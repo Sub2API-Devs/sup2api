@@ -29,25 +29,28 @@ import { errorMessage } from "../../utils/errors.js";
  */
 var MAX_LOG_LINES_BUFFERED = 500;
 //@ chunk-hm0ce8vc.js:213733-214473 placement
-async function forwardLogFile(e) {
-  let { apiClient, apiBaseUrl, sessionId, sessionToken, workerEpoch } = e;
-  let l = 262144;
-  let u;
+async function forwardLogFile(options) {
+  let { apiClient, apiBaseUrl, sessionId, sessionToken, workerEpoch } = options;
+  let windowBytes = 262144;
+  let text;
   try {
-    let y = await withFsOpTimeout(stat(e.debugFile), `stat ${e.debugFile}`);
-    let max = Math.max(0, y.size - 262144);
-    let w = await withFsOpTimeout(open(e.debugFile, "r"), `open ${e.debugFile}`);
+    let stats = await withFsOpTimeout(stat(options.debugFile), `stat ${options.debugFile}`);
+    let max = Math.max(0, stats.size - 262144);
+    let handle = await withFsOpTimeout(open(options.debugFile, "r"), `open ${options.debugFile}`);
     try {
-      let E = Buffer.alloc(Math.min(y.size, 262144));
-      let { bytesRead } = await withFsOpTimeout(w.read(E, 0, E.length, max), `read ${e.debugFile}`);
-      u = E.toString("utf-8", 0, bytesRead);
+      let buffer = Buffer.alloc(Math.min(stats.size, 262144));
+      let { bytesRead } = await withFsOpTimeout(
+        handle.read(buffer, 0, buffer.length, max),
+        `read ${options.debugFile}`,
+      );
+      text = buffer.toString("utf-8", 0, bytesRead);
     } finally {
-      await w.close().catch(() => {});
+      await handle.close().catch(() => {});
     }
   } catch {
     return false;
   }
-  let sliced = u
+  let sliced = text
     .split(
       `
 `,
@@ -63,7 +66,7 @@ async function forwardLogFile(e) {
     },
   }));
   await apiClient.forwardDiagnostics(apiBaseUrl, sessionId, sessionToken, workerEpoch, mapped);
-  e.onDebug(`[runner:session] forwarded ${sliced.length} debug log lines to /worker/diagnostics`);
+  options.onDebug(`[runner:session] forwarded ${sliced.length} debug log lines to /worker/diagnostics`);
   return true;
 }
 //@ chunk-hm0ce8vc.js:214473-214555 placement
@@ -76,30 +79,30 @@ function makeInitMilestoneMessage(message) {
   };
 }
 //@ chunk-hm0ce8vc.js:214555-214756 placement
-function logEnvManager(stepId, n, content, s) {
+function logEnvManager(stepId, status, content, extraFields) {
   return {
     type: "env_manager_log",
     uuid: randomUUID(),
     data: {
-      level: n === "failed" ? "error" : "info",
+      level: status === "failed" ? "error" : "info",
       category: "init",
       content,
       timestamp: new Date().toISOString(),
       extra: {
         step_id: stepId,
-        step_status: n,
-        ...s,
+        step_status: status,
+        ...extraFields,
       },
     },
   };
 }
 //@ chunk-hm0ce8vc.js:214756-214886 placement
-function logCloneStep(repo, n, r, s) {
-  return logEnvManager("clone", "completed", `${repo} ${n} (${r}ms)`, {
-    ...s,
+function logCloneStep(repo, phase, durationMs, extraFields) {
+  return logEnvManager("clone", "completed", `${repo} ${phase} (${durationMs}ms)`, {
+    ...extraFields,
     step_detail: repo,
-    clone_phase: n,
-    duration_ms: String(r),
+    clone_phase: phase,
+    duration_ms: String(durationMs),
   });
 }
 //@ chunk-hm0ce8vc.js:214886-215506 placement
@@ -114,7 +117,7 @@ var WORK_ORDER_REJECTION_TEXT_BY_REASON = new Map([
   ["superseded", "this work order has been superseded, so this runner is not needed"],
   ["session_paused", "the session is paused, so no runner is needed for it right now"],
 ]);
-var WORK_ORDER_USED_MESSAGE = 1024;
+var MAX_WORK_ORDER_MESSAGE_CHARS = 1024;
 var WORK_ORDER_RESTART_EXPLANATION =
   "See https://code.claude.com/docs/en/self-hosted-environments-deploy#troubleshooting";
 var WORK_ORDER_SINGLE_USE_TEXT =
@@ -123,33 +126,35 @@ var WORK_ORDER_SINGLE_USE_TEXT =
 /**
  * 描述服务器拒绝（HTTP 状态、令牌是否过期、--api-url、时钟偏差）。
  */
-function describeServerAuthRejection(error, n) {
+function describeServerAuthRejection(error, workOrderSecret) {
   let httpStatus = getHttpStatus(error);
   let { errorType, errorReason, serverMessage } = getRunnerErrorFields(error);
-  let l = redactSecretsInText(
+  let serverDetail = redactSecretsInText(
     [
       [errorType, errorReason].filter(isSnakeCaseReasonCode).join(", "),
-      serverMessage && isAlreadyPrintable(serverMessage, WORK_ORDER_USED_MESSAGE) ? serverMessage : undefined,
+      serverMessage && isAlreadyPrintable(serverMessage, MAX_WORK_ORDER_MESSAGE_CHARS)
+        ? serverMessage
+        : undefined,
     ]
       .filter(Boolean)
       .join(": "),
   );
-  let u = `The server answered (HTTP ${httpStatus}) ${l}`.trimEnd();
-  let h;
-  if (httpStatus === 401 && isPoolSpawnJwt(n)) {
-    let date = new Date((decodeSessionJwt(n) ?? NaN) * 1000);
-    let S = !Number.isNaN(date.getTime());
-    if (!S || date.getTime() > Date.now())
-      return `RegisterRunner refused because the server did not accept this work order${S ? ", which has not expired by this host's clock" : ", which may have expired"}. Check the work order${S ? ", --api-url, and the clock" : " and --api-url"}. A restart alone cannot help. This does not show the environment secret is bad, so do not rotate it. ${WORK_ORDER_RESTART_EXPLANATION} ${u}`;
-    h = `this work order expired at ${date.toISOString()}`;
+  let serverLine = `The server answered (HTTP ${httpStatus}) ${serverDetail}`.trimEnd();
+  let reason;
+  if (httpStatus === 401 && isPoolSpawnJwt(workOrderSecret)) {
+    let date = new Date((decodeSessionJwt(workOrderSecret) ?? NaN) * 1000);
+    let isExpiryKnown = !Number.isNaN(date.getTime());
+    if (!isExpiryKnown || date.getTime() > Date.now())
+      return `RegisterRunner refused because the server did not accept this work order${isExpiryKnown ? ", which has not expired by this host's clock" : ", which may have expired"}. Check the work order${isExpiryKnown ? ", --api-url, and the clock" : " and --api-url"}. A restart alone cannot help. This does not show the environment secret is bad, so do not rotate it. ${WORK_ORDER_RESTART_EXPLANATION} ${serverLine}`;
+    reason = `this work order expired at ${date.toISOString()}`;
   } else if (httpStatus === 409 && errorType === "work_order_not_redeemable")
-    h =
+    reason =
       WORK_ORDER_REJECTION_TEXT_BY_REASON.get(errorReason) ??
       "this work order can no longer be used, so this runner is not needed";
-  else if (httpStatus === 409 && errorType === "session_not_active" && isPoolSpawnJwt(n))
-    h = "the session is no longer active, so this runner is not needed";
+  else if (httpStatus === 409 && errorType === "session_not_active" && isPoolSpawnJwt(workOrderSecret))
+    reason = "the session is no longer active, so this runner is not needed";
   else return null;
-  return `RegisterRunner refused because ${h}. ${WORK_ORDER_SINGLE_USE_TEXT} The environment secret is not at fault, so do not rotate it. ${WORK_ORDER_RESTART_EXPLANATION} ${u}`;
+  return `RegisterRunner refused because ${reason}. ${WORK_ORDER_SINGLE_USE_TEXT} The environment secret is not at fault, so do not rotate it. ${WORK_ORDER_RESTART_EXPLANATION} ${serverLine}`;
 }
 //@ chunk-hm0ce8vc.js:216618-216714 placement
 var POLL_WAKE_SOURCES = {
@@ -165,27 +170,27 @@ class PollWaker {
   ac = new AbortController();
   pending = null;
   atCapacity = false;
-  wake(e) {
-    if (e === "SSE" && this.atCapacity) return;
-    if (this.pending !== "SSE") this.pending = e;
+  wake(source) {
+    if (source === "SSE" && this.atCapacity) return;
+    if (this.pending !== "SSE") this.pending = source;
     this.ac.abort();
   }
-  async wait(e, n) {
-    if (this.pending !== null || n.aborted) return;
+  async wait(delayMs, signal) {
+    if (this.pending !== null || signal.aborted) return;
     let abortController = new AbortController();
-    let s = () => abortController.abort();
-    let signal = this.ac.signal;
-    n.addEventListener("abort", s, {
+    let abort = () => abortController.abort();
+    let signal_2 = this.ac.signal;
+    signal.addEventListener("abort", abort, {
       once: true,
     });
-    signal.addEventListener("abort", s, {
+    signal_2.addEventListener("abort", abort, {
       once: true,
     });
     try {
-      await sleep(e, abortController.signal);
+      await sleep(delayMs, abortController.signal);
     } finally {
-      n.removeEventListener("abort", s);
-      signal.removeEventListener("abort", s);
+      signal.removeEventListener("abort", abort);
+      signal_2.removeEventListener("abort", abort);
     }
   }
   consume() {
@@ -204,31 +209,31 @@ var WORK_HINTS_CONNECT_TIMEOUT_MS = 45000;
 /**
  * 中止工作提示流的请求。
  */
-function abortRequest(e) {
-  e.abort();
+function abortRequest(controller) {
+  controller.abort();
 }
 //@ chunk-hm0ce8vc.js:217323-218339 placement
 /**
  * 订阅 /v1/code/runners/self-hosted/runners/<id>/work-hints/stream SSE，收到 work_available 时唤醒轮询。
  */
-function streamWorkHints(e) {
-  let { baseUrl, runnerId, tokenState, onWake, onDebug, signal } = e;
-  let u = `${baseUrl}/v1/code/runners/self-hosted/runners/${encodeURIComponent(runnerId)}/work-hints/stream`;
-  let h = false;
-  let p = 0;
-  let S = null;
-  let T = () => {
-    h = true;
-    S?.abort();
+function streamWorkHints(options) {
+  let { baseUrl, runnerId, tokenState, onWake, onDebug, signal } = options;
+  let streamUrl = `${baseUrl}/v1/code/runners/self-hosted/runners/${encodeURIComponent(runnerId)}/work-hints/stream`;
+  let isClosed = false;
+  let attempt = 0;
+  let controller = null;
+  let close = () => {
+    isClosed = true;
+    controller?.abort();
   };
-  signal.addEventListener("abort", T, {
+  signal.addEventListener("abort", close, {
     once: true,
   });
   (async () => {
-    while (!h && !signal.aborted) {
-      S = new AbortController();
+    while (!isClosed && !signal.aborted) {
+      controller = new AbortController();
       try {
-        let response = await fetch(u, {
+        let response = await fetch(streamUrl, {
           method: "GET",
           headers: {
             Authorization: `Bearer ${tokenState.runnerToken}`,
@@ -237,10 +242,10 @@ function streamWorkHints(e) {
             "x-self-hosted-runner-version": RUNNER_CLIENT_VERSION,
           },
           ...getProxyFetchOptions({
-            url: u,
+            url: streamUrl,
           }),
           ...getTLSFetchOptions(undefined),
-          signal: S.signal,
+          signal: controller.signal,
         });
         if (!response.ok || !response.body) {
           onDebug(`[runner:hints] stream HTTP ${response.status} \u2014 degrading to poll, retrying`);
@@ -250,58 +255,58 @@ function streamWorkHints(e) {
           throw Error(`HTTP ${response.status}`);
         }
         onDebug("[runner:hints] stream connected");
-        if (await parseWorkHintEvent(response.body, onWake, S)) p = 0;
+        if (await parseWorkHintEvent(response.body, onWake, controller)) attempt = 0;
         onDebug("[runner:hints] stream ended \u2014 reconnecting");
       } catch (error) {
-        if (h || signal.aborted) break;
-        if (p === 0) onDebug(`[runner:hints] stream error: ${errorMessage(error)}`);
+        if (isClosed || signal.aborted) break;
+        if (attempt === 0) onDebug(`[runner:hints] stream error: ${errorMessage(error)}`);
       }
-      p++;
-      let min = Math.min(WORK_HINTS_BACKOFF_MAX_MS, WORK_HINTS_BACKOFF_BASE_MS * 2 ** p);
+      attempt++;
+      let min = Math.min(WORK_HINTS_BACKOFF_MAX_MS, WORK_HINTS_BACKOFF_BASE_MS * 2 ** attempt);
       let floored = Math.floor(Math.random() * min);
       await sleep(floored, signal);
     }
-    signal.removeEventListener("abort", T);
+    signal.removeEventListener("abort", close);
   })();
   return {
-    close: T,
+    close,
   };
 }
 //@ chunk-hm0ce8vc.js:218339-218854 placement
-async function parseWorkHintEvent(body, onWake, r) {
+async function parseWorkHintEvent(body, onWake, controller) {
   let reader = body.getReader();
   let textDecoder = new TextDecoder();
-  let o = "";
-  let l = false;
-  let u;
-  let h = () => {
-    if (u !== undefined) clearTimeout(u);
-    u = setTimeout(abortRequest, WORK_HINTS_CONNECT_TIMEOUT_MS, r);
-    u.unref?.();
+  let buffer = "";
+  let sawWorkEvent = false;
+  let timeoutTimer;
+  let armTimeout = () => {
+    if (timeoutTimer !== undefined) clearTimeout(timeoutTimer);
+    timeoutTimer = setTimeout(abortRequest, WORK_HINTS_CONNECT_TIMEOUT_MS, controller);
+    timeoutTimer.unref?.();
   };
-  h();
+  armTimeout();
   try {
-    while (!r.signal.aborted) {
-      let { done: p, value: S } = await reader.read();
-      if (p) return l;
-      l = true;
-      h();
-      o += textDecoder.decode(S, {
+    while (!controller.signal.aborted) {
+      let { done, value } = await reader.read();
+      if (done) return sawWorkEvent;
+      sawWorkEvent = true;
+      armTimeout();
+      buffer += textDecoder.decode(value, {
         stream: true,
       });
-      let T;
+      let lineEndIndex;
       while (
-        (T = o.indexOf(`
+        (lineEndIndex = buffer.indexOf(`
 `)) >= 0
       ) {
-        let replaced = o.slice(0, T).replace(/\r$/, "");
-        o = o.slice(T + 1);
+        let replaced = buffer.slice(0, lineEndIndex).replace(/\r$/, "");
+        buffer = buffer.slice(lineEndIndex + 1);
         if (replaced.startsWith("event:") && replaced.slice(6).trimStart() === "work_available") onWake();
       }
     }
-    return l;
+    return sawWorkEvent;
   } finally {
-    if (u !== undefined) clearTimeout(u);
+    if (timeoutTimer !== undefined) clearTimeout(timeoutTimer);
     reader.releaseLock();
     body.cancel().catch(() => {});
   }

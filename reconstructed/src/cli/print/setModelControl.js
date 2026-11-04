@@ -92,14 +92,15 @@ import {
 } from "../../plugins/functionHooks/inputHold.js";
 import { runIgnoringAbort } from "../../plugins/functionHooks/dispatch/dispatchScope.js";
 import { currentSurfaceBinding } from "../../plugins/functionHooks/surfaceBinding.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-0sfjpx19.js:25022-25465 placement
 /**
  * 判断模型名是否可识别（第一方时与目录比对），返回形状分类。
  */
-function recognizeModelName(e) {
-  let trimmed = e.trim();
-  if (!trimmed)
+function recognizeModelName(name) {
+  let name_2 = name.trim();
+  if (!name_2)
     return {
       recognized: false,
       shape: "empty",
@@ -108,25 +109,25 @@ function recognizeModelName(e) {
     return {
       recognized: true,
     };
-  let lower = trimmed.toLowerCase();
-  let trimmed_2 = strip1mSuffix(lower).trim();
-  if (isModelKeyAlias(lower) || isModelKeyAlias(trimmed_2))
+  let lower = name_2.toLowerCase();
+  let model = strip1mSuffix(lower).trim();
+  if (isModelKeyAlias(lower) || isModelKeyAlias(model))
     return {
       recognized: true,
     };
-  if (getCatalogEntry(trimmed_2) || catalogIdForProviderModelId(trimmed_2))
+  if (getCatalogEntry(model) || catalogIdForProviderModelId(model))
     return {
       recognized: true,
     };
-  if (isDeploymentVouchedModel(trimmed))
+  if (isDeploymentVouchedModel(name_2))
     return {
       recognized: true,
     };
-  if (buildModelPickerOptions().some((h) => h.value === trimmed))
+  if (buildModelPickerOptions().some((option) => option.value === name_2))
     return {
       recognized: true,
     };
-  if (catalogBehavesAsTarget(trimmed_2) !== undefined)
+  if (catalogBehavesAsTarget(model) !== undefined)
     return {
       recognized: true,
     };
@@ -136,67 +137,67 @@ function recognizeModelName(e) {
     };
   return {
     recognized: false,
-    ...formatModelDisplayName(trimmed),
+    ...formatModelDisplayName(name_2),
   };
 }
 //@ chunk-0sfjpx19.js:25465-25827 placement
-function formatModelDisplayName(e) {
-  let trimmed = e.replace(/^\[(.+)\]$/s, "$1").trim();
+function formatModelDisplayName(name) {
+  let name_2 = name.replace(/^\[(.+)\]$/s, "$1").trim();
   let found = getModelCatalog().models.find(
-    (model) => model.display_name.toLowerCase() === trimmed.toLowerCase(),
+    (model) => model.display_name.toLowerCase() === name_2.toLowerCase(),
   );
   if (found)
     return {
       shape: "display_name",
       suggestion: found.id,
     };
-  if (/^\d+$/.test(e))
+  if (/^\d+$/.test(name))
     return {
       shape: "numeric",
     };
-  if (e.startsWith("["))
+  if (name.startsWith("["))
     return {
       shape: "bracketed",
-      ...suggestModelName(trimmed),
+      ...suggestModelName(name_2),
     };
-  if (/\s/.test(e))
+  if (/\s/.test(name))
     return {
       shape: "whitespace",
-      ...suggestModelName(e),
+      ...suggestModelName(name),
     };
   return {
     shape: "other",
-    ...suggestModelName(e),
+    ...suggestModelName(name),
   };
 }
 //@ chunk-0sfjpx19.js:25827-25941 placement
-function suggestModelName(e) {
-  let n = [...LEGACY_MODEL_IDS, ...getModelCatalog().models.map((model) => model.id)];
-  let [r] = similarNames(e.toLowerCase(), n, 1);
-  return r
+function suggestModelName(name) {
+  let candidates = [...LEGACY_MODEL_IDS, ...getModelCatalog().models.map((model) => model.id)];
+  let [suggestion] = similarNames(name.toLowerCase(), candidates, 1);
+  return suggestion
     ? {
-        suggestion: r,
+        suggestion,
       }
     : {};
 }
 //@ chunk-0sfjpx19.js:25941-26139 placement
-function formatUnknownModelHint(e, suggestion) {
-  let r = artifactPathPrefix("model");
-  let s =
+function formatUnknownModelHint(name, suggestion) {
+  let prefix = artifactPathPrefix("model");
+  let hint =
     suggestion !== undefined
       ? ` Did you mean '${suggestion}'?`
-      : r
-        ? ` Run ${r} to see available models.`
+      : prefix
+        ? ` Run ${prefix} to see available models.`
         : " Switch to a different model.";
-  return `Model "${e}" is not a recognized model id.${s}`;
+  return `Model "${name}" is not a recognized model id.${hint}`;
 }
 //@ chunk-0sfjpx19.js:26139-26202 placement
 /**
  * 把切换请求里的模型解析成实际模型名：默认解析豁免或模型被允许才返回，否则 undefined。
  */
-function resolveSwitchedModel(e) {
-  return e !== undefined && (isExemptDefaultResolvingPick(e) || isModelAllowed(e))
-    ? parseUserSpecifiedModel(e)
+function resolveSwitchedModel(pick) {
+  return pick !== undefined && (isExemptDefaultResolvingPick(pick) || isModelAllowed(pick))
+    ? parseUserSpecifiedModel(pick)
     : undefined;
 }
 //@ chunk-0sfjpx19.js:26202-26562 placement
@@ -207,19 +208,19 @@ function buildModelSwitchNotice({ messages, queriedInProcess, activeModel }) {
   )
     return activeModel;
   for (let j = messages.length - 1; j >= 0; j--) {
-    let h = messages[j];
-    if (isCompactBoundaryMessage(h)) return;
-    if (userMessageText(h)?.startsWith(MODEL_SET_STDOUT_PREFIX)) {
-      let _ = messages[j - 1];
-      let b = _ === undefined ? null : userMessageText(_);
-      let k =
-        b !== null && extractTag(b, COMMAND_NAME)?.trim() === "/model"
-          ? extractTag(b, COMMAND_ARGS)?.trim()
+    let message = messages[j];
+    if (isCompactBoundaryMessage(message)) return;
+    if (userMessageText(message)?.startsWith(MODEL_SET_STDOUT_PREFIX)) {
+      let previous = messages[j - 1];
+      let previousText = previous === undefined ? null : userMessageText(previous);
+      let argText =
+        previousText !== null && extractTag(previousText, COMMAND_NAME)?.trim() === "/model"
+          ? extractTag(previousText, COMMAND_ARGS)?.trim()
           : undefined;
-      return k ? resolveEffortAfterModelSwitch(k) : undefined;
+      return argText ? resolveEffortAfterModelSwitch(argText) : undefined;
     }
-    let y = assistantModelOf(h);
-    if (y !== undefined) return y;
+    let model = assistantModelOf(message);
+    if (model !== undefined) return model;
   }
   return;
 }
@@ -230,78 +231,78 @@ function buildModelSwitchNotice({ messages, queriedInProcess, activeModel }) {
 function modelChangeNeedsNewContext({ appliedModel, previousModel, conversationModel }) {
   if (conversationModel === undefined) return false;
   let userSpecifiedModel = parseUserSpecifiedModel(appliedModel);
-  let h = canonicalModelName(userSpecifiedModel);
-  if (canonicalModelName(parseUserSpecifiedModel(conversationModel)) !== h) return true;
+  let canonical = canonicalModelName(userSpecifiedModel);
+  if (canonicalModelName(parseUserSpecifiedModel(conversationModel)) !== canonical) return true;
   let userSpecifiedModel_2 = parseUserSpecifiedModel(previousModel);
   return (
-    canonicalModelName(userSpecifiedModel_2) === h &&
+    canonicalModelName(userSpecifiedModel_2) === canonical &&
     has1mSuffix_2(userSpecifiedModel_2) !== has1mSuffix_2(userSpecifiedModel)
   );
 }
 //@ chunk-0sfjpx19.js:26742-27152 placement
-function classifyModelSwitch(e) {
-  if (e.trim().toLowerCase() === "default")
+function classifyModelSwitch(name) {
+  if (name.trim().toLowerCase() === "default")
     return {
       kind: "default",
     };
-  let n = recognizeModelName(e);
-  if (!n.recognized && !(n.shape === "other" && e.trim().length <= MAX_MODEL_NAME_CHARS))
+  let recognized = recognizeModelName(name);
+  if (!recognized.recognized && !(recognized.shape === "other" && name.trim().length <= MAX_MODEL_NAME_CHARS))
     return {
       kind: "unrecognized",
-      shape: n.shape,
-      suggestion: n.suggestion,
+      shape: recognized.shape,
+      suggestion: recognized.suggestion,
     };
-  if (isExemptDefaultResolvingPick(e))
+  if (isExemptDefaultResolvingPick(name))
     return {
       kind: "allowed",
-      model: e,
+      model: name,
     };
-  let r = isModelAllowedUnderActiveEnforcement(e);
-  if (r ?? isModelAllowed(e))
+  let enforcement = isModelAllowedUnderActiveEnforcement(name);
+  if (enforcement ?? isModelAllowed(name))
     return {
       kind: "allowed",
-      model: e,
+      model: name,
     };
-  let s = stepDownRestrictedFamilyAliasPick(e);
-  return s === null
+  let steppedDown = stepDownRestrictedFamilyAliasPick(name);
+  return steppedDown === null
     ? {
         kind: "blocked",
-        underEnforcement: r !== null,
+        underEnforcement: enforcement !== null,
       }
     : {
         kind: "steppedDown",
-        model: s,
+        model: steppedDown,
       };
 }
 //@ chunk-0sfjpx19.js:27152-27388 placement
-function logUnrecognizedModelSwitch(e, surface) {
-  let r = recognizeModelName(e);
-  if (r.recognized) return;
+function logUnrecognizedModelSwitch(name, surface) {
+  let recognized = recognizeModelName(name);
+  if (recognized.recognized) return;
   logEvent("tengu_set_model_unrecognized", {
-    shape: fromEnum(r.shape),
-    had_suggestion: r.suggestion !== undefined,
+    shape: fromEnum(recognized.shape),
+    had_suggestion: recognized.suggestion !== undefined,
     surface,
   });
   logFeatureBad("model_switch", "unrecognized_model");
   return {
     ok: false,
-    error: formatUnknownModelHint(displayModelName(e), r.suggestion),
+    error: formatUnknownModelHint(displayModelName(name), recognized.suggestion),
   };
 }
 //@ chunk-0sfjpx19.js:27388-27463 placement
-function modelSwitchFailure(error, n) {
-  logFeatureBad("system_prompt_switch", n);
+function modelSwitchFailure(error, code) {
+  logFeatureBad("system_prompt_switch", code);
   return {
     ok: false,
     error,
-    code: n,
+    code,
   };
 }
 //@ chunk-0sfjpx19.js:27463-31684 placement
 /**
  * 处理 set_model 控制请求：校验类型、识别模型、切换主循环模型与系统提示词并回复（约 4 KB）。
  */
-async function handleSetModelRequest(request, n) {
+async function handleSetModelRequest(request, host) {
   let model = request.model;
   if (model != null && typeof model !== "string") {
     logFeatureBad("model_switch", "invalid_model_type");
@@ -337,193 +338,194 @@ async function handleSetModelRequest(request, n) {
         "set_model: when only_if_model_is_current is true, system_prompt is required.",
         "invalid_request",
       );
-    let L = typeof model === "string" ? model : "";
-    if (L.trim() === "" || L.trim().toLowerCase() === "default")
+    let requestedModel = typeof model === "string" ? model : "";
+    if (requestedModel.trim() === "" || requestedModel.trim().toLowerCase() === "default")
       return modelSwitchFailure(
         "set_model: when only_if_model_is_current is true, model must be a model name. It cannot be absent, empty or 'default'.",
         "invalid_request",
       );
     let mainLoopModel = getMainLoopModel();
     if (
-      !sameEffort(L, mainLoopModel) ||
-      !sameEffort(resolveSwitchedModel(n.getActiveModel()) ?? mainLoopModel, mainLoopModel) ||
+      !sameEffort(requestedModel, mainLoopModel) ||
+      !sameEffort(resolveSwitchedModel(host.getActiveModel()) ?? mainLoopModel, mainLoopModel) ||
       planModeConstituentFamily(getUserSpecifiedModelSetting()) !== null
     )
       return modelSwitchFailure(
         "set_model: only_if_model_is_current is true, and the session cannot confirm that it runs the model named. The request changed nothing. Name the model that the session runs. If a turn is in progress, send the request again after that turn ends.",
         "model_not_current",
       );
-    n.setSystemPrompt(systemPrompt);
+    host.setSystemPrompt(systemPrompt);
     logFeatureOk("system_prompt_switch");
     return {
       ok: true,
     };
   }
-  let y = model ?? "default";
-  let _ = classifyModelSwitch(y);
-  let b =
-    _.kind === "blocked" && !_.underEnforcement
-      ? await reprobeEntitlementDeny(y, n.storageV5, n.credentials)
+  let pick = model ?? "default";
+  let initial = classifyModelSwitch(pick);
+  let reprobe =
+    initial.kind === "blocked" && !initial.underEnforcement
+      ? await reprobeEntitlementDeny(pick, host.storageV5, host.credentials)
       : undefined;
-  let k = b === "overturned" ? classifyModelSwitch(y) : _;
-  let w;
-  let S;
-  let T = false;
-  switch (k.kind) {
+  let classified = reprobe === "overturned" ? classifyModelSwitch(pick) : initial;
+  let appliedModel;
+  let steppedDown;
+  let unconfirmed = false;
+  switch (classified.kind) {
     case "unrecognized":
       logEvent("tengu_set_model_unrecognized", {
-        shape: fromEnum(k.shape),
-        had_suggestion: k.suggestion !== undefined,
-        surface: n.surface,
+        shape: fromEnum(classified.shape),
+        had_suggestion: classified.suggestion !== undefined,
+        surface: host.surface,
       });
       logFeatureBad("model_switch", "unrecognized_model");
       if (typeof systemPrompt === "string") logFeatureBad("system_prompt_switch", "model_switch_rejected");
       return {
         ok: false,
-        error: formatUnknownModelHint(displayModelName(y), k.suggestion),
+        error: formatUnknownModelHint(displayModelName(pick), classified.suggestion),
         code: "catalog_unknown",
       };
     case "blocked": {
-      let switchedModel = resolveSwitchedModel(n.getActiveModel());
-      n.noticeRestrictedModel(y, switchedModel);
-      logFeatureBad("model_switch", b === "probe_failed" ? "entitlement_probe_failed" : "not_allowed");
+      let switchedModel = resolveSwitchedModel(host.getActiveModel());
+      host.noticeRestrictedModel(pick, switchedModel);
+      logFeatureBad("model_switch", reprobe === "probe_failed" ? "entitlement_probe_failed" : "not_allowed");
       if (typeof systemPrompt === "string") logFeatureBad("system_prompt_switch", "model_switch_rejected");
       return {
         ok: false,
-        error: formatModelRestrictedNotice(y, switchedModel ?? getMainLoopModel()),
-        code: b === "probe_failed" ? "check_failed" : "restricted_by_org",
+        error: formatModelRestrictedNotice(pick, switchedModel ?? getMainLoopModel()),
+        code: reprobe === "probe_failed" ? "check_failed" : "restricted_by_org",
       };
     }
     case "default": {
-      let L = managedDenyStartupRefusal(getDefaultMainLoopModel(), "switch");
-      if (L !== null)
+      let refusal = managedDenyStartupRefusal(getDefaultMainLoopModel(), "switch");
+      if (refusal !== null)
         return {
           ok: false,
-          error: sanitizeTelemetryString(L),
+          error: sanitizeTelemetryString(refusal),
           code: "restricted_by_org",
         };
-      w = getDefaultMainLoopModel();
-      S = null;
+      appliedModel = getDefaultMainLoopModel();
+      steppedDown = null;
       break;
     }
     case "allowed": {
-      if (isExemptDefaultResolvingPick(y)) {
-        w = k.model;
-        S = null;
+      if (isExemptDefaultResolvingPick(pick)) {
+        appliedModel = classified.model;
+        steppedDown = null;
         break;
       }
-      let L = await switchMainLoopModelSafe(y, n.storageV5, n.credentials, {
+      let switchResult = await switchMainLoopModelSafe(pick, host.storageV5, host.credentials, {
         deadlineMs: MODEL_LIST_REFRESH_TIMEOUT_MS,
         acceptSessionModeRefusal: true,
         acceptSharedLimitRefusal: true,
-        ...(n.isLaunchModelPick?.() && {
+        ...(host.isLaunchModelPick?.() && {
           confirmWithServer: false,
         }),
       });
-      if (!L.ok) {
+      if (!switchResult.ok) {
         if (typeof systemPrompt === "string") logFeatureBad("system_prompt_switch", "model_switch_rejected");
-        if (L.serverRefusedModel === true && n.dropUnconfirmedLaunchModel?.(y))
+        if (switchResult.serverRefusedModel === true && host.dropUnconfirmedLaunchModel?.(pick))
           logEvent("tengu_set_model_launch_model_dropped", {
-            surface: n.surface,
-            code: fromEnumOpt(L.code),
+            surface: host.surface,
+            code: fromEnumOpt(switchResult.code),
           });
         return {
           ok: false,
-          error: sanitizeTelemetryString(L.message),
-          ...(L.code !== undefined && {
-            code: L.code,
+          error: sanitizeTelemetryString(switchResult.message),
+          ...(switchResult.code !== undefined && {
+            code: switchResult.code,
           }),
         };
       }
-      w = L.model ?? getDefaultMainLoopModel();
-      S = L.substitutedFrom !== undefined ? w : null;
-      T = L.unconfirmed === true;
+      appliedModel = switchResult.model ?? getDefaultMainLoopModel();
+      steppedDown = switchResult.substitutedFrom !== undefined ? appliedModel : null;
+      unconfirmed = switchResult.unconfirmed === true;
       break;
     }
     case "steppedDown":
-      w = k.model;
-      S = k.model;
+      appliedModel = classified.model;
+      steppedDown = classified.model;
       break;
   }
-  let D = () => {
-    let appState = n.readAppState();
+  let readAppState = () => {
+    let appState = host.readAppState();
     return {
-      mainLoopModel: appState.mainLoopModel ?? n.getActiveModel() ?? getMainLoopModel(),
+      mainLoopModel: appState.mainLoopModel ?? host.getActiveModel() ?? getMainLoopModel(),
       mainLoopModelForSession: appState.mainLoopModelForSession,
       toolPermissionContext: appState.toolPermissionContext,
     };
   };
-  let E = k.kind === "default" ? null : w;
-  let N = await runPreModelSwitchHooks(n.session, D, E, "sdk");
-  if (N.decision !== "proceed") {
+  let targetModel = classified.kind === "default" ? null : appliedModel;
+  let hookResult = await runPreModelSwitchHooks(host.session, readAppState, targetModel, "sdk");
+  if (hookResult.decision !== "proceed") {
     logFeatureSad("model_switch", "blocked_by_hook");
     if (typeof systemPrompt === "string") logFeatureBad("system_prompt_switch", "model_switch_rejected");
     return {
       ok: false,
-      error: describeModelSwitchBlocked(N),
+      error: describeModelSwitchBlocked(hookResult),
       code: "blocked_by_hook",
     };
   }
   let mainLoopModel = getMainLoopModel();
-  let activeModel = n.getActiveModel();
-  let conversationModel = n.getConversationModel();
-  recordSwitchIfChanged(n.session, D(), E, "sdk");
+  let activeModel = host.getActiveModel();
+  let conversationModel = host.getConversationModel();
+  recordSwitchIfChanged(host.session, readAppState(), targetModel, "sdk");
   if (isFirstPartyClientDataFetchEnabled()) {
-    let L = withClientDataReseedOnModelChange(() => n.applyModel(w));
-    if (getMainLoopModel() !== mainLoopModel) refreshBootstrapDataTracked_2(n.storageV5, n.credentials, L);
-  } else n.applyModel(w);
+    let apply = withClientDataReseedOnModelChange(() => host.applyModel(appliedModel));
+    if (getMainLoopModel() !== mainLoopModel)
+      refreshBootstrapDataTracked_2(host.storageV5, host.credentials, apply);
+  } else host.applyModel(appliedModel);
   if (
     (getMainLoopModel() !== mainLoopModel ||
-      parseUserSpecifiedModel(w) !== parseUserSpecifiedModel(activeModel ?? mainLoopModel)) &&
+      parseUserSpecifiedModel(appliedModel) !== parseUserSpecifiedModel(activeModel ?? mainLoopModel)) &&
     modelChangeNeedsNewContext({
-      appliedModel: w,
+      appliedModel,
       previousModel: activeModel ?? mainLoopModel,
       conversationModel,
     })
   )
-    n.injectModelSwitchBreadcrumbs(y, w);
-  n.recordAllowedModelApplied();
-  if (S !== null) {
-    n.noticeRestrictedModel(y, S);
+    host.injectModelSwitchBreadcrumbs(pick, appliedModel);
+  host.recordAllowedModelApplied();
+  if (steppedDown !== null) {
+    host.noticeRestrictedModel(pick, steppedDown);
     logFeatureSad("model_switch", "family_alias_stepped_down");
   } else logFeatureOk("model_switch");
   if (typeof systemPrompt === "string") {
-    n.setSystemPrompt(systemPrompt);
+    host.setSystemPrompt(systemPrompt);
     logFeatureOk("system_prompt_switch");
   }
   return {
     ok: true,
-    ...(N.messages.length > 0 && {
-      notices: N.messages.map(sanitizeHookText),
+    ...(hookResult.messages.length > 0 && {
+      notices: hookResult.messages.map(sanitizeHookText),
     }),
-    ...(T && {
+    ...(unconfirmed && {
       unconfirmed: true,
     }),
   };
 }
 //@ chunk-0sfjpx19.js:31684-31797 placement
-function assistantModelOf(e) {
-  if (e.type !== "assistant") return;
-  let model = e.message?.model;
+function assistantModelOf(message) {
+  if (message.type !== "assistant") return;
+  let model = message.message?.model;
   return typeof model === "string" && model !== SYNTHETIC_MODEL ? model : undefined;
 }
 //@ chunk-0sfjpx19.js:31797-31863 placement
-function userMessageText(e) {
-  return e.type === "user" ? getContentText(e.message?.content) : null;
+function userMessageText(message) {
+  return message.type === "user" ? getContentText(message.message?.content) : null;
 }
 //@ chunk-0sfjpx19.js:31863-31895 placement
 function canonicalModelName(userSpecifiedModel) {
   return getCanonicalName(stripAnyVersatileSuffix(userSpecifiedModel));
 }
 //@ chunk-0sfjpx19.js:31895-32051 placement
-function resolveEffortAfterModelSwitch(e) {
-  let n = classifyModelSwitch(e);
-  switch (n.kind) {
+function resolveEffortAfterModelSwitch(name) {
+  let classified = classifyModelSwitch(name);
+  switch (classified.kind) {
     case "default":
       return getDefaultMainLoopModel();
     case "allowed":
     case "steppedDown":
-      return n.model;
+      return classified.model;
     case "unrecognized":
     case "blocked":
       return;
@@ -533,51 +535,59 @@ function resolveEffortAfterModelSwitch(e) {
 /**
  * 模型切换状态的清理器（HostScoped 包装的函数槽，用于撤销待发切换）。
  */
-var MODEL_SWITCH_STATE_CLEARER = identity(createValueSlot(), (e) => e.set(undefined));
+var MODEL_SWITCH_STATE_CLEARER; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-0sfjpx19.js:32051", () => {
+  MODEL_SWITCH_STATE_CLEARER = identity(createValueSlot(), (slot) => slot.set(undefined));
+});
 //@ chunk-0sfjpx19.js:32087-32128 placement
-var AUTO_INPUT_ORIGIN_KINDS = new Set(["plugin", "coordinator"]);
+var AUTO_INPUT_ORIGIN_KINDS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-0sfjpx19.js:32087", () => {
+  AUTO_INPUT_ORIGIN_KINDS = new Set(["plugin", "coordinator"]);
+});
 //@ chunk-0sfjpx19.js:32128-32173 placement
-function isSchedulingPluginCommand(e) {
-  return isMainAgentCommand(e) && getSchedulingPlugin(e) !== undefined;
+function isSchedulingPluginCommand(command) {
+  return isMainAgentCommand(command) && getSchedulingPlugin(command) !== undefined;
 }
 //@ chunk-0sfjpx19.js:32173-32252 placement
-function resurrectQueuedInput(e) {
+function resurrectQueuedInput(command) {
   holdQueuedInput(
     () =>
       enqueueCommand({
-        ...e,
+        ...command,
         admissionExempt: "resurrected",
       }),
-    e,
-    () => emitDiscardedCommand([e]),
+    command,
+    () => emitDiscardedCommand([command]),
   );
 }
 //@ chunk-0sfjpx19.js:32252-32349 placement
 /**
  * 取消排队中的自动输入：命中时清定时项、移除插件/协调器来源的排队消息，并取消其他可取消项。
  */
-function cancelQueuedAutoInput(e, n, r) {
-  let s = isSchedulingPluginCommand(e) && isHeldByPlugin();
-  if (s)
-    runIgnoringAbort(() => (AUTO_INPUT_ORIGIN_KINDS.has(e.origin?.kind) ? r() : holdQueuedInput(n, e, r)));
-  return s;
+function cancelQueuedAutoInput(command, hold, discard) {
+  let shouldCancel = isSchedulingPluginCommand(command) && isHeldByPlugin();
+  if (shouldCancel)
+    runIgnoringAbort(() =>
+      AUTO_INPUT_ORIGIN_KINDS.has(command.origin?.kind) ? discard() : holdQueuedInput(hold, command, discard),
+    );
+  return shouldCancel;
 }
 //@ chunk-0sfjpx19.js:32349-32512 placement
 /**
  * 取消排队中的自动输入：清除待发的定时项，移除插件/协调器来源的排队消息，并取消其他可取消的项（轮次继续时保留部分）。
  */
-function cancelQueuedAutoInputs({ turnGoesOn: e = false } = {}) {
+function cancelQueuedAutoInputs({ turnGoesOn = false } = {}) {
   if (isPluginInputRefusalOn()) {
     runIgnoringAbort(() => MODEL_SWITCH_STATE_CLEARER.get()?.());
     runIgnoringAbort(() =>
       removeQueuedByFilter(
-        (r) => isSchedulingPluginCommand(r) && AUTO_INPUT_ORIGIN_KINDS.has(r.origin?.kind),
+        (queued) => isSchedulingPluginCommand(queued) && AUTO_INPUT_ORIGIN_KINDS.has(queued.origin?.kind),
       ),
     );
     runIgnoringAbort(() =>
-      dequeueAllMatching((r) => isSchedulingPluginCommand(r) && !(e && isFoldInFlight(r))).forEach(
-        resurrectQueuedInput,
-      ),
+      dequeueAllMatching(
+        (queued) => isSchedulingPluginCommand(queued) && !(turnGoesOn && isFoldInFlight(queued)),
+      ).forEach(resurrectQueuedInput),
     );
   }
 }
@@ -585,27 +595,30 @@ function cancelQueuedAutoInputs({ turnGoesOn: e = false } = {}) {
 /**
  * 被取消命令的状态槽（收集需要从队列移除的 uuid）。
  */
-var CANCELLED_COMMAND_STATE = identity(createValueSlot(), (e) => e.set(undefined));
+var CANCELLED_COMMAND_STATE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-0sfjpx19.js:32512", () => {
+  CANCELLED_COMMAND_STATE = identity(createValueSlot(), (slot) => slot.set(undefined));
+});
 //@ chunk-0sfjpx19.js:32548-32875 placement
-var MODEL_SWITCH_STATE = (e = {}) =>
+var MODEL_SWITCH_STATE = (options = {}) =>
   runIgnoringAbort(() => {
-    let n = currentSurfaceBinding();
-    let r = new Set();
+    let binding = currentSurfaceBinding();
+    let sentBefore = new Set();
     receiptQueuedProbe.set(cancelQueuedAutoInput);
     inFlightDrainProbe.set(countHeldCommands);
-    if (n !== undefined)
+    if (binding !== undefined)
       pluginInputHoldSlot.set({
-        session: new WeakRef(n),
+        session: new WeakRef(binding),
         stoppedAt: performance.now(),
-        sentBefore: r,
+        sentBefore,
       });
-    runIgnoringAbort(() => (CANCELLED_COMMAND_STATE.get()?.() ?? []).forEach((s) => r.add(s)));
+    runIgnoringAbort(() => (CANCELLED_COMMAND_STATE.get()?.() ?? []).forEach((uuid) => sentBefore.add(uuid)));
     runIgnoringAbort(() =>
       getCommandQueue()
-        .flatMap((s) => s.uuid ?? s.stopKey ?? s.handedOffTurn?.messages[0]?.uuid ?? [])
-        .forEach((s) => r.add(s)),
+        .flatMap((queued) => queued.uuid ?? queued.stopKey ?? queued.handedOffTurn?.messages[0]?.uuid ?? [])
+        .forEach((uuid) => sentBefore.add(uuid)),
     );
-    cancelQueuedAutoInputs(e);
+    cancelQueuedAutoInputs(options);
   });
 //@ chunk-0sfjpx19.js:32875-32896 placement
 var MOVED_RESULT_HOLD_MS = 200;
@@ -615,47 +628,47 @@ var GRACE_POLL_TICKS = 2;
 /**
  * 根据轮次状态（被钩子结束、对话框占用、本地轮次）决定排队提示 stand_by/wait/deliver。
  */
-function decideQueuedPromptAction(e) {
-  if (e.head === "ended_by_hook" || e.hasFoldTakenPrompt || !e.isLocalTurnActive)
+function decideQueuedPromptAction(decision) {
+  if (decision.head === "ended_by_hook" || decision.hasFoldTakenPrompt || !decision.isLocalTurnActive)
     return {
       action: "stand_by",
     };
-  if (e.isHeldByDialog)
+  if (decision.isHeldByDialog)
     return {
       action: "wait",
       reason: "held_by_dialog",
     };
-  if (e.head === "not_ready" || !e.isLocalTurnRunning)
+  if (decision.head === "not_ready" || !decision.isLocalTurnRunning)
     return {
       action: "wait",
       reason: "not_ready",
     };
-  if (e.head === "behind_earlier")
+  if (decision.head === "behind_earlier")
     return {
       action: "wait",
       reason: "behind_earlier",
     };
-  if (e.holderCount > e.unmovableHolderCount)
+  if (decision.holderCount > decision.unmovableHolderCount)
     return {
       action: "background",
     };
-  if (e.isCompacting)
+  if (decision.isCompacting)
     return {
       action: "wait",
       reason: "compacting",
     };
-  if (e.isAwaitingMovedResult)
+  if (decision.isAwaitingMovedResult)
     return {
       action: "wait",
       reason: "moved_result",
     };
-  if (e.holderCount > 0 || e.isExecuting) {
-    if (!e.isUnmovableGraceOver)
+  if (decision.holderCount > 0 || decision.isExecuting) {
+    if (!decision.isUnmovableGraceOver)
       return {
         action: "wait",
         reason: "unmovable_grace",
       };
-    return e.isBackgroundingDisabled
+    return decision.isBackgroundingDisabled
       ? {
           action: "cancel",
         }
@@ -663,7 +676,7 @@ function decideQueuedPromptAction(e) {
           action: "interrupt",
         };
   }
-  if (!e.isMainRequestInFlight)
+  if (!decision.isMainRequestInFlight)
     return {
       action: "wait",
       reason: "not_sampling",

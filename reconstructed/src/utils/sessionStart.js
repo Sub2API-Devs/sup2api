@@ -59,15 +59,16 @@ import { isCompactBoundaryMessage as isCompactBoundaryMessage_3 } from "../servi
 import { getTokenUsage } from "./tokens.js";
 import { totalTokensOf } from "./messages/usageAndStopReason.js";
 import { roughTokenCountEstimationForMessages } from "../services/tokenEstimation.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:2077254-2077366 placement
 /**
  * 启动一次可中止的钩子执行：返回 Promise（失败时记录并给空列表）、放置位置与中止函数。
  */
-function startHookRun(placement, n) {
+function startHookRun(placement, run) {
   let abortController = createAbortController();
   return {
-    promise: n(abortController.signal).catch((error) => {
+    promise: run(abortController.signal).catch((error) => {
       logHookExecutionFailure(error);
       return [];
     }),
@@ -86,7 +87,10 @@ class SessionStartState {
   hasDispatched = false;
 }
 //@ chunk-e6aww6q8.js:2077542-2077570 placement
-var sessionStartStateSlot = new SessionRootSlot(() => new SessionStartState());
+var sessionStartStateSlot; // deferred: uses SessionRootSlot (../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:2077542", () => {
+  sessionStartStateSlot = new SessionRootSlot(() => new SessionStartState());
+});
 //@ chunk-e6aww6q8.js:2077570-2077604 placement
 function sessionStartState() {
   return sessionStartStateSlot.of(getRootSession());
@@ -96,16 +100,16 @@ function sessionStartState() {
  * 列出尚未运行 SessionStart 钩子的新插件，返回补跑所需的来源与筛选函数；没有则为 undefined。
  */
 function owedSessionStartHooks() {
-  let e = sessionStartState();
-  if (e.startSource === undefined) return;
-  let filtered = getHooksForEvent("SessionStart").filter((r) => "pluginRoot" in r);
-  return owedPluginHooks(e, filtered).owed.length === 0
+  let state = sessionStartState();
+  if (state.startSource === undefined) return;
+  let hooks = getHooksForEvent("SessionStart").filter((hook) => "pluginRoot" in hook);
+  return owedPluginHooks(state, hooks).owed.length === 0
     ? undefined
     : {
-        source: e.startSource,
+        source: state.startSource,
         newPluginsOnly: {
-          owed: (r) => owedPluginHooks(e, r).owed,
-          envFileIndexBase: e.hooksDispatched,
+          owed: (hooks) => owedPluginHooks(state, hooks).owed,
+          envFileIndexBase: state.hooksDispatched,
         },
       };
 }
@@ -113,45 +117,45 @@ function owedSessionStartHooks() {
 /**
  * 找出未被覆盖的插件钩子（同名插件经市场别名已覆盖的视为已运行）。
  */
-function owedPluginHooks({ pluginsCovered, pluginsSucceeded }, r) {
-  let s = new Set(
-    Object.values(getRegisteredHooks() ?? {}).flatMap((q) =>
-      q.flatMap((Z) => ("pluginRoot" in Z ? nfcLower(Z.pluginId) : [])),
+function owedPluginHooks({ pluginsCovered, pluginsSucceeded }, hooks) {
+  let registeredPluginIds = new Set(
+    Object.values(getRegisteredHooks() ?? {}).flatMap((entry) =>
+      entry.flatMap((hook) => ("pluginRoot" in hook ? nfcLower(hook.pluginId) : [])),
     ),
   );
-  let list = Array.from(pluginsCovered, ([q, Z]) => ({
-    id: q,
-    name: Z,
-    folded: nfcLower(q),
+  let list = Array.from(pluginsCovered, ([id, name]) => ({
+    id,
+    name,
+    folded: nfcLower(id),
   }));
-  let y = new Set(list.map((q) => q.folded));
-  let S = new Set(Array.from(pluginsSucceeded, nfcLower));
-  let w = [];
-  let L = new Map();
-  let G = new Set();
-  for (let q of r) {
-    let { pluginId } = q;
-    let Se = nfcLower(pluginId);
-    if (y.has(Se) || L.has(Se)) continue;
-    let ke = nfcLower(q.pluginName);
+  let coveredIds = new Set(list.map((item) => item.folded));
+  let succeededIds = new Set(Array.from(pluginsSucceeded, nfcLower));
+  let owedHooks = [];
+  let stoodForIds = new Map();
+  let claimedIds = new Set();
+  for (let hook of hooks) {
+    let { pluginId } = hook;
+    let foldedPluginId = nfcLower(pluginId);
+    if (coveredIds.has(foldedPluginId) || stoodForIds.has(foldedPluginId)) continue;
+    let pluginName = nfcLower(hook.pluginName);
     let found = list.find(
-      (Ee) =>
-        Ee.name === ke &&
-        !s.has(Ee.folded) &&
-        !S.has(Ee.folded) &&
-        !G.has(Ee.folded) &&
-        (hasMarketplaceAlias(Ee.id) || hasMarketplaceAlias(pluginId)),
+      (item) =>
+        item.name === pluginName &&
+        !registeredPluginIds.has(item.folded) &&
+        !succeededIds.has(item.folded) &&
+        !claimedIds.has(item.folded) &&
+        (hasMarketplaceAlias(item.id) || hasMarketplaceAlias(pluginId)),
     );
     if (found === undefined) {
-      w.push(q);
+      owedHooks.push(hook);
       continue;
     }
-    L.set(Se, found.id);
-    G.add(found.folded);
+    stoodForIds.set(foldedPluginId, found.id);
+    claimedIds.add(found.folded);
   }
   return {
-    owed: w,
-    stoodFor: L,
+    owed: owedHooks,
+    stoodFor: stoodForIds,
   };
 }
 //@ chunk-e6aww6q8.js:2078459-2078560 placement
@@ -159,9 +163,9 @@ function owedPluginHooks({ pluginsCovered, pluginsSucceeded }, r) {
  * 取出并清除 SessionStart 钩子提供的初始用户消息。
  */
 function takePendingInitialUserMessage() {
-  let e = sessionStartState();
-  let pendingInitialUserMessage = e.pendingInitialUserMessage;
-  e.pendingInitialUserMessage = undefined;
+  let state = sessionStartState();
+  let pendingInitialUserMessage = state.pendingInitialUserMessage;
+  state.pendingInitialUserMessage = undefined;
   return pendingInitialUserMessage;
 }
 //@ chunk-e6aww6q8.js:2078560-2078657 placement
@@ -169,9 +173,9 @@ function takePendingInitialUserMessage() {
  * takePendingHookSessionTitle：取待定的钩子会话标题。
  */
 function takePendingHookSessionTitle() {
-  let e = sessionStartState();
-  let pendingHookSessionTitle = e.pendingHookSessionTitle;
-  e.pendingHookSessionTitle = undefined;
+  let state = sessionStartState();
+  let pendingHookSessionTitle = state.pendingHookSessionTitle;
+  state.pendingHookSessionTitle = undefined;
   return pendingHookSessionTitle;
 }
 //@ chunk-e6aww6q8.js:2078657-2081951 fingerprint = processSessionStartHooks (0.552)
@@ -180,71 +184,71 @@ function takePendingHookSessionTitle() {
  */
 async function processSessionStartHooks(
   session,
-  n,
+  source,
   {
     sessionId,
-    sessionTitle: s,
-    agentType: h,
+    sessionTitle: title,
+    agentType,
     model,
     forceSyncExecution,
-    resumedMessages: w,
+    resumedMessages,
     storageV5,
     credentials,
     signal,
-    orphaned: Z,
+    orphaned: abortSignal,
     agentContext,
-    newPluginsOnly: ke,
-    envFileSessionId: we,
-    progress: Ee,
-    holdHooksUntil: Ae,
+    newPluginsOnly,
+    envFileSessionId,
+    progress,
+    holdHooksUntil,
   } = {},
 ) {
-  let Ie =
-    w !== undefined
-      ? resumeCacheStats(w, model, sessionId, {
+  let cacheStats =
+    resumedMessages !== undefined
+      ? resumeCacheStats(resumedMessages, model, sessionId, {
           credentials,
           storageV5,
         })
       : undefined;
   if (isCustomizationDisabled("hooks")) return [];
-  if (Ae !== undefined) {
-    await Ae();
-    if (Z?.aborted) return [];
+  if (holdHooksUntil !== undefined) {
+    await holdHooksUntil();
+    if (abortSignal?.aborted) return [];
   }
-  let Me = sessionStartState();
-  let rows = Ee?.rows ?? [];
-  let additionalContexts = Ee?.additionalContexts ?? [];
-  let lt = [];
-  let Je;
-  let nt = false;
-  let pt =
-    !Me.hasDispatched &&
-    (n === "startup" || (n === "resume" && w?.length === 0)) &&
+  let state = sessionStartState();
+  let rows = progress?.rows ?? [];
+  let additionalContexts = progress?.additionalContexts ?? [];
+  let watchPaths = [];
+  let sessionTitle;
+  let reloadSkills = false;
+  let launcherShaped =
+    !state.hasDispatched &&
+    (source === "startup" || (source === "resume" && resumedMessages?.length === 0)) &&
     agentContext === undefined &&
-    ke === undefined;
-  Me.hasDispatched = true;
-  let Et = executeSessionStartHooks(
+    newPluginsOnly === undefined;
+  state.hasDispatched = true;
+  let results = executeSessionStartHooks(
     session,
-    n,
+    source,
     sessionId,
-    s,
-    h ?? getMainThreadAgentType(),
+    title,
+    agentType ?? getMainThreadAgentType(),
     model,
     signal,
     undefined,
     forceSyncExecution,
-    Ie,
+    cacheStats,
     agentContext,
     {
-      newPluginsOnly: ke,
-      envFileSessionId: we,
-      launcherHookEnv: sessionAccessTokenEnvForHooks(pt),
-      onMatched: (yt, gt) => {
-        Me.hooksDispatched += gt;
-        if (n === "compact") return;
-        let At = ke ? [] : owedPluginHooks(Me, yt).stoodFor.values();
-        for (let It of At) Me.pluginsSucceeded.add(It);
-        for (let It of yt) Me.pluginsCovered.set(It.pluginId, nfcLower(It.pluginName));
+      newPluginsOnly,
+      envFileSessionId,
+      launcherHookEnv: sessionAccessTokenEnvForHooks(launcherShaped),
+      onMatched: (hooks, count) => {
+        state.hooksDispatched += count;
+        if (source === "compact") return;
+        let stoodFor = newPluginsOnly ? [] : owedPluginHooks(state, hooks).stoodFor.values();
+        for (let pluginId of stoodFor) state.pluginsSucceeded.add(pluginId);
+        for (let hook of hooks) state.pluginsCovered.set(hook.pluginId, nfcLower(hook.pluginName));
       },
     },
     storageV5,
@@ -293,51 +297,56 @@ async function processSessionStartHooks(
         },
       );
     }
-  if (n === "startup" || n === "resume" || n === "fork") {
-    Me.startSource = n;
-    markHooksInitSource(n);
+  if (source === "startup" || source === "resume" || source === "fork") {
+    state.startSource = source;
+    markHooksInitSource(source);
   }
   await waitForStartHooksPolicyIfNeeded("SessionStart");
   try {
-    for await (let yt of Et) {
+    for await (let result of results) {
       if (
-        yt.message &&
-        !(yt.message.type === "attachment" && yt.message.attachment.type === "hook_blocking_error")
+        result.message &&
+        !(result.message.type === "attachment" && result.message.attachment.type === "hook_blocking_error")
       )
-        rows.push(yt.message);
-      if (yt.blockingError)
-        rows.push(getNonBlockableHookErrorMessage("SessionStart", yt.blockingError, `SessionStart:${n}`));
-      if (yt.additionalContexts && yt.additionalContexts.length > 0)
-        additionalContexts.push(...yt.additionalContexts);
-      if (yt.initialUserMessage)
-        if (ke)
+        rows.push(result.message);
+      if (result.blockingError)
+        rows.push(
+          getNonBlockableHookErrorMessage("SessionStart", result.blockingError, `SessionStart:${source}`),
+        );
+      if (result.additionalContexts && result.additionalContexts.length > 0)
+        additionalContexts.push(...result.additionalContexts);
+      if (result.initialUserMessage)
+        if (newPluginsOnly)
           logForDebugging(
             "Ignoring initialUserMessage from a SessionStart hook: its plugin loaded after the session started",
             {
               level: "warn",
             },
           );
-        else if (Ee?.isOvertaken) Ee.lateInitialUserMessage = yt.initialUserMessage;
-        else Me.pendingInitialUserMessage = yt.initialUserMessage;
-      if (yt.sessionTitle) Je = yt.sessionTitle;
-      if (yt.watchPaths && yt.watchPaths.length > 0) lt.push(...yt.watchPaths);
-      if (yt.reloadSkills) nt = true;
+        else if (progress?.isOvertaken) progress.lateInitialUserMessage = result.initialUserMessage;
+        else state.pendingInitialUserMessage = result.initialUserMessage;
+      if (result.sessionTitle) sessionTitle = result.sessionTitle;
+      if (result.watchPaths && result.watchPaths.length > 0) watchPaths.push(...result.watchPaths);
+      if (result.reloadSkills) reloadSkills = true;
     }
   } catch (error) {
     if (!(error instanceof StreamClosedAbortError)) throw error;
     logForDebugging("SessionStart hooks cancelled (control stream closed)");
   }
-  if (signal?.aborted || Z?.aborted) return rows;
-  if (nt) {
+  if (signal?.aborted || abortSignal?.aborted) return rows;
+  if (reloadSkills) {
     clearCommandsCache();
     skillsChangedSignal.emit();
     logFeatureOk("hook_session_start_reload_skills");
   }
-  Me.pendingHookSessionTitle = !ke && (n === "startup" || n === "resume" || n === "fork") ? Je : undefined;
-  if (ke || we !== undefined) invalidateSessionEnvCache();
-  if (lt.length > 0)
-    if (ke || Ee?.isOvertaken) addWatchPaths(lt);
-    else updateWatchPaths(lt);
+  state.pendingHookSessionTitle =
+    !newPluginsOnly && (source === "startup" || source === "resume" || source === "fork")
+      ? sessionTitle
+      : undefined;
+  if (newPluginsOnly || envFileSessionId !== undefined) invalidateSessionEnvCache();
+  if (watchPaths.length > 0)
+    if (newPluginsOnly || progress?.isOvertaken) addWatchPaths(watchPaths);
+    else updateWatchPaths(watchPaths);
   rows.push(...createSessionStartContextAttachments(additionalContexts));
   return rows;
 }
@@ -354,8 +363,8 @@ function overtakeSessionStart(progress) {
  * 是否需等待 SessionStart 钩子的原因：托管层钩子或托管插件策略。
  */
 function sessionStartWaitReason() {
-  let e = managedTierHooks("SessionStart");
-  if (e !== "none") return e === "some" ? "managed_hooks" : "managed_hooks_unknown";
+  let managed = managedTierHooks("SessionStart");
+  if (managed !== "none") return managed === "some" ? "managed_hooks" : "managed_hooks_unknown";
   return getPolicyAllowedSet() === null ? undefined : "managed_plugins";
 }
 //@ chunk-e6aww6q8.js:2082354-2083443 fingerprint = processSetupHooks (0.573)
@@ -430,32 +439,32 @@ async function processSetupHooks(trigger, trigger_2, { forceSyncExecution, stora
 /**
  * 恢复会话时统计：距上次响应秒数、上下文 token、提示缓存是否可能过期与重写费用，并记录恢复日志种子。
  */
-function resumeCacheStats(e, n, sessionId, s) {
-  let h = contextTokensOf(e);
-  let y = (requestAt, ttlMs) => {
+function resumeCacheStats(messages, model, sessionId, options) {
+  let contextTokens = contextTokensOf(messages);
+  let stageSeed = (requestAt, ttlMs) => {
     stageResumeJournalSeed({
       sessionId,
-      contextTokens: h,
+      contextTokens,
       requestAt,
       ttlMs,
     });
   };
-  let lastRealAssistantMessage = findLastRealAssistantMessage(e);
-  let w = lastRealAssistantMessage ? Date.parse(lastRealAssistantMessage.timestamp) : NaN;
-  if (!lastRealAssistantMessage || Number.isNaN(w)) {
-    y(null, null);
+  let lastRealAssistantMessage = findLastRealAssistantMessage(messages);
+  let lastReplyAt = lastRealAssistantMessage ? Date.parse(lastRealAssistantMessage.timestamp) : NaN;
+  if (!lastRealAssistantMessage || Number.isNaN(lastReplyAt)) {
+    stageSeed(null, null);
     stageResumeKeepalive(() => {
       return;
     });
     return {};
   }
-  let secondsSinceLastResponse = Math.max(0, Math.round((Date.now() - w) / 1000));
-  let G = hasPostCompactUsage(e);
+  let secondsSinceLastResponse = Math.max(0, Math.round((Date.now() - lastReplyAt) / 1000));
+  let postCompact = hasPostCompactUsage(messages);
   let lastLiveMainThreadRequestAt = getLastLiveMainThreadRequestAt();
-  let Z = estimateCacheWriteCost(
-    n ?? lastRealAssistantMessage.message.model ?? getMainLoopModel(),
-    h,
-    G
+  let writeCost = estimateCacheWriteCost(
+    model ?? lastRealAssistantMessage.message.model ?? getMainLoopModel(),
+    contextTokens,
+    postCompact
       ? (getCacheCreationTtl(lastRealAssistantMessage.message.usage) ??
           (lastLiveMainThreadRequestAt !== null &&
           lastLiveMainThreadRequestAt === getLastMainThreadRequestAt()
@@ -463,70 +472,78 @@ function resumeCacheStats(e, n, sessionId, s) {
             : getMainThreadCacheTtl()))
       : getMainThreadCacheTtl(),
   );
-  let Se = Z.cache_ttl === "1h" ? 3600 : 300;
-  let ke = G ? w : NaN;
-  let we = Number.isNaN(ke) ? 1 / 0 : Math.max(0, Math.round((Date.now() - ke) / 1000));
-  y(Number.isNaN(ke) ? null : ke, Number.isNaN(ke) ? null : Se * 1000);
+  let ttlSeconds = writeCost.cache_ttl === "1h" ? 3600 : 300;
+  let cacheAnchorAt = postCompact ? lastReplyAt : NaN;
+  let sinceAnchorSeconds = Number.isNaN(cacheAnchorAt)
+    ? 1 / 0
+    : Math.max(0, Math.round((Date.now() - cacheAnchorAt) / 1000));
+  stageSeed(
+    Number.isNaN(cacheAnchorAt) ? null : cacheAnchorAt,
+    Number.isNaN(cacheAnchorAt) ? null : ttlSeconds * 1000,
+  );
   stageResumeKeepalive(() =>
-    G &&
+    postCompact &&
     getCacheCreationTtl(lastRealAssistantMessage.message.usage) === "5m" &&
     lastRealAssistantMessage.remoteSourced !== true
       ? {
           sessionId,
-          repliedAt: w,
+          repliedAt: lastReplyAt,
           requestId: lastRealAssistantMessage.requestId,
           cacheTtlOf: getMainThreadCacheTtlConfig,
           clientOptions: {
             model: lastRealAssistantMessage.message.model,
-            ...s,
+            ...options,
           },
         }
       : undefined,
   );
   return {
     seconds_since_last_response: secondsSinceLastResponse,
-    context_tokens: h,
-    prompt_cache_likely_expired: we >= Se,
-    estimated_cache_write_usd: Z.estimated_cache_write_usd,
+    context_tokens: contextTokens,
+    prompt_cache_likely_expired: sinceAnchorSeconds >= ttlSeconds,
+    estimated_cache_write_usd: writeCost.estimated_cache_write_usd,
   };
 }
 //@ chunk-e6aww6q8.js:2084306-2084641 placement
 /**
  * 判断压缩边界之后是否有助手用量（或保留段锚点即边界）。
  */
-function hasPostCompactUsage(e) {
-  let lastIndex = e.findLastIndex(isCompactBoundaryMessage_3);
+function hasPostCompactUsage(messages) {
+  let lastIndex = messages.findLastIndex(isCompactBoundaryMessage_3);
   if (lastIndex === -1) return true;
-  for (let idx = e.length - 1; idx > lastIndex; idx--) {
-    let S = e[idx];
-    if (S?.type !== "assistant") continue;
-    let tokenUsage = getTokenUsage(S);
+  for (let idx = messages.length - 1; idx > lastIndex; idx--) {
+    let message = messages[idx];
+    if (message?.type !== "assistant") continue;
+    let tokenUsage = getTokenUsage(message);
     if (tokenUsage && totalTokensOf(tokenUsage) > 0) return true;
   }
-  let r = e[lastIndex];
-  if (r === undefined || !isCompactBoundaryMessage_3(r)) return false;
-  let compactMetadata = r.compactMetadata;
+  let boundary = messages[lastIndex];
+  if (boundary === undefined || !isCompactBoundaryMessage_3(boundary)) return false;
+  let compactMetadata = boundary.compactMetadata;
   let anchorUuid =
     compactMetadata?.preservedMessages?.anchorUuid ?? compactMetadata?.preservedSegment?.anchorUuid;
-  return anchorUuid !== undefined && anchorUuid === r.uuid;
+  return anchorUuid !== undefined && anchorUuid === boundary.uuid;
 }
 //@ chunk-e6aww6q8.js:2084641-2084912 placement
 /**
  * 估算当前上下文 token：取最近一次助手用量，否则取压缩边界的 postTokens 或估算。
  */
-function contextTokensOf(e) {
-  let lastIndex = e.findLastIndex(isCompactBoundaryMessage_3);
-  for (let idx = e.length - 1; idx > lastIndex; idx--) {
-    let h = e[idx];
-    if (h?.type !== "assistant") continue;
-    let tokenUsage = getTokenUsage(h);
-    let S = tokenUsage ? totalTokensOf(tokenUsage) : 0;
-    if (S > 0) return S;
+function contextTokensOf(messages) {
+  let lastIndex = messages.findLastIndex(isCompactBoundaryMessage_3);
+  for (let idx = messages.length - 1; idx > lastIndex; idx--) {
+    let message = messages[idx];
+    if (message?.type !== "assistant") continue;
+    let tokenUsage = getTokenUsage(message);
+    let total = tokenUsage ? totalTokensOf(tokenUsage) : 0;
+    if (total > 0) return total;
   }
-  let r = lastIndex === -1 ? undefined : e[lastIndex];
-  if (r !== undefined && isCompactBoundaryMessage_3(r))
-    return r.compactMetadata?.postTokens ?? roughTokenCountEstimationForMessages(e.slice(lastIndex + 1));
-  return roughTokenCountEstimationForMessages(e);
+  let boundary = lastIndex === -1 ? undefined : messages[lastIndex];
+  if (boundary !== undefined && isCompactBoundaryMessage_3(boundary))
+    return (
+      boundary.compactMetadata?.postTokens ??
+      roughTokenCountEstimationForMessages(messages.slice(lastIndex + 1))
+    );
+  return roughTokenCountEstimationForMessages(messages);
 }
 export {
   startHookRun,

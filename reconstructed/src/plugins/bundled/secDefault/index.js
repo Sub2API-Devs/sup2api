@@ -8,9 +8,9 @@
  * pieces: chunk-ykab7xp3.js (61)
  * attribution: placement 60, affinity 1
  */
-import { x, Ar } from "../../../../runtime/bun-runtime.js";
+import { __commonJS, __export } from "../../../../runtime/bun-runtime.js";
 import {
-  W4o,
+  MANAGED_MOD_OPTIONS,
   managedModsPolicyKey,
   dispatchClassicEvent,
   canSkipEmptyClassicDispatch,
@@ -18,8 +18,8 @@ import {
   canShortcutAppend,
 } from "../../functionHooks/modAdmission.js";
 import {
-  aAo,
-  dAo,
+  SESSION_ATTACHMENT_KINDS,
+  SESSION_APPEND_HOOK_EVENTS,
   toSessionAppendDoorPatterns,
   collectPassedOverHooks,
   filterFreezablePatterns,
@@ -53,8 +53,8 @@ import { registerBuiltinPlugin, builtinHooksModuleRef, getModsFolderPath } from 
 /**
  * sec-default 插件的 hooks 扫描清单。
  */
-var SEC_DEFAULT_HOOKS_SCAN = x(function (Nn, Re) {
-  Re.exports = {
+var SEC_DEFAULT_HOOKS_SCAN = __commonJS(function (requireFn, moduleObject) {
+  moduleObject.exports = {
     scan: {
       hooks: [
         "classic.*",
@@ -91,11 +91,11 @@ var SEC_DEFAULT_HOOKS_SCAN = x(function (Nn, Re) {
  */
 var emptyHooksFirst = {};
 //@ chunk-ykab7xp3.js:4970-5728 placement
-Ar(emptyHooksFirst, {
-  ADMISSION_OPTIONS: () => W4o,
+__export(emptyHooksFirst, {
+  ADMISSION_OPTIONS: () => MANAGED_MOD_OPTIONS,
   MOD_FOLDER: () => SEC_DEFAULT,
-  PASSED_OVER_DOORS: () => aAo,
-  PASSED_OVER_EVENTS: () => dAo,
+  PASSED_OVER_DOORS: () => SESSION_ATTACHMENT_KINDS,
+  PASSED_OVER_EVENTS: () => SESSION_APPEND_HOOK_EVENTS,
   SEATS_OVER_POLICY_OMISSION: () => SEAT_BY_DEFAULT,
   SEC_DEFAULT_PLUGIN_ID: () => DEFAULT_SECURITY_SEAT_PLUGIN,
   SEC_DEFAULT_PLUGIN_NAME: () => SEC_DEFAULT_PLUGIN_NAME,
@@ -130,19 +130,19 @@ Ar(emptyHooksFirst, {
  */
 var emptyHooksSecond = {};
 //@ chunk-ykab7xp3.js:5737-6859 placement
-Ar(emptyHooksSecond, {
+__export(emptyHooksSecond, {
   CODE_LOADING_VARIABLES: () => DANGEROUS_ENV_VARS,
-  LENIENCY: () => A,
+  LENIENCY: () => LENIENCY,
   OWN_OPTIONS_PATH: () => SEC_DEFAULT_OPTIONS_PATH,
   POLICY_MEMO_MS: () => MAX_TOOL_NAMES,
   POLICY_SOURCE_VARIABLES: () => PROTECTED_CONFIG_ENV_VARS,
   PROCESS_WRAPPER_VARIABLE: () => CLAUDE_CODE_PROCESS_WRAPPER,
   SKILL_TOOL: () => SKILL_TOOL_NAME,
   SOURCE: () => POLICY_SOURCE_ONLY,
-  TIERS_HOLDING_USERS: () => ae,
+  TIERS_HOLDING_USERS: () => TIERS_HOLDING_USERS,
   TOOL_REGISTER_REFUSAL: () => ALLOWED_MCP_WARNING,
-  UNCHECKED_DENY: () => me,
-  USER_REACHABLE_TIERS: () => V,
+  UNCHECKED_DENY: () => UNCHECKED_DENY,
+  USER_REACHABLE_TIERS: () => USER_REACHABLE_TIERS,
   admissionFailure: () => registerHookJudgeError,
   askKind: () => describeAskSource,
   caughtAnswer: () => decideOrFreeze,
@@ -204,24 +204,24 @@ var registerHookJudgeError = (name, error) =>
 /**
  * 取条目的 plugin
  */
-var pluginOf = (e) => e.plugin;
+var pluginOf = (ask) => ask.plugin;
 //@ chunk-ykab7xp3.js:7034-7235 placement
 /**
  * 描述 ask 决定来自哪里（某钩子、某设置、某插件、ask 上限或宿主）。
  */
-function describeAskSource(e) {
-  let t = pluginOf(e);
-  let s = e.hook !== undefined;
-  let i = e.setting !== undefined;
-  let n = t !== undefined;
-  let r = e.ceiling !== undefined;
-  return s
-    ? `${e.hook} hook's ask`
-    : i
-      ? `${e.setting} setting's ask`
-      : n
-        ? `${t}'s ask`
-        : r
+function describeAskSource(ask) {
+  let plugin = pluginOf(ask);
+  let hasHook = ask.hook !== undefined;
+  let hasSetting = ask.setting !== undefined;
+  let hasPlugin = plugin !== undefined;
+  let hasCeiling = ask.ceiling !== undefined;
+  return hasHook
+    ? `${ask.hook} hook's ask`
+    : hasSetting
+      ? `${ask.setting} setting's ask`
+      : hasPlugin
+        ? `${plugin}'s ask`
+        : hasCeiling
           ? "ask cap"
           : "host's ask";
 }
@@ -229,24 +229,25 @@ function describeAskSource(e) {
 /**
  * 两个决定对象（忽略 undefined 字段）是否相同。
  */
-var sameDecision = (e, t) =>
-  t !== undefined &&
-  [e, t]
-    .map((s) =>
+var sameDecision = (a, b) =>
+  b !== undefined &&
+  [a, b]
+    .map((decision) =>
       JSON.stringify(
-        Object.entries(s)
+        Object.entries(decision)
           .filter(([, value]) => value !== undefined)
-          .toSorted(([i], [n]) => (i < n ? -1 : 1)),
+          .toSorted(([keyA], [keyB]) => (keyA < keyB ? -1 : 1)),
       ),
     )
-    .every((s, i, n) => s === n[0]);
+    .every((value, index, list) => value === list[0]);
 //@ chunk-ykab7xp3.js:7392-7460 placement
 /**
  * 找第一个有 returned 的钩子结果
  */
-var firstReturnedBy = (e, t) => e.slice(t + 1).find((s) => s.returned !== undefined)?.returned;
+var firstReturnedBy = (asks, index) =>
+  asks.slice(index + 1).find((ask) => ask.returned !== undefined)?.returned;
 //@ chunk-ykab7xp3.js:7460-7504 placement
-var A = Object.freeze({
+var LENIENCY = Object.freeze({
   deny: 0,
   ask: 1,
   allow: 2,
@@ -255,45 +256,46 @@ var A = Object.freeze({
 /**
  * 决定强度比较
  */
-var isStrongerDecision = (e, t) => e !== undefined && A[e.decision] > A[t?.decision ?? "deny"];
+var isStrongerDecision = (candidate, previous) =>
+  candidate !== undefined && LENIENCY[candidate.decision] > LENIENCY[previous?.decision ?? "deny"];
 //@ chunk-ykab7xp3.js:7566-7607 placement
-var ae = Object.freeze(["user", "prepend"]);
+var TIERS_HOLDING_USERS = Object.freeze(["user", "prepend"]);
 //@ chunk-ykab7xp3.js:7607-7801 placement
 /**
  * 插件改动的决定是否覆盖了不允许覆盖的来源（deny、规则、钩子、设置、上限、宿主 ask）。
  */
-function isOverriddenDecision(e, t, approver) {
-  let i = e.decision === "ask";
+function isOverriddenDecision(ask, previous, approver) {
+  let isAsk = ask.decision === "ask";
   return (
-    !isStrongerDecision(e, t) &&
-    !sameDecision(e, t) &&
-    (e.decision === "deny" ||
-      e.rule !== undefined ||
-      e.hook !== undefined ||
-      e.setting !== undefined ||
-      pluginOf(e) !== undefined ||
-      e.ceiling !== undefined ||
-      (i && approver === "host"))
+    !isStrongerDecision(ask, previous) &&
+    !sameDecision(ask, previous) &&
+    (ask.decision === "deny" ||
+      ask.rule !== undefined ||
+      ask.hook !== undefined ||
+      ask.setting !== undefined ||
+      pluginOf(ask) !== undefined ||
+      ask.ceiling !== undefined ||
+      (isAsk && approver === "host"))
   );
 }
 //@ chunk-ykab7xp3.js:7801-7948 placement
 /**
  * 列出在受限层级中改变了决定的插件。
  */
-var pluginsThatChangedDecision = (e) =>
-  e
-    .filter((t, s) => {
-      let i = firstReturnedBy(e, s);
+var pluginsThatChangedDecision = (trace) =>
+  trace
+    .filter((entry, index) => {
+      let effective = firstReturnedBy(trace, index);
       return (
-        ae.includes(t.tier) &&
-        t.returned !== undefined &&
-        !isStrongerDecision(i, t.returned) &&
-        !sameDecision(t.returned, i)
+        TIERS_HOLDING_USERS.includes(entry.tier) &&
+        entry.returned !== undefined &&
+        !isStrongerDecision(effective, entry.returned) &&
+        !sameDecision(entry.returned, effective)
       );
     })
-    .map((t) => t.plugin);
+    .map((entry) => entry.plugin);
 //@ chunk-ykab7xp3.js:7948-8087 placement
-var me = Object.freeze({
+var UNCHECKED_DENY = Object.freeze({
   decision: "deny",
   reason: "the rules and hooks in your settings could not be checked for this call, so it is refused",
 });
@@ -301,30 +303,30 @@ var me = Object.freeze({
 /**
  * 有决定且未被插件改变则用，否则冻结
  */
-function decideOrFreeze(e, trace) {
-  return e !== undefined && pluginsThatChangedDecision(trace).length === 0 ? e : me;
+function decideOrFreeze(decision, trace) {
+  return decision !== undefined && pluginsThatChangedDecision(trace).length === 0 ? decision : UNCHECKED_DENY;
 }
 //@ chunk-ykab7xp3.js:8144-8249 placement
 /**
  * 决定的名称（deny/ask rule、refusal 或 ask 来源）。
  */
-function decisionNoun(e) {
-  let t = e.rule !== undefined;
-  let s = e.decision === "deny";
-  return t ? `${e.decision} rule` : s ? "refusal" : describeAskSource(e);
+function decisionNoun(ask) {
+  let hasRule = ask.rule !== undefined;
+  let isDeny = ask.decision === "deny";
+  return hasRule ? `${ask.decision} rule` : isDeny ? "refusal" : describeAskSource(ask);
 }
 //@ chunk-ykab7xp3.js:8249-8523 placement
 /**
  * 插件试图推翻设置中的规则时的说明文本（allowModsToOverrideDenyRules）。
  */
-function formatOverrideRefusal(e, tool, s, i) {
-  let n = decisionNoun(s);
-  let r = n.startsWith("a") ? "an" : "a";
-  let o =
-    s.rule === undefined
-      ? `${r} ${n} from a ${tool} call`
-      : `${r} ${n} in your settings from a ${tool} call (${s.rule})`;
-  return `${e} tried to ${i} ${o}; the ${n} holds over the plugins you install (allowModsToOverrideDenyRules)`;
+function formatOverrideRefusal(plugin, tool, ask, action) {
+  let noun = decisionNoun(ask);
+  let article = noun.startsWith("a") ? "an" : "a";
+  let sourceText =
+    ask.rule === undefined
+      ? `${article} ${noun} from a ${tool} call`
+      : `${article} ${noun} in your settings from a ${tool} call (${ask.rule})`;
+  return `${plugin} tried to ${action} ${sourceText}; the ${noun} holds over the plugins you install (allowModsToOverrideDenyRules)`;
 }
 //@ chunk-ykab7xp3.js:8523-8630 placement
 /**
@@ -333,13 +335,13 @@ function formatOverrideRefusal(e, tool, s, i) {
 var managedModsOnlyMessage = (name) =>
   `mods are limited to your organization's by policy (allowManagedModsOnly); ${name} was not loaded`;
 //@ chunk-ykab7xp3.js:8630-8677 placement
-var V = Object.freeze(["user", "builtin", "core"]);
+var USER_REACHABLE_TIERS = Object.freeze(["user", "builtin", "core"]);
 //@ chunk-ykab7xp3.js:8677-8751 placement
 /**
  * 非受信层级只能 append
  */
-function appendForUntrustedTier(e, t) {
-  return V.includes(e.provider?.tier) ? t(e) : t.to(e, "append");
+function appendForUntrustedTier(ctx, next) {
+  return USER_REACHABLE_TIERS.includes(ctx.provider?.tier) ? next(ctx) : next.to(ctx, "append");
 }
 //@ chunk-ykab7xp3.js:8751-8828 placement
 /**
@@ -366,33 +368,33 @@ var DANGEROUS_ENV_VARS = [
 /**
  * 在 e 毫秒内复用上次计算结果的节流器。
  */
-function throttleValue(e, t = Date.now) {
+function throttleValue(windowMs, now = Date.now) {
   let NEGATIVE_INFINITY = Number.NEGATIVE_INFINITY;
-  let i;
-  return (n) => {
-    if (i === undefined || t() - NEGATIVE_INFINITY > e) {
-      NEGATIVE_INFINITY = t();
-      i = n();
+  let lastValue;
+  return (compute) => {
+    if (lastValue === undefined || now() - NEGATIVE_INFINITY > windowMs) {
+      NEGATIVE_INFINITY = now();
+      lastValue = compute();
     }
-    return i ?? n();
+    return lastValue ?? compute();
   };
 }
 //@ chunk-ykab7xp3.js:9107-9144 placement
 /**
  * 出错也当成功
  */
-var settleTrueOnError = (e, isDenyRuleProtected) => e.then(isDenyRuleProtected).catch(() => true);
+var settleTrueOnError = (promise, isDenyRuleProtected) => promise.then(isDenyRuleProtected).catch(() => true);
 //@ chunk-ykab7xp3.js:9144-9183 placement
 /**
  * 策略允许本人修改
  */
-var isPersonWritablePolicy = (e) => e.personWritablePolicy === true;
+var isPersonWritablePolicy = (ctx) => ctx.personWritablePolicy === true;
 //@ chunk-ykab7xp3.js:9183-9277 placement
 /**
  * 对象取值（Map 化）
  */
-function getFromMap(e, t) {
-  return typeof e === "object" && e !== null ? new Map(Object.entries(e)).get(t) : undefined;
+function getFromMap(value, key) {
+  return typeof value === "object" && value !== null ? new Map(Object.entries(value)).get(key) : undefined;
 }
 //@ chunk-ykab7xp3.js:9277-9343 placement
 /**
@@ -403,24 +405,25 @@ var SEC_DEFAULT_OPTIONS_PATH = ["pluginConfigs", "cc-plugin-sec-default@builtin"
 /**
  * 取 sec-default 配置项
  */
-var getSecDefaultOption = (e, t) => [...SEC_DEFAULT_OPTIONS_PATH, t].reduce(getFromMap, e);
+var getSecDefaultOption = (settings, option) =>
+  [...SEC_DEFAULT_OPTIONS_PATH, option].reduce(getFromMap, settings);
 //@ chunk-ykab7xp3.js:9377-9435 placement
 /**
  * deny 规则是否受保护
  */
-var isDenyRuleProtected = (e) =>
-  isPersonWritablePolicy(e) || getSecDefaultOption(e, "allowModsToOverrideDenyRules") !== true;
+var isDenyRuleProtected = (ctx) =>
+  isPersonWritablePolicy(ctx) || getSecDefaultOption(ctx, "allowModsToOverrideDenyRules") !== true;
 //@ chunk-ykab7xp3.js:9435-9482 placement
 /**
  * 是否声明了 allowedMcpServers
  */
-var hasAllowedMcpServerList = (e) => Array.isArray(e.allowedMcpServers);
+var hasAllowedMcpServerList = (settings) => Array.isArray(settings.allowedMcpServers);
 //@ chunk-ykab7xp3.js:9482-9557 placement
 /**
  * 只允许托管插件
  */
-function isManagedModsOnly(e) {
-  let secDefaultOption = getSecDefaultOption(e, "allowManagedModsOnly");
+function isManagedModsOnly(ctx) {
+  let secDefaultOption = getSecDefaultOption(ctx, "allowManagedModsOnly");
   return secDefaultOption !== undefined && secDefaultOption !== false;
 }
 //@ chunk-ykab7xp3.js:9557-9831 placement
@@ -444,11 +447,11 @@ var CLAUDE_CODE_PROCESS_WRAPPER = "CLAUDE_CODE_PROCESS_WRAPPER";
 /**
  * 插件不得改写的环境变量键（设置 env 中的键、进程包装器、保护变量与危险变量）。
  */
-function protectedEnvKeys(e) {
-  let t = e.processWrapper !== undefined;
+function protectedEnvKeys(ctx) {
+  let hasWrapper = ctx.processWrapper !== undefined;
   return [
-    ...Object.keys(e.env ?? {}),
-    ...(t ? [CLAUDE_CODE_PROCESS_WRAPPER] : []),
+    ...Object.keys(ctx.env ?? {}),
+    ...(hasWrapper ? [CLAUDE_CODE_PROCESS_WRAPPER] : []),
     ...PROTECTED_CONFIG_ENV_VARS,
     ...DANGEROUS_ENV_VARS,
   ];
@@ -457,51 +460,52 @@ function protectedEnvKeys(e) {
 /**
  * 是否为受保护环境变量
  */
-var isProtectedEnvKey = (e, name) => protectedEnvKeys(e).some((s) => s.toUpperCase() === name.toUpperCase());
+var isProtectedEnvKey = (ctx, name) =>
+  protectedEnvKeys(ctx).some((key) => key.toUpperCase() === name.toUpperCase());
 //@ chunk-ykab7xp3.js:10033-10079 placement
 /**
  * 托管 MCP 列表不可读
  */
-var isManagedMcpUnreadable = (e) => e.managedMcpServersUnreadable === true;
+var isManagedMcpUnreadable = (ctx) => ctx.managedMcpServersUnreadable === true;
 //@ chunk-ykab7xp3.js:10079-10123 placement = setCwdState (1)
 var nfcLower = (cwd) => cwd.normalize("NFC").toLowerCase();
 //@ chunk-ykab7xp3.js:10123-10205 placement
 /**
  * NFC/NFD 两种归一化
  */
-var normalizationVariants = (e) => {
-  let normalized = e.normalize("NFC");
-  let normalized_2 = e.normalize("NFD");
+var normalizationVariants = (name) => {
+  let normalized = name.normalize("NFC");
+  let normalized_2 = name.normalize("NFD");
   return normalized === normalized_2 ? [normalized] : [normalized, normalized_2];
 };
 //@ chunk-ykab7xp3.js:10205-10241 placement
 /**
  * true 或数组
  */
-var isTrueOrArray = (e) => e === true || Array.isArray(e);
+var isTrueOrArray = (value) => value === true || Array.isArray(value);
 //@ chunk-ykab7xp3.js:10241-10306 placement
 /**
  * 去掉 @版本
  */
-function stripVersionSuffix(e) {
-  let index = e.lastIndexOf("@");
-  return index > 0 ? e.slice(0, index) : e;
+function stripVersionSuffix(id) {
+  let index = id.lastIndexOf("@");
+  return index > 0 ? id.slice(0, index) : id;
 }
 //@ chunk-ykab7xp3.js:10306-10660 placement
 /**
  * 列出组织在 sec-default 之前启用的插件。
  */
-function listOrgPluginsBeforeSecDefault(e, cwd) {
-  let flattened = Object.entries(e.enabledPlugins ?? {}).flatMap(([key, value]) =>
+function listOrgPluginsBeforeSecDefault(ctx, cwd) {
+  let flattened = Object.entries(ctx.enabledPlugins ?? {}).flatMap(([key, value]) =>
     isTrueOrArray(value) && !key.endsWith("@builtin") ? [key] : [],
   );
-  let i = (cwd_2) => typeof cwd === "string" && nfcLower(cwd_2) === nfcLower(cwd);
-  let any = flattened.some(i);
-  return [e.prependPlugins, e.appendPlugins, flattened].flatMap((r) =>
-    (Array.isArray(r) ? r : []).flatMap((o) => {
-      let p = typeof o === "string" ? stripVersionSuffix(o) : "";
-      let a = typeof o === "string" && any && i(o);
-      return p !== "" && !a ? normalizationVariants(p) : [];
+  let isSameCwd = (cwd_2) => typeof cwd === "string" && nfcLower(cwd_2) === nfcLower(cwd);
+  let any = flattened.some(isSameCwd);
+  return [ctx.prependPlugins, ctx.appendPlugins, flattened].flatMap((list) =>
+    (Array.isArray(list) ? list : []).flatMap((pluginId) => {
+      let name = typeof pluginId === "string" ? stripVersionSuffix(pluginId) : "";
+      let isThisProject = typeof pluginId === "string" && any && isSameCwd(pluginId);
+      return name !== "" && !isThisProject ? normalizationVariants(name) : [];
     }),
   );
 }
@@ -509,79 +513,82 @@ function listOrgPluginsBeforeSecDefault(e, cwd) {
 /**
  * 组织允许/托管的 MCP 服务器名列表。
  */
-function orgMcpServerNames(e) {
-  let { allowedMcpServers, managedMcpServers } = e;
-  let i = typeof managedMcpServers === "object" && !Array.isArray(managedMcpServers);
+function orgMcpServerNames(settings) {
+  let { allowedMcpServers, managedMcpServers } = settings;
+  let hasManagedMap = typeof managedMcpServers === "object" && !Array.isArray(managedMcpServers);
   return [
-    ...(Array.isArray(allowedMcpServers) ? allowedMcpServers : []).flatMap((n) => {
-      let serverName = typeof n === "object" && n !== null && "serverName" in n ? n.serverName : undefined;
+    ...(Array.isArray(allowedMcpServers) ? allowedMcpServers : []).flatMap((entry) => {
+      let serverName =
+        typeof entry === "object" && entry !== null && "serverName" in entry ? entry.serverName : undefined;
       return typeof serverName === "string" && serverName !== "" ? [serverName] : [];
     }),
-    ...Object.keys(i ? (managedMcpServers ?? {}) : {}),
+    ...Object.keys(hasManagedMap ? (managedMcpServers ?? {}) : {}),
   ];
 }
 //@ chunk-ykab7xp3.js:10956-11099 placement
 /**
  * 服务器名规范化后的变体（替换非法字符、合并下划线）。
  */
-function serverNameVariants(e) {
-  let replaced = e.replace(/[^a-zA-Z0-9_-]/g, "_");
+function serverNameVariants(name) {
+  let replaced = name.replace(/[^a-zA-Z0-9_-]/g, "_");
   let replaced_2 = replaced.replace(/_+/g, "_").replace(/^_|_$/g, "");
-  return [...new Set([replaced, replaced_2])].filter((i) => i !== "");
+  return [...new Set([replaced, replaced_2])].filter((variant) => variant !== "");
 }
 //@ chunk-ykab7xp3.js:11099-11200 placement
 /**
  * 名称规范化为小写下划线形式。
  */
-var normalizeToolPrefix = (e) =>
-  e
+var normalizeToolPrefix = (name) =>
+  name
     .replace(/[^a-zA-Z0-9_-]/g, "_")
     .toLowerCase()
     .replace(/[-_]+/g, "_")
     .replace(/^_|_$/g, "");
 //@ chunk-ykab7xp3.js:11200-11226 placement
-var _ = (e) => `mcp_${normalizeToolPrefix(e)}_`;
+var _ = (serverName) => `mcp_${normalizeToolPrefix(serverName)}_`;
 //@ chunk-ykab7xp3.js:11226-11423 placement
 /**
  * 工具名是否属于组织的 MCP 服务器或组织插件。
  */
-var isOrgToolName = (e, name) =>
-  (isManagedMcpUnreadable(e) && name.startsWith("mcp__")) ||
-  orgMcpServerNames(e)
+var isOrgToolName = (ctx, name) =>
+  (isManagedMcpUnreadable(ctx) && name.startsWith("mcp__")) ||
+  orgMcpServerNames(ctx)
     .flatMap(serverNameVariants)
-    .some((s) => name.startsWith(`mcp__${s}__`)) ||
-  listOrgPluginsBeforeSecDefault(e)
-    .filter((s) => normalizeToolPrefix(s) !== "")
-    .flatMap((s) => [s, `plugin_${s}`])
-    .some((s) => `${normalizeToolPrefix(name)}_`.startsWith(_(s)));
+    .some((variant) => name.startsWith(`mcp__${variant}__`)) ||
+  listOrgPluginsBeforeSecDefault(ctx)
+    .filter((pluginId) => normalizeToolPrefix(pluginId) !== "")
+    .flatMap((pluginId) => [pluginId, `plugin_${pluginId}`])
+    .some((candidate) => `${normalizeToolPrefix(name)}_`.startsWith(_(candidate)));
 //@ chunk-ykab7xp3.js:11423-11488 placement
 /**
  * 组织保留的工具名前缀
  */
-var toolNamesReservedForOrg = (e, t) => [
-  ...orgMcpServerNames(e),
-  ...listOrgPluginsBeforeSecDefault(e, t).flatMap((s) => [s, `plugin_${s}`]),
+var toolNamesReservedForOrg = (ctx, cwd) => [
+  ...orgMcpServerNames(ctx),
+  ...listOrgPluginsBeforeSecDefault(ctx, cwd).flatMap((pluginId) => [pluginId, `plugin_${pluginId}`]),
 ];
 //@ chunk-ykab7xp3.js:11488-11646 placement
 /**
  * 组织工具排在前面，其他工具在后。
  */
-function orderOrgToolsFirst(e, t, s) {
-  return e === undefined || t.value === undefined || s.value === undefined
-    ? t
+function orderOrgToolsFirst(ctx, orgTools, otherTools) {
+  return ctx === undefined || orgTools.value === undefined || otherTools.value === undefined
+    ? orgTools
     : {
         value: [
-          ...t.value.filter((n) => isOrgToolName(e, n.name)),
-          ...s.value.filter((n) => !isOrgToolName(e, n.name)),
+          ...orgTools.value.filter((tool) => isOrgToolName(ctx, tool.name)),
+          ...otherTools.value.filter((tool) => !isOrgToolName(ctx, tool.name)),
         ],
       };
 }
 //@ chunk-ykab7xp3.js:11646-11761 placement = getMcpPrefix (1)
-function getMcpPrefix(e, t, s, i) {
-  let n = `${normalizeToolPrefix(`mcp__${t}__${s}`)}_`;
+function getMcpPrefix(ctx, serverName, toolName, cwd) {
+  let prefix = `${normalizeToolPrefix(`mcp__${serverName}__${toolName}`)}_`;
   return (
-    isManagedMcpUnreadable(e) ||
-    toolNamesReservedForOrg(e, i).some((r) => normalizeToolPrefix(r) === "" || n.startsWith(_(r)))
+    isManagedMcpUnreadable(ctx) ||
+    toolNamesReservedForOrg(ctx, cwd).some(
+      (reserved) => normalizeToolPrefix(reserved) === "" || prefix.startsWith(_(reserved)),
+    )
   );
 }
 //@ chunk-ykab7xp3.js:11761-11772 placement
@@ -600,13 +607,13 @@ var POLICY_SOURCE_ONLY = {
 /**
  * 判断消息 origin 是否为 Skill 工具产生。
  */
-var isSkillToolOrigin = (e) => e.origin.kind === "tool" && e.origin.tool === SKILL_TOOL_NAME;
+var isSkillToolOrigin = (ctx) => ctx.origin.kind === "tool" && ctx.origin.tool === SKILL_TOOL_NAME;
 //@ chunk-ykab7xp3.js:11866-11986 placement
 /**
  * 插件工具名冒充组织服务器工具时的说明。
  */
-var orgToolNameClashMessage = (e) =>
-  `managedMcpServers (managed): a tool of ${e} would be named as a tool of one of the organization's servers`;
+var orgToolNameClashMessage = (serverName) =>
+  `managedMcpServers (managed): a tool of ${serverName} would be named as a tool of one of the organization's servers`;
 //@ chunk-ykab7xp3.js:11986-12064 placement
 /**
  * 托管 allowedMcpServers 的提示
@@ -616,171 +623,192 @@ var ALLOWED_MCP_WARNING = "allowedMcpServers (managed): plugins outside policy m
 /**
  * 工具名冲突原因
  */
-var reservedToolNameReason = (e, plugin, name, i) =>
-  hasAllowedMcpServerList(e)
+var reservedToolNameReason = (ctx, serverName, toolName, cwd) =>
+  hasAllowedMcpServerList(ctx)
     ? ALLOWED_MCP_WARNING
-    : getMcpPrefix(e, plugin, name, i)
-      ? orgToolNameClashMessage(plugin)
+    : getMcpPrefix(ctx, serverName, toolName, cwd)
+      ? orgToolNameClashMessage(serverName)
       : undefined;
 //@ chunk-ykab7xp3.js:12115-14738 placement
 /**
  * sec-default 插件的 hooks：把各类提示词、上下文、技能、工具描述事件统一追加处理并做审核。
  */
-function secDefaultHooks(e) {
-  let t = throttleValue(MAX_TOOL_NAMES);
-  let s = new Set();
-  let i = new Map();
-  e("classic.*", (n, r, o) => o.to(r, "append"));
-  e("prompt.section", (n, r, o) => o.to(r, "append"));
-  e("prompt.context", (n, r, o) => o.to(r, "append"));
-  e("prompt.attachment", (n, r, o) => o.to(r, "append"));
-  e("prompt.compose", (n, r, o) => o.to(r, "append"));
-  e("skill.prompt", (n, r, o) => o.to(r, "append"));
-  e("attribution.text", (n, r, o) => o.to(r, "append"));
-  e(
+function secDefaultHooks(on) {
+  let readPolicyThrottled = throttleValue(MAX_TOOL_NAMES);
+  let loggedMessages = new Set();
+  let pluginProvenance = new Map();
+  on("classic.*", (ctx, payload, next) => next.to(payload, "append"));
+  on("prompt.section", (ctx, payload, next) => next.to(payload, "append"));
+  on("prompt.context", (ctx, payload, next) => next.to(payload, "append"));
+  on("prompt.attachment", (ctx, payload, next) => next.to(payload, "append"));
+  on("prompt.compose", (ctx, payload, next) => next.to(payload, "append"));
+  on("skill.prompt", (ctx, payload, next) => next.to(payload, "append"));
+  on("attribution.text", (ctx, payload, next) => next.to(payload, "append"));
+  on(
     "session.append",
     {
       door: "attachment",
     },
-    (n, r, o) => o.to(r, "append"),
+    (ctx, payload, next) => next.to(payload, "append"),
   );
-  e(
+  on(
     "session.append",
     {
       door: "hook-context",
     },
-    (n, r, o) => o.to(r, "append"),
+    (ctx, payload, next) => next.to(payload, "append"),
   );
-  e(
+  on(
     "session.append",
     {
       door: "compaction",
     },
-    (n, r, o) => o.to(r, "append"),
+    (ctx, payload, next) => next.to(payload, "append"),
   );
-  e(
+  on(
     "session.append",
     {
       door: "tool-message",
     },
-    (n, r, o) => (isSkillToolOrigin(r) ? o.to(r, "append") : o(r)),
+    (ctx, payload, next) => (isSkillToolOrigin(payload) ? next.to(payload, "append") : next(payload)),
   );
-  e(
+  on(
     "session.append",
     {
       door: "note",
     },
-    (n, r, o) => (o.origin.tier === "prepend" || o.origin.tier === "append" ? o.to(r, "append") : o(r)),
+    (ctx, payload, next) =>
+      next.origin.tier === "prepend" || next.origin.tier === "append"
+        ? next.to(payload, "append")
+        : next(payload),
   );
-  e("session.compact", (n, r, o) => o.to(r, "append"));
-  e("settings.read", (n, r, o) => o.to(r, "append"));
-  e("tool.describe", (n, r, o) => appendForUntrustedTier(r, o));
-  e("command.describe", (n, r, o) => appendForUntrustedTier(r, o));
-  e("agent.offer", (n, r, o) => appendForUntrustedTier(r, o));
-  e("agent.spawn", (n, r, o) => appendForUntrustedTier(r, o));
-  e("tool.register", async (n, r, o) => {
-    if (o.origin.tier === "prepend" || o.origin.tier === "append") return o.to(r, "append");
-    let a =
-      o.origin.tier === "user"
-        ? await t(() => n.settings.read(POLICY_SOURCE_ONLY))
-            .then((I) => reservedToolNameReason(I, o.origin.plugin, r.name, i.get(o.origin.plugin)))
+  on("session.compact", (ctx, payload, next) => next.to(payload, "append"));
+  on("settings.read", (ctx, payload, next) => next.to(payload, "append"));
+  on("tool.describe", (ctx, payload, next) => appendForUntrustedTier(payload, next));
+  on("command.describe", (ctx, payload, next) => appendForUntrustedTier(payload, next));
+  on("agent.offer", (ctx, payload, next) => appendForUntrustedTier(payload, next));
+  on("agent.spawn", (ctx, payload, next) => appendForUntrustedTier(payload, next));
+  on("tool.register", async (ctx, payload, next) => {
+    if (next.origin.tier === "prepend" || next.origin.tier === "append") return next.to(payload, "append");
+    let refusal =
+      next.origin.tier === "user"
+        ? await readPolicyThrottled(() => ctx.settings.read(POLICY_SOURCE_ONLY))
+            .then((settings) =>
+              reservedToolNameReason(
+                settings,
+                next.origin.plugin,
+                payload.name,
+                pluginProvenance.get(next.origin.plugin),
+              ),
+            )
             .catch(() => ALLOWED_MCP_WARNING)
         : undefined;
-    return a === undefined
-      ? o(r)
+    return refusal === undefined
+      ? next(payload)
       : {
-          deny: a,
+          deny: refusal,
         };
   });
-  e("tool.list", async (n, r, o) =>
+  on("tool.list", async (ctx, payload, next) =>
     orderOrgToolsFirst(
-      await t(() => n.settings.read(POLICY_SOURCE_ONLY)).catch(() => {
+      await readPolicyThrottled(() => ctx.settings.read(POLICY_SOURCE_ONLY)).catch(() => {
         return;
       }),
-      await o.to(r, "append"),
-      await o(r),
+      await next.to(payload, "append"),
+      await next(payload),
     ),
   );
-  e("tool.check", async (n, r, o) => {
-    let p = await o(r);
-    let a = pluginsThatChangedDecision(o.trace);
+  on("tool.check", async (ctx, payload, next) => {
+    let before = await next(payload);
+    let changedPlugins = pluginsThatChangedDecision(next.trace);
     if (!(
-      a.length > 0 &&
+      changedPlugins.length > 0 &&
       (await settleTrueOnError(
-        t(() => n.settings.read(POLICY_SOURCE_ONLY)),
+        readPolicyThrottled(() => ctx.settings.read(POLICY_SOURCE_ONLY)),
         isDenyRuleProtected,
       ))
     ))
-      return p;
-    let m = await o.to(r, "append");
-    let { approver } = r;
-    if (!isOverriddenDecision(m, p, approver)) return p;
-    let se = decisionNoun(m);
-    for (let ie of a.filter((Te) => !s.has(`${Te} ${se}`))) {
-      s.add(`${ie} ${se}`);
-      n.ui.log(formatOverrideRefusal(ie, r.tool, m, isStrongerDecision(p, m) ? "lift" : "reword"));
+      return before;
+    let after = await next.to(payload, "append");
+    let { approver } = payload;
+    if (!isOverriddenDecision(after, before, approver)) return before;
+    let noun = decisionNoun(after);
+    for (let plugin of changedPlugins.filter((plugin) => !loggedMessages.has(`${plugin} ${noun}`))) {
+      loggedMessages.add(`${plugin} ${noun}`);
+      ctx.ui.log(
+        formatOverrideRefusal(
+          plugin,
+          payload.tool,
+          after,
+          isStrongerDecision(before, after) ? "lift" : "reword",
+        ),
+      );
     }
-    return m;
-  }).catch(async (error, r, o) => {
-    let p = await o(r).catch(() => {
+    return after;
+  }).catch(async (error, payload, next) => {
+    let settled = await next(payload).catch(() => {
       return;
     });
     return (await settleTrueOnError(
-      t(() => error.settings.read(POLICY_SOURCE_ONLY)),
+      readPolicyThrottled(() => error.settings.read(POLICY_SOURCE_ONLY)),
       isDenyRuleProtected,
     ))
-      ? decideOrFreeze(p, o.trace)
-      : p;
+      ? decideOrFreeze(settled, next.trace)
+      : settled;
   });
-  e("ui.log", (n, r, o) =>
-    o.origin.tier === "prepend" || o.origin.tier === "append" ? o.to(r, "append") : o(r),
+  on("ui.log", (ctx, payload, next) =>
+    next.origin.tier === "prepend" || next.origin.tier === "append"
+      ? next.to(payload, "append")
+      : next(payload),
   );
-  e("env.get", (n, r, o) =>
-    o.origin.tier === "prepend" || o.origin.tier === "append" ? o.to(r, "append") : o(r),
+  on("env.get", (ctx, payload, next) =>
+    next.origin.tier === "prepend" || next.origin.tier === "append"
+      ? next.to(payload, "append")
+      : next(payload),
   );
-  e("env.set", async (n, r, o) => {
-    if (o.origin.tier === "prepend" || o.origin.tier === "append") return o.to(r, "append");
+  on("env.set", async (ctx, payload, next) => {
+    if (next.origin.tier === "prepend" || next.origin.tier === "append") return next.to(payload, "append");
     if (
       !(await settleTrueOnError(
-        t(() => n.settings.read(POLICY_SOURCE_ONLY)),
-        (m) => isProtectedEnvKey(m, r.name),
+        readPolicyThrottled(() => ctx.settings.read(POLICY_SOURCE_ONLY)),
+        (settings) => isProtectedEnvKey(settings, payload.name),
       ))
     )
-      return o(r);
-    return o.origin.tier === "user"
+      return next(payload);
+    return next.origin.tier === "user"
       ? {
-          deny: managedEnvRejection(r.name),
+          deny: managedEnvRejection(payload.name),
         }
-      : o.to(r, "append");
-  }).catch((error, r, o) => {
-    if (o.called) return o(r);
-    return o.origin.tier === "user"
+      : next.to(payload, "append");
+  }).catch((error, payload, next) => {
+    if (next.called) return next(payload);
+    return next.origin.tier === "user"
       ? {
-          deny: managedEnvRejection(r.name),
+          deny: managedEnvRejection(payload.name),
         }
-      : o.to(r, "append");
+      : next.to(payload, "append");
   });
-  e(
+  on(
     "plugin.register",
     {
       tier: "user",
     },
-    async (n, r, o) => {
-      i.set(r.name, r.provenance);
-      return isManagedModsOnly(await n.settings.read(POLICY_SOURCE_ONLY))
+    async (ctx, payload, next) => {
+      pluginProvenance.set(payload.name, payload.provenance);
+      return isManagedModsOnly(await ctx.settings.read(POLICY_SOURCE_ONLY))
         ? {
-            refuse: managedModsOnlyMessage(r.name),
+            refuse: managedModsOnlyMessage(payload.name),
           }
-        : o(r);
+        : next(payload);
     },
-  ).catch((error, r, o) => {
-    error.ui.log(registerHookJudgeError(r.name, o.error), {
+  ).catch((error, payload, next) => {
+    error.ui.log(registerHookJudgeError(payload.name, next.error), {
       to: "debug",
     });
-    return o.called
-      ? o(r)
+    return next.called
+      ? next(payload)
       : {
-          refuse: managedModsOnlyMessage(r.name),
+          refuse: managedModsOnlyMessage(payload.name),
         };
   });
 }
@@ -800,3 +828,4 @@ var registerSecDefaultPlugin = () =>
       SEC_DEFAULT_HOOKS_SCAN(),
     ),
   });
+export { SEC_DEFAULT, emptyHooksFirst, isSecDefaultOutermost, registerSecDefaultPlugin };

@@ -9,19 +9,19 @@
  * attribution: fingerprint 1
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, string } from "../../../vendor/zod/v4/classic/schemas.js";
+import { objectSchema, stringSchema } from "../../../vendor/zod/v4/classic/schemas.js";
 
 //@ chunk-e6aww6q8.js:2323863-2323942 fingerprint = saveSyncedMeta (0.656)
 /**
  * 代理记忆快照的元数据 schema（updatedAt / syncedFrom）；316 中无引用，快照同步功能已不存在。
  */
 var SnapshotMetaSchema = DoctorLazy(() =>
-  u({
-    updatedAt: string().min(1),
+  objectSchema({
+    updatedAt: stringSchema().min(1),
   }),
 );
 var SyncedMetaSchema = DoctorLazy(() =>
-  u({
-    syncedFrom: string().min(1),
+  objectSchema({
+    syncedFrom: stringSchema().min(1),
   }),
 );

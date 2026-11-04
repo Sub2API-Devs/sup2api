@@ -27,10 +27,11 @@ import { hasProfileScope } from "../../auth.js";
 import { getOauthConfig } from "../../../constants/oauth.js";
 import { createAdminRequest } from "../../../services/api/adminRequests.js";
 import { DoctorLazy } from "../../../cli/handlers/util.js";
-import { u, string } from "../../../../vendor/zod/v4/classic/schemas.js";
+import { objectSchema, stringSchema } from "../../../../vendor/zod/v4/classic/schemas.js";
 import { printableName } from "../../printableName.js";
 import { jsonStringify } from "../../slowOperations.js";
 import { isEssentialTrafficOnly } from "../../privacyLevel.js";
+import { deferInit } from "../../../../runtime/deferred-init.js";
 
 //@ chunk-s61vbvea.js:463956-464015 fingerprint = checkIsGitClean (1)
 async function checkIsGitClean() {
@@ -56,13 +57,13 @@ async function fetchRemoteEnvironmentsForEligibility(storageV5, credentials) {
  * 目录是否在 git 工作树内（或是已知的仓库根）。
  */
 async function isInGitRepo(cwd) {
-  let n = cwd ?? getCwd();
-  if (findGitRoot(n) !== null) return true;
+  let dir = cwd ?? getCwd();
+  if (findGitRoot(dir) !== null) return true;
   let { stdout, code } = await execFileNoThrowWithCwd(
     gitExe(),
     [...GIT_SAFE_GLOBAL_ARGS, "rev-parse", "--is-inside-work-tree"],
     {
-      cwd: n,
+      cwd: dir,
     },
   );
   return code === 0 && stdout.trim() === "true";
@@ -91,9 +92,9 @@ async function checkGithubAppInstalled(owner, repo, signal, options) {
     };
   }
   try {
-    let h = isConsoleProfileSessionsCredential();
-    let y = await accountApiAccessToken(h);
-    if (!y) {
+    let consoleProfile = isConsoleProfileSessionsCredential();
+    let accessToken = await accountApiAccessToken(consoleProfile);
+    if (!accessToken) {
       logForDebugging("checkGithubAppInstalled: No access token found, assuming app not installed");
       return {
         appInstalled: false,
@@ -103,26 +104,26 @@ async function checkGithubAppInstalled(owner, repo, signal, options) {
         httpStatus: null,
       };
     }
-    let S = await sessionsApiOrganizationUUID(h);
-    if (!S) {
-      let j = hasProfileScope();
+    let orgUuid = await sessionsApiOrganizationUUID(consoleProfile);
+    if (!orgUuid) {
+      let hasProfile = hasProfileScope();
       logForDebugging(
-        j
+        hasProfile
           ? "checkGithubAppInstalled: No org UUID found (profile fetch null \u2014 possibly transient), assuming app not installed"
           : "checkGithubAppInstalled: No org UUID found (token lacks user:profile scope \u2014 deterministic), assuming app not installed",
       );
       return {
         appInstalled: false,
         defaultBranch: null,
-        transient: j,
+        transient: hasProfile,
         linkedAccountAccess: "inconclusive",
         httpStatus: null,
       };
     }
-    let url = `${getOauthConfig().BASE_API_URL}/api/oauth/organizations/${S}/code/repos/${owner}/${repo}`;
+    let url = `${getOauthConfig().BASE_API_URL}/api/oauth/organizations/${orgUuid}/code/repos/${owner}/${repo}`;
     let headers = {
-      ...getOAuthRequestHeaders(y),
-      "x-organization-uuid": S,
+      ...getOAuthRequestHeaders(accessToken),
+      "x-organization-uuid": orgUuid,
     };
     logForDebugging(`Checking GitHub app installation for ${owner}/${repo}`);
     let now = Date.now();
@@ -145,8 +146,8 @@ async function checkGithubAppInstalled(owner, repo, signal, options) {
         };
       }
       if (response.data.status === null) {
-        let G = GITHUB_APP_CHECK_TIMEOUT_MS - (Date.now() - now);
-        if (options?.resyncUndetermined === false || G < MIN_RESYNC_BUDGET_MS) {
+        let remainingMs = GITHUB_APP_CHECK_TIMEOUT_MS - (Date.now() - now);
+        if (options?.resyncUndetermined === false || remainingMs < MIN_RESYNC_BUDGET_MS) {
           logForDebugging(
             `GitHub app status for ${owner}/${repo} is undetermined; not asking the server to resync it`,
           );
@@ -160,11 +161,11 @@ async function checkGithubAppInstalled(owner, repo, signal, options) {
         }
         return {
           ...(await createAdminRequest({
-            orgUUID: S,
-            accessToken: y,
+            orgUUID: orgUuid,
+            accessToken,
             owner: response.data.repo?.owner?.login || owner,
             repo: response.data.repo?.name || repo,
-            timeoutMs: G,
+            timeoutMs: remainingMs,
             signal,
           })),
           defaultBranch,
@@ -195,14 +196,14 @@ async function checkGithubAppInstalled(owner, repo, signal, options) {
     if (axios_default.isAxiosError(error)) {
       let status = error.response?.status;
       let headers = error.response?.headers ?? {};
-      let w = error.response?.data;
-      let R = classifyGithubPrecondition(status, error.response?.data);
-      let x = githubUserFacingError(status, error.response?.data);
-      let P =
+      let data = error.response?.data;
+      let linkedAccountAccess = classifyGithubPrecondition(status, error.response?.data);
+      let serverMessage = githubUserFacingError(status, error.response?.data);
+      let rateLimited =
         status === 403 &&
         (headers["x-ratelimit-remaining"] === "0" ||
           headers["retry-after"] !== undefined ||
-          [w?.error, w?.message].some((j) => typeof j === "string" && /rate limit/i.test(j)));
+          [data?.error, data?.message].some((text) => typeof text === "string" && /rate limit/i.test(text)));
       if (
         status &&
         status >= 400 &&
@@ -210,31 +211,33 @@ async function checkGithubAppInstalled(owner, repo, signal, options) {
         status !== 408 &&
         status !== 429 &&
         status !== 401 &&
-        !P
+        !rateLimited
       ) {
         logForDebugging(
-          `checkGithubAppInstalled: Got ${status} error, app likely not installed on ${owner}/${repo} (linked-account access: ${R})`,
+          `checkGithubAppInstalled: Got ${status} error, app likely not installed on ${owner}/${repo} (linked-account access: ${linkedAccountAccess})`,
         );
         return {
           appInstalled: false,
           defaultBranch: null,
           transient: false,
-          linkedAccountAccess: R,
+          linkedAccountAccess,
           httpStatus: status,
-          ...(x && {
-            serverMessage: x,
+          ...(serverMessage && {
+            serverMessage,
           }),
         };
       }
-      logForDebugging(`checkGithubAppInstalled error: ${errorMessage(error)} (linked-account access: ${R})`);
+      logForDebugging(
+        `checkGithubAppInstalled error: ${errorMessage(error)} (linked-account access: ${linkedAccountAccess})`,
+      );
       return {
         appInstalled: false,
         defaultBranch: null,
-        transient: R !== "github_not_connected",
-        linkedAccountAccess: R,
+        transient: linkedAccountAccess !== "github_not_connected",
+        linkedAccountAccess,
         httpStatus: status ?? null,
-        ...(x && {
-          serverMessage: x,
+        ...(serverMessage && {
+          serverMessage,
         }),
       };
     }
@@ -268,26 +271,29 @@ function GITHUB_PRECONDITION_ERRORS({ linkedAccountAccess, serverMessage, transi
           };
 }
 //@ chunk-s61vbvea.js:469567-469739 placement
-var githubErrorResponseSchema = DoctorLazy(() =>
-  u({
-    error: u({
-      message: string().optional().catch(undefined),
-      details: u({
-        error_code: string().optional(),
-        type: string().optional(),
-        error_visibility: string().optional().catch(undefined),
+var githubErrorResponseSchema; // deferred: uses DoctorLazy (../../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-s61vbvea.js:469567", () => {
+  githubErrorResponseSchema = DoctorLazy(() =>
+    objectSchema({
+      error: objectSchema({
+        message: stringSchema().optional().catch(undefined),
+        details: objectSchema({
+          error_code: stringSchema().optional(),
+          type: stringSchema().optional(),
+          error_visibility: stringSchema().optional().catch(undefined),
+        }),
       }),
     }),
-  }),
-);
+  );
+});
 //@ chunk-s61vbvea.js:469739-470060 placement
 /**
  * 根据 401/404 响应判断 GitHub 前置条件：需要授权、未安装应用或无法判断。
  */
-function classifyGithubPrecondition(status, n) {
+function classifyGithubPrecondition(status, body) {
   if (status !== 401 && status !== 404) return "inconclusive";
-  let r = githubErrorResponseSchema().safeParse(n);
-  let details = r.success ? r.data.error.details : undefined;
+  let parseResult = githubErrorResponseSchema().safeParse(body);
+  let details = parseResult.success ? parseResult.data.error.details : undefined;
   if (status === 401 && details?.error_code === "auth_required" && details.type === "github")
     return "github_not_connected";
   if (status === 404 && details?.error_code === "github_resource_not_found") return "github_repo_not_found";
@@ -297,11 +303,11 @@ function classifyGithubPrecondition(status, n) {
 /**
  * 从 403 响应中提取面向用户的 GitHub 错误信息。
  */
-function githubUserFacingError(status, n) {
+function githubUserFacingError(status, body) {
   if (status !== 403) return;
-  let r = githubErrorResponseSchema().safeParse(n);
-  if (!r.success) return;
-  let { message, details } = r.data.error;
+  let parseResult = githubErrorResponseSchema().safeParse(body);
+  if (!parseResult.success) return;
+  let { message, details } = parseResult.data.error;
   if (!message || details.error_visibility !== "user_facing") return;
   if (
     details.error_code !== "github_ip_allowlist" &&
@@ -322,20 +328,20 @@ async function isGithubAppInstalled(owner, repo, signal) {
 //@ chunk-s61vbvea.js:470485-471223 fingerprint = checkGithubTokenSynced (0.98)
 async function checkGithubTokenSynced() {
   try {
-    let e = isConsoleProfileSessionsCredential();
-    let n = await accountApiAccessToken(e);
-    if (!n) {
+    let consoleProfile = isConsoleProfileSessionsCredential();
+    let accessToken = await accountApiAccessToken(consoleProfile);
+    if (!accessToken) {
       logForDebugging("checkGithubTokenSynced: No access token found");
       return false;
     }
-    let orgUUID = await sessionsApiOrganizationUUID(e);
+    let orgUUID = await sessionsApiOrganizationUUID(consoleProfile);
     if (!orgUUID) {
       logForDebugging("checkGithubTokenSynced: No org UUID found");
       return false;
     }
     let url = `${getOauthConfig().BASE_API_URL}/api/oauth/organizations/${orgUUID}/sync/github/auth`;
     let headers = {
-      ...getOAuthRequestHeaders(n),
+      ...getOAuthRequestHeaders(accessToken),
       "x-organization-uuid": orgUUID,
     };
     logForDebugging("Checking if GitHub token is synced via web-setup");
@@ -365,13 +371,13 @@ async function checkGithubTokenSynced() {
  * 判断仓库的远程访问方式：github-app、token-sync 或 none（附原因）。
  */
 async function checkRepoForRemoteAccess(owner, repo) {
-  let r = await checkGithubAppInstalled(owner, repo);
-  if (r.appInstalled)
+  let githubApp = await checkGithubAppInstalled(owner, repo);
+  if (githubApp.appInstalled)
     return {
       hasAccess: true,
       method: "github-app",
     };
-  if (r.linkedAccountAccess === "github_not_connected")
+  if (githubApp.linkedAccountAccess === "github_not_connected")
     return {
       hasAccess: false,
       method: "none",
@@ -385,7 +391,7 @@ async function checkRepoForRemoteAccess(owner, repo) {
   return {
     hasAccess: false,
     method: "none",
-    reason: r.transient ? "transient" : "no_access",
+    reason: githubApp.transient ? "transient" : "no_access",
   };
 }
 export {

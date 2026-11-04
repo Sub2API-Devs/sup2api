@@ -62,12 +62,12 @@ class JOSEAlgNotAllowed extends JOSEError {
   code = "ERR_JOSE_ALG_NOT_ALLOWED";
 }
 //@ chunk-5h78gfwc.js:5686-5771 esm-fingerprint
-class JOSENotSupported extends JOSEError {
+class JOSENotSupported_2 extends JOSEError {
   static code = "ERR_JOSE_NOT_SUPPORTED";
   code = "ERR_JOSE_NOT_SUPPORTED";
 }
 //@ chunk-5h78gfwc.js:5771-5921 esm-fingerprint
-class JWEDecryptionFailed extends JOSEError {
+class JWEDecryptionFailed_2 extends JOSEError {
   static code = "ERR_JWE_DECRYPTION_FAILED";
   code = "ERR_JWE_DECRYPTION_FAILED";
   constructor(message = "decryption operation failed", options) {
@@ -75,12 +75,12 @@ class JWEDecryptionFailed extends JOSEError {
   }
 }
 //@ chunk-5h78gfwc.js:5921-5992 esm-fingerprint
-class JWEInvalid extends JOSEError {
+class JWEInvalid_2 extends JOSEError {
   static code = "ERR_JWE_INVALID";
   code = "ERR_JWE_INVALID";
 }
 //@ chunk-5h78gfwc.js:5992-6063 esm-fingerprint
-class JWSInvalid extends JOSEError {
+class JWSInvalid_2 extends JOSEError {
   static code = "ERR_JWS_INVALID";
   code = "ERR_JWS_INVALID";
 }
@@ -134,10 +134,10 @@ class JWSSignatureVerificationFailed extends JOSEError {
 }
 export {
   JWTClaimValidationFailed,
-  JOSENotSupported,
-  JWEInvalid,
-  JWEDecryptionFailed,
-  JWSInvalid,
+  JOSENotSupported_2,
+  JWEInvalid_2,
+  JWEDecryptionFailed_2,
+  JWSInvalid_2,
   JWTInvalid,
   JWTExpired,
   JOSEAlgNotAllowed,

@@ -10,6 +10,21 @@
  */
 import { resolve } from "path";
 import {
+  permissionRuleExtractPrefix,
+  hasWildcards,
+  matchWildcardPattern,
+} from "../../utils/permissions/shellRuleMatching.js";
+import {
+  createPermissionRequestMessage,
+  parseToolInputForPermission,
+  describePermissionCheckFault,
+  isSettledPermissionResult,
+  PERMISSION_CHECK_CRASHED_REASON,
+  getContentRulesMapForToolName,
+  carriesAskRuleIntent,
+} from "../../utils/permissions/permissions.js";
+import { recordCheckedResult } from "../../utils/permissions/permissionRecord.js";
+import {
   parsePowerShellCommand,
   getAllCommandNames,
   stripModulePrefix,
@@ -43,20 +58,6 @@ import {
   skipLeadingWhitespaceAndComments,
 } from "./powershellParsing.js";
 import { POWERSHELL_TOOL_NAME } from "./toolName.js";
-import {
-  matchWildcardPattern,
-  permissionRuleExtractPrefix,
-  hasWildcards,
-} from "../../utils/permissions/shellRuleMatching.js";
-import {
-  getContentRulesMapForToolName,
-  createPermissionRequestMessage,
-  carriesAskRuleIntent,
-  parseToolInputForPermission,
-  describePermissionCheckFault,
-  isSettledPermissionResult,
-  PERMISSION_CHECK_CRASHED_REASON,
-} from "../../utils/permissions/permissions.js";
 import { powershellToolCheckExactMatchPermission_2 } from "../BashTool/bashPermissions.js";
 import { getToolPermissionContext } from "../../utils/permissions/toolPermissionContext.js";
 import {
@@ -82,58 +83,148 @@ import {
 } from "./gitSafety.js";
 import { readFlagWithOverride } from "../../services/analytics/flagOverrides.js";
 import { getCwd } from "../../utils/cwd.js";
-import { recordCheckedResult } from "../../utils/permissions/permissionRecord.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
+//@ chunk-dcmhvw5a.js:214175-214322 fingerprint = filterRulesByContentsMatchingInput (1)
+/**
+ * 把规则内容解析成 {type:prefix,prefix} / {type:wildcard,pattern} / {type:exact,command}。
+ */
+function parseShellPermissionRule(pattern) {
+  let inputCmdName = permissionRuleExtractPrefix(pattern);
+  if (inputCmdName !== null)
+    return {
+      type: "prefix",
+      prefix: inputCmdName,
+    };
+  if (hasWildcards(pattern))
+    return {
+      type: "wildcard",
+      pattern,
+    };
+  return {
+    type: "exact",
+    command: pattern,
+  };
+}
+//@ chunk-dcmhvw5a.js:214322-214446 placement = buildSuggestions (1)
+/**
+ * 通用权限建议：localSettings 里为 toolName(ruleContent) 加 allow 规则。PowerShell/Bash 权限请求复用。
+ */
+function buildToolAllowSuggestion(toolName, ruleContent) {
+  return [
+    {
+      type: "addRules",
+      rules: [
+        {
+          toolName,
+          ruleContent,
+        },
+      ],
+      behavior: "allow",
+      destination: "localSettings",
+    },
+  ];
+}
+//@ chunk-e6aww6q8.js:3017371-3017889 callgraph-fingerprint = powershellToolCheckExactMatchPermission (0.276)
+/**
+ * 命中 ask 规则时仍运行工具自己的 checkPermissions：deny 优先，ask 时带上 matchedAskRule；检查崩溃时按 crashIsObjection 决定是否以"检查崩溃"询问。
+ */
+async function powershellToolCheckExactMatchPermission(tool, input, callOptions, askRuleForTool, settings) {
+  let defaultAsk = {
+    behavior: "ask",
+    decisionReason: {
+      type: "rule",
+      rule: askRuleForTool,
+    },
+    message: createPermissionRequestMessage(tool.name),
+  };
+  try {
+    let { parsedInput } = parseToolInputForPermission(tool, input, callOptions);
+    let result = await tool.checkPermissions(parsedInput, callOptions);
+    recordCheckedResult(callOptions, parsedInput, result, tool.name);
+    if (result?.behavior === "deny") return result;
+    if (result?.behavior === "ask") {
+      let { suggestions, ...resultWithoutSuggestions } = result;
+      return {
+        ...resultWithoutSuggestions,
+        matchedAskRule: askRuleForTool,
+      };
+    }
+  } catch (error) {
+    let faultDecision = describePermissionCheckFault(error, tool, input, callOptions);
+    if (faultDecision !== undefined && faultDecision.behavior === "deny") return faultDecision;
+    if (!isSettledPermissionResult(faultDecision) && settings?.crashIsObjection === true) {
+      let decisionReason = {
+        type: "other",
+        reason: PERMISSION_CHECK_CRASHED_REASON,
+      };
+      return {
+        behavior: "ask",
+        message: createPermissionRequestMessage(tool.name, decisionReason),
+        decisionReason,
+      };
+    }
+  }
+  return defaultAsk;
+}
 //@ chunk-v0yfsee9.js:50839-50968 fingerprint = GIT_SAFETY_WRITE_CMDLETS (0.583)
 /**
  * 在读封锁下也视为需检查读路径的写类 cmdlet（Copy-Item、Move-Item、Compress/Expand-Archive、Invoke-WebRequest/RestMethod、New-Item）。
  */
-var GIT_SAFETY_WRITE_CMDLETS = new Set([
-  "copy-item",
-  "move-item",
-  "compress-archive",
-  "expand-archive",
-  "invoke-webrequest",
-  "invoke-restmethod",
-  "new-item",
-]);
+var GIT_SAFETY_WRITE_CMDLETS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-v0yfsee9.js:50839", () => {
+  GIT_SAFETY_WRITE_CMDLETS = new Set([
+    "copy-item",
+    "move-item",
+    "compress-archive",
+    "expand-archive",
+    "invoke-webrequest",
+    "invoke-restmethod",
+    "new-item",
+  ]);
+});
 //@ chunk-v0yfsee9.js:71945-72369 fingerprint = GIT_SAFETY_ARCHIVE_EXTRACTORS (0.646)
 /**
  * 会写文件的 cmdlet 集合、归档解压程序集合（tar/unzip/7z/gzip/Expand-Archive）、原生复制程序集合（xcopy/robocopy），用于 git 内部路径与归档攻击检查。
  */
-var GIT_SAFETY_WRITE_CMDLETS_ALL = new Set([
-  "new-item",
-  "set-content",
-  "add-content",
-  "out-file",
-  "copy-item",
-  "move-item",
-  "rename-item",
-  "expand-archive",
-  "invoke-webrequest",
-  "invoke-restmethod",
-  "tee-object",
-  "export-csv",
-  "export-clixml",
-]);
-var GIT_SAFETY_ARCHIVE_EXTRACTORS = new Set([
-  "tar",
-  "tar.exe",
-  "bsdtar",
-  "bsdtar.exe",
-  "unzip",
-  "unzip.exe",
-  "7z",
-  "7z.exe",
-  "7za",
-  "7za.exe",
-  "gzip",
-  "gzip.exe",
-  "gunzip",
-  "gunzip.exe",
-  "expand-archive",
-]);
-var NATIVE_FILE_COPIERS = new Set(["xcopy", "xcopy.exe", "robocopy", "robocopy.exe"]);
+var GIT_SAFETY_WRITE_CMDLETS_ALL; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var GIT_SAFETY_ARCHIVE_EXTRACTORS;
+var NATIVE_FILE_COPIERS;
+deferInit("chunk-v0yfsee9.js:71945", () => {
+  GIT_SAFETY_WRITE_CMDLETS_ALL = new Set([
+    "new-item",
+    "set-content",
+    "add-content",
+    "out-file",
+    "copy-item",
+    "move-item",
+    "rename-item",
+    "expand-archive",
+    "invoke-webrequest",
+    "invoke-restmethod",
+    "tee-object",
+    "export-csv",
+    "export-clixml",
+  ]);
+  GIT_SAFETY_ARCHIVE_EXTRACTORS = new Set([
+    "tar",
+    "tar.exe",
+    "bsdtar",
+    "bsdtar.exe",
+    "unzip",
+    "unzip.exe",
+    "7z",
+    "7z.exe",
+    "7za",
+    "7za.exe",
+    "gzip",
+    "gzip.exe",
+    "gunzip",
+    "gunzip.exe",
+    "expand-archive",
+  ]);
+  NATIVE_FILE_COPIERS = new Set(["xcopy", "xcopy.exe", "robocopy", "robocopy.exe"]);
+});
 //@ chunk-v0yfsee9.js:72369-72490 layout
 function isNativeFileCopier(element) {
   let lower = element.name.toLowerCase();
@@ -148,29 +239,29 @@ async function extractCommandName(command) {
   return getAllCommandNames(parsed)[0] ?? "";
 }
 //@ chunk-v0yfsee9.js:72581-72610 layout
-function parsePowerShellPermissionRule(e) {
-  return parseShellPermissionRule(e);
+function parsePowerShellPermissionRule(ruleContent) {
+  return parseShellPermissionRule(ruleContent);
 }
 //@ chunk-v0yfsee9.js:72610-72828 layout
-function firstCommandTokenLower(e) {
-  let n = isHazyPeachFlagOn();
-  let r = n ? e.replace(regExp_4, "") : e.trimStart();
-  let s = r[0];
-  if (s === '"' || s === "'") {
-    let index = r.indexOf(s, 1);
-    let g = index === -1 ? r.length : index + 1;
-    return r.slice(0, g).toLowerCase();
+function firstCommandTokenLower(command) {
+  let hazyPeach = isHazyPeachFlagOn();
+  let trimmed = hazyPeach ? command.replace(regExp_4, "") : command.trimStart();
+  let firstChar = trimmed[0];
+  if (firstChar === '"' || firstChar === "'") {
+    let index = trimmed.indexOf(firstChar, 1);
+    let tokenEnd = index === -1 ? trimmed.length : index + 1;
+    return trimmed.slice(0, tokenEnd).toLowerCase();
   }
-  return (r.split(n ? PS_LEADING_WHITESPACE_RE : /\s+/)[0] ?? "").toLowerCase();
+  return (trimmed.split(hazyPeach ? PS_LEADING_WHITESPACE_RE : /\s+/)[0] ?? "").toLowerCase();
 }
 //@ chunk-v0yfsee9.js:72828-72914 layout
 /**
  * 返回字符串去掉尾部空白（含 U+0085、U+180E）后的长度。
  */
-function trimPsTrailingWhitespaceEnd(e) {
-  let n = e.length;
-  while (n > 0 && /[\s\u0085\u180e]/.test(e[n - 1])) n--;
-  return n;
+function trimPsTrailingWhitespaceEnd(text) {
+  let endIndex = text.length;
+  while (endIndex > 0 && /[\s\u0085\u180e]/.test(text[endIndex - 1])) endIndex--;
+  return endIndex;
 }
 //@ chunk-v0yfsee9.js:72914-72986 layout
 /**
@@ -181,23 +272,23 @@ function trimPsWhitespace(command) {
 }
 //@ chunk-v0yfsee9.js:72986-73187 layout
 function trimExoticWhitespaceEdges(ruleContent) {
-  let n = ruleContent;
-  let match = n.match(/^[\s\u0085\u180e]+/);
-  if (match && /[\u0085\u180e]/.test(match[0])) n = n.slice(match[0].length);
-  let sliced = n.slice(trimPsTrailingWhitespaceEnd(n));
-  if (/[\u0085\u180e]/.test(sliced)) n = n.slice(0, n.length - sliced.length);
-  return n;
+  let text = ruleContent;
+  let match = text.match(/^[\s\u0085\u180e]+/);
+  if (match && /[\u0085\u180e]/.test(match[0])) text = text.slice(match[0].length);
+  let sliced = text.slice(trimPsTrailingWhitespaceEnd(text));
+  if (/[\u0085\u180e]/.test(sliced)) text = text.slice(0, text.length - sliced.length);
+  return text;
 }
 //@ chunk-v0yfsee9.js:73187-73455 layout
-function stripExoticWhitespaceAtEdges(e) {
-  let n = e;
-  let match = n.match(/^[\s\u0085\u180e]+/);
+function stripExoticWhitespaceAtEdges(text) {
+  let stripped = text;
+  let match = stripped.match(/^[\s\u0085\u180e]+/);
   if (match && /[\u0085\u180e]/.test(match[0]))
-    n = match[0].replace(/[\u0085\u180e]/g, "") + n.slice(match[0].length);
-  let sliced = n.slice(trimPsTrailingWhitespaceEnd(n));
+    stripped = match[0].replace(/[\u0085\u180e]/g, "") + stripped.slice(match[0].length);
+  let sliced = stripped.slice(trimPsTrailingWhitespaceEnd(stripped));
   if (/[\u0085\u180e]/.test(sliced))
-    n = n.slice(0, n.length - sliced.length) + sliced.replace(/[\u0085\u180e]/g, "");
-  return n;
+    stripped = stripped.slice(0, stripped.length - sliced.length) + sliced.replace(/[\u0085\u180e]/g, "");
+  return stripped;
 }
 //@ chunk-v0yfsee9.js:73455-73536 file-local
 /**
@@ -218,8 +309,8 @@ function suggestionForExactCommand_2(command) {
  */
 function filterRulesByContentsMatchingInput(input, rules, matchMode, behavior) {
   let command = trimPsWhitespace(input.command);
-  function strEquals(_, P) {
-    return _.toLowerCase() === P.toLowerCase();
+  function strEquals(left, right) {
+    return left.toLowerCase() === right.toLowerCase();
   }
   function strStartsWith(str, prefix) {
     return str.toLowerCase().startsWith(prefix.toLowerCase());
@@ -335,14 +426,14 @@ function matchingRulesForInput_2(input, toolPermissionContext, matchMode) {
  */
 function powershellToolCheckPermission(input, toolPermissionContext) {
   let command = trimPsWhitespace(input.command);
-  let s = {
+  let trimmedInput = {
     ...input,
     command,
   };
   let exactMatchResult = powershellToolCheckExactMatchPermission_2(input, toolPermissionContext);
   if (exactMatchResult.behavior === "deny" || exactMatchResult.behavior === "ask") return exactMatchResult;
   let { matchingDenyRules, matchingAskRules, matchingAllowRules } = matchingRulesForInput_2(
-    s,
+    trimmedInput,
     toolPermissionContext,
     "prefix",
   );
@@ -449,7 +540,7 @@ async function getSubCommandsForPermissionCheck(parsed, originalCommand) {
 /**
  * PowerShell checkPermissions 入口：代理带 bashCommandClamp 时直接拒绝，否则走 powershellToolHasPermission。
  */
-async function checkPowerShellPermissions(e, context) {
+async function checkPowerShellPermissions(input, context) {
   let toolPermissionContext = getToolPermissionContext(context);
   if (
     toolPermissionContext.bashCommandClamps !== undefined &&
@@ -466,7 +557,7 @@ async function checkPowerShellPermissions(e, context) {
         reason: BASH_COMMAND_CLAMP_DENY_REASON,
       },
     };
-  return powershellToolHasPermission(e, context, toolPermissionContext);
+  return powershellToolHasPermission(input, context, toolPermissionContext);
 }
 //@ chunk-v0yfsee9.js:77656-77953 layout
 /**
@@ -492,7 +583,7 @@ function denyCrashedCheckUnderCommandClamp(shellPermission) {
  */
 async function powershellToolHasPermission(input, context, toolPermissionContext) {
   let command = trimPsWhitespace(input.command);
-  let m = {
+  let trimmedInput = {
     ...input,
     command,
   };
@@ -508,7 +599,11 @@ async function powershellToolHasPermission(input, context, toolPermissionContext
   let parsed = await parsePowerShellCommand(command);
   let exactMatchResult = powershellToolCheckExactMatchPermission_2(input, toolPermissionContext);
   if (exactMatchResult.behavior === "deny") return exactMatchResult;
-  let { matchingDenyRules, matchingAskRules } = matchingRulesForInput_2(m, toolPermissionContext, "prefix");
+  let { matchingDenyRules, matchingAskRules } = matchingRulesForInput_2(
+    trimmedInput,
+    toolPermissionContext,
+    "prefix",
+  );
   if (matchingDenyRules[0] !== undefined)
     return {
       behavior: "deny",
@@ -544,28 +639,36 @@ async function powershellToolHasPermission(input, context, toolPermissionContext
     let backtickStripped = unescapePsDoubleQuoted(
       command.replace(/<#[\s\S]*?#>/g, " ").replace(/`[\r\n]+\s*/g, ""),
     );
-    let L = false;
-    let j;
-    let F;
+    let sawRemoveItem = false;
+    let dangerousRemovalArg;
+    let fragmentAskRule;
     for (let fragment of backtickStripped.split(/[;|\n\r{}()&]+/)) {
       let trimmedFrag = fragment.trim();
       if (!trimmedFrag) continue;
       let parts = trimmedFrag.split(POWERSHELL_WHITESPACE);
       for (let idx = 0; idx < parts.length; idx++) {
-        let xe = parts[idx];
-        let Fe = stripPsParameterPrefix(xe);
-        if (!Fe) continue;
-        if (j === undefined && !PS_TOKENIZER_DASH_CHARS.has(xe[0] ?? "") && isDangerousRemovalPath(xe))
-          j = xe;
-        if (resolveToCanonical(Fe) === "remove-item") {
-          L = true;
+        let token = parts[idx];
+        let strippedToken = stripPsParameterPrefix(token);
+        if (!strippedToken) continue;
+        if (
+          dangerousRemovalArg === undefined &&
+          !PS_TOKENIZER_DASH_CHARS.has(token[0] ?? "") &&
+          isDangerousRemovalPath(token)
+        )
+          dangerousRemovalArg = token;
+        if (resolveToCanonical(strippedToken) === "remove-item") {
+          sawRemoveItem = true;
           for (let arg of parts.slice(idx + 1)) {
             if (PS_TOKENIZER_DASH_CHARS.has(arg[0] ?? "")) continue;
             if (isDangerousRemovalPath(arg)) return dangerousRemovalDeny(arg);
           }
         }
-        for (let ie of new Set([Fe, stripFileSystemProviderPrefix(xe), createSingleEditDiffConfig(xe)])) {
-          let command_2 = [ie, ...parts.slice(idx + 1)].join(" ");
+        for (let nameVariant of new Set([
+          strippedToken,
+          stripFileSystemProviderPrefix(token),
+          createSingleEditDiffConfig(token),
+        ])) {
+          let command_2 = [nameVariant, ...parts.slice(idx + 1)].join(" ");
           let { matchingDenyRules: fragDenyRules, matchingAskRules } = matchingRulesForInput_2(
             {
               command: command_2,
@@ -582,19 +685,21 @@ async function powershellToolHasPermission(input, context, toolPermissionContext
                 rule: fragDenyRules[0],
               },
             };
-          F ??= matchingAskRules[0];
+          fragmentAskRule ??= matchingAskRules[0];
         }
       }
     }
-    if (L && j !== undefined) return dangerousRemovalDeny(j);
-    let K = (preParseAskDecision) =>
-      F !== undefined && preParseAskDecision.behavior === "ask" && !carriesAskRuleIntent(preParseAskDecision)
+    if (sawRemoveItem && dangerousRemovalArg !== undefined) return dangerousRemovalDeny(dangerousRemovalArg);
+    let withMatchedAskRule = (preParseAskDecision) =>
+      fragmentAskRule !== undefined &&
+      preParseAskDecision.behavior === "ask" &&
+      !carriesAskRuleIntent(preParseAskDecision)
         ? {
             ...preParseAskDecision,
-            matchedAskRule: F,
+            matchedAskRule: fragmentAskRule,
           }
         : preParseAskDecision;
-    if (preParseAskDecision !== null) return K(preParseAskDecision);
+    if (preParseAskDecision !== null) return withMatchedAskRule(preParseAskDecision);
     if (toolPermissionContext.blockReadsOutsideWorkingDirectories === true)
       return outsideReadsTooComplexAsk(
         `Command contains malformed syntax that cannot be parsed: ${parsed.errors[0]?.message ?? "unknown error"}`,
@@ -603,16 +708,16 @@ async function powershellToolHasPermission(input, context, toolPermissionContext
       type: "other",
       reason: `Command contains malformed syntax that cannot be parsed: ${parsed.errors[0]?.message ?? "unknown error"}`,
     };
-    let U = {
+    let syntaxAskResult = {
       behavior: "ask",
       decisionReason,
       message: createPermissionRequestMessage(POWERSHELL_TOOL_NAME, decisionReason),
     };
-    return K({
-      ...U,
+    return withMatchedAskRule({
+      ...syntaxAskResult,
       decisionReason: {
         type: "subcommandResults",
-        reasons: new Map([[command, U]]),
+        reasons: new Map([[command, syntaxAskResult]]),
       },
     });
   }
@@ -660,26 +765,27 @@ async function powershellToolHasPermission(input, context, toolPermissionContext
     });
   }
   if (parsed.hasBackgroundJob) {
-    let A = {
+    let backgroundJobReason = {
       type: "other",
       reason: "Command uses the background job operator (`&`) which spawns a child PowerShell process",
     };
     decisions.push({
       behavior: "ask",
-      message: createPermissionRequestMessage(POWERSHELL_TOOL_NAME, A),
-      decisionReason: A,
+      message: createPermissionRequestMessage(POWERSHELL_TOOL_NAME, backgroundJobReason),
+      decisionReason: backgroundJobReason,
       suggestions: suggestionForExactCommand_2(command),
     });
   }
   let NON_FS_PROVIDER_PATTERN =
     /^(?:[\w.]+\\)?(env|hklm|hkcu|function|alias|variable|cert|wsman|registry)::?/i;
   function extractProviderPathFromArg(arg) {
-    let L = arg;
-    if (L.length > 0 && (PS_TOKENIZER_DASH_CHARS.has(L[0]) || L[0] === "/")) {
-      let colonIdx = L.indexOf(":", 1);
-      if (colonIdx > 0 && (L[0] !== "/" || /^\/[A-Za-z]{1,2}:/.test(L))) L = L.substring(colonIdx + 1);
+    let argText = arg;
+    if (argText.length > 0 && (PS_TOKENIZER_DASH_CHARS.has(argText[0]) || argText[0] === "/")) {
+      let colonIdx = argText.indexOf(":", 1);
+      if (colonIdx > 0 && (argText[0] !== "/" || /^\/[A-Za-z]{1,2}:/.test(argText)))
+        argText = argText.substring(colonIdx + 1);
     }
-    return unescapePsDoubleQuoted(L.replace(/`[\r\n]+\s*/g, ""));
+    return unescapePsDoubleQuoted(argText.replace(/`[\r\n]+\s*/g, ""));
   }
   function providerOrUncDecisionForArg(arg) {
     let value = extractProviderPathFromArg(arg);
@@ -774,24 +880,26 @@ async function powershellToolHasPermission(input, context, toolPermissionContext
       message:
         "Compound commands with cd/Set-Location and git require approval to prevent bare repository attacks",
     });
-  let W = hasGitSubCommand && isCurrentDirectoryBareGitRepo();
-  if (W)
+  let bareRepoKind = hasGitSubCommand && isCurrentDirectoryBareGitRepo();
+  if (bareRepoKind)
     decisions.push({
       behavior: "ask",
       message:
-        W === "bare-indicators"
+        bareRepoKind === "bare-indicators"
           ? "Git command in a directory with bare-repo indicators (HEAD/objects/refs outside a .git/ directory). Git may treat it as a git dir and run config/hooks from here."
           : "The .git file or symlink here redirects to a location that cannot be verified as safe (it may have been planted by an untrusted archive). Git commands need approval.",
     });
   if (hasGitSubCommand) {
     let writesToGitInternal = allSubCommands.some(({ element, statement }) => {
-      for (let U of element.redirections ?? []) if (isGitInternalPathPS(U.target)) return true;
+      for (let redirection of element.redirections ?? [])
+        if (isGitInternalPathPS(redirection.target)) return true;
       let canonical = resolveToCanonical(element.name);
       if (!GIT_SAFETY_WRITE_CMDLETS_ALL.has(canonical)) return false;
-      if (element.args.flatMap(splitCommaWords).some((U) => isGitInternalPathPS(U))) return true;
+      if (element.args.flatMap(splitCommaWords).some((arg) => isGitInternalPathPS(arg))) return true;
       if (canonical === "copy-item" || canonical === "move-item") {
-        let U = statement === null ? -1 : statement.commands.indexOf(element);
-        let forceAsk = statement !== null && (U > 0 || (U === -1 && statement.commands.length > 1));
+        let elementIndex = statement === null ? -1 : statement.commands.indexOf(element);
+        let forceAsk =
+          statement !== null && (elementIndex > 0 || (elementIndex === -1 && statement.commands.length > 1));
         if (copyMoveMayReachGitInternals(element.args, forceAsk)) return true;
       }
       if (statement !== null)
@@ -801,7 +909,9 @@ async function powershellToolHasPermission(input, context, toolPermissionContext
         }
       return false;
     });
-    let redirWritesToGitInternal = getFileRedirections(parsed).some((F) => isGitInternalPathPS(F.target));
+    let redirWritesToGitInternal = getFileRedirections(parsed).some((redirection) =>
+      isGitInternalPathPS(redirection.target),
+    );
     if (writesToGitInternal || redirWritesToGitInternal)
       decisions.push({
         behavior: "ask",
@@ -816,31 +926,35 @@ async function powershellToolHasPermission(input, context, toolPermissionContext
       });
   }
   if (getPlatform() === "windows" && allSubCommands.length > 1) {
-    let A = new Set();
-    for (let j of getFileRedirections(parsed)) for (let F of baseStems(j.target)) A.add(F);
-    let L = null;
+    let writtenStems = new Set();
+    for (let redirection of getFileRedirections(parsed))
+      for (let stem of baseStems(redirection.target)) writtenStems.add(stem);
+    let shadowedCommand = null;
     for (let { element } of allSubCommands) {
       if (
         commandBaseVariants(element.name).some(
-          ({ base, stem }) => (stem !== "" && A.has(stem)) || (base !== stem && A.has(base)),
+          ({ base, stem }) =>
+            (stem !== "" && writtenStems.has(stem)) || (base !== stem && writtenStems.has(base)),
         )
       ) {
-        L = element.name;
+        shadowedCommand = element.name;
         break;
       }
-      for (let K of element.redirections ?? []) for (let Q of baseStems(K.target)) A.add(Q);
-      let F = resolveToCanonical(element.name);
-      if (GIT_SAFETY_WRITE_CMDLETS_ALL.has(F))
-        for (let K of element.args.flatMap(splitCommaWords)) {
-          let replaced = K.replace(/^[-\u2013\u2014\u2015]+[A-Za-z]+:?/, "");
-          let U = skipLeadingWhitespaceAndComments(replaced);
-          if (stripPsParameterPrefix(U) !== "") for (let J of baseStems(U)) A.add(J);
+      for (let redirection of element.redirections ?? [])
+        for (let stem of baseStems(redirection.target)) writtenStems.add(stem);
+      let canonicalName = resolveToCanonical(element.name);
+      if (GIT_SAFETY_WRITE_CMDLETS_ALL.has(canonicalName))
+        for (let arg of element.args.flatMap(splitCommaWords)) {
+          let replaced = arg.replace(/^[-\u2013\u2014\u2015]+[A-Za-z]+:?/, "");
+          let argText = skipLeadingWhitespaceAndComments(replaced);
+          if (stripPsParameterPrefix(argText) !== "")
+            for (let stem of baseStems(argText)) writtenStems.add(stem);
         }
     }
-    if (L !== null)
+    if (shadowedCommand !== null)
       decisions.push({
         behavior: "ask",
-        message: `An earlier sub-command writes a file (./${L}.*) that would shadow the later \`${L}\` command under Windows PowerShell 5.1 cwd-first resolution.`,
+        message: `An earlier sub-command writes a file (./${shadowedCommand}.*) that would shadow the later \`${shadowedCommand}\` command under Windows PowerShell 5.1 cwd-first resolution.`,
       });
   }
   if (
@@ -859,31 +973,31 @@ async function powershellToolHasPermission(input, context, toolPermissionContext
     });
   if (
     allSubCommands.some(({ element }) => {
-      for (let F of element.redirections ?? []) if (isDotGitPathPS(F.target)) return true;
+      for (let redirection of element.redirections ?? []) if (isDotGitPathPS(redirection.target)) return true;
       let canonical = resolveToCanonical(element.name);
       if (!GIT_SAFETY_WRITE_CMDLETS_ALL.has(canonical)) return false;
       return element.args.flatMap(splitCommaWords).some(isDotGitPathPS);
     }) ||
-    getFileRedirections(parsed).some((L) => isDotGitPathPS(L.target))
+    getFileRedirections(parsed).some((redirection) => isDotGitPathPS(redirection.target))
   )
     decisions.push({
       behavior: "ask",
       message:
         "Command writes to .git/ \u2014 hooks or config planted there execute on the next git operation.",
     });
-  let pathResult = checkPathConstraints(m, parsed, toolPermissionContext, hasCdSubCommand);
+  let pathResult = checkPathConstraints(trimmedInput, parsed, toolPermissionContext, hasCdSubCommand);
   if (pathResult.behavior !== "passthrough") decisions.push(pathResult);
   let ruleContent =
     exactMatchResult.behavior === "allow" && exactMatchResult.decisionReason?.type === "rule"
       ? exactMatchResult.decisionReason.rule.ruleValue.ruleContent
       : undefined;
-  let B =
+  let ruleCoversFullCommand =
     ruleContent !== undefined &&
     trimExoticWhitespaceEdges(ruleContent).trim().toLowerCase() === command.toLowerCase();
   if (
     exactMatchResult.behavior === "allow" &&
     allSubCommands[0] !== undefined &&
-    (B ||
+    (ruleCoversFullCommand ||
       allSubCommands.every(
         (sc) => sc.element.nameType !== "application" && !argLeaksValue(sc.text, sc.element),
       ))
@@ -904,23 +1018,23 @@ async function powershellToolHasPermission(input, context, toolPermissionContext
       message: "Command contains file redirections that could write to arbitrary paths",
       suggestions: suggestionForExactCommand_2(command),
     });
-  let modeResult = checkPermissionMode(m, parsed, toolPermissionContext);
+  let modeResult = checkPermissionMode(trimmedInput, parsed, toolPermissionContext);
   if (modeResult.behavior !== "passthrough") decisions.push(modeResult);
   let deniedDecision = decisions.find((decision) => decision.behavior === "deny");
   if (deniedDecision !== undefined) return deniedDecision;
-  let ne =
+  let askDecision =
     decisions.find(
       (decision) => decision.behavior === "ask" && isOutsideReadsBlockedAsk(decision.decisionReason),
     ) ?? decisions.find((decision) => decision.behavior === "ask");
-  if (ne !== undefined) {
-    let A = {
-      ...ne,
+  if (askDecision !== undefined) {
+    let askDecisionWithReasons = {
+      ...askDecision,
       decisionReason: {
         type: "subcommandResults",
-        reasons: new Map([[command, ne]]),
+        reasons: new Map([[command, askDecision]]),
       },
     };
-    if (!carriesAskRuleIntent(A)) {
+    if (!carriesAskRuleIntent(askDecisionWithReasons)) {
       for (let decision of decisions)
         if (
           decision.behavior === "ask" &&
@@ -928,11 +1042,11 @@ async function powershellToolHasPermission(input, context, toolPermissionContext
           decision.decisionReason.rule.ruleBehavior === "ask"
         )
           return {
-            ...A,
+            ...askDecisionWithReasons,
             matchedAskRule: decision.decisionReason.rule,
           };
     }
-    return A;
+    return askDecisionWithReasons;
   }
   let allowDecision = decisions.find((decision) => decision.behavior === "allow");
   if (allowDecision !== undefined) return allowDecision;
@@ -951,15 +1065,17 @@ async function powershellToolHasPermission(input, context, toolPermissionContext
     }
     return true;
   });
-  let he = (element) => {
+  let approvalScopeOf = (element) => {
     if (element.nameType === "application") return null;
     let lower = element.name.toLowerCase();
-    let j = resolveToCanonical(lower);
-    let index = j.indexOf("-");
-    return j !== lower || (index > 0 && SAFE_POWERSHELL_VERBS.has(j.slice(0, index))) ? "full" : "exact";
+    let canonicalName = resolveToCanonical(lower);
+    let index = canonicalName.indexOf("-");
+    return canonicalName !== lower || (index > 0 && SAFE_POWERSHELL_VERBS.has(canonicalName.slice(0, index)))
+      ? "full"
+      : "exact";
   };
   let subCommandsNeedingApproval = [];
-  let Ee = false;
+  let sawAllowlistedCommand = false;
   let statementsSeenInLoop = new Set();
   let statementsSeenInLoop_2 = new Set();
   for (let { text: subCmd, element, statement } of subCommands) {
@@ -978,38 +1094,46 @@ async function powershellToolHasPermission(input, context, toolPermissionContext
       subCommandsNeedingApproval.push(subCmd);
       continue;
     }
-    let Q = false;
+    let allowedByPrefixRule = false;
     if (subResult.behavior === "allow" && element.nameType === "application") {
       let lower = element.name.toLowerCase();
       let lower_2 = stripFileSystemProviderPrefix(firstCommandTokenLower(subCmd)).toLowerCase();
       if (lower.length > 0 && lower_2 === lower)
-        Q = matchingRulesForInput_2(subInput, toolPermissionContext, "prefix").matchingAllowRules.some(
-          (matchingAllowRule) => {
-            let powerShellPermissionRule = parsePowerShellPermissionRule(
-              stripExoticWhitespaceAtEdges(matchingAllowRule.ruleValue.ruleContent ?? ""),
-            );
-            let ke =
-              powerShellPermissionRule.type === "exact"
-                ? powerShellPermissionRule.command
-                : powerShellPermissionRule.type === "prefix"
-                  ? powerShellPermissionRule.prefix
-                  : powerShellPermissionRule.pattern;
-            return stripFileSystemProviderPrefix(firstCommandTokenLower(ke)).toLowerCase() === lower;
-          },
-        );
+        allowedByPrefixRule = matchingRulesForInput_2(
+          subInput,
+          toolPermissionContext,
+          "prefix",
+        ).matchingAllowRules.some((matchingAllowRule) => {
+          let powerShellPermissionRule = parsePowerShellPermissionRule(
+            stripExoticWhitespaceAtEdges(matchingAllowRule.ruleValue.ruleContent ?? ""),
+          );
+          let rulePatternCommand =
+            powerShellPermissionRule.type === "exact"
+              ? powerShellPermissionRule.command
+              : powerShellPermissionRule.type === "prefix"
+                ? powerShellPermissionRule.prefix
+                : powerShellPermissionRule.pattern;
+          return (
+            stripFileSystemProviderPrefix(firstCommandTokenLower(rulePatternCommand)).toLowerCase() === lower
+          );
+        });
     }
-    if (subResult.behavior === "allow" && (element.nameType !== "application" || Q) && !hasSymlinkCreate) {
+    if (
+      subResult.behavior === "allow" &&
+      (element.nameType !== "application" || allowedByPrefixRule) &&
+      !hasSymlinkCreate
+    ) {
       if (argLeaksValue(subCmd, element)) {
         if (statement !== null) statementsSeenInLoop_2.add(statement);
         subCommandsNeedingApproval.push(subCmd);
         statementsSeenInLoop.add(subCmd);
         continue;
       }
-      let U = he(element);
+      let approvalScope = approvalScopeOf(element);
       if (
-        U !== null &&
-        (hasVariableWritingParam(element.args, element.elementTypes, U) ||
-          hasNonDefaultActionPreference(element.args, element.elementTypes, U))
+        approvalScope !== null &&
+        (hasVariableWritingParam(element.args, element.elementTypes, approvalScope) ||
+          hasNonDefaultActionPreference(element.args, element.elementTypes, approvalScope))
       ) {
         if (statement !== null) statementsSeenInLoop_2.add(statement);
         subCommandsNeedingApproval.push(subCmd);
@@ -1030,7 +1154,7 @@ async function powershellToolHasPermission(input, context, toolPermissionContext
       isProvablySafeStatement(statement) &&
       isAllowlistedCommand(element, subCmd)
     ) {
-      Ee = true;
+      sawAllowlistedCommand = true;
       continue;
     }
     if (statement !== null && !hasCdSubCommand && !hasSymlinkCreate) {
@@ -1055,26 +1179,30 @@ async function powershellToolHasPermission(input, context, toolPermissionContext
     if (statement !== null) statementsSeenInLoop_2.add(statement);
     subCommandsNeedingApproval.push(subCmd);
     {
-      let U = he(element);
+      let approvalScope = approvalScopeOf(element);
       if (
-        U !== null &&
-        (hasVariableWritingParam(element.args, element.elementTypes, U) ||
-          hasNonDefaultActionPreference(element.args, element.elementTypes, U))
+        approvalScope !== null &&
+        (hasVariableWritingParam(element.args, element.elementTypes, approvalScope) ||
+          hasNonDefaultActionPreference(element.args, element.elementTypes, approvalScope))
       )
         statementsSeenInLoop.add(subCmd);
     }
   }
-  let Ae = new Set();
-  let ue = new Set(subCommandsNeedingApproval);
+  let statementOnlyCommands = new Set();
+  let queuedCommandTexts = new Set(subCommandsNeedingApproval);
   for (let stmt of parsed.statements)
-    if (!isProvablySafeStatement(stmt) && !statementsSeenInLoop_2.has(stmt) && !ue.has(stmt.text)) {
+    if (
+      !isProvablySafeStatement(stmt) &&
+      !statementsSeenInLoop_2.has(stmt) &&
+      !queuedCommandTexts.has(stmt.text)
+    ) {
       subCommandsNeedingApproval.push(stmt.text);
-      ue.add(stmt.text);
-      Ae.add(stmt.text);
+      queuedCommandTexts.add(stmt.text);
+      statementOnlyCommands.add(stmt.text);
     }
   if (subCommandsNeedingApproval.length === 0) {
     if (deriveSecurityFlags(parsed).hasScriptBlocks) {
-      let A = {
+      let scriptBlockAsk = {
         behavior: "ask",
         message: createPermissionRequestMessage(POWERSHELL_TOOL_NAME),
         decisionReason: {
@@ -1084,10 +1212,10 @@ async function powershellToolHasPermission(input, context, toolPermissionContext
         },
       };
       return {
-        ...A,
+        ...scriptBlockAsk,
         decisionReason: {
           type: "subcommandResults",
-          reasons: new Map([[command, A]]),
+          reasons: new Map([[command, scriptBlockAsk]]),
         },
       };
     }
@@ -1096,7 +1224,7 @@ async function powershellToolHasPermission(input, context, toolPermissionContext
       updatedInput: input,
       decisionReason: {
         type: "other",
-        reason: Ee
+        reason: sawAllowlistedCommand
           ? POWERSHELL_COMPOUND_READ_ONLY_PART_REASON
           : "All pipeline commands are individually allowed",
       },
@@ -1108,105 +1236,23 @@ async function powershellToolHasPermission(input, context, toolPermissionContext
   };
   let pendingSuggestions = [];
   for (let subCmd of subCommandsNeedingApproval) {
-    if (Ae.has(subCmd) && subCmd !== command) continue;
+    if (statementOnlyCommands.has(subCmd) && subCmd !== command) continue;
     if (statementsSeenInLoop.has(subCmd) && subCmd !== command) continue;
     pendingSuggestions.push(...suggestionForExactCommand_2(subCmd));
   }
-  let _e = {
+  let passthroughAsk = {
     behavior: "passthrough",
     message: createPermissionRequestMessage(POWERSHELL_TOOL_NAME, decisionReason),
     decisionReason,
     suggestions: pendingSuggestions,
   };
   return {
-    ..._e,
+    ...passthroughAsk,
     decisionReason: {
       type: "subcommandResults",
-      reasons: new Map([[command, _e]]),
+      reasons: new Map([[command, passthroughAsk]]),
     },
   };
-}
-//@ chunk-dcmhvw5a.js:214175-214322 fingerprint = filterRulesByContentsMatchingInput (1)
-/**
- * 把规则内容解析成 {type:prefix,prefix} / {type:wildcard,pattern} / {type:exact,command}。
- */
-function parseShellPermissionRule(pattern) {
-  let inputCmdName = permissionRuleExtractPrefix(pattern);
-  if (inputCmdName !== null)
-    return {
-      type: "prefix",
-      prefix: inputCmdName,
-    };
-  if (hasWildcards(pattern))
-    return {
-      type: "wildcard",
-      pattern,
-    };
-  return {
-    type: "exact",
-    command: pattern,
-  };
-}
-//@ chunk-dcmhvw5a.js:214322-214446 placement = buildSuggestions (1)
-/**
- * 通用权限建议：localSettings 里为 toolName(ruleContent) 加 allow 规则。PowerShell/Bash 权限请求复用。
- */
-function buildToolAllowSuggestion(toolName, ruleContent) {
-  return [
-    {
-      type: "addRules",
-      rules: [
-        {
-          toolName,
-          ruleContent,
-        },
-      ],
-      behavior: "allow",
-      destination: "localSettings",
-    },
-  ];
-}
-//@ chunk-e6aww6q8.js:3017371-3017889 callgraph-fingerprint = powershellToolCheckExactMatchPermission (0.276)
-/**
- * 命中 ask 规则时仍运行工具自己的 checkPermissions：deny 优先，ask 时带上 matchedAskRule；检查崩溃时按 crashIsObjection 决定是否以"检查崩溃"询问。
- */
-async function powershellToolCheckExactMatchPermission(e, n, r, askRuleForTool, h) {
-  let y = {
-    behavior: "ask",
-    decisionReason: {
-      type: "rule",
-      rule: askRuleForTool,
-    },
-    message: createPermissionRequestMessage(e.name),
-  };
-  try {
-    let { parsedInput } = parseToolInputForPermission(e, n, r);
-    let result = await e.checkPermissions(parsedInput, r);
-    recordCheckedResult(r, parsedInput, result, e.name);
-    if (result?.behavior === "deny") return result;
-    if (result?.behavior === "ask") {
-      let { suggestions, ...G } = result;
-      return {
-        ...G,
-        matchedAskRule: askRuleForTool,
-      };
-    }
-  } catch (error) {
-    let w = describePermissionCheckFault(error, e, n, r);
-    if (w !== undefined && w.behavior === "deny") return w;
-    if (!isSettledPermissionResult(w) && h?.crashIsObjection === true) {
-      let decisionReason = {
-        type: "other",
-        reason: PERMISSION_CHECK_CRASHED_REASON,
-      };
-      return {
-        behavior: "ask",
-        message: createPermissionRequestMessage(e.name, decisionReason),
-        decisionReason,
-      };
-    }
-  }
-  return y;
 }
 export {
   powershellToolCheckExactMatchPermission,

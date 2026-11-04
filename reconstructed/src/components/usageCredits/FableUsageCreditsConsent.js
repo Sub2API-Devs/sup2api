@@ -11,7 +11,7 @@
 import { firstWord as firstWord_2 } from "../../utils/model/thirdPartyModelDefaults.js";
 import { useNotifyDialogClaimed } from "../permissions/PermissionRequestTitle.js";
 import { useTheme_2 } from "../design-system/ThemeProvider.js";
-import { Q, y, R, P } from "../../../vendor/react/cjs/react.production.js";
+import { useMemo, useState, useRef, useEffect } from "../../../vendor/react/cjs/react.production.js";
 import { withQuotaResumeFire } from "../../services/quotaAutoResume/quotaAutoResume.js";
 import { useInputClock } from "../../ink/components/Input.js";
 import { useRefusableAnswer } from "../../hooks/useRefusableAnswer.js";
@@ -62,12 +62,12 @@ var CREDITS_CONSENT_TEXT = "By continuing, you agree to turn on usage credits pe
  */
 function FableUsageCreditsConsent(props) {
   let { variant, modelName = "Fable", model, onDone, startAtChooseForTesting } = props;
-  let Re = firstWord_2(modelName);
-  let Be = () => props.variant !== "mid-session" || props.wouldTakeAnswer();
+  let modelFirstName = firstWord_2(modelName);
+  let wouldTakeAnswer = () => props.variant !== "mid-session" || props.wouldTakeAnswer();
   let notifyDialogClaimed = useNotifyDialogClaimed();
   let { storageV5, credentials } = useTheme_2();
-  let Xe = Q(() => withQuotaResumeFire(onDone), [onDone]);
-  let [rt, kt] = y(
+  let finishWithAnswer = useMemo(() => withQuotaResumeFire(onDone), [onDone]);
+  let [consentState, setConsentState] = useState(
     startAtChooseForTesting
       ? {
           s: "choose",
@@ -80,72 +80,74 @@ function FableUsageCreditsConsent(props) {
         },
   );
   let inputClock = useInputClock();
-  let [It, Ot] = y(rt.s);
-  let [Et, Dt] = y(0);
-  let Lt = useRefusableAnswer(() => Be());
-  if (It !== rt.s) {
-    Ot(rt.s);
-    Dt(Date.now());
+  let [stepName, setStepName] = useState(consentState.s);
+  let [stepStartedAt, setStepStartedAt] = useState(0);
+  let refusableAnswer = useRefusableAnswer(() => wouldTakeAnswer());
+  if (stepName !== consentState.s) {
+    setStepName(consentState.s);
+    setStepStartedAt(Date.now());
   }
   let inputRefusalWindow = useInputRefusalWindow();
   let { refusedWithin, noteRefused, epoch } = useRefusalTracker();
-  let po = R(false);
-  let ao = settleKey(`${Et}:${epoch}`);
-  function co() {
-    return (Et !== 0 && isWithinRecentInput(inputClock, Et)) || refusedWithin();
+  let hasReenabledRef = useRef(false);
+  let remount = settleKey(`${stepStartedAt}:${epoch}`);
+  function isInputRefusedNow() {
+    return (stepStartedAt !== 0 && isWithinRecentInput(inputClock, stepStartedAt)) || refusedWithin();
   }
-  function bo() {
-    if (inputRefusalWindow() || co()) {
+  function refuseInput() {
+    if (inputRefusalWindow() || isInputRefusedNow()) {
       noteRefused();
       return true;
     }
     return false;
   }
-  let Ao = R(null);
-  let Bo = R(null);
-  let grantLineRef = R(null);
-  let Ho = R(false);
-  let Io = R(false);
-  P(() => {
-    if (rt.s === "loading") {
-      let Xo = false;
-      Ao.current ??= Promise.all([
+  let balancePromiseRef = useRef(null);
+  let externalBuyPromiseRef = useRef(null);
+  let grantLineRef = useRef(null);
+  let hasFinishedRef = useRef(false);
+  let hasRunExternalBuyRef = useRef(false);
+  useEffect(() => {
+    if (consentState.s === "loading") {
+      let isCancelled = false;
+      balancePromiseRef.current ??= Promise.all([
         fetchPrepaidBalance(credentials).catch(() => null),
         checkExtraUsageStatus(credentials, storageV5).catch(() => "unknown"),
-      ]).then(([Sn, $n]) => ({
-        balance: Sn,
+      ]).then(([balance, extraUsageStatus]) => ({
+        balance,
         overagesEnabled:
-          $n === "enabled" || $n === "blocked" || ($n === "unknown" && hasExtraUsageProvisioned()),
-        blocked: $n === "blocked",
-        liveDefinite: $n !== "unknown",
+          extraUsageStatus === "enabled" ||
+          extraUsageStatus === "blocked" ||
+          (extraUsageStatus === "unknown" && hasExtraUsageProvisioned()),
+        blocked: extraUsageStatus === "blocked",
+        liveDefinite: extraUsageStatus !== "unknown",
       }));
-      Ao.current.then((Sn) => {
-        if (Xo) return;
-        kt({
+      balancePromiseRef.current.then((loadedState) => {
+        if (isCancelled) return;
+        setConsentState({
           s: "choose",
-          ...Sn,
+          ...loadedState,
         });
       });
       return () => {
-        Xo = true;
+        isCancelled = true;
       };
     }
-    if (rt.s === "buy-external") {
-      let Xo = false;
-      Bo.current ??= runExtraUsage(
+    if (consentState.s === "buy-external") {
+      let isCancelled = false;
+      externalBuyPromiseRef.current ??= runExtraUsage(
         {
           openInBrowser: true,
         },
         credentials,
       );
-      Bo.current.then((Sn) => {
-        if (Xo || Io.current) return;
-        Io.current = true;
-        if (Sn.type === "confirm-admin-request") {
+      externalBuyPromiseRef.current.then((externalResult) => {
+        if (isCancelled || hasRunExternalBuyRef.current) return;
+        hasRunExternalBuyRef.current = true;
+        if (externalResult.type === "confirm-admin-request") {
           if (isBgSession()) {
             logFeatureSad("model_fable_consent", "overage_enable_deferred");
             resolveWhenTaken(() =>
-              Xe(
+              finishWithAnswer(
                 "dismiss",
                 isExtraUsageAllowed()
                   ? USAGE_CREDITS_NONINTERACTIVE_HINT
@@ -154,56 +156,56 @@ function FableUsageCreditsConsent(props) {
             );
             return;
           }
-          kt({
+          setConsentState({
             s: "confirm-admin-request",
-            extraUsage: Sn.extraUsage,
-            needsSetup: rt.needsSetup,
+            extraUsage: externalResult.extraUsage,
+            needsSetup: consentState.needsSetup,
           });
           return;
         }
         logFeatureSad("model_fable_consent", "overage_enable_deferred");
         resolveWhenTaken(() =>
-          Xe(
+          finishWithAnswer(
             "dismiss",
-            Sn.type === "message"
-              ? Sn.value
-              : Sn.opened
-                ? `Opened ${Sn.url} in your browser to ${rt.needsSetup ? "turn on" : "manage"} usage credits. Once ${rt.needsSetup ? "enabled" : "topped up"}, run /model to switch to ${modelName}.`
-                : `Visit ${Sn.url} to ${rt.needsSetup ? "turn on" : "manage"} usage credits. Once ${rt.needsSetup ? "enabled" : "topped up"}, run /model to switch to ${modelName}.`,
+            externalResult.type === "message"
+              ? externalResult.value
+              : externalResult.opened
+                ? `Opened ${externalResult.url} in your browser to ${consentState.needsSetup ? "turn on" : "manage"} usage credits. Once ${consentState.needsSetup ? "enabled" : "topped up"}, run /model to switch to ${modelName}.`
+                : `Visit ${externalResult.url} to ${consentState.needsSetup ? "turn on" : "manage"} usage credits. Once ${consentState.needsSetup ? "enabled" : "topped up"}, run /model to switch to ${modelName}.`,
           ),
         );
       });
       return () => {
-        Xo = true;
+        isCancelled = true;
       };
     }
-  }, [rt.s, Xe, credentials, storageV5]);
-  function Wo() {
-    if (Xe("consent") === false) return;
-    saveModelConsent(Re, storageV5);
+  }, [consentState.s, finishWithAnswer, credentials, storageV5]);
+  function onContinue() {
+    if (finishWithAnswer("consent") === false) return;
+    saveModelConsent(modelFirstName, storageV5);
     logFeatureOk("model_fable_consent");
   }
-  function mn(Xo, liveDefinite) {
-    if (!Be()) return;
+  function startPurchase(needsSetup, liveDefinite) {
+    if (!wouldTakeAnswer()) return;
     notifyDialogClaimed();
     if (canPurchaseExtraUsage())
-      kt({
+      setConsentState({
         s: "buy",
-        needsSetup: Xo,
-        skipLiveCheck: Xo && liveDefinite,
+        needsSetup,
+        skipLiveCheck: needsSetup && liveDefinite,
       });
     else
-      kt({
+      setConsentState({
         s: "buy-external",
-        needsSetup: Xo,
+        needsSetup,
       });
   }
-  function Cn() {
-    if (!Be()) return;
-    if (po.current) return;
-    po.current = true;
+  function onReenable() {
+    if (!wouldTakeAnswer()) return;
+    if (hasReenabledRef.current) return;
+    hasReenabledRef.current = true;
     notifyDialogClaimed();
-    kt({
+    setConsentState({
       s: "reenabling",
       work: enableOverageForConsent({
         credentials,
@@ -211,122 +213,128 @@ function FableUsageCreditsConsent(props) {
       }),
     });
   }
-  function No() {
-    if (Xe("switch") === false) return;
+  function onSwitch() {
+    if (finishWithAnswer("switch") === false) return;
     logFeatureBad("model_fable_consent", "declined");
   }
-  function vo() {
-    if (Xe("upgrade") === false) return;
+  function onUpsell() {
+    if (finishWithAnswer("upgrade") === false) return;
     logFeatureSad("model_fable_consent", "upsell_selected");
   }
-  function Yo() {
-    if (inputRefusalWindow() || co()) {
+  function onDismiss() {
+    if (inputRefusalWindow() || isInputRefusedNow()) {
       noteRefused();
       return;
     }
-    if (Xe("dismiss") === false) return;
+    if (finishWithAnswer("dismiss") === false) return;
     logFeatureSad("model_fable_consent", "dismissed");
   }
-  let kn = getUsageCreditsOnlyModelConsentDeclineFallback();
+  let declineFallbackModel = getUsageCreditsOnlyModelConsentDeclineFallback();
   let label =
-    variant === "mid-session" && kn !== null
-      ? `Switch to ${renderModelName(kn)} and continue`
+    variant === "mid-session" && declineFallbackModel !== null
+      ? `Switch to ${renderModelName(declineFallbackModel)} and continue`
       : variant === "mid-session"
         ? "Not now"
         : "No, keep my current model";
-  let [bn] = y(() => isUsageCreditsModelBilled(model));
-  let Go = Re === "Fable" && variant === "mid-session" && !bn;
-  let [hn] = y(() => Re === "Fable" && (variant === "picker" || !isBgSession()) && bn && saffronLadderOn());
+  let [isBilledModel] = useState(() => isUsageCreditsModelBilled(model));
+  let isLimitReached = modelFirstName === "Fable" && variant === "mid-session" && !isBilledModel;
+  let [showUpsell] = useState(
+    () =>
+      modelFirstName === "Fable" &&
+      (variant === "picker" || !isBgSession()) &&
+      isBilledModel &&
+      saffronLadderOn(),
+  );
   let title =
     variant === "picker"
       ? `Switch to ${modelName}?`
-      : Go
+      : isLimitReached
         ? "You've reached your Fable limit"
         : `${modelName} now uses usage credits`;
-  switch (rt.s) {
+  switch (consentState.s) {
     case "loading":
       return jsxProd_default(Dialog, {
         title,
         color: "warning",
-        onCancel: Yo,
+        onCancel: onDismiss,
         children: jsxProd_default(WorkerBadge, {
           message: "Checking usage credits\u2026",
         }),
       });
     case "choose": {
-      let { balance, overagesEnabled, blocked, liveDefinite } = rt;
+      let { balance, overagesEnabled, blocked, liveDefinite } = consentState;
       let amount = balance?.amount ?? 0;
       let currency = balance?.currency ?? "USD";
-      let Dn = !overagesEnabled;
-      let wn = Dn && amount > 0;
-      let mr = overagesEnabled && balance === null;
-      let Kn = overagesEnabled && amount > 0;
-      let Wn = !blocked && (Kn || mr);
-      let Fr = canPurchaseExtraUsage();
-      let Zn = isConsumerPlan()
-        ? Dn
+      let overagesOff = !overagesEnabled;
+      let hasCreditsToReenable = overagesOff && amount > 0;
+      let creditBalanceUnknown = overagesEnabled && balance === null;
+      let hasCreditBalance = overagesEnabled && amount > 0;
+      let canContinue = !blocked && (hasCreditBalance || creditBalanceUnknown);
+      let canPurchase = canPurchaseExtraUsage();
+      let manageLabel = isConsumerPlan()
+        ? overagesOff
           ? "Set up usage credits on claude.ai"
           : "Manage usage credits on claude.ai"
-        : Dn
+        : overagesOff
           ? "Request usage credits from your admin"
           : "Request more from your admin";
-      let Un = Go
+      let leadSentence = isLimitReached
         ? `You've used your included Fable usage for this week. Continuing on ${modelName} uses usage credits`
         : `${modelName} runs on usage credits`;
-      let dr =
-        (Dn && !wn) || mr
-          ? `${Un}, purchased separately from your plan.`
-          : `${Un} \u2014 you have ${formatCurrency(Kn || wn ? amount : 0, currency)} in credits.`;
-      let label_2 = Wn
+      let balanceSentence =
+        (overagesOff && !hasCreditsToReenable) || creditBalanceUnknown
+          ? `${leadSentence}, purchased separately from your plan.`
+          : `${leadSentence} \u2014 you have ${formatCurrency(hasCreditBalance || hasCreditsToReenable ? amount : 0, currency)} in credits.`;
+      let label_2 = canContinue
         ? `Continue with ${modelName}`
-        : wn && Fr
+        : hasCreditsToReenable && canPurchase
           ? "Yes, re-enable and continue"
-          : Fr
-            ? Dn
+          : canPurchase
+            ? overagesOff
               ? "Yes, buy usage credits"
               : "Buy usage credits"
-            : Zn;
-      let pr = hn
+            : manageLabel;
+      let upsellOption = showUpsell
         ? {
             label: "Upgrade to Max",
             value: "upsell",
           }
         : null;
-      let Qn = false;
-      let ur = false;
-      let Ir = formatCurrency(DEFAULT_MONTHLY_SPEND_LIMIT, "USD", "whole");
+      let placeholderA = false;
+      let placeholderB = false;
+      let defaultLimitLabel = formatCurrency(DEFAULT_MONTHLY_SPEND_LIMIT, "USD", "whole");
       return jsxProd_default(Dialog, {
         title,
         color: "warning",
-        onCancel: Yo,
+        onCancel: onDismiss,
         children: jsxProd_default_2(Box, {
           flexDirection: "column",
           gap: 1,
           marginBottom: 1,
           children: [
             jsxProd_default_2(Text, {
-              children: [dr, ""],
+              children: [balanceSentence, ""],
             }),
-            wn
+            hasCreditsToReenable
               ? jsxProd_default_2(Text, {
                   dimColor: true,
                   children: ["Usage credits are turned off. Re-enable to use ", modelName, "."],
                 })
-              : Dn
+              : overagesOff
                 ? jsxProd_default_2(Fragment, {
                     children: [
                       jsxProd_default(Text, {
                         dimColor: true,
                         children: "You don't have usage credits yet.",
                       }),
-                      Fr &&
+                      canPurchase &&
                         jsxProd_default_2(Fragment, {
                           children: [
                             jsxProd_default_2(Text, {
                               dimColor: true,
                               children: [
                                 "Starts with a ",
-                                Ir,
+                                defaultLimitLabel,
                                 " monthly limit \xB7 run /usage-credits to adjust",
                               ],
                             }),
@@ -353,28 +361,28 @@ function FableUsageCreditsConsent(props) {
                     label: label_2,
                     value: "confirm",
                   },
-                  ...(pr ? [pr] : []),
+                  ...(upsellOption ? [upsellOption] : []),
                 ],
                 selectedValue: NO_COMMITTED_ROW,
-                refuseInput: bo,
+                refuseInput,
                 hideIndexes: true,
                 defaultFocusValue: "switch",
-                onChange: (Pr) => {
-                  if (co()) {
-                    Lt.refuse(Pr);
+                onChange: (value) => {
+                  if (isInputRefusedNow()) {
+                    refusableAnswer.refuse(value);
                     noteRefused();
                     return;
                   }
-                  if (!Lt.answer(Pr)) return;
-                  if (Pr === "switch") return No();
-                  if (Pr === "upsell") return hn ? vo() : undefined;
-                  if (Wn) return Wo();
-                  if (wn && Fr) return Cn();
-                  return mn(Dn && !wn, liveDefinite);
+                  if (!refusableAnswer.answer(value)) return;
+                  if (value === "switch") return onSwitch();
+                  if (value === "upsell") return showUpsell ? onUpsell() : undefined;
+                  if (canContinue) return onContinue();
+                  if (hasCreditsToReenable && canPurchase) return onReenable();
+                  return startPurchase(overagesOff && !hasCreditsToReenable, liveDefinite);
                 },
-                onCancel: Yo,
+                onCancel: onDismiss,
               },
-              `${Lt.attempts}-${ao.remountKey}`,
+              `${refusableAnswer.attempts}-${remount.remountKey}`,
             ),
           ],
         }),
@@ -384,27 +392,27 @@ function FableUsageCreditsConsent(props) {
       return jsxProd_default(ExtraUsageDialogEntry, {
         initialStep: "buy_select",
         entryReason: "fable",
-        onBeforePurchase: rt.needsSetup
+        onBeforePurchase: consentState.needsSetup
           ? () =>
               enableOverageForConsent({
-                skipLiveCheck: rt.skipLiveCheck,
+                skipLiveCheck: consentState.skipLiveCheck,
                 credentials,
                 storageV5,
               })
           : undefined,
-        onPurchaseSuccess: (Xo) => {
-          saveModelConsent(Re, storageV5);
+        onPurchaseSuccess: (mesage) => {
+          saveModelConsent(modelFirstName, storageV5);
           logFeatureOk("model_fable_consent");
-          resolveWhenTaken(() => Xe("consent", Xo));
+          resolveWhenTaken(() => finishWithAnswer("consent", mesage));
         },
-        onDone: (Xo) => {
-          if (typeof Xo === "string") {
+        onDone: (result) => {
+          if (typeof result === "string") {
             logFeatureSad("model_fable_consent", "buy_fallback");
-            resolveWhenTaken(() => Xe("dismiss", Xo));
+            resolveWhenTaken(() => finishWithAnswer("dismiss", result));
             return;
           }
-          Ao.current = null;
-          kt({
+          balancePromiseRef.current = null;
+          setConsentState({
             s: "loading",
           });
         },
@@ -413,20 +421,23 @@ function FableUsageCreditsConsent(props) {
       return jsxProd_default(Dialog, {
         title,
         color: "warning",
-        onCancel: Yo,
+        onCancel: onDismiss,
         children: jsxProd_default(AwaitWork, {
           message: "Turning on usage credits\u2026",
-          work: rt.work,
+          work: consentState.work,
           failure: false,
-          onDone: (Xo) => {
-            if (Xo) {
-              saveModelConsent(Re, storageV5);
+          onDone: (enabled) => {
+            if (enabled) {
+              saveModelConsent(modelFirstName, storageV5);
               logFeatureOk("model_fable_consent");
-              resolveWhenTaken(() => Xe("consent"));
+              resolveWhenTaken(() => finishWithAnswer("consent"));
             } else {
               logFeatureSad("model_fable_consent", "reenable_failed");
               resolveWhenTaken(() =>
-                Xe("dismiss", "Couldn't turn on usage credits. Run /usage-credits to try again."),
+                finishWithAnswer(
+                  "dismiss",
+                  "Couldn't turn on usage credits. Run /usage-credits to try again.",
+                ),
               );
             }
           },
@@ -437,19 +448,23 @@ function FableUsageCreditsConsent(props) {
         title,
         color: "warning",
         onCancel: () => {
-          if (inputRefusalWindow() || co()) {
+          if (inputRefusalWindow() || isInputRefusedNow()) {
             noteRefused();
             return;
           }
-          if (Ho.current) return;
-          if (Xe("dismiss", usageCreditsBlockedText(rt.line, "unknown", modelName)) === false) return;
-          Ho.current = true;
+          if (hasFinishedRef.current) return;
+          if (
+            finishWithAnswer("dismiss", usageCreditsBlockedText(consentState.line, "unknown", modelName)) ===
+            false
+          )
+            return;
+          hasFinishedRef.current = true;
           logFeatureSad("model_fable_consent", "dismissed");
         },
         children: jsxProd_default(Box, {
           paddingTop: 1,
           children: jsxProd_default(WorkerBadge, {
-            message: `${rt.line} Checking usage credits\u2026`,
+            message: `${consentState.line} Checking usage credits\u2026`,
           }),
         }),
       });
@@ -457,51 +472,53 @@ function FableUsageCreditsConsent(props) {
       return jsxProd_default(Dialog, {
         title,
         color: "warning",
-        onCancel: Yo,
+        onCancel: onDismiss,
         children: jsxProd_default(WorkerBadge, {
-          message: rt.needsSetup ? "Setting up usage credits\u2026" : "Opening usage credits\u2026",
+          message: consentState.needsSetup ? "Setting up usage credits\u2026" : "Opening usage credits\u2026",
         }),
       });
     case "confirm-admin-request":
       return jsxProd_default(AdminRequestConfirmDialog, {
-        extraUsage: rt.extraUsage,
-        wouldTakeAnswer: Be,
-        onDone: (Xo) => {
-          let Sn = grantLineRef.current;
-          if (Sn === null) return Xe("dismiss", Xo);
+        extraUsage: consentState.extraUsage,
+        wouldTakeAnswer,
+        onDone: (message) => {
+          let grantLine = grantLineRef.current;
+          if (grantLine === null) return finishWithAnswer("dismiss", message);
           notifyDialogClaimed();
-          kt({
+          setConsentState({
             s: "granted",
-            line: Sn,
+            line: grantLine,
           });
           sleep(ADMIN_REQUEST_TIMEOUT_MS)
             .then(() => checkExtraUsageStatus(credentials, storageV5))
             .catch(() => "unknown")
-            .then(($n) => {
-              if (Ho.current) return;
-              Ho.current = true;
-              if ($n === "enabled") {
-                saveModelConsent(Re, storageV5);
+            .then((status) => {
+              if (hasFinishedRef.current) return;
+              hasFinishedRef.current = true;
+              if (status === "enabled") {
+                saveModelConsent(modelFirstName, storageV5);
                 logFeatureOk("model_fable_consent");
-                resolveWhenTaken(() => Xe("consent", Sn));
+                resolveWhenTaken(() => finishWithAnswer("consent", grantLine));
                 return;
               }
               logFeatureSad(
                 "model_fable_consent",
-                $n === "disabled"
+                status === "disabled"
                   ? "overage_enable_deferred"
-                  : $n === "blocked"
+                  : status === "blocked"
                     ? "credits_blocked"
                     : "credits_unconfirmed",
               );
-              resolveWhenTaken(() => Xe("dismiss", usageCreditsBlockedText(Sn, $n, modelName)));
+              resolveWhenTaken(() =>
+                finishWithAnswer("dismiss", usageCreditsBlockedText(grantLine, status, modelName)),
+              );
             });
           return true;
         },
-        onOutcome: (Xo) => {
-          switch (Xo.outcome) {
+        onOutcome: (outcome) => {
+          switch (outcome.outcome) {
             case "granted":
-              grantLineRef.current = Xo.grantLine;
+              grantLineRef.current = outcome.grantLine;
               return;
             case "filed":
               logFeatureSad("model_fable_consent", "overage_enable_deferred");
@@ -518,15 +535,15 @@ function FableUsageCreditsConsent(props) {
   }
 }
 //@ chunk-18hwfzwa.js:1191955-1192350 placement
-function usageCreditsBlockedText(h, x, modelName) {
-  switch (x) {
+function usageCreditsBlockedText(prefixText, status, modelName) {
+  switch (status) {
     case "disabled":
-      return `${h} Usage credits aren't on for your organization yet. Ask your admin to turn them on, then run /model to switch to ${modelName}.`;
+      return `${prefixText} Usage credits aren't on for your organization yet. Ask your admin to turn them on, then run /model to switch to ${modelName}.`;
     case "blocked":
-      return `${h} Your organization's usage credits are capped or used up right now. Run /model to switch to ${modelName} once they're available.`;
+      return `${prefixText} Your organization's usage credits are capped or used up right now. Run /model to switch to ${modelName} once they're available.`;
     case "enabled":
     case "unknown":
-      return `${h} Run /model to switch to ${modelName}.`;
+      return `${prefixText} Run /model to switch to ${modelName}.`;
   }
 }
 export { FableUsageCreditsConsent };

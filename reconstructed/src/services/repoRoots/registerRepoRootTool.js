@@ -10,7 +10,7 @@
  */
 import { relative, sep } from "path";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, string, union, literal } from "../../../vendor/zod/v4/classic/schemas.js";
+import { objectSchema, stringSchema, union, literal } from "../../../vendor/zod/v4/classic/schemas.js";
 import { HostScoped } from "../../utils/hostScoped.js";
 import { registerRepoRoot, registerRepoRootErrorClass, checkRepoRootScope } from "./registerRepoRoot.js";
 import { getToolPermissionContext } from "../../utils/permissions/toolPermissionContext.js";
@@ -32,20 +32,20 @@ var REGISTERREPOROOT = "RegisterRepoRoot";
 var MAX_ASKED_BY_CHARS = 32;
 var MAX_REGISTER_DIRECTORY_CHARS = 4096;
 var _ = DoctorLazy(() =>
-  u({
-    directory: string().max(MAX_REGISTER_DIRECTORY_CHARS),
-    askedBy: string().min(1).max(64).optional(),
+  objectSchema({
+    directory: stringSchema().max(MAX_REGISTER_DIRECTORY_CHARS),
+    askedBy: stringSchema().min(1).max(64).optional(),
   }),
 );
 var registerRepoRootSlots = new HostScoped(() => new Map());
 var registerRepoRootResultSchema = DoctorLazy(() =>
   union([
-    u({
-      directory: string().min(1).max(4096),
+    objectSchema({
+      directory: stringSchema().min(1).max(4096),
       alreadyTaken: literal(true).optional(),
     }),
-    u({
-      refusal: string().min(1).max(64),
+    objectSchema({
+      refusal: stringSchema().min(1).max(64),
     }),
   ]),
 );
@@ -53,20 +53,20 @@ var registerRepoRootResultSchema = DoctorLazy(() =>
 /**
  * RegisterRepoRoot 工具的调用：在工作区根下注册文件夹。
  */
-async function callRegisterRepoRoot(s, f, a) {
-  let { directory, askedBy } = _().parse(s);
-  let y = a.toolUseContext();
+async function callRegisterRepoRoot(input, abortSignal, context) {
+  let { directory, askedBy } = _().parse(input);
+  let toolContext = context.toolUseContext();
   let {
     workspaceRoot = {
       kind: "absent",
     },
-  } = a;
-  let e;
+  } = context;
+  let repoRoot;
   try {
-    e = await registerRepoRoot(
+    repoRoot = await registerRepoRoot(
       directory,
       () => ({
-        ...getToolPermissionContext(y),
+        ...getToolPermissionContext(toolContext),
         additionalWorkingDirectories: new Map(
           workspaceRoot.kind === "valid"
             ? [
@@ -84,27 +84,27 @@ async function callRegisterRepoRoot(s, f, a) {
       getOriginalCwd(),
     );
   } catch (error) {
-    let l = registerRepoRootErrorClass(error);
-    if (l === undefined) throw error;
-    if (l === "outside_scope") {
-      let h =
+    let errorCode = registerRepoRootErrorClass(error);
+    if (errorCode === undefined) throw error;
+    if (errorCode === "outside_scope") {
+      let outsideScopeDetail =
         workspaceRoot.kind === "valid"
           ? "the folder is not below the workspace root"
           : workspaceRoot.kind === "invalid"
             ? `the workspace root is invalid: ${workspaceRoot.fault}`
             : "no workspace root";
-      logForDebugging(`${REGISTERREPOROOT}: outside_scope: ${h}`, {
+      logForDebugging(`${REGISTERREPOROOT}: outside_scope: ${outsideScopeDetail}`, {
         level: "warn",
       });
     }
-    return refusalResult(l);
+    return refusalResult(errorCode);
   }
   if (
     workspaceRoot.kind === "valid" &&
-    !checkRepoRootScope(e, getOriginalCwd(), [], []).allowed &&
-    relative(workspaceRoot.real, e)
+    !checkRepoRootScope(repoRoot, getOriginalCwd(), [], []).allowed &&
+    relative(workspaceRoot.real, repoRoot)
       .split(sep)
-      .some((i) => i === "" || i.startsWith("."))
+      .some((segment) => segment === "" || segment.startsWith("."))
   ) {
     logForDebugging(
       `${REGISTERREPOROOT}: outside_scope: the folder is not strictly below where the workspace root led at the daemon's start, or a folder on the way has a name that starts with a dot`,
@@ -114,35 +114,35 @@ async function callRegisterRepoRoot(s, f, a) {
     );
     return refusalResult("outside_scope");
   }
-  f.throwIfAborted();
+  abortSignal.throwIfAborted();
   let additionalDirectoriesForClaudeMd = getAdditionalDirectoriesForClaudeMd();
-  let c = registerRepoRootSlots.of(a.session.host);
-  let included = additionalDirectoriesForClaudeMd.includes(e);
+  let askedBySlots = registerRepoRootSlots.of(context.session.host);
+  let included = additionalDirectoriesForClaudeMd.includes(repoRoot);
   if (!included) {
     if (additionalDirectoriesForClaudeMd.length >= MAX_ASKED_BY_CHARS) return refusalResult("too_many");
-    setAdditionalDirectoriesForClaudeMd([...additionalDirectoriesForClaudeMd, e]);
-    if (askedBy !== undefined) c.set(e, askedBy);
-    pinResolvedWorkingDirPath(e);
+    setAdditionalDirectoriesForClaudeMd([...additionalDirectoriesForClaudeMd, repoRoot]);
+    if (askedBy !== undefined) askedBySlots.set(repoRoot, askedBy);
+    pinResolvedWorkingDirPath(repoRoot);
     SandboxManager.refreshConfig();
   }
   await reloadSkillsAfterDirectoryChange();
   return {
     summary: "folder registered",
     output: {
-      directory: e,
+      directory: repoRoot,
       ...(included &&
-        (askedBy === undefined || c.get(e) !== askedBy) && {
+        (askedBy === undefined || askedBySlots.get(repoRoot) !== askedBy) && {
           alreadyTaken: true,
         }),
     },
   };
 }
 //@ chunk-0k2xkafk.js:2022-2101 placement
-function refusalResult(s) {
+function refusalResult(refusalCode) {
   return {
-    summary: `folder not registered: ${s}`,
+    summary: `folder not registered: ${refusalCode}`,
     output: {
-      refusal: s,
+      refusal: refusalCode,
     },
   };
 }

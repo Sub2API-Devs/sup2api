@@ -25,8 +25,8 @@ var MAX_HINT_SHOWS = 2;
 /**
  * parseVoiceArg：hold|tap|off|invalid。
  */
-function parseVoiceArg(s) {
-  let lower = s.trim().toLowerCase();
+function parseVoiceArg(arg) {
+  let lower = arg.trim().toLowerCase();
   if (lower === "") return;
   if (lower === "hold" || lower === "tap" || lower === "off") return lower;
   return "invalid";
@@ -42,12 +42,12 @@ var call = async (args, context) => {
         type: "text",
         value: "Voice mode requires a Claude.ai account. Please run /login to sign in.",
       };
-    let o = policyDeniedReason("allow_voice_mode", "Voice mode", "is");
-    if (o) {
+    let policyDenied = policyDeniedReason("allow_voice_mode", "Voice mode", "is");
+    if (policyDenied) {
       logOrgPolicyDenied("allow_voice_mode", "slash_command");
       return {
         type: "text",
-        value: o,
+        value: policyDenied,
       };
     }
     return {
@@ -92,8 +92,8 @@ var call = async (args, context) => {
       value: "Voice mode disabled.",
     };
   }
-  let { isVoiceStreamAvailable } = await import("./chunk-k5p47mp3.js");
-  let { checkRecordingAvailability } = await import("./chunk-ga5txjrx.js");
+  let { isVoiceStreamAvailable } = await import("../../services/voiceStreamSTT.js");
+  let { checkRecordingAvailability } = await import("../../services/voice.js");
   let recording = await checkRecordingAvailability(context.session.host, {
     probeForwarded: true,
   });
@@ -107,7 +107,7 @@ var call = async (args, context) => {
       type: "text",
       value: "Voice mode requires a Claude.ai account. Please run /login to sign in.",
     };
-  let { checkVoiceDependencies, requestMicrophonePermission } = await import("./chunk-ga5txjrx.js");
+  let { checkVoiceDependencies, requestMicrophonePermission } = await import("../../services/voice.js");
   let deps = await checkVoiceDependencies(context.session.host);
   if (!deps.available)
     return {
@@ -128,7 +128,8 @@ Install SoX manually for audio recording.`
       value: `Microphone access is denied. To enable it, go to ${guidance}, then run /voice again.`,
     };
   }
-  let l = voiceArg === "hold" || voiceArg === "tap" ? voiceArg : (currentSettings.voice?.mode ?? "hold");
+  let voiceMode =
+    voiceArg === "hold" || voiceArg === "tap" ? voiceArg : (currentSettings.voice?.mode ?? "hold");
   if (
     (
       await updateSettingsForSource(
@@ -138,7 +139,7 @@ Install SoX manually for audio recording.`
           voice: {
             ...currentSettings.voice,
             enabled: true,
-            mode: l,
+            mode: voiceMode,
           },
         },
         undefined,
@@ -152,11 +153,13 @@ Install SoX manually for audio recording.`
     };
   logEvent("tengu_voice_toggled", {
     enabled: true,
-    tap_mode: l === "tap",
+    tap_mode: voiceMode === "tap",
   });
   let key = getShortcutDisplay("voice:pushToTalk", "Chat", "space");
-  let w =
-    l === "tap" ? `Tap ${key} (with input empty) to start, tap again to send.` : `Hold ${key} to record.`;
+  let activationHint =
+    voiceMode === "tap"
+      ? `Tap ${key} (with input empty) to start, tap again to send.`
+      : `Hold ${key} to record.`;
   let stt = normalizeLanguageForSTT(currentSettings.language);
   let cfg = getGlobalConfig();
   let langChanged = cfg.voiceLangHintLastLanguage !== stt.code;
@@ -175,9 +178,10 @@ Install SoX manually for audio recording.`
       }),
       context.storageV5,
     );
-  let S = recording.note ? ` ${recording.note}` : "";
+  let recordingNote = recording.note ? ` ${recording.note}` : "";
   return {
     type: "text",
-    value: `Voice mode enabled (${l}). ${w}${langNote}${S}`,
+    value: `Voice mode enabled (${voiceMode}). ${activationHint}${langNote}${recordingNote}`,
   };
 };
+export { call };

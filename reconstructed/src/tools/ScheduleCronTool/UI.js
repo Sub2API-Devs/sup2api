@@ -8,8 +8,6 @@
  * pieces: chunk-93kwxas0.js (1), chunk-ah34pb7m.js (3), chunk-vde9a20m.js (4)
  * attribution: fingerprint 3, placement 5
  */
-import { init_react_production } from "../../../vendor/react/cjs/react.production.js";
-import { parseScheduleInput } from "../../utils/cron.js";
 import {
   jsxProd_default,
   jsxProd_default_2,
@@ -19,27 +17,16 @@ import { Text, Box } from "../../ink/components/Text.js";
 import { hasValidDates } from "../../commands/insights.js";
 import { HintText } from "../../components/design-system/HintText.js";
 import { truncate } from "../../utils/format.js";
+import { init_react_production } from "../../../vendor/react/cjs/react.production.js";
+import { parseScheduleInput } from "../../utils/cron.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-vde9a20m.js:818-822 placement
-init_react_production();
-//@ chunk-vde9a20m.js:869-941 placement
-function cronPromptFieldHint() {
-  return "Sent to Claude on each fire. Slash commands work.";
-}
-//@ chunk-vde9a20m.js:941-1004 placement
-function validateScheduleInput(mo) {
-  return mo.trim() === "" ? null : (parseScheduleInput(mo).error ?? null);
-}
-//@ chunk-vde9a20m.js:1004-1114 fingerprint = renderCreateToolUseMessage (0.616)
+//@ chunk-93kwxas0.js:163163-163196 fingerprint = renderListResultMessage (0.512)
 /**
- * 把输入文本解析成 cron 并返回 "人类可读 · cron"，解析失败返回 undefined。
+ * 取 CronList 输出中的任务数组（缺省为空数组）。
  */
-function renderCreateToolUseMessage(input) {
-  if (input.trim() === "") {
-    return;
-  }
-  let scheduleInput = parseScheduleInput(input);
-  return scheduleInput.error ? undefined : `${scheduleInput.human} \xB7 ${scheduleInput.cron}`;
+function renderListResultMessage(output) {
+  return output.jobs ?? [];
 }
 //@ chunk-ah34pb7m.js:35256-35430 fingerprint = renderCreateResultMessage (0.503)
 /**
@@ -81,8 +68,8 @@ function renderDeleteResultMessage(output) {
 /**
  * 显示定时任务列表。
  */
-function renderCronList(m) {
-  if (m.jobs.length === 0)
+function renderCronList(result) {
+  if (result.jobs.length === 0)
     return jsxProd_default(MessageResponse, {
       children: jsxProd_default(HintText, {
         children: "No scheduled jobs",
@@ -91,7 +78,7 @@ function renderCronList(m) {
   return jsxProd_default(MessageResponse, {
     children: jsxProd_default(Box, {
       flexDirection: "column",
-      children: m.jobs.map((job) =>
+      children: result.jobs.map((job) =>
         jsxProd_default_2(
           Text,
           {
@@ -119,12 +106,29 @@ function renderCronList(m) {
     }),
   });
 }
-//@ chunk-93kwxas0.js:163163-163196 fingerprint = renderListResultMessage (0.512)
+//@ chunk-vde9a20m.js:818-822 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-vde9a20m.js:818", () => {
+  init_react_production();
+});
+//@ chunk-vde9a20m.js:869-941 placement
+function cronPromptFieldHint() {
+  return "Sent to Claude on each fire. Slash commands work.";
+}
+//@ chunk-vde9a20m.js:941-1004 placement
+function validateScheduleInput(scheduleText) {
+  return scheduleText.trim() === "" ? null : (parseScheduleInput(scheduleText).error ?? null);
+}
+//@ chunk-vde9a20m.js:1004-1114 fingerprint = renderCreateToolUseMessage (0.616)
 /**
- * 取 CronList 输出中的任务数组（缺省为空数组）。
+ * 把输入文本解析成 cron 并返回 "人类可读 · cron"，解析失败返回 undefined。
  */
-function renderListResultMessage(output) {
-  return output.jobs ?? [];
+function renderCreateToolUseMessage(input) {
+  if (input.trim() === "") {
+    return;
+  }
+  let scheduleInput = parseScheduleInput(input);
+  return scheduleInput.error ? undefined : `${scheduleInput.human} \xB7 ${scheduleInput.cron}`;
 }
 export {
   renderListResultMessage,

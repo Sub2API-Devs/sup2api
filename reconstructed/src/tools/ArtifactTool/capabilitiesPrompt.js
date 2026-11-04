@@ -58,12 +58,12 @@ import { getLiveState } from "../../services/liveReplica/liveReplica.js";
 import { resolveContract, fetchContractPrompt } from "../../services/artifacts/contract.js";
 
 //@ chunk-hantmvxa.js:7689-7828 placement
-async function verifyExtractedTypeFiles(e) {
-  if (e == null) return null;
+async function verifyExtractedTypeFiles(typeFiles) {
+  if (typeFiles == null) return null;
   let bundledSkillExtractDir = getBundledSkillExtractDir(ARTIFACT_CAPABILITIES);
   try {
-    await Promise.all(e.files.map((file) => access(join(bundledSkillExtractDir, file))));
-    return e;
+    await Promise.all(typeFiles.files.map((file) => access(join(bundledSkillExtractDir, file))));
+    return typeFiles;
   } catch {
     return null;
   }
@@ -82,9 +82,9 @@ var MAX_LISTED_CONNECTORS = 32;
 /**
  * 拼出「以及另外 N 个 — …」的补充说明。
  */
-function moreCountClause(e, n, s) {
-  let r = e - n;
-  return r > 0 ? `; and ${r} more \u2014 ${s}` : "";
+function moreCountClause(total, shown, howToSeeMore) {
+  let more = total - shown;
+  return more > 0 ? `; and ${more} more \u2014 ${howToSeeMore}` : "";
 }
 //@ chunk-hantmvxa.js:7960-9954 placement
 /**
@@ -93,68 +93,74 @@ function moreCountClause(e, n, s) {
 function describeHostedConnectors(hosted, hasHostedConnectors) {
   let mapped = hosted.named
     .slice(0, MAX_LISTED_CONNECTORS)
-    .map((S) => `\`${S.toolPrefix}\` is "${sanitizeConnectorName(S.server)}"`);
-  let r = hasHostedConnectors
+    .map((connector) => `\`${connector.toolPrefix}\` is "${sanitizeConnectorName(connector.server)}"`);
+  let opaqueNote = hasHostedConnectors
     ? " The Claude app has also connected claude.ai connectors under opaque ids (tools `mcp__<id>__<toolName>`)."
     : "";
-  let h =
+  let namedText =
     mapped.length === 0
       ? ""
       : ` The ids belong to these connectors: ${mapped.join("; ")}${moreCountClause(hosted.named.length, mapped.length, "ask the user for their names")}. For these, set \`server\` to the connector's name exactly as written here, e.g. \`{"server": "${sanitizeConnectorName(hosted.named[0]?.server ?? "")}", "tools": [...]}\` \u2014 never the id or any \`mcp__\` segment \u2014 and in the page pass that same name as the \`server\` argument of \`callTool\`/\`watchTool\`, because viewers resolve connectors by name only.`;
   let mapped_2 = hosted.unnamedIds.slice(0, MAX_LISTED_CONNECTORS).map((unnamedId) => `\`${unnamedId}\``);
-  let w = mapped_2.length === 1;
-  let b =
+  let single = mapped_2.length === 1;
+  let unnamedText =
     mapped_2.length === 0
       ? ""
-      : ` ${w ? "Connector" : "Connectors"} ${mapped_2.join(", ")}${moreCountClause(hosted.unnamedIds.length, mapped_2.length, "treat the rest the same way")} did not report ${w ? "a name" : "names"} here: ask the user for ${w ? "that connector's" : "each connector's"} name exactly as shown in claude.ai (Settings \u2192 Connectors) \u2014 describe ${w ? "it" : "each"} by the tools it provides (its \`mcp__<id>__\u2026\` tool names), since the user cannot see the id \u2014 and use that name as \`server\` and in the page's calls; the id itself is refused at publish because no viewer can resolve it.`;
+      : ` ${single ? "Connector" : "Connectors"} ${mapped_2.join(", ")}${moreCountClause(hosted.unnamedIds.length, mapped_2.length, "treat the rest the same way")} did not report ${single ? "a name" : "names"} here: ask the user for ${single ? "that connector's" : "each connector's"} name exactly as shown in claude.ai (Settings \u2192 Connectors) \u2014 describe ${single ? "it" : "each"} by the tools it provides (its \`mcp__<id>__\u2026\` tool names), since the user cannot see the id \u2014 and use that name as \`server\` and in the page's calls; the id itself is refused at publish because no viewer can resolve it.`;
   let mapped_3 = hosted.undeclarable
     .slice(0, MAX_LISTED_CONNECTORS)
-    .map((S) => `\`${S.toolPrefix}\` ("${sanitizeConnectorNameConnectors(S.server)}")`);
-  let C =
+    .map(
+      (connector) => `\`${connector.toolPrefix}\` ("${sanitizeConnectorNameConnectors(connector.server)}")`,
+    );
+  let undeclarableText =
     mapped_3.length === 0
       ? ""
       : ` ${plural(mapped_3.length, "Connector")} ${mapped_3.join(", ")}${moreCountClause(hosted.undeclarable.length, mapped_3.length, "more like them")} cannot be declared at all until renamed: a manifest \`server\` must be 1\u201364 characters with no control characters, line breaks, unusual spaces or text-direction controls, must not begin or end with a space or invisible character, and must not read as \`host:\` or be shaped like an id or a \`claude_ai_\u2026\`/\`mcp__\u2026\` prefix, so if the page needs one of these, tell the user it must first be renamed in claude.ai (Settings \u2192 Connectors).`;
-  return `${r}${h}${b}${C}`;
+  return `${opaqueNote}${namedText}${unnamedText}${undeclarableText}`;
 }
 //@ chunk-hantmvxa.js:9954-15689 placement
-function buildConnectorCapabilitiesPrompt(tools, hostedConnectors, hostServers) {
+function buildConnectorCapabilitiesPrompt(connectors, hostedConnectors, hostServers) {
   let { ccrHosted, metaConnector, hosted } = hostedConnectors;
-  let w = groupClaudeAiConnectors(tools);
-  let b = hosted === null ? 0 : hosted.named.length + hosted.unnamedIds.length + hosted.undeclarable.length;
-  let k =
-    w.length > 0
+  let groupedConnectors = groupClaudeAiConnectors(connectors);
+  let hostedCount =
+    hosted === null ? 0 : hosted.named.length + hosted.unnamedIds.length + hosted.undeclarable.length;
+  let mcpIntro =
+    groupedConnectors.length > 0
       ? `Connector tools appear in your tool list as \`mcp__<connector>__<toolName>\`. Set \`server\` to the \`<connector>\` segment \u2014 everything between \`mcp__\` and the next \`__\` (for \`mcp__${slackConnectorName()}__search\`, the \`server\` is \`${slackConnectorName()}\`). Copy the segment exactly, case included; when publishing, it is resolved to the connector's display name automatically. In the page's own \`callTool\`/\`watchTool\` calls, pass the connector's display name (its name as shown in claude.ai), not that segment \u2014 viewers resolve connectors by name only. The publish result states the exact display name for each segment it resolves; if the page's calls do not match it, fix them and publish again.`
-      : b > 0
+      : hostedCount > 0
         ? "In this session the Claude app has connected the user's claude.ai connectors under opaque ids: their tools appear in your tool list as `mcp__<id>__<toolName>`."
         : ccrHosted
           ? "In this session, claude.ai connector tools appear in your tool list as `mcp__<connector>__<toolName>`. Set `server` to the connector's display name as it appears in claude.ai (usually the `<connector>` segment with underscores read as spaces)."
           : hosted !== null
             ? "None are connected right now \u2014 they may still be connecting, or the user has none. In this session a connector's tools would appear as `mcp__<id>__<toolName>` under an opaque connector id; invoke this skill again once they appear to learn each connector's name."
             : `None are connected right now \u2014 they may still be connecting, or the user has none. ${isServerIdentityActive() ? "When one connects, its tools appear in your tool list as `mcp__<connector>__<tool>`." : "Look for tools prefixed `mcp__claude_ai_*` in your tool list; each is named `mcp__claude_ai_<connector>__<tool>`."}`;
-  let C = hosted === null || b === 0 ? "" : describeHostedConnectors(hosted, w.length > 0);
-  let S =
+  let hostedText =
+    hosted === null || hostedCount === 0
+      ? ""
+      : describeHostedConnectors(hosted, groupedConnectors.length > 0);
+  let metaText =
     metaConnector === null
       ? ""
       : ` The \`mcp__${metaConnector.toolPrefix}__*\` tools in your tool list are also available to viewers as the built-in claude.ai connector \`${metaConnector.server}\`: declare that exact name as \`server\` with those tools' upstream names. A published page calls them as the viewer, with no calling session, so tools that act on the calling session (e.g. \`send_later\`, \`watch_url\`) do not apply there.`;
-  let T = hostServers
-    ? ` Locally-configured MCP servers connected in this session can also be declared, as host servers: set \`server\` to \`host:<server>\` where \`<server>\` is the segment between \`mcp__\` and the next \`__\` in that server's tool names (\`mcp__filesystem__read_file\` \u2192 \`host:filesystem\`). Only servers from the user's MCP configuration count, with one built-in exception: \`host:claude_browser\` is the Claude app's own browser \u2014 declare it, with the tools the page needs from \`read_page\`, \`get_page_text\`, \`find\`, \`preview_start\`, \`navigate\`, \`computer\` and \`form_input\`, when the page must read or act on other websites; it answers only when the viewer opens the page in the Claude desktop app; the viewer is asked once, at the page's first call to it, and again at each click or key press that calls a banking or other high-risk site. The app's other built-in servers (\`cowork\`, \`scheduled-tasks\`, \`session_info\`, \`workspace\` and the like) are never host servers, and a page that declares one is refused at publish.${b > 0 ? " The `mcp__<id>__` connectors above are claude.ai connectors, never host servers." : ""} A host server only answers when the viewer opens the page in a Claude app that has that same local server connected \u2014 say so to the user when you publish.`
-    : b > 0
+  let hostText = hostServers
+    ? ` Locally-configured MCP servers connected in this session can also be declared, as host servers: set \`server\` to \`host:<server>\` where \`<server>\` is the segment between \`mcp__\` and the next \`__\` in that server's tool names (\`mcp__filesystem__read_file\` \u2192 \`host:filesystem\`). Only servers from the user's MCP configuration count, with one built-in exception: \`host:claude_browser\` is the Claude app's own browser \u2014 declare it, with the tools the page needs from \`read_page\`, \`get_page_text\`, \`find\`, \`preview_start\`, \`navigate\`, \`computer\` and \`form_input\`, when the page must read or act on other websites; it answers only when the viewer opens the page in the Claude desktop app; the viewer is asked once, at the page's first call to it, and again at each click or key press that calls a banking or other high-risk site. The app's other built-in servers (\`cowork\`, \`scheduled-tasks\`, \`session_info\`, \`workspace\` and the like) are never host servers, and a page that declares one is refused at publish.${hostedCount > 0 ? " The `mcp__<id>__` connectors above are claude.ai connectors, never host servers." : ""} A host server only answers when the viewer opens the page in a Claude app that has that same local server connected \u2014 say so to the user when you publish.`
+    : hostedCount > 0
       ? metaConnector === null
         ? " Only claude.ai connectors are valid `server` values \u2014 the Claude app's own servers (`cowork`, `workspace`, `scheduled-tasks`, `session_info` and the like) and other locally-configured MCP servers in your tool list are not."
         : ` Only claude.ai connectors and \`${metaConnector.server}\` are valid \`server\` values \u2014 the Claude app's own servers (\`cowork\`, \`workspace\`, \`scheduled-tasks\`, \`session_info\` and the like) and other locally-configured MCP servers in your tool list are not.`
-      : w.length === 0 && ccrHosted
+      : groupedConnectors.length === 0 && ccrHosted
         ? metaConnector === null
           ? " Only connectors the user added in claude.ai are valid `server` values \u2014 this session's other built-in MCP servers are not."
           : ` Only connectors the user added in claude.ai and \`${metaConnector.server}\` are valid \`server\` values \u2014 this session's other built-in MCP servers are not.`
         : metaConnector === null
           ? " Only claude.ai connectors are valid \u2014 locally-configured MCP servers are not."
           : " Only claude.ai connectors are valid `server` values \u2014 other locally-configured MCP servers in your tool list are not.";
-  let R = hosted === null ? "`listTools()` / `/v1/mcp_servers`" : "`listTools()`";
-  let L =
+  let listHint = hosted === null ? "`listTools()` / `/v1/mcp_servers`" : "`listTools()`";
+  let ciNote =
     hosted !== null
       ? ""
       : ` In hermetic/CI sessions where connectors aren't loaded but \`$CLAUDE_CODE_OAUTH_TOKEN\` is set, fetch the list via Bash: \`curl -H 'anthropic-version: 2023-06-01' -H 'anthropic-beta: ${BETA_MCP_SERVERS.header}' -H "Authorization: Bearer $CLAUDE_CODE_OAUTH_TOKEN" ${getOauthConfig().BASE_API_URL}/v1/mcp_servers?limit=1000\`; in that case use each entry's \`display_name\` as the \`server\` value (exact display names are always accepted alongside tool-prefix segments).`;
-  return `${k}${C}${S}${T} The manifest's \`tools\` array takes the connector's upstream tool names (as returned by ${R}), which can differ from the normalized \`<toolName>\` segment when an upstream name contains \`.\` or spaces. Every \`servers[]\` entry needs a non-empty \`tools\` array naming the tools the page calls \u2014 an empty or omitted \`tools\` list is refused and never means "all tools"; to publish without connector access, leave \`mcp\` out of \`capabilities\` (pass \`capabilities: {}\` to clear a stored declaration) rather than declaring an empty \`servers\` list.${L}`;
+  return `${mcpIntro}${hostedText}${metaText}${hostText} The manifest's \`tools\` array takes the connector's upstream tool names (as returned by ${listHint}), which can differ from the normalized \`<toolName>\` segment when an upstream name contains \`.\` or spaces. Every \`servers[]\` entry needs a non-empty \`tools\` array naming the tools the page calls \u2014 an empty or omitted \`tools\` list is refused and never means "all tools"; to publish without connector access, leave \`mcp\` out of \`capabilities\` (pass \`capabilities: {}\` to clear a stored declaration) rather than declaring an empty \`servers\` list.${ciNote}`;
 }
 //@ chunk-hantmvxa.js:15689-16936 placement
 /**
@@ -173,10 +179,10 @@ function callContractParagraph(contract) {
   let found_2 = contract.files.find((file) => file.endsWith(CLAUDE_DTS_PATH));
   let bundledSkillExtractDir = getBundledSkillExtractDir(ARTIFACT_CAPABILITIES);
   if (found) {
-    let y = found_2
+    let readNote = found_2
       ? `Read \`${bundledSkillExtractDir}/${found_2}\` (how a page reaches any capability on this contract) and \`${bundledSkillExtractDir}/${found}\` before writing any code that calls the \`mcp\` capability \u2014 they are`
       : `Read \`${bundledSkillExtractDir}/${found}\` before writing any code that calls the \`mcp\` capability \u2014 it is`;
-    return `**Call contract** (runtime contract ${contract.version}). The platform-served \`window.claude\` type definitions for this contract are extracted under \`${bundledSkillExtractDir}\`: ${contract.files.map((file) => `\`${file}\``).join(", ")}. ${y} authoritative for this contract version over any remembered API shape. ${TYPE_DEFS_AUTHORITY_NOTE} ${CONNECTOR_SCHEMA_GUIDANCE}`;
+    return `**Call contract** (runtime contract ${contract.version}). The platform-served \`window.claude\` type definitions for this contract are extracted under \`${bundledSkillExtractDir}\`: ${contract.files.map((file) => `\`${file}\``).join(", ")}. ${readNote} authoritative for this contract version over any remembered API shape. ${TYPE_DEFS_AUTHORITY_NOTE} ${CONNECTOR_SCHEMA_GUIDANCE}`;
   }
   return `**Call contract.** The served \`mcp\` type definitions could not be extracted for this invocation \u2014 invoking this skill again retries. Do not write \`mcp\` capability calls from memory; the served definitions are the authority.${found_2 ? ` \`${bundledSkillExtractDir}/${found_2}\` (how a page reaches any capability on this contract) did extract \u2014 Read it.` : ""} ${CONNECTOR_SCHEMA_GUIDANCE}`;
 }
@@ -188,12 +194,12 @@ var NO_RUNTIME_CAPABILITIES_NOTE =
  * "Available capabilities" 行：列出可声明的能力名，以及每个页面内置、无需声明的核心能力。
  */
 function availableCapabilitiesLine(roster, core) {
-  let s = (w) => w.map((b) => `\`${b}\``).join(", ");
-  let filtered = roster.filter((w) => core.includes(w));
-  if (filtered.length === 0)
-    return `**Available capabilities:** ${s(roster)} \u2014 the complete set of capability names you may declare. Anything not listed is unavailable to this user.`;
-  let filtered_2 = roster.filter((w) => !core.includes(w));
-  return `**Available capabilities:** ${filtered_2.length > 0 ? `${s(filtered_2)} \u2014 the complete set of capability names you may declare; ` : "none to declare for this user; "}built in on every page, called without declaring (never pass these in \`capabilities\`): ${s(filtered)}. Anything not listed is unavailable to this user.`;
+  let joinNames = (names) => names.map((name) => `\`${name}\``).join(", ");
+  let names = roster.filter((name) => core.includes(name));
+  if (names.length === 0)
+    return `**Available capabilities:** ${joinNames(roster)} \u2014 the complete set of capability names you may declare. Anything not listed is unavailable to this user.`;
+  let names_2 = roster.filter((name) => !core.includes(name));
+  return `**Available capabilities:** ${names_2.length > 0 ? `${joinNames(names_2)} \u2014 the complete set of capability names you may declare; ` : "none to declare for this user; "}built in on every page, called without declaring (never pass these in \`capabilities\`): ${joinNames(names)}. Anything not listed is unavailable to this user.`;
 }
 //@ chunk-hantmvxa.js:18765-20295 placement
 /**
@@ -224,49 +230,49 @@ ${NO_RUNTIME_CAPABILITIES_NOTE}`,
     ].join(`
 
 `);
-  let r = [CAPABILITIES_SKILL_HEADER, availableCapabilitiesLine(roster.roster, roster.core)];
+  let sections = [CAPABILITIES_SKILL_HEADER, availableCapabilitiesLine(roster.roster, roster.core)];
   if (roster.pinned) {
-    let w = roster.pinnedSlug ? ` artifact \`${roster.pinnedSlug}\`` : "";
-    r.push(
-      `_This guidance is pinned to runtime contract ${roster.version} \u2014 the contract the target${w} currently runs. A carry-forward republish keeps this pin._`,
+    let slugNote = roster.pinnedSlug ? ` artifact \`${roster.pinnedSlug}\`` : "";
+    sections.push(
+      `_This guidance is pinned to runtime contract ${roster.version} \u2014 the contract the target${slugNote} currently runs. A carry-forward republish keeps this pin._`,
     );
   }
-  let h =
+  let missingCaps =
     roster.promptBody === null
       ? roster.roster
       : roster.missingCaps.filter((missingCap) => roster.roster.includes(missingCap));
   let included = roster.roster.includes("mcp");
-  if (roster.promptBody !== null) r.push(buildToolSpellingNote(["data"]) + roster.promptBody);
-  for (let w of h) {
-    let found = roster.files.find((file) => file.endsWith(`/${w}.d.ts`));
+  if (roster.promptBody !== null) sections.push(buildToolSpellingNote(["data"]) + roster.promptBody);
+  for (let capability of missingCaps) {
+    let found = roster.files.find((file) => file.endsWith(`/${capability}.d.ts`));
     let bundledSkillExtractDir = getBundledSkillExtractDir(ARTIFACT_CAPABILITIES);
-    r.push(
+    sections.push(
       found
-        ? `**\`${w}\`.** Its authoring guidance could not be fetched this invocation; its type definitions are extracted at \`${bundledSkillExtractDir}/${found}\` \u2014 Read that file before ${roster.core.includes(w) ? "calling" : "declaring"} this capability.`
-        : `**\`${w}\`.** Its authoring guidance and type definitions could not be fetched this invocation \u2014 invoking this skill again retries.`,
+        ? `**\`${capability}\`.** Its authoring guidance could not be fetched this invocation; its type definitions are extracted at \`${bundledSkillExtractDir}/${found}\` \u2014 Read that file before ${roster.core.includes(capability) ? "calling" : "declaring"} this capability.`
+        : `**\`${capability}\`.** Its authoring guidance and type definitions could not be fetched this invocation \u2014 invoking this skill again retries.`,
     );
   }
   if (included) {
-    r.push(
+    sections.push(
       `**Your connectors this session.** ${buildConnectorCapabilitiesPrompt(tools, hostedConnectors, roster.hostServers)}`,
     );
-    r.push(callContractParagraph(roster));
+    sections.push(callContractParagraph(roster));
   }
   if (!included && roster.files.length > 0) {
     let found = roster.files.find((file) => file.endsWith(CLAUDE_DTS_PATH));
     let any = roster.files.some((file) => file !== found);
-    let k = found
+    let claudeDtsNote = found
       ? ` \`${found}\` documents how a page reaches any capability on this contract \u2014 Read it${any ? " first" : ""}.`
       : "";
-    let C = any
+    let perCapNote = any
       ? ` ${found ? "Each capability's" : "Each"} file documents its own declaration config and runtime surface \u2014 Read it before declaring that capability.`
       : "";
-    r.push(
-      `**Type definitions.** Extracted under \`${getBundledSkillExtractDir(ARTIFACT_CAPABILITIES)}\`: ${roster.files.map((file) => `\`${file}\``).join(", ")}.${k}${C} ${TYPE_DEFS_AUTHORITY_NOTE}`,
+    sections.push(
+      `**Type definitions.** Extracted under \`${getBundledSkillExtractDir(ARTIFACT_CAPABILITIES)}\`: ${roster.files.map((file) => `\`${file}\``).join(", ")}.${claudeDtsNote}${perCapNote} ${TYPE_DEFS_AUTHORITY_NOTE}`,
     );
   }
-  r.push(...liveSessionPromptSections(tools, roster.roster));
-  return r.join(`
+  sections.push(...liveSessionPromptSections(tools, roster.roster));
+  return sections.join(`
 
 `);
 }
@@ -279,67 +285,69 @@ function isCapabilitiesPromptAvailable() {
 }
 //@ chunk-hantmvxa.js:22112-25849 placement
 function createCapabilityProbeCache() {
-  let e = new Map();
-  let n = new Set();
-  registerBundledSkillSessionReset(() => n.clear());
-  async function s(version, y, credentials) {
-    let b = e.get(version);
-    if (b !== undefined) {
-      let R = await verifyExtractedTypeFiles(b);
-      if (R !== null) {
-        let filtered = y.filter((W) => !R.files.includes(`${version}/${W}.d.ts`));
-        if (filtered.length === 0) return R.files;
-        let capabilityDefs = await fetchCapabilityDefs(version, filtered, credentials);
-        if (Object.keys(capabilityDefs).length === 0) return R.files;
+  let byVersion = new Map();
+  let unpinnedSlugs = new Set();
+  registerBundledSkillSessionReset(() => unpinnedSlugs.clear());
+  async function ensureFiles(version, wantedCaps, credentials) {
+    let cached = byVersion.get(version);
+    if (cached !== undefined) {
+      let verified = await verifyExtractedTypeFiles(cached);
+      if (verified !== null) {
+        let capabilities = wantedCaps.filter(
+          (capability) => !verified.files.includes(`${version}/${capability}.d.ts`),
+        );
+        if (capabilities.length === 0) return verified.files;
+        let capabilityDefs = await fetchCapabilityDefs(version, capabilities, credentials);
+        if (Object.keys(capabilityDefs).length === 0) return verified.files;
         if ((await extractAdditionalSkillFiles(ARTIFACT_CAPABILITIES, capabilityDefs)) === null)
-          return R.files;
-        let B = {
+          return verified.files;
+        let updated = {
           version,
-          files: [...R.files, ...Object.keys(capabilityDefs)].sort(),
+          files: [...verified.files, ...Object.keys(capabilityDefs)].sort(),
         };
-        if ((await verifyExtractedTypeFiles(B)) === null) return R.files;
-        e.set(version, B);
-        return B.files;
+        if ((await verifyExtractedTypeFiles(updated)) === null) return verified.files;
+        byVersion.set(version, updated);
+        return updated.files;
       }
     }
-    let capabilityDefs = await fetchCapabilityDefs(version, y, credentials);
+    let capabilityDefs = await fetchCapabilityDefs(version, wantedCaps, credentials);
     if (Object.keys(capabilityDefs).length === 0) return [];
     if ((await extractAdditionalSkillFiles(ARTIFACT_CAPABILITIES, capabilityDefs)) === null) return [];
-    let S = {
+    let entry = {
       version,
       files: Object.keys(capabilityDefs).sort(),
     };
-    if ((await verifyExtractedTypeFiles(S)) === null) return [];
-    e.set(version, S);
-    return S.files;
+    if ((await verifyExtractedTypeFiles(entry)) === null) return [];
+    byVersion.set(version, entry);
+    return entry.files;
   }
-  async function r(h) {
-    let { targetSlug, pins } = h.getArtifactContractTarget();
+  async function resolvePinnedVersion(context) {
+    let { targetSlug, pins } = context.getArtifactContractTarget();
     if (targetSlug === undefined) return null;
-    let b = pins[targetSlug];
-    if (b !== undefined) return parseContractVersion(b);
-    if (n.has(targetSlug)) return null;
+    let pin = pins[targetSlug];
+    if (pin !== undefined) return parseContractVersion(pin);
+    if (unpinnedSlugs.has(targetSlug)) return null;
     let combinedAbortSignal = createCombinedAbortSignal(undefined, {
       timeoutMs: CAPABILITY_PROBE_TIMEOUT_MS,
     });
-    let C = await readFrameDecl(targetSlug, combinedAbortSignal.signal, h.credentials)
+    let decl = await readFrameDecl(targetSlug, combinedAbortSignal.signal, context.credentials)
       .catch(() => ({
         err: "read-back threw",
         thrown: true,
       }))
       .finally(combinedAbortSignal.cleanup);
-    if (C === null) {
-      n.add(targetSlug);
+    if (decl === null) {
+      unpinnedSlugs.add(targetSlug);
       return null;
     }
-    if ("err" in C) {
+    if ("err" in decl) {
       logFeatureSad("artifact_capability_section", "pin_readback_failed");
-      logForDebugging(`[artifact] capability pin read-back failed: ${C.err}`);
+      logForDebugging(`[artifact] capability pin read-back failed: ${decl.err}`);
       return null;
     }
-    let contractVersion = parseContractVersion(C.contract);
-    if (contractVersion === null) n.add(targetSlug);
-    else h.setArtifactContractTarget(targetSlug, contractVersion);
+    let contractVersion = parseContractVersion(decl.contract);
+    if (contractVersion === null) unpinnedSlugs.add(targetSlug);
+    else context.setArtifactContractTarget(targetSlug, contractVersion);
     return contractVersion;
   }
   registerBundledSkill({
@@ -352,15 +360,15 @@ function createCapabilityProbeCache() {
       "it saves new versions of itself), keeping state shared across viewers, knowing who is viewing, asking Claude a question of its own, storing files people add, handing the viewer a file to save, or using the viewer's camera, microphone, location, screen or device motion. Serves this user's live capability roster and the typed call definitions. Load it whenever any such runtime behavior would make an artifact more useful, before writing the page.",
     isEnabled: isCapabilitiesPromptAvailable,
     userInvocable: true,
-    files: async (h) => {
+    files: async (context) => {
       try {
         let capabilityRosterWithDefs = await loadCapabilityRosterWithDefs({
-          credentials: h.credentials,
-          storageV5: h.storageV5,
+          credentials: context.credentials,
+          storageV5: context.storageV5,
         });
         if (capabilityRosterWithDefs === null || Object.keys(capabilityRosterWithDefs.defs).length === 0)
           return {};
-        e.set(capabilityRosterWithDefs.version, {
+        byVersion.set(capabilityRosterWithDefs.version, {
           version: capabilityRosterWithDefs.version,
           files: Object.keys(capabilityRosterWithDefs.defs).sort(),
         });
@@ -369,81 +377,83 @@ function createCapabilityProbeCache() {
         return {};
       }
     },
-    async getPromptForCommand(h, y) {
-      let w = await r(y);
+    async getPromptForCommand(_args, context) {
+      let pinnedVersion = await resolvePinnedVersion(context);
       let liveState = getLiveState();
       let epoch = liveState.accountEpoch;
-      let C = await resolveContract({
+      let contract = await resolveContract({
         timeoutMs: CAPABILITY_FETCH_TIMEOUT_MS,
-        ...(w !== null && {
-          version: w,
+        ...(pinnedVersion !== null && {
+          version: pinnedVersion,
         }),
-        credentials: y.credentials,
+        credentials: context.credentials,
       }).catch(() => null);
-      if (C !== null && !("err" in C) && w === null)
+      if (contract !== null && !("err" in contract) && pinnedVersion === null)
         saveRosterToConfig({
           session: liveState,
           epoch,
-          roster: C,
-          storageV5: y.storageV5,
+          roster: contract,
+          storageV5: context.storageV5,
         });
-      if (C === null || "err" in C) {
-        if (C !== null) logFeatureSad("artifact_capability_section", `roster_${C.cause}`);
+      if (contract === null || "err" in contract) {
+        if (contract !== null) logFeatureSad("artifact_capability_section", `roster_${contract.cause}`);
         return [
           {
             type: "text",
-            text: buildCapabilitiesSkillText(y.options.tools, null),
+            text: buildCapabilitiesSkillText(context.options.tools, null),
           },
         ];
       }
       let roster = {
-        version: C.version,
-        roster: C.capabilities,
-        core: C.core ?? [],
+        version: contract.version,
+        roster: contract.capabilities,
+        core: contract.core ?? [],
         files: [],
         promptBody: null,
         missingCaps: [],
-        pinned: w !== null,
-        hostServers: hasFeatureFlag(C, "mcp", HOST),
-        ...(w !== null && {
-          pinnedSlug: y.getArtifactContractTarget().targetSlug,
+        pinned: pinnedVersion !== null,
+        hostServers: hasFeatureFlag(contract, "mcp", HOST),
+        ...(pinnedVersion !== null && {
+          pinnedSlug: context.getArtifactContractTarget().targetSlug,
         }),
       };
-      if (w === null) setServedCapabilities(y.session, roster.hostServers);
-      let [T = 0, R = 0, L = 0] = C.version.split(".").map(Number);
-      let x = {
-        v_major: T,
-        v_minor: R,
-        v_patch: L,
+      if (pinnedVersion === null) setServedCapabilities(context.session, roster.hostServers);
+      let [major = 0, minor = 0, patch = 0] = contract.version.split(".").map(Number);
+      let versionFields = {
+        v_major: major,
+        v_minor: minor,
+        v_patch: patch,
       };
-      if (C.capabilities.length > 0) {
-        let D = capabilitiesWithClaude(C);
-        let [B, contractPrompt] = await Promise.all([
-          s(C.version, D, y.credentials),
-          fetchContractPrompt(C.version, {
+      if (contract.capabilities.length > 0) {
+        let capsWithClaude = capabilitiesWithClaude(contract);
+        let [files, contractPrompt] = await Promise.all([
+          ensureFiles(contract.version, capsWithClaude, context.credentials),
+          fetchContractPrompt(contract.version, {
             timeoutMs: CAPABILITY_DOC_TIMEOUT_MS,
-            credentials: y.credentials,
+            credentials: context.credentials,
           }),
         ]);
-        roster.files = B.filter((W) => D.some((P) => W.endsWith(`/${P}.d.ts`)));
+        roster.files = files.filter((file) =>
+          capsWithClaude.some((capability) => file.endsWith(`/${capability}.d.ts`)),
+        );
         if ("err" in contractPrompt) {
           if (contractPrompt.cause === "http_404")
             logFeatureOk("artifact_capability_section", {
               composed: false,
-              ...x,
+              ...versionFields,
             });
-          else logFeatureSad("artifact_capability_section", `prompt_${contractPrompt.cause}`, x);
+          else logFeatureSad("artifact_capability_section", `prompt_${contractPrompt.cause}`, versionFields);
         } else {
           roster.promptBody = contractPrompt.promptMd;
           roster.missingCaps = contractPrompt.missingCaps.filter((missingCap) =>
-            C.capabilities.includes(missingCap),
+            contract.capabilities.includes(missingCap),
           );
           if (roster.missingCaps.length > 0)
-            logFeatureSad("artifact_capability_section", "prompt_partial", x);
+            logFeatureSad("artifact_capability_section", "prompt_partial", versionFields);
           else
             logFeatureOk("artifact_capability_section", {
               composed: true,
-              ...x,
+              ...versionFields,
             });
         }
       }
@@ -451,9 +461,9 @@ function createCapabilityProbeCache() {
         {
           type: "text",
           text: buildCapabilitiesSkillText(
-            y.options.tools,
+            context.options.tools,
             roster,
-            getArtifactConnectorContext(y.options.tools, y.options.mcpClients),
+            getArtifactConnectorContext(context.options.tools, context.options.mcpClients),
           ),
         },
       ];

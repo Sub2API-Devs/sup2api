@@ -9,7 +9,7 @@
  * attribution: fingerprint 1
  */
 import { useTheme_2 } from "./design-system/ThemeProvider.js";
-import { R } from "../../vendor/react/cjs/react.production.js";
+import { useRef } from "../../vendor/react/cjs/react.production.js";
 import { useInputRefusalWindow, useRefusalTracker, settleKey } from "./CustomSelect/selectTypeahead.js";
 import { RECENT_INPUT_GUARD_MS } from "../hooks/useRecentInputGuard.js";
 import { logEvent } from "../services/analytics/index.js";
@@ -33,11 +33,11 @@ import { NO_COMMITTED_ROW } from "./CustomSelect/select.js";
  */
 function MCPServerApprovalDialog({ serverName, isPluginServer = false, onDone }) {
   let { storageV5 } = useTheme_2();
-  let l = R(false);
+  let submitGuardRef = useRef(false);
   let inputRefusalWindow = useInputRefusalWindow(RECENT_INPUT_GUARD_MS);
   let { refusedWithin, noteRefused, epoch } = useRefusalTracker();
-  let h = settleKey(epoch, RECENT_INPUT_GUARD_MS);
-  function E() {
+  let remountKey = settleKey(epoch, RECENT_INPUT_GUARD_MS);
+  function shouldRefuseInput() {
     if (inputRefusalWindow() || refusedWithin(RECENT_INPUT_GUARD_MS)) {
       noteRefused();
       return true;
@@ -45,10 +45,10 @@ function MCPServerApprovalDialog({ serverName, isPluginServer = false, onDone })
     return false;
   }
   async function onChange(value) {
-    if (E()) return;
-    if (l.current) return;
+    if (shouldRefuseInput()) return;
+    if (submitGuardRef.current) return;
     switch (
-      ((l.current = true),
+      ((submitGuardRef.current = true),
       logEvent("tengu_mcp_dialog_choice", {
         choice: fromEnum(value),
       }),
@@ -56,7 +56,7 @@ function MCPServerApprovalDialog({ serverName, isPluginServer = false, onDone })
     ) {
       case "yes":
       case "yes_all": {
-        let g = false;
+        let persistFailed = false;
         {
           let { error } = await updateSettingsForSourceWithTransform(
             "localSettings",
@@ -70,7 +70,7 @@ function MCPServerApprovalDialog({ serverName, isPluginServer = false, onDone })
             undefined,
             storageV5,
           );
-          g ||= error != null;
+          persistFailed ||= error != null;
         }
         if (value === "yes_all") {
           let { error } = await updateSettingsForSource(
@@ -81,11 +81,11 @@ function MCPServerApprovalDialog({ serverName, isPluginServer = false, onDone })
             undefined,
             storageV5,
           );
-          g ||= error != null;
+          persistFailed ||= error != null;
         }
         addSessionApprovedMcpServers(getWorkspacePersistedTrustKey(), [serverName]);
         onDone({
-          persistFailed: g,
+          persistFailed,
         });
         break;
       }
@@ -136,11 +136,11 @@ function MCPServerApprovalDialog({ serverName, isPluginServer = false, onDone })
           onChange: (value_0) => void onChange(value_0),
           onCancel: () => void onChange("no"),
           hideIndexes: true,
-          refuseInput: E,
+          refuseInput: shouldRefuseInput,
           defaultFocusValue: "no",
           selectedValue: NO_COMMITTED_ROW,
         },
-        h.remountKey,
+        remountKey.remountKey,
       ),
     ],
   });

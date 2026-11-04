@@ -5,23 +5,23 @@
  *
  * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/FullscreenLayout.tsx
- * pieces: chunk-ag5x7vhf.js (60)
- * attribution: placement 37, sole-consumer 5, affinity 1, fingerprint 8, layout 7, file-local 2
+ * pieces: chunk-ag5x7vhf.js (65)
+ * attribution: placement 42, sole-consumer 5, affinity 1, fingerprint 8, layout 7, file-local 2
  */
 import { createStore } from "../state/store.js";
 import { setSliceField } from "../state/sliceHelpers.js";
 import {
-  qt,
-  y,
-  R,
-  Se,
-  P,
+  createContext,
+  useState,
+  useRef,
+  useContext,
+  useEffect,
   init_react_production,
-  NSe,
-  zt,
-  yt,
+  useInsertionEffect,
+  useLayoutEffect,
+  useSyncExternalStore,
 } from "../../vendor/react/cjs/react.production.js";
-import { w } from "../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import {
   jsxProd_default,
   jsxProd_default_2,
@@ -50,7 +50,6 @@ import { stripMemoryTags } from "../services/orgMemory/promptIndex.js";
 import { Text, Box } from "../ink/components/Text.js";
 import { isBashOutputText } from "../constants/xml.js";
 import { subscribeScrollTraceLive, isScrollTraceDemoRuler } from "../ink/widest-line.js";
-import { ScrollTestFiller } from "./ContextVisualization.js";
 import { openClickedLink } from "../utils/browser.js";
 import {
   isFullscreenEnvEnabled,
@@ -79,7 +78,7 @@ import { scrollViewportContext } from "./ScrollViewportContext.js";
 import { PANE_WIDTH_RESERVE } from "./design-system/Pane.js";
 import { Divider } from "./design-system/Divider.js";
 import { useHeaderGauge, isHeldNotice, holdsToasts, isGaugeSurface } from "../context/notifications.js";
-import { kp } from "../../vendor/convert-to-spaces/dist/index.js";
+import { APP_CONTEXT } from "../../vendor/convert-to-spaces/dist/index.js";
 import { figures_default } from "../../vendor/@inquirer/figures/dist/esm/index.js";
 import { parseChord, chordToDisplayString } from "../keybindings/parser.js";
 import { getShortcutDisplayPlatform } from "../utils/keyboardShortcuts.js";
@@ -89,6 +88,7 @@ import { bunStringWidth } from "../ink/stringWidth.js";
 import { countJumpToBottom } from "../utils/scrollTelemetry.js";
 import { TagTabs } from "./TagTabs.js";
 import { FooterSuggestionsMemo } from "./PromptInput/PromptInputFooterSuggestions.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-ag5x7vhf.js:9697-9723 placement
 function renderNull() {
@@ -109,145 +109,151 @@ function createFullscreenSlots() {
   };
 }
 //@ chunk-ag5x7vhf.js:9861-9877 placement
-var FullscreenSlotsContext = qt(null);
+var FullscreenSlotsContext; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-ag5x7vhf.js:9861", () => {
+  FullscreenSlotsContext = createContext(null);
+});
 //@ chunk-ag5x7vhf.js:9877-10140 placement
 function FullscreenSlotsProvider(props) {
-  let _ = w(6);
+  let $ = useMemoCache(6);
   let { container, children } = props;
-  let [T] = y(createFullscreenSlots);
-  let anchor = R(null);
-  let I;
-  if (_[0] !== T || _[1] !== container) {
-    I = {
-      ...T,
+  let [slots] = useState(createFullscreenSlots);
+  let anchor = useRef(null);
+  let value;
+  if ($[0] !== slots || $[1] !== container) {
+    value = {
+      ...slots,
       anchor,
       container,
     };
-    _[0] = T;
-    _[1] = container;
-    _[2] = I;
-  } else I = _[2];
-  let value = I;
-  let A;
-  if (_[3] !== children || _[4] !== value) {
-    A = jsxProd_default(FullscreenSlotsContext, {
-      value,
+    $[0] = slots;
+    $[1] = container;
+    $[2] = value;
+  } else value = $[2];
+  let value_2 = value;
+  let provider;
+  if ($[3] !== children || $[4] !== value_2) {
+    provider = jsxProd_default(FullscreenSlotsContext, {
+      value: value_2,
       children,
     });
-    _[3] = children;
-    _[4] = value;
-    _[5] = A;
-  } else A = _[5];
-  return A;
+    $[3] = children;
+    $[4] = value_2;
+    $[5] = provider;
+  } else provider = $[5];
+  return provider;
 }
 //@ chunk-ag5x7vhf.js:10140-10169 placement
-function selectSlotData(m) {
-  return m.data;
+function selectSlotData(slots) {
+  return slots.data;
 }
 //@ chunk-ag5x7vhf.js:10169-10200 placement
-function selectSlotDialog(m) {
-  return m.dialog;
+function selectSlotDialog(slots) {
+  return slots.dialog;
 }
 //@ chunk-ag5x7vhf.js:10306-10354 placement
 function useFullscreenSlotData() {
-  return useStoreSelector(Se(FullscreenSlotsContext)?.store, selectSlotData) ?? null;
+  return useStoreSelector(useContext(FullscreenSlotsContext)?.store, selectSlotData) ?? null;
 }
 //@ chunk-ag5x7vhf.js:10354-10402 placement
 function useFullscreenSlotDialog() {
-  return useStoreSelector(Se(FullscreenSlotsContext)?.store, selectSlotDialog) ?? null;
+  return useStoreSelector(useContext(FullscreenSlotsContext)?.store, selectSlotDialog) ?? null;
 }
 //@ chunk-ag5x7vhf.js:10402-10738 placement
 /**
  * 测量锚点在容器中的顶部位置，等于其上外边距时返回该值，否则为 0。
  */
 function useAnchorTopMargin() {
-  let h = w(3);
-  let m = Se(FullscreenSlotsContext);
-  let x;
-  if (h[0] !== m?.anchor || h[1] !== m?.container?.current) {
-    x = () => {
-      let T = m?.container?.current;
-      let k = m?.anchor.current;
-      if (!T || !k?.yogaNode) {
+  let $ = useMemoCache(3);
+  let slots = useContext(FullscreenSlotsContext);
+  let measureMargin;
+  if ($[0] !== slots?.anchor || $[1] !== slots?.container?.current) {
+    measureMargin = () => {
+      let containerNode = slots?.container?.current;
+      let anchorNode = slots?.anchor.current;
+      if (!containerNode || !anchorNode?.yogaNode) {
         return 0;
       }
-      let _ = topWithin(k, T);
-      if (_ < 0) {
+      let top = topWithin(anchorNode, containerNode);
+      if (top < 0) {
         return 0;
       }
-      let computedMargin = k.yogaNode.getComputedMargin(1);
-      return _ === computedMargin ? computedMargin : 0;
+      let computedMargin = anchorNode.yogaNode.getComputedMargin(1);
+      return top === computedMargin ? computedMargin : 0;
     };
-    h[0] = m?.anchor;
-    h[1] = m?.container?.current;
-    h[2] = x;
-  } else x = h[2];
-  return useMeasured(x);
+    $[0] = slots?.anchor;
+    $[1] = slots?.container?.current;
+    $[2] = measureMargin;
+  } else measureMargin = $[2];
+  return useMeasured(measureMargin);
 }
 //@ chunk-ag5x7vhf.js:10738-10785 placement
 /**
  * 函数 useFeedIsWide（全屏 feed 是否够宽）；位于「全屏布局：滚动区 + 底部输入区 + 侧栏/坞，提供 ScrollChromeContext、未读分隔线、"新消息"跳底药丸、置顶提示头、对话框/建议浮层」模块。
  */
 function useFeedIsWide() {
-  return useStoreSelector(Se(FullscreenSlotsContext)?.store, calculateFeedWidth) ?? false;
+  return useStoreSelector(useContext(FullscreenSlotsContext)?.store, calculateFeedWidth) ?? false;
 }
 //@ chunk-ag5x7vhf.js:10785-11045 placement
-function useSetSlot(m, h) {
-  let x = w(7);
-  let T;
-  let k;
-  if (x[0] !== m || x[1] !== h) {
-    T = () => {
-      if (!m) {
+function useSetSlot(setSlot, value) {
+  let $ = useMemoCache(7);
+  let setEffect;
+  let setDeps;
+  if ($[0] !== setSlot || $[1] !== value) {
+    setEffect = () => {
+      if (!setSlot) {
         return;
       }
-      m(() => h);
+      setSlot(() => value);
     };
-    k = [m, h];
-    x[0] = m;
-    x[1] = h;
-    x[2] = T;
-    x[3] = k;
+    setDeps = [setSlot, value];
+    $[0] = setSlot;
+    $[1] = value;
+    $[2] = setEffect;
+    $[3] = setDeps;
   } else {
-    T = x[2];
-    k = x[3];
+    setEffect = $[2];
+    setDeps = $[3];
   }
-  P(T, k);
-  let _;
-  let I;
-  if (x[4] !== m) {
-    _ = () => {
-      if (!m) {
+  useEffect(setEffect, setDeps);
+  let clearEffect;
+  let clearDeps;
+  if ($[4] !== setSlot) {
+    clearEffect = () => {
+      if (!setSlot) {
         return;
       }
       return () => {
-        m(renderNull);
+        setSlot(renderNull);
       };
     };
-    I = [m];
-    x[4] = m;
-    x[5] = _;
-    x[6] = I;
+    clearDeps = [setSlot];
+    $[4] = setSlot;
+    $[5] = clearEffect;
+    $[6] = clearDeps;
   } else {
-    _ = x[5];
-    I = x[6];
+    clearEffect = $[5];
+    clearDeps = $[6];
   }
-  P(_, I);
+  useEffect(clearEffect, clearDeps);
 }
 //@ chunk-ag5x7vhf.js:11045-11083 placement
-function useFullscreenFooterData(m) {
-  useSetSlot(Se(FullscreenSlotsContext)?.setData, m);
+function useFullscreenFooterData(data) {
+  useSetSlot(useContext(FullscreenSlotsContext)?.setData, data);
 }
 //@ chunk-ag5x7vhf.js:11083-11123 placement
-function useFullscreenDialogSlot(m) {
-  useSetSlot(Se(FullscreenSlotsContext)?.setDialog, m);
+function useFullscreenDialogSlot(dialog) {
+  useSetSlot(useContext(FullscreenSlotsContext)?.setDialog, dialog);
 }
 //@ chunk-ag5x7vhf.js:11123-11160 placement
 function useFullscreenAnchor() {
-  return Se(FullscreenSlotsContext)?.anchor;
+  return useContext(FullscreenSlotsContext)?.anchor;
 }
 //@ chunk-ag5x7vhf.js:11160-11164 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-ag5x7vhf.js:11160", () => {
+  init_react_production();
+});
 //@ chunk-ag5x7vhf.js:18504-18533 placement
 function newReplayHandleSlot() {
   return new ReplayHandleSlot();
@@ -257,181 +263,187 @@ function newReplayHandleSlot() {
  * 全屏布局：可滚动区、底部区、上推区与浮层，维护滚动视口与缓存布局。
  */
 function FullscreenLayoutView(props) {
-  let pe = w(28);
+  let $ = useMemoCache(28);
   let { scrollable, bottom, pushUp, overlay, scrollViewport } = props;
   let terminalSize = useTerminalSize();
   let { columns, rows } = terminalSize;
-  let L = R(null);
-  let V = R(null);
-  let W = R(null);
-  let z = R(null);
-  let [K] = y(newReplayHandleSlot);
-  let q = scrollViewport ?? K;
-  let { attach } = q;
-  let xe;
-  if (pe[0] !== columns || pe[1] !== rows || pe[2] !== q.handle) {
-    xe = () => {
-      let ge = getSecondRootError().get(process.stdout);
-      if (!ge) {
+  let writerRef = useRef(null);
+  let bottomRef = useRef(null);
+  let overlayRef = useRef(null);
+  let anchorRef = useRef(null);
+  let [replaySlot] = useState(newReplayHandleSlot);
+  let replay = scrollViewport ?? replaySlot;
+  let { attach } = replay;
+  let setupReplay;
+  if ($[0] !== columns || $[1] !== rows || $[2] !== replay.handle) {
+    setupReplay = () => {
+      let terminal = getSecondRootError().get(process.stdout);
+      if (!terminal) {
         return;
       }
-      let Re = new ScreenReplayWriter(process.stdout, columns, rows, ge.recordContentWrite);
-      Re.setup();
-      L.current = Re;
-      let We = false;
-      ge.frameSink = (fe, stylePool) => {
-        let te = L.current;
-        if (!te) {
+      let writer = new ScreenReplayWriter(process.stdout, columns, rows, terminal.recordContentWrite);
+      writer.setup();
+      writerRef.current = writer;
+      let suspended = false;
+      terminal.frameSink = (frame, stylePool) => {
+        let activeWriter = writerRef.current;
+        if (!activeWriter) {
           return false;
         }
-        if (ge.isAltScreenActive) {
-          if (!We) {
-            te.suspend();
-            We = true;
+        if (terminal.isAltScreenActive) {
+          if (!suspended) {
+            activeWriter.suspend();
+            suspended = true;
           }
           return false;
         }
-        if (We) {
-          We = false;
-          te.resume(te.cols, te.rows);
+        if (suspended) {
+          suspended = false;
+          activeWriter.resume(activeWriter.cols, activeWriter.rows);
         }
-        let me = te.tickPump();
-        let se = serializeNodeScreenRows(fe, stylePool, V.current);
-        let _e = serializeNodeScreenRows(fe, stylePool, W.current);
-        let layout = te.computeLayout(se, _e);
-        let ve = q.handle?.getDomElement() ?? null;
-        if (ve) {
-          let cachedLayout = ve.cachedLayout;
-          let He = [];
+        let needsTick = activeWriter.tickPump();
+        let scrollableRows = serializeNodeScreenRows(frame, stylePool, bottomRef.current);
+        let overlayRows = serializeNodeScreenRows(frame, stylePool, overlayRef.current);
+        let layout = activeWriter.computeLayout(scrollableRows, overlayRows);
+        let scrollNode = replay.handle?.getDomElement() ?? null;
+        if (scrollNode) {
+          let cachedLayout = scrollNode.cachedLayout;
+          let transcriptLines = [];
           if (cachedLayout && cachedLayout.height > 0) {
-            let min = Math.min(cachedLayout.y + cachedLayout.height, fe.screen.height);
+            let min = Math.min(cachedLayout.y + cachedLayout.height, frame.screen.height);
             for (let row = cachedLayout.y; row < min; row++)
-              He.push(serializeScreenRow(fe.screen, stylePool, row));
+              transcriptLines.push(serializeScreenRow(frame.screen, stylePool, row));
           }
-          let scrollHeight = ve.scrollHeight ?? 0;
-          let transcriptEnd = offsetWithinParent(z.current, ve) ?? scrollHeight;
-          te.syncViewport(
+          let scrollHeight = scrollNode.scrollHeight ?? 0;
+          let transcriptEnd = offsetWithinParent(anchorRef.current, scrollNode) ?? scrollHeight;
+          activeWriter.syncViewport(
             {
-              lines: He,
-              scrollTop: ve.scrollTop ?? 0,
+              lines: transcriptLines,
+              scrollTop: scrollNode.scrollTop ?? 0,
               scrollHeight,
               transcriptEnd,
             },
             layout.contentHeight,
           );
         }
-        let tt = false;
-        if (ve) {
-          let ct = te.consumeGapRange();
-          let Je = te.consumeBackfillNeeded();
-          if (ct || Je) {
-            let from = ct ? ct.from : 0;
-            let toRow = ct ? ct.to : (ve.scrollTop ?? 0);
-            let Wt = renderToScreen(ve, from, toRow, te.cols, ge.getStylePool());
-            if (Wt.length > 0) {
-              te.primeBackfill(Wt);
-              tt = true;
+        let backfilled = false;
+        if (scrollNode) {
+          let gap = activeWriter.consumeGapRange();
+          let backfillNeeded = activeWriter.consumeBackfillNeeded();
+          if (gap || backfillNeeded) {
+            let from = gap ? gap.from : 0;
+            let toRow = gap ? gap.to : (scrollNode.scrollTop ?? 0);
+            let backfillRows = renderToScreen(
+              scrollNode,
+              from,
+              toRow,
+              activeWriter.cols,
+              terminal.getStylePool(),
+            );
+            if (backfillRows.length > 0) {
+              activeWriter.primeBackfill(backfillRows);
+              backfilled = true;
             }
           }
         }
-        te.draw(layout);
-        return me || tt ? "tick" : true;
+        activeWriter.draw(layout);
+        return needsTick || backfilled ? "tick" : true;
       };
       return () => {
-        ge.frameSink = null;
-        Re.restore();
-        L.current = null;
+        terminal.frameSink = null;
+        writer.restore();
+        writerRef.current = null;
       };
     };
-    pe[0] = columns;
-    pe[1] = rows;
-    pe[2] = q.handle;
-    pe[3] = xe;
-  } else xe = pe[3];
-  let Ze;
-  if (pe[4] === MEMO_CACHE_SENTINEL) {
-    Ze = [];
-    pe[4] = Ze;
-  } else Ze = pe[4];
-  NSe(xe, Ze);
-  let pt;
-  if (pe[5] !== columns || pe[6] !== rows) {
-    pt = {
+    $[0] = columns;
+    $[1] = rows;
+    $[2] = replay.handle;
+    $[3] = setupReplay;
+  } else setupReplay = $[3];
+  let emptyDeps;
+  if ($[4] === MEMO_CACHE_SENTINEL) {
+    emptyDeps = [];
+    $[4] = emptyDeps;
+  } else emptyDeps = $[4];
+  useInsertionEffect(setupReplay, emptyDeps);
+  let size;
+  if ($[5] !== columns || $[6] !== rows) {
+    size = {
       cols: columns,
       rows,
     };
-    pe[5] = columns;
-    pe[6] = rows;
-    pe[7] = pt;
-  } else pt = pe[7];
-  let Xt = R(pt);
-  let rt;
-  let qe;
-  if (pe[8] !== columns || pe[9] !== rows) {
-    rt = () => {
-      if (columns === Xt.current.cols && rows === Xt.current.rows) {
+    $[5] = columns;
+    $[6] = rows;
+    $[7] = size;
+  } else size = $[7];
+  let sizeRef = useRef(size);
+  let onResize;
+  let resizeDeps;
+  if ($[8] !== columns || $[9] !== rows) {
+    onResize = () => {
+      if (columns === sizeRef.current.cols && rows === sizeRef.current.rows) {
         return;
       }
-      Xt.current = {
+      sizeRef.current = {
         cols: columns,
         rows,
       };
-      L.current?.handleResize(columns, rows);
+      writerRef.current?.handleResize(columns, rows);
     };
-    qe = [columns, rows];
-    pe[8] = columns;
-    pe[9] = rows;
-    pe[10] = rt;
-    pe[11] = qe;
+    resizeDeps = [columns, rows];
+    $[8] = columns;
+    $[9] = rows;
+    $[10] = onResize;
+    $[11] = resizeDeps;
   } else {
-    rt = pe[10];
-    qe = pe[11];
+    onResize = $[10];
+    resizeDeps = $[11];
   }
-  zt(rt, qe);
+  useLayoutEffect(onResize, resizeDeps);
   let children;
-  if (pe[12] !== scrollable) {
+  if ($[12] !== scrollable) {
     children = jsxProd_default(ScrollAnchorContext.Provider, {
-      value: z,
+      value: anchorRef,
       children: scrollable,
     });
-    pe[12] = scrollable;
-    pe[13] = children;
-  } else children = pe[13];
-  let dt;
-  if (pe[14] !== attach || pe[15] !== children) {
-    dt = jsxProd_default(ScrollBoxDefault, {
+    $[12] = scrollable;
+    $[13] = children;
+  } else children = $[13];
+  let scrollBox;
+  if ($[14] !== attach || $[15] !== children) {
+    scrollBox = jsxProd_default(ScrollBoxDefault, {
       ref: attach,
       flexGrow: 1,
       flexDirection: "column",
       stickyScroll: true,
       children,
     });
-    pe[14] = attach;
-    pe[15] = children;
-    pe[16] = dt;
-  } else dt = pe[16];
+    $[14] = attach;
+    $[15] = children;
+    $[16] = scrollBox;
+  } else scrollBox = $[16];
   const maxHeight = rows - 2;
-  let Ot;
-  if (pe[17] !== bottom || pe[18] !== pushUp || pe[19] !== maxHeight) {
-    Ot = jsxProd_default_2(BaseBox, {
-      ref: V,
+  let bottomBox;
+  if ($[17] !== bottom || $[18] !== pushUp || $[19] !== maxHeight) {
+    bottomBox = jsxProd_default_2(BaseBox, {
+      ref: bottomRef,
       flexDirection: "column",
       flexShrink: 0,
       minHeight: CHROME_ROWS,
       maxHeight,
       children: [pushUp, bottom],
     });
-    pe[17] = bottom;
-    pe[18] = pushUp;
-    pe[19] = maxHeight;
-    pe[20] = Ot;
-  } else Ot = pe[20];
-  let It;
-  if (pe[21] !== overlay) {
-    It =
+    $[17] = bottom;
+    $[18] = pushUp;
+    $[19] = maxHeight;
+    $[20] = bottomBox;
+  } else bottomBox = $[20];
+  let overlayBox;
+  if ($[21] !== overlay) {
+    overlayBox =
       overlay != null
         ? jsxProd_default(BaseBox, {
-            ref: W,
+            ref: overlayRef,
             flexDirection: "column",
             flexShrink: 0,
             position: "absolute",
@@ -442,94 +454,114 @@ function FullscreenLayoutView(props) {
             children: overlay,
           })
         : null;
-    pe[21] = overlay;
-    pe[22] = It;
-  } else It = pe[22];
-  let kt;
-  if (pe[23] !== rows || pe[24] !== It || pe[25] !== dt || pe[26] !== Ot) {
-    kt = jsxProd_default_2(BaseBox, {
+    $[21] = overlay;
+    $[22] = overlayBox;
+  } else overlayBox = $[22];
+  let root;
+  if ($[23] !== rows || $[24] !== overlayBox || $[25] !== scrollBox || $[26] !== bottomBox) {
+    root = jsxProd_default_2(BaseBox, {
       flexDirection: "column",
       height: rows,
       width: "100%",
       flexShrink: 0,
-      children: [dt, Ot, It],
+      children: [scrollBox, bottomBox, overlayBox],
     });
-    pe[23] = rows;
-    pe[24] = It;
-    pe[25] = dt;
-    pe[26] = Ot;
-    pe[27] = kt;
-  } else kt = pe[27];
-  return kt;
+    $[23] = rows;
+    $[24] = overlayBox;
+    $[25] = scrollBox;
+    $[26] = bottomBox;
+    $[27] = root;
+  } else root = $[27];
+  return root;
 }
 //@ chunk-ag5x7vhf.js:21173-21309 placement = siblingSharesY (0.858)
 function offsetWithinParent(node, yogaNode) {
   if (!node) return;
-  let x = 0;
-  let T = node;
-  while (T && T.parentNode !== yogaNode) {
-    x += T.yogaNode?.getComputedTop() ?? 0;
-    T = T.parentNode;
+  let offset = 0;
+  let node_2 = node;
+  while (node_2 && node_2.parentNode !== yogaNode) {
+    offset += node_2.yogaNode?.getComputedTop() ?? 0;
+    node_2 = node_2.parentNode;
   }
-  return T ? x : undefined;
+  return node_2 ? offset : undefined;
 }
 //@ chunk-ag5x7vhf.js:22083-22097 placement
 /**
  * 导出值：TranscriptOverlaySlot（transcript 叠加层槽）；位于「全屏布局：滚动区 + 底部输入区 + 侧栏/坞，提供 ScrollChromeContext、未读分隔线、"新消息"跳底药丸、置顶提示头、对话框/建议浮层」模块。
  */
-var TranscriptOverlaySlot = qt(0);
+var TranscriptOverlaySlot; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-ag5x7vhf.js:22083", () => {
+  TranscriptOverlaySlot = createContext(0);
+});
 //@ chunk-ag5x7vhf.js:22097-22101 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-ag5x7vhf.js:22097", () => {
+  init_react_production();
+});
 //@ chunk-ag5x7vhf.js:22101-22115 placement
 /**
  * 导出值：FooterSlot（页脚槽）；位于「全屏布局：滚动区 + 底部输入区 + 侧栏/坞，提供 ScrollChromeContext、未读分隔线、"新消息"跳底药丸、置顶提示头、对话框/建议浮层」模块。
  */
-var FooterSlot = qt(0);
+var FooterSlot; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-ag5x7vhf.js:22101", () => {
+  FooterSlot = createContext(0);
+});
 //@ chunk-ag5x7vhf.js:22115-22119 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-ag5x7vhf.js:22115", () => {
+  init_react_production();
+});
 //@ chunk-ag5x7vhf.js:22119-22181 placement
-function debugColor(m) {
-  return `rgb(${m & 255},${(m >> 8) & 255},${(m >> 16) & 255})`;
+function debugColor(color) {
+  return `rgb(${color & 255},${(color >> 8) & 255},${(color >> 16) & 255})`;
 }
 //@ chunk-ag5x7vhf.js:22181-22436 placement
-var DEBUG_COLOR_COUNT = 64;
-var DEBUG_ALT_COLOR_COUNT = 64;
-var DEBUG_COLORS = Array.from(
-  {
-    length: DEBUG_COLOR_COUNT,
-  },
-  (m, h) => debugColor(h * 2043453),
-);
-var DEBUG_ALT_COLORS = Array.from(
-  {
-    length: DEBUG_ALT_COLOR_COUNT,
-  },
-  (m, h) => debugColor(h * 461587 + 8405034),
-);
-var GLYPH_RANGES = [
-  [33, 94],
-  [161, 431],
-  [592, 96],
-  [880, 144],
-  [1024, 256],
-  [8592, 112],
-  [8704, 256],
-  [9472, 128],
-  [9600, 32],
-  [9632, 96],
-];
-var GLYPH_RANGE_TOTAL = GLYPH_RANGES.reduce((acc, [, h]) => acc + h, 0);
+var DEBUG_COLOR_COUNT; // deferred: uses debugColor of its import cycle while loading; runs once the cycle is complete
+var DEBUG_ALT_COLOR_COUNT;
+var DEBUG_COLORS;
+var DEBUG_ALT_COLORS;
+var GLYPH_RANGES;
+var GLYPH_RANGE_TOTAL;
+deferInit("chunk-ag5x7vhf.js:22181", () => {
+  DEBUG_COLOR_COUNT = 64;
+  DEBUG_ALT_COLOR_COUNT = 64;
+  DEBUG_COLORS = Array.from(
+    {
+      length: DEBUG_COLOR_COUNT,
+    },
+    (value, index) => debugColor(index * 2043453),
+  );
+  DEBUG_ALT_COLORS = Array.from(
+    {
+      length: DEBUG_ALT_COLOR_COUNT,
+    },
+    (value, index) => debugColor(index * 461587 + 8405034),
+  );
+  GLYPH_RANGES = [
+    [33, 94],
+    [161, 431],
+    [592, 96],
+    [880, 144],
+    [1024, 256],
+    [8592, 112],
+    [8704, 256],
+    [9472, 128],
+    [9600, 32],
+    [9632, 96],
+  ];
+  GLYPH_RANGE_TOTAL = GLYPH_RANGES.reduce((acc, [, count]) => acc + count, 0);
+});
 //@ chunk-ag5x7vhf.js:24486-24758 placement
-function isInvisibleMessage(m) {
-  switch (m.type) {
+function isInvisibleMessage(message) {
+  switch (message.type) {
     case "attachment":
-      return isHiddenAttachmentMessage(m);
+      return isHiddenAttachmentMessage(message);
     case "assistant": {
-      let content = m.message.content;
+      let content = message.message.content;
       if (content.length === 0) return false;
-      for (let x of content) {
-        if (x.type !== "thinking") return false;
-        let thinking = x.thinking;
+      for (let block of content) {
+        if (block.type !== "thinking") return false;
+        let thinking = block.thinking;
         if (thinking !== "" && !(thinking.startsWith("<") && stripMemoryTags(thinking) === "")) return false;
       }
       return true;
@@ -539,14 +571,17 @@ function isInvisibleMessage(m) {
   }
 }
 //@ chunk-ag5x7vhf.js:24758-24762 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-ag5x7vhf.js:24758", () => {
+  init_react_production();
+});
 //@ chunk-ag5x7vhf.js:24762-24790 placement
-function incrementByOne(So) {
-  return So + 1;
+function incrementByOne(value) {
+  return value + 1;
 }
 //@ chunk-ag5x7vhf.js:24790-24828 placement
-function isInKind(Yt) {
-  return Yt.kind === "in";
+function isInKind(part) {
+  return part.kind === "in";
 }
 //@ chunk-ag5x7vhf.js:24828-24927 placement = _temp2 (0.818)
 function renderDebugLine(line, i_1) {
@@ -561,14 +596,14 @@ function renderDebugLine(line, i_1) {
   );
 }
 //@ chunk-ag5x7vhf.js:24927-24987 placement
-function renderDimChildren(children, Fe) {
+function renderDimChildren(children, key) {
   return jsxProd_default(
     Text,
     {
       dimColor: true,
       children,
     },
-    Fe,
+    key,
   );
 }
 //@ chunk-ag5x7vhf.js:24987-25012 placement
@@ -576,38 +611,178 @@ var FULLSCREEN_COLUMNS = 25;
 var FULLSCREEN_ROWS = 80;
 var FULLSCREEN_CELL_BUDGET = FULLSCREEN_COLUMNS * FULLSCREEN_ROWS;
 //@ chunk-ag5x7vhf.js:25012-25016 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-ag5x7vhf.js:25012", () => {
+  init_react_production();
+});
+//@ chunk-ag5x7vhf.js:25016-25130 placement
+function renderScrollTestLine(line, _) {
+  return jsxProd_default_2(
+    Text,
+    {
+      dimColor: true,
+      children: [
+        "  ",
+        line.num,
+        line.text &&
+          jsxProd_default_2(Fragment, {
+            children: ["  ", line.indent, line.text],
+          }),
+      ],
+    },
+    _,
+  );
+}
+//@ chunk-ag5x7vhf.js:25130-25141 placement
+var SCROLL_TEST_LINE_COUNT = 200;
 //@ chunk-ag5x7vhf.js:25141-25247 placement
 function ScrollTraceRuler() {
-  let h = w(2);
-  let m = yt(subscribeScrollTraceLive, isScrollTraceDemoRuler);
-  let x;
-  if (h[0] !== m) {
-    x = m ? jsxProd_default(ScrollTestFiller, {}) : null;
-    h[0] = m;
-    h[1] = x;
-  } else x = h[1];
-  return x;
+  let $ = useMemoCache(2);
+  let isDemoRuler = useSyncExternalStore(subscribeScrollTraceLive, isScrollTraceDemoRuler);
+  let ruler;
+  if ($[0] !== isDemoRuler) {
+    ruler = isDemoRuler ? jsxProd_default(ScrollTestFiller, {}) : null;
+    $[0] = isDemoRuler;
+    $[1] = ruler;
+  } else ruler = $[1];
+  return ruler;
+}
+//@ chunk-ag5x7vhf.js:25247-25541 placement = _temp25 (0.357)
+/**
+ * 全屏布局里的"scroll test"占位区块：生成固定行数的拉丁文编号行，用于测试滚动，关闭对话框后消失。
+ */
+function ScrollTestFiller() {
+  let $ = useMemoCache(2);
+  let builtLines;
+  if ($[0] === MEMO_CACHE_SENTINEL) {
+    builtLines = buildScrollTestLines(SCROLL_TEST_LINE_COUNT);
+    $[0] = builtLines;
+  } else builtLines = $[0];
+  let lines_ = builtLines;
+  let fillerBox;
+  if ($[1] === MEMO_CACHE_SENTINEL) {
+    fillerBox = jsxProd_default_2(Box, {
+      flexDirection: "column",
+      marginTop: 1,
+      children: [
+        jsxProd_default(Text, {
+          dimColor: true,
+          children: "\u2500\u2500 scroll test \u2014 disappears when you close the dialog \u2500\u2500",
+        }),
+        lines_.map(renderScrollTestLine),
+      ],
+    });
+    $[1] = fillerBox;
+  } else fillerBox = $[1];
+  return fillerBox;
+}
+//@ chunk-ag5x7vhf.js:25541-27152 placement
+/**
+ * 滚动测试用的拉丁文填充文本。
+ */
+var SCROLL_TEST_LOREM =
+  "Vivere omnes beate volunt sed ad pervidendum quid sit quod beatam vitam efficiat caligant et adeo non est facile consequi beatam vitam ut eo quisque ab ea longius recedat quo ad illam concitatius fertur si via lapsus est quae ubi in contrarium ducit ipsa velocitas maioris intervalli causa fit proponendum est itaque primum quid sit quod adpetamus tunc circumspiciendum qua contendere illo celerrime possimus intellecturi in ipso itinere si modo rectum erit quantum cotidie profligetur quantoque propius ab eo simus ad quod nos cupiditas naturalis inpellit quam diu quidem passim vagamur non ducem secuti sed fremitum et clamorem dissonum in diversa vocantium conteretur vita inter errores brevis etiam si dies noctesque bonae menti laboremus decernatur itaque et quo tendamus et qua non sine perito aliquo cui explorata sint ea in quae procedimus quoniam quidem non eadem hic quae in ceteris peregrinationibus condicio est in illis comprensus aliquis limes et interrogati incolae non patiuntur errare at hic tritissima quaeque via et celeberrima maxime decipit nihil ergo magis praestandum est quam ne pecorum ritu sequamur antecedentium gregem pergentes non quo eundum est sed quo itur atqui nulla res nos maioribus malis implicat quam quod ad rumorem componimur optima rati ea quae magno adsensu recepta sunt quodque exempla nobis pro bonis multa sunt nec ad rationem sed ad similitudinem vivimus ";
+var SCROLL_TEST_LINE_WIDTH = 56;
+var SCROLL_TEST_PARAGRAPH_SHAPES = [
+  {
+    lines: 1,
+    indent: 0,
+  },
+  {
+    lines: 5,
+    indent: 0,
+  },
+  {
+    lines: 3,
+    indent: 2,
+  },
+  {
+    lines: 2,
+    indent: 0,
+  },
+  {
+    lines: 7,
+    indent: 0,
+  },
+  {
+    lines: 4,
+    indent: 2,
+  },
+  {
+    lines: 1,
+    indent: 0,
+  },
+  {
+    lines: 6,
+    indent: 0,
+  },
+  {
+    lines: 2,
+    indent: 2,
+  },
+  {
+    lines: 3,
+    indent: 0,
+  },
+];
+//@ chunk-ag5x7vhf.js:27152-27597 placement
+/**
+ * 用填充文本生成指定行数的滚动测试行，每行带行号。
+ */
+function buildScrollTestLines(lineCount) {
+  let parts = SCROLL_TEST_LOREM.trim().split(/\s+/);
+  let numberWidth = String(lineCount).length;
+  let lines = [];
+  let wordIndex = 0;
+  let shapeIndex = 0;
+  while (lines.length < lineCount) {
+    let shape = SCROLL_TEST_PARAGRAPH_SHAPES[shapeIndex % SCROLL_TEST_PARAGRAPH_SHAPES.length];
+    shapeIndex++;
+    let indent = " ".repeat(shape.indent);
+    for (let idx = 0; idx < shape.lines && lines.length < lineCount; idx++) {
+      let targetWidth = idx === shape.lines - 1 ? 12 + ((shapeIndex * 11) % 28) : SCROLL_TEST_LINE_WIDTH;
+      let words = [];
+      let width = 0;
+      while (width < targetWidth) {
+        let word = parts[wordIndex % parts.length];
+        words.push(word);
+        width += word.length + 1;
+        wordIndex++;
+      }
+      lines.push({
+        num: String(lines.length + 1).padStart(numberWidth),
+        text: words.join(" "),
+        indent,
+      });
+    }
+    if (lines.length < lineCount)
+      lines.push({
+        num: String(lines.length + 1).padStart(numberWidth),
+        text: "",
+        indent: "",
+      });
+  }
+  return lines;
 }
 //@ chunk-ag5x7vhf.js:27676-27704 sole-consumer
 function createEmptyStore() {
   return createStore([]);
 }
 //@ chunk-ag5x7vhf.js:27704-27751 sole-consumer
-function sumRowsMinusOwed(Yc, Ls) {
-  return Yc + Ls.rows() - Ls.owed;
+function sumRowsMinusOwed(baseRows, layout) {
+  return baseRows + layout.rows() - layout.owed;
 }
 //@ chunk-ag5x7vhf.js:27751-27785 sole-consumer
-function selectVerbose(UL) {
-  return UL.verbose;
+function selectVerbose(state) {
+  return state.verbose;
 }
 //@ chunk-ag5x7vhf.js:27785-27800 sole-consumer
 function noop() {}
 //@ chunk-ag5x7vhf.js:27800-27815 sole-consumer
 function noop_2() {}
 //@ chunk-ag5x7vhf.js:27815-27839 affinity
-function openHyperlink(tr) {
-  openClickedLink(tr);
+function openHyperlink(url) {
+  openClickedLink(url);
 }
 //@ chunk-ag5x7vhf.js:27839-28016 fingerprint = _temp3 (0.652)
 function repaintFullscreenInk() {
@@ -625,20 +800,23 @@ function repaintFullscreenInk() {
   };
 }
 //@ chunk-ag5x7vhf.js:28016-28064 layout
-function selectUnseenDividerCount(m) {
-  return m.unseenDivider?.count ?? 0;
+function selectUnseenDividerCount(state) {
+  return state.unseenDivider?.count ?? 0;
 }
 //@ chunk-ag5x7vhf.js:28064-28080 layout
-var ScrollChromeContextValue = qt(null);
+var ScrollChromeContextValue; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-ag5x7vhf.js:28064", () => {
+  ScrollChromeContextValue = createContext(null);
+});
 //@ chunk-ag5x7vhf.js:28080-28271 layout
 function useScrollChrome() {
-  let m = Se(ScrollChromeContextValue);
-  if (!m) {
+  let chrome = useContext(ScrollChromeContextValue);
+  if (!chrome) {
     throw ReferenceError(
       "useScrollChrome cannot be called outside of a <FullscreenLayout /> (it provides ScrollChromeContext to its scrollable slot)",
     );
   }
-  return m;
+  return chrome;
 }
 //@ chunk-ag5x7vhf.js:28271-28367 fingerprint = ScrollChromeContext (0.478)
 function ScrollChromeContext() {
@@ -646,8 +824,8 @@ function ScrollChromeContext() {
   return {
     sticky: store,
     chrome: {
-      setStickyPrompt: (h) => {
-        store.setState(() => h);
+      setStickyPrompt: (prompt) => {
+        store.setState(() => prompt);
       },
     },
   };
@@ -670,17 +848,17 @@ function countUnseenAssistantTurns(messages, dividerIndex) {
   return count;
 }
 //@ chunk-ag5x7vhf.js:28562-28694 file-local
-function assistantHasVisibleText(m) {
-  if (m.type !== "assistant") return false;
-  for (let h of m.message.content) if (h.type === "text" && h.text?.trim()) return true;
+function assistantHasVisibleText(message) {
+  if (message.type !== "assistant") return false;
+  for (let block of message.message.content) if (block.type === "text" && block.text?.trim()) return true;
   return false;
 }
 //@ chunk-ag5x7vhf.js:28694-28881 layout = countToolCallsSince (1)
-function countToolCallsSince(m) {
-  if (m.type !== "assistant" || m.message.content.length === 0) return false;
-  for (let h of m.message.content) {
-    if (h.type === "text" || h.type === "tool_use") return false;
-    if (isSignedThinkingBlock(h)) return false;
+function countToolCallsSince(message) {
+  if (message.type !== "assistant" || message.message.content.length === 0) return false;
+  for (let block of message.message.content) {
+    if (block.type === "text" || block.type === "tool_use") return false;
+    if (isSignedThinkingBlock(block)) return false;
   }
   return true;
 }
@@ -688,28 +866,32 @@ function countToolCallsSince(m) {
 /**
  * 根据最后一次已读位置计算未读分隔线（位置与计数），跳过 progress/attachment。
  */
-function computeUnseenDivider(messages, dividerIndex, x) {
+function computeUnseenDivider(messages, dividerIndex, skipReinjected) {
   if (dividerIndex === null) return;
   let anchorIdx = dividerIndex;
-  let k = -1;
+  let fallbackAnchorIdx = -1;
   while (anchorIdx < messages.length) {
-    let D = messages[anchorIdx];
-    if (D.type === "progress" || isInvisibleMessage(D)) {
+    let message = messages[anchorIdx];
+    if (message.type === "progress" || isInvisibleMessage(message)) {
       anchorIdx++;
       continue;
     }
-    if (x && D.type === "attachment" && isReinjectedListingAttachment(D.attachment)) {
+    if (
+      skipReinjected &&
+      message.type === "attachment" &&
+      isReinjectedListingAttachment(message.attachment)
+    ) {
       anchorIdx++;
       continue;
     }
-    if (x && countToolCallsSince(D)) {
-      if (k === -1) k = anchorIdx;
+    if (skipReinjected && countToolCallsSince(message)) {
+      if (fallbackAnchorIdx === -1) fallbackAnchorIdx = anchorIdx;
       anchorIdx++;
       continue;
     }
     break;
   }
-  if (anchorIdx >= messages.length && k !== -1) anchorIdx = k;
+  if (anchorIdx >= messages.length && fallbackAnchorIdx !== -1) anchorIdx = fallbackAnchorIdx;
   let uuid = messages[anchorIdx];
   if (!hasStringUuid(uuid)) return;
   let count = countUnseenAssistantTurns(messages, dividerIndex);
@@ -723,7 +905,7 @@ function computeUnseenDivider(messages, dividerIndex, x) {
  * 全屏布局组件：scrollable 槽（消息列表）放在 ScrollBox 中并提供 ScrollChromeContext；底部 bottom/abovePrompt 槽、可选 sidebar/dock；未读分隔线、"新消息"药丸、置顶提示头、modal/对话框浮层与建议浮层。
  */
 function FullscreenLayout(props) {
-  let $ = w(164);
+  let $ = useMemoCache(164);
   let {
     scrollable,
     sidebar,
@@ -743,162 +925,170 @@ function FullscreenLayout(props) {
     hideSticky,
     transcriptOverlay,
   } = props;
-  let ge = sidebarWidth === undefined ? 0 : sidebarWidth;
-  let Re = dockWidth === undefined ? 0 : dockWidth;
-  let We = hidePill === undefined ? false : hidePill;
-  let fe = hideSticky === undefined ? false : hideSticky;
+  let sidebarW = sidebarWidth === undefined ? 0 : sidebarWidth;
+  let dockW = dockWidth === undefined ? 0 : dockWidth;
+  let pillHidden = hidePill === undefined ? false : hidePill;
+  let stickyHidden = hideSticky === undefined ? false : hideSticky;
   let terminalSize = useTerminalSize();
   let { rows, columns } = terminalSize;
-  let se = header != null && rows >= NOTICE_WIDTH_LIMIT;
-  let _e = rows - (se ? MAX_NOTICE_LINES : 0);
-  let ve;
-  if ($[0] !== _e || $[1] !== columns || $[2] !== se || $[3] !== terminalSize) {
-    ve = se
+  let showNotice = header != null && rows >= NOTICE_WIDTH_LIMIT;
+  let bodyRows = rows - (showNotice ? MAX_NOTICE_LINES : 0);
+  let bodySize;
+  if ($[0] !== bodyRows || $[1] !== columns || $[2] !== showNotice || $[3] !== terminalSize) {
+    bodySize = showNotice
       ? {
           columns,
-          rows: _e,
+          rows: bodyRows,
         }
       : terminalSize;
-    $[0] = _e;
+    $[0] = bodyRows;
     $[1] = columns;
-    $[2] = se;
+    $[2] = showNotice;
     $[3] = terminalSize;
-    $[4] = ve;
-  } else ve = $[4];
-  let value = ve;
-  let He = _e - OVERLAY_BATCH_SIZE - 1;
-  let Ue = R(null);
-  let lt = R(null);
-  let [it, ae] = y(null);
-  let tt = modal?.footer != null;
-  let ct;
+    $[4] = bodySize;
+  } else bodySize = $[4];
+  let value = bodySize;
+  let modalRows = bodyRows - OVERLAY_BATCH_SIZE - 1;
+  let modalContentRef = useRef(null);
+  let modalFooterRef = useRef(null);
+  let [claimedRows, onClaimRows] = useState(null);
+  let hasModalFooter = modal?.footer != null;
+  let decstbmEnabled;
   if ($[5] === MEMO_CACHE_SENTINEL) {
-    ct = isDecstbmRendererEnabled();
-    $[5] = ct;
-  } else ct = $[5];
-  let Je = ct;
-  let $e;
-  if ($[6] !== tt || $[7] !== it || $[8] !== He || $[9] !== rows) {
-    $e = () => {
-      let Qe = Ue.current;
-      let Wt = lt.current;
-      if (!tt || (!Je && (it === null || it <= 0)) || Qe === null || Wt === null) {
+    decstbmEnabled = isDecstbmRendererEnabled();
+    $[5] = decstbmEnabled;
+  } else decstbmEnabled = $[5];
+  let decstbm = decstbmEnabled;
+  let measureModalFits;
+  if ($[6] !== hasModalFooter || $[7] !== claimedRows || $[8] !== modalRows || $[9] !== rows) {
+    measureModalFits = () => {
+      let contentNode = modalContentRef.current;
+      let footerNode = modalFooterRef.current;
+      if (
+        !hasModalFooter ||
+        (!decstbm && (claimedRows === null || claimedRows <= 0)) ||
+        contentNode === null ||
+        footerNode === null
+      ) {
         return true;
       }
-      return measureElement(Qe).height + measureElement(Wt).height <= (Je ? rows : He);
+      return (
+        measureElement(contentNode).height + measureElement(footerNode).height <= (decstbm ? rows : modalRows)
+      );
     };
-    $[6] = tt;
-    $[7] = it;
-    $[8] = He;
+    $[6] = hasModalFooter;
+    $[7] = claimedRows;
+    $[8] = modalRows;
     $[9] = rows;
-    $[10] = $e;
-  } else $e = $[10];
-  let measured = useMeasured($e);
-  const columns_2 = Math.max(1, columns - ge - Re);
-  let Xt;
-  if ($[11] !== _e || $[12] !== columns_2) {
-    Xt = {
+    $[10] = measureModalFits;
+  } else measureModalFits = $[10];
+  let measured = useMeasured(measureModalFits);
+  const columns_2 = Math.max(1, columns - sidebarW - dockW);
+  let contentSize;
+  if ($[11] !== bodyRows || $[12] !== columns_2) {
+    contentSize = {
       columns: columns_2,
-      rows: _e,
+      rows: bodyRows,
     };
-    $[11] = _e;
+    $[11] = bodyRows;
     $[12] = columns_2;
-    $[13] = Xt;
-  } else Xt = $[13];
-  let value_2 = Xt;
-  let qe = dock != null && Re > 0;
-  const columns_3 = Math.max(1, columns - Re);
-  let dt;
-  if ($[14] !== _e || $[15] !== columns_3) {
-    dt = {
+    $[13] = contentSize;
+  } else contentSize = $[13];
+  let value_2 = contentSize;
+  let dockVisible = dock != null && dockW > 0;
+  const columns_3 = Math.max(1, columns - dockW);
+  let dockContentSize;
+  if ($[14] !== bodyRows || $[15] !== columns_3) {
+    dockContentSize = {
       columns: columns_3,
-      rows: _e,
+      rows: bodyRows,
     };
-    $[14] = _e;
+    $[14] = bodyRows;
     $[15] = columns_3;
-    $[16] = dt;
-  } else dt = $[16];
-  let value_3 = dt;
+    $[16] = dockContentSize;
+  } else dockContentSize = $[16];
+  let value_3 = dockContentSize;
   let overlayFlagA = useOverlayFlagA();
   let overlayFlagB = useOverlayFlagB();
-  let kt = overlayFlagA || overlayFlagB ? _e - OVERLAY_BATCH_SIZE : Math.floor(_e / 2);
-  let to = R(null);
-  let de = R(null);
-  let le = R(null);
-  let Be = R(null);
-  let st;
+  let overlayRows = overlayFlagA || overlayFlagB ? bodyRows - OVERLAY_BATCH_SIZE : Math.floor(bodyRows / 2);
+  let promptRef = useRef(null);
+  let containerRef = useRef(null);
+  let abovePromptRef = useRef(null);
+  let promptAreaRef = useRef(null);
+  let measurePromptArea;
   if ($[17] === MEMO_CACHE_SENTINEL) {
-    st = () => (Be.current === null ? 0 : measureElement(Be.current).height);
-    $[17] = st;
-  } else st = $[17];
-  let measured_2 = useMeasured(st);
-  let maxHeight = Math.max(0, kt - measured_2);
+    measurePromptArea = () =>
+      promptAreaRef.current === null ? 0 : measureElement(promptAreaRef.current).height;
+    $[17] = measurePromptArea;
+  } else measurePromptArea = $[17];
+  let measured_2 = useMeasured(measurePromptArea);
+  let maxHeight = Math.max(0, overlayRows - measured_2);
   let visible = modal?.visible ?? false;
-  let At;
-  if ($[18] !== kt || $[19] !== visible) {
-    At = () =>
-      visible || to.current === null
+  let measureAbovePrompt;
+  if ($[18] !== overlayRows || $[19] !== visible) {
+    measureAbovePrompt = () =>
+      visible || promptRef.current === null
         ? null
-        : kt -
-          measureElement(to.current).height -
-          (le.current === null ? 0 : measureElement(le.current).height);
-    $[18] = kt;
+        : overlayRows -
+          measureElement(promptRef.current).height -
+          (abovePromptRef.current === null ? 0 : measureElement(abovePromptRef.current).height);
+    $[18] = overlayRows;
     $[19] = visible;
-    $[20] = At;
-  } else At = $[20];
-  let ut = At;
-  let [jt] = y(createEmptyStore);
-  let storeSelector = useStoreSelector(jt);
-  let mo;
-  if ($[21] !== jt) {
-    mo = (Jt) => {
-      jt.setState((Gt) => [...Gt, Jt]);
-      return () => jt.setState((Mo) => Mo.filter((Vo) => Vo !== Jt));
+    $[20] = measureAbovePrompt;
+  } else measureAbovePrompt = $[20];
+  let measureRows = measureAbovePrompt;
+  let [claimsStore] = useState(createEmptyStore);
+  let storeSelector = useStoreSelector(claimsStore);
+  let registerClaim;
+  if ($[21] !== claimsStore) {
+    registerClaim = (claim) => {
+      claimsStore.setState((claims) => [...claims, claim]);
+      return () => claimsStore.setState((claims) => claims.filter((otherClaim) => otherClaim !== claim));
     };
-    $[21] = jt;
-    $[22] = mo;
-  } else mo = $[22];
-  let value_4 = mo;
-  let So;
-  if ($[23] !== ut || $[24] !== storeSelector) {
-    So = () => {
-      let Yt = ut();
-      return Yt === null ? null : storeSelector.reduce(sumRowsMinusOwed, Yt);
+    $[21] = claimsStore;
+    $[22] = registerClaim;
+  } else registerClaim = $[22];
+  let value_4 = registerClaim;
+  let measureWithClaims;
+  if ($[23] !== measureRows || $[24] !== storeSelector) {
+    measureWithClaims = () => {
+      let base = measureRows();
+      return base === null ? null : storeSelector.reduce(sumRowsMinusOwed, base);
     };
-    $[23] = ut;
+    $[23] = measureRows;
     $[24] = storeSelector;
-    $[25] = So;
-  } else So = $[25];
-  let value_5 = So;
-  let [ne] = y(ScrollChromeContext);
-  let storeSelector_2 = useStoreSelector(ne.sticky);
-  let value_6 = ne.chrome;
-  let Ce = useAppStateSlice(selectVerbose) ?? false;
-  let leftMargin = shouldShowNotice(Ce) ? SPINNER_COLUMN_MIN_WIDTH : 0;
-  let Ke;
+    $[25] = measureWithClaims;
+  } else measureWithClaims = $[25];
+  let value_5 = measureWithClaims;
+  let [scrollChrome] = useState(ScrollChromeContext);
+  let storeSelector_2 = useStoreSelector(scrollChrome.sticky);
+  let value_6 = scrollChrome.chrome;
+  let verbose = useAppStateSlice(selectVerbose) ?? false;
+  let leftMargin = shouldShowNotice(verbose) ? SPINNER_COLUMN_MIN_WIDTH : 0;
+  let subscribeScroll;
   if ($[26] !== scrollViewport || $[27] !== unseen) {
-    Ke = (listener) => {
-      let je = scrollViewport?.subscribe(listener) ?? noop;
-      let Xe = unseen?.subscribe(listener) ?? noop_2;
+    subscribeScroll = (listener) => {
+      let unsubViewport = scrollViewport?.subscribe(listener) ?? noop;
+      let unsubUnseen = unseen?.subscribe(listener) ?? noop_2;
       return () => {
-        je();
-        Xe();
+        unsubViewport();
+        unsubUnseen();
       };
     };
     $[26] = scrollViewport;
     $[27] = unseen;
-    $[28] = Ke;
-  } else Ke = $[28];
-  let Et = Ke;
-  let Ct;
+    $[28] = subscribeScroll;
+  } else subscribeScroll = $[28];
+  let scrollSubscriber = subscribeScroll;
+  let autoScrollSetting;
   if ($[29] === MEMO_CACHE_SENTINEL) {
-    Ct = resolveSetting("autoScrollEnabled", true);
-    $[29] = Ct;
-  } else Ct = $[29];
-  let bt = Ct.value;
-  let _t;
+    autoScrollSetting = resolveSetting("autoScrollEnabled", true);
+    $[29] = autoScrollSetting;
+  } else autoScrollSetting = $[29];
+  let autoScroll = autoScrollSetting.value;
+  let computePillVisible;
   if ($[30] !== scrollViewport?.handle || $[31] !== unseen) {
-    _t = () => {
+    computePillVisible = () => {
       let handle = scrollViewport?.handle;
       if (!handle) {
         return false;
@@ -906,54 +1096,54 @@ function FullscreenLayout(props) {
       if (handle.isSticky()) {
         return false;
       }
-      let $t = handle.getScrollTop() + handle.getPendingDelta() + handle.getViewportHeight();
+      let bottomEdge = handle.getScrollTop() + handle.getPendingDelta() + handle.getViewportHeight();
       let dividerY = unseen?.getSnapshot().dividerY;
       if (dividerY != null) {
-        return $t < dividerY && $t < handle.getScrollHeight();
+        return bottomEdge < dividerY && bottomEdge < handle.getScrollHeight();
       }
-      return !bt && $t < handle.getScrollHeight();
+      return !autoScroll && bottomEdge < handle.getScrollHeight();
     };
     $[30] = scrollViewport?.handle;
     $[31] = unseen;
-    $[32] = _t;
-  } else _t = $[32];
-  let pillVisible = yt(Et, _t);
+    $[32] = computePillVisible;
+  } else computePillVisible = $[32];
+  let pillVisible = useSyncExternalStore(scrollSubscriber, computePillVisible);
   let count = useStoreSelector(unseen, selectUnseenDividerCount) ?? 0;
   let { clearSelection } = useSelection();
-  let Li;
-  let Gc;
+  let clearWhenVisible;
+  let clearDeps;
   if ($[33] !== clearSelection || $[34] !== visible) {
-    Li = () => {
+    clearWhenVisible = () => {
       if (!visible) {
         return;
       }
       return clearSelection;
     };
-    Gc = [visible, clearSelection];
+    clearDeps = [visible, clearSelection];
     $[33] = clearSelection;
     $[34] = visible;
-    $[35] = Li;
-    $[36] = Gc;
+    $[35] = clearWhenVisible;
+    $[36] = clearDeps;
   } else {
-    Li = $[35];
-    Gc = $[36];
+    clearWhenVisible = $[35];
+    clearDeps = $[36];
   }
-  zt(Li, Gc);
-  let Oi = Se(appStoreContext);
-  let $c;
-  if ($[37] !== Oi) {
-    $c = [Oi];
-    $[37] = Oi;
-    $[38] = $c;
-  } else $c = $[38];
-  zt(repaintFullscreenInk, $c);
+  useLayoutEffect(clearWhenVisible, clearDeps);
+  let appStore = useContext(appStoreContext);
+  let repaintDeps;
+  if ($[37] !== appStore) {
+    repaintDeps = [appStore];
+    $[37] = appStore;
+    $[38] = repaintDeps;
+  } else repaintDeps = $[38];
+  useLayoutEffect(repaintFullscreenInk, repaintDeps);
   if (isFullscreenEnvEnabled()) {
-    let ko = fe ? null : storeSelector_2;
-    let jn = ko != null && ko !== "clicked" ? ko : null;
-    let Gn = ko != null;
-    let Ro;
+    let sticky = stickyHidden ? null : storeSelector_2;
+    let stickyPrompt = sticky != null && sticky !== "clicked" ? sticky : null;
+    let hasSticky = sticky != null;
+    let headerBox;
     if ($[39] !== header || $[40] !== terminalSize) {
-      Ro =
+      headerBox =
         header != null &&
         jsxProd_default(Box, {
           flexShrink: 0,
@@ -965,112 +1155,118 @@ function FullscreenLayout(props) {
         });
       $[39] = header;
       $[40] = terminalSize;
-      $[41] = Ro;
-    } else Ro = $[41];
-    let wo;
-    if ($[42] !== jn || $[43] !== leftMargin) {
-      wo =
-        jn &&
+      $[41] = headerBox;
+    } else headerBox = $[41];
+    let stickyHeader;
+    if ($[42] !== stickyPrompt || $[43] !== leftMargin) {
+      stickyHeader =
+        stickyPrompt &&
         jsxProd_default(StickyPromptHeader, {
-          text: jn.text,
-          onClick: jn.scrollTo,
+          text: stickyPrompt.text,
+          onClick: stickyPrompt.scrollTo,
           leftMargin,
         });
-      $[42] = jn;
+      $[42] = stickyPrompt;
       $[43] = leftMargin;
-      $[44] = wo;
-    } else wo = $[44];
+      $[44] = stickyHeader;
+    } else stickyHeader = $[44];
     const ref = scrollViewport?.attach;
-    const paddingTop = Gn ? 0 : 1;
-    let mn;
+    const paddingTop = hasSticky ? 0 : 1;
+    let traceRuler;
     if ($[45] === MEMO_CACHE_SENTINEL) {
-      mn = jsxProd_default(ScrollTraceRuler, {});
-      $[45] = mn;
-    } else mn = $[45];
+      traceRuler = jsxProd_default(ScrollTraceRuler, {});
+      $[45] = traceRuler;
+    } else traceRuler = $[45];
     let children;
     if ($[46] !== value_6 || $[47] !== scrollable) {
       children = jsxProd_default_2(ScrollChromeContextValue, {
         value: value_6,
-        children: [scrollable, mn],
+        children: [scrollable, traceRuler],
       });
       $[46] = value_6;
       $[47] = scrollable;
       $[48] = children;
     } else children = $[48];
-    let $n;
+    let scrollBox;
     if ($[49] !== ref || $[50] !== paddingTop || $[51] !== children) {
-      $n = jsxProd_default(ScrollBoxDefault, {
+      scrollBox = jsxProd_default(ScrollBoxDefault, {
         ref,
         flexGrow: 1,
         flexDirection: "column",
         paddingTop,
         stickyScroll: true,
-        followGrowth: bt,
+        followGrowth: autoScroll,
         children,
       });
       $[49] = ref;
       $[50] = paddingTop;
       $[51] = children;
-      $[52] = $n;
-    } else $n = $[52];
-    let Kn;
-    if ($[53] !== We || $[54] !== count || $[55] !== pillVisible || $[56] !== unseen?.jumpToNew) {
-      Kn =
-        !We &&
+      $[52] = scrollBox;
+    } else scrollBox = $[52];
+    let pill;
+    if ($[53] !== pillHidden || $[54] !== count || $[55] !== pillVisible || $[56] !== unseen?.jumpToNew) {
+      pill =
+        !pillHidden &&
         pillVisible &&
         jsxProd_default(NewMessagesPill, {
           count,
           onClick: unseen?.jumpToNew,
         });
-      $[53] = We;
+      $[53] = pillHidden;
       $[54] = count;
       $[55] = pillVisible;
       $[56] = unseen?.jumpToNew;
-      $[57] = Kn;
-    } else Kn = $[57];
-    const value_7 = jn ? 1 : 0;
-    let qn;
+      $[57] = pill;
+    } else pill = $[57];
+    const value_7 = stickyPrompt ? 1 : 0;
+    let transcriptSlot;
     if ($[58] !== value_7 || $[59] !== transcriptOverlay) {
-      qn = jsxProd_default(TranscriptOverlaySlot, {
+      transcriptSlot = jsxProd_default(TranscriptOverlaySlot, {
         value: value_7,
         children: transcriptOverlay,
       });
       $[58] = value_7;
       $[59] = transcriptOverlay;
-      $[60] = qn;
-    } else qn = $[60];
+      $[60] = transcriptSlot;
+    } else transcriptSlot = $[60];
     let children_2;
-    if ($[61] !== wo || $[62] !== $n || $[63] !== Kn || $[64] !== qn || $[65] !== top) {
+    if (
+      $[61] !== stickyHeader ||
+      $[62] !== scrollBox ||
+      $[63] !== pill ||
+      $[64] !== transcriptSlot ||
+      $[65] !== top
+    ) {
       children_2 = jsxProd_default_2(Box, {
         flexGrow: 1,
         flexDirection: "column",
         overflow: "hidden",
-        children: [top, wo, $n, Kn, qn, false, false],
+        children: [top, stickyHeader, scrollBox, pill, transcriptSlot, false, false],
       });
-      $[61] = wo;
-      $[62] = $n;
-      $[63] = Kn;
-      $[64] = qn;
+      $[61] = stickyHeader;
+      $[62] = scrollBox;
+      $[63] = pill;
+      $[64] = transcriptSlot;
       $[65] = top;
       $[66] = children_2;
     } else children_2 = $[66];
-    let Jn;
+    let mainColumn;
     if ($[67] !== value_2 || $[68] !== children_2) {
-      Jn = jsxProd_default(TerminalSizeContext, {
+      mainColumn = jsxProd_default(TerminalSizeContext, {
         value: value_2,
         children: children_2,
       });
       $[67] = value_2;
       $[68] = children_2;
-      $[69] = Jn;
-    } else Jn = $[69];
-    let wn;
-    if ($[70] !== sidebar || $[71] !== ge) {
-      wn =
+      $[69] = mainColumn;
+    } else mainColumn = $[69];
+    let sidebarBox;
+    if ($[70] !== sidebar || $[71] !== sidebarW) {
+      sidebarBox =
         sidebar != null &&
-        (ge > 0
+        (sidebarW > 0
           ? jsxProd_default(Box, {
-              width: ge,
+              width: sidebarW,
               flexShrink: 0,
               flexDirection: "column",
               overflow: "hidden",
@@ -1079,26 +1275,26 @@ function FullscreenLayout(props) {
             })
           : sidebar);
       $[70] = sidebar;
-      $[71] = ge;
-      $[72] = wn;
-    } else wn = $[72];
-    let Ui;
-    if ($[73] !== Jn || $[74] !== wn) {
-      Ui = jsxProd_default_2(Box, {
+      $[71] = sidebarW;
+      $[72] = sidebarBox;
+    } else sidebarBox = $[72];
+    let mainRow;
+    if ($[73] !== mainColumn || $[74] !== sidebarBox) {
+      mainRow = jsxProd_default_2(Box, {
         flexGrow: 1,
         flexDirection: "row",
         overflow: "hidden",
-        children: [Jn, wn],
+        children: [mainColumn, sidebarBox],
       });
-      $[73] = Jn;
-      $[74] = wn;
-      $[75] = Ui;
-    } else Ui = $[75];
+      $[73] = mainColumn;
+      $[74] = sidebarBox;
+      $[75] = mainRow;
+    } else mainRow = $[75];
     const display = visible ? "none" : "flex";
     let children_3;
     if ($[76] !== abovePrompt || $[77] !== value_5) {
       children_3 = jsxProd_default(Box, {
-        ref: le,
+        ref: abovePromptRef,
         flexDirection: "column",
         flexShrink: 0,
         width: "100%",
@@ -1112,75 +1308,75 @@ function FullscreenLayout(props) {
       $[78] = children_3;
     } else children_3 = $[78];
     let children_4;
-    if ($[79] !== kt || $[80] !== display || $[81] !== children_3) {
+    if ($[79] !== overlayRows || $[80] !== display || $[81] !== children_3) {
       children_4 = jsxProd_default(Box, {
-        ref: Be,
+        ref: promptAreaRef,
         flexDirection: "column",
         flexShrink: 0,
         width: "100%",
-        maxHeight: kt,
+        maxHeight: overlayRows,
         overflowY: "hidden",
         display,
         children: children_3,
       });
-      $[79] = kt;
+      $[79] = overlayRows;
       $[80] = display;
       $[81] = children_3;
       $[82] = children_4;
     } else children_4 = $[82];
-    let Hi;
+    let abovePromptBox;
     if ($[83] !== value_3 || $[84] !== children_4) {
-      Hi = jsxProd_default(TerminalSizeContext, {
+      abovePromptBox = jsxProd_default(TerminalSizeContext, {
         value: value_3,
         children: children_4,
       });
       $[83] = value_3;
       $[84] = children_4;
-      $[85] = Hi;
-    } else Hi = $[85];
-    let _s;
-    if ($[86] !== Ui || $[87] !== Hi) {
-      _s = jsxProd_default_2(Box, {
+      $[85] = abovePromptBox;
+    } else abovePromptBox = $[85];
+    let bodyBox;
+    if ($[86] !== mainRow || $[87] !== abovePromptBox) {
+      bodyBox = jsxProd_default_2(Box, {
         flexGrow: 1,
         flexDirection: "column",
         overflow: "hidden",
-        children: [Ui, Hi],
+        children: [mainRow, abovePromptBox],
       });
-      $[86] = Ui;
-      $[87] = Hi;
-      $[88] = _s;
-    } else _s = $[88];
-    let Is;
-    if ($[89] !== dock || $[90] !== Re || $[91] !== qe) {
-      Is =
+      $[86] = mainRow;
+      $[87] = abovePromptBox;
+      $[88] = bodyBox;
+    } else bodyBox = $[88];
+    let dockBox;
+    if ($[89] !== dock || $[90] !== dockW || $[91] !== dockVisible) {
+      dockBox =
         dock != null &&
         jsxProd_default(Box, {
-          width: Re,
+          width: dockW,
           flexShrink: 0,
           flexDirection: "column",
           overflow: "hidden",
-          display: qe ? "flex" : "none",
+          display: dockVisible ? "flex" : "none",
           children: dock,
         });
       $[89] = dock;
-      $[90] = Re;
-      $[91] = qe;
-      $[92] = Is;
-    } else Is = $[92];
-    let Es;
-    if ($[93] !== _s || $[94] !== Is) {
-      Es = jsxProd_default_2(Box, {
+      $[90] = dockW;
+      $[91] = dockVisible;
+      $[92] = dockBox;
+    } else dockBox = $[92];
+    let bodyRow;
+    if ($[93] !== bodyBox || $[94] !== dockBox) {
+      bodyRow = jsxProd_default_2(Box, {
         flexGrow: 1,
         flexDirection: "row",
         overflow: "hidden",
-        children: [_s, Is],
+        children: [bodyBox, dockBox],
       });
-      $[93] = _s;
-      $[94] = Is;
-      $[95] = Es;
-    } else Es = $[95];
+      $[93] = bodyBox;
+      $[94] = dockBox;
+      $[95] = bodyRow;
+    } else bodyRow = $[95];
     const display_2 = visible ? "none" : "flex";
-    const value_8 = qe ? Re : 0;
+    const value_8 = dockVisible ? dockW : 0;
     let children_5;
     if ($[96] !== bottom || $[97] !== value_8) {
       children_5 = jsxProd_default(FooterSlot, {
@@ -1201,78 +1397,84 @@ function FullscreenLayout(props) {
       $[100] = children_5;
       $[101] = children_6;
     } else children_6 = $[101];
-    let zi;
-    if ($[102] !== ut || $[103] !== children_6) {
-      zi = jsxProd_default(Box, {
-        ref: to,
+    let promptColumn;
+    if ($[102] !== measureRows || $[103] !== children_6) {
+      promptColumn = jsxProd_default(Box, {
+        ref: promptRef,
         flexDirection: "column",
         width: "100%",
         flexGrow: 1,
         flexShrink: 0,
         overflowY: "hidden",
         children: jsxProd_default(ContextSlotA, {
-          value: ut,
+          value: measureRows,
           children: children_6,
         }),
       });
-      $[102] = ut;
+      $[102] = measureRows;
       $[103] = children_6;
-      $[104] = zi;
-    } else zi = $[104];
-    let Gi;
-    if ($[105] !== dockTail || $[106] !== Re || $[107] !== qe) {
-      Gi =
-        qe &&
+      $[104] = promptColumn;
+    } else promptColumn = $[104];
+    let dockTailBox;
+    if ($[105] !== dockTail || $[106] !== dockW || $[107] !== dockVisible) {
+      dockTailBox =
+        dockVisible &&
         jsxProd_default(DialogOverlay, {
-          width: Re,
+          width: dockW,
           children: dockTail,
         });
       $[105] = dockTail;
-      $[106] = Re;
-      $[107] = qe;
-      $[108] = Gi;
-    } else Gi = $[108];
-    let Zn;
+      $[106] = dockW;
+      $[107] = dockVisible;
+      $[108] = dockTailBox;
+    } else dockTailBox = $[108];
+    let suggestionsBox;
     if ($[109] !== measured_2) {
-      Zn = jsxProd_default(SuggestionsOverlay, {
+      suggestionsBox = jsxProd_default(SuggestionsOverlay, {
         rowsAbove: measured_2,
       });
       $[109] = measured_2;
-      $[110] = Zn;
-    } else Zn = $[110];
-    let Er;
-    if ($[111] !== maxHeight || $[112] !== display_2 || $[113] !== zi || $[114] !== Gi || $[115] !== Zn) {
-      Er = jsxProd_default_2(Box, {
-        ref: de,
+      $[110] = suggestionsBox;
+    } else suggestionsBox = $[110];
+    let promptArea;
+    if (
+      $[111] !== maxHeight ||
+      $[112] !== display_2 ||
+      $[113] !== promptColumn ||
+      $[114] !== dockTailBox ||
+      $[115] !== suggestionsBox
+    ) {
+      promptArea = jsxProd_default_2(Box, {
+        ref: containerRef,
         flexDirection: "column",
         flexShrink: 0,
         width: "100%",
         maxHeight,
         display: display_2,
-        children: [zi, Gi, Zn],
+        children: [promptColumn, dockTailBox, suggestionsBox],
       });
       $[111] = maxHeight;
       $[112] = display_2;
-      $[113] = zi;
-      $[114] = Gi;
-      $[115] = Zn;
-      $[116] = Er;
-    } else Er = $[116];
-    let Dr;
+      $[113] = promptColumn;
+      $[114] = dockTailBox;
+      $[115] = suggestionsBox;
+      $[116] = promptArea;
+    } else promptArea = $[116];
+    let modalOverlay;
     if (
-      $[117] !== _e ||
+      $[117] !== bodyRows ||
       $[118] !== columns ||
       $[119] !== modal ||
       $[120] !== measured ||
-      $[121] !== He ||
+      $[121] !== modalRows ||
       $[122] !== modalScrollViewport ||
       $[123] !== visible
     ) {
-      Dr =
+      modalOverlay =
         modal != null &&
         jsxProd_default(scrollViewportContext, {
           value: {
-            rows: He,
+            rows: modalRows,
             columns: columns - 2 * PANE_WIDTH_RESERVE,
             scrollViewport: modalScrollViewport ?? null,
             claimScrollBox: null,
@@ -1280,7 +1482,7 @@ function FullscreenLayout(props) {
           children: jsxProd_default_2(Box, {
             flexShrink: 0,
             width: "100%",
-            maxHeight: _e - OVERLAY_BATCH_SIZE,
+            maxHeight: bodyRows - OVERLAY_BATCH_SIZE,
             flexDirection: "column",
             overflow: "hidden",
             display: visible ? "flex" : "none",
@@ -1308,13 +1510,13 @@ function FullscreenLayout(props) {
                 flexShrink: 1,
                 overflow: "hidden",
                 children: jsxProd_default(Box, {
-                  ref: Ue,
+                  ref: modalContentRef,
                   flexDirection: "column",
                   flexShrink: 0,
                   children: jsxProd_default(useUnseenDivider, {
                     scrollViewport: modalScrollViewport,
-                    maxRows: He,
-                    onClaim: ae,
+                    maxRows: modalRows,
+                    onClaim: onClaimRows,
                     children: modal.content,
                   }),
                 }),
@@ -1325,7 +1527,7 @@ function FullscreenLayout(props) {
                 overflow: "hidden",
                 height: measured ? undefined : 0,
                 children: jsxProd_default(Box, {
-                  ref: lt,
+                  ref: modalFooterRef,
                   flexDirection: "column",
                   flexShrink: 0,
                   children: modal.footer,
@@ -1334,29 +1536,29 @@ function FullscreenLayout(props) {
             ],
           }),
         });
-      $[117] = _e;
+      $[117] = bodyRows;
       $[118] = columns;
       $[119] = modal;
       $[120] = measured;
-      $[121] = He;
+      $[121] = modalRows;
       $[122] = modalScrollViewport;
       $[123] = visible;
-      $[124] = Dr;
-    } else Dr = $[124];
-    let er;
-    if ($[125] !== Ro || $[126] !== Es || $[127] !== Er || $[128] !== Dr) {
-      er = jsxProd_default_2(FullscreenSlotsProvider, {
-        container: de,
-        children: [Ro, Es, Er, Dr],
+      $[124] = modalOverlay;
+    } else modalOverlay = $[124];
+    let layoutContent;
+    if ($[125] !== headerBox || $[126] !== bodyRow || $[127] !== promptArea || $[128] !== modalOverlay) {
+      layoutContent = jsxProd_default_2(FullscreenSlotsProvider, {
+        container: containerRef,
+        children: [headerBox, bodyRow, promptArea, modalOverlay],
       });
-      $[125] = Ro;
-      $[126] = Es;
-      $[127] = Er;
-      $[128] = Dr;
-      $[129] = er;
-    } else er = $[129];
-    let children_7 = er;
-    const value_9 = se ? rows : null;
+      $[125] = headerBox;
+      $[126] = bodyRow;
+      $[127] = promptArea;
+      $[128] = modalOverlay;
+      $[129] = layoutContent;
+    } else layoutContent = $[129];
+    let children_7 = layoutContent;
+    const value_9 = showNotice ? rows : null;
     let children_8;
     if ($[130] !== value || $[131] !== children_7) {
       children_8 = jsxProd_default(TerminalSizeContext, {
@@ -1367,46 +1569,46 @@ function FullscreenLayout(props) {
       $[131] = children_7;
       $[132] = children_8;
     } else children_8 = $[132];
-    let _o;
+    let noticeSlot;
     if ($[133] !== value_9 || $[134] !== children_8) {
-      _o = jsxProd_default(noticeDialogSlot, {
+      noticeSlot = jsxProd_default(noticeDialogSlot, {
         value: value_9,
         children: children_8,
       });
       $[133] = value_9;
       $[134] = children_8;
-      $[135] = _o;
-    } else _o = $[135];
-    return _o;
+      $[135] = noticeSlot;
+    } else noticeSlot = $[135];
+    return noticeSlot;
   }
   if (isDecstbmRendererEnabled()) {
-    let Ro;
+    let traceRuler;
     if ($[136] === MEMO_CACHE_SENTINEL) {
-      Ro = jsxProd_default(ScrollTraceRuler, {});
-      $[136] = Ro;
-    } else Ro = $[136];
+      traceRuler = jsxProd_default(ScrollTraceRuler, {});
+      $[136] = traceRuler;
+    } else traceRuler = $[136];
     let scrollable_2;
     if ($[137] !== value_6 || $[138] !== scrollable) {
       scrollable_2 = jsxProd_default_2(ScrollChromeContextValue, {
         value: value_6,
-        children: [scrollable, Ro],
+        children: [scrollable, traceRuler],
       });
       $[137] = value_6;
       $[138] = scrollable;
       $[139] = scrollable_2;
     } else scrollable_2 = $[139];
-    let Wo;
+    let suggestionsBox;
     if ($[140] === MEMO_CACHE_SENTINEL) {
-      Wo = jsxProd_default(SuggestionsOverlay, {});
-      $[140] = Wo;
-    } else Wo = $[140];
+      suggestionsBox = jsxProd_default(SuggestionsOverlay, {});
+      $[140] = suggestionsBox;
+    } else suggestionsBox = $[140];
     let bottom_2;
     if ($[141] !== abovePrompt || $[142] !== bottom) {
       bottom_2 = jsxProd_default_2(Box, {
-        ref: de,
+        ref: containerRef,
         flexDirection: "column",
         width: "100%",
-        children: [abovePrompt, bottom, Wo],
+        children: [abovePrompt, bottom, suggestionsBox],
       });
       $[141] = abovePrompt;
       $[142] = bottom;
@@ -1417,14 +1619,14 @@ function FullscreenLayout(props) {
       $[144] !== columns ||
       $[145] !== modal ||
       $[146] !== measured ||
-      $[147] !== He ||
+      $[147] !== modalRows ||
       $[148] !== modalScrollViewport
     ) {
       overlay =
         modal != null
           ? jsxProd_default(scrollViewportContext, {
               value: {
-                rows: He,
+                rows: modalRows,
                 columns: columns - 2 * PANE_WIDTH_RESERVE,
                 scrollViewport: modalScrollViewport ?? null,
                 claimScrollBox: null,
@@ -1433,7 +1635,7 @@ function FullscreenLayout(props) {
                 flexDirection: "column",
                 children: [
                   jsxProd_default(Box, {
-                    ref: Ue,
+                    ref: modalContentRef,
                     flexDirection: "column",
                     paddingX: PANE_WIDTH_RESERVE,
                     children: modal.content,
@@ -1444,7 +1646,7 @@ function FullscreenLayout(props) {
                     overflow: "hidden",
                     height: measured ? undefined : 0,
                     children: jsxProd_default(Box, {
-                      ref: lt,
+                      ref: modalFooterRef,
                       flexDirection: "column",
                       flexShrink: 0,
                       children: modal.footer,
@@ -1457,14 +1659,14 @@ function FullscreenLayout(props) {
       $[144] = columns;
       $[145] = modal;
       $[146] = measured;
-      $[147] = He;
+      $[147] = modalRows;
       $[148] = modalScrollViewport;
       $[149] = overlay;
     } else overlay = $[149];
-    let Xo;
+    let legacyLayout;
     if ($[150] !== scrollViewport || $[151] !== scrollable_2 || $[152] !== bottom_2 || $[153] !== overlay) {
-      Xo = jsxProd_default(FullscreenSlotsProvider, {
-        container: de,
+      legacyLayout = jsxProd_default(FullscreenSlotsProvider, {
+        container: containerRef,
         children: jsxProd_default(FullscreenLayoutView, {
           scrollViewport,
           scrollable: scrollable_2,
@@ -1476,60 +1678,60 @@ function FullscreenLayout(props) {
       $[151] = scrollable_2;
       $[152] = bottom_2;
       $[153] = overlay;
-      $[154] = Xo;
-    } else Xo = $[154];
-    return Xo;
+      $[154] = legacyLayout;
+    } else legacyLayout = $[154];
+    return legacyLayout;
   }
-  let Ro;
+  let chromeProvider;
   if ($[155] !== value_6 || $[156] !== scrollable) {
-    Ro = jsxProd_default(ScrollChromeContextValue, {
+    chromeProvider = jsxProd_default(ScrollChromeContextValue, {
       value: value_6,
       children: scrollable,
     });
     $[155] = value_6;
     $[156] = scrollable;
-    $[157] = Ro;
-  } else Ro = $[157];
+    $[157] = chromeProvider;
+  } else chromeProvider = $[157];
   const content = modal?.content;
   const footer = modal?.footer;
-  let Lo;
+  let plainLayout;
   if (
     $[158] !== abovePrompt ||
     $[159] !== bottom ||
-    $[160] !== Ro ||
+    $[160] !== chromeProvider ||
     $[161] !== content ||
     $[162] !== footer
   ) {
-    Lo = jsxProd_default_2(Fragment, {
-      children: [Ro, abovePrompt, bottom, content, footer],
+    plainLayout = jsxProd_default_2(Fragment, {
+      children: [chromeProvider, abovePrompt, bottom, content, footer],
     });
     $[158] = abovePrompt;
     $[159] = bottom;
-    $[160] = Ro;
+    $[160] = chromeProvider;
     $[161] = content;
     $[162] = footer;
-    $[163] = Lo;
-  } else Lo = $[163];
-  return Lo;
+    $[163] = plainLayout;
+  } else plainLayout = $[163];
+  return plainLayout;
 }
 //@ chunk-ag5x7vhf.js:39089-39452 layout
 function useHasVisibleNotification() {
-  let $ = w(3);
+  let $ = useMemoCache(3);
   let headerGauge = useHeaderGauge();
-  let x;
+  let selectHasHeldNotice;
   if ($[0] !== headerGauge) {
-    x = (T) =>
-      isHeldNotice(T.notifications.current, holdsToasts(T)) &&
-      !isGaugeSurface(T.notifications.current, headerGauge);
+    selectHasHeldNotice = (appState) =>
+      isHeldNotice(appState.notifications.current, holdsToasts(appState)) &&
+      !isGaugeSurface(appState.notifications.current, headerGauge);
     $[0] = headerGauge;
-    $[1] = x;
-  } else x = $[1];
-  if (useAppStateSlice(x) !== true) {
+    $[1] = selectHasHeldNotice;
+  } else selectHasHeldNotice = $[1];
+  if (useAppStateSlice(selectHasHeldNotice) !== true) {
     return null;
   }
-  let _;
+  let toastRow;
   if ($[2] === MEMO_CACHE_SENTINEL) {
-    _ = jsxProd_default_2(Box, {
+    toastRow = jsxProd_default_2(Box, {
       flexShrink: 0,
       maxWidth: "100%",
       overflow: "hidden",
@@ -1544,105 +1746,105 @@ function useHasVisibleNotification() {
         }),
       ],
     });
-    $[2] = _;
-  } else _ = $[2];
-  return _;
+    $[2] = toastRow;
+  } else toastRow = $[2];
+  return toastRow;
 }
 //@ chunk-ag5x7vhf.js:39452-43160 file-local
 /**
  * 管理未读分隔线：用户向上滚动后记录 dividerIndex，响应 down/pageup/pagedown/home 等按键，回到底部时清除。
  */
 function useUnseenDivider(messageCount) {
-  let $ = w(46);
+  let $ = useMemoCache(46);
   let { scrollViewport, maxRows, onClaim, children } = messageCount;
-  let dividerYRef = Se(scrollViewportContext);
-  let handleRef = R(null);
-  let [D, A] = y(null);
-  let V;
+  let dividerYRef = useContext(scrollViewportContext);
+  let handleRef = useRef(null);
+  let [claimedHeight, setClaimedHeight] = useState(null);
+  let claimScrollBox;
   if ($[0] !== onClaim) {
-    V = (handle) => {
+    claimScrollBox = (handle) => {
       handleRef.current = handle;
-      A(handle);
+      setClaimedHeight(handle);
       onClaim?.(handle);
     };
     $[0] = onClaim;
-    $[1] = V;
-  } else V = $[1];
-  let claimScrollBox = V;
-  let K = D !== null;
-  let q = maxRows - (D ?? 0);
-  let Y = R(null);
-  let pe;
+    $[1] = claimScrollBox;
+  } else claimScrollBox = $[1];
+  let claimScrollBox_2 = claimScrollBox;
+  let hasClaim = claimedHeight !== null;
+  let availableRows = maxRows - (claimedHeight ?? 0);
+  let scrollBoxRef = useRef(null);
+  let attachViewport;
   if ($[2] !== scrollViewport) {
-    pe = () => {
+    attachViewport = () => {
       if (scrollViewport && handleRef.current === null) {
-        return scrollViewport.attach(Y.current);
+        return scrollViewport.attach(scrollBoxRef.current);
       }
     };
     $[2] = scrollViewport;
-    $[3] = pe;
-  } else pe = $[3];
-  zt(pe);
-  let xe;
+    $[3] = attachViewport;
+  } else attachViewport = $[3];
+  useLayoutEffect(attachViewport);
+  let initialOverflow;
   if ($[4] === MEMO_CACHE_SENTINEL) {
-    xe = {
+    initialOverflow = {
       overflows: false,
       above: false,
       below: false,
       hintTop: 0,
       hintBottom: 0,
     };
-    $[4] = xe;
-  } else xe = $[4];
-  let [ge, Re] = y(xe);
-  let We;
-  if ($[5] !== q || $[6] !== scrollViewport?.handle) {
-    We = () => {
+    $[4] = initialOverflow;
+  } else initialOverflow = $[4];
+  let [overflow, setOverflow] = useState(initialOverflow);
+  let updateOverflow;
+  if ($[5] !== availableRows || $[6] !== scrollViewport?.handle) {
+    updateOverflow = () => {
       let handle = scrollViewport?.handle;
       if (!handle) {
         return;
       }
       let freshScrollHeight = handle.getFreshScrollHeight();
-      let te = handle.getViewportHeight() || q;
-      let me = Y.current?.getViewportTop() ?? 0;
-      let se = Y.current?.getViewportHeight() ?? 0;
-      let max = Math.max(0, handle.getViewportTop() - me);
-      let max_2 = Math.max(0, se - max - te);
-      let ve = handleRef.current !== null ? te : q;
-      let Ee = freshScrollHeight > ve;
-      let He = handle.getScrollTop() + handle.getPendingDelta();
-      let Ue = freshScrollHeight - ve > 2;
-      let lt = Ue && He > 0;
-      let it = Ue && He < freshScrollHeight - te;
-      Re((handle_0) =>
-        handle_0.overflows === Ee &&
-        handle_0.above === lt &&
-        handle_0.below === it &&
+      let viewportHeight = handle.getViewportHeight() || availableRows;
+      let boxViewportTop = scrollBoxRef.current?.getViewportTop() ?? 0;
+      let boxViewportHeight = scrollBoxRef.current?.getViewportHeight() ?? 0;
+      let max = Math.max(0, handle.getViewportTop() - boxViewportTop);
+      let max_2 = Math.max(0, boxViewportHeight - max - viewportHeight);
+      let effectiveRows = handleRef.current !== null ? viewportHeight : availableRows;
+      let overflows = freshScrollHeight > effectiveRows;
+      let scrollTop = handle.getScrollTop() + handle.getPendingDelta();
+      let hasMore = freshScrollHeight - effectiveRows > 2;
+      let hasAbove = hasMore && scrollTop > 0;
+      let hasBelow = hasMore && scrollTop < freshScrollHeight - viewportHeight;
+      setOverflow((handle_0) =>
+        handle_0.overflows === overflows &&
+        handle_0.above === hasAbove &&
+        handle_0.below === hasBelow &&
         handle_0.hintTop === max &&
         handle_0.hintBottom === max_2
           ? handle_0
           : {
-              overflows: Ee,
-              above: lt,
-              below: it,
+              overflows,
+              above: hasAbove,
+              below: hasBelow,
               hintTop: max,
               hintBottom: max_2,
             },
       );
     };
-    $[5] = q;
+    $[5] = availableRows;
     $[6] = scrollViewport?.handle;
-    $[7] = We;
-  } else We = $[7];
-  let tt = We;
-  let ct = R(null);
-  let activeElementRef = R(null);
-  let { focusManager } = Se(kp);
-  let Qe;
+    $[7] = updateOverflow;
+  } else updateOverflow = $[7];
+  let recomputeOverflow = updateOverflow;
+  let boxRef = useRef(null);
+  let activeElementRef = useRef(null);
+  let { focusManager } = useContext(APP_CONTEXT);
+  let restoreFocus;
   if ($[8] !== focusManager) {
-    Qe = () => {
-      let Wt = ct.current;
-      if (!Wt || !focusManager) {
+    restoreFocus = () => {
+      let boxNode = boxRef.current;
+      if (!boxNode || !focusManager) {
         return;
       }
       for (
@@ -1650,79 +1852,79 @@ function useUnseenDivider(messageCount) {
         activeElement;
         activeElement = activeElement.parentNode
       ) {
-        if (activeElement === Wt) {
+        if (activeElement === boxNode) {
           activeElementRef.current = focusManager.activeElement;
           return;
         }
       }
-      let pt = activeElementRef.current;
-      for (let Xt = pt ?? undefined; Xt; Xt = Xt.parentNode) {
-        if (Xt === Wt) {
-          focusManager.focus(pt);
+      let previousActive = activeElementRef.current;
+      for (let node = previousActive ?? undefined; node; node = node.parentNode) {
+        if (node === boxNode) {
+          focusManager.focus(previousActive);
           return;
         }
       }
-      focusManager.focus(Wt);
+      focusManager.focus(boxNode);
     };
     $[8] = focusManager;
-    $[9] = Qe;
-  } else Qe = $[9];
-  let rt = Qe;
-  let qe;
-  if ($[10] !== rt) {
-    qe = [rt];
-    $[10] = rt;
-    $[11] = qe;
-  } else qe = $[11];
-  P(rt, qe);
-  let St;
-  let dt;
-  if ($[12] !== tt || $[13] !== scrollViewport) {
-    St = () => {
-      tt();
-      return scrollViewport?.subscribe(tt);
+    $[9] = restoreFocus;
+  } else restoreFocus = $[9];
+  let restoreFocusEffect = restoreFocus;
+  let focusDeps;
+  if ($[10] !== restoreFocusEffect) {
+    focusDeps = [restoreFocusEffect];
+    $[10] = restoreFocusEffect;
+    $[11] = focusDeps;
+  } else focusDeps = $[11];
+  useEffect(restoreFocusEffect, focusDeps);
+  let subscribeEffect;
+  let subscribeDeps;
+  if ($[12] !== recomputeOverflow || $[13] !== scrollViewport) {
+    subscribeEffect = () => {
+      recomputeOverflow();
+      return scrollViewport?.subscribe(recomputeOverflow);
     };
-    dt = [tt, scrollViewport];
-    $[12] = tt;
+    subscribeDeps = [recomputeOverflow, scrollViewport];
+    $[12] = recomputeOverflow;
     $[13] = scrollViewport;
-    $[14] = St;
-    $[15] = dt;
+    $[14] = subscribeEffect;
+    $[15] = subscribeDeps;
   } else {
-    St = $[14];
-    dt = $[15];
+    subscribeEffect = $[14];
+    subscribeDeps = $[15];
   }
-  P(St, dt);
-  let Pt;
-  if ($[16] !== tt || $[17] !== rt) {
-    Pt = () => {
-      tt();
-      rt();
+  useEffect(subscribeEffect, subscribeDeps);
+  let pollTick;
+  if ($[16] !== recomputeOverflow || $[17] !== restoreFocusEffect) {
+    pollTick = () => {
+      recomputeOverflow();
+      restoreFocusEffect();
     };
-    $[16] = tt;
-    $[17] = rt;
-    $[18] = Pt;
-  } else Pt = $[18];
-  useInterval(Pt, 50);
+    $[16] = recomputeOverflow;
+    $[17] = restoreFocusEffect;
+    $[18] = pollTick;
+  } else pollTick = $[18];
+  useInterval(pollTick, 50);
   const rows = dividerYRef?.rows ?? maxRows;
   const columns = dividerYRef?.columns ?? 0;
   const scrollViewport_2 = scrollViewport ?? null;
-  let to;
-  if ($[19] !== claimScrollBox || $[20] !== rows || $[21] !== columns || $[22] !== scrollViewport_2) {
-    to = {
+  let contextValue;
+  if ($[19] !== claimScrollBox_2 || $[20] !== rows || $[21] !== columns || $[22] !== scrollViewport_2) {
+    contextValue = {
       rows,
       columns,
       scrollViewport: scrollViewport_2,
-      claimScrollBox,
+      claimScrollBox: claimScrollBox_2,
     };
-    $[19] = claimScrollBox;
+    $[19] = claimScrollBox_2;
     $[20] = rows;
     $[21] = columns;
     $[22] = scrollViewport_2;
-    $[23] = to;
-  } else to = $[23];
-  let value = to;
+    $[23] = contextValue;
+  } else contextValue = $[23];
+  let value = contextValue;
   let onKeyDown;
-  if ($[24] !== q || $[25] !== scrollViewport?.handle) {
+  if ($[24] !== availableRows || $[25] !== scrollViewport?.handle) {
     onKeyDown = (idx) => {
       if (idx.defaultPrevented || idx.ctrl || idx.meta || idx.shift) {
         return;
@@ -1732,16 +1934,16 @@ function useUnseenDivider(messageCount) {
         return;
       }
       let freshScrollHeight = handle.getFreshScrollHeight();
-      let Ve = handle.getViewportHeight() || q;
-      let ze = handleRef.current !== null ? Ve : q;
-      if (freshScrollHeight <= ze) {
+      let viewportHeight = handle.getViewportHeight() || availableRows;
+      let effectiveRows = handleRef.current !== null ? viewportHeight : availableRows;
+      if (freshScrollHeight <= effectiveRows) {
         return;
       }
       if (idx.key === "up" || idx.key === "down") {
         handle.scrollBy(idx.key === "down" ? 1 : -1);
         idx.preventDefault();
       } else if (idx.key === "pageup" || idx.key === "pagedown") {
-        let max = Math.max(1, ze);
+        let max = Math.max(1, effectiveRows);
         handle.scrollBy(idx.key === "pagedown" ? max : -max);
         idx.preventDefault();
       } else if (idx.key === "home") {
@@ -1752,11 +1954,11 @@ function useUnseenDivider(messageCount) {
         idx.preventDefault();
       }
     };
-    $[24] = q;
+    $[24] = availableRows;
     $[25] = scrollViewport?.handle;
     $[26] = onKeyDown;
   } else onKeyDown = $[26];
-  const height = !K && ge.overflows ? q : undefined;
+  const height = !hasClaim && overflow.overflows ? availableRows : undefined;
   let children_2;
   if ($[27] !== children) {
     children_2 = jsxProd_default(Box, {
@@ -1768,10 +1970,10 @@ function useUnseenDivider(messageCount) {
     $[27] = children;
     $[28] = children_2;
   } else children_2 = $[28];
-  let oo;
+  let scrollBox;
   if ($[29] !== height || $[30] !== children_2) {
-    oo = jsxProd_default(ScrollBoxDefault, {
-      ref: Y,
+    scrollBox = jsxProd_default(ScrollBoxDefault, {
+      ref: scrollBoxRef,
       flexDirection: "column",
       flexShrink: 0,
       height,
@@ -1780,128 +1982,133 @@ function useUnseenDivider(messageCount) {
     });
     $[29] = height;
     $[30] = children_2;
-    $[31] = oo;
-  } else oo = $[31];
-  let mo;
-  if ($[32] !== ge.above || $[33] !== ge.hintTop) {
-    mo =
-      ge.above &&
+    $[31] = scrollBox;
+  } else scrollBox = $[31];
+  let aboveHint;
+  if ($[32] !== overflow.above || $[33] !== overflow.hintTop) {
+    aboveHint =
+      overflow.above &&
       jsxProd_default(Box, {
         position: "absolute",
-        top: ge.hintTop,
+        top: overflow.hintTop,
         right: 1,
         children: jsxProd_default(Text, {
           dimColor: true,
           children: figures_default.arrowUp,
         }),
       });
-    $[32] = ge.above;
-    $[33] = ge.hintTop;
-    $[34] = mo;
-  } else mo = $[34];
-  let Jt;
-  if ($[35] !== ge.below || $[36] !== ge.hintBottom) {
-    Jt =
-      ge.below &&
+    $[32] = overflow.above;
+    $[33] = overflow.hintTop;
+    $[34] = aboveHint;
+  } else aboveHint = $[34];
+  let belowHint;
+  if ($[35] !== overflow.below || $[36] !== overflow.hintBottom) {
+    belowHint =
+      overflow.below &&
       jsxProd_default(Box, {
         position: "absolute",
-        bottom: ge.hintBottom,
+        bottom: overflow.hintBottom,
         right: 1,
         children: jsxProd_default(Text, {
           dimColor: true,
           children: figures_default.arrowDown,
         }),
       });
-    $[35] = ge.below;
-    $[36] = ge.hintBottom;
-    $[37] = Jt;
-  } else Jt = $[37];
+    $[35] = overflow.below;
+    $[36] = overflow.hintBottom;
+    $[37] = belowHint;
+  } else belowHint = $[37];
   let children_3;
-  if ($[38] !== onKeyDown || $[39] !== oo || $[40] !== mo || $[41] !== Jt) {
+  if ($[38] !== onKeyDown || $[39] !== scrollBox || $[40] !== aboveHint || $[41] !== belowHint) {
     children_3 = jsxProd_default_2(Box, {
-      ref: ct,
+      ref: boxRef,
       flexDirection: "column",
       flexShrink: 0,
       onKeyDown,
-      children: [oo, mo, Jt],
+      children: [scrollBox, aboveHint, belowHint],
     });
     $[38] = onKeyDown;
-    $[39] = oo;
-    $[40] = mo;
-    $[41] = Jt;
+    $[39] = scrollBox;
+    $[40] = aboveHint;
+    $[41] = belowHint;
     $[42] = children_3;
   } else children_3 = $[42];
-  let Mo;
+  let root;
   if ($[43] !== value || $[44] !== children_3) {
-    Mo = jsxProd_default(scrollViewportContext, {
+    root = jsxProd_default(scrollViewportContext, {
       value,
       children: children_3,
     });
     $[43] = value;
     $[44] = children_3;
-    $[45] = Mo;
-  } else Mo = $[45];
-  return Mo;
+    $[45] = root;
+  } else root = $[45];
+  return root;
 }
 //@ chunk-ag5x7vhf.js:43160-43202 layout
-var JUMP_TO_BOTTOM_CHORD = parseChord("ctrl+end");
-var PAGE_DOWN_CHORD = parseChord("pagedown");
+var JUMP_TO_BOTTOM_CHORD; // deferred: uses parseChord (../keybindings/parser.js) of its import cycle while loading; runs once the cycle is complete
+var PAGE_DOWN_CHORD;
+deferInit("chunk-ag5x7vhf.js:43160", () => {
+  JUMP_TO_BOTTOM_CHORD = parseChord("ctrl+end");
+  PAGE_DOWN_CHORD = parseChord("pagedown");
+});
 //@ chunk-ag5x7vhf.js:43202-44640 fingerprint = NewMessagesPill (0.615)
 /**
  * "新消息"药丸：不在底部且有未读时显示 "Jump to bottom"，点击或 scroll:bottom 快捷键跳到底部。
  */
 function NewMessagesPill(props) {
-  let $ = w(20);
+  let $ = useMemoCache(20);
   let { count, onClick } = props;
-  let [T, k] = y(false);
+  let [hover, setHover] = useState(false);
   let { columns } = useTerminalSize();
-  let D;
-  let A;
-  let L;
+  let jumpChord;
+  let platform;
+  let pageDownChord;
   if ($[0] === MEMO_CACHE_SENTINEL) {
-    A = getShortcutDisplayPlatform();
-    D = chordToDisplayString(JUMP_TO_BOTTOM_CHORD, A);
-    L = chordToDisplayString(PAGE_DOWN_CHORD, A);
-    $[0] = D;
-    $[1] = A;
-    $[2] = L;
+    platform = getShortcutDisplayPlatform();
+    jumpChord = chordToDisplayString(JUMP_TO_BOTTOM_CHORD, platform);
+    pageDownChord = chordToDisplayString(PAGE_DOWN_CHORD, platform);
+    $[0] = jumpChord;
+    $[1] = platform;
+    $[2] = pageDownChord;
   } else {
-    D = $[0];
-    A = $[1];
-    L = $[2];
+    jumpChord = $[0];
+    platform = $[1];
+    pageDownChord = $[2];
   }
-  let V = L;
-  let shortcutDisplay = useShortcutDisplay("scroll:bottom", "Scroll", D);
-  let shortcutDisplay_2 = useShortcutDisplay("scroll:pageDown", "Scroll", V);
-  let K = yt(subscribeFullscreenObserved, hasFullscreenBeenObserved);
-  let q;
+  let pageDownChord_2 = pageDownChord;
+  let shortcutDisplay = useShortcutDisplay("scroll:bottom", "Scroll", jumpChord);
+  let shortcutDisplay_2 = useShortcutDisplay("scroll:pageDown", "Scroll", pageDownChord_2);
+  let hasBeenObserved = useSyncExternalStore(subscribeFullscreenObserved, hasFullscreenBeenObserved);
+  let label;
   if ($[3] !== count) {
-    q = count > 0 ? `${count} new ${plural(count, "message")}` : "Jump to bottom";
+    label = count > 0 ? `${count} new ${plural(count, "message")}` : "Jump to bottom";
     $[3] = count;
-    $[4] = q;
-  } else q = $[4];
-  let Y = q;
-  let pe = A === "macos" && (shortcutDisplay === "" || shortcutDisplay === D);
-  let xe = isMouseTrackingEnabled() === "full" && K;
-  let ge = shortcutDisplay_2 === V ? `fn+${figures_default.arrowDown}` : shortcutDisplay_2;
-  let Re;
-  if (pe && xe) Re = `${Y} (click) ${figures_default.arrowDown}`;
-  else if (pe && ge) Re = `${Y}: ${ge} to scroll`;
-  else if (shortcutDisplay) Re = `${Y} (${shortcutDisplay}) ${figures_default.arrowDown}`;
-  else Re = `${Y} ${figures_default.arrowDown}`;
-  let We = columns - 2;
-  const fe = `${Y} ${figures_default.arrowDown}`;
-  let Fe;
-  if ($[5] !== We || $[6] !== Re || $[7] !== Y || $[8] !== fe) {
-    let te = [Re, fe, Y];
-    Fe = te.find((me) => bunStringWidth(me) <= We) ?? Y;
-    $[5] = We;
-    $[6] = Re;
-    $[7] = Y;
-    $[8] = fe;
-    $[9] = Fe;
-  } else Fe = $[9];
-  let children = Fe;
+    $[4] = label;
+  } else label = $[4];
+  let label_2 = label;
+  let isMac = platform === "macos" && (shortcutDisplay === "" || shortcutDisplay === jumpChord);
+  let mouseFull = isMouseTrackingEnabled() === "full" && hasBeenObserved;
+  let pageDownHint =
+    shortcutDisplay_2 === pageDownChord_2 ? `fn+${figures_default.arrowDown}` : shortcutDisplay_2;
+  let fullLabel;
+  if (isMac && mouseFull) fullLabel = `${label_2} (click) ${figures_default.arrowDown}`;
+  else if (isMac && pageDownHint) fullLabel = `${label_2}: ${pageDownHint} to scroll`;
+  else if (shortcutDisplay) fullLabel = `${label_2} (${shortcutDisplay}) ${figures_default.arrowDown}`;
+  else fullLabel = `${label_2} ${figures_default.arrowDown}`;
+  let availableWidth = columns - 2;
+  const shortLabel = `${label_2} ${figures_default.arrowDown}`;
+  let label_3;
+  if ($[5] !== availableWidth || $[6] !== fullLabel || $[7] !== label_2 || $[8] !== shortLabel) {
+    let candidates = [fullLabel, shortLabel, label_2];
+    label_3 = candidates.find((candidate) => bunStringWidth(candidate) <= availableWidth) ?? label_2;
+    $[5] = availableWidth;
+    $[6] = fullLabel;
+    $[7] = label_2;
+    $[8] = shortLabel;
+    $[9] = label_3;
+  } else label_3 = $[9];
+  let children = label_3;
   let onClick_2;
   if ($[10] !== onClick) {
     onClick_2 = () => {
@@ -1914,15 +2121,15 @@ function NewMessagesPill(props) {
   let onMouseEnter;
   let onMouseLeave;
   if ($[12] === MEMO_CACHE_SENTINEL) {
-    onMouseEnter = () => k(true);
-    onMouseLeave = () => k(false);
+    onMouseEnter = () => setHover(true);
+    onMouseLeave = () => setHover(false);
     $[12] = onMouseEnter;
     $[13] = onMouseLeave;
   } else {
     onMouseEnter = $[12];
     onMouseLeave = $[13];
   }
-  const color = T ? "userMessageBackgroundHover" : "userMessageBackground";
+  const color = hover ? "userMessageBackgroundHover" : "userMessageBackground";
   let children_2;
   if ($[14] !== color || $[15] !== children) {
     children_2 = jsxProd_default(TagTabs, {
@@ -1936,9 +2143,9 @@ function NewMessagesPill(props) {
     $[15] = children;
     $[16] = children_2;
   } else children_2 = $[16];
-  let Ue;
+  let pill;
   if ($[17] !== onClick_2 || $[18] !== children_2) {
-    Ue = jsxProd_default(Box, {
+    pill = jsxProd_default(Box, {
       position: "absolute",
       bottom: 0,
       left: 0,
@@ -1954,29 +2161,29 @@ function NewMessagesPill(props) {
     });
     $[17] = onClick_2;
     $[18] = children_2;
-    $[19] = Ue;
-  } else Ue = $[19];
-  return Ue;
+    $[19] = pill;
+  } else pill = $[19];
+  return pill;
 }
 //@ chunk-ag5x7vhf.js:44640-45388 fingerprint = StickyPromptHeader (0.796)
 /**
  * 全屏滚动时置顶显示当前可见区域对应的用户提示（StickyPromptHeader）。
  */
 function StickyPromptHeader(props) {
-  let $ = w(13);
+  let $ = useMemoCache(13);
   let { text, onClick, leftMargin } = props;
-  let [hover, setHover] = y(false);
-  let D;
+  let [hover, setHover] = useState(false);
+  let gutter;
   if ($[0] !== leftMargin) {
-    D =
+    gutter =
       leftMargin > 0 &&
       jsxProd_default(NoSelect, {
         fromLeftEdge: true,
         minWidth: leftMargin,
       });
     $[0] = leftMargin;
-    $[1] = D;
-  } else D = $[1];
+    $[1] = gutter;
+  } else gutter = $[1];
   const backgroundColor = hover ? "userMessageBackgroundHover" : "userMessageBackground";
   let onMouseEnter;
   let onMouseLeave;
@@ -1999,9 +2206,9 @@ function StickyPromptHeader(props) {
     $[4] = text;
     $[5] = children;
   } else children = $[5];
-  let z;
+  let promptBox;
   if ($[6] !== onClick || $[7] !== backgroundColor || $[8] !== children) {
-    z = jsxProd_default(Box, {
+    promptBox = jsxProd_default(Box, {
       flexGrow: 1,
       paddingRight: 1,
       backgroundColor,
@@ -2013,26 +2220,26 @@ function StickyPromptHeader(props) {
     $[6] = onClick;
     $[7] = backgroundColor;
     $[8] = children;
-    $[9] = z;
-  } else z = $[9];
-  let K;
-  if ($[10] !== D || $[11] !== z) {
-    K = jsxProd_default_2(Box, {
+    $[9] = promptBox;
+  } else promptBox = $[9];
+  let header;
+  if ($[10] !== gutter || $[11] !== promptBox) {
+    header = jsxProd_default_2(Box, {
       flexShrink: 0,
       width: "100%",
       height: 1,
       flexDirection: "row",
-      children: [D, z],
+      children: [gutter, promptBox],
     });
-    $[10] = D;
-    $[11] = z;
-    $[12] = K;
-  } else K = $[12];
-  return K;
+    $[10] = gutter;
+    $[11] = promptBox;
+    $[12] = header;
+  } else header = $[12];
+  return header;
 }
 //@ chunk-ag5x7vhf.js:45388-45658 fingerprint = DialogOverlay (0.554)
 function DialogOverlay(props) {
-  let $ = w(4);
+  let $ = useMemoCache(4);
   let { width, children } = props;
   let node = useAnchorTopMargin();
   let t0;
@@ -2060,18 +2267,18 @@ function DialogOverlay(props) {
 }
 //@ chunk-ag5x7vhf.js:45658-46504 fingerprint = SuggestionsOverlay (0.783)
 function SuggestionsOverlay(props) {
-  let $ = w(10);
+  let $ = useMemoCache(10);
   let { rowsAbove } = props;
-  let x = rowsAbove === undefined ? 0 : rowsAbove;
+  let rowsAboveValue = rowsAbove === undefined ? 0 : rowsAbove;
   let data = useFullscreenSlotData();
   let fullscreenSlotDialog = useFullscreenSlotDialog();
   let anchorTopMargin = useAnchorTopMargin();
-  let marginBottom = x > 0 ? x : -anchorTopMargin;
-  let D = data !== null && (data.suggestions.length > 0 || !!data.emptyMessage);
-  let L;
-  if ($[0] !== data || $[1] !== marginBottom || $[2] !== D) {
-    L =
-      D &&
+  let marginBottom = rowsAboveValue > 0 ? rowsAboveValue : -anchorTopMargin;
+  let hasSuggestions = data !== null && (data.suggestions.length > 0 || !!data.emptyMessage);
+  let suggestionsBox;
+  if ($[0] !== data || $[1] !== marginBottom || $[2] !== hasSuggestions) {
+    suggestionsBox =
+      hasSuggestions &&
       jsxProd_default(Box, {
         position: "absolute",
         bottom: "100%",
@@ -2096,12 +2303,12 @@ function SuggestionsOverlay(props) {
       });
     $[0] = data;
     $[1] = marginBottom;
-    $[2] = D;
-    $[3] = L;
-  } else L = $[3];
-  let V;
+    $[2] = hasSuggestions;
+    $[3] = suggestionsBox;
+  } else suggestionsBox = $[3];
+  let dialogBox;
   if ($[4] !== fullscreenSlotDialog || $[5] !== marginBottom) {
-    V = fullscreenSlotDialog
+    dialogBox = fullscreenSlotDialog
       ? jsxProd_default(Box, {
           position: "absolute",
           bottom: "100%",
@@ -2114,25 +2321,34 @@ function SuggestionsOverlay(props) {
       : null;
     $[4] = fullscreenSlotDialog;
     $[5] = marginBottom;
-    $[6] = V;
-  } else V = $[6];
-  let W;
-  if ($[7] !== L || $[8] !== V) {
-    W = jsxProd_default_2(Fragment, {
-      children: [L, V],
+    $[6] = dialogBox;
+  } else dialogBox = $[6];
+  let overlay;
+  if ($[7] !== suggestionsBox || $[8] !== dialogBox) {
+    overlay = jsxProd_default_2(Fragment, {
+      children: [suggestionsBox, dialogBox],
     });
-    $[7] = L;
-    $[8] = V;
-    $[9] = W;
-  } else W = $[9];
-  return W;
+    $[7] = suggestionsBox;
+    $[8] = dialogBox;
+    $[9] = overlay;
+  } else overlay = $[9];
+  return overlay;
 }
 //@ chunk-ag5x7vhf.js:46504-46508 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-ag5x7vhf.js:46504", () => {
+  init_react_production();
+});
 //@ chunk-ag5x7vhf.js:46508-46512 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-ag5x7vhf.js:46508", () => {
+  init_react_production();
+});
 //@ chunk-ag5x7vhf.js:46512-46516 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-ag5x7vhf.js:46512", () => {
+  init_react_production();
+});
 export {
   isInvisibleMessage,
   TranscriptOverlaySlot,

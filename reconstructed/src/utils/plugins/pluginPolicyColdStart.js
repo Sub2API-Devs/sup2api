@@ -31,28 +31,31 @@ import {
   logFeatureBadAsync,
   logFeatureSadAsync,
 } from "../../services/analytics/featureTelemetry.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-cjydagjy.js:15659-15889 placement
 function watchManagedMemoryPolicy(rootSession) {
-  let r = "";
-  let n = "[]";
+  let lastFingerprint = "";
+  let lastResponse = "[]";
   let policyMemoryFingerprint = getPolicyMemoryFingerprint();
-  let S = serializeCalls(async (y) => {
+  let watch = serializeCalls(async (initial) => {
     try {
-      let [P, E] = y ? await policyMemoryFingerprint : await getPolicyMemoryFingerprint();
-      if (P === r) return;
-      let A = E === n ? "policy_refresh" : "managed_folder_check";
-      r = P;
-      n = E;
-      if (y) return;
+      let [fingerprint, response] = initial
+        ? await policyMemoryFingerprint
+        : await getPolicyMemoryFingerprint();
+      if (fingerprint === lastFingerprint) return;
+      let cause = response === lastResponse ? "policy_refresh" : "managed_folder_check";
+      lastFingerprint = fingerprint;
+      lastResponse = response;
+      if (initial) return;
       clearMemoryFilesCache(rootSession);
-      invalidateUserContext(rootSession, A);
+      invalidateUserContext(rootSession, cause);
     } catch (error) {
       logError(error);
     }
   });
-  S(true);
-  return () => S(false);
+  watch(true);
+  return () => watch(false);
 }
 //@ chunk-cjydagjy.js:15889-15906 placement
 /**
@@ -65,22 +68,25 @@ var initBuiltinPlugins = () => initBuiltinPlugins_2();
  */
 var isPluginCommandContext = () => initBuiltinPlugins_2();
 //@ chunk-cjydagjy.js:15924-16004 placement
-var READ_ONLY_PLUGIN_SUBCOMMANDS = new Set([
-  "list",
-  "marketplace list",
-  "validate",
-  "tag",
-  "test",
-  "eval init",
-]);
+var READ_ONLY_PLUGIN_SUBCOMMANDS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-cjydagjy.js:15924", () => {
+  READ_ONLY_PLUGIN_SUBCOMMANDS = new Set([
+    "list",
+    "marketplace list",
+    "validate",
+    "tag",
+    "test",
+    "eval init",
+  ]);
+});
 //@ chunk-cjydagjy.js:16004-16142 placement
 /**
  * commander 动作是否为会修改插件状态的 plugin 子命令（list、marketplace list、validate、tag、test、eval init 除外）。
  */
-function isPluginMutationCommand(e) {
-  let r = [];
-  for (let n = e; n.parent !== null; n = n.parent) r.unshift(n.name());
-  return r[0] === "plugin" && !READ_ONLY_PLUGIN_SUBCOMMANDS.has(r.slice(1).join(" "));
+function isPluginMutationCommand(command) {
+  let parts = [];
+  for (let node = command; node.parent !== null; node = node.parent) parts.unshift(node.name());
+  return parts[0] === "plugin" && !READ_ONLY_PLUGIN_SUBCOMMANDS.has(parts.slice(1).join(" "));
 }
 //@ chunk-cjydagjy.js:16142-16952 placement
 /**
@@ -92,31 +98,37 @@ async function awaitPluginPolicyColdStart() {
   logForDebugging("[plugin-policy-cold-start] waiting on remote managed-settings load");
   let startTime = performance.now();
   await waitForRemoteManagedSettingsToLoad();
-  let r = !isShuttingDown() && unansweredSecuritySettingsDialog() === null;
-  let n = didRemoteManagedSettingsBackstopRelease();
-  let s = !r ? "stopped" : n ? "timed_out" : isRemoteManagedSettingsColdStartPending() ? "load_failed" : "ok";
-  recordLoadBarrier("settings", n ? "timed_out" : "completed", {
+  let mayContinue = !isShuttingDown() && unansweredSecuritySettingsDialog() === null;
+  let timedOut = didRemoteManagedSettingsBackstopRelease();
+  let outcome = !mayContinue
+    ? "stopped"
+    : timedOut
+      ? "timed_out"
+      : isRemoteManagedSettingsColdStartPending()
+        ? "load_failed"
+        : "ok";
+  recordLoadBarrier("settings", timedOut ? "timed_out" : "completed", {
     since: startTime,
   });
-  logForDiagnosticsNoPII(s === "ok" ? "info" : "warn", "plugin_policy_settings_wait", {
+  logForDiagnosticsNoPII(outcome === "ok" ? "info" : "warn", "plugin_policy_settings_wait", {
     waited_ms: Math.round(performance.now() - startTime),
-    outcome: s,
+    outcome,
   });
-  if (s === "ok") {
+  if (outcome === "ok") {
     await logFeatureOkAsync("plugin_policy_cold_start");
     return true;
   }
   logForDebugging(
-    r
-      ? `[plugin-policy-cold-start] going on, managed policy not confirmed: ${s}`
+    mayContinue
+      ? `[plugin-policy-cold-start] going on, managed policy not confirmed: ${outcome}`
       : "[plugin-policy-cold-start] the command does not run: managed settings were not approved, or the process is exiting",
     {
       level: "warn",
     },
   );
-  if (s === "stopped") await logFeatureBadAsync("plugin_policy_cold_start", s);
-  else await logFeatureSadAsync("plugin_policy_cold_start", s);
-  return r;
+  if (outcome === "stopped") await logFeatureBadAsync("plugin_policy_cold_start", outcome);
+  else await logFeatureSadAsync("plugin_policy_cold_start", outcome);
+  return mayContinue;
 }
 export {
   isPluginMutationCommand,

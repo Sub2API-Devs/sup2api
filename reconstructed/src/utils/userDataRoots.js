@@ -19,17 +19,17 @@ import { logForDebugging } from "./debug.js";
 /**
  * 是否是第一方（console/云）远程会话。
  */
-function isFirstPartyRemoteSession(e, n) {
-  return Boolean(e) && (!n || n === "anthropic_cloud");
+function isFirstPartyRemoteSession(remoteSessionId, provider) {
+  return Boolean(remoteSessionId) && (!provider || provider === "anthropic_cloud");
 }
 //@ chunk-82kqcve8.js:178411-178775 placement
 async function ensureUserDataRoot() {
   if (!isFirstPartyRemoteSession(env.CLAUDE_CODE_REMOTE_SESSION_ID, env.CLAUDE_CODE_ENVIRONMENT_KIND)) return;
   try {
-    let e = [getStageFileRoot(), getOutputsRoot()];
+    let roots = [getStageFileRoot(), getOutputsRoot()];
     await Promise.all(
-      e.map((n) =>
-        fsPromisesModule.mkdir(n).catch((error) => {
+      roots.map((root) =>
+        fsPromisesModule.mkdir(root).catch((error) => {
           let errnoCode = getErrnoCode(error);
           if (errnoCode !== "EEXIST" && errnoCode !== "ENOENT")
             logForDiagnosticsNoPII("warn", "user_data_roots_mkdir_failed", {

@@ -5,12 +5,12 @@
  * pieces: chunk-fq0cr76a.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../../runtime/bun-runtime.js";
 import { require_protobuf } from "../../../protobuf/dist/commonjs/index.js";
 import { require_error_4 } from "../../../../@anthropic-ai/bedrock-sdk/core/error.js";
 
 //@ chunk-fq0cr76a.js:481955-482325 cjs-fingerprint
-var require_timestamp_2 = x(function (cjsExports) {
+var require_timestamp_2 = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });

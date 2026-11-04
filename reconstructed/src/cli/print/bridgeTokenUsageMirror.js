@@ -54,9 +54,9 @@ function usageToTuple(usage) {
  */
 function mirrorTokenUsageToBridge() {
   try {
-    let e = bridgeHostState();
-    let n = e.replHandle ?? e.sdkHostedHandle;
-    let r = (e.tokenUsageMirror ??= {
+    let bridgeHost = bridgeHostState();
+    let bridgeHandle = bridgeHost.replHandle ?? bridgeHost.sdkHostedHandle;
+    let mirrorState = (bridgeHost.tokenUsageMirror ??= {
       seen: ZERO_TOKEN_USAGE,
       bridged: ZERO_TOKEN_USAGE,
       sessionId: undefined,
@@ -65,30 +65,35 @@ function mirrorTokenUsageToBridge() {
       sent: ZERO_TOKEN_USAGE,
     });
     let total = getSpentTokens();
-    let usage = addScaledUsage(total, -1, r.seen);
-    r.seen = total;
-    let y = n?.workerEpoch?.();
-    if (!n || n.outboundOnly || !y) return;
-    if (r.sessionId !== y.sessionId) {
-      r.sent = r.bridged;
-      r.base = r.bridged;
-    } else if (r.epoch !== y.epoch) r.base = r.sent;
-    r.sessionId = y.sessionId;
-    r.epoch = y.epoch;
-    r.bridged = addScaledUsage(r.bridged, 1, usage);
-    let _ = usageToTuple(r.bridged);
-    if (!e.replHandle && !n.getJoinedProjectThread?.() && !e.projectFilesDoor?.()) return;
-    if (usageToTuple(r.sent).every((w, S) => w === _[S])) return;
-    let b = addScaledUsage(r.bridged, -1, r.base);
+    let usage = addScaledUsage(total, -1, mirrorState.seen);
+    mirrorState.seen = total;
+    let workerEpoch = bridgeHandle?.workerEpoch?.();
+    if (!bridgeHandle || bridgeHandle.outboundOnly || !workerEpoch) return;
+    if (mirrorState.sessionId !== workerEpoch.sessionId) {
+      mirrorState.sent = mirrorState.bridged;
+      mirrorState.base = mirrorState.bridged;
+    } else if (mirrorState.epoch !== workerEpoch.epoch) mirrorState.base = mirrorState.sent;
+    mirrorState.sessionId = workerEpoch.sessionId;
+    mirrorState.epoch = workerEpoch.epoch;
+    mirrorState.bridged = addScaledUsage(mirrorState.bridged, 1, usage);
+    let bridgedTuple = usageToTuple(mirrorState.bridged);
     if (
-      n.reportInternalMetadata?.({
-        cumulative_input_tokens: b.inputTokens,
-        cumulative_output_tokens: b.outputTokens,
-        cumulative_cache_read_tokens: b.cacheReadInputTokens,
-        cumulative_cache_write_tokens: b.cacheCreationInputTokens,
+      !bridgeHost.replHandle &&
+      !bridgeHandle.getJoinedProjectThread?.() &&
+      !bridgeHost.projectFilesDoor?.()
+    )
+      return;
+    if (usageToTuple(mirrorState.sent).every((sentValue, i) => sentValue === bridgedTuple[i])) return;
+    let unsentUsage = addScaledUsage(mirrorState.bridged, -1, mirrorState.base);
+    if (
+      bridgeHandle.reportInternalMetadata?.({
+        cumulative_input_tokens: unsentUsage.inputTokens,
+        cumulative_output_tokens: unsentUsage.outputTokens,
+        cumulative_cache_read_tokens: unsentUsage.cacheReadInputTokens,
+        cumulative_cache_write_tokens: unsentUsage.cacheCreationInputTokens,
       })
     )
-      r.sent = r.bridged;
+      mirrorState.sent = mirrorState.bridged;
   } catch (error) {
     logError(error);
   }
@@ -107,7 +112,7 @@ function buildBridgeContextSnapshot({
   effortValue,
   messagesInView,
 }) {
-  let T = queuedNotificationCapabilities(tools, session, messagesInView);
+  let notificationCapabilities = queuedNotificationCapabilities(tools, session, messagesInView);
   return buildSystemInitMessage({
     ...buildRemoteSystemInitFields(),
     additionalDirectories: undefined,
@@ -127,7 +132,7 @@ function buildBridgeContextSnapshot({
       getFastModeUnavailableReasonCode(model) ?? getFastRejectedReason(model, fastMode) ?? undefined,
     effort: resolveEffortLevelOrNull(model, effortValue),
     viewMode: viewTeammateOutput(),
-    capabilities: [...T, ASK_USER_QUESTION_UNANSWERED_V1],
+    capabilities: [...notificationCapabilities, ASK_USER_QUESTION_UNANSWERED_V1],
   });
 }
 //@ chunk-0sfjpx19.js:47479-47509 placement

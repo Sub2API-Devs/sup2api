@@ -63,10 +63,10 @@ Output: ${outputStr}`;
 
 `
       : "";
-    let T = toolsUsedManifestText(tagUntrustedArtifactContent(messages, undefined, false));
+    let manifest = toolsUsedManifestText(tagUntrustedArtifactContent(messages, undefined, false));
     let response = await queryHaikuWithFallback({
       systemPrompt: asSystemPrompt([TOOL_USE_SUMMARY_PROMPT]),
-      userPrompt: `${T}${contextPrefix}Tools completed:
+      userPrompt: `${manifest}${contextPrefix}Tools completed:
 
 ${toolSummaries}
 
@@ -93,13 +93,13 @@ Label:`,
       .map((block) => (block.type === "text" ? block.text : ""))
       .join("")
       .trim();
-    let Q = getFirstLine(summary).trimEnd();
-    if (!Q) {
+    let firstLine = getFirstLine(summary).trimEnd();
+    if (!firstLine) {
       logFeatureSad("summary_tool_use_generate", "empty_response");
       return null;
     }
     logFeatureOk("summary_tool_use_generate");
-    return Q;
+    return firstLine;
   } catch (error) {
     if (signal.aborted) return null;
     let err = toError(error);

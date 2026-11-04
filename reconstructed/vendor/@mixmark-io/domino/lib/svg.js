@@ -5,14 +5,14 @@
  * pieces: chunk-vwj6ccer.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 import { require_Element } from "./Element.js";
 import { require_defineElement } from "./defineElement.js";
 import { require_utils } from "./utils.js";
 import { require_CSSStyleDeclaration } from "./CSSStyleDeclaration.js";
 
 //@ chunk-vwj6ccer.js:106314-107818 cjs-fingerprint
-var require_svg = x(function (cjsExports) {
+var require_svg = __commonJS(function (cjsExports) {
   var Element = require_Element();
   var defineElement = require_defineElement();
   var utils = require_utils();

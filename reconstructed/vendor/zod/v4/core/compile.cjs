@@ -5,7 +5,7 @@
  * pieces: chunk-1ny7cxrt.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 import { require_core } from "./core.cjs";
 import { require_doc } from "./doc.cjs";
 import { require_memoizer } from "./memoizer.cjs";
@@ -14,7 +14,7 @@ import { require_schemas } from "./schemas.cjs";
 import { require_util } from "./util.cjs";
 
 //@ chunk-1ny7cxrt.js:509437-541070 cjs-fingerprint
-var require_compile = x(function (cjsExports) {
+var require_compile = __commonJS(function (cjsExports) {
   var __createBinding =
     (cjsExports && cjsExports.__createBinding) ||
     (Object.create
@@ -184,12 +184,12 @@ ${code}`
         : code
       : "";
     let F = Function;
-    let h = `return (input) => {
+    let factorySource = `return (input) => {
 ${code}
 }`;
     let fn;
     try {
-      fn = new F(...constantNames, h)(...constantValues);
+      fn = new F(...constantNames, factorySource)(...constantValues);
     } catch (err) {
       throw new ZodCompileUnsupportedError(`this schema (generated code failed to evaluate: ${err.message})`);
     }
@@ -498,7 +498,7 @@ ${code}
       if (isAsyncFunction(check._zod.check))
         throw new ZodCompileAsyncError("z.compile: async .superRefine() / check functions are not supported");
       let checkFn = check._zod.check;
-      let l = addUserConstant(ctx, (value) => {
+      let checkConstant = addUserConstant(ctx, (value) => {
         let fakePayload = {
           value,
           issues: [],
@@ -508,7 +508,7 @@ ${code}
         return fakePayload.issues.length === 0 ? fakePayload.value : cjsExports.INVALID;
       });
       let outVar = newVar(ctx);
-      doc.write(`const ${outVar} = ${l}(${accessor});`);
+      doc.write(`const ${outVar} = ${checkConstant}(${accessor});`);
       doc.write(`if (${outVar} === INVALID) return INVALID;`);
       return outVar;
     }
@@ -1557,7 +1557,7 @@ ${code}
       if (isAsyncFunction(def.transform))
         throw new ZodCompileAsyncError("z.compile: async transforms in pipes are not supported");
       let transformFn = def.transform;
-      let c = addUserConstant(ctx, (value) => {
+      let transformConstant = addUserConstant(ctx, (value) => {
         let fakePayload = {
           value,
           issues: [],
@@ -1568,7 +1568,7 @@ ${code}
         return fakePayload.issues.length === 0 ? result : cjsExports.INVALID;
       });
       let transformedVar = newVar(ctx);
-      doc.write(`const ${transformedVar} = ${c}(${inputOutput});`);
+      doc.write(`const ${transformedVar} = ${transformConstant}(${inputOutput});`);
       doc.write(`if (${transformedVar} === INVALID) return INVALID;`);
       return generateCheck(doc, ctx, def.out, transformedVar);
     } else return generateCheck(doc, ctx, def.out, inputOutput);
@@ -1602,8 +1602,8 @@ ${code}
       {},
     );
     if (result && typeof result.then === "function") return cjsExports.INVALID;
-    let r = result;
-    if (r.issues.length === 0) return r.value;
+    let runResult = result;
+    if (runResult.issues.length === 0) return runResult.value;
     return catchValue();
   }
   function generateCatchCheck(doc, ctx, schema, accessor) {
@@ -1637,7 +1637,7 @@ ${code}
       if (isAsyncFunction(def.transform))
         throw new ZodCompileAsyncError("z.compile: async transforms are not supported");
       let transformFn = def.transform;
-      let l = addUserConstant(ctx, (value) => {
+      let transformConstant = addUserConstant(ctx, (value) => {
         let fakePayload = {
           value,
           issues: [],
@@ -1648,7 +1648,7 @@ ${code}
         return fakePayload.issues.length === 0 ? result : cjsExports.INVALID;
       });
       let outputVar = newVar(ctx);
-      doc.write(`const ${outputVar} = ${l}(${accessor});`);
+      doc.write(`const ${outputVar} = ${transformConstant}(${accessor});`);
       doc.write(`if (${outputVar} === INVALID) return INVALID;`);
       return outputVar;
     }

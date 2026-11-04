@@ -14,11 +14,11 @@ import {
   zodStrictObject,
   preprocess,
   array,
-  string,
+  stringSchema,
   _enum,
-  u,
-  E,
-  M,
+  objectSchema,
+  numberSchema,
+  booleanSchema,
 } from "../../../vendor/zod/v4/classic/schemas.js";
 import { getSessionFeatureValues } from "../../bootstrap/sessionFeatureValues.js";
 import { buildTool } from "../../services/tools/permissionCheckGuard.js";
@@ -74,11 +74,11 @@ var sendUserFileInputSchema = DoctorLazy(() =>
   zodStrictObject({
     files: preprocess(
       (files) => (typeof files === "string" ? [files] : files),
-      array(string()).min(1),
+      array(stringSchema()).min(1),
     ).describe(
       "File paths (absolute or relative to cwd) to send to the user. Always pass an array, even for a single file.",
     ),
-    caption: string().optional().describe("Optional short caption for the file(s)."),
+    caption: stringSchema().optional().describe("Optional short caption for the file(s)."),
     status: _enum(["normal", "proactive"]).describe(
       "Use 'proactive' when you're surfacing a file the user hasn't asked for and needs to see now \u2014 a generated artifact, a completed report. Use 'normal' when replying to something the user just said.",
     ),
@@ -93,47 +93,47 @@ var sendUserFileInputSchema = DoctorLazy(() =>
 /**
  * 判断是否 1 到 100 万之间的正整数（缩放尺寸）。
  */
-function isPositiveIntegerUpTo1e6(t) {
-  return typeof t === "number" && Number.isInteger(t) && t > 0 && t <= 1e6;
+function isPositiveIntegerUpTo1e6(value) {
+  return typeof value === "number" && Number.isInteger(value) && value > 0 && value <= 1e6;
 }
 //@ chunk-gy7w3kfr.js:6976-7501 placement
 /**
  * SendUserFile 工具输出 schema：caption、display、每个附件的路径、大小、是否图片、上传结果（uuid、媒体类型、错误与疑似限额）、缩放尺寸与项目路径，以及是否本地渲染。
  */
 var sendUserFileOutputSchema = DoctorLazy(() =>
-  u({
-    caption: string().optional(),
+  objectSchema({
+    caption: stringSchema().optional(),
     display: _enum(["render", "attach"]).optional(),
     attachments: array(
-      u({
-        path: string(),
-        size: E(),
-        isImage: M(),
-        file_uuid: string().optional(),
-        media_type: string().optional(),
-        pathValidated: M().optional(),
-        upload_error: string().optional(),
-        upload_error_code: string().optional(),
-        upload_suspected_limit_bytes: E().optional(),
-        scaled: u({
-          width: E(),
-          height: E(),
-          original_width: E(),
-          original_height: E(),
+      objectSchema({
+        path: stringSchema(),
+        size: numberSchema(),
+        isImage: booleanSchema(),
+        file_uuid: stringSchema().optional(),
+        media_type: stringSchema().optional(),
+        pathValidated: booleanSchema().optional(),
+        upload_error: stringSchema().optional(),
+        upload_error_code: stringSchema().optional(),
+        upload_suspected_limit_bytes: numberSchema().optional(),
+        scaled: objectSchema({
+          width: numberSchema(),
+          height: numberSchema(),
+          original_width: numberSchema(),
+          original_height: numberSchema(),
         }).optional(),
-        project_path: string().optional(),
-        partial_error: string().optional(),
+        project_path: stringSchema().optional(),
+        partial_error: stringSchema().optional(),
       }),
     ).describe("Resolved file metadata"),
-    rendered_locally: M().optional(),
+    rendered_locally: booleanSchema().optional(),
   }),
 );
 //@ chunk-gy7w3kfr.js:7501-7563 placement
 /**
  * 返回图片副本的格式标签（JPEG 或 PNG）。
  */
-function imageCopyFormatLabel(t) {
-  return t.media_type === "image/jpeg" ? "JPEG" : "PNG";
+function imageCopyFormatLabel(image) {
+  return image.media_type === "image/jpeg" ? "JPEG" : "PNG";
 }
 //@ chunk-gy7w3kfr.js:7563-7647 placement
 /**
@@ -170,9 +170,9 @@ var SendUserFileTool = buildTool({
     return sendUserFileOutputSchema();
   },
   isEnabled() {
-    let t = !env.CLAUDE_CODE_ATTACHMENTS_BY_PATH;
-    if (t && (getAPIProvider() !== "firstParty" || isEssentialTrafficOnly())) return false;
-    if (t && !isPolicyAllowed("allow_send_file")) return false;
+    let byPathOnly = !env.CLAUDE_CODE_ATTACHMENTS_BY_PATH;
+    if (byPathOnly && (getAPIProvider() !== "firstParty" || isEssentialTrafficOnly())) return false;
+    if (byPathOnly && !isPolicyAllowed("allow_send_file")) return false;
     if (!getFeatureValue_CACHED_MAY_BE_STALE("tengu_send_user_file", true)) return false;
     return (isReplBridgeActive() || attachmentsByPathAvailable()) && !isBriefEnabled();
   },
@@ -182,17 +182,17 @@ var SendUserFileTool = buildTool({
   isReadOnly() {
     return true;
   },
-  toAutoClassifierInput(t) {
-    let files = t.files;
-    let m = typeof files === "string" ? files : readUntrustedArray(files);
-    let r =
-      typeof m === "string"
-        ? m
-        : m === UNREADABLE_ARRAY
+  toAutoClassifierInput(input) {
+    let files = input.files;
+    let filesValue = typeof files === "string" ? files : readUntrustedArray(files);
+    let filesText =
+      typeof filesValue === "string"
+        ? filesValue
+        : filesValue === UNREADABLE_ARRAY
           ? UNREADABLE_LIST_TEXT
-          : (m ?? []).filter((h) => typeof h === "string").join(", ");
-    let caption = typeof t.caption === "string" ? t.caption : "";
-    return caption ? `${caption} [${r}]` : `[${r}]`;
+          : (filesValue ?? []).filter((filePath) => typeof filePath === "string").join(", ");
+    let caption = typeof input.caption === "string" ? input.caption : "";
+    return caption ? `${caption} [${filesText}]` : `[${filesText}]`;
   },
   async description() {
     return DESCRIPTION;
@@ -200,53 +200,56 @@ var SendUserFileTool = buildTool({
   async prompt() {
     return SEND_USER_FILE_TOOL_PROMPT;
   },
-  fromAnotherProcess(t, n) {
-    let m = Array.isArray(n.files) ? n.files.map(String) : [];
-    let r = (T) => (T === undefined ? undefined : escapeXmlInline(clipText(T, 2000)));
-    let { rendered_locally: renderedLocally, caption, display, ...l } = t;
+  fromAnotherProcess(result, input) {
+    let files = Array.isArray(input.files) ? input.files.map(String) : [];
+    let sanitizeOptional = (value) =>
+      value === undefined ? undefined : escapeXmlInline(clipText(value, 2000));
+    let { rendered_locally: renderedLocally, caption, display, ...rest } = result;
     return {
       data: {
-        ...l,
-        ...(typeof n.caption === "string" && {
-          caption: n.caption,
+        ...rest,
+        ...(typeof input.caption === "string" && {
+          caption: input.caption,
         }),
-        ...((n.display === "render" || n.display === "attach") && {
-          display: n.display,
+        ...((input.display === "render" || input.display === "attach") && {
+          display: input.display,
         }),
-        attachments: t.attachments.map(
+        attachments: result.attachments.map(
           ({
             pathValidated,
             upload_error_code: uploadErrorCode,
             upload_suspected_limit_bytes: uploadSuspectedLimitBytes,
             scaled,
-            ...d
+            ...attachment
           }) => ({
-            ...d,
-            path: m.includes(d.path) ? d.path : escapeForTag(clipText(d.path, 2000)),
-            ...(d.file_uuid !== undefined && {
-              file_uuid: r(d.file_uuid),
+            ...attachment,
+            path: files.includes(attachment.path)
+              ? attachment.path
+              : escapeForTag(clipText(attachment.path, 2000)),
+            ...(attachment.file_uuid !== undefined && {
+              file_uuid: sanitizeOptional(attachment.file_uuid),
             }),
-            ...(d.media_type !== undefined && {
-              media_type: r(d.media_type),
+            ...(attachment.media_type !== undefined && {
+              media_type: sanitizeOptional(attachment.media_type),
             }),
-            ...(d.upload_error !== undefined && {
-              upload_error: r(d.upload_error),
+            ...(attachment.upload_error !== undefined && {
+              upload_error: sanitizeOptional(attachment.upload_error),
             }),
-            ...(d.upload_error !== undefined &&
+            ...(attachment.upload_error !== undefined &&
               imageErrorCodeOrUndefined(uploadErrorCode) !== undefined && {
                 upload_error_code: uploadErrorCode,
               }),
-            ...(d.upload_error !== undefined &&
+            ...(attachment.upload_error !== undefined &&
               isPositiveSafeInteger(uploadSuspectedLimitBytes) && {
                 upload_suspected_limit_bytes: uploadSuspectedLimitBytes,
               }),
-            ...(d.project_path !== undefined && {
-              project_path: r(d.project_path),
+            ...(attachment.project_path !== undefined && {
+              project_path: sanitizeOptional(attachment.project_path),
             }),
-            ...(d.partial_error !== undefined && {
-              partial_error: r(d.partial_error),
+            ...(attachment.partial_error !== undefined && {
+              partial_error: sanitizeOptional(attachment.partial_error),
             }),
-            ...(d.file_uuid !== undefined &&
+            ...(attachment.file_uuid !== undefined &&
               scaled !== undefined &&
               Object.values(scaled).every(isPositiveIntegerUpTo1e6) && {
                 scaled,
@@ -256,8 +259,8 @@ var SendUserFileTool = buildTool({
       },
     };
   },
-  mapToolResultToToolResultBlockParam(t, toolUseId) {
-    let mapped = t.attachments.map((attachment) => ({
+  mapToolResultToToolResultBlockParam(result, toolUseId) {
+    let mapped = result.attachments.map((attachment) => ({
       ...attachment,
       path: encodeControlChars(attachment.path),
       ...(attachment.file_uuid !== undefined && {
@@ -273,30 +276,35 @@ var SendUserFileTool = buildTool({
         partial_error: escapeForTag(attachment.partial_error),
       }),
     }));
-    let filtered = mapped.filter((e) => e.upload_error !== undefined);
-    let filtered_2 = mapped.filter((e) => e.upload_error === undefined);
-    let mapped_2 = filtered_2
-      .filter((e) => e.project_path !== undefined)
+    let filtered = mapped.filter((attachment) => attachment.upload_error !== undefined);
+    let attachments = mapped.filter((attachment) => attachment.upload_error === undefined);
+    let mapped_2 = attachments
+      .filter((attachment) => attachment.project_path !== undefined)
       .map(
-        (e) =>
-          `  ${e.path} \u2192 ${e.project_path}` +
-          (hasMismatchedImageType(e)
-            ? ` (the folder has the original; the chat shows a ${imageCopyFormatLabel(e)} copy of it${e.isImage ? "" : " as a plain file, not a picture"})`
+        (attachment) =>
+          `  ${attachment.path} \u2192 ${attachment.project_path}` +
+          (hasMismatchedImageType(attachment)
+            ? ` (the folder has the original; the chat shows a ${imageCopyFormatLabel(attachment)} copy of it${attachment.isImage ? "" : " as a plain file, not a picture"})`
             : ""),
       );
-    let filtered_3 = filtered_2.filter((e) => e.file_uuid !== undefined && e.project_path === undefined);
-    let mapped_3 = filtered_3.filter(hasMismatchedImageType).map((e) => {
-      let f = `${basename(e.path, extname(e.path))}.${e.media_type === "image/jpeg" ? "jpg" : "png"}`;
-      let _ = e.isImage ? "" : ", which the chat shows as a plain file, not a picture";
-      return `The chat got a ${imageCopyFormatLabel(e)} copy of ${e.path}, named ${f}${_}; the file at that path is unchanged.`;
+    let filtered_2 = attachments.filter(
+      (attachment) => attachment.file_uuid !== undefined && attachment.project_path === undefined,
+    );
+    let mapped_3 = filtered_2.filter(hasMismatchedImageType).map((attachment) => {
+      let copyName = `${basename(attachment.path, extname(attachment.path))}.${attachment.media_type === "image/jpeg" ? "jpg" : "png"}`;
+      let plainFileNote = attachment.isImage ? "" : ", which the chat shows as a plain file, not a picture";
+      return `The chat got a ${imageCopyFormatLabel(attachment)} copy of ${attachment.path}, named ${copyName}${plainFileNote}; the file at that path is unchanged.`;
     });
-    let T = [...filtered_3.map((e) => `  ${e.path} \u2192 file_uuid: ${e.file_uuid}`), ...mapped_3];
-    let mapped_4 = filtered_2
-      .filter((e) => e.partial_error !== undefined)
-      .map((e) => `  ${e.path}: ${e.partial_error}`);
-    let y = [];
+    let deliveredLines = [
+      ...filtered_2.map((attachment) => `  ${attachment.path} \u2192 file_uuid: ${attachment.file_uuid}`),
+      ...mapped_3,
+    ];
+    let mapped_4 = attachments
+      .filter((attachment) => attachment.partial_error !== undefined)
+      .map((attachment) => `  ${attachment.path}: ${attachment.partial_error}`);
+    let lines = [];
     if (mapped_2.length > 0)
-      y.push(
+      lines.push(
         `${mapped_2.length} ${plural(mapped_2.length, "file")} placed in the project's shared folder (visible in its Library):
 ` +
           mapped_2.join(`
@@ -304,21 +312,21 @@ var SendUserFileTool = buildTool({
           `
 To show ${plural(mapped_2.length, "it", "them")} on the thread, declare each path on your reply: attached_outputs: [{ "kind": "file", "ref": "<path above>" }].`,
       );
-    let g = filtered_2.length - mapped_2.length;
-    if (g > 0) {
-      y.push(
-        [`${g} ${plural(g, "file")} delivered to user.`, ...T].join(`
+    let failedCount = attachments.length - mapped_2.length;
+    if (failedCount > 0) {
+      lines.push(
+        [`${failedCount} ${plural(failedCount, "file")} delivered to user.`, ...deliveredLines].join(`
 `),
       );
       if (isClaudeAiChatCowork())
-        y.push(
+        lines.push(
           "Each file shows as a card whose position relative to your text depends on the app the user is reading in, so refer to a file by its name, never as above or below.",
         );
     }
-    let d = scaledImagesNote(filtered_2);
-    if (d !== undefined) y.push(d);
+    let scaledNote = scaledImagesNote(attachments);
+    if (scaledNote !== undefined) lines.push(scaledNote);
     if (mapped_4.length > 0)
-      y.push(
+      lines.push(
         `${mapped_4.length} ${plural(mapped_4.length, "file")} reached only one of its viewers:
 ` +
           mapped_4.join(`
@@ -327,11 +335,14 @@ To show ${plural(mapped_2.length, "it", "them")} on the thread, declare each pat
 Tell the user which viewers missed it.`,
       );
     if (filtered.length > 0) {
-      let e = (_) => `${(_ / 1048576).toFixed(1)} MiB`;
-      let joined = filtered.map((_) => `  ${_.path} (${e(_.size)}): ${describeUploadFailure(_)}`).join(`
+      let formatMiB = (bytes) => `${(bytes / 1048576).toFixed(1)} MiB`;
+      let joined = filtered.map(
+        (attachment) =>
+          `  ${attachment.path} (${formatMiB(attachment.size)}): ${describeUploadFailure(attachment)}`,
+      ).join(`
 `);
-      if (t.rendered_locally)
-        y.push(
+      if (result.rendered_locally)
+        lines.push(
           `${filtered.length} ${plural(filtered.length, "file")} NOT delivered to Remote Control (phone/web) viewers \u2014 only visible in the desktop app on this machine:
 ` +
             joined +
@@ -339,7 +350,7 @@ Tell the user which viewers missed it.`,
 Tell the user the ${plural(filtered.length, "file is", "files are")} only visible in the desktop app, and why.${retryLaterHint(filtered)}`,
         );
       else
-        y.push(
+        lines.push(
           `${filtered.length} ${plural(filtered.length, "file")} could NOT be delivered to the user:
 ` +
             joined +
@@ -350,53 +361,53 @@ Tell the user the ${plural(filtered.length, "file was", "files were")} not deliv
     return {
       tool_use_id: toolUseId,
       type: "tool_result",
-      content: y.join(`
+      content: lines.join(`
 `),
     };
   },
   renderToolUseMessage() {
     return "";
   },
-  create(t) {
+  create(toolContext) {
     return {
       async validateInput({ files }) {
-        return validateAttachments(files, t.permissions());
+        return validateAttachments(files, toolContext.permissions());
       },
-      async checkPermissions(n, m) {
-        let r = t.permissions();
-        let mapped = n.files.map((file) => {
-          let _ = expandPath(file);
-          let C = walkPermissionCheckPaths(_);
+      async checkPermissions(input, callOptions) {
+        let permissionState = toolContext.permissions();
+        let mapped = input.files.map((file) => {
+          let fullPath = expandPath(file);
+          let walked = walkPermissionCheckPaths(fullPath);
           return {
-            fullPath: _,
-            walked: C,
-            pathsToCheck: C.spellings,
+            fullPath,
+            walked,
+            pathsToCheck: walked.spellings,
           };
         });
-        let h = bridgeHostState().projectFilesDoor?.() ?? null;
-        let denyRuleForTool = getDenyRuleForTool(r, READ_PATH_PROBE);
+        let projectFilesDoor = bridgeHostState().projectFilesDoor?.() ?? null;
+        let denyRuleForTool = getDenyRuleForTool(permissionState, READ_PATH_PROBE);
         let mapped_2 = mapped.map(({ fullPath, walked }) =>
           checkReadPermissionForTool(
             READ_PATH_PROBE,
             {
               file_path: fullPath,
             },
-            r,
+            permissionState,
             walked,
           ),
         );
-        let found = mapped_2.find((f) => f.behavior === "deny");
+        let found = mapped_2.find((result) => result.behavior === "deny");
         let found_2 = mapped_2.find(
-          (f) =>
-            f.behavior !== "allow" &&
-            f.decisionReason?.type === "rule" &&
-            f.decisionReason.rule.ruleBehavior === "ask",
+          (result) =>
+            result.behavior !== "allow" &&
+            result.decisionReason?.type === "rule" &&
+            result.decisionReason.rule.ruleBehavior === "ask",
         );
-        let askRuleForTool = getAskRuleForTool(r, READ_PATH_PROBE);
-        let g;
-        let d = h != null;
+        let askRuleForTool = getAskRuleForTool(permissionState, READ_PATH_PROBE);
+        let decision;
+        let hasDoor = projectFilesDoor != null;
         if (denyRuleForTool)
-          g = {
+          decision = {
             behavior: "deny",
             message: "SendUserFile reads file contents; that action is disabled.",
             decisionReason: {
@@ -404,52 +415,58 @@ Tell the user the ${plural(filtered.length, "file was", "files were")} not deliv
               rule: denyRuleForTool,
             },
           };
-        else if (found) g = found;
+        else if (found) decision = found;
         else if (found_2) {
-          g = found_2;
-          d &&= r.mode !== "plan";
+          decision = found_2;
+          hasDoor &&= permissionState.mode !== "plan";
         } else if (askRuleForTool) {
-          g = {
+          decision = {
             behavior: "ask",
-            message: `Send ${n.files.length} ${plural(n.files.length, "file")} to the user? SendUserFile reads file contents.`,
+            message: `Send ${input.files.length} ${plural(input.files.length, "file")} to the user? SendUserFile reads file contents.`,
             decisionReason: {
               type: "rule",
               rule: askRuleForTool,
             },
           };
-          d &&= r.mode !== "plan";
-        } else if (r.mode === "plan" && h) {
-          let found = mapped_2.find((_) => _.behavior !== "allow");
-          g = {
+          hasDoor &&= permissionState.mode !== "plan";
+        } else if (permissionState.mode === "plan" && projectFilesDoor) {
+          let found = mapped_2.find((result) => result.behavior !== "allow");
+          decision = {
             behavior: "ask",
-            message: `${SEND_USER_FILE_TOOL_NAME} would place ${plural(n.files.length, "a file", "files")} in the project's shared folder${found?.behavior === "ask" ? ` (${found.message})` : ""} \u2014 approve the plan first.`,
+            message: `${SEND_USER_FILE_TOOL_NAME} would place ${plural(input.files.length, "a file", "files")} in the project's shared folder${found?.behavior === "ask" ? ` (${found.message})` : ""} \u2014 approve the plan first.`,
             decisionReason: {
               type: "mode",
               mode: "plan",
             },
           };
         } else
-          g = mapped_2.find((f) => f.behavior !== "allow") ?? {
+          decision = mapped_2.find((result) => result.behavior !== "allow") ?? {
             behavior: "allow",
-            updatedInput: n,
+            updatedInput: input,
           };
-        let writePermissionStash = t.session.writePermissionStash;
+        let writePermissionStash = toolContext.session.writePermissionStash;
         writePermissionStash.stash(
-          m.toolUseId,
-          sortedUniqueKey(n.files),
+          callOptions.toolUseId,
+          sortedUniqueKey(input.files),
           [
-            ...mapped.flatMap((f) => f.pathsToCheck),
-            ...(d && h ? [`${PROJECT_FILES_DOOR_PREFIX}${h.channelId}`] : []),
+            ...mapped.flatMap((entry) => entry.pathsToCheck),
+            ...(hasDoor && projectFilesDoor
+              ? [`${PROJECT_FILES_DOOR_PREFIX}${projectFilesDoor.channelId}`]
+              : []),
           ],
           "read",
         );
         for (let { fullPath, pathsToCheck } of mapped)
-          writePermissionStash.stashIdentity(m.toolUseId, fullPath, await lastExistingIdentity(pathsToCheck));
-        return g;
+          writePermissionStash.stashIdentity(
+            callOptions.toolUseId,
+            fullPath,
+            await lastExistingIdentity(pathsToCheck),
+          );
+        return decision;
       },
-      async call({ files, caption, status, display }, h) {
+      async call({ files, caption, status, display }, callOptions) {
         let attachmentUploadLane = getAttachmentUploadLane({
-          replBridgeEnabled: t.replBridgeEnabled(),
+          replBridgeEnabled: toolContext.replBridgeEnabled(),
         });
         logEvent("tengu_send_user_file", {
           proactive: status === "proactive",
@@ -458,15 +475,17 @@ Tell the user the ${plural(filtered.length, "file was", "files were")} not deliv
           display_attach: display === "attach",
           upload_lane: fromEnum(attachmentUploadLane),
         });
-        let l = consumeReadApproval(t.session, h.toolUseId, files);
+        let readApproval = consumeReadApproval(toolContext.session, callOptions.toolUseId, files);
         let projectFilesChannel =
-          l.doorChannel ??
-          (t.permissions().mode !== "plan" ? bridgeHostState().projectFilesDoor?.()?.channelId : undefined);
+          readApproval.doorChannel ??
+          (toolContext.permissions().mode !== "plan"
+            ? bridgeHostState().projectFilesDoor?.()?.channelId
+            : undefined);
         let attachments = await resolveBriefAttachments(files, {
           lane: attachmentUploadLane,
-          signal: h.signal,
-          credentials: t.credentials,
-          judged: l,
+          signal: callOptions.signal,
+          credentials: toolContext.credentials,
+          judged: readApproval,
           projectFilesChannel,
           originalsOnly: display === "attach",
         });
@@ -507,8 +526,8 @@ function isBridgeChildFileUploadEnabled() {
 /**
  * 去重排序后拼成一行的键（暂存权限的匹配键）。
  */
-function sortedUniqueKey(t) {
-  return uniq(t).sort().join(`
+function sortedUniqueKey(paths) {
+  return uniq(paths).sort().join(`
 `);
 }
 //@ chunk-gy7w3kfr.js:14445-14477 placement
@@ -522,30 +541,31 @@ var PROJECT_FILES_DOOR_PREFIX = "\x00project-files-door:";
  */
 function consumeReadApproval(session, toolUseId, paths) {
   let writePermissionStash = session.writePermissionStash;
-  let s = new Map(
-    uniq(paths.map((path) => expandPath(path))).map((l) => [
-      l,
-      writePermissionStash.takeIdentity(toolUseId, l),
+  let identitiesByPath = new Map(
+    uniq(paths.map((path) => expandPath(path))).map((fullPath) => [
+      fullPath,
+      writePermissionStash.takeIdentity(toolUseId, fullPath),
     ]),
   );
-  let h = writePermissionStash.consume(toolUseId, sortedUniqueKey(paths), "read");
-  if (h === PERMISSION_STASH_EVICTED_SYMBOL)
+  let stashedSpellings = writePermissionStash.consume(toolUseId, sortedUniqueKey(paths), "read");
+  if (stashedSpellings === PERMISSION_STASH_EVICTED_SYMBOL)
     return {
       paths: [],
-      identities: s,
+      identities: identitiesByPath,
       doorChannel: undefined,
     };
-  if (h === undefined)
+  if (stashedSpellings === undefined)
     return {
       paths: paths.flatMap((path) => getPathsForPermissionCheck(expandPath(path))),
-      identities: s,
+      identities: identitiesByPath,
       doorChannel: undefined,
     };
-  let found = h.find((l) => l.startsWith(PROJECT_FILES_DOOR_PREFIX));
-  for (let [l, T] of s) if (T === undefined) s.set(l, null);
+  let found = stashedSpellings.find((spelling) => spelling.startsWith(PROJECT_FILES_DOOR_PREFIX));
+  for (let [path, identity] of identitiesByPath) if (identity === undefined) identitiesByPath.set(path, null);
   return {
-    paths: h.filter((l) => !l.startsWith(PROJECT_FILES_DOOR_PREFIX)),
-    identities: s,
+    paths: stashedSpellings.filter((spelling) => !spelling.startsWith(PROJECT_FILES_DOOR_PREFIX)),
+    identities: identitiesByPath,
     doorChannel: found?.slice(PROJECT_FILES_DOOR_PREFIX.length),
   };
 }
+export { SendUserFileTool };

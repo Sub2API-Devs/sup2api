@@ -38,8 +38,8 @@ function createDefaultInstrumenter() {
   };
 }
 //@ chunk-mrx6y2r5.js:58496-58616 esm-fingerprint
-function Qn() {
+function getInstrumenter() {
   if (!state.instrumenterImplementation) state.instrumenterImplementation = createDefaultInstrumenter();
   return state.instrumenterImplementation;
 }
-export { Qn };
+export { getInstrumenter };

@@ -40,91 +40,91 @@ class ToolHostRegistry {
   hosts() {
     return [this.defaultHost, ...this.#t()];
   }
-  resolve(e) {
-    if (isReservedMachineNameExact(e))
+  resolve(name) {
+    if (isReservedMachineNameExact(name))
       return {
         kind: "local",
         host: this.defaultHost,
       };
-    let n = this.#t();
-    let found = n.find((y) => y.name === e);
+    let remotes = this.#t();
+    let found = remotes.find((host) => host.name === name);
     if (found)
       return {
         kind: "remote",
         host: found,
       };
-    let [s, h] = n.filter((y) => machineNameMatches(e, y.name));
-    return s !== undefined && h === undefined
+    let [firstMatch, secondMatch] = remotes.filter((remote) => machineNameMatches(name, remote.name));
+    return firstMatch !== undefined && secondMatch === undefined
       ? {
           kind: "remote",
-          host: s,
+          host: firstMatch,
         }
       : {
           kind: "unknown",
         };
   }
-  replaceRemoteHosts(e, n) {
-    if (n.find((P) => P.source !== e))
+  replaceRemoteHosts(source, hosts) {
+    if (hosts.find((host) => host.source !== source))
       throw Error("replaceRemoteHosts was handed a ToolHost registered by another source");
-    let s = snapshotToolHosts(this.#t());
-    let h = this.#e.get(e) ?? new Map();
-    let y = new Map();
-    let dropped = n.flatMap((P) => {
-      if (!isValidMachineSlug(P.name) || y.has(P.name)) return [P.name];
-      y.set(P.name, P);
+    let beforeSnapshot = snapshotToolHosts(this.#t());
+    let previous = this.#e.get(source) ?? new Map();
+    let next = new Map();
+    let dropped = hosts.flatMap((host) => {
+      if (!isValidMachineSlug(host.name) || next.has(host.name)) return [host.name];
+      next.set(host.name, host);
       return [];
     });
-    let w =
-      y.size > 0 || !OFFLINE_WHEN_MISSING[e]
+    let offlineRows =
+      next.size > 0 || !OFFLINE_WHEN_MISSING[source]
         ? []
-        : [...h.values()].map((P) => [
-            P.name,
+        : [...previous.values()].map((host) => [
+            host.name,
             {
-              ...P,
+              ...host,
               status: "offline",
             },
           ]);
-    let R = new Map(this.#e);
-    R.set(e, new Map([...w, ...y]));
-    this.#e = R;
-    let x = snapshotToolHosts(this.#t());
+    let registry = new Map(this.#e);
+    registry.set(source, new Map([...offlineRows, ...next]));
+    this.#e = registry;
+    let afterSnapshot = snapshotToolHosts(this.#t());
     return {
-      changed: !isDeepStrictEqual(s, x),
+      changed: !isDeepStrictEqual(beforeSnapshot, afterSnapshot),
       dropped,
     };
   }
-  passthroughHost(e) {
-    return this.#n().find((n) => n.passthroughTools?.has(e) === true);
+  passthroughHost(toolName) {
+    return this.#n().find((host) => host.passthroughTools?.has(toolName) === true);
   }
-  sourceHosts(e) {
-    return [...(this.#e.get(e)?.values() ?? [])];
+  sourceHosts(source) {
+    return [...(this.#e.get(source)?.values() ?? [])];
   }
   #t() {
     return [
       ...this.#n()
-        .reduce((acc, r) => {
-          let s = acc.get(r.name);
-          if (s === undefined) return acc.set(r.name, r);
-          let h =
-            s.passthroughTools === undefined && r.passthroughTools !== undefined
+        .reduce((acc, host) => {
+          let existing = acc.get(host.name);
+          if (existing === undefined) return acc.set(host.name, host);
+          let merged =
+            existing.passthroughTools === undefined && host.passthroughTools !== undefined
               ? {
-                  ...s,
-                  passthroughTools: r.passthroughTools,
-                  ...(r.rejectedPassthroughTools !== undefined && {
-                    rejectedPassthroughTools: r.rejectedPassthroughTools,
+                  ...existing,
+                  passthroughTools: host.passthroughTools,
+                  ...(host.rejectedPassthroughTools !== undefined && {
+                    rejectedPassthroughTools: host.rejectedPassthroughTools,
                   }),
                 }
-              : s;
-          return h === s ? acc : acc.set(r.name, h);
+              : existing;
+          return merged === existing ? acc : acc.set(host.name, merged);
         }, new Map())
         .values(),
-    ].sort((n, r) => n.name.localeCompare(r.name));
+    ].sort((left, right) => left.name.localeCompare(right.name));
   }
   #n() {
-    let flattened = HOST_SOURCE_ORDER.flatMap((n) => [...(this.#e.get(n)?.values() ?? [])]);
+    let flattened = HOST_SOURCE_ORDER.flatMap((source) => [...(this.#e.get(source)?.values() ?? [])]);
     return [
-      ...flattened.filter((n) => n.status === "online"),
-      ...flattened.filter((n) => n.status !== "online"),
+      ...flattened.filter((host) => host.status === "online"),
+      ...flattened.filter((host) => host.status !== "online"),
     ];
   }
 }
@@ -132,12 +132,12 @@ class ToolHostRegistry {
 /**
  * 生成工具宿主列表快照：来源、名称、状态和执行策略。
  */
-function snapshotToolHosts(e) {
+function snapshotToolHosts(hosts) {
   return {
-    remotes: e.map(
+    remotes: hosts.map(
       ({
         source,
-        name: r,
+        name,
         status,
         enforcement,
         description,
@@ -152,7 +152,7 @@ function snapshotToolHosts(e) {
         lastHeardAt,
       }) => ({
         source,
-        name: r,
+        name,
         status,
         enforcement,
         description,

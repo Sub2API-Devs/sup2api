@@ -8,8 +8,8 @@
  * pieces: chunk-e1ykjvh2.js (2)
  * attribution: placement 2
  */
-import { init_react_production, y } from "../../vendor/react/cjs/react.production.js";
-import { w } from "../../vendor/react/compiler-runtime.js";
+import { init_react_production, useState } from "../../vendor/react/cjs/react.production.js";
+import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import {
   jsxProd_default,
   jsxProd_default_2,
@@ -28,42 +28,42 @@ import { ConfirmSelect } from "./design-system/ConfirmSelect.js";
 init_react_production();
 //@ chunk-e1ykjvh2.js:13932-14858 placement
 function PowerupDiscoveryStep(props) {
-  let t = w(9);
+  let $ = useMemoCache(9);
   let { onDone } = props;
-  let [v, C] = y(false);
-  if (v) {
-    let i;
-    if (t[0] !== onDone) {
-      i = jsxProd_default(PowerupLessons, {
+  let [isLessonsOpen, setIsLessonsOpen] = useState(false);
+  if (isLessonsOpen) {
+    let powerupLessonsElement;
+    if ($[0] !== onDone) {
+      powerupLessonsElement = jsxProd_default(PowerupLessons, {
         onExit: onDone,
       });
-      t[0] = onDone;
-      t[1] = i;
-    } else i = t[1];
-    return i;
+      $[0] = onDone;
+      $[1] = powerupLessonsElement;
+    } else powerupLessonsElement = $[1];
+    return powerupLessonsElement;
   }
-  let i;
-  if (t[2] !== onDone) {
-    i = function m(d) {
+  let handleAction;
+  if ($[2] !== onDone) {
+    handleAction = function onChoice(action) {
       logEvent("tengu_powerup_discovery_shown", {
         arm: fromEnum("step"),
-        action: fromEnum(d),
+        action: fromEnum(action),
       });
-      if (d === "launch") C(true);
+      if (action === "launch") setIsLessonsOpen(true);
       else onDone();
     };
-    t[2] = onDone;
-    t[3] = i;
-  } else i = t[3];
-  let m = i;
-  let h;
-  if (t[4] === MEMO_CACHE_SENTINEL) {
-    h = jsxProd_default(WelcomeV2, {});
-    t[4] = h;
-  } else h = t[4];
-  let u;
-  if (t[5] === MEMO_CACHE_SENTINEL) {
-    u = jsxProd_default_2(Box, {
+    $[2] = onDone;
+    $[3] = handleAction;
+  } else handleAction = $[3];
+  let handleActionMemo = handleAction;
+  let welcomeV2Element;
+  if ($[4] === MEMO_CACHE_SENTINEL) {
+    welcomeV2Element = jsxProd_default(WelcomeV2, {});
+    $[4] = welcomeV2Element;
+  } else welcomeV2Element = $[4];
+  let titleBox;
+  if ($[5] === MEMO_CACHE_SENTINEL) {
+    titleBox = jsxProd_default_2(Box, {
       children: [
         jsxProd_default(Text, {
           bold: true,
@@ -81,44 +81,45 @@ function PowerupDiscoveryStep(props) {
         }),
       ],
     });
-    t[5] = u;
-  } else u = t[5];
-  let g;
-  if (t[6] === MEMO_CACHE_SENTINEL) {
-    g = jsxProd_default(Box, {
+    $[5] = titleBox;
+  } else titleBox = $[5];
+  let bodyBox;
+  if ($[6] === MEMO_CACHE_SENTINEL) {
+    bodyBox = jsxProd_default(Box, {
       maxWidth: 70,
       children: jsxProd_default(Text, {
         children: POWERUP_DISCOVERY_COPY.body,
       }),
     });
-    t[6] = g;
-  } else g = t[6];
-  let x;
-  if (t[7] !== m) {
-    x = jsxProd_default_2(Box, {
+    $[6] = bodyBox;
+  } else bodyBox = $[6];
+  let columnBox;
+  if ($[7] !== handleActionMemo) {
+    columnBox = jsxProd_default_2(Box, {
       flexDirection: "column",
       children: [
-        h,
+        welcomeV2Element,
         jsxProd_default_2(Box, {
           flexDirection: "column",
           gap: 1,
           paddingLeft: 1,
           marginTop: 1,
           children: [
-            u,
-            g,
+            titleBox,
+            bodyBox,
             jsxProd_default(ConfirmSelect, {
               confirmLabel: "Take the tour",
               cancelLabel: "Skip for now",
-              onConfirm: () => m("launch"),
-              onCancel: () => m("skip"),
+              onConfirm: () => handleActionMemo("launch"),
+              onCancel: () => handleActionMemo("skip"),
             }),
           ],
         }),
       ],
     });
-    t[7] = m;
-    t[8] = x;
-  } else x = t[8];
-  return x;
+    $[7] = handleActionMemo;
+    $[8] = columnBox;
+  } else columnBox = $[8];
+  return columnBox;
 }
+export { PowerupDiscoveryStep };

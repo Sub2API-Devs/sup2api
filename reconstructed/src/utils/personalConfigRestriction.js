@@ -31,9 +31,11 @@ function isPersonalConfigRestricted() {
 var PERSONAL_CONFIG_TTL_SECONDS = 300;
 //@ chunk-rsktsadk.js:417-624 placement
 function getPersonalConfigFixHint() {
-  let e = personalConfigRestrictionFlag?.();
+  let restrictionOverride = personalConfigRestrictionFlag?.();
   let trimmed = (
-    e === undefined ? env.CLAUDE_CODE_PERSONAL_CONFIG_FIX : e.CLAUDE_CODE_PERSONAL_CONFIG_FIX
+    restrictionOverride === undefined
+      ? env.CLAUDE_CODE_PERSONAL_CONFIG_FIX
+      : restrictionOverride.CLAUDE_CODE_PERSONAL_CONFIG_FIX
   )?.trim();
   if (
     trimmed === undefined ||

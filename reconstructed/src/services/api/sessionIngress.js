@@ -32,14 +32,20 @@ import { isPlainObject as isPlainObject_5 } from "../../utils/isPlainObject.js";
 import { cloudErrorMessage } from "../../utils/teleport/cloudErrorMessage.js";
 import { normalizeUserToolUseResult } from "../../cli/transports/ccrMessageMapping.js";
 import { isEnvTruthy } from "../../utils/envUtils.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:205981-206009 affinity
 /**
  * 10 次；Pdo=500ms 基础退避。
  */
-var SESSION_INGRESS_MAX_RETRIES = 10;
-var SESSION_INGRESS_BASE_BACKOFF_MS = 500;
-var sessionAppendLock = createKeyedQueue();
+var SESSION_INGRESS_MAX_RETRIES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var SESSION_INGRESS_BASE_BACKOFF_MS;
+var sessionAppendLock;
+deferInit("chunk-e6aww6q8.js:205981", () => {
+  SESSION_INGRESS_MAX_RETRIES = 10;
+  SESSION_INGRESS_BASE_BACKOFF_MS = 500;
+  sessionAppendLock = createKeyedQueue();
+});
 //@ chunk-e6aww6q8.js:206009-207815 fingerprint = appendSessionLogImpl (0.968)
 /**
  * PUT 追加会话日志：带 Last-Uuid，409 时按服务器最后 uuid 修正重试，5xx/网络错误退避重试。
@@ -184,74 +190,74 @@ async function getSessionLogs(sessionId, url) {
 /**
  * 用 OAuth 读取 /v1/session_ingress/session/<id>。
  */
-async function getSessionLogsViaOAuth(sessionId, accessToken, orgUUID, s = false) {
+async function getSessionLogsViaOAuth(sessionId, accessToken, orgUUID, refusesRedirects = false) {
   let url = `${getOauthConfig().BASE_API_URL}/v1/session_ingress/session/${sessionId}`;
   logForDebugging(`[session-ingress] Fetching session logs from: ${url}`);
   let headers = {
     ...getOAuthRequestHeaders(accessToken),
     "x-organization-uuid": orgUUID,
   };
-  return await fetchSessionLogsFromUrl(sessionId, url, headers, s);
+  return await fetchSessionLogsFromUrl(sessionId, url, headers, refusesRedirects);
 }
 //@ chunk-e6aww6q8.js:208838-213786 fingerprint = getTeleportEvents (0.456)
 /**
  * 分页拉取 teleport 事件（每页 1000，最多 100 页）。
  */
-async function getTeleportEvents(e, n, headers, s, h) {
+async function getTeleportEvents(sessionId, url, headers, options, allowDeviceRenewal) {
   let headers_2 = headers;
-  logForDebugging(`[teleport] Fetching events from: ${n}`);
-  let S = [];
-  let w;
+  logForDebugging(`[teleport] Fetching events from: ${url}`);
+  let events = [];
+  let cursor;
   let pages = 0;
-  let fromFirstEvent = s.fromFirstEvent;
+  let fromFirstEvent = options.fromFirstEvent;
   let maxPages = 100;
   while (pages < maxPages) {
     let params = {
       limit: 1000,
     };
-    if (s.sessionAgentId !== undefined) params.session_agent_id = s.sessionAgentId;
-    if (s.subagents) params.subagents = "true";
-    if (w !== undefined) params.cursor = w;
+    if (options.sessionAgentId !== undefined) params.session_agent_id = options.sessionAgentId;
+    if (options.subagents) params.subagents = "true";
+    if (cursor !== undefined) params.cursor = cursor;
     else if (fromFirstEvent) params.from_first_event = "true";
-    let Se;
-    let ke = false;
-    let we = false;
+    let response;
+    let renewedDevice = false;
+    let loginUnreadable = false;
     try {
-      Se = await getWithTimeout(n, headers_2, params, s.refusesRedirects);
-      if (Se.status === 403 && h) {
-        let ze = [];
-        Se = await resendAfterUntrustedDevice(
-          Se,
+      response = await getWithTimeout(url, headers_2, params, options.refusesRedirects);
+      if (response.status === 403 && allowDeviceRenewal) {
+        let errors = [];
+        response = await resendAfterUntrustedDevice(
+          response,
           headers_2["X-Trusted-Device-Token"],
           async (status) => {
-            ke = true;
+            renewedDevice = true;
             try {
-              let Je = await prepareApiRequest().catch((error) => {
-                we = true;
+              let auth = await prepareApiRequest().catch((error) => {
+                loginUnreadable = true;
                 throw error;
               });
               headers_2 = {
-                ...getOAuthRequestHeaders(Je.accessToken),
-                "x-organization-uuid": Je.orgUUID,
-                ...(Je.profile
+                ...getOAuthRequestHeaders(auth.accessToken),
+                "x-organization-uuid": auth.orgUUID,
+                ...(auth.profile
                   ? {}
                   : {
                       "X-Trusted-Device-Token": status,
                     }),
               };
-              return await getWithTimeout(n, headers_2, params, s.refusesRedirects);
+              return await getWithTimeout(url, headers_2, params, options.refusesRedirects);
             } catch (error) {
-              ze.push(error);
+              errors.push(error);
               throw error;
             }
           },
           "cloud_session",
         );
-        if (ze.length > 0) throw ze[0];
+        if (errors.length > 0) throw errors[0];
       }
     } catch (error) {
       logForDiagnosticsNoPII("error", "teleport_events_fetch_fail");
-      if (we && error instanceof CloudSessionAccessError)
+      if (loginUnreadable && error instanceof CloudSessionAccessError)
         logForDebugging(
           `[teleport] Events not asked for again after the enrollment, the sign-in could not be read: ${errorMessage(error)}`,
           {
@@ -267,24 +273,28 @@ async function getTeleportEvents(e, n, headers, s, h) {
         );
       logFeatureBad(
         "api_teleport_events_fetch",
-        we ? "login_unreadable" : isTransientNetworkError(error) ? "retries_exhausted" : "network_error",
+        loginUnreadable
+          ? "login_unreadable"
+          : isTransientNetworkError(error)
+            ? "retries_exhausted"
+            : "network_error",
       );
       throw sessionLogsFetchError();
     }
-    let Ee = Se.data;
-    let error = isPlainObject_5(Ee) ? Ee.error : undefined;
+    let body = response.data;
+    let error = isPlainObject_5(body) ? body.error : undefined;
     if (
       params.from_first_event &&
-      (Se.status === 400 ||
-        (Se.status === 403 && isPlainObject_5(error) && error.resource === "from_first_event"))
+      (response.status === 400 ||
+        (response.status === 403 && isPlainObject_5(error) && error.resource === "from_first_event"))
     ) {
-      logForDebugging(`[teleport] from_first_event refused for ${e}`);
+      logForDebugging(`[teleport] from_first_event refused for ${sessionId}`);
       fromFirstEvent = false;
-      if (s.seen) s.seen.fromFirstEventRefused = true;
+      if (options.seen) options.seen.fromFirstEventRefused = true;
       continue;
     }
-    if (Se.status === 404) {
-      logForDebugging(`[teleport] Session ${e} not found (page ${pages})`);
+    if (response.status === 404) {
+      logForDebugging(`[teleport] Session ${sessionId} not found (page ${pages})`);
       logForDiagnosticsNoPII("warn", "teleport_events_not_found");
       if (pages > 0) {
         logFeatureBad("api_teleport_events_fetch", "not_found");
@@ -293,119 +303,126 @@ async function getTeleportEvents(e, n, headers, s, h) {
       logFeatureSad("api_teleport_events_fetch", "not_found");
       return null;
     }
-    if (Se.status === 401) {
+    if (response.status === 401) {
       logForDiagnosticsNoPII("error", "teleport_events_bad_token");
       logFeatureSad("api_teleport_events_fetch", "auth_expired");
-      let ze = "Your session has expired. Please run /login to sign in again.";
-      throw new TeleportOperationError(ze, ze);
+      let loginMessage = "Your session has expired. Please run /login to sign in again.";
+      throw new TeleportOperationError(loginMessage, loginMessage);
     }
-    if (Se.status === 403) {
+    if (response.status === 403) {
       logForDiagnosticsNoPII("error", "teleport_events_forbidden");
-      let ze = Se.data;
-      let { readUntrustedDeviceRefusal } = await import("./chunk-g9dw262t.js");
-      let Je = readUntrustedDeviceRefusal(Se.data)?.kind === "token_refused";
-      let nt = false;
-      if (Je && !ke) {
-        let { enrollmentAfterRefusalHold } = await import("./chunk-3kb57csj.js");
-        nt =
+      let refusalBody = response.data;
+      let { readUntrustedDeviceRefusal } = await import("../../bridge/codeSessionApi.js");
+      let tokenRefused = readUntrustedDeviceRefusal(response.data)?.kind === "token_refused";
+      let recentEnrollment = false;
+      if (tokenRefused && !renewedDevice) {
+        let { enrollmentAfterRefusalHold } = await import("../../bridge/trustedDevice.js");
+        recentEnrollment =
           (await enrollmentAfterRefusalHold(headers_2["X-Trusted-Device-Token"]).catch(() => "none")) ===
           "recent";
       }
       logFeatureSad(
         "api_teleport_events_fetch",
-        ke ? "forbidden_after_device_renewal" : nt ? "forbidden_after_earlier_device_renewal" : "forbidden",
+        renewedDevice
+          ? "forbidden_after_device_renewal"
+          : recentEnrollment
+            ? "forbidden_after_earlier_device_renewal"
+            : "forbidden",
       );
-      if (Je) {
-        if (ke || nt)
+      if (tokenRefused) {
+        if (renewedDevice || recentEnrollment)
           throw new TeleportOperationError(
             "This session requires a trusted device, and it still refused this computer after its trusted-device enrollment was renewed. Open the session at claude.ai/code or in the Claude app instead.",
             "This session requires a trusted device, and it still refused this computer after its trusted-device enrollment was renewed. Open the session at claude.ai/code or in the Claude app instead.",
           );
-        let { loginEnrollmentOnThisComputerSettled } = await import("./chunk-3kb57csj.js");
-        let At = await loginEnrollmentOnThisComputerSettled();
-        let It =
+        let { loginEnrollmentOnThisComputerSettled } = await import("../../bridge/trustedDevice.js");
+        let enrollmentOutcome = await loginEnrollmentOnThisComputerSettled();
+        let enrollMessage =
           "This session requires a trusted device, and this computer isn't recognized as one. Sign in with `/login` in Claude Code on this computer to enroll it (`claude auth login` does not enroll), then try again.";
-        let Yt;
-        switch (At) {
+        let message;
+        switch (enrollmentOutcome) {
           case "enrolls":
-            Yt = It;
+            message = enrollMessage;
             break;
           case "paused":
-            Yt =
+            message =
               "This session requires a trusted device, and enrolling devices is paused right now. Try again later.";
             break;
           case "no_cloud_container":
           case "no_gate_off":
           case "no_not_required":
-            Yt =
+            message =
               "This session requires a trusted device, and this computer isn't one. Open it at claude.ai/code or in the Claude app to verify your device and keep using the session.";
             break;
           case "no":
             break;
         }
-        if (Yt !== undefined) throw new TeleportOperationError(Yt, Yt);
+        if (message !== undefined) throw new TeleportOperationError(message, message);
       }
-      if (ze?.error?.resource === "session_stale_relogin")
+      if (refusalBody?.error?.resource === "session_stale_relogin")
         throw new TeleportOperationError(
           "Your session has expired for the trusted-device check. Run /login to re-authenticate, then retry.",
           "Your session has expired for the trusted-device check. Run /login to re-authenticate, then retry.",
         );
-      let { message, statusLine } = cloudErrorMessage(Se, ze?.error?.message);
-      let yt = message ?? `Access denied fetching session events: ${statusLine}`;
-      throw new TeleportOperationError(yt, yt);
+      let { message, statusLine } = cloudErrorMessage(response, refusalBody?.error?.message);
+      let denialMessage = message ?? `Access denied fetching session events: ${statusLine}`;
+      throw new TeleportOperationError(denialMessage, denialMessage);
     }
-    if (Se.status !== 200) {
-      logError(Error(`Teleport events returned ${Se.status}`));
+    if (response.status !== 200) {
+      logError(Error(`Teleport events returned ${response.status}`));
       logForDiagnosticsNoPII("error", "teleport_events_bad_status");
       logFeatureBad("api_teleport_events_fetch", "bad_status");
-      throw noopSessionHook(s.refusesRedirects, Se.status) ?? sessionLogsFetchError();
+      throw noopSessionHook(options.refusesRedirects, response.status) ?? sessionLogsFetchError();
     }
-    let { data: Ie, next_cursor: nextCursor } = Se.data ?? {};
-    let We =
-      s.subagents &&
-      isPlainObject_5(Ee) &&
-      Object.keys(Ee).every((key) => key === "data" || key === "next_cursor")
-        ? (Ie ?? [])
-        : Ie;
-    if (!Array.isArray(We)) {
-      logError(Error(`Teleport events invalid response shape (data is ${We === null ? "null" : typeof We})`));
+    let { data, next_cursor: nextCursor } = response.data ?? {};
+    let rows =
+      options.subagents &&
+      isPlainObject_5(body) &&
+      Object.keys(body).every((key) => key === "data" || key === "next_cursor")
+        ? (data ?? [])
+        : data;
+    if (!Array.isArray(rows)) {
+      logError(
+        Error(`Teleport events invalid response shape (data is ${rows === null ? "null" : typeof rows})`),
+      );
       logForDiagnosticsNoPII("error", "teleport_events_invalid_shape");
       logFeatureBad("api_teleport_events_fetch", "bad_status");
       throw sessionLogsFetchError();
     }
-    for (let ev of We) {
-      if (ev.session_agent_id && s.seen) s.seen.agentIds.add(ev.session_agent_id);
-      if (ev.payload !== null && ev.payload !== undefined) S.push(normalizeUserToolUseResult(ev.payload));
-      else if (s.seen) s.seen.rowsWithoutPayload++;
+    for (let ev of rows) {
+      if (ev.session_agent_id && options.seen) options.seen.agentIds.add(ev.session_agent_id);
+      if (ev.payload !== null && ev.payload !== undefined)
+        events.push(normalizeUserToolUseResult(ev.payload));
+      else if (options.seen) options.seen.rowsWithoutPayload++;
     }
     pages++;
     if (nextCursor == null) break;
-    w = nextCursor;
+    cursor = nextCursor;
   }
   if (pages >= maxPages) {
-    if (s.seen) s.seen.stoppedAtPageLimit = true;
+    if (options.seen) options.seen.stoppedAtPageLimit = true;
     logError(
       withTelemetryMessage(
-        Error(`Teleport events hit page cap (${maxPages}) for ${e}`),
+        Error(`Teleport events hit page cap (${maxPages}) for ${sessionId}`),
         `teleport_events_page_cap ${maxPages}`,
       ),
     );
     logForDiagnosticsNoPII("warn", "teleport_events_page_cap");
     logFeatureSad("api_teleport_events_fetch", "page_cap");
   } else logFeatureOk("api_teleport_events_fetch");
-  logForDebugging(`[teleport] Fetched ${S.length} events over ${pages} page(s) for ${e}`);
-  return S;
+  logForDebugging(`[teleport] Fetched ${events.length} events over ${pages} page(s) for ${sessionId}`);
+  return events;
 }
 //@ chunk-e6aww6q8.js:213786-213921 layout
 /**
  * 带 20 秒超时、<500 视为有效响应的 GET（可禁用重定向）。
  */
-function getWithTimeout(e, headers, params, refusesRedirects) {
-  return axiosGetWithRetry(e, {
+function getWithTimeout(url, headers, params, refusesRedirects) {
+  return axiosGetWithRetry(url, {
     headers,
     params,
     timeout: 20000,
-    validateStatus: (h) => h < 500,
+    validateStatus: (status) => status < 500,
     ...(refusesRedirects && {
       maxRedirects: 0,
       adapter: "http",
@@ -423,14 +440,14 @@ function sessionLogsFetchError() {
 /**
  * 空操作钩子（构建裁剪后的占位）。
  */
-function noopSessionHook(e, status) {
+function noopSessionHook(refusesRedirects, status) {
   return;
 }
 //@ chunk-e6aww6q8.js:214006-215375 fingerprint = fetchSessionLogsFromUrl (0.795)
 /**
  * GET 会话日志（可 CLAUDE_AFTER_LAST_COMPACT 只取最后一次压缩之后）。
  */
-async function fetchSessionLogsFromUrl(sessionId, url, headers, s = false) {
+async function fetchSessionLogsFromUrl(sessionId, url, headers, refusesRedirects = false) {
   try {
     let response = await axios_default.get(url, {
       headers,
@@ -441,7 +458,7 @@ async function fetchSessionLogsFromUrl(sessionId, url, headers, s = false) {
             after_last_compact: true,
           }
         : undefined,
-      ...(s && {
+      ...(refusesRedirects && {
         maxRedirects: 0,
         adapter: "http",
       }),
@@ -476,8 +493,8 @@ async function fetchSessionLogsFromUrl(sessionId, url, headers, s = false) {
       status: response.status,
     });
     logFeatureBad("api_session_logs_fetch", "bad_status");
-    let y = noopSessionHook(s, response.status);
-    if (y !== undefined) throw y;
+    let hookError = noopSessionHook(refusesRedirects, response.status);
+    if (hookError !== undefined) throw hookError;
     return null;
   } catch (error) {
     if (!axios_default.isAxiosError(error)) throw error;

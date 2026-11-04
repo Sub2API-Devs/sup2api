@@ -13,7 +13,7 @@ import { canonicalJson, JCS_LIB } from "../../bridge/clientEventSigner.js";
 import { uuidToBytes } from "../../bridge/deviceBinder.js";
 import { logFeatureSad, logFeatureOk } from "../../services/analytics/featureTelemetry.js";
 import { isPlainObject } from "../objectUtils.js";
-import { normalizeJsonRoundTrip } from "../telemetry/memorySummary.js";
+import { normalizeJsonRoundTrip } from "../telemetry/clientEventUploader.js";
 import { jsonStringify } from "../slowOperations.js";
 import { logForDebugging } from "../debug.js";
 import { errorMessage } from "../errors.js";
@@ -25,35 +25,40 @@ var buffer_2 = Buffer.from([0]);
 /**
  * 为种子事件生成证明：按 uuid 与类型拼接事件并计算摘要，含 NUL 时抛错。
  */
-function createSeedAttestation(n, events, l) {
+function createSeedAttestation(signedOver, events, signIndex) {
   let mapped = events.map((event) => {
-    let { uuid, type: a, ...y } = event;
-    let e = typeof uuid === "string" ? uuid : "";
-    let i = typeof a === "string" ? a : "";
-    if (e.includes("\x00") || i.includes("\x00"))
+    let { uuid, type, ...rest } = event;
+    let eventUuid = typeof uuid === "string" ? uuid : "";
+    let eventType = typeof type === "string" ? type : "";
+    if (eventUuid.includes("\x00") || eventType.includes("\x00"))
       throw Error("createSeedAttestation: a NUL in an event uuid or type");
     return Buffer.concat([
-      Buffer.from(e, "utf8"),
+      Buffer.from(eventUuid, "utf8"),
       buffer_2,
-      Buffer.from(i, "utf8"),
+      Buffer.from(eventType, "utf8"),
       buffer_2,
-      createHash("sha256").update(canonicalJson(y), "utf8").digest(),
+      createHash("sha256").update(canonicalJson(rest), "utf8").digest(),
     ]);
   });
-  let u = Buffer.alloc(4);
-  u.writeUInt32BE(mapped.length);
-  let o = Buffer.alloc(8);
-  o.writeBigUInt64BE(BigInt(n.issuedAtMs));
+  let countBuffer = Buffer.alloc(4);
+  countBuffer.writeUInt32BE(mapped.length);
+  let issuedAtBuffer = Buffer.alloc(8);
+  issuedAtBuffer.writeBigUInt64BE(BigInt(signedOver.issuedAtMs));
   return Buffer.concat([
     buffer,
-    uuidToBytes(n.orgUuid),
-    uuidToBytes(n.accountUuid),
-    uuidToBytes(n.deviceUuid),
-    o,
+    uuidToBytes(signedOver.orgUuid),
+    uuidToBytes(signedOver.accountUuid),
+    uuidToBytes(signedOver.deviceUuid),
+    issuedAtBuffer,
     buffer_2,
-    mapped[l],
+    mapped[signIndex],
     createHash("sha256")
-      .update(Buffer.concat([u, ...mapped.map((s) => createHash("sha256").update(s).digest())]))
+      .update(
+        Buffer.concat([
+          countBuffer,
+          ...mapped.map((eventBytes) => createHash("sha256").update(eventBytes).digest()),
+        ]),
+      )
       .digest(),
   ]);
 }
@@ -67,52 +72,54 @@ async function createSeedSealer({ attestation, key, sample }) {
       return identitySealer;
     }
     let events_2 = [];
-    let s = [];
+    let modeEventIndexes = [];
     for (let event of events) {
       let payload = isPlainObject(event) ? event.payload : undefined;
       if (!isPlainObject(payload)) {
         logFeatureSad("create_seed_signature", "not_signable");
         return identitySealer;
       }
-      let S = isSetPermissionModeRequest(payload);
-      let U = normalizeJsonRoundTrip(
-        S && (typeof payload.uuid !== "string" || payload.uuid === "")
+      let isModeRequest = isSetPermissionModeRequest(payload);
+      let normalizedPayload = normalizeJsonRoundTrip(
+        isModeRequest && (typeof payload.uuid !== "string" || payload.uuid === "")
           ? {
               ...payload,
               uuid: randomUUID(),
             }
           : payload,
       );
-      if (!isPlainObject(U)) {
+      if (!isPlainObject(normalizedPayload)) {
         logFeatureSad("create_seed_signature", "not_signable");
         return identitySealer;
       }
-      if (S) s.push(events_2.length);
-      events_2.push(U);
+      if (isModeRequest) modeEventIndexes.push(events_2.length);
+      events_2.push(normalizedPayload);
     }
-    if (s.length === 0) return identitySealer;
-    let m = {
+    if (modeEventIndexes.length === 0) return identitySealer;
+    let signedOver_2 = {
       ...signedOver,
       deviceUuid: attestation.deviceUUID,
     };
     let mapped = events_2.map((payload) => ({
       payload,
     }));
-    for (let e of s)
-      mapped[e].device_attestation = {
+    for (let eventIndex of modeEventIndexes)
+      mapped[eventIndex].device_attestation = {
         kid: attestation.kid,
-        signature: (await key.sign(createSeedAttestation(m, events_2, e))).toString("base64"),
+        signature: (await key.sign(createSeedAttestation(signedOver_2, events_2, eventIndex))).toString(
+          "base64",
+        ),
         jcs_lib: JCS_LIB,
       };
     logFeatureOk("create_seed_signature");
-    let y = jsonStringify(events);
-    return (e) =>
-      e.bind_attestation !== undefined && jsonStringify(e.events) === y
+    let originalJson = jsonStringify(events);
+    return (body) =>
+      body.bind_attestation !== undefined && jsonStringify(body.events) === originalJson
         ? {
-            ...e,
+            ...body,
             events: mapped,
           }
-        : e;
+        : body;
   } catch (error) {
     logForDebugging(
       `[createSeedAttestation] the create's permission mode goes unsigned: ${errorMessage(error)}`,
@@ -125,8 +132,8 @@ async function createSeedSealer({ attestation, key, sample }) {
   }
 }
 //@ chunk-j2e9tjav.js:7358-7381 placement
-function identitySealer(n) {
-  return n;
+function identitySealer(input) {
+  return input;
 }
 //@ chunk-j2e9tjav.js:7381-7487 placement
 function isSetPermissionModeRequest(payload) {
@@ -136,3 +143,4 @@ function isSetPermissionModeRequest(payload) {
     payload.request.subtype === "set_permission_mode"
   );
 }
+export { createSeedSealer };

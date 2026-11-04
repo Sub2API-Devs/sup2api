@@ -91,13 +91,14 @@ import { DISABLE_MOUSE_TRACKING } from "../ink/termio/dec.js";
 import { restoreTerminalModes } from "../ink/ink.js";
 import { TerminalModes } from "../ink/terminalModes.js";
 import { CLEAR_TERMINAL_TITLE } from "../ink/termio/osc.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:244110-244207 fingerprint = gracefulShutdown (0.464)
-function gracefulShutdown_2(e, n) {
-  if (!n) return;
+function gracefulShutdown_2(scope, lastRequestId) {
+  if (!lastRequestId) return;
   logEvent("tengu_cache_eviction_hint", {
-    scope: fromEnum(e),
-    last_request_id: sanitizeMarkName(n),
+    scope: fromEnum(scope),
+    last_request_id: sanitizeMarkName(lastRequestId),
   });
 }
 //@ chunk-e6aww6q8.js:270819-270864 placement
@@ -105,13 +106,13 @@ function cleanupTerminalModes() {
   getTerminalHooks()?.cleanupTerminalModes();
 }
 //@ chunk-e6aww6q8.js:270864-270916 placement
-function emitExitMessage(e) {
+function emitExitMessage(message) {
   try {
     cleanupTerminalModes();
     writeSync(
       2,
       `
-${stripControlChars_3(e)}
+${stripControlChars_3(message)}
 `,
     );
   } catch {}
@@ -128,11 +129,11 @@ var EXIT_HANDOFF_FAILSAFE_MS = 15000;
 var STDOUT_DRAIN_EXTRA_MS = 1500;
 var DEFAULT_CLEANUP_BUDGET_MS = 600000;
 //@ chunk-e6aww6q8.js:271004-271050 placement
-function writeShutdownNotice(e) {
+function writeShutdownNotice(message) {
   try {
     writeSync(
       2,
-      `${stripControlChars_3(e)}
+      `${stripControlChars_3(message)}
 `,
     );
   } catch {}
@@ -172,23 +173,23 @@ class ShutdownCoordinator {
     if (this.resumeHintPrinted) return;
     if (process.stdout.isTTY && getIsInteractive())
       try {
-        let e = getIsRemoteMode() ? getRemoteCaps() : null;
-        let n =
-          e?.sessionId !== undefined && !e.viewerOnly
-            ? extractRepoSlug(toCompatSessionId(e.sessionId))
+        let remoteCaps = getIsRemoteMode() ? getRemoteCaps() : null;
+        let repoSlug =
+          remoteCaps?.sessionId !== undefined && !remoteCaps.viewerOnly
+            ? extractRepoSlug(toCompatSessionId(remoteCaps.sessionId))
             : null;
-        if (n !== null) {
-          let r = process.stderr.isTTY === true;
-          let s = !hasBeenInWorktree();
+        if (repoSlug !== null) {
+          let stderrIsTty = process.stderr.isTTY === true;
+          let notInWorktree = !hasBeenInWorktree();
           writeSync(
             1,
             sequential.dim(`
 ${this.cloudHintLead?.() ?? `${resumeHintPrefix()}Resume this session with:`}
-claude --cloud ${n}
+claude --cloud ${repoSlug}
 `),
           );
           this.resumeHintPrinted = true;
-          if (r && s) noopContainerCleanup(n);
+          if (stderrIsTty && notInWorktree) noopContainerCleanup(repoSlug);
           return;
         }
       } catch {}
@@ -196,23 +197,23 @@ claude --cloud ${n}
       try {
         let sessionId = getSessionId();
         if (!sessionIdExists(sessionId)) return;
-        let n = this.resumeHintOmitsWorktree ? null : getResumeHintWorktreeName();
+        let worktreeName = this.resumeHintOmitsWorktree ? null : getResumeHintWorktreeName();
         let { advice, command, arg, worktree } = worktreeResumeHint({
           sessionId,
-          worktree: n
+          worktree: worktreeName
             ? {
-                name: n,
+                name: worktreeName,
                 recordCleared: getCurrentWorktreeSession() === null,
               }
             : undefined,
           columns: process.stdout.columns,
           envAssignment: undefined,
         });
-        let S = [];
+        let extraLines = [];
         writeSync(
           1,
           sequential.dim(
-            ["", ...S, ...advice, "Resume this session with:", command, ""].join(`
+            ["", ...extraLines, ...advice, "Resume this session with:", command, ""].join(`
 `),
           ),
         );
@@ -225,7 +226,7 @@ claude --cloud ${n}
         });
       } catch {}
   }
-  forceExit(e) {
+  forceExit(exitCode) {
     if (this.failsafeTimer !== undefined) {
       clearTimeout(this.failsafeTimer);
       this.failsafeTimer = undefined;
@@ -235,7 +236,7 @@ claude --cloud ${n}
       getTerminalHooks()?.drainStdin();
     } catch {}
     try {
-      process.exit(e);
+      process.exit(exitCode);
     } catch (error) {
       process.kill(process.pid, "SIGKILL");
     }
@@ -268,7 +269,7 @@ claude --cloud ${n}
       this.shutdown(0);
     });
     process.on("SIGTERM", () => {
-      let r = {
+      let signalInfo = {
         uptime_s: Math.round(process.uptime()),
         ppid_changed: process.ppid !== ppid,
         stdin_at_eof: process.stdin.readableEnded,
@@ -277,11 +278,11 @@ claude --cloud ${n}
       };
       logForDiagnosticsNoPII("info", "shutdown_signal", {
         signal: "SIGTERM",
-        ...r,
+        ...signalInfo,
       });
       logEvent("tengu_shutdown_signal", {
         signal: lit_2("SIGTERM"),
-        ...r,
+        ...signalInfo,
       });
       markStdoutDrainExternallyClocked();
       if (this.printModeSignalHandlersRegistered) return;
@@ -312,79 +313,84 @@ claude --cloud ${n}
       });
       this.armOrphanCheck();
     }
-    registerProcessIOErrorHandlers((r, s) => {
+    registerProcessIOErrorHandlers((signalName, codePart) => {
       if (!getIsInteractive()) return;
       logForDiagnosticsNoPII("info", "shutdown_signal", {
-        signal: `${r}_${s}`,
+        signal: `${signalName}_${codePart}`,
       });
       markStdoutDrainExternallyClocked();
       this.shutdown(0);
     });
-    process.on("uncaughtException", (r) => {
+    process.on("uncaughtException", (error) => {
       if (this.uncaughtBreakerTripped) return;
-      let s = serializeShutdownError(r);
-      let h = s.isHostError && isHttp2TransportError(r) && this.recordHttp2RecoveryAndCheckBudget(Date.now());
+      let serialized = serializeShutdownError(error);
+      let recovered =
+        serialized.isHostError &&
+        isHttp2TransportError(error) &&
+        this.recordHttp2RecoveryAndCheckBudget(Date.now());
       logForDiagnosticsNoPII("error", "uncaught_exception", {
-        ...s,
-        recovered: h,
+        ...serialized,
+        recovered,
       });
-      let y = s.isHostError ? errorTelemetryFields(r) : hostErrorMessageFields(s);
+      let errorFields = serialized.isHostError
+        ? errorTelemetryFields(error)
+        : hostErrorMessageFields(serialized);
       logEvent("tengu_uncaught_exception", {
-        error_name: sanitizeErrorName(s),
-        ...y,
-        ...(h && {
-          recovered: h,
+        error_name: sanitizeErrorName(serialized),
+        ...errorFields,
+        ...(recovered && {
+          recovered,
         }),
       });
-      if (s.isHostError) {
-        if (!h) trackError(r, "uncaught_exception");
+      if (serialized.isHostError) {
+        if (!recovered) trackError(error, "uncaught_exception");
         else if (this.recoveredDdReportCount < RECOVERED_DD_REPORT_CAP) {
           this.recoveredDdReportCount++;
-          trackError(r, "uncaught_exception_recovered");
+          trackError(error, "uncaught_exception_recovered");
         }
       }
-      if (h) {
+      if (recovered) {
         logForDebugging(
-          `Recovered HTTP/2 stream-teardown uncaught exception (${s.error_name}) \u2014 transport throttle, keeping the process alive`,
+          `Recovered HTTP/2 stream-teardown uncaught exception (${serialized.error_name}) \u2014 transport throttle, keeping the process alive`,
           {
             level: "error",
           },
         );
-        this.scheduleStartupMountWatchdog(s.error_message ?? s.error_name);
+        this.scheduleStartupMountWatchdog(serialized.error_message ?? serialized.error_name);
         return;
       }
       if (isSupervisedMode()) {
         this.uncaughtBreakerTripped = true;
         logForDebugging(
-          `Uncaught exception under CLAUDE_CODE_SUPERVISED \u2014 exiting ${EX_SOFTWARE}: ${s.error_name}`,
+          `Uncaught exception under CLAUDE_CODE_SUPERVISED \u2014 exiting ${EX_SOFTWARE}: ${serialized.error_name}`,
           {
             level: "error",
           },
         );
-        if (isBgSession() && !this.isShuttingDown()) recordBgExitCause("uncaught:" + s.error_name);
+        if (isBgSession() && !this.isShuttingDown()) recordBgExitCause("uncaught:" + serialized.error_name);
         this.shutdown(EX_SOFTWARE);
         return;
       }
-      let S = this.recordUncaughtAndCheckBreaker(Date.now());
-      if (this.recentUncaught.length < RECENT_UNCAUGHT_KEEP || S)
+      let breakerTripped = this.recordUncaughtAndCheckBreaker(Date.now());
+      if (this.recentUncaught.length < RECENT_UNCAUGHT_KEEP || breakerTripped)
         this.recentUncaught.push({
-          name: s.error_name,
-          message: (s.error_message ?? "").slice(0, 200),
-          topFrame: y.error_top_frame,
+          name: serialized.error_name,
+          message: (serialized.error_message ?? "").slice(0, 200),
+          topFrame: errorFields.error_top_frame,
         });
-      if (S) {
+      if (breakerTripped) {
         logEvent("tengu_uncaught_exception_loop", {
           count: this.uncaughtCount,
           window_ms: UNCAUGHT_WINDOW_MS,
-          error_name: sanitizeErrorName(s),
-          error_message_hash: y.error_message_hash,
+          error_name: sanitizeErrorName(serialized),
+          error_message_hash: errorFields.error_message_hash,
         });
         cleanupTerminalModes();
         try {
-          for (let w of this.recentUncaught)
+          for (let recent of this.recentUncaught)
             writeSync(
               2,
-              `Uncaught exception (loop): ${w.name}: ${w.message}${w.topFrame ? ` at ${w.topFrame}` : ""}
+              `Uncaught exception (loop): ${recent.name}: ${recent.message}${recent.topFrame ? ` at ${recent.topFrame}` : ""}
 `,
             );
           writeSync(
@@ -397,36 +403,36 @@ claude --cloud ${n}
         return;
       }
       if (isBgSession() && !this.isShuttingDown()) {
-        recordBgExitCause("uncaught:" + s.error_name);
+        recordBgExitCause("uncaught:" + serialized.error_name);
         this.shutdown(1);
         return;
       }
-      this.scheduleStartupMountWatchdog(s.error_message ?? s.error_name);
+      this.scheduleStartupMountWatchdog(serialized.error_message ?? serialized.error_name);
     });
-    process.on("unhandledRejection", (r, s) => {
+    process.on("unhandledRejection", (reason, promise) => {
       if (this.uncaughtBreakerTripped) return;
-      let pendingWriteLine = findPendingWriteLine(r, s);
+      let pendingWriteLine = findPendingWriteLine(reason, promise);
       if (pendingWriteLine !== undefined) {
         logForDebugging(pendingWriteLine);
         return;
       }
-      let y = serializeShutdownError(r);
-      if (this.shutdownInProgress && y.isHostError && isMcpConnectionClosed(r)) {
-        logForDebugging(`Swallowed MCP ConnectionClosed during shutdown: ${errorMessage(r)}`);
+      let serialized = serializeShutdownError(reason);
+      if (this.shutdownInProgress && serialized.isHostError && isMcpConnectionClosed(reason)) {
+        logForDebugging(`Swallowed MCP ConnectionClosed during shutdown: ${errorMessage(reason)}`);
         return;
       }
-      logForDiagnosticsNoPII("error", "unhandled_rejection", y);
+      logForDiagnosticsNoPII("error", "unhandled_rejection", serialized);
       logEvent("tengu_unhandled_rejection", {
-        error_name: sanitizeErrorName(y),
-        ...(y.isHostError ? errorTelemetryFields(r) : hostErrorMessageFields(y)),
+        error_name: sanitizeErrorName(serialized),
+        ...(serialized.isHostError ? errorTelemetryFields(reason) : hostErrorMessageFields(serialized)),
       });
-      let S = y.isHostError && isHttpServerConnReset(r);
-      if (y.isHostError && !S) trackError(r, "unhandled_rejection");
-      if (y.isHostError && isAbortError(r)) {
+      let isServerReset = serialized.isHostError && isHttpServerConnReset(reason);
+      if (serialized.isHostError && !isServerReset) trackError(reason, "unhandled_rejection");
+      if (serialized.isHostError && isAbortError(reason)) {
         logForDebugging("Swallowed unhandled AbortError rejection (not exiting bg/supervised worker)");
         return;
       }
-      if (S) {
+      if (isServerReset) {
         logForDebugging(
           "Swallowed unhandled http.Server ECONNRESET rejection (not exiting bg/supervised worker)",
         );
@@ -435,45 +441,45 @@ claude --cloud ${n}
       if (isSupervisedMode()) {
         this.uncaughtBreakerTripped = true;
         logForDebugging(
-          `Unhandled rejection under CLAUDE_CODE_SUPERVISED \u2014 exiting ${EX_SOFTWARE}: ${y.error_name}`,
+          `Unhandled rejection under CLAUDE_CODE_SUPERVISED \u2014 exiting ${EX_SOFTWARE}: ${serialized.error_name}`,
           {
             level: "error",
           },
         );
-        if (isBgSession() && !this.isShuttingDown()) recordBgExitCause("unhandled:" + y.error_name);
+        if (isBgSession() && !this.isShuttingDown()) recordBgExitCause("unhandled:" + serialized.error_name);
         this.shutdown(EX_SOFTWARE);
         return;
       }
       if (isBgSession() && !this.isShuttingDown()) {
-        recordBgExitCause("unhandled:" + y.error_name);
+        recordBgExitCause("unhandled:" + serialized.error_name);
         this.shutdown(1);
         return;
       }
-      this.scheduleStartupMountWatchdog(y.error_message ?? y.error_name);
+      this.scheduleStartupMountWatchdog(serialized.error_message ?? serialized.error_name);
     });
   }
-  shutdownSync(e = 0, n = "other") {
+  shutdownSync(exitCode = 0, reason = "other") {
     if (!this.shutdownInProgress) {
-      process.exitCode = e;
+      process.exitCode = exitCode;
       latchTerminalShutdown();
     }
-    this.pendingShutdown = this.shutdown(e, n)
+    this.pendingShutdown = this.shutdown(exitCode, reason)
       .catch(async (error) => {
         logForDebugging(`Graceful shutdown failed: ${error}`, {
           level: "error",
         });
         cleanupTerminalModes();
         this.printResumeHint();
-        await this.armFailsafeAndDrainStdout(e);
-        this.forceExit(e);
+        await this.armFailsafeAndDrainStdout(exitCode);
+        this.forceExit(exitCode);
       })
       .catch(() => {});
   }
-  recordUncaughtAndCheckBreaker(e) {
+  recordUncaughtAndCheckBreaker(nowMs) {
     if (this.uncaughtBreakerTripped) return false;
-    if (e - this.uncaughtWindowStart > UNCAUGHT_WINDOW_MS) {
+    if (nowMs - this.uncaughtWindowStart > UNCAUGHT_WINDOW_MS) {
       this.uncaughtCount = 0;
-      this.uncaughtWindowStart = e;
+      this.uncaughtWindowStart = nowMs;
       this.recentUncaught = [];
     }
     this.uncaughtCount++;
@@ -483,10 +489,10 @@ claude --cloud ${n}
     }
     return false;
   }
-  recordHttp2RecoveryAndCheckBudget(e) {
-    if (e - this.http2RecoveryWindowStart > HTTP2_RECOVERY_WINDOW_MS) {
+  recordHttp2RecoveryAndCheckBudget(nowMs) {
+    if (nowMs - this.http2RecoveryWindowStart > HTTP2_RECOVERY_WINDOW_MS) {
       this.http2RecoveryCount = 0;
-      this.http2RecoveryWindowStart = e;
+      this.http2RecoveryWindowStart = nowMs;
     }
     this.http2RecoveryCount++;
     return this.http2RecoveryCount <= HTTP2_RECOVERY_CAP;
@@ -498,67 +504,67 @@ claude --cloud ${n}
   inNonUiSubcommand() {
     return this.startupActionStarted && !this.startupExpectsUiMount;
   }
-  exitIfStartupNeverMounted(e) {
+  exitIfStartupNeverMounted(detail) {
     if (isUiMounted() || this.inNonUiSubcommand() || this.isShuttingDown()) return;
     try {
       writeSync(
         2,
-        `Claude Code could not start: ${e ?? "<unknown>"}
+        `Claude Code could not start: ${detail ?? "<unknown>"}
 `,
       );
     } catch {}
     this.shutdown(1);
   }
-  scheduleStartupMountWatchdog(e) {
+  scheduleStartupMountWatchdog(detail) {
     if (!getIsInteractive() || isUiMounted() || this.inNonUiSubcommand() || this.isShuttingDown()) return;
-    setTimeout((n) => this.exitIfStartupNeverMounted(n), STARTUP_MOUNT_GRACE_MS, e).unref();
+    setTimeout((detail) => this.exitIfStartupNeverMounted(detail), STARTUP_MOUNT_GRACE_MS, detail).unref();
   }
-  armShutdownFailsafe(e, n) {
+  armShutdownFailsafe(delayMs, exitCode) {
     if (this.failsafeTimer !== undefined) clearTimeout(this.failsafeTimer);
-    this.failsafeFiresAtMs = Date.now() + e;
+    this.failsafeFiresAtMs = Date.now() + delayMs;
     this.failsafeTimer = setTimeout(
-      (r) => {
+      (exitCode) => {
         cleanupTerminalModes();
         this.printResumeHint();
         drainStdoutBeforeExit(500, {
           scaleBudgetToQueue: false,
         })
-          .then(() => this.forceExit(r))
+          .then(() => this.forceExit(exitCode))
           .catch(() => {});
       },
-      e,
-      n,
+      delayMs,
+      exitCode,
     );
   }
-  async removeWorktreeAtExit(e, n, r) {
-    let budgetMs = e.budgetMs ?? DEFAULT_CLEANUP_BUDGET_MS;
+  async removeWorktreeAtExit(removal, exitCode, extraMs) {
+    let budgetMs = removal.budgetMs ?? DEFAULT_CLEANUP_BUDGET_MS;
     if (this.failsafeFiresAtMs !== undefined)
-      this.armShutdownFailsafe(Math.max(this.failsafeFiresAtMs - Date.now(), budgetMs + r), n);
+      this.armShutdownFailsafe(Math.max(this.failsafeFiresAtMs - Date.now(), budgetMs + extraMs), exitCode);
     writeShutdownNotice("Removing worktree\u2026");
-    let h = "it may be partly deleted. Delete the folder if you no longer need it.";
+    let partialNote = "it may be partly deleted. Delete the folder if you no longer need it.";
     if (!this.worktreeRemovalSignalsInstalled) {
       this.worktreeRemovalSignalsInstalled = true;
       process.on("SIGINT", () => this.interruptWorktreeRemoval?.());
       process.on("SIGTERM", () => this.interruptWorktreeRemoval?.());
       process.on("SIGHUP", () => {
-        let L = env.CLAUDE_BG_BACKEND === "daemon" && !this.ownsControllingTerminal;
-        if (!this.worktreeRemovalIgnoresHangup && !L) this.interruptWorktreeRemoval?.();
+        let daemonIgnoresHangup = env.CLAUDE_BG_BACKEND === "daemon" && !this.ownsControllingTerminal;
+        if (!this.worktreeRemovalIgnoresHangup && !daemonIgnoresHangup) this.interruptWorktreeRemoval?.();
       });
     }
-    this.worktreeRemovalIgnoresHangup = e.ignoresHangup === true;
+    this.worktreeRemovalIgnoresHangup = removal.ignoresHangup === true;
     let promise = new Promise((resolve) => {
       this.interruptWorktreeRemoval = () =>
         resolve({
-          line: `Stopped waiting for the removal of the worktree at ${e.path}; ${h}`,
+          line: `Stopped waiting for the removal of the worktree at ${removal.path}; ${partialNote}`,
         });
     });
     let rounded = Math.round(budgetMs / 60000);
-    let w;
+    let outcome;
     try {
-      w = await withDeadline(
+      outcome = await withDeadline(
         Promise.race([
           Promise.resolve()
-            .then(() => e.run())
+            .then(() => removal.run())
             .then(
               (line) => ({
                 line,
@@ -566,7 +572,7 @@ claude --cloud ${n}
               (error) => {
                 logError(error);
                 return {
-                  line: `Could not finish removing the worktree at ${e.path}; ${h}`,
+                  line: `Could not finish removing the worktree at ${removal.path}; ${partialNote}`,
                 };
               },
             ),
@@ -579,10 +585,10 @@ claude --cloud ${n}
       this.worktreeRemovalIgnoresHangup = false;
     }
     writeShutdownNotice(
-      w?.line ??
-        `Removing the worktree at ${e.path} did not finish within ${budgetMs >= 60000 ? `${rounded} ${rounded === 1 ? "minute" : "minutes"}` : `${Math.round(budgetMs / 1000)} seconds`}; ${h}`,
+      outcome?.line ??
+        `Removing the worktree at ${removal.path} did not finish within ${budgetMs >= 60000 ? `${rounded} ${rounded === 1 ? "minute" : "minutes"}` : `${Math.round(budgetMs / 1000)} seconds`}; ${partialNote}`,
     );
-    if (this.failsafeFiresAtMs !== undefined) this.armShutdownFailsafe(r, n);
+    if (this.failsafeFiresAtMs !== undefined) this.armShutdownFailsafe(extraMs, exitCode);
   }
   isShuttingDown() {
     return this.shutdownInProgress;
@@ -643,49 +649,54 @@ claude --cloud ${n}
   getPendingShutdown() {
     return this.pendingShutdown;
   }
-  async shutdown(e = 0, n = "other", r) {
+  async shutdown(exitCode = 0, reason = "other", options) {
     if (this.shutdownInProgress) {
-      if (r?.removeWorktree && r.removeWorktree !== this.worktreeRemoval)
-        logForDebugging(`Worktree ${r.removeWorktree.path} kept: a shutdown was already under way`, {
+      if (options?.removeWorktree && options.removeWorktree !== this.worktreeRemoval)
+        logForDebugging(`Worktree ${options.removeWorktree.path} kept: a shutdown was already under way`, {
           level: "warn",
         });
       return;
     }
     this.shutdownInProgress = true;
     latchTerminalShutdown();
-    process.exitCode = e;
-    if (r?.suppressResumeHint) this.resumeHintPrinted = true;
-    this.resumeHintOmitsWorktree = r?.removeWorktree !== undefined;
-    this.worktreeRemoval = r?.removeWorktree;
+    process.exitCode = exitCode;
+    if (options?.suppressResumeHint) this.resumeHintPrinted = true;
+    this.resumeHintOmitsWorktree = options?.removeWorktree !== undefined;
+    this.worktreeRemoval = options?.removeWorktree;
     let { executeSessionEndHooks, getSessionEndHookTimeoutMs, SESSION_END_HOOK_TIMEOUT_MS_DEFAULT } =
-      await import("./chunk-4kvy3jy3.js");
-    let S;
+      await import("./hooks.lazy.js");
+    let hookTimeoutMs;
     try {
-      S = getSessionEndHookTimeoutMs();
+      hookTimeoutMs = getSessionEndHookTimeoutMs();
     } catch {
-      S = SESSION_END_HOOK_TIMEOUT_MS_DEFAULT;
+      hookTimeoutMs = SESSION_END_HOOK_TIMEOUT_MS_DEFAULT;
     }
-    this.armShutdownFailsafe(Math.max(5000, S + 5000), e);
+    this.armShutdownFailsafe(Math.max(5000, hookTimeoutMs + 5000), exitCode);
     cleanupTerminalModes();
     this.printResumeHint();
-    let w;
+    let cleanupTimer;
     try {
-      let G = (async () => {
+      let cleanupPromise = (async () => {
         try {
           await runCleanups();
         } catch {}
       })();
       await Promise.race([
-        G,
+        cleanupPromise,
         new Promise((resolve, reject) => {
-          w = setTimeout((Se) => Se(new CleanupTimeoutError()), CLEANUP_TIMEOUT_MS, reject);
+          cleanupTimer = setTimeout(
+            (reject) => reject(new CleanupTimeoutError()),
+            CLEANUP_TIMEOUT_MS,
+            reject,
+          );
         }),
       ]);
-      clearTimeout(w);
+      clearTimeout(cleanupTimer);
     } catch {
-      clearTimeout(w);
+      clearTimeout(cleanupTimer);
     }
-    if (hasPendingWrites()) this.armShutdownFailsafe(Math.max(EXIT_HANDOFF_FAILSAFE_MS, S + 5000), e);
+    if (hasPendingWrites())
+      this.armShutdownFailsafe(Math.max(EXIT_HANDOFF_FAILSAFE_MS, hookTimeoutMs + 5000), exitCode);
     try {
       await drainPendingWrites();
     } catch {}
@@ -696,11 +707,12 @@ claude --cloud ${n}
     try {
       await killPendingEscalations();
     } catch {}
-    if (r?.removeWorktree) await this.removeWorktreeAtExit(r.removeWorktree, e, Math.max(5000, S + 5000));
+    if (options?.removeWorktree)
+      await this.removeWorktreeAtExit(options.removeWorktree, exitCode, Math.max(5000, hookTimeoutMs + 5000));
     try {
       if (!isUnclaimedSpare())
-        await executeSessionEndHooks(getSessionIdentity(), n, {
-          signal: AbortSignal.timeout(S),
+        await executeSessionEndHooks(getSessionIdentity(), reason, {
+          signal: AbortSignal.timeout(hookTimeoutMs),
           storageV5: this.handles.storageV5,
           credentials: this.handles.credentials,
         });
@@ -717,24 +729,24 @@ claude --cloud ${n}
       endMaintenanceAndForget("session_end");
     } catch {}
     try {
-      let G = maxPreExitFlushWaitMs();
-      if (G > 0) {
-        this.widenFailsafeBy(G, e);
-        await withDeadline(drainPreExitFlushes_2(), G);
+      let flushWaitMs = maxPreExitFlushWaitMs();
+      if (flushWaitMs > 0) {
+        this.widenFailsafeBy(flushWaitMs, exitCode);
+        await withDeadline(drainPreExitFlushes_2(), flushWaitMs);
       }
     } catch {}
-    let L = await this.waitForHeldOAuthRefresh(e);
+    let noHeldRefresh = await this.waitForHeldOAuthRefresh(exitCode);
     await drainRegisteredWriteQueues();
     await flushAnalyticsSinks();
-    if (L && waitForOAuthRefreshLocksReleased() !== null) {
-      await this.waitForHeldOAuthRefresh(e);
+    if (noHeldRefresh && waitForOAuthRefreshLocksReleased() !== null) {
+      await this.waitForHeldOAuthRefresh(exitCode);
       await drainRegisteredWriteQueues();
     }
-    if (r?.finalMessage)
+    if (options?.finalMessage)
       try {
         writeSync(
           2,
-          r.finalMessage +
+          options.finalMessage +
             `
 `,
         );
@@ -746,111 +758,113 @@ claude --cloud ${n}
       await flushDebugLogs();
     } catch {}
     try {
-      this.widenFailsafeBy(maxPreExitFlushWaitMs(), e);
+      this.widenFailsafeBy(maxPreExitFlushWaitMs(), exitCode);
       await drainPreExitFlushes();
     } catch {}
-    await this.armFailsafeAndDrainStdout(e);
-    this.forceExit(e);
+    await this.armFailsafeAndDrainStdout(exitCode);
+    this.forceExit(exitCode);
   }
-  widenFailsafeBy(e, n) {
-    if (e > 0 && this.failsafeFiresAtMs !== undefined)
-      this.armShutdownFailsafe(Math.max(0, this.failsafeFiresAtMs - Date.now()) + e, n);
+  widenFailsafeBy(extraMs, exitCode) {
+    if (extraMs > 0 && this.failsafeFiresAtMs !== undefined)
+      this.armShutdownFailsafe(Math.max(0, this.failsafeFiresAtMs - Date.now()) + extraMs, exitCode);
   }
-  async armFailsafeAndDrainStdout(e) {
-    this.armShutdownFailsafe(getStdoutDrainBudgetMs() + STDOUT_DRAIN_EXTRA_MS, e);
+  async armFailsafeAndDrainStdout(exitCode) {
+    this.armShutdownFailsafe(getStdoutDrainBudgetMs() + STDOUT_DRAIN_EXTRA_MS, exitCode);
     await drainStdoutBeforeExit();
   }
-  async waitForHeldOAuthRefresh(e) {
+  async waitForHeldOAuthRefresh(exitCode) {
     if (waitForOAuthRefreshLocksReleased() === null) return true;
     if (this.failsafeFiresAtMs !== undefined)
       this.armShutdownFailsafe(
         Math.max(0, this.failsafeFiresAtMs - Date.now()) + OAUTH_REFRESH_EXIT_WAIT_CAP_MS,
-        e,
+        exitCode,
       );
     return waitForInFlightOAuthRefresh(OAUTH_REFRESH_EXIT_WAIT_CAP_MS);
   }
 }
 //@ chunk-e6aww6q8.js:283131-283872 placement
-function serializeShutdownError(e) {
-  let n = isUntrustedObject(e);
-  if (!(!n && e instanceof Error)) {
-    if (typeof e === "string")
+function serializeShutdownError(error) {
+  let untrusted = isUntrustedObject(error);
+  if (!(!untrusted && error instanceof Error)) {
+    if (typeof error === "string")
       return {
         error_name: "string",
-        error_message: redactSecrets(e).slice(0, 2000),
+        error_message: redactSecrets(error).slice(0, 2000),
         isHostError: false,
       };
-    let w = n ? ownDataString(e, "name") : protoDataString(e, "name");
-    let L = ownDataString(e, "message");
-    let G = [];
-    if (w !== undefined) G.push(w);
-    if (L !== undefined) G.push(L);
-    let errorMessage = G.length > 0 ? redactSecrets(G.join(": ")).slice(0, 2000) : undefined;
-    let Z = types.isNativeError(e) ? undefined : ownDataString(e, "stack");
+    let namePart = untrusted ? ownDataString(error, "name") : protoDataString(error, "name");
+    let messagePart = ownDataString(error, "message");
+    let parts = [];
+    if (namePart !== undefined) parts.push(namePart);
+    if (messagePart !== undefined) parts.push(messagePart);
+    let errorMessage = parts.length > 0 ? redactSecrets(parts.join(": ")).slice(0, 2000) : undefined;
+    let stackPart = types.isNativeError(error) ? undefined : ownDataString(error, "stack");
     return {
       error_name: "non-error",
       error_message: errorMessage,
-      error_stack: Z !== undefined ? redactSecrets(Z).slice(0, 4000) : undefined,
+      error_stack: stackPart !== undefined ? redactSecrets(stackPart).slice(0, 4000) : undefined,
       isHostError: false,
     };
   }
-  let s = e;
-  let h;
-  let y;
-  let S;
+  let errorObject = error;
+  let name;
+  let message;
+  let stack;
   try {
-    h = s.name;
+    name = errorObject.name;
   } catch {}
   try {
-    y = s.message;
+    message = errorObject.message;
   } catch {}
   try {
-    S = s.stack;
+    stack = errorObject.stack;
   } catch {}
   return {
-    error_name: typeof h === "string" ? h : "Error",
-    error_message: typeof y === "string" ? redactSecrets(y).slice(0, 2000) : undefined,
-    error_stack: typeof S === "string" ? redactSecrets(S).slice(0, 4000) : undefined,
+    error_name: typeof name === "string" ? name : "Error",
+    error_message: typeof message === "string" ? redactSecrets(message).slice(0, 2000) : undefined,
+    error_stack: typeof stack === "string" ? redactSecrets(stack).slice(0, 4000) : undefined,
     isHostError: true,
   };
 }
 //@ chunk-e6aww6q8.js:283872-284072 placement
-function ownDataString(e, n) {
-  if (e === null || typeof e !== "object") return;
-  if (isUntrustedObject_2(e)) return;
-  let r;
+function ownDataString(object, key) {
+  if (object === null || typeof object !== "object") return;
+  if (isUntrustedObject_2(object)) return;
+  let descriptor;
   try {
-    r = Object.getOwnPropertyDescriptor(e, n);
+    descriptor = Object.getOwnPropertyDescriptor(object, key);
   } catch {
     return;
   }
-  return r && "value" in r && typeof r.value === "string" ? r.value : undefined;
+  return descriptor && "value" in descriptor && typeof descriptor.value === "string"
+    ? descriptor.value
+    : undefined;
 }
 //@ chunk-e6aww6q8.js:284072-284338 placement
-function protoDataString(e, n) {
-  if (e === null || typeof e !== "object") return;
-  let r = e;
+function protoDataString(object, key) {
+  if (object === null || typeof object !== "object") return;
+  let current = object;
   for (let idx = 0; idx < 128; idx++) {
-    if (r === null) return;
-    if (isUntrustedObject_2(r)) return;
-    let ownPropertyDescriptor = Object.getOwnPropertyDescriptor(r, n);
+    if (current === null) return;
+    if (isUntrustedObject_2(current)) return;
+    let ownPropertyDescriptor = Object.getOwnPropertyDescriptor(current, key);
     if (ownPropertyDescriptor)
       return "value" in ownPropertyDescriptor && typeof ownPropertyDescriptor.value === "string"
         ? ownPropertyDescriptor.value
         : undefined;
-    r = Object.getPrototypeOf(r);
+    current = Object.getPrototypeOf(current);
   }
   return;
 }
 //@ chunk-e6aww6q8.js:284338-284544 placement
-function isMcpConnectionClosed(e) {
+function isMcpConnectionClosed(error) {
   try {
-    if (!(e instanceof Error)) return false;
-    let code = e.code;
+    if (!(error instanceof Error)) return false;
+    let code = error.code;
     return (
-      (e.name === "McpError" && code === -32000) ||
-      (e.name === "SdkError" && code === "CONNECTION_CLOSED") ||
-      (e.name === "ProtocolError" && code === -32000)
+      (error.name === "McpError" && code === -32000) ||
+      (error.name === "SdkError" && code === "CONNECTION_CLOSED") ||
+      (error.name === "ProtocolError" && code === -32000)
     );
   } catch {
     return false;
@@ -869,7 +883,7 @@ function emitScrollTelemetrySummary() {
 //@ chunk-e6aww6q8.js:284639-284745 placement
 async function flushAnalyticsSinks() {
   try {
-    let { flushAnalyticsSinks } = await import("./chunk-af5wdhtv.js");
+    let { flushAnalyticsSinks } = await import("../services/analytics/flushSinks.js");
     await flushAnalyticsSinks();
   } catch {}
 }
@@ -880,19 +894,23 @@ class CleanupTimeoutError extends Error {
   }
 }
 //@ chunk-e6aww6q8.js:284809-284901 placement
-function hostErrorMessageFields(e) {
-  if (!e.error_message) return {};
+function hostErrorMessageFields(serialized) {
+  if (!serialized.error_message) return {};
   return {
-    error_message_hash: shortHash(e.error_message),
+    error_message_hash: shortHash(serialized.error_message),
   };
 }
 //@ chunk-e6aww6q8.js:284901-285029 placement
-function sanitizeErrorName(e) {
-  if (!e.isHostError) return e.error_name === "string" ? lit_2("string") : lit_2("non-error");
-  return sanitizeClassName(e.error_name) ?? lit_2("Error");
+function sanitizeErrorName(serialized) {
+  if (!serialized.isHostError)
+    return serialized.error_name === "string" ? lit_2("string") : lit_2("non-error");
+  return sanitizeClassName(serialized.error_name) ?? lit_2("Error");
 }
 //@ chunk-e6aww6q8.js:285029-285056 placement
-var shutdownCoordinators = new HostScoped(() => new ShutdownCoordinator());
+var shutdownCoordinators; // deferred: uses ShutdownCoordinator of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:285029", () => {
+  shutdownCoordinators = new HostScoped(() => new ShutdownCoordinator());
+});
 //@ chunk-e6aww6q8.js:285056-285085 placement
 function currentShutdownCoordinator() {
   return onProcessRootHost(shutdownCoordinators);
@@ -901,8 +919,8 @@ function currentShutdownCoordinator() {
 /**
  * setupGracefulShutdown：安装信号与异常处理（init 时调用）。
  */
-function setupGracefulShutdown(e) {
-  currentShutdownCoordinator().install(e);
+function setupGracefulShutdown(handles) {
+  currentShutdownCoordinator().install(handles);
 }
 //@ chunk-e6aww6q8.js:285117-285158 placement = isChromeExtensionInstalledPortable (1)
 function areShutdownHandlersInstalled() {
@@ -917,30 +935,30 @@ function markOwnsControllingTerminal() {
   currentShutdownCoordinator().markOwnsControllingTerminal();
 }
 //@ chunk-e6aww6q8.js:285268-285315 placement
-function setCloudResumeHintLead(e) {
-  currentShutdownCoordinator().setCloudResumeHintLead(e);
+function setCloudResumeHintLead(lead) {
+  currentShutdownCoordinator().setCloudResumeHintLead(lead);
 }
 //@ chunk-e6aww6q8.js:285315-285364 placement
-function markStartupActionStarted(e) {
-  currentShutdownCoordinator().markStartupActionStarted(e);
+function markStartupActionStarted(expectsUiMount) {
+  currentShutdownCoordinator().markStartupActionStarted(expectsUiMount);
 }
 //@ chunk-e6aww6q8.js:285364-285414 placement
-function exitIfStartupNeverMounted(e) {
-  currentShutdownCoordinator().exitIfStartupNeverMounted(e);
+function exitIfStartupNeverMounted(detail) {
+  currentShutdownCoordinator().exitIfStartupNeverMounted(detail);
 }
 //@ chunk-e6aww6q8.js:285414-285477 placement = shutdown1PEventLogging (0.371)
 /**
  * 退出时 flush 并关闭 1P 事件日志 provider。
  */
-async function gracefulShutdown(e = 0, n = "other", r) {
-  return currentShutdownCoordinator().shutdown(e, n, r);
+async function gracefulShutdown(exitCode = 0, reason = "other", options) {
+  return currentShutdownCoordinator().shutdown(exitCode, reason, options);
 }
 //@ chunk-e6aww6q8.js:285477-285527 placement
 /**
  * gracefulShutdownSync：同步退出路径。
  */
-function gracefulShutdownSync(e = 0, n = "other") {
-  currentShutdownCoordinator().shutdownSync(e, n);
+function gracefulShutdownSync(exitCode = 0, reason = "other") {
+  currentShutdownCoordinator().shutdownSync(exitCode, reason);
 }
 //@ chunk-e6aww6q8.js:285527-285570 placement
 function isShuttingDown() {
@@ -955,8 +973,8 @@ function releaseShutdownClaim() {
   currentShutdownCoordinator().releaseShutdownClaim();
 }
 //@ chunk-e6aww6q8.js:285649-285707 placement
-function registerBeforeInteractiveShutdown(e) {
-  currentShutdownCoordinator().registerBeforeInteractiveShutdown(e);
+function registerBeforeInteractiveShutdown(fn) {
+  currentShutdownCoordinator().registerBeforeInteractiveShutdown(fn);
 }
 //@ chunk-e6aww6q8.js:285707-285760 placement
 function clearBeforeInteractiveShutdown() {
@@ -979,7 +997,7 @@ function cleanupTerminalModes_2() {
       } catch {}
     inst?.drainStdin();
     inst?.detachForShutdown();
-    restoreTerminalModes(inst?.modes ?? new TerminalModes(), (r) => writeSync(1, r));
+    restoreTerminalModes(inst?.modes ?? new TerminalModes(), (output) => writeSync(1, output));
     if (!env.CLAUDE_CODE_DISABLE_TERMINAL_TITLE) writeSync(1, CLEAR_TERMINAL_TITLE);
   } catch {}
 }
@@ -987,19 +1005,31 @@ export {
   isShuttingDown,
   gracefulShutdownSync,
   gracefulShutdown,
-  claimShutdown,
   flushAnalyticsSinks,
-  emitExitMessage,
   areShutdownHandlersInstalled,
   markStartupActionStarted,
+  claimShutdown,
+  emitExitMessage,
   cleanupTerminalModes,
   registerBeforeInteractiveShutdown,
   markPrintModeSignalHandlersRegistered,
   shutdownCoordinators,
   setupGracefulShutdown,
-  cleanupTerminalModes_2,
   gracefulShutdown_2,
   markOwnsControllingTerminal,
   emitScrollTelemetrySummary,
   protoDataString,
+  cleanupTerminalModes_2,
+  EXIT_HANDOFF_FAILSAFE_MS,
+  HTTP2_RECOVERY_CAP,
+  HTTP2_RECOVERY_WINDOW_MS,
+  RECOVERED_DD_REPORT_CAP,
+  STARTUP_MOUNT_GRACE_MS,
+  ShutdownCoordinator,
+  clearBeforeInteractiveShutdown,
+  exitIfStartupNeverMounted,
+  isMcpConnectionClosed,
+  ownDataString,
+  releaseShutdownClaim,
+  setCloudResumeHintLead,
 };

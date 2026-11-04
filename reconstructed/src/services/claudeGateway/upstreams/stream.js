@@ -33,88 +33,91 @@ import { truncateToLength } from "../../../utils/stringUtils.js";
  * 把 SDK 流事件转为 SSE 响应流：定时发 ping 保活、改写 message_start 的模型名、上报 guardrail trace，出错时发 error 事件。
  */
 function sdkStreamToSse(
-  e,
-  { requestId: t, wireModel: n, guardrailTraceRow: o, keepaliveIntervalMs: r = SSE_PING_INTERVAL_MS } = {},
+  stream,
+  { requestId, wireModel, guardrailTraceRow, keepaliveIntervalMs = SSE_PING_INTERVAL_MS } = {},
 ) {
   let textEncoder = new TextEncoder();
-  let a = textEncoder.encode(SSE_PING_FRAME);
-  let l = e[Symbol.asyncIterator]();
+  let pingFrame = textEncoder.encode(SSE_PING_FRAME);
+  let iterator = stream[Symbol.asyncIterator]();
   let now = Date.now();
-  let u = false;
-  let f;
+  let finished = false;
+  let keepaliveTimer;
   return new ReadableStream({
-    start(h) {
-      f = setInterval(
+    start(controller) {
+      keepaliveTimer = setInterval(
         () => {
-          if (!u && Date.now() - now >= r && (h.desiredSize ?? 0) > 0) {
-            h.enqueue(a);
+          if (!finished && Date.now() - now >= keepaliveIntervalMs && (controller.desiredSize ?? 0) > 0) {
+            controller.enqueue(pingFrame);
             now = Date.now();
           }
         },
-        Math.ceil(r / 3),
+        Math.ceil(keepaliveIntervalMs / 3),
       );
-      f.unref?.();
+      keepaliveTimer.unref?.();
     },
-    async pull(h) {
+    async pull(controller) {
       try {
-        let { value: m, done: y } = await l.next();
-        if (u) return;
-        if (y) {
-          u = true;
-          clearInterval(f);
-          h.close();
+        let { value: event, done } = await iterator.next();
+        if (finished) return;
+        if (done) {
+          finished = true;
+          clearInterval(keepaliveTimer);
+          controller.close();
           return;
         }
-        if (o) reportGuardrailTrace(m, o);
-        let b = m;
-        let w =
-          n !== undefined && m.type === "message_start" && typeof b.message === "object" && b.message !== null
+        if (guardrailTraceRow) reportGuardrailTrace(event, guardrailTraceRow);
+        let rawEvent = event;
+        let outboundEvent =
+          wireModel !== undefined &&
+          event.type === "message_start" &&
+          typeof rawEvent.message === "object" &&
+          rawEvent.message !== null
             ? {
-                ...m,
+                ...event,
                 message: {
-                  ...b.message,
-                  model: n,
+                  ...rawEvent.message,
+                  model: wireModel,
                 },
               }
-            : m;
-        h.enqueue(
-          textEncoder.encode(`event: ${w.type}
-data: ${jsonStringify(w)}
+            : event;
+        controller.enqueue(
+          textEncoder.encode(`event: ${outboundEvent.type}
+data: ${jsonStringify(outboundEvent)}
 
 `),
         );
         now = Date.now();
       } catch (error) {
-        if (u) return;
+        if (finished) return;
         gatewayLog(
           "warn",
-          `upstream stream error request_id=${t ?? "-"}: ${redactAwsSessionName(errorMessage(error))}`,
+          `upstream stream error request_id=${requestId ?? "-"}: ${redactAwsSessionName(errorMessage(error))}`,
         );
-        let y = error instanceof APIError ? (error.status ?? 500) : 500;
-        h.enqueue(
+        let status = error instanceof APIError ? (error.status ?? 500) : 500;
+        controller.enqueue(
           textEncoder.encode(`event: error
 data: ${jsonStringify({
             type: "error",
-            ...(t && {
-              request_id: t,
+            ...(requestId && {
+              request_id: requestId,
             }),
             error: {
-              type: errorTypeForStatus(y),
-              message: UPSTREAM_ERROR_MESSAGES[y] ?? "upstream error",
+              type: errorTypeForStatus(status),
+              message: UPSTREAM_ERROR_MESSAGES[status] ?? "upstream error",
             },
           })}
 
 `),
         );
-        u = true;
-        clearInterval(f);
-        h.close();
+        finished = true;
+        clearInterval(keepaliveTimer);
+        controller.close();
       }
     },
     async cancel() {
-      u = true;
-      clearInterval(f);
-      await l.return?.(undefined).catch(() => {});
+      finished = true;
+      clearInterval(keepaliveTimer);
+      await iterator.return?.(undefined).catch(() => {});
     },
   });
 }
@@ -122,29 +125,29 @@ data: ${jsonStringify({
 /**
  * Bedrock 上游时把 anthropic-beta 头转成请求体 anthropic_beta 字段。
  */
-function moveBetasToBody(e, t, n) {
-  if (n !== "bedrock" || !t)
+function moveBetasToBody(body, betaHeader, provider) {
+  if (provider !== "bedrock" || !betaHeader)
     return {
-      body: e,
-      betaHeader: t || undefined,
+      body,
+      betaHeader: betaHeader || undefined,
     };
-  let o = [];
-  for (let s of t.split(",")) {
-    let trimmed = s.trim();
-    if (!trimmed) continue;
-    let betaByName = getBetaByName(trimmed);
-    o.push(betaByName ? betaByName.header : trimmed);
+  let betas = [];
+  for (let entry of betaHeader.split(",")) {
+    let name = entry.trim();
+    if (!name) continue;
+    let betaByName = getBetaByName(name);
+    betas.push(betaByName ? betaByName.header : name);
   }
-  if (o.length === 0)
+  if (betas.length === 0)
     return {
-      body: e,
+      body,
       betaHeader: undefined,
     };
-  let anthropicBeta = e.anthropic_beta;
+  let anthropicBeta = body.anthropic_beta;
   return {
     body: {
-      ...e,
-      anthropic_beta: uniq([...(Array.isArray(anthropicBeta) ? anthropicBeta : []), ...o]),
+      ...body,
+      anthropic_beta: uniq([...(Array.isArray(anthropicBeta) ? anthropicBeta : []), ...betas]),
     },
     betaHeader: undefined,
   };
@@ -158,68 +161,86 @@ var BODY_ID_KEYS = ["workspace_id"];
 /**
  * 通过 SDK 客户端转发 /v1/messages（流式或非流式）与 count_tokens（Bedrock 特殊处理），把 API 错误转为网关错误响应。
  */
-async function forwardViaSdk(e, t, provider, o, r, s, signal, l, c, u, countTokens, h) {
-  let m = moveBetasToBody(t, r, provider);
-  let body = m.body;
-  let b = {
-    ...s,
-    ...(m.betaHeader && {
-      "anthropic-beta": m.betaHeader,
+async function forwardViaSdk(
+  pathname,
+  payload,
+  provider,
+  client,
+  betaHeader,
+  baseHeaders,
+  signal,
+  ttfbMs,
+  requestId,
+  wireModel,
+  countTokens,
+  traceRow,
+) {
+  let prepared = moveBetasToBody(payload, betaHeader, provider);
+  let body = prepared.body;
+  let headers = {
+    ...baseHeaders,
+    ...(prepared.betaHeader && {
+      "anthropic-beta": prepared.betaHeader,
     }),
   };
-  let w = l !== undefined && (e !== "/v1/messages" || Boolean(body.stream));
-  let S = {
+  let streamingOrNonMessages = ttfbMs !== undefined && (pathname !== "/v1/messages" || Boolean(body.stream));
+  let requestOptions = {
     signal,
-    ...(w && {
-      timeout: Math.min(l, ERROR_RETRY_AFTER_MS),
+    ...(streamingOrNonMessages && {
+      timeout: Math.min(ttfbMs, ERROR_RETRY_AFTER_MS),
     }),
-    ...(Object.keys(b).length > 0 && {
-      headers: b,
+    ...(Object.keys(headers).length > 0 && {
+      headers,
     }),
   };
-  let found = BODY_ID_KEYS.find((M) => Object.hasOwn(body, M));
+  let found = BODY_ID_KEYS.find((bodyIdKey) => Object.hasOwn(body, bodyIdKey));
   if (found !== undefined)
-    return jsonErrorResponse(400, "invalid_request_error", `${found}: not supported through the gateway`, c);
-  if (e === "/v1/messages/count_tokens" && provider === "bedrock") {
-    let { model, ...N } = body;
+    return jsonErrorResponse(
+      400,
+      "invalid_request_error",
+      `${found}: not supported through the gateway`,
+      requestId,
+    );
+  if (pathname === "/v1/messages/count_tokens" && provider === "bedrock") {
+    let { model, ...restBody } = body;
     let budgetTokens = body.thinking?.budget_tokens;
-    let X = await countTokens?.(model, {
+    let tokenCount = await countTokens?.(model, {
       max_tokens: typeof budgetTokens === "number" ? budgetTokens + 1 : 1,
-      ...N,
+      ...restBody,
     });
-    if (typeof X === "number")
+    if (typeof tokenCount === "number")
       return Response.json({
-        input_tokens: X,
+        input_tokens: tokenCount,
       });
     return jsonErrorResponse(
       501,
       "not_supported",
       "count_tokens is not available on this Bedrock upstream",
-      c,
+      requestId,
       {
         "x-should-retry": "false",
       },
     );
   }
   try {
-    switch (e) {
+    switch (pathname) {
       case "/v1/messages": {
         if (body.stream) {
-          let { data: Z, response } = await o.messages
+          let { data: stream, response } = await client.messages
             .create(
               {
                 ...body,
                 stream: true,
               },
-              S,
+              requestOptions,
             )
             .withResponse();
           return withUpstreamRequestIds(
             new Response(
-              sdkStreamToSse(Z, {
-                requestId: c,
-                wireModel: u,
-                guardrailTraceRow: h,
+              sdkStreamToSse(stream, {
+                requestId,
+                wireModel,
+                guardrailTraceRow: traceRow,
               }),
               {
                 headers: SSE_RESPONSE_HEADERS,
@@ -228,48 +249,53 @@ async function forwardViaSdk(e, t, provider, o, r, s, signal, l, c, u, countToke
             response.headers,
           );
         }
-        let { data: M, response } = await o.messages.create(body, S).withResponse();
-        if (h) reportGuardrailTrace(M, h);
+        let { data: message, response } = await client.messages.create(body, requestOptions).withResponse();
+        if (traceRow) reportGuardrailTrace(message, traceRow);
         return withUpstreamRequestIds(
           Response.json(
-            u !== undefined
+            wireModel !== undefined
               ? {
-                  ...M,
-                  model: u,
+                  ...message,
+                  model: wireModel,
                 }
-              : M,
+              : message,
           ),
           response.headers,
         );
       }
       case "/v1/messages/count_tokens": {
-        let { data: M, response } = await o.messages.countTokens(body, S).withResponse();
-        return withUpstreamRequestIds(Response.json(M), response.headers);
+        let { data: countResult, response } = await client.messages
+          .countTokens(body, requestOptions)
+          .withResponse();
+        return withUpstreamRequestIds(Response.json(countResult), response.headers);
       }
     }
   } catch (error) {
     if (error instanceof APIError) {
       let status = error.status ?? 500;
-      let Z = w && error instanceof APIConnectionTimeoutError ? ` (timeouts.upstream_ttfb_ms: ${l})` : "";
-      let F =
+      let ttfbNote =
+        streamingOrNonMessages && error instanceof APIConnectionTimeoutError
+          ? ` (timeouts.upstream_ttfb_ms: ${ttfbMs})`
+          : "";
+      let message =
         error.cause instanceof Error
           ? `${error.message} (cause: ${error.cause.name}: ${truncateToLength(error.cause.message, 1000)})`
           : error.message;
       gatewayLog(
         "warn",
-        `${provider} upstream ${status} request_id=${c ?? "-"}: ${redactAwsSessionName(F)}${Z}`,
+        `${provider} upstream ${status} request_id=${requestId ?? "-"}: ${redactAwsSessionName(message)}${ttfbNote}`,
       );
-      let X = jsonErrorResponse(
+      let errorResponse = jsonErrorResponse(
         status,
         errorTypeForStatus(status),
-        upstreamErrorMessage(status, error, r),
-        c,
+        upstreamErrorMessage(status, error, betaHeader),
+        requestId,
       );
-      weakMap.set(X, {
+      weakMap.set(errorResponse, {
         errorType: error.headers?.get("x-amzn-errortype") ?? undefined,
         message: error.message,
       });
-      return withUpstreamRequestIds(X, error.headers);
+      return withUpstreamRequestIds(errorResponse, error.headers);
     }
     throw error;
   }

@@ -10,7 +10,7 @@
  */
 import { sep, join, basename } from "path";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, string, E } from "../../../vendor/zod/v4/classic/schemas.js";
+import { objectSchema, stringSchema, numberSchema } from "../../../vendor/zod/v4/classic/schemas.js";
 import { httpsOrigin, apiClient } from "../routines/routinesApi.js";
 import { sleep } from "../../utils/sleep.js";
 import { logForDebugging } from "../../utils/debug.js";
@@ -45,9 +45,9 @@ var MAX_TOKEN_HEADER_CHARS = 4096;
 var PUT_TIMEOUT_MS = 120000;
 var MAX_CONTENT_LENGTH = 4096;
 var putResultSchema = DoctorLazy(() =>
-  u({
-    sha256: string(),
-    size: E(),
+  objectSchema({
+    sha256: stringSchema(),
+    size: numberSchema(),
   }),
 );
 var PUT_STATUS_REASONS = {
@@ -66,60 +66,65 @@ var MAX_RETRY_DELAY_MS = 1e4;
 /**
  * 把文件以 PUT 上传到预签名地址，校验主机、响应哈希与大小。
  */
-async function putUploadFile(e, buf, l, uploadPathPrefix, n) {
-  let _ = httpsOrigin(e.url);
-  let f = _ === undefined ? undefined : new URL(e.url);
+async function putUploadFile(target, buf, sha256, uploadPathPrefix, signal) {
+  let origin = httpsOrigin(target.url);
+  let parsedUrl = origin === undefined ? undefined : new URL(target.url);
   if (
-    _ === undefined ||
-    f === undefined ||
-    f.search !== "" ||
-    f.hash !== "" ||
+    origin === undefined ||
+    parsedUrl === undefined ||
+    parsedUrl.search !== "" ||
+    parsedUrl.hash !== "" ||
     !uploadPathPrefix.endsWith("/") ||
-    !f.pathname.startsWith(uploadPathPrefix) ||
-    !/^[A-Za-z0-9_-]{1,256}$/.test(f.pathname.slice(uploadPathPrefix.length))
+    !parsedUrl.pathname.startsWith(uploadPathPrefix) ||
+    !/^[A-Za-z0-9_-]{1,256}$/.test(parsedUrl.pathname.slice(uploadPathPrefix.length))
   )
     return "put_url_refused";
-  let s = {
+  let headers = {
     "content-type": "application/octet-stream",
   };
-  for (let [key, value] of Object.entries(e.headers)) {
+  for (let [key, value] of Object.entries(target.headers)) {
     if (
       !UPLOAD_PUT_CONSTANTS.has(key.toLowerCase()) ||
       value.length > MAX_TOKEN_HEADER_CHARS ||
       /[^\x20-\x7e]/.test(value)
     )
       return "put_header_refused";
-    s[key.toLowerCase()] = value;
+    headers[key.toLowerCase()] = value;
   }
   try {
     for (let j = 0; ; j++) {
-      let r = await apiClient.put(`/${f.pathname.slice(1)}`, buf, {
+      let response = await apiClient.put(`/${parsedUrl.pathname.slice(1)}`, buf, {
         auth: "none",
-        baseUrl: _,
-        headers: s,
+        baseUrl: origin,
+        headers,
         maxRedirects: 0,
         maxBodyLength: buf.length,
         maxContentLength: MAX_CONTENT_LENGTH,
         timeout: PUT_TIMEOUT_MS,
-        signal: n,
+        signal,
         validateStatus: () => true,
       });
-      if (!r.ok) return r.reason === "essential-traffic-only" ? "essential_traffic" : "egress_blocked";
-      if (r.status === 200) {
-        let b = putResultSchema().safeParse(r.data);
-        return b.success && b.data.sha256 === l && b.data.size === buf.length ? undefined : "put_bad_answer";
+      if (!response.ok)
+        return response.reason === "essential-traffic-only" ? "essential_traffic" : "egress_blocked";
+      if (response.status === 200) {
+        let parsed = putResultSchema().safeParse(response.data);
+        return parsed.success && parsed.data.sha256 === sha256 && parsed.data.size === buf.length
+          ? undefined
+          : "put_bad_answer";
       }
-      let m = PUT_STATUS_REASONS[r.status] ?? "put_failed";
-      if (m !== "put_busy" || j === MAX_BUSY_RETRIES) return m;
-      let R = Number(r.response.headers["retry-after"]);
+      let reason = PUT_STATUS_REASONS[response.status] ?? "put_failed";
+      if (reason !== "put_busy" || j === MAX_BUSY_RETRIES) return reason;
+      let retryAfter = Number(response.response.headers["retry-after"]);
       await sleep(
-        Number.isFinite(R) && R >= 0 ? Math.min(R * 1000, MAX_RETRY_DELAY_MS) : DEFAULT_RETRY_DELAY_MS,
-        n,
+        Number.isFinite(retryAfter) && retryAfter >= 0
+          ? Math.min(retryAfter * 1000, MAX_RETRY_DELAY_MS)
+          : DEFAULT_RETRY_DELAY_MS,
+        signal,
       );
-      if (n.aborted) return "canceled";
+      if (signal.aborted) return "canceled";
     }
   } catch (error) {
-    if (n.aborted) return "canceled";
+    if (signal.aborted) return "canceled";
     logForDebugging(`[file inputs] upload threw: ${errorMessage(error)}`, {
       level: "error",
     });
@@ -135,124 +140,124 @@ function createUploadScreen({
   namesResolvedPaths = false,
 }) {
   return {
-    async hash(_, f) {
-      let s = [];
-      let c = 0;
-      for (let r of _) {
-        if (f.aborted)
+    async hash(paths, signal) {
+      let results = [];
+      let totalBytes = 0;
+      for (let path of paths) {
+        if (signal.aborted)
           return [
-            ...s,
-            {
-              path: r,
-              code: "canceled",
-            },
-          ];
-        let m = await statUploadCandidate(r, screen, maxFileBytes);
-        if ("code" in m)
-          return [
-            ...s,
-            namesResolvedPaths
-              ? m
-              : {
-                  path: r,
-                  code: m.code,
-                },
-          ];
-        c += m.buf.length;
-        if (c > maxTotalBytes)
-          return [
-            ...s,
-            {
-              path: r,
-              code: "too_large_total",
-            },
-          ];
-        s.push({
-          path: r,
-          name: m.name,
-          size: m.buf.length,
-          sha256: m.sha256,
-        });
-      }
-      return s;
-    },
-    async put(_, f) {
-      let s = [];
-      let c = 0;
-      for (let { path, sha256, url, headers } of _) {
-        if (f.aborted)
-          return [
-            ...s,
+            ...results,
             {
               path,
               code: "canceled",
             },
           ];
-        let g = await statUploadCandidate(path, screen, maxFileBytes);
-        if ("code" in g)
+        let candidate = await statUploadCandidate(path, screen, maxFileBytes);
+        if ("code" in candidate)
           return [
-            ...s,
-            g.code === "resolves_elsewhere"
+            ...results,
+            namesResolvedPaths
+              ? candidate
+              : {
+                  path,
+                  code: candidate.code,
+                },
+          ];
+        totalBytes += candidate.buf.length;
+        if (totalBytes > maxTotalBytes)
+          return [
+            ...results,
+            {
+              path,
+              code: "too_large_total",
+            },
+          ];
+        results.push({
+          path,
+          name: candidate.name,
+          size: candidate.buf.length,
+          sha256: candidate.sha256,
+        });
+      }
+      return results;
+    },
+    async put(items, signal) {
+      let results = [];
+      let totalBytes = 0;
+      for (let { path, sha256, url, headers } of items) {
+        if (signal.aborted)
+          return [
+            ...results,
+            {
+              path,
+              code: "canceled",
+            },
+          ];
+        let candidate = await statUploadCandidate(path, screen, maxFileBytes);
+        if ("code" in candidate)
+          return [
+            ...results,
+            candidate.code === "resolves_elsewhere"
               ? {
                   path,
                   code: "changed",
                 }
-              : g,
+              : candidate,
           ];
-        c += g.buf.length;
-        if (c > maxTotalBytes)
+        totalBytes += candidate.buf.length;
+        if (totalBytes > maxTotalBytes)
           return [
-            ...s,
+            ...results,
             {
               path,
               code: "too_large_total",
             },
           ];
-        if (g.sha256 !== sha256)
+        if (candidate.sha256 !== sha256)
           return [
-            ...s,
+            ...results,
             {
               path,
               code: "changed",
             },
           ];
-        let S = await putUploadFile(
+        let failureCode = await putUploadFile(
           {
             url,
             headers,
           },
-          g.buf,
+          candidate.buf,
           sha256,
           uploadPathPrefix,
-          f,
+          signal,
         );
-        if (S !== undefined)
+        if (failureCode !== undefined)
           return [
-            ...s,
+            ...results,
             {
               path,
-              code: S,
+              code: failureCode,
             },
           ];
-        s.push({
+        results.push({
           path,
           ok: true,
         });
       }
-      return s;
+      return results;
     },
   };
 }
 //@ chunk-0c614h9c.js:3294-3512 placement
-function isOutsideUploadRoot(e, realPath) {
-  let l = expandPathOrNull(e);
-  if (l === null) return true;
+function isOutsideUploadRoot(path, path_2) {
+  let expanded = expandPathOrNull(path);
+  if (expanded === null) return true;
   return (
-    e !== realPath &&
-    normalizeUploadPath(l) !== normalizeUploadPath(realPath) &&
+    path !== path_2 &&
+    normalizeUploadPath(expanded) !== normalizeUploadPath(path_2) &&
     !(
       env.CLAUDE_CODE_REMOTE === true &&
-      isSyncedAttachPath(l, realPath, {
+      isSyncedAttachPath(expanded, path_2, {
         product: DEFAULT_OUTPUTS_ROOT,
         attach: DEFAULT_ATTACH_OUTPUTS_ROOT,
       })
@@ -260,33 +265,39 @@ function isOutsideUploadRoot(e, realPath) {
     !(
       isRemoteManagedEnvironment() &&
       env.CLAUDE_CODE_REMOTE_ENVIRONMENT_TYPE !== "self_hosted" &&
-      isSyncedAttachPath(l, realPath, PROJECT_FILES_LINK)
+      isSyncedAttachPath(expanded, path_2, PROJECT_FILES_LINK)
     )
   );
 }
 //@ chunk-0c614h9c.js:3512-3624 placement
-function normalizeUploadPath(e) {
-  return normalizeTrustedSymlink(identity(e.length > 1 && e.endsWith(sep) ? e.slice(0, -1) : e)).replace(
-    /^[a-z]:/,
-    (a) => a.toUpperCase(),
-  );
+function normalizeUploadPath(path) {
+  return normalizeTrustedSymlink(
+    identity(path.length > 1 && path.endsWith(sep) ? path.slice(0, -1) : path),
+  ).replace(/^[a-z]:/, (driveLetter) => driveLetter.toUpperCase());
 }
 //@ chunk-0c614h9c.js:3624-3726 placement
-async function isUploadAllowedPath(e, a, { fromChat: l = false } = {}) {
+async function isUploadAllowedPath(path, realPath, { fromChat = false } = {}) {
   return (
-    (await isCredentialPath(e, a)) ||
-    (!l && [e, a].some((h) => isSensitiveBasenameWithVariants(h) || isCredentialConfigPath_2(h)))
+    (await isCredentialPath(path, realPath)) ||
+    (!fromChat &&
+      [path, realPath].some(
+        (candidatePath) =>
+          isSensitiveBasenameWithVariants(candidatePath) || isCredentialConfigPath_2(candidatePath),
+      ))
   );
 }
 //@ chunk-0c614h9c.js:3726-4443 placement
-async function statUploadCandidate(path, screen, maxFileBytes, { followsLinks: h = false } = {}) {
-  let n = await screen(path);
-  if (n === undefined)
+async function statUploadCandidate(path, screen, maxFileBytes, { followsLinks = false } = {}) {
+  let screened = await screen(path);
+  if (screened === undefined)
     return {
       path,
       code: "path_rejected",
     };
-  if (n.requiredDigest === undefined && (await isUploadAllowedPath(path, n.realPath, n))) {
+  if (
+    screened.requiredDigest === undefined &&
+    (await isUploadAllowedPath(path, screened.realPath, screened))
+  ) {
     logForDebugging("[file inputs] a path was rejected: a credential, or Claude's own");
     return {
       path,
@@ -294,32 +305,32 @@ async function statUploadCandidate(path, screen, maxFileBytes, { followsLinks: h
     };
   }
   if (
-    !h &&
-    isOutsideUploadRoot(path, n.realPath) &&
+    !followsLinks &&
+    isOutsideUploadRoot(path, screened.realPath) &&
     !(
-      n.requiredDigest !== undefined &&
-      expandPathOrNull(path) === join(sessionUploadsDir(), basename(n.realPath))
+      screened.requiredDigest !== undefined &&
+      expandPathOrNull(path) === join(sessionUploadsDir(), basename(screened.realPath))
     )
   )
     return {
       path,
       code: "resolves_elsewhere",
-      resolved: n.realPath,
+      resolved: screened.realPath,
     };
-  let _ = await uploadDisplayName(n.realPath);
+  let _ = await uploadDisplayName(screened.realPath);
   if (BIDI_CONTROL_PATTERN.test(_))
     return {
       path,
       code: "name_direction",
     };
-  let validatedFileWithin = await readValidatedFileWithin(n.realPath, maxFileBytes);
+  let validatedFileWithin = await readValidatedFileWithin(screened.realPath, maxFileBytes);
   if (!("buf" in validatedFileWithin))
     return {
       path,
       code: validatedFileWithin.refusal,
     };
   let contentHash = computeContentHash(validatedFileWithin.buf);
-  if (n.requiredDigest !== undefined && contentHash !== n.requiredDigest)
+  if (screened.requiredDigest !== undefined && contentHash !== screened.requiredDigest)
     return {
       path,
       code: "path_rejected",

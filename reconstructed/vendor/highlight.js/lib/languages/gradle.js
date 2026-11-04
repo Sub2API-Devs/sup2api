@@ -5,10 +5,10 @@
  * pieces: chunk-egr0twnb.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:178386-180238 cjs-fingerprint
-var require_gradle = x(function (cjsExports, cjsModule) {
+var require_gradle = __commonJS(function (cjsExports, cjsModule) {
   function gradle(hljs) {
     return {
       name: "Gradle",

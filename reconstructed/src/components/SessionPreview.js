@@ -8,8 +8,8 @@
  * pieces: chunk-b79vwm1h.js (3)
  * attribution: placement 2, fingerprint 1
  */
-import { init_react_production, y, P } from "../../vendor/react/cjs/react.production.js";
-import { w } from "../../vendor/react/compiler-runtime.js";
+import { init_react_production, useState, useEffect } from "../../vendor/react/cjs/react.production.js";
+import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import { useTheme_2 } from "./design-system/ThemeProvider.js";
 import { isLiteLog, loadFullLog, getSessionIdFromLog } from "../utils/sessionStorage.js";
 import {
@@ -32,21 +32,28 @@ import { LogoHeader } from "./Messages.js";
 import { ExportTranscriptView } from "../utils/exportRenderer.js";
 import { formatRelativeTimeAgo } from "../utils/format.js";
 import { KeyboardShortcutHint } from "./design-system/KeyboardShortcutHint.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-b79vwm1h.js:1859-1863 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-b79vwm1h.js:1859", () => {
+  init_react_production();
+});
 //@ chunk-b79vwm1h.js:1863-1867 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-b79vwm1h.js:1863", () => {
+  init_react_production();
+});
 //@ chunk-b79vwm1h.js:1867-4216 fingerprint = SessionPreview (0.704)
 function SessionPreview(props) {
-  let $ = w(36);
+  let $ = useMemoCache(36);
   let { log, onExit, onSelect } = props;
-  let [fullLog, setFullLog] = y(null);
+  let [fullLog, setFullLog] = useState(null);
   let { storageV5 } = useTheme_2();
-  let _;
+  let loadLog;
   let t2;
   if ($[0] !== log || $[1] !== storageV5) {
-    _ = () => {
+    loadLog = () => {
       setFullLog(null);
       if (isLiteLog(log))
         loadFullLog(log, {
@@ -56,31 +63,34 @@ function SessionPreview(props) {
     t2 = [log, storageV5];
     $[0] = log;
     $[1] = storageV5;
-    $[2] = _;
+    $[2] = loadLog;
     $[3] = t2;
   } else {
-    _ = $[2];
+    loadLog = $[2];
     t2 = $[3];
   }
-  P(_, t2);
+  useEffect(loadLog, t2);
   let isLoading = isLiteLog(log) && fullLog === null;
   let displayLog = fullLog ?? log;
-  let X;
+  let displayMessages;
   if ($[4] !== displayLog.messages) {
-    X = dropApiInvalidAssistantBlocks(dropMalformedAttachments(dropRetractedMessages(displayLog.messages)), {
-      site: "preview",
-    });
+    displayMessages = dropApiInvalidAssistantBlocks(
+      dropMalformedAttachments(dropRetractedMessages(displayLog.messages)),
+      {
+        site: "preview",
+      },
+    );
     $[4] = displayLog.messages;
-    $[5] = X;
-  } else X = $[5];
-  let messages = X;
-  let Ve;
+    $[5] = displayMessages;
+  } else displayMessages = $[5];
+  let messages = displayMessages;
+  let sessionId;
   if ($[6] !== displayLog) {
-    Ve = getSessionIdFromLog(displayLog) || "";
+    sessionId = getSessionIdFromLog(displayLog) || "";
     $[6] = displayLog;
-    $[7] = Ve;
-  } else Ve = $[7];
-  let conversationId = Ve;
+    $[7] = sessionId;
+  } else sessionId = $[7];
+  let conversationId = sessionId;
   let t4;
   if ($[8] === MEMO_CACHE_SENTINEL) {
     t4 = getAllBaseTools();
@@ -146,13 +156,13 @@ function SessionPreview(props) {
     } else t9 = $[16];
     return t9;
   }
-  let te;
+  let logoHeaderElement;
   if ($[17] === MEMO_CACHE_SENTINEL) {
-    te = jsxProd_default(LogoHeader, {
+    logoHeaderElement = jsxProd_default(LogoHeader, {
       latchAnnouncementSlot: false,
     });
-    $[17] = te;
-  } else te = $[17];
+    $[17] = logoHeaderElement;
+  } else logoHeaderElement = $[17];
   let source;
   if ($[18] !== conversationId || $[19] !== messages) {
     source = {
@@ -239,7 +249,7 @@ function SessionPreview(props) {
   if ($[33] !== t12 || $[34] !== t17) {
     t18 = jsxProd_default_2(Box, {
       flexDirection: "column",
-      children: [te, t12, t17],
+      children: [logoHeaderElement, t12, t17],
     });
     $[33] = t12;
     $[34] = t17;

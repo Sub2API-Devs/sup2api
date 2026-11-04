@@ -65,18 +65,24 @@ import { scheduleThreadScan } from "./comments/threadScanner.js";
 import { claudeAiEnvironment } from "../../constants/claudeAiOrigin.js";
 import { artifactViewerUrlFor } from "../../tools/ArtifactTool/artifactUrls.js";
 import { createSystemMessage } from "../../utils/messages.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-grx66nns.js:1086-1151 placement
-var SEND_RETRY_MS = 1000;
-var SEND_STEP_MS = 200;
-var EMPTY_ARMABLE_STATE = {
-  armable: new Set(),
-  yielded: new Set(),
-  undo: () => {},
-};
+var SEND_RETRY_MS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var SEND_STEP_MS;
+var EMPTY_ARMABLE_STATE;
+deferInit("chunk-grx66nns.js:1086", () => {
+  SEND_RETRY_MS = 1000;
+  SEND_STEP_MS = 200;
+  EMPTY_ARMABLE_STATE = {
+    armable: new Set(),
+    yielded: new Set(),
+    undo: () => {},
+  };
+});
 //@ chunk-grx66nns.js:1151-1282 placement
 async function findOwnSessionRecord() {
-  let found = (await listRegisteredSessionRecords()).find((r) => r.pid === process.pid);
+  let found = (await listRegisteredSessionRecords()).find((record) => record.pid === process.pid);
   return found === undefined
     ? undefined
     : {
@@ -85,208 +91,213 @@ async function findOwnSessionRecord() {
       };
 }
 //@ chunk-grx66nns.js:1282-1592 placement
-async function requestReplyTakeover(e) {
-  let n = await requestReplyTakeoverUnchecked(e).finally(() => e.claim?.end());
-  if (n.kind === "took_over")
+async function requestReplyTakeover(options) {
+  let result = await requestReplyTakeoverUnchecked(options).finally(() => options.claim?.end());
+  if (result.kind === "took_over")
     logFeatureOk("artifact_live_subscribe", {
       took_over: true,
-      holders: e.holders.length,
-      armable_count: n.armable.size,
-      yielded_count: n.yielded.size,
+      holders: options.holders.length,
+      armable_count: result.armable.size,
+      yielded_count: result.yielded.size,
     });
   else
-    logFeatureSad("artifact_live_subscribe", `takeover_${n.kind}`, {
-      holders: e.holders.length,
+    logFeatureSad("artifact_live_subscribe", `takeover_${result.kind}`, {
+      holders: options.holders.length,
     });
-  return n;
+  return result;
 }
 //@ chunk-grx66nns.js:1592-5932 placement
 /**
  * 向持有者请求接管自动回复
  */
-async function requestReplyTakeoverUnchecked(e) {
+async function requestReplyTakeoverUnchecked(options) {
   if (!isCrossSessionMessagingEnabled())
     return {
       ...EMPTY_ARMABLE_STATE,
       kind: "messaging_off",
     };
-  let n = ownMessagingSocket();
-  if (n === undefined || e.holders.length === 0)
+  let sock = ownMessagingSocket();
+  if (sock === undefined || options.holders.length === 0)
     return {
       ...EMPTY_ARMABLE_STATE,
       kind: "no_inbox",
     };
-  let r = canonicalSocketPath(n);
-  let ownRecord = e.transport?.ownRecord ?? findOwnSessionRecord;
-  let s = await ownRecord().catch(() => {
+  let ownPath = canonicalSocketPath(sock);
+  let ownRecord = options.transport?.ownRecord ?? findOwnSessionRecord;
+  let record = await ownRecord().catch(() => {
     return;
   });
-  if (s?.sessionId !== e.conversationId) {
-    let timers = e.transport?.timers ?? unrefTimers;
+  if (record?.sessionId !== options.conversationId) {
+    let timers = options.transport?.timers ?? unrefTimers;
     await new Promise((resolve) => void timers.setTimeout(resolve, SEND_STEP_MS));
-    s = await ownRecord().catch(() => {
+    record = await ownRecord().catch(() => {
       return;
     });
   }
-  if (s?.sessionId !== e.conversationId)
+  if (record?.sessionId !== options.conversationId)
     return {
       ...EMPTY_ARMABLE_STATE,
       kind: "registry_stale",
     };
-  let tmux = s.tmux;
-  if (e.holdersIncomplete === true && !e.alreadyReplying)
+  let tmux = record.tmux;
+  if (options.holdersIncomplete === true && !options.alreadyReplying)
     return {
       ...EMPTY_ARMABLE_STATE,
       kind: "holder_unreachable",
     };
-  let sliced = e.slugs.filter((slug) => !(e.claim?.lost.has(slug) ?? false)).slice(0, MAX_YIELD_SLUGS);
-  if (sliced.length === 0)
+  let msg = options.slugs
+    .filter((slug) => !(options.claim?.lost.has(slug) ?? false))
+    .slice(0, MAX_YIELD_SLUGS);
+  if (msg.length === 0)
     return {
       ...EMPTY_ARMABLE_STATE,
       kind: "nothing_freed",
     };
-  let h = [];
-  for (let holder of e.holders) {
+  let holders = [];
+  for (let holder of options.holders) {
     if (
       holder.sock === undefined ||
       holder.sock === "" ||
       !(holder.peerFeatures?.includes(ARTIFACT_YIELD_PEER_FEATURE) ?? false) ||
-      canonicalSocketPath(holder.sock) === r ||
+      canonicalSocketPath(holder.sock) === ownPath ||
       isBackgroundSurface(holder.kind)
     ) {
-      if (e.alreadyReplying) continue;
+      if (options.alreadyReplying) continue;
       return {
         ...EMPTY_ARMABLE_STATE,
         kind: "holder_unreachable",
       };
     }
-    h.push({
+    holders.push({
       sock: holder.sock,
       pid: holder.pid,
     });
   }
-  if (h.length === 0)
+  if (holders.length === 0)
     return {
       ...EMPTY_ARMABLE_STATE,
       kind: "holder_unreachable",
     };
-  let send = e.transport?.send ?? sendStampedControlToUdsSocket;
-  let sendControl = e.transport?.sendControl ?? sendControlToUdsSocket;
-  let timers = e.transport?.timers ?? unrefTimers;
-  let now = e.transport?.now ?? Date.now;
-  let from = udsAddressFromPath(n);
-  let P = (expectPeerPid) =>
+  let send = options.transport?.send ?? sendStampedControlToUdsSocket;
+  let sendControl = options.transport?.sendControl ?? sendControlToUdsSocket;
+  let timers = options.transport?.timers ?? unrefTimers;
+  let now = options.transport?.now ?? Date.now;
+  let from = udsAddressFromPath(sock);
+  let sendOpts = (expectPeerPid) =>
     getPlatform() !== "windows"
       ? {
           expectPeerPid,
         }
       : {};
-  let v = [];
-  let D = new Set();
+  let attempts = [];
+  let takenSlugs = new Set();
   let { wakes, autoReact, durable } = getLiveState();
-  let W = (o) => {
-    for (let d of o.yielded) {
-      let i = wakes.takenFrom.get(d) ?? [];
-      if (!i.some((y) => y.msgId === o.msgId))
-        wakes.takenFrom.set(d, [
-          ...i,
+  let recordYield = (entry) => {
+    for (let slug of entry.yielded) {
+      let takeovers = wakes.takenFrom.get(slug) ?? [];
+      if (!takeovers.some((takeover) => takeover.msgId === entry.msgId))
+        wakes.takenFrom.set(slug, [
+          ...takeovers,
           {
-            sock: o.sock,
-            pid: o.pid,
-            msgId: o.msgId,
+            sock: entry.sock,
+            pid: entry.pid,
+            msgId: entry.msgId,
           },
         ]);
       if (
-        e.alreadyReplying &&
-        (autoReact.userDisarmed || durable.stopLatches.isStopped(d) || (isSlugStopped(d) && !isSlugSwept(d)))
+        options.alreadyReplying &&
+        (autoReact.userDisarmed ||
+          durable.stopLatches.isStopped(slug) ||
+          (isSlugStopped(slug) && !isSlugSwept(slug)))
       )
-        notifyTakenOverSlugStopped(d, sendControl);
+        notifyTakenOverSlugStopped(slug, sendControl);
     }
   };
-  let U = e.claim?.sentAt ?? now();
-  let A = (o, d, i) => {
-    let y =
-      i?.precautionary !== undefined
-        ? [...i.precautionary]
-        : [...o.yielded].filter((m) => d === undefined || d.has(m));
-    if (y.length === 0) return;
-    for (let m of y) o.yielded.delete(m);
+  let claimedAt = options.claim?.sentAt ?? now();
+  let unyield = (attempt, only, opts) => {
+    let slugs =
+      opts?.precautionary !== undefined
+        ? [...opts.precautionary]
+        : [...attempt.yielded].filter((slug) => only === undefined || only.has(slug));
+    if (slugs.length === 0) return;
+    for (let slug of slugs) attempt.yielded.delete(slug);
     logFeatureOk("artifact_live_subscribe", {
-      [i?.precautionary !== undefined ? "takeover_unyield_precautionary" : "takeover_handed_back"]: y.length,
+      [opts?.precautionary !== undefined ? "takeover_unyield_precautionary" : "takeover_handed_back"]:
+        slugs.length,
     });
-    let _ = {
+    let envelope = {
       action: "unyield_artifact_replies",
-      orig_msg_id: o.msgId,
-      slugs: y,
-      ...(i?.stopped === true && {
+      orig_msg_id: attempt.msgId,
+      slugs,
+      ...(opts?.stopped === true && {
         stopped: true,
       }),
     };
-    sendControl(o.sock, _, P(o.pid)).catch((error) => {
+    sendControl(attempt.sock, envelope, sendOpts(attempt.pid)).catch((error) => {
       logForDebugging(
-        `[reply-yield] unyield to ${fragmentForLog(o.sock)} failed: ${redactFragmentForLog(String(error))}`,
+        `[reply-yield] unyield to ${fragmentForLog(attempt.sock)} failed: ${redactFragmentForLog(String(error))}`,
       );
-      if (isExpectedSendError(error) && !isProcessRunning(o.pid)) {
+      if (isExpectedSendError(error) && !isProcessRunning(attempt.pid)) {
         logFeatureSad("artifact_live_subscribe", "unyield_holder_gone");
         return;
       }
-      let k = () =>
-        void sendControl(o.sock, _, P(o.pid)).catch(() => {
+      let retrySend = () =>
+        void sendControl(attempt.sock, envelope, sendOpts(attempt.pid)).catch(() => {
           logFeatureSad("artifact_live_subscribe", "unyield_send_failed");
         });
-      if (isExpectedSendError(error)) timers.setTimeout(k, SEND_RETRY_MS);
-      else k();
+      if (isExpectedSendError(error)) timers.setTimeout(retrySend, SEND_RETRY_MS);
+      else retrySend();
     });
   };
-  let N = [];
-  for (let o of h) {
+  let pending = [];
+  for (let holder of holders) {
     let messageEnvelope = createMessageEnvelope();
-    let i = {
-      sock: o.sock,
-      pid: o.pid,
+    let attempt = {
+      sock: holder.sock,
+      pid: holder.pid,
       msgId: messageEnvelope.msg_id,
       yielded: new Set(),
     };
-    v.push(i);
-    let y = waitForYieldAnswer(messageEnvelope.msg_id, sliced, {
-      sentAt: U,
-      expectPid: o.pid,
-      ...(e.transport?.timeoutMs !== undefined && {
-        timeoutMs: e.transport.timeoutMs,
+    attempts.push(attempt);
+    let answer = waitForYieldAnswer(messageEnvelope.msg_id, msg, {
+      sentAt: claimedAt,
+      expectPid: holder.pid,
+      ...(options.transport?.timeoutMs !== undefined && {
+        timeoutMs: options.transport.timeoutMs,
       }),
-      ...(e.transport?.timers !== undefined && {
-        timers: e.transport.timers,
+      ...(options.transport?.timers !== undefined && {
+        timers: options.transport.timers,
       }),
-      onLate: (_) => {
-        if (_.kind !== "yielded") return;
-        for (let k of _.yielded) i.yielded.add(k);
-        let m = new Map([...(e.claim?.lost ?? []), ..._.lostTo]);
-        A(
-          i,
+      onLate: (late) => {
+        if (late.kind !== "yielded") return;
+        for (let slug of late.yielded) attempt.yielded.add(slug);
+        let lostTo = new Map([...(options.claim?.lost ?? []), ...late.lostTo]);
+        unyield(
+          attempt,
           new Set(
-            [...i.yielded].filter((k) =>
-              m.has(k)
-                ? isReplyHolderCandidate(k, i, m, e.alreadyReplying === true)
-                : !e.alreadyReplying && !D.has(k),
+            [...attempt.yielded].filter((slug) =>
+              lostTo.has(slug)
+                ? isReplyHolderCandidate(slug, attempt, lostTo, options.alreadyReplying === true)
+                : !options.alreadyReplying && !takenSlugs.has(slug),
             ),
           ),
         );
-        W(i);
+        recordYield(attempt);
       },
     });
-    N.push(
+    pending.push(
       (async () => {
         try {
           await send(
-            o.sock,
+            holder.sock,
             {
               action: "yield_artifact_replies",
               from,
-              session_id: e.conversationId,
-              slugs: sliced,
-              reason: e.reason,
+              session_id: options.conversationId,
+              slugs: msg,
+              reason: options.reason,
               sent_at: now(),
-              claimed_at: U,
+              claimed_at: claimedAt,
               requester: {
                 cwd: getOriginalCwd(),
                 ...(tmux !== undefined && {
@@ -295,194 +306,198 @@ async function requestReplyTakeoverUnchecked(e) {
               },
             },
             messageEnvelope,
-            P(o.pid),
+            sendOpts(holder.pid),
           );
         } catch (error) {
           if (isExpectedSendError(error)) {
-            let m = takeOutstandingLost(messageEnvelope.msg_id);
-            let lost = m.map(([J]) => J);
-            return isProcessRunning(o.pid)
+            let lost = takeOutstandingLost(messageEnvelope.msg_id);
+            let lost_2 = lost.map(([slug]) => slug);
+            return isProcessRunning(holder.pid)
               ? {
                   kind: "unreachable",
-                  lost,
-                  lostTo: m,
+                  lost: lost_2,
+                  lostTo: lost,
                 }
               : {
                   kind: "gone",
-                  lost,
-                  lostTo: m,
+                  lost: lost_2,
+                  lostTo: lost,
                 };
           }
         }
-        return y;
+        return answer;
       })(),
     );
   }
-  let results = await Promise.all(N);
-  let x = new Map();
-  let L = new Map();
-  let C = new Map();
-  let S = new Map(e.claim?.lost ?? []);
-  let O = true;
-  let K = false;
-  let F = 0;
-  results.forEach((o, d) => {
-    for (let [i, y] of o.lostTo) S.set(i, y);
-    if (o.kind === "gone") return;
-    F++;
-    if (o.kind === "unreachable") {
-      O = false;
+  let results = await Promise.all(pending);
+  let yieldCount = new Map();
+  let notHeldCount = new Map();
+  let answeredCount = new Map();
+  let lostToMap = new Map(options.claim?.lost ?? []);
+  let allYielded = true;
+  let refused = false;
+  let answeredTotal = 0;
+  results.forEach((result, index) => {
+    for (let [slug, holder] of result.lostTo) lostToMap.set(slug, holder);
+    if (result.kind === "gone") return;
+    answeredTotal++;
+    if (result.kind === "unreachable") {
+      allYielded = false;
       return;
     }
-    if (o.kind === "yielded") {
-      for (let i of o.yielded) {
-        v[d].yielded.add(i);
-        x.set(i, (x.get(i) ?? 0) + 1);
+    if (result.kind === "yielded") {
+      for (let slug of result.yielded) {
+        attempts[index].yielded.add(slug);
+        yieldCount.set(slug, (yieldCount.get(slug) ?? 0) + 1);
       }
-      for (let i of o.notHeld) L.set(i, (L.get(i) ?? 0) + 1);
-      for (let i of new Set([...o.yielded, ...o.notHeld])) C.set(i, (C.get(i) ?? 0) + 1);
+      for (let slug of result.notHeld) notHeldCount.set(slug, (notHeldCount.get(slug) ?? 0) + 1);
+      for (let slug of new Set([...result.yielded, ...result.notHeld]))
+        answeredCount.set(slug, (answeredCount.get(slug) ?? 0) + 1);
     } else {
-      O = false;
-      if (o.kind === "refused") K = true;
+      allYielded = false;
+      if (result.kind === "refused") refused = true;
     }
   });
-  let R = new Set();
-  let M = new Set();
-  if (O && !K)
-    for (let o of sliced) {
-      if (S.has(o) || (C.get(o) ?? 0) !== F) continue;
-      if ((x.get(o) ?? 0) > 0) {
-        R.add(o);
-        M.add(o);
-      } else if ((L.get(o) ?? 0) === F) R.add(o);
+  let armable = new Set();
+  let yielded = new Set();
+  if (allYielded && !refused)
+    for (let slug of msg) {
+      if (lostToMap.has(slug) || (answeredCount.get(slug) ?? 0) !== answeredTotal) continue;
+      if ((yieldCount.get(slug) ?? 0) > 0) {
+        armable.add(slug);
+        yielded.add(slug);
+      } else if ((notHeldCount.get(slug) ?? 0) === answeredTotal) armable.add(slug);
     }
-  for (let o of R) D.add(o);
-  if (e.alreadyReplying) {
-    for (let o of v) for (let d of o.yielded) if (!S.has(d)) M.add(d);
+  for (let slug of armable) takenSlugs.add(slug);
+  if (options.alreadyReplying) {
+    for (let attempt of attempts)
+      for (let slug of attempt.yielded) if (!lostToMap.has(slug)) yielded.add(slug);
   }
-  for (let o of v) {
-    let d = new Set(
-      [...o.yielded].filter((i) =>
-        S.has(i)
-          ? isReplyHolderCandidate(i, o, S, e.alreadyReplying === true)
-          : !e.alreadyReplying && !R.has(i),
+  for (let attempt of attempts) {
+    let toTake = new Set(
+      [...attempt.yielded].filter((slug) =>
+        lostToMap.has(slug)
+          ? isReplyHolderCandidate(slug, attempt, lostToMap, options.alreadyReplying === true)
+          : !options.alreadyReplying && !armable.has(slug),
       ),
     );
-    if (d.size > 0) A(o, d);
+    if (toTake.size > 0) unyield(attempt, toTake);
   }
-  if (!e.alreadyReplying)
-    results.forEach((o, d) => {
-      if (o.kind === "timeout")
-        A(v[d], undefined, {
-          precautionary: sliced,
+  if (!options.alreadyReplying)
+    results.forEach((result, index) => {
+      if (result.kind === "timeout")
+        unyield(attempts[index], undefined, {
+          precautionary: msg,
         });
     });
-  for (let o of v) W(o);
+  for (let attempt of attempts) recordYield(attempt);
   return {
-    armable: R,
-    yielded: M,
-    kind: R.size > 0 ? "took_over" : "nothing_freed",
-    undo: (o) => {
-      for (let i of v) A(i, o);
-      let d = new Set(v.map((i) => i.msgId));
-      for (let i of o ?? sliced) {
-        let filtered = (wakes.takenFrom.get(i) ?? []).filter((_) => !d.has(_.msgId));
-        if (filtered.length > 0) wakes.takenFrom.set(i, filtered);
-        else wakes.takenFrom.delete(i);
+    armable,
+    yielded,
+    kind: armable.size > 0 ? "took_over" : "nothing_freed",
+    undo: (slugs) => {
+      for (let attempt of attempts) unyield(attempt, slugs);
+      let msgIds = new Set(attempts.map((attempt) => attempt.msgId));
+      for (let slug of slugs ?? msg) {
+        let filtered = (wakes.takenFrom.get(slug) ?? []).filter((takeover) => !msgIds.has(takeover.msgId));
+        if (filtered.length > 0) wakes.takenFrom.set(slug, filtered);
+        else wakes.takenFrom.delete(slug);
       }
     },
   };
 }
 //@ chunk-grx66nns.js:5932-6013 placement
-function isReplyHolderCandidate(e, n, r, a) {
-  let s = r.get(e);
-  return (s !== undefined && s === udsAddressFromPath(n.sock)) || (!a && !isSlugYielded(e));
+function isReplyHolderCandidate(context, record, slugs, opts) {
+  let entry = slugs.get(context);
+  return (
+    (entry !== undefined && entry === udsAddressFromPath(record.sock)) || (!opts && !isSlugYielded(context))
+  );
 }
 //@ chunk-grx66nns.js:6013-6045 placement
-function notifyTakenOverSlugStopped(e, sendControl = sendControlToUdsSocket) {
-  handBackTakenSlugs(e, true, sendControl);
+function notifyTakenOverSlugStopped(slug, postWake = sendControlToUdsSocket) {
+  handBackTakenSlugs(slug, true, postWake);
 }
 //@ chunk-grx66nns.js:6045-6077 placement
-function handBackTakenOverSlug(e, n = sendControlToUdsSocket) {
-  handBackTakenSlugs(e, false, n);
+function handBackTakenOverSlug(slug, sendControl = sendControlToUdsSocket) {
+  handBackTakenSlugs(slug, false, sendControl);
 }
 //@ chunk-grx66nns.js:6077-6683 placement
 /**
  * 把接管的 slug 交还原持有者
  */
-function handBackTakenSlugs(e, n, r) {
+function handBackTakenSlugs(slug, stopped, postWake) {
   let { wakes } = getLiveState();
-  let s = wakes.takenFrom.get(e);
-  if (s === undefined || isSlugYielded(e)) return;
-  wakes.takenFrom.delete(e);
-  for (let l of s) {
-    let p = {
+  let taken = wakes.takenFrom.get(slug);
+  if (taken === undefined || isSlugYielded(slug)) return;
+  wakes.takenFrom.delete(slug);
+  for (let entry of taken) {
+    let body = {
       action: "unyield_artifact_replies",
-      orig_msg_id: l.msgId,
-      slugs: [e],
-      ...(n && {
+      orig_msg_id: entry.msgId,
+      slugs: [slug],
+      ...(stopped && {
         stopped: true,
       }),
     };
-    let h =
+    let wakeOptions =
       getPlatform() !== "windows"
         ? {
-            expectPeerPid: l.pid,
+            expectPeerPid: entry.pid,
           }
         : {};
-    r(l.sock, p, h).catch((error) => {
+    postWake(entry.sock, body, wakeOptions).catch((error) => {
       logForDebugging(
-        `[reply-yield] release to ${fragmentForLog(l.sock)} failed: ${redactFragmentForLog(String(error))}`,
+        `[reply-yield] release to ${fragmentForLog(entry.sock)} failed: ${redactFragmentForLog(String(error))}`,
       );
-      if (isExpectedSendError(error) && !isProcessRunning(l.pid)) return;
-      let u = () =>
-        void r(l.sock, p, h).catch(() => {
+      if (isExpectedSendError(error) && !isProcessRunning(entry.pid)) return;
+      let finish = () =>
+        void postWake(entry.sock, body, wakeOptions).catch(() => {
           logFeatureSad("artifact_live_subscribe", "takeover_release_failed");
         });
-      if (isExpectedSendError(error)) unrefTimers.setTimeout(u, SEND_RETRY_MS);
-      else u();
+      if (isExpectedSendError(error)) unrefTimers.setTimeout(finish, SEND_RETRY_MS);
+      else finish();
     });
   }
   logFeatureOk("artifact_live_subscribe", {
-    [n ? "takeover_stop_notified" : "takeover_released"]: s.length,
+    [stopped ? "takeover_stop_notified" : "takeover_released"]: taken.length,
   });
 }
 //@ chunk-grx66nns.js:6683-6786 placement = formatFailureDetails (0.777)
-function formatFailureDetails(e) {
-  let sliced = e.slice(0, 2);
-  let remaining = e.length - sliced.length;
+function formatFailureDetails(failures) {
+  let sliced = failures.slice(0, 2);
+  let remaining = failures.length - sliced.length;
   return `${sliced.join(", ")}${remaining > 0 ? ` and ${remaining} more` : ""}`;
 }
 //@ chunk-grx66nns.js:6786-7291 placement
 /**
  * 交互会话的通知/恢复处理（与插件无关，见 lead 建议）。
  */
-function repliesYieldedLine(e, n, r, now) {
-  let s = describeReplyHolder(
+function repliesYieldedLine(slugs, holder, count, now) {
+  let line = describeReplyHolder(
     {
       kind: "interactive",
-      ...(typeof r.cwd === "string" && {
-        cwd: r.cwd,
+      ...(typeof count.cwd === "string" && {
+        cwd: count.cwd,
       }),
-      ...(typeof r.tmux === "string" && {
-        tmux: r.tmux,
+      ...(typeof count.tmux === "string" && {
+        tmux: count.tmux,
       }),
     },
     now,
   );
-  let l =
-    n === "resume"
-      ? `the session that just resumed this conversation in ${s}`
-      : `another session of this conversation (${s}), which just published or resumed them there`;
-  return `Automatic replies to comments on ${formatFailureDetails(e)} moved to ${l}; this session keeps watching for new versions only. To take them back here, publish the Artifact again or ask Claude to resume its replies.`;
+  let out =
+    holder === "resume"
+      ? `the session that just resumed this conversation in ${line}`
+      : `another session of this conversation (${line}), which just published or resumed them there`;
+  return `Automatic replies to comments on ${formatFailureDetails(slugs)} moved to ${out}; this session keeps watching for new versions only. To take them back here, publish the Artifact again or ask Claude to resume its replies.`;
 }
 //@ chunk-grx66nns.js:7291-7494 placement
-function repliesYieldRevertedLine(e) {
-  return `Automatic replies to comments on ${formatFailureDetails(e)} are back in this session: the other session of this conversation did not keep them (it could not take them over, or it has since exited).`;
+function repliesYieldRevertedLine(options) {
+  return `Automatic replies to comments on ${formatFailureDetails(options)} are back in this session: the other session of this conversation did not keep them (it could not take them over, or it has since exited).`;
 }
 //@ chunk-grx66nns.js:7494-7728 placement
-function repliesStoppedElsewhereLine(e) {
-  return `Automatic replies to comments on ${formatFailureDetails(e)} were stopped in the other session of this conversation, so they stay off here too. To turn them back on, publish the Artifact again or ask Claude to resume its replies.`;
+function repliesStoppedElsewhereLine(options) {
+  return `Automatic replies to comments on ${formatFailureDetails(options)} were stopped in the other session of this conversation, so they stay off here too. To turn them back on, publish the Artifact again or ask Claude to resume its replies.`;
 }
 //@ chunk-grx66nns.js:7728-8459 placement
 /**
@@ -495,25 +510,25 @@ var REPLIES_STOPPED_NOTICE =
 var REPLIES_RETURNED_NOTICE =
   "The automatic comment replies are back with this session: the other session of this conversation did not keep them (it could not take them over, or it has since exited).";
 //@ chunk-grx66nns.js:8459-8958 placement
-function notifyModelOfReplyYield(e, n) {
-  let r =
-    e === "yielded"
-      ? `Comment replies on ${n} Artifact(s) moved to another session of this conversation`
-      : e === "reverted"
-        ? `Comment replies on ${n} Artifact(s) are back with this session`
-        : `Comment replies on ${n} Artifact(s) were stopped in the other session`;
-  let a =
-    e === "yielded"
+function notifyModelOfReplyYield(slugs, options) {
+  let text =
+    slugs === "yielded"
+      ? `Comment replies on ${options} Artifact(s) moved to another session of this conversation`
+      : slugs === "reverted"
+        ? `Comment replies on ${options} Artifact(s) are back with this session`
+        : `Comment replies on ${options} Artifact(s) were stopped in the other session`;
+  let out =
+    slugs === "yielded"
       ? REPLIES_MOVED_NOTICE
-      : e === "reverted"
+      : slugs === "reverted"
         ? REPLIES_RETURNED_NOTICE
         : REPLIES_STOPPED_NOTICE;
   enqueuePendingNotification({
     value: formatTaskNotification({
       taskType: ARTIFACT_WATCH_LIFECYCLE,
-      summary: escapeXml(r),
+      summary: escapeXml(text),
       body: `
-<event>${escapeXml(a)}</event>`,
+<event>${escapeXml(out)}</event>`,
     }),
     mode: "task-notification",
     passive: true,
@@ -529,39 +544,43 @@ function notifyModelOfReplyYield(e, n) {
 /**
  * 注册 artifact 评论自动回复的让出/接管持有者。
  */
-function registerReplyYieldHolder(e) {
+function registerReplyYieldHolder(table) {
   setYieldHolder(
-    (n) => {
-      let r = partitionSlugsForYield(n.slugs, n.msgId);
-      let newlyYielded = r.newlyYielded;
+    (request) => {
+      let partition = partitionSlugsForYield(request.slugs, request.msgId);
+      let newlyYielded = partition.newlyYielded;
       if (newlyYielded.length > 0)
         logFeatureOk("artifact_comments_autoreact", {
           yielded_to_other_session: newlyYielded.length,
         });
       return {
-        yielded: r.yielded,
-        notHeld: r.notHeld,
+        yielded: partition.yielded,
+        notHeld: partition.notHeld,
         ...(newlyYielded.length > 0 && {
           onDelivered: () => {
-            let filtered = newlyYielded.filter((l) => isSlugYielded(l));
-            for (let l of filtered) markYieldAnnounced(l);
-            if (filtered.length > 0) e.yielded(filtered, n.reason, n.requester);
+            let filtered = newlyYielded.filter((slug) => isSlugYielded(slug));
+            for (let slug of filtered) markYieldAnnounced(slug);
+            if (filtered.length > 0) table.yielded(filtered, request.reason, request.requester);
           },
         }),
       };
     },
-    (n, r, a) => {
-      for (let u of r) if (a?.stopped?.has(u) ?? false) isYieldedMessage(u, n);
-      let s = new Set(r.filter((u) => isStoppedElsewhere(u)));
-      let l = new Set(r.filter((u) => isYieldAnnounced(u)));
-      let p = releaseYieldedSlugs(n, r);
-      let filtered = p.filter(
-        (u) => l.has(u) && !isSlugStopped(u) && isReplyWired(u) && !(a?.transferring?.has(u) ?? false),
+    (msgId, reason, requester) => {
+      for (let slug of reason) if (requester?.stopped?.has(slug) ?? false) isYieldedMessage(slug, msgId);
+      let stoppedElsewhere = new Set(reason.filter((slug) => isStoppedElsewhere(slug)));
+      let announced = new Set(reason.filter((slug) => isYieldAnnounced(slug)));
+      let released = releaseYieldedSlugs(msgId, reason);
+      let filtered = released.filter(
+        (slug) =>
+          announced.has(slug) &&
+          !isSlugStopped(slug) &&
+          isReplyWired(slug) &&
+          !(requester?.transferring?.has(slug) ?? false),
       );
-      if (filtered.length > 0) e.reverted(filtered);
-      let filtered_2 = p.filter((u) => l.has(u) && s.has(u));
-      if (filtered_2.length > 0) e.stoppedElsewhere(filtered_2);
-      return p;
+      if (filtered.length > 0) table.reverted(filtered);
+      let filtered_2 = released.filter((slug) => announced.has(slug) && stoppedElsewhere.has(slug));
+      if (filtered_2.length > 0) table.stoppedElsewhere(filtered_2);
+      return released;
     },
   );
   return () => setYieldHolder(null);
@@ -572,75 +591,75 @@ function registerReplyYieldHolder(e) {
  */
 function partitionSlugsForYield(slugs, msgId) {
   let { live, autoReact, durable } = getLiveState();
-  let l = [];
-  let p = [];
-  let h = [];
-  for (let c of slugs) {
-    if (isSlugYielded(c)) {
-      recordYieldedMessage(c, msgId);
-      l.push(c);
+  let yielded = [];
+  let notHeld = [];
+  let lost = [];
+  for (let slug of slugs) {
+    if (isSlugYielded(slug)) {
+      recordYieldedMessage(slug, msgId);
+      yielded.push(slug);
       continue;
     }
-    let u = isReplyWired(c);
-    let Y = isSlugSwept(c) && !isSlugOrphaned(c);
-    let T =
+    let wired = isReplyWired(slug);
+    let swept = isSlugSwept(slug) && !isSlugOrphaned(slug);
+    let notStopped =
       autoReact.wakeEnabledMemo !== false &&
       !autoReact.userDisarmed &&
-      !durable.stopLatches.isStopped(c) &&
-      (!isSlugStopped(c) || Y);
-    if (!u || !T) {
-      p.push(c);
+      !durable.stopLatches.isStopped(slug) &&
+      (!isSlugStopped(slug) || swept);
+    if (!wired || !notStopped) {
+      notHeld.push(slug);
       continue;
     }
-    recordYieldedMessage(c, msgId);
-    clearSummonWakeTimers(c);
-    bumpSlugEpoch(c);
-    emitSummonArm(live, c);
-    l.push(c);
-    h.push(c);
+    recordYieldedMessage(slug, msgId);
+    clearSummonWakeTimers(slug);
+    bumpSlugEpoch(slug);
+    emitSummonArm(live, slug);
+    yielded.push(slug);
+    lost.push(slug);
   }
   return {
-    yielded: l,
-    notHeld: p,
-    newlyYielded: h,
+    yielded,
+    notHeld,
+    newlyYielded: lost,
   };
 }
 //@ chunk-grx66nns.js:9996-10152 placement
 /**
  * 该 slug 的自动回复是否已接线
  */
-function isReplyWired(e) {
+function isReplyWired(slug) {
   let { live } = getLiveState();
-  let r = live.supervisors.get(e);
+  let supervisor = live.supervisors.get(slug);
   return (
-    (r !== undefined && !r.stopped && r.autoReactWiring !== undefined) ||
-    live.inFlightWiredIntent.has(e) ||
-    getBootingAutoReactSlugs().has(e)
+    (supervisor !== undefined && !supervisor.stopped && supervisor.autoReactWiring !== undefined) ||
+    live.inFlightWiredIntent.has(slug) ||
+    getBootingAutoReactSlugs().has(slug)
   );
 }
 //@ chunk-grx66nns.js:10152-10631 placement
 /**
  * 释放已让出的 slug
  */
-function releaseYieldedSlugs(e, n) {
+function releaseYieldedSlugs(entry, slugs) {
   let { live } = getLiveState();
-  let a = [];
-  for (let s of n) {
-    if (!settleYieldedMessage(s, e)) continue;
-    emitSummonArm(live, s);
-    if (isSlugStopped(s) && !isSlugSwept(s)) {
-      stopCommentMonitorIntent(s);
-      notifyTakenOverSlugStopped(s);
+  let released = [];
+  for (let slug of slugs) {
+    if (!settleYieldedMessage(slug, entry)) continue;
+    emitSummonArm(live, slug);
+    if (isSlugStopped(slug) && !isSlugSwept(slug)) {
+      stopCommentMonitorIntent(slug);
+      notifyTakenOverSlugStopped(slug);
     }
-    a.push(s);
-    let l = live.supervisors.get(s);
-    if (!isSlugStopped(s) && !isReplyWired(s)) handBackTakenOverSlug(s);
-    let lastWakeArgs = getSummonWakeState(s).lastWakeArgs;
+    released.push(slug);
+    let supervisor = live.supervisors.get(slug);
+    if (!isSlugStopped(slug) && !isReplyWired(slug)) handBackTakenOverSlug(slug);
+    let lastWakeArgs = getSummonWakeState(slug).lastWakeArgs;
     if (
-      !isSlugStopped(s) &&
-      isReplyWired(s) &&
-      l?.taskId !== undefined &&
-      isMonitorSocketOpenNow(l.taskId) &&
+      !isSlugStopped(slug) &&
+      isReplyWired(slug) &&
+      supervisor?.taskId !== undefined &&
+      isMonitorSocketOpenNow(supervisor.taskId) &&
       lastWakeArgs !== null
     )
       scheduleThreadScan({
@@ -654,11 +673,11 @@ function releaseYieldedSlugs(e, n) {
         suppressSummonStatus: undefined,
       });
   }
-  if (a.length > 0)
+  if (released.length > 0)
     logFeatureOk("artifact_comments_autoreact", {
-      yield_reverted: a.length,
+      yield_reverted: released.length,
     });
-  return a;
+  return released;
 }
 //@ chunk-18hwfzwa.js:348523-348815 placement
 /**
@@ -666,26 +685,37 @@ function releaseYieldedSlugs(e, n) {
  */
 function registerReplyYieldNotices({ transcript }) {
   {
-    let x = (L) => {
+    let toViewerUrls = (slugs) => {
       let env = claudeAiEnvironment();
-      return L.map((slug) =>
+      return slugs.map((slug) =>
         artifactViewerUrlFor({
           slug,
           env,
         }),
       );
     };
-    let D = (L) =>
+    let appendNotice = (text) =>
       transcript.apply({
         type: "append",
-        messages: [createSystemMessage(L, "notice")],
+        messages: [createSystemMessage(text, "notice")],
       });
     return registerReplyYieldHolder({
-      yielded: (L, ee, ke) => D(repliesYieldedLine(x(L), ee, ke, Date.now())),
-      reverted: (L) => D(repliesYieldRevertedLine(x(L))),
-      stoppedElsewhere: (L) => D(repliesStoppedElsewhereLine(x(L))),
+      yielded: (slugs, reason, requester) =>
+        appendNotice(repliesYieldedLine(toViewerUrls(slugs), reason, requester, Date.now())),
+      reverted: (slugs) => appendNotice(repliesYieldRevertedLine(toViewerUrls(slugs))),
+      stoppedElsewhere: (slugs) => appendNotice(repliesStoppedElsewhereLine(toViewerUrls(slugs))),
     });
   }
   return () => {};
 }
-export { registerReplyYieldNotices };
+export {
+  registerReplyYieldNotices,
+  handBackTakenOverSlug,
+  notifyModelOfReplyYield,
+  notifyTakenOverSlugStopped,
+  registerReplyYieldHolder,
+  repliesStoppedElsewhereLine,
+  repliesYieldRevertedLine,
+  repliesYieldedLine,
+  requestReplyTakeover,
+};

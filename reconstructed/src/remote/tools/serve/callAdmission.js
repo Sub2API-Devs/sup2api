@@ -53,18 +53,20 @@ import { logForDebugging } from "../../../utils/debug.js";
 import { errorMessage } from "../../../utils/errors.js";
 
 //@ chunk-ad2e1aj6.js:71537-71828 placement
-async function admitServedCall(name, n, s, h, r, i) {
-  let { request, toolInput } = createExplanationPromise(isPlainObject(n) ? n : {});
-  let R = r === "bridge" ? unknownAttestationResult() : undefined;
-  return serveRemoteToolCall(name, toolInput, request, s, h, r, {
-    requestBytes: () => byteLengthOf(n ?? {}),
-    ...(i !== undefined && {
-      trust: i,
+async function admitServedCall(toolName, toolInput, ctx, deps, arrivedOver, options) {
+  let { request, toolInput: toolInput_2 } = createExplanationPromise(
+    isPlainObject(toolInput) ? toolInput : {},
+  );
+  let attestation = arrivedOver === "bridge" ? unknownAttestationResult() : undefined;
+  return serveRemoteToolCall(toolName, toolInput_2, request, ctx, deps, arrivedOver, {
+    requestBytes: () => byteLengthOf(toolInput ?? {}),
+    ...(options !== undefined && {
+      trust: options,
     }),
-    ...(R?.attestation !== undefined && {
-      attestation: R.attestation,
-      unattested: R.heldBack,
-      onHeldBack: () => noticeUnattestedServedCalls(h.onNotice),
+    ...(attestation?.attestation !== undefined && {
+      attestation: attestation.attestation,
+      unattested: attestation.heldBack,
+      onHeldBack: () => noticeUnattestedServedCalls(deps.onNotice),
     }),
   });
 }
@@ -72,33 +74,33 @@ async function admitServedCall(name, n, s, h, r, i) {
 /**
  * 远程工具服务端处理一次调用：协议解析、准入、重试合并、权限判定、执行与结果整形。
  */
-async function serveRemoteToolCall(e, n, request, h, r, i, y = {}) {
-  let O =
-    y.requestBytes ??
+async function serveRemoteToolCall(toolName, toolInput, request, ctx, deps, arrivedOver, options = {}) {
+  let requestBytes =
+    options.requestBytes ??
     (() =>
       byteLengthOf({
-        toolInput: n,
+        toolInput,
         envelope: request.ok ? request.value : null,
       }));
-  let R = {
-    name: r.targetName,
-    working_dir: r.announcedDir ?? r.launchDir,
+  let target = {
+    name: deps.targetName,
+    working_dir: deps.announcedDir ?? deps.launchDir,
   };
-  let w = request.ok && request.kind === "call" ? request.value : undefined;
-  let servedTool = findServedTool(r, e);
-  let P = servedMcpWireArgs(r, e);
-  let x = renameInputFields(n, P);
-  let Y = truncateToLength(stripControlChars(e), MAX_TELEMETRY_STRING);
-  let F = {
-    arrivedOver: i,
-    workerEpoch: h.workerEpoch,
-    toolNameForAnalytics: servedTool
-      ? sanitizeToolNameForAnalytics(servedTool.name)
-      : getUnknownToolAnalyticsName(e),
-    isMcp: servedTool?.isMcp ?? false,
-    toolName: servedTool?.name ?? e,
-    resolvedToolName: servedTool?.name,
-    envelope: w,
+  let callEnvelope = request.ok && request.kind === "call" ? request.value : undefined;
+  let tool = findServedTool(deps, toolName);
+  let wireArguments = servedMcpWireArgs(deps, toolName);
+  let normalizedInput = renameInputFields(toolInput, wireArguments);
+  let toolNameForText = truncateToLength(stripControlChars(toolName), MAX_TELEMETRY_STRING);
+  let facts = {
+    arrivedOver,
+    workerEpoch: ctx.workerEpoch,
+    toolNameForAnalytics: tool
+      ? sanitizeToolNameForAnalytics(tool.name)
+      : getUnknownToolAnalyticsName(toolName),
+    isMcp: tool?.isMcp ?? false,
+    toolName: tool?.name ?? toolName,
+    resolvedToolName: tool?.name,
+    envelope: callEnvelope,
     callId: request.ok ? request.value.call_id : undefined,
     envelopeStatus: request.ok ? "present" : request.why,
     query: request.ok && request.kind === "outcome_query",
@@ -108,10 +110,10 @@ async function serveRemoteToolCall(e, n, request, h, r, i, y = {}) {
     fromPriorEpoch: false,
     inputFingerprint: undefined,
     redeemsAskId: undefined,
-    sessionMode: w?.caller.permission_mode,
+    sessionMode: callEnvelope?.caller.permission_mode,
     startedAt: Date.now(),
     forceAsk: false,
-    secondLeg: w?.approval !== undefined,
+    secondLeg: callEnvelope?.approval !== undefined,
     approvalAttested: false,
     approvalBasis: undefined,
     deniedBySession: false,
@@ -121,274 +123,286 @@ async function serveRemoteToolCall(e, n, request, h, r, i, y = {}) {
     truncated: false,
     staleLeg: undefined,
     trust:
-      i === "relay"
+      arrivedOver === "relay"
         ? {
-            approvalAttested: y.trust?.approvalAttested === true,
-            modeDecidedByHost: y.trust?.modeDecidedByHost === true,
+            approvalAttested: options.trust?.approvalAttested === true,
+            modeDecidedByHost: options.trust?.modeDecidedByHost === true,
           }
         : DEFAULT_SERVING_POLICY,
-    ...(y.attestation !== undefined && {
-      attestation: y.attestation,
+    ...(options.attestation !== undefined && {
+      attestation: options.attestation,
     }),
-    ...(y.untrustedRepositories !== undefined && {
-      untrustedRepositories: y.untrustedRepositories,
+    ...(options.untrustedRepositories !== undefined && {
+      untrustedRepositories: options.untrustedRepositories,
     }),
-    ...(y.modeStamp !== undefined && {
-      modeStamp: y.modeStamp,
+    ...(options.modeStamp !== undefined && {
+      modeStamp: options.modeStamp,
     }),
     serverVerdict:
-      i !== "session" || !request.ok || request.kind !== "call" || request.serverVerdict === undefined
+      arrivedOver !== "session" ||
+      !request.ok ||
+      request.kind !== "call" ||
+      request.serverVerdict === undefined
         ? {
             kind: "absent",
           }
-        : y.modeStamp === "present"
+        : options.modeStamp === "present"
           ? request.serverVerdict
           : {
               kind: "unmarked",
             },
   };
-  let D = (V, K, Se = {}) => {
-    if (F.secondLeg) F.askStillPending = true;
-    return refusedEnvelope(R, F, V, K, Se);
+  let refuse = (code, message, extra = {}) => {
+    if (facts.secondLeg) facts.askStillPending = true;
+    return refusedEnvelope(target, facts, code, message, extra);
   };
-  let L = h.sessionId !== undefined || r.policy.admission === "none" ? callerKey(h) : undefined;
-  let j = () => (L === undefined ? undefined : r.sessions.peek(L));
-  let callId = w !== undefined && w.approval === undefined ? w.call_id : undefined;
-  let Q = () => {
-    let approval = w?.approval;
-    let K = approval === undefined ? undefined : j()?.pendingAsks.peek(approval.ask_id);
-    return K?.callId === w?.call_id ? K : undefined;
+  let servedCallerKey =
+    ctx.sessionId !== undefined || deps.policy.admission === "none" ? callerKey(ctx) : undefined;
+  let currentSession = () =>
+    servedCallerKey === undefined ? undefined : deps.sessions.peek(servedCallerKey);
+  let callId =
+    callEnvelope !== undefined && callEnvelope.approval === undefined ? callEnvelope.call_id : undefined;
+  let pendingAsk = () => {
+    let approval = callEnvelope?.approval;
+    let ask = approval === undefined ? undefined : currentSession()?.pendingAsks.peek(approval.ask_id);
+    return ask?.callId === callEnvelope?.call_id ? ask : undefined;
   };
-  let ee = (stale) => {
-    let approval = w?.approval;
-    let Se = j();
-    let ue = approval !== undefined && Se !== undefined && Q() !== undefined;
-    if (ue)
-      withdrawAskedCall(Se, approval.ask_id, {
+  let refuseStale = (stale) => {
+    let approval = callEnvelope?.approval;
+    let session = currentSession();
+    let endedAsk = approval !== undefined && session !== undefined && pendingAsk() !== undefined;
+    if (endedAsk)
+      withdrawAskedCall(session, approval.ask_id, {
         reason: "stale_answer",
         message: withdrawnRequestMessage({
-          targetName: r.targetName,
+          targetName: deps.targetName,
           reason: "stale_answer",
         }),
       });
-    F.staleLeg = stale;
-    logRemoteTools(w?.call_id, "stale leg refused", {
+    facts.staleLeg = stale;
+    logRemoteTools(callEnvelope?.call_id, "stale leg refused", {
       leg: approval === undefined ? "call" : "answer",
       age_ms: stale.ageMs,
       window_ms: stale.windowMs,
-      ended_ask: ue,
+      ended_ask: endedAsk,
     });
     return refusedEnvelope(
-      R,
-      F,
+      target,
+      facts,
       "stale",
       lateCallMessage({
-        targetName: r.targetName,
+        targetName: deps.targetName,
         leg: approval === undefined ? "call" : "answer",
-        endedAsk: ue,
+        endedAsk,
         ageMs: stale.ageMs,
       }),
-      ue
+      endedAsk
         ? {
             reason: "stale_answer",
           }
         : {},
     );
   };
-  let q = await (async () => {
-    if (r.callLog !== undefined && !r.callLog.priorLoaded) await r.callLog.loadPrior();
-    if (O() > r.policy.limits.max_request_bytes)
-      return D(
+  let envelope = await (async () => {
+    if (deps.callLog !== undefined && !deps.callLog.priorLoaded) await deps.callLog.loadPrior();
+    if (requestBytes() > deps.policy.limits.max_request_bytes)
+      return refuse(
         "invalid_request",
-        `The call is larger than ${r.targetName} accepts (${r.policy.limits.max_request_bytes} bytes) \u2014 it was not run.`,
+        `The call is larger than ${deps.targetName} accepts (${deps.policy.limits.max_request_bytes} bytes) \u2014 it was not run.`,
       );
     if (!request.ok && request.why === "unsupported_protocol")
-      return D(
+      return refuse(
         "unsupported_protocol",
         protocolMismatchMessage({
-          toolName: Y,
-          targetName: r.targetName,
+          toolName: toolNameForText,
+          targetName: deps.targetName,
         }),
       );
     if (!request.ok && request.why === "malformed") {
       if (request.unlistedOp !== undefined)
-        r.callLog?.note({
+        deps.callLog?.note({
           t: "refused_request",
-          caller: callerKey(h),
+          caller: callerKey(ctx),
           what: "op",
           length: request.unlistedOp.length,
           name_hash: request.unlistedOp.hash,
           variant_of_listed: request.unlistedOp.variantOfListed,
         });
-      return D(
+      return refuse(
         "invalid_request",
-        `The remote tool call envelope sent to ${r.targetName} was present but did not match protocol v${REMOTE_TOOL_PROTOCOL_VERSION} (for example a call id or expiry out of range) \u2014 the call was not run.`,
+        `The remote tool call envelope sent to ${deps.targetName} was present but did not match protocol v${REMOTE_TOOL_PROTOCOL_VERSION} (for example a call id or expiry out of range) \u2014 the call was not run.`,
       );
     }
-    let V = (answer) =>
+    let throughGate = (answer) =>
       gateServedCall({
-        toolName: servedTool?.name ?? Y,
-        ctx: h,
-        deps: r,
-        target: R,
-        facts: F,
-        refuse: D,
+        toolName: tool?.name ?? toolNameForText,
+        ctx,
+        deps,
+        target,
+        facts,
+        refuse,
         answer,
       });
-    if (y.unattested === true)
-      return V(() => {
-        y.onHeldBack?.();
-        return D(
+    if (options.unattested === true)
+      return throughGate(() => {
+        options.onHeldBack?.();
+        return refuse(
           "unattested_request",
-          y.untrustedRepositories !== undefined
+          options.untrustedRepositories !== undefined
             ? untrustedRepositoriesMessage({
-                targetName: r.targetName,
-                state: y.untrustedRepositories,
+                targetName: deps.targetName,
+                state: options.untrustedRepositories,
               })
             : unattestedSenderMessage({
-                targetName: r.targetName,
-                status: y.attestation?.status ?? "UNSPECIFIED",
+                targetName: deps.targetName,
+                status: options.attestation?.status ?? "UNSPECIFIED",
                 subtype: "remote_tool_call",
               }),
         );
       });
-    if (y.stale !== undefined) {
-      let stale = y.stale;
-      return V(() => {
-        if (callId !== undefined && L !== undefined) {
-          let X = r.sessions.forCaller(L);
-          let ce = X?.calls.lookup(callId);
-          if (X !== undefined && ce !== undefined)
+    if (options.stale !== undefined) {
+      let stale = options.stale;
+      return throughGate(() => {
+        if (callId !== undefined && servedCallerKey !== undefined) {
+          let session = deps.sessions.forCaller(servedCallerKey);
+          let known = session?.calls.lookup(callId);
+          if (session !== undefined && known !== undefined)
             return joinKnownCall({
-              known: ce,
-              session: X,
-              hostEpoch: r.sessions.epoch,
+              known,
+              session,
+              hostEpoch: deps.sessions.epoch,
               callId,
-              target: R,
-              facts: F,
+              target,
+              facts,
             });
-          if (X !== undefined) {
-            F.enteredRecord = X.calls.receive(
+          if (session !== undefined) {
+            facts.enteredRecord = session.calls.receive(
               callId,
-              servedTool === undefined
+              tool === undefined
                 ? undefined
                 : {
-                    retryKey: decidingInput(servedTool, x, X.cwd ?? r.launchDir),
-                    workerEpoch: h.workerEpoch,
+                    retryKey: decidingInput(tool, normalizedInput, session.cwd ?? deps.launchDir),
+                    workerEpoch: ctx.workerEpoch,
                     late: true,
                   },
             );
-            let ge = servedTool === undefined ? undefined : X.calls.retryOf(callId);
+            let retry = tool === undefined ? undefined : session.calls.retryOf(callId);
             if (
-              servedTool !== undefined &&
-              ge !== undefined &&
-              ge.call.summary.state !== "asked" &&
-              ge.call.summary.state !== "received" &&
-              (ge.call.summary.state !== "running" || ge.call.summary.started === true) &&
-              !isServedReadOnly(servedTool, x, r)
+              tool !== undefined &&
+              retry !== undefined &&
+              retry.call.summary.state !== "asked" &&
+              retry.call.summary.state !== "received" &&
+              (retry.call.summary.state !== "running" || retry.call.summary.started === true) &&
+              !isServedReadOnly(tool, normalizedInput, deps)
             ) {
-              F.staleLeg = stale;
+              facts.staleLeg = stale;
               return joinRetry({
-                session: X,
+                session,
                 joined: {
-                  callId: ge.callId,
-                  call: X.calls.lookup(ge.callId) ?? ge.call,
+                  callId: retry.callId,
+                  call: session.calls.lookup(retry.callId) ?? retry.call,
                 },
-                hostEpoch: r.sessions.epoch,
+                hostEpoch: deps.sessions.epoch,
                 callId,
-                target: R,
-                facts: F,
-                workerEpoch: h.workerEpoch,
+                target,
+                facts,
+                workerEpoch: ctx.workerEpoch,
               });
             }
           }
         }
-        return ee(stale);
+        return refuseStale(stale);
       });
     }
     if (request.ok && request.kind === "outcome_query") {
       let callId = request.value.call_id;
-      let X = await V(() =>
-        L === undefined
-          ? D("no_session", `${Y} refused: no server-asserted session.`)
+      let answer = await throughGate(() =>
+        servedCallerKey === undefined
+          ? refuse("no_session", `${toolNameForText} refused: no server-asserted session.`)
           : lookupCallerCall({
-              sessions: r.sessions,
-              callLog: r.callLog,
-              callerKey: L,
+              sessions: deps.sessions,
+              callLog: deps.callLog,
+              callerKey: servedCallerKey,
               callId,
-              target: R,
-              facts: F,
+              target,
+              facts,
             }),
       );
-      let ce =
-        X.envelope.outcome === "completed" && r.policy.backgroundShells?.enabled() === true
-          ? await j()?.backgroundShells.statusOf(F.joinedCallId ?? callId)
+      let backgroundStatus =
+        answer.envelope.outcome === "completed" && deps.policy.backgroundShells?.enabled() === true
+          ? await currentSession()?.backgroundShells.statusOf(facts.joinedCallId ?? callId)
           : undefined;
-      return ce === undefined ? X : backgroundCommandStatusText(R, callId, ce);
+      return backgroundStatus === undefined
+        ? answer
+        : backgroundCommandStatusText(target, callId, backgroundStatus);
     }
-    if (!servedTool) {
-      let Z = () =>
-        D(
+    if (!tool) {
+      let refuseNotServed = () =>
+        refuse(
           "not_served",
           toolNotServedMessage({
-            toolName: Y,
-            targetName: r.targetName,
+            toolName: toolNameForText,
+            targetName: deps.targetName,
           }),
         );
-      let X = j();
-      let callId = w?.call_id;
-      let ge = X !== undefined && callId !== undefined ? X.calls.lookup(callId) : undefined;
-      if (X === undefined || callId === undefined || ge === undefined) return Z();
+      let session = currentSession();
+      let callId = callEnvelope?.call_id;
+      let knownCall =
+        session !== undefined && callId !== undefined ? session.calls.lookup(callId) : undefined;
+      if (session === undefined || callId === undefined || knownCall === undefined) return refuseNotServed();
       let answer = () =>
         joinKnownCall({
-          known: X.calls.lookup(callId) ?? ge,
-          session: X,
-          hostEpoch: r.sessions.epoch,
+          known: session.calls.lookup(callId) ?? knownCall,
+          session,
+          hostEpoch: deps.sessions.epoch,
           callId,
-          target: R,
-          facts: F,
+          target,
+          facts,
         });
-      if (w?.approval === undefined || ge.summary.state !== "asked") return V(answer);
-      let we = ge.summary.askId !== undefined ? X.pendingAsks.peek(ge.summary.askId) : undefined;
-      if (we === undefined || we.callId !== callId || we.toolStillServed()) return Z();
-      return V(() => {
-        let te = Z();
-        withdrawAskedCall(X, we.askId, {
+      if (callEnvelope?.approval === undefined || knownCall.summary.state !== "asked")
+        return throughGate(answer);
+      let pendingAsk =
+        knownCall.summary.askId !== undefined ? session.pendingAsks.peek(knownCall.summary.askId) : undefined;
+      if (pendingAsk === undefined || pendingAsk.callId !== callId || pendingAsk.toolStillServed())
+        return refuseNotServed();
+      return throughGate(() => {
+        let refusal = refuseNotServed();
+        withdrawAskedCall(session, pendingAsk.askId, {
           reason: "tool_withdrawn",
           message: withdrawnRequestMessage({
-            targetName: r.targetName,
+            targetName: deps.targetName,
             reason: "tool_withdrawn",
           }),
-          retain: te,
+          retain: refusal,
         });
-        F.askStillPending = false;
-        return te;
+        facts.askStillPending = false;
+        return refusal;
       });
     }
-    if (!request.ok && r.policy.requireEnvelope)
-      return D(
+    if (!request.ok && deps.policy.requireEnvelope)
+      return refuse(
         "invalid_request",
         mustUseForwarderMessage({
-          toolName: Y,
-          targetName: r.targetName,
+          toolName: toolNameForText,
+          targetName: deps.targetName,
         }),
       );
-    if (r.readiness !== undefined && !r.readiness.ready) {
+    if (deps.readiness !== undefined && !deps.readiness.ready) {
       await withDeadline(
-        r.readiness.whenReady(),
-        clampToMaxPageSize(callDeadlineMs(r.policy.limits, w) - (Date.now() - F.startedAt)),
+        deps.readiness.whenReady(),
+        clampToMaxPageSize(callDeadlineMs(deps.policy.limits, callEnvelope) - (Date.now() - facts.startedAt)),
       );
-      if (!r.readiness.ready) {
+      if (!deps.readiness.ready) {
         logForDebugging(
-          `[remote-tools] ${Y} refused: this machine was still loading its hooks and settings when the call's deadline ran out`,
+          `[remote-tools] ${toolNameForText} refused: this machine was still loading its hooks and settings when the call's deadline ran out`,
           {
             level: "warn",
           },
         );
-        return D(
+        return refuse(
           "queue_full",
           notStartedUpMessage({
-            targetName: r.targetName,
+            targetName: deps.targetName,
           }),
           {
             limit: "queue",
@@ -396,114 +410,126 @@ async function serveRemoteToolCall(e, n, request, h, r, i, y = {}) {
         );
       }
     }
-    let K = j();
-    if (callId !== undefined && K !== undefined) {
-      let Z = K.calls.lookup(callId);
-      if (Z !== undefined)
-        return V(() =>
+    let session = currentSession();
+    if (callId !== undefined && session !== undefined) {
+      let knownCall = session.calls.lookup(callId);
+      if (knownCall !== undefined)
+        return throughGate(() =>
           joinKnownCall({
-            known: K.calls.lookup(callId) ?? Z,
-            session: K,
-            hostEpoch: r.sessions.epoch,
+            known: session.calls.lookup(callId) ?? knownCall,
+            session,
+            hostEpoch: deps.sessions.epoch,
             callId,
-            target: R,
-            facts: F,
+            target,
+            facts,
           }),
         );
-      F.enteredRecord = K.calls.receive(callId, {
-        retryKey: decidingInput(servedTool, x, K.cwd ?? r.launchDir),
-        workerEpoch: h.workerEpoch,
+      facts.enteredRecord = session.calls.receive(callId, {
+        retryKey: decidingInput(tool, normalizedInput, session.cwd ?? deps.launchDir),
+        workerEpoch: ctx.workerEpoch,
       });
-      let X = K.calls.retryOf(callId);
-      let directoryReset = K.directoryReset;
+      let retry = session.calls.retryOf(callId);
+      let directoryReset = session.directoryReset;
       if (
-        X === undefined &&
-        F.enteredRecord &&
+        retry === undefined &&
+        facts.enteredRecord &&
         directoryReset !== undefined &&
-        directoryReset.from !== K.cwd
+        directoryReset.from !== session.cwd
       ) {
-        K.calls.rekey(callId, decidingInput(servedTool, x, directoryReset.from));
-        let ge = K.calls.retryOf(callId);
-        if (ge !== undefined && ge.call.receivedAt < directoryReset.at) X = ge;
-        else K.calls.rekey(callId, decidingInput(servedTool, x, K.cwd ?? r.launchDir));
+        session.calls.rekey(callId, decidingInput(tool, normalizedInput, directoryReset.from));
+        let retryBeforeReset = session.calls.retryOf(callId);
+        if (retryBeforeReset !== undefined && retryBeforeReset.call.receivedAt < directoryReset.at)
+          retry = retryBeforeReset;
+        else session.calls.rekey(callId, decidingInput(tool, normalizedInput, session.cwd ?? deps.launchDir));
       }
-      if (X !== undefined && X.call.summary.state !== "asked" && !isServedReadOnly(servedTool, x, r))
-        return V(() =>
+      if (
+        retry !== undefined &&
+        retry.call.summary.state !== "asked" &&
+        !isServedReadOnly(tool, normalizedInput, deps)
+      )
+        return throughGate(() =>
           joinRetry({
-            session: K,
+            session,
             joined: {
-              callId: X.callId,
-              call: K.calls.lookup(X.callId) ?? X.call,
+              callId: retry.callId,
+              call: session.calls.lookup(retry.callId) ?? retry.call,
             },
-            hostEpoch: r.sessions.epoch,
+            hostEpoch: deps.sessions.epoch,
             callId,
-            target: R,
-            facts: F,
-            workerEpoch: h.workerEpoch,
+            target,
+            facts,
+            workerEpoch: ctx.workerEpoch,
           }),
         );
     }
-    let Se = () =>
+    let serve = () =>
       serveToolCall({
-        tool: servedTool,
-        toolInput: x,
-        wireArguments: P,
-        ctx: h,
-        deps: r,
-        target: R,
-        facts: F,
+        tool,
+        toolInput: normalizedInput,
+        wireArguments,
+        ctx,
+        deps,
+        target,
+        facts,
       });
-    let ue = w?.approval?.decision === "allow" ? Q() : undefined;
-    if (ue !== undefined) {
-      ue.redeemingLegs += 1;
-      F.redeemsAskId = ue.askId;
+    let redeemedAsk = callEnvelope?.approval?.decision === "allow" ? pendingAsk() : undefined;
+    if (redeemedAsk !== undefined) {
+      redeemedAsk.redeemingLegs += 1;
+      facts.redeemsAskId = redeemedAsk.askId;
     }
     try {
-      if (r.policy.admission === "none")
-        return await Se().catch((error) => callFailureEnvelope(error, R, F, h.signal, {}));
-      if (!r.gate) return D("unbound", refusalTargetNotAcceptingText(Y, r.targetName));
+      if (deps.policy.admission === "none")
+        return await serve().catch((error) => callFailureEnvelope(error, target, facts, ctx.signal, {}));
+      if (!deps.gate)
+        return refuse("unbound", refusalTargetNotAcceptingText(toolNameForText, deps.targetName));
       let now = Date.now();
       let admissionOutcomes = createAdmissionOutcomes({
-        target: R,
-        facts: F,
-        refuse: D,
-        ctx: h,
+        target,
+        facts,
+        refuse,
+        ctx,
         serve: () => {
-          F.postureWaitMs = Date.now() - now;
-          return Se();
+          facts.postureWaitMs = Date.now() - now;
+          return serve();
         },
       });
-      return await (w?.approval?.decision === "deny"
-        ? r.gate.admitWithoutSlot(servedTool.name, h, admissionOutcomes)
-        : r.gate.run(servedTool.name, h, admissionOutcomes));
+      return await (callEnvelope?.approval?.decision === "deny"
+        ? deps.gate.admitWithoutSlot(tool.name, ctx, admissionOutcomes)
+        : deps.gate.run(tool.name, ctx, admissionOutcomes));
     } finally {
-      if (ue !== undefined) {
-        ue.redeemingLegs -= 1;
-        F.redeemsAskId = undefined;
+      if (redeemedAsk !== undefined) {
+        redeemedAsk.redeemingLegs -= 1;
+        facts.redeemsAskId = undefined;
       }
     }
   })().catch((error) => {
-    logForDebugging(`[remote-tools] serving ${Y} failed before admission: ${errorMessage(error)}`, {
-      level: "warn",
-    });
-    return D("invalid_request", `The call sent to ${r.targetName} could not be read \u2014 it was not run.`);
+    logForDebugging(
+      `[remote-tools] serving ${toolNameForText} failed before admission: ${errorMessage(error)}`,
+      {
+        level: "warn",
+      },
+    );
+    return refuse(
+      "invalid_request",
+      `The call sent to ${deps.targetName} could not be read \u2014 it was not run.`,
+    );
   });
-  let ae = j();
+  let sessionAfter = currentSession();
   if (
     callId !== undefined &&
-    F.enteredRecord &&
-    ae !== undefined &&
-    F.answeredFromRecord === undefined &&
-    hasSettledOutcome(q) &&
-    ae.calls.lookup(callId)?.result === undefined
+    facts.enteredRecord &&
+    sessionAfter !== undefined &&
+    facts.answeredFromRecord === undefined &&
+    hasSettledOutcome(envelope) &&
+    sessionAfter.calls.lookup(callId)?.result === undefined
   )
-    ae.calls.settle(callId, q, isSessionDenial(q));
-  logServedCallTelemetry(q.envelope, F, r, ae);
-  return buildRemoteToolCallResult(q);
+    sessionAfter.calls.settle(callId, envelope, isSessionDenial(envelope));
+  logServedCallTelemetry(envelope.envelope, facts, deps, sessionAfter);
+  return buildRemoteToolCallResult(envelope);
 }
 //@ chunk-ad2e1aj6.js:79282-79375 placement
-function hasSettledOutcome(e) {
-  let { outcome } = e.envelope;
+function hasSettledOutcome(result) {
+  let { outcome } = result.envelope;
   return outcome === "completed" || outcome === "refused" || outcome === "failed";
 }
 //@ chunk-ad2e1aj6.js:79375-79680 placement
@@ -526,20 +552,20 @@ function gateServedCall({ toolName, ctx, deps, target, facts, refuse, answer }) 
 //@ chunk-ad2e1aj6.js:79680-79889 placement
 function createAdmissionOutcomes({ target, facts, refuse, ctx, serve }) {
   return {
-    refuse: (i, y) => refuse(admissionRefusalCode(i), y),
-    fail: (i) => callFailureEnvelope(i, target, facts, ctx.signal, {}),
+    refuse: (code, message) => refuse(admissionRefusalCode(code), message),
+    fail: (error) => callFailureEnvelope(error, target, facts, ctx.signal, {}),
     cancelled: () =>
       failedEnvelope(target, facts, "cancelled", "The caller cancelled the call before it ran."),
     serve,
   };
 }
 //@ chunk-ad2e1aj6.js:79889-79987 placement
-function refusalTargetNotAcceptingText(e, targetName) {
-  return `${e} refused: ${targetName} is not accepting calls from cloud sessions right now.`;
+function refusalTargetNotAcceptingText(toolName, targetName) {
+  return `${toolName} refused: ${targetName} is not accepting calls from cloud sessions right now.`;
 }
 //@ chunk-ad2e1aj6.js:79987-80196 placement
-function admissionRefusalCode(e) {
-  switch (e) {
+function admissionRefusalCode(code) {
+  switch (code) {
     case "no_session":
       return "no_session";
     case "unbound_device":

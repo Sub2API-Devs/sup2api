@@ -5,10 +5,10 @@
  * pieces: chunk-dwnmc1nr.js (1)
  * attribution: native-addon 1
  */
-import { x } from "../../runtime/bun-runtime.js";
+import { __commonJS } from "../../runtime/bun-runtime.js";
 
 //@ chunk-dwnmc1nr.js:229-298 native-addon
-var irs = x(function (L, H) {
-  H.exports = require("./clipboard-napi.node");
+var require_clipboard_napi_node = __commonJS(function (cjsExports, cjsModule) {
+  cjsModule.exports = require("./clipboard-napi.node");
 });
-export { irs };
+export { require_clipboard_napi_node };

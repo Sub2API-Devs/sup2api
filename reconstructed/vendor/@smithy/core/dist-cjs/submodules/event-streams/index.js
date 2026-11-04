@@ -9,11 +9,11 @@ import { Readable } from "stream";
 import { EventStreamCodec } from "../../../../eventstream-codec/dist-es/EventStreamCodec.js";
 import {
   SmithyMessageDecoderStream,
-  Q,
+  MessageDecoderStream,
   MessageEncoderStream,
   SmithyMessageEncoderStream,
 } from "../../../../eventstream-codec/dist-cjs/index.js";
-import { Re, Xa } from "../../../../../../runtime/bun-runtime.js";
+import { __toESM, __esm } from "../../../../../../runtime/bun-runtime.js";
 import { require_index_native } from "../config/index.native.js";
 import { require_core } from "../../index.js";
 import { require_schema } from "../schema/index.js";
@@ -126,7 +126,7 @@ class EventStreamMarshaller$1 {
   deserialize(body, deserializer) {
     let inputStream = getChunkedStream(body);
     return new SmithyMessageDecoderStream({
-      messageStream: new Q({
+      messageStream: new MessageDecoderStream({
         inputStream,
         decoder: this.eventStreamCodec,
       }),
@@ -145,22 +145,22 @@ class EventStreamMarshaller$1 {
   }
 }
 //@ chunk-3cddmtk7.js:13329-13368 esm-layout
-var import_index_native = Re(require_index_native());
-var import_core = Re(require_core());
-var import_schema = Re(require_schema());
+var import_index_native = __toESM(require_index_native());
+var import_core_3 = __toESM(require_core());
+var import_schema = __toESM(require_schema());
 //@ chunk-3cddmtk7.js:13368-13451 esm-fingerprint
-var ge = (input) =>
+var withEventStreamSerdeProvider = (input) =>
   Object.assign(input, {
     eventStreamMarshaller: input.eventStreamSerdeProvider(input),
   });
 //@ chunk-3cddmtk7.js:19948-19970 esm-layout
-var ne = (options) => new EventStreamPayloadHandler(options);
+var createEventStreamPayloadHandler = (options) => new EventStreamPayloadHandler(options);
 //@ chunk-3cddmtk7.js:19970-20009 esm-layout
-var import_util_user_agent_node = Re(require_util_user_agent_node());
-var import_index_native_2 = Re(require_index_native());
-var import_core_5 = Re(require_core());
+var import_util_user_agent_node = __toESM(require_util_user_agent_node());
+var import_index_native_2 = __toESM(require_index_native());
+var import_core_7 = __toESM(require_core());
 //@ chunk-3cddmtk7.js:20044-20285 esm-fingerprint
-async function* Ie(readStream) {
+async function* toAsyncIterable(readStream) {
   let streamEnded = false;
   let generationEnded = false;
   let records = [];
@@ -181,7 +181,7 @@ async function* Ie(readStream) {
   }
 }
 //@ chunk-3cddmtk7.js:20285-20617 esm-fingerprint
-class Gur {
+class EventStreamMarshaller {
   universalMarshaller;
   constructor({ utf8Encoder, utf8Decoder }) {
     this.universalMarshaller = new EventStreamMarshaller$1({
@@ -189,16 +189,17 @@ class Gur {
       utf8Encoder,
     });
   }
-  deserialize(readStream, t) {
-    let o = typeof readStream[Symbol.asyncIterator] === "function" ? readStream : Ie(readStream);
-    return this.universalMarshaller.deserialize(o, t);
+  deserialize(readStream, context) {
+    let readable =
+      typeof readStream[Symbol.asyncIterator] === "function" ? readStream : toAsyncIterable(readStream);
+    return this.universalMarshaller.deserialize(readable, context);
   }
-  serialize(e, t) {
-    return Readable.from(this.universalMarshaller.serialize(e, t));
+  serialize(input, context) {
+    return Readable.from(this.universalMarshaller.serialize(input, context));
   }
 }
 //@ chunk-w1q1hkg4.js:263-3851 esm-fingerprint
-class x {
+class EventStreamSerde {
   marshaller;
   serializer;
   deserializer;
@@ -304,7 +305,7 @@ class x {
             if (eventPayload) {
               if (member.isBlobSchema()) out[name] = body;
               else if (member.isStringSchema())
-                out[name] = (this.serdeContext?.utf8Encoder ?? z.toUtf8)(body);
+                out[name] = (this.serdeContext?.utf8Encoder ?? utilUtf8.toUtf8)(body);
               else if (member.isStructSchema()) out[name] = await this.deserializer.read(member, body);
             } else if (eventHeader) {
               let value = event[unionMember].headers[name]?.value;
@@ -400,7 +401,7 @@ class x {
     return {
       body:
         typeof messageSerialization === "string"
-          ? (this.serdeContext?.utf8Decoder ?? z.fromUtf8)(messageSerialization)
+          ? (this.serdeContext?.utf8Decoder ?? utilUtf8.fromUtf8)(messageSerialization)
           : messageSerialization,
       eventType,
       explicitPayloadContentType,
@@ -409,23 +410,24 @@ class x {
   }
 }
 //@ chunk-w1q1hkg4.js:3851-3859 esm-layout
-var z;
-var E;
+var utilUtf8;
+var EventStreamSerdeExport;
 //@ chunk-w1q1hkg4.js:3859-3886 esm-layout
-var init_event_streams = Xa(() => {
-  z = require_util_utf8();
-  E = x;
+var init_event_streams = __esm(() => {
+  utilUtf8 = require_util_utf8();
+  EventStreamSerdeExport = EventStreamSerde;
 });
 //@ chunk-w1q1hkg4.js:3886-3890 esm-layout
 init_event_streams();
 export {
   import_index_native,
-  ge,
+  withEventStreamSerdeProvider,
   import_schema,
-  import_core,
-  Gur,
+  import_core_3,
+  EventStreamMarshaller,
   import_util_user_agent_node,
-  ne,
-  import_core_5,
+  createEventStreamPayloadHandler,
+  import_core_7,
   import_index_native_2,
+  EventStreamSerdeExport,
 };

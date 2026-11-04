@@ -24,17 +24,17 @@ async function advisorCommand(args, context) {
       type: "text",
       value: "The advisor is not available",
     };
-  let r = `Usage: /advisor <${[...getValidAdvisorAliases(), "off"].join("|")}>`;
+  let usage = `Usage: /advisor <${[...getValidAdvisorAliases(), "off"].join("|")}>`;
   let lower = args.trim().toLowerCase();
   if (!lower || COMMON_INFO_ARGS_ALIAS.includes(lower) || COMMON_HELP_ARGS.includes(lower)) {
     let advisorSetting = context.getAdvisorSetting();
     return {
       type: "text",
       value: `${advisorSetting ? `Advisor: ${stripAnsi(renderDefaultModelSetting(advisorSetting))}` : "Advisor: off"}
-${r}`,
+${usage}`,
     };
   }
-  let a = !isBridgeOrVerifiedSlackTurn(context);
+  let blocked = !isBridgeOrVerifiedSlackTurn(context);
   return {
     type: "text",
     value: setAdvisorModelCommand(
@@ -42,9 +42,10 @@ ${r}`,
       context.options.mainLoopModel,
       context.setAppState,
       context.storageV5,
-      a,
+      blocked,
       true,
       context.getMessages?.() ?? context.messages ?? [],
     ),
   };
 }
+export { advisorCommand };

@@ -38,6 +38,7 @@ import {
 import { tableSource } from "./readTable.js";
 import { tickTextAt, tickStepsFor } from "./timeFormat.js";
 import { parseNumberCell } from "./parseValues.js";
+import { deferInit } from "../../../../runtime/deferred-init.js";
 
 //@ chunk-3s7ydtfd.js:54522-54592 placement = AGENT_COLORS (0.646)
 /**
@@ -115,37 +116,38 @@ var DEFAULT_TABLE_HEIGHT = 24;
 /**
  * 取首个系列的单位
  */
-var firstSeriesUnit = (e) => e[0]?.unit ?? "";
+var firstSeriesUnit = (series) => series[0]?.unit ?? "";
 //@ chunk-3s7ydtfd.js:54769-54782 placement
 /**
  * 红色
  */
 var RED = "red";
 //@ chunk-3s7ydtfd.js:54782-55209 placement
-function pickSeriesColors(e, t, o) {
-  let r = stableSum(t);
-  let mapped = e.map(firstValue);
-  let max = Math.max(...e.map((l) => l.size));
-  let m = max === 0 ? 1 : max;
-  let filtered = AGENT_COLORS.filter((l) => l !== RED);
-  let a = o.measures.length <= filtered.length;
-  let f = new Map(a ? returnValue(o.measures, filtered) : []);
-  let x =
-    o.isSummed && r > 0 && t.every((l) => l >= 0)
+function pickSeriesColors(series, values, options) {
+  let total = stableSum(values);
+  let mapped = series.map(firstValue);
+  let max = Math.max(...series.map((series) => series.size));
+  let maxAbsolute = max === 0 ? 1 : max;
+  let filtered = AGENT_COLORS.filter((color) => color !== RED);
+  let canDistinguish = options.measures.length <= filtered.length;
+  let inkByMeasure = new Map(canDistinguish ? returnValue(options.measures, filtered) : []);
+  let extraStats =
+    options.isSummed && total > 0 && values.every((value) => value >= 0)
       ? formatSeriesValues(
           "%",
-          mapped.map((l) => (MAX_ROW_CHARS * l) / r),
-        ).map((l) => [["", "", l]])
+          mapped.map((value) => (MAX_ROW_CHARS * value) / total),
+        ).map((fraction) => [["", "", fraction]])
       : mapped.map(() => []);
-  return returnValue(e, returnValue(formatSeriesValues(firstSeriesUnit(e), mapped), x)).map(
-    ([l, [u, d]]) => ({
-      key: "",
-      name: l.name,
-      stats: [["", u, ""], ...d],
-      ink: firstValue(l) < 0 ? RED : (f.get(l.measure) ?? BLUE),
-      relativeLength: firstValue(l) / m,
-    }),
-  );
+  return returnValue(
+    series,
+    returnValue(formatSeriesValues(firstSeriesUnit(series), mapped), extraStats),
+  ).map(([series, [label, stats]]) => ({
+    key: "",
+    name: series.name,
+    stats: [["", label, ""], ...stats],
+    ink: firstValue(series) < 0 ? RED : (inkByMeasure.get(series.measure) ?? BLUE),
+    relativeLength: firstValue(series) / maxAbsolute,
+  }));
 }
 //@ chunk-3s7ydtfd.js:55209-55232 placement
 /**
@@ -159,14 +161,14 @@ var TOTAL_ROW = {
 /**
  * 柱状图的合计行。
  */
-var totalRow = (e, t) => ({
+var totalRow = (series, values) => ({
   ...TOTAL_ROW,
   name: "total",
   stats: [
     [
       "",
-      formatSeriesValues(firstSeriesUnit(e), [stableSum(t)], {
-        peers: e.map(firstValue),
+      formatSeriesValues(firstSeriesUnit(series), [stableSum(values)], {
+        peers: series.map(firstValue),
       })[0] ?? "",
       "",
     ],
@@ -174,31 +176,33 @@ var totalRow = (e, t) => ({
   relativeLength: 0,
 });
 //@ chunk-3s7ydtfd.js:55343-55675 placement
-function describeBarsLimit(e) {
-  let t = e.request.combine === "sum";
-  let r =
-    e.request.top !== undefined || e.selection.cutSeries.length > 0 ? e.selection.topSeries : e.allSeries;
-  let flattened = e.allSeries.flatMap((n) => n.values);
-  let p = pickSeriesColors(r, flattened, {
-    isSummed: t,
-    measures: uniqueValues(e.allSeries.map((n) => n.measure)),
+function describeBarsLimit(context) {
+  let isSummed = context.request.combine === "sum";
+  let shownSeries =
+    context.request.top !== undefined || context.selection.cutSeries.length > 0
+      ? context.selection.topSeries
+      : context.allSeries;
+  let flattened = context.allSeries.flatMap((series) => series.values);
+  let rows = pickSeriesColors(shownSeries, flattened, {
+    isSummed,
+    measures: uniqueValues(context.allSeries.map((series) => series.measure)),
   });
-  let rows = t ? [...p, totalRow(r, flattened)] : p;
+  let rows_2 = isSummed ? [...rows, totalRow(shownSeries, flattened)] : rows;
   return {
     form: "bars",
-    header: e.frame.header,
-    rows,
-    notes: e.frame.notes,
+    header: context.frame.header,
+    rows: rows_2,
+    notes: context.frame.notes,
   };
 }
 //@ chunk-3s7ydtfd.js:55675-55814 placement
 /**
  * 给系列补上非空值列表与最大绝对值。
  */
-function withSeriesValues(e) {
-  let filtered = e.samples.map((sample) => sample.value).filter((o) => o !== null);
+function withSeriesValues(series) {
+  let filtered = series.samples.map((sample) => sample.value).filter((value) => value !== null);
   return {
-    ...e,
+    ...series,
     values: filtered,
     size: Math.max(...filtered.map(Math.abs)),
     isOthers: false,
@@ -208,7 +212,7 @@ function withSeriesValues(e) {
 /**
  * 名字用逗号拼接
  */
-var joinNames = (e) => e.map((t) => t.name).join(", ");
+var joinNames = (series) => series.map((series) => series.name).join(", ");
 //@ chunk-3s7ydtfd.js:55856-55935 placement
 /**
  * “这是最大值”/“这 N 个最大”
@@ -217,71 +221,74 @@ function largestNote(drawnAloneCount) {
   return drawnAloneCount === 1 ? "this is the largest" : `these are the ${drawnAloneCount} largest`;
 }
 //@ chunk-3s7ydtfd.js:55935-56441 placement
-function describeGroupedOthers(e) {
-  let t = e.cutSeries.length;
-  if (t === 0) return [];
-  let o = e.form === "bars" && t >= MAX_ROW_INK * e.drawnAloneCount;
-  let r = t <= MIN_BAR_HEIGHT;
-  let s =
-    `${formatCountWithUnit(e.form, t)} ` +
-    (e.isRestDrawnAsOne ? "drawn as one" : "not shown") +
-    (r ? ` (${joinNames(e.cutSeries)})` : "") +
-    `: ${largestNote(e.drawnAloneCount)} of ` +
-    (e.drawnAloneCount + t).toLocaleString("en-US") +
-    (o ? ". For a distribution, pass counts per range" : "");
-  return e.top !== undefined && e.top > e.formLimit
+function describeGroupedOthers(context) {
+  let cutCount = context.cutSeries.length;
+  if (cutCount === 0) return [];
+  let tooManyToGroup = context.form === "bars" && cutCount >= MAX_ROW_INK * context.drawnAloneCount;
+  let namesFit = cutCount <= MIN_BAR_HEIGHT;
+  let note =
+    `${formatCountWithUnit(context.form, cutCount)} ` +
+    (context.isRestDrawnAsOne ? "drawn as one" : "not shown") +
+    (namesFit ? ` (${joinNames(context.cutSeries)})` : "") +
+    `: ${largestNote(context.drawnAloneCount)} of ` +
+    (context.drawnAloneCount + cutCount).toLocaleString("en-US") +
+    (tooManyToGroup ? ". For a distribution, pass counts per range" : "");
+  return context.top !== undefined && context.top > context.formLimit
     ? [
-        s,
-        `top ${e.top}: a chart draws at most ${formatCountWithUnit(e.form, e.formLimit)}` +
-          (e.isRestDrawnAsOne ? ", and the rest as one" : ""),
+        note,
+        `top ${context.top}: a chart draws at most ${formatCountWithUnit(context.form, context.formLimit)}` +
+          (context.isRestDrawnAsOne ? ", and the rest as one" : ""),
       ]
-    : [s];
+    : [note];
 }
 //@ chunk-3s7ydtfd.js:56441-56717 placement
 /**
  * 按单位与量级把系列分组到同一坐标轴。
  */
-function groupSeriesByScale(drawnSeries, t) {
-  let o = [];
-  let r = new Map();
-  let s = [];
-  for (let p of drawnSeries) {
-    let m = r.get(p.unit) ?? o.length;
-    let n = o[m];
-    if (n !== undefined && (t || p.size === 0 || n.size <= p.size * MAX_EVENTS)) s.push(m);
+function groupSeriesByScale(drawnSeries, isBars) {
+  let groups = [];
+  let groupOfUnit = new Map();
+  let groupIndex = [];
+  for (let series of drawnSeries) {
+    let existingGroup = groupOfUnit.get(series.unit) ?? groups.length;
+    let group = groups[existingGroup];
+    if (group !== undefined && (isBars || series.size === 0 || group.size <= series.size * MAX_EVENTS))
+      groupIndex.push(existingGroup);
     else {
-      r.set(p.unit, o.length);
-      s.push(o.length);
-      o.push(p);
+      groupOfUnit.set(series.unit, groups.length);
+      groupIndex.push(groups.length);
+      groups.push(series);
     }
   }
-  return [...groupIndexBy(returnValue(drawnSeries, s), (p) => p[1]).values()].map((p) => p.map((m) => m[0]));
+  return [...groupIndexBy(returnValue(drawnSeries, groupIndex), (pair) => pair[1]).values()].map((pairs) =>
+    pairs.map((pair) => pair[0]),
+  );
 }
 //@ chunk-3s7ydtfd.js:56717-56776 placement
 /**
  * 图的标题/事实/来源
  */
-var plotFrame = (e, t, facts) => ({
-  title: t.title ?? "",
+var plotFrame = (table, options, facts) => ({
+  title: options.title ?? "",
   facts,
-  source: tableSource(e),
+  source: tableSource(table),
 });
 //@ chunk-3s7ydtfd.js:56776-56961 placement
 /**
  * 按时刻求各系列之和。
  */
-var sumSamplesByTime = (e) =>
+var sumSamplesByTime = (series) =>
   [
     ...groupIndexBy(
-      e.flatMap((t) => t.samples),
-      (t) => t.ms,
+      series.flatMap((series) => series.samples),
+      (sample) => sample.ms,
     ),
   ]
-    .toSorted(([t], [o]) => t - o)
-    .map(([t, o]) => {
-      let filtered = o.map((s) => s.value).filter((s) => s !== null);
+    .toSorted(([a], [b]) => a - b)
+    .map(([ms, samples]) => {
+      let filtered = samples.map((sample) => sample.value).filter((value) => value !== null);
       return {
-        ms: t,
+        ms,
         value: filtered.length > 0 ? stableSum(filtered) : null,
       };
     });
@@ -289,76 +296,79 @@ var sumSamplesByTime = (e) =>
 /**
  * 同一时刻求和的系列
  */
-var sumSeries = (e, name) =>
+var sumSeries = (series, name) =>
   withSeriesValues({
-    unit: firstSeriesUnit(e),
+    unit: firstSeriesUnit(series),
     name,
-    measure: e[0]?.measure ?? "",
-    samples: sumSamplesByTime(e),
+    measure: series[0]?.measure ?? "",
+    samples: sumSamplesByTime(series),
   });
 //@ chunk-3s7ydtfd.js:57038-57358 placement
-function describeTotalColumn(e, plural) {
-  if (e.length <= MIN_LANE_HEIGHT) return [];
-  let o = new Map(sumSeries(e, "").samples.map(({ ms, value: p }) => [ms, p]));
-  let r = ({ ms, value: p }) =>
-    p !== null && Math.abs(MIN_PLOT_HEIGHT * p - (o.get(ms) ?? 0)) <= NEGLIGIBLE_VALUE * Math.abs(p);
-  return e
-    .filter((s) => s.size > 0 && s.samples.every(r))
-    .map((s) => `${s.name} equals the sum of the other ${plural}: if it is their total, leave it out`);
+function describeTotalColumn(series, plural) {
+  if (series.length <= MIN_LANE_HEIGHT) return [];
+  let sumByMs = new Map(sumSeries(series, "").samples.map(({ ms, value }) => [ms, value]));
+  let isEqual = ({ ms, value }) =>
+    value !== null &&
+    Math.abs(MIN_PLOT_HEIGHT * value - (sumByMs.get(ms) ?? 0)) <= NEGLIGIBLE_VALUE * Math.abs(value);
+  return series
+    .filter((series) => series.size > 0 && series.samples.every(isEqual))
+    .map(
+      (series) => `${series.name} equals the sum of the other ${plural}: if it is their total, leave it out`,
+    );
 }
 //@ chunk-3s7ydtfd.js:57358-57491 placement
 /**
  * 系列峰值所在时刻的标签。
  */
-function peakTimeLabel(e, t) {
-  let o = {
+function peakTimeLabel(series, timeline) {
+  let peak = {
     ms: 0,
     value: -1 / 0,
   };
-  for (let { ms, value: s } of e.samples)
-    if (s !== null && s > o.value)
-      o = {
+  for (let { ms, value } of series.samples)
+    if (value !== null && value > peak.value)
+      peak = {
         ms,
-        value: s,
+        value,
       };
-  return tickTextAt(t, o.ms);
+  return tickTextAt(timeline, peak.ms);
 }
 //@ chunk-3s7ydtfd.js:57491-57607 placement
 /**
  * “total max X at T” 说明。
  */
-function totalPeakNote(e, timeline) {
-  let o = sumSeries(e, "total");
-  let [r = ""] = formatSeriesValues(o.unit, [Math.max(...o.values)]);
-  return `total max ${r} at ${peakTimeLabel(o, timeline)}`;
+function totalPeakNote(series, timeline) {
+  let totalSeries = sumSeries(series, "total");
+  let [peakLabel = ""] = formatSeriesValues(totalSeries.unit, [Math.max(...totalSeries.values)]);
+  return `total max ${peakLabel} at ${peakTimeLabel(totalSeries, timeline)}`;
 }
 //@ chunk-3s7ydtfd.js:57607-57640 placement
 /**
  * 按名字比较
  */
-var byName = (e, t) => (e.name < t.name ? -1 : 1);
+var byName = (a, b) => (a.name < b.name ? -1 : 1);
 //@ chunk-3s7ydtfd.js:57640-57698 placement
 /**
  * 合并出的 “N others”
  */
-var othersSeries = (e) => ({
-  ...sumSeries(e, `${e.length} others`),
+var othersSeries = (series) => ({
+  ...sumSeries(series, `${series.length} others`),
   isOthers: true,
 });
 //@ chunk-3s7ydtfd.js:57698-57922 placement
 /**
  * 按大小选前若干系列，其余合并为 “others”。
  */
-function pickTopSeries(e, t, o) {
-  let sliced = e
-    .toSorted((m, n) => (m.size !== n.size ? n.size - m.size : byName(m, n)))
-    .slice(0, o && e.length === t + 1 ? t + 1 : t);
-  let filtered = e.filter((m) => !sliced.includes(m));
-  let p = o && filtered.length > 0;
+function pickTopSeries(series, top, isRestDrawnAsOne) {
+  let sliced = series
+    .toSorted((a, b) => (a.size !== b.size ? b.size - a.size : byName(a, b)))
+    .slice(0, isRestDrawnAsOne && series.length === top + 1 ? top + 1 : top);
+  let series_2 = series.filter((series) => !sliced.includes(series));
+  let hasCut = isRestDrawnAsOne && series_2.length > 0;
   return {
     topSeries: sliced,
-    cutSeries: filtered,
-    drawnSeries: p ? [...sliced, othersSeries(filtered)] : sliced,
+    cutSeries: series_2,
+    drawnSeries: hasCut ? [...sliced, othersSeries(series_2)] : sliced,
   };
 }
 //@ chunk-3s7ydtfd.js:57922-57950 placement
@@ -370,144 +380,150 @@ var QUIET_ROW = {
   ink: "quiet",
 };
 //@ chunk-3s7ydtfd.js:57950-58009 placement
-var mapped = returnValue([..."abcdefgh"], AGENT_COLORS).map(([e, t]) => ({
-  key: e,
-  ink: t,
-}));
+var mapped; // deferred: uses returnValue (./chartSchema.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-3s7ydtfd.js:57950", () => {
+  mapped = returnValue([..."abcdefgh"], AGENT_COLORS).map(([key, color]) => ({
+    key,
+    ink: color,
+  }));
+});
 //@ chunk-3s7ydtfd.js:58009-58267 placement
 /**
  * 占比图布局（各项份额与颜色）。
  */
-function layoutShareChart(e, t, o) {
-  let flattened = o.flatMap((m) => m.values);
-  let s = new Map(returnValue(t.topSeries, mapped));
+function layoutShareChart(frame, selection, series) {
+  let flattened = series.flatMap((series) => series.values);
+  let nameByInk = new Map(returnValue(selection.topSeries, mapped));
   let rows = returnValue(
-    pickSeriesColors(t.drawnSeries, flattened, {
+    pickSeriesColors(selection.drawnSeries, flattened, {
       isSummed: true,
       measures: [],
     }),
-    t.drawnSeries,
-  ).map(([m, n]) => ({
-    ...m,
-    ...(s.get(n) ?? QUIET_ROW),
-    share: firstValue(n) / stableSum(flattened),
+    selection.drawnSeries,
+  ).map(([series, label]) => ({
+    ...series,
+    ...(nameByInk.get(label) ?? QUIET_ROW),
+    share: firstValue(label) / stableSum(flattened),
   }));
   return {
     form: "share",
-    header: e.header,
+    header: frame.header,
     rows,
-    notes: e.notes,
+    notes: frame.notes,
   };
 }
 //@ chunk-3s7ydtfd.js:58267-58351 placement
 /**
  * 迷你图结果对象
  */
-var sparksFrame = (e, rows, medianStep) => ({
+var sparksFrame = (frame, rows, medianStep) => ({
   form: "sparks",
-  header: e.header,
+  header: frame.header,
   rows,
   medianStep,
-  notes: e.notes,
+  notes: frame.notes,
 });
 //@ chunk-3s7ydtfd.js:58351-58511 placement
 /**
  * 缺失样本的说明。
  */
-function missingSampleNotes(e) {
-  let t = stableSum(e.map((r) => r.samples.length - r.values.length));
-  return t > 0 ? [`${formatCount(t, "missing sample")}, left blank where the gap is wide enough to see`] : [];
+function missingSampleNotes(series) {
+  let missingCount = stableSum(series.map((series) => series.samples.length - series.values.length));
+  return missingCount > 0
+    ? [`${formatCount(missingCount, "missing sample")}, left blank where the gap is wide enough to see`]
+    : [];
 }
 //@ chunk-3s7ydtfd.js:58511-58612 placement
 /**
  * 列图的行（名称、统计、线段）。
  */
 var toColumnRow =
-  (e, t) =>
-  ([o, [r, s]]) => ({
-    ...e.identityOf(o),
-    name: o.name,
-    stats: s,
-    stretches: r.map((p) => p.map(t)),
+  (context, toLine) =>
+  ([series, [columns, stats]]) => ({
+    ...context.identityOf(series),
+    name: series.name,
+    stats,
+    stretches: columns.map((column) => column.map(toLine)),
   });
 //@ chunk-3s7ydtfd.js:58612-58667 placement
 /**
  * 折线的坐标函数
  */
-var linePoint = (e, t) => (o) => ({
-  x: e(o.ms),
-  y: t.positionOf(o.top),
+var linePoint = (xOf, axis) => (point) => ({
+  x: xOf(point.ms),
+  y: axis.positionOf(point.top),
 });
 //@ chunk-3s7ydtfd.js:58667-59164 placement
 function summarizeSparkStat({ seriesOfPlot, axisValues, timeline, isSummed }) {
-  let s = firstSeriesUnit(seriesOfPlot);
-  let mapped = seriesOfPlot.map((l) => l.values);
-  let m = (l) =>
-    formatSeriesValues(s, l, {
+  let unit = firstSeriesUnit(seriesOfPlot);
+  let mapped = seriesOfPlot.map((series) => series.values);
+  let formatValues = (values) =>
+    formatSeriesValues(unit, values, {
       peers: axisValues,
       minWritten: MIN_LEGEND_ROWS,
     });
-  let n = m(mapped.map((l) => Math.max(...l)));
-  let a = m(mapped.map((l) => l.at(-1) ?? 0));
-  let f = m(mapped.map((l) => Math.min(...l)));
-  let i = m(mapped.map((l) => stableSum(l) / l.length));
-  let x = formatSeriesValues(s, mapped.map(stableSum));
-  return seriesOfPlot.map((l, u) => {
-    if (l.values.length === 1) return [["last", a[u] ?? "", ""]];
-    let d = [
-      ["max", n[u] ?? "", `at ${peakTimeLabel(l, timeline)}`],
-      ["last", a[u] ?? "", ""],
-      ["min", f[u] ?? "", ""],
-      ["mean", i[u] ?? "", ""],
+  let maxStats = formatValues(mapped.map((values) => Math.max(...values)));
+  let lastStats = formatValues(mapped.map((values) => values.at(-1) ?? 0));
+  let minStats = formatValues(mapped.map((values) => Math.min(...values)));
+  let meanStats = formatValues(mapped.map((values) => stableSum(values) / values.length));
+  let totalStats = formatSeriesValues(unit, mapped.map(stableSum));
+  return seriesOfPlot.map((series, index) => {
+    if (series.values.length === 1) return [["last", lastStats[index] ?? "", ""]];
+    let stats = [
+      ["max", maxStats[index] ?? "", `at ${peakTimeLabel(series, timeline)}`],
+      ["last", lastStats[index] ?? "", ""],
+      ["min", minStats[index] ?? "", ""],
+      ["mean", meanStats[index] ?? "", ""],
     ];
-    return isSummed ? [...d, ["total", x[u] ?? "", ""]] : d;
+    return isSummed ? [...stats, ["total", totalStats[index] ?? "", ""]] : stats;
   });
 }
 //@ chunk-3s7ydtfd.js:59164-59283 placement
 /**
  * 坐标轴上下文（系列映射、值、时间线、是否求和）。
  */
-var axisContext = (e, axisValues) => ({
-  seriesOfPlot: e.seriesOfPlot,
+var axisContext = (context, axisValues) => ({
+  seriesOfPlot: context.seriesOfPlot,
   axisValues,
-  timeline: e.data.timeline,
-  isSummed: e.request.combine === "sum",
+  timeline: context.data.timeline,
+  isSummed: context.request.combine === "sum",
 });
 //@ chunk-3s7ydtfd.js:59283-59827 placement
-function layoutColumns(e) {
-  let t = e.data.form === "columns";
-  let o = new Map();
-  let r = [];
-  for (let f of e.seriesOfPlot) {
-    let i = [];
-    let x = [];
-    for (let sample of f.samples)
+function layoutColumns(context) {
+  let isColumns = context.data.form === "columns";
+  let runningStack = new Map();
+  let stretches = [];
+  for (let series of context.seriesOfPlot) {
+    let seriesStretches = [];
+    let current = [];
+    for (let sample of series.samples)
       if (sample.value === null) {
-        i.push(x);
-        x = [];
+        seriesStretches.push(current);
+        current = [];
       } else {
-        let u = (t ? (o.get(sample.ms) ?? 0) : 0) + sample.value;
-        o.set(sample.ms, u);
-        x.push({
+        let top = (isColumns ? (runningStack.get(sample.ms) ?? 0) : 0) + sample.value;
+        runningStack.set(sample.ms, top);
+        current.push({
           ms: sample.ms,
-          top: u,
+          top,
         });
       }
-    i.push(x);
-    r.push(i.filter((l) => l.length > 0));
+    seriesStretches.push(current);
+    stretches.push(seriesStretches.filter((stretch) => stretch.length > 0));
   }
-  let axisValues = r.flat(MIN_SPARK_ROWS).map((f) => f.top);
-  let p = firstSeriesUnit(e.seriesOfPlot);
-  let m = [t ? 0 : Math.min(...axisValues), Math.max(...axisValues)];
-  let a =
-    e.request.log === true
-      ? logAxisTicks(p, m, e.maxAxisSteps)
-      : linearAxisTicks(summarizeSeries(p, axisValues), m, e.maxAxisSteps);
+  let axisValues = stretches.flat(MIN_SPARK_ROWS).map((stretch) => stretch.top);
+  let unit = firstSeriesUnit(context.seriesOfPlot);
+  let range = [isColumns ? 0 : Math.min(...axisValues), Math.max(...axisValues)];
+  let axis =
+    context.request.log === true
+      ? logAxisTicks(unit, range, context.maxAxisSteps)
+      : linearAxisTicks(summarizeSeries(unit, axisValues), range, context.maxAxisSteps);
   return {
-    ticks: a.ticks,
-    rows: returnValue(e.seriesOfPlot, returnValue(r, summarizeSparkStat(axisContext(e, axisValues)))).map(
-      toColumnRow(e, linePoint(tickStepsFor(e.data.timeline), a)),
-    ),
+    ticks: axis.ticks,
+    rows: returnValue(
+      context.seriesOfPlot,
+      returnValue(stretches, summarizeSparkStat(axisContext(context, axisValues))),
+    ).map(toColumnRow(context, linePoint(tickStepsFor(context.data.timeline), axis))),
   };
 }
 //@ chunk-3s7ydtfd.js:59827-59861 placement
@@ -519,21 +535,21 @@ var PLOT_LIMITS = {
   severalPlots: 2,
 };
 //@ chunk-3s7ydtfd.js:59861-60312 placement
-function describeStretch({ topSeries, frame: { header, notes }, request, data: s }) {
+function describeStretch({ topSeries, frame: { header, notes }, request, data }) {
   let { ticks, rows } = layoutColumns({
     seriesOfPlot: topSeries,
     identityOf: () => TOTAL_ROW,
     maxAxisSteps: PLOT_LIMITS.onePlot,
     request,
-    data: s,
+    data,
   });
-  let n = tickStepsFor(s.timeline);
-  let a = topSeries
-    .flatMap((f) => {
-      let mapped = f.samples.map((sample) => n(sample.ms));
-      return returnValue(mapped, mapped.slice(1)).map(([x, l]) => l - x);
+  let tickSteps = tickStepsFor(data.timeline);
+  let deltas = topSeries
+    .flatMap((series) => {
+      let mapped = series.samples.map((sample) => tickSteps(sample.ms));
+      return returnValue(mapped, mapped.slice(1)).map(([from, to]) => to - from);
     })
-    .toSorted((f, i) => f - i);
+    .toSorted((a, b) => a - b);
   return sparksFrame(
     {
       header: {
@@ -543,19 +559,19 @@ function describeStretch({ topSeries, frame: { header, notes }, request, data: s
       notes: [...notes, ...missingSampleNotes(topSeries)],
     },
     rows,
-    a[Math.floor(a.length / MIN_SHARE_SEGS)] ?? 1,
+    deltas[Math.floor(deltas.length / MIN_SHARE_SEGS)] ?? 1,
   );
 }
 //@ chunk-3s7ydtfd.js:60312-60484 placement
 /**
  * 多条折线在同一列靠得太近。
  */
-function hasCrowdedLines(e) {
-  let t = new Map();
-  for (let o of e.rows.flatMap((r) => r.stretches.flat())) {
-    let r = o.y - (t.get(o.x) ?? 0);
-    if (e.rows.length > 1 && r > 0 && r < MIN_BAR_RATIO) return true;
-    t.set(o.x, o.y);
+function hasCrowdedLines(layout) {
+  let lastY = new Map();
+  for (let point of layout.rows.flatMap((row) => row.stretches.flat())) {
+    let gap = point.y - (lastY.get(point.x) ?? 0);
+    if (layout.rows.length > 1 && gap > 0 && gap < MIN_BAR_RATIO) return true;
+    lastY.set(point.x, point.y);
   }
   return false;
 }
@@ -563,84 +579,92 @@ function hasCrowdedLines(e) {
 /**
  * 按请求里 y 的顺序排列系列分组。
  */
-function orderSeriesByRequest(e, t, request) {
-  let mapped = t.series.map((a) => a.name);
-  let mapped_2 = (request.y ?? []).map((a) => a.toLowerCase());
+function orderSeriesByRequest(groups, data, request) {
+  let mapped = data.series.map((series) => series.name);
+  let mapped_2 = (request.y ?? []).map((name) => name.toLowerCase());
   if (!(
     mapped.length > 1 &&
-    mapped.every((a) => mapped_2.includes(a.toLowerCase())) &&
-    e.flat().length === mapped.length
+    mapped.every((name) => mapped_2.includes(name.toLowerCase())) &&
+    groups.flat().length === mapped.length
   ))
-    return e;
-  let m = (a) => mapped.indexOf(a.name);
-  let n = (a) => Math.min(...a.map(m));
-  return e.map((a) => a.toSorted((f, i) => m(f) - m(i))).toSorted((a, f) => n(a) - n(f));
+    return groups;
+  let requestIndexOf = (series) => mapped.indexOf(series.name);
+  let groupIndexOf = (group) => Math.min(...group.map(requestIndexOf));
+  return groups
+    .map((group) => group.toSorted((a, b) => requestIndexOf(a) - requestIndexOf(b)))
+    .toSorted((groupA, groupB) => groupIndexOf(groupA) - groupIndexOf(groupB));
 }
 //@ chunk-3s7ydtfd.js:60803-60892 placement
 /**
  * 时间刻度标签
  */
 function tickLabelFor(timeline) {
-  let t = tickStepsFor(timeline);
-  return (o) => ({
-    position: t(o.ms),
-    when: tickTextAt(timeline, o.ms),
-    label: o.label,
+  let tickSteps = tickStepsFor(timeline);
+  return (mark) => ({
+    position: tickSteps(mark.ms),
+    when: tickTextAt(timeline, mark.ms),
+    label: mark.label,
   });
 }
 //@ chunk-3s7ydtfd.js:60892-61942 placement
 /**
  * 把序列分配到一个或多个图（同单位共享，柱状最多若干组）。
  */
-function layoutPlots(e) {
-  let t = e.data.form === "columns";
-  let o = orderSeriesByRequest(e.groups.slice(0, MAX_COMBINED_SERIES), e.data, e.request);
-  let r = o.flat();
-  let s = e.groups.slice(MAX_COMBINED_SERIES).flat();
-  let p = new Map(
+function layoutPlots(context) {
+  let isColumns = context.data.form === "columns";
+  let groups = orderSeriesByRequest(
+    context.groups.slice(0, MAX_COMBINED_SERIES),
+    context.data,
+    context.request,
+  );
+  let shown = groups.flat();
+  let overflow = context.groups.slice(MAX_COMBINED_SERIES).flat();
+  let identityBySeries = new Map(
     returnValue(
-      r.filter((T) => !T.isOthers),
-      r.length > 1 ? mapped : [TOTAL_ROW],
+      shown.filter((series) => !series.isOthers),
+      shown.length > 1 ? mapped : [TOTAL_ROW],
     ),
   );
-  let identityOf = (T) => p.get(T) ?? QUIET_ROW;
-  let maxAxisSteps = PLOT_LIMITS[o.length > 1 ? "severalPlots" : "onePlot"];
-  let mapped_2 = o.map((seriesOfPlot) =>
+  let identityOf = (series) => identityBySeries.get(series) ?? QUIET_ROW;
+  let maxAxisSteps = PLOT_LIMITS[groups.length > 1 ? "severalPlots" : "onePlot"];
+  let mapped_2 = groups.map((seriesOfPlot) =>
     layoutColumns({
       seriesOfPlot,
       identityOf,
       maxAxisSteps,
-      request: e.request,
-      data: e.data,
+      request: context.request,
+      data: context.data,
     }),
   );
-  let f = e.data.timeline.periodStarts.length;
-  let i = r.length > o.length;
-  let x = `${f} columns do not fit, so they are drawn as ${i ? "lines, one for each series" : "a line"}`;
-  let l = s.length > 0;
-  let u = f > DEFAULT_TABLE_HEIGHT;
-  let d = t && mapped_2.some(hasCrowdedLines);
+  let columnCount = context.data.timeline.periodStarts.length;
+  let isMultiple = shown.length > groups.length;
+  let mergedNote = `${columnCount} columns do not fit, so they are drawn as ${isMultiple ? "lines, one for each series" : "a line"}`;
+  let hasOverflow = overflow.length > 0;
+  let isNarrow = columnCount > DEFAULT_TABLE_HEIGHT;
+  let isCrowded = isColumns && mapped_2.some(hasCrowdedLines);
   let notes = [
-    ...e.frame.notes,
-    ...(l
+    ...context.frame.notes,
+    ...(hasOverflow
       ? [
-          `${formatCountWithUnit(e.data.form, s.length)} not shown (${joinNames(s)}): a chart has at most ${MAX_COMBINED_SERIES} plots`,
+          `${formatCountWithUnit(context.data.form, overflow.length)} not shown (${joinNames(overflow)}): a chart has at most ${MAX_COMBINED_SERIES} plots`,
         ]
       : []),
-    ...missingSampleNotes(r),
+    ...missingSampleNotes(shown),
   ];
   let modelOnlyNotes = [
-    ...(u ? [`on a screen under about ${f + DEFAULT_TABLE_WIDTH} characters wide, ${x}`] : []),
-    ...(d ? ["in a terminal, parts of a column thinner than a row may not show"] : []),
+    ...(isNarrow
+      ? [`on a screen under about ${columnCount + DEFAULT_TABLE_WIDTH} characters wide, ${mergedNote}`]
+      : []),
+    ...(isCrowded ? ["in a terminal, parts of a column thinner than a row may not show"] : []),
   ];
   return {
-    form: t ? "columns" : "line",
-    header: e.frame.header,
+    form: isColumns ? "columns" : "line",
+    header: context.frame.header,
     plots: mapped_2,
-    timeline: e.data.timeline,
-    marks: e.data.marks.map(tickLabelFor(e.data.timeline)),
+    timeline: context.data.timeline,
+    marks: context.data.marks.map(tickLabelFor(context.data.timeline)),
     notes,
-    mergedColumnsNote: x,
+    mergedColumnsNote: mergedNote,
     thinPartsNote: "the thinnest parts of a column are too thin to show here",
     modelOnlyNotes,
   };
@@ -649,47 +673,53 @@ function layoutPlots(e) {
 /**
  * 决定绘制方式（合并、对数刻度、序列上限）。
  */
-function planChartLayout(e, t) {
-  let o = t.combine === "sum";
-  let r = e.form === "columns" && !o;
-  let mapped = e.series.map(withSeriesValues);
-  let p =
-    e.form === "share" ||
-    (e.form === "columns" && o && mapped.every((l) => l.unit === firstSeriesUnit(mapped)));
-  let m = r ? MAX_COMBINED_SERIES : CHART_FORMS[e.form].maxCount;
-  let n = pickTopSeries(mapped, Math.min(t.top ?? CHART_FORMS[e.form].defaultCount, m), p);
-  let a = e.hasCombinedRows && !o;
-  let f = e.form === "columns" && p && mapped.length > 1;
-  let header = plotFrame(e, t, [
-    ...(e.subject === "" ? [] : [e.subject]),
-    ...e.timeline.spanLabels,
-    ...(t.log ? ["log scale"] : []),
-    ...(a ? [`rows combined by ${t.combine}`] : []),
-    ...(f ? [totalPeakNote(mapped, e.timeline)] : []),
+function planChartLayout(chartRequestData, request) {
+  let isSummed = request.combine === "sum";
+  let isCombinedColumns = chartRequestData.form === "columns" && !isSummed;
+  let series = chartRequestData.series.map(withSeriesValues);
+  let isRestDrawnAsOne =
+    chartRequestData.form === "share" ||
+    (chartRequestData.form === "columns" &&
+      isSummed &&
+      series.every((series_2) => series_2.unit === firstSeriesUnit(series)));
+  let formLimit = isCombinedColumns ? MAX_COMBINED_SERIES : CHART_FORMS[chartRequestData.form].maxCount;
+  let selection = pickTopSeries(
+    series,
+    Math.min(request.top ?? CHART_FORMS[chartRequestData.form].defaultCount, formLimit),
+    isRestDrawnAsOne,
+  );
+  let hasCombinedRows = chartRequestData.hasCombinedRows && !isSummed;
+  let showsTotalPeak = chartRequestData.form === "columns" && isRestDrawnAsOne && series.length > 1;
+  let header = plotFrame(chartRequestData, request, [
+    ...(chartRequestData.subject === "" ? [] : [chartRequestData.subject]),
+    ...chartRequestData.timeline.spanLabels,
+    ...(request.log ? ["log scale"] : []),
+    ...(hasCombinedRows ? [`rows combined by ${request.combine}`] : []),
+    ...(showsTotalPeak ? [totalPeakNote(series, chartRequestData.timeline)] : []),
   ]);
   let notes = [
-    ...e.leftOutNotes,
-    ...e.notes,
+    ...chartRequestData.leftOutNotes,
+    ...chartRequestData.notes,
     ...describeGroupedOthers({
-      form: e.form,
-      cutSeries: n.cutSeries,
-      drawnAloneCount: n.topSeries.length,
-      isRestDrawnAsOne: p,
-      formLimit: m,
-      top: t.top,
+      form: chartRequestData.form,
+      cutSeries: selection.cutSeries,
+      drawnAloneCount: selection.topSeries.length,
+      isRestDrawnAsOne,
+      formLimit,
+      top: request.top,
     }),
-    ...(o ? describeTotalColumn(mapped, CHART_FORMS[e.form].plural) : []),
+    ...(isSummed ? describeTotalColumn(series, CHART_FORMS[chartRequestData.form].plural) : []),
   ];
-  switch (e.form) {
+  switch (chartRequestData.form) {
     case "bars":
       return describeBarsLimit({
         frame: {
           header,
           notes,
         },
-        selection: n,
-        allSeries: mapped,
-        request: t,
+        selection,
+        allSeries: series,
+        request,
       });
     case "share":
       return layoutShareChart(
@@ -697,31 +727,34 @@ function planChartLayout(e, t) {
           header,
           notes,
         },
-        n,
-        mapped,
+        selection,
+        series,
       );
     case "sparks":
       return describeStretch({
-        topSeries: n.topSeries,
+        topSeries: selection.topSeries,
         frame: {
           header,
           notes,
         },
-        request: t,
-        data: e,
+        request,
+        data: chartRequestData,
       });
     case "line":
     case "columns":
       return layoutPlots({
-        groups: r
-          ? n.topSeries.map((l) => [l])
-          : groupSeriesByScale(n.drawnSeries, e.form === "columns" || t.log === true),
+        groups: isCombinedColumns
+          ? selection.topSeries.map((series) => [series])
+          : groupSeriesByScale(
+              selection.drawnSeries,
+              chartRequestData.form === "columns" || request.log === true,
+            ),
         frame: {
           header,
           notes,
         },
-        request: t,
-        data: e,
+        request,
+        data: chartRequestData,
       });
   }
 }
@@ -729,41 +762,41 @@ function planChartLayout(e, t) {
 /**
  * 标记点文本
  */
-function markLabel(e) {
-  return e.label !== "" ? `mark at ${e.when}: ${e.label}` : `mark at ${e.when}`;
+function markLabel(mark) {
+  return mark.label !== "" ? `mark at ${mark.when}: ${mark.label}` : `mark at ${mark.when}`;
 }
 //@ chunk-3s7ydtfd.js:63070-63137 placement
 /**
  * 汇总注释
  */
-var allNotes = (e) => ("plots" in e ? [...e.notes, ...e.modelOnlyNotes] : e.notes);
+var allNotes = (layout) => ("plots" in layout ? [...layout.notes, ...layout.modelOnlyNotes] : layout.notes);
 //@ chunk-3s7ydtfd.js:63137-63153 placement = SEP_WIDTH (1)
-var SEP_WIDTH = " \xB7 ";
+var SEP = " \xB7 ";
 //@ chunk-3s7ydtfd.js:63153-63217 placement
 /**
  * 带引号的标题
  */
 var quotedPlotTitle = (header) => (header.title === "" ? "" : ` "${header.title.replaceAll('"', "'")}"`);
 //@ chunk-3s7ydtfd.js:63217-63725 placement
-function renderLegend(e) {
+function renderLegend(layout) {
   let joined = [
-    `${CHART_FORMS[e.form].label}` + quotedPlotTitle(e.header),
-    ...e.header.facts,
-    `from ${e.header.source}`,
-  ].join(SEP_WIDTH);
-  let mapped = ("plots" in e ? e.plots.flatMap((plot) => plot.rows) : e.rows).map((s) => {
-    let p = "stretches" in s ? s.stretches.flat().length : 0;
+    `${CHART_FORMS[layout.form].label}` + quotedPlotTitle(layout.header),
+    ...layout.header.facts,
+    `from ${layout.header.source}`,
+  ].join(SEP);
+  let mapped = ("plots" in layout ? layout.plots.flatMap((plot) => plot.rows) : layout.rows).map((row) => {
+    let pointCount = "stretches" in row ? row.stretches.flat().length : 0;
     return (
-      `- ${s.name}: ` +
+      `- ${row.name}: ` +
       [
-        ...s.stats.map((stat) => stat.filter((n) => n !== "").join(" ")),
-        ...(p > 0 ? [formatCount(p, "point")] : []),
-      ].join(SEP_WIDTH)
+        ...row.stats.map((stat) => stat.filter((part) => part !== "").join(" ")),
+        ...(pointCount > 0 ? [formatCount(pointCount, "point")] : []),
+      ].join(SEP)
     );
   });
-  let r = [
-    ...("plots" in e ? e.marks : []).map((s) => markLabel(s)),
-    ...allNotes(e).map((s) => `note: ${s}`),
+  let tailLines = [
+    ...("plots" in layout ? layout.marks : []).map((mark) => markLabel(mark)),
+    ...allNotes(layout).map((note) => `note: ${note}`),
   ];
   return [
     joined,
@@ -772,27 +805,27 @@ function renderLegend(e) {
       takeWhileBudget(
         mapped,
         MAX_PLOT_WIDTH -
-          [joined, ...r].join(`
+          [joined, ...tailLines].join(`
 `).length,
-        (s) => s.length + 1,
+        (line) => line.length + 1,
       ).length,
       "more row",
     ),
-    ...r,
+    ...tailLines,
   ];
 }
 //@ chunk-3s7ydtfd.js:63725-63782 placement
 /**
  * 展示名数量相符
  */
-var hasExactlyNames = (e) => (t) => new Set(t.shownNames.values()).size === e;
+var hasExactlyNames = (count) => (rowLayout) => new Set(rowLayout.shownNames.values()).size === count;
 //@ chunk-3s7ydtfd.js:63782-63876 placement
 /**
  * 是否还有空间
  */
-var hasRoomFor = (rowLayout, t, o) => (r, s) => {
-  let p = s < rowLayout.lane.statsBeforeNames;
-  return rowLayout.widthPastKey - r.end >= (p ? t : o);
+var hasRoomFor = (rowLayout, statsWidth, nameWidth) => (range, index) => {
+  let isStat = index < rowLayout.lane.statsBeforeNames;
+  return rowLayout.widthPastKey - range.end >= (isStat ? statsWidth : nameWidth);
 };
 //@ chunk-3s7ydtfd.js:63876-63885 placement
 /**
@@ -908,51 +941,58 @@ var DEFAULT_ROW_OPTIONS = 1;
 /**
  * 行布局的输入（名称是否已在标题中、缩进、键宽）。
  */
-function prepareRowLayout(e) {
-  let t = e.rows.length === 1 ? e.rows[0] : undefined;
-  let o = t !== undefined && e.headerTexts.includes(t.name);
-  let s = e.rows.some((p) => p.key) ? MIN_SEGMENT : 0;
+function prepareRowLayout(options) {
+  let onlyRow = options.rows.length === 1 ? options.rows[0] : undefined;
+  let isNamedInHeader = onlyRow !== undefined && options.headerTexts.includes(onlyRow.name);
+  let keyWidth = options.rows.some((row) => row.key) ? MIN_SEGMENT : 0;
   return {
-    rows: e.rows,
-    lane: e.lane,
-    fullNames: o ? [] : e.rows.map((p) => p.name),
-    isNamedInHeader: o,
-    indent: Math.max(0, e.left - MIN_LANE_GAP),
-    keyWidth: s,
-    widthPastKey: e.columns - s - MIN_LANE_GAP,
+    rows: options.rows,
+    lane: options.lane,
+    fullNames: isNamedInHeader ? [] : options.rows.map((row) => row.name),
+    isNamedInHeader,
+    indent: Math.max(0, options.left - MIN_LANE_GAP),
+    keyWidth,
+    widthPastKey: options.columns - keyWidth - MIN_LANE_GAP,
   };
 }
 //@ chunk-3s7ydtfd.js:64385-64421 placement
 /**
  * 最长显示宽度
  */
-var maxDisplayWidth = (e) => Math.max(0, ...e.map(displayWidth));
+var maxDisplayWidth = (names) => Math.max(0, ...names.map(displayWidth));
 //@ chunk-3s7ydtfd.js:64421-64484 placement
 /**
  * 计算列位置
  */
-var columnPositions = (e, lane, o) =>
-  o ? Math.min(Math.floor(e / LANE_WIDTH_DIVISOR), e - lane.minWidth - DEFAULT_ROW_OPTIONS) : e;
+var columnPositions = (columns, lane, isSplit) =>
+  isSplit
+    ? Math.min(Math.floor(columns / LANE_WIDTH_DIVISOR), columns - lane.minWidth - DEFAULT_ROW_OPTIONS)
+    : columns;
 //@ chunk-3s7ydtfd.js:64484-64851 placement
 /**
  * 计算行的列位置：名称、色道、统计列。
  */
-function computeRowLayout(rowLayout, t) {
-  let o = rowLayout.lane.minWidth > 0;
-  let r = rowLayout.widthPastKey - (t.at(-1)?.end ?? 0);
-  let s = o && r >= MAX_LEGEND_ENTRIES + rowLayout.lane.minWidth;
-  let p = measureLabelWidth(rowLayout.fullNames, columnPositions(r, rowLayout.lane, s));
-  let m = rowLayout.isNamedInHeader ? Math.min(rowLayout.indent, r) : maxDisplayWidth(p);
-  let n = s ? r - m - DEFAULT_ROW_OPTIONS : 0;
-  let a = rowLayout.keyWidth + m + (s ? DEFAULT_ROW_OPTIONS + n : 0);
+function computeRowLayout(rowLayout, statColumns) {
+  let hasLane = rowLayout.lane.minWidth > 0;
+  let widthPastStats = rowLayout.widthPastKey - (statColumns.at(-1)?.end ?? 0);
+  let canShowLane = hasLane && widthPastStats >= MAX_LEGEND_ENTRIES + rowLayout.lane.minWidth;
+  let names = measureLabelWidth(
+    rowLayout.fullNames,
+    columnPositions(widthPastStats, rowLayout.lane, canShowLane),
+  );
+  let nameWidth = rowLayout.isNamedInHeader
+    ? Math.min(rowLayout.indent, widthPastStats)
+    : maxDisplayWidth(names);
+  let laneWidth = canShowLane ? widthPastStats - nameWidth - DEFAULT_ROW_OPTIONS : 0;
+  let statsLeft = rowLayout.keyWidth + nameWidth + (canShowLane ? DEFAULT_ROW_OPTIONS + laneWidth : 0);
   return {
-    wantsLane: o,
+    wantsLane: hasLane,
     keyWidth: rowLayout.keyWidth,
-    shownNames: new Map(returnValue(rowLayout.rows, p)),
-    laneLeft: rowLayout.keyWidth + m + DEFAULT_ROW_OPTIONS,
-    laneWidth: n,
-    statsLeft: a > 0 ? a + MIN_LANE_GAP : 0,
-    statColumns: t,
+    shownNames: new Map(returnValue(rowLayout.rows, names)),
+    laneLeft: rowLayout.keyWidth + nameWidth + DEFAULT_ROW_OPTIONS,
+    laneWidth,
+    statsLeft: statsLeft > 0 ? statsLeft + MIN_LANE_GAP : 0,
+    statColumns,
   };
 }
 //@ chunk-3s7ydtfd.js:64851-64972 placement
@@ -970,131 +1010,134 @@ var minNameWidth = (rowLayout, columns) =>
 //@ chunk-3s7ydtfd.js:64972-64987 placement
 var COLUMN_INDEXES = [0, 1, 2];
 //@ chunk-3s7ydtfd.js:64987-65041 placement
-var maxStatsLength = (rows) => Math.max(0, ...rows.map((t) => t.stats.length));
+var maxStatsLength = (rows) => Math.max(0, ...rows.map((row) => row.stats.length));
 //@ chunk-3s7ydtfd.js:65041-65247 placement = rollFrom (0.363)
 function layoutStatColumns(rows) {
-  let t = [];
-  let o = -MIN_LANE_GAP;
-  for (let r of rangeIndices(maxStatsLength(rows))) {
-    o += MIN_LANE_GAP - DEFAULT_ROW_OPTIONS;
-    let s = [];
-    for (let p of COLUMN_INDEXES) {
-      let rarity = maxDisplayWidth(rows.map((n) => n.stats[r]?.[p] ?? ""));
-      o += rarity > 0 ? DEFAULT_ROW_OPTIONS + rarity : 0;
-      s.push({
-        start: o - rarity,
+  let columns = [];
+  let end = -MIN_LANE_GAP;
+  for (let groupIndex of rangeIndices(maxStatsLength(rows))) {
+    end += MIN_LANE_GAP - DEFAULT_ROW_OPTIONS;
+    let parts = [];
+    for (let partIndex of COLUMN_INDEXES) {
+      let rarity = maxDisplayWidth(rows.map((row) => row.stats[groupIndex]?.[partIndex] ?? ""));
+      end += rarity > 0 ? DEFAULT_ROW_OPTIONS + rarity : 0;
+      parts.push({
+        start: end - rarity,
         width: rarity,
       });
     }
-    t.push({
-      parts: s,
-      end: o,
+    columns.push({
+      parts,
+      end,
     });
   }
-  return t;
+  return columns;
 }
 //@ chunk-3s7ydtfd.js:65247-65487 placement
 /**
  * 选择能放下的统计列数并计算行布局。
  */
-function layoutRows(e) {
-  let rowLayout = prepareRowLayout(e);
-  let filtered = layoutStatColumns(e.rows).filter(
+function layoutRows(options) {
+  let rowLayout = prepareRowLayout(options);
+  let statColumns = layoutStatColumns(options.rows).filter(
     hasRoomFor(
       rowLayout,
       Math.min(maxDisplayWidth(rowLayout.fullNames), MAX_LEGEND_ENTRIES),
-      minNameWidth(rowLayout, e.columns),
+      minNameWidth(rowLayout, options.columns),
     ),
   );
   return (
-    rangeIndices(Math.max(0, filtered.length - e.lane.statsBeforeNames) + 1)
-      .map((r) => computeRowLayout(rowLayout, filtered.slice(0, filtered.length - r)))
-      .find(hasExactlyNames(new Set(rowLayout.fullNames).size)) ?? computeRowLayout(rowLayout, filtered)
+    rangeIndices(Math.max(0, statColumns.length - options.lane.statsBeforeNames) + 1)
+      .map((extraColumns) =>
+        computeRowLayout(rowLayout, statColumns.slice(0, statColumns.length - extraColumns)),
+      )
+      .find(hasExactlyNames(new Set(rowLayout.fullNames).size)) ?? computeRowLayout(rowLayout, statColumns)
   );
 }
 //@ chunk-3s7ydtfd.js:65487-65540 placement
 /**
  * 带色道的行布局
  */
-var laneFrame = (shapes, t, laneLeft) => ({
+var laneFrame = (shapes, y, laneLeft) => ({
   shapes,
-  rows: t + 1,
+  rows: y + 1,
   lane: {
     x: laneLeft,
-    y: t,
+    y,
   },
 });
 //@ chunk-3s7ydtfd.js:65540-65621 placement
 /**
  * 文字图形
  */
-var textShape = (e) => ({
+var textShape = (shape) => ({
   kind: "text",
-  at: e.at,
-  text: e.text,
-  ink: e.ink,
+  at: shape.at,
+  text: shape.text,
+  ink: shape.ink,
   isAboutPartsLeftOut: false,
 });
 //@ chunk-3s7ydtfd.js:65621-65672 placement
 /**
  * 空白文本返回空数组
  */
-function textShapeOrEmpty(e) {
-  return e.text.trim() === "" ? [] : [textShape(e)];
+function textShapeOrEmpty(shape) {
+  return shape.text.trim() === "" ? [] : [textShape(shape)];
 }
 //@ chunk-3s7ydtfd.js:65672-65707 placement
 /**
  * 名字前留白
  */
-var keyPadding = (e, t, o) => (t > 0 ? e.width - displayWidth(o) : 0);
+var keyPadding = (part, partIndex, text) => (partIndex > 0 ? part.width - displayWidth(text) : 0);
 //@ chunk-3s7ydtfd.js:65707-65747 placement
 /**
  * 名称的颜色
  */
-var nameInk = (e, t) => (e.wantsLane ? "title" : t.ink);
+var nameInk = (rowLayout, row) => (rowLayout.wantsLane ? "title" : row.ink);
 //@ chunk-3s7ydtfd.js:65747-65786 placement
 /**
  * 统计列的颜色
  */
-var statInk = (e, t, o) => (o === TITLE_ROW_INDEX ? nameInk(e, t) : "quiet");
+var statInk = (rowLayout, row, partIndex) =>
+  partIndex === TITLE_ROW_INDEX ? nameInk(rowLayout, row) : "quiet";
 //@ chunk-3s7ydtfd.js:65786-66149 placement
 /**
  * 画一行的键、名称与统计值。
  */
-function drawRowLabels(e, t, o) {
+function drawRowLabels(rowLayout, row, y) {
   let shapes = [
     ...textShapeOrEmpty({
       at: {
         x: 0,
-        y: o,
+        y,
       },
-      text: t.key,
-      ink: t.ink,
+      text: row.key,
+      ink: row.ink,
     }),
     ...textShapeOrEmpty({
       at: {
-        x: e.keyWidth,
-        y: o,
+        x: rowLayout.keyWidth,
+        y,
       },
-      text: e.shownNames.get(t) ?? "",
-      ink: e.wantsLane ? "words" : "title",
+      text: rowLayout.shownNames.get(row) ?? "",
+      ink: rowLayout.wantsLane ? "words" : "title",
     }),
   ];
-  for (let [s, p] of e.statColumns.entries())
-    for (let [m, n] of p.parts.entries()) {
-      let a = t.stats[s]?.[m] ?? "";
+  for (let [groupIndex, group] of rowLayout.statColumns.entries())
+    for (let [partIndex, part] of group.parts.entries()) {
+      let text = row.stats[groupIndex]?.[partIndex] ?? "";
       shapes.push(
         ...textShapeOrEmpty({
           at: {
-            x: e.statsLeft + n.start + keyPadding(n, m, a),
-            y: o,
+            x: rowLayout.statsLeft + part.start + keyPadding(part, partIndex, text),
+            y,
           },
-          text: a,
-          ink: statInk(e, t, m),
+          text,
+          ink: statInk(rowLayout, row, partIndex),
         }),
       );
     }
-  return laneFrame(shapes, o, e.laneLeft);
+  return laneFrame(shapes, y, rowLayout.laneLeft);
 }
 //@ chunk-3s7ydtfd.js:66149-66188 placement
 /**
@@ -1116,174 +1159,180 @@ var MIN_LANE_OPTIONS = {
 /**
  * 柱形（宽度按相对长度，负值加斜线）。
  */
-var barShape = (at, t, o) => ({
+var barShape = (at, row, rowLayout) => ({
   kind: "bar",
   at,
-  width: Math.max(BAR_GAP_FRACTION, Math.abs(t.relativeLength) * o.laneWidth),
-  ink: t.ink,
-  isHatched: t.relativeLength < 0,
+  width: Math.max(BAR_GAP_FRACTION, Math.abs(row.relativeLength) * rowLayout.laneWidth),
+  ink: row.ink,
+  isHatched: row.relativeLength < 0,
 });
 //@ chunk-3s7ydtfd.js:66360-66605 placement
 /**
  * 画柱状图的各行。
  */
-function drawBarRows(e, rows, headerTexts) {
-  let r = layoutRows({
+function drawBarRows(frame, rows, headerTexts) {
+  let rowLayout = layoutRows({
     rows,
-    columns: e.columns,
+    columns: frame.columns,
     lane: MIN_LANE_OPTIONS,
     headerTexts,
     left: 0,
   });
   return {
-    shapes: rows.flatMap((s, p) => {
-      let m = drawRowLabels(r, s, e.rows + p);
-      return s.relativeLength !== 0 && r.laneWidth > 0 ? [...m.shapes, barShape(m.lane, s, r)] : m.shapes;
+    shapes: rows.flatMap((row, index) => {
+      let labels = drawRowLabels(rowLayout, row, frame.rows + index);
+      return row.relativeLength !== 0 && rowLayout.laneWidth > 0
+        ? [...labels.shapes, barShape(labels.lane, row, rowLayout)]
+        : labels.shapes;
     }),
-    rows: e.rows + rows.length,
+    rows: frame.rows + rows.length,
   };
 }
 //@ chunk-3s7ydtfd.js:66605-66637 placement
 /**
  * 按精度取整
  */
-var roundToScale = (e) => Math.round(e * BAR_SCALE) / BAR_SCALE;
+var roundToScale = (value) => Math.round(value * BAR_SCALE) / BAR_SCALE;
 //@ chunk-3s7ydtfd.js:66637-66681 placement
 /**
  * 键标记
  */
-var laneKeyMark = (e, row) => ({
-  key: e.key,
-  ink: e.ink,
-  row,
+var laneKeyMark = (row, row_2) => ({
+  key: row.key,
+  ink: row.ink,
+  row: row_2,
 });
 //@ chunk-3s7ydtfd.js:66681-66770 placement
 /**
  * 最后一个伸展段的标记
  */
-function lastStretchMark(e, t) {
-  let last = e.stretches.at(-1)?.at(-1);
-  return last ? [laneKeyMark(e, Math.floor(t(last.y)))] : [];
+function lastStretchMark(row, yOf) {
+  let last = row.stretches.at(-1)?.at(-1);
+  return last ? [laneKeyMark(row, Math.floor(yOf(last.y)))] : [];
 }
 //@ chunk-3s7ydtfd.js:66770-66841 placement
 /**
  * 按行分组标记
  */
-var groupMarksByRow = (e, t) =>
+var groupMarksByRow = (rows, yOf) =>
   groupIndexBy(
-    e.filter((o) => o.key).flatMap((o) => lastStretchMark(o, t)),
-    (o) => o.row,
+    rows.filter((row) => row.key).flatMap((row) => lastStretchMark(row, yOf)),
+    (mark) => mark.row,
   );
 //@ chunk-3s7ydtfd.js:66841-66857 placement
 var CHART_ROW_DENSITIES = [11, 7, 5];
 //@ chunk-3s7ydtfd.js:66857-66891 placement
-var rowsPerTick = (e, t) => Math.floor((e - 1) / t);
+var rowsPerTick = (rows, ticks) => Math.floor((rows - 1) / ticks);
 //@ chunk-3s7ydtfd.js:66891-66964 placement
-var chartRowScale = (e, t) =>
+var chartRowScale = (plotCount, valueSpan) =>
   Math.max(
     1,
     Math.min(
-      rowsPerTick(CHART_ROW_DENSITIES.at(e - 1) ?? Math.min(...CHART_ROW_DENSITIES), t),
+      rowsPerTick(CHART_ROW_DENSITIES.at(plotCount - 1) ?? Math.min(...CHART_ROW_DENSITIES), valueSpan),
       KEY_COLUMN_WIDTH,
     ),
   );
 //@ chunk-3s7ydtfd.js:66964-67030 placement
-var ticksInRange = (e, t, o) => e.ticks.filter((tick) => tick.position >= t && tick.position <= o);
+var ticksInRange = (plot, from, to) =>
+  plot.ticks.filter((tick) => tick.position >= from && tick.position <= to);
 //@ chunk-3s7ydtfd.js:67030-67227 placement
 function unstackColumnRows(rows) {
-  let t = new Map();
-  let o = [];
-  for (let r of rows) {
-    o.push({
-      ...r,
-      stretches: r.stretches.map((stretch) =>
-        stretch.map((p) => ({
-          x: p.x,
-          y: p.y - (t.get(p.x) ?? 0),
+  let lastY = new Map();
+  let out = [];
+  for (let row of rows) {
+    out.push({
+      ...row,
+      stretches: row.stretches.map((stretch) =>
+        stretch.map((point) => ({
+          x: point.x,
+          y: point.y - (lastY.get(point.x) ?? 0),
         })),
       ),
     });
-    for (let stretch of r.stretches.flat()) t.set(stretch.x, stretch.y);
+    for (let stretch of row.stretches.flat()) lastY.set(stretch.x, stretch.y);
   }
-  return o;
+  return out;
 }
 //@ chunk-3s7ydtfd.js:67227-67610 placement
-function layoutPlotRows(plot, t, o) {
-  let r = t.form === "columns";
-  let s = r && !o ? unstackColumnRows(plot.rows) : plot.rows;
-  let mapped = s.flatMap((T) => T.stretches.flat()).map((T) => T.y);
-  let m = r ? 0 : Math.min(...mapped);
+function layoutPlotRows(plot, layout, isSinglePlot) {
+  let isColumns = layout.form === "columns";
+  let rows = isColumns && !isSinglePlot ? unstackColumnRows(plot.rows) : plot.rows;
+  let mapped = rows.flatMap((row) => row.stretches.flat()).map((point) => point.y);
+  let minY = isColumns ? 0 : Math.min(...mapped);
   let max = Math.max(...mapped);
-  let a = plot.ticks.length - 1;
-  let f = ticksInRange(plot, m, max).length >= MIN_STATS_WIDTH;
-  let i = f ? m : 0;
-  let x = f ? max : 1;
-  let u = max > m ? chartRowScale(t.plots.length, (x - i) * a) : 1;
-  let d = (T) => roundToScale((1 - T) * a * u);
-  let c = (T) => Math.round(d(T));
-  let g = (T) => HALF + d(T) - c(x);
+  let lastTickIndex = plot.ticks.length - 1;
+  let hasStatsRoom = ticksInRange(plot, minY, max).length >= MIN_STATS_WIDTH;
+  let baseY = hasStatsRoom ? minY : 0;
+  let topY = hasStatsRoom ? max : 1;
+  let rowScale = max > minY ? chartRowScale(layout.plots.length, (topY - baseY) * lastTickIndex) : 1;
+  let rawRow = (y) => roundToScale((1 - y) * lastTickIndex * rowScale);
+  let rowOf = (y) => Math.round(rawRow(y));
+  let yOf = (y) => HALF + rawRow(y) - rowOf(topY);
   return {
     ...plot,
-    rows: s,
-    yOf: g,
-    height: c(i) - c(x) + 1,
-    endKeys: groupMarksByRow(o ? [] : s, g),
+    rows,
+    yOf,
+    height: rowOf(baseY) - rowOf(topY) + 1,
+    endKeys: groupMarksByRow(isSinglePlot ? [] : rows, yOf),
   };
 }
 //@ chunk-3s7ydtfd.js:67610-67674 placement
 function keyColumnWidth(plots) {
-  return plots.some((o) => o.rows.some((r) => r.key)) ? MIN_SEGMENT : 0;
+  return plots.some((plot) => plot.rows.some((row) => row.key)) ? MIN_SEGMENT : 0;
 }
 //@ chunk-3s7ydtfd.js:67674-67787 placement
-function endKeysWidth(e) {
-  let max = Math.max(0, ...e.flatMap((o) => [...o.endKeys.values()]).map((o) => o.length));
+function endKeysWidth(rows) {
+  let max = Math.max(0, ...rows.flatMap((row) => [...row.endKeys.values()]).map((mark) => mark.length));
   return max > 0 ? DEFAULT_ROW_OPTIONS + max : 0;
 }
 //@ chunk-3s7ydtfd.js:67787-67952 placement
-function columnAreaLayout(e, t, o) {
-  let max = Math.max(1, t - 1);
-  let s = (m) => e + Math.floor(roundToScale(m * o)) * t;
-  let tickXOf = (m) => Math.min(s(m), s((o - 1) / o)) + max / MIN_LANE_WIDTH;
+function columnAreaLayout(left, columnWidth, columnCount) {
+  let max = Math.max(1, columnWidth - 1);
+  let xOf = (fraction) => left + Math.floor(roundToScale(fraction * columnCount)) * columnWidth;
+  let tickXOf = (tick) => Math.min(xOf(tick), xOf((columnCount - 1) / columnCount)) + max / MIN_LANE_WIDTH;
   return {
-    left: e,
-    width: t * o,
+    left,
+    width: columnWidth * columnCount,
     columnWidth: max,
-    xOf: s,
+    xOf,
     tickXOf,
   };
 }
 //@ chunk-3s7ydtfd.js:67952-68044 placement
-function continuousAreaLayout(e, t) {
-  let o = (r) => e + r * (t - HALF);
+function continuousAreaLayout(left, width) {
+  let xOf = (fraction) => left + fraction * (width - HALF);
   return {
-    left: e,
-    width: t,
+    left,
+    width,
     columnWidth: 0,
-    xOf: o,
-    tickXOf: o,
+    xOf,
+    tickXOf: xOf,
   };
 }
 //@ chunk-3s7ydtfd.js:68044-68179 placement
-function layoutChartArea(plots, t, o) {
-  let r = maxDisplayWidth(plots.flatMap((n) => n.ticks.map((tick) => tick.label))) + MIN_MARK_ROWS;
-  let s = t - r;
-  let p = o > 0 ? Math.floor(s / o) : 0;
-  return p === 0 ? continuousAreaLayout(r, s) : columnAreaLayout(r, p, o);
+function layoutChartArea(plots, width, columnCount) {
+  let labelWidth =
+    maxDisplayWidth(plots.flatMap((plot) => plot.ticks.map((tick) => tick.label))) + MIN_MARK_ROWS;
+  let areaWidth = width - labelWidth;
+  let cellWidth = columnCount > 0 ? Math.floor(areaWidth / columnCount) : 0;
+  return cellWidth === 0
+    ? continuousAreaLayout(labelWidth, areaWidth)
+    : columnAreaLayout(labelWidth, cellWidth, columnCount);
 }
 //@ chunk-3s7ydtfd.js:68179-68366 placement
-function layoutPlots_2(e, columns) {
-  let plots = e.plots;
-  let r = layoutChartArea(plots, columns - keyColumnWidth(plots), e.timeline.periodStarts.length);
-  let s = r.columnWidth > 0;
-  let mapped = plots.map((plot) => layoutPlotRows(plot, e, s));
-  return s
+function layoutPlots_2(layout, columns) {
+  let plots = layout.plots;
+  let area = layoutChartArea(plots, columns - keyColumnWidth(plots), layout.timeline.periodStarts.length);
+  let isColumns = area.columnWidth > 0;
+  let rows = plots.map((plot) => layoutPlotRows(plot, layout, isColumns));
+  return isColumns
     ? {
-        area: r,
-        drawnPlots: mapped,
+        area,
+        drawnPlots: rows,
       }
     : {
-        area: layoutChartArea(plots, columns - endKeysWidth(mapped), 0),
-        drawnPlots: mapped,
+        area: layoutChartArea(plots, columns - endKeysWidth(rows), 0),
+        drawnPlots: rows,
       };
 }
 //@ chunk-3s7ydtfd.js:68366-68416 placement
@@ -1293,71 +1342,71 @@ var axisRowShape = (at, gridWidth) => ({
   gridWidth,
 });
 //@ chunk-3s7ydtfd.js:68416-68472 placement
-var flattenThinStack = (e) =>
-  e.map((t, o) => ({
-    ink: t.ink,
-    height: o > 0 ? 0 : BAR_GAP_FRACTION,
+var flattenThinStack = (parts) =>
+  parts.map((part, index) => ({
+    ink: part.ink,
+    height: index > 0 ? 0 : BAR_GAP_FRACTION,
   }));
 //@ chunk-3s7ydtfd.js:68472-68538 placement
-var stackShape = (at, t, parts) => ({
+var stackShape = (at, area, parts) => ({
   kind: "stack",
   at,
-  width: t.columnWidth,
+  width: area.columnWidth,
   parts,
 });
 //@ chunk-3s7ydtfd.js:68538-68711 placement
 var toColumnStack =
-  (e, area) =>
-  ([o, r]) => {
-    let s = [];
-    let p = {
-      y: e,
+  (baseline, area) =>
+  ([x, points]) => {
+    let parts = [];
+    let previous = {
+      y: baseline,
       position: 0,
     };
-    for (let m of r) {
-      if (m.position > p.position)
-        s.push({
-          height: p.y - m.y,
-          ink: m.ink,
+    for (let point of points) {
+      if (point.position > previous.position)
+        parts.push({
+          height: previous.y - point.y,
+          ink: point.ink,
         });
-      p = m;
+      previous = point;
     }
     return stackShape(
       {
-        x: o,
-        y: e,
+        x,
+        y: baseline,
       },
       area,
-      e - p.y < BAR_GAP_FRACTION ? flattenThinStack(s) : s,
+      baseline - previous.y < BAR_GAP_FRACTION ? flattenThinStack(parts) : parts,
     );
   };
 //@ chunk-3s7ydtfd.js:68711-68828 placement
-var groupPointsByColumn = (e) =>
+var groupPointsByColumn = (plot) =>
   groupIndexBy(
-    e.rows.flatMap((t) =>
-      t.stretches.flat().map((stretch) => ({
-        ...e.toCells(stretch),
+    plot.rows.flatMap((row) =>
+      row.stretches.flat().map((stretch) => ({
+        ...plot.toCells(stretch),
         position: stretch.y,
-        ink: t.ink,
+        ink: row.ink,
       })),
     ),
-    (t) => t.x,
+    (point) => point.x,
   );
 //@ chunk-3s7ydtfd.js:68828-68890 placement
-var columnStacks = (e) =>
-  [...groupPointsByColumn(e)].map(
+var columnStacks = (plot) =>
+  [...groupPointsByColumn(plot)].map(
     toColumnStack(
-      e.toCells({
+      plot.toCells({
         x: 0,
         y: 0,
       }).y,
-      e.area,
+      plot.area,
     ),
   );
 //@ chunk-3s7ydtfd.js:68890-68954 placement
-var markFlag = (area) => (t) => ({
-  x: area.tickXOf(t.position),
-  text: truncateMiddle(t.label, AXIS_LABEL_INDENT),
+var markFlag = (area) => (mark) => ({
+  x: area.tickXOf(mark.position),
+  text: truncateMiddle(mark.label, AXIS_LABEL_INDENT),
 });
 //@ chunk-3s7ydtfd.js:68954-68999 placement
 var lineShape = (points, ink) => ({
@@ -1367,153 +1416,157 @@ var lineShape = (points, ink) => ({
 });
 //@ chunk-3s7ydtfd.js:68999-69098 placement = diff (0.798)
 var pointSegment = (prev, next) =>
-  [prev.x - HALF, prev.x + HALF].map((o) => ({
-    x: Math.max(next.left, Math.min(o, next.left + next.width - BAR_FRACTION)),
+  [prev.x - HALF, prev.x + HALF].map((x) => ({
+    x: Math.max(next.left, Math.min(x, next.left + next.width - BAR_FRACTION)),
     y: prev.y,
   }));
 //@ chunk-3s7ydtfd.js:69098-69270 placement = diff (0.794)
-var decimateLinePoints = (e) =>
-  [...groupIndexBy(e, (t) => Math.floor(t.x / HALF)).values()].flatMap((t) => {
-    let o = t.toSorted((s, p) => s.y - p.y);
-    let r = [t[0], o[0], o.at(-1), t.at(-1)];
-    return t.filter((s) => r.includes(s));
+var decimateLinePoints = (points) =>
+  [...groupIndexBy(points, (point) => Math.floor(point.x / HALF)).values()].flatMap((points) => {
+    let sorted = points.toSorted((a, b) => a.y - b.y);
+    let kept = [points[0], sorted[0], sorted.at(-1), points.at(-1)];
+    return points.filter((point) => kept.includes(point));
   });
 //@ chunk-3s7ydtfd.js:69270-69312 placement
-var linePoints = (e, area) => (e.length > 1 ? decimateLinePoints(e) : pointSegment(e[0], area));
+var linePoints = (points, area) =>
+  points.length > 1 ? decimateLinePoints(points) : pointSegment(points[0], area);
 //@ chunk-3s7ydtfd.js:69312-69508 placement
-function splitLineRuns(e) {
-  let t = [];
-  let o = [];
-  let r = -1 / 0;
-  for (let [s, ...p] of e) {
-    if (s === undefined) continue;
-    let m = p.length === 0 ? HALF : 0;
-    if (s.x - m - r < MIN_LEGEND_COLUMN) o.push(s, ...p);
+function splitLineRuns(stretches) {
+  let runs = [];
+  let current = [];
+  let lastX = -1 / 0;
+  for (let [first, ...rest] of stretches) {
+    if (first === undefined) continue;
+    let lead = rest.length === 0 ? HALF : 0;
+    if (first.x - lead - lastX < MIN_LEGEND_COLUMN) current.push(first, ...rest);
     else {
-      let a = [s, ...p];
-      t.push(a);
-      o = a;
+      let run = [first, ...rest];
+      runs.push(run);
+      current = run;
     }
-    r = (p.at(-1) ?? s).x + m;
+    lastX = (rest.at(-1) ?? first).x + lead;
   }
-  return t;
+  return runs;
 }
 //@ chunk-3s7ydtfd.js:69508-69667 placement
 function lineShapes({ rows, area, toCells }) {
-  let r = [];
-  for (let s of rows.toReversed())
-    for (let p of splitLineRuns(s.stretches.map((stretch) => stretch.map(toCells))))
-      r.push(lineShape(linePoints(p, area), s.ink));
-  return r;
+  let shapes = [];
+  for (let row of rows.toReversed())
+    for (let run of splitLineRuns(row.stretches.map((stretch) => stretch.map(toCells))))
+      shapes.push(lineShape(linePoints(run, area), row.ink));
+  return shapes;
 }
 //@ chunk-3s7ydtfd.js:69667-69756 placement
-var axisTickRow = (e, area) =>
+var axisTickRow = (markCells, area) =>
   rangeIndices(area.width)
-    .map((o) => (e.some((s) => s.column === o) ? "\u252C" : "\u2500"))
+    .map((index) => (markCells.some((mark) => mark.column === index) ? "\u252C" : "\u2500"))
     .join("");
 //@ chunk-3s7ydtfd.js:69756-69851 placement
-var xAxisShapes = (e, t) =>
+var xAxisShapes = (layout, labels) =>
   textShapeOrEmpty({
     at: {
-      x: e.area.left - 1,
-      y: e.room.rows,
+      x: layout.area.left - 1,
+      y: layout.room.rows,
     },
-    text: `\u2514${axisTickRow(t, e.area)}`,
+    text: `\u2514${axisTickRow(labels, layout.area)}`,
     ink: "quiet",
   });
 //@ chunk-3s7ydtfd.js:69851-69938 placement
-var xLabelShapes = (e, area, o) =>
-  e.flatMap((r) =>
+var xLabelShapes = (labels, area, y) =>
+  labels.flatMap((label) =>
     textShapeOrEmpty({
       at: {
-        x: area.left + r.start,
-        y: o,
+        x: area.left + label.start,
+        y,
       },
-      text: r.text,
+      text: label.text,
       ink: "quiet",
     }),
   );
 //@ chunk-3s7ydtfd.js:69938-70018 placement
-var periodPosition = (timeline) => (t) =>
-  (timeline.periodStarts.findIndex((periodStart) => periodStart >= t) + MARK_FRACTION) /
+var periodPosition = (timeline) => (ms) =>
+  (timeline.periodStarts.findIndex((periodStart) => periodStart >= ms) + MARK_FRACTION) /
   timeline.periodStarts.length;
 //@ chunk-3s7ydtfd.js:70018-70072 placement
-var columnOfTime = (area, t) => (o) => Math.floor(area.tickXOf(t(o)) - area.left);
+var columnOfTime = (area, steps) => (ms) => Math.floor(area.tickXOf(steps(ms)) - area.left);
 //@ chunk-3s7ydtfd.js:70072-70253 placement
-function xAxisLabels(e) {
-  let t = e.area.columnWidth > 0;
-  let columnOf = columnOfTime(e.area, t ? periodPosition(e.timeline) : tickStepsFor(e.timeline));
-  return parseNumberCell(e.timeline.dataSpan, e.timeline.step, {
-    columns: e.area.width,
+function xAxisLabels(layout) {
+  let isColumns = layout.area.columnWidth > 0;
+  let columnOf = columnOfTime(
+    layout.area,
+    isColumns ? periodPosition(layout.timeline) : tickStepsFor(layout.timeline),
+  );
+  return parseNumberCell(layout.timeline.dataSpan, layout.timeline.step, {
+    columns: layout.area.width,
     columnOf,
-    areCentred: t,
+    areCentred: isColumns,
   });
 }
 //@ chunk-3s7ydtfd.js:70253-70563 placement
-function drawXAxis(e) {
-  let t = xAxisLabels(e);
-  let o = e.room.rows + 1;
-  let r = [];
-  let s = o + 1;
-  let p;
-  for (let flag of e.flags.filter((flag) => flag.text !== "")) {
-    let n = displayWidth(flag.text);
-    let floored = Math.floor(Math.min(flag.x, e.room.columns - n));
-    if (p === undefined || floored < p) s += 1;
-    r.push(
+function drawXAxis(layout) {
+  let labels = xAxisLabels(layout);
+  let labelRow = layout.room.rows + 1;
+  let flagShapes = [];
+  let rows = labelRow + 1;
+  let lastEnd;
+  for (let flag of layout.flags.filter((flag) => flag.text !== "")) {
+    let width = displayWidth(flag.text);
+    let floored = Math.floor(Math.min(flag.x, layout.room.columns - width));
+    if (lastEnd === undefined || floored < lastEnd) rows += 1;
+    flagShapes.push(
       ...textShapeOrEmpty({
         at: {
           x: floored,
-          y: s - 1,
+          y: rows - 1,
         },
         text: flag.text,
         ink: "words",
       }),
     );
-    p = floored + n + DEFAULT_ROW_OPTIONS;
+    lastEnd = floored + width + DEFAULT_ROW_OPTIONS;
   }
   return {
-    shapes: [...xAxisShapes(e, t), ...xLabelShapes(t, e.area, o), ...r],
-    rows: s,
+    shapes: [...xAxisShapes(layout, labels), ...xLabelShapes(labels, layout.area, labelRow), ...flagShapes],
+    rows,
   };
 }
 //@ chunk-3s7ydtfd.js:70563-70616 placement
-var toPlotCells = (area, drawnPlot, o) => (r) => ({
-  x: area.xOf(r.x),
-  y: o + drawnPlot.yOf(r.y),
+var toPlotCells = (area, drawnPlot, baseRow) => (point) => ({
+  x: area.xOf(point.x),
+  y: baseRow + drawnPlot.yOf(point.y),
 });
 //@ chunk-3s7ydtfd.js:70616-71621 placement
 function drawLineOrColumnChart({ room, chart, plotsLayout, headerTexts }) {
   let { area, drawnPlots } = plotsLayout;
-  let m = area.columnWidth > 0;
-  let n = layoutRows({
+  let isColumns = area.columnWidth > 0;
+  let rowLabels = layoutRows({
     rows: drawnPlots.flatMap((drawnPlot) => drawnPlot.rows),
     columns: room.columns,
     lane: DEFAULT_LANE_OPTIONS,
     headerTexts,
     left: area.left,
   });
-  let a = n.shownNames.size + n.statColumns.length > 0;
+  let hasLabels = rowLabels.shownNames.size + rowLabels.statColumns.length > 0;
   let mapped = chart.marks.map(markFlag(area));
-  let i = m ? columnStacks : lineShapes;
-  let x = [];
+  let drawSeries = isColumns ? columnStacks : lineShapes;
+  let shapes = [];
   let rows = room.rows;
   for (let drawnPlot of drawnPlots) {
-    for (let L of a ? drawnPlot.rows : []) {
-      let _ = drawRowLabels(n, L, rows);
-      x.push(_.shapes);
-      rows = _.rows;
+    for (let row of hasLabels ? drawnPlot.rows : []) {
+      let labels = drawRowLabels(rowLabels, row, rows);
+      shapes.push(labels.shapes);
+      rows = labels.rows;
     }
-    let g = rows;
-    let T = g + drawnPlot.height;
-    for (let L = g; L < T; L++) {
-      let found = drawnPlot.ticks.find((tick) => g + Math.floor(drawnPlot.yOf(tick.position)) === L);
+    let plotTop = rows;
+    let plotEnd = plotTop + drawnPlot.height;
+    for (let row = plotTop; row < plotEnd; row++) {
+      let found = drawnPlot.ticks.find((tick) => plotTop + Math.floor(drawnPlot.yOf(tick.position)) === row);
       let label = found?.label ?? "";
-      x.push(
+      shapes.push(
         textShapeOrEmpty({
           at: {
             x: area.left - MIN_MARK_ROWS - displayWidth(label),
-            y: L,
+            y: row,
           },
           text: label,
           ink: "quiet",
@@ -1522,46 +1575,46 @@ function drawLineOrColumnChart({ room, chart, plotsLayout, headerTexts }) {
           axisRowShape(
             {
               x: area.left - 1,
-              y: L,
+              y: row,
             },
             found ? area.width + HALF : 0,
           ),
         ],
       );
     }
-    x.push(
-      i({
+    shapes.push(
+      drawSeries({
         rows: drawnPlot.rows,
         area,
-        toCells: toPlotCells(area, drawnPlot, g),
+        toCells: toPlotCells(area, drawnPlot, plotTop),
       }),
     );
-    for (let [L, _] of drawnPlot.endKeys)
-      for (let [w, A] of _.entries())
-        x.push(
+    for (let [row, marks] of drawnPlot.endKeys)
+      for (let [column, mark] of marks.entries())
+        shapes.push(
           textShapeOrEmpty({
             at: {
-              x: area.left + area.width + DEFAULT_ROW_OPTIONS + w,
-              y: g + L,
+              x: area.left + area.width + DEFAULT_ROW_OPTIONS + column,
+              y: plotTop + row,
             },
-            text: A.key,
-            ink: A.ink,
+            text: mark.key,
+            ink: mark.ink,
           }),
         );
-    x.push(
-      mapped.map((L) =>
+    shapes.push(
+      mapped.map((flag) =>
         lineShape(
-          [g, T - BAR_FRACTION].map((_) => ({
-            x: L.x,
-            y: _,
+          [plotTop, plotEnd - BAR_FRACTION].map((y) => ({
+            x: flag.x,
+            y,
           })),
           "quiet",
         ),
       ),
     );
-    rows = T;
+    rows = plotEnd;
   }
-  let u = drawXAxis({
+  let axis = drawXAxis({
     room: {
       columns: room.columns,
       rows,
@@ -1570,11 +1623,11 @@ function drawLineOrColumnChart({ room, chart, plotsLayout, headerTexts }) {
     area,
     flags: mapped,
   });
-  let d = chart.form === "columns" && !m;
+  let mergedColumns = chart.form === "columns" && !isColumns;
   return {
-    shapes: [...x.flat(), ...u.shapes],
-    rows: u.rows,
-    notes: d ? [chart.mergedColumnsNote] : [],
+    shapes: [...shapes.flat(), ...axis.shapes],
+    rows: axis.rows,
+    notes: mergedColumns ? [chart.mergedColumnsNote] : [],
   };
 }
 //@ chunk-3s7ydtfd.js:71621-71680 placement
@@ -1588,75 +1641,77 @@ var bandShape = (rows, parts) => ({
   parts,
 });
 //@ chunk-3s7ydtfd.js:71680-71752 placement
-var shareKeyShape = (e, t) =>
+var shareKeyShape = (part, y) =>
   textShapeOrEmpty({
     at: {
-      x: Math.floor(e.middle),
-      y: t,
+      x: Math.floor(part.middle),
+      y,
     },
-    text: e.key,
-    ink: e.ink,
+    text: part.key,
+    ink: part.ink,
   });
 //@ chunk-3s7ydtfd.js:71752-71799 placement
-var sharePart = (e, t, o) => ({
-  ...e,
-  width: t,
-  middle: o - t / MIN_LANE_WIDTH,
+var sharePart = (row, width, end) => ({
+  ...row,
+  width,
+  middle: end - width / MIN_LANE_WIDTH,
 });
 //@ chunk-3s7ydtfd.js:71799-72215 placement
-function drawShareBar(e, rows) {
-  let mapped = rows.map((i) => (i.share > 0 ? Math.max(i.share * e.columns, MIN_ROWS_TO_DRAW) : 0));
-  let r = stableSum(mapped) - e.columns;
+function drawShareBar(frame, rows) {
+  let mapped = rows.map((row) => (row.share > 0 ? Math.max(row.share * frame.columns, MIN_ROWS_TO_DRAW) : 0));
+  let overflow = stableSum(mapped) - frame.columns;
   let index = mapped.indexOf(Math.max(...mapped));
   let parts = [];
-  let m = 0;
-  for (let [i, x] of rows.entries()) {
-    let l = (mapped[i] ?? 0) - (i === index ? r : 0);
-    if (l > 0) {
-      m += l;
-      parts.push(sharePart(x, l, m));
+  let end = 0;
+  for (let [rowIndex, row] of rows.entries()) {
+    let width = (mapped[rowIndex] ?? 0) - (rowIndex === index ? overflow : 0);
+    if (width > 0) {
+      end += width;
+      parts.push(sharePart(row, width, end));
     }
   }
-  let n = e.rows + MIN_CHART_WIDTH;
-  let a = n + 1;
-  let f = layoutRows({
+  let labelRow = frame.rows + MIN_CHART_WIDTH;
+  let labelRows = labelRow + 1;
+  let rowLabels = layoutRows({
     rows,
-    columns: e.columns,
+    columns: frame.columns,
     lane: DEFAULT_LANE_OPTIONS,
     headerTexts: [],
     left: 0,
   });
   return {
     shapes: [
-      bandShape(e.rows, parts),
-      ...parts.flatMap((i) => shareKeyShape(i, n)),
-      ...rows.flatMap((i, x) => drawRowLabels(f, i, a + x).shapes),
+      bandShape(frame.rows, parts),
+      ...parts.flatMap((part) => shareKeyShape(part, labelRow)),
+      ...rows.flatMap((row, index) => drawRowLabels(rowLabels, row, labelRows + index).shapes),
     ],
-    rows: a + rows.length,
+    rows: labelRows + rows.length,
   };
 }
 //@ chunk-3s7ydtfd.js:72215-72264 placement
-var fartherFrom = (e, t, o) => (Math.abs(t - e) >= Math.abs(o - e) ? t : o);
+var fartherFrom = (target, a, b) => (Math.abs(a - target) >= Math.abs(b - target) ? a : b);
 //@ chunk-3s7ydtfd.js:72264-72311 placement
-var bucketIndex = (e) => (t) => Math.min(e - 1, Math.floor(t * e));
+var bucketIndex = (bucketCount) => (x) => Math.min(bucketCount - 1, Math.floor(x * bucketCount));
 //@ chunk-3s7ydtfd.js:72311-72571 placement = diff (0.806)
 function resampleSparkline(prev, next) {
   let list = Array.from(Array(next), () => null);
-  let mapped = prev.flat().map((m) => m.y);
-  let s = stableSum(mapped) / mapped.length;
-  let p = bucketIndex(next);
-  for (let m of prev)
-    for (let [n, a] of m.entries()) {
-      let f = p(a.x);
-      let max = Math.max(f, p(m[n + 1]?.x ?? a.x) - 1);
-      for (let x = f; x <= max; x++)
-        list[x] = Math.max(BAR_GAP_FRACTION, fartherFrom(s, a.y, list[x] ?? a.y));
+  let mapped = prev.flat().map((point) => point.y);
+  let meanY = stableSum(mapped) / mapped.length;
+  let bucketOf = bucketIndex(next);
+  for (let stretch of prev)
+    for (let [index, point] of stretch.entries()) {
+      let fromBucket = bucketOf(point.x);
+      let max = Math.max(fromBucket, bucketOf(stretch[index + 1]?.x ?? point.x) - 1);
+      for (let bucket = fromBucket; bucket <= max; bucket++)
+        list[bucket] = Math.max(BAR_GAP_FRACTION, fartherFrom(meanY, point.y, list[bucket] ?? point.y));
     }
   return list;
 }
 //@ chunk-3s7ydtfd.js:72571-72670 placement
-var sparklineHeights = (e, t, o) =>
-  resampleSparkline(e.stretches, o).flatMap((r) => Array.from(Array(Math.floor(t.laneWidth / o)), () => r));
+var sparklineHeights = (row, rowLayout, step) =>
+  resampleSparkline(row.stretches, step).flatMap((height) =>
+    Array.from(Array(Math.floor(rowLayout.laneWidth / step)), () => height),
+  );
 //@ chunk-3s7ydtfd.js:72670-72710 placement
 var SPARK_LANE = {
   minWidth: 16,
@@ -1670,49 +1725,49 @@ var stripShape = (at, heights, ink) => ({
   ink,
 });
 //@ chunk-3s7ydtfd.js:72764-73043 placement
-function drawSparklines(e, t, headerTexts) {
-  let r = layoutRows({
-    rows: t.rows,
-    columns: e.columns,
+function drawSparklines(frame, chart, headerTexts) {
+  let rowLayout = layoutRows({
+    rows: chart.rows,
+    columns: frame.columns,
     lane: SPARK_LANE,
     headerTexts,
     left: 0,
   });
-  let min = Math.min(r.laneWidth, Math.round(1 / t.medianStep) + 1);
+  let min = Math.min(rowLayout.laneWidth, Math.round(1 / chart.medianStep) + 1);
   return {
-    shapes: t.rows.flatMap((p, m) => {
-      let n = drawRowLabels(r, p, e.rows + m);
-      return [...n.shapes, stripShape(n.lane, sparklineHeights(p, r, min), p.ink)];
+    shapes: chart.rows.flatMap((row, index) => {
+      let labels = drawRowLabels(rowLayout, row, frame.rows + index);
+      return [...labels.shapes, stripShape(labels.lane, sparklineHeights(row, rowLayout, min), row.ink)];
     }),
-    rows: e.rows + t.rows.length,
+    rows: frame.rows + chart.rows.length,
   };
 }
 //@ chunk-3s7ydtfd.js:73043-73341 placement
-function drawChartBody(e, t, headerTexts) {
-  switch (e.form) {
+function drawChartBody(chart, frame, headerTexts) {
+  switch (chart.form) {
     case "bars":
       return {
-        ...drawBarRows(t, e.rows, headerTexts),
+        ...drawBarRows(frame, chart.rows, headerTexts),
         notes: [],
       };
     case "share":
       return {
-        ...drawShareBar(t, e.rows),
+        ...drawShareBar(frame, chart.rows),
         notes: [],
       };
     case "sparks":
       return {
-        ...drawSparklines(t, e, headerTexts),
+        ...drawSparklines(frame, chart, headerTexts),
         notes: [],
       };
     case "line":
     case "columns": {
-      let r = layoutPlots_2(e, t.columns);
-      return r.area.width >= MIN_AXIS_WIDTH
+      let plotsLayout = layoutPlots_2(chart, frame.columns);
+      return plotsLayout.area.width >= MIN_AXIS_WIDTH
         ? drawLineOrColumnChart({
-            room: t,
-            chart: e,
-            plotsLayout: r,
+            room: frame,
+            chart,
+            plotsLayout,
             headerTexts,
           })
         : undefined;
@@ -1720,73 +1775,76 @@ function drawChartBody(e, t, headerTexts) {
   }
 }
 //@ chunk-3s7ydtfd.js:73341-73490 placement
-function wrappedTextRows(e, t, ink) {
-  let flattened = t.flatMap((s) => wrapToWidth(s, e.columns));
+function wrappedTextRows(room, lines, ink) {
+  let flattened = lines.flatMap((line) => wrapToWidth(line, room.columns));
   return {
-    shapes: flattened.flatMap((text, p) =>
+    shapes: flattened.flatMap((text, index) =>
       textShapeOrEmpty({
         at: {
           x: 0,
-          y: e.rows + p,
+          y: room.rows + index,
         },
         text,
         ink,
       }),
     ),
-    rows: e.rows + flattened.length,
+    rows: room.rows + flattened.length,
   };
 }
 //@ chunk-3s7ydtfd.js:73490-73570 placement
-var headerFactShape = (rows, t, o) =>
+var headerFactShape = (rows, x, fact) =>
   textShapeOrEmpty({
     at: {
-      x: t + DEFAULT_ROW_OPTIONS,
+      x: x + DEFAULT_ROW_OPTIONS,
       y: rows - 1,
     },
-    text: `${SEP_WIDTH.trimStart()}${o}`,
+    text: `${SEP.trimStart()}${fact}`,
     ink: "quiet",
   });
 //@ chunk-3s7ydtfd.js:73570-73583 placement
-var SEPARATOR_WIDTH = displayWidth(SEP_WIDTH);
+var SEPARATOR_WIDTH; // deferred: uses displayWidth (./chartSchema.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-3s7ydtfd.js:73570", () => {
+  SEPARATOR_WIDTH = displayWidth(SEP);
+});
 //@ chunk-3s7ydtfd.js:73583-73893 placement
-function drawHeader(e, header) {
-  let filtered = [header.title, ...header.facts].filter((m) => m !== "");
-  let r = [];
-  let rows = e.rows;
-  let p = 0;
-  for (let [m, n] of filtered.entries()) {
-    let a = p + SEPARATOR_WIDTH + displayWidth(n);
-    if (m === 0 || a > e.columns) {
-      let i = wrappedTextRows(
+function drawHeader(room, header) {
+  let filtered = [header.title, ...header.facts].filter((part) => part !== "");
+  let shapes = [];
+  let rows = room.rows;
+  let lastEnd = 0;
+  for (let [index, part] of filtered.entries()) {
+    let end = lastEnd + SEPARATOR_WIDTH + displayWidth(part);
+    if (index === 0 || end > room.columns) {
+      let wrapped = wrappedTextRows(
         {
-          columns: e.columns,
+          columns: room.columns,
           rows,
         },
-        [n],
-        m === 0 ? "title" : "quiet",
+        [part],
+        index === 0 ? "title" : "quiet",
       );
-      r.push(...i.shapes);
-      rows = i.rows;
-      p = displayWidth(n);
+      shapes.push(...wrapped.shapes);
+      rows = wrapped.rows;
+      lastEnd = displayWidth(part);
     } else {
-      r.push(...headerFactShape(rows, p, n));
-      p = a;
+      shapes.push(...headerFactShape(rows, lastEnd, part));
+      lastEnd = end;
     }
   }
   return {
-    shapes: r,
+    shapes,
     rows,
     texts: filtered,
   };
 }
 //@ chunk-3s7ydtfd.js:73893-73949 placement
-var chartResult = (columns, t) => ({
+var chartResult = (columns, body) => ({
   columns,
-  rows: t.rows,
-  shapes: t.shapes,
+  rows: body.rows,
+  shapes: body.shapes,
 });
 //@ chunk-3s7ydtfd.js:73949-74006 placement
-var chartAsText = (e, columns) =>
+var chartAsText = (chart, columns) =>
   chartResult(
     columns,
     wrappedTextRows(
@@ -1794,72 +1852,72 @@ var chartAsText = (e, columns) =>
         columns,
         rows: 0,
       },
-      renderLegend(e),
+      renderLegend(chart),
       "words",
     ),
   );
 //@ chunk-3s7ydtfd.js:74006-74091 placement
-var partsLeftOutShape = (text, t) => ({
+var partsLeftOutShape = (text, y) => ({
   kind: "text",
   at: {
     x: 0,
-    y: t,
+    y,
   },
   text,
   ink: "quiet",
   isAboutPartsLeftOut: true,
 });
 //@ chunk-3s7ydtfd.js:74091-74195 placement
-function drawThinPartsNote(e, thinPartsNote) {
-  let o = wrapToWidth(thinPartsNote, e.columns);
+function drawThinPartsNote(room, thinPartsNote) {
+  let lines = wrapToWidth(thinPartsNote, room.columns);
   return {
-    shapes: o.map((r, s) => partsLeftOutShape(r, e.rows + s)),
-    rows: e.rows + o.length,
+    shapes: lines.map((line, index) => partsLeftOutShape(line, room.rows + index)),
+    rows: room.rows + lines.length,
   };
 }
 //@ chunk-3s7ydtfd.js:74195-74581 placement
-function layoutChart(e, columns) {
-  if (columns < MIN_PLOT_WIDTH) return chartAsText(e, columns);
-  let o = drawHeader(
+function layoutChart(chart, columns) {
+  if (columns < MIN_PLOT_WIDTH) return chartAsText(chart, columns);
+  let header = drawHeader(
     {
       columns,
       rows: 0,
     },
-    e.header,
+    chart.header,
   );
-  let r = drawChartBody(
-    e,
+  let body = drawChartBody(
+    chart,
     {
       columns,
-      rows: o.rows,
+      rows: header.rows,
     },
-    o.texts,
+    header.texts,
   );
-  if (r === undefined) return chartAsText(e, columns);
-  let s = wrappedTextRows(
+  if (body === undefined) return chartAsText(chart, columns);
+  let noteRows = wrappedTextRows(
     {
       columns,
-      rows: r.rows,
+      rows: body.rows,
     },
-    [...e.notes, ...r.notes],
+    [...chart.notes, ...body.notes],
     "quiet",
   );
-  let m =
-    e.form === "columns"
+  let thinNote =
+    chart.form === "columns"
       ? drawThinPartsNote(
           {
             columns,
-            rows: s.rows,
+            rows: noteRows.rows,
           },
-          e.thinPartsNote,
+          chart.thinPartsNote,
         )
       : {
           shapes: [],
-          rows: s.rows,
+          rows: noteRows.rows,
         };
   return chartResult(columns, {
-    shapes: [...o.shapes, ...r.shapes, ...s.shapes, ...m.shapes],
-    rows: m.rows,
+    shapes: [...header.shapes, ...body.shapes, ...noteRows.shapes, ...thinNote.shapes],
+    rows: thinNote.rows,
   });
 }
 //@ chunk-3s7ydtfd.js:74581-74628 placement
@@ -1891,35 +1949,35 @@ var LOWER_THREE_QUARTERS = "\u2586";
 //@ chunk-3s7ydtfd.js:74740-74756 placement
 var MEDIUM_SHADE = "\u2592";
 //@ chunk-3s7ydtfd.js:74756-74811 placement
-var topTwoParts = (e, t) => e.filter((o) => t.slice(0, MAX_BLEND_PARTS).includes(o));
+var topTwoParts = (parts, sorted) => parts.filter((part) => sorted.slice(0, MAX_BLEND_PARTS).includes(part));
 //@ chunk-3s7ydtfd.js:74811-75203 placement
-function blendEighthGlyph(e, t, o) {
-  let filtered = e
-    .map((i) => ({
-      ink: i.ink,
-      size: Math.min(i.to, t + EIGHTHS) - Math.max(i.from, t),
+function blendEighthGlyph(parts, base, glyphs) {
+  let parts_2 = parts
+    .map((part) => ({
+      ink: part.ink,
+      size: Math.min(part.to, base + EIGHTHS) - Math.max(part.from, base),
     }))
-    .filter((i) => i.size >= MIN_PART_EIGHTHS);
-  let s = filtered.toSorted((i, x) => x.size - i.size);
-  let [p] = s;
-  if (p === undefined) return;
-  let rounded = Math.round((e.at(-1)?.to ?? t) - t);
+    .filter((part) => part.size >= MIN_PART_EIGHTHS);
+  let sorted = parts_2.toSorted((a, b) => b.size - a.size);
+  let [largest] = sorted;
+  if (largest === undefined) return;
+  let rounded = Math.round((parts.at(-1)?.to ?? base) - base);
   if (rounded < EIGHTHS) {
-    let i = o[rounded];
-    return i
+    let glyph = glyphs[rounded];
+    return glyph
       ? {
-          glyph: i,
-          ink: p.ink,
+          glyph,
+          ink: largest.ink,
         }
       : undefined;
   }
-  let [n = p, a] = topTwoParts(filtered, s);
-  let glyph = o[Math.round((n.size / (n.size + (a?.size ?? 0))) * EIGHTHS)];
+  let [primary = largest, secondary] = topTwoParts(parts_2, sorted);
+  let glyph = glyphs[Math.round((primary.size / (primary.size + (secondary?.size ?? 0))) * EIGHTHS)];
   return glyph
-    ? glyphCell(glyph, n.ink, a?.ink)
+    ? glyphCell(glyph, primary.ink, secondary?.ink)
     : {
         glyph: FULL_BLOCK,
-        ink: p.ink,
+        ink: largest.ink,
       };
 }
 //@ chunk-3s7ydtfd.js:75203-75239 placement
@@ -1935,31 +1993,35 @@ var BLANK_CELL = {
   ink: "words",
 };
 //@ chunk-3s7ydtfd.js:75303-75622 placement
-function createGlyphGrid(e) {
+function createGlyphGrid(size) {
   let list = Array.from(
     {
-      length: e.rows * e.columns,
+      length: size.rows * size.columns,
     },
     () => BLANK_CELL,
   );
-  function o(r) {
-    return Number.isInteger(r.x) && Number.isInteger(r.y) && r.x >= 0 && r.x < e.columns
-      ? r.y * e.columns + r.x
+  function indexOf(position) {
+    return Number.isInteger(position.x) &&
+      Number.isInteger(position.y) &&
+      position.x >= 0 &&
+      position.x < size.columns
+      ? position.y * size.columns + position.x
       : -1;
   }
   return {
-    cellAt: (r) => list[o(r)],
-    set: (r, s) => {
-      let p = o(r);
-      if (list[p] !== undefined) list[p] = s;
+    cellAt: (position) => list[indexOf(position)],
+    set: (position, cell) => {
+      let cellIndex = indexOf(position);
+      if (list[cellIndex] !== undefined) list[cellIndex] = cell;
     },
-    rows: () => rangeIndices(e.rows).map((r) => list.slice(r * e.columns, (r + 1) * e.columns)),
+    rows: () =>
+      rangeIndices(size.rows).map((row) => list.slice(row * size.columns, (row + 1) * size.columns)),
   };
 }
 //@ chunk-3s7ydtfd.js:75622-75679 placement
-var thinTopGlyph = (e, t) => ({
-  glyph: t < THIN_TOP_EIGHTHS ? "\u2501" : "\u2580",
-  ink: e.ink,
+var thinTopGlyph = (part, remaining) => ({
+  glyph: remaining < THIN_TOP_EIGHTHS ? "\u2501" : "\u2580",
+  ink: part.ink,
 });
 //@ chunk-3s7ydtfd.js:75679-75754 placement
 var LOWER_EIGHTHS = ["", "\u2581", "\u2582", "\u2583", "\u2584", "\u2585", "\u2586", "\u2587"];
@@ -1974,39 +2036,41 @@ var partRange = (from, to, ink) => ({
   ink,
 });
 //@ chunk-3s7ydtfd.js:75897-75994 placement
-function stackRanges(parts, t, o) {
-  let r = (part) => t(part) * EIGHTHS;
-  return prefixSums(parts, r, o).map(({ part, end }) => partRange(end - r(part), end, part.ink));
+function stackRanges(parts, heightOf, offset) {
+  let eighthsOf = (part) => heightOf(part) * EIGHTHS;
+  return prefixSums(parts, eighthsOf, offset).map(({ part, end }) =>
+    partRange(end - eighthsOf(part), end, part.ink),
+  );
 }
 //@ chunk-3s7ydtfd.js:75994-76330 placement
 function drawStack(glyphGrid, { at, width, parts }) {
-  let s = Math.ceil(at.y);
-  let p = (s - at.y) * EIGHTHS;
-  let m = stackRanges(parts, (f) => f.height, p);
-  let to = m.at(-1)?.to ?? 0;
-  let a = new Set();
-  for (let f = 0; f < to; f += EIGHTHS) {
-    let i = blendEighthGlyph(m, f, LOWER_EIGHTHS);
-    if (i === undefined) continue;
-    let l = f < p ? thinTopGlyph(i, to - p) : i;
-    a.add(l.ink).add(l.background);
+  let row = Math.ceil(at.y);
+  let subRow = (row - at.y) * EIGHTHS;
+  let ranges = stackRanges(parts, (part) => part.height, subRow);
+  let to = ranges.at(-1)?.to ?? 0;
+  let inks = new Set();
+  for (let eighth = 0; eighth < to; eighth += EIGHTHS) {
+    let cell = blendEighthGlyph(ranges, eighth, LOWER_EIGHTHS);
+    if (cell === undefined) continue;
+    let painted = eighth < subRow ? thinTopGlyph(cell, to - subRow) : cell;
+    inks.add(painted.ink).add(painted.background);
     for (let j = 0; j < Math.round(width); j++)
       glyphGrid.set(
         {
           x: at.x + j,
-          y: s - 1 - f / EIGHTHS,
+          y: row - 1 - eighth / EIGHTHS,
         },
-        l,
+        painted,
       );
   }
-  return parts.every((part) => a.has(part.ink));
+  return parts.every((part) => inks.has(part.ink));
 }
 //@ chunk-3s7ydtfd.js:76330-76557 placement
 function drawBar(glyphGrid, { at, width, ink, isHatched }) {
-  let p = LEFT_EIGHTHS[Math.max(1, Math.round(width * EIGHTHS))];
-  if (p !== undefined && !isHatched) {
+  let glyph = LEFT_EIGHTHS[Math.max(1, Math.round(width * EIGHTHS))];
+  if (glyph !== undefined && !isHatched) {
     glyphGrid.set(at, {
-      glyph: p,
+      glyph,
       ink,
     });
     return;
@@ -2024,52 +2088,56 @@ function drawBar(glyphGrid, { at, width, ink, isHatched }) {
     );
 }
 //@ chunk-3s7ydtfd.js:76557-76647 placement
-var brailleDotBit = (e, t) =>
+var brailleDotBit = (x, y) =>
   BRAILLE_DOT_BITS[
-    Math.floor((e - Math.floor(e)) * BRAILLE_COLS) * BRAILLE_ROWS +
-      Math.floor((t - Math.floor(t)) * BRAILLE_ROWS)
+    Math.floor((x - Math.floor(x)) * BRAILLE_COLS) * BRAILLE_ROWS +
+      Math.floor((y - Math.floor(y)) * BRAILLE_ROWS)
   ] ?? 0;
 //@ chunk-3s7ydtfd.js:76647-76695 placement
-var countBits = (bits) => BRAILLE_DOT_BITS.reduce((acc, o) => ((bits & o) === 0 ? acc : acc + 1), 0);
+var countBits = (bits) => BRAILLE_DOT_BITS.reduce((acc, bit) => ((bits & bit) === 0 ? acc : acc + 1), 0);
 //@ chunk-3s7ydtfd.js:76695-76727 placement
-var hasBitCount = (e) => (t) => countBits(t.bits) === e;
+var hasBitCount = (count) => (line) => countBits(line.bits) === count;
 //@ chunk-3s7ydtfd.js:76727-77053 placement
-function mergeBrailleCell(e, t) {
-  let lines = e.lines ?? [];
-  let r = [
-    ...lines.filter((line) => line.ink !== t.ink),
+function mergeBrailleCell(cell, addition) {
+  let lines = cell.lines ?? [];
+  let mergedLines = [
+    ...lines.filter((line) => line.ink !== addition.ink),
     {
-      ink: t.ink,
-      bits: (lines.find((line) => line.ink === t.ink)?.bits ?? 0) | t.bits,
+      ink: addition.ink,
+      bits: (lines.find((line) => line.ink === addition.ink)?.bits ?? 0) | addition.bits,
     },
   ];
-  let filtered = r.filter((m) => m.ink !== "quiet");
-  let p = filtered.length > 0 ? filtered : r;
+  let filtered = mergedLines.filter((line) => line.ink !== "quiet");
+  let visible = filtered.length > 0 ? filtered : mergedLines;
   return {
-    glyph: String.fromCodePoint(BRAILLE_BASE + p.reduce((acc, n) => acc | n.bits, 0)),
-    ink: p.findLast(hasBitCount(Math.max(...p.map((m) => countBits(m.bits)))))?.ink ?? t.ink,
-    lines: r,
+    glyph: String.fromCodePoint(BRAILLE_BASE + visible.reduce((acc, line) => acc | line.bits, 0)),
+    ink:
+      visible.findLast(hasBitCount(Math.max(...visible.map((line) => countBits(line.bits)))))?.ink ??
+      addition.ink,
+    lines: mergedLines,
   };
 }
 //@ chunk-3s7ydtfd.js:77053-77408 placement
 function drawBrailleLine(glyphGrid, { points, ink }) {
-  for (let [r, s] of points.entries()) {
-    let p = points[r - 1] ?? s;
-    let m = Math.ceil(Math.max(Math.abs(s.x - p.x) * BRAILLE_COLS, Math.abs(s.y - p.y) * BRAILLE_ROWS, 1));
-    for (let j = 0; j <= m; j++) {
-      let a = p.x + ((s.x - p.x) * j) / m;
-      let f = p.y + ((s.y - p.y) * j) / m;
-      let i = {
-        x: Math.floor(a),
-        y: Math.floor(f),
+  for (let [index, point] of points.entries()) {
+    let from = points[index - 1] ?? point;
+    let steps = Math.ceil(
+      Math.max(Math.abs(point.x - from.x) * BRAILLE_COLS, Math.abs(point.y - from.y) * BRAILLE_ROWS, 1),
+    );
+    for (let j = 0; j <= steps; j++) {
+      let dotX = from.x + ((point.x - from.x) * j) / steps;
+      let dotY = from.y + ((point.y - from.y) * j) / steps;
+      let position = {
+        x: Math.floor(dotX),
+        y: Math.floor(dotY),
       };
-      let x = glyphGrid.cellAt(i);
-      if (!x || !(x.glyph === BLANK || x === GRID_DOT || x.lines !== undefined)) continue;
+      let cell = glyphGrid.cellAt(position);
+      if (!cell || !(cell.glyph === BLANK || cell === GRID_DOT || cell.lines !== undefined)) continue;
       glyphGrid.set(
-        i,
-        mergeBrailleCell(x, {
+        position,
+        mergeBrailleCell(cell, {
           ink,
-          bits: brailleDotBit(a, f),
+          bits: brailleDotBit(dotX, dotY),
         }),
       );
     }
@@ -2078,19 +2146,19 @@ function drawBrailleLine(glyphGrid, { points, ink }) {
 //@ chunk-3s7ydtfd.js:77408-77595 placement
 function drawText(glyphGrid, { at, text, ink }) {
   let rounded = Math.round(at.x);
-  for (let p of splitGraphemes(text)) {
-    let m = displayWidth(p);
+  for (let grapheme of splitGraphemes(text)) {
+    let width = displayWidth(grapheme);
     glyphGrid.set(
       {
         x: rounded,
         y: at.y,
       },
       {
-        glyph: p,
+        glyph: grapheme,
         ink,
       },
     );
-    for (let i = 1; i < m; i++)
+    for (let i = 1; i < width; i++)
       glyphGrid.set(
         {
           x: rounded + i,
@@ -2101,41 +2169,41 @@ function drawText(glyphGrid, { at, text, ink }) {
           ink,
         },
       );
-    rounded += m;
+    rounded += width;
   }
 }
 //@ chunk-3s7ydtfd.js:77595-77658 placement
-var cellToRun = (e) => ({
-  text: e.glyph,
-  ink: e.ink,
-  background: e.background,
+var cellToRun = (cell) => ({
+  text: cell.glyph,
+  ink: cell.ink,
+  background: cell.background,
 });
 //@ chunk-3s7ydtfd.js:77658-77883 placement
-function rowToRuns(e) {
-  let t = [];
-  for (let o of e.slice(0, e.findLastIndex((r) => r.glyph !== BLANK) + 1)) {
-    let last = t.at(-1);
+function rowToRuns(cells) {
+  let runs = [];
+  for (let cell of cells.slice(0, cells.findLastIndex((cell) => cell.glyph !== BLANK) + 1)) {
+    let last = runs.at(-1);
     if (
       last &&
-      ((last.ink === o.ink && last.background === o.background) ||
-        (o.glyph === BLANK && last.background === undefined))
+      ((last.ink === cell.ink && last.background === cell.background) ||
+        (cell.glyph === BLANK && last.background === undefined))
     )
-      last.text += o.glyph;
-    else t.push(cellToRun(o));
+      last.text += cell.glyph;
+    else runs.push(cellToRun(cell));
   }
-  return t;
+  return runs;
 }
 //@ chunk-3s7ydtfd.js:77883-77920 placement
 var sparkGlyph = (height) => LOWER_EIGHTHS[Math.round(height * EIGHTHS)] ?? FULL_BLOCK;
 //@ chunk-3s7ydtfd.js:77920-78608 placement
-function rasterizeChart(e) {
-  let glyphGrid = createGlyphGrid(e);
-  let o = false;
-  let r = 0;
-  for (let shape of e.shapes)
+function rasterizeChart(chart) {
+  let glyphGrid = createGlyphGrid(chart);
+  let dropped = false;
+  let droppedRows = 0;
+  for (let shape of chart.shapes)
     switch (shape.kind) {
       case "text": {
-        if (shape.isAboutPartsLeftOut && !o) r += 1;
+        if (shape.isAboutPartsLeftOut && !dropped) droppedRows += 1;
         else drawText(glyphGrid, shape);
         break;
       }
@@ -2143,18 +2211,18 @@ function rasterizeChart(e) {
         drawBar(glyphGrid, shape);
         break;
       case "stack":
-        o = !drawStack(glyphGrid, shape) || o;
+        dropped = !drawStack(glyphGrid, shape) || dropped;
         break;
       case "line":
         drawBrailleLine(glyphGrid, shape);
         break;
       case "strip": {
         let { at, heights, ink } = shape;
-        heights.forEach((height, f) => {
+        heights.forEach((height, index) => {
           if (height !== null)
             glyphGrid.set(
               {
-                x: at.x + f,
+                x: at.x + index,
                 y: at.y,
               },
               {
@@ -2167,16 +2235,16 @@ function rasterizeChart(e) {
       }
       case "band": {
         let { at, rows, parts } = shape;
-        let a = stackRanges(parts, (f) => f.width, 0);
-        for (let f = 0; f < (a.at(-1)?.to ?? 0); f += EIGHTHS) {
-          let i = blendEighthGlyph(a, f, LEFT_EIGHTHS);
-          for (let j = 0; i !== undefined && j < rows; j++)
+        let ranges = stackRanges(parts, (part) => part.width, 0);
+        for (let eighth = 0; eighth < (ranges.at(-1)?.to ?? 0); eighth += EIGHTHS) {
+          let cell = blendEighthGlyph(ranges, eighth, LEFT_EIGHTHS);
+          for (let j = 0; cell !== undefined && j < rows; j++)
             glyphGrid.set(
               {
-                x: at.x + f / EIGHTHS,
+                x: at.x + eighth / EIGHTHS,
                 y: at.y + j,
               },
-              i,
+              cell,
             );
         }
         break;
@@ -2200,11 +2268,11 @@ function rasterizeChart(e) {
     }
   return glyphGrid
     .rows()
-    .slice(0, e.rows - r)
+    .slice(0, chart.rows - droppedRows)
     .map(rowToRuns);
 }
 //@ chunk-3s7ydtfd.js:78608-78669 placement
-var svgFill = (e, t = "") => `fill="var(--${e})"${t} data-series="${e}"`;
+var svgFill = (ink, extraAttrs = "") => `fill="var(--${ink})"${extraAttrs} data-series="${ink}"`;
 //@ chunk-3s7ydtfd.js:78669-78678 placement
 var SVG_HALF = 2;
 //@ chunk-3s7ydtfd.js:78678-78689 placement
@@ -2224,45 +2292,45 @@ var SVG_STROKE = 0.125;
 //@ chunk-3s7ydtfd.js:78755-78766 placement
 var SVG_BAND_PAD = 0.1;
 //@ chunk-3s7ydtfd.js:78766-78796 placement
-var svgY = (e) => (e * SVG_ROW_HEIGHT).toFixed(1);
+var svgY = (row) => (row * SVG_ROW_HEIGHT).toFixed(1);
 //@ chunk-3s7ydtfd.js:78796-78829 placement
 var hasSvgHeight = (part) => svgY(part.height) !== svgY(0);
 //@ chunk-3s7ydtfd.js:78829-78858 placement
-var svgX = (e) => (e * SVG_COL_WIDTH).toFixed(1);
+var svgX = (column) => (column * SVG_COL_WIDTH).toFixed(1);
 //@ chunk-3s7ydtfd.js:78858-78891 placement
-var svgPoint = (e, t) => `${svgX(e)},${svgY(t)}`;
+var svgPoint = (x, y) => `${svgX(x)},${svgY(y)}`;
 //@ chunk-3s7ydtfd.js:78891-79008 placement
-var svgLine = (e, t, o = "") =>
-  `<line${o} x1="${svgX(e.x)}" y1="${svgY(e.y)}" x2="${svgX(t.x)}" y2="${svgY(t.y)}" stroke="var(--quiet)"/>`;
+var svgLine = (from, to, extraAttrs = "") =>
+  `<line${extraAttrs} x1="${svgX(from.x)}" y1="${svgY(from.y)}" x2="${svgX(to.x)}" y2="${svgY(to.y)}" stroke="var(--quiet)"/>`;
 //@ chunk-3s7ydtfd.js:79008-79082 placement = diff (1)
-function svgTickLine(e) {
-  let t = e.at.x + SVG_HALF_CELL;
+function svgTickLine(line) {
+  let x = line.at.x + SVG_HALF_CELL;
   return svgLine(
     {
-      x: t,
-      y: e.at.y,
+      x,
+      y: line.at.y,
     },
     {
-      x: t,
-      y: e.at.y + 1,
+      x,
+      y: line.at.y + 1,
     },
   );
 }
 //@ chunk-3s7ydtfd.js:79082-79187 placement
-var bandPartRect = (e, t) => ({
-  x: t.end - t.part.width,
-  y: e.at.y + SVG_BAND_PAD,
-  width: t.part.width,
-  height: e.rows - SVG_HALF * SVG_BAND_PAD,
-  ink: t.part.ink,
+var bandPartRect = (cell, entry) => ({
+  x: entry.end - entry.part.width,
+  y: cell.at.y + SVG_BAND_PAD,
+  width: entry.part.width,
+  height: cell.rows - SVG_HALF * SVG_BAND_PAD,
+  ink: entry.part.ink,
 });
 //@ chunk-3s7ydtfd.js:79187-79265 placement = unionRect (0.845)
-var thinBarRect = (e) => ({
-  x: e.at.x,
-  y: e.at.y + (1 - SVG_THIN_BAR) / SVG_HALF,
-  width: e.width,
+var thinBarRect = (bar) => ({
+  x: bar.at.x,
+  y: bar.at.y + (1 - SVG_THIN_BAR) / SVG_HALF,
+  width: bar.width,
   height: SVG_THIN_BAR,
-  ink: e.ink,
+  ink: bar.ink,
 });
 export {
   SVG_HALF_CELL,

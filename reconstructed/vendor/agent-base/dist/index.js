@@ -5,11 +5,11 @@
  * pieces: chunk-hq88884p.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x, importMetaRequire } from "../../../runtime/bun-runtime.js";
+import { __commonJS, importMetaRequire } from "../../../runtime/bun-runtime.js";
 import { require_helpers } from "./helpers.js";
 
 //@ chunk-hq88884p.js:18297-20967 cjs-fingerprint
-var require_agent_base = x(function (cjsExports) {
+var require_agent_base = __commonJS(function (cjsExports) {
   var __createBinding =
     (cjsExports && cjsExports.__createBinding) ||
     (Object.create
@@ -56,9 +56,10 @@ var require_agent_base = x(function (cjsExports) {
     };
   var __exportStar =
     (cjsExports && cjsExports.__exportStar) ||
-    function (m, r) {
+    function (m, target) {
       for (var p in m)
-        if (p !== "default" && !Object.prototype.hasOwnProperty.call(r, p)) __createBinding(r, m, p);
+        if (p !== "default" && !Object.prototype.hasOwnProperty.call(target, p))
+          __createBinding(target, m, p);
     };
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,

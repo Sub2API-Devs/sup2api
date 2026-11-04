@@ -77,7 +77,7 @@ var autoModeSetupNonInteractiveCommand = {
   get isHidden() {
     return !getIsNonInteractiveSession();
   },
-  load: () => import("./chunk-4cndz99e.js"),
+  load: () => import("./call_2.lazy.js"),
 };
 var autoModeSetupCommandDefinition = {
   type: "local-jsx",

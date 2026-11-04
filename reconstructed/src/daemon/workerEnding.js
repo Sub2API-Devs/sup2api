@@ -8,7 +8,7 @@
  * pieces: chunk-vb0enkt7.js (6)
  * attribution: placement 6
  */
-import { Ar } from "../../runtime/bun-runtime.js";
+import { __export } from "../../runtime/bun-runtime.js";
 import { errorMessage } from "../utils/errors.js";
 import { PassingCauseError } from "../utils/errors/PassingCauseError.js";
 import { EXIT_TEMPFAIL, EXIT_CONFIG_ERROR } from "../utils/exitCodes.js";
@@ -19,21 +19,21 @@ import { EXIT_TEMPFAIL, EXIT_CONFIG_ERROR } from "../utils/exitCodes.js";
  */
 var EMPTY_WORKER_ENDING = {};
 //@ chunk-vb0enkt7.js:350-440 placement
-Ar(EMPTY_WORKER_ENDING, {
+__export(EMPTY_WORKER_ENDING, {
   default: () => EMPTY_WORKER_ENDING,
   endsInARowOf: () => endsInARowOf,
   unsettledBy: () => unsettledBy,
   workerEndingOf: () => workerEndingOf,
 });
 //@ chunk-vb0enkt7.js:440-512 placement
-function endsInARowOf(e) {
-  let n = Number(e);
-  return Number.isSafeInteger(n) && n > 0 ? n : 0;
+function endsInARowOf(rawCount) {
+  let count = Number(rawCount);
+  return Number.isSafeInteger(count) && count > 0 ? count : 0;
 }
 //@ chunk-vb0enkt7.js:512-595 placement
-var unsettledBy = (e) => ({
-  reason: `Error: ${errorMessage(e)}`,
-  kind: e instanceof PassingCauseError ? "passing" : "lasting",
+var unsettledBy = (error) => ({
+  reason: `Error: ${errorMessage(error)}`,
+  kind: error instanceof PassingCauseError ? "passing" : "lasting",
 });
 //@ chunk-vb0enkt7.js:595-758 placement
 /**
@@ -48,21 +48,21 @@ var WORKER_ENDING_TEXT = `${TRIES_TEXT}: ${HELD_TEXT}. ${RESTART_HINT}`;
 /**
  * 守护进程工作者结束码与说明。
  */
-function workerEndingOf(e, n) {
-  let r = e.kind === "passing";
-  let s = r && n + 1 < WORKER_RETRY_LIMIT;
-  let i = r ? WORKER_ENDING_TEXT : RESTART_HINT;
-  return s
+function workerEndingOf(ending, endsInARow) {
+  let isPassing = ending.kind === "passing";
+  let canRetry = isPassing && endsInARow + 1 < WORKER_RETRY_LIMIT;
+  let hintText = isPassing ? WORKER_ENDING_TEXT : RESTART_HINT;
+  return canRetry
     ? {
         code: EXIT_TEMPFAIL,
-        said: `${e.reason}
+        said: `${ending.reason}
 `,
       }
     : {
         code: EXIT_CONFIG_ERROR,
-        said: `${e.reason}
-${i}
+        said: `${ending.reason}
+${hintText}
 `,
       };
 }
-export { unsettledBy };
+export { unsettledBy, EMPTY_WORKER_ENDING, endsInARowOf, workerEndingOf };

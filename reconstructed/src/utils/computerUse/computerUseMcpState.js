@@ -10,39 +10,43 @@
  */
 import { createFieldAccessor } from "../../state/sliceHelpers.js";
 import { SessionRootSlot } from "../../bootstrap/sessionSlices.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-2n9gagn7.js:264-304 placement
 /**
  * 包装 AppState 中 Computer Use MCP 状态的读写单元。
  */
-var computerUseMcpStateAccessor = createFieldAccessor("computerUseMcpState", undefined);
+var computerUseMcpStateAccessor; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-2n9gagn7.js:264", () => {
+  computerUseMcpStateAccessor = createFieldAccessor("computerUseMcpState", undefined);
+});
 //@ chunk-2n9gagn7.js:304-451 placement
 /**
  * 包装 AppState 中 Computer Use MCP 状态的读写单元。
  */
 class ComputerUseStateCell {
   #e;
-  constructor(e) {
-    this.#e = e;
+  constructor(accessor) {
+    this.#e = accessor;
   }
-  static over(e) {
-    return new ComputerUseStateCell(computerUseMcpStateAccessor(e.getState, e.setState));
+  static over(stateCell) {
+    return new ComputerUseStateCell(computerUseMcpStateAccessor(stateCell.getState, stateCell.setState));
   }
   get() {
     return this.#e.get();
   }
-  update(e) {
-    this.#e.set(e);
+  update(nextState) {
+    this.#e.set(nextState);
   }
 }
 //@ chunk-2n9gagn7.js:451-573 placement
 class SingleOwnerLock {
   owner = undefined;
-  acquire(e) {
+  acquire(owner) {
     if (this.owner) return () => {};
-    this.owner = e;
+    this.owner = owner;
     return () => {
-      if (this.owner === e) this.owner = undefined;
+      if (this.owner === owner) this.owner = undefined;
     };
   }
 }
@@ -50,7 +54,10 @@ class SingleOwnerLock {
 /**
  * 按会话根保存的 Computer Use 独占锁。
  */
-var computerUseOwnerLock = new SessionRootSlot(() => new SingleOwnerLock());
+var computerUseOwnerLock; // deferred: uses SessionRootSlot (../../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-2n9gagn7.js:573", () => {
+  computerUseOwnerLock = new SessionRootSlot(() => new SingleOwnerLock());
+});
 //@ chunk-2n9gagn7.js:599-638 placement
 /**
  * 读取 Computer Use 的当前持有者。

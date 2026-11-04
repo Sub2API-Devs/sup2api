@@ -31,20 +31,23 @@ import {
   getFeatureValue_CACHED_MAY_BE_STALE,
 } from "../../services/analytics/growthbook.js";
 import { readFlagWithOverride } from "../../services/analytics/flagOverrides.js";
-import { string, u, M } from "../../../vendor/zod/v4/classic/schemas.js";
+import { stringSchema, objectSchema, booleanSchema } from "../../../vendor/zod/v4/classic/schemas.js";
 import { DoctorLazy } from "../handlers/util.js";
 import { createSignal } from "../../utils/signal.js";
 import { HostScoped } from "../../utils/hostScoped.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-tyg7f3ek.js:177301-177446 placement
 /**
  * 返回在一批用户消息结束时写入"回退替身"系统行的回调；记录 cli_rewind_stand_in 结果遥测。
  */
-function makeRewindStandInWriter(e, n) {
-  let r = new Set(n.map((s) => s.uuid));
-  return async (s, h) => {
+function makeRewindStandInWriter(messageUuid, priorMessages) {
+  let priorUuids = new Set(priorMessages.map((message) => message.uuid));
+  return async (batchUuid, atBatchEnd) => {
     try {
-      reportRewindStandInOutcome(h ? await writeRewindStandIn(s, e, r) : "not_at_batch_end");
+      reportRewindStandInOutcome(
+        atBatchEnd ? await writeRewindStandIn(batchUuid, messageUuid, priorUuids) : "not_at_batch_end",
+      );
     } catch (error) {
       logError(error);
       reportRewindStandInOutcome("failed");
@@ -52,56 +55,67 @@ function makeRewindStandInWriter(e, n) {
   };
 }
 //@ chunk-tyg7f3ek.js:177446-177614 placement
-function reportRewindStandInOutcome(e) {
+function reportRewindStandInOutcome(outcome) {
   logForDiagnosticsNoPII("info", "cli_rewind_stand_in", {
-    outcome: e,
+    outcome,
   });
-  if (e === "stored") logFeatureOk("rewind_stand_in");
-  else if (e === "failed") logFeatureBad("rewind_stand_in", e);
-  else logFeatureSad("rewind_stand_in", e);
+  if (outcome === "stored") logFeatureOk("rewind_stand_in");
+  else if (outcome === "failed") logFeatureBad("rewind_stand_in", outcome);
+  else logFeatureSad("rewind_stand_in", outcome);
 }
 //@ chunk-tyg7f3ek.js:177614-178196 placement
 /**
  * 在转录末尾追加 rewind_stand_in 系统行（若没有可回退目标），等待期间对话变化则放弃。
  */
-async function writeRewindStandIn(e, n, r) {
-  let s = n.conversation().length;
-  let h = await checkRewindStandInPreconditions(e, n, r);
-  if (h !== undefined) return h;
-  if (n.conversation().length !== s) return "changed_in_wait";
-  let y = {
+async function writeRewindStandIn(messageUuid, conversationStore, excludedUuids) {
+  let previousLength = conversationStore.conversation().length;
+  let refusal = await checkRewindStandInPreconditions(messageUuid, conversationStore, excludedUuids);
+  if (refusal !== undefined) return refusal;
+  if (conversationStore.conversation().length !== previousLength) return "changed_in_wait";
+  let standInMessage = {
     type: "system",
     subtype: "rewind_stand_in",
-    source_uuid: e,
+    source_uuid: messageUuid,
     content: "",
     level: "info",
     timestamp: new Date().toISOString(),
     uuid: randomUUID(),
   };
-  n.append([y]);
-  if (n.conversation().at(-1) !== y) await withDeadline(n.appendsSettled(), SUMMARY_RETRY_DELAY_MS);
-  let S = n.conversation();
-  if (!S.some((R) => R.uuid === y.uuid)) return "append_deferred";
-  if (S.at(-1)?.uuid !== y.uuid || S.length !== s + 1) return "changed_in_wait";
-  await recordTranscript(n.conversation(), undefined, undefined, undefined, n.storageV5);
+  conversationStore.append([standInMessage]);
+  if (conversationStore.conversation().at(-1) !== standInMessage)
+    await withDeadline(conversationStore.appendsSettled(), SUMMARY_RETRY_DELAY_MS);
+  let conversation = conversationStore.conversation();
+  if (!conversation.some((message) => message.uuid === standInMessage.uuid)) return "append_deferred";
+  if (conversation.at(-1)?.uuid !== standInMessage.uuid || conversation.length !== previousLength + 1)
+    return "changed_in_wait";
+  await recordTranscript(
+    conversationStore.conversation(),
+    undefined,
+    undefined,
+    undefined,
+    conversationStore.storageV5,
+  );
   return "stored";
 }
 //@ chunk-tyg7f3ek.js:178196-178253 placement
-function hasRewindTarget(e, n) {
-  return findRewindTarget(e, n) !== null || findStandInTarget(e, n) !== null;
+function hasRewindTarget(conversation, messageUuid) {
+  return (
+    findRewindTarget(conversation, messageUuid) !== null ||
+    findStandInTarget(conversation, messageUuid) !== null
+  );
 }
 //@ chunk-tyg7f3ek.js:178253-178620 placement
-async function checkRewindStandInPreconditions(e, { conversation, storageV5 }, s) {
-  let h = conversation();
-  if (hasRewindTarget(h, e)) return "target_exists";
-  if (hasTurnAfterLastSummary(h)) return "later_input";
-  let last = h.findLast((R) => R.type === "user" || R.type === "assistant");
+async function checkRewindStandInPreconditions(messageUuid, { conversation, storageV5 }, excludedUuids) {
+  let rows = conversation();
+  if (hasRewindTarget(rows, messageUuid)) return "target_exists";
+  if (hasTurnAfterLastSummary(rows)) return "later_input";
+  let last = rows.findLast((message) => message.type === "user" || message.type === "assistant");
   if (last?.type !== "assistant") return "user_row_last";
-  if (s.has(last.uuid)) return "no_turn_here";
+  if (excludedUuids.has(last.uuid)) return "no_turn_here";
   await flushSessionStorage();
   let sessionId = getSessionId();
-  for (let R of cleanMessagesForLogging(h))
-    if (!(await doesMessageExistInSession(sessionId, R.uuid, storageV5))) return "unstored_rows";
+  for (let message of cleanMessagesForLogging(rows))
+    if (!(await doesMessageExistInSession(sessionId, message.uuid, storageV5))) return "unstored_rows";
   return;
 }
 //@ chunk-tyg7f3ek.js:178620-178860 placement
@@ -115,38 +129,38 @@ var HISTORY_FAILURE_EXIT_DELAY_MS = 2000;
 /**
  * CCR 会话历史读取/恢复失败时，按原因输出拒绝启动的说明并结束。
  */
-async function reportCcrHistoryLoadFailure(e) {
-  let n;
-  switch (e) {
+async function reportCcrHistoryLoadFailure(loadResult) {
+  let report;
+  switch (loadResult) {
     case "rows":
     case "no_rows":
     case "no_reader":
       return;
     case "read_failed":
-      n = {
+      report = {
         reason: "history_read_failed",
         sentence: HISTORY_READ_FAILED_SENTENCE,
       };
       break;
     case "apply_failed":
-      n = {
+      report = {
         reason: "history_apply_failed",
         sentence: HISTORY_RESTORE_FAILED_SENTENCE,
       };
       break;
   }
   if (isShuttingDown()) return "stopping";
-  let r = isBridgeEnvironment();
-  let s = env.CLAUDE_CODE_WORKER_EPOCH === 1;
-  if (e === "read_failed" && (r || s)) {
+  let isBridge = isBridgeEnvironment();
+  let isFirstWorker = env.CLAUDE_CODE_WORKER_EPOCH === 1;
+  if (loadResult === "read_failed" && (isBridge || isFirstWorker)) {
     logForDiagnosticsNoPII("warn", "resume_history_not_loaded", {
-      reason: n.reason,
+      reason: report.reason,
       boot_fails: false,
-      first_worker: s,
+      first_worker: isFirstWorker,
     });
     return;
   }
-  let h = await withDeadline(
+  let flagFetchSettled = await withDeadline(
     initializeGrowthBook().then(
       () => true,
       () => true,
@@ -158,13 +172,13 @@ async function reportCcrHistoryLoadFailure(e) {
     safe: false,
   });
   logForDiagnosticsNoPII(flagWithOverride ? "error" : "warn", "resume_history_not_loaded", {
-    reason: n.reason,
+    reason: report.reason,
     boot_fails: flagWithOverride,
-    first_worker: s,
-    flag_fetch_settled: h === true,
+    first_worker: isFirstWorker,
+    flag_fetch_settled: flagFetchSettled === true,
     flag_payload_in_hand: hasFreshGrowthBookFeatures(),
   });
-  return flagWithOverride ? n : undefined;
+  return flagWithOverride ? report : undefined;
 }
 //@ chunk-tyg7f3ek.js:179532-179693 placement
 var ADMIN_LIMIT_REQUEST_FLAG = "tengu_tallow_quoit";
@@ -173,24 +187,27 @@ var ADMIN_REQUEST_BUTTON_LABEL = "Request more";
 var ADMIN_REQUEST_DONE_LABEL = "Request sent to your admin \u2713";
 var ADMIN_REQUEST_CONFIRM_PROMPT = "This notifies your organization's admins.";
 //@ chunk-tyg7f3ek.js:179693-179763 placement
-function isValidAdminRequestLabel(e) {
-  return e.length >= 1 && e.length <= 80 && /^\P{Cc}*$/u.test(e);
+function isValidAdminRequestLabel(label) {
+  return label.length >= 1 && label.length <= 80 && /^\P{Cc}*$/u.test(label);
 }
 //@ chunk-tyg7f3ek.js:179763-179824 placement
 function adminRequestLabelSchema() {
-  return string().refine(isValidAdminRequestLabel).optional().catch(undefined);
+  return stringSchema().refine(isValidAdminRequestLabel).optional().catch(undefined);
 }
 //@ chunk-tyg7f3ek.js:179824-179948 placement
-var adminLimitRequestConfigSchema = DoctorLazy(() =>
-  u({
-    vscode: u({
-      label: adminRequestLabelSchema(),
-      doneLabel: adminRequestLabelSchema(),
-      confirm: M().optional().catch(undefined),
-      confirmPrompt: adminRequestLabelSchema(),
-    }).optional(),
-  }),
-);
+var adminLimitRequestConfigSchema; // deferred: uses DoctorLazy (../handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-tyg7f3ek.js:179824", () => {
+  adminLimitRequestConfigSchema = DoctorLazy(() =>
+    objectSchema({
+      vscode: objectSchema({
+        label: adminRequestLabelSchema(),
+        doneLabel: adminRequestLabelSchema(),
+        confirm: booleanSchema().optional().catch(undefined),
+        confirmPrompt: adminRequestLabelSchema(),
+      }).optional(),
+    }),
+  );
+});
 //@ chunk-tyg7f3ek.js:179948-179978 placement
 function isAdminLimitRequestGateOn() {
   return getFeatureValue_CACHED_MAY_BE_STALE(TENGU_TALLOW_QUOIT_GATE, false);
@@ -203,13 +220,13 @@ function readAdminLimitRequestConfig() {
   let featureValue_CACHED_MAY_BE_STALE = getFeatureValue_CACHED_MAY_BE_STALE(ADMIN_LIMIT_REQUEST_FLAG, null);
   if (featureValue_CACHED_MAY_BE_STALE === null || featureValue_CACHED_MAY_BE_STALE === undefined)
     return null;
-  let n = adminLimitRequestConfigSchema().safeParse(featureValue_CACHED_MAY_BE_STALE);
-  if (!n.success) {
+  let parsed = adminLimitRequestConfigSchema().safeParse(featureValue_CACHED_MAY_BE_STALE);
+  if (!parsed.success) {
     logFeatureBad("ide_admin_limit_request", "flag_unparseable");
     return null;
   }
-  if (n.data.vscode === undefined) return null;
-  let vscode = n.data.vscode;
+  if (parsed.data.vscode === undefined) return null;
+  let vscode = parsed.data.vscode;
   return {
     label: vscode.label ?? ADMIN_REQUEST_BUTTON_LABEL,
     doneLabel: vscode.doneLabel ?? ADMIN_REQUEST_DONE_LABEL,
@@ -228,7 +245,10 @@ function createAdminRequestState() {
   };
 }
 //@ chunk-tyg7f3ek.js:180378-180395 placement
-var ADMIN_REQUEST_STATE = new HostScoped(createAdminRequestState);
+var ADMIN_REQUEST_STATE; // deferred: uses createAdminRequestState of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-tyg7f3ek.js:180378", () => {
+  ADMIN_REQUEST_STATE = new HostScoped(createAdminRequestState);
+});
 //@ chunk-tyg7f3ek.js:180395-180432 placement
 function getAdminRequestState() {
   return ADMIN_REQUEST_STATE.of(getRootSession().host);
@@ -244,40 +264,46 @@ function setAdminRequestPhase(state) {
   adminRequestState.changed.emit();
 }
 //@ chunk-tyg7f3ek.js:180517-180565 placement
-function subscribeAdminRequestPhase(e) {
-  return getAdminRequestState().changed.subscribe(e);
+function subscribeAdminRequestPhase(listener) {
+  return getAdminRequestState().changed.subscribe(listener);
 }
 //@ chunk-tyg7f3ek.js:180565-180796 placement
-var ADMIN_REQUESTABLE_OVERAGE_REASONS = new Set([
-  "org_spend_cap_reached",
-  "org_level_disabled_until",
-  "member_level_disabled",
-  "member_zero_credit_limit",
-  "seat_tier_level_disabled",
-  "seat_tier_zero_credit_limit",
-  "group_zero_credit_limit",
-]);
-var EXTRA_USAGE_CHECK_TIMEOUT_MS = 40000;
-var ADMIN_REQUEST_FILING_TIMEOUT_MS = 20000;
-var ADMIN_REQUEST_SETTLED_COOLDOWN_MS = 600000;
+var ADMIN_REQUESTABLE_OVERAGE_REASONS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var EXTRA_USAGE_CHECK_TIMEOUT_MS;
+var ADMIN_REQUEST_FILING_TIMEOUT_MS;
+var ADMIN_REQUEST_SETTLED_COOLDOWN_MS;
+deferInit("chunk-tyg7f3ek.js:180565", () => {
+  ADMIN_REQUESTABLE_OVERAGE_REASONS = new Set([
+    "org_spend_cap_reached",
+    "org_level_disabled_until",
+    "member_level_disabled",
+    "member_zero_credit_limit",
+    "seat_tier_level_disabled",
+    "seat_tier_zero_credit_limit",
+    "group_zero_credit_limit",
+  ]);
+  EXTRA_USAGE_CHECK_TIMEOUT_MS = 40000;
+  ADMIN_REQUEST_FILING_TIMEOUT_MS = 20000;
+  ADMIN_REQUEST_SETTLED_COOLDOWN_MS = 600000;
+});
 //@ chunk-tyg7f3ek.js:180796-181039 placement
 /**
  * 对被拒绝且原因属于组织/席位额度上限的限流事件，生成可向管理员申请的键。
  */
-function adminRequestKeyForRateLimit(e) {
+function adminRequestKeyForRateLimit(limitState) {
   if (
-    e.status !== "rejected" ||
-    e.rateLimitType === undefined ||
-    e.overageDisabledReason === undefined ||
-    !ADMIN_REQUESTABLE_OVERAGE_REASONS.has(e.overageDisabledReason) ||
-    e.overageScope !== undefined
+    limitState.status !== "rejected" ||
+    limitState.rateLimitType === undefined ||
+    limitState.overageDisabledReason === undefined ||
+    !ADMIN_REQUESTABLE_OVERAGE_REASONS.has(limitState.overageDisabledReason) ||
+    limitState.overageScope !== undefined
   )
     return null;
-  return `${e.overageDisabledReason}:${e.overageResetsAt ?? e.resetsAt ?? ""}`;
+  return `${limitState.overageDisabledReason}:${limitState.overageResetsAt ?? limitState.resetsAt ?? ""}`;
 }
 //@ chunk-tyg7f3ek.js:181039-181110 placement
-function isSameAdminRequestKey(wall, n) {
-  return wall.key === n.key && wall.accountEpoch === n.accountEpoch;
+function isSameAdminRequestKey(wall, other) {
+  return wall.key === other.key && wall.accountEpoch === other.accountEpoch;
 }
 export {
   makeRewindStandInWriter,

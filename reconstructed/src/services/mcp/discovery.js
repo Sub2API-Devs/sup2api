@@ -163,7 +163,7 @@ import { applyBlockedToolPolicy } from "./blockedServers.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { judgeToolSchemaSendability } from "./toolSchemaSendability.js";
 import { joinDescription } from "../../remote/tools/inputSchemaFlatten.js";
-import { Ji } from "../../../vendor/lodash-es/uniqBy.js";
+import { uniqByExport } from "../../../vendor/lodash-es/uniqBy.js";
 import { toolTimeoutForServer } from "./mcpTimeouts.js";
 import { buildPluginEventFieldsFromId, recordPluginUsage } from "../../utils/telemetry/pluginTelemetry.js";
 import { policyEnabledPluginNameSet } from "../../utils/plugins/pluginPolicy.js";
@@ -192,7 +192,7 @@ import {
   readTabUrl,
   judgedSiteMeta,
 } from "../../utils/claudeInChrome/chromePermissions.js";
-import { IMAGE_LIMITS } from "../../utils/truncateGraphemes.js";
+import { IMAGE_LIMITS } from "../../utils/mediaLimits.js";
 import {
   isFileUploadServer,
   buildMcpToolPermissionOverrides,
@@ -267,114 +267,121 @@ import { plural } from "../../utils/stringUtils.js";
 import { recordToolUsed } from "../compact/keptTools.js";
 import { checkCommandListable } from "../../utils/commandPredicates.js";
 import { RESERVED_SKILL_NAMESPACE_REASON } from "../../skills/reservedSkillNames.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-z1n5m6nf.js:88192-88259 placement
 /**
  * 监听工具列表变化并按需重新拉取。
  */
-function watchToolListChanges(e, r) {
-  identityId2(e.client).setNotificationHandler(
+function watchToolListChanges(connection, refetch) {
+  identityId2(connection.client).setNotificationHandler(
     ToolListChangedNotificationSchema,
-    createListChangedRefetcher(e, r),
+    createListChangedRefetcher(connection, refetch),
   );
 }
 //@ chunk-z1n5m6nf.js:88259-88326 placement
 /**
  * 监听提示列表变化。
  */
-function watchPromptListChanges(e, r) {
-  identityId2(e.client).setNotificationHandler(
+function watchPromptListChanges(connection, refetch) {
+  identityId2(connection.client).setNotificationHandler(
     PromptListChangedNotificationSchema,
-    createListChangedRefetcher(e, r),
+    createListChangedRefetcher(connection, refetch),
   );
 }
 //@ chunk-z1n5m6nf.js:88326-88393 placement
 /**
  * 监听资源列表变化。
  */
-function watchResourceListChanges(e, r) {
-  identityId2(e.client).setNotificationHandler(
+function watchResourceListChanges(connection, refetch) {
+  identityId2(connection.client).setNotificationHandler(
     ResourceListChangedNotificationSchema,
-    createListChangedRefetcher(e, r),
+    createListChangedRefetcher(connection, refetch),
   );
 }
 //@ chunk-z1n5m6nf.js:88393-88453 placement
 /**
  * 设置任意通知处理器。
  */
-function watchNotification(e, r, n) {
-  identityId2(e.client).setNotificationHandler(r, n);
+function watchNotification(connection, schema, handler) {
+  identityId2(connection.client).setNotificationHandler(schema, handler);
 }
 //@ chunk-z1n5m6nf.js:88453-90098 placement
-async function connectMcpServer(e, r) {
-  if (e.type === "connected" && e.config.type === "sdk") return e;
-  if (isWithdrawnBuiltinPluginServer(e.name, e.config)) throw withdrawnBuiltinPluginServerError(e.name);
-  if (isMcpServerBlockedAtConnectTime(e.name, e.config)) {
-    if (e.type === "cached") refuseCachedRowV1(e.name, e.config, "policy");
-    if (judgeGate(e.name, e.config))
+async function connectMcpServer(server, options) {
+  if (server.type === "connected" && server.config.type === "sdk") return server;
+  if (isWithdrawnBuiltinPluginServer(server.name, server.config))
+    throw withdrawnBuiltinPluginServerError(server.name);
+  if (isMcpServerBlockedAtConnectTime(server.name, server.config)) {
+    if (server.type === "cached") refuseCachedRowV1(server.name, server.config, "policy");
+    if (judgeGate(server.name, server.config))
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        reservedAddressRefusalText(e.name),
+        reservedAddressRefusalText(server.name),
         "MCP server refused at a reserved address",
       );
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `MCP server "${e.name}" is blocked by managed policy`,
+      `MCP server "${server.name}" is blocked by managed policy`,
       "MCP server blocked by policy",
     );
   }
-  if (isMcpServerDisabled(e.name) && (await getCachedConnectResult(e.name, e.config))?.type !== "connected") {
-    if (e.type === "cached") refuseCachedRowV1(e.name, e.config, "disabled");
+  if (
+    isMcpServerDisabled(server.name) &&
+    (await getCachedConnectResult(server.name, server.config))?.type !== "connected"
+  ) {
+    if (server.type === "cached") refuseCachedRowV1(server.name, server.config, "disabled");
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `MCP server "${e.name}" is disabled \u2014 re-enable it via /mcp to use its tools`,
+      `MCP server "${server.name}" is disabled \u2014 re-enable it via /mcp to use its tools`,
       "MCP server disabled",
     );
   }
-  let n = identityEpoch();
-  let s =
-    e.type === "cached" && r?.toolUseId !== undefined && TOOL_USE_ID_PATTERN.test(r.toolUseId)
+  let epochAtDial = identityEpoch();
+  let toolUseBinding =
+    server.type === "cached" &&
+    options?.toolUseId !== undefined &&
+    TOOL_USE_ID_PATTERN.test(options.toolUseId)
       ? {
-          toolUseId: r.toolUseId,
-          withListings: r.toolUseIdWithListingsUntil !== undefined,
+          toolUseId: options.toolUseId,
+          withListings: options.toolUseIdWithListingsUntil !== undefined,
         }
       : undefined;
-  let h =
-    s === undefined
-      ? connectToServer_2(e.name, e.config)
-      : connectToServer_2(e.name, e.config, undefined, undefined, undefined, s);
-  if (s !== undefined) {
-    let S = () => {
-      s.toolUseId = undefined;
+  let dial =
+    toolUseBinding === undefined
+      ? connectToServer_2(server.name, server.config)
+      : connectToServer_2(server.name, server.config, undefined, undefined, undefined, toolUseBinding);
+  if (toolUseBinding !== undefined) {
+    let clearBinding = () => {
+      toolUseBinding.toolUseId = undefined;
     };
-    (r?.toolUseIdWithListingsUntil ?? h).then(S, S);
+    (options?.toolUseIdWithListingsUntil ?? dial).then(clearBinding, clearBinding);
   }
-  if (e.type === "cached")
-    h.then(
-      (S) => runCachedFirstDialArms(S, h, n),
+  if (server.type === "cached")
+    dial.then(
+      (connected) => runCachedFirstDialArms(connected, dial, epochAtDial),
       () => {},
     );
-  let y = await boundDial(h, {
-    signal: r?.signal,
-    timeoutMs: r?.timeoutMs,
-    serverName: e.name,
-    context: r?.context ?? "MCP connection",
+  let connection = await boundDial(dial, {
+    signal: options?.signal,
+    timeoutMs: options?.timeoutMs,
+    serverName: server.name,
+    context: options?.context ?? "MCP connection",
   });
-  if (y.type !== "connected") {
-    if (y.type === "needs-auth")
+  if (connection.type !== "connected") {
+    if (connection.type === "needs-auth")
       throw Object.assign(
         new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-          AUTH_MESSAGES.dialNeedsAuth(e.name),
+          AUTH_MESSAGES.dialNeedsAuth(server.name),
           "MCP server needs authentication",
         ),
         {
           mcpErrorSource: "user_auth",
         },
       );
-    let errorCode = y.type === "failed" ? y.errorCode : undefined;
+    let errorCode = connection.type === "failed" ? connection.errorCode : undefined;
     throw Object.assign(
       new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
         AUTH_MESSAGES.dialNotConnected(
-          e.name,
-          isDiscoveryCacheOn() && y.type === "failed" && y.error
-            ? `: ${normalizeMcpServerName(y.error)}`
+          server.name,
+          isDiscoveryCacheOn() && connection.type === "failed" && connection.error
+            ? `: ${normalizeMcpServerName(connection.error)}`
             : "",
         ),
         "MCP server not connected",
@@ -389,57 +396,59 @@ async function connectMcpServer(e, r) {
       },
     );
   }
-  if (isWithdrawnBuiltinPluginServer(e.name, e.config)) {
-    await detachAndCloseConnection_2(y);
-    throw withdrawnBuiltinPluginServerError(e.name);
+  if (isWithdrawnBuiltinPluginServer(server.name, server.config)) {
+    await detachAndCloseConnection_2(connection);
+    throw withdrawnBuiltinPluginServerError(server.name);
   }
-  return y;
+  return connection;
 }
 //@ chunk-z1n5m6nf.js:90098-90178 placement
 /**
  * 判断缓存条目是否已被取代。
  */
-function isSupersededCacheEntry_2(e, r, n) {
+function isSupersededCacheEntry_2(cacheEntry, name, config) {
   let cache = connectToServer_2.cache;
   if (!cache?.get) return false;
-  return cache.get(serverCacheKey(r, n)) !== e;
+  return cache.get(serverCacheKey(name, config)) !== cacheEntry;
 }
 //@ chunk-z1n5m6nf.js:90178-90228 placement
 /**
  * 判断该次拨号是否已被取代。
  */
-function isSupersededDial_2(e) {
-  return getCliOwnedState().supersededDials.has(e);
+function isSupersededDial_2(dial) {
+  return getCliOwnedState().supersededDials.has(dial);
 }
 //@ chunk-z1n5m6nf.js:90228-90634 placement
 /**
  * 缓存首次拨号结束后的处理（v1 副本）：身份变化或被取代时关闭，成功或需认证时记录，失败时删除记忆并上报。
  */
-function runCachedFirstDialArms(e, r, n) {
+function runCachedFirstDialArms(result, dial, epochAtDial) {
   let cachedFirstDialArmsRan = getCliOwnedState().cachedFirstDialArmsRan;
-  if (cachedFirstDialArmsRan.has(e)) return;
-  cachedFirstDialArmsRan.add(e);
-  let h = serverCacheKey(e.name, e.config);
-  let y = getConnectionCache().connections.get(h);
-  let S = identityEpoch() !== n;
-  let T = y === undefined && S;
-  if (isSupersededDial_2(r) || (y !== undefined && y !== r) || T) {
-    if (!isSupersededDial_2(r) && S && e.type === "connected") detachAndCloseConnection_2(e);
+  if (cachedFirstDialArmsRan.has(result)) return;
+  cachedFirstDialArmsRan.add(result);
+  let cacheKey = serverCacheKey(result.name, result.config);
+  let currentDial = getConnectionCache().connections.get(cacheKey);
+  let identityChanged = identityEpoch() !== epochAtDial;
+  let isStaleAdopt = currentDial === undefined && identityChanged;
+  if (isSupersededDial_2(dial) || (currentDial !== undefined && currentDial !== dial) || isStaleAdopt) {
+    if (!isSupersededDial_2(dial) && identityChanged && result.type === "connected")
+      detachAndCloseConnection_2(result);
     return;
   }
-  if (e.type === "connected" || e.type === "needs-auth") {
-    emitCachedAdoptSignal(e.name, e.config);
+  if (result.type === "connected" || result.type === "needs-auth") {
+    emitCachedAdoptSignal(result.name, result.config);
     return;
   }
-  getConnectionCache().connections.delete(h);
-  if (e.type === "failed") recordCachedDialFailureV1(e, !getCliOwnedState().swrRefreshDialsInFlight.has(r));
+  getConnectionCache().connections.delete(cacheKey);
+  if (result.type === "failed")
+    recordCachedDialFailureV1(result, !getCliOwnedState().swrRefreshDialsInFlight.has(dial));
 }
 //@ chunk-z1n5m6nf.js:90634-90672 placement
 /**
  * 判断两个配置哈希是否相同。
  */
-function sameConfigHash(e, r) {
-  return configHash(e) === configHash(r);
+function sameConfigHash(configA, configB) {
+  return configHash(configA) === configHash(configB);
 }
 //@ chunk-z1n5m6nf.js:90672-91740 placement
 var OAUTH_ERROR_CODES = [
@@ -495,66 +504,69 @@ var OAUTH_ERROR_CODES = [
 /**
  * 把连接错误码收敛为可上报值（v1 副本）。
  */
-function sanitizeConnectErrorCodeForTelemetry_2(e) {
-  if (e === undefined) return lit("missing");
-  if (/^-?\d+$/.test(e)) return fromNumber(Number(e));
-  let found = OAUTH_ERROR_CODES.find((n) => n === e);
+function sanitizeConnectErrorCodeForTelemetry_2(code) {
+  if (code === undefined) return lit("missing");
+  if (/^-?\d+$/.test(code)) return fromNumber(Number(code));
+  let found = OAUTH_ERROR_CODES.find((knownCode) => knownCode === code);
   if (found !== undefined) return fromEnum(found);
-  return sanitizableErrorCode(e) ?? lit("other");
+  return sanitizableErrorCode(code) ?? lit("other");
 }
 //@ chunk-z1n5m6nf.js:91909-92203 placement
-var LIST_FAILURE_REASONS_V1 = {
-  [ErrorCode.ConnectionClosed]: "connection_closed",
-  [ErrorCode.RequestTimeout]: "request_timeout",
-  [CCR_NEEDS_APPROVAL_CODE]: "ccr_needs_approval",
-  [ErrorCode.ParseError]: "parse_error",
-  [ErrorCode.InvalidRequest]: "invalid_request",
-  [ErrorCode.MethodNotFound]: "method_not_found",
-  [ErrorCode.InvalidParams]: "invalid_params",
-  [ErrorCode.InternalError]: "internal_error",
-};
+var LIST_FAILURE_REASONS_V1; // deferred: uses ErrorCode (../../../vendor/@modelcontextprotocol/sdk/dist/esm/types.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-z1n5m6nf.js:91909", () => {
+  LIST_FAILURE_REASONS_V1 = {
+    [ErrorCode.ConnectionClosed]: "connection_closed",
+    [ErrorCode.RequestTimeout]: "request_timeout",
+    [CCR_NEEDS_APPROVAL_CODE]: "ccr_needs_approval",
+    [ErrorCode.ParseError]: "parse_error",
+    [ErrorCode.InvalidRequest]: "invalid_request",
+    [ErrorCode.MethodNotFound]: "method_not_found",
+    [ErrorCode.InvalidParams]: "invalid_params",
+    [ErrorCode.InternalError]: "internal_error",
+  };
+});
 //@ chunk-z1n5m6nf.js:92203-92386 placement
 /**
  * 把 MCP 工具输入转换为自动模式分类器的输入文本（v1 副本）。
  */
-function mcpToolInputToAutoClassifierInput(e, name) {
-  let keys = Object.keys(e);
+function mcpToolInputToAutoClassifierInput(input, name) {
+  let keys = Object.keys(input);
   if (keys.length === 0) return name;
   return keys
-    .map((s) => {
-      let h = e[s];
-      let y = typeof h === "object" && h !== null ? JSON.stringify(h) : String(h);
-      return `${s}=${y}`;
+    .map((key) => {
+      let value = input[key];
+      let text = typeof value === "object" && value !== null ? JSON.stringify(value) : String(value);
+      return `${key}=${text}`;
     })
     .join(" ");
 }
 //@ chunk-z1n5m6nf.js:92386-92529 placement
-function beginDroppedToolsRoundV1(e) {
+function beginDroppedToolsRoundV1(connection) {
   let droppedToolsSeqByConnection = getCliOwnedState().droppedToolsSeqByConnection;
-  let n = droppedToolsSeqByConnection.get(e) ?? {
+  let sequence = droppedToolsSeqByConnection.get(connection) ?? {
     started: 0,
     applied: 0,
   };
-  droppedToolsSeqByConnection.set(e, n);
-  n.started += 1;
+  droppedToolsSeqByConnection.set(connection, sequence);
+  sequence.started += 1;
   return {
-    seq: n.started,
-    state: n,
+    seq: sequence.started,
+    state: sequence,
   };
 }
 //@ chunk-z1n5m6nf.js:92529-92586 placement
 /**
  * 取服务器的 tools/list 错误。
  */
-function getToolsListError(e) {
-  return getCliOwnedState().toolsListErrorByResult.get(e);
+function getToolsListError(toolsResult) {
+  return getCliOwnedState().toolsListErrorByResult.get(toolsResult);
 }
 //@ chunk-z1n5m6nf.js:92586-92641 placement
 /**
  * 取服务器的发现阶段请求错误。
  */
-function getDiscoveryFetchError_2(e) {
-  return getCliOwnedState().discoveryFetchErrors.get(e);
+function getDiscoveryFetchError_2(templatesResult) {
+  return getCliOwnedState().discoveryFetchErrors.get(templatesResult);
 }
 //@ chunk-z1n5m6nf.js:92641-92701 placement
 /**
@@ -573,139 +585,149 @@ function seedMcpIdentityCheck() {
   let cliOwnedState = getCliOwnedState();
   if (cliOwnedState.identitySeedAttempted) return;
   cliOwnedState.identitySeedAttempted = true;
-  let r = currentIdentityToken();
-  if (r !== undefined) cliOwnedState.identityBaseline = r;
+  let identityToken = currentIdentityToken();
+  if (identityToken !== undefined) cliOwnedState.identityBaseline = identityToken;
 }
 //@ chunk-z1n5m6nf.js:92833-93043 placement
 /**
  * 判断 MCP 身份自上次检查以来是否变化并更新基线（v1 副本）。
  */
 function mcpIdentityChangedSinceLastCheck() {
-  let e = currentIdentityToken();
+  let identityToken = currentIdentityToken();
   let cliOwnedState = getCliOwnedState();
-  if (e === undefined) {
+  if (identityToken === undefined) {
     cliOwnedState.identityBaseline = undefined;
     return true;
   }
   if (cliOwnedState.identityBaseline === undefined) {
-    cliOwnedState.identityBaseline = e;
+    cliOwnedState.identityBaseline = identityToken;
     return true;
   }
-  if (cliOwnedState.identityBaseline === e) return false;
-  cliOwnedState.identityBaseline = e;
+  if (cliOwnedState.identityBaseline === identityToken) return false;
+  cliOwnedState.identityBaseline = identityToken;
   return true;
 }
 //@ chunk-z1n5m6nf.js:93043-93156 placement
 /**
  * 记录原始工具列表与拉取时间（v1 副本）。
  */
-function recordRawToolsForResult(e, r) {
+function recordRawToolsForResult(result, rawTools) {
   if (!isDiscoveryCacheOn()) return;
   let cliOwnedState = getCliOwnedState();
-  cliOwnedState.rawToolsByResult.set(e, r);
-  cliOwnedState.rawFetchedAtByResult.set(e, Date.now());
+  cliOwnedState.rawToolsByResult.set(result, rawTools);
+  cliOwnedState.rawFetchedAtByResult.set(result, Date.now());
 }
 //@ chunk-z1n5m6nf.js:93156-93272 placement
 /**
  * 记录原始命令列表与拉取时间（v1 副本）。
  */
-function recordRawCommandsForResult(e, r) {
+function recordRawCommandsForResult(result, rawCommands) {
   if (!isDiscoveryCacheOn()) return;
   let cliOwnedState = getCliOwnedState();
-  cliOwnedState.rawCommandsByResult.set(e, r);
-  cliOwnedState.rawFetchedAtByResult.set(e, Date.now());
+  cliOwnedState.rawCommandsByResult.set(result, rawCommands);
+  cliOwnedState.rawFetchedAtByResult.set(result, Date.now());
 }
 //@ chunk-z1n5m6nf.js:93272-93389 placement
 /**
  * 记录原始资源列表与拉取时间（v1 副本）。
  */
-function recordRawResourcesForResult_2(e, r) {
+function recordRawResourcesForResult_2(result, rawResources) {
   if (!isDiscoveryCacheOn()) return;
   let cliOwnedState = getCliOwnedState();
-  cliOwnedState.rawResourcesByResult.set(e, r);
-  cliOwnedState.rawFetchedAtByResult.set(e, Date.now());
+  cliOwnedState.rawResourcesByResult.set(result, rawResources);
+  cliOwnedState.rawFetchedAtByResult.set(result, Date.now());
 }
 //@ chunk-z1n5m6nf.js:93389-93441 placement
 /**
  * 记录服务器的发现阶段请求错误。
  */
-function setDiscoveryFetchError(e, r) {
-  getCliOwnedState().discoveryFetchErrors.set(e, r);
+function setDiscoveryFetchError(result, error) {
+  getCliOwnedState().discoveryFetchErrors.set(result, error);
 }
 //@ chunk-z1n5m6nf.js:93441-93594 placement
 /**
  * 发现缓存命中但服务器具备频道能力时改为未命中（v1 副本）。
  */
-function applyCapabilityServeTimeMiss_2(e) {
-  if (e.kind !== "fresh" && e.kind !== "stale") return e;
-  let capabilities = e.entry.capabilities;
+function applyCapabilityServeTimeMiss_2(probe) {
+  if (probe.kind !== "fresh" && probe.kind !== "stale") return probe;
+  let capabilities = probe.entry.capabilities;
   if (hasChannelCapability(capabilities))
     return {
       kind: "miss",
       reason: "channel-capable",
     };
-  return e;
+  return probe;
 }
 //@ chunk-z1n5m6nf.js:93594-95181 placement
-async function persistDiscovery(e, r) {
+async function persistDiscovery(connection, listing) {
   isLegacyProtocolEra();
   let cliOwnedState = getCliOwnedState();
-  if (cliOwnedState.persistedDiscoveryRounds.has(r.tools)) return true;
-  if (!isCurrentIdentityEpoch(r.identityEpoch)) return true;
-  let s = cliOwnedState.rawToolsByResult.get(r.tools);
-  let h = cliOwnedState.rawCommandsByResult.get(r.commands);
-  let y = cliOwnedState.rawResourcesByResult.get(r.resources);
-  if (s === undefined || h === undefined || y === undefined || r.templates === undefined) return false;
+  if (cliOwnedState.persistedDiscoveryRounds.has(listing.tools)) return true;
+  if (!isCurrentIdentityEpoch(listing.identityEpoch)) return true;
+  let rawTools = cliOwnedState.rawToolsByResult.get(listing.tools);
+  let rawCommands = cliOwnedState.rawCommandsByResult.get(listing.commands);
+  let rawResources = cliOwnedState.rawResourcesByResult.get(listing.resources);
+  if (
+    rawTools === undefined ||
+    rawCommands === undefined ||
+    rawResources === undefined ||
+    listing.templates === undefined
+  )
+    return false;
   let min = Math.min(
-    cliOwnedState.rawFetchedAtByResult.get(r.tools) ?? Number.POSITIVE_INFINITY,
-    cliOwnedState.rawFetchedAtByResult.get(r.commands) ?? Number.POSITIVE_INFINITY,
-    cliOwnedState.rawFetchedAtByResult.get(r.resources) ?? Number.POSITIVE_INFINITY,
+    cliOwnedState.rawFetchedAtByResult.get(listing.tools) ?? Number.POSITIVE_INFINITY,
+    cliOwnedState.rawFetchedAtByResult.get(listing.commands) ?? Number.POSITIVE_INFINITY,
+    cliOwnedState.rawFetchedAtByResult.get(listing.resources) ?? Number.POSITIVE_INFINITY,
   );
   if (!Number.isFinite(min)) return true;
   let now = min;
-  let mapped = [r.tools, r.commands, r.resources].map((R) => [R, cliOwnedState.rawFetchedAtByResult.get(R)]);
-  cliOwnedState.rawToolsByResult.delete(r.tools);
-  cliOwnedState.rawCommandsByResult.delete(r.commands);
-  cliOwnedState.rawResourcesByResult.delete(r.resources);
-  cliOwnedState.rawFetchedAtByResult.delete(r.tools);
-  cliOwnedState.rawFetchedAtByResult.delete(r.commands);
-  cliOwnedState.rawFetchedAtByResult.delete(r.resources);
-  cliOwnedState.persistedDiscoveryRounds.add(r.tools);
-  let w = await writeDiscoveryCache(
-    e.name,
-    e.config,
+  let mapped = [listing.tools, listing.commands, listing.resources].map((resultKey) => [
+    resultKey,
+    cliOwnedState.rawFetchedAtByResult.get(resultKey),
+  ]);
+  cliOwnedState.rawToolsByResult.delete(listing.tools);
+  cliOwnedState.rawCommandsByResult.delete(listing.commands);
+  cliOwnedState.rawResourcesByResult.delete(listing.resources);
+  cliOwnedState.rawFetchedAtByResult.delete(listing.tools);
+  cliOwnedState.rawFetchedAtByResult.delete(listing.commands);
+  cliOwnedState.rawFetchedAtByResult.delete(listing.resources);
+  cliOwnedState.persistedDiscoveryRounds.add(listing.tools);
+  let writeOutcome = await writeDiscoveryCache(
+    connection.name,
+    connection.config,
     {
-      ...(e.serverInfo && {
+      ...(connection.serverInfo && {
         serverInfo: {
-          name: e.serverInfo.name,
-          version: e.serverInfo.version,
+          name: connection.serverInfo.name,
+          version: connection.serverInfo.version,
         },
       }),
-      ...(e.protocolEra !== undefined && {
-        negotiatedEra: e.protocolEra,
+      ...(connection.protocolEra !== undefined && {
+        negotiatedEra: connection.protocolEra,
       }),
-      capabilities: e.capabilities,
-      tools: s,
-      commands: h,
-      resources: y,
-      templates: r.templates.map(({ server, ...E }) => E),
+      capabilities: connection.capabilities,
+      tools: rawTools,
+      commands: rawCommands,
+      resources: rawResources,
+      templates: listing.templates.map(({ server, ...template }) => template),
     },
     {
-      identityEpoch: r.identityEpoch,
-      grantLeg: r.grantLeg,
+      identityEpoch: listing.identityEpoch,
+      grantLeg: listing.grantLeg,
       now,
     },
   );
-  if (w === "terminal") {
-    cliOwnedState.persistedDiscoveryRounds.delete(r.tools);
+  if (writeOutcome === "terminal") {
+    cliOwnedState.persistedDiscoveryRounds.delete(listing.tools);
     return false;
   }
-  if (w === "transient") {
-    cliOwnedState.rawToolsByResult.set(r.tools, s);
-    cliOwnedState.rawCommandsByResult.set(r.commands, h);
-    cliOwnedState.rawResourcesByResult.set(r.resources, y);
-    for (let [R, E] of mapped) if (E !== undefined) cliOwnedState.rawFetchedAtByResult.set(R, E);
-    cliOwnedState.persistedDiscoveryRounds.delete(r.tools);
+  if (writeOutcome === "transient") {
+    cliOwnedState.rawToolsByResult.set(listing.tools, rawTools);
+    cliOwnedState.rawCommandsByResult.set(listing.commands, rawCommands);
+    cliOwnedState.rawResourcesByResult.set(listing.resources, rawResources);
+    for (let [resultKey, fetchedAt] of mapped)
+      if (fetchedAt !== undefined) cliOwnedState.rawFetchedAtByResult.set(resultKey, fetchedAt);
+    cliOwnedState.persistedDiscoveryRounds.delete(listing.tools);
   }
   return true;
 }
@@ -713,52 +735,55 @@ async function persistDiscovery(e, r) {
 /**
  * 身份未变化时把刷新得到的工具列表合并写入发现缓存（v1 副本）。
  */
-async function persistRefreshedToolsIfPresent(e, r, n) {
+async function persistRefreshedToolsIfPresent(server, toolsResult, options) {
   isLegacyProtocolEra();
-  if (!isCurrentIdentityEpoch(n.identityEpoch)) return;
+  if (!isCurrentIdentityEpoch(options.identityEpoch)) return;
   let cliOwnedState = getCliOwnedState();
-  let tools = cliOwnedState.rawToolsByResult.get(r);
-  let y = cliOwnedState.rawFetchedAtByResult.get(r);
-  if (tools === undefined || y === undefined) return;
-  await mergeDiscoveryTools(e.name, e.config, tools, {
-    identityEpoch: n.identityEpoch,
-    grantLeg: n.grantLeg,
-    fetchedAt: y,
+  let tools = cliOwnedState.rawToolsByResult.get(toolsResult);
+  let fetchedAt = cliOwnedState.rawFetchedAtByResult.get(toolsResult);
+  if (tools === undefined || fetchedAt === undefined) return;
+  await mergeDiscoveryTools(server.name, server.config, tools, {
+    identityEpoch: options.identityEpoch,
+    grantLeg: options.grantLeg,
+    fetchedAt,
   });
 }
 //@ chunk-z1n5m6nf.js:95439-95824 placement
 /**
  * 把实时连接得到的列表写入发现缓存（v1 副本）。
  */
-async function persistLiveListing_2(e, r) {
+async function persistLiveListing_2(connection, listing) {
   if (
     !isDiscoveryCacheOn() ||
-    !isDiscoveryCacheEligible(e.config) ||
-    isMcpServerDisabled(e.name) ||
-    isMcpServerBlockedAtConnectTime(e.name, e.config)
+    !isDiscoveryCacheEligible(connection.config) ||
+    isMcpServerDisabled(connection.name) ||
+    isMcpServerBlockedAtConnectTime(connection.name, connection.config)
   )
     return;
   try {
-    let n = !!e.capabilities?.resources;
-    if (!n) recordRawResourcesForResult_2(r.resources, []);
-    let s = n && isCacheableServer(e.config) ? await fetchResourceTemplatesForClient_2(e) : [];
+    let hasResources = !!connection.capabilities?.resources;
+    if (!hasResources) recordRawResourcesForResult_2(listing.resources, []);
+    let templates =
+      hasResources && isCacheableServer(connection.config)
+        ? await fetchResourceTemplatesForClient_2(connection)
+        : [];
     if (
-      (await getCachedConnectResult(e.name, e.config)) !== e ||
-      isMcpServerDisabled(e.name) ||
-      isMcpServerBlockedAtConnectTime(e.name, e.config)
+      (await getCachedConnectResult(connection.name, connection.config)) !== connection ||
+      isMcpServerDisabled(connection.name) ||
+      isMcpServerBlockedAtConnectTime(connection.name, connection.config)
     )
       return;
-    await persistDiscovery(e, {
-      ...r,
-      templates: getDiscoveryFetchError_2(s) === undefined ? s : undefined,
+    await persistDiscovery(connection, {
+      ...listing,
+      templates: getDiscoveryFetchError_2(templates) === undefined ? templates : undefined,
     });
   } catch (error) {
-    logMCPDebug(e.name, `Discovery cache write-through skipped: ${errorMessage(error)}`);
+    logMCPDebug(connection.name, `Discovery cache write-through skipped: ${errorMessage(error)}`);
   }
 }
 //@ chunk-z1n5m6nf.js:95824-96117 placement
-function isDiscoveryCacheMissRecoverable_2(e) {
-  switch (e.reason) {
+function isDiscoveryCacheMissRecoverable_2(probe) {
+  switch (probe.reason) {
     case "absent":
     case "expired":
     case "corrupt":
@@ -774,13 +799,13 @@ function isDiscoveryCacheMissRecoverable_2(e) {
     case "channel-capable":
       return false;
     default:
-      return e.reason;
+      return probe.reason;
   }
 }
 //@ chunk-z1n5m6nf.js:96117-96644 placement
-function discoverySourceLabel_2(e) {
-  if (e.kind !== "miss") return "live";
-  switch (e.reason) {
+function discoverySourceLabel_2(probe) {
+  if (probe.kind !== "miss") return "live";
+  switch (probe.reason) {
     case "disabled":
       return "miss_disabled";
     case "key-unavailable":
@@ -806,13 +831,17 @@ function discoverySourceLabel_2(e) {
     case "channel-capable":
       return "live";
     default:
-      return e.reason;
+      return probe.reason;
   }
 }
 //@ chunk-z1n5m6nf.js:96644-96768 placement
-function getMaxResultSizeCharsMeta(e) {
-  let r = e._meta?.["anthropic/maxResultSizeChars"];
-  return typeof r === "number" && Number.isFinite(r) && r > 0 ? r : undefined;
+function getMaxResultSizeCharsMeta(tool) {
+  let maxResultSizeChars = tool._meta?.["anthropic/maxResultSizeChars"];
+  return typeof maxResultSizeChars === "number" &&
+    Number.isFinite(maxResultSizeChars) &&
+    maxResultSizeChars > 0
+    ? maxResultSizeChars
+    : undefined;
 }
 //@ chunk-z1n5m6nf.js:96768-101063 placement
 /**
@@ -848,44 +877,49 @@ function buildMcpTool({
   serverInfoName,
   role,
   listed,
-  call: ze,
+  call,
   overrides,
 }) {
   let mcpToolName = buildMcpToolName(serverName, listed.name);
   let maxResultSizeCharsMeta = getMaxResultSizeCharsMeta(listed);
-  let Ne = maxResultSizeCharsMeta !== undefined;
-  let Te = listed._meta?.["anthropic/requiresUserInteraction"] === true;
-  let we = toolUiMeta(listed._meta);
-  let Oe = promptOverrides?.tools?.[listed.name] ?? listed.description ?? "";
-  let De = truncateDescription_2(Oe, `Tool "${listed.name}" description`, serverName, maxDescriptionLength_2);
-  let xe = truncateDescription_2(
-    Oe,
+  let hasMaxResultSizeCap = maxResultSizeCharsMeta !== undefined;
+  let requiresUserInteraction = listed._meta?.["anthropic/requiresUserInteraction"] === true;
+  let uiMeta = toolUiMeta(listed._meta);
+  let descriptionText = promptOverrides?.tools?.[listed.name] ?? listed.description ?? "";
+  let truncatedDescription = truncateDescription_2(
+    descriptionText,
+    `Tool "${listed.name}" description`,
+    serverName,
+    maxDescriptionLength_2,
+  );
+  let truncatedLoadedDescription = truncateDescription_2(
+    descriptionText,
     `Tool "${listed.name}" description`,
     serverName,
     maxLoadedDescriptionLength,
   );
-  let He =
+  let searchHint =
     promptOverrides?.search_hints?.[listed.name] ??
     (typeof listed._meta?.["anthropic/searchHint"] === "string"
       ? listed._meta["anthropic/searchHint"]
       : undefined);
-  let Fe = withOverlapSlots(serverName, listed.name, ze);
-  let Ue = requiresConnectorGrant(serverName, {
+  let callWithOverlapSlots = withOverlapSlots(serverName, listed.name, call);
+  let requiresConnectorGrant_2 = requiresConnectorGrant(serverName, {
     scope,
     pluginSource,
   });
-  let Ie = Ue || legacyGrantRefused;
-  let ve =
+  let requiresGrant = requiresConnectorGrant_2 || legacyGrantRefused;
+  let canRebindLegacyGrant =
     legacyGrantRefused &&
     legacyGrantRebindable &&
-    !Te &&
+    !requiresUserInteraction &&
     effectiveMaxPermission !== "ask" &&
     overrides?.suppressesAlwaysAllowRule === undefined &&
     overrides?.requiresUserInteraction === undefined &&
     !isDesignGatedTool(isFirstPartyDesignServer, listed.name);
-  let Ee = Ie || isDesignGatedTool(isFirstPartyDesignServer, listed.name);
-  let B = () =>
-    Ue ||
+  let suppressesAllowRules = requiresGrant || isDesignGatedTool(isFirstPartyDesignServer, listed.name);
+  let ignoresWholeToolAllowRule = () =>
+    requiresConnectorGrant_2 ||
     (legacyGrantRefused &&
       !ownsLegacyKey({
         serverName,
@@ -902,10 +936,10 @@ function buildMcpTool({
       serverType,
       serverId,
     });
-  if (Ie)
+  if (requiresGrant)
     logMCPDebug(
       serverName,
-      Ue
+      requiresConnectorGrant_2
         ? "Allow rules do not apply: this server's name starts like a claude.ai connector's. To use allow rules, the server needs another name, and the rules must use that name."
         : "Allow rules do not apply: another MCP server already uses this name, or the name could not be recorded in the config file. Give this server a different name and write the rules for that name, or reconnect if the config file was busy.",
     );
@@ -941,7 +975,7 @@ function buildMcpTool({
       ...(legacyGrantRefused && {
         legacyGrantRefused,
       }),
-      ...(ve && {
+      ...(canRebindLegacyGrant && {
         legacyGrantRebindable,
       }),
       ...(denyKey !== undefined && {
@@ -961,35 +995,35 @@ function buildMcpTool({
       execution: listed.execution,
       role,
       effectiveMaxPermission,
-      ...(we && {
-        uiMeta: we,
+      ...(uiMeta && {
+        uiMeta,
       }),
       ...(describeHiddenMcpTool(listed._meta, serverName, listed.name) && {
         hiddenFromModel: true,
       }),
     },
     isMcp: true,
-    searchHint: He?.replace(/\s+/g, " ").trim() || undefined,
+    searchHint: searchHint?.replace(/\s+/g, " ").trim() || undefined,
     alwaysLoad:
       !serverDefersAllTools &&
       ((serverAlwaysLoad && !(scope === "dynamic" && listed._meta?.["anthropic/alwaysLoad"] === false)) ||
         listed._meta?.["anthropic/alwaysLoad"] === true),
     async description() {
-      return Oe;
+      return descriptionText;
     },
     async prompt({ loadedThroughToolSearch }) {
-      return loadedThroughToolSearch ? xe : De;
+      return loadedThroughToolSearch ? truncatedLoadedDescription : truncatedDescription;
     },
     isConcurrencySafe() {
-      return Fe.mayOverlap || (listed.annotations?.readOnlyHint ?? false);
+      return callWithOverlapSlots.mayOverlap || (listed.annotations?.readOnlyHint ?? false);
     },
     isReadOnly() {
       return listed.annotations?.readOnlyHint ?? false;
     },
     readOnlyHint: listed.annotations?.readOnlyHint,
     openWorldHint: listed.annotations?.openWorldHint,
-    toAutoClassifierInput(te) {
-      return mcpToolInputToAutoClassifierInput(te, listed.name);
+    toAutoClassifierInput(input) {
+      return mcpToolInputToAutoClassifierInput(input, listed.name);
     },
     isDestructive() {
       return listed.annotations?.destructiveHint ?? false;
@@ -998,35 +1032,35 @@ function buildMcpTool({
       return listed.annotations?.openWorldHint ?? false;
     },
     requiresUserInteraction() {
-      return Te;
+      return requiresUserInteraction;
     },
-    async validateInput(te, Pe) {
-      let ke = refuseNonMainAccountMemoryWrite(accountMemoryServer, listed.name, Pe);
-      if (ke === undefined)
+    async validateInput(input, context) {
+      let refusal = refuseNonMainAccountMemoryWrite(accountMemoryServer, listed.name, context);
+      if (refusal === undefined)
         return {
           result: true,
         };
       logEvent("tengu_account_memory_spawned_write_refused", {
-        caller: fromEnumOpt(Pe.memoryCaller) ?? lit("unmarked"),
+        caller: fromEnumOpt(context.memoryCaller) ?? lit("unmarked"),
       });
       return {
         result: false,
-        message: ke,
+        message: refusal,
         errorCode: 1,
       };
     },
-    suppressesAlwaysAllowRule: (te, Pe) =>
-      Te ||
-      (effectiveMaxPermission === "ask" && !Pe) ||
-      B() ||
+    suppressesAlwaysAllowRule: (input, hasAlwaysAllowRule) =>
+      requiresUserInteraction ||
+      (effectiveMaxPermission === "ask" && !hasAlwaysAllowRule) ||
+      ignoresWholeToolAllowRule() ||
       isDesignGatedTool(isFirstPartyDesignServer, listed.name),
-    ...((Ie || isServerIdentityActive()) && {
-      ignoresWholeToolAllowRule: B,
+    ...((requiresGrant || isServerIdentityActive()) && {
+      ignoresWholeToolAllowRule,
     }),
-    maxResultSizeChars: Ne
+    maxResultSizeChars: hasMaxResultSizeCap
       ? Math.min(maxResultSizeCharsMeta, MAX_MCP_RESULT_CHARS)
       : MCPTool.maxResultSizeChars,
-    persistenceThresholdCeiling: Ne ? MAX_MCP_RESULT_CHARS : undefined,
+    persistenceThresholdCeiling: hasMaxResultSizeCap ? MAX_MCP_RESULT_CHARS : undefined,
     inputJSONSchema: addComputerUseActionSummary(
       addActionSummaryToSchema(
         applyParamDescriptionOverrides(
@@ -1037,19 +1071,26 @@ function buildMcpTool({
       ),
       mcpToolName,
     ),
-    async checkPermissions(te, Pe) {
-      let ke = gateDesignWriteWithoutPlanToken(isFirstPartyDesignServer, listed.name, te);
-      if (ke) return ke;
+    async checkPermissions(input, context) {
+      let planTokenDenial = gateDesignWriteWithoutPlanToken(isFirstPartyDesignServer, listed.name, input);
+      if (planTokenDenial) return planTokenDenial;
       if (isFirstPartyDesignServer) {
-        let oe = peekScopeExpansionNotice();
-        let ye =
-          (await oe?.wouldNeedDesignConsent(Pe.toolState.get(DesignGateState), Pe.credentials)) ?? null;
-        if (ye !== null && oe && Pe.toolUseId) {
-          let Ae = rememberDesignConsentAsk(Pe.toolUseId, ye, canAskDesignConsent(Pe));
-          return askDesignConsent(oe.consentPromptFor(ye), te, Ae);
+        let notice = peekScopeExpansionNotice();
+        let neededConsentBit =
+          (await notice?.wouldNeedDesignConsent(
+            context.toolState.get(DesignGateState),
+            context.credentials,
+          )) ?? null;
+        if (neededConsentBit !== null && notice && context.toolUseId) {
+          let consentNonce = rememberDesignConsentAsk(
+            context.toolUseId,
+            neededConsentBit,
+            canAskDesignConsent(context),
+          );
+          return askDesignConsent(notice.consentPromptFor(neededConsentBit), input, consentNonce);
         }
       }
-      if (Te)
+      if (requiresUserInteraction)
         return {
           behavior: "ask",
           message: "MCPTool requires permission.",
@@ -1059,7 +1100,7 @@ function buildMcpTool({
       return {
         behavior: "passthrough",
         message: "MCPTool requires permission.",
-        suggestions: Ee
+        suggestions: suppressesAllowRules
           ? []
           : [
               {
@@ -1079,7 +1120,7 @@ function buildMcpTool({
             ],
       };
     },
-    call: Fe.call,
+    call: callWithOverlapSlots.call,
     userFacingName() {
       let trimmed = (listed.annotations?.title || listed.name).replace(/\s+/g, " ").trim();
       return `${serverName} - ${trimmed} (MCP)`;
@@ -1088,11 +1129,11 @@ function buildMcpTool({
   };
 }
 //@ chunk-z1n5m6nf.js:101063-101346 placement
-async function buildCachedClientTools_2({ name: e, config, capabilities, serverInfo, savedAt, tools }) {
+async function buildCachedClientTools_2({ name, config, capabilities, serverInfo, savedAt, tools }) {
   primeEnsureConnectedClient();
-  await evictStaleFailedConnectMemoForServe(e, config);
-  let S = {
-    name: e,
+  await evictStaleFailedConnectMemoForServe(name, config);
+  let client = {
+    name,
     type: "cached",
     config,
     capabilities,
@@ -1105,272 +1146,287 @@ async function buildCachedClientTools_2({ name: e, config, capabilities, serverI
     cacheSavedAt: savedAt,
   };
   return {
-    client: S,
-    tools: await fetchMcpTools(S, tools, Date.now(), "cache", beginDroppedToolsRoundV1(S)),
+    client,
+    tools: await fetchMcpTools(client, tools, Date.now(), "cache", beginDroppedToolsRoundV1(client)),
   };
 }
 //@ chunk-z1n5m6nf.js:101346-117269 placement
 /**
  * 获取 MCP 服务器工具：调用 tools/list，按权限上限、提示词覆盖、描述长度限制、插件来源等把 MCP 工具转换成 Claude Code 工具定义，失败时记 tengu_mcp_degraded。
  */
-async function fetchMcpTools(config, r, n, s, h) {
-  r = filterRemoteRepoTools(config.config, r);
-  let y = r.length;
+async function fetchMcpTools(client, listedTools, startMs, discoverySource, listingState) {
+  listedTools = filterRemoteRepoTools(client.config, listedTools);
+  let originalCount = listedTools.length;
   let streamingListingSanitizer = createStreamingListingSanitizer();
-  let T = (await mapInTurns(r, (B) => streamingListingSanitizer(B) ?? [])).flat();
-  r = [];
-  let M = loggingSafeOrigin(config.config);
-  let w = mcpBaseUrlAnalytics(config.config, config.name);
+  let sanitizedTools = (
+    await mapInTurns(listedTools, (tool) => streamingListingSanitizer(tool) ?? [])
+  ).flat();
+  listedTools = [];
+  let loggableOrigin = loggingSafeOrigin(client.config);
+  let baseAnalytics = mcpBaseUrlAnalytics(client.config, client.name);
   let mcpServerName = mcpNameForAnalytics_GATE_EVALUATED(
-    normalizeNameForMCP(config.name),
-    isMcpServerLoggableInAnalytics(config.name, config.config),
+    normalizeNameForMCP(client.name),
+    isMcpServerLoggableInAnalytics(client.name, client.config),
   );
-  let E = y - T.length;
-  if (E > 0) {
-    logMCPError(config.name, listingTruncatedNote("tools", E, y));
+  let truncatedCount = originalCount - sanitizedTools.length;
+  if (truncatedCount > 0) {
+    logMCPError(client.name, listingTruncatedNote("tools", truncatedCount, originalCount));
     logEvent("tengu_mcp_degraded", {
       reason: lit("tool_listing_over_limit"),
-      transportType: fromEnum(config.config.type ?? "stdio"),
-      skippedCount: E,
+      transportType: fromEnum(client.config.type ?? "stdio"),
+      skippedCount: truncatedCount,
       mcpServerName,
-      ...w,
+      ...baseAnalytics,
     });
   }
-  if (y === 0 && s === "live")
+  if (originalCount === 0 && discoverySource === "live")
     logEvent("tengu_mcp_degraded", {
       reason: lit("connected_zero_tools"),
-      transportType: fromEnum(config.config.type ?? "stdio"),
+      transportType: fromEnum(client.config.type ?? "stdio"),
       mcpServerName,
-      ...w,
+      ...baseAnalytics,
     });
-  let CLAUDE_AGENT_SDK_MCP_NO_PREFIX = config.config.type === "sdk" && env.CLAUDE_AGENT_SDK_MCP_NO_PREFIX;
+  let CLAUDE_AGENT_SDK_MCP_NO_PREFIX = client.config.type === "sdk" && env.CLAUDE_AGENT_SDK_MCP_NO_PREFIX;
   let toolPermissions =
-    config.config.type === "claudeai-proxy" || config.config.type === "http" || config.config.type === "sse"
-      ? config.config.toolPermissions
+    client.config.type === "claudeai-proxy" || client.config.type === "http" || client.config.type === "sse"
+      ? client.config.toolPermissions
       : undefined;
-  let U = isRunnerDynamicServer(config.config) ? applyBlockedToolPolicy(toolPermissions) : toolPermissions;
-  if (U) {
-    let B = Object.keys(U).length;
-    if (B > 0 && !T.some((te) => U[te.name] !== undefined))
+  let effectiveToolPermissions = isRunnerDynamicServer(client.config)
+    ? applyBlockedToolPolicy(toolPermissions)
+    : toolPermissions;
+  if (effectiveToolPermissions) {
+    let permissionCount = Object.keys(effectiveToolPermissions).length;
+    if (
+      permissionCount > 0 &&
+      !sanitizedTools.some((tool) => effectiveToolPermissions[tool.name] !== undefined)
+    )
       logForDebugging(
-        `[claudeai-mcp] ${config.name}: toolPermissions has ${B} entries but none matched upstream tool names \u2014 backend name drift?`,
+        `[claudeai-mcp] ${client.name}: toolPermissions has ${permissionCount} entries but none matched upstream tool names \u2014 backend name drift?`,
         {
           level: "warn",
         },
       );
   }
-  let normalizeEnabled = shouldNormalizeRootCombinators_2(config.config);
-  let apiValidateEnabled = shouldDropInvalidToolSchemas_2(config.config);
-  let G = 0;
-  let q = 0;
-  let j = 0;
-  let fe = 0;
-  let pe = 0;
-  let ge = [];
-  let ce = 0;
-  let le = 0;
-  let k = await mapInTurns(T, (B) => {
-    let te = judgeToolSchemaSendability(B.inputSchema, {
+  let normalizeEnabled = shouldNormalizeRootCombinators_2(client.config);
+  let apiValidateEnabled = shouldDropInvalidToolSchemas_2(client.config);
+  let normalizedCount = 0;
+  let normalizeGatedCount = 0;
+  let unsupportedCount = 0;
+  let invalidMetaCount = 0;
+  let invalidPropKeyCount = 0;
+  let droppedTools = [];
+  let invalidGatedCount = 0;
+  let propKeyGatedCount = 0;
+  let judgedTools = await mapInTurns(sanitizedTools, (tool) => {
+    let judgment = judgeToolSchemaSendability(tool.inputSchema, {
       normalizeEnabled,
       apiValidateEnabled,
     });
-    if (te.verdict === "drop" && te.cause !== "api_invalid") {
-      if (te.cause === "normalize_gated") q++;
-      else j++;
+    if (judgment.verdict === "drop" && judgment.cause !== "api_invalid") {
+      if (judgment.cause === "normalize_gated") normalizeGatedCount++;
+      else unsupportedCount++;
       logMCPError(
-        config.name,
-        `Skipping tool "${B.name}": ${te.reason}. Other tools from this server remain available.`,
+        client.name,
+        `Skipping tool "${tool.name}": ${judgment.reason}. Other tools from this server remain available.`,
       );
       return [];
     }
-    if (te.normalized) {
-      G++;
+    if (judgment.normalized) {
+      normalizedCount++;
       logMCPDebug(
-        config.name,
-        `Normalized input schema for tool "${B.name}" (flattened top-level ${te.normalized.combinators.join("/")})`,
+        client.name,
+        `Normalized input schema for tool "${tool.name}" (flattened top-level ${judgment.normalized.combinators.join("/")})`,
       );
     }
-    if (te.verdict === "drop") {
-      if (te.rejection.check === "meta") fe++;
-      else pe++;
+    if (judgment.verdict === "drop") {
+      if (judgment.rejection.check === "meta") invalidMetaCount++;
+      else invalidPropKeyCount++;
       if (
-        U?.[B.name] !== "blocked" &&
-        isIncludedMcpTool_3(CLAUDE_AGENT_SDK_MCP_NO_PREFIX ? B.name : buildMcpToolName(config.name, B.name))
+        effectiveToolPermissions?.[tool.name] !== "blocked" &&
+        isIncludedMcpTool_3(
+          CLAUDE_AGENT_SDK_MCP_NO_PREFIX ? tool.name : buildMcpToolName(client.name, tool.name),
+        )
       )
-        ge.push({
-          toolName: B.name,
-          reason: te.rejection.detail,
+        droppedTools.push({
+          toolName: tool.name,
+          reason: judgment.rejection.detail,
         });
       logMCPError(
-        config.name,
-        `Skipping tool "${B.name}": its input schema would be rejected by the Anthropic API (${te.rejection.detail}). Other tools from this server remain available.`,
+        client.name,
+        `Skipping tool "${tool.name}": its input schema would be rejected by the Anthropic API (${judgment.rejection.detail}). Other tools from this server remain available.`,
       );
       return [];
     }
-    if (te.apiWouldReject) {
-      if (te.apiWouldReject.check === "meta") ce++;
-      else le++;
+    if (judgment.apiWouldReject) {
+      if (judgment.apiWouldReject.check === "meta") invalidGatedCount++;
+      else propKeyGatedCount++;
       logMCPDebug(
-        config.name,
-        `Tool "${B.name}" input schema would be rejected by the Anthropic API (${te.apiWouldReject.detail}); requests that include it may fail`,
+        client.name,
+        `Tool "${tool.name}" input schema would be rejected by the Anthropic API (${judgment.apiWouldReject.detail}); requests that include it may fail`,
       );
     }
-    return te.normalized
+    return judgment.normalized
       ? [
           {
-            ...B,
-            inputSchema: te.normalized.schema,
-            description: joinDescription(te.normalized.note, B.description),
+            ...tool,
+            inputSchema: judgment.normalized.schema,
+            description: joinDescription(judgment.normalized.note, tool.description),
           },
         ]
-      : [B];
+      : [tool];
   });
-  let L = Ji(k.flat(), "name");
-  if (h.seq > h.state.applied) {
-    h.state.applied = h.seq;
-    config.droppedTools = Ji(ge, "toolName");
+  let keptTools = uniqByExport(judgedTools.flat(), "name");
+  if (listingState.seq > listingState.state.applied) {
+    listingState.state.applied = listingState.seq;
+    client.droppedTools = uniqByExport(droppedTools, "toolName");
   }
-  if (G > 0)
+  if (normalizedCount > 0)
     logEvent("tengu_mcp_degraded", {
       reason: lit("tool_schema_normalized"),
-      transportType: fromEnum(config.config.type ?? "stdio"),
-      normalizedCount: G,
+      transportType: fromEnum(client.config.type ?? "stdio"),
+      normalizedCount,
       mcpServerName,
-      ...w,
+      ...baseAnalytics,
     });
-  if (q > 0)
+  if (normalizeGatedCount > 0)
     logEvent("tengu_mcp_degraded", {
       reason: lit("tool_schema_normalize_gated"),
-      transportType: fromEnum(config.config.type ?? "stdio"),
-      skippedCount: q,
+      transportType: fromEnum(client.config.type ?? "stdio"),
+      skippedCount: normalizeGatedCount,
       mcpServerName,
-      ...w,
+      ...baseAnalytics,
     });
-  if (j > 0)
+  if (unsupportedCount > 0)
     logEvent("tengu_mcp_degraded", {
       reason: lit("tool_schema_unsupported"),
-      transportType: fromEnum(config.config.type ?? "stdio"),
-      skippedCount: j,
+      transportType: fromEnum(client.config.type ?? "stdio"),
+      skippedCount: unsupportedCount,
       mcpServerName,
-      ...w,
+      ...baseAnalytics,
     });
-  if (fe > 0)
+  if (invalidMetaCount > 0)
     logEvent("tengu_mcp_degraded", {
       reason: lit("tool_schema_invalid"),
-      transportType: fromEnum(config.config.type ?? "stdio"),
-      skippedCount: fe,
+      transportType: fromEnum(client.config.type ?? "stdio"),
+      skippedCount: invalidMetaCount,
       mcpServerName,
-      ...w,
+      ...baseAnalytics,
     });
-  if (pe > 0)
+  if (invalidPropKeyCount > 0)
     logEvent("tengu_mcp_degraded", {
       reason: lit("tool_property_key_invalid"),
-      transportType: fromEnum(config.config.type ?? "stdio"),
-      skippedCount: pe,
+      transportType: fromEnum(client.config.type ?? "stdio"),
+      skippedCount: invalidPropKeyCount,
       mcpServerName,
-      ...w,
+      ...baseAnalytics,
     });
-  if (ce > 0)
+  if (invalidGatedCount > 0)
     logEvent("tengu_mcp_degraded", {
       reason: lit("tool_schema_invalid_gated"),
-      transportType: fromEnum(config.config.type ?? "stdio"),
-      keptCount: ce,
+      transportType: fromEnum(client.config.type ?? "stdio"),
+      keptCount: invalidGatedCount,
       mcpServerName,
-      ...w,
+      ...baseAnalytics,
     });
-  if (le > 0)
+  if (propKeyGatedCount > 0)
     logEvent("tengu_mcp_degraded", {
       reason: lit("tool_property_key_invalid_gated"),
-      transportType: fromEnum(config.config.type ?? "stdio"),
-      keptCount: le,
+      transportType: fromEnum(client.config.type ?? "stdio"),
+      keptCount: propKeyGatedCount,
       mcpServerName,
-      ...w,
+      ...baseAnalytics,
     });
-  let be = () => isMcpServerLoggableInAnalytics(config.name, config.config);
-  let W = toolTimeoutForServer(config.config);
-  let maxLoadedDescriptionLength = toolTimeoutForServer(config.config, true);
-  await logToolCallXmlInDescriptions(L, config.name, be(), M, config.instructions);
-  let X = isDesignServerConfig(config.config);
-  let Le = officialPluginPromptOverrides(config.config);
-  let pluginTelemetry = config.config.pluginSource
-    ? buildPluginEventFieldsFromId(config.config.pluginSource, policyEnabledPluginNameSet())
+  let isLoggable = () => isMcpServerLoggableInAnalytics(client.name, client.config);
+  let maxDescriptionLength = toolTimeoutForServer(client.config);
+  let maxLoadedDescriptionLength = toolTimeoutForServer(client.config, true);
+  await logToolCallXmlInDescriptions(
+    keptTools,
+    client.name,
+    isLoggable(),
+    loggableOrigin,
+    client.instructions,
+  );
+  let isDesignServer = isDesignServerConfig(client.config);
+  let promptOverrides = officialPluginPromptOverrides(client.config);
+  let pluginTelemetry = client.config.pluginSource
+    ? buildPluginEventFieldsFromId(client.config.pluginSource, policyEnabledPluginNameSet())
     : undefined;
-  let Ne = isCliOwnedConfig(config.config);
-  let Te = Ne && config.name === CLAUDE_ARTIFACTS;
-  let we = Te || isOwnCcrMcpServer(config.config);
-  let Oe = false;
-  let De = L;
-  let xe =
-    T.some((B) => isMemoryToolServer(config, B.name)) ||
-    De.some((B) => isMemoryToolServer(config, B.name)) ||
-    (E > 0 && isMemoryToolServer_2(config));
-  let He = {
-    serverName: config.name,
-    scope: config.config.scope,
-    pluginSource: config.config.pluginSource,
-    serverType: config.config.type ?? "stdio",
-    sdkDocsConnector: isDocsConnectorClient(config),
-    source: mcpServerSource(config.name, config.config),
+  let cliOwned = isCliOwnedConfig(client.config);
+  let isArtifactsServer = cliOwned && client.name === CLAUDE_ARTIFACTS;
+  let wrapArtifactsPublishing = isArtifactsServer || isOwnCcrMcpServer(client.config);
+  let unusedFlag = false;
+  let toolsForBuild = keptTools;
+  let memoryServer =
+    sanitizedTools.some((tool) => isMemoryToolServer(client, tool.name)) ||
+    toolsForBuild.some((tool) => isMemoryToolServer(client, tool.name)) ||
+    (truncatedCount > 0 && isMemoryToolServer_2(client));
+  let toolOptions = {
+    serverName: client.name,
+    scope: client.config.scope,
+    pluginSource: client.config.pluginSource,
+    serverType: client.config.type ?? "stdio",
+    sdkDocsConnector: isDocsConnectorClient(client),
+    source: mcpServerSource(client.name, client.config),
     skipPrefix: CLAUDE_AGENT_SDK_MCP_NO_PREFIX,
-    serverAlwaysLoad: config.config.alwaysLoad === true,
-    serverDefersAllTools: config.config.alwaysLoad === false,
-    promptOverrides: Le,
-    isFirstPartyDesignServer: X,
-    maxDescriptionLength: W,
+    serverAlwaysLoad: client.config.alwaysLoad === true,
+    serverDefersAllTools: client.config.alwaysLoad === false,
+    promptOverrides,
+    isFirstPartyDesignServer: isDesignServer,
+    maxDescriptionLength,
     maxLoadedDescriptionLength,
     pluginTelemetry,
-    cliOwned: Ne,
-    displayName: "displayName" in config.config ? config.config.displayName : undefined,
+    cliOwned,
+    displayName: "displayName" in client.config ? client.config.displayName : undefined,
     standardKey: isStandardKeyActive()
-      ? getServerIdentityKey(config.name, config.config, Ne === true)
+      ? getServerIdentityKey(client.name, client.config, cliOwned === true)
       : undefined,
     legacyGrantRefused:
       isStandardKeyActive() &&
       (await isLegacyKeyRefused(
         {
-          serverName: config.name,
-          serverType: config.config.type ?? "stdio",
-          serverId: connectorServerId(config.config),
+          serverName: client.name,
+          serverType: client.config.type ?? "stdio",
+          serverId: connectorServerId(client.config),
         },
-        requiresConnectorGrant(config.name, config.config),
-        isIdentityTrackedServer(config.name, config.config),
+        requiresConnectorGrant(client.name, client.config),
+        isIdentityTrackedServer(client.name, client.config),
       )),
     legacyGrantRebindable:
       isStandardKeyActive() &&
-      !requiresConnectorGrant(config.name, config.config) &&
-      isIdentityTrackedServer(config.name, config.config) &&
+      !requiresConnectorGrant(client.name, client.config) &&
+      isIdentityTrackedServer(client.name, client.config) &&
       isLegacyKeyOwnedElsewhere({
-        serverName: config.name,
-        serverType: config.config.type ?? "stdio",
-        serverId: connectorServerId(config.config),
+        serverName: client.name,
+        serverType: client.config.type ?? "stdio",
+        serverId: connectorServerId(client.config),
       }),
-    denyKey: isStandardKeyActive() ? isRemoteTransport(config.config) : undefined,
-    serverId: connectorServerId(config.config),
-    serverIdStamp: dynamicServerConnectorId(config.name, config.config),
-    iconUrl: "iconUrl" in config.config ? config.config.iconUrl : undefined,
-    serverInfoName: stripIgnorables(config.serverInfo?.name ?? "") || undefined,
-    role: "role" in config.config ? config.config.role : undefined,
+    denyKey: isStandardKeyActive() ? isRemoteTransport(client.config) : undefined,
+    serverId: connectorServerId(client.config),
+    serverIdStamp: dynamicServerConnectorId(client.name, client.config),
+    iconUrl: "iconUrl" in client.config ? client.config.iconUrl : undefined,
+    serverInfoName: stripIgnorables(client.serverInfo?.name ?? "") || undefined,
+    role: "role" in client.config ? client.config.role : undefined,
   };
-  let Fe = isClaudeInChromeMCPServer(config.name);
-  let Ue = isDocsConnectorServer(config);
+  let isClaudeInChrome = isClaudeInChromeMCPServer(client.name);
+  let isDocsConnector = isDocsConnectorServer(client);
   let filtered = (
-    await mapInTurns(De, (B) => {
-      let fullyQualifiedName = buildMcpToolName(config.name, B.name);
-      let Pe = getMaxResultSizeCharsMeta(B) !== undefined;
+    await mapInTurns(toolsForBuild, (listedTool) => {
+      let fullyQualifiedName = buildMcpToolName(client.name, listedTool.name);
+      let hasResultSizeAnnotation = getMaxResultSizeCharsMeta(listedTool) !== undefined;
       let overrides = {
-        ...(Fe &&
-          isStdioConfig(config.config) && {
-            ...needsAuthCacheModuleV1().getClaudeInChromeMCPToolOverrides(B.name),
+        ...(isClaudeInChrome &&
+          isStdioConfig(client.config) && {
+            ...needsAuthCacheModuleV1().getClaudeInChromeMCPToolOverrides(listedTool.name),
             builtinRenderFamily: "claude-in-chrome",
           }),
-        ...(Fe &&
-          isClaudeAiProxyServer(config.config) && {
-            ...createChromePermissionHandler(B.name, B._meta, (_e, ee) =>
+        ...(isClaudeInChrome &&
+          isClaudeAiProxyServer(client.config) && {
+            ...createChromePermissionHandler(listedTool.name, listedTool._meta, (tool, args) =>
               readTabUrl(
                 async (tool, args, signal) =>
                   (
                     await callMCPTool_2({
-                      client: await connectMcpServer(config, {
+                      client: await connectMcpServer(client, {
                         context: "MCP tool call",
                         signal,
                       }),
@@ -1383,184 +1439,201 @@ async function fetchMcpTools(config, r, n, s, h) {
                       credentials: undefined,
                     })
                   ).content,
-                _e,
-                ee,
+                tool,
+                args,
               ),
             ),
           }),
-        ...(config.name === REMOTE_BROWSER_SERVER_NAME && {
+        ...(client.name === REMOTE_BROWSER_SERVER_NAME && {
           excludedFromModeBypassAllow: isRemoteBrowserModeFloorOn,
         }),
         ...false,
-        ...(config.config.type === "sdk" && isFileUploadServer(config.name)
+        ...(client.config.type === "sdk" && isFileUploadServer(client.name)
           ? buildMcpToolPermissionOverrides(
-              config.name,
-              B.name,
-              B.inputSchema.properties,
+              client.name,
+              listedTool.name,
+              listedTool.inputSchema.properties,
               mcpToolInputToAutoClassifierInput,
             )
           : {}),
-        ...(isSlackSendToolName(B.name) ? createSlackSendToolUi() : {}),
-        ...(isClaudeTestWriteCall(config.name, config.config.pluginSource, B.name)
+        ...(isSlackSendToolName(listedTool.name) ? createSlackSendToolUi() : {}),
+        ...(isClaudeTestWriteCall(client.name, client.config.pluginSource, listedTool.name)
           ? claudeTestWriteToolOverrides()
           : {}),
         ...{},
-        ...(Te ? artifactsMcpLaptopModuleV1()?.artifactsMcpLaptopToolOverridesFor(config.config) : {}),
-        ...(isRunnerDynamicServer(config.config) && {
+        ...(isArtifactsServer
+          ? artifactsMcpLaptopModuleV1()?.artifactsMcpLaptopToolOverridesFor(client.config)
+          : {}),
+        ...(isRunnerDynamicServer(client.config) && {
           skipAggregateToolResultBudget: true,
         }),
       };
       let tool = buildMcpTool({
-        ...He,
-        accountMemory: isMemoryServerConnection(config, B.name),
-        accountMemoryServer: xe,
-        effectiveMaxPermission: U?.[B.name],
-        listed: B,
+        ...toolOptions,
+        accountMemory: isMemoryServerConnection(client, listedTool.name),
+        accountMemoryServer: memoryServer,
+        effectiveMaxPermission: effectiveToolPermissions?.[listedTool.name],
+        listed: listedTool,
         overrides,
-        async call(_e, ee, canUseTool, x, D, z) {
-          let ie = ee.toolUseId ?? getFirstToolUseId_2(x);
-          let ue = refuseNonMainAccountMemoryWrite(xe, B.name, ee);
-          if (ue !== undefined)
+        async call(args, context, canUseTool, parentMessage, onProgress, callOptions) {
+          let toolUseId = context.toolUseId ?? getFirstToolUseId_2(parentMessage);
+          let refusal = refuseNonMainAccountMemoryWrite(memoryServer, listedTool.name, context);
+          if (refusal !== undefined)
             throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-              ue,
+              refusal,
               "account memory write from a spawned loop",
             );
-          let Se = {
-            ...stripHostMetaUnlessCcrScoped(config.config, ee.mcpRequestMeta),
-            ...z?.mcpCallMeta,
-            ...(ie && {
-              "claudecode/toolUseId": ie,
+          let callMeta = {
+            ...stripHostMetaUnlessCcrScoped(client.config, context.mcpRequestMeta),
+            ...callOptions?.mcpCallMeta,
+            ...(toolUseId && {
+              "claudecode/toolUseId": toolUseId,
             }),
-            ...consumeMcpApprovalTicket(ee.session, ee.toolUseId, config.name, config.config),
-            ...(isClaudeInChromeMCPServer(config.name) &&
-              isClaudeAiProxyServer(config.config) &&
-              judgedSiteMeta(ee)),
-            ...((isDocsConnectorServer(config) || isOwnArtifactMcpTool(config.name, config.config)) &&
-              requestIdMeta(x.requestId)),
-            ...(isHearthbotRelayServer(config) && ccrTurnEventHeaders(turnTraceContextsOf())),
-            ...agentRequestMeta(config, ee),
-            ...(isAccountMemoryServer(config) && memoryChainMeta(ee.toolState, x.message.id)),
+            ...consumeMcpApprovalTicket(context.session, context.toolUseId, client.name, client.config),
+            ...(isClaudeInChromeMCPServer(client.name) &&
+              isClaudeAiProxyServer(client.config) &&
+              judgedSiteMeta(context)),
+            ...((isDocsConnectorServer(client) || isOwnArtifactMcpTool(client.name, client.config)) &&
+              requestIdMeta(parentMessage.requestId)),
+            ...(isHearthbotRelayServer(client) && ccrTurnEventHeaders(turnTraceContextsOf())),
+            ...agentRequestMeta(client, context),
+            ...(isAccountMemoryServer(client) &&
+              memoryChainMeta(context.toolState, parentMessage.message.id)),
           };
-          let me = false;
-          function Me(data) {
-            if (!D || !ie || me) return;
-            D({
+          let backgrounded = false;
+          function reportProgress(data) {
+            if (!onProgress || !toolUseId || backgrounded) return;
+            onProgress({
               type: "progress",
-              toolUseID: ie,
+              toolUseID: toolUseId,
               data,
             });
           }
-          Me({
+          reportProgress({
             type: "mcp_progress",
             status: "started",
-            serverName: config.name,
-            toolName: B.name,
+            serverName: client.name,
+            toolName: listedTool.name,
           });
           let now = Date.now();
-          let et = config;
-          let Je = false;
-          let Ye;
-          let We = null;
-          let __consentNonce = typeof _e.__consentNonce === "string" ? _e.__consentNonce : undefined;
-          if ("__consentNonce" in _e) {
-            let { __consentNonce, ...Et } = _e;
-            _e = Et;
+          let currentClient = client;
+          let awaitingUserInput = false;
+          let stopApprovalTiming;
+          let releasePark = null;
+          let __consentNonce = typeof args.__consentNonce === "string" ? args.__consentNonce : undefined;
+          if ("__consentNonce" in args) {
+            let { __consentNonce, ...restArgs } = args;
+            args = restArgs;
           }
-          let wt = X ? takeDesignConsentAsk(ie, __consentNonce) : null;
-          if (X) noteDesignProjectId(ee.toolState.get(DesignGateState), X, B.name, _e);
-          let onAwaitingUserInput = (Qe) => {
-            Je = Qe;
-            if (Qe) {
-              Ye ??= z?.timing?.mark("approval");
-              if (!me && tool.name !== getPermissionPromptToolName() && We === null) We = parkOnUser();
+          let consentAsk = isDesignServer ? takeDesignConsentAsk(toolUseId, __consentNonce) : null;
+          if (isDesignServer)
+            noteDesignProjectId(
+              context.toolState.get(DesignGateState),
+              isDesignServer,
+              listedTool.name,
+              args,
+            );
+          let onAwaitingUserInput = (waiting) => {
+            awaitingUserInput = waiting;
+            if (waiting) {
+              stopApprovalTiming ??= callOptions?.timing?.mark("approval");
+              if (!backgrounded && tool.name !== getPermissionPromptToolName() && releasePark === null)
+                releasePark = parkOnUser();
             } else {
-              Ye?.();
-              Ye = undefined;
-              We?.();
-              We = null;
+              stopApprovalTiming?.();
+              stopApprovalTiming = undefined;
+              releasePark?.();
+              releasePark = null;
             }
           };
-          let at = true;
-          let ct = async (Qe) => {
+          let firstAttempt = true;
+          let invokeTool = async (signal) => {
             for (let idx = 0; ; idx++)
               try {
-                let toolUseId = at ? ie : undefined;
-                at = false;
-                let Ut = z?.timing?.mark(
-                  config.config.type === "http" && issuerKey_3(config.config.url) ? "own" : "external",
+                let toolUseId_2 = firstAttempt ? toolUseId : undefined;
+                firstAttempt = false;
+                let stopTiming = callOptions?.timing?.mark(
+                  client.config.type === "http" && issuerKey_3(client.config.url) ? "own" : "external",
                 );
-                let yt = await connectMcpServer(config, {
+                let client_2 = await connectMcpServer(client, {
                   context: "MCP tool call",
+                  toolUseId: toolUseId_2,
+                }).finally(stopTiming);
+                currentClient = client_2;
+                applyMemoryCallerMeta(callMeta, memoryServer, context, client_2);
+                let result = await callMCPToolWithUrlElicitationRetry_2({
+                  client: client_2,
+                  clientConnection: client,
+                  tool: listedTool.name,
+                  args,
+                  meta: callMeta,
+                  signal,
+                  imageLimits: imageLimitsForModel(context.options.mainLoopModel),
+                  taskRegistry: context.taskRegistry,
                   toolUseId,
-                }).finally(Ut);
-                et = yt;
-                applyMemoryCallerMeta(Se, xe, ee, yt);
-                let je = await callMCPToolWithUrlElicitationRetry_2({
-                  client: yt,
-                  clientConnection: config,
-                  tool: B.name,
-                  args: _e,
-                  meta: Se,
-                  signal: Qe,
-                  imageLimits: imageLimitsForModel(ee.options.mainLoopModel),
-                  taskRegistry: ee.taskRegistry,
-                  toolUseId: ie,
-                  onProgress: D && ie ? Me : undefined,
-                  requestDialog: ee.requestDialog,
-                  storageV5: ee.storageV5,
-                  credentials: ee.credentials,
-                  hasResultSizeAnnotation: Pe || ee.innerCall === true,
+                  onProgress: onProgress && toolUseId ? reportProgress : undefined,
+                  requestDialog: context.requestDialog,
+                  storageV5: context.storageV5,
+                  credentials: context.credentials,
+                  hasResultSizeAnnotation: hasResultSizeAnnotation || context.innerCall === true,
                   onAwaitingUserInput,
-                  timing: z?.timing,
+                  timing: callOptions?.timing,
                   offCriticalPath:
-                    (getBackgroundAgentId(ee.agentContext) ??
-                      (ee.isBackgroundAgent ? ee.agentId : undefined)) !== undefined,
+                    (getBackgroundAgentId(context.agentContext) ??
+                      (context.isBackgroundAgent ? context.agentId : undefined)) !== undefined,
                   ccrNeedsApprovalRetry:
-                    "url" in config.config &&
-                    isSameOriginAsCcr(config.config.url) &&
-                    canPromptForPermission(ee) &&
+                    "url" in client.config &&
+                    isSameOriginAsCcr(client.config.url) &&
+                    canPromptForPermission(context) &&
                     !(getPermissionPromptToolName() && getPermissionPromptToolName() !== "stdio")
                       ? {
                           canUseTool,
                           tool,
                           fullyQualifiedName,
-                          toolUseContext: ee,
-                          parentMessage: x,
+                          toolUseContext: context,
+                          parentMessage,
                         }
                       : undefined,
                 });
-                if (je.interrupted) throw new AbortError(INTERRUPTED_CALL_NOTICE);
-                Me({
+                if (result.interrupted) throw new AbortError(INTERRUPTED_CALL_NOTICE);
+                reportProgress({
                   type: "mcp_progress",
                   status: "completed",
-                  serverName: config.name,
-                  toolName: B.name,
+                  serverName: client.name,
+                  toolName: listedTool.name,
                   elapsedTimeMs: Date.now() - now,
                 });
-                if (!je.isError) {
-                  logPrCreateOperation(B.name);
-                  if (isAccountMemoryServer(config))
-                    rememberMemoryChain(ee.toolState, x.message.id, je._meta);
-                  if (!me && isClaudeInChromeMCPServer(config.name) && isClaudeAiProxyServer(config.config))
-                    je.content = chromeNoBrowserAnswer(je.content, je._meta, ee);
+                if (!result.isError) {
+                  logPrCreateOperation(listedTool.name);
+                  if (isAccountMemoryServer(client))
+                    rememberMemoryChain(context.toolState, parentMessage.message.id, result._meta);
+                  if (
+                    !backgrounded &&
+                    isClaudeInChromeMCPServer(client.name) &&
+                    isClaudeAiProxyServer(client.config)
+                  )
+                    result.content = chromeNoBrowserAnswer(result.content, result._meta, context);
                 }
                 if (idx > 0) logFeatureOk("mcp_session_recovery");
-                let Xt = rewriteAnthropicSourcesForCcr(config.config, stripAnthropicMeta(je._meta));
+                let rewrittenMeta = rewriteAnthropicSourcesForCcr(
+                  client.config,
+                  stripAnthropicMeta(result._meta),
+                );
                 return {
-                  data: je.content,
-                  ...(je.urlElicitationDeclined && {
-                    urlElicitationDeclined: je.urlElicitationDeclined,
+                  data: result.content,
+                  ...(result.urlElicitationDeclined && {
+                    urlElicitationDeclined: result.urlElicitationDeclined,
                   }),
-                  ...((Xt || je.structuredContent || je.resourceLinks) && {
+                  ...((rewrittenMeta || result.structuredContent || result.resourceLinks) && {
                     mcpMeta: {
-                      ...(Xt && {
-                        _meta: Xt,
+                      ...(rewrittenMeta && {
+                        _meta: rewrittenMeta,
                       }),
-                      ...(je.structuredContent && {
-                        structuredContent: je.structuredContent,
+                      ...(result.structuredContent && {
+                        structuredContent: result.structuredContent,
                       }),
-                      ...(je.resourceLinks && {
-                        resourceLinks: je.resourceLinks,
+                      ...(result.resourceLinks && {
+                        resourceLinks: result.resourceLinks,
                       }),
                     },
                   }),
@@ -1569,10 +1642,12 @@ async function fetchMcpTools(config, r, n, s, h) {
                 if (
                   error instanceof McpSessionExpiredError &&
                   idx < 1 &&
-                  (!error.mayHaveRun || tool.isConcurrencySafe(_e) || B.annotations?.idempotentHint === true)
+                  (!error.mayHaveRun ||
+                    tool.isConcurrencySafe(args) ||
+                    listedTool.annotations?.idempotentHint === true)
                 ) {
                   logFeatureSad("mcp_session_recovery", error.expiryKind);
-                  logMCPDebug(config.name, `Retrying tool '${B.name}' after session recovery`);
+                  logMCPDebug(client.name, `Retrying tool '${listedTool.name}' after session recovery`);
                   continue;
                 }
                 if (error instanceof McpSessionExpiredError)
@@ -1580,203 +1655,222 @@ async function fetchMcpTools(config, r, n, s, h) {
                     "mcp_session_recovery",
                     idx < 1 ? "may_have_run_no_retry" : "session_retry_exhausted",
                   );
-                else if (idx > 0 && !Qe.aborted) logFeatureBad("mcp_session_recovery", "retry_failed_other");
-                Me({
+                else if (idx > 0 && !signal.aborted)
+                  logFeatureBad("mcp_session_recovery", "retry_failed_other");
+                reportProgress({
                   type: "mcp_progress",
                   status: "failed",
-                  serverName: config.name,
-                  toolName: B.name,
+                  serverName: client.name,
+                  toolName: listedTool.name,
                   elapsedTimeMs: Date.now() - now,
                 });
-                if (!Qe.aborted) noteHearthDegraded(config.name, error);
+                if (!signal.aborted) noteHearthDegraded(client.name, error);
                 if (
                   error instanceof Error &&
                   !(error instanceof TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS)
                 ) {
-                  let Ut = error.constructor.name;
-                  let yt = () => (Qe.aborted ? "other" : classifyMcpErrorSourceCategory(error));
-                  if (Ut === "Error") {
-                    let je = describeConnectError(error, config.config);
+                  let errorName = error.constructor.name;
+                  let sourceCategory = () =>
+                    signal.aborted ? "other" : classifyMcpErrorSourceCategory(error);
+                  if (errorName === "Error") {
+                    let message = describeConnectError(error, client.config);
                     throw Object.assign(
-                      new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(je, je.slice(0, 200)),
+                      new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
+                        message,
+                        message.slice(0, 200),
+                      ),
                       {
-                        mcpErrorSource: yt(),
+                        mcpErrorSource: sourceCategory(),
                       },
                     );
                   }
-                  if (Ut === "McpError" && "code" in error && typeof error.code === "number") {
+                  if (errorName === "McpError" && "code" in error && typeof error.code === "number") {
                     let merged = Object.assign(
                       new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
                         error.message,
                         `McpError ${error.code}`,
                       ),
                       {
-                        mcpErrorSource: yt(),
+                        mcpErrorSource: sourceCategory(),
                       },
                     );
                     throw isNeedsApprovalOrExpiredSessionV1(error) ? markRefusedByCcrProxy(merged) : merged;
                   }
                 }
-                raiseMemoryErrorCap(error, config, B.name);
+                raiseMemoryErrorCap(error, client, listedTool.name);
                 throw error;
               }
           };
-          let dt = ct;
-          if (X)
-            dt = wrapCallWithDesignConsent(ct, {
-              designSession: ee.toolState.get(DesignGateState),
-              approvedConsentBit: wt?.bit ?? null,
-              consentAskReachesUser: (wt?.askReachesUser ?? false) && canAskDesignConsent(ee),
-              credentials: ee.credentials,
+          let callImpl = invokeTool;
+          if (isDesignServer)
+            callImpl = wrapCallWithDesignConsent(invokeTool, {
+              designSession: context.toolState.get(DesignGateState),
+              approvedConsentBit: consentAsk?.bit ?? null,
+              consentAskReachesUser: (consentAsk?.askReachesUser ?? false) && canAskDesignConsent(context),
+              credentials: context.credentials,
             });
-          if (B.name === GET_TASK && isToolboxServer(config)) {
-            let { withTaskFilesRemembered } = await import("./chunk-h33h7b0z.js");
-            dt = withTaskFilesRemembered(dt, {
-              client: config,
-              args: _e,
-              session: ee.session,
+          if (listedTool.name === GET_TASK && isToolboxServer(client)) {
+            let { withTaskFilesRemembered } =
+              await import("../../tools/SaveTaskFilesTool/addTaskFileSaves.lazy.js");
+            callImpl = withTaskFilesRemembered(callImpl, {
+              client,
+              args,
+              session: context.session,
             });
           }
           if (
             netModule &&
-            !ee.agentId &&
-            ee.taskRegistry !== UNLIMITED_RATE_LIMITER &&
+            !context.agentId &&
+            context.taskRegistry !== UNLIMITED_RATE_LIMITER &&
             tool.name !== getPermissionPromptToolName()
           ) {
-            let mcpAutoBackgroundMs = netModule.getMcpAutoBackgroundMs(config.config, {
-              isNonInteractiveSession: ee.options.isNonInteractiveSession,
+            let mcpAutoBackgroundMs = netModule.getMcpAutoBackgroundMs(client.config, {
+              isNonInteractiveSession: context.options.isNonInteractiveSession,
             });
-            let Et =
+            let movableWithoutTimer =
               mcpAutoBackgroundMs === 0 &&
-              netModule.isMcpCallMovableWithoutTimer(config.config, {
-                isNonInteractiveSession: ee.options.isNonInteractiveSession,
-                isInnerCall: ee.innerCall === true,
+              netModule.isMcpCallMovableWithoutTimer(client.config, {
+                isNonInteractiveSession: context.options.isNonInteractiveSession,
+                isInnerCall: context.innerCall === true,
               });
-            if (mcpAutoBackgroundMs > 0 || Et)
+            if (mcpAutoBackgroundMs > 0 || movableWithoutTimer)
               return netModule.callMcpToolWithAutoBackground({
-                run: dt,
-                serverName: config.name,
-                toolName: B.name,
+                run: callImpl,
+                serverName: client.name,
+                toolName: listedTool.name,
                 accountMemoryTool: isLiveMemoryTool(tool),
-                toolUseId: ie,
-                parentAbortController: ee.abortController,
-                taskRegistry: ee.taskRegistry,
-                autoBackgroundMs: Et ? null : mcpAutoBackgroundMs,
-                storageV5: ee.storageV5,
-                credentials: ee.credentials,
+                toolUseId,
+                parentAbortController: context.abortController,
+                taskRegistry: context.taskRegistry,
+                autoBackgroundMs: movableWithoutTimer ? null : mcpAutoBackgroundMs,
+                storageV5: context.storageV5,
+                credentials: context.credentials,
                 hasPendingElicitation: () =>
-                  Je ||
-                  ((et.type === "connected" ? et.transportErrorState?.pendingElicitations : undefined) ?? 0) >
-                    0,
+                  awaitingUserInput ||
+                  ((currentClient.type === "connected"
+                    ? currentClient.transportErrorState?.pendingElicitations
+                    : undefined) ?? 0) > 0,
                 onBackgrounded: () => {
-                  me = true;
+                  backgrounded = true;
                 },
-                foregroundCalls: ee.innerCall ? undefined : foregroundCallRegistrySlots.of(ee.session),
+                foregroundCalls: context.innerCall
+                  ? undefined
+                  : foregroundCallRegistrySlots.of(context.session),
                 noticeGate: wrapHoldAware({
-                  hookCaller: ee.hookCaller,
-                  hookServesModel: ee.hookServesModel,
-                  pluginUnnamed: ee.pluginUnnamed,
+                  hookCaller: context.hookCaller,
+                  hookServesModel: context.hookServesModel,
+                  pluginUnnamed: context.pluginUnnamed,
                 }),
               });
           }
-          return dt(ee.abortController.signal);
+          return callImpl(context.abortController.signal);
         },
       });
-      if (Fe && (B.name === "file_upload" || B.name === "browser_batch")) {
+      if (isClaudeInChrome && (listedTool.name === "file_upload" || listedTool.name === "browser_batch")) {
         let CLAUDE_CODE_IS_COWORK =
-          !isStdioConfig(config.config) && !env.CLAUDE_CODE_REMOTE && env.CLAUDE_CODE_IS_COWORK;
-        let ee = tool.call;
-        tool.call = async (P, x, D, z, ie, ue) => {
+          !isStdioConfig(client.config) && !env.CLAUDE_CODE_REMOTE && env.CLAUDE_CODE_IS_COWORK;
+        let originalCall = tool.call;
+        tool.call = async (input, context, canUseTool, parentMessage, onProgress, callOptions) => {
           let {
             FILE_UPLOAD_MAX_TOTAL_BYTES,
             passThroughChromeFileUploadInput,
             prepareChromeFileUploadInput,
-          } = await import("./chunk-f11kwnvn.js");
-          let Be = CLAUDE_CODE_IS_COWORK
-            ? await passThroughChromeFileUploadInput(B.name, P ?? {}, getToolPermissionContext(x))
+          } = await import("../../utils/claudeInChrome/fileUpload.js");
+          let prepared = CLAUDE_CODE_IS_COWORK
+            ? await passThroughChromeFileUploadInput(
+                listedTool.name,
+                input ?? {},
+                getToolPermissionContext(context),
+              )
             : await prepareChromeFileUploadInput(
-                B.name,
-                P ?? {},
-                getToolPermissionContext(x),
-                isClaudeAiProxyServer(config.config)
+                listedTool.name,
+                input ?? {},
+                getToolPermissionContext(context),
+                isClaudeAiProxyServer(client.config)
                   ? {
-                      maxTotalBytes: chromeUploadMaxBytes(B._meta, FILE_UPLOAD_MAX_TOTAL_BYTES),
+                      maxTotalBytes: chromeUploadMaxBytes(listedTool._meta, FILE_UPLOAD_MAX_TOTAL_BYTES),
                       hosted: {
-                        session: x.session,
-                        signal: x.abortController.signal,
+                        session: context.session,
+                        signal: context.abortController.signal,
                       },
                     }
                   : undefined,
               );
-          if (Be.error)
+          if (prepared.error)
             throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-              Be.error,
+              prepared.error,
               "Claude in Chrome file_upload path rejected",
             );
-          return ee(
-            Be.input ?? P,
-            x,
-            D,
-            z,
-            ie,
-            Be.callMeta
+          return originalCall(
+            prepared.input ?? input,
+            context,
+            canUseTool,
+            parentMessage,
+            onProgress,
+            prepared.callMeta
               ? {
-                  ...ue,
-                  mcpCallMeta: Be.callMeta,
+                  ...callOptions,
+                  mcpCallMeta: prepared.callMeta,
                 }
-              : ue,
+              : callOptions,
           );
         };
       }
       if (
-        config.config.type === "sdk" &&
-        isFileUploadServer(config.name) &&
-        FILE_UPLOAD_TOOLS.includes(B.name) &&
+        client.config.type === "sdk" &&
+        isFileUploadServer(client.name) &&
+        FILE_UPLOAD_TOOLS.includes(listedTool.name) &&
         !env.CLAUDE_CODE_REMOTE &&
         !env.CLAUDE_CODE_IS_COWORK &&
         resolveSdkUrl().status === "absent"
       ) {
-        let _e = B._meta?.[ANTHROPIC_HOSTASKSPERUPLOADEDFILE] === true;
-        let ee = tool.call;
-        tool.call = async (P, x, D, z, ie, ue) => {
-          let Se = await import("./chunk-v64arqfj.js");
-          let me = await Se.paneFileUploadCall(
-            P,
-            getToolPermissionContext(x),
-            x.mcpRequestMeta,
-            _e,
-            x.autoModeClassified === true,
+        let hostAsksUpload = listedTool._meta?.[ANTHROPIC_HOSTASKSPERUPLOADEDFILE] === true;
+        let originalCall = tool.call;
+        tool.call = async (input, context, canUseTool, parentMessage, onProgress, callOptions) => {
+          let paneModule = await import("../../utils/claudeInChrome/paneFileUploadCall.lazy.js");
+          let prepared = await paneModule.paneFileUploadCall(
+            input,
+            getToolPermissionContext(context),
+            context.mcpRequestMeta,
+            hostAsksUpload,
+            context.autoModeClassified === true,
           );
-          return ee(
-            me.input,
+          return originalCall(
+            prepared.input,
             {
-              ...x,
-              mcpRequestMeta: me.mcpRequestMeta,
+              ...context,
+              mcpRequestMeta: prepared.mcpRequestMeta,
             },
-            D,
-            z,
-            ie,
-            ue && {
-              ...ue,
+            canUseTool,
+            parentMessage,
+            onProgress,
+            callOptions && {
+              ...callOptions,
               mcpCallMeta: {},
             },
           );
         };
       }
-      if (isTaskWriteMethod(B.name)) {
-        let _e = B.name;
+      if (isTaskWriteMethod(listedTool.name)) {
+        let toolName = listedTool.name;
         let validateInput = tool.validateInput;
-        tool.validateInput = async (D, z) => {
-          let ie = validateInput
-            ? await validateInput(D, z)
+        tool.validateInput = async (input, context) => {
+          let validation = validateInput
+            ? await validateInput(input, context)
             : {
                 result: true,
               };
-          if (!ie.result) return ie;
-          let { startTaskInputRefusal } = await import("./chunk-d40fm320.js");
-          let taskInputRefusal = startTaskInputRefusal(config, _e, D, tool.inputJSONSchema, z.session);
+          if (!validation.result) return validation;
+          let { startTaskInputRefusal } = await import("../taskFiles/startTaskFiles.js");
+          let taskInputRefusal = startTaskInputRefusal(
+            client,
+            toolName,
+            input,
+            tool.inputJSONSchema,
+            context.session,
+          );
           return taskInputRefusal === undefined
-            ? ie
+            ? validation
             : {
                 result: false,
                 message: taskInputRefusal,
@@ -1784,57 +1878,64 @@ async function fetchMcpTools(config, r, n, s, h) {
               };
         };
         let prompt = tool.prompt;
-        tool.prompt = async (D) => {
-          let z = await prompt(D);
-          let toolPermissionContext = await D.getToolPermissionContext();
-          if (toolPermissionContext.isRemoteMode !== true) return z;
-          let { startTaskFilesPromptNote } = await import("./chunk-d40fm320.js");
-          let taskFilesPromptNote = startTaskFilesPromptNote(config, _e, toolPermissionContext);
+        tool.prompt = async (input) => {
+          let basePrompt = await prompt(input);
+          let toolPermissionContext = await input.getToolPermissionContext();
+          if (toolPermissionContext.isRemoteMode !== true) return basePrompt;
+          let { startTaskFilesPromptNote } = await import("../taskFiles/startTaskFiles.js");
+          let taskFilesPromptNote = startTaskFilesPromptNote(client, toolName, toolPermissionContext);
           return taskFilesPromptNote === undefined
-            ? z
-            : `${z}
+            ? basePrompt
+            : `${basePrompt}
 
 ${taskFilesPromptNote}`;
         };
-        let x = tool.call;
-        tool.call = async (D, z, ie, ue, Se, me) => {
-          let Me = D ?? {};
-          if (!Array.isArray(Me.files) || Me.files.length === 0) return x(D, z, ie, ue, Se, me);
+        let originalCall = tool.call;
+        tool.call = async (input, context, canUseTool, parentMessage, onProgress, callOptions) => {
+          let args = input ?? {};
+          if (!Array.isArray(args.files) || args.files.length === 0)
+            return originalCall(input, context, canUseTool, parentMessage, onProgress, callOptions);
           let {
             prepareStartTaskFileInputs,
             removeStartTaskUploadsFor,
             startTaskInputRefusal,
             startTaskSendRefusal,
-          } = await import("./chunk-d40fm320.js");
-          let toolUseId = z.toolUseId;
-          let pendingTaskFilesForArgs = findPendingTaskFilesForArgs(z.session, toolUseId, Me.files);
+          } = await import("../taskFiles/startTaskFiles.js");
+          let toolUseId = context.toolUseId;
+          let pendingTaskFilesForArgs = findPendingTaskFilesForArgs(context.session, toolUseId, args.files);
           if (pendingTaskFilesForArgs !== undefined && toolUseId !== undefined) {
-            let taskSendRefusal = startTaskSendRefusal(pendingTaskFilesForArgs.uploadStartedAt, _e);
+            let taskSendRefusal = startTaskSendRefusal(pendingTaskFilesForArgs.uploadStartedAt, toolName);
             if (taskSendRefusal !== undefined) {
-              await discardTaskFiles(z.session, pendingTaskFilesForArgs);
+              await discardTaskFiles(context.session, pendingTaskFilesForArgs);
               throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
                 taskSendRefusal,
                 "start_task files not sent after the approval",
               );
             }
             pendingTaskFilesForArgs.state = "sending";
-            registerDiscarder(z.session, toolUseId, () =>
-              startTaskSendRefusal(pendingTaskFilesForArgs.uploadStartedAt, _e),
+            registerDiscarder(context.session, toolUseId, () =>
+              startTaskSendRefusal(pendingTaskFilesForArgs.uploadStartedAt, toolName),
             );
             try {
-              return await x(D, z, ie, ue, Se, me);
+              return await originalCall(input, context, canUseTool, parentMessage, onProgress, callOptions);
             } catch (error) {
               if (isRefusedByCcrProxy(error)) {
                 pendingTaskFilesForArgs.state = "pending";
-                await discardTaskFiles(z.session, pendingTaskFilesForArgs);
+                await discardTaskFiles(context.session, pendingTaskFilesForArgs);
               }
               throw error;
             } finally {
-              unregisterDiscarder(z.session, toolUseId);
-              markTaskFilesSent(z.session, pendingTaskFilesForArgs);
+              unregisterDiscarder(context.session, toolUseId);
+              markTaskFilesSent(context.session, pendingTaskFilesForArgs);
             }
           }
-          let taskInputRefusal = startTaskInputRefusal(config, _e, Me, tool.inputJSONSchema, z.session);
+          let taskInputRefusal = startTaskInputRefusal(
+            client,
+            toolName,
+            args,
+            tool.inputJSONSchema,
+            context.session,
+          );
           if (taskInputRefusal !== undefined)
             throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
               taskInputRefusal,
@@ -1842,12 +1943,12 @@ ${taskFilesPromptNote}`;
             );
           let now = Date.now();
           let startTaskFileInputs = await prepareStartTaskFileInputs(
-            config,
-            _e,
-            Me,
-            getToolPermissionContext(z),
-            z.abortController.signal,
-            z.session,
+            client,
+            toolName,
+            args,
+            getToolPermissionContext(context),
+            context.abortController.signal,
+            context.session,
           );
           if (startTaskFileInputs.error)
             throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
@@ -1855,40 +1956,55 @@ ${taskFilesPromptNote}`;
               "start_task file input rejected",
             );
           if (startTaskFileInputs.input === undefined || toolUseId === undefined)
-            return x(startTaskFileInputs.input ?? D, z, ie, ue, Se, me);
-          registerDiscarder(z.session, toolUseId, () => startTaskSendRefusal(now, _e));
+            return originalCall(
+              startTaskFileInputs.input ?? input,
+              context,
+              canUseTool,
+              parentMessage,
+              onProgress,
+              callOptions,
+            );
+          registerDiscarder(context.session, toolUseId, () => startTaskSendRefusal(now, toolName));
           try {
-            return await x(startTaskFileInputs.input, z, ie, ue, Se, me);
+            return await originalCall(
+              startTaskFileInputs.input,
+              context,
+              canUseTool,
+              parentMessage,
+              onProgress,
+              callOptions,
+            );
           } catch (error) {
             if (isRefusedByCcrProxy(error))
-              await removeStartTaskUploadsFor(config, z.session, startTaskFileInputs.input.files);
+              await removeStartTaskUploadsFor(client, context.session, startTaskFileInputs.input.files);
             throw error;
           } finally {
-            unregisterDiscarder(z.session, toolUseId);
+            unregisterDiscarder(context.session, toolUseId);
           }
         };
-        if (isToolboxMcpServer(config))
-          tool.askInputPreparer = async (D, z, ie) => {
-            if (!Array.isArray(D.files) || D.files.length === 0) return;
-            let { startTaskAskInputPreparer, startTaskInputRefusal } = await import("./chunk-d40fm320.js");
+        if (isToolboxMcpServer(client))
+          tool.askInputPreparer = async (input, context, overrides) => {
+            if (!Array.isArray(input.files) || input.files.length === 0) return;
+            let { startTaskAskInputPreparer, startTaskInputRefusal } =
+              await import("../taskFiles/startTaskFiles.js");
             let taskAskInputPreparer = startTaskAskInputPreparer(
-              config,
-              _e,
-              D,
-              getToolPermissionContext(z),
-              z.abortController.signal,
-              z.session,
-              ie,
+              client,
+              toolName,
+              input,
+              getToolPermissionContext(context),
+              context.abortController.signal,
+              context.session,
+              overrides,
             );
             return (
               taskAskInputPreparer && {
                 prepare: () => {
                   let taskInputRefusal = startTaskInputRefusal(
-                    config,
-                    _e,
-                    D,
+                    client,
+                    toolName,
+                    input,
                     tool.inputJSONSchema,
-                    z.session,
+                    context.session,
                   );
                   return taskInputRefusal === undefined
                     ? taskAskInputPreparer.prepare()
@@ -1900,138 +2016,141 @@ ${taskFilesPromptNote}`;
             );
           };
       }
-      let { validateInput, call: Ae, askInputPreparer } = tool;
-      if (B._meta?.[ANTHROPIC_FILEINPUTS] !== undefined)
+      let { validateInput, call: originalCall, askInputPreparer } = tool;
+      if (listedTool._meta?.[ANTHROPIC_FILEINPUTS] !== undefined)
         wireFileInputs(
           tool,
           {
-            client: config,
-            name: B.name,
-            meta: B._meta,
+            client,
+            name: listedTool.name,
+            meta: listedTool._meta,
             schema: tool.inputJSONSchema,
           },
-          (_e) => async (tool, args) =>
+          (context) => async (tool, args) =>
             (
               await callMCPTool_2({
-                client: await connectMcpServer(config, {
+                client: await connectMcpServer(client, {
                   context: "MCP tool call",
                 }),
                 tool,
                 args,
-                signal: _e.abortController.signal,
-                imageLimits: imageLimitsForModel(_e.options.mainLoopModel),
+                signal: context.abortController.signal,
+                imageLimits: imageLimitsForModel(context.options.mainLoopModel),
                 hasResultSizeAnnotation: true,
-                storageV5: _e.storageV5,
-                credentials: _e.credentials,
+                storageV5: context.storageV5,
+                credentials: context.credentials,
               })
             ).structuredContent,
         );
       {
-        let _e = fileReferenceToolToFill(config, B.name);
-        if (_e !== undefined)
+        let refToolName = fileReferenceToolToFill(client, listedTool.name);
+        if (refToolName !== undefined)
           wrapFileReferenceTool(
             tool,
-            _e,
+            refToolName,
             {
               validateInput,
-              call: Ae,
+              call: originalCall,
               askInputPreparer,
             },
             getFirstToolUseId_2,
-            filledCallRequestMeta(config),
+            filledCallRequestMeta(client),
           );
       }
-      if (tool.mcpInfo !== undefined && fileReferenceToolForRecords(config, B.name) !== undefined)
+      if (tool.mcpInfo !== undefined && fileReferenceToolForRecords(client, listedTool.name) !== undefined)
         tool.mcpInfo = {
           ...tool.mcpInfo,
           fileReference: true,
         };
-      if (Te || isRunnerDynamicServer(config.config))
-        artifactPermissionRulesModuleV1()?.applyArtifactRules(config.config, tool);
-      if (we) artifactsMcpLaptopModuleV1()?.wrapArtifactsMcpLaptopPublishing(config.config, tool);
-      if (Ue) claudeDocsWakeModuleV1()?.wrapClaudeDocsCreateWake(tool);
-      if (Fe && config.config.type !== "sdk") {
-        let _e = tool.call;
-        tool.call = async (ee, P, x, D, z, ie) => {
-          let ue = policyDeniedReason("allow_claude_browser_extension", "Claude in Chrome", "is");
-          if (ue !== null)
+      if (isArtifactsServer || isRunnerDynamicServer(client.config))
+        artifactPermissionRulesModuleV1()?.applyArtifactRules(client.config, tool);
+      if (wrapArtifactsPublishing)
+        artifactsMcpLaptopModuleV1()?.wrapArtifactsMcpLaptopPublishing(client.config, tool);
+      if (isDocsConnector) claudeDocsWakeModuleV1()?.wrapClaudeDocsCreateWake(tool);
+      if (isClaudeInChrome && client.config.type !== "sdk") {
+        let originalCall = tool.call;
+        tool.call = async (input, context, canUseTool, parentMessage, onProgress, callOptions) => {
+          let deniedReason = policyDeniedReason("allow_claude_browser_extension", "Claude in Chrome", "is");
+          if (deniedReason !== null)
             throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-              ue,
+              deniedReason,
               "Claude in Chrome call refused by org policy",
             );
-          return _e(ee, P, x, D, z, ie);
+          return originalCall(input, context, canUseTool, parentMessage, onProgress, callOptions);
         };
       }
-      let ot = tool.call;
-      tool.call = async (_e, ee, P, x, D, z) => {
-        ee.options.activeMcpServer = config.name;
-        ee.options.activeMcpTool = B.name;
-        if (config.config.pluginSource) {
-          recordPluginUsage(config.config.pluginSource);
-          recordPluginActivity(config.config.pluginSource, "mcp", {
+      let finalOriginalCall = tool.call;
+      tool.call = async (input, context, canUseTool, parentMessage, onProgress, callOptions) => {
+        context.options.activeMcpServer = client.name;
+        context.options.activeMcpTool = listedTool.name;
+        if (client.config.pluginSource) {
+          recordPluginUsage(client.config.pluginSource);
+          recordPluginActivity(client.config.pluginSource, "mcp", {
             kind: "mcp-server",
-            name: config.name,
+            name: client.name,
           });
         }
-        let ie = be();
-        if (ie) markMcpServerLoggable(config.name);
-        let ue =
-          (isTaskWriteMethod(B.name) &&
-            findPendingTaskFilesForArgs(ee.session, ee.toolUseId, _e?.files) !== undefined) ||
-          (B._meta?.[ANTHROPIC_FILEINPUTS] !== undefined
-            ? (await import("./chunk-bk2cbdc2.js")).hasFileGrants(ee.session, ee.toolUseId)
+        let loggable = isLoggable();
+        if (loggable) markMcpServerLoggable(client.name);
+        let keepInput =
+          (isTaskWriteMethod(listedTool.name) &&
+            findPendingTaskFilesForArgs(context.session, context.toolUseId, input?.files) !== undefined) ||
+          (listedTool._meta?.[ANTHROPIC_FILEINPUTS] !== undefined
+            ? (await import("./fileGrants.js")).hasFileGrants(context.session, context.toolUseId)
             : false);
-        return ot(
-          ue
-            ? _e
+        return finalOriginalCall(
+          keepInput
+            ? input
             : stripTrailingInvokeSuffix(
-                _e,
-                B.name,
-                config.name,
-                ie,
+                input,
+                listedTool.name,
+                client.name,
+                loggable,
                 getFeatureValue_CACHED_MAY_BE_STALE("tengu_mcp_strip_trailing_xml_tags", false),
-                M,
+                loggableOrigin,
               ),
-          ee,
-          P,
-          x,
-          D,
-          z,
+          context,
+          canUseTool,
+          parentMessage,
+          onProgress,
+          callOptions,
         );
       };
       return tool;
     })
   ).filter(isIdeServer_2);
-  let mapped = L.map((B) => (Le?.tools?.[B.name] ?? B.description ?? "").length);
-  let reduced = mapped.reduce((acc, te) => acc + te, 0);
+  let mapped = keptTools.map(
+    (tool) => (promptOverrides?.tools?.[tool.name] ?? tool.description ?? "").length,
+  );
+  let reduced = mapped.reduce((acc, length) => acc + length, 0);
   logEvent("tengu_mcp_tools_listed", {
-    transportType: fromEnum(config.config.type ?? "stdio"),
-    listDurationMs: Date.now() - n,
+    transportType: fromEnum(client.config.type ?? "stdio"),
+    listDurationMs: Date.now() - startMs,
     toolCount: filtered.length,
-    alwaysLoadCount: count(filtered, (B) => B.alwaysLoad === true),
+    alwaysLoadCount: count(filtered, (tool) => tool.alwaysLoad === true),
     descriptionTotalLength: reduced,
-    descriptionMaxLength: mapped.reduce((acc, te) => Math.max(acc, te), 0),
+    descriptionMaxLength: mapped.reduce((acc, length) => Math.max(acc, length), 0),
     descriptionMeanLength: mapped.length ? Math.round(reduced / mapped.length) : 0,
-    descriptionOverLimitCount: count(mapped, (B) => B > W),
-    discoverySource: fromEnum(s),
-    ...w,
+    descriptionOverLimitCount: count(mapped, (length) => length > maxDescriptionLength),
+    discoverySource: fromEnum(discoverySource),
+    ...baseAnalytics,
     mcpServerName: mcpNameForAnalytics_GATE_EVALUATED(
-      normalizeNameForMCP(config.name),
-      isMcpServerLoggableInAnalytics(config.name, config.config),
+      normalizeNameForMCP(client.name),
+      isMcpServerLoggableInAnalytics(client.name, client.config),
     ),
   });
-  if (s === "live") logFeatureOk("mcp_list_tools");
-  if (isStdioConfig(config.config) && isClaudeInChromeMCPServer(config.name))
-    logChromeToolsAdded(filtered.length, s);
-  if (isToolboxServer(config)) {
-    let { addTaskFileSaves } = await import("./chunk-h33h7b0z.js");
+  if (discoverySource === "live") logFeatureOk("mcp_list_tools");
+  if (isStdioConfig(client.config) && isClaudeInChromeMCPServer(client.name))
+    logChromeToolsAdded(filtered.length, discoverySource);
+  if (isToolboxServer(client)) {
+    let { addTaskFileSaves } = await import("../../tools/SaveTaskFilesTool/addTaskFileSaves.lazy.js");
     addTaskFileSaves(filtered, {
-      client: config,
-      listed: De,
+      client,
+      listed: toolsForBuild,
       compose: (listed, call, overrides, effectiveMaxPermission) =>
         buildMcpTool({
-          ...He,
-          accountMemoryServer: xe,
+          ...toolOptions,
+          accountMemoryServer: memoryServer,
           effectiveMaxPermission,
           listed,
           call,
@@ -2042,98 +2161,108 @@ ${taskFilesPromptNote}`;
   return filtered;
 }
 //@ chunk-z1n5m6nf.js:117269-119068 placement
-var listMcpTools = memoizeWithLRU(
-  async (e, r, n) => {
-    if (e.type !== "connected") return [];
-    let s = identityEpoch();
-    let h = beginDroppedToolsRoundV1(e);
-    try {
-      if (!e.capabilities?.tools) {
-        let w = [];
-        recordRawToolsForResult(w, []);
-        return w;
+var listMcpTools; // deferred: uses memoizeWithLRU (./needsAuthCache.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-z1n5m6nf.js:117269", () => {
+  listMcpTools = memoizeWithLRU(
+    async (client, storageV5, rawOnly) => {
+      if (client.type !== "connected") return [];
+      let epochAtStart = identityEpoch();
+      let droppedToolsRound = beginDroppedToolsRoundV1(client);
+      try {
+        if (!client.capabilities?.tools) {
+          let rawTools = [];
+          recordRawToolsForResult(rawTools, []);
+          return rawTools;
+        }
+        let now = Date.now();
+        let listedTools = await listAllPages(
+          identityId2(client.client),
+          client.name,
+          client.config,
+          "tools/list",
+          ListToolsResultSchema,
+          (page) => page.tools,
+        );
+        client.toolsListError = undefined;
+        client.discoveryAuthFailure = undefined;
+        if (rawOnly === true) {
+          let rawTools = [];
+          recordRawToolsForResult(rawTools, listedTools);
+          return rawTools;
+        }
+        let memoResult = listToolsWithMemo(client, listedTools, epochAtStart, droppedToolsRound, () => ({
+          normalizeEnabled: shouldNormalizeRootCombinators_2(client.config),
+          apiValidateEnabled: shouldDropInvalidToolSchemas_2(client.config),
+        }));
+        if (memoResult?.reuse !== undefined) {
+          recordRawToolsForResult(memoResult.reuse, listedTools);
+          return memoResult.reuse;
+        }
+        let tools = await fetchMcpTools(client, listedTools, now, "live", droppedToolsRound);
+        if (droppedToolsRound.seq === droppedToolsRound.state.started) {
+          client.toolsListError = undefined;
+          client.discoveryAuthFailure = undefined;
+        }
+        recordRawToolsForResult(tools, listedTools);
+        settleToolListingMemo(client, memoResult, tools, droppedToolsRound);
+        return tools;
+      } catch (error) {
+        let errorDetail = redactMcpErrorDetail(
+          client.name,
+          client.config,
+          describeConnectError(error, client.config),
+        );
+        if (client.config.type === "claudeai-proxy" && isListAuthError_2(error)) {
+          logEvent("tengu_mcp_server_needs_auth", {
+            transportType: lit("claudeai-proxy"),
+            cause: lit("discovery_tools_list"),
+            ...mcpBaseUrlAnalytics(client.config, client.name),
+          });
+          if (isCurrentIdentityEpoch(epochAtStart))
+            isMcpAuthCached_3(client.name, client.config.id, undefined, storageV5);
+          logFeatureSad("mcp_list_tools", "mcp_list_tools_needs_auth");
+          logMCPDebug(client.name, "tools/list 401/403 on claude.ai proxy \u2014 flagging needs-auth");
+          client.discoveryAuthFailure = true;
+          getConnectionCache().toolLists.delete(serverCacheKey(client.name, client.config));
+          return [];
+        }
+        if (isListAuthError_2(error) && hasLapsedCcrSignIn(client.name, client.config))
+          client.discoveryAuthFailure = true;
+        let isBearerRejected =
+          client.config.type === "claudeai-proxy" && isClaudeAiBearerRejectedError_2(error);
+        let failureMetric = isBearerRejected
+          ? "mcp_list_tools_claudeai_bearer_rejected"
+          : error instanceof McpError
+            ? `mcp_list_tools_${LIST_FAILURE_REASONS_V1[error.code] ?? "mcperr_other"}`
+            : errorDetail.includes("timed out")
+              ? "mcp_list_tools_timeout"
+              : "mcp_list_tools_failed";
+        logFeatureSad("mcp_list_tools", failureMetric);
+        (isBearerRejected ? logMCPDebug : logMCPError)(client.name, `Failed to fetch tools: ${errorDetail}`);
+        client.toolsListError = errorDetail;
+        if (isBearerRejected) client.discoveryBearerRejected = true;
+        let emptyTools = [];
+        getCliOwnedState().toolsListErrorByResult.set(emptyTools, errorDetail);
+        if (!isBearerRejected) {
+          let serverFields = mcpBaseUrlAnalytics(client.config, client.name);
+          logEvent("tengu_mcp_degraded", {
+            reason: lit("tools_list_failed"),
+            transportType: fromEnum(client.config.type ?? "stdio"),
+            ...serverFields,
+            mcpServerName: mcpNameForAnalytics_GATE_EVALUATED(
+              normalizeNameForMCP(client.name),
+              isMcpServerLoggableInAnalytics(client.name, client.config),
+            ),
+          });
+        }
+        getConnectionCache().toolLists.delete(serverCacheKey(client.name, client.config));
+        return emptyTools;
       }
-      let now = Date.now();
-      let S = await listAllPages(
-        identityId2(e.client),
-        e.name,
-        e.config,
-        "tools/list",
-        ListToolsResultSchema,
-        (w) => w.tools,
-      );
-      e.toolsListError = undefined;
-      e.discoveryAuthFailure = undefined;
-      if (n === true) {
-        let w = [];
-        recordRawToolsForResult(w, S);
-        return w;
-      }
-      let T = listToolsWithMemo(e, S, s, h, () => ({
-        normalizeEnabled: shouldNormalizeRootCombinators_2(e.config),
-        apiValidateEnabled: shouldDropInvalidToolSchemas_2(e.config),
-      }));
-      if (T?.reuse !== undefined) {
-        recordRawToolsForResult(T.reuse, S);
-        return T.reuse;
-      }
-      let mcpTools = await fetchMcpTools(e, S, now, "live", h);
-      if (h.seq === h.state.started) {
-        e.toolsListError = undefined;
-        e.discoveryAuthFailure = undefined;
-      }
-      recordRawToolsForResult(mcpTools, S);
-      settleToolListingMemo(e, T, mcpTools, h);
-      return mcpTools;
-    } catch (error) {
-      let S = redactMcpErrorDetail(e.name, e.config, describeConnectError(error, e.config));
-      if (e.config.type === "claudeai-proxy" && isListAuthError_2(error)) {
-        logEvent("tengu_mcp_server_needs_auth", {
-          transportType: lit("claudeai-proxy"),
-          cause: lit("discovery_tools_list"),
-          ...mcpBaseUrlAnalytics(e.config, e.name),
-        });
-        if (isCurrentIdentityEpoch(s)) isMcpAuthCached_3(e.name, e.config.id, undefined, r);
-        logFeatureSad("mcp_list_tools", "mcp_list_tools_needs_auth");
-        logMCPDebug(e.name, "tools/list 401/403 on claude.ai proxy \u2014 flagging needs-auth");
-        e.discoveryAuthFailure = true;
-        getConnectionCache().toolLists.delete(serverCacheKey(e.name, e.config));
-        return [];
-      }
-      if (isListAuthError_2(error) && hasLapsedCcrSignIn(e.name, e.config)) e.discoveryAuthFailure = true;
-      let T = e.config.type === "claudeai-proxy" && isClaudeAiBearerRejectedError_2(error);
-      let M = T
-        ? "mcp_list_tools_claudeai_bearer_rejected"
-        : error instanceof McpError
-          ? `mcp_list_tools_${LIST_FAILURE_REASONS_V1[error.code] ?? "mcperr_other"}`
-          : S.includes("timed out")
-            ? "mcp_list_tools_timeout"
-            : "mcp_list_tools_failed";
-      logFeatureSad("mcp_list_tools", M);
-      (T ? logMCPDebug : logMCPError)(e.name, `Failed to fetch tools: ${S}`);
-      e.toolsListError = S;
-      if (T) e.discoveryBearerRejected = true;
-      let R = [];
-      getCliOwnedState().toolsListErrorByResult.set(R, S);
-      if (!T) {
-        let E = mcpBaseUrlAnalytics(e.config, e.name);
-        logEvent("tengu_mcp_degraded", {
-          reason: lit("tools_list_failed"),
-          transportType: fromEnum(e.config.type ?? "stdio"),
-          ...E,
-          mcpServerName: mcpNameForAnalytics_GATE_EVALUATED(
-            normalizeNameForMCP(e.name),
-            isMcpServerLoggableInAnalytics(e.name, e.config),
-          ),
-        });
-      }
-      getConnectionCache().toolLists.delete(serverCacheKey(e.name, e.config));
-      return R;
-    }
-  },
-  (e) => serverCacheKey(e.name, e.config),
-  () => getConnectionCache().toolLists,
-);
+    },
+    (client) => serverCacheKey(client.name, client.config),
+    () => getConnectionCache().toolLists,
+  );
+});
 //@ chunk-z1n5m6nf.js:119068-119612 placement
 /**
  * 记录 MCP 列表请求（资源/命令）失败：区分需要认证、claude.ai bearer 被拒、MCP 错误码、超时与一般失败，报告结果码；非认证类失败还记 tengu_mcp_degraded。
@@ -2143,7 +2272,7 @@ function reportListFailure_2(connection, error, listKind, setOutcome, degradedRe
   let needsAuth = connection.config.type === "claudeai-proxy" && isListAuthError_2(error);
   let bearerRejected = connection.config.type === "claudeai-proxy" && isClaudeAiBearerRejectedError_2(error);
   if (bearerRejected) connection.discoveryBearerRejected = true;
-  let w = needsAuth
+  let failureMetric = needsAuth
     ? `${listKind}_needs_auth`
     : bearerRejected
       ? `${listKind}_claudeai_bearer_rejected`
@@ -2152,7 +2281,7 @@ function reportListFailure_2(connection, error, listKind, setOutcome, degradedRe
         : errorText.includes("timed out")
           ? `${listKind}_timeout`
           : `${listKind}_failed`;
-  setOutcome(w);
+  setOutcome(failureMetric);
   (needsAuth || bearerRejected ? logMCPDebug : logMCPError)(
     connection.name,
     `Failed to fetch ${what}: ${errorText}`,
@@ -2169,103 +2298,110 @@ function reportListFailure_2(connection, error, listKind, setOutcome, degradedRe
     });
 }
 //@ chunk-z1n5m6nf.js:119612-120851 placement
-var fetchResourcesForClient_2 = memoizeWithLRU(
-  async (connection) => {
-    if (connection.type !== "connected") return [];
-    try {
-      if (!connection.capabilities?.resources) {
-        let s = [];
-        recordRawResourcesForResult_2(s, []);
-        return s;
+var fetchResourcesForClient_2; // deferred: uses memoizeWithLRU (./needsAuthCache.js) of its import cycle while loading; runs once the cycle is complete
+var fetchResourceTemplatesForClient_2;
+deferInit("chunk-z1n5m6nf.js:119612", () => {
+  fetchResourcesForClient_2 = memoizeWithLRU(
+    async (connection) => {
+      if (connection.type !== "connected") return [];
+      try {
+        if (!connection.capabilities?.resources) {
+          let rawResources = [];
+          recordRawResourcesForResult_2(rawResources, []);
+          return rawResources;
+        }
+        let listedResources = await listAllPages(
+          identityId2(connection.client),
+          connection.name,
+          connection.config,
+          "resources/list",
+          ListResourcesResultSchema,
+          (page) => page.resources,
+        );
+        logFeatureOk("mcp_list_resources");
+        let mapped = listedResources.map((resource) => ({
+          ...resource,
+          server: connection.name,
+        }));
+        recordRawResourcesForResult_2(mapped, listedResources);
+        return mapped;
+      } catch (error) {
+        reportListFailure_2(
+          connection,
+          error,
+          "mcp_list_resources",
+          (metric) => logFeatureSad("mcp_list_resources", metric),
+          lit("resources_list_failed"),
+          "resources",
+        );
+        getConnectionCache().resourceLists.delete(serverCacheKey(connection.name, connection.config));
+        let errorHolder = [];
+        if (error instanceof McpError && error.code === ErrorCode.MethodNotFound)
+          recordRawResourcesForResult_2(errorHolder, []);
+        else getCliOwnedState().discoveryFetchErrors.set(errorHolder, toError(error));
+        return errorHolder;
       }
-      let r = await listAllPages(
-        identityId2(connection.client),
-        connection.name,
-        connection.config,
-        "resources/list",
-        ListResourcesResultSchema,
-        (s) => s.resources,
-      );
-      logFeatureOk("mcp_list_resources");
-      let mapped = r.map((s) => ({
-        ...s,
-        server: connection.name,
-      }));
-      recordRawResourcesForResult_2(mapped, r);
-      return mapped;
-    } catch (error) {
-      reportListFailure_2(
-        connection,
-        error,
-        "mcp_list_resources",
-        (s) => logFeatureSad("mcp_list_resources", s),
-        lit("resources_list_failed"),
-        "resources",
-      );
-      getConnectionCache().resourceLists.delete(serverCacheKey(connection.name, connection.config));
-      let n = [];
-      if (error instanceof McpError && error.code === ErrorCode.MethodNotFound)
-        recordRawResourcesForResult_2(n, []);
-      else getCliOwnedState().discoveryFetchErrors.set(n, toError(error));
-      return n;
-    }
-  },
-  (e) => serverCacheKey(e.name, e.config),
-  () => getConnectionCache().resourceLists,
-);
-var fetchResourceTemplatesForClient_2 = memoizeWithLRU(
-  async (e) => {
-    if (e.type !== "connected") return [];
-    try {
-      if (!e.capabilities?.resources) return [];
-      let r = await listAllPages(
-        identityId2(e.client),
-        e.name,
-        e.config,
-        "resources/templates/list",
-        ListResourceTemplatesResultSchema,
-        (n) => n.resourceTemplates,
-      );
-      logEvent("tengu_mcp_resource_templates_fetched", {
-        template_count: r.length,
-      });
-      logFeatureOk("mcp_list_resource_templates");
-      return r.map((n) => ({
-        ...n,
-        server: e.name,
-      }));
-    } catch (error) {
-      getConnectionCache().resourceTemplateLists.delete(serverCacheKey(e.name, e.config));
-      logMCPDebug(e.name, `Failed to fetch resource templates: ${describeConnectError(error, e.config)}`);
-      let n = [];
-      if (!(error instanceof McpError && error.code === ErrorCode.MethodNotFound))
-        getCliOwnedState().discoveryFetchErrors.set(n, toError(error));
-      return n;
-    }
-  },
-  (e) => serverCacheKey(e.name, e.config),
-  () => getConnectionCache().resourceTemplateLists,
-);
+    },
+    (client) => serverCacheKey(client.name, client.config),
+    () => getConnectionCache().resourceLists,
+  );
+  fetchResourceTemplatesForClient_2 = memoizeWithLRU(
+    async (client) => {
+      if (client.type !== "connected") return [];
+      try {
+        if (!client.capabilities?.resources) return [];
+        let listedTemplates = await listAllPages(
+          identityId2(client.client),
+          client.name,
+          client.config,
+          "resources/templates/list",
+          ListResourceTemplatesResultSchema,
+          (page) => page.resourceTemplates,
+        );
+        logEvent("tengu_mcp_resource_templates_fetched", {
+          template_count: listedTemplates.length,
+        });
+        logFeatureOk("mcp_list_resource_templates");
+        return listedTemplates.map((template) => ({
+          ...template,
+          server: client.name,
+        }));
+      } catch (error) {
+        getConnectionCache().resourceTemplateLists.delete(serverCacheKey(client.name, client.config));
+        logMCPDebug(
+          client.name,
+          `Failed to fetch resource templates: ${describeConnectError(error, client.config)}`,
+        );
+        let errorHolder = [];
+        if (!(error instanceof McpError && error.code === ErrorCode.MethodNotFound))
+          getCliOwnedState().discoveryFetchErrors.set(errorHolder, toError(error));
+        return errorHolder;
+      }
+    },
+    (client) => serverCacheKey(client.name, client.config),
+    () => getConnectionCache().resourceTemplateLists,
+  );
+});
 //@ chunk-z1n5m6nf.js:120851-121022 placement
-function fetchResourceTemplatesForClients(e, r) {
-  let n = [];
-  for (let s of e) {
-    if (s.type !== "connected") continue;
-    if (s.name in r) continue;
-    n.push(
-      fetchResourceTemplatesForClient_2(s).then((templates) => ({
-        client: s,
+function fetchResourceTemplatesForClients(clients, alreadyFetched) {
+  let pending = [];
+  for (let client of clients) {
+    if (client.type !== "connected") continue;
+    if (client.name in alreadyFetched) continue;
+    pending.push(
+      fetchResourceTemplatesForClient_2(client).then((templates) => ({
+        client,
         templates,
       })),
     );
   }
-  return Promise.all(n);
+  return Promise.all(pending);
 }
 //@ chunk-z1n5m6nf.js:121022-121472 placement
-async function completeResourceTemplateArgument(e, uri, name, value, h) {
-  if (!e.capabilities?.completions) return [];
+async function completeResourceTemplateArgument(client, uri, name, value, contextArguments) {
+  if (!client.capabilities?.completions) return [];
   try {
-    let y = await identityId2(e.client).complete({
+    let result = await identityId2(client.client).complete({
       ref: {
         type: "ref/resource",
         uri,
@@ -2275,136 +2411,147 @@ async function completeResourceTemplateArgument(e, uri, name, value, h) {
         value,
       },
       context:
-        Object.keys(h).length > 0
+        Object.keys(contextArguments).length > 0
           ? {
-              arguments: h,
+              arguments: contextArguments,
             }
           : undefined,
     });
     logFeatureOk("mcp_complete_resource_template");
-    return y.completion.values;
+    return result.completion.values;
   } catch (error) {
     logFeatureBad("mcp_complete_resource_template", "mcp_complete_resource_template_failed");
-    logMCPDebug(e.name, `Failed to complete resource template: ${describeConnectError(error, e.config)}`);
+    logMCPDebug(
+      client.name,
+      `Failed to complete resource template: ${describeConnectError(error, client.config)}`,
+    );
     return [];
   }
 }
 //@ chunk-z1n5m6nf.js:121472-122033 placement
-var fetchCommandsForClient_2 = memoizeWithLRU(
-  async (connection) => {
-    if (connection.type !== "connected") return [];
-    try {
-      if (!connection.capabilities?.prompts) {
-        let s = [];
-        recordRawCommandsForResult(s, []);
-        return s;
+var fetchCommandsForClient_2; // deferred: uses memoizeWithLRU (./needsAuthCache.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-z1n5m6nf.js:121472", () => {
+  fetchCommandsForClient_2 = memoizeWithLRU(
+    async (client) => {
+      if (client.type !== "connected") return [];
+      try {
+        if (!client.capabilities?.prompts) {
+          let rawCommands = [];
+          recordRawCommandsForResult(rawCommands, []);
+          return rawCommands;
+        }
+        let prompts = await listAllPages(
+          identityId2(client.client),
+          client.name,
+          client.config,
+          "prompts/list",
+          ListPromptsResultSchema,
+          (page) => page.prompts,
+        );
+        logFeatureOk("mcp_list_prompts");
+        let result = buildMcpPromptCommands_2(client, prompts);
+        recordRawCommandsForResult(result, prompts);
+        return result;
+      } catch (error) {
+        reportListFailure_2(
+          client,
+          error,
+          "mcp_list_prompts",
+          (metric) => logFeatureSad("mcp_list_prompts", metric),
+          lit("prompts_list_failed"),
+          "commands",
+        );
+        getConnectionCache().commandLists.delete(serverCacheKey(client.name, client.config));
+        let errorHolder = [];
+        if (error instanceof McpError && error.code === ErrorCode.MethodNotFound)
+          recordRawCommandsForResult(errorHolder, []);
+        else getCliOwnedState().discoveryFetchErrors.set(errorHolder, toError(error));
+        return errorHolder;
       }
-      let r = await listAllPages(
-        identityId2(connection.client),
-        connection.name,
-        connection.config,
-        "prompts/list",
-        ListPromptsResultSchema,
-        (s) => s.prompts,
-      );
-      logFeatureOk("mcp_list_prompts");
-      let mcpPromptCommands = buildMcpPromptCommands_2(connection, r);
-      recordRawCommandsForResult(mcpPromptCommands, r);
-      return mcpPromptCommands;
-    } catch (error) {
-      reportListFailure_2(
-        connection,
-        error,
-        "mcp_list_prompts",
-        (s) => logFeatureSad("mcp_list_prompts", s),
-        lit("prompts_list_failed"),
-        "commands",
-      );
-      getConnectionCache().commandLists.delete(serverCacheKey(connection.name, connection.config));
-      let n = [];
-      if (error instanceof McpError && error.code === ErrorCode.MethodNotFound)
-        recordRawCommandsForResult(n, []);
-      else getCliOwnedState().discoveryFetchErrors.set(n, toError(error));
-      return n;
-    }
-  },
-  (e) => serverCacheKey(e.name, e.config),
-  () => getConnectionCache().commandLists,
-);
+    },
+    (client) => serverCacheKey(client.name, client.config),
+    () => getConnectionCache().commandLists,
+  );
+});
 //@ chunk-z1n5m6nf.js:122033-123802 placement
 /**
  * 动态生成的 prompt 命令对象（name="mcp__"+Sn(e.name)+"__"+w.name）；描述：Q??""；别名 S?[`${e.name}:${w.name}`,`${e.name}:${w.name} (MCP)`]:void 0；isEnabled: ()=>!0；isHidden: false。
  */
-function buildMcpPromptCommands_2(e, r) {
+function buildMcpPromptCommands_2(client, prompts) {
   let streamingListingSanitizer = createStreamingListingSanitizer();
-  let flattened = r.flatMap((w) => streamingListingSanitizer(w) ?? []);
-  let h = r.length - flattened.length;
-  if (h > 0) logMCPError(e.name, listingTruncatedNote("prompts", h, r.length));
-  let config = e.config;
-  let S = (config.type === "http" || config.type === "sse") && isDesignMcpUrl(config.url);
-  let T = officialPluginPromptOverrides(e.config);
-  let commands = flattened.map((w) => {
-    let values = Object.values(w.arguments ?? {});
-    let mapped = values.map((H) => H.name);
-    let Q = T?.prompts?.[w.name] ?? w.description;
+  let flattened = prompts.flatMap((prompt) => streamingListingSanitizer(prompt) ?? []);
+  let droppedCount = prompts.length - flattened.length;
+  if (droppedCount > 0)
+    logMCPError(client.name, listingTruncatedNote("prompts", droppedCount, prompts.length));
+  let config = client.config;
+  let isDesignServer = (config.type === "http" || config.type === "sse") && isDesignMcpUrl(config.url);
+  let overrides = officialPluginPromptOverrides(client.config);
+  let commands = flattened.map((prompt) => {
+    let values = Object.values(prompt.arguments ?? {});
+    let mapped = values.map((argument) => argument.name);
+    let description = overrides?.prompts?.[prompt.name] ?? prompt.description;
     return {
       type: "prompt",
-      name: "mcp__" + normalizeNameForMCP(e.name) + "__" + w.name,
-      description: Q ?? "",
-      hasUserSpecifiedDescription: !!Q,
+      name: "mcp__" + normalizeNameForMCP(client.name) + "__" + prompt.name,
+      description: description ?? "",
+      hasUserSpecifiedDescription: !!description,
       contentLength: 0,
       isEnabled: () => true,
       isHidden: false,
       isMcp: true,
-      mcpInfo: getMcpInfoFromConnection(e),
+      mcpInfo: getMcpInfoFromConnection(client),
       progressMessage: "running",
       userFacingName() {
-        return S ? w.name : `${e.name}:${w.name} (MCP)`;
+        return isDesignServer ? prompt.name : `${client.name}:${prompt.name} (MCP)`;
       },
-      aliases: S ? [`${e.name}:${w.name}`, `${e.name}:${w.name} (MCP)`] : undefined,
+      aliases: isDesignServer
+        ? [`${client.name}:${prompt.name}`, `${client.name}:${prompt.name} (MCP)`]
+        : undefined,
       argNames: mapped,
       source: "mcp",
       async getPromptForCommand(args, context) {
         let trimmed = args.trim();
-        let he = trimmed ? trimmed.split(/\s+/) : [];
-        let G = hostedDesktopRefusal_2(e);
-        if (G) throw G;
+        let argValues = trimmed ? trimmed.split(/\s+/) : [];
+        let refusal = hostedDesktopRefusal_2(client);
+        if (refusal) throw refusal;
         try {
-          let mapped_2 = values.filter((ce, le) => ce.required && he[le] === undefined).map((ce) => ce.name);
+          let mapped_2 = values
+            .filter((argument, index) => argument.required && argValues[index] === undefined)
+            .map((argument) => argument.name);
           if (mapped_2.length > 0)
             throw Error(
-              `Missing required ${plural(mapped_2.length, "argument")}: ${mapped_2.join(", ")}. Usage: /mcp__${normalizeNameForMCP(e.name)}__${w.name} ${mapped.join(" ")}`,
+              `Missing required ${plural(mapped_2.length, "argument")}: ${mapped_2.join(", ")}. Usage: /mcp__${normalizeNameForMCP(client.name)}__${prompt.name} ${mapped.join(" ")}`,
             );
-          let mcpServer = await connectMcpServer(e, {
+          let mcpServer = await connectMcpServer(client, {
             signal: context.abortController.signal,
             context: "MCP prompt command",
           });
-          let prompt = await identityId2(mcpServer.client).getPrompt({
-            name: w.name,
-            arguments: zipOperationFields(mapped, he),
+          let prompt_2 = await identityId2(mcpServer.client).getPrompt({
+            name: prompt.name,
+            arguments: zipOperationFields(mapped, argValues),
           });
           let imageBuffer = imageLimitsForModel(context.options.mainLoopModel);
           let results = await Promise.all(
-            prompt.messages.map((message) =>
+            prompt_2.messages.map((message) =>
               transformResultContent_2(message.content, mcpServer.name, imageBuffer, context.storageV5),
             ),
           );
           logFeatureOk("mcp_get_prompt");
-          recordToolUsed(buildMcpToolName(e.name, w.name));
+          recordToolUsed(buildMcpToolName(client.name, prompt.name));
           return results.flat();
         } catch (error) {
           if (!isAbortError(error))
-            if (e.config.type === "claudeai-proxy" && isClaudeAiBearerRejectedError_2(error)) {
+            if (client.config.type === "claudeai-proxy" && isClaudeAiBearerRejectedError_2(error)) {
               logFeatureSad("mcp_get_prompt", "mcp_get_prompt_claudeai_bearer_rejected");
               logMCPDebug(
-                e.name,
-                `Error running command '${w.name}': ${describeConnectError(error, e.config)}`,
+                client.name,
+                `Error running command '${prompt.name}': ${describeConnectError(error, client.config)}`,
               );
             } else {
               logFeatureBad("mcp_get_prompt", "mcp_get_prompt_failed");
               logMCPError(
-                e.name,
-                `Error running command '${w.name}': ${describeConnectError(error, e.config)}`,
+                client.name,
+                `Error running command '${prompt.name}': ${describeConnectError(error, client.config)}`,
               );
             }
           throw error;
@@ -2412,10 +2559,10 @@ function buildMcpPromptCommands_2(e, r) {
       },
     };
   });
-  return checkCommandListable(commands, (w) =>
+  return checkCommandListable(commands, (command) =>
     logMCPDebug(
-      e.name,
-      `Prompt '${w.name}' not listed: the server name ${RESERVED_SKILL_NAMESPACE_REASON}. Rename the server in your MCP configuration to list its prompts.`,
+      client.name,
+      `Prompt '${command.name}' not listed: the server name ${RESERVED_SKILL_NAMESPACE_REASON}. Rename the server in your MCP configuration to list its prompts.`,
     ),
   );
 }
@@ -2437,4 +2584,22 @@ export {
   discoverySourceLabel_2,
   recordRawResourcesForResult_2,
   connectMcpServer,
+  sameConfigHash,
+  completeResourceTemplateArgument,
+  buildMcpTool,
+  getToolsListError,
+  fetchMcpTools,
+  mcpIdentityChangedSinceLastCheck,
+  mcpToolInputToAutoClassifierInput,
+  watchNotification,
+  watchPromptListChanges,
+  watchResourceListChanges,
+  watchToolListChanges,
+  persistRefreshedToolsIfPresent,
+  setDiscoveryFetchError,
+  recordRawCommandsForResult,
+  recordRawToolsForResult,
+  fetchResourceTemplatesForClients,
+  runCachedFirstDialArms,
+  seedMcpIdentityCheck,
 };

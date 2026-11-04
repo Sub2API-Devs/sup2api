@@ -5,10 +5,10 @@
  * pieces: chunk-egr0twnb.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:275687-277786 cjs-fingerprint
-var require_markdown = x(function (cjsExports, cjsModule) {
+var require_markdown = __commonJS(function (cjsExports, cjsModule) {
   function markdown(hljs) {
     let regex = hljs.regex;
     let INLINE_HTML = {
@@ -21,7 +21,7 @@ var require_markdown = x(function (cjsExports, cjsModule) {
       begin: "^[-\\*]{3,}",
       end: "$",
     };
-    let s = {
+    let CODE = {
       className: "code",
       variants: [
         {
@@ -212,7 +212,7 @@ var require_markdown = x(function (cjsExports, cjsModule) {
           contains: CONTAINABLE,
           end: "$",
         },
-        s,
+        CODE,
         HORIZONTAL_RULE,
         LINK,
         LINK_REFERENCE,

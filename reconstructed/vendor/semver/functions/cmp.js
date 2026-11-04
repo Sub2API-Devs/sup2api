@@ -5,11 +5,11 @@
  * pieces: chunk-bwbq4xvm.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../runtime/bun-runtime.js";
 import { require_eq_3, require_eq_4, require_eq, require_eq_5, require_eq_2, require_eq_6 } from "./eq.js";
 
 //@ chunk-bwbq4xvm.js:12601-13126 cjs-fingerprint
-var require_cmp = x(function (cjsExports, cjsModule) {
+var require_cmp = __commonJS(function (cjsExports, cjsModule) {
   var eq = require_eq_3();
   var neq = require_eq_4();
   var gt = require_eq();

@@ -9,7 +9,13 @@
  * attribution: fingerprint 1
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { zodStrictObject, string, M, u, E } from "../../../vendor/zod/v4/classic/schemas.js";
+import {
+  zodStrictObject,
+  stringSchema,
+  booleanSchema,
+  objectSchema,
+  numberSchema,
+} from "../../../vendor/zod/v4/classic/schemas.js";
 import { booleanishSchema } from "../../utils/spellcheck.js";
 import {
   DEFAULT_MAX_AGE_DAYS,
@@ -46,23 +52,25 @@ import { truncate } from "../../utils/format.js";
 var MAX_CRON_JOBS = 50;
 var cronCreateInputSchema = DoctorLazy(() =>
   zodStrictObject({
-    cron: string().describe(
+    cron: stringSchema().describe(
       'Standard 5-field cron expression in local time: "M H DoM Mon DoW" (e.g. "*/5 * * * *" = every 5 minutes, "30 14 28 2 *" = Feb 28 at 2:30pm local once).',
     ),
-    prompt: string().describe("The prompt to enqueue at each fire time."),
-    recurring: booleanishSchema(M().optional()).describe(
+    prompt: stringSchema().describe("The prompt to enqueue at each fire time."),
+    recurring: booleanishSchema(booleanSchema().optional()).describe(
       `true (default) = fire on every cron match until deleted or auto-expired after ${DEFAULT_MAX_AGE_DAYS} days. false = fire once at the next match, then auto-delete. Use false for "remind me at X" one-shot requests with pinned minute/hour/dom/month.`,
     ),
-    durable: booleanishSchema(M().optional()).describe(buildDurableParamDescription(isDurableCronEnabled())),
+    durable: booleanishSchema(booleanSchema().optional()).describe(
+      buildDurableParamDescription(isDurableCronEnabled()),
+    ),
   }),
 );
 var cronCreateOutputSchema = DoctorLazy(() =>
-  u({
-    id: string(),
-    humanSchedule: string(),
-    recurring: M(),
-    durable: M().optional(),
-    nextFireAt: E().optional().describe(NEXT_FIRE_AT_DESCRIPTION),
+  objectSchema({
+    id: stringSchema(),
+    humanSchedule: stringSchema(),
+    recurring: booleanSchema(),
+    durable: booleanSchema().optional(),
+    nextFireAt: numberSchema().optional().describe(NEXT_FIRE_AT_DESCRIPTION),
   }),
 );
 var CronCreateTool = buildTool({
@@ -107,12 +115,12 @@ var CronCreateTool = buildTool({
         };
       },
       async validateInput(input) {
-        let n = isUnknownPluginSpawnedAgent(pluginContext) ? UNKNOWN_PLUGIN_AGENT_NOTE : undefined;
-        if (n !== undefined) {
-          logForDebugging(`CronCreate refused: ${n}`);
+        let refusalNote = isUnknownPluginSpawnedAgent(pluginContext) ? UNKNOWN_PLUGIN_AGENT_NOTE : undefined;
+        if (refusalNote !== undefined) {
+          logForDebugging(`CronCreate refused: ${refusalNote}`);
           return {
             result: false,
-            message: n,
+            message: refusalNote,
             errorCode: 5,
           };
         }
@@ -157,7 +165,7 @@ var CronCreateTool = buildTool({
           now,
           pluginContext,
         );
-        let m = nextFireTimeForTask(
+        let nextFireAt = nextFireTimeForTask(
           {
             id,
             cron,
@@ -173,8 +181,8 @@ var CronCreateTool = buildTool({
             humanSchedule: cronToHuman(cron),
             recurring,
             durable: effectiveDurable,
-            ...(m !== null && {
-              nextFireAt: m,
+            ...(nextFireAt !== null && {
+              nextFireAt,
             }),
           },
         };
@@ -185,7 +193,7 @@ var CronCreateTool = buildTool({
     let where = output.durable
       ? "Persisted to .claude/scheduled_tasks.json"
       : "Session-only (not written to disk, dies when Claude exits)";
-    let s =
+    let fireSuffix =
       output.nextFireAt === undefined
         ? ""
         : ` Next run: ${formatCronFireTime(roundToMinute(output.nextFireAt))}.`;
@@ -193,11 +201,12 @@ var CronCreateTool = buildTool({
       tool_use_id: toolUseID,
       type: "tool_result",
       content: output.recurring
-        ? `Scheduled recurring job ${output.id} (${output.humanSchedule}).${s} ${where}. Auto-expires after ${DEFAULT_MAX_AGE_DAYS} days. Use CronDelete to cancel sooner.`
-        : `Scheduled one-shot task ${output.id} (${output.humanSchedule}).${s} ${where}. It will fire once then auto-delete.`,
+        ? `Scheduled recurring job ${output.id} (${output.humanSchedule}).${fireSuffix} ${where}. Auto-expires after ${DEFAULT_MAX_AGE_DAYS} days. Use CronDelete to cancel sooner.`
+        : `Scheduled one-shot task ${output.id} (${output.humanSchedule}).${fireSuffix} ${where}. It will fire once then auto-delete.`,
     };
   },
-  renderToolUseMessage(e) {
-    return `${e.cron ?? ""}${e.prompt ? `: ${truncate(e.prompt, 60, true)}` : ""}`;
+  renderToolUseMessage(input) {
+    return `${input.cron ?? ""}${input.prompt ? `: ${truncate(input.prompt, 60, true)}` : ""}`;
   },
 });
+export { CronCreateTool };

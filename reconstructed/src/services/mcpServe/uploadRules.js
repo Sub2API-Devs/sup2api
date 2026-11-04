@@ -20,27 +20,27 @@ var REPO_RULES_UNREAD = "repo_rules_unread";
 /**
  * mcp serve 的文件上传调用读取仓库权限规则（repo rules），读不到时拒绝并记 repo_rules_read_failed。
  */
-function uploadRulesForRequest(e, o) {
-  let repoRulesForRequest = readRepoRulesForRequest(e, o.meta);
-  return repoRulesForRequest instanceof Promise
-    ? repoRulesForRequest.then((r) => permissionContextWithRepoRules(r, o))
-    : permissionContextWithRepoRules(repoRulesForRequest, o);
+function uploadRulesForRequest(request, context) {
+  let rulesRead = readRepoRulesForRequest(request, context.meta);
+  return rulesRead instanceof Promise
+    ? rulesRead.then((repoRules) => permissionContextWithRepoRules(repoRules, context))
+    : permissionContextWithRepoRules(rulesRead, context);
 }
 //@ chunk-11e3jmt7.js:495-728 placement
 /**
  * 把仓库规则并入启动权限上下文
  */
-function permissionContextWithRepoRules(e, o) {
-  if (e.refused !== undefined) {
-    (e.refused.cause === "repo_rules_read_failed" ? logFeatureBad : logFeatureSad)(
+function permissionContextWithRepoRules(rulesRead, context) {
+  if (rulesRead.refused !== undefined) {
+    (rulesRead.refused.cause === "repo_rules_read_failed" ? logFeatureBad : logFeatureSad)(
       "mcp_serve_file_call",
-      e.refused.cause,
+      rulesRead.refused.cause,
     );
     return REPO_RULES_UNREAD;
   }
-  return e.repoRules === undefined
-    ? o.launchPermissionContext
-    : buildUploadPermissionContext(o.launchPermissionContext, e.repoRules, o);
+  return rulesRead.repoRules === undefined
+    ? context.launchPermissionContext
+    : buildUploadPermissionContext(context.launchPermissionContext, rulesRead.repoRules, context);
 }
 //@ chunk-11e3jmt7.js:728-861 placement
 function buildUploadPermissionContext(launchPermissionContext, mergeOptions, { session }) {
@@ -59,4 +59,4 @@ function buildUploadPermissionContext(launchPermissionContext, mergeOptions, { s
     ),
   };
 }
-export { REPO_RULES_UNREAD };
+export { REPO_RULES_UNREAD, uploadRulesForRequest };

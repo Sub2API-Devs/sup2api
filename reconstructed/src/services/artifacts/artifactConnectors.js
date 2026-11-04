@@ -9,7 +9,7 @@
  * attribution: placement 9
  */
 import { antEnv, env } from "../../utils/env.js";
-import { record, string, unknown } from "../../../vendor/zod/v4/classic/schemas.js";
+import { record, stringSchema, unknown } from "../../../vendor/zod/v4/classic/schemas.js";
 import { ARTIFACT_CAPABILITIES } from "../../skills/bundled/bundledSkillNames.js";
 import { mcpInfoFromString } from "../mcp/mcpStringUtils.js";
 import { getMcpPrefix as getMcpPrefix_2 } from "./connectorNames.js";
@@ -32,7 +32,7 @@ function artifactMcpEnabled() {
  * Artifact 发布输入里 connectors 字段的 schema：{名字: 配置} 形式的运行时能力声明，名字与配置形状以控制面为准，空对象清除之前的声明。
  */
 function connectorsInputSchema() {
-  return record(string().min(1).max(64), unknown())
+  return record(stringSchema().min(1).max(64), unknown())
     .optional()
     .describe(
       `Runtime capabilities this page declares, as {name: config}. The control plane is the authority on valid names and config shapes. An empty object clears any previously stored declaration; omit the field on a redeploy to carry the stored declaration forward unchanged. Before declaring any capability, load the \`${ARTIFACT_CAPABILITIES}\` skill for the current contract and per-capability guidance.`,
@@ -42,21 +42,21 @@ function connectorsInputSchema() {
 /**
  * （归属疑误：权限/系统提示）按 claude.ai 连接器汇总 {server, toolPrefix, toolNames}。
  */
-function groupClaudeAiConnectors(s) {
-  let a = new Map();
-  for (let e of s) {
-    if (e.mcpInfo?.scope !== "claudeai") continue;
-    let serverName = e.mcpInfo.serverName;
-    let r = a.get(serverName);
-    if (r !== undefined) {
-      r.toolNames.push(e.mcpInfo.toolName);
+function groupClaudeAiConnectors(connectors) {
+  let groups = new Map();
+  for (let connector of connectors) {
+    if (connector.mcpInfo?.scope !== "claudeai") continue;
+    let serverName = connector.mcpInfo.serverName;
+    let group = groups.get(serverName);
+    if (group !== undefined) {
+      group.toolNames.push(connector.mcpInfo.toolName);
       continue;
     }
-    let displayName = e.mcpInfo.displayName ?? serverName;
-    a.set(serverName, {
+    let displayName = connector.mcpInfo.displayName ?? serverName;
+    groups.set(serverName, {
       server: displayName,
-      toolPrefix: mcpInfoFromString(e.name)?.serverName ?? serverName,
-      toolNames: [e.mcpInfo.toolName],
+      toolPrefix: mcpInfoFromString(connector.name)?.serverName ?? serverName,
+      toolNames: [connector.mcpInfo.toolName],
       ...(getMcpPrefix_2(displayName)
         ? {}
         : {
@@ -64,22 +64,22 @@ function groupClaudeAiConnectors(s) {
           }),
     });
   }
-  return [...a.values()];
+  return [...groups.values()];
 }
 //@ chunk-9xyz2gbc.js:1459-1643 placement = getMcpPrefix (1)
 /**
  * （归属疑误：权限/系统提示）从 mcp__<ls>__<sub>__* 工具名中取子服务器名集合。
  */
 function getMcpPrefix(serverName) {
-  let a = `mcp__${REMOTE_DEVICES}__`;
-  let e = new Set();
-  for (let t of serverName) {
-    if (!t.name.startsWith(a)) continue;
-    let sliced = t.name.slice(a.length);
+  let prefix = `mcp__${REMOTE_DEVICES}__`;
+  let seen = new Set();
+  for (let name of serverName) {
+    if (!name.name.startsWith(prefix)) continue;
+    let sliced = name.name.slice(prefix.length);
     let index = sliced.indexOf("__");
-    if (index > 0) e.add(sliced.slice(0, index));
+    if (index > 0) seen.add(sliced.slice(0, index));
   }
-  return [...e];
+  return [...seen];
 }
 //@ chunk-9xyz2gbc.js:1643-1670 placement
 /**
@@ -98,9 +98,9 @@ function groupSdkHostedServers(tools) {
   for (let tool of tools) {
     let mcpInfo = tool.mcpInfo;
     if (mcpInfo?.serverType !== "sdk" || normalizeUuidOrNull(mcpInfo.serverName) === null) continue;
-    let l = byServer.get(mcpInfo.serverName);
-    if (l !== undefined) {
-      l.toolNames.push(mcpInfo.toolName);
+    let row = byServer.get(mcpInfo.serverName);
+    if (row !== undefined) {
+      row.toolNames.push(mcpInfo.toolName);
       continue;
     }
     if (unnamedIds.has(mcpInfo.serverName)) continue;
@@ -120,11 +120,11 @@ function groupSdkHostedServers(tools) {
           }),
     });
   }
-  let t = [...byServer.values()];
+  let rows = [...byServer.values()];
   return {
-    named: t.filter((r) => r.declarable !== false),
+    named: rows.filter((row) => row.declarable !== false),
     unnamedIds: [...unnamedIds],
-    undeclarable: t.filter((r) => r.declarable === false),
+    undeclarable: rows.filter((row) => row.declarable === false),
   };
 }
 //@ chunk-9xyz2gbc.js:2245-2297 placement
@@ -135,9 +135,9 @@ function isCobaltPlinthYewEnabled() {
 /**
  * 汇总 Artifact 页面可声明的连接器上下文：是否 CCR 托管、元连接器（会话服务器 URL 对应的工具前缀）、SDK 托管服务器分组。
  */
-function getArtifactConnectorContext(tools, a) {
+function getArtifactConnectorContext(tools, context) {
   let hosted = isHostEntrypointSession() ? groupSdkHostedServers(tools) : null;
-  let serverUrl = getServerUrl(a ?? []);
+  let serverUrl = getServerUrl(context ?? []);
   if (!serverUrl)
     return {
       ccrHosted: false,
@@ -145,14 +145,14 @@ function getArtifactConnectorContext(tools, a) {
       hosted,
     };
   let ccrHosted = env.CLAUDE_CODE_REMOTE === true;
-  let n = serverUrl.name;
-  let found = tools.find((f) => f.mcpInfo?.serverName === n);
-  let serverName = found && mcpInfoFromString(found.name)?.serverName;
+  let serverName = serverUrl.name;
+  let found = tools.find((tool) => tool.mcpInfo?.serverName === serverName);
+  let serverName_2 = found && mcpInfoFromString(found.name)?.serverName;
   let metaConnector =
-    serverName && isCobaltPlinthYewEnabled()
+    serverName_2 && isCobaltPlinthYewEnabled()
       ? {
           server: CLAUDE_CODE_REMOTE_DISPLAY_NAME,
-          toolPrefix: serverName,
+          toolPrefix: serverName_2,
         }
       : null;
   return {
@@ -162,13 +162,13 @@ function getArtifactConnectorContext(tools, a) {
   };
 }
 //@ chunk-9xyz2gbc.js:2600-2737 placement
-function listArtifactConnectors(s, mcpClients) {
-  let { metaConnector, hosted } = getArtifactConnectorContext(s, mcpClients);
-  let r = [
-    ...groupClaudeAiConnectors(s),
+function listArtifactConnectors(tools, context) {
+  let { metaConnector, hosted } = getArtifactConnectorContext(tools, context);
+  let listed = [
+    ...groupClaudeAiConnectors(tools),
     ...(hosted === null ? [] : [...hosted.named, ...hosted.undeclarable]),
   ];
-  return metaConnector ? [...r, metaConnector] : r;
+  return metaConnector ? [...listed, metaConnector] : listed;
 }
 export {
   listArtifactConnectors,

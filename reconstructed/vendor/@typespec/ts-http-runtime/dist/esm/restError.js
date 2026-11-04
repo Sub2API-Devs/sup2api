@@ -6,7 +6,7 @@
  * attribution: esm-layout 2, esm-fingerprint 4
  */
 import { Sanitizer, custom } from "./util/sanitizer.js";
-import { tr } from "./util/error.js";
+import { isError } from "./util/error.js";
 
 //@ chunk-mrx6y2r5.js:37067-37081 esm-layout
 var errorSanitizer = new Sanitizer();
@@ -43,9 +43,9 @@ RestError.REQUEST_SEND_ERROR = "REQUEST_SEND_ERROR";
 //@ chunk-mrx6y2r5.js:37616-37645 esm-fingerprint
 RestError.PARSE_ERROR = "PARSE_ERROR";
 //@ chunk-mrx6y2r5.js:37645-37723 esm-fingerprint
-function isRestError(e) {
-  if (e instanceof RestError) return true;
-  return tr(e) && e.name === "RestError";
+function isRestError(error) {
+  if (error instanceof RestError) return true;
+  return isError(error) && error.name === "RestError";
 }
 //@ chunk-mrx6y2r5.js:37832-37903 esm-layout
 class AbortError_2 extends Error {

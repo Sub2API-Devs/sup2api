@@ -50,22 +50,26 @@ import {
 } from "./streamFilter.js";
 import { logEventAsync } from "../../services/analytics/index.js";
 import { fromEnum } from "../../services/analytics/safeMetadata.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-54xbtc53.js:18487-18528 placement
 var CLOUD_PRINT_INITIALIZE = "cloud-print-initialize";
 var MAX_CLOUD_PRINT_SESSION_READS = 3;
 var CLOUD_PRINT_HISTORY_PAGE_SIZE = 200;
 //@ chunk-54xbtc53.js:18528-18633 placement
-class FrameCaptureIO extends StructuredIO {
-  onFrame;
-  constructor(e, t, onFrame) {
-    super(e, t);
-    this.onFrame = onFrame;
-  }
-  async write(e) {
-    this.onFrame(e);
-  }
-}
+let FrameCaptureIO; // deferred: uses StructuredIO (../structuredIO.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-54xbtc53.js:18528", () => {
+  FrameCaptureIO = class FrameCaptureIO extends StructuredIO {
+    onFrame;
+    constructor(input, output, onFrame) {
+      super(input, output);
+      this.onFrame = onFrame;
+    }
+    async write(value) {
+      this.onFrame(value);
+    }
+  };
+});
 //@ chunk-54xbtc53.js:18633-24895 placement
 /**
  * `--cloud -p` 单次运行的状态机：发送用户消息、跟踪 worker 与宿主帧、识别本消息对应的 result；worker 消失时查询会话状态与已存结果；超时、中断与失败时给出相应说明与结果类别。
@@ -98,13 +102,13 @@ class CloudPrintRun {
     this.readSession = readSession;
     this.readLatestResults = readLatestResults;
   }
-  noteOnce(e) {
-    if (!this.notedOnce.has(e)) {
-      this.notedOnce.add(e);
-      this.note(e);
+  noteOnce(message) {
+    if (!this.notedOnce.has(message)) {
+      this.notedOnce.add(message);
+      this.note(message);
     }
   }
-  checkSession(e) {
+  checkSession(sessionId) {
     if (this.result !== undefined || this.ended !== undefined) return;
     if (this.checking) {
       this.checkAgain = true;
@@ -112,60 +116,60 @@ class CloudPrintRun {
     }
     if (this.sessionReads >= MAX_CLOUD_PRINT_SESSION_READS) return;
     this.checking = true;
-    this.readSession(e)
+    this.readSession(sessionId)
       .then(
-        (t) => {
+        (session) => {
           this.sessionReads += 1;
           if (this.result !== undefined) return;
-          let s =
-            t.session_status === "running"
+          let ended =
+            session.session_status === "running"
               ? undefined
-              : t.session_status === "archived"
+              : session.session_status === "archived"
                 ? {
                     kind: "archived",
                   }
-                : t.startup_failure !== undefined
+                : session.startup_failure !== undefined
                   ? {
                       kind: "start_failed",
-                      reason: t.startup_failure,
+                      reason: session.startup_failure,
                     }
-                  : t.session_status === "requires_action"
+                  : session.session_status === "requires_action"
                     ? {
                         kind: "needs_answer",
                       }
                     : {
                         kind: "worker_stopped",
                       };
-          if (s === undefined) {
+          if (ended === undefined) {
             this.noteOnce(
               `The cloud session stopped working mid-turn; the service may restart its worker and resume the turn (this can take minutes), so the run keeps waiting. Ctrl-C stops waiting; the session itself is unaffected${this.viewUrl ? ` (${this.viewUrl})` : ""}.`,
             );
             return;
           }
-          return this.readLatestResults(e).then(
-            (n) => {
+          return this.readLatestResults(sessionId).then(
+            (events) => {
               if (this.result !== undefined) return;
-              let r =
-                n.findLast(
-                  (u) =>
-                    this.resultIsOwn(u) &&
+              let result =
+                events.findLast(
+                  (event) =>
+                    this.resultIsOwn(event) &&
                     !(
-                      u.type === "result" &&
-                      u.subtype === "success" &&
-                      !u.is_error &&
-                      u.num_turns === 0 &&
-                      u.result === ""
+                      event.type === "result" &&
+                      event.subtype === "success" &&
+                      !event.is_error &&
+                      event.num_turns === 0 &&
+                      event.result === ""
                     ),
-                ) ?? n.findLast((u) => this.resultIsOwn(u));
-              if (r !== undefined) {
-                this.result = sanitizeCloudResult(r);
+                ) ?? events.findLast((event) => this.resultIsOwn(event));
+              if (result !== undefined) {
+                this.result = sanitizeCloudResult(result);
                 this.resultFromLookup = true;
-              } else this.ended = s;
+              } else this.ended = ended;
               this.input.done();
             },
             (error) => {
-              if (s.kind === "needs_answer") {
-                this.ended = s;
+              if (ended.kind === "needs_answer") {
+                this.ended = ended;
                 this.input.done();
                 return;
               }
@@ -185,7 +189,7 @@ class CloudPrintRun {
         this.checking = false;
         if (this.checkAgain) {
           this.checkAgain = false;
-          this.checkSession(e);
+          this.checkSession(sessionId);
         }
       });
   }
@@ -202,43 +206,44 @@ class CloudPrintRun {
       },
     });
   }
-  resultIsOwn(e) {
-    return this.ownMessageUuid === null || this.answersOwnMessage(e);
+  resultIsOwn(event) {
+    return this.ownMessageUuid === null || this.answersOwnMessage(event);
   }
-  answersOwnMessage(e) {
+  answersOwnMessage(event) {
     return (
-      this.ownMessageUuid !== null && (getResultUserMessageUuids(e)?.includes(this.ownMessageUuid) ?? false)
+      this.ownMessageUuid !== null &&
+      (getResultUserMessageUuids(event)?.includes(this.ownMessageUuid) ?? false)
     );
   }
-  send(e) {
+  send(message) {
     this.input.enqueue(
-      jsonStringify(e) +
+      jsonStringify(message) +
         `
 `,
     );
   }
-  onWireFrame(e, t) {
-    if (e.type === "env_manager_log") {
-      let setupStepFields = readSetupStepFields(e);
+  onWireFrame(frame, meta) {
+    if (frame.type === "env_manager_log") {
+      let setupStepFields = readSetupStepFields(frame);
       if (!this.workerSeen && setupStepFields.stepId !== null && setupStepFields.stepStatus === "failed") {
         this.startFailed = true;
         this.input.done();
       }
       return;
     }
-    if (e.type === "user" && this.ownMessageUuid !== null && e.uuid === this.ownMessageUuid) {
+    if (frame.type === "user" && this.ownMessageUuid !== null && frame.uuid === this.ownMessageUuid) {
       this.ownMessageEchoed = true;
       return;
     }
-    if (t?.source !== "worker") return;
-    if (e.type === "result") {
-      if (this.result === undefined && this.resultIsOwn(e)) {
-        this.result = sanitizeCloudResult(e);
+    if (meta?.source !== "worker") return;
+    if (frame.type === "result") {
+      if (this.result === undefined && this.resultIsOwn(frame)) {
+        this.result = sanitizeCloudResult(frame);
         this.input.done();
       }
       return;
     }
-    if (e.type !== "user") this.workerSeen = true;
+    if (frame.type !== "user") this.workerSeen = true;
   }
   onHostFrame(controlRequest) {
     if (controlRequest.type === "control_request") this.send(autoRespondUnattended(controlRequest));
@@ -260,40 +265,40 @@ class CloudPrintRun {
     )
       this.note(clipCloudText(controlRequest.content));
   }
-  adopt(e) {
-    if (e.kind !== "opened") return e;
-    let t = e.session.cloudSession();
-    this.viewUrl = t.view_url;
-    this.cloudSessionId = displaySessionId(t.id);
-    this.note(`Cloud session: ${this.cloudSessionId} (${t.view_url})`);
+  adopt(result) {
+    if (result.kind !== "opened") return result;
+    let cloudSession = result.session.cloudSession();
+    this.viewUrl = cloudSession.view_url;
+    this.cloudSessionId = displaySessionId(cloudSession.id);
+    this.note(`Cloud session: ${this.cloudSessionId} (${cloudSession.view_url})`);
     return {
       kind: "opened",
       session: {
-        ...e.session,
+        ...result.session,
         hostAnswersUnattended: true,
-        createManager: (n, r) => {
-          let callbacks = {
-            ...r,
-            onMessage: (l, a) => {
-              this.onWireFrame(l, a);
-              r.onMessage(l, a);
+        createManager: (options, callbacks) => {
+          let callbacks_2 = {
+            ...callbacks,
+            onMessage: (frame, meta) => {
+              this.onWireFrame(frame, meta);
+              callbacks.onMessage(frame, meta);
             },
             onWorkerLive: () => {
-              r.onWorkerLive?.();
+              callbacks.onWorkerLive?.();
               this.sessionReads = 0;
             },
             onWorkerGone: () => {
-              r.onWorkerGone?.();
-              if (this.workerSeen) this.checkSession(e.session);
+              callbacks.onWorkerGone?.();
+              if (this.workerSeen) this.checkSession(result.session);
             },
           };
-          let h = {
-            ...n,
+          let sessionOptions = {
+            ...options,
             keepStreamRedialling: true,
           };
-          return e.session.createManager
-            ? e.session.createManager(h, callbacks)
-            : new RemoteSessionManager(h, callbacks);
+          return result.session.createManager
+            ? result.session.createManager(sessionOptions, callbacks_2)
+            : new RemoteSessionManager(sessionOptions, callbacks_2);
         },
       },
     };
@@ -303,16 +308,16 @@ class CloudPrintRun {
     this.giveUp.abort();
     this.input.done();
   }
-  armLimit(e) {
-    let t = setTimeout(abandonOnTimeout, e, this).unref();
-    return () => clearTimeout(t);
+  armLimit(limitMs) {
+    let timer = setTimeout(abandonOnTimeout, limitMs, this).unref();
+    return () => clearTimeout(timer);
   }
-  outcome(e) {
+  outcome(clientFailed) {
     return this.result !== undefined
       ? "result"
       : this.timedOut
         ? "timed_out"
-        : e
+        : clientFailed
           ? "client_failed"
           : this.sendFailure !== undefined
             ? "send_failed"
@@ -323,46 +328,46 @@ class CloudPrintRun {
                 : "no_result";
   }
   interruptedLine() {
-    let e = this.viewUrl ? `: ${this.viewUrl}` : "";
+    let urlNote = this.viewUrl ? `: ${this.viewUrl}` : "";
     if (this.result !== undefined)
-      return `Interrupted after the turn finished \u2014 the cloud session keeps its result${e}`;
+      return `Interrupted after the turn finished \u2014 the cloud session keeps its result${urlNote}`;
     if (this.ownMessageUuid !== null && !this.ownMessageEchoed)
-      return `Interrupted \u2014 the message was not yet delivered; the cloud session is unchanged${e}`;
+      return `Interrupted \u2014 the message was not yet delivered; the cloud session is unchanged${urlNote}`;
     switch (this.getUnfinishedCreateStage()) {
       case "unanswered_create":
         return "Interrupted while the cloud session was being created \u2014 it may still have been created";
       case "unopened_session":
-        return `Interrupted while the cloud session was being created \u2014 it may still be running${e}`;
+        return `Interrupted while the cloud session was being created \u2014 it may still be running${urlNote}`;
       case undefined:
-        return `Interrupted \u2014 the cloud session keeps running${e}`;
+        return `Interrupted \u2014 the cloud session keeps running${urlNote}`;
     }
   }
   getUnfinishedCreateStage() {
     if (this.ownMessageUuid !== null || this.cloudSessionId !== undefined) return;
     return this.viewUrl === undefined ? "unanswered_create" : "unopened_session";
   }
-  noResultLine(e, t) {
+  noResultLine(errorLine, startedAt) {
     let viewUrl = this.viewUrl;
     if (this.timedOut) {
-      let rounded = Math.round((Date.now() - t) / 1000);
+      let rounded = Math.round((Date.now() - startedAt) / 1000);
       if (this.getUnfinishedCreateStage() === "unopened_session")
         return `Error: gave up after ${rounded}s, while the cloud session was being created; it may still be running: ${viewUrl}`;
       return viewUrl
         ? `Error: no result from the cloud session after ${rounded}s; it is still running: ${viewUrl}`
         : `Error: gave up after ${rounded}s, before the cloud session was created`;
     }
-    if (e !== undefined) return `${e}${viewUrl ? ` (session: ${viewUrl})` : ""}`;
+    if (errorLine !== undefined) return `${errorLine}${viewUrl ? ` (session: ${viewUrl})` : ""}`;
     if (this.startFailed)
       return `Error: the cloud session's container failed to start${viewUrl ? ` (${viewUrl})` : ""}`;
-    let n = viewUrl ? ` (${viewUrl})` : "";
-    if (this.sendFailure !== undefined) return `Error: ${this.sendFailure}${n}`;
+    let urlNote = viewUrl ? ` (${viewUrl})` : "";
+    if (this.sendFailure !== undefined) return `Error: ${this.sendFailure}${urlNote}`;
     switch (this.ended?.kind) {
       case "archived":
-        return `Error: the cloud session was archived before it answered${n}`;
+        return `Error: the cloud session was archived before it answered${urlNote}`;
       case "start_failed":
-        return `Error: the cloud session failed to start: ${sanitizeCloudText(this.ended.reason)}${n}`;
+        return `Error: the cloud session failed to start: ${sanitizeCloudText(this.ended.reason)}${urlNote}`;
       case "worker_stopped":
-        return `Error: the cloud session stopped before it produced a result${n}`;
+        return `Error: the cloud session stopped before it produced a result${urlNote}`;
       case "needs_answer":
         return `Error: the session is waiting on a question this run cannot answer; open it to answer: ${viewUrl ?? "claude.ai/code"}`;
       case undefined:
@@ -371,145 +376,168 @@ class CloudPrintRun {
   }
 }
 //@ chunk-54xbtc53.js:24895-24938 placement
-function cloudPrintCreateGates(e, t, entry) {
-  return cloudCreateGates(e, t, entry, deviceLessGates(e, entry));
+function cloudPrintCreateGates(options, host, entry) {
+  return cloudCreateGates(options, host, entry, deviceLessGates(options, entry));
 }
 //@ chunk-54xbtc53.js:24938-25002 placement
-function deviceLessGates(e, t) {
+function deviceLessGates(options, host) {
   return {
     isDeviceLess: true,
     poolLaunchFolder: undefined,
   };
 }
 //@ chunk-54xbtc53.js:25002-25028 placement
-function abandonOnTimeout(e) {
-  e.abandon();
+function abandonOnTimeout(run) {
+  run.abandon();
 }
 //@ chunk-54xbtc53.js:25028-27303 placement
-async function runHeadlessCloudPrint(e, t, s, n = {}) {
-  let exit = n.exit ?? gracefulShutdown;
-  let stdout = n.stdout ?? writeToStdout;
-  let stderr = n.stderr ?? printCliError;
+async function runHeadlessCloudPrint(options, host, runOptions, seams = {}) {
+  let exit = seams.exit ?? gracefulShutdown;
+  let stdout = seams.stdout ?? writeToStdout;
+  let stderr = seams.stderr ?? printCliError;
   let note =
-    n.note ??
-    ((i) =>
-      void process.stderr.write(`${i}
+    seams.note ??
+    ((line) =>
+      void process.stderr.write(`${line}
 `));
   let now = Date.now();
-  let m = await (n.gates ?? cloudPrintCreateGates)(e, t, s.sessionId !== undefined ? "attach" : "create");
-  if (m.kind === "refused") {
-    await logFeatureBadAsync("remote_headless_session", m.code);
-    stderr(m.message);
-    await logCloudPrintEnded("refused", 1, s.outputFormat, now, m.code);
+  let gateResult = await (seams.gates ?? cloudPrintCreateGates)(
+    options,
+    host,
+    runOptions.sessionId !== undefined ? "attach" : "create",
+  );
+  if (gateResult.kind === "refused") {
+    await logFeatureBadAsync("remote_headless_session", gateResult.code);
+    stderr(gateResult.message);
+    await logCloudPrintEnded("refused", 1, runOptions.outputFormat, now, gateResult.code);
     await exit(1);
     return;
   }
-  let { policy } = m;
+  let { policy } = gateResult;
   policy.notices.forEach((notice) => note(notice));
-  setHasFormattedOutput(s.outputFormat === "json");
+  setHasFormattedOutput(runOptions.outputFormat === "json");
   setIsRemoteMode(true);
-  let o = new CloudPrintRun(
+  let run = new CloudPrintRun(
     note,
-    n.progressShown ?? process.stderr.isTTY === true,
-    n.readSession ??
-      ((i) =>
-        fetchSession(i.sessionId, {
-          accessToken: i.getAccessToken(),
+    seams.progressShown ?? process.stderr.isTTY === true,
+    seams.readSession ??
+      ((target) =>
+        fetchSession(target.sessionId, {
+          accessToken: target.getAccessToken(),
         })),
-    n.readLatestResults ?? ((i) => readLatestWorkerResults(i.sessionId, e.credentials)),
+    seams.readLatestResults ?? ((target) => readLatestWorkerResults(target.sessionId, options.credentials)),
   );
-  let b =
-    n.openSession ??
-    ((i) =>
-      authenticateThenOpen(e.credentials, (apiCreds) =>
-        i.sessionId !== undefined
+  let openSession =
+    seams.openSession ??
+    ((openArgs) =>
+      authenticateThenOpen(options.credentials, (apiCreds) =>
+        openArgs.sessionId !== undefined
           ? openBareAttachedSession(
               {
                 apiCreds,
-                credentials: e.credentials,
-                openingRequests: attachOpeningRequests(e.permissionModeCli, {
+                credentials: options.credentials,
+                openingRequests: attachOpeningRequests(options.permissionModeCli, {
                   serveOnly: false,
                 }),
               },
-              i.sessionId,
+              openArgs.sessionId,
             )
-          : openBareCloudSession(e, {
+          : openBareCloudSession(options, {
               apiCreds,
-              prompt: i.prompt,
-              forwarded: i.forwarded,
+              prompt: openArgs.prompt,
+              forwarded: openArgs.forwarded,
               repositoryAgent: policy.repositoryAgent,
               hostFillsDefault: false,
-              carriedMode: t.inheritPermissionMode,
-              signal: i.signal,
-              onSessionExists: i.onSessionExists,
-              storageV5: e.storageV5,
-              credentials: e.credentials,
+              carriedMode: host.inheritPermissionMode,
+              signal: openArgs.signal,
+              onSessionExists: openArgs.onSessionExists,
+              storageV5: options.storageV5,
+              credentials: options.credentials,
             }),
       ));
-  let R = runHeadlessCloudClient({
-    input: o.input,
+  let client = runHeadlessCloudClient({
+    input: run.input,
     builtInToolNames: registeredBuiltInToolNames,
     replayUserMessages: false,
     includePartialMessages: false,
     initializePolicy: "strict",
     ignoredOptions: policy.ignored,
-    createIO: (i, g) => new FrameCaptureIO(i, g, (I) => o.onHostFrame(I)),
+    createIO: (input, output) => new FrameCaptureIO(input, output, (frame) => run.onHostFrame(frame)),
     openSession: async () => {
-      let i = o.adopt(
-        await b({
-          prompt: s.prompt,
+      let adopted = run.adopt(
+        await openSession({
+          prompt: runOptions.prompt,
           forwarded: policy.forwarded,
-          signal: o.giveUp.signal,
+          signal: run.giveUp.signal,
           onSessionExists: (viewUrl) => {
-            o.viewUrl = viewUrl;
+            run.viewUrl = viewUrl;
           },
-          sessionId: s.sessionId,
+          sessionId: runOptions.sessionId,
         }),
       );
       return withNotApplied(
-        i,
+        adopted,
         notAppliedReport(
-          [...getUnconfirmedOptions(policy.forwarded, i), ...policy.notApplied],
+          [...getUnconfirmedOptions(policy.forwarded, adopted), ...policy.notApplied],
           null,
-          s.sessionId !== undefined ? "attach" : "create",
+          runOptions.sessionId !== undefined ? "attach" : "create",
           [],
         ),
       );
     },
   });
-  let F = s.maxWaitMs !== undefined && s.maxWaitMs > 0 ? o.armLimit(s.maxWaitMs) : undefined;
-  let w = false;
-  let U = registerCleanup(async () => {
-    if (w) return;
-    w = true;
-    note(o.interruptedLine());
-    await logCloudPrintEnded("interrupted", null, s.outputFormat, now, o.getUnfinishedCreateStage());
+  let disarmLimit =
+    runOptions.maxWaitMs !== undefined && runOptions.maxWaitMs > 0
+      ? run.armLimit(runOptions.maxWaitMs)
+      : undefined;
+  let isFinished = false;
+  let cleanup = registerCleanup(async () => {
+    if (isFinished) return;
+    isFinished = true;
+    note(run.interruptedLine());
+    await logCloudPrintEnded(
+      "interrupted",
+      null,
+      runOptions.outputFormat,
+      now,
+      run.getUnfinishedCreateStage(),
+    );
   });
-  o.send({
+  run.send({
     type: "control_request",
     request_id: CLOUD_PRINT_INITIALIZE,
     request: {
       subtype: "initialize",
     },
   });
-  if (s.sessionId !== undefined) o.sendOwnMessage(s.prompt);
-  let f = await R.done;
-  F?.();
-  if (w) return;
-  w = true;
-  U();
-  let v = o.outcome(f.exitCode !== 0);
-  if (o.result === undefined) {
-    stderr(o.noResultLine(f.exitCode !== 0 ? f.message : undefined, now));
-    await logCloudPrintEnded(v, 1, s.outputFormat, now, o.ended?.kind);
+  if (runOptions.sessionId !== undefined) run.sendOwnMessage(runOptions.prompt);
+  let final = await client.done;
+  disarmLimit?.();
+  if (isFinished) return;
+  isFinished = true;
+  cleanup();
+  let outcome = run.outcome(final.exitCode !== 0);
+  if (run.result === undefined) {
+    stderr(run.noResultLine(final.exitCode !== 0 ? final.message : undefined, now));
+    await logCloudPrintEnded(outcome, 1, runOptions.outputFormat, now, run.ended?.kind);
     await exit(1);
     return;
   }
-  if (f.message !== undefined && f.exitCode === 0) note(f.message);
-  writePrintResult(drainSdkEvents(o.result, o.cloudSessionId, o.viewUrl), s.outputFormat, stdout);
-  let k = o.result.is_error ? 1 : 0;
-  await logCloudPrintEnded(v, k, s.outputFormat, now, o.resultFromLookup ? "from_lookup" : undefined);
-  await exit(k);
+  if (final.message !== undefined && final.exitCode === 0) note(final.message);
+  writePrintResult(
+    drainSdkEvents(run.result, run.cloudSessionId, run.viewUrl),
+    runOptions.outputFormat,
+    stdout,
+  );
+  let exitCode = run.result.is_error ? 1 : 0;
+  await logCloudPrintEnded(
+    outcome,
+    exitCode,
+    runOptions.outputFormat,
+    now,
+    run.resultFromLookup ? "from_lookup" : undefined,
+  );
+  await exit(exitCode);
 }
 //@ chunk-54xbtc53.js:27303-27546 placement
 async function readLatestWorkerResults(sessionId, credentials) {
@@ -526,48 +554,48 @@ async function readLatestWorkerResults(sessionId, credentials) {
     .map((event) => event.payload);
 }
 //@ chunk-54xbtc53.js:27635-27683 placement
-function sanitizeCloudResult(e) {
-  return filterResultErrors(stripCloudSessionKey(identity(stripApiErrorOrigin(stripProtoKey(e)))));
+function sanitizeCloudResult(result) {
+  return filterResultErrors(stripCloudSessionKey(identity(stripApiErrorOrigin(stripProtoKey(result)))));
 }
 //@ chunk-54xbtc53.js:27683-27985 placement
 /**
  * 记录远程无头打印结束：上报结果、退出码、输出格式与等待时长，并按结果记成功或失败。
  */
-async function logCloudPrintEnded(e, t, outputFormat, n, r) {
+async function logCloudPrintEnded(outcome, exitCode, outputFormat, startedAt, detail) {
   await logEventAsync("tengu_remote_headless_print_ended", {
-    outcome: fromEnum(e),
-    ...(t !== null && {
-      exit_code: t,
+    outcome: fromEnum(outcome),
+    ...(exitCode !== null && {
+      exit_code: exitCode,
     }),
     output_format: fromEnum(outputFormat),
-    waited_ms: Date.now() - n,
-    ...(r !== undefined && {
-      detail: fromEnum(r),
+    waited_ms: Date.now() - startedAt,
+    ...(detail !== undefined && {
+      detail: fromEnum(detail),
     }),
   });
-  if (e === "result") await logFeatureOkAsync("remote_headless_print");
-  else if (e !== "interrupted") await logFeatureBadAsync("remote_headless_print", r ?? e);
+  if (outcome === "result") await logFeatureOkAsync("remote_headless_print");
+  else if (outcome !== "interrupted") await logFeatureBadAsync("remote_headless_print", detail ?? outcome);
 }
 //@ chunk-54xbtc53.js:28866-28880 placement
 var MAX_LISTED_MCP_SERVER_NAMES = 64;
 var MAX_MCP_SERVER_NAME_CHARS = 64;
 //@ chunk-54xbtc53.js:28880-29153 placement
-function getResultUserMessageUuids(e) {
-  let userMessageUuids = "user_message_uuids" in e ? e.user_message_uuids : undefined;
-  let s = (userMessageUuid) =>
+function getResultUserMessageUuids(result) {
+  let userMessageUuids = "user_message_uuids" in result ? result.user_message_uuids : undefined;
+  let isValid = (userMessageUuid) =>
     typeof userMessageUuid === "string" &&
     userMessageUuid.length > 0 &&
     userMessageUuid.length <= MAX_MCP_SERVER_NAME_CHARS;
-  let n = Array.isArray(userMessageUuids)
-    ? userMessageUuids.filter(s).slice(0, MAX_LISTED_MCP_SERVER_NAMES)
+  let uuids = Array.isArray(userMessageUuids)
+    ? userMessageUuids.filter(isValid).slice(0, MAX_LISTED_MCP_SERVER_NAMES)
     : [];
-  if (n.length > 0) return n;
-  let userMessageUuid = "user_message_uuid" in e ? e.user_message_uuid : undefined;
-  return s(userMessageUuid) ? [userMessageUuid] : undefined;
+  if (uuids.length > 0) return uuids;
+  let userMessageUuid = "user_message_uuid" in result ? result.user_message_uuid : undefined;
+  return isValid(userMessageUuid) ? [userMessageUuid] : undefined;
 }
 //@ chunk-54xbtc53.js:29153-29246 placement
 function firstErrorText(resultMessage) {
   let errors = resultMessage.errors;
   return Array.isArray(errors) && typeof errors[0] === "string" ? sanitizeCloudText(errors[0]) : undefined;
 }
-export { firstErrorText };
+export { firstErrorText, runHeadlessCloudPrint };

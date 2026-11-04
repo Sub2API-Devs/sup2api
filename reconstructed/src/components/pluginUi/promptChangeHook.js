@@ -14,6 +14,7 @@ import { uniq } from "../../utils/collections.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { tellOnce } from "../../plugins/functionHooks/ui/renderNotices.js";
 import { errorMessage } from "../../utils/errors.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-18hwfzwa.js:1807723-1807785 placement
 function hasPromptChangeHookingSite() {
@@ -24,128 +25,135 @@ function hasPromptChangeHookingSite() {
   }
 }
 //@ chunk-18hwfzwa.js:1807785-1807823 placement
-var jRt = Object.freeze({
-  kind: "clear",
+var clearedPromptOrigin; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:1807785", () => {
+  clearedPromptOrigin = Object.freeze({
+    kind: "clear",
+  });
 });
 //@ chunk-18hwfzwa.js:1807823-1807862 placement
-var qRt = Object.freeze({
-  kind: "engine",
+var enginePromptOrigin; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:1807823", () => {
+  enginePromptOrigin = Object.freeze({
+    kind: "engine",
+  });
 });
 //@ chunk-18hwfzwa.js:1807862-1807995 placement
-function promptChangeOrigin(h, x) {
-  let D = h.after === "" ? jRt : qRt;
-  let origin = h.origin;
-  if (origin === undefined || origin.kind === "composer") return D;
-  return origin.kind === "landing" ? (x ?? D) : origin;
+function promptChangeOrigin(change, fallbackOrigin) {
+  let defaultOrigin = change.after === "" ? clearedPromptOrigin : enginePromptOrigin;
+  let origin = change.origin;
+  if (origin === undefined || origin.kind === "composer") return defaultOrigin;
+  return origin.kind === "landing" ? (fallbackOrigin ?? defaultOrigin) : origin;
 }
 //@ chunk-18hwfzwa.js:1807995-1808005 placement
 var MAX_STALLED_PLUGINS = 8;
 //@ chunk-18hwfzwa.js:1808005-1808064 placement
-function raiseCorePromptChange(h, signal) {
+function raiseCorePromptChange(change, signal) {
   return NO_CORE_AT_CHAIN_BOTTOM("prompt.change", {
     signal,
-  })(h);
+  })(change);
 }
 //@ chunk-18hwfzwa.js:1808064-1808313 placement
-function warnPromptChangeStalled(h) {
-  let joined = uniq(h).toSorted().join(", ");
-  let D = `prompt.change: ${h.length} dispatches in a row for fills by ${joined}; not raised again until the box changes another way`;
-  logForDebugging(D, {
+function warnPromptChangeStalled(owners) {
+  let joined = uniq(owners).toSorted().join(", ");
+  let message = `prompt.change: ${owners.length} dispatches in a row for fills by ${joined}; not raised again until the box changes another way`;
+  logForDebugging(message, {
     level: "warn",
   });
   tellOnce({
     key: `prompt.change stalled ${joined}`,
     lead: "hooks",
-    text: D,
+    text: message,
   });
 }
 //@ chunk-18hwfzwa.js:1808313-1809318 placement
-function raisePromptChange(h, x = {}) {
-  let raise = x.raise ?? raiseCorePromptChange;
-  let later = x.later ?? queueMicrotask;
-  let isHooked = x.isHooked ?? hasPromptChangeHookingSite;
-  let ke = x.report ?? ((Dt) => logForDebugging(Dt));
-  let stall = x.stall ?? warnPromptChangeStalled;
+function raisePromptChange(readPrompt, options = {}) {
+  let raise = options.raise ?? raiseCorePromptChange;
+  let later = options.later ?? queueMicrotask;
+  let isHooked = options.isHooked ?? hasPromptChangeHookingSite;
+  let report = options.report ?? ((message) => logForDebugging(message));
+  let stall = options.stall ?? warnPromptChangeStalled;
   let abortController = new AbortController();
-  let He;
-  let We;
-  let ze;
-  let Xe;
-  let rt = [];
-  let kt = false;
-  let At = false;
-  let It = false;
-  function Ot(Dt) {
-    if (Dt.kind !== "plugin") return false;
-    let Lt = rt.length >= MAX_STALLED_PLUGINS;
-    if (Lt && !kt) {
-      kt = true;
-      stall(rt);
+  let pendingBefore;
+  let pendingAfter;
+  let pendingOrigin;
+  let lastOrigin;
+  let stalledPlugins = [];
+  let stalledWarned = false;
+  let inFlight = false;
+  let scheduled = false;
+  function noteStalledPlugin(origin) {
+    if (origin.kind !== "plugin") return false;
+    let isStalled = stalledPlugins.length >= MAX_STALLED_PLUGINS;
+    if (isStalled && !stalledWarned) {
+      stalledWarned = true;
+      stall(stalledPlugins);
     }
-    rt = Lt ? rt : [...rt, Dt.name];
-    return Lt;
+    stalledPlugins = isStalled ? stalledPlugins : [...stalledPlugins, origin.name];
+    return isStalled;
   }
-  function Et() {
-    It = false;
-    let Dt = ze;
-    if (At || abortController.signal.aborted || He === undefined || Dt === undefined) return;
-    let oo = h();
-    let Xt = We !== undefined && oo.text !== We;
-    let io = oo.text !== He || Xt;
-    He = undefined;
-    We = undefined;
-    ze = undefined;
-    if (!io || !isHooked() || Ot(Dt)) return;
-    At = true;
+  function run() {
+    scheduled = false;
+    let origin = pendingOrigin;
+    if (inFlight || abortController.signal.aborted || pendingBefore === undefined || origin === undefined)
+      return;
+    let next = readPrompt();
+    let afterChanged = pendingAfter !== undefined && next.text !== pendingAfter;
+    let needsRaise = next.text !== pendingBefore || afterChanged;
+    pendingBefore = undefined;
+    pendingAfter = undefined;
+    pendingOrigin = undefined;
+    if (!needsRaise || !isHooked() || noteStalledPlugin(origin)) return;
+    inFlight = true;
     new Promise((resolve) =>
       resolve(
         raise(
           {
-            ...oo,
-            origin: Dt,
+            ...next,
+            origin,
           },
           abortController.signal,
         ),
       ),
     )
       .catch((error) => {
-        ke(`prompt.change: ${errorMessage(error)}`);
+        report(`prompt.change: ${errorMessage(error)}`);
       })
       .finally(() => {
-        At = false;
+        inFlight = false;
       })
-      .then(Et);
+      .then(run);
   }
   return {
-    changed: (Dt) => {
-      let Lt = Dt.origin?.kind === "composer";
+    changed: (change) => {
+      let isComposer = change.origin?.kind === "composer";
       if (abortController.signal.aborted) return;
-      Xe = Lt ? undefined : promptChangeOrigin(Dt, Xe);
-      if (Xe?.kind !== "plugin") {
-        rt = [];
-        kt = false;
+      lastOrigin = isComposer ? undefined : promptChangeOrigin(change, lastOrigin);
+      if (lastOrigin?.kind !== "plugin") {
+        stalledPlugins = [];
+        stalledWarned = false;
       }
-      if (Xe === undefined) {
-        We = He === undefined ? undefined : Dt.after;
+      if (lastOrigin === undefined) {
+        pendingAfter = pendingBefore === undefined ? undefined : change.after;
         return;
       }
       if (!isHooked()) {
-        He = undefined;
-        We = undefined;
-        ze = undefined;
+        pendingBefore = undefined;
+        pendingAfter = undefined;
+        pendingOrigin = undefined;
         return;
       }
-      He ??= Dt.before;
-      ze = Xe;
-      if (!It && !At) {
-        It = true;
-        later(Et);
+      pendingBefore ??= change.before;
+      pendingOrigin = lastOrigin;
+      if (!scheduled && !inFlight) {
+        scheduled = true;
+        later(run);
       }
     },
     dispose: () => {
-      He = undefined;
-      We = undefined;
-      ze = undefined;
+      pendingBefore = undefined;
+      pendingAfter = undefined;
+      pendingOrigin = undefined;
       abortController.abort();
     },
   };

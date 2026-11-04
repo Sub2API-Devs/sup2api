@@ -5,7 +5,7 @@
  * pieces: chunk-vwj6ccer.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 import { require_xmlnames } from "./xmlnames.js";
 import { require_utils } from "./utils.js";
 import { require_attributes } from "./attributes.js";
@@ -22,7 +22,7 @@ import { require_NonDocumentTypeChildNode } from "./NonDocumentTypeChildNode.js"
 import { require_NamedNodeMap } from "./NamedNodeMap.js";
 
 //@ chunk-vwj6ccer.js:45299-62055 cjs-fingerprint
-var require_Element = x(function (cjsExports, cjsModule) {
+var require_Element = __commonJS(function (cjsExports, cjsModule) {
   cjsModule.exports = Element;
   var xml = require_xmlnames();
   var utils = require_utils();
@@ -426,8 +426,8 @@ var require_Element = x(function (cjsExports, cjsModule) {
         qname = String(qname);
         if (!xml.isValidName(qname)) utils.InvalidCharacterError();
         if (/[A-Z]/.test(qname) && this.isHTML) qname = utils.toASCIILowerCase(qname);
-        var a = this._attrsByQName[qname];
-        if (a === undefined) {
+        var attrNode = this._attrsByQName[qname];
+        if (attrNode === undefined) {
           if (force === undefined || force === true) {
             this._setAttribute(qname, "");
             return true;
@@ -690,14 +690,14 @@ var require_Element = x(function (cjsExports, cjsModule) {
     }),
     classList: {
       get: function () {
-        var e = this;
+        var elementRef = this;
         if (this._classList) return this._classList;
         var dtlist = new DOMTokenList(
           function () {
-            return e.className || "";
+            return elementRef.className || "";
           },
           function (v) {
-            e.className = v;
+            elementRef.className = v;
           },
         );
         this._classList = dtlist;
@@ -858,12 +858,12 @@ var require_Element = x(function (cjsExports, cjsModule) {
     AttributesArray.prototype[globalThis.Symbol.iterator] = function () {
       var i = 0;
       var n = this.length;
-      var r = this;
+      var arrayRef = this;
       return {
         next: function () {
           if (i < n)
             return {
-              value: r.item(i++),
+              value: arrayRef.item(i++),
             };
           return {
             done: true,

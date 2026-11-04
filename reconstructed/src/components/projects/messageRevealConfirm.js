@@ -9,12 +9,18 @@
  * attribution: placement 2
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, string, M, discriminatedUnion, literal } from "../../../vendor/zod/v4/classic/schemas.js";
+import {
+  objectSchema,
+  stringSchema,
+  booleanSchema,
+  discriminatedUnion,
+  literal,
+} from "../../../vendor/zod/v4/classic/schemas.js";
 import { withHideWhile } from "../dialogs/dialogRequests.js";
 
 //@ chunk-0q2rgdq2.js:306-423 placement
-function messageTitle(projectName, t) {
-  return t
+function messageTitle(projectName, isNewProject) {
+  return isNewProject
     ? `Create the project \u201C${projectName}\u201D and send this message?`
     : `Send this message to ${projectName}?`;
 }
@@ -24,18 +30,18 @@ function messageTitle(projectName, t) {
  */
 var MESSAGE_REVEAL_NOTICE = "Choose Send again to confirm.";
 var RevealConfirmPayloadSchema = DoctorLazy(() =>
-  u({
-    projectName: string(),
-    creates: M(),
-    message: string(),
+  objectSchema({
+    projectName: stringSchema(),
+    creates: booleanSchema(),
+    message: stringSchema(),
   }),
 );
 var RevealConfirmChoiceSchema = DoctorLazy(() =>
   discriminatedUnion("choice", [
-    u({
+    objectSchema({
       choice: literal("send"),
     }),
-    u({
+    objectSchema({
       choice: literal("cancel"),
     }),
   ]),
@@ -49,4 +55,4 @@ var continueInProjectsMessageDialog = withHideWhile({
   },
   hideWhile: [],
 });
-export { messageTitle, MESSAGE_REVEAL_NOTICE };
+export { messageTitle, MESSAGE_REVEAL_NOTICE, continueInProjectsMessageDialog };

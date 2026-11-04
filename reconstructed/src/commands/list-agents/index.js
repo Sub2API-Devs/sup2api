@@ -21,6 +21,7 @@ var listAgentsCommandDefinition = {
   description: "List subagents, teammates, and other Claude sessions you can message",
   supportsNonInteractive: true,
   isEnabled: () => isCrossSessionMessagingEnabled(),
-  load: () => import("./chunk-kq21a1r9.js"),
+  load: () => import("./list-agents.js"),
 };
 var listAgentsCommand = listAgentsCommandDefinition;
+export { listAgentsCommand };

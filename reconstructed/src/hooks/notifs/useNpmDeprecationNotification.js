@@ -8,7 +8,7 @@
  * pieces: chunk-18hwfzwa.js (2)
  * attribution: affinity 1, fingerprint 1
  */
-import { P } from "../../../vendor/react/cjs/react.production.js";
+import { useEffect } from "../../../vendor/react/cjs/react.production.js";
 import {
   takeAutomaticEnrollmentNotice,
   AUTOMATIC_ENROLLMENT_NOTICE,
@@ -24,7 +24,7 @@ var trustedDeviceEnrolledNotice = {
 };
 //@ chunk-18hwfzwa.js:1624076-1624350 fingerprint = _temp (0.302)
 function useTrustedDeviceEnrolledNotice(addNotification, transcript) {
-  P(() => {
+  useEffect(() => {
     function listener() {
       if (!takeAutomaticEnrollmentNotice()) return;
       transcript.apply({
@@ -46,7 +46,7 @@ function useTrustedDeviceEnrolledNotice(addNotification, transcript) {
         ],
         priority: "high",
         timeoutMs: 30000,
-        fold: (L, ee) => ee,
+        fold: (previousNotice, nextNotice) => nextNotice,
       });
     }
     listener();

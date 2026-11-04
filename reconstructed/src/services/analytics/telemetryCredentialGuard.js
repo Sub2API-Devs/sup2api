@@ -13,14 +13,15 @@ import { isGatewayUrlForBaseAndSync, currentBaseUrl } from "../gateway/constants
 import { isAnthropicApiKey } from "../../utils/anthropicHosts.js";
 import { isFirstPartyAnthropicHost } from "../../utils/model/providers.js";
 import { ALLOWED_OAUTH_BASE_URLS } from "../../constants/oauth.js";
-import { Re } from "../../../runtime/bun-runtime.js";
+import { __toESM } from "../../../runtime/bun-runtime.js";
 import { require_node_http_handler } from "../../../vendor/@smithy/node-http-handler/dist-cjs/index.js";
 import { getProviderState } from "../../utils/model/providerCaches.js";
 import { getBedrockInferenceProfiles_2 } from "../../utils/model/bedrock.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-aepeg2w5.js:129758-129791 placement
-function settingsSyncEndpointWithAuth(e) {
-  return credentialForEndpointHost(getSettingsSyncEndpoint(), e);
+function settingsSyncEndpointWithAuth(endpoint) {
+  return credentialForEndpointHost(getSettingsSyncEndpoint(), endpoint);
 }
 //@ chunk-aepeg2w5.js:129852-130094 placement
 /**
@@ -42,39 +43,45 @@ function guardTelemetryCredentials(authHeaders, endpoint) {
 /**
  * 对非 Anthropic 主机不发送 API key。
  */
-function apiKeyForHost(e) {
-  let n = currentBaseUrl();
-  let r = n === undefined || !getCurrentRepoHttpsUrl(n);
-  return !e || (r && !isAnthropicApiKey(e)) ? null : e;
+function apiKeyForHost(apiKey) {
+  let baseUrl = currentBaseUrl();
+  let notOurs = baseUrl === undefined || !getCurrentRepoHttpsUrl(baseUrl);
+  return !apiKey || (notOurs && !isAnthropicApiKey(apiKey)) ? null : apiKey;
 }
 //@ chunk-aepeg2w5.js:130169-130243 placement
-function credentialForEndpointHost(e, n) {
-  let r = isHttpsUrl(n) ? hostOfUrl(n) : undefined;
-  return e !== undefined && e === r && getCurrentRepoHttpsUrl(r);
+function credentialForEndpointHost(host, endpoint) {
+  let endpointHost = isHttpsUrl(endpoint) ? hostOfUrl(endpoint) : undefined;
+  return host !== undefined && host === endpointHost && getCurrentRepoHttpsUrl(endpointHost);
 }
 //@ chunk-aepeg2w5.js:130243-130316 placement
-function isHttpsUrl(e) {
+function isHttpsUrl(url) {
   try {
-    return new URL(e).protocol === "https:";
+    return new URL(url).protocol === "https:";
   } catch {
     return false;
   }
 }
 //@ chunk-aepeg2w5.js:130316-130385 placement
-function hostOfUrl(e) {
-  if (!e) return;
+function hostOfUrl(url) {
+  if (!url) return;
   try {
-    return new URL(e).host;
+    return new URL(url).host;
   } catch {
     return;
   }
 }
 //@ chunk-aepeg2w5.js:130385-130452 placement = getCurrentRepoHttpsUrl (0.803)
-function getCurrentRepoHttpsUrl(e) {
-  return isFirstPartyAnthropicHost(`https://${e}`) || ALLOWED_OAUTH_BASE_URLS.some((n) => hostOfUrl(n) === e);
+function getCurrentRepoHttpsUrl(host) {
+  return (
+    isFirstPartyAnthropicHost(`https://${host}`) ||
+    ALLOWED_OAUTH_BASE_URLS.some((url) => hostOfUrl(url) === host)
+  );
 }
 //@ chunk-aepeg2w5.js:130452-130470 placement
-var apiKeyForHostGuard = Re(require_node_http_handler(), 1);
+var apiKeyForHostGuard; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-aepeg2w5.js:130452", () => {
+  apiKeyForHostGuard = __toESM(require_node_http_handler(), 1);
+});
 //@ chunk-aepeg2w5.js:130470-130666 placement
 /**
  * 获取并缓存 Bedrock 推理配置。

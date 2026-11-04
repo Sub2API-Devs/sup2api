@@ -33,35 +33,35 @@ import { lastTextBlockText } from "../utils/historyFile.js";
 import { ULTRATHINK_KEYWORD } from "../utils/ultraplan/keyword.js";
 
 //@ chunk-ha3km179.js:8077-8257 placement
-function isTextOrJsonDeltaEvent(e) {
-  let n = e;
-  if (n?.type !== "stream_event") return false;
-  let event = n.event;
+function isTextOrJsonDeltaEvent(event) {
+  let streamEvent = event;
+  if (streamEvent?.type !== "stream_event") return false;
+  let event_2 = streamEvent.event;
   return (
-    event?.type === "content_block_delta" &&
-    (event.delta.type === "text_delta" || event.delta.type === "input_json_delta")
+    event_2?.type === "content_block_delta" &&
+    (event_2.delta.type === "text_delta" || event_2.delta.type === "input_json_delta")
   );
 }
 //@ chunk-ha3km179.js:8257-8330 placement
 /**
  * 记录快速路径失败
  */
-function logPlainDeltaFailure(e, error) {
+function logPlainDeltaFailure(reason, error) {
   try {
     logError(error);
-    logFeatureSad("headless_plain_delta_fast_path", e);
+    logFeatureSad("headless_plain_delta_fast_path", reason);
   } catch {}
 }
 //@ chunk-ha3km179.js:8330-8493 placement
-function guardGoalCheck(e, n, takePlainDelta) {
-  let s = false;
-  return (h) => {
-    if (s) return false;
+function guardGoalCheck(source, canTakePlainDelta, takePlainDelta) {
+  let failed = false;
+  return (event) => {
+    if (failed) return false;
     try {
-      return n() && takePlainDelta(h);
+      return canTakePlainDelta() && takePlainDelta(event);
     } catch (error) {
-      s = true;
-      logPlainDeltaFailure(e === "engine" ? "engine_check_threw" : "query_check_threw", error);
+      failed = true;
+      logPlainDeltaFailure(source === "engine" ? "engine_check_threw" : "query_check_threw", error);
       return false;
     }
   };
@@ -84,8 +84,8 @@ var IDLE_CHECKINS_PAUSED_BODY =
 /**
  * 主动任务通知
  */
-function isActiveTaskNotification(e) {
-  return e.mode === "task-notification" && isMainAgentCommand(e) && e.passive !== true;
+function isActiveTaskNotification(command) {
+  return command.mode === "task-notification" && isMainAgentCommand(command) && command.passive !== true;
 }
 //@ chunk-ha3km179.js:8837-8944 placement
 /**
@@ -106,32 +106,35 @@ function isGoalCheckinOn() {
 /**
  * 指数退避的检查间隔
  */
-function backoffCheckin(goalCheckinIntervalMs, n) {
-  return goalCheckinIntervalMs * 2 ** Math.min(n, MAX_CHECKIN_BACKOFF_DOUBLINGS);
+function backoffCheckin(goalCheckinIntervalMs, checkinCount) {
+  return goalCheckinIntervalMs * 2 ** Math.min(checkinCount, MAX_CHECKIN_BACKOFF_DOUBLINGS);
 }
 //@ chunk-ha3km179.js:9047-9995 placement
 /**
  * 生成目标检查消息（后台工作仍在运行/已停止时的说明）。
  */
-function goalCheckinMessage(condition, n, r) {
-  let max = Math.max(1, Math.round(n / 60000));
-  let h = wrapInGuillemets(condition);
-  if (r.length === 0)
+function goalCheckinMessage(condition, deferredMs, tasks) {
+  let max = Math.max(1, Math.round(deferredMs / 60000));
+  let quotedCondition = wrapInGuillemets(condition);
+  if (tasks.length === 0)
     return {
       summary: "Goal check-in: background work no longer running",
-      body: `${h} is still active. Its evaluation was deferred for ${max} min while background work ran, and that work is no longer running (it finished or was stopped without reporting back). Continue toward the goal.`,
+      body: `${quotedCondition} is still active. Its evaluation was deferred for ${max} min while background work ran, and that work is no longer running (it finished or was stopped without reporting back). Continue toward the goal.`,
     };
-  let mapped = r.map((S) => {
-    let M = S.type === "local_bash" && S.kind === "monitor";
-    let R = M ? "monitor" : taskKindLabel(S.type);
-    let T = S.type === "local_bash" && !M ? S.command : S.description;
+  let mapped = tasks.map((task) => {
+    let isMonitor = task.type === "local_bash" && task.kind === "monitor";
+    let kindLabel = isMonitor ? "monitor" : taskKindLabel(task.type);
+    let labelSource = task.type === "local_bash" && !isMonitor ? task.command : task.description;
     return escapeXml(
-      truncateWithCount(`- ${S.id} \xB7 ${R} \xB7 ${stripAndNormalize(T)}`, MAX_TASK_LINE_CHARS),
+      truncateWithCount(
+        `- ${task.id} \xB7 ${kindLabel} \xB7 ${stripAndNormalize(labelSource)}`,
+        MAX_TASK_LINE_CHARS,
+      ),
     );
   });
   return {
     summary: "Goal check-in: background work still running",
-    body: `${h} is still active, and evaluation has been deferred for ${max} min because background work is still running:
+    body: `${quotedCondition} is still active, and evaluation has been deferred for ${max} min because background work is still running:
 ${mapped.join(`
 `)}
 Check on their progress (e.g. read their output). If they are progressing, say so briefly and keep waiting; if they are stuck or no longer needed, fix or stop them and continue toward the goal.`,
@@ -141,107 +144,107 @@ Check on their progress (e.g. read their output). If they are progressing, say s
 /**
  * 附“检查已暂停”说明
  */
-function withPausedNote(e) {
+function withPausedNote(message) {
   return {
-    summary: e.summary + IDLE_CHECKINS_PAUSED_SUMMARY,
-    body: e.body + IDLE_CHECKINS_PAUSED_BODY,
+    summary: message.summary + IDLE_CHECKINS_PAUSED_SUMMARY,
+    body: message.body + IDLE_CHECKINS_PAUSED_BODY,
   };
 }
 //@ chunk-ha3km179.js:10054-10103 placement
 /**
  * 达到最大空闲检查次数
  */
-function hasMaxIdleCheckins(e) {
-  return (e.idleCheckinCount ?? 0) >= MAX_IDLE_CHECKINS;
+function hasMaxIdleCheckins(goal) {
+  return (goal.idleCheckinCount ?? 0) >= MAX_IDLE_CHECKINS;
 }
 //@ chunk-ha3km179.js:10103-10494 placement
 /**
  * 上报 tengu_goal_checkin_injected。
  */
-function reportGoalCheckin(e, n, r, s) {
-  let h = count(s, (y) => y.type === "local_bash");
+function reportGoalCheckin(trigger, deferredMs, goal, tasks) {
+  let shellCount = count(tasks, (task) => task.type === "local_bash");
   logEvent("tengu_goal_checkin_injected", {
-    trigger: fromEnum(e),
-    deferredMs: n,
-    activeShells: h,
-    activeAgents: s.length - h,
-    checkinCount: r.checkinCount ?? 0,
-    idleCheckinCount: r.idleCheckinCount ?? 0,
+    trigger: fromEnum(trigger),
+    deferredMs,
+    activeShells: shellCount,
+    activeAgents: tasks.length - shellCount,
+    checkinCount: goal.checkinCount ?? 0,
+    idleCheckinCount: goal.idleCheckinCount ?? 0,
   });
-  if (e === "idle_timer" && hasMaxIdleCheckins(r)) logFeatureSad("goal_checkin", "idle_cap_reached");
+  if (trigger === "idle_timer" && hasMaxIdleCheckins(goal)) logFeatureSad("goal_checkin", "idle_cap_reached");
   else logFeatureOk("goal_checkin");
-  logForDebugging(`[goal] check-in injected (${e}) after ${Math.round(n / 1000)}s deferred`);
+  logForDebugging(`[goal] check-in injected (${trigger}) after ${Math.round(deferredMs / 1000)}s deferred`);
 }
 //@ chunk-ha3km179.js:10494-10866 placement
 /**
  * 计算目标评估推迟状态（是否新一轮、检查次数）。
  */
-function nextGoalDeferral(e, n, r, goalCheckinIntervalMs) {
-  if (e.deferredSince === undefined)
+function nextGoalDeferral(goal, tasks, now, goalCheckinIntervalMs) {
+  if (goal.deferredSince === undefined)
     return {
-      deferredSince: r,
+      deferredSince: now,
       checkinCount: 0,
       isNewRun: true,
     };
-  let min = Math.min(...n.map((S) => S.startTime));
-  let y =
-    e.lastDeferralPassAt !== undefined &&
+  let min = Math.min(...tasks.map((task) => task.startTime));
+  let isNewRun =
+    goal.lastDeferralPassAt !== undefined &&
     Number.isFinite(min) &&
-    min > e.lastDeferralPassAt &&
-    r - e.lastDeferralPassAt > goalCheckinIntervalMs;
-  return y
+    min > goal.lastDeferralPassAt &&
+    now - goal.lastDeferralPassAt > goalCheckinIntervalMs;
+  return isNewRun
     ? {
-        deferredSince: r,
+        deferredSince: now,
         checkinCount: 0,
-        isNewRun: y,
+        isNewRun,
       }
     : {
-        deferredSince: e.deferredSince,
-        checkinCount: e.checkinCount ?? 0,
-        isNewRun: y,
+        deferredSince: goal.deferredSince,
+        checkinCount: goal.checkinCount ?? 0,
+        isNewRun,
       };
 }
 //@ chunk-ha3km179.js:10866-11291 placement
 /**
  * 决定是否需要注入目标检查文本，并更新目标状态。
  */
-function planGoalCheckin(activeGoal, visibleBackgroundTasks, r) {
+function planGoalCheckin(goal, tasks, now) {
   let goalCheckinIntervalMs = getGoalCheckinIntervalMs();
   if (goalCheckinIntervalMs === 0)
     return {
-      nextGoal: activeGoal,
+      nextGoal: goal,
       checkinText: undefined,
     };
-  let h = nextGoalDeferral(activeGoal, visibleBackgroundTasks, r, goalCheckinIntervalMs);
-  let y = r - h.deferredSince;
-  if (y < backoffCheckin(goalCheckinIntervalMs, h.checkinCount))
+  let deferral = nextGoalDeferral(goal, tasks, now, goalCheckinIntervalMs);
+  let elapsedMs = now - deferral.deferredSince;
+  if (elapsedMs < backoffCheckin(goalCheckinIntervalMs, deferral.checkinCount))
     return {
       nextGoal: {
-        ...activeGoal,
-        deferredSince: h.deferredSince,
-        checkinCount: h.checkinCount,
-        lastDeferralPassAt: r,
+        ...goal,
+        deferredSince: deferral.deferredSince,
+        checkinCount: deferral.checkinCount,
+        lastDeferralPassAt: now,
       },
       checkinText: undefined,
     };
-  let S = {
-    ...activeGoal,
-    deferredSince: r,
-    checkinCount: h.checkinCount + 1,
-    lastDeferralPassAt: r,
+  let nextGoal = {
+    ...goal,
+    deferredSince: now,
+    checkinCount: deferral.checkinCount + 1,
+    lastDeferralPassAt: now,
   };
-  let checkinText = goalCheckinMessage(activeGoal.condition, y, visibleBackgroundTasks).body;
-  reportGoalCheckin("turn_end", y, S, visibleBackgroundTasks);
+  let checkinText = goalCheckinMessage(goal.condition, elapsedMs, tasks).body;
+  reportGoalCheckin("turn_end", elapsedMs, nextGoal, tasks);
   return {
-    nextGoal: S,
+    nextGoal,
     checkinText,
   };
 }
 //@ chunk-ha3km179.js:11291-11410 placement
 function clearPendingGoalIdleCheckin(sessionScratch) {
-  let n = sessionScratch.pendingGoalIdleCheckin();
-  if (n !== undefined) {
-    clearTimeout(n);
+  let timer = sessionScratch.pendingGoalIdleCheckin();
+  if (timer !== undefined) {
+    clearTimeout(timer);
     sessionScratch.replacePendingGoalIdleCheckin(undefined);
   }
 }
@@ -249,29 +252,29 @@ function clearPendingGoalIdleCheckin(sessionScratch) {
 /**
  * 为当前目标安排下一次空闲检查：先清掉已排的定时器，检查间隔为 0 或目标未推迟时不排；否则按检查次数退避计算延迟（扣除已推迟时间，夹在最小值与上限间）后设置定时器。
  */
-function scheduleGoalIdleCheckin(e) {
-  clearPendingGoalIdleCheckin(e.sessionScratch);
+function scheduleGoalIdleCheckin(state) {
+  clearPendingGoalIdleCheckin(state.sessionScratch);
   let goalCheckinIntervalMs = getGoalCheckinIntervalMs();
-  if (goalCheckinIntervalMs === 0 || e.goal.deferredSince === undefined) return;
-  let r = backoffCheckin(goalCheckinIntervalMs, e.goal.checkinCount ?? 0);
-  let s = hasMaxIdleCheckins(e.goal) ? 0 : e.now - e.goal.deferredSince;
-  let min = Math.min(MAX_TIMER_DELAY_MS, Math.max(MIN_GOAL_CHECKIN_DELAY_MS, r - s));
-  armGoalIdleCheckinTimer(e, min);
+  if (goalCheckinIntervalMs === 0 || state.goal.deferredSince === undefined) return;
+  let intervalMs = backoffCheckin(goalCheckinIntervalMs, state.goal.checkinCount ?? 0);
+  let elapsedMs = hasMaxIdleCheckins(state.goal) ? 0 : state.now - state.goal.deferredSince;
+  let min = Math.min(MAX_TIMER_DELAY_MS, Math.max(MIN_GOAL_CHECKIN_DELAY_MS, intervalMs - elapsedMs));
+  armGoalIdleCheckinTimer(state, min);
 }
 //@ chunk-ha3km179.js:11622-11724 placement
-function armGoalIdleCheckinTimer(e, n) {
-  let timer = setTimeout(runGoalIdleCheckin, n, e);
+function armGoalIdleCheckinTimer(state, delayMs) {
+  let timer = setTimeout(runGoalIdleCheckin, delayMs, state);
   timer.unref();
-  e.sessionScratch.replacePendingGoalIdleCheckin(timer);
+  state.sessionScratch.replacePendingGoalIdleCheckin(timer);
 }
 //@ chunk-ha3km179.js:11724-12775 placement
 /**
  * 执行目标空闲检查：仍在推迟时投递检查消息。
  */
-function runGoalIdleCheckin(e) {
-  e.sessionScratch.replacePendingGoalIdleCheckin(undefined);
-  let { goal, getAppState, setAppState, getDeferringTasks, deliver, hasQueued } = e;
-  let M = goal;
+function runGoalIdleCheckin(state) {
+  state.sessionScratch.replacePendingGoalIdleCheckin(undefined);
+  let { goal, getAppState, setAppState, getDeferringTasks, deliver, hasQueued } = state;
+  let goalForRearm = goal;
   try {
     let activeGoal = getAppState().activeGoal;
     if (!isSameGoal(activeGoal, goal) || activeGoal.deferredSince === undefined) return;
@@ -280,77 +283,77 @@ function runGoalIdleCheckin(e) {
     if (hasMaxIdleCheckins(activeGoal)) {
       logForDebugging("[goal] idle check-in cap reached \u2014 tick re-armed only");
       scheduleGoalIdleCheckin({
-        ...e,
+        ...state,
         goal: activeGoal,
         now: Date.now(),
       });
       return;
     }
     if (getMainLoopBusy() || hasQueued(isGoalCheckinNotification)) {
-      armGoalIdleCheckinTimer(e, MIN_GOAL_CHECKIN_DELAY_MS);
+      armGoalIdleCheckinTimer(state, MIN_GOAL_CHECKIN_DELAY_MS);
       return;
     }
-    let deferringTasks = getDeferringTasks();
-    if (deferringTasks.length === 0 && hasQueued(isActiveTaskNotification)) {
-      armGoalIdleCheckinTimer(e, MIN_GOAL_CHECKIN_DELAY_MS);
+    let tasks = getDeferringTasks();
+    if (tasks.length === 0 && hasQueued(isActiveTaskNotification)) {
+      armGoalIdleCheckinTimer(state, MIN_GOAL_CHECKIN_DELAY_MS);
       return;
     }
     let now = Date.now();
-    let Q = nextGoalDeferral(activeGoal, deferringTasks, now, goalCheckinIntervalMs);
-    if (Q.isNewRun) {
-      let G = {
+    let deferral = nextGoalDeferral(activeGoal, tasks, now, goalCheckinIntervalMs);
+    if (deferral.isNewRun) {
+      let restartedGoal = {
         ...activeGoal,
         deferredSince: now,
         checkinCount: 0,
         lastDeferralPassAt: now,
       };
-      setAppState((ee) =>
-        ee.activeGoal !== activeGoal
-          ? ee
+      setAppState((appState) =>
+        appState.activeGoal !== activeGoal
+          ? appState
           : {
-              ...ee,
-              activeGoal: G,
+              ...appState,
+              activeGoal: restartedGoal,
             },
       );
-      M = G;
+      goalForRearm = restartedGoal;
       scheduleGoalIdleCheckin({
-        ...e,
-        goal: G,
+        ...state,
+        goal: restartedGoal,
         now,
       });
       return;
     }
-    let D = now - Q.deferredSince;
-    let L = {
+    let elapsedMs = now - deferral.deferredSince;
+    let updatedGoal = {
       ...activeGoal,
       deferredSince: now,
-      checkinCount: Q.checkinCount + 1,
+      checkinCount: deferral.checkinCount + 1,
       lastDeferralPassAt: now,
       idleCheckinCount: (activeGoal.idleCheckinCount ?? 0) + 1,
     };
-    setAppState((G) =>
-      G.activeGoal !== activeGoal
-        ? G
+    setAppState((appStateForGoal) =>
+      appStateForGoal.activeGoal !== activeGoal
+        ? appStateForGoal
         : {
-            ...G,
-            activeGoal: L,
+            ...appStateForGoal,
+            activeGoal: updatedGoal,
           },
     );
-    M = L;
-    let z = goalCheckinMessage(activeGoal.condition, D, deferringTasks);
-    deliver(hasMaxIdleCheckins(L) ? withPausedNote(z) : z);
-    reportGoalCheckin("idle_timer", D, L, deferringTasks);
+    goalForRearm = updatedGoal;
+    let checkin = goalCheckinMessage(activeGoal.condition, elapsedMs, tasks);
+    deliver(hasMaxIdleCheckins(updatedGoal) ? withPausedNote(checkin) : checkin);
+    reportGoalCheckin("idle_timer", elapsedMs, updatedGoal, tasks);
     scheduleGoalIdleCheckin({
-      ...e,
-      goal: L,
+      ...state,
+      goal: updatedGoal,
       now,
     });
   } catch (error) {
     logError(error);
     try {
       scheduleGoalIdleCheckin({
-        ...e,
-        goal: M,
+        ...state,
+        goal: goalForRearm,
         now: Date.now(),
       });
     } catch (error) {
@@ -365,9 +368,9 @@ function runGoalIdleCheckin(e) {
 }
 //@ chunk-ha3km179.js:12775-12888 placement
 function clearPendingGoalReprompt(sessionScratch) {
-  let n = sessionScratch.pendingGoalReprompt();
-  if (n !== undefined) {
-    clearTimeout(n);
+  let timer = sessionScratch.pendingGoalReprompt();
+  if (timer !== undefined) {
+    clearTimeout(timer);
     sessionScratch.replacePendingGoalReprompt(undefined);
   }
 }
@@ -383,36 +386,36 @@ function clearGoalRepromptState(sessionScratch) {
 /**
  * 清并重排目标重提示
  */
-function scheduleGoalReprompt(e, n) {
-  clearPendingGoalReprompt(e.sessionScratch);
-  setGoalRepromptTimer(e, n);
+function scheduleGoalReprompt(state, delayMs) {
+  clearPendingGoalReprompt(state.sessionScratch);
+  setGoalRepromptTimer(state, delayMs);
 }
 //@ chunk-ha3km179.js:12997-13096 placement
 /**
  * 设定重提示定时器
  */
-function setGoalRepromptTimer(e, n) {
-  let timer = setTimeout(runGoalReprompt, n, e);
+function setGoalRepromptTimer(state, delayMs) {
+  let timer = setTimeout(runGoalReprompt, delayMs, state);
   timer.unref();
-  e.sessionScratch.replacePendingGoalReprompt(timer);
+  state.sessionScratch.replacePendingGoalReprompt(timer);
 }
 //@ chunk-ha3km179.js:13096-13656 placement
 /**
  * 目标未达成时投递"继续"提示（有排队消息时延后）。
  */
-function runGoalReprompt(e) {
-  let { sessionScratch, getAppState } = e;
+function runGoalReprompt(state) {
+  let { sessionScratch, getAppState } = state;
   sessionScratch.replacePendingGoalReprompt(undefined);
   try {
     let activeGoal = getAppState().activeGoal;
-    if (!isSameGoal(activeGoal, e.goal) || !isGoalCheckinOn()) return;
-    if (getMainLoopBusy() || e.hasQueued(isGoalCheckinNotification)) {
-      setGoalRepromptTimer(e, MIN_GOAL_CHECKIN_DELAY_MS);
+    if (!isSameGoal(activeGoal, state.goal) || !isGoalCheckinOn()) return;
+    if (getMainLoopBusy() || state.hasQueued(isGoalCheckinNotification)) {
+      setGoalRepromptTimer(state, MIN_GOAL_CHECKIN_DELAY_MS);
       return;
     }
-    e.deliver({
+    state.deliver({
       summary: "Goal check-in: continuing after the last turn ended early",
-      body: `${wrapInGuillemets(activeGoal.condition)} is still active. The last turn ended before the goal could be evaluated: ${e.cause}. Continue toward the goal.`,
+      body: `${wrapInGuillemets(activeGoal.condition)} is still active. The last turn ended before the goal could be evaluated: ${state.cause}. Continue toward the goal.`,
     });
     logFeatureOk("goal_interruption");
     logForDebugging("[goal] re-prompt delivered after an unevaluated turn");
@@ -429,12 +432,12 @@ function runGoalReprompt(e) {
 function resetGoalIdleCheckinCount(setAppState, sessionScratch) {
   try {
     clearGoalRepromptState(sessionScratch);
-    setAppState((r) => {
-      if (r.activeGoal?.idleCheckinCount === undefined) return r;
-      let { idleCheckinCount, ...h } = r.activeGoal;
+    setAppState((appState) => {
+      if (appState.activeGoal?.idleCheckinCount === undefined) return appState;
+      let { idleCheckinCount, ...goalWithoutIdleCount } = appState.activeGoal;
       return {
-        ...r,
-        activeGoal: h,
+        ...appState,
+        activeGoal: goalWithoutIdleCount,
       };
     });
   } catch (error) {
@@ -445,15 +448,15 @@ function resetGoalIdleCheckinCount(setAppState, sessionScratch) {
 /**
  * 去掉可忽略字符
  */
-function stripAndNormalize(e) {
-  return foldLookalikeChars(stripIgnorables(e));
+function stripAndNormalize(text) {
+  return foldLookalikeChars(stripIgnorables(text));
 }
 //@ chunk-ha3km179.js:13861-13907 placement
 /**
  * 用 «» 包裹
  */
-function wrapInGuillemets(e) {
-  return `${GOAL_CHECK_IN_PREFIX}${escapeXml(stripAndNormalize(e))}\xBB`;
+function wrapInGuillemets(condition) {
+  return `${GOAL_CHECK_IN_PREFIX}${escapeXml(stripAndNormalize(condition))}\xBB`;
 }
 //@ chunk-ha3km179.js:13907-13988 placement
 /**
@@ -465,10 +468,10 @@ function isSameGoal(activeGoal, goal) {
   );
 }
 //@ chunk-ha3km179.js:13988-14102 placement
-function notifyAutoReactHumanTurn(e) {
+function notifyAutoReactHumanTurn(turnInfo) {
   try {
     getTaskRunState().autoReactHumanTurnObserver?.({
-      ownWords: e?.ownWords === true,
+      ownWords: turnInfo?.ownWords === true,
     });
   } catch (error) {
     if (isAbortError(error)) return;
@@ -477,12 +480,12 @@ function notifyAutoReactHumanTurn(e) {
 }
 //@ chunk-ha3km179.js:14102-14249 placement
 function hasUltrathinkKeyword({ composerEnter, preExpansion, localStdinOrigin, input }) {
-  let h = isFrozenMarker(composerEnter)
+  let keywordText = isFrozenMarker(composerEnter)
     ? preExpansion
     : localStdinOrigin
       ? plainTextFromReminder(lastTextBlockText(input) ?? "")
       : undefined;
-  return h !== undefined && ULTRATHINK_KEYWORD(h).length > 0;
+  return keywordText !== undefined && ULTRATHINK_KEYWORD(keywordText).length > 0;
 }
 //@ chunk-ha3km179.js:14249-14540 placement
 function hasFrustrationLanguage(userPromptText) {

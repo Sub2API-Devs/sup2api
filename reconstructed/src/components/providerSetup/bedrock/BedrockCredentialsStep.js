@@ -8,8 +8,8 @@
  * pieces: chunk-sx9xc5ee.js (6)
  * attribution: placement 6
  */
-import { init_react_production, y } from "../../../../vendor/react/cjs/react.production.js";
-import { w } from "../../../../vendor/react/compiler-runtime.js";
+import { init_react_production, useState } from "../../../../vendor/react/cjs/react.production.js";
+import { useMemoCache } from "../../../../vendor/react/compiler-runtime.js";
 import { useWizard } from "../../wizard/useWizard.js";
 import { MEMO_CACHE_SENTINEL } from "../../../../runtime/bun-runtime.js";
 import {
@@ -20,9 +20,13 @@ import { AgentsList } from "../../agents/AgentsList.js";
 import { Text, Box } from "../../../ink/components/Text.js";
 import { WizardDialogLayout } from "../../wizard/WizardDialogLayout.js";
 import { ModelSelector } from "../../agents/ModelSelector.js";
+import { deferInit } from "../../../../runtime/deferred-init.js";
 
 //@ chunk-sx9xc5ee.js:1426-1430 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-sx9xc5ee.js:1426", () => {
+  init_react_production();
+});
 //@ chunk-sx9xc5ee.js:1430-1769 placement
 /**
  * Bedrock 访问密钥表单字段：Access key ID、Secret access key（掩码）、可选 Session token（仅 STS 临时凭证需要）。
@@ -52,14 +56,14 @@ var ACCESS_KEY_FIELDS = [
 ];
 //@ chunk-sx9xc5ee.js:1769-2744 placement
 function BedrockAccessKeysStep() {
-  let $ = w(16);
+  let $ = useMemoCache(16);
   let { goBack, goNext, updateWizardData, wizardData, title } = useWizard();
   const accessKeyId = wizardData.accessKeyId ?? "";
   const secretAccessKey = wizardData.secretAccessKey ?? "";
   const sessionToken = wizardData.sessionToken ?? "";
-  let B;
+  let initialCredentials;
   if ($[0] !== accessKeyId || $[1] !== secretAccessKey || $[2] !== sessionToken) {
-    B = {
+    initialCredentials = {
       accessKeyId,
       secretAccessKey,
       sessionToken,
@@ -67,62 +71,62 @@ function BedrockAccessKeysStep() {
     $[0] = accessKeyId;
     $[1] = secretAccessKey;
     $[2] = sessionToken;
-    $[3] = B;
-  } else B = $[3];
-  let [p, A] = y(B);
-  let E;
+    $[3] = initialCredentials;
+  } else initialCredentials = $[3];
+  let [credentials, setCredentials] = useState(initialCredentials);
+  let onSubmit;
   if (
     $[4] !== goNext ||
     $[5] !== updateWizardData ||
-    $[6] !== p.accessKeyId ||
-    $[7] !== p.secretAccessKey ||
-    $[8] !== p.sessionToken
+    $[6] !== credentials.accessKeyId ||
+    $[7] !== credentials.secretAccessKey ||
+    $[8] !== credentials.sessionToken
   ) {
-    E = () => {
+    onSubmit = () => {
       updateWizardData({
-        accessKeyId: p.accessKeyId.trim(),
-        secretAccessKey: p.secretAccessKey.trim(),
-        sessionToken: p.sessionToken.trim() || undefined,
+        accessKeyId: credentials.accessKeyId.trim(),
+        secretAccessKey: credentials.secretAccessKey.trim(),
+        sessionToken: credentials.sessionToken.trim() || undefined,
       });
       goNext();
     };
     $[4] = goNext;
     $[5] = updateWizardData;
-    $[6] = p.accessKeyId;
-    $[7] = p.secretAccessKey;
-    $[8] = p.sessionToken;
-    $[9] = E;
-  } else E = $[9];
-  let onSubmit = E;
+    $[6] = credentials.accessKeyId;
+    $[7] = credentials.secretAccessKey;
+    $[8] = credentials.sessionToken;
+    $[9] = onSubmit;
+  } else onSubmit = $[9];
+  let onSubmit_2 = onSubmit;
   const title_2 = title ?? "Set up AWS Bedrock";
   let onChange;
   if ($[10] === MEMO_CACHE_SENTINEL) {
-    onChange = (v, T) =>
-      A((_) => ({
-        ..._,
-        [v]: T,
+    onChange = (field, value) =>
+      setCredentials((previous) => ({
+        ...previous,
+        [field]: value,
       }));
     $[10] = onChange;
   } else onChange = $[10];
-  let D;
-  if ($[11] !== goBack || $[12] !== onSubmit || $[13] !== title_2 || $[14] !== p) {
-    D = jsxProd_default(AgentsList, {
+  let agentsListElement;
+  if ($[11] !== goBack || $[12] !== onSubmit_2 || $[13] !== title_2 || $[14] !== credentials) {
+    agentsListElement = jsxProd_default(AgentsList, {
       title: title_2,
       subtitle: "AWS access keys",
       fields: ACCESS_KEY_FIELDS,
-      values: p,
+      values: credentials,
       onChange,
-      onSubmit,
+      onSubmit: onSubmit_2,
       onCancel: goBack,
       submitLabel: "Continue",
     });
     $[11] = goBack;
-    $[12] = onSubmit;
+    $[12] = onSubmit_2;
     $[13] = title_2;
-    $[14] = p;
-    $[15] = D;
-  } else D = $[15];
-  return D;
+    $[14] = credentials;
+    $[15] = agentsListElement;
+  } else agentsListElement = $[15];
+  return agentsListElement;
 }
 //@ chunk-sx9xc5ee.js:2744-2842 placement
 var BEDROCK_STEPS = {
@@ -137,11 +141,11 @@ var BEDROCK_STEPS = {
 };
 //@ chunk-sx9xc5ee.js:2842-3817 placement
 function BedrockAuthMethodStep() {
-  let $ = w(9);
+  let $ = useMemoCache(9);
   let { goBack, goToStep, updateWizardData } = useWizard();
-  let t;
+  let authMethodOptions;
   if ($[0] === MEMO_CACHE_SENTINEL) {
-    t = [
+    authMethodOptions = [
       {
         label: "AWS profile (SSO or named profile)",
         value: "profile",
@@ -159,66 +163,69 @@ function BedrockAuthMethodStep() {
         value: "environment",
       },
     ];
-    $[0] = t;
-  } else t = $[0];
-  let options = t;
-  let g;
+    $[0] = authMethodOptions;
+  } else authMethodOptions = $[0];
+  let options = authMethodOptions;
+  let stepByMethod;
   if ($[1] === MEMO_CACHE_SENTINEL) {
-    g = {
+    stepByMethod = {
       profile: BEDROCK_STEPS.PROFILE,
       bearer: BEDROCK_STEPS.BEARER,
       accessKey: BEDROCK_STEPS.ACCESS_KEY_ID,
       environment: BEDROCK_STEPS.REGION,
     };
-    $[1] = g;
-  } else g = $[1];
-  let h = g;
-  let u;
+    $[1] = stepByMethod;
+  } else stepByMethod = $[1];
+  let stepMap = stepByMethod;
+  let onChange;
   if ($[2] !== goToStep || $[3] !== updateWizardData) {
-    u = (B) => {
-      let p = B;
+    onChange = (authMethod) => {
+      let method = authMethod;
       updateWizardData({
-        authMethod: p,
+        authMethod: method,
       });
-      goToStep(h[p]);
+      goToStep(stepMap[method]);
     };
     $[2] = goToStep;
     $[3] = updateWizardData;
-    $[4] = u;
-  } else u = $[4];
-  let onChange = u;
-  let E;
+    $[4] = onChange;
+  } else onChange = $[4];
+  let onChange_2 = onChange;
+  let textElement;
   if ($[5] === MEMO_CACHE_SENTINEL) {
-    E = jsxProd_default(Text, {
+    textElement = jsxProd_default(Text, {
       dimColor: true,
       children:
         "Claude Code uses the standard AWS credential chain. Pick the method you already use with the AWS CLI.",
     });
-    $[5] = E;
-  } else E = $[5];
-  let k;
-  if ($[6] !== goBack || $[7] !== onChange) {
-    k = jsxProd_default(WizardDialogLayout, {
+    $[5] = textElement;
+  } else textElement = $[5];
+  let wizardDialogLayoutElement;
+  if ($[6] !== goBack || $[7] !== onChange_2) {
+    wizardDialogLayoutElement = jsxProd_default(WizardDialogLayout, {
       subtitle: "How do you authenticate to AWS?",
       children: jsxProd_default_2(Box, {
         flexDirection: "column",
         gap: 1,
         children: [
-          E,
+          textElement,
           jsxProd_default(ModelSelector, {
             options,
-            onChange,
+            onChange: onChange_2,
             onCancel: goBack,
           }),
         ],
       }),
     });
     $[6] = goBack;
-    $[7] = onChange;
-    $[8] = k;
-  } else k = $[8];
-  return k;
+    $[7] = onChange_2;
+    $[8] = wizardDialogLayoutElement;
+  } else wizardDialogLayoutElement = $[8];
+  return wizardDialogLayoutElement;
 }
 //@ chunk-sx9xc5ee.js:3817-3821 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-sx9xc5ee.js:3817", () => {
+  init_react_production();
+});
 export { BEDROCK_STEPS, BedrockAuthMethodStep, BedrockAccessKeysStep };

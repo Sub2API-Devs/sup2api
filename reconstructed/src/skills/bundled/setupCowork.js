@@ -27,18 +27,18 @@ function registerCoworkSetupSkill() {
     menuDescription: "Guided setup \u2014 pick a role, install a plugin, try a skill, connect tools",
     userInvocable: true,
     isEnabled: () => isRemoteCowork() || isCcsRemoteCowork(),
-    async getPromptForCommand(o) {
-      let { SETUP_COWORK_PROMPT } = await import("./chunk-1eqzjhyp.js");
-      let t = [SETUP_COWORK_PROMPT.trimStart()];
-      let trimmed = o?.trim();
+    async getPromptForCommand(args) {
+      let { SETUP_COWORK_PROMPT } = await import("../../commands/setup-cowork/SETUP_COWORK_PROMPT.lazy.js");
+      let sections = [SETUP_COWORK_PROMPT.trimStart()];
+      let trimmed = args?.trim();
       if (trimmed)
-        t.push(`## User Request
+        sections.push(`## User Request
 
 ${trimmed}`);
       return [
         {
           type: "text",
-          text: t.join(`
+          text: sections.join(`
 
 `),
         },
@@ -46,3 +46,4 @@ ${trimmed}`);
     },
   });
 }
+export { registerCoworkSetupSkill };

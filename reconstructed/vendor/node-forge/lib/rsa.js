@@ -5,7 +5,7 @@
  * pieces: chunk-fq0cr76a.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x, importMetaRequire } from "../../../runtime/bun-runtime.js";
+import { __commonJS, importMetaRequire } from "../../../runtime/bun-runtime.js";
 import { require_forge } from "./forge.js";
 import { require_asn1 } from "./asn1.js";
 import { require_jsbn } from "./jsbn.js";
@@ -16,7 +16,7 @@ import { require_random } from "./random.js";
 import { require_util } from "./util.js";
 
 //@ chunk-fq0cr76a.js:120062-139209 cjs-fingerprint
-var require_rsa = x(function (cjsExports, cjsModule) {
+var require_rsa = __commonJS(function (cjsExports, cjsModule) {
   var forge = require_forge();
   require_asn1();
   require_jsbn();
@@ -354,7 +354,7 @@ var require_rsa = x(function (cjsExports, cjsModule) {
     } else throw Error("Invalid key generation algorithm: " + algorithm);
     return rval;
   };
-  pki.rsa.stepKeyPairGenerationState = function (state, n) {
+  pki.rsa.stepKeyPairGenerationState = function (state, budget) {
     if (!("algorithm" in state)) state.algorithm = "PRIMEINC";
     var THIRTY = new BigInteger(null);
     THIRTY.fromInt(30);
@@ -365,7 +365,7 @@ var require_rsa = x(function (cjsExports, cjsModule) {
     var t1 = +new Date();
     var t2;
     var total = 0;
-    while (state.keys === null && (n <= 0 || total < n)) {
+    while (state.keys === null && (budget <= 0 || total < budget)) {
       if (state.state === 0) {
         var bits = state.p === null ? state.pBits : state.qBits;
         var bits1 = bits - 1;

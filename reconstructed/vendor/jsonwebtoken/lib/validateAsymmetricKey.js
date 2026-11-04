@@ -5,12 +5,12 @@
  * pieces: chunk-mrx6y2r5.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../runtime/bun-runtime.js";
 import { require_asymmetricKeyDetailsSupported } from "./asymmetricKeyDetailsSupported.js";
 import { require_rsaPssKeyDetailsSupported } from "./rsaPssKeyDetailsSupported.js";
 
 //@ chunk-mrx6y2r5.js:4951-5992 cjs-fingerprint
-var require_validateAsymmetricKey = x(function (cjsExports, cjsModule) {
+var require_validateAsymmetricKey = __commonJS(function (cjsExports, cjsModule) {
   var ASYMMETRIC_KEY_DETAILS_SUPPORTED = require_asymmetricKeyDetailsSupported();
   var RSA_PSS_KEY_DETAILS_SUPPORTED = require_rsaPssKeyDetailsSupported();
   var allowedAlgorithmsForKeys = {

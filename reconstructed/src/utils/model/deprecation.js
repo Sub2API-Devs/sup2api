@@ -114,22 +114,23 @@ function getDeprecatedModelInfo(modelId) {
   });
   let provider = getAPIProvider();
   let trimmed = strip1mSuffix(modelId.trim().toLowerCase()).trim();
-  let h = usesFirstPartyModelIds() && isLegacyOpusFirstParty(trimmed) && isLegacyModelRemapEnabled();
-  let y = Object.hasOwn(DEPRECATED_MODELS, canonicalName) ? DEPRECATED_MODELS[canonicalName] : undefined;
-  if (y) {
-    let retirementDate = y.retirementDates[provider];
-    if (retirementDate || h) {
-      let w = {
+  let remapEnabled =
+    usesFirstPartyModelIds() && isLegacyOpusFirstParty(trimmed) && isLegacyModelRemapEnabled();
+  let entry = Object.hasOwn(DEPRECATED_MODELS, canonicalName) ? DEPRECATED_MODELS[canonicalName] : undefined;
+  if (entry) {
+    let retirementDate = entry.retirementDates[provider];
+    if (retirementDate || remapEnabled) {
+      let copy = {
         kind: "none",
       };
-      if (h && y.remappedTo)
-        w = {
+      if (remapEnabled && entry.remappedTo)
+        copy = {
           kind: "remap",
-          remappedTo: y.remappedTo,
+          remappedTo: entry.remappedTo,
         };
       else if (retirementDate) {
         let date = new Date(retirementDate);
-        w = {
+        copy = {
           kind: "retirement",
           retirementDate,
           isPast: !Number.isNaN(date.getTime()) && date < new Date(),
@@ -137,8 +138,8 @@ function getDeprecatedModelInfo(modelId) {
       }
       return {
         isDeprecated: true,
-        modelName: y.modelName,
-        copy: w,
+        modelName: entry.modelName,
+        copy,
       };
     }
   }
@@ -150,25 +151,25 @@ function getDeprecatedModelInfo(modelId) {
 /**
  * 是否在弃用表中且对当前提供商生效。
  */
-function isModelDeprecated(firstParty) {
-  return getDeprecatedModelInfo(firstParty).isDeprecated;
+function isModelDeprecated(modelId) {
+  return getDeprecatedModelInfo(modelId).isDeprecated;
 }
 //@ chunk-aepeg2w5.js:406568-406777 layout
 /**
  * 旧 Opus 将被重映射，或弃用且已重映射/已过退役日期。
  */
-function isModelRemappedOrRetired(e) {
+function isModelRemappedOrRetired(modelId) {
   if (
     usesFirstPartyModelIds() &&
     isLegacyOpusFirstParty(
-      getCanonicalName(strip1mSuffix(e), {
+      getCanonicalName(strip1mSuffix(modelId), {
         identity: true,
       }),
     ) &&
     isLegacyModelRemapEnabled()
   )
     return true;
-  let deprecatedModelInfo = getDeprecatedModelInfo(e);
+  let deprecatedModelInfo = getDeprecatedModelInfo(modelId);
   if (!deprecatedModelInfo.isDeprecated) return false;
   switch (deprecatedModelInfo.copy.kind) {
     case "remap":
@@ -183,9 +184,9 @@ function isModelRemappedOrRetired(e) {
 /**
  * 弃用通知 {message, action}（"now runs as …" 或 "retired/retires …"）。
  */
-function getDeprecationNotice(e) {
-  if (!e) return null;
-  let deprecatedModelInfo = getDeprecatedModelInfo(e);
+function getDeprecationNotice(modelId) {
+  if (!modelId) return null;
+  let deprecatedModelInfo = getDeprecatedModelInfo(modelId);
   if (!deprecatedModelInfo.isDeprecated) return null;
   switch (deprecatedModelInfo.copy.kind) {
     case "remap":
@@ -212,8 +213,8 @@ function getDeprecationStatusLine(modelId) {
   if (!deprecatedModelInfo.isDeprecated || deprecatedModelInfo.copy.kind !== "remap")
     return getModelDeprecationWarning(modelId);
   let defaultOpusModel = getDefaultOpusModel();
-  let s = getMarketingNameForModel(defaultOpusModel) ?? defaultOpusModel;
-  return `\u26A0 ${deprecatedModelInfo.modelName.replace(/^Claude /, "")} remaps to ${s}. CLAUDE_CODE_DISABLE_LEGACY_MODEL_REMAP=1 opts out`;
+  let targetName = getMarketingNameForModel(defaultOpusModel) ?? defaultOpusModel;
+  return `\u26A0 ${deprecatedModelInfo.modelName.replace(/^Claude /, "")} remaps to ${targetName}. CLAUDE_CODE_DISABLE_LEGACY_MODEL_REMAP=1 opts out`;
 }
 //@ chunk-aepeg2w5.js:407383-407872 fingerprint = getModelDeprecationWarning (0.531)
 /**
@@ -226,12 +227,12 @@ function getModelDeprecationWarning(modelId) {
   switch (info.copy.kind) {
     case "remap": {
       let defaultOpusModel = getDefaultOpusModel();
-      let s = getMarketingNameForModel(defaultOpusModel) ?? defaultOpusModel;
-      return `\u26A0 ${modelId.trim()} is automatically remapped to ${s} (${info.copy.remappedTo}). Set CLAUDE_CODE_DISABLE_LEGACY_MODEL_REMAP=1 to keep the requested model.`;
+      let targetName = getMarketingNameForModel(defaultOpusModel) ?? defaultOpusModel;
+      return `\u26A0 ${modelId.trim()} is automatically remapped to ${targetName} (${info.copy.remappedTo}). Set CLAUDE_CODE_DISABLE_LEGACY_MODEL_REMAP=1 to keep the requested model.`;
     }
     case "retirement": {
-      let r = info.copy.isPast ? "was retired on" : "will be retired on";
-      return `\u26A0 ${info.modelName} ${r} ${info.copy.retirementDate}. Consider switching to a newer model.`;
+      let verb = info.copy.isPast ? "was retired on" : "will be retired on";
+      return `\u26A0 ${info.modelName} ${verb} ${info.copy.retirementDate}. Consider switching to a newer model.`;
     }
     case "none":
       return null;
@@ -239,8 +240,8 @@ function getModelDeprecationWarning(modelId) {
 }
 export {
   isModelRemappedOrRetired,
-  getDeprecationNotice,
   getModelDeprecationWarning,
+  getDeprecationNotice,
   getDeprecationStatusLine,
   isModelDeprecated,
 };

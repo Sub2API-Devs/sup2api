@@ -70,12 +70,12 @@ var DO_NOT_INTERRUPT_HINT = `Until this has ended, don't start Claude Code, don'
 /**
  * Windows 沙箱卸载（claude sandbox uninstall）：停止服务、删除账户与目录并检查残留。
  */
-async function uninstallWindowsSandbox(n) {
-  let e = rgRunner();
-  let o;
+async function uninstallWindowsSandbox(onNotice) {
+  let runner = rgRunner();
+  let status;
   try {
-    o = await checkWindowsSandboxStatusAsync({
-      srtWin: e,
+    status = await checkWindowsSandboxStatusAsync({
+      srtWin: runner,
     });
   } catch (error) {
     logFeatureBad("sandbox_windows_uninstall", "status_probe_failed");
@@ -86,220 +86,237 @@ async function uninstallWindowsSandbox(n) {
       filtersChecked: false,
     };
   }
-  let a = o.wfp.state !== "cannot-read";
-  let l = describeSandboxLeftovers(o);
-  let h = describeGrantLeftovers(o);
-  if (l.length === 0 && h.length === 0) {
+  let filtersReadable = status.wfp.state !== "cannot-read";
+  let sandboxLeftovers = describeSandboxLeftovers(status);
+  let grantLeftovers = describeGrantLeftovers(status);
+  if (sandboxLeftovers.length === 0 && grantLeftovers.length === 0) {
     logFeatureOk("sandbox_windows_uninstall", {
       removed: false,
     });
     return {
       status: "not_installed",
-      message: `${a ? "The Windows sandbox isn't installed on this PC, so nothing was removed." : "No sandbox account, group or stored password is on this PC, so nothing was removed. Claude Code can't read the network filters without administrator rights, so it can't say whether any are left."} ${LEFT_OVER_ACCOUNT_NOTE}`,
+      message: `${filtersReadable ? "The Windows sandbox isn't installed on this PC, so nothing was removed." : "No sandbox account, group or stored password is on this PC, so nothing was removed. Claude Code can't read the network filters without administrator rights, so it can't say whether any are left."} ${LEFT_OVER_ACCOUNT_NOTE}`,
       leftBehind: [],
-      filtersChecked: a,
+      filtersChecked: filtersReadable,
     };
   }
-  let r = l.length > 0;
-  let p = (status, A) => ({
+  let hasSandbox = sandboxLeftovers.length > 0;
+  let refuse = (status, reason) => ({
     status,
-    message: `Nothing was removed, because ${A}`,
+    message: `Nothing was removed, because ${reason}`,
     leftBehind: [],
-    filtersChecked: a,
+    filtersChecked: filtersReadable,
   });
-  let k = listRunningClaudeProcesses();
-  if (k === undefined) {
+  let runningProcesses = listRunningClaudeProcesses();
+  if (runningProcesses === undefined) {
     logFeatureBad("sandbox_windows_uninstall", "programs_unreadable");
-    return p(
+    return refuse(
       "error",
       `Claude Code couldn't list the programs that are running on this PC, so it can't tell whether sandboxed commands are still running. You can ${UNINSTALL_TEXTS}.`,
     );
   }
-  if (k.length > 0) {
+  if (runningProcesses.length > 0) {
     logFeatureSad("sandbox_windows_uninstall", "programs_open", {
-      count: k.length,
+      count: runningProcesses.length,
     });
-    return p(
+    return refuse(
       "in_use",
-      `Claude is still running on this PC: ${formatFailureDetails(k)}.${r ? " A sandboxed command that is still running would keep running with no network block." : ""} ${CLOSE_PROGRAMS_HINT} Then, from a terminal outside Claude Code, ${UNINSTALL_TEXTS}.`,
+      `Claude is still running on this PC: ${formatFailureDetails(runningProcesses)}.${hasSandbox ? " A sandboxed command that is still running would keep running with no network block." : ""} ${CLOSE_PROGRAMS_HINT} Then, from a terminal outside Claude Code, ${UNINSTALL_TEXTS}.`,
     );
   }
-  await n?.(
-    r
-      ? `Removing the Windows sandbox. Windows may ask for administrator approval. No Claude program is running. Anything else that still runs as the sandbox account loses its network block and the sandbox's write blocks on system folders, and Claude Code can't check for that.${h.length > 0 ? ` Then the removal also takes the sandbox's entries off your files, for which it ${PROFILE_SCAN_DURATION_HINT}` : ""} ${DO_NOT_INTERRUPT_HINT}`
+  await onNotice?.(
+    hasSandbox
+      ? `Removing the Windows sandbox. Windows may ask for administrator approval. No Claude program is running. Anything else that still runs as the sandbox account loses its network block and the sandbox's write blocks on system folders, and Claude Code can't check for that.${grantLeftovers.length > 0 ? ` Then the removal also takes the sandbox's entries off your files, for which it ${PROFILE_SCAN_DURATION_HINT}` : ""} ${DO_NOT_INTERRUPT_HINT}`
       : `Taking off the permission entries that the Windows sandbox may have left on your files. This needs no administrator approval. It ${PROFILE_SCAN_DURATION_HINT} ${DO_NOT_INTERRUPT_HINT}`,
   ).catch((error) => {
     logForDebugging(`[sandbox] uninstall: notice not printed: ${errorMessage(error)}`);
   });
-  let R = UNINSTALL_TIMEOUT_MINUTES * 60000;
-  let re = Date.now() + R;
-  let w = [];
+  let timeoutMs = UNINSTALL_TIMEOUT_MINUTES * 60000;
+  let deadline = Date.now() + timeoutMs;
+  let errors = [];
   try {
-    if (!r) {
+    if (!hasSandbox) {
       await forgetWindowsProfileReadAsync({
-        srtWin: e,
-        timeoutMs: R,
+        srtWin: runner,
+        timeoutMs,
       }).catch((error) => {
         if (!(error instanceof WindowsSandboxError) || error.code !== "profile_forget_failed") throw error;
-        w.push(error);
+        errors.push(error);
       });
-      await forgetSandboxAcls(e, re - Date.now());
+      await forgetSandboxAcls(runner, deadline - Date.now());
     } else if (
       uninstallWindowsSandbox_2({
-        srtWin: e,
-        timeoutMs: R,
+        srtWin: runner,
+        timeoutMs,
       }).cancelled
     ) {
       logFeatureSad("sandbox_windows_uninstall", "uac_cancelled");
-      return p(
+      return refuse(
         "cancelled",
-        `Windows' prompt for administrator approval was cancelled. To remove the sandbox, ${UNINSTALL_TEXTS} and approve the prompt. If you don't have administrator rights, ask your administrator to run claude sandbox uninstall from a copy of Claude Code that they installed themselves.${h.length > 0 ? ` Their run can't reach the sandbox's entries on your files. Afterwards, run claude sandbox uninstall yourself, ${NO_ADMIN_APPROVAL_HINT}.` : ""}`,
+        `Windows' prompt for administrator approval was cancelled. To remove the sandbox, ${UNINSTALL_TEXTS} and approve the prompt. If you don't have administrator rights, ask your administrator to run claude sandbox uninstall from a copy of Claude Code that they installed themselves.${grantLeftovers.length > 0 ? ` Their run can't reach the sandbox's entries on your files. Afterwards, run claude sandbox uninstall yourself, ${NO_ADMIN_APPROVAL_HINT}.` : ""}`,
       );
     }
   } catch (error) {
-    w.push(error);
+    errors.push(error);
   }
-  for (let s of w)
-    logForDebugging(`[sandbox] uninstall: ${errorMessage(s)}`, {
+  for (let error of errors)
+    logForDebugging(`[sandbox] uninstall: ${errorMessage(error)}`, {
       level: "error",
     });
-  let c = w[0];
-  let code = c instanceof WindowsSandboxError ? c.code : undefined;
+  let firstError = errors[0];
+  let code = firstError instanceof WindowsSandboxError ? firstError.code : undefined;
   if (code === "spawn_failed") {
     logFeatureBad("sandbox_windows_uninstall", "spawn_failed");
-    return p("error", `the removal couldn't start. You can ${UNINSTALL_TEXTS}. ${formatUninstallDetails(c)}`);
+    return refuse(
+      "error",
+      `the removal couldn't start. You can ${UNINSTALL_TEXTS}. ${formatUninstallDetails(firstError)}`,
+    );
   }
   if (code === "kept_grants_in_use") {
     logFeatureSad("sandbox_windows_uninstall", "session_on_record");
-    return p(
+    return refuse(
       "in_use",
-      `the sandbox's record for your account shows a sandboxed session or command still running. The process IDs are in the details.${r ? " Removing the sandbox now would leave it running with no network block." : ""} End those processes in Task Manager, or restart the PC. Then ${UNINSTALL_TEXTS}. ${formatUninstallDetails(c)}`,
+      `the sandbox's record for your account shows a sandboxed session or command still running. The process IDs are in the details.${hasSandbox ? " Removing the sandbox now would leave it running with no network block." : ""} End those processes in Task Manager, or restart the PC. Then ${UNINSTALL_TEXTS}. ${formatUninstallDetails(firstError)}`,
     );
   }
   if (code === "profile_operation_in_progress") {
     logFeatureSad("sandbox_windows_uninstall", "profile_busy");
-    return p(
+    return refuse(
       "in_use",
       `another set-up or removal of the sandbox is changing its entries on your user profile right now. On a large profile that can take many minutes. Let it finish without restarting the PC. Then ${UNINSTALL_TEXTS}.`,
     );
   }
-  let F = formatSids(o.user);
-  let H =
-    F &&
-    ` Keep a note of the IDs of the sandbox account and group${F}: permission entries left on files show them, and a later run may no longer know them.`;
-  if (w.some((s) => s instanceof WindowsSandboxError && s.code === "srt_win_timeout")) {
+  let sidNote = formatSids(status.user);
+  let idsToKeepNote =
+    sidNote &&
+    ` Keep a note of the IDs of the sandbox account and group${sidNote}: permission entries left on files show them, and a later run may no longer know them.`;
+  if (errors.some((error) => error instanceof WindowsSandboxError && error.code === "srt_win_timeout")) {
     logFeatureSad("sandbox_windows_uninstall", "helper_timeout");
     return {
       status: "error",
-      message: r
-        ? `The removal didn't end within ${UNINSTALL_TIMEOUT_MINUTES} minutes. It may still be running, be waiting at Windows' prompt, or have been stopped part-way. When it has ended, ${UNINSTALL_TEXTS} to finish the removal.${H}`
+      message: hasSandbox
+        ? `The removal didn't end within ${UNINSTALL_TIMEOUT_MINUTES} minutes. It may still be running, be waiting at Windows' prompt, or have been stopped part-way. When it has ended, ${UNINSTALL_TEXTS} to finish the removal.${idsToKeepNote}`
         : `Taking the sandbox's entries off your files didn't end within ${UNINSTALL_TIMEOUT_MINUTES} minutes, and was stopped part-way. To go on, ${UNINSTALL_TEXTS}.`,
       leftBehind: [],
       filtersChecked: false,
     };
   }
-  let S;
+  let afterStatus;
   try {
-    S = await checkWindowsSandboxStatusAsync({
-      srtWin: e,
+    afterStatus = await checkWindowsSandboxStatusAsync({
+      srtWin: runner,
     });
   } catch (error) {
-    if (c === undefined) logFeatureSad("sandbox_windows_uninstall", "read_back_failed");
+    if (firstError === undefined) logFeatureSad("sandbox_windows_uninstall", "read_back_failed");
     else logFeatureBad("sandbox_windows_uninstall", "helper_stopped");
     return {
       status: "error",
-      message: `The removal ${c === undefined ? "ran" : "stopped early"}, and what is left couldn't be read afterwards. To check, ${UNINSTALL_TEXTS}.${H} ${(w.length > 0 ? w : [error]).map(formatUninstallDetails).join(" ")}`,
+      message: `The removal ${firstError === undefined ? "ran" : "stopped early"}, and what is left couldn't be read afterwards. To check, ${UNINSTALL_TEXTS}.${idsToKeepNote} ${(errors.length > 0 ? errors : [error]).map(formatUninstallDetails).join(" ")}`,
       leftBehind: [],
       filtersChecked: false,
     };
   }
-  let b = r ? listRunningClaudeProcesses() : [];
-  let T =
-    b === undefined
+  let startedMeanwhile = hasSandbox ? listRunningClaudeProcesses() : [];
+  let startedNote =
+    startedMeanwhile === undefined
       ? "Claude Code couldn't look again for Claude programs that started while the removal ran."
-      : b.length > 0
-        ? `Started while the removal ran, and still running: ${formatFailureDetails(b)}. Sandboxed commands that ${plural(b.length, "it", "they")} started have no network block until they end. Close ${plural(b.length, "it", "them")}.`
+      : startedMeanwhile.length > 0
+        ? `Started while the removal ran, and still running: ${formatFailureDetails(startedMeanwhile)}. Sandboxed commands that ${plural(startedMeanwhile.length, "it", "they")} started have no network block until they end. Close ${plural(startedMeanwhile.length, "it", "them")}.`
         : undefined;
-  let W = {
-    leftBehind: await windowsSandboxLeftovers(o.user, S.user),
-    filtersChecked: S.wfp.state !== "cannot-read",
+  let leftoverInfo = {
+    leftBehind: await windowsSandboxLeftovers(status.user, afterStatus.user),
+    filtersChecked: afterStatus.wfp.state !== "cannot-read",
   };
-  let C = describeSandboxLeftovers(S);
-  let D = describeGrantLeftovers(S);
-  let N = describeSandboxEntryLocations(D.filter((s) => s.certain));
-  let filtered = D.filter((s) => !s.certain);
-  let K = [...(T === undefined ? [] : [T]), ...w.map(formatUninstallDetails)];
-  let G = W.filtersChecked
+  let sandboxLeftoverList = describeSandboxLeftovers(afterStatus);
+  let grantLeftoverList = describeGrantLeftovers(afterStatus);
+  let certainLocations = describeSandboxEntryLocations(grantLeftoverList.filter((entry) => entry.certain));
+  let entries = grantLeftoverList.filter((entry) => !entry.certain);
+  let extraDetails = [
+    ...(startedNote === undefined ? [] : [startedNote]),
+    ...errors.map(formatUninstallDetails),
+  ];
+  let filtersNote = leftoverInfo.filtersChecked
     ? ""
     : " Claude Code can't read the network filters without administrator rights. The removal reported that they are gone.";
-  if (C.length === 0 && D.length > 0) {
-    let s = !r || c === undefined || errorMessage(c).includes("(exit 23)");
-    if (s) logFeatureSad("sandbox_windows_uninstall", "kept_entries_left");
+  if (sandboxLeftoverList.length === 0 && grantLeftoverList.length > 0) {
+    let keptEntriesOnly =
+      !hasSandbox || firstError === undefined || errorMessage(firstError).includes("(exit 23)");
+    if (keptEntriesOnly) logFeatureSad("sandbox_windows_uninstall", "kept_entries_left");
     else logFeatureBad("sandbox_windows_uninstall", "helper_stopped");
     return {
-      ...W,
+      ...leftoverInfo,
       status: "partial",
       message: [
-        ...(r ? [s ? `The Windows sandbox is removed from this PC.${G}` : "The removal stopped early."] : []),
-        ...(N.length > 0
+        ...(hasSandbox
           ? [
-              `These are still on your files: ${formatListConjunction(N)}. To finish, ${UNINSTALL_TEXTS}${r ? `, ${NO_ADMIN_APPROVAL_HINT}` : ""}.`,
+              keptEntriesOnly
+                ? `The Windows sandbox is removed from this PC.${filtersNote}`
+                : "The removal stopped early.",
             ]
           : []),
-        ...(filtered.length > 0
+        ...(certainLocations.length > 0
           ? [
-              `Claude Code can't tell whether ${formatListConjunction(describeSandboxEntryLocations(filtered))} are all gone.`,
+              `These are still on your files: ${formatListConjunction(certainLocations)}. To finish, ${UNINSTALL_TEXTS}${hasSandbox ? `, ${NO_ADMIN_APPROVAL_HINT}` : ""}.`,
+            ]
+          : []),
+        ...(entries.length > 0
+          ? [
+              `Claude Code can't tell whether ${formatListConjunction(describeSandboxEntryLocations(entries))} are all gone.`,
               ...new Set(
-                filtered.flatMap((A) => (A.reason === undefined ? [] : [formatUninstallDetails(A.reason)])),
+                entries.flatMap((entry) =>
+                  entry.reason === undefined ? [] : [formatUninstallDetails(entry.reason)],
+                ),
               ),
             ]
           : []),
-        ...(r ? [UNCHECKED_SANDBOX_PROCESSES_NOTE] : []),
-        ...K,
+        ...(hasSandbox ? [UNCHECKED_SANDBOX_PROCESSES_NOTE] : []),
+        ...extraDetails,
       ].join(" "),
     };
   }
-  if (c !== undefined || C.length > 0) {
-    if (c === undefined) logFeatureSad("sandbox_windows_uninstall", "partly_removed");
+  if (firstError !== undefined || sandboxLeftoverList.length > 0) {
+    if (firstError === undefined) logFeatureSad("sandbox_windows_uninstall", "partly_removed");
     else logFeatureBad("sandbox_windows_uninstall", "helper_stopped");
     return {
-      ...W,
+      ...leftoverInfo,
       status: "partial",
       message: [
-        ...(r || C.length > 0
+        ...(hasSandbox || sandboxLeftoverList.length > 0
           ? [
-              c === undefined
+              firstError === undefined
                 ? "The Windows sandbox is only partly removed."
                 : "The removal stopped early, so the Windows sandbox may be only partly removed.",
-              ...(C.length > 0 ? [`Still here: ${formatListConjunction([...C, ...N])}.`] : []),
+              ...(sandboxLeftoverList.length > 0
+                ? [`Still here: ${formatListConjunction([...sandboxLeftoverList, ...certainLocations])}.`]
+                : []),
               `The network filters come off first, so don't count on the network block. To finish, ${UNINSTALL_TEXTS}.`,
             ]
           : [
               "Taking the sandbox's entries off your files reported a problem, but the sandbox's record now lists none there.",
             ]),
-        ...K,
+        ...extraDetails,
       ].join(" "),
     };
   }
-  let filtered_2 = h.filter((s) => s.certain);
+  let entries_2 = grantLeftovers.filter((entry) => entry.certain);
   logFeatureOk("sandbox_windows_uninstall", {
     removed: true,
-    startedMeanwhile: r ? (b?.length ?? -1) : -1,
+    startedMeanwhile: hasSandbox ? (startedMeanwhile?.length ?? -1) : -1,
   });
   return {
-    ...W,
+    ...leftoverInfo,
     status: "ok",
-    message: r
+    message: hasSandbox
       ? [
-          `Removed the Windows sandbox from this PC: ${formatListConjunction([...l, ...describeSandboxEntryLocations(filtered_2)])}.${G}`,
-          ...(T === undefined ? [] : [T]),
+          `Removed the Windows sandbox from this PC: ${formatListConjunction([...sandboxLeftovers, ...describeSandboxEntryLocations(entries_2)])}.${filtersNote}`,
+          ...(startedNote === undefined ? [] : [startedNote]),
           UNCHECKED_SANDBOX_PROCESSES_NOTE,
           "To set the sandbox up again, run `claude sandbox install`, or /sandbox install inside Claude Code.",
         ].join(`
 
 `)
-      : filtered_2.length > 0
-        ? `Took the Windows sandbox's entries off ${formatListConjunction(filtered_2.map((s) => s.where))}.`
+      : entries_2.length > 0
+        ? `Took the Windows sandbox's entries off ${formatListConjunction(entries_2.map((entry) => entry.where))}.`
         : "No entries of the Windows sandbox are recorded on your files now.",
   };
 }
@@ -336,18 +353,18 @@ async function forgetSandboxAcls({ exe, prependArgs }, timeoutMs) {
  */
 function listRunningClaudeProcesses() {
   let lower = basename(rgRunner().exe).toLowerCase();
-  let e;
+  let processes;
   try {
-    e = windowsProcessTree();
+    processes = windowsProcessTree();
   } catch (error) {
     logForDebugging(`[sandbox] uninstall: snapshot threw: ${errorMessage(error)}`, {
       level: "error",
     });
     return;
   }
-  return e
-    ?.filter(({ pid, name: a }) => {
-      let lower_2 = a.toLowerCase();
+  return processes
+    ?.filter(({ pid, name: processName }) => {
+      let lower_2 = processName.toLowerCase();
       return (
         pid !== process.pid &&
         (lower_2 === lower ||
@@ -357,7 +374,7 @@ function listRunningClaudeProcesses() {
           lower_2 === "srt-win.exe")
       );
     })
-    .map(({ pid, name: a }) => `${diffLineToPlainText(a)} (process ${pid})`);
+    .map(({ pid, name: processName }) => `${diffLineToPlainText(processName)} (process ${pid})`);
 }
 //@ chunk-v21qppnj.js:14873-15111 placement
 function describeSandboxLeftovers({ user, wfp }) {
@@ -366,7 +383,7 @@ function describeSandboxLeftovers({ user, wfp }) {
     user.groupExists && "the sandbox-runtime-users group",
     user.credPresent && "the stored password",
     (wfp.state === "installed" || wfp.filters > 0) && "the network filters",
-  ].filter((o) => o !== false);
+  ].filter((leftover) => leftover !== false);
 }
 //@ chunk-v21qppnj.js:15111-15348 placement
 function describeGrantLeftovers({ user }) {
@@ -392,26 +409,28 @@ function describeGrantLeftovers({ user }) {
   );
 }
 //@ chunk-v21qppnj.js:15348-15438 placement
-function describeSandboxEntryLocations(n) {
-  return n.length > 0 ? [`the sandbox's entries on ${formatListConjunction(n.map((e) => e.where))}`] : [];
+function describeSandboxEntryLocations(entries) {
+  return entries.length > 0
+    ? [`the sandbox's entries on ${formatListConjunction(entries.map((entry) => entry.where))}`]
+    : [];
 }
 //@ chunk-v21qppnj.js:15438-15551 placement
 function formatSids({ sid, groupSid }) {
-  let filtered = [sid, groupSid].filter((a) => a !== undefined);
+  let filtered = [sid, groupSid].filter((sid) => sid !== undefined);
   return filtered.length > 0 ? ` (${filtered.join(" and ")})` : "";
 }
 //@ chunk-v21qppnj.js:15551-15629 placement
-function formatListConjunction(n) {
+function formatListConjunction(items) {
   return new Intl.ListFormat("en", {
     type: "conjunction",
-  }).format(n);
+  }).format(items);
 }
 //@ chunk-v21qppnj.js:15629-15728 placement = formatFailureDetails (0.777)
-function formatFailureDetails(n) {
-  let remaining = n.length - MAX_LISTED_REMAINING;
+function formatFailureDetails(items) {
+  let remaining = items.length - MAX_LISTED_REMAINING;
   return remaining > 0
-    ? `${n.slice(0, MAX_LISTED_REMAINING).join(", ")} and ${remaining} more`
-    : n.join(", ");
+    ? `${items.slice(0, MAX_LISTED_REMAINING).join(", ")} and ${remaining} more`
+    : items.join(", ");
 }
 //@ chunk-v21qppnj.js:15728-16246 placement
 /**
@@ -432,22 +451,24 @@ function formatUninstallDetails(error) {
 }
 //@ chunk-v21qppnj.js:16246-18771 placement
 async function windowsSandboxLeftovers(user, user_2) {
-  let o = join(env.ProgramData || env.PROGRAMDATA || "C:\\ProgramData", "sandbox-runtime");
-  let a =
+  let sandboxRuntimeDir = join(env.ProgramData || env.PROGRAMDATA || "C:\\ProgramData", "sandbox-runtime");
+  let profileDirs =
     user.provisioned && !user_2.provisioned
-      ? SANDBOX_USER_NAMES.map((r) => join(dirname(systemRootDir()), "Users", r))
+      ? SANDBOX_USER_NAMES.map((userName) => join(dirname(systemRootDir()), "Users", userName))
       : [];
-  let [l, ...h] = await Promise.all([join(o, "ca", "ca.json"), ...a].map(pathPresence));
+  let [caJsonPresence, ...presences] = await Promise.all(
+    [join(sandboxRuntimeDir, "ca", "ca.json"), ...profileDirs].map(pathPresence),
+  );
   return [
     `Permission entries for the sandbox account and group${formatSids(user)}. Once its account or group is deleted, Windows shows an entry as a bare ID, and it matches no account. For each Windows user who used the sandbox, the entries can be on that user's Claude Code program files, older versions included, on their home folder and the folders between it and each project, and on files and folders that the sandbox opened or protected. For the account that ran this command, start with ${diffLineToPlainText(process.execPath)} and ${diffLineToPlainText(homedir())}.`,
     `For every other Windows user who used the sandbox, the entries that let it read their user profile and write to their project folders. The removal takes these off only for the account that ran this command. Each such project folder also has three entries that don't bear the sandbox's IDs: for OWNER RIGHTS, for that user, and for the folder's own capability ID. To take theirs off, each of those users runs claude sandbox uninstall under their own account, ${NO_ADMIN_APPROVAL_HINT}.`,
     "If a drive was disconnected when the sandbox was removed, the sandbox's entries on it stay there. Connect it and run claude sandbox uninstall again.",
     "Empty files and folders that the sandbox created to protect names that didn't exist yet, such as .mcp.json in a project.",
-    `${diffLineToPlainText(o)}, the sandbox's folder for all users of this PC.${l === "gone" ? "" : " Its ca folder holds the private key of the sandbox's TLS inspection certificate."}`,
+    `${diffLineToPlainText(sandboxRuntimeDir)}, the sandbox's folder for all users of this PC.${caJsonPresence === "gone" ? "" : " Its ca folder holds the private key of the sandbox's TLS inspection certificate."}`,
     `A sandbox-runtime folder in the local app data of each Windows user who used the sandbox. It holds the sandbox's record of the permissions it set. A removal approved at Windows' prompt makes one for the approving account too. For the account that ran this command, it is ${diffLineToPlainText(join(env.LOCALAPPDATA || join(homedir(), "AppData", "Local"), "sandbox-runtime"))}.`,
-    ...a
-      .filter((r, p) => h[p] !== "gone")
-      .map((r) => `${diffLineToPlainText(r)}, the sandbox account's profile folder.`),
+    ...profileDirs
+      .filter((profileDir, index) => presences[index] !== "gone")
+      .map((profileDir) => `${diffLineToPlainText(profileDir)}, the sandbox account's profile folder.`),
     ...(user.provisioned ? [] : [`Perhaps an account, with its profile folder. ${LEFT_OVER_ACCOUNT_NOTE}`]),
     "Your Claude Code settings. If the sandbox is still turned on there, Claude Code warns that it isn't available and runs commands without it. If your settings require the sandbox, Claude Code won't start. To turn it off, run /sandbox or set sandbox.enabled to false in your settings file. Where policy manages these settings, that is up to your administrator.",
   ];
@@ -457,12 +478,12 @@ async function windowsSandboxLeftovers(user, user_2) {
  * claude sandbox install：不可用时直接返回原因；否则执行一次 Windows 沙箱安装，结果以 JSON 写到 stdout，并按状态设置退出码。
  */
 async function sandboxInstallCommand() {
-  let n = windowsSandboxUnavailableReason();
-  let e;
-  if (n)
-    e = {
+  let unavailableReason = windowsSandboxUnavailableReason();
+  let result;
+  if (unavailableReason)
+    result = {
       status: "unavailable",
-      message: n,
+      message: unavailableReason,
     };
   else {
     let isTTY = process.stderr.isTTY;
@@ -472,46 +493,46 @@ async function sandboxInstallCommand() {
           `
 `,
       );
-    e = await setupWindowsSandboxOnce(
+    result = await setupWindowsSandboxOnce(
       getRootSession().host,
-      (a) => {
-        process.stderr.write(`${a}
+      (line) => {
+        process.stderr.write(`${line}
 `);
       },
       isTTY ? 1 / 0 : Date.now() - Math.ceil(process.uptime() * 1000) + 150000,
     );
   }
   await writeStdoutAndDrain(
-    jsonStringify(e) +
+    jsonStringify(result) +
       `
 `,
   );
-  return exitAfterAnalyticsFlush(e.status === "ok" ? 0 : 1);
+  return exitAfterAnalyticsFlush(result.status === "ok" ? 0 : 1);
 }
 //@ chunk-v21qppnj.js:19077-20100 placement
 async function sandboxStatusSummary() {
-  let n = windowsSandboxUnavailableReason();
-  let e;
-  if (n)
-    e = {
+  let unavailableReason = windowsSandboxUnavailableReason();
+  let base;
+  if (unavailableReason)
+    base = {
       available: false,
       installed: false,
       policyLocked: false,
-      reasons: [n],
+      reasons: [unavailableReason],
     };
   else {
-    let l = await SandboxManager.checkDependenciesAsync();
-    e = {
+    let deps = await SandboxManager.checkDependenciesAsync();
+    base = {
       available: true,
-      installed: l.errors.length === 0,
+      installed: deps.errors.length === 0,
       policyLocked: SandboxManager.areSandboxSettingsLockedByPolicy(),
-      reasons: l.errors,
+      reasons: deps.errors,
     };
   }
-  let o = SandboxManager.isStrictSandboxModeConfigured();
-  let a = {
+  let strictMode = SandboxManager.isStrictSandboxModeConfigured();
+  let summary = {
     statusVersion: 3,
-    ...e,
+    ...base,
     supported: SandboxManager.isSupportedPlatform() && SandboxManager.isPlatformInEnabledList(),
     enabled: SandboxManager.isSandboxingEnabled(),
     enabledSource: sandboxEnablementSource({
@@ -520,11 +541,11 @@ async function sandboxStatusSummary() {
       settings: SandboxManager.isSandboxEnabledInSettings(),
     }),
     unavailableReason: SandboxManager.getSandboxUnavailableReason() ?? null,
-    strictMode: o,
+    strictMode,
     strictModeSource: sandboxEnablementSource({
       forced: SandboxManager.areUnsandboxedCommandsForbiddenByPolicy(),
       policy: isSandboxSettingOverriddenByPolicy("allowUnsandboxedCommands"),
-      settings: o,
+      settings: strictMode,
     }),
     filesystemPolicy: getEffectiveFilesystemPolicy(),
     autoAllowBashIfSandboxed: SandboxManager.isAutoAllowBashIfSandboxedEnabled(),
@@ -537,7 +558,7 @@ async function sandboxStatusSummary() {
           : "settings",
   };
   await writeStdoutAndDrain(
-    jsonStringify(a) +
+    jsonStringify(summary) +
       `
 `,
   );
@@ -548,15 +569,15 @@ async function sandboxStatusSummary() {
  * claude sandbox uninstall：仅原生 Windows 执行卸载（非 json 模式逐条打印进度），输出结果与残留清单，按状态设置退出码。
  */
 async function sandboxUninstallCommand({ json }) {
-  let e =
+  let result =
     getPlatform() === "windows"
       ? await uninstallWindowsSandbox(
           json
             ? undefined
-            : (o) =>
+            : (message) =>
                 new Promise((resolve) => {
                   process.stderr.write(
-                    `${o}
+                    `${message}
 
 `,
                     () => resolve(),
@@ -572,17 +593,19 @@ async function sandboxUninstallCommand({ json }) {
         };
   await writeStdoutAndDrain(
     json
-      ? jsonStringify(e) +
+      ? jsonStringify(result) +
           `
 `
       : [
-          e.message,
-          ...(e.leftBehind.length > 0 ? ["", "Left behind:", ...e.leftBehind.map((o) => `- ${o}`)] : []),
+          result.message,
+          ...(result.leftBehind.length > 0
+            ? ["", "Left behind:", ...result.leftBehind.map((item) => `- ${item}`)]
+            : []),
           "",
         ].join(`
 `),
   );
-  return exitAfterAnalyticsFlush(e.status === "ok" || e.status === "not_installed" ? 0 : 1);
+  return exitAfterAnalyticsFlush(result.status === "ok" || result.status === "not_installed" ? 0 : 1);
 }
 //@ chunk-v21qppnj.js:20634-20937 placement
 /**
@@ -601,3 +624,4 @@ function sandboxEnablementSource({ forced, policy, settings }) {
   if (policy) return "policy";
   return settings ? "settings" : "off";
 }
+export { sandboxInstallCommand, sandboxStatusSummary, sandboxUninstallCommand };

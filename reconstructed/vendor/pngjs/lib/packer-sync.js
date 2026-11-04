@@ -5,23 +5,23 @@
  * pieces: chunk-spjgqa4y.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x, importMetaRequire } from "../../../runtime/bun-runtime.js";
+import { __commonJS, importMetaRequire } from "../../../runtime/bun-runtime.js";
 import { require_constants } from "./constants.js";
 import { require_packer } from "./packer.js";
 
 //@ chunk-spjgqa4y.js:47377-47987 cjs-fingerprint
-var require_packer_sync = x(function (cjsExports, cjsModule) {
+var require_packer_sync = __commonJS(function (cjsExports, cjsModule) {
   var hasSyncZlib = true;
   var zlib = importMetaRequire("zlib");
   if (!zlib.deflateSync) hasSyncZlib = false;
   var constants = require_constants();
-  var ys = require_packer();
+  var packerModule = require_packer();
   cjsModule.exports = function (metaData, opt) {
     if (!hasSyncZlib)
       throw Error(
         "To use the sync capability of this library in old node versions, please pin pngjs to v2.3.0",
       );
-    let packer = new ys(opt || {});
+    let packer = new packerModule(opt || {});
     let chunks = [];
     chunks.push(Buffer.from(constants.PNG_SIGNATURE));
     chunks.push(packer.packIHDR(metaData.width, metaData.height));

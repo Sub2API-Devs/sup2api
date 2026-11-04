@@ -7,22 +7,23 @@
  */
 
 //@ chunk-333ft0yv.js:191-197 esm-layout
-var r;
+var webcryptoPromise;
 //@ chunk-333ft0yv.js:197-288 esm-fingerprint
-r = globalThis.crypto?.webcrypto ?? globalThis.crypto ?? import("crypto").then((m) => m.webcrypto);
+webcryptoPromise =
+  globalThis.crypto?.webcrypto ?? globalThis.crypto ?? import("crypto").then((m) => m.webcrypto);
 //@ chunk-333ft0yv.js:288-359 esm-fingerprint
 async function getRandomValues(size) {
-  return (await r).getRandomValues(new Uint8Array(size));
+  return (await webcryptoPromise).getRandomValues(new Uint8Array(size));
 }
 //@ chunk-333ft0yv.js:359-520 esm-fingerprint
-async function random(e) {
-  let t = "";
-  let randomValues = await getRandomValues(e);
-  for (let j = 0; j < e; j++) {
-    let o = randomValues[j] % 66;
-    t += "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-._~"[o];
+async function random(length) {
+  let result = "";
+  let randomValues = await getRandomValues(length);
+  for (let j = 0; j < length; j++) {
+    let charIndex = randomValues[j] % 66;
+    result += "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-._~"[charIndex];
   }
-  return t;
+  return result;
 }
 //@ chunk-333ft0yv.js:520-558 esm-layout
 async function generateVerifier(length) {
@@ -30,7 +31,9 @@ async function generateVerifier(length) {
 }
 //@ chunk-333ft0yv.js:558-762 esm-fingerprint
 async function generateChallenge(code_verifier) {
-  let buffer = await (await r).subtle.digest("SHA-256", new TextEncoder().encode(code_verifier));
+  let buffer = await (
+    await webcryptoPromise
+  ).subtle.digest("SHA-256", new TextEncoder().encode(code_verifier));
   return btoa(String.fromCharCode(...new Uint8Array(buffer)))
     .replace(/\//g, "_")
     .replace(/\+/g, "-")

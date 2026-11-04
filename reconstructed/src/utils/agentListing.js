@@ -24,20 +24,27 @@ import { getConversationToolsUsed } from "../bootstrap/state.js";
 /**
  * 列出摘要前使用过但不可读的工具名（去掉可信的），开关关闭时为空。
  */
-function listUnreadableToolsUsed(e, n) {
-  if (!isSillyShoreGateOn() || e.length === 0) return [];
-  let r = new Set(tagUntrustedArtifactContent(n.filter((s) => !isVirtualConversationMessage(s))));
-  return uniq(e.filter((s) => s !== "").map(readableToolName))
-    .filter((s) => s === UNREADABLE_TOOLS_USED_BEFORE_SUMMARY || !r.has(s))
+function listUnreadableToolsUsed(toolsUsed, messages) {
+  if (!isSillyShoreGateOn() || toolsUsed.length === 0) return [];
+  let knownTools = new Set(
+    tagUntrustedArtifactContent(messages.filter((message) => !isVirtualConversationMessage(message))),
+  );
+  return uniq(toolsUsed.filter((toolName) => toolName !== "").map(readableToolName))
+    .filter(
+      (readableName) =>
+        readableName === UNREADABLE_TOOLS_USED_BEFORE_SUMMARY || !knownTools.has(readableName),
+    )
     .sort();
 }
 //@ chunk-e6aww6q8.js:168581-168673 placement
 /**
  * 判断是否主代理或主会话的子代理上下文。
  */
-function isMainOrMainSessionContext(e, n) {
-  if (e === undefined) return n === undefined;
-  return isMainAgent(e) || (isSubagentContext(e) && e.isMainSession === true);
+function isMainOrMainSessionContext(agentContext, agentId) {
+  if (agentContext === undefined) return agentId === undefined;
+  return (
+    isMainAgent(agentContext) || (isSubagentContext(agentContext) && agentContext.isMainSession === true)
+  );
 }
 //@ chunk-e6aww6q8.js:168673-168813 placement
 /**
@@ -46,42 +53,44 @@ function isMainOrMainSessionContext(e, n) {
 function getToolsUsedForSummary(messages, agentContext, agentId) {
   if (!isSillyShoreGateOn()) return tagUntrustedArtifactContent(messages);
   let conversationToolsUsed = getConversationToolsUsed();
-  let h = tagUntrustedArtifactContent(messages, undefined, (y) => conversationToolsUsed.has(y));
-  if (!isMainOrMainSessionContext(agentContext, agentId)) return h;
-  return uniq([...conversationToolsUsed.names(), ...h]).sort();
+  let taggedTools = tagUntrustedArtifactContent(messages, undefined, (toolName) =>
+    conversationToolsUsed.has(toolName),
+  );
+  if (!isMainOrMainSessionContext(agentContext, agentId)) return taggedTools;
+  return uniq([...conversationToolsUsed.names(), ...taggedTools]).sort();
 }
 //@ chunk-e6aww6q8.js:168813-168884 placement
 /**
  * 生成摘要用的已用工具标记（闸门关闭时为空）。
  */
-function toolsUsedForSummary(e) {
+function toolsUsedForSummary(messages) {
   if (!isSillyShoreGateOn()) return [];
   let conversationToolsUsed = getConversationToolsUsed();
-  return tagUntrustedArtifactContent(e, (r) => conversationToolsUsed.has(r));
+  return tagUntrustedArtifactContent(messages, (toolName) => conversationToolsUsed.has(toolName));
 }
 //@ chunk-e6aww6q8.js:168884-168946 placement
 /**
  * 列出已用过但无法读取的工具（没有则 undefined）。
  */
-function unreadableToolsUsed(e, n) {
-  let r = listUnreadableToolsUsed(e, n);
-  return r.length === 0 ? undefined : r;
+function unreadableToolsUsed(toolsUsed, messages) {
+  let unreadable = listUnreadableToolsUsed(toolsUsed, messages);
+  return unreadable.length === 0 ? undefined : unreadable;
 }
 //@ chunk-e6aww6q8.js:168946-169019 placement
 /**
  * 把无法读取的工具列表渲染成一行说明。
  */
-function unreadableToolsLine(e, messages) {
-  let r = unreadableToolsUsed(e, messages);
-  return r === undefined ? undefined : toolsUsedManifestText(r).trimEnd();
+function unreadableToolsLine(toolsUsed, messages) {
+  let unreadable = unreadableToolsUsed(toolsUsed, messages);
+  return unreadable === undefined ? undefined : toolsUsedManifestText(unreadable).trimEnd();
 }
 //@ chunk-e6aww6q8.js:169019-169085 placement
 /**
  * 构造摘要用的伴生消息（标记为 meta）。
  */
-function summaryCompanionMessage(e) {
+function summaryCompanionMessage(toolsUsed) {
   return {
-    content: systemReminderWithToolsUsed(e),
+    content: systemReminderWithToolsUsed(toolsUsed),
     isMeta: true,
     turnCompanion: true,
   };
@@ -90,20 +99,22 @@ function summaryCompanionMessage(e) {
 /**
  * 有附加文本时用换行连接，否则原样返回。
  */
-function joinWithNewlineIfAny(e, n) {
-  return n === undefined
-    ? e
-    : `${e}
-${n}`;
+function joinWithNewlineIfAny(firstText, secondText) {
+  return secondText === undefined
+    ? firstText
+    : `${firstText}
+${secondText}`;
 }
 //@ chunk-e6aww6q8.js:169135-169253 placement
 /**
  * 把偏移数组最后一项加上追加文本的长度。
  */
-function adjustLastOffset(promptNoticeLengths, n) {
-  if (n === undefined || promptNoticeLengths === undefined || promptNoticeLengths.length === 0)
+function adjustLastOffset(promptNoticeLengths, appendText) {
+  if (appendText === undefined || promptNoticeLengths === undefined || promptNoticeLengths.length === 0)
     return promptNoticeLengths;
-  return promptNoticeLengths.map((r, s) => (s === promptNoticeLengths.length - 1 ? r + n.length + 1 : r));
+  return promptNoticeLengths.map((offset, index) =>
+    index === promptNoticeLengths.length - 1 ? offset + appendText.length + 1 : offset,
+  );
 }
 export {
   toolsUsedForSummary,

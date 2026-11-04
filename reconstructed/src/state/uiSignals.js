@@ -65,19 +65,19 @@ class UiSignals {
 /**
  * UI 信号的单例（重置时清空已看过记录与忙碌状态）。
  */
-var uiSignals = identity(new UiSignals(), (o) => {
-  o.configRowsSeen.clear();
-  o.configRowNotices.clear();
-  o.mainLoopBusy.setState((e) =>
-    e.busy
+var uiSignals = identity(new UiSignals(), (signals) => {
+  signals.configRowsSeen.clear();
+  signals.configRowNotices.clear();
+  signals.mainLoopBusy.setState((state) =>
+    state.busy
       ? {
           busy: false,
         }
-      : e,
+      : state,
   );
-  o.headerGauge.setState((e) =>
-    e.mounts === 0
-      ? e
+  signals.headerGauge.setState((state) =>
+    state.mounts === 0
+      ? state
       : {
           mounts: 0,
         },

@@ -62,7 +62,7 @@ function dropContainedSpans(spans) {
 //@ chunk-e6aww6q8.js:1050935-1051070 file-local
 function removeSpans(command, spans) {
   if (spans.length === 0) return command;
-  let sorted = dropContainedSpans(spans).sort((h, y) => y[0] - h[0]);
+  let sorted = dropContainedSpans(spans).sort((leftSpan, rightSpan) => rightSpan[0] - leftSpan[0]);
   let result = command;
   for (let [start, end] of sorted) result = result.slice(0, start) + result.slice(end);
   return result;
@@ -70,7 +70,7 @@ function removeSpans(command, spans) {
 //@ chunk-e6aww6q8.js:1051070-1051213 file-local
 function replaceSpansKeepQuotes(command, spans) {
   if (spans.length === 0) return command;
-  let sorted = dropContainedSpans(spans).sort((h, y) => y[0] - h[0]);
+  let sorted = dropContainedSpans(spans).sort((leftSpan, rightSpan) => rightSpan[0] - leftSpan[0]);
   let result = command;
   for (let [start, end, open, close] of sorted)
     result = result.slice(0, start) + open + close + result.slice(end);
@@ -131,7 +131,7 @@ function extractCompoundStructure(rootNode, command) {
   let hasSubshell = false;
   let hasCommandGroup = false;
   let hasPipeline = false;
-  let L = new Set([
+  let compoundTypes = new Set([
     "if_statement",
     "while_statement",
     "for_statement",
@@ -154,7 +154,7 @@ function extractCompoundStructure(rootNode, command) {
             listChild.type === "redirected_statement" ||
             listChild.type === "pipeline" ||
             listChild.type === "negated_command" ||
-            L.has(listChild.type)
+            compoundTypes.has(listChild.type)
           )
             walkTopLevel({
               ...node,
@@ -199,7 +199,7 @@ function extractCompoundStructure(rootNode, command) {
       } else if (child.type === "negated_command") {
         segments.push(child.text);
         walkTopLevel(child);
-      } else if (L.has(child.type)) {
+      } else if (compoundTypes.has(child.type)) {
         if (child.type !== "do_group" && child.type !== "elif_clause" && child.type !== "else_clause")
           segments.push(child.text);
         walkTopLevel(child);

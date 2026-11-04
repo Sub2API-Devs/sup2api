@@ -5,7 +5,7 @@
  *
  * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
  * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (28)
+ * pieces: chunk-e6aww6q8.js (27)
  * attribution: placement 28
  */
 import { realpath, lstat, access, readlink, stat, open } from "fs/promises";
@@ -28,37 +28,38 @@ import { enqueueTaskNotification as enqueueTaskNotification_2 } from "../task/ta
 import { logError } from "../log.js";
 import { posixPathToWindowsPath } from "../path.js";
 import { HostScoped } from "../hostScoped.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:829244-829372 placement
-function omitKeys(e, n) {
-  let r = new Set(typeof n === "string" ? [n] : n);
-  return Object.fromEntries(Object.entries(e).filter(([key]) => !r.has(key)));
+function omitKeys(object, keys) {
+  let omit = new Set(typeof keys === "string" ? [keys] : keys);
+  return Object.fromEntries(Object.entries(object).filter(([key]) => !omit.has(key)));
 }
 //@ chunk-e6aww6q8.js:829372-829685 placement
 /**
  * 求路径的真实路径，允许末端不存在（拼回缺失部分）。
  */
-async function realpathAllowMissing(e) {
-  let n = "";
-  for (let r = e; ;)
+async function realpathAllowMissing(path) {
+  let suffix = "";
+  for (let current = path; ;)
     try {
-      let s = await realpath(r);
-      if (!isAbsolute(s)) return "unreadable";
-      return join(s, n);
+      let realPath = await realpath(current);
+      if (!isAbsolute(realPath)) return "unreadable";
+      return join(realPath, suffix);
     } catch (error) {
       let errnoCode = getErrnoCode(error);
       if (errnoCode !== "ENOENT" && errnoCode !== "ENOTDIR") return "unreadable";
       if (
-        await lstat(r).then(
-          (S) => S.isSymbolicLink(),
+        await lstat(current).then(
+          (stats) => stats.isSymbolicLink(),
           () => false,
         )
       )
         return "unreadable";
-      let y = dirname(r);
-      if (y === r) return "absent";
-      n = join(basename(r), n);
-      r = y;
+      let parent = dirname(current);
+      if (parent === current) return "absent";
+      suffix = join(basename(current), suffix);
+      current = parent;
     }
 }
 //@ chunk-e6aww6q8.js:829685-829917 placement
@@ -68,13 +69,13 @@ function mergeHookEnv_2({ attached, beforeSettings, ownEnv, childrenSee }) {
       ...attached,
     };
   return Object.fromEntries(
-    uniq([...Object.keys(attached), ...Object.keys(ownEnv).filter(childrenSee)]).map((h) => [
-      h,
-      Object.hasOwn(ownEnv, h)
-        ? ownEnv[h]
-        : attached[h] === beforeSettings[h]
-          ? attached[h]
-          : beforeSettings[h],
+    uniq([...Object.keys(attached), ...Object.keys(ownEnv).filter(childrenSee)]).map((name) => [
+      name,
+      Object.hasOwn(ownEnv, name)
+        ? ownEnv[name]
+        : attached[name] === beforeSettings[name]
+          ? attached[name]
+          : beforeSettings[name],
     ]),
   );
 }
@@ -96,62 +97,74 @@ var EMPTY_PATH_DIR = "/var/empty";
 /**
  * 合并钩子环境：基础环境去掉省略键再叠加额外项。
  */
-function mergeHookEnv(e) {
+function mergeHookEnv(env) {
   return {
-    ...omitKeys(e.base, e.omit),
-    ...e.extra,
+    ...omitKeys(env.base, env.omit),
+    ...env.extra,
   };
 }
 //@ chunk-e6aww6q8.js:830076-831105 placement
 /**
  * 在 PATH 中解析钩子命令对应的程序。
  */
-async function resolveHookProgramOnPath(e, n = subprocessEnv(), r = n) {
-  let s = async (Se) => {
-    if (!isAbsolute(Se)) return false;
-    let ke = await realpathAllowMissing(Se);
+async function resolveHookProgramOnPath(roots, searchPath = subprocessEnv(), originalEnv = searchPath) {
+  let isOutsideReach = async (path) => {
+    if (!isAbsolute(path)) return false;
+    let realPath = await realpathAllowMissing(path);
     return (
-      ke !== "unreadable" &&
-      !anyPairMatches([Se, ...(ke === "absent" ? [] : [ke])].map(normalizeCommandForPlatform), e)
+      realPath !== "unreadable" &&
+      !anyPairMatches(
+        [path, ...(realPath === "absent" ? [] : [realPath])].map(normalizeCommandForPlatform),
+        roots,
+      )
     );
   };
-  let h = async (Se) => {
-    if (!isAbsolute(Se)) return false;
-    let ke = await realpathAllowMissing(Se);
+  let isInsideReach = async (path) => {
+    if (!isAbsolute(path)) return false;
+    let realPath = await realpathAllowMissing(path);
     return (
-      ke === "unreadable" ||
-      anyPairMatches([Se, ...(ke === "absent" ? [] : [ke])].map(normalizeCommandForPlatform), e)
+      realPath === "unreadable" ||
+      anyPairMatches(
+        [path, ...(realPath === "absent" ? [] : [realPath])].map(normalizeCommandForPlatform),
+        roots,
+      )
     );
   };
-  let y = async (Se) => (await Promise.all(Se.split(delimiter).map(h))).some(Boolean);
-  let S = async (Se) =>
-    (await Promise.all(Se.split(delimiter).map(async (ke) => ((await s(ke)) ? [ke] : [])))).flat();
-  let w = new Set(BUILD_TOOL_ENV_VARS);
-  let L = new Set(hipaaCredentialScrubKeys().map((Se) => Se.toUpperCase()));
-  let G = L.size > 0 ? subprocessEnv() : {};
-  let q = {};
-  let Z = [];
-  for (let key of Object.keys(n)) {
-    let ke = n[key];
-    if (ke === undefined) continue;
-    if (L.size > 0 && L.has(envVarToUpperSnake(key))) {
-      let we = G[key];
-      if (we === undefined) Z.push(key);
-      else if (we !== ke) q[key] = we;
-    } else if (w.has(key)) {
-      let we = await S(ke);
-      if (key === "PATH") q.PATH = we.length > 0 ? we.join(delimiter) : EMPTY_PATH_DIR;
-      else if (we.length > 0) q[key] = we.join(delimiter);
-      else Z.push(key);
-    } else if (isDangerousEnvName(key)) Z.push(key);
-    else if (await y(ke)) Z.push(key);
-    else if (r[key] !== ke) q[key] = ke;
+  let anyEntryInside = async (list) =>
+    (await Promise.all(list.split(delimiter).map(isInsideReach))).some(Boolean);
+  let filterOutside = async (list) =>
+    (
+      await Promise.all(
+        list.split(delimiter).map(async (entry) => ((await isOutsideReach(entry)) ? [entry] : [])),
+      )
+    ).flat();
+  let buildToolVars = new Set(BUILD_TOOL_ENV_VARS);
+  let scrubKeys = new Set(hipaaCredentialScrubKeys().map((key) => key.toUpperCase()));
+  let processEnv = scrubKeys.size > 0 ? subprocessEnv() : {};
+  let extra = {};
+  let omit = [];
+  for (let key of Object.keys(searchPath)) {
+    let value = searchPath[key];
+    if (value === undefined) continue;
+    if (scrubKeys.size > 0 && scrubKeys.has(envVarToUpperSnake(key))) {
+      let originalValue = processEnv[key];
+      if (originalValue === undefined) omit.push(key);
+      else if (originalValue !== value) extra[key] = originalValue;
+    } else if (buildToolVars.has(key)) {
+      let kept = await filterOutside(value);
+      if (key === "PATH") extra.PATH = kept.length > 0 ? kept.join(delimiter) : EMPTY_PATH_DIR;
+      else if (kept.length > 0) extra[key] = kept.join(delimiter);
+      else omit.push(key);
+    } else if (isDangerousEnvName(key)) omit.push(key);
+    else if (await anyEntryInside(value)) omit.push(key);
+    else if (originalEnv[key] !== value) extra[key] = value;
   }
-  for (let key of Object.keys(r)) if (r[key] !== undefined && n[key] === undefined) Z.push(key);
+  for (let key of Object.keys(originalEnv))
+    if (originalEnv[key] !== undefined && searchPath[key] === undefined) omit.push(key);
   return {
-    base: n,
-    extra: q,
-    omit: Z,
+    base: searchPath,
+    extra,
+    omit,
   };
 }
 //@ chunk-e6aww6q8.js:831105-832040 placement
@@ -161,12 +174,12 @@ async function resolveHookProgramOnPath(e, n = subprocessEnv(), r = n) {
 async function resolveProgramOnPathInReach(
   cwd,
   searchPath,
-  r,
-  { linkScreen: s = true, childStartsInReach: h = true, depth = 0 } = {},
+  roots,
+  { linkScreen = true, childStartsInReach = true, depth = 0 } = {},
 ) {
-  for (let S of searchPath.split(delimiter)) {
-    if (!isAbsolute(S)) return "in_reach";
-    let candidate = join(S, cwd);
+  for (let dir of searchPath.split(delimiter)) {
+    if (!isAbsolute(dir)) return "in_reach";
+    let candidate = join(dir, cwd);
     if (
       !(await access(candidate, constants.X_OK).then(
         () => true,
@@ -175,78 +188,80 @@ async function resolveProgramOnPathInReach(
     ) {
       if (
         await lstat(candidate).then(
-          (Se) => Se.isSymbolicLink(),
+          (stats) => stats.isSymbolicLink(),
           () => false,
         )
       ) {
-        let Se = await readlink(candidate).then(
-          (we) => resolve_2(dirname(candidate), we),
+        let linkTarget = await readlink(candidate).then(
+          (target) => resolve_2(dirname(candidate), target),
           () => {
             return;
           },
         );
-        let ke = Se === undefined ? "unreadable" : await realpathAllowMissing(Se);
+        let realTarget = linkTarget === undefined ? "unreadable" : await realpathAllowMissing(linkTarget);
         if (
-          ke === "unreadable" ||
+          realTarget === "unreadable" ||
           anyPairMatches(
-            [candidate, ...(Se === undefined ? [] : [Se]), ...(ke === "absent" ? [] : [ke])].map(
-              normalizeCommandForPlatform,
-            ),
-            r,
+            [
+              candidate,
+              ...(linkTarget === undefined ? [] : [linkTarget]),
+              ...(realTarget === "absent" ? [] : [realTarget]),
+            ].map(normalizeCommandForPlatform),
+            roots,
           )
         )
           return "in_reach";
       }
       continue;
     }
-    let G = await realpathAllowMissing(candidate);
-    if (G === "unreadable") return "in_reach";
-    let q =
-      G === "absent"
+    let realPath = await realpathAllowMissing(candidate);
+    if (realPath === "unreadable") return "in_reach";
+    let stats =
+      realPath === "absent"
         ? undefined
-        : await stat(G).catch((error) =>
+        : await stat(realPath).catch((error) =>
             error.code === "ENOENT" || error.code === "ENOTDIR" ? undefined : "unreadable",
           );
-    if (q === "unreadable") return "in_reach";
-    if (!q?.isFile()) continue;
-    if (anyPairMatches([candidate, G].map(normalizeCommandForPlatform), r)) return "in_reach";
-    if (s && q.nlink > 1 && !(await isNativeBinaryFile(G))) return "in_reach";
+    if (stats === "unreadable") return "in_reach";
+    if (!stats?.isFile()) continue;
+    if (anyPairMatches([candidate, realPath].map(normalizeCommandForPlatform), roots)) return "in_reach";
+    if (linkScreen && stats.nlink > 1 && !(await isNativeBinaryFile(realPath))) return "in_reach";
     if (depth <= 1) {
       if (
-        (await resolveHookCommand(candidate, searchPath, r, {
-          linkScreen: s,
-          childStartsInReach: h,
+        (await resolveHookCommand(candidate, searchPath, roots, {
+          linkScreen,
+          childStartsInReach,
           depth,
         })) !== undefined
       )
         return "in_reach";
-    } else if (await hasShebang(G)) return "in_reach";
+    } else if (await hasShebang(realPath)) return "in_reach";
     return candidate;
   }
   return;
 }
 //@ chunk-e6aww6q8.js:832040-832228 placement
-async function isSuspiciousHardLinkedFile(e) {
-  let n = await stat(e).catch((error) =>
+async function isSuspiciousHardLinkedFile(path) {
+  let stats = await stat(path).catch((error) =>
     error.code === "ENOENT" || error.code === "ENOTDIR" ? "absent" : "unreadable",
   );
-  if (n === "absent") return false;
-  return n === "unreadable" || (n.nlink > 1 && !(await isNativeBinaryFile(e)));
+  if (stats === "absent") return false;
+  return stats === "unreadable" || (stats.nlink > 1 && !(await isNativeBinaryFile(path)));
 }
 //@ chunk-e6aww6q8.js:832228-832545 placement
 /**
  * 判断文件是否为原生可执行文件（读取文件头魔数）。
  */
-async function isNativeBinaryFile(e) {
-  let n = await open(e, "r").catch(() => {
+async function isNativeBinaryFile(path) {
+  let handle = await open(path, "r").catch(() => {
     return;
   });
-  if (n === undefined) return false;
+  if (handle === undefined) return false;
   try {
-    let r = Buffer.alloc(4);
-    let { bytesRead } = await n.read(r, 0, 4, 0);
+    let header = Buffer.alloc(4);
+    let { bytesRead } = await handle.read(header, 0, 4, 0);
     if (bytesRead < 4) return false;
-    let uInt32BE = r.readUInt32BE(0);
+    let uInt32BE = header.readUInt32BE(0);
     return (
       uInt32BE === 2135247942 ||
       uInt32BE === 4277009102 ||
@@ -256,24 +271,24 @@ async function isNativeBinaryFile(e) {
       uInt32BE === 3405691582
     );
   } finally {
-    await n.close();
+    await handle.close();
   }
 }
 //@ chunk-e6aww6q8.js:832545-832664 placement
 /**
  * 判断参数词是否为普通选项（-、--、--xxx、短选项组合）。
  */
-function isPlainOptionWord(e) {
+function isPlainOptionWord(word) {
   return (
-    e === "-" ||
-    e === "--" ||
-    /^--[a-z][a-z-]*$/.test(e) ||
-    (/^-[A-Za-z]{1,3}$/.test(e) && !/^-[IMmr]./.test(e))
+    word === "-" ||
+    word === "--" ||
+    /^--[a-z][a-z-]*$/.test(word) ||
+    (/^-[A-Za-z]{1,3}$/.test(word) && !/^-[IMmr]./.test(word))
   );
 }
 //@ chunk-e6aww6q8.js:832664-832745 placement
-async function hasShebang(e) {
-  let fileHead = await readFileHead(e, 2);
+async function hasShebang(path) {
+  let fileHead = await readFileHead(path, 2);
   return fileHead === undefined || fileHead.startsWith("#!");
 }
 //@ chunk-e6aww6q8.js:832745-834284 placement
@@ -281,24 +296,24 @@ async function hasShebang(e) {
  * 解析钩子命令：确定程序与 shebang 是否存在、可读，供沙箱与固定使用。
  */
 async function resolveHookCommand(
-  e,
-  n,
+  path,
+  searchPath,
   roots,
-  { linkScreen: s = true, childStartsInReach: h = true, depth: y = 0 } = {},
+  { linkScreen = true, childStartsInReach = true, depth = 0 } = {},
 ) {
-  let S = await realpathAllowMissing(e);
-  if (S === "unreadable") return "unreadable";
-  let w =
-    S === "absent"
+  let realPath = await realpathAllowMissing(path);
+  if (realPath === "unreadable") return "unreadable";
+  let stats =
+    realPath === "absent"
       ? "absent"
-      : await stat(S).catch((error) =>
+      : await stat(realPath).catch((error) =>
           error.code === "ENOENT" || error.code === "ENOTDIR" ? "absent" : undefined,
         );
-  if (w === undefined) return "unreadable";
-  if (w === "absent" || !w.isFile()) return;
-  if (s && w.nlink > 1 && !(await isNativeBinaryFile(S))) return "program_unresolved";
-  let fileHead = await readFileHead(S, 512);
-  if (fileHead === undefined) return y === 0 ? "unreadable" : undefined;
+  if (stats === undefined) return "unreadable";
+  if (stats === "absent" || !stats.isFile()) return;
+  if (linkScreen && stats.nlink > 1 && !(await isNativeBinaryFile(realPath))) return "program_unresolved";
+  let fileHead = await readFileHead(realPath, 512);
+  if (fileHead === undefined) return depth === 0 ? "unreadable" : undefined;
   if (!fileHead.startsWith("#!")) return;
   let parts = fileHead
     .slice(
@@ -311,29 +326,31 @@ async function resolveHookCommand(
     )
     .replace(/^[ \t]+|[ \t]+$/g, "")
     .split(/[ \t]+/);
-  let q = parts[0];
-  if (q === undefined || !isAbsolute(q)) return "shebang_in_reach";
-  if (parts.some((ke) => /[^\x21-\x7e]/.test(ke))) return "program_unresolved";
-  let Z = normalizeCommandForPlatform(q) === "/usr/bin/env" || normalizeCommandForPlatform(q) === "/bin/env";
-  if (normalizeCommandForPlatform(basename(q)) === "env" && !Z) return "program_unresolved";
-  if (Z) {
-    let flattened = parts.slice(1).flatMap((Ie) => Ie.split(/[ \t]+/));
-    let we = flattened[0] === "-S" ? flattened.slice(1) : flattened;
-    let Ee = we[0];
+  let interpreterPath = parts[0];
+  if (interpreterPath === undefined || !isAbsolute(interpreterPath)) return "shebang_in_reach";
+  if (parts.some((word) => /[^\x21-\x7e]/.test(word))) return "program_unresolved";
+  let isEnv =
+    normalizeCommandForPlatform(interpreterPath) === "/usr/bin/env" ||
+    normalizeCommandForPlatform(interpreterPath) === "/bin/env";
+  if (normalizeCommandForPlatform(basename(interpreterPath)) === "env" && !isEnv) return "program_unresolved";
+  if (isEnv) {
+    let flattened = parts.slice(1).flatMap((part) => part.split(/[ \t]+/));
+    let words = flattened[0] === "-S" ? flattened.slice(1) : flattened;
+    let program = words[0];
     if (
-      Ee === undefined ||
-      Ee.startsWith("-") ||
-      Ee.includes("=") ||
-      Ee.includes("/") ||
-      !parseShebangArgs(we.slice(1), Ee, {
-        childStartsInReach: h,
+      program === undefined ||
+      program.startsWith("-") ||
+      program.includes("=") ||
+      program.includes("/") ||
+      !parseShebangArgs(words.slice(1), program, {
+        childStartsInReach,
       })
     )
       return "program_unresolved";
-    let programOnPathInReach = await resolveProgramOnPathInReach(Ee, n, roots, {
-      linkScreen: s,
-      childStartsInReach: h,
-      depth: y + 1,
+    let programOnPathInReach = await resolveProgramOnPathInReach(program, searchPath, roots, {
+      linkScreen,
+      childStartsInReach,
+      depth: depth + 1,
     });
     return programOnPathInReach === undefined
       ? "program_unresolved"
@@ -342,67 +359,70 @@ async function resolveHookCommand(
         : undefined;
   }
   if (
-    !parseShebangArgs(parts.slice(1), basename(q), {
-      childStartsInReach: h,
+    !parseShebangArgs(parts.slice(1), basename(interpreterPath), {
+      childStartsInReach,
     })
   )
     return "program_unresolved";
-  let Se = await realpathAllowMissing(q);
-  if (Se === "unreadable") return "unreadable";
-  if (Se !== "absent" && anyPairMatches([q, Se].map(normalizeCommandForPlatform), roots))
+  let interpreterReal = await realpathAllowMissing(interpreterPath);
+  if (interpreterReal === "unreadable") return "unreadable";
+  if (
+    interpreterReal !== "absent" &&
+    anyPairMatches([interpreterPath, interpreterReal].map(normalizeCommandForPlatform), roots)
+  )
     return "shebang_in_reach";
-  if (Se === "absent") return;
-  if (y < 2)
-    return resolveHookCommand(q, n, roots, {
-      linkScreen: s,
-      childStartsInReach: h,
-      depth: y + 1,
+  if (interpreterReal === "absent") return;
+  if (depth < 2)
+    return resolveHookCommand(interpreterPath, searchPath, roots, {
+      linkScreen,
+      childStartsInReach,
+      depth: depth + 1,
     });
-  return (await hasShebang(Se)) ? "program_unresolved" : undefined;
+  return (await hasShebang(interpreterReal)) ? "program_unresolved" : undefined;
 }
 //@ chunk-e6aww6q8.js:834284-834499 placement
-async function readFileHead(e, n) {
-  let r = await open(e, "r").catch(() => {
+async function readFileHead(path, byteCount) {
+  let handle = await open(path, "r").catch(() => {
     return;
   });
-  if (r === undefined) return;
+  if (handle === undefined) return;
   try {
-    let s = Buffer.alloc(n);
-    let { bytesRead } = await r.read(s, 0, n, 0);
-    return s.subarray(0, bytesRead).toString("utf8");
+    let buffer = Buffer.alloc(byteCount);
+    let { bytesRead } = await handle.read(buffer, 0, byteCount, 0);
+    return buffer.subarray(0, bytesRead).toString("utf8");
   } finally {
-    await r.close();
+    await handle.close();
   }
 }
 //@ chunk-e6aww6q8.js:834499-834573 placement
 /**
  * 取 legacy 环境 pin（未设置时返回默认值）。
  */
-function legacyPinOr(e, appliedGlobalConfigEnv) {
-  return e.legacyEnvPin === undefined ? appliedGlobalConfigEnv : (e.legacyEnvPin ?? undefined);
+function legacyPinOr(memory, appliedGlobalConfigEnv) {
+  return memory.legacyEnvPin === undefined ? appliedGlobalConfigEnv : (memory.legacyEnvPin ?? undefined);
 }
 //@ chunk-e6aww6q8.js:834573-834671 placement
 /**
  * 首次读到时锁定 legacy 环境 pin。
  */
-function latchLegacyPin(e, n) {
-  if (e.legacyEnvPin === undefined) e.legacyEnvPin = n ?? null;
-  return e.legacyEnvPin ?? undefined;
+function latchLegacyPin(memory, env) {
+  if (memory.legacyEnvPin === undefined) memory.legacyEnvPin = env ?? null;
+  return memory.legacyEnvPin ?? undefined;
 }
 //@ chunk-e6aww6q8.js:834671-834840 placement
 /**
  * 若钩子脚本位于可疑硬链接/全局 CLI 文件内则返回 undefined，否则返回脚本路径。
  */
-async function hookScriptInReach(legacyEnvAtAttach, n) {
+async function hookScriptInReach(legacyEnvAtAttach, roots) {
   let globalClaudeFile = getGlobalClaudeFile();
   if (legacyEnvAtAttach === undefined || !isAbsolute(globalClaudeFile)) return;
-  let s = await realpath(globalClaudeFile).catch(() => {
+  let realPath = await realpath(globalClaudeFile).catch(() => {
     return;
   });
   if (
-    s === undefined ||
-    (await isSuspiciousHardLinkedFile(s)) ||
-    anyPairMatches([globalClaudeFile, s].map(normalizeCommandForPlatform), n)
+    realPath === undefined ||
+    (await isSuspiciousHardLinkedFile(realPath)) ||
+    anyPairMatches([globalClaudeFile, realPath].map(normalizeCommandForPlatform), roots)
   )
     return;
   return legacyEnvAtAttach;
@@ -456,15 +476,15 @@ function expandHookPathVariables({
   windowsBash,
   posixShell,
 }) {
-  let w = args === undefined;
-  let L = w ? splitHookCommandWords(command) : [command, ...args];
-  let G = w && posixShell ? INTERPRETER_SCRIPT_VAR_RE.exec(command)?.[1] : undefined;
-  let q = [];
-  for (let Z of L) {
-    if (!FILE_EXTENSION_RE.test(Z)) continue;
-    let replaced = Z.replaceAll("${CLAUDE_PROJECT_DIR}", () => projectDir);
+  let splitWords = args === undefined;
+  let words = splitWords ? splitHookCommandWords(command) : [command, ...args];
+  let scriptVar = splitWords && posixShell ? INTERPRETER_SCRIPT_VAR_RE.exec(command)?.[1] : undefined;
+  let found = [];
+  for (let word of words) {
+    if (!FILE_EXTENSION_RE.test(word)) continue;
+    let replaced = word.replaceAll("${CLAUDE_PROJECT_DIR}", () => projectDir);
     if (pluginRoot !== undefined) replaced = replaced.replaceAll("${CLAUDE_PLUGIN_ROOT}", () => pluginRoot);
-    if (w) {
+    if (splitWords) {
       replaced = replaced
         .replace(/^(?:~(?=[\\/])|\$HOME\b|\$\{HOME\})/, () => homeDir)
         .replace(/\$CLAUDE_PROJECT_DIR\b/g, () => projectDir);
@@ -472,54 +492,57 @@ function expandHookPathVariables({
       if (windowsBash && replaced.startsWith("/")) replaced = posixPathToWindowsPath(replaced);
     }
     if (/[$`*?[]/.test(replaced) || !isAbsolute(replaced)) continue;
-    q.push({
+    found.push({
       path: replaced,
       cutFrom: undefined,
     });
-    let ke = Z === G ? /^[^ \t\n]+(?= )/.exec(replaced)?.[0] : undefined;
-    if (ke !== undefined)
-      q.push({
-        path: ke,
+    let leading = word === scriptVar ? /^[^ \t\n]+(?= )/.exec(replaced)?.[0] : undefined;
+    if (leading !== undefined)
+      found.push({
+        path: leading,
         cutFrom: replaced,
       });
   }
-  return q;
+  return found;
 }
 //@ chunk-e6aww6q8.js:946439-946779 placement
 /**
  * 把 hook 命令行按 shell 规则拆成单词（处理引号与转义）。
  */
 function splitHookCommandWords(command) {
-  let n = [];
-  let r = "";
-  let s = false;
-  let h;
+  let words = [];
+  let buffer = "";
+  let hasContent = false;
+  let quote;
   for (let idx = 0; idx < command.length; idx++) {
-    let S = command[idx];
-    if (h !== undefined) {
-      if (S === h) h = undefined;
-      else r += S;
+    let char = command[idx];
+    if (quote !== undefined) {
+      if (char === quote) quote = undefined;
+      else buffer += char;
       continue;
     }
-    if (S === '"' || S === "'") {
-      h = S;
-      s = true;
-    } else if (S === "\\" && idx + 1 < command.length) {
-      r += command[++idx];
-      s = true;
-    } else if (/\s/.test(S)) {
-      if (s) {
-        n.push(r);
-        r = "";
-        s = false;
+    if (char === '"' || char === "'") {
+      quote = char;
+      hasContent = true;
+    } else if (char === "\\" && idx + 1 < command.length) {
+      buffer += command[++idx];
+      hasContent = true;
+    } else if (/\s/.test(char)) {
+      if (hasContent) {
+        words.push(buffer);
+        buffer = "";
+        hasContent = false;
       }
     } else {
-      r += S;
-      s = true;
+      buffer += char;
+      hasContent = true;
     }
   }
-  if (s) n.push(r);
-  return n.filter((y, S) => !REDIRECT_TOKEN_RE.test(y) && !REDIRECT_OPERATOR_RE.test(n[S - 1] ?? ""));
+  if (hasContent) words.push(buffer);
+  return words.filter(
+    (word, wordIndex) =>
+      !REDIRECT_TOKEN_RE.test(word) && !REDIRECT_OPERATOR_RE.test(words[wordIndex - 1] ?? ""),
+  );
 }
 //@ chunk-e6aww6q8.js:946779-946918 placement
 var CANNOT_OPEN_SCRIPT_RE =
@@ -530,8 +553,8 @@ var CANNOT_OPEN_SCRIPT_RE =
  */
 async function detectMissingHookScript({ stdout, stderr, scriptPaths }) {
   if (scriptPaths.length === 0 || (stdout.trim() && stderr.trim())) return;
-  let s = stderr.trim() ? stderr : stdout;
-  let filtered = s
+  let output = stderr.trim() ? stderr : stdout;
+  let filtered = output
     .split(
       `
 `,
@@ -539,63 +562,62 @@ async function detectMissingHookScript({ stdout, stderr, scriptPaths }) {
     .map((line) => line.trim())
     .filter(Boolean);
   if (filtered.length === 0) return;
-  let y = new Map();
-  for (let scriptPath of scriptPaths) y.set(normalizeScriptPathKey(scriptPath), scriptPath);
-  let S = new Set();
-  for (let L of filtered) {
-    let match = CANNOT_OPEN_SCRIPT_RE.exec(L);
-    let q = match?.[2] ?? match?.[3];
-    let Z = q === undefined ? undefined : y.get(normalizeScriptPathKey(q));
-    if (Z === undefined) return;
-    S.add(Z);
+  let byKey = new Map();
+  for (let scriptPath of scriptPaths) byKey.set(normalizeScriptPathKey(scriptPath), scriptPath);
+  let missing = new Set();
+  for (let line of filtered) {
+    let match = CANNOT_OPEN_SCRIPT_RE.exec(line);
+    let pathText = match?.[2] ?? match?.[3];
+    let scriptPath = pathText === undefined ? undefined : byKey.get(normalizeScriptPathKey(pathText));
+    if (scriptPath === undefined) return;
+    missing.add(scriptPath);
   }
-  for (let L of S)
+  for (let scriptPath of missing)
     if (
-      await access(L, constants.R_OK).then(
+      await access(scriptPath, constants.R_OK).then(
         () => true,
         () => false,
       )
     )
       return;
-  let [w] = S;
-  return w === undefined
+  let [first] = missing;
+  return first === undefined
     ? undefined
     : {
-        scriptPath: w,
-        output: s,
+        scriptPath: first,
+        output,
       };
 }
 //@ chunk-e6aww6q8.js:947406-947500 placement
-function normalizeScriptPathKey(e) {
-  let replaced = e.replace(/[\\/]+/g, "/");
+function normalizeScriptPathKey(path) {
+  let replaced = path.replace(/[\\/]+/g, "/");
   return /^[A-Za-z]:\//.test(replaced) ? replaced.toLowerCase() : replaced;
 }
 //@ chunk-e6aww6q8.js:947500-947534 placement
 /**
  * 记住的脚本路径数量上限与宿主隔离的 Map。
  */
-var MAX_REMEMBERED_SCRIPTS = 64;
-var rememberedScriptsRegistry = new HostScoped(() => new Map());
+var MAX_REMEMBERED_SCRIPTS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var rememberedScriptsRegistry;
+deferInit("chunk-e6aww6q8.js:947500", () => {
+  MAX_REMEMBERED_SCRIPTS = 64;
+  rememberedScriptsRegistry = new HostScoped(() => new Map());
+});
 //@ chunk-e6aww6q8.js:947534-947704 placement
-function rememberBounded(e, n, output) {
+function rememberBounded(cache, key, output) {
   if (output === undefined) {
-    e.delete(n);
+    cache.delete(key);
     return false;
   }
-  if (e.get(n) === output) return true;
-  e.delete(n);
-  e.set(n, output);
-  if (e.size > MAX_REMEMBERED_SCRIPTS) {
-    let [s] = e.keys();
-    if (s !== undefined) e.delete(s);
+  if (cache.get(key) === output) return true;
+  cache.delete(key);
+  cache.set(key, output);
+  if (cache.size > MAX_REMEMBERED_SCRIPTS) {
+    let [oldest] = cache.keys();
+    if (oldest !== undefined) cache.delete(oldest);
   }
   return false;
 }
-//@ chunk-e6aww6q8.js:947704-947712 placement
-/**
- * 缓存的钩子展示文本构造器。
- */
-var cachedHookDisplayBuilder;
 export {
   omitKeys,
   detectMissingHookScript,
@@ -616,7 +638,6 @@ export {
   EMPTY_PATH_DIR,
   latchLegacyPin,
   GIT_FOR_WINDOWS_LINK,
-  cachedHookDisplayBuilder,
   isPlainOptionWord,
   isSuspiciousHardLinkedFile,
   legacyPinOr,

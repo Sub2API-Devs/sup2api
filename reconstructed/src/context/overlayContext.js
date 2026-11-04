@@ -8,13 +8,22 @@
  * pieces: chunk-18hwfzwa.js (1), chunk-372tanf4.js (17)
  * attribution: fingerprint 4, placement 8, layout 6
  */
-import { init_react_production, Se, P, zt } from "../../vendor/react/cjs/react.production.js";
+import {
+  init_react_production,
+  useContext,
+  useEffect,
+  useLayoutEffect,
+} from "../../vendor/react/cjs/react.production.js";
 import { getSecondRootError } from "../ink/terminal.js";
-import { w } from "../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import { appStoreContext, useAppState, useAppStateSlice } from "../state/AppState.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-372tanf4.js:346-350 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-372tanf4.js:346", () => {
+  init_react_production();
+});
 //@ chunk-372tanf4.js:350-418 fingerprint = _temp (1)
 /**
  * 覆盖层卸载时让 stdout 的 Ink 实例重绘整帧。
@@ -71,23 +80,32 @@ function selectHasElicitationOverlay(s) {
 /**
  * 非模态覆盖层（autocomplete）；m 为提示框上方覆盖层；v 为 history-search。
  */
-var NON_MODAL_OVERLAYS = new Set(["autocomplete"]);
-var ABOVE_PROMPT_OVERLAYS = new Set(["above-prompt-input", "above-prompt-select"]);
-var HISTORY_SEARCH_OVERLAYS = new Set(["history-search"]);
+var NON_MODAL_OVERLAYS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var ABOVE_PROMPT_OVERLAYS;
+var HISTORY_SEARCH_OVERLAYS;
+deferInit("chunk-372tanf4.js:705", () => {
+  NON_MODAL_OVERLAYS = new Set(["autocomplete"]);
+  ABOVE_PROMPT_OVERLAYS = new Set(["above-prompt-input", "above-prompt-select"]);
+  HISTORY_SEARCH_OVERLAYS = new Set(["history-search"]);
+});
 //@ chunk-372tanf4.js:823-890 layout
 /**
  * elicitation/elicitation-url；WWe=2。
  */
-var ELICITATION_OVERLAYS = new Set(["elicitation", "elicitation-url", ...[], ...[]]);
-var OVERLAY_BATCH_SIZE = 2;
+var ELICITATION_OVERLAYS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var OVERLAY_BATCH_SIZE;
+deferInit("chunk-372tanf4.js:823", () => {
+  ELICITATION_OVERLAYS = new Set(["elicitation", "elicitation-url", ...[], ...[]]);
+  OVERLAY_BATCH_SIZE = 2;
+});
 //@ chunk-372tanf4.js:890-1448 fingerprint = useRegisterOverlay (1)
 /**
  * 登记一个覆盖层 id 到 activeOverlays（启用时），卸载时移除并重绘。
  */
 function useRegisterOverlay(id, t0) {
-  let $ = w(8);
+  let $ = useMemoCache(8);
   let enabled = t0 === undefined ? true : t0;
-  let setAppState = Se(appStoreContext)?.setState;
+  let setAppState = useContext(appStoreContext)?.setState;
   let t1;
   let t2;
   if ($[0] !== enabled || $[1] !== id || $[2] !== setAppState) {
@@ -130,7 +148,7 @@ function useRegisterOverlay(id, t0) {
     t1 = $[3];
     t2 = $[4];
   }
-  P(t1, t2);
+  useEffect(t1, t2);
   let t3;
   let t4;
   if ($[5] !== enabled) {
@@ -148,7 +166,7 @@ function useRegisterOverlay(id, t0) {
     t3 = $[6];
     t4 = $[7];
   }
-  zt(t3, t4);
+  useLayoutEffect(t3, t4);
 }
 //@ chunk-372tanf4.js:1448-1475 placement
 /**
@@ -159,7 +177,7 @@ function useOverlayKeys() {
 }
 //@ chunk-372tanf4.js:1475-1535 placement
 function hasUnknownKey(activeOverlays) {
-  for (let t of activeOverlays) if (!ABOVE_PROMPT_OVERLAYS.has(t)) return true;
+  for (let key of activeOverlays) if (!ABOVE_PROMPT_OVERLAYS.has(key)) return true;
   return false;
 }
 //@ chunk-372tanf4.js:1535-1562 placement
@@ -174,7 +192,7 @@ function useSecondOverlayKeys() {
  * 函数 hasUnknownOtherKey（第二组存在未登记 key）；位于「覆盖层登记（useRegisterOverlay）与各类覆盖层是否激活的选择器（模态、非模态 autocomplete、history-search、elicitation）」模块。
  */
 function hasUnknownOtherKey(activeOverlays) {
-  for (let t of activeOverlays) if (!NON_MODAL_OVERLAYS.has(t)) return true;
+  for (let key of activeOverlays) if (!NON_MODAL_OVERLAYS.has(key)) return true;
   return false;
 }
 //@ chunk-372tanf4.js:1624-1650 placement

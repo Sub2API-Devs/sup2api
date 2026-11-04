@@ -9,8 +9,63 @@
  * attribution: fingerprint 21, placement 115, layout 54, callgraph-fingerprint 2, callgraph-witnessed 3, file-local 2, affinity 1
  */
 import { randomUUID } from "crypto";
-import { isPlainObject as isPlainObject_5 } from "../../utils/isPlainObject.js";
+import { getModelMaxOutputTokens } from "../../utils/context.js";
+import { validateBoundedIntEnvVar } from "../../utils/envValidation.js";
+import { getControlRequestSubtype_2 } from "../../bridge/attestationGate.js";
+import { MUTATING_CONTROL_SUBTYPES, getControlRequestSubtype } from "../../bridge/controlRequests.js";
+import { getAttributionHeader, getCLISyspromptPrefix } from "../../constants/system.js";
+import { parseAttributionProject } from "../../utils/attributionProject.js";
+import { asSystemPrompt } from "../../utils/systemPromptType.js";
 import {
+  logAPIPrefix,
+  isStellarDriftEnabled,
+  prefetchToolDescribeHooks,
+  toolToApiDefinition,
+  shouldEnableWebSearchCitations,
+  isNotLegacyClaude3,
+  normalizeToolInput_2,
+  markRootRequestSent,
+  splitSysPromptPrefix,
+} from "../../utils/api.js";
+import { safeParseJSON } from "../../utils/json.js";
+import { logForDebugging, getMinDebugLogLevel, createAttachmentMessage_2 } from "../../utils/debug.js";
+import { getParentSessionId } from "../../utils/teammate.js";
+import {
+  isEnvTruthy,
+  getVertexRegionForModel,
+  parseIntLoose,
+  nonEmptyOrUndefined,
+} from "../../utils/envUtils.js";
+import { env, antEnv } from "../../utils/env.js";
+import {
+  isFirstPartyProvider,
+  isFirstPartyApiBackend,
+  assumesFirstPartyBaseUrl,
+  getAPIProvider,
+  isFirstPartyAnthropicHost,
+  isActualFirstPartyAnthropicBaseUrl,
+  isGenuineBedrockEndpoint,
+  isFirstPartyAnthropicBaseUrl,
+  getProviderForModel,
+  getAPIProviderForAnalytics,
+} from "../../utils/model/providers.js";
+import {
+  turnAttributionKeyFor,
+  mainAgentContext,
+  isMainAgent,
+  isSubagentContext,
+  isMainConversationContext,
+  getBackgroundAgentId,
+} from "../../utils/agentContext.js";
+import { getOrCreateUserID, getCachedClientData, getGlobalConfig } from "../../utils/config.js";
+import {
+  getAuthenticatedAccountInfo,
+  getOauthAccountInfo,
+  isClaudeAISubscriber,
+  isWIFDispatchAuth,
+} from "../../utils/auth.js";
+import {
+  getSessionId,
   getLastMainThreadContextTokens,
   getStickyBetas,
   isPromptEndMarkRefused,
@@ -58,8 +113,9 @@ import {
   setLastMainRequestId,
   setLastMainThreadContextTokens,
   takeRefusalFallbackCarriedEffortEnd,
-  getSessionId,
 } from "../../bootstrap/state.js";
+import { jsonStringify, jsonParse, clone } from "../../utils/slowOperations.js";
+import { isPlainObject as isPlainObject_5 } from "../../utils/isPlainObject.js";
 import { isMainThreadSource } from "../../utils/querySource.js";
 import {
   estimateCacheWriteCost,
@@ -163,7 +219,6 @@ import {
   isEffortLevel,
 } from "../../utils/effort.js";
 import { enqueueTaskNotification as enqueueTaskNotification_2 } from "../../utils/task/taskNotifications.js";
-import { env, antEnv } from "../../utils/env.js";
 import {
   showThinkingSummaries,
   upgradeDisabledThinkingForModel,
@@ -260,7 +315,6 @@ import {
   repairMalformedStringsDeep,
   plural,
 } from "../../utils/stringUtils.js";
-import { logForDebugging, getMinDebugLogLevel, createAttachmentMessage_2 } from "../../utils/debug.js";
 import { createApiSystemMessage, joinParts } from "../../utils/messages/systemMessages.js";
 import { getDateTimeFormat } from "../../utils/intl.js";
 import {
@@ -285,21 +339,14 @@ import {
 import { identity as identity_2 } from "../../utils/identity.js";
 import { logForDiagnosticsNoPII } from "../../utils/diagLogs.js";
 import { logFeatureSad, logFeatureOk, logFeatureBad } from "../analytics/featureTelemetry.js";
-import {
-  isFirstPartyApiBackend,
-  assumesFirstPartyBaseUrl,
-  getAPIProvider,
-  isFirstPartyAnthropicHost,
-  isActualFirstPartyAnthropicBaseUrl,
-  isGenuineBedrockEndpoint,
-  isFirstPartyAnthropicBaseUrl,
-  getProviderForModel,
-  getAPIProviderForAnalytics,
-  isFirstPartyProvider,
-} from "../../utils/model/providers.js";
-import { getCachedClientData, getGlobalConfig, getOrCreateUserID } from "../../utils/config.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, literal, string, int as int_2, union } from "../../../vendor/zod/v4/classic/schemas.js";
+import {
+  objectSchema,
+  literal,
+  stringSchema,
+  int as int_2,
+  union,
+} from "../../../vendor/zod/v4/classic/schemas.js";
 import { isObjectBlock } from "../../utils/toolResultStorage.js";
 import {
   streamFallbackWarning,
@@ -332,13 +379,11 @@ import { anyModelDescribed } from "../../utils/model/modelCatalog/catalogCapabil
 import { logEvent } from "../analytics/index.js";
 import { telemetrySafeModelName } from "../../utils/model/telemetryModelName.js";
 import { agentTypeForTelemetry, buildAttribution } from "../analytics/metadata.js";
-import { jsonStringify, jsonParse, clone } from "../../utils/slowOperations.js";
 import { writeToStderr } from "../../utils/process.js";
 import { isFoamySpringEnabled } from "../analytics/growthbookGates.js";
 import { WAITFORMCPSERVERS, markDeclared } from "../../tools/WaitForMcpServersTool/WaitForMcpServersTool.js";
 import { sanitizeMarkName } from "../../utils/startupMarks.js";
 import { lit as lit_2, fromEnumOpt, fromEnum, fromNumber } from "../analytics/safeMetadata.js";
-import { safeParseJSON } from "../../utils/json.js";
 import { getDefaultHaikuModel } from "../../utils/model/planModeModel.js";
 import {
   hasDedicatedSmallFastModel,
@@ -360,12 +405,6 @@ import {
   toProviderWireModelId,
   SECONDARY_CONTEXT_WINDOW,
 } from "../../utils/model/model.js";
-import {
-  isClaudeAISubscriber,
-  isWIFDispatchAuth,
-  getAuthenticatedAccountInfo,
-  getOauthAccountInfo,
-} from "../../utils/auth.js";
 import {
   getCurrentLimits,
   getLimitsAccountEpoch,
@@ -425,14 +464,6 @@ import {
   StreamIdleTimeoutError,
   StreamSuspendedError,
 } from "./client.js";
-import {
-  mainAgentContext,
-  isMainAgent,
-  isSubagentContext,
-  isMainConversationContext,
-  getBackgroundAgentId,
-  turnAttributionKeyFor,
-} from "../../utils/agentContext.js";
 import {
   reorderByApiBlockIndex,
   isResendableClientApiError,
@@ -512,7 +543,7 @@ import {
   MAX_MEDIA_ITEMS,
   MEDIA_BYTES_PER_ITEM_SLACK,
   MEDIA_ITEM_COUNT_FALLBACKS,
-} from "../../utils/truncateGraphemes.js";
+} from "../../utils/mediaLimits.js";
 import {
   deferredToolNameOf,
   countToolCallsSince_2 as countToolCallsSince_2_3,
@@ -628,12 +659,6 @@ import { isLiveMemoryTool, createMemoryServerVerifier } from "../mcp/memoryServe
 import { isBase64ImageBlock as isBase64ImageBlock_3 } from "../../utils/imageValidation.js";
 import { getResolvedWIFBaseUrlSnapshot } from "../oauth/wifCredentials.js";
 import {
-  getVertexRegionForModel,
-  parseIntLoose,
-  nonEmptyOrUndefined,
-  isEnvTruthy,
-} from "../../utils/envUtils.js";
-import {
   ADVISOR_TOOL_NAME,
   isAdvisorEnabled,
   isAdvisorToolEnabled,
@@ -662,17 +687,6 @@ import {
 } from "../../utils/messages/accountMemory.js";
 import { logSessionNoticeRender } from "../../utils/messages/ccrSessionNotice.js";
 import { logDeclaredRound } from "../../utils/pollEvents/declarations.js";
-import {
-  isStellarDriftEnabled,
-  prefetchToolDescribeHooks,
-  toolToApiDefinition,
-  shouldEnableWebSearchCitations,
-  isNotLegacyClaude3,
-  normalizeToolInput_2,
-  markRootRequestSent,
-  splitSysPromptPrefix,
-  logAPIPrefix,
-} from "../../utils/api.js";
 import { imageLimitsForModel } from "../../utils/attachmentMedia.js";
 import {
   queryCheckpoint,
@@ -772,7 +786,6 @@ import {
 } from "../../utils/permissions/permissionSetup.js";
 import { sessionTimeZone } from "../../utils/sessionTimeZone.js";
 import { computeFingerprintFromMessages } from "../../utils/fingerprint.js";
-import { getCLISyspromptPrefix, getAttributionHeader } from "../../constants/system.js";
 import { isBetasSwitchSetAside } from "../../utils/permissions/serverClassifier/flags.js";
 import {
   getClassifierProviderKind,
@@ -845,7 +858,10 @@ import {
   classifyStreamFailure,
   classifyAttemptOutcome,
 } from "./attemptDecision.js";
-import { mRe, $jo } from "../../../vendor/@anthropic-ai/sdk/lib/internal/tracing/response.mjs";
+import {
+  mergeUsageFromDelta,
+  addResponseUsageAttributes,
+} from "../../../vendor/@anthropic-ai/sdk/lib/internal/tracing/response.mjs";
 import {
   resolveRefusalFallbackRoute,
   isSameModel,
@@ -896,14 +912,138 @@ import { totalTokensOf } from "../../utils/messages/usageAndStopReason.js";
 import { isFirstPartyTelemetryBlocked } from "../../utils/hostEnvironment.js";
 import { getToolNameKinds } from "../../tools/SkillTool/SkillTool.js";
 import { sessionHasOwnFallback, buildAvailabilityFallbackChain } from "../../utils/model/modelFallback.js";
-import { asSystemPrompt } from "../../utils/systemPromptType.js";
-import { parseAttributionProject } from "../../utils/attributionProject.js";
-import { getParentSessionId } from "../../utils/teammate.js";
-import { getControlRequestSubtype_2 } from "../../bridge/attestationGate.js";
-import { MUTATING_CONTROL_SUBTYPES, getControlRequestSubtype } from "../../bridge/controlRequests.js";
-import { getModelMaxOutputTokens } from "../../utils/context.js";
-import { validateBoundedIntEnvVar } from "../../utils/envValidation.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
+//@ chunk-aepeg2w5.js:474942-475090 fingerprint = getMaxOutputTokensForModel (1)
+/**
+ * 主循环模型的 max_tokens：模型默认值，可用 CLAUDE_CODE_MAX_OUTPUT_TOKENS 在模型上限内调整。
+ */
+function getMaxOutputTokensForModel(model) {
+  let maxOutputTokens = getModelMaxOutputTokens(model);
+  return validateBoundedIntEnvVar(
+    "CLAUDE_CODE_MAX_OUTPUT_TOKENS",
+    process.env.CLAUDE_CODE_MAX_OUTPUT_TOKENS,
+    maxOutputTokens.default,
+    maxOutputTokens.upperLimit,
+  ).effective;
+}
+//@ chunk-1qpz7qcd.js:30432-30552 fingerprint = getPreviousRequestIdFromMessages (0.653)
+/**
+ * 控制请求子类型在白名单内时返回 {subtype, requestId}。旧版名 getPreviousRequestIdFromMessages 为错配。
+ */
+function getControlRequestInfo(messages) {
+  let controlRequestSubtype = getControlRequestSubtype_2(messages);
+  if (controlRequestSubtype === undefined || !MUTATING_CONTROL_SUBTYPES.has(controlRequestSubtype)) return;
+  return {
+    subtype: controlRequestSubtype,
+    requestId: messages.payload ? getControlRequestSubtype(messages.payload) : undefined,
+  };
+}
+//@ chunk-w5ndchqs.js:2496-2556 placement
+/**
+ * ti/os/sb/he/uf/ap/tk：CLAUDE_CODE_EXTRA_METADATA 不能覆盖的保留键；512 为 user_id JSON 的长度上限。
+ */
+var RESERVED_METADATA_KEYS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var MAX_METADATA_USER_ID_LENGTH;
+deferInit("chunk-w5ndchqs.js:2496", () => {
+  RESERVED_METADATA_KEYS = new Set(["ti", "os", "sb", "he", "uf", "ap", "tk"]);
+  MAX_METADATA_USER_ID_LENGTH = 512;
+});
+//@ chunk-w5ndchqs.js:2556-2709 placement
+/**
+ * 去掉保留键，只保留字符串/数字/布尔值的附加 metadata 字段。
+ */
+function sanitizeExtraMetadata(parsed) {
+  let extraMetadata = {};
+  for (let [key, value] of Object.entries(parsed))
+    if (
+      !RESERVED_METADATA_KEYS.has(key) &&
+      (typeof value === "string" || typeof value === "number" || typeof value === "boolean")
+    )
+      extraMetadata[key] = value;
+  return extraMetadata;
+}
+//@ chunk-w5ndchqs.js:3172-3418 placement
+/**
+ * 构造请求 system：计费/归因头、额外前缀与原 system 依次拼接（去掉空项），并记录 API 前缀。
+ */
+function buildSystemWithAttribution(systemPrompt, prefix, options) {
+  let attributionHeader = getAttributionHeader(
+    options.fingerprint,
+    options.agentContext,
+    options.previousRequestId,
+    options.promptId,
+    options.turnOrigin,
+    options.turnPosition,
+    {
+      attributionProject: parseAttributionProject(),
+      responseBeforeCompaction: options.responseBeforeCompaction,
+    },
+  );
+  let systemPrompt_2 = asSystemPrompt([attributionHeader, prefix, ...systemPrompt].filter(Boolean));
+  logAPIPrefix(systemPrompt_2);
+  return systemPrompt_2;
+}
+//@ chunk-w5ndchqs.js:5496-6185 fingerprint = getAPIMetadata (0.694)
+/**
+ * 请求体 metadata：user_id 为 JSON 字符串 {device_id, account_uuid, session_id, parent_session_id?, tk?}，可合并 CLAUDE_CODE_EXTRA_METADATA（超长时丢弃附加字段）。
+ */
+function getAPIMetadata({ agentContext, servedSessionMode } = {}) {
+  let extraMetadata = {};
+  let extraStr = process.env.CLAUDE_CODE_EXTRA_METADATA;
+  if (extraStr) {
+    let parsed = safeParseJSON(extraStr, false);
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed))
+      extraMetadata = sanitizeExtraMetadata(parsed);
+    else
+      logForDebugging(`CLAUDE_CODE_EXTRA_METADATA env var must be a JSON object, but was given ${extraStr}`, {
+        level: "error",
+      });
+  }
+  let reservedMetadata = {};
+  let turnInfo;
+  let parentSessionId = getParentSessionId();
+  let turnAttributionKey =
+    isEnvTruthy(env.CLAUDE_CODE_REMOTE) && isFirstPartyProvider()
+      ? turnAttributionKeyFor(agentContext)
+      : undefined;
+  let baseMetadata = {
+    ...(turnInfo && {
+      ti: turnInfo,
+    }),
+    device_id: getOrCreateUserID(),
+    account_uuid:
+      (isEnvTruthy(env.CLAUDE_CODE_REMOTE) && env.CLAUDE_CODE_ACCOUNT_UUID) ||
+      getAuthenticatedAccountInfo()?.accountUuid ||
+      getOauthAccountInfo()?.accountUuid ||
+      "",
+    session_id: getSessionId(),
+    ...(parentSessionId && {
+      parent_session_id: parentSessionId,
+    }),
+    ...(turnAttributionKey && {
+      tk: turnAttributionKey,
+    }),
+  };
+  let metadata = {
+    ...reservedMetadata,
+    ...extraMetadata,
+    ...baseMetadata,
+  };
+  if (
+    (Object.keys(extraMetadata).length > 0 || Object.keys(reservedMetadata).length > 0) &&
+    jsonStringify(metadata).length > MAX_METADATA_USER_ID_LENGTH
+  ) {
+    metadata = {
+      ...reservedMetadata,
+      ...baseMetadata,
+    };
+    if (jsonStringify(metadata).length > MAX_METADATA_USER_ID_LENGTH) metadata = baseMetadata;
+  }
+  return {
+    user_id: jsonStringify(metadata),
+  };
+}
 //@ chunk-e6aww6q8.js:445621-445714 fingerprint = isToolResultBlock (0.745)
 /**
  * user 消息里所有 tool_result 的 tool_use_id。旧版名 isToolResultBlock 不准确。
@@ -917,23 +1057,23 @@ function getToolResultIds(block) {
 /**
  * 从内容数组里取指定 type 块的某个字符串字段（如 tool_use 的 id、tool_result 的 tool_use_id）。
  */
-function collectBlockFieldsByType(content, n, r) {
+function collectBlockFieldsByType(content, blockType, fieldName) {
   if (!Array.isArray(content)) return [];
-  let s = [];
-  for (let h of content)
-    if (isPlainObject_5(h) && h.type === n) {
-      let y = h[r];
-      if (typeof y === "string") s.push(y);
+  let values = [];
+  for (let block of content)
+    if (isPlainObject_5(block) && block.type === blockType) {
+      let value = block[fieldName];
+      if (typeof value === "string") values.push(value);
     }
-  return s;
+  return values;
 }
 //@ chunk-e6aww6q8.js:2077127-2077220 placement
-function buildContextTokensFields(toModel) {
-  let n = getLastMainThreadContextTokens() ?? 0;
+function buildContextTokensFields(model) {
+  let contextTokens = getLastMainThreadContextTokens() ?? 0;
   return {
-    context_tokens: n,
+    context_tokens: contextTokens,
     prompt_cache_warm: isMainThreadSource([]),
-    ...estimateCacheWriteCost(toModel, n),
+    ...estimateCacheWriteCost(model, contextTokens),
   };
 }
 //@ chunk-e6aww6q8.js:2476386-2476451 placement
@@ -961,9 +1101,9 @@ function ultrathinkEffectiveSafely(model, readSessionEffort) {
   }
 }
 //@ chunk-e6aww6q8.js:2476516-2476650 placement
-function notifyPerTurnEffortInactive(e, n) {
+function notifyPerTurnEffortInactive(messages, isPerTurnEffortActive) {
   try {
-    if (!n && hasContextBeta(e))
+    if (!isPerTurnEffortActive && hasContextBeta(messages))
       enqueueTaskNotification_2({
         type: "system",
         subtype: "per_turn_effort_changed",
@@ -978,9 +1118,9 @@ function thinkingDisplayUpdatesEnabled() {
   return env.CLAUDE_CODE_THINKING_DISPLAY_UPDATES ?? true;
 }
 //@ chunk-e6aww6q8.js:2476715-2476938 placement
-function thinkingDisplayMode(display, n) {
+function thinkingDisplayMode(display, isThinkingDisabled) {
   if (display === "summarized" || display === "highlights") return "thinking_and_connector_text";
-  if (display === "omitted" && !n) return "none";
+  if (display === "omitted" && !isThinkingDisabled) return "none";
   if (display !== "omitted" && showThinkingSummaries()) return "thinking_and_connector_text";
   return thinkingDisplayUpdatesEnabled() ? "connector_text" : "none";
 }
@@ -1006,52 +1146,63 @@ function noteThinkingDisplayProbeFailure() {
     (sessionFeatureValues.thinkingDisplayProbeFailures ?? 0) + 1;
 }
 //@ chunk-e6aww6q8.js:2495003-2495042 placement
-var computerToolRelayModule = require("./chunk-s5mxraj2.js");
+var computerToolRelayModule; // deferred: loads other modules while loading; runs once its import cycle is complete
+deferInit("chunk-e6aww6q8.js:2495003", () => {
+  computerToolRelayModule = require("../remoteTools/isLinkedComputerToolShownOnRelay.lazy.js");
+});
 //@ chunk-e6aww6q8.js:2495042-2495128 placement
-function isClaudeAiAlwaysLoadMcpTool(e) {
-  return e.isMcp === true && e.alwaysLoad === true && e.mcpInfo?.scope === "claudeai";
+function isClaudeAiAlwaysLoadMcpTool(tool) {
+  return tool.isMcp === true && tool.alwaysLoad === true && tool.mcpInfo?.scope === "claudeai";
 }
 //@ chunk-e6aww6q8.js:2495128-2495583 placement
 /**
  * 计算本次请求声明的工具集（DeclaredToolSet）：启用 ToolSearch 时排除延迟加载的工具（CLAUDE_CODE_UPFRONT_TOOLS 中的可提前声明）；条件不满足返回 undefined。
  */
 function computeDeclaredToolSet(betas, tools, isDeferred, context, upfront = false) {
-  let y = betas === getStickyBetas();
-  let S = (Z) =>
+  let isStickyBetas = betas === getStickyBetas();
+  let wantsDeclared = (tool) =>
     !betas.declaredToolsDecided &&
-    (isClaudeAiAlwaysLoadMcpTool(Z) ||
-      (y && computerToolRelayModule?.isLinkedComputerToolShownOnRelay(Z, betas, context) === true));
-  let w = turnDeniedTools(tools, betas);
-  let L = w !== tools;
-  let G = (Z) =>
-    Z.mcpInfo?.scope !== "claudeai" && toolMatchesAnyName(Z, env.CLAUDE_CODE_UPFRONT_TOOLS ?? []);
-  let q = upfront && !betas.declaredToolsDecided && w.some((Z) => G(Z) && isDeferred(Z));
+    (isClaudeAiAlwaysLoadMcpTool(tool) ||
+      (isStickyBetas &&
+        computerToolRelayModule?.isLinkedComputerToolShownOnRelay(tool, betas, context) === true));
+  let remainingTools = turnDeniedTools(tools, betas);
+  let isTurnDenied = remainingTools !== tools;
+  let isUpfrontTool = (tool) =>
+    tool.mcpInfo?.scope !== "claudeai" && toolMatchesAnyName(tool, env.CLAUDE_CODE_UPFRONT_TOOLS ?? []);
+  let hasUpfrontDeferred =
+    upfront &&
+    !betas.declaredToolsDecided &&
+    remainingTools.some((tool) => isUpfrontTool(tool) && isDeferred(tool));
   if (
-    (L ? betas.declaredTools !== undefined : betas.declaredToolsDecided) ||
+    (isTurnDenied ? betas.declaredTools !== undefined : betas.declaredToolsDecided) ||
     !isFoamySpringEnabled_2() ||
-    (!L && !q && !tools.some(S)) ||
+    (!isTurnDenied && !hasUpfrontDeferred && !tools.some(wantsDeclared)) ||
     !tools.some((tool) => toolMatchesName(tool, TOOL_SEARCH_TOOL_NAME))
   )
     return;
-  return new DeclaredToolSet(w.filter((Z) => (!isDeferred(Z) || (q && G(Z))) && !S(Z)));
+  return new DeclaredToolSet(
+    remainingTools.filter(
+      (tool) => (!isDeferred(tool) || (hasUpfrontDeferred && isUpfrontTool(tool))) && !wantsDeclared(tool),
+    ),
+  );
 }
 //@ chunk-e6aww6q8.js:2512232-2512247 placement
 var MSG = "msg_";
 //@ chunk-e6aww6q8.js:2512247-2512432 placement
-function isRealApiResponse(e) {
-  if (e.isApiErrorMessage) return false;
-  if (e.requestId) return true;
-  if (e.isVirtual) return false;
-  let id = e.message?.id;
-  return typeof id === "string" && id.startsWith(MSG) && e.message?.model !== SYNTHETIC_MODEL;
+function isRealApiResponse(message) {
+  if (message.isApiErrorMessage) return false;
+  if (message.requestId) return true;
+  if (message.isVirtual) return false;
+  let id = message.message?.id;
+  return typeof id === "string" && id.startsWith(MSG) && message.message?.model !== SYNTHETIC_MODEL;
 }
 //@ chunk-e6aww6q8.js:2512432-2512602 placement
 function lastAssistantMessageId(messages) {
   try {
     for (let idx = messages.length - 1; idx >= 0; idx--) {
-      let r = messages[idx];
-      if (r.type === "assistant" && isRealApiResponse(r)) {
-        let id = r.message?.id;
+      let message = messages[idx];
+      if (message.type === "assistant" && isRealApiResponse(message)) {
+        let id = message.message?.id;
         if (typeof id === "string") return id;
       }
     }
@@ -1068,28 +1219,28 @@ function isBasaltSpurEnabled() {
   return canSendFirstPartyBetas() && getFeatureValue_CACHED_MAY_BE_STALE("tengu_basalt_spur", false);
 }
 //@ chunk-e6aww6q8.js:2533686-2533737 placement
-function isExtractMemoriesSkipCacheWrite(querySource, n) {
-  return querySource === "extract_memories" && n;
+function isExtractMemoriesSkipCacheWrite(querySource, skipCacheWrite) {
+  return querySource === "extract_memories" && skipCacheWrite;
 }
 //@ chunk-e6aww6q8.js:2533737-2533792 placement
 function isBasaltScarpEnabled() {
   return canSendFirstPartyBetas() && getFeatureValue_CACHED_MAY_BE_STALE("tengu_basalt_scarp", false);
 }
 //@ chunk-e6aww6q8.js:2533792-2533974 placement = hasThinkingContent (1)
-function isRenderableContentBlock(e, n) {
-  if (e.type === "text") {
-    if (typeof e.text !== "string" || e.text === "") return false;
-    return !n || e.text.trim() !== "";
+function isRenderableContentBlock(block, whitespaceTextUnstampable) {
+  if (block.type === "text") {
+    if (typeof block.text !== "string" || block.text === "") return false;
+    return !whitespaceTextUnstampable || block.text.trim() !== "";
   }
-  return e.type !== "thinking" && e.type !== "redacted_thinking" && !isFallbackMessage(e);
+  return block.type !== "thinking" && block.type !== "redacted_thinking" && !isFallbackMessage(block);
 }
 //@ chunk-e6aww6q8.js:2533974-2534124 placement
-function lastBlockIsRenderable(e, whitespaceTextUnstampable) {
-  if (e.type !== "assistant") return true;
-  let content = e.message.content;
+function lastBlockIsRenderable(message, whitespaceTextUnstampable) {
+  if (message.type !== "assistant") return true;
+  let content = message.message.content;
   if (typeof content === "string") return true;
-  let last = content.at(-1);
-  return last !== undefined && isRenderableContentBlock(last, whitespaceTextUnstampable);
+  let block = content.at(-1);
+  return block !== undefined && isRenderableContentBlock(block, whitespaceTextUnstampable);
 }
 //@ chunk-e6aww6q8.js:2534124-2534476 placement
 /**
@@ -1134,23 +1285,27 @@ function pickCacheMarkerIndices({
   parentReplyId,
   tailAuditTerms = DEFAULT_TAIL_AUDIT_TERMS,
 }) {
-  let isRenderable = (It) => lastBlockIsRenderable(It, whitespaceTextUnstampable);
-  let isSkippable = (It) =>
-    It.type === "api_system" || (It.type === "user" && It.ephemeral === true) || !isRenderable(It);
-  let lastCacheableBefore = (It) => {
-    let Yt = It;
-    while (Yt >= 0 && isSkippable(messages[Yt])) Yt--;
-    return Yt;
+  let isRenderable = (message) => lastBlockIsRenderable(message, whitespaceTextUnstampable);
+  let isSkippable = (message) =>
+    message.type === "api_system" ||
+    (message.type === "user" && message.ephemeral === true) ||
+    !isRenderable(message);
+  let lastCacheableBefore = (index) => {
+    let cursor = index;
+    while (cursor >= 0 && isSkippable(messages[cursor])) cursor--;
+    return cursor;
   };
   let tailIndex = lastCacheableBefore(messages.length - 1);
   if (skipCacheWrite) tailIndex = lastCacheableBefore(tailIndex - 1);
-  let isMarkableApiSystem = (It, Yt) => {
-    let candidate = messages[It];
+  let isMarkableApiSystem = (index, floorIndex) => {
+    let candidate = messages[index];
     return (
       candidate !== undefined &&
       candidate.type === "api_system" &&
       !candidate.ephemeral &&
-      !messages.slice(Yt + 1, It).some((message) => message.type === "user" && message.ephemeral === true) &&
+      !messages
+        .slice(floorIndex + 1, index)
+        .some((message) => message.type === "user" && message.ephemeral === true) &&
       typeof candidate.message.content === "string" &&
       candidate.message.content.trim() !== ""
     );
@@ -1186,21 +1341,21 @@ function pickCacheMarkerIndices({
     if (forkPointUuid) {
       let lastIndex = messages.findLastIndex((message) => message.uuid === forkPointUuid);
       if (lastIndex >= 0 && lastIndex <= tailIndex) {
-        let Yt =
+        let forkPinIndex =
           skipCacheWrite && lastIndex === tailIndex && isForkPinStepBackEnabled()
             ? lastCacheableBefore(lastIndex - 1)
             : isRenderable(messages[lastIndex])
               ? lastIndex
               : lastCacheableBefore(lastIndex - 1);
-        if (Yt >= 0) {
-          markerIndices.add(Yt);
+        if (forkPinIndex >= 0) {
+          markerIndices.add(forkPinIndex);
           forkPointPinned = true;
         }
       }
     } else if (!skipCacheWrite) {
-      let It = lastCacheableBefore(tailIndex - 1);
-      if (It >= 0) {
-        markerIndices.add(It);
+      let prevIndex = lastCacheableBefore(tailIndex - 1);
+      if (prevIndex >= 0) {
+        markerIndices.add(prevIndex);
         forkPointPinned = true;
       }
     }
@@ -1235,7 +1390,7 @@ function explainCacheControlSkip({
   terms,
   whitespaceTextUnstampable,
 }) {
-  let w = messages.length - 1;
+  let lastIndex = messages.length - 1;
   if (!cachingOn)
     return {
       reason: terms.skipMessageCacheMarkers ? "no_message_markers" : "caching_off",
@@ -1244,100 +1399,104 @@ function explainCacheControlSkip({
       sentOnceTailTokensEst: 0,
       unexcusedTailTokensEst: 0,
     };
-  let L = skipCacheWrite ? "fork_tail_skip_cache_write" : undefined;
-  let G = terms.proxyDemoted
+  let forcedReason = skipCacheWrite ? "fork_tail_skip_cache_write" : undefined;
+  let lastReason = terms.proxyDemoted
     ? "proxy_demoted"
     : terms.experimentalBetasDisabled || terms.simulateProxyUsage
       ? "experimental_betas_disabled"
       : "unexcused";
-  let lastIndex = messages.findLastIndex(
-    (message, lt) => lt >= firstTailIndex && message.type === "assistant",
+  let lastIndex_2 = messages.findLastIndex(
+    (message, idx) => idx >= firstTailIndex && message.type === "assistant",
   );
-  let Z = 0;
-  let Se = 0;
+  let resentTokens = 0;
+  let sentOnceTokens = 0;
   let unexcusedTailTokensEst = 0;
-  let we = false;
-  let Ee = "none";
-  let Ae = (ze) => {
-    if (CACHE_SKIP_REASON_CODES[ze] > CACHE_SKIP_REASON_CODES[Ee]) Ee = ze;
+  let sawRequestScopedUser = false;
+  let worstReason = "none";
+  let noteReason = (reason) => {
+    if (CACHE_SKIP_REASON_CODES[reason] > CACHE_SKIP_REASON_CODES[worstReason]) worstReason = reason;
   };
-  let Ie = (ze, lt) => {
-    if (ze === 0) return;
-    if (lt === "unexcused" || lt === "sent_once_oversized" || lt === "sent_once_mislabeled")
-      unexcusedTailTokensEst += ze;
-    Ae(lt);
+  let addReasoned = (tokens, reason) => {
+    if (tokens === 0) return;
+    if (reason === "unexcused" || reason === "sent_once_oversized" || reason === "sent_once_mislabeled")
+      unexcusedTailTokensEst += tokens;
+    noteReason(reason);
   };
-  let Me = (ze, lt) => {
-    Se += ze;
-    Ie(
-      ze,
-      L ??
-        (lt ? "sent_once_mislabeled" : ze > MAX_TAIL_AUDIT_ITEMS ? "sent_once_oversized" : "sent_once_text"),
+  let addSentOnce = (tokens, isMislabeled) => {
+    sentOnceTokens += tokens;
+    addReasoned(
+      tokens,
+      forcedReason ??
+        (isMislabeled
+          ? "sent_once_mislabeled"
+          : tokens > MAX_TAIL_AUDIT_ITEMS
+            ? "sent_once_oversized"
+            : "sent_once_text"),
     );
   };
-  let We = messages[firstTailIndex - 1];
-  if (We?.type === "api_system" && We.ephemeralSuffix !== undefined)
-    Me(roughTokensOfTrimmed(We.ephemeralSuffix), false);
-  for (let ze = firstTailIndex; ze <= w; ze++) {
-    let lt = messages[ze];
-    if (lt.type === "api_system") {
-      let content = lt.message.content;
-      Me(
-        roughTokensOfTrimmed(lt.ephemeral ? content : (lt.ephemeralSuffix ?? "")),
-        lt.ephemeral === true && hasFoldedAttachmentEdits(lt),
+  let prevMessage = messages[firstTailIndex - 1];
+  if (prevMessage?.type === "api_system" && prevMessage.ephemeralSuffix !== undefined)
+    addSentOnce(roughTokensOfTrimmed(prevMessage.ephemeralSuffix), false);
+  for (let idx = firstTailIndex; idx <= lastIndex; idx++) {
+    let message = messages[idx];
+    if (message.type === "api_system") {
+      let content = message.message.content;
+      addSentOnce(
+        roughTokensOfTrimmed(message.ephemeral ? content : (message.ephemeralSuffix ?? "")),
+        message.ephemeral === true && hasFoldedAttachmentEdits(message),
       );
-      if (lt.ephemeral) continue;
-      let nt = roughTokensOfTrimmed(content);
-      Z += nt;
-      Ie(
-        nt,
-        L ??
-          (ze < lastIndex
+      if (message.ephemeral) continue;
+      let tokens = roughTokensOfTrimmed(content);
+      resentTokens += tokens;
+      addReasoned(
+        tokens,
+        forcedReason ??
+          (idx < lastIndex_2
             ? "unstampable_tail"
-            : we
+            : sawRequestScopedUser
               ? "request_scoped_user"
-              : ze === w && !canMarkApiSystem
-                ? G
+              : idx === lastIndex && !canMarkApiSystem
+                ? lastReason
                 : "unexcused"),
       );
-    } else if (lt.type === "user" && lt.ephemeral === true) {
-      Se += roughTokenCountEstimationForContent(lt.message.content);
-      we = true;
-      Ae("request_scoped_user");
+    } else if (message.type === "user" && message.ephemeral === true) {
+      sentOnceTokens += roughTokenCountEstimationForContent(message.message.content);
+      sawRequestScopedUser = true;
+      noteReason("request_scoped_user");
     } else {
-      let Je = roughTokenCountEstimationForContent(lt.message.content);
-      Z += Je;
-      Ie(
-        Je,
-        L ??
-          (lt.type === "assistant" && !lastBlockIsRenderable(lt, whitespaceTextUnstampable)
+      let tokens = roughTokenCountEstimationForContent(message.message.content);
+      resentTokens += tokens;
+      addReasoned(
+        tokens,
+        forcedReason ??
+          (message.type === "assistant" && !lastBlockIsRenderable(message, whitespaceTextUnstampable)
             ? "unstampable_tail"
             : "unexcused"),
       );
     }
   }
   return {
-    reason: L ?? Ee,
-    messagesAfterMarker: w - firstTailIndex + 1,
-    resentTailTokensEst: Z,
-    sentOnceTailTokensEst: Se,
+    reason: forcedReason ?? worstReason,
+    messagesAfterMarker: lastIndex - firstTailIndex + 1,
+    resentTailTokensEst: resentTokens,
+    sentOnceTailTokensEst: sentOnceTokens,
     unexcusedTailTokensEst,
   };
 }
 //@ chunk-e6aww6q8.js:2537557-2537777 placement
-function hasFoldedAttachmentEdits(e) {
+function hasFoldedAttachmentEdits(block) {
   return (
-    (e.foldedAttachmentSpans?.length ?? 0) > 0 ||
-    (e.foldedAttachmentTypes?.length ?? 0) > 0 ||
-    e.nameOnlyContent !== undefined ||
-    (e.toolAdditions?.length ?? 0) > 0 ||
-    (e.toolRemovals?.length ?? 0) > 0 ||
-    e.toolDefinitions !== undefined
+    (block.foldedAttachmentSpans?.length ?? 0) > 0 ||
+    (block.foldedAttachmentTypes?.length ?? 0) > 0 ||
+    block.nameOnlyContent !== undefined ||
+    (block.toolAdditions?.length ?? 0) > 0 ||
+    (block.toolRemovals?.length ?? 0) > 0 ||
+    block.toolDefinitions !== undefined
   );
 }
 //@ chunk-e6aww6q8.js:2537777-2537822 placement
-function roughTokensOfTrimmed(e) {
-  return e.trim() === "" ? 0 : roughTokenCountEstimation(e);
+function roughTokensOfTrimmed(text) {
+  return text.trim() === "" ? 0 : roughTokenCountEstimation(text);
 }
 //@ chunk-e6aww6q8.js:2537822-2538195 placement
 /**
@@ -1352,8 +1511,8 @@ function parentReplyMarkPlan({ querySource, model, isKeepaliveHeaderOnWire, hasS
       isPromptEndMarkRefused()
     )
       return;
-    for (let y of keepaliveRequestIds(model)) {
-      let found = messages.find((message) => message.type === "assistant" && message.requestId === y);
+    for (let requestId of keepaliveRequestIds(model)) {
+      let found = messages.find((message) => message.type === "assistant" && message.requestId === requestId);
       if (found?.type === "assistant")
         return {
           querySource,
@@ -1368,15 +1527,15 @@ function parentReplyMarkPlan({ querySource, model, isKeepaliveHeaderOnWire, hasS
   }
 }
 //@ chunk-e6aww6q8.js:2538195-2538259 placement
-function isStructuredOutputsUnsupportedClaude(e) {
+function isStructuredOutputsUnsupportedClaude(model) {
   return (
-    isStructuredOutputsMarkedUnsupported(stripAnyVersatileSuffix(e)) ||
-    !foundrySupportsCapability(e, "structured_outputs")
+    isStructuredOutputsMarkedUnsupported(stripAnyVersatileSuffix(model)) ||
+    !foundrySupportsCapability(model, "structured_outputs")
   );
 }
 //@ chunk-e6aww6q8.js:2538259-2538286 placement
-function markStructuredOutputsUnsupportedClaude(e) {
-  markStructuredOutputsUnsupported(stripAnyVersatileSuffix(e));
+function markStructuredOutputsUnsupportedClaude(model) {
+  markStructuredOutputsUnsupported(stripAnyVersatileSuffix(model));
 }
 //@ chunk-e6aww6q8.js:2562306-2563334 placement
 /**
@@ -1384,98 +1543,100 @@ function markStructuredOutputsUnsupportedClaude(e) {
  */
 async function* joinWebSearchCitationTexts(stream, enabled) {
   if (!env.CLAUDE_CODE_WEBSEARCH_CITATIONS || !enabled) return yield* stream;
-  let r = [];
-  let s = new Map();
-  function* h() {
-    let w = r;
-    r = [];
-    let last = w.at(-1);
+  let buffer = [];
+  let replacements = new Map();
+  function* flushBuffer() {
+    let buffered = buffer;
+    buffer = [];
+    let last = buffered.at(-1);
     if (last === undefined) return;
-    let G;
+    let mergedContent;
     try {
-      G = mergeCitedTextBlocks(w.flatMap((ke) => ke.message.content));
+      mergedContent = mergeCitedTextBlocks(buffered.flatMap((message) => message.message.content));
     } catch (error) {
       logError(error);
-      yield* w;
+      yield* buffered;
       return;
     }
-    if (G === undefined) {
+    if (mergedContent === undefined) {
       yield last;
       return;
     }
-    let { apiBlockIndex, ...Z } = last;
-    let Se = {
-      ...Z,
+    let { apiBlockIndex, ...rest } = last;
+    let mergedMessage = {
+      ...rest,
       message: {
         ...last.message,
-        content: G,
+        content: mergedContent,
       },
     };
-    for (let ke of w) s.set(ke, Se);
-    yield Se;
+    for (let message of buffered) replacements.set(message, mergedMessage);
+    yield mergedMessage;
   }
-  function y() {
-    for (let [w, L] of s) {
-      if (w.uuid !== L.uuid) continue;
-      let { message, apiBlockIndex, ...Z } = w;
-      Object.assign(L, Z);
-      Object.assign(L.message, message, {
-        content: L.message.content,
+  function applyReplacements() {
+    for (let [original, replacement] of replacements) {
+      if (original.uuid !== replacement.uuid) continue;
+      let { message, apiBlockIndex, ...rest } = original;
+      Object.assign(replacement, rest);
+      Object.assign(replacement.message, message, {
+        content: replacement.message.content,
       });
     }
   }
-  let S = (w) => uniq(w.map((L) => s.get(L) ?? L));
+  let remapMessages = (list) => uniq(list.map((message) => replacements.get(message) ?? message));
   try {
-    for await (let w of stream) {
-      if (w.type === "assistant") {
-        let last = r.at(-1);
-        if (last !== undefined && !isNextTextBlock(last, w)) yield* h();
-        r.push(w);
-        if (!isSingleTextBlockMessage(w)) yield* h();
+    for await (let message of stream) {
+      if (message.type === "assistant") {
+        let prevMessage = buffer.at(-1);
+        if (prevMessage !== undefined && !isNextTextBlock(prevMessage, message)) yield* flushBuffer();
+        buffer.push(message);
+        if (!isSingleTextBlockMessage(message)) yield* flushBuffer();
         continue;
       }
-      if (!isTextStreamEvent(w)) {
-        yield* h();
-        y();
+      if (!isTextStreamEvent(message)) {
+        yield* flushBuffer();
+        applyReplacements();
       }
-      if (w.type === "server_fallback")
+      if (message.type === "server_fallback")
         yield {
-          ...w,
-          discardedMessages: S(w.discardedMessages),
-          retainedMessages: S(w.retainedMessages),
+          ...message,
+          discardedMessages: remapMessages(message.discardedMessages),
+          retainedMessages: remapMessages(message.retainedMessages),
         };
-      else if (w.type === "stream_event" && w.event.type === "message_start")
+      else if (message.type === "stream_event" && message.event.type === "message_start")
         yield {
-          ...w,
+          ...message,
           textRunsJoined: true,
         };
-      else yield w;
+      else yield message;
     }
   } catch (error) {
-    yield* h();
+    yield* flushBuffer();
     throw error;
   }
-  yield* h();
+  yield* flushBuffer();
 }
 //@ chunk-e6aww6q8.js:2563334-2563448 placement
-function isSingleTextBlockMessage(e) {
+function isSingleTextBlockMessage(message) {
   return (
-    e.apiBlockIndex !== undefined && e.message.content.length === 1 && e.message.content[0].type === "text"
+    message.apiBlockIndex !== undefined &&
+    message.message.content.length === 1 &&
+    message.message.content[0].type === "text"
   );
 }
 //@ chunk-e6aww6q8.js:2563448-2563517 placement
-function isNextTextBlock(e, n) {
-  return isSingleTextBlockMessage(n) && n.apiBlockIndex === e.apiBlockIndex + 1;
+function isNextTextBlock(prevMessage, message) {
+  return isSingleTextBlockMessage(message) && message.apiBlockIndex === prevMessage.apiBlockIndex + 1;
 }
 //@ chunk-e6aww6q8.js:2563517-2563726 placement
-function isTextStreamEvent(e) {
-  if (e.type !== "stream_event") return false;
-  let event = e.event;
-  let r = event.type;
+function isTextStreamEvent(message) {
+  if (message.type !== "stream_event") return false;
+  let event = message.event;
+  let eventType = event.type;
   return (
-    r === "ping" ||
-    r === "content_block_delta" ||
-    r === "content_block_stop" ||
+    eventType === "ping" ||
+    eventType === "content_block_delta" ||
+    eventType === "content_block_stop" ||
     (event.type === "content_block_start" && event.content_block.type === "text")
   );
 }
@@ -1483,52 +1644,59 @@ function isTextStreamEvent(e) {
 /**
  * 合并相邻文本块并把引用的 span 改写为合并后文本中的码点区间（网页搜索位置引用除外），没有变化时返回 undefined。
  */
-function mergeCitedTextBlocks(e) {
-  let n = [];
-  let r = false;
-  let s = 0;
-  for (let h of e) {
-    if (h.type !== "text") {
-      n.push(h);
+function mergeCitedTextBlocks(blocks) {
+  let merged = [];
+  let sawCitationOrSplit = false;
+  let offset = 0;
+  for (let block of blocks) {
+    if (block.type !== "text") {
+      merged.push(block);
       continue;
     }
-    let last = n.at(-1);
-    let S = last?.type === "text" ? last : undefined;
-    let w = S === undefined ? 0 : s;
-    s = w + countCodePoints(h.text);
-    let mapped = (h.citations ?? []).map((q) =>
-      q.type === "web_search_result_location"
-        ? q
+    let last = merged.at(-1);
+    let prevText = last?.type === "text" ? last : undefined;
+    let prevSpanEnd = prevText === undefined ? 0 : offset;
+    offset = prevSpanEnd + countCodePoints(block.text);
+    let mapped = (block.citations ?? []).map((citation) =>
+      citation.type === "web_search_result_location"
+        ? citation
         : {
-            ...q,
-            span_start: w,
-            span_end: s,
+            ...citation,
+            span_start: prevSpanEnd,
+            span_end: offset,
           },
     );
-    r ||= S !== undefined || mapped.length > 0;
-    if (S !== undefined) n.pop();
-    let G = [...(S?.citations ?? []), ...mapped];
-    n.push({
-      ...h,
-      text: (S?.text ?? "") + h.text,
-      citations: G.length > 0 ? G : null,
+    sawCitationOrSplit ||= prevText !== undefined || mapped.length > 0;
+    if (prevText !== undefined) merged.pop();
+    let citations = [...(prevText?.citations ?? []), ...mapped];
+    merged.push({
+      ...block,
+      text: (prevText?.text ?? "") + block.text,
+      citations: citations.length > 0 ? citations : null,
     });
   }
-  return r ? n : undefined;
+  return sawCitationOrSplit ? merged : undefined;
 }
 //@ chunk-e6aww6q8.js:2564164-2564343 placement
 /**
  * web 搜索相关的内容常量：web_search/server_tool_use、web_search_tool_result、引用位置类型、占位文案与计数初始值。
  */
-var WEB_SEARCH = "web_search";
-var WEB_SEARCH_TOOL_RESULT = "web_search_tool_result";
-var WEB_SEARCH_RESULT_LOCATION = "web_search_result_location";
-var WEB_SEARCH_REMOVED_TEXT = "[Web search removed]";
-var Fun = Object.freeze({
-  toolUses: 0,
-  results: 0,
-  citations: 0,
-  placeholders: 0,
+var WEB_SEARCH; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var WEB_SEARCH_TOOL_RESULT;
+var WEB_SEARCH_RESULT_LOCATION;
+var WEB_SEARCH_REMOVED_TEXT;
+var ZERO_WEB_SEARCH_REMOVALS;
+deferInit("chunk-e6aww6q8.js:2564164", () => {
+  WEB_SEARCH = "web_search";
+  WEB_SEARCH_TOOL_RESULT = "web_search_tool_result";
+  WEB_SEARCH_RESULT_LOCATION = "web_search_result_location";
+  WEB_SEARCH_REMOVED_TEXT = "[Web search removed]";
+  ZERO_WEB_SEARCH_REMOVALS = Object.freeze({
+    toolUses: 0,
+    results: 0,
+    citations: 0,
+    placeholders: 0,
+  });
 });
 //@ chunk-e6aww6q8.js:2564343-2564824 placement
 /**
@@ -1538,7 +1706,7 @@ function stripWebSearchBlocks(messages) {
   if (!messages.some(hasWebSearchContent))
     return {
       messages,
-      removed: Fun,
+      removed: ZERO_WEB_SEARCH_REMOVALS,
     };
   let mapped = messages.map((message) =>
     message.type === "assistant" && hasWebSearchContent(message)
@@ -1546,29 +1714,29 @@ function stripWebSearchBlocks(messages) {
       : undefined,
   );
   return {
-    messages: messages.map((message, s) => {
-      let h = mapped[s];
-      return h === undefined || message.type !== "assistant"
+    messages: messages.map((message, index) => {
+      let stripped = mapped[index];
+      return stripped === undefined || message.type !== "assistant"
         ? message
         : {
             ...message,
             message: {
               ...message.message,
-              content: h.content,
+              content: stripped.content,
             },
           };
     }),
     removed: mapped.reduce(
-      (acc, s) =>
-        s === undefined
+      (acc, stripped) =>
+        stripped === undefined
           ? acc
           : {
-              toolUses: acc.toolUses + s.counts.toolUses,
-              results: acc.results + s.counts.results,
-              citations: acc.citations + s.counts.citations,
-              placeholders: acc.placeholders + s.counts.placeholders,
+              toolUses: acc.toolUses + stripped.counts.toolUses,
+              results: acc.results + stripped.counts.results,
+              citations: acc.citations + stripped.counts.citations,
+              placeholders: acc.placeholders + stripped.counts.placeholders,
             },
-      Fun,
+      ZERO_WEB_SEARCH_REMOVALS,
     ),
   };
 }
@@ -1577,20 +1745,20 @@ function stripWebSearchBlocks(messages) {
  * 从助手内容中移除网页搜索相关块，必要时插入占位 thinking 块以保持思考块位置合法，并统计工具调用、结果、引用和占位数量。
  */
 function stripWebSearchFromContent(blocks) {
-  let keptIndices = blocks.flatMap((block, G) => (isRemovableWebSearchBlock(block) ? [] : [G]));
-  let rebuiltBlocks = keptIndices.flatMap((keptIndex, G) => {
-    let q = dropSearchCitations(blocks[keptIndex]);
+  let keptIndices = blocks.flatMap((block, index) => (isRemovableWebSearchBlock(block) ? [] : [index]));
+  let rebuiltBlocks = keptIndices.flatMap((keptIndex, order) => {
+    let block = dropSearchCitations(blocks[keptIndex]);
     let lastIndex = keptIndices
-      .slice(0, G)
+      .slice(0, order)
       .findLastIndex((keptIndex) => !isSearchCitationBlock(blocks[keptIndex]));
-    return (lastIndex === -1 ? 0 : keptIndex - keptIndices[lastIndex] - (G - lastIndex)) > 0 &&
+    return (lastIndex === -1 ? 0 : keptIndex - keptIndices[lastIndex] - (order - lastIndex)) > 0 &&
       isThinkingBlockOptional(blocks[keptIndices[lastIndex]]) &&
-      isThinkingBlockOptional(q)
-      ? [placeholderTextBlock(), q]
-      : [q];
+      isThinkingBlockOptional(block)
+      ? [placeholderTextBlock(), block]
+      : [block];
   });
   let lastIndex = keptIndices.findLastIndex((keptIndex) => !isSearchCitationBlock(blocks[keptIndex]));
-  let y =
+  let needsTrailingPlaceholder =
     (lastIndex === -1
       ? 0
       : blocks.length - 1 - keptIndices[lastIndex] - (keptIndices.length - 1 - lastIndex)) > 0 &&
@@ -1601,12 +1769,13 @@ function stripWebSearchFromContent(blocks) {
       isBlankTextBlock(rebuiltBlock) ||
       isSearchCitationBlock(rebuiltBlock),
   );
-  let finalContent = y || all ? [...rebuiltBlocks, placeholderTextBlock()] : rebuiltBlocks;
+  let finalContent =
+    needsTrailingPlaceholder || all ? [...rebuiltBlocks, placeholderTextBlock()] : rebuiltBlocks;
   return {
     content: finalContent,
     counts: {
       toolUses: count(blocks, isWebSearchServerToolUse),
-      results: count(blocks, (L) => L?.type === WEB_SEARCH_TOOL_RESULT),
+      results: count(blocks, (block) => block?.type === WEB_SEARCH_TOOL_RESULT),
       citations: blocks.reduce((acc, block) => acc + countSearchCitations(block), 0),
       placeholders: finalContent.length - keptIndices.length,
     },
@@ -1617,16 +1786,18 @@ function hasWebSearchContent(message) {
   return (
     message.type === "assistant" &&
     Array.isArray(message.message.content) &&
-    message.message.content.some((n) => isRemovableWebSearchBlock(n) || countSearchCitations(n) > 0)
+    message.message.content.some(
+      (block) => isRemovableWebSearchBlock(block) || countSearchCitations(block) > 0,
+    )
   );
 }
 //@ chunk-e6aww6q8.js:2565459-2565504 placement
-function isRemovableWebSearchBlock(e) {
-  return isWebSearchServerToolUse(e) || e?.type === WEB_SEARCH_TOOL_RESULT;
+function isRemovableWebSearchBlock(block) {
+  return isWebSearchServerToolUse(block) || block?.type === WEB_SEARCH_TOOL_RESULT;
 }
 //@ chunk-e6aww6q8.js:2565504-2565569 placement
-function isWebSearchServerToolUse(e) {
-  return e?.type === "server_tool_use" && e.name === WEB_SEARCH;
+function isWebSearchServerToolUse(block) {
+  return block?.type === "server_tool_use" && block.name === WEB_SEARCH;
 }
 //@ chunk-e6aww6q8.js:2565569-2565644 placement = hasThinkingContent (1)
 function isThinkingBlockOptional(m) {
@@ -1643,17 +1814,17 @@ function isBlankTextBlock(rebuiltBlock) {
   );
 }
 //@ chunk-e6aww6q8.js:2565766-2565870 placement
-function countSearchCitations(e) {
-  return e?.type === "text" && Array.isArray(e.citations)
-    ? count(e.citations, (n) => n?.type === WEB_SEARCH_RESULT_LOCATION)
+function countSearchCitations(block) {
+  return block?.type === "text" && Array.isArray(block.citations)
+    ? count(block.citations, (citation) => citation?.type === WEB_SEARCH_RESULT_LOCATION)
     : 0;
 }
 //@ chunk-e6aww6q8.js:2565870-2565995 placement
-function dropSearchCitations(e) {
-  if (e?.type !== "text" || countSearchCitations(e) === 0) return e;
+function dropSearchCitations(block) {
+  if (block?.type !== "text" || countSearchCitations(block) === 0) return block;
   return {
-    ...e,
-    citations: (e.citations ?? []).filter((n) => n?.type !== WEB_SEARCH_RESULT_LOCATION),
+    ...block,
+    citations: (block.citations ?? []).filter((citation) => citation?.type !== WEB_SEARCH_RESULT_LOCATION),
   };
 }
 //@ chunk-e6aww6q8.js:2565995-2566052 placement
@@ -1669,26 +1840,26 @@ function placeholderTextBlock() {
  * 包装异步迭代器：超过 heartbeatMs 没有新值时产出 ping 事件（静默时长不超过 maxSilentMs 时）。
  */
 async function* withHeartbeat(iterator, { maxSilentMs, heartbeatMs = 30000 }) {
-  let s = iterator;
-  let h = Symbol("heartbeat");
-  let y = null;
-  let S = 0;
-  let w;
+  let source = iterator;
+  let heartbeatToken = Symbol("heartbeat");
+  let pendingNext = null;
+  let pendingSince = 0;
+  let heartbeatTimer;
   try {
     while (true) {
-      if (y === null) {
-        y = s.next();
-        S = performance.now();
+      if (pendingNext === null) {
+        pendingNext = source.next();
+        pendingSince = performance.now();
       }
       let promise = new Promise((resolve) => {
-        w = setTimeout((Z, Se) => Z(Se), heartbeatMs, resolve, h);
-        w.unref?.();
+        heartbeatTimer = setTimeout((resolve, value) => resolve(value), heartbeatMs, resolve, heartbeatToken);
+        heartbeatTimer.unref?.();
       });
-      let winner = await Promise.race([y, promise]);
-      clearTimeout(w);
-      w = undefined;
-      if (winner === h) {
-        if (performance.now() - S < maxSilentMs)
+      let winner = await Promise.race([pendingNext, promise]);
+      clearTimeout(heartbeatTimer);
+      heartbeatTimer = undefined;
+      if (winner === heartbeatToken) {
+        if (performance.now() - pendingSince < maxSilentMs)
           yield {
             type: "stream_event",
             event: {
@@ -1697,13 +1868,13 @@ async function* withHeartbeat(iterator, { maxSilentMs, heartbeatMs = 30000 }) {
           };
         continue;
       }
-      y = null;
+      pendingNext = null;
       if (winner.done) return winner.value;
       yield winner.value;
     }
   } finally {
-    clearTimeout(w);
-    s.return?.().catch(() => {});
+    clearTimeout(heartbeatTimer);
+    source.return?.().catch(() => {});
   }
 }
 //@ chunk-e6aww6q8.js:2566525-2566535 placement
@@ -1712,38 +1883,38 @@ var MAX_HELD_EVENTS = 8;
 /**
  * 包装流式事件：监视并修正护栏产生的游离文本事件，处理出错时停止监视并放出暂存事件，流结束且未中止时补发暂存事件。
  */
-async function* fixGuardrailStrayText(e, signal) {
+async function* fixGuardrailStrayText(source, signal) {
   let state = {
     openTextIndex: undefined,
     hold: undefined,
     watching: true,
   };
-  let s;
+  let failure;
   try {
-    for await (let h of e) {
+    for await (let event of source) {
       if (!state.watching) {
-        yield h;
+        yield event;
         continue;
       }
-      let y;
+      let heldEvents;
       try {
-        y = stepGuardrailHold(state, h);
+        heldEvents = stepGuardrailHold(state, event);
       } catch (error) {
         logError(toError(error));
-        y = state.hold?.events ?? [h];
+        heldEvents = state.hold?.events ?? [event];
         state.hold = undefined;
         state.watching = false;
       }
-      if (y === undefined) yield h;
-      else yield* y;
+      if (heldEvents === undefined) yield event;
+      else yield* heldEvents;
     }
   } catch (error) {
-    s = {
+    failure = {
       error,
     };
   }
   if (!signal.aborted) yield* state.hold?.events ?? [];
-  if (s !== undefined) throw s.error;
+  if (failure !== undefined) throw failure.error;
 }
 //@ chunk-e6aww6q8.js:2566885-2568242 placement
 /**
@@ -1779,27 +1950,27 @@ function stepGuardrailHold(state, event) {
         return;
     }
   hold.events.push(event);
-  let s = hold.events.length <= MAX_HELD_EVENTS;
-  let h = false;
+  let withinLimit = hold.events.length <= MAX_HELD_EVENTS;
+  let accepts = false;
   switch (event.type) {
     case "content_block_delta":
-      h = hold.acceptsText && event.index === hold.strayIndex && event.delta?.type === "text_delta";
+      accepts = hold.acceptsText && event.index === hold.strayIndex && event.delta?.type === "text_delta";
       break;
     case "content_block_stop":
-      h = hold.acceptsText && event.index === hold.strayIndex;
+      accepts = hold.acceptsText && event.index === hold.strayIndex;
       hold.acceptsText = false;
       break;
     case "message_delta":
-      h = true;
+      accepts = true;
       hold.acceptsText = false;
       break;
     default:
       break;
   }
-  if (s && h) return [];
+  if (withinLimit && accepts) return [];
   state.watching = false;
   if (
-    !s ||
+    !withinLimit ||
     event.type !== "message_stop" ||
     !("amazon-bedrock-guardrailAction" in event) ||
     event["amazon-bedrock-guardrailAction"] !== "INTERVENED"
@@ -1807,29 +1978,29 @@ function stepGuardrailHold(state, event) {
     state.hold = undefined;
     return hold.events;
   }
-  let y = [];
-  let S = false;
+  let moved = [];
+  let stopEmitted = false;
   for (let event of hold.events)
     if (event.type === "content_block_delta")
-      y.push({
+      moved.push({
         ...event,
         index: hold.targetIndex,
       });
     else if (event.type !== "content_block_stop") {
-      if (!S) {
-        y.push({
+      if (!stopEmitted) {
+        moved.push({
           type: "content_block_stop",
           index: hold.targetIndex,
         });
-        S = true;
+        stopEmitted = true;
       }
-      y.push(event);
+      moved.push(event);
     }
   logForDebugging(
     `Guardrail block text addressed to block ${hold.strayIndex} moved to text block ${hold.targetIndex}`,
   );
   state.hold = undefined;
-  return y;
+  return moved;
 }
 //@ chunk-e6aww6q8.js:2568242-2568443 placement = extractErrorTypeFromData (1)
 /**
@@ -1839,7 +2010,9 @@ function isToolResultOnlyUserMessage(message) {
   if (message.type !== "user") return false;
   let content = message.message.content;
   if (!Array.isArray(content) || content.length === 0) return false;
-  return content.every((r) => typeof r === "object" && r !== null && "type" in r && r.type === "tool_result");
+  return content.every(
+    (block) => typeof block === "object" && block !== null && "type" in block && block.type === "tool_result",
+  );
 }
 //@ chunk-e6aww6q8.js:2568443-2568943 placement
 /**
@@ -1847,46 +2020,50 @@ function isToolResultOnlyUserMessage(message) {
  */
 function attachPerTurnOutputConfig(messages, options) {
   let { levels, times, answered } = perTurnEffortLevels(messages, options);
-  let y = [];
-  let S;
+  let out = [];
+  let lastEffort;
   let outputConfig;
-  for (let [L, G] of messages.entries()) {
-    if (outputConfig !== undefined && G.type !== "user") {
-      S = outputConfig.effort ?? S;
-      if (G.type === "api_system") {
-        y.push({
-          ...G,
+  for (let [index, message] of messages.entries()) {
+    if (outputConfig !== undefined && message.type !== "user") {
+      lastEffort = outputConfig.effort ?? lastEffort;
+      if (message.type === "api_system") {
+        out.push({
+          ...message,
           outputConfig,
         });
         outputConfig = undefined;
         continue;
       }
-      y.push(apiSystemMessageWithOutputConfig(outputConfig));
+      out.push(apiSystemMessageWithOutputConfig(outputConfig));
       outputConfig = undefined;
     }
-    y.push(G);
-    if (G.type === "user") {
-      let q = S !== undefined && !answered[L] && isToolResultOnlyUserMessage(G);
-      let Z = levels !== undefined && levels[L] !== S && !q ? levels[L] : outputConfig?.effort;
-      let Se = times?.[L];
+    out.push(message);
+    if (message.type === "user") {
+      let isToolResultOnly =
+        lastEffort !== undefined && !answered[index] && isToolResultOnlyUserMessage(message);
+      let effort =
+        levels !== undefined && levels[index] !== lastEffort && !isToolResultOnly
+          ? levels[index]
+          : outputConfig?.effort;
+      let timing = times?.[index];
       outputConfig =
-        Z === undefined && Se === undefined
+        effort === undefined && timing === undefined
           ? undefined
           : {
-              ...(Z !== undefined && {
-                effort: Z,
+              ...(effort !== undefined && {
+                effort,
               }),
-              ...(Se !== undefined && {
+              ...(timing !== undefined && {
                 timing: {
                   type: "now",
-                  now: Se,
+                  now: timing,
                 },
               }),
             };
     }
   }
-  if (outputConfig !== undefined) y.push(apiSystemMessageWithOutputConfig(outputConfig));
-  return y;
+  if (outputConfig !== undefined) out.push(apiSystemMessageWithOutputConfig(outputConfig));
+  return out;
 }
 //@ chunk-e6aww6q8.js:2568943-2569488 placement
 /**
@@ -1927,58 +2104,60 @@ function perTurnEffortLevels(messages, options) {
   };
 }
 //@ chunk-e6aww6q8.js:2569488-2569689 placement
-function lastOutputConfig(e) {
-  let n = {};
-  for (let r of e)
-    if (r.type === "user") n.now = undefined;
-    else if (r.type === "api_system" && r.outputConfig) {
-      n.effort = r.outputConfig.effort ?? n.effort;
-      n.now = r.outputConfig.timing?.now;
+function lastOutputConfig(messages) {
+  let config = {};
+  for (let message of messages)
+    if (message.type === "user") config.now = undefined;
+    else if (message.type === "api_system" && message.outputConfig) {
+      config.effort = message.outputConfig.effort ?? config.effort;
+      config.now = message.outputConfig.timing?.now;
     }
-  return n;
+  return config;
 }
 //@ chunk-e6aww6q8.js:2569689-2569786 placement
-function resolveEffortFromLastOutputConfig(messagesForAPI, n, r) {
+function resolveEffortFromLastOutputConfig(messages, fallbackEffort, normalizeEffort) {
   try {
-    let { effort } = lastOutputConfig(messagesForAPI);
-    return effort === undefined ? n : r(effort);
+    let { effort } = lastOutputConfig(messages);
+    return effort === undefined ? fallbackEffort : normalizeEffort(effort);
   } catch (error) {
     logError(toError(error));
-    return n;
+    return fallbackEffort;
   }
 }
 //@ chunk-e6aww6q8.js:2569786-2569834 placement
-function isRealUserMessage(e) {
-  return e.type === "user" && !isToolResultOnlyUserMessage(e);
+function isRealUserMessage(message) {
+  return message.type === "user" && !isToolResultOnlyUserMessage(message);
 }
 //@ chunk-e6aww6q8.js:2569834-2569877 placement
-function stripOutputConfigs(messagesForAPI) {
-  return mapOutputConfigs(messagesForAPI, () => {
+function stripOutputConfigs(messages) {
+  return mapOutputConfigs(messages, () => {
     return;
   });
 }
 //@ chunk-e6aww6q8.js:2569877-2569959 placement
-function dropTimingFromOutputConfigs(e) {
-  return mapOutputConfigs(e, ({ timing, ...r }) => (Object.keys(r).length > 0 ? r : undefined));
+function dropTimingFromOutputConfigs(messages) {
+  return mapOutputConfigs(messages, ({ timing, ...rest }) =>
+    Object.keys(rest).length > 0 ? rest : undefined,
+  );
 }
 //@ chunk-e6aww6q8.js:2569959-2570236 placement
-function mapOutputConfigs(e, n) {
-  let r = [];
-  for (let s of e) {
-    if (s.type !== "api_system" || s.outputConfig === undefined) {
-      r.push(s);
+function mapOutputConfigs(messages, mapConfig) {
+  let out = [];
+  for (let message of messages) {
+    if (message.type !== "api_system" || message.outputConfig === undefined) {
+      out.push(message);
       continue;
     }
-    let { outputConfig, ...y } = s;
-    let S = n(outputConfig);
-    if (S !== undefined)
-      r.push({
-        ...y,
-        outputConfig: S,
+    let { outputConfig, ...rest } = message;
+    let nextConfig = mapConfig(outputConfig);
+    if (nextConfig !== undefined)
+      out.push({
+        ...rest,
+        outputConfig: nextConfig,
       });
-    else if (y.message.content.length > 0 || (y.toolAdditions?.length ?? 0) > 0) r.push(y);
+    else if (rest.message.content.length > 0 || (rest.toolAdditions?.length ?? 0) > 0) out.push(rest);
   }
-  return r;
+  return out;
 }
 //@ chunk-e6aww6q8.js:2570236-2570286 placement
 function apiSystemMessageWithOutputConfig(outputConfig) {
@@ -1990,12 +2169,12 @@ function apiSystemMessageWithOutputConfig(outputConfig) {
 //@ chunk-e6aww6q8.js:2570286-2570373 placement
 var GMT_TIMESTAMP_RE = /^(\d{4}-\d{2}-\d{2}T(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d)GMT([+-]\d{2}:\d{2})?$/;
 //@ chunk-e6aww6q8.js:2570373-2571173 placement
-function formatLocalTimestamp(e, n) {
-  if (n) {
+function formatLocalTimestamp(date, timeZone) {
+  if (timeZone) {
     try {
-      let S = new Map(
+      let parts = new Map(
         getDateTimeFormat("en-US", {
-          timeZone: n,
+          timeZone,
           hourCycle: "h23",
           year: "numeric",
           month: "2-digit",
@@ -2005,11 +2184,11 @@ function formatLocalTimestamp(e, n) {
           second: "2-digit",
           timeZoneName: "longOffset",
         })
-          .formatToParts(e)
-          .map((L) => [L.type, L.value]),
+          .formatToParts(date)
+          .map((part) => [part.type, part.value]),
       );
       let match = GMT_TIMESTAMP_RE.exec(
-        `${S.get("year")}-${S.get("month")}-${S.get("day")}T${S.get("hour")}:${S.get("minute")}:${S.get("second")}${S.get("timeZoneName")}`,
+        `${parts.get("year")}-${parts.get("month")}-${parts.get("day")}T${parts.get("hour")}:${parts.get("minute")}:${parts.get("second")}${parts.get("timeZoneName")}`,
       );
       if (match) return `${match[1]}${match[2] ?? "+00:00"}`;
     } catch {}
@@ -2019,71 +2198,71 @@ function formatLocalTimestamp(e, n) {
       ),
     );
   }
-  let r = (S) => String(S).padStart(2, "0");
-  let s = -e.getTimezoneOffset();
-  let h = s < 0 ? "-" : "+";
-  let y = Math.abs(s);
-  return `${e.getFullYear()}-${r(e.getMonth() + 1)}-${r(e.getDate())}T${r(e.getHours())}:${r(e.getMinutes())}:${r(e.getSeconds())}${h}${r(Math.floor(y / 60))}:${r(y % 60)}`;
+  let pad2 = (value) => String(value).padStart(2, "0");
+  let offsetMinutes = -date.getTimezoneOffset();
+  let sign = offsetMinutes < 0 ? "-" : "+";
+  let absOffsetMinutes = Math.abs(offsetMinutes);
+  return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}T${pad2(date.getHours())}:${pad2(date.getMinutes())}:${pad2(date.getSeconds())}${sign}${pad2(Math.floor(absOffsetMinutes / 60))}:${pad2(absOffsetMinutes % 60)}`;
 }
 //@ chunk-e6aww6q8.js:2571173-2571289 placement
-function isInvalidEffortError(e) {
+function isInvalidEffortError(error) {
   return (
-    e instanceof APIError &&
-    e.status === 400 &&
-    extractNestedErrorMessage(e) === "Invalid effort level" &&
+    error instanceof APIError &&
+    error.status === 400 &&
+    extractNestedErrorMessage(error) === "Invalid effort level" &&
     !getFeatureValue_CACHED_MAY_BE_STALE("tengu_eager_quilt", false)
   );
 }
 //@ chunk-e6aww6q8.js:2571289-2571544 placement
-function effortInPlay(e, messagesForAPI) {
-  let r;
-  let s = [];
-  let h = false;
-  for (let y of messagesForAPI) {
-    let effort = y.type === "api_system" ? y.outputConfig?.effort : undefined;
+function effortInPlay(candidateEffort, messagesForAPI) {
+  let lastEffort;
+  let recentEfforts = [];
+  let isRealUser = false;
+  for (let message of messagesForAPI) {
+    let effort = message.type === "api_system" ? message.outputConfig?.effort : undefined;
     if (effort !== undefined) {
-      r = effort;
-      s = h ? [effort] : [...s, effort];
-    } else if (y.type !== "api_system") {
-      h = isRealUserMessage(y);
-      if (h) s = r === undefined ? [] : [r];
+      lastEffort = effort;
+      recentEfforts = isRealUser ? [effort] : [...recentEfforts, effort];
+    } else if (message.type !== "api_system") {
+      isRealUser = isRealUserMessage(message);
+      if (isRealUser) recentEfforts = lastEffort === undefined ? [] : [lastEffort];
     }
   }
-  return EFFORT_LEVELS.findLast((y) => y === e || s.includes(y));
+  return EFFORT_LEVELS.findLast((level) => level === candidateEffort || recentEfforts.includes(level));
 }
 //@ chunk-e6aww6q8.js:2571544-2571665 placement
-function learnedEffortCap(e, querySource) {
+function learnedEffortCap(model, querySource) {
   let learnedEffortCaps = getLearnedEffortCaps();
   if (learnedEffortCaps.size === 0 || isAutoModeQuerySource(querySource)) return;
-  let level = learnedEffortCaps.get(getModelSettingsKey(e))?.level;
-  return level === "xhigh" && !modelSupportsXhighEffort(e) ? "high" : level;
+  let level = learnedEffortCaps.get(getModelSettingsKey(model))?.level;
+  return level === "xhigh" && !modelSupportsXhighEffort(model) ? "high" : level;
 }
 //@ chunk-e6aww6q8.js:2571665-2571735 placement
-function lowerEffort(e, n) {
-  return n !== undefined && typeof e === "string" && isEffortHigherThan(e, n) ? n : e;
+function lowerEffort(level, cap) {
+  return cap !== undefined && typeof level === "string" && isEffortHigherThan(level, cap) ? cap : level;
 }
 //@ chunk-e6aww6q8.js:2571735-2571918 placement
-function lowerLearnedEffortCap(resolvedModel, n) {
+function lowerLearnedEffortCap(resolvedModel, level) {
   let learnedEffortCaps = getLearnedEffortCaps();
   let modelSettingsKey = getModelSettingsKey(resolvedModel);
-  let level = learnedEffortCaps.get(modelSettingsKey)?.level;
-  let y = EFFORT_LEVELS[EFFORT_LEVELS.indexOf(n) - 1];
-  if (y === undefined) learnedEffortCaps.delete(modelSettingsKey);
-  else if (level === undefined || isEffortHigherThan(level, y))
+  let level_2 = learnedEffortCaps.get(modelSettingsKey)?.level;
+  let lowerLevel = EFFORT_LEVELS[EFFORT_LEVELS.indexOf(level) - 1];
+  if (lowerLevel === undefined) learnedEffortCaps.delete(modelSettingsKey);
+  else if (level_2 === undefined || isEffortHigherThan(level_2, lowerLevel))
     learnedEffortCaps.set(modelSettingsKey, {
-      level: y,
+      level: lowerLevel,
       told: false,
     });
-  else return level;
-  return y;
+  else return level_2;
+  return lowerLevel;
 }
 //@ chunk-e6aww6q8.js:2571918-2572030 placement
 function takeEffortCapNotice(resolvedModel) {
   let modelSettingsKey = getModelSettingsKey(resolvedModel);
-  let r = getLearnedEffortCaps().get(modelSettingsKey);
-  if (r === undefined || r.told) return false;
+  let capEntry = getLearnedEffortCaps().get(modelSettingsKey);
+  if (capEntry === undefined || capEntry.told) return false;
   getLearnedEffortCaps().set(modelSettingsKey, {
-    ...r,
+    ...capEntry,
     told: true,
   });
   return true;
@@ -2092,17 +2271,23 @@ function takeEffortCapNotice(resolvedModel) {
 /**
  * 流式护栏暂存增量的上限、哨兵与最后标量缓存：暂存文本最多 8192 字，读取结束用 Symbol 标记。
  */
-var MAX_HELD_DELTA_CHARS = 8192;
-var EMPTY_LIST = [];
-var READ_ENDED_SENTINEL = Symbol("read ended");
-var lastScalarSlot = identity_2(
-  {
-    value: undefined,
-  },
-  (e) => {
-    e.value = undefined;
-  },
-);
+var MAX_HELD_DELTA_CHARS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var EMPTY_LIST;
+var READ_ENDED_SENTINEL;
+var lastScalarSlot;
+deferInit("chunk-e6aww6q8.js:2572030", () => {
+  MAX_HELD_DELTA_CHARS = 8192;
+  EMPTY_LIST = [];
+  READ_ENDED_SENTINEL = Symbol("read ended");
+  lastScalarSlot = identity_2(
+    {
+      value: undefined,
+    },
+    (slot) => {
+      slot.value = undefined;
+    },
+  );
+});
 //@ chunk-e6aww6q8.js:2572120-2572403 placement
 function isDeltaFoldEnabled() {
   try {
@@ -2130,60 +2315,61 @@ function isDeltaFoldEnabled() {
  * 合并连续的同类流式 delta（text/input_json/thinking）以减少下游事件数：同一块同一类型连续到达时暂存拼接，到下一个 tick 或类型变化时放出；出错时停止合并。
  */
 async function* foldStreamDeltas(events, clock, counter, signal) {
-  let h = events[Symbol.asyncIterator]();
-  let y = {
+  let source = events[Symbol.asyncIterator]();
+  let state = {
     held: undefined,
     folded: counter,
   };
-  let S;
-  let w;
-  let L;
-  let G = null;
-  let q;
-  let Z;
-  let Se = false;
+  let lastIndex;
+  let lastDeltaType;
+  let lastAt;
+  let pendingNext = null;
+  let readEndedRace;
+  let readEndedTimer;
+  let bookkeepingFailed = false;
   try {
     while (true) {
-      G ??= h.next();
-      if (y.held !== undefined && q === undefined)
-        q = new Promise((resolve) => {
-          Z = setImmediate(resolve, READ_ENDED_SENTINEL);
+      pendingNext ??= source.next();
+      if (state.held !== undefined && readEndedRace === undefined)
+        readEndedRace = new Promise((resolve) => {
+          readEndedTimer = setImmediate(resolve, READ_ENDED_SENTINEL);
         });
-      let ke;
+      let next;
       try {
-        ke = q === undefined ? await G : await Promise.race([G, q]);
+        next =
+          readEndedRace === undefined ? await pendingNext : await Promise.race([pendingNext, readEndedRace]);
       } catch (error) {
-        if (!signal.aborted) yield* flushHeldDelta(y);
+        if (!signal.aborted) yield* flushHeldDelta(state);
         throw error;
       }
       if (signal.aborted) {
-        y.held = undefined;
-        if (ke !== READ_ENDED_SENTINEL) return;
+        state.held = undefined;
+        if (next !== READ_ENDED_SENTINEL) return;
       }
-      let we;
-      if (ke === READ_ENDED_SENTINEL) we = flushHeldDelta(y);
+      let output;
+      if (next === READ_ENDED_SENTINEL) output = flushHeldDelta(state);
       else {
-        G = null;
-        if (ke.done) {
-          yield* flushHeldDelta(y);
+        pendingNext = null;
+        if (next.done) {
+          yield* flushHeldDelta(state);
           return;
         }
-        let Ee = ke.value;
-        if (Se) we = [Ee];
+        let event = next.value;
+        if (bookkeepingFailed) output = [event];
         else
           try {
-            let Ae;
-            if (Ee.type === "content_block_delta" && typeof Ee.index === "number") {
-              let delta = Ee.delta;
+            let deltaText;
+            if (event.type === "content_block_delta" && typeof event.index === "number") {
+              let delta = event.delta;
               switch (delta?.type) {
                 case "text_delta":
-                  Ae = typeof delta.text === "string" ? delta.text : undefined;
+                  deltaText = typeof delta.text === "string" ? delta.text : undefined;
                   break;
                 case "input_json_delta":
-                  Ae = typeof delta.partial_json === "string" ? delta.partial_json : undefined;
+                  deltaText = typeof delta.partial_json === "string" ? delta.partial_json : undefined;
                   break;
                 case "thinking_delta":
-                  Ae =
+                  deltaText =
                     typeof delta.thinking === "string" && typeof delta.estimated_tokens !== "number"
                       ? delta.thinking
                       : undefined;
@@ -2194,57 +2380,61 @@ async function* foldStreamDeltas(events, clock, counter, signal) {
                   break;
                 default:
               }
-              if ("research" in Ee) Ae = undefined;
+              if ("research" in event) deltaText = undefined;
             }
-            if (Ee.type !== "content_block_delta" || Ae === undefined) {
-              S = undefined;
-              we = [...flushHeldDelta(y), Ee];
-            } else if (Ee.index !== S || Ee.delta.type !== w || clock.lastAt !== L) {
-              S = Ee.index;
-              w = Ee.delta.type;
-              L = clock.lastAt;
-              we = [...flushHeldDelta(y), Ee];
-            } else if (y.held === undefined) {
-              y.held = {
-                last: Ee,
-                text: Ae,
+            if (event.type !== "content_block_delta" || deltaText === undefined) {
+              lastIndex = undefined;
+              output = [...flushHeldDelta(state), event];
+            } else if (
+              event.index !== lastIndex ||
+              event.delta.type !== lastDeltaType ||
+              clock.lastAt !== lastAt
+            ) {
+              lastIndex = event.index;
+              lastDeltaType = event.delta.type;
+              lastAt = clock.lastAt;
+              output = [...flushHeldDelta(state), event];
+            } else if (state.held === undefined) {
+              state.held = {
+                last: event,
+                text: deltaText,
                 deltas: 1,
               };
-              we = EMPTY_LIST;
-            } else if (y.held.text.length + Ae.length > MAX_HELD_DELTA_CHARS) {
-              we = flushHeldDelta(y);
-              y.held = {
-                last: Ee,
-                text: Ae,
+              output = EMPTY_LIST;
+            } else if (state.held.text.length + deltaText.length > MAX_HELD_DELTA_CHARS) {
+              output = flushHeldDelta(state);
+              state.held = {
+                last: event,
+                text: deltaText,
                 deltas: 1,
               };
             } else {
-              y.held.last = Ee;
-              y.held.text += Ae;
-              y.held.deltas += 1;
-              we = EMPTY_LIST;
+              state.held.last = event;
+              state.held.text += deltaText;
+              state.held.deltas += 1;
+              output = EMPTY_LIST;
             }
           } catch (error) {
             logError(toError(error));
             logFeatureSad("api_stream_delta_merge", "bookkeeping_threw");
-            Se = true;
-            we = y.held?.last === Ee ? flushHeldDelta(y) : [...flushHeldDelta(y), Ee];
+            bookkeepingFailed = true;
+            output = state.held?.last === event ? flushHeldDelta(state) : [...flushHeldDelta(state), event];
           }
       }
-      if (y.held === undefined && q !== undefined) {
-        clearImmediate(Z);
-        Z = undefined;
-        q = undefined;
+      if (state.held === undefined && readEndedRace !== undefined) {
+        clearImmediate(readEndedTimer);
+        readEndedTimer = undefined;
+        readEndedRace = undefined;
       }
-      for (let Ee of we) {
+      for (let event of output) {
         if (signal.aborted) return;
-        yield Ee;
+        yield event;
       }
     }
   } finally {
-    clearImmediate(Z);
+    clearImmediate(readEndedTimer);
     try {
-      Promise.resolve(h.return?.(undefined)).catch(() => {});
+      Promise.resolve(source.return?.(undefined)).catch(() => {});
     } catch {}
   }
 }
@@ -2252,11 +2442,11 @@ async function* foldStreamDeltas(events, clock, counter, signal) {
 /**
  * 放出暂存的合并增量：把多个同类 delta（文本、JSON 片段、思考）的文本合并到最后一个事件里，并累计折叠数量。
  */
-function flushHeldDelta(e) {
-  let held = e.held;
+function flushHeldDelta(state) {
+  let held = state.held;
   if (held === undefined) return [];
-  e.held = undefined;
-  e.folded.count += held.deltas - 1;
+  state.held = undefined;
+  state.folded.count += held.deltas - 1;
   if (held.deltas === 1) return [held.last];
   let { last, text } = held;
   let delta = last.delta;
@@ -2298,8 +2488,8 @@ function flushHeldDelta(e) {
 //@ chunk-e6aww6q8.js:2574443-2574476 placement
 var TENGU_POLISHED_DEWDROP = "tengu_polished_dewdrop";
 //@ chunk-e6aww6q8.js:2574476-2574574 placement
-function polishedDewdropMode(e) {
-  switch (e) {
+function polishedDewdropMode(mode) {
+  switch (mode) {
     case "drop":
       return "drop_block";
     case "block":
@@ -2311,131 +2501,145 @@ function polishedDewdropMode(e) {
 //@ chunk-e6aww6q8.js:2574574-2574753 placement
 function getPolishedDewdropMode() {
   if (!isFirstPartyApiBackend()) return;
-  let e = getCachedClientData()?.[TENGU_POLISHED_DEWDROP];
-  let n = env.CLAUDE_CODE_POLISHED_DEWDROP ?? (e === "drop" || e === "block" || e === "off" ? e : undefined);
-  if (n !== undefined) return polishedDewdropMode(n);
+  let clientValue = getCachedClientData()?.[TENGU_POLISHED_DEWDROP];
+  let envOrClient =
+    env.CLAUDE_CODE_POLISHED_DEWDROP ??
+    (clientValue === "drop" || clientValue === "block" || clientValue === "off" ? clientValue : undefined);
+  if (envOrClient !== undefined) return polishedDewdropMode(envOrClient);
   return polishedDewdropMode(getFeatureValue_CACHED_MAY_BE_STALE(TENGU_POLISHED_DEWDROP, ""));
 }
 //@ chunk-e6aww6q8.js:2574753-2574793 placement
-function isPolishedDewdropActive(e) {
-  return e !== undefined || isFirstPartyApiBackend();
+function isPolishedDewdropActive(mode) {
+  return mode !== undefined || isFirstPartyApiBackend();
 }
 //@ chunk-e6aww6q8.js:2579785-2580012 placement
-var MAX_SEARCH_RESULTS = 6;
-var SEARCH_RESULT_LOCATION_SCHEMA = DoctorLazy(() =>
-  u({
-    type: literal("search_result_location"),
-    cited_text: string(),
-    source: string(),
-    title: string().nullable(),
-    search_result_index: int_2(),
-    start_block_index: int_2(),
-    end_block_index: int_2(),
-    span_start: int_2().optional(),
-    span_end: int_2().optional(),
-  }),
-);
+var MAX_SEARCH_RESULTS; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var SEARCH_RESULT_LOCATION_SCHEMA;
+deferInit("chunk-e6aww6q8.js:2579785", () => {
+  MAX_SEARCH_RESULTS = 6;
+  SEARCH_RESULT_LOCATION_SCHEMA = DoctorLazy(() =>
+    objectSchema({
+      type: literal("search_result_location"),
+      cited_text: stringSchema(),
+      source: stringSchema(),
+      title: stringSchema().nullable(),
+      search_result_index: int_2(),
+      start_block_index: int_2(),
+      end_block_index: int_2(),
+      span_start: int_2().optional(),
+      span_end: int_2().optional(),
+    }),
+  );
+});
 //@ chunk-e6aww6q8.js:2580012-2581746 placement
 /**
  * 发请求前整理消息列表（合并、清理系统消息），受 tengu_jolly_sparrow 开关影响。
  */
-function prepareRequestMessages(e, messages) {
+function prepareRequestMessages(messages, messages_2) {
   if (
     !env.CLAUDE_CODE_WEBSEARCH_CITATIONS ||
     !getFeatureValue_SESSION_PINNED("tengu_jolly_sparrow_enabled", false)
   )
-    return e;
+    return messages;
   try {
-    let r = new Map();
-    for (let y of messages) {
-      if (y.type !== "assistant") continue;
-      for (let S of y.message.content)
-        if (S.type === "text" && S.citations?.length) {
-          let w = r.get(y.message.id) ?? [];
-          r.set(y.message.id, w);
-          w.push(S);
+    let citationsByMessageId = new Map();
+    for (let message of messages_2) {
+      if (message.type !== "assistant") continue;
+      for (let block of message.message.content)
+        if (block.type === "text" && block.citations?.length) {
+          let citations = citationsByMessageId.get(message.message.id) ?? [];
+          citationsByMessageId.set(message.message.id, citations);
+          citations.push(block);
         }
     }
-    if (r.size === 0) return e;
-    let s = [];
-    let h = new Map();
-    return e.map((y) => {
-      if (y.type === "api_system" || typeof y.message.content === "string") return y;
-      if (y.type === "user") {
-        for (let Z of y.message.content) {
-          let Se = Z.type === "tool_result" && Array.isArray(Z.content) ? Z.content : [Z];
-          for (let ke of Se)
-            if (isObjectBlock(ke) && ke.type === "search_result" && ke.citations?.enabled) s.push(ke.source);
+    if (citationsByMessageId.size === 0) return messages;
+    let searchSources = [];
+    let usedCountById = new Map();
+    return messages.map((message) => {
+      if (message.type === "api_system" || typeof message.message.content === "string") return message;
+      if (message.type === "user") {
+        for (let block of message.message.content) {
+          let blocks = block.type === "tool_result" && Array.isArray(block.content) ? block.content : [block];
+          for (let item of blocks)
+            if (isObjectBlock(item) && item.type === "search_result" && item.citations?.enabled)
+              searchSources.push(item.source);
         }
-        return y;
+        return message;
       }
-      let id = y.message.id;
-      let w = r.get(id);
-      if (w === undefined) return y;
-      let L = (h.get(id) ?? 0) + count(y.message.content, (Z) => Z.type === "tool_use");
-      let G = L;
-      let q = [];
-      for (let Z of y.message.content) {
-        let Se =
-          Z.type === "text" && !Z.citations?.length && L < MAX_SEARCH_RESULTS
-            ? w.findIndex((Ie) => Ie.text === Z.text)
+      let id = message.message.id;
+      let remainingCitations = citationsByMessageId.get(id);
+      if (remainingCitations === undefined) return message;
+      let usedCount =
+        (usedCountById.get(id) ?? 0) + count(message.message.content, (block) => block.type === "tool_use");
+      let startCount = usedCount;
+      let out = [];
+      for (let block of message.message.content) {
+        let matchIndex =
+          block.type === "text" && !block.citations?.length && usedCount < MAX_SEARCH_RESULTS
+            ? remainingCitations.findIndex((citation) => citation.text === block.text)
             : -1;
-        let [ke] = Se === -1 ? [] : w.splice(Se, 1);
-        if (Z.type !== "text" || ke === undefined) {
-          q.push(Z);
+        let [matchedCitation] = matchIndex === -1 ? [] : remainingCitations.splice(matchIndex, 1);
+        if (block.type !== "text" || matchedCitation === undefined) {
+          out.push(block);
           continue;
         }
-        let list = Array.from(Z.text);
-        let Ee = new Map();
-        for (let Ie of ke.citations ?? []) {
-          let Me = SEARCH_RESULT_LOCATION_SCHEMA().safeParse(Ie);
-          if (!Me.success) continue;
-          let { span_start: spanStart = 0, span_end: spanEnd = list.length, ...lt } = Me.data;
-          if (s[lt.search_result_index] !== lt.source) continue;
-          let Je = Ee.get(spanStart) ?? {
+        let list = Array.from(block.text);
+        let spansByStart = new Map();
+        for (let citation of matchedCitation.citations ?? []) {
+          let parsed = SEARCH_RESULT_LOCATION_SCHEMA().safeParse(citation);
+          if (!parsed.success) continue;
+          let { span_start: spanStart = 0, span_end: spanEnd = list.length, ...rest } = parsed.data;
+          if (searchSources[rest.search_result_index] !== rest.source) continue;
+          let span = spansByStart.get(spanStart) ?? {
             end: spanEnd,
             citations: [],
           };
-          Ee.set(spanStart, Je);
-          Je.citations.push(lt);
+          spansByStart.set(spanStart, span);
+          span.citations.push(rest);
         }
-        let Ae = 0;
-        for (let [Ie, Me] of [...Ee].sort((We, ze) => We[0] - ze[0])) {
-          if (L >= MAX_SEARCH_RESULTS || Ie < Ae || Me.end <= Ie || Me.end > list.length) continue;
-          L++;
-          if (Ie > Ae)
-            q.push({
-              ...Z,
-              text: list.slice(Ae, Ie).join(""),
+        let cursor = 0;
+        for (let [spanStart, span] of [...spansByStart].sort((a, b) => a[0] - b[0])) {
+          if (
+            usedCount >= MAX_SEARCH_RESULTS ||
+            spanStart < cursor ||
+            span.end <= spanStart ||
+            span.end > list.length
+          )
+            continue;
+          usedCount++;
+          if (spanStart > cursor)
+            out.push({
+              ...block,
+              text: list.slice(cursor, spanStart).join(""),
             });
-          q.push({
-            ...Z,
-            text: list.slice(Ie, Me.end).join(""),
-            citations: Me.citations,
+          out.push({
+            ...block,
+            text: list.slice(spanStart, span.end).join(""),
+            citations: span.citations,
           });
-          Ae = Me.end;
+          cursor = span.end;
         }
-        if (Ae === 0) q.push(Z);
-        else if (Ae < list.length)
-          q.push({
-            ...Z,
-            text: list.slice(Ae).join(""),
+        if (cursor === 0) out.push(block);
+        else if (cursor < list.length)
+          out.push({
+            ...block,
+            text: list.slice(cursor).join(""),
           });
       }
-      h.set(id, L);
-      return L === G
-        ? y
+      usedCountById.set(id, usedCount);
+      return usedCount === startCount
+        ? message
         : {
-            ...y,
+            ...message,
             message: {
-              ...y.message,
-              content: q,
+              ...message.message,
+              content: out,
             },
           };
     });
   } catch (error) {
     logError(error);
-    return e;
+    return messages;
   }
 }
 //@ chunk-e6aww6q8.js:2581746-2582303 placement
@@ -2467,14 +2671,14 @@ function disableSearchResultCitations(messages) {
               }
             : item,
         );
-        return mapped.some((w, L) => w !== content[L])
+        return mapped.some((item, index) => item !== content[index])
           ? {
               ...block,
               content: mapped,
             }
           : block;
       });
-      return mapped.some((h, y) => h !== content[y])
+      return mapped.some((block, index) => block !== content[index])
         ? {
             ...message,
             message: {
@@ -2501,13 +2705,13 @@ function readDisplayField(thinking) {
   }
 }
 //@ chunk-e6aww6q8.js:2582541-2582784 placement
-function thinkingStartTime(e, n) {
+function thinkingStartTime(event, now) {
   try {
-    if (n === undefined) return;
-    return e.type === "message_start" ||
-      (e.type === "content_block_start" && e.content_block?.type === "thinking") ||
-      (e.type === "content_block_delta" && e.delta?.type === "thinking_delta")
-      ? n
+    if (now === undefined) return;
+    return event.type === "message_start" ||
+      (event.type === "content_block_start" && event.content_block?.type === "thinking") ||
+      (event.type === "content_block_delta" && event.delta?.type === "thinking_delta")
+      ? now
       : undefined;
   } catch (error) {
     logError(toError(error));
@@ -2518,29 +2722,30 @@ function thinkingStartTime(e, n) {
 var TENGU_RUSTLING_PIXEL = "tengu_rustling_pixel";
 //@ chunk-e6aww6q8.js:2582815-2583081 placement
 function foreignThinkingKeepMode() {
-  let e = streamFallbackWarning();
-  if (e.foreignThinkingKeep === undefined) {
-    e.foreignThinkingKeep = resolveForeignThinkingKeep();
-    if (e.foreignThinkingKeep === "all") logFeatureOk("api_keep_thinking_on_model_change");
-    else if (e.foreignThinkingKeep === "upgrade") logFeatureOk("api_keep_thinking_on_upgrade");
+  let warningState = streamFallbackWarning();
+  if (warningState.foreignThinkingKeep === undefined) {
+    warningState.foreignThinkingKeep = resolveForeignThinkingKeep();
+    if (warningState.foreignThinkingKeep === "all") logFeatureOk("api_keep_thinking_on_model_change");
+    else if (warningState.foreignThinkingKeep === "upgrade") logFeatureOk("api_keep_thinking_on_upgrade");
   }
-  return e.foreignThinkingKeep;
+  return warningState.foreignThinkingKeep;
 }
 //@ chunk-e6aww6q8.js:2583081-2583301 placement
-function dropForeignThinkingKeep(e) {
-  let n = streamFallbackWarning();
-  if (n.foreignThinkingKeep === "all") logFeatureSad("api_keep_thinking_on_model_change", e);
-  else if (n.foreignThinkingKeep === "upgrade") logFeatureSad("api_keep_thinking_on_upgrade", e);
+function dropForeignThinkingKeep(reason) {
+  let warningState = streamFallbackWarning();
+  if (warningState.foreignThinkingKeep === "all") logFeatureSad("api_keep_thinking_on_model_change", reason);
+  else if (warningState.foreignThinkingKeep === "upgrade")
+    logFeatureSad("api_keep_thinking_on_upgrade", reason);
   else return;
-  n.foreignThinkingKeep = "none";
+  warningState.foreignThinkingKeep = "none";
 }
 //@ chunk-e6aww6q8.js:2583301-2583382 placement
 /**
  * 导出函数 `watchSessionSwitchForThinkingKeep`：返回 onSessionSwitch((e, n) => { if (aes.has(n)) Ws().foreignThinkingKeep = void 0; })。
  */
 function watchSessionSwitchForThinkingKeep() {
-  return onSessionSwitch((e, n) => {
-    if (CONVERSATION_RESET_KINDS.has(n)) streamFallbackWarning().foreignThinkingKeep = undefined;
+  return onSessionSwitch((sessionId, resetKind) => {
+    if (CONVERSATION_RESET_KINDS.has(resetKind)) streamFallbackWarning().foreignThinkingKeep = undefined;
   });
 }
 //@ chunk-e6aww6q8.js:2583382-2583770 placement
@@ -2571,51 +2776,51 @@ function resolveForeignThinkingKeep() {
       );
     return normalizeThinkingKeep(CLAUDE_CODE_RUSTLING_PIXEL);
   }
-  let n = getCachedClientData()?.[TENGU_RUSTLING_PIXEL];
-  if (typeof n === "string") return normalizeThinkingKeep(n);
+  let clientValue = getCachedClientData()?.[TENGU_RUSTLING_PIXEL];
+  if (typeof clientValue === "string") return normalizeThinkingKeep(clientValue);
   return normalizeThinkingKeep(getFeatureValue_CACHED_MAY_BE_STALE(TENGU_RUSTLING_PIXEL, "all"));
 }
 //@ chunk-e6aww6q8.js:2583770-2583827 placement
-function normalizeThinkingKeep(e) {
-  return e === "all" || e === "none" ? e : "upgrade";
+function normalizeThinkingKeep(value) {
+  return value === "all" || value === "none" ? value : "upgrade";
 }
 //@ chunk-e6aww6q8.js:2583827-2584257 placement
 /**
  * 按模型、查询来源和 beta 列表计算请求特性开关：中途 system 消息、工具变更头与内联工具、保留提醒等。
  */
-function requestFeatureFlags(conversation, effectiveModel, r) {
-  let s =
+function requestFeatureFlags(conversation, effectiveModel, ctx) {
+  let systemTurns =
     isBetaRejected_2(conversation, BETA_MID_CONVERSATION_SYSTEM) || hasComplianceTaint("hipaa")
       ? false
       : shouldUseMidConvSystem(effectiveModel) || undefined;
-  let h = toolChangeHeaderAllowed(conversation)
+  let toolChangeHeader = toolChangeHeaderAllowed(conversation)
     ? true
     : isBetaRejected_2(conversation, BETA_MID_CONV_TOOL_CHANGE) ||
         isBetaRejected_2(conversation, BETA_MID_CONVERSATION_SYSTEM)
       ? false
       : undefined;
-  let y =
-    r.keptOn && r.betas.includes(BETA_MID_CONVERSATION_SYSTEM_CLEAR_AT)
+  let keptReminders =
+    ctx.keptOn && ctx.betas.includes(BETA_MID_CONVERSATION_SYSTEM_CLEAR_AT)
       ? true
       : isBetaRejected_2(conversation, BETA_MID_CONVERSATION_SYSTEM_CLEAR_AT) ||
           isBetaRejected_2(conversation, BETA_MID_CONVERSATION_SYSTEM) ||
-          r.betas.includes(BETA_MID_CONVERSATION_SYSTEM)
+          ctx.betas.includes(BETA_MID_CONVERSATION_SYSTEM)
         ? false
         : undefined;
-  let S;
+  let safeguardsFlag;
   return {
-    ...(s !== undefined && {
-      systemTurns: s,
+    ...(systemTurns !== undefined && {
+      systemTurns,
     }),
-    ...(h !== undefined && {
-      toolChangeHeader: h,
-      inlineTools: h && inlineToolsAllowed(conversation),
+    ...(toolChangeHeader !== undefined && {
+      toolChangeHeader,
+      inlineTools: toolChangeHeader && inlineToolsAllowed(conversation),
     }),
-    ...(y !== undefined && {
-      keptReminders: y,
+    ...(keptReminders !== undefined && {
+      keptReminders,
     }),
-    ...(S !== undefined && {
-      toolResultSafeguards: S,
+    ...(safeguardsFlag !== undefined && {
+      toolResultSafeguards: safeguardsFlag,
     }),
     ...(conversation.systemMessagesAcceptedBy.has(effectiveModel) && {
       systemTurnsAnsweredBy: effectiveModel,
@@ -2635,20 +2840,24 @@ var UNRECOGNIZED_MODEL_MARKER = "[claude-code:unrecognized_model]";
 /**
  * 遇到无法识别的模型名时（每个模型只记一次）记遥测，并在 print 模式下写 stderr，否则写调试日志。
  */
-function logUnrecognizedModel(e, querySource) {
+function logUnrecognizedModel(model, querySource) {
   try {
     if (querySource === "model_validation") return;
-    if (isUnresolvedInferenceProfile(e)) return;
-    let r = stripAnyVersatileSuffix(e);
-    if (!claimOnce().claim(`unrecognized-model-signal:${r}`)) return;
-    if (isRecognizedModel(e) || isRecognizedModel(r) || anyModelDescribed(e, r, strippedCanonicalName(e)))
+    if (isUnresolvedInferenceProfile(model)) return;
+    let stripped = stripAnyVersatileSuffix(model);
+    if (!claimOnce().claim(`unrecognized-model-signal:${stripped}`)) return;
+    if (
+      isRecognizedModel(model) ||
+      isRecognizedModel(stripped) ||
+      anyModelDescribed(model, stripped, strippedCanonicalName(model))
+    )
       return;
     logEvent("tengu_api_unrecognized_model", {
-      model: telemetrySafeModelName(e),
+      model: telemetrySafeModelName(model),
       querySource: agentTypeForTelemetry(querySource),
     });
     let replaced = `${UNRECOGNIZED_MODEL_MARKER} ${jsonStringify({
-      model: e,
+      model,
       query_source: querySource,
     })}`.replace(CONTROL_CHARS_EXCEPT_WS_RE, "");
     if (getPrintOutputFormat() !== null && env.CLAUDE_CODE_SESSION_KIND !== "bg")
@@ -2663,23 +2872,26 @@ function logUnrecognizedModel(e, querySource) {
   }
 }
 //@ chunk-e6aww6q8.js:2647496-2647535 placement
-var thinkingRelayModuleClaude = require("./chunk-1cnesc1e.js");
+var thinkingRelayModuleClaude; // deferred: loads other modules while loading; runs once its import cycle is complete
+deferInit("chunk-e6aww6q8.js:2647496", () => {
+  thinkingRelayModuleClaude = require("../teleport/relayState.js");
+});
 //@ chunk-e6aww6q8.js:2647535-2647595 placement
-function guardReturning(e, n) {
+function guardReturning(fn, fallback) {
   try {
-    return e();
+    return fn();
   } catch (error) {
     logError(toError(error));
-    return n;
+    return fallback;
   }
 }
 //@ chunk-e6aww6q8.js:2647595-2647688 placement
-function noteWaitForMcpServers(e, querySource) {
+function noteWaitForMcpServers(tools, querySource) {
   try {
     if (
       classifyQuerySource(querySource) === "main" &&
       isFoamySpringEnabled() &&
-      e.some((r) => toolMatchesName(r, WAITFORMCPSERVERS))
+      tools.some((tool) => toolMatchesName(tool, WAITFORMCPSERVERS))
     )
       markDeclared();
   } catch (error) {
@@ -2692,8 +2904,8 @@ var V2S = "v2s";
 var V2D = "v2d";
 var V2P = "v2p";
 //@ chunk-e6aww6q8.js:2647748-2647790 placement
-function traceValueOrUnknown(e) {
-  return sanitizeMarkName(e) ?? lit_2("unknown");
+function traceValueOrUnknown(value) {
+  return sanitizeMarkName(value) ?? lit_2("unknown");
 }
 //@ chunk-e6aww6q8.js:2647790-2647800 layout
 /**
@@ -2706,41 +2918,43 @@ var MAX_SIGNATURE_STRIP_ATTEMPTS = 2;
  */
 function getThinkingBlockKey(m) {
   if (typeof m !== "object" || m === null) return;
-  let n = m;
-  let r = n.type === "thinking" ? n.signature : n.type === "redacted_thinking" ? n.data : undefined;
-  return typeof r === "string" && r.length > 0 ? `${n.type}:${r}` : undefined;
+  let block = m;
+  let key =
+    block.type === "thinking" ? block.signature : block.type === "redacted_thinking" ? block.data : undefined;
+  return typeof key === "string" && key.length > 0 ? `${block.type}:${key}` : undefined;
 }
 //@ chunk-e6aww6q8.js:2648004-2648185 layout = hasThinkingContent (1)
 /**
  * assistant 消息里 thinking/redacted_thinking 块数。
  */
 function countThinkingBlocks(m) {
-  let n = 0;
+  let thinkingCount = 0;
   if (m?.type === "assistant" && Array.isArray(m.message.content)) {
-    for (let r of m.message.content) if (r.type === "thinking" || r.type === "redacted_thinking") n++;
+    for (let block of m.message.content)
+      if (block.type === "thinking" || block.type === "redacted_thinking") thinkingCount++;
   }
-  return n;
+  return thinkingCount;
 }
 //@ chunk-e6aww6q8.js:2648185-2648418 layout
 /**
  * 比较剥离前后消息：发送/剥离的思考块数与轮数。
  */
-function summarizeThinkingStrip(e, n) {
-  let r = {
+function summarizeThinkingStrip(before, after) {
+  let summary = {
     blocksSent: 0,
     turnsSent: 0,
     blocksStripped: 0,
     turnsStripped: 0,
   };
-  for (let idx = 0; idx < e.length; idx++) {
-    let h = countThinkingBlocks(e[idx]);
-    let y = h - countThinkingBlocks(n[idx]);
-    r.blocksSent += h;
-    r.turnsSent += h > 0 ? 1 : 0;
-    r.blocksStripped += y;
-    r.turnsStripped += y > 0 ? 1 : 0;
+  for (let idx = 0; idx < before.length; idx++) {
+    let beforeCount = countThinkingBlocks(before[idx]);
+    let strippedCount = beforeCount - countThinkingBlocks(after[idx]);
+    summary.blocksSent += beforeCount;
+    summary.turnsSent += beforeCount > 0 ? 1 : 0;
+    summary.blocksStripped += strippedCount;
+    summary.turnsStripped += strippedCount > 0 ? 1 : 0;
   }
-  return r;
+  return summary;
 }
 //@ chunk-e6aww6q8.js:2648418-2649540 fingerprint = getExtraBodyParams (0.442)
 /**
@@ -2775,41 +2989,41 @@ function getExtraBodyParams(betaHeaders) {
         level: "error",
       });
     }
-  for (let h of ["betas", "anthropic_beta"]) {
-    if (!(h in result)) continue;
-    let filtered = String(result[h])
+  for (let betaKey of ["betas", "anthropic_beta"]) {
+    if (!(betaKey in result)) continue;
+    let filtered = String(result[betaKey])
       .split(",")
-      .map((w) => w.trim())
+      .map((header) => header.trim())
       .filter(Boolean);
-    let filtered_2 = filtered.filter((w) => !isAfkModeBeta(w));
+    let filtered_2 = filtered.filter((header) => !isAfkModeBeta(header));
     if (filtered_2.length === filtered.length) continue;
     logForDebugging(
-      `CLAUDE_CODE_EXTRA_BODY ${h}: dropped afk-mode \u2014 only auto mode itself sends that beta`,
+      `CLAUDE_CODE_EXTRA_BODY ${betaKey}: dropped afk-mode \u2014 only auto mode itself sends that beta`,
       {
         level: "warn",
       },
     );
-    if (filtered_2.length > 0) result[h] = filtered_2;
-    else delete result[h];
+    if (filtered_2.length > 0) result[betaKey] = filtered_2;
+    else delete result[betaKey];
   }
   let metadata = result.metadata;
   if (isPlainObject_5(metadata) && typeof metadata.user_id === "string") {
-    let h = safeParseJSON(metadata.user_id, false);
-    if (isPlainObject_5(h) && "tk" in h) {
-      let { tk, ...S } = h;
+    let userId = safeParseJSON(metadata.user_id, false);
+    if (isPlainObject_5(userId) && "tk" in userId) {
+      let { tk, ...rest } = userId;
       result.metadata = {
         ...metadata,
-        user_id: jsonStringify(S),
+        user_id: jsonStringify(rest),
       };
     }
   }
   if (betaHeaders && betaHeaders.length > 0) {
-    let h = betaHeaderValues(betaHeaders);
+    let betaValues = betaHeaderValues(betaHeaders);
     if (result.anthropic_beta && Array.isArray(result.anthropic_beta)) {
       let existingHeaders = result.anthropic_beta;
-      let newHeaders = h.filter((header) => !existingHeaders.includes(header));
+      let newHeaders = betaValues.filter((header) => !existingHeaders.includes(header));
       result.anthropic_beta = [...existingHeaders, ...newHeaders];
-    } else result.anthropic_beta = h;
+    } else result.anthropic_beta = betaValues;
   }
   return result;
 }
@@ -2817,11 +3031,11 @@ function getExtraBodyParams(betaHeaders) {
 /**
  * Bedrock 等把 beta 放进请求体 anthropic_beta 数组时，追加该 beta 头（已有则不加）。
  */
-function addBetaToBodyAnthropicBeta(extraBodyParams, n, r) {
-  if (!r) return;
+function addBetaToBodyAnthropicBeta(extraBodyParams, beta, enabled) {
+  if (!enabled) return;
   let anthropicBeta = extraBodyParams.anthropic_beta;
-  if (Array.isArray(anthropicBeta) && !anthropicBeta.includes(n.header))
-    extraBodyParams.anthropic_beta = [...anthropicBeta, n.header];
+  if (Array.isArray(anthropicBeta) && !anthropicBeta.includes(beta.header))
+    extraBodyParams.anthropic_beta = [...anthropicBeta, beta.header];
 }
 //@ chunk-e6aww6q8.js:2649672-2650149 fingerprint = getPromptCachingEnabled (0.756)
 /**
@@ -2863,11 +3077,11 @@ function getPromptCachingEnabled(model) {
 /**
  * 生成 cache_control：{type:"ephemeral"}，可带 ttl（1h）与 scope:"global"。
  */
-function getCacheControl({ scope, ttl: n } = {}) {
+function getCacheControl({ scope, ttl } = {}) {
   return {
     type: "ephemeral",
-    ...(n && {
-      ttl: n,
+    ...(ttl && {
+      ttl,
     }),
     ...(scope === "global" && {
       scope,
@@ -2879,14 +3093,14 @@ function getCacheControl({ scope, ttl: n } = {}) {
  * 决定提示词缓存 TTL：代理覆盖优先；订阅用户且不在超额、模型在 tengu_prompt_cache_1h_config 白名单内用 1h，否则 5m；tengu_tidy_frost 时活跃 5m 缓存保持 5m。
  */
 function should1hCacheTTL(
-  e,
-  { agentCacheTtlOverride: n, ignoreOverage: r = false, mainThreadModel: s } = {},
+  querySource,
+  { agentCacheTtlOverride, ignoreOverage = false, mainThreadModel } = {},
 ) {
   let userEligible = isClaudeAISubscriber();
-  let y = userEligible && !r && getCurrentLimits().isUsingOverage === true;
-  let promptCacheTtl = resolvePromptCacheTtl(e, n, y);
+  let billedAsOverage = userEligible && !ignoreOverage && getCurrentLimits().isUsingOverage === true;
+  let promptCacheTtl = resolvePromptCacheTtl(querySource, agentCacheTtlOverride, billedAsOverage);
   if (promptCacheTtl !== undefined) return promptCacheTtl;
-  if (!userEligible || y)
+  if (!userEligible || billedAsOverage)
     return {
       ttl: "5m",
       reason: "default",
@@ -2899,14 +3113,14 @@ function should1hCacheTTL(
       }).allowlist ?? [];
     setPromptCache1hAllowlist(allowlist);
   }
-  if (!matchesModelPattern(e, allowlist))
+  if (!matchesModelPattern(querySource, allowlist))
     return {
       ttl: "5m",
       reason: "default",
     };
   if (
-    s !== undefined &&
-    isLastMainThreadAskLive(CACHE_TTL_5M_MS, s) &&
+    mainThreadModel !== undefined &&
+    isLastMainThreadAskLive(CACHE_TTL_5M_MS, mainThreadModel) &&
     getFeatureValue_CACHED_MAY_BE_STALE("tengu_tidy_frost", false)
   )
     return {
@@ -2922,18 +3136,18 @@ function should1hCacheTTL(
 /**
  * should1hCacheTTL(...).ttl 是否为 1h。
  */
-function isOneHourCacheTtl(querySource, n) {
-  return should1hCacheTTL(querySource, n).ttl === "1h";
+function isOneHourCacheTtl(querySource, options) {
+  return should1hCacheTTL(querySource, options).ttl === "1h";
 }
 //@ chunk-e6aww6q8.js:2650774-2651250 layout
 /**
  * thinking.type=disabled 时去掉 display 等多余键（服务器拒收），首次记 tengu_thinking_disabled_sanitized。
  */
-function sanitizeDisabledThinking(thinking, querySource, r) {
+function sanitizeDisabledThinking(thinking, querySource, shouldLog) {
   if (thinking?.type !== "disabled") return thinking;
   let filtered = Object.keys(thinking).filter((key) => key !== "type");
   if (filtered.length === 0) return thinking;
-  if (r) {
+  if (shouldLog) {
     logEvent("tengu_thinking_disabled_sanitized", {
       hadDisplay: filtered.includes("display") ? lit_2("true") : lit_2("false"),
       extraKeyCount: filtered.length,
@@ -2991,7 +3205,7 @@ async function verifyApiKey(apiKey, isNonInteractiveSession, credentials, storag
   try {
     let model = getBareCheckModel();
     let betas = getModelBetas(model);
-    let S = await returnValue_2(
+    let ok = await returnValue_2(
       withRetry(
         () =>
           getAnthropicClient({
@@ -3030,7 +3244,7 @@ async function verifyApiKey(apiKey, isNonInteractiveSession, credentials, storag
       ),
     );
     logFeatureOk("api_key_verify");
-    return S;
+    return ok;
   } catch (errorFromRetry) {
     let error = errorFromRetry;
     if (errorFromRetry instanceof CannotRetryError) error = errorFromRetry.originalError;
@@ -3085,12 +3299,12 @@ function userMessageToMessageParam(message, addCache = false, enablePromptCachin
         ],
       };
     else {
-      let h = dropEmptyTextBlocks(message.message.content);
+      let content = dropEmptyTextBlocks(message.message.content);
       return {
         role: "user",
-        content: h.map((y, i) => ({
-          ...y,
-          ...(i === h.length - 1
+        content: content.map((block, i) => ({
+          ...block,
+          ...(i === content.length - 1
             ? enablePromptCaching
               ? {
                   cache_control: getCacheControl({
@@ -3114,16 +3328,16 @@ function userMessageToMessageParam(message, addCache = false, enablePromptCachin
  * 去掉空白 text 块；全空时返回一个 "(no content)" 文本块。
  */
 function dropEmptyTextBlocks(content) {
-  let n;
+  let filtered;
   for (let idx = 0; idx < content.length; idx++) {
-    let s = content[idx];
-    if (s.type === "text" && (typeof s.text !== "string" || s.text.trim() === ""))
-      n ??= content.slice(0, idx);
-    else n?.push(s);
+    let block = content[idx];
+    if (block.type === "text" && (typeof block.text !== "string" || block.text.trim() === ""))
+      filtered ??= content.slice(0, idx);
+    else filtered?.push(block);
   }
-  if (n === undefined) return [...content];
-  return n.length > 0
-    ? n
+  if (filtered === undefined) return [...content];
+  return filtered.length > 0
+    ? filtered
     : [
         {
           type: "text",
@@ -3135,20 +3349,26 @@ function dropEmptyTextBlocks(content) {
 /**
  * echoApiBlockOrder 开启时按 API 原始块顺序重排 assistant 内容（gJe），出错记日志返回原值。
  */
-function applyApiBlockOrderEcho(e, echoApiBlockOrder, preserveTrailingThinking) {
-  if (!echoApiBlockOrder) return e;
+function applyApiBlockOrderEcho(messages, echoApiBlockOrder, preserveTrailingThinking) {
+  if (!echoApiBlockOrder) return messages;
   try {
-    return reorderByApiBlockIndex(e, preserveTrailingThinking);
+    return reorderByApiBlockIndex(messages, preserveTrailingThinking);
   } catch (error) {
     logError(toError(error));
-    return e;
+    return messages;
   }
 }
 //@ chunk-e6aww6q8.js:2653480-2653865 callgraph-fingerprint = assistantMessageToMessageParam (0.411)
 /**
  * 内部 assistant 消息转 API MessageParam；需要缓存断点时给最后一个非 thinking 块加 cache_control。
  */
-function assistantMessageToMessageParam(message, addCache = false, enablePromptCaching, ttl, h) {
+function assistantMessageToMessageParam(
+  message,
+  addCache = false,
+  enablePromptCaching,
+  ttl,
+  whitespaceTextUnstampable,
+) {
   if (addCache)
     if (typeof message.message.content === "string")
       return {
@@ -3168,9 +3388,10 @@ function assistantMessageToMessageParam(message, addCache = false, enablePromptC
     else
       return {
         role: "assistant",
-        content: message.message.content.map((y, i) => ({
-          ...y,
-          ...(i === message.message.content.length - 1 && isRenderableContentBlock(y, h)
+        content: message.message.content.map((block, i) => ({
+          ...block,
+          ...(i === message.message.content.length - 1 &&
+          isRenderableContentBlock(block, whitespaceTextUnstampable)
             ? enablePromptCaching
               ? {
                   cache_control: getCacheControl({
@@ -3190,10 +3411,10 @@ function assistantMessageToMessageParam(message, addCache = false, enablePromptC
 /**
  * 调用 options.onMediaStripped 观察者（媒体剥离重试时），异常只告警。
  */
-function notifyMediaStripped(options, kind, r) {
+function notifyMediaStripped(options, kind, detail) {
   if (!options.onMediaStripped) return;
   try {
-    options.onMediaStripped(kind, r);
+    options.onMediaStripped(kind, detail);
   } catch (error) {
     logForDebugging(
       `onMediaStripped observer threw; continuing the media-strip retry: ${errorMessage(error)}`,
@@ -3224,15 +3445,22 @@ async function queryModelWithoutStreaming({
   signal,
   options,
 }) {
-  let S = {
+  let requestOptions = {
     ...options,
     model: unlessManagedDeniedModel(options.model),
   };
   let assistantMessage;
   for await (let message of joinWebSearchCitationTexts(
     withStreamVCR(messages, async function* () {
-      yield* recoverRegimeRefusal(tools, signal, (G) =>
-        queryModelWithToolSearchRecovery(messages, systemPrompt, thinkingConfig, G, signal, S),
+      yield* recoverRegimeRefusal(tools, signal, (tools) =>
+        queryModelWithToolSearchRecovery(
+          messages,
+          systemPrompt,
+          thinkingConfig,
+          tools,
+          signal,
+          requestOptions,
+        ),
       );
     }),
     options.isNonInteractiveSession,
@@ -3245,8 +3473,8 @@ async function queryModelWithoutStreaming({
   if (
     isResendableClientApiError(assistantMessage) &&
     getAPIProvider() === "gateway" &&
-    S.model === getSmallFastModel() &&
-    S.model !== getMainLoopModel()
+    requestOptions.model === getSmallFastModel() &&
+    requestOptions.model !== getMainLoopModel()
   )
     return queryModelWithoutStreaming({
       messages,
@@ -3269,8 +3497,8 @@ async function* queryModelWithStreaming({ messages, systemPrompt, thinkingConfig
   try {
     return yield* joinWebSearchCitationTexts(
       withStreamVCR(messages, async function* () {
-        yield* recoverRegimeRefusal(tools, signal, (S) =>
-          queryModelWithToolSearchRecovery(messages, systemPrompt, thinkingConfig, S, signal, options),
+        yield* recoverRegimeRefusal(tools, signal, (tools) =>
+          queryModelWithToolSearchRecovery(messages, systemPrompt, thinkingConfig, tools, signal, options),
         );
       }),
       options.isNonInteractiveSession,
@@ -3311,16 +3539,16 @@ function getNonStreamingRequestTimeoutMs() {
 /**
  * verbose 日志级别时打印请求的 model/thinking/output_config/temperature/betas。
  */
-function logApiRequestDetail(e) {
+function logApiRequestDetail(params) {
   if (getMinDebugLogLevel() !== "verbose") return;
   logForDebugging(
     `[API REQUEST DETAIL] ${jsonStringify({
-      model: e.model,
-      thinking: e.thinking,
-      output_config: e.output_config,
-      temperature: e.temperature,
-      betas: e.betas ?? [],
-      anthropic_beta: e.anthropic_beta,
+      model: params.model,
+      thinking: params.thinking,
+      output_config: params.output_config,
+      temperature: params.temperature,
+      betas: params.betas ?? [],
+      anthropic_beta: params.anthropic_beta,
     })}`,
     {
       level: "verbose",
@@ -3332,59 +3560,60 @@ function logApiRequestDetail(e) {
  * 生成 x-client-request-id（第一方时）和 traceparent 头，并记录本次尝试。
  */
 function buildRequestTraceHeaders(span, attempt) {
-  let r = hitsAnthropicBackend();
-  let s = r ? randomUUID() : undefined;
-  let h =
-    (span && (r || env.CLAUDE_CODE_PROPAGATE_TRACEPARENT) ? getSpanId(span) : undefined) ??
+  let hitsBackend = hitsAnthropicBackend();
+  let clientRequestId = hitsBackend ? randomUUID() : undefined;
+  let traceparent =
+    (span && (hitsBackend || env.CLAUDE_CODE_PROPAGATE_TRACEPARENT) ? getSpanId(span) : undefined) ??
     getUpstreamTraceparent();
   recordLlmRequestAttempt(span, {
     attempt,
-    clientRequestId: s,
+    clientRequestId,
   });
   return {
     headers: {
-      ...(s && {
-        [CLIENT_REQUEST_ID_HEADER]: s,
+      ...(clientRequestId && {
+        [CLIENT_REQUEST_ID_HEADER]: clientRequestId,
       }),
-      ...(h && {
-        traceparent: h,
+      ...(traceparent && {
+        traceparent,
       }),
     },
-    clientRequestId: s,
+    clientRequestId,
   };
 }
 //@ chunk-e6aww6q8.js:2655663-2655822 layout
 /**
  * 按端点设置 x-cc-/x-claude-code- 的 context-compacted 与 compaction-request 头。
  */
-function setCompactionHeaders(headers, n, r) {
-  if (n === undefined && r === undefined) return;
-  let s = isFirstPartyApiBackend();
-  let h = shouldSendGatewayHintHeaders();
-  if (n !== undefined) {
-    if (s) headers[X_CC_CONTEXT_COMPACTED] = n;
-    if (h) headers[X_CLAUDE_CODE_CONTEXT_COMPACTED] = n;
+function setCompactionHeaders(headers, contextCompacted, compactionRequest) {
+  if (contextCompacted === undefined && compactionRequest === undefined) return;
+  let isFirstParty = isFirstPartyApiBackend();
+  let sendGatewayHints = shouldSendGatewayHintHeaders();
+  if (contextCompacted !== undefined) {
+    if (isFirstParty) headers[X_CC_CONTEXT_COMPACTED] = contextCompacted;
+    if (sendGatewayHints) headers[X_CLAUDE_CODE_CONTEXT_COMPACTED] = contextCompacted;
   }
-  if (r !== undefined) {
-    if (s) headers[X_CC_COMPACTION_REQUEST] = r;
-    if (h) headers[X_CLAUDE_CODE_COMPACTION] = r;
+  if (compactionRequest !== undefined) {
+    if (isFirstParty) headers[X_CC_COMPACTION_REQUEST] = compactionRequest;
+    if (sendGatewayHints) headers[X_CLAUDE_CODE_COMPACTION] = compactionRequest;
   }
 }
 //@ chunk-e6aww6q8.js:2655822-2655870 layout
 /**
  * 设置 x-claude-code-prev-tool-durations 头。
  */
-function setPrevToolDurationsHeader(headers, n) {
-  if (n !== undefined && shouldSendGatewayHintHeaders()) headers[X_CLAUDE_CODE_PREV_TOOL_DURATIONS] = n;
+function setPrevToolDurationsHeader(headers, durations) {
+  if (durations !== undefined && shouldSendGatewayHintHeaders())
+    headers[X_CLAUDE_CODE_PREV_TOOL_DURATIONS] = durations;
 }
 //@ chunk-e6aww6q8.js:2655870-2656070 layout
 /**
  * 请求分派版本：CLAUDE_CODE_DISPATCH_V2D 或 tengu_dreamy_frost → v2d；非 auxiliary 且 V2S/tengu_cedar_lattice → v2s；否则 null。
  */
-function getDispatchVersion(e) {
+function getDispatchVersion(querySourceCategory) {
   if (antEnv.CLAUDE_CODE_DISPATCH_V2D ?? getFeatureValue_CACHED_MAY_BE_STALE("tengu_dreamy_frost", false))
     return V2D;
-  if (e === "auxiliary") return null;
+  if (querySourceCategory === "auxiliary") return null;
   if (antEnv.CLAUDE_CODE_DISPATCH_V2S ?? getFeatureValue_CACHED_MAY_BE_STALE("tengu_cedar_lattice", false))
     return V2S;
   return null;
@@ -3393,9 +3622,9 @@ function getDispatchVersion(e) {
 /**
  * 每进程一次记录 API 路由（状态、头）诊断事件。
  */
-function logApiRouteObserved(e, incrementalRequestBody) {
-  if (e === undefined || !streamFallbackWarning().once("api_route_observed")) return;
-  let { status, headers } = e;
+function logApiRouteObserved(response, incrementalRequestBody) {
+  if (response === undefined || !streamFallbackWarning().once("api_route_observed")) return;
+  let { status, headers } = response;
   logForDiagnosticsNoPII("info", "cli_api_route_observed", () => ({
     response: describeResponseHeaders(status, headers),
     route: connectionSetupFacts(),
@@ -3406,13 +3635,13 @@ function logApiRouteObserved(e, incrementalRequestBody) {
 /**
  * 看起来像 JSON 的字符串尝试解析，失败原样返回。
  */
-function tryParseJsonString(e) {
-  let n = typeof e === "string" ? e.trim() : undefined;
-  if (!n || (n[0] !== "{" && n[0] !== "[")) return e;
+function tryParseJsonString(value) {
+  let trimmed = typeof value === "string" ? value.trim() : undefined;
+  if (!trimmed || (trimmed[0] !== "{" && trimmed[0] !== "[")) return value;
   try {
-    return jsonParse(n);
+    return jsonParse(trimmed);
   } catch {
-    return e;
+    return value;
   }
 }
 //@ chunk-e6aww6q8.js:2656398-2659669 callgraph-witnessed = executeNonStreamingRequest (0.295)
@@ -3450,7 +3679,7 @@ async function* executeNonStreamingRequest(
       }),
     async (anthropic, attempt_2, context) => {
       let start = clock.now();
-      let limitsAccountEpoch = getLimitsAccountEpoch();
+      let accountEpoch = getLimitsAccountEpoch();
       let retryParams = paramsFromContext(context);
       onAttempt(attempt_2, start, retryParams.max_tokens);
       let adjustedParams = adjustParamsForNonStreaming(retryParams, MAX_OUTPUT_TOKENS_CAP_2);
@@ -3466,11 +3695,11 @@ async function* executeNonStreamingRequest(
       setPrevToolDurationsHeader(headers, clientOptions.prevToolDurationsForWire);
       retryOptions.stampDispatchHeader?.(headers, isFirstPartyApiBackend() && isLowPriorityActiveSafe());
       let abortController = new AbortController();
-      let lt = clock.setTimeout(() => abortController.abort(), fallbackTimeoutMs, {
+      let cancelTimeout = clock.setTimeout(() => abortController.abort(), fallbackTimeoutMs, {
         unref: true,
       });
       try {
-        let Je = await anthropic.beta.messages
+        let result = await anthropic.beta.messages
           .create(
             {
               ...deferredToolNameOf(adjustedParams),
@@ -3485,61 +3714,61 @@ async function* executeNonStreamingRequest(
             },
           )
           .withResponse();
-        logApiRouteObserved(Je.response, false);
-        let nt = tryParseJsonString(Je.data);
-        if (nt !== Je.data) {
+        logApiRouteObserved(result.response, false);
+        let message = tryParseJsonString(result.data);
+        if (message !== result.data) {
           logForDebugging("Non-streaming fallback: parsed a JSON body served under a non-JSON content-type");
           logForDiagnosticsNoPII("info", "cli_nonstreaming_fallback_text_body_parsed");
         }
-        if (!isValidAPIMessage(nt))
+        if (!isValidAPIMessage(message))
           throw new UnexpectedApiResponseError({
-            data: nt,
-            status: Je.response?.status,
-            headers: Je.response?.headers,
+            data: message,
+            status: result.response?.status,
+            headers: result.response?.headers,
             originating: originatingRequestId,
           });
-        countToolCallsSince_2_3(nt);
-        let headers_2 = Je.response?.headers;
+        countToolCallsSince_2_3(message);
+        let headers_2 = result.response?.headers;
         if (retryOptions.lowPriorityWait) recordLowPriorityServed(retryOptions.lowPriorityWait);
         if (headers_2) {
-          let yt =
+          let longContext =
             (has1mSuffix_2(retryOptions.model) || modelHasNative1MContext(retryOptions.model)) &&
-            (nt.usage?.input_tokens ?? 0) +
-              (nt.usage?.cache_read_input_tokens ?? 0) +
-              (nt.usage?.cache_creation_input_tokens ?? 0) >
+            (message.usage?.input_tokens ?? 0) +
+              (message.usage?.cache_read_input_tokens ?? 0) +
+              (message.usage?.cache_creation_input_tokens ?? 0) >
               SECONDARY_CONTEXT_WINDOW;
           let quotaStatusFromHeaders = extractQuotaStatusFromHeaders(
             headers_2,
             retryOptions.model,
-            yt,
+            longContext,
             clock.now(),
-            limitsAccountEpoch,
+            accountEpoch,
             clientOptions.storageV5,
           );
           if (quotaStatusFromHeaders && clientOptions.queryTracking) {
             clientOptions.queryTracking.billedToUsageCredits = quotaStatusFromHeaders.overageInUse === true;
-            clientOptions.queryTracking.longContextBilled = yt;
+            clientOptions.queryTracking.longContextBilled = longContext;
           }
         }
-        let creditCode = readFallbackCreditToken(nt.stop_details);
+        let creditCode = readFallbackCreditToken(message.stop_details);
         {
-          let stopDetails = nt.stop_details;
+          let stopDetails = message.stop_details;
           if (stopDetails && "fallback_credit_token" in stopDetails) delete stopDetails.fallback_credit_token;
         }
         return {
-          message: nt,
-          requestId: amazonRequestId(Je.request_id, headers_2),
+          message,
+          requestId: amazonRequestId(result.request_id, headers_2),
           headers: headers_2,
           creditCode,
         };
       } catch (err) {
-        let nt =
+        let error =
           isAbortError(err) && abortController.signal.aborted && !retryOptions.signal.aborted
             ? new APIConnectionTimeoutError()
             : err;
-        if (nt instanceof APIUserAbortError) throw nt;
+        if (error instanceof APIUserAbortError) throw error;
         logForDiagnosticsNoPII("error", "cli_nonstreaming_fallback_error", () => ({
-          ...classifyApiErrorKind(nt, classifyAPIError(nt)),
+          ...classifyApiErrorKind(error, classifyAPIError(error)),
           attempt: attempt_2,
           attempt_duration_ms: clock.now() - start,
           timeout_ms: fallbackTimeoutMs,
@@ -3551,14 +3780,16 @@ async function* executeNonStreamingRequest(
         logEvent("tengu_nonstreaming_fallback_error", {
           model: telemetrySafeModelName(clientOptions.model),
           error:
-            nt instanceof Error ? (sanitizedErrorNameForTelemetry(nt) ?? lit_2("Error")) : lit_2("unknown"),
+            error instanceof Error
+              ? (sanitizedErrorNameForTelemetry(error) ?? lit_2("Error"))
+              : lit_2("unknown"),
           attempt: attempt_2,
           timeout_ms: fallbackTimeoutMs,
           request_id: originatingRequestId?.analyticsRequestId ?? lit_2("unknown"),
         });
-        throw nt;
+        throw error;
       } finally {
-        lt();
+        cancelTimeout();
       }
     },
     {
@@ -3598,23 +3829,23 @@ async function* executeNonStreamingRequest(
     : yield* generator;
 }
 //@ chunk-e6aww6q8.js:2659812-2659842 placement
-function promptIdForMessages(e) {
-  return getPromptId(e);
+function promptIdForMessages(messages) {
+  return getPromptId(messages);
 }
 //@ chunk-e6aww6q8.js:2659842-2659965 placement
 /**
  * 取请求所属的提示 id：优先解析自身，失败或为空时在子代理上下文中使用父提示 id。
  */
-function promptIdForRequest(e, agentContext) {
-  let r;
+function promptIdForRequest(messages, agentContext) {
+  let promptId;
   try {
-    r = promptIdForMessages(e);
+    promptId = promptIdForMessages(messages);
   } catch (error) {
     logError(toError(error));
-    r = undefined;
+    promptId = undefined;
   }
   return (
-    r ??
+    promptId ??
     (isSubagentContext(agentContext) && !agentContext.isMainSession ? agentContext.parentPromptId : undefined)
   );
 }
@@ -3641,19 +3872,23 @@ function memoryToolNames(messages, tools) {
   return memoryRedactionIndex(
     getRootSession().host,
     messages,
-    new Set(tools.filter((r) => isLiveMemoryTool(r) || r.mcpInfo?.accountMemory === true).map((r) => r.name)),
+    new Set(
+      tools
+        .filter((tool) => isLiveMemoryTool(tool) || tool.mcpInfo?.accountMemory === true)
+        .map((tool) => tool.name),
+    ),
   );
 }
 //@ chunk-e6aww6q8.js:2660203-2660356 placement
-function applyThreadBody(e, n) {
-  if (!("thread" in e)) return e;
-  let { thread, ...s } = e;
+function applyThreadBody(body, threadBody) {
+  if (!("thread" in body)) return body;
+  let { thread, ...rest } = body;
   return {
-    ...s,
-    messages: n.messages,
-    system: n.system,
-    ...(n.tools !== undefined && {
-      tools: n.tools,
+    ...rest,
+    messages: threadBody.messages,
+    system: threadBody.system,
+    ...(threadBody.tools !== undefined && {
+      tools: threadBody.tools,
     }),
   };
 }
@@ -3692,8 +3927,8 @@ function isMediaBlock(block) {
 /**
  * base64 媒体块的 data 长度，否则 0。
  */
-function base64MediaLength(e) {
-  return isBase64ImageBlock_3(e) ? e.source.data.length : 0;
+function base64MediaLength(block) {
+  return isBase64ImageBlock_3(block) ? block.source.data.length : 0;
 }
 //@ chunk-e6aww6q8.js:2660830-2660883 file-local
 /**
@@ -3731,124 +3966,134 @@ function countMediaItems(messagesForAPI) {
 /**
  * 按数量上限与总字节上限从最旧开始移除媒体块（tool_result 内的换成占位文本），用于请求媒体数量/大小限制。
  */
-function stripExcessMediaItems(e, n, r = 0, mediaTotalByteCap = 1 / 0, h = 0, documentByteCap = 1 / 0) {
-  let S = [];
-  let w = [];
-  for (let Me of e) {
-    if (!Array.isArray(Me.message.content)) continue;
-    for (let We of Me.message.content)
-      if (isMediaBlock(We)) {
-        S.push(base64MediaLength(We));
-        w.push(We.type === "document" ? S.at(-1) : 0);
-      } else if (isToolResultBlock_2(We) && Array.isArray(We.content)) {
-        for (let ze of We.content)
-          if (isMediaBlock(ze)) {
-            S.push(base64MediaLength(ze));
-            w.push(ze.type === "document" ? S.at(-1) : 0);
+function stripExcessMediaItems(
+  messages,
+  maxMediaItems,
+  reservedItems = 0,
+  mediaTotalByteCap = 1 / 0,
+  reservedBytes = 0,
+  documentByteCap = 1 / 0,
+) {
+  let byteLengths = [];
+  let documentBytes = [];
+  for (let message of messages) {
+    if (!Array.isArray(message.message.content)) continue;
+    for (let block of message.message.content)
+      if (isMediaBlock(block)) {
+        byteLengths.push(base64MediaLength(block));
+        documentBytes.push(block.type === "document" ? byteLengths.at(-1) : 0);
+      } else if (isToolResultBlock_2(block) && Array.isArray(block.content)) {
+        for (let nestedBlock of block.content)
+          if (isMediaBlock(nestedBlock)) {
+            byteLengths.push(base64MediaLength(nestedBlock));
+            documentBytes.push(nestedBlock.type === "document" ? byteLengths.at(-1) : 0);
           }
       }
   }
-  let L = new Set();
-  let G = [];
-  let max = Math.max(0, n - r);
-  let Z = 0;
-  let Se = 0;
-  let ke = false;
+  let removedIndices = new Set();
+  let keptIndices = [];
+  let max = Math.max(0, maxMediaItems - reservedItems);
+  let totalBytes = 0;
+  let documentBytesTotal = 0;
+  let capTriggered = false;
   let documentCapTriggered = false;
-  let Ee = documentByteCap > 0 && documentByteCap < mediaTotalByteCap;
-  for (let [Me, We] of S.entries()) {
-    G.push(Me);
-    Z += We;
-    Se += w[Me];
-    if (G.length > n)
-      for (let ze of G.splice(0, G.length - max)) {
-        L.add(ze);
-        Z -= S[ze];
-        Se -= w[ze];
+  let documentCapped = documentByteCap > 0 && documentByteCap < mediaTotalByteCap;
+  for (let [index, bytes] of byteLengths.entries()) {
+    keptIndices.push(index);
+    totalBytes += bytes;
+    documentBytesTotal += documentBytes[index];
+    if (keptIndices.length > maxMediaItems)
+      for (let index of keptIndices.splice(0, keptIndices.length - max)) {
+        removedIndices.add(index);
+        totalBytes -= byteLengths[index];
+        documentBytesTotal -= documentBytes[index];
       }
-    if (Ee && Se > documentByteCap) {
-      ke = true;
+    if (documentCapped && documentBytesTotal > documentByteCap) {
+      capTriggered = true;
       documentCapTriggered = true;
-      for (let ze = 0; ze < G.length && Se > documentByteCap - h;) {
-        let lt = G[ze];
-        if (w[lt] === 0) {
-          ze++;
+      for (
+        let index = 0;
+        index < keptIndices.length && documentBytesTotal > documentByteCap - reservedBytes;
+      ) {
+        let docItemIndex = keptIndices[index];
+        if (documentBytes[docItemIndex] === 0) {
+          index++;
           continue;
         }
-        G.splice(ze, 1);
-        L.add(lt);
-        Z -= S[lt];
-        Se -= w[lt];
+        keptIndices.splice(index, 1);
+        removedIndices.add(docItemIndex);
+        totalBytes -= byteLengths[docItemIndex];
+        documentBytesTotal -= documentBytes[docItemIndex];
       }
     }
-    if (mediaTotalByteCap > 0 && Z > mediaTotalByteCap) {
-      ke = true;
-      for (let ze = 0; ze < G.length && Z > mediaTotalByteCap - h;) {
-        let lt = G[ze];
-        if (S[lt] === 0) {
-          ze++;
+    if (mediaTotalByteCap > 0 && totalBytes > mediaTotalByteCap) {
+      capTriggered = true;
+      for (let index = 0; index < keptIndices.length && totalBytes > mediaTotalByteCap - reservedBytes;) {
+        let mediaItemIndex = keptIndices[index];
+        if (byteLengths[mediaItemIndex] === 0) {
+          index++;
           continue;
         }
-        G.splice(ze, 1);
-        L.add(lt);
-        Z -= S[lt];
-        Se -= w[lt];
+        keptIndices.splice(index, 1);
+        removedIndices.add(mediaItemIndex);
+        totalBytes -= byteLengths[mediaItemIndex];
+        documentBytesTotal -= documentBytes[mediaItemIndex];
       }
     }
   }
-  if (L.size === 0) return e;
-  let Ae = 0;
-  let mapped = e.map((Me) => {
-    let content = Me.message.content;
-    if (!Array.isArray(content)) return Me;
-    let ze = false;
-    let lt = [];
-    for (let Je of content)
-      if (isMediaBlock(Je)) {
-        if (L.has(Ae++)) ze = true;
-        else lt.push(Je);
-      } else if (isToolResultBlock_2(Je) && Array.isArray(Je.content)) {
-        let nt = false;
-        let content = Je.content.map((Et) => {
-          if (isMediaBlock(Et) && L.has(Ae++)) {
-            nt = true;
+  if (removedIndices.size === 0) return messages;
+  let mediaIndex = 0;
+  let mapped = messages.map((message) => {
+    let content = message.message.content;
+    if (!Array.isArray(content)) return message;
+    let stripped = false;
+    let keptBlocks = [];
+    for (let block of content)
+      if (isMediaBlock(block)) {
+        if (removedIndices.has(mediaIndex++)) stripped = true;
+        else keptBlocks.push(block);
+      } else if (isToolResultBlock_2(block) && Array.isArray(block.content)) {
+        let removedInToolResult = false;
+        let content = block.content.map((item) => {
+          if (isMediaBlock(item) && removedIndices.has(mediaIndex++)) {
+            removedInToolResult = true;
             return mediaRemovedPlaceholder();
           }
-          return Et;
+          return item;
         });
-        ze ||= nt;
-        lt.push(
-          nt
+        stripped ||= removedInToolResult;
+        keptBlocks.push(
+          removedInToolResult
             ? {
-                ...Je,
+                ...block,
                 content,
               }
-            : Je,
+            : block,
         );
-      } else lt.push(Je);
-    if (!ze) return Me;
+      } else keptBlocks.push(block);
+    if (!stripped) return message;
     return {
-      ...Me,
+      ...message,
       message: {
-        ...Me.message,
-        content: lt.length > 0 ? lt : [mediaRemovedPlaceholder()],
+        ...message.message,
+        content: keptBlocks.length > 0 ? keptBlocks : [mediaRemovedPlaceholder()],
       },
     };
   });
-  if (ke) {
+  if (capTriggered) {
     let removedBytes = 0;
     let removedDocumentBytes = 0;
-    for (let ze of L) {
-      removedBytes += S[ze];
-      removedDocumentBytes += w[ze];
+    for (let index of removedIndices) {
+      removedBytes += byteLengths[index];
+      removedDocumentBytes += documentBytes[index];
     }
     logEvent("tengu_media_byte_cap_stripped", {
-      totalBytes: S.reduce((acc, lt) => acc + lt, 0),
-      totalDocumentBytes: w.reduce((acc, lt) => acc + lt, 0),
+      totalBytes: byteLengths.reduce((acc, bytes) => acc + bytes, 0),
+      totalDocumentBytes: documentBytes.reduce((acc, bytes) => acc + bytes, 0),
       byteLimit: mediaTotalByteCap,
       documentByteLimit: documentByteCap,
       documentCapTriggered,
-      removedCount: L.size,
+      removedCount: removedIndices.size,
       removedBytes,
       removedDocumentBytes,
     });
@@ -3859,24 +4104,27 @@ function stripExcessMediaItems(e, n, r = 0, mediaTotalByteCap = 1 / 0, h = 0, do
 /**
  * 媒体字节上限 GrowthBook 值的 schema。
  */
-var mediaByteCapSchema = DoctorLazy(() => union([literal(0), int_2().min(2 * MEDIA_BYTE_CAP_MIN)]));
+var mediaByteCapSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:2662770", () => {
+  mediaByteCapSchema = DoctorLazy(() => union([literal(0), int_2().min(2 * MEDIA_BYTE_CAP_MIN)]));
+});
 //@ chunk-e6aww6q8.js:2662812-2662892 layout
 /**
  * 读 GrowthBook 数值开关并校验。
  */
-function readMediaByteCapFlag(e) {
-  let n = mediaByteCapSchema().safeParse(getFeatureValue_CACHED_MAY_BE_STALE(e, null));
-  return n.success ? n.data : undefined;
+function readMediaByteCapFlag(flagName) {
+  let parsed = mediaByteCapSchema().safeParse(getFeatureValue_CACHED_MAY_BE_STALE(flagName, null));
+  return parsed.success ? parsed.data : undefined;
 }
 //@ chunk-e6aww6q8.js:2662892-2663034 layout
 /**
  * 请求媒体总字节上限（tengu_keen_pudding / tengu_media_byte_cap）。
  */
 function getMediaTotalByteCap() {
-  let e = readMediaByteCapFlag("tengu_keen_pudding") || readMediaByteCapFlag("tengu_media_byte_cap");
-  if (e === undefined)
+  let flag = readMediaByteCapFlag("tengu_keen_pudding") || readMediaByteCapFlag("tengu_media_byte_cap");
+  if (flag === undefined)
     return hitsAnthropicBackend() ? MEDIA_TOTAL_BYTES_ANTHROPIC : MEDIA_TOTAL_BYTES_DEFAULT;
-  return hitsAnthropicBackend() ? e : Math.min(e, MEDIA_TOTAL_BYTES_ANTHROPIC);
+  return hitsAnthropicBackend() ? flag : Math.min(flag, MEDIA_TOTAL_BYTES_ANTHROPIC);
 }
 //@ chunk-e6aww6q8.js:2663034-2663105 layout
 /**
@@ -3909,52 +4157,62 @@ function getStreamStallMarginMs() {
 /**
  * tool_use/server_tool_use/mcp_tool_use。
  */
-var MAX_STREAM_STALL_MS = 90000;
-var MAX_PING_EVENTS_RESETTING_IDLE = 30;
-var TOOL_USE_BLOCK_TYPES = new Set(["tool_use", "server_tool_use", "mcp_tool_use"]);
+var MAX_STREAM_STALL_MS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var MAX_PING_EVENTS_RESETTING_IDLE;
+var TOOL_USE_BLOCK_TYPES;
+deferInit("chunk-e6aww6q8.js:2663206", () => {
+  MAX_STREAM_STALL_MS = 90000;
+  MAX_PING_EVENTS_RESETTING_IDLE = 30;
+  TOOL_USE_BLOCK_TYPES = new Set(["tool_use", "server_tool_use", "mcp_tool_use"]);
+});
 //@ chunk-e6aww6q8.js:2663286-2663765 layout
 /**
  * 包装 SSE 迭代器：超过间隔无事件但 lastAt 前进时插入 {type:"ping"}。
  */
-async function* withStreamHeartbeat(e, n, r = STREAM_HEARTBEAT_MS, clock = systemClock) {
-  if (!n) {
-    yield* e;
+async function* withStreamHeartbeat(
+  source,
+  activityClock,
+  heartbeatMs = STREAM_HEARTBEAT_MS,
+  clock = systemClock,
+) {
+  if (!activityClock) {
+    yield* source;
     return;
   }
-  let h = e[Symbol.asyncIterator]();
-  let y = clock.monotonicNow();
-  let S = null;
-  let w;
-  let L = Symbol("heartbeat");
+  let iterator = source[Symbol.asyncIterator]();
+  let lastAt = clock.monotonicNow();
+  let pendingNext = null;
+  let timer;
+  let heartbeatToken = Symbol("heartbeat");
   try {
     while (true) {
-      S ??= h.next();
+      pendingNext ??= iterator.next();
       let promise = new Promise((resolve) => {
-        w = clock.setTimeout(() => resolve(L), r, {
+        timer = clock.setTimeout(() => resolve(heartbeatToken), heartbeatMs, {
           unref: true,
         });
       });
-      let winner = await Promise.race([S, promise]);
-      w?.();
-      w = undefined;
-      if (winner === L) {
-        if (n.lastAt > y) {
-          y = clock.monotonicNow();
+      let winner = await Promise.race([pendingNext, promise]);
+      timer?.();
+      timer = undefined;
+      if (winner === heartbeatToken) {
+        if (activityClock.lastAt > lastAt) {
+          lastAt = clock.monotonicNow();
           yield {
             type: "ping",
           };
         }
         continue;
       }
-      S = null;
+      pendingNext = null;
       if (winner.done) return;
-      y = clock.monotonicNow();
+      lastAt = clock.monotonicNow();
       yield winner.value;
     }
   } finally {
-    w?.();
+    timer?.();
     try {
-      Promise.resolve(h.return?.(undefined)).catch(() => {});
+      Promise.resolve(iterator.return?.(undefined)).catch(() => {});
     } catch {}
   }
 }
@@ -3962,9 +4220,9 @@ async function* withStreamHeartbeat(e, n, r = STREAM_HEARTBEAT_MS, clock = syste
 /**
  * 非第一方/假定第一方/自定义 ANTHROPIC_BASE_URL/非 OAuth 时为真；否则看组织额度状态。用于 fallback credit 端点判断。
  */
-function isFirstPartyCreditEndpoint(e = getAPIProvider()) {
+function isFirstPartyCreditEndpoint(provider = getAPIProvider()) {
   if (
-    e !== "firstParty" ||
+    provider !== "firstParty" ||
     assumesFirstPartyBaseUrl() ||
     env.ANTHROPIC_BASE_URL !== undefined ||
     !isWIFDispatchAuth()
@@ -3997,8 +4255,8 @@ function isDirectFirstPartyApi() {
 /**
  * bedrock/vertex/mantle/anthropicGoogleCloud 是否未设自定义 base URL。
  */
-function usesDefaultProviderEndpoint(e) {
-  switch (e) {
+function usesDefaultProviderEndpoint(provider) {
+  switch (provider) {
     case "bedrock":
       return isGenuineBedrockEndpoint();
     case "vertex":
@@ -4013,22 +4271,22 @@ function usesDefaultProviderEndpoint(e) {
 /**
  * 各提供商是否走自定义/网关端点。
  */
-function isCustomEndpoint(providerForModel) {
-  switch (providerForModel) {
+function isCustomEndpoint(provider) {
+  switch (provider) {
     case "gateway":
       return true;
     case "firstParty":
-      return !isFirstPartyAnthropicBaseUrl() || !isFirstPartyCreditEndpoint(providerForModel);
+      return !isFirstPartyAnthropicBaseUrl() || !isFirstPartyCreditEndpoint(provider);
     case "bedrock":
     case "mantle":
     case "vertex":
-      return !usesDefaultProviderEndpoint(providerForModel);
+      return !usesDefaultProviderEndpoint(provider);
     case "anthropicAws":
-      return !hitsAnthropicBackend(providerForModel);
+      return !hitsAnthropicBackend(provider);
     case "foundry":
       return env.ANTHROPIC_FOUNDRY_BASE_URL !== undefined;
     case "anthropicGoogleCloud":
-      return !usesDefaultProviderEndpoint(providerForModel);
+      return !usesDefaultProviderEndpoint(provider);
   }
 }
 //@ chunk-e6aww6q8.js:2664552-2664898 layout
@@ -4036,14 +4294,14 @@ function isCustomEndpoint(providerForModel) {
  * mint 模型与请求模型同提供商且端点允许 fallback credit 时为真。
  */
 function canUseFallbackCreditMintModel(fallbackCreditMintModel, model) {
-  let providerForModel = getProviderForModel(model);
-  if (getProviderForModel(fallbackCreditMintModel) !== providerForModel) return false;
-  switch (providerForModel) {
+  let provider = getProviderForModel(model);
+  if (getProviderForModel(fallbackCreditMintModel) !== provider) return false;
+  switch (provider) {
     case "gateway":
       return false;
     case "firstParty": {
       if (!isFirstPartyAnthropicBaseUrl()) return false;
-      return isFirstPartyCreditEndpoint(providerForModel);
+      return isFirstPartyCreditEndpoint(provider);
     }
     case "bedrock":
       return usesDefaultProviderEndpoint("bedrock");
@@ -4052,7 +4310,7 @@ function canUseFallbackCreditMintModel(fallbackCreditMintModel, model) {
     case "foundry":
       return true;
     case "anthropicAws":
-      return hitsAnthropicBackend(providerForModel);
+      return hitsAnthropicBackend(provider);
     case "anthropicGoogleCloud":
       return false;
     case "vertex":
@@ -4066,16 +4324,19 @@ function canUseFallbackCreditMintModel(fallbackCreditMintModel, model) {
 /**
  * 从 api_system 消息的 toolAdditions/toolRemovals 里去掉 advisor 工具。
  */
-function dropAdvisorFromApiSystem(e) {
-  return e.map((n) => {
-    if (n.type !== "api_system") return n;
-    let filtered = n.toolAdditions?.filter((toolAddition) => toolAddition !== ADVISOR_TOOL_NAME);
-    let filtered_2 = n.toolRemovals?.filter((toolRemoval) => toolRemoval !== ADVISOR_TOOL_NAME);
-    if (filtered?.length === n.toolAdditions?.length && filtered_2?.length === n.toolRemovals?.length)
-      return n;
-    let { toolAdditions, toolRemovals, ...S } = n;
+function dropAdvisorFromApiSystem(messages) {
+  return messages.map((message) => {
+    if (message.type !== "api_system") return message;
+    let filtered = message.toolAdditions?.filter((toolAddition) => toolAddition !== ADVISOR_TOOL_NAME);
+    let filtered_2 = message.toolRemovals?.filter((toolRemoval) => toolRemoval !== ADVISOR_TOOL_NAME);
+    if (
+      filtered?.length === message.toolAdditions?.length &&
+      filtered_2?.length === message.toolRemovals?.length
+    )
+      return message;
+    let { toolAdditions, toolRemovals, ...rest } = message;
     return {
-      ...S,
+      ...rest,
       ...(filtered !== undefined &&
         filtered.length > 0 && {
           toolAdditions: filtered,
@@ -4091,8 +4352,8 @@ function dropAdvisorFromApiSystem(e) {
 /**
  * 消息含 advisor 相关块（sJe 计数 >0）。
  */
-function hasAdvisorBlocks(e) {
-  return countThinkingBlocks(e) > 0;
+function hasAdvisorBlocks(message) {
+  return countThinkingBlocks(message) > 0;
 }
 //@ chunk-e6aww6q8.js:2665313-2665503 layout
 /**
@@ -4114,32 +4375,32 @@ function logAdvisorStripReplayed(messages, options) {
 /**
  * 请求前消息规整：剥离 tool_reference/caller（无工具搜索时）、修复 tool_use/tool_result 配对、去 advisor 块、可选去 web search、媒体数量上限，然后 normalizeMessagesForAPI 并处理思考签名。返回 messagesForAPI 与多个降级回调。
  */
-function normalizeMessagesForRequest(e, normalizeOptions) {
-  let r = normalizeOptions.bodyModel ?? normalizeOptions.model;
-  let s = stripAnyVersatileSuffix(r);
+function normalizeMessagesForRequest(inputMessages, normalizeOptions) {
+  let modelName = normalizeOptions.bodyModel ?? normalizeOptions.model;
+  let baseModelName = stripAnyVersatileSuffix(modelName);
   let keepForeignThinking = normalizeOptions.keepForeignThinking ?? "none";
-  let y = stripForeignModelThinking(e, s, keepForeignThinking);
-  let foreignModelChecker = makeForeignModelChecker(s);
+  let strippedMessages = stripForeignModelThinking(inputMessages, baseModelName, keepForeignThinking);
+  let foreignModelChecker = makeForeignModelChecker(baseModelName);
   let keptForeignSignatures =
     keepForeignThinking !== "none" &&
-    e.some(
-      (pt) =>
-        pt.type === "assistant" &&
-        foreignModelChecker(pt) &&
-        shouldKeepForeignThinking(pt, s, keepForeignThinking) &&
-        Array.isArray(pt.message.content) &&
-        pt.message.content.some(hasThinkingSignature),
+    inputMessages.some(
+      (message) =>
+        message.type === "assistant" &&
+        foreignModelChecker(message) &&
+        shouldKeepForeignThinking(message, baseModelName, keepForeignThinking) &&
+        Array.isArray(message.message.content) &&
+        message.message.content.some(hasThinkingSignature),
     );
-  let L =
-    uses1mContext(r, undefined) ||
-    modelHasNative1MContext(r) ||
+  let hasLargeContext =
+    uses1mContext(modelName, undefined) ||
+    modelHasNative1MContext(modelName) ||
     normalizeOptions.betas.includes(BETA_LONG_CONTEXT) ||
-    getSonnet46ContextWindowOverride(r) !== null ||
-    antGrants1MContext(r);
-  let reminderFold = resolveReminderFold_2(e, normalizeOptions.reminderFold);
-  let echoWireToolInputs = shouldEchoWireToolInputs(e, normalizeOptions.echoWireToolInputs);
-  let textsToFold = renderedAttachmentTexts(y);
-  let Se = (messages, Et) => {
+    getSonnet46ContextWindowOverride(modelName) !== null ||
+    antGrants1MContext(modelName);
+  let reminderFold = resolveReminderFold_2(inputMessages, normalizeOptions.reminderFold);
+  let echoWireToolInputs = shouldEchoWireToolInputs(inputMessages, normalizeOptions.echoWireToolInputs);
+  let textsToFold = renderedAttachmentTexts(strippedMessages);
+  let finalizeMessageList = (messages, midConvModel) => {
     if (!normalizeOptions.useToolSearch)
       messages = messages.map((msg) => {
         switch (msg.type) {
@@ -4154,22 +4415,25 @@ function normalizeMessagesForRequest(e, normalizeOptions) {
     messages = ensureToolResultPairing(messages, {
       reminderFold,
       textsToFold,
-      keyedRemindersStaySiblings: Et !== undefined && shouldUseMidConvSystem(Et),
+      keyedRemindersStaySiblings: midConvModel !== undefined && shouldUseMidConvSystem(midConvModel),
     });
     if (!normalizeOptions.advisorModel) messages = stripAdvisorBlocks(messages);
     if (normalizeOptions.stripWebSearch) messages = stripWebSearchBlocks(messages).messages;
     return stripExcessMediaItems(
       messages,
-      Math.min(L ? MAX_MEDIA_ITEMS_LARGE_CONTEXT : MAX_MEDIA_ITEMS, normalizeOptions.mediaItemLimit ?? 1 / 0),
+      Math.min(
+        hasLargeContext ? MAX_MEDIA_ITEMS_LARGE_CONTEXT : MAX_MEDIA_ITEMS,
+        normalizeOptions.mediaItemLimit ?? 1 / 0,
+      ),
       MEDIA_BYTES_PER_ITEM_SLACK,
       getMediaTotalByteCap(),
       MEDIA_BYTE_CAP_MIN,
       getDocumentByteCap(),
     );
   };
-  let ke = normalizeOptions.accountMemoryWithheld ?? isAccountMemoryRedactionOn();
-  let we = {
-    accountMemoryWithheld: ke,
+  let accountMemoryWithheld = normalizeOptions.accountMemoryWithheld ?? isAccountMemoryRedactionOn();
+  let apiMessageOptions = {
+    accountMemoryWithheld,
     preserveTrailingThinking: normalizeOptions.resumeIncompleteThinking,
     onSessionNoticeRender: logSessionNoticeRender,
     onDeclaredRoundRender: logDeclaredRound,
@@ -4184,19 +4448,19 @@ function normalizeMessagesForRequest(e, normalizeOptions) {
       declaredToolNames: normalizeOptions.declaredToolNames,
     }),
     surfaceLateToolAdditions:
-      normalizeOptions.betas.includes(BETA_MID_CONV_TOOL_CHANGE) && modelTakesToolAdditions(r),
+      normalizeOptions.betas.includes(BETA_MID_CONV_TOOL_CHANGE) && modelTakesToolAdditions(modelName),
     advisorToolChanges:
       normalizeOptions.advisorDeferred === true &&
       normalizeOptions.advisorModel !== undefined &&
       normalizeOptions.betas.includes(BETA_MID_CONV_TOOL_CHANGE) &&
-      modelTakesToolAdditions(r),
+      modelTakesToolAdditions(modelName),
     deferredWireToolNames: normalizeOptions.deferredWireToolNames,
     nameOnlyAnnouncements: normalizeOptions.nameOnlyAnnouncements,
     inlineToolDefinitions:
       normalizeOptions.byValueNames !== undefined &&
       normalizeOptions.byValueNames.size > 0 &&
       normalizeOptions.betas.includes(BETA_INLINE_TOOLS) &&
-      modelTakesToolAdditions(r)
+      modelTakesToolAdditions(modelName)
         ? normalizeOptions.byValueNames
         : undefined,
     withoutAttachmentHooks: normalizeOptions.withoutAttachmentHooks,
@@ -4210,122 +4474,142 @@ function normalizeMessagesForRequest(e, normalizeOptions) {
       normalizeOptions.betas.includes(BETA_MID_CONVERSATION_SYSTEM_CLEAR_AT),
     reminderFold,
   };
-  let Ee = normalizeOptions.midConvLatchedOff ? undefined : r;
-  let Ae = normalizeMessagesForAPI(y, normalizeOptions.tools, Ee, we);
-  validateImagesInMessages(Ae, imageLimitsForModel(normalizeOptions.model).maxBase64Size);
+  let midConvModel = normalizeOptions.midConvLatchedOff ? undefined : modelName;
+  let apiMessages = normalizeMessagesForAPI(
+    strippedMessages,
+    normalizeOptions.tools,
+    midConvModel,
+    apiMessageOptions,
+  );
+  validateImagesInMessages(apiMessages, imageLimitsForModel(normalizeOptions.model).maxBase64Size);
   queryCheckpoint("query_message_normalization_end");
-  Ae = applyApiBlockOrderEcho(Se(Ae, Ee), we.echoApiBlockOrder, we.preserveTrailingThinking);
+  apiMessages = applyApiBlockOrderEcho(
+    finalizeMessageList(apiMessages, midConvModel),
+    apiMessageOptions.echoApiBlockOrder,
+    apiMessageOptions.preserveTrailingThinking,
+  );
   let included = normalizeOptions.betas.includes(BETA_PER_MESSAGE_EFFORT);
-  let canonicalName = getCanonicalName(r);
-  let We = {
-    effort: included && supportsPerTurnEffort(r, canonicalName) ? normalizeOptions.perTurnEffort : undefined,
+  let canonicalName = getCanonicalName(modelName);
+  let perTurnConfig = {
+    effort:
+      included && supportsPerTurnEffort(modelName, canonicalName)
+        ? normalizeOptions.perTurnEffort
+        : undefined,
     now:
       included &&
       normalizeOptions.betas.includes(BETA_PER_TURN_TIMING) &&
-      supportsPerTurnTiming(r, canonicalName)
+      supportsPerTurnTiming(modelName, canonicalName)
         ? normalizeOptions.perTurnNow
         : undefined,
   };
-  let ze = (messages) =>
-    We.effort === undefined && We.now === undefined
+  let attachPerTurnConfig = (messages) =>
+    perTurnConfig.effort === undefined && perTurnConfig.now === undefined
       ? messages
       : attachPerTurnOutputConfig(messages, {
-          ...We,
+          ...perTurnConfig,
           effortCap: normalizeOptions.perTurnEffortCap?.(),
         });
-  Ae = ze(Ae);
+  apiMessages = attachPerTurnConfig(apiMessages);
   let midConvFallback = null;
   if (
     !normalizeOptions.midConvLatchedOff &&
     (normalizeOptions.betas.includes(BETA_MID_CONVERSATION_SYSTEM) || included)
   ) {
-    let pt = Ae;
-    midConvFallback = pt.some((Et) => Et.type === "api_system")
+    let initialMessages = apiMessages;
+    midConvFallback = initialMessages.some((message) => message.type === "api_system")
       ? () =>
           applyApiBlockOrderEcho(
-            Se(normalizeMessagesForAPI(y, normalizeOptions.tools, undefined, we), undefined),
-            we.echoApiBlockOrder,
-            we.preserveTrailingThinking,
+            finalizeMessageList(
+              normalizeMessagesForAPI(strippedMessages, normalizeOptions.tools, undefined, apiMessageOptions),
+              undefined,
+            ),
+            apiMessageOptions.echoApiBlockOrder,
+            apiMessageOptions.preserveTrailingThinking,
           )
-      : () => pt;
+      : () => initialMessages;
   }
   let toolChangeFallback = null;
   if (
-    (we.surfaceLateToolAdditions || we.advisorToolChanges) &&
-    Ae.some(
-      (pt) =>
-        pt.type === "api_system" &&
-        ((pt.toolAdditions?.length ?? 0) > 0 || (pt.toolRemovals?.length ?? 0) > 0),
+    (apiMessageOptions.surfaceLateToolAdditions || apiMessageOptions.advisorToolChanges) &&
+    apiMessages.some(
+      (message) =>
+        message.type === "api_system" &&
+        ((message.toolAdditions?.length ?? 0) > 0 || (message.toolRemovals?.length ?? 0) > 0),
     )
   )
     toolChangeFallback = () =>
-      ze(
-        Se(
-          normalizeMessagesForAPI(y, normalizeOptions.tools, Ee, {
-            ...we,
+      attachPerTurnConfig(
+        finalizeMessageList(
+          normalizeMessagesForAPI(strippedMessages, normalizeOptions.tools, midConvModel, {
+            ...apiMessageOptions,
             surfaceLateToolAdditions: false,
             advisorToolChanges: false,
             inlineToolDefinitions: undefined,
           }),
-          Ee,
+          midConvModel,
         ),
       );
   let inlineToolsFallback = null;
   if (
-    we.inlineToolDefinitions !== undefined &&
-    Ae.some((pt) => pt.type === "api_system" && pt.toolDefinitions !== undefined)
+    apiMessageOptions.inlineToolDefinitions !== undefined &&
+    apiMessages.some((message) => message.type === "api_system" && message.toolDefinitions !== undefined)
   )
     inlineToolsFallback = () =>
-      ze(
-        Se(
-          normalizeMessagesForAPI(y, normalizeOptions.tools, Ee, {
-            ...we,
+      attachPerTurnConfig(
+        finalizeMessageList(
+          normalizeMessagesForAPI(strippedMessages, normalizeOptions.tools, midConvModel, {
+            ...apiMessageOptions,
             inlineToolDefinitions: undefined,
             nameOnlyAnnouncements: new Set([
-              ...(we.nameOnlyAnnouncements ?? []),
+              ...(apiMessageOptions.nameOnlyAnnouncements ?? []),
               ...(normalizeOptions.byValueAnnouncements ?? []),
             ]),
           }),
-          Ee,
+          midConvModel,
         ),
       );
   return {
-    messagesPreNormalize: y,
-    messagesForAPI: Ae,
+    messagesPreNormalize: strippedMessages,
+    messagesForAPI: apiMessages,
     accountMemoryEpoch: redactAccountMemory(
-      y,
-      ke,
+      strippedMessages,
+      accountMemoryWithheld,
       createMemoryServerVerifier(() => normalizeOptions.tools),
     ).epoch,
     midConvFallback,
     toolChangeFallback,
     inlineToolsFallback,
     keptForeignSignatures,
-    blocksEligible: we.surfaceLateToolAdditions === true,
+    blocksEligible: apiMessageOptions.surfaceLateToolAdditions === true,
   };
 }
 //@ chunk-e6aww6q8.js:2668815-2669526 layout
 /**
  * 何时在请求头 anthropic-usage-limit 发 extended（多个 tengu_lantern_* 开关、第一方订阅）。
  */
-function shouldSendExtendedUsageLimitHeader(options, n, r) {
-  if (n) return false;
-  let s = options.querySource === "web_fetch_apply";
-  if (s) {
-    let w = classifyQuerySource(options.callerAnsweredQuerySource);
-    if (w !== "main" && w !== "subagent") return false;
+function shouldSendExtendedUsageLimitHeader(options, webFetchApply, isSubagentDepth) {
+  if (webFetchApply) return false;
+  let isWebFetchApply = options.querySource === "web_fetch_apply";
+  if (isWebFetchApply) {
+    let callerCategory = classifyQuerySource(options.callerAnsweredQuerySource);
+    if (callerCategory !== "main" && callerCategory !== "subagent") return false;
   }
-  if (!s && (options.queryTracking?.depth ?? 0) === 0 && !r) return false;
-  if (classifyQuerySource(options.querySource) === "auxiliary" && options.querySource !== "compact" && !s)
+  if (!isWebFetchApply && (options.queryTracking?.depth ?? 0) === 0 && !isSubagentDepth) return false;
+  if (
+    classifyQuerySource(options.querySource) === "auxiliary" &&
+    options.querySource !== "compact" &&
+    !isWebFetchApply
+  )
     return false;
   if (getAPIProvider() !== "firstParty" || !isFirstPartyAnthropicBaseUrl()) return false;
   let cachedExtraUsageDisabledReason = getGlobalConfig().cachedExtraUsageDisabledReason;
-  let y =
+  let hasKnownReason =
     typeof cachedExtraUsageDisabledReason === "string" &&
     cachedExtraUsageDisabledReason !== "fetch_error" &&
     cachedExtraUsageDisabledReason !== "unknown";
-  if (s && cachedExtraUsageDisabledReason !== null && !y) return false;
-  if (s && getFeatureValue_CACHED_MAY_BE_STALE("tengu_lantern_hinge", false) !== true) return false;
+  if (isWebFetchApply && cachedExtraUsageDisabledReason !== null && !hasKnownReason) return false;
+  if (isWebFetchApply && getFeatureValue_CACHED_MAY_BE_STALE("tengu_lantern_hinge", false) !== true)
+    return false;
   if (
     cachedExtraUsageDisabledReason === null &&
     !getFeatureValue_CACHED_MAY_BE_STALE("tengu_smooth_harbor", false)
@@ -4335,7 +4619,7 @@ function shouldSendExtendedUsageLimitHeader(options, n, r) {
   let agentContext = options.agentContext;
   return !(
     isSubagentContext(agentContext) &&
-    y &&
+    hasKnownReason &&
     agentContext.workflowWaitsOutUsageLimit?.(getCurrentLimits().resetsAt) &&
     getFeatureValue_CACHED_MAY_BE_STALE("tengu_lantern_snuffer", false) === true
   );
@@ -4350,30 +4634,28 @@ var TENGU_FIZZY_BONBON = "tengu_fizzy_bonbon";
  * 惰性估算消息 token 数（失败时 +∞）。
  */
 function lazyContextTokenEstimate(messages, model) {
-  let r;
+  let cached;
   return () => {
-    if (r === undefined)
+    if (cached === undefined)
       try {
-        r =
+        cached =
           estimateTokensWithAnchor(messages, bytesPerTokenForModel(model)) +
           stripInProgressAssistantMessage(messages);
       } catch (error) {
         logError(toError(error));
-        r = Number.POSITIVE_INFINITY;
+        cached = Number.POSITIVE_INFINITY;
       }
-    return r;
+    return cached;
   };
 }
 //@ chunk-e6aww6q8.js:2669683-2669780 layout
 /**
  * 若当前上下文已超过 fallback 模型窗口（GCn）则不用 accessFallbackModel，返回 undefined。
  */
-function resolveAccessFallbackModel(model, accessFallbackModel, lazyTokenEstimate) {
-  if (accessFallbackModel === undefined) return;
+function resolveAccessFallbackModel(fromModel, toModel, currentContextSize) {
+  if (toModel === undefined) return;
   try {
-    return ladderStepLosesContext(model, accessFallbackModel, lazyTokenEstimate)
-      ? undefined
-      : accessFallbackModel;
+    return ladderStepLosesContext(fromModel, toModel, currentContextSize) ? undefined : toModel;
   } catch (error) {
     logError(toError(error));
     return;
@@ -4383,9 +4665,9 @@ function resolveAccessFallbackModel(model, accessFallbackModel, lazyTokenEstimat
 /**
  * 有 ladders 时记录会话大小（token 估算）。
  */
-function recordConversationSize(agentId, n) {
+function recordConversationSize(sessionId, estimate) {
   try {
-    if (hasFallbackLadders()) recordConversationSize_2(agentId, n());
+    if (hasFallbackLadders()) recordConversationSize_2(sessionId, estimate());
   } catch (error) {
     logError(toError(error));
   }
@@ -4394,12 +4676,12 @@ function recordConversationSize(agentId, n) {
 /**
  * CLAUDE_CODE_MESSAGES_PROMPT_CACHE_TTL=5m 时把消息缓存 TTL 降为 5m。
  */
-function applyMessagesCacheTtlOverride(e) {
+function applyMessagesCacheTtlOverride(ttl) {
   try {
-    return applyFiveMinuteOverride(e);
+    return applyFiveMinuteOverride(ttl);
   } catch (error) {
     logError(toError(error));
-    return e;
+    return ttl;
   }
 }
 //@ chunk-e6aww6q8.js:2669901-2669946 layout
@@ -4420,11 +4702,11 @@ function noteMainThreadCacheTtl5m() {
 class ToolSearchRefusedError extends Error {
   refusal;
   declaredToolSearch;
-  constructor(e, declaredToolSearch) {
+  constructor(cause, declaredToolSearch) {
     super("tool search refused", {
-      cause: e,
+      cause,
     });
-    this.refusal = e;
+    this.refusal = cause;
     this.declaredToolSearch = declaredToolSearch;
   }
 }
@@ -4432,16 +4714,16 @@ class ToolSearchRefusedError extends Error {
 /**
  * 包 queryModel：捕获 ToolSearchRefusedError 后加一条 critical_system_reminder（延迟工具改为直接声明）重跑一次。
  */
-async function* queryModelWithToolSearchRecovery(...e) {
-  let n;
+async function* queryModelWithToolSearchRecovery(...args) {
+  let refusal;
   try {
-    return yield* queryModel(...e);
+    return yield* queryModel(...args);
   } catch (error) {
     if (!(error instanceof ToolSearchRefusedError)) throw error;
-    n = error;
+    refusal = error;
   }
-  let [r, systemPrompt, thinkingConfig, tools, signal, w] = e;
-  let L = n.declaredToolSearch
+  let [messages, systemPrompt, thinkingConfig, tools, signal, options] = args;
+  let reminder = refusal.declaredToolSearch
     ? [
         createAttachmentMessage_2({
           type: "critical_system_reminder",
@@ -4449,25 +4731,25 @@ async function* queryModelWithToolSearchRecovery(...e) {
         }),
       ]
     : [];
-  let G = false;
-  let model = queryModel([...r, ...L], systemPrompt, thinkingConfig, tools, signal, {
-    ...w,
-    toolSearchRefusal: n.refusal,
+  let emitted = false;
+  let model = queryModel([...messages, ...reminder], systemPrompt, thinkingConfig, tools, signal, {
+    ...options,
+    toolSearchRefusal: refusal.refusal,
   });
   try {
-    for (let Z = await model.next(); ; Z = await model.next()) {
-      if (Z.done) return Z.value;
-      let Se = Z.value;
+    for (let step = await model.next(); ; step = await model.next()) {
+      if (step.done) return step.value;
+      let value = step.value;
       if (
-        !G &&
-        (Se.type === "assistant"
-          ? !Se.isApiErrorMessage
-          : Se.type === "stream_event" && Se.event.type === "message_start")
+        !emitted &&
+        (value.type === "assistant"
+          ? !value.isApiErrorMessage
+          : value.type === "stream_event" && value.event.type === "message_start")
       ) {
-        G = true;
-        yield* L;
+        emitted = true;
+        yield* reminder;
       }
-      yield Se;
+      yield value;
     }
   } finally {
     await model.return(undefined);
@@ -4477,23 +4759,35 @@ async function* queryModelWithToolSearchRecovery(...e) {
 /**
  * queryModel：一次 Messages API 调用的全部逻辑（约 129KB）。依次：off-switch 与模型封锁检查 → beta 列表与模型事实 → 工具 schema 构建、工具搜索/延迟工具决策 → normalizeMessagesForRequest 规整消息 → buildSystemPromptBlocks → buildRequestParams（paramsFromContext 过滤被拒 beta、thinking/effort/output_config/context_management/speed/diagnostics、addCacheBreakpoints）→ withRetry 内 anthropic.beta.messages.create(stream:true) → 解析 SSE（message_start/content_block_*\/message_delta/message_stop）产出 stream_event 与 assistant 消息、累计 usage 与成本 → 流停顿/空闲超时/无事件时回退非流式 → onError 里按错误类型返回 "retry:<原因>"（去 beta、去 thinking.display、去媒体、降 effort 等）自愈重发。
  */
-async function* queryModel(messages, systemPrompt, thinkingConfig, tools, signal, { modelFacts, ...S }) {
-  let { fallbackModel, accessFallbackModel = S.accessFallbackModel } = resolveFallbackModel(
-    S.model,
-    S.fallbackModel,
+async function* queryModel(
+  messages,
+  systemPrompt,
+  thinkingConfig,
+  tools,
+  signal,
+  { modelFacts, ...baseOptions },
+) {
+  let { fallbackModel, accessFallbackModel = baseOptions.accessFallbackModel } = resolveFallbackModel(
+    baseOptions.model,
+    baseOptions.fallbackModel,
     isRefusedOrSentModel,
   );
-  let lazyTokenEstimate = lazyContextTokenEstimate(messages, S.model);
-  let accessFallbackModel_2 = resolveAccessFallbackModel(S.model, accessFallbackModel, lazyTokenEstimate);
+  let lazyTokenEstimate = lazyContextTokenEstimate(messages, baseOptions.model);
+  let accessFallbackModel_2 = resolveAccessFallbackModel(
+    baseOptions.model,
+    accessFallbackModel,
+    lazyTokenEstimate,
+  );
   let options =
-    fallbackModel === S.fallbackModel
-      ? S
+    fallbackModel === baseOptions.fallbackModel
+      ? baseOptions
       : {
-          ...S,
+          ...baseOptions,
           fallbackModel,
         };
   let clock = options.clock ?? systemClock;
-  let runGuarded = (Wn) => (isAutoModeQuerySource(options.querySource) ? withCatalogSuppressed(Wn) : Wn());
+  let runGuarded = (runFn) =>
+    isAutoModeQuerySource(options.querySource) ? withCatalogSuppressed(runFn) : runFn();
   let previousRequestId = runGuarded(() => getCanonicalName(options.model));
   let isTopLevelMain = classifyQuerySource(options.querySource) === "main" && !options.agentId;
   if (isTopLevelMain) startProfilePhase("model_gates");
@@ -4515,39 +4809,45 @@ async function* queryModel(messages, systemPrompt, thinkingConfig, tools, signal
     );
     return;
   }
-  let Ae = null;
+  let modelBlockedText = null;
   try {
-    Ae = await blockedOverrideText(previousRequestId);
+    modelBlockedText = await blockedOverrideText(previousRequestId);
   } catch (error) {
     logForDebugging(`tengu-model-error-overrides block check failed: ${error}`, {
       level: "error",
     });
   }
-  if (Ae !== null) {
+  if (modelBlockedText !== null) {
     if (options.fallbackModel !== undefined) {
       logEvent("tengu_off_switch_query", {
         tier: lit_2("per_model_block"),
         outcome: lit_2("fallback"),
       });
-      throw new FallbackTriggeredError(options.model, options.fallbackModel, "model_blocked", undefined, Ae);
+      throw new FallbackTriggeredError(
+        options.model,
+        options.fallbackModel,
+        "model_blocked",
+        undefined,
+        modelBlockedText,
+      );
     }
     logEvent("tengu_off_switch_query", {
       tier: lit_2("per_model_block"),
     });
     yield createApiErrorMessage({
-      content: Ae,
+      content: modelBlockedText,
       error: "rate_limit",
     });
     return;
   }
   let previousRequestId_2 = collectRecentAssistantTexts(messages);
-  let Me = promptIdForRequest(messages, options.agentContext);
-  let ccrSenderAddressKey = getCcrSenderAddressKey(options.agentContext, Me);
-  if (ccrSenderAddressKey && isFirstPartyApiBackend()) await prefetchCcrSenderAddress(ccrSenderAddressKey);
+  let requestPromptId = promptIdForRequest(messages, options.agentContext);
+  let key = getCcrSenderAddressKey(options.agentContext, requestPromptId);
+  if (key && isFirstPartyApiBackend()) await prefetchCcrSenderAddress(key);
   let turnOrigin = turnOriginSafe(messages);
   let turnPosition = turnPositionSafe(messages);
-  let Je = isSessionTaskTurn(messages);
-  let nt = lastAssistantMessageId(messages);
+  let isSessionTask = isSessionTaskTurn(messages);
+  let lastAssistantId = lastAssistantMessageId(messages);
   let resolvedModel =
     getAPIProvider() === "bedrock" && options.model.includes("application-inference-profile")
       ? ((await getInferenceProfileBackingModel(stripAnyVersatileSuffix(options.model))) ?? options.model)
@@ -4586,39 +4886,39 @@ async function* queryModel(messages, systemPrompt, thinkingConfig, tools, signal
     !betaList.includes(BETA_THINKING_TOKEN_COUNT)
   )
     betaList.push(BETA_THINKING_TOKEN_COUNT);
-  let Yt =
+  let canMintCredit =
     options.fallbackCreditCode !== undefined &&
     options.fallbackCreditMintModel !== undefined &&
     canUseFallbackCreditMintModel(options.fallbackCreditMintModel, options.model);
-  let creditMintModel = Yt ? options.fallbackCreditMintModel : undefined;
+  let creditMintModel = canMintCredit ? options.fallbackCreditMintModel : undefined;
   let effectiveModel = creditMintModel ?? options.model;
   let betas = upgradeDisabledThinkingForModel(
     thinkingConfig,
     modelFacts_2.thinking.alwaysOn ||
       (creditMintModel !== undefined && runGuarded(() => isThinkingAlwaysOn(creditMintModel))),
   );
-  let pn = creditMintModel === undefined ? toProviderWireModelId(options.model) : undefined;
-  if (pn !== undefined && !conversation.declaredToolsDecided) {
-    let Wn = hasContextBeta(conversation);
-    for (let pr of getRefusedBetasForModel(pn)) markBetaRejected(conversation, pr);
-    if (options.stickyBetas === undefined) notifyPerTurnEffortInactive(conversation, Wn);
+  let wireModelId = creditMintModel === undefined ? toProviderWireModelId(options.model) : undefined;
+  if (wireModelId !== undefined && !conversation.declaredToolsDecided) {
+    let contextBetaActive = hasContextBeta(conversation);
+    for (let refusedBeta of getRefusedBetasForModel(wireModelId)) markBetaRejected(conversation, refusedBeta);
+    if (options.stickyBetas === undefined) notifyPerTurnEffortInactive(conversation, contextBetaActive);
   }
-  let latchBetaRefused = (Wn, pr) => {
-    markBetaRejected(conversation, Wn);
-    let Jr = "in this conversation";
-    if (pr && pn !== undefined) {
-      markBetaRefusedForModel(pn, Wn);
-      Jr += `, or by new ones on ${pn} in this process`;
+  let latchBetaRefused = (beta, perModel) => {
+    markBetaRejected(conversation, beta);
+    let scopeText = "in this conversation";
+    if (perModel && wireModelId !== undefined) {
+      markBetaRefusedForModel(wireModelId, beta);
+      scopeText += `, or by new ones on ${wireModelId} in this process`;
     }
-    logForDebugging(`[betas] the API refused ${Wn.header}; not sent again ${Jr}`, {
+    logForDebugging(`[betas] the API refused ${beta.header}; not sent again ${scopeText}`, {
       level: "warn",
     });
   };
   registerMcpStandardKeys(tools);
   await awaitArtifactRosterSafe(tools);
-  let hn = options.withoutToolDescribeHooks ? "engine" : "hooks";
-  let ho = (tool, nonDeferrableBuiltins) =>
-    hn === "engine"
+  let deferralMode = options.withoutToolDescribeHooks ? "engine" : "hooks";
+  let isDeferredByEngine = (tool, nonDeferrableBuiltins) =>
+    deferralMode === "engine"
       ? isDeferredToolByEngine(tool, nonDeferrableBuiltins)
       : isDeferredTool_2(tool, nonDeferrableBuiltins);
   if (!options.withoutToolDescribeHooks)
@@ -4633,11 +4933,11 @@ async function* queryModel(messages, systemPrompt, thinkingConfig, tools, signal
         querySource: options.querySource,
       }),
     );
-  let yn =
+  let advisorModelForQuery =
     isAgenticQuery || options.forkPointUuid !== undefined
       ? runGuarded(() => getAdvisorModelForQuery(options.advisorModel, effectiveModel))
       : undefined;
-  let declaredToolSearch =
+  let useToolSearch =
     !isAutoModeQuerySource(options.querySource) &&
     (await isToolSearchEnabled(
       effectiveModel,
@@ -4650,17 +4950,17 @@ async function* queryModel(messages, systemPrompt, thinkingConfig, tools, signal
       conversation,
     )) &&
     options.toolSearchRefusal === undefined;
-  let Xn = shouldEchoWireToolInputs(messages, options.echoWireToolInputs);
-  let fo = options.resumeIncompleteThinking === true;
+  let echoWireToolInputs = shouldEchoWireToolInputs(messages, options.echoWireToolInputs);
+  let resumeIncompleteThinking = options.resumeIncompleteThinking === true;
   betaList = runGuarded(() => adjustToolBetas(conversation, betaList, options.model));
-  let To = false;
+  let announceDeferred = false;
   if (
-    !declaredToolSearch &&
+    !useToolSearch &&
     options.toolSearchRefusal === undefined &&
     !isAutoModeQuerySource(options.querySource)
   )
     try {
-      To = runGuarded(() =>
+      announceDeferred = runGuarded(() =>
         shouldAnnounceDeferredTools(conversation, effectiveModel, {
           toolSearchToolFilteredOut: toolSearchToolFilteredOut(effectiveModel, tools, conversation),
           toolPoolRefreshes: options.toolPoolRefreshes === true,
@@ -4671,14 +4971,15 @@ async function* queryModel(messages, systemPrompt, thinkingConfig, tools, signal
       logError(toError(error));
     }
   if (!conversation.declaredToolsDecided) {
-    let Wn;
+    let recordedDeferred;
     try {
-      Wn = options.recordedDeferredTools?.();
-      for (let pr of Wn?.nameOnlyAnnouncements ?? []) conversation.nameOnlyAnnouncements.add(pr);
-      if (Wn !== undefined)
-        seedDeferredToolReferences(messages, [...Wn.entries.values()], {
-          strippedReferences: Wn.strippedReferences,
-          ...((declaredToolSearch || To) &&
+      recordedDeferred = options.recordedDeferredTools?.();
+      for (let announcement of recordedDeferred?.nameOnlyAnnouncements ?? [])
+        conversation.nameOnlyAnnouncements.add(announcement);
+      if (recordedDeferred !== undefined)
+        seedDeferredToolReferences(messages, [...recordedDeferred.entries.values()], {
+          strippedReferences: recordedDeferred.strippedReferences,
+          ...((useToolSearch || announceDeferred) &&
             toolChangeHeaderAllowed(conversation) && {
               surfacedCarrier: conversation,
             }),
@@ -4687,23 +4988,23 @@ async function* queryModel(messages, systemPrompt, thinkingConfig, tools, signal
       logError(toError(error));
     }
     try {
-      let toolInputCopies = Wn?.toolInputCopies;
+      let toolInputCopies = recordedDeferred?.toolInputCopies;
       if (
         toolInputCopies !== undefined &&
         toolInputCopies.size > 0 &&
         shouldTrackDeferredToolForQuery(options.querySource) &&
-        shouldEchoWireToolInputsForRequest(messages, Xn)
+        shouldEchoWireToolInputsForRequest(messages, echoWireToolInputs)
       )
         adoptWireToolInputCopies(messages, toolInputCopies);
     } catch (error) {
       logError(toError(error));
     }
   }
-  let bo = new Set();
-  let vn = new Set();
-  let co = true;
+  let byValueNames = new Set();
+  let byValueAnnouncements = new Set();
+  let byValueStaysOut = true;
   try {
-    co = isToolDefinedByValueEnabled();
+    byValueStaysOut = isToolDefinedByValueEnabled();
   } catch (error) {
     logError(toError(error));
   }
@@ -4712,38 +5013,38 @@ async function* queryModel(messages, systemPrompt, thinkingConfig, tools, signal
       betaList.includes(BETA_INLINE_TOOLS) &&
       runGuarded(() => canDeclareInlineTools(conversation, effectiveModel))
     ) {
-      bo = deltaToolNames(messages, conversation.nameOnlyAnnouncements);
-      vn = deferredToolNames(messages, conversation.nameOnlyAnnouncements);
+      byValueNames = deltaToolNames(messages, conversation.nameOnlyAnnouncements);
+      byValueAnnouncements = deferredToolNames(messages, conversation.nameOnlyAnnouncements);
     }
   } catch (error) {
     logError(toError(error));
   }
-  let So;
-  let ko = 0;
-  if (declaredToolSearch)
+  let scratchDeclared;
+  let upfrontDeferredCount = 0;
+  if (useToolSearch)
     try {
       let nonDeferrableBuiltins = getNonDeferrableBuiltins();
       let declaredToolSet = computeDeclaredToolSet(
         conversation,
         tools,
-        (Jr) => ho(Jr, nonDeferrableBuiltins),
+        (tool) => isDeferredByEngine(tool, nonDeferrableBuiltins),
         effectiveModel,
         !messages.some((message) => message.type === "assistant"),
       );
-      So = declaredToolSet;
+      scratchDeclared = declaredToolSet;
       if (declaredToolSet !== undefined)
-        ko = count(
+        upfrontDeferredCount = count(
           turnDeniedTools(tools, conversation),
-          (Jr) => declaredToolSet.has(Jr.name) && ho(Jr, nonDeferrableBuiltins),
+          (tool) => declaredToolSet.has(tool.name) && isDeferredByEngine(tool, nonDeferrableBuiltins),
         );
     } catch (error) {
       logError(toError(error));
     }
-  let un;
-  let ao = !conversation.declaredToolsDecided;
+  let resolvedDeclared;
+  let wasUndecided = !conversation.declaredToolsDecided;
   let advisorExperiment = deferredToolsEnabled();
-  let yo = 0;
-  if (declaredToolSearch || To) {
+  let redeclaredCount = 0;
+  if (useToolSearch || announceDeferred) {
     let permissionContext;
     if (!conversation.declaredToolsDecided)
       try {
@@ -4752,7 +5053,7 @@ async function* queryModel(messages, systemPrompt, thinkingConfig, tools, signal
         logError(toError(error));
       }
     try {
-      un = resolveDeclaredToolSet(
+      resolvedDeclared = resolveDeclaredToolSet(
         conversation,
         () =>
           options.recordedToolDescriptions && {
@@ -4768,67 +5069,68 @@ async function* queryModel(messages, systemPrompt, thinkingConfig, tools, signal
       );
     } catch (error) {
       logError(toError(error));
-      So = undefined;
+      scratchDeclared = undefined;
     }
-  } else if (ao) conversation.declaredTools = undefined;
+  } else if (wasUndecided) conversation.declaredTools = undefined;
   markDeclaredToolsDecided(conversation);
-  let Ho = un ?? So;
+  let declaredToolSet = resolvedDeclared ?? scratchDeclared;
   let deferredToolNames_2 = new Set();
-  let br = 0;
-  if (declaredToolSearch || To)
+  let deferredLateCount = 0;
+  if (useToolSearch || announceDeferred)
     try {
       let nonDeferrableBuiltins = getNonDeferrableBuiltins();
       for (let tool of tools) {
-        let Jr = declaredToolSearch && ho(tool, nonDeferrableBuiltins);
+        let isLoadedThroughSearch = useToolSearch && isDeferredByEngine(tool, nonDeferrableBuiltins);
         if (
-          Ho === undefined
-            ? To
+          declaredToolSet === undefined
+            ? announceDeferred
               ? false
-              : Jr
-            : isDeferredToolInConversation(tool, Ho, tools, {
-                toolSearchAbsent: To,
-                placements: hn,
+              : isLoadedThroughSearch
+            : isDeferredToolInConversation(tool, declaredToolSet, tools, {
+                toolSearchAbsent: announceDeferred,
+                placements: deferralMode,
                 nonDeferrableBuiltins,
               })
         ) {
           deferredToolNames_2.add(tool.name);
-          if (!Jr) br++;
+          if (!isLoadedThroughSearch) deferredLateCount++;
         }
       }
     } catch (error) {
       logError(toError(error));
-      un = undefined;
-      Ho = undefined;
+      resolvedDeclared = undefined;
+      declaredToolSet = undefined;
       deferredToolNames_2.clear();
-      br = 0;
+      deferredLateCount = 0;
       let nonDeferrableBuiltins = getNonDeferrableBuiltins();
       for (let tool of tools)
-        if (declaredToolSearch && ho(tool, nonDeferrableBuiltins)) deferredToolNames_2.add(tool.name);
+        if (useToolSearch && isDeferredByEngine(tool, nonDeferrableBuiltins))
+          deferredToolNames_2.add(tool.name);
     }
   let generation = deferredToolCache().generation;
-  let Fr =
-    declaredToolSearch || To
+  let keptDeferred =
+    useToolSearch || announceDeferred
       ? logKeptDeferredTools(messages, tools, options.querySource, {
           keepMcp: !alwaysFalseFeed(tools),
           surfacedOnWire: conversation.surfacedOnWire,
           ...(advisorExperiment && {
-            declaredInline: un,
+            declaredInline: resolvedDeclared,
           }),
         })
       : undefined;
   if (
-    declaredToolSearch &&
+    useToolSearch &&
     deferredToolNames_2.size === 0 &&
-    !(Ho !== undefined && Ho === So && ko > 0) &&
+    !(declaredToolSet !== undefined && declaredToolSet === scratchDeclared && upfrontDeferredCount > 0) &&
     (!options.hasPendingMcpServers || alwaysFalseFeed(tools)) &&
-    !Fr?.kept.size &&
-    !un?.has(TOOL_SEARCH_TOOL_NAME)
+    !keptDeferred?.kept.size &&
+    !resolvedDeclared?.has(TOOL_SEARCH_TOOL_NAME)
   ) {
     logForDebugging("Tool search disabled: no deferred tools available to search");
-    declaredToolSearch = false;
-    if (advisorExperiment && un !== undefined && Fr !== undefined)
+    useToolSearch = false;
+    if (advisorExperiment && resolvedDeclared !== undefined && keptDeferred !== undefined)
       try {
-        Fr = logKeptDeferredTools(messages, tools, options.querySource, {
+        keptDeferred = logKeptDeferredTools(messages, tools, options.querySource, {
           keepMcp: !alwaysFalseFeed(tools),
           surfacedOnWire: conversation.surfacedOnWire,
         });
@@ -4836,11 +5138,11 @@ async function* queryModel(messages, systemPrompt, thinkingConfig, tools, signal
         logError(toError(error));
       }
   }
-  let cs = declaredToolSearch ? "tool_search" : To ? "tool_addition" : undefined;
-  let _r;
-  let Cr;
+  let toolChangeMode = useToolSearch ? "tool_search" : announceDeferred ? "tool_addition" : undefined;
+  let requestTools;
+  let noChannelTools;
   let unclassifiedDepartures = 0;
-  if (cs !== undefined) {
+  if (toolChangeMode !== undefined) {
     let discoveredToolNames = extractDiscoveredToolNames(messages, {
       surfaced: toolChangeHeaderAllowed(conversation)
         ? {
@@ -4848,122 +5150,138 @@ async function* queryModel(messages, systemPrompt, thinkingConfig, tools, signal
           }
         : conversation.surfacedOnWire,
     });
-    let pr = new Set();
-    if (bo.size > 0)
+    let referencedToolNames = new Set();
+    if (byValueNames.size > 0)
       try {
-        pr = co
-          ? new Set(collectToolReferences(messages).map((Jr) => Jr.toolName))
+        referencedToolNames = byValueStaysOut
+          ? new Set(collectToolReferences(messages).map((toolRef) => toolRef.toolName))
           : extractDiscoveredToolNames(messages);
       } catch (error) {
         logError(toError(error));
       }
-    _r = tools.filter((tool) => {
+    requestTools = tools.filter((tool) => {
       if (!deferredToolNames_2.has(tool.name)) return true;
       if (toolMatchesName(tool, TOOL_SEARCH_TOOL_NAME)) return true;
-      return discoveredToolNames.has(tool.name) && (!bo.has(tool.name) || pr.has(tool.name));
+      return (
+        discoveredToolNames.has(tool.name) &&
+        (!byValueNames.has(tool.name) || referencedToolNames.has(tool.name))
+      );
     });
     try {
-      let Jr = updateDeclaredToolSet(_r, un ?? So);
-      _r = Jr.tools;
-      yo = Jr.redeclared.length;
+      let updatedTools = updateDeclaredToolSet(requestTools, resolvedDeclared ?? scratchDeclared);
+      requestTools = updatedTools.tools;
+      redeclaredCount = updatedTools.redeclared.length;
     } catch (error) {
       logError(toError(error));
     }
   } else {
-    _r = tools.filter((tool) => {
+    requestTools = tools.filter((tool) => {
       if (toolMatchesName(tool, TOOL_SEARCH_TOOL_NAME)) return false;
-      if (bo.has(tool.name)) return false;
+      if (byValueNames.has(tool.name)) return false;
       return true;
     });
-    let Wn = asScratchDeclaredToolSet(conversation);
-    if (Wn !== undefined)
+    let scratch = asScratchDeclaredToolSet(conversation);
+    if (scratch !== undefined)
       try {
-        let pr = await isHipaaRestricted(Wn, tools, {
+        let hipaaResult = await isHipaaRestricted(scratch, tools, {
           mcpClients: options.mcpClients ?? [],
           getPermissionContext: options.getToolPermissionContext,
-          byValue: bo,
+          byValue: byValueNames,
         });
-        Cr = bo.size === 0 ? pr.kept : pr.kept.without(bo);
-        unclassifiedDepartures = pr.unread;
-        let Jr = updateDeclaredToolSet(_r, Cr);
-        _r = Jr.tools;
-        yo = Jr.redeclared.length;
+        noChannelTools = byValueNames.size === 0 ? hipaaResult.kept : hipaaResult.kept.without(byValueNames);
+        unclassifiedDepartures = hipaaResult.unread;
+        let updatedTools = updateDeclaredToolSet(requestTools, noChannelTools);
+        requestTools = updatedTools.tools;
+        redeclaredCount = updatedTools.redeclared.length;
       } catch (error) {
         logError(toError(error));
       }
-    else if (ao && options.recordedToolDescriptions === undefined)
+    else if (wasUndecided && options.recordedToolDescriptions === undefined)
       try {
-        _r = turnDeniedTools(_r, conversation);
+        requestTools = turnDeniedTools(requestTools, conversation);
       } catch (error) {
         logError(toError(error));
       }
   }
-  let Oo = identityValue_2(hideAliasedV1Tools(_r));
-  noteWaitForMcpServers(Oo, options.querySource);
+  let availableTools = identityValue_2(hideAliasedV1Tools(requestTools));
+  noteWaitForMcpServers(availableTools, options.querySource);
   let providerForModel = getProviderForModel(options.model);
-  let Or = declaredToolSearch ? getToolSearchBeta() : null;
-  if (Or && providerForModel !== "bedrock") {
-    if (!betaList.includes(Or)) betaList.push(Or);
+  let toolSearchBeta = useToolSearch ? getToolSearchBeta() : null;
+  if (toolSearchBeta && providerForModel !== "bedrock") {
+    if (!betaList.includes(toolSearchBeta)) betaList.push(toolSearchBeta);
   }
   let Io;
   let featureEnabled = shouldUseGlobalCacheScope();
-  let rs = (tool) => deferredToolNames_2.has(tool.name) || (declaredToolSearch && shouldDeferLspTool(tool));
-  let Es = (Wn) => Fr?.kept.has(Wn.name) === true;
-  let Nr = true;
+  let isDeferredForRequest = (tool) =>
+    deferredToolNames_2.has(tool.name) || (useToolSearch && shouldDeferLspTool(tool));
+  let isKeptDeferredTool = (tool) => keptDeferred?.kept.has(tool.name) === true;
+  let hasUnkeptTools = true;
   try {
-    Nr =
-      Oo.some((tool) => (un?.has(tool.name) ?? true) && !rs(tool) && !Es(tool)) ||
-      (un !== undefined &&
-        isLateToolAdditionsEnabled(un, {
+    hasUnkeptTools =
+      availableTools.some(
+        (tool) =>
+          (resolvedDeclared?.has(tool.name) ?? true) &&
+          !isDeferredForRequest(tool) &&
+          !isKeptDeferredTool(tool),
+      ) ||
+      (resolvedDeclared !== undefined &&
+        isLateToolAdditionsEnabled(resolvedDeclared, {
           pool: tools,
-          keptDeferred: Fr?.kept.keys() ?? [],
+          keptDeferred: keptDeferred?.kept.keys() ?? [],
           keepMcp: !alwaysFalseFeed(tools),
         }).length > 0);
   } catch (error) {
     logError(toError(error));
   }
-  let willDefer = (tool) => cs !== undefined && (rs(tool) || (Nr && Es(tool)));
-  if (cs !== undefined && un === undefined)
+  let willDefer = (tool) =>
+    toolChangeMode !== undefined &&
+    (isDeferredForRequest(tool) || (hasUnkeptTools && isKeptDeferredTool(tool)));
+  if (toolChangeMode !== undefined && resolvedDeclared === undefined)
     try {
-      let filtered = identityValue_2(_r).filter((pr) => !willDefer(pr));
-      if (Ho !== undefined) {
-        setDeclaredTools(conversation, new DeclaredToolSet(filtered));
-        if (ko > 0)
+      let tools = identityValue_2(requestTools).filter((tool) => !willDefer(tool));
+      if (declaredToolSet !== undefined) {
+        setDeclaredTools(conversation, new DeclaredToolSet(tools));
+        if (upfrontDeferredCount > 0)
           logFeatureOk("host_upfront_tools", {
             named: env.CLAUDE_CODE_UPFRONT_TOOLS?.length ?? 0,
-            sent: ko,
+            sent: upfrontDeferredCount,
           });
-      } else recordDeclaredToolsIfMissing(conversation, filtered);
+      } else recordDeclaredToolsIfMissing(conversation, tools);
     } catch (error) {
       logError(toError(error));
     }
-  let fs;
+  let pendingMcpResult;
   if (
-    cs === undefined &&
-    ao &&
+    toolChangeMode === undefined &&
+    wasUndecided &&
     asScratchDeclaredToolSet(conversation) === undefined &&
-    (options.mcpClients ?? []).some((Wn) => Wn.type === "pending")
+    (options.mcpClients ?? []).some((mcpClient) => mcpClient.type === "pending")
   )
     try {
-      fs = await markReconnectingServers(options, tools, bo);
+      pendingMcpResult = await markReconnectingServers(options, tools, byValueNames);
     } catch (error) {
       logError(toError(error));
     }
   try {
-    Cr = cacheNoChannelTools(conversation, cs !== undefined, () =>
-      buildDeclaredToolSet(identityValue_2(_r), tools, fs ?? Cr?.recordedOnly),
+    noChannelTools = cacheNoChannelTools(conversation, toolChangeMode !== undefined, () =>
+      buildDeclaredToolSet(
+        identityValue_2(requestTools),
+        tools,
+        pendingMcpResult ?? noChannelTools?.recordedOnly,
+      ),
     );
   } catch (error) {
     logError(toError(error));
   }
-  let as = featureEnabled && Oo.some((Wn) => Wn.isMcp === true && !willDefer(Wn));
+  let hasLiveMcpTools =
+    featureEnabled && availableTools.some((tool) => tool.isMcp === true && !willDefer(tool));
   if (featureEnabled && !betaList.includes(BETA_PROMPT_CACHING_SCOPE))
     betaList.push(BETA_PROMPT_CACHING_SCOPE);
-  let globalCacheStrategy = featureEnabled ? (as ? "none" : "system_prompt") : "none";
+  let globalCacheStrategy = featureEnabled ? (hasLiveMcpTools ? "none" : "system_prompt") : "none";
   let nonDeferrableBuiltins = getNonDeferrableBuiltins();
   let redescribedTools = options.withoutToolDescribeHooks ? undefined : options.redescribedTools;
   let toolSchemas = await Promise.all(
-    Oo.map((tool) =>
+    availableTools.map((tool) =>
       toolToApiDefinition(tool, {
         getToolPermissionContext: options.getToolPermissionContext,
         tools,
@@ -4980,77 +5298,80 @@ async function* queryModel(messages, systemPrompt, thinkingConfig, tools, signal
             : options.recordedToolEntries?.get(tool.name),
         isRedescribed: redescribedTools?.has(tool.name) || undefined,
         deferLoading: willDefer(tool),
-        loadedThroughToolSearch: declaredToolSearch && willDefer(tool) && ho(tool, nonDeferrableBuiltins),
+        loadedThroughToolSearch:
+          useToolSearch && willDefer(tool) && isDeferredByEngine(tool, nonDeferrableBuiltins),
       }),
     ),
   );
-  let wa = isMainAgent(options.agentContext) && classifyQuerySource(options.querySource) === "main";
+  let isMainChain = isMainAgent(options.agentContext) && classifyQuerySource(options.querySource) === "main";
   noteToolRedescribed(conversation, toolSchemas, {
     redescribed: redescribedTools,
     recorded: options.recordedToolDescriptions,
-    isMainChain: wa,
+    isMainChain,
   });
-  if (wa)
+  if (isMainChain)
     try {
-      let Wn;
-      for (let pr of toolSchemas)
-        if ("name" in pr && "description" in pr && toolMatchesName(pr, BASH_TOOL_NAME)) {
-          Wn = pr.description;
+      let bashDescription;
+      for (let schema of toolSchemas)
+        if ("name" in schema && "description" in schema && toolMatchesName(schema, BASH_TOOL_NAME)) {
+          bashDescription = schema.description;
           break;
         }
-      noteBackgroundStopNoticeSent(Wn);
+      noteBackgroundStopNoticeSent(bashDescription);
     } catch (error) {
       logError(toError(error));
       noteBackgroundStopNoticeSent("");
     }
-  let hr = [];
-  if (cs !== "tool_search" && bo.size > 0)
+  let lateToolSchemas = [];
+  if (toolChangeMode !== "tool_search" && byValueNames.size > 0)
     try {
-      let Wn = new Set(Oo.map((Os) => Os.name));
-      let filtered = tools.filter((tool) => bo.has(tool.name) && !Wn.has(tool.name));
-      let Jr = new Set(identityValue_2(hideAliasedV1Tools([..._r, ...filtered])).map((Os) => Os.name));
-      hr = await Promise.all(
+      let presentNames = new Set(availableTools.map((tool) => tool.name));
+      let filtered = tools.filter((tool) => byValueNames.has(tool.name) && !presentNames.has(tool.name));
+      let hiddenNames = new Set(
+        identityValue_2(hideAliasedV1Tools([...requestTools, ...filtered])).map((tool) => tool.name),
+      );
+      lateToolSchemas = await Promise.all(
         filtered
-          .filter((Os) => Jr.has(Os.name))
-          .map((Os) =>
-            toolToApiDefinition(Os, {
+          .filter((tool) => hiddenNames.has(tool.name))
+          .map((tool) =>
+            toolToApiDefinition(tool, {
               getToolPermissionContext: options.getToolPermissionContext,
               tools,
               agents: options.agents,
               allowedAgentTypes: options.allowedAgentTypes,
               model: effectiveModel,
-              enginePlacement: isDeferredToolByEngine(Os) ? "deferred" : "listed",
+              enginePlacement: isDeferredToolByEngine(tool) ? "deferred" : "listed",
               querySource: options.querySource,
               withoutToolDescribeHooks: options.withoutToolDescribeHooks,
-              recordedDescription: options.recordedToolDescriptions?.get(Os.name),
-              recordedEntry: options.recordedToolEntries?.get(Os.name),
-              isRedescribed: redescribedTools?.has(Os.name) || undefined,
+              recordedDescription: options.recordedToolDescriptions?.get(tool.name),
+              recordedEntry: options.recordedToolEntries?.get(tool.name),
+              isRedescribed: redescribedTools?.has(tool.name) || undefined,
               deferLoading: false,
             }),
           ),
       );
     } catch (error) {
       logError(toError(error));
-      hr = [];
+      lateToolSchemas = [];
     }
-  let mi = new Map(
-    Oo.map((Wn, pr) => [
-      Wn.name,
+  let schemaByName = new Map(
+    availableTools.map((tool, index) => [
+      tool.name,
       {
-        schema: toolSchemas[pr],
-        isMcp: Wn.isMcp === true,
+        schema: toolSchemas[index],
+        isMcp: tool.isMcp === true,
       },
     ]),
   );
-  let Ha = cs !== undefined ? un : Cr;
+  let declaredSource = toolChangeMode !== undefined ? resolvedDeclared : noChannelTools;
   let requestDeclaresSearchCitations = runGuarded(() => shouldEnableWebSearchCitations(effectiveModel));
-  let nr = [];
-  if (Ha !== undefined && Ha.recordedOnly.size > 0)
+  let lateToolAdditions = [];
+  if (declaredSource !== undefined && declaredSource.recordedOnly.size > 0)
     try {
-      nr = computeLateToolAdditions(toolSchemas, Ha, {
+      lateToolAdditions = computeLateToolAdditions(toolSchemas, declaredSource, {
         pool: tools,
         recordedEntries: options.recordedToolEntries,
-        keptDeferred: Nr ? (Fr?.kept.keys() ?? []) : [],
+        keptDeferred: hasUnkeptTools ? (keptDeferred?.kept.keys() ?? []) : [],
         keepMcp: !alwaysFalseFeed(tools),
         requestCarriesStructuredOutputs: runGuarded(() => willSendStructuredOutputsBeta(effectiveModel)),
         requestDeclaresSearchCitations,
@@ -5059,58 +5380,58 @@ async function* queryModel(messages, systemPrompt, thinkingConfig, tools, signal
       logError(toError(error));
     }
   logDeclaredToolSetHeld({
-    deferredLate: br,
-    redeclared: yo,
-    fromRecord: nr.length,
+    deferredLate: deferredLateCount,
+    redeclared: redeclaredCount,
+    fromRecord: lateToolAdditions.length,
     queryDepth: options.queryTracking?.depth,
-    toolSearchAbsent: cs === "tool_addition",
-    noDeferredChannel: cs === undefined,
+    toolSearchAbsent: toolChangeMode === "tool_addition",
+    noDeferredChannel: toolChangeMode === undefined,
     unclassifiedDepartures,
   });
   if (options.onInlineToolsDeclared) {
-    let Wn = new Map(Oo.map((Jr) => [Jr.name, Jr]));
-    let pr = [];
-    for (let Jr of toolSchemas) {
-      if (!("input_schema" in Jr)) continue;
-      let Os = Wn.get(Jr.name);
-      let La = Os === undefined ? Ha?.recordedOnly.get(Jr.name) : undefined;
-      if (Os !== undefined && !willDefer(Os))
-        pr.push({
-          name: Jr.name,
-          description: Jr.description ?? "",
-          schema: Jr,
-          ...(Os.mcpInfo && {
-            server: Os.mcpInfo.serverName,
+    let toolsByName = new Map(availableTools.map((tool) => [tool.name, tool]));
+    let inlineTools = [];
+    for (let schema of toolSchemas) {
+      if (!("input_schema" in schema)) continue;
+      let tool = toolsByName.get(schema.name);
+      let recordedOnly = tool === undefined ? declaredSource?.recordedOnly.get(schema.name) : undefined;
+      if (tool !== undefined && !willDefer(tool))
+        inlineTools.push({
+          name: schema.name,
+          description: schema.description ?? "",
+          schema,
+          ...(tool.mcpInfo && {
+            server: tool.mcpInfo.serverName,
           }),
         });
-      else if (La !== undefined) {
-        let Vl = options.recordedToolEntries?.get(Jr.name) ?? La.entry;
-        pr.push({
-          name: Jr.name,
-          description: Vl.description ?? "",
-          schema: Vl,
-          ...(La.server !== undefined && {
-            server: La.server,
+      else if (recordedOnly !== undefined) {
+        let entry = options.recordedToolEntries?.get(schema.name) ?? recordedOnly.entry;
+        inlineTools.push({
+          name: schema.name,
+          description: entry.description ?? "",
+          schema: entry,
+          ...(recordedOnly.server !== undefined && {
+            server: recordedOnly.server,
           }),
         });
       }
     }
-    options.onInlineToolsDeclared(pr);
+    options.onInlineToolsDeclared(inlineTools);
   }
-  if (cs !== undefined) {
-    if (Fr)
-      buildDeferredToolsForRequest(Fr, toolSchemas, mi, {
+  if (toolChangeMode !== undefined) {
+    if (keptDeferred)
+      buildDeferredToolsForRequest(keptDeferred, toolSchemas, schemaByName, {
         requestCarriesStructuredOutputs: runGuarded(() => willSendStructuredOutputsBeta(effectiveModel)),
         requestDeclaresSearchCitations,
       });
     let deferredToolPlaceholderSchema = getDeferredToolPlaceholderSchema();
     if (
       deferredToolPlaceholderSchema &&
-      !_r.some((Jr) => toolMatchesName(Jr, DEFERREDTOOLPLACEHOLDER)) &&
-      !Fr?.kept.has(DEFERREDTOOLPLACEHOLDER)
+      !requestTools.some((tool) => toolMatchesName(tool, DEFERREDTOOLPLACEHOLDER)) &&
+      !keptDeferred?.kept.has(DEFERREDTOOLPLACEHOLDER)
     )
       toolSchemas.splice(Math.max(toolSchemas.length - 1, 0), 0, deferredToolPlaceholderSchema);
-    let includedDeferredTools = count(_r, (Jr) => deferredToolNames_2.has(Jr.name));
+    let includedDeferredTools = count(requestTools, (tool) => deferredToolNames_2.has(tool.name));
     logForDebugging(
       `Dynamic tool loading: ${includedDeferredTools}/${deferredToolNames_2.size} deferred tools included`,
     );
@@ -5122,65 +5443,67 @@ async function* queryModel(messages, systemPrompt, thinkingConfig, tools, signal
   });
   queryCheckpoint("query_message_normalization_start");
   if (creditMintModel !== undefined) logEvent("tengu_fallback_credit_strip_as_mint_model", {});
-  let Ti;
-  let Vs = (Wn) => {
-    _1 = Wn.thread?.type === "continue";
-    let pr = noopRecordSentPrefix(
+  let deferredSchemasSent;
+  let prepareSendParams = (params) => {
+    thinkingAlreadyStripped = params.thread?.type === "continue";
+    let sentPrefix = noopRecordSentPrefix(
       conversation,
       {
-        ...applyThreadBody(Wn, kLe()),
-        messages: HS,
+        ...applyThreadBody(params, currentThreadBody()),
+        messages: sentMessages,
       },
       {
         querySource: options.querySource,
         isMainThread: isMainAgent(options.agentContext),
         history: messages,
-        retryCause: Ac,
-        retryKeepsHeal: uh === true,
+        retryCause,
+        retryKeepsHeal: retryKeepsHeal === true,
         promptEpoch: options.promptRenderEpoch,
         accountMemoryEpoch: accountMemoryEpoch_2,
       },
     );
     if (threadSourceKind(options.querySource) !== null && isTetherLive())
       try {
-        noteLastDispatchHealed(options.agentId, pr !== undefined);
+        noteLastDispatchHealed(options.agentId, sentPrefix !== undefined);
       } catch (error) {
         logError(toError(error));
       }
-    if (pr?.tools !== undefined) S$ = [...pr.tools];
-    if (pr?.tools !== undefined && Wn.tools !== undefined) {
-      Wn.tools = [...pr.tools];
-      if (Fr) recordDeferredToolsSent(Fr, Wn.tools);
+    if (sentPrefix?.tools !== undefined) pinnedTools = [...sentPrefix.tools];
+    if (sentPrefix?.tools !== undefined && params.tools !== undefined) {
+      params.tools = [...sentPrefix.tools];
+      if (keptDeferred) recordDeferredToolsSent(keptDeferred, params.tools);
     }
-    let tools = Wn.tools ?? S$;
-    if (Ti !== undefined && tools !== undefined) restoreDeferredDefinitions(Ti, tools);
-    if (pr === undefined) return;
-    if (pr.system !== undefined) {
-      let Os = typeof pr.system === "string" ? pr.system : [...pr.system];
-      vw = Os;
-      if (!d1) Wn.system = Os;
+    let tools = params.tools ?? pinnedTools;
+    if (deferredSchemasSent !== undefined && tools !== undefined)
+      restoreDeferredDefinitions(deferredSchemasSent, tools);
+    if (sentPrefix === undefined) return;
+    if (sentPrefix.system !== undefined) {
+      let systemValue = typeof sentPrefix.system === "string" ? sentPrefix.system : [...sentPrefix.system];
+      pinnedSystem = systemValue;
+      if (!systemOverridden) params.system = systemValue;
     }
-    if (pr.messages !== undefined) {
-      HS = [...pr.messages];
-      let messagesForAPI = takeTail(HS, Wn.messages.length);
+    if (sentPrefix.messages !== undefined) {
+      sentMessages = [...sentPrefix.messages];
+      let messagesForAPI = takeTail(sentMessages, params.messages.length);
       if (containsMalformedStringDeep(messagesForAPI))
         try {
-          let La = clone(messagesForAPI);
-          repairMalformedStringsDeep(La);
-          messagesForAPI = La;
+          let repairedMessages = clone(messagesForAPI);
+          repairMalformedStringsDeep(repairedMessages);
+          messagesForAPI = repairedMessages;
         } catch {}
-      Wn.messages = messagesForAPI;
+      params.messages = messagesForAPI;
     }
   };
-  let _i = isBetaRejected_2(conversation, BETA_MID_CONVERSATION_SYSTEM);
-  let jo = _i || isBetaRejected_2(conversation, BETA_PER_MESSAGE_EFFORT);
-  let Qr = jo || isBetaRejected_2(conversation, BETA_PER_TURN_TIMING);
-  let fi = isBetaRejected_2(conversation, BETA_MID_CONVERSATION_SYSTEM_CLEAR_AT);
+  let midConvRejected = isBetaRejected_2(conversation, BETA_MID_CONVERSATION_SYSTEM);
+  let perMessageEffortRejected = midConvRejected || isBetaRejected_2(conversation, BETA_PER_MESSAGE_EFFORT);
+  let perTurnTimingRejected =
+    perMessageEffortRejected || isBetaRejected_2(conversation, BETA_PER_TURN_TIMING);
+  let clearAtRejected = isBetaRejected_2(conversation, BETA_MID_CONVERSATION_SYSTEM_CLEAR_AT);
   betaList = betaList.filter(
     (msg) =>
       !isBetaRejected_2(conversation, msg) &&
-      !(jo && msg === BETA_PER_MESSAGE_EFFORT) &&
-      !(Qr && msg === BETA_PER_TURN_TIMING),
+      !(perMessageEffortRejected && msg === BETA_PER_MESSAGE_EFFORT) &&
+      !(perTurnTimingRejected && msg === BETA_PER_TURN_TIMING),
   );
   if (creditMintModel !== undefined) {
     let fingerprint = runGuarded(() =>
@@ -5188,25 +5511,25 @@ async function* queryModel(messages, systemPrompt, thinkingConfig, tools, signal
         isAgenticQuery,
       }),
     );
-    let pr = (Jr) => {
-      if (fingerprint.includes(Jr)) {
-        if (!betaList.includes(Jr)) betaList.push(Jr);
-      } else betaList = betaList.filter((beta) => beta !== Jr);
+    let ensureBeta = (betaHeader) => {
+      if (fingerprint.includes(betaHeader)) {
+        if (!betaList.includes(betaHeader)) betaList.push(betaHeader);
+      } else betaList = betaList.filter((beta) => beta !== betaHeader);
     };
-    if (!_i) pr(BETA_MID_CONVERSATION_SYSTEM);
-    if (!jo) pr(BETA_PER_MESSAGE_EFFORT);
-    if (!Qr) pr(BETA_PER_TURN_TIMING);
+    if (!midConvRejected) ensureBeta(BETA_MID_CONVERSATION_SYSTEM);
+    if (!perMessageEffortRejected) ensureBeta(BETA_PER_MESSAGE_EFFORT);
+    if (!perTurnTimingRejected) ensureBeta(BETA_PER_TURN_TIMING);
     betaList = runGuarded(() => toolAdditionBetas(conversation, betaList, creditMintModel, options.model));
-    pr(BETA_STRUCTURED_OUTPUTS);
+    ensureBeta(BETA_STRUCTURED_OUTPUTS);
   }
-  let Ri =
+  let keptRemindersOn =
     !isAutoModeQuerySource(options.querySource) &&
-    !fi &&
+    !clearAtRejected &&
     betaList.includes(BETA_MID_CONVERSATION_SYSTEM) &&
     runGuarded(() => isKeptReminderModeNotOff(creditMintModel ?? options.model));
-  if (Ri && !betaList.includes(BETA_MID_CONVERSATION_SYSTEM_CLEAR_AT))
+  if (keptRemindersOn && !betaList.includes(BETA_MID_CONVERSATION_SYSTEM_CLEAR_AT))
     betaList.push(BETA_MID_CONVERSATION_SYSTEM_CLEAR_AT);
-  let Ja = runGuarded(() =>
+  let carriedEffort = runGuarded(() =>
     resolveLoopEffort(
       {
         loopEffort: options.refusalFallbackEffort,
@@ -5215,23 +5538,23 @@ async function* queryModel(messages, systemPrompt, thinkingConfig, tools, signal
       resolvedModel,
     ),
   );
-  let Di = runGuarded(() =>
+  let resolvedEffort = runGuarded(() =>
     resolveEffortValue(resolvedModel, options.effortValue, {
       turnEffort: options.turnEffort,
       hookEffortValue: options.hookEffortValue,
-      carriedEffort: Ja,
+      carriedEffort,
     }),
   );
-  let yr = () => learnedEffortCap(resolvedModel, options.querySource);
-  let Kr = lowerEffort(Di, yr());
-  let Li =
-    Ja === null
+  let learnedEffortCapFn = () => learnedEffortCap(resolvedModel, options.querySource);
+  let cappedEffort = lowerEffort(resolvedEffort, learnedEffortCapFn());
+  let carriedEffortReport =
+    carriedEffort === null
       ? undefined
       : {
-          level: Ja,
+          level: carriedEffort,
           outcome: classifyEffortCarryEffect({
-            carried: Ja,
-            withIt: Kr,
+            carried: carriedEffort,
+            withIt: cappedEffort,
             withoutIt: runGuarded(() =>
               resolveEffortValue(resolvedModel, options.effortValue ?? options.effortSetAsideByHold, {
                 turnEffort: options.turnEffort,
@@ -5242,28 +5565,31 @@ async function* queryModel(messages, systemPrompt, thinkingConfig, tools, signal
             isSavedSetAside: options.effortSetAsideByHold !== undefined,
           }),
         };
-  let Qs = runGuarded(() =>
-    modelSupportsEffort(resolvedModel) && Kr !== undefined ? normalizeEffortLevel(Kr) : undefined,
+  let normalizedEffort = runGuarded(() =>
+    modelSupportsEffort(resolvedModel) && cappedEffort !== undefined
+      ? normalizeEffortLevel(cappedEffort)
+      : undefined,
   );
-  let Hi =
+  let isMainThread =
     isMainAgent(options.agentContext) &&
     (options.querySource.startsWith("repl_main_thread") || options.querySource === "sdk");
-  let Xa = options.querySource.startsWith("repl_main_thread") || options.querySource === "sdk";
-  let agentId = Hi ? "foreground" : options.agentContext.agentId;
-  if (Xa) recordConversationSize(agentId, lazyTokenEstimate);
+  let recordsConversationSize =
+    options.querySource.startsWith("repl_main_thread") || options.querySource === "sdk";
+  let agentId = isMainThread ? "foreground" : options.agentContext.agentId;
+  if (recordsConversationSize) recordConversationSize(agentId, lazyTokenEstimate);
   let turnOrigin_2;
-  if (Hi)
+  if (isMainThread)
     try {
       turnOrigin_2 = getTurnStartOriginKind(messages);
     } catch (error) {
       logError(toError(error));
     }
-  let Ca = (Wn) => {
-    if (!Hi || Wn === undefined) return {};
+  let defaultEffortFields = (effortLevel) => {
+    if (!isMainThread || effortLevel === undefined) return {};
     try {
       let defaultEffortLevel = getDefaultEffortLevel(resolvedModel);
       return {
-        isDefaultEffort: Wn === defaultEffortLevel,
+        isDefaultEffort: effortLevel === defaultEffortLevel,
         defaultEffortLevel,
       };
     } catch (error) {
@@ -5271,75 +5597,91 @@ async function* queryModel(messages, systemPrompt, thinkingConfig, tools, signal
       return {};
     }
   };
-  let tu =
-    typeof Kr === "string" && !(betas.type === "disabled" && betas.mechanical === true) ? Qs : undefined;
+  let perTurnEffort =
+    typeof cappedEffort === "string" && !(betas.type === "disabled" && betas.mechanical === true)
+      ? normalizedEffort
+      : undefined;
   let perTurnNow = betaList.includes(BETA_PER_TURN_TIMING)
     ? formatLocalTimestamp(new Date(), sessionTimeZone())
     : undefined;
-  let ga =
-    toolSchemas.some((Wn) => !("defer_loading" in Wn && Wn.defer_loading === true)) ||
-    (options.extraToolSchemas ?? []).some((Wn) => !("defer_loading" in Wn && Wn.defer_loading === true));
-  let Hl =
+  let hasNonDeferredTool =
+    toolSchemas.some((schema) => !("defer_loading" in schema && schema.defer_loading === true)) ||
+    (options.extraToolSchemas ?? []).some(
+      (schema) => !("defer_loading" in schema && schema.defer_loading === true),
+    );
+  let advisorDeferredNow =
     options.advisorDeferred === true &&
-    yn !== undefined &&
+    advisorModelForQuery !== undefined &&
     betaList.includes(BETA_MID_CONV_TOOL_CHANGE) &&
-    ga;
-  let hd = options.advisorDeferred === true && options.advisorActive === false && !Hl ? undefined : yn;
+    hasNonDeferredTool;
+  let advisorModelForSend =
+    options.advisorDeferred === true && options.advisorActive === false && !advisorDeferredNow
+      ? undefined
+      : advisorModelForQuery;
   let deferredEntriesMoved = false;
-  let Ld = 0;
-  if (cs === "tool_addition" && !betaList.includes(BETA_MID_CONV_TOOL_CHANGE))
+  let inlinedCount = 0;
+  if (toolChangeMode === "tool_addition" && !betaList.includes(BETA_MID_CONV_TOOL_CHANGE))
     try {
-      let flattened = toolSchemas.flatMap((Jr) => {
-        if (!("defer_loading" in Jr) || Jr.defer_loading !== true) return [Jr];
-        if (!("input_schema" in Jr) || !tools.some((tool) => toolMatchesName(tool, Jr.name))) return [];
-        let { defer_loading: deferLoading, ...La } = Jr;
-        return [La];
+      let flattened = toolSchemas.flatMap((schema) => {
+        if (!("defer_loading" in schema) || schema.defer_loading !== true) return [schema];
+        if (!("input_schema" in schema) || !tools.some((tool) => toolMatchesName(tool, schema.name)))
+          return [];
+        let { defer_loading: deferLoading, ...rest } = schema;
+        return [rest];
       });
-      let pr = new Set(toolSchemas);
-      Ld = count(flattened, (Jr) => !pr.has(Jr));
-      deferredEntriesMoved = Ld > 0 || flattened.length !== toolSchemas.length;
+      let originalSchemas = new Set(toolSchemas);
+      inlinedCount = count(flattened, (schema) => !originalSchemas.has(schema));
+      deferredEntriesMoved = inlinedCount > 0 || flattened.length !== toolSchemas.length;
       toolSchemas.splice(0, toolSchemas.length, ...flattened);
     } catch (error) {
       logError(toError(error));
     }
-  let vs =
+  let toolMoveReport =
     creditMintModel === undefined
       ? undefined
       : runGuarded(() =>
           describeToolAdditionMoves(conversation, messages, {
             mintModel: creditMintModel,
             retryModel: options.model,
-            advisorEntryMoved: options.advisorDeferred === true && yn !== undefined && ga && !Hl,
+            advisorEntryMoved:
+              options.advisorDeferred === true &&
+              advisorModelForQuery !== undefined &&
+              hasNonDeferredTool &&
+              !advisorDeferredNow,
             deferredEntriesMoved,
-            hasDeferredChannel: cs !== undefined,
+            hasDeferredChannel: toolChangeMode !== undefined,
           }),
         );
-  let ol = new Set([..._r.filter(willDefer).map((Wn) => Wn.name), ...(Fr?.kept.keys() ?? [])]);
-  findLatestApiSystemDelta(conversation, messages, ol, declaredToolSearch, bo);
-  if (cs !== undefined && options.onDeferredToolsSent && areDeferredToolsKept())
+  let deferredWireNames = new Set([
+    ...requestTools.filter(willDefer).map((tool) => tool.name),
+    ...(keptDeferred?.kept.keys() ?? []),
+  ]);
+  findLatestApiSystemDelta(conversation, messages, deferredWireNames, useToolSearch, byValueNames);
+  if (toolChangeMode !== undefined && options.onDeferredToolsSent && areDeferredToolsKept())
     try {
-      Ti = toolSchemas.filter(
-        (Wn) => isDeferredCustomToolDefinition(Wn) && !toolMatchesName(Wn, DEFERREDTOOLPLACEHOLDER),
+      deferredSchemasSent = toolSchemas.filter(
+        (schema) =>
+          isDeferredCustomToolDefinition(schema) && !toolMatchesName(schema, DEFERREDTOOLPLACEHOLDER),
       );
       options.onDeferredToolsSent({
-        entries: Ti,
+        entries: deferredSchemasSent,
         nameOnlyAnnouncements: conversation.nameOnlyAnnouncements,
-        strippedReferences: strippedToolReferences(Fr),
+        strippedReferences: strippedToolReferences(keptDeferred),
       });
     } catch (error) {
       logError(toError(error));
     }
-  let gd = guardReturning(
+  let relayPlan = guardReturning(
     () => {
-      let Wn = options.resumeIncompleteThinking
+      let disposition = options.resumeIncompleteThinking
         ? "keep"
         : (thinkingRelayModuleClaude?.relayThinkingDisposition({
             mainLoop: classifyQuerySource(options.querySource) === "main" && !options.agentId,
             fetch: options.fetchOverride,
           }) ?? "keep");
       return {
-        relayThinking: Wn,
-        relayThinkingPlan: Wn === "keep" ? undefined : thinkingStripAllPlan(messages),
+        relayThinking: disposition,
+        relayThinkingPlan: disposition === "keep" ? undefined : thinkingStripAllPlan(messages),
         builtForRelay:
           !options.resumeIncompleteThinking &&
           (thinkingRelayModuleClaude?.isRelayedRequest(options.fetchOverride) ?? false),
@@ -5351,13 +5693,13 @@ async function* queryModel(messages, systemPrompt, thinkingConfig, tools, signal
       builtForRelay: false,
     },
   );
-  let { relayThinking, relayThinkingPlan, builtForRelay } = gd;
+  let { relayThinking, relayThinkingPlan, builtForRelay } = relayPlan;
   let normalizeOptions = {
     model: options.model,
     bodyModel: effectiveModel,
     pollEventsAsText: false,
     accountMemoryWithheld: isAccountMemoryRedactionOn(),
-    tools: identityValue_2(_r),
+    tools: identityValue_2(requestTools),
     ingestPool: {
       tools,
       ...(shouldTrackDeferredToolForQuery(options.querySource) && {
@@ -5370,26 +5712,26 @@ async function* queryModel(messages, systemPrompt, thinkingConfig, tools, signal
       declaredToolNames: clientNames(toolSchemas),
     }),
     betas: betaList,
-    midConvLatchedOff: _i,
-    keptReminders: Ri,
-    useToolSearch: declaredToolSearch,
-    advisorModel: hd,
-    advisorDeferred: Hl,
+    midConvLatchedOff: midConvRejected,
+    keptReminders: keptRemindersOn,
+    useToolSearch,
+    advisorModel: advisorModelForSend,
+    advisorDeferred: advisorDeferredNow,
     stripWebSearch: conversation.webSearchHistoryRejected,
     mediaItemLimit: mediaItemCapForModel(conversation, effectiveModel)?.limit,
-    resumeIncompleteThinking: fo,
-    perTurnEffort: tu,
-    perTurnEffortCap: yr,
+    resumeIncompleteThinking,
+    perTurnEffort,
+    perTurnEffortCap: learnedEffortCapFn,
     perTurnNow,
-    deferredToolReferencePlan: Fr,
+    deferredToolReferencePlan: keptDeferred,
     keepForeignThinking: foreignThinkingKeepMode(),
-    deferredWireToolNames: ol,
+    deferredWireToolNames: deferredWireNames,
     nameOnlyAnnouncements: conversation.nameOnlyAnnouncements,
-    byValueNames: bo,
-    byValueAnnouncements: vn,
+    byValueNames,
+    byValueAnnouncements,
     withoutAttachmentHooks: options.withoutToolDescribeHooks,
     reminderFold: options.reminderFold,
-    echoWireToolInputs: Xn,
+    echoWireToolInputs,
     thinkingStripPlan:
       relayThinkingPlan === undefined
         ? options.thinkingStripPlan
@@ -5414,80 +5756,96 @@ async function* queryModel(messages, systemPrompt, thinkingConfig, tools, signal
   let messagesForAPI_2 = messagesForAPI;
   let accountMemoryEpoch_2 = accountMemoryEpoch;
   logAdvisorStripReplayed(messages, options);
-  if (options.onToolInputCopiesSent && normalizeOptions.ingestPool?.ownRequest !== undefined && Xn)
+  if (
+    options.onToolInputCopiesSent &&
+    normalizeOptions.ingestPool?.ownRequest !== undefined &&
+    echoWireToolInputs
+  )
     try {
-      let Wn = wireInputSources(messages);
-      if (Wn.size > 0) options.onToolInputCopiesSent(Wn);
+      let wireInputs = wireInputSources(messages);
+      if (wireInputs.size > 0) options.onToolInputCopiesSent(wireInputs);
     } catch (error) {
       logError(toError(error));
     }
   surfaceDeferredTools(conversation, messages, messagesForAPI_2, {
-    useToolSearch: declaredToolSearch,
-    toolSearchAbsent: cs === "tool_addition",
+    useToolSearch,
+    toolSearchAbsent: toolChangeMode === "tool_addition",
     blocksEligible,
-    byValueNames: bo,
-    byValueStaysOut: co,
+    byValueNames,
+    byValueStaysOut,
   });
-  if (cs !== undefined)
-    keepDepartedDeferredTools(messages, conversation.surfacedOnWire, mi, Fr, options.querySource, generation);
-  let Ac;
-  let tp = false;
-  let Yh = false;
-  let Ef = false;
-  let np = () => {
-    if (!Yh || Ef) return;
-    Ef = true;
+  if (toolChangeMode !== undefined)
+    keepDepartedDeferredTools(
+      messages,
+      conversation.surfacedOnWire,
+      schemaByName,
+      keptDeferred,
+      options.querySource,
+      generation,
+    );
+  let retryCause;
+  let thinkingWasStripped = false;
+  let shouldNotifyAdvisorStripped = false;
+  let advisorStrippedNotified = false;
+  let advisorStrippedMessage = () => {
+    if (!shouldNotifyAdvisorStripped || advisorStrippedNotified) return;
+    advisorStrippedNotified = true;
     return createAttachmentMessage_2({
       type: "advisor_stripped",
     });
   };
-  let Rf = false;
-  let ap = false;
+  let thinkingStripMarked = false;
+  let nothingToStrip = false;
   if (relayThinking === "strip_and_mark")
     if (relayThinkingPlan !== undefined && relayThinkingPlan.size > 0) {
-      tp = true;
-      Rf = true;
-    } else ap = true;
-  let al = isStellarDriftEnabled();
-  let mf;
-  let rg = (messagesForAPI, pr, Jr) => {
-    if (mf !== undefined && mf.input === messagesForAPI && mf.fallbackBeta === pr && mf.marksBeta === Jr)
-      return mf.output;
-    let La = normalizeFallbackBlocks(messagesForAPI, pr);
+      thinkingWasStripped = true;
+      thinkingStripMarked = true;
+    } else nothingToStrip = true;
+  let echoApiBlockOrder = isStellarDriftEnabled();
+  let echoCache;
+  let buildEchoedMessages = (messages_2, fallbackBeta, marksBeta) => {
+    if (
+      echoCache !== undefined &&
+      echoCache.input === messages_2 &&
+      echoCache.fallbackBeta === fallbackBeta &&
+      echoCache.marksBeta === marksBeta
+    )
+      return echoCache.output;
+    let normalizedMessages = normalizeFallbackBlocks(messages_2, fallbackBeta);
     let markable = false;
-    let system = applyApiBlockOrderEcho(La, al, fo);
+    let system = applyApiBlockOrderEcho(normalizedMessages, echoApiBlockOrder, resumeIncompleteThinking);
     let requestMessages = prepareRequestMessages(
       runGuarded(() => isNotLegacyClaude3(effectiveModel)) ? system : disableSearchResultCitations(system),
       messages,
     );
-    mf = {
-      input: messagesForAPI,
-      fallbackBeta: pr,
-      marksBeta: Jr,
+    echoCache = {
+      input: messages_2,
+      fallbackBeta,
+      marksBeta,
       output: requestMessages,
       markable,
     };
     return requestMessages;
   };
-  let uh;
-  let Kf = false;
-  let ch = (Wn, pr, Jr = false) => {
-    Kf = true;
-    if (pr === "microcompact") noopLedger(conversation, pr);
+  let retryKeepsHeal;
+  let retryRequested = false;
+  let recoverMessages = (messages, recoveryCause, keepsHeal = false) => {
+    retryRequested = true;
+    if (recoveryCause === "microcompact") noopLedger(conversation, recoveryCause);
     else {
-      Ac = pr;
-      uh = (uh ?? true) && Jr;
+      retryCause = recoveryCause;
+      retryKeepsHeal = (retryKeepsHeal ?? true) && keepsHeal;
     }
-    return applyApiBlockOrderEcho(Wn, al, fo);
+    return applyApiBlockOrderEcho(messages, echoApiBlockOrder, resumeIncompleteThinking);
   };
-  let uS = midConvFallback;
-  let Ks = toolChangeFallback;
-  let kl = inlineToolsFallback;
-  let Yd = false;
-  let xc = false;
-  let Ip = "idle";
-  let Gc = false;
-  let oc;
+  let getMidConvFallback = midConvFallback;
+  let getToolChangeFallback = toolChangeFallback;
+  let getInlineToolsFallback = inlineToolsFallback;
+  let apiSystemHasCacheControl = false;
+  let sideRequestMarked = false;
+  let promptEndMarkState = "idle";
+  let anyCacheControl = false;
+  let uncoveredTailReport;
   let modelHeldStateless =
     threadSourceKind(options.querySource) !== null && isTetherLive()
       ? isStatelessTetherModel(options.model)
@@ -5498,15 +5856,21 @@ async function* queryModel(messages, systemPrompt, thinkingConfig, tools, signal
       : false;
   let classifierHeldStateless =
     threadSourceKind(options.querySource) !== null && isTetherLive() ? isThreadsHeldForClassifier() : false;
-  let Hu = options.fallbackCreditCode !== undefined ? options.fallbackCreditMintedStateless === true : false;
+  let creditMintedStateless =
+    options.fallbackCreditCode !== undefined ? options.fallbackCreditMintedStateless === true : false;
   let dropHeldStateless =
     threadSourceKind(options.querySource) !== null && isTetherLive()
       ? isThreadHeldStateless(options.agentId)
       : false;
-  let Hx = canUseNoTransientReminders(options.querySource, options.agentId, options.model, Hu);
-  let aI = Xn;
+  let allowsNoTransientReminders = canUseNoTransientReminders(
+    options.querySource,
+    options.agentId,
+    options.model,
+    creditMintedStateless,
+  );
+  let wireInputsEchoed = echoWireToolInputs;
   if (hasFallbackBlocks(messagesForAPI_2)) {
-    let Wn = isFirstPartyApiBackend()
+    let fallbackBetaPicked = isFirstPartyApiBackend()
       ? pickFallbackBeta({
           fromModel: lastFallbackModel(messagesForAPI_2),
           sticky: conversation,
@@ -5515,16 +5879,16 @@ async function* queryModel(messages, systemPrompt, thinkingConfig, tools, signal
             getFeatureValue_CACHED_MAY_BE_STALE(TENGU_ELEGANT_POSSUM, false),
         })
       : null;
-    let pr = Wn !== null && !isBetaRejected_2(conversation, Wn);
-    if (pr) markBetaSent(conversation, Wn);
+    let fallbackBetaOk = fallbackBetaPicked !== null && !isBetaRejected_2(conversation, fallbackBetaPicked);
+    if (fallbackBetaOk) markBetaSent(conversation, fallbackBetaPicked);
     logEvent("tengu_rotunda_pennant_replay", {
-      echo_eligible: pr,
-      category: Wn !== null && Wn === BETA_SERVER_SIDE_FALLBACK_CATEGORY,
+      echo_eligible: fallbackBetaOk,
+      category: fallbackBetaPicked !== null && fallbackBetaPicked === BETA_SERVER_SIDE_FALLBACK_CATEGORY,
     });
   }
   logEvent("tengu_api_after_normalize", {
     postNormalizedMessageCount: messagesForAPI_2.length,
-    apiSystemMessageCount: count(messagesForAPI_2, (Wn) => Wn.type === "api_system"),
+    apiSystemMessageCount: count(messagesForAPI_2, (message) => message.type === "api_system"),
   });
   let fingerprint = computeFingerprintFromMessages(messagesPreNormalize);
   let prefix = getCLISyspromptPrefix({
@@ -5533,7 +5897,7 @@ async function* queryModel(messages, systemPrompt, thinkingConfig, tools, signal
     recorded: options.recordedCliPrefix,
   });
   let safeguards;
-  let Bx = () => {
+  let emitPromptHead = () => {
     if (options.onPromptHeadSent)
       try {
         options.onPromptHeadSent({
@@ -5541,7 +5905,7 @@ async function* queryModel(messages, systemPrompt, thinkingConfig, tools, signal
           wireShape: runGuarded(() =>
             requestFeatureFlags(conversation, effectiveModel, {
               betas: betaList,
-              keptOn: Ri,
+              keptOn: keptRemindersOn,
               safeguards,
             }),
           ),
@@ -5550,76 +5914,76 @@ async function* queryModel(messages, systemPrompt, thinkingConfig, tools, signal
         logError(toError(error));
       }
   };
-  Bx();
+  emitPromptHead();
   systemPrompt = buildSystemWithAttribution(systemPrompt, prefix, {
     fingerprint,
     agentContext: options.agentContext,
     previousRequestId: previousRequestId_2,
-    promptId: Me,
+    promptId: requestPromptId,
     turnOrigin,
     turnPosition,
-    responseBeforeCompaction: Hi ? getResponseBeforeCompaction() : undefined,
+    responseBeforeCompaction: isMainThread ? getResponseBeforeCompaction() : undefined,
   });
   let enablePromptCaching = options.enablePromptCaching ?? getPromptCachingEnabled(effectiveModel);
-  let gae = options.forkPointUuid !== undefined && isMainAgent(options.agentContext);
-  let gW = should1hCacheTTL(options.querySource, {
+  let forkPointMainThread = options.forkPointUuid !== undefined && isMainAgent(options.agentContext);
+  let cacheTtlChoice = should1hCacheTTL(options.querySource, {
     agentCacheTtlOverride: options.agentCacheTtlOverride,
-    mainThreadModel: Hi || gae ? effectiveModel : undefined,
+    mainThreadModel: isMainThread || forkPointMainThread ? effectiveModel : undefined,
   });
-  let IW = gW.ttl === "1h" ? "1h" : undefined;
-  let Tw = applyMessagesCacheTtlOverride(gW.ttl) === "1h" ? "1h" : undefined;
-  let XF = Tw !== IW;
-  if (Hi) {
+  let ttlChoice = cacheTtlChoice.ttl === "1h" ? "1h" : undefined;
+  let messagesTtl = applyMessagesCacheTtlOverride(cacheTtlChoice.ttl) === "1h" ? "1h" : undefined;
+  let ttlOverridden = messagesTtl !== ttlChoice;
+  if (isMainThread) {
     setLastMainThreadCacheTtlMs(
-      IW === "1h" ? CACHE_TTL_1H_MS : CACHE_TTL_5M_MS,
+      ttlChoice === "1h" ? CACHE_TTL_1H_MS : CACHE_TTL_5M_MS,
       options.model,
-      gW.reason === "live_5m_cache",
+      cacheTtlChoice.reason === "live_5m_cache",
     );
-    if (XF) noteMainThreadCacheTtl5m();
+    if (ttlOverridden) noteMainThreadCacheTtl5m();
   }
-  let Ux = false;
-  let xT = () => {
-    if (Ux) return;
-    Ux = true;
-    let Wn = S3 || clock.now();
-    if (Hi)
+  let usageRecorded = false;
+  let recordUsageOnce = () => {
+    if (usageRecorded) return;
+    usageRecorded = true;
+    let usageAt = dispatchedAt || clock.now();
+    if (isMainThread)
       recordPromptCacheUsage(MAIN_2, {
-        at: Wn,
-        ttl: getCacheCreationTtl(Iu) ?? Tw ?? "5m",
-        inputTokens: Iu.input_tokens,
-        cacheReadTokens: Iu.cache_read_input_tokens,
-        cacheCreationTokens: Iu.cache_creation_input_tokens,
+        at: usageAt,
+        ttl: getCacheCreationTtl(usage) ?? messagesTtl ?? "5m",
+        inputTokens: usage.input_tokens,
+        cacheReadTokens: usage.cache_read_input_tokens,
+        cacheCreationTokens: usage.cache_creation_input_tokens,
       });
-    else if (gae && Iu.cache_read_input_tokens > 0) touchPromptCache(MAIN_2, Wn);
+    else if (forkPointMainThread && usage.cache_read_input_tokens > 0) touchPromptCache(MAIN_2, usageAt);
   };
-  let cLe = () =>
+  let buildSystemBlocks = () =>
     buildSystemPromptBlocks(systemPrompt, enablePromptCaching, {
-      skipGlobalCacheForSystemPrompt: as,
-      cacheTtl: IW,
+      skipGlobalCacheForSystemPrompt: hasLiveMcpTools,
+      cacheTtl: ttlChoice,
       scopeRefused: isBetaRejected_2(conversation, BETA_PROMPT_CACHING_SCOPE),
     });
-  let systemBlocks = cLe();
-  let JF = betaList.length > 0;
+  let systemBlocks = buildSystemBlocks();
+  let hasBetas = betaList.length > 0;
   let extraToolSchemas = [...(options.extraToolSchemas ?? [])];
-  if (hd)
+  if (advisorModelForSend)
     extraToolSchemas.push({
       type: ADVISOR_20260301,
       name: ADVISOR_TOOL_NAME,
-      model: hd,
-      ...(Hl && {
+      model: advisorModelForSend,
+      ...(advisorDeferredNow && {
         defer_loading: true,
       }),
     });
   let allTools = [...toolSchemas, ...extraToolSchemas];
-  let fLe = prefixLedgerNotice(
+  let prefixDeltaText = prefixLedgerNotice(
     conversation,
     {
       model: toProviderWireModelId(options.model),
       tools: allTools,
       system: systemBlocks,
-      messages: messagesForAPI_2.map((Wn) => ({
-        role: Wn.message.role,
-        content: Wn.message.content,
+      messages: messagesForAPI_2.map((message) => ({
+        role: message.message.role,
+        content: message.message.content,
       })),
     },
     {
@@ -5628,57 +5992,63 @@ async function* queryModel(messages, systemPrompt, thinkingConfig, tools, signal
       promptEpoch: options.promptRenderEpoch,
     },
   );
-  if (fLe !== undefined) {
+  if (prefixDeltaText !== undefined) {
     let attachmentMessage = createAttachmentMessage_2({
       type: "prefix_delta",
-      text: fLe,
+      text: prefixDeltaText,
     });
     yield attachmentMessage;
-    let pr = runGuarded(() =>
+    let renormalized = runGuarded(() =>
       normalizeMessagesForRequest([...messages, attachmentMessage], normalizeOptions),
     );
-    messagesForAPI_2 = pr.messagesForAPI;
-    accountMemoryEpoch_2 = pr.accountMemoryEpoch;
+    messagesForAPI_2 = renormalized.messagesForAPI;
+    accountMemoryEpoch_2 = renormalized.accountMemoryEpoch;
     surfaceDeferredTools(conversation, messages, messagesForAPI_2, {
-      useToolSearch: declaredToolSearch,
-      toolSearchAbsent: cs === "tool_addition",
-      blocksEligible: pr.blocksEligible,
-      byValueNames: bo,
-      byValueStaysOut: co,
+      useToolSearch,
+      toolSearchAbsent: toolChangeMode === "tool_addition",
+      blocksEligible: renormalized.blocksEligible,
+      byValueNames,
+      byValueStaysOut,
     });
-    uS = pr.midConvFallback;
-    Ks = pr.toolChangeFallback;
-    kl = pr.inlineToolsFallback;
+    getMidConvFallback = renormalized.midConvFallback;
+    getToolChangeFallback = renormalized.toolChangeFallback;
+    getInlineToolsFallback = renormalized.inlineToolsFallback;
   }
-  let fI = runGuarded(() =>
-    resolveEffortFromLastOutputConfig(messagesForAPI_2, Kr, (Wn) => resolveAppliedEffort(Wn, resolvedModel)),
+  let effortFromConfig = runGuarded(() =>
+    resolveEffortFromLastOutputConfig(messagesForAPI_2, cappedEffort, (effortCandidate) =>
+      resolveAppliedEffort(effortCandidate, resolvedModel),
+    ),
   );
-  let effortValue = fI;
-  let CC = runGuarded(() =>
-    modelSupportsEffort(resolvedModel) && fI !== undefined ? normalizeEffortLevel(fI) : undefined,
+  let effortValue = effortFromConfig;
+  let effortLevelNormalized = runGuarded(() =>
+    modelSupportsEffort(resolvedModel) && effortFromConfig !== undefined
+      ? normalizeEffortLevel(effortFromConfig)
+      : undefined,
   );
-  let pLe =
+  let fastModeEligible =
     isFastModeEnabled() &&
     runGuarded(() => isFastModeAvailable()) &&
     runGuarded(() => supportsFastMode(effectiveModel)) &&
     !!options.fastMode &&
     !isFallbackModelFastRejected(options.model);
-  let fE = pLe && !isFastModeCooldown();
-  let e$ = () =>
+  let fastModeActive = fastModeEligible && !isFastModeCooldown();
+  let afkBetaAllowed = () =>
     shouldAllowAfkModeBeta() ||
     (isBetasSwitchSetAside() &&
       getClassifierProviderKind() === "firstParty" &&
       !isThirdPartyServerClassifierRefused());
-  let _E = false;
+  let afkModeOn = false;
   if (isAgenticQuery) {
     if (getFeatureValue_CACHED_MAY_BE_STALE(TENGU_FIZZY_BONBON, false)) {
-      if (isAutoModeActive() && e$()) markBetaSent(conversation, BETA_AFK_MODE);
-      _E = isBetaSent(conversation, BETA_AFK_MODE) && e$();
+      if (isAutoModeActive() && afkBetaAllowed()) markBetaSent(conversation, BETA_AFK_MODE);
+      afkModeOn = isBetaSent(conversation, BETA_AFK_MODE) && afkBetaAllowed();
     } else if (!isAutoModeCircuitBroken() && !isBetaRejected_2(conversation, BETA_AFK_MODE))
       try {
         let toolPermissionContext = await options.getToolPermissionContext();
-        _E =
-          toolPermissionContext !== undefined && isAutoClassifierActive(toolPermissionContext.mode) && e$();
+        afkModeOn =
+          toolPermissionContext !== undefined &&
+          isAutoClassifierActive(toolPermissionContext.mode) &&
+          afkBetaAllowed();
       } catch (error) {
         logError(toError(error));
       }
@@ -5691,25 +6061,26 @@ async function* queryModel(messages, systemPrompt, thinkingConfig, tools, signal
       logError(toError(error));
     }
   let toolNames;
-  if (fE) markBetaSent(conversation, BETA_SPEED);
-  let R5 = isBetaSent(conversation, BETA_SPEED) && (!isAutoModeQuerySource(options.querySource) || pLe);
+  if (fastModeActive) markBetaSent(conversation, BETA_SPEED);
+  let speedBetaOn =
+    isBetaSent(conversation, BETA_SPEED) && (!isAutoModeQuerySource(options.querySource) || fastModeEligible);
   if (canSendProviderBetas()) markBetaSent(conversation, BETA_CACHE_DIAGNOSIS);
-  let t$ = () => canSendProviderBetas() && isBetaSent(conversation, BETA_CACHE_DIAGNOSIS);
-  let hI = releaseKeepaliveChain(conversation, {
-    isMainLoopRequest: Hi,
+  let cacheDiagnosisOn = () => canSendProviderBetas() && isBetaSent(conversation, BETA_CACHE_DIAGNOSIS);
+  let keepaliveHeaderOn = releaseKeepaliveChain(conversation, {
+    isMainLoopRequest: isMainThread,
     continuesPrefix: options.forkPointUuid !== undefined,
-    cacheTtl: enablePromptCaching && !XF ? gW : undefined,
+    cacheTtl: enablePromptCaching && !ttlOverridden ? cacheTtlChoice : undefined,
   });
   let chainReleaseCount = getMainChainReleaseCount();
   let modelSwitchCount = getModelSwitchCount();
   let requestId = undefined;
-  let C5 = (Wn, headers, isWhole) => {
-    if (Hi) {
-      requestId = Wn;
+  let noteResponse = (streamRequestId, headers, isWhole) => {
+    if (isMainThread) {
+      requestId = streamRequestId;
       evaluateCacheKeepalive({
         conversation,
-        headerSent: hI,
-        requestId: Wn,
+        headerSent: keepaliveHeaderOn,
+        requestId: streamRequestId,
         headers,
         isWhole,
         chainReleaseCount,
@@ -5724,20 +6095,20 @@ async function* queryModel(messages, systemPrompt, thinkingConfig, tools, signal
       });
     }
   };
-  let AC;
-  let wE = false;
+  let dewdropMode;
+  let thinkingBindingOn = false;
   try {
-    let Wn =
+    let shouldSendBetas =
       !(betas.type === "disabled" && betas.mechanical === true) &&
       !env.CLAUDE_CODE_SIMULATE_PROXY_USAGE &&
       (!isWIFDispatchAuth() || isFirstPartyBaseUrl());
-    if (Wn && canSendFirstPartyBetas()) {
+    if (shouldSendBetas && canSendFirstPartyBetas()) {
       if (betas.type !== "disabled") {
-        AC = getPolishedDewdropMode();
-        if (isPolishedDewdropActive(AC)) markBetaSent(conversation, BETA_THINKING_BINDING_CONTROLS);
+        dewdropMode = getPolishedDewdropMode();
+        if (isPolishedDewdropActive(dewdropMode)) markBetaSent(conversation, BETA_THINKING_BINDING_CONTROLS);
       }
-      wE = isBetaSent(conversation, BETA_THINKING_BINDING_CONTROLS);
-    } else if (Wn && !areExperimentalBetasDisabled()) {
+      thinkingBindingOn = isBetaSent(conversation, BETA_THINKING_BINDING_CONTROLS);
+    } else if (shouldSendBetas && !areExperimentalBetasDisabled()) {
       let providerForModel = getProviderForModel(options.model);
       if (
         (providerForModel === "bedrock" || providerForModel === "mantle" || providerForModel === "vertex") &&
@@ -5745,63 +6116,66 @@ async function* queryModel(messages, systemPrompt, thinkingConfig, tools, signal
         runGuarded(() => thirdPartyAcceptsThinkingBindingBeta(providerForModel, options.model))
       ) {
         if (betas.type !== "disabled") markBetaSent(conversation, BETA_THINKING_BINDING_CONTROLS);
-        wE = isBetaSent(conversation, BETA_THINKING_BINDING_CONTROLS);
+        thinkingBindingOn = isBetaSent(conversation, BETA_THINKING_BINDING_CONTROLS);
       }
     }
   } catch (error) {
     logError(error);
-    AC = undefined;
-    wE = false;
+    dewdropMode = undefined;
+    thinkingBindingOn = false;
   }
-  if (!wE && !shouldIncludeFirstPartyOnlyBetas())
+  if (!thinkingBindingOn && !shouldIncludeFirstPartyOnlyBetas())
     betaList = betaList.filter((beta) => beta !== BETA_THINKING_BINDING_CONTROLS);
   if (options.evictCacheOnComplete && options.stickyBetas !== undefined && isSubagentCacheEvictEnabled())
     markBetaSent(conversation, BETA_PROMPT_CACHING_EVICT);
-  let contextHintController = require("./chunk-gzv3xh26.js").createContextHintController({
-    querySource: options.querySource,
-    agentId: options.agentId,
-    includeFirstPartyBetas: canSendFirstPartyBetas(),
-    is529Error,
-    storageV5: options.storageV5,
-  });
-  let yS = undefined;
-  let EE = null;
-  let n$ = undefined;
-  let qx = () =>
+  let contextHintController =
+    require("../compact/createContextHintController.lazy.js").createContextHintController({
+      querySource: options.querySource,
+      agentId: options.agentId,
+      includeFirstPartyBetas: canSendFirstPartyBetas(),
+      is529Error,
+      storageV5: options.storageV5,
+    });
+  let sentEffort = undefined;
+  let perTurnEffortValue = null;
+  let perTurnNowValue = undefined;
+  let refusedEffortInfo = () =>
     getRefusedEffortCarry({
-      sent: yS !== undefined && fI !== Kr ? Qs : yS,
+      sent: sentEffort !== undefined && effortFromConfig !== cappedEffort ? normalizedEffort : sentEffort,
       turnEffort: options.turnEffort,
       hookEffortValue: options.hookEffortValue,
     });
-  let BW;
-  let yI;
-  let gLe;
-  let getMessageHashes = () => (gLe ??= fingerprintMessagesForCache(messagesForAPI_2));
-  let kae = () => {
+  let deferredFilteredTools;
+  let betaHeaderList;
+  let messageHashes;
+  let getMessageHashes = () => (messageHashes ??= fingerprintMessagesForCache(messagesForAPI_2));
+  let extraBodyParamsForLog = () => {
     let extraBodyParams = getExtraBodyParams();
     alwaysFalseResponseDiag(extraBodyParams, options.model, getProviderForModel(options.model));
     return extraBodyParams;
   };
-  let toolSchemas_2 = (BW ??= allTools.filter((tool) => !("defer_loading" in tool && tool.defer_loading)));
-  yI ??= betaHeaderValues(betaList);
+  let toolSchemas_2 = (deferredFilteredTools ??= allTools.filter(
+    (tool) => !("defer_loading" in tool && tool.defer_loading),
+  ));
+  betaHeaderList ??= betaHeaderValues(betaList);
   recordPromptState({
     system: systemBlocks,
-    toolSchemas: BW,
-    anyDeferLoading: BW.length !== allTools.length,
+    toolSchemas: deferredFilteredTools,
+    anyDeferLoading: deferredFilteredTools.length !== allTools.length,
     querySource: options.querySource,
     model: options.model,
     agentId: options.agentId,
-    fastMode: R5,
+    fastMode: speedBetaOn,
     globalCacheStrategy,
-    betas: hI ? [...yI, BETA_CACHE_KEEPALIVE.header] : yI,
-    autoModeActive: _E,
+    betas: keepaliveHeaderOn ? [...betaHeaderList, BETA_CACHE_KEEPALIVE.header] : betaHeaderList,
+    autoModeActive: afkModeOn,
     isUsingOverage: getCurrentLimits().isUsingOverage ?? false,
-    is1hCacheTTL: Tw === "1h",
+    is1hCacheTTL: messagesTtl === "1h",
     queryDepth: options.queryTracking?.depth,
-    cacheDiagnosis: t$(),
-    effortValue: fI,
+    cacheDiagnosis: cacheDiagnosisOn(),
+    effortValue: effortFromConfig,
     thinkingConfig: betas,
-    extraBodyParams: kae(),
+    extraBodyParams: extraBodyParamsForLog(),
     getMessageHashes,
     messages: messagesForAPI_2,
     baselineAgentId:
@@ -5809,42 +6183,49 @@ async function* queryModel(messages, systemPrompt, thinkingConfig, tools, signal
         ? options.agentContext.agentId
         : undefined,
   });
-  let hLe = messagesForAPI_2;
-  let Nh = null;
-  let x5 = () => getClassifierProviderKind() === "thirdParty" && hb.includes(BETA_DANGEROUS_TOOL_USE.header);
-  let WW = () =>
-    wE && !shouldIncludeFirstPartyOnlyBetas() && hb.includes(BETA_THINKING_BINDING_CONTROLS.header);
-  let nP = [];
-  let P5 = false;
-  let M5 = (Wn) => {
+  let lastLoggedMessages = messagesForAPI_2;
+  let tetherDelta = null;
+  let isThirdPartyClassifier = () =>
+    getClassifierProviderKind() === "thirdParty" && sentBetaHeaders.includes(BETA_DANGEROUS_TOOL_USE.header);
+  let tokenCountBetaBlocked = () =>
+    thinkingBindingOn &&
+    !shouldIncludeFirstPartyOnlyBetas() &&
+    sentBetaHeaders.includes(BETA_THINKING_BINDING_CONTROLS.header);
+  let droppedBetas = [];
+  let releaseClassifierRefusal = false;
+  let handleDangerousToolUseRejection = (error) => {
     if (!isBetaSent(conversation, BETA_DANGEROUS_TOOL_USE)) return;
-    let pr = x5();
+    let thirdParty = isThirdPartyClassifier();
     let CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS =
-      !pr && hb.includes(BETA_DANGEROUS_TOOL_USE.header) && env.CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS;
-    let Os = pr || CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS;
-    let La =
-      Os &&
-      Wn instanceof APIError &&
-      Wn.status === 400 &&
-      Wn.message.includes(BETA_DANGEROUS_TOOL_USE.header);
-    let Vl = Os && !WW() && isInvalidBetaFlagError(Wn);
-    let Yl = pr ? (parseFoundryUnsupportedCapabilities(Wn) ?? []) : [];
-    let any = Yl.some((ku) => ku.includes("dangerous_tool_use") || ku.includes("safeguard"));
-    if (!La && !Vl && !any && !isSafeguardsRejected(Wn)) return;
+      !thirdParty &&
+      sentBetaHeaders.includes(BETA_DANGEROUS_TOOL_USE.header) &&
+      env.CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS;
+    let serverSide = thirdParty || CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS;
+    let mentionsBeta =
+      serverSide &&
+      error instanceof APIError &&
+      error.status === 400 &&
+      error.message.includes(BETA_DANGEROUS_TOOL_USE.header);
+    let invalidBetaFlag = serverSide && !tokenCountBetaBlocked() && isInvalidBetaFlagError(error);
+    let foundryCaps = thirdParty ? (parseFoundryUnsupportedCapabilities(error) ?? []) : [];
+    let any = foundryCaps.some(
+      (capability) => capability.includes("dangerous_tool_use") || capability.includes("safeguard"),
+    );
+    if (!mentionsBeta && !invalidBetaFlag && !any && !isSafeguardsRejected(error)) return;
     markBetaRejected(conversation, BETA_DANGEROUS_TOOL_USE);
-    let Wd = pr || (CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS && isBetasSwitchSetAside());
-    if (Vl && !La && !any && !isSafeguardsRejected(Wn)) {
-      nP.push(BETA_DANGEROUS_TOOL_USE);
-      P5 = Wd && !isThirdPartyServerClassifierRefused();
+    let stopAsking = thirdParty || (CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS && isBetasSwitchSetAside());
+    if (invalidBetaFlag && !mentionsBeta && !any && !isSafeguardsRejected(error)) {
+      droppedBetas.push(BETA_DANGEROUS_TOOL_USE);
+      releaseClassifierRefusal = stopAsking && !isThirdPartyServerClassifierRefused();
     }
-    if (Wd) {
+    if (stopAsking) {
       markThirdPartyServerClassifierRefused();
-      if (any) recordFoundryUnsupportedCapabilities(options.model, Yl);
+      if (any) recordFoundryUnsupportedCapabilities(options.model, foundryCaps);
     }
     logForDebugging(
-      pr
+      thirdParty
         ? "[server-classifier] the platform rejected a beta on this request (HTTP 400), most likely dangerous-tool-use, which this deployment does not know yet; it is not sent again this session and auto mode decides with the local classifier"
-        : Wd
+        : stopAsking
           ? "[server-classifier] a request was refused (HTTP 400), most likely because of the dangerous-tool-use beta header or the safeguards field. Claude Code sends these on a direct connection to api.anthropic.com even with CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS set. The API, or something between this machine and it, refused them. Until Claude Code restarts, it sends none of them again, nor the afk-mode beta header, and auto mode no longer asks the server to check actions. To stop sending them on this machine at all, set CLAUDE_CODE_AUTO_MODE_SERVER=0."
           : CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS
             ? "[server-classifier] a request was refused (HTTP 400), most likely because of the dangerous-tool-use beta header, which this conversation had kept sending since an earlier request. It is not sent again in this conversation. This session had already stopped asking the server to check actions, so auto mode goes on deciding as it did."
@@ -5855,91 +6236,104 @@ async function* queryModel(messages, systemPrompt, thinkingConfig, tools, signal
     );
     logEvent("tengu_server_classifier_beta_rejected_retry", {
       provider: getAPIProviderForAnalytics(),
-      unnamed: Vl,
+      unnamed: invalidBetaFlag,
       foundryFeature: any,
       unclaimed: false,
       betasSwitchSetAside: CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS,
-      stopsAsking: Wd,
+      stopsAsking: stopAsking,
     });
     return "retry:safeguards";
   };
-  let yLe = (Wn) =>
-    isSpeedParameterUnsupportedError(Wn, options.model) &&
+  let isSpeedUnsupported = (error) =>
+    isSpeedParameterUnsupportedError(error, options.model) &&
     (!!options.modelIsRefusalFallbackTarget || wasEverFastRejected(options.model));
-  let PE = (Wn) => isNonFallbackError(Wn) || yLe(Wn);
-  let O5 = (Wn) =>
-    cs !== undefined && dg === undefined && Wn instanceof APIError && !options.resumeIncompleteThinking;
-  let wae = (Wn) => {
-    let pr = normalize422To400(Wn);
+  let isUnrecoverable = (error) => isNonFallbackError(error) || isSpeedUnsupported(error);
+  let isToolSearchRejectable = (error) =>
+    toolChangeMode !== undefined &&
+    partialMessage === undefined &&
+    error instanceof APIError &&
+    !options.resumeIncompleteThinking;
+  let isDeferredToolsRejection = (error) => {
+    let normalizedError = normalize422To400(error);
     return (
-      O5(Wn) &&
-      (!isDirectFirstPartyApi() || /\bdefer_loading\b/.test(Wn.message)) &&
-      (Wn.status === 400 || Wn.status === 422) &&
-      Wn.type !== "billing_error" &&
-      !PE(pr) &&
-      !FI(pr)
+      isToolSearchRejectable(error) &&
+      (!isDirectFirstPartyApi() || /\bdefer_loading\b/.test(error.message)) &&
+      (error.status === 400 || error.status === 422) &&
+      error.type !== "billing_error" &&
+      !isUnrecoverable(normalizedError) &&
+      !isUnrecoverableError(normalizedError)
     );
   };
-  let I5 = (Wn, pr, Jr) => {
+  let refuseToolSearch = (error, beta, reason) => {
     logForDebugging(
-      `[ToolSearch] HTTP ${Wn.status} ${Jr}${pr ? ` (${pr.header})` : ""}; sending the request again without deferred tools. ENABLE_TOOL_SEARCH=false avoids the refused request${nP.length > 0 ? `. Dropped first and now allowed again: ${betaHeaderValues(nP).join(", ")}` : ""}`,
+      `[ToolSearch] HTTP ${error.status} ${reason}${beta ? ` (${beta.header})` : ""}; sending the request again without deferred tools. ENABLE_TOOL_SEARCH=false avoids the refused request${droppedBetas.length > 0 ? `. Dropped first and now allowed again: ${betaHeaderValues(droppedBetas).join(", ")}` : ""}`,
       {
         level: "warn",
       },
     );
-    for (let Os of nP) forgetBeta(conversation, Os);
-    if (P5) releaseThirdPartyServerClassifierRefusal();
-    throw new ToolSearchRefusedError(Wn, declaredToolSearch);
+    for (let droppedBeta of droppedBetas) forgetBeta(conversation, droppedBeta);
+    if (releaseClassifierRefusal) releaseThirdPartyServerClassifierRefusal();
+    throw new ToolSearchRefusedError(error, useToolSearch);
   };
-  let D5 = (Wn) => {
-    if (Or !== null && O5(Wn) && isBetaRejected(Wn, Or)) I5(Wn, Or, "refusing the tool search beta");
+  let maybeRefuseToolSearch = (error) => {
+    if (toolSearchBeta !== null && isToolSearchRejectable(error) && isBetaRejected(error, toolSearchBeta))
+      refuseToolSearch(error, toolSearchBeta, "refusing the tool search beta");
     return;
   };
-  let Tae = (Wn) => {
-    if (wae(Wn)) I5(Wn, Or, "that no other recovery took, on a request that declared deferred tools");
+  let maybeRefuseToolSearchFinal = (error) => {
+    if (isDeferredToolsRejection(error))
+      refuseToolSearch(
+        error,
+        toolSearchBeta,
+        "that no other recovery took, on a request that declared deferred tools",
+      );
     return;
   };
-  let i$ = false;
-  let e1 = () => {
+  let toolSearchRefusalHandled = false;
+  let handleToolSearchRefusal = () => {
     let toolSearchRefusal = options.toolSearchRefusal;
-    if (toolSearchRefusal === undefined || i$) return;
-    i$ = true;
+    if (toolSearchRefusal === undefined || toolSearchRefusalHandled) return;
+    toolSearchRefusalHandled = true;
     try {
-      let toolSearchBeta = getToolSearchBeta();
-      let Jr = isBetaRejected(toolSearchRefusal, toolSearchBeta);
-      if (Jr) latchBetaRefused(toolSearchBeta, isBetaHeaderRejected(toolSearchRefusal, toolSearchBeta));
+      let beta = getToolSearchBeta();
+      let headerRejected = isBetaRejected(toolSearchRefusal, beta);
+      if (headerRejected) latchBetaRefused(beta, isBetaHeaderRejected(toolSearchRefusal, beta));
       else {
-        markBetaRejected(conversation, toolSearchBeta);
+        markBetaRejected(conversation, beta);
         logForDebugging(
           "[ToolSearch] the endpoint answered the request sent without tool search, so this conversation goes on without it",
         );
       }
       logEvent("tengu_beta_400_healed", {
-        beta: hashToolNames([toolSearchBeta.header]),
+        beta: hashToolNames([beta.header]),
         model: telemetrySafeModelName(options.model),
         provider: getAPIProviderForAnalytics(),
         status: toolSearchRefusal.status,
-        unnamed: !Jr,
+        unnamed: !headerRejected,
       });
     } catch (error) {
       logError(error);
     }
   };
-  let L5 = (Wn) => {
-    let pr = NLe(Wn, true);
-    if (pr !== null) return pr;
-    if (!(Wn instanceof APIError) || (Wn.status !== 400 && Wn.status !== 422)) return;
-    let Jr = normalize422To400(Wn);
-    if (PE(Jr) || FI(Jr)) return;
-    if (Wn.status === 422 || !isBetaSent(conversation, BETA_DANGEROUS_TOOL_USE) || !x5()) {
+  let recoverUnclaimedBeta = (error) => {
+    let healed = recoverThinkingBinding(error, true);
+    if (healed !== null) return healed;
+    if (!(error instanceof APIError) || (error.status !== 400 && error.status !== 422)) return;
+    let normalizedError = normalize422To400(error);
+    if (isUnrecoverable(normalizedError) || isUnrecoverableError(normalizedError)) return;
+    if (
+      error.status === 422 ||
+      !isBetaSent(conversation, BETA_DANGEROUS_TOOL_USE) ||
+      !isThirdPartyClassifier()
+    ) {
       if (shouldIncludeFirstPartyOnlyBetas() || conversation.systemMessagesAcceptedBy.has(effectiveModel))
         return;
-      let Os = LLe(Wn, true);
-      if (Os !== undefined) qd = "retrying";
-      return Os;
+      let midConvRecovery = recoverToolChange(error, true);
+      if (midConvRecovery !== undefined) midConvProbeState = "retrying";
+      return midConvRecovery;
     }
     markBetaRejected(conversation, BETA_DANGEROUS_TOOL_USE);
-    nP.push(BETA_DANGEROUS_TOOL_USE);
+    droppedBetas.push(BETA_DANGEROUS_TOOL_USE);
     logForDebugging(
       "[server-classifier] an unrecognised HTTP 400 arrived while the dangerous-tool-use beta was on the request; retrying once without it, and auto mode decides with the local classifier for the rest of this conversation",
       {
@@ -5954,44 +6348,49 @@ async function* queryModel(messages, systemPrompt, thinkingConfig, tools, signal
     });
     return "retry:safeguards-unclaimed";
   };
-  let _Le = (Wn) => {
+  let probeThinkingDisplay = (error) => {
     try {
-      if (!(Wn instanceof APIError) || (Wn.status !== 400 && Wn.status !== 422)) return;
-      if (JS === "withoutField") {
-        JS = "spent";
-        let pr = L5(Wn);
-        if (pr === undefined && !PE(Wn) && !wae(Wn)) noteThinkingDisplayProbeFailure();
-        return pr;
+      if (!(error instanceof APIError) || (error.status !== 400 && error.status !== 422)) return;
+      if (thinkingDisplayProbeState === "withoutField") {
+        thinkingDisplayProbeState = "spent";
+        let healed = recoverUnclaimedBeta(error);
+        if (healed === undefined && !isUnrecoverable(error) && !isDeferredToolsRejection(error))
+          noteThinkingDisplayProbeFailure();
+        return healed;
       }
       if (
-        JS === "spent" ||
-        m1 === undefined ||
-        Wn.type === "billing_error" ||
-        PE(Wn) ||
-        (FI(Wn) && !isThinkingDisplayRejected(Wn)) ||
+        thinkingDisplayProbeState === "spent" ||
+        sentThinkingDisplay === undefined ||
+        error.type === "billing_error" ||
+        isUnrecoverable(error) ||
+        (isUnrecoverableError(error) && !isThinkingDisplayRejected(error)) ||
         !hasThinkingDisplayProbesLeft() ||
         isDirectFirstPartyApi()
       )
         return;
       betaList = betaList.filter((beta) => beta !== BETA_THINKING_DISPLAY_UPDATES);
-      JS = m1 === "updates" && betas.display !== undefined ? "withoutUpdates" : "withoutField";
-      return `retry:thinking-display-unclaimed:${JS}`;
+      thinkingDisplayProbeState =
+        sentThinkingDisplay === "updates" && betas.display !== undefined ? "withoutUpdates" : "withoutField";
+      return `retry:thinking-display-unclaimed:${thinkingDisplayProbeState}`;
     } catch (error) {
       logError(error);
       return;
     }
   };
-  let Rae = () => {
-    if (qd === "retrying") qd = "spent";
-    else if (!shouldIncludeFirstPartyOnlyBetas() && HS.some((Wn) => Wn.role === "system")) {
+  let noteMidConvSystemAccepted = () => {
+    if (midConvProbeState === "retrying") midConvProbeState = "spent";
+    else if (
+      !shouldIncludeFirstPartyOnlyBetas() &&
+      sentMessages.some((message) => message.role === "system")
+    ) {
       conversation.systemMessagesAcceptedBy.add(effectiveModel);
-      Bx();
+      emitPromptHead();
     }
   };
-  let SLe = () => {
-    if (qd === "retrying") {
+  let noteMidConvGuessWrong = () => {
+    if (midConvProbeState === "retrying") {
       forgetBeta(conversation, BETA_MID_CONVERSATION_SYSTEM);
-      Bx();
+      emitPromptHead();
       logForDebugging(
         "[mid-conv-system] the resend without system messages was not answered either, so the guess that the platform refuses them is dropped; the next request of this conversation sends them again",
         {
@@ -6000,15 +6399,15 @@ async function* queryModel(messages, systemPrompt, thinkingConfig, tools, signal
       );
     }
   };
-  let t1 = () => {
-    if (JS === "idle" || JS === "spent") return;
-    let Wn = JS === "withoutField";
-    JS = Wn ? "spent" : "idle";
+  let settleThinkingDisplayProbe = () => {
+    if (thinkingDisplayProbeState === "idle" || thinkingDisplayProbeState === "spent") return;
+    let withoutField = thinkingDisplayProbeState === "withoutField";
+    thinkingDisplayProbeState = withoutField ? "spent" : "idle";
     try {
-      if (Wn) markBetaRejected(conversation, THINKING_DISPLAY_NAMED_BETA);
+      if (withoutField) markBetaRejected(conversation, THINKING_DISPLAY_NAMED_BETA);
       markBetaRejected(conversation, BETA_THINKING_DISPLAY_UPDATES);
       logForDebugging(
-        `[thinking] a request was refused (HTTP 400 or 422) and went through when sent again ${Wn ? "without thinking.display" : "with the session's own display in place of 'updates'"}; this conversation no longer sends ${Wn ? "thinking.display" : "'updates'"}.`,
+        `[thinking] a request was refused (HTTP 400 or 422) and went through when sent again ${withoutField ? "without thinking.display" : "with the session's own display in place of 'updates'"}; this conversation no longer sends ${withoutField ? "thinking.display" : "'updates'"}.`,
         {
           level: "warn",
         },
@@ -6023,42 +6422,43 @@ async function* queryModel(messages, systemPrompt, thinkingConfig, tools, signal
       logError(error);
     }
   };
-  let i1 = (Wn, pr) => {
+  let probeThinkingTokenCount = (error, latencyOnly) => {
     try {
-      if (!(Wn instanceof APIError) || (Wn.status !== 400 && Wn.status !== 422)) return;
-      if (ma === "resent") ma = "spent";
-      let Jr = normalize422To400(Wn);
+      if (!(error instanceof APIError) || (error.status !== 400 && error.status !== 422)) return;
+      if (thinkingTokenProbeState === "resent") thinkingTokenProbeState = "spent";
+      let normalizedError = normalize422To400(error);
       if (
-        ma !== "idle" ||
-        !hb.includes(BETA_THINKING_TOKEN_COUNT.header) ||
-        Wn.type === "billing_error" ||
-        apiErrorCode(Wn) !== undefined ||
-        isClientVersionRejected(Jr) ||
-        PE(Jr) ||
-        (Wn.status === 400 && pr) ||
-        classifyFallbackCreditError(Wn) !== undefined ||
-        classifyServerFallbackError(Wn) !== undefined ||
-        (FI(Jr) && !Wn.message.includes(BETA_THINKING_TOKEN_COUNT.header)) ||
+        thinkingTokenProbeState !== "idle" ||
+        !sentBetaHeaders.includes(BETA_THINKING_TOKEN_COUNT.header) ||
+        error.type === "billing_error" ||
+        apiErrorCode(error) !== undefined ||
+        isClientVersionRejected(normalizedError) ||
+        isUnrecoverable(normalizedError) ||
+        (error.status === 400 && latencyOnly) ||
+        classifyFallbackCreditError(error) !== undefined ||
+        classifyServerFallbackError(error) !== undefined ||
+        (isUnrecoverableError(normalizedError) &&
+          !error.message.includes(BETA_THINKING_TOKEN_COUNT.header)) ||
         isDirectFirstPartyApi()
       )
         return;
       logForDebugging(
-        `[thinking] HTTP ${Wn.status} that no earlier recovery took; sending the request again without the ${BETA_THINKING_TOKEN_COUNT.header} beta`,
+        `[thinking] HTTP ${error.status} that no earlier recovery took; sending the request again without the ${BETA_THINKING_TOKEN_COUNT.header} beta`,
         {
           level: "warn",
         },
       );
       betaList = betaList.filter((beta) => beta !== BETA_THINKING_TOKEN_COUNT);
-      ma = pr ? "spent" : "resent";
+      thinkingTokenProbeState = latencyOnly ? "spent" : "resent";
       return "retry:thinking-token-count-unclaimed";
     } catch (error) {
       logError(error);
       return;
     }
   };
-  let N5 = () => {
-    if (ma !== "resent") return;
-    ma = "spent";
+  let settleThinkingTokenCountProbe = () => {
+    if (thinkingTokenProbeState !== "resent") return;
+    thinkingTokenProbeState = "spent";
     try {
       latchBetaRefused(BETA_THINKING_TOKEN_COUNT, false);
       logEvent("tengu_beta_400_healed", {
@@ -6071,56 +6471,57 @@ async function* queryModel(messages, systemPrompt, thinkingConfig, tools, signal
       logError(error);
     }
   };
-  let l$ = (Wn) => {
+  let recoverHookRetry = (error) => {
     return;
   };
-  let SI = (Wn) => {
+  let probeClearAt = (error) => {
     {
-      let pr = Wn instanceof APIError && Wn.status === 400;
-      if (rP === "retrying") {
-        if (pr) {
-          rP = "spent";
-          if (!PE(Wn) && !(ME === "idle" && u$(Wn))) noteClearAtProbeFailure();
+      let is400 = error instanceof APIError && error.status === 400;
+      if (clearAtProbeState === "retrying") {
+        if (is400) {
+          clearAtProbeState = "spent";
+          if (!isUnrecoverable(error) && !(threadsProbeState === "idle" && isThreadsProbeCandidate(error)))
+            noteClearAtProbeFailure();
         }
         return;
       }
       if (
-        rP === "idle" &&
-        OI &&
+        clearAtProbeState === "idle" &&
+        clearAtOnWire &&
         betaList.includes(BETA_MID_CONVERSATION_SYSTEM_CLEAR_AT) &&
-        pr &&
-        Wn.type !== "billing_error" &&
-        !PE(Wn) &&
-        !FI(Wn) &&
+        is400 &&
+        error.type !== "billing_error" &&
+        !isUnrecoverable(error) &&
+        !isUnrecoverableError(error) &&
         hasClearAtProbeBudget()
       ) {
-        rP = "retrying";
-        k$ = Wn.requestID ?? undefined;
+        clearAtProbeState = "retrying";
+        clearAtProbeRequestId = error.requestID ?? undefined;
         betaList = betaList.filter((beta) => beta !== BETA_MID_CONVERSATION_SYSTEM_CLEAR_AT);
-        Nh?.forceCreate("clear_at_header_retired");
+        tetherDelta?.forceCreate("clear_at_header_retired");
         return "retry:kept-reminder-unrecognised-400";
       }
     }
     return;
   };
-  let u$ = (Wn) => {
+  let isThreadsProbeCandidate = (error) => {
     try {
       return (
         BETA_MESSAGE_THREADS !== null &&
         getAPIProvider() === "firstParty" &&
-        hb.includes(BETA_MESSAGE_THREADS.header) &&
-        Wn instanceof APIError &&
-        Wn.status === 400 &&
-        Wn.type !== "billing_error" &&
-        classifyAPIError(Wn) === "client_error" &&
+        sentBetaHeaders.includes(BETA_MESSAGE_THREADS.header) &&
+        error instanceof APIError &&
+        error.status === 400 &&
+        error.type !== "billing_error" &&
+        classifyAPIError(error) === "client_error" &&
         !options.resumeIncompleteThinking &&
-        !(y3 && !iP) &&
-        getApiErrorCode(Wn) === undefined &&
-        !PE(Wn) &&
-        !FI(Wn) &&
-        classifyThreadError(Wn) === null &&
-        classifyFallbackCreditError(Wn) === undefined &&
-        classifyServerFallbackError(Wn) === undefined &&
+        !(creditMintedStream && !creditStripped) &&
+        getApiErrorCode(error) === undefined &&
+        !isUnrecoverable(error) &&
+        !isUnrecoverableError(error) &&
+        classifyThreadError(error) === null &&
+        classifyFallbackCreditError(error) === undefined &&
+        classifyServerFallbackError(error) === undefined &&
         hasThreadsProbeBudget()
       );
     } catch (error) {
@@ -6128,14 +6529,14 @@ async function* queryModel(messages, systemPrompt, thinkingConfig, tools, signal
       return false;
     }
   };
-  let oP = (Wn) => {
+  let noteThreadsRefused = (error) => {
     try {
-      if (ME === "retrying" && Wn instanceof APIError && Wn.status === 400) {
-        ME = "spent";
-        if (!PE(Wn)) noteThreadsProbeFailure();
+      if (threadsProbeState === "retrying" && error instanceof APIError && error.status === 400) {
+        threadsProbeState = "spent";
+        if (!isUnrecoverable(error)) noteThreadsProbeFailure();
         logEvent("tengu_tether_unrecognised_400", {
           phase: lit_2("refused"),
-          planner_backed: II,
+          planner_backed: threadsProbePlannerBacked,
           query_source: agentTypeForTelemetry(options.querySource),
         });
       }
@@ -6143,38 +6544,38 @@ async function* queryModel(messages, systemPrompt, thinkingConfig, tools, signal
       logError(error);
     }
   };
-  let a1 = (Wn) => {
+  let maybeRetryThreads = (error) => {
     try {
-      oP(Wn);
-      if (ME === "idle" && u$(Wn)) {
-        let pr = Nh !== null;
-        let Jr = Nh?.dropForUnrecognised400();
+      noteThreadsRefused(error);
+      if (threadsProbeState === "idle" && isThreadsProbeCandidate(error)) {
+        let plannerBacked = tetherDelta !== null;
+        let droppedThread = tetherDelta?.dropForUnrecognised400();
         logEvent("tengu_tether_unrecognised_400", {
           phase: lit_2("start"),
-          planner_backed: pr,
-          dropped_thread: Jr !== undefined,
+          planner_backed: plannerBacked,
+          dropped_thread: droppedThread !== undefined,
           query_source: agentTypeForTelemetry(options.querySource),
         });
-        ME = "retrying";
-        G5 = Wn.requestID ?? undefined;
-        II = pr;
-        return Jr ?? "retry:tether-unrecognised-400";
+        threadsProbeState = "retrying";
+        threadsProbeRequestId = error.requestID ?? undefined;
+        threadsProbePlannerBacked = plannerBacked;
+        return droppedThread ?? "retry:tether-unrecognised-400";
       }
     } catch (error) {
       logError(error);
     }
     return;
   };
-  let Cae = false;
-  let l1 = (Wn) => {
-    if (Wn instanceof APIError && Wn.status !== undefined) Cae = true;
-    oP(Wn);
-    if (betaList.includes(BETA_MID_CONVERSATION_SYSTEM_CLEAR_AT) && isKeptReminderClearAtRejected(Wn)) {
+  let sawApiError = false;
+  let handleKeptReminderRejection = (error) => {
+    if (error instanceof APIError && error.status !== undefined) sawApiError = true;
+    noteThreadsRefused(error);
+    if (betaList.includes(BETA_MID_CONVERSATION_SYSTEM_CLEAR_AT) && isKeptReminderClearAtRejected(error)) {
       betaList = betaList.filter((beta) => beta !== BETA_MID_CONVERSATION_SYSTEM_CLEAR_AT);
       markBetaRejected(conversation, BETA_MID_CONVERSATION_SYSTEM_CLEAR_AT);
       retireKeptReminder();
-      Bx();
-      Nh?.forceCreate("clear_at_header_retired");
+      emitPromptHead();
+      tetherDelta?.forceCreate("clear_at_header_retired");
       logFeatureSad("api_kept_reminder_clear_at", "server_rejected");
       logForDebugging(
         "[reminders] the server rejected the clear_at beta header or field (HTTP 400); retrying without them. For the rest of this session earlier reminders are not re-sent, and requests that can use a Message Threads thread get no reminder.",
@@ -6186,7 +6587,7 @@ async function* queryModel(messages, systemPrompt, thinkingConfig, tools, signal
     }
     if (
       BETA_MESSAGE_THREADS !== null &&
-      isTetherBetaRejected(Wn) &&
+      isTetherBetaRejected(error) &&
       !isBetaRejected_2(conversation, BETA_MESSAGE_THREADS)
     ) {
       markBetaRejected(conversation, BETA_MESSAGE_THREADS);
@@ -6197,43 +6598,43 @@ async function* queryModel(messages, systemPrompt, thinkingConfig, tools, signal
           level: "warn",
         },
       );
-      return Nh?.resolveRetry(Wn) ?? "retry:tether-header";
+      return tetherDelta?.resolveRetry(error) ?? "retry:tether-header";
     }
-    return Nh?.resolveRetry(Wn);
+    return tetherDelta?.resolveRetry(error);
   };
-  let EI = planToolResultClearingAfterIdle(
+  let toolResultClearingPlan = planToolResultClearingAfterIdle(
     messages,
     options.querySource,
     options.model,
     options.agentId,
-    (Wn) => findToolByName(normalizeOptions.tools, Wn)?.name,
+    (toolName) => findToolByName(normalizeOptions.tools, toolName)?.name,
     options.forkPointUuid,
   );
-  let m$ = false;
-  let HS = [];
-  let g$ = [];
-  let Eh = (Wn) => {
-    if (g$.length === 0) return Wn;
-    for (let i = g$.length - 2; i >= 0; i--) if (g$[i] === Wn) return i;
+  let contextManagementEligible = false;
+  let sentMessages = [];
+  let wireIndexMap = [];
+  let sourceIndexOf = (messageIndex) => {
+    if (wireIndexMap.length === 0) return messageIndex;
+    for (let i = wireIndexMap.length - 2; i >= 0; i--) if (wireIndexMap[i] === messageIndex) return i;
     return;
   };
-  let vw = undefined;
-  let S$ = undefined;
-  let d1 = false;
-  let c1 = false;
-  let F5 = 0;
+  let pinnedSystem = undefined;
+  let pinnedTools = undefined;
+  let systemOverridden = false;
+  let threadSliced = false;
+  let threadSliceFrom = 0;
   let threadType = "none";
-  let kLe = () => ({
-    messages: HS,
-    system: vw,
-    tools: S$,
+  let currentThreadBody = () => ({
+    messages: sentMessages,
+    system: pinnedSystem,
+    tools: pinnedTools,
   });
   {
     let agentType = threadSourceKind(options.querySource);
     if (agentType !== null && isTetherLive()) {
-      BW ??= allTools.filter((tool) => !("defer_loading" in tool && tool.defer_loading));
-      yI ??= betaHeaderValues(betaList);
-      let pr = lastAssistantMessageId(messages);
+      deferredFilteredTools ??= allTools.filter((tool) => !("defer_loading" in tool && tool.defer_loading));
+      betaHeaderList ??= betaHeaderValues(betaList);
+      let previousMessageId = lastAssistantMessageId(messages);
       let dangerousToolUse =
         isBetaSent(conversation, BETA_DANGEROUS_TOOL_USE) ||
         (options.serverClassifier === true &&
@@ -6248,54 +6649,54 @@ async function* queryModel(messages, systemPrompt, thinkingConfig, tools, signal
         modelHeldStateless,
         relayHeldStateless,
         classifierHeldStateless,
-        creditRetryStateless: Hu,
+        creditRetryStateless: creditMintedStateless,
         dropHeldStateless,
         system: systemBlocks,
-        toolSchemas: BW,
-        betas: yI,
+        toolSchemas: deferredFilteredTools,
+        betas: betaHeaderList,
         latchedHeaders: {
-          fastMode: R5,
-          autoMode: _E,
-          cacheTtl1h: IW === "1h",
+          fastMode: speedBetaOn,
+          autoMode: afkModeOn,
+          cacheTtl1h: ttlChoice === "1h",
           evictOnComplete: isBetaSent(conversation, BETA_PROMPT_CACHING_EVICT),
-          cacheDiagnosis: t$(),
-          cacheKeepalive: hI,
+          cacheDiagnosis: cacheDiagnosisOn(),
+          cacheKeepalive: keepaliveHeaderOn,
           dangerousToolUse,
         },
         thinkingConfig: betas,
         toolChoice: options.toolChoice,
-        effortValue: fI,
-        extraBodyParams: kae(),
+        effortValue: effortFromConfig,
+        extraBodyParams: extraBodyParamsForLog(),
         getMessageHashes,
-        previousMessageId: pr,
+        previousMessageId,
       });
       if (isSubagentOrUnknown(agentType, options.agentId)) {
         let effort = auditTetherEchoSafely(messages, messagesForAPI_2);
-        Nh = buildTetherDelta({
+        tetherDelta = buildTetherDelta({
           engine,
-          previousMessageId: pr,
-          anchorRewritten: effort !== null && hasStructuralEchoDiff(effort, pr),
+          previousMessageId,
+          anchorRewritten: effort !== null && hasStructuralEchoDiff(effort, previousMessageId),
           messages: messagesForAPI_2,
           agentId: options.agentId,
           model: options.model,
           modelHeldStateless,
           relayHeldStateless,
           classifierHeldStateless,
-          creditRetryStateless: Hu,
+          creditRetryStateless: creditMintedStateless,
           dropHeldStateless,
-          toolResultClearingHeldStateless: EI !== undefined,
+          toolResultClearingHeldStateless: toolResultClearingPlan !== undefined,
           clock,
         });
         if (effort !== null)
           logTetherEchoAudit(effort, {
             sourceCategory: agentType,
             messageCount: messagesForAPI_2.length,
-            anchorMessageId: pr,
+            anchorMessageId: previousMessageId,
           });
       }
     }
   }
-  let $5 = isBetaTracingEnabled()
+  let tracingMetadata = isBetaTracingEnabled()
     ? {
         systemPrompt: systemPrompt.join(`
 
@@ -6305,76 +6706,78 @@ async function* queryModel(messages, systemPrompt, thinkingConfig, tools, signal
         tools: jsonStringify(allTools),
       }
     : undefined;
-  let Zk;
-  let f1 = () => (Zk ??= memoryToolNames(messages, tools));
+  let memoMemoryKeys;
+  let accountMemoryKeys = () => (memoMemoryKeys ??= memoryToolNames(messages, tools));
   let llmRequestSpan = startLLMRequestSpan(
     options.model,
     options.agentContext,
-    $5,
+    tracingMetadata,
     messagesForAPI_2,
-    fE,
+    fastModeActive,
     options.querySource,
-    f1,
+    accountMemoryKeys,
   );
-  let xae = clock.monotonicNow();
-  let Uy = clock.monotonicNow();
-  let p_ = 0;
-  let B5 = [];
-  let stream = undefined;
-  let Al = undefined;
-  let j5 = false;
-  let Qh;
-  let bLe = (Wn) => {
+  let requestStartAt = clock.monotonicNow();
+  let attemptStartAt = clock.monotonicNow();
+  let attemptNumber = 0;
+  let attemptStartTimes = [];
+  let activeStream = undefined;
+  let responseRequestId = undefined;
+  let classifierOnRequest = false;
+  let classifierSession;
+  let noteClassifierUnsupported = (unsupported) => {
     if (
-      Wn !== undefined &&
+      unsupported !== undefined &&
       getClassifierProviderKind() === "thirdParty" &&
-      isServerClassifierUnsupported(Wn) &&
+      isServerClassifierUnsupported(unsupported) &&
       !isThirdPartyServerClassifierRefused() &&
       !isArbiterWithFallbackActive()
     ) {
       markThirdPartyServerClassifierRefused();
       logForDebugging(
-        `[server-classifier] the platform gave no classification for this request (${Wn.why}); treating that as this deployment's answer: auto mode classifies locally for the rest of this session and stops sending the classifier context`,
+        `[server-classifier] the platform gave no classification for this request (${unsupported.why}); treating that as this deployment's answer: auto mode classifies locally for the rest of this session and stops sending the classifier context`,
       );
     }
   };
-  let MI = (Wn, pr, Jr) => {
-    let flattened = Jr.flatMap((La) => (La.type === "tool_use" && typeof La.id === "string" ? [La.id] : []));
-    bLe(settleServerClassifierResult(Wn, pr, flattened));
+  let settleClassifier = (session, payload, blocks) => {
+    let callIds = blocks.flatMap((block) =>
+      block.type === "tool_use" && typeof block.id === "string" ? [block.id] : [],
+    );
+    noteClassifierUnsupported(settleServerClassifierResult(session, payload, callIds));
   };
-  let p1 = false;
-  let W5 = false;
-  let OI = false;
-  let rP = "idle";
-  let k$;
-  let ME = "idle";
-  let G5;
-  let II = false;
-  let JS = "idle";
-  let ma = "idle";
-  let qd = "idle";
-  let Gd = "idle";
-  let vu = () => Gd !== "idle" && Gd !== "spent";
-  let sc = false;
-  let fc = undefined;
+  let cacheMarkable = false;
+  let keptReminderSent = false;
+  let clearAtOnWire = false;
+  let clearAtProbeState = "idle";
+  let clearAtProbeRequestId;
+  let threadsProbeState = "idle";
+  let threadsProbeRequestId;
+  let threadsProbePlannerBacked = false;
+  let thinkingDisplayProbeState = "idle";
+  let thinkingTokenProbeState = "idle";
+  let midConvProbeState = "idle";
+  let contextBetaState = "idle";
+  let contextBetaRefused = () => contextBetaState !== "idle" && contextBetaState !== "spent";
+  let longContextRequested = false;
+  let firstAttemptRequestId = undefined;
   let rawRequestBodyId = undefined;
   let requestRef;
-  let Af = (Wn, stream) => {
-    Vs(Wn);
-    let Jr = applyThreadBody(Wn, kLe());
-    captureAPIRequest(Jr, options.querySource, isMainAgent(options.agentContext));
+  let recordRequestBodies = (params, stream) => {
+    prepareSendParams(params);
+    let snapshottedParams = applyThreadBody(params, currentThreadBody());
+    captureAPIRequest(snapshottedParams, options.querySource, isMainAgent(options.agentContext));
     rawRequestBodyId = logApiRequestBody(
       {
-        ...Wn,
+        ...params,
         stream,
       },
       options.querySource,
-      f1,
-      Jr.messages,
+      accountMemoryKeys,
+      snapshottedParams.messages,
       options.agentContext,
     );
     requestRef = replayTranscriptRequest({
-      params: Jr,
+      params: snapshottedParams,
       querySource: options.querySource,
       agentId: options.agentId,
       storageV5: options.storageV5,
@@ -6383,18 +6786,18 @@ async function* queryModel(messages, systemPrompt, thinkingConfig, tools, signal
       readInjectedBody: () => getExtraBodyParams(),
     });
   };
-  let Ah = undefined;
-  let k_ = undefined;
+  let clientRequestId = undefined;
+  let responseBody = undefined;
   let FT;
-  let Jh = false;
-  let _S = emptySuspendState();
-  let bS = undefined;
-  let nk;
+  let isLowPriority = false;
+  let lowPriorityWait = emptySuspendState();
+  let headersReceivedAt = undefined;
+  let responseMeta;
   let limitsAccountEpoch = getLimitsAccountEpoch();
-  let onQuotaWindowWait = (headers, pr) => {
+  let onQuotaWindowWait = (rejection, retryPlan) => {
     let requestRouteKind = getRequestRouteKind(options);
     extractQuotaStatusFromError(
-      headers,
+      rejection,
       requestRouteKind,
       clock.now(),
       limitsAccountEpoch,
@@ -6404,10 +6807,10 @@ async function* queryModel(messages, systemPrompt, thinkingConfig, tools, signal
       route: requestRouteKind,
       querySource: options.querySource,
       model: options.model,
-      rateLimitType: applyMockHeaders(headers).rateLimitType,
-      retryAtMs: pr.retryAtMs,
-      attempt: pr.attempt,
-      maxRetries: pr.maxRetries,
+      rateLimitType: applyMockHeaders(rejection).rateLimitType,
+      retryAtMs: retryPlan.retryAtMs,
+      attempt: retryPlan.attempt,
+      maxRetries: retryPlan.maxRetries,
     });
   };
   let isUsageLimitLifted = (rejection) =>
@@ -6417,97 +6820,99 @@ async function* queryModel(messages, systemPrompt, thinkingConfig, tools, signal
       credentials: options.credentials,
       stop: signal,
     });
-  let $T = null;
-  function OE() {
-    if ($T !== null) {
-      $T();
-      $T = null;
+  let firstByteTimer = null;
+  function cancelFirstByteTimer() {
+    if (firstByteTimer !== null) {
+      firstByteTimer();
+      firstByteTimer = null;
     }
   }
   function releaseStreamResources() {
-    OE();
-    cleanupStream(stream);
-    stream = undefined;
-    if (k_) {
-      k_.body?.cancel().catch(() => {});
-      k_ = undefined;
+    cancelFirstByteTimer();
+    cleanupStream(activeStream);
+    activeStream = undefined;
+    if (responseBody) {
+      responseBody.body?.cancel().catch(() => {});
+      responseBody = undefined;
     }
   }
-  let hb = [];
-  let Pae = [];
-  let m1 = undefined;
-  let z5 = undefined;
+  let sentBetaHeaders = [];
+  let bodyBetaHeaders = [];
+  let sentThinkingDisplay = undefined;
+  let requestedDisplayField = undefined;
   let solicited = false;
-  let g1;
-  let Mae = "disabled";
-  let h1 = false;
-  let s3 = false;
-  let d3;
-  let _1 = false;
-  let S1 = false;
-  let w$ = "none";
-  let h3 = false;
-  let Oae = false;
-  if (options.fallbackCreditCode !== undefined && (!Yt || vs !== undefined))
+  let prefixMismatchBehavior;
+  let thinkingType = "disabled";
+  let responseDiagFlag = false;
+  let hasOutputFormat = false;
+  let fastModelUsed;
+  let thinkingAlreadyStripped = false;
+  let serverFallbackExplicit = false;
+  let serverFallbackMode = "none";
+  let serverFallbackWithBlocks = false;
+  let categoryBetaRefused = false;
+  if (options.fallbackCreditCode !== undefined && (!canMintCredit || toolMoveReport !== undefined))
     logEvent("tengu_fallback_credit_skipped", {
-      reason: Yt ? lit_2("tool_changes_dropped") : lit_2("backend_unknown_or_mismatch"),
-      ...(vs && {
-        ...vs,
-        late_tools_inlined: Ld,
+      reason: canMintCredit ? lit_2("tool_changes_dropped") : lit_2("backend_unknown_or_mismatch"),
+      ...(toolMoveReport && {
+        ...toolMoveReport,
+        late_tools_inlined: inlinedCount,
       }),
       mint_request_id: sanitizeMarkName(options.fallbackCreditMintRequestId),
       mint_model: telemetrySafeModelName(options.fallbackCreditMintModel),
       model: telemetrySafeModelName(options.model),
       query_source: agentTypeForTelemetry(options.querySource),
     });
-  let fallbackCreditCode = Yt && vs === undefined ? options.fallbackCreditCode : undefined;
-  let m5n = (Wn) =>
-    (options.fallbackCreditCode ? Wn.split(options.fallbackCreditCode).join("[FCT_REDACTED]") : Wn).slice(
+  let fallbackCreditCode =
+    canMintCredit && toolMoveReport === undefined ? options.fallbackCreditCode : undefined;
+  let redactFallbackCreditCode = (text) =>
+    (options.fallbackCreditCode ? text.split(options.fallbackCreditCode).join("[FCT_REDACTED]") : text).slice(
       0,
       600,
     );
-  let y3 = false;
-  let sP = false;
-  let iP = false;
-  let hgt = false;
-  let ygt = false;
-  let _gt = false;
-  let b1 = false;
-  let C_ = (Wn, pr, Jr) => {
-    if (!y3 || _gt) return;
-    _gt = true;
-    let Os = yS;
+  let creditMintedStream = false;
+  let creditEchoedStream = false;
+  let creditStripped = false;
+  let creditHeaderRefused = false;
+  let creditBetaOnWire = false;
+  let creditOutcomeLogged = false;
+  let creditLogged = false;
+  let logCreditOutcome = (outcome, requestId, usage) => {
+    if (!creditMintedStream || creditOutcomeLogged) return;
+    creditOutcomeLogged = true;
+    let effort = sentEffort;
     logEvent("tengu_fallback_credit_outcome", {
-      outcome: fromEnum(Wn),
+      outcome: fromEnum(outcome),
       mint_request_id: sanitizeMarkName(options.fallbackCreditMintRequestId),
       mint_model: telemetrySafeModelName(options.fallbackCreditMintModel),
-      request_id: sanitizeMarkName(pr),
-      client_request_id: sanitizeMarkName(Ah),
+      request_id: sanitizeMarkName(requestId),
+      client_request_id: sanitizeMarkName(clientRequestId),
       model: telemetrySafeModelName(options.model),
       query_source: agentTypeForTelemetry(options.querySource),
-      carried_effort_level: fromEnumOpt(Li?.level),
-      carried_effort_outcome: fromEnumOpt(Li?.outcome),
-      effort_level: fromEnumOpt(Os),
-      ...(Jr !== null && {
-        input_tokens: Jr.input_tokens,
-        output_tokens: Jr.output_tokens,
-        cache_read_input_tokens: Jr.cache_read_input_tokens,
-        cache_creation_input_tokens: Jr.cache_creation_input_tokens,
-        cache_creation_5m_input_tokens: Jr.cache_creation?.ephemeral_5m_input_tokens ?? 0,
-        cache_creation_1h_input_tokens: Jr.cache_creation?.ephemeral_1h_input_tokens ?? 0,
-        service_tier: fromEnumOpt(Jr.service_tier),
-        speed: fromEnumOpt(Jr.speed),
+      carried_effort_level: fromEnumOpt(carriedEffortReport?.level),
+      carried_effort_outcome: fromEnumOpt(carriedEffortReport?.outcome),
+      effort_level: fromEnumOpt(effort),
+      ...(usage !== null && {
+        input_tokens: usage.input_tokens,
+        output_tokens: usage.output_tokens,
+        cache_read_input_tokens: usage.cache_read_input_tokens,
+        cache_creation_input_tokens: usage.cache_creation_input_tokens,
+        cache_creation_5m_input_tokens: usage.cache_creation?.ephemeral_5m_input_tokens ?? 0,
+        cache_creation_1h_input_tokens: usage.cache_creation?.ephemeral_1h_input_tokens ?? 0,
+        service_tier: fromEnumOpt(usage.service_tier),
+        speed: fromEnumOpt(usage.speed),
       }),
     });
   };
-  let Sgt = false;
-  let kgt = false;
-  let bgt = false;
-  let buildRequestParamsGuarded = (context, pr = true) => runGuarded(() => buildRequestParams(context, pr));
-  let buildRequestParams = (Wn, pr) => {
-    if (messagesForAPI_2 !== hLe) {
-      hLe = messagesForAPI_2;
-      gLe = undefined;
+  let thinkingSanitized = false;
+  let malformedRepaired = false;
+  let effortClampedLogged = false;
+  let buildRequestParamsGuarded = (context, allowClassifier = true) =>
+    runGuarded(() => buildRequestParams(context, allowClassifier));
+  let buildRequestParams = (context, allowClassifierRetry) => {
+    if (messagesForAPI_2 !== lastLoggedMessages) {
+      lastLoggedMessages = messagesForAPI_2;
+      messageHashes = undefined;
       recordMessageHistory({
         querySource: options.querySource,
         agentId: options.agentId,
@@ -6517,22 +6922,29 @@ async function* queryModel(messages, systemPrompt, thinkingConfig, tools, signal
     }
     let paramsFromContext = (retryContext) =>
       !KNOWN_BETAS.has(retryContext) && isBetaRejected_2(conversation, retryContext);
-    let betas_2 = betaList.filter((beta) => beta !== BETA_LONG_CONTEXT || !vu());
-    if (!betas_2.includes(BETA_LONG_CONTEXT) && !vu() && getSonnet46ContextWindowOverride(Wn.model) !== null)
+    let betas_2 = betaList.filter((beta) => beta !== BETA_LONG_CONTEXT || !contextBetaRefused());
+    if (
+      !betas_2.includes(BETA_LONG_CONTEXT) &&
+      !contextBetaRefused() &&
+      getSonnet46ContextWindowOverride(context.model) !== null
+    )
       betas_2.push(BETA_LONG_CONTEXT);
-    let provider = getProviderForModel(Wn.model);
-    let Vl = provider === "bedrock" && BETA_AFK_MODE && _E && isAgenticQuery && isAutoMode3POptIn();
-    if (Vl)
+    let provider = getProviderForModel(context.model);
+    let afkBetaViaBody =
+      provider === "bedrock" && BETA_AFK_MODE && afkModeOn && isAgenticQuery && isAutoMode3POptIn();
+    if (afkBetaViaBody)
       logForDebugging(
         `auto-mode 3P: sending afk-mode beta '${BETA_AFK_MODE?.header}' to bedrock via body.anthropic_beta`,
       );
     let betaHeaders =
       provider === "bedrock"
         ? [
-            ...getBedrockExtraBodyParamsBetas(Wn.model).filter((ql) => ql !== BETA_LONG_CONTEXT || !vu()),
-            ...(Or ? [Or] : []),
-            ...(Vl && BETA_AFK_MODE ? [BETA_AFK_MODE] : []),
-          ].filter((ql) => !paramsFromContext(ql))
+            ...getBedrockExtraBodyParamsBetas(context.model).filter(
+              (header) => header !== BETA_LONG_CONTEXT || !contextBetaRefused(),
+            ),
+            ...(toolSearchBeta ? [toolSearchBeta] : []),
+            ...(afkBetaViaBody && BETA_AFK_MODE ? [BETA_AFK_MODE] : []),
+          ].filter((header) => !paramsFromContext(header))
         : [];
     let extraBodyParams = getExtraBodyParams(betaHeaders);
     addBetaToBodyAnthropicBeta(
@@ -6545,24 +6957,31 @@ async function* queryModel(messages, systemPrompt, thinkingConfig, tools, signal
     };
     delete extraBodyParams.output_config;
     applyEffortToOutputConfig(effortValue, outputConfig, extraBodyParams, betas_2, resolvedModel);
-    h1 = alwaysFalseResponseDiag(extraBodyParams, Wn.model, provider);
+    responseDiagFlag = alwaysFalseResponseDiag(extraBodyParams, context.model, provider);
     configureTaskBudgetParams(options.taskBudget, outputConfig, betas_2);
     if (paramsFromContext(BETA_EFFORT)) delete outputConfig.effort;
     if (paramsFromContext(BETA_TASK_BUDGETS) && "task_budget" in outputConfig)
       delete outputConfig.task_budget;
-    s3 = hasStringFormat(options.outputFormat, outputConfig, betas_2, options.model);
-    let ku = options.refusalFallbackSilentArmActive === true;
-    let Np = serverFallbackPlan(options.serverRefusalFallback, Wn.model, betas_2, conversation, ku, Hx);
+    hasOutputFormat = hasStringFormat(options.outputFormat, outputConfig, betas_2, options.model);
+    let silentArmActive = options.refusalFallbackSilentArmActive === true;
+    let serverFallbackPlanResult = serverFallbackPlan(
+      options.serverRefusalFallback,
+      context.model,
+      betas_2,
+      conversation,
+      silentArmActive,
+      allowsNoTransientReminders,
+    );
     applyRefusalFallbackBeta(
       options.fallbackCreditLaneArmed === true || options.fallbackCreditCode !== undefined,
       betas_2,
       conversation,
-      ku,
+      silentArmActive,
       provider === "bedrock" ? extraBodyParams : undefined,
     );
-    ygt = betas_2.includes(BETA_FALLBACK_CREDIT);
+    creditBetaOnWire = betas_2.includes(BETA_FALLBACK_CREDIT);
     let serverClassifierEligible = thirdPartyAcceptsDangerousToolUseBeta(provider, resolvedModel);
-    let Kg =
+    let serverReminders =
       options.serverClassifier === true && options.autoModeServerContext !== undefined
         ? markInsertedTextProvenance(
             markHumanReplyProvenance(
@@ -6575,25 +6994,25 @@ async function* queryModel(messages, systemPrompt, thinkingConfig, tools, signal
             messagesForAPI_2,
           )
         : [];
-    let cy =
+    let classifierContext =
       options.serverClassifier === true && options.autoModeServerContext !== undefined
         ? buildServerClassifierRequestContext({
             autoModeServerContext: options.autoModeServerContext,
             priorTurnContext: collectPriorServerContexts(messages),
-            systemReminders: Kg,
+            systemReminders: serverReminders,
             textProvenance: buildContextSectionsMessage(messages, messagesForAPI_2, attachmentToMessages),
           })
         : undefined;
-    let jT =
+    let includeClassifier =
       options.serverClassifier === true &&
-      cy !== undefined &&
+      classifierContext !== undefined &&
       serverClassifierEligible &&
       canUseServerClassifier() &&
       !isBetaRejected_2(conversation, BETA_DANGEROUS_TOOL_USE) &&
       !isThirdPartyServerClassifierRefused();
-    if (jT) {
+    if (includeClassifier) {
       markBetaSent(conversation, BETA_DANGEROUS_TOOL_USE);
-      checkInsertedTextShed(Kg, cy?.system_reminders ?? []);
+      checkInsertedTextShed(serverReminders, classifierContext?.system_reminders ?? []);
     }
     if (
       serverClassifierEligible &&
@@ -6607,20 +7026,20 @@ async function* queryModel(messages, systemPrompt, thinkingConfig, tools, signal
       provider === "bedrock" && betas_2.includes(BETA_DANGEROUS_TOOL_USE),
     );
     let min = Math.min(
-      Wn?.maxTokensOverride || options.maxOutputTokensOverride || modelFacts_2.maxOutputTokens,
+      context?.maxTokensOverride || options.maxOutputTokensOverride || modelFacts_2.maxOutputTokens,
       modelFacts_2.maxOutputTokens,
     );
     let CLAUDE_CODE_DISABLE_THINKING = env.CLAUDE_CODE_DISABLE_THINKING;
     let thinkingEnabled = betas.type !== "disabled" && !CLAUDE_CODE_DISABLE_THINKING;
-    let Ew = () =>
+    let rejectsDisabledThinking = () =>
       modelFacts_2.thinking.rejectsDisabled ||
       (creditMintModel !== undefined && modelRejectsDisabledThinking(creditMintModel));
-    let Aw =
+    let sendThinkingDisplay =
       thinkingEnabled &&
       shouldSendInterleavedThinkingBeta(resolvedModel) &&
       !isBetaRejected_2(conversation, THINKING_DISPLAY_NAMED_BETA) &&
-      (JS === "idle" || JS === "withoutUpdates");
-    let thinkingDisplay = !Aw
+      (thinkingDisplayProbeState === "idle" || thinkingDisplayProbeState === "withoutUpdates");
+    let thinkingDisplay = !sendThinkingDisplay
       ? undefined
       : betas.display === "highlights" && isThinkingHighlightsRefused()
         ? "omitted"
@@ -6653,53 +7072,56 @@ async function* queryModel(messages, systemPrompt, thinkingConfig, tools, signal
       getAPIProvider() === "firstParty" &&
       !CLAUDE_CODE_DISABLE_THINKING &&
       modelFacts_2.thinking.supported &&
-      !Ew()
+      !rejectsDisabledThinking()
     )
       thinking = {
         type: "disabled",
       };
-    let cP;
-    if (wE) {
+    let blockBinding;
+    if (thinkingBindingOn) {
       if (!betas_2.includes(BETA_THINKING_BINDING_CONTROLS)) betas_2.push(BETA_THINKING_BINDING_CONTROLS);
       addBetaToBodyAnthropicBeta(extraBodyParams, BETA_THINKING_BINDING_CONTROLS, provider === "bedrock");
       if (
-        AC !== undefined &&
+        dewdropMode !== undefined &&
         (thinking?.type === "adaptive" || thinking?.type === "enabled") &&
         !("thinking" in extraBodyParams)
       ) {
         thinking = {
           ...thinking,
           block_binding: {
-            prefix_mismatch_behavior: AC,
+            prefix_mismatch_behavior: dewdropMode,
           },
         };
-        cP = AC;
+        blockBinding = dewdropMode;
       }
     }
-    let fP = betas.type === "disabled" ? undefined : betas;
-    let display = fP?.display;
-    let HI = "none";
+    let activeThinking = betas.type === "disabled" ? undefined : betas;
+    let display = activeThinking?.display;
+    let displayMode = "none";
     try {
-      HI = thinkingDisplayMode(display, fP?.displayExplicit ?? getThinkingDisplayExplicit());
+      displayMode = thinkingDisplayMode(
+        display,
+        activeThinking?.displayExplicit ?? getThinkingDisplayExplicit(),
+      );
     } catch (error) {
       logError(error);
     }
-    let pP = () => {
+    let dropRedactedBeta = () => {
       let index = betas_2.indexOf(BETA_REDACT_THINKING);
       if (index !== -1) betas_2.splice(index, 1);
     };
-    if (thinking && thinkingDisplay) pP();
-    switch (HI) {
+    if (thinking && thinkingDisplay) dropRedactedBeta();
+    switch (displayMode) {
       case "thinking_and_connector_text":
       case "none":
         break;
       case "connector_text": {
         if (
           (thinking?.type === "adaptive" || thinking?.type === "enabled") &&
-          Aw &&
+          sendThinkingDisplay &&
           !("thinking" in extraBodyParams) &&
           !isBetaRejected_2(conversation, BETA_THINKING_DISPLAY_UPDATES) &&
-          JS === "idle" &&
+          thinkingDisplayProbeState === "idle" &&
           !env.CLAUDE_CODE_SIMULATE_PROXY_USAGE
         ) {
           thinking = {
@@ -6708,17 +7130,19 @@ async function* queryModel(messages, systemPrompt, thinkingConfig, tools, signal
           };
           if (!betas_2.includes(BETA_THINKING_DISPLAY_UPDATES)) betas_2.push(BETA_THINKING_DISPLAY_UPDATES);
           addBetaToBodyAnthropicBeta(extraBodyParams, BETA_THINKING_DISPLAY_UPDATES, provider === "bedrock");
-          pP();
+          dropRedactedBeta();
         }
         break;
       }
     }
     if (canResumeThinking(resolvedModel) && !betas_2.includes(BETA_THINKING_RESUMPTION))
       betas_2.push(BETA_THINKING_RESUMPTION);
-    let BE =
-      thinking?.type === "enabled" || thinking?.type === "adaptive" || (thinking === undefined && Ew());
+    let thinkingActive =
+      thinking?.type === "enabled" ||
+      thinking?.type === "adaptive" ||
+      (thinking === undefined && rejectsDisabledThinking());
     let toolChoice = options.toolChoice;
-    if (toolChoice?.type === "tool" && BE) {
+    if (toolChoice?.type === "tool" && thinkingActive) {
       logForDebugging(
         `tool_choice {type:'tool', name:'${toolChoice.name}'} demoted to auto: extended thinking is active`,
       );
@@ -6726,21 +7150,21 @@ async function* queryModel(messages, systemPrompt, thinkingConfig, tools, signal
         type: "auto",
       };
     }
-    let UE = betas.type === "disabled" && betas.mechanical === true;
+    let mechanicalDisabled = betas.type === "disabled" && betas.mechanical === true;
     if (
       thinking?.type === "disabled" &&
-      (UE || modelFacts_2.thinking.capsEffortWhenDisabled) &&
+      (mechanicalDisabled || modelFacts_2.thinking.capsEffortWhenDisabled) &&
       typeof outputConfig.effort === "string" &&
       isAboveHighEffort(outputConfig.effort)
     ) {
-      if (!bgt) {
-        bgt = true;
+      if (!effortClampedLogged) {
+        effortClampedLogged = true;
         logForDebugging(
-          `output_config.effort '${outputConfig.effort}' clamped to '${THINKING_DISABLED_EFFORT_CAP}': thinking is ${UE ? "mechanically " : ""}disabled for this request, and this model rejects higher effort when thinking is disabled`,
+          `output_config.effort '${outputConfig.effort}' clamped to '${THINKING_DISABLED_EFFORT_CAP}': thinking is ${mechanicalDisabled ? "mechanically " : ""}disabled for this request, and this model rejects higher effort when thinking is disabled`,
         );
       }
       if (
-        !UE &&
+        !mechanicalDisabled &&
         classifyQuerySource(options.querySource) === "main" &&
         streamFallbackWarning().once("effort_thinking_disabled_clamp")
       )
@@ -6753,198 +7177,218 @@ async function* queryModel(messages, systemPrompt, thinkingConfig, tools, signal
     }
     let contextManagement = getAPIContextManagement({
       hasThinking: thinkingEnabled,
-      toolClearing: EI?.edit,
+      toolClearing: toolResultClearingPlan?.edit,
     });
-    let P$ = options.enablePromptCaching ?? getPromptCachingEnabled(creditMintModel ?? Wn.model);
-    let fh;
-    let Ow =
+    let promptCachingEnabled =
+      options.enablePromptCaching ?? getPromptCachingEnabled(creditMintModel ?? context.model);
+    let speedValue;
+    let fastModeEligibleRetry =
       isFastModeEnabled() &&
       runGuarded(() => isFastModeAvailable()) &&
       !isFastModeCooldown() &&
       runGuarded(() => supportsFastMode(effectiveModel)) &&
-      !!Wn.fastMode &&
+      !!context.fastMode &&
       !paramsFromContext(BETA_SPEED) &&
-      !isFallbackModelFastRejected(Wn.model);
-    if (Ow) fh = "fast";
-    d3 = Ow ? Wn.model : undefined;
-    if (R5 && !betas_2.includes(BETA_SPEED)) betas_2.push(BETA_SPEED);
-    if (BETA_AFK_MODE && _E && e$() && isAgenticQuery && !betas_2.includes(BETA_AFK_MODE)) {
+      !isFallbackModelFastRejected(context.model);
+    if (fastModeEligibleRetry) speedValue = "fast";
+    fastModelUsed = fastModeEligibleRetry ? context.model : undefined;
+    if (speedBetaOn && !betas_2.includes(BETA_SPEED)) betas_2.push(BETA_SPEED);
+    if (
+      BETA_AFK_MODE &&
+      afkModeOn &&
+      afkBetaAllowed() &&
+      isAgenticQuery &&
+      !betas_2.includes(BETA_AFK_MODE)
+    ) {
       betas_2.push(BETA_AFK_MODE);
       if (isAutoMode3POptIn())
         logForDebugging(
           `auto-mode 3P: sending afk-mode beta '${BETA_AFK_MODE.header}' to ${provider} via betas header`,
         );
     }
-    if (IW === "1h" && canSendFirstPartyBetas() && !betas_2.includes(BETA_EXTENDED_CACHE_TTL))
+    if (ttlChoice === "1h" && canSendFirstPartyBetas() && !betas_2.includes(BETA_EXTENDED_CACHE_TTL))
       betas_2.push(BETA_EXTENDED_CACHE_TTL);
-    let _b = null;
-    let jE = contextHintController?.buildRequestParams(messagesForAPI_2);
-    if (jE) {
-      betas_2.push(jE.beta);
-      _b = jE.body;
+    let contextHintBody = null;
+    let contextHintParams = contextHintController?.buildRequestParams(messagesForAPI_2);
+    if (contextHintParams) {
+      betas_2.push(contextHintParams.beta);
+      contextHintBody = contextHintParams.body;
     }
-    let gP = null;
-    if (isBetaSent(conversation, BETA_PROMPT_CACHING_EVICT) && P$) {
+    let evictBody = null;
+    if (isBetaSent(conversation, BETA_PROMPT_CACHING_EVICT) && promptCachingEnabled) {
       if (!betas_2.includes(BETA_PROMPT_CACHING_EVICT)) betas_2.push(BETA_PROMPT_CACHING_EVICT);
-      gP = {
+      evictBody = {
         cache_control: {
           type: "ephemeral",
-          ...(Tw && {
-            ttl: Tw,
+          ...(messagesTtl && {
+            ttl: messagesTtl,
           }),
           evict_on_complete: true,
         },
       };
     }
-    if (t$() && !betas_2.includes(BETA_CACHE_DIAGNOSIS)) betas_2.push(BETA_CACHE_DIAGNOSIS);
-    if (hI && !betas_2.includes(BETA_CACHE_KEEPALIVE)) betas_2.push(BETA_CACHE_KEEPALIVE);
+    if (cacheDiagnosisOn() && !betas_2.includes(BETA_CACHE_DIAGNOSIS)) betas_2.push(BETA_CACHE_DIAGNOSIS);
+    if (keepaliveHeaderOn && !betas_2.includes(BETA_CACHE_KEEPALIVE)) betas_2.push(BETA_CACHE_KEEPALIVE);
     let CLAUDE_CODE_SIMULATE_PROXY_USAGE = env.CLAUDE_CODE_SIMULATE_PROXY_USAGE;
-    let BI =
-      Ri &&
-      JF &&
+    let clearAtEligible =
+      keptRemindersOn &&
+      hasBetas &&
       !CLAUDE_CODE_SIMULATE_PROXY_USAGE &&
       filterBetasForProvider(betas_2).includes(BETA_MID_CONVERSATION_SYSTEM_CLEAR_AT);
-    let D1 = Nh !== null && !CLAUDE_CODE_SIMULATE_PROXY_USAGE ? Nh.plan(messagesForAPI_2, BI) : null;
-    let L1 =
+    let threadPlan =
+      tetherDelta !== null && !CLAUDE_CODE_SIMULATE_PROXY_USAGE
+        ? tetherDelta.plan(messagesForAPI_2, clearAtEligible)
+        : null;
+    let threadsOff =
       BETA_MESSAGE_THREADS !== null &&
-      (isBetaRejected_2(conversation, BETA_MESSAGE_THREADS) || ME !== "idle");
-    let L_ = L1 ? null : D1;
+      (isBetaRejected_2(conversation, BETA_MESSAGE_THREADS) || threadsProbeState !== "idle");
+    let threadPlanActive = threadsOff ? null : threadPlan;
     if (BETA_MESSAGE_THREADS !== null) {
-      if (L_ !== null) markBetaSent(conversation, BETA_MESSAGE_THREADS);
-      if (L1) {
+      if (threadPlanActive !== null) markBetaSent(conversation, BETA_MESSAGE_THREADS);
+      if (threadsOff) {
         for (let idx = betas_2.length - 1; idx >= 0; idx--)
           if (betas_2[idx] === BETA_MESSAGE_THREADS) betas_2.splice(idx, 1);
       } else if (
-        (L_ !== null || isBetaSent(conversation, BETA_MESSAGE_THREADS)) &&
+        (threadPlanActive !== null || isBetaSent(conversation, BETA_MESSAGE_THREADS)) &&
         !betas_2.includes(BETA_MESSAGE_THREADS)
       )
         betas_2.push(BETA_MESSAGE_THREADS);
     }
-    let filtered = betas_2.filter(
-      (ql) => !paramsFromContext(ql) && (!CLAUDE_CODE_SIMULATE_PROXY_USAGE || ql === BETA_OAUTH_AUTH),
+    let betas_3 = betas_2.filter(
+      (beta) => !paramsFromContext(beta) && (!CLAUDE_CODE_SIMULATE_PROXY_USAGE || beta === BETA_OAUTH_AUTH),
     );
     if (CLAUDE_CODE_SIMULATE_PROXY_USAGE)
       logForDebugging(
-        `[API:client] SIMULATE_PROXY_USAGE: stripping ${betas_2.length - filtered.length} beta headers from request (keeping ${betaHeaderValues(filtered).join(", ") || "none"}): ${betaHeaderValues(betas_2).join(", ")}`,
+        `[API:client] SIMULATE_PROXY_USAGE: stripping ${betas_2.length - betas_3.length} beta headers from request (keeping ${betaHeaderValues(betas_3).join(", ") || "none"}): ${betaHeaderValues(betas_2).join(", ")}`,
       );
-    let N3 =
+    let temperature =
       !thinkingEnabled && modelFacts_2.acceptsTemperature ? (options.temperatureOverride ?? 1) : undefined;
-    hb = betaHeaderValues(filtered);
-    Pae = betaHeaderValues(betaHeaders);
-    sc = filtered.includes(BETA_LONG_CONTEXT) || betaHeaders.includes(BETA_LONG_CONTEXT);
-    m1 =
+    sentBetaHeaders = betaHeaderValues(betas_3);
+    bodyBetaHeaders = betaHeaderValues(betaHeaders);
+    longContextRequested = betas_3.includes(BETA_LONG_CONTEXT) || betaHeaders.includes(BETA_LONG_CONTEXT);
+    sentThinkingDisplay =
       thinking !== undefined && "display" in thinking && !("thinking" in extraBodyParams)
         ? (thinking.display ?? undefined)
         : undefined;
     solicited = thinking !== undefined && "block_binding" in thinking;
-    g1 = cP;
-    let betaHeaderValues_2 = filterBetasForProvider(filtered);
-    let yP =
-      JF &&
-      (!CLAUDE_CODE_SIMULATE_PROXY_USAGE || filtered.length > 0) &&
+    prefixMismatchBehavior = blockBinding;
+    let betaHeaderValues_2 = filterBetasForProvider(betas_3);
+    let sendBetas =
+      hasBetas &&
+      (!CLAUDE_CODE_SIMULATE_PROXY_USAGE || betas_3.length > 0) &&
       betaHeaderValues(betaHeaderValues_2).length > 0;
-    W5 = BI;
-    OI = false;
-    let Fd =
-      yP &&
+    keptReminderSent = clearAtEligible;
+    clearAtOnWire = false;
+    let fallbackBetaOnWire =
+      sendBetas &&
       (betaHeaderValues_2.includes(BETA_SERVER_SIDE_FALLBACK) ||
         (BETA_SERVER_SIDE_FALLBACK_CATEGORY !== null &&
           betaHeaderValues_2.includes(BETA_SERVER_SIDE_FALLBACK_CATEGORY)));
-    h3 = Fd && hasFallbackBlocks(messagesForAPI_2);
-    let Zg =
-      yP &&
-      (Np.fallbacks === "default"
+    serverFallbackWithBlocks = fallbackBetaOnWire && hasFallbackBlocks(messagesForAPI_2);
+    let fallbackBody =
+      sendBetas &&
+      (serverFallbackPlanResult.fallbacks === "default"
         ? BETA_SERVER_SIDE_FALLBACK_CATEGORY !== null &&
           betaHeaderValues_2.includes(BETA_SERVER_SIDE_FALLBACK_CATEGORY)
         : betaHeaderValues_2.includes(BETA_SERVER_SIDE_FALLBACK))
-        ? Np
+        ? serverFallbackPlanResult
         : {};
-    S1 = Zg.fallbacks !== undefined;
-    w$ = Zg.fallbacks === "default" ? "default" : S1 ? "explicit" : "none";
-    if (!Fd && hasFallbackBlocks(messagesForAPI_2)) {
-      Ac = "error_recovery";
-      uh = false;
+    serverFallbackExplicit = fallbackBody.fallbacks !== undefined;
+    serverFallbackMode =
+      fallbackBody.fallbacks === "default" ? "default" : serverFallbackExplicit ? "explicit" : "none";
+    if (!fallbackBetaOnWire && hasFallbackBlocks(messagesForAPI_2)) {
+      retryCause = "error_recovery";
+      retryKeepsHeal = false;
     }
-    let Iy = false;
-    p1 = Iy;
-    let Of = [];
-    oc = undefined;
-    let B_ = P$ && !options.skipMessageCacheMarkers;
+    let markable = false;
+    cacheMarkable = markable;
+    let wireIndexOut = [];
+    uncoveredTailReport = undefined;
+    let messageCachingOn = promptCachingEnabled && !options.skipMessageCacheMarkers;
     let topLevelCacheControl =
-      (!CLAUDE_CODE_SIMULATE_PROXY_USAGE && gP !== null) || extraBodyParams.cache_control != null;
-    let j_ = rg(messagesForAPI_2, Fd, Iy);
-    let vc =
-      pr && Ip === "idle"
+      (!CLAUDE_CODE_SIMULATE_PROXY_USAGE && evictBody !== null) || extraBodyParams.cache_control != null;
+    let cacheMessages = buildEchoedMessages(messagesForAPI_2, fallbackBetaOnWire, markable);
+    let parentReplyPlan =
+      allowClassifierRetry && promptEndMarkState === "idle"
         ? parentReplyMarkPlan({
             querySource: options.querySource,
-            model: creditMintModel ?? Wn.model,
-            isKeepaliveHeaderOnWire: yP && betaHeaderValues_2.includes(BETA_CACHE_KEEPALIVE),
-            hasSecondMarkerSlot: B_ && !topLevelCacheControl && options.divergesAtMessageId === undefined,
-            messages: j_,
+            model: creditMintModel ?? context.model,
+            isKeepaliveHeaderOnWire: sendBetas && betaHeaderValues_2.includes(BETA_CACHE_KEEPALIVE),
+            hasSecondMarkerSlot:
+              messageCachingOn && !topLevelCacheControl && options.divergesAtMessageId === undefined,
+            messages: cacheMessages,
           })
         : undefined;
-    let apiMessages = (HS = addCacheBreakpoints(
-      j_,
-      B_,
-      Tw,
+    let apiMessages = (sentMessages = addCacheBreakpoints(
+      cacheMessages,
+      messageCachingOn,
+      messagesTtl,
       options.skipCacheWrite,
       options.forkPointUuid,
       isBetaRejected_2(conversation, BETA_MID_CONV_CACHE_PROMOTION_LATCH) ||
         isMidConvCachePromotionRejected(),
       provider,
-      L_ !== null,
+      threadPlanActive !== null,
       topLevelCacheControl,
-      BI,
-      Of,
+      clearAtEligible,
+      wireIndexOut,
       options.divergesAtMessageId,
       {
         skipMessageCacheMarkers: options.skipMessageCacheMarkers === true,
-        report: (ql) => {
-          oc = ql;
+        report: (report) => {
+          uncoveredTailReport = report;
         },
       },
       isExtractMemoriesSkipCacheWrite(options.querySource, options.skipCacheWrite === true),
-      pr,
-      vc,
+      allowClassifierRetry,
+      parentReplyPlan,
     ));
-    g$ = Of.some((ql, Ep) => ql !== Ep) ? Of : [];
-    let eh = (apiMessage) =>
+    wireIndexMap = wireIndexOut.some((entry, index) => entry !== index) ? wireIndexOut : [];
+    let hasCacheControl = (apiMessage) =>
       Array.isArray(apiMessage.content) &&
       apiMessage.content.some(
-        (Ep) => typeof Ep === "object" && Ep !== null && "cache_control" in Ep && Ep.cache_control != null,
+        (block) =>
+          typeof block === "object" &&
+          block !== null &&
+          "cache_control" in block &&
+          block.cache_control != null,
       );
-    Yd = apiMessages.some((apiMessage) => apiMessage.role === "system" && eh(apiMessage));
-    Gc = apiMessages.some(eh);
-    let om = vc?.isMarkWanted === true ? apiMessages.findLastIndex(eh) : -1;
-    xc =
-      om > 0 &&
-      apiMessages.some((apiMessage, Ep) => {
+    apiSystemHasCacheControl = apiMessages.some(
+      (apiMessage) => apiMessage.role === "system" && hasCacheControl(apiMessage),
+    );
+    anyCacheControl = apiMessages.some(hasCacheControl);
+    let lastMarkedIndex =
+      parentReplyPlan?.isMarkWanted === true ? apiMessages.findLastIndex(hasCacheControl) : -1;
+    sideRequestMarked =
+      lastMarkedIndex > 0 &&
+      apiMessages.some((apiMessage, messagePos) => {
         let role = apiMessage.role;
-        return Ep < om && role === "system" && eh(apiMessage);
+        return messagePos < lastMarkedIndex && role === "system" && hasCacheControl(apiMessage);
       });
-    j5 =
-      jT &&
-      JF &&
+    classifierOnRequest =
+      includeClassifier &&
+      hasBetas &&
       !CLAUDE_CODE_SIMULATE_PROXY_USAGE &&
-      filterBetasForProvider(filtered).includes(BETA_DANGEROUS_TOOL_USE);
-    if (pr) {
-      if (Qh !== undefined) settleServerStreamEnded(Qh);
-      Qh = j5
+      filterBetasForProvider(betas_3).includes(BETA_DANGEROUS_TOOL_USE);
+    if (allowClassifierRetry) {
+      if (classifierSession !== undefined) settleServerStreamEnded(classifierSession);
+      classifierSession = classifierOnRequest
         ? createServerClassifierResult(randomUUID(), {
-            artifacts: cy?.artifacts,
-            thread: L_ !== null,
-            exactMcpAllowRules: cy && getExactMcpAllowRules(cy),
+            artifacts: classifierContext?.artifacts,
+            thread: threadPlanActive !== null,
+            exactMcpAllowRules: classifierContext && getExactMcpAllowRules(classifierContext),
             judgeOnlyTools: options.autoModeServerContext?.judgeOnlyTools,
             agentId: options.agentId,
           })
         : undefined;
-      if (Qh !== undefined && cy !== undefined) recordClassifierRequest(Qh.key, pickPriorTurnContext(cy));
+      if (classifierSession !== undefined && classifierContext !== undefined)
+        recordClassifierRequest(classifierSession.key, pickPriorTurnContext(classifierContext));
     }
     let toolsForRequest = stripUnsupportedFoundryCapabilities(allTools, options.model);
     toolsForRequest = applyRefusedToolSchemas(toolsForRequest, conversation);
-    let Nu =
-      Nh !== null
-        ? Nh.shapeInheritedFields(L_, {
+    let shapedRequest =
+      tetherDelta !== null
+        ? tetherDelta.shapeInheritedFields(threadPlanActive, {
             system: systemBlocks,
             tools: toolsForRequest,
           })
@@ -6952,106 +7396,117 @@ async function* queryModel(messages, systemPrompt, thinkingConfig, tools, signal
             system: systemBlocks,
             tools: toolsForRequest,
           };
-    vw = systemBlocks;
-    S$ = toolsForRequest;
-    d1 = Nu.system !== systemBlocks;
-    c1 = L_ !== null;
-    F5 = L_?.sliceFrom ?? 0;
-    threadType = L_?.thread.type ?? "none";
+    pinnedSystem = systemBlocks;
+    pinnedTools = toolsForRequest;
+    systemOverridden = shapedRequest.system !== systemBlocks;
+    threadSliced = threadPlanActive !== null;
+    threadSliceFrom = threadPlanActive?.sliceFrom ?? 0;
+    threadType = threadPlanActive?.thread.type ?? "none";
     let requestParams = {
       model: toProviderWireModelId(options.model),
-      messages: L_ !== null && L_.sliceFrom > 0 ? apiMessages.slice(Of[L_.sliceFrom]) : apiMessages,
-      system: Nu.system,
-      ...(Nu.tools !== undefined && {
-        tools: Nu.tools,
+      messages:
+        threadPlanActive !== null && threadPlanActive.sliceFrom > 0
+          ? apiMessages.slice(wireIndexOut[threadPlanActive.sliceFrom])
+          : apiMessages,
+      system: shapedRequest.system,
+      ...(shapedRequest.tools !== undefined && {
+        tools: shapedRequest.tools,
       }),
       tool_choice: toolChoice,
-      ...(yP && betasRequestParam(betaHeaderValues_2)),
+      ...(sendBetas && betasRequestParam(betaHeaderValues_2)),
       metadata: getAPIMetadata({
         agentContext: options.agentContext,
       }),
       max_tokens: min,
       thinking,
-      ...(N3 !== undefined && {
-        temperature: N3,
+      ...(temperature !== undefined && {
+        temperature,
       }),
       ...(contextManagement &&
-        JF &&
+        hasBetas &&
         betas_2.includes(BETA_CONTEXT_MANAGEMENT) && {
           context_management: contextManagement,
         }),
-      ...(j5 &&
-        cy !== undefined && {
+      ...(classifierOnRequest &&
+        classifierContext !== undefined && {
           safeguards: [
             {
               type: DANGEROUS_TOOL_USE_2,
-              classifier_context: cy,
+              classifier_context: classifierContext,
             },
           ],
         }),
-      ...(!CLAUDE_CODE_SIMULATE_PROXY_USAGE && _b ? _b : {}),
-      ...(!CLAUDE_CODE_SIMULATE_PROXY_USAGE && gP ? gP : {}),
-      ...Zg,
+      ...(!CLAUDE_CODE_SIMULATE_PROXY_USAGE && contextHintBody ? contextHintBody : {}),
+      ...(!CLAUDE_CODE_SIMULATE_PROXY_USAGE && evictBody ? evictBody : {}),
+      ...fallbackBody,
       ...extraBodyParams,
       ...{},
       ...(Object.keys(outputConfig).length > 0 && {
         output_config: outputConfig,
       }),
-      ...(fh !== undefined && {
-        speed: fh,
+      ...(speedValue !== undefined && {
+        speed: speedValue,
       }),
-      ...(L_ !== null && {
-        thread: L_.thread,
+      ...(threadPlanActive !== null && {
+        thread: threadPlanActive.thread,
       }),
-      ...(t$() &&
+      ...(cacheDiagnosisOn() &&
         (isAgenticQuery || options.forkPointUuid !== undefined) &&
-        JF &&
+        hasBetas &&
         !CLAUDE_CODE_SIMULATE_PROXY_USAGE && {
           diagnostics: {
-            previous_message_id: nt ?? null,
+            previous_message_id: lastAssistantId ?? null,
           },
         }),
     };
-    m$ = EI !== undefined && requestParams.context_management === contextManagement;
-    OI = BI && requestParams.messages.some((message) => message.clear_at !== undefined);
-    let W_ = sanitizeDisabledThinking(requestParams.thinking, options.querySource, !Sgt);
-    if (W_ !== requestParams.thinking) {
-      Sgt = true;
-      requestParams.thinking = W_;
+    contextManagementEligible =
+      toolResultClearingPlan !== undefined && requestParams.context_management === contextManagement;
+    clearAtOnWire =
+      clearAtEligible && requestParams.messages.some((message) => message.clear_at !== undefined);
+    let sanitizedThinking = sanitizeDisabledThinking(
+      requestParams.thinking,
+      options.querySource,
+      !thinkingSanitized,
+    );
+    if (sanitizedThinking !== requestParams.thinking) {
+      thinkingSanitized = true;
+      requestParams.thinking = sanitizedThinking;
     }
     {
       let thinking = requestParams.thinking;
-      Mae = thinking?.type === "adaptive" || thinking?.type === "enabled" ? thinking.type : "disabled";
-      z5 = readDisplayField(thinking);
+      thinkingType =
+        thinking?.type === "adaptive" || thinking?.type === "enabled" ? thinking.type : "disabled";
+      requestedDisplayField = readDisplayField(thinking);
     }
-    if (pr && containsMalformedStringDeep(requestParams)) {
+    if (allowClassifierRetry && containsMalformedStringDeep(requestParams)) {
       try {
         requestParams = clone(requestParams);
       } catch {}
       repairMalformedStringsDeep(requestParams);
-      if (!kgt) {
-        kgt = true;
+      if (!malformedRepaired) {
+        malformedRepaired = true;
         logEvent("tengu_lone_surrogate_sanitized", {
           source: lit_2("queryModel"),
         });
       }
     }
     let logEffortValue = requestParams.output_config?.effort;
-    yS = typeof logEffortValue === "string" && isEffortLevel(logEffortValue) ? logEffortValue : undefined;
-    let Xl = lastOutputConfig(messagesForAPI_2);
-    EE = Xl.effort ?? null;
-    n$ = Xl.now;
+    sentEffort =
+      typeof logEffortValue === "string" && isEffortLevel(logEffortValue) ? logEffortValue : undefined;
+    let lastConfig = lastOutputConfig(messagesForAPI_2);
+    perTurnEffortValue = lastConfig.effort ?? null;
+    perTurnNowValue = lastConfig.now;
     return requestParams;
   };
-  let TLe = false;
-  let wgt = (permissionContext) => {
-    if (TLe) return;
-    TLe = true;
-    let betas = JF ? (permissionContext.betas ?? []) : [];
+  let apiQueryLogged = false;
+  let logApiQueryOnce = (permissionContext) => {
+    if (apiQueryLogged) return;
+    apiQueryLogged = true;
+    let betas = hasBetas ? (permissionContext.betas ?? []) : [];
     let thinkingType = permissionContext.thinking?.type ?? "disabled";
     let messagesLength = messagesForAPI_2.length;
-    let thinkingPrefixMismatchBehavior = g1;
-    let effortValue = Qs;
+    let thinkingPrefixMismatchBehavior = prefixMismatchBehavior;
+    let effortValue = normalizedEffort;
     options.getToolPermissionContext().then((permissionContext) => {
       logAPIQuery({
         model: options.model,
@@ -7066,17 +7521,17 @@ async function* queryModel(messages, systemPrompt, thinkingConfig, tools, signal
         thinkingType,
         thinkingPrefixMismatchBehavior,
         effortValue,
-        fastMode: fE,
+        fastMode: fastModeActive,
         previousRequestId: previousRequestId_2,
       });
     });
   };
-  let Tgt = false;
-  let vgt = () => {
-    if (TLe || Tgt) return;
-    Tgt = true;
+  let apiQueryLoggedFallback = false;
+  let logApiQueryOnError = () => {
+    if (apiQueryLogged || apiQueryLoggedFallback) return;
+    apiQueryLoggedFallback = true;
     try {
-      wgt(
+      logApiQueryOnce(
         buildRequestParamsGuarded(
           {
             model: options.model,
@@ -7088,62 +7543,63 @@ async function* queryModel(messages, systemPrompt, thinkingConfig, tools, signal
       logError(toError(error));
     }
   };
-  let Cm = [];
-  let Iae = 0;
-  let vLe;
-  let v$ = 0;
-  let _3 = 0;
-  let ELe = 0;
-  let RLe = false;
-  let CLe;
-  let S3 = 0;
-  let dg = undefined;
-  let A_ = [];
-  let Iu = EMPTY_USAGE;
-  let T1 = null;
-  let Dae = 0;
+  let yieldedMessages = [];
+  let ttftMs = 0;
+  let firstContentMs;
+  let streamEventCount = 0;
+  let sentAtMonotonic = 0;
+  let sentAtWall = 0;
+  let profileHandle = false;
+  let queryOverheadMs;
+  let dispatchedAt = 0;
+  let partialMessage = undefined;
+  let blocks = [];
+  let usage = EMPTY_USAGE;
+  let contextManagement = null;
+  let costUSD = 0;
   let reason = null;
   let complete = false;
-  let aP = "none";
-  function lP() {
-    if (aP === "credited") return;
-    aP = "credited";
-    Dae += addToTotalSessionCost(
-      calculateUSDCost(resolvedModel, Iu),
-      Iu,
+  let costState = "none";
+  function creditCostOnce() {
+    if (costState === "credited") return;
+    costState = "credited";
+    costUSD += addToTotalSessionCost(
+      calculateUSDCost(resolvedModel, usage),
+      usage,
       options.model,
       options.querySource,
-      CC,
+      effortLevelNormalized,
       options.spawnedBySkill,
       options.activeSkill,
       options.activeMcpServer,
       options.activeMcpTool,
     );
   }
-  let dP = false;
+  let fellBackToNonStreaming = false;
   let nonStreamingFallbackSkipped = false;
-  let LI;
-  let k3 = false;
-  let BT = 0;
-  let ALe = undefined;
+  let nonStreamingAssistant;
+  let fallbackTriggered = false;
+  let maxOutputTokens = 0;
+  let responseHeaders = undefined;
   let NMs = undefined;
-  let b3;
-  let fallbackActive = fE;
-  let E1 = false;
-  let FMs = isMainAgent(options.agentContext) && options.querySource.startsWith("repl_main_thread");
+  let cacheMissReason;
+  let fallbackActive = fastModeActive;
+  let advisorToolInFlight = false;
+  let isReplMainThread =
+    isMainAgent(options.agentContext) && options.querySource.startsWith("repl_main_thread");
   let $Ms = undefined;
-  let w3 = new Map();
-  let Rgt = 3;
-  let Cgt = {
+  let mediaStripErrors = new Map();
+  let lastMediaStripLimit = 3;
+  let lastMediaStripCount = {
     value: 0,
   };
-  let h5n = Rgt;
-  let Agt = new Map();
-  let T3 = false;
-  let xgt = false;
-  let Lae;
-  let uP;
-  let xLe = {
+  let maxLastMediaStrips = lastMediaStripLimit;
+  let mediaStripAttempts = new Map();
+  let retryStatusShown = false;
+  let watchdogGaveUp = false;
+  let idleTimeoutError;
+  let attemptOutcome;
+  let noResponseRetryLedgerState = {
     count: 0,
   };
   let maxRetriesFromEnv = getMaxRetriesFromEnv();
@@ -7161,68 +7617,68 @@ async function* queryModel(messages, systemPrompt, thinkingConfig, tools, signal
     },
     options.apiAttemptsLeft,
   );
-  let E3 = false;
-  let yb = null;
-  let $ae = false;
-  let Pgt = (headers, pr) => {
-    yb = null;
-    $ae = isFirstPartyApiBackend();
-    if (E3) {
-      if ($ae) {
+  let dispatchEscalated = false;
+  let sentDispatch = null;
+  let firstParty = false;
+  let stampDispatchHeader = (headers, isRetrying) => {
+    sentDispatch = null;
+    firstParty = isFirstPartyApiBackend();
+    if (dispatchEscalated) {
+      if (firstParty) {
         headers[ANTHROPIC_DISPATCH_ID] = V2P;
-        yb = fromEnum(V2P);
+        sentDispatch = fromEnum(V2P);
         logForDebugging(`[dispatch] sent ${ANTHROPIC_DISPATCH_ID}=${V2P}`);
       }
       return;
     }
-    if (!pr && $ae) {
+    if (!isRetrying && firstParty) {
       let dispatchVersion = getDispatchVersion(classifyQuerySource(options.querySource));
       if (dispatchVersion !== null) {
         headers[ANTHROPIC_DISPATCH_ID] = dispatchVersion;
-        yb = fromEnum(dispatchVersion);
+        sentDispatch = fromEnum(dispatchVersion);
         logForDebugging(`[dispatch] sent ${ANTHROPIC_DISPATCH_ID}=${dispatchVersion}`);
       }
     }
   };
-  let Mgt = async (Wn) => {
-    if (E3) return;
-    let status = Wn instanceof APIError ? Wn.status : undefined;
-    let Jr = status !== undefined && status >= 500;
-    let Os = Wn instanceof APIConnectionError;
-    if (!(yb !== null ? Jr || Os : $ae && status === 503)) return;
-    E3 = true;
+  let handleDispatchError = async (error) => {
+    if (dispatchEscalated) return;
+    let status = error instanceof APIError ? error.status : undefined;
+    let is5xx = status !== undefined && status >= 500;
+    let isConnErr = error instanceof APIConnectionError;
+    if (!(sentDispatch !== null ? is5xx || isConnErr : firstParty && status === 503)) return;
+    dispatchEscalated = true;
     logForDebugging(
-      `[dispatch] ${Jr ? `HTTP ${status}` : "connection error"} with ${yb === null ? `no ${ANTHROPIC_DISPATCH_ID}` : `${ANTHROPIC_DISPATCH_ID}=${yb}`}; retrying once with ${ANTHROPIC_DISPATCH_ID}=${V2P}`,
+      `[dispatch] ${is5xx ? `HTTP ${status}` : "connection error"} with ${sentDispatch === null ? `no ${ANTHROPIC_DISPATCH_ID}` : `${ANTHROPIC_DISPATCH_ID}=${sentDispatch}`}; retrying once with ${ANTHROPIC_DISPATCH_ID}=${V2P}`,
       {
         level: "warn",
       },
     );
     logEvent("tengu_dispatch_header_fallback", {
       model: telemetrySafeModelName(options.model),
-      dispatch: yb ?? lit_2("none"),
+      dispatch: sentDispatch ?? lit_2("none"),
       resend_dispatch: fromEnum(V2P),
-      reason: yb === null ? headerlessDeclineKind(Wn) : Jr ? lit_2("5xx") : lit_2("conn_err"),
+      reason: sentDispatch === null ? headerlessDeclineKind(error) : is5xx ? lit_2("5xx") : lit_2("conn_err"),
       status: status !== undefined ? fromNumber(status) : lit_2("none"),
       query_source: agentTypeForTelemetry(options.querySource),
-      request_id: sanitizeMarkName(Wn instanceof APIError ? Wn.requestID : undefined),
+      request_id: sanitizeMarkName(error instanceof APIError ? error.requestID : undefined),
     });
-    if (yb === null) {
-      let Vl = headerlessDeclineRetryDelay(Wn);
-      if (Vl > 0)
-        await sleep(Vl, signal, {
+    if (sentDispatch === null) {
+      let delayMs = headerlessDeclineRetryDelay(error);
+      if (delayMs > 0)
+        await sleep(delayMs, signal, {
           clock,
         });
     }
     return "retry:dispatch-header-strip";
   };
-  let M1 = false;
-  let $E = false;
-  let UT = false;
-  let Hae;
-  let Ogt = (error, pr) => {
+  let fallbackBetaRefused = false;
+  let serverFallbackUsed = false;
+  let fallbackAnnounced = false;
+  let iterations;
+  let handleFallbackRejection = (error, transport) => {
     if (!(error instanceof APIError) || error.status !== 400) return;
     let included = error.message.includes("`fallback-credit-");
-    let Os =
+    let mentionsCategory =
       BETA_SERVER_SIDE_FALLBACK_CATEGORY !== null &&
       error.message.includes(`\`${BETA_SERVER_SIDE_FALLBACK_CATEGORY.header}`);
     let matches = (
@@ -7230,15 +7686,15 @@ async function* queryModel(messages, systemPrompt, thinkingConfig, tools, signal
         ? new RegExp(`\`server-side-fallback-(?!${BETA_SERVER_SIDE_FALLBACK_CATEGORY.header.slice(21)})`)
         : /`server-side-fallback-/
     ).test(error.message);
-    let Vl = (Wd) => {
-      logForDebugging(`[server-fallback] 400 attributed (${Wd}) \u2014 stripping and retrying`, {
+    let logStripped = (shape) => {
+      logForDebugging(`[server-fallback] 400 attributed (${shape}) \u2014 stripping and retrying`, {
         level: "warn",
       });
-      let ku = w$;
+      let mode = serverFallbackMode;
       logEvent("tengu_rotunda_pennant_strip", {
-        shape: fromEnum(Wd),
-        mode: fromEnum(ku),
-        non_streaming: pr === "sync",
+        shape: fromEnum(shape),
+        mode: fromEnum(mode),
+        non_streaming: transport === "sync",
         query_source: agentTypeForTelemetry(options.querySource),
         sticky_scope:
           options.stickyBetas === undefined
@@ -7250,58 +7706,67 @@ async function* queryModel(messages, systemPrompt, thinkingConfig, tools, signal
                 : lit_2("aux"),
       });
     };
-    let Yl = classifyFallbackCreditError(error);
-    if (Yl !== undefined && !iP) {
-      iP = true;
+    let creditClass = classifyFallbackCreditError(error);
+    if (creditClass !== undefined && !creditStripped) {
+      creditStripped = true;
       fallbackCreditCode = undefined;
-      if (Yl === "credit_beta_header") {
+      if (creditClass === "credit_beta_header") {
         markBetaRejected(conversation, BETA_FALLBACK_CREDIT);
-        if (Os && BETA_SERVER_SIDE_FALLBACK_CATEGORY !== null) {
+        if (mentionsCategory && BETA_SERVER_SIDE_FALLBACK_CATEGORY !== null) {
           markBetaRejected(conversation, BETA_SERVER_SIDE_FALLBACK_CATEGORY);
-          Oae = true;
+          categoryBetaRefused = true;
         }
         if (matches) {
           markBetaRejected(conversation, BETA_SERVER_SIDE_FALLBACK);
-          M1 = true;
+          fallbackBetaRefused = true;
         }
-        if (Os && h3 && !isBetaRejected_2(conversation, BETA_SERVER_SIDE_FALLBACK))
+        if (
+          mentionsCategory &&
+          serverFallbackWithBlocks &&
+          !isBetaRejected_2(conversation, BETA_SERVER_SIDE_FALLBACK)
+        )
           markBetaSent(conversation, BETA_SERVER_SIDE_FALLBACK);
       }
-      if (pr === "stream") C_(Yl, error.requestID ?? null, null);
-      Vl(Yl);
+      if (transport === "stream") logCreditOutcome(creditClass, error.requestID ?? null, null);
+      logStripped(creditClass);
       return "retry:fallback-credit-strip";
     }
-    let nd = classifyServerFallbackError(error);
+    let fallbackClass = classifyServerFallbackError(error);
     if (
       BETA_SERVER_SIDE_FALLBACK_CATEGORY !== null &&
-      (nd === "category_beta_header" || (nd === "default_unconfigured" && S1)) &&
-      !Oae
+      (fallbackClass === "category_beta_header" ||
+        (fallbackClass === "default_unconfigured" && serverFallbackExplicit)) &&
+      !categoryBetaRefused
     ) {
-      Oae = true;
+      categoryBetaRefused = true;
       markBetaRejected(conversation, BETA_SERVER_SIDE_FALLBACK_CATEGORY);
       if (included) {
         markBetaRejected(conversation, BETA_FALLBACK_CREDIT);
-        iP = true;
+        creditStripped = true;
         fallbackCreditCode = undefined;
       }
       if (matches) {
         markBetaRejected(conversation, BETA_SERVER_SIDE_FALLBACK);
-        M1 = true;
+        fallbackBetaRefused = true;
       }
-      if (h3 && !isBetaRejected_2(conversation, BETA_SERVER_SIDE_FALLBACK))
+      if (serverFallbackWithBlocks && !isBetaRejected_2(conversation, BETA_SERVER_SIDE_FALLBACK))
         markBetaSent(conversation, BETA_SERVER_SIDE_FALLBACK);
-      Vl(nd);
+      logStripped(fallbackClass);
       return "retry:server-fallback-category-strip";
     }
-    if (nd !== undefined && (S1 || nd === "beta_header") && !M1) {
-      M1 = true;
+    if (
+      fallbackClass !== undefined &&
+      (serverFallbackExplicit || fallbackClass === "beta_header") &&
+      !fallbackBetaRefused
+    ) {
+      fallbackBetaRefused = true;
       markBetaRejected(conversation, BETA_SERVER_SIDE_FALLBACK);
-      if (nd === "beta_header" && included) {
+      if (fallbackClass === "beta_header" && included) {
         markBetaRejected(conversation, BETA_FALLBACK_CREDIT);
-        iP = true;
+        creditStripped = true;
         fallbackCreditCode = undefined;
       }
-      Vl(nd);
+      logStripped(fallbackClass);
       return "retry:server-fallback-strip";
     }
     if (isAdvisorModelMismatchError(error)) return;
@@ -7309,114 +7774,121 @@ async function* queryModel(messages, systemPrompt, thinkingConfig, tools, signal
     if (isWebSearchContentRejected(error) || isCodeExecutionOutputRejected(error)) return;
     if (alwaysFalseD(error)) return;
     if (alwaysFalseB(error)) return;
-    if (isInvalidEffortError(error) && w$ !== "explicit") return;
+    if (isInvalidEffortError(error) && serverFallbackMode !== "explicit") return;
     if (isFastModeNotEnabledError(error) || parseMaxTokensContextOverflowError(error) !== undefined) return;
-    if (yLe(error)) {
-      if (pr === "stream" && sP && !iP) fallbackCreditCode = options.fallbackCreditCode;
+    if (isSpeedUnsupported(error)) {
+      if (transport === "stream" && creditEchoedStream && !creditStripped)
+        fallbackCreditCode = options.fallbackCreditCode;
       return;
     }
     if (options.resumeIncompleteThinking) return;
-    if (pr === "sync" && FI(error)) return;
-    if (Yl === undefined && nd === undefined) {
-      let Wd = SI(error);
-      if (Wd !== undefined) return Wd;
-      let ku = a1(error);
-      if (ku !== undefined) return ku;
-      let Np = OLe(error);
-      if (Np !== undefined) return Np;
+    if (transport === "sync" && isUnrecoverableError(error)) return;
+    if (creditClass === undefined && fallbackClass === undefined) {
+      let recovered = probeClearAt(error);
+      if (recovered !== undefined) return recovered;
+      let threadRecovery = maybeRetryThreads(error);
+      if (threadRecovery !== undefined) return threadRecovery;
+      let hintRecovery = classifyHintRecovery(error);
+      if (hintRecovery !== undefined) return hintRecovery;
     }
-    if (pr === "stream" && y3 && !iP) {
-      iP = true;
-      C_("unattributed_400_dropped", error.requestID ?? null, null);
-      Vl("unattributed");
+    if (transport === "stream" && creditMintedStream && !creditStripped) {
+      creditStripped = true;
+      logCreditOutcome("unattributed_400_dropped", error.requestID ?? null, null);
+      logStripped("unattributed");
       return "retry:fallback-credit-unattributed";
     }
-    if ((S1 || h3) && !M1) {
-      M1 = true;
+    if ((serverFallbackExplicit || serverFallbackWithBlocks) && !fallbackBetaRefused) {
+      fallbackBetaRefused = true;
       markBetaRejected(conversation, BETA_SERVER_SIDE_FALLBACK);
       if (BETA_SERVER_SIDE_FALLBACK_CATEGORY !== null)
         markBetaRejected(conversation, BETA_SERVER_SIDE_FALLBACK_CATEGORY);
-      Vl("unattributed");
+      logStripped("unattributed");
       return "retry:server-fallback-strip";
     }
-    if (ygt && !hgt) {
-      hgt = true;
+    if (creditBetaOnWire && !creditHeaderRefused) {
+      creditHeaderRefused = true;
       markBetaRejected(conversation, BETA_FALLBACK_CREDIT);
-      nP.push(BETA_FALLBACK_CREDIT);
-      Vl("unattributed");
+      droppedBetas.push(BETA_FALLBACK_CREDIT);
+      logStripped("unattributed");
       return "retry:fallback-credit-header-strip";
     }
     return;
   };
-  let FI = (Wn) =>
-    classifyProviderErrorForModel(options.model, Wn) === "refused" ||
-    isAfkModeBetaRejected(Wn) ||
-    isAdvisorResultUnprocessable(Wn) ||
-    isAdvisorUnavailableError(Wn) ||
-    isWebSearchContentRejected(Wn) ||
-    isCodeExecutionOutputRejected(Wn) ||
-    getMediaErrorFromApiError(Wn) !== undefined ||
-    getRejectedBetas(Wn, betaHeaderValues(BETA_REJECTION_MATCHER_KEYS)).length > 0 ||
-    isCacheKeepaliveBetaRejected(Wn) ||
-    isThinkingResumptionBetaRejected(Wn) ||
-    isThinkingBindingRejected(Wn) ||
-    getRejectedThinkingType(Wn) !== null ||
-    isInvalidThinkingSignatureError(Wn) ||
-    isMidConversationSystemRejected(Wn) ||
-    isToolChangeRejected(Wn) ||
-    isInlineToolDefinitionRejected(Wn) ||
-    isCacheControlFieldRejected(Wn) ||
-    isOutputConfigRejected(Wn) ||
-    isOutputTimingRejected(Wn) ||
-    isEffortUnsupportedError(Wn) ||
-    isStructuredOutputsUnsupported(Wn);
-  let MLe = () => {
-    if (cs === "tool_search") return;
+  let isUnrecoverableError = (error) =>
+    classifyProviderErrorForModel(options.model, error) === "refused" ||
+    isAfkModeBetaRejected(error) ||
+    isAdvisorResultUnprocessable(error) ||
+    isAdvisorUnavailableError(error) ||
+    isWebSearchContentRejected(error) ||
+    isCodeExecutionOutputRejected(error) ||
+    getMediaErrorFromApiError(error) !== undefined ||
+    getRejectedBetas(error, betaHeaderValues(BETA_REJECTION_MATCHER_KEYS)).length > 0 ||
+    isCacheKeepaliveBetaRejected(error) ||
+    isThinkingResumptionBetaRejected(error) ||
+    isThinkingBindingRejected(error) ||
+    getRejectedThinkingType(error) !== null ||
+    isInvalidThinkingSignatureError(error) ||
+    isMidConversationSystemRejected(error) ||
+    isToolChangeRejected(error) ||
+    isInlineToolDefinitionRejected(error) ||
+    isCacheControlFieldRejected(error) ||
+    isOutputConfigRejected(error) ||
+    isOutputTimingRejected(error) ||
+    isEffortUnsupportedError(error) ||
+    isStructuredOutputsUnsupported(error);
+  let inlineLateTools = () => {
+    if (toolChangeMode === "tool_search") return;
     try {
-      let Wn = 0;
-      if (cs === undefined) allTools = allTools.slice();
+      let lateCount = 0;
+      if (toolChangeMode === undefined) allTools = allTools.slice();
       else
         allTools = allTools.flatMap((tool) => {
           if (!("input_schema" in tool)) return [tool];
           if (!tools.some((tool_2) => toolMatchesName(tool_2, tool.name))) return [];
           if (tool.defer_loading !== true) return [tool];
-          Wn++;
-          let { defer_loading: deferLoading, ...Vl } = tool;
-          return [Vl];
+          lateCount++;
+          let { defer_loading: deferLoading, ...rest } = tool;
+          return [rest];
         });
-      let pr = new Set(allTools.flatMap((tool) => ("name" in tool ? [tool.name] : [])));
-      let Jr = new Map(tools.map((tool, La) => [tool.name, La]));
-      for (let Os of hr) {
-        if (!("name" in Os) || pr.has(Os.name)) continue;
-        let La = Jr.get(Os.name) ?? 1 / 0;
-        let index = allTools.findIndex((tool) => !("input_schema" in tool) || (Jr.get(tool.name) ?? -1) > La);
+      let presentNames = new Set(allTools.flatMap((tool) => ("name" in tool ? [tool.name] : [])));
+      let indexByName = new Map(tools.map((tool, index) => [tool.name, index]));
+      for (let schema of lateToolSchemas) {
+        if (!("name" in schema) || presentNames.has(schema.name)) continue;
+        let insertBefore = indexByName.get(schema.name) ?? 1 / 0;
+        let index = allTools.findIndex(
+          (tool) => !("input_schema" in tool) || (indexByName.get(tool.name) ?? -1) > insertBefore,
+        );
         if (index === -1) index = allTools.length;
-        allTools.splice(index, 0, Os);
-        pr.add(Os.name);
-        Wn++;
+        allTools.splice(index, 0, schema);
+        presentNames.add(schema.name);
+        lateCount++;
       }
-      if (cs === "tool_addition") {
-        Ti?.splice(0, Ti.length);
+      if (toolChangeMode === "tool_addition") {
+        deferredSchemasSent?.splice(0, deferredSchemasSent.length);
         resetDeclaredTools(conversation);
         markDeclaredToolsDecided(conversation);
-      } else if (Wn === 0) return;
+      } else if (lateCount === 0) return;
       else {
-        let sliced = _r.slice();
+        let sliced = requestTools.slice();
         for (let tool of tools) {
-          if (!pr.has(tool.name) || !bo.has(tool.name)) continue;
-          let Vl = Jr.get(tool.name) ?? 1 / 0;
-          let index = sliced.findIndex((nd) => (Jr.get(nd.name) ?? -1) > Vl);
+          if (!presentNames.has(tool.name) || !byValueNames.has(tool.name)) continue;
+          let insertBefore = indexByName.get(tool.name) ?? 1 / 0;
+          let index = sliced.findIndex((entry) => (indexByName.get(entry.name) ?? -1) > insertBefore);
           if (index === -1) index = sliced.length;
           sliced.splice(index, 0, tool);
         }
-        Cr = cacheNoChannelTools(conversation, false, () =>
-          buildDeclaredToolSet(identityValue_2(sliced), tools, fs ?? Cr?.recordedOnly),
+        noChannelTools = cacheNoChannelTools(conversation, false, () =>
+          buildDeclaredToolSet(
+            identityValue_2(sliced),
+            tools,
+            pendingMcpResult ?? noChannelTools?.recordedOnly,
+          ),
         );
       }
-      Ac = "error_recovery";
-      uh = false;
+      retryCause = "error_recovery";
+      retryKeepsHeal = false;
       logForDebugging(
-        `[late-tool-additions] no ToolSearch on this request: ${Wn} late tool(s) go inline from this request on`,
+        `[late-tool-additions] no ToolSearch on this request: ${lateCount} late tool(s) go inline from this request on`,
         {
           level: "warn",
         },
@@ -7425,55 +7897,56 @@ async function* queryModel(messages, systemPrompt, thinkingConfig, tools, signal
       logError(toError(error));
     }
   };
-  let Igt = () => {
-    let Wn = Ks;
-    if (Wn) Ks = () => dropAdvisorFromApiSystem(stripAdvisorBlocks(Wn()));
-    let pr = uS;
-    if (pr) uS = () => dropAdvisorFromApiSystem(stripAdvisorBlocks(pr()));
-    let Jr = kl;
-    if (Jr) kl = () => dropAdvisorFromApiSystem(stripAdvisorBlocks(Jr()));
+  let wrapFallbacksAdvisorDrop = () => {
+    let fallback = getToolChangeFallback;
+    if (fallback) getToolChangeFallback = () => dropAdvisorFromApiSystem(stripAdvisorBlocks(fallback()));
+    let midConv = getMidConvFallback;
+    if (midConv) getMidConvFallback = () => dropAdvisorFromApiSystem(stripAdvisorBlocks(midConv()));
+    let inline = getInlineToolsFallback;
+    if (inline) getInlineToolsFallback = () => dropAdvisorFromApiSystem(stripAdvisorBlocks(inline()));
   };
-  let y5n = () => {
-    let Wn = Ks;
-    if (Wn) Ks = () => stripAdvisorBlocks(Wn());
-    let pr = uS;
-    if (pr) uS = () => stripAdvisorBlocks(pr());
-    let Jr = kl;
-    if (Jr) kl = () => stripAdvisorBlocks(Jr());
+  let wrapFallbacksAdvisorStrip = () => {
+    let fallback = getToolChangeFallback;
+    if (fallback) getToolChangeFallback = () => stripAdvisorBlocks(fallback());
+    let midConv = getMidConvFallback;
+    if (midConv) getMidConvFallback = () => stripAdvisorBlocks(midConv());
+    let inline = getInlineToolsFallback;
+    if (inline) getInlineToolsFallback = () => stripAdvisorBlocks(inline());
   };
-  let Dgt = () => {
+  let dropAdvisorBeta = () => {
     if (!isAdvisorToolEnabled()) betaList = betaList.filter((beta) => beta !== BETA_ADVISOR_TOOL);
   };
-  let Lgt = false;
-  let Ngt = (Wn) => {
-    if (Lgt || !isAdvisorUnavailableError(Wn)) return;
-    let pr = (tool) => !("input_schema" in tool) && "name" in tool && tool.name === ADVISOR_TOOL_NAME;
-    let any = allTools.some(pr);
-    let Os = hb.includes(BETA_ADVISOR_TOOL.header) && isAdvisorBetaRejected(Wn);
-    if (!any && !Os) return;
-    Lgt = true;
+  let advisorRefused = false;
+  let handleAdvisorUnavailable = (error) => {
+    if (advisorRefused || !isAdvisorUnavailableError(error)) return;
+    let isAdvisorEntry = (tool) =>
+      !("input_schema" in tool) && "name" in tool && tool.name === ADVISOR_TOOL_NAME;
+    let any = allTools.some(isAdvisorEntry);
+    let betaRefused = sentBetaHeaders.includes(BETA_ADVISOR_TOOL.header) && isAdvisorBetaRejected(error);
+    if (!any && !betaRefused) return;
+    advisorRefused = true;
     try {
       if (any) {
-        allTools = allTools.filter((tool) => !pr(tool));
-        messagesForAPI_2 = ch(
+        allTools = allTools.filter((tool) => !isAdvisorEntry(tool));
+        messagesForAPI_2 = recoverMessages(
           dropAdvisorFromApiSystem(stripAdvisorBlocks(messagesForAPI_2)),
           "error_recovery",
         );
-        Igt();
-        Ac = "error_recovery";
-        uh = false;
+        wrapFallbacksAdvisorDrop();
+        retryCause = "error_recovery";
+        retryKeepsHeal = false;
       }
       conversation.advisorHeld = {
         model: undefined,
         viaToolChange: conversation.advisorHeld?.viaToolChange ?? false,
         refused: true,
       };
-      let advisorRefusalScope = getAdvisorRefusalScope(Wn);
+      let advisorRefusalScope = getAdvisorRefusalScope(error);
       if (advisorRefusalScope === "process") markAdvisorRefusedForProcess();
       else if (advisorRefusalScope === "host") markAdvisorRefusedForHost();
-      Dgt();
+      dropAdvisorBeta();
       logForDebugging(
-        `[advisor] the server refused the advisor ${Os ? "beta header" : "entry"} (scope: ${advisorRefusalScope}); retrying once without the advisor`,
+        `[advisor] the server refused the advisor ${betaRefused ? "beta header" : "entry"} (scope: ${advisorRefusalScope}); retrying once without the advisor`,
         {
           level: "warn",
         },
@@ -7482,20 +7955,20 @@ async function* queryModel(messages, systemPrompt, thinkingConfig, tools, signal
         query_source: agentTypeForTelemetry(options.querySource),
         organization_wide: advisorRefusalScope === "process",
         host_wide: advisorRefusalScope === "host",
-        beta_header_refused: Os,
+        beta_header_refused: betaRefused,
       });
     } catch (error) {
       logError(toError(error));
     }
     return "retry:advisor-entry-refused";
   };
-  let Fgt = new ToolSchemaWireCache(conversation);
-  let $gt = (Wn) => {
+  let wireCache = new ToolSchemaWireCache(conversation);
+  let recoverViaWireCache = (error) => {
     try {
-      let resolved = Fgt.resolve(Wn, S$, tools, options.querySource);
+      let resolved = wireCache.resolve(error, pinnedTools, tools, options.querySource);
       if (resolved !== undefined) {
-        Ac = "error_recovery";
-        uh = false;
+        retryCause = "error_recovery";
+        retryKeepsHeal = false;
       }
       return resolved;
     } catch (error) {
@@ -7503,17 +7976,17 @@ async function* queryModel(messages, systemPrompt, thinkingConfig, tools, signal
       return;
     }
   };
-  let Hgt = (Wn) => {
+  let recoverFromHintError = (error) => {
     return;
   };
   let HMs = "idle";
-  let OLe = (Wn) => {
+  let classifyHintRecovery = (error) => {
     return;
   };
-  let Bgt = () => {
+  let inlineAdvisorEntry = () => {
     try {
-      let Wn = false;
-      let pr = options.advisorActive !== false;
+      let foundDeferred = false;
+      let advisorActive = options.advisorActive !== false;
       allTools = allTools.flatMap((tool) => {
         if (
           "input_schema" in tool ||
@@ -7522,47 +7995,47 @@ async function* queryModel(messages, systemPrompt, thinkingConfig, tools, signal
           tool.name !== ADVISOR_TOOL_NAME
         )
           return [tool];
-        Wn = true;
-        if (!pr) return [];
-        let { defer_loading: deferLoading, ...La } = tool;
-        return [La];
+        foundDeferred = true;
+        if (!advisorActive) return [];
+        let { defer_loading: deferLoading, ...rest } = tool;
+        return [rest];
       });
-      if (Wn) {
-        if (!pr) {
-          messagesForAPI_2 = ch(
+      if (foundDeferred) {
+        if (!advisorActive) {
+          messagesForAPI_2 = recoverMessages(
             dropAdvisorFromApiSystem(stripAdvisorBlocks(messagesForAPI_2)),
             "error_recovery",
           );
-          Igt();
-          Dgt();
+          wrapFallbacksAdvisorDrop();
+          dropAdvisorBeta();
         }
-        if (pr && conversation.advisorHeld?.viaToolChange === true)
+        if (advisorActive && conversation.advisorHeld?.viaToolChange === true)
           conversation.advisorHeld = {
             ...conversation.advisorHeld,
             inFallback: true,
           };
-        Ac = "error_recovery";
-        uh = false;
+        retryCause = "error_recovery";
+        retryKeepsHeal = false;
       }
     } catch (error) {
       logError(toError(error));
     }
   };
-  let _5n = () => {
-    let Wn = Ks;
-    if (Wn) Ks = () => stripWebSearchBlocks(Wn()).messages;
-    let pr = uS;
-    if (pr) uS = () => stripWebSearchBlocks(pr()).messages;
-    let Jr = kl;
-    if (Jr) kl = () => stripWebSearchBlocks(Jr()).messages;
+  let wrapFallbacksWebSearchStrip = () => {
+    let fallback = getToolChangeFallback;
+    if (fallback) getToolChangeFallback = () => stripWebSearchBlocks(fallback()).messages;
+    let midConv = getMidConvFallback;
+    if (midConv) getMidConvFallback = () => stripWebSearchBlocks(midConv()).messages;
+    let inline = getInlineToolsFallback;
+    if (inline) getInlineToolsFallback = () => stripWebSearchBlocks(inline()).messages;
   };
-  let Ugt = (Wn, pr) => {
-    if (!isWebSearchContentRejected(Wn)) return;
+  let handleWebSearchRejected = (error, transport) => {
+    if (!isWebSearchContentRejected(error)) return;
     let { messages, removed } = stripWebSearchBlocks(messagesForAPI_2);
     if (messages === messagesForAPI_2) return;
-    messagesForAPI_2 = ch(messages, "error_recovery");
+    messagesForAPI_2 = recoverMessages(messages, "error_recovery");
     markWebSearchHistoryRejected(conversation);
-    _5n();
+    wrapFallbacksWebSearchStrip();
     logForDebugging(
       `[web-search-strip] The API could not decrypt web search content in this conversation's history: removed ${removed.toolUses} ${plural(removed.toolUses, "search call")}, ${removed.results} ${plural(removed.results, "result block")} and ${removed.citations} ${plural(removed.citations, "citation")} from the request; retrying once. Later requests in this conversation leave them out too.`,
       {
@@ -7571,7 +8044,7 @@ async function* queryModel(messages, systemPrompt, thinkingConfig, tools, signal
     );
     logFeatureSad("api_request", "api_request_web_search_stripped", {
       query_source: agentTypeForTelemetry(options.querySource),
-      transport: fromEnum(pr),
+      transport: fromEnum(transport),
       tool_uses: removed.toolUses,
       results: removed.results,
       citations: removed.citations,
@@ -7579,25 +8052,25 @@ async function* queryModel(messages, systemPrompt, thinkingConfig, tools, signal
     });
     return "retry:web-search-strip";
   };
-  let xC;
-  let ILe = (Wn) => {
-    let pr = mediaItemCapForModel(conversation, effectiveModel);
-    if (!isUnprocessableRequest(Wn) || pr?.gaveUp) return;
+  let mediaLimitStep;
+  let handleUnprocessableMedia = (error) => {
+    let mediaCap = mediaItemCapForModel(conversation, effectiveModel);
+    if (!isUnprocessableRequest(error) || mediaCap?.gaveUp) return;
     try {
-      let Jr = countMediaItems(messagesForAPI_2);
-      let min = Math.min(Jr, xC?.limit ?? 1 / 0);
-      let found = MEDIA_ITEM_COUNT_FALLBACKS.find((ku) => ku < min);
-      if (found === undefined) {
-        if (xC !== undefined) {
-          let { steps, refusedAt } = xC;
-          xC = undefined;
+      let mediaCount = countMediaItems(messagesForAPI_2);
+      let min = Math.min(mediaCount, mediaLimitStep?.limit ?? 1 / 0);
+      let maxMediaItems = MEDIA_ITEM_COUNT_FALLBACKS.find((candidateLimit) => candidateLimit < min);
+      if (maxMediaItems === undefined) {
+        if (mediaLimitStep !== undefined) {
+          let { steps, refusedAt } = mediaLimitStep;
+          mediaLimitStep = undefined;
           setMediaItemCap(conversation, {
             model: effectiveModel,
-            limit: pr?.limit,
+            limit: mediaCap?.limit,
             gaveUp: true,
           });
           logForDebugging(
-            `[media-item-limit] The model still refuses this request as unprocessable with ${Jr} images and documents left. Not removing any more.`,
+            `[media-item-limit] The model still refuses this request as unprocessable with ${mediaCount} images and documents left. Not removing any more.`,
             {
               level: "warn",
             },
@@ -7610,48 +8083,49 @@ async function* queryModel(messages, systemPrompt, thinkingConfig, tools, signal
         }
         return;
       }
-      let Vl = (ku) => stripExcessMediaItems(ku, found, MEDIA_BYTES_PER_ITEM_SLACK);
-      messagesForAPI_2 = ch(Vl(messagesForAPI_2), "error_recovery");
-      let Yl = Ks;
-      if (Yl) Ks = () => Vl(Yl());
-      let nd = uS;
-      if (nd) uS = () => Vl(nd());
-      let Wd = kl;
-      if (Wd) kl = () => Vl(Wd());
-      xC = {
-        limit: found,
-        steps: (xC?.steps ?? 0) + 1,
-        refusedAt: xC?.refusedAt ?? Jr,
+      let stripToLimit = (messagesToStrip) =>
+        stripExcessMediaItems(messagesToStrip, maxMediaItems, MEDIA_BYTES_PER_ITEM_SLACK);
+      messagesForAPI_2 = recoverMessages(stripToLimit(messagesForAPI_2), "error_recovery");
+      let toolChangeFallback = getToolChangeFallback;
+      if (toolChangeFallback) getToolChangeFallback = () => stripToLimit(toolChangeFallback());
+      let midConvFallback = getMidConvFallback;
+      if (midConvFallback) getMidConvFallback = () => stripToLimit(midConvFallback());
+      let inlineFallback = getInlineToolsFallback;
+      if (inlineFallback) getInlineToolsFallback = () => stripToLimit(inlineFallback());
+      mediaLimitStep = {
+        limit: maxMediaItems,
+        steps: (mediaLimitStep?.steps ?? 0) + 1,
+        refusedAt: mediaLimitStep?.refusedAt ?? mediaCount,
       };
       logForDebugging(
-        `[media-item-limit] The model refused this request as unprocessable. It held ${Jr} images and documents; the oldest were removed to fit a limit of ${found}, and it is being sent again. If it is answered, this conversation keeps that limit.`,
+        `[media-item-limit] The model refused this request as unprocessable. It held ${mediaCount} images and documents; the oldest were removed to fit a limit of ${maxMediaItems}, and it is being sent again. If it is answered, this conversation keeps that limit.`,
         {
           level: "warn",
         },
       );
-      return `retry:media-item-limit:${found}`;
+      return `retry:media-item-limit:${maxMediaItems}`;
     } catch (error) {
       logError(toError(error));
       return;
     }
   };
-  let DLe = () => {
+  let recordMediaLimitSuccess = () => {
     try {
-      let Wn = mediaItemCapForModel(conversation, effectiveModel);
-      if (xC === undefined) {
-        if (Wn?.gaveUp && Wn.limit === undefined) clearMediaItemCap(conversation);
-        else if (Wn?.gaveUp)
+      let mediaCap = mediaItemCapForModel(conversation, effectiveModel);
+      if (mediaLimitStep === undefined) {
+        if (mediaCap?.gaveUp && mediaCap.limit === undefined) clearMediaItemCap(conversation);
+        else if (mediaCap?.gaveUp)
           setMediaItemCap(conversation, {
-            ...Wn,
+            ...mediaCap,
             gaveUp: false,
           });
         return;
       }
-      let { limit, steps, refusedAt } = xC;
-      xC = undefined;
+      let { limit, steps, refusedAt } = mediaLimitStep;
+      mediaLimitStep = undefined;
       setMediaItemCap(conversation, {
         model: effectiveModel,
-        limit: Math.min(limit, Wn?.limit ?? 1 / 0),
+        limit: Math.min(limit, mediaCap?.limit ?? 1 / 0),
         gaveUp: false,
       });
       logFeatureSad("api_request", "api_request_media_limit_lowered", {
@@ -7664,23 +8138,28 @@ async function* queryModel(messages, systemPrompt, thinkingConfig, tools, signal
       logError(toError(error));
     }
   };
-  let jgt = (Wn) => {
+  let probePromptEndMark = (error) => {
     {
-      let pr = Wn instanceof APIError && Wn.status === 400;
-      if (Ip === "retrying") {
-        if (pr) Ip = "spent";
+      let is400 = error instanceof APIError && error.status === 400;
+      if (promptEndMarkState === "retrying") {
+        if (is400) promptEndMarkState = "spent";
         return;
       }
-      if (Ip === "idle" && xc && pr && Wn.message.includes("cache_control")) {
-        Ip = "retrying";
+      if (
+        promptEndMarkState === "idle" &&
+        sideRequestMarked &&
+        is400 &&
+        error.message.includes("cache_control")
+      ) {
+        promptEndMarkState = "retrying";
         return "retry:prompt-end-mark";
       }
     }
     return;
   };
-  let Wgt = () => {
-    if (Ip !== "retrying") return;
-    Ip = "spent";
+  let settlePromptEndMark = () => {
+    if (promptEndMarkState !== "retrying") return;
+    promptEndMarkState = "spent";
     if (creditMintModel !== undefined) return;
     try {
       markPromptEndMarkRefused();
@@ -7695,102 +8174,109 @@ async function* queryModel(messages, systemPrompt, thinkingConfig, tools, signal
       logError(error);
     }
   };
-  let LLe = (Wn, pr = false) => {
-    let Jr =
+  let recoverToolChange = (error, unclaimed = false) => {
+    let inlineClass =
       betaList.includes(BETA_INLINE_TOOLS) &&
-      !isMidConversationSystemRejected(Wn) &&
-      classifyToolChangeError(Wn) !== "header_rejected"
-        ? classifyInlineToolDefinitionError(Wn)
+      !isMidConversationSystemRejected(error) &&
+      classifyToolChangeError(error) !== "header_rejected"
+        ? classifyInlineToolDefinitionError(error)
         : undefined;
-    if (Jr !== undefined) {
-      if (kl) {
-        let Wd = kl();
-        messagesForAPI_2 = ch(
+    if (inlineClass !== undefined) {
+      if (getInlineToolsFallback) {
+        let inlineFallbackMessages = getInlineToolsFallback();
+        messagesForAPI_2 = recoverMessages(
           !betaList.includes(BETA_PER_MESSAGE_EFFORT)
-            ? stripOutputConfigs(Wd)
+            ? stripOutputConfigs(inlineFallbackMessages)
             : !betaList.includes(BETA_PER_TURN_TIMING)
-              ? dropTimingFromOutputConfigs(Wd)
-              : Wd,
+              ? dropTimingFromOutputConfigs(inlineFallbackMessages)
+              : inlineFallbackMessages,
           "error_recovery",
         );
-        tp = Rf;
-        addNameOnlyAnnouncements(conversation, vn);
-        if (cs === undefined) MLe();
+        thinkingWasStripped = thinkingStripMarked;
+        addNameOnlyAnnouncements(conversation, byValueAnnouncements);
+        if (toolChangeMode === undefined) inlineLateTools();
       }
-      kl = null;
+      getInlineToolsFallback = null;
       betaList = betaList.filter((beta) => beta !== BETA_INLINE_TOOLS);
-      handleInlineToolsRejection(conversation, Jr);
-      Bx();
+      handleInlineToolsRejection(conversation, inlineClass);
+      emitPromptHead();
       logEvent("tengu_inline_tools_refused_retry", {
-        cause: fromEnum(Jr),
+        cause: fromEnum(inlineClass),
       });
       return "retry:inline-tools-strip";
     }
-    let Os =
-      betaList.includes(BETA_MID_CONV_TOOL_CHANGE) && !isMidConversationSystemRejected(Wn)
-        ? classifyToolChangeError(Wn)
+    let toolChangeClass =
+      betaList.includes(BETA_MID_CONV_TOOL_CHANGE) && !isMidConversationSystemRejected(error)
+        ? classifyToolChangeError(error)
         : undefined;
-    if (Os !== undefined) {
-      if (Ks) {
-        let ku = Ks();
-        messagesForAPI_2 = ch(
+    if (toolChangeClass !== undefined) {
+      if (getToolChangeFallback) {
+        let toolChangeFallbackMessages = getToolChangeFallback();
+        messagesForAPI_2 = recoverMessages(
           !betaList.includes(BETA_PER_MESSAGE_EFFORT)
-            ? stripOutputConfigs(ku)
+            ? stripOutputConfigs(toolChangeFallbackMessages)
             : !betaList.includes(BETA_PER_TURN_TIMING)
-              ? dropTimingFromOutputConfigs(ku)
-              : ku,
+              ? dropTimingFromOutputConfigs(toolChangeFallbackMessages)
+              : toolChangeFallbackMessages,
           "error_recovery",
         );
-        tp = Rf;
+        thinkingWasStripped = thinkingStripMarked;
       }
-      Ks = null;
-      let Wd =
-        betaList.includes(BETA_INLINE_TOOLS) && classifyInlineToolDefinitionError(Wn) === "header_rejected";
+      getToolChangeFallback = null;
+      let inlineHeaderRejected =
+        betaList.includes(BETA_INLINE_TOOLS) &&
+        classifyInlineToolDefinitionError(error) === "header_rejected";
       betaList = betaList.filter((beta) => beta !== BETA_MID_CONV_TOOL_CHANGE && beta !== BETA_INLINE_TOOLS);
-      classifyToolAdditionRejection(conversation, Os, options.model, Wd);
-      Bx();
-      MLe();
-      Bgt();
+      classifyToolAdditionRejection(conversation, toolChangeClass, options.model, inlineHeaderRejected);
+      emitPromptHead();
+      inlineLateTools();
+      inlineAdvisorEntry();
       return "retry:tool-change-strip";
     }
-    let La = pr || isMidConversationSystemRejected(Wn);
-    let midConvSystemRejection = getMidConvSystemRejection(Wn);
-    let Yl =
+    let midConvCandidate = unclaimed || isMidConversationSystemRejected(error);
+    let midConvSystemRejection = getMidConvSystemRejection(error);
+    let effortRejected =
       betaList.includes(BETA_PER_MESSAGE_EFFORT) &&
-      isOutputConfigRejected(Wn) &&
-      !isEffortUnsupportedError(Wn);
+      isOutputConfigRejected(error) &&
+      !isEffortUnsupportedError(error);
     let included = betaList.includes(BETA_PER_TURN_TIMING);
-    if (included && isOutputTimingRejected(Wn) && !La && !Yl) {
-      messagesForAPI_2 = ch(dropTimingFromOutputConfigs(messagesForAPI_2), "error_recovery");
+    if (included && isOutputTimingRejected(error) && !midConvCandidate && !effortRejected) {
+      messagesForAPI_2 = recoverMessages(dropTimingFromOutputConfigs(messagesForAPI_2), "error_recovery");
       betaList = betaList.filter((beta) => beta !== BETA_PER_TURN_TIMING);
       markBetaRejected(conversation, BETA_PER_TURN_TIMING);
       logForDebugging(
-        `[per-turn-timing] the server refused the current-time statement (${errorMessage(Wn)}); leaving it out for the rest of this conversation (until /clear or /compact)`,
+        `[per-turn-timing] the server refused the current-time statement (${errorMessage(error)}); leaving it out for the rest of this conversation (until /clear or /compact)`,
         {
           level: "warn",
         },
       );
       return "retry:per-turn-timing-strip";
     }
-    if (uS && (La || Yl)) {
-      if (midConvSystemRejection !== null && !HS.some((Kg) => Kg.role === "system" && Kg.content.length > 0))
+    if (getMidConvFallback && (midConvCandidate || effortRejected)) {
+      if (
+        midConvSystemRejection !== null &&
+        !sentMessages.some((message) => message.role === "system" && message.content.length > 0)
+      )
         return;
-      let Wd = hasContextBeta(conversation);
-      let ku = HS.length;
-      let Np = messagesForAPI_2.length;
-      let hf =
+      let contextBetaWasActive = hasContextBeta(conversation);
+      let wireCount = sentMessages.length;
+      let messageCount = messagesForAPI_2.length;
+      let mismatchDetail =
         midConvSystemRejection === null
           ? undefined
           : midConvSystemRejection.messageIndex === undefined
-            ? `${ku} messages on the wire`
-            : midConvSystemRejection.messageIndex >= ku
-              ? `messages[${midConvSystemRejection.messageIndex}], beyond the ${ku} this request sent`
-              : `messages[${midConvSystemRejection.messageIndex}] of ${ku} on the wire; conversation entry ${Eh(midConvSystemRejection.messageIndex) ?? "none of ours (a clear_at reminder slot)"} of ${Np}`;
-      messagesForAPI_2 = ch(La ? uS() : stripOutputConfigs(messagesForAPI_2), "error_recovery");
-      uS = null;
+            ? `${wireCount} messages on the wire`
+            : midConvSystemRejection.messageIndex >= wireCount
+              ? `messages[${midConvSystemRejection.messageIndex}], beyond the ${wireCount} this request sent`
+              : `messages[${midConvSystemRejection.messageIndex}] of ${wireCount} on the wire; conversation entry ${sourceIndexOf(midConvSystemRejection.messageIndex) ?? "none of ours (a clear_at reminder slot)"} of ${messageCount}`;
+      messagesForAPI_2 = recoverMessages(
+        midConvCandidate ? getMidConvFallback() : stripOutputConfigs(messagesForAPI_2),
+        "error_recovery",
+      );
+      getMidConvFallback = null;
       if (included) betaList = betaList.filter((beta) => beta !== BETA_PER_TURN_TIMING);
-      if (La) {
-        tp = Rf;
+      if (midConvCandidate) {
+        thinkingWasStripped = thinkingStripMarked;
         betaList = betaList.filter(
           (beta) =>
             beta !== BETA_MID_CONVERSATION_SYSTEM &&
@@ -7801,26 +8287,26 @@ async function* queryModel(messages, systemPrompt, thinkingConfig, tools, signal
         );
         markBetaRejected(conversation, BETA_MID_CONVERSATION_SYSTEM);
         dropToolChangeState(conversation);
-        Bx();
-        MLe();
-        Bgt();
-        if (Ks !== null) {
+        emitPromptHead();
+        inlineLateTools();
+        inlineAdvisorEntry();
+        if (getToolChangeFallback !== null) {
           logFeatureSad("mcp_late_tool_additions", "rejected_with_mid_conv_system");
-          Ks = null;
+          getToolChangeFallback = null;
         }
       }
-      if (Yl) {
+      if (effortRejected) {
         betaList = betaList.filter((beta) => beta !== BETA_PER_MESSAGE_EFFORT);
-        latchBetaRefused(BETA_PER_MESSAGE_EFFORT, isPerTurnEffortRejected(Wn));
-        if (EE !== null) logFeatureSad("api_per_turn_effort", "server_rejected");
+        latchBetaRefused(BETA_PER_MESSAGE_EFFORT, isPerTurnEffortRejected(error));
+        if (perTurnEffortValue !== null) logFeatureSad("api_per_turn_effort", "server_rejected");
       }
-      if (options.stickyBetas === undefined) notifyPerTurnEffortInactive(conversation, Wd);
+      if (options.stickyBetas === undefined) notifyPerTurnEffortInactive(conversation, contextBetaWasActive);
       logForDebugging(
-        hf !== undefined
-          ? `[mid-conv-system] API refused where a system message sits (${hf}) \u2014 retrying once without system messages; off for this conversation until /clear or /compact`
-          : Yl
+        mismatchDetail !== undefined
+          ? `[mid-conv-system] API refused where a system message sits (${mismatchDetail}) \u2014 retrying once without system messages; off for this conversation until /clear or /compact`
+          : effortRejected
             ? "[per-turn-control] server rejected the per-turn statements \u2014 resending without them"
-            : pr
+            : unclaimed
               ? "[mid-conv-system] an HTTP 400 or 422 that nothing else recognises answered a request on which system turns were enabled; guessing the platform refuses them and resending without system messages; if that goes through they stay off until /clear or /compact"
               : '[mid-conv-system] server rejected role:"system" \u2014 falling back to a body with no {role:"system"} turn, sticky-rejecting the beta until /clear or /compact',
         {
@@ -7828,23 +8314,23 @@ async function* queryModel(messages, systemPrompt, thinkingConfig, tools, signal
         },
       );
       logEvent("tengu_mid_conv_system_fallback_retry", {
-        per_turn_effort: Yl,
-        ...(pr && {
-          unclaimed: pr,
+        per_turn_effort: effortRejected,
+        ...(unclaimed && {
+          unclaimed,
         }),
         misplaced: midConvSystemRejection !== null,
         ...(midConvSystemRejection !== null && {
           misplaced_index: midConvSystemRejection.messageIndex ?? -1,
-          wire_message_count: ku,
-          message_count: Np,
+          wire_message_count: wireCount,
+          message_count: messageCount,
         }),
       });
       return "retry:mid-conv-system";
     }
     if (
-      Yd &&
+      apiSystemHasCacheControl &&
       !isBetaRejected_2(conversation, BETA_MID_CONV_CACHE_PROMOTION_LATCH) &&
-      isCacheControlFieldRejected(Wn)
+      isCacheControlFieldRejected(error)
     ) {
       markBetaRejected(conversation, BETA_MID_CONV_CACHE_PROMOTION_LATCH);
       markMidConvCachePromotionRejected();
@@ -7859,36 +8345,41 @@ async function* queryModel(messages, systemPrompt, thinkingConfig, tools, signal
     }
     return;
   };
-  let Ggt = (Wn) => {
+  let noteCacheCoverageUsage = (usage) => {
     if (
-      Yd &&
-      !xc &&
+      apiSystemHasCacheControl &&
+      !sideRequestMarked &&
       !isBetaRejected_2(conversation, BETA_MID_CONV_CACHE_PROMOTION_LATCH) &&
       !isBetaRejected_2(conversation, BETA_MID_CONV_CACHE_PROMOTION_OK_LATCH)
     ) {
-      let inputTokens = Wn?.input_tokens ?? 0;
-      let cacheReadInputTokens = Wn?.cache_read_input_tokens ?? 0;
-      let Os =
-        (Wn?.cache_creation_input_tokens ?? 0) +
-        (Wn?.cache_creation?.ephemeral_5m_input_tokens ?? 0) +
-        (Wn?.cache_creation?.ephemeral_1h_input_tokens ?? 0);
-      let La = inputTokens + cacheReadInputTokens + Os > 0;
-      let Vl = Os > 0 && inputTokens < MIDCONV_CACHE_PROXY_READ_THRESHOLD;
-      if (La && !Vl) return;
+      let inputTokens = usage?.input_tokens ?? 0;
+      let cacheReadInputTokens = usage?.cache_read_input_tokens ?? 0;
+      let creationTokens =
+        (usage?.cache_creation_input_tokens ?? 0) +
+        (usage?.cache_creation?.ephemeral_5m_input_tokens ?? 0) +
+        (usage?.cache_creation?.ephemeral_1h_input_tokens ?? 0);
+      let hasAnyTokens = inputTokens + cacheReadInputTokens + creationTokens > 0;
+      let proxyStripped = creationTokens > 0 && inputTokens < MIDCONV_CACHE_PROXY_READ_THRESHOLD;
+      if (hasAnyTokens && !proxyStripped) return;
       markBetaRejected(conversation, BETA_MID_CONV_CACHE_PROMOTION_OK_LATCH);
       logFeatureOk("api_midconv_cache_proxy");
     }
   };
-  let zgt = (Wn) => {
-    if (!Gc || options.skipCacheWrite || !isCustomEndpoint(getProviderForModel(options.model))) return;
-    let pr = decideStreamFallbackWarning(streamFallbackWarning().cacheCoverage, conversation, Wn);
-    if (pr.kind === "confirm") {
+  let noteCacheCoverageSustained = (usage) => {
+    if (!anyCacheControl || options.skipCacheWrite || !isCustomEndpoint(getProviderForModel(options.model)))
+      return;
+    let coverageDecision = decideStreamFallbackWarning(
+      streamFallbackWarning().cacheCoverage,
+      conversation,
+      usage,
+    );
+    if (coverageDecision.kind === "confirm") {
       logFeatureOk("api_prompt_cache_coverage", {
         provider: fromEnum(getProviderForModel(options.model)),
       });
       return;
     }
-    if (pr.kind !== "fire") return;
+    if (coverageDecision.kind !== "fire") return;
     logForDebugging(
       "[cache-coverage] sustained uncovered input with a cache breakpoint on the wire through a custom endpoint \u2014 no cache-billing evidence visible at the client (the endpoint may be silently stripping cache_control)",
       {
@@ -7896,50 +8387,52 @@ async function* queryModel(messages, systemPrompt, thinkingConfig, tools, signal
       },
     );
     logFeatureSad("api_prompt_cache_coverage", "cache_coverage_loss", {
-      api_system_marker: Yd,
-      consecutive_turns: pr.consecutive,
-      input_tokens: pr.inputTokens,
-      cache_read_input_tokens: pr.cacheReadTokens,
-      cache_creation_input_tokens: pr.cacheCreationTokens,
+      api_system_marker: apiSystemHasCacheControl,
+      consecutive_turns: coverageDecision.consecutive,
+      input_tokens: coverageDecision.inputTokens,
+      cache_read_input_tokens: coverageDecision.cacheReadTokens,
+      cache_creation_input_tokens: coverageDecision.cacheCreationTokens,
       provider: fromEnum(getProviderForModel(options.model)),
     });
   };
-  let qgt = () => {
-    if (!isPerTurnEffortOkEmitted() && EE !== null) {
+  let noteEffortOk = () => {
+    if (!isPerTurnEffortOkEmitted() && perTurnEffortValue !== null) {
       markPerTurnEffortOkEmitted();
       logFeatureOk("api_per_turn_effort");
     }
   };
-  let Kgt = () => {
-    if (!isLateToolAdditionsOkEmitted() && Ks !== null) {
+  let noteLateToolsOk = () => {
+    if (!isLateToolAdditionsOkEmitted() && getToolChangeFallback !== null) {
       markLateToolAdditionsOkEmitted();
       logFeatureOk("mcp_late_tool_additions");
     }
     if (
       !isInlineToolsOkEmitted() &&
-      Ks !== null &&
+      getToolChangeFallback !== null &&
       betaList.includes(BETA_INLINE_TOOLS) &&
-      messagesForAPI_2.some((Wn) => Wn.type === "api_system" && Wn.toolDefinitions !== undefined)
+      messagesForAPI_2.some(
+        (message) => message.type === "api_system" && message.toolDefinitions !== undefined,
+      )
     ) {
       markInlineToolsOkEmitted();
       logFeatureOk("mcp_inline_tools");
     }
   };
-  let Vgt = () => {};
-  let Ygt = () => {};
-  let Xgt = () => {
-    if (ME === "retrying") {
-      ME = "spent";
+  let noopAfterSend = () => {};
+  let noopAfterSuccess = () => {};
+  let settleHealsAtSuccess = () => {
+    if (threadsProbeState === "retrying") {
+      threadsProbeState = "spent";
       try {
         if (BETA_MESSAGE_THREADS !== null) markBetaRejected(conversation, BETA_MESSAGE_THREADS);
-        if (II) disableTetherLiveGate();
+        if (threadsProbePlannerBacked) disableTetherLiveGate();
         logEvent("tengu_tether_unrecognised_400", {
           phase: lit_2("healed"),
-          planner_backed: II,
+          planner_backed: threadsProbePlannerBacked,
           query_source: agentTypeForTelemetry(options.querySource),
         });
         logForDebugging(
-          `[tether] a request carrying the message-threads header got an HTTP 400 that Claude Code does not recognise (request id ${G5 ?? "unknown"}), and a later attempt without the header succeeded. ${II ? "Message Threads stays off for the rest of this session." : "The header stays off for this conversation."}`,
+          `[tether] a request carrying the message-threads header got an HTTP 400 that Claude Code does not recognise (request id ${threadsProbeRequestId ?? "unknown"}), and a later attempt without the header succeeded. ${threadsProbePlannerBacked ? "Message Threads stays off for the rest of this session." : "The header stays off for this conversation."}`,
           {
             level: "warn",
           },
@@ -7948,72 +8441,77 @@ async function* queryModel(messages, systemPrompt, thinkingConfig, tools, signal
         logError(error);
       }
     }
-    if (W5) logKeptReminderOk();
-    if (rP === "retrying") {
-      rP = "spent";
+    if (keptReminderSent) logKeptReminderOk();
+    if (clearAtProbeState === "retrying") {
+      clearAtProbeState = "spent";
       markBetaRejected(conversation, BETA_MID_CONVERSATION_SYSTEM_CLEAR_AT);
       retireKeptReminder();
-      Bx();
+      emitPromptHead();
       logFeatureSad("api_kept_reminder_clear_at", "unrecognised_400");
       logForDebugging(
-        `[reminders] a request carrying a clear_at message got an HTTP 400 that Claude Code does not recognise (request id ${k$ ?? "unknown"}), and the same request without clear_at succeeded. For the rest of this session earlier reminders are not re-sent, and requests that can use a Message Threads thread get no reminder.`,
+        `[reminders] a request carrying a clear_at message got an HTTP 400 that Claude Code does not recognise (request id ${clearAtProbeRequestId ?? "unknown"}), and the same request without clear_at succeeded. For the rest of this session earlier reminders are not re-sent, and requests that can use a Message Threads thread get no reminder.`,
         {
           level: "warn",
         },
       );
     }
   };
-  let S5n = (Wn) => {
-    if (!isInvalidEffortError(Wn) || w$ === "explicit" || isAutoModeQuerySource(options.querySource))
+  let recoverOrgEffortCap = (error) => {
+    if (
+      !isInvalidEffortError(error) ||
+      serverFallbackMode === "explicit" ||
+      isAutoModeQuerySource(options.querySource)
+    )
       return null;
     try {
-      let pr = effortInPlay(yS, messagesForAPI_2);
-      let Jr = pr === undefined ? undefined : lowerLearnedEffortCap(resolvedModel, pr);
-      if (Jr === undefined) {
+      let attemptedEffort = effortInPlay(sentEffort, messagesForAPI_2);
+      let lowerLevel =
+        attemptedEffort === undefined ? undefined : lowerLearnedEffortCap(resolvedModel, attemptedEffort);
+      if (lowerLevel === undefined) {
         logFeatureBad("api_org_effort_cap_retry", "no_lower_level");
         return null;
       }
-      effortValue = lowerEffort(fI, yr());
-      if (EE !== null)
-        messagesForAPI_2 = ch(
+      effortValue = lowerEffort(effortFromConfig, learnedEffortCapFn());
+      if (perTurnEffortValue !== null)
+        messagesForAPI_2 = recoverMessages(
           attachPerTurnOutputConfig(stripOutputConfigs(messagesForAPI_2), {
-            effort: tu,
-            effortCap: yr(),
-            now: n$,
+            effort: perTurnEffort,
+            effortCap: learnedEffortCapFn(),
+            now: perTurnNowValue,
           }),
           "error_recovery",
         );
       logForDebugging(
-        `[effort] the API refused effort '${pr}' as above the organization's cap for model ${options.model}. Sending the request again at no more than '${Jr}', as later requests to this model will be.`,
+        `[effort] the API refused effort '${attemptedEffort}' as above the organization's cap for model ${options.model}. Sending the request again at no more than '${lowerLevel}', as later requests to this model will be.`,
         {
           level: "warn",
         },
       );
-      return `retry:org-effort-cap:${Jr}`;
+      return `retry:org-effort-cap:${lowerLevel}`;
     } catch (error) {
       logError(toError(error));
       return null;
     }
   };
-  function* Qgt() {
-    if (!Hi) return;
-    let Wn;
+  function* orgEffortNotice() {
+    if (!isMainThread) return;
+    let notice;
     try {
-      let pr = lowerEffort(Di, yr());
-      if (pr !== Di && takeEffortCapNotice(resolvedModel)) {
+      let cappedLevel = lowerEffort(resolvedEffort, learnedEffortCapFn());
+      if (cappedLevel !== resolvedEffort && takeEffortCapNotice(resolvedModel)) {
         logFeatureOk("api_org_effort_cap_retry");
-        Wn = createInformationalSystemMessage(
-          `Your organization limits effort for ${renderModelName(resolvedModel)}, so Claude Code is using '${pr}' instead of '${Di}'. Your effort setting is unchanged.`,
+        notice = createInformationalSystemMessage(
+          `Your organization limits effort for ${renderModelName(resolvedModel)}, so Claude Code is using '${cappedLevel}' instead of '${resolvedEffort}'. Your effort setting is unchanged.`,
           "warning",
         );
       }
     } catch (error) {
       logError(toError(error));
     }
-    if (Wn) yield Wn;
+    if (notice) yield notice;
   }
-  let Jgt = (Wn) => {
-    if (!isEffortUnsupportedError(Wn)) return S5n(Wn);
+  let handleEffortUnsupported = (error) => {
+    if (!isEffortUnsupportedError(error)) return recoverOrgEffortCap(error);
     markEffortUnsupported(options.model);
     if (resolvedModel !== options.model) markEffortUnsupported(resolvedModel);
     logForDebugging(
@@ -8027,8 +8525,8 @@ async function* queryModel(messages, systemPrompt, thinkingConfig, tools, signal
     });
     return "retry:effort-unsupported";
   };
-  let Zgt = (Wn) => {
-    if (!s3 || !isStructuredOutputsUnsupported(Wn)) return null;
+  let handleStructuredOutputs = (error) => {
+    if (!hasOutputFormat || !isStructuredOutputsUnsupported(error)) return null;
     try {
       markStructuredOutputsUnsupportedClaude(options.model);
       logForDebugging(
@@ -8046,9 +8544,9 @@ async function* queryModel(messages, systemPrompt, thinkingConfig, tools, signal
       return null;
     }
   };
-  let eht = (Wn) => null;
-  let tht = (Wn) => {
-    if (m1 === "highlights" && isThinkingDisplayRejected(Wn)) {
+  let noRecovery = (error) => null;
+  let handleThinkingHighlights = (error) => {
+    if (sentThinkingDisplay === "highlights" && isThinkingDisplayRejected(error)) {
       markThinkingHighlightsRefused();
       logForDebugging(
         "[thinking] server rejected thinking.display highlights; asking for omitted for the rest of this process and retrying.",
@@ -8063,22 +8561,26 @@ async function* queryModel(messages, systemPrompt, thinkingConfig, tools, signal
     }
     return null;
   };
-  let NLe = (Wn, pr = false) => {
-    if (!wE || !hb.includes(BETA_THINKING_BINDING_CONTROLS.header)) return null;
-    let Jr =
-      isThinkingBindingRejected(Wn) ||
-      (!shouldIncludeFirstPartyOnlyBetas() && mentionsThinkingBindingBeta(Wn));
-    let Os =
+  let recoverThinkingBinding = (error, unclaimed = false) => {
+    if (!thinkingBindingOn || !sentBetaHeaders.includes(BETA_THINKING_BINDING_CONTROLS.header)) return null;
+    let betaRejected =
+      isThinkingBindingRejected(error) ||
+      (!shouldIncludeFirstPartyOnlyBetas() && mentionsThinkingBindingBeta(error));
+    let unclaimed400 =
       !shouldIncludeFirstPartyOnlyBetas() &&
-      (isInvalidBetaFlagError(Wn) ||
-        (pr && Wn instanceof APIError && Wn.status === 400 && !PE(Wn) && !FI(Wn)));
-    if (!Jr && !Os) return null;
-    wE = false;
-    AC = undefined;
+      (isInvalidBetaFlagError(error) ||
+        (unclaimed &&
+          error instanceof APIError &&
+          error.status === 400 &&
+          !isUnrecoverable(error) &&
+          !isUnrecoverableError(error)));
+    if (!betaRejected && !unclaimed400) return null;
+    thinkingBindingOn = false;
+    dewdropMode = undefined;
     betaList = betaList.filter((beta) => beta !== BETA_THINKING_BINDING_CONTROLS);
     markBetaRejected(conversation, BETA_THINKING_BINDING_CONTROLS);
     logForDebugging(
-      Jr
+      betaRejected
         ? "[thinking] server rejected the thinking-binding-controls beta; dropping the header and the block_binding value for this conversation and retrying."
         : "[thinking] an HTTP 400 that does not name the thinking-binding-controls beta arrived on a request that carried it; guessing the platform refuses that beta, so retrying once without it and leaving it off for this conversation. The only loss is the API's list of the thinking blocks it dropped.",
       {
@@ -8090,12 +8592,12 @@ async function* queryModel(messages, systemPrompt, thinkingConfig, tools, signal
     });
     return "retry:thinking-binding-controls";
   };
-  let nht = (Wn) => {
-    if (!hb.includes(BETA_THINKING_TOKEN_COUNT.header)) return null;
-    if (WW() || !isInvalidBetaFlagError(Wn)) return null;
+  let recoverThinkingTokenCountBeta = (error) => {
+    if (!sentBetaHeaders.includes(BETA_THINKING_TOKEN_COUNT.header)) return null;
+    if (tokenCountBetaBlocked() || !isInvalidBetaFlagError(error)) return null;
     betaList = betaList.filter((beta) => beta !== BETA_THINKING_TOKEN_COUNT);
     markBetaRejected(conversation, BETA_THINKING_TOKEN_COUNT);
-    nP.push(BETA_THINKING_TOKEN_COUNT);
+    droppedBetas.push(BETA_THINKING_TOKEN_COUNT);
     logForDebugging(
       "[thinking-token-count] server rejected the beta; dropping it for this conversation and retrying.",
       {
@@ -8109,52 +8611,57 @@ async function* queryModel(messages, systemPrompt, thinkingConfig, tools, signal
     });
     return "retry:thinking-token-count-beta";
   };
-  let oht = (Wn) => {
+  let recoverMentionedBetas = (error) => {
     try {
-      let rejectedBetas = getRejectedBetas(Wn, [...hb, ...Pae]);
+      let rejectedBetas = getRejectedBetas(error, [...sentBetaHeaders, ...bodyBetaHeaders]);
       if (rejectedBetas.length === 0) return;
-      let Jr = new Set(rejectedBetas);
-      betaList = betaList.filter((beta) => !Jr.has(beta));
-      for (let Os of rejectedBetas) {
-        let La = isBetaHeaderRejected(Wn, Os);
-        latchBetaRefused(Os, La);
+      let refusedSet = new Set(rejectedBetas);
+      betaList = betaList.filter((beta) => !refusedSet.has(beta));
+      for (let beta of rejectedBetas) {
+        let onlyMentioned = isBetaHeaderRejected(error, beta);
+        latchBetaRefused(beta, onlyMentioned);
         logEvent("tengu_beta_400_healed", {
-          beta: hashToolNames([Os.header]),
+          beta: hashToolNames([beta.header]),
           model: telemetrySafeModelName(options.model),
           provider: getAPIProviderForAnalytics(),
-          status: Wn instanceof APIError ? Wn.status : undefined,
-          only_mentioned: !La && !isBetaListedAsUnexpected(Wn, Os),
+          status: error instanceof APIError ? error.status : undefined,
+          only_mentioned: !onlyMentioned && !isBetaListedAsUnexpected(error, beta),
         });
       }
-      if (Jr.has(BETA_PROMPT_CACHING_SCOPE)) systemBlocks = cLe();
-      if (Jr.has(BETA_SPEED) && d3 !== undefined) markFallbackModelFastRejected(d3);
-      return `retry:beta-rejected:${rejectedBetas.map((Os) => Os.name).join(",")}`;
+      if (refusedSet.has(BETA_PROMPT_CACHING_SCOPE)) systemBlocks = buildSystemBlocks();
+      if (refusedSet.has(BETA_SPEED) && fastModelUsed !== undefined)
+        markFallbackModelFastRejected(fastModelUsed);
+      return `retry:beta-rejected:${rejectedBetas.map((beta) => beta.name).join(",")}`;
     } catch (error) {
       logError(error);
       return;
     }
   };
-  let rht = (Wn) => {
-    if (!(Wn instanceof APIError) || Wn.status !== 400) return null;
+  let probeContext1mBeta = (error) => {
+    if (!(error instanceof APIError) || error.status !== 400) return null;
     try {
-      let pr = isContext1mBetaRejected(Wn);
-      let Jr = !pr && isInvalidBetaFlagError(Wn);
-      if (Gd === "spent") return null;
-      if (Gd !== "idle") {
-        Gd = Gd === "guessing" && Jr ? "spent" : "unproven";
+      let readsAsBetaReject = isContext1mBetaRejected(error);
+      let invalidFlag = !readsAsBetaReject && isInvalidBetaFlagError(error);
+      if (contextBetaState === "spent") return null;
+      if (contextBetaState !== "idle") {
+        contextBetaState = contextBetaState === "guessing" && invalidFlag ? "spent" : "unproven";
         logForDebugging(
-          `[betas] the resend without ${BETA_LONG_CONTEXT.header} also got an HTTP 400, so the backend is not recorded as rejecting it; ${Gd === "spent" ? 'both said "invalid beta flag", so it is sent again from the next attempt' : "it stays off for the remaining attempts of this request and is sent again on the next request"}`,
+          `[betas] the resend without ${BETA_LONG_CONTEXT.header} also got an HTTP 400, so the backend is not recorded as rejecting it; ${contextBetaState === "spent" ? 'both said "invalid beta flag", so it is sent again from the next attempt' : "it stays off for the remaining attempts of this request and is sent again on the next request"}`,
           {
             level: "warn",
           },
         );
         return null;
       }
-      if (!sc || hitsAnthropicBackend(getProviderForModel(options.model)) || !(pr || (Jr && !WW())))
+      if (
+        !longContextRequested ||
+        hitsAnthropicBackend(getProviderForModel(options.model)) ||
+        !(readsAsBetaReject || (invalidFlag && !tokenCountBetaBlocked()))
+      )
         return null;
-      Gd = pr ? "retrying" : "guessing";
+      contextBetaState = readsAsBetaReject ? "retrying" : "guessing";
       logForDebugging(
-        `[betas] an HTTP 400 ${pr ? "reads as the backend rejecting" : 'says "invalid beta flag", which may be about'} ${BETA_LONG_CONTEXT.header}; resending once without it`,
+        `[betas] an HTTP 400 ${readsAsBetaReject ? "reads as the backend rejecting" : 'says "invalid beta flag", which may be about'} ${BETA_LONG_CONTEXT.header}; resending once without it`,
         {
           level: "warn",
         },
@@ -8165,10 +8672,10 @@ async function* queryModel(messages, systemPrompt, thinkingConfig, tools, signal
       return null;
     }
   };
-  let sht = () => {
-    if (Gd !== "retrying" && Gd !== "guessing") return;
-    let unnamed = Gd === "guessing";
-    Gd = "spent";
+  let settleContext1mProbe = () => {
+    if (contextBetaState !== "retrying" && contextBetaState !== "guessing") return;
+    let unnamed = contextBetaState === "guessing";
+    contextBetaState = "spent";
     try {
       betaList = betaList.filter((beta) => beta !== BETA_LONG_CONTEXT);
       rejectContextBetaForModel(options.model);
@@ -8183,8 +8690,12 @@ async function* queryModel(messages, systemPrompt, thinkingConfig, tools, signal
       logError(error);
     }
   };
-  let iht = (Wn) => {
-    if (!hb.includes(BETA_THINKING_RESUMPTION.header) || !isThinkingResumptionBetaRejected(Wn)) return null;
+  let handleThinkingResumption = (error) => {
+    if (
+      !sentBetaHeaders.includes(BETA_THINKING_RESUMPTION.header) ||
+      !isThinkingResumptionBetaRejected(error)
+    )
+      return null;
     markThinkingResumptionRefused();
     markBetaHeaderRefused(BETA_THINKING_RESUMPTION);
     betaList = betaList.filter((beta) => beta !== BETA_THINKING_RESUMPTION);
@@ -8195,100 +8706,101 @@ async function* queryModel(messages, systemPrompt, thinkingConfig, tools, signal
       },
     );
     logFeatureSad("query_thinking_block_resumption", "header_rejected");
-    return fo ? "surface:resume-prefill" : "retry:thinking-resumption-beta";
+    return resumeIncompleteThinking ? "surface:resume-prefill" : "retry:thinking-resumption-beta";
   };
-  let aht;
-  let k5n = (Wn) => Wn instanceof APIError && isConversationBindingError(Wn);
-  let I1 = 0;
+  let pendingNotice;
+  let isPrefixLockError = (error) => error instanceof APIError && isConversationBindingError(error);
+  let prefixLockAttempts = 0;
   let stopReason = null;
-  let PC = "all";
-  let FLe = (Wn) => {
-    if (!tp) PC = Wn;
+  let stripScope = "all";
+  let recordStripScope = (from) => {
+    if (!thinkingWasStripped) stripScope = from;
     else if (
-      PC !== "all" &&
-      (Wn === "all" ||
-        Wn.messageIndex < PC.messageIndex ||
-        (Wn.messageIndex === PC.messageIndex && Wn.thinkingIndex < PC.thinkingIndex))
+      stripScope !== "all" &&
+      (from === "all" ||
+        from.messageIndex < stripScope.messageIndex ||
+        (from.messageIndex === stripScope.messageIndex && from.thinkingIndex < stripScope.thinkingIndex))
     )
-      PC = Wn;
-    tp = true;
+      stripScope = from;
+    thinkingWasStripped = true;
   };
-  let b5n = (block) => {
-    if (_1) return;
-    let pr = HS[block.messageIndex];
-    if (pr?.role !== "assistant" || !Array.isArray(pr.content)) return;
-    let thinkingBlockKey = getThinkingBlockKey(pr.content[block.blockIndex]);
+  let locateThinkingBlock = (block) => {
+    if (thinkingAlreadyStripped) return;
+    let blockRef = sentMessages[block.messageIndex];
+    if (blockRef?.role !== "assistant" || !Array.isArray(blockRef.content)) return;
+    let thinkingBlockKey = getThinkingBlockKey(blockRef.content[block.blockIndex]);
     if (thinkingBlockKey === undefined) return;
-    let Os;
-    let La = new Map();
+    let foundBlock;
+    let thinkingCounts = new Map();
     for (let idx = 0; idx < messagesForAPI_2.length; idx++) {
-      let Yl = messagesForAPI_2[idx];
-      if (Yl.type !== "assistant" || !Array.isArray(Yl.message.content)) continue;
-      let id = Yl.message.id;
-      let Wd = La.get(id) ?? 0;
-      for (let ku of Yl.message.content) {
-        if (ku.type !== "thinking" && ku.type !== "redacted_thinking") continue;
-        if (getThinkingBlockKey(ku) === thinkingBlockKey) {
-          if (Os !== undefined) return;
-          Os = {
+      let message = messagesForAPI_2[idx];
+      if (message.type !== "assistant" || !Array.isArray(message.message.content)) continue;
+      let id = message.message.id;
+      let thinkingIndex = thinkingCounts.get(id) ?? 0;
+      for (let block of message.message.content) {
+        if (block.type !== "thinking" && block.type !== "redacted_thinking") continue;
+        if (getThinkingBlockKey(block) === thinkingBlockKey) {
+          if (foundBlock !== undefined) return;
+          foundBlock = {
             messageIndex: idx,
-            indexInMessage: Wd - (La.get(id) ?? 0),
-            thinkingIndex: Wd,
+            indexInMessage: thinkingIndex - (thinkingCounts.get(id) ?? 0),
+            thinkingIndex,
             messageId: id,
           };
         }
-        Wd++;
+        thinkingIndex++;
       }
-      La.set(id, Wd);
+      thinkingCounts.set(id, thinkingIndex);
     }
-    return typeof Os?.messageId === "string" ? Os : undefined;
+    return typeof foundBlock?.messageId === "string" ? foundBlock : undefined;
   };
-  let dht = (Wn) => {
+  let recoverPrefixLock = (error) => {
     try {
-      if (!k5n(Wn)) return;
-      I1++;
-      let pr = Wn.requestID || Wn.error?.request_id || null;
-      if (I1 === 1) stopReason = pr;
-      let thinkingPrefixMismatchHeader = parseThinkingPrefixMismatchHeader(Wn);
-      let Os = messagesForAPI_2;
-      let La = (() => {
+      if (!isPrefixLockError(error)) return;
+      prefixLockAttempts++;
+      let chainRequestId = error.requestID || error.error?.request_id || null;
+      if (prefixLockAttempts === 1) stopReason = chainRequestId;
+      let thinkingPrefixMismatchHeader = parseThinkingPrefixMismatchHeader(error);
+      let currentMessages = messagesForAPI_2;
+      let stripResult = (() => {
         if (options.resumeIncompleteThinking) return;
-        let Wd =
-          thinkingPrefixMismatchHeader?.block !== undefined && I1 <= MAX_SIGNATURE_STRIP_ATTEMPTS
-            ? b5n(thinkingPrefixMismatchHeader.block)
+        let located =
+          thinkingPrefixMismatchHeader?.block !== undefined &&
+          prefixLockAttempts <= MAX_SIGNATURE_STRIP_ATTEMPTS
+            ? locateThinkingBlock(thinkingPrefixMismatchHeader.block)
             : undefined;
-        if (Wd !== undefined) {
-          let Np = stripThinkingFromPoint(Os, {
-            messageIndex: Wd.messageIndex,
-            thinkingIndex: Wd.indexInMessage,
+        if (located !== undefined) {
+          let strippedPartial = stripThinkingFromPoint(currentMessages, {
+            messageIndex: located.messageIndex,
+            thinkingIndex: located.indexInMessage,
           });
-          if (Np !== Os)
+          if (strippedPartial !== currentMessages)
             return {
               scope: "partial",
-              stripped: Np,
-              from: Wd,
+              stripped: strippedPartial,
+              from: located,
             };
         }
-        let ku = stripAllThinking(Os);
-        return ku !== Os
+        let strippedAll = stripAllThinking(currentMessages);
+        return strippedAll !== currentMessages
           ? {
               scope: "all",
-              stripped: ku,
+              stripped: strippedAll,
               from: "all",
             }
           : undefined;
       })();
-      if (La === undefined && !tp) markPrefixLockHealDeclined(Wn);
-      let scope = La?.scope ?? "none";
-      let Yl = summarizeThinkingStrip(Os, La?.stripped ?? Os);
-      if (La !== undefined) {
-        messagesForAPI_2 = ch(La.stripped, "error_recovery", true);
-        FLe(La.from);
+      if (stripResult === undefined && !thinkingWasStripped) markPrefixLockHealDeclined(error);
+      let scope = stripResult?.scope ?? "none";
+      let stripSummary = summarizeThinkingStrip(currentMessages, stripResult?.stripped ?? currentMessages);
+      if (stripResult !== undefined) {
+        messagesForAPI_2 = recoverMessages(stripResult.stripped, "error_recovery", true);
+        recordStripScope(stripResult.from);
       }
       logForDebugging(
-        La === undefined
+        stripResult === undefined
           ? "[thinking] prefix-lock rejection: nothing to strip; the error is returned."
-          : `[thinking] prefix-lock rejection: stripped ${Yl.blocksStripped} of ${Yl.blocksSent} thinking block(s) (${scope}) and retrying.`,
+          : `[thinking] prefix-lock rejection: stripped ${stripSummary.blocksStripped} of ${stripSummary.blocksSent} thinking block(s) (${scope}) and retrying.`,
         {
           level: "warn",
         },
@@ -8297,68 +8809,71 @@ async function* queryModel(messages, systemPrompt, thinkingConfig, tools, signal
       logEvent("tengu_strict_prefix_lock_400_surfaced", {
         query_source: agentTypeForTelemetry(options.querySource),
         model: telemetrySafeModelName(options.model),
-        request_id: traceValueOrUnknown(pr),
+        request_id: traceValueOrUnknown(chainRequestId),
         chain_request_id: traceValueOrUnknown(stopReason),
-        client_request_id: sanitizeMarkName(Ah),
+        client_request_id: sanitizeMarkName(clientRequestId),
         solicited,
         mismatch_kind: sanitizeMarkName(thinkingPrefixMismatchHeader?.kind),
         failing_message_index: thinkingPrefixMismatchHeader?.block?.messageIndex,
         failing_block_index: thinkingPrefixMismatchHeader?.block?.blockIndex,
-        thinking_blocks_sent: Yl.blocksSent,
-        thinking_turns_sent: Yl.turnsSent,
+        thinking_blocks_sent: stripSummary.blocksSent,
+        thinking_turns_sent: stripSummary.turnsSent,
         strip_scope: fromEnum(scope),
-        stripped_block_count: Yl.blocksStripped,
-        stripped_turn_count: Yl.turnsStripped,
-        attempt: I1,
+        stripped_block_count: stripSummary.blocksStripped,
+        stripped_turn_count: stripSummary.turnsStripped,
+        attempt: prefixLockAttempts,
         client_change_kinds: pendingChangeSummary.kinds,
         first_changed_message_index: pendingChangeSummary.firstChangedMessageIndex,
         client_baseline: pendingChangeSummary.baseline,
         call_number: pendingChangeSummary.callNumber,
       });
-      return La === undefined
+      return stripResult === undefined
         ? undefined
-        : La.scope === "partial"
-          ? `retry:prefix-lock-strip-${I1}`
-          : `retry:prefix-lock-strip-all-${I1}`;
+        : stripResult.scope === "partial"
+          ? `retry:prefix-lock-strip-${prefixLockAttempts}`
+          : `retry:prefix-lock-strip-all-${prefixLockAttempts}`;
     } catch (error) {
       logError(error);
     }
     return;
   };
-  let w5n = (Wn) => {
-    let pr = dht(Wn);
-    if (keptForeignSignatures && isInvalidThinkingSignatureError(Wn))
-      dropForeignThinkingKeep(pr !== undefined ? "rejected_healed" : "rejected_surfaced");
-    return pr;
+  let recoverPrefixLockAndForeign = (error) => {
+    let recovered = recoverPrefixLock(error);
+    if (keptForeignSignatures && isInvalidThinkingSignatureError(error))
+      dropForeignThinkingKeep(recovered !== undefined ? "rejected_healed" : "rejected_surfaced");
+    return recovered;
   };
-  function* uht() {}
-  function* cht() {
-    if (aht !== undefined) {
-      let Wn;
+  function* emptyStream() {}
+  function* yieldEffortNotice() {
+    if (pendingNotice !== undefined) {
+      let notice;
       try {
       } catch (error) {
         logError(error);
       }
-      aht = undefined;
-      if (Wn) yield Wn;
+      pendingNotice = undefined;
+      if (notice) yield notice;
     }
   }
-  let M3 = false;
-  function fht() {
-    let Wn = guardReturning(
-      () => builtForRelay && !M3 && (thinkingRelayModuleClaude?.relayStoppedInLastDispatch() ?? false),
+  let thinkingStripAttachmentSent = false;
+  function thinkingStripAttachment() {
+    let relayStopped = guardReturning(
+      () =>
+        builtForRelay &&
+        !thinkingStripAttachmentSent &&
+        (thinkingRelayModuleClaude?.relayStoppedInLastDispatch() ?? false),
       false,
     );
-    if (Wn) {
-      let pr = guardReturning(() => thinkingStripAllPlan(messages).size > 0, undefined);
-      if (pr === true) {
-        tp = true;
-        PC = "all";
-        Rf = true;
-      } else if (pr === false) ap = true;
+    if (relayStopped) {
+      let stripPlanSize = guardReturning(() => thinkingStripAllPlan(messages).size > 0, undefined);
+      if (stripPlanSize === true) {
+        thinkingWasStripped = true;
+        stripScope = "all";
+        thinkingStripMarked = true;
+      } else if (stripPlanSize === false) nothingToStrip = true;
     }
-    if (ap && !tp && !M3) {
-      M3 = true;
+    if (nothingToStrip && !thinkingWasStripped && !thinkingStripAttachmentSent) {
+      thinkingStripAttachmentSent = true;
       guardReturning(
         () => thinkingRelayModuleClaude?.markRelayThinkingStripRecorded("no_thinking"),
         undefined,
@@ -8368,16 +8883,18 @@ async function* queryModel(messages, systemPrompt, thinkingConfig, tools, signal
         scope: "all",
       });
     }
-    if (!tp || M3) return;
-    M3 = true;
-    if (Rf)
+    if (!thinkingWasStripped || thinkingStripAttachmentSent) return;
+    thinkingStripAttachmentSent = true;
+    if (thinkingStripMarked)
       guardReturning(
         () =>
-          thinkingRelayModuleClaude?.markRelayThinkingStripRecorded(Wn ? "marker_same_request" : "marker"),
+          thinkingRelayModuleClaude?.markRelayThinkingStripRecorded(
+            relayStopped ? "marker_same_request" : "marker",
+          ),
         undefined,
       );
     return createAttachmentMessage_2(
-      PC === "all"
+      stripScope === "all"
         ? {
             type: "thinking_stripped",
             scope: "all",
@@ -8386,35 +8903,42 @@ async function* queryModel(messages, systemPrompt, thinkingConfig, tools, signal
             type: "thinking_stripped",
             scope: "partial",
             from: {
-              messageId: PC.messageId,
-              thinkingIndex: PC.thinkingIndex,
+              messageId: stripScope.messageId,
+              thinkingIndex: stripScope.thinkingIndex,
             },
           },
     );
   }
   async function* BMs() {}
-  function pht({ messageIndex, blockIndex }) {
-    let Jr = HS[messageIndex];
-    return Jr?.role === "assistant" && Array.isArray(Jr.content)
-      ? getThinkingBlockKey(Jr.content[blockIndex])
+  function blockKeyAt({ messageIndex, blockIndex }) {
+    let message = sentMessages[messageIndex];
+    return message?.role === "assistant" && Array.isArray(message.content)
+      ? getThinkingBlockKey(message.content[blockIndex])
       : undefined;
   }
-  function mht(body) {
+  function checkTetherPrefix(body) {
     try {
-      if (!isTetherLive() || _1 || Cae || Kf || Ac !== undefined) return;
+      if (
+        !isTetherLive() ||
+        thinkingAlreadyStripped ||
+        sawApiError ||
+        retryRequested ||
+        retryCause !== undefined
+      )
+        return;
       checkTetherPrefixMismatch({
         body,
-        blockKeyAt: pht,
-        replyHolding: (pr, Jr) => {
-          let Os = Eh(pr);
-          let La = Os === undefined ? undefined : messagesForAPI_2[Os];
-          return Os !== undefined &&
-            La?.type === "assistant" &&
-            Array.isArray(La.message.content) &&
-            La.message.content.some((Vl) => getThinkingBlockKey(Vl) === Jr)
+        blockKeyAt,
+        replyHolding: (messageIndex, blockKey) => {
+          let sourceIndex = sourceIndexOf(messageIndex);
+          let message = sourceIndex === undefined ? undefined : messagesForAPI_2[sourceIndex];
+          return sourceIndex !== undefined &&
+            message?.type === "assistant" &&
+            Array.isArray(message.message.content) &&
+            message.message.content.some((block) => getThinkingBlockKey(block) === blockKey)
             ? {
-                messageId: La.message.id,
-                messageIndex: Os,
+                messageId: message.message.id,
+                messageIndex: sourceIndex,
               }
             : undefined;
         },
@@ -8434,29 +8958,29 @@ async function* queryModel(messages, systemPrompt, thinkingConfig, tools, signal
       logError(toError(error));
     }
   }
-  let ght = (body) => {
-    if (_1) return;
-    let pr = reportThinkingDrop({
+  let thinkingDropAttachment = (body) => {
+    if (thinkingAlreadyStripped) return;
+    let dropReport = reportThinkingDrop({
       body,
-      blockKeyAt: pht,
+      blockKeyAt,
       carriedBlockHashes: () => collectDroppedThinkingHashes(messages),
       countThinkingSent: () => summarizeThinkingStrip(messagesForAPI_2, messagesForAPI_2),
       querySource: options.querySource,
       agentId: options.agentId,
       model: options.model,
-      requestId: Al,
+      requestId: responseRequestId,
       solicited,
-      contextCompactedKind: BLe,
+      contextCompactedKind,
     });
     try {
       return (
-        pr &&
+        dropReport &&
         createAttachmentMessage_2(
-          buildThinkingDropAttachment(pr, {
-            requestId: Al,
+          buildThinkingDropAttachment(dropReport, {
+            requestId: responseRequestId,
             model: options.model,
             querySource: options.querySource,
-            requestedBehavior: g1,
+            requestedBehavior: prefixMismatchBehavior,
           }),
         )
       );
@@ -8465,31 +8989,34 @@ async function* queryModel(messages, systemPrompt, thinkingConfig, tools, signal
       return;
     }
   };
-  let T5n = (message) => {
-    let pr =
+  let parseMessageStop = (message) => {
+    let fallbackIndex =
       options.serverRefusalFallback !== undefined
-        ? (message.content ?? []).reduce((acc, ku, Np) => (isFallbackNotification(ku) ? Np : acc), -1)
+        ? (message.content ?? []).reduce(
+            (acc, block, index) => (isFallbackNotification(block) ? index : acc),
+            -1,
+          )
         : -1;
-    let Jr = message.stop_reason === "refusal";
-    let Os;
-    let La = 0;
+    let isRefusal = message.stop_reason === "refusal";
+    let lastHop;
+    let droppedCount = 0;
     let hadToolUse = false;
-    let Yl = [];
-    for (let [Wd, ku] of (message.content ?? []).entries()) {
-      if (!isFallbackNotification(ku)) {
-        if ((Wd < pr && ku.type !== "text") || (Jr && pr >= 0)) {
-          La++;
-          hadToolUse ||= ku.type === "tool_use";
+    let content = [];
+    for (let [index, block] of (message.content ?? []).entries()) {
+      if (!isFallbackNotification(block)) {
+        if ((index < fallbackIndex && block.type !== "text") || (isRefusal && fallbackIndex >= 0)) {
+          droppedCount++;
+          hadToolUse ||= block.type === "tool_use";
           continue;
         }
-        Yl.push(ku);
+        content.push(block);
         continue;
       }
-      let fallbackMessage = parseFallbackMessage(ku);
-      if (fallbackMessage === undefined) {
+      let block_2 = parseFallbackMessage(block);
+      if (block_2 === undefined) {
         logForDiagnosticsNoPII("warn", "cli_malformed_fallback_block");
         logEvent("tengu_rotunda_pennant_malformed", {
-          block_index: Wd,
+          block_index: index,
           non_streaming: true,
         });
         logFeatureSad("refusal_fallback", "malformed_fallback_block", {
@@ -8497,23 +9024,23 @@ async function* queryModel(messages, systemPrompt, thinkingConfig, tools, signal
         });
         continue;
       }
-      Yl.push(fallbackNotification(fallbackMessage));
-      Os = fallbackMessage;
-      let hf = w$;
+      content.push(fallbackNotification(block_2));
+      lastHop = block_2;
+      let fallbackMode = serverFallbackMode;
       logEvent("tengu_rotunda_pennant_materialized", {
         armed: options.serverRefusalFallback !== undefined,
-        mode: fromEnum(hf),
-        block_index: Wd,
+        mode: fromEnum(fallbackMode),
+        block_index: index,
         non_streaming: true,
       });
-      if (fallbackMessage.reason === "refusal")
+      if (block_2.reason === "refusal")
         logApiRefusal({
           model: resolvedModel,
-          requestId: Al || undefined,
+          requestId: responseRequestId || undefined,
           querySource: options.querySource,
-          effort: CC,
+          effort: effortLevelNormalized,
           fastMode: fallbackActive,
-          attempt: p_,
+          attempt: attemptNumber,
           attribution: buildAttribution(
             options.querySource,
             options.spawnedBySkill,
@@ -8525,53 +9052,54 @@ async function* queryModel(messages, systemPrompt, thinkingConfig, tools, signal
           agentContext: options.agentContext,
         });
     }
-    if (Yl.length === 0 && (message.content ?? []).length > 0)
-      Yl.push({
+    if (content.length === 0 && (message.content ?? []).length > 0)
+      content.push({
         type: "text",
         text: NO_CONTENT_MESSAGE,
         citations: [],
       });
-    let nd = options.serverRefusalFallback !== undefined ? parseUsageIterations(message.usage) : undefined;
-    $E =
-      nd?.servedFallbackModel !== undefined ||
-      (options.serverRefusalFallback !== undefined && Os !== undefined);
-    UT = false;
-    b1 = false;
-    Hae = nd;
-    if (La > 0)
+    let stopIterations =
+      options.serverRefusalFallback !== undefined ? parseUsageIterations(message.usage) : undefined;
+    serverFallbackUsed =
+      stopIterations?.servedFallbackModel !== undefined ||
+      (options.serverRefusalFallback !== undefined && lastHop !== undefined);
+    fallbackAnnounced = false;
+    creditLogged = false;
+    iterations = stopIterations;
+    if (droppedCount > 0)
       logEvent("tengu_rotunda_pennant_sync_dropped", {
-        dropped_count: La,
+        dropped_count: droppedCount,
         had_tool_use: hadToolUse,
-        chain_exhausted: Jr,
+        chain_exhausted: isRefusal,
       });
     return {
-      content: Yl,
-      lastHop: Os,
-      iterations: nd,
+      content,
+      lastHop,
+      iterations: stopIterations,
     };
   };
-  function* v5n(Wn, message, creditCode) {
-    if (creditCode !== undefined && !b1) {
-      b1 = true;
-      let hf = mRe(EMPTY_USAGE, message.usage);
+  function* handleStopEvents(parsed, message, creditCode) {
+    if (creditCode !== undefined && !creditLogged) {
+      creditLogged = true;
+      let usage = mergeUsageFromDelta(EMPTY_USAGE, message.usage);
       logEvent("tengu_fallback_credit_minted", {
-        request_id: sanitizeMarkName(Al),
+        request_id: sanitizeMarkName(responseRequestId),
         model: telemetrySafeModelName(options.model),
         fallback_target_model: telemetrySafeModelName(
           options.refusalFallbackModel ??
-            (options.serverRefusalFallback !== undefined && !$E
+            (options.serverRefusalFallback !== undefined && !serverFallbackUsed
               ? options.serverRefusalFallback.model
               : undefined),
         ),
         token_length: creditCode.length,
-        input_tokens: hf.input_tokens,
-        output_tokens: hf.output_tokens,
-        cache_read_input_tokens: hf.cache_read_input_tokens,
-        cache_creation_input_tokens: hf.cache_creation_input_tokens,
-        cache_creation_5m_input_tokens: hf.cache_creation?.ephemeral_5m_input_tokens ?? 0,
-        cache_creation_1h_input_tokens: hf.cache_creation?.ephemeral_1h_input_tokens ?? 0,
-        service_tier: fromEnumOpt(hf.service_tier),
-        speed: fromEnumOpt(hf.speed),
+        input_tokens: usage.input_tokens,
+        output_tokens: usage.output_tokens,
+        cache_read_input_tokens: usage.cache_read_input_tokens,
+        cache_creation_input_tokens: usage.cache_creation_input_tokens,
+        cache_creation_5m_input_tokens: usage.cache_creation?.ephemeral_5m_input_tokens ?? 0,
+        cache_creation_1h_input_tokens: usage.cache_creation?.ephemeral_1h_input_tokens ?? 0,
+        service_tier: fromEnumOpt(usage.service_tier),
+        speed: fromEnumOpt(usage.speed),
         query_source: agentTypeForTelemetry(options.querySource),
         ...(options.queryTracking && {
           query_chain_id: sanitizeMarkName(options.queryTracking.chainId),
@@ -8579,104 +9107,106 @@ async function* queryModel(messages, systemPrompt, thinkingConfig, tools, signal
         }),
       });
     }
-    let Os =
+    let servedModel =
       options.serverRefusalFallback !== undefined
-        ? (Wn.lastHop?.model ?? Wn.iterations?.servedFallbackModel)
+        ? (parsed.lastHop?.model ?? parsed.iterations?.servedFallbackModel)
         : undefined;
-    if (!UT && Os !== undefined) {
-      UT = true;
+    if (!fallbackAnnounced && servedModel !== undefined) {
+      fallbackAnnounced = true;
       yield {
         type: "server_fallback",
-        fromModel: Wn.lastHop?.fromModel ?? options.model,
-        toModel: Os,
-        reason: Wn.lastHop !== undefined ? "refusal" : "sticky",
-        apiRefusalCategory: Wn.lastHop?.category ?? null,
+        fromModel: parsed.lastHop?.fromModel ?? options.model,
+        toModel: servedModel,
+        reason: parsed.lastHop !== undefined ? "refusal" : "sticky",
+        apiRefusalCategory: parsed.lastHop?.category ?? null,
         midStream: false,
-        requestId: Al ?? null,
-        refusedEffort: qx(),
+        requestId: responseRequestId ?? null,
+        refusedEffort: refusedEffortInfo(),
         discardedMessages: [],
         retainedMessages: [],
         retainedText: "",
         finalStopReason: message.stop_reason,
       };
     }
-    let La = options.refusalFallbackModelLane === "silent";
-    let Vl = !La
+    let silentLane = options.refusalFallbackModelLane === "silent";
+    let armedFallback = !silentLane
       ? (options.refusalFallbackModel ??
-        (options.serverRefusalFallback !== undefined && !$E
+        (options.serverRefusalFallback !== undefined && !serverFallbackUsed
           ? options.serverRefusalFallback.model
           : undefined))
       : undefined;
     let refusalFallbackCascadeHop = options.refusalFallbackCascadeHop;
-    let nd =
-      message.stop_reason === "refusal" && Vl !== undefined && refusalFallbackCascadeHop === undefined
+    let route =
+      message.stop_reason === "refusal" &&
+      armedFallback !== undefined &&
+      refusalFallbackCascadeHop === undefined
         ? resolveRefusalFallbackRoute({
             originalModelCanonical: getCanonicalName(options.model),
-            armedFallbackModel: Vl,
+            armedFallbackModel: armedFallback,
             apiRefusalCategory: message.stop_details?.category ?? null,
-            armedTargetIsRefusingModel: isSameModel(options.model, Vl),
+            armedTargetIsRefusingModel: isSameModel(options.model, armedFallback),
             resolveTarget: (mappedTarget) =>
               pickFallbackModel({
                 mappedTarget,
-                armedFallbackModel: Vl,
+                armedFallbackModel: armedFallback,
                 refusingModel: options.model,
                 triedModels: [canonicalModelKey(options.model)],
               }),
             routesOverride: noopDialogHost(),
           })
         : undefined;
-    let Wd = nd !== undefined ? nd.model : Vl;
-    if (nd !== undefined)
+    let fallbackModel = route !== undefined ? route.model : armedFallback;
+    if (route !== undefined)
       logFallbackRouteOutcome({
-        route: nd,
+        route,
         model: options.model,
-        armedFallbackModel: Vl,
+        armedFallbackModel: armedFallback,
         apiRefusalCategory: message.stop_details?.category,
-        requestId: Al,
+        requestId: responseRequestId,
       });
-    if (message.stop_reason === "refusal" && Wd !== undefined) {
-      DLe();
-      k3 = true;
+    if (message.stop_reason === "refusal" && fallbackModel !== undefined) {
+      recordMediaLimitSuccess();
+      fallbackTriggered = true;
       yield {
         type: "fallback_request",
         trigger: "refusal",
         originalModel: options.model,
-        fallbackModel: Wd,
-        requestId: Al ?? null,
-        refusedEffort: qx(),
+        fallbackModel,
+        requestId: responseRequestId ?? null,
+        refusedEffort: refusedEffortInfo(),
         apiRefusalCategory: message.stop_details?.category ?? null,
         apiRefusalExplanation: message.stop_details?.explanation ?? null,
         creditCode: creditCode ?? null,
-        mintedStateless: !c1,
-        ...describeFallbackRoute(nd, refusalFallbackCascadeHop),
+        mintedStateless: !threadSliced,
+        ...describeFallbackRoute(route, refusalFallbackCascadeHop),
       };
       return true;
     }
     let refusalMessage = getRefusalMessage(
       message.stop_reason,
       message.stop_details,
-      Al,
-      Os ?? options.model,
+      responseRequestId,
+      servedModel ?? options.model,
       message.id,
     );
     if (refusalMessage) {
-      let hf = hasRefusalFallbackOccurred() || getRefusalFallbackModelLatch() !== undefined;
+      let latchActive = hasRefusalFallbackOccurred() || getRefusalFallbackModelLatch() !== undefined;
       if (
-        Vl !== undefined ||
+        armedFallback !== undefined ||
         options.refusalFallbackModel !== undefined ||
         (hasRefusalFallbackTarget(options.model) && isRefusalFallbackEnabled()) ||
         hasFallbackLatch() ||
-        hf
+        latchActive
       )
         logFeatureBad(
           "refusal_fallback",
-          nd?.matched === "none"
+          route?.matched === "none"
             ? "route_declined"
-            : La
+            : silentLane
               ? "sync_silent_stood"
-              : Os !== undefined
+              : servedModel !== undefined
                 ? "server_chain_exhausted"
-                : hf
+                : latchActive
                   ? "client_chain_exhausted"
                   : hasRefusalFallbackTarget(options.model) && isSwitchModelsOnFlagDisabled()
                     ? "disabled_by_config"
@@ -8684,31 +9214,31 @@ async function* queryModel(messages, systemPrompt, thinkingConfig, tools, signal
           {
             convolute_arcades: hasConvoluteArcadesFlag(),
             arm_source: fromEnum(getFallbackLatchKind()),
-            armed: Vl !== undefined,
+            armed: armedFallback !== undefined,
             model_scope: fromEnum(classifyFallbackOrigin(options.model)),
           },
         );
       yield {
         type: "refusal_no_fallback",
         originalModel: options.model,
-        requestId: Al ?? null,
+        requestId: responseRequestId ?? null,
         apiRefusalCategory: message.stop_details?.category ?? null,
         apiRefusalExplanation: message.stop_details?.explanation ?? null,
       };
       yield refusalMessage;
     }
-    let Np = E5n(message);
-    if (Np !== undefined) yield Np;
+    let maxTokensMsg = maxTokensStopMessageFor(message);
+    if (maxTokensMsg !== undefined) yield maxTokensMsg;
     return false;
   }
-  function E5n(Wn) {
+  function maxTokensStopMessageFor(message) {
     try {
       if (!getFeatureValue_CACHED_MAY_BE_STALE("tengu_vast_sunset", true)) return;
       return getMaxTokensStopMessage(
-        Wn.stop_reason,
-        Math.min(BT, MAX_OUTPUT_TOKENS_CAP_2),
-        Wn.usage?.output_tokens ?? 0,
-        BT >= MAX_OUTPUT_TOKENS_CAP_2,
+        message.stop_reason,
+        Math.min(maxOutputTokens, MAX_OUTPUT_TOKENS_CAP_2),
+        message.usage?.output_tokens ?? 0,
+        maxOutputTokens >= MAX_OUTPUT_TOKENS_CAP_2,
       );
     } catch (error) {
       logError(
@@ -8720,19 +9250,19 @@ async function* queryModel(messages, systemPrompt, thinkingConfig, tools, signal
       return;
     }
   }
-  let hht = [];
-  function yht(clearedIds, clearedContent) {
+  let hintClears = [];
+  function recordHintClears(clearedIds, clearedContent) {
     if (clearedIds.size > 0)
-      hht.push({
+      hintClears.push({
         type: "hint_clears",
         ids: [...clearedIds],
         contentById: Object.fromEntries(clearedContent),
       });
   }
-  function* $Le() {
-    yield* hht.splice(0);
+  function* drainHintClears() {
+    yield* hintClears.splice(0);
   }
-  async function* _ht(originatingRequestId, failedStreamOutlastedTimeout) {
+  async function* runNonStreamingFallback(originatingRequestId, failedStreamOutlastedTimeout) {
     let { message, requestId, headers, creditCode } = yield* executeNonStreamingRequest(
       {
         model: options.model,
@@ -8740,8 +9270,8 @@ async function* queryModel(messages, systemPrompt, thinkingConfig, tools, signal
         source: options.querySource,
         requestClass: options.requestClass,
         agentContext: options.agentContext,
-        promptId: Me,
-        ccsSender: ccrSenderAddressKey,
+        promptId: requestPromptId,
+        ccsSender: key,
         permissionContext,
         toolNames,
         credentials: options.credentials,
@@ -8749,9 +9279,9 @@ async function* queryModel(messages, systemPrompt, thinkingConfig, tools, signal
         clock,
         queryTracking: options.queryTracking,
         llmSpan: llmRequestSpan,
-        contextCompactedKindForWire: BLe,
+        contextCompactedKindForWire: contextCompactedKind,
         compactionRequestKindForWire: compactionRequestKind,
-        prevToolDurationsForWire: bht,
+        prevToolDurationsForWire: prevToolDurations,
       },
       {
         model: options.model,
@@ -8759,7 +9289,7 @@ async function* queryModel(messages, systemPrompt, thinkingConfig, tools, signal
         accessFallbackModel: accessFallbackModel_2,
         toolFreeHelper: options.toolFreeHelper,
         ...(isFastModeEnabled() && {
-          fastMode: fE,
+          fastMode: fastModeActive,
         }),
         modelIsRefusalFallbackTarget: options.modelIsRefusalFallbackTarget,
         signal,
@@ -8769,151 +9299,155 @@ async function* queryModel(messages, systemPrompt, thinkingConfig, tools, signal
         modelCallRetries: retryBudget,
         clock,
         random: options.random,
-        isResumePrefillRequest: fo,
+        isResumePrefillRequest: resumeIncompleteThinking,
         failedStreamOutlastedTimeout,
         onRetryStatus: options.onRetryStatus,
         subscribeRetryWake: options.subscribeRetryWake,
         onQuotaWindowWait,
         isUsageLimitLifted,
-        lowPriorityWait: _S,
-        stampDispatchHeader: Pgt,
-        onApiError: async (Pc) => {
-          let ey = l1(Pc);
-          if (ey !== undefined) return ey;
-          let Ew = await Mgt(Pc);
-          if (Ew !== undefined) return Ew;
-          let Aw = l$(Pc);
-          if (Aw !== undefined) return Aw;
-          let VT = M5(Pc);
-          if (VT !== undefined) return VT;
-          let Am = eht(Pc);
-          if (Am !== null) return Am;
-          let cP = Ugt(Pc, "sync");
-          if (cP !== undefined) return cP;
-          let fP = ILe(Pc);
-          if (fP !== undefined) return fP;
-          let foundryRetryDirective = getFoundryRetryDirective(Pc, options.model, options.querySource);
+        lowPriorityWait,
+        stampDispatchHeader,
+        onApiError: async (error) => {
+          let keptReminderRetry = handleKeptReminderRejection(error);
+          if (keptReminderRetry !== undefined) return keptReminderRetry;
+          let dispatchRetry = await handleDispatchError(error);
+          if (dispatchRetry !== undefined) return dispatchRetry;
+          let hookRetry = recoverHookRetry(error);
+          if (hookRetry !== undefined) return hookRetry;
+          let classifierRetry = handleDangerousToolUseRejection(error);
+          if (classifierRetry !== undefined) return classifierRetry;
+          let recovered = noRecovery(error);
+          if (recovered !== null) return recovered;
+          let webSearchRetry = handleWebSearchRejected(error, "sync");
+          if (webSearchRetry !== undefined) return webSearchRetry;
+          let mediaRetry = handleUnprocessableMedia(error);
+          if (mediaRetry !== undefined) return mediaRetry;
+          let foundryRetryDirective = getFoundryRetryDirective(error, options.model, options.querySource);
           if (foundryRetryDirective === FAIL_FOUNDRY_PURPOSE_REQUEST) return;
           if (foundryRetryDirective !== null) return foundryRetryDirective;
-          let HI = Zgt(Pc);
-          if (HI !== null) return HI;
-          let pP = jgt(Pc);
-          if (pP) return pP;
-          let BE = LLe(Pc);
-          if (BE) return BE;
-          let OC = Jgt(Pc);
-          if (OC !== null) return OC;
-          let UE = iht(Pc);
-          if (UE === "surface:resume-prefill") return;
-          if (UE !== null) return UE;
-          let mP = tht(Pc);
-          if (mP !== null) return mP;
-          let P$ = nht(Pc);
-          if (P$ !== null) return P$;
-          let fh = oht(Pc);
-          if (fh !== undefined) return fh;
-          D5(Pc);
-          let Ow = rht(Pc);
-          if (Ow !== null) return Ow;
-          let _b = NLe(Pc);
-          if (_b !== null) return _b;
-          let jE = w5n(Pc);
-          if (jE !== undefined) return jE;
+          let structuredRetry = handleStructuredOutputs(error);
+          if (structuredRetry !== null) return structuredRetry;
+          let promptEndRetry = probePromptEndMark(error);
+          if (promptEndRetry) return promptEndRetry;
+          let toolChangeRetry = recoverToolChange(error);
+          if (toolChangeRetry) return toolChangeRetry;
+          let effortRetry = handleEffortUnsupported(error);
+          if (effortRetry !== null) return effortRetry;
+          let resumptionRetry = handleThinkingResumption(error);
+          if (resumptionRetry === "surface:resume-prefill") return;
+          if (resumptionRetry !== null) return resumptionRetry;
+          let highlightsRetry = handleThinkingHighlights(error);
+          if (highlightsRetry !== null) return highlightsRetry;
+          let tokenCountProbe = recoverThinkingTokenCountBeta(error);
+          if (tokenCountProbe !== null) return tokenCountProbe;
+          let mentionedBetasRetry = recoverMentionedBetas(error);
+          if (mentionedBetasRetry !== undefined) return mentionedBetasRetry;
+          maybeRefuseToolSearch(error);
+          let context1mRetry = probeContext1mBeta(error);
+          if (context1mRetry !== null) return context1mRetry;
+          let bindingRetry = recoverThinkingBinding(error);
+          if (bindingRetry !== null) return bindingRetry;
+          let prefixLockRetry = recoverPrefixLockAndForeign(error);
+          if (prefixLockRetry !== undefined) return prefixLockRetry;
           return (
-            $gt(Pc) ??
-            Ngt(Pc) ??
-            Hgt(Pc) ??
-            i1(Pc, false) ??
-            Ogt(Pc, "sync") ??
-            SI(Pc) ??
-            a1(Pc) ??
-            OLe(Pc) ??
-            _Le(Pc) ??
-            L5(Pc) ??
-            Tae(Pc)
+            recoverViaWireCache(error) ??
+            handleAdvisorUnavailable(error) ??
+            recoverFromHintError(error) ??
+            probeThinkingTokenCount(error, false) ??
+            handleFallbackRejection(error, "sync") ??
+            probeClearAt(error) ??
+            maybeRetryThreads(error) ??
+            classifyHintRecovery(error) ??
+            probeThinkingDisplay(error) ??
+            recoverUnclaimedBeta(error) ??
+            maybeRefuseToolSearchFinal(error)
           );
         },
       },
       buildRequestParamsGuarded,
-      (Pc, ey, Ew) => {
-        p_ = Pc;
-        BT = Ew;
-        S3 = ey;
+      (attemptedAt, attemptStart, attemptMaxTokens) => {
+        attemptNumber = attemptedAt;
+        maxOutputTokens = attemptMaxTokens;
+        dispatchedAt = attemptStart;
       },
-      (Pc) => Af(Pc, false),
+      (params) => recordRequestBodies(params, false),
       originatingRequestId,
     );
-    Al = requestId;
-    C5(requestId, headers, true);
-    mht(message);
-    Nh?.settle(
+    responseRequestId = requestId;
+    noteResponse(requestId, headers, true);
+    checkTetherPrefix(message);
+    tetherDelta?.settle(
       {
         kind: "ok",
       },
-      Al,
+      responseRequestId,
       message.id,
     );
     try {
-      Ggt(message.usage);
-      zgt(message.usage);
+      noteCacheCoverageUsage(message.usage);
+      noteCacheCoverageSustained(message.usage);
     } catch {}
-    qgt();
-    Kgt();
-    Vgt();
-    Ygt();
-    Xgt();
-    N5();
-    t1();
-    Rae();
-    sht();
-    e1();
-    Wgt();
+    noteEffortOk();
+    noteLateToolsOk();
+    noopAfterSend();
+    noopAfterSuccess();
+    settleHealsAtSuccess();
+    settleThinkingTokenCountProbe();
+    settleThinkingDisplayProbe();
+    noteMidConvSystemAccepted();
+    settleContext1mProbe();
+    handleToolSearchRefusal();
+    settlePromptEndMark();
     logEvent("tengu_nonstreaming_fallback_success", {
       model: telemetrySafeModelName(options.model),
       request_id: traceValueOrUnknown(requestId),
-      originating_request_id: traceValueOrUnknown(fc),
+      originating_request_id: traceValueOrUnknown(firstAttemptRequestId),
       fallback_cause: fromEnum(originatingRequestId.cause),
-      attempt: p_,
+      attempt: attemptNumber,
     });
-    yield* cht();
-    yield* uht();
-    yield* Qgt();
-    b3 = message.diagnostics?.cache_miss_reason ?? undefined;
-    let Yl = T5n(message);
-    let nd = aI ? captureWireToolInputs(Yl.content) : undefined;
-    if (nd?.degraded) logWireToolInputParseFailure();
-    let inputs = nd?.inputs;
-    let ku = countToolCallsSince_4(Yl.content, inputs);
+    yield* yieldEffortNotice();
+    yield* emptyStream();
+    yield* orgEffortNotice();
+    cacheMissReason = message.diagnostics?.cache_miss_reason ?? undefined;
+    let parsed = parseMessageStop(message);
+    let wireInputs = wireInputsEchoed ? captureWireToolInputs(parsed.content) : undefined;
+    if (wireInputs?.degraded) logWireToolInputParseFailure();
+    let inputs = wireInputs?.inputs;
+    let ingestContext = countToolCallsSince_4(parsed.content, inputs);
     let { content, batchToolUses } = isBatchToolsUse(
       normalizeContentFromAPI(
-        Yl.content,
+        parsed.content,
         tools,
         options.agentId,
         {
-          requestId: Al ?? undefined,
+          requestId: responseRequestId ?? undefined,
           messageId: message.id,
         },
         options.storageV5,
       ),
       tools,
-      (Pc, ey) => normalizeToolInput_2(Pc, ey, options.agentId, options.storageV5),
+      (item, index) => normalizeToolInput_2(item, index, options.agentId, options.storageV5),
     );
-    if (Qh !== undefined) MI(Qh, message, message.content);
-    ALe = headers;
-    let Kg = ght(message);
-    let cy = fht();
-    if (cy) yield cy;
-    let jT = np();
-    if (jT) yield jT;
-    if (Kg) yield Kg;
-    let pk = {
+    if (classifierSession !== undefined) settleClassifier(classifierSession, message, message.content);
+    responseHeaders = headers;
+    let dropAttachment = thinkingDropAttachment(message);
+    let stripAttachment = thinkingStripAttachment();
+    if (stripAttachment) yield stripAttachment;
+    let advisorStrippedMsg = advisorStrippedMessage();
+    if (advisorStrippedMsg) yield advisorStrippedMsg;
+    if (dropAttachment) yield dropAttachment;
+    let assistantMessage = {
       message: {
         ...message,
         content,
-        usage: mRe(EMPTY_USAGE, message.usage),
-        ...(m$ &&
+        usage: mergeUsageFromDelta(EMPTY_USAGE, message.usage),
+        ...(contextManagementEligible &&
           message.context_management && {
-            context_management: addClientEstimatedClearedTokens(message.context_management, EI?.edit, HS),
+            context_management: addClientEstimatedClearedTokens(
+              message.context_management,
+              toolResultClearingPlan?.edit,
+              sentMessages,
+            ),
           }),
       },
       ...(batchToolUses.length > 0 && {
@@ -8922,12 +9456,12 @@ async function* queryModel(messages, systemPrompt, thinkingConfig, tools, signal
       ...(inputs !== undefined && {
         wireToolInputs: inputs,
       }),
-      ...(ku !== undefined && {
-        wireIngestContext: ku,
+      ...(ingestContext !== undefined && {
+        wireIngestContext: ingestContext,
       }),
-      ...(Qh !== undefined && classifierResultPayload(Qh)),
+      ...(classifierSession !== undefined && classifierResultPayload(classifierSession)),
       apiBlockIndex: 0,
-      requestId: Al ?? undefined,
+      requestId: responseRequestId ?? undefined,
       requestRef,
       requestedModel: options.model,
       ...buildAttribution(
@@ -8941,50 +9475,50 @@ async function* queryModel(messages, systemPrompt, thinkingConfig, tools, signal
       uuid: randomUUID(),
       timestamp: new Date().toISOString(),
       ...false,
-      ...(yn && {
-        advisorModel: yn,
+      ...(advisorModelForQuery && {
+        advisorModel: advisorModelForQuery,
       }),
-      ...(yS !== undefined && {
-        effort: yS,
+      ...(sentEffort !== undefined && {
+        effort: sentEffort,
       }),
-      perTurnEffort: EE,
-      perTurnTiming: n$,
+      perTurnEffort: perTurnEffortValue,
+      perTurnTiming: perTurnNowValue,
       ...{},
     };
-    noopNotice(conversation, pk);
-    Cm.push(pk);
-    LI = pk;
-    Ux = false;
-    yield pk;
-    return yield* v5n(Yl, message, creditCode);
+    noopNotice(conversation, assistantMessage);
+    yieldedMessages.push(assistantMessage);
+    nonStreamingAssistant = assistantMessage;
+    usageRecorded = false;
+    yield assistantMessage;
+    return yield* handleStopEvents(parsed, message, creditCode);
   }
-  let D3 = false;
-  let MC = new Map();
-  let Bae = new Set();
-  let HLe = new Set();
-  let E$;
-  let Sht =
+  let suppressedByFallback = false;
+  let blockMessages = new Map();
+  let malformedBlocks = new Set();
+  let fallbackBlockIndices = new Set();
+  let pendingFallback;
+  let backgroundAgentId =
     getBackgroundAgentId(options.agentContext) ?? (options.isBackgroundAgent ? options.agentId : undefined);
-  let BLe =
+  let contextCompactedKind =
     classifyQuerySource(options.querySource) === "main" &&
     isMainQueryCompaction(options.querySource, options.agentId)
       ? consumePendingContextCompacted()
       : undefined;
   let compactionRequestKind = options.compactionRequestKind;
-  let bht =
+  let prevToolDurations =
     options.prevToolDurations !== undefined
       ? formatToolDurationsHeader(options.prevToolDurations)
       : undefined;
   try {
-    startSessionActivity("api_call", Sht);
+    startSessionActivity("api_call", backgroundAgentId);
     e: for (;;) {
-      let D1 = function () {
+      let clearStreamTimers = function () {
         if (streamIdleTimer !== null) {
           streamIdleTimer();
           streamIdleTimer = null;
         }
-        if (BI) {
-          BI = false;
+        if (stallNotified) {
+          stallNotified = false;
           options.onRetryStatus?.(null);
         }
         if (streamWatchdogFiredAt !== null) {
@@ -8996,27 +9530,27 @@ async function* queryModel(messages, systemPrompt, thinkingConfig, tools, signal
           streamIdleWarningTimer = null;
         }
       };
-      let L1 = function () {
-        if (!options.onRetryStatus || !clock_2) return;
-        let lastAt = clock_2.lastAt;
-        let od = clock.monotonicNow();
+      let armStallWatcher = function () {
+        if (!options.onRetryStatus || !chunkTimes) return;
+        let lastAt = chunkTimes.lastAt;
+        let lastEventAt = clock.monotonicNow();
         streamIdleTimer = clock.setTimeout(
           () => {
-            if (clock.monotonicNow() - od < streamStallMarginMs / 2) return;
-            if (clock_2.lastAt > lastAt) {
-              L1();
+            if (clock.monotonicNow() - lastEventAt < streamStallMarginMs / 2) return;
+            if (chunkTimes.lastAt > lastAt) {
+              armStallWatcher();
               return;
             }
-            let Zg = clock.monotonicNow() - clock_2.lastAt;
-            if (E1 && Zg < min_2) {
-              L1();
+            let idleMs = clock.monotonicNow() - chunkTimes.lastAt;
+            if (advisorToolInFlight && idleMs < min_2) {
+              armStallWatcher();
               return;
             }
-            let Iy = clock_2.lastAt === 0 ? clock.monotonicNow() - Os : Zg;
-            BI = true;
+            let lastEventAgeMs = chunkTimes.lastAt === 0 ? clock.monotonicNow() - stallWindowStart : idleMs;
+            stallNotified = true;
             options.onRetryStatus?.({
               kind: "stalled",
-              deadline: clock.now() + Math.max(0, min - Iy),
+              deadline: clock.now() + Math.max(0, min - lastEventAgeMs),
             });
           },
           streamStallMarginMs,
@@ -9025,32 +9559,32 @@ async function* queryModel(messages, systemPrompt, thinkingConfig, tools, signal
           },
         );
       };
-      let L_ = function () {
-        D1();
-        L1();
+      let armStreamWatchdogs = function () {
+        clearStreamTimers();
+        armStallWatcher();
         if (!CLAUDE_ENABLE_STREAM_WATCHDOG) return;
-        let Fd = clock.monotonicNow();
+        let armedAt = clock.monotonicNow();
         let wallArmedAt = clock.now();
-        let Zg = OC;
+        let warningMs = warningThresholdMs;
         streamWatchdogFiredAt = clock.setTimeout(() => {
-          if (clock.monotonicNow() - Fd < Zg) return;
-          logForDebugging(`Streaming idle warning: no chunks received for ${Zg / 1000}s`, {
+          if (clock.monotonicNow() - armedAt < warningMs) return;
+          logForDebugging(`Streaming idle warning: no chunks received for ${warningMs / 1000}s`, {
             level: "warn",
           });
           logForDiagnosticsNoPII("warn", "cli_streaming_idle_warning");
-        }, OC);
+        }, warningThresholdMs);
         streamIdleWarningTimer = clock.setTimeout(() => {
-          Ow = checkSuspendedStreamIdle(clock, {
-            armedAt: Fd,
+          suspendedError = checkSuspendedStreamIdle(clock, {
+            armedAt,
             wallArmedAt,
             idleMs: streamIdleTimeoutMs,
           });
-          if (Ow !== undefined) {
+          if (suspendedError !== undefined) {
             releaseStreamResources();
             return;
           }
-          fh = true;
-          _b = clock.monotonicNow();
+          idleTimedOut = true;
+          idleTimeoutAt = clock.monotonicNow();
           logForDebugging(
             `Streaming idle timeout: no chunks received for ${streamIdleTimeoutMs / 1000}s, aborting stream`,
             {
@@ -9060,14 +9594,14 @@ async function* queryModel(messages, systemPrompt, thinkingConfig, tools, signal
           logForDiagnosticsNoPII("error", "cli_streaming_idle_timeout");
           logEvent("tengu_streaming_idle_timeout", {
             model: telemetrySafeModelName(options.model),
-            request_id: traceValueOrUnknown(Al),
+            request_id: traceValueOrUnknown(responseRequestId),
             timeout_ms: streamIdleTimeoutMs,
             tier: lit_2("event"),
           });
           releaseStreamResources();
         }, streamIdleTimeoutMs);
       };
-      nk = undefined;
+      responseMeta = undefined;
       queryCheckpoint("query_client_creation_start");
       if (isTopLevelMain) {
         endProfilePhase("request_build");
@@ -9082,23 +9616,24 @@ async function* queryModel(messages, systemPrompt, thinkingConfig, tools, signal
             source: options.querySource,
             requestClass: options.requestClass,
             agentContext: options.agentContext,
-            promptId: Me,
-            ccsSender: ccrSenderAddressKey,
+            promptId: requestPromptId,
+            ccsSender: key,
             permissionContext,
             toolNames,
             credentials: options.credentials,
             storageV5: options.storageV5,
             signal,
             clock,
-            noResponseRetryLedger: xLe,
+            noResponseRetryLedger: noResponseRetryLedgerState,
           }),
         async (anthropic, attempt, context) => {
-          if (fallbackCreditCode === undefined) C_("attempt_errored", Al ?? null, null);
-          p_ = attempt;
+          if (fallbackCreditCode === undefined)
+            logCreditOutcome("attempt_errored", responseRequestId ?? null, null);
+          attemptNumber = attempt;
           fallbackActive = context.fastMode ?? false;
-          Uy = clock.monotonicNow();
-          nk = undefined;
-          B5.push(Uy);
+          attemptStartAt = clock.monotonicNow();
+          responseMeta = undefined;
+          attemptStartTimes.push(attemptStartAt);
           queryCheckpoint("query_client_creation_end");
           if (isTopLevelMain) {
             endProfilePhase("client_creation");
@@ -9106,47 +9641,47 @@ async function* queryModel(messages, systemPrompt, thinkingConfig, tools, signal
           }
           let params = buildRequestParamsGuarded(context);
           try {
-            wgt(params);
+            logApiQueryOnce(params);
           } catch (error) {
             logError(toError(error));
           }
           logApiRequestDetail(params);
-          Af(params, true);
-          BT = params.max_tokens;
+          recordRequestBodies(params, true);
+          maxOutputTokens = params.max_tokens;
           queryCheckpoint("query_api_request_sent");
           logForDebugging(
             `[API:timing] dispatching to ${getProviderForModel(options.model)} model=${options.model}`,
           );
-          S3 = clock.now();
-          if (CLe === undefined && options.queryTracking?.roundStartedAtMs !== undefined) {
+          dispatchedAt = clock.now();
+          if (queryOverheadMs === undefined && options.queryTracking?.roundStartedAtMs !== undefined) {
             options.queryTracking.firstDispatchedAtMs ??= performance.now();
-            CLe = Math.round(
+            queryOverheadMs = Math.round(
               options.queryTracking.firstDispatchedAtMs - options.queryTracking.roundStartedAtMs,
             );
           }
           if (!options.agentId) {
-            if (Hi) headlessProfilerCheckpoint("api_request_sent");
+            if (isMainThread) headlessProfilerCheckpoint("api_request_sent");
             if (isTopLevelMain) endProfilePhase("request_build");
-            if (attempt === 1 && !_3) {
-              _3 = clock.monotonicNow();
-              ELe = clock.now();
-              if (Hi) recordApiRequestSentFromSpawn();
-              if (isTopLevelMain) RLe = closeProfile(_3);
+            if (attempt === 1 && !sentAtMonotonic) {
+              sentAtMonotonic = clock.monotonicNow();
+              sentAtWall = clock.now();
+              if (isMainThread) recordApiRequestSentFromSpawn();
+              if (isTopLevelMain) profileHandle = closeProfile(sentAtMonotonic);
             }
-            if (Hi)
+            if (isMainThread)
               try {
                 markRootRequestSent();
               } catch (error) {
                 logError(toError(error));
               }
           }
-          OE();
-          let Of = parseIntLoose(process.env.CLAUDE_SLOW_FIRST_BYTE_MS) || 30000;
-          $T = clock.setTimeout(() => {
-            $T = null;
-            let Ql = clock.monotonicNow() - Uy;
+          cancelFirstByteTimer();
+          let slowFirstByteMs = parseIntLoose(process.env.CLAUDE_SLOW_FIRST_BYTE_MS) || 30000;
+          firstByteTimer = clock.setTimeout(() => {
+            firstByteTimer = null;
+            let elapsedMs = clock.monotonicNow() - attemptStartAt;
             logForDebugging(
-              `Slow first byte: no stream chunk ${(Ql / 1000).toFixed(1)}s after request sent (attempt ${attempt})`,
+              `Slow first byte: no stream chunk ${(elapsedMs / 1000).toFixed(1)}s after request sent (attempt ${attempt})`,
               {
                 level: "warn",
               },
@@ -9155,71 +9690,71 @@ async function* queryModel(messages, systemPrompt, thinkingConfig, tools, signal
               model: telemetrySafeModelName(options.model),
               provider: getAPIProviderForAnalytics(),
               attempt,
-              elapsed_ms: Math.round(Ql),
+              elapsed_ms: Math.round(elapsedMs),
             });
-          }, Of);
-          let requestTraceHeaders = buildRequestTraceHeaders(llmRequestSpan, B5.length);
-          Ah = requestTraceHeaders.clientRequestId;
+          }, slowFirstByteMs);
+          let requestTraceHeaders = buildRequestTraceHeaders(llmRequestSpan, attemptStartTimes.length);
+          clientRequestId = requestTraceHeaders.clientRequestId;
           let headers = requestTraceHeaders.headers;
-          Jh = isFirstPartyApiBackend() && isLowPriorityActiveSafe();
-          if (Jh) headers[ANTHROPIC_USAGE_LIMIT] = SLOW;
-          if (shouldSendExtendedUsageLimitHeader(options, Jh, Je))
+          isLowPriority = isFirstPartyApiBackend() && isLowPriorityActiveSafe();
+          if (isLowPriority) headers[ANTHROPIC_USAGE_LIMIT] = SLOW;
+          if (shouldSendExtendedUsageLimitHeader(options, isLowPriority, isSessionTask))
             headers[ANTHROPIC_USAGE_LIMIT] = "extended";
-          Pgt(headers, Jh);
+          stampDispatchHeader(headers, isLowPriority);
           if (
             options.fallbackStampFromModel !== undefined &&
             getAPIProvider() === "firstParty" &&
             isFirstPartyAnthropicBaseUrl()
           )
-            for (let [Ql, Nu] of [
+            for (let [headerName, headerValue] of [
               [X_CC_FALLBACK_FROM_MODEL, options.fallbackStampFromModel],
               [X_CC_FALLBACK_CATEGORY, options.fallbackStampCategory],
               [X_CC_FALLBACK_TRIGGER, options.fallbackStampTrigger],
               [X_CC_ORIGINAL_REQUEST_ID, options.fallbackStampOriginalRequestId],
             ]) {
-              let Qc = sanitizeHeaderValue_2(Nu);
-              if (Qc !== undefined) headers[Ql] = Qc;
+              let sanitizedValue = sanitizeHeaderValue_2(headerValue);
+              if (sanitizedValue !== undefined) headers[headerName] = sanitizedValue;
             }
-          setCompactionHeaders(headers, BLe, compactionRequestKind);
-          setPrevToolDurationsHeader(headers, bht);
-          let vc = fallbackCreditCode;
-          sP = vc !== undefined;
-          if (vc !== undefined) {
+          setCompactionHeaders(headers, contextCompactedKind, compactionRequestKind);
+          setPrevToolDurationsHeader(headers, prevToolDurations);
+          let creditToken = fallbackCreditCode;
+          creditEchoedStream = creditToken !== undefined;
+          if (creditToken !== undefined) {
             fallbackCreditCode = undefined;
-            y3 = true;
+            creditMintedStream = true;
           }
           limitsAccountEpoch = getLimitsAccountEpoch();
-          if (Ah !== undefined) {
-            armFirstByteWatchdog(Ah, {
-              escalated: xLe.count > 0,
+          if (clientRequestId !== undefined) {
+            armFirstByteWatchdog(clientRequestId, {
+              escalated: noResponseRetryLedgerState.count > 0,
             });
-            takeDispatchAtGzip(Ah, performance.now());
+            takeDispatchAtGzip(clientRequestId, performance.now());
           }
           if (classifyQuerySource(options.querySource) === "main") setTimeout(warmHarnessPatterns, 0);
           setTimeout(flushMessageOutlines, 0, options.querySource, options.agentId);
           let streamRequestBody = {
             ...deferredToolNameOf(params),
-            ...(vc !== undefined && {
-              fallback_credit_token: vc,
+            ...(creditToken !== undefined && {
+              fallback_credit_token: creditToken,
             }),
             stream: true,
           };
-          let eh = takesRequestBodyBytes(options.fetchOverride)
+          let incrementalBody = takesRequestBodyBytes(options.fetchOverride)
             ? checkIncrementalRequestBody(
                 streamRequestBody,
                 classifyQuerySource(options.querySource) === "main" && options.agentId === undefined,
               )
             : undefined;
-          let responseWithMeta = await reportIncrementalBodyMismatch(eh, streamRequestBody, () =>
+          let responseWithMeta = await reportIncrementalBodyMismatch(incrementalBody, streamRequestBody, () =>
             anthropic.beta.messages
               .create(streamRequestBody, {
                 signal,
-                ...(eh === undefined
+                ...(incrementalBody === undefined
                   ? Object.keys(headers).length > 0 && {
                       headers,
                     }
                   : {
-                      body: eh,
+                      body: incrementalBody,
                       headers: {
                         ...headers,
                         "content-type": "application/json",
@@ -9228,28 +9763,31 @@ async function* queryModel(messages, systemPrompt, thinkingConfig, tools, signal
               })
               .withResponse(),
           ).catch((error) => {
-            OE();
+            cancelFirstByteTimer();
             throw error;
           });
           queryCheckpoint("query_response_headers_received");
-          Al = amazonRequestId(responseWithMeta.request_id, responseWithMeta.response?.headers);
-          k_ = responseWithMeta.response;
-          bS = clock.now();
-          C5(Al, responseWithMeta.response?.headers, false);
-          nk = responseWithMeta.response && {
+          responseRequestId = amazonRequestId(
+            responseWithMeta.request_id,
+            responseWithMeta.response?.headers,
+          );
+          responseBody = responseWithMeta.response;
+          headersReceivedAt = clock.now();
+          noteResponse(responseRequestId, responseWithMeta.response?.headers, false);
+          responseMeta = responseWithMeta.response && {
             status: responseWithMeta.response.status,
             headers: responseWithMeta.response.headers,
-            latencyMs: Math.round(clock.monotonicNow() - Uy),
+            latencyMs: Math.round(clock.monotonicNow() - attemptStartAt),
           };
-          logApiRouteObserved(nk, eh !== undefined);
-          if (vc !== undefined)
+          logApiRouteObserved(responseMeta, incrementalBody !== undefined);
+          if (creditToken !== undefined)
             logEvent("tengu_rotunda_pennant_credit_echoed", {
               mint_request_id: sanitizeMarkName(options.fallbackCreditMintRequestId),
               mint_model: telemetrySafeModelName(options.fallbackCreditMintModel),
-              request_id: sanitizeMarkName(Al),
-              client_request_id: sanitizeMarkName(Ah),
+              request_id: sanitizeMarkName(responseRequestId),
+              client_request_id: sanitizeMarkName(clientRequestId),
               model: telemetrySafeModelName(options.model),
-              token_length: vc.length,
+              token_length: creditToken.length,
               query_source: agentTypeForTelemetry(options.querySource),
             });
           return responseWithMeta.data;
@@ -9263,36 +9801,36 @@ async function* queryModel(messages, systemPrompt, thinkingConfig, tools, signal
           toolFreeHelper: options.toolFreeHelper,
           ...(isFastModeEnabled()
             ? {
-                fastMode: fE,
+                fastMode: fastModeActive,
               }
             : false),
           modelIsRefusalFallbackTarget: options.modelIsRefusalFallbackTarget,
           signal,
           initialConsecutive529Errors: retryBudget.counts().overloaded,
           maxRetries: retryBudget.retriesLeft(),
-          noResponseRetryLedger: xLe,
+          noResponseRetryLedger: noResponseRetryLedgerState,
           modelCallRetries: retryBudget,
           clock,
           random: options.random,
-          isResumePrefillRequest: fo,
+          isResumePrefillRequest: resumeIncompleteThinking,
           querySource: options.querySource,
           onRetryStatus: options.onRetryStatus,
           subscribeRetryWake: options.subscribeRetryWake,
           onQuotaWindowWait,
           isUsageLimitLifted,
-          lowPriorityWait: _S,
-          onError: async (Fd) => {
-            vgt();
-            let od = l1(Fd);
-            if (od !== undefined) return od;
-            let Zg = l$(Fd);
-            if (Zg !== undefined) return Zg;
-            let Iy = M5(Fd);
-            if (Iy !== undefined) return Iy;
-            let Of = eht(Fd);
-            if (Of !== null) return Of;
-            if (_E && isAfkModeBetaRejected(Fd)) {
-              _E = false;
+          lowPriorityWait,
+          onError: async (error) => {
+            logApiQueryOnError();
+            let recovered = handleKeptReminderRejection(error);
+            if (recovered !== undefined) return recovered;
+            let hookRetry = recoverHookRetry(error);
+            if (hookRetry !== undefined) return hookRetry;
+            let classifierRetry = handleDangerousToolUseRejection(error);
+            if (classifierRetry !== undefined) return classifierRetry;
+            let recoveredResult = noRecovery(error);
+            if (recoveredResult !== null) return recoveredResult;
+            if (afkModeOn && isAfkModeBetaRejected(error)) {
+              afkModeOn = false;
               if (BETA_AFK_MODE) markBetaRejected(conversation, BETA_AFK_MODE);
               setAutoModeActive(false);
               setAutoModeCircuitBroken(true);
@@ -9304,143 +9842,148 @@ async function* queryModel(messages, systemPrompt, thinkingConfig, tools, signal
               );
               return "retry:afk-beta";
             }
-            let B_ = await Mgt(Fd);
-            if (B_ !== undefined) return B_;
-            if (isAdvisorResultUnprocessable(Fd)) {
-              let Xl = messagesForAPI_2;
-              let ql = stripAdvisorBlocks(Xl);
-              let index = Xl.findIndex((ty, fp) => ql[fp] !== ty);
-              let reduced = Xl.reduce((acc, fp, th) => (ql[th] !== fp ? acc + 1 : acc), 0);
-              let Nf = isFoamySpringWireOn() && index !== -1;
-              let G_;
-              if (Nf && !options.resumeIncompleteThinking && Mae !== "enabled")
+            let dispatchRetry = await handleDispatchError(error);
+            if (dispatchRetry !== undefined) return dispatchRetry;
+            if (isAdvisorResultUnprocessable(error)) {
+              let originalMessages = messagesForAPI_2;
+              let strippedMessages = stripAdvisorBlocks(originalMessages);
+              let index = originalMessages.findIndex((message, index) => strippedMessages[index] !== message);
+              let reduced = originalMessages.reduce(
+                (acc, message, index) => (strippedMessages[index] !== message ? acc + 1 : acc),
+                0,
+              );
+              let recordStrip = isFoamySpringWireOn() && index !== -1;
+              let stripFrom;
+              if (recordStrip && !options.resumeIncompleteThinking && thinkingType !== "enabled")
                 try {
-                  let index_2 = Xl.findIndex((th, Fg) => Fg >= index && hasAdvisorBlocks(th));
-                  let fp = index_2 === -1 ? undefined : Xl[index_2];
-                  if (fp?.type === "assistant") {
-                    let th = stripThinkingFromPoint(ql, {
+                  let index_2 = originalMessages.findIndex(
+                    (message, stripIndexOf) => stripIndexOf >= index && hasAdvisorBlocks(message),
+                  );
+                  let firstWithAdvisor = index_2 === -1 ? undefined : originalMessages[index_2];
+                  if (firstWithAdvisor?.type === "assistant") {
+                    let afterStripMessages = stripThinkingFromPoint(strippedMessages, {
                       messageIndex: index_2,
                       thinkingIndex: 0,
                     });
-                    if (th !== ql) {
-                      ql = th;
-                      let id = fp.message.id;
+                    if (afterStripMessages !== strippedMessages) {
+                      strippedMessages = afterStripMessages;
+                      let id = firstWithAdvisor.message.id;
                       if (typeof id === "string") {
                         let thinkingIndex = 0;
                         for (let idx = 0; idx < index_2; idx++) {
-                          let pp = Xl[idx];
+                          let message = originalMessages[idx];
                           if (
-                            pp.type === "assistant" &&
-                            pp.message.id === id &&
-                            Array.isArray(pp.message.content)
+                            message.type === "assistant" &&
+                            message.message.id === id &&
+                            Array.isArray(message.message.content)
                           )
                             thinkingIndex += count(
-                              pp.message.content,
-                              (Om) => Om.type === "thinking" || Om.type === "redacted_thinking",
+                              message.message.content,
+                              (block) => block.type === "thinking" || block.type === "redacted_thinking",
                             );
                         }
-                        G_ = {
+                        stripFrom = {
                           messageIndex: index_2,
                           indexInMessage: 0,
                           thinkingIndex,
                           messageId: id,
                         };
                       } else {
-                        ql = stripAllThinking(ql);
-                        G_ = "all";
+                        strippedMessages = stripAllThinking(strippedMessages);
+                        stripFrom = "all";
                       }
                     }
                   }
                 } catch (error) {
                   logError(toError(error));
-                  ql = stripAdvisorBlocks(Xl);
-                  G_ = undefined;
+                  strippedMessages = stripAdvisorBlocks(originalMessages);
+                  stripFrom = undefined;
                 }
-              messagesForAPI_2 = ch(ql, "error_recovery");
-              y5n();
-              if (Nf) {
-                Yh = true;
-                if (G_ !== undefined) FLe(G_);
+              messagesForAPI_2 = recoverMessages(strippedMessages, "error_recovery");
+              wrapFallbacksAdvisorStrip();
+              if (recordStrip) {
+                shouldNotifyAdvisorStripped = true;
+                if (stripFrom !== undefined) recordStripScope(stripFrom);
               }
               logForDebugging(
                 reduced === 0
                   ? "[advisor] the server could not process an advisor result sent earlier in this conversation; nothing to remove, retrying as sent."
-                  : `[advisor] the server could not process an advisor result sent earlier in this conversation; retrying with the advisor blocks removed from ${reduced} message(s)${G_ === "all" ? " and all thinking removed" : G_ !== undefined ? " and the thinking after them removed" : ""}${Nf ? "; recorded, so later requests leave them out too." : "; not recorded, so the next request sends them again."}`,
+                  : `[advisor] the server could not process an advisor result sent earlier in this conversation; retrying with the advisor blocks removed from ${reduced} message(s)${stripFrom === "all" ? " and all thinking removed" : stripFrom !== undefined ? " and the thinking after them removed" : ""}${recordStrip ? "; recorded, so later requests leave them out too." : "; not recorded, so the next request sends them again."}`,
                 {
                   level: "warn",
                 },
               );
               logEvent("tengu_advisor_strip_retry", {
                 query_source: agentTypeForTelemetry(options.querySource),
-                strip_recorded: Nf,
+                strip_recorded: recordStrip,
                 stripped_message_count: reduced,
-                thinking_also_stripped: G_ !== undefined,
+                thinking_also_stripped: stripFrom !== undefined,
               });
               return "retry:advisor-strip";
             }
-            let ea = Ugt(Fd, "stream");
-            if (ea !== undefined) return ea;
-            let streamWatchdogEnabled = ILe(Fd);
+            let webSearchRetry = handleWebSearchRejected(error, "stream");
+            if (webSearchRetry !== undefined) return webSearchRetry;
+            let streamWatchdogEnabled = handleUnprocessableMedia(error);
             if (streamWatchdogEnabled !== undefined) return streamWatchdogEnabled;
-            let foundryRetryDirective = getFoundryRetryDirective(Fd, options.model, options.querySource);
+            let foundryRetryDirective = getFoundryRetryDirective(error, options.model, options.querySource);
             if (foundryRetryDirective === FAIL_FOUNDRY_PURPOSE_REQUEST) return;
             if (foundryRetryDirective !== null) return foundryRetryDirective;
-            let Mg = Zgt(Fd);
-            if (Mg !== null) return Mg;
+            let structuredRetry = handleStructuredOutputs(error);
+            if (structuredRetry !== null) return structuredRetry;
             {
-              let mediaErrorFromApiError = getMediaErrorFromApiError(Fd);
+              let mediaErrorFromApiError = getMediaErrorFromApiError(error);
               if (mediaErrorFromApiError) {
-                let ql = Fd instanceof Error ? Fd.message : String(Fd);
-                let Ep = isBase64ImageBlock(messagesForAPI_2, ql);
-                if (Ep !== messagesForAPI_2) {
-                  messagesForAPI_2 = ch(Ep, "error_recovery");
-                  w3.set(mediaErrorFromApiError.kind, ql);
-                  notifyMediaStripped(options, mediaErrorFromApiError.kind, ql);
+                let errorMessage = error instanceof Error ? error.message : String(error);
+                let strippedImages = isBase64ImageBlock(messagesForAPI_2, errorMessage);
+                if (strippedImages !== messagesForAPI_2) {
+                  messagesForAPI_2 = recoverMessages(strippedImages, "error_recovery");
+                  mediaStripErrors.set(mediaErrorFromApiError.kind, errorMessage);
+                  notifyMediaStripped(options, mediaErrorFromApiError.kind, errorMessage);
                   logEvent("tengu_media_block_strip_retry", {
                     kind: fromEnum(mediaErrorFromApiError.kind),
                     targeted: 1,
                   });
                   return "retry:media-strip-over-dimension-limit";
                 }
-                let cg =
+                let sourceIndex =
                   mediaErrorFromApiError.messageIdx !== undefined
-                    ? Eh(mediaErrorFromApiError.messageIdx)
+                    ? sourceIndexOf(mediaErrorFromApiError.messageIdx)
                     : undefined;
                 if (
                   mediaErrorFromApiError.messageIdx !== undefined &&
-                  cg !== undefined &&
+                  sourceIndex !== undefined &&
                   mediaErrorFromApiError.contentIdx !== undefined
                 ) {
-                  let G_ = `${mediaErrorFromApiError.messageIdx}.${mediaErrorFromApiError.contentIdx}`;
-                  let ty = Agt.get(G_) ?? 0;
+                  let attemptKey = `${mediaErrorFromApiError.messageIdx}.${mediaErrorFromApiError.contentIdx}`;
+                  let attempts = mediaStripAttempts.get(attemptKey) ?? 0;
                   let nestedContentIdx =
-                    mediaErrorFromApiError.nestedContentIdx !== undefined && ty < h5n
+                    mediaErrorFromApiError.nestedContentIdx !== undefined && attempts < maxLastMediaStrips
                       ? mediaErrorFromApiError.nestedContentIdx
                       : undefined;
-                  let th = replaceUnsupportedMediaAt(
+                  let replaced = replaceUnsupportedMediaAt(
                     messagesForAPI_2,
                     {
-                      messageIdx: cg,
+                      messageIdx: sourceIndex,
                       contentIdx: mediaErrorFromApiError.contentIdx,
                       nestedContentIdx,
                       kind: mediaErrorFromApiError.kind,
                     },
-                    ql,
+                    errorMessage,
                   );
-                  if (th !== messagesForAPI_2) {
-                    messagesForAPI_2 = ch(th, "error_recovery");
-                    w3.set(mediaErrorFromApiError.kind, ql);
-                    notifyMediaStripped(options, mediaErrorFromApiError.kind, ql);
-                    if (nestedContentIdx !== undefined) Agt.set(G_, ty + 1);
-                    let Fg = `messages.${mediaErrorFromApiError.messageIdx}.content.${mediaErrorFromApiError.contentIdx}`;
-                    let DC =
+                  if (replaced !== messagesForAPI_2) {
+                    messagesForAPI_2 = recoverMessages(replaced, "error_recovery");
+                    mediaStripErrors.set(mediaErrorFromApiError.kind, errorMessage);
+                    notifyMediaStripped(options, mediaErrorFromApiError.kind, errorMessage);
+                    if (nestedContentIdx !== undefined) mediaStripAttempts.set(attemptKey, attempts + 1);
+                    let pathPrefix = `messages.${mediaErrorFromApiError.messageIdx}.content.${mediaErrorFromApiError.contentIdx}`;
+                    let mediaPath =
                       nestedContentIdx !== undefined
-                        ? `${Fg}.tool_result.content.${nestedContentIdx}`
+                        ? `${pathPrefix}.tool_result.content.${nestedContentIdx}`
                         : mediaErrorFromApiError.nestedContentIdx !== undefined
-                          ? `${Fg}.tool_result.content.*`
-                          : Fg;
+                          ? `${pathPrefix}.tool_result.content.*`
+                          : pathPrefix;
                     logForDebugging(
-                      `Removed unprocessable ${mediaErrorFromApiError.kind} at ${DC}; retrying.`,
+                      `Removed unprocessable ${mediaErrorFromApiError.kind} at ${mediaPath}; retrying.`,
                       {
                         level: "warn",
                       },
@@ -9451,20 +9994,20 @@ async function* queryModel(messages, systemPrompt, thinkingConfig, tools, signal
                       content_idx: mediaErrorFromApiError.contentIdx,
                       targeted: 1,
                     });
-                    return `retry:media-strip:${mediaErrorFromApiError.kind}:${DC}`;
+                    return `retry:media-strip:${mediaErrorFromApiError.kind}:${mediaPath}`;
                   }
                 }
-                let Nf =
-                  Cgt.value < Rgt
-                    ? replaceLastUnsupportedMedia(messagesForAPI_2, mediaErrorFromApiError.kind, ql)
+                let replacedLatest =
+                  lastMediaStripCount.value < lastMediaStripLimit
+                    ? replaceLastUnsupportedMedia(messagesForAPI_2, mediaErrorFromApiError.kind, errorMessage)
                     : undefined;
-                if (Nf) {
-                  Cgt.value++;
-                  messagesForAPI_2 = ch(Nf.messages, "error_recovery");
-                  w3.set(mediaErrorFromApiError.kind, ql);
-                  notifyMediaStripped(options, mediaErrorFromApiError.kind, ql);
+                if (replacedLatest) {
+                  lastMediaStripCount.value++;
+                  messagesForAPI_2 = recoverMessages(replacedLatest.messages, "error_recovery");
+                  mediaStripErrors.set(mediaErrorFromApiError.kind, errorMessage);
+                  notifyMediaStripped(options, mediaErrorFromApiError.kind, errorMessage);
                   logForDebugging(
-                    `Removed base64 ${mediaErrorFromApiError.kind} blocks from carrier ${Nf.carrierIdx} (API 400 had no usable path); retrying.`,
+                    `Removed base64 ${mediaErrorFromApiError.kind} blocks from carrier ${replacedLatest.carrierIdx} (API 400 had no usable path); retrying.`,
                     {
                       level: "warn",
                     },
@@ -9472,27 +10015,27 @@ async function* queryModel(messages, systemPrompt, thinkingConfig, tools, signal
                   logEvent("tengu_media_block_strip_retry", {
                     kind: fromEnum(mediaErrorFromApiError.kind),
                     targeted: 0,
-                    carrier_idx: Nf.carrierIdx,
+                    carrier_idx: replacedLatest.carrierIdx,
                   });
-                  return `retry:media-strip-latest:${mediaErrorFromApiError.kind}:${Nf.carrierIdx}`;
+                  return `retry:media-strip-latest:${mediaErrorFromApiError.kind}:${replacedLatest.carrierIdx}`;
                 }
               }
             }
-            if (hI && isCacheKeepaliveBetaRejected(Fd)) {
-              hI = false;
-              onKeepaliveHeaderRejected(conversation, limitsAccountEpoch, Hi);
+            if (keepaliveHeaderOn && isCacheKeepaliveBetaRejected(error)) {
+              keepaliveHeaderOn = false;
+              onKeepaliveHeaderRejected(conversation, limitsAccountEpoch, isMainThread);
               return "retry:cache-keepalive-beta";
             }
-            let eh = iht(Fd);
-            if (eh === "surface:resume-prefill") return;
-            if (eh !== null) return eh;
+            let resumptionRetry = handleThinkingResumption(error);
+            if (resumptionRetry === "surface:resume-prefill") return;
+            if (resumptionRetry !== null) return resumptionRetry;
             {
-              let rejectedThinkingType = getRejectedThinkingType(Fd);
+              let rejectedThinkingType = getRejectedThinkingType(error);
               if (rejectedThinkingType) {
-                let ql = rejectedThinkingType === "enabled" ? "adaptive" : "enabled";
-                setThinkingTypeOverride(options.model, ql);
+                let fallbackType = rejectedThinkingType === "enabled" ? "adaptive" : "enabled";
+                setThinkingTypeOverride(options.model, fallbackType);
                 logForDebugging(
-                  `[thinking] model rejected thinking.type=${rejectedThinkingType}; retrying with ${ql}. For Bedrock application-inference-profile ARNs with bearer-token auth, granting bedrock:GetInferenceProfile to the token avoids this round-trip.`,
+                  `[thinking] model rejected thinking.type=${rejectedThinkingType}; retrying with ${fallbackType}. For Bedrock application-inference-profile ARNs with bearer-token auth, granting bedrock:GetInferenceProfile to the token avoids this round-trip.`,
                   {
                     level: "warn",
                   },
@@ -9500,42 +10043,42 @@ async function* queryModel(messages, systemPrompt, thinkingConfig, tools, signal
                 return "retry:thinking-type";
               }
             }
-            let om = Jgt(Fd);
-            if (om !== null) return om;
-            let Ql = tht(Fd);
-            if (Ql !== null) return Ql;
-            let Nu = nht(Fd);
-            if (Nu !== null) return Nu;
-            let Qc = oht(Fd);
-            if (Qc !== undefined) return Qc;
-            D5(Fd);
-            let W_ = rht(Fd);
-            if (W_ !== null) return W_;
-            let pm = NLe(Fd);
-            if (pm !== null) return pm;
+            let effortRetry = handleEffortUnsupported(error);
+            if (effortRetry !== null) return effortRetry;
+            let highlightsRetry = handleThinkingHighlights(error);
+            if (highlightsRetry !== null) return highlightsRetry;
+            let tokenCountRetry = recoverThinkingTokenCountBeta(error);
+            if (tokenCountRetry !== null) return tokenCountRetry;
+            let mentionedBetasRetry = recoverMentionedBetas(error);
+            if (mentionedBetasRetry !== undefined) return mentionedBetasRetry;
+            maybeRefuseToolSearch(error);
+            let context1mRetry = probeContext1mBeta(error);
+            if (context1mRetry !== null) return context1mRetry;
+            let bindingRetry = recoverThinkingBinding(error);
+            if (bindingRetry !== null) return bindingRetry;
             {
-              let Xl = dht(Fd);
-              if (Xl !== undefined) {
-                if (keptForeignSignatures && isInvalidThinkingSignatureError(Fd))
+              let prefixLockRetry = recoverPrefixLock(error);
+              if (prefixLockRetry !== undefined) {
+                if (keptForeignSignatures && isInvalidThinkingSignatureError(error))
                   dropForeignThinkingKeep("rejected_healed");
-                return Xl;
+                return prefixLockRetry;
               }
             }
-            if (!options.resumeIncompleteThinking && isInvalidThinkingSignatureError(Fd)) {
-              let Xl = 0;
-              let ql = 0;
-              for (let cg of messagesForAPI_2) {
-                if (cg.type !== "assistant" || !Array.isArray(cg.message.content)) continue;
-                for (let Nf of cg.message.content)
-                  if (Nf.type === "redacted_thinking") Xl++;
-                  else if (Nf.type === "thinking")
-                    if ("signature" in Nf && Nf.signature) Xl++;
-                    else ql++;
+            if (!options.resumeIncompleteThinking && isInvalidThinkingSignatureError(error)) {
+              let signedCount = 0;
+              let unsignedCount = 0;
+              for (let message of messagesForAPI_2) {
+                if (message.type !== "assistant" || !Array.isArray(message.message.content)) continue;
+                for (let block of message.message.content)
+                  if (block.type === "redacted_thinking") signedCount++;
+                  else if (block.type === "thinking")
+                    if ("signature" in block && block.signature) signedCount++;
+                    else unsignedCount++;
               }
-              let Ep = stripAllThinking(messagesForAPI_2);
-              if (Ep !== messagesForAPI_2) {
-                messagesForAPI_2 = ch(Ep, "error_recovery");
-                FLe("all");
+              let strippedAll = stripAllThinking(messagesForAPI_2);
+              if (strippedAll !== messagesForAPI_2) {
+                messagesForAPI_2 = recoverMessages(strippedAll, "error_recovery");
+                recordStripScope("all");
                 if (keptForeignSignatures) dropForeignThinkingKeep("rejected_fell_back");
                 logForDebugging(
                   "[thinking] server rejected a thinking block; stripping all thinking blocks and retrying.",
@@ -9546,206 +10089,212 @@ async function* queryModel(messages, systemPrompt, thinkingConfig, tools, signal
                 logEvent("tengu_thinking_signature_strip_retry", {
                   query_source: agentTypeForTelemetry(options.querySource),
                   model: telemetrySafeModelName(options.model),
-                  stripped_signed_count: Xl,
-                  stripped_unsigned_count: ql,
+                  stripped_signed_count: signedCount,
+                  stripped_unsigned_count: unsignedCount,
                 });
                 return "retry:thinking-signature-strip";
               }
             }
-            if (keptForeignSignatures && isInvalidThinkingSignatureError(Fd))
+            if (keptForeignSignatures && isInvalidThinkingSignatureError(error))
               dropForeignThinkingKeep("rejected_surfaced");
             {
-              let Xl = jgt(Fd);
-              if (Xl) return Xl;
+              let promptEndRetry = probePromptEndMark(error);
+              if (promptEndRetry) return promptEndRetry;
             }
             {
-              let Xl = LLe(Fd);
-              if (Xl) return Xl;
+              let toolChangeRetry = recoverToolChange(error);
+              if (toolChangeRetry) return toolChangeRetry;
             }
             {
-              let Xl = Ngt(Fd);
-              if (Xl !== undefined) return Xl;
+              let advisorRetry = handleAdvisorUnavailable(error);
+              if (advisorRetry !== undefined) return advisorRetry;
             }
             {
-              let Xl = await contextHintController?.onRequestError(Fd, messagesForAPI_2);
-              if (Xl) {
-                messagesForAPI_2 = ch(Xl.messages, "microcompact");
-                yht(Xl.clearedIds, Xl.clearedContent);
+              let hintRecovery = await contextHintController?.onRequestError(error, messagesForAPI_2);
+              if (hintRecovery) {
+                messagesForAPI_2 = recoverMessages(hintRecovery.messages, "microcompact");
+                recordHintClears(hintRecovery.clearedIds, hintRecovery.clearedContent);
                 return "retry:context-hint";
               }
             }
             return (
-              $gt(Fd) ??
-              Hgt(Fd) ??
-              i1(Fd, sP) ??
-              Ogt(Fd, "stream") ??
-              SI(Fd) ??
-              a1(Fd) ??
-              OLe(Fd) ??
-              _Le(Fd) ??
-              L5(Fd) ??
-              Tae(Fd)
+              recoverViaWireCache(error) ??
+              recoverFromHintError(error) ??
+              probeThinkingTokenCount(error, creditEchoedStream) ??
+              handleFallbackRejection(error, "stream") ??
+              probeClearAt(error) ??
+              maybeRetryThreads(error) ??
+              classifyHintRecovery(error) ??
+              probeThinkingDisplay(error) ??
+              recoverUnclaimedBeta(error) ??
+              maybeRefuseToolSearchFinal(error)
             );
           },
         },
       );
-      let pr;
+      let next;
       do {
-        pr = await generator.next();
-        yield* $Le();
-        if (!("controller" in pr.value)) yield pr.value;
-      } while (!pr.done);
-      stream = pr.value;
-      qgt();
-      Kgt();
-      Vgt();
-      Ygt();
-      Xgt();
-      N5();
-      t1();
-      Wgt();
-      if (T3) {
-        T3 = false;
+        next = await generator.next();
+        yield* drainHintClears();
+        if (!("controller" in next.value)) yield next.value;
+      } while (!next.done);
+      activeStream = next.value;
+      noteEffortOk();
+      noteLateToolsOk();
+      noopAfterSend();
+      noopAfterSuccess();
+      settleHealsAtSuccess();
+      settleThinkingTokenCountProbe();
+      settleThinkingDisplayProbe();
+      settlePromptEndMark();
+      if (retryStatusShown) {
+        retryStatusShown = false;
         options.onRetryStatus?.(null);
       }
-      for (let [Fd, od] of w3)
+      for (let [mediaKind, mediaMessage] of mediaStripErrors)
         yield createApiErrorMessage({
-          ...buildMediaRemovedError(Fd, od),
+          ...buildMediaRemovedError(mediaKind, mediaMessage),
           error: "invalid_request",
-          errorDetails: od,
+          errorDetails: mediaMessage,
         });
-      w3.clear();
-      yield* cht();
-      yield* uht();
-      yield* Qgt();
-      let clock_2 = k_ ? (k_._chunkTimes ?? undefined) : undefined;
+      mediaStripErrors.clear();
+      yield* yieldEffortNotice();
+      yield* emptyStream();
+      yield* orgEffortNotice();
+      let chunkTimes = responseBody ? (responseBody._chunkTimes ?? undefined) : undefined;
       if (
-        clock_2 === undefined &&
-        k_ !== undefined &&
+        chunkTimes === undefined &&
+        responseBody !== undefined &&
         getAPIProvider() === "bedrock" &&
         shouldUseBodyIdleWatchdog("bedrock")
       )
         logForDebugging(
           "wire-heartbeat: _chunkTimes absent on a Bedrock stream with the byte watchdog enabled \u2014 heartbeat side-channel unavailable for this stream (bedrock-sdk \u22650.32.0 eventstream\u2192SSE transcode drops it; also expected if the response was not vnd.amazon.eventstream, e.g. behind a header-rewriting proxy)",
         );
-      let Os = clock.monotonicNow();
-      Cm.length = 0;
-      Iae = 0;
-      vLe = undefined;
-      v$ = 0;
-      dg = undefined;
-      A_.length = 0;
-      $E = false;
-      UT = false;
-      D3 = false;
-      MC.clear();
-      Bae.clear();
-      HLe.clear();
-      E$ = undefined;
-      b1 = false;
-      Iu = EMPTY_USAGE;
-      T1 = null;
+      let stallWindowStart = clock.monotonicNow();
+      yieldedMessages.length = 0;
+      ttftMs = 0;
+      firstContentMs = undefined;
+      streamEventCount = 0;
+      partialMessage = undefined;
+      blocks.length = 0;
+      serverFallbackUsed = false;
+      fallbackAnnounced = false;
+      suppressedByFallback = false;
+      blockMessages.clear();
+      malformedBlocks.clear();
+      fallbackBlockIndices.clear();
+      pendingFallback = undefined;
+      creditLogged = false;
+      usage = EMPTY_USAGE;
+      contextManagement = null;
       reason = null;
       complete = false;
-      aP = "none";
-      let La = false;
-      Ux = false;
-      E1 = false;
-      let Vl = false;
+      costState = "none";
+      let refusalLogged = false;
+      usageRecorded = false;
+      advisorToolInFlight = false;
+      let anyEventYielded = false;
       let anyBlockFinished = false;
-      let nd = false;
-      let Wd = null;
+      let anyOutputShown = false;
+      let openBlockIndex = null;
       let weakSet = new WeakSet();
       let weakMap = new WeakMap();
-      let hf = false;
-      let Kg = false;
-      let cy = null;
-      let jT = false;
-      let pk = null;
-      let Pc = 0;
-      function* ey({ responseUnfinished }) {
-        if (!Kg) return;
-        let od = jT ? null : cy;
-        Kg = false;
-        cy = null;
-        jT = false;
-        let Zg =
-          pk !== null
+      let envelopeOpen = false;
+      let stopEventsPending = false;
+      let openContentBlockIndex = null;
+      let openBlockIsToolUse = false;
+      let apiMessageId = null;
+      let nextBlockIndex = 0;
+      function* emitStopEvents({ responseUnfinished }) {
+        if (!stopEventsPending) return;
+        let closeIndex = openBlockIsToolUse ? null : openContentBlockIndex;
+        stopEventsPending = false;
+        openContentBlockIndex = null;
+        openBlockIsToolUse = false;
+        let apiMessageIdField =
+          apiMessageId !== null
             ? {
-                apiMessageId: pk,
+                apiMessageId,
               }
             : undefined;
-        if (od !== null)
+        if (closeIndex !== null)
           yield {
             type: "stream_event",
             event: {
               type: "content_block_stop",
-              index: od,
+              index: closeIndex,
             },
-            ...Zg,
+            ...apiMessageIdField,
           };
         yield {
           type: "stream_event",
           event: {
             type: "message_stop",
           },
-          ...Zg,
-          ...(responseUnfinished && pk !== null && Number.isSafeInteger(Pc)
+          ...apiMessageIdField,
+          ...(responseUnfinished && apiMessageId !== null && Number.isSafeInteger(nextBlockIndex)
             ? {
                 abandonedBlocks: {
-                  apiMessageId: pk,
-                  fromBlockIndex: Pc,
+                  apiMessageId,
+                  fromBlockIndex: nextBlockIndex,
                 },
               }
             : undefined),
         };
       }
-      let Ew = null;
-      let Aw = 0;
-      let VT = 0;
+      let lastEventAt = null;
+      let stallCount = 0;
+      let stallTotalMs = 0;
       let msToFirstEvent = null;
-      let cP = null;
-      let fP = null;
-      let $I = 0;
-      let HI = false;
+      let firstEventType = null;
+      let lastEventType = null;
+      let completedBlockCount = 0;
+      let wireInputDegraded = false;
       let CLAUDE_ENABLE_STREAM_WATCHDOG = env.CLAUDE_ENABLE_STREAM_WATCHDOG ?? true;
       let streamIdleTimeoutMs = getStreamIdleTimeoutMs();
-      let OC = streamIdleTimeoutMs / 2;
+      let warningThresholdMs = streamIdleTimeoutMs / 2;
       let streamStallMarginMs = getStreamStallMarginMs();
       let min = Math.min(
         getByteIdleTimeoutForProvider(getAPIProvider()),
         CLAUDE_ENABLE_STREAM_WATCHDOG ? streamIdleTimeoutMs : 1 / 0,
       );
       let min_2 = Math.min(MAX_STREAM_STALL_MS, min - streamStallMarginMs);
-      let fh = false;
-      let Ow;
-      let _b = null;
+      let idleTimedOut = false;
+      let suspendedError;
+      let idleTimeoutAt = null;
       let streamWatchdogFiredAt = null;
       let streamIdleWarningTimer = null;
       let streamIdleTimer = null;
-      let BI = false;
-      L_();
-      let hP = () => {
+      let stallNotified = false;
+      armStreamWatchdogs();
+      let partialOnAbortMessage = () => {
         if (options.querySource !== "sdk" && options.keepPartialMessageOnAbort !== true) return;
-        if (D3) return;
-        let Fd = A_[Cm.length];
-        if (Fd?.type !== "text" || weakSet.has(Fd) || !Fd.text.trim() || !dg) return;
+        if (suppressedByFallback) return;
+        let partialBlock = blocks[yieldedMessages.length];
+        if (
+          partialBlock?.type !== "text" ||
+          weakSet.has(partialBlock) ||
+          !partialBlock.text.trim() ||
+          !partialMessage
+        )
+          return;
         return {
           message: {
-            ...dg,
+            ...partialMessage,
             content: normalizeContentFromAPI(
-              [Fd],
+              [partialBlock],
               tools,
               options.agentId,
               {
-                requestId: Al ?? undefined,
-                messageId: dg.id,
+                requestId: responseRequestId ?? undefined,
+                messageId: partialMessage.id,
               },
               options.storageV5,
             ),
           },
-          apiBlockIndex: Cm.length,
-          requestId: Al ?? undefined,
+          apiBlockIndex: yieldedMessages.length,
+          requestId: responseRequestId ?? undefined,
           requestRef,
           requestedModel: options.model,
           ...buildAttribution(
@@ -9760,27 +10309,27 @@ async function* queryModel(messages, systemPrompt, thinkingConfig, tools, signal
           timestamp: new Date().toISOString(),
           isAbortedMidStream: true,
           ...undefined,
-          ...(yS !== undefined && {
-            effort: yS,
+          ...(sentEffort !== undefined && {
+            effort: sentEffort,
           }),
-          perTurnEffort: EE,
-          perTurnTiming: n$,
+          perTurnEffort: perTurnEffortValue,
+          perTurnTiming: perTurnNowValue,
         };
       };
-      let N3 = () => {
-        if (E$ === undefined || UT) return;
-        let Fd = E$;
-        E$ = undefined;
-        UT = true;
+      let serverFallbackEvent = () => {
+        if (pendingFallback === undefined || fallbackAnnounced) return;
+        let pendingFallbackBlock = pendingFallback;
+        pendingFallback = undefined;
+        fallbackAnnounced = true;
         return {
           type: "server_fallback",
-          fromModel: Fd.fromModel,
-          toModel: Fd.model,
-          reason: Fd.reason,
-          apiRefusalCategory: Fd.category,
+          fromModel: pendingFallbackBlock.fromModel,
+          toModel: pendingFallbackBlock.model,
+          reason: pendingFallbackBlock.reason,
+          apiRefusalCategory: pendingFallbackBlock.category,
           midStream: false,
-          requestId: Al ?? null,
-          refusedEffort: qx(),
+          requestId: responseRequestId ?? null,
+          refusedEffort: refusedEffortInfo(),
           discardedMessages: [],
           retainedMessages: [],
           retainedText: "",
@@ -9788,106 +10337,108 @@ async function* queryModel(messages, systemPrompt, thinkingConfig, tools, signal
         };
       };
       function* clearStreamIdleTimers() {
-        C_("aborted", Al ?? null, null);
-        let Fd = N3();
-        if (Fd) yield Fd;
-        let od = hP();
-        if (od) yield od;
-        if (E1)
+        logCreditOutcome("aborted", responseRequestId ?? null, null);
+        let fallbackEvent = serverFallbackEvent();
+        if (fallbackEvent) yield fallbackEvent;
+        let partialMessageOnAbort = partialOnAbortMessage();
+        if (partialMessageOnAbort) yield partialMessageOnAbort;
+        if (advisorToolInFlight)
           logEvent("tengu_advisor_tool_interrupted", {
             model: telemetrySafeModelName(options.model),
-            advisor_model: telemetrySafeModelName(yn ?? "unknown"),
+            advisor_model: telemetrySafeModelName(advisorModelForQuery ?? "unknown"),
             query_source: agentTypeForTelemetry(options.querySource),
           });
       }
-      let yP;
+      let finishProfile;
       try {
-        let Fd = true;
+        let isFirstEvent = true;
         let STALL_THRESHOLD_MS = 30000;
-        let Zg = 0;
-        let events = fixGuardrailStrayText(stream, signal);
+        let pingCount = 0;
+        let events = fixGuardrailStrayText(activeStream, signal);
         let counter = {
           count: 0,
         };
-        for await (let ea of withStreamHeartbeat(
-          clock_2 !== undefined && isDeltaFoldEnabled()
-            ? foldStreamDeltas(events, clock_2, counter, signal)
+        for await (let event of withStreamHeartbeat(
+          chunkTimes !== undefined && isDeltaFoldEnabled()
+            ? foldStreamDeltas(events, chunkTimes, counter, signal)
             : events,
-          clock_2,
+          chunkTimes,
           STREAM_HEARTBEAT_MS,
           clock,
         )) {
-          if (isPingStreamEvent(ea)) {
-            Zg++;
-            if (Zg <= MAX_PING_EVENTS_RESETTING_IDLE) L_();
-            else if (!CLAUDE_ENABLE_STREAM_WATCHDOG || fh || Ow !== undefined) continue;
+          if (isPingStreamEvent(event)) {
+            pingCount++;
+            if (pingCount <= MAX_PING_EVENTS_RESETTING_IDLE) armStreamWatchdogs();
+            else if (!CLAUDE_ENABLE_STREAM_WATCHDOG || idleTimedOut || suspendedError !== undefined) continue;
             yield {
               type: "stream_event",
-              event: ea,
+              event,
             };
             continue;
           }
-          Zg = 0;
-          L_();
-          v$ += 1 + counter.count;
+          pingCount = 0;
+          armStreamWatchdogs();
+          streamEventCount += 1 + counter.count;
           counter.count = 0;
-          msToFirstEvent ??= Math.round(clock.monotonicNow() - Uy);
-          cP ??= ea.type;
-          fP = ea.type;
+          msToFirstEvent ??= Math.round(clock.monotonicNow() - attemptStartAt);
+          firstEventType ??= event.type;
+          lastEventType = event.type;
           let now = clock.now();
-          if (Ew !== null) {
-            let Ql = now - Ew;
-            if (Ql > STALL_THRESHOLD_MS) {
-              Aw++;
-              VT += Ql;
+          if (lastEventAt !== null) {
+            let gapMs = now - lastEventAt;
+            if (gapMs > STALL_THRESHOLD_MS) {
+              stallCount++;
+              stallTotalMs += gapMs;
               logForDebugging(
-                `Streaming stall detected: ${(Ql / 1000).toFixed(1)}s gap between events (stall #${Aw})`,
+                `Streaming stall detected: ${(gapMs / 1000).toFixed(1)}s gap between events (stall #${stallCount})`,
                 {
                   level: "warn",
                 },
               );
               logEvent("tengu_streaming_stall", {
-                stall_duration_ms: Ql,
-                stall_count: Aw,
-                total_stall_time_ms: VT,
-                event_type: fromEnum(normalizeStreamEventType(ea.type)),
+                stall_duration_ms: gapMs,
+                stall_count: stallCount,
+                total_stall_time_ms: stallTotalMs,
+                event_type: fromEnum(normalizeStreamEventType(event.type)),
                 model: telemetrySafeModelName(options.model),
-                request_id: traceValueOrUnknown(Al),
+                request_id: traceValueOrUnknown(responseRequestId),
               });
             }
           }
-          Ew = now;
-          if (Fd) {
-            OE();
+          lastEventAt = now;
+          if (isFirstEvent) {
+            cancelFirstByteTimer();
             logForDebugging("Stream started - received first chunk");
-            logForDebugging(`[API:timing] first byte after ${Math.round(clock.monotonicNow() - Uy)}ms`);
+            logForDebugging(
+              `[API:timing] first byte after ${Math.round(clock.monotonicNow() - attemptStartAt)}ms`,
+            );
             queryCheckpoint("query_first_chunk_received");
-            if (!options.agentId && Hi) headlessProfilerCheckpoint("first_chunk");
-            if (isTopLevelMain) yP = openProfileStream();
+            if (!options.agentId && isMainThread) headlessProfilerCheckpoint("first_chunk");
+            if (isTopLevelMain) finishProfile = openProfileStream();
             endQueryProfile();
-            Fd = false;
+            isFirstEvent = false;
           }
-          let fallbackBlockStart = parseFallbackBlockStart(ea);
-          let Mg = !fallbackBlockStart && isUnreadableFallbackBlock(ea);
-          if (fallbackBlockStart || Mg) E1 = false;
-          if (fallbackBlockStart) {
-            HLe.add(fallbackBlockStart.index);
-            A_[fallbackBlockStart.index] = fallbackNotification(fallbackBlockStart);
-            let Ql = w$;
+          let block = parseFallbackBlockStart(event);
+          let unreadableFallback = !block && isUnreadableFallbackBlock(event);
+          if (block || unreadableFallback) advisorToolInFlight = false;
+          if (block) {
+            fallbackBlockIndices.add(block.index);
+            blocks[block.index] = fallbackNotification(block);
+            let fallbackMode = serverFallbackMode;
             logEvent("tengu_rotunda_pennant_materialized", {
               armed: options.serverRefusalFallback !== undefined,
-              mode: fromEnum(Ql),
-              block_index: fallbackBlockStart.index,
+              mode: fromEnum(fallbackMode),
+              block_index: block.index,
               non_streaming: false,
             });
-            if (fallbackBlockStart.reason === "refusal")
+            if (block.reason === "refusal")
               logApiRefusal({
                 model: resolvedModel,
-                requestId: Al || undefined,
+                requestId: responseRequestId || undefined,
                 querySource: options.querySource,
-                effort: CC,
+                effort: effortLevelNormalized,
                 fastMode: fallbackActive,
-                attempt: p_,
+                attempt: attemptNumber,
                 attribution: buildAttribution(
                   options.querySource,
                   options.spawnedBySkill,
@@ -9899,58 +10450,63 @@ async function* queryModel(messages, systemPrompt, thinkingConfig, tools, signal
                 agentContext: options.agentContext,
               });
             if (options.serverRefusalFallback === undefined) continue;
-            if (isFallbackReason(fallbackBlockStart.reason)) $E = true;
-            if (dg !== undefined)
-              dg = {
-                ...dg,
-                model: fallbackBlockStart.model,
+            if (isFallbackReason(block.reason)) serverFallbackUsed = true;
+            if (partialMessage !== undefined)
+              partialMessage = {
+                ...partialMessage,
+                model: block.model,
               };
-            for (let Nu of MC.values()) Nu.message.model = fallbackBlockStart.model;
-            if (MC.size === 0) E$ = fallbackBlockStart;
-            else if (!isFallbackReason(fallbackBlockStart.reason)) {
-              UT = true;
+            for (let message of blockMessages.values()) message.message.model = block.model;
+            if (blockMessages.size === 0) pendingFallback = block;
+            else if (!isFallbackReason(block.reason)) {
+              fallbackAnnounced = true;
               yield {
                 type: "server_fallback",
-                fromModel: fallbackBlockStart.fromModel,
-                toModel: fallbackBlockStart.model,
-                reason: fallbackBlockStart.reason,
-                apiRefusalCategory: fallbackBlockStart.category,
+                fromModel: block.fromModel,
+                toModel: block.model,
+                reason: block.reason,
+                apiRefusalCategory: block.category,
                 midStream: true,
-                requestId: Al ?? null,
-                refusedEffort: qx(),
+                requestId: responseRequestId ?? null,
+                refusedEffort: refusedEffortInfo(),
                 discardedMessages: [],
                 retainedMessages: [],
                 retainedText: "",
                 finalStopReason: null,
               };
             } else {
-              UT = true;
-              let Nu = [];
-              for (let [pm, Xl] of MC)
-                if (hasNonTextContent(Xl)) {
-                  Nu.push(Xl);
-                  MC.delete(pm);
-                  delete A_[pm];
+              fallbackAnnounced = true;
+              let discarded = [];
+              for (let [index, blockMessage] of blockMessages)
+                if (hasNonTextContent(blockMessage)) {
+                  discarded.push(blockMessage);
+                  blockMessages.delete(index);
+                  delete blocks[index];
                 }
-              if (Nu.length > 0) {
-                let pm = new Set(Nu);
-                for (let idx = Cm.length - 1; idx >= 0; idx--) if (pm.has(Cm[idx])) Cm.splice(idx, 1);
-                D3 = true;
+              if (discarded.length > 0) {
+                let discardedSet = new Set(discarded);
+                for (let idx = yieldedMessages.length - 1; idx >= 0; idx--)
+                  if (discardedSet.has(yieldedMessages[idx])) yieldedMessages.splice(idx, 1);
+                suppressedByFallback = true;
               }
-              let mapped = [...MC.entries()].sort((pm, Xl) => pm[0] - Xl[0]).map(([, pm]) => pm);
+              let mapped = [...blockMessages.entries()]
+                .sort((left, right) => left[0] - right[0])
+                .map(([, message]) => message);
               let retainedText = mapped
-                .map((pm) => pm.message.content.map((Xl) => (Xl.type === "text" ? Xl.text : "")).join(""))
+                .map((message) =>
+                  message.message.content.map((block) => (block.type === "text" ? block.text : "")).join(""),
+                )
                 .join("");
               yield {
                 type: "server_fallback",
-                fromModel: fallbackBlockStart.fromModel,
-                toModel: fallbackBlockStart.model,
-                reason: fallbackBlockStart.reason,
-                apiRefusalCategory: fallbackBlockStart.category,
+                fromModel: block.fromModel,
+                toModel: block.model,
+                reason: block.reason,
+                apiRefusalCategory: block.category,
                 midStream: true,
-                requestId: Al ?? null,
-                refusedEffort: qx(),
-                discardedMessages: Nu,
+                requestId: responseRequestId ?? null,
+                refusedEffort: refusedEffortInfo(),
+                discardedMessages: discarded,
                 retainedMessages: mapped,
                 retainedText,
                 finalStopReason: null,
@@ -9958,10 +10514,10 @@ async function* queryModel(messages, systemPrompt, thinkingConfig, tools, signal
             }
             continue;
           }
-          if (Mg) {
-            let index = ea.index;
-            Bae.add(index);
-            D3 = true;
+          if (unreadableFallback) {
+            let index = event.index;
+            malformedBlocks.add(index);
+            suppressedByFallback = true;
             logForDiagnosticsNoPII("warn", "cli_malformed_fallback_block");
             logEvent("tengu_rotunda_pennant_malformed", {
               block_index: index,
@@ -9972,289 +10528,291 @@ async function* queryModel(messages, systemPrompt, thinkingConfig, tools, signal
             });
             continue;
           }
-          if (ea.type === "content_block_stop" && Bae.has(ea.index)) continue;
-          switch (ea.type) {
+          if (event.type === "content_block_stop" && malformedBlocks.has(event.index)) continue;
+          switch (event.type) {
             case "message_start": {
               assertStreamPart(
-                typeof ea.message === "object" && ea.message !== null,
-                ea,
+                typeof event.message === "object" && event.message !== null,
+                event,
                 lit_2("message_start_without_message"),
               );
-              hf = true;
-              Rae();
-              sht();
-              e1();
-              dg = ea.message;
-              if (dg !== undefined && "resumable" in dg) {
-                let { resumable, ...pm } = dg;
-                dg = pm;
+              envelopeOpen = true;
+              noteMidConvSystemAccepted();
+              settleContext1mProbe();
+              handleToolSearchRefusal();
+              partialMessage = event.message;
+              if (partialMessage !== undefined && "resumable" in partialMessage) {
+                let { resumable, ...rest } = partialMessage;
+                partialMessage = rest;
               }
-              Iae = Math.max(0, Math.round(clock.monotonicNow() - Uy));
-              Iu = mRe(Iu, ea.message?.usage);
-              if (ea.message?.model)
-                recordServedModel(stripAnyVersatileSuffix(options.model), ea.message.model);
-              b3 = ea.message.diagnostics?.cache_miss_reason ?? undefined;
-              mht(ea.message);
-              let Ql = ght(ea.message);
-              let Nu = fht();
-              if (Nu) yield Nu;
-              let Qc = np();
-              if (Qc) yield Qc;
-              if (Ql) yield Ql;
+              ttftMs = Math.max(0, Math.round(clock.monotonicNow() - attemptStartAt));
+              usage = mergeUsageFromDelta(usage, event.message?.usage);
+              if (event.message?.model)
+                recordServedModel(stripAnyVersatileSuffix(options.model), event.message.model);
+              cacheMissReason = event.message.diagnostics?.cache_miss_reason ?? undefined;
+              checkTetherPrefix(event.message);
+              let dropAttachment = thinkingDropAttachment(event.message);
+              let stripAttachment = thinkingStripAttachment();
+              if (stripAttachment) yield stripAttachment;
+              let advisorStrippedMsg = advisorStrippedMessage();
+              if (advisorStrippedMsg) yield advisorStrippedMsg;
+              if (dropAttachment) yield dropAttachment;
               break;
             }
             case "content_block_start": {
-              let Ql = typeof ea.content_block === "object" && ea.content_block !== null;
-              if (!Ql) complete = false;
-              assertStreamPart(Ql, ea, lit_2("content_block_start_without_content_block"));
+              let hasContentBlock = typeof event.content_block === "object" && event.content_block !== null;
+              if (!hasContentBlock) complete = false;
+              assertStreamPart(hasContentBlock, event, lit_2("content_block_start_without_content_block"));
               if (
                 isRestartedBlock({
-                  previous: A_[ea.index],
+                  previous: blocks[event.index],
                   closedContentBlocks: weakSet,
-                  started: ea.content_block,
+                  started: event.content_block,
                 })
               ) {
                 logEvent("tengu_streaming_error", {
                   error_type: lit_2("content_block_closed_start"),
-                  part_type: fromEnum(ea.type),
-                  part_index: blockIndexOf(ea),
+                  part_type: fromEnum(event.type),
+                  part_index: blockIndexOf(event),
                 });
                 throw new StreamMalformedEventError("closed");
               }
               switch (
                 ((complete = false),
-                (vLe ??= Math.max(0, Math.round(clock.monotonicNow() - Uy))),
-                ea.content_block.type)
+                (firstContentMs ??= Math.max(0, Math.round(clock.monotonicNow() - attemptStartAt))),
+                event.content_block.type)
               ) {
                 case "tool_use":
-                  ea.content_block.name = internalName(ea.content_block.name);
-                  A_[ea.index] = {
-                    ...ea.content_block,
+                  event.content_block.name = internalName(event.content_block.name);
+                  blocks[event.index] = {
+                    ...event.content_block,
                     input: "",
                   };
                   break;
                 case "server_tool_use":
-                  A_[ea.index] = {
-                    ...ea.content_block,
+                  blocks[event.index] = {
+                    ...event.content_block,
                     input: "",
                   };
-                  if (ea.content_block.name === ADVISOR_TOOL_NAME) {
-                    E1 = true;
+                  if (event.content_block.name === ADVISOR_TOOL_NAME) {
+                    advisorToolInFlight = true;
                     logForDebugging("[AdvisorTool] Advisor tool called");
                     logEvent("tengu_advisor_tool_call", {
                       model: telemetrySafeModelName(options.model),
-                      advisor_model: telemetrySafeModelName(yn ?? "unknown"),
+                      advisor_model: telemetrySafeModelName(advisorModelForQuery ?? "unknown"),
                       query_source: agentTypeForTelemetry(options.querySource),
                     });
                   }
                   break;
                 case "text":
-                  A_[ea.index] = {
-                    ...ea.content_block,
+                  blocks[event.index] = {
+                    ...event.content_block,
                     text: "",
                   };
                   break;
                 case "thinking": {
-                  let Nu = {
-                    ...ea.content_block,
+                  let thinkingBlock = {
+                    ...event.content_block,
                     thinking: "",
                     signature: "",
                   };
-                  A_[ea.index] = Nu;
-                  recordMonotonicTime(weakMap, Nu, clock);
+                  blocks[event.index] = thinkingBlock;
+                  recordMonotonicTime(weakMap, thinkingBlock, clock);
                   break;
                 }
                 default:
-                  A_[ea.index] = {
-                    ...ea.content_block,
+                  blocks[event.index] = {
+                    ...event.content_block,
                   };
-                  if (ea.content_block.type === "advisor_tool_result") {
-                    E1 = false;
+                  if (event.content_block.type === "advisor_tool_result") {
+                    advisorToolInFlight = false;
                     logForDebugging("[AdvisorTool] Advisor tool result received");
-                    let advisorToolError = parseAdvisorToolError(ea.content_block);
+                    let advisorToolError = parseAdvisorToolError(event.content_block);
                     if (advisorToolError !== undefined) {
                       logForDebugging(`[AdvisorTool] Advisor tool result error: ${advisorToolError}`);
                       logEvent("tengu_advisor_tool_error", {
                         model: telemetrySafeModelName(options.model),
-                        advisor_model: telemetrySafeModelName(yn ?? "unknown"),
+                        advisor_model: telemetrySafeModelName(advisorModelForQuery ?? "unknown"),
                         error_code: fromEnum(advisorToolError),
                         query_source: agentTypeForTelemetry(options.querySource),
                       });
                     } else
                       logEvent("tengu_advisor_tool_result", {
                         model: telemetrySafeModelName(options.model),
-                        advisor_model: telemetrySafeModelName(yn ?? "unknown"),
+                        advisor_model: telemetrySafeModelName(advisorModelForQuery ?? "unknown"),
                         query_source: agentTypeForTelemetry(options.querySource),
-                        stop_reason: fromEnumOpt(parseAdvisorResult(ea.content_block)) ?? lit_2("none"),
+                        stop_reason: fromEnumOpt(parseAdvisorResult(event.content_block)) ?? lit_2("none"),
                       });
                   }
                   break;
               }
-              Wd = ea.index;
+              openBlockIndex = event.index;
               if (
-                ea.content_block.type !== "thinking" &&
-                ea.content_block.type !== "redacted_thinking" &&
-                !isFallbackMessage(ea.content_block)
+                event.content_block.type !== "thinking" &&
+                event.content_block.type !== "redacted_thinking" &&
+                !isFallbackMessage(event.content_block)
               )
-                nd = true;
+                anyOutputShown = true;
               break;
             }
             case "content_block_delta": {
-              let Ql = A_[ea.index];
-              let delta = ea.delta;
-              if (!Ql || !weakSet.has(Ql)) complete = false;
-              if (!Ql || weakSet.has(Ql)) {
+              let block = blocks[event.index];
+              let delta = event.delta;
+              if (!block || !weakSet.has(block)) complete = false;
+              if (!block || weakSet.has(block)) {
                 logEvent("tengu_streaming_error", {
-                  error_type: Ql
+                  error_type: block
                     ? lit_2("content_block_closed_delta")
                     : lit_2("content_block_not_found_delta"),
-                  part_type: fromEnum(ea.type),
-                  part_index: blockIndexOf(ea),
+                  part_type: fromEnum(event.type),
+                  part_index: blockIndexOf(event),
                 });
-                throw new StreamMalformedEventError(Ql ? "closed" : "unstarted");
+                throw new StreamMalformedEventError(block ? "closed" : "unstarted");
               }
               switch (
                 (assertStreamPart(
                   typeof delta === "object" && delta !== null,
-                  ea,
+                  event,
                   lit_2("content_block_delta_without_delta"),
                 ),
                 assertStreamPart(
                   typeof delta.type === "string",
-                  ea,
+                  event,
                   lit_2("content_block_delta_without_delta_type"),
                 ),
                 delta.type)
               ) {
                 case "citations_delta":
-                  if (Ql.type !== "text") break;
+                  if (block.type !== "text") break;
                   assertStreamPart(
                     typeof delta.citation === "object" && delta.citation !== null,
-                    ea,
+                    event,
                     lit_2("citations_delta_without_citation"),
                   );
-                  Ql.citations = [...(Ql.citations ?? []), delta.citation];
+                  block.citations = [...(block.citations ?? []), delta.citation];
                   break;
                 case "input_json_delta":
-                  if (Ql.type !== "tool_use" && Ql.type !== "server_tool_use") {
+                  if (block.type !== "tool_use" && block.type !== "server_tool_use") {
                     logEvent("tengu_streaming_error", {
                       error_type: lit_2("content_block_type_mismatch_input_json"),
                       expected_type: lit_2("tool_use"),
-                      actual_type: fromEnum(Ql.type),
+                      actual_type: fromEnum(block.type),
                     });
                     throw new StreamMalformedEventError("unreadable");
                   }
-                  if (typeof Ql.input !== "string") {
+                  if (typeof block.input !== "string") {
                     logEvent("tengu_streaming_error", {
                       error_type: lit_2("content_block_input_not_string"),
-                      input_type: fromEnum(typeof Ql.input),
+                      input_type: fromEnum(typeof block.input),
                     });
                     throw new StreamMalformedEventError("unreadable");
                   }
                   assertStreamPart(
                     typeof delta.partial_json === "string",
-                    ea,
+                    event,
                     lit_2("input_json_delta_without_partial_json"),
                   );
-                  Ql.input += delta.partial_json;
+                  block.input += delta.partial_json;
                   break;
                 case "text_delta":
-                  if (Ql.type !== "text") {
+                  if (block.type !== "text") {
                     logEvent("tengu_streaming_error", {
                       error_type: lit_2("content_block_type_mismatch_text"),
                       expected_type: lit_2("text"),
-                      actual_type: fromEnum(Ql.type),
+                      actual_type: fromEnum(block.type),
                     });
                     throw new StreamMalformedEventError("unreadable");
                   }
-                  assertStreamPart(typeof delta.text === "string", ea, lit_2("text_delta_without_text"));
-                  Ql.text += delta.text;
+                  assertStreamPart(typeof delta.text === "string", event, lit_2("text_delta_without_text"));
+                  block.text += delta.text;
                   break;
                 case "signature_delta":
-                  if (Ql.type !== "thinking") {
+                  if (block.type !== "thinking") {
                     logEvent("tengu_streaming_error", {
                       error_type: lit_2("content_block_type_mismatch_thinking_signature"),
                       expected_type: lit_2("thinking"),
-                      actual_type: fromEnum(Ql.type),
+                      actual_type: fromEnum(block.type),
                     });
                     throw new StreamMalformedEventError("unreadable");
                   }
                   assertStreamPart(
                     typeof delta.signature === "string",
-                    ea,
+                    event,
                     lit_2("signature_delta_without_signature"),
                   );
-                  Ql.signature = delta.signature;
+                  block.signature = delta.signature;
                   break;
                 case "thinking_delta":
-                  if (Ql.type === "redacted_thinking") break;
-                  if (Ql.type !== "thinking") {
+                  if (block.type === "redacted_thinking") break;
+                  if (block.type !== "thinking") {
                     logEvent("tengu_streaming_error", {
                       error_type: lit_2("content_block_type_mismatch_thinking_delta"),
                       expected_type: lit_2("thinking"),
-                      actual_type: fromEnum(Ql.type),
+                      actual_type: fromEnum(block.type),
                     });
                     throw new StreamMalformedEventError("unreadable");
                   }
                   assertStreamPart(
                     typeof delta.thinking === "string",
-                    ea,
+                    event,
                     lit_2("thinking_delta_without_thinking"),
                   );
-                  Ql.thinking += delta.thinking;
+                  block.thinking += delta.thinking;
                   break;
               }
               break;
             }
             case "content_block_stop": {
-              let Ql = A_[ea.index];
-              if (!Ql || !weakSet.has(Ql)) complete = false;
-              if (!Ql || weakSet.has(Ql)) {
+              let block = blocks[event.index];
+              if (!block || !weakSet.has(block)) complete = false;
+              if (!block || weakSet.has(block)) {
                 logEvent("tengu_streaming_error", {
-                  error_type: Ql ? lit_2("content_block_closed_stop") : lit_2("content_block_not_found_stop"),
-                  part_type: fromEnum(ea.type),
-                  part_index: blockIndexOf(ea),
+                  error_type: block
+                    ? lit_2("content_block_closed_stop")
+                    : lit_2("content_block_not_found_stop"),
+                  part_type: fromEnum(event.type),
+                  part_index: blockIndexOf(event),
                 });
-                throw new StreamMalformedEventError(Ql ? "closed" : "unstarted");
+                throw new StreamMalformedEventError(block ? "closed" : "unstarted");
               }
-              Wd = null;
-              if (!dg) {
+              openBlockIndex = null;
+              if (!partialMessage) {
                 logEvent("tengu_streaming_error", {
                   error_type: lit_2("partial_message_not_found"),
-                  part_type: fromEnum(ea.type),
+                  part_type: fromEnum(event.type),
                 });
                 throw Error("Message not found");
               }
               let { content, batchToolUses } = isBatchToolsUse(
                 normalizeContentFromAPI(
-                  [Ql],
+                  [block],
                   tools,
                   options.agentId,
                   {
-                    requestId: Al ?? undefined,
-                    messageId: dg.id,
+                    requestId: responseRequestId ?? undefined,
+                    messageId: partialMessage.id,
                   },
                   options.storageV5,
                 ),
                 tools,
-                (Nf, G_) => normalizeToolInput_2(Nf, G_, options.agentId, options.storageV5),
+                (item, index) => normalizeToolInput_2(item, index, options.agentId, options.storageV5),
               );
-              let W_ = aI ? captureWireToolInputs([Ql]) : undefined;
-              HI ||= W_?.degraded === true;
-              let inputs = W_?.inputs;
-              let Xl = countToolCallsSince_4([Ql], inputs);
-              let ql = elapsedSinceMs(weakMap, Ql, clock);
-              let Ep = THINKING_BARE_WIDTH(Ql, z5);
-              let cg = {
+              let wireInputs = wireInputsEchoed ? captureWireToolInputs([block]) : undefined;
+              wireInputDegraded ||= wireInputs?.degraded === true;
+              let inputs = wireInputs?.inputs;
+              let ingestContext = countToolCallsSince_4([block], inputs);
+              let thinkingDurationMs = elapsedSinceMs(weakMap, block, clock);
+              let thinkingDisplay = THINKING_BARE_WIDTH(block, requestedDisplayField);
+              let assistantMessage = {
                 message: {
-                  ...dg,
+                  ...partialMessage,
                   content,
                 },
-                ...(ql !== undefined && {
-                  thinkingDurationMs: ql,
+                ...(thinkingDurationMs !== undefined && {
+                  thinkingDurationMs,
                 }),
-                ...(Ep !== undefined && {
-                  thinkingDisplay: Ep,
+                ...(thinkingDisplay !== undefined && {
+                  thinkingDisplay,
                 }),
                 ...(batchToolUses.length > 0 && {
                   batchToolUses,
@@ -10262,15 +10820,15 @@ async function* queryModel(messages, systemPrompt, thinkingConfig, tools, signal
                 ...(inputs !== undefined && {
                   wireToolInputs: inputs,
                 }),
-                ...(Xl !== undefined && {
-                  wireIngestContext: Xl,
+                ...(ingestContext !== undefined && {
+                  wireIngestContext: ingestContext,
                 }),
-                ...(Xl !== undefined && {
-                  wireIngestContext: Xl,
+                ...(ingestContext !== undefined && {
+                  wireIngestContext: ingestContext,
                 }),
-                ...(Qh !== undefined && classifierResultPayload(Qh)),
-                apiBlockIndex: ea.index,
-                requestId: Al ?? undefined,
+                ...(classifierSession !== undefined && classifierResultPayload(classifierSession)),
+                apiBlockIndex: event.index,
+                requestId: responseRequestId ?? undefined,
                 requestRef,
                 requestedModel: options.model,
                 ...buildAttribution(
@@ -10284,81 +10842,87 @@ async function* queryModel(messages, systemPrompt, thinkingConfig, tools, signal
                 uuid: randomUUID(),
                 timestamp: new Date().toISOString(),
                 ...false,
-                ...(yn && {
-                  advisorModel: yn,
+                ...(advisorModelForQuery && {
+                  advisorModel: advisorModelForQuery,
                 }),
-                ...(yS !== undefined && {
-                  effort: yS,
+                ...(sentEffort !== undefined && {
+                  effort: sentEffort,
                 }),
-                perTurnEffort: EE,
-                perTurnTiming: n$,
+                perTurnEffort: perTurnEffortValue,
+                perTurnTiming: perTurnNowValue,
                 ...{},
               };
-              noopNotice(conversation, cg);
-              Cm.push(cg);
-              $I++;
-              MC.set(ea.index, cg);
-              Pc = Math.max(Pc, Number.isSafeInteger(ea.index) && ea.index >= 0 ? ea.index + 1 : Number.NaN);
-              weakSet.add(Ql);
-              if (cg.message.content.some((Nf) => !isFallbackMessage(Nf))) {
+              noopNotice(conversation, assistantMessage);
+              yieldedMessages.push(assistantMessage);
+              completedBlockCount++;
+              blockMessages.set(event.index, assistantMessage);
+              nextBlockIndex = Math.max(
+                nextBlockIndex,
+                Number.isSafeInteger(event.index) && event.index >= 0 ? event.index + 1 : Number.NaN,
+              );
+              weakSet.add(block);
+              if (assistantMessage.message.content.some((block) => !isFallbackMessage(block))) {
                 anyBlockFinished = true;
                 if (
-                  cg.message.content.some(
-                    (Nf) =>
-                      Nf.type !== "thinking" && Nf.type !== "redacted_thinking" && !isFallbackMessage(Nf),
+                  assistantMessage.message.content.some(
+                    (block) =>
+                      block.type !== "thinking" &&
+                      block.type !== "redacted_thinking" &&
+                      !isFallbackMessage(block),
                   )
                 )
-                  nd = true;
+                  anyOutputShown = true;
               }
-              yield cg;
+              yield assistantMessage;
               break;
             }
             case "message_delta": {
-              Iu = mRe(Iu, ea.usage);
-              T1 = ea.context_management ?? T1;
+              usage = mergeUsageFromDelta(usage, event.usage);
+              contextManagement = event.context_management ?? contextManagement;
               assertStreamPart(
-                typeof ea.delta === "object" && ea.delta !== null,
-                ea,
+                typeof event.delta === "object" && event.delta !== null,
+                event,
                 lit_2("message_delta_without_delta"),
               );
               if (
-                Qh !== undefined &&
-                typeof ea.delta === "object" &&
-                ea.delta !== null &&
-                "safeguard_results" in ea.delta
+                classifierSession !== undefined &&
+                typeof event.delta === "object" &&
+                event.delta !== null &&
+                "safeguard_results" in event.delta
               )
-                MI(Qh, ea.delta, A_);
-              let Ql = options.serverRefusalFallback !== undefined ? parseUsageIterations(Iu) : undefined;
-              if (Ql?.servedFallbackModel !== undefined) {
-                $E = true;
-                Iu = $jo(Iu, ea.usage);
+                settleClassifier(classifierSession, event.delta, blocks);
+              let iterations =
+                options.serverRefusalFallback !== undefined ? parseUsageIterations(usage) : undefined;
+              if (iterations?.servedFallbackModel !== undefined) {
+                serverFallbackUsed = true;
+                usage = addResponseUsageAttributes(usage, event.usage);
               }
-              let fallbackCreditToken = readFallbackCreditToken(ea.delta.stop_details);
+              let fallbackCreditToken = readFallbackCreditToken(event.delta.stop_details);
               {
-                let stopDetails = ea.delta.stop_details;
+                let stopDetails = event.delta.stop_details;
                 if (stopDetails && "fallback_credit_token" in stopDetails)
                   delete stopDetails.fallback_credit_token;
               }
-              if (fallbackCreditToken !== undefined && !b1) {
-                b1 = true;
+              if (fallbackCreditToken !== undefined && !creditLogged) {
+                creditLogged = true;
                 logEvent("tengu_fallback_credit_minted", {
-                  request_id: sanitizeMarkName(Al),
+                  request_id: sanitizeMarkName(responseRequestId),
                   model: telemetrySafeModelName(options.model),
                   fallback_target_model: telemetrySafeModelName(
                     options.refusalFallbackModel ??
-                      (options.serverRefusalFallback !== undefined && !$E
+                      (options.serverRefusalFallback !== undefined && !serverFallbackUsed
                         ? options.serverRefusalFallback.model
                         : undefined),
                   ),
                   token_length: fallbackCreditToken.length,
-                  input_tokens: Iu.input_tokens,
-                  output_tokens: Iu.output_tokens,
-                  cache_read_input_tokens: Iu.cache_read_input_tokens,
-                  cache_creation_input_tokens: Iu.cache_creation_input_tokens,
-                  cache_creation_5m_input_tokens: Iu.cache_creation?.ephemeral_5m_input_tokens ?? 0,
-                  cache_creation_1h_input_tokens: Iu.cache_creation?.ephemeral_1h_input_tokens ?? 0,
-                  service_tier: fromEnumOpt(Iu.service_tier),
-                  speed: fromEnumOpt(Iu.speed),
+                  input_tokens: usage.input_tokens,
+                  output_tokens: usage.output_tokens,
+                  cache_read_input_tokens: usage.cache_read_input_tokens,
+                  cache_creation_input_tokens: usage.cache_creation_input_tokens,
+                  cache_creation_5m_input_tokens: usage.cache_creation?.ephemeral_5m_input_tokens ?? 0,
+                  cache_creation_1h_input_tokens: usage.cache_creation?.ephemeral_1h_input_tokens ?? 0,
+                  service_tier: fromEnumOpt(usage.service_tier),
+                  speed: fromEnumOpt(usage.speed),
                   query_source: agentTypeForTelemetry(options.querySource),
                   ...(options.queryTracking && {
                     query_chain_id: sanitizeMarkName(options.queryTracking.chainId),
@@ -10366,62 +10930,69 @@ async function* queryModel(messages, systemPrompt, thinkingConfig, tools, signal
                   }),
                 });
               }
-              let stopReason = typeof ea.delta.stop_reason === "string" ? ea.delta.stop_reason : null;
+              let stopReason = typeof event.delta.stop_reason === "string" ? event.delta.stop_reason : null;
               if (stopReason !== null) {
                 reason = stopReason;
                 complete = true;
               }
-              let delta = ea.delta;
-              if (delta.diagnostics?.cache_miss_reason) b3 = delta.diagnostics.cache_miss_reason;
-              let pm = getResumableFlag(ea.delta) ?? getResumableFlag(ea);
-              let Xl = m$ && T1 ? addClientEstimatedClearedTokens(T1, EI?.edit, HS) : null;
-              for (let msg of Cm) {
-                msg.message.usage = Iu;
+              let delta = event.delta;
+              if (delta.diagnostics?.cache_miss_reason) cacheMissReason = delta.diagnostics.cache_miss_reason;
+              let resumable = getResumableFlag(event.delta) ?? getResumableFlag(event);
+              let contextManagementUpdate =
+                contextManagementEligible && contextManagement
+                  ? addClientEstimatedClearedTokens(
+                      contextManagement,
+                      toolResultClearingPlan?.edit,
+                      sentMessages,
+                    )
+                  : null;
+              for (let msg of yieldedMessages) {
+                msg.message.usage = usage;
                 msg.message.stop_reason = reason;
                 if (stopReason !== null || reason === null)
-                  msg.message.stop_details = ea.delta.stop_details ?? null;
-                if (Xl) msg.message.context_management = Xl;
-                if (pm !== undefined) msg.message.resumable = pm;
+                  msg.message.stop_details = event.delta.stop_details ?? null;
+                if (contextManagementUpdate) msg.message.context_management = contextManagementUpdate;
+                if (resumable !== undefined) msg.message.resumable = resumable;
               }
-              if (reason !== null && aP !== "credited") {
-                aP = "credited";
-                let servedFallbackModel = Ql?.servedFallbackModel;
-                let pp = Ql !== undefined && servedFallbackModel !== undefined;
-                let Om = pp
+              if (reason !== null && costState !== "credited") {
+                costState = "credited";
+                let servedFallbackModel = iterations?.servedFallbackModel;
+                let servedFallback = iterations !== undefined && servedFallbackModel !== undefined;
+                let cost = servedFallback
                   ? fallbackMessagesCost(
-                      Ql.entries,
+                      iterations.entries,
                       {
-                        speed: Iu.speed,
-                        inferenceGeo: Iu.inference_geo,
-                        serverToolUse: Iu.server_tool_use,
+                        speed: usage.speed,
+                        inferenceGeo: usage.inference_geo,
+                        serverToolUse: usage.server_tool_use,
                       },
                       reason,
                     )
-                  : calculateUSDCost(resolvedModel, Iu);
-                let Dy = pp
+                  : calculateUSDCost(resolvedModel, usage);
+                let costModel = servedFallback
                   ? preferSameModel(options.serverRefusalFallback?.model, servedFallbackModel)
                   : options.model;
-                Dae += addToTotalSessionCost(
-                  Om,
-                  Iu,
-                  Dy,
+                costUSD += addToTotalSessionCost(
+                  cost,
+                  usage,
+                  costModel,
                   options.querySource,
-                  CC,
+                  effortLevelNormalized,
                   options.spawnedBySkill,
                   options.activeSkill,
                   options.activeMcpServer,
                   options.activeMcpTool,
                 );
-              } else if (aP === "none") aP = "pending";
-              if (stopReason === "refusal" && !La) {
-                La = true;
+              } else if (costState === "none") costState = "pending";
+              if (stopReason === "refusal" && !refusalLogged) {
+                refusalLogged = true;
                 logApiRefusal({
                   model: resolvedModel,
-                  requestId: Al || undefined,
+                  requestId: responseRequestId || undefined,
                   querySource: options.querySource,
-                  effort: CC,
+                  effort: effortLevelNormalized,
                   fastMode: fallbackActive,
-                  attempt: p_,
+                  attempt: attemptNumber,
                   attribution: buildAttribution(
                     options.querySource,
                     options.spawnedBySkill,
@@ -10430,42 +11001,42 @@ async function* queryModel(messages, systemPrompt, thinkingConfig, tools, signal
                     options.activeMcpTool,
                   ),
                   serverFallbackHop: false,
-                  stopDetails: ea.delta.stop_details ?? null,
+                  stopDetails: event.delta.stop_details ?? null,
                   agentContext: options.agentContext,
                 });
               }
               if (options.serverRefusalFallback !== undefined) {
-                let Hf = E$;
-                E$ = undefined;
-                if (Hf !== undefined) {
-                  if (!UT) {
-                    UT = true;
+                let fallbackPending = pendingFallback;
+                pendingFallback = undefined;
+                if (fallbackPending !== undefined) {
+                  if (!fallbackAnnounced) {
+                    fallbackAnnounced = true;
                     yield {
                       type: "server_fallback",
-                      fromModel: Hf.fromModel,
-                      toModel: Hf.model,
-                      reason: Hf.reason,
-                      apiRefusalCategory: Hf.category,
+                      fromModel: fallbackPending.fromModel,
+                      toModel: fallbackPending.model,
+                      reason: fallbackPending.reason,
+                      apiRefusalCategory: fallbackPending.category,
                       midStream: false,
-                      requestId: Al ?? null,
-                      refusedEffort: qx(),
+                      requestId: responseRequestId ?? null,
+                      refusedEffort: refusedEffortInfo(),
                       discardedMessages: [],
                       retainedMessages: [],
                       retainedText: "",
                       finalStopReason: reason,
                     };
                   }
-                } else if (!UT && Ql?.servedFallbackModel !== undefined) {
-                  UT = true;
+                } else if (!fallbackAnnounced && iterations?.servedFallbackModel !== undefined) {
+                  fallbackAnnounced = true;
                   yield {
                     type: "server_fallback",
                     fromModel: options.model,
-                    toModel: Ql.servedFallbackModel,
+                    toModel: iterations.servedFallbackModel,
                     reason: "sticky",
                     apiRefusalCategory: null,
                     midStream: false,
-                    requestId: Al ?? null,
-                    refusedEffort: qx(),
+                    requestId: responseRequestId ?? null,
+                    refusedEffort: refusedEffortInfo(),
                     discardedMessages: [],
                     retainedMessages: [],
                     retainedText: "",
@@ -10473,96 +11044,102 @@ async function* queryModel(messages, systemPrompt, thinkingConfig, tools, signal
                   };
                 }
               }
-              let ql =
+              let armedFallback =
                 options.refusalFallbackModel ??
-                (options.serverRefusalFallback !== undefined && !$E
+                (options.serverRefusalFallback !== undefined && !serverFallbackUsed
                   ? options.serverRefusalFallback.model
                   : undefined);
-              let Ep = options.refusalFallbackModelLane === "silent";
+              let silentLane = options.refusalFallbackModelLane === "silent";
               let refusalFallbackCascadeHop = options.refusalFallbackCascadeHop;
-              let Nf =
-                stopReason === "refusal" && ql !== undefined && !Ep && refusalFallbackCascadeHop === undefined
+              let route =
+                stopReason === "refusal" &&
+                armedFallback !== undefined &&
+                !silentLane &&
+                refusalFallbackCascadeHop === undefined
                   ? resolveRefusalFallbackRoute({
                       originalModelCanonical: getCanonicalName(options.model),
-                      armedFallbackModel: ql,
-                      apiRefusalCategory: ea.delta.stop_details?.category ?? null,
-                      armedTargetIsRefusingModel: isSameModel(options.model, ql),
+                      armedFallbackModel: armedFallback,
+                      apiRefusalCategory: event.delta.stop_details?.category ?? null,
+                      armedTargetIsRefusingModel: isSameModel(options.model, armedFallback),
                       resolveTarget: (mappedTarget) =>
                         pickFallbackModel({
                           mappedTarget,
-                          armedFallbackModel: ql,
+                          armedFallbackModel: armedFallback,
                           refusingModel: options.model,
                           triedModels: [canonicalModelKey(options.model)],
                         }),
                       routesOverride: noopDialogHost(),
                     })
                   : undefined;
-              let G_ = Nf !== undefined ? Nf.model : ql;
-              if (Nf !== undefined)
+              let fallbackModel = route !== undefined ? route.model : armedFallback;
+              if (route !== undefined)
                 logFallbackRouteOutcome({
-                  route: Nf,
+                  route,
                   model: options.model,
-                  armedFallbackModel: ql,
-                  apiRefusalCategory: ea.delta.stop_details?.category,
-                  requestId: Al,
+                  armedFallbackModel: armedFallback,
+                  apiRefusalCategory: event.delta.stop_details?.category,
+                  requestId: responseRequestId,
                 });
-              let ty =
-                Nf?.matched === "none" &&
-                ea.delta.stop_details?.category === "bio" &&
+              let routeDeclinedBio =
+                route?.matched === "none" &&
+                event.delta.stop_details?.category === "bio" &&
                 !hasRefusalFallbackOccurred();
-              let fp =
-                stopReason === "refusal" && (ql === undefined || ty)
+              let silentRearm =
+                stopReason === "refusal" && (armedFallback === undefined || routeDeclinedBio)
                   ? options.refusalFallbackSilentRearm?.(
-                      ty,
-                      ea.delta.stop_details?.category ?? null,
-                      hasTenderQuiltHeader(k_?.headers),
+                      routeDeclinedBio,
+                      event.delta.stop_details?.category ?? null,
+                      hasTenderQuiltHeader(responseBody?.headers),
                     )
                   : undefined;
-              let th = G_ ?? fp;
-              if (stopReason === "refusal" && th !== undefined) {
-                DLe();
-                k3 = true;
+              let fallbackModelChosen = fallbackModel ?? silentRearm;
+              if (stopReason === "refusal" && fallbackModelChosen !== undefined) {
+                recordMediaLimitSuccess();
+                fallbackTriggered = true;
                 yield {
                   type: "fallback_request",
                   trigger: "refusal",
                   originalModel: options.model,
-                  fallbackModel: th,
-                  requestId: Al ?? null,
-                  refusedEffort: qx(),
-                  apiRefusalCategory: ea.delta.stop_details?.category ?? null,
-                  apiRefusalExplanation: ea.delta.stop_details?.explanation ?? null,
+                  fallbackModel: fallbackModelChosen,
+                  requestId: responseRequestId ?? null,
+                  refusedEffort: refusedEffortInfo(),
+                  apiRefusalCategory: event.delta.stop_details?.category ?? null,
+                  apiRefusalExplanation: event.delta.stop_details?.explanation ?? null,
                   creditCode: fallbackCreditToken ?? null,
-                  mintedStateless: !c1,
-                  ...(fp !== undefined && {
+                  mintedStateless: !threadSliced,
+                  ...(silentRearm !== undefined && {
                     silentArmAtTrigger: true,
                   }),
-                  ...describeFallbackRoute(Nf, refusalFallbackCascadeHop),
+                  ...describeFallbackRoute(route, refusalFallbackCascadeHop),
                 };
                 return;
               }
               let refusalMessage = getRefusalMessage(
                 stopReason,
-                ea.delta.stop_details,
-                Al,
-                $E ? (Ql?.servedFallbackModel ?? dg?.model ?? options.model) : options.model,
-                dg?.id,
+                event.delta.stop_details,
+                responseRequestId,
+                serverFallbackUsed
+                  ? (iterations?.servedFallbackModel ?? partialMessage?.model ?? options.model)
+                  : options.model,
+                partialMessage?.id,
               );
               if (refusalMessage) {
-                let Hf = hasRefusalFallbackOccurred() || getRefusalFallbackModelLatch() !== undefined;
+                let latchActive =
+                  hasRefusalFallbackOccurred() || getRefusalFallbackModelLatch() !== undefined;
                 if (
-                  ql !== undefined ||
+                  armedFallback !== undefined ||
                   options.refusalFallbackModel !== undefined ||
                   (hasRefusalFallbackTarget(options.model) && isRefusalFallbackEnabled()) ||
                   hasFallbackLatch() ||
-                  Hf
+                  latchActive
                 )
                   logFeatureBad(
                     "refusal_fallback",
-                    Nf?.matched === "none"
+                    route?.matched === "none"
                       ? "route_declined"
-                      : $E
+                      : serverFallbackUsed
                         ? "server_chain_exhausted"
-                        : Hf
+                        : latchActive
                           ? "client_chain_exhausted"
                           : hasRefusalFallbackTarget(options.model) && isSwitchModelsOnFlagDisabled()
                             ? "disabled_by_config"
@@ -10570,71 +11147,77 @@ async function* queryModel(messages, systemPrompt, thinkingConfig, tools, signal
                     {
                       convolute_arcades: hasConvoluteArcadesFlag(),
                       arm_source: fromEnum(getFallbackLatchKind()),
-                      armed: ql !== undefined,
+                      armed: armedFallback !== undefined,
                       model_scope: fromEnum(classifyFallbackOrigin(options.model)),
                     },
                   );
                 yield {
                   type: "refusal_no_fallback",
                   originalModel: options.model,
-                  requestId: Al ?? null,
-                  apiRefusalCategory: ea.delta.stop_details?.category ?? null,
-                  apiRefusalExplanation: ea.delta.stop_details?.explanation ?? null,
+                  requestId: responseRequestId ?? null,
+                  apiRefusalCategory: event.delta.stop_details?.category ?? null,
+                  apiRefusalExplanation: event.delta.stop_details?.explanation ?? null,
                 };
                 yield refusalMessage;
               }
-              let maxTokensStopMessage = getMaxTokensStopMessage(stopReason, BT, Iu.output_tokens);
+              let maxTokensStopMessage = getMaxTokensStopMessage(
+                stopReason,
+                maxOutputTokens,
+                usage.output_tokens,
+              );
               if (maxTokensStopMessage !== undefined) yield maxTokensStopMessage;
               break;
             }
             case "message_stop":
-              hf = false;
-              if (Qh !== undefined) bLe(settleServerNoResult(Qh));
-              if (HI) logWireToolInputParseFailure();
-              if (aP === "pending") lP();
-              C_("stream_completed", Al ?? null, Iu);
+              envelopeOpen = false;
+              if (classifierSession !== undefined)
+                noteClassifierUnsupported(settleServerNoResult(classifierSession));
+              if (wireInputDegraded) logWireToolInputParseFailure();
+              if (costState === "pending") creditCostOnce();
+              logCreditOutcome("stream_completed", responseRequestId ?? null, usage);
               break;
           }
-          if (ea.type === "content_block_stop" && HLe.has(ea.index)) continue;
-          Vl = true;
-          let costUSDForPart = thinkingStartTime(ea, z5);
-          let om = Kg || ea.type === "message_start";
-          if (ea.type === "message_start") {
-            Kg = true;
-            cy = null;
-            jT = false;
-            pk = typeof ea.message.id === "string" && ea.message.id !== "" ? ea.message.id : null;
-          } else if (ea.type === "content_block_start") {
-            cy = ea.index;
-            jT = TOOL_USE_BLOCK_TYPES.has(ea.content_block.type);
-          } else if (ea.type === "content_block_stop") {
-            cy = null;
-            jT = false;
-          } else if (ea.type === "message_stop") {
-            Kg = false;
-            cy = null;
-            jT = false;
+          if (event.type === "content_block_stop" && fallbackBlockIndices.has(event.index)) continue;
+          anyEventYielded = true;
+          let costUSDForPart = thinkingStartTime(event, requestedDisplayField);
+          let apiMessageIdWanted = stopEventsPending || event.type === "message_start";
+          if (event.type === "message_start") {
+            stopEventsPending = true;
+            openContentBlockIndex = null;
+            openBlockIsToolUse = false;
+            apiMessageId =
+              typeof event.message.id === "string" && event.message.id !== "" ? event.message.id : null;
+          } else if (event.type === "content_block_start") {
+            openContentBlockIndex = event.index;
+            openBlockIsToolUse = TOOL_USE_BLOCK_TYPES.has(event.content_block.type);
+          } else if (event.type === "content_block_stop") {
+            openContentBlockIndex = null;
+            openBlockIsToolUse = false;
+          } else if (event.type === "message_stop") {
+            stopEventsPending = false;
+            openContentBlockIndex = null;
+            openBlockIsToolUse = false;
           }
           yield {
             type: "stream_event",
-            event: ea,
-            ...(ea.type === "message_start"
+            event,
+            ...(event.type === "message_start"
               ? {
-                  ttftMs: Iae,
-                  ...(yS !== undefined && {
-                    sentEffort: yS,
+                  ttftMs,
+                  ...(sentEffort !== undefined && {
+                    sentEffort,
                   }),
                   ...(options.turnEffort !== undefined && {
                     turnEffort: options.turnEffort,
                   }),
-                  ...(_3
+                  ...(sentAtMonotonic
                     ? {
-                        requestSentAtMs: _3,
+                        requestSentAtMs: sentAtMonotonic,
                       }
                     : undefined),
-                  ...(ELe
+                  ...(sentAtWall
                     ? {
-                        requestSentWallMs: ELe,
+                        requestSentWallMs: sentAtWall,
                       }
                     : undefined),
                 }
@@ -10644,44 +11227,44 @@ async function* queryModel(messages, systemPrompt, thinkingConfig, tools, signal
                   thinkingDisplay: costUSDForPart,
                 }
               : undefined),
-            ...(om && pk !== null
+            ...(apiMessageIdWanted && apiMessageId !== null
               ? {
-                  apiMessageId: pk,
+                  apiMessageId,
                 }
               : undefined),
           };
         }
-        D1();
-        yP?.(v$, clock_2?.chunks);
+        clearStreamTimers();
+        finishProfile?.(streamEventCount, chunkTimes?.chunks);
         if (signal.aborted) {
           yield* clearStreamIdleTimers();
           return;
         }
-        if (fh) {
-          let exitDelayMs = _b !== null ? Math.round(clock.monotonicNow() - _b) : -1;
+        if (idleTimedOut) {
+          let exitDelayMs = idleTimeoutAt !== null ? Math.round(clock.monotonicNow() - idleTimeoutAt) : -1;
           logForDiagnosticsNoPII("info", "cli_stream_loop_exited_after_watchdog_clean");
           logEvent("tengu_stream_loop_exited_after_watchdog", {
-            request_id: traceValueOrUnknown(Al),
+            request_id: traceValueOrUnknown(responseRequestId),
             exit_delay_ms: exitDelayMs,
             exit_path: lit_2("clean"),
             model: telemetrySafeModelName(options.model),
           });
-          _b = null;
+          idleTimeoutAt = null;
           throw Error("Stream idle timeout - no chunks received");
         }
-        if (Ow !== undefined) throw Ow;
-        if (hf && Wd !== null) {
+        if (suspendedError !== undefined) throw suspendedError;
+        if (envelopeOpen && openBlockIndex !== null) {
           logForDebugging(
-            `Stream ended cleanly inside open block ${Wd} (stop_reason=${reason}) \u2014 treating as a dropped connection`,
+            `Stream ended cleanly inside open block ${openBlockIndex} (stop_reason=${reason}) \u2014 treating as a dropped connection`,
             {
               level: "error",
             },
           );
           throw new StreamTruncatedError();
         }
-        if (!dg || (Cm.length === 0 && !reason)) {
+        if (!partialMessage || (yieldedMessages.length === 0 && !reason)) {
           logForDebugging(
-            !dg
+            !partialMessage
               ? "Stream completed without receiving message_start event - triggering non-streaming fallback"
               : "Stream completed with message_start but no content blocks completed - triggering non-streaming fallback",
             {
@@ -10690,13 +11273,13 @@ async function* queryModel(messages, systemPrompt, thinkingConfig, tools, signal
           );
           logEvent("tengu_stream_no_events", {
             model: telemetrySafeModelName(options.model),
-            request_id: traceValueOrUnknown(Al),
-            ...responseDiagnosticFields(undefined, nk),
-            ms_since_request: Math.round(clock.monotonicNow() - Uy),
+            request_id: traceValueOrUnknown(responseRequestId),
+            ...responseDiagnosticFields(undefined, responseMeta),
+            ms_since_request: Math.round(clock.monotonicNow() - attemptStartAt),
           });
           throw new StreamNoEventsError();
         }
-        if (hf && !(reason !== null && complete)) {
+        if (envelopeOpen && !(reason !== null && complete)) {
           logForDebugging(
             `Stream ended cleanly mid-response (stop_reason=${reason}, terminal=${complete}) \u2014 treating as a dropped connection`,
             {
@@ -10706,350 +11289,389 @@ async function* queryModel(messages, systemPrompt, thinkingConfig, tools, signal
           throw new StreamTruncatedError();
         }
         try {
-          let ea = streamFallbackWarning();
-          let j_ = ea.hasFired("stream_text_delivery_bad");
-          let vc = ea.hasFired("stream_text_delivery_ok");
-          if (reason !== null && !D3 && (!j_ || !vc)) {
-            if (!j_)
-              for (let [Mg, eh] of A_.entries()) {
-                if (!eh || eh.type !== "text") continue;
-                if (eh.text.trim().length > 0 && !MC.has(Mg) && !Bae.has(Mg)) {
-                  ea.markFired("stream_text_delivery_bad");
+          let warningState = streamFallbackWarning();
+          let textDeliveryBad = warningState.hasFired("stream_text_delivery_bad");
+          let textDeliveryOk = warningState.hasFired("stream_text_delivery_ok");
+          if (reason !== null && !suppressedByFallback && (!textDeliveryBad || !textDeliveryOk)) {
+            if (!textDeliveryBad)
+              for (let [index, block] of blocks.entries()) {
+                if (!block || block.type !== "text") continue;
+                if (
+                  block.text.trim().length > 0 &&
+                  !blockMessages.has(index) &&
+                  !malformedBlocks.has(index)
+                ) {
+                  warningState.markFired("stream_text_delivery_bad");
                   logFeatureBad("api_stream_text_delivery", "text_block_unyielded", {
-                    had_tool_use: A_.some((om) => om?.type === "tool_use"),
-                    dropped_block_index: Mg,
+                    had_tool_use: blocks.some((block) => block?.type === "tool_use"),
+                    dropped_block_index: index,
                   });
                   break;
                 }
               }
-            if (!vc) {
-              let any = A_.some((om, Ql) => om?.type === "text" && om.text.trim().length > 0 && MC.has(Ql));
-              let any_2 = A_.some((om, Ql) => om?.type === "tool_use" && MC.has(Ql));
+            if (!textDeliveryOk) {
+              let any = blocks.some(
+                (block, index) =>
+                  block?.type === "text" && block.text.trim().length > 0 && blockMessages.has(index),
+              );
+              let any_2 = blocks.some(
+                (block, index) => block?.type === "tool_use" && blockMessages.has(index),
+              );
               if (any && any_2) {
-                ea.markFired("stream_text_delivery_ok");
+                warningState.markFired("stream_text_delivery_ok");
                 logFeatureOk("api_stream_text_delivery");
               }
             }
           }
-          if (reason !== null) Ggt(Iu);
-          zgt(Iu);
+          if (reason !== null) noteCacheCoverageUsage(usage);
+          noteCacheCoverageSustained(usage);
         } catch {}
-        if (Aw > 0) {
+        if (stallCount > 0) {
           logForDebugging(
-            `Streaming completed with ${Aw} stall(s), total stall time: ${(VT / 1000).toFixed(1)}s`,
+            `Streaming completed with ${stallCount} stall(s), total stall time: ${(stallTotalMs / 1000).toFixed(1)}s`,
             {
               level: "warn",
             },
           );
           logEvent("tengu_streaming_stall_summary", {
-            stall_count: Aw,
-            total_stall_time_ms: VT,
+            stall_count: stallCount,
+            total_stall_time_ms: stallTotalMs,
             model: telemetrySafeModelName(options.model),
-            request_id: traceValueOrUnknown(Al),
+            request_id: traceValueOrUnknown(responseRequestId),
           });
         }
         recordIdleClearingServerReport({
-          returnAfterIdle: m$ ? EI?.returnAfterIdle : undefined,
-          contextManagement: T1,
-          usage: Iu,
+          returnAfterIdle: contextManagementEligible ? toolResultClearingPlan?.returnAfterIdle : undefined,
+          contextManagement,
+          usage,
           querySource: options.querySource,
           agentId: options.agentId,
         });
         checkResponseForCacheBreak(
           options.querySource,
-          Iu.cache_read_input_tokens,
-          Iu.cache_creation_input_tokens,
+          usage.cache_read_input_tokens,
+          usage.cache_creation_input_tokens,
           messages,
           options.agentId,
-          Al,
-          nt,
-          Hi,
+          responseRequestId,
+          lastAssistantId,
+          isMainThread,
         );
-        let B_ = k_;
-        if (B_) {
-          recordLowPriorityServed(_S, bS);
+        let response = responseBody;
+        if (response) {
+          recordLowPriorityServed(lowPriorityWait, headersReceivedAt);
           extractGraceStatusFromHeaders(
-            B_.headers,
+            response.headers,
             classifyQuerySource(options.querySource) !== "auxiliary",
-            bS,
+            headersReceivedAt,
             limitsAccountEpoch,
           );
-          let ea =
+          let longContext =
             (has1mSuffix_2(options.model) || modelHasNative1MContext(options.model)) &&
-            Iu.input_tokens + Iu.cache_read_input_tokens + Iu.cache_creation_input_tokens >
+            usage.input_tokens + usage.cache_read_input_tokens + usage.cache_creation_input_tokens >
               SECONDARY_CONTEXT_WINDOW;
           let quotaStatusFromHeaders = extractQuotaStatusFromHeaders(
-            B_.headers,
+            response.headers,
             options.model,
-            ea,
-            bS,
+            longContext,
+            headersReceivedAt,
             limitsAccountEpoch,
             options.storageV5,
           );
           if (quotaStatusFromHeaders && options.queryTracking) {
             options.queryTracking.answeredQuerySource = options.querySource;
             options.queryTracking.billedToUsageCredits = quotaStatusFromHeaders.overageInUse === true;
-            options.queryTracking.longContextBilled = ea;
+            options.queryTracking.longContextBilled = longContext;
           }
-          refetchStaleClientData(B_.headers, options, fallbackActive);
-          ALe = B_.headers;
+          refetchStaleClientData(response.headers, options, fallbackActive);
+          responseHeaders = response.headers;
         }
       } catch (streamingError) {
-        let od =
-          Ow !== undefined && !fh && !signal.aborted && streamingError instanceof APIUserAbortError
-            ? Ow
+        let streamError =
+          suspendedError !== undefined &&
+          !idleTimedOut &&
+          !signal.aborted &&
+          streamingError instanceof APIUserAbortError
+            ? suspendedError
             : streamingError;
-        D1();
-        yP?.(v$, clock_2?.chunks);
-        OE();
+        clearStreamTimers();
+        finishProfile?.(streamEventCount, chunkTimes?.chunks);
+        cancelFirstByteTimer();
         {
-          let pp = N3();
-          if (pp) yield pp;
+          let fallbackEvent = serverFallbackEvent();
+          if (fallbackEvent) yield fallbackEvent;
         }
-        if (!fh && od instanceof StreamIdleTimeoutError) {
-          fh = true;
-          _b = clock.monotonicNow();
-          logForDebugging(`Streaming idle timeout (byte-level): ${od.message}, aborting stream`, {
+        if (!idleTimedOut && streamError instanceof StreamIdleTimeoutError) {
+          idleTimedOut = true;
+          idleTimeoutAt = clock.monotonicNow();
+          logForDebugging(`Streaming idle timeout (byte-level): ${streamError.message}, aborting stream`, {
             level: "error",
           });
           logForDiagnosticsNoPII("error", "cli_streaming_idle_timeout");
           logEvent("tengu_streaming_idle_timeout", {
             model: telemetrySafeModelName(options.model),
-            request_id: traceValueOrUnknown(Al),
-            timeout_ms: od.idleMs,
+            request_id: traceValueOrUnknown(responseRequestId),
+            timeout_ms: streamError.idleMs,
             tier: lit_2("byte"),
-            bytes_received_before_stall: od.bytesReceived,
-            time_to_first_byte_ms: od.ttfbMs,
-            body_read_pending: od.bodyReadPending,
-            slept_ms: od.sleptMs,
-            cf_ray: sanitizeMarkName(od.cfRay),
+            bytes_received_before_stall: streamError.bytesReceived,
+            time_to_first_byte_ms: streamError.ttfbMs,
+            body_read_pending: streamError.bodyReadPending,
+            slept_ms: streamError.sleptMs,
+            cf_ray: sanitizeMarkName(streamError.cfRay),
           });
         }
-        if (fh && _b !== null) {
-          let exitDelayMs = Math.round(clock.monotonicNow() - _b);
+        if (idleTimedOut && idleTimeoutAt !== null) {
+          let exitDelayMs = Math.round(clock.monotonicNow() - idleTimeoutAt);
           logForDiagnosticsNoPII("info", "cli_stream_loop_exited_after_watchdog_error");
           logEvent("tengu_stream_loop_exited_after_watchdog", {
-            request_id: traceValueOrUnknown(Al),
+            request_id: traceValueOrUnknown(responseRequestId),
             exit_delay_ms: exitDelayMs,
             exit_path: lit_2("error"),
             error_name:
-              od instanceof Error ? (sanitizedErrorNameForTelemetry(od) ?? lit_2("Error")) : lit_2("unknown"),
+              streamError instanceof Error
+                ? (sanitizedErrorNameForTelemetry(streamError) ?? lit_2("Error"))
+                : lit_2("unknown"),
             model: telemetrySafeModelName(options.model),
           });
         }
-        let Zg = {
-          events_received: v$,
+        let stallInfo = {
+          events_received: streamEventCount,
           ms_to_first_event: msToFirstEvent,
-          ms_since_last_event: Ew === null ? null : clock.now() - Ew,
+          ms_since_last_event: lastEventAt === null ? null : clock.now() - lastEventAt,
         };
-        let Iy = (fallbackCause, Om) =>
+        let logStreamFailure = (fallbackCause, failureError) =>
           logForDiagnosticsNoPII("warn", "cli_stream_failed", () => ({
-            ...classifyApiErrorKind(Om, classifyAPIError(Om), nk),
+            ...classifyApiErrorKind(failureError, classifyAPIError(failureError), responseMeta),
             fallback_cause: fallbackCause,
-            watchdog_fired: fh,
+            watchdog_fired: idleTimedOut,
             slept_ms:
-              od instanceof StreamIdleTimeoutError || od instanceof StreamSuspendedError ? od.sleptMs : null,
-            client_request_id: sanitizeMarkName(Ah) ?? null,
+              streamError instanceof StreamIdleTimeoutError || streamError instanceof StreamSuspendedError
+                ? streamError.sleptMs
+                : null,
+            client_request_id: sanitizeMarkName(clientRequestId) ?? null,
             model: telemetrySafeModelName(options.model) ?? null,
             stream: {
-              ...Zg,
-              first_event_type: cP === null ? null : normalizeStreamEventType(cP),
-              last_event_type: fP === null ? null : normalizeStreamEventType(fP),
-              message_envelope_open: hf,
+              ...stallInfo,
+              first_event_type: firstEventType === null ? null : normalizeStreamEventType(firstEventType),
+              last_event_type: lastEventType === null ? null : normalizeStreamEventType(lastEventType),
+              message_envelope_open: envelopeOpen,
               stop_reason_received: reason !== null,
-              content_blocks_completed: $I,
-              any_event_yielded: Vl,
-              ms_since_request: Math.round(clock.monotonicNow() - Uy),
-              ms_to_headers: nk?.latencyMs ?? null,
-              stalls_over_30s: Aw,
-              stall_ms_total: VT,
+              content_blocks_completed: completedBlockCount,
+              any_event_yielded: anyEventYielded,
+              ms_since_request: Math.round(clock.monotonicNow() - attemptStartAt),
+              ms_to_headers: responseMeta?.latencyMs ?? null,
+              stalls_over_30s: stallCount,
+              stall_ms_total: stallTotalMs,
             },
             route: connectionSetupFacts(),
           }));
-        if (od instanceof APIUserAbortError) {
+        if (streamError instanceof APIUserAbortError) {
           if (signal.aborted) {
             yield* clearStreamIdleTimers();
-            logForDebugging(`Streaming aborted by user: ${errorMessage(od)}`);
-            throw od;
-          } else if (!fh) {
-            logForDebugging(`Streaming timeout (SDK abort): ${od.message}`, {
+            logForDebugging(`Streaming aborted by user: ${errorMessage(streamError)}`);
+            throw streamError;
+          } else if (!idleTimedOut) {
+            logForDebugging(`Streaming timeout (SDK abort): ${streamError.message}`, {
               level: "error",
             });
-            let pp = new APIConnectionTimeoutError({
+            let timeoutError = new APIConnectionTimeoutError({
               message: "Request timed out",
             });
-            Iy("sdk_timeout", pp);
-            throw pp;
+            logStreamFailure("sdk_timeout", timeoutError);
+            throw timeoutError;
           }
         }
-        let connectionErrorDetails = extractConnectionErrorDetails(od);
-        let B_ = connectionErrorDetails !== null && TRANSIENT_SOCKET_CODES.has(connectionErrorDetails.code);
-        let ea =
-          connectionErrorDetails !== null && (B_ || UNREACHABLE_ERROR_CODES.has(connectionErrorDetails.code));
-        let isContextHintSse = contextHintController?.classifyStreamError(od) ?? false;
-        let vc = od instanceof StreamMalformedEventError || od instanceof SyntaxError;
-        let Mg = od instanceof StreamMalformedEventError && od.blockState === "unstarted";
-        let eh = Mg
+        let connectionErrorDetails = extractConnectionErrorDetails(streamError);
+        let isStaleConnection =
+          connectionErrorDetails !== null && TRANSIENT_SOCKET_CODES.has(connectionErrorDetails.code);
+        let connectionBroken =
+          connectionErrorDetails !== null &&
+          (isStaleConnection || UNREACHABLE_ERROR_CODES.has(connectionErrorDetails.code));
+        let isContextHintSse = contextHintController?.classifyStreamError(streamError) ?? false;
+        let malformed =
+          streamError instanceof StreamMalformedEventError || streamError instanceof SyntaxError;
+        let unstartedBlock =
+          streamError instanceof StreamMalformedEventError && streamError.blockState === "unstarted";
+        let malformedReason = unstartedBlock
           ? "event referenced an unstarted content block"
-          : od instanceof StreamMalformedEventError && od.blockState === "closed"
+          : streamError instanceof StreamMalformedEventError && streamError.blockState === "closed"
             ? "event referenced an already-closed content block"
             : "event could not be read";
         let fallbackCause = classifyStreamError({
           connDetails: connectionErrorDetails,
-          isStaleConnection: B_,
+          isStaleConnection,
           isContextHintSse,
-          streamIdleAborted: fh,
-          noEvents: od instanceof StreamNoEventsError,
-          malformedStream: od instanceof StreamMalformedEventError,
+          streamIdleAborted: idleTimedOut,
+          noEvents: streamError instanceof StreamNoEventsError,
+          malformedStream: streamError instanceof StreamMalformedEventError,
         });
-        let Ql = sanitizedErrorNameForTelemetry(od) ?? null;
-        let Nu = sanitizedConnectionCodeForTelemetry(connectionErrorDetails?.code) ?? null;
-        let errorName = od instanceof Error ? (Ql ?? lit_2("none")) : fromEnum(typeof od);
+        let errorName = sanitizedErrorNameForTelemetry(streamError) ?? null;
+        let connectionCode = sanitizedConnectionCodeForTelemetry(connectionErrorDetails?.code) ?? null;
+        let errorName_2 =
+          streamError instanceof Error ? (errorName ?? lit_2("none")) : fromEnum(typeof streamError);
         let errorConstructor =
-          od instanceof Error
-            ? (sanitizedClassNameForTelemetry(od.constructor?.name) ?? lit_2("none"))
+          streamError instanceof Error
+            ? (sanitizedClassNameForTelemetry(streamError.constructor?.name) ?? lit_2("none"))
             : lit_2("none");
-        let errorCode = Nu ?? lit_2("none");
-        let Xl =
+        let errorCode = connectionCode ?? lit_2("none");
+        let fallbackDisabled =
           ((getFeatureValue_CACHED_MAY_BE_STALE("tengu_watchdog_skip_nonstreaming_fallback", false) ||
             env.CLAUDE_CODE_REMOTE) &&
-            fh) ||
+            idleTimedOut) ||
           env.CLAUDE_CODE_DISABLE_NONSTREAMING_FALLBACK ||
           getFeatureValue_CACHED_MAY_BE_STALE("tengu_disable_streaming_to_non_streaming_fallback", false);
-        if (fh)
-          Lae = Error(
-            Cm.length > 0
+        if (idleTimedOut)
+          idleTimeoutError = Error(
+            yieldedMessages.length > 0
               ? "Stream idle timeout - partial response received"
               : "Stream idle timeout - no chunks received",
           );
-        let ql = fh ? Lae : od;
+        let effectiveError = idleTimedOut ? idleTimeoutError : streamError;
         let error =
-          ql instanceof Error ? (sanitizedErrorNameForTelemetry(ql) ?? lit_2("Error")) : fromEnum(typeof ql);
-        Iy(fallbackCause, od instanceof APIUserAbortError ? ql : od);
-        let cg =
-          is529Error(od) ||
-          isNon529ServerError(od) ||
-          (od instanceof APIError && (od.type === "api_error" || od.type === "timeout_error"));
-        let Nf;
-        if (isDlpRequestDenied(od)) Nf = "dlpDenied";
-        else if (alwaysFalseErrors(od)) Nf = "escapeMonitor";
-        let outputFiltered = isRequestTooLargeError_2(od);
-        let ty = yb !== null && !E3 && connectionErrorDetails !== null && !Vl;
-        let fp = classifyStreamFailure({
-          error: od,
-          isServerError: cg,
-          stalled: fh,
-          isConnectionError: ea || ty,
-          suspended: isStreamSuspendedError(od),
+          effectiveError instanceof Error
+            ? (sanitizedErrorNameForTelemetry(effectiveError) ?? lit_2("Error"))
+            : fromEnum(typeof effectiveError);
+        logStreamFailure(
+          fallbackCause,
+          streamError instanceof APIUserAbortError ? effectiveError : streamError,
+        );
+        let isServerError =
+          is529Error(streamError) ||
+          isNon529ServerError(streamError) ||
+          (streamError instanceof APIError &&
+            (streamError.type === "api_error" || streamError.type === "timeout_error"));
+        let terminalKind;
+        if (isDlpRequestDenied(streamError)) terminalKind = "dlpDenied";
+        else if (alwaysFalseErrors(streamError)) terminalKind = "escapeMonitor";
+        let outputFiltered = isRequestTooLargeError_2(streamError);
+        let dispatchRecovery =
+          sentDispatch !== null && !dispatchEscalated && connectionErrorDetails !== null && !anyEventYielded;
+        let failure = classifyStreamFailure({
+          error: streamError,
+          isServerError,
+          stalled: idleTimedOut,
+          isConnectionError: connectionBroken || dispatchRecovery,
+          suspended: isStreamSuspendedError(streamError),
           truncated: connectionErrorDetails?.code === "StreamTruncated",
-          malformed: vc,
-          denied: Nf !== undefined,
+          malformed,
+          denied: terminalKind !== undefined,
           outputFiltered,
-          anyEvent: Vl,
+          anyEvent: anyEventYielded,
           anyBlockFinished,
-          anyOutputShown: nd,
+          anyOutputShown,
           stopReasonReceived: reason !== null,
-          outlastedNonStreamingTimeout: clock.monotonicNow() - Uy >= getNonStreamingRequestTimeoutMs(),
-          complete: reason !== null && complete && Wd === null,
+          outlastedNonStreamingTimeout:
+            clock.monotonicNow() - attemptStartAt >= getNonStreamingRequestTimeoutMs(),
+          complete: reason !== null && complete && openBlockIndex === null,
         });
-        let th = fp === undefined ? "keepPartial" : retryBudget.onStreamFailed(fp, !Xl);
-        let Fg = retryBudget.counts();
-        let DC = fp?.progress === "thinkingOnly" && fp.cause === "overloaded" && !fp.stopReasonReceived;
+        let decision =
+          failure === undefined ? "keepPartial" : retryBudget.onStreamFailed(failure, !fallbackDisabled);
+        let retryCounts = retryBudget.counts();
+        let thinkingOnlyOverloaded =
+          failure?.progress === "thinkingOnly" &&
+          failure.cause === "overloaded" &&
+          !failure.stopReasonReceived;
         if (
-          th === "useFallbackModel" &&
-          (fp?.cause === "serverError" || fp?.cause === "timedOut") &&
+          decision === "useFallbackModel" &&
+          (failure?.cause === "serverError" || failure?.cause === "timedOut") &&
           options.fallbackModel
         ) {
-          if (!nd) markAbandonedThinking(Cm, resolvedModel);
-          if (hf) {
-            lP();
-            xT();
+          if (!anyOutputShown) markAbandonedThinking(yieldedMessages, resolvedModel);
+          if (envelopeOpen) {
+            creditCostOnce();
+            recordUsageOnce();
           }
           logEvent("tengu_api_model_not_found_fallback_triggered", {
             original_model: telemetrySafeModelName(options.model),
             fallback_model: telemetrySafeModelName(options.fallbackModel),
             provider: getAPIProviderForAnalytics(),
-            reason: fp.cause === "timedOut" ? lit_2("timed_out") : lit_2("server_error"),
+            reason: failure.cause === "timedOut" ? lit_2("timed_out") : lit_2("server_error"),
             source: lit_2("mid_stream"),
           });
-          throw new FallbackTriggeredError(options.model, options.fallbackModel, "server_error", od);
+          throw new FallbackTriggeredError(options.model, options.fallbackModel, "server_error", streamError);
         }
-        if (fp === undefined || fp.progress === "output" || (fp.progress === "thinkingOnly" && !DC)) {
-          let pp = cg && nd;
-          let Om = cg && th === "retry";
-          if (th !== "fail") {
+        if (
+          failure === undefined ||
+          failure.progress === "output" ||
+          (failure.progress === "thinkingOnly" && !thinkingOnlyOverloaded)
+        ) {
+          let serverErrorWithOutput = isServerError && anyOutputShown;
+          let serverErrorRetry = isServerError && decision === "retry";
+          if (decision !== "fail") {
             releaseStreamResources();
-            let Dy = fh;
-            let any = Cm.some((Uae) => Uae.message.content.some((params) => params.type === "tool_use"));
-            if (th === "retry") {
-              if (!nd) markAbandonedThinking(Cm, resolvedModel);
-              if (Dy) {
+            let wasWatchdog = idleTimedOut;
+            let any = yieldedMessages.some((message) =>
+              message.message.content.some((params) => params.type === "tool_use"),
+            );
+            if (decision === "retry") {
+              if (!anyOutputShown) markAbandonedThinking(yieldedMessages, resolvedModel);
+              if (wasWatchdog) {
                 logForDebugging(
-                  `Stream idle timeout after thinking-only yield \u2014 retrying streaming (${Fg.stalls}/${RETRY_POLICY_CONST_1})`,
+                  `Stream idle timeout after thinking-only yield \u2014 retrying streaming (${retryCounts.stalls}/${RETRY_POLICY_CONST_1})`,
                   {
                     level: "warn",
                   },
                 );
                 logEvent("tengu_streaming_watchdog_retry", {
                   model: telemetrySafeModelName(options.model),
-                  retry_attempt: Fg.stalls,
-                  request_id: sanitizeMarkName(Al),
+                  retry_attempt: retryCounts.stalls,
+                  request_id: sanitizeMarkName(responseRequestId),
                   after_thinking_only: true,
                 });
               } else {
                 logForDebugging(
-                  `Stream ${vc ? eh : Om ? "server error" : `connection closed (${connectionErrorDetails?.code})`} after thinking-only yield \u2014 retrying streaming (${Fg.afterThinkingOnly}/${fp?.cause === "timedOut" ? RETRY_POLICY_CONST_HYN : MAX_OUTPUT_FILTERED_RETRIES})`,
+                  `Stream ${malformed ? malformedReason : serverErrorRetry ? "server error" : `connection closed (${connectionErrorDetails?.code})`} after thinking-only yield \u2014 retrying streaming (${retryCounts.afterThinkingOnly}/${failure?.cause === "timedOut" ? RETRY_POLICY_CONST_HYN : MAX_OUTPUT_FILTERED_RETRIES})`,
                   {
                     level: "warn",
                   },
                 );
                 logEvent("tengu_streaming_stale_connection_retry", {
                   model: telemetrySafeModelName(options.model),
-                  error_code: vc
+                  error_code: malformed
                     ? lit_2("malformed_stream")
-                    : Om
-                      ? fp?.cause === "timedOut"
+                    : serverErrorRetry
+                      ? failure?.cause === "timedOut"
                         ? lit_2("timed_out")
                         : lit_2("server_error")
                       : reducibleErrorCode(connectionErrorDetails?.code ?? ""),
-                  retry_attempt: Fg.afterThinkingOnly,
-                  request_id: sanitizeMarkName(Al),
+                  retry_attempt: retryCounts.afterThinkingOnly,
+                  request_id: sanitizeMarkName(responseRequestId),
                   after_thinking_only: true,
                 });
               }
-              C_("attempt_errored", Al ?? null, null);
-              lP();
-              xT();
-              yield* ey({
+              logCreditOutcome("attempt_errored", responseRequestId ?? null, null);
+              creditCostOnce();
+              recordUsageOnce();
+              yield* emitStopEvents({
                 responseUnfinished: true,
               });
-              Al = null;
-              if (Om)
+              responseRequestId = null;
+              if (serverErrorRetry)
                 await sleep(
-                  getRetryDelay(Fg.afterThinkingOnly, undefined, undefined, options.random),
+                  getRetryDelay(retryCounts.afterThinkingOnly, undefined, undefined, options.random),
                   signal,
                   {
                     clock,
                   },
                 );
-              else if (!Dy)
-                await sleep(100 * Fg.afterThinkingOnly, signal, {
+              else if (!wasWatchdog)
+                await sleep(100 * retryCounts.afterThinkingOnly, signal, {
                   clock,
                 });
               continue e;
             }
-            let P5n = reason !== null;
-            let vht = connectionErrorDetails?.code === "StreamSuspended";
-            let ULe = vht && !isDisklessProcess();
-            let Eht = Dy
+            let hasStopReason = reason !== null;
+            let suspended = connectionErrorDetails?.code === "StreamSuspended";
+            let computerSlept = suspended && !isDisklessProcess();
+            let cutCause = wasWatchdog
               ? "watchdog"
-              : pp
-                ? od instanceof APIError && od.type === "timeout_error"
+              : serverErrorWithOutput
+                ? streamError instanceof APIError && streamError.type === "timeout_error"
                   ? "timed_out"
                   : "server_error"
-                : vc
+                : malformed
                   ? "malformed_stream"
-                  : vht
+                  : suspended
                     ? "stream_suspended"
                     : connectionErrorDetails?.code === "StreamTruncated"
                       ? "stream_truncated"
@@ -11057,372 +11679,387 @@ async function* queryModel(messages, systemPrompt, thinkingConfig, tools, signal
                           UNREACHABLE_ERROR_CODES.has(connectionErrorDetails.code)
                         ? "network_down"
                         : "stale_connection";
-            let cause = fromEnum(Eht);
-            if (P5n && complete && Wd === null) {
+            let cause = fromEnum(cutCause);
+            if (hasStopReason && complete && openBlockIndex === null) {
               logForDebugging(
-                `Stream ${Dy ? "stalled" : `connection closed (${connectionErrorDetails?.code ?? "unknown"})`} after message_delta (stop_reason=${reason}) \u2014 response already complete, no truncation`,
+                `Stream ${wasWatchdog ? "stalled" : `connection closed (${connectionErrorDetails?.code ?? "unknown"})`} after message_delta (stop_reason=${reason}) \u2014 response already complete, no truncation`,
                 {
                   level: "info",
                 },
               );
               logEvent("tengu_streaming_close_after_complete", {
                 model: telemetrySafeModelName(options.model),
-                blocks_yielded: Cm.length,
+                blocks_yielded: yieldedMessages.length,
                 cause,
                 error_code: connectionErrorDetails
                   ? reducibleErrorCode(connectionErrorDetails.code)
                   : lit_2("none"),
-                request_id: sanitizeMarkName(Al),
+                request_id: sanitizeMarkName(responseRequestId),
               });
-              C_("stream_completed", Al ?? null, Iu);
-              yield* ey({
+              logCreditOutcome("stream_completed", responseRequestId ?? null, usage);
+              yield* emitStopEvents({
                 responseUnfinished: false,
               });
               break e;
             }
-            let jLe = any ? "tool_use" : "end_turn";
-            reason = jLe;
-            for (let Uae of Cm) {
-              Uae.message.usage = Iu;
-              Uae.message.stop_reason = jLe;
+            let synthesizedStopReason = any ? "tool_use" : "end_turn";
+            reason = synthesizedStopReason;
+            for (let message of yieldedMessages) {
+              message.message.usage = usage;
+              message.message.stop_reason = synthesizedStopReason;
             }
-            Nh?.noteClientTruncated(Cm[0]?.message.id);
+            tetherDelta?.noteClientTruncated(yieldedMessages[0]?.message.id);
             logForDebugging(
-              Dy
-                ? `Stream idle timeout after ${Cm.length} block(s) yielded \u2014 finalizing partial response`
-                : pp
-                  ? `Mid-stream server error after ${Cm.length} block(s) yielded \u2014 finalizing partial response`
-                  : vc
-                    ? `Stream ${eh} after ${Cm.length} block(s) yielded \u2014 finalizing partial response`
-                    : `Stream connection closed (${connectionErrorDetails?.code}) after ${Cm.length} block(s) yielded \u2014 finalizing partial response`,
+              wasWatchdog
+                ? `Stream idle timeout after ${yieldedMessages.length} block(s) yielded \u2014 finalizing partial response`
+                : serverErrorWithOutput
+                  ? `Mid-stream server error after ${yieldedMessages.length} block(s) yielded \u2014 finalizing partial response`
+                  : malformed
+                    ? `Stream ${malformedReason} after ${yieldedMessages.length} block(s) yielded \u2014 finalizing partial response`
+                    : `Stream connection closed (${connectionErrorDetails?.code}) after ${yieldedMessages.length} block(s) yielded \u2014 finalizing partial response`,
               {
                 level: "warn",
               },
             );
             logEvent("tengu_streaming_partial_finalized", {
               model: telemetrySafeModelName(options.model),
-              blocks_yielded: Cm.length,
-              has_output: nd,
-              synthesized_stop_reason: fromEnum(jLe),
+              blocks_yielded: yieldedMessages.length,
+              has_output: anyOutputShown,
+              synthesized_stop_reason: fromEnum(synthesizedStopReason),
               cause,
-              request_id: sanitizeMarkName(Al),
+              request_id: sanitizeMarkName(responseRequestId),
             });
-            lP();
-            yield* ey({
+            creditCostOnce();
+            yield* emitStopEvents({
               responseUnfinished: true,
             });
             let apiErrorMessage = createApiErrorMessage({
-              content: nd
-                ? Dy
+              content: anyOutputShown
+                ? wasWatchdog
                   ? `${API_ERROR_MESSAGE_PREFIX}: The response stopped arriving. The response above may be incomplete.`
-                  : pp
+                  : serverErrorWithOutput
                     ? `${API_ERROR_MESSAGE_PREFIX}: Server error mid-response. The response above may be incomplete.`
-                    : vc
-                      ? Mg
+                    : malformed
+                      ? unstartedBlock
                         ? `${API_ERROR_MESSAGE_PREFIX}: Part of the response never arrived. The response above may be incomplete.`
                         : `${API_ERROR_MESSAGE_PREFIX}: The response stream was malformed. The response above may be incomplete.`
-                      : ULe
+                      : computerSlept
                         ? `${API_ERROR_MESSAGE_PREFIX}: Your computer went to sleep mid-response. The response above may be incomplete.`
                         : `${API_ERROR_MESSAGE_PREFIX}: Connection lost mid-response. The response above may be incomplete.`
-                : Dy
+                : wasWatchdog
                   ? `${API_ERROR_MESSAGE_PREFIX}: The response stalled before a response was produced. Try again.`
-                  : vc
-                    ? Mg
+                  : malformed
+                    ? unstartedBlock
                       ? `${API_ERROR_MESSAGE_PREFIX}: Part of the response never arrived and no response was produced. Try again.`
                       : `${API_ERROR_MESSAGE_PREFIX}: The response stream was malformed and no response was produced. Try again.`
-                    : ULe
+                    : computerSlept
                       ? `${API_ERROR_MESSAGE_PREFIX}: Your computer went to sleep before a response was produced. Try again.`
                       : `${API_ERROR_MESSAGE_PREFIX}: Connection lost before a response was produced. Try again.`,
               error: "server_error",
               apiError: signal.aborted
                 ? undefined
-                : Dy
+                : wasWatchdog
                   ? "stream_idle_timeout"
-                  : ULe
+                  : computerSlept
                     ? "computer_slept"
-                    : isConnectionError(od)
+                    : isConnectionError(streamError)
                       ? "connection_failed"
                       : undefined,
-              truncatedAfterOutput: nd && !any ? true : undefined,
+              truncatedAfterOutput: anyOutputShown && !any ? true : undefined,
             });
-            apiErrorMessage.streamCutCause = Eht;
-            if (Dy && !nd) apiErrorMessage.streamWatchdogGaveUp = true;
+            apiErrorMessage.streamCutCause = cutCause;
+            if (wasWatchdog && !anyOutputShown) apiErrorMessage.streamWatchdogGaveUp = true;
             yield apiErrorMessage;
             break e;
           }
           logEvent("tengu_streaming_fallback_to_non_streaming", {
             model: telemetrySafeModelName(options.model),
             error,
-            attemptNumber: p_,
-            maxOutputTokens: BT,
+            attemptNumber,
+            maxOutputTokens,
             thinkingType: fromEnum(betas.type),
-            fallback_disabled: Xl,
-            request_id: traceValueOrUnknown(Al),
+            fallback_disabled: fallbackDisabled,
+            request_id: traceValueOrUnknown(responseRequestId),
             fallback_cause: lit_2("partial_yield"),
-            any_stream_event_yielded: Vl,
-            has_output: nd,
-            died_of: fromEnum(fp?.cause ?? "complete"),
+            any_stream_event_yielded: anyEventYielded,
+            has_output: anyOutputShown,
+            died_of: fromEnum(failure?.cause ?? "complete"),
           });
-          throw ql;
+          throw effectiveError;
         }
-        if (fp?.cause === "outputFiltered") {
-          if (hf) lP();
-          if (th === "retry") {
+        if (failure?.cause === "outputFiltered") {
+          if (envelopeOpen) creditCostOnce();
+          if (decision === "retry") {
             logForDebugging(
-              `Output content filter stopped the response before any of the answer was shown: retrying streaming (${Fg.outputFiltered}/${RETRY_POLICY_CONST_JEE})`,
+              `Output content filter stopped the response before any of the answer was shown: retrying streaming (${retryCounts.outputFiltered}/${RETRY_POLICY_CONST_JEE})`,
               {
                 level: "warn",
               },
             );
             logEvent("tengu_streaming_output_filter_retry", {
               model: telemetrySafeModelName(options.model),
-              retry_attempt: Fg.outputFiltered,
-              request_id: traceValueOrUnknown(Al),
-              first_stop_progress: fromEnum(fp.progress),
+              retry_attempt: retryCounts.outputFiltered,
+              request_id: traceValueOrUnknown(responseRequestId),
+              first_stop_progress: fromEnum(failure.progress),
             });
-            uP = {
-              firstStopProgress: fp.progress,
-              msToFirstStop: Math.round(clock.monotonicNow() - Uy),
+            attemptOutcome = {
+              firstStopProgress: failure.progress,
+              msToFirstStop: Math.round(clock.monotonicNow() - attemptStartAt),
               startedAt: clock.monotonicNow(),
               ended: undefined,
             };
             releaseStreamResources();
-            C_("attempt_errored", Al ?? null, null);
-            if (hf) xT();
-            yield* ey({
+            logCreditOutcome("attempt_errored", responseRequestId ?? null, null);
+            if (envelopeOpen) recordUsageOnce();
+            yield* emitStopEvents({
               responseUnfinished: true,
             });
-            Al = null;
+            responseRequestId = null;
             continue e;
           }
           logEvent("tengu_streaming_fallback_to_non_streaming", {
             model: telemetrySafeModelName(options.model),
             error: lit_2("output_content_filtered"),
-            attemptNumber: p_,
-            maxOutputTokens: BT,
+            attemptNumber,
+            maxOutputTokens,
             thinkingType: fromEnum(betas.type),
             fallback_disabled: true,
-            request_id: traceValueOrUnknown(Al),
+            request_id: traceValueOrUnknown(responseRequestId),
             fallback_cause: lit_2("output_content_filtered"),
-            any_stream_event_yielded: Vl,
+            any_stream_event_yielded: anyEventYielded,
           });
-          throw od;
+          throw streamError;
         }
-        if (ty) {
-          E3 = true;
+        if (dispatchRecovery) {
+          dispatchEscalated = true;
           logForDebugging(
-            `[dispatch] Stream connection error (${connectionErrorDetails.code}) with ${ANTHROPIC_DISPATCH_ID}=${yb} before first event; ${th === "retry" ? "retrying once" : "going on"} with ${ANTHROPIC_DISPATCH_ID}=${V2P}`,
+            `[dispatch] Stream connection error (${connectionErrorDetails.code}) with ${ANTHROPIC_DISPATCH_ID}=${sentDispatch} before first event; ${decision === "retry" ? "retrying once" : "going on"} with ${ANTHROPIC_DISPATCH_ID}=${V2P}`,
             {
               level: "warn",
             },
           );
           logEvent("tengu_dispatch_header_fallback", {
             model: telemetrySafeModelName(options.model),
-            dispatch: yb ?? undefined,
+            dispatch: sentDispatch ?? undefined,
             resend_dispatch: fromEnum(V2P),
             reason: lit_2("body_phase"),
             status: lit_2("none"),
             error_code: reducibleErrorCode(connectionErrorDetails.code),
             query_source: agentTypeForTelemetry(options.querySource),
-            request_id: sanitizeMarkName(Al),
+            request_id: sanitizeMarkName(responseRequestId),
           });
-          if (th === "retry") {
+          if (decision === "retry") {
             releaseStreamResources();
-            C_("attempt_errored", Al ?? null, null);
-            Al = null;
+            logCreditOutcome("attempt_errored", responseRequestId ?? null, null);
+            responseRequestId = null;
             continue e;
           }
         }
-        let Hf =
-          ea && connectionErrorDetails !== null
+        let retryPlan =
+          connectionBroken && connectionErrorDetails !== null
             ? {
                 label: `connection error (${connectionErrorDetails.code})`,
                 errorCode: reducibleErrorCode(connectionErrorDetails.code),
                 error: new APIConnectionError({
-                  cause: od instanceof Error ? od : undefined,
+                  cause: streamError instanceof Error ? streamError : undefined,
                 }),
-                attempt: Math.max(1, Fg.retries),
+                attempt: Math.max(1, retryCounts.retries),
                 limit: maxRetriesFromEnv,
               }
-            : fp?.cause === "serverError" && od instanceof APIError
+            : failure?.cause === "serverError" && streamError instanceof APIError
               ? {
                   label: "server error",
                   errorCode: lit_2("server_error"),
-                  error: od,
-                  attempt: Fg.afterThinkingOnly,
+                  error: streamError,
+                  attempt: retryCounts.afterThinkingOnly,
                   limit: MAX_OUTPUT_FILTERED_RETRIES,
                 }
               : undefined;
-        if (th === "retry" && Hf !== undefined) {
-          let attempt = Hf.attempt;
-          logForDebugging(`Stream ${Hf.label} \u2014 retrying streaming (${attempt}/${Hf.limit})`, {
-            level: "warn",
-          });
+        if (decision === "retry" && retryPlan !== undefined) {
+          let attempt = retryPlan.attempt;
+          logForDebugging(
+            `Stream ${retryPlan.label} \u2014 retrying streaming (${attempt}/${retryPlan.limit})`,
+            {
+              level: "warn",
+            },
+          );
           logEvent("tengu_streaming_stale_connection_retry", {
             model: telemetrySafeModelName(options.model),
-            error_code: Hf.errorCode,
+            error_code: retryPlan.errorCode,
             retry_attempt: attempt,
-            request_id: traceValueOrUnknown(Al),
+            request_id: traceValueOrUnknown(responseRequestId),
           });
           releaseStreamResources();
-          C_("attempt_errored", Al ?? null, null);
-          if (hf) xT();
-          if (hf && aP !== "credited") {
-            lP();
-            yield* ey({
+          logCreditOutcome("attempt_errored", responseRequestId ?? null, null);
+          if (envelopeOpen) recordUsageOnce();
+          if (envelopeOpen && costState !== "credited") {
+            creditCostOnce();
+            yield* emitStopEvents({
               responseUnfinished: true,
             });
           }
-          Al = null;
+          responseRequestId = null;
           let retryDelay = getRetryDelay(attempt, undefined, undefined, options.random);
-          let Dy = {
-            ...summarizeApiError(Hf.error),
+          let errorSummary = {
+            ...summarizeApiError(retryPlan.error),
             rateLimits: null,
           };
-          T3 = true;
+          retryStatusShown = true;
           options.onRetryStatus?.({
             kind: "retrying",
-            error: Dy,
+            error: errorSummary,
             attempt,
-            maxRetries: Hf.limit,
+            maxRetries: retryPlan.limit,
             retryInMs: retryDelay,
             deadline: clock.now() + retryDelay,
           });
-          yield createSystemAPIErrorMessage(Dy, retryDelay, attempt, Hf.limit, "connection_retry");
+          yield createSystemAPIErrorMessage(
+            errorSummary,
+            retryDelay,
+            attempt,
+            retryPlan.limit,
+            "connection_retry",
+          );
           await sleep(retryDelay, signal, {
             clock,
           });
           continue e;
         }
-        if (ea && reason === null && hf) lP();
-        if (fh && th === "retry") {
+        if (connectionBroken && reason === null && envelopeOpen) creditCostOnce();
+        if (idleTimedOut && decision === "retry") {
           logForDebugging(
-            `Stream idle timeout before first event \u2014 retrying streaming (${Fg.stalls}/${RETRY_POLICY_CONST_1})`,
+            `Stream idle timeout before first event \u2014 retrying streaming (${retryCounts.stalls}/${RETRY_POLICY_CONST_1})`,
             {
               level: "warn",
             },
           );
           logEvent("tengu_streaming_watchdog_retry", {
             model: telemetrySafeModelName(options.model),
-            retry_attempt: Fg.stalls,
-            request_id: traceValueOrUnknown(Al),
+            retry_attempt: retryCounts.stalls,
+            request_id: traceValueOrUnknown(responseRequestId),
           });
           releaseStreamResources();
-          C_("attempt_errored", Al ?? null, null);
-          Al = null;
+          logCreditOutcome("attempt_errored", responseRequestId ?? null, null);
+          responseRequestId = null;
           continue e;
         }
-        if (!nd && reason === null && !retryBudget.outOfApiAttempts() && ILe(od) !== undefined) {
+        if (
+          !anyOutputShown &&
+          reason === null &&
+          !retryBudget.outOfApiAttempts() &&
+          handleUnprocessableMedia(streamError) !== undefined
+        ) {
           retryBudget.undoLastCount();
-          if (hf) {
-            lP();
-            xT();
+          if (envelopeOpen) {
+            creditCostOnce();
+            recordUsageOnce();
           }
           releaseStreamResources();
-          C_("attempt_errored", Al ?? null, null);
-          yield* ey({
+          logCreditOutcome("attempt_errored", responseRequestId ?? null, null);
+          yield* emitStopEvents({
             responseUnfinished: true,
           });
-          Al = null;
+          responseRequestId = null;
           continue e;
         }
-        if (Nf === "dlpDenied") {
+        if (terminalKind === "dlpDenied") {
           logEvent("tengu_streaming_fallback_to_non_streaming", {
             model: telemetrySafeModelName(options.model),
             error: lit_2(DLP_REQUEST_DENIED),
-            attemptNumber: p_,
-            maxOutputTokens: BT,
+            attemptNumber,
+            maxOutputTokens,
             thinkingType: fromEnum(betas.type),
             fallback_disabled: true,
-            request_id: traceValueOrUnknown(Al),
+            request_id: traceValueOrUnknown(responseRequestId),
             fallback_cause: lit_2(DLP_REQUEST_DENIED),
-            any_stream_event_yielded: Vl,
+            any_stream_event_yielded: anyEventYielded,
           });
-          throw od;
+          throw streamError;
         }
-        if (Nf === "escapeMonitor") {
+        if (terminalKind === "escapeMonitor") {
           logEvent("tengu_streaming_fallback_to_non_streaming", {
             model: telemetrySafeModelName(options.model),
             error: lit_2(SAFETY_MONITOR_BLOCKED),
-            attemptNumber: p_,
-            maxOutputTokens: BT,
+            attemptNumber,
+            maxOutputTokens,
             thinkingType: fromEnum(betas.type),
             fallback_disabled: true,
-            request_id: traceValueOrUnknown(Al),
+            request_id: traceValueOrUnknown(responseRequestId),
             fallback_cause: lit_2(SAFETY_MONITOR_BLOCKED),
-            any_stream_event_yielded: Vl,
+            any_stream_event_yielded: anyEventYielded,
           });
-          throw od;
+          throw streamError;
         }
-        if (od instanceof APIError && is529Error(od)) {
-          let pp = nd
+        if (streamError instanceof APIError && is529Error(streamError)) {
+          let lowPriorityPlan = anyOutputShown
             ? null
-            : planLowPriorityRetry(od, {
-                markedAtDispatch: Jh,
+            : planLowPriorityRetry(streamError, {
+                markedAtDispatch: isLowPriority,
                 querySource: options.querySource,
-                wait: _S,
+                wait: lowPriorityWait,
               });
-          let Om = retryBudget.outOfApiAttempts() ? null : pp;
-          if (!nd) {
-            if (hf) {
-              lP();
-              xT();
+          let plan = retryBudget.outOfApiAttempts() ? null : lowPriorityPlan;
+          if (!anyOutputShown) {
+            if (envelopeOpen) {
+              creditCostOnce();
+              recordUsageOnce();
             }
-            let overloaded = Fg.overloaded;
-            if (Om !== null || th === "retry") {
-              markAbandonedThinking(Cm, resolvedModel);
+            let overloaded = retryCounts.overloaded;
+            if (plan !== null || decision === "retry") {
+              markAbandonedThinking(yieldedMessages, resolvedModel);
               logForDebugging(
-                Om !== null
-                  ? `Mid-stream 529 before content at lower priority \u2014 waiting ${Om.delayMs}ms for capacity (attempt ${Om.attempt})`
+                plan !== null
+                  ? `Mid-stream 529 before content at lower priority \u2014 waiting ${plan.delayMs}ms for capacity (attempt ${plan.attempt})`
                   : `Mid-stream 529 before content \u2014 retrying streaming (${overloaded}/${MAX_529_RETRIES})`,
                 {
                   level: "warn",
                 },
               );
-              if (Om !== null) retryBudget.undoLastCount();
+              if (plan !== null) retryBudget.undoLastCount();
               logEvent("tengu_streaming_529_retry", {
                 model: telemetrySafeModelName(options.model),
-                retry_attempt: Om !== null ? Om.attempt : overloaded,
-                request_id: sanitizeMarkName(Al),
-                ...(Om !== null && {
+                retry_attempt: plan !== null ? plan.attempt : overloaded,
+                request_id: sanitizeMarkName(responseRequestId),
+                ...(plan !== null && {
                   is_low_priority: true,
                 }),
               });
               releaseStreamResources();
-              C_("attempt_errored", Al ?? null, null);
-              yield* ey({
+              logCreditOutcome("attempt_errored", responseRequestId ?? null, null);
+              yield* emitStopEvents({
                 responseUnfinished: true,
               });
-              Al = null;
-              T3 = true;
-              let UI = Om?.delayMs ?? getRetryDelay(overloaded, undefined, undefined, options.random);
+              responseRequestId = null;
+              retryStatusShown = true;
+              let retryDelay =
+                plan?.delayMs ?? getRetryDelay(overloaded, undefined, undefined, options.random);
               options.onRetryStatus?.(
-                Om !== null
+                plan !== null
                   ? {
                       kind: "low_priority_waiting",
-                      attempt: Om.attempt,
-                      retryInMs: UI,
-                      deadline: clock.now() + UI,
+                      attempt: plan.attempt,
+                      retryInMs: retryDelay,
+                      deadline: clock.now() + retryDelay,
                     }
                   : {
                       kind: "retrying",
                       error: {
-                        ...summarizeApiError(od),
+                        ...summarizeApiError(streamError),
                         rateLimits: null,
                       },
                       attempt: overloaded,
                       maxRetries: MAX_529_RETRIES - 1,
-                      retryInMs: UI,
-                      deadline: clock.now() + UI,
+                      retryInMs: retryDelay,
+                      deadline: clock.now() + retryDelay,
                     },
               );
-              await sleep(UI, signal, {
+              await sleep(retryDelay, signal, {
                 clock,
               });
               continue e;
             }
-            if (options.fallbackModel && th === "useFallbackModel") {
-              markAbandonedThinking(Cm, resolvedModel);
+            if (options.fallbackModel && decision === "useFallbackModel") {
+              markAbandonedThinking(yieldedMessages, resolvedModel);
               logEvent("tengu_api_opus_fallback_triggered", {
                 original_model: telemetrySafeModelName(options.model),
                 fallback_model: telemetrySafeModelName(options.fallbackModel),
@@ -11430,171 +12067,185 @@ async function* queryModel(messages, systemPrompt, thinkingConfig, tools, signal
                 source: lit_2("mid_stream"),
               });
               logFeatureSad("api_request", "api_request_fallback_triggered");
-              throw new FallbackTriggeredError(options.model, options.fallbackModel, "overloaded", od);
+              throw new FallbackTriggeredError(
+                options.model,
+                options.fallbackModel,
+                "overloaded",
+                streamError,
+              );
             }
           }
         }
-        if (th === "fail") {
-          logForDebugging(`Error streaming (non-streaming fallback disabled): ${errorMessage(ql)}`, {
-            level: "error",
-          });
+        if (decision === "fail") {
+          logForDebugging(
+            `Error streaming (non-streaming fallback disabled): ${errorMessage(effectiveError)}`,
+            {
+              level: "error",
+            },
+          );
           logEvent("tengu_streaming_fallback_to_non_streaming", {
             model: telemetrySafeModelName(options.model),
             error,
-            attemptNumber: p_,
-            maxOutputTokens: BT,
+            attemptNumber,
+            maxOutputTokens,
             thinkingType: fromEnum(betas.type),
             fallback_disabled: true,
-            request_id: traceValueOrUnknown(Al),
+            request_id: traceValueOrUnknown(responseRequestId),
             fallback_cause: fromEnum(fallbackCause),
-            error_name: errorName,
+            error_name: errorName_2,
             error_constructor: errorConstructor,
             error_code: errorCode,
-            any_stream_event_yielded: Vl,
+            any_stream_event_yielded: anyEventYielded,
           });
           nonStreamingFallbackSkipped = true;
-          xgt = fh;
-          throw ql;
+          watchdogGaveUp = idleTimedOut;
+          throw effectiveError;
         }
-        if (!nd) markAbandonedThinking(Cm, resolvedModel);
-        logForDebugging(`Error streaming, falling back to non-streaming mode: ${errorMessage(ql)}`, {
-          level: "error",
-        });
-        dP = true;
-        if (RLe) noteRedrive("non_streaming");
-        if (dg !== undefined) xT();
-        S3 = clock.now();
+        if (!anyOutputShown) markAbandonedThinking(yieldedMessages, resolvedModel);
+        logForDebugging(
+          `Error streaming, falling back to non-streaming mode: ${errorMessage(effectiveError)}`,
+          {
+            level: "error",
+          },
+        );
+        fellBackToNonStreaming = true;
+        if (profileHandle) noteRedrive("non_streaming");
+        if (partialMessage !== undefined) recordUsageOnce();
+        dispatchedAt = clock.now();
         {
-          let pp = await contextHintController?.onStreamFallback(messagesForAPI_2, Al ?? undefined);
-          if (pp) {
-            messagesForAPI_2 = ch(pp.messages, "microcompact");
-            yht(pp.clearedIds, pp.clearedContent);
+          let hintResult = await contextHintController?.onStreamFallback(
+            messagesForAPI_2,
+            responseRequestId ?? undefined,
+          );
+          if (hintResult) {
+            messagesForAPI_2 = recoverMessages(hintResult.messages, "microcompact");
+            recordHintClears(hintResult.clearedIds, hintResult.clearedContent);
           }
         }
         logEvent("tengu_streaming_fallback_to_non_streaming", {
           model: telemetrySafeModelName(options.model),
           error,
-          attemptNumber: p_,
-          maxOutputTokens: BT,
+          attemptNumber,
+          maxOutputTokens,
           thinkingType: fromEnum(betas.type),
           fallback_disabled: false,
-          request_id: traceValueOrUnknown(Al),
+          request_id: traceValueOrUnknown(responseRequestId),
           fallback_cause: fromEnum(fallbackCause),
-          error_name: errorName,
+          error_name: errorName_2,
           error_constructor: errorConstructor,
           error_code: errorCode,
-          any_stream_event_yielded: Vl,
+          any_stream_event_yielded: anyEventYielded,
         });
         logForDiagnosticsNoPII("info", "cli_nonstreaming_fallback_started");
         logEvent("tengu_nonstreaming_fallback_started", {
-          request_id: traceValueOrUnknown(Al),
+          request_id: traceValueOrUnknown(responseRequestId),
           model: telemetrySafeModelName(options.model),
           fallback_cause: fromEnum(fallbackCause),
         });
-        C_("attempt_errored", Al ?? null, null);
-        fc = Al;
-        Al = null;
-        yield* ey({
+        logCreditOutcome("attempt_errored", responseRequestId ?? null, null);
+        firstAttemptRequestId = responseRequestId;
+        responseRequestId = null;
+        yield* emitStopEvents({
           responseUnfinished: true,
         });
-        yield* $Le();
+        yield* drainHintClears();
         yield {
           type: "streaming_fallback_began",
           cause: fallbackCause,
         };
         if (
-          yield* _ht(
+          yield* runNonStreamingFallback(
             {
-              requestId: requestIdFromHeaders(fc),
-              analyticsRequestId: traceValueOrUnknown(fc),
+              requestId: requestIdFromHeaders(firstAttemptRequestId),
+              analyticsRequestId: traceValueOrUnknown(firstAttemptRequestId),
               cause: fallbackCause,
-              errorName: Ql,
-              connectionCode: Nu,
-              stall: Zg,
+              errorName,
+              connectionCode,
+              stall: stallInfo,
             },
-            cg && (fp?.outlastedNonStreamingTimeout ?? false),
+            isServerError && (failure?.outlastedNonStreamingTimeout ?? false),
           )
         )
           return;
       } finally {
-        D1();
-        yP?.(v$, clock_2?.chunks);
-        if (Qh !== undefined) settleServerStreamEnded(Qh);
+        clearStreamTimers();
+        finishProfile?.(streamEventCount, chunkTimes?.chunks);
+        if (classifierSession !== undefined) settleServerStreamEnded(classifierSession);
       }
-      C_("stream_completed", Al ?? null, reason !== null ? Iu : null);
-      yield* ey({
+      logCreditOutcome("stream_completed", responseRequestId ?? null, reason !== null ? usage : null);
+      yield* emitStopEvents({
         responseUnfinished: false,
       });
       break e;
     }
-    Nh?.settle(
+    tetherDelta?.settle(
       {
         kind: "ok",
       },
-      Al,
-      dg?.id,
+      responseRequestId,
+      partialMessage?.id,
     );
-    if (uP !== undefined) uP.ended = "completed";
+    if (attemptOutcome !== undefined) attemptOutcome.ended = "completed";
   } catch (fallbackError) {
-    vgt();
-    yield* $Le();
-    C_(signal.aborted ? "aborted" : "attempt_errored", Al ?? null, null);
+    logApiQueryOnError();
+    yield* drainHintClears();
+    logCreditOutcome(signal.aborted ? "aborted" : "attempt_errored", responseRequestId ?? null, null);
     if (fallbackError instanceof FallbackTriggeredError) {
       retryBudget.reportHttpFailure(fallbackError.originalError, "useFallbackModel", {
         fallbackModelCouldHelp: fallbackError.reason !== "overloaded",
       });
-      Nh?.settle(
+      tetherDelta?.settle(
         {
           kind: "error",
           error: fallbackError,
         },
-        Al,
+        responseRequestId,
       );
-      k3 = true;
+      fallbackTriggered = true;
       throw fallbackError;
     }
     let originalError = fallbackError instanceof CannotRetryError ? fallbackError.originalError : undefined;
-    let Os =
+    let retryWithoutStreaming =
       (originalError === undefined ? "fail" : retryBudget.onWithRetryGaveUp(originalError)) ===
       "retryWithoutStreaming";
-    let La = fallbackError;
-    let Vl = false;
-    if (Os) {
-      let Yl = (originalError instanceof APIError ? originalError.requestID : undefined) ?? "unknown";
+    let failure = fallbackError;
+    let fallbackSucceeded = false;
+    if (retryWithoutStreaming) {
+      let requestId = (originalError instanceof APIError ? originalError.requestID : undefined) ?? "unknown";
       logForDebugging("Streaming endpoint returned 404, falling back to non-streaming mode", {
         level: "warn",
       });
-      dP = true;
-      S3 = clock.now();
+      fellBackToNonStreaming = true;
+      dispatchedAt = clock.now();
       contextHintController?.strip();
       logEvent("tengu_streaming_fallback_to_non_streaming", {
         model: telemetrySafeModelName(options.model),
         error: lit_2("404_stream_creation"),
-        attemptNumber: p_,
-        maxOutputTokens: BT,
+        attemptNumber,
+        maxOutputTokens,
         thinkingType: fromEnum(betas.type),
-        request_id: traceValueOrUnknown(Yl),
+        request_id: traceValueOrUnknown(requestId),
         fallback_cause: lit_2("404_stream_creation"),
         any_stream_event_yielded: false,
       });
       logForDiagnosticsNoPII("info", "cli_nonstreaming_fallback_started");
       logEvent("tengu_nonstreaming_fallback_started", {
-        request_id: sanitizeMarkName(Yl),
+        request_id: sanitizeMarkName(requestId),
         model: telemetrySafeModelName(options.model),
         fallback_cause: lit_2("404_stream_creation"),
       });
-      if (RLe) noteRedrive("non_streaming");
+      if (profileHandle) noteRedrive("non_streaming");
       yield {
         type: "streaming_fallback_began",
         cause: "404_stream_creation",
       };
       try {
-        fc = Al ?? (Yl !== "unknown" ? Yl : null);
+        firstAttemptRequestId = responseRequestId ?? (requestId !== "unknown" ? requestId : null);
         if (
-          yield* _ht(
+          yield* runNonStreamingFallback(
             {
-              requestId: requestIdFromHeaders(Yl),
-              analyticsRequestId: traceValueOrUnknown(Yl),
+              requestId: requestIdFromHeaders(requestId),
+              analyticsRequestId: traceValueOrUnknown(requestId),
               cause: "404_stream_creation",
               errorName: null,
               connectionCode: null,
@@ -11604,97 +12255,101 @@ async function* queryModel(messages, systemPrompt, thinkingConfig, tools, signal
           )
         )
           return;
-        Vl = true;
-        if (uP !== undefined) uP.ended = "completed";
+        fallbackSucceeded = true;
+        if (attemptOutcome !== undefined) attemptOutcome.ended = "completed";
       } catch (error) {
         if (error instanceof FallbackTriggeredError) {
-          Nh?.settle(
+          tetherDelta?.settle(
             {
               kind: "error",
               error,
             },
-            Al,
+            responseRequestId,
           );
-          k3 = true;
+          fallbackTriggered = true;
           throw error;
         }
-        La = error;
+        failure = error;
       }
     }
-    if (!Vl) {
-      if (ao && (La instanceof ToolSearchRefusedError || options.toolSearchRefusal !== undefined))
+    if (!fallbackSucceeded) {
+      if (
+        wasUndecided &&
+        (failure instanceof ToolSearchRefusedError || options.toolSearchRefusal !== undefined)
+      )
         resetDeclaredTools(conversation);
-      if (La instanceof ToolSearchRefusedError) {
-        Ti?.splice(0, Ti.length);
-        throw La;
+      if (failure instanceof ToolSearchRefusedError) {
+        deferredSchemasSent?.splice(0, deferredSchemasSent.length);
+        throw failure;
       }
       logForDebugging(
-        `${Os ? "Non-streaming fallback also failed" : "Error in API request"}: ${errorMessage(La)}`,
+        `${retryWithoutStreaming ? "Non-streaming fallback also failed" : "Error in API request"}: ${errorMessage(failure)}`,
         {
           level: "error",
         },
       );
-      let Yl = La;
+      let surfaceError = failure;
       let errorModel = options.model;
-      if (La instanceof CannotRetryError) {
-        Yl = La.originalError;
-        errorModel = La.retryContext.model;
+      if (failure instanceof CannotRetryError) {
+        surfaceError = failure.originalError;
+        errorModel = failure.retryContext.model;
       }
-      if (Yl instanceof APIUserAbortError) {
-        Nh?.settle(
+      if (surfaceError instanceof APIUserAbortError) {
+        tetherDelta?.settle(
           {
             kind: "aborted",
           },
-          Os ? null : Al,
-          Os ? undefined : dg?.id,
+          retryWithoutStreaming ? null : responseRequestId,
+          retryWithoutStreaming ? undefined : partialMessage?.id,
         );
         releaseStreamResources();
         return;
       }
-      if (uP !== undefined && isRequestTooLargeError_2(Yl)) uP.ended = "filtered_again";
-      if (Yl instanceof APIError)
+      if (attemptOutcome !== undefined && isRequestTooLargeError_2(surfaceError))
+        attemptOutcome.ended = "filtered_again";
+      if (surfaceError instanceof APIError)
         extractQuotaStatusFromError(
-          Yl,
+          surfaceError,
           getRequestRouteKind(options),
           clock.now(),
           limitsAccountEpoch,
           options.storageV5,
         );
-      let Wd =
-        Al ||
-        (Yl instanceof APIError
-          ? amazonRequestId(Yl.requestID || Yl.error?.request_id, Yl.headers)
+      let requestId =
+        responseRequestId ||
+        (surfaceError instanceof APIError
+          ? amazonRequestId(surfaceError.requestID || surfaceError.error?.request_id, surfaceError.headers)
           : undefined);
-      Nh?.settle(
+      tetherDelta?.settle(
         {
           kind: "error",
-          error: Yl,
+          error: surfaceError,
         },
-        Wd,
+        requestId,
       );
       logAPIError({
-        isLowPriority: Jh,
-        dispatch: yb,
-        error: Yl,
+        isLowPriority,
+        dispatch: sentDispatch,
+        error: surfaceError,
         model: errorModel,
         messageCount: messagesForAPI_2.length,
         messageTokens: tokenCountFromLastAPIResponse(messagesForAPI_2),
-        durationMs: Math.max(0, Math.round(clock.monotonicNow() - Uy)),
-        durationMsIncludingRetries: Math.max(0, Math.round(clock.monotonicNow() - xae)),
-        attempt: p_,
-        requestId: Wd,
-        clientRequestId: Ah,
-        didFallBackToNonStreaming: dP,
+        durationMs: Math.max(0, Math.round(clock.monotonicNow() - attemptStartAt)),
+        durationMsIncludingRetries: Math.max(0, Math.round(clock.monotonicNow() - requestStartAt)),
+        attempt: attemptNumber,
+        requestId,
+        clientRequestId,
+        didFallBackToNonStreaming: fellBackToNonStreaming,
         nonStreamingFallbackSkipped,
-        observedResponse: dP ? undefined : nk,
+        observedResponse: fellBackToNonStreaming ? undefined : responseMeta,
         queryTracking: options.queryTracking,
         querySource: options.querySource,
-        accountMemoryKeys: f1,
+        accountMemoryKeys,
         messageClientPlatform: options.messageClientPlatform,
         llmSpan: llmRequestSpan,
         fastMode: fallbackActive,
         previousRequestId: previousRequestId_2,
-        effort: CC,
+        effort: effortLevelNormalized,
         agentContext: options.agentContext,
         attribution: buildAttribution(
           options.querySource,
@@ -11706,63 +12361,63 @@ async function* queryModel(messages, systemPrompt, thinkingConfig, tools, signal
         modelCallNames: options.modelCallNames,
         promptTooLongIsHandled: options.promptTooLongIsHandled,
       });
-      let assistantMessageFromApiError = getAssistantMessageFromApiError(Yl, errorModel, {
+      let assistantMessageFromApiError = getAssistantMessageFromApiError(surfaceError, errorModel, {
         messages,
         messagesForAPI: messagesForAPI_2,
-        requestId: Wd,
+        requestId,
       });
-      let Np = {
+      let assistantMessage = {
         ...assistantMessageFromApiError,
         ...(signal.aborted &&
           (assistantMessageFromApiError.apiError === "connection_failed" ||
             assistantMessageFromApiError.apiError === "computer_slept") && {
             apiError: undefined,
           }),
-        ...(Lae !== undefined &&
-          Yl === Lae &&
+        ...(idleTimeoutError !== undefined &&
+          surfaceError === idleTimeoutError &&
           !signal.aborted && {
             apiError: "stream_idle_timeout",
           }),
-        perTurnEffort: EE,
-        perTurnTiming: n$,
-        ...(xgt && {
+        perTurnEffort: perTurnEffortValue,
+        perTurnTiming: perTurnNowValue,
+        ...(watchdogGaveUp && {
           streamWatchdogGaveUp: true,
         }),
-        ...((isNonFallbackError(Yl) ||
-          alwaysFalseErrors(Yl) ||
-          isVerificationRequiredError(Yl) ||
-          (Yl instanceof APIError && Yl.type === "billing_error")) && {
+        ...((isNonFallbackError(surfaceError) ||
+          alwaysFalseErrors(surfaceError) ||
+          isVerificationRequiredError(surfaceError) ||
+          (surfaceError instanceof APIError && surfaceError.type === "billing_error")) && {
           resendCannotCure: true,
         }),
       };
-      if (isRegimeRefusal(Yl) && !retryBudget.outOfApiAttempts()) return Np;
-      yield Np;
+      if (isRegimeRefusal(surfaceError) && !retryBudget.outOfApiAttempts()) return assistantMessage;
+      yield assistantMessage;
       releaseStreamResources();
       return;
     }
   } finally {
-    if (Hi) onMainResponseEnd(requestId, complete, Date.now());
+    if (isMainThread) onMainResponseEnd(requestId, complete, Date.now());
     try {
-      if (Qh !== undefined) settleServerStreamEnded(Qh);
+      if (classifierSession !== undefined) settleServerStreamEnded(classifierSession);
     } catch (error) {
       logError(toError(error));
     }
-    endActivity("api_call", Sht);
-    SLe();
+    endActivity("api_call", backgroundAgentId);
+    noteMidConvGuessWrong();
     flushMessageOutlines(options.querySource, options.agentId);
-    if (T3) options.onRetryStatus?.(null);
-    if (uP !== undefined)
-      classifyAttemptOutcome(uP, {
+    if (retryStatusShown) options.onRetryStatus?.(null);
+    if (attemptOutcome !== undefined)
+      classifyAttemptOutcome(attemptOutcome, {
         now: clock.monotonicNow(),
-        stopReason: LI?.message.stop_reason ?? reason,
+        stopReason: nonStreamingAssistant?.message.stop_reason ?? reason,
         aborted: signal.aborted,
         model: options.model,
         querySource: options.querySource,
-        clientRequestId: dP ? undefined : Ah,
+        clientRequestId: fellBackToNonStreaming ? undefined : clientRequestId,
       });
-    C_(signal.aborted ? "aborted" : "attempt_errored", Al ?? null, null);
-    Nh?.settle(
-      reason !== null && Al
+    logCreditOutcome(signal.aborted ? "aborted" : "attempt_errored", responseRequestId ?? null, null);
+    tetherDelta?.settle(
+      reason !== null && responseRequestId
         ? {
             kind: "ok",
           }
@@ -11773,22 +12428,22 @@ async function* queryModel(messages, systemPrompt, thinkingConfig, tools, signal
           : {
               kind: "other_exit",
             },
-      Al,
-      dg?.id,
+      responseRequestId,
+      partialMessage?.id,
     );
     releaseStreamResources();
-    if (LI) {
-      let fallbackUsage = LI.message.usage;
-      Iu = mRe(EMPTY_USAGE, fallbackUsage);
-      reason = LI.message.stop_reason;
+    if (nonStreamingAssistant) {
+      let fallbackUsage = nonStreamingAssistant.message.usage;
+      usage = mergeUsageFromDelta(EMPTY_USAGE, fallbackUsage);
+      reason = nonStreamingAssistant.message.stop_reason;
       if (reason === "refusal")
         logApiRefusal({
           model: resolvedModel,
-          requestId: Al || undefined,
+          requestId: responseRequestId || undefined,
           querySource: options.querySource,
-          effort: CC,
+          effort: effortLevelNormalized,
           fastMode: fallbackActive,
-          attempt: p_,
+          attempt: attemptNumber,
           attribution: buildAttribution(
             options.querySource,
             options.spawnedBySkill,
@@ -11797,64 +12452,69 @@ async function* queryModel(messages, systemPrompt, thinkingConfig, tools, signal
             options.activeMcpTool,
           ),
           serverFallbackHop: false,
-          stopDetails: LI.message.stop_details ?? null,
+          stopDetails: nonStreamingAssistant.message.stop_details ?? null,
           agentContext: options.agentContext,
         });
-      let servedFallbackModel = Hae?.servedFallbackModel;
-      let Jr = servedFallbackModel !== undefined;
-      if (!$E) recordServedModel(stripAnyVersatileSuffix(options.model), LI.message.model);
-      let Os =
-        Jr && Hae !== undefined
+      let servedFallbackModel = iterations?.servedFallbackModel;
+      let servedFallback = servedFallbackModel !== undefined;
+      if (!serverFallbackUsed)
+        recordServedModel(stripAnyVersatileSuffix(options.model), nonStreamingAssistant.message.model);
+      let cost =
+        servedFallback && iterations !== undefined
           ? fallbackMessagesCost(
-              Hae.entries,
+              iterations.entries,
               {
-                speed: Iu.speed,
-                inferenceGeo: Iu.inference_geo,
-                serverToolUse: Iu.server_tool_use,
+                speed: usage.speed,
+                inferenceGeo: usage.inference_geo,
+                serverToolUse: usage.server_tool_use,
               },
               reason,
             )
-          : calculateUSDCost(resolvedModel, Iu);
-      Dae += addToTotalSessionCost(
-        Os,
-        Iu,
-        Jr ? preferSameModel(options.serverRefusalFallback?.model, servedFallbackModel) : options.model,
+          : calculateUSDCost(resolvedModel, usage);
+      costUSD += addToTotalSessionCost(
+        cost,
+        usage,
+        servedFallback
+          ? preferSameModel(options.serverRefusalFallback?.model, servedFallbackModel)
+          : options.model,
         options.querySource,
-        CC,
+        effortLevelNormalized,
         options.spawnedBySkill,
         options.activeSkill,
         options.activeMcpServer,
         options.activeMcpTool,
       );
     }
-    if (dg !== undefined || LI !== undefined) {
-      xT();
-      if (Hi && !k3) forgetResponseBeforeCompaction();
+    if (partialMessage !== undefined || nonStreamingAssistant !== undefined) {
+      recordUsageOnce();
+      if (isMainThread && !fallbackTriggered) forgetResponseBeforeCompaction();
     }
   }
-  if (Al && Hi)
-    setLastMainRequestId(Al, {
-      messageId: Cm.at(-1)?.message.id ?? dg?.id,
+  if (responseRequestId && isMainThread)
+    setLastMainRequestId(responseRequestId, {
+      messageId: yieldedMessages.at(-1)?.message.id ?? partialMessage?.id,
       turnPosition,
     });
-  if (Hi) setLastMainThreadContextTokens(totalTokensOf(Iu));
-  if (Xa)
+  if (isMainThread) setLastMainThreadContextTokens(totalTokensOf(usage));
+  if (recordsConversationSize)
     recordConversationSize(agentId, () => {
-      let Wn = lazyTokenEstimate();
-      let pr = totalTokensOf(Iu);
-      return Number.isFinite(Wn) ? Math.max(Wn + Iu.output_tokens, pr) : pr || Wn;
+      let estimate = lazyTokenEstimate();
+      let usageTotal = totalTokensOf(usage);
+      return Number.isFinite(estimate)
+        ? Math.max(estimate + usage.output_tokens, usageTotal)
+        : usageTotal || estimate;
     });
   noopRecordRequest(conversation, {
-    isMainConversation: Hi,
+    isMainConversation: isMainThread,
   });
-  DLe();
-  Fgt.served();
-  if (t$() && b3)
-    logCacheDiagnosisReceived(b3, {
-      requestId: Al,
-      previousMessageId: nt,
+  recordMediaLimitSuccess();
+  wireCache.served();
+  if (cacheDiagnosisOn() && cacheMissReason)
+    logCacheDiagnosisReceived(cacheMissReason, {
+      requestId: responseRequestId,
+      previousMessageId: lastAssistantId,
       model: options.model,
-      is1hCacheTTL: Tw === "1h",
+      is1hCacheTTL: messagesTtl === "1h",
       querySource: options.querySource,
       queryDepth: options.queryTracking?.depth,
     });
@@ -11863,77 +12523,79 @@ async function* queryModel(messages, systemPrompt, thinkingConfig, tools, signal
   let requestContentTelemetry = isFirstPartyTelemetryBlocked()
     ? undefined
     : safeRequestContentStats(messagesForAPI_2, options.model);
-  let wht = isFirstPartyTelemetryBlocked() ? undefined : sentImageStats(messagesForAPI_2, F5);
-  let Tht = isFirstPartyTelemetryBlocked()
+  let imageTelemetry = isFirstPartyTelemetryBlocked()
+    ? undefined
+    : sentImageStats(messagesForAPI_2, threadSliceFrom);
+  let prefixStats = isFirstPartyTelemetryBlocked()
     ? undefined
     : requestPrefixStats(systemBlocks, allTools, getToolNameKinds(tools, extraToolSchemas));
-  let carriedEffortEnded = Hi ? takeRefusalFallbackCarriedEffortEnd() : undefined;
+  let carriedEffortEnded = isMainThread ? takeRefusalFallbackCarriedEffortEnd() : undefined;
   options
     .getToolPermissionContext()
     .then((permissionContext) => {
       logAPISuccessAndDuration({
-        isLowPriority: Jh,
-        dispatch: yb,
-        uncoveredTail: oc,
-        model: Cm[0]?.message.model ?? dg?.model ?? options.model,
+        isLowPriority,
+        dispatch: sentDispatch,
+        uncoveredTail: uncoveredTailReport,
+        model: yieldedMessages[0]?.message.model ?? partialMessage?.model ?? options.model,
         preNormalizedModel: options.model,
-        usage: Iu,
-        start: Uy,
-        startIncludingRetries: xae,
-        attempt: p_,
+        usage,
+        start: attemptStartAt,
+        startIncludingRetries: requestStartAt,
+        attempt: attemptNumber,
         messageCount: logMessageCount,
         messageTokens: logMessageTokens,
-        requestId: Al ?? null,
+        requestId: responseRequestId ?? null,
         rawRequestBodyId,
-        accountMemoryKeys: f1,
-        clientRequestId: dP ? undefined : Ah,
-        firstAttemptRequestId: fc ?? null,
+        accountMemoryKeys,
+        clientRequestId: fellBackToNonStreaming ? undefined : clientRequestId,
+        firstAttemptRequestId: firstAttemptRequestId ?? null,
         stopReason: reason,
-        ttftMs: Iae,
-        firstContentMs: dP ? null : (vLe ?? null),
-        streamEventCount: dP ? undefined : v$,
-        queryOverheadMs: CLe,
-        didFallBackToNonStreaming: dP,
+        ttftMs,
+        firstContentMs: fellBackToNonStreaming ? null : (firstContentMs ?? null),
+        streamEventCount: fellBackToNonStreaming ? undefined : streamEventCount,
+        queryOverheadMs,
+        didFallBackToNonStreaming: fellBackToNonStreaming,
         querySource: options.querySource,
-        promptCacheTtl: enablePromptCaching ? gW : undefined,
+        promptCacheTtl: enablePromptCaching ? cacheTtlChoice : undefined,
         promptCacheMessagesTtl:
-          enablePromptCaching && !options.skipMessageCacheMarkers && XF ? "5m" : undefined,
+          enablePromptCaching && !options.skipMessageCacheMarkers && ttlOverridden ? "5m" : undefined,
         messageClientPlatform: options.messageClientPlatform,
-        headers: ALe,
+        headers: responseHeaders,
         extraEventFields: {
           ...{},
           ...emptyObject(conversation),
         },
-        costUSD: Dae,
-        isDefaultModel: Hi ? options.isDefaultModel : undefined,
-        defaultModel: Hi ? options.defaultModel : undefined,
-        ...Ca(yS),
-        carriedEffort: Li,
+        costUSD,
+        isDefaultModel: isMainThread ? options.isDefaultModel : undefined,
+        defaultModel: isMainThread ? options.defaultModel : undefined,
+        ...defaultEffortFields(sentEffort),
+        carriedEffort: carriedEffortReport,
         carriedEffortEnded,
         queryTracking: options.queryTracking,
         permissionMode: permissionContext.mode,
         proactivityLevel: options.proactivityLevel,
-        newMessages: Cm,
+        newMessages: yieldedMessages,
         requestContentTelemetry,
-        sentBody: wht && {
-          ...wht,
+        sentBody: imageTelemetry && {
+          ...imageTelemetry,
           threadType,
         },
-        requestPrefixTelemetry: Tht && {
-          ...Tht,
+        requestPrefixTelemetry: prefixStats && {
+          ...prefixStats,
           systemPromptSource: fromEnumOpt(options.systemPromptSource),
           snapshotHash: options.systemPromptSnapshotHash,
         },
         llmSpan: llmRequestSpan,
         globalCacheStrategy,
-        requestSetupMs: Uy - xae,
-        attemptStartTimes: B5,
+        requestSetupMs: attemptStartAt - requestStartAt,
+        attemptStartTimes,
         fastMode: fallbackActive,
         previousRequestId: previousRequestId_2,
-        betas: hb,
-        thinkingPrefixMismatchBehavior: g1,
-        echoWireToolInputs: Xn,
-        effort: yS,
+        betas: sentBetaHeaders,
+        thinkingPrefixMismatchBehavior: prefixMismatchBehavior,
+        echoWireToolInputs,
+        effort: sentEffort,
         turnOrigin: turnOrigin_2,
         agentContext: options.agentContext,
         attribution: buildAttribution(
@@ -11974,147 +12636,158 @@ function addCacheBreakpoints(
   querySource,
   skipCacheWrite = false,
   forkPointUuid,
-  y = false,
+  midConvCacheDemoted = false,
   provider = getAPIProvider(),
-  w = false,
+  threadActive = false,
   topLevelCacheControl = false,
   clearAtNextUser = false,
-  q,
+  wireIndexOf,
   divergesAtMessageId,
-  Se,
-  ke = false,
-  we = true,
-  Ee,
+  tailAuditSink,
+  extractMemoriesSkipCacheWrite = false,
+  logCacheBreakpoints = true,
+  parentReplyMarkPlan,
 ) {
-  let Ae = areExperimentalBetasDisabled();
+  let experimentalBetasDisabled = areExperimentalBetasDisabled();
   let CLAUDE_CODE_SIMULATE_PROXY_USAGE = env.CLAUDE_CODE_SIMULATE_PROXY_USAGE;
-  let Me = !y && !Ae && !CLAUDE_CODE_SIMULATE_PROXY_USAGE;
-  let We = isStellarDriftEnabled();
-  let ze = !w && isBasaltSpurEnabled();
-  let lt = pickCacheMarkerIndices({
+  let canMarkApiSystem =
+    !midConvCacheDemoted && !experimentalBetasDisabled && !CLAUDE_CODE_SIMULATE_PROXY_USAGE;
+  let whitespaceUnstampable = isStellarDriftEnabled();
+  let basaltSpurEnabled = !threadActive && isBasaltSpurEnabled();
+  let markerPlan = pickCacheMarkerIndices({
     messages,
     enablePromptCaching,
     skipCacheWrite,
     forkPointUuid,
-    canMarkApiSystem: Me,
-    forkCachePin: ze || (ke && !w),
-    whitespaceTextUnstampable: We,
+    canMarkApiSystem,
+    forkCachePin: basaltSpurEnabled || (extractMemoriesSkipCacheWrite && !threadActive),
+    whitespaceTextUnstampable: whitespaceUnstampable,
     topLevelCacheControl,
-    isForkPinStepBackEnabled: () => ze && isBasaltScarpEnabled(),
-    divergesAtMessageId: w ? undefined : divergesAtMessageId,
-    parentReplyId: Ee?.isMarkWanted === true && !w ? Ee.parentReplyId : undefined,
+    isForkPinStepBackEnabled: () => basaltSpurEnabled && isBasaltScarpEnabled(),
+    divergesAtMessageId: threadActive ? undefined : divergesAtMessageId,
+    parentReplyId:
+      parentReplyMarkPlan?.isMarkWanted === true && !threadActive
+        ? parentReplyMarkPlan.parentReplyId
+        : undefined,
     tailAuditTerms: {
-      proxyDemoted: y,
-      experimentalBetasDisabled: Ae,
+      proxyDemoted: midConvCacheDemoted,
+      experimentalBetasDisabled,
       simulateProxyUsage: CLAUDE_CODE_SIMULATE_PROXY_USAGE,
-      skipMessageCacheMarkers: Se?.skipMessageCacheMarkers ?? false,
+      skipMessageCacheMarkers: tailAuditSink?.skipMessageCacheMarkers ?? false,
     },
   });
-  let { markerIndices, forkPointPinned, parentPromptEndMarked, auditTail } = lt;
-  if (Se !== undefined)
+  let { markerIndices, forkPointPinned, parentPromptEndMarked, auditTail } = markerPlan;
+  if (tailAuditSink !== undefined)
     try {
-      Se.report(auditTail());
+      tailAuditSink.report(auditTail());
     } catch (error) {
       logError(error);
     }
-  if (we)
+  if (logCacheBreakpoints)
     logEvent("tengu_api_cache_breakpoints", {
       totalMessageCount: messages.length,
       cachingEnabled: enablePromptCaching,
       skipCacheWrite,
       forkPointPinned,
       markerCount: markerIndices.size,
-      ...(Ee !== undefined &&
-        !w && {
-          querySource: agentTypeForTelemetry(Ee.querySource),
-          ...(Ee.isMarkWanted && {
+      ...(parentReplyMarkPlan !== undefined &&
+        !threadActive && {
+          querySource: agentTypeForTelemetry(parentReplyMarkPlan.querySource),
+          ...(parentReplyMarkPlan.isMarkWanted && {
             parentPromptEndMarked,
           }),
         }),
     });
-  let yt;
+  let liftResult;
   try {
-    yt = liftEphemeralReminders(messages, clearAtNextUser);
+    liftResult = liftEphemeralReminders(messages, clearAtNextUser);
   } catch (error) {
     logError(error);
   }
-  let mapped = (yt?.messages ?? messages).map((At, It) => {
-    let addCache = markerIndices.has(It);
-    if (At.type === "user") return userMessageToMessageParam(At, addCache, enablePromptCaching, querySource);
-    if (At.type === "api_system") {
-      let qt = addCache && enablePromptCaching && Me;
-      let markerIndex = At.ephemeralSuffix
+  let messages_2 = (liftResult?.messages ?? messages).map((message, messageIndex) => {
+    let addCache = markerIndices.has(messageIndex);
+    if (message.type === "user")
+      return userMessageToMessageParam(message, addCache, enablePromptCaching, querySource);
+    if (message.type === "api_system") {
+      let markCacheControl = addCache && enablePromptCaching && canMarkApiSystem;
+      let markerIndex = message.ephemeralSuffix
         ? [
             {
               type: "text",
-              text: At.ephemeralSuffix,
+              text: message.ephemeralSuffix,
             },
           ]
         : [];
       if (
-        (At.toolAdditions && At.toolAdditions.length > 0) ||
-        (At.toolRemovals && At.toolRemovals.length > 0)
+        (message.toolAdditions && message.toolAdditions.length > 0) ||
+        (message.toolRemovals && message.toolRemovals.length > 0)
       )
         return {
           role: "system",
           content: [
             ...buildToolRemovalBlocks(
-              At.message.content,
-              At.toolAdditions ?? [],
-              qt
+              message.message.content,
+              message.toolAdditions ?? [],
+              markCacheControl
                 ? getCacheControl({
                     ttl: querySource,
                   })
                 : undefined,
-              At.toolRemovals ?? [],
-              At.toolDefinitions,
+              message.toolRemovals ?? [],
+              message.toolDefinitions,
             ),
             ...markerIndex,
           ],
-          ...(At.outputConfig && {
-            output_config: At.outputConfig,
+          ...(message.outputConfig && {
+            output_config: message.outputConfig,
           }),
         };
-      let rn = joinParts(At.message.content, At.ephemeralSuffix ?? "");
+      let joinedText = joinParts(message.message.content, message.ephemeralSuffix ?? "");
       return {
         role: "system",
-        content: qt
+        content: markCacheControl
           ? [
               {
                 type: "text",
-                text: At.message.content,
+                text: message.message.content,
                 cache_control: getCacheControl({
                   ttl: querySource,
                 }),
               },
               ...markerIndex,
             ]
-          : rn || [],
-        ...(At.outputConfig && {
-          output_config: At.outputConfig,
+          : joinedText || [],
+        ...(message.outputConfig && {
+          output_config: message.outputConfig,
         }),
       };
     }
-    return assistantMessageToMessageParam(At, addCache, enablePromptCaching, querySource, We);
+    return assistantMessageToMessageParam(
+      message,
+      addCache,
+      enablePromptCaching,
+      querySource,
+      whitespaceUnstampable,
+    );
   });
-  if (yt !== undefined)
+  if (liftResult !== undefined)
     try {
-      let wireWithClearAt = buildWireWithClearAt(mapped, yt);
-      q?.push(...wireWithClearAt.wireIndexOf);
+      let wireWithClearAt = buildWireWithClearAt(messages_2, liftResult);
+      wireIndexOf?.push(...wireWithClearAt.wireIndexOf);
       return wireWithClearAt.wire;
     } catch (error) {
       logError(error);
-      let dropBase = yt.dropBase;
-      let Yt = [];
-      mapped.forEach((msg, index) => {
-        q?.push(Yt.length);
-        if (!dropBase.has(index)) Yt.push(msg);
+      let dropBase = liftResult.dropBase;
+      let keptParams = [];
+      messages_2.forEach((msg, index) => {
+        wireIndexOf?.push(keptParams.length);
+        if (!dropBase.has(index)) keptParams.push(msg);
       });
-      q?.push(Yt.length);
-      return Yt;
+      wireIndexOf?.push(keptParams.length);
+      return keptParams;
     }
-  q?.push(...mapped.keys(), mapped.length);
-  return mapped;
+  wireIndexOf?.push(...messages_2.keys(), messages_2.length);
+  return messages_2;
 }
 //@ chunk-e6aww6q8.js:2805133-2805379 fingerprint = buildSystemPromptBlocks (0.617)
 /**
@@ -12139,30 +12812,31 @@ function buildSystemPromptBlocks(systemPrompt, enablePromptCaching, options) {
 /**
  * 小模型查询：按小模型 fallback 链依次尝试，只在 permission_denied 时换下一个。
  */
-async function queryHaikuWithFallback(e) {
-  let n = unlessManagedDeniedModel(getSmallFastModel());
-  let r =
-    e.options.fallbackModel === undefined &&
+async function queryHaikuWithFallback(options) {
+  let smallModel = unlessManagedDeniedModel(getSmallFastModel());
+  let chain =
+    options.options.fallbackModel === undefined &&
     !sessionHasOwnFallback() &&
     env.ANTHROPIC_SMALL_FAST_MODEL === undefined &&
     !(nonEmptyOrUndefined(env.ANTHROPIC_SMALL_FAST_MODEL_AWS_REGION) && hasDedicatedSmallFastModel())
-      ? buildAvailabilityFallbackChain(n, undefined)
+      ? buildAvailabilityFallbackChain(smallModel, undefined)
       : [];
-  let s = 1;
+  let limit = 1;
   while (
-    s < r.length &&
-    resolveFallbackModel(r[s - 1], r[s], isRefusedOrSentModel).accessFallbackModel !== undefined
+    limit < chain.length &&
+    resolveFallbackModel(chain[limit - 1], chain[limit], isRefusedOrSentModel).accessFallbackModel !==
+      undefined
   )
-    s++;
-  let h = r.length > 0 ? r.slice(0, s) : [n];
+    limit++;
+  let models = chain.length > 0 ? chain.slice(0, limit) : [smallModel];
   for (let idx = 0; ; idx++)
     try {
-      return await queryWithModel(e, h[idx], h[idx + 1]);
+      return await queryWithModel(options, models[idx], models[idx + 1]);
     } catch (error) {
       if (
         !(error instanceof FallbackTriggeredError) ||
         error.reason !== "permission_denied" ||
-        idx + 1 >= h.length
+        idx + 1 >= models.length
       )
         throw error;
     }
@@ -12172,9 +12846,15 @@ async function queryHaikuWithFallback(e) {
  * 单轮无工具辅助查询（指定模型、可带 fallback）：用 VCR 包装，thinking 机械关闭，默认不开缓存。
  */
 async function queryWithModel(
-  { systemPrompt = asSystemPrompt([]), userPrompt, outputFormat, signal, options: { helperEffortFor, ...y } },
-  S,
-  w,
+  {
+    systemPrompt = asSystemPrompt([]),
+    userPrompt,
+    outputFormat,
+    signal,
+    options: { helperEffortFor, ...baseOptions },
+  },
+  model,
+  fallbackModel,
 ) {
   return (
     await withVCR(
@@ -12206,13 +12886,13 @@ async function queryWithModel(
             tools: [],
             signal,
             options: {
-              ...y,
-              ...helperEffortFor?.(S),
-              stickyBetas: y.stickyBetas ?? forkStickyBetaLatches(getStickyBetas()),
-              agentContext: y.agentContext,
-              model: S,
-              fallbackModel: w ?? y.fallbackModel,
-              enablePromptCaching: y.enablePromptCaching ?? false,
+              ...baseOptions,
+              ...helperEffortFor?.(model),
+              stickyBetas: baseOptions.stickyBetas ?? forkStickyBetaLatches(getStickyBetas()),
+              agentContext: baseOptions.agentContext,
+              model,
+              fallbackModel: fallbackModel ?? baseOptions.fallbackModel,
+              enablePromptCaching: baseOptions.enablePromptCaching ?? false,
               outputFormat,
               async getToolPermissionContext() {
                 return getEmptyToolPermissionContext();
@@ -12285,22 +12965,22 @@ async function queryHaiku({
 /**
  * stop_reason 为 max_tokens / model_context_window_exceeded 时生成 API 错误消息（提示 CLAUDE_CODE_MAX_OUTPUT_TOKENS）。
  */
-function getMaxTokensStopMessage(stopReason, n, outputTokens, s = false) {
+function getMaxTokensStopMessage(stopReason, maxTokens, outputTokens, withoutStreaming = false) {
   if (stopReason === "max_tokens") {
     logEvent("tengu_max_tokens_reached", {
-      max_tokens: n,
+      max_tokens: maxTokens,
     });
     return createApiErrorMessage({
-      content: s
-        ? `${API_ERROR_MESSAGE_PREFIX}: Claude's response exceeded the ${n} output token maximum for a request sent without streaming. The CLAUDE_CODE_MAX_OUTPUT_TOKENS environment variable cannot raise this limit.`
-        : `${API_ERROR_MESSAGE_PREFIX}: Claude's response exceeded the ${n} output token maximum. To configure this behavior, set the CLAUDE_CODE_MAX_OUTPUT_TOKENS environment variable.`,
+      content: withoutStreaming
+        ? `${API_ERROR_MESSAGE_PREFIX}: Claude's response exceeded the ${maxTokens} output token maximum for a request sent without streaming. The CLAUDE_CODE_MAX_OUTPUT_TOKENS environment variable cannot raise this limit.`
+        : `${API_ERROR_MESSAGE_PREFIX}: Claude's response exceeded the ${maxTokens} output token maximum. To configure this behavior, set the CLAUDE_CODE_MAX_OUTPUT_TOKENS environment variable.`,
       apiError: "max_output_tokens",
       error: "max_output_tokens",
     });
   }
   if (stopReason === "model_context_window_exceeded") {
     logEvent("tengu_context_window_exceeded", {
-      max_tokens: n,
+      max_tokens: maxTokens,
       output_tokens: outputTokens,
     });
     return createApiErrorMessage({
@@ -12334,22 +13014,22 @@ function adjustParamsForNonStreaming(params, maxTokensCap) {
 /**
  * 消息上布尔 resumable 字段（未完成思考可续写）。
  */
-function getResumableFlag(e) {
-  return "resumable" in e && typeof e.resumable === "boolean" ? e.resumable : undefined;
+function getResumableFlag(message) {
+  return "resumable" in message && typeof message.resumable === "boolean" ? message.resumable : undefined;
 }
 //@ chunk-e6aww6q8.js:2808007-2808146 placement
-function assertStreamPart(e, n, errorType) {
-  if (e) return;
+function assertStreamPart(ok, part, errorType) {
+  if (ok) return;
   logEvent("tengu_streaming_error", {
     error_type: errorType,
-    part_type: fromEnum(n.type),
-    part_index: blockIndexOf(n),
+    part_type: fromEnum(part.type),
+    part_index: blockIndexOf(part),
   });
   throw new StreamMalformedEventError("unreadable");
 }
 //@ chunk-e6aww6q8.js:2808146-2808222 placement
-function blockIndexOf(e) {
-  return "index" in e && typeof e.index === "number" ? e.index : undefined;
+function blockIndexOf(event) {
+  return "index" in event && typeof event.index === "number" ? event.index : undefined;
 }
 //@ chunk-e6aww6q8.js:2808222-2808342 placement
 function isRestartedBlock({ previous, closedContentBlocks, started }) {
@@ -12362,124 +13042,37 @@ function isRestartedBlock({ previous, closedContentBlocks, started }) {
   );
 }
 //@ chunk-e6aww6q8.js:2808342-2808410 placement
-function recordMonotonicTime(weakMap, n, clock) {
+function recordMonotonicTime(weakMap, block, clock) {
   try {
-    weakMap.set(n, clock.monotonicNow());
+    weakMap.set(block, clock.monotonicNow());
   } catch (error) {
     logError(toError(error));
   }
 }
 //@ chunk-e6aww6q8.js:2808410-2808545 placement
-function elapsedSinceMs(weakMap, n, clock) {
+function elapsedSinceMs(weakMap, block, clock) {
   try {
-    let s = weakMap.get(n);
-    if (s === undefined) return;
-    return Math.max(1, Math.round(clock.monotonicNow() - s));
+    let startedAt = weakMap.get(block);
+    if (startedAt === undefined) return;
+    return Math.max(1, Math.round(clock.monotonicNow() - startedAt));
   } catch (error) {
     logError(toError(error));
     return;
   }
 }
 //@ chunk-e6aww6q8.js:2808545-2808554 placement
-setAdvisorBaseUrlGetter(getApiBaseUrl);
-//@ chunk-w5ndchqs.js:2496-2556 placement
+// deferred: uses setAdvisorBaseUrlGetter (../../utils/advisor.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:2808545", () => {
+  setAdvisorBaseUrlGetter(getApiBaseUrl);
+});
+//@ chunk-3xb70ww4.js:2887-2932 fingerprint = isMedia (1)
 /**
- * ti/os/sb/he/uf/ap/tk：CLAUDE_CODE_EXTRA_METADATA 不能覆盖的保留键；512 为 user_id JSON 的长度上限。
+ * text/image/document：contentBlockStableKeys 不为这几类生成键。旧版名 isMedia 为错配。
  */
-var RESERVED_METADATA_KEYS = new Set(["ti", "os", "sb", "he", "uf", "ap", "tk"]);
-var MAX_METADATA_USER_ID_LENGTH = 512;
-//@ chunk-w5ndchqs.js:2556-2709 placement
-/**
- * 去掉保留键，只保留字符串/数字/布尔值的附加 metadata 字段。
- */
-function sanitizeExtraMetadata(parsed) {
-  let n = {};
-  for (let [key, value] of Object.entries(parsed))
-    if (
-      !RESERVED_METADATA_KEYS.has(key) &&
-      (typeof value === "string" || typeof value === "number" || typeof value === "boolean")
-    )
-      n[key] = value;
-  return n;
-}
-//@ chunk-w5ndchqs.js:3172-3418 placement
-/**
- * 构造请求 system：计费/归因头、额外前缀与原 system 依次拼接（去掉空项），并记录 API 前缀。
- */
-function buildSystemWithAttribution(systemPrompt, prefix, options) {
-  let attributionHeader = getAttributionHeader(
-    options.fingerprint,
-    options.agentContext,
-    options.previousRequestId,
-    options.promptId,
-    options.turnOrigin,
-    options.turnPosition,
-    {
-      attributionProject: parseAttributionProject(),
-      responseBeforeCompaction: options.responseBeforeCompaction,
-    },
-  );
-  let systemPrompt_2 = asSystemPrompt([attributionHeader, prefix, ...systemPrompt].filter(Boolean));
-  logAPIPrefix(systemPrompt_2);
-  return systemPrompt_2;
-}
-//@ chunk-w5ndchqs.js:5496-6185 fingerprint = getAPIMetadata (0.694)
-/**
- * 请求体 metadata：user_id 为 JSON 字符串 {device_id, account_uuid, session_id, parent_session_id?, tk?}，可合并 CLAUDE_CODE_EXTRA_METADATA（超长时丢弃附加字段）。
- */
-function getAPIMetadata({ agentContext: e, servedSessionMode: n } = {}) {
-  let r = {};
-  let extraStr = process.env.CLAUDE_CODE_EXTRA_METADATA;
-  if (extraStr) {
-    let parsed = safeParseJSON(extraStr, false);
-    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) r = sanitizeExtraMetadata(parsed);
-    else
-      logForDebugging(`CLAUDE_CODE_EXTRA_METADATA env var must be a JSON object, but was given ${extraStr}`, {
-        level: "error",
-      });
-  }
-  let d = {};
-  let m;
-  let parentSessionId = getParentSessionId();
-  let y =
-    isEnvTruthy(env.CLAUDE_CODE_REMOTE) && isFirstPartyProvider() ? turnAttributionKeyFor(e) : undefined;
-  let w = {
-    ...(m && {
-      ti: m,
-    }),
-    device_id: getOrCreateUserID(),
-    account_uuid:
-      (isEnvTruthy(env.CLAUDE_CODE_REMOTE) && env.CLAUDE_CODE_ACCOUNT_UUID) ||
-      getAuthenticatedAccountInfo()?.accountUuid ||
-      getOauthAccountInfo()?.accountUuid ||
-      "",
-    session_id: getSessionId(),
-    ...(parentSessionId && {
-      parent_session_id: parentSessionId,
-    }),
-    ...(y && {
-      tk: y,
-    }),
-  };
-  let L = {
-    ...d,
-    ...r,
-    ...w,
-  };
-  if (
-    (Object.keys(r).length > 0 || Object.keys(d).length > 0) &&
-    jsonStringify(L).length > MAX_METADATA_USER_ID_LENGTH
-  ) {
-    L = {
-      ...d,
-      ...w,
-    };
-    if (jsonStringify(L).length > MAX_METADATA_USER_ID_LENGTH) L = w;
-  }
-  return {
-    user_id: jsonStringify(L),
-  };
-}
+var KEYLESS_BLOCK_TYPES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-3xb70ww4.js:2887", () => {
+  KEYLESS_BLOCK_TYPES = new Set(["text", "image", "document"]);
+});
 //@ chunk-r1wk8q25.js:12135-12238 placement
 var UPGRADE_RELAY_USAGE_LIMIT = "upgrade_relay_usage_limit";
 var UPGRADE_RELAY_REQUEST_CLASS = "upgrade_relay_request_class";
@@ -12504,59 +13097,29 @@ function getNonstreamingFallbackTimeoutMs() {
 /**
  * 把内部 usage 规整成 SDK/外部格式：缓存细分、server_tool_use 只保留 web_search、speed 只认 fast，其余置 null。旧版名 updateUsage 为错配。
  */
-function toSdkUsage(e) {
+function toSdkUsage(rawUsage) {
   return {
     output_tokens_details: null,
-    input_tokens: e.input_tokens,
-    output_tokens: e.output_tokens,
-    cache_creation_input_tokens: e.cache_creation_input_tokens ?? 0,
-    cache_read_input_tokens: e.cache_read_input_tokens ?? 0,
-    cache_creation: e.cache_creation
+    input_tokens: rawUsage.input_tokens,
+    output_tokens: rawUsage.output_tokens,
+    cache_creation_input_tokens: rawUsage.cache_creation_input_tokens ?? 0,
+    cache_read_input_tokens: rawUsage.cache_read_input_tokens ?? 0,
+    cache_creation: rawUsage.cache_creation
       ? {
-          ephemeral_5m_input_tokens: e.cache_creation.ephemeral_5m_input_tokens ?? 0,
-          ephemeral_1h_input_tokens: e.cache_creation.ephemeral_1h_input_tokens ?? 0,
+          ephemeral_5m_input_tokens: rawUsage.cache_creation.ephemeral_5m_input_tokens ?? 0,
+          ephemeral_1h_input_tokens: rawUsage.cache_creation.ephemeral_1h_input_tokens ?? 0,
         }
       : null,
     server_tool_use: {
-      web_search_requests: e.server_tool_use?.web_search_requests ?? 0,
+      web_search_requests: rawUsage.server_tool_use?.web_search_requests ?? 0,
       web_fetch_requests: 0,
     },
     service_tier: null,
     inference_geo: null,
     iterations: null,
-    speed: e.speed === "fast" ? "fast" : null,
+    speed: rawUsage.speed === "fast" ? "fast" : null,
     fallback_credit: null,
   };
-}
-//@ chunk-1qpz7qcd.js:30432-30552 fingerprint = getPreviousRequestIdFromMessages (0.653)
-/**
- * 控制请求子类型在白名单内时返回 {subtype, requestId}。旧版名 getPreviousRequestIdFromMessages 为错配。
- */
-function getControlRequestInfo(messages) {
-  let controlRequestSubtype = getControlRequestSubtype_2(messages);
-  if (controlRequestSubtype === undefined || !MUTATING_CONTROL_SUBTYPES.has(controlRequestSubtype)) return;
-  return {
-    subtype: controlRequestSubtype,
-    requestId: messages.payload ? getControlRequestSubtype(messages.payload) : undefined,
-  };
-}
-//@ chunk-3xb70ww4.js:2887-2932 fingerprint = isMedia (1)
-/**
- * text/image/document：contentBlockStableKeys 不为这几类生成键。旧版名 isMedia 为错配。
- */
-var KEYLESS_BLOCK_TYPES = new Set(["text", "image", "document"]);
-//@ chunk-aepeg2w5.js:474942-475090 fingerprint = getMaxOutputTokensForModel (1)
-/**
- * 主循环模型的 max_tokens：模型默认值，可用 CLAUDE_CODE_MAX_OUTPUT_TOKENS 在模型上限内调整。
- */
-function getMaxOutputTokensForModel(model) {
-  let maxOutputTokens = getModelMaxOutputTokens(model);
-  return validateBoundedIntEnvVar(
-    "CLAUDE_CODE_MAX_OUTPUT_TOKENS",
-    process.env.CLAUDE_CODE_MAX_OUTPUT_TOKENS,
-    maxOutputTokens.default,
-    maxOutputTokens.upperLimit,
-  ).effective;
 }
 export {
   queryHaiku,

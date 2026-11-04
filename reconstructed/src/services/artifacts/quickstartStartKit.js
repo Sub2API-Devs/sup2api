@@ -56,38 +56,38 @@ var MAX_SKIP_TEXT_LENGTH = 1024;
 /**
  * 导出函数 `hasStartKitSwitchAndBash`：参数 e，返回 startKitSwitchOn() && findToolByName(e.options.tools ?? [], BASH_TOOL_NAME) !== void 0。
  */
-function hasStartKitSwitchAndBash(e) {
-  return startKitSwitchOn() && findToolByName(e.options.tools ?? [], BASH_TOOL_NAME) !== undefined;
+function hasStartKitSwitchAndBash(tools) {
+  return startKitSwitchOn() && findToolByName(tools.options.tools ?? [], BASH_TOOL_NAME) !== undefined;
 }
 //@ chunk-965tj7mg.js:7332-7379 placement
 /**
  * 导出函数 `hasArtifactReplTool`：参数 e，返回 artifactReplToolInPool(e.options.tools ?? [])。
  */
-function hasArtifactReplTool(e) {
-  return artifactReplToolInPool(e.options.tools ?? []);
+function hasArtifactReplTool(tools) {
+  return artifactReplToolInPool(tools.options.tools ?? []);
 }
 //@ chunk-965tj7mg.js:7379-7437 placement
 /**
  * 导出函数 `hasSkillTool`：参数 e，返回 findToolByName(e.options.tools ?? [], SKILL) !== void 0。
  */
-function hasSkillTool(e) {
-  return findToolByName(e.options.tools ?? [], SKILL) !== undefined;
+function hasSkillTool(tools) {
+  return findToolByName(tools.options.tools ?? [], SKILL) !== undefined;
 }
 //@ chunk-965tj7mg.js:7437-7501 placement
-function savedFilesSummary(e) {
+function savedFilesSummary(saved) {
   return {
-    dir: e.dir,
-    files: e.files,
-    skipped: e.skipped,
+    dir: saved.dir,
+    files: saved.files,
+    skipped: saved.skipped,
   };
 }
 //@ chunk-965tj7mg.js:7501-7621 placement
-function kitNotSaved(e, i, notSaved = i, n = "list") {
-  logForDebugging(`[quickstartStartKit] ${e} not saved: ${i}`);
+function kitNotSaved(url, saved, notSaved = saved, kind = "list") {
+  logForDebugging(`[quickstartStartKit] ${url} not saved: ${saved}`);
   return {
     notSaved,
-    ...(n !== "list" && {
-      next: n,
+    ...(kind !== "list" && {
+      next: kind,
     }),
   };
 }
@@ -110,113 +110,125 @@ function notSavedReason(code) {
                 : ["reading it would ask first", "list"];
 }
 //@ chunk-965tj7mg.js:8246-8920 placement
-async function readQuickstartTypeFile(e, i, signal) {
-  let { url, context, pipelineRan } = e;
-  let o = await checkDesignSystemReadable(url, signal, context, false, pipelineRan, "quickstart_start_kit");
-  if (!o.ok) return kitNotSaved(i, o.code, ...notSavedReason(o.code));
-  if (!o.filesOk)
-    return o.filesRuled
-      ? kitNotSaved(i, "rule", "a permission rule covers reading its files", "own_calls")
-      : kitNotSaved(i, "a read would ask", "reading its files would ask first");
+async function readQuickstartTypeFile(type, path, signal) {
+  let { url, context, pipelineRan } = type;
+  let readable = await checkDesignSystemReadable(
+    url,
+    signal,
+    context,
+    false,
+    pipelineRan,
+    "quickstart_start_kit",
+  );
+  if (!readable.ok) return kitNotSaved(path, readable.code, ...notSavedReason(readable.code));
+  if (!readable.filesOk)
+    return readable.filesRuled
+      ? kitNotSaved(path, "rule", "a permission rule covers reading its files", "own_calls")
+      : kitNotSaved(path, "a read would ask", "reading its files would ask first");
   let toolPermissionContext = getToolPermissionContext(context);
   if (
-    hasDesignSystemReadRule(o.parsed, url, "list_files", context, {
+    hasDesignSystemReadRule(readable.parsed, url, "list_files", context, {
       pipelineRan,
     }) ||
-    ["deny", "ask"].some((p) => artifactReadRule(toolPermissionContext, o.parsed, url, p) !== null)
+    ["deny", "ask"].some(
+      (path) => artifactReadRule(toolPermissionContext, readable.parsed, url, path) !== null,
+    )
   )
-    return kitNotSaved(i, "a rule covers reading it", undefined, "own_calls");
-  let m = await raceWithDeadline(
-    listArtifactFiles(o.parsed, signal, context.credentials),
+    return kitNotSaved(path, "a rule covers reading it", undefined, "own_calls");
+  let read = await raceWithDeadline(
+    listArtifactFiles(readable.parsed, signal, context.credentials),
     signal,
     context,
     () => null,
   );
-  if (m?.kind !== "ok") return kitNotSaved(i, "its files could not be listed", undefined, "own_calls");
+  if (read?.kind !== "ok") return kitNotSaved(path, "its files could not be listed", undefined, "own_calls");
   return {
-    parsed: o.parsed,
-    owned: o.owned,
-    listing: m,
+    parsed: readable.parsed,
+    owned: readable.owned,
+    listing: read,
   };
 }
 //@ chunk-965tj7mg.js:8920-9024 placement
-function isKitReadRuled(e, parsed, path) {
-  return hasDesignSystemReadRule(parsed, e.url, "read_file", e.context, {
+function isKitReadRuled(context, parsed, path) {
+  return hasDesignSystemReadRule(parsed, context.url, "read_file", context.context, {
     fields: {
       path,
     },
-    pipelineRan: e.pipelineRan,
+    pipelineRan: context.pipelineRan,
   });
 }
 //@ chunk-965tj7mg.js:9024-9090 placement
 /**
  * 导出函数 `readTypeSkillOrNull`：参数 e，返回 "notSaved" in i ? null : i。
  */
-async function readTypeSkillOrNull(e) {
-  let firstPartyTypeSkill = await readFirstPartyTypeSkill(e);
+async function readTypeSkillOrNull(type) {
+  let firstPartyTypeSkill = await readFirstPartyTypeSkill(type);
   return "notSaved" in firstPartyTypeSkill ? null : firstPartyTypeSkill;
 }
 //@ chunk-965tj7mg.js:9090-10391 placement
-async function readFirstPartyTypeSkill(e) {
-  let artifactUrl = parseArtifactUrl(e.url);
-  let n = () => artifactUrl !== null && getAttestationKind(artifactUrl.slug) === "first_party_type";
-  if (!n()) return kitNotSaved("the type", "not listed first-party");
-  let combinedAbortSignal = createCombinedAbortSignal(e.signal, {
-    timeoutMs: e.budgetMs ?? MAX_KIT_FILE_BYTES,
+async function readFirstPartyTypeSkill(request) {
+  let artifactUrl = parseArtifactUrl(request.url);
+  let isFirstPartyType = () =>
+    artifactUrl !== null && getAttestationKind(artifactUrl.slug) === "first_party_type";
+  if (!isFirstPartyType()) return kitNotSaved("the type", "not listed first-party");
+  let combinedAbortSignal = createCombinedAbortSignal(request.signal, {
+    timeoutMs: request.budgetMs ?? MAX_KIT_FILE_BYTES,
     refTimer: true,
   });
   try {
-    let quickstartTypeFile = await readQuickstartTypeFile(e, "the type", combinedAbortSignal.signal);
+    let quickstartTypeFile = await readQuickstartTypeFile(request, "the type", combinedAbortSignal.signal);
     if ("notSaved" in quickstartTypeFile) return quickstartTypeFile;
     let { parsed, owned, listing } = quickstartTypeFile;
-    let p = () => n() && canReadDesignSystemFiles(parsed, e.url, e.context, e.pipelineRan);
+    let stillAllowed = () =>
+      isFirstPartyType() &&
+      canReadDesignSystemFiles(parsed, request.url, request.context, request.pipelineRan);
     let mapped = listing.files.map((file) => file.path);
     if (!mapped.includes(TYPE_INSTRUCTIONS_FILE)) return kitNotSaved("the type", "it lists no SKILL.md");
-    let sorted = mapped.filter((c) => REFERENCE_PATH_RE.test(c)).sort();
+    let sorted = mapped.filter((path) => REFERENCE_PATH_RE.test(path)).sort();
     if (sorted.length > MAX_REFERENCE_PAGES)
       return kitNotSaved("the type", `more than ${MAX_REFERENCE_PAGES} reference pages`);
-    if ([TYPE_INSTRUCTIONS_FILE, ...sorted].some((c) => isKitReadRuled(e, parsed, c)))
+    if ([TYPE_INSTRUCTIONS_FILE, ...sorted].some((path) => isKitReadRuled(request, parsed, path)))
       return kitNotSaved("the type", "a rule names one of its files");
-    let g = await raceWithDeadline(
+    let read = await raceWithDeadline(
       webfetchReadFile(
         {
           ...parsed,
           file: TYPE_INSTRUCTIONS_FILE,
         },
         combinedAbortSignal.signal,
-        e.context.credentials,
+        request.context.credentials,
         "artifact_type_instructions_read",
       ),
       combinedAbortSignal.signal,
-      e.context,
+      request.context,
       () => null,
     );
-    if (g === null || g.err !== null) return kitNotSaved("the type", "SKILL.md could not be read");
-    if (!p()) return kitNotSaved("the type", "the admission no longer stands after the read");
-    let h = scrubArtifactEnvelopeTags(g.html);
-    let y = await raceWithDeadline(
+    if (read === null || read.err !== null) return kitNotSaved("the type", "SKILL.md could not be read");
+    if (!stillAllowed()) return kitNotSaved("the type", "the admission no longer stands after the read");
+    let html = scrubArtifactEnvelopeTags(read.html);
+    let snippet = await raceWithDeadline(
       prefetchArtifactTypeAndSystem(
         {
           type: {
             artifact: parsed,
-            instructions: h,
+            instructions: html,
             pages: sorted,
-            stillConsented: p,
+            stillConsented: stillAllowed,
           },
           system: null,
         },
-        e.context,
+        request.context,
         combinedAbortSignal.signal,
       ),
       combinedAbortSignal.signal,
-      e.context,
+      request.context,
       () => null,
     );
-    if (y === null || y.type === null) return kitNotSaved("the type", "its files did not land");
-    if (!owned) recordForeignDesignSystemRead(parsed, "read_file", e.context);
+    if (snippet === null || snippet.type === null) return kitNotSaved("the type", "its files did not land");
+    if (!owned) recordForeignDesignSystemRead(parsed, "read_file", request.context);
     return {
-      saved: savedFilesSummary(y.type),
-      skillInResult: !instructionsFromText(h, true).clipped,
+      saved: savedFilesSummary(snippet.type),
+      skillInResult: !instructionsFromText(html, true).clipped,
     };
   } catch (error) {
     return kitNotSaved("the type", `failed: ${errorMessage(error)}`);
@@ -229,88 +241,96 @@ function isReservedKitPath(path) {
   return path === "index.html" || path === TYPE_INSTRUCTIONS_FILE || path.startsWith("artifact-type/");
 }
 //@ chunk-965tj7mg.js:10469-10603 placement = formatFailureDetails (0.777)
-function formatFailureDetails(e) {
-  let i = e.length - 3;
+function formatFailureDetails(failures) {
+  let limit = failures.length - 3;
   return (
-    e
+    failures
       .slice(0, 3)
-      .map((s) => `${jsonStringify(sweepResultLineField(s.path, 60))} (${s.reason})`)
-      .join(", ") + (i > 0 ? ` and ${i} more` : "")
+      .map((failure) => `${jsonStringify(sweepResultLineField(failure.path, 60))} (${failure.reason})`)
+      .join(", ") + (limit > 0 ? ` and ${limit} more` : "")
   );
 }
 //@ chunk-965tj7mg.js:10603-12017 placement
 /**
  * Artifact quickstart 起步包：在预算内读取类型与设计系统的 SKILL.md/参考页并保存到 scratchpad。
  */
-async function runQuickstartStartKit(e) {
-  let budgetMs = e.budgetMs ?? MAX_KIT_FILE_BYTES;
-  let combinedAbortSignal = createCombinedAbortSignal(e.signal, {
+async function runQuickstartStartKit(request) {
+  let budgetMs = request.budgetMs ?? MAX_KIT_FILE_BYTES;
+  let combinedAbortSignal = createCombinedAbortSignal(request.signal, {
     timeoutMs: budgetMs,
     refTimer: true,
   });
-  let combinedAbortSignal_2 = createCombinedAbortSignal(e.signal, {
-    timeoutMs: budgetMs + (e.graceMs ?? GUIDE_READ_GRACE_MS),
+  let combinedAbortSignal_2 = createCombinedAbortSignal(request.signal, {
+    timeoutMs: budgetMs + (request.graceMs ?? GUIDE_READ_GRACE_MS),
     refTimer: true,
   });
   try {
-    let quickstartTypeFile = await readQuickstartTypeFile(e, "the design system", combinedAbortSignal.signal);
+    let quickstartTypeFile = await readQuickstartTypeFile(
+      request,
+      "the design system",
+      combinedAbortSignal.signal,
+    );
     if ("notSaved" in quickstartTypeFile) return quickstartTypeFile;
     let { parsed, owned, listing } = quickstartTypeFile;
     let filtered = listing.files.filter((file) => !isReservedKitPath(file.path));
     if (filtered.length === 0)
       return kitNotSaved("the design system", "it publishes no files of its own", undefined, "own_calls");
-    let filtered_2 = filtered.filter((r) => isKitReadRuled(e, parsed, r.path));
+    let filtered_2 = filtered.filter((file) => isKitReadRuled(request, parsed, file.path));
     let kitSwitchOn = startKitSwitchOn();
-    let g = (r) => (filtered_2.includes(r) ? "a permission rule" : typeFileSkipReason(r, kitSwitchOn));
-    let all = filtered.every((r) => g(r) !== undefined || isBinaryTypeFile(r));
-    let flattened = filtered.flatMap((r) => {
-      let w = g(r) ?? (all && isBinaryTypeFile(r) ? "font file" : undefined);
-      return w === undefined
+    let skipReason = (file) =>
+      filtered_2.includes(file) ? "a permission rule" : typeFileSkipReason(file, kitSwitchOn);
+    let all = filtered.every((file) => skipReason(file) !== undefined || isBinaryTypeFile(file));
+    let failures = filtered.flatMap((file) => {
+      let reason = skipReason(file) ?? (all && isBinaryTypeFile(file) ? "font file" : undefined);
+      return reason === undefined
         ? []
         : [
             {
-              path: r.path,
-              reason: w,
+              path: file.path,
+              reason,
             },
           ];
     });
-    if (flattened.length === filtered.length)
+    if (failures.length === filtered.length)
       return kitNotSaved(
         "the design system",
         "none of its files can land",
-        `none of its files could be saved: ${formatFailureDetails(flattened)}`,
+        `none of its files could be saved: ${formatFailureDetails(failures)}`,
         filtered_2.length > 0 ? "own_calls" : "list",
       );
-    let c = await raceWithDeadline(
+    let saved = await raceWithDeadline(
       prefetchArtifactTypeAndSystem(
         {
           type: null,
           system: {
             artifact: parsed,
-            listing: filtered.filter((r) => !filtered_2.includes(r)),
-            stillConsented: () => canReadDesignSystemFiles(parsed, e.url, e.context, e.pipelineRan),
+            listing: filtered.filter((file) => !filtered_2.includes(file)),
+            stillConsented: () =>
+              canReadDesignSystemFiles(parsed, request.url, request.context, request.pipelineRan),
           },
         },
-        e.context,
+        request.context,
         combinedAbortSignal.signal,
       ),
       combinedAbortSignal_2.signal,
-      e.context,
+      request.context,
       () => null,
     );
     if (
-      c === null ||
-      c.system === null ||
-      c.system.files.every((file) => filtered.some((w) => w.path === file.path && isBinaryTypeFile(w)))
+      saved === null ||
+      saved.system === null ||
+      saved.system.files.every((file) =>
+        filtered.some((binaryFile) => binaryFile.path === file.path && isBinaryTypeFile(binaryFile)),
+      )
     )
       return kitNotSaved("the design system", "no file of it landed", "none of its files could be saved");
-    if (!owned) recordForeignDesignSystemRead(parsed, "read_file", e.context);
-    let b = savedFilesSummary(c.system);
+    if (!owned) recordForeignDesignSystemRead(parsed, "read_file", request.context);
+    let summary = savedFilesSummary(saved.system);
     return {
-      ...b,
-      skipped: b.skipped.concat(
-        filtered_2.map((r) => ({
-          path: r.path,
+      ...summary,
+      skipped: summary.skipped.concat(
+        filtered_2.map((file) => ({
+          path: file.path,
           reason: "a permission rule",
         })),
       ),
@@ -323,52 +343,63 @@ async function runQuickstartStartKit(e) {
   }
 }
 //@ chunk-965tj7mg.js:12017-12253 placement
-function validateSavedKit(e, i) {
-  let s = i === undefined ? null : parseArtifactUrl(i);
-  return e !== undefined &&
-    s !== null &&
-    e.dir === scratchpadArtifactFilePath(s.slug) &&
-    e.files.every(
+function validateSavedKit(kit, url) {
+  let parsed = url === undefined ? null : parseArtifactUrl(url);
+  return kit !== undefined &&
+    parsed !== null &&
+    kit.dir === scratchpadArtifactFilePath(parsed.slug) &&
+    kit.files.every(
       (file) => file.path.length <= MAX_KIT_PATH_LENGTH && KIT_RELATIVE_PATH_RE.test(file.path),
     ) &&
-    e.skipped.length <= MAX_LISTED_FILES &&
-    e.skipped.every((n) => n.path.length <= MAX_SKIP_TEXT_LENGTH && n.reason.length <= MAX_SKIP_TEXT_LENGTH)
-    ? e
+    kit.skipped.length <= MAX_LISTED_FILES &&
+    kit.skipped.every(
+      (system) => system.path.length <= MAX_SKIP_TEXT_LENGTH && system.reason.length <= MAX_SKIP_TEXT_LENGTH,
+    )
+    ? kit
     : null;
 }
 //@ chunk-965tj7mg.js:12253-12666 placement
-function parseStartKitResult(e, i, typeKey) {
-  let n = startKitSchema().safeParse(e);
-  if (!n.success) return null;
-  let type = validateSavedKit(n.data.type, i);
-  let l = validateSavedKit(n.data.system, n.data.system_url);
+function parseStartKitResult(text, typeKey, typeKey_2) {
+  let parsed = startKitSchema().safeParse(text);
+  if (!parsed.success) return null;
+  let type = validateSavedKit(parsed.data.type, typeKey);
+  let validated = validateSavedKit(parsed.data.system, parsed.data.system_url);
   return artifactOpeningPrefetchPrompt({
     turnOne: {
       kind: "create",
-      typeUrl: i,
+      typeUrl: typeKey,
     },
-    typeKey,
+    typeKey: typeKey_2,
     files: {
       type,
-      system: l,
+      system: validated,
     },
-    ...(l !== null && {
-      systemUrl: n.data.system_url,
+    ...(validated !== null && {
+      systemUrl: parsed.data.system_url,
     }),
-    skillInResult: n.data.skill_in_result,
-    capabilitiesSkill: n.data.capabilities_skill,
-    repl: n.data.repl_tool !== false,
+    skillInResult: parsed.data.skill_in_result,
+    capabilitiesSkill: parsed.data.capabilities_skill,
+    repl: parsed.data.repl_tool !== false,
     canCheckWork: false,
     copyFrom: getLiveState().frozenCopyFrom === true,
   });
 }
 //@ chunk-965tj7mg.js:12666-12782 placement
-function describeKitContents(e) {
-  return e?.type !== undefined
-    ? e.system !== undefined
+function describeKitContents(kit) {
+  return kit?.type !== undefined
+    ? kit.system !== undefined
       ? "both"
       : "type_only"
-    : e?.system !== undefined
+    : kit?.system !== undefined
       ? "system_only"
       : "none";
 }
+export {
+  hasSkillTool,
+  parseStartKitResult,
+  hasArtifactReplTool,
+  runQuickstartStartKit,
+  readTypeSkillOrNull,
+  describeKitContents,
+  hasStartKitSwitchAndBash,
+};

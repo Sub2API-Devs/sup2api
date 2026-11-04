@@ -23,9 +23,10 @@ import { mainAgentContext } from "../../utils/agentContext.js";
 var SESSION_NAME_PROMPT =
   'Generate a short kebab-case name (2-4 words) that captures the main topic of this conversation. Use lowercase words separated by hyphens. Examples: "fix-login-bug", "add-auth-feature", "refactor-api-client", "debug-test-failures". Return JSON with a "name" field.';
 //@ chunk-zmqmnh19.js:890-1013 sole-consumer = mergeClients (1)
-function mergeClients(s) {
-  let e = safeParseJSON(stripJsonCodeFence(s), false);
-  if (e && typeof e === "object" && "name" in e && typeof e.name === "string") return e.name;
+function mergeClients(responseText) {
+  let parsed = safeParseJSON(stripJsonCodeFence(responseText), false);
+  if (parsed && typeof parsed === "object" && "name" in parsed && typeof parsed.name === "string")
+    return parsed.name;
   return null;
 }
 //@ chunk-zmqmnh19.js:1013-1790 sole-consumer
@@ -65,15 +66,15 @@ async function generateNameViaFork(signal) {
       skipTranscript: true,
     });
     if (signal.aborted) return null;
-    let trimmed = messages
+    let responseText = messages
       .flatMap((message) =>
         message.type === "assistant" && !message.isApiErrorMessage ? message.message.content : [],
       )
-      .filter((r) => r.type === "text")
-      .map((r) => ("text" in r ? r.text : ""))
+      .filter((part) => part.type === "text")
+      .map((part) => ("text" in part ? part.text : ""))
       .join("")
       .trim();
-    return mergeClients(trimmed);
+    return mergeClients(responseText);
   } catch (error) {
     if (!signal.aborted)
       logForDebugging(`generateSessionName fork failed: ${errorMessage(error)}`, {
@@ -83,9 +84,9 @@ async function generateNameViaFork(signal) {
   }
 }
 //@ chunk-zmqmnh19.js:1790-2624 fingerprint = generateSessionName (0.701)
-async function generateSessionName(messages, signal, o) {
+async function generateSessionName(messages, signal, options) {
   if (
-    o.preferFork &&
+    options.preferFork &&
     getFeatureValue_CACHED_MAY_BE_STALE("tengu_rename_full_session_fork", false) &&
     isMainThreadCacheWarm()
   ) {
@@ -125,7 +126,7 @@ ${conversationText}
         hasAppendSystemPrompt: false,
         mcpTools: [],
         agentContext: mainAgentContext(),
-        credentials: o.credentials,
+        credentials: options.credentials,
       },
     });
     let content = extractTextContent_2(result.message.content);

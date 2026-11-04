@@ -99,6 +99,7 @@ import { EVENT_LOGGING_FLAG_WAIT_MS } from "../../utils/startupFlagWait.js";
 import { isStoredLoginSurfaceShortcut } from "../remoteManagedSettings/storedLoginSurface.js";
 import { stripControlChars } from "../../utils/settings/writeQueues.js";
 import { orgConfigGateMessage } from "../policyLimits/orgConfigGateMessages.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-zbtr7f5k.js:2222-2372 placement
 var LOGIN_SAVE_FAILED = "Couldn't save your login. Try logging in again.";
@@ -108,35 +109,40 @@ var LOGIN_SAVE_FAILED_KEYCHAIN =
 /**
  * 保存登录凭据，失败时给出提示（macOS 钥匙串锁定等）。
  */
-async function saveLoginOrWarn(tokens, { storageV5: r, credentials, clock: f } = {}) {
-  let o = await installOAuthTokens(tokens, {
-    storageV5: r,
+async function saveLoginOrWarn(loginTokens, { storageV5, credentials, clock } = {}) {
+  let installed = await installOAuthTokens(loginTokens, {
+    storageV5,
     credentials,
   });
-  let { result: s, locked } = await warnNoRefreshLock(
-    () => saveOAuthTokensIfNeeded(tokens, credentials, "sign_in"),
+  let { result: saveResult, locked } = await warnNoRefreshLock(
+    () => saveOAuthTokensIfNeeded(loginTokens, credentials, "sign_in"),
     credentials,
     {
-      clock: f,
+      clock,
     },
   );
-  let replaced = locked ? s.replaced : undefined;
-  let A = isBgSession() && !locked && s.replaced !== undefined;
+  let replaced = locked ? saveResult.replaced : undefined;
+  let unrestorable = isBgSession() && !locked && saveResult.replaced !== undefined;
   clearOAuthTokenCache();
   if (process.env.CLAUDE_CODE_OAUTH_TOKEN)
-    if (s.success) delete process.env.CLAUDE_CODE_OAUTH_TOKEN;
-    else process.env.CLAUDE_CODE_OAUTH_TOKEN = tokens.accessToken;
+    if (saveResult.success) delete process.env.CLAUDE_CODE_OAUTH_TOKEN;
+    else process.env.CLAUDE_CODE_OAUTH_TOKEN = loginTokens.accessToken;
   if (getOauthTokenFromFd()) {
-    setOauthTokenFromFd(s.success ? null : tokens.accessToken);
+    setOauthTokenFromFd(saveResult.success ? null : loginTokens.accessToken);
     setOauthTokenFromBgSnapshot(false);
   }
-  setLoginStashedInTokenSlot(s.success ? null : tokens.accessToken);
-  if ("transient" in s && s.transient === true && !env.CLAUDE_CODE_OAUTH_TOKEN && !getOauthTokenFromFd())
+  setLoginStashedInTokenSlot(saveResult.success ? null : loginTokens.accessToken);
+  if (
+    "transient" in saveResult &&
+    saveResult.transient === true &&
+    !env.CLAUDE_CODE_OAUTH_TOKEN &&
+    !getOauthTokenFromFd()
+  )
     throw new WireSafeControlError(
       getPlatform() === "macos" ? LOGIN_SAVE_FAILED_KEYCHAIN : LOGIN_SAVE_FAILED,
     );
   if (isStorageV5Enabled() && credentials !== undefined) await refreshClaudeAITokens(credentials);
-  let { warning } = s;
+  let { warning } = saveResult;
   if (warning)
     logEvent("tengu_oauth_storage_warning", {
       warning:
@@ -144,43 +150,43 @@ async function saveLoginOrWarn(tokens, { storageV5: r, credentials, clock: f } =
           ? fromEnum(warning)
           : lit("other"),
     });
-  await fetchAndStoreUserRoles(tokens.accessToken, r).catch((error) =>
+  await fetchAndStoreUserRoles(loginTokens.accessToken, storageV5).catch((error) =>
     logForDebugging(String(error), {
       level: "error",
     }),
   );
-  if (shouldUseClaudeAIAuth(tokens.scopes))
-    await fetchAndStoreClaudeCodeFirstTokenDate(r, credentials).catch((error) =>
+  if (shouldUseClaudeAIAuth(loginTokens.scopes))
+    await fetchAndStoreClaudeCodeFirstTokenDate(storageV5, credentials).catch((error) =>
       logForDebugging(String(error), {
         level: "error",
       }),
     );
-  else if (!(await createAndStoreApiKey(tokens.accessToken, r)))
+  else if (!(await createAndStoreApiKey(loginTokens.accessToken, storageV5)))
     throw Error("Unable to create API key. The server accepted the request but did not return a key.");
   await isSameAccount({
-    storageV5: r,
+    storageV5,
     credentials,
-    ...o,
+    ...installed,
   });
   return {
     storage: {
-      success: s.success,
-      backendName: s.backendName,
-      transient: s.transient,
-      fallbackWritten: s.fallbackWritten,
+      success: saveResult.success,
+      backendName: saveResult.backendName,
+      transient: saveResult.transient,
+      fallbackWritten: saveResult.fallbackWritten,
       landedToken: {
-        accessToken: tokens.accessToken,
-        refreshToken: tokens.refreshToken,
-        clientId: tokens.clientId,
+        accessToken: loginTokens.accessToken,
+        refreshToken: loginTokens.refreshToken,
+        clientId: loginTokens.clientId,
       },
       ...(replaced !== undefined && {
         replacedLogin: replaced,
       }),
-      ...(A && {
-        replacedLoginUnrestorable: A,
+      ...(unrestorable && {
+        replacedLoginUnrestorable: unrestorable,
       }),
       sessionAuth:
-        s.success || storedOAuthTokenEquals(tokens.accessToken)
+        saveResult.success || storedOAuthTokenEquals(loginTokens.accessToken)
           ? "fresh"
           : hasStoredOAuthToken()
             ? "previous"
@@ -204,46 +210,46 @@ async function isSameAccount({ storageV5, credentials, preserveQuotaAutoResume =
  */
 var MAX_LOCK_RETRIES = 3;
 //@ chunk-zbtr7f5k.js:5543-6062 placement
-async function warnNoRefreshLock(e, r, { withoutLock: n, clock: f } = {}) {
+async function warnNoRefreshLock(run, credentials, { withoutLock, clock } = {}) {
   if (!isBgSession() || isDiskless())
     return {
-      result: await e(),
+      result: await run(),
       locked: false,
     };
   for (let idx = 1; ; idx++) {
-    let s = false;
+    let inLock = false;
     try {
       return await withOAuthRefreshLock(async ({ isCompromised }) => {
-        let y = !isCompromised();
-        if (!y && n !== undefined)
+        let locked = !isCompromised();
+        if (!locked && withoutLock !== undefined)
           return {
-            result: n(),
+            result: withoutLock(),
             locked: false,
           };
-        s = true;
+        inLock = true;
         return {
-          result: await e(),
-          locked: y && !isCompromised(),
+          result: await run(),
+          locked: locked && !isCompromised(),
         };
-      }, r);
+      }, credentials);
     } catch (error) {
-      if (s) throw error;
+      if (inLock) throw error;
       if (error instanceof OAuthRefreshLockContendedError && idx < MAX_LOCK_RETRIES) {
         await sleep(100 * idx, undefined, {
-          clock: f,
+          clock,
         });
         continue;
       }
       logForDebugging(`OAuth: no refresh lock for a credential write (${describeErrorName(error)})`, {
         level: "warn",
       });
-      return n !== undefined
+      return withoutLock !== undefined
         ? {
-            result: n(),
+            result: withoutLock(),
             locked: false,
           }
         : {
-            result: await e(),
+            result: await run(),
             locked: false,
           };
     }
@@ -253,9 +259,9 @@ async function warnNoRefreshLock(e, r, { withoutLock: n, clock: f } = {}) {
 /**
  * 清空令牌缓存并重新读取 claude.ai 令牌。
  */
-async function refreshClaudeAITokens(e) {
+async function refreshClaudeAITokens(credentials) {
   clearOAuthTokenMemos();
-  await getClaudeAIOAuthTokensAsync(e);
+  await getClaudeAIOAuthTokensAsync(credentials);
 }
 //@ chunk-zbtr7f5k.js:6100-6581 placement
 /**
@@ -269,16 +275,18 @@ var ROLLBACK_MAYBE_VALID_TEXT =
 /**
  * 按是否已吊销选择回滚失败说明。
  */
-function rollbackFailureText(e) {
-  return e.revoked ? ROLLBACK_UNCONFIRMED_TEXT : ROLLBACK_MAYBE_VALID_TEXT;
+function rollbackFailureText(rollback) {
+  return rollback.revoked ? ROLLBACK_UNCONFIRMED_TEXT : ROLLBACK_MAYBE_VALID_TEXT;
 }
 //@ chunk-zbtr7f5k.js:6620-6677 placement
 /**
  * 判断错误是否为锁占用或文件不可访问。
  */
-function isLockOrAccessError(e) {
+function isLockOrAccessError(error) {
   return (
-    getErrnoCode(e) === "ELOCKED" || isFsInaccessible(e) || isFsInaccessibleCode(storageCauseErrnoCode(e))
+    getErrnoCode(error) === "ELOCKED" ||
+    isFsInaccessible(error) ||
+    isFsInaccessibleCode(storageCauseErrnoCode(error))
   );
 }
 //@ chunk-zbtr7f5k.js:6677-6763 placement
@@ -292,10 +300,10 @@ function describeErrorName(error) {
   );
 }
 //@ chunk-zbtr7f5k.js:6763-7005 placement
-function logRollbackFailure(error, r) {
+function logRollbackFailure(error, where) {
   if (isLockOrAccessError(error)) {
     logForDebugging(
-      `Rolling back a refused sign-in failed (${r}; ${describeErrorName(error)}: ${getErrnoCode(error) ?? storageCauseErrnoCode(error) ?? "no errno"})`,
+      `Rolling back a refused sign-in failed (${where}; ${describeErrorName(error)}: ${getErrnoCode(error) ?? storageCauseErrnoCode(error) ?? "no errno"})`,
       {
         level: "error",
       },
@@ -304,7 +312,7 @@ function logRollbackFailure(error, r) {
   }
   logError(
     new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `Rolling back a refused sign-in threw (${r}: ${describeErrorName(error)})`,
+      `Rolling back a refused sign-in threw (${where}: ${describeErrorName(error)})`,
       "Rolling back a refused sign-in threw",
     ),
   );
@@ -313,8 +321,8 @@ function logRollbackFailure(error, r) {
 /**
  * 回滚被拒绝的登录：恢复之前的凭据或登出，必要时清除环境令牌说明。
  */
-async function rollbackRefusedSignIn(e, { storageV5, credentials, clock }) {
-  if (e === undefined || (e.success && !isBgSession())) {
+async function rollbackRefusedSignIn(storage, { storageV5, credentials, clock }) {
+  if (storage === undefined || (storage.success && !isBgSession())) {
     await performLogout({
       clearOnboarding: false,
       preserveNonAnthropicAuth: true,
@@ -330,55 +338,62 @@ async function rollbackRefusedSignIn(e, { storageV5, credentials, clock }) {
   setOauthTokenFromFd(null);
   setAuthenticatedAccount(null);
   clearOAuthTokenCache();
-  let landedToken = e.landedToken;
-  let s = true;
+  let landedToken = storage.landedToken;
+  let restored = true;
   let revoked = false;
   if (landedToken !== undefined) {
     let refreshToken =
       landedToken.refreshToken !== null && getAPIProvider() === "firstParty"
         ? landedToken.refreshToken
         : null;
-    let store = getSecureStorage();
+    let secureStorage = getSecureStorage();
     try {
-      let replacedLogin = e.replacedLogin;
-      let u = replacedLogin === undefined;
+      let replacedLogin = storage.replacedLogin;
+      let canRemove = replacedLogin === undefined;
       if (replacedLogin !== undefined) {
-        let h = await warnNoRefreshLock(
-          () => restorePreviousCredentials(store, landedToken.accessToken, replacedLogin, credentials, clock),
+        let restoreOutcome = await warnNoRefreshLock(
+          () =>
+            restorePreviousCredentials(
+              secureStorage,
+              landedToken.accessToken,
+              replacedLogin,
+              credentials,
+              clock,
+            ),
           credentials,
           {
             withoutLock: () => false,
             clock,
           },
         );
-        u = h.locked && h.result;
+        canRemove = restoreOutcome.locked && restoreOutcome.result;
       }
-      if (u)
+      if (canRemove)
         await mutateEveryCredentialLeg(
-          store,
-          (h) => {
-            if (h.claudeAiOauth?.accessToken !== landedToken.accessToken) return h;
-            let { claudeAiOauth, ...P } = h;
-            return P;
+          secureStorage,
+          (leg) => {
+            if (leg.claudeAiOauth?.accessToken !== landedToken.accessToken) return leg;
+            let { claudeAiOauth, ...rest } = leg;
+            return rest;
           },
           credentials,
         );
       let everyCredentialLeg = await readEveryCredentialLeg(
-        store,
-        (h) => h.claudeAiOauth?.accessToken,
+        secureStorage,
+        (leg) => leg.claudeAiOauth?.accessToken,
         credentials,
       );
-      s =
-        u &&
+      restored =
+        canRemove &&
         !everyCredentialLeg.some(
-          (h) =>
-            h.value === READ_FAILED ||
-            h.value === landedToken.accessToken ||
-            (isBgSession() && h.value !== undefined && h.value !== replacedLogin?.accessToken),
+          (leg) =>
+            leg.value === READ_FAILED ||
+            leg.value === landedToken.accessToken ||
+            (isBgSession() && leg.value !== undefined && leg.value !== replacedLogin?.accessToken),
         );
     } catch (error) {
       logRollbackFailure(error, "credential store");
-      s = false;
+      restored = false;
     } finally {
       if (refreshToken !== null)
         try {
@@ -399,7 +414,7 @@ async function rollbackRefusedSignIn(e, { storageV5, credentials, clock }) {
   });
   await clearAccountScopedConfig(storageV5);
   return {
-    restored: s && e.replacedLoginUnrestorable !== true,
+    restored: restored && storage.replacedLoginUnrestorable !== true,
     revoked,
   };
 }
@@ -414,13 +429,13 @@ async function restorePreviousCredentials(store, newAccessToken, previous, stora
       if (
         (
           await store.mutate(
-            (y) =>
-              y.claudeAiOauth?.accessToken === newAccessToken
+            (store) =>
+              store.claudeAiOauth?.accessToken === newAccessToken
                 ? {
-                    ...y,
+                    ...store,
                     claudeAiOauth: previous,
                   }
-                : y,
+                : store,
             storage,
           )
         ).success
@@ -433,8 +448,8 @@ async function restorePreviousCredentials(store, newAccessToken, previous, stora
   return false;
 }
 //@ chunk-zbtr7f5k.js:8432-8710 placement
-async function LOGIN_REFUSAL_REASONS(e, storage, n) {
-  switch (e.reason) {
+async function LOGIN_REFUSAL_REASONS(refusal, storage, options) {
+  switch (refusal.reason) {
     case "org_pin_mismatch":
     case "org_verify_failed":
     case "managed_settings_invalid":
@@ -444,7 +459,7 @@ async function LOGIN_REFUSAL_REASONS(e, storage, n) {
       return;
   }
   try {
-    return await rollbackRefusedSignIn(storage, n);
+    return await rollbackRefusedSignIn(storage, options);
   } catch (error) {
     logRollbackFailure(error, "sign-out");
     return {
@@ -457,49 +472,50 @@ async function LOGIN_REFUSAL_REASONS(e, storage, n) {
 /**
  * 描述 OAuth 错误响应：是否有结构化错误、是否带 request-id、是否为 HTML 页面、错误类型与代码。
  */
-function describeOAuthErrorResponse(e) {
-  let response = e !== null && typeof e === "object" && e.isAxiosError === true ? e.response : undefined;
+function describeOAuthErrorResponse(error) {
+  let response =
+    error !== null && typeof error === "object" && error.isAxiosError === true ? error.response : undefined;
   if (response === undefined)
     return {
       hasSchema: false,
       requestIdPresent: false,
       htmlPage: false,
     };
-  let n = responseHeaderFacts(response.headers ?? {});
-  let serverErrorFields = extractServerErrorFields(e);
-  let o = stampedServerErrorType({
+  let headerFacts = responseHeaderFacts(response.headers ?? {});
+  let serverErrorFields = extractServerErrorFields(error);
+  let stampedType = stampedServerErrorType({
     serverErrorType: serverErrorFields.serverErrorType,
     serverErrorStamped: true,
   });
   return {
-    hasSchema: o !== undefined,
-    requestIdPresent: n.requestIdPresent === true,
-    htmlPage: n.responseContentType === "html",
-    errorType: o,
+    hasSchema: stampedType !== undefined,
+    requestIdPresent: headerFacts.requestIdPresent === true,
+    htmlPage: headerFacts.responseContentType === "html",
+    errorType: stampedType,
     errorCode: serverErrorFields.serverErrorCode,
   };
 }
 //@ chunk-zbtr7f5k.js:9116-10061 placement
 function classifyOAuthError(error) {
   let { kind, status } = classifyAxiosError(error);
-  let f = describeOAuthErrorResponse(error);
-  let o =
-    f.hasSchema && f.requestIdPresent
+  let facts = describeOAuthErrorResponse(error);
+  let orgRefusal =
+    facts.hasSchema && facts.requestIdPresent
       ? refusalForOrgSubscription(
           status,
-          f.errorType,
-          f.errorCode,
+          facts.errorType,
+          facts.errorCode,
           extractServerErrorFields(error).serverAuthDenial,
         )
       : undefined;
   switch (kind) {
     case "auth":
-      if (o !== undefined)
+      if (orgRefusal !== undefined)
         return {
-          reason: o,
+          reason: orgRefusal,
           httpStatus: status,
         };
-      if (!f.hasSchema || !f.requestIdPresent || f.htmlPage)
+      if (!facts.hasSchema || !facts.requestIdPresent || facts.htmlPage)
         return {
           reason: "blocked_by_intermediary",
           httpStatus: status,
@@ -541,13 +557,13 @@ function classifyOAuthError(error) {
           reason: "unavailable_rate_limited",
           httpStatus: status,
         };
-      if (status === 407 || o === undefined)
+      if (status === 407 || orgRefusal === undefined)
         return {
           reason: "blocked_by_intermediary",
           httpStatus: status,
         };
       return {
-        reason: o,
+        reason: orgRefusal,
         httpStatus: status,
       };
     case "other":
@@ -567,34 +583,38 @@ function logProbeClientError(reason, error) {
   );
 }
 //@ chunk-zbtr7f5k.js:10249-11386 placement
-async function fetchOAuthProfile(e, r, n = {}) {
-  let f = n.baseApiUrl ?? getOauthConfig().BASE_API_URL;
+async function fetchOAuthProfile(accessToken, timeoutMs, options = {}) {
+  let baseApiUrl = options.baseApiUrl ?? getOauthConfig().BASE_API_URL;
   let authHeaders = {
-    Authorization: `Bearer ${e}`,
+    Authorization: `Bearer ${accessToken}`,
     "anthropic-beta": OAUTH_BETA_HEADER,
   };
-  let s = {
+  let admittedState = {
     hasAdmittedCache: false,
   };
-  let p = (async () => {
+  let policyProbe = (async () => {
     try {
-      let u = await (n.requestPolicy ?? fetchPolicyLimitsResponse)({
-        endpoint: policyLimitsUrl(f),
+      let response = await (options.requestPolicy ?? fetchPolicyLimitsResponse)({
+        endpoint: policyLimitsUrl(baseApiUrl),
         authHeaders,
-        timeoutMs: r,
-        signal: AbortSignal.timeout(r),
+        timeoutMs,
+        signal: AbortSignal.timeout(timeoutMs),
         acceptAny2xx: true,
       });
-      if (u.kind === "not_modified" || !u.contentType.includes("json") || !u.requestIdPresent)
+      if (
+        response.kind === "not_modified" ||
+        !response.contentType.includes("json") ||
+        !response.requestIdPresent
+      )
         return {
           outcome: {
-            ...s,
+            ...admittedState,
             reason: "blocked_by_intermediary",
           },
         };
       return {
         outcome: {
-          ...s,
+          ...admittedState,
           reason: "ok",
         },
       };
@@ -603,7 +623,7 @@ async function fetchOAuthProfile(e, r, n = {}) {
       logProbeClientError(reason, error);
       return {
         outcome: {
-          ...s,
+          ...admittedState,
           reason,
           ...(httpStatus !== undefined && {
             httpStatus,
@@ -613,17 +633,17 @@ async function fetchOAuthProfile(e, r, n = {}) {
       };
     }
   })();
-  let y = (async () => {
+  let settingsProbe = (async () => {
     try {
       let { status, contentType, requestIdPresent } = await (
-        n.requestSettings ?? probeManagedSettingsForBearer
-      )(e, {
-        timeoutMs: r,
+        options.requestSettings ?? probeManagedSettingsForBearer
+      )(accessToken, {
+        timeoutMs,
       });
       if (!requestIdPresent || status === 304 || (status === 200 && !contentType.includes("json")))
         return {
           outcome: {
-            ...s,
+            ...admittedState,
             reason: "blocked_by_intermediary",
             httpStatus: status,
           },
@@ -631,7 +651,7 @@ async function fetchOAuthProfile(e, r, n = {}) {
         };
       return {
         outcome: {
-          ...s,
+          ...admittedState,
           reason: status === 404 || status === 204 ? "none_configured" : "ok",
         },
       };
@@ -640,7 +660,7 @@ async function fetchOAuthProfile(e, r, n = {}) {
       logProbeClientError(reason, error);
       return {
         outcome: {
-          ...s,
+          ...admittedState,
           reason,
           ...(httpStatus !== undefined && {
             httpStatus,
@@ -650,11 +670,11 @@ async function fetchOAuthProfile(e, r, n = {}) {
       };
     }
   })();
-  let [A, _] = await Promise.all([p, y]);
+  let [policyProbeResult, settingsProbeResult] = await Promise.all([policyProbe, settingsProbe]);
   return {
-    policy: A.outcome,
-    settings: _.outcome,
-    httpStatus: A.httpStatus ?? _.httpStatus,
+    policy: policyProbeResult.outcome,
+    settings: settingsProbeResult.outcome,
+    httpStatus: policyProbeResult.httpStatus ?? settingsProbeResult.httpStatus,
   };
 }
 //@ chunk-zbtr7f5k.js:11386-11611 placement
@@ -669,20 +689,20 @@ function loginIdentity(newLogin) {
 /**
  * 判断登录后是否需要核实账号资料（claude.ai scope 且资料或订阅类型未确认）。
  */
-function needsProfileVerification(e) {
+function needsProfileVerification(tokens) {
   return (
-    isClaudeAiScopeSet(e.scopes) &&
-    (e.profile === undefined ||
-      e.subscriptionType === null ||
-      (e.subscriptionTypeSource === "profile" && e.subscriptionTypeVerifiedAt === undefined))
+    isClaudeAiScopeSet(tokens.scopes) &&
+    (tokens.profile === undefined ||
+      tokens.subscriptionType === null ||
+      (tokens.subscriptionTypeSource === "profile" && tokens.subscriptionTypeVerifiedAt === undefined))
   );
 }
 //@ chunk-zbtr7f5k.js:11774-11924 placement
-function normalizeSettingsDecision(e, flag) {
-  let { reason } = e.settings;
-  if (classifyManagedConfigOutcome(reason) === "refused" && !isExemptReason(flag, reason)) return e;
+function normalizeSettingsDecision(evaluation, flag) {
+  let { reason } = evaluation.settings;
+  if (classifyManagedConfigOutcome(reason) === "refused" && !isExemptReason(flag, reason)) return evaluation;
   return {
-    ...e,
+    ...evaluation,
     settings: {
       hasAdmittedCache: false,
       reason: "not_attempted",
@@ -693,31 +713,31 @@ function normalizeSettingsDecision(e, flag) {
 /**
  * 检查新登录是否被允许（组织固定、托管设置、API key 冲突、提供商、层级），约 3.6 KB。
  */
-async function checkLoginAllowed(e) {
-  let r = () =>
-    e.readFlag !== undefined
+async function checkLoginAllowed(options) {
+  let readFlag = () =>
+    options.readFlag !== undefined
       ? {
-          flag: e.readFlag(),
-          source: e.readFlagSource?.() ?? "override",
+          flag: options.readFlag(),
+          source: options.readFlagSource?.() ?? "override",
         }
       : readOrgConfigRequiredFlagWithSource();
-  let n = e.startupGateFollows === true;
-  let f = !n || e.untieredLogin === true;
-  let { flag, source } = r();
-  let isFlagFetchHeld = e.isFlagFetchHeld ?? isFlagFetchHeldNoTrust;
-  let isFlagCacheEmpty = e.isFlagCacheEmpty ?? isGrowthBookCacheEmpty;
-  if (!flag.enabled && isFallbackFlagUsable(source, isFlagFetchHeld, isFlagCacheEmpty) && n)
+  let startupGateFollows = options.startupGateFollows === true;
+  let canRetryLogin = !startupGateFollows || options.untieredLogin === true;
+  let { flag, source } = readFlag();
+  let isFlagFetchHeld = options.isFlagFetchHeld ?? isFlagFetchHeldNoTrust;
+  let isFlagCacheEmpty = options.isFlagCacheEmpty ?? isGrowthBookCacheEmpty;
+  if (!flag.enabled && isFallbackFlagUsable(source, isFlagFetchHeld, isFlagCacheEmpty) && startupGateFollows)
     return {
       ok: true,
     };
-  let _ = (e.readCandidateInputs ?? orgConfigInputs)({
+  let baseInputs = (options.readCandidateInputs ?? orgConfigInputs)({
     authRecoveryCommand: false,
   });
-  let newLogin = e.newLogin;
-  let T =
-    e.untieredLogin === true
+  let newLogin = options.newLogin;
+  let candidateInputs =
+    options.untieredLogin === true
       ? {
-          ..._,
+          ...baseInputs,
           hostToken: false,
           tier: null,
           credentialShape: "untiered_login",
@@ -726,7 +746,7 @@ async function checkLoginAllowed(e) {
         }
       : newLogin !== undefined
         ? {
-            ..._,
+            ...baseInputs,
             hostToken: false,
             tier: newLogin.subscriptionType,
             credentialShape: !isClaudeAiScopeSet(newLogin.scopes)
@@ -741,172 +761,199 @@ async function checkLoginAllowed(e) {
                 : undefined,
           }
         : {
-            ..._,
+            ...baseInputs,
             hostToken: false,
           };
-  let h = e.untieredLogin === true;
-  let R = (flag) =>
-    h
+  let isUntieredLogin = options.untieredLogin === true;
+  let inputsForFlag = (flag) =>
+    isUntieredLogin
       ? {
-          ...T,
+          ...candidateInputs,
           tier: flag.plans[0] ?? "team",
           credentialShape: "stored_login",
           tierVerifiedAtMs: undefined,
         }
-      : T;
-  let P = (O) => {
-    let L = e.newLogin === undefined ? getOauthAccountInfo() : undefined;
-    let z =
-      e.newLogin !== undefined
-        ? loginIdentity(e.newLogin)
+      : candidateInputs;
+  let fetchServedFlag = (timeoutMs) => {
+    let accountInfo = options.newLogin === undefined ? getOauthAccountInfo() : undefined;
+    let identity =
+      options.newLogin !== undefined
+        ? loginIdentity(options.newLogin)
         : {
-            accountUuid: L?.accountUuid,
-            organizationUuid: L?.organizationUuid,
-            email: L?.emailAddress,
+            accountUuid: accountInfo?.accountUuid,
+            organizationUuid: accountInfo?.organizationUuid,
+            email: accountInfo?.emailAddress,
           };
-    let re = z.accountUuid === undefined && z.organizationUuid === undefined;
+    let hasNoIdentity = identity.accountUuid === undefined && identity.organizationUuid === undefined;
     return withDeadline(
-      (e.fetchServedFlag ?? fetchOrgConfigRequiredFlagServedToBearer)(e.accessToken, z, O).catch(() => {
+      (options.fetchServedFlag ?? fetchOrgConfigRequiredFlagServedToBearer)(
+        options.accessToken,
+        identity,
+        timeoutMs,
+      ).catch(() => {
         return;
       }),
-      O,
-    ).then((D) =>
-      D !== undefined && re && !(D.flag.enabled && orgConfigCandidacy(D.flag, R(D.flag)).candidate)
+      timeoutMs,
+    ).then((served) =>
+      served !== undefined &&
+      hasNoIdentity &&
+      !(served.flag.enabled && orgConfigCandidacy(served.flag, inputsForFlag(served.flag)).candidate)
         ? undefined
-        : D,
+        : served,
     );
   };
-  let w = orgConfigCandidacy(flag, R(flag));
-  let U = "no";
+  let candidacy = orgConfigCandidacy(flag, inputsForFlag(flag));
+  let servedStatus = "no";
   if (
     isUnarmedFallback(
       {
-        armed: flag.enabled && w.candidate,
+        armed: flag.enabled && candidacy.candidate,
         flagSource: source,
-        candidacy: w,
+        candidacy,
       },
       isFlagFetchHeld,
       isFlagCacheEmpty,
     )
   ) {
-    let O = await P(Math.min(flag.budgetMs, EVENT_LOGGING_FLAG_WAIT_MS));
-    U = O !== undefined ? "served" : "nothing_in_time";
-    ({ flag, source } = O ?? r());
-    w = orgConfigCandidacy(flag, R(flag));
+    let servedWithinBudget = await fetchServedFlag(Math.min(flag.budgetMs, EVENT_LOGGING_FLAG_WAIT_MS));
+    servedStatus = servedWithinBudget !== undefined ? "served" : "nothing_in_time";
+    ({ flag, source } = servedWithinBudget ?? readFlag());
+    candidacy = orgConfigCandidacy(flag, inputsForFlag(flag));
   }
-  let B = !n && source !== "override" && source !== "disabled" && !isFlagFetchHeld();
-  if (B && U === "no" && !w.candidate && isRolloutRefusal(w.exclusion)) {
-    let O = await P(Math.min(flag.budgetMs, EVENT_LOGGING_FLAG_WAIT_MS));
-    U = O !== undefined ? "served" : "nothing_in_time";
-    if (O !== undefined) {
-      ({ flag, source } = O);
-      w = orgConfigCandidacy(flag, R(flag));
+  let canAwaitServedFlag =
+    !startupGateFollows && source !== "override" && source !== "disabled" && !isFlagFetchHeld();
+  if (
+    canAwaitServedFlag &&
+    servedStatus === "no" &&
+    !candidacy.candidate &&
+    isRolloutRefusal(candidacy.exclusion)
+  ) {
+    let servedOnRetry = await fetchServedFlag(Math.min(flag.budgetMs, EVENT_LOGGING_FLAG_WAIT_MS));
+    servedStatus = servedOnRetry !== undefined ? "served" : "nothing_in_time";
+    if (servedOnRetry !== undefined) {
+      ({ flag, source } = servedOnRetry);
+      candidacy = orgConfigCandidacy(flag, inputsForFlag(flag));
     }
   }
-  if (!flag.enabled || !w.candidate)
+  if (!flag.enabled || !candidacy.candidate)
     return {
       ok: true,
     };
   let startTime = performance.now();
-  let q =
-    U !== "served" && (B || isFlagSourceUntrusted(source, isFlagFetchHeld, isFlagCacheEmpty))
-      ? P(flag.budgetMs)
+  let servedFlagPromise =
+    servedStatus !== "served" &&
+    (canAwaitServedFlag || isFlagSourceUntrusted(source, isFlagFetchHeld, isFlagCacheEmpty))
+      ? fetchServedFlag(flag.budgetMs)
       : undefined;
-  let N = e.tokenUsedElsewhere !== true && isStoredLoginSurfaceShortcut();
-  let G = await (e.probe ?? fetchOAuthProfile)(e.accessToken, flag.budgetMs);
-  let v = N ? normalizeSettingsDecision(G, flag) : G;
-  let S = orgConfigGateDecision({
+  let useShortcutSurface = options.tokenUsedElsewhere !== true && isStoredLoginSurfaceShortcut();
+  let profile = await (options.probe ?? fetchOAuthProfile)(options.accessToken, flag.budgetMs);
+  let profileDecision = useShortcutSurface ? normalizeSettingsDecision(profile, flag) : profile;
+  let gateDecision = orgConfigGateDecision({
     flag,
-    candidacy: w,
-    policy: v.policy,
-    settings: v.settings,
+    candidacy,
+    policy: profileDecision.policy,
+    settings: profileDecision.settings,
     surface: "login",
     blockedMs: Math.max(0, Math.round(performance.now() - startTime)),
   });
-  if (S.verdict !== "pass" && q !== undefined) {
-    let O = (await q) ?? {
+  if (gateDecision.verdict !== "pass" && servedFlagPromise !== undefined) {
+    let servedFallback = (await servedFlagPromise) ?? {
       flag,
       source,
     };
-    let L = orgConfigCandidacy(O.flag, R(O.flag));
-    if (!O.flag.enabled || !L.candidate) {
+    let servedCandidacy = orgConfigCandidacy(servedFallback.flag, inputsForFlag(servedFallback.flag));
+    if (!servedFallback.flag.enabled || !servedCandidacy.candidate) {
       logForDebugging(
-        `org-config gate (login): policy=${v.policy.reason} settings=${v.settings.reason} \u2192 released by the served flag`,
+        `org-config gate (login): policy=${profileDecision.policy.reason} settings=${profileDecision.settings.reason} \u2192 released by the served flag`,
       );
       return {
         ok: true,
       };
     }
-    flag = O.flag;
-    source = O.source;
-    w = L;
-    if (N) v = normalizeSettingsDecision(G, flag);
-    S = orgConfigGateDecision({
+    flag = servedFallback.flag;
+    source = servedFallback.source;
+    candidacy = servedCandidacy;
+    if (useShortcutSurface) profileDecision = normalizeSettingsDecision(profile, flag);
+    gateDecision = orgConfigGateDecision({
       flag,
-      candidacy: w,
-      policy: v.policy,
-      settings: v.settings,
+      candidacy,
+      policy: profileDecision.policy,
+      settings: profileDecision.settings,
       surface: "login",
       blockedMs: Math.max(0, Math.round(performance.now() - startTime)),
     });
   }
-  if ((e.reprobeUnavailableOnce === true || f) && S.verdict === "blocked" && isUnavailableReason(S.reason)) {
-    let O = flag.budgetMs - Math.max(0, Math.round(performance.now() - startTime));
-    if (O > 0) {
-      v = await (e.probe ?? fetchOAuthProfile)(e.accessToken, O);
-      if (N) v = normalizeSettingsDecision(v, flag);
-      S = orgConfigGateDecision({
+  if (
+    (options.reprobeUnavailableOnce === true || canRetryLogin) &&
+    gateDecision.verdict === "blocked" &&
+    isUnavailableReason(gateDecision.reason)
+  ) {
+    let remainingMs = flag.budgetMs - Math.max(0, Math.round(performance.now() - startTime));
+    if (remainingMs > 0) {
+      profileDecision = await (options.probe ?? fetchOAuthProfile)(options.accessToken, remainingMs);
+      if (useShortcutSurface) profileDecision = normalizeSettingsDecision(profileDecision, flag);
+      gateDecision = orgConfigGateDecision({
         flag,
-        candidacy: w,
-        policy: v.policy,
-        settings: v.settings,
+        candidacy,
+        policy: profileDecision.policy,
+        settings: profileDecision.settings,
         surface: "login",
         blockedMs: Math.max(0, Math.round(performance.now() - startTime)),
       });
     }
   }
-  let M =
-    e.organizationName ?? (newLogin !== undefined ? undefined : getOauthAccountInfo()?.organizationName);
-  let W = {
-    policy: v.policy,
-    settings: v.settings,
+  let organizationName =
+    options.organizationName ??
+    (newLogin !== undefined ? undefined : getOauthAccountInfo()?.organizationName);
+  let outcomes = {
+    policy: profileDecision.policy,
+    settings: profileDecision.settings,
   };
-  let K = {
-    organizationName: M === undefined || M === null ? undefined : stripControlChars(M),
-    httpStatus: S.resource === undefined ? undefined : (W[S.resource].httpStatus ?? v.httpStatus),
+  let gateContext = {
+    organizationName:
+      organizationName === undefined || organizationName === null
+        ? undefined
+        : stripControlChars(organizationName),
+    httpStatus:
+      gateDecision.resource === undefined
+        ? undefined
+        : (outcomes[gateDecision.resource].httpStatus ?? profileDecision.httpStatus),
   };
-  let F = {
-    decision: S,
-    message: orgConfigGateMessage(S, K),
+  let evaluation = {
+    decision: gateDecision,
+    message: orgConfigGateMessage(gateDecision, gateContext),
     flag,
     flagSource: source,
-    candidacy: w,
+    candidacy,
     armed: true,
-    context: K,
+    context: gateContext,
     attempt: 0,
     decidedWithoutWaiting: false,
-    outcomes: W,
+    outcomes,
   };
-  await (e.report ?? ((O) => logOrgConfigGate(O, O.outcomes)))(F);
+  await (
+    options.report ??
+    ((evaluationToReport) => logOrgConfigGate(evaluationToReport, evaluationToReport.outcomes))
+  )(evaluation);
   logForDebugging(
-    `org-config gate (login): policy=${v.policy.reason} settings=${v.settings.reason} \u2192 ${S.verdict}`,
+    `org-config gate (login): policy=${profileDecision.policy.reason} settings=${profileDecision.settings.reason} \u2192 ${gateDecision.verdict}`,
   );
-  if (!isGateBlocking(S))
+  if (!isGateBlocking(gateDecision))
     return {
       ok: true,
-      evaluation: F,
+      evaluation,
     };
-  if (S.verdict === "blocked" && !f)
+  if (gateDecision.verdict === "blocked" && !canRetryLogin)
     return {
       ok: true,
-      evaluation: F,
-      warning: unverifiedSettingsNotice(F),
+      evaluation,
+      warning: unverifiedSettingsNotice(evaluation),
     };
   return {
     ok: false,
-    evaluation: F,
+    evaluation,
     message:
-      F.message ??
+      evaluation.message ??
       "Claude Code couldn't load your organization's settings, which it requires before this sign-in can be used.",
   };
 }
@@ -914,49 +961,49 @@ async function checkLoginAllowed(e) {
 /**
  * 登录成功但未能核实组织设置时的提示文字。
  */
-function unverifiedSettingsNotice(e) {
-  let { reason } = e.decision;
+function unverifiedSettingsNotice(login) {
+  let { reason } = login.decision;
   return `Signed in. Claude Code couldn't verify your organization's settings yet${reason !== undefined ? ` (${describeUnavailableReason(reason)})` : ""}; it will check again when you start a session.`;
 }
 //@ chunk-zbtr7f5k.js:15745-16506 placement
-async function mintApiKeyIfAllowed(e) {
-  let { minted, ...n } = e;
-  let readCandidateInputs = e.readCandidateInputs ?? orgConfigInputs;
-  let o = await checkLoginAllowed({
-    ...n,
+async function mintApiKeyIfAllowed(input) {
+  let { minted, ...rest } = input;
+  let readCandidateInputs = input.readCandidateInputs ?? orgConfigInputs;
+  let check = await checkLoginAllowed({
+    ...rest,
     newLogin: minted,
     untieredLogin: needsProfileVerification(minted),
     startupGateFollows: false,
     reprobeUnavailableOnce: true,
     tokenUsedElsewhere: true,
     organizationName:
-      e.organizationName ?? minted.profile?.organization?.name ?? minted.tokenAccount?.organizationName,
-    readCandidateInputs: (y) => ({
-      ...readCandidateInputs(y),
+      input.organizationName ?? minted.profile?.organization?.name ?? minted.tokenAccount?.organizationName,
+    readCandidateInputs: (candidateInputs) => ({
+      ...readCandidateInputs(candidateInputs),
       provider: "firstParty",
       firstPartyBaseUrl: true,
     }),
   });
-  if (o.ok) return o;
-  let s = await describeWithheldMint(
+  if (check.ok) return check;
+  let withheld = await describeWithheldMint(
     {
-      accessToken: e.accessToken,
+      accessToken: input.accessToken,
       ...minted,
     },
     "withheld mint",
-    e.revoke,
+    input.revoke,
   );
-  if (o.evaluation.decision.verdict === "refused")
+  if (check.evaluation.decision.verdict === "refused")
     return {
       ok: false,
-      evaluation: o.evaluation,
-      message: `${o.message} ${revokedNote(s)}`,
+      evaluation: check.evaluation,
+      message: `${check.message} ${revokedNote(withheld)}`,
     };
-  let { reason } = o.evaluation.decision;
+  let { reason } = check.evaluation.decision;
   return {
     ok: false,
-    evaluation: o.evaluation,
-    message: `Couldn't verify your organization's settings${reason !== undefined ? ` (${describeUnavailableReason(reason)})` : ""}. ${describeNetworkUnavailable(reason)}. ${revokedNote(s)}`,
+    evaluation: check.evaluation,
+    message: `Couldn't verify your organization's settings${reason !== undefined ? ` (${describeUnavailableReason(reason)})` : ""}. ${describeNetworkUnavailable(reason)}. ${revokedNote(withheld)}`,
   };
 }
 //@ chunk-zbtr7f5k.js:16506-16682 placement
@@ -967,8 +1014,8 @@ var TOKEN_NOT_REVOKED_NOTE =
 /**
  * 按是否已吊销返回对应说明。
  */
-function revokedNote(e) {
-  return e ? TOKEN_REVOKED_NOTE : TOKEN_NOT_REVOKED_NOTE;
+function revokedNote(revoked) {
+  return revoked ? TOKEN_REVOKED_NOTE : TOKEN_NOT_REVOKED_NOTE;
 }
 //@ chunk-zbtr7f5k.js:16712-17243 placement
 function describeNetworkUnavailable(reason) {
@@ -992,25 +1039,25 @@ function describeNetworkUnavailable(reason) {
 /**
  * 吊销被拒绝登录的令牌并说明结果。
  */
-async function revokeRefusedSignInToken(e) {
-  return (await describeWithheldMint(e, "refused sign-in"))
+async function revokeRefusedSignInToken(entry) {
+  return (await describeWithheldMint(entry, "refused sign-in"))
     ? "Anthropic reported the new sign-in revoked; your previous login is unchanged."
     : "The new sign-in could not be confirmed revoked \u2014 ask your admin to revoke it if this device is shared; your previous login is unchanged.";
 }
 //@ chunk-zbtr7f5k.js:17527-17835 placement
-async function describeWithheldMint(e, r, revoke = revokeOAuthTokenAcknowledged) {
-  if (r !== "withheld mint" && getAPIProvider() !== "firstParty") return false;
-  let refreshToken = e.refreshToken ?? null;
+async function describeWithheldMint(tokens, reason, revoke = revokeOAuthTokenAcknowledged) {
+  if (reason !== "withheld mint" && getAPIProvider() !== "firstParty") return false;
+  let refreshToken = tokens.refreshToken ?? null;
   try {
     return await revoke(
-      refreshToken ?? e.accessToken,
-      e.clientId,
+      refreshToken ?? tokens.accessToken,
+      tokens.clientId,
       refreshToken !== null ? "refresh_token" : "access_token",
     );
   } catch (error) {
     logError(
       new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        `Revoking a ${r}'s grant threw (${describeErrorName(error)})`,
+        `Revoking a ${reason}'s grant threw (${describeErrorName(error)})`,
         "Revoking an uninstalled grant threw",
       ),
     );
@@ -1080,14 +1127,19 @@ function loginSettingsOutcome(evaluation) {
       : "unavailable";
 }
 //@ chunk-zbtr7f5k.js:18964-19157 placement
-class OrgConfigLoginRefusedError extends TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS {
-  evaluation;
-  constructor(message, evaluation) {
-    super(message, "OrgConfigLoginRefusedError: the org-config gate refused a completed sign-in");
-    this.evaluation = evaluation;
-    this.name = "OrgConfigLoginRefusedError";
-  }
-}
+let OrgConfigLoginRefusedError; // deferred: uses TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS (../../utils/errors.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-zbtr7f5k.js:18964", () => {
+  OrgConfigLoginRefusedError = class OrgConfigLoginRefusedError extends (
+    TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
+  ) {
+    evaluation;
+    constructor(message, evaluation) {
+      super(message, "OrgConfigLoginRefusedError: the org-config gate refused a completed sign-in");
+      this.evaluation = evaluation;
+      this.name = "OrgConfigLoginRefusedError";
+    }
+  };
+});
 export {
   revokeRefusedSignInToken,
   saveLoginOrWarn,

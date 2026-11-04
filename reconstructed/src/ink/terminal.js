@@ -13,8 +13,8 @@ import { Buffer as M } from "buffer";
 import { logError } from "../utils/log.js";
 import { HostScoped } from "../utils/hostScoped.js";
 import { getRootSession, getAttacherCaps } from "../bootstrap/state.js";
-import { irs } from "../../vendor/private-unresolved/clipboard-napi.node.js";
-import { importMetaRequire, Re } from "../../runtime/bun-runtime.js";
+import { require_clipboard_napi_node } from "../../vendor/private-unresolved/clipboard-napi.node.js";
+import { importMetaRequire, __toESM } from "../../runtime/bun-runtime.js";
 import { terminalDetector } from "./terminalColorSupport.js";
 import { env, JETBRAINS_IDES } from "../utils/env.js";
 import { isValidPipeOrPath } from "../utils/peerAddress.js";
@@ -24,7 +24,7 @@ import { URL_STRIP_RE, osc, OSC, OSC_PREFIX, link } from "./termio/osc.js";
 import { BEL } from "./termio/ansi.js";
 import { require_semver_3 } from "../../vendor/semver/index.js";
 import { semverGt } from "../utils/semver.js";
-import { getXtversionName, getTerminalCapabilities, getTerminalProbeState } from "./terminalCapabilities.js";
+import { getTerminalProbeState, getXtversionName, getTerminalCapabilities } from "./terminalCapabilities.js";
 import { readScrollSpeedBase } from "../components/ScrollKeybindingHandler.js";
 import {
   csi,
@@ -42,6 +42,7 @@ import {
 import { ENTER_ALT_SCREEN, EXIT_ALT_SCREEN, BSU, HIDE_CURSOR, SHOW_CURSOR, ESU } from "./termio/dec.js";
 import { handleEPIPE } from "../utils/process.js";
 import { getClearTerminalSequence, eraseViewportInPlace } from "./clearTerminal.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-dxdtyerk.js:788-879 placement
 /**
@@ -61,7 +62,10 @@ class TerminalHooksRegistry {
 /**
  * 单例
  */
-var terminalHooksRegistry = new TerminalHooksRegistry();
+var terminalHooksRegistry; // deferred: uses TerminalHooksRegistry of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-dxdtyerk.js:879", () => {
+  terminalHooksRegistry = new TerminalHooksRegistry();
+});
 //@ chunk-dxdtyerk.js:891-921 placement
 /**
  * 登记供终端模块使用的钩子集合。
@@ -80,8 +84,8 @@ function getTerminalHooks() {
 /**
  * 标记 UI 已挂载
  */
-function markUiMounted(e) {
-  terminalHooksRegistry.setUiMounted(e);
+function markUiMounted(mounted) {
+  terminalHooksRegistry.setUiMounted(mounted);
 }
 //@ chunk-dxdtyerk.js:983-1017 placement
 /**
@@ -95,28 +99,28 @@ class SecondRootError extends Map {
   get everMounted() {
     return isUiMounted();
   }
-  set everMounted(e) {
-    markUiMounted(e);
+  set everMounted(mounted) {
+    markUiMounted(mounted);
   }
-  set(e, r) {
+  set(stream, root) {
     this.everMounted = true;
-    let n = this.get(e);
-    if (n && n !== r && !n.hasUnmounted && n.holdsRawMode)
+    let existing = this.get(stream);
+    if (existing && existing !== root && !existing.hasUnmounted && existing.holdsRawMode)
       logError(
         Error(
           "ink: second root created on a stream whose mounted root still holds stdin (raw mode); unmount the previous root first",
         ),
       );
-    return super.set(e, r);
+    return super.set(stream, root);
   }
   treeRoots = new Map();
   standaloneRender = null;
-  claimForStandaloneRender(e) {
-    let r = () => {
-      if (this.standaloneRender === n) this.standaloneRender = null;
+  claimForStandaloneRender(promise) {
+    let clear = () => {
+      if (this.standaloneRender === tracked) this.standaloneRender = null;
     };
-    let n = e.then(r, r);
-    this.standaloneRender = n;
+    let tracked = promise.then(clear, clear);
+    this.standaloneRender = tracked;
   }
   get pendingStandaloneRender() {
     return this.standaloneRender;
@@ -126,7 +130,10 @@ class SecondRootError extends Map {
 /**
  * HostScoped 的“第二个根”错误
  */
-var secondRootErrorSlot = new HostScoped(() => new SecondRootError());
+var secondRootErrorSlot; // deferred: uses SecondRootError of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-dxdtyerk.js:1570", () => {
+  secondRootErrorSlot = new HostScoped(() => new SecondRootError());
+});
 //@ chunk-dxdtyerk.js:1593-1629 placement
 /**
  * 取“同一宿主只允许一个 Ink 根”错误的实例。
@@ -145,17 +152,17 @@ function getClipboardNativeModulePath() {
   if (lazyNodeAttrsLoaded) return lazyNodeAttrsModule;
   lazyNodeAttrsLoaded = true;
   try {
-    lazyNodeAttrsModule = irs();
+    lazyNodeAttrsModule = require_clipboard_napi_node();
     return lazyNodeAttrsModule;
   } catch {}
-  let e = "x64-linux";
-  let flattened = [e, `${e}-musl`].flatMap((o) => [
-    `./vendor/clipboard-napi/${o}/clipboard-napi.node`,
-    `../clipboard-napi/${o}/clipboard-napi.node`,
+  let platform = "x64-linux";
+  let flattened = [platform, `${platform}-musl`].flatMap((variant) => [
+    `./vendor/clipboard-napi/${variant}/clipboard-napi.node`,
+    `../clipboard-napi/${variant}/clipboard-napi.node`,
   ]);
-  for (let o of flattened)
+  for (let candidatePath of flattened)
     try {
-      lazyNodeAttrsModule = importMetaRequire(o);
+      lazyNodeAttrsModule = importMetaRequire(candidatePath);
       return lazyNodeAttrsModule;
     } catch {}
   return null;
@@ -220,20 +227,24 @@ function describeMetaKey() {
 /**
  * （误归 deepLink）终端/IDE 名称集合：支持某终端特性的终端列表与 VS Code 系编辑器列表。
  */
-var KNOWN_TERMINALS = new Set([
-  "ghostty",
-  "kitty",
-  "WezTerm",
-  "alacritty",
-  "xterm",
-  "gnome-terminal",
-  "vte-based",
-  "konsole",
-  "windows-terminal",
-  "mintty",
-  ...JETBRAINS_IDES,
-]);
-var VSCODE_FAMILY_TERMINALS = new Set(["vscode", "cursor", "windsurf", "antigravity", "codium"]);
+var KNOWN_TERMINALS; // deferred: uses JETBRAINS_IDES (../utils/env.js) of its import cycle while loading; runs once the cycle is complete
+var VSCODE_FAMILY_TERMINALS;
+deferInit("chunk-dxdtyerk.js:2844", () => {
+  KNOWN_TERMINALS = new Set([
+    "ghostty",
+    "kitty",
+    "WezTerm",
+    "alacritty",
+    "xterm",
+    "gnome-terminal",
+    "vte-based",
+    "konsole",
+    "windows-terminal",
+    "mintty",
+    ...JETBRAINS_IDES,
+  ]);
+  VSCODE_FAMILY_TERMINALS = new Set(["vscode", "cursor", "windsurf", "antigravity", "codium"]);
+});
 //@ chunk-dxdtyerk.js:10964-10989 placement
 /**
  * 2048
@@ -250,52 +261,58 @@ function sanitizeSessionName(id) {
   return sliced.length > 0 ? sliced : undefined;
 }
 //@ chunk-dxdtyerk.js:11085-11166 placement = base64URLEncode (1)
-function base64URLEncode(e, r) {
-  let n = truncateUtf8Bytes(e.replace(URL_STRIP_RE, " "), r);
-  return M.from(n).toString("base64");
+function base64URLEncode(text, maxBytes) {
+  let truncated = truncateUtf8Bytes(text.replace(URL_STRIP_RE, " "), maxBytes);
+  return M.from(truncated).toString("base64");
 }
 //@ chunk-dxdtyerk.js:11166-11620 placement
-function formatTabStatus(e) {
-  let r = [`state=${e.state}`, "app=claude-code"];
-  if (e.id !== undefined) r.push(`id=${e.id}`);
-  if (e.state === "blocked" && e.kind) r.push(`kind=${e.kind}`);
+function formatTabStatus(tabStatus) {
+  let parts = [`state=${tabStatus.state}`, "app=claude-code"];
+  if (tabStatus.id !== undefined) parts.push(`id=${tabStatus.id}`);
+  if (tabStatus.state === "blocked" && tabStatus.kind) parts.push(`kind=${tabStatus.kind}`);
   if (
-    (e.state === "working" || e.state === "blocked") &&
-    e.progress !== undefined &&
-    Number.isFinite(e.progress)
+    (tabStatus.state === "working" || tabStatus.state === "blocked") &&
+    tabStatus.progress !== undefined &&
+    Number.isFinite(tabStatus.progress)
   ) {
-    let min = Math.min(100, Math.max(0, Math.round(e.progress)));
-    r.push(`progress=${min}`);
+    let min = Math.min(100, Math.max(0, Math.round(tabStatus.progress)));
+    parts.push(`progress=${min}`);
   }
-  if (e.title) r.push(`title=${base64URLEncode(e.title, MAX_TITLE_BASE64_CHARS)}`);
-  if (e.msg) r.push(`msg=${base64URLEncode(e.msg, MAX_MSG_BASE64_CHARS)}`);
-  return osc(OSC.PROGRAM_STATUS, r.join(":"));
+  if (tabStatus.title) parts.push(`title=${base64URLEncode(tabStatus.title, MAX_TITLE_BASE64_CHARS)}`);
+  if (tabStatus.msg) parts.push(`msg=${base64URLEncode(tabStatus.msg, MAX_MSG_BASE64_CHARS)}`);
+  return osc(OSC.PROGRAM_STATUS, parts.join(":"));
 }
 //@ chunk-dxdtyerk.js:11620-11672 placement
 /**
  * 生成 OSC 7501 “state=clear” 序列（清掉程序状态）。
  */
-var PROGRAM_STATUS_CLEAR = `${OSC_PREFIX}${OSC.PROGRAM_STATUS};state=clear${BEL}`;
+var PROGRAM_STATUS_CLEAR; // deferred: uses OSC (./termio/osc.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-dxdtyerk.js:11620", () => {
+  PROGRAM_STATUS_CLEAR = `${OSC_PREFIX}${OSC.PROGRAM_STATUS};state=clear${BEL}`;
+});
 //@ chunk-dxdtyerk.js:11672-11739 placement
 /**
  * 生成带 id 的 OSC 7501 状态清除序列。
  */
-function programStatusClearById(e) {
-  return osc(OSC.PROGRAM_STATUS, `state=clear:id=${e}`);
+function programStatusClearById(id) {
+  return osc(OSC.PROGRAM_STATUS, `state=clear:id=${id}`);
 }
 //@ chunk-dxdtyerk.js:11739-11756 placement
 /**
  * semver 模块命名空间
  */
-var semverModule_2 = Re(require_semver_3(), 1);
+var semverModule_2; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-dxdtyerk.js:11739", () => {
+  semverModule_2 = __toESM(require_semver_3(), 1);
+});
 //@ chunk-dxdtyerk.js:11756-11887 layout
 /**
  * 由 TERM 识别 st 或 rxvt，否则 null。
  */
-function detectMinimalTerminal(e) {
-  if (e === undefined) return null;
-  if (/^st(term)?(-|$)/.test(e)) return "st";
-  if (/^rxvt(-|$)/.test(e)) return "rxvt";
+function detectMinimalTerminal(terminalName) {
+  if (terminalName === undefined) return null;
+  if (/^st(term)?(-|$)/.test(terminalName)) return "st";
+  if (/^rxvt(-|$)/.test(terminalName)) return "rxvt";
   return null;
 }
 //@ chunk-dxdtyerk.js:11887-12003 fingerprint = EXTENDED_KEYS_TERMINALS (0.914)
@@ -310,12 +327,12 @@ var EXTENDED_KEYS_TERMINALS = [
 ];
 var EXTENDED_KEYS_NEEDS_CONFIRM = ["windows-terminal"];
 //@ chunk-dxdtyerk.js:12003-12038 layout
-function isStTerminal(e) {
-  return detectMinimalTerminal(e) === "st";
+function isStTerminal(terminalName) {
+  return detectMinimalTerminal(terminalName) === "st";
 }
 //@ chunk-dxdtyerk.js:12038-12122 layout
-function describeOldVte(e) {
-  return `env: terminal=${e}, VTE before 0.53 (shows the query as text)`;
+function describeOldVte(terminalName) {
+  return `env: terminal=${terminalName}, VTE before 0.53 (shows the query as text)`;
 }
 //@ chunk-dxdtyerk.js:12122-12205 layout
 var TMUX_IMAGES_PENDING_SOURCE = "env: inside tmux, waiting for tmux to say whether it passes images through";
@@ -353,21 +370,21 @@ function getInitialCapabilities() {
   };
 }
 //@ chunk-dxdtyerk.js:12973-13260 layout
-function initialProgramStatus(e) {
-  if (e.tabWritesDisabled)
+function initialProgramStatus(envInfo) {
+  if (envInfo.tabWritesDisabled)
     return {
       settled: false,
       source: "env: CLAUDE_CODE_DISABLE_TERMINAL_TITLE",
     };
-  if (e.bgWorker)
+  if (envInfo.bgWorker)
     return {
       settled: false,
       source: "bg worker",
     };
-  if (terminalDetector.hasUnknownSequencePrintingBug(e.terminal))
+  if (terminalDetector.hasUnknownSequencePrintingBug(envInfo.terminal))
     return {
       settled: false,
-      source: describeOldVte(e.terminal),
+      source: describeOldVte(envInfo.terminal),
     };
   return {
     likely: false,
@@ -375,20 +392,20 @@ function initialProgramStatus(e) {
   };
 }
 //@ chunk-dxdtyerk.js:13260-13480 layout
-function initialMousePixels(e) {
-  if (e.bgWorker)
+function initialMousePixels(envInfo) {
+  if (envInfo.bgWorker)
     return {
       settled: false,
       source: "bg worker",
     };
-  if (e.multiplexed)
+  if (envInfo.multiplexed)
     return {
       settled: false,
       source: "env: inside tmux or screen",
     };
   return {
     likely: false,
-    source: `env: terminal=${e.terminal || "unknown"}, not asked yet`,
+    source: `env: terminal=${envInfo.terminal || "unknown"}, not asked yet`,
   };
 }
 //@ chunk-dxdtyerk.js:13480-13519 layout
@@ -401,36 +418,36 @@ var KITTY_GRAPHICS_MIN_VERSION = "0.28.0";
 function supportsKittyGraphics(terminal) {
   if (terminal === null) return false;
   if (terminal.startsWith("kitty(")) {
-    let r = semverModule_2.coerce(terminal.slice(6));
-    return r !== null && semverGt(r.version, KITTY_GRAPHICS_MIN_VERSION);
+    let parsedVersion = semverModule_2.coerce(terminal.slice(6));
+    return parsedVersion !== null && semverGt(parsedVersion.version, KITTY_GRAPHICS_MIN_VERSION);
   }
-  return KITTY_GRAPHICS_TERMINALS.some((r) => terminal === r || terminal.startsWith(`${r} `));
+  return KITTY_GRAPHICS_TERMINALS.some((prefix) => terminal === prefix || terminal.startsWith(`${prefix} `));
 }
 //@ chunk-dxdtyerk.js:13694-14022 layout
-function initialKittyGraphics(e) {
-  if (e.forced)
+function initialKittyGraphics(envInfo) {
+  if (envInfo.forced)
     return {
       settled: true,
       source: "env: CLAUDE_CODE_FORCE_TERMINAL_IMAGES",
     };
-  if (e.bgWorker)
+  if (envInfo.bgWorker)
     return {
       settled: false,
       source: "bg worker",
     };
-  if (e.tmux)
+  if (envInfo.tmux)
     return {
       likely: false,
       source: TMUX_IMAGES_PENDING_SOURCE,
     };
-  if (e.multiplexed)
+  if (envInfo.multiplexed)
     return {
       settled: false,
       source: "env: inside screen",
     };
   return {
     likely: false,
-    source: `env: terminal=${e.terminal || "unknown"}, not asked yet`,
+    source: `env: terminal=${envInfo.terminal || "unknown"}, not asked yet`,
   };
 }
 //@ chunk-dxdtyerk.js:14022-14037 layout
@@ -441,22 +458,22 @@ var ITERM_IMAGES_MIN_VERSION = "3.5.0";
  */
 function supportsItermImages(terminal) {
   if (terminal === null || !/^iTerm2\s/.test(terminal)) return false;
-  let r = semverModule_2.coerce(terminal.slice(6).trim());
-  return r !== null && semverGt(r.version, ITERM_IMAGES_MIN_VERSION);
+  let parsedVersion = semverModule_2.coerce(terminal.slice(6).trim());
+  return parsedVersion !== null && semverGt(parsedVersion.version, ITERM_IMAGES_MIN_VERSION);
 }
 //@ chunk-dxdtyerk.js:14164-14432 layout
-function initialItermImages(e) {
-  if (e.bgWorker)
+function initialItermImages(envInfo) {
+  if (envInfo.bgWorker)
     return {
       settled: false,
       source: "bg worker",
     };
-  if (e.tmux)
+  if (envInfo.tmux)
     return {
       likely: false,
       source: TMUX_IMAGES_PENDING_SOURCE,
     };
-  if (e.multiplexed)
+  if (envInfo.multiplexed)
     return {
       settled: false,
       source: "env: inside screen, not supported",
@@ -467,21 +484,21 @@ function initialItermImages(e) {
   };
 }
 //@ chunk-dxdtyerk.js:14432-14668 layout
-function initialKittyKeyboard(terminal, r) {
-  if (r)
+function initialKittyKeyboard(terminalName, isBgWorker) {
+  if (isBgWorker)
     return {
       settled: true,
       source: "bg worker",
     };
-  if (terminal !== null && isStTerminal(terminal))
+  if (terminalName !== null && isStTerminal(terminalName))
     return {
       settled: false,
-      source: `env: terminal=${terminal}`,
+      source: `env: terminal=${terminalName}`,
     };
-  if (terminalDetector.hasUnknownSequencePrintingBug(terminal))
+  if (terminalDetector.hasUnknownSequencePrintingBug(terminalName))
     return {
       settled: false,
-      source: describeOldVte(terminal),
+      source: describeOldVte(terminalName),
     };
   return {
     likely: true,
@@ -489,31 +506,31 @@ function initialKittyKeyboard(terminal, r) {
   };
 }
 //@ chunk-dxdtyerk.js:14668-14972 layout
-function initialExtendedKeys(terminal, r) {
-  let n = `env: terminal=${terminal || "unknown"}`;
-  if (r)
+function initialExtendedKeys(terminalName, isBgWorker) {
+  let envSource = `env: terminal=${terminalName || "unknown"}`;
+  if (isBgWorker)
     return {
       settled: false,
-      source: `${n}, bg worker`,
+      source: `${envSource}, bg worker`,
     };
-  if (terminal !== null && EXTENDED_KEYS_TERMINALS.includes(terminal))
+  if (terminalName !== null && EXTENDED_KEYS_TERMINALS.includes(terminalName))
     return {
       settled: true,
-      source: n,
+      source: envSource,
     };
-  if (terminal !== null && isStTerminal(terminal))
+  if (terminalName !== null && isStTerminal(terminalName))
     return {
       settled: false,
-      source: n,
+      source: envSource,
     };
-  if (terminalDetector.hasUnknownSequencePrintingBug(terminal))
+  if (terminalDetector.hasUnknownSequencePrintingBug(terminalName))
     return {
       settled: false,
-      source: describeOldVte(terminal),
+      source: describeOldVte(terminalName),
     };
   return {
     likely: false,
-    source: n,
+    source: envSource,
   };
 }
 //@ chunk-dxdtyerk.js:14972-15361 layout
@@ -533,11 +550,11 @@ function initialSyncOutput() {
       settled: true,
       source: "env: TERMINAL_EMULATOR=JetBrains-JediTerm",
     };
-  let e = isSynchronizedOutputSupported_2();
-  if (e)
+  let syncSupport = isSynchronizedOutputSupported_2();
+  if (syncSupport)
     return {
       likely: true,
-      source: `env: ${e}`,
+      source: `env: ${syncSupport}`,
     };
   return {
     likely: false,
@@ -574,42 +591,51 @@ function isSynchronizedOutputSupported_2() {
   if (parseInt(env.VTE_VERSION ?? "", 10) >= 6800) return `VTE_VERSION=${env.VTE_VERSION}`;
   return;
 }
+//@ chunk-brd2890s.js:3337-3474 fingerprint = isXtermJs (0.807)
+/**
+ * 是否运行在 xterm.js 终端（VS Code 等）：会话状态、TERM_PROGRAM=vscode，或 XTVERSION 应答以 xterm.js 开头。
+ */
+function isXtermJs() {
+  if (getAttacherCaps()?.isVscodeTerm) return true;
+  if (env.TERM_PROGRAM === "vscode") return true;
+  return getTerminalProbeState().xtversionName?.startsWith("xterm.js") ?? false;
+}
 //@ chunk-24t3dkzb.js:855-1523 placement
 class hasCursorUpViewportYankBug_2 {
   value = undefined;
   get() {
     let xtversionName = getXtversionName();
     let attacherCaps = getAttacherCaps();
-    let o = attacherCaps?.wheelFlood ?? isXtermJsTerminal();
-    let u = attacherCaps
+    let wheelFlood = attacherCaps?.wheelFlood ?? isXtermJsTerminal();
+    let isJetBrains = attacherCaps
       ? JETBRAINS_IDES.includes(attacherCaps.terminal ?? "")
       : terminalDetector.isJetBrainsIdeTerminal();
-    let s = attacherCaps?.wtSession ?? !!env.WT_SESSION;
-    let p = isXtermJs();
-    let a = this.value;
+    let isWtSession = attacherCaps?.wtSession ?? !!env.WT_SESSION;
+    let isXterm = isXtermJs();
+    let cached = this.value;
     if (
-      a &&
-      a.xtversion === (xtversionName ?? "(no reply)") &&
-      a.wheelFlood === o &&
-      a.jediTerm === u &&
-      a.wtSession === s &&
-      a.xtermJs === p
+      cached &&
+      cached.xtversion === (xtversionName ?? "(no reply)") &&
+      cached.wheelFlood === wheelFlood &&
+      cached.jediTerm === isJetBrains &&
+      cached.wtSession === isWtSession &&
+      cached.xtermJs === isXterm
     )
-      return a;
-    let d = "linux";
+      return cached;
+    let platform = "linux";
     this.value = {
-      useDecayCurve: !o && (p || d === "win32" || s),
-      useAdaptiveDrain: p,
-      base: u ? 2 : readScrollSpeedBase(p, o, s),
-      xtermJs: p,
-      wheelFlood: o,
-      jediTerm: u,
+      useDecayCurve: !wheelFlood && (isXterm || platform === "win32" || isWtSession),
+      useAdaptiveDrain: isXterm,
+      base: isJetBrains ? 2 : readScrollSpeedBase(isXterm, wheelFlood, isWtSession),
+      xtermJs: isXterm,
+      wheelFlood,
+      jediTerm: isJetBrains,
       termProgram: env.TERM_PROGRAM ?? "unset",
       termProgramVersion: env.TERM_PROGRAM_VERSION ?? "unset",
       xtversion: xtversionName ?? "(no reply)",
-      wtSession: s,
+      wtSession: isWtSession,
       scrollSpeedEnv: env.CLAUDE_CODE_SCROLL_SPEED ?? "unset",
-      platform: d,
+      platform,
     };
     return this.value;
   }
@@ -621,7 +647,10 @@ class hasCursorUpViewportYankBug_2 {
 /**
  * HostScoped 的“光标上移视口”缺陷状态
  */
-var cursorYankBugSlot = new HostScoped(() => new hasCursorUpViewportYankBug_2());
+var cursorYankBugSlot; // deferred: uses hasCursorUpViewportYankBug_2 of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-24t3dkzb.js:1523", () => {
+  cursorYankBugSlot = new HostScoped(() => new hasCursorUpViewportYankBug_2());
+});
 //@ chunk-24t3dkzb.js:1546-1588 placement
 /**
  * 判断当前宿主终端是否有“光标上移导致视口错位”的缺陷。
@@ -643,9 +672,9 @@ function isXtermJsTerminal() {
   return getXtversionName()?.startsWith("xterm.js") ?? false;
 }
 //@ chunk-24t3dkzb.js:1855-1978 placement
-function parseVersionNumber(r) {
-  if (!r) return null;
-  let match = /^(\d+)\.(\d+)\.(\d+)/.exec(r);
+function parseVersionNumber(version) {
+  if (!version) return null;
+  let match = /^(\d+)\.(\d+)\.(\d+)/.exec(version);
   if (!match) return null;
   return +match[1] * 1e6 + +match[2] * 1000 + +match[3];
 }
@@ -660,9 +689,15 @@ function invalidateCursorYankBug() {
 /**
  * semver 模块命名空间
  */
-var semverModule = Re(require_semver_3(), 1);
+var semverModule; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-24t3dkzb.js:2212", () => {
+  semverModule = __toESM(require_semver_3(), 1);
+});
 //@ chunk-24t3dkzb.js:2229-2246 placement
-var CURSOR_HOME_FULL = csi(0, "f");
+var CURSOR_HOME_FULL; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-24t3dkzb.js:2229", () => {
+  CURSOR_HOME_FULL = csi(0, "f");
+});
 //@ chunk-24t3dkzb.js:2358-2453 placement
 function isSyncOutputKnownSupported() {
   if (env.TMUX && getTerminalCapabilities().get("synchronizedOutput").state === "pending") return;
@@ -693,18 +728,18 @@ function isSynchronizedOutputLikely() {
 function resolveSyncOutputSupport({ beforeTheAnswer: allowLikely }) {
   if (env.CLAUDE_BG_BACKEND === "daemon") return getAttacherCaps()?.syncOutput !== false;
   if (!env.TMUX && env.CLAUDE_CODE_FORCE_SYNC_OUTPUT) return true;
-  let n = getTerminalCapabilities().get("synchronizedOutput");
-  if (n.state === "settled") return n.value;
-  return allowLikely && n.likely;
+  let reading = getTerminalCapabilities().get("synchronizedOutput");
+  if (reading.state === "settled") return reading.value;
+  return allowLikely && reading.likely;
 }
 //@ chunk-24t3dkzb.js:2787-2958 layout
 /**
  * 是否启用同步输出：支持且不在 daemon 后端、tmux、zellij、JetBrains、xterm.js 或 Windows Terminal 中。
  */
-function shouldUseSynchronizedOutput(r = isSynchronizedOutputSupported()) {
+function shouldUseSynchronizedOutput(syncSupported = isSynchronizedOutputSupported()) {
   if (env.CLAUDE_BG_BACKEND === "daemon") return false;
   return (
-    r &&
+    syncSupported &&
     env.TMUX == null &&
     process.env.ZELLIJ == null &&
     !terminalDetector.isJetBrainsIdeTerminal() &&
@@ -781,14 +816,17 @@ function exitAltScreenSequence() {
 //@ chunk-24t3dkzb.js:3791-3804 placement
 var STDIN_IDLE_REASSERT_MS = 5000;
 //@ chunk-24t3dkzb.js:3840-3859 placement
-var DECSTBM_ENABLED = shouldUseSynchronizedOutput(isSynchronizedOutputLikely());
+var DECSTBM_ENABLED; // deferred: uses shouldUseSynchronizedOutput of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-24t3dkzb.js:3840", () => {
+  DECSTBM_ENABLED = shouldUseSynchronizedOutput(isSynchronizedOutputLikely());
+});
 //@ chunk-24t3dkzb.js:3859-4009 placement
-function recordSlowestWrite(r, n, bytes) {
+function recordSlowestWrite(stats, startedMs, bytes) {
   let startTime = performance.now();
-  let slowestWrite = r.slowestWrite;
-  if (slowestWrite === undefined || startTime - n >= slowestWrite.endedMs - slowestWrite.startedMs)
-    r.slowestWrite = {
-      startedMs: n,
+  let slowestWrite = stats.slowestWrite;
+  if (slowestWrite === undefined || startTime - startedMs >= slowestWrite.endedMs - slowestWrite.startedMs)
+    stats.slowestWrite = {
+      startedMs,
       endedMs: startTime,
       bytes,
     };
@@ -844,20 +882,11 @@ function writeDiffToTerminal(terminal, patches, skipSyncMarkers = false, rows, p
   if (useSync) out += ESU;
   handleEPIPE(terminal, out);
 }
-//@ chunk-brd2890s.js:3337-3474 fingerprint = isXtermJs (0.807)
-/**
- * 是否运行在 xterm.js 终端（VS Code 等）：会话状态、TERM_PROGRAM=vscode，或 XTVERSION 应答以 xterm.js 开头。
- */
-function isXtermJs() {
-  if (getAttacherCaps()?.isVscodeTerm) return true;
-  if (env.TERM_PROGRAM === "vscode") return true;
-  return getTerminalProbeState().xtversionName?.startsWith("xterm.js") ?? false;
-}
 export {
   getSecondRootError,
-  hasCursorUpViewportYankBug,
   hasUnknownSequencePrintingBug,
   describeMetaKey,
+  hasCursorUpViewportYankBug,
   supportsExtendedKeys,
   getTerminalMultiplexer,
   isSynchronizedOutputLikely,
@@ -886,10 +915,10 @@ export {
   isSshSession,
   getTmuxSocketArgs,
   writeDiffToTerminal,
-  setTerminalHooks,
   getTerminalHooks,
   isUiMounted,
   invalidateCursorYankBug,
   isXtermJsTerminal,
   isSyncOutputKnownSupported,
+  setTerminalHooks,
 };

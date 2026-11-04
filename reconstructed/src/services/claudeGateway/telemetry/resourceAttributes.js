@@ -31,47 +31,50 @@ var RESERVED_LABEL_PREFIXES = ["enduser.", "user.", "identity."];
 /**
  * 校验遥测资源属性的标签名与值（字符集、保留名、长度），返回错误或 undefined。
  */
-function validateResourceLabel(e, t) {
-  if (!/^[A-Za-z0-9._-]{1,255}$/.test(e))
-    return `label name '${e}' may use only letters, digits, ".", "_" and "-", 255 characters at most`;
-  let lower = e.toLowerCase();
-  if (RESERVED_RESOURCE_LABELS.has(lower) || RESERVED_LABEL_PREFIXES.some((o) => lower.startsWith(o)))
-    return `label '${e}' is reserved: the gateway or Claude sets it. Use another name`;
-  if (t === "" || INVALID_LABEL_CHARS_RE.test(t))
-    return `label '${e}' needs a non-empty value of printable ASCII with no space and none of , ; = \\ " % (if it comes from a \${VAR}, check that variable's value)`;
-  if (!isWithinEncodedLength(t))
-    return `label '${e}' has too long a value: the limit is 255 characters, and characters such as / : @ count as three`;
+function validateResourceLabel(name, value) {
+  if (!/^[A-Za-z0-9._-]{1,255}$/.test(name))
+    return `label name '${name}' may use only letters, digits, ".", "_" and "-", 255 characters at most`;
+  let lower = name.toLowerCase();
+  if (
+    RESERVED_RESOURCE_LABELS.has(lower) ||
+    RESERVED_LABEL_PREFIXES.some((prefix) => lower.startsWith(prefix))
+  )
+    return `label '${name}' is reserved: the gateway or Claude sets it. Use another name`;
+  if (value === "" || INVALID_LABEL_CHARS_RE.test(value))
+    return `label '${name}' needs a non-empty value of printable ASCII with no space and none of , ; = \\ " % (if it comes from a \${VAR}, check that variable's value)`;
+  if (!isWithinEncodedLength(value))
+    return `label '${name}' has too long a value: the limit is 255 characters, and characters such as / : @ count as three`;
   return;
 }
 //@ chunk-1ny7cxrt.js:1384657-1384924 placement
 /**
  * 为用户生成 OTLP 资源属性：enduser.id、user.email、user.groups、enduser.sub（值需合法）。
  */
-function buildUserResourceAttributes(e, resourceAttributes) {
-  let n = {
+function buildUserResourceAttributes(claims, resourceAttributes) {
+  let attrs = {
     ...resourceAttributes,
-    "enduser.id": e.email ?? e.sub,
+    "enduser.id": claims.email ?? claims.sub,
   };
-  if (e.email) n["user.email"] = e.email;
-  let groups = e.groups ?? [];
+  if (claims.email) attrs["user.email"] = claims.email;
+  let groups = claims.groups ?? [];
   let joined = groups.join(",");
   if (
     joined.length > 0 &&
     !groups.some((group) => group.includes(",") || group.includes("=")) &&
     isWithinEncodedLength(joined)
   )
-    n["user.groups"] = joined;
-  let sub = e.sub;
-  if (!INVALID_LABEL_CHARS_RE.test(sub) && isWithinEncodedLength(sub)) n[ENDUSER_SUB] = sub;
-  return n;
+    attrs["user.groups"] = joined;
+  let sub = claims.sub;
+  if (!INVALID_LABEL_CHARS_RE.test(sub) && isWithinEncodedLength(sub)) attrs[ENDUSER_SUB] = sub;
+  return attrs;
 }
 //@ chunk-1ny7cxrt.js:1384924-1385000 placement
 /**
  * 判断 URI 编码后的长度是否不超过 255。
  */
-function isWithinEncodedLength(e) {
+function isWithinEncodedLength(value) {
   try {
-    return encodeURIComponent(e).length <= 255;
+    return encodeURIComponent(value).length <= 255;
   } catch {
     return false;
   }
@@ -80,22 +83,27 @@ function isWithinEncodedLength(e) {
 /**
  * 生成发给客户端的 inferenceModels（显示名覆盖、可用时标 supports1m）。
  */
-function buildInferenceModels(e, t, settings) {
-  let CLAUDE_CODE_DISABLE_1M_CONTEXT = envObject(settings).CLAUDE_CODE_DISABLE_1M_CONTEXT;
-  let r = !isEnvTruthy(
+function buildInferenceModels(config, policy, bootstrap) {
+  let CLAUDE_CODE_DISABLE_1M_CONTEXT = envObject(bootstrap).CLAUDE_CODE_DISABLE_1M_CONTEXT;
+  let enable1m = !isEnvTruthy(
     typeof CLAUDE_CODE_DISABLE_1M_CONTEXT === "string" || typeof CLAUDE_CODE_DISABLE_1M_CONTEXT === "boolean"
       ? CLAUDE_CODE_DISABLE_1M_CONTEXT
       : typeof CLAUDE_CODE_DISABLE_1M_CONTEXT === "number"
         ? String(CLAUDE_CODE_DISABLE_1M_CONTEXT)
         : undefined,
   );
-  let mapped = listGatewayModels(e.models, e.upstreams, e.auto_include_builtin_models, t).map((a) => ({
-    name: a.id,
-    ...(a.display_name !== a.id && {
-      labelOverride: a.display_name,
+  let mapped = listGatewayModels(
+    config.models,
+    config.upstreams,
+    config.auto_include_builtin_models,
+    policy,
+  ).map((model) => ({
+    name: model.id,
+    ...(model.display_name !== model.id && {
+      labelOverride: model.display_name,
     }),
-    ...(r &&
-      supports1mContext(a.id, e) && {
+    ...(enable1m &&
+      supports1mContext(model.id, config) && {
         supports1m: true,
       }),
   }));
@@ -109,7 +117,7 @@ function buildInferenceModels(e, t, settings) {
 /**
  * 取对象上的 env 字段，不是对象时给空对象。
  */
-function envObject(e) {
-  return e.env !== null && typeof e.env === "object" ? e.env : {};
+function envObject(bootstrap) {
+  return bootstrap.env !== null && typeof bootstrap.env === "object" ? bootstrap.env : {};
 }
 export { buildUserResourceAttributes, buildInferenceModels, envObject, validateResourceLabel };

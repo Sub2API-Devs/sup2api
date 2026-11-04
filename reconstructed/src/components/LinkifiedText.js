@@ -8,62 +8,62 @@
  * pieces: chunk-f1cesmvz.js (1)
  * attribution: placement 1
  */
-import { w } from "../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import { URL_IN_TEXT_RE, trimTrailingPunctuation } from "../services/oauth/oauthErrors.js";
 import { jsxProd_default } from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Link, Text } from "../ink/components/Text.js";
 
 //@ chunk-f1cesmvz.js:340-881 placement
 function LinkifiedText(props) {
-  let y = w(10);
+  let $ = useMemoCache(10);
   let { children, color, bold, linkHref } = props;
-  let o;
-  if (y[0] !== children || y[1] !== linkHref) {
-    o = [];
-    let l = 0;
-    for (const i of children.matchAll(URL_IN_TEXT_RE)) {
-      let x = trimTrailingPunctuation(i[0]);
-      let k = linkHref === undefined ? x : linkHref(x);
-      if (k === undefined) {
+  let parts;
+  if ($[0] !== children || $[1] !== linkHref) {
+    parts = [];
+    let lastEnd = 0;
+    for (const match of children.matchAll(URL_IN_TEXT_RE)) {
+      let url = trimTrailingPunctuation(match[0]);
+      let href = linkHref === undefined ? url : linkHref(url);
+      if (href === undefined) {
         continue;
       }
-      if (i.index > l) o.push(children.slice(l, i.index));
-      o.push(
+      if (match.index > lastEnd) parts.push(children.slice(lastEnd, match.index));
+      parts.push(
         jsxProd_default(
           Link,
           {
-            url: k,
-            children: k,
+            url: href,
+            children: href,
           },
-          i.index,
+          match.index,
         ),
       );
-      l = i.index + x.length;
+      lastEnd = match.index + url.length;
     }
-    let s;
-    if (y[3] !== children || y[4] !== l) {
-      s = children.slice(l);
-      y[3] = children;
-      y[4] = l;
-      y[5] = s;
-    } else s = y[5];
-    o.push(s);
-    y[0] = children;
-    y[1] = linkHref;
-    y[2] = o;
-  } else o = y[2];
-  let s;
-  if (y[6] !== bold || y[7] !== color || y[8] !== o) {
-    s = jsxProd_default(Text, {
+    let tail;
+    if ($[3] !== children || $[4] !== lastEnd) {
+      tail = children.slice(lastEnd);
+      $[3] = children;
+      $[4] = lastEnd;
+      $[5] = tail;
+    } else tail = $[5];
+    parts.push(tail);
+    $[0] = children;
+    $[1] = linkHref;
+    $[2] = parts;
+  } else parts = $[2];
+  let text;
+  if ($[6] !== bold || $[7] !== color || $[8] !== parts) {
+    text = jsxProd_default(Text, {
       color,
       bold,
-      children: o,
+      children: parts,
     });
-    y[6] = bold;
-    y[7] = color;
-    y[8] = o;
-    y[9] = s;
-  } else s = y[9];
-  return s;
+    $[6] = bold;
+    $[7] = color;
+    $[8] = parts;
+    $[9] = text;
+  } else text = $[9];
+  return text;
 }
 export { LinkifiedText };

@@ -5,14 +5,14 @@
  * pieces: chunk-fq0cr76a.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../runtime/bun-runtime.js";
 import { require_forge } from "./forge.js";
 import { require_util } from "./util.js";
 import { require_jsbn } from "./jsbn.js";
 import { require_random } from "./random.js";
 
 //@ chunk-fq0cr76a.js:117883-120062 cjs-fingerprint
-var require_prime = x(function (cjsExports, cjsModule) {
+var require_prime = __commonJS(function (cjsExports, cjsModule) {
   var forge = require_forge();
   require_util();
   require_jsbn();

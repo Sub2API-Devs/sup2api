@@ -57,17 +57,20 @@ import { skipsTranscript } from "./taskKinds.js";
 import { logError } from "../utils/log.js";
 
 //@ chunk-qvytv6sj.js:1177-1359 placement
-function carryUnattendedReplies(r) {
+function carryUnattendedReplies(frameLive) {
   let { bySlug } = drainUnattendedReplies();
-  if (bySlug.size === 0) return r;
-  return r.map((o) => {
-    let min = Math.min((bySlug.get(o.slug) ?? 0) + (o.unattendedReplies ?? 0), MAX_UNATTENDED_REPLY_COUNT);
+  if (bySlug.size === 0) return frameLive;
+  return frameLive.map((entry) => {
+    let min = Math.min(
+      (bySlug.get(entry.slug) ?? 0) + (entry.unattendedReplies ?? 0),
+      MAX_UNATTENDED_REPLY_COUNT,
+    );
     return min > 0
       ? {
-          ...o,
+          ...entry,
           unattendedReplies: min,
         }
-      : o;
+      : entry;
   });
 }
 //@ chunk-qvytv6sj.js:1359-1407 placement
@@ -88,31 +91,31 @@ function getAdoptReadRoots() {
 /**
  * 收集退出时需要交接的项目（监视 WebSocket、Artifact 实时订阅、后台任务）。
  */
-function collectHandoffItems(r) {
-  let n = isActingAsBgJob() ? getBgJobDir() : undefined;
-  let o =
-    n && getLiveState().builtInArtifactHiddenForMcp
+function collectHandoffItems(tasks) {
+  let jobDir = isActingAsBgJob() ? getBgJobDir() : undefined;
+  let wakeOnlySlugs =
+    jobDir && getLiveState().builtInArtifactHiddenForMcp
       ? uniq([
           ...Array.from(getLiveState().live.supervisors.values())
             .filter((supervisor) => supervisor.autoReactWiring !== undefined)
             .map((supervisor) => supervisor.slug),
-          ...Object.values(r).flatMap((e) =>
-            e.type === "monitor_ws" &&
-            e.status === "running" &&
-            e.autoReactArmed === true &&
-            e.frameLive !== undefined
-              ? [e.frameLive.slug]
+          ...Object.values(tasks).flatMap((task) =>
+            task.type === "monitor_ws" &&
+            task.status === "running" &&
+            task.autoReactArmed === true &&
+            task.frameLive !== undefined
+              ? [task.frameLive.slug]
               : [],
           ),
         ])
       : [];
-  if (!n || env.CLAUDE_CODE_DISABLE_BG_EXIT_HANDOFF) {
-    if (n) {
+  if (!jobDir || env.CLAUDE_CODE_DISABLE_BG_EXIT_HANDOFF) {
+    if (jobDir) {
       let live = getLiveState().live;
-      drainUnresumedFrameLive(n);
+      drainUnresumedFrameLive(jobDir);
       if (live.bootingWiredArms.size > 0)
         logFeatureSad("artifact_live_subscribe", "booting_consent_uncarried");
-      stopArtifactSupervisors(new Set([...live.inFlightSubscribes, ...o]));
+      stopArtifactSupervisors(new Set([...live.inFlightSubscribes, ...wakeOnlySlugs]));
     }
     return {
       shells: [],
@@ -122,7 +125,7 @@ function collectHandoffItems(r) {
       unresumedWorkflows: [],
       frameLive: [],
       frameLiveTaskIds: [],
-      wakeOnlyFrameLiveSlugs: o,
+      wakeOnlyFrameLiveSlugs: wakeOnlySlugs,
       jobDir: undefined,
       agentTranscriptPaths: {},
       workflowTranscriptDirs: {},
@@ -130,51 +133,56 @@ function collectHandoffItems(r) {
       mergeShellOutputReadRoots: getAdoptReadRoots(),
     };
   }
-  let adoptability = computeAdoptability(r);
-  let values = Object.values(r);
-  let filtered = values.filter((e) => isAdoptableWorkflowTask(e, adoptability));
-  let filtered_2 = values.filter((e) => isAdoptableAgentTask(e, adoptability));
-  let S = drainUnresumedAdopt(n);
-  let T = (e) => !getLiveState().autoReact.userDisarmed && !isSlugStoppedAnywhere(e.slug);
-  let b = drainUnresumedFrameLive(n);
-  let v = carryUnattendedReplies(
+  let adoptability = computeAdoptability(tasks);
+  let values = Object.values(tasks);
+  let filtered = values.filter((task) => isAdoptableWorkflowTask(task, adoptability));
+  let filtered_2 = values.filter((task) => isAdoptableAgentTask(task, adoptability));
+  let unresumed = drainUnresumedAdopt(jobDir);
+  let isLive = (entry) => !getLiveState().autoReact.userDisarmed && !isSlugStoppedAnywhere(entry.slug);
+  let unresumedFrameLive = drainUnresumedFrameLive(jobDir);
+  let carriedFrameLive = carryUnattendedReplies(
     dedupFrameLiveNewest([
       {
-        entries: collectFrameLiveConsent(r),
+        entries: collectFrameLiveConsent(tasks),
         fallbackBasis: Date.now(),
       },
       {
-        entries: b.filter(T),
+        entries: unresumedFrameLive.filter(isLive),
         fallbackBasis: Date.now(),
       },
       {
-        entries: takeExitRetryFrameLive(n).filter(T),
+        entries: takeExitRetryFrameLive(jobDir).filter(isLive),
         fallbackBasis: Date.now(),
       },
     ]),
   );
-  let k = new Set(v.map((e) => e.slug));
+  let carriedSlugs = new Set(carriedFrameLive.map((entry) => entry.slug));
   let live = getLiveState().live;
-  if ([...live.bootingWiredArms.keys()].some((key) => !k.has(key)))
+  if ([...live.bootingWiredArms.keys()].some((key) => !carriedSlugs.has(key)))
     logFeatureSad("artifact_live_subscribe", "booting_consent_uncarried");
-  stopArtifactSupervisors(new Set([...k, ...live.inFlightSubscribes, ...o]));
+  stopArtifactSupervisors(new Set([...carriedSlugs, ...live.inFlightSubscribes, ...wakeOnlySlugs]));
   return {
-    shells: values.filter((e) => isAdoptableShellTask(e, adoptability) && e.agentId === undefined),
+    shells: values.filter((task) => isAdoptableShellTask(task, adoptability) && task.agentId === undefined),
     workflows: filtered,
     agents: filtered_2,
-    unresumedAgents: S.agents,
-    unresumedWorkflows: S.workflows,
-    frameLive: v,
-    frameLiveTaskIds: Object.values(r)
-      .filter((e) => isCarriedFrameLiveWatch(e) && e.frameLive !== undefined && k.has(e.frameLive.slug))
-      .map((e) => e.id),
-    wakeOnlyFrameLiveSlugs: o,
-    jobDir: n,
+    unresumedAgents: unresumed.agents,
+    unresumedWorkflows: unresumed.workflows,
+    frameLive: carriedFrameLive,
+    frameLiveTaskIds: Object.values(tasks)
+      .filter(
+        (task) =>
+          isCarriedFrameLiveWatch(task) &&
+          task.frameLive !== undefined &&
+          carriedSlugs.has(task.frameLive.slug),
+      )
+      .map((task) => task.id),
+    wakeOnlyFrameLiveSlugs: wakeOnlySlugs,
+    jobDir,
     agentTranscriptPaths: Object.fromEntries(
-      filtered_2.map((e) => [e.agentId, getAgentTranscriptPath(identityAgentId2(e.agentId))]),
+      filtered_2.map((agent) => [agent.agentId, getAgentTranscriptPath(identityAgentId2(agent.agentId))]),
     ),
     workflowTranscriptDirs: Object.fromEntries(
-      filtered.map((e) => [e.workflowRunId, subagentWorkflowDir(e.workflowRunId)]),
+      filtered.map((workflow) => [workflow.workflowRunId, subagentWorkflowDir(workflow.workflowRunId)]),
     ),
     projectTempDir: getBgTakeover()?.adoptShellOutputRoot ?? sessionTempDirRealpath(),
     mergeShellOutputReadRoots: getAdoptReadRoots(),
@@ -198,12 +206,12 @@ function writeExitHandoff(
     projectTempDir,
     mergeShellOutputReadRoots,
   },
-  k,
+  storageV5,
 ) {
-  for (let e of workflows) e.abortController?.abort(userAbortReason("background"));
+  for (let workflow of workflows) workflow.abortController?.abort(userAbortReason("background"));
   for (let agent of agents) agent.abortController?.abort(userAbortReason("background"));
-  let h = (async () => {
-    let e = [];
+  let writePromise = (async () => {
+    let agentRecords = [];
     if (agents.length > 0) {
       try {
         await withTimeout(
@@ -215,13 +223,13 @@ function writeExitHandoff(
           EXIT_HANDOFF_FLUSH_TIMEOUT_MESSAGE,
         );
       } catch (error) {
-        let A = error instanceof Error && error.message === EXIT_HANDOFF_FLUSH_TIMEOUT_MESSAGE;
-        logFeatureSad("task_local_agent_exit_handoff", A ? "flush_timeout" : "flush_failed");
+        let isTimeout = error instanceof Error && error.message === EXIT_HANDOFF_FLUSH_TIMEOUT_MESSAGE;
+        logFeatureSad("task_local_agent_exit_handoff", isTimeout ? "flush_timeout" : "flush_failed");
         logForDebugging(`exit handoff: agent transcript flush failed: ${error}`, {
           level: "warn",
         });
       }
-      e = await Promise.all(
+      agentRecords = await Promise.all(
         agents.map((agent) =>
           serializeAdoptAgent(agent, {
             derivedTranscriptPath: agentTranscriptPaths[agent.agentId],
@@ -229,7 +237,7 @@ function writeExitHandoff(
         ),
       );
     }
-    e.push(...unresumedAgents);
+    agentRecords.push(...unresumedAgents);
     let filtered = (
       await Promise.all(
         shells.map((shell) =>
@@ -238,18 +246,24 @@ function writeExitHandoff(
           }),
         ),
       )
-    ).filter((s) => s !== null);
-    let _ = [
+    ).filter((shellRecord) => shellRecord !== null);
+    let workflowRecords = [
       ...(await Promise.all(
-        workflows.map((s) =>
-          serializeAdoptWorkflow(s, {
-            derivedTranscriptDir: workflowTranscriptDirs[s.workflowRunId],
+        workflows.map((workflow) =>
+          serializeAdoptWorkflow(workflow, {
+            derivedTranscriptDir: workflowTranscriptDirs[workflow.workflowRunId],
           }),
         ),
       )),
       ...unresumedWorkflows,
     ];
-    if ((filtered.length === 0 && _.length === 0 && e.length === 0 && frameLive.length === 0) || !jobDir)
+    if (
+      (filtered.length === 0 &&
+        workflowRecords.length === 0 &&
+        agentRecords.length === 0 &&
+        frameLive.length === 0) ||
+      !jobDir
+    )
       return;
     try {
       await writeAdoptJson(
@@ -259,8 +273,8 @@ function writeExitHandoff(
           origin: "exit",
           shells: filtered,
           cron: [],
-          workflows: _,
-          agents: e,
+          workflows: workflowRecords,
+          agents: agentRecords,
           ...(frameLive.length > 0 && {
             frameLive,
           }),
@@ -268,19 +282,19 @@ function writeExitHandoff(
         {
           mergeShellOutputRoot: [projectTempDir, ...(mergeShellOutputReadRoots ?? [])],
         },
-        k,
+        storageV5,
       );
       logEvent("tengu_adopt_exit_handoff", {
         adopted_shells: filtered.length,
-        adopted_workflows: _.length,
-        adopted_agents: e.length,
+        adopted_workflows: workflowRecords.length,
+        adopted_agents: agentRecords.length,
         adopted_frame_live: frameLive.length,
       });
       if (filtered.length > 0) logFeatureOk("task_local_shell_exit_handoff");
-      if (_.length > 0) logFeatureOk("task_local_workflow_exit_handoff");
-      if (e.length > 0) logFeatureOk("task_local_agent_exit_handoff");
+      if (workflowRecords.length > 0) logFeatureOk("task_local_workflow_exit_handoff");
+      if (agentRecords.length > 0) logFeatureOk("task_local_agent_exit_handoff");
       logForDebugging(
-        `exit handoff: ${filtered.length} background shell(s), ${_.length} workflow(s), ${e.length} agent(s), and ${frameLive.length} comment-monitoring consent record(s) handed to the next wake of this session`,
+        `exit handoff: ${filtered.length} background shell(s), ${workflowRecords.length} workflow(s), ${agentRecords.length} agent(s), and ${frameLive.length} comment-monitoring consent record(s) handed to the next wake of this session`,
       );
     } catch (error) {
       for (let shell of shells)
@@ -289,7 +303,7 @@ function writeExitHandoff(
         } catch {}
       if (shells.length > 0) logFeatureBad("task_local_shell_exit_handoff", "write_failed");
       if (workflows.length > 0) logFeatureBad("task_local_workflow_exit_handoff", "write_failed");
-      if (e.length > 0) logFeatureBad("task_local_agent_exit_handoff", "write_failed");
+      if (agentRecords.length > 0) logFeatureBad("task_local_agent_exit_handoff", "write_failed");
       if (frameLive.length > 0 && jobDir !== undefined) {
         recordExitRetryFrameLive(jobDir, frameLive);
         logFeatureBad("artifact_live_subscribe", "consent_exit_write_failed");
@@ -299,48 +313,48 @@ function writeExitHandoff(
       });
     }
   })();
-  trackPendingWrite(h);
-  return h;
+  trackPendingWrite(writePromise);
+  return writePromise;
 }
 //@ chunk-qvytv6sj.js:5443-5713 placement
-function hasPendingHandoff(tasks, n) {
+function hasPendingHandoff(tasks, storageV5) {
   let handoffItems = collectHandoffItems(tasks);
-  let d =
+  let writePromise =
     handoffItems.shells.length > 0 ||
     handoffItems.workflows.length > 0 ||
     handoffItems.agents.length > 0 ||
     handoffItems.unresumedAgents.length > 0 ||
     handoffItems.unresumedWorkflows.length > 0 ||
     handoffItems.frameLive.length > 0
-      ? writeExitHandoff(handoffItems, n)
+      ? writeExitHandoff(handoffItems, storageV5)
       : undefined;
-  let c = new Set(
-    [...handoffItems.shells, ...handoffItems.workflows, ...handoffItems.agents].map((p) => p.id),
+  let carriedIds = new Set(
+    [...handoffItems.shells, ...handoffItems.workflows, ...handoffItems.agents].map((task) => task.id),
   );
-  markRunningTasksForHandoff(tasks, c);
-  return d;
+  markRunningTasksForHandoff(tasks, carriedIds);
+  return writePromise;
 }
 //@ chunk-qvytv6sj.js:5713-6103 placement
-function markRunningTasksForHandoff(r, n = new Set()) {
-  for (let o of Object.values(r)) {
-    if (o.status !== "running" || n.has(o.id)) continue;
+function markRunningTasksForHandoff(tasks, skipIds = new Set()) {
+  for (let task of Object.values(tasks)) {
+    if (task.status !== "running" || skipIds.has(task.id)) continue;
     try {
-      if (isLocalShellTask(o)) {
-        o.shellCommand?.kill({
+      if (isLocalShellTask(task)) {
+        task.shellCommand?.kill({
           cause: "session_exit",
         });
-        o.shellCommand?.cleanup();
+        task.shellCommand?.cleanup();
       } else if (isTerminalShutdown()) {
-        evictTaskOutput(o.id);
+        evictTaskOutput(task.id);
         continue;
-      } else if ("abortController" in o) o.abortController?.abort();
-      if (!isObserverAgentTask(o))
-        emitTaskNotification(o.id, "stopped", {
-          toolUseId: o.toolUseId,
-          summary: o.description,
-          ambient: skipsTranscript(o),
+      } else if ("abortController" in task) task.abortController?.abort();
+      if (!isObserverAgentTask(task))
+        emitTaskNotification(task.id, "stopped", {
+          toolUseId: task.toolUseId,
+          summary: task.description,
+          ambient: skipsTranscript(task),
         });
-      evictTaskOutput(o.id);
+      evictTaskOutput(task.id);
     } catch (error) {
       logError(error);
     }

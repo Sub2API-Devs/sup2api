@@ -8,7 +8,7 @@
  * pieces: chunk-3mec1atf.js (1)
  * attribution: fingerprint 1
  */
-import { R } from "../../../vendor/react/cjs/react.production.js";
+import { useRef } from "../../../vendor/react/cjs/react.production.js";
 
 //@ chunk-3mec1atf.js:7371-7948 fingerprint = useStalledAnimation (0.835)
 function useStalledAnimation(
@@ -18,11 +18,11 @@ function useStalledAnimation(
   reducedMotion = false,
   agentId,
 ) {
-  let lastTokenTime = R(time);
-  let lastResponseLength = R(currentResponseLength);
-  let stalledIntensityRef = R(0);
-  let lastSmoothTime = R(time);
-  let lastSmoothTime_2 = R(agentId);
+  let lastTokenTime = useRef(time);
+  let lastResponseLength = useRef(currentResponseLength);
+  let stalledIntensityRef = useRef(0);
+  let lastSmoothTime = useRef(time);
+  let lastSmoothTime_2 = useRef(agentId);
   if (currentResponseLength > lastResponseLength.current || lastSmoothTime_2.current !== agentId) {
     lastSmoothTime_2.current = agentId;
     lastTokenTime.current = time;
@@ -39,9 +39,9 @@ function useStalledAnimation(
   let isStalled = timeSinceLastToken > 1e4 && !hasActiveTools;
   let intensity = isStalled ? Math.min((timeSinceLastToken - 1e4) / 1e4, 1) : 0;
   if (!reducedMotion && (intensity > 0 || stalledIntensityRef.current > 0)) {
-    let W = time - lastSmoothTime.current;
-    if (W >= 50) {
-      let steps = Math.floor(W / 50);
+    let deltaMs = time - lastSmoothTime.current;
+    if (deltaMs >= 50) {
+      let steps = Math.floor(deltaMs / 50);
       let current = stalledIntensityRef.current;
       for (let i = 0; i < steps; i++) {
         let diff = intensity - current;

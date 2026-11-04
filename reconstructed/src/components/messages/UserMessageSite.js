@@ -21,12 +21,12 @@ import { ULTRATHINK_KEYWORD } from "../../utils/ultraplan/keyword.js";
 /**
  * 取某时刻所在日期的零点时间戳；给出时区时按该时区的年月日计算（UTC 表示）。
  */
-function startOfDayMs(i, timeZone) {
-  if (!timeZone) return new Date(i.getFullYear(), i.getMonth(), i.getDate()).getTime();
-  let o = getDateTimeFormat("en-US", withTimeZone(DATE_FORMAT_OPTIONS, timeZone)).formatToParts(i);
-  let d = {};
-  for (let a of o) d[a.type] = a.value;
-  return Date.UTC(Number(d.year), Number(d.month) - 1, Number(d.day));
+function startOfDayMs(date, timeZone) {
+  if (!timeZone) return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+  let parts = getDateTimeFormat("en-US", withTimeZone(DATE_FORMAT_OPTIONS, timeZone)).formatToParts(date);
+  let offsetMs = {};
+  for (let startMs of parts) offsetMs[startMs.type] = startMs.value;
+  return Date.UTC(Number(offsetMs.year), Number(offsetMs.month) - 1, Number(offsetMs.day));
 }
 //@ chunk-j64mp9kq.js:1925-1979 placement
 var DATE_FORMAT_OPTIONS = {
@@ -47,9 +47,9 @@ function deliveredBy(origin) {
 }
 //@ chunk-j64mp9kq.js:2098-2394 placement
 function useUserMessageSite({ messageId, stored, text, isExpanded, task, sender, draw }) {
-  let l = stableStringifySafe(task);
-  let u = stableStringifySafe(sender);
-  let p = useRenderInput(
+  let taskKey = stableStringifySafe(task);
+  let senderKey = stableStringifySafe(sender);
+  let renderInput = useRenderInput(
     "UserMessage",
     () => ({
       requestId: messageId,
@@ -65,9 +65,13 @@ function useUserMessageSite({ messageId, stored, text, isExpanded, task, sender,
         }),
       },
     }),
-    [messageId, text, stored, isExpanded, l, u],
+    [messageId, text, stored, isExpanded, taskKey, senderKey],
   );
-  return useRenderHook(p, (C) => draw(C.props.text), deliveredBy(p.props.origin));
+  return useRenderHook(
+    renderInput,
+    (renderDeps) => draw(renderDeps.props.text),
+    deliveredBy(renderInput.props.origin),
+  );
 }
 //@ chunk-j64mp9kq.js:2394-2421 placement
 var SITE_REFRESH_MS = 1e4;
@@ -77,28 +81,28 @@ var SITE_RETRY_MS = 2500;
 /**
  * 超过 1 万字符的文本拆成头部、尾部与中间隐藏的行数/字符数，供折叠显示；短文本原样返回。
  */
-function splitLongTextForCollapse(i) {
-  if (i.length <= SITE_REFRESH_MS) return i;
-  let t = truncateToLength(i, SITE_POLL_MS);
-  let o = takeLastChars(i, SITE_RETRY_MS);
+function splitLongTextForCollapse(text) {
+  if (text.length <= SITE_REFRESH_MS) return text;
+  let head = truncateToLength(text, SITE_POLL_MS);
+  let tail = takeLastChars(text, SITE_RETRY_MS);
   let hiddenLines =
     countCharInString(
-      i,
+      text,
       `
 `,
-      t.length,
+      head.length,
     ) -
     countCharInString(
-      o,
+      tail,
       `
 `,
     );
-  let hiddenChars = i.length - t.length - o.length;
+  let hiddenChars = text.length - head.length - tail.length;
   return {
-    head: t,
+    head,
     hiddenLines,
     hiddenChars,
-    tail: o,
+    tail,
   };
 }
 //@ chunk-j64mp9kq.js:2598-2610 placement
@@ -107,7 +111,7 @@ var MAX_SITE_TEXT = 4000;
 /**
  * 函数 isShortSiteText（文本够短且无敏感路径）。
  */
-function isShortSiteText(i) {
-  return i.length <= MAX_SITE_TEXT && !(isUltrathinkEnabled() && ULTRATHINK_KEYWORD(i).length > 0);
+function isShortSiteText(text) {
+  return text.length <= MAX_SITE_TEXT && !(isUltrathinkEnabled() && ULTRATHINK_KEYWORD(text).length > 0);
 }
 export { deliveredBy, useUserMessageSite, startOfDayMs, isShortSiteText, splitLongTextForCollapse };

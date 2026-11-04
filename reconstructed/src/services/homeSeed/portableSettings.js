@@ -21,7 +21,7 @@ import { isWorkingFilePath as isWorkingFilePath_2 } from "./workingFiles.js";
 import { computeContentHash } from "../../utils/commitAttribution.js";
 import { containsSecret } from "../../utils/redactSecrets.js";
 import { scanForSecrets } from "../teamMemorySync/secretScanner.js";
-import { urlSpans, ENCODED_BRACKET_END_RE } from "../../utils/redaction/urlParsing.js";
+import { urlSpans, WEB_SCHEME_TAIL_RE } from "../../utils/redaction/urlParsing.js";
 import { COLON_RE } from "../../utils/redaction/urlRedaction.js";
 import { DEVICE_BASH_TOOL, REMOTE_DEVICES } from "../mcp/firstPartyServerIds.js";
 import { TOOL_VALIDATION_CONFIG } from "../../utils/settings/toolValidationConfig.js";
@@ -67,31 +67,33 @@ import { count } from "../../utils/collections.js";
 import { getSettingsSchemaForDocument } from "../../utils/settings/types.js";
 import { sortKeysDeep } from "../../utils/settings/settingsSourceTrust.js";
 import { validatePermissionRule } from "../../utils/settings/permissionValidation.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-bwpc82tt.js:6346-6433 placement
 /**
  * 判断对象的键是否都在允许/禁止集合内。
  */
-function hasOnlyAllowedKeys(e, t) {
+function hasOnlyAllowedKeys(settings, allowed) {
   return (
-    e === undefined ||
-    (isPlainObject(e) && Object.keys(e).every((key) => t.has(key) || FORBIDDEN_KEYS.has(key)))
+    settings === undefined ||
+    (isPlainObject(settings) &&
+      Object.keys(settings).every((key) => allowed.has(key) || FORBIDDEN_KEYS.has(key)))
   );
 }
 //@ chunk-bwpc82tt.js:6433-6507 placement
 /**
  * 判断是否为字符串数组。
  */
-function isStringArray(e) {
-  return Array.isArray(e) && e.every((t) => typeof t === "string");
+function isStringArray(value) {
+  return Array.isArray(value) && value.every((item) => typeof item === "string");
 }
 //@ chunk-bwpc82tt.js:6507-6554 placement
 /**
  * 尝试解析 JSON，失败返回 undefined。
  */
-function tryJsonParse(e) {
+function tryJsonParse(text) {
   try {
-    return jsonParse(e);
+    return jsonParse(text);
   } catch {
     return;
   }
@@ -100,19 +102,19 @@ function tryJsonParse(e) {
 /**
  * 扫描 JSON 文本（跳过字符串），括号嵌套超过上限时返回 true。
  */
-function exceedsJsonNesting(e) {
-  let t = 0;
-  let n = false;
-  for (let i = 0; i < e.length; i++) {
-    let s = e[i];
-    if (n) {
-      if (s === "\\") i++;
-      else if (s === '"') n = false;
-    } else if (s === '"') n = true;
-    else if (s === "[" || s === "{") {
-      t++;
-      if (t > MAX_JSON_NESTING) return true;
-    } else if (s === "]" || s === "}") t--;
+function exceedsJsonNesting(text) {
+  let depth = 0;
+  let inString = false;
+  for (let i = 0; i < text.length; i++) {
+    let char = text[i];
+    if (inString) {
+      if (char === "\\") i++;
+      else if (char === '"') inString = false;
+    } else if (char === '"') inString = true;
+    else if (char === "[" || char === "{") {
+      depth++;
+      if (depth > MAX_JSON_NESTING) return true;
+    } else if (char === "]" || char === "}") depth--;
   }
   return false;
 }
@@ -137,18 +139,18 @@ function hasSerializableSettings(parsed) {
 /**
  * 判断路径是否是可工作的目标文件。
  */
-function isWorkingFilePath(e) {
-  return isWorkingFilePath_2(e.path);
+function isWorkingFilePath(file) {
+  return isWorkingFilePath_2(file.path);
 }
 //@ chunk-bwpc82tt.js:6937-7134 placement
-function decodePackFile(e) {
-  if (e.content.length !== Math.ceil(e.size / 3) * 4) return null;
-  let buffer = Buffer.from(e.content, "base64");
-  return buffer.length === e.size && computeContentHash(buffer) === e.sha256
+function decodePackFile(file) {
+  if (file.content.length !== Math.ceil(file.size / 3) * 4) return null;
+  let buffer = Buffer.from(file.content, "base64");
+  return buffer.length === file.size && computeContentHash(buffer) === file.sha256
     ? {
-        path: e.path,
+        path: file.path,
         content: buffer,
-        sha256: e.sha256,
+        sha256: file.sha256,
       }
     : null;
 }
@@ -157,22 +159,22 @@ function decodePackFile(e) {
  * 迭代检查值的嵌套深度与值总数是否在上限内。
  */
 function isWithinValueBounds(value) {
-  let t = [
+  let stack = [
     {
       value,
       depth: 0,
     },
   ];
-  let n = 1;
-  for (let r = t.pop(); r !== undefined; r = t.pop()) {
-    let { value: s, depth } = r;
+  let valueCount = 1;
+  for (let entry = stack.pop(); entry !== undefined; entry = stack.pop()) {
+    let { value: current, depth } = entry;
     if (depth > MAX_SETTINGS_DEPTH) return false;
-    if (typeof s !== "object" || s === null) continue;
-    let c = Array.isArray(s) ? s : Object.values(s);
-    n += c.length;
-    if (n > MAX_SETTINGS_VALUES) return false;
-    for (let value of c)
-      t.push({
+    if (typeof current !== "object" || current === null) continue;
+    let children = Array.isArray(current) ? current : Object.values(current);
+    valueCount += children.length;
+    if (valueCount > MAX_SETTINGS_VALUES) return false;
+    for (let value of children)
+      stack.push({
         value,
         depth: depth + 1,
       });
@@ -184,24 +186,24 @@ function isWithinValueBounds(value) {
  * 迭代检查值是否只由 JSON 可表达的原始值、数组与普通对象组成。
  */
 function isJsonPlainValue(settings) {
-  let t = [settings];
-  while (t.length > 0) {
-    let n = t.pop();
+  let stack = [settings];
+  while (stack.length > 0) {
+    let item = stack.pop();
     if (
-      n === null ||
-      typeof n === "string" ||
-      typeof n === "boolean" ||
-      (typeof n === "number" && Number.isFinite(n))
+      item === null ||
+      typeof item === "string" ||
+      typeof item === "boolean" ||
+      (typeof item === "number" && Number.isFinite(item))
     )
       continue;
-    if (Array.isArray(n)) {
-      for (let i = 0; i < n.length; i++) t.push(n[i]);
+    if (Array.isArray(item)) {
+      for (let i = 0; i < item.length; i++) stack.push(item[i]);
       continue;
     }
-    if (isPlainObject(n)) {
-      let prototypeOf = Object.getPrototypeOf(n);
+    if (isPlainObject(item)) {
+      let prototypeOf = Object.getPrototypeOf(item);
       if (prototypeOf === Object.prototype || prototypeOf === null) {
-        for (let s of Object.values(n)) t.push(s);
+        for (let key of Object.values(item)) stack.push(key);
         continue;
       }
     }
@@ -222,55 +224,66 @@ function sortedPortableCopy(settings) {
 /**
  * 深拷贝并排序（数组逐项、对象按键）。
  */
-function sortedCopy(e) {
-  return Array.isArray(e) ? e.map(sortedCopy) : isPlainObject(e) ? sortedPortableCopy(e) : e;
+function sortedCopy(value) {
+  return Array.isArray(value)
+    ? value.map(sortedCopy)
+    : isPlainObject(value)
+      ? sortedPortableCopy(value)
+      : value;
 }
 //@ chunk-bwpc82tt.js:7967-8026 placement
 /**
  * 按 path 排序的比较函数。
  */
-function compareByPath(e, t) {
-  return e.path < t.path ? -1 : e.path > t.path ? 1 : 0;
+function compareByPath(left, right) {
+  return left.path < right.path ? -1 : left.path > right.path ? 1 : 0;
 }
 //@ chunk-bwpc82tt.js:8026-8419 placement
 /**
  * 匹配 sha256: 摘要引用的正则。
  */
-var regExp = new RegExp(
-  `^(?:${[String.raw`\*+`, String.raw`(["']?)(?:\$(?:env:)?[A-Za-z_]\w*|\$\{(?:env:)?[A-Za-z_][\w.]*(?::?\?[^{}]*)?\}|\$\{\{[^{}]*\}\}|\$\([^()]*\)|%[A-Za-z_]\w*%)\1`, String.raw`<[^<>]*>|\{[^{}]*\}|\{\{[^{}]*\}\}|%s|x+`, "password|passwd|pass|secret|changeme|example"].join("|")})?$`,
-  "i",
-);
-var URL_FRAGMENT_RE = /^(?:\[[^\]]*\]|[^:?#]*)(?::\d*)?[?#]/;
-var SHA256_REF_RE = /^sha256:(?:[0-9a-f]{64}(?![\w.-])|[*$<{])/i;
+var regExp; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var URL_FRAGMENT_RE;
+var SHA256_REF_RE;
+deferInit("chunk-bwpc82tt.js:8026", () => {
+  regExp = new RegExp(
+    `^(?:${[String.raw`\*+`, String.raw`(["']?)(?:\$(?:env:)?[A-Za-z_]\w*|\$\{(?:env:)?[A-Za-z_][\w.]*(?::?\?[^{}]*)?\}|\$\{\{[^{}]*\}\}|\$\([^()]*\)|%[A-Za-z_]\w*%)\1`, String.raw`<[^<>]*>|\{[^{}]*\}|\{\{[^{}]*\}\}|%s|x+`, "password|passwd|pass|secret|changeme|example"].join("|")})?$`,
+    "i",
+  );
+  URL_FRAGMENT_RE = /^(?:\[[^\]]*\]|[^:?#]*)(?::\d*)?[?#]/;
+  SHA256_REF_RE = /^sha256:(?:[0-9a-f]{64}(?![\w.-])|[*$<{])/i;
+});
 //@ chunk-bwpc82tt.js:8419-8495 placement
 /**
  * 判断文本是否像凭证（含 NUL 时去掉后再判断）。
  */
-function looksLikeCredentialIncludingNul(e) {
-  return looksLikeCredential(e) || (e.includes("\x00") && looksLikeCredential(e.replaceAll("\x00", "")));
+function looksLikeCredentialIncludingNul(text) {
+  return (
+    looksLikeCredential(text) || (text.includes("\x00") && looksLikeCredential(text.replaceAll("\x00", "")))
+  );
 }
 //@ chunk-bwpc82tt.js:8495-8930 placement
 /**
  * 文本是否像凭证：直接或经 URL/转义解码后扫描到密钥，或出现带值的密钥赋值片段（排除部分常见误报）。
  */
-function looksLikeCredential(e) {
-  let replaced = e.replace(/%[0-9A-Fa-f]{2}|\\[nrt]/g, " ");
+function looksLikeCredential(text) {
+  let replaced = text.replace(/%[0-9A-Fa-f]{2}|\\[nrt]/g, " ");
   let replaced_2 = replaced.replace(/[^\w.~+/=-]+/g, " ");
-  let r = [replaced_2, replaced_2.replace(/[.~+/=]+(?= |$)/g, " "), replaced.replace(/[^\w-]+/g, " ")];
+  let decoded = [replaced_2, replaced_2.replace(/[.~+/=]+(?= |$)/g, " "), replaced.replace(/[^\w-]+/g, " ")];
   return (
-    containsSecret(e) ||
+    containsSecret(text) ||
     containsSecret(replaced) ||
-    r.some((s) => scanForSecrets(s).length > 0) ||
-    urlSpans(e).some(({ start, end, separatorEnd }) => {
-      let sliced = e.slice(start, end);
+    decoded.some((flag) => scanForSecrets(flag).length > 0) ||
+    urlSpans(text).some(({ start, end, separatorEnd }) => {
+      let sliced = text.slice(start, end);
       let match = COLON_RE.exec(sliced);
       return (
         match !== null &&
         !regExp.test(sliced.slice(match.index + match[0].length)) &&
-        !SHA256_REF_RE.test(e.slice(separatorEnd, separatorEnd + 72)) &&
+        !SHA256_REF_RE.test(text.slice(separatorEnd, separatorEnd + 72)) &&
         !(
           URL_FRAGMENT_RE.test(sliced) &&
-          ENCODED_BRACKET_END_RE.test(e.slice(Math.max(0, start - 11), start - 3))
+          WEB_SCHEME_TAIL_RE.test(text.slice(Math.max(0, start - 11), start - 3))
         )
       );
     })
@@ -280,58 +293,71 @@ function looksLikeCredential(e) {
 /**
  * 可移植设置筛选用到的键顺序、长度与条数上限，以及按工具族展开规则（读、编辑、shell、Artifact）的工具名列表。
  */
-var PORTABLE_KEYS_ORDER = [
-  "language",
-  "outputStyle",
-  "attribution",
-  "includeCoAuthoredBy",
-  "includeGitInstructions",
-  "alwaysThinkingEnabled",
-  "showThinkingSummaries",
-  "permissions",
-];
-var ATTRIBUTION_KEYS = ["commit", "pr", "sessionUrl", "commitTrailers"];
-var PERMISSION_BEHAVIORS = ["allow", "deny", "ask"];
-var DEVICE_SERVER_ID = DEVICE_BASH_TOOL;
-var MAX_STRING_SETTING_LENGTH = 256;
-var MAX_ATTRIBUTION_LENGTH = 8192;
-var MAX_RULE_LENGTH = 1024;
-var MAX_RULES_PER_BEHAVIOR = 1000;
-var MAX_SETTINGS_BYTES = 1048576;
-var PATH_RULE_TOOLS = new Set([
-  ...TOOL_VALIDATION_CONFIG.filePatternTools,
-  GREP_TOOL_NAME,
-  "MultiEdit",
-  "LS",
-]);
-var READ_FAMILY_TOOLS = [
-  FILE_READ_TOOL_NAME,
-  GREP_TOOL_NAME,
-  GLOB_TOOL_NAME,
-  LSP_TOOL_NAME,
-  ...ARTIFACT_FAMILY_TOOL_NAMES,
-  WORKFLOW_TOOL_NAME,
-  SENDFILE,
-  SEND_USER_FILE_TOOL_NAME,
-  ...BATCH_RESTRICTED_TOOLS.map((e) => buildMcpToolName(CLAUDE_IN_CHROME_MCP_SERVER_NAME, e)),
-  ...[...BROWSER_SERVER_NAMES].flatMap((e) => FILE_UPLOAD_TOOLS.map((t) => buildMcpToolName(e, t))),
-  "NotebookRead",
-  "LS",
-  ...TOOL_VALIDATION_CONFIG.bashPrefixTools,
-  POWERSHELL_TOOL_NAME,
-  MONITOR,
-];
-var ARTIFACT_FAMILY = ARTIFACT_FAMILY_TOOL_NAMES;
-var SHELL_FAMILY_TOOLS = [...TOOL_VALIDATION_CONFIG.bashPrefixTools, MONITOR];
-var EDIT_FAMILY_TOOLS = [
-  FILE_EDIT_TOOL_NAME,
-  FILE_WRITE_TOOL_NAME,
-  NOTEBOOK_EDIT_TOOL_NAME,
-  ...ARTIFACT_FAMILY_TOOL_NAMES,
-  "MultiEdit",
-  PUBLISH_PLUGIN_TOOL_NAME,
-  ...READ_FAMILY_TOOLS,
-];
+var PORTABLE_KEYS_ORDER; // deferred: uses DEVICE_BASH_TOOL (../mcp/firstPartyServerIds.js) of its import cycle while loading; runs once the cycle is complete
+var ATTRIBUTION_KEYS;
+var PERMISSION_BEHAVIORS;
+var DEVICE_SERVER_ID;
+var MAX_STRING_SETTING_LENGTH;
+var MAX_ATTRIBUTION_LENGTH;
+var MAX_RULE_LENGTH;
+var MAX_RULES_PER_BEHAVIOR;
+var MAX_SETTINGS_BYTES;
+var PATH_RULE_TOOLS;
+var READ_FAMILY_TOOLS;
+var ARTIFACT_FAMILY;
+var SHELL_FAMILY_TOOLS;
+var EDIT_FAMILY_TOOLS;
+deferInit("chunk-bwpc82tt.js:8930", () => {
+  PORTABLE_KEYS_ORDER = [
+    "language",
+    "outputStyle",
+    "attribution",
+    "includeCoAuthoredBy",
+    "includeGitInstructions",
+    "alwaysThinkingEnabled",
+    "showThinkingSummaries",
+    "permissions",
+  ];
+  ATTRIBUTION_KEYS = ["commit", "pr", "sessionUrl", "commitTrailers"];
+  PERMISSION_BEHAVIORS = ["allow", "deny", "ask"];
+  DEVICE_SERVER_ID = DEVICE_BASH_TOOL;
+  MAX_STRING_SETTING_LENGTH = 256;
+  MAX_ATTRIBUTION_LENGTH = 8192;
+  MAX_RULE_LENGTH = 1024;
+  MAX_RULES_PER_BEHAVIOR = 1000;
+  MAX_SETTINGS_BYTES = 1048576;
+  PATH_RULE_TOOLS = new Set([...TOOL_VALIDATION_CONFIG.filePatternTools, GREP_TOOL_NAME, "MultiEdit", "LS"]);
+  READ_FAMILY_TOOLS = [
+    FILE_READ_TOOL_NAME,
+    GREP_TOOL_NAME,
+    GLOB_TOOL_NAME,
+    LSP_TOOL_NAME,
+    ...ARTIFACT_FAMILY_TOOL_NAMES,
+    WORKFLOW_TOOL_NAME,
+    SENDFILE,
+    SEND_USER_FILE_TOOL_NAME,
+    ...BATCH_RESTRICTED_TOOLS.map((key) => buildMcpToolName(CLAUDE_IN_CHROME_MCP_SERVER_NAME, key)),
+    ...[...BROWSER_SERVER_NAMES].flatMap((key) =>
+      FILE_UPLOAD_TOOLS.map((label) => buildMcpToolName(key, label)),
+    ),
+    "NotebookRead",
+    "LS",
+    ...TOOL_VALIDATION_CONFIG.bashPrefixTools,
+    POWERSHELL_TOOL_NAME,
+    MONITOR,
+  ];
+  ARTIFACT_FAMILY = ARTIFACT_FAMILY_TOOL_NAMES;
+  SHELL_FAMILY_TOOLS = [...TOOL_VALIDATION_CONFIG.bashPrefixTools, MONITOR];
+  EDIT_FAMILY_TOOLS = [
+    FILE_EDIT_TOOL_NAME,
+    FILE_WRITE_TOOL_NAME,
+    NOTEBOOK_EDIT_TOOL_NAME,
+    ...ARTIFACT_FAMILY_TOOL_NAMES,
+    "MultiEdit",
+    PUBLISH_PLUGIN_TOOL_NAME,
+    ...READ_FAMILY_TOOLS,
+  ];
+});
 //@ chunk-bwpc82tt.js:9501-9699 placement
 /**
  * 给出某工具名的规则会覆盖的工具族（编辑、Artifact、读、shell）；整服务器的 MCP 规则展开为通配。
@@ -341,20 +367,30 @@ function getRuleToolFamily(toolName) {
   if (toolName === ARTIFACT_TOOL_NAME) return ARTIFACT_FAMILY;
   if (toolName === FILE_READ_TOOL_NAME) return READ_FAMILY_TOOLS;
   if (SHELL_FAMILY_TOOLS.includes(toolName)) return SHELL_FAMILY_TOOLS;
-  let t = mcpInfoFromString(toolName);
-  if (t !== null && t.toolName === undefined && !hasWildcard(toolName))
-    return [`${buildMcpToolName(t.serverName, "")}*`];
+  let ruleToolName = mcpInfoFromString(toolName);
+  if (ruleToolName !== null && ruleToolName.toolName === undefined && !hasWildcard(toolName))
+    return [`${buildMcpToolName(ruleToolName.serverName, "")}*`];
   return [toolName];
 }
 //@ chunk-bwpc82tt.js:9699-9961 placement
-var SHELL_RULE_TOOLS = new Set([...TOOL_VALIDATION_CONFIG.bashPrefixTools, POWERSHELL_TOOL_NAME]);
-var WEB_RULE_TOOLS = new Set([WEBFETCH, "WebBrowser"]);
-var POSIX_ROOT = "/";
-var CONTROL_CHAR_RE = /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}\p{Default_Ignorable_Code_Point}]/u;
-var UNSAFE_TEXT_CHAR_RE = /[\p{Cf}\p{Zl}\p{Zp}\p{Default_Ignorable_Code_Point}]|[^\P{Cc}\t\n\r]|\r(?!\n)/u;
-var RULE_TOOL_NAME_RE = /^[\w*-]+$/;
-var TRIPLE_STAR_RE = /\*{3,}/;
-var MAX_RULE_STARS = 8;
+var SHELL_RULE_TOOLS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var WEB_RULE_TOOLS;
+var POSIX_ROOT;
+var CONTROL_CHAR_RE;
+var UNSAFE_TEXT_CHAR_RE;
+var RULE_TOOL_NAME_RE;
+var TRIPLE_STAR_RE;
+var MAX_RULE_STARS;
+deferInit("chunk-bwpc82tt.js:9699", () => {
+  SHELL_RULE_TOOLS = new Set([...TOOL_VALIDATION_CONFIG.bashPrefixTools, POWERSHELL_TOOL_NAME]);
+  WEB_RULE_TOOLS = new Set([WEBFETCH, "WebBrowser"]);
+  POSIX_ROOT = "/";
+  CONTROL_CHAR_RE = /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}\p{Default_Ignorable_Code_Point}]/u;
+  UNSAFE_TEXT_CHAR_RE = /[\p{Cf}\p{Zl}\p{Zp}\p{Default_Ignorable_Code_Point}]|[^\P{Cc}\t\n\r]|\r(?!\n)/u;
+  RULE_TOOL_NAME_RE = /^[\w*-]+$/;
+  TRIPLE_STAR_RE = /\*{3,}/;
+  MAX_RULE_STARS = 8;
+});
 //@ chunk-bwpc82tt.js:9961-11315 placement
 /**
  * 从用户设置中筛选可转发到云端的部分：开关关闭或设置不可读时不发；权限规则按 PreToolUse 钩子与解析丢失情况过滤；去掉像凭证的文本；通过 schema 与大小检查后返回 document 与计数。
@@ -390,9 +426,9 @@ function filterPortableSettings(
     preToolUseHookActiveHere,
     hasLostAnAllowEntryAtParse,
   );
-  let i = getOwn(userSettings, "language");
+  let write = getOwn(userSettings, "language");
   let picked = {
-    language: pickNonEmptyString(typeof i === "string" ? i.trim() : i),
+    language: pickNonEmptyString(typeof write === "string" ? write.trim() : write),
     outputStyle: pickNonEmptyString(getOwn(userSettings, "outputStyle")),
     attribution: pickAttribution(getOwn(userSettings, "attribution")),
     includeCoAuthoredBy: asBooleanOrUndefined(getOwn(userSettings, "includeCoAuthoredBy")),
@@ -402,13 +438,13 @@ function filterPortableSettings(
     permissions: permissions.value,
   };
   let scrubbed = scrubCredentialValues(
-    PORTABLE_KEYS_ORDER.reduce((acc, ce) => pickSchemaValidSetting(acc, picked, ce), {}),
+    PORTABLE_KEYS_ORDER.reduce((acc, options) => pickSchemaValidSetting(acc, picked, options), {}),
   );
   let kept = scrubbed.kept ?? {};
   let keys = Object.keys(userSettings);
   let counts = {
     forwardedKeys: Object.keys(kept).length,
-    withheldKeys: count(keys, (b) => !Object.hasOwn(kept, b)),
+    withheldKeys: count(keys, (predicate) => !Object.hasOwn(kept, predicate)),
     withheldCredentialTexts: scrubbed.withheld,
     rules: permissions.counts,
   };
@@ -460,9 +496,9 @@ function safeBooleanCall(settingsToCloud) {
 /**
  * 生成键排序、两格缩进的 JSON 文本。
  */
-function canonicalJson(e) {
+function canonicalJson(value) {
   return (
-    jsonStringify(sortKeysDeep(e), null, 2) +
+    jsonStringify(sortKeysDeep(value), null, 2) +
     `
 `
   );
@@ -477,7 +513,7 @@ function classifyPortableRule(rule, behavior) {
   if (
     CONTROL_CHAR_RE.test(rule) ||
     TRIPLE_STAR_RE.test(rule) ||
-    count([...rule], (s) => s === "*") > MAX_RULE_STARS ||
+    count([...rule], (rule) => rule === "*") > MAX_RULE_STARS ||
     !validatePermissionRule(rule, behavior).valid
   )
     return "invalid";
@@ -486,8 +522,8 @@ function classifyPortableRule(rule, behavior) {
   if (mcpInfoFromString(toolName)?.serverName === REMOTE_DEVICES)
     return behavior === "allow" ? "device" : "keep_covers_device_tools";
   if (ruleContent !== undefined && (PATH_RULE_TOOLS.has(toolName) || hasWildcard(toolName))) {
-    let s = classifyRulePathRoot(ruleContent);
-    if (s === "machine" || (s === "home" && behavior === "allow")) return "rooted";
+    let rule = classifyRulePathRoot(ruleContent);
+    if (rule === "machine" || (rule === "home" && behavior === "allow")) return "rooted";
   }
   if (
     ruleContent !== undefined &&

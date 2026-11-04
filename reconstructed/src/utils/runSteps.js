@@ -8,155 +8,171 @@
  * pieces: chunk-d6c8e5w8.js (8)
  * attribution: placement 8
  */
-import { init_react_production, P, fo, Qr } from "../../vendor/react/cjs/react.production.js";
+import {
+  init_react_production,
+  useEffect,
+  suspenseTypeExport,
+  use,
+} from "../../vendor/react/cjs/react.production.js";
 import { env } from "./env.js";
 import { jsxProd_default } from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
-import { w } from "../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import { AppRoot } from "../components/AppRoot.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-d6c8e5w8.js:375-379 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-d6c8e5w8.js:375", () => {
+  init_react_production();
+});
 //@ chunk-d6c8e5w8.js:379-397 placement
-var weakMap = new WeakMap();
+var weakMap; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-d6c8e5w8.js:379", () => {
+  weakMap = new WeakMap();
+});
 //@ chunk-d6c8e5w8.js:397-528 placement
-function getRunStepsState(r) {
-  let n = weakMap.get(r);
-  if (!n) {
-    n = {
-      root: r,
+function getRunStepsState(root) {
+  let state = weakMap.get(root);
+  if (!state) {
+    state = {
+      root,
       screen: null,
       rendered: false,
       run: 0,
       keys: 0,
       jobWrites: Promise.resolve(),
     };
-    weakMap.set(r, n);
+    weakMap.set(root, state);
   }
-  return n;
+  return state;
 }
 //@ chunk-d6c8e5w8.js:528-1806 placement
 /**
  * 依次显示一组对话步骤（用 Ink 渲染）。
  */
-function runSteps(r, n, t = {}) {
-  let runStepsState = getRunStepsState(r);
-  let d = ++runStepsState.run;
-  let f = t.marksJobBlocked === true && !!env.CLAUDE_JOB_DIR;
+function runSteps(root, steps, options = {}) {
+  let runStepsState = getRunStepsState(root);
+  let runId = ++runStepsState.run;
+  let marksJobBlocked = options.marksJobBlocked === true && !!env.CLAUDE_JOB_DIR;
   return new Promise((resolve, reject) => {
-    let S = false;
-    function k(error) {
-      if (S || runStepsState.run !== d) return;
-      S = true;
+    let settled = false;
+    function fail(error) {
+      if (settled || runStepsState.run !== runId) return;
+      settled = true;
       reject(error);
     }
-    function m(s) {
-      let p = runStepsState.jobWrites.then(s).catch(() => {
+    function enqueueWrite(write) {
+      let queued = runStepsState.jobWrites.then(write).catch(() => {
         return;
       });
-      runStepsState.jobWrites = p;
-      return p;
+      runStepsState.jobWrites = queued;
+      return queued;
     }
-    function A(s) {
-      for (let p = s; p < n.length; p++) {
-        let y = false;
-        let J = true;
-        let N = false;
-        let v;
-        let V = false;
-        let M = () => {
-          if (f && !v && !y && !V)
-            v = m(() => import("./chunk-bc1hsbps.js").then((c) => c.markStartupDialogBlocked()));
+    function advanceFrom(startIndex) {
+      for (let index = startIndex; index < steps.length; index++) {
+        let passed = false;
+        let callReturned = true;
+        let stopped = false;
+        let blockedWrite;
+        let tearingDown = false;
+        let markBlocked = () => {
+          if (marksJobBlocked && !blockedWrite && !passed && !tearingDown)
+            blockedWrite = enqueueWrite(() =>
+              import("../services/daemon/rendezvous.js").then((jobModule) =>
+                jobModule.markStartupDialogBlocked(),
+              ),
+            );
         };
-        let D = () => {
-          let c = v;
-          v = undefined;
-          V = true;
-          if (c)
-            m(async () => {
-              let z = await c;
-              if (z) {
-                let F = await import("./chunk-bc1hsbps.js");
-                await F.clearStartupDialogBlocked(z);
+        let tearDown = () => {
+          let pendingWrite = blockedWrite;
+          blockedWrite = undefined;
+          tearingDown = true;
+          if (pendingWrite)
+            enqueueWrite(async () => {
+              let token = await pendingWrite;
+              if (token) {
+                let jobModule = await import("../services/daemon/rendezvous.js");
+                await jobModule.clearStartupDialogBlocked(token);
               }
             });
         };
-        let _ = (c) => {
-          if (y || S || runStepsState.run !== d) return;
-          y = true;
-          N = c === "stop";
-          D();
-          if (!J) R(N ? "done" : A(p + 1));
+        let onStepDone = (stop) => {
+          if (passed || settled || runStepsState.run !== runId) return;
+          passed = true;
+          stopped = stop === "stop";
+          tearDown();
+          if (!callReturned) settle(stopped ? "done" : advanceFrom(index + 1));
         };
-        let u;
+        let stepResult;
         try {
-          u = n[p](_);
+          stepResult = steps[index](onStepDone);
         } catch (error) {
-          k(error);
+          fail(error);
           return "failed";
         } finally {
-          J = false;
+          callReturned = false;
         }
-        if (y) {
-          if (N) return "done";
+        if (passed) {
+          if (stopped) return "done";
           continue;
         }
-        if (u instanceof Promise) {
-          u = u.catch((error) => {
-            k(error);
+        if (stepResult instanceof Promise) {
+          stepResult = stepResult.catch((error) => {
+            fail(error);
             return new Promise(() => {});
           });
-          u.then((c) => {
-            if (c !== null && c !== undefined) M();
+          stepResult.then((dialog) => {
+            if (dialog !== null && dialog !== undefined) markBlocked();
           });
-        } else if (u === null || u === undefined) {
-          y = true;
+        } else if (stepResult === null || stepResult === undefined) {
+          passed = true;
           continue;
-        } else M();
+        } else markBlocked();
         return {
           key: ++runStepsState.keys,
-          dialog: u,
-          pass: () => _(),
-          tornDown: D,
-          replaced: D,
-          options: t,
+          dialog: stepResult,
+          pass: () => onStepDone(),
+          tornDown: tearDown,
+          replaced: tearDown,
+          options,
         };
       }
       return "done";
     }
-    function R(s) {
-      if (s === "failed" || runStepsState.run !== d) return;
-      if (s === "done") {
+    function settle(outcome) {
+      if (outcome === "failed" || runStepsState.run !== runId) return;
+      if (outcome === "done") {
         renderStep(runStepsState, null);
         resolve();
         return;
       }
-      if (!runStepsState.rendered && s.dialog instanceof Promise) {
-        runStepsState.screen = s;
-        s.dialog.then((p) => {
-          if (runStepsState.screen !== s || runStepsState.run !== d) return;
-          if (p === null || p === undefined) s.pass();
+      if (!runStepsState.rendered && outcome.dialog instanceof Promise) {
+        runStepsState.screen = outcome;
+        outcome.dialog.then((dialog) => {
+          if (runStepsState.screen !== outcome || runStepsState.run !== runId) return;
+          if (dialog === null || dialog === undefined) outcome.pass();
           else
-            R({
-              ...s,
-              dialog: p,
+            settle({
+              ...outcome,
+              dialog,
             });
         });
         return;
       }
-      renderStep(runStepsState, s);
+      renderStep(runStepsState, outcome);
     }
-    R(A(0));
+    settle(advanceFrom(0));
   });
 }
 //@ chunk-d6c8e5w8.js:1806-2048 placement
-function showScreen(r, dialog, options = {}) {
-  let runStepsState = getRunStepsState(r);
+function showScreen(root, dialog, options = {}) {
+  let runStepsState = getRunStepsState(root);
   runStepsState.run++;
   let replaced = () => {};
   let replaced_2 = new Promise((resolve) => {
     replaced = resolve;
   });
-  let l = {
+  let screen = {
     key: ++runStepsState.keys,
     dialog,
     pass: () => {},
@@ -164,12 +180,12 @@ function showScreen(r, dialog, options = {}) {
     replaced,
     options,
   };
-  renderStep(runStepsState, l);
+  renderStep(runStepsState, screen);
   return {
     update: (dialog) => {
-      if (runStepsState.screen?.key === l.key)
+      if (runStepsState.screen?.key === screen.key)
         renderStep(runStepsState, {
-          ...l,
+          ...screen,
           dialog,
         });
     },
@@ -180,15 +196,15 @@ function showScreen(r, dialog, options = {}) {
 /**
  * 渲染当前步骤
  */
-function renderStep(runStepsState, n) {
-  if (runStepsState.screen && runStepsState.screen.key !== n?.key) runStepsState.screen.replaced();
-  runStepsState.screen = n;
-  if (!runStepsState.rendered && n === null) return;
+function renderStep(runStepsState, screen) {
+  if (runStepsState.screen && runStepsState.screen.key !== screen?.key) runStepsState.screen.replaced();
+  runStepsState.screen = screen;
+  if (!runStepsState.rendered && screen === null) return;
   runStepsState.rendered = true;
   runStepsState.root.render(
     jsxProd_default(StepTree, {
       tree: runStepsState,
-      screen: n,
+      screen,
     }),
   );
 }
@@ -197,104 +213,104 @@ function renderStep(runStepsState, n) {
  * 步骤树组件
  */
 function StepTree(props) {
-  let o = w(8);
+  let $ = useMemoCache(8);
   let { tree, screen } = props;
-  let d;
-  let f;
-  if (o[0] !== tree) {
-    d = () => () => {
+  let cleanup;
+  let deps;
+  if ($[0] !== tree) {
+    cleanup = () => () => {
       tree.rendered = false;
       tree.screen?.tornDown();
     };
-    f = [tree];
-    o[0] = tree;
-    o[1] = d;
-    o[2] = f;
+    deps = [tree];
+    $[0] = tree;
+    $[1] = cleanup;
+    $[2] = deps;
   } else {
-    d = o[1];
-    f = o[2];
+    cleanup = $[1];
+    deps = $[2];
   }
-  P(d, f);
+  useEffect(cleanup, deps);
   if (screen === null) {
     return null;
   }
   let children;
-  if (o[3] !== screen) {
+  if ($[3] !== screen) {
     children = jsxProd_default(StepScreen, {
       screen,
     });
-    o[3] = screen;
-    o[4] = children;
-  } else children = o[4];
-  let a;
-  if (o[5] !== screen.key || o[6] !== children) {
-    a = jsxProd_default(
-      fo,
+    $[3] = screen;
+    $[4] = children;
+  } else children = $[4];
+  let element;
+  if ($[5] !== screen.key || $[6] !== children) {
+    element = jsxProd_default(
+      suspenseTypeExport,
       {
         fallback: null,
         children,
       },
       screen.key,
     );
-    o[5] = screen.key;
-    o[6] = children;
-    o[7] = a;
-  } else a = o[7];
-  return a;
+    $[5] = screen.key;
+    $[6] = children;
+    $[7] = element;
+  } else element = $[7];
+  return element;
 }
 //@ chunk-d6c8e5w8.js:2581-3147 placement
 /**
  * 步骤屏幕渲染
  */
 function StepScreen(props) {
-  let d = w(12);
+  let $ = useMemoCache(12);
   let { screen } = props;
-  let t = screen.dialog instanceof Promise ? Qr(screen.dialog) : screen.dialog;
-  let o = t !== null && t !== undefined;
-  let f;
-  let l;
-  if (d[0] !== screen || d[1] !== o) {
-    f = () => {
-      if (!o) screen.pass();
+  let dialog = screen.dialog instanceof Promise ? use(screen.dialog) : screen.dialog;
+  let hasDialog = dialog !== null && dialog !== undefined;
+  let effect;
+  let deps;
+  if ($[0] !== screen || $[1] !== hasDialog) {
+    effect = () => {
+      if (!hasDialog) screen.pass();
     };
-    l = [screen, o];
-    d[0] = screen;
-    d[1] = o;
-    d[2] = f;
-    d[3] = l;
+    deps = [screen, hasDialog];
+    $[0] = screen;
+    $[1] = hasDialog;
+    $[2] = effect;
+    $[3] = deps;
   } else {
-    f = d[2];
-    l = d[3];
+    effect = $[2];
+    deps = $[3];
   }
-  P(f, l);
-  if (!o) {
+  useEffect(effect, deps);
+  if (!hasDialog) {
     return null;
   }
   let { session, onChangeAppState, storageV5 } = screen.options;
   if (!session) {
-    return t;
+    return dialog;
   }
   let onChangeAppState_2;
-  if (d[4] !== onChangeAppState || d[5] !== session) {
-    onChangeAppState_2 = onChangeAppState && ((A) => onChangeAppState(A, session));
-    d[4] = onChangeAppState;
-    d[5] = session;
-    d[6] = onChangeAppState_2;
-  } else onChangeAppState_2 = d[6];
-  let R;
-  if (d[7] !== t || d[8] !== session || d[9] !== storageV5 || d[10] !== onChangeAppState_2) {
-    R = jsxProd_default(AppRoot, {
+  if ($[4] !== onChangeAppState || $[5] !== session) {
+    onChangeAppState_2 = onChangeAppState && ((newAppState) => onChangeAppState(newAppState, session));
+    $[4] = onChangeAppState;
+    $[5] = session;
+    $[6] = onChangeAppState_2;
+  } else onChangeAppState_2 = $[6];
+  let element;
+  if ($[7] !== dialog || $[8] !== session || $[9] !== storageV5 || $[10] !== onChangeAppState_2) {
+    element = jsxProd_default(AppRoot, {
       session,
       storageV5,
       onChangeAppState: onChangeAppState_2,
-      children: t,
+      children: dialog,
     });
-    d[7] = t;
-    d[8] = session;
-    d[9] = storageV5;
-    d[10] = onChangeAppState_2;
-    d[11] = R;
-  } else R = d[11];
-  return R;
+    $[7] = dialog;
+    $[8] = session;
+    $[9] = storageV5;
+    $[10] = onChangeAppState_2;
+    $[11] = element;
+  } else element = $[11];
+  return element;
 }
 export { showScreen, runSteps };

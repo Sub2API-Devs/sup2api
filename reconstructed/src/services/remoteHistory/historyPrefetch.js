@@ -55,68 +55,68 @@ var PREVIOUS_SPOOL_CLEANUP_DELAY_MS = 30000;
 var SETTLED_PREFETCH_TTL_MS = 3000;
 //@ chunk-pmgfyvx7.js:12979-13348 placement
 function historySpoolDir() {
-  let e = bridgeHostState();
-  if (e.historySpoolDir !== null) return e.historySpoolDir;
-  let r = join(tmpdir(), "cc-history-prefetch-");
-  let i = mkdtemp(r).catch((error) =>
+  let state = bridgeHostState();
+  if (state.historySpoolDir !== null) return state.historySpoolDir;
+  let template = join(tmpdir(), "cc-history-prefetch-");
+  let pendingDir = mkdtemp(template).catch((error) =>
     isENOENT(error)
-      ? mkdir(dirname(r), {
+      ? mkdir(dirname(template), {
           recursive: true,
           mode: 448,
-        }).then(() => mkdtemp(r))
+        }).then(() => mkdtemp(template))
       : Promise.reject(error),
   );
-  let m = registerCleanup(() =>
-    i
-      .then((s) =>
-        rm(s, {
+  let unregister = registerCleanup(() =>
+    pendingDir
+      .then((dir) =>
+        rm(dir, {
           recursive: true,
           force: true,
         }),
       )
       .catch(() => {}),
   );
-  e.historySpoolDir = i;
-  i.catch(() => {
-    m();
-    if (e.historySpoolDir === i) e.historySpoolDir = null;
+  state.historySpoolDir = pendingDir;
+  pendingDir.catch(() => {
+    unregister();
+    if (state.historySpoolDir === pendingDir) state.historySpoolDir = null;
   });
-  return i;
+  return pendingDir;
 }
 //@ chunk-pmgfyvx7.js:13348-15125 placement
 /**
  * 为云端会话预取历史事件并写入本地缓存目录（仅第一方）。
  */
-function startHistoryPrefetch(e, credentials, i) {
+function startHistoryPrefetch(sessionId, credentials, options) {
   if (getAPIProvider() !== "firstParty") return;
-  if (!CCR_SESSION_ID_RE.test(e)) {
-    logForDebugging(`[historyPrefetch] ${e} fails CCR_SESSION_ID_RE \u2014 refusing`, {
+  if (!CCR_SESSION_ID_RE.test(sessionId)) {
+    logForDebugging(`[historyPrefetch] ${sessionId} fails CCR_SESSION_ID_RE \u2014 refusing`, {
       level: "warn",
     });
     return;
   }
   let historyPrefetchEntries = bridgeHostState().historyPrefetchEntries;
-  let s = historyPrefetchEntries.get(e);
-  if (s && !s.settled) return;
+  let previousEntry = historyPrefetchEntries.get(sessionId);
+  if (previousEntry && !previousEntry.settled) return;
   if (
-    i?.force !== true &&
-    s?.settledOk === true &&
-    s.settledAt !== undefined &&
-    Date.now() - s.settledAt < SETTLED_PREFETCH_TTL_MS
+    options?.force !== true &&
+    previousEntry?.settledOk === true &&
+    previousEntry.settledAt !== undefined &&
+    Date.now() - previousEntry.settledAt < SETTLED_PREFETCH_TTL_MS
   )
     return;
-  let l = historySpoolDir();
-  let n = l.then((y) => join(y, `${e}.${randomUUID()}.json`));
+  let dirPromise = historySpoolDir();
+  let pathPromise = dirPromise.then((dir) => join(dir, `${sessionId}.${randomUUID()}.json`));
   let startTime = performance.now();
-  let S = {
+  let entry = {
     written: Promise.resolve(null),
     settled: false,
     pageSize: HISTORY_PAGE_SIZE,
   };
-  let w = (async () => {
-    let y = await n;
-    let R = async (E) =>
-      apiClient.get(`/v1/code/sessions/${e}/events?limit=${E}&sort_order=desc`, {
+  let writePromise = (async () => {
+    let spoolPath = await pathPromise;
+    let fetchPage = async (limit) =>
+      apiClient.get(`/v1/code/sessions/${sessionId}/events?limit=${limit}&sort_order=desc`, {
         auth: "teleport-org",
         credentials,
         headers: await trustedDeviceHeaders(),
@@ -124,99 +124,108 @@ function startHistoryPrefetch(e, credentials, i) {
         timeout: 15000,
         validateStatus: () => true,
       });
-    let _ = await R(HISTORY_PAGE_SIZE);
-    if (_.ok && _.status === 400) {
+    let response = await fetchPage(HISTORY_PAGE_SIZE);
+    if (response.ok && response.status === 400) {
       logForDebugging(
-        `[historyPrefetch] ${e} limit=${HISTORY_PAGE_SIZE} rejected (400) \u2014 retrying at ${DEFAULT_EVENT_PAGE_SIZE}`,
+        `[historyPrefetch] ${sessionId} limit=${HISTORY_PAGE_SIZE} rejected (400) \u2014 retrying at ${DEFAULT_EVENT_PAGE_SIZE}`,
       );
-      _.data.resume();
-      S.pageSize = DEFAULT_EVENT_PAGE_SIZE;
-      _ = await R(DEFAULT_EVENT_PAGE_SIZE);
+      response.data.resume();
+      entry.pageSize = DEFAULT_EVENT_PAGE_SIZE;
+      response = await fetchPage(DEFAULT_EVENT_PAGE_SIZE);
     }
-    if (!_.ok) {
-      logForDebugging(`[historyPrefetch] ${e} gate=${_.reason} ${"detail" in _ ? _.detail : ""}`);
+    if (!response.ok) {
+      logForDebugging(
+        `[historyPrefetch] ${sessionId} gate=${response.reason} ${"detail" in response ? response.detail : ""}`,
+      );
       return null;
     }
-    if (_.status !== 200) {
-      logForDebugging(`[historyPrefetch] ${e} HTTP ${_.status}`);
-      _.data.resume();
+    if (response.status !== 200) {
+      logForDebugging(`[historyPrefetch] ${sessionId} HTTP ${response.status}`);
+      response.data.resume();
       return null;
     }
     let hash = createHash("sha256");
     await pipeline(
-      _.data,
-      async function* (E) {
-        for await (let P of E) {
-          hash.update(P);
-          yield P;
+      response.data,
+      async function* (source) {
+        for await (let chunk of source) {
+          hash.update(chunk);
+          yield chunk;
         }
       },
-      createWriteStream(y, {
+      createWriteStream(spoolPath, {
         mode: 384,
         flags: "wx",
       }),
     );
     return {
-      path: y,
+      path: spoolPath,
       digest: hash.digest("hex"),
     };
   })().catch((error) => {
-    logForDebugging(`[historyPrefetch] ${e} failed: ${errorMessage(error)}`);
+    logForDebugging(`[historyPrefetch] ${sessionId} failed: ${errorMessage(error)}`);
     if (getErrnoCode(error) === "EEXIST") {
       logEvent("tengu_remote_history_spool_altered", {});
       return null;
     }
-    if (isENOENT(error) && bridgeHostState().historySpoolDir === l) bridgeHostState().historySpoolDir = null;
-    n.then(unlink).catch(() => {});
+    if (isENOENT(error) && bridgeHostState().historySpoolDir === dirPromise)
+      bridgeHostState().historySpoolDir = null;
+    pathPromise.then(unlink).catch(() => {});
     return null;
   });
-  S.written = w;
-  historyPrefetchEntries.set(e, S);
-  if (s)
+  entry.written = writePromise;
+  historyPrefetchEntries.set(sessionId, entry);
+  if (previousEntry)
     setTimeout(
-      (y) => {
-        y.then((R) => (R === null ? undefined : unlink(R.path))).catch(() => {});
+      (previousWritten) => {
+        previousWritten
+          .then((previousResult) => (previousResult === null ? undefined : unlink(previousResult.path)))
+          .catch(() => {});
       },
       PREVIOUS_SPOOL_CLEANUP_DELAY_MS,
-      s.written,
+      previousEntry.written,
     ).unref();
-  w.then((y) => {
-    S.settled = true;
-    S.settledAt = Date.now();
-    S.settledOk = y !== null;
-    if (y === null && s?.settled === true && historyPrefetchEntries.get(e) === S)
-      historyPrefetchEntries.set(e, {
-        ...s,
+  writePromise.then((written) => {
+    entry.settled = true;
+    entry.settledAt = Date.now();
+    entry.settledOk = written !== null;
+    if (
+      written === null &&
+      previousEntry?.settled === true &&
+      historyPrefetchEntries.get(sessionId) === entry
+    )
+      historyPrefetchEntries.set(sessionId, {
+        ...previousEntry,
         settledAt: Date.now(),
       });
     logForDebugging(
-      `[historyPrefetch] ${e} ${y ? `\u2192 ${y.path}` : "null"} +${(performance.now() - startTime).toFixed(0)}ms`,
+      `[historyPrefetch] ${sessionId} ${written ? `\u2192 ${written.path}` : "null"} +${(performance.now() - startTime).toFixed(0)}ms`,
     );
   });
 }
 //@ chunk-pmgfyvx7.js:15125-15785 placement
-async function readSpooledHistory(e, { path, digest }) {
+async function readSpooledHistory(sessionId, { path, digest }) {
   try {
-    let m = await lstat(path);
-    let size = m.size;
+    let stats = await lstat(path);
+    let size = stats.size;
     if (size > MAX_SPOOL_BYTES) {
-      logForDebugging(`[historyPrefetch] ${e} spool ${size}B exceeds cap \u2014 skipping`);
+      logForDebugging(`[historyPrefetch] ${sessionId} spool ${size}B exceeds cap \u2014 skipping`);
       return {
         skip: "oversize",
       };
     }
-    if (m.isFile()) {
-      let l = await open(path, readOnlyNoFollowFlags());
+    if (stats.isFile()) {
+      let handle = await open(path, readOnlyNoFollowFlags());
       try {
-        if ((await l.stat()).isFile()) {
-          let { buffer } = await l.read(Buffer.alloc(size), 0, size, 0);
+        if ((await handle.stat()).isFile()) {
+          let { buffer } = await handle.read(Buffer.alloc(size), 0, size, 0);
           if (computeContentHash(buffer) === digest)
             return {
               body: buffer.toString("utf8"),
             };
         }
       } finally {
-        await l.close();
+        await handle.close();
       }
     }
   } catch (error) {
@@ -232,7 +241,7 @@ async function readSpooledHistory(e, { path, digest }) {
   }
   logEvent("tengu_remote_history_spool_altered", {});
   logForDebugging(
-    `[historyPrefetch] ${e} spool failed the check against what the fetch wrote \u2014 skipping`,
+    `[historyPrefetch] ${sessionId} spool failed the check against what the fetch wrote \u2014 skipping`,
     {
       level: "warn",
     },
@@ -242,55 +251,55 @@ async function readSpooledHistory(e, { path, digest }) {
   };
 }
 //@ chunk-pmgfyvx7.js:15785-16650 placement
-async function takePrefetchedHistory(e, credentials) {
+async function takePrefetchedHistory(sessionId, credentials) {
   let historyPrefetchEntries = bridgeHostState().historyPrefetchEntries;
-  if (!historyPrefetchEntries.has(e)) startHistoryPrefetch(e, credentials);
-  let m = historyPrefetchEntries.get(e);
-  historyPrefetchEntries.delete(e);
-  if (!m) return null;
-  let written = await m.written;
+  if (!historyPrefetchEntries.has(sessionId)) startHistoryPrefetch(sessionId, credentials);
+  let entry = historyPrefetchEntries.get(sessionId);
+  historyPrefetchEntries.delete(sessionId);
+  if (!entry) return null;
+  let written = await entry.written;
   if (written === null) return null;
-  let spooledHistory = await readSpooledHistory(e, written);
+  let spooledHistory = await readSpooledHistory(sessionId, written);
   await unlink(written.path).catch(() => {});
   if ("skip" in spooledHistory) return null;
   let body = spooledHistory.body;
   let historyLine = parseHistoryLine(body);
   if (historyLine === null) {
-    logForDebugging(`[historyPrefetch] ${e} parse failed`);
+    logForDebugging(`[historyPrefetch] ${sessionId} parse failed`);
     return null;
   }
   if (!historyLine.hasMore) return filterHistoryEvents(historyLine);
-  let ctx = await getSessionRequestConfig(e, credentials).catch(() => null);
+  let ctx = await getSessionRequestConfig(sessionId, credentials).catch(() => null);
   if (ctx === null) return filterHistoryEvents(historyLine);
   let events = historyLine.events;
   let firstId = historyLine.firstId;
-  let R = 1;
-  let _ = Date.now() + HISTORY_WALK_BUDGET_MS;
+  let pageCount = 1;
+  let deadlineMs = Date.now() + HISTORY_WALK_BUDGET_MS;
   while (
     firstId !== null &&
-    R < MAX_HISTORY_EXTRA_PAGES &&
-    Date.now() < _ &&
+    pageCount < MAX_HISTORY_EXTRA_PAGES &&
+    Date.now() < deadlineMs &&
     !(hasBackgroundEvents(events) && events.some(isWorkerBackgroundEvent))
   ) {
-    let E = _ - Date.now();
+    let remainingMs = deadlineMs - Date.now();
     let winner = await Promise.race([
-      fetchOlderEvents(ctx, firstId, m.pageSize, MAX_SPOOL_BYTES),
-      sleep(E).then(() => "budget"),
+      fetchOlderEvents(ctx, firstId, entry.pageSize, MAX_SPOOL_BYTES),
+      sleep(remainingMs).then(() => "budget"),
     ]);
     if (winner === "budget" || winner === null) break;
-    R++;
+    pageCount++;
     events.unshift(...winner.events);
     firstId = winner.hasMore ? winner.firstId : null;
     historyLine = winner;
   }
-  let b = firstId !== null && hasBackgroundEvents(events);
+  let complete = firstId !== null && hasBackgroundEvents(events);
   logForDebugging(
-    `[historyPrefetch] ${e} walked ${R} pages, ${events.length} events, complete=${firstId === null || b}`,
+    `[historyPrefetch] ${sessionId} walked ${pageCount} pages, ${events.length} events, complete=${firstId === null || complete}`,
   );
   return filterHistoryEvents({
     events,
     firstId,
-    hasMore: firstId !== null && !b,
+    hasMore: firstId !== null && !complete,
   });
 }
-export { PREFETCH_STATE, projectPersonEventFilter };
+export { PREFETCH_STATE, projectPersonEventFilter, takePrefetchedHistory };

@@ -60,10 +60,10 @@ async function call(onDone, context, args) {
     onDone(message);
     return null;
   }
-  let i = args?.trim() || "";
-  let p = firstLineOf(i, " ");
-  if (p === "install" && platform === "windows" && isWindowsSandboxEnabled()) {
-    if (i !== "install") {
+  let trimmedArgs = args?.trim() || "";
+  let firstWord = firstLineOf(trimmedArgs, " ");
+  if (firstWord === "install" && platform === "windows" && isWindowsSandboxEnabled()) {
+    if (trimmedArgs !== "install") {
       onDone(color("error", theme)("install takes no arguments. Run /sandbox install by itself."));
       return null;
     }
@@ -71,7 +71,7 @@ async function call(onDone, context, args) {
       ...createSystemMessage(WINDOWS_SANDBOX_SETUP_NOTICE, "notice"),
       persist: false,
     });
-    let a = await setupWindowsSandboxOnce(context.session.host);
+    let result = await setupWindowsSandboxOnce(context.session.host);
     onDone(
       color(
         {
@@ -79,9 +79,9 @@ async function call(onDone, context, args) {
           cancelled: "warning",
           partial: "warning",
           error: "error",
-        }[a.status],
+        }[result.status],
         theme,
-      )(a.message),
+      )(result.message),
     );
     return null;
   }
@@ -89,7 +89,7 @@ async function call(onDone, context, args) {
     let message = SandboxManager.isSandboxEnabledInSettings()
       ? await getWindowsSandboxUserStatus()
       : undefined;
-    let c = color(
+    let lockedMessage = color(
       "error",
       theme,
     )(
@@ -100,19 +100,19 @@ async function call(onDone, context, args) {
 ${message}`
       }`,
     );
-    onDone(c);
+    onDone(lockedMessage);
     return null;
   }
-  if (!i) {
+  if (!trimmedArgs) {
     let depCheck = SandboxManager.checkDependencies();
     return jsxProd_default(SandboxSettings, {
       onComplete: onDone,
       depCheck,
     });
   }
-  if (i)
-    if (p === "exclude") {
-      let commandPattern = i.slice(8).trim();
+  if (trimmedArgs)
+    if (firstWord === "exclude") {
+      let commandPattern = trimmedArgs.slice(8).trim();
       if (!commandPattern) {
         let message = color(
           "error",
@@ -122,24 +122,25 @@ ${message}`
         return null;
       }
       let cleanPattern = commandPattern.replace(/^["']|["']$/g, "");
-      let C = addToExcludedCommands(cleanPattern);
-      if (C.outcome === "refused") {
-        let v = color(
+      let addResult = addToExcludedCommands(cleanPattern);
+      if (addResult.outcome === "refused") {
+        let refusedMessage = color(
           "error",
           theme,
         )(
           `Can't exclude "${cleanPattern}": this session's sandbox policy limits exclusions to trusted settings (managed policy, a --settings file, user settings), and user settings are turned off here (--setting-sources), so there is no settings file where the exclusion would take effect. Re-enable user settings, or add it to the managed or --settings configuration.`,
         );
-        onDone(v);
+        onDone(refusedMessage);
         return null;
       }
-      let { settingsSource } = C;
+      let { settingsSource } = addResult;
       let settingsFilePathForSource = getSettingsFilePathForSource(settingsSource);
-      let x = settingsFilePathForSource
+      let relativePath = settingsFilePathForSource
         ? relative(getCwdState(), settingsFilePathForSource)
         : ".claude/settings.local.json";
-      let P = settingsFilePathForSource && x.startsWith("..") ? settingsFilePathForSource : x;
-      let message = color("success", theme)(`Added "${cleanPattern}" to excluded commands in ${P}`);
+      let shownPath =
+        settingsFilePathForSource && relativePath.startsWith("..") ? settingsFilePathForSource : relativePath;
+      let message = color("success", theme)(`Added "${cleanPattern}" to excluded commands in ${shownPath}`);
       onDone(message);
       return null;
     } else {
@@ -147,10 +148,11 @@ ${message}`
         "error",
         theme,
       )(
-        `Error: Unknown subcommand "${p}". Available: ${platform === "windows" && isWindowsSandboxEnabled() ? "install, exclude" : "exclude"}`,
+        `Error: Unknown subcommand "${firstWord}". Available: ${platform === "windows" && isWindowsSandboxEnabled() ? "install, exclude" : "exclude"}`,
       );
       onDone(message);
       return null;
     }
   return null;
 }
+export { call };

@@ -19,14 +19,19 @@ import { getGlobalConfig } from "../../utils/config.js";
 import { CLAUDE_IN_CHROME_MCP_SERVER_NAME } from "../../utils/claudeInChrome/common.js";
 import { isClaudeAISubscriber } from "../../utils/auth.js";
 import { env } from "../../utils/env.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-vbhf914m.js:382-472 placement
-var CHROME_PERMISSIONS_URL = "https://clau.de/chrome/permissions";
-var CHROME_CONSENT_URLS = {
-  install: HTTPS_CLAUDE_AI_CHROME,
-  reconnect: CHROME_EXTENSION_RECONNECT_URL,
-  permissions: CHROME_PERMISSIONS_URL,
-};
+var CHROME_PERMISSIONS_URL; // deferred: uses HTTPS_CLAUDE_AI_CHROME (./chrome.js) of its import cycle while loading; runs once the cycle is complete
+var CHROME_CONSENT_URLS;
+deferInit("chunk-vbhf914m.js:382", () => {
+  CHROME_PERMISSIONS_URL = "https://clau.de/chrome/permissions";
+  CHROME_CONSENT_URLS = {
+    install: HTTPS_CLAUDE_AI_CHROME,
+    reconnect: CHROME_EXTENSION_RECONNECT_URL,
+    permissions: CHROME_PERMISSIONS_URL,
+  };
+});
 //@ chunk-vbhf914m.js:472-993 placement
 /**
  * /chrome 对话框的响应（扩展检测与权限页）。
@@ -63,4 +68,4 @@ async function buildChromeDialogResponse({ mcpClients, atStartup }) {
     },
   };
 }
-export { CHROME_PERMISSIONS_URL };
+export { CHROME_PERMISSIONS_URL, buildChromeDialogResponse };

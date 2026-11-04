@@ -213,7 +213,7 @@ import {
   isRepoFrontmatterHookRestricted,
 } from "../../utils/hooks/registerFrontmatterHooks.js";
 import { warnMcpToolNameTooLong } from "../../services/mcp/toolNameLimits.js";
-import { Ji } from "../../../vendor/lodash-es/uniqBy.js";
+import { uniqByExport } from "../../../vendor/lodash-es/uniqBy.js";
 import { logFeatureBad, logFeatureSad, logFeatureOk } from "../../services/analytics/featureTelemetry.js";
 import { permissionRuleValueFromString } from "../../utils/permissions/permissionRuleParser.js";
 import { getMaxSubagentSpawnDepth } from "./spawnDepth.js";
@@ -290,6 +290,7 @@ import { readAgentMemoryScope } from "./agentMemory.js";
 import { buildSubagentNotesSection, DEFAULT_SUBAGENT_PROMPT } from "../../constants/prompts.js";
 import { applyPromptAblation } from "../../utils/api.js";
 import { firstLineOf } from "../../utils/stringUtils.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-0h4e7gnq.js:81304-81708 placement
 /**
@@ -298,26 +299,29 @@ import { firstLineOf } from "../../utils/stringUtils.js";
 async function restoreResumedAgentBaseline(agentId, { resumed, storageV5 }) {
   if (!resumed) return;
   try {
-    let y = null;
-    let r = hasParkedAgentBaseline(agentId) ? undefined : prefixSidecarKey(agentId);
-    if (r !== undefined) {
-      let S = isStorageV5Enabled() && storageV5 !== undefined ? toStorageKey(r) : undefined;
-      if (storageV5 === undefined || S === undefined) {
-        let h = worktreeFromProgress(r);
-        y = h === undefined ? null : await readSmallFileOrNull(h, MAX_CACHE_STATE_BYTES);
+    let baselineText = null;
+    let sidecarPath = hasParkedAgentBaseline(agentId) ? undefined : prefixSidecarKey(agentId);
+    if (sidecarPath !== undefined) {
+      let storageKey =
+        isStorageV5Enabled() && storageV5 !== undefined ? toStorageKey(sidecarPath) : undefined;
+      if (storageV5 === undefined || storageKey === undefined) {
+        let filePath = worktreeFromProgress(sidecarPath);
+        baselineText =
+          filePath === undefined ? null : await readSmallFileOrNull(filePath, MAX_CACHE_STATE_BYTES);
       } else {
-        let h = await storageV5.read([
+        let readResult = await storageV5.read([
           {
-            key: S,
+            key: storageKey,
             offset: 0,
             length: MAX_CACHE_STATE_BYTES + 1,
           },
         ]);
-        let k = h.ok ? h.value.items[0] : undefined;
-        if (k?.found && k.totalBytes <= MAX_CACHE_STATE_BYTES) y = Buffer.from(k.value).toString("utf-8");
+        let item = readResult.ok ? readResult.value.items[0] : undefined;
+        if (item?.found && item.totalBytes <= MAX_CACHE_STATE_BYTES)
+          baselineText = Buffer.from(item.value).toString("utf-8");
       }
     }
-    restoreAgentBaseline(agentId, y);
+    restoreAgentBaseline(agentId, baselineText);
   } catch (error) {
     logError(error);
   }
@@ -326,28 +330,28 @@ async function restoreResumedAgentBaseline(agentId, { resumed, storageV5 }) {
 /**
  * 由代理转录路径得到 `.prefix.json` 路径。
  */
-function prefixTranscriptPath(e) {
-  return getAgentTranscriptPath(e).replace(/\.jsonl$/, ".prefix.json");
+function prefixTranscriptPath(agentId) {
+  return getAgentTranscriptPath(agentId).replace(/\.jsonl$/, ".prefix.json");
 }
 //@ chunk-0h4e7gnq.js:81771-81846 placement
 /**
  * 由代理转录定位出 `.prefix.json` 的 sidecar 键。
  */
-function prefixSidecarKey(e) {
-  let n = locateAgentTranscript(e);
-  return n === undefined ? undefined : subagentSidecarKey(n, ".prefix.json");
+function prefixSidecarKey(agentId) {
+  let transcriptPath = locateAgentTranscript(agentId);
+  return transcriptPath === undefined ? undefined : subagentSidecarKey(transcriptPath, ".prefix.json");
 }
 //@ chunk-0h4e7gnq.js:81846-81912 placement
 /**
  * 把自动压缩上限包成 `{ceiling, inner}`。
  */
 function withAutoCompactCeiling(autoCompactWindow, autoCompactWindow_2) {
-  let s = autoCompactWindow;
+  let innerWindow = autoCompactWindow;
   return autoCompactWindow_2 === undefined
-    ? s
+    ? innerWindow
     : {
         ceiling: autoCompactWindow_2,
-        inner: s,
+        inner: innerWindow,
       };
 }
 //@ chunk-0h4e7gnq.js:81912-81962 placement
@@ -356,7 +360,7 @@ function withAutoCompactCeiling(autoCompactWindow, autoCompactWindow_2) {
  */
 function killAgentShellTasks(agentId, taskRegistry) {
   killShellTasksForAgent(agentId, taskRegistry);
-  dequeueAllMatching((s) => s.agentId === agentId);
+  dequeueAllMatching((entry) => entry.agentId === agentId);
 }
 //@ chunk-0h4e7gnq.js:81962-82010 placement
 /**
@@ -373,35 +377,38 @@ function logAgentSkillPreloadSafely(skill, agentId, isBuiltIn) {
 /**
  * 上报子代理预加载技能的遥测（tengu_skill_tool_invocation，execution_context=preload、invocation_trigger=agent-preload）；技能名按官方市场/MCP/内建/打包区分脱敏。
  */
-function logAgentSkillPreload(e, n, isBuiltIn) {
-  let isOfficial = isOfficialMarketplaceSkill(e);
+function logAgentSkillPreload(skill, agentId, isBuiltIn) {
+  let isOfficial = isOfficialMarketplaceSkill(skill);
   let { sanitizedName, skillNameHash } = sanitizeSkillNameForTelemetry({
-    rawName: e.name,
-    canonicalName: e.name,
-    isMcp: e.loadedFrom === "mcp",
+    rawName: skill.name,
+    canonicalName: skill.name,
+    isMcp: skill.loadedFrom === "mcp",
     isBuiltIn,
-    isBundled: e.source === "bundled",
+    isBundled: skill.source === "bundled",
     isOfficial,
   });
-  let h = "agent-preload";
+  let trigger = "agent-preload";
   logEvent("tengu_skill_tool_invocation", {
     command_name: sanitizedName,
-    _PROTO_skill_name: e.name,
+    _PROTO_skill_name: skill.name,
     ...skillNameHash,
     execution_context: lit("preload"),
     invocation_trigger: fromEnum("agent-preload"),
-    parent_agent_id: sanitizeMarkName(n),
-    ...logSkillsLoaded(e.source, e.loadedFrom, e.kind, e.createdBy),
-    skill_content_chars: e.contentLength,
-    ...buildServerAttributionFields(e),
+    parent_agent_id: sanitizeMarkName(agentId),
+    ...logSkillsLoaded(skill.source, skill.loadedFrom, skill.kind, skill.createdBy),
+    skill_content_chars: skill.contentLength,
+    ...buildServerAttributionFields(skill),
   });
 }
 //@ chunk-0h4e7gnq.js:82485-82634 placement = getDestructiveCommandWarning (0.499)
 /**
  * 取子代理最近一次自我报告的文本，有 warning 时拼在前面；报告来源与当前一致时不取，返回 undefined。被 runAgent 使用。
  */
-function getLatestAgentReportText(e, agentId, s) {
-  let report = handbackFrom(agentId) !== s ? getPendingHandbackReport(e, agentId)?.at(-1)?.report : undefined;
+function getLatestAgentReportText(task, agentId, previousHandback) {
+  let report =
+    handbackFrom(agentId) !== previousHandback
+      ? getPendingHandbackReport(task, agentId)?.at(-1)?.report
+      : undefined;
   let text = report?.text;
   if (text === undefined) return;
   return report?.warning === undefined
@@ -415,8 +422,8 @@ function filterIncompleteToolCalls_2(toolUseContext, message) {
   if (toolUseContext.options.forwardSubagentText) return true;
   if (toolUseContext.session.surfaceCapabilities.sdkForwardNestedSubagentToolCalls() !== true) return false;
   let content = message.data.message.message.content;
-  let y = Array.isArray(content) ? content[0] : undefined;
-  if (y?.type !== "tool_use" && y?.type !== "tool_result") return false;
+  let firstBlock = Array.isArray(content) ? content[0] : undefined;
+  if (firstBlock?.type !== "tool_use" && firstBlock?.type !== "tool_result") return false;
   return getFeatureValue_CACHED_MAY_BE_STALE("tengu_starry_squid", true);
 }
 //@ chunk-0h4e7gnq.js:82937-84075 placement
@@ -430,38 +437,39 @@ class SidechainRecorder {
   queued = [];
   unregisterExitDrain;
   flushHeld = () => this.flush(true);
-  constructor(e, agentId, lastRecordedUuid, recordedUuids, storageV5, signal) {
-    this.sessionStorage = e;
+  constructor(sessionStorage, agentId, lastRecordedUuid, recordedUuids, storageV5, signal) {
+    this.sessionStorage = sessionStorage;
     this.agentId = agentId;
     this.lastRecordedUuid = lastRecordedUuid;
     this.recordedUuids = recordedUuids;
     this.storageV5 = storageV5;
     this.abortSignal = signal;
-    this.unregisterExitDrain = e.registerTranscriptExitDrain(this.flushHeld);
+    this.unregisterExitDrain = sessionStorage.registerTranscriptExitDrain(this.flushHeld);
     signal.addEventListener("abort", this.flushHeld, {
       once: true,
     });
   }
-  record(e) {
-    this.queued.push(...e.filter(this.sessionStorage.isLoggableMessage));
+  record(messages) {
+    this.queued.push(...messages.filter(this.sessionStorage.isLoggableMessage));
     return this.flush(
-      this.abortSignal.aborted || e.some((n) => n.type === "assistant" && n.isApiErrorMessage === true),
+      this.abortSignal.aborted ||
+        messages.some((message) => message.type === "assistant" && message.isApiErrorMessage === true),
     );
   }
-  async flush(e = false) {
-    let n = this.queued.splice(0, this.sessionStorage.transcriptCursorEnd(this.queued, 0, !e));
-    if (n.length === 0) return;
+  async flush(force = false) {
+    let batch = this.queued.splice(0, this.sessionStorage.transcriptCursorEnd(this.queued, 0, !force));
+    if (batch.length === 0) return;
     let lastRecordedUuid = this.lastRecordedUuid;
-    for (let y of n) {
-      this.lastRecordedUuid = y.uuid;
-      this.recordedUuids?.add(y.uuid);
+    for (let message of batch) {
+      this.lastRecordedUuid = message.uuid;
+      this.recordedUuids?.add(message.uuid);
     }
     await this.sessionStorage
-      .recordSidechainTranscript(n, this.agentId, lastRecordedUuid, this.storageV5)
+      .recordSidechainTranscript(batch, this.agentId, lastRecordedUuid, this.storageV5)
       .catch(logSidechainFailure);
   }
-  forget(e) {
-    let lastIndex = this.queued.findLastIndex((s) => s.uuid === e);
+  forget(uuid) {
+    let lastIndex = this.queued.findLastIndex((message) => message.uuid === uuid);
     if (lastIndex !== -1) this.queued.splice(lastIndex, 1);
   }
   async close() {
@@ -474,136 +482,155 @@ class SidechainRecorder {
 /**
  * 记录 sidechain 转录写入失败。
  */
-function logSidechainFailure(e) {
-  logForDebugging(`Failed to record sidechain transcript: ${e}`);
+function logSidechainFailure(error) {
+  logForDebugging(`Failed to record sidechain transcript: ${error}`);
 }
 //@ chunk-0h4e7gnq.js:84139-84258 placement
-function assembleAgentToolPool(toolUseContext, n, s) {
-  return toolUseContext.options.toolCatalog.assembleToolPool(n, excludeCoordinatorCommsMcpTools(s), {
-    skipReplFilter: true,
-    machineMcpTools: bridgeToolsOf(toolUseContext),
-  });
+function assembleAgentToolPool(toolUseContext, permissionContext, mcpTools) {
+  return toolUseContext.options.toolCatalog.assembleToolPool(
+    permissionContext,
+    excludeCoordinatorCommsMcpTools(mcpTools),
+    {
+      skipReplFilter: true,
+      machineMcpTools: bridgeToolsOf(toolUseContext),
+    },
+  );
 }
 //@ chunk-0h4e7gnq.js:84258-84347 placement
 /**
  * 生成可后挂工具池的审查工具集合。
  */
 function createDeferredReviewTools(tools) {
-  let n = () => [];
+  let getExtraTools = () => [];
   return {
-    onToolPool: (s) => {
-      n = s;
+    onToolPool: (onToolPool) => {
+      getExtraTools = onToolPool;
     },
-    reviewTools: () => [...tools, ...n()],
+    reviewTools: () => [...tools, ...getExtraTools()],
   };
 }
 //@ chunk-0h4e7gnq.js:84347-84657 placement
 /**
  * 创建随调用增长的工具列表获取函数。
  */
-function createGrowingToolList(e, n, s, y) {
-  let r = e;
-  let S;
-  let h;
+function createGrowingToolList(initialTools, getBaseTools, getMcpTools, filterTools) {
+  let currentTools = initialTools;
+  let lastBaseTools;
+  let lastMcpTools;
   return () => {
     try {
-      let k = n();
-      let w = s();
-      if (k !== S || w !== h) {
-        let combined = k.concat(w.filter(isMcpTool));
-        let L = new Set(r.map((G) => G.name));
-        let I = new Set(combined.map((G) => G.name).filter((G) => !L.has(G)));
-        if (I.size > 0) {
-          let filtered = y(combined).filter((ee) => I.has(ee.name));
-          if (filtered.length > 0) r = [...r, ...filtered];
+      let baseTools = getBaseTools();
+      let mcpTools = getMcpTools();
+      if (baseTools !== lastBaseTools || mcpTools !== lastMcpTools) {
+        let combined = baseTools.concat(mcpTools.filter(isMcpTool));
+        let knownNames = new Set(currentTools.map((tool) => tool.name));
+        let newNames = new Set(
+          combined.map((tool) => tool.name).filter((toolName) => !knownNames.has(toolName)),
+        );
+        if (newNames.size > 0) {
+          let filtered = filterTools(combined).filter((tool) => newNames.has(tool.name));
+          if (filtered.length > 0) currentTools = [...currentTools, ...filtered];
         }
-        S = k;
-        h = w;
+        lastBaseTools = baseTools;
+        lastMcpTools = mcpTools;
       }
     } catch (error) {
       logError(toError(error));
     }
-    return r;
+    return currentTools;
   };
 }
 //@ chunk-0h4e7gnq.js:84657-84772 placement
 function isOnlyPendingToolUse(messages, id) {
-  let flattened = messages.slice(messages.findLastIndex((y) => y.type === "user") + 1).flatMap(getToolUseIds);
+  let flattened = messages
+    .slice(messages.findLastIndex((message) => message.type === "user") + 1)
+    .flatMap(getToolUseIds);
   return flattened.length === 1 && flattened[0] === id;
 }
 //@ chunk-0h4e7gnq.js:84772-85087 placement
 /**
  * 在消息中找出正在等待结果的工具调用及其所属的助手消息。
  */
-function findWaitingToolCall(e, id, tools, { normalizeMessagesForAPI }) {
-  let lastIndex = e.findLastIndex((k) => getToolUseIds(k).includes(id));
-  let S = e[lastIndex];
-  if (S?.type !== "assistant") return;
-  let h = e.slice(0, lastIndex).findLastIndex((k) => k.type === "user") + 1;
+function findWaitingToolCall(messages, id, tools, { normalizeMessagesForAPI }) {
+  let lastIndex = messages.findLastIndex((message) => getToolUseIds(message).includes(id));
+  let assistantMessage = messages[lastIndex];
+  if (assistantMessage?.type !== "assistant") return;
+  let runStartIndex = messages.slice(0, lastIndex).findLastIndex((message) => message.type === "user") + 1;
   if (
-    e.slice(0, h).some((k) => isSameAssistantMessage(k, S)) ||
-    normalizeMessagesForAPI(e.slice(lastIndex + 1), tools).length > 0
+    messages.slice(0, runStartIndex).some((message) => isSameAssistantMessage(message, assistantMessage)) ||
+    normalizeMessagesForAPI(messages.slice(lastIndex + 1), tools).length > 0
   )
     return;
   return {
-    call: S,
-    rows: e.slice(h, lastIndex + 1).filter((k) => isSameAssistantMessage(k, S)),
+    call: assistantMessage,
+    rows: messages
+      .slice(runStartIndex, lastIndex + 1)
+      .filter((message) => isSameAssistantMessage(message, assistantMessage)),
   };
 }
 //@ chunk-0h4e7gnq.js:85087-85666 placement
-async function* abortedToolResults(e, n, s, y) {
-  if (e === undefined) return yield* s(y);
-  let waitingToolCall = findWaitingToolCall(y.messages, e.id, y.toolUseContext.options.tools, n);
+async function* abortedToolResults(abortedCall, messageUtils, innerIterator, queryParams) {
+  if (abortedCall === undefined) return yield* innerIterator(queryParams);
+  let waitingToolCall = findWaitingToolCall(
+    queryParams.messages,
+    abortedCall.id,
+    queryParams.toolUseContext.options.tools,
+    messageUtils,
+  );
   if (waitingToolCall === undefined) {
-    e.settled();
-    return yield* s({
-      ...y,
-      messages: n.filterUnresolvedToolUses(y.messages, undefined, {
+    abortedCall.settled();
+    return yield* innerIterator({
+      ...queryParams,
+      messages: messageUtils.filterUnresolvedToolUses(queryParams.messages, undefined, {
         dropSiblingBlocks: true,
       }),
     });
   }
-  let S = new Set(waitingToolCall.rows);
-  let h = s({
-    ...y,
-    messages: y.messages.filter((message) => !S.has(message)),
+  let rowSet = new Set(waitingToolCall.rows);
+  let inner = innerIterator({
+    ...queryParams,
+    messages: queryParams.messages.filter((message) => !rowSet.has(message)),
     keptFirstResponse: waitingToolCall.rows,
   });
   try {
-    let k = await h.next();
-    while (!k.done) {
-      if (k.value.type === "user" && k.value.sourceToolAssistantUUID === waitingToolCall.call.uuid)
-        e.settled();
-      yield k.value;
-      k = await h.next();
+    let result = await inner.next();
+    while (!result.done) {
+      if (result.value.type === "user" && result.value.sourceToolAssistantUUID === waitingToolCall.call.uuid)
+        abortedCall.settled();
+      yield result.value;
+      result = await inner.next();
     }
-    return k.value;
+    return result.value;
   } finally {
-    e.settled();
-    await h.return({
+    abortedCall.settled();
+    await inner.return({
       reason: "aborted_tools",
     });
   }
 }
 //@ chunk-0h4e7gnq.js:85666-85808 placement = countToolCallsSince (1)
-function getToolUseIds(e) {
-  return e.type === "assistant" && Array.isArray(e.message.content)
-    ? e.message.content.flatMap((block) => (block.type === "tool_use" ? [block.id] : []))
+function getToolUseIds(message) {
+  return message.type === "assistant" && Array.isArray(message.message.content)
+    ? message.message.content.flatMap((block) => (block.type === "tool_use" ? [block.id] : []))
     : [];
 }
 //@ chunk-0h4e7gnq.js:85808-85882 placement
 /**
  * 判断两条消息是否是同一条 assistant 消息。
  */
-function isSameAssistantMessage(e, n) {
-  return e.type === "assistant" && e.message.id === n.message.id;
+function isSameAssistantMessage(message, reference) {
+  return message.type === "assistant" && message.message.id === reference.message.id;
 }
 //@ chunk-0h4e7gnq.js:85882-85958 placement
 /**
  * 惰性注入的 laptop 记忆工具引用（当前为 null）。
  */
-var laptopMemoryToolsRef = null;
-var OTHER_AGENTS_NOTE = `Other agents active in this session, addressable via ${SENDMESSAGE}`;
+var laptopMemoryToolsRef; // deferred: uses SENDMESSAGE (../SendMessageTool/constants.js) of its import cycle while loading; runs once the cycle is complete
+var OTHER_AGENTS_NOTE;
+deferInit("chunk-0h4e7gnq.js:85882", () => {
+  laptopMemoryToolsRef = null;
+  OTHER_AGENTS_NOTE = `Other agents active in this session, addressable via ${SENDMESSAGE}`;
+});
 //@ chunk-0h4e7gnq.js:85958-86788 placement
 function resolveAgentMcpServers(agentType, agentSource, mcpServer) {
   if (typeof mcpServer === "string") {
@@ -639,17 +666,20 @@ function resolveAgentMcpServers(agentType, agentSource, mcpServer) {
     });
     return null;
   }
-  let [r, S] = entries[0];
-  if (isBuiltinMcpServerName(r)) {
-    logForDebugging(`[Agent: ${agentType}] Skipping reserved MCP server name '${r}' in frontmatter`, {
-      level: "warn",
-    });
+  let [serverName, serverConfig] = entries[0];
+  if (isBuiltinMcpServerName(serverName)) {
+    logForDebugging(
+      `[Agent: ${agentType}] Skipping reserved MCP server name '${serverName}' in frontmatter`,
+      {
+        level: "warn",
+      },
+    );
     return null;
   }
-  let h = unaddableTransportReason(S.type);
-  if (h !== null) {
+  let transportProblem = unaddableTransportReason(serverConfig.type);
+  if (transportProblem !== null) {
     logForDebugging(
-      `[Agent: ${agentType}] Skipping ${h} MCP transport '${S.type}' for '${r}' in frontmatter`,
+      `[Agent: ${agentType}] Skipping ${transportProblem} MCP transport '${serverConfig.type}' for '${serverName}' in frontmatter`,
       {
         level: "warn",
       },
@@ -657,9 +687,9 @@ function resolveAgentMcpServers(agentType, agentSource, mcpServer) {
     return null;
   }
   return {
-    name: r,
+    name: serverName,
     config: {
-      ...S,
+      ...serverConfig,
       scope: "agent",
       agentSource,
     },
@@ -686,24 +716,26 @@ async function initializeAgentMcpServers(
     };
   await awaitPolicyColdStartWaiter();
   let agentIsAdminTrusted = isSourceAdminTrusted(agentDefinition.source);
-  let h = null;
-  if (isRestrictedToPluginOnly("mcp") && !agentIsAdminTrusted) h = "strictPluginOnlyCustomization";
-  else if (getStrictMcpConfig() && agentDefinition.source !== "flagSettings") h = "--strict-mcp-config";
-  else if (isCustomizationDisabled("mcpAgentFrontmatter")) h = isSafeMode() ? "--safe-mode" : "--bare";
-  else if (getIsRemoteMode()) h = "remote mode";
-  else if (doesEnterpriseMcpConfigExist()) h = "enterprise MCP config";
+  let blockedBy = null;
+  if (isRestrictedToPluginOnly("mcp") && !agentIsAdminTrusted) blockedBy = "strictPluginOnlyCustomization";
+  else if (getStrictMcpConfig() && agentDefinition.source !== "flagSettings")
+    blockedBy = "--strict-mcp-config";
+  else if (isCustomizationDisabled("mcpAgentFrontmatter"))
+    blockedBy = isSafeMode() ? "--safe-mode" : "--bare";
+  else if (getIsRemoteMode()) blockedBy = "remote mode";
+  else if (doesEnterpriseMcpConfigExist()) blockedBy = "enterprise MCP config";
   else if (isDiskless()) {
     reportOnce("subagent_mcp_servers");
-    h = "this cloud session";
+    blockedBy = "this cloud session";
   }
-  if (h) {
+  if (blockedBy) {
     logForDebugging(
-      `[Agent: ${agentDefinition.agentType}] Skipping frontmatter MCP servers: blocked by ${h} (agent source: ${agentDefinition.source})`,
+      `[Agent: ${agentDefinition.agentType}] Skipping frontmatter MCP servers: blocked by ${blockedBy} (agent source: ${agentDefinition.source})`,
       {
         level: "warn",
       },
     );
-    onServersBlocked?.(flattenToolNameList(agentDefinition.mcpServers), h);
+    onServersBlocked?.(flattenToolNameList(agentDefinition.mcpServers), blockedBy);
     return {
       clients: parentClients,
       agentClients: [],
@@ -711,27 +743,31 @@ async function initializeAgentMcpServers(
       cleanup: async () => {},
     };
   }
-  let k = !hasUntrustedMcpServerEntries(agentDefinition);
-  let w = isRestrictedPersonalAgent(agentDefinition);
-  if (k && w && agentDefinition.mcpServers.some((mcpServer) => typeof mcpServer !== "string"))
+  let originTrusted = !hasUntrustedMcpServerEntries(agentDefinition);
+  let isRestrictedPersonal = isRestrictedPersonalAgent(agentDefinition);
+  if (
+    originTrusted &&
+    isRestrictedPersonal &&
+    agentDefinition.mcpServers.some((mcpServer) => typeof mcpServer !== "string")
+  )
     onServersBlocked?.(
       flattenToolNameList(agentDefinition.mcpServers.filter((mcpServer) => typeof mcpServer !== "string")),
       "your own agents can't define their own MCP servers in this session (CLAUDE_CODE_RESTRICT_PERSONAL_CONFIG)",
     );
-  if (!k) {
+  if (!originTrusted) {
     checkAgentOriginTrust(agentDefinition, "subagent", "mcpServers");
     onServersBlocked?.(
       flattenToolNameList(agentDefinition.mcpServers.filter((mcpServer) => typeof mcpServer !== "string")),
       `untrusted agent origin \u2014 ${agentFolderTrustHint(agentDefinition)}`,
     );
   }
-  let x = [];
-  let L = [];
-  let I = [];
-  let G = [];
+  let policyBlockedNames = [];
+  let unapprovedNames = [];
+  let strictSkippedNames = [];
+  let sessionOwnedNames = [];
   let results = await Promise.all(
     agentDefinition.mcpServers.map(async (mcpServer) => {
-      if (typeof mcpServer !== "string" && (!k || w)) return null;
+      if (typeof mcpServer !== "string" && (!originTrusted || isRestrictedPersonal)) return null;
       let agentMcpServers = resolveAgentMcpServers(
         agentDefinition.agentType,
         agentMcpSource(agentDefinition),
@@ -739,109 +775,111 @@ async function initializeAgentMcpServers(
       );
       if (agentMcpServers === null) return null;
       if ("skipped" in agentMcpServers) {
-        I.push(agentMcpServers.name);
+        strictSkippedNames.push(agentMcpServers.name);
         return null;
       }
-      let { name: j, config, isNewlyCreated } = agentMcpServers;
+      let { name: serverName, config, isNewlyCreated } = agentMcpServers;
       if (
-        isMemoryServerName(j) &&
+        isMemoryServerName(serverName) &&
         (hasCliOwnedMemoryServer(parentClients) ||
           (laptopMemoryToolsRef?.laptopMemoryToolsEntryBuilt() ?? false))
       ) {
         logForDebugging(
-          `[Agent: ${agentDefinition.agentType}] MCP server '${j}' skipped: the session holds this server name for its own entry`,
+          `[Agent: ${agentDefinition.agentType}] MCP server '${serverName}' skipped: the session holds this server name for its own entry`,
           {
             level: "warn",
           },
         );
-        G.push(j);
+        sessionOwnedNames.push(serverName);
         return null;
       }
       let { blocked } = filterMcpServersByPolicy({
-        [j]: config,
+        [serverName]: config,
       });
-      let ce = blocked.length > 0 ? "managed-policy" : mcpDialBlockCause(j, config);
-      if (ce === "project-approval") {
+      let blockCause = blocked.length > 0 ? "managed-policy" : mcpDialBlockCause(serverName, config);
+      if (blockCause === "project-approval") {
         logForDebugging(
-          `[Agent: ${agentDefinition.agentType}] MCP server '${j}' skipped: not approved for this project`,
+          `[Agent: ${agentDefinition.agentType}] MCP server '${serverName}' skipped: not approved for this project`,
           {
             level: "warn",
           },
         );
-        L.push(j);
+        unapprovedNames.push(serverName);
         return null;
       }
-      if (ce) {
+      if (blockCause) {
         logForDebugging(
-          `[Agent: ${agentDefinition.agentType}] MCP server '${j}' blocked by managed settings MCP policy`,
+          `[Agent: ${agentDefinition.agentType}] MCP server '${serverName}' blocked by managed settings MCP policy`,
           {
             level: "warn",
           },
         );
-        x.push(j);
+        policyBlockedNames.push(serverName);
         return null;
       }
-      let { connectToServer, fetchToolsForClient } = require("./chunk-asne9cp8.js").mcpClientModule();
-      let { boundDial } = require("./chunk-td5f96dd.js");
-      let q = connectToServer(j, config, undefined, abortSignal, options);
+      let { connectToServer, fetchToolsForClient } =
+        require("../../services/mcp/emitTripwireEvent.lazy.js").mcpClientModule();
+      let { boundDial } = require("../../services/mcp/dialFailureLatch.js");
+      let connectPromise = connectToServer(serverName, config, undefined, abortSignal, options);
       let name;
       try {
-        name = await boundDial(q, {
-          serverName: j,
+        name = await boundDial(connectPromise, {
+          serverName,
           context: "subagent MCP server connect",
         });
       } catch (error) {
         logForDebugging(
-          `[Agent: ${agentDefinition.agentType}] MCP server '${j}' connect timed out or aborted: ${errorMessage(error)}`,
+          `[Agent: ${agentDefinition.agentType}] MCP server '${serverName}' connect timed out or aborted: ${errorMessage(error)}`,
           {
             level: "warn",
           },
         );
         if (isNewlyCreated)
-          q.then(
-            (Q) => {
-              if (Q.type === "connected") Q.cleanup().catch(() => {});
+          connectPromise.then(
+            (connectedClient) => {
+              if (connectedClient.type === "connected") connectedClient.cleanup().catch(() => {});
             },
             () => {},
           );
         return null;
       }
-      let ue = [];
+      let tools = [];
       if (name.type === "connected") {
-        ue = await fetchToolsForClient(name, abortSignal);
+        tools = await fetchToolsForClient(name, abortSignal);
         logForDebugging(
-          `[Agent: ${agentDefinition.agentType}] Connected to MCP server '${j}' with ${ue.length} tools`,
+          `[Agent: ${agentDefinition.agentType}] Connected to MCP server '${serverName}' with ${tools.length} tools`,
         );
       } else
         logForDebugging(
-          `[Agent: ${agentDefinition.agentType}] Failed to connect to MCP server '${j}': ${name.type}`,
+          `[Agent: ${agentDefinition.agentType}] Failed to connect to MCP server '${serverName}': ${name.type}`,
           {
             level: "warn",
           },
         );
       return applyMcpServerConfig(config, {
         client: name,
-        tools: ue,
+        tools,
         isNewlyCreated,
       });
     }),
   );
-  if (I.length > 0) onServersBlocked?.(I, "--strict-mcp-config");
-  if (x.length > 0) onServersBlocked?.(x, "managed settings MCP policy");
-  if (L.length > 0) onServersBlocked?.(L, "missing project approval (approve via /mcp)");
-  let te = [];
-  let R = [];
-  let z = [];
-  for (let V of results) {
-    if (!V) continue;
-    te.push(V.client);
-    if (V.isNewlyCreated) R.push(V.client);
-    z.push(...V.tools);
+  if (strictSkippedNames.length > 0) onServersBlocked?.(strictSkippedNames, "--strict-mcp-config");
+  if (policyBlockedNames.length > 0) onServersBlocked?.(policyBlockedNames, "managed settings MCP policy");
+  if (unapprovedNames.length > 0)
+    onServersBlocked?.(unapprovedNames, "missing project approval (approve via /mcp)");
+  let agentClients = [];
+  let newClients = [];
+  let tools = [];
+  for (let result of results) {
+    if (!result) continue;
+    agentClients.push(result.client);
+    if (result.isNewlyCreated) newClients.push(result.client);
+    tools.push(...result.tools);
   }
-  if (te.some((V) => V.name === CLAUDE_ARTIFACTS))
+  if (agentClients.some((client) => client.name === CLAUDE_ARTIFACTS))
     getCliOwnedState().subagentBroughtOwnArtifactsServer = true;
   let cleanup = async () => {
-    for (let client of R)
+    for (let client of newClients)
       if (client.type === "connected")
         try {
           await client.cleanup();
@@ -855,9 +893,9 @@ async function initializeAgentMcpServers(
         }
   };
   return {
-    clients: [...parentClients, ...te],
-    agentClients: te,
-    tools: z,
+    clients: [...parentClients, ...agentClients],
+    agentClients,
+    tools,
     cleanup,
   };
 }
@@ -874,29 +912,29 @@ function isRecordableMessage(msg) {
   );
 }
 //@ chunk-0h4e7gnq.js:90133-90193 layout
-function logForkContextRefFailure(e) {
-  logForDebugging(`Failed to record fork-context-ref: ${e}`);
+function logForkContextRefFailure(error) {
+  logForDebugging(`Failed to record fork-context-ref: ${error}`);
 }
 //@ chunk-0h4e7gnq.js:90193-90250 layout
-function logAgentMetadataWriteFailure(e) {
-  logForDebugging(`Failed to write agent metadata: ${e}`);
+function logAgentMetadataWriteFailure(error) {
+  logForDebugging(`Failed to write agent metadata: ${error}`);
 }
 //@ chunk-0h4e7gnq.js:90250-90436 facade-exports
-function writeSubagentProgressToOutputSink(e, progressMessage, s) {
-  let active = transportStateByHost.of(e.session).active;
+function writeSubagentProgressToOutputSink(toolUseContext, progressMessage, toolOnly) {
+  let active = transportStateByHost.of(toolUseContext.session).active;
   if (!active) return;
-  let forwardSubagentText = e.options.forwardSubagentText ?? false;
-  for (let S of normalizeMessage(progressMessage, e.options.tools)) {
-    if (s && !forwardSubagentText && !isToolUseOrResultMessage(S)) continue;
-    active.writeAfterInit(S);
+  let forwardSubagentText = toolUseContext.options.forwardSubagentText ?? false;
+  for (let message of normalizeMessage(progressMessage, toolUseContext.options.tools)) {
+    if (toolOnly && !forwardSubagentText && !isToolUseOrResultMessage(message)) continue;
+    active.writeAfterInit(message);
   }
 }
 //@ chunk-0h4e7gnq.js:90436-91216 layout
 /**
  * 写入子代理元数据；恢复时先读取旧元数据并继承父代理、worktree、插件引导、workflow 阶段、请求形态、非交互与 effort 等字段。
  */
-async function persistAgentMetadata(agentId, n, context, storageV5) {
-  if (n) {
+async function persistAgentMetadata(agentId, resumed, context, storageV5) {
+  if (resumed) {
     let metadata = await readAgentMetadata(agentId, storageV5).catch(
       makeSidecarReadFallback("persistAgentMetadata"),
     );
@@ -927,21 +965,21 @@ async function persistAgentMetadata(agentId, n, context, storageV5) {
  * 把 .claude/worktrees/<名>/<相对路径> 映射回主仓库中的对应路径（防 .. 逃逸）；不在 worktree 下且位于允许根内返回 null，否则原样返回。旧版名 isDangerousFilePathToAutoEdit 误配，应归 worktree 相关模块。
  */
 function mapWorktreePathToRepo(path, allowedRoot) {
-  let s = `${sep}.claude${sep}worktrees${sep}`;
-  let index = path.indexOf(s);
+  let worktreeSegment = `${sep}.claude${sep}worktrees${sep}`;
+  let index = path.indexOf(worktreeSegment);
   if (index < 0) {
     if (allowedRoot && path.startsWith(allowedRoot + sep)) return null;
     return path;
   }
   let sliced = path.slice(0, index);
-  let sliced_2 = path.slice(index + s.length);
+  let sliced_2 = path.slice(index + worktreeSegment.length);
   let index_2 = sliced_2.indexOf(sep);
   if (index_2 < 0) return null;
   let sliced_3 = sliced_2.slice(index_2 + 1);
-  let w = join(sliced, sliced_3);
+  let mappedPath = join(sliced, sliced_3);
   let absolutePath = resolve(sliced);
-  if (!resolve(w).startsWith(absolutePath + sep)) return null;
-  return w;
+  if (!resolve(mappedPath).startsWith(absolutePath + sep)) return null;
+  return mappedPath;
 }
 //@ chunk-0h4e7gnq.js:91503-91610 layout
 /**
@@ -1003,7 +1041,7 @@ async function* runAgent({
   session,
   spawnMode,
   description,
-  name: Ke,
+  name,
   toolUseId,
   enclosingToolUseId,
   transcriptSubdir,
@@ -1024,25 +1062,25 @@ async function* runAgent({
   handbackTool,
   callerDeliveredReport,
 }) {
-  let ut = session ?? toolUseContext.session;
-  let Me =
+  let activeSession = session ?? toolUseContext.session;
+  let resumedContext =
     override?.agentContext?.agentType === "subagent" && override.agentContext.invocationKind === "resume";
-  let Xe = worktreePath || isolationWorktreeFor(toolUseContext);
+  let isolationRoot = worktreePath || isolationWorktreeFor(toolUseContext);
   if (agentDefinition.source === "plugin") {
-    let P = await checkSyncedSkillAccess(
+    let refusal = await checkSyncedSkillAccess(
       agentDefinition.plugin,
       agentDefinition.pluginSource?.pluginPath ?? agentDefinition.registeringPluginRoot,
       agentDefinition.registeredAtRunTime ? "refused" : "not judged",
     );
-    if (P !== undefined) {
-      logSyncedPartRefused("agent", agentDefinition.agentType, P);
+    if (refusal !== undefined) {
+      logSyncedPartRefused("agent", agentDefinition.agentType, refusal);
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        `The agent was not started: ${refusalTextFor(P)}.`,
+        `The agent was not started: ${refusalTextFor(refusal)}.`,
         "synced plugin agent refused",
       );
     }
   }
-  if (session) session.setIsolationRoot(Me ? undefined : Xe);
+  if (session) session.setIsolationRoot(resumedContext ? undefined : isolationRoot);
   let toolPermissionContext = getToolPermissionContext(toolUseContext);
   let permissionMode = toolPermissionContext.mode;
   let parentModel = isTeammate
@@ -1054,11 +1092,11 @@ async function* runAgent({
     model,
     permissionMode,
     onModelRestricted,
-    isTeammate ? undefined : Me ? "resume" : "spawn",
+    isTeammate ? undefined : resumedContext ? "resume" : "spawn",
     {
       inWorkflowRun:
         spawnedByWorkflowRunId !== undefined ||
-        (!Me && !isTeammate && toolUseContext.spawnedByWorkflowRunId !== undefined),
+        (!resumedContext && !isTeammate && toolUseContext.spawnedByWorkflowRunId !== undefined),
     },
   );
   let resolvedModel = resolvedAgentModel;
@@ -1068,28 +1106,28 @@ async function* runAgent({
     : isAsync
       ? new AbortController()
       : toolUseContext.abortController;
-  let it = !(
+  let hooksEnabled = !(
     isDelegatedObservationContext(override?.agentContext ?? toolUseContext.agentContext) ||
     toolUseContext.options.settingsHooksOff === true
   );
-  let Xo = isUnknownPluginSpawnedAgent({
+  let unknownPluginAgent = isUnknownPluginSpawnedAgent({
     hookCaller: toolUseContext.hookCaller,
     pluginUnnamed: toolUseContext.pluginUnnamed,
   });
-  using Jo = raiseTurnLifecycleForAgent(
-    it ? (turnPrompt ?? "") : "",
+  using turnLifecycle = raiseTurnLifecycleForAgent(
+    hooksEnabled ? (turnPrompt ?? "") : "",
     agentId,
     agentAbortController.signal,
-    toolUseContext.hookCaller ?? (Xo ? "" : undefined),
+    toolUseContext.hookCaller ?? (unknownPluginAgent ? "" : undefined),
     toolUseContext.hookOrigin,
   );
-  let So = handbackFrom(agentId);
+  let handback = handbackFrom(agentId);
   if (transcriptSubdir) setAgentTranscriptSubdir(agentId, transcriptSubdir);
   if (isPerfettoRecording()) {
-    let P = toolUseContext.agentId ?? getSessionId();
-    registerPerfettoAgent(agentId, agentDefinition.agentType, P);
+    let perfettoParentId = toolUseContext.agentId ?? getSessionId();
+    registerPerfettoAgent(agentId, agentDefinition.agentType, perfettoParentId);
   }
-  let Oo;
+  let taskHandle;
   let messages = forkContextMessages ? filterIncompleteToolCalls(forkContextMessages) : [];
   let initialMessages = [
     ...messages,
@@ -1107,105 +1145,120 @@ async function* runAgent({
           stripSeededFromContext: true,
         })
       : createRemoteFileState(READ_FILE_STATE_CACHE_SIZE_2));
-  let [xt, Be] = await Promise.all([
+  let [userContext, systemContext] = await Promise.all([
     override?.userContext ??
       getOrBuildUserContext(toolUseContext.session, toolUseContext.storageV5, toolUseContext.credentials),
     override?.systemContext ??
       getCachedSystemContext(toolUseContext.session, toolUseContext.options.cacheBreakerPhrase),
   ]);
-  let { userContext, managedInstructionsOnly, architectureInstructionsOnly } =
-    agentDefinition.omitClaudeMd && !override?.userContext
-      ? await resolveAgentUserContext(agentDefinition, xt, toolUseContext)
-      : {
-          userContext: xt,
-          managedInstructionsOnly: false,
-        };
-  let Bt = narrowerMode(spawnMode, permissionMode);
-  let Lt = Bt ?? hasHookForEvent_2(agentDefinition, permissionMode);
-  let ys;
-  let gn;
-  function hs(permissionContext) {
-    if (permissionContext === ys && gn) return gn;
-    ys = permissionContext;
-    let se = permissionContext;
+  let {
+    userContext: userContext_2,
+    managedInstructionsOnly,
+    architectureInstructionsOnly,
+  } = agentDefinition.omitClaudeMd && !override?.userContext
+    ? await resolveAgentUserContext(agentDefinition, userContext, toolUseContext)
+    : {
+        userContext,
+        managedInstructionsOnly: false,
+      };
+  let spawnModeOverride = narrowerMode(spawnMode, permissionMode);
+  let effectiveMode = spawnModeOverride ?? hasHookForEvent_2(agentDefinition, permissionMode);
+  let cachedPermissionContext;
+  let cachedAgentPermissionContext;
+  function resolvePermissionContext(permissionContext) {
+    if (permissionContext === cachedPermissionContext && cachedAgentPermissionContext)
+      return cachedAgentPermissionContext;
+    cachedPermissionContext = permissionContext;
+    let resolved = permissionContext;
     let agentPermissionMode = agentDefinition.permissionMode;
-    let lt =
-      Bt !== undefined &&
+    let modeSuppressed =
+      spawnModeOverride !== undefined &&
       !isWebFetchAgent(agentDefinition) &&
-      narrowerMode(Bt, permissionContext.mode) === undefined;
-    let re = Bt ?? (spawnMode === "bubble" ? undefined : spawnMode) ?? agentPermissionMode;
-    let Rt =
+      narrowerMode(spawnModeOverride, permissionContext.mode) === undefined;
+    let declaredMode =
+      spawnModeOverride ?? (spawnMode === "bubble" ? undefined : spawnMode) ?? agentPermissionMode;
+    let suppressPromptsForPlan =
       permissionContext.mode === "plan" &&
       !isTeammate &&
-      (lt || (!Bt && re !== undefined && re !== "plan" && re !== "bubble"));
+      (modeSuppressed ||
+        (!spawnModeOverride &&
+          declaredMode !== undefined &&
+          declaredMode !== "plan" &&
+          declaredMode !== "bubble"));
     if (
-      Lt &&
-      !lt &&
-      (Bt ||
+      effectiveMode &&
+      !modeSuppressed &&
+      (spawnModeOverride ||
         !isBypassCapableMode(permissionContext.mode) ||
-        (isTeammate && (permissionContext.mode === "plan" || Lt === "plan")))
+        (isTeammate && (permissionContext.mode === "plan" || effectiveMode === "plan")))
     ) {
-      let mode = Lt;
-      let Ut =
-        isRestrictedPersonalAgent(agentDefinition) && narrowerMode(Lt, permissionContext.mode) === undefined;
+      let mode = effectiveMode;
+      let personalModeRefused =
+        isRestrictedPersonalAgent(agentDefinition) &&
+        narrowerMode(effectiveMode, permissionContext.mode) === undefined;
       if (
-        !Bt &&
-        (Ut ||
-          (settingsGrantsConfined() && (Lt === "bypassPermissions" || Lt === "acceptEdits" || Lt === "auto")))
+        !spawnModeOverride &&
+        (personalModeRefused ||
+          (settingsGrantsConfined() &&
+            (effectiveMode === "bypassPermissions" ||
+              effectiveMode === "acceptEdits" ||
+              effectiveMode === "auto")))
       ) {
         logForDebugging(
-          Ut
-            ? `Agent '${agentDefinition.agentType}' asks for permission mode ${Lt} in your own agent file. This session doesn't let your own agents widen their permission mode (CLAUDE_CODE_RESTRICT_PERSONAL_CONFIG), so it runs in '${permissionContext.mode}'.`
-            : `Subagent declared permissionMode: ${Lt} inside a confined evaluation run; keeping parent mode '${permissionContext.mode}'.`,
+          personalModeRefused
+            ? `Agent '${agentDefinition.agentType}' asks for permission mode ${effectiveMode} in your own agent file. This session doesn't let your own agents widen their permission mode (CLAUDE_CODE_RESTRICT_PERSONAL_CONFIG), so it runs in '${permissionContext.mode}'.`
+            : `Subagent declared permissionMode: ${effectiveMode} inside a confined evaluation run; keeping parent mode '${permissionContext.mode}'.`,
           {
             level: "warn",
           },
         );
         mode = permissionContext.mode;
       } else if (
-        Lt === "bubble" &&
+        effectiveMode === "bubble" &&
         (permissionContext.mode === "plan" || permissionContext.mode === "dontAsk")
       )
         mode = permissionContext.mode;
-      else if (Lt === "bypassPermissions" && !isBypassPermissionsAuthorized(permissionContext)) {
+      else if (effectiveMode === "bypassPermissions" && !isBypassPermissionsAuthorized(permissionContext)) {
         mode = permissionContext.mode;
         if (mode !== "bypassPermissions")
           logForDebugging(
-            `Subagent ${Bt ? "spawn-time permission mode" : "declared permissionMode"} bypassPermissions is not authorized by this session (parent not in bypass mode, bypass policy-disabled, session --restricted, or not a contained no-internet environment); keeping parent mode '${permissionContext.mode}'.`,
+            `Subagent ${spawnModeOverride ? "spawn-time permission mode" : "declared permissionMode"} bypassPermissions is not authorized by this session (parent not in bypass mode, bypass policy-disabled, session --restricted, or not a contained no-internet environment); keeping parent mode '${permissionContext.mode}'.`,
             {
               level: "warn",
             },
           );
-      } else if (!Bt) mode = fallbackFromUnavailableAutoMode(Lt, permissionContext.mode, resolvedAgentModel);
-      se = withClassifiedWebCalls(se, mode);
+      } else if (!spawnModeOverride)
+        mode = fallbackFromUnavailableAutoMode(effectiveMode, permissionContext.mode, resolvedAgentModel);
+      resolved = withClassifiedWebCalls(resolved, mode);
     }
-    if (se.mode === "plan" && (isTeammate || (re !== undefined && re !== "bubble")))
-      se = {
-        ...se,
+    if (resolved.mode === "plan" && (isTeammate || (declaredMode !== undefined && declaredMode !== "bubble")))
+      resolved = {
+        ...resolved,
         isBypassPermissionsModeAvailable: false,
       };
-    let Jt = toolUseContext.requestDialog !== undefined;
-    let qt = getIsNonInteractiveSession() && hasPermissionPromptTool(getPermissionPromptToolName());
-    let $e =
-      (Rt && (re === "dontAsk" || agentPermissionMode === "dontAsk")) ||
+    let hasRequestDialog = toolUseContext.requestDialog !== undefined;
+    let hasPromptTool =
+      getIsNonInteractiveSession() && hasPermissionPromptTool(getPermissionPromptToolName());
+    let avoidPrompts =
+      (suppressPromptsForPlan && (declaredMode === "dontAsk" || agentPermissionMode === "dontAsk")) ||
       (canShowPermissionPrompts !== undefined
         ? !canShowPermissionPrompts
-        : Lt === "bubble" || Jt || qt
+        : effectiveMode === "bubble" || hasRequestDialog || hasPromptTool
           ? false
           : isAsync);
-    if ($e)
-      se = {
-        ...se,
+    if (avoidPrompts)
+      resolved = {
+        ...resolved,
         shouldAvoidPermissionPrompts: true,
       };
-    if (isAsync && !$e)
-      se = {
-        ...se,
+    if (isAsync && !avoidPrompts)
+      resolved = {
+        ...resolved,
         awaitAutomatedChecksBeforeDialog: true,
       };
     if (allowedTools !== undefined)
-      se = {
-        ...se,
+      resolved = {
+        ...resolved,
         alwaysAllowRules: {
           cliArg: permissionContext.alwaysAllowRules.cliArg,
           ...(permissionContext.alwaysAllowRules.mcpServerPolicy && {
@@ -1214,16 +1267,16 @@ async function* runAgent({
           session: [...allowedTools],
         },
       };
-    se = withAgentDisallowedTools(se, agentDefinition);
+    resolved = withAgentDisallowedTools(resolved, agentDefinition);
     if (
       worktreePath &&
-      !se.blockWritesOutsideWorkingDirectories &&
-      !se.additionalWorkingDirectories.has(worktreePath)
+      !resolved.blockWritesOutsideWorkingDirectories &&
+      !resolved.additionalWorkingDirectories.has(worktreePath)
     )
-      se = {
-        ...se,
+      resolved = {
+        ...resolved,
         additionalWorkingDirectories: new Map([
-          ...se.additionalWorkingDirectories,
+          ...resolved.additionalWorkingDirectories,
           [
             worktreePath,
             {
@@ -1233,19 +1286,19 @@ async function* runAgent({
           ],
         ]),
       };
-    gn = se;
-    return se;
+    cachedAgentPermissionContext = resolved;
+    return resolved;
   }
   let agentGetAppState = () => {
     let state = toolUseContext.getAppState();
-    let se = hs(state.toolPermissionContext);
-    if (se === state.toolPermissionContext) return state;
+    let statePermissionContext = resolvePermissionContext(state.toolPermissionContext);
+    if (statePermissionContext === state.toolPermissionContext) return state;
     return {
       ...state,
-      toolPermissionContext: se,
+      toolPermissionContext: statePermissionContext,
     };
   };
-  let Ts = [
+  let modelOverrides = [
     {
       kind: "model",
       mainLoopModel: resolvedAgentModel,
@@ -1260,8 +1313,8 @@ async function* runAgent({
       : []),
   ];
   let agentDepth = getAgentDepth(override?.agentContext ?? toolUseContext.agentContext);
-  let ro = memoryModeForSession(toolUseContext);
-  let Ss =
+  let memoryMode = memoryModeForSession(toolUseContext);
+  let memoryCaller =
     toolUseContext.memoryCaller ??
     memoryCallerKind({
       isTeammate,
@@ -1281,11 +1334,11 @@ async function* runAgent({
         false,
         isTeammate,
         agentDepth,
-        ro.mode,
+        memoryMode.mode,
       );
-  let ep = false;
+  let repliedSuppressed = false;
   let agentTools = resolvedAgentTools?.resolvedTools ?? availableTools;
-  let ks = resolvedAgentTools ? agentDefinition : override?.agentToolScope;
+  let toolScope = resolvedAgentTools ? agentDefinition : override?.agentToolScope;
   let agentSystemPromptBlocks = override?.systemPrompt
     ? override.systemPrompt
     : asSystemPrompt(
@@ -1303,19 +1356,19 @@ async function* runAgent({
     toolUseContext.options.appendSubagentSystemPrompt
       ? toolUseContext.options.appendSubagentSystemPrompt
       : undefined;
-  let yn =
+  let memoryNoteEnabled =
     !useExactTools &&
     !override?.isolatedContext &&
     !isWebFetchAgent(agentDefinition) &&
     !env.CLAUDE_CODE_MEMORY_SUBAGENT_APPEND;
-  let Ms = yn ? memoryNoteIfEnabled(ro) : undefined;
-  let vs = yn && !ro.serverPending;
-  let filtered = [appendSubagentSystemPrompt, Ms].filter((P) => P !== undefined);
+  let memoryNote = memoryNoteEnabled ? memoryNoteIfEnabled(memoryMode) : undefined;
+  let coworkMemoryOn = memoryNoteEnabled && !memoryMode.serverPending;
+  let filtered = [appendSubagentSystemPrompt, memoryNote].filter((block) => block !== undefined);
   let systemPromptWithAppend =
     filtered.length === 0
       ? agentSystemPromptBlocks
       : asSystemPrompt([...agentSystemPromptBlocks, ...filtered]);
-  let en = {
+  let promptOptions = {
     customSystemPrompt: toolUseContext.options.customSystemPrompt,
     appendSystemPrompt: toolUseContext.options.appendSystemPrompt,
     systemPromptSnapshot:
@@ -1323,27 +1376,27 @@ async function* runAgent({
         ? true
         : toolUseContext.options.systemPromptSnapshot,
   };
-  let Ao = recordedUuids !== undefined && recordedUuids.size > 0;
-  let io = [];
-  let hn = uniq(agentDefinition.skills ?? []);
-  let sliced = hn.slice(0, MAX_PRELOADED_SKILLS);
-  if (hn.length > MAX_PRELOADED_SKILLS)
+  let isContinuation = recordedUuids !== undefined && recordedUuids.size > 0;
+  let hookMessages = [];
+  let skillNames = uniq(agentDefinition.skills ?? []);
+  let preloadNames = skillNames.slice(0, MAX_PRELOADED_SKILLS);
+  if (skillNames.length > MAX_PRELOADED_SKILLS)
     logForDebugging(
-      `[Agent: ${agentDefinition.agentType}] Warning: the skills list has ${hn.length} different names; only the first ${MAX_PRELOADED_SKILLS} are preloaded`,
+      `[Agent: ${agentDefinition.agentType}] Warning: the skills list has ${skillNames.length} different names; only the first ${MAX_PRELOADED_SKILLS} are preloaded`,
       {
         level: "warn",
       },
     );
-  let { hookContextCarried, carriedPreloads } = Ao
-    ? await scanCarriedSubagentContext(initialMessages, sliced)
+  let { hookContextCarried, carriedPreloads } = isContinuation
+    ? await scanCarriedSubagentContext(initialMessages, preloadNames)
     : {
         hookContextCarried: false,
         carriedPreloads: new Set(),
       };
-  let _n = [];
+  let hookContexts = [];
   try {
     let agentContext = override?.agentContext ?? toolUseContext.agentContext;
-    let se = isDelegatedObservationContext(agentContext)
+    let startHookStream = isDelegatedObservationContext(agentContext)
       ? []
       : executeSubagentStartHooks(
           toolUseContext,
@@ -1357,8 +1410,8 @@ async function* runAgent({
             managedHooksOnly: isWebFetchAgent(agentDefinition),
           },
         );
-    for await (let xe of se) {
-      let message = xe.message;
+    for await (let hookEvent of startHookStream) {
+      let message = hookEvent.message;
       if (
         message?.type === "attachment" &&
         isLoggableMessage(message) &&
@@ -1366,68 +1419,69 @@ async function* runAgent({
         !override?.isolatedContext
       ) {
         initialMessages.push(message);
-        io.push(message);
+        hookMessages.push(message);
       }
-      if (xe.blockingError && !override?.isolatedContext) {
+      if (hookEvent.blockingError && !override?.isolatedContext) {
         let nonBlockableHookErrorMessage = getNonBlockableHookErrorMessage(
           "SubagentStart",
-          xe.blockingError,
+          hookEvent.blockingError,
           `SubagentStart:${agentDefinition.agentType}`,
         );
         initialMessages.push(nonBlockableHookErrorMessage);
-        io.push(nonBlockableHookErrorMessage);
+        hookMessages.push(nonBlockableHookErrorMessage);
       }
-      if (xe.additionalContexts && xe.additionalContexts.length > 0) _n.push(...xe.additionalContexts);
+      if (hookEvent.additionalContexts && hookEvent.additionalContexts.length > 0)
+        hookContexts.push(...hookEvent.additionalContexts);
     }
   } catch (error) {
     if (!(error instanceof StreamClosedAbortError)) throw error;
     logForDebugging("SubagentStart hooks cancelled (control stream closed)");
   }
-  if (_n.length > 0 && !override?.isolatedContext && !hookContextCarried) {
+  if (hookContexts.length > 0 && !override?.isolatedContext && !hookContextCarried) {
     let attachmentMessage = createAttachmentMessage({
       type: "hook_additional_context",
-      content: _n,
+      content: hookContexts,
       hookName: "SubagentStart",
       toolUseID: randomUUID(),
       hookEvent: "SubagentStart",
     });
     initialMessages.push(attachmentMessage);
-    io.push(attachmentMessage);
+    hookMessages.push(attachmentMessage);
   }
-  if (vs && ro.mode !== "none" && Ao)
+  if (coworkMemoryOn && memoryMode.mode !== "none" && isContinuation)
     insertCoworkMemoryContexts(toolUseContext.session.host, initialMessages);
-  let xs = yn
+  let staleMemoryAttachment = memoryNoteEnabled
     ? getStaleMemoryContextAttachment(
         toolUseContext.session.host,
         messagesSinceCompactBoundary(initialMessages),
       )
     : undefined;
-  if (xs !== undefined) {
-    let attachmentMessage = createAttachmentMessage(xs);
+  if (staleMemoryAttachment !== undefined) {
+    let attachmentMessage = createAttachmentMessage(staleMemoryAttachment);
     initialMessages.push(attachmentMessage);
-    io.push(attachmentMessage);
+    hookMessages.push(attachmentMessage);
   }
-  let on = vs
+  let coworkMemoryAttachment = coworkMemoryOn
     ? coworkMemoryContextMode(
         toolUseContext.session.host,
         getLatestCoworkMemoryVersion(messagesSinceCompactBoundary(initialMessages)),
-        ro.mode === "none",
+        memoryMode.mode === "none",
       )
     : undefined;
-  if (on !== undefined) {
-    let attachmentMessage = createAttachmentMessage(on);
+  if (coworkMemoryAttachment !== undefined) {
+    let attachmentMessage = createAttachmentMessage(coworkMemoryAttachment);
     initialMessages.push(attachmentMessage);
-    io.push(attachmentMessage);
-    let anchorAttachment = buildAnchorAttachment(on);
+    hookMessages.push(attachmentMessage);
+    let anchorAttachment = buildAnchorAttachment(coworkMemoryAttachment);
     if (anchorAttachment !== undefined) {
       let contextMessage = createAttachmentMessage(anchorAttachment);
       initialMessages.push(contextMessage);
-      io.push(contextMessage);
+      hookMessages.push(contextMessage);
     }
   }
-  let Gi = !isRestrictedToPluginOnly("hooks") || isSourceAdminTrusted(agentDefinition.source);
+  let hooksTrusted = !isRestrictedToPluginOnly("hooks") || isSourceAdminTrusted(agentDefinition.source);
   toolUseContext.sessionHooksRegistry.clear(agentId);
-  if (hasFrontmatterHooks(agentDefinition.hooks) && Gi)
+  if (hasFrontmatterHooks(agentDefinition.hooks) && hooksTrusted)
     if (isAgentDefinitionTrusted(agentDefinition))
       registerFrontmatterHooks(
         toolUseContext.sessionHooksRegistry,
@@ -1449,22 +1503,23 @@ async function* runAgent({
   );
   let { isToolDisallowed } = buildDisallowedToolsFilter(agentDefinition.disallowedTools);
   let filtered_2 = warnMcpToolNameTooLong(tools).filter(
-    (P) => !isToolDisallowed(P) && !isServedAccountMemoryTool(P, ro.mode),
+    (tool) => !isToolDisallowed(tool) && !isServedAccountMemoryTool(tool, memoryMode.mode),
   );
-  let kt = filtered_2.length > 0 ? Ji([...agentTools, ...filtered_2], "name") : agentTools;
-  let Ps = count(availableTools, (P) => P.mcpInfo?.accountMemoryServer === true);
-  if (Ps > 0)
+  let agentToolPool =
+    filtered_2.length > 0 ? uniqByExport([...agentTools, ...filtered_2], "name") : agentTools;
+  let memoryToolCount = count(availableTools, (tool) => tool.mcpInfo?.accountMemoryServer === true);
+  if (memoryToolCount > 0)
     logEvent("tengu_subagent_memory_tools", {
-      mode: fromEnum(ro.mode),
-      mode_source: fromEnum(ro.source),
-      marked_as: fromEnum(Ss),
-      parent_tools: Ps,
-      kept_tools: count(kt, (P) => P.mcpInfo?.accountMemoryServer === true),
+      mode: fromEnum(memoryMode.mode),
+      mode_source: fromEnum(memoryMode.source),
+      marked_as: fromEnum(memoryCaller),
+      parent_tools: memoryToolCount,
+      kept_tools: count(agentToolPool, (tool) => tool.mcpInfo?.accountMemoryServer === true),
       exact_tools: useExactTools ?? false,
-      note_appended: Ms !== undefined,
-      block_attached: on?.content != null,
+      note_appended: memoryNote !== undefined,
+      block_attached: coworkMemoryAttachment?.content != null,
     });
-  if (kt.length === 0) {
+  if (agentToolPool.length === 0) {
     let invalidTools = resolvedAgentTools?.invalidTools ?? [];
     let unavailableTools = resolvedAgentTools?.unavailableTools ?? [];
     let filtered = (resolvedAgentTools?.validTools ?? []).filter(
@@ -1480,12 +1535,12 @@ async function* runAgent({
     ]
       .filter(Boolean)
       .join("; ");
-    let re =
+    let zeroToolsRefused =
       joined !== "" &&
       resolvedAgentTools !== undefined &&
       !resolvedAgentTools.hasWildcard &&
       availableTools.length > 0 &&
-      !Ao;
+      !isContinuation;
     logEvent("tengu_subagent_zero_tools", {
       isBuiltIn: agentDefinition.source === "built-in",
       invalidCount: invalidTools.length,
@@ -1493,11 +1548,11 @@ async function* runAgent({
       validButEmptyCount: filtered.length,
       availablePoolSize: availableTools.length,
       hadWildcard: resolvedAgentTools?.hasWildcard ?? false,
-      isContinuation: Ao,
-      refused: re,
+      isContinuation,
+      refused: zeroToolsRefused,
       isAsync,
     });
-    if (re) {
+    if (zeroToolsRefused) {
       logFeatureBad("subagent_tool_resolution", "zero_tools_refused", {
         invalid_count: invalidTools.length,
         unavailable_count: unavailableTools.length,
@@ -1515,51 +1570,51 @@ async function* runAgent({
     }
   }
   if (resolvedAgentTools !== undefined) {
-    let P = count(
+    let unavailableCount = count(
       resolvedAgentTools.unavailableTools,
-      (xe) =>
+      (name) =>
         !isToolDisallowed({
-          name: permissionRuleValueFromString(xe).toolName,
+          name: permissionRuleValueFromString(name).toolName,
         }),
     );
-    let se = {
+    let resolutionTelemetry = {
       agent_depth: agentDepth,
       spawn_depth_cap: getMaxSubagentSpawnDepth(),
       is_async: isAsync,
-      is_continuation: Ao,
+      is_continuation: isContinuation,
       invalid_count: resolvedAgentTools.invalidTools.length,
-      self_disallowed_overlap_count: resolvedAgentTools.unavailableTools.length - P,
+      self_disallowed_overlap_count: resolvedAgentTools.unavailableTools.length - unavailableCount,
     };
-    if (resolvedAgentTools.declaredAgentToolWithheld || P > 0)
+    if (resolvedAgentTools.declaredAgentToolWithheld || unavailableCount > 0)
       logFeatureSad(
         "subagent_tool_resolution",
         resolvedAgentTools.declaredAgentToolWithheld
           ? "declared_agent_withheld"
           : "declared_tools_unavailable",
         {
-          ...se,
-          unavailable_count: P,
+          ...resolutionTelemetry,
+          unavailable_count: unavailableCount,
         },
       );
     else
       logFeatureOk("subagent_tool_resolution", {
-        ...se,
+        ...resolutionTelemetry,
         agent_tool_removed_by_depth: resolvedAgentTools.agentToolRemovedByDepth === true,
         has_wildcard: resolvedAgentTools.hasWildcard,
       });
   }
-  let any = kt.some((P) => toolMatchesName(P, SUBAGENTHANDBACK) && P !== handbackTool);
-  let Xi = false;
-  let uo =
+  let any = agentToolPool.some((tool) => toolMatchesName(tool, SUBAGENTHANDBACK) && tool !== handbackTool);
+  let handbackNameTaken = false;
+  let handbackArmed =
     handbackOptIn === true &&
     !useExactTools &&
     !requiresStructuredOutput &&
     handbackTool !== undefined &&
     !any &&
     isAutoHandbackArmed(toolPermissionContext) &&
-    !Xi &&
-    hs(toolPermissionContext).mode === "auto";
-  let Qi = uo
+    !handbackNameTaken &&
+    resolvePermissionContext(toolPermissionContext).mode === "auto";
+  let handbackReason = handbackArmed
     ? undefined
     : handbackOptIn !== true
       ? "no_opt_in"
@@ -1576,17 +1631,21 @@ async function* runAgent({
                 : !isAutoHandbackArmed(toolPermissionContext)
                   ? "switched_off"
                   : "child_mode";
-  recordHandbackContract(agentId, uo, Qi);
-  if (uo && !kt.includes(handbackTool)) kt = [...kt, handbackTool];
-  let Mn =
-    !useExactTools && (agentDefinition.tools ?? ["*"]).some((P) => P === "*" || mcpInfoFromString(P) !== null)
+  recordHandbackContract(agentId, handbackArmed, handbackReason);
+  if (handbackArmed && !agentToolPool.includes(handbackTool))
+    agentToolPool = [...agentToolPool, handbackTool];
+  let assembleTools =
+    !useExactTools &&
+    (agentDefinition.tools ?? ["*"]).some(
+      (toolSpec) => toolSpec === "*" || mcpInfoFromString(toolSpec) !== null,
+    )
       ? assembleAvailableTools
       : undefined;
   try {
-    let filtered = sliced.filter((se) => !carriedPreloads.has(se));
+    let filtered = preloadNames.filter((skillName) => !carriedPreloads.has(skillName));
     if (filtered.length > 0) {
       let hiddenPlugins = getHeldBackSyncedPlugins();
-      let allSkills = dropSyncedClashes(
+      let skillCommands = dropSyncedClashes(
         withNamedFolderYieldsRestored(
           await getSkillToolCommands(getProjectRootOrNull(), toolUseContext.storageV5, hiddenPlugins),
         ),
@@ -1597,20 +1656,20 @@ async function* runAgent({
         toolUseContext.storageV5,
         hiddenPlugins,
       );
-      let re = hiddenPlugins.size === 0 ? [] : getSyncedSkillCommands();
-      let Rt = (skillName) =>
-        re.some((_t) =>
-          [_t.name, ...(_t.aliases ?? [])].some((Zt) => foldName(Zt) === foldName(skillName)),
-        ) && findCommand(skillName, allSkills) === undefined;
-      let Jt = [];
-      let allSkills_2 = await findRefusedSyncedCommands(allSkills);
-      let $e;
+      let syncedSkillCommands = hiddenPlugins.size === 0 ? [] : getSyncedSkillCommands();
+      let isSyncedButMissing = (skillName) =>
+        syncedSkillCommands.some((command) =>
+          [command.name, ...(command.aliases ?? [])].some((alias) => foldName(alias) === foldName(skillName)),
+        ) && findCommand(skillName, skillCommands) === undefined;
+      let preloadedSkills = [];
+      let allSkills = await findRefusedSyncedCommands(skillCommands);
+      let vetoRefreshPromise;
       for (let skillName of filtered) {
-        let _t =
-          findCommand(skillName, hiddenSyncedSkills) === undefined && !Rt(skillName)
-            ? findSkillForAgent(skillName, allSkills, agentDefinition)
+        let skill =
+          findCommand(skillName, hiddenSyncedSkills) === undefined && !isSyncedButMissing(skillName)
+            ? findSkillForAgent(skillName, skillCommands, agentDefinition)
             : undefined;
-        if (!_t) {
+        if (!skill) {
           logForDebugging(
             `[Agent: ${agentDefinition.agentType}] Warning: Skill '${skillName}' specified in frontmatter was not found`,
             {
@@ -1619,7 +1678,7 @@ async function* runAgent({
           );
           continue;
         }
-        if (_t.type !== "prompt") {
+        if (skill.type !== "prompt") {
           logForDebugging(
             `[Agent: ${agentDefinition.agentType}] Warning: Skill '${skillName}' is not a prompt-based skill`,
             {
@@ -1628,7 +1687,7 @@ async function* runAgent({
           );
           continue;
         }
-        if (!isCommandEnabled(_t)) {
+        if (!isCommandEnabled(skill)) {
           logForDebugging(
             `[Agent: ${agentDefinition.agentType}] Warning: Skill '${skillName}' is disabled by policy`,
             {
@@ -1637,7 +1696,7 @@ async function* runAgent({
           );
           continue;
         }
-        if (isKilledHostCatalogSkill(_t)) {
+        if (isKilledHostCatalogSkill(skill)) {
           logForDebugging(
             `[Agent: ${agentDefinition.agentType}] Warning: Skill '${skillName}' is turned off by the organization's Skills setting`,
             {
@@ -1646,7 +1705,7 @@ async function* runAgent({
           );
           continue;
         }
-        if (isSyncedSkill(_t) && ($e ??= refreshVetoAndRead())) {
+        if (isSyncedSkill(skill) && (vetoRefreshPromise ??= refreshVetoAndRead())) {
           logForDebugging(
             `[Agent: ${agentDefinition.agentType}] Warning: Skill '${skillName}' is an account-synced skill and skills sync is currently disabled (turned off or denied by policy)`,
             {
@@ -1655,32 +1714,33 @@ async function* runAgent({
           );
           continue;
         }
-        let Zt = allSkills_2.get(_t);
-        if (Zt !== undefined) {
-          logSyncedCommandRefused(_t, Zt);
+        let refusalReason = allSkills.get(skill);
+        if (refusalReason !== undefined) {
+          logSyncedCommandRefused(skill, refusalReason);
           continue;
         }
-        Jt.push({
+        preloadedSkills.push({
           skillName,
-          skill: _t,
+          skill,
         });
       }
-      let { formatSkillLoadingMetadata } = await import("./chunk-jghdfw5c.js");
-      let Ut = new PromptScopedAbortController(toolUseContext.abortController);
-      let Bo = await Promise.all(
-        Jt.map(async ({ skillName, skill }) => {
+      let { formatSkillLoadingMetadata } =
+        await import("../../utils/processUserInput/processSlashCommand.js");
+      let skillAbortController = new PromptScopedAbortController(toolUseContext.abortController);
+      let skillPrompts = await Promise.all(
+        preloadedSkills.map(async ({ skillName, skill }) => {
           let promptShellHandOff = [];
           let content = await applySkillPromptHooks(
             skillName,
             await skill.getPromptForCommand("", {
               ...toolUseContext,
-              abortController: Ut,
+              abortController: skillAbortController,
               promptShellHandOff,
-              session: ut,
+              session: activeSession,
               options: {
                 ...toolUseContext.options,
                 isSkillPreload: true,
-                tools: kt,
+                tools: agentToolPool,
               },
             }),
             skill,
@@ -1693,10 +1753,10 @@ async function* runAgent({
           };
         }),
       ).catch((error) => {
-        Ut.abort();
+        skillAbortController.abort();
         throw error;
       });
-      for (let { skillName, skill, content, promptShellHandOff } of Bo) {
+      for (let { skillName, skill, content, promptShellHandOff } of skillPrompts) {
         logForDebugging(`[Agent: ${agentDefinition.agentType}] Preloaded skill '${skillName}'`);
         logAgentSkillPreloadSafely(skill, agentId, builtInCommandNames().has(skill.name));
         let metadata = formatSkillLoadingMetadata(skillName, skill.progressMessage);
@@ -1717,14 +1777,14 @@ async function* runAgent({
           }),
         });
         initialMessages.push(userMessage);
-        io.push(userMessage);
+        hookMessages.push(userMessage);
       }
     }
   } catch (error) {
     await cleanup();
     throw error;
   }
-  let ao =
+  let deferredToolsState =
     stickyBetas ??
     (useExactTools
       ? forkContextMessages !== undefined
@@ -1733,22 +1793,26 @@ async function* runAgent({
             clearAdvisorHeldAndReturn(forkStickyBetaLatches(toolUseContext.stickyBetas ?? getStickyBetas())),
           )
       : createStickyBetaLatches());
-  let Yt = [];
+  let extraAttachments = [];
   if (!useExactTools || forkContextMessages === undefined) {
-    let P = messagesSinceCompactBoundary(initialMessages);
-    if (!ao.declaredToolsDecided)
+    let sinceCompact = messagesSinceCompactBoundary(initialMessages);
+    if (!deferredToolsState.declaredToolsDecided)
       try {
-        seedWireShapeFromRecord(ao, snapshotIfEnabled(initialMessages, en)?.wireShape, resolvedAgentModel);
-        mergeNameOnlyAnnouncements(ao, recordedDeferredTools(P));
+        seedWireShapeFromRecord(
+          deferredToolsState,
+          snapshotIfEnabled(initialMessages, promptOptions)?.wireShape,
+          resolvedAgentModel,
+        );
+        mergeNameOnlyAnnouncements(deferredToolsState, recordedDeferredTools(sinceCompact));
       } catch (error) {
         logError(error);
       }
-    let permissionContext = getToolPermissionContext({
+    let toolPermissionContext = getToolPermissionContext({
       getAppState: agentGetAppState,
-      permissionLayers: [...(toolUseContext.permissionLayers ?? []), ...Ts],
+      permissionLayers: [...(toolUseContext.permissionLayers ?? []), ...modelOverrides],
     });
-    for (let xe of await getDeferredToolsDeltaAttachments(
-      kt,
+    for (let deferredToolsAttachment of await getDeferredToolsDeltaAttachments(
+      agentToolPool,
       resolvedAgentModel,
       initialMessages,
       {
@@ -1759,31 +1823,37 @@ async function* runAgent({
       undefined,
       undefined,
       undefined,
-      getDeclaredToolSource(ao, P, en, kt, permissionContext),
+      getDeclaredToolSource(
+        deferredToolsState,
+        sinceCompact,
+        promptOptions,
+        agentToolPool,
+        toolPermissionContext,
+      ),
       buildDeferredToolsLatchContextFrom(
-        ao,
-        Mn !== undefined,
-        permissionContext,
+        deferredToolsState,
+        assembleTools !== undefined,
+        toolPermissionContext,
         toolUseContext.options.agentDefinitions,
         querySource,
       ),
       undefined,
-      en,
+      promptOptions,
     )) {
-      let attachmentMessage = createAttachmentMessage(xe);
+      let attachmentMessage = createAttachmentMessage(deferredToolsAttachment);
       initialMessages.push(attachmentMessage);
-      Yt.push(attachmentMessage);
+      extraAttachments.push(attachmentMessage);
     }
   }
-  for (let P of getSandboxInstructionsAttachments(kt, initialMessages)) {
-    let attachmentMessage = createAttachmentMessage(P);
+  for (let sandboxAttachment of getSandboxInstructionsAttachments(agentToolPool, initialMessages)) {
+    let attachmentMessage = createAttachmentMessage(sandboxAttachment);
     initialMessages.push(attachmentMessage);
-    Yt.push(attachmentMessage);
+    extraAttachments.push(attachmentMessage);
   }
   if (
     !useExactTools &&
-    !Ao &&
-    hasSendMessageTool(kt) &&
+    !isContinuation &&
+    hasSendMessageTool(agentToolPool) &&
     !initialMessages.some(
       (initialMessage) =>
         initialMessage.type === "user" &&
@@ -1793,57 +1863,60 @@ async function* runAgent({
     )
   ) {
     let sorted = [...toolUseContext.getAppState().agentNameRegistry]
-      .filter(([, se]) => se !== agentId)
-      .map(([se]) => se)
+      .filter(([, otherAgentId]) => otherAgentId !== agentId)
+      .map(([agentId]) => agentId)
       .sort();
     if (sorted.length > 0) {
-      let se = escapeXmlText([MAIN, ...sorted].join(", "));
+      let mainLabel = escapeXmlText([MAIN, ...sorted].join(", "));
       let userMessage = createUserMessage({
-        content: wrapInSystemReminder(`${OTHER_AGENTS_NOTE}({to: name, message}): ${se}.`),
+        content: wrapInSystemReminder(`${OTHER_AGENTS_NOTE}({to: name, message}): ${mainLabel}.`),
         isMeta: true,
       });
       initialMessages.push(userMessage);
-      Yt.push(userMessage);
+      extraAttachments.push(userMessage);
     }
   }
-  let Zi = toolUseContext.taskRegistry.get(agentId);
-  if (handbackOptIn === true && (isSendMessageHandbackEnabled() || handbackContractOf(Zi) !== undefined))
-    toolUseContext.taskRegistry.update(agentId, (P) => ({
-      ...P,
+  let taskEntry = toolUseContext.taskRegistry.get(agentId);
+  if (
+    handbackOptIn === true &&
+    (isSendMessageHandbackEnabled() || handbackContractOf(taskEntry) !== undefined)
+  )
+    toolUseContext.taskRegistry.update(agentId, (task) => ({
+      ...task,
       ...resolveHandbackRecipient({
-        contract: uo,
+        contract: handbackArmed,
         registered: {
-          recipient: P.handbackRecipient,
+          recipient: task.handbackRecipient,
         },
-        callerInbox: P.parentAgentId ?? mainAgentId(),
+        callerInbox: task.parentAgentId ?? mainAgentId(),
         resumerInbox: toolUseContext.agentId ?? mainAgentId(),
-        inboxReadable: (se) => shouldNotifyTeammateLifecycle(se, toolUseContext.taskRegistry),
+        inboxReadable: (from) => shouldNotifyTeammateLifecycle(from, toolUseContext.taskRegistry),
       }),
     }));
   let latestHandbackReminder = findLatestHandbackReminder(initialMessages);
-  if (uo && latestHandbackReminder !== "reminder") {
+  if (handbackArmed && latestHandbackReminder !== "reminder") {
     let userMessage = createUserMessage({
-      content: wrapInSystemReminder(buildHandbackInstruction(hasSendMessageTool(kt))),
+      content: wrapInSystemReminder(buildHandbackInstruction(hasSendMessageTool(agentToolPool))),
       isMeta: true,
     });
     initialMessages.push(userMessage);
-    Yt.push(userMessage);
-  } else if (!uo && handbackOptIn === true && latestHandbackReminder === "reminder") {
+    extraAttachments.push(userMessage);
+  } else if (!handbackArmed && handbackOptIn === true && latestHandbackReminder === "reminder") {
     let userMessage = createUserMessage({
       content: wrapInSystemReminder(handbackCountermandText()),
       isMeta: true,
     });
     initialMessages.push(userMessage);
-    Yt.push(userMessage);
+    extraAttachments.push(userMessage);
   }
-  let vn = {
+  let taskOptions = {
     runQuery: toolUseContext.options.runQuery,
     isNonInteractiveSession: useExactTools
       ? toolUseContext.options.isNonInteractiveSession
       : (requestNonInteractive ??
         spawnRequestShape(requestShape === "background", toolUseContext.options.isNonInteractiveSession)
           .requestNonInteractive),
-    ...en,
+    ...promptOptions,
     ...(override?.isolatedContext && {
       isolatedContext: true,
     }),
@@ -1857,7 +1930,7 @@ async function* runAgent({
     appendSubagentSystemPrompt: toolUseContext.options.appendSubagentSystemPrompt,
     spawnedBySkill,
     spawnedByForkedSkill,
-    tools: kt,
+    tools: agentToolPool,
     toolCatalog: toolUseContext.options.toolCatalog,
     commands: [],
     debug: toolUseContext.options.debug,
@@ -1878,21 +1951,21 @@ async function* runAgent({
     }),
     forwardSubagentText: toolUseContext.options.forwardSubagentText,
     refreshTools:
-      Mn !== undefined
+      assembleTools !== undefined
         ? createGrowingToolList(
-            kt,
+            agentToolPool,
             () => toolUseContext.getAppState().mcp.tools,
             () => toolUseContext.options.refreshTools?.() ?? toolUseContext.options.tools,
-            (P) => {
-              let se = memoryModeForSession(toolUseContext);
+            (entry) => {
+              let memoryModeAgain = memoryModeForSession(toolUseContext);
               return resolveAgentTools(
                 agentDefinition,
-                Mn(P),
+                assembleTools(entry),
                 requestShape === "background",
                 false,
                 isTeammate,
                 agentDepth,
-                se.serverPending ? "none" : se.mode,
+                memoryModeAgain.serverPending ? "none" : memoryModeAgain.mode,
               ).resolvedTools;
             },
           )
@@ -1900,8 +1973,8 @@ async function* runAgent({
     mcpClients: clients,
     refreshMcpClients: toolUseContext.options.refreshMcpClients
       ? () => {
-          let P = toolUseContext.options.refreshMcpClients();
-          return agentClients.length > 0 ? [...P, ...agentClients] : P;
+          let mcpClients = toolUseContext.options.refreshMcpClients();
+          return agentClients.length > 0 ? [...mcpClients, ...agentClients] : mcpClients;
         }
       : undefined,
     mcpResources: toolUseContext.options.mcpResources,
@@ -1935,21 +2008,21 @@ async function* runAgent({
     ...(structuredOutputIsHandback === true && {
       structuredOutputIsHandback: true,
     }),
-    ...(uo && {
+    ...(handbackArmed && {
       requiresHandback: true,
     }),
   };
-  onToolPool?.(() => vn.refreshTools?.() ?? kt);
+  onToolPool?.(() => taskOptions.refreshTools?.() ?? agentToolPool);
   let subagentContext = createSubagentContext(toolUseContext, {
-    options: vn,
-    session: ut,
+    options: taskOptions,
+    session: activeSession,
     agentId,
     isBackgroundAgent:
       isAsync &&
       !(
         override?.agentContext?.agentType === "subagent" && override.agentContext.isBackgroundAgent === false
       ),
-    memoryCaller: Ss,
+    memoryCaller,
     agentType: agentDefinition.agentType,
     agentContext: override?.agentContext,
     requireCanUseTool: override?.requireCanUseTool,
@@ -1965,8 +2038,8 @@ async function* runAgent({
     readFileState,
     abortController: agentAbortController,
     getAppState: agentGetAppState,
-    permissionLayers: Ts,
-    primitiveToolGrant: ks === undefined ? undefined : resolveAgentToolNames(ks),
+    permissionLayers: modelOverrides,
+    primitiveToolGrant: toolScope === undefined ? undefined : resolveAgentToolNames(toolScope),
     shareSetAppState: !isAsync,
     shareFileHistory: override?.shareFileHistory,
     criticalSystemReminder_EXPERIMENTAL: agentDefinition.criticalSystemReminder_EXPERIMENTAL,
@@ -1975,12 +2048,12 @@ async function* runAgent({
   if (override?.onRetryStatus) subagentContext.onRetryStatus = override.onRetryStatus;
   if (override?.subscribeRetryWake) subagentContext.subscribeRetryWake = override.subscribeRetryWake;
   if (worktreePath) subagentContext.agentWorktree = worktreePath;
-  for (let P of await getEnvironmentChangeAttachments(subagentContext, initialMessages)) {
-    let attachmentMessage = createAttachmentMessage(P);
+  for (let envAttachment of await getEnvironmentChangeAttachments(subagentContext, initialMessages)) {
+    let attachmentMessage = createAttachmentMessage(envAttachment);
     initialMessages.push(attachmentMessage);
-    Yt.push(attachmentMessage);
+    extraAttachments.push(attachmentMessage);
   }
-  for (let P of await getSkillListingAttachmentsLazy(
+  for (let skillAttachment of await getSkillListingAttachmentsLazy(
     subagentContext,
     messagesSinceCompactBoundary(initialMessages),
   ).catch((error) => {
@@ -1992,9 +2065,9 @@ async function* runAgent({
     );
     return [];
   })) {
-    let attachmentMessage = createAttachmentMessage(P);
+    let attachmentMessage = createAttachmentMessage(skillAttachment);
     initialMessages.push(attachmentMessage);
-    Yt.push(attachmentMessage);
+    extraAttachments.push(attachmentMessage);
   }
   let noticeAttachment =
     isRemoteToolForwardingSwitchOn() &&
@@ -2004,10 +2077,10 @@ async function* runAgent({
       : undefined;
   if (noticeAttachment !== undefined)
     try {
-      for (let P of await noticeAttachment(subagentContext, initialMessages, "attachment_scan")) {
-        let attachmentMessage = createAttachmentMessage(P);
+      for (let noticeMessage of await noticeAttachment(subagentContext, initialMessages, "attachment_scan")) {
+        let attachmentMessage = createAttachmentMessage(noticeMessage);
         initialMessages.push(attachmentMessage);
-        Yt.push(attachmentMessage);
+        extraAttachments.push(attachmentMessage);
       }
     } catch (error) {
       if (isAbortError(error)) logForDebugging("Attached-machines notice skipped (spawn aborted)");
@@ -2015,51 +2088,55 @@ async function* runAgent({
     }
   if (preserveToolUseResults) subagentContext.preserveToolUseResults = true;
   if (persistedToolResultFiles) subagentContext.persistedToolResultFiles = persistedToolResultFiles;
-  let yt = null;
-  let co = null;
-  subagentContext.stickyBetas = ao;
+  let pendingResult = null;
+  let pendingError = null;
+  subagentContext.stickyBetas = deferredToolsState;
   let evictCacheOnComplete = isPlainSpawnShape({
     stickyBetas,
     useExactTools,
-    name: Ke,
+    name,
     recordedUuids,
   });
   if (onCacheSafeParams) {
-    let P = [...initialMessages];
-    yt = P;
+    let allMessages = [...initialMessages];
+    pendingResult = allMessages;
     onCacheSafeParams(
       {
         systemPrompt: systemPromptWithAppend,
-        userContext,
-        systemContext: Be,
+        userContext: userContext_2,
+        systemContext,
         toolUseContext: subagentContext,
         forkContextMessages: initialMessages,
         advisorModel: subagentContext.getAdvisorSetting(),
-        stickyBetas: ao,
+        stickyBetas: deferredToolsState,
         agentCacheTtlOverride: agentDefinition.cacheTtl,
       },
-      () => P,
+      () => allMessages,
     );
   }
   if (compactTranscriptUnavailable) subagentContext.compactTranscriptUnavailable = true;
-  let fo = initialMessages;
-  let Cn = null;
+  let beforeLoop = initialMessages;
+  let loopError = null;
   if (recordedUuids !== undefined) {
     let lastIndex = initialMessages.findLastIndex((initialMessage) => recordedUuids.has(initialMessage.uuid));
-    fo = initialMessages.slice(lastIndex + 1);
+    beforeLoop = initialMessages.slice(lastIndex + 1);
     let lastIndex_2 = initialMessages.findLastIndex(
-      (initialMessage, lt) =>
-        lt <= lastIndex && recordedUuids.has(initialMessage.uuid) && !isReorderedRow(initialMessage.uuid),
+      (initialMessage, message) =>
+        message <= lastIndex &&
+        recordedUuids.has(initialMessage.uuid) &&
+        !isReorderedRow(initialMessage.uuid),
     );
-    Cn = lastIndex_2 >= 0 ? initialMessages[lastIndex_2].uuid : null;
+    loopError = lastIndex_2 >= 0 ? initialMessages[lastIndex_2].uuid : null;
   } else if (
     forkContextMessages !== undefined &&
     forkContextMessages === toolUseContext.messages &&
     toolUseContext.agentId === undefined
   ) {
-    let uuid = messages.findLast((se) => isLoggableMessage(se) && !isReorderedRow(se.uuid))?.uuid;
+    let uuid = messages.findLast(
+      (message) => isLoggableMessage(message) && !isReorderedRow(message.uuid),
+    )?.uuid;
     if (uuid !== undefined) {
-      fo = initialMessages.slice(messages.length);
+      beforeLoop = initialMessages.slice(messages.length);
       subagentContext.compactTranscriptUnavailable = true;
       recordForkContextRef(
         {
@@ -2072,39 +2149,41 @@ async function* runAgent({
       ).catch(logForkContextRefFailure);
     }
   }
-  let Bs = initialMessages.length - fo.length;
-  let max = Math.max(Bs, messages.length);
-  let ta = initialMessages.splice(max);
-  yt?.splice(max);
-  let js = orderedRowSource({
+  let appendedCount = initialMessages.length - beforeLoop.length;
+  let max = Math.max(appendedCount, messages.length);
+  let spliced = initialMessages.splice(max);
+  pendingResult?.splice(max);
+  let rowSource = orderedRowSource({
     agentId,
-    keep: (P) => {
-      initialMessages.push(...P);
-      yt?.push(...P);
+    keep: (message) => {
+      initialMessages.push(...message);
+      pendingResult?.push(...message);
     },
     rows: () => initialMessages,
-    isHookable: it,
+    isHookable: hooksEnabled,
   });
-  for (let P of ta) {
-    let se =
-      P.type === "user" &&
-      P.isMeta !== true &&
-      promptMessages.some((promptMessage) => promptMessage.uuid === P.uuid);
+  for (let message of spliced) {
+    let pendingText =
+      message.type === "user" &&
+      message.isMeta !== true &&
+      promptMessages.some((promptMessage) => promptMessage.uuid === message.uuid);
     await appendRowsWithHooks(
-      js,
-      [P],
-      se
+      rowSource,
+      [message],
+      pendingText
         ? {
             door: "prompt",
           }
         : {},
     );
   }
-  fo = initialMessages.slice(Bs);
-  recordSidechainTranscript(fo, agentId, Cn, toolUseContext.storageV5).catch(logSidechainFailure);
-  let Po = recordedUuids !== undefined || extraMetadata !== undefined;
-  if (!Po && !worktreePath && toolUseContext.agentWorktree) recordSpawnedAgentIsolation(agentId);
-  if (!Po) {
+  beforeLoop = initialMessages.slice(appendedCount);
+  recordSidechainTranscript(beforeLoop, agentId, loopError, toolUseContext.storageV5).catch(
+    logSidechainFailure,
+  );
+  let recordSidechain = recordedUuids !== undefined || extraMetadata !== undefined;
+  if (!recordSidechain && !worktreePath && toolUseContext.agentWorktree) recordSpawnedAgentIsolation(agentId);
+  if (!recordSidechain) {
     recordSpawnProvenance(agentId, toolUseContext);
     if (
       isUnknownPluginSpawnedAgent({
@@ -2124,7 +2203,7 @@ async function* runAgent({
   }
   persistAgentMetadata(
     agentId,
-    Po,
+    recordSidechain,
     {
       agentType: agentDefinition.agentType,
       ...(agentDefinition.agentType === FORK && {
@@ -2134,7 +2213,7 @@ async function* runAgent({
       ...(worktreePath && {
         worktreePath,
       }),
-      ...(!Po &&
+      ...(!recordSidechain &&
         !worktreePath &&
         toolUseContext.agentWorktree && {
           inheritedWorktreePath: toolUseContext.agentWorktree,
@@ -2156,14 +2235,14 @@ async function* runAgent({
       ...(launchedWithDefaults && {
         launchedWithDefaults: true,
       }),
-      ...(Bt && {
-        spawnMode: Bt,
+      ...(spawnModeOverride && {
+        spawnMode: spawnModeOverride,
       }),
       ...(description && {
         description,
       }),
-      ...(Ke && {
-        name: Ke,
+      ...(name && {
+        name,
       }),
       ...(workflowPhase && {
         workflowPhase,
@@ -2179,12 +2258,12 @@ async function* runAgent({
         spawnDepth: getAgentDepth(override.agentContext),
       }),
       requestShape,
-      requestNonInteractive: vn.isNonInteractiveSession,
+      requestNonInteractive: taskOptions.isNonInteractiveSession,
       ...(model && {
         model,
       }),
       ...(!model &&
-        !Po &&
+        !recordSidechain &&
         toolUseContext.agentId &&
         resolvedAgentModel === parentModel &&
         parentModel !== getMainLoopModel() && {
@@ -2197,7 +2276,7 @@ async function* runAgent({
     },
     toolUseContext.storageV5,
   ).catch(logAgentMetadataWriteFailure);
-  let ko = new SidechainRecorder(
+  let recorder = new SidechainRecorder(
     {
       isLoggableMessage,
       recordSidechainTranscript,
@@ -2205,120 +2284,120 @@ async function* runAgent({
       transcriptCursorEnd,
     },
     agentId,
-    fo.findLast(isLoggableMessage)?.uuid ?? Cn,
+    beforeLoop.findLast(isLoggableMessage)?.uuid ?? loopError,
     recordedUuids,
     toolUseContext.storageV5,
     agentAbortController.signal,
   );
   if (recordedUuids) {
-    for (let P of fo) if (isLoggableMessage(P)) recordedUuids.add(P.uuid);
+    for (let message of beforeLoop) if (isLoggableMessage(message)) recordedUuids.add(message.uuid);
   }
-  let Io = false;
-  let Ws = false;
-  let No;
-  let Fo = [];
-  let Lo = 0;
-  let Uo = 0;
-  let En = 0;
-  let Rn = false;
-  let bo = 0;
-  let nn = (P) => {
+  let gotResult = false;
+  let abortedEarly = false;
+  let finalResult;
+  let resultMessages = [];
+  let lastTokenCount = 0;
+  let lastTurnTokens = 0;
+  let turnCount = 0;
+  let sawStructuredOutput = false;
+  let toolUseCount = 0;
+  let onMessage = (message) => {
     let now = Date.now();
-    if (!P && now - En < STREAM_TOKEN_ESTIMATE_THROTTLE_MS) return;
-    let xe = Math.floor(Lo) - Uo;
-    if (xe <= 0) return;
-    En = now;
-    Uo += xe;
+    if (!message && now - turnCount < STREAM_TOKEN_ESTIMATE_THROTTLE_MS) return;
+    let contextLeft = Math.floor(lastTokenCount) - lastTurnTokens;
+    if (contextLeft <= 0) return;
+    turnCount = now;
+    lastTurnTokens += contextLeft;
     onStreamTokenEstimate?.({
       type: "tokens",
-      estimatedTokensDelta: xe,
+      estimatedTokensDelta: contextLeft,
     });
   };
-  let oa = () => {
-    if (Rn) {
-      if (Uo > 0)
+  let finish = () => {
+    if (sawStructuredOutput) {
+      if (lastTurnTokens > 0)
         onStreamTokenEstimate?.({
           type: "tokens",
-          estimatedTokensDelta: -Uo,
+          estimatedTokensDelta: -lastTurnTokens,
         });
     } else
       onStreamTokenEstimate?.({
         type: "response_start",
       });
-    Lo = 0;
-    Uo = 0;
-    En = 0;
-    bo = 0;
-    Rn = true;
+    lastTokenCount = 0;
+    lastTurnTokens = 0;
+    turnCount = 0;
+    toolUseCount = 0;
+    sawStructuredOutput = true;
   };
-  let na = () => {
-    nn(true);
-    Rn = false;
+  let onEnd = () => {
+    onMessage(true);
+    sawStructuredOutput = false;
   };
-  let sa = {
+  let streamCallbacks = {
     onSetStreamMode: (mode) =>
-      Fo.push({
+      resultMessages.push({
         type: "spinner_mode",
         mode,
       }),
     ...(onStreamTokenEstimate && {
-      onUpdateLength: (P) => {
-        Lo += P / 4;
-        nn(false);
+      onUpdateLength: (length) => {
+        lastTokenCount += length / 4;
+        onMessage(false);
       },
     }),
-    onApiMetrics: (P) => {
+    onApiMetrics: (metrics) => {
       if (onStreamTokenEstimate) {
-        if (P.type === "content_block_start") bo = 0;
-        else if (P.type === "thinking_progress") {
-          bo += P.estimatedTokensDelta;
-          Lo += P.estimatedTokensDelta;
-          nn(false);
-        } else if (P.type === "thinking_signature") {
-          let se = Math.ceil(P.chars / 4);
-          if (se > bo) {
-            Lo += se - bo;
-            bo = se;
-            nn(false);
+        if (metrics.type === "content_block_start") toolUseCount = 0;
+        else if (metrics.type === "thinking_progress") {
+          toolUseCount += metrics.estimatedTokensDelta;
+          lastTokenCount += metrics.estimatedTokensDelta;
+          onMessage(false);
+        } else if (metrics.type === "thinking_signature") {
+          let approxTokens = Math.ceil(metrics.chars / 4);
+          if (approxTokens > toolUseCount) {
+            lastTokenCount += approxTokens - toolUseCount;
+            toolUseCount = approxTokens;
+            onMessage(false);
           }
         }
       }
-      if (P.type !== "start" && P.type !== "end") return;
-      if (P.type === "start") {
-        No = randomUUID();
-        Fo.push({
+      if (metrics.type !== "start" && metrics.type !== "end") return;
+      if (metrics.type === "start") {
+        finalResult = randomUUID();
+        resultMessages.push({
           type: "api_metrics",
           event: {
             type: "start",
-            ttftMs: P.ttftMs,
-            id: No,
+            ttftMs: metrics.ttftMs,
+            id: finalResult,
           },
         });
-      } else if (No != null) {
-        Fo.push({
+      } else if (finalResult != null) {
+        resultMessages.push({
           type: "api_metrics",
           event: {
             type: "end",
-            outputTokens: P.outputTokens,
-            id: No,
+            outputTokens: metrics.outputTokens,
+            id: finalResult,
           },
         });
-        No = undefined;
+        finalResult = undefined;
       }
     },
   };
-  let ra = {
+  let queryOptions = {
     isSubagent: true,
   };
-  let Qt;
-  let Ks = [];
-  let qs = `isolation:${agentId}`;
-  let Pn = autoModeUnavailableNotes.of(ut.host);
-  Pn.set(agentId, undefined);
+  let loopPromise;
+  let worktrees = [];
+  let isolationKey = `isolation:${agentId}`;
+  let autoModeNotes = autoModeUnavailableNotes.of(activeSession.host);
+  autoModeNotes.set(agentId, undefined);
   try {
     if (worktreePath && isSameRepoWorktree(worktreePath, [getOriginalCwd(), getProjectRoot()]))
-      registerSandboxWriteDirectory(worktreePath, qs);
-    Oo = executeInSpan({
+      registerSandboxWriteDirectory(worktreePath, isolationKey);
+    taskHandle = executeInSpan({
       agentId,
       agentType: agentDefinition.agentType,
       isBuiltIn: isBuiltInAgent(agentDefinition),
@@ -2329,37 +2408,42 @@ async function* runAgent({
         override?.agentContext?.agentType === "subagent" && override.agentContext.invocationKind === "resume",
       storageV5: toolUseContext.storageV5,
     });
-    yield* io;
-    yield* Yt;
-    using P = runningTurnRegistry.running(
+    yield* hookMessages;
+    yield* extraAttachments;
+    using runningTurn = runningTurnRegistry.running(
       agentId,
       orderedRowSource({
         agentId,
-        keep: (re) => {
-          yt?.push(...re);
+        keep: (message) => {
+          pendingResult?.push(...message);
         },
-        keepArrived: (re) => {
-          yt?.push(...re);
-          ko.record(re);
+        keepArrived: (message) => {
+          pendingResult?.push(...message);
+          recorder.record(message);
         },
-        rows: () => yt ?? initialMessages,
-        isHookable: js.isHookable,
+        rows: () => pendingResult ?? initialMessages,
+        isHookable: rowSource.isHookable,
       }),
     );
-    let se = {
+    let turnOptions = {
       filterUnresolvedToolUses: normalizeMessagesForResume,
       normalizeMessagesForAPI,
     };
-    let xe =
+    let turnResult =
       waitingToolUse &&
-      findWaitingToolCall(initialMessages, waitingToolUse.id, subagentContext.options.tools, se);
-    if (xe !== undefined) yield xe.call;
-    let lt = abortedToolResults.bind(null, waitingToolUse, se, subagentContext.options.runQuery);
-    for await (let re of lt({
+      findWaitingToolCall(initialMessages, waitingToolUse.id, subagentContext.options.tools, turnOptions);
+    if (turnResult !== undefined) yield turnResult.call;
+    let collectAborted = abortedToolResults.bind(
+      null,
+      waitingToolUse,
+      turnOptions,
+      subagentContext.options.runQuery,
+    );
+    for await (let event of collectAborted({
       messages: initialMessages,
       systemPrompt: systemPromptWithAppend,
-      userContext,
-      systemContext: Be,
+      userContext: userContext_2,
+      systemContext,
       canUseTool,
       toolUseContext: subagentContext,
       querySource,
@@ -2368,104 +2452,106 @@ async function* runAgent({
       maxTurns: maxTurns ?? agentDefinition.maxTurns,
       forkPointUuid,
       fallbackModel: subagentContext.options.fallbackModel,
-      stickyBetas: ao,
+      stickyBetas: deferredToolsState,
       evictCacheOnComplete,
       agentCacheTtlOverride: agentDefinition.cacheTtl,
     })) {
       onQueryProgress?.();
-      if (isStreamEvent(re)) {
+      if (isStreamEvent(event)) {
         if (
-          re.type === "stream_event" &&
-          (re.event.type === "message_start" ||
-            (re.event.type === "message_stop" && re.abandonedBlocks === undefined))
+          event.type === "stream_event" &&
+          (event.event.type === "message_start" ||
+            (event.event.type === "message_stop" && event.abandonedBlocks === undefined))
         )
-          await ko.flush(true);
-        if (onStreamTokenEstimate && re.type === "stream_event") {
-          if (re.event.type === "message_start") oa();
-          else if (re.event.type === "message_stop") na();
+          await recorder.flush(true);
+        if (onStreamTokenEstimate && event.type === "stream_event") {
+          if (event.event.type === "message_start") finish();
+          else if (event.event.type === "message_stop") onEnd();
         }
-        handleMessageFromStream(re, sa, ra);
-        yield* Fo;
-        Fo.length = 0;
+        handleMessageFromStream(event, streamCallbacks, queryOptions);
+        yield* resultMessages;
+        resultMessages.length = 0;
         continue;
       }
       if (
-        (re.type === "attachment" &&
-          "hookEvent" in re.attachment &&
-          re.attachment.hookEvent === "SubagentStop") ||
-        (re.type === "progress" && re.data?.type === "hook_progress" && re.data.hookEvent === "SubagentStop")
+        (event.type === "attachment" &&
+          "hookEvent" in event.attachment &&
+          event.attachment.hookEvent === "SubagentStop") ||
+        (event.type === "progress" &&
+          event.data?.type === "hook_progress" &&
+          event.data.hookEvent === "SubagentStop")
       )
-        Io = true;
-      if (re.type === "system" && re.subtype === "api_error") {
-        yield re;
+        gotResult = true;
+      if (event.type === "system" && event.subtype === "api_error") {
+        yield event;
         continue;
       }
       if (
-        re.type === "system" &&
-        (re.subtype === "model_refusal_fallback" || re.subtype === "model_fallback")
+        event.type === "system" &&
+        (event.subtype === "model_refusal_fallback" || event.subtype === "model_fallback")
       ) {
-        yield re;
+        yield event;
         continue;
       }
-      if (re.type === "set_in_progress_tool_use_ids") {
-        if (re.op.action === "remove") yield re;
+      if (event.type === "set_in_progress_tool_use_ids") {
+        if (event.op.action === "remove") yield event;
         continue;
       }
-      if (re.type === "query_model_change") {
-        resolvedModel = re.toModel;
-        yield re;
+      if (event.type === "query_model_change") {
+        resolvedModel = event.toModel;
+        yield event;
         continue;
       }
-      if (re.type === "attachment") {
-        if (re.attachment.type === "nested_memory") Ks.push(re.attachment.path);
-        if (yt) {
-          yt.push(re);
-          co = applyPreservedMessages(yt, re, co);
+      if (event.type === "attachment") {
+        if (event.attachment.type === "nested_memory") worktrees.push(event.attachment.path);
+        if (pendingResult) {
+          pendingResult.push(event);
+          pendingError = applyPreservedMessages(pendingResult, event, pendingError);
         }
-        if (re.attachment.type === "max_turns_reached") {
-          Ws = true;
+        if (event.attachment.type === "max_turns_reached") {
+          abortedEarly = true;
           logForDebugging(
-            `[Agent: ${agentDefinition.agentType}] Reached max turns limit (${re.attachment.maxTurns})`,
+            `[Agent: ${agentDefinition.agentType}] Reached max turns limit (${event.attachment.maxTurns})`,
           );
           if (!agentAbortController.signal.aborted) {
             logEvent("tengu_agent_max_turns_reached", {
               query_source: agentTypeForTelemetry(querySource),
               is_built_in_agent: isBuiltInAgent(agentDefinition),
-              max_turns: re.attachment.maxTurns,
-              turn_count: re.attachment.turnCount,
+              max_turns: event.attachment.maxTurns,
+              turn_count: event.attachment.turnCount,
               is_async: isAsync,
             });
-            yield re;
+            yield event;
           }
           break;
         }
-        await ko.record([re]);
-        yield re;
+        await recorder.record([event]);
+        yield event;
         continue;
       }
-      if (re.type === "tombstone") {
-        ko.forget(re.message.uuid);
-        if (yt) {
-          let lastIndex = yt.findLastIndex((Jt) => Jt.uuid === re.message.uuid);
-          if (lastIndex !== -1) yt.splice(lastIndex, 1);
+      if (event.type === "tombstone") {
+        recorder.forget(event.message.uuid);
+        if (pendingResult) {
+          let lastIndex = pendingResult.findLastIndex((row) => row.uuid === event.message.uuid);
+          if (lastIndex !== -1) pendingResult.splice(lastIndex, 1);
         }
         continue;
       }
-      if (isRecordableMessage(re)) {
-        if (re.type !== "progress") {
-          Jo.saw(re);
-          if (yt) {
-            yt.push(re);
-            co = applyPreservedMessages(yt, re, co);
+      if (isRecordableMessage(event)) {
+        if (event.type !== "progress") {
+          turnLifecycle.saw(event);
+          if (pendingResult) {
+            pendingResult.push(event);
+            pendingError = applyPreservedMessages(pendingResult, event, pendingError);
           }
         }
-        await ko.record([re]);
-        let Rt = toolUseContext.taskRegistry.get(agentId);
-        let isBackgrounded = isLocalAgent(Rt) && Rt.isBackgrounded;
+        await recorder.record([event]);
+        let taskRegistryEntry = toolUseContext.taskRegistry.get(agentId);
+        let isBackgrounded = isLocalAgent(taskRegistryEntry) && taskRegistryEntry.isBackgrounded;
         if ((isAsync || isBackgrounded) && toolUseId) {
           let active = transportStateByHost.of(toolUseContext.session).active;
-          if (active && (re.type === "assistant" || re.type === "user"))
-            for (let message of normalizeMessages([re])) {
+          if (active && (event.type === "assistant" || event.type === "user"))
+            for (let message of normalizeMessages([event])) {
               let progressMessage = createProgressMessage({
                 toolUseID: `agent_${agentId}`,
                 parentToolUseID: toolUseId,
@@ -2482,11 +2568,11 @@ async function* runAgent({
                   }),
                 },
               });
-              for (let Ut of normalizeMessage(
+              for (let message of normalizeMessage(
                 progressMessage,
-                subagentContext.options.refreshTools?.() ?? kt,
+                subagentContext.options.refreshTools?.() ?? agentToolPool,
               ))
-                active.write(Ut).catch((err) =>
+                active.write(message).catch((err) =>
                   logForDebugging(`bg-subagent progress write failed: ${err}`, {
                     level: "warn",
                   }),
@@ -2494,73 +2580,78 @@ async function* runAgent({
             }
           else if (
             active &&
-            extractAgentIdsFromMessages_2(re) &&
-            filterIncompleteToolCalls_2(toolUseContext, re)
+            extractAgentIdsFromMessages_2(event) &&
+            filterIncompleteToolCalls_2(toolUseContext, event)
           )
-            for (let $e of normalizeMessage(re, subagentContext.options.refreshTools?.() ?? kt))
-              active.write($e).catch((prev) =>
+            for (let message of normalizeMessage(
+              event,
+              subagentContext.options.refreshTools?.() ?? agentToolPool,
+            ))
+              active.write(message).catch((prev) =>
                 logForDebugging(`bg-subagent nested progress write failed: ${prev}`, {
                   level: "warn",
                 }),
               );
         }
-        yield re;
+        yield event;
       }
     }
-    Io = true;
+    gotResult = true;
     if (agentAbortController.signal.aborted) {
-      let re = Pn.get(agentId);
+      let note = autoModeNotes.get(agentId);
       throw unwrapAbortReason(agentAbortController.signal.reason) === "permission-stop"
         ? new AbortError(
-            re !== undefined ? buildAutoModeStoppedMessage(re) : buildAgentStoppedUnavailableMessage(),
+            note !== undefined ? buildAutoModeStoppedMessage(note) : buildAgentStoppedUnavailableMessage(),
           )
         : new AbortError();
     }
     if (isBuiltInAgent(agentDefinition) && agentDefinition.callback) agentDefinition.callback();
   } catch (error) {
-    Qt = error;
+    loopPromise = error;
     throw error;
   } finally {
-    Pn.delete(agentId);
-    await ko.close();
-    Jo.ended({
-      isAborted: agentAbortController.signal.aborted || (!Io && Qt === undefined),
-      hasFailed: Qt !== undefined,
+    autoModeNotes.delete(agentId);
+    await recorder.close();
+    turnLifecycle.ended({
+      isAborted: agentAbortController.signal.aborted || (!gotResult && loopPromise === undefined),
+      hasFailed: loopPromise !== undefined,
       report:
-        getLatestAgentReportText(toolUseContext.taskRegistry.get(agentId), agentId, So) ??
+        getLatestAgentReportText(toolUseContext.taskRegistry.get(agentId), agentId, handback) ??
         callerDeliveredReport?.(),
     });
-    if (yt && co) {
-      yt.push(...co.preserved);
-      co = null;
+    if (pendingResult && pendingError) {
+      pendingResult.push(...pendingError.preserved);
+      pendingError = null;
     }
     getTaskRunState().killAgentMonitors ??= stopMonitorWsTasksForAgent;
-    let P = toolUseContext.taskRegistry.get(agentId);
-    let se = toolUseContext.taskRegistry.get(agentId);
-    let xe =
+    let taskEntry = toolUseContext.taskRegistry.get(agentId);
+    let taskEntry2 = toolUseContext.taskRegistry.get(agentId);
+    let failureNote =
       isAsync &&
-      !(isLocalAgent(se) && se.isBackgrounded === false) &&
-      Io &&
+      !(isLocalAgent(taskEntry2) && taskEntry2.isBackgrounded === false) &&
+      gotResult &&
       !agentAbortController.signal.aborted &&
       (hasAnyKeepaliveReason(agentId, toolUseContext.taskRegistry) ||
         hasRunningBackgroundWorkForAgent(agentId, toolUseContext.taskRegistry));
-    let re = false;
-    let Rt = [];
-    let Jt = () => {
-      for (let $e of Rt)
+    let resultRecorded = false;
+    let toolResults = [];
+    let flushResults = () => {
+      for (let result of toolResults)
         Promise.resolve()
-          .then($e.run)
+          .then(result.run)
           .catch((error) =>
-            logForDebugging(`[runAgent cleanup] deferred stage '${$e.name}' failed: ${errorMessage(error)}`),
+            logForDebugging(
+              `[runAgent cleanup] deferred stage '${result.name}' failed: ${errorMessage(error)}`,
+            ),
           );
     };
-    let qt = [
+    let stopHookQueue = [
       {
         name: "SubagentStop",
         run: async () => {
-          if (Io) return;
+          if (gotResult) return;
           try {
-            for await (let $e of executeStopHooks(
+            for await (let stopHookEvent of executeStopHooks(
               undefined,
               undefined,
               5000,
@@ -2614,13 +2705,14 @@ async function* runAgent({
               );
               return;
             }
-            for (let rt of Ks) {
-              if (!["CLAUDE.md", "CLAUDE.local.md", ...INSTRUCTION_FILE_NAMES].includes(basename(rt)))
+            for (let worktree of worktrees) {
+              if (!["CLAUDE.md", "CLAUDE.local.md", ...INSTRUCTION_FILE_NAMES].includes(basename(worktree)))
                 continue;
-              let Ut = mapWorktreePathToRepo(rt, worktreePath);
-              if (Ut === null) continue;
-              if (toolUseContext.readFileState.has(Ut)) continue;
-              if (!pendingNestedMemoryTriggers.includes(Ut)) pendingNestedMemoryTriggers.push(Ut);
+              let mappedPath = mapWorktreePathToRepo(worktree, worktreePath);
+              if (mappedPath === null) continue;
+              if (toolUseContext.readFileState.has(mappedPath)) continue;
+              if (!pendingNestedMemoryTriggers.includes(mappedPath))
+                pendingNestedMemoryTriggers.push(mappedPath);
             }
           }
         },
@@ -2639,7 +2731,7 @@ async function* runAgent({
       {
         name: "liveMessages",
         run: () => {
-          if (yt) yt.length = 0;
+          if (pendingResult) pendingResult.length = 0;
         },
       },
       {
@@ -2650,12 +2742,12 @@ async function* runAgent({
         name: "otelSubagentSpan",
         run: () => {
           let aborted = agentAbortController.signal.aborted;
-          endSubagentSpan(Oo, {
-            success: Qt === undefined && !aborted,
-            ...(Qt !== undefined &&
+          endSubagentSpan(taskHandle, {
+            success: loopPromise === undefined && !aborted,
+            ...(loopPromise !== undefined &&
               !aborted && {
-                error: Qt instanceof Error ? Qt.message : String(Qt),
-                errorClass: classifyToolError(Qt),
+                error: loopPromise instanceof Error ? loopPromise.message : String(loopPromise),
+                errorClass: classifyToolError(loopPromise),
               }),
           });
         },
@@ -2671,7 +2763,7 @@ async function* runAgent({
       {
         name: "sandboxWriteGrant",
         deferredWhileParked: true,
-        run: () => unregisterSandboxWriteDirectory(qs),
+        run: () => unregisterSandboxWriteDirectory(isolationKey),
       },
       {
         name: "nonShellMonitors",
@@ -2684,17 +2776,17 @@ async function* runAgent({
         run: () => killAgentShellTasks(agentId, toolUseContext.taskRegistry),
       },
     ];
-    for (let $e of qt) {
-      if (xe && $e.keepaliveGated) continue;
-      if (re && $e.deferredWhileParked) {
-        Rt.push($e);
+    for (let entry of stopHookQueue) {
+      if (failureNote && entry.keepaliveGated) continue;
+      if (resultRecorded && entry.deferredWhileParked) {
+        toolResults.push(entry);
         continue;
       }
       try {
-        await $e.run();
+        await entry.run();
       } catch (error) {
         logForDebugging(
-          `[runAgent cleanup] stage '${$e.name}' failed: ${error instanceof Error ? error.message : String(error)}`,
+          `[runAgent cleanup] stage '${entry.name}' failed: ${error instanceof Error ? error.message : String(error)}`,
         );
       }
     }
@@ -2711,25 +2803,28 @@ function stopMonitorWsTasksForAgent(agentId, taskRegistry) {
 /**
  * 本次派生是否为普通形态（无 stickyBetas/useExactTools/name/recordedUuids），决定完成后是否驱逐缓存。
  */
-function isPlainSpawnShape({ stickyBetas, useExactTools, name: s, recordedUuids }) {
-  return stickyBetas === undefined && !useExactTools && s === undefined && recordedUuids === undefined;
+function isPlainSpawnShape({ stickyBetas, useExactTools, name, recordedUuids }) {
+  return stickyBetas === undefined && !useExactTools && name === undefined && recordedUuids === undefined;
 }
 //@ chunk-0h4e7gnq.js:118625-118977 facade-exports = countToolCallsSince (1)
-function filterIncompleteToolCalls(e) {
-  let n = new Set();
-  for (let s of e)
-    if (s?.type === "user") {
-      let content = s.message.content;
+function filterIncompleteToolCalls(messages) {
+  let resolvedToolUseIds = new Set();
+  for (let message of messages)
+    if (message?.type === "user") {
+      let content = message.message.content;
       if (Array.isArray(content)) {
         for (let message of content)
-          if (message.type === "tool_result" && message.tool_use_id) n.add(message.tool_use_id);
+          if (message.type === "tool_result" && message.tool_use_id)
+            resolvedToolUseIds.add(message.tool_use_id);
       }
     }
-  return e.filter((s) => {
-    if (s?.type === "assistant") {
-      let content = s.message.content;
+  return messages.filter((message) => {
+    if (message?.type === "assistant") {
+      let content = message.message.content;
       if (Array.isArray(content))
-        return !content.some((block) => block.type === "tool_use" && block.id && !n.has(block.id));
+        return !content.some(
+          (block) => block.type === "tool_use" && block.id && !resolvedToolUseIds.has(block.id),
+        );
     }
     return true;
   });
@@ -2738,28 +2833,23 @@ function filterIncompleteToolCalls(e) {
 /**
  * 渲染代理系统提示词（含已加载的代理记忆）；失败时回退默认子代理提示词。
  */
-async function getAgentSystemPrompt(
-  agentDefinition,
-  toolUseContext,
-  resolvedAgentModel,
-  totalTokensReminderBudget,
-) {
+async function getAgentSystemPrompt(agent, toolUseContext, requestModel, budgetOverride) {
   try {
-    let primedAgentMemory = await readAgentMemoryScope(agentDefinition, toolUseContext.storageV5);
-    let agentPrompt = agentDefinition.getSystemPrompt({
+    let primedAgentMemory = await readAgentMemoryScope(agent, toolUseContext.storageV5);
+    let agentPrompt = agent.getSystemPrompt({
       toolUseContext,
       primedAgentMemory,
     });
     return await buildSubagentNotesSection(
-      [isBuiltInAgent(agentDefinition) ? applyPromptAblation(agentPrompt) : agentPrompt],
-      resolvedAgentModel,
-      totalTokensReminderBudget,
+      [isBuiltInAgent(agent) ? applyPromptAblation(agentPrompt) : agentPrompt],
+      requestModel,
+      budgetOverride,
     );
   } catch (_error) {
     return buildSubagentNotesSection(
       [applyPromptAblation(DEFAULT_SUBAGENT_PROMPT)],
-      resolvedAgentModel,
-      totalTokensReminderBudget,
+      requestModel,
+      budgetOverride,
     );
   }
 }
@@ -2768,17 +2858,17 @@ function findSkillForAgent(skillName, allSkills, agentDefinition) {
   let command = findCommand(skillName, allSkills);
   if (command) return command;
   let filtered = allSkills.filter(isProjectScopedCommand);
-  let S = firstLineOf(agentDefinition.agentType, ":");
-  if (S) {
-    let qualifiedName = findCommand(`${S}:${skillName}`, filtered);
+  let agentPrefix = firstLineOf(agentDefinition.agentType, ":");
+  if (agentPrefix) {
+    let qualifiedName = findCommand(`${agentPrefix}:${skillName}`, filtered);
     if (qualifiedName) return qualifiedName;
   }
   let suffix = `:${skillName}`;
   return filtered.find((cmd) => cmd.name.endsWith(suffix));
 }
 //@ chunk-0h4e7gnq.js:119361-119493 facade-exports
-function spawnRequestShape(e, requestNonInteractive) {
-  return e
+function spawnRequestShape(isBackground, requestNonInteractive) {
+  return isBackground
     ? {
         requestShape: "background",
         requestNonInteractive: true,
@@ -2791,10 +2881,10 @@ function spawnRequestShape(e, requestNonInteractive) {
 //@ chunk-0h4e7gnq.js:119493-120116 facade-exports
 async function clearWorktreeFromAgentMetadata({ agentId, removedWorktreePath, spawnMetadata, storageV5 }) {
   recordCleanlyRemovedAgent(agentId);
-  let r = await readAgentMetadata(agentId, storageV5).catch(
+  let metadata = await readAgentMetadata(agentId, storageV5).catch(
     makeSidecarReadFallback("clearWorktreeFromAgentMetadata"),
   );
-  let cwd = r?.cwd && r.cwd !== removedWorktreePath ? r.cwd : undefined;
+  let cwd = metadata?.cwd && metadata.cwd !== removedWorktreePath ? metadata.cwd : undefined;
   await writeAgentMetadata(
     agentId,
     {
@@ -2802,23 +2892,23 @@ async function clearWorktreeFromAgentMetadata({ agentId, removedWorktreePath, sp
       ...(cwd && {
         cwd,
       }),
-      ...(r?.stoppedByUser && {
+      ...(metadata?.stoppedByUser && {
         stoppedByUser: true,
       }),
-      ...(r?.parentAgentId && {
-        parentAgentId: r.parentAgentId,
+      ...(metadata?.parentAgentId && {
+        parentAgentId: metadata.parentAgentId,
       }),
-      ...(r?.pluginSteered === true && {
+      ...(metadata?.pluginSteered === true && {
         pluginSteered: true,
       }),
-      ...(r?.finished === true && {
+      ...(metadata?.finished === true && {
         finished: true,
       }),
-      ...((r?.requestShape === "foreground" || r?.requestShape === "background") && {
-        requestShape: r.requestShape,
+      ...((metadata?.requestShape === "foreground" || metadata?.requestShape === "background") && {
+        requestShape: metadata.requestShape,
       }),
-      ...(typeof r?.requestNonInteractive === "boolean" && {
-        requestNonInteractive: r.requestNonInteractive,
+      ...(typeof metadata?.requestNonInteractive === "boolean" && {
+        requestNonInteractive: metadata.requestNonInteractive,
       }),
       ...false,
       worktreeCleanlyRemoved: true,
@@ -2830,38 +2920,45 @@ async function clearWorktreeFromAgentMetadata({ agentId, removedWorktreePath, sp
 /**
  * 扫描子代理的初始消息：是否已带 SubagentStart hook 的附加上下文、哪些预载技能已在消息中（避免恢复/续接时重复注入）。
  */
-async function scanCarriedSubagentContext(initialMessages, n) {
-  let { isSkillLoadingMetadata } = await import("./chunk-jghdfw5c.js");
-  let y = false;
-  let r = new Set();
-  for (let S of messagesSinceCompactBoundary(initialMessages)) {
-    if (S.type === "attachment") {
-      let { attachment } = S;
-      if (attachment.type === "hook_additional_context" && attachment.hookEvent === "SubagentStart") y = true;
-    } else if (S.type === "user" && S.isMeta === true && typeof S.message.content !== "string") {
-      let h = S.message.content[0];
-      if (h?.type === "text") {
-        for (let k of n) if (isSkillLoadingMetadata(h.text, k)) r.add(k);
+async function scanCarriedSubagentContext(initialMessages, preloadNames) {
+  let { isSkillLoadingMetadata } = await import("../../utils/processUserInput/processSlashCommand.js");
+  let hookContextCarried = false;
+  let carriedPreloads = new Set();
+  for (let message of messagesSinceCompactBoundary(initialMessages)) {
+    if (message.type === "attachment") {
+      let { attachment } = message;
+      if (attachment.type === "hook_additional_context" && attachment.hookEvent === "SubagentStart")
+        hookContextCarried = true;
+    } else if (
+      message.type === "user" &&
+      message.isMeta === true &&
+      typeof message.message.content !== "string"
+    ) {
+      let block = message.message.content[0];
+      if (block?.type === "text") {
+        for (let skillName of preloadNames)
+          if (isSkillLoadingMetadata(block.text, skillName)) carriedPreloads.add(skillName);
       }
     }
-    if (y && r.size === n.length) break;
+    if (hookContextCarried && carriedPreloads.size === preloadNames.length) break;
   }
   return {
-    hookContextCarried: y,
-    carriedPreloads: r,
+    hookContextCarried,
+    carriedPreloads,
   };
 }
 //@ chunk-0h4e7gnq.js:120602-120958 sole-consumer
 /**
  * 计算子代理的 userContext：内建或策略来源的代理去掉 CLAUDE.md；其它代理按会话取托管的 CLAUDE.md 覆盖，返回 {userContext, managedInstructionsOnly}。
  */
-async function resolveAgentUserContext(agentDefinition, n, toolUseContext) {
-  let { claudeMd, ...r } = n;
-  let S = {
-    userContext: r,
+async function resolveAgentUserContext(agentDefinition, userContext, toolUseContext) {
+  let { claudeMd, ...withoutClaudeMd } = userContext;
+  let managedOnlyResult = {
+    userContext: withoutClaudeMd,
     managedInstructionsOnly: false,
   };
-  if (agentDefinition.source === "built-in" || agentDefinition.source === "policySettings") return S;
+  if (agentDefinition.source === "built-in" || agentDefinition.source === "policySettings")
+    return managedOnlyResult;
   let managedInstructionText = await getManagedInstructionText(
     toolUseContext.session,
     toolUseContext.storageV5,
@@ -2869,24 +2966,28 @@ async function resolveAgentUserContext(agentDefinition, n, toolUseContext) {
   );
   if (managedInstructionText === undefined)
     return {
-      userContext: n,
+      userContext,
       managedInstructionsOnly: false,
     };
-  if (managedInstructionText === "") return S;
+  if (managedInstructionText === "") return managedOnlyResult;
   return {
     userContext: {
-      ...n,
+      ...userContext,
       claudeMd: managedInstructionText,
     },
     managedInstructionsOnly: true,
   };
 }
 //@ chunk-0h4e7gnq.js:120958-121177 sole-consumer
-function getLatestCoworkMemoryVersion(e) {
-  for (let j = e.length - 1; j >= 0; j--) {
-    let s = e[j];
-    if (s.type === "attachment" && s.attachment.type === "cowork_memory_context" && !s.attachment.anchor)
-      return s.attachment.content !== null ? s.attachment.version : undefined;
+function getLatestCoworkMemoryVersion(messages) {
+  for (let j = messages.length - 1; j >= 0; j--) {
+    let message = messages[j];
+    if (
+      message.type === "attachment" &&
+      message.attachment.type === "cowork_memory_context" &&
+      !message.attachment.anchor
+    )
+      return message.attachment.content !== null ? message.attachment.version : undefined;
   }
   return;
 }

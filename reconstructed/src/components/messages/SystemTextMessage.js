@@ -9,7 +9,12 @@
  * attribution: affinity 1, fingerprint 12, placement 8, layout 12, file-local 1
  */
 import { normalize, basename } from "path";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import {
+  MAX_TOOL_DURATION_ENTRIES,
+  encodeToolNameForHeader,
+  MAX_TOOL_DURATION_HEADER_CHARS,
+} from "../../services/api/compactionHeaders.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { useAppStateSlice, useAppState, useAppStoreDirect } from "../../state/AppState.js";
 import { MEMO_CACHE_SENTINEL, EARLY_RETURN_SENTINEL } from "../../../runtime/bun-runtime.js";
 import {
@@ -18,12 +23,8 @@ import {
   Fragment,
 } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Box, Text, Link } from "../../ink/components/Text.js";
-import {
-  REFERENCE_GLYPH,
-  BLACK_CIRCLE,
-  TEARDROP_ASTERISK,
-} from "../../utils/permissions/autoModeRulesPrompt.js";
-import { init_react_production, y } from "../../../vendor/react/cjs/react.production.js";
+import { REFERENCE_GLYPH, BLACK_CIRCLE, TEARDROP_ASTERISK } from "../../constants/figures.js";
+import { init_react_production, useState } from "../../../vendor/react/cjs/react.production.js";
 import { useTerminalSize } from "../../hooks/useTerminalSize.js";
 import { useFrozenValue } from "../FreezeWhenOffscreen.js";
 import {
@@ -41,7 +42,7 @@ import { isTerminalTaskStatus as isTerminalTaskStatus_2 } from "../../tasks/task
 import { isMainAgentCommand } from "../../utils/messageQueueManager.js";
 import { isCoordinatorPanelActive } from "../../utils/transcriptDiagnostics.js";
 import { shouldHideTasksFooter } from "../tasks/taskStatusUtils.js";
-import { countNonAmbientTasks } from "../../utils/claudeInChrome/toolRendering.js";
+import { countNonAmbientTasks } from "../../utils/tasks.js";
 import { getPillLabelWithExtra } from "../../tasks/pillLabel.js";
 import { readFlagWithOverride } from "../../services/analytics/flagOverrides.js";
 import { isRefusalFallbackEnabled } from "../../services/api/refusalFallback.js";
@@ -67,19 +68,43 @@ import { hasControlChars } from "../../services/policyLimits/complianceTaints.js
 import { HIDDEN_PATH_PLACEHOLDER } from "../../utils/file.js";
 import { openPath } from "../../utils/browser.js";
 import { FilePathLink } from "../FilePathLink.js";
-import {
-  MAX_TOOL_DURATION_ENTRIES,
-  encodeToolNameForHeader,
-  MAX_TOOL_DURATION_HEADER_CHARS,
-} from "../../services/api/compactionHeaders.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
+//@ chunk-e6aww6q8.js:1538140-1538417 fingerprint = _temp (0.705)
+/**
+ * 把工具耗时列表编码为 "tool=ms;tool=ms"（数量与总长有上限），用于请求头。
+ */
+function formatToolDurationsHeader(prevToolDurations) {
+  let entries = [];
+  let totalMs = 0;
+  for (let { toolName, durationMs } of prevToolDurations) {
+    if (entries.length >= MAX_TOOL_DURATION_ENTRIES) break;
+    if (!Number.isFinite(durationMs)) continue;
+    let max = Math.max(0, Math.round(durationMs));
+    let entry = `${encodeToolNameForHeader(toolName)}=${max}`;
+    let entryDurationMs = entries.length > 0 ? 1 : 0;
+    if (totalMs + entryDurationMs + entry.length > MAX_TOOL_DURATION_HEADER_CHARS) break;
+    totalMs += entryDurationMs + entry.length;
+    entries.push(entry);
+  }
+  return entries.length > 0 ? entries.join(";") : undefined;
+}
+//@ chunk-e4xept39.js:231-335 placement
+/**
+ * 云会话横幅文字（创建或附着）与"在此或在…编码"的连接文字。
+ */
+var CLOUD_SESSION_BANNERS = {
+  create: "Cloud session active",
+  attach: "Attached to cloud session",
+};
+var CODE_HERE_OR_AT = " \xB7 code here or at ";
 //@ chunk-ah34pb7m.js:65544-65591 affinity
-function selectMaxProseWidth(L) {
-  return L.settings.maxProseWidth;
+function selectMaxProseWidth(state) {
+  return state.settings.maxProseWidth;
 }
 //@ chunk-ah34pb7m.js:65591-66292 fingerprint = ThinkingMessage (0.463)
 function ThinkingMessage(props) {
-  let $ = w(13);
+  let $ = useMemoCache(13);
   let { content, addMargin, trailer } = props;
   let maxWidth = useAppStateSlice(selectMaxProseWidth);
   const marginTop = addMargin ? 1 : 0;
@@ -104,81 +129,87 @@ function ThinkingMessage(props) {
     });
     $[1] = t3;
   } else t3 = $[1];
-  let k;
+  let textElement;
   if ($[2] !== content) {
-    k = jsxProd_default(Text, {
+    textElement = jsxProd_default(Text, {
       dimColor: true,
       italic: true,
       children: content,
     });
     $[2] = content;
-    $[3] = k;
-  } else k = $[3];
+    $[3] = textElement;
+  } else textElement = $[3];
   let children;
-  if ($[4] !== k || $[5] !== trailer) {
+  if ($[4] !== textElement || $[5] !== trailer) {
     children = jsxProd_default_2(Text, {
-      children: [t3, k, trailer],
+      children: [t3, textElement, trailer],
     });
-    $[4] = k;
+    $[4] = textElement;
     $[5] = trailer;
     $[6] = children;
   } else children = $[6];
-  let E;
+  let contentBox;
   if ($[7] !== maxWidth || $[8] !== children) {
-    E = jsxProd_default(Box, {
+    contentBox = jsxProd_default(Box, {
       maxWidth,
       children,
     });
     $[7] = maxWidth;
     $[8] = children;
-    $[9] = E;
-  } else E = $[9];
-  let B;
-  if ($[10] !== marginTop || $[11] !== E) {
-    B = jsxProd_default_2(Box, {
+    $[9] = contentBox;
+  } else contentBox = $[9];
+  let rowBox;
+  if ($[10] !== marginTop || $[11] !== contentBox) {
+    rowBox = jsxProd_default_2(Box, {
       flexDirection: "row",
       marginTop,
       width: "100%",
-      children: [t2, E],
+      children: [t2, contentBox],
     });
     $[10] = marginTop;
-    $[11] = E;
-    $[12] = B;
-  } else B = $[12];
-  return B;
+    $[11] = contentBox;
+    $[12] = rowBox;
+  } else rowBox = $[12];
+  return rowBox;
 }
 //@ chunk-ah34pb7m.js:190237-190241 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-ah34pb7m.js:190237", () => {
+  init_react_production();
+});
 //@ chunk-ah34pb7m.js:190290-190294 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-ah34pb7m.js:190290", () => {
+  init_react_production();
+});
 //@ chunk-ah34pb7m.js:190294-190335 placement
-function selectCloudSessionSync(z) {
-  return z.cloudSessionSync;
+function selectCloudSessionSync(state) {
+  return state.cloudSessionSync;
 }
 //@ chunk-ah34pb7m.js:190335-191287 placement
 /**
  * 系统消息：远程会话链接（仅当前远程会话 URL 匹配时显示），并附上同步状态行。
  */
 function RemoteSessionLinkMessage(props) {
-  let f = w(18);
+  let $ = useMemoCache(18);
   let { message, addMargin } = props;
   let { columns } = useTerminalSize();
-  let h;
-  if (f[0] !== message.url) {
-    h = (M) => M.remoteSessionUrl === message.url;
-    f[0] = message.url;
-    f[1] = h;
-  } else h = f[1];
-  let appState = useAppState(h);
+  let selectUrlMatch;
+  if ($[0] !== message.url) {
+    selectUrlMatch = (state) => state.remoteSessionUrl === message.url;
+    $[0] = message.url;
+    $[1] = selectUrlMatch;
+  } else selectUrlMatch = $[1];
+  let appState = useAppState(selectUrlMatch);
   let appState_2 = useAppState(selectCloudSessionSync);
-  let [k, b] = useFrozenValue(appState_2);
+  let [frozenValueRef, frozenValue] = useFrozenValue(appState_2);
   if (!appState) {
     return null;
   }
   const marginTop = addMargin ? 1 : 0;
-  let B;
-  if (f[2] === MEMO_CACHE_SENTINEL) {
-    B = jsxProd_default(Box, {
+  let bulletBox;
+  if ($[2] === MEMO_CACHE_SENTINEL) {
+    bulletBox = jsxProd_default(Box, {
       minWidth: 2,
       children: jsxProd_default(Text, {
         "aria-hidden": true,
@@ -186,266 +217,281 @@ function RemoteSessionLinkMessage(props) {
         children: BLACK_CIRCLE,
       }),
     });
-    f[2] = B;
-  } else B = f[2];
+    $[2] = bulletBox;
+  } else bulletBox = $[2];
   const width = columns - 10;
-  const N = CLOUD_SESSION_BANNERS[message.entry];
-  let W;
-  if (f[3] !== message.url) {
-    W = jsxProd_default(Link, {
+  const bannerText = CLOUD_SESSION_BANNERS[message.entry];
+  let linkElement;
+  if ($[3] !== message.url) {
+    linkElement = jsxProd_default(Link, {
       url: message.url,
       children: message.url,
     });
-    f[3] = message.url;
-    f[4] = W;
-  } else W = f[4];
-  let U;
-  if (f[5] !== N || f[6] !== W) {
-    U = jsxProd_default_2(Text, {
+    $[3] = message.url;
+    $[4] = linkElement;
+  } else linkElement = $[4];
+  let textElement;
+  if ($[5] !== bannerText || $[6] !== linkElement) {
+    textElement = jsxProd_default_2(Text, {
       color: "inactive",
       wrap: "wrap",
-      children: [N, CODE_HERE_OR_AT, W],
+      children: [bannerText, CODE_HERE_OR_AT, linkElement],
     });
-    f[5] = N;
-    f[6] = W;
-    f[7] = U;
-  } else U = f[7];
-  let K;
-  if (f[8] !== b) {
-    K =
-      b !== undefined &&
+    $[5] = bannerText;
+    $[6] = linkElement;
+    $[7] = textElement;
+  } else textElement = $[7];
+  let syncHint;
+  if ($[8] !== frozenValue) {
+    syncHint =
+      frozenValue !== undefined &&
       jsxProd_default(SyncStatusRows, {
-        rows: b,
+        rows: frozenValue,
       });
-    f[8] = b;
-    f[9] = K;
-  } else K = f[9];
-  let V;
-  if (f[10] !== width || f[11] !== U || f[12] !== K) {
-    V = jsxProd_default_2(Box, {
+    $[8] = frozenValue;
+    $[9] = syncHint;
+  } else syncHint = $[9];
+  let contentColumn;
+  if ($[10] !== width || $[11] !== textElement || $[12] !== syncHint) {
+    contentColumn = jsxProd_default_2(Box, {
       flexDirection: "column",
       width,
-      children: [U, K],
+      children: [textElement, syncHint],
     });
-    f[10] = width;
-    f[11] = U;
-    f[12] = K;
-    f[13] = V;
-  } else V = f[13];
-  let Y;
-  if (f[14] !== k || f[15] !== marginTop || f[16] !== V) {
-    Y = jsxProd_default_2(Box, {
-      ref: k,
+    $[10] = width;
+    $[11] = textElement;
+    $[12] = syncHint;
+    $[13] = contentColumn;
+  } else contentColumn = $[13];
+  let bannerRow;
+  if ($[14] !== frozenValueRef || $[15] !== marginTop || $[16] !== contentColumn) {
+    bannerRow = jsxProd_default_2(Box, {
+      ref: frozenValueRef,
       flexDirection: "row",
       marginTop,
       width: "100%",
-      children: [B, V],
+      children: [bulletBox, contentColumn],
     });
-    f[14] = k;
-    f[15] = marginTop;
-    f[16] = V;
-    f[17] = Y;
-  } else Y = f[17];
-  return Y;
+    $[14] = frozenValueRef;
+    $[15] = marginTop;
+    $[16] = contentColumn;
+    $[17] = bannerRow;
+  } else bannerRow = $[17];
+  return bannerRow;
 }
 //@ chunk-ah34pb7m.js:191287-192403 placement
 /**
  * 远程会话同步状态区块：项目文件、设置、插件、本地工具各一行，以及两行附加说明。
  */
 function SyncStatusRows(props) {
-  let c = w(24);
+  let $ = useMemoCache(24);
   let { rows } = props;
-  let g;
-  if (c[0] !== rows) {
-    g = repositoryTrustNote(rows);
-    c[0] = rows;
-    c[1] = g;
-  } else g = c[1];
-  let f = g;
-  let h;
-  if (c[2] !== rows) {
-    h = describeRepositoryTrust(rows);
-    c[2] = rows;
-    c[3] = h;
-  } else h = c[3];
-  let M = h;
-  let T;
-  if (c[4] === MEMO_CACHE_SENTINEL) {
-    T = jsxProd_default(Text, {
+  let trustNote;
+  if ($[0] !== rows) {
+    trustNote = repositoryTrustNote(rows);
+    $[0] = rows;
+    $[1] = trustNote;
+  } else trustNote = $[1];
+  let trustNoteMemo = trustNote;
+  let trustDescription;
+  if ($[2] !== rows) {
+    trustDescription = describeRepositoryTrust(rows);
+    $[2] = rows;
+    $[3] = trustDescription;
+  } else trustDescription = $[3];
+  let trustDescriptionMemo = trustDescription;
+  let textElement;
+  if ($[4] === MEMO_CACHE_SENTINEL) {
+    textElement = jsxProd_default(Text, {
       color: "inactive",
       children: SYNC_STATUS_HEADING,
     });
-    c[4] = T;
-  } else T = c[4];
-  let x;
-  if (c[5] !== rows.projectFiles) {
-    x =
+    $[4] = textElement;
+  } else textElement = $[4];
+  let projectFilesRow;
+  if ($[5] !== rows.projectFiles) {
+    projectFilesRow =
       rows.projectFiles !== undefined &&
       jsxProd_default(SyncStatusRow, {
         label: SYNC_ITEM_LABELS.projectFiles,
         row: rows.projectFiles,
       });
-    c[5] = rows.projectFiles;
-    c[6] = x;
-  } else x = c[6];
-  let k;
-  if (c[7] !== rows.settings) {
-    k = jsxProd_default(SyncStatusRow, {
+    $[5] = rows.projectFiles;
+    $[6] = projectFilesRow;
+  } else projectFilesRow = $[6];
+  let settingsRow;
+  if ($[7] !== rows.settings) {
+    settingsRow = jsxProd_default(SyncStatusRow, {
       label: SYNC_ITEM_LABELS.settings,
       row: rows.settings,
     });
-    c[7] = rows.settings;
-    c[8] = k;
-  } else k = c[8];
-  let b;
-  if (c[9] !== rows.plugins) {
-    b = jsxProd_default(SyncStatusRow, {
+    $[7] = rows.settings;
+    $[8] = settingsRow;
+  } else settingsRow = $[8];
+  let pluginsRow;
+  if ($[9] !== rows.plugins) {
+    pluginsRow = jsxProd_default(SyncStatusRow, {
       label: SYNC_ITEM_LABELS.plugins,
       row: rows.plugins,
     });
-    c[9] = rows.plugins;
-    c[10] = b;
-  } else b = c[10];
-  let E;
-  if (c[11] !== rows.localTools) {
-    E =
+    $[9] = rows.plugins;
+    $[10] = pluginsRow;
+  } else pluginsRow = $[10];
+  let localToolsRow;
+  if ($[11] !== rows.localTools) {
+    localToolsRow =
       rows.localTools !== undefined &&
       jsxProd_default(SyncStatusRow, {
         label: SYNC_ITEM_LABELS.localTools,
         row: rows.localTools,
       });
-    c[11] = rows.localTools;
-    c[12] = E;
-  } else E = c[12];
-  let B;
-  if (c[13] !== f) {
-    B =
-      f !== undefined &&
+    $[11] = rows.localTools;
+    $[12] = localToolsRow;
+  } else localToolsRow = $[12];
+  let trustNoteText;
+  if ($[13] !== trustNoteMemo) {
+    trustNoteText =
+      trustNoteMemo !== undefined &&
       jsxProd_default(Text, {
         dimColor: true,
         wrap: "wrap",
-        children: f,
+        children: trustNoteMemo,
       });
-    c[13] = f;
-    c[14] = B;
-  } else B = c[14];
-  let L;
-  if (c[15] !== M) {
-    L =
-      M !== undefined &&
+    $[13] = trustNoteMemo;
+    $[14] = trustNoteText;
+  } else trustNoteText = $[14];
+  let trustDescriptionText;
+  if ($[15] !== trustDescriptionMemo) {
+    trustDescriptionText =
+      trustDescriptionMemo !== undefined &&
       jsxProd_default(Text, {
         dimColor: true,
         wrap: "wrap",
-        children: M,
+        children: trustDescriptionMemo,
       });
-    c[15] = M;
-    c[16] = L;
-  } else L = c[16];
-  let N;
-  if (c[17] !== x || c[18] !== k || c[19] !== b || c[20] !== E || c[21] !== B || c[22] !== L) {
-    N = jsxProd_default_2(Fragment, {
-      children: [T, x, k, b, E, B, L],
+    $[15] = trustDescriptionMemo;
+    $[16] = trustDescriptionText;
+  } else trustDescriptionText = $[16];
+  let fragmentElement;
+  if (
+    $[17] !== projectFilesRow ||
+    $[18] !== settingsRow ||
+    $[19] !== pluginsRow ||
+    $[20] !== localToolsRow ||
+    $[21] !== trustNoteText ||
+    $[22] !== trustDescriptionText
+  ) {
+    fragmentElement = jsxProd_default_2(Fragment, {
+      children: [
+        textElement,
+        projectFilesRow,
+        settingsRow,
+        pluginsRow,
+        localToolsRow,
+        trustNoteText,
+        trustDescriptionText,
+      ],
     });
-    c[17] = x;
-    c[18] = k;
-    c[19] = b;
-    c[20] = E;
-    c[21] = B;
-    c[22] = L;
-    c[23] = N;
-  } else N = c[23];
-  return N;
+    $[17] = projectFilesRow;
+    $[18] = settingsRow;
+    $[19] = pluginsRow;
+    $[20] = localToolsRow;
+    $[21] = trustNoteText;
+    $[22] = trustDescriptionText;
+    $[23] = fragmentElement;
+  } else fragmentElement = $[23];
+  return fragmentElement;
 }
 //@ chunk-ah34pb7m.js:192403-193319 placement
 /**
  * 同步状态行：synced 显示成功图标与备注，pending 显示加载，not_synced 显示叉号与原因。
  */
 function SyncStatusRow(props) {
-  let g = w(15);
+  let $ = useMemoCache(15);
   let { label, row } = props;
   switch (row.mark) {
     case "synced": {
-      let f;
-      if (g[0] === MEMO_CACHE_SENTINEL) {
-        f = jsxProd_default(StatusIcon, {
+      let successIcon;
+      if ($[0] === MEMO_CACHE_SENTINEL) {
+        successIcon = jsxProd_default(StatusIcon, {
           status: "success",
           withSpace: true,
         });
-        g[0] = f;
-      } else f = g[0];
-      let h;
-      if (g[1] !== row.note) {
-        h =
+        $[0] = successIcon;
+      } else successIcon = $[0];
+      let noteText;
+      if ($[1] !== row.note) {
+        noteText =
           row.note !== undefined &&
           jsxProd_default_2(Text, {
             dimColor: true,
             children: [" (", row.note, ")"],
           });
-        g[1] = row.note;
-        g[2] = h;
-      } else h = g[2];
-      let M;
-      if (g[3] !== label || g[4] !== h) {
-        M = jsxProd_default_2(Text, {
+        $[1] = row.note;
+        $[2] = noteText;
+      } else noteText = $[2];
+      let syncedRow;
+      if ($[3] !== label || $[4] !== noteText) {
+        syncedRow = jsxProd_default_2(Text, {
           color: "inactive",
-          children: [f, label, h],
+          children: [successIcon, label, noteText],
         });
-        g[3] = label;
-        g[4] = h;
-        g[5] = M;
-      } else M = g[5];
-      return M;
+        $[3] = label;
+        $[4] = noteText;
+        $[5] = syncedRow;
+      } else syncedRow = $[5];
+      return syncedRow;
     }
     case "pending": {
-      let f;
-      if (g[6] === MEMO_CACHE_SENTINEL) {
-        f = jsxProd_default(StatusIcon, {
+      let loadingIcon;
+      if ($[6] === MEMO_CACHE_SENTINEL) {
+        loadingIcon = jsxProd_default(StatusIcon, {
           status: "loading",
           withSpace: true,
         });
-        g[6] = f;
-      } else f = g[6];
-      let h;
-      if (g[7] !== label) {
-        h = jsxProd_default_2(Text, {
+        $[6] = loadingIcon;
+      } else loadingIcon = $[6];
+      let pendingRow;
+      if ($[7] !== label) {
+        pendingRow = jsxProd_default_2(Text, {
           dimColor: true,
-          children: [f, label],
+          children: [loadingIcon, label],
         });
-        g[7] = label;
-        g[8] = h;
-      } else h = g[8];
-      return h;
+        $[7] = label;
+        $[8] = pendingRow;
+      } else pendingRow = $[8];
+      return pendingRow;
     }
     case "not_synced": {
-      let f;
-      if (g[9] === MEMO_CACHE_SENTINEL) {
-        f = jsxProd_default(Text, {
+      let crossIcon;
+      if ($[9] === MEMO_CACHE_SENTINEL) {
+        crossIcon = jsxProd_default(Text, {
           "aria-label": "not synced:",
           children: cross,
         });
-        g[9] = f;
-      } else f = g[9];
-      let h;
-      if (g[10] !== row.words) {
-        h = jsxProd_default_2(Text, {
+        $[9] = crossIcon;
+      } else crossIcon = $[9];
+      let notSyncedText;
+      if ($[10] !== row.words) {
+        notSyncedText = jsxProd_default_2(Text, {
           dimColor: true,
           children: [" \u2014 ", row.words],
         });
-        g[10] = row.words;
-        g[11] = h;
-      } else h = g[11];
-      let M;
-      if (g[12] !== label || g[13] !== h) {
-        M = jsxProd_default_2(Text, {
+        $[10] = row.words;
+        $[11] = notSyncedText;
+      } else notSyncedText = $[11];
+      let notSyncedRow;
+      if ($[12] !== label || $[13] !== notSyncedText) {
+        notSyncedRow = jsxProd_default_2(Text, {
           color: "inactive",
           wrap: "wrap",
-          children: [f, " ", label, h],
+          children: [crossIcon, " ", label, notSyncedText],
         });
-        g[12] = label;
-        g[13] = h;
-        g[14] = M;
-      } else M = g[14];
-      return M;
+        $[12] = label;
+        $[13] = notSyncedText;
+        $[14] = notSyncedRow;
+      } else notSyncedRow = $[14];
+      return notSyncedRow;
     }
   }
 }
@@ -453,20 +499,20 @@ function SyncStatusRow(props) {
 var WORKED = "Worked";
 //@ chunk-ah34pb7m.js:193425-193486 layout
 function pickTurnCompletionVerb(uuid) {
-  let d = (hashString31(uuid) >>> 0) % TURN_COMPLETION_VERBS.length;
-  return TURN_COMPLETION_VERBS[d] ?? WORKED;
+  let verbIndex = (hashString31(uuid) >>> 0) % TURN_COMPLETION_VERBS.length;
+  return TURN_COMPLETION_VERBS[verbIndex] ?? WORKED;
 }
 //@ chunk-ah34pb7m.js:193486-193589 layout
-function countPendingBackgroundWork(m) {
-  let { agents, workflowIds } = collectPendingBackgroundWork(m);
+function countPendingBackgroundWork(state) {
+  let { agents, workflowIds } = collectPendingBackgroundWork(state);
   return {
     pendingAgents: agents.size,
     pendingWorkflows: workflowIds.size,
   };
 }
 //@ chunk-ah34pb7m.js:193589-193752 layout
-function listPendingBackgroundAgents(m) {
-  return [...collectPendingBackgroundWork(m).agents.values()].map((agent) => ({
+function listPendingBackgroundAgents(state) {
+  return [...collectPendingBackgroundWork(state).agents.values()].map((agent) => ({
     id: agent.id,
     agentType: agent.agentType,
     startTime: agent.startTime,
@@ -477,14 +523,15 @@ function listPendingBackgroundAgents(m) {
 }
 //@ chunk-ah34pb7m.js:193752-194144 layout
 function collectPendingBackgroundWork({ tasks, queuedCommands = [] }) {
-  let c = new Map();
-  let g = new Set();
-  let f = (h) => {
-    if (isPanelAgentTask(h) && h.isBackgrounded) c.set(h.id, h);
-    else if (h.type === "local_workflow") g.add(h.id);
+  let agentsById = new Map();
+  let workflowIds = new Set();
+  let collectTask = (task) => {
+    if (isPanelAgentTask(task) && task.isBackgrounded) agentsById.set(task.id, task);
+    else if (task.type === "local_workflow") workflowIds.add(task.id);
   };
-  for (let h of Object.values(tasks))
-    if (h.status === "running" || (isTerminalTaskStatus_2(h.status) && !h.notified)) f(h);
+  for (let task of Object.values(tasks))
+    if (task.status === "running" || (isTerminalTaskStatus_2(task.status) && !task.notified))
+      collectTask(task);
   for (let queuedCommand of queuedCommands) {
     if (
       queuedCommand.mode !== "task-notification" ||
@@ -492,12 +539,12 @@ function collectPendingBackgroundWork({ tasks, queuedCommands = [] }) {
       queuedCommand.taskId === undefined
     )
       continue;
-    let M = tasks[queuedCommand.taskId];
-    if (M) f(M);
+    let queuedTask = tasks[queuedCommand.taskId];
+    if (queuedTask) collectTask(queuedTask);
   }
   return {
-    agents: c,
-    workflowIds: g,
+    agents: agentsById,
+    workflowIds,
   };
 }
 //@ chunk-ah34pb7m.js:194144-194588 layout
@@ -531,8 +578,8 @@ function computeTurnDurationInfo({
   };
 }
 //@ chunk-ah34pb7m.js:194588-194632 layout
-function sumDurationMs(sum, X) {
-  return sum + (X.durationMs ?? 0);
+function sumDurationMs(sum, entry) {
+  return sum + (entry.durationMs ?? 0);
 }
 //@ chunk-ah34pb7m.js:194632-194811 fingerprint = _temp2 (0.851)
 function renderStopHookCommandLine(info, idx) {
@@ -571,7 +618,7 @@ function renderStopHookCommandLineCompact(info, idx) {
   );
 }
 //@ chunk-ah34pb7m.js:194993-195139 layout
-function renderStopHookFeedbackLine(ae, pe) {
+function renderStopHookFeedbackLine(line, index) {
   return jsxProd_default_2(
     Text,
     {
@@ -582,10 +629,10 @@ function renderStopHookFeedbackLine(ae, pe) {
           children: "\u23BF \xA0",
         }),
         "Stop hook feedback: ",
-        ae,
+        line,
       ],
     },
-    `feedback-${pe}`,
+    `feedback-${index}`,
   );
 }
 //@ chunk-ah34pb7m.js:195139-195248 placement = _temp0 (0.683)
@@ -599,12 +646,12 @@ function agentRef(a) {
   };
 }
 //@ chunk-ah34pb7m.js:195248-195420 layout
-function getBackgroundTasksPillLabel(we) {
-  let $e = isCoordinatorPanelActive();
-  let tasks = Object.values(we.tasks).filter(
-    (task) => shouldHideTasksFooter(task) && !($e && isIdleTeammateTask(task)),
+function getBackgroundTasksPillLabel(state) {
+  let isCoordinatorPanelOn = isCoordinatorPanelActive();
+  let tasks = Object.values(state.tasks).filter(
+    (task) => shouldHideTasksFooter(task) && !(isCoordinatorPanelOn && isIdleTeammateTask(task)),
   );
-  let extraCount = countNonAmbientTasks(we.remoteBackgroundTasks);
+  let extraCount = countNonAmbientTasks(state.remoteBackgroundTasks);
   return tasks.length + extraCount > 0 ? getPillLabelWithExtra(tasks, extraCount) : null;
 }
 //@ chunk-ah34pb7m.js:195420-195458 layout
@@ -621,13 +668,13 @@ var accountMemoryModule = null;
  * 系统消息分派：turn_duration（"Worked for …"、预算/后台 agent）、memory_saved/account_memory_saved、away_summary、agents_killed、stop_hook_summary（"Ran N hooks"）、bridge_status（"/remote-control is active"）、api_error、model_fallback/model_refusal_*、permission_denied/permission_retry、scheduled_task_fire、cloud_session_status 等；其余按 level 着色显示文本。
  */
 function SystemTextMessage(props) {
-  let $ = w(65);
+  let $ = useMemoCache(65);
   let { message, addMargin, verbose, isTranscriptMode } = props;
   if (message.subtype === "turn_duration") {
     const isExpanded = verbose || isTranscriptMode === true;
-    let T;
+    let turnDurationRowElement;
     if ($[0] !== addMargin || $[1] !== message || $[2] !== isExpanded) {
-      T = jsxProd_default(TurnDurationRow, {
+      turnDurationRowElement = jsxProd_default(TurnDurationRow, {
         message,
         addMargin,
         isExpanded,
@@ -635,15 +682,15 @@ function SystemTextMessage(props) {
       $[0] = addMargin;
       $[1] = message;
       $[2] = isExpanded;
-      $[3] = T;
-    } else T = $[3];
-    return T;
+      $[3] = turnDurationRowElement;
+    } else turnDurationRowElement = $[3];
+    return turnDurationRowElement;
   }
   if (message.subtype === "memory_saved") {
     const verbose_2 = verbose || !!isTranscriptMode;
-    let T;
+    let memorySavedMessageElement;
     if ($[4] !== addMargin || $[5] !== message || $[6] !== verbose_2) {
-      T = jsxProd_default(MemorySavedMessage, {
+      memorySavedMessageElement = jsxProd_default(MemorySavedMessage, {
         message,
         addMargin,
         verbose: verbose_2,
@@ -651,14 +698,14 @@ function SystemTextMessage(props) {
       $[4] = addMargin;
       $[5] = message;
       $[6] = verbose_2;
-      $[7] = T;
-    } else T = $[7];
-    return T;
+      $[7] = memorySavedMessageElement;
+    } else memorySavedMessageElement = $[7];
+    return memorySavedMessageElement;
   }
   if (message.subtype === "account_memory_saved") {
-    let h;
+    let accountMemoryElement;
     if ($[8] !== addMargin || $[9] !== message) {
-      h =
+      accountMemoryElement =
         accountMemoryModule === null
           ? null
           : jsxProd_default(accountMemoryModule.AccountMemorySavedMessage, {
@@ -667,27 +714,27 @@ function SystemTextMessage(props) {
             });
       $[8] = addMargin;
       $[9] = message;
-      $[10] = h;
-    } else h = $[10];
-    return h;
+      $[10] = accountMemoryElement;
+    } else accountMemoryElement = $[10];
+    return accountMemoryElement;
   }
   if (message.subtype === "away_summary") {
-    let h;
+    let thinkingMessageElement;
     if ($[11] !== addMargin || $[12] !== message.content) {
-      h = jsxProd_default(ThinkingMessage, {
+      thinkingMessageElement = jsxProd_default(ThinkingMessage, {
         content: message.content,
         addMargin,
       });
       $[11] = addMargin;
       $[12] = message.content;
-      $[13] = h;
-    } else h = $[13];
-    return h;
+      $[13] = thinkingMessageElement;
+    } else thinkingMessageElement = $[13];
+    return thinkingMessageElement;
   }
   if (message.subtype === "agents_killed") {
     const marginTop = addMargin ? 1 : 0;
     let t2;
-    let x;
+    let turnDurationElement;
     if ($[14] === MEMO_CACHE_SENTINEL) {
       t2 = jsxProd_default(Box, {
         minWidth: 2,
@@ -697,15 +744,15 @@ function SystemTextMessage(props) {
           children: BLACK_CIRCLE,
         }),
       });
-      x = jsxProd_default(Text, {
+      turnDurationElement = jsxProd_default(Text, {
         dimColor: true,
         children: "All background agents stopped",
       });
       $[14] = t2;
-      $[15] = x;
+      $[15] = turnDurationElement;
     } else {
       t2 = $[14];
-      x = $[15];
+      turnDurationElement = $[15];
     }
     let t4;
     if ($[16] !== marginTop) {
@@ -713,7 +760,7 @@ function SystemTextMessage(props) {
         flexDirection: "row",
         marginTop,
         width: "100%",
-        children: [t2, x],
+        children: [t2, turnDurationElement],
       });
       $[16] = marginTop;
       $[17] = t4;
@@ -728,9 +775,9 @@ function SystemTextMessage(props) {
   }
   if (isRefusalFallbackEnabled() && message.subtype === "model_refusal_fallback") {
     const marginTop = addMargin ? 1 : 0;
-    let T;
+    let memorySavedElement;
     if ($[18] === MEMO_CACHE_SENTINEL) {
-      T = jsxProd_default(Box, {
+      memorySavedElement = jsxProd_default(Box, {
         minWidth: 2,
         children: jsxProd_default(Text, {
           "aria-label": "warning:",
@@ -738,15 +785,15 @@ function SystemTextMessage(props) {
           children: BLACK_CIRCLE,
         }),
       });
-      $[18] = T;
-    } else T = $[18];
-    let x;
+      $[18] = memorySavedElement;
+    } else memorySavedElement = $[18];
+    let stopHookElement;
     if ($[19] !== message.content) {
-      x = jsxProd_default_2(Box, {
+      stopHookElement = jsxProd_default_2(Box, {
         flexDirection: "row",
         width: "100%",
         children: [
-          T,
+          memorySavedElement,
           jsxProd_default(LinkifiedText, {
             color: "warning",
             bold: true,
@@ -755,11 +802,11 @@ function SystemTextMessage(props) {
         ],
       });
       $[19] = message.content;
-      $[20] = x;
-    } else x = $[20];
-    let k;
+      $[20] = stopHookElement;
+    } else stopHookElement = $[20];
+    let bridgeElement;
     if ($[21] !== message.scope) {
-      k =
+      bridgeElement =
         message.scope !== "local" &&
         jsxProd_default_2(Text, {
           dimColor: true,
@@ -772,19 +819,19 @@ function SystemTextMessage(props) {
           ],
         });
       $[21] = message.scope;
-      $[22] = k;
-    } else k = $[22];
+      $[22] = bridgeElement;
+    } else bridgeElement = $[22];
     let t3;
-    if ($[23] !== marginTop || $[24] !== x || $[25] !== k) {
+    if ($[23] !== marginTop || $[24] !== stopHookElement || $[25] !== bridgeElement) {
       t3 = jsxProd_default_2(Box, {
         flexDirection: "column",
         marginTop,
         width: "100%",
-        children: [x, k, false],
+        children: [stopHookElement, bridgeElement, false],
       });
       $[23] = marginTop;
-      $[24] = x;
-      $[25] = k;
+      $[24] = stopHookElement;
+      $[25] = bridgeElement;
       $[26] = t3;
     } else t3 = $[26];
     return t3;
@@ -792,9 +839,9 @@ function SystemTextMessage(props) {
   if (message.subtype === "model_fallback") {
     let bold = message.trigger === "model_not_found" || message.trigger === "permission_denied";
     const marginTop = addMargin ? 1 : 0;
-    let T;
+    let innerElement;
     if ($[27] === MEMO_CACHE_SENTINEL) {
-      T = jsxProd_default(Box, {
+      innerElement = jsxProd_default(Box, {
         minWidth: 2,
         children: jsxProd_default(Text, {
           "aria-label": "warning:",
@@ -802,11 +849,11 @@ function SystemTextMessage(props) {
           children: BLACK_CIRCLE,
         }),
       });
-      $[27] = T;
-    } else T = $[27];
-    let x;
+      $[27] = innerElement;
+    } else innerElement = $[27];
+    let containerElement;
     if ($[28] !== bold || $[29] !== message.content) {
-      x = jsxProd_default(Text, {
+      containerElement = jsxProd_default(Text, {
         color: "warning",
         bold,
         wrap: "wrap",
@@ -814,34 +861,34 @@ function SystemTextMessage(props) {
       });
       $[28] = bold;
       $[29] = message.content;
-      $[30] = x;
-    } else x = $[30];
-    let k;
-    if ($[31] !== marginTop || $[32] !== x) {
-      k = jsxProd_default_2(Box, {
+      $[30] = containerElement;
+    } else containerElement = $[30];
+    let wrappedElement;
+    if ($[31] !== marginTop || $[32] !== containerElement) {
+      wrappedElement = jsxProd_default_2(Box, {
         flexDirection: "row",
         marginTop,
         width: "100%",
-        children: [T, x],
+        children: [innerElement, containerElement],
       });
       $[31] = marginTop;
-      $[32] = x;
-      $[33] = k;
-    } else k = $[33];
-    return k;
+      $[32] = containerElement;
+      $[33] = wrappedElement;
+    } else wrappedElement = $[33];
+    return wrappedElement;
   }
   if (message.subtype === "bridge_status") {
-    let h;
+    let bridgeStatusMessageElement;
     if ($[34] !== addMargin || $[35] !== message) {
-      h = jsxProd_default(BridgeStatusMessage, {
+      bridgeStatusMessageElement = jsxProd_default(BridgeStatusMessage, {
         message,
         addMargin,
       });
       $[34] = addMargin;
       $[35] = message;
-      $[36] = h;
-    } else h = $[36];
-    return h;
+      $[36] = bridgeStatusMessageElement;
+    } else bridgeStatusMessageElement = $[36];
+    return bridgeStatusMessageElement;
   }
   if (message.subtype === "cloud_session_status") {
     let t1;
@@ -858,70 +905,70 @@ function SystemTextMessage(props) {
   }
   if (message.subtype === "scheduled_task_fire") {
     const marginTop = addMargin ? 1 : 0;
-    let T;
+    let rowElement;
     if ($[40] === MEMO_CACHE_SENTINEL) {
-      T = jsxProd_default_2(Text, {
+      rowElement = jsxProd_default_2(Text, {
         "aria-hidden": true,
         children: [TEARDROP_ASTERISK, " "],
       });
-      $[40] = T;
-    } else T = $[40];
+      $[40] = rowElement;
+    } else rowElement = $[40];
     let children;
     if ($[41] !== message.content) {
       children = jsxProd_default_2(Text, {
         dimColor: true,
-        children: [T, message.content],
+        children: [rowElement, message.content],
       });
       $[41] = message.content;
       $[42] = children;
     } else children = $[42];
-    let k;
+    let columnElement;
     if ($[43] !== marginTop || $[44] !== children) {
-      k = jsxProd_default(Box, {
+      columnElement = jsxProd_default(Box, {
         marginTop,
         width: "100%",
         children,
       });
       $[43] = marginTop;
       $[44] = children;
-      $[45] = k;
-    } else k = $[45];
-    return k;
+      $[45] = columnElement;
+    } else columnElement = $[45];
+    return columnElement;
   }
   if (message.subtype === "permission_retry") {
     let commands = message.commands;
     let content = message.content;
-    let h;
-    let T;
+    let outerElement;
+    let innerElement;
     if (
       $[46] !== addMargin ||
       $[47] !== commands ||
       $[48] !== content ||
       $[49] !== message.heardAtNextPrompt
     ) {
-      T = EARLY_RETURN_SENTINEL;
+      innerElement = EARLY_RETURN_SENTINEL;
       K: {
         let validStringArray = getValidStringArray(commands);
         let joined = validStringArray.join(", ");
-        let U = typeof content === "string" ? content : "";
-        if (joined.length === 0 && U.length === 0) {
-          T = null;
+        let contentText = typeof content === "string" ? content : "";
+        if (joined.length === 0 && contentText.length === 0) {
+          innerElement = null;
           break K;
         }
-        let x;
+        let hintElement;
         if ($[52] === MEMO_CACHE_SENTINEL) {
-          x = jsxProd_default_2(Text, {
+          hintElement = jsxProd_default_2(Text, {
             "aria-hidden": true,
             dimColor: true,
             children: [TEARDROP_ASTERISK, " "],
           });
-          $[52] = x;
-        } else x = $[52];
-        h = jsxProd_default_2(Box, {
+          $[52] = hintElement;
+        } else hintElement = $[52];
+        outerElement = jsxProd_default_2(Box, {
           marginTop: addMargin ? 1 : 0,
           width: "100%",
           children: [
-            x,
+            hintElement,
             joined.length > 0
               ? jsxProd_default_2(Text, {
                   children: [
@@ -938,7 +985,7 @@ function SystemTextMessage(props) {
                   ],
                 })
               : jsxProd_default(Text, {
-                  children: U,
+                  children: contentText,
                 }),
           ],
         });
@@ -947,14 +994,14 @@ function SystemTextMessage(props) {
       $[47] = commands;
       $[48] = content;
       $[49] = message.heardAtNextPrompt;
-      $[50] = h;
-      $[51] = T;
+      $[50] = outerElement;
+      $[51] = innerElement;
     } else {
-      h = $[50];
-      T = $[51];
+      outerElement = $[50];
+      innerElement = $[51];
     }
-    if (T !== EARLY_RETURN_SENTINEL) return T;
-    return h;
+    if (innerElement !== EARLY_RETURN_SENTINEL) return innerElement;
+    return outerElement;
   }
   if (message.subtype === "placed") {
     return null;
@@ -966,9 +1013,9 @@ function SystemTextMessage(props) {
     return null;
   }
   if (message.subtype === "stop_hook_summary") {
-    let h;
+    let stopHookSummaryMessageElement;
     if ($[53] !== addMargin || $[54] !== isTranscriptMode || $[55] !== message || $[56] !== verbose) {
-      h = jsxProd_default(StopHookSummaryMessage, {
+      stopHookSummaryMessageElement = jsxProd_default(StopHookSummaryMessage, {
         message,
         addMargin,
         verbose,
@@ -978,9 +1025,9 @@ function SystemTextMessage(props) {
       $[54] = isTranscriptMode;
       $[55] = message;
       $[56] = verbose;
-      $[57] = h;
-    } else h = $[57];
-    return h;
+      $[57] = stopHookSummaryMessageElement;
+    } else stopHookSummaryMessageElement = $[57];
+    return stopHookSummaryMessageElement;
   }
   let content = message.content;
   if (typeof content !== "string") {
@@ -1023,7 +1070,7 @@ function SystemTextMessage(props) {
 }
 //@ chunk-ah34pb7m.js:200180-201377 fingerprint = StopHookSummaryMessage (0.765)
 function StopHookSummaryMessage(props) {
-  let $ = w(2);
+  let $ = useMemoCache(2);
   let { message, addMargin, verbose, isTranscriptMode } = props;
   let {
     hookCount,
@@ -1035,50 +1082,59 @@ function StopHookSummaryMessage(props) {
     hookLabel,
     totalDurationMs,
   } = normalizeHookSummary(message);
-  let L = hookAdditionalContext === undefined ? [] : hookAdditionalContext;
+  let additionalContext = hookAdditionalContext === undefined ? [] : hookAdditionalContext;
   let { columns } = useTerminalSize();
   totalDurationMs ?? hookInfos.reduce(sumDurationMs, 0);
-  if (hookErrors.length === 0 && L.length === 0 && !preventedContinuation && !hookLabel) {
+  if (hookErrors.length === 0 && additionalContext.length === 0 && !preventedContinuation && !hookLabel) {
     return null;
   }
   if (hookLabel) {
-    let U;
+    let textElement;
     if ($[0] === MEMO_CACHE_SENTINEL) {
-      U = jsxProd_default(Text, {
+      textElement = jsxProd_default(Text, {
         "aria-hidden": true,
         children: "  \u23BF  ",
       });
-      $[0] = U;
-    } else U = $[0];
+      $[0] = textElement;
+    } else textElement = $[0];
     return jsxProd_default_2(Box, {
       flexDirection: "column",
       width: "100%",
       children: [
         jsxProd_default_2(Text, {
           dimColor: true,
-          children: [U, "Ran ", hookCount, " ", hookLabel, " ", hookCount === 1 ? "hook" : "hooks", ""],
+          children: [
+            textElement,
+            "Ran ",
+            hookCount,
+            " ",
+            hookLabel,
+            " ",
+            hookCount === 1 ? "hook" : "hooks",
+            "",
+          ],
         }),
         isTranscriptMode && hookInfos.map(renderStopHookCommandLine),
       ],
     });
   }
-  let U;
+  let boxElement;
   if ($[1] === MEMO_CACHE_SENTINEL) {
-    U = jsxProd_default(Box, {
+    boxElement = jsxProd_default(Box, {
       minWidth: 2,
       children: jsxProd_default(Text, {
         "aria-hidden": true,
         children: BLACK_CIRCLE,
       }),
     });
-    $[1] = U;
-  } else U = $[1];
+    $[1] = boxElement;
+  } else boxElement = $[1];
   return jsxProd_default_2(Box, {
     flexDirection: "row",
     marginTop: addMargin ? 1 : 0,
     width: "100%",
     children: [
-      U,
+      boxElement,
       jsxProd_default_2(Box, {
         flexDirection: "column",
         width: columns - 10,
@@ -1134,7 +1190,7 @@ function StopHookSummaryMessage(props) {
                 idx,
               ),
             ),
-          L.length > 0 && L.map(renderStopHookFeedbackLine),
+          additionalContext.length > 0 && additionalContext.map(renderStopHookFeedbackLine),
         ],
       }),
     ],
@@ -1142,19 +1198,19 @@ function StopHookSummaryMessage(props) {
 }
 //@ chunk-ah34pb7m.js:201377-202330 fingerprint = SystemTextMessageInner (0.721)
 function SystemTextMessageInner(props) {
-  let $ = w(19);
+  let $ = useMemoCache(19);
   let { content, addMargin, dot, color, dimColor, highlight } = props;
   let { columns } = useTerminalSize();
   let trimmed = content.trim();
-  let [k, b] = useShimmerOffset(highlight ? trimmed.length : 0);
-  let [E] = trimmed.split(`
+  let [shimmerOffset, setShimmerOffset] = useShimmerOffset(highlight ? trimmed.length : 0);
+  let [firstLine] = trimmed.split(`
 `);
-  if (E === undefined) "";
-  else E;
+  if (firstLine === undefined) "";
+  else firstLine;
   const marginTop = addMargin ? 1 : 0;
-  let N;
+  let dotElement;
   if ($[0] !== color || $[1] !== dimColor || $[2] !== dot || $[3] !== highlight?.color) {
-    N =
+    dotElement =
       dot &&
       jsxProd_default(Box, {
         minWidth: 2,
@@ -1169,17 +1225,23 @@ function SystemTextMessageInner(props) {
     $[1] = dimColor;
     $[2] = dot;
     $[3] = highlight?.color;
-    $[4] = N;
-  } else N = $[4];
+    $[4] = dotElement;
+  } else dotElement = $[4];
   const width = columns - 10;
   let children;
-  if ($[5] !== color || $[6] !== dimColor || $[7] !== b || $[8] !== highlight || $[9] !== trimmed) {
+  if (
+    $[5] !== color ||
+    $[6] !== dimColor ||
+    $[7] !== setShimmerOffset ||
+    $[8] !== highlight ||
+    $[9] !== trimmed
+  ) {
     children = highlight
       ? jsxProd_default(ShimmerText, {
           text: trimmed,
           color: highlight.color,
           shimmerColor: highlight.shimmerColor,
-          glimmerIndex: b,
+          glimmerIndex: setShimmerOffset,
         })
       : jsxProd_default(Text, {
           color,
@@ -1189,7 +1251,7 @@ function SystemTextMessageInner(props) {
         });
     $[5] = color;
     $[6] = dimColor;
-    $[7] = b;
+    $[7] = setShimmerOffset;
     $[8] = highlight;
     $[9] = trimmed;
     $[10] = children;
@@ -1206,17 +1268,17 @@ function SystemTextMessageInner(props) {
     $[13] = t6;
   } else t6 = $[13];
   let t7;
-  if ($[14] !== k || $[15] !== marginTop || $[16] !== N || $[17] !== t6) {
+  if ($[14] !== shimmerOffset || $[15] !== marginTop || $[16] !== dotElement || $[17] !== t6) {
     t7 = jsxProd_default_2(Box, {
-      ref: k,
+      ref: shimmerOffset,
       flexDirection: "row",
       marginTop,
       width: "100%",
-      children: [N, t6],
+      children: [dotElement, t6],
     });
-    $[14] = k;
+    $[14] = shimmerOffset;
     $[15] = marginTop;
-    $[16] = N;
+    $[16] = dotElement;
     $[17] = t6;
     $[18] = t7;
   } else t7 = $[18];
@@ -1224,19 +1286,19 @@ function SystemTextMessageInner(props) {
 }
 //@ chunk-ah34pb7m.js:202330-204046 layout
 function TurnDurationRow(props) {
-  let $ = w(21);
+  let $ = useMemoCache(21);
   let { message, addMargin, isExpanded } = props;
   let uuid = hasStringUuid(message) ? message.uuid : "";
-  let M;
+  let verb;
   if ($[0] !== uuid) {
-    M = pickTurnCompletionVerb(uuid);
+    verb = pickTurnCompletionVerb(uuid);
     $[0] = uuid;
-    $[1] = M;
-  } else M = $[1];
-  let T = M;
+    $[1] = verb;
+  } else verb = $[1];
+  let durationText = verb;
   let appStoreDirect = useAppStoreDirect();
   let commandQueueOrDefault = useCommandQueueOrDefault();
-  let b;
+  let durationElement;
   if (
     $[2] !== message.briefHiddenCount ||
     $[3] !== message.budgetLimit ||
@@ -1246,34 +1308,36 @@ function TurnDurationRow(props) {
     $[7] !== commandQueueOrDefault ||
     $[8] !== appStoreDirect
   ) {
-    b = () => {
-      let E = {
+    durationElement = () => {
+      let hintElement = {
         tasks: appStoreDirect.getState().tasks,
         queuedCommands: commandQueueOrDefault.getCommandQueue(),
       };
-      let B = countPendingBackgroundWork(E);
-      let L = B.pendingAgents > 0;
-      let N = B.pendingWorkflows > 0;
-      let W = resolveSetting("showTurnDuration", true).value;
-      let U = L ? (message.pendingBackgroundAgentCount ?? 0) : 0;
-      let K = N ? (message.pendingWorkflowCount ?? 0) : 0;
+      let titleElement = countPendingBackgroundWork(hintElement);
+      let titleRow = titleElement.pendingAgents > 0;
+      let rowBox = titleElement.pendingWorkflows > 0;
+      let detailElement = resolveSetting("showTurnDuration", true).value;
+      let columnElement = titleRow ? (message.pendingBackgroundAgentCount ?? 0) : 0;
+      let containerElement = rowBox ? (message.pendingWorkflowCount ?? 0) : 0;
       let timestamp = Date.parse(message.timestamp);
-      let filtered = (U > 0 ? listPendingBackgroundAgents(E) : []).filter((Y) => Y.startTime <= timestamp);
-      let z =
-        W &&
-        (U > 0 || K > 0) &&
+      let filtered = (columnElement > 0 ? listPendingBackgroundAgents(hintElement) : []).filter(
+        (state) => state.startTime <= timestamp,
+      );
+      let resultElement =
+        detailElement &&
+        (columnElement > 0 || containerElement > 0) &&
         message.budgetLimit === undefined &&
         (message.briefHiddenCount ?? 0) === 0 &&
-        filtered.length === U;
+        filtered.length === columnElement;
       return {
-        hasPendingAgents: L,
-        hasPendingWorkflows: N,
-        showTurnDuration: W,
+        hasPendingAgents: titleRow,
+        hasPendingWorkflows: rowBox,
+        showTurnDuration: detailElement,
         doneAt: formatBriefTimestamp(message.timestamp),
-        waitingFor: z
+        waitingFor: resultElement
           ? {
               agents: filtered.map(agentRef),
-              workflows: K,
+              workflows: containerElement,
             }
           : undefined,
       };
@@ -1285,92 +1349,92 @@ function TurnDurationRow(props) {
     $[6] = message.timestamp;
     $[7] = commandQueueOrDefault;
     $[8] = appStoreDirect;
-    $[9] = b;
-  } else b = $[9];
-  let [ee] = y(b);
-  let le;
-  let ge;
+    $[9] = durationElement;
+  } else durationElement = $[9];
+  let [durationMemo] = useState(durationElement);
+  let hintElement;
+  let rowElement;
   if (
     $[10] !== isExpanded ||
     $[11] !== message.durationMs ||
     $[12] !== uuid ||
-    $[13] !== ee.waitingFor ||
-    $[14] !== T
+    $[13] !== durationMemo.waitingFor ||
+    $[14] !== durationText
   ) {
-    le = () => ({
+    hintElement = () => ({
       requestId: uuid,
       props: {
-        word: T,
+        word: durationText,
         durationMs: message.durationMs,
         isExpanded,
-        ...(ee.waitingFor !== undefined && {
-          waitingFor: ee.waitingFor,
+        ...(durationMemo.waitingFor !== undefined && {
+          waitingFor: durationMemo.waitingFor,
         }),
       },
     });
-    ge = [T, uuid, message.durationMs, isExpanded, ee.waitingFor];
+    rowElement = [durationText, uuid, message.durationMs, isExpanded, durationMemo.waitingFor];
     $[10] = isExpanded;
     $[11] = message.durationMs;
     $[12] = uuid;
-    $[13] = ee.waitingFor;
-    $[14] = T;
-    $[15] = le;
-    $[16] = ge;
+    $[13] = durationMemo.waitingFor;
+    $[14] = durationText;
+    $[15] = hintElement;
+    $[16] = rowElement;
   } else {
-    le = $[15];
-    ge = $[16];
+    hintElement = $[15];
+    rowElement = $[16];
   }
-  let ae = actionKeysNamespace.useRenderInput("TurnDuration", le, ge);
-  let pe;
-  if ($[17] !== addMargin || $[18] !== message || $[19] !== ee) {
-    pe = (te) =>
+  let renderInput = actionKeysNamespace.useRenderInput("TurnDuration", hintElement, rowElement);
+  let renderHook;
+  if ($[17] !== addMargin || $[18] !== message || $[19] !== durationMemo) {
+    renderHook = (args) =>
       jsxProd_default(TurnDurationMessage, {
         message:
-          te.props.durationMs === message.durationMs
+          args.props.durationMs === message.durationMs
             ? message
             : {
                 ...message,
-                durationMs: te.props.durationMs,
+                durationMs: args.props.durationMs,
               },
         addMargin,
-        verb: te.props.word,
-        snapshot: ee,
+        verb: args.props.word,
+        snapshot: durationMemo,
       });
     $[17] = addMargin;
     $[18] = message;
-    $[19] = ee;
-    $[20] = pe;
-  } else pe = $[20];
-  return actionKeysNamespace.useRenderHook(ae, pe);
+    $[19] = durationMemo;
+    $[20] = renderHook;
+  } else renderHook = $[20];
+  return actionKeysNamespace.useRenderHook(renderInput, renderHook);
 }
 //@ chunk-ah34pb7m.js:204046-206407 fingerprint = TurnDurationMessage (0.466)
 /**
  * 回合耗时消息："✻ <随机完成动词> for Xm Ys"，附带 token 用量、提醒（nudge）计数与仍在后台运行的 agent/工作流数。
  */
 function TurnDurationMessage(props) {
-  let $ = w(33);
+  let $ = useMemoCache(33);
   let { message, addMargin, verb, snapshot } = props;
   let { hasPendingAgents, hasPendingWorkflows, showTurnDuration, doneAt } = snapshot;
   let appState = useAppState(getBackgroundTasksPillLabel);
-  let E;
+  let durationText;
   if ($[0] !== message.durationMs) {
-    E = formatDuration(message.durationMs);
+    durationText = formatDuration(message.durationMs);
     $[0] = message.durationMs;
-    $[1] = E;
-  } else E = $[1];
-  let B = E;
+    $[1] = durationText;
+  } else durationText = $[1];
+  let durationText_2 = durationText;
   let hasBudget = message.budgetLimit !== undefined;
-  let N;
+  let budgetPart;
   W: {
     if (!hasBudget) {
-      N = null;
+      budgetPart = null;
       break W;
     }
     let tokens = message.budgetTokens;
     let limit = message.budgetLimit;
-    let V;
+    let budgetText;
     if ($[2] !== limit || $[3] !== tokens) {
-      V =
+      budgetText =
         tokens >= limit
           ? jsxProd_default_2(Text, {
               children: [
@@ -1388,102 +1452,102 @@ function TurnDurationMessage(props) {
           : `${formatNumber(tokens)} / ${formatNumber(limit)} (${Math.round((tokens / limit) * 100)}%)`;
       $[2] = limit;
       $[3] = tokens;
-      $[4] = V;
-    } else V = $[4];
-    let Y = V;
-    let X =
+      $[4] = budgetText;
+    } else budgetText = $[4];
+    let budgetText_2 = budgetText;
+    let nudgeSuffix =
       message.budgetNudges > 0
         ? ` \xB7 ${message.budgetNudges} ${message.budgetNudges === 1 ? "nudge" : "nudges"}`
         : "";
-    const z = showTurnDuration ? " \xB7 " : "";
-    let ee;
-    if ($[5] !== X || $[6] !== z || $[7] !== Y) {
-      ee = jsxProd_default_2(Fragment, {
-        children: [z, Y, X],
+    const leadingSep = showTurnDuration ? " \xB7 " : "";
+    let budgetFragment;
+    if ($[5] !== nudgeSuffix || $[6] !== leadingSep || $[7] !== budgetText_2) {
+      budgetFragment = jsxProd_default_2(Fragment, {
+        children: [leadingSep, budgetText_2, nudgeSuffix],
       });
-      $[5] = X;
-      $[6] = z;
-      $[7] = Y;
-      $[8] = ee;
-    } else ee = $[8];
-    N = ee;
+      $[5] = nudgeSuffix;
+      $[6] = leadingSep;
+      $[7] = budgetText_2;
+      $[8] = budgetFragment;
+    } else budgetFragment = $[8];
+    budgetPart = budgetFragment;
   }
-  let le = N;
+  let budgetFragment_2 = budgetPart;
   let briefHiddenCount = message.briefHiddenCount ?? 0;
-  let ae =
+  let hiddenSuffix =
     briefHiddenCount > 0
       ? `${showTurnDuration || hasBudget ? " \xB7 " : ""}${briefHiddenCount} ${briefHiddenCount === 1 ? "message" : "messages"} hidden (/focus to show)`
       : "";
-  let pe = !showTurnDuration && !hasBudget && !ae;
-  let te = hasPendingAgents ? (message.pendingBackgroundAgentCount ?? 0) : 0;
-  let de = hasPendingWorkflows ? (message.pendingWorkflowCount ?? 0) : 0;
-  let ue = te > 0 || de > 0;
-  let V;
-  if ($[9] !== te) {
-    V =
-      te > 0 &&
+  let isEmpty = !showTurnDuration && !hasBudget && !hiddenSuffix;
+  let pendingAgents = hasPendingAgents ? (message.pendingBackgroundAgentCount ?? 0) : 0;
+  let pendingWorkflows = hasPendingWorkflows ? (message.pendingWorkflowCount ?? 0) : 0;
+  let hasPending = pendingAgents > 0 || pendingWorkflows > 0;
+  let agentsText;
+  if ($[9] !== pendingAgents) {
+    agentsText =
+      pendingAgents > 0 &&
       jsxProd_default_2(Text, {
         children: [
           " ",
           jsxProd_default(Text, {
             bold: true,
             dimColor: true,
-            children: te,
+            children: pendingAgents,
           }),
-          ` background ${te === 1 ? "agent" : "agents"}`,
+          ` background ${pendingAgents === 1 ? "agent" : "agents"}`,
         ],
       });
-    $[9] = te;
-    $[10] = V;
-  } else V = $[10];
-  const z = te > 0 && de > 0 && " and";
-  let ee;
-  if ($[11] !== de) {
-    ee =
-      de > 0 &&
+    $[9] = pendingAgents;
+    $[10] = agentsText;
+  } else agentsText = $[10];
+  const andText = pendingAgents > 0 && pendingWorkflows > 0 && " and";
+  let workflowsText;
+  if ($[11] !== pendingWorkflows) {
+    workflowsText =
+      pendingWorkflows > 0 &&
       jsxProd_default_2(Text, {
         children: [
           " ",
           jsxProd_default(Text, {
             bold: true,
             dimColor: true,
-            children: de,
+            children: pendingWorkflows,
           }),
-          ` ${de === 1 ? "dynamic workflow" : "dynamic workflows"}`,
+          ` ${pendingWorkflows === 1 ? "dynamic workflow" : "dynamic workflows"}`,
         ],
       });
-    $[11] = de;
-    $[12] = ee;
-  } else ee = $[12];
-  let J;
-  if ($[13] !== V || $[14] !== z || $[15] !== ee) {
-    J = jsxProd_default_2(Text, {
+    $[11] = pendingWorkflows;
+    $[12] = workflowsText;
+  } else workflowsText = $[12];
+  let waitingText;
+  if ($[13] !== agentsText || $[14] !== andText || $[15] !== workflowsText) {
+    waitingText = jsxProd_default_2(Text, {
       dimColor: true,
-      children: ["Waiting for", V, z, ee, " to finish"],
+      children: ["Waiting for", agentsText, andText, workflowsText, " to finish"],
     });
-    $[13] = V;
-    $[14] = z;
-    $[15] = ee;
-    $[16] = J;
-  } else J = $[16];
-  let se = J;
-  let ye = showTurnDuration && ue;
-  let Te;
+    $[13] = agentsText;
+    $[14] = andText;
+    $[15] = workflowsText;
+    $[16] = waitingText;
+  } else waitingText = $[16];
+  let waitingText_2 = waitingText;
+  let waitingShown = showTurnDuration && hasPending;
+  let content;
   if (
     $[17] !== addMargin ||
     $[18] !== appState ||
-    $[19] !== le ||
+    $[19] !== budgetFragment_2 ||
     $[20] !== doneAt ||
-    $[21] !== B ||
-    $[22] !== ae ||
-    $[23] !== pe ||
-    $[24] !== ue ||
+    $[21] !== durationText_2 ||
+    $[22] !== hiddenSuffix ||
+    $[23] !== isEmpty ||
+    $[24] !== hasPending ||
     $[25] !== showTurnDuration ||
-    $[26] !== ye ||
+    $[26] !== waitingShown ||
     $[27] !== verb ||
-    $[28] !== se
+    $[28] !== waitingText_2
   ) {
-    Te = pe
+    content = isEmpty
       ? null
       : jsxProd_default_2(Box, {
           flexDirection: "row",
@@ -1501,23 +1565,23 @@ function TurnDurationMessage(props) {
             jsxProd_default_2(Text, {
               children: [
                 showTurnDuration &&
-                  (ue
-                    ? se
+                  (hasPending
+                    ? waitingText_2
                     : jsxProd_default(Text, {
                         dimColor: true,
-                        children: `${verb} for ${B}${doneAt ? ` \xB7 done ${doneAt}` : ""}`,
+                        children: `${verb} for ${durationText_2}${doneAt ? ` \xB7 done ${doneAt}` : ""}`,
                       })),
-                le &&
+                budgetFragment_2 &&
                   jsxProd_default(Text, {
                     dimColor: true,
-                    children: le,
+                    children: budgetFragment_2,
                   }),
-                ae &&
+                hiddenSuffix &&
                   jsxProd_default(Text, {
                     dimColor: true,
-                    children: ae,
+                    children: hiddenSuffix,
                   }),
-                !ye &&
+                !waitingShown &&
                   appState &&
                   jsxProd_default(Text, {
                     dimColor: true,
@@ -1529,82 +1593,83 @@ function TurnDurationMessage(props) {
         });
     $[17] = addMargin;
     $[18] = appState;
-    $[19] = le;
+    $[19] = budgetFragment_2;
     $[20] = doneAt;
-    $[21] = B;
-    $[22] = ae;
-    $[23] = pe;
-    $[24] = ue;
+    $[21] = durationText_2;
+    $[22] = hiddenSuffix;
+    $[23] = isEmpty;
+    $[24] = hasPending;
     $[25] = showTurnDuration;
-    $[26] = ye;
+    $[26] = waitingShown;
     $[27] = verb;
-    $[28] = se;
-    $[29] = Te;
-  } else Te = $[29];
-  let Me = Te;
-  let [be, ve] = useFrozenValue(Me);
-  let Ue;
-  if ($[30] !== ve || $[31] !== be) {
-    Ue = jsxProd_default(Box, {
-      ref: be,
+    $[28] = waitingText_2;
+    $[29] = content;
+  } else content = $[29];
+  let contentOrNull = content;
+  let [measureRef, frozenContent] = useFrozenValue(contentOrNull);
+  let container;
+  if ($[30] !== frozenContent || $[31] !== measureRef) {
+    container = jsxProd_default(Box, {
+      ref: measureRef,
       flexDirection: "column",
       width: "100%",
-      children: ve,
+      children: frozenContent,
     });
-    $[30] = ve;
-    $[31] = be;
-    $[32] = Ue;
-  } else Ue = $[32];
-  return Ue;
+    $[30] = frozenContent;
+    $[31] = measureRef;
+    $[32] = container;
+  } else container = $[32];
+  return container;
 }
 //@ chunk-ah34pb7m.js:206407-206439 layout
 var TENGU_LIVELY_AVALANCHE = "tengu_lively_avalanche";
 //@ chunk-ah34pb7m.js:206439-207625 fingerprint = MemorySavedMessage (0.642)
 function MemorySavedMessage(props) {
-  let $ = w(18);
+  let $ = useMemoCache(18);
   let { message, addMargin, verbose } = props;
   let validStringArray = getValidStringArray(message.writtenPaths);
-  let M;
+  let verb;
   if ($[0] !== message) {
-    M = getMemorySavedVerb(message);
+    verb = getMemorySavedVerb(message);
     $[0] = message;
-    $[1] = M;
-  } else M = $[1];
-  let T = M;
-  let x = renderWithForceUpdate(isLivelyAvalancheEnabled);
-  let k = x ? getAutoMemPathOrNull() : null;
-  let b;
+    $[1] = verb;
+  } else verb = $[1];
+  let parts = verb;
+  let pathElement = renderWithForceUpdate(isLivelyAvalancheEnabled);
+  let pathText = pathElement ? getAutoMemPathOrNull() : null;
+  let headlineElement;
   if ($[2] === MEMO_CACHE_SENTINEL) {
-    b = getPlatform();
-    $[2] = b;
-  } else b = $[2];
-  let E = b;
-  let B = E !== "windows" && E !== "wsl";
-  let L;
+    headlineElement = getPlatform();
+    $[2] = headlineElement;
+  } else headlineElement = $[2];
+  let headlineText = headlineElement;
+  let headerRow = headlineText !== "windows" && headlineText !== "wsl";
+  let countElement;
   if ($[3] !== message) {
-    L = teamMemSavedPart(message);
+    countElement = teamMemSavedPart(message);
     $[3] = message;
-    $[4] = L;
-  } else L = $[4];
-  let N = L;
-  let privateCount = validStringArray.length - (N?.count ?? 0);
-  let U;
+    $[4] = countElement;
+  } else countElement = $[4];
+  let noticeRow = countElement;
+  let privateCount = validStringArray.length - (noticeRow?.count ?? 0);
+  let localQualifier;
   if ($[5] === MEMO_CACHE_SENTINEL) {
-    U = memoryQualifierApi?.localMemoryQualifier() ?? "";
-    $[5] = U;
-  } else U = $[5];
-  let K = U;
-  const V = privateCount > 0 ? `${privateCount} ${K}${privateCount === 1 ? "memory" : "memories"}` : null;
-  const segment = N?.segment;
+    localQualifier = memoryQualifierApi?.localMemoryQualifier() ?? "";
+    $[5] = localQualifier;
+  } else localQualifier = $[5];
+  let bodyElement = localQualifier;
+  const columnElement =
+    privateCount > 0 ? `${privateCount} ${bodyElement}${privateCount === 1 ? "memory" : "memories"}` : null;
+  const segment = noticeRow?.segment;
   let t4;
-  if ($[6] !== V || $[7] !== segment) {
-    t4 = [V, segment].filter(Boolean);
-    $[6] = V;
+  if ($[6] !== columnElement || $[7] !== segment) {
+    t4 = [columnElement, segment].filter(Boolean);
+    $[6] = columnElement;
     $[7] = segment;
     $[8] = t4;
   } else t4 = $[8];
-  let parts = t4;
-  const ee = Box;
+  let parts_2 = t4;
+  const containerElement = Box;
   const flexDirection = "column";
   const marginTop = addMargin ? 1 : 0;
   let t6;
@@ -1619,26 +1684,26 @@ function MemorySavedMessage(props) {
     });
     $[9] = t6;
   } else t6 = $[9];
-  const joined = parts.join(" \xB7 ");
-  let te;
-  if ($[10] !== joined || $[11] !== T) {
-    te = jsxProd_default_2(Box, {
+  const joined = parts_2.join(" \xB7 ");
+  let boxElement;
+  if ($[10] !== joined || $[11] !== parts) {
+    boxElement = jsxProd_default_2(Box, {
       flexDirection: "row",
       children: [
         t6,
         jsxProd_default_2(Text, {
-          children: [T, " ", joined],
+          children: [parts, " ", joined],
         }),
       ],
     });
     $[10] = joined;
-    $[11] = T;
-    $[12] = te;
-  } else te = $[12];
-  const ue =
+    $[11] = parts;
+    $[12] = boxElement;
+  } else boxElement = $[12];
+  const outerElement =
     verbose &&
     validStringArray.map((validString) => {
-      if (!x) {
+      if (!pathElement) {
         return jsxProd_default(
           MemoryFileRow,
           {
@@ -1647,7 +1712,7 @@ function MemorySavedMessage(props) {
           validString,
         );
       }
-      return B && k !== null && isAllowedAutoMemWritePath(validString, k)
+      return headerRow && pathText !== null && isAllowedAutoMemWritePath(validString, pathText)
         ? jsxProd_default(
             MemoryFileRow,
             {
@@ -1664,15 +1729,15 @@ function MemorySavedMessage(props) {
           );
     });
   let t11;
-  if ($[13] !== ee || $[14] !== te || $[15] !== ue || $[16] !== marginTop) {
-    t11 = jsxProd_default_2(ee, {
+  if ($[13] !== containerElement || $[14] !== boxElement || $[15] !== outerElement || $[16] !== marginTop) {
+    t11 = jsxProd_default_2(containerElement, {
       flexDirection,
       marginTop,
-      children: [te, ue],
+      children: [boxElement, outerElement],
     });
-    $[13] = ee;
-    $[14] = te;
-    $[15] = ue;
+    $[13] = containerElement;
+    $[14] = boxElement;
+    $[15] = outerElement;
     $[16] = marginTop;
     $[17] = t11;
   } else t11 = $[17];
@@ -1680,56 +1745,56 @@ function MemorySavedMessage(props) {
 }
 //@ chunk-ah34pb7m.js:207625-207996 file-local
 function MemoryFilePath(p) {
-  let $ = w(12);
+  let $ = useMemoCache(12);
   let { path } = p;
-  let g;
-  let f;
+  let textComponent;
+  let wrapperComponent;
   let dimColor;
   let children;
   if ($[0] !== path) {
-    let T = basename(path);
-    f = MessageResponse;
-    g = Text;
+    let baseName = basename(path);
+    wrapperComponent = MessageResponse;
+    textComponent = Text;
     dimColor = true;
-    children = hasControlChars(T) ? HIDDEN_PATH_PLACEHOLDER : T;
+    children = hasControlChars(baseName) ? HIDDEN_PATH_PLACEHOLDER : baseName;
     $[0] = path;
-    $[1] = g;
-    $[2] = f;
+    $[1] = textComponent;
+    $[2] = wrapperComponent;
     $[3] = dimColor;
     $[4] = children;
   } else {
-    g = $[1];
-    f = $[2];
+    textComponent = $[1];
+    wrapperComponent = $[2];
     dimColor = $[3];
     children = $[4];
   }
   let children_2;
-  if ($[5] !== g || $[6] !== dimColor || $[7] !== children) {
-    children_2 = jsxProd_default(g, {
+  if ($[5] !== textComponent || $[6] !== dimColor || $[7] !== children) {
+    children_2 = jsxProd_default(textComponent, {
       dimColor,
       children,
     });
-    $[5] = g;
+    $[5] = textComponent;
     $[6] = dimColor;
     $[7] = children;
     $[8] = children_2;
   } else children_2 = $[8];
-  let k;
-  if ($[9] !== f || $[10] !== children_2) {
-    k = jsxProd_default(f, {
+  let wrapperElement;
+  if ($[9] !== wrapperComponent || $[10] !== children_2) {
+    wrapperElement = jsxProd_default(wrapperComponent, {
       children: children_2,
     });
-    $[9] = f;
+    $[9] = wrapperComponent;
     $[10] = children_2;
-    $[11] = k;
-  } else k = $[11];
-  return k;
+    $[11] = wrapperElement;
+  } else wrapperElement = $[11];
+  return wrapperElement;
 }
 //@ chunk-ah34pb7m.js:207996-208617 fingerprint = MemoryFileRow (0.734)
 function MemoryFileRow(props) {
-  let $ = w(16);
+  let $ = useMemoCache(16);
   let { path } = props;
-  let [hover, setHover] = y(false);
+  let [hover, setHover] = useState(false);
   let onClick;
   if ($[0] !== path) {
     onClick = () => void openPath(path);
@@ -1794,15 +1859,18 @@ function MemoryFileRow(props) {
 }
 //@ chunk-ah34pb7m.js:208617-209574 fingerprint = BridgeStatusMessage (0.355)
 function BridgeStatusMessage(props) {
-  let $ = w(13);
+  let $ = useMemoCache(13);
   let { message, addMargin } = props;
-  let f;
+  let selectBridgeMatch;
   if ($[0] !== message) {
-    f = (h) => h.replBridgeConnected && !h.replBridgeOutboundOnly && h.replBridgeSessionUrl === message.url;
+    selectBridgeMatch = (state) =>
+      state.replBridgeConnected &&
+      !state.replBridgeOutboundOnly &&
+      state.replBridgeSessionUrl === message.url;
     $[0] = message;
-    $[1] = f;
-  } else f = $[1];
-  if (!useAppState(f)) {
+    $[1] = selectBridgeMatch;
+  } else selectBridgeMatch = $[1];
+  if (!useAppState(selectBridgeMatch)) {
     return null;
   }
   const marginTop = addMargin ? 1 : 0;
@@ -1813,9 +1881,9 @@ function BridgeStatusMessage(props) {
     });
     $[2] = t2;
   } else t2 = $[2];
-  let k;
+  let textElement;
   if ($[3] !== message.url) {
-    k = jsxProd_default_2(Text, {
+    textElement = jsxProd_default_2(Text, {
       children: [
         "/remote-control is active",
         jsxProd_default_2(Text, {
@@ -1831,11 +1899,11 @@ function BridgeStatusMessage(props) {
       ],
     });
     $[3] = message.url;
-    $[4] = k;
-  } else k = $[4];
-  let b;
+    $[4] = textElement;
+  } else textElement = $[4];
+  let state;
   if ($[5] !== message.upgradeNudge) {
-    b =
+    state =
       message.upgradeNudge &&
       jsxProd_default_2(Box, {
         flexDirection: "row",
@@ -1852,59 +1920,31 @@ function BridgeStatusMessage(props) {
         ],
       });
     $[5] = message.upgradeNudge;
-    $[6] = b;
-  } else b = $[6];
-  let E;
-  if ($[7] !== k || $[8] !== b) {
-    E = jsxProd_default_2(Box, {
+    $[6] = state;
+  } else state = $[6];
+  let isConnected;
+  if ($[7] !== textElement || $[8] !== state) {
+    isConnected = jsxProd_default_2(Box, {
       flexDirection: "column",
-      children: [k, b],
+      children: [textElement, state],
     });
-    $[7] = k;
-    $[8] = b;
-    $[9] = E;
-  } else E = $[9];
-  let B;
-  if ($[10] !== marginTop || $[11] !== E) {
-    B = jsxProd_default_2(Box, {
+    $[7] = textElement;
+    $[8] = state;
+    $[9] = isConnected;
+  } else isConnected = $[9];
+  let statusText;
+  if ($[10] !== marginTop || $[11] !== isConnected) {
+    statusText = jsxProd_default_2(Box, {
       flexDirection: "row",
       marginTop,
       width: 999,
-      children: [t2, E],
+      children: [t2, isConnected],
     });
     $[10] = marginTop;
-    $[11] = E;
-    $[12] = B;
-  } else B = $[12];
-  return B;
-}
-//@ chunk-e4xept39.js:231-335 placement
-/**
- * 云会话横幅文字（创建或附着）与"在此或在…编码"的连接文字。
- */
-var CLOUD_SESSION_BANNERS = {
-  create: "Cloud session active",
-  attach: "Attached to cloud session",
-};
-var CODE_HERE_OR_AT = " \xB7 code here or at ";
-//@ chunk-e6aww6q8.js:1538140-1538417 fingerprint = _temp (0.705)
-/**
- * 把工具耗时列表编码为 "tool=ms;tool=ms"（数量与总长有上限），用于请求头。
- */
-function formatToolDurationsHeader(prevToolDurations) {
-  let n = [];
-  let r = 0;
-  for (let { toolName, durationMs } of prevToolDurations) {
-    if (n.length >= MAX_TOOL_DURATION_ENTRIES) break;
-    if (!Number.isFinite(durationMs)) continue;
-    let max = Math.max(0, Math.round(durationMs));
-    let S = `${encodeToolNameForHeader(toolName)}=${max}`;
-    let w = n.length > 0 ? 1 : 0;
-    if (r + w + S.length > MAX_TOOL_DURATION_HEADER_CHARS) break;
-    r += w + S.length;
-    n.push(S);
-  }
-  return n.length > 0 ? n.join(";") : undefined;
+    $[11] = isConnected;
+    $[12] = statusText;
+  } else statusText = $[12];
+  return statusText;
 }
 export {
   countPendingBackgroundWork,

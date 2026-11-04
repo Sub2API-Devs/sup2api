@@ -11,7 +11,75 @@
 import { arch } from "os";
 import http from "http";
 import https from "https";
-import { Re, Ar } from "../../../runtime/bun-runtime.js";
+import { __export, __toESM } from "../../../runtime/bun-runtime.js";
+import {
+  EMPTY_ENV_DECLARATIONS,
+  ANT_CLAUDE_CODE_METRICS_ENDPOINT,
+  ANT_OTEL_EXPORTER_OTLP_ENDPOINT,
+  ANT_OTEL_EXPORTER_OTLP_HEADERS,
+  ANT_OTEL_EXPORTER_OTLP_PROTOCOL,
+  ANT_OTEL_LOGS_EXPORTER,
+  ANT_OTEL_METRICS_EXPORTER,
+  ANT_OTEL_RESOURCE_ATTRIBUTES,
+  ANT_OTEL_TRACES_EXPORTER,
+  BETA_TRACING_ENDPOINT,
+  CLAUDE_CODE_BENCH_LIVE_COUNTS,
+  CLAUDE_CODE_BYOC_ENABLE_DATADOG,
+  CLAUDE_CODE_DATADOG_FLUSH_INTERVAL_MS,
+  CLAUDE_CODE_DD_ERROR_TRACKING_FLUSH_INTERVAL_MS,
+  CLAUDE_CODE_DEBUG_LOGS_DIR,
+  CLAUDE_CODE_DEBUG_LOG_LEVEL,
+  CLAUDE_CODE_DEBUG_REPAINTS,
+  CLAUDE_CODE_DIAGNOSTICS_FILE,
+  CLAUDE_CODE_ENHANCED_TELEMETRY_BETA,
+  CLAUDE_CODE_FRAME_TIMING_LOG,
+  CLAUDE_CODE_FRAME_TIMING_SAMPLE_EVERY,
+  CLAUDE_CODE_OTEL_CONTENT_MAX_LENGTH,
+  CLAUDE_CODE_OTEL_DIAG_STDERR,
+  CLAUDE_CODE_OTEL_FLUSH_TIMEOUT_MS,
+  CLAUDE_CODE_OTEL_HEADERS_HELPER_DEBOUNCE_MS,
+  CLAUDE_CODE_OTEL_SHUTDOWN_TIMEOUT_MS,
+  CLAUDE_CODE_PERFETTO_TRACE,
+  CLAUDE_CODE_PERFETTO_WRITE_INTERVAL_S,
+  CLAUDE_CODE_PROFILE_STARTUP,
+  CLAUDE_CODE_SESSION_LOG,
+  CLAUDE_CODE_TEE_SDK_STDOUT,
+  CLAUDE_CODE_TERMINAL_RECORDING,
+  CLAUDE_DEBUG,
+  CLAUDE_PTY_RECORD,
+  DEBUG,
+  DEBUG_CLAUDE_AGENT_SDK,
+  DEBUG_SDK,
+  OTEL_ATTRIBUTE_VALUE_LENGTH_LIMIT,
+  OTEL_EXPORTER_OTLP_ENDPOINT,
+  OTEL_EXPORTER_OTLP_HEADERS,
+  OTEL_EXPORTER_OTLP_LOGS_ENDPOINT,
+  OTEL_EXPORTER_OTLP_LOGS_HEADERS,
+  OTEL_EXPORTER_OTLP_LOGS_PROTOCOL,
+  OTEL_EXPORTER_OTLP_METRICS_ENDPOINT,
+  OTEL_EXPORTER_OTLP_METRICS_HEADERS,
+  OTEL_EXPORTER_OTLP_METRICS_PROTOCOL,
+  OTEL_EXPORTER_OTLP_METRICS_TEMPORALITY_PREFERENCE,
+  OTEL_EXPORTER_OTLP_PROTOCOL,
+  OTEL_EXPORTER_OTLP_TRACES_ENDPOINT,
+  OTEL_EXPORTER_OTLP_TRACES_HEADERS,
+  OTEL_EXPORTER_OTLP_TRACES_PROTOCOL,
+  OTEL_LOGRECORD_ATTRIBUTE_VALUE_LENGTH_LIMIT,
+  OTEL_LOGS_EXPORTER,
+  OTEL_LOGS_EXPORT_INTERVAL,
+  OTEL_LOG_ASSISTANT_RESPONSES,
+  OTEL_LOG_MANAGED_SETTINGS,
+  OTEL_LOG_RAW_API_BODIES,
+  OTEL_LOG_TOOL_CONTENT,
+  OTEL_LOG_TOOL_DETAILS,
+  OTEL_LOG_USER_PROMPTS,
+  OTEL_METRICS_EXPORTER,
+  OTEL_METRIC_EXPORT_INTERVAL,
+  OTEL_RESOURCE_ATTRIBUTES,
+  OTEL_SPAN_ATTRIBUTE_VALUE_LENGTH_LIMIT,
+  OTEL_TRACES_EXPORTER,
+  OTEL_TRACES_EXPORT_INTERVAL,
+} from "../env/envRegistry.js";
 import { require_error_3 } from "../../../vendor/@anthropic-ai/bedrock-sdk/core/error.js";
 import { isTelemetryDisabled } from "../privacyLevel.js";
 import {
@@ -67,8 +135,8 @@ import { firstLineOf } from "../stringUtils.js";
 import { getPlatform, getWslVersion } from "../platform.js";
 import { normalizeArchForOtel } from "../../../vendor/@opentelemetry/resources/build/esm/detectors/platform/node/utils.js";
 import { gatewayIdentityAttributes } from "./gatewayIdentityAttributes.js";
-import { wi } from "../../../vendor/lodash-es/_inlinedHelpers.js";
-import { j } from "../../../vendor/@opentelemetry/sdk-trace-base/build/esm/platform/node/RandomIdGenerator.js";
+import { import_reject } from "../../../vendor/lodash-es/_inlinedHelpers.js";
+import { BatchSpanProcessor } from "../../../vendor/@opentelemetry/sdk-trace-base/build/esm/platform/node/RandomIdGenerator.js";
 import { BasicTracerProvider } from "../../../vendor/@opentelemetry/sdk-trace-base/build/src/BasicTracerProvider.js";
 import { LoggerProvider } from "../../../vendor/@opentelemetry/sdk-logs/build/src/LoggerProvider.js";
 import { BatchLogRecordProcessor } from "../../../vendor/@opentelemetry/sdk-logs/build/esm/platform/node/export/BatchLogRecordProcessor.js";
@@ -101,77 +169,77 @@ import { getSessionIngressAuthHeaders } from "../sessionIngressAuth.js";
 import { getUsableProxyUrl, shouldBypassProxy, TlsCheckingProxyAgent } from "../proxy.js";
 import { anthropicHostOf } from "../anthropicHosts.js";
 import { getMTLSConfig, caListBehindProxy } from "../mtls.js";
-import {
-  EMPTY_ENV_DECLARATIONS,
-  M_,
-  I_,
-  U_,
-  i_,
-  x_,
-  N_,
-  P_,
-  l_,
-  a_,
-  Ft,
-  vt,
-  Yt,
-  gt,
-  It,
-  pt,
-  Ut,
-  it,
-  dt,
-  at,
-  ut,
-  O_,
-  yt,
-  ft,
-  Wt,
-  Kt,
-  Pt,
-  CLAUDE_CODE_PERFETTO_WRITE_INTERVAL_S,
-  lt,
-  bt,
-  mt,
-  Ht,
-  St,
-  Gt,
-  Rt,
-  xt,
-  Nt,
-  C_,
-  ht,
-  kt,
-  Zt,
-  Jt,
-  Qt,
-  zt,
-  $t,
-  qt,
-  o_,
-  jt,
-  t_,
-  __,
-  E_,
-  D_,
-  wt,
-  e_,
-  T_,
-  R_,
-  p_,
-  c_,
-  S_,
-  L_,
-  Vt,
-  r_,
-  s_,
-  A_,
-  Xt,
-  n_,
-} from "../env/envRegistry.js";
 
+//@ chunk-jhrww53q.js:3176-5552 fingerprint = bootstrapTelemetry (0.317)
+__export(EMPTY_ENV_DECLARATIONS, {
+  ANT_CLAUDE_CODE_METRICS_ENDPOINT: () => ANT_CLAUDE_CODE_METRICS_ENDPOINT,
+  ANT_OTEL_EXPORTER_OTLP_ENDPOINT: () => ANT_OTEL_EXPORTER_OTLP_ENDPOINT,
+  ANT_OTEL_EXPORTER_OTLP_HEADERS: () => ANT_OTEL_EXPORTER_OTLP_HEADERS,
+  ANT_OTEL_EXPORTER_OTLP_PROTOCOL: () => ANT_OTEL_EXPORTER_OTLP_PROTOCOL,
+  ANT_OTEL_LOGS_EXPORTER: () => ANT_OTEL_LOGS_EXPORTER,
+  ANT_OTEL_METRICS_EXPORTER: () => ANT_OTEL_METRICS_EXPORTER,
+  ANT_OTEL_RESOURCE_ATTRIBUTES: () => ANT_OTEL_RESOURCE_ATTRIBUTES,
+  ANT_OTEL_TRACES_EXPORTER: () => ANT_OTEL_TRACES_EXPORTER,
+  BETA_TRACING_ENDPOINT: () => BETA_TRACING_ENDPOINT,
+  CLAUDE_CODE_BENCH_LIVE_COUNTS: () => CLAUDE_CODE_BENCH_LIVE_COUNTS,
+  CLAUDE_CODE_BYOC_ENABLE_DATADOG: () => CLAUDE_CODE_BYOC_ENABLE_DATADOG,
+  CLAUDE_CODE_DATADOG_FLUSH_INTERVAL_MS: () => CLAUDE_CODE_DATADOG_FLUSH_INTERVAL_MS,
+  CLAUDE_CODE_DD_ERROR_TRACKING_FLUSH_INTERVAL_MS: () => CLAUDE_CODE_DD_ERROR_TRACKING_FLUSH_INTERVAL_MS,
+  CLAUDE_CODE_DEBUG_LOGS_DIR: () => CLAUDE_CODE_DEBUG_LOGS_DIR,
+  CLAUDE_CODE_DEBUG_LOG_LEVEL: () => CLAUDE_CODE_DEBUG_LOG_LEVEL,
+  CLAUDE_CODE_DEBUG_REPAINTS: () => CLAUDE_CODE_DEBUG_REPAINTS,
+  CLAUDE_CODE_DIAGNOSTICS_FILE: () => CLAUDE_CODE_DIAGNOSTICS_FILE,
+  CLAUDE_CODE_ENHANCED_TELEMETRY_BETA: () => CLAUDE_CODE_ENHANCED_TELEMETRY_BETA,
+  CLAUDE_CODE_FRAME_TIMING_LOG: () => CLAUDE_CODE_FRAME_TIMING_LOG,
+  CLAUDE_CODE_FRAME_TIMING_SAMPLE_EVERY: () => CLAUDE_CODE_FRAME_TIMING_SAMPLE_EVERY,
+  CLAUDE_CODE_OTEL_CONTENT_MAX_LENGTH: () => CLAUDE_CODE_OTEL_CONTENT_MAX_LENGTH,
+  CLAUDE_CODE_OTEL_DIAG_STDERR: () => CLAUDE_CODE_OTEL_DIAG_STDERR,
+  CLAUDE_CODE_OTEL_FLUSH_TIMEOUT_MS: () => CLAUDE_CODE_OTEL_FLUSH_TIMEOUT_MS,
+  CLAUDE_CODE_OTEL_HEADERS_HELPER_DEBOUNCE_MS: () => CLAUDE_CODE_OTEL_HEADERS_HELPER_DEBOUNCE_MS,
+  CLAUDE_CODE_OTEL_SHUTDOWN_TIMEOUT_MS: () => CLAUDE_CODE_OTEL_SHUTDOWN_TIMEOUT_MS,
+  CLAUDE_CODE_PERFETTO_TRACE: () => CLAUDE_CODE_PERFETTO_TRACE,
+  CLAUDE_CODE_PERFETTO_WRITE_INTERVAL_S: () => CLAUDE_CODE_PERFETTO_WRITE_INTERVAL_S,
+  CLAUDE_CODE_PROFILE_STARTUP: () => CLAUDE_CODE_PROFILE_STARTUP,
+  CLAUDE_CODE_SESSION_LOG: () => CLAUDE_CODE_SESSION_LOG,
+  CLAUDE_CODE_TEE_SDK_STDOUT: () => CLAUDE_CODE_TEE_SDK_STDOUT,
+  CLAUDE_CODE_TERMINAL_RECORDING: () => CLAUDE_CODE_TERMINAL_RECORDING,
+  CLAUDE_DEBUG: () => CLAUDE_DEBUG,
+  CLAUDE_PTY_RECORD: () => CLAUDE_PTY_RECORD,
+  DEBUG: () => DEBUG,
+  DEBUG_CLAUDE_AGENT_SDK: () => DEBUG_CLAUDE_AGENT_SDK,
+  DEBUG_SDK: () => DEBUG_SDK,
+  OTEL_ATTRIBUTE_VALUE_LENGTH_LIMIT: () => OTEL_ATTRIBUTE_VALUE_LENGTH_LIMIT,
+  OTEL_EXPORTER_OTLP_ENDPOINT: () => OTEL_EXPORTER_OTLP_ENDPOINT,
+  OTEL_EXPORTER_OTLP_HEADERS: () => OTEL_EXPORTER_OTLP_HEADERS,
+  OTEL_EXPORTER_OTLP_LOGS_ENDPOINT: () => OTEL_EXPORTER_OTLP_LOGS_ENDPOINT,
+  OTEL_EXPORTER_OTLP_LOGS_HEADERS: () => OTEL_EXPORTER_OTLP_LOGS_HEADERS,
+  OTEL_EXPORTER_OTLP_LOGS_PROTOCOL: () => OTEL_EXPORTER_OTLP_LOGS_PROTOCOL,
+  OTEL_EXPORTER_OTLP_METRICS_ENDPOINT: () => OTEL_EXPORTER_OTLP_METRICS_ENDPOINT,
+  OTEL_EXPORTER_OTLP_METRICS_HEADERS: () => OTEL_EXPORTER_OTLP_METRICS_HEADERS,
+  OTEL_EXPORTER_OTLP_METRICS_PROTOCOL: () => OTEL_EXPORTER_OTLP_METRICS_PROTOCOL,
+  OTEL_EXPORTER_OTLP_METRICS_TEMPORALITY_PREFERENCE: () => OTEL_EXPORTER_OTLP_METRICS_TEMPORALITY_PREFERENCE,
+  OTEL_EXPORTER_OTLP_PROTOCOL: () => OTEL_EXPORTER_OTLP_PROTOCOL,
+  OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: () => OTEL_EXPORTER_OTLP_TRACES_ENDPOINT,
+  OTEL_EXPORTER_OTLP_TRACES_HEADERS: () => OTEL_EXPORTER_OTLP_TRACES_HEADERS,
+  OTEL_EXPORTER_OTLP_TRACES_PROTOCOL: () => OTEL_EXPORTER_OTLP_TRACES_PROTOCOL,
+  OTEL_LOGRECORD_ATTRIBUTE_VALUE_LENGTH_LIMIT: () => OTEL_LOGRECORD_ATTRIBUTE_VALUE_LENGTH_LIMIT,
+  OTEL_LOGS_EXPORTER: () => OTEL_LOGS_EXPORTER,
+  OTEL_LOGS_EXPORT_INTERVAL: () => OTEL_LOGS_EXPORT_INTERVAL,
+  OTEL_LOG_ASSISTANT_RESPONSES: () => OTEL_LOG_ASSISTANT_RESPONSES,
+  OTEL_LOG_MANAGED_SETTINGS: () => OTEL_LOG_MANAGED_SETTINGS,
+  OTEL_LOG_RAW_API_BODIES: () => OTEL_LOG_RAW_API_BODIES,
+  OTEL_LOG_TOOL_CONTENT: () => OTEL_LOG_TOOL_CONTENT,
+  OTEL_LOG_TOOL_DETAILS: () => OTEL_LOG_TOOL_DETAILS,
+  OTEL_LOG_USER_PROMPTS: () => OTEL_LOG_USER_PROMPTS,
+  OTEL_METRICS_EXPORTER: () => OTEL_METRICS_EXPORTER,
+  OTEL_METRIC_EXPORT_INTERVAL: () => OTEL_METRIC_EXPORT_INTERVAL,
+  OTEL_RESOURCE_ATTRIBUTES: () => OTEL_RESOURCE_ATTRIBUTES,
+  OTEL_SPAN_ATTRIBUTE_VALUE_LENGTH_LIMIT: () => OTEL_SPAN_ATTRIBUTE_VALUE_LENGTH_LIMIT,
+  OTEL_TRACES_EXPORTER: () => OTEL_TRACES_EXPORTER,
+  OTEL_TRACES_EXPORT_INTERVAL: () => OTEL_TRACES_EXPORT_INTERVAL,
+});
 //@ chunk-9vvvg0d3.js:24056-24074 sole-consumer
-var otelSemconv_2 = Re(require_error_3(), 1);
+var otelSemconv_2 = __toESM(require_error_3(), 1);
 //@ chunk-9vvvg0d3.js:24144-24241 fingerprint = isBigQueryMetricsEnabled (1)
 /**
  * BigQuery 指标是否启用：隐私级别 default 且（Slt() 或 Claude.ai 的 team/enterprise 订阅）。
@@ -184,16 +252,16 @@ function isBigQueryMetricsEnabled() {
   return is1PApiCustomer() || isC4EOrTeamUser;
 }
 //@ chunk-9vvvg0d3.js:31114-31176 sole-consumer
-var otelCore = Re(require_core(), 1);
+var otelCore = __toESM(require_core(), 1);
 var MAX_BUFFERED_RECORDS = 64;
 var EXPORT_SUCCESS_RESULT = {
   code: otelCore.ExportResultCode.SUCCESS,
 };
 //@ chunk-9vvvg0d3.js:31176-31246 sole-consumer
-function exportFailureResult(e) {
+function exportFailureResult(error) {
   return {
     code: otelCore.ExportResultCode.FAILED,
-    error: Error(e),
+    error: Error(error),
   };
 }
 //@ chunk-9vvvg0d3.js:31246-31261 sole-consumer
@@ -206,28 +274,28 @@ class BufferingSpanExporter {
   delegate;
   buffer = [];
   shutDown = false;
-  setDelegate(e) {
+  setDelegate(delegate) {
     if (this.shutDown) {
-      e.shutdown().catch(() => {});
+      delegate.shutdown().catch(() => {});
       return;
     }
-    this.delegate = e;
+    this.delegate = delegate;
     let buffer = this.buffer;
     this.buffer = [];
-    for (let o of buffer) e.export(o, noopExportCallback);
+    for (let buffered of buffer) delegate.export(buffered, noopExportCallback);
   }
-  export(e, r) {
+  export(record, callback) {
     if (this.shutDown) {
-      r(exportFailureResult("Exporter has been shut down"));
+      callback(exportFailureResult("Exporter has been shut down"));
       return;
     }
     if (this.delegate) {
-      this.delegate.export(e, r);
+      this.delegate.export(record, callback);
       return;
     }
     if (this.buffer.length >= MAX_BUFFERED_RECORDS) this.buffer.shift();
-    this.buffer.push(e);
-    r(EXPORT_SUCCESS_RESULT);
+    this.buffer.push(record);
+    callback(EXPORT_SUCCESS_RESULT);
   }
   async forceFlush() {
     if (this.delegate?.forceFlush) await this.delegate.forceFlush();
@@ -246,28 +314,28 @@ class BufferingExporter {
   delegate;
   buffer = [];
   shutDown = false;
-  setDelegate(e) {
+  setDelegate(delegate) {
     if (this.shutDown) {
-      e.shutdown().catch(() => {});
+      delegate.shutdown().catch(() => {});
       return;
     }
-    this.delegate = e;
+    this.delegate = delegate;
     let buffer = this.buffer;
     this.buffer = [];
-    for (let o of buffer) e.export(o, noopExportCallback);
+    for (let buffered of buffer) delegate.export(buffered, noopExportCallback);
   }
-  export(e, r) {
+  export(record, callback) {
     if (this.shutDown) {
-      r(exportFailureResult("Exporter has been shut down"));
+      callback(exportFailureResult("Exporter has been shut down"));
       return;
     }
     if (this.delegate) {
-      this.delegate.export(e, r);
+      this.delegate.export(record, callback);
       return;
     }
     if (this.buffer.length >= MAX_BUFFERED_RECORDS) this.buffer.shift();
-    this.buffer.push(e);
-    r(EXPORT_SUCCESS_RESULT);
+    this.buffer.push(record);
+    callback(EXPORT_SUCCESS_RESULT);
   }
   async shutdown() {
     this.shutDown = true;
@@ -276,7 +344,7 @@ class BufferingExporter {
   }
 }
 //@ chunk-9vvvg0d3.js:32304-32322 sole-consumer
-var otelCore_2 = Re(require_core(), 1);
+var otelCore_2 = __toESM(require_core(), 1);
 //@ chunk-9vvvg0d3.js:32322-32920 sole-consumer
 /**
  * OTLP 导出错误归类（grpc/http 状态、headers helper、超时等）。
@@ -294,10 +362,10 @@ function classifyExportError(error, protocol) {
         httpStatus: code,
       };
   }
-  let n = otelHeadersHelperFailureKind(error);
-  if (n !== undefined)
+  let helperFailureKind = otelHeadersHelperFailureKind(error);
+  if (helperFailureKind !== undefined)
     return {
-      errorCode: `headers_helper_${n}`,
+      errorCode: `headers_helper_${helperFailureKind}`,
     };
   if (hasExactErrorMessage(error, "Request Timeout"))
     return {
@@ -317,45 +385,45 @@ function classifyExportError(error, protocol) {
   };
 }
 //@ chunk-9vvvg0d3.js:32920-33393 sole-consumer
-function buildExporterDiagnostics(e, r) {
-  let o = {
-    signal: fromEnum(e),
+function buildExporterDiagnostics(signal, transportInfo) {
+  let baseAttrs = {
+    signal: fromEnum(signal),
     protocol: fromEnum(
-      r.protocol === "grpc"
+      transportInfo.protocol === "grpc"
         ? "grpc"
-        : r.protocol === "http/json"
+        : transportInfo.protocol === "http/json"
           ? "http_json"
-          : r.protocol === "http/protobuf"
+          : transportInfo.protocol === "http/protobuf"
             ? "http_protobuf"
             : "other",
     ),
-    ...(r.viaProxy === undefined
+    ...(transportInfo.viaProxy === undefined
       ? {}
       : {
-          via_proxy: r.viaProxy,
+          via_proxy: transportInfo.viaProxy,
         }),
   };
-  let n = false;
-  let s = new Set();
-  return (u) => {
-    if (u.code === otelCore_2.ExportResultCode.SUCCESS) {
-      if (!n) {
-        n = true;
-        logFeatureOk("otlp_export", o);
+  let reportedSuccess = false;
+  let reportedKeys = new Set();
+  return (result) => {
+    if (result.code === otelCore_2.ExportResultCode.SUCCESS) {
+      if (!reportedSuccess) {
+        reportedSuccess = true;
+        logFeatureOk("otlp_export", baseAttrs);
       }
       return;
     }
-    let { errorCode, httpStatus } = classifyExportError(u.error, r.protocol);
-    let f = `${errorCode}:${httpStatus ?? ""}`;
-    if (s.has(f)) return;
-    s.add(f);
+    let { errorCode, httpStatus } = classifyExportError(result.error, transportInfo.protocol);
+    let reportKey = `${errorCode}:${httpStatus ?? ""}`;
+    if (reportedKeys.has(reportKey)) return;
+    reportedKeys.add(reportKey);
     logFeatureBad(
       "otlp_export",
       errorCode,
       httpStatus === undefined
-        ? o
+        ? baseAttrs
         : {
-            ...o,
+            ...baseAttrs,
             http_status: httpStatus,
           },
     );
@@ -422,34 +490,41 @@ function buildOtelResource() {
   let cachedTelemetryResource = getCachedTelemetryResource();
   if (cachedTelemetryResource) return cachedTelemetryResource;
   let platform = getPlatform();
-  let o = {
+  let coreAttrs = {
     [otelSemconv_2.ATTR_SERVICE_NAME]: "claude-code",
     [otelSemconv_2.ATTR_SERVICE_VERSION]: getServiceVersion(),
   };
   if (platform === "wsl") {
     let wslVersion = getWslVersion();
-    if (wslVersion) o["wsl.version"] = wslVersion;
+    if (wslVersion) coreAttrs["wsl.version"] = wslVersion;
   }
-  let n = import_resources.resourceFromAttributes(o);
-  let s = import_resources.resourceFromAttributes(
+  let serviceResource = import_resources.resourceFromAttributes(coreAttrs);
+  let osResource = import_resources.resourceFromAttributes(
     hasRemoteOtelLogsEndpoint() ? {} : import_resources.osDetector.detect().attributes || {},
   );
-  let u = import_resources.resourceFromAttributes({
+  let hostResource = import_resources.resourceFromAttributes({
     [otelSemconv_2.SEMRESATTRS_HOST_ARCH]: normalizeArchForOtel(arch()),
   });
-  let a = gatewayIdentityAttributes();
-  let p = Object.keys(a).length > 0;
+  let identityAttrs = gatewayIdentityAttributes();
+  let hasIdentity = Object.keys(identityAttrs).length > 0;
   let attributes = import_resources.envDetector.detect().attributes || {};
-  let h = import_resources.resourceFromAttributes(
+  let envAttrs = import_resources.resourceFromAttributes(
     isTracesRelayed()
       ? {}
-      : p
-        ? wi(attributes, (O, T) => T.startsWith("user.") || T.startsWith("identity."))
+      : hasIdentity
+        ? import_reject(
+            attributes,
+            (attrKey, attrName) => attrName.startsWith("user.") || attrName.startsWith("identity."),
+          )
         : attributes,
   );
-  let E = n.merge(s).merge(u).merge(h).merge(import_resources.resourceFromAttributes(a));
-  setCachedTelemetryResource(E);
-  return E;
+  let mergedResource = serviceResource
+    .merge(osResource)
+    .merge(hostResource)
+    .merge(envAttrs)
+    .merge(import_resources.resourceFromAttributes(identityAttrs));
+  setCachedTelemetryResource(mergedResource);
+  return mergedResource;
 }
 //@ chunk-9vvvg0d3.js:35485-36594 fingerprint = initializeBetaTracing (0.51)
 /**
@@ -457,8 +532,8 @@ function buildOtelResource() {
  */
 function initializeBetaTracing() {
   let resource = buildOtelResource();
-  let r = new BufferingSpanExporter();
-  let spanProcessor = new j(r, {
+  let spanExporter = new BufferingSpanExporter();
+  let spanProcessor = new BatchSpanProcessor(spanExporter, {
     scheduledDelayMillis: DEFAULT_TRACES_EXPORT_INTERVAL_MS,
   });
   let tracerProvider = new BasicTracerProvider({
@@ -501,7 +576,7 @@ function initializeBetaTracing() {
     loggerProvider.forceFlush().catch(() => {});
     tracerProvider.forceFlush().catch(() => {});
   });
-  initializeBetaTracingExporters(r, logExporter).catch((error) =>
+  initializeBetaTracingExporters(spanExporter, logExporter).catch((error) =>
     logForDebugging(`Beta tracing exporter wiring failed: ${error}`, {
       level: "error",
     }),
@@ -511,20 +586,20 @@ function initializeBetaTracing() {
 /**
  * beta 追踪导出器：把 trace 与 log 分别发往 BETA_TRACING_ENDPOINT/v1/traces 与 /v1/logs。
  */
-async function initializeBetaTracingExporters(e, logExporter) {
+async function initializeBetaTracingExporters(traceExporter, logExporter) {
   let BETA_TRACING_ENDPOINT = env.BETA_TRACING_ENDPOINT;
   if (!BETA_TRACING_ENDPOINT) return;
-  let [{ OTLPTraceExporter: n }, { OTLPLogExporter: s }] = await Promise.all([
-    import("./chunk-733pppnh.js"),
-    import("./chunk-3pt5dasv.js"),
+  let [{ OTLPTraceExporter }, { OTLPLogExporter }] = await Promise.all([
+    import("../../../vendor/@opentelemetry/exporter-trace-otlp-http/build/src/platform/node/OTLPTraceExporter.js"),
+    import("../../../vendor/@opentelemetry/exporter-logs-otlp-http/build/src/platform/node/OTLPLogExporter.js"),
   ]);
-  e.setDelegate(
-    new n({
+  traceExporter.setDelegate(
+    new OTLPTraceExporter({
       url: `${BETA_TRACING_ENDPOINT}/v1/traces`,
     }),
   );
   logExporter.setDelegate(
-    new s({
+    new OTLPLogExporter({
       url: `${BETA_TRACING_ENDPOINT}/v1/logs`,
     }),
   );
@@ -541,33 +616,33 @@ function parseExporterTypes(value) {
     .filter((t) => t !== "none");
 }
 //@ chunk-9vvvg0d3.js:37003-37369 layout
-function wrapExporterWithFirstExportLog(e, r) {
-  let o = false;
-  let n = r && buildExporterDiagnostics(e, r);
-  return (s) => {
-    let u =
-      s instanceof import_sdk_metrics.ConsoleMetricExporter ||
-      s instanceof ConsoleLogRecordExporter ||
-      s instanceof ConsoleSpanExporter
+function wrapExporterWithFirstExportLog(signal, transportInfo) {
+  let reportedFirstExport = false;
+  let diagnostics = transportInfo && buildExporterDiagnostics(signal, transportInfo);
+  return (wrapExporter) => {
+    let diagnostics_2 =
+      wrapExporter instanceof import_sdk_metrics.ConsoleMetricExporter ||
+      wrapExporter instanceof ConsoleLogRecordExporter ||
+      wrapExporter instanceof ConsoleSpanExporter
         ? undefined
-        : n;
-    let a = s.export.bind(s);
-    s.export = (p, f) =>
-      a(p, (h) => {
-        if (!o) {
-          o = true;
+        : diagnostics;
+    let boundExport = wrapExporter.export.bind(wrapExporter);
+    wrapExporter.export = (record, callback) =>
+      boundExport(record, (result) => {
+        if (!reportedFirstExport) {
+          reportedFirstExport = true;
           logForDebugging(
-            `[3P telemetry] First ${e} export: ${h.code === import_core.ExportResultCode.SUCCESS ? "SUCCESS" : `FAILED (${h.error?.message ?? "unknown"})`}`,
+            `[3P telemetry] First ${signal} export: ${result.code === import_core.ExportResultCode.SUCCESS ? "SUCCESS" : `FAILED (${result.error?.message ?? "unknown"})`}`,
           );
         }
         try {
-          u?.(h);
+          diagnostics_2?.(result);
         } catch (error) {
           logError(error);
         }
-        f(h);
+        callback(result);
       });
-    return s;
+    return wrapExporter;
   };
 }
 //@ chunk-9vvvg0d3.js:37369-37511 layout
@@ -585,25 +660,28 @@ function describeExporterTransport(protocol, httpConfig) {
 /**
  * 收集 OTLP 请求头：OTEL_EXPORTER_OTLP_HEADERS、OTEL_EXPORTER_OTLP_<SIGNAL>_HEADERS 与 otelHeadersHelper 输出。
  */
-function getOtlpHeaders(e, httpConfig) {
-  let o =
+function getOtlpHeaders(signal, httpConfig) {
+  let unsetHeaders =
     httpConfig.onlyConfigHeaders === true
-      ? ["OTEL_EXPORTER_OTLP_HEADERS", `OTEL_EXPORTER_OTLP_${SIGNAL_ENV_SUFFIX[e]}_HEADERS`].flatMap((n) => {
-          let s = env[n];
-          return s === undefined
-            ? []
-            : [
-                {
-                  name: n,
-                  value: s,
-                },
-              ];
-        })
+      ? ["OTEL_EXPORTER_OTLP_HEADERS", `OTEL_EXPORTER_OTLP_${SIGNAL_ENV_SUFFIX[signal]}_HEADERS`].flatMap(
+          (headerName) => {
+            let headerValue = env[headerName];
+            return headerValue === undefined
+              ? []
+              : [
+                  {
+                    name: headerName,
+                    value: headerValue,
+                  },
+                ];
+          },
+        )
       : [];
-  for (let { name: n } of o) env.unset(n);
+  for (let { name: headerName_2 } of unsetHeaders) env.unset(headerName_2);
   return {
     [Symbol.dispose]() {
-      for (let { name: n, value: s } of o) env.set(n, s);
+      for (let { name: headerName_3, value: headerValue_2 } of unsetHeaders)
+        env.set(headerName_3, headerValue_2);
     },
   };
 }
@@ -611,14 +689,14 @@ function getOtlpHeaders(e, httpConfig) {
 /**
  * 按 OTEL_METRICS_EXPORTER（otlp/prometheus/console）和 OTEL_EXPORTER_OTLP_PROTOCOL 创建 metric reader，导出间隔 OTEL_METRIC_EXPORT_INTERVAL（默认 60 秒）。
  */
-async function getOtlpReaders(e) {
+async function getOtlpReaders(exporterTypes) {
   let OTEL_METRIC_EXPORT_INTERVAL = env.OTEL_METRIC_EXPORT_INTERVAL ?? DEFAULT_METRICS_EXPORT_INTERVAL_MS;
   logForDebugging(
-    `[3P telemetry] getOtlpReaders: types=${jsonStringify(e)}, interval=${OTEL_METRIC_EXPORT_INTERVAL}, protocol=${env.OTEL_EXPORTER_OTLP_PROTOCOL}, endpoint=${env.OTEL_EXPORTER_OTLP_ENDPOINT}`,
+    `[3P telemetry] getOtlpReaders: types=${jsonStringify(exporterTypes)}, interval=${OTEL_METRIC_EXPORT_INTERVAL}, protocol=${env.OTEL_EXPORTER_OTLP_PROTOCOL}, endpoint=${env.OTEL_EXPORTER_OTLP_ENDPOINT}`,
   );
   let exporters = [];
-  let n;
-  for (let exporterType of e)
+  let transport;
+  for (let exporterType of exporterTypes)
     if (exporterType === "console") {
       let consoleExporter = new import_sdk_metrics.ConsoleMetricExporter();
       let originalExport = consoleExporter.export.bind(consoleExporter);
@@ -634,40 +712,50 @@ async function getOtlpReaders(e) {
       };
       exporters.push(consoleExporter);
     } else if (exporterType === "otlp") {
-      let a = env.OTEL_EXPORTER_OTLP_METRICS_PROTOCOL || env.OTEL_EXPORTER_OTLP_PROTOCOL;
-      let httpConfig = getOTLPExporterConfig("metrics", a);
-      switch (((n = describeExporterTransport(a, httpConfig)), a)) {
+      let protocol = env.OTEL_EXPORTER_OTLP_METRICS_PROTOCOL || env.OTEL_EXPORTER_OTLP_PROTOCOL;
+      let httpConfig = getOTLPExporterConfig("metrics", protocol);
+      switch (((transport = describeExporterTransport(protocol, httpConfig)), protocol)) {
         case "grpc": {
-          let { OTLPMetricExporter } = await import("./chunk-6n5d7gpq.js").then((m) => Re(m.default, 1));
+          let { OTLPMetricExporter } =
+            await import("../../../vendor/@opentelemetry/exporter-metrics-otlp-grpc/build/src/index.js").then(
+              (otlpModule) => __toESM(otlpModule.default, 1),
+            );
           exporters.push(new OTLPMetricExporter());
           break;
         }
         case "http/json": {
-          let { OTLPMetricExporter } = await import("./chunk-jw1wb0qr.js").then((m) => Re(m.default, 1));
+          let { OTLPMetricExporter } =
+            await import("../../../vendor/@opentelemetry/exporter-metrics-otlp-http/index.js").then((ns_2) =>
+              __toESM(ns_2.default, 1),
+            );
           using otlpHeaders = getOtlpHeaders("metrics", httpConfig);
           exporters.push(new OTLPMetricExporter(httpConfig));
           break;
         }
         case "http/protobuf": {
-          let { OTLPMetricExporter } = await import("./chunk-qrf13zdh.js");
+          let { OTLPMetricExporter } =
+            await import("../../../vendor/@opentelemetry/exporter-metrics-otlp-proto/build/src/platform/node/OTLPMetricExporter.js");
           using otlpHeaders = getOtlpHeaders("metrics", httpConfig);
           exporters.push(new OTLPMetricExporter(httpConfig));
           break;
         }
         default:
           throw Error(
-            `Unknown protocol set in OTEL_EXPORTER_OTLP_METRICS_PROTOCOL or OTEL_EXPORTER_OTLP_PROTOCOL env var: ${a}`,
+            `Unknown protocol set in OTEL_EXPORTER_OTLP_METRICS_PROTOCOL or OTEL_EXPORTER_OTLP_PROTOCOL env var: ${protocol}`,
           );
       }
     } else if (exporterType === "prometheus") {
-      let { PrometheusExporter } = await import("./chunk-1gzy30bn.js").then((m) => Re(m.default, 1));
+      let { PrometheusExporter } =
+        await import("../../../vendor/@opentelemetry/exporter-prometheus/build/src/index.js").then((ns_3) =>
+          __toESM(ns_3.default, 1),
+        );
       exporters.push(new PrometheusExporter());
     } else throw Error(`Unknown exporter type set in OTEL_METRICS_EXPORTER env var: ${exporterType}`);
-  let s = wrapExporterWithFirstExportLog("metrics", n);
+  let wrap = wrapExporterWithFirstExportLog("metrics", transport);
   return exporters.map((exporter) => {
     if ("export" in exporter)
       return new import_sdk_metrics.PeriodicExportingMetricReader({
-        exporter: s(exporter),
+        exporter: wrap(exporter),
         exportIntervalMillis: OTEL_METRIC_EXPORT_INTERVAL,
       });
     return exporter;
@@ -685,25 +773,30 @@ async function getOtlpLogExporters() {
     `[3P telemetry] getOtlpLogExporters: types=${jsonStringify(exporterTypes)}, protocol=${protocol}, endpoint=${endpoint}`,
   );
   let exporters = [];
-  let s;
+  let transport;
   for (let exporterType of exporterTypes)
     if (exporterType === "console") exporters.push(new ConsoleLogRecordExporter());
     else if (exporterType === "otlp") {
       let httpConfig = getOTLPExporterConfig("logs", protocol);
-      switch (((s = describeExporterTransport(protocol, httpConfig)), protocol)) {
+      switch (((transport = describeExporterTransport(protocol, httpConfig)), protocol)) {
         case "grpc": {
-          let { OTLPLogExporter } = await import("./chunk-vt7p2m92.js").then((m) => Re(m.default, 1));
+          let { OTLPLogExporter } =
+            await import("../../../vendor/@opentelemetry/exporter-logs-otlp-grpc/build/src/index.js").then(
+              (otlpModule) => __toESM(otlpModule.default, 1),
+            );
           exporters.push(new OTLPLogExporter());
           break;
         }
         case "http/json": {
-          let { OTLPLogExporter } = await import("./chunk-3pt5dasv.js");
+          let { OTLPLogExporter } =
+            await import("../../../vendor/@opentelemetry/exporter-logs-otlp-http/build/src/platform/node/OTLPLogExporter.js");
           using otlpHeaders = getOtlpHeaders("logs", httpConfig);
           exporters.push(new OTLPLogExporter(httpConfig));
           break;
         }
         case "http/protobuf": {
-          let { OTLPLogExporter } = await import("./chunk-290z83zt.js");
+          let { OTLPLogExporter } =
+            await import("../../../vendor/@opentelemetry/exporter-logs-otlp-proto/build/src/platform/node/OTLPLogExporter.js");
           using otlpHeaders = getOtlpHeaders("logs", httpConfig);
           exporters.push(new OTLPLogExporter(httpConfig));
           break;
@@ -714,7 +807,7 @@ async function getOtlpLogExporters() {
           );
       }
     } else throw Error(`Unknown exporter type set in OTEL_LOGS_EXPORTER env var: ${exporterType}`);
-  return exporters.map(wrapExporterWithFirstExportLog("logs", s));
+  return exporters.map(wrapExporterWithFirstExportLog("logs", transport));
 }
 //@ chunk-9vvvg0d3.js:40257-41145 fingerprint = getOtlpTraceExporters (0.811)
 /**
@@ -723,7 +816,7 @@ async function getOtlpLogExporters() {
 async function getOtlpTraceExporters() {
   let exporterTypes = parseExporterTypes(env.OTEL_TRACES_EXPORTER);
   let exporters = [];
-  let o;
+  let transport;
   for (let exporterType of exporterTypes)
     if (exporterType === "console") exporters.push(new ConsoleSpanExporter());
     else if (exporterType === "otlp") {
@@ -732,21 +825,26 @@ async function getOtlpTraceExporters() {
           ? "http/protobuf"
           : env.OTEL_EXPORTER_OTLP_TRACES_PROTOCOL || env.OTEL_EXPORTER_OTLP_PROTOCOL;
       let otlpExporterConfig = getOTLPExporterConfig("traces", protocol);
-      if (!isCcrTracesEndpoint()) o = describeExporterTransport(protocol, otlpExporterConfig);
+      if (!isCcrTracesEndpoint()) transport = describeExporterTransport(protocol, otlpExporterConfig);
       switch (protocol) {
         case "grpc": {
-          let { OTLPTraceExporter } = await import("./chunk-qz9ye512.js").then((m) => Re(m.default, 1));
+          let { OTLPTraceExporter } =
+            await import("../../../vendor/@opentelemetry/exporter-trace-otlp-grpc/build/src/index.js").then(
+              (otlpModule) => __toESM(otlpModule.default, 1),
+            );
           exporters.push(new OTLPTraceExporter());
           break;
         }
         case "http/json": {
-          let { OTLPTraceExporter } = await import("./chunk-733pppnh.js");
+          let { OTLPTraceExporter } =
+            await import("../../../vendor/@opentelemetry/exporter-trace-otlp-http/build/src/platform/node/OTLPTraceExporter.js");
           using otlpHeaders = getOtlpHeaders("traces", otlpExporterConfig);
           exporters.push(new OTLPTraceExporter(otlpExporterConfig));
           break;
         }
         case "http/protobuf": {
-          let { OTLPTraceExporter } = await import("./chunk-yj0w6kkt.js");
+          let { OTLPTraceExporter } =
+            await import("../../../vendor/@opentelemetry/exporter-trace-otlp-proto/build/src/platform/node/OTLPTraceExporter.js");
           using otlpHeaders = getOtlpHeaders("traces", otlpExporterConfig);
           exporters.push(new OTLPTraceExporter(otlpExporterConfig));
           break;
@@ -757,7 +855,7 @@ async function getOtlpTraceExporters() {
           );
       }
     } else throw Error(`Unknown exporter type set in OTEL_TRACES_EXPORTER env var: ${exporterType}`);
-  return exporters.map(wrapExporterWithFirstExportLog("traces", o));
+  return exporters.map(wrapExporterWithFirstExportLog("traces", transport));
 }
 //@ chunk-9vvvg0d3.js:41145-41211 fingerprint = isTelemetryEnabled (1)
 /**
@@ -801,7 +899,7 @@ function getBigQueryExportingReader(storageV5) {
 /**
  * 初始化 OTel：设置传播器与诊断 logger；CLAUDE_CODE_ENABLE_TELEMETRY 时按 OTEL_METRICS_EXPORTER 建 metric reader，team/enterprise 另加 BigQuery 指标；按 OTEL_LOGS_EXPORTER 建事件 logger（com.anthropic.claude_code.events）；增强遥测时按 OTEL_TRACES_EXPORTER 建 trace；注册退出 flush。
  */
-async function initializeTelemetry(storageV5, r) {
+async function initializeTelemetry(storageV5, options) {
   profileCheckpoint("telemetry_init_start");
   configureOtelGlobals();
   await initializeAntTelemetry();
@@ -812,8 +910,8 @@ async function initializeTelemetry(storageV5, r) {
       if (v?.includes("console"))
         process.env[key] = v
           .split(",")
-          .map((E) => E.trim())
-          .filter((E) => E !== "console")
+          .map((value_3) => value_3.trim())
+          .filter((value_2) => value_2 !== "console")
           .join(",");
     }
   import_api.diag.setLogger(
@@ -823,12 +921,13 @@ async function initializeTelemetry(storageV5, r) {
   initializePerfettoTracing();
   let readers = [];
   let telemetryEnabled = isTelemetryEnabled();
-  let s = telemetryEnabled ? parseExporterTypes(env.OTEL_METRICS_EXPORTER) : [];
+  let exporterTypes = telemetryEnabled ? parseExporterTypes(env.OTEL_METRICS_EXPORTER) : [];
   logForDebugging(
     `[3P telemetry] isTelemetryEnabled=${telemetryEnabled} (CLAUDE_CODE_ENABLE_TELEMETRY=${process.env.CLAUDE_CODE_ENABLE_TELEMETRY})`,
   );
-  if (telemetryEnabled) readers.push(...(await getOtlpReaders(s)));
-  if (!r?.disableBigQuery && isBigQueryMetricsEnabled()) readers.push(getBigQueryExportingReader(storageV5));
+  if (telemetryEnabled) readers.push(...(await getOtlpReaders(exporterTypes)));
+  if (!options?.disableBigQuery && isBigQueryMetricsEnabled())
+    readers.push(getBigQueryExportingReader(storageV5));
   let platform = buildOtelResource();
   if (isBetaTracingEnabled()) {
     if (!getTracerProvider()) initializeBetaTracing();
@@ -861,7 +960,7 @@ async function initializeTelemetry(storageV5, r) {
     });
     return {
       meter: meterProvider.getMeter("com.anthropic.claude_code", getServiceVersion()),
-      metricsExporterKinds: s,
+      metricsExporterKinds: exporterTypes,
     };
   }
   let meterProvider = new import_sdk_metrics.MeterProvider({
@@ -902,13 +1001,13 @@ async function initializeTelemetry(storageV5, r) {
     let traceExporters = await getOtlpTraceExporters();
     if (traceExporters.length > 0) {
       tracesRelayedLatch.freeze();
-      let E = isTracesRelayed() ? TRACE_RELAY_BATCH_MS : undefined;
+      let maxExportBatchSize = isTracesRelayed() ? TRACE_RELAY_BATCH_MS : undefined;
       let spanProcessors = traceExporters.map(
         (exporter) =>
-          new j(exporter, {
+          new BatchSpanProcessor(exporter, {
             scheduledDelayMillis: env.OTEL_TRACES_EXPORT_INTERVAL ?? DEFAULT_TRACES_EXPORT_INTERVAL_MS,
-            ...(E !== undefined && {
-              maxExportBatchSize: E,
+            ...(maxExportBatchSize !== undefined && {
+              maxExportBatchSize,
             }),
           }),
       );
@@ -961,7 +1060,7 @@ Current timeout: ${timeoutMs}ms
   });
   return {
     meter: meterProvider.getMeter("com.anthropic.claude_code", getServiceVersion()),
-    metricsExporterKinds: s,
+    metricsExporterKinds: exporterTypes,
   };
 }
 //@ chunk-9vvvg0d3.js:44472-44991 fingerprint = flushTelemetry (0.963)
@@ -1012,14 +1111,16 @@ function parseOtelHeadersEnvVar() {
 /**
  * OTLP 导出器配置：endpoint（OTEL_EXPORTER_OTLP_<SIGNAL>_ENDPOINT/ENDPOINT + /v1/<signal>）、headers（含 otelHeadersHelper）、代理与 mTLS。
  */
-function getOTLPExporterConfig(e, protocol) {
-  let o = !!getConfiguredOtelHeadersHelper();
+function getOTLPExporterConfig(signal, protocol) {
+  let usesHeadersHelper = !!getConfiguredOtelHeadersHelper();
   let config = {};
   let staticHeaders = getGatewayAuth();
-  let u = isGatewayAuthPinned(staticHeaders) ? gatewayManagedCollectorUrl(e, staticHeaders, o) : null;
-  if (isGatewayAuthPinned(staticHeaders) && u === null) {
+  let managedCollectorUrl = isGatewayAuthPinned(staticHeaders)
+    ? gatewayManagedCollectorUrl(signal, staticHeaders, usesHeadersHelper)
+    : null;
+  if (isGatewayAuthPinned(staticHeaders) && managedCollectorUrl === null) {
     let url = staticHeaders.url;
-    config.url = `${url}/v1/${e}`;
+    config.url = `${url}/v1/${signal}`;
     config.headers = async () => {
       await refreshGatewayToken();
       let dynamicHeaders = getGatewayAuth();
@@ -1033,31 +1134,31 @@ function getOTLPExporterConfig(e, protocol) {
     });
     return config;
   }
-  let a = isGatewayAuthPinned(staticHeaders) ? null : getRemoteOtlpEndpoint(e);
-  if (a !== null) {
-    config.url = a;
+  let remoteEndpoint = isGatewayAuthPinned(staticHeaders) ? null : getRemoteOtlpEndpoint(signal);
+  if (remoteEndpoint !== null) {
+    config.url = remoteEndpoint;
     config.headers = async () => {
-      if (getRemoteOtlpEndpoint(e) !== a) return {};
+      if (getRemoteOtlpEndpoint(signal) !== remoteEndpoint) return {};
       return configureApiKeyHeaders(env.CLAUDE_CODE_SESSION_ACCESS_TOKEN);
     };
-    config.httpAgentOptions = createOtlpAgentFactory(a, {
+    config.httpAgentOptions = createOtlpAgentFactory(remoteEndpoint, {
       carriesOurToken: true,
     });
     return config;
   }
   let caCerts = parseOtelHeadersEnvVar();
-  let f = gatewayRelayConfig(e, o);
-  let h = ccrTraceRelayConfig(e);
-  if (h.send) {
-    config.url = h.url;
-    config.headers = h.headers;
-    config.httpAgentOptions = createOtlpAgentFactory(h.url, {
+  let gatewayRelay = gatewayRelayConfig(signal, usesHeadersHelper);
+  let ccrRelay = ccrTraceRelayConfig(signal);
+  if (ccrRelay.send) {
+    config.url = ccrRelay.url;
+    config.headers = ccrRelay.headers;
+    config.httpAgentOptions = createOtlpAgentFactory(ccrRelay.url, {
       carriesOurToken: true,
     });
     tracesRelayedLatch.arm();
     return config;
   }
-  if (o) {
+  if (usesHeadersHelper) {
     config.headers = async () => {
       let otelHeadersFromHelper = await getOtelHeadersFromHelper();
       return {
@@ -1066,26 +1167,26 @@ function getOTLPExporterConfig(e, protocol) {
       };
     };
     if (protocol === "http/json" || protocol === "http/protobuf") prefetchOtelHeadersFromHelper();
-  } else if (f.send) {
-    config.url = f.url;
-    config.headers = f.headers;
+  } else if (gatewayRelay.send) {
+    config.url = gatewayRelay.url;
+    config.headers = gatewayRelay.headers;
     config.onlyConfigHeaders = true;
-    config.httpAgentOptions = createOtlpAgentFactory(f.url, {
+    config.httpAgentOptions = createOtlpAgentFactory(gatewayRelay.url, {
       carriesOurToken: false,
     });
     return config;
   } else if (Object.keys(caCerts).length > 0) config.headers = async () => caCerts;
   let httpAgentOptions = createOtlpAgentFactory(
-    u ??
-      (process.env[`OTEL_EXPORTER_OTLP_${SIGNAL_ENV_SUFFIX[e]}_ENDPOINT`]?.trim() ||
+    managedCollectorUrl ??
+      (process.env[`OTEL_EXPORTER_OTLP_${SIGNAL_ENV_SUFFIX[signal]}_ENDPOINT`]?.trim() ||
         env.OTEL_EXPORTER_OTLP_ENDPOINT),
     {
       carriesOurToken: false,
     },
   );
   config.httpAgentOptions = httpAgentOptions;
-  if (u !== null) {
-    config.url = u;
+  if (managedCollectorUrl !== null) {
+    config.url = managedCollectorUrl;
     let url = staticHeaders?.url;
     let headers = config.headers;
     config.headers = async () => {
@@ -1099,21 +1200,21 @@ function getOTLPExporterConfig(e, protocol) {
   return config;
 }
 //@ chunk-9vvvg0d3.js:46457-46731 sole-consumer
-function gatewayManagedCollectorUrl(e, staticHeaders, o) {
-  if (o) return null;
-  let otlpEndpoint = resolveOtlpEndpoint(remotePolicySettings()?.env, e);
-  if (otlpEndpoint === null) return null;
+function gatewayManagedCollectorUrl(signal, auth, usesHeadersHelper) {
+  if (usesHeadersHelper) return null;
+  let url = resolveOtlpEndpoint(remotePolicySettings()?.env, signal);
+  if (url === null) return null;
   if (
-    envOtlpEndpoint(e) !== otlpEndpoint ||
-    isGatewayHost(otlpEndpoint, staticHeaders) ||
-    !isAllowedCollectorUrl(otlpEndpoint) ||
-    !isOtlpSignalPath(otlpEndpoint, e)
+    envOtlpEndpoint(signal) !== url ||
+    isGatewayHost(url, auth) ||
+    !isAllowedCollectorUrl(url) ||
+    !isOtlpSignalPath(url, signal)
   )
     return null;
   logForDebugging(
-    `[3P telemetry] ${e}: exporting to the collector the gateway's managed settings name (${redactUrlsInText(otlpEndpoint)}), not through the gateway relay`,
+    `[3P telemetry] ${signal}: exporting to the collector the gateway's managed settings name (${redactUrlsInText(url)}), not through the gateway relay`,
   );
-  return otlpEndpoint;
+  return url;
 }
 //@ chunk-9vvvg0d3.js:46731-46833 sole-consumer
 function remotePolicySettings() {
@@ -1122,62 +1223,68 @@ function remotePolicySettings() {
   return getAllPolicyTierSettings()[0] ?? null;
 }
 //@ chunk-9vvvg0d3.js:46833-47009 sole-consumer
-function envOtlpEndpoint(e) {
-  let r = SIGNAL_ENV_SUFFIX[e];
+function envOtlpEndpoint(signal) {
+  let suffix = SIGNAL_ENV_SUFFIX[signal];
   return resolveOtlpEndpoint(
     {
       OTEL_EXPORTER_OTLP_ENDPOINT: env.OTEL_EXPORTER_OTLP_ENDPOINT,
-      [`OTEL_EXPORTER_OTLP_${r}_ENDPOINT`]: env[`OTEL_EXPORTER_OTLP_${r}_ENDPOINT`],
+      [`OTEL_EXPORTER_OTLP_${suffix}_ENDPOINT`]: env[`OTEL_EXPORTER_OTLP_${suffix}_ENDPOINT`],
     },
-    e,
+    signal,
   );
 }
 //@ chunk-9vvvg0d3.js:47009-47368 sole-consumer
 /**
  * 从环境映射中解析某信号的 OTLP 端点（专用或通用 + /v1/<信号>）。
  */
-function resolveOtlpEndpoint(e, r) {
-  if (!e) return null;
-  let o = new Map();
-  for (let [key, value] of Object.entries(e)) {
+function resolveOtlpEndpoint(source, signal) {
+  if (!source) return null;
+  let byUpper = new Map();
+  for (let [key, value] of Object.entries(source)) {
     let upper = key.toUpperCase();
-    if (value !== undefined && (!o.has(upper) || key === upper)) o.set(upper, value);
+    if (value !== undefined && (!byUpper.has(upper) || key === upper)) byUpper.set(upper, value);
   }
-  let n = o.get(`OTEL_EXPORTER_OTLP_${SIGNAL_ENV_SUFFIX[r]}_ENDPOINT`);
-  if (n?.trim()) return normalizeHttpUrl(n);
-  let s = o.get("OTEL_EXPORTER_OTLP_ENDPOINT");
-  if (!s?.trim() || normalizeHttpUrl(s) === null) return null;
-  return normalizeHttpUrl(`${s}${s.endsWith("/") ? "" : "/"}v1/${r}`);
+  let signalEndpoint = byUpper.get(`OTEL_EXPORTER_OTLP_${SIGNAL_ENV_SUFFIX[signal]}_ENDPOINT`);
+  if (signalEndpoint?.trim()) return normalizeHttpUrl(signalEndpoint);
+  let baseEndpoint = byUpper.get("OTEL_EXPORTER_OTLP_ENDPOINT");
+  if (!baseEndpoint?.trim() || normalizeHttpUrl(baseEndpoint) === null) return null;
+  return normalizeHttpUrl(`${baseEndpoint}${baseEndpoint.endsWith("/") ? "" : "/"}v1/${signal}`);
 }
 //@ chunk-9vvvg0d3.js:47368-47557 sole-consumer
-function isGatewayHost(otlpEndpoint, r) {
-  let o = hostOfUrl(otlpEndpoint);
-  if (o === null) return false;
-  let n = [r.url];
-  let s = decodeJwtPayload(r.jwt);
-  if (s !== null && typeof s === "object" && "iss" in s && typeof s.iss === "string") n.push(s.iss);
-  return n.some((u) => hostOfUrl(u) === o);
+function isGatewayHost(url, auth) {
+  let endpointHost = hostOfUrl(url);
+  if (endpointHost === null) return false;
+  let allowedHosts = [auth.url];
+  let jwtPayload = decodeJwtPayload(auth.jwt);
+  if (
+    jwtPayload !== null &&
+    typeof jwtPayload === "object" &&
+    "iss" in jwtPayload &&
+    typeof jwtPayload.iss === "string"
+  )
+    allowedHosts.push(jwtPayload.iss);
+  return allowedHosts.some((host) => hostOfUrl(host) === endpointHost);
 }
 //@ chunk-9vvvg0d3.js:47557-47644 sole-consumer
-function hostOfUrl(e) {
-  let r = normalizeHttpUrl(e);
-  return r === null ? null : new URL(r).host.replace(/\.(?=:|$)/, "");
+function hostOfUrl(url) {
+  let normalized = normalizeHttpUrl(url);
+  return normalized === null ? null : new URL(normalized).host.replace(/\.(?=:|$)/, "");
 }
 //@ chunk-9vvvg0d3.js:47644-47737 sole-consumer
-function isOtlpSignalPath(e, r) {
-  let o = new URL(e);
-  return o.pathname.endsWith(`/v1/${r}`) && !o.search && !o.hash;
+function isOtlpSignalPath(url, signal) {
+  let parsed = new URL(url);
+  return parsed.pathname.endsWith(`/v1/${signal}`) && !parsed.search && !parsed.hash;
 }
 //@ chunk-9vvvg0d3.js:47737-47832 sole-consumer
-function isAllowedCollectorUrl(e) {
-  let r = new URL(e);
-  return r.protocol === "https:" || (r.protocol === "http:" && isLoopbackUrl(r.href));
+function isAllowedCollectorUrl(url) {
+  let parsed = new URL(url);
+  return parsed.protocol === "https:" || (parsed.protocol === "http:" && isLoopbackUrl(parsed.href));
 }
 //@ chunk-9vvvg0d3.js:47832-47958 sole-consumer
-function normalizeHttpUrl(e) {
+function normalizeHttpUrl(url) {
   try {
-    let r = new URL(e);
-    return (r.protocol === "https:" || r.protocol === "http:") && r.host ? r.href : null;
+    let parsed = new URL(url);
+    return (parsed.protocol === "https:" || parsed.protocol === "http:") && parsed.host ? parsed.href : null;
   } catch {
     return null;
   }
@@ -1186,29 +1293,33 @@ function normalizeHttpUrl(e) {
 /**
  * 宿主托管网关令牌时经网关中继导出的配置。
  */
-function gatewayRelayConfig(e, r) {
-  let o = {
+function gatewayRelayConfig(signal, usesHeadersHelper) {
+  let disabled = {
     send: false,
   };
-  let n = (a) => {
-    if (!a || normalizeHttpUrl(a) === null) return null;
-    let p = normalizeHttpUrl(`${a.replace(/\/+$/, "")}/v1/${e}`);
-    return p !== null && isAllowedCollectorUrl(p) && isOtlpSignalPath(p, e) ? p : null;
+  let toSignalUrl = (baseUrl) => {
+    if (!baseUrl || normalizeHttpUrl(baseUrl) === null) return null;
+    let signalUrl = normalizeHttpUrl(`${baseUrl.replace(/\/+$/, "")}/v1/${signal}`);
+    return signalUrl !== null && isAllowedCollectorUrl(signalUrl) && isOtlpSignalPath(signalUrl, signal)
+      ? signalUrl
+      : null;
   };
-  if (!isHostManagedProviderAuth()) return o;
+  if (!isHostManagedProviderAuth()) return disabled;
   let apiProvider = getAPIProvider();
-  if (apiProvider !== "firstParty" && apiProvider !== "gateway") return o;
-  if (!isGatewayToken(env.ANTHROPIC_AUTH_TOKEN)) return o;
-  if (r) return o;
-  let u = n(env.ANTHROPIC_BASE_URL);
-  if (!u) return o;
-  if (envOtlpEndpoint(e) !== u) return o;
+  if (apiProvider !== "firstParty" && apiProvider !== "gateway") return disabled;
+  if (!isGatewayToken(env.ANTHROPIC_AUTH_TOKEN)) return disabled;
+  if (usesHeadersHelper) return disabled;
+  let relayUrl = toSignalUrl(env.ANTHROPIC_BASE_URL);
+  if (!relayUrl) return disabled;
+  if (envOtlpEndpoint(signal) !== relayUrl) return disabled;
   return {
     send: true,
-    url: u,
+    url: relayUrl,
     headers: async () => {
       let ANTHROPIC_AUTH_TOKEN = env.ANTHROPIC_AUTH_TOKEN;
-      return ANTHROPIC_AUTH_TOKEN && isGatewayToken(ANTHROPIC_AUTH_TOKEN) && n(env.ANTHROPIC_BASE_URL) === u
+      return ANTHROPIC_AUTH_TOKEN &&
+        isGatewayToken(ANTHROPIC_AUTH_TOKEN) &&
+        toSignalUrl(env.ANTHROPIC_BASE_URL) === relayUrl
         ? {
             Authorization: `Bearer ${ANTHROPIC_AUTH_TOKEN}`,
           }
@@ -1219,85 +1330,91 @@ function gatewayRelayConfig(e, r) {
 //@ chunk-9vvvg0d3.js:48457-48468 sole-consumer
 var TRACE_RELAY_BATCH_MS = 100;
 //@ chunk-9vvvg0d3.js:48468-48601 sole-consumer
-function ccrTraceRelayConfig(e) {
-  let r = {
+function ccrTraceRelayConfig(signal) {
+  let disabled = {
     send: false,
   };
-  if (e !== "traces") return r;
-  let o = ccrTracesRelayUrl();
-  if (o === null) return r;
+  if (signal !== "traces") return disabled;
+  let relayUrl = ccrTracesRelayUrl();
+  if (relayUrl === null) return disabled;
   return {
     send: true,
-    url: o,
+    url: relayUrl,
     headers: async () => getSessionIngressAuthHeaders(),
   };
 }
 //@ chunk-9vvvg0d3.js:48601-48769 sole-consumer
-function isLoopbackUrl(e) {
-  if (!e) return false;
+function isLoopbackUrl(url) {
+  if (!url) return false;
   try {
-    let lower = new URL(e).hostname.toLowerCase();
+    let lower = new URL(url).hostname.toLowerCase();
     return lower === "localhost" || lower === "::1" || lower === "[::1]" || /^127(\.\d{1,3}){3}$/.test(lower);
   } catch {
     return false;
   }
 }
 //@ chunk-9vvvg0d3.js:48769-49019 sole-consumer
-function toBufferChunk(e, r) {
-  if (Buffer.isBuffer(e)) return e;
-  if (typeof e === "string") return typeof r === "string" ? Buffer.from(e, r) : Buffer.from(e);
-  if (e instanceof Uint8Array) return Buffer.from(e);
+function toBufferChunk(chunk, encoding) {
+  if (Buffer.isBuffer(chunk)) return chunk;
+  if (typeof chunk === "string")
+    return typeof encoding === "string" ? Buffer.from(chunk, encoding) : Buffer.from(chunk);
+  if (chunk instanceof Uint8Array) return Buffer.from(chunk);
   throw TypeError("OTLP request body chunk is not string or Uint8Array");
 }
 //@ chunk-9vvvg0d3.js:49019-49768 sole-consumer
 /**
  * 给 Agent 打补丁：无长度头的请求先缓冲整个请求体再发送。
  */
-function bufferRequestBodies(e) {
-  let r = e;
-  let o = r.addRequest.bind(r);
-  r.addRequest = function (s, ...u) {
-    if (!s.getHeader("content-length") && !s.getHeader("transfer-encoding")) {
-      let h = function () {
-        s.write = write;
-        s.end = f;
+function bufferRequestBodies(request) {
+  let client = request;
+  let boundAddRequest = client.addRequest.bind(client);
+  client.addRequest = function (req, ...args) {
+    if (!req.getHeader("content-length") && !req.getHeader("transfer-encoding")) {
+      let restoreWriteAndEnd = function () {
+        req.write = write;
+        req.end = boundEnd;
       };
-      let E = function (error) {
-        h();
-        s.destroy(error instanceof Error ? error : TypeError("OTLP request body chunk conversion failed"));
+      let onConvertError = function (error) {
+        restoreWriteAndEnd();
+        req.destroy(error instanceof Error ? error : TypeError("OTLP request body chunk conversion failed"));
       };
-      let a = [];
-      let write = s.write.bind(s);
-      let f = s.end.bind(s);
-      s.write = function (T, P, C) {
+      let chunks = [];
+      let write = req.write.bind(req);
+      let boundEnd = req.end.bind(req);
+      req.write = function (chunk_2, encoding, callback) {
         try {
-          a.push(toBufferChunk(T, P));
+          chunks.push(toBufferChunk(chunk_2, encoding));
         } catch (error) {
-          E(error);
+          onConvertError(error);
           return false;
         }
-        let F = typeof P === "function" ? P : C;
-        if (F) process.nextTick(F, null);
+        let writeCallback = typeof encoding === "function" ? encoding : callback;
+        if (writeCallback) process.nextTick(writeCallback, null);
         return true;
       };
-      s.end = function (T, P, C) {
-        if (T != null && typeof T !== "function")
+      req.end = function (chunk_3, encoding_2, callback_2) {
+        if (chunk_3 != null && typeof chunk_3 !== "function")
           try {
-            a.push(toBufferChunk(T, P));
+            chunks.push(toBufferChunk(chunk_3, encoding_2));
           } catch (error) {
-            E(error);
-            return s;
+            onConvertError(error);
+            return req;
           }
-        let F = typeof T === "function" ? T : typeof P === "function" ? P : C;
-        let buffer = Buffer.concat(a);
-        if (!s.headersSent) s.setHeader("Content-Length", String(buffer.byteLength));
-        h();
-        return f(buffer, F);
+        let cb_2 =
+          typeof chunk_3 === "function"
+            ? chunk_3
+            : typeof encoding_2 === "function"
+              ? encoding_2
+              : callback_2;
+        let buffer = Buffer.concat(chunks);
+        if (!req.headersSent) req.setHeader("Content-Length", String(buffer.byteLength));
+        restoreWriteAndEnd();
+        return boundEnd(buffer, cb_2);
       };
     }
-    o(s, ...u);
+    boundAddRequest(req, ...args);
   };
-  return e;
+  return request;
 }
 //@ chunk-9vvvg0d3.js:49768-50235 sole-consumer
 /**
@@ -1305,127 +1422,73 @@ function bufferRequestBodies(e) {
  */
 function createOtlpAgentFactory(url, { carriesOurToken }) {
   let usableProxyUrl = getUsableProxyUrl();
-  let n = !!(usableProxyUrl && !isLoopbackUrl(url) && !(url && shouldBypassProxy(url)));
-  let s = carriesOurToken ? undefined : anthropicHostOf(url);
-  let u = s ? "customer" : "strict";
-  let cachedOtlpHttpAgentFactory = getCachedOtlpHttpAgentFactory(n, u);
+  let usesProxy = !!(usableProxyUrl && !isLoopbackUrl(url) && !(url && shouldBypassProxy(url)));
+  let anthropicHost = carriesOurToken ? undefined : anthropicHostOf(url);
+  let proxyMode = anthropicHost ? "customer" : "strict";
+  let cachedOtlpHttpAgentFactory = getCachedOtlpHttpAgentFactory(usesProxy, proxyMode);
   if (cachedOtlpHttpAgentFactory) return cachedOtlpHttpAgentFactory;
   let mtlsConfig = getMTLSConfig();
-  let f = caListBehindProxy(s);
-  let h = {
+  let caCerts = caListBehindProxy(anthropicHost);
+  let agentOptions = {
     ...mtlsConfig,
-    ...(f && {
-      ca: f,
+    ...(caCerts && {
+      ca: caCerts,
     }),
   };
-  let E;
-  let O;
-  let T;
-  let P = (C) => {
-    if (n) {
-      if (!T) {
-        T = bufferRequestBodies(
+  let httpAgent;
+  let httpsAgent;
+  let proxyAgent;
+  let getAgent = (protocol) => {
+    if (usesProxy) {
+      if (!proxyAgent) {
+        proxyAgent = bufferRequestBodies(
           new TlsCheckingProxyAgent(usableProxyUrl, {
-            ...h,
+            ...agentOptions,
             keepAlive: true,
             maxSockets: 1,
           }),
         );
-        T.options = {
-          ...T.options,
-          ...h,
+        proxyAgent.options = {
+          ...proxyAgent.options,
+          ...agentOptions,
         };
       }
-      return T;
+      return proxyAgent;
     }
-    if (C === "http:") {
-      if (!E)
-        E = bufferRequestBodies(
+    if (protocol === "http:") {
+      if (!httpAgent)
+        httpAgent = bufferRequestBodies(
           new http.Agent({
             keepAlive: true,
             maxSockets: 1,
           }),
         );
-      return E;
+      return httpAgent;
     }
-    if (!O)
-      O = bufferRequestBodies(
+    if (!httpsAgent)
+      httpsAgent = bufferRequestBodies(
         new https.Agent({
-          ...h,
+          ...agentOptions,
           keepAlive: true,
           maxSockets: 1,
         }),
       );
-    return O;
+    return httpsAgent;
   };
-  setCachedOtlpHttpAgentFactory(n, u, P);
-  return P;
+  setCachedOtlpHttpAgentFactory(usesProxy, proxyMode, getAgent);
+  return getAgent;
 }
-//@ chunk-jhrww53q.js:3176-5552 fingerprint = bootstrapTelemetry (0.317)
-Ar(EMPTY_ENV_DECLARATIONS, {
-  ANT_CLAUDE_CODE_METRICS_ENDPOINT: () => M_,
-  ANT_OTEL_EXPORTER_OTLP_ENDPOINT: () => I_,
-  ANT_OTEL_EXPORTER_OTLP_HEADERS: () => U_,
-  ANT_OTEL_EXPORTER_OTLP_PROTOCOL: () => i_,
-  ANT_OTEL_LOGS_EXPORTER: () => x_,
-  ANT_OTEL_METRICS_EXPORTER: () => N_,
-  ANT_OTEL_RESOURCE_ATTRIBUTES: () => P_,
-  ANT_OTEL_TRACES_EXPORTER: () => l_,
-  BETA_TRACING_ENDPOINT: () => a_,
-  CLAUDE_CODE_BENCH_LIVE_COUNTS: () => Ft,
-  CLAUDE_CODE_BYOC_ENABLE_DATADOG: () => vt,
-  CLAUDE_CODE_DATADOG_FLUSH_INTERVAL_MS: () => Yt,
-  CLAUDE_CODE_DD_ERROR_TRACKING_FLUSH_INTERVAL_MS: () => gt,
-  CLAUDE_CODE_DEBUG_LOGS_DIR: () => It,
-  CLAUDE_CODE_DEBUG_LOG_LEVEL: () => pt,
-  CLAUDE_CODE_DEBUG_REPAINTS: () => Ut,
-  CLAUDE_CODE_DIAGNOSTICS_FILE: () => it,
-  CLAUDE_CODE_ENHANCED_TELEMETRY_BETA: () => dt,
-  CLAUDE_CODE_FRAME_TIMING_LOG: () => at,
-  CLAUDE_CODE_FRAME_TIMING_SAMPLE_EVERY: () => ut,
-  CLAUDE_CODE_OTEL_CONTENT_MAX_LENGTH: () => O_,
-  CLAUDE_CODE_OTEL_DIAG_STDERR: () => yt,
-  CLAUDE_CODE_OTEL_FLUSH_TIMEOUT_MS: () => ft,
-  CLAUDE_CODE_OTEL_HEADERS_HELPER_DEBOUNCE_MS: () => Wt,
-  CLAUDE_CODE_OTEL_SHUTDOWN_TIMEOUT_MS: () => Kt,
-  CLAUDE_CODE_PERFETTO_TRACE: () => Pt,
-  CLAUDE_CODE_PERFETTO_WRITE_INTERVAL_S: () => CLAUDE_CODE_PERFETTO_WRITE_INTERVAL_S,
-  CLAUDE_CODE_PROFILE_STARTUP: () => lt,
-  CLAUDE_CODE_SESSION_LOG: () => bt,
-  CLAUDE_CODE_TEE_SDK_STDOUT: () => mt,
-  CLAUDE_CODE_TERMINAL_RECORDING: () => Ht,
-  CLAUDE_DEBUG: () => St,
-  CLAUDE_PTY_RECORD: () => Gt,
-  DEBUG: () => Rt,
-  DEBUG_CLAUDE_AGENT_SDK: () => xt,
-  DEBUG_SDK: () => Nt,
-  OTEL_ATTRIBUTE_VALUE_LENGTH_LIMIT: () => C_,
-  OTEL_EXPORTER_OTLP_ENDPOINT: () => ht,
-  OTEL_EXPORTER_OTLP_HEADERS: () => kt,
-  OTEL_EXPORTER_OTLP_LOGS_ENDPOINT: () => Zt,
-  OTEL_EXPORTER_OTLP_LOGS_HEADERS: () => Jt,
-  OTEL_EXPORTER_OTLP_LOGS_PROTOCOL: () => Qt,
-  OTEL_EXPORTER_OTLP_METRICS_ENDPOINT: () => zt,
-  OTEL_EXPORTER_OTLP_METRICS_HEADERS: () => $t,
-  OTEL_EXPORTER_OTLP_METRICS_PROTOCOL: () => qt,
-  OTEL_EXPORTER_OTLP_METRICS_TEMPORALITY_PREFERENCE: () => o_,
-  OTEL_EXPORTER_OTLP_PROTOCOL: () => jt,
-  OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: () => t_,
-  OTEL_EXPORTER_OTLP_TRACES_HEADERS: () => __,
-  OTEL_EXPORTER_OTLP_TRACES_PROTOCOL: () => E_,
-  OTEL_LOGRECORD_ATTRIBUTE_VALUE_LENGTH_LIMIT: () => D_,
-  OTEL_LOGS_EXPORTER: () => wt,
-  OTEL_LOGS_EXPORT_INTERVAL: () => e_,
-  OTEL_LOG_ASSISTANT_RESPONSES: () => T_,
-  OTEL_LOG_MANAGED_SETTINGS: () => R_,
-  OTEL_LOG_RAW_API_BODIES: () => p_,
-  OTEL_LOG_TOOL_CONTENT: () => c_,
-  OTEL_LOG_TOOL_DETAILS: () => S_,
-  OTEL_LOG_USER_PROMPTS: () => L_,
-  OTEL_METRICS_EXPORTER: () => Vt,
-  OTEL_METRIC_EXPORT_INTERVAL: () => r_,
-  OTEL_RESOURCE_ATTRIBUTES: () => s_,
-  OTEL_SPAN_ATTRIBUTE_VALUE_LENGTH_LIMIT: () => A_,
-  OTEL_TRACES_EXPORTER: () => Xt,
-  OTEL_TRACES_EXPORT_INTERVAL: () => n_,
-});
+export {
+  getBigQueryExportIntervalMs,
+  configureOtelGlobals,
+  flushTelemetry,
+  getOTLPExporterConfig,
+  getOtlpLogExporters,
+  initializeTelemetry,
+  isTelemetryEnabled,
+  resolveOtlpEndpoint,
+  parseExporterTypes,
+  parseOtelHeadersEnvVar,
+  initializeAntTelemetry,
+  bufferRequestBodies,
+};

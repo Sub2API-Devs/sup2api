@@ -8,8 +8,9 @@
  * pieces: chunk-19fynvg9.js (4), chunk-1bmxdqa0.js (1), chunk-6zvphrsz.js (1)
  * attribution: sole-consumer 1, fingerprint 3, layout 1, callgraph-fingerprint 1
  */
-import { join } from "path";
 import { readdir, stat } from "fs/promises";
+import { join } from "path";
+import { npmGlobalPrefixes } from "./autoUpdater.js";
 import {
   getProjectKeyIfRepresentable,
   wrapStorageSource,
@@ -22,11 +23,28 @@ import { readAllPages } from "./pagedRead.js";
 import { validateUuid, readSessionLite } from "./sessionStoragePortable.js";
 import { findContinuedInSessionId } from "./backgroundSessionResume.js";
 import { stripBomAndCarriageReturn } from "./remoteFileState.js";
-import { npmGlobalPrefixes } from "./autoUpdater.js";
 
+//@ chunk-6zvphrsz.js:19666-19861 fingerprint = gatherAllCandidates (1)
+async function gatherAllCandidates() {
+  return (
+    await Promise.all(
+      npmGlobalPrefixes().map((globalPrefix) =>
+        readdir(globalPrefix, {
+          withFileTypes: true,
+        })
+          .then((dirents) =>
+            dirents
+              .filter((dirent) => dirent.isDirectory() && dirent.name.startsWith("."))
+              .map((dirent) => join(globalPrefix, dirent.name)),
+          )
+          .catch(() => []),
+      ),
+    )
+  ).flat();
+}
 //@ chunk-19fynvg9.js:545-605 sole-consumer
-function getProjectKeyIfValid(s) {
-  let projectKeyIfRepresentable = getProjectKeyIfRepresentable(s);
+function getProjectKeyIfValid(projectPath) {
+  let projectKeyIfRepresentable = getProjectKeyIfRepresentable(projectPath);
   return projectKeyIfRepresentable !== undefined && isValidKeySegment(projectKeyIfRepresentable)
     ? projectKeyIfRepresentable
     : undefined;
@@ -35,63 +53,64 @@ function getProjectKeyIfValid(s) {
 /**
  * 列出某项目目录（或全部）下的 .jsonl 会话候选及 mtime。
  */
-async function listCandidates(s, e, projectPath, d, a, ownWorktrees) {
-  let f = isStorageV5Enabled() && d !== undefined ? getProjectKeyIfValid(s) : undefined;
-  if (d !== undefined && f !== undefined) {
-    let i = new Map();
+async function listCandidates(projectsDir, includeMtime, projectPath, storage, budget, ownWorktrees) {
+  let projectKey =
+    isStorageV5Enabled() && storage !== undefined ? getProjectKeyIfValid(projectsDir) : undefined;
+  if (storage !== undefined && projectKey !== undefined) {
+    let sessionsById = new Map();
     try {
       await readAllPages(
-        (r) =>
-          d.listEntries(
+        (cursor) =>
+          storage.listEntries(
             {
               namespace: "transcript",
-              projectKey: f,
+              projectKey,
             },
             {
               skipScopeStats: true,
-              ...(e
+              ...(includeMtime
                 ? {}
                 : {
                     skipKeyStats: true,
                   }),
-              ...(r !== undefined && {
-                cursor: r,
+              ...(cursor !== undefined && {
+                cursor,
               }),
             },
           ),
-        (r) => {
-          for (let t of r) {
-            if (t.kind !== "key" || t.key.namespace !== "transcript") continue;
-            let l = validateUuid(t.key.sessionId);
-            if (!l) continue;
-            if (e && t.mtimeMs === undefined) continue;
-            let m = e ? Math.trunc(t.mtimeMs ?? 0) : 0;
-            let p = i.get(l);
-            if (p !== undefined) {
-              if (m > p.mtime) p.mtime = m;
+        (entries) => {
+          for (let entry of entries) {
+            if (entry.kind !== "key" || entry.key.namespace !== "transcript") continue;
+            let sessionId = validateUuid(entry.key.sessionId);
+            if (!sessionId) continue;
+            if (includeMtime && entry.mtimeMs === undefined) continue;
+            let mtimeMs = includeMtime ? Math.trunc(entry.mtimeMs ?? 0) : 0;
+            let existing = sessionsById.get(sessionId);
+            if (existing !== undefined) {
+              if (mtimeMs > existing.mtime) existing.mtime = mtimeMs;
               continue;
             }
-            i.set(l, {
-              sessionId: l,
-              filePath: join(s, `${t.key.sessionId}.jsonl`),
-              mtime: m,
+            sessionsById.set(sessionId, {
+              sessionId,
+              filePath: join(projectsDir, `${entry.key.sessionId}.jsonl`),
+              mtime: mtimeMs,
               projectPath,
               ownWorktrees,
             });
           }
         },
-        a !== undefined
+        budget !== undefined
           ? {
-              budget: a,
+              budget,
             }
           : undefined,
       );
     } catch {}
-    return [...i.values()];
+    return [...sessionsById.values()];
   }
   let names;
   try {
-    names = await readdir(s);
+    names = await readdir(projectsDir);
   } catch {
     return [];
   }
@@ -101,8 +120,8 @@ async function listCandidates(s, e, projectPath, d, a, ownWorktrees) {
         if (!name.endsWith(".jsonl")) return null;
         let sessionId = validateUuid(name.slice(0, -6));
         if (!sessionId) return null;
-        let filePath = join(s, name);
-        if (!e)
+        let filePath = join(projectsDir, name);
+        if (!includeMtime)
           return {
             sessionId,
             filePath,
@@ -111,11 +130,11 @@ async function listCandidates(s, e, projectPath, d, a, ownWorktrees) {
             ownWorktrees,
           };
         try {
-          let l = await stat(filePath);
+          let fileStats = await stat(filePath);
           return {
             sessionId,
             filePath,
-            mtime: l.mtime.getTime(),
+            mtime: fileStats.mtime.getTime(),
             projectPath,
             ownWorktrees,
           };
@@ -124,7 +143,7 @@ async function listCandidates(s, e, projectPath, d, a, ownWorktrees) {
         }
       }),
     )
-  ).filter((i) => i !== null);
+  ).filter((candidate) => candidate !== null);
 }
 //@ chunk-19fynvg9.js:1662-1671 layout
 var CANDIDATE_READ_CONCURRENCY = 32;
@@ -132,30 +151,30 @@ var CANDIDATE_READ_CONCURRENCY = 32;
 /**
  * 读取候选会话文件头尾，提取摘要信息（标题、首条提示、cwd、分支）。
  */
-async function readCandidate(s, sessionId, o) {
-  let d = await listCandidates(s, false, undefined, o);
-  for (let a = 0; a < d.length; a += CANDIDATE_READ_CONCURRENCY) {
+async function readCandidate(projectsDir, sessionId, storage) {
+  let candidates = await listCandidates(projectsDir, false, undefined, storage);
+  for (let offset = 0; offset < candidates.length; offset += CANDIDATE_READ_CONCURRENCY) {
     let found = (
       await Promise.all(
-        d.slice(a, a + CANDIDATE_READ_CONCURRENCY).map(async (n) => {
+        candidates.slice(offset, offset + CANDIDATE_READ_CONCURRENCY).map(async (candidate) => {
           let sessionLite = await readSessionLite(
-            n.filePath,
-            wrapStorageSource(getTranscriptStorageKey(n.filePath, o)),
+            candidate.filePath,
+            wrapStorageSource(getTranscriptStorageKey(candidate.filePath, storage)),
           );
           return sessionLite !== null &&
             findContinuedInSessionId(sessionLite.tail) === sessionId &&
             (await transcriptMayContainMarker(
-              n.filePath,
+              candidate.filePath,
               sessionLite.head,
               sessionLite.tail,
               sessionLite.size,
-              o,
+              storage,
             ))
-            ? n.filePath
+            ? candidate.filePath
             : undefined;
         }),
       )
-    ).find((n) => n !== undefined);
+    ).find((foundPath) => foundPath !== undefined);
     if (found !== undefined) return found;
   }
   return;
@@ -164,26 +183,12 @@ async function readCandidate(s, sessionId, o) {
 /**
  * SDK listSessions 实现：扫描项目目录候选会话文件并读取 lite 信息。
  */
-function listSessionsImpl(o, timestamp) {
+function listSessionsImpl(entry, timestamp) {
   return {
-    content: stripBomAndCarriageReturn(o.content),
+    content: stripBomAndCarriageReturn(entry.content),
     timestamp,
     offset: undefined,
     limit: undefined,
   };
-}
-//@ chunk-6zvphrsz.js:19666-19861 fingerprint = gatherAllCandidates (1)
-async function gatherAllCandidates() {
-  return (
-    await Promise.all(
-      npmGlobalPrefixes().map((r) =>
-        readdir(r, {
-          withFileTypes: true,
-        })
-          .then((n) => n.filter((o) => o.isDirectory() && o.name.startsWith(".")).map((o) => join(r, o.name)))
-          .catch(() => []),
-      ),
-    )
-  ).flat();
 }
 export { listSessionsImpl, gatherAllCandidates, readCandidate, listCandidates };

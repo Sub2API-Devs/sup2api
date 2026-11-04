@@ -7,7 +7,7 @@
  */
 import { checkEncCryptoKey } from "./crypto_key.js";
 import { concat, encode } from "./buffer_utils.js";
-import { JWEInvalid } from "../../node/esm/util/errors.js";
+import { JWEInvalid_2 } from "../../node/esm/util/errors.js";
 
 //@ chunk-5h78gfwc.js:13647-13787 esm-fingerprint
 function getCryptoKey(key, alg) {
@@ -20,9 +20,9 @@ var concatSalt = (alg, p2sInput) => concat(encode(alg), Uint8Array.of(0), p2sInp
 //@ chunk-5h78gfwc.js:13828-14141 esm-fingerprint
 async function deriveKey_2(p2s, alg, p2c, key) {
   if (!(p2s instanceof Uint8Array) || p2s.length < 8)
-    throw new JWEInvalid("PBES2 Salt Input must be 8 or more octets");
+    throw new JWEInvalid_2("PBES2 Salt Input must be 8 or more octets");
   let salt = concatSalt(alg, p2s);
-  let o = parseInt(alg.slice(13, 16), 10);
+  let keyLength = parseInt(alg.slice(13, 16), 10);
   let subtleAlg = {
     hash: `SHA-${alg.slice(8, 11)}`,
     iterations: p2c,
@@ -30,6 +30,6 @@ async function deriveKey_2(p2s, alg, p2c, key) {
     salt,
   };
   let cryptoKey = await getCryptoKey(key, alg);
-  return new Uint8Array(await crypto.subtle.deriveBits(subtleAlg, cryptoKey, o));
+  return new Uint8Array(await crypto.subtle.deriveBits(subtleAlg, cryptoKey, keyLength));
 }
 export { deriveKey_2 };

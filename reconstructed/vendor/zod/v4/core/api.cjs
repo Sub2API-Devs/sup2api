@@ -5,14 +5,14 @@
  * pieces: chunk-1ny7cxrt.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 import { require_checks } from "./checks.cjs";
 import { require_registries } from "./registries.cjs";
 import { require_schemas } from "./schemas.cjs";
 import { require_util } from "./util.cjs";
 
 //@ chunk-1ny7cxrt.js:541070-556551 cjs-fingerprint
-var require_api = x(function (cjsExports) {
+var require_api = __commonJS(function (cjsExports) {
   var __createBinding =
     (cjsExports && cjsExports.__createBinding) ||
     (Object.create
@@ -1005,12 +1005,12 @@ var require_api = x(function (cjsExports) {
       ...norm,
     });
   }
-  function _refine(Class, fn, n) {
+  function _refine(Class, fn, params) {
     return new Class({
       type: "custom",
       check: "custom",
       fn,
-      ...util.normalizeParams(n),
+      ...util.normalizeParams(params),
     });
   }
   function _superRefine(fn, params) {
@@ -1083,7 +1083,7 @@ var require_api = x(function (cjsExports) {
     let falsySet = new Set(falsyArray);
     let _Codec = Classes.Codec ?? schemas.$ZodCodec;
     let _Boolean = Classes.Boolean ?? schemas.$ZodBoolean;
-    let f = new (Classes.String ?? schemas.$ZodString)({
+    let stringSchema = new (Classes.String ?? schemas.$ZodString)({
       type: "string",
       error: params.error,
     });
@@ -1093,7 +1093,7 @@ var require_api = x(function (cjsExports) {
     });
     let codec = new _Codec({
       type: "pipe",
-      in: f,
+      in: stringSchema,
       out: booleanSchema,
       transform: (input, payload) => {
         let data = input;

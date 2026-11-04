@@ -6,7 +6,7 @@
  * attribution: esm-fingerprint 1
  */
 import { APIResource } from "../../../core/resource.mjs";
-import { I } from "../../../internal/utils/path.mjs";
+import { parseUrl_2 } from "../../../internal/utils/path.mjs";
 import { buildHeaders } from "../../../internal/headers.mjs";
 import { TokenPage } from "../../../core/pagination.mjs";
 
@@ -15,7 +15,7 @@ class MemoryVersions extends APIResource {
   retrieve(memoryVersionID, params, options) {
     let { memory_store_id, betas, workspace_id, ...query } = params;
     return this._client.get(
-      I`/v1/memory_stores/${memory_store_id}/memory_versions/${memoryVersionID}?beta=true`,
+      parseUrl_2`/v1/memory_stores/${memory_store_id}/memory_versions/${memoryVersionID}?beta=true`,
       {
         query,
         ...options,
@@ -36,7 +36,7 @@ class MemoryVersions extends APIResource {
   list(memoryStoreID, params = {}, options) {
     let { betas, workspace_id, ...query } = params ?? {};
     return this._client.getAPIList(
-      I`/v1/memory_stores/${memoryStoreID}/memory_versions?beta=true`,
+      parseUrl_2`/v1/memory_stores/${memoryStoreID}/memory_versions?beta=true`,
       TokenPage,
       {
         query,
@@ -58,7 +58,7 @@ class MemoryVersions extends APIResource {
   redact(memoryVersionID, params, options) {
     let { memory_store_id, betas, workspace_id } = params;
     return this._client.post(
-      I`/v1/memory_stores/${memory_store_id}/memory_versions/${memoryVersionID}/redact?beta=true`,
+      parseUrl_2`/v1/memory_stores/${memory_store_id}/memory_versions/${memoryVersionID}/redact?beta=true`,
       {
         ...options,
         headers: buildHeaders([

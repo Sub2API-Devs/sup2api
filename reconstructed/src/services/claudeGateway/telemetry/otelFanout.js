@@ -20,7 +20,7 @@ function isAdminGroupMember(groups, admin) {
   return (
     admin !== undefined &&
     admin.admin_groups.length > 0 &&
-    (groups ?? []).some((n) => admin.admin_groups.includes(n))
+    (groups ?? []).some((group) => admin.admin_groups.includes(group))
   );
 }
 //@ chunk-1ny7cxrt.js:1452851-1452948 placement
@@ -39,8 +39,8 @@ var OTLP_DEST_BREAKER_MS = 30000;
 /**
  * 去掉 URL 里的 userinfo，用于日志输出。
  */
-function stripUrlCredentials(e) {
-  return String(e).replace(/(\b\w+:\/\/)[^@/]+@/g, "$1");
+function stripUrlCredentials(value) {
+  return String(value).replace(/(\b\w+:\/\/)[^@/]+@/g, "$1");
 }
 //@ chunk-1ny7cxrt.js:1453017-1454873 placement
 /**
@@ -52,16 +52,16 @@ class OtelFanout {
   refused = new Map();
   circuitBreakers = new Map();
   googleAuths = new Map();
-  googleHeaders(e) {
-    let t = this.googleAuths.get(e);
-    if (!t) {
-      t = createGoogleHeaderProvider(e);
-      this.googleAuths.set(e, t);
+  googleHeaders(authConfig) {
+    let provider = this.googleAuths.get(authConfig);
+    if (!provider) {
+      provider = createGoogleHeaderProvider(authConfig);
+      this.googleAuths.set(authConfig, provider);
     }
-    return t();
+    return provider();
   }
-  async fanout(e, body, n, o, r) {
-    if (r.length === 0) return;
+  async fanout(path, body, contentType, contentEncoding, destinations) {
+    if (destinations.length === 0) return;
     if (this.inFlight >= MAX_OTLP_INFLIGHT) {
       if (this.dropped++ % 100 === 0)
         gatewayLog("warn", `otel fanout saturated (${this.inFlight} in flight); dropping`);
@@ -70,73 +70,74 @@ class OtelFanout {
     this.inFlight++;
     try {
       let now = Date.now();
-      let mapped = r.map((c) => (this.circuitBreakers.get(c.url)?.openUntil ?? 0) > now);
+      let mapped = destinations.map((dest) => (this.circuitBreakers.get(dest.url)?.openUntil ?? 0) > now);
       (
         await Promise.allSettled(
-          r.map(async (c, u) => {
-            if (mapped[u]) return Promise.reject(Error("circuit open"));
-            let f = {
-              "Content-Type": n,
-              ...(o && {
-                "Content-Encoding": o,
+          destinations.map(async (dest, index) => {
+            if (mapped[index]) return Promise.reject(Error("circuit open"));
+            let headers = {
+              "Content-Type": contentType,
+              ...(contentEncoding && {
+                "Content-Encoding": contentEncoding,
               }),
-              ...c.headers,
+              ...dest.headers,
             };
-            if (c.auth) {
-              let h = await this.googleHeaders(c.auth.google);
-              let mapped = Object.keys(c.headers).map((key) => key.toLowerCase());
-              for (let key of Object.keys(f)) if (key.toLowerCase() === "authorization") delete f[key];
-              for (let [key, value] of Object.entries(h))
-                if (key === "authorization" || !mapped.includes(key)) f[key] = value;
+            if (dest.auth) {
+              let googleHeaders = await this.googleHeaders(dest.auth.google);
+              let mapped = Object.keys(dest.headers).map((key) => key.toLowerCase());
+              for (let key of Object.keys(headers))
+                if (key.toLowerCase() === "authorization") delete headers[key];
+              for (let [key, value] of Object.entries(googleHeaders))
+                if (key === "authorization" || !mapped.includes(key)) headers[key] = value;
             }
-            return ssrfSafeFetch(`${c.url.replace(/\/$/, "")}${e}`, {
+            return ssrfSafeFetch(`${dest.url.replace(/\/$/, "")}${path}`, {
               method: "POST",
               body,
               honorNoProxy: true,
-              headers: f,
+              headers,
               signal: AbortSignal.timeout(1e4),
-            }).then((h) => {
-              h.body?.cancel().catch(() => {});
+            }).then((response) => {
+              response.body?.cancel().catch(() => {});
               if (
-                h.status === 400 ||
-                h.status === 413 ||
-                h.status === 415 ||
-                h.status === 422 ||
-                h.status === 431
+                response.status === 400 ||
+                response.status === 413 ||
+                response.status === 415 ||
+                response.status === 422 ||
+                response.status === 431
               ) {
-                let m = this.refused.get(c.url) ?? 0;
-                this.refused.set(c.url, m + 1);
-                if (m % 100 === 0)
+                let refusedCount = this.refused.get(dest.url) ?? 0;
+                this.refused.set(dest.url, refusedCount + 1);
+                if (refusedCount % 100 === 0)
                   gatewayLog(
                     "warn",
-                    `otel dest ${stripUrlCredentials(c.url)} refused an export's payload: ${h.status} ${stripUrlCredentials(h.statusText)} (not counted as a dest failure)`,
+                    `otel dest ${stripUrlCredentials(dest.url)} refused an export's payload: ${response.status} ${stripUrlCredentials(response.statusText)} (not counted as a dest failure)`,
                   );
                 return "refused";
               }
-              if (!h.ok) throw Error(`${h.status} ${h.statusText}`);
+              if (!response.ok) throw Error(`${response.status} ${response.statusText}`);
               return "delivered";
             });
           }),
         )
-      ).forEach((c, u) => {
-        if (mapped[u]) return;
-        let url = r[u].url;
-        if (c.status === "fulfilled") {
-          if (c.value === "delivered") this.circuitBreakers.delete(url);
+      ).forEach((result, index) => {
+        if (mapped[index]) return;
+        let url = destinations[index].url;
+        if (result.status === "fulfilled") {
+          if (result.value === "delivered") this.circuitBreakers.delete(url);
         } else {
-          let h = this.circuitBreakers.get(url) ?? {
+          let breaker = this.circuitBreakers.get(url) ?? {
             fails: 0,
             openUntil: 0,
           };
-          if (++h.fails >= OTLP_DEST_FAIL_THRESHOLD) {
-            h.openUntil = Date.now() + OTLP_DEST_BREAKER_MS;
+          if (++breaker.fails >= OTLP_DEST_FAIL_THRESHOLD) {
+            breaker.openUntil = Date.now() + OTLP_DEST_BREAKER_MS;
             gatewayLog("warn", `otel dest ${stripUrlCredentials(url)} tripped; skipping 30s`);
           } else
             gatewayLog(
               "warn",
-              `otel forward to ${stripUrlCredentials(url)} failed: ${stripUrlCredentials(c.reason)}`,
+              `otel forward to ${stripUrlCredentials(url)} failed: ${stripUrlCredentials(result.reason)}`,
             );
-          this.circuitBreakers.set(url, h);
+          this.circuitBreakers.set(url, breaker);
         }
       });
     } finally {

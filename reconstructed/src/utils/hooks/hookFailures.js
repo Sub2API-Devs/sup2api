@@ -31,15 +31,19 @@ import { findGitRootUncached, findCanonicalGitRootUncached, normalizeCommandForP
 import { expandPathOrNull } from "../path.js";
 import { getGlobBaseDirectory_2 } from "../permissions/pathValidation.js";
 import { stickyRootsFor } from "../settings/stickyRoots.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:923051-923161 placement
-var PERSONAL_BLOCKING_EVENTS_2 = new Set([
-  "PreToolUse",
-  "PermissionRequest",
-  "PreModelSwitch",
-  "UserPromptSubmit",
-  "UserPromptExpansion",
-]);
+var PERSONAL_BLOCKING_EVENTS_2; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:923051", () => {
+  PERSONAL_BLOCKING_EVENTS_2 = new Set([
+    "PreToolUse",
+    "PermissionRequest",
+    "PreModelSwitch",
+    "UserPromptSubmit",
+    "UserPromptExpansion",
+  ]);
+});
 //@ chunk-e6aww6q8.js:923161-923243 placement
 /**
  * 非阻断状态码与"按非阻断处理"的提示前缀。
@@ -47,12 +51,12 @@ var PERSONAL_BLOCKING_EVENTS_2 = new Set([
 var NON_BLOCKING_STATUS_PREFIX = "Failed with non-blocking status code: ";
 var TREATING_NON_BLOCKING_PREFIX = "Treating as non-blocking. ";
 //@ chunk-e6aww6q8.js:923243-923409 placement
-function blocksOnFailure(e) {
-  switch (e.type) {
+function blocksOnFailure(hook) {
+  switch (hook.type) {
     case "command":
-      return e.onFailure === "block" && e.async !== true && e.asyncRewake !== true;
+      return hook.onFailure === "block" && hook.async !== true && hook.asyncRewake !== true;
     case "http":
-      return e.onFailure === "block";
+      return hook.onFailure === "block";
     default:
       return false;
   }
@@ -63,7 +67,7 @@ function blocksOnFailure(e) {
  */
 var EXIT_CODE_COMMAND_NOT_FOUND = 127;
 //@ chunk-e6aww6q8.js:923421-923570 placement
-function mayBlockForMissingBash(hook, n) {
+function mayBlockForMissingBash(hook, hookEvent) {
   return (
     hook.type === "command" &&
     hook.async !== true &&
@@ -71,26 +75,27 @@ function mayBlockForMissingBash(hook, n) {
     hook.args === undefined &&
     hook.onFailure !== "continue" &&
     defaultShellKind() === "powershell" &&
-    isGuardedHookEvent(n)
+    isGuardedHookEvent(hookEvent)
   );
 }
 //@ chunk-e6aww6q8.js:923570-923761 placement
-function hookBlockingReason(e, n, r) {
-  let s = e.type === "http" || (e.type === "command" && e.async !== true && e.asyncRewake !== true);
-  if (r && s && PERSONAL_BLOCKING_EVENTS_2.has(n)) return "personal";
-  if (blocksOnFailure(e)) return "setting";
-  return mayBlockForMissingBash(e, n) ? "noBash" : undefined;
+function hookBlockingReason(hook, hookEvent, personal) {
+  let canBlock =
+    hook.type === "http" || (hook.type === "command" && hook.async !== true && hook.asyncRewake !== true);
+  if (personal && canBlock && PERSONAL_BLOCKING_EVENTS_2.has(hookEvent)) return "personal";
+  if (blocksOnFailure(hook)) return "setting";
+  return mayBlockForMissingBash(hook, hookEvent) ? "noBash" : undefined;
 }
 //@ chunk-e6aww6q8.js:923761-925173 placement
 /**
  * 说明钩子为何阻断（找不到 Git Bash、onFailure 为 block 等）。
  */
-function describeBlockingHookFailure(e, n, hook, s) {
-  if (s)
+function describeBlockingHookFailure(reason, isServedCall, hook, hook_2) {
+  if (hook_2)
     return `blocking because Git Bash wasn't found, so only exit code 0 or 2 counts as this hook's verdict. The hook ended with exit code 127. If its command is only quoted strings, PowerShell started no program. To run a program, install ${GIT_FOR_WINDOWS_LINK} and start a new session, or put the program in "command" and its arguments in "args" ("args": [] if it has none) and set "onFailure" to "block" so that failures still block. To print this text, such as a JSON answer, set "shell" to "powershell". The user needs to do this; Claude should not change the hook.`;
-  if (e === "setting") return 'blocking because onFailure is "block"';
-  if (n) return "blocking because this hook is required.";
-  return e === "personal"
+  if (reason === "setting") return 'blocking because onFailure is "block"';
+  if (isServedCall) return "blocking because this hook is required.";
+  return reason === "personal"
     ? "blocking because it is one of the user's own hooks, which must succeed in this session (CLAUDE_CODE_RESTRICT_PERSONAL_CONFIG is set). The user needs to fix or remove the hook; Claude should not change it."
     : `blocking because Git Bash wasn't found, so only exit code 0 or 2 counts as this hook's verdict. ${hook.type === "command" && hook.shell === "powershell" ? 'Make the hook end with exit code 0 or 2, or set "onFailure" to "continue" to let its failures pass.' : `${INSTALL_GIT_FOR_WINDOWS} and start a new session, or put the program in "command" and its arguments in "args" ("args": [] if it has none) and set "onFailure" to "block" so that failures still block.`} The user needs to do this; Claude should not change the hook.`;
 }
@@ -99,28 +104,32 @@ function describeBlockingHookFailure(e, n, hook, s) {
  * 为报告生成钩子程序标签（MCP 为 server/tool，命令取首词）。
  */
 function hookProgramLabelForReport(hook) {
-  let n = hookProgramLabel(hook);
-  return n === undefined ? `${hook.type} hook` : truncateToLength(n, 60);
+  let label = hookProgramLabel(hook);
+  return label === undefined ? `${hook.type} hook` : truncateToLength(label, 60);
 }
 //@ chunk-e6aww6q8.js:925246-925633 placement
 /**
  * 生成用于报告的 hook 程序标签：MCP 工具为 server/tool，命令 hook 取第一个可安全展示的词。
  */
-function hookProgramLabel(e) {
-  if (e.type === "mcp_tool") {
-    let s = `${e.server}/${e.tool}`;
-    return /^[\w.@/-]+$/.test(s) ? s : undefined;
+function hookProgramLabel(hook) {
+  if (hook.type === "mcp_tool") {
+    let label = `${hook.server}/${hook.tool}`;
+    return /^[\w.@/-]+$/.test(label) ? label : undefined;
   }
-  if (e.type !== "command") return;
-  let n = (e.args !== undefined ? /^([\w.+@~/\\${}-]+)$/ : /^\s*([\w.+@~/\\${}"'-]+)(?:\s|$)/).exec(
-    e.command,
+  if (hook.type !== "command") return;
+  let word = (hook.args !== undefined ? /^([\w.+@~/\\${}-]+)$/ : /^\s*([\w.+@~/\\${}"'-]+)(?:\s|$)/).exec(
+    hook.command,
   )?.[1];
-  if (n === undefined || countCharInString(n, '"') % 2 === 1 || countCharInString(n, "'") % 2 === 1) return;
-  let r = n.split(/[/\\]/).at(-1)?.replace(/["']/g, "") ?? "";
-  return /^[\w.+@~-]+$/.test(r) ? r : undefined;
+  if (word === undefined || countCharInString(word, '"') % 2 === 1 || countCharInString(word, "'") % 2 === 1)
+    return;
+  let baseName = word.split(/[/\\]/).at(-1)?.replace(/["']/g, "") ?? "";
+  return /^[\w.+@~-]+$/.test(baseName) ? baseName : undefined;
 }
 //@ chunk-e6aww6q8.js:925633-925705 placement
-var PERSONAL_BLOCKING_EVENTS = new Set(["Stop", "SubagentStop", "TaskCompleted", "TeammateIdle"]);
+var PERSONAL_BLOCKING_EVENTS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:925633", () => {
+  PERSONAL_BLOCKING_EVENTS = new Set(["Stop", "SubagentStop", "TaskCompleted", "TeammateIdle"]);
+});
 //@ chunk-e6aww6q8.js:925705-925750 placement
 /**
  * 判断该钩子的非阻断错误是否应按阻断处理（排除个人阻断事件）。
@@ -129,9 +138,9 @@ function blocksWhenNonBlockingError(hook, hookEvent) {
   return blocksOnFailure(hook) && !PERSONAL_BLOCKING_EVENTS.has(hookEvent);
 }
 //@ chunk-e6aww6q8.js:925750-926037 placement
-function isDenyDecisionOutput(e, hookEvent) {
-  if (hookEvent !== "PermissionRequest") return isDenyingHookOutput(e);
-  let hookSpecificOutput = "hookSpecificOutput" in e ? e.hookSpecificOutput : undefined;
+function isDenyDecisionOutput(output, hookEvent) {
+  if (hookEvent !== "PermissionRequest") return isDenyingHookOutput(output);
+  let hookSpecificOutput = "hookSpecificOutput" in output ? output.hookSpecificOutput : undefined;
   return (
     hookSpecificOutput !== undefined &&
     typeof hookSpecificOutput === "object" &&
@@ -147,86 +156,92 @@ function isDenyDecisionOutput(e, hookEvent) {
 /**
  * 判断钩子是否有阻断原因且事件不在豁免列表中。
  */
-function hasBlockingReason(hook, hookEvent, r) {
-  return hookBlockingReason(hook, hookEvent, r) !== undefined && !PERSONAL_BLOCKING_EVENTS.has(hookEvent);
+function hasBlockingReason(hook, hookEvent, personal) {
+  return (
+    hookBlockingReason(hook, hookEvent, personal) !== undefined && !PERSONAL_BLOCKING_EVENTS.has(hookEvent)
+  );
 }
 //@ chunk-e6aww6q8.js:926097-926304 placement
-var HTTP_HOOK_ERROR_HIDDEN_NOTE = `Error details are hidden because they may contain this hook's URL, and any secrets in it can't be reliably removed. They will be shown if the URL starts with http:// or https:// and has no ${URL_BREAK_DESCRIPTION}.`;
+var HTTP_HOOK_ERROR_HIDDEN_NOTE; // deferred: uses URL_IN_TEXT_RE (../redaction/urlRedaction.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:926097", () => {
+  HTTP_HOOK_ERROR_HIDDEN_NOTE = `Error details are hidden because they may contain this hook's URL, and any secrets in it can't be reliably removed. They will be shown if the URL starts with http:// or https:// and has no ${URL_BREAK_DESCRIPTION}.`;
+});
 //@ chunk-e6aww6q8.js:926304-927631 placement
 /**
  * 汇总一批钩子的失败（取消、超时、非阻断错误）。
  */
-function summarizeHookFailures(e, hookEvent, signal, isServedCall, h) {
-  let y = hookBlockingReason(e.hook, hookEvent, h);
-  if (y === undefined) return e;
-  let S =
-    e.outcome === "cancelled" && (signal?.aborted !== true || e.stoppedAfterItsTimeout === true)
+function summarizeHookFailures(result, hookEvent, signal, isServedCall, personal) {
+  let reason = hookBlockingReason(result.hook, hookEvent, personal);
+  if (reason === undefined) return result;
+  let failure =
+    result.outcome === "cancelled" && (signal?.aborted !== true || result.stoppedAfterItsTimeout === true)
       ? "timed out"
-      : e.outcome === "non_blocking_error"
+      : result.outcome === "non_blocking_error"
         ? "failed"
         : undefined;
-  if (S === undefined) return e;
+  if (failure === undefined) return result;
   if (PERSONAL_BLOCKING_EVENTS.has(hookEvent)) {
     logForDebugging(
-      `Hooks: ${hookEvent} ${e.hook.type} hook ${S}; not blocking (onFailure: "block" is ignored on ${hookEvent})`,
+      `Hooks: ${hookEvent} ${result.hook.type} hook ${failure}; not blocking (onFailure: "block" is ignored on ${hookEvent})`,
       {
         level: "warn",
       },
     );
-    return e;
+    return result;
   }
-  let hook = e.hook;
-  let L = y !== "setting";
-  let G = !L
+  let hook = result.hook;
+  let redact = reason !== "setting";
+  let command = !redact
     ? getHookDisplayText(hook)
     : hook.type === "http"
       ? redactSecrets(redactUrlsInText(hook.url))
       : redactSecrets(redactUrlsInMessage(getHookDisplayText(hook)));
-  let attachment = e.message?.type === "attachment" ? e.message.attachment : undefined;
-  let Z = !isServedCall && attachment?.type === "hook_non_blocking_error" ? attachment.stderr.trim() : "";
+  let attachment = result.message?.type === "attachment" ? result.message.attachment : undefined;
+  let stderr =
+    !isServedCall && attachment?.type === "hook_non_blocking_error" ? attachment.stderr.trim() : "";
   let replaced = (
-    Z.startsWith(NON_BLOCKING_STATUS_PREFIX) ? Z.slice(NON_BLOCKING_STATUS_PREFIX.length) : Z
+    stderr.startsWith(NON_BLOCKING_STATUS_PREFIX) ? stderr.slice(NON_BLOCKING_STATUS_PREFIX.length) : stderr
   ).replace(TREATING_NON_BLOCKING_PREFIX, "");
-  let ke = hook.type !== "http" || isPlainHttpUrl(hook.url);
-  let we =
-    !L || replaced === ""
+  let safeUrl = hook.type !== "http" || isPlainHttpUrl(hook.url);
+  let detail =
+    !redact || replaced === ""
       ? replaced
-      : ke
+      : safeUrl
         ? redactSecrets(redactUrlsInMessage(replaced))
         : HTTP_HOOK_ERROR_HIDDEN_NOTE;
-  let Ee =
+  let missingBash =
     !isServedCall &&
     attachment?.type === "hook_non_blocking_error" &&
     attachment.exitCode === EXIT_CODE_COMMAND_NOT_FOUND &&
     hook.type === "command" &&
     hook.shell === undefined &&
     mayBlockForMissingBash(hook, hookEvent);
-  let Ae = `[${G}]: ${S}; ${describeBlockingHookFailure(y, isServedCall, hook, Ee)}${
-    we === ""
+  let text = `[${command}]: ${failure}; ${describeBlockingHookFailure(reason, isServedCall, hook, missingBash)}${
+    detail === ""
       ? ""
       : `
-${we}`
+${detail}`
   }`;
   logForDebugging(
-    `Hooks: ${hookEvent} ${e.hook.type} hook ${S}; blocking (${y === "personal" ? "personal hook, CLAUDE_CODE_RESTRICT_PERSONAL_CONFIG" : y === "setting" ? 'onFailure: "block"' : "no Git Bash"})`,
+    `Hooks: ${hookEvent} ${result.hook.type} hook ${failure}; blocking (${reason === "personal" ? "personal hook, CLAUDE_CODE_RESTRICT_PERSONAL_CONFIG" : reason === "setting" ? 'onFailure: "block"' : "no Git Bash"})`,
     {
       level: "warn",
     },
   );
   return {
-    ...e,
+    ...result,
     message: undefined,
     blockingError: {
-      blockingError: Ae,
-      command: G,
+      blockingError: text,
+      command,
       ...promptEndingFields(hookEvent, {
-        noVerdict: S === "timed out" ? "hook_timed_out" : "hook_failed",
+        noVerdict: failure === "timed out" ? "hook_timed_out" : "hook_failed",
       }),
     },
     ...(hookEvent === "PermissionRequest" && {
       permissionRequestResult: {
         behavior: "deny",
-        message: Ae,
+        message: text,
       },
     }),
     suppressOriginalPrompt: true,
@@ -234,18 +249,19 @@ ${we}`
   };
 }
 //@ chunk-e6aww6q8.js:927631-927886 placement
-function applyBlockOnFailure(hook, n) {
-  if (!blocksOnFailure(hook) || n.succeeded || n.blocked || n.cancelled === true) return n;
-  let r = n.output === "Hook cancelled";
-  let s = r ? "" : n.output.trim();
+function applyBlockOnFailure(hook, hook_2) {
+  if (!blocksOnFailure(hook) || hook_2.succeeded || hook_2.blocked || hook_2.cancelled === true)
+    return hook_2;
+  let wasCancelled = hook_2.output === "Hook cancelled";
+  let detail = wasCancelled ? "" : hook_2.output.trim();
   return {
-    ...n,
+    ...hook_2,
     blocked: true,
-    output: `${r ? "timed out" : "failed"}; blocking because onFailure is "block"${
-      s === ""
+    output: `${wasCancelled ? "timed out" : "failed"}; blocking because onFailure is "block"${
+      detail === ""
         ? ""
         : `
-${s}`
+${detail}`
     }`,
   };
 }
@@ -256,22 +272,22 @@ ${s}`
 async function hookPathRoots() {
   let originalCwdOrNull = getOriginalCwdOrNull();
   if (originalCwdOrNull === null) return [POSIX_SEP_2];
-  let n = uniq(
+  let candidates = uniq(
     [
       originalCwdOrNull,
       findGitRootUncached(originalCwdOrNull),
       findCanonicalGitRootUncached(originalCwdOrNull),
-      ...getAdditionalDirectoriesForClaudeMd().map((s) => {
-        let path = expandPathOrNull(s, originalCwdOrNull);
-        return path === null ? s : (getGlobBaseDirectory_2(path) ?? path);
+      ...getAdditionalDirectoriesForClaudeMd().map((directory) => {
+        let path = expandPathOrNull(directory, originalCwdOrNull);
+        return path === null ? directory : (getGlobBaseDirectory_2(path) ?? path);
       }),
-    ].filter((s) => s !== null),
+    ].filter((value) => value !== null),
   );
-  let results = await Promise.all(n.map((s) => realpath(s).catch(() => s)));
+  let results = await Promise.all(candidates.map((path) => realpath(path).catch(() => path)));
   return stickyRootsFor({
     launchDir: originalCwdOrNull,
     launchDirReal: results[0] ?? originalCwdOrNull,
-    extra: [...n, ...results],
+    extra: [...candidates, ...results],
   }).map(normalizeCommandForPlatform);
 }
 export {

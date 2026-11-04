@@ -8,8 +8,8 @@
  * pieces: chunk-j1c0t4gs.js (7)
  * attribution: placement 1, layout 2, fingerprint 4
  */
-import { init_react_production, y, P } from "../../../../vendor/react/cjs/react.production.js";
-import { w } from "../../../../vendor/react/compiler-runtime.js";
+import { init_react_production, useState, useEffect } from "../../../../vendor/react/cjs/react.production.js";
+import { useMemoCache } from "../../../../vendor/react/compiler-runtime.js";
 import { MEMO_CACHE_SENTINEL } from "../../../../runtime/bun-runtime.js";
 import {
   jsxProd_default,
@@ -35,8 +35,8 @@ import { FocusColumn } from "../../design-system/FocusColumn.js";
 //@ chunk-j1c0t4gs.js:889-893 placement
 init_react_production();
 //@ chunk-j1c0t4gs.js:893-939 layout
-function stripLineBreaks(l) {
-  return l.replace(/[\r\n]/g, "");
+function stripLineBreaks(text) {
+  return text.replace(/[\r\n]/g, "");
 }
 //@ chunk-j1c0t4gs.js:939-1087 fingerprint = REMEMBER_DIRECTORY_OPTIONS (1)
 var REMEMBER_DIRECTORY_OPTIONS = [
@@ -55,7 +55,7 @@ var REMEMBER_DIRECTORY_OPTIONS = [
 ];
 //@ chunk-j1c0t4gs.js:1087-1287 layout
 function WorkspaceDirectoryHint() {
-  let $ = w(1);
+  let $ = useMemoCache(1);
   let t0;
   if ($[0] === MEMO_CACHE_SENTINEL) {
     t0 = jsxProd_default(Text, {
@@ -69,7 +69,7 @@ function WorkspaceDirectoryHint() {
 }
 //@ chunk-j1c0t4gs.js:1287-1555 fingerprint = DirectoryDisplay (0.521)
 function DirectoryDisplay(props) {
-  let $ = w(5);
+  let $ = useMemoCache(5);
   let { path } = props;
   let t1;
   if ($[0] !== path) {
@@ -99,7 +99,7 @@ function DirectoryDisplay(props) {
 }
 //@ chunk-j1c0t4gs.js:1555-2553 fingerprint = DirectoryInput (0.739)
 function DirectoryInput(props) {
-  let $ = w(16);
+  let $ = useMemoCache(16);
   let {
     value,
     onChange,
@@ -190,22 +190,22 @@ function DirectoryInput(props) {
 }
 //@ chunk-j1c0t4gs.js:2553-5100 fingerprint = AddWorkspaceDirectory (0.726)
 function AddWorkspaceDirectory(props) {
-  let $ = w(38);
+  let $ = useMemoCache(38);
   let { onAddDirectory, onAlreadyAccessible, onCancel, permissionContext, directoryPath } = props;
   let session = useSession();
-  let [directoryInput, setDirectoryInput] = y("");
-  let [m, E] = y(0);
-  let [error, setError] = y(null);
+  let [directoryInput, setDirectoryInput] = useState("");
+  let [step, setStep] = useState(0);
+  let [error, setError] = useState(null);
   let t1;
   if ($[0] === MEMO_CACHE_SENTINEL) {
     t1 = [];
     $[0] = t1;
   } else t1 = $[0];
-  let [suggestions, setSuggestions] = y(t1);
-  let [selectedSuggestion, setSelectedSuggestion] = y(0);
-  let de;
+  let [suggestions, setSuggestions] = useState(t1);
+  let [selectedSuggestion, setSelectedSuggestion] = useState(0);
+  let submit;
   if ($[1] !== session) {
-    de = async (path) => {
+    submit = async (path) => {
       if (!path) {
         setSuggestions([]);
         setSelectedSuggestion(0);
@@ -216,31 +216,31 @@ function AddWorkspaceDirectory(props) {
       setSelectedSuggestion(0);
     };
     $[1] = session;
-    $[2] = de;
-  } else de = $[2];
-  let debouncedFetchSuggestions = useDebouncedCallback(de, 100);
-  let me;
+    $[2] = submit;
+  } else submit = $[2];
+  let debouncedFetchSuggestions = useDebouncedCallback(submit, 100);
+  let handleSubmit;
   let t4;
   if ($[3] !== debouncedFetchSuggestions || $[4] !== directoryInput) {
-    me = () => {
+    handleSubmit = () => {
       debouncedFetchSuggestions(directoryInput);
     };
     t4 = [directoryInput, debouncedFetchSuggestions];
     $[3] = debouncedFetchSuggestions;
     $[4] = directoryInput;
-    $[5] = me;
+    $[5] = handleSubmit;
     $[6] = t4;
   } else {
-    me = $[5];
+    handleSubmit = $[5];
     t4 = $[6];
   }
-  P(me, t4);
+  useEffect(handleSubmit, t4);
   let t5;
   if ($[7] === MEMO_CACHE_SENTINEL) {
     t5 = (suggestion) => {
       let newPath = suggestion.id + "/";
       setDirectoryInput(newPath);
-      E(newPath.length);
+      setStep(newPath.length);
       setError(null);
     };
     $[7] = t5;
@@ -268,7 +268,7 @@ function AddWorkspaceDirectory(props) {
     $[10] = permissionContext;
     $[11] = t6;
   } else t6 = $[11];
-  let handleSubmit = t6;
+  let handleSubmit_2 = t6;
   let t7;
   if ($[12] === MEMO_CACHE_SENTINEL) {
     t7 = {
@@ -277,9 +277,9 @@ function AddWorkspaceDirectory(props) {
     $[12] = t7;
   } else t7 = $[12];
   useKeybinding("confirm:no", onCancel, t7);
-  let Ce;
+  let suggestionKeyHandler;
   if ($[13] !== selectedSuggestion || $[14] !== suggestions) {
-    Ce = (e) => {
+    suggestionKeyHandler = (e) => {
       if (suggestions.length > 0) {
         if (e.name === "tab") {
           e.preventDefault();
@@ -301,9 +301,9 @@ function AddWorkspaceDirectory(props) {
     };
     $[13] = selectedSuggestion;
     $[14] = suggestions;
-    $[15] = Ce;
-  } else Ce = $[15];
-  let handleKeyDown = Ce;
+    $[15] = suggestionKeyHandler;
+  } else suggestionKeyHandler = $[15];
+  let handleKeyDown = suggestionKeyHandler;
   let t9;
   if ($[16] !== directoryPath || $[17] !== onAddDirectory || $[18] !== onCancel) {
     t9 = (value) => {
@@ -357,12 +357,12 @@ function AddWorkspaceDirectory(props) {
   } else inputGuide = $[21];
   let children;
   if (
-    $[22] !== m ||
+    $[22] !== step ||
     $[23] !== directoryInput ||
     $[24] !== directoryPath ||
     $[25] !== error ||
     $[26] !== handleSelect ||
-    $[27] !== handleSubmit ||
+    $[27] !== handleSubmit_2 ||
     $[28] !== selectedSuggestion ||
     $[29] !== suggestions
   ) {
@@ -389,21 +389,21 @@ function AddWorkspaceDirectory(props) {
             jsxProd_default(DirectoryInput, {
               value: directoryInput,
               onChange: setDirectoryInput,
-              cursorOffset: m,
-              onChangeCursorOffset: E,
-              onSubmit: handleSubmit,
+              cursorOffset: step,
+              onChangeCursorOffset: setStep,
+              onSubmit: handleSubmit_2,
               error,
               suggestions,
               selectedSuggestion,
             }),
           ],
         });
-    $[22] = m;
+    $[22] = step;
     $[23] = directoryInput;
     $[24] = directoryPath;
     $[25] = error;
     $[26] = handleSelect;
-    $[27] = handleSubmit;
+    $[27] = handleSubmit_2;
     $[28] = selectedSuggestion;
     $[29] = suggestions;
     $[30] = children;

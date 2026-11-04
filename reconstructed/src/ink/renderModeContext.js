@@ -8,15 +8,28 @@
  * pieces: chunk-x6v6jz2y.js (16)
  * attribution: placement 16
  */
-import { init_react_production, qt, y, Se, R } from "../../vendor/react/cjs/react.production.js";
+import {
+  init_react_production,
+  createContext,
+  useState,
+  useContext,
+  useRef,
+} from "../../vendor/react/cjs/react.production.js";
 import { isFullscreenEnvEnabled } from "../utils/fullscreen.js";
-import { w } from "../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import { jsxProd_default } from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-x6v6jz2y.js:1478-1482 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-x6v6jz2y.js:1478", () => {
+  init_react_production();
+});
 //@ chunk-x6v6jz2y.js:1482-1486 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-x6v6jz2y.js:1482", () => {
+  init_react_production();
+});
 //@ chunk-x6v6jz2y.js:1486-1521 placement
 /**
  * 新建渲染模式锁存
@@ -27,7 +40,10 @@ function createRenderModeLatch() {
   };
 }
 //@ chunk-x6v6jz2y.js:1521-1538 placement
-var RenderModeContext = qt(null);
+var RenderModeContext; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-x6v6jz2y.js:1521", () => {
+  RenderModeContext = createContext(null);
+});
 //@ chunk-x6v6jz2y.js:1538-1586 placement
 /**
  * 全屏环境变量开启则 fullscreen，否则 inline
@@ -37,47 +53,50 @@ function defaultRenderMode() {
 }
 //@ chunk-x6v6jz2y.js:1586-1767 placement
 function RenderModeProvider(props) {
-  let p = w(3);
-  let { value: r, children } = props;
-  let [u] = y(createRenderModeLatch);
-  const value = r ?? u;
-  let m;
-  if (p[0] !== children || p[1] !== value) {
-    m = jsxProd_default(RenderModeContext.Provider, {
+  let $ = useMemoCache(3);
+  let { value: valueProp, children } = props;
+  let [latch] = useState(createRenderModeLatch);
+  const value = valueProp ?? latch;
+  let providerElement;
+  if ($[0] !== children || $[1] !== value) {
+    providerElement = jsxProd_default(RenderModeContext.Provider, {
       value,
       children,
     });
-    p[0] = children;
-    p[1] = value;
-    p[2] = m;
-  } else m = p[2];
-  return m;
+    $[0] = children;
+    $[1] = value;
+    $[2] = providerElement;
+  } else providerElement = $[2];
+  return providerElement;
 }
 //@ chunk-x6v6jz2y.js:1767-1870 placement
 function useRenderMode() {
-  let r = w(2);
-  const o = Se(RenderModeContext);
-  let l;
-  if (r[0] !== o) {
-    l = resolveRenderMode(o);
-    r[0] = o;
-    r[1] = l;
-  } else l = r[1];
-  return l;
+  let $ = useMemoCache(2);
+  const contextValue = useContext(RenderModeContext);
+  let mode;
+  if ($[0] !== contextValue) {
+    mode = resolveRenderMode(contextValue);
+    $[0] = contextValue;
+    $[1] = mode;
+  } else mode = $[1];
+  return mode;
 }
 //@ chunk-x6v6jz2y.js:1870-1994 placement
-function resolveRenderMode(o) {
-  if (o === null) return defaultRenderMode();
-  if (typeof o === "string") return o;
-  if (o.latched === null) o.latched = defaultRenderMode();
-  return o.latched;
+function resolveRenderMode(value) {
+  if (value === null) return defaultRenderMode();
+  if (typeof value === "string") return value;
+  if (value.latched === null) value.latched = defaultRenderMode();
+  return value.latched;
 }
 //@ chunk-x6v6jz2y.js:1994-2035 placement
 function useIsFullscreen() {
   return useRenderMode() === "fullscreen";
 }
 //@ chunk-x6v6jz2y.js:2035-2039 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-x6v6jz2y.js:2035", () => {
+  init_react_production();
+});
 //@ chunk-x6v6jz2y.js:2039-2165 placement
 function createRenderCaches() {
   return {
@@ -91,10 +110,13 @@ function createRenderCaches() {
 /**
  * 渲染缓存上下文
  */
-var RenderCachesContext = qt(null);
+var RenderCachesContext; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-x6v6jz2y.js:2165", () => {
+  RenderCachesContext = createContext(null);
+});
 //@ chunk-x6v6jz2y.js:2181-2289 placement
 function FrameRegistryProvider({ children }) {
-  let renderCachesRef = R(null);
+  let renderCachesRef = useRef(null);
   renderCachesRef.current ??= createRenderCaches();
   return jsxProd_default(RenderCachesContext.Provider, {
     value: renderCachesRef.current,
@@ -103,31 +125,31 @@ function FrameRegistryProvider({ children }) {
 }
 //@ chunk-x6v6jz2y.js:2289-2374 placement
 function useFrameRegistry() {
-  let o = Se(RenderCachesContext);
-  let renderCachesRef = R(null);
-  if (o) return o;
+  let contextRegistry = useContext(RenderCachesContext);
+  let renderCachesRef = useRef(null);
+  if (contextRegistry) return contextRegistry;
   renderCachesRef.current ??= createRenderCaches();
   return renderCachesRef.current;
 }
 //@ chunk-x6v6jz2y.js:2374-2602 placement
-function parseRenderModeValue(frameRegistry, outputSchema, l) {
-  if (!outputSchema) return;
-  if (typeof l !== "object" || l === null) return outputSchema.safeParse(l);
-  let u = frameRegistry.parsedToolResults.get(l);
-  if (u && isSameSchema(u, outputSchema)) return u.parsed;
-  let d = outputSchema.safeParse(l);
-  frameRegistry.parsedToolResults.set(l, {
-    schema: outputSchema,
-    parsed: d,
+function parseRenderModeValue(frameRegistry, schema, value) {
+  if (!schema) return;
+  if (typeof value !== "object" || value === null) return schema.safeParse(value);
+  let cached = frameRegistry.parsedToolResults.get(value);
+  if (cached && isSameSchema(cached, schema)) return cached.parsed;
+  let parsed = schema.safeParse(value);
+  frameRegistry.parsedToolResults.set(value, {
+    schema,
+    parsed,
   });
-  return d;
+  return parsed;
 }
 //@ chunk-x6v6jz2y.js:2602-2639 placement
 /**
  * schema 引用相等
  */
-function isSameSchema(o, r) {
-  return o.schema === r;
+function isSameSchema(cached, schema) {
+  return cached.schema === schema;
 }
 export {
   resolveRenderMode,

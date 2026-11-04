@@ -5,28 +5,29 @@
  * pieces: chunk-h6b7mazd.js (3)
  * attribution: cjs-require-graph 3
  */
-import { x } from "../../runtime/bun-runtime.js";
+import { __commonJS } from "../../runtime/bun-runtime.js";
 import { require_function_bind } from "../function-bind/index.js";
 import { require_functionApply } from "./functionApply.js";
 import { require_call_bind_apply_helpers } from "./index.js";
 
 //@ chunk-h6b7mazd.js:10934-10996 cjs-require-graph
-var require_functionCall = x(function (cjsExports, cjsModule) {
+var require_functionCall = __commonJS(function (cjsExports, cjsModule) {
   cjsModule.exports = Function.prototype.call;
 });
 //@ chunk-h6b7mazd.js:11140-11233 cjs-require-graph
-var require_functionCall_3 = x(function (cjsExports, cjsModule) {
-  var iu = require_function_bind();
-  var au = require_functionApply();
-  var uu = require_functionCall();
-  var cu = require_call_bind_apply_helpers();
-  cjsModule.exports = cu || iu.call(uu, au);
+var require_functionCall_3 = __commonJS(function (cjsExports, cjsModule) {
+  var requireFunctionBind = require_function_bind();
+  var requireFunctionApply = require_functionApply();
+  var requireFunctionCall = require_functionCall();
+  var requireCallBindApplyHelpers = require_call_bind_apply_helpers();
+  cjsModule.exports =
+    requireCallBindApplyHelpers || requireFunctionBind.call(requireFunctionCall, requireFunctionApply);
 });
 //@ chunk-h6b7mazd.js:12047-12174 cjs-require-graph
-var require_functionCall_2 = x(function (cjsExports, cjsModule) {
-  var mu = Function.prototype.call;
+var require_functionCall_2 = __commonJS(function (cjsExports, cjsModule) {
+  var call = Function.prototype.call;
   var hasOwnProperty = Object.prototype.hasOwnProperty;
-  var bu = require_function_bind();
-  cjsModule.exports = bu.call(mu, hasOwnProperty);
+  var requireFunctionBind = require_function_bind();
+  cjsModule.exports = requireFunctionBind.call(call, hasOwnProperty);
 });
 export { require_functionCall, require_functionCall_3, require_functionCall_2 };

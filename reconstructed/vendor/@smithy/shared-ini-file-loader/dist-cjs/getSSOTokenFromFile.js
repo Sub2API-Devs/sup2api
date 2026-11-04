@@ -5,11 +5,11 @@
  * pieces: chunk-a1ttyqdw.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x, importMetaRequire } from "../../../../runtime/bun-runtime.js";
+import { __commonJS, importMetaRequire } from "../../../../runtime/bun-runtime.js";
 import { require_getSSOTokenFilepath } from "./getSSOTokenFilepath.js";
 
 //@ chunk-a1ttyqdw.js:951-1293 cjs-fingerprint
-var require_getSSOTokenFromFile = x(function (cjsExports) {
+var require_getSSOTokenFromFile = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });

@@ -5,12 +5,12 @@
  * pieces: chunk-h6b7mazd.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../runtime/bun-runtime.js";
+import { __commonJS } from "../../runtime/bun-runtime.js";
 import { require_call_bind_apply_helpers_2 } from "../call-bind-apply-helpers/index.js";
 import { require_gopd } from "../gopd/index.js";
 
 //@ chunk-h6b7mazd.js:11418-11796 cjs-fingerprint
-var require_get = x(function (cjsExports, cjsModule) {
+var require_get = __commonJS(function (cjsExports, cjsModule) {
   var callBind = require_call_bind_apply_helpers_2();
   var gOPD = require_gopd();
   var hasProtoAccessor;

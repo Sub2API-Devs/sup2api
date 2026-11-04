@@ -17,7 +17,17 @@ import { isByocEnvironment } from "../../utils/remoteEnvironment.js";
 import { WEBSEARCH } from "../WebSearchTool/prompt.js";
 import { leanPromptOf } from "../../utils/model/promptBundles.js";
 import { confusableTagScrubPattern } from "../../utils/confusables.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
+//@ chunk-rce5b6h0.js:191-219 fingerprint = WEB_FETCH_TOOL_NAME (0.759)
+/**
+ * WebFetch 工具名常量 "WebFetch"；qdr 为规则内容字段 "url"。
+ */
+var WEBFETCH = "WebFetch";
+var WEB_FETCH_RULE_CONTENT_FIELD = "url";
+//@ chunk-rce5b6h0.js:219-257 placement
+var FETCH = "Fetch";
+var ALLOW_WEB_FETCH = "allow_web_fetch";
 //@ chunk-g54kbxqw.js:138896-138910 placement
 /**
  * WebFetch 缓存 TTL 的默认值（15 分钟）。
@@ -34,12 +44,15 @@ class WebFetchCacheTtlState {
 /**
  * 按宿主隔离的 WebFetch 缓存 TTL 状态。
  */
-var webFetchCacheTtlByHost = new HostScoped(() => new WebFetchCacheTtlState());
+var webFetchCacheTtlByHost; // deferred: uses WebFetchCacheTtlState of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-g54kbxqw.js:138929", () => {
+  webFetchCacheTtlByHost = new HostScoped(() => new WebFetchCacheTtlState());
+});
 //@ chunk-g54kbxqw.js:138954-139050 placement
 function webFetchCacheTtlMs() {
-  let e = webFetchCacheTtlByHost.of(getRootSession().host);
-  e.ms ??= env.CLAUDE_CODE_WEBFETCH_CACHE_TTL_MS ?? DEFAULT_WEBFETCH_CACHE_TTL_MS;
-  return e.ms;
+  let state = webFetchCacheTtlByHost.of(getRootSession().host);
+  state.ms ??= env.CLAUDE_CODE_WEBFETCH_CACHE_TTL_MS ?? DEFAULT_WEBFETCH_CACHE_TTL_MS;
+  return state.ms;
 }
 //@ chunk-g54kbxqw.js:139050-139137 placement
 function webFetchCacheTtlText() {
@@ -57,12 +70,12 @@ function artifactsReadToolName() {
 /**
  * 读取 artifact 被拒时改用 WebFetch 的提示（不适用时为空串）。
  */
-function artifactRefusalHint(e) {
-  return isByocEnvironment() ? "" : ` Where it refuses one, use ${WEBFETCH}, not ${e}.`;
+function artifactRefusalHint(fallbackToolName) {
+  return isByocEnvironment() ? "" : ` Where it refuses one, use ${WEBFETCH}, not ${fallbackToolName}.`;
 }
 //@ chunk-g54kbxqw.js:139243-139934 placement
-function artifactUrlRoutingShort(e) {
-  switch (e) {
+function artifactUrlRoutingShort(route) {
+  switch (route) {
     case "artifact-tool":
       return ' claude.ai artifact links (claude.ai/artifact/{id} or claude.ai/code/artifact/{uuid}) are published artifacts: read them with the Artifact tool (action "read"), not WebFetch or curl.';
     case "artifacts-mcp":
@@ -74,8 +87,8 @@ function artifactUrlRoutingShort(e) {
   }
 }
 //@ chunk-g54kbxqw.js:139934-140823 placement
-function artifactUrlRoutingList(e) {
-  switch (e) {
+function artifactUrlRoutingList(route) {
+  switch (route) {
     case "artifact-tool":
       return `- claude.ai artifact links (claude.ai/artifact/{id} or claude.ai/code/artifact/{uuid}, including preview.claude.ai) are published artifacts: read them with the Artifact tool (action "read"), not WebFetch, curl or a headless browser.
 `;
@@ -94,22 +107,22 @@ var WEBFETCH_URL_PROVENANCE_RULE = `${WEBFETCH} is for URLs that already appear 
 
 `;
 //@ chunk-g54kbxqw.js:141122-141985 placement
-function webFetchDescription(model, artifactFetchRoute = "none", leanPrompt, r = false) {
-  let h = r ? WEBFETCH_URL_PROVENANCE_RULE : "";
+function webFetchDescription(model, route = "none", leanPrompt, withProvenance = false) {
+  let provenanceRule = withProvenance ? WEBFETCH_URL_PROVENANCE_RULE : "";
   if (
     leanPromptOf({
       model,
       leanPrompt,
     })
   )
-    return `${h}Fetches a URL, converts the page to markdown, and answers \`prompt\` against it using a small fast model.
+    return `${provenanceRule}Fetches a URL, converts the page to markdown, and answers \`prompt\` against it using a small fast model.
 
-- Fails on authenticated/private URLs \u2014 use an authenticated MCP tool or \`gh\` for those instead.${artifactUrlRoutingShort(artifactFetchRoute)}
+- Fails on authenticated/private URLs \u2014 use an authenticated MCP tool or \`gh\` for those instead.${artifactUrlRoutingShort(route)}
 - Fails on localhost and other hostnames without a dot; for a local server, use curl via Bash.
 - HTTP is upgraded to HTTPS. Cross-host redirects are returned to you rather than followed; call again with the redirect URL.
 - Responses are cached for ${webFetchCacheTtlText()} per URL.`;
-  return `${h}IMPORTANT: WebFetch WILL FAIL for authenticated or private URLs. Before using this tool, check if the URL points to an authenticated service (e.g. Google Docs, Confluence, Jira, GitHub). If so, look for a specialized MCP tool that provides authenticated access.
-${artifactUrlRoutingList(artifactFetchRoute)}${webFetchFullPrompt()}`;
+  return `${provenanceRule}IMPORTANT: WebFetch WILL FAIL for authenticated or private URLs. Before using this tool, check if the URL points to an authenticated service (e.g. Google Docs, Confluence, Jira, GitHub). If so, look for a specialized MCP tool that provides authenticated access.
+${artifactUrlRoutingList(route)}${webFetchFullPrompt()}`;
 }
 //@ chunk-g54kbxqw.js:141985-143352 placement
 function webFetchFullPrompt() {
@@ -145,9 +158,9 @@ var COPYRIGHT_GUIDELINES = ` - Enforce a strict 125-character maximum for quotes
 var UNTRUSTED_CONTENT = "untrusted-content";
 var untrustedFenceRegex;
 //@ chunk-g54kbxqw.js:143807-143879 layout
-function escapeUntrustedFence(e) {
+function escapeUntrustedFence(text) {
   untrustedFenceRegex ??= confusableTagScrubPattern([UNTRUSTED_CONTENT], () => "");
-  return e.replace(untrustedFenceRegex, (n) => `${n}\\`);
+  return text.replace(untrustedFenceRegex, (matchText) => `${matchText}\\`);
 }
 //@ chunk-g54kbxqw.js:143879-145288 layout
 var untrustedContentLead = ({ source, fence }) =>
@@ -158,19 +171,19 @@ var untrustedContentTrail = ({ fence }) =>
 /**
  * 构造 WebFetch 次级模型 prompt：页面内容 + 用户 prompt + 准则；预批准域名用宽松准则，否则附加版权准则（引用 ≤125 字、不复述歌词）；给了 untrusted 选项时用随机标签包裹内容并加前后警示。
  */
-function makeSecondaryModelPrompt(truncatedContent, prompt, isPreapprovedDomain, r) {
+function makeSecondaryModelPrompt(text, prompt, isPreapprovedDomain, untrusted) {
   let guidelines = isPreapprovedDomain
     ? "Provide a concise response based on the content above. Include relevant details, code examples, and documentation excerpts as needed."
     : `Provide a concise response based only on the content above. In your response:
 ${COPYRIGHT_GUIDELINES}`;
-  if (r !== undefined)
-    return `${untrustedContentLead(r)}
+  if (untrusted !== undefined)
+    return `${untrustedContentLead(untrusted)}
 
-<${r.fence}>
-${escapeUntrustedFence(truncatedContent)}
-</${r.fence}>
+<${untrusted.fence}>
+${escapeUntrustedFence(text)}
+</${untrusted.fence}>
 
-${untrustedContentTrail(r)}
+${untrustedContentTrail(untrusted)}
 
 ${prompt}
 
@@ -179,7 +192,7 @@ ${guidelines}
   return `
 Web page content:
 ---
-${truncatedContent}
+${text}
 ---
 
 ${prompt}
@@ -187,15 +200,6 @@ ${prompt}
 ${guidelines}
 `;
 }
-//@ chunk-rce5b6h0.js:191-219 fingerprint = WEB_FETCH_TOOL_NAME (0.759)
-/**
- * WebFetch 工具名常量 "WebFetch"；qdr 为规则内容字段 "url"。
- */
-var WEBFETCH = "WebFetch";
-var WEB_FETCH_RULE_CONTENT_FIELD = "url";
-//@ chunk-rce5b6h0.js:219-257 placement
-var FETCH = "Fetch";
-var ALLOW_WEB_FETCH = "allow_web_fetch";
 export {
   WEBFETCH,
   ALLOW_WEB_FETCH,

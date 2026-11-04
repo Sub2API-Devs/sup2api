@@ -5,7 +5,7 @@
  * pieces: chunk-fq0cr76a.js (1)
  * attribution: cjs-require-graph 1
  */
-import { x } from "../../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../../runtime/bun-runtime.js";
 import { require_descriptors } from "./descriptors.js";
 import { require_text_format } from "./wire/text-format.js";
 import { require_nested_types } from "./reflect/nested-types.js";
@@ -13,7 +13,7 @@ import { require_unsafe } from "./reflect/unsafe.js";
 import { require_names } from "./reflect/names.js";
 
 //@ chunk-fq0cr76a.js:364098-375937 cjs-require-graph
-var require_registry = x(function (cjsExports) {
+var require_registry = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });

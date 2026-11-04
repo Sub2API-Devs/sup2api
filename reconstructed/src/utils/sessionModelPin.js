@@ -14,7 +14,7 @@ import { assertResumeNotRefused } from "./transcript/deserialize.js";
 /**
  * noModelPin：不改变模型的占位结果。
  */
-function noModelPin(e, o) {
+function noModelPin(context, model) {
   return {
     pin: undefined,
     switched: false,
@@ -24,30 +24,30 @@ function noModelPin(e, o) {
 /**
  * noopModelPinSubscriber：空实现的模型固定订阅者。
  */
-function noopModelPinSubscriber(e) {
-  return (o, s) => {};
+function noopModelPinSubscriber(a) {
+  return (b, c) => {};
 }
 //@ chunk-0h6s23my.js:309-332 placement
 /**
  * recordModelPinSwitch：记录模型固定切换。
  */
-function recordModelPinSwitch(e) {
-  assertResumeNotRefused(e);
+function recordModelPinSwitch(pin) {
+  assertResumeNotRefused(pin);
 }
 //@ chunk-0h6s23my.js:332-381 placement
 /**
  * switchSessionModelPin：切换会话的模型固定。
  */
-function switchSessionModelPin(e, o) {
-  let s = noModelPin(e, o);
-  recordModelPinSwitch(s);
-  return s;
+function switchSessionModelPin(context, model) {
+  let pin = noModelPin(context, model);
+  recordModelPinSwitch(pin);
+  return pin;
 }
 //@ chunk-0h6s23my.js:381-401 placement
 /**
  * noopModelPinReset：空实现的模型固定重置。
  */
-function noopModelPinReset(e = false) {}
+function noopModelPinReset(force = false) {}
 //@ chunk-0h6s23my.js:401-430 placement
 /**
  * modelPinStorageKind：模型固定的存储种类（file）。

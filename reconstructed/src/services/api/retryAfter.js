@@ -14,13 +14,13 @@ import { APIError } from "../../../vendor/@anthropic-ai/sdk/core/error.mjs";
 var X_CC_RETRY_AFTER_TOO_LONG = "x-cc-retry-after-too-long";
 //@ chunk-e6aww6q8.js:225908-226167 placement
 function parseRetryAfterMs(headers, now = Date.now()) {
-  let r = parseFloat(headers.get("retry-after-ms") ?? "");
-  if (!Number.isNaN(r) && r !== 0) return r;
-  let s = headers.get("retry-after");
-  if (!s) return;
-  let h = parseFloat(s);
-  if (!Number.isNaN(h)) return h * 1000;
-  let timestamp = Date.parse(s);
+  let retryAfterMs = parseFloat(headers.get("retry-after-ms") ?? "");
+  if (!Number.isNaN(retryAfterMs) && retryAfterMs !== 0) return retryAfterMs;
+  let retryAfter = headers.get("retry-after");
+  if (!retryAfter) return;
+  let seconds = parseFloat(retryAfter);
+  if (!Number.isNaN(seconds)) return seconds * 1000;
+  let timestamp = Date.parse(retryAfter);
   return Number.isNaN(timestamp) ? undefined : timestamp - now;
 }
 //@ chunk-e6aww6q8.js:226167-226617 placement
@@ -28,19 +28,19 @@ function parseRetryAfterMs(headers, now = Date.now()) {
  * 429/529 响应的 Retry-After 超过可等待时长时，改写响应头：x-should-retry=false 并写入 X_CC_RETRY_AFTER_TOO_LONG（毫秒），让 SDK 不再自行重试。
  */
 function markRetryAfterTooLong(response, maxWaitMs) {
-  let r =
+  let values =
     response.status === 429 || response.status === 529 ? parseRetryAfterMs(response.headers) : undefined;
-  let s =
-    r !== undefined &&
-    Number.isFinite(r) &&
-    r >= Math.max(maxWaitMs, 0) &&
+  let hint =
+    values !== undefined &&
+    Number.isFinite(values) &&
+    values >= Math.max(maxWaitMs, 0) &&
     response.headers.get("x-should-retry") !== "false";
-  if (!s && !response.headers.has(X_CC_RETRY_AFTER_TOO_LONG)) return response;
+  if (!hint && !response.headers.has(X_CC_RETRY_AFTER_TOO_LONG)) return response;
   let headers = new Headers(response.headers);
   headers.delete(X_CC_RETRY_AFTER_TOO_LONG);
-  if (s) {
+  if (hint) {
     headers.set("x-should-retry", "false");
-    headers.set(X_CC_RETRY_AFTER_TOO_LONG, String(Math.round(r)));
+    headers.set(X_CC_RETRY_AFTER_TOO_LONG, String(Math.round(values)));
   }
   let response_2 = new Response(response.body, {
     status: response.status,
@@ -60,8 +60,8 @@ function retryAfterTooLongMs(error) {
     !(error.headers instanceof Headers)
   )
     return;
-  let n = parseFloat(error.headers.get(X_CC_RETRY_AFTER_TOO_LONG) ?? "");
-  return Number.isFinite(n) && n >= 0 ? n : undefined;
+  let seconds = parseFloat(error.headers.get(X_CC_RETRY_AFTER_TOO_LONG) ?? "");
+  return Number.isFinite(seconds) && seconds >= 0 ? seconds : undefined;
 }
 //@ chunk-e6aww6q8.js:226807-226911 placement
 function stripRetryAfterTooLongHeader(error) {

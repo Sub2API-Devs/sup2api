@@ -5,7 +5,10 @@
  * pieces: chunk-3a1caa6f.js (1)
  * attribution: placement 1
  */
-import { Out, Qve } from "../@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
+import {
+  baseGetAlias,
+  castPathAlias,
+} from "../@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
 import { setValueRaw } from "../../src/utils/git/gitSafeEnv.js";
 
 //@ chunk-3a1caa6f.js:1544-1657 placement
@@ -15,8 +18,8 @@ function basePickBy(object, paths, predicate) {
   var result = {};
   while (++index < length) {
     var path = paths[index];
-    var value = Out(object, path);
-    if (predicate(value, path)) setValueRaw(result, Qve(path, object), value);
+    var value = baseGetAlias(object, path);
+    if (predicate(value, path)) setValueRaw(result, castPathAlias(path, object), value);
   }
   return result;
 }

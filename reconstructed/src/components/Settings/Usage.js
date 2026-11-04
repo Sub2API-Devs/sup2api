@@ -8,6 +8,7 @@
  * pieces: chunk-9689amr8.js (1), chunk-9h8dr0qb.js (52)
  * attribution: fingerprint 3, placement 49, layout 1
  */
+import { formatResetText, formatTokens, formatRelativeTimeAgo, formatResetTime } from "../../utils/format.js";
 import {
   jsxProd_default_2,
   jsxProd_default,
@@ -15,15 +16,23 @@ import {
 } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Box, Text } from "../../ink/components/Text.js";
 import { plural } from "../../utils/stringUtils.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { useAppState, useAppStateSession } from "../../state/AppState.js";
 import { selectPluginCommands } from "../../commands/plugin/PluginSettings.js";
 import { selectMcpCommands } from "./Status.js";
 import { useMainLoopModelSetting, useMainLoopModel } from "../../hooks/useMainLoopModel.js";
 import { pluginSkillBudgetUsage } from "../../utils/plugins/pluginSkillBudget.js";
 import { bytesPerTokenForModel } from "../../utils/model/modelDisplay.js";
-import { MEMO_CACHE_SENTINEL, Re } from "../../../runtime/bun-runtime.js";
-import { init_react_production, qt, Se, y, fo, Qr, P } from "../../../vendor/react/cjs/react.production.js";
+import { MEMO_CACHE_SENTINEL, __toESM } from "../../../runtime/bun-runtime.js";
+import {
+  init_react_production,
+  createContext,
+  useContext,
+  useState,
+  suspenseTypeExport,
+  use,
+  useEffect,
+} from "../../../vendor/react/cjs/react.production.js";
 import { useCommandQueueOrDefault, useQueuedMessageText } from "../../context/QueuedMessageContext.js";
 import {
   effortBelowMaxSaved,
@@ -45,7 +54,6 @@ import { stableEmptyObject } from "../../utils/stableEmptyObject.js";
 import { ConfigurableShortcutHint } from "../ConfigurableShortcutHint.js";
 import { Byline } from "../design-system/Byline.js";
 import { cronToHuman } from "../../utils/cron.js";
-import { formatTokens, formatRelativeTimeAgo, formatResetText, formatResetTime } from "../../utils/format.js";
 import { ProgressBar } from "../design-system/ProgressBar.js";
 import { useTerminalSize } from "../../hooks/useTerminalSize.js";
 import { isClaudeAISubscriber, getSubscriptionType } from "../../utils/auth.js";
@@ -74,13 +82,60 @@ import { useKeybinding } from "../../keybindings/useKeybinding.js";
 import { FeedColumn } from "../LogoV2/FeedColumn.js";
 import { usageCreditsCommand } from "../../commands/extra-usage/index.js";
 import { require_asciichart } from "../../../vendor/asciichart/asciichart.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
+//@ chunk-9689amr8.js:12028-12675 fingerprint = Usage (0.427)
+/**
+ * /usage：当前会话与本周用量条（全部模型/Sonnet/Opus）、重置时间，团队/企业的额外用量区。
+ */
+function Usage(usage) {
+  let { rate_limits: rateLimits, subscription_type: subscriptionType } = usage;
+  if (!rateLimits) return null;
+  let showSonnetWeek = subscriptionType === "max" || subscriptionType === "team" || subscriptionType === null;
+  let bars = [
+    {
+      title: "Current session",
+      limit: rateLimits.five_hour,
+    },
+    {
+      title: "Current week (all models)",
+      limit: rateLimits.seven_day,
+    },
+    ...(showSonnetWeek
+      ? [
+          {
+            title: "Current week (Sonnet only)",
+            limit: rateLimits.seven_day_sonnet,
+          },
+        ]
+      : []),
+    ...(rateLimits.model_scoped ?? []).map((modelScope) => ({
+      title: `Current week (${modelScope.display_name})`,
+      limit: {
+        utilization: modelScope.utilization,
+        resets_at: modelScope.resets_at,
+      },
+    })),
+  ];
+  let lines = [];
+  for (let { title, limit } of bars) {
+    if (!limit || limit.utilization === null) continue;
+    let responseBody = limit.resets_at
+      ? ` \xB7 resets ${formatResetText(limit.resets_at, true, true, true)}`
+      : "";
+    lines.push(`${title}: ${Math.floor(limit.utilization)}% used${responseBody}`);
+  }
+  return lines.length > 0
+    ? lines.join(`
+`)
+    : null;
+}
 //@ chunk-9h8dr0qb.js:42676-42716 placement
-function selectMainLoopModel(ee) {
-  return ee.mainLoopModel;
+function selectMainLoopModel(state) {
+  return state.mainLoopModel;
 }
 //@ chunk-9h8dr0qb.js:42716-42972 placement
-function renderPluginSkillTokensRow(ne) {
+function renderPluginSkillTokensRow(plugin) {
   return jsxProd_default_2(
     Box,
     {
@@ -90,24 +145,24 @@ function renderPluginSkillTokensRow(ne) {
           width: 28,
           children: jsxProd_default(Text, {
             dimColor: true,
-            children: ne.pluginName,
+            children: plugin.pluginName,
           }),
         }),
         jsxProd_default_2(Text, {
           dimColor: true,
           children: [
-            ne.skillCount,
+            plugin.skillCount,
             " ",
-            plural(ne.skillCount, "skill"),
+            plural(plugin.skillCount, "skill"),
             " \xB7 ~",
-            ne.approxTokens,
+            plugin.approxTokens,
             " ",
             "tok/turn",
           ],
         }),
       ],
     },
-    ne.pluginName,
+    plugin.pluginName,
   );
 }
 //@ chunk-9h8dr0qb.js:42972-44139 placement
@@ -115,108 +170,114 @@ function renderPluginSkillTokensRow(ne) {
  * 显示各插件技能描述每轮占用的 token。
  */
 function renderPluginSkillFootprint() {
-  let D = w(15);
+  let $ = useMemoCache(15);
   let appState = useAppState(selectPluginCommands);
   let appState_2 = useAppState(selectMcpCommands);
   let appState_3 = useAppState(selectMainLoopModel);
-  let h = useMainLoopModelSetting() ?? appState_3;
-  let E;
-  if (D[0] !== appState_2 || D[1] !== h || D[2] !== appState) {
-    E = pluginSkillBudgetUsage([...appState, ...appState_2], bytesPerTokenForModel(h ?? undefined));
-    D[0] = appState_2;
-    D[1] = h;
-    D[2] = appState;
-    D[3] = E;
-  } else E = D[3];
-  let T = E;
-  if (T.byPlugin.length === 0) {
+  let model = useMainLoopModelSetting() ?? appState_3;
+  let usage;
+  if ($[0] !== appState_2 || $[1] !== model || $[2] !== appState) {
+    usage = pluginSkillBudgetUsage([...appState, ...appState_2], bytesPerTokenForModel(model ?? undefined));
+    $[0] = appState_2;
+    $[1] = model;
+    $[2] = appState;
+    $[3] = usage;
+  } else usage = $[3];
+  let usageValue = usage;
+  if (usageValue.byPlugin.length === 0) {
     return null;
   }
-  let A;
-  let v;
-  if (D[4] === MEMO_CACHE_SENTINEL) {
-    A = jsxProd_default(Text, {
+  let titleElement;
+  let noteElement;
+  if ($[4] === MEMO_CACHE_SENTINEL) {
+    titleElement = jsxProd_default(Text, {
       bold: true,
       children: "Plugin skill-listing footprint",
     });
-    v = jsxProd_default(Text, {
+    noteElement = jsxProd_default(Text, {
       dimColor: true,
       wrap: "wrap",
       children:
         "What each plugin's skill descriptions add to the system prompt (cached input after the first turn). Agents and MCP tools not yet counted.",
     });
-    D[4] = A;
-    D[5] = v;
+    $[4] = titleElement;
+    $[5] = noteElement;
   } else {
-    A = D[4];
-    v = D[5];
+    titleElement = $[4];
+    noteElement = $[5];
   }
-  let F;
-  if (D[6] !== T.byPlugin) {
-    F = T.byPlugin.map(renderPluginSkillTokensRow);
-    D[6] = T.byPlugin;
-    D[7] = F;
-  } else F = D[7];
-  let U;
-  if (D[8] === MEMO_CACHE_SENTINEL) {
-    U = jsxProd_default(Box, {
+  let pluginRows;
+  if ($[6] !== usageValue.byPlugin) {
+    pluginRows = usageValue.byPlugin.map(renderPluginSkillTokensRow);
+    $[6] = usageValue.byPlugin;
+    $[7] = pluginRows;
+  } else pluginRows = $[7];
+  let totalLabel;
+  if ($[8] === MEMO_CACHE_SENTINEL) {
+    totalLabel = jsxProd_default(Box, {
       width: 28,
       children: jsxProd_default(Text, {
         children: "Total",
       }),
     });
-    D[8] = U;
-  } else U = D[8];
-  const W = T.overBudget
+    $[8] = totalLabel;
+  } else totalLabel = $[8];
+  const capSuffix = usageValue.overBudget
     ? " (capped at the listing budget; per-plugin figures above are pre-truncation)"
     : "";
-  let M;
-  if (D[9] !== T.totalTokens || D[10] !== W) {
-    M = jsxProd_default_2(Box, {
+  let totalRow;
+  if ($[9] !== usageValue.totalTokens || $[10] !== capSuffix) {
+    totalRow = jsxProd_default_2(Box, {
       flexDirection: "row",
       marginTop: 1,
       children: [
-        U,
+        totalLabel,
         jsxProd_default_2(Text, {
-          children: ["~", T.totalTokens, " tok/turn", W],
+          children: ["~", usageValue.totalTokens, " tok/turn", capSuffix],
         }),
       ],
     });
-    D[9] = T.totalTokens;
-    D[10] = W;
-    D[11] = M;
-  } else M = D[11];
-  let B;
-  if (D[12] !== F || D[13] !== M) {
-    B = jsxProd_default_2(Box, {
+    $[9] = usageValue.totalTokens;
+    $[10] = capSuffix;
+    $[11] = totalRow;
+  } else totalRow = $[11];
+  let column;
+  if ($[12] !== pluginRows || $[13] !== totalRow) {
+    column = jsxProd_default_2(Box, {
       flexDirection: "column",
       marginTop: 1,
       children: [
-        A,
-        v,
+        titleElement,
+        noteElement,
         jsxProd_default_2(Box, {
           flexDirection: "column",
           marginTop: 1,
-          children: [F, M],
+          children: [pluginRows, totalRow],
         }),
       ],
     });
-    D[12] = F;
-    D[13] = M;
-    D[14] = B;
-  } else B = D[14];
-  return B;
+    $[12] = pluginRows;
+    $[13] = totalRow;
+    $[14] = column;
+  } else column = $[14];
+  return column;
 }
 //@ chunk-9h8dr0qb.js:44139-44143 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-9h8dr0qb.js:44139", () => {
+  init_react_production();
+});
 //@ chunk-9h8dr0qb.js:44143-44147 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-9h8dr0qb.js:44143", () => {
+  init_react_production();
+});
 //@ chunk-9h8dr0qb.js:44147-44181 placement
-function selectUltracode(J) {
-  return J.ultracode;
+function selectUltracode(state) {
+  return state.ultracode;
 }
 //@ chunk-9h8dr0qb.js:44181-44389 placement
-function renderUsageShareRow(B) {
+function renderUsageShareRow(row) {
   return jsxProd_default_2(
     Box,
     {
@@ -225,174 +286,182 @@ function renderUsageShareRow(B) {
           width: USAGE_EVIDENCE_WINDOW_DAYS,
           flexShrink: 0,
           children: jsxProd_default_2(Text, {
-            children: [B.pct, "%"],
+            children: [row.pct, "%"],
           }),
         }),
         jsxProd_default_2(Text, {
           wrap: "wrap",
           children: [
-            B.title,
-            B.detail &&
+            row.title,
+            row.detail &&
               jsxProd_default_2(Text, {
                 dimColor: true,
-                children: [" \xB7 ", B.detail],
+                children: [" \xB7 ", row.detail],
               }),
           ],
         }),
       ],
     },
-    B.key,
+    row.key,
   );
 }
 //@ chunk-9h8dr0qb.js:44389-44405 placement
-var usageDataSlot = qt(null);
+var usageDataSlot; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-9h8dr0qb.js:44389", () => {
+  usageDataSlot = createContext(null);
+});
 //@ chunk-9h8dr0qb.js:44405-44433 placement
 function useUsageData() {
-  return Se(usageDataSlot);
+  return useContext(usageDataSlot);
 }
 //@ chunk-9h8dr0qb.js:44433-45315 placement
 /**
  * 执行用量修复建议（Remote Control 下不可用）。
  */
 function applyUsageFix(props) {
-  let v = w(18);
+  let $ = useMemoCache(18);
   let { onClose, children } = props;
   let commandQueueOrDefault = useCommandQueueOrDefault();
   let appStateSession = useAppStateSession();
   const mainLoopModel = useMainLoopModel();
-  const queuedMessageText = useQueuedMessageText();
-  const appState = useAppState(selectUltracode);
-  let F;
-  if (v[0] !== mainLoopModel || v[1] !== queuedMessageText || v[2] !== appState) {
-    F = effortBelowMaxSaved(mainLoopModel, queuedMessageText, appState);
-    v[0] = mainLoopModel;
-    v[1] = queuedMessageText;
-    v[2] = appState;
-    v[3] = F;
-  } else F = v[3];
-  let { effortBelowMax, isEffortBelowMaxSaved, isEffortSwitchFree, isUltracodeOn } = F;
-  let H;
-  if (v[4] !== appStateSession) {
-    H = isRemoteSessionAvailable() || isBridgeOrTransport(appStateSession);
-    v[4] = appStateSession;
-    v[5] = H;
-  } else H = v[5];
-  let K = H;
-  let ee;
+  const sessionEffort = useQueuedMessageText();
+  const context = useAppState(selectUltracode);
+  let effortBelowMax;
+  if ($[0] !== mainLoopModel || $[1] !== sessionEffort || $[2] !== context) {
+    effortBelowMax = effortBelowMaxSaved(mainLoopModel, sessionEffort, context);
+    $[0] = mainLoopModel;
+    $[1] = sessionEffort;
+    $[2] = context;
+    $[3] = effortBelowMax;
+  } else effortBelowMax = $[3];
+  let {
+    effortBelowMax: effortBelowMax_2,
+    isEffortBelowMaxSaved,
+    isEffortSwitchFree,
+    isUltracodeOn,
+  } = effortBelowMax;
+  let noticeElement;
+  if ($[4] !== appStateSession) {
+    noticeElement = isRemoteSessionAvailable() || isBridgeOrTransport(appStateSession);
+    $[4] = appStateSession;
+    $[5] = noticeElement;
+  } else noticeElement = $[5];
+  let noticeNode = noticeElement;
+  let noticeBody;
   if (
-    v[6] !== effortBelowMax ||
-    v[7] !== isEffortBelowMaxSaved ||
-    v[8] !== isEffortSwitchFree ||
-    v[9] !== isUltracodeOn ||
-    v[10] !== K ||
-    v[11] !== onClose ||
-    v[12] !== commandQueueOrDefault ||
-    v[13] !== appStateSession
+    $[6] !== effortBelowMax_2 ||
+    $[7] !== isEffortBelowMaxSaved ||
+    $[8] !== isEffortSwitchFree ||
+    $[9] !== isUltracodeOn ||
+    $[10] !== noticeNode ||
+    $[11] !== onClose ||
+    $[12] !== commandQueueOrDefault ||
+    $[13] !== appStateSession
   ) {
-    ee = K
+    noticeBody = noticeNode
       ? null
       : {
           live: {
-            effortBelowMax,
+            effortBelowMax: effortBelowMax_2,
             isEffortBelowMaxSaved,
             isEffortSwitchFree,
             isUltracodeOn,
           },
-          send: (ne) => {
+          send: (send) => {
             if (isBridgeOrTransport(appStateSession)) {
               onClose("Nothing was sent. Turn off Remote Control to use fixes.", {
                 display: "system",
               });
               return;
             }
-            enqueueContinuationMessages(commandQueueOrDefault, ne);
+            enqueueContinuationMessages(commandQueueOrDefault, send);
             logFeatureOk("usage_fix");
             onClose(undefined, {
               display: "skip",
             });
           },
         };
-    v[6] = effortBelowMax;
-    v[7] = isEffortBelowMaxSaved;
-    v[8] = isEffortSwitchFree;
-    v[9] = isUltracodeOn;
-    v[10] = K;
-    v[11] = onClose;
-    v[12] = commandQueueOrDefault;
-    v[13] = appStateSession;
-    v[14] = ee;
-  } else ee = v[14];
-  let value = ee;
-  let L;
-  if (v[15] !== children || v[16] !== value) {
-    L = jsxProd_default(usageDataSlot.Provider, {
+    $[6] = effortBelowMax_2;
+    $[7] = isEffortBelowMaxSaved;
+    $[8] = isEffortSwitchFree;
+    $[9] = isUltracodeOn;
+    $[10] = noticeNode;
+    $[11] = onClose;
+    $[12] = commandQueueOrDefault;
+    $[13] = appStateSession;
+    $[14] = noticeBody;
+  } else noticeBody = $[14];
+  let value = noticeBody;
+  let usageDataSlotElement;
+  if ($[15] !== children || $[16] !== value) {
+    usageDataSlotElement = jsxProd_default(usageDataSlot.Provider, {
       value,
       children,
     });
-    v[15] = children;
-    v[16] = value;
-    v[17] = L;
-  } else L = v[17];
-  return L;
+    $[15] = children;
+    $[16] = value;
+    $[17] = usageDataSlotElement;
+  } else usageDataSlotElement = $[17];
+  return usageDataSlotElement;
 }
 //@ chunk-9h8dr0qb.js:45315-45324 placement
 var USAGE_EVIDENCE_WINDOW_DAYS = 5;
 //@ chunk-9h8dr0qb.js:45324-45836 placement
 function renderFixUsageButton(props) {
-  let A = w(10);
+  let $ = useMemoCache(10);
   let { recommendations, fix, maxWidth } = props;
   let usageData = useUsageData();
-  let [E, T] = y(false);
-  let v;
-  if (A[0] !== fix || A[1] !== usageData) {
-    v = {
+  let [isSending, setIsSending] = useState(false);
+  let keybindings;
+  if ($[0] !== fix || $[1] !== usageData) {
+    keybindings = {
       "settings:fixUsage": () => {
         if (fix) {
-          T(true);
+          setIsSending(true);
           usageData?.send(fix);
         }
       },
     };
-    A[0] = fix;
-    A[1] = usageData;
-    A[2] = v;
-  } else v = A[2];
-  const isActive = fix !== undefined && !E;
-  let U;
-  if (A[3] !== isActive) {
-    U = {
+    $[0] = fix;
+    $[1] = usageData;
+    $[2] = keybindings;
+  } else keybindings = $[2];
+  const isActive = fix !== undefined && !isSending;
+  let buttonElement;
+  if ($[3] !== isActive) {
+    buttonElement = {
       context: "Settings",
       isActive,
     };
-    A[3] = isActive;
-    A[4] = U;
-  } else U = A[4];
-  MessageActionsKeybindings(v, U);
+    $[3] = isActive;
+    $[4] = buttonElement;
+  } else buttonElement = $[4];
+  MessageActionsKeybindings(keybindings, buttonElement);
   if (recommendations.length === 0) {
     return null;
   }
   let children;
-  if (A[5] !== recommendations) {
+  if ($[5] !== recommendations) {
     children = recommendations.map(renderUsageShareRow);
-    A[5] = recommendations;
-    A[6] = children;
-  } else children = A[6];
-  let M;
-  if (A[7] !== maxWidth || A[8] !== children) {
-    M = jsxProd_default(Box, {
+    $[5] = recommendations;
+    $[6] = children;
+  } else children = $[6];
+  let boxElement;
+  if ($[7] !== maxWidth || $[8] !== children) {
+    boxElement = jsxProd_default(Box, {
       flexDirection: "column",
       maxWidth,
       children,
     });
-    A[7] = maxWidth;
-    A[8] = children;
-    A[9] = M;
-  } else M = A[9];
-  return M;
+    $[7] = maxWidth;
+    $[8] = children;
+    $[9] = boxElement;
+  } else boxElement = $[9];
+  return boxElement;
 }
 //@ chunk-9h8dr0qb.js:45836-45912 placement
-function resetUsageData(M) {
-  logError(M);
+function resetUsageData(error) {
+  logError(error);
   return {
     day: EMPTY_USAGE_BREAKDOWN,
     week: EMPTY_USAGE_BREAKDOWN,
@@ -403,8 +472,8 @@ function resetUsageData(M) {
   };
 }
 //@ chunk-9h8dr0qb.js:45912-45943 placement
-function slashLabel(Ve) {
-  return `/${Ve}`;
+function slashLabel(commandName) {
+  return `/${commandName}`;
 }
 //@ chunk-9h8dr0qb.js:45943-46092 placement
 var EMPTY_USAGE_BREAKDOWN = {
@@ -427,43 +496,44 @@ var PERCENT_COLUMN_WIDTH = 6;
  * 用量归因：技能、子代理、插件、MCP 服务器各占多少（扫描本地会话）。
  */
 function UsageAttributionView(props) {
-  let D = w(14);
+  let $ = useMemoCache(14);
   let { maxWidth } = props;
   let { storageV5 } = useTheme_2();
-  let [h] = y(isUsageScanAllowed);
-  let E;
-  if (D[0] !== storageV5 || D[1] !== h.allowed) {
-    E = () => (h.allowed ? collectUsageRecommendations(storageV5).catch(resetUsageData) : null);
-    D[0] = storageV5;
-    D[1] = h.allowed;
-    D[2] = E;
-  } else E = D[2];
-  let [T] = y(E);
-  if (T === null || !h.allowed) {
-    let A;
-    if (D[3] === MEMO_CACHE_SENTINEL) {
-      A = jsxProd_default(renderAttributionHeader, {
+  let [scanAllowed] = useState(isUsageScanAllowed);
+  let scanEffect;
+  if ($[0] !== storageV5 || $[1] !== scanAllowed.allowed) {
+    scanEffect = () =>
+      scanAllowed.allowed ? collectUsageRecommendations(storageV5).catch(resetUsageData) : null;
+    $[0] = storageV5;
+    $[1] = scanAllowed.allowed;
+    $[2] = scanEffect;
+  } else scanEffect = $[2];
+  let [recommendations] = useState(scanEffect);
+  if (recommendations === null || !scanAllowed.allowed) {
+    let blockedAttributionHeader;
+    if ($[3] === MEMO_CACHE_SENTINEL) {
+      blockedAttributionHeader = jsxProd_default(renderAttributionHeader, {
         withSubtitle: false,
       });
-      D[3] = A;
-    } else A = D[3];
-    const children = h.allowed ? null : h.reason;
+      $[3] = blockedAttributionHeader;
+    } else blockedAttributionHeader = $[3];
+    const children = scanAllowed.allowed ? null : scanAllowed.reason;
     let children_2;
-    if (D[4] !== children) {
+    if ($[4] !== children) {
       children_2 = jsxProd_default(Text, {
         dimColor: true,
         wrap: "wrap",
         children,
       });
-      D[4] = children;
-      D[5] = children_2;
-    } else children_2 = D[5];
-    let U;
-    if (D[6] !== maxWidth || D[7] !== children_2) {
-      U = jsxProd_default_2(Box, {
+      $[4] = children;
+      $[5] = children_2;
+    } else children_2 = $[5];
+    let blockedNoticeBox;
+    if ($[6] !== maxWidth || $[7] !== children_2) {
+      blockedNoticeBox = jsxProd_default_2(Box, {
         flexDirection: "column",
         children: [
-          A,
+          blockedAttributionHeader,
           jsxProd_default(Box, {
             marginTop: 1,
             maxWidth,
@@ -471,23 +541,23 @@ function UsageAttributionView(props) {
           }),
         ],
       });
-      D[6] = maxWidth;
-      D[7] = children_2;
-      D[8] = U;
-    } else U = D[8];
-    return U;
+      $[6] = maxWidth;
+      $[7] = children_2;
+      $[8] = blockedNoticeBox;
+    } else blockedNoticeBox = $[8];
+    return blockedNoticeBox;
   }
-  let A;
-  if (D[9] === MEMO_CACHE_SENTINEL) {
-    A = jsxProd_default(renderAttributionHeader, {});
-    D[9] = A;
-  } else A = D[9];
-  let v;
-  if (D[10] === MEMO_CACHE_SENTINEL) {
-    v = jsxProd_default_2(Box, {
+  let attributionHeader;
+  if ($[9] === MEMO_CACHE_SENTINEL) {
+    attributionHeader = jsxProd_default(renderAttributionHeader, {});
+    $[9] = attributionHeader;
+  } else attributionHeader = $[9];
+  let usageColumnBox;
+  if ($[10] === MEMO_CACHE_SENTINEL) {
+    usageColumnBox = jsxProd_default_2(Box, {
       flexDirection: "column",
       children: [
-        A,
+        attributionHeader,
         jsxProd_default(Box, {
           marginTop: 1,
           children: jsxProd_default(Text, {
@@ -497,139 +567,147 @@ function UsageAttributionView(props) {
         }),
       ],
     });
-    D[10] = v;
-  } else v = D[10];
-  let fallback = v;
-  let F;
-  if (D[11] !== maxWidth || D[12] !== T) {
-    F = jsxProd_default(fo, {
+    $[10] = usageColumnBox;
+  } else usageColumnBox = $[10];
+  let fallback = usageColumnBox;
+  let foElement;
+  if ($[11] !== maxWidth || $[12] !== recommendations) {
+    foElement = jsxProd_default(suspenseTypeExport, {
       fallback,
       children: jsxProd_default(renderAttributionPeriod, {
         maxWidth,
-        scanPromise: T,
+        scanPromise: recommendations,
       }),
     });
-    D[11] = maxWidth;
-    D[12] = T;
-    D[13] = F;
-  } else F = D[13];
-  return F;
+    $[11] = maxWidth;
+    $[12] = recommendations;
+    $[13] = foElement;
+  } else foElement = $[13];
+  return foElement;
 }
 //@ chunk-9h8dr0qb.js:47126-47229 placement
-function getSignificantBehaviors(o) {
-  if (o.totalCost === 0) return [];
-  return o.behaviors.filter((behavior) => (behavior.cost / o.totalCost) * 100 >= MIN_RECOMMENDATION_PCT);
+function getSignificantBehaviors(usage) {
+  if (usage.totalCost === 0) return [];
+  return usage.behaviors.filter(
+    (behavior) => (behavior.cost / usage.totalCost) * 100 >= MIN_RECOMMENDATION_PCT,
+  );
 }
 //@ chunk-9h8dr0qb.js:47229-47349 placement
-function hasUsageBreakdownEntries(o) {
+function hasUsageBreakdownEntries(state) {
   return (
-    o.agents.length > 0 ||
-    o.skills.length > 0 ||
-    o.plugins.length > 0 ||
-    o.mcpServers.length > 0 ||
-    o.loops.length > 0
+    state.agents.length > 0 ||
+    state.skills.length > 0 ||
+    state.plugins.length > 0 ||
+    state.mcpServers.length > 0 ||
+    state.loops.length > 0
   );
 }
 //@ chunk-9h8dr0qb.js:47349-50015 placement
 function renderAttributionPeriod(props) {
-  let h = w(36);
+  let $ = useMemoCache(36);
   let { maxWidth, scanPromise } = props;
-  let D;
-  if (h[0] === MEMO_CACHE_SENTINEL) {
-    D = stableEmptyObject(false);
-    h[0] = D;
-  } else D = h[0];
-  let E = D;
-  let T = Qr(scanPromise);
-  let [A, v] = y("day");
+  let emptyProps;
+  if ($[0] === MEMO_CACHE_SENTINEL) {
+    emptyProps = stableEmptyObject(false);
+    $[0] = emptyProps;
+  } else emptyProps = $[0];
+  let hintFormat = emptyProps;
+  let scan = use(scanPromise);
+  let [period, setPeriod] = useState("day");
   let usageData = useUsageData();
-  let U;
-  if (h[1] !== T.day) {
-    U = getSignificantBehaviors(T.day).length > 0 || hasUsageBreakdownEntries(T.day);
-    h[1] = T.day;
-    h[2] = U;
-  } else U = h[2];
-  let W = U;
-  let M;
-  if (h[3] !== T.week) {
-    M = getSignificantBehaviors(T.week).length > 0 || hasUsageBreakdownEntries(T.week);
-    h[3] = T.week;
-    h[4] = M;
-  } else M = h[4];
-  let B = M;
-  let isActive = W || B;
-  let K;
-  if (h[5] === MEMO_CACHE_SENTINEL) {
-    K = {
-      "settings:periodDay": () => v("day"),
-      "settings:periodWeek": () => v("week"),
+  let hasDayData;
+  if ($[1] !== scan.day) {
+    hasDayData = getSignificantBehaviors(scan.day).length > 0 || hasUsageBreakdownEntries(scan.day);
+    $[1] = scan.day;
+    $[2] = hasDayData;
+  } else hasDayData = $[2];
+  let hasDay = hasDayData;
+  let hasWeek;
+  if ($[3] !== scan.week) {
+    hasWeek = getSignificantBehaviors(scan.week).length > 0 || hasUsageBreakdownEntries(scan.week);
+    $[3] = scan.week;
+    $[4] = hasWeek;
+  } else hasWeek = $[4];
+  let hasWeek_2 = hasWeek;
+  let isActive = hasDay || hasWeek_2;
+  let keyActions;
+  if ($[5] === MEMO_CACHE_SENTINEL) {
+    keyActions = {
+      "settings:periodDay": () => setPeriod("day"),
+      "settings:periodWeek": () => setPeriod("week"),
     };
-    h[5] = K;
-  } else K = h[5];
-  let ee;
-  if (h[6] !== isActive) {
-    ee = {
+    $[5] = keyActions;
+  } else keyActions = $[5];
+  let keyOptions;
+  if ($[6] !== isActive) {
+    keyOptions = {
       context: "Settings",
       isActive,
     };
-    h[6] = isActive;
-    h[7] = ee;
-  } else ee = h[7];
-  MessageActionsKeybindings(K, ee);
-  if (!W && !B) {
+    $[6] = isActive;
+    $[7] = keyOptions;
+  } else keyOptions = $[7];
+  MessageActionsKeybindings(keyActions, keyOptions);
+  if (!hasDay && !hasWeek_2) {
     return null;
   }
-  let ne = A === "day" ? T.day : T.week;
-  let V;
-  if (h[8] !== ne) {
-    V = getSignificantBehaviors(ne);
-    h[8] = ne;
-    h[9] = V;
-  } else V = h[9];
-  let L = V;
-  let J;
-  let ae;
-  if (h[10] !== usageData || h[11] !== A || h[12] !== T.evidence || h[13] !== ne) {
-    J = costliestBehavior(ne, T.evidence[A], usageData?.live);
-    ae = usageData ? usageRecommendationAction(J) : undefined;
-    h[10] = usageData;
-    h[11] = A;
-    h[12] = T.evidence;
-    h[13] = ne;
-    h[14] = J;
-    h[15] = ae;
+  let periodData = period === "day" ? scan.day : scan.week;
+  let behaviors;
+  if ($[8] !== periodData) {
+    behaviors = getSignificantBehaviors(periodData);
+    $[8] = periodData;
+    $[9] = behaviors;
+  } else behaviors = $[9];
+  let behaviors_2 = behaviors;
+  let costliest;
+  let fixAction;
+  if ($[10] !== usageData || $[11] !== period || $[12] !== scan.evidence || $[13] !== periodData) {
+    costliest = costliestBehavior(periodData, scan.evidence[period], usageData?.live);
+    fixAction = usageData ? usageRecommendationAction(costliest) : undefined;
+    $[10] = usageData;
+    $[11] = period;
+    $[12] = scan.evidence;
+    $[13] = periodData;
+    $[14] = costliest;
+    $[15] = fixAction;
   } else {
-    J = h[14];
-    ae = h[15];
+    costliest = $[14];
+    fixAction = $[15];
   }
-  let me = ae;
-  let fe;
-  if (h[16] === MEMO_CACHE_SENTINEL) {
-    fe = jsxProd_default(renderAttributionHeader, {});
-    h[16] = fe;
-  } else fe = h[16];
-  const De = A === "day" ? "24h" : "7d";
-  let de;
-  if (h[17] !== De) {
-    de = jsxProd_default(Box, {
+  let fixAction_2 = fixAction;
+  let header;
+  if ($[16] === MEMO_CACHE_SENTINEL) {
+    header = jsxProd_default(renderAttributionHeader, {});
+    $[16] = header;
+  } else header = $[16];
+  const windowLabel = period === "day" ? "24h" : "7d";
+  let windowLine;
+  if ($[17] !== windowLabel) {
+    windowLine = jsxProd_default(Box, {
       marginTop: 1,
       children: jsxProd_default_2(Text, {
         dimColor: true,
         wrap: "wrap",
-        children: ["Last ", De, " \xB7 shares overlap"],
+        children: ["Last ", windowLabel, " \xB7 shares overlap"],
       }),
     });
-    h[17] = De;
-    h[18] = de;
-  } else de = h[18];
-  let ve;
-  if (h[19] !== me || h[20] !== maxWidth || h[21] !== J || h[22] !== L.length || h[23] !== ne) {
-    ve = jsxProd_default(Box, {
+    $[17] = windowLabel;
+    $[18] = windowLine;
+  } else windowLine = $[18];
+  let bodyBox;
+  if (
+    $[19] !== fixAction_2 ||
+    $[20] !== maxWidth ||
+    $[21] !== costliest ||
+    $[22] !== behaviors_2.length ||
+    $[23] !== periodData
+  ) {
+    bodyBox = jsxProd_default(Box, {
       marginTop: 1,
       flexDirection: "column",
       gap: 1,
       children:
-        L.length === 0 && !hasUsageBreakdownEntries(ne)
+        behaviors_2.length === 0 && !hasUsageBreakdownEntries(periodData)
           ? jsxProd_default_2(Text, {
               dimColor: true,
               children: [
@@ -641,11 +719,11 @@ function renderAttributionPeriod(props) {
           : jsxProd_default_2(Fragment, {
               children: [
                 jsxProd_default(renderFixUsageButton, {
-                  recommendations: J,
-                  fix: me,
+                  recommendations: costliest,
+                  fix: fixAction_2,
                   maxWidth,
                 }),
-                !hasUsageBreakdownEntries(ne)
+                !hasUsageBreakdownEntries(periodData)
                   ? jsxProd_default_2(Box, {
                       flexDirection: "column",
                       children: [
@@ -664,23 +742,23 @@ function renderAttributionPeriod(props) {
                       children: [
                         jsxProd_default(renderAttributionRows, {
                           title: "Skills",
-                          rows: ne.skills,
+                          rows: periodData.skills,
                           label: slashLabel,
                         }),
                         jsxProd_default(renderAttributionRows, {
                           title: "Subagents",
-                          rows: ne.agents,
+                          rows: periodData.agents,
                         }),
                         jsxProd_default(renderAttributionRows, {
                           title: "Plugins",
-                          rows: ne.plugins,
+                          rows: periodData.plugins,
                         }),
                         jsxProd_default(renderAttributionRows, {
                           title: "MCP servers",
-                          rows: ne.mcpServers,
+                          rows: periodData.mcpServers,
                         }),
                         jsxProd_default(renderLoopsAttribution, {
-                          rows: ne.loops,
+                          rows: periodData.loops,
                           maxWidth,
                         }),
                       ],
@@ -688,166 +766,166 @@ function renderAttributionPeriod(props) {
               ],
             }),
     });
-    h[19] = me;
-    h[20] = maxWidth;
-    h[21] = J;
-    h[22] = L.length;
-    h[23] = ne;
-    h[24] = ve;
-  } else ve = h[24];
-  let pe;
-  if (h[25] !== me || h[26] !== J) {
-    pe =
-      me &&
+    $[19] = fixAction_2;
+    $[20] = maxWidth;
+    $[21] = costliest;
+    $[22] = behaviors_2.length;
+    $[23] = periodData;
+    $[24] = bodyBox;
+  } else bodyBox = $[24];
+  let fixHint;
+  if ($[25] !== fixAction_2 || $[26] !== costliest) {
+    fixHint =
+      fixAction_2 &&
       jsxProd_default(ConfigurableShortcutHint, {
         action: "settings:fixUsage",
         context: "Settings",
         fallback: "f",
-        description: formatFixCountLabel(me.keys.length, J.length),
-        ...E,
+        description: formatFixCountLabel(fixAction_2.keys.length, costliest.length),
+        ...hintFormat,
       });
-    h[25] = me;
-    h[26] = J;
-    h[27] = pe;
-  } else pe = h[27];
-  let Ce;
-  let He;
-  if (h[28] === MEMO_CACHE_SENTINEL) {
-    Ce = jsxProd_default(ConfigurableShortcutHint, {
+    $[25] = fixAction_2;
+    $[26] = costliest;
+    $[27] = fixHint;
+  } else fixHint = $[27];
+  let dayHint;
+  let weekHint;
+  if ($[28] === MEMO_CACHE_SENTINEL) {
+    dayHint = jsxProd_default(ConfigurableShortcutHint, {
       action: "settings:periodDay",
       context: "Settings",
       fallback: "d",
       description: "day",
-      ...E,
+      ...hintFormat,
     });
-    He = jsxProd_default(ConfigurableShortcutHint, {
+    weekHint = jsxProd_default(ConfigurableShortcutHint, {
       action: "settings:periodWeek",
       context: "Settings",
       fallback: "w",
       description: "week",
-      ...E,
+      ...hintFormat,
     });
-    h[28] = Ce;
-    h[29] = He;
+    $[28] = dayHint;
+    $[29] = weekHint;
   } else {
-    Ce = h[28];
-    He = h[29];
+    dayHint = $[28];
+    weekHint = $[29];
   }
-  let xe;
-  if (h[30] !== pe) {
-    xe = jsxProd_default(Box, {
+  let hintsBox;
+  if ($[30] !== fixHint) {
+    hintsBox = jsxProd_default(Box, {
       marginTop: 1,
       children: jsxProd_default(Text, {
         dimColor: true,
         italic: false,
         children: jsxProd_default_2(Byline, {
-          children: [pe, Ce, He],
+          children: [fixHint, dayHint, weekHint],
         }),
       }),
     });
-    h[30] = pe;
-    h[31] = xe;
-  } else xe = h[31];
-  let Oe;
-  if (h[32] !== de || h[33] !== ve || h[34] !== xe) {
-    Oe = jsxProd_default_2(Box, {
+    $[30] = fixHint;
+    $[31] = hintsBox;
+  } else hintsBox = $[31];
+  let content;
+  if ($[32] !== windowLine || $[33] !== bodyBox || $[34] !== hintsBox) {
+    content = jsxProd_default_2(Box, {
       flexDirection: "column",
-      children: [fe, de, ve, xe],
+      children: [header, windowLine, bodyBox, hintsBox],
     });
-    h[32] = de;
-    h[33] = ve;
-    h[34] = xe;
-    h[35] = Oe;
-  } else Oe = h[35];
-  return Oe;
+    $[32] = windowLine;
+    $[33] = bodyBox;
+    $[34] = hintsBox;
+    $[35] = content;
+  } else content = $[35];
+  return content;
 }
 //@ chunk-9h8dr0qb.js:50015-50120 placement
-function formatFixCountLabel(o, u) {
-  if (o < u) return `fix ${o} of ${u}`;
-  return o === 1 ? "fix this" : o === 2 ? "fix both" : `fix all ${o}`;
+function formatFixCountLabel(index, total) {
+  if (index < total) return `fix ${index} of ${total}`;
+  return index === 1 ? "fix this" : index === 2 ? "fix both" : `fix all ${index}`;
 }
 //@ chunk-9h8dr0qb.js:50120-50529 placement
 function renderAttributionHeader(props) {
-  let h = w(5);
+  let $ = useMemoCache(5);
   let { withSubtitle } = props;
-  let p = withSubtitle === undefined ? true : withSubtitle;
-  let D;
-  if (h[0] === MEMO_CACHE_SENTINEL) {
-    D = jsxProd_default(Text, {
+  let subtitleFlag = withSubtitle === undefined ? true : withSubtitle;
+  let textElement;
+  if ($[0] === MEMO_CACHE_SENTINEL) {
+    textElement = jsxProd_default(Text, {
       bold: true,
       wrap: "wrap",
       children: "What's contributing to your usage?",
     });
-    h[0] = D;
-  } else D = h[0];
-  let E;
-  if (h[1] !== p) {
-    E =
-      p &&
+    $[0] = textElement;
+  } else textElement = $[0];
+  let headerElement;
+  if ($[1] !== subtitleFlag) {
+    headerElement =
+      subtitleFlag &&
       jsxProd_default(Text, {
         dimColor: true,
         wrap: "wrap",
         children: "Approximate \xB7 sessions on this machine only",
       });
-    h[1] = p;
-    h[2] = E;
-  } else E = h[2];
-  let T;
-  if (h[3] !== E) {
-    T = jsxProd_default_2(Box, {
+    $[1] = subtitleFlag;
+    $[2] = headerElement;
+  } else headerElement = $[2];
+  let boxElement;
+  if ($[3] !== headerElement) {
+    boxElement = jsxProd_default_2(Box, {
       flexDirection: "column",
-      children: [D, E],
+      children: [textElement, headerElement],
     });
-    h[3] = E;
-    h[4] = T;
-  } else T = h[4];
-  return T;
+    $[3] = headerElement;
+    $[4] = boxElement;
+  } else boxElement = $[4];
+  return boxElement;
 }
 //@ chunk-9h8dr0qb.js:50529-51614 placement
 function renderAttributionRows(props) {
-  let D = w(23);
+  let $ = useMemoCache(23);
   let { title, rows, label } = props;
   if (rows.length === 0) {
     return null;
   }
-  let E;
+  let containerComponent;
   let flexDirection;
-  let A;
-  let v;
-  let F;
-  if (D[0] !== label || D[1] !== rows || D[2] !== title) {
+  let boxElement;
+  let rowElements;
+  let hiddenCount;
+  if ($[0] !== label || $[1] !== rows || $[2] !== title) {
     let sliced = rows.slice(0, USAGE_LIST_MAX_ROWS);
-    F = rows.length - USAGE_LIST_MAX_ROWS;
-    E = Box;
+    hiddenCount = rows.length - USAGE_LIST_MAX_ROWS;
+    containerComponent = Box;
     flexDirection = "column";
-    let W;
-    if (D[8] !== title) {
-      W = jsxProd_default(Text, {
+    let titleElement;
+    if ($[8] !== title) {
+      titleElement = jsxProd_default(Text, {
         children: title,
       });
-      D[8] = title;
-      D[9] = W;
-    } else W = D[9];
-    let M;
-    if (D[10] === MEMO_CACHE_SENTINEL) {
-      M = jsxProd_default(Text, {
+      $[8] = title;
+      $[9] = titleElement;
+    } else titleElement = $[9];
+    let percentHeader;
+    if ($[10] === MEMO_CACHE_SENTINEL) {
+      percentHeader = jsxProd_default(Text, {
         dimColor: true,
         children: "% of usage",
       });
-      D[10] = M;
-    } else M = D[10];
-    if (D[11] !== W) {
-      A = jsxProd_default_2(Box, {
+      $[10] = percentHeader;
+    } else percentHeader = $[10];
+    if ($[11] !== titleElement) {
+      boxElement = jsxProd_default_2(Box, {
         width: USAGE_NAME_COLUMN_WIDTH + PERCENT_COLUMN_WIDTH,
         justifyContent: "space-between",
-        children: [W, M],
+        children: [titleElement, percentHeader],
       });
-      D[11] = W;
-      D[12] = A;
-    } else A = D[12];
-    let B;
-    if (D[13] !== label) {
-      B = (H) =>
+      $[11] = titleElement;
+      $[12] = boxElement;
+    } else boxElement = $[12];
+    let renderRow;
+    if ($[13] !== label) {
+      renderRow = (row) =>
         jsxProd_default_2(
           Box,
           {
@@ -857,7 +935,7 @@ function renderAttributionRows(props) {
                 children: jsxProd_default(Text, {
                   dimColor: true,
                   wrap: "truncate-end",
-                  children: label ? label(H.name) : H.name,
+                  children: label ? label(row.name) : row.name,
                 }),
               }),
               jsxProd_default(Box, {
@@ -865,57 +943,63 @@ function renderAttributionRows(props) {
                 justifyContent: "flex-end",
                 children: jsxProd_default_2(Text, {
                   dimColor: true,
-                  children: [H.pct, "%"],
+                  children: [row.pct, "%"],
                 }),
               }),
             ],
           },
-          H.name,
+          row.name,
         );
-      D[13] = label;
-      D[14] = B;
-    } else B = D[14];
-    v = sliced.map(B);
-    D[0] = label;
-    D[1] = rows;
-    D[2] = title;
-    D[3] = E;
-    D[4] = flexDirection;
-    D[5] = A;
-    D[6] = v;
-    D[7] = F;
+      $[13] = label;
+      $[14] = renderRow;
+    } else renderRow = $[14];
+    rowElements = sliced.map(renderRow);
+    $[0] = label;
+    $[1] = rows;
+    $[2] = title;
+    $[3] = containerComponent;
+    $[4] = flexDirection;
+    $[5] = boxElement;
+    $[6] = rowElements;
+    $[7] = hiddenCount;
   } else {
-    E = D[3];
-    flexDirection = D[4];
-    A = D[5];
-    v = D[6];
-    F = D[7];
+    containerComponent = $[3];
+    flexDirection = $[4];
+    boxElement = $[5];
+    rowElements = $[6];
+    hiddenCount = $[7];
   }
-  let W;
-  if (D[15] !== F) {
-    W =
-      F > 0 &&
+  let moreIndicator;
+  if ($[15] !== hiddenCount) {
+    moreIndicator =
+      hiddenCount > 0 &&
       jsxProd_default_2(Text, {
         dimColor: true,
-        children: ["\u2026 ", F, " more"],
+        children: ["\u2026 ", hiddenCount, " more"],
       });
-    D[15] = F;
-    D[16] = W;
-  } else W = D[16];
-  let M;
-  if (D[17] !== E || D[18] !== flexDirection || D[19] !== A || D[20] !== v || D[21] !== W) {
-    M = jsxProd_default_2(E, {
+    $[15] = hiddenCount;
+    $[16] = moreIndicator;
+  } else moreIndicator = $[16];
+  let containerComponentElement;
+  if (
+    $[17] !== containerComponent ||
+    $[18] !== flexDirection ||
+    $[19] !== boxElement ||
+    $[20] !== rowElements ||
+    $[21] !== moreIndicator
+  ) {
+    containerComponentElement = jsxProd_default_2(containerComponent, {
       flexDirection,
-      children: [A, v, W],
+      children: [boxElement, rowElements, moreIndicator],
     });
-    D[17] = E;
-    D[18] = flexDirection;
-    D[19] = A;
-    D[20] = v;
-    D[21] = W;
-    D[22] = M;
-  } else M = D[22];
-  return M;
+    $[17] = containerComponent;
+    $[18] = flexDirection;
+    $[19] = boxElement;
+    $[20] = rowElements;
+    $[21] = moreIndicator;
+    $[22] = containerComponentElement;
+  } else containerComponentElement = $[22];
+  return containerComponentElement;
 }
 //@ chunk-9h8dr0qb.js:51614-51671 placement
 var USAGE_SECTION_HEADER_ROWS = 10;
@@ -934,10 +1018,10 @@ var USAGE_SHELL_ROWS = USAGE_TOTAL_ROWS + 24;
 /**
  * 把循环任务的 cron 表达式缩写成 "5m"/"2h"/"1d"/"at HH:MM"；动态循环返回 dynamic，其他表达式用 cronToHuman 转成文字。
  */
-function formatLoopSchedule(o) {
-  if (o.isDynamic) return "dynamic";
-  if (!o.cron) return "?";
-  let match = o.cron.match(
+function formatLoopSchedule(schedule) {
+  if (schedule.isDynamic) return "dynamic";
+  if (!schedule.cron) return "?";
+  let match = schedule.cron.match(
     /^(?:(?:\*\/(\d+)|(\*)) \* \* \* \*|0 (?:\*\/(\d+)|(\*)) \* \* \*|0 0 (?:\*\/(\d+)|(\*)) \* \*|(\d{1,2}) (\d{1,2}) \* \* \*)$/,
   );
   if (match) {
@@ -946,97 +1030,97 @@ function formatLoopSchedule(o) {
     if (match[5] || match[6]) return `${match[5] ?? 1}d`;
     return `at ${match[8].padStart(2, "0")}:${match[7].padStart(2, "0")}`;
   }
-  return cronToHuman(o.cron).toLowerCase();
+  return cronToHuman(schedule.cron).toLowerCase();
 }
 //@ chunk-9h8dr0qb.js:52084-53661 placement
 function renderLoopsAttribution(props) {
-  let T = w(28);
+  let $ = useMemoCache(28);
   let { rows, maxWidth } = props;
   if (rows.length === 0) {
     return null;
   }
-  let h = maxWidth >= USAGE_SHELL_ROWS;
-  let D = h ? USAGE_TOTAL_ROWS : USAGE_TOTAL_ROWS - USAGE_SECTION_TABLE_ROWS;
-  let width = Math.max(12, maxWidth - D);
-  let A;
+  let isWide = maxWidth >= USAGE_SHELL_ROWS;
+  let headerRows = isWide ? USAGE_TOTAL_ROWS : USAGE_TOTAL_ROWS - USAGE_SECTION_TABLE_ROWS;
+  let width = Math.max(12, maxWidth - headerRows);
+  let containerComponent;
   let flexDirection;
-  let F;
-  let U;
-  let W;
-  if (T[0] !== width || T[1] !== rows || T[2] !== h) {
+  let headerRow;
+  let rowElements;
+  let hiddenCount;
+  if ($[0] !== width || $[1] !== rows || $[2] !== isWide) {
     let sliced = rows.slice(0, USAGE_LIST_MAX_ROWS);
-    W = rows.length - USAGE_LIST_MAX_ROWS;
+    hiddenCount = rows.length - USAGE_LIST_MAX_ROWS;
     let now = new Date();
-    A = Box;
+    containerComponent = Box;
     flexDirection = "column";
     let children;
-    if (T[8] === MEMO_CACHE_SENTINEL) {
+    if ($[8] === MEMO_CACHE_SENTINEL) {
       children = jsxProd_default(Text, {
         children: "Loops",
       });
-      T[8] = children;
-    } else children = T[8];
-    let K;
-    if (T[9] !== width) {
-      K = jsxProd_default(Box, {
+      $[8] = children;
+    } else children = $[8];
+    let promptColumn;
+    if ($[9] !== width) {
+      promptColumn = jsxProd_default(Box, {
         width,
         children,
       });
-      T[9] = width;
-      T[10] = K;
-    } else K = T[10];
-    let ee;
-    let ne;
-    let V;
-    if (T[11] === MEMO_CACHE_SENTINEL) {
-      ee = jsxProd_default(RightAlignedDimText, {
+      $[9] = width;
+      $[10] = promptColumn;
+    } else promptColumn = $[10];
+    let runsHeader;
+    let runCountHeader;
+    let shareHeader;
+    if ($[11] === MEMO_CACHE_SENTINEL) {
+      runsHeader = jsxProd_default(RightAlignedDimText, {
         width: USAGE_SECTION_HEADER_ROWS,
         text: "every",
       });
-      ne = jsxProd_default(RightAlignedDimText, {
+      runCountHeader = jsxProd_default(RightAlignedDimText, {
         width: USAGE_SECTION_SPARK_ROWS,
         text: "runs",
       });
-      V = jsxProd_default(RightAlignedDimText, {
+      shareHeader = jsxProd_default(RightAlignedDimText, {
         width: USAGE_SECTION_DETAIL_ROWS,
         text: "tokens",
       });
-      T[11] = ee;
-      T[12] = ne;
-      T[13] = V;
+      $[11] = runsHeader;
+      $[12] = runCountHeader;
+      $[13] = shareHeader;
     } else {
-      ee = T[11];
-      ne = T[12];
-      V = T[13];
+      runsHeader = $[11];
+      runCountHeader = $[12];
+      shareHeader = $[13];
     }
-    let L;
-    if (T[14] !== h) {
-      L =
-        h &&
+    let perRunHeader;
+    if ($[14] !== isWide) {
+      perRunHeader =
+        isWide &&
         jsxProd_default(RightAlignedDimText, {
           width: USAGE_SECTION_TABLE_ROWS,
           text: "per run",
         });
-      T[14] = h;
-      T[15] = L;
-    } else L = T[15];
-    let J;
-    if (T[16] === MEMO_CACHE_SENTINEL) {
-      J = jsxProd_default(RightAlignedDimText, {
+      $[14] = isWide;
+      $[15] = perRunHeader;
+    } else perRunHeader = $[15];
+    let costHeader;
+    if ($[16] === MEMO_CACHE_SENTINEL) {
+      costHeader = jsxProd_default(RightAlignedDimText, {
         width: USAGE_SECTION_FOOTER_ROWS,
         text: "last run",
       });
-      T[16] = J;
-    } else J = T[16];
-    if (T[17] !== K || T[18] !== L) {
-      F = jsxProd_default_2(Box, {
-        children: [K, ee, ne, V, L, J],
+      $[16] = costHeader;
+    } else costHeader = $[16];
+    if ($[17] !== promptColumn || $[18] !== perRunHeader) {
+      headerRow = jsxProd_default_2(Box, {
+        children: [promptColumn, runsHeader, runCountHeader, shareHeader, perRunHeader, costHeader],
       });
-      T[17] = K;
-      T[18] = L;
-      T[19] = F;
-    } else F = T[19];
-    U = sliced.map((ae) =>
+      $[17] = promptColumn;
+      $[18] = perRunHeader;
+      $[19] = headerRow;
+    } else headerRow = $[19];
+    rowElements = sliced.map((row) =>
       jsxProd_default_2(
         Box,
         {
@@ -1046,139 +1130,146 @@ function renderLoopsAttribution(props) {
               children: jsxProd_default(Text, {
                 dimColor: true,
                 wrap: "truncate-end",
-                children: ae.prompt,
+                children: row.prompt,
               }),
             }),
             jsxProd_default(RightAlignedDimText, {
               width: USAGE_SECTION_HEADER_ROWS,
-              text: formatLoopSchedule(ae),
+              text: formatLoopSchedule(row),
             }),
             jsxProd_default(RightAlignedDimText, {
               width: USAGE_SECTION_SPARK_ROWS,
-              text: String(ae.runs),
+              text: String(row.runs),
             }),
             jsxProd_default(RightAlignedDimText, {
               width: USAGE_SECTION_DETAIL_ROWS,
-              text: formatTokens(ae.tokens),
+              text: formatTokens(row.tokens),
             }),
-            h &&
+            isWide &&
               jsxProd_default(RightAlignedDimText, {
                 width: USAGE_SECTION_TABLE_ROWS,
-                text: ae.runs > 0 && ae.tokens > 0 ? formatTokens(Math.round(ae.tokens / ae.runs)) : "\u2013",
+                text:
+                  row.runs > 0 && row.tokens > 0 ? formatTokens(Math.round(row.tokens / row.runs)) : "\u2013",
               }),
             jsxProd_default(RightAlignedDimText, {
               width: USAGE_SECTION_FOOTER_ROWS,
               text:
-                ae.lastRunMs > 0
-                  ? formatRelativeTimeAgo(new Date(ae.lastRunMs), {
+                row.lastRunMs > 0
+                  ? formatRelativeTimeAgo(new Date(row.lastRunMs), {
                       now,
                     })
                   : "\u2013",
             }),
           ],
         },
-        ae.prompt,
+        row.prompt,
       ),
     );
-    T[0] = width;
-    T[1] = rows;
-    T[2] = h;
-    T[3] = A;
-    T[4] = flexDirection;
-    T[5] = F;
-    T[6] = U;
-    T[7] = W;
+    $[0] = width;
+    $[1] = rows;
+    $[2] = isWide;
+    $[3] = containerComponent;
+    $[4] = flexDirection;
+    $[5] = headerRow;
+    $[6] = rowElements;
+    $[7] = hiddenCount;
   } else {
-    A = T[3];
-    flexDirection = T[4];
-    F = T[5];
-    U = T[6];
-    W = T[7];
+    containerComponent = $[3];
+    flexDirection = $[4];
+    headerRow = $[5];
+    rowElements = $[6];
+    hiddenCount = $[7];
   }
-  let H;
-  if (T[20] !== W) {
-    H =
-      W > 0 &&
+  let moreIndicator;
+  if ($[20] !== hiddenCount) {
+    moreIndicator =
+      hiddenCount > 0 &&
       jsxProd_default_2(Text, {
         dimColor: true,
-        children: ["\u2026 ", W, " more"],
+        children: ["\u2026 ", hiddenCount, " more"],
       });
-    T[20] = W;
-    T[21] = H;
-  } else H = T[21];
-  let K;
-  if (T[22] !== A || T[23] !== flexDirection || T[24] !== F || T[25] !== U || T[26] !== H) {
-    K = jsxProd_default_2(A, {
+    $[20] = hiddenCount;
+    $[21] = moreIndicator;
+  } else moreIndicator = $[21];
+  let containerComponentElement;
+  if (
+    $[22] !== containerComponent ||
+    $[23] !== flexDirection ||
+    $[24] !== headerRow ||
+    $[25] !== rowElements ||
+    $[26] !== moreIndicator
+  ) {
+    containerComponentElement = jsxProd_default_2(containerComponent, {
       flexDirection,
-      children: [F, U, H],
+      children: [headerRow, rowElements, moreIndicator],
     });
-    T[22] = A;
-    T[23] = flexDirection;
-    T[24] = F;
-    T[25] = U;
-    T[26] = H;
-    T[27] = K;
-  } else K = T[27];
-  return K;
+    $[22] = containerComponent;
+    $[23] = flexDirection;
+    $[24] = headerRow;
+    $[25] = rowElements;
+    $[26] = moreIndicator;
+    $[27] = containerComponentElement;
+  } else containerComponentElement = $[27];
+  return containerComponentElement;
 }
 //@ chunk-9h8dr0qb.js:53661-53922 placement
 function RightAlignedDimText(props) {
-  let h = w(5);
+  let $ = useMemoCache(5);
   let { width, text } = props;
   let children;
-  if (h[0] !== text) {
+  if ($[0] !== text) {
     children = jsxProd_default(Text, {
       dimColor: true,
       wrap: "truncate-end",
       children: text,
     });
-    h[0] = text;
-    h[1] = children;
-  } else children = h[1];
-  let E;
-  if (h[2] !== children || h[3] !== width) {
-    E = jsxProd_default(Box, {
+    $[0] = text;
+    $[1] = children;
+  } else children = $[1];
+  let renderCache;
+  if ($[2] !== children || $[3] !== width) {
+    renderCache = jsxProd_default(Box, {
       width,
       justifyContent: "flex-end",
       children,
     });
-    h[2] = children;
-    h[3] = width;
-    h[4] = E;
-  } else E = h[4];
-  return E;
+    $[2] = children;
+    $[3] = width;
+    $[4] = renderCache;
+  } else renderCache = $[4];
+  return renderCache;
 }
 //@ chunk-9h8dr0qb.js:53922-53937 placement
 function noopUsageCallback() {}
 //@ chunk-9h8dr0qb.js:53937-54010 placement
-function clearEnrichError(In) {
-  return In.enrichError === null
-    ? In
+function clearEnrichError(state) {
+  return state.enrichError === null
+    ? state
     : {
-        ...In,
+        ...state,
         enrichError: null,
       };
 }
 //@ chunk-9h8dr0qb.js:54010-54064 placement
-function toUsageNoticeRow(hn) {
+function toUsageNoticeRow(notice) {
   return {
-    text: hn.text,
-    color: hn.variant,
+    text: notice.text,
+    color: notice.variant,
   };
 }
 //@ chunk-9h8dr0qb.js:54064-54177 placement
-function toLimitBarSpec(o) {
-  let { title, displayName, limit } = o;
+function toLimitBarSpec(limit) {
+  let { title, displayName, limit: limit_2 } = limit;
   return {
     bar: displayName,
     title,
-    limit,
+    limit: limit_2,
     alwaysShowDateInReset: true,
   };
 }
 //@ chunk-9h8dr0qb.js:54177-56348 fingerprint = LimitBar (0.788)
 function LimitBar(props) {
-  let $ = w(41);
+  let $ = useMemoCache(41);
   let {
     title,
     limit,
@@ -1189,8 +1280,8 @@ function LimitBar(props) {
     trailingLines,
     subtextOverride,
   } = props;
-  let F = showTimeInReset === undefined ? true : showTimeInReset;
-  let U = alwaysShowDateInReset === undefined ? false : alwaysShowDateInReset;
+  let showResetTime = showTimeInReset === undefined ? true : showTimeInReset;
+  let showDateInReset = alwaysShowDateInReset === undefined ? false : alwaysShowDateInReset;
   let { utilization, resets_at } = limit;
   if (utilization === null) {
     return null;
@@ -1199,11 +1290,11 @@ function LimitBar(props) {
   let subtext;
   if (resets_at) {
     let t2;
-    if ($[0] !== U || $[1] !== resets_at || $[2] !== F) {
-      t2 = formatResetText(resets_at, true, F, U);
-      $[0] = U;
+    if ($[0] !== showDateInReset || $[1] !== resets_at || $[2] !== showResetTime) {
+      t2 = formatResetText(resets_at, true, showResetTime, showDateInReset);
+      $[0] = showDateInReset;
       $[1] = resets_at;
-      $[2] = F;
+      $[2] = showResetTime;
       $[3] = t2;
     } else t2 = $[3];
     subtext = `Resets ${t2}`;
@@ -1215,15 +1306,15 @@ function LimitBar(props) {
   if (subtextOverride !== undefined) subtext = subtextOverride;
   let maxWidth_2 = false ? Math.max(1, maxWidth - 4) : maxWidth;
   if (maxWidth_2 >= 62) {
-    let ee;
+    let resetText;
     if ($[4] !== title) {
-      ee = jsxProd_default(Text, {
+      resetText = jsxProd_default(Text, {
         bold: true,
         children: title,
       });
       $[4] = title;
-      $[5] = ee;
-    } else ee = $[5];
+      $[5] = resetText;
+    } else resetText = $[5];
     const ratio = utilization / 100;
     let t4;
     if ($[6] !== ratio) {
@@ -1245,47 +1336,47 @@ function LimitBar(props) {
       $[8] = usedText;
       $[9] = t5;
     } else t5 = $[9];
-    let ae;
+    let boxElement;
     if ($[10] !== t4 || $[11] !== t5) {
-      ae = jsxProd_default_2(Box, {
+      boxElement = jsxProd_default_2(Box, {
         flexDirection: "row",
         gap: false ? 2 : 1,
         children: [t4, t5],
       });
       $[10] = t4;
       $[11] = t5;
-      $[12] = ae;
-    } else ae = $[12];
-    let me;
+      $[12] = boxElement;
+    } else boxElement = $[12];
+    let barElement;
     if ($[13] !== subtext) {
-      me =
+      barElement =
         subtext &&
         jsxProd_default(Text, {
           dimColor: true,
           children: subtext,
         });
       $[13] = subtext;
-      $[14] = me;
-    } else me = $[14];
-    let fe;
+      $[14] = barElement;
+    } else barElement = $[14];
+    let subtextLines;
     if ($[15] !== trailingLines) {
-      fe = jsxProd_default(renderColoredLines, {
+      subtextLines = jsxProd_default(renderColoredLines, {
         lines: trailingLines,
       });
       $[15] = trailingLines;
-      $[16] = fe;
-    } else fe = $[16];
+      $[16] = subtextLines;
+    } else subtextLines = $[16];
     let t8;
-    if ($[17] !== ee || $[18] !== ae || $[19] !== me || $[20] !== fe) {
+    if ($[17] !== resetText || $[18] !== boxElement || $[19] !== barElement || $[20] !== subtextLines) {
       t8 = jsxProd_default_2(Box, {
         flexDirection: "column",
         flexShrink: 0,
-        children: [ee, ae, me, fe],
+        children: [resetText, boxElement, barElement, subtextLines],
       });
-      $[17] = ee;
-      $[18] = ae;
-      $[19] = me;
-      $[20] = fe;
+      $[17] = resetText;
+      $[18] = boxElement;
+      $[19] = barElement;
+      $[20] = subtextLines;
       $[21] = t8;
     } else t8 = $[21];
     return t8;
@@ -1317,27 +1408,27 @@ function LimitBar(props) {
       $[24] = subtext;
       $[25] = t3;
     } else t3 = $[25];
-    let L;
+    let lineElement;
     if ($[26] !== t2 || $[27] !== t3) {
-      L = jsxProd_default_2(Text, {
+      lineElement = jsxProd_default_2(Text, {
         children: [t2, t3],
       });
       $[26] = t2;
       $[27] = t3;
-      $[28] = L;
-    } else L = $[28];
-    let J;
+      $[28] = lineElement;
+    } else lineElement = $[28];
+    let containerElement;
     if ($[29] !== trailingLines) {
-      J = jsxProd_default(renderColoredLines, {
+      containerElement = jsxProd_default(renderColoredLines, {
         lines: trailingLines,
       });
       $[29] = trailingLines;
-      $[30] = J;
-    } else J = $[30];
+      $[30] = containerElement;
+    } else containerElement = $[30];
     const ratio = utilization / 100;
-    let me;
+    let progressBarElement;
     if ($[31] !== maxWidth_2 || $[32] !== ratio) {
-      me = jsxProd_default(ProgressBar, {
+      progressBarElement = jsxProd_default(ProgressBar, {
         ratio,
         width: maxWidth_2,
         variant: false ? "shade" : "block",
@@ -1346,8 +1437,8 @@ function LimitBar(props) {
       });
       $[31] = maxWidth_2;
       $[32] = ratio;
-      $[33] = me;
-    } else me = $[33];
+      $[33] = progressBarElement;
+    } else progressBarElement = $[33];
     let t7;
     if ($[34] !== usedText) {
       t7 = jsxProd_default(Text, {
@@ -1357,15 +1448,15 @@ function LimitBar(props) {
       $[35] = t7;
     } else t7 = $[35];
     let t8;
-    if ($[36] !== L || $[37] !== J || $[38] !== me || $[39] !== t7) {
+    if ($[36] !== lineElement || $[37] !== containerElement || $[38] !== progressBarElement || $[39] !== t7) {
       t8 = jsxProd_default_2(Box, {
         flexDirection: "column",
         flexShrink: 0,
-        children: [L, J, me, t7],
+        children: [lineElement, containerElement, progressBarElement, t7],
       });
-      $[36] = L;
-      $[37] = J;
-      $[38] = me;
+      $[36] = lineElement;
+      $[37] = containerElement;
+      $[38] = progressBarElement;
       $[39] = t7;
       $[40] = t8;
     } else t8 = $[40];
@@ -1374,58 +1465,60 @@ function LimitBar(props) {
 }
 //@ chunk-9h8dr0qb.js:56348-56454 placement
 function renderColoredLines({ lines }) {
-  return (lines ?? []).map((u, p) =>
+  return (lines ?? []).map((line, index) =>
     jsxProd_default(
       Text,
       {
-        dimColor: !u.color,
-        color: u.color,
-        children: u.text,
+        dimColor: !line.color,
+        color: line.color,
+        children: line.text,
       },
-      p,
+      index,
     ),
   );
 }
 //@ chunk-9h8dr0qb.js:56454-57121 placement
 function renderGatewayUsageNotice() {
-  let o = w(7);
-  let u;
-  if (o[0] === MEMO_CACHE_SENTINEL) {
-    u = stableEmptyObject(false);
-    o[0] = u;
-  } else u = o[0];
-  let p = u;
+  let $ = useMemoCache(7);
+  let emptyState;
+  if ($[0] === MEMO_CACHE_SENTINEL) {
+    emptyState = stableEmptyObject(false);
+    $[0] = emptyState;
+  } else emptyState = $[0];
+  let emptyStateValue = emptyState;
   let { columns } = useTerminalSize();
-  let D = columns - 2;
-  let maxWidth = Math.min(D, 80);
-  let T;
-  if (o[1] === MEMO_CACHE_SENTINEL) {
-    T = isClaudeAISubscriber();
-    o[1] = T;
-  } else T = o[1];
-  let A = T;
-  let v;
-  if (o[2] === MEMO_CACHE_SENTINEL) {
-    v = getRemoteCaps();
-    o[2] = v;
-  } else v = o[2];
-  let isThinClient = v !== null;
-  let U;
-  let W;
-  if (o[3] === MEMO_CACHE_SENTINEL) {
-    U = jsxProd_default(renderRemoteCost, {
+  let roomColumns = columns - 2;
+  let maxWidth = Math.min(roomColumns, 80);
+  let noticeElement;
+  if ($[1] === MEMO_CACHE_SENTINEL) {
+    noticeElement = isClaudeAISubscriber();
+    $[1] = noticeElement;
+  } else noticeElement = $[1];
+  let textElement = noticeElement;
+  let bodyElement;
+  if ($[2] === MEMO_CACHE_SENTINEL) {
+    bodyElement = getRemoteCaps();
+    $[2] = bodyElement;
+  } else bodyElement = $[2];
+  let isThinClient = bodyElement !== null;
+  let renderRemoteCostElement;
+  let pluginSkillFootprintElement;
+  if ($[3] === MEMO_CACHE_SENTINEL) {
+    renderRemoteCostElement = jsxProd_default(renderRemoteCost, {
       isThinClient,
     });
-    W = lanternPrismEnabled() ? jsxProd_default(renderPluginSkillFootprint, {}) : null;
-    o[3] = U;
-    o[4] = W;
+    pluginSkillFootprintElement = lanternPrismEnabled()
+      ? jsxProd_default(renderPluginSkillFootprint, {})
+      : null;
+    $[3] = renderRemoteCostElement;
+    $[4] = pluginSkillFootprintElement;
   } else {
-    U = o[3];
-    W = o[4];
+    renderRemoteCostElement = $[3];
+    pluginSkillFootprintElement = $[4];
   }
-  let M;
-  if (o[5] !== maxWidth) {
-    M = jsxProd_default(Box, {
+  let boxElement;
+  if ($[5] !== maxWidth) {
+    boxElement = jsxProd_default(Box, {
       flexDirection: "column",
       width: "100%",
       children: jsxProd_default_2(Box, {
@@ -1433,13 +1526,13 @@ function renderGatewayUsageNotice() {
         gap: 1,
         flexShrink: 0,
         children: [
-          U,
-          W,
+          renderRemoteCostElement,
+          pluginSkillFootprintElement,
           getAPIProvider() === "gateway"
             ? jsxProd_default(UsageCreditsPanel, {
                 maxWidth,
               })
-            : A
+            : textElement
               ? jsxProd_default(loadUsageData, {
                   maxWidth,
                 })
@@ -1451,38 +1544,38 @@ function renderGatewayUsageNotice() {
                     context: "Settings",
                     fallback: "Esc",
                     description: "cancel",
-                    ...p,
+                    ...emptyStateValue,
                   }),
                 }),
         ],
       }),
     });
-    o[5] = maxWidth;
-    o[6] = M;
-  } else M = o[6];
-  return M;
+    $[5] = maxWidth;
+    $[6] = boxElement;
+  } else boxElement = $[6];
+  return boxElement;
 }
 //@ chunk-9h8dr0qb.js:57121-57890 placement = _temp2 (0.477)
 /**
  * 用量设置里的额度面板：读取凭据对应的额度，失败时回退显示消费上限，底部 Esc 取消提示。
  */
 function UsageCreditsPanel(exitState) {
-  let $ = w(15);
+  let $ = useMemoCache(15);
   let { maxWidth } = exitState;
-  let h;
+  let emptyState;
   if ($[0] === MEMO_CACHE_SENTINEL) {
-    h = stableEmptyObject(false);
-    $[0] = h;
-  } else h = $[0];
-  let D = h;
+    emptyState = stableEmptyObject(false);
+    $[0] = emptyState;
+  } else emptyState = $[0];
+  let headerElement = emptyState;
   let { credentials } = useTheme_2();
-  let T;
+  let usageResult;
   if ($[1] !== credentials) {
-    T = () => refreshGatewayUsage(credentials).catch(noopUsageCallback);
+    usageResult = () => refreshGatewayUsage(credentials).catch(noopUsageCallback);
     $[1] = credentials;
-    $[2] = T;
-  } else T = $[2];
-  let [A] = y(T);
+    $[2] = usageResult;
+  } else usageResult = $[2];
+  let [panelElement] = useState(usageResult);
   let spend;
   if ($[3] === MEMO_CACHE_SENTINEL) {
     spend = cachedGatewayUsage();
@@ -1498,28 +1591,28 @@ function UsageCreditsPanel(exitState) {
     $[5] = fallback;
   } else fallback = $[5];
   let children;
-  if ($[6] !== maxWidth || $[7] !== A) {
+  if ($[6] !== maxWidth || $[7] !== panelElement) {
     children = jsxProd_default(SpendLimitReading, {
-      reading: A,
+      reading: panelElement,
       maxWidth,
     });
     $[6] = maxWidth;
-    $[7] = A;
+    $[7] = panelElement;
     $[8] = children;
   } else children = $[8];
-  let W;
+  let foElement;
   if ($[9] !== fallback || $[10] !== children) {
-    W = jsxProd_default(fo, {
+    foElement = jsxProd_default(suspenseTypeExport, {
       fallback,
       children,
     });
     $[9] = fallback;
     $[10] = children;
-    $[11] = W;
-  } else W = $[11];
-  let M;
+    $[11] = foElement;
+  } else foElement = $[11];
+  let textElement;
   if ($[12] === MEMO_CACHE_SENTINEL) {
-    M = jsxProd_default(Text, {
+    textElement = jsxProd_default(Text, {
       dimColor: true,
       italic: false,
       children: jsxProd_default(ConfigurableShortcutHint, {
@@ -1527,56 +1620,56 @@ function UsageCreditsPanel(exitState) {
         context: "Settings",
         fallback: "Esc",
         description: "cancel",
-        ...D,
+        ...headerElement,
       }),
     });
-    $[12] = M;
-  } else M = $[12];
-  let B;
-  if ($[13] !== W) {
-    B = jsxProd_default_2(Box, {
+    $[12] = textElement;
+  } else textElement = $[12];
+  let boxElement;
+  if ($[13] !== foElement) {
+    boxElement = jsxProd_default_2(Box, {
       flexDirection: "column",
       gap: 1,
-      children: [W, M],
+      children: [foElement, textElement],
     });
-    $[13] = W;
-    $[14] = B;
-  } else B = $[14];
-  return B;
+    $[13] = foElement;
+    $[14] = boxElement;
+  } else boxElement = $[14];
+  return boxElement;
 }
 //@ chunk-9h8dr0qb.js:57890-58054 placement
 /**
  * 在 Suspense 下读取额度花费数据并渲染支出上限行。
  */
 function SpendLimitReading(props) {
-  let D = w(3);
+  let $ = useMemoCache(3);
   let { reading, maxWidth } = props;
-  const spend = Qr(reading);
-  let E;
-  if (D[0] !== maxWidth || D[1] !== spend) {
-    E = jsxProd_default(renderSpendLimit, {
+  const spend = use(reading);
+  let element;
+  if ($[0] !== maxWidth || $[1] !== spend) {
+    element = jsxProd_default(renderSpendLimit, {
       spend,
       maxWidth,
     });
-    D[0] = maxWidth;
-    D[1] = spend;
-    D[2] = E;
-  } else E = D[2];
-  return E;
+    $[0] = maxWidth;
+    $[1] = spend;
+    $[2] = element;
+  } else element = $[2];
+  return element;
 }
 //@ chunk-9h8dr0qb.js:58054-58854 placement
 function renderSpendLimit(props) {
-  let h = w(10);
+  let $ = useMemoCache(10);
   let { spend, maxWidth } = props;
-  let D;
-  if (h[0] === MEMO_CACHE_SENTINEL) {
-    D = getRawUtilization();
-    h[0] = D;
-  } else D = h[0];
-  let overage = D.overage;
-  let T;
-  if (h[1] !== spend) {
-    T = spend
+  let utilization;
+  if ($[0] === MEMO_CACHE_SENTINEL) {
+    utilization = getRawUtilization();
+    $[0] = utilization;
+  } else utilization = $[0];
+  let overage = utilization.overage;
+  let utilizationOverage;
+  if ($[1] !== spend) {
+    utilizationOverage = spend
       ? {
           utilization: Math.round(spend.utilization),
           resets_at: spend.resetsAt,
@@ -1587,121 +1680,121 @@ function renderSpendLimit(props) {
             resets_at: new Date(overage.resets_at * 1000).toISOString(),
           }
         : null;
-    h[1] = spend;
-    h[2] = T;
-  } else T = h[2];
-  let A = T;
-  if (!A) {
-    let v;
-    if (h[3] === MEMO_CACHE_SENTINEL) {
-      v = areLimitsObserved()
+    $[1] = spend;
+    $[2] = utilizationOverage;
+  } else utilizationOverage = $[2];
+  let spendElement = utilizationOverage;
+  if (!spendElement) {
+    let overageElement;
+    if ($[3] === MEMO_CACHE_SENTINEL) {
+      overageElement = areLimitsObserved()
         ? null
         : jsxProd_default(Text, {
             dimColor: true,
             children: "Spend limit \xB7 Shown once your gateway reports one",
           });
-      h[3] = v;
-    } else v = h[3];
-    return v;
+      $[3] = overageElement;
+    } else overageElement = $[3];
+    return overageElement;
   }
-  let v;
-  if (h[4] !== spend) {
-    v = spend
+  let containerElement;
+  if ($[4] !== spend) {
+    containerElement = spend
       ? `${formatCurrency(spend.used, spend.currency)} / ${formatCurrency(spend.limit, spend.currency)} spent${spend.period ? ` ${SPEND_PERIOD_LABELS[spend.period]}` : ""}`
       : undefined;
-    h[4] = spend;
-    h[5] = v;
-  } else v = h[5];
-  let extraSubtext = v;
-  let U;
-  if (h[6] !== extraSubtext || h[7] !== A || h[8] !== maxWidth) {
-    U = jsxProd_default(LimitBar, {
+    $[4] = spend;
+    $[5] = containerElement;
+  } else containerElement = $[5];
+  let extraSubtext = containerElement;
+  let limitBarElement;
+  if ($[6] !== extraSubtext || $[7] !== spendElement || $[8] !== maxWidth) {
+    limitBarElement = jsxProd_default(LimitBar, {
       title: "Spend limit",
-      limit: A,
+      limit: spendElement,
       maxWidth,
       alwaysShowDateInReset: true,
       extraSubtext,
     });
-    h[6] = extraSubtext;
-    h[7] = A;
-    h[8] = maxWidth;
-    h[9] = U;
-  } else U = h[9];
-  return U;
+    $[6] = extraSubtext;
+    $[7] = spendElement;
+    $[8] = maxWidth;
+    $[9] = limitBarElement;
+  } else limitBarElement = $[9];
+  return limitBarElement;
 }
 //@ chunk-9h8dr0qb.js:58854-59430 placement
 function renderRemoteCost(props) {
-  let p = w(10);
+  let $ = useMemoCache(10);
   let { isThinClient } = props;
-  let h;
-  if (p[0] === MEMO_CACHE_SENTINEL) {
-    h = stripAnsi(formatTotalCost());
-    p[0] = h;
-  } else h = p[0];
-  let children = h;
-  let E;
-  if (p[1] !== isThinClient) {
-    E = () => (isThinClient ? fetchRemoteSessionCost() : null);
-    p[1] = isThinClient;
-    p[2] = E;
-  } else E = p[2];
-  let [T] = y(E);
-  const A = isThinClient ? " (remote)" : "";
-  let v;
-  if (p[3] !== A) {
-    v = jsxProd_default_2(Title, {
-      children: ["Session", A],
+  let costText;
+  if ($[0] === MEMO_CACHE_SENTINEL) {
+    costText = stripAnsi(formatTotalCost());
+    $[0] = costText;
+  } else costText = $[0];
+  let children = costText;
+  let costElement;
+  if ($[1] !== isThinClient) {
+    costElement = () => (isThinClient ? fetchRemoteSessionCost() : null);
+    $[1] = isThinClient;
+    $[2] = costElement;
+  } else costElement = $[2];
+  let [isThinClientHint] = useState(costElement);
+  const remoteSuffix = isThinClient ? " (remote)" : "";
+  let titleElement;
+  if ($[3] !== remoteSuffix) {
+    titleElement = jsxProd_default_2(Title, {
+      children: ["Session", remoteSuffix],
     });
-    p[3] = A;
-    p[4] = v;
-  } else v = p[4];
-  let F;
-  if (p[5] !== T) {
-    F = T
-      ? jsxProd_default(fo, {
+    $[3] = remoteSuffix;
+    $[4] = titleElement;
+  } else titleElement = $[4];
+  let containerElement;
+  if ($[5] !== isThinClientHint) {
+    containerElement = isThinClientHint
+      ? jsxProd_default(suspenseTypeExport, {
           fallback: jsxProd_default(Text, {
             dimColor: true,
             children: "Loading remote cost\u2026",
           }),
           children: jsxProd_default(RemoteCostText, {
-            costPromise: T,
+            costPromise: isThinClientHint,
           }),
         })
       : jsxProd_default(Text, {
           dimColor: true,
           children,
         });
-    p[5] = T;
-    p[6] = F;
-  } else F = p[6];
-  let U;
-  if (p[7] !== v || p[8] !== F) {
-    U = jsxProd_default_2(Box, {
+    $[5] = isThinClientHint;
+    $[6] = containerElement;
+  } else containerElement = $[6];
+  let boxElement;
+  if ($[7] !== titleElement || $[8] !== containerElement) {
+    boxElement = jsxProd_default_2(Box, {
       flexDirection: "column",
       gap: 1,
-      children: [v, F],
+      children: [titleElement, containerElement],
     });
-    p[7] = v;
-    p[8] = F;
-    p[9] = U;
-  } else U = p[9];
-  return U;
+    $[7] = titleElement;
+    $[8] = containerElement;
+    $[9] = boxElement;
+  } else boxElement = $[9];
+  return boxElement;
 }
 //@ chunk-9h8dr0qb.js:59430-59573 placement
 function RemoteCostText(props) {
-  let h = w(2);
+  let $ = useMemoCache(2);
   let { costPromise } = props;
-  const children = Qr(costPromise);
-  let D;
-  if (h[0] !== children) {
-    D = jsxProd_default(Text, {
+  const children = use(costPromise);
+  let costElement;
+  if ($[0] !== children) {
+    costElement = jsxProd_default(Text, {
       dimColor: true,
       children,
     });
-    h[0] = children;
-    h[1] = D;
-  } else D = h[1];
-  return D;
+    $[0] = children;
+    $[1] = costElement;
+  } else costElement = $[1];
+  return costElement;
 }
 //@ chunk-9h8dr0qb.js:59573-59768 placement
 async function fetchRemoteSessionCost() {
@@ -1720,9 +1813,9 @@ async function fetchRemoteSessionCost() {
 //@ chunk-9h8dr0qb.js:59768-59803 placement
 var USAGE_LOAD_FAILED_TEXT = "Failed to load usage data";
 //@ chunk-9h8dr0qb.js:59803-59885 placement
-function asOfSuffix(o, now) {
-  if (o === undefined) return "";
-  return ` as of ${formatRelativeTimeAgo(new Date(o), {
+function asOfSuffix(timestamp, now) {
+  if (timestamp === undefined) return "";
+  return ` as of ${formatRelativeTimeAgo(new Date(timestamp), {
     now,
   })}`;
 }
@@ -1737,49 +1830,53 @@ function describeRateLimitWait(heldUntilMs) {
  * 加载用量与额度数据（远程会话成本、gateway 花费上限、限流、刷新失败回退到上次已知数据，约 6 KB）。
  */
 function loadUsageData(props) {
-  let p = w(67);
+  let $ = useMemoCache(67);
   let { maxWidth } = props;
-  let h;
-  if (p[0] === MEMO_CACHE_SENTINEL) {
-    h = stableEmptyObject(false);
-    p[0] = h;
-  } else h = p[0];
-  let D = h;
+  let emptyProps;
+  if ($[0] === MEMO_CACHE_SENTINEL) {
+    emptyProps = stableEmptyObject(false);
+    $[0] = emptyProps;
+  } else emptyProps = $[0];
+  let hintFormat = emptyProps;
   let { storageV5, credentials } = useTheme_2();
-  let A;
-  if (p[1] !== storageV5) {
-    A = () => normalizeUsageLimits(storageV5);
-    p[1] = storageV5;
-    p[2] = A;
-  } else A = p[2];
-  let [v] = y(A);
-  let F;
-  if (p[3] !== v?.fetchedAtMs || p[4] !== v?.source || p[5] !== v?.utilization) {
-    F = () => ({
-      utilization: v?.utilization ?? null,
-      source: v?.source ?? null,
-      fetchedAtMs: v?.fetchedAtMs,
+  let initialSnapshot;
+  if ($[1] !== storageV5) {
+    initialSnapshot = () => normalizeUsageLimits(storageV5);
+    $[1] = storageV5;
+    $[2] = initialSnapshot;
+  } else initialSnapshot = $[2];
+  let [persistedUsage] = useState(initialSnapshot);
+  let initialUsageState;
+  if (
+    $[3] !== persistedUsage?.fetchedAtMs ||
+    $[4] !== persistedUsage?.source ||
+    $[5] !== persistedUsage?.utilization
+  ) {
+    initialUsageState = () => ({
+      utilization: persistedUsage?.utilization ?? null,
+      source: persistedUsage?.source ?? null,
+      fetchedAtMs: persistedUsage?.fetchedAtMs,
       enrichError: null,
     });
-    p[3] = v?.fetchedAtMs;
-    p[4] = v?.source;
-    p[5] = v?.utilization;
-    p[6] = F;
-  } else F = p[6];
-  let [U, W] = y(F);
-  let { utilization, enrichError } = U;
-  let [H, K] = y(null);
-  let [ee, ne] = y(true);
-  let V;
-  if (p[7] !== credentials || p[8] !== storageV5) {
-    V = async () => {
-      ne(true);
-      K(null);
-      W(clearEnrichError);
+    $[3] = persistedUsage?.fetchedAtMs;
+    $[4] = persistedUsage?.source;
+    $[5] = persistedUsage?.utilization;
+    $[6] = initialUsageState;
+  } else initialUsageState = $[6];
+  let [usageState, setUsageState] = useState(initialUsageState);
+  let { utilization, enrichError } = usageState;
+  let [loadError, setLoadError] = useState(null);
+  let [isLoading, setIsLoading] = useState(true);
+  let loadUsage;
+  if ($[7] !== credentials || $[8] !== storageV5) {
+    loadUsage = async () => {
+      setIsLoading(true);
+      setLoadError(null);
+      setUsageState(clearEnrichError);
       let usageWithModelScopes = await fetchUsageWithModelScopes(storageV5, credentials);
       J: switch (usageWithModelScopes.status) {
         case "ok": {
-          W({
+          setUsageState({
             utilization: usageWithModelScopes.utilization,
             source: "ok",
             fetchedAtMs: undefined,
@@ -1790,30 +1887,35 @@ function loadUsageData(props) {
         }
         case "empty_response": {
           logFeatureBad("usage_plan_limits", "empty_response");
-          K(USAGE_LOAD_FAILED_TEXT);
+          setLoadError(USAGE_LOAD_FAILED_TEXT);
           break J;
         }
         case "seeded": {
           let date = new Date();
-          W((me) => {
-            let fe = me.utilization === null;
-            let De = usageWithModelScopes.seedSource === "headers" ? "headers" : fe ? "persisted" : me.source;
-            let de =
+          setUsageState((prev) => {
+            let hadNoUtilization = prev.utilization === null;
+            let nextSource =
+              usageWithModelScopes.seedSource === "headers"
+                ? "headers"
+                : hadNoUtilization
+                  ? "persisted"
+                  : prev.source;
+            let nextFetchedAt =
               usageWithModelScopes.seedSource === "headers"
                 ? undefined
-                : fe
+                : hadNoUtilization
                   ? usageWithModelScopes.seedFetchedAtMs
-                  : me.fetchedAtMs;
+                  : prev.fetchedAtMs;
             return {
               utilization:
                 usageWithModelScopes.seedSource === "headers"
                   ? usageWithModelScopes.utilization
-                  : (me.utilization ?? usageWithModelScopes.utilization),
-              source: De,
-              fetchedAtMs: de,
+                  : (prev.utilization ?? usageWithModelScopes.utilization),
+              source: nextSource,
+              fetchedAtMs: nextFetchedAt,
               enrichError:
                 usageWithModelScopes.seedSource === "persisted"
-                  ? `Showing last-known usage${De === "persisted" ? asOfSuffix(de, date) : ""}${usageWithModelScopes.rateLimitedVia !== null ? ` (${describeRateLimitWait(usageWithModelScopes.heldUntilMs)})` : " (could not refresh)"}`
+                  ? `Showing last-known usage${nextSource === "persisted" ? asOfSuffix(nextFetchedAt, date) : ""}${usageWithModelScopes.rateLimitedVia !== null ? ` (${describeRateLimitWait(usageWithModelScopes.heldUntilMs)})` : " (could not refresh)"}`
                   : usageWithModelScopes.rateLimitedVia !== null
                     ? `${hasModelScopedLimit(usageWithModelScopes.utilization.limits) ? "Partial usage data" : "Per-model breakdown unavailable"} (${describeRateLimitWait(usageWithModelScopes.heldUntilMs)})`
                     : "Could not refresh usage data",
@@ -1831,7 +1933,7 @@ function loadUsageData(props) {
         }
         case "unavailable": {
           if (usageWithModelScopes.rateLimitedVia !== null) {
-            K(
+            setLoadError(
               usageWithModelScopes.heldUntilMs === undefined
                 ? "Claude is temporarily limiting requests to the usage page (not your usage limit). Try again in a moment."
                 : `Usage endpoint is ${describeRateLimitWait(usageWithModelScopes.heldUntilMs)}.`,
@@ -1843,7 +1945,7 @@ function loadUsageData(props) {
                 : "rate_limited_http_429",
             );
           } else {
-            K(
+            setLoadError(
               usageWithModelScopes.responseBody
                 ? `${USAGE_LOAD_FAILED_TEXT}: ${usageWithModelScopes.responseBody}`
                 : USAGE_LOAD_FAILED_TEXT,
@@ -1852,60 +1954,60 @@ function loadUsageData(props) {
           }
         }
       }
-      ne(false);
+      setIsLoading(false);
     };
-    p[7] = credentials;
-    p[8] = storageV5;
-    p[9] = V;
-  } else V = p[9];
-  let ve = V;
-  let pe;
-  let Ce;
-  if (p[10] !== ve) {
-    pe = () => {
-      ve();
+    $[7] = credentials;
+    $[8] = storageV5;
+    $[9] = loadUsage;
+  } else loadUsage = $[9];
+  let loadUsageStable = loadUsage;
+  let retryEffect;
+  let retryDeps;
+  if ($[10] !== loadUsageStable) {
+    retryEffect = () => {
+      loadUsageStable();
     };
-    Ce = [ve];
-    p[10] = ve;
-    p[11] = pe;
-    p[12] = Ce;
+    retryDeps = [loadUsageStable];
+    $[10] = loadUsageStable;
+    $[11] = retryEffect;
+    $[12] = retryDeps;
   } else {
-    pe = p[11];
-    Ce = p[12];
+    retryEffect = $[11];
+    retryDeps = $[12];
   }
-  P(pe, Ce);
-  let He;
-  if (p[13] !== ve) {
-    He = () => {
-      ve();
+  useEffect(retryEffect, retryDeps);
+  let retryHandler;
+  if ($[13] !== loadUsageStable) {
+    retryHandler = () => {
+      loadUsageStable();
     };
-    p[13] = ve;
-    p[14] = He;
-  } else He = p[14];
-  const isActive = (!!H || !!enrichError) && !ee;
-  let Oe;
-  if (p[15] !== isActive) {
-    Oe = {
+    $[13] = loadUsageStable;
+    $[14] = retryHandler;
+  } else retryHandler = $[14];
+  const isActive = (!!loadError || !!enrichError) && !isLoading;
+  let retryKeyArgs;
+  if ($[15] !== isActive) {
+    retryKeyArgs = {
       context: "Settings",
       isActive,
     };
-    p[15] = isActive;
-    p[16] = Oe;
-  } else Oe = p[16];
-  useKeybinding("settings:retry", He, Oe);
-  if (H) {
-    let Ve;
-    if (p[17] !== H) {
-      Ve = jsxProd_default_2(Text, {
+    $[15] = isActive;
+    $[16] = retryKeyArgs;
+  } else retryKeyArgs = $[16];
+  useKeybinding("settings:retry", retryHandler, retryKeyArgs);
+  if (loadError) {
+    let errorText;
+    if ($[17] !== loadError) {
+      errorText = jsxProd_default_2(Text, {
         color: "error",
-        children: ["Error: ", H],
+        children: ["Error: ", loadError],
       });
-      p[17] = H;
-      p[18] = Ve;
-    } else Ve = p[18];
-    let ke;
-    if (p[19] === MEMO_CACHE_SENTINEL) {
-      ke = jsxProd_default(Text, {
+      $[17] = loadError;
+      $[18] = errorText;
+    } else errorText = $[18];
+    let errorHints;
+    if ($[19] === MEMO_CACHE_SENTINEL) {
+      errorHints = jsxProd_default(Text, {
         dimColor: true,
         italic: false,
         children: jsxProd_default_2(Byline, {
@@ -1915,48 +2017,48 @@ function loadUsageData(props) {
               context: "Settings",
               fallback: "r",
               description: "retry",
-              ...D,
+              ...hintFormat,
             }),
             jsxProd_default(ConfigurableShortcutHint, {
               action: "confirm:no",
               context: "Settings",
               fallback: "Esc",
               description: "cancel",
-              ...D,
+              ...hintFormat,
             }),
           ],
         }),
       });
-      p[19] = ke;
-    } else ke = p[19];
-    let Ue;
-    if (p[20] !== Ve) {
-      Ue = jsxProd_default_2(Box, {
+      $[19] = errorHints;
+    } else errorHints = $[19];
+    let errorBox;
+    if ($[20] !== errorText) {
+      errorBox = jsxProd_default_2(Box, {
         flexDirection: "column",
         gap: 1,
-        children: [Ve, ke],
+        children: [errorText, errorHints],
       });
-      p[20] = Ve;
-      p[21] = Ue;
-    } else Ue = p[21];
-    return Ue;
+      $[20] = errorText;
+      $[21] = errorBox;
+    } else errorBox = $[21];
+    return errorBox;
   }
   if (!utilization) {
-    let Ve;
-    if (p[22] === MEMO_CACHE_SENTINEL) {
-      Ve = jsxProd_default(Text, {
+    let loadingText;
+    if ($[22] === MEMO_CACHE_SENTINEL) {
+      loadingText = jsxProd_default(Text, {
         dimColor: true,
         children: "Loading usage data\u2026",
       });
-      p[22] = Ve;
-    } else Ve = p[22];
-    let ke;
-    if (p[23] === MEMO_CACHE_SENTINEL) {
-      ke = jsxProd_default_2(Box, {
+      $[22] = loadingText;
+    } else loadingText = $[22];
+    let loadingBox;
+    if ($[23] === MEMO_CACHE_SENTINEL) {
+      loadingBox = jsxProd_default_2(Box, {
         flexDirection: "column",
         gap: 1,
         children: [
-          Ve,
+          loadingText,
           jsxProd_default(Text, {
             dimColor: true,
             italic: false,
@@ -1965,36 +2067,40 @@ function loadUsageData(props) {
               context: "Settings",
               fallback: "Esc",
               description: "cancel",
-              ...D,
+              ...hintFormat,
             }),
           }),
         ],
       });
-      p[23] = ke;
-    } else ke = p[23];
-    return ke;
+      $[23] = loadingBox;
+    } else loadingBox = $[23];
+    return loadingBox;
   }
-  let Ve;
-  if (p[24] === MEMO_CACHE_SENTINEL) {
-    Ve = getSubscriptionType();
-    p[24] = Ve;
-  } else Ve = p[24];
-  let Ie = Ve;
-  let ye = Ie === "max" || Ie === "team" || Ie === null;
-  let We;
+  let subscriptionType;
+  if ($[24] === MEMO_CACHE_SENTINEL) {
+    subscriptionType = getSubscriptionType();
+    $[24] = subscriptionType;
+  } else subscriptionType = $[24];
+  let subscriptionType_2 = subscriptionType;
+  let showSonnetRow =
+    subscriptionType_2 === "max" || subscriptionType_2 === "team" || subscriptionType_2 === null;
+  let BoxComponent;
   let flexDirection;
   let gap;
-  let _e;
+  let limitBars;
   if (
-    p[25] !== maxWidth ||
-    p[26] !== utilization.five_hour ||
-    p[27] !== utilization.limits ||
-    p[28] !== utilization.seven_day ||
-    p[29] !== utilization.seven_day_sonnet
+    $[25] !== maxWidth ||
+    $[26] !== utilization.five_hour ||
+    $[27] !== utilization.limits ||
+    $[28] !== utilization.seven_day ||
+    $[29] !== utilization.seven_day_sonnet
   ) {
-    let Ne = rateLimitPromoNotices();
-    let st = (at) => Ne.filter((ot) => ot.bar.toLowerCase() === at.toLowerCase()).map(toUsageNoticeRow);
-    let et = [
+    let promoNotices = rateLimitPromoNotices();
+    let noticesForBar = (barName) =>
+      promoNotices
+        .filter((notice) => notice.bar.toLowerCase() === barName.toLowerCase())
+        .map(toUsageNoticeRow);
+    let bars = [
       {
         bar: "five_hour",
         title: "Current session",
@@ -2007,7 +2113,7 @@ function loadUsageData(props) {
         limit: utilization.seven_day,
         alwaysShowDateInReset: true,
       },
-      ...(ye
+      ...(showSonnetRow
         ? [
             {
               bar: "seven_day_sonnet",
@@ -2019,11 +2125,11 @@ function loadUsageData(props) {
         : []),
       ...modelScopedWeeklyRows(utilization.limits, overageIncludedModels()).map(toLimitBarSpec),
     ];
-    We = Box;
+    BoxComponent = Box;
     flexDirection = "column";
     gap = 1;
-    _e = et.map((Ge) => {
-      let { bar, title, limit, alwaysShowDateInReset } = Ge;
+    limitBars = bars.map((barSpec) => {
+      let { bar, title, limit, alwaysShowDateInReset } = barSpec;
       return (
         limit &&
         jsxProd_default(
@@ -2033,30 +2139,30 @@ function loadUsageData(props) {
             limit,
             maxWidth,
             alwaysShowDateInReset,
-            trailingLines: st(bar),
+            trailingLines: noticesForBar(bar),
           },
           title,
         )
       );
     });
-    p[25] = maxWidth;
-    p[26] = utilization.five_hour;
-    p[27] = utilization.limits;
-    p[28] = utilization.seven_day;
-    p[29] = utilization.seven_day_sonnet;
-    p[30] = We;
-    p[31] = flexDirection;
-    p[32] = gap;
-    p[33] = _e;
+    $[25] = maxWidth;
+    $[26] = utilization.five_hour;
+    $[27] = utilization.limits;
+    $[28] = utilization.seven_day;
+    $[29] = utilization.seven_day_sonnet;
+    $[30] = BoxComponent;
+    $[31] = flexDirection;
+    $[32] = gap;
+    $[33] = limitBars;
   } else {
-    We = p[30];
-    flexDirection = p[31];
-    gap = p[32];
-    _e = p[33];
+    BoxComponent = $[30];
+    flexDirection = $[31];
+    gap = $[32];
+    limitBars = $[33];
   }
-  let Ge;
-  if (p[34] !== maxWidth || p[35] !== utilization.cinder_cove) {
-    Ge =
+  let creditBar;
+  if ($[34] !== maxWidth || $[35] !== utilization.cinder_cove) {
+    creditBar =
       utilization.cinder_cove &&
       jsxProd_default(LimitBar, {
         title: "Claude Code and Cowork credit",
@@ -2064,13 +2170,13 @@ function loadUsageData(props) {
         maxWidth,
         subtextOverride: creditExpiryLabel(utilization.cinder_cove.resets_at),
       });
-    p[34] = maxWidth;
-    p[35] = utilization.cinder_cove;
-    p[36] = Ge;
-  } else Ge = p[36];
-  let Ze;
-  if (p[37] !== maxWidth || p[38] !== utilization.wattle_ember) {
-    Ze =
+    $[34] = maxWidth;
+    $[35] = utilization.cinder_cove;
+    $[36] = creditBar;
+  } else creditBar = $[36];
+  let fableCreditBar;
+  if ($[37] !== maxWidth || $[38] !== utilization.wattle_ember) {
+    fableCreditBar =
       utilization.wattle_ember &&
       jsxProd_default(LimitBar, {
         title: utilization.wattle_ember.label || "Credit",
@@ -2079,138 +2185,147 @@ function loadUsageData(props) {
         subtextOverride: formatCreditLine(utilization.wattle_ember),
         trailingLines: formatFableCredit(utilization.wattle_ember),
       });
-    p[37] = maxWidth;
-    p[38] = utilization.wattle_ember;
-    p[39] = Ze;
-  } else Ze = p[39];
-  let Xe;
-  if (p[40] !== maxWidth) {
-    Xe = jsxProd_default(FeedColumn, {
+    $[37] = maxWidth;
+    $[38] = utilization.wattle_ember;
+    $[39] = fableCreditBar;
+  } else fableCreditBar = $[39];
+  let feedColumn;
+  if ($[40] !== maxWidth) {
+    feedColumn = jsxProd_default(FeedColumn, {
       maxWidth,
     });
-    p[40] = maxWidth;
-    p[41] = Xe;
-  } else Xe = p[41];
-  let tt;
-  if (p[42] !== maxWidth || p[43] !== utilization.extra_usage) {
-    tt =
+    $[40] = maxWidth;
+    $[41] = feedColumn;
+  } else feedColumn = $[41];
+  let extraUsageSection;
+  if ($[42] !== maxWidth || $[43] !== utilization.extra_usage) {
+    extraUsageSection =
       utilization.extra_usage &&
       jsxProd_default(ExtraUsageSection, {
         extraUsage: utilization.extra_usage,
         maxWidth,
       });
-    p[42] = maxWidth;
-    p[43] = utilization.extra_usage;
-    p[44] = tt;
-  } else tt = p[44];
-  let mn;
-  if (p[45] !== enrichError) {
-    mn =
+    $[42] = maxWidth;
+    $[43] = utilization.extra_usage;
+    $[44] = extraUsageSection;
+  } else extraUsageSection = $[44];
+  let enrichErrorText;
+  if ($[45] !== enrichError) {
+    enrichErrorText =
       enrichError &&
       jsxProd_default(Text, {
         dimColor: true,
         children: enrichError,
       });
-    p[45] = enrichError;
-    p[46] = mn;
-  } else mn = p[46];
-  let fn;
-  if (p[47] !== enrichError || p[48] !== ee) {
-    fn =
-      ee &&
+    $[45] = enrichError;
+    $[46] = enrichErrorText;
+  } else enrichErrorText = $[46];
+  let refreshingText;
+  if ($[47] !== enrichError || $[48] !== isLoading) {
+    refreshingText =
+      isLoading &&
       !enrichError &&
       jsxProd_default(Text, {
         dimColor: true,
         children: "Refreshing\u2026",
       });
-    p[47] = enrichError;
-    p[48] = ee;
-    p[49] = fn;
-  } else fn = p[49];
-  let Yt;
-  if (p[50] !== enrichError) {
-    Yt =
+    $[47] = enrichError;
+    $[48] = isLoading;
+    $[49] = refreshingText;
+  } else refreshingText = $[49];
+  let retryHint;
+  if ($[50] !== enrichError) {
+    retryHint =
       enrichError &&
       jsxProd_default(ConfigurableShortcutHint, {
         action: "settings:retry",
         context: "Settings",
         fallback: "r",
         description: "retry",
-        ...D,
+        ...hintFormat,
       });
-    p[50] = enrichError;
-    p[51] = Yt;
-  } else Yt = p[51];
-  let _n;
-  if (p[52] === MEMO_CACHE_SENTINEL) {
-    _n = jsxProd_default(ConfigurableShortcutHint, {
+    $[50] = enrichError;
+    $[51] = retryHint;
+  } else retryHint = $[51];
+  let cancelHint;
+  if ($[52] === MEMO_CACHE_SENTINEL) {
+    cancelHint = jsxProd_default(ConfigurableShortcutHint, {
       action: "confirm:no",
       context: "Settings",
       fallback: "Esc",
       description: "cancel",
-      ...D,
+      ...hintFormat,
     });
-    p[52] = _n;
-  } else _n = p[52];
-  let Qt;
-  if (p[53] !== Yt) {
-    Qt = jsxProd_default(Text, {
+    $[52] = cancelHint;
+  } else cancelHint = $[52];
+  let hintsLine;
+  if ($[53] !== retryHint) {
+    hintsLine = jsxProd_default(Text, {
       dimColor: true,
       italic: false,
       children: jsxProd_default_2(Byline, {
-        children: [Yt, _n],
+        children: [retryHint, cancelHint],
       }),
     });
-    p[53] = Yt;
-    p[54] = Qt;
-  } else Qt = p[54];
-  let ps;
+    $[53] = retryHint;
+    $[54] = hintsLine;
+  } else hintsLine = $[54];
+  let content;
   if (
-    p[55] !== We ||
-    p[56] !== flexDirection ||
-    p[57] !== gap ||
-    p[58] !== _e ||
-    p[59] !== Ge ||
-    p[60] !== Ze ||
-    p[61] !== Xe ||
-    p[62] !== tt ||
-    p[63] !== mn ||
-    p[64] !== fn ||
-    p[65] !== Qt
+    $[55] !== BoxComponent ||
+    $[56] !== flexDirection ||
+    $[57] !== gap ||
+    $[58] !== limitBars ||
+    $[59] !== creditBar ||
+    $[60] !== fableCreditBar ||
+    $[61] !== feedColumn ||
+    $[62] !== extraUsageSection ||
+    $[63] !== enrichErrorText ||
+    $[64] !== refreshingText ||
+    $[65] !== hintsLine
   ) {
-    ps = jsxProd_default_2(We, {
+    content = jsxProd_default_2(BoxComponent, {
       flexDirection,
       gap,
-      children: [_e, Ge, Ze, Xe, tt, mn, fn, Qt],
+      children: [
+        limitBars,
+        creditBar,
+        fableCreditBar,
+        feedColumn,
+        extraUsageSection,
+        enrichErrorText,
+        refreshingText,
+        hintsLine,
+      ],
     });
-    p[55] = We;
-    p[56] = flexDirection;
-    p[57] = gap;
-    p[58] = _e;
-    p[59] = Ge;
-    p[60] = Ze;
-    p[61] = Xe;
-    p[62] = tt;
-    p[63] = mn;
-    p[64] = fn;
-    p[65] = Qt;
-    p[66] = ps;
-  } else ps = p[66];
-  return ps;
+    $[55] = BoxComponent;
+    $[56] = flexDirection;
+    $[57] = gap;
+    $[58] = limitBars;
+    $[59] = creditBar;
+    $[60] = fableCreditBar;
+    $[61] = feedColumn;
+    $[62] = extraUsageSection;
+    $[63] = enrichErrorText;
+    $[64] = refreshingText;
+    $[65] = hintsLine;
+    $[66] = content;
+  } else content = $[66];
+  return content;
 }
 //@ chunk-9h8dr0qb.js:65969-65992 layout
 var USAGE_CREDITS_LABEL = "Usage credits";
 //@ chunk-9h8dr0qb.js:65992-67685 fingerprint = ExtraUsageSection (0.698)
 function ExtraUsageSection(props) {
-  let $ = w(27);
+  let $ = useMemoCache(27);
   let { extraUsage, maxWidth } = props;
   let subscriptionType = getSubscriptionType();
-  let D = subscriptionType === "pro" || subscriptionType === "max";
-  if (!D && !(subscriptionType === "team" || subscriptionType === "enterprise")) {
+  let isConsumerPlan = subscriptionType === "pro" || subscriptionType === "max";
+  if (!isConsumerPlan && !(subscriptionType === "team" || subscriptionType === "enterprise")) {
     return null;
   }
   if (!extraUsage.is_enabled) {
-    if (D && usageCreditsCommand.isEnabled()) {
+    if (isConsumerPlan && usageCreditsCommand.isEnabled()) {
       let t1;
       if ($[0] === MEMO_CACHE_SENTINEL) {
         t1 = jsxProd_default(Title, {
@@ -2225,7 +2340,7 @@ function ExtraUsageSection(props) {
   }
   let currency = extraUsage.currency ?? "USD";
   if (extraUsage.monthly_limit === null) {
-    if (D) {
+    if (isConsumerPlan) {
       let t1;
       if ($[1] === MEMO_CACHE_SENTINEL) {
         t1 = jsxProd_default(Title, {
@@ -2239,85 +2354,91 @@ function ExtraUsageSection(props) {
     if (typeof extraUsage.used_credits !== "number") {
       return null;
     }
-    let A;
+    let usedLabel;
     if ($[2] !== currency || $[3] !== extraUsage.used_credits) {
-      A = formatCurrency(extraUsage.used_credits, currency);
+      usedLabel = formatCurrency(extraUsage.used_credits, currency);
       $[2] = currency;
       $[3] = extraUsage.used_credits;
-      $[4] = A;
-    } else A = $[4];
-    const subtitle = `${A} spent`;
-    let U;
+      $[4] = usedLabel;
+    } else usedLabel = $[4];
+    const subtitle = `${usedLabel} spent`;
+    let titleElement;
     if ($[5] !== subtitle) {
-      U = jsxProd_default(Title, {
+      titleElement = jsxProd_default(Title, {
         subtitle,
         children: USAGE_CREDITS_LABEL,
       });
       $[5] = subtitle;
-      $[6] = U;
-    } else U = $[6];
-    return U;
+      $[6] = titleElement;
+    } else titleElement = $[6];
+    return titleElement;
   }
   if (typeof extraUsage.used_credits !== "number") {
     return null;
   }
-  let W =
+  let utilization =
     extraUsage.utilization ??
     (extraUsage.monthly_limit > 0
       ? Math.max(0, Math.min(100, (extraUsage.used_credits / extraUsage.monthly_limit) * 100))
       : 100);
-  let A;
+  let usedLabel;
   if ($[7] !== currency || $[8] !== extraUsage.used_credits) {
-    A = formatCurrency(extraUsage.used_credits, currency);
+    usedLabel = formatCurrency(extraUsage.used_credits, currency);
     $[7] = currency;
     $[8] = extraUsage.used_credits;
-    $[9] = A;
-  } else A = $[9];
-  let M = A;
-  let F;
+    $[9] = usedLabel;
+  } else usedLabel = $[9];
+  let usedLabelValue = usedLabel;
+  let limitLabel;
   if ($[10] !== currency || $[11] !== extraUsage.monthly_limit) {
-    F = formatCurrency(extraUsage.monthly_limit, currency);
+    limitLabel = formatCurrency(extraUsage.monthly_limit, currency);
     $[10] = currency;
     $[11] = extraUsage.monthly_limit;
-    $[12] = F;
-  } else F = $[12];
-  let formattedMonthlyLimit = F;
-  let H;
-  let utilization;
+    $[12] = limitLabel;
+  } else limitLabel = $[12];
+  let formattedMonthlyLimit = limitLabel;
+  let utilizationValue;
+  let utilization_2;
   let resetsAt;
   let title;
-  if ($[13] !== W) {
+  if ($[13] !== utilization) {
     let now = new Date();
     let oneMonthReset = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-    H = LimitBar;
+    utilizationValue = LimitBar;
     title = USAGE_CREDITS_LABEL;
-    utilization = W;
+    utilization_2 = utilization;
     resetsAt = oneMonthReset.toISOString();
-    $[13] = W;
-    $[14] = H;
-    $[15] = utilization;
+    $[13] = utilization;
+    $[14] = utilizationValue;
+    $[15] = utilization_2;
     $[16] = resetsAt;
     $[17] = title;
   } else {
-    H = $[14];
-    utilization = $[15];
+    utilizationValue = $[14];
+    utilization_2 = $[15];
     resetsAt = $[16];
     title = $[17];
   }
   let limit;
-  if ($[18] !== utilization || $[19] !== resetsAt) {
+  if ($[18] !== utilization_2 || $[19] !== resetsAt) {
     limit = {
-      utilization,
+      utilization: utilization_2,
       resets_at: resetsAt,
     };
-    $[18] = utilization;
+    $[18] = utilization_2;
     $[19] = resetsAt;
     $[20] = limit;
   } else limit = $[20];
-  const extraSubtext = `${M} / ${formattedMonthlyLimit} spent`;
+  const extraSubtext = `${usedLabelValue} / ${formattedMonthlyLimit} spent`;
   let t10;
-  if ($[21] !== H || $[22] !== maxWidth || $[23] !== title || $[24] !== limit || $[25] !== extraSubtext) {
-    t10 = jsxProd_default(H, {
+  if (
+    $[21] !== utilizationValue ||
+    $[22] !== maxWidth ||
+    $[23] !== title ||
+    $[24] !== limit ||
+    $[25] !== extraSubtext
+  ) {
+    t10 = jsxProd_default(utilizationValue, {
       title,
       limit,
       showTimeInReset: false,
@@ -2325,7 +2446,7 @@ function ExtraUsageSection(props) {
       extraSubtext,
       maxWidth,
     });
-    $[21] = H;
+    $[21] = utilizationValue;
     $[22] = maxWidth;
     $[23] = title;
     $[24] = limit;
@@ -2343,40 +2464,42 @@ function formatPeakDay(dateStr) {
 }
 //@ chunk-9h8dr0qb.js:67776-68119 placement
 function formatCreditLine(wattleEmber) {
-  let u = [];
+  let parts = [];
   if (wattleEmber.limit_dollars != null) {
-    let p = formatUsageUSD(wattleEmber.used_dollars ?? 0);
-    let h = formatUsageUSD(wattleEmber.limit_dollars);
-    u.push(`${p} of ${h} used`);
+    let usedLabel = formatUsageUSD(wattleEmber.used_dollars ?? 0);
+    let limitLabel = formatUsageUSD(wattleEmber.limit_dollars);
+    parts.push(`${usedLabel} of ${limitLabel} used`);
   }
   if (wattleEmber.resets_at) {
-    let p = formatResetText(wattleEmber.resets_at, true, true, true);
+    let resetLabel = formatResetText(wattleEmber.resets_at, true, true, true);
     let periods = wattleEmber.periods ?? [];
     let endsAt = periods.length >= 2 ? periods.at(-1)?.ends_at : undefined;
-    let E = endsAt != null && Date.parse(wattleEmber.resets_at) < Date.parse(endsAt);
-    u.push(E ? `Resets ${p}` : `Expires ${p}`);
+    let periodLabel = endsAt != null && Date.parse(wattleEmber.resets_at) < Date.parse(endsAt);
+    parts.push(periodLabel ? `Resets ${resetLabel}` : `Expires ${resetLabel}`);
   }
-  return u.join(" \xB7 ");
+  return parts.join(" \xB7 ");
 }
 //@ chunk-9h8dr0qb.js:68119-68564 placement
 function formatFableCredit(wattleEmber) {
   let periods = Array.isArray(wattleEmber.periods) ? wattleEmber.periods : [];
-  let [p, h] = periods;
+  let [firstPeriod, secondPeriod] = periods;
   if (
     periods.length !== 2 ||
-    p == null ||
-    h == null ||
+    firstPeriod == null ||
+    secondPeriod == null ||
     wattleEmber.limit_dollars == null ||
-    [p.starts_at, p.ends_at, h.ends_at].some((v) => typeof v !== "string" || Number.isNaN(Date.parse(v)))
+    [firstPeriod.starts_at, firstPeriod.ends_at, secondPeriod.ends_at].some(
+      (dateText) => typeof dateText !== "string" || Number.isNaN(Date.parse(dateText)),
+    )
   )
     return [];
-  let D = formatUsageUSD(wattleEmber.limit_dollars);
-  let E = formatPeakDay(p.starts_at);
-  let T = formatPeakDay(p.ends_at);
-  let A = formatPeakDay(h.ends_at);
+  let limitLabel = formatUsageUSD(wattleEmber.limit_dollars);
+  let firstStart = formatPeakDay(firstPeriod.starts_at);
+  let firstEnd = formatPeakDay(firstPeriod.ends_at);
+  let secondEnd = formatPeakDay(secondPeriod.ends_at);
   return [
     {
-      text: `You have ${D} USD of Fable usage for each of two periods: ${E} to ${T}, and ${T} to ${A}. Unused credit doesn't carry over.`,
+      text: `You have ${limitLabel} USD of Fable usage for each of two periods: ${firstStart} to ${firstEnd}, and ${firstEnd} to ${secondEnd}. Unused credit doesn't carry over.`,
     },
   ];
 }
@@ -2393,53 +2516,13 @@ function formatUsageUSD(limitDollars) {
   );
 }
 //@ chunk-9h8dr0qb.js:68732-68750 placement
-var usageRefreshSignal = Re(require_asciichart(), 1);
+var usageRefreshSignal; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-9h8dr0qb.js:68732", () => {
+  usageRefreshSignal = __toESM(require_asciichart(), 1);
+});
 //@ chunk-9h8dr0qb.js:68750-68754 placement
-init_react_production();
-//@ chunk-9689amr8.js:12028-12675 fingerprint = Usage (0.427)
-/**
- * /usage：当前会话与本周用量条（全部模型/Sonnet/Opus）、重置时间，团队/企业的额外用量区。
- */
-function Usage(a) {
-  let { rate_limits: rateLimits, subscription_type: subscriptionType } = a;
-  if (!rateLimits) return null;
-  let i = subscriptionType === "max" || subscriptionType === "team" || subscriptionType === null;
-  let s = [
-    {
-      title: "Current session",
-      limit: rateLimits.five_hour,
-    },
-    {
-      title: "Current week (all models)",
-      limit: rateLimits.seven_day,
-    },
-    ...(i
-      ? [
-          {
-            title: "Current week (Sonnet only)",
-            limit: rateLimits.seven_day_sonnet,
-          },
-        ]
-      : []),
-    ...(rateLimits.model_scoped ?? []).map((n) => ({
-      title: `Current week (${n.display_name})`,
-      limit: {
-        utilization: n.utilization,
-        resets_at: n.resets_at,
-      },
-    })),
-  ];
-  let o = [];
-  for (let { title, limit } of s) {
-    if (!limit || limit.utilization === null) continue;
-    let responseBody = limit.resets_at
-      ? ` \xB7 resets ${formatResetText(limit.resets_at, true, true, true)}`
-      : "";
-    o.push(`${title}: ${Math.floor(limit.utilization)}% used${responseBody}`);
-  }
-  return o.length > 0
-    ? o.join(`
-`)
-    : null;
-}
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-9h8dr0qb.js:68750", () => {
+  init_react_production();
+});
 export { usageRefreshSignal, Usage, UsageAttributionView, renderGatewayUsageNotice, applyUsageFix };

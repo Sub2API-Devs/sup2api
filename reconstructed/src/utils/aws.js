@@ -10,7 +10,7 @@
  */
 import { findInCauseChain, errorMessage } from "./errors.js";
 import { env } from "./env.js";
-import { Re } from "../../runtime/bun-runtime.js";
+import { __toESM } from "../../runtime/bun-runtime.js";
 import { resolveAwsRegion } from "./awsRegion.js";
 import {
   getAWSClientProxyConfig,
@@ -20,17 +20,18 @@ import {
 import { withTimeout } from "./sleep.js";
 import { logForDebugging } from "./debug.js";
 import { require_sts } from "../../vendor/@aws-sdk/nested-clients/dist-cjs/submodules/sts/index.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-bwbq4xvm.js:156069-156148 fingerprint = isAwsCredentialsProviderError (1)
 function isAwsCredentialsProviderError(err) {
-  return findInCauseChain(err, (s) => s.name === "CredentialsProviderError") !== undefined;
+  return findInCauseChain(err, (cause) => cause.name === "CredentialsProviderError") !== undefined;
 }
 //@ chunk-bwbq4xvm.js:156148-156422 placement
 var AWS_AUTH_ERROR_PATTERN =
   /ExpiredToken|InvalidSignature|SignatureDoesNotMatch|UnrecognizedClient|InvalidClientTokenId|security token.*(invalid|expired)|signature we calculated does not match|Bearer Token has expired|Authentication failed.*API Key|Missing required parameters in the API Key/i;
 //@ chunk-bwbq4xvm.js:157362-157416 placement
-function isAwsCredentialError(e, message) {
-  return AWS_AUTH_ERROR_PATTERN.test(`${e ?? ""} ${message ?? ""}`);
+function isAwsCredentialError(name, message) {
+  return AWS_AUTH_ERROR_PATTERN.test(`${name ?? ""} ${message ?? ""}`);
 }
 //@ chunk-bwbq4xvm.js:157701-157947 fingerprint = isValidAwsStsOutput (0.85)
 /**
@@ -49,11 +50,11 @@ function isValidAwsStsOutput(obj) {
   );
 }
 //@ chunk-bwbq4xvm.js:157947-158082 layout
-function extractStsCredentials(e) {
-  if (!e || typeof e !== "object") return null;
-  let s = e;
-  if (isValidAwsStsOutput(s.Credentials)) return s.Credentials;
-  if (isValidAwsStsOutput(s)) return s;
+function extractStsCredentials(value) {
+  if (!value || typeof value !== "object") return null;
+  let record = value;
+  if (isValidAwsStsOutput(record.Credentials)) return record.Credentials;
+  if (isValidAwsStsOutput(record)) return record;
   return null;
 }
 //@ chunk-bwbq4xvm.js:158082-158095 layout
@@ -67,43 +68,47 @@ function getAwsChainResolveTimeoutMs() {
  * 用 STS GetCallerIdentity 检查当前 AWS 凭证是否有效（先强制重读共享配置）。
  */
 async function checkStsCallerIdentity() {
-  let { loadSharedConfigFiles } = await import("./chunk-72ngr4xp.js").then((m) => Re(m.default, 1));
+  let { loadSharedConfigFiles } = await import("../../vendor/@smithy/shared-ini-file-loader/default.js").then(
+    (sdkModule) => __toESM(sdkModule.default, 1),
+  );
   await loadSharedConfigFiles({
     ignoreCache: true,
   }).catch(() => {
     return;
   });
-  let [{ STSClient: s, GetCallerIdentityCommand: n }, awsRegion] = await Promise.all([
-    import("./chunk-heg39xxp.js"),
+  let [{ STSClient, GetCallerIdentityCommand }, region] = await Promise.all([
+    import("../../vendor/@aws-sdk/client-sts/dist-cjs/GetCallerIdentityCommand.lazy.js"),
     resolveAwsRegion(),
   ]);
-  let a = new s({
-    region: awsRegion,
+  let client = new STSClient({
+    region,
     ...(await getAWSClientProxyConfig({
-      url: resolveStsEndpointForProxyUrl(awsRegion),
-      region: awsRegion,
+      url: resolveStsEndpointForProxyUrl(region),
+      region,
       requestTimeoutMs: AWS_STS_TIMEOUT_MS,
     })),
   });
-  await withTimeout(a.send(new n({})), getAwsChainResolveTimeoutMs(), "AWS STS");
+  await withTimeout(client.send(new GetCallerIdentityCommand({})), getAwsChainResolveTimeoutMs(), "AWS STS");
 }
 //@ chunk-bwbq4xvm.js:158550-158912 layout
 async function getAwsProfileRegionHints() {
-  let { loadSharedConfigFiles } = await import("./chunk-72ngr4xp.js").then((m) => Re(m.default, 1));
-  let s = await loadSharedConfigFiles().catch(() => {
+  let { loadSharedConfigFiles } = await import("../../vendor/@smithy/shared-ini-file-loader/default.js").then(
+    (sdkModule) => __toESM(sdkModule.default, 1),
+  );
+  let files = await loadSharedConfigFiles().catch(() => {
     return;
   });
-  let n = new Set();
+  let visited = new Set();
   let AWS_PROFILE = env.AWS_PROFILE || "default";
-  while (s !== undefined && !n.has(AWS_PROFILE)) {
-    n.add(AWS_PROFILE);
-    let a = {
-      ...s.configFile[AWS_PROFILE],
-      ...s.credentialsFile[AWS_PROFILE],
+  while (files !== undefined && !visited.has(AWS_PROFILE)) {
+    visited.add(AWS_PROFILE);
+    let profile = {
+      ...files.configFile[AWS_PROFILE],
+      ...files.credentialsFile[AWS_PROFILE],
     };
-    if (a.credential_process) return true;
-    if (!a.source_profile) return false;
-    AWS_PROFILE = a.source_profile;
+    if (profile.credential_process) return true;
+    if (!profile.source_profile) return false;
+    AWS_PROFILE = profile.source_profile;
   }
   return false;
 }
@@ -114,9 +119,12 @@ async function getAwsProfileRegionHints() {
 async function clearAwsIniCache() {
   try {
     logForDebugging("Clearing AWS credential provider cache");
-    let [{ fromIni }, awsRegion] = await Promise.all([import("./chunk-thwbpw6e.js"), resolveAwsRegion()]);
+    let [{ fromIni }, region] = await Promise.all([
+      import("../../vendor/@aws-sdk/credential-providers/dist-cjs/createCredentialChain.lazy.js"),
+      resolveAwsRegion(),
+    ]);
     let awsProxyRequestHandler = await getAWSProxyRequestHandler({
-      url: resolveStsEndpointForProxyUrl(awsRegion),
+      url: resolveStsEndpointForProxyUrl(region),
       requestTimeoutMs: AWS_STS_TIMEOUT_MS,
     });
     let iniProvider = fromIni({
@@ -127,7 +135,7 @@ async function clearAwsIniCache() {
         },
         parentClientConfig: {
           requestHandler: awsProxyRequestHandler,
-          region: awsRegion,
+          region,
         },
       }),
     });
@@ -141,11 +149,20 @@ async function clearAwsIniCache() {
 /**
  * 惰性加载的 AWS SDK（共享配置文件读取）模块。
  */
-var awsSdkModule = Re(require_sts());
+var awsSdkModule; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-nm3tp7ry.js:544", () => {
+  awsSdkModule = __toESM(require_sts());
+});
 //@ chunk-nm3tp7ry.js:560-586 sole-consumer
-var AssumeRoleCommand = awsSdkModule.AssumeRoleCommand;
+var AssumeRoleCommand; // deferred: uses awsSdkModule of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-nm3tp7ry.js:560", () => {
+  AssumeRoleCommand = awsSdkModule.AssumeRoleCommand;
+});
 //@ chunk-nm3tp7ry.js:586-604 fingerprint = checkStsCallerIdentity (0.333)
-var STSClient = awsSdkModule.STSClient;
+var STSClient; // deferred: uses awsSdkModule of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-nm3tp7ry.js:586", () => {
+  STSClient = awsSdkModule.STSClient;
+});
 export {
   checkStsCallerIdentity,
   getAwsProfileRegionHints,
@@ -154,4 +171,6 @@ export {
   isAwsCredentialError,
   isAwsCredentialsProviderError,
   getAwsChainResolveTimeoutMs,
+  AssumeRoleCommand,
+  STSClient,
 };

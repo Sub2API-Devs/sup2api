@@ -8,7 +8,7 @@
  * pieces: chunk-vrb44rx7.js (2)
  * attribution: affinity 1, fingerprint 1
  */
-import { R, y, Q, ce } from "../../../vendor/react/cjs/react.production.js";
+import { useRef, useState, useMemo, useCallback } from "../../../vendor/react/cjs/react.production.js";
 
 //@ chunk-vrb44rx7.js:69906-69915 affinity
 var DEFAULT_MAX_VISIBLE = 5;
@@ -21,15 +21,15 @@ function usePagination({
   onScroll,
 }) {
   let needsPagination = totalItems > maxVisible;
-  let scrollOffsetRef = R(0);
-  let [U, L] = y(0);
-  let scrollOffset = Q(() => {
+  let scrollOffsetRef = useRef(0);
+  let [tick, setTick] = useState(0);
+  let scrollOffset = useMemo(() => {
     if (!needsPagination) return 0;
     let prevOffset = scrollOffsetRef.current;
     if (selectedIndex < prevOffset) {
-      let Oe = selectedIndex <= firstSelectableIndex ? 0 : selectedIndex;
-      scrollOffsetRef.current = Oe;
-      return Oe;
+      let clamped = selectedIndex <= firstSelectableIndex ? 0 : selectedIndex;
+      scrollOffsetRef.current = clamped;
+      return clamped;
     }
     if (selectedIndex >= prevOffset + maxVisible) {
       let newOffset = selectedIndex - maxVisible + 1;
@@ -40,43 +40,43 @@ function usePagination({
     let clampedOffset = Math.min(prevOffset, maxOffset);
     scrollOffsetRef.current = clampedOffset;
     return clampedOffset;
-  }, [selectedIndex, maxVisible, needsPagination, totalItems, firstSelectableIndex, U]);
+  }, [selectedIndex, maxVisible, needsPagination, totalItems, firstSelectableIndex, tick]);
   let startIndex = scrollOffset;
   let endIndex = Math.min(scrollOffset + maxVisible, totalItems);
-  let getVisibleItems = ce(
+  let getVisibleItems = useCallback(
     (items) => {
       if (!needsPagination) return items;
       return items.slice(startIndex, endIndex);
     },
     [needsPagination, startIndex, endIndex],
   );
-  let toActualIndex = ce((visibleIndex) => startIndex + visibleIndex, [startIndex]);
-  let isOnCurrentPage = ce(
+  let toActualIndex = useCallback((visibleIndex) => startIndex + visibleIndex, [startIndex]);
+  let isOnCurrentPage = useCallback(
     (newIndex, setSelectedIndex) => {
       let clampedIndex = Math.max(0, Math.min(newIndex, totalItems - 1));
       setSelectedIndex(clampedIndex);
     },
     [totalItems],
   );
-  function pe(actualIndex) {
+  function handleSelectionChange(actualIndex) {
     scrollOffsetRef.current = actualIndex;
-    L((he) => he + 1);
+    setTick((n) => n + 1);
     onScroll?.(actualIndex);
   }
-  function fe(ne) {
-    let clampedIndex = Math.max(0, Math.min(ne, totalItems - maxVisible));
-    pe(clampedIndex <= firstSelectableIndex ? 0 : clampedIndex);
+  function handleScroll(delta) {
+    let clampedIndex = Math.max(0, Math.min(delta, totalItems - maxVisible));
+    handleSelectionChange(clampedIndex <= firstSelectableIndex ? 0 : clampedIndex);
   }
-  function me(event) {
+  function handleWheel(event) {
     if (event.deltaY === 0) return;
-    let he = event.deltaY > 0;
-    let W = scrollOffsetRef.current;
-    let Oe = totalItems - maxVisible;
-    let totalPages = Math.max(0, Math.min(W + (he ? 1 : -1), Oe));
-    let min = Math.min(firstSelectableIndex + 1, Oe);
-    let je = he ? min : 0;
-    let actualIndex = totalPages > firstSelectableIndex ? totalPages : je;
-    if (actualIndex !== W) pe(actualIndex);
+    let downward = event.deltaY > 0;
+    let currentOffset = scrollOffsetRef.current;
+    let maxOffset = totalItems - maxVisible;
+    let totalPages = Math.max(0, Math.min(currentOffset + (downward ? 1 : -1), maxOffset));
+    let min = Math.min(firstSelectableIndex + 1, maxOffset);
+    let clamped = downward ? min : 0;
+    let actualIndex = totalPages > firstSelectableIndex ? totalPages : clamped;
+    if (actualIndex !== currentOffset) handleSelectionChange(actualIndex);
     event.stopImmediatePropagation();
   }
   return {
@@ -90,9 +90,9 @@ function usePagination({
       offset: startIndex,
       visible: endIndex - startIndex,
       total: totalItems,
-      onScrollTo: needsPagination ? fe : undefined,
+      onScrollTo: needsPagination ? handleScroll : undefined,
     },
-    onWheel: needsPagination ? me : undefined,
+    onWheel: needsPagination ? handleWheel : undefined,
     scrollPosition: {
       current: selectedIndex + 1,
       total: totalItems,

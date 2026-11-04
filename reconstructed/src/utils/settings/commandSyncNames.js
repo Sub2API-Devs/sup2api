@@ -29,8 +29,8 @@ function mergedCommandNames() {
 /**
  * invalidateCommandNames：使命令名单缓存失效。
  */
-function invalidateCommandNames(e) {
-  commandSyncNameState().invalidateAll(e);
+function invalidateCommandNames(source) {
+  commandSyncNameState().invalidateAll(source);
 }
 //@ chunk-5hsd6qen.js:393-431 placement
 /**
@@ -193,15 +193,15 @@ var COMMAND_NAME_SOURCES = {
 /**
  * commandKindOf：取命令来源分类（prompt 视为 skill）。
  */
-function commandKindOf(e) {
-  if (e.type === "prompt") return "skill";
-  return COMMAND_NAME_SOURCES[e.name] ?? "action";
+function commandKindOf(command) {
+  if (command.type === "prompt") return "skill";
+  return COMMAND_NAME_SOURCES[command.name] ?? "action";
 }
 //@ chunk-5hsd6qen.js:3035-3444 placement
-function isBuiltinCommandSource(e) {
-  if (e.type !== "prompt") return "builtin";
-  if (e.loadedFrom === "syncedSkills") return "synced";
-  switch (e.source) {
+function isBuiltinCommandSource(command) {
+  if (command.type !== "prompt") return "builtin";
+  if (command.loadedFrom === "syncedSkills") return "synced";
+  switch (command.source) {
     case "builtin":
       return "builtin";
     case "bundled":

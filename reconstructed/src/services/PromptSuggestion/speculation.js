@@ -18,8 +18,12 @@ import { logFeatureOk } from "../analytics/featureTelemetry.js";
 function stripSuggestionWrapper(candidate) {
   return candidate
     .trim()
-    .replace(/^<(suggestion|response|output|answer|result)>([\s\S]*)<\/\1>$/i, (n, t, o) =>
-      o.includes(`</${t.toLowerCase()}>`) || o.includes(`</${t.toUpperCase()}>`) ? n : o,
+    .replace(
+      /^<(suggestion|response|output|answer|result)>([\s\S]*)<\/\1>$/i,
+      (wholeMatch, tagName, inner) =>
+        inner.includes(`</${tagName.toLowerCase()}>`) || inner.includes(`</${tagName.toUpperCase()}>`)
+          ? wholeMatch
+          : inner,
     )
     .replace(
       /^\s*(suggested\s+(response|reply|input|prompt)|suggestion|response|reply|answer|output|result|\u63D0\u6848|\u56DE\u7B54|\u8FD4\u4FE1|\u5FDC\u7B54|\u51FA\u529B|\u7D50\u679C|\u5EFA\u8BAE|\u56DE\u590D|\u7B54\u6848|\u8F93\u51FA|\u7ED3\u679C|\uC81C\uC548|\uB2F5\uBCC0|\uC751\uB2F5|\uCD9C\uB825|\uACB0\uACFC)\s*[:\uFF1A]\s*/i,

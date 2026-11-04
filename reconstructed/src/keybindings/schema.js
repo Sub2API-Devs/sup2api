@@ -11,9 +11,18 @@
 import { NON_REBINDABLE } from "./reservedShortcuts.js";
 import { normalizeKeyForComparison } from "./parser.js";
 import { DEFAULT_BINDINGS } from "./defaultBindings.js";
-import { xr } from "../../vendor/lodash-es/_inlinedHelpers.js";
+import { import_mapValues } from "../../vendor/lodash-es/_inlinedHelpers.js";
 import { DoctorLazy } from "../cli/handlers/util.js";
-import { u, _enum, record, string, union, zg, array } from "../../vendor/zod/v4/classic/schemas.js";
+import {
+  objectSchema,
+  _enum,
+  record,
+  stringSchema,
+  union,
+  nullSchema,
+  array,
+} from "../../vendor/zod/v4/classic/schemas.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-6qssfmzs.js:9545-9551 placement
 /**
@@ -26,12 +35,12 @@ var nonRebindableKeySet;
  */
 function isNonRebindableAction(action) {
   if (!nonRebindableKeySet) {
-    let r = new Set(NON_REBINDABLE.map((i) => normalizeKeyForComparison(i.key)));
-    let s = new Set();
-    for (let i of DEFAULT_BINDINGS)
-      for (let [key, value] of Object.entries(i.bindings))
-        if (value !== null && r.has(normalizeKeyForComparison(key))) s.add(value);
-    nonRebindableKeySet = s;
+    let rebindableKeys = new Set(NON_REBINDABLE.map((entry) => normalizeKeyForComparison(entry.key)));
+    let actionSet = new Set();
+    for (let block of DEFAULT_BINDINGS)
+      for (let [key, value] of Object.entries(block.bindings))
+        if (value !== null && rebindableKeys.has(normalizeKeyForComparison(key))) actionSet.add(value);
+    nonRebindableKeySet = actionSet;
   }
   return nonRebindableKeySet.has(action);
 }
@@ -59,18 +68,18 @@ var DEPRECATED_ACTION_REPLACEMENTS = {
 /**
  * 判断快捷键动作名是否在已弃用列表里。
  */
-function isDeprecatedAction(e) {
-  return DEPRECATED_ACTIONS.some((r) => r === e);
+function isDeprecatedAction(action) {
+  return DEPRECATED_ACTIONS.some((deprecated) => deprecated === action);
 }
 //@ chunk-6qssfmzs.js:10155-10265 placement
 /**
  * 把用户快捷键配置中的弃用动作名迁移为新动作名。
  */
-function migrateDeprecatedActions(e) {
-  return e.map((r) => ({
-    context: r.context,
-    bindings: xr(r.bindings, (s) =>
-      s !== null && isDeprecatedAction(s) ? DEPRECATED_ACTION_REPLACEMENTS[s] : s,
+function migrateDeprecatedActions(blocks) {
+  return blocks.map((block) => ({
+    context: block.context,
+    bindings: import_mapValues(block.bindings, (action) =>
+      action !== null && isDeprecatedAction(action) ? DEPRECATED_ACTION_REPLACEMENTS[action] : action,
     ),
   }));
 }
@@ -78,38 +87,42 @@ function migrateDeprecatedActions(e) {
 /**
  * 29 个快捷键上下文：Global、Chat、Autocomplete、Confirmation、Help、ProactivityMenu、Transcript、HistorySearch、Task、ThemePicker、Settings、Tabs、Attachments、Footer、AbovePrompt、AbovePromptInput、AbovePromptSelect、Pane、PaneField、MessageSelector、DiffDialog、DiffPanel、FeedbackSurvey、ModelPicker、EffortSlider、Select、Plugin、Scroll、Agents。
  */
-var KEYBINDING_CONTEXTS = [
-  "Global",
-  "Chat",
-  "Autocomplete",
-  "Confirmation",
-  "Help",
-  "ProactivityMenu",
-  "Transcript",
-  "HistorySearch",
-  "Task",
-  "ThemePicker",
-  "Settings",
-  "Tabs",
-  "Attachments",
-  "Footer",
-  "AbovePrompt",
-  "AbovePromptInput",
-  "AbovePromptSelect",
-  "Pane",
-  "PaneField",
-  "MessageSelector",
-  "DiffDialog",
-  "DiffPanel",
-  "FeedbackSurvey",
-  "ModelPicker",
-  "EffortSlider",
-  "Select",
-  "Plugin",
-  "Scroll",
-  "Agents",
-];
-var KEYBINDING_CONTEXT_SET = new Set(KEYBINDING_CONTEXTS);
+var KEYBINDING_CONTEXTS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var KEYBINDING_CONTEXT_SET;
+deferInit("chunk-6qssfmzs.js:10265", () => {
+  KEYBINDING_CONTEXTS = [
+    "Global",
+    "Chat",
+    "Autocomplete",
+    "Confirmation",
+    "Help",
+    "ProactivityMenu",
+    "Transcript",
+    "HistorySearch",
+    "Task",
+    "ThemePicker",
+    "Settings",
+    "Tabs",
+    "Attachments",
+    "Footer",
+    "AbovePrompt",
+    "AbovePromptInput",
+    "AbovePromptSelect",
+    "Pane",
+    "PaneField",
+    "MessageSelector",
+    "DiffDialog",
+    "DiffPanel",
+    "FeedbackSurvey",
+    "ModelPicker",
+    "EffortSlider",
+    "Select",
+    "Plugin",
+    "Scroll",
+    "Agents",
+  ];
+  KEYBINDING_CONTEXT_SET = new Set(KEYBINDING_CONTEXTS);
+});
 //@ chunk-6qssfmzs.js:10649-10681 layout
 function isKeybindingContext(keybindingScope) {
   return KEYBINDING_CONTEXT_SET.has(keybindingScope);
@@ -328,8 +341,12 @@ var KEYBINDING_ACTIONS = [
   "agents:setGroup",
 ];
 //@ chunk-6qssfmzs.js:15653-15695 layout
-var TEMPLATE_EXCLUDED_CONTEXTS = ["FeedbackSurvey"];
-var KEYBINDING_ACTION_SET = new Set(KEYBINDING_ACTIONS);
+var TEMPLATE_EXCLUDED_CONTEXTS; // deferred: uses KEYBINDING_CONTEXT_DESCRIPTIONS of its import cycle while loading; runs once the cycle is complete
+var KEYBINDING_ACTION_SET;
+deferInit("chunk-6qssfmzs.js:15653", () => {
+  TEMPLATE_EXCLUDED_CONTEXTS = ["FeedbackSurvey"];
+  KEYBINDING_ACTION_SET = new Set(KEYBINDING_ACTIONS);
+});
 //@ chunk-6qssfmzs.js:15695-15727 layout
 function isKeybindingAction(action) {
   return KEYBINDING_ACTION_SET.has(action);
@@ -345,32 +362,36 @@ function isValidBindingAction(action) {
 /**
  * keybindings.json 的 zod schema（用于生成 JSON Schema）：块 = {context: 上下文枚举, bindings: 按键串 → 动作枚举 | command:名字 | null}；文件 = {$schema?, $docs?, bindings: 块数组}。
  */
-var KeybindingBlockSchema = DoctorLazy(() =>
-  u({
-    context: _enum(KEYBINDING_CONTEXTS).describe(
-      "UI context where these bindings apply. Global bindings work everywhere.",
-    ),
-    bindings: record(
-      string().describe('Keystroke pattern (e.g., "ctrl+k", "shift+tab")'),
-      union([
-        _enum([...KEYBINDING_ACTIONS, ...DEPRECATED_ACTIONS]),
-        string()
-          .regex(/^command:[a-zA-Z0-9:\-_]+$/)
-          .describe(
-            'Command binding (e.g., "command:help", "command:compact"). Executes the slash command as if typed.',
-          ),
-        zg().describe("Set to null to unbind a default shortcut"),
-      ]).describe("Action to trigger, command to invoke, or null to unbind"),
-    ).describe("Map of keystroke patterns to actions"),
-  }).describe("A block of keybindings for a specific context"),
-);
-var KeybindingsSchema = DoctorLazy(() =>
-  u({
-    $schema: string().optional().describe("JSON Schema URL for editor validation"),
-    $docs: string().optional().describe("Documentation URL"),
-    bindings: array(KeybindingBlockSchema()).describe("Array of keybinding blocks by context"),
-  }).describe("Claude Code keybindings configuration. Customize keyboard shortcuts by context."),
-);
+var KeybindingBlockSchema; // deferred: uses DoctorLazy (../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var KeybindingsSchema;
+deferInit("chunk-6qssfmzs.js:15785", () => {
+  KeybindingBlockSchema = DoctorLazy(() =>
+    objectSchema({
+      context: _enum(KEYBINDING_CONTEXTS).describe(
+        "UI context where these bindings apply. Global bindings work everywhere.",
+      ),
+      bindings: record(
+        stringSchema().describe('Keystroke pattern (e.g., "ctrl+k", "shift+tab")'),
+        union([
+          _enum([...KEYBINDING_ACTIONS, ...DEPRECATED_ACTIONS]),
+          stringSchema()
+            .regex(/^command:[a-zA-Z0-9:\-_]+$/)
+            .describe(
+              'Command binding (e.g., "command:help", "command:compact"). Executes the slash command as if typed.',
+            ),
+          nullSchema().describe("Set to null to unbind a default shortcut"),
+        ]).describe("Action to trigger, command to invoke, or null to unbind"),
+      ).describe("Map of keystroke patterns to actions"),
+    }).describe("A block of keybindings for a specific context"),
+  );
+  KeybindingsSchema = DoctorLazy(() =>
+    objectSchema({
+      $schema: stringSchema().optional().describe("JSON Schema URL for editor validation"),
+      $docs: stringSchema().optional().describe("Documentation URL"),
+      bindings: array(KeybindingBlockSchema()).describe("Array of keybinding blocks by context"),
+    }).describe("Claude Code keybindings configuration. Customize keyboard shortcuts by context."),
+  );
+});
 export {
   TEMPLATE_EXCLUDED_CONTEXTS,
   isKeybindingAction,

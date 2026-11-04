@@ -25,24 +25,31 @@ import { logMCPDebug } from "../../utils/log.js";
 import { redactUrlSecrets } from "../../utils/urlRedaction.js";
 import { sanitizeRelayUrl } from "../../utils/sanitization.js";
 import { createInformationalSystemMessage } from "../../utils/messages.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-8t8n4kdh.js:37526-37639 placement
 /**
  * 主机名格式的正则。
  */
-var TENGU_GLEAMING_CREEK = "tengu_gleaming_creek";
-var RESTRICT_ALL_HOSTS = {
-  mode: "all",
-};
-var RESTRICT_NO_HOSTS = {
-  mode: "allow",
-  hosts: new Set(),
-};
-var HOSTNAME_RE = /^[a-z0-9_-]+(\.[a-z0-9_-]+)*$/;
+var TENGU_GLEAMING_CREEK; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var RESTRICT_ALL_HOSTS;
+var RESTRICT_NO_HOSTS;
+var HOSTNAME_RE;
+deferInit("chunk-8t8n4kdh.js:37526", () => {
+  TENGU_GLEAMING_CREEK = "tengu_gleaming_creek";
+  RESTRICT_ALL_HOSTS = {
+    mode: "all",
+  };
+  RESTRICT_NO_HOSTS = {
+    mode: "allow",
+    hosts: new Set(),
+  };
+  HOSTNAME_RE = /^[a-z0-9_-]+(\.[a-z0-9_-]+)*$/;
+});
 //@ chunk-8t8n4kdh.js:37639-37863 placement
-function normalizePolicyHost(e) {
-  if (typeof e !== "string" || /[\s/:@?#\\[\]%]/.test(e.trim())) return;
-  let replaced = e.trim().replace(/\.$/, "");
+function normalizePolicyHost(host) {
+  if (typeof host !== "string" || /[\s/:@?#\\[\]%]/.test(host.trim())) return;
+  let replaced = host.trim().replace(/\.$/, "");
   let hostname = URL.canParse(`https://${replaced}/`) ? new URL(`https://${replaced}/`).hostname : undefined;
   return hostname !== undefined && HOSTNAME_RE.test(hostname) ? hostname : undefined;
 }
@@ -59,13 +66,13 @@ function remoteHostPolicy() {
   let { mode, hosts } = featureValue_CACHED_MAY_BE_STALE;
   if (mode === undefined && Object.keys(featureValue_CACHED_MAY_BE_STALE).length === 0)
     return RESTRICT_ALL_HOSTS;
-  let s = typeof mode === "string" ? mode.trim().toLowerCase() : undefined;
-  if (s === "all") return RESTRICT_ALL_HOSTS;
-  if ((s === "allow" || s === "deny") && Array.isArray(hosts)) {
+  let mode_2 = typeof mode === "string" ? mode.trim().toLowerCase() : undefined;
+  if (mode_2 === "all") return RESTRICT_ALL_HOSTS;
+  if ((mode_2 === "allow" || mode_2 === "deny") && Array.isArray(hosts)) {
     let mapped = hosts.map(normalizePolicyHost);
-    if (mapped.every((y) => y !== undefined))
+    if (mapped.every((normalized) => normalized !== undefined))
       return {
-        mode: s,
+        mode: mode_2,
         hosts: new Set(mapped),
       };
   }
@@ -74,41 +81,47 @@ function remoteHostPolicy() {
 //@ chunk-8t8n4kdh.js:38265-38401 placement
 function urlHostname(url) {
   if (!URL.canParse(url)) return;
-  let n = new URL(url);
-  return ["http:", "https:", "ws:", "wss:"].includes(n.protocol) ? n.hostname : undefined;
+  let url_2 = new URL(url);
+  return ["http:", "https:", "ws:", "wss:"].includes(url_2.protocol) ? url_2.hostname : undefined;
 }
 //@ chunk-8t8n4kdh.js:38401-38563 placement
-function hasPlainAuthority(e) {
-  let n = e?.match(/^[a-z][a-z0-9+.-]*:\/\/([^/?#]*)/i)?.[1];
-  return e !== null && n !== undefined && n !== "" && !n.includes("@") && !/[\\\u0000-\u001f\u007f]/.test(e);
+function hasPlainAuthority(url) {
+  let authority = url?.match(/^[a-z][a-z0-9+.-]*:\/\/([^/?#]*)/i)?.[1];
+  return (
+    url !== null &&
+    authority !== undefined &&
+    authority !== "" &&
+    !authority.includes("@") &&
+    !/[\\\u0000-\u001f\u007f]/.test(url)
+  );
 }
 //@ chunk-8t8n4kdh.js:38563-38973 placement
 /**
  * 取 MCP 配置实际访问的远程主机（claude.ai 连接器、直连地址或经 CCR 代理的目标），不合法时返回 undefined。
  */
-function remoteHostOf(e) {
-  let n;
-  if (e.type === "claudeai-proxy")
-    n = e.scope === "claudeai" && hasPlainAuthority(e.url) ? urlHostname(e.url) : undefined;
-  else if (e.type === "http" || e.type === "sse" || e.type === "ws") {
-    if (!isSameOriginAsCcr(e.url)) n = urlHostname(e.url);
+function remoteHostOf(config) {
+  let host;
+  if (config.type === "claudeai-proxy")
+    host = config.scope === "claudeai" && hasPlainAuthority(config.url) ? urlHostname(config.url) : undefined;
+  else if (config.type === "http" || config.type === "sse" || config.type === "ws") {
+    if (!isSameOriginAsCcr(config.url)) host = urlHostname(config.url);
     else if (
-      e.scope === "dynamic" &&
-      !isPluginServerConfig(e) &&
-      CCR_SESSION_MCP_PATH.test(new URL(e.url).pathname) &&
-      hasUniqueQueryParams(e.url, ["mcp_url"]) &&
-      hasPlainAuthority(new URL(e.url).searchParams.get("mcp_url"))
+      config.scope === "dynamic" &&
+      !isPluginServerConfig(config) &&
+      CCR_SESSION_MCP_PATH.test(new URL(config.url).pathname) &&
+      hasUniqueQueryParams(config.url, ["mcp_url"]) &&
+      hasPlainAuthority(new URL(config.url).searchParams.get("mcp_url"))
     )
-      n = ccrProxyTargetHost(e.url);
+      host = ccrProxyTargetHost(config.url);
   }
-  let replaced = n?.toLowerCase().replace(/\.$/, "");
+  let replaced = host?.toLowerCase().replace(/\.$/, "");
   return replaced && HOSTNAME_RE.test(replaced) ? replaced : undefined;
 }
 //@ chunk-8t8n4kdh.js:38973-39242 placement
 /**
  * shouldRestrictRemoteHost：CCR 云会话中按 GrowthBook tengu_gleaming_creek 的 allow/deny 主机列表限制远程 MCP 服务器。
  */
-function shouldRestrictRemoteHost(e) {
+function shouldRestrictRemoteHost(config) {
   {
     let CLAUDE_CODE_ENVIRONMENT_KIND = env.CLAUDE_CODE_ENVIRONMENT_KIND;
     if (
@@ -117,11 +130,11 @@ function shouldRestrictRemoteHost(e) {
       isCcsTenant()
     )
       return false;
-    let r = remoteHostPolicy();
-    if (r.mode === "all") return false;
-    let s = remoteHostOf(e);
-    if (s === undefined) return true;
-    return r.mode === "allow" ? !r.hosts.has(s) : r.hosts.has(s);
+    let policy = remoteHostPolicy();
+    if (policy.mode === "all") return false;
+    let host = remoteHostOf(config);
+    if (host === undefined) return true;
+    return policy.mode === "allow" ? !policy.hosts.has(host) : policy.hosts.has(host);
   }
   return false;
 }
@@ -129,7 +142,10 @@ function shouldRestrictRemoteHost(e) {
 /**
  * 按宿主保存的步进授权状态。
  */
-var stepUpStateSlot = new HostScoped(() => ({}));
+var stepUpStateSlot; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-8t8n4kdh.js:39242", () => {
+  stepUpStateSlot = new HostScoped(() => ({}));
+});
 //@ chunk-8t8n4kdh.js:39265-39302 placement
 /**
  * 取当前宿主的步进授权状态。
@@ -149,47 +165,47 @@ function isStepUpAuthDialogEnabled() {
   return getFeatureValue_CACHED_MAY_BE_STALE("tengu_mcp_step_up_auth_dialog", true);
 }
 //@ chunk-8t8n4kdh.js:39398-39516 placement
-function scopesInclude(scopes, n) {
-  let r = new Set(scopes.split(" ").filter(Boolean));
-  return n
+function scopesInclude(scopes, needed) {
+  let granted = new Set(scopes.split(" ").filter(Boolean));
+  return needed
     .split(" ")
     .filter(Boolean)
-    .every((s) => r.has(s));
+    .every((scope) => granted.has(scope));
 }
 //@ chunk-8t8n4kdh.js:39516-39645 placement
-function grantedScopesCover(config, requestedScope) {
+function grantedScopesCover(config, needed) {
   let scopes = config.oauth?.scopes;
   if (!Boolean(scopes || config.oauth?.authServerMetadataUrl)) return true;
-  if (!requestedScope || !scopes) return false;
-  return scopesInclude(scopes, requestedScope);
+  if (!needed || !scopes) return false;
+  return scopesInclude(scopes, needed);
 }
 //@ chunk-8t8n4kdh.js:39645-39713 placement
 /**
  * 规范化 scope 列表（排序去重）。
  */
-function normalizeScopeList(e) {
-  return e.split(" ").filter(Boolean).sort().join(" ");
+function normalizeScopeList(scopes) {
+  return scopes.split(" ").filter(Boolean).sort().join(" ");
 }
 //@ chunk-8t8n4kdh.js:39713-39795 placement
 /**
  * 该服务器的这组 scope 是否已耗尽重试。
  */
-function isStepUpExhausted(name, config, requestedScope) {
+function isStepUpExhausted(name, config, scopes) {
   return (
     getCliOwnedState()
       .stepUpReauthExhausted.get(getServerKey(name, config))
-      ?.has(normalizeScopeList(requestedScope)) ?? false
+      ?.has(normalizeScopeList(scopes)) ?? false
   );
 }
 //@ chunk-8t8n4kdh.js:39795-39987 placement
-function markStepUpExhausted(name, config, r, requestedScope) {
-  let h = normalizeScopeList(r);
+function markStepUpExhausted(name, config, grantedScope, scopes) {
+  let normalizedGranted = normalizeScopeList(grantedScope);
   let stepUpReauthExhausted = getCliOwnedState().stepUpReauthExhausted;
   let serverKey = getServerKey(name, config);
-  let w = stepUpReauthExhausted.get(serverKey) ?? new Set();
-  if (normalizeScopeList(requestedScope) !== h || w.has(h)) return;
+  let exhaustedScopes = stepUpReauthExhausted.get(serverKey) ?? new Set();
+  if (normalizeScopeList(scopes) !== normalizedGranted || exhaustedScopes.has(normalizedGranted)) return;
   logFeatureSad("mcp_step_up_reauth", "rechallenged_after_reauth");
-  stepUpReauthExhausted.set(serverKey, w.add(h));
+  stepUpReauthExhausted.set(serverKey, exhaustedScopes.add(normalizedGranted));
 }
 //@ chunk-8t8n4kdh.js:39987-40393 placement
 var STEP_UP_DIALOG_OPTIONS = [
@@ -206,16 +222,16 @@ var STEP_UP_DIALOG_OPTIONS = [
   },
 ];
 //@ chunk-8t8n4kdh.js:40393-40565 placement
-function stepUpResultMessage(content, name, r) {
-  let s = `Re-authenticated MCP server "${normalizeServerNameShort(name)}" (scope: "${normalizeMcpServerName(r, undefined, "none")}")`;
+function stepUpResultMessage(content, name, scope) {
+  let header = `Re-authenticated MCP server "${normalizeServerNameShort(name)}" (scope: "${normalizeMcpServerName(scope, undefined, "none")}")`;
   return typeof content === "string"
-    ? `${s}
+    ? `${header}
 
 ${content}`
     : [
         {
           type: "text",
-          text: s,
+          text: header,
         },
         ...(content ?? []),
       ];
@@ -238,12 +254,12 @@ function runStepUpReauth({
 }) {
   let stepUpReauthFlights = getCliOwnedState().stepUpReauthFlights;
   let serverKey = getServerKey(serverName, config);
-  let ce = stepUpReauthFlights.get(serverKey);
-  if (ce !== undefined) return ce;
-  let Q = (async () => {
-    let ie = identityEpoch();
-    let ge = () =>
-      identityEpoch() === ie &&
+  let inFlight = stepUpReauthFlights.get(serverKey);
+  if (inFlight !== undefined) return inFlight;
+  let flow = (async () => {
+    let epochAtStart = identityEpoch();
+    let stillAvailable = () =>
+      identityEpoch() === epochAtStart &&
       isPermitted(serverName, config) &&
       toolUseContext
         .getMcp()
@@ -253,27 +269,27 @@ function runStepUpReauth({
             client.config.type === "http" &&
             getServerKey(client.name, client.config) === serverKey,
         );
-    let Ie = normalizeMcpServerName(requestedScope, undefined, "none");
-    if (Ie !== requestedScope) {
+    let scopeLabel = normalizeMcpServerName(requestedScope, undefined, "none");
+    if (scopeLabel !== requestedScope) {
       logFeatureSad("mcp_step_up_reauth", "scope_not_displayable");
       return "declined";
     }
-    let G = await confirmWithUser({
+    let answer = await confirmWithUser({
       canUseTool,
       toolUseContext,
       source: "mcp_step_up_reauth",
       header: "MCP",
-      question: `MCP server "${normalizeServerNameShort(serverName)}" needs additional permissions for this tool (it asked for the scope "${Ie}"). Re-authenticate now?`,
+      question: `MCP server "${normalizeServerNameShort(serverName)}" needs additional permissions for this tool (it asked for the scope "${scopeLabel}"). Re-authenticate now?`,
       choices: STEP_UP_DIALOG_OPTIONS,
     });
-    if (G.kind !== "chose" || G.value !== "reauthenticate") {
+    if (answer.kind !== "chose" || answer.value !== "reauthenticate") {
       logFeatureSad(
         "mcp_step_up_reauth",
-        G.kind === "unanswered" ? G.reason : G.kind === "chose" ? "declined" : G.kind,
+        answer.kind === "unanswered" ? answer.reason : answer.kind === "chose" ? "declined" : answer.kind,
       );
       return "declined";
     }
-    if (!ge()) {
+    if (!stillAvailable()) {
       logFeatureBad("mcp_step_up_reauth", "server_unavailable_after_consent");
       return "failed";
     }
@@ -281,15 +297,15 @@ function runStepUpReauth({
       await performOAuthFlow(
         serverName,
         config,
-        (Pe) => {
-          logMCPDebug(serverName, `Step-up re-auth authorization URL: ${redactUrlSecrets(Pe)}`);
-          let ke = `Opening your browser to re-authenticate MCP server "${normalizeServerNameShort(serverName)}".`;
-          let nt = sanitizeRelayUrl(Pe) === Pe;
+        (authorizationUrl) => {
+          logMCPDebug(serverName, `Step-up re-auth authorization URL: ${redactUrlSecrets(authorizationUrl)}`);
+          let openingText = `Opening your browser to re-authenticate MCP server "${normalizeServerNameShort(serverName)}".`;
+          let linkSafe = sanitizeRelayUrl(authorizationUrl) === authorizationUrl;
           toolUseContext.appendSystemMessage?.({
             ...createInformationalSystemMessage(
-              nt
-                ? `${ke} If it doesn't open, use this link to the server's sign-in page: ${Pe}`
-                : `${ke} If it doesn't open, run /mcp to sign back in; its sign-in screen shows the link.`,
+              linkSafe
+                ? `${openingText} If it doesn't open, use this link to the server's sign-in page: ${authorizationUrl}`
+                : `${openingText} If it doesn't open, run /mcp to sign back in; its sign-in screen shows the link.`,
               "suggestion",
             ),
             persist: false,
@@ -303,7 +319,7 @@ function runStepUpReauth({
       else logFeatureBad("mcp_step_up_reauth", "flow_failed");
       return "failed";
     }
-    if (!ge()) {
+    if (!stillAvailable()) {
       logFeatureBad("mcp_step_up_reauth", "server_unavailable_after_flow");
       return "failed";
     }
@@ -312,28 +328,28 @@ function runStepUpReauth({
       return "failed";
     }
     try {
-      let Pe = await reconnect(serverName, config);
-      if (identityEpoch() !== ie) {
+      let connection = await reconnect(serverName, config);
+      if (identityEpoch() !== epochAtStart) {
         logFeatureBad("mcp_step_up_reauth", "identity_changed");
         return "failed";
       }
-      let ke = toolUseContext.session.mcpSessionWiring.connections();
-      if (!ge() || ke === undefined) {
+      let connections = toolUseContext.session.mcpSessionWiring.connections();
+      if (!stillAvailable() || connections === undefined) {
         await discard(serverName, config).catch((error) =>
           logMCPDebug(serverName, `Orphan cleanup failed: ${describeConnectError(error, config)}`),
         );
-        ke?.markReconnectDiscarded(serverName, config);
+        connections?.markReconnectDiscarded(serverName, config);
         logFeatureBad("mcp_step_up_reauth", "server_unavailable_after_reconnect");
         return "failed";
       }
-      if (ke.adoptServer(serverName, Pe) !== "adopted") {
+      if (connections.adoptServer(serverName, connection) !== "adopted") {
         await discard(serverName, config).catch((error) =>
           logMCPDebug(serverName, `Orphan cleanup failed: ${describeConnectError(error, config)}`),
         );
         logFeatureBad("mcp_step_up_reauth", "adopt_refused");
         return "failed";
       }
-      if (Pe.client.type !== "connected") {
+      if (connection.client.type !== "connected") {
         logFeatureBad("mcp_step_up_reauth", "reconnect_not_connected");
         return "failed";
       }
@@ -347,8 +363,8 @@ function runStepUpReauth({
   })().finally(() => {
     stepUpReauthFlights.delete(serverKey);
   });
-  stepUpReauthFlights.set(serverKey, Q);
-  return Q;
+  stepUpReauthFlights.set(serverKey, flow);
+  return flow;
 }
 export {
   shouldRestrictRemoteHost,

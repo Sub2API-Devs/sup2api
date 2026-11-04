@@ -57,7 +57,7 @@ function serializeDecisionReason(reason) {
  */
 function isCircuitBreakerSafetyCheck({ circuitBreaker, also }) {
   return [circuitBreaker, ...(also ?? [])].some(
-    (r) => r === "outsideReadsBlocked" || r === "unfinishedCheck",
+    (reason) => reason === "outsideReadsBlocked" || reason === "unfinishedCheck",
   );
 }
 export { isAllRuleReason, serializeDecisionReason, isCircuitBreakerSafetyCheck };

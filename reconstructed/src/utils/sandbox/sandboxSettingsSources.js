@@ -42,14 +42,16 @@ function getPolicySettingsIfEnabled() {
   return isPolicySlotAdminOrParentComposed() ? getSettingsForSource("policySettings") : null;
 }
 //@ chunk-fq0cr76a.js:853425-853500 placement
-function collectFromSandboxSettings(e) {
-  return uniq(sandboxSettingSources().flatMap((n) => (n?.sandbox && e(n.sandbox)) ?? []));
+function collectFromSandboxSettings(pick) {
+  return uniq(
+    sandboxSettingSources().flatMap((settings) => (settings?.sandbox && pick(settings.sandbox)) ?? []),
+  );
 }
 //@ chunk-fq0cr76a.js:853500-853601 placement
-function firstFromSandboxSettings(e) {
-  for (let n of sandboxSettingSources()) {
-    let r = n?.sandbox ? e(n.sandbox) : undefined;
-    if (r !== undefined) return r;
+function firstFromSandboxSettings(pick) {
+  for (let settings of sandboxSettingSources()) {
+    let value = settings?.sandbox ? pick(settings.sandbox) : undefined;
+    if (value !== undefined) return value;
   }
   return;
 }
@@ -57,21 +59,21 @@ function firstFromSandboxSettings(e) {
 /**
  * policySandboxSetting：策略层沙箱设置。
  */
-function policySandboxSetting(e) {
+function policySandboxSetting(pick) {
   let sandbox = getPolicySettingsIfEnabled()?.sandbox;
-  return sandbox ? e(sandbox) : undefined;
+  return sandbox ? pick(sandbox) : undefined;
 }
 //@ chunk-fq0cr76a.js:853657-853847 placement
 function mergeIgnoreViolations() {
-  let e = new Map();
-  for (let n of sandboxSettingSources())
-    for (let [key, value] of Object.entries(n?.sandbox?.ignoreViolations ?? {}))
-      e.set(key, uniq([...(e.get(key) ?? []), ...value]));
-  return e.size > 0 ? Object.fromEntries(e) : undefined;
+  let merged = new Map();
+  for (let settings of sandboxSettingSources())
+    for (let [key, value] of Object.entries(settings?.sandbox?.ignoreViolations ?? {}))
+      merged.set(key, uniq([...(merged.get(key) ?? []), ...value]));
+  return merged.size > 0 ? Object.fromEntries(merged) : undefined;
 }
 //@ chunk-fq0cr76a.js:853847-853916 placement
 function collectAllowRules() {
-  return uniq(sandboxSettingSources().flatMap((e) => e?.permissions?.allow ?? []));
+  return uniq(sandboxSettingSources().flatMap((settings) => settings?.permissions?.allow ?? []));
 }
 //@ chunk-fq0cr76a.js:853916-853952 placement
 function sandboxSettingSources() {
@@ -81,23 +83,23 @@ function sandboxSettingSources() {
 /**
  * 读取策略层的沙箱设置项：有合并的策略来源时取 policySettings，否则取各策略层第一个有值的。
  */
-function readPolicySandboxSetting(e) {
+function readPolicySandboxSetting(path) {
   if (getMergedPolicySources() !== null)
-    return readSettingsPath(getSettingsForSource("policySettings")?.sandbox, e);
+    return readSettingsPath(getSettingsForSource("policySettings")?.sandbox, path);
   return getAllPolicyTierSettings()
-    .map((n) => readSettingsPath(n.sandbox, e))
-    .find((n) => n !== undefined);
+    .map((settings) => readSettingsPath(settings.sandbox, path))
+    .find((value) => value !== undefined);
 }
 //@ chunk-fq0cr76a.js:854139-854253 placement
 /**
  * 读取沙箱设置项：策略层优先，没有时依次查找其他设置来源。
  */
-function readSandboxSetting(e) {
-  let policySandboxSetting = readPolicySandboxSetting(e);
+function readSandboxSetting(path) {
+  let policySandboxSetting = readPolicySandboxSetting(path);
   if (policySandboxSetting !== undefined) return policySandboxSetting;
   return sandboxSettingsChain()
-    .map((r) => readSettingsPath(r?.sandbox, e))
-    .find((r) => r !== undefined);
+    .map((settings) => readSettingsPath(settings?.sandbox, path))
+    .find((value) => value !== undefined);
 }
 export {
   collectFromSandboxSettings,

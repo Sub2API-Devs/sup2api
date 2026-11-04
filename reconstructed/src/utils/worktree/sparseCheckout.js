@@ -28,18 +28,18 @@ import { firstLineOf } from "../stringUtils.js";
 import { SandboxManager, getEffectiveFilesystemPolicy } from "../sandbox/sandbox-adapter.js";
 
 //@ chunk-e6aww6q8.js:3591246-3591456 placement
-async function uploadPackArgForRemote(e, n) {
-  let r = await execFileNoThrowWithCwd(
+async function uploadPackArgForRemote(a, b) {
+  let configResult = await execFileNoThrowWithCwd(
     gitExe(),
-    [...GIT_SAFE_GLOBAL_ARGS, "config", "--local", "--get", `remote.${n}.uploadpack`],
+    [...GIT_SAFE_GLOBAL_ARGS, "config", "--local", "--get", `remote.${b}.uploadpack`],
     {
-      cwd: e,
-      env: buildGitEnvForRepo(e),
+      cwd: a,
+      env: buildGitEnvForRepo(a),
       stdin: "ignore",
     },
   );
-  let trimmed = r.stdout.trim();
-  return r.code === 0 && trimmed !== "" ? `--upload-pack=${trimmed}` : undefined;
+  let trimmed = configResult.stdout.trim();
+  return configResult.code === 0 && trimmed !== "" ? `--upload-pack=${trimmed}` : undefined;
 }
 //@ chunk-e6aww6q8.js:3591456-3591870 placement
 /**
@@ -53,52 +53,60 @@ function gitattributesSparsePatterns({ text, cone }) {
 `,
     )
     .map((line) => line.replace(/\r$/, ""))
-    .filter((y) => y !== "" && !y.startsWith("#"));
-  let s = /^\/\*$|^!?\/.*\/$/;
-  if (!cone || filtered.some((y) => !s.test(y)))
+    .filter((line) => line !== "" && !line.startsWith("#"));
+  let conePatternRe = /^\/\*$|^!?\/.*\/$/;
+  if (!cone || filtered.some((pattern) => !conePatternRe.test(pattern)))
     return `.gitattributes
 `;
-  let h = new Set(["/.gitattributes"]);
-  for (let y of filtered) {
-    let S = /^\/(.*)\/$/.exec(y)?.[1];
-    let w = S ? S.split("/") : [];
-    for (let idx = 1; idx < w.length; idx++) h.add(`/${w.slice(0, idx).join("/")}/.gitattributes`);
+  let attributesPaths = new Set(["/.gitattributes"]);
+  for (let pattern of filtered) {
+    let dirPath = /^\/(.*)\/$/.exec(pattern)?.[1];
+    let config = dirPath ? dirPath.split("/") : [];
+    for (let idx = 1; idx < config.length; idx++)
+      attributesPaths.add(`/${config.slice(0, idx).join("/")}/.gitattributes`);
   }
-  return [...h, ""].join(`
+  return [...attributesPaths, ""].join(`
 `);
 }
 //@ chunk-e6aww6q8.js:3591870-3591886 placement
 var MAX_SPARSE_CONFIG_BYTES = 1048576;
 //@ chunk-e6aww6q8.js:3591886-3592665 placement
 async function readSparseCheckoutConfig(worktreePath) {
-  let n = (L) =>
-    execFileNoThrowWithCwd(gitExe(), [...GIT_SAFE_GLOBAL_ARGS, ...L], {
+  let runGit = (args) =>
+    execFileNoThrowWithCwd(gitExe(), [...GIT_SAFE_GLOBAL_ARGS, ...args], {
       cwd: worktreePath,
       env: buildGitEnvForRepo(worktreePath),
       stdin: "ignore",
     });
-  let r = await n(["config", "--type=bool", "--get-regexp", "^core\\.sparsecheckout(cone)?$"]);
-  let s = (L) => [...r.stdout.matchAll(new RegExp(`^core\\.${L} (\\S+)$`, "gim"))].at(-1)?.[1] === "true";
-  if (r.code !== 0 || !s("sparsecheckout")) return null;
-  let h = await n(["rev-parse", "--git-path", "info/sparse-checkout"]);
-  if (h.code !== 0) return null;
-  let y = s("sparsecheckoutcone");
-  let S = y
+  let configResult = await runGit([
+    "config",
+    "--type=bool",
+    "--get-regexp",
+    "^core\\.sparsecheckout(cone)?$",
+  ]);
+  let isConfigTrue = (configKey) =>
+    [...configResult.stdout.matchAll(new RegExp(`^core\\.${configKey} (\\S+)$`, "gim"))].at(-1)?.[1] ===
+    "true";
+  if (configResult.code !== 0 || !isConfigTrue("sparsecheckout")) return null;
+  let pathResult = await runGit(["rev-parse", "--git-path", "info/sparse-checkout"]);
+  if (pathResult.code !== 0) return null;
+  let coneMode = isConfigTrue("sparsecheckoutcone");
+  let conePrelude = coneMode
     ? `/*
 !/*/
 `
     : "";
-  let w = resolve_2(worktreePath, h.stdout.trim());
-  if (readPositionIsUnsafe(w, resolveGitDirsOrPlaceholder(worktreePath).gitDir)) return null;
+  let configPath = resolve_2(worktreePath, pathResult.stdout.trim());
+  if (readPositionIsUnsafe(configPath, resolveGitDirsOrPlaceholder(worktreePath).gitDir)) return null;
   try {
-    await using L = await open(w, nonblockingReadFlags());
-    let stats = await L.stat();
+    await using handle = await open(configPath, nonblockingReadFlags());
+    let stats = await handle.stat();
     if (!stats.isFile() || stats.size > MAX_SPARSE_CONFIG_BYTES) return null;
-    let handleUpTo = await readHandleUpTo(L, MAX_SPARSE_CONFIG_BYTES, "file");
-    let Z = handleUpTo.subarray(0, 3).equals(Buffer.from([239, 187, 191]));
+    let handleUpTo = await readHandleUpTo(handle, MAX_SPARSE_CONFIG_BYTES, "file");
+    let hasBom = handleUpTo.subarray(0, 3).equals(Buffer.from([239, 187, 191]));
     return {
-      text: Buffer.concat([Buffer.from(S), handleUpTo.subarray(Z ? 3 : 0)]),
-      cone: y,
+      text: Buffer.concat([Buffer.from(conePrelude), handleUpTo.subarray(hasBom ? 3 : 0)]),
+      cone: coneMode,
     };
   } catch {
     return null;
@@ -111,23 +119,25 @@ async function readSparseCheckoutConfig(worktreePath) {
 function minimalSparseDirs(paths) {
   let filtered = paths
     .map((path) => posix.normalize(path.replace(/\\/g, "/")).replace(/^\/+/, "").replace(/\/+$/, ""))
-    .filter((S) => S !== "" && S !== ".");
+    .filter((path) => path !== "" && path !== ".");
   if (filtered.length < paths.length) return null;
   let roots = [];
-  for (let S of [...filtered].sort())
-    if (!roots.some((root) => S === root || S.startsWith(`${root}/`))) roots.push(S);
-  let s = new Set();
+  for (let root of [...filtered].sort())
+    if (!roots.some((root_2) => root === root_2 || root.startsWith(`${root_2}/`))) roots.push(root);
+  let parentDirs = new Set();
   for (let root of roots) {
     let parts = root.split("/");
-    for (let idx = 1; idx < parts.length; idx++) s.add(parts.slice(0, idx).join("/"));
+    for (let idx = 1; idx < parts.length; idx++) parentDirs.add(parts.slice(0, idx).join("/"));
   }
-  let h = (S) => S.replace(/[*?[\\]/g, "\\$&");
+  let escapeGlobChars = (dir) => dir.replace(/[*?[\\]/g, "\\$&");
   return {
     text: [
       "/*",
       "!/*/",
-      ...[...s].sort().flatMap((S) => [`/${h(S)}/`, `!/${h(S)}/*/`]),
-      ...roots.map((root) => `/${h(root)}/`),
+      ...[...parentDirs]
+        .sort()
+        .flatMap((dir) => [`/${escapeGlobChars(dir)}/`, `!/${escapeGlobChars(dir)}/*/`]),
+      ...roots.map((root) => `/${escapeGlobChars(root)}/`),
       "",
     ].join(`
 `),
@@ -135,15 +145,15 @@ function minimalSparseDirs(paths) {
   };
 }
 //@ chunk-e6aww6q8.js:3593207-3593326 placement
-async function hasMissingSparseObjects(repoRoot, n, sparseCheckoutConfig) {
-  await using s = await writeSparsePatterns(repoRoot, sparseCheckoutConfig);
-  let h = await s.missing(n);
-  return typeof h === "string" || h.length > 0;
+async function hasMissingSparseObjects(repoRoot, commit, sparseConfig) {
+  await using patterns = await writeSparsePatterns(repoRoot, sparseConfig);
+  let missing = await patterns.missing(commit);
+  return typeof missing === "string" || missing.length > 0;
 }
 //@ chunk-e6aww6q8.js:3593326-3594255 placement
-async function writeSparsePatterns(cwd, n) {
-  let r =
-    n === null
+async function writeSparsePatterns(cwd, sparseConfig) {
+  let sideDir =
+    sparseConfig === null
       ? null
       : await mkdtemp(join(tmpdir_2(), "claude-sparse-")).catch((error) => {
           logForDebugging(
@@ -154,28 +164,28 @@ async function writeSparsePatterns(cwd, n) {
           );
           return null;
         });
-  let s = null;
-  if (r !== null && n !== null) {
-    let h = await execFileNoThrowWithCwd(
+  let patternsObject = null;
+  if (sideDir !== null && sparseConfig !== null) {
+    let hashResult = await execFileNoThrowWithCwd(
       gitExe(),
       [...GIT_SAFE_GLOBAL_ARGS, "hash-object", "-w", "--stdin"],
       {
         cwd,
         env: buildGitEnvForRepo(cwd, {
-          GIT_OBJECT_DIRECTORY: r,
+          GIT_OBJECT_DIRECTORY: sideDir,
         }),
         input: Buffer.concat([
-          Buffer.from(n.text),
+          Buffer.from(sparseConfig.text),
           Buffer.from(`
-${gitattributesSparsePatterns(n)}# ${randomUUID()}
+${gitattributesSparsePatterns(sparseConfig)}# ${randomUUID()}
 `),
         ]),
       },
     );
-    s = h.code === 0 ? h.stdout.trim() : null;
-    if (s === null)
+    patternsObject = hashResult.code === 0 ? hashResult.stdout.trim() : null;
+    if (patternsObject === null)
       logForDebugging(
-        `[worktree] could not hand git the sparse patterns (${h.stderr.trim()}); listing the whole tree`,
+        `[worktree] could not hand git the sparse patterns (${hashResult.stderr.trim()}); listing the whole tree`,
         {
           level: "warn",
         },
@@ -183,23 +193,23 @@ ${gitattributesSparsePatterns(n)}# ${randomUUID()}
   }
   return {
     async missing(commit) {
-      if (s !== null && r !== null) {
-        let y = await listMissingObjects(cwd, commit, {
-          filter: s,
-          side: r,
+      if (patternsObject !== null && sideDir !== null) {
+        let missing = await listMissingObjects(cwd, commit, {
+          filter: patternsObject,
+          side: sideDir,
         });
-        if (typeof y !== "string" || y === MISSING_TOO_MANY_TEXT) return y;
+        if (typeof missing !== "string" || missing === MISSING_TOO_MANY_TEXT) return missing;
       }
       return listMissingObjects(cwd, commit);
     },
     async [Symbol.asyncDispose]() {
-      if (r !== null)
-        await rm_2(r, {
+      if (sideDir !== null)
+        await rm_2(sideDir, {
           recursive: true,
           force: true,
         }).catch((error) =>
           logForDebugging(
-            `[worktree] could not remove the sparse patterns' side directory ${r}: ${errorMessage(error)}`,
+            `[worktree] could not remove the sparse patterns' side directory ${sideDir}: ${errorMessage(error)}`,
             {
               level: "warn",
             },

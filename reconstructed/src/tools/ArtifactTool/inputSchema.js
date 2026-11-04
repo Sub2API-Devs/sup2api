@@ -20,8 +20,8 @@ import {
 import {
   zodStrictObject,
   _enum,
-  string,
-  M,
+  stringSchema,
+  booleanSchema,
   record,
   unknown,
   array,
@@ -58,8 +58,8 @@ var HANDLERS_CLAUSE_MODULE = null;
 /**
  * 把若干句子拼成一句（首字母大写并以句号结尾）。
  */
-function joinSentence(e, i = ", and ") {
-  let joined = e.join(i);
+function joinSentence(parts, separator = ", and ") {
+  let joined = parts.join(separator);
   return joined === "" ? "" : ` ${joined[0].toUpperCase()}${joined.slice(1)}.`;
 }
 //@ chunk-p98twse2.js:1224-1455 placement
@@ -69,58 +69,59 @@ var PREFLIGHT_RESERVED_CLAUSE =
 /**
  * 按开关组合出 Artifact 工具可用的动作名：基础 publish/list/read，再按 live-edit、room、删除/资源、open、pin、endpoints、quickstart、share 开关追加。
  */
-function artifactActionNames(e) {
-  let i = ["publish", "list", "read"];
-  if (e.liveEditOn) i.push("sync");
-  if (e.roomOn) i.push("room_send");
-  if (e.deleteOn || e.assetsOn) i.push("delete");
-  if (e.openOn) i.push("open");
-  if (e.pinOn) i.push("pin", "unpin");
-  if (e.handlersOn) i.push("get_endpoints", "call_endpoint", "run_script");
-  if (e.quickstartOn) i.push("quickstart");
-  if (e.shareOn) i.push("share");
-  return i;
+function artifactActionNames(gates) {
+  let names = ["publish", "list", "read"];
+  if (gates.liveEditOn) names.push("sync");
+  if (gates.roomOn) names.push("room_send");
+  if (gates.deleteOn || gates.assetsOn) names.push("delete");
+  if (gates.openOn) names.push("open");
+  if (gates.pinOn) names.push("pin", "unpin");
+  if (gates.handlersOn) names.push("get_endpoints", "call_endpoint", "run_script");
+  if (gates.quickstartOn) names.push("quickstart");
+  if (gates.shareOn) names.push("share");
+  return names;
 }
 //@ chunk-p98twse2.js:1813-1923 placement
-function listScopes(e) {
-  let i = [...ARTIFACT_LIST_SCOPES, "types"];
-  if (e.multiFileOn) i.push("files");
-  if (e.assetsOn) i.push("assets");
-  return i;
+function listScopes(gates) {
+  let scopes = [...ARTIFACT_LIST_SCOPES, "types"];
+  if (gates.multiFileOn) scopes.push("files");
+  if (gates.assetsOn) scopes.push("assets");
+  return scopes;
 }
 //@ chunk-p98twse2.js:1923-2167 placement
-function actionDescription(e) {
-  return `One of ${artifactActionNames(e)
-    .map((t) => `'${t}'`)
+function actionDescription(gates) {
+  return `One of ${artifactActionNames(gates)
+    .map((name) => `'${name}'`)
     .join(
       ", ",
-    )}. Omitting it means 'publish'. **Calls** in the description says what each one does and takes, except as noted here.${e.handlersOn && HANDLERS_CLAUSE_MODULE ? HANDLERS_CLAUSE_MODULE.HANDLERS_CLAUSE : ""}${e.versionsOn ? VERSIONS_CLAUSE : ""}`;
+    )}. Omitting it means 'publish'. **Calls** in the description says what each one does and takes, except as noted here.${gates.handlersOn && HANDLERS_CLAUSE_MODULE ? HANDLERS_CLAUSE_MODULE.HANDLERS_CLAUSE : ""}${gates.versionsOn ? VERSIONS_CLAUSE : ""}`;
 }
 //@ chunk-p98twse2.js:2167-2262 placement
 /**
  * 按替换表改写字段描述。
  */
-function rewriteFieldDescription(e, i) {
-  let description = e.description ?? "";
-  for (let [s, f] of i) description = description.replace(s, f);
-  return e.describe(description);
+function rewriteFieldDescription(schema, replacements) {
+  let description = schema.description ?? "";
+  for (let [pattern, replacement] of replacements) description = description.replace(pattern, replacement);
+  return schema.describe(description);
 }
 //@ chunk-p98twse2.js:2262-14801 placement
-function buildArtifactInputSchema(e, i) {
-  let shape = i.shape;
-  let s = (...f) => Object.fromEntries(f.filter((h) => h in shape).map((h) => [h, shape[h]]));
+function buildArtifactInputSchema(gates, fields) {
+  let shape = fields.shape;
+  let pick = (...names) =>
+    Object.fromEntries(names.filter((name) => name in shape).map((name) => [name, shape[name]]));
   return zodStrictObject({
-    action: _enum(artifactActionNames(e)).optional().describe(actionDescription(e)),
-    file_path: string()
+    action: _enum(artifactActionNames(gates)).optional().describe(actionDescription(gates)),
+    file_path: stringSchema()
       .optional()
       .describe(
-        `publish: the local page Claude publishes (.html, or .md only when a skill says so).${e.typesOn ? " For an Artifact created from an Artifact type, it is one of that Artifact's data files." : ""}${e.assetsOn ? " With `asset: true`, it is the local file Claude uploads." : ""} A short, distinctive basename also serves as the title when nothing else gives one.`,
+        `publish: the local page Claude publishes (.html, or .md only when a skill says so).${gates.typesOn ? " For an Artifact created from an Artifact type, it is one of that Artifact's data files." : ""}${gates.assetsOn ? " With `asset: true`, it is the local file Claude uploads." : ""} A short, distinctive basename also serves as the title when nothing else gives one.`,
       ),
-    ...(e.assetsOn && {
-      asset: M()
+    ...(gates.assetsOn && {
+      asset: booleanSchema()
         .optional()
         .describe(
-          e.copyOn
+          gates.copyOn
             ? "publish with `url`: true uploads `file_path` (or each of `file_paths`) to that artifact's asset store instead of publishing it as the page \u2014 or, with `from_url` and `asset_ids` in place of `file_path`, copies those assets of another artifact into it server side (see **Calls**)."
             : "publish with `url`: true uploads `file_path` (or each of `file_paths`) to that artifact's asset store instead of publishing it as the page (see **Calls**).",
         ),
@@ -129,7 +130,7 @@ function buildArtifactInputSchema(e, i) {
           ["upload_asset:", "publish with `asset: true` only:"],
         ]),
       }),
-      ...(e.copyOn &&
+      ...(gates.copyOn &&
         "from_url" in shape && {
           from_url: rewriteFieldDescription(shape.from_url, [
             ["copy_from only:", "publish with `asset: true`, in place of `file_path`:"],
@@ -149,38 +150,42 @@ function buildArtifactInputSchema(e, i) {
     }),
     ...("icon" in shape && {
       icon: shape.icon.describe(
-        `One short generic word for the artifact's browser-tab icon, such as chart, calendar, recipe, code or map: a plain signifier, never a product or brand name. Claude includes it on every page's first publish and omits it on a redeploy so the artifact keeps its icon, passing a new one only when the person asks.${e.typesOn ? " Ignored on an Artifact created from an Artifact type." : ""}`,
+        `One short generic word for the artifact's browser-tab icon, such as chart, calendar, recipe, code or map: a plain signifier, never a product or brand name. Claude includes it on every page's first publish and omits it on a redeploy so the artifact keeps its icon, passing a new one only when the person asks.${gates.typesOn ? " Ignored on an Artifact created from an Artifact type." : ""}`,
       ),
     }),
     ...("files" in shape &&
-      !e.copyOn && {
+      !gates.copyOn && {
         files: shape.files.describe(
           `Supporting files to publish alongside the page, as a map {"published/path": "source/path" | {from, contentType} | null}. The key is what the HTML references. The source is a path on disk, or {from, contentType} when the type cannot be inferred from the published extension. null removes that path on an update, and files left out are kept. A plain list publishes each file at its own spelling. Sources must be under the working directory or Claude's scratchpad directory.` +
             PREFLIGHT_RESERVED_CLAUSE +
-            (e.livePathsOn && CORE_FILES_LIVE_MODULE ? CORE_FILES_LIVE_MODULE.CORE_FILES_LIVE_DESCRIBE : ""),
+            (gates.livePathsOn && CORE_FILES_LIVE_MODULE
+              ? CORE_FILES_LIVE_MODULE.CORE_FILES_LIVE_DESCRIBE
+              : ""),
         ),
       }),
     ...("files" in shape &&
-      e.copyOn && {
+      gates.copyOn && {
         files: shape.files.describe(
           `Supporting files to publish alongside the page, as a map {"published/path": "source/path" | {from, contentType} | {artifact, path, ver?} | null}. The key is what the HTML references. The source is a path on disk, or {from, contentType} when the type cannot be inferred from the published extension. An {artifact, path} source copies that Artifact's published file on the server: an Artifact the person can open, with its type carried over, never an HTML or XML document, and at most ${MAX_COPY_SOURCES} source Artifact versions per publish. null removes that path on an update, and files left out are kept. A plain list publishes each file at its own spelling. Sources must be under the working directory or Claude's scratchpad directory.` +
             PREFLIGHT_RESERVED_CLAUSE +
-            (e.livePathsOn && CORE_FILES_LIVE_MODULE ? CORE_FILES_LIVE_MODULE.CORE_FILES_LIVE_DESCRIBE : ""),
+            (gates.livePathsOn && CORE_FILES_LIVE_MODULE
+              ? CORE_FILES_LIVE_MODULE.CORE_FILES_LIVE_DESCRIBE
+              : ""),
         ),
       }),
     ...("edits" in shape && {
       edits: shape.edits.describe(
         publishEditsDescription({
           core: true,
-          typesOn: e.typesOn,
-          multiFileOn: e.multiFileOn,
+          typesOn: gates.typesOn,
+          multiFileOn: gates.multiFileOn,
         }),
       ),
     }),
     ...("root" in shape && {
       root: shape.root.describe(
-        `The base directory that relative \`files\` sources resolve against, like a bundler root. ${e.typesOn ? "It never changes the published path of a `files` entry" : "It never changes published paths"}. It is relative to the working directory, or absolute within it or within Claude's scratchpad directory.` +
-          (e.typesOn
+        `The base directory that relative \`files\` sources resolve against, like a bundler root. ${gates.typesOn ? "It never changes the published path of a `files` entry" : "It never changes published paths"}. It is relative to the working directory, or absolute within it or within Claude's scratchpad directory.` +
+          (gates.typesOn
             ? " It requires `files`, except on an Artifact made from a type, where a data `file_path` is served at its path relative to `root`, unless a `files` map entry states its served path. Claude sends it with every such publish, set to the folder that holds the Artifact's files at their served paths."
             : " It requires `files`."),
       ),
@@ -189,7 +194,7 @@ function buildArtifactInputSchema(e, i) {
       CORE_FILES_LIVE_MODULE && {
         live: shape.live.describe(CORE_FILES_LIVE_MODULE.CORE_LIVE_FIELD_DESCRIBE),
       }),
-    ...(e.pinOn &&
+    ...(gates.pinOn &&
       "pin" in shape && {
         pin: shape.pin.describe(
           "publish only: true also pins the published artifact to the person's claude.ai sidebar once it is published. Claude passes it only when the person asked for that. A failed pin never fails the publish, and the result says so.",
@@ -198,32 +203,32 @@ function buildArtifactInputSchema(e, i) {
     limit: shape.limit.describe(
       `list only: the maximum number of artifacts to return (default ${DEFAULT_LIST_LIMIT}).`,
     ),
-    scope: _enum(listScopes(e))
+    scope: _enum(listScopes(gates))
       .optional()
       .describe(
-        `list: which listing to return. 'mine' is the default. The others are ${["'shared'", "'all'", e.typeCatalogOn ? "'types'" : "", e.multiFileOn ? "'files' (with `url`)" : "", e.assetsOn ? "'assets' (with `url`, continued with `after`)" : ""].filter(Boolean).reduce((acc, h, y, n) => acc + (y === 0 ? "" : y === n.length - 1 ? " and " : ", ") + h, "")}. See **Calls**.`,
+        `list: which listing to return. 'mine' is the default. The others are ${["'shared'", "'all'", gates.typeCatalogOn ? "'types'" : "", gates.multiFileOn ? "'files' (with `url`)" : "", gates.assetsOn ? "'assets' (with `url`, continued with `after`)" : ""].filter(Boolean).reduce((acc, part, index, list) => acc + (index === 0 ? "" : index === list.length - 1 ? " and " : ", ") + part, "")}. See **Calls**.`,
       ),
-    ...(e.typeCatalogOn && {
-      type_query: string()
+    ...(gates.typeCatalogOn && {
+      type_query: stringSchema()
         .max(200)
         .optional()
         .describe(
           "list with scope 'types' only: limits the listing to the types whose title or description match this text best, ignoring case; a type that matches less well is left out, so a narrowed listing is not the whole catalog. Claude omits it when choosing a type for a request, unless a listing made without it says more types exist than it shows.",
         ),
-      type: string()
+      type: stringSchema()
         .max(200)
         .optional()
         .describe(
           "list only: the name of a published Artifact type, as a 'types' listing shows it (case does not matter). The listing then shows the Artifacts made from that type instead of the person's gallery. Claude passes this or `type_url`, not both.",
         ),
     }),
-    ...s("intent", "design_systems"),
-    title: string()
+    ...pick("intent", "design_systems"),
+    title: stringSchema()
       .optional()
       .describe(
-        `publish: the fallback title for an HTML page whose file has no <title>. It is a name, not a summary, and Claude keeps it the same across redeploys.${e.typeCreateOn ? " On a `type_url` create, it is the new Artifact's name: what the person called it, or a short descriptive name. If it is left out, the Artifact is named after the type." : ""}`,
+        `publish: the fallback title for an HTML page whose file has no <title>. It is a name, not a summary, and Claude keeps it the same across redeploys.${gates.typeCreateOn ? " On a `type_url` create, it is the new Artifact's name: what the person called it, or a short descriptive name. If it is left out, the Artifact is named after the type." : ""}`,
       ),
-    description: string()
+    description: stringSchema()
       .max(1000)
       .optional()
       .describe("publish: one sentence for the subtitle on the gallery card."),
@@ -237,23 +242,23 @@ function buildArtifactInputSchema(e, i) {
         `A short name for this publish, at most ${VERSION_LABEL_MAX} characters (e.g. "Draft to legal"). Optional. It is a few words, not a description.`,
       ),
     }),
-    ...s("deadline"),
-    ...s("overwrite_unread"),
-    url: string()
+    ...pick("deadline"),
+    ...pick("overwrite_unread"),
+    url: stringSchema()
       .optional()
       .describe(
         'An existing artifact\'s claude.ai link (claude.ai/artifact/{id} or claude.ai/code/artifact/{uuid}); a chat, project or session link is not one, and `action: "list"` lists the person\'s artifacts. On a publish, it is the artifact to update in place, one the person owns or was given edit access to (a read of it says "writer"). Before publishing to an artifact this conversation has neither read nor published, Claude reads it (`action: "read"`) and builds on what comes back; a publish sent without that read is refused. A refusal that hands Claude the live version counts as that read: Claude merges its changes into that version and publishes the result, and never resends the refused content unchanged. Claude omits `url` for a new artifact or to redeploy a file this conversation already published. For read, delete and the other calls that take a URL, it is the artifact to act on.',
       ),
-    ...((e.typeCreateOn || e.typeCatalogOn) && {
-      type_url: string()
+    ...((gates.typeCreateOn || gates.typeCatalogOn) && {
+      type_url: stringSchema()
         .max(2048)
         .optional()
         .describe(
-          (e.typeCreateOn
+          (gates.typeCreateOn
             ? "publish: the Artifact type to create this new, private Artifact from (a link from a 'types' listing). Claude omits `url`. Any `file_path`/`files` passed become the new Artifact's own files beside the type's fixed ones."
             : "An Artifact type's link.") +
-            (e.typeCatalogOn
-              ? ` read (no \`url\`): the type to describe. list: the type whose Artifacts to list, or Claude names the type with \`type\` instead.${e.typeCreateOn ? "" : " Creating an Artifact from a type is not available in this session, so it is accepted only with those two actions."}`
+            (gates.typeCatalogOn
+              ? ` read (no \`url\`): the type to describe. list: the type whose Artifacts to list, or Claude names the type with \`type\` instead.${gates.typeCreateOn ? "" : " Creating an Artifact from a type is not available in this session, so it is accepted only with those two actions."}`
               : ""),
         ),
     }),
@@ -262,45 +267,47 @@ function buildArtifactInputSchema(e, i) {
         'Only with `type_url` and no `file_path`: when the new Artifact opens for the person. Claude passes "after_first_write" when it will fill the Artifact right after creating it with a files publish to its url, so the person does not first see it empty. The Artifact then opens on that first write. Otherwise Claude omits it, and the Artifact opens when created; Claude always omits it for a type whose content it writes through a connector, such as a Claude Docs document, since no publish or store write follows to open it.',
       ),
     }),
-    prompt: string()
+    prompt: stringSchema()
       .optional()
       .describe(
         "read, for an artifact shared with the person: what Claude needs from it, which steers the isolated summary.",
       ),
-    force: M()
+    force: booleanSchema()
       .optional()
       .describe(
         "publish: a last-resort overwrite that **discards** the newer published version. On a conflict, Claude merges its changes onto the newer content that the rejection hands it and publishes again. Claude passes true only when the person explicitly said to discard that specific version, and the server may still refuse it over a version saved from inside the page.",
       ),
-    ...((e.assetsOn || e.multiFileOn) && {
+    ...((gates.assetsOn || gates.multiFileOn) && {
       out_dir: shape.out_dir.describe(
         "read with `path`: the directory to save into. The default is this artifact's folder in Claude's scratchpad directory, where saving needs no approval." +
-          (e.multiFileOn
+          (gates.multiFileOn
             ? " A published file lands at <out_dir>/<published path>, and saving it outside that default folder asks the person first."
             : "") +
-          (e.assetsOn
+          (gates.assetsOn
             ? " An asset's file is named by its id plus its type's extension; saving it outside the default folder is an ordinary file save the person may be asked to approve."
             : ""),
       ),
     }),
-    ...((e.assetsOn || e.multiFileOn || e.handlersOn) && {
-      path: string()
+    ...((gates.assetsOn || gates.multiFileOn || gates.handlersOn) && {
+      path: stringSchema()
         .max(
-          e.handlersOn && HANDLERS_LIMITS_MODULE
+          gates.handlersOn && HANDLERS_LIMITS_MODULE
             ? HANDLERS_LIMITS_MODULE.MAX_HANDLER_TARGET_CHARS
             : MAX_PUBLISHED_PATH_LENGTH,
         )
         .optional()
         .describe(
           [
-            e.multiFileOn
+            gates.multiFileOn
               ? `read: the file's published path inside the artifact, exactly as a 'files' listing printed it ("index.html" is the page itself). The file is saved locally, the result says where, and a small text file's contents are included.`
               : "",
-            e.assetsOn
-              ? `${e.multiFileOn ? "It can instead be an" : "read: an"} uploaded asset's id (32 hex characters, from an 'assets' listing or an upload result), and that asset is saved to a local file. delete: the id of the one asset to remove.`
+            gates.assetsOn
+              ? `${gates.multiFileOn ? "It can instead be an" : "read: an"} uploaded asset's id (32 hex characters, from an 'assets' listing or an upload result), and that asset is saved to a local file. delete: the id of the one asset to remove.`
               : "",
-            e.livePathsOn ? "sync: the live file to address." : "",
-            e.handlersOn && HANDLERS_CLAUSE_MODULE ? HANDLERS_CLAUSE_MODULE.CALL_HANDLER_PATH_DESCRIBE : "",
+            gates.livePathsOn ? "sync: the live file to address." : "",
+            gates.handlersOn && HANDLERS_CLAUSE_MODULE
+              ? HANDLERS_CLAUSE_MODULE.CALL_HANDLER_PATH_DESCRIBE
+              : "",
           ]
             .filter(Boolean)
             .join(" "),
@@ -311,11 +318,11 @@ function buildArtifactInputSchema(e, i) {
         `read: several published paths in place of \`path\`, up to ${MAX_SEGMENT_WITH_SLASH} in one call. Each file is saved as a single \`path\` would be, and the result lists where each one landed, or why it could not be read, with small text files' contents included while they fit.`,
       ),
     }),
-    ...(e.handlersOn && s("method", "body", "body_file", "mode", "script")),
-    ...(e.shareOn && s("mode", "people", "access")),
-    ...(e.versionsOn && s("version")),
-    ...(e.assetsOn && {
-      after: string()
+    ...(gates.handlersOn && pick("method", "body", "body_file", "mode", "script")),
+    ...(gates.shareOn && pick("mode", "people", "access")),
+    ...(gates.versionsOn && pick("version")),
+    ...(gates.assetsOn && {
+      after: stringSchema()
         .regex(ASSET_CURSOR_RE)
         .optional()
         .describe(
@@ -324,7 +331,7 @@ function buildArtifactInputSchema(e, i) {
     }),
     ...("page" in shape && {
       page: shape.page.describe(
-        `read only: true returns the rendered page in cases where a read otherwise returns something else.${joinSentence([e.liveEditOn && CORE_FILES_LIVE_MODULE ? CORE_FILES_LIVE_MODULE.CORE_PAGE_LIVE_CLAUSE : "", e.typeCatalogOn ? "a typed Artifact's read leaves out the type's own page" : ""].filter(Boolean))}`,
+        `read only: true returns the rendered page in cases where a read otherwise returns something else.${joinSentence([gates.liveEditOn && CORE_FILES_LIVE_MODULE ? CORE_FILES_LIVE_MODULE.CORE_PAGE_LIVE_CLAUSE : "", gates.typeCatalogOn ? "a typed Artifact's read leaves out the type's own page" : ""].filter(Boolean))}`,
       ),
     }),
     ...("topic" in shape && {
@@ -332,8 +339,8 @@ function buildArtifactInputSchema(e, i) {
         'room_send only: the event topic, which the page listens to through its room capability. It is lowercase and starts with a letter, followed by letters, digits, "_", "-" or ".", at most 48 characters.',
       ),
     }),
-    ...(e.roomOn && {
-      data: record(string(), unknown())
+    ...(gates.roomOn && {
+      data: record(stringSchema(), unknown())
         .optional()
         .describe(
           "room_send: the event payload, a JSON object of at most 4 KiB when serialized. Claude omits it for a bare signal.",
@@ -360,8 +367,8 @@ var artifactInputSchemaLazy = DoctorLazy(() =>
 /**
  * 列出 schema 里以旧动作别名形式出现的动作名。
  */
-function legacyActionNamesInSchema(e) {
-  let action = e.shape.action;
+function legacyActionNamesInSchema(schema) {
+  let action = schema.shape.action;
   return Object.keys(ADDON_OF_LEGACY_ACTION).filter((key) => zodEnumFieldIncludes(action, key));
 }
 //@ chunk-p98twse2.js:14908-15014 placement
@@ -375,21 +382,21 @@ function dataFieldNames() {
   ];
 }
 //@ chunk-p98twse2.js:15014-15255 placement
-function withLegacyActions(e, i, t) {
-  let s = legacyActionNamesInSchema(i);
-  if (s.length === 0) return t;
-  let shape = i.shape;
-  let h = Object.fromEntries(
+function withLegacyActions(gates, legacySchema, baseSchema) {
+  let legacyNames = legacyActionNamesInSchema(legacySchema);
+  if (legacyNames.length === 0) return baseSchema;
+  let shape = legacySchema.shape;
+  let dataFields = Object.fromEntries(
     dataFieldNames()
-      .filter((y) => y in shape)
-      .map((y) => [y, shape[y]]),
+      .filter((name) => name in shape)
+      .map((name) => [name, shape[name]]),
   );
   return zodStrictObject({
-    ...h,
-    ...t.shape,
-    action: _enum([...artifactActionNames(e), ...s])
+    ...dataFields,
+    ...baseSchema.shape,
+    action: _enum([...artifactActionNames(gates), ...legacyNames])
       .optional()
-      .describe(t.shape.action.description ?? ""),
+      .describe(baseSchema.shape.action.description ?? ""),
   });
 }
 //@ chunk-p98twse2.js:15255-15286 placement
@@ -405,7 +412,7 @@ var artifactInputSchemaWithLegacyActions = DoctorLazy(() =>
  */
 function commentsInputSchema(gates, baseSchema) {
   let shape = baseSchema.shape;
-  let s = commentFieldSchemas();
+  let fields = commentFieldSchemas();
   return zodStrictObject({
     action: _enum(["read", "reply", "resolve", "watch"]).describe(
       "'read' reads the comment threads on the artifact at `url` (add `thread_id` for one thread, or `cursor` to continue a listing); 'reply' posts `text` into the thread `thread_id`; 'resolve' marks that thread resolved; 'watch' manages this session's artifact watches \u2014 with `url` it starts watching that artifact (`on: false` stops), with no `url` it lists this session's watches and rooms" +
@@ -413,21 +420,21 @@ function commentsInputSchema(gates, baseSchema) {
           ? ", and `replies: true` re-enables automatic comment replies that were stopped or paused for the artifact at `url` (only when the user explicitly asked; approved the way a publish is)."
           : "."),
     ),
-    url: string()
+    url: stringSchema()
       .optional()
       .describe("The artifact's claude.ai URL. Required for every action except a bare 'watch' listing."),
-    thread_id: rewriteFieldDescription(s.thread_id, [
+    thread_id: rewriteFieldDescription(fields.thread_id, [
       ["comments: read just", "read: read just"],
       ['action "comments"', 'action "read"'],
     ]),
-    text: s.text,
-    cursor: rewriteFieldDescription(s.cursor, [["comments only:", "read only:"]]),
-    acknowledge_duplicate: s.acknowledge_duplicate,
-    on: M()
+    text: fields.text,
+    cursor: rewriteFieldDescription(fields.cursor, [["comments only:", "read only:"]]),
+    acknowledge_duplicate: fields.acknowledge_duplicate,
+    on: booleanSchema()
       .optional()
       .describe("watch only: false stops watching the artifact at `url`; omit (or true) to start."),
     ...(gates.watchRail === "live" && {
-      replies: M()
+      replies: booleanSchema()
         .optional()
         .describe(
           "watch only: true re-enables automatic comment replies for the artifact at `url` after the user stopped or paused them \u2014 pass it ONLY when the user explicitly asked to resume.",
@@ -442,51 +449,51 @@ function commentsInputSchema(gates, baseSchema) {
   });
 }
 //@ chunk-p98twse2.js:16828-19765 placement
-function buildDataActionInputSchema(e) {
-  let shape = e.shape;
-  let t = "old_str" in shape;
-  let s = dbFieldSchemas(t);
+function buildDataActionInputSchema(schema) {
+  let shape = schema.shape;
+  let hasStrReplace = "old_str" in shape;
+  let fields = dbFieldSchemas(hasStrReplace);
   return zodStrictObject({
     action: _enum([
       ...READ_DB_OPERATIONS,
       ...WRITE_DB_OPERATIONS,
-      ...(t ? [STR_REPLACE] : []),
+      ...(hasStrReplace ? [STR_REPLACE] : []),
       DB_BATCH_OP,
       DB_PROFILES_OP,
     ]).describe(
-      `Reads: 'get' (one document: \`collection\` + \`doc_id\`), 'list' (a page of a collection: \`collection\`, with optional \`query.limit\`/\`query.cursor\`), 'query' (filtered: \`collection\` + \`query\`), 'profiles' (people's display names: \`ids\`, nothing else). Writes: 'set' (replace) or 'update' (merge) with \`collection\`, \`doc_id\`, and either \`data\` or \`file_path\`;${t ? " 'str_replace' with `collection`, `doc_id`, `field`, `old_str`, `new_str` \u2014 swaps one exact, unique piece of text inside a string field without resending the field (`replace_all`: every occurrence);" : ""} 'delete' with \`collection\` + \`doc_id\`; 'batch' with \`writes\`. Every action takes the artifact's \`url\`.`,
+      `Reads: 'get' (one document: \`collection\` + \`doc_id\`), 'list' (a page of a collection: \`collection\`, with optional \`query.limit\`/\`query.cursor\`), 'query' (filtered: \`collection\` + \`query\`), 'profiles' (people's display names: \`ids\`, nothing else). Writes: 'set' (replace) or 'update' (merge) with \`collection\`, \`doc_id\`, and either \`data\` or \`file_path\`;${hasStrReplace ? " 'str_replace' with `collection`, `doc_id`, `field`, `old_str`, `new_str` \u2014 swaps one exact, unique piece of text inside a string field without resending the field (`replace_all`: every occurrence);" : ""} 'delete' with \`collection\` + \`doc_id\`; 'batch' with \`writes\`. Every action takes the artifact's \`url\`.`,
     ),
-    url: string().optional().describe("The artifact's claude.ai URL. Required."),
-    writes: rewriteFieldDescription(s.writes, [
+    url: stringSchema().optional().describe("The artifact's claude.ai URL. Required."),
+    writes: rewriteFieldDescription(fields.writes, [
       ["write_db with db_op 'batch' only:", "action 'batch' only:"],
       ["separate write_db calls", "separate calls"],
     ]),
-    collection: rewriteFieldDescription(s.collection, [
+    collection: rewriteFieldDescription(fields.collection, [
       ["Required for read_db and write_db.", "Required for every action except 'batch' and 'profiles'."],
     ]),
-    ids: array(string())
+    ids: array(stringSchema())
       .min(1)
       .max(ARTIFACT_PERMISSION_LIMITS)
       .optional()
       .describe(
         `action 'profiles' only: the people to name, 1-${ARTIFACT_PERMISSION_LIMITS} ids exactly as a document or live event showed them ("u_" plus 22 characters).`,
       ),
-    doc_id: rewriteFieldDescription(s.doc_id, [["Required for db_op", "Required for action"]]),
-    query: rewriteFieldDescription(s.query, [["Options for db_op", "Options for action"]]),
-    ...(s.field !== undefined && {
-      field: rewriteFieldDescription(s.field, [
+    doc_id: rewriteFieldDescription(fields.doc_id, [["Required for db_op", "Required for action"]]),
+    query: rewriteFieldDescription(fields.query, [["Options for db_op", "Options for action"]]),
+    ...(fields.field !== undefined && {
+      field: rewriteFieldDescription(fields.field, [
         ["write_db with db_op 'str_replace' only:", "action 'str_replace' only:"],
       ]),
-      old_str: rewriteFieldDescription(s.old_str, [
+      old_str: rewriteFieldDescription(fields.old_str, [
         ["write_db with db_op 'str_replace' only:", "action 'str_replace' only:"],
       ]),
-      new_str: rewriteFieldDescription(s.new_str, [
+      new_str: rewriteFieldDescription(fields.new_str, [
         ["write_db with db_op 'str_replace' only:", "action 'str_replace' only:"],
       ]),
-      replace_all: rewriteFieldDescription(s.replace_all, [
+      replace_all: rewriteFieldDescription(fields.replace_all, [
         ["write_db with db_op 'str_replace' only:", "action 'str_replace' only:"],
       ]),
-      if_version: rewriteFieldDescription(s.if_version, [
+      if_version: rewriteFieldDescription(fields.if_version, [
         [
           "write_db with db_op 'set', 'update', 'str_replace' or 'delete'",
           "action 'set', 'update', 'str_replace' or 'delete'",
@@ -494,12 +501,12 @@ function buildDataActionInputSchema(e) {
         ["every read_db document", "every document a get, list or query returns"],
       ]),
     }),
-    data: record(string(), unknown())
+    data: record(stringSchema(), unknown())
       .optional()
       .describe(
         'set and update: the document fields to write, as a JSON object \u2014 pass exactly one of `data` or `file_path`. In an update, a field given as `{"__delete__": true}` is removed instead.',
       ),
-    file_path: string()
+    file_path: stringSchema()
       .optional()
       .describe(
         "set and update: a local JSON file whose top-level object is sent as the document \u2014 an alternative to inline `data`, so a large document need not pass through the conversation.",
@@ -509,7 +516,7 @@ function buildDataActionInputSchema(e) {
         "get, list and query: when given, each returned document is written as pretty-printed JSON to <out_dir>/<collection path>/<doc_id>.json (directories created as needed) and the result lists the files instead of the document contents \u2014 use it for large documents or many of them.",
       ),
     }),
-    as_level: rewriteFieldDescription(s.as_level, [["read_db and write_db only: act", "Act"]]),
+    as_level: rewriteFieldDescription(fields.as_level, [["read_db and write_db only: act", "Act"]]),
   });
 }
 //@ chunk-p98twse2.js:19765-20369 placement
@@ -517,38 +524,38 @@ function buildDataActionInputSchema(e) {
  * verify/preview 子工具的输入 schema：按开关提供 verify（url）与 preview（file_path，非仿真时还有 widths/themes）。
  */
 function verifyPreviewInputSchema(gates) {
-  let i = previewFieldSchemas();
-  let t = gates.previewOn && previewEngineKind() === "emulator";
-  let s = [];
-  if (gates.verifyOn) s.push("verify");
-  if (gates.previewOn) s.push("preview");
+  let fields = previewFieldSchemas();
+  let emulator = gates.previewOn && previewEngineKind() === "emulator";
+  let actions = [];
+  if (gates.verifyOn) actions.push("verify");
+  if (gates.previewOn) actions.push("preview");
   return zodStrictObject({
-    action: _enum(s.length > 0 ? s : ["verify"]).describe(
+    action: _enum(actions.length > 0 ? actions : ["verify"]).describe(
       (
         (gates.verifyOn ? VERIFY_CLAUSE : "") +
-        (gates.previewOn ? (t ? EMULATOR_PREVIEW_CLAUSE : PREVIEW_CLAUSE) : "")
+        (gates.previewOn ? (emulator ? EMULATOR_PREVIEW_CLAUSE : PREVIEW_CLAUSE) : "")
       ).trim(),
     ),
     ...(gates.verifyOn && {
-      url: string()
+      url: stringSchema()
         .optional()
         .describe(
           "verify: the artifact's claude.ai URL \u2014 omit to target this session's most recent publish.",
         ),
     }),
     ...(gates.previewOn && {
-      file_path: string()
+      file_path: stringSchema()
         .optional()
         .describe(
-          t
+          emulator
             ? "preview: the page's .html file to look at in the artifact viewer."
             : "preview: the local .html page to render.",
         ),
     }),
     ...(gates.previewOn &&
-      !t && {
-        widths: i.widths,
-        themes: i.themes,
+      !emulator && {
+        widths: fields.widths,
+        themes: fields.themes,
       }),
   });
 }

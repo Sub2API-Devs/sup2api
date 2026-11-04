@@ -10,12 +10,16 @@
  */
 import { identity } from "../../../utils/identity.js";
 import { createSurfaceRowLedger } from "../sites/index.js";
+import { deferInit } from "../../../../runtime/deferred-init.js";
 
 //@ chunk-4121qate.js:8957-8989 placement
 /**
  * 界面行账本
  */
-var surfaceRowLedger = identity(createSurfaceRowLedger(), (e) => e.clear());
+var surfaceRowLedger; // deferred: uses createSurfaceRowLedger (../sites/index.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-4121qate.js:8957", () => {
+  surfaceRowLedger = identity(createSurfaceRowLedger(), (ledger) => ledger.clear());
+});
 //@ chunk-4121qate.js:8989-9000 placement
 var DIALOG_FRAME_COLUMNS = 40;
 //@ chunk-4121qate.js:9000-9011 placement
@@ -23,13 +27,16 @@ var DIALOG_FRAME_ROWS_MAX = 12;
 //@ chunk-4121qate.js:9011-9022 placement
 var OWN_FRAME_ROWS_MAX = 48;
 //@ chunk-4121qate.js:9022-9069 placement
-var OWN_FRAME_SURFACES = new Set(["desktop", "vscode", "mobile"]);
+var OWN_FRAME_SURFACES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-4121qate.js:9022", () => {
+  OWN_FRAME_SURFACES = new Set(["desktop", "vscode", "mobile"]);
+});
 //@ chunk-4121qate.js:9069-9158 placement
 function dialogFrameOf(surface) {
-  let o = surface !== undefined && OWN_FRAME_SURFACES.has(surface);
+  let isOwnFrame = surface !== undefined && OWN_FRAME_SURFACES.has(surface);
   return {
-    rowsMax: o ? OWN_FRAME_ROWS_MAX : DIALOG_FRAME_ROWS_MAX,
-    isMarkdownDrawn: o,
+    rowsMax: isOwnFrame ? OWN_FRAME_ROWS_MAX : DIALOG_FRAME_ROWS_MAX,
+    isMarkdownDrawn: isOwnFrame,
   };
 }
 //@ chunk-4121qate.js:9158-9170 placement
@@ -61,11 +68,11 @@ function parseAskUserQuestionRenderRequest(event, payload) {
 /**
  * 生成 Client 元素的挂载键（请求、界面、插件与 key）。
  */
-var clientMountKey = ({ requestId, surface }, r) => ({
+var clientMountKey = ({ requestId, surface }, client) => ({
   requestId,
   surface,
-  plugin: r.client.plugin,
-  key: r.props.key,
+  plugin: client.client.plugin,
+  key: client.props.key,
 });
 export {
   MAX_TREE_TEXT_CHARS,

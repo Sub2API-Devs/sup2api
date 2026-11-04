@@ -5,11 +5,11 @@
  * pieces: chunk-fq0cr76a.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../../../runtime/bun-runtime.js";
 import { require_descriptors } from "../../cjs/descriptors.js";
 
 //@ chunk-fq0cr76a.js:518581-519597 cjs-fingerprint
-var require_scalar_2 = x(function (cjsExports) {
+var require_scalar_2 = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });

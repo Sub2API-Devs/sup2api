@@ -26,14 +26,14 @@ import { _enum } from "../../vendor/zod/v4/classic/schemas.js";
 /**
  * 去重追加：值不存在时才 push。
  */
-function pushUnique(e, absolutePath) {
-  if (e && !e.includes(absolutePath)) e.push(absolutePath);
+function pushUnique(list, absolutePath) {
+  if (list && !list.includes(absolutePath)) list.push(absolutePath);
 }
 //@ chunk-e6aww6q8.js:1365078-1366023 placement
 /**
  * 只暴露部分字段的工具上下文视图。
  */
-function createToolContextView(toolContext, n) {
+function createToolContextView(toolContext, toolUseContext) {
   return {
     get session() {
       return toolContext.session;
@@ -72,38 +72,38 @@ function createToolContextView(toolContext, n) {
       return toolContext.permissions;
     },
     get toolUseId() {
-      return n.toolUseId;
+      return toolUseContext.toolUseId;
     },
     get remoteCall() {
-      return n.remoteCall;
+      return toolUseContext.remoteCall;
     },
     get inputFromAnotherMachine() {
-      return n.inputFromAnotherMachine;
+      return toolUseContext.inputFromAnotherMachine;
     },
     get callerLogsSharedEvents() {
-      return n.callerLogsSharedEvents;
+      return toolUseContext.callerLogsSharedEvents;
     },
     get gitDiffRead() {
-      return n.gitDiffRead;
+      return toolUseContext.gitDiffRead;
     },
     get smallResultAsked() {
-      return n.smallResultAsked;
+      return toolUseContext.smallResultAsked;
     },
     get permissionSurface() {
-      return n.permissionSurface;
+      return toolUseContext.permissionSurface;
     },
     get userModified() {
-      return n.userModified;
+      return toolUseContext.userModified;
     },
   };
 }
 //@ chunk-e6aww6q8.js:1366023-1366221 placement
-function rejectNullBytes(e, n) {
-  let found = n.find(([, s]) => s?.includes("\x00"));
+function rejectNullBytes(label, entries) {
+  let found = entries.find(([, value]) => value?.includes("\x00"));
   if (found)
     return {
       result: false,
-      message: `${e} ${found[0]} cannot contain null bytes (\\0). Remove the null byte and try again.`,
+      message: `${label} ${found[0]} cannot contain null bytes (\\0). Remove the null byte and try again.`,
       errorCode: 2,
     };
   return null;
@@ -112,10 +112,10 @@ function rejectNullBytes(e, n) {
 /**
  * 解析后末尾为空白的路径拒绝。
  */
-function rejectTrailingWhitespace(e, n) {
-  let found = n.find(([, s]) => {
+function rejectTrailingWhitespace(label, entries) {
+  let found = entries.find(([, value]) => {
     try {
-      expandStablePath(s);
+      expandStablePath(value);
       return false;
     } catch (error) {
       if (error instanceof UnstablePathError) return true;
@@ -125,7 +125,7 @@ function rejectTrailingWhitespace(e, n) {
   return found
     ? {
         result: false,
-        message: `${e} ${found[0]} ends in white space once its "." and ".." are resolved, and ${e} refuses such a path. If the white space is not meant, send the path without it. ${e} cannot open a file whose own name ends in white space.`,
+        message: `${label} ${found[0]} ends in white space once its "." and ".." are resolved, and ${label} refuses such a path. If the white space is not meant, send the path without it. ${label} cannot open a file whose own name ends in white space.`,
         errorCode: 20,
       }
     : null;
@@ -134,7 +134,7 @@ function rejectTrailingWhitespace(e, n) {
 var EXPLICIT_HOME_PATH_RE = /^\s*(?:\/(?:Users|Volumes)\/|[A-Za-z]:[\\/]|\\\\)/;
 var POSIX_HOME_PATH_RE = /^\/(?:Users|Volumes)\//;
 //@ chunk-e6aww6q8.js:1366685-1367448 placement
-function checkForeignFilePath(e, n) {
+function checkForeignFilePath(entries, toolName) {
   if (
     env.platform !== "linux" ||
     !isCoworkEntrypoint() ||
@@ -143,13 +143,13 @@ function checkForeignFilePath(e, n) {
     getFeatureValue_CACHED_MAY_BE_STALE("tengu_hazy_cosmos", true) === false
   )
     return null;
-  let found = n.find(
-    ([, s]) => EXPLICIT_HOME_PATH_RE.test(s) || POSIX_HOME_PATH_RE.test(expandStablePath(s)),
+  let found = toolName.find(
+    ([, value]) => EXPLICIT_HOME_PATH_RE.test(value) || POSIX_HOME_PATH_RE.test(expandStablePath(value)),
   );
   return found
     ? {
         result: false,
-        message: `${e} ${found[0]} starts like a path on the user's computer and was refused; nothing was written. Neither ${e} nor ${BASH_TOOL_NAME} runs there: on this session's machine that path names an unrelated file, which never reaches the user. If this session has ${DEVICE_BASH_TOOL}, make or change the file there with it. Otherwise save the finished file under ${getOutputsRoot()}, from where ${DEVICE_COMMIT_FILES_TOOL} copies it over; to change a file of theirs, first copy it here with ${DEVICE_STAGE_FILES_TOOL}. With none of these tools, work here and tell the user that nothing was saved on their computer.`,
+        message: `${entries} ${found[0]} starts like a path on the user's computer and was refused; nothing was written. Neither ${entries} nor ${BASH_TOOL_NAME} runs there: on this session's machine that path names an unrelated file, which never reaches the user. If this session has ${DEVICE_BASH_TOOL}, make or change the file there with it. Otherwise save the finished file under ${getOutputsRoot()}, from where ${DEVICE_COMMIT_FILES_TOOL} copies it over; to change a file of theirs, first copy it here with ${DEVICE_STAGE_FILES_TOOL}. With none of these tools, work here and tell the user that nothing was saved on their computer.`,
         errorCode: 22,
       }
     : null;
@@ -158,8 +158,8 @@ function checkForeignFilePath(e, n) {
 /**
  * 用给定 schema 校验工具输入，成功返回原对象，否则 null。
  */
-function parsedToolInputOrNull(e, n) {
-  return n !== null && e.safeParse(n.input).success ? n : null;
+function parsedToolInputOrNull(input, tool) {
+  return tool !== null && input.safeParse(tool.input).success ? tool : null;
 }
 //@ chunk-e6aww6q8.js:1367518-1367657 placement
 var SKILL_SAVE_SURFACES = {
@@ -180,8 +180,8 @@ var SKILL_SAVE_OUTCOMES = {
 /**
  * 取对象的键列表。
  */
-function objectKeysArray(e) {
-  return _enum(Object.keys(e));
+function objectKeysArray(object) {
+  return _enum(Object.keys(object));
 }
 export {
   rejectNullBytes,

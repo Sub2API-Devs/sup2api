@@ -6,16 +6,16 @@
  * attribution: esm-fingerprint 1
  */
 //@ chunk-s1zey0a9.js:5442-5836 esm-fingerprint
-var G = /<message\b([^>]*)>([\s\S]*?)<\/message>/g;
-var Q =
+var MESSAGE_ELEMENT_RE = /<message\b([^>]*)>([\s\S]*?)<\/message>/g;
+var PREVIOUS_BODY_RE =
   /<previous-body>[\s\S]*?<\/previous-body>|<reply-to\b[^>]*>[\s\S]*?<\/reply-to>|<mentions\b[^>]*>[\s\S]*?<\/mentions>|<reactions\b[^>]*>[\s\S]*?<\/reactions>|<attachment\b[^>]*\/>|<attachment\b[^>]*>[\s\S]*?<\/attachment>/g;
-var Se = /<reply-to\b([^>]*)>/g;
-var Oe = /&(amp|lt|gt|quot|apos|#x[0-9a-f]+|#\d+);/gi;
-var je = {
+var REPLY_TO_START_RE = /<reply-to\b([^>]*)>/g;
+var ENTITY_RE = /&(amp|lt|gt|quot|apos|#x[0-9a-f]+|#\d+);/gi;
+var NAMED_ENTITIES = {
   amp: "&",
   lt: "<",
   gt: ">",
   quot: '"',
   apos: "'",
 };
-export { Q, G, Oe, je, Se };
+export { PREVIOUS_BODY_RE, MESSAGE_ELEMENT_RE, ENTITY_RE, NAMED_ENTITIES, REPLY_TO_START_RE };

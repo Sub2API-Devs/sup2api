@@ -5,7 +5,7 @@
  * pieces: chunk-vwj6ccer.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 import { require_Node } from "./Node.js";
 import { require_Element } from "./Element.js";
 import { require_CSSStyleDeclaration } from "./CSSStyleDeclaration.js";
@@ -14,7 +14,7 @@ import { require_URLUtils } from "./URLUtils.js";
 import { require_defineElement } from "./defineElement.js";
 
 //@ chunk-vwj6ccer.js:84376-106314 cjs-fingerprint
-var require_htmlelts = x(function (cjsExports) {
+var require_htmlelts = __commonJS(function (cjsExports) {
   var Node = require_Node();
   var Element = require_Element();
   var CSSStyleDeclaration = require_CSSStyleDeclaration();
@@ -30,7 +30,7 @@ var require_htmlelts = x(function (cjsExports) {
   function define(spec) {
     return defineElement(spec, HTMLElement, htmlElements, htmlNameToImpl);
   }
-  function te(attr) {
+  function urlProperty(attr) {
     return {
       get: function () {
         var v = this._getattr(attr);
@@ -281,13 +281,13 @@ var require_htmlelts = x(function (cjsExports) {
     },
     props: {
       _post_click_activation_steps: {
-        value: function (e) {
+        value: function (event) {
           if (this.href) this.ownerDocument.defaultView.location = this.href;
         },
       },
     },
     attributes: {
-      href: te,
+      href: urlProperty,
       ping: String,
       download: String,
       target: String,
@@ -316,7 +316,7 @@ var require_htmlelts = x(function (cjsExports) {
       download: String,
       rel: String,
       media: String,
-      href: te,
+      href: urlProperty,
       hreflang: String,
       type: String,
       shape: String,
@@ -414,7 +414,7 @@ var require_htmlelts = x(function (cjsExports) {
         missing: "submit",
       },
       formTarget: String,
-      formAction: te,
+      formAction: urlProperty,
       formNoValidate: Boolean,
       formMethod: {
         type: ["get", "post", "dialog"],
@@ -482,7 +482,7 @@ var require_htmlelts = x(function (cjsExports) {
       HTMLElement.call(this, doc, localName, prefix);
     },
     attributes: {
-      src: te,
+      src: urlProperty,
       type: String,
       width: String,
       height: String,
@@ -576,7 +576,7 @@ var require_htmlelts = x(function (cjsExports) {
       HTMLElement.call(this, doc, localName, prefix);
     },
     attributes: {
-      xmlns: te,
+      xmlns: urlProperty,
       version: String,
     },
   });
@@ -587,7 +587,7 @@ var require_htmlelts = x(function (cjsExports) {
       HTMLElement.call(this, doc, localName, prefix);
     },
     attributes: {
-      src: te,
+      src: urlProperty,
       srcdoc: String,
       name: String,
       width: String,
@@ -605,7 +605,7 @@ var require_htmlelts = x(function (cjsExports) {
       align: String,
       scrolling: String,
       frameBorder: String,
-      longDesc: te,
+      longDesc: urlProperty,
       marginHeight: {
         type: String,
         treatNullAsEmptyString: true,
@@ -624,7 +624,7 @@ var require_htmlelts = x(function (cjsExports) {
     },
     attributes: {
       alt: String,
-      src: te,
+      src: urlProperty,
       srcset: String,
       crossOrigin: CORS,
       useMap: String,
@@ -644,7 +644,7 @@ var require_htmlelts = x(function (cjsExports) {
         missing: "",
       },
       name: String,
-      lowsrc: te,
+      lowsrc: urlProperty,
       align: String,
       hspace: {
         type: "unsigned long",
@@ -654,7 +654,7 @@ var require_htmlelts = x(function (cjsExports) {
         type: "unsigned long",
         default: 0,
       },
-      longDesc: te,
+      longDesc: urlProperty,
       border: {
         type: String,
         treatNullAsEmptyString: true,
@@ -670,7 +670,7 @@ var require_htmlelts = x(function (cjsExports) {
     props: {
       form: formAssociatedProps.form,
       _post_click_activation_steps: {
-        value: function (e) {
+        value: function (event) {
           if (this.type === "checkbox") this.checked = !this.checked;
           else if (this.type === "radio") {
             var group = this.form.getElementsByName(this.name);
@@ -702,7 +702,7 @@ var require_htmlelts = x(function (cjsExports) {
       readOnly: Boolean,
       checked: Boolean,
       value: String,
-      src: te,
+      src: urlProperty,
       defaultChecked: {
         name: "checked",
         type: Boolean,
@@ -862,7 +862,7 @@ var require_htmlelts = x(function (cjsExports) {
       HTMLElement.call(this, doc, localName, prefix);
     },
     attributes: {
-      href: te,
+      href: urlProperty,
       rel: String,
       media: String,
       hreflang: String,
@@ -934,7 +934,7 @@ var require_htmlelts = x(function (cjsExports) {
       HTMLElement.call(this, doc, localName, prefix);
     },
     attributes: {
-      cite: te,
+      cite: urlProperty,
       dateTime: String,
     },
   });
@@ -976,7 +976,7 @@ var require_htmlelts = x(function (cjsExports) {
     },
     props: formAssociatedProps,
     attributes: {
-      data: te,
+      data: urlProperty,
       type: String,
       name: String,
       useMap: String,
@@ -996,7 +996,7 @@ var require_htmlelts = x(function (cjsExports) {
         type: "unsigned long",
         default: 0,
       },
-      codeBase: te,
+      codeBase: urlProperty,
       codeType: String,
       border: {
         type: String,
@@ -1127,7 +1127,7 @@ var require_htmlelts = x(function (cjsExports) {
       HTMLElement.call(this, doc, localName, prefix);
     },
     attributes: {
-      cite: te,
+      cite: urlProperty,
     },
   });
   define({
@@ -1153,7 +1153,7 @@ var require_htmlelts = x(function (cjsExports) {
       },
     },
     attributes: {
-      src: te,
+      src: urlProperty,
       type: String,
       charset: String,
       referrerPolicy: REFERRER,
@@ -1521,7 +1521,7 @@ var require_htmlelts = x(function (cjsExports) {
       HTMLElement.call(this, doc, localName, prefix);
     },
     attributes: {
-      src: te,
+      src: urlProperty,
       crossOrigin: CORS,
       preload: {
         type: [
@@ -1561,7 +1561,7 @@ var require_htmlelts = x(function (cjsExports) {
       htmlElements.HTMLMediaElement.call(this, doc, localName, prefix);
     },
     attributes: {
-      poster: te,
+      poster: urlProperty,
       width: {
         type: "unsigned long",
         min: 0,
@@ -1694,7 +1694,7 @@ var require_htmlelts = x(function (cjsExports) {
         type: ["command", "checkbox", "radio"],
         missing: "command",
       },
-      icon: te,
+      icon: urlProperty,
       disabled: Boolean,
       checked: Boolean,
       radiogroup: String,
@@ -1711,7 +1711,7 @@ var require_htmlelts = x(function (cjsExports) {
       srcset: String,
       sizes: String,
       media: String,
-      src: te,
+      src: urlProperty,
       type: String,
       width: String,
       height: String,
@@ -1724,7 +1724,7 @@ var require_htmlelts = x(function (cjsExports) {
       HTMLElement.call(this, doc, localName, prefix);
     },
     attributes: {
-      src: te,
+      src: urlProperty,
       srclang: String,
       label: String,
       default: Boolean,

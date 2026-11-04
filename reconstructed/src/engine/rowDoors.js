@@ -22,20 +22,21 @@ import { appendCoreOf } from "./sessionAppend.js";
 import { logForDebugging } from "../utils/debug.js";
 import { errorMessage } from "../utils/errors.js";
 import { currentSurfaceBinding } from "../plugins/functionHooks/surfaceBinding.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-1nk4j4sn.js:15636-16179 placement
 /**
  * 判定消息作者类别：assistant→model，attachment 按来源，system→engine，user 里工具结果→tool，开场提示→coordinator，插件 note→plugin，否则按用户来源。
  */
-function classifyMessageAuthor(e, o, r) {
-  switch (e.type) {
+function classifyMessageAuthor(message, door, hooks) {
+  switch (message.type) {
     case "assistant":
       return {
         kind: "model",
-        model: e.message.model,
+        model: message.message.model,
       };
     case "attachment": {
-      let { attachment } = e;
+      let { attachment } = message;
       return attachment.type === "queued_command"
         ? originFromUnknown(attachment.origin)
         : classifyHookAttachmentSource(attachment);
@@ -47,24 +48,25 @@ function classifyMessageAuthor(e, o, r) {
     case "user":
       break;
   }
-  let p = o === "tool-result" || o === "tool-message" ? getToolUseIdOfMessage(e) : undefined;
-  if (p !== undefined)
+  let toolUseId =
+    door === "tool-result" || door === "tool-message" ? getToolUseIdOfMessage(message) : undefined;
+  if (toolUseId !== undefined)
     return {
       kind: "tool",
-      tool: r.toolNameOf(p),
+      tool: hooks.toolNameOf(toolUseId),
     };
-  if (r.isOpeningPrompt)
+  if (hooks.isOpeningPrompt)
     return {
       kind: "coordinator",
     };
-  let origin = e.origin;
-  if (origin?.kind === "plugin" && o === "note")
+  let origin = message.origin;
+  if (origin?.kind === "plugin" && door === "note")
     return {
       kind: "plugin",
       name: origin.name,
     };
-  return o === "prompt" || o === "command"
-    ? originFromUnknown(e.origin)
+  return door === "prompt" || door === "command"
+    ? originFromUnknown(message.origin)
     : {
         kind: "engine",
       };
@@ -72,71 +74,81 @@ function classifyMessageAuthor(e, o, r) {
 //@ chunk-1nk4j4sn.js:16179-16197 placement
 var BOUNDARY_SUFFIX = "_boundary";
 //@ chunk-1nk4j4sn.js:16197-16237 placement
-var COMMAND_ROW_TAGS = [COMMAND_NAME, COMMAND_MESSAGE, ...ARTIFACT_BLOCK_TAGS].map((e) => `<${e}>`);
+var COMMAND_ROW_TAGS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-1nk4j4sn.js:16197", () => {
+  COMMAND_ROW_TAGS = [COMMAND_NAME, COMMAND_MESSAGE, ...ARTIFACT_BLOCK_TAGS].map((tag) => `<${tag}>`);
+});
 //@ chunk-1nk4j4sn.js:16237-16304 placement
-var DELIVERY_ATTACHMENT_TYPES = new Set(["queued_command", "poll_events", "teammate_mailbox"]);
+var DELIVERY_ATTACHMENT_TYPES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-1nk4j4sn.js:16237", () => {
+  DELIVERY_ATTACHMENT_TYPES = new Set(["queued_command", "poll_events", "teammate_mailbox"]);
+});
 //@ chunk-1nk4j4sn.js:16304-16452 placement
-function lastTextOf(e) {
-  let { content } = e.message;
+function lastTextOf(message) {
+  let { content } = message.message;
   if (typeof content === "string") return content;
-  let last = content.findLast((n) => n.type === "text");
+  let last = content.findLast((block) => block.type === "text");
   return last?.type === "text" ? last.text : undefined;
 }
 //@ chunk-1nk4j4sn.js:16452-16869 placement
-function userDoorOf(e) {
-  let { content } = e.message;
-  if (Array.isArray(content) && content.some((i) => i.type === "tool_result")) return "tool-result";
-  if (e.isCompactSummary === true) return "compaction";
-  if (e.sourceToolUseID !== undefined) return "tool-message";
-  let n = lastTextOf(e);
+function userDoorOf(message) {
+  let { content } = message.message;
+  if (Array.isArray(content) && content.some((block) => block.type === "tool_result")) return "tool-result";
+  if (message.isCompactSummary === true) return "compaction";
+  if (message.sourceToolUseID !== undefined) return "tool-message";
+  let lastText = lastTextOf(message);
   if (
-    e.dispatchEcho === true ||
-    e.stackedExpansion === true ||
-    (n !== undefined && COMMAND_ROW_TAGS.some((i) => n.startsWith(i)))
+    message.dispatchEcho === true ||
+    message.stackedExpansion === true ||
+    (lastText !== undefined && COMMAND_ROW_TAGS.some((tag) => lastText.startsWith(tag)))
   )
     return "command";
-  return e.promptId !== undefined || e.promptSource !== undefined || e.origin !== undefined
+  return message.promptId !== undefined || message.promptSource !== undefined || message.origin !== undefined
     ? "prompt"
     : "note";
 }
 //@ chunk-1nk4j4sn.js:16869-17221 placement
-function doorOf(e) {
-  switch (e.type) {
+function doorOf(message) {
+  switch (message.type) {
     case "user":
-      return userDoorOf(e);
+      return userDoorOf(message);
     case "assistant":
       return "response";
     case "attachment": {
-      let o = e.attachment.type;
-      if (DELIVERY_ATTACHMENT_TYPES.has(o)) return "delivery";
-      return o.startsWith("hook_") || o === "async_hook_response" ? "hook-context" : "attachment";
+      let attachmentType = message.attachment.type;
+      if (DELIVERY_ATTACHMENT_TYPES.has(attachmentType)) return "delivery";
+      return attachmentType.startsWith("hook_") || attachmentType === "async_hook_response"
+        ? "hook-context"
+        : "attachment";
     }
     case "system":
-      if (e.subtype.endsWith(BOUNDARY_SUFFIX)) return "compaction";
-      return e.subtype === "local_command" ? "command" : "notice";
+      if (message.subtype.endsWith(BOUNDARY_SUFFIX)) return "compaction";
+      return message.subtype === "local_command" ? "command" : "notice";
   }
 }
 //@ chunk-1nk4j4sn.js:17221-17447 placement = countToolCallsSince (1)
 function countToolCallsSince(messages, sinceUuid) {
   for (let message of sinceUuid)
     for (let idx = message.length - 1; idx >= 0; idx--) {
-      let p = message[idx];
-      if (p?.type !== "assistant") continue;
-      let found = p.message.content.find((block) => block.type === "tool_use" && block.id === messages);
+      let message_2 = message[idx];
+      if (message_2?.type !== "assistant") continue;
+      let found = message_2.message.content.find(
+        (block) => block.type === "tool_use" && block.id === messages,
+      );
       if (found?.type === "tool_use") return found.name;
     }
   return "unknown";
 }
 //@ chunk-1nk4j4sn.js:17447-17665 placement
-function appendInputOf(message, o) {
-  let { agentId, raising, lists } = o;
-  let s = raising.door ?? doorOf(message);
+function appendInputOf(message, context) {
+  let { agentId, raising, lists } = context;
+  let door = raising.door ?? doorOf(message);
   return {
     message: summarizeMessageForExport(message),
-    door: s,
+    door,
     origin:
       raising.origin ??
-      classifyMessageAuthor(message, s, {
+      classifyMessageAuthor(message, door, {
         toolNameOf: (messages) => countToolCallsSince(messages, lists),
         isOpeningPrompt: raising.door === "prompt",
       }),
@@ -147,73 +159,75 @@ function appendInputOf(message, o) {
   };
 }
 //@ chunk-1nk4j4sn.js:17665-18093 placement
-async function appendedRow(e, o, r) {
-  let { row, listed } = o;
-  let s = {
-    keep: r.keep ?? e.keep,
-    fills: r.fills === true,
+async function appendedRow(session, input, raising) {
+  let { row, listed } = input;
+  let options = {
+    keep: raising.keep ?? session.keep,
+    fills: raising.fills === true,
   };
-  let i;
-  let a = appendInputOf(row, {
-    ...(e.agentId !== undefined && {
-      agentId: e.agentId,
+  let applied;
+  let payload = appendInputOf(row, {
+    ...(session.agentId !== undefined && {
+      agentId: session.agentId,
     }),
-    raising: r,
-    lists: [listed, e.rows()],
+    raising,
+    lists: [listed, session.rows()],
   });
   try {
     await NO_CORE_AT_CHAIN_BOTTOM("session.append", {
-      origin: r.hookOrigin,
+      origin: raising.hookOrigin,
       core: {
-        "session.append": appendCoreOf(s, row, (m) => {
-          i = m;
+        "session.append": appendCoreOf(options, row, (result) => {
+          applied = result;
         }),
       },
-    })(a);
+    })(payload);
   } catch (error) {
     logForDebugging(
-      `session.append ${a.door}: the dispatch failed, the row is kept as made: ${errorMessage(error)}`,
+      `session.append ${payload.door}: the dispatch failed, the row is kept as made: ${errorMessage(error)}`,
       {
         level: "error",
       },
     );
   }
-  if (i === undefined && !s.fills) s.keep([row]);
-  return i ?? row;
+  if (applied === undefined && !options.fills) options.keep([row]);
+  return applied ?? row;
 }
 //@ chunk-1nk4j4sn.js:18093-18144 placement
-var callAppended = (e) => refuseSessionAppend(e, currentSurfaceBinding()?.conversation?.(e.agentId));
+var callAppended = (agentContext) =>
+  refuseSessionAppend(agentContext, currentSurfaceBinding()?.conversation?.(agentContext.agentId));
 //@ chunk-1nk4j4sn.js:18144-18212 placement
-var isAppendable = (e) => e.type !== "progress" && (e.type !== "user" || e.ephemeral !== true);
+var isAppendable = (message) =>
+  message.type !== "progress" && (message.type !== "user" || message.ephemeral !== true);
 //@ chunk-1nk4j4sn.js:18212-18322 placement
-var pluginAppended = (e, o) =>
+var pluginAppended = (message, options) =>
   NO_CORE_AT_CHAIN_BOTTOM("session.append", {
-    origin: o.origin,
-    ...(o.signal !== undefined && {
-      signal: o.signal,
+    origin: options.origin,
+    ...(options.signal !== undefined && {
+      signal: options.signal,
     }),
-  })(buildPluginAppendRow(e, o.plugin));
+  })(buildPluginAppendRow(message, options.plugin));
 //@ chunk-1nk4j4sn.js:18322-18493 placement
-async function rowsAppendedTo(e, o, r) {
-  let listed = o.filter(isAppendable);
-  let p = [];
-  for (let s of o)
-    if (isAppendable(s))
-      p.push(
+async function rowsAppendedTo(session, rows, raising) {
+  let listed = rows.filter(isAppendable);
+  let applied = [];
+  for (let row of rows)
+    if (isAppendable(row))
+      applied.push(
         await appendedRow(
-          e,
+          session,
           {
-            row: s,
+            row,
             listed,
           },
-          r,
+          raising,
         ),
       );
     else {
-      if (r.fills !== true) (r.keep ?? e.keep)([s]);
-      p.push(s);
+      if (raising.fills !== true) (raising.keep ?? session.keep)([row]);
+      applied.push(row);
     }
-  return p;
+  return applied;
 }
 export {
   BOUNDARY_SUFFIX,

@@ -10,6 +10,7 @@
  */
 import { resolve as resolve_2, relative, sep, join } from "path";
 import { readFile } from "fs/promises";
+import { printableName } from "../printableName.js";
 import { hasDotDotWithSpaceSegment } from "../pathClassification.js";
 import { areValidKeySegments, STORAGE_SPACES } from "../storage/storageSpaces.js";
 import { formatStorageError } from "../storage/storageErrors.js";
@@ -18,7 +19,7 @@ import { projectPluginCacheDir } from "./pluginCachePaths.js";
 import { isProjectLocalPlugin } from "./pluginIdentifier.js";
 import { resolvePluginDirComponentPath } from "./pluginPathContainment.js";
 import { jsonParse } from "../slowOperations.js";
-import { record, string } from "../../../vendor/zod/v4/classic/schemas.js";
+import { record, stringSchema } from "../../../vendor/zod/v4/classic/schemas.js";
 import { LspServerConfigSchema } from "./schemas.js";
 import { logForDebugging } from "../debug.js";
 import { isENOENT, errorMessage } from "../errors.js";
@@ -33,11 +34,37 @@ import {
 import { getProjectConfigRoot, getProjectRoot } from "../../bootstrap/state.js";
 import { mapStringsDeep } from "./pluginLoader.js";
 import { uniq } from "../collections.js";
-import { formatWithheldEnvNotice } from "../settings/managedSettingsFiles.js";
+import { formatWithheldEnvNotice } from "../settings/hostEnvWrites.js";
 import { isManagedPluginScope, runWithPluginWriteScope } from "./pluginScopedWrite.js";
 import { addPluginScopeToServers } from "./mcpPluginIntegration.js";
-import { printableName } from "../printableName.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
+//@ chunk-6mwt0myy.js:20771-20900 placement
+/**
+ * LSP 服务器显示名（含来源插件）。
+ */
+function formatMcpServerLabel(name, fromPlugin) {
+  if (!fromPlugin) return printableName(name, SERVER_LABEL_MAX_CHARS);
+  let pluginServerName = parsePluginServerName(name);
+  return pluginServerName
+    ? `${printableName(pluginServerName.serverName, SERVER_LABEL_MAX_CHARS)} (from plugin ${printableName(pluginServerName.pluginName, SERVER_LABEL_MAX_CHARS)})`
+    : printableName(name, SERVER_LABEL_MAX_CHARS);
+}
+//@ chunk-6mwt0myy.js:20900-20909 placement
+var SERVER_LABEL_MAX_CHARS = 80;
+//@ chunk-6mwt0myy.js:20909-21056 placement
+/**
+ * 解析 plugin:插件:服务器 形式的 id。
+ */
+function parsePluginServerName(name) {
+  if (!name.startsWith("plugin:")) return;
+  let parts = name.split(":");
+  if (parts.length < 3) return;
+  return {
+    pluginName: parts[1],
+    serverName: parts.slice(2).join(":"),
+  };
+}
 //@ chunk-e6aww6q8.js:599782-599914 file-local
 /**
  * 把插件内相对路径解析为绝对路径，越出插件目录或为绝对路径时返回 null。
@@ -56,29 +83,31 @@ function validatePathWithinPlugin(pluginPath, relativePath) {
   return resolvedFilePath;
 }
 //@ chunk-e6aww6q8.js:599914-600301 layout
-async function readLspConfigViaStorage(e, n, r) {
-  if (!areValidKeySegments(r))
+async function readLspConfigViaStorage(storageV5, coords, relPath) {
+  if (!areValidKeySegments(relPath))
     return {
       kind: "unrepresentable",
     };
-  let s = await e.read([STORAGE_SPACES.pluginCache(n.marketplace, n.plugin, n.version, r)]);
-  if (!s.ok)
-    return s.error.code === "Failed" && s.error.telemetryCode === "ELOOP"
+  let readResult = await storageV5.read([
+    STORAGE_SPACES.pluginCache(coords.marketplace, coords.plugin, coords.version, relPath),
+  ]);
+  if (!readResult.ok)
+    return readResult.error.code === "Failed" && readResult.error.telemetryCode === "ELOOP"
       ? {
           kind: "symlink",
         }
       : {
           kind: "error",
-          message: formatStorageError(s.error),
+          message: formatStorageError(readResult.error),
         };
-  let h = s.value.items[0];
-  if (!h.found)
+  let item = readResult.value.items[0];
+  if (!item.found)
     return {
       kind: "absent",
     };
   return {
     kind: "found",
-    text: Buffer.from(h.value).toString("utf-8"),
+    text: Buffer.from(item.value).toString("utf-8"),
   };
 }
 //@ chunk-e6aww6q8.js:600301-600325 layout
@@ -109,26 +138,26 @@ function describeLspConfigError(error) {
 /**
  * 读取插件的 LSP 服务器配置：插件根目录 .lsp.json + manifest.lspServers（路径或内联），校验 LspServerConfigSchema。
  */
-async function loadPluginLspServers(plugin, errors = [], r) {
+async function loadPluginLspServers(plugin, errors = [], storageV5) {
   if (plugin.isBuiltin) return;
   let servers = {};
-  let h = r ? parseVersionCachePath(plugin.path, projectPluginCacheDir()) : null;
-  let y = isProjectLocalPlugin(plugin);
+  let cacheCoords = storageV5 ? parseVersionCachePath(plugin.path, projectPluginCacheDir()) : null;
+  let isProjectLocal = isProjectLocalPlugin(plugin);
   let lspJsonPath = join(plugin.path, ".lsp.json");
   try {
-    let w;
-    if (y) {
+    let content;
+    if (isProjectLocal) {
       let pluginDirComponentPath = await resolvePluginDirComponentPath(plugin, ".lsp.json");
-      w = pluginDirComponentPath === null ? null : await readFile(pluginDirComponentPath, "utf-8");
-    } else if (r && h) {
-      let lspConfigViaStorage = await readLspConfigViaStorage(r, h, [".lsp.json"]);
+      content = pluginDirComponentPath === null ? null : await readFile(pluginDirComponentPath, "utf-8");
+    } else if (storageV5 && cacheCoords) {
+      let lspConfigViaStorage = await readLspConfigViaStorage(storageV5, cacheCoords, [".lsp.json"]);
       if (lspConfigViaStorage.kind !== "found" && lspConfigViaStorage.kind !== "absent")
         throw toLspConfigReadError(lspConfigViaStorage);
-      w = lspConfigViaStorage.kind === "found" ? lspConfigViaStorage.text : null;
-    } else w = await readFile(lspJsonPath, "utf-8");
-    if (w !== null) {
-      let parsed = jsonParse(w);
-      let result = record(string(), LspServerConfigSchema()).safeParse(parsed);
+      content = lspConfigViaStorage.kind === "found" ? lspConfigViaStorage.text : null;
+    } else content = await readFile(lspJsonPath, "utf-8");
+    if (content !== null) {
+      let parsed = jsonParse(content);
+      let result = record(stringSchema(), LspServerConfigSchema()).safeParse(parsed);
       if (result.success) Object.assign(servers, result.data);
       else {
         let errorMsg = `LSP config validation failed for .lsp.json in plugin ${plugin.name}: ${result.error.message}`;
@@ -163,7 +192,13 @@ async function loadPluginLspServers(plugin, errors = [], r) {
     }
   }
   if (plugin.manifest.lspServers) {
-    let manifestServers = await loadLspServersFromManifest(plugin.manifest.lspServers, plugin, errors, r, h);
+    let manifestServers = await loadLspServersFromManifest(
+      plugin.manifest.lspServers,
+      plugin,
+      errors,
+      storageV5,
+      cacheCoords,
+    );
     if (manifestServers) Object.assign(servers, manifestServers);
   }
   return Object.keys(servers).length > 0 ? servers : undefined;
@@ -172,9 +207,9 @@ async function loadPluginLspServers(plugin, errors = [], r) {
 /**
  * 处理 manifest.lspServers 中的每一项（文件路径做目录逃逸检查，内联对象直接校验）。
  */
-async function loadLspServersFromManifest(declaration, plugin, errors, s, h) {
+async function loadLspServersFromManifest(declaration, plugin, errors, storageV5, cacheCoords) {
   let servers = {};
-  let S = isProjectLocalPlugin(plugin);
+  let isProjectLocal = isProjectLocalPlugin(plugin);
   let declarations = Array.isArray(declaration) ? declaration : [declaration];
   for (let decl of declarations)
     if (typeof decl === "string") {
@@ -194,23 +229,24 @@ async function loadLspServersFromManifest(declaration, plugin, errors, s, h) {
         continue;
       }
       try {
-        let q;
-        if (S) {
+        let content;
+        if (isProjectLocal) {
           let pluginDirComponentPath = await resolvePluginDirComponentPath(plugin, decl);
           if (pluginDirComponentPath === null) continue;
-          q = await readFile(pluginDirComponentPath, "utf-8");
-        } else if (s && h) {
+          content = await readFile(pluginDirComponentPath, "utf-8");
+        } else if (storageV5 && cacheCoords) {
           let lspConfigViaStorage = await readLspConfigViaStorage(
-            s,
-            h,
+            storageV5,
+            cacheCoords,
             relative(plugin.path, validatedPath).split(sep),
           );
-          if (lspConfigViaStorage.kind === "unrepresentable") q = await readFile(validatedPath, "utf-8");
-          else if (lspConfigViaStorage.kind === "found") q = lspConfigViaStorage.text;
+          if (lspConfigViaStorage.kind === "unrepresentable")
+            content = await readFile(validatedPath, "utf-8");
+          else if (lspConfigViaStorage.kind === "found") content = lspConfigViaStorage.text;
           else throw toLspConfigReadError(lspConfigViaStorage);
-        } else q = await readFile(validatedPath, "utf-8");
-        let parsed = jsonParse(q);
-        let result = record(string(), LspServerConfigSchema()).safeParse(parsed);
+        } else content = await readFile(validatedPath, "utf-8");
+        let parsed = jsonParse(content);
+        let result = record(stringSchema(), LspServerConfigSchema()).safeParse(parsed);
         if (result.success) Object.assign(servers, result.data);
         else {
           let errorMsg = `LSP config validation failed for ${decl} in plugin ${plugin.name}: ${result.error.message}`;
@@ -265,24 +301,24 @@ async function loadLspServersFromManifest(declaration, plugin, errors, s, h) {
 /**
  * 对插件 LSP 服务器配置做变量替换：command/args/env/workspaceFolder 按 spawn 规则（缺用户配置抛错）， initializationOptions/settings 按 data 规则（缺失保留原文）；注入 CLAUDE_PLUGIN_ROOT/DATA/PROJECT_DIR； 被扣留的凭证变量记 error 日志，未展开的 data 变量记调试日志。
  */
-function resolvePluginLspServerConfig(serverConfig, plugin, userConfig, s) {
+function resolvePluginLspServerConfig(serverConfig, plugin, userConfig, errors) {
   let withheldVars = [];
   let unexpandedDataVars = [];
   let blankList = scrubbedEnvKeys();
-  let expand = (Z, Se = "spawn") => {
-    let ke = substitutePluginVariables(Z, plugin);
+  let expand = (text, mode = "spawn") => {
+    let substituted = substitutePluginVariables(text, plugin);
     if (userConfig)
-      ke = substituteUserConfigVariables(ke, userConfig, {
-        missingKey: Se === "data" ? "literal" : "throw",
+      substituted = substituteUserConfigVariables(substituted, userConfig, {
+        missingKey: mode === "data" ? "literal" : "throw",
       });
-    let { expanded, missingVars } = expandMcpCredentialEnvVars(ke, undefined, undefined, {
+    let { expanded, missingVars } = expandMcpCredentialEnvVars(substituted, undefined, undefined, {
       blankList,
     });
-    if (Se === "data") unexpandedDataVars.push(...missingVars);
+    if (mode === "data") unexpandedDataVars.push(...missingVars);
     else withheldVars.push(...missingVars);
     return expanded;
   };
-  let expandData = (Z) => expand(Z, "data");
+  let expandData = (text) => expand(text, "data");
   let resolved = {
     ...serverConfig,
   };
@@ -303,10 +339,10 @@ function resolvePluginLspServerConfig(serverConfig, plugin, userConfig, s) {
     resolved.initializationOptions = mapStringsDeep(resolved.initializationOptions, expandData);
   if (resolved.settings !== undefined) resolved.settings = mapStringsDeep(resolved.settings, expandData);
   if (withheldVars.length > 0) {
-    let Z = uniq(withheldVars);
+    let withheld = uniq(withheldVars);
     logForDebugging(
       `In plugin LSP config: ${formatWithheldEnvNotice(
-        Z,
+        withheld,
         isManagedPluginScope({
           pluginSource: plugin.source,
         }),
@@ -327,56 +363,56 @@ function resolvePluginLspServerConfig(serverConfig, plugin, userConfig, s) {
  * 遍历已启用插件的 lspServers.extensionToLanguage，同一扩展名（小写）被多个 plugin:<插件>:<服务器> 声明时生成 lsp-extension-conflict 错误（先声明者生效）。
  */
 function findLspExtensionConflicts(enabled) {
-  let n = [];
-  let r = new Map();
-  for (let s of enabled) {
-    if (!s.enabled || !s.lspServers) continue;
-    for (let [key, value] of Object.entries(s.lspServers)) {
+  let errors = [];
+  let extensionOwners = new Map();
+  for (let plugin of enabled) {
+    if (!plugin.enabled || !plugin.lspServers) continue;
+    for (let [key, value] of Object.entries(plugin.lspServers)) {
       if (!value.extensionToLanguage) continue;
-      let S = `plugin:${s.name}:${key}`;
+      let serverId = `plugin:${plugin.name}:${key}`;
       for (let key_2 of Object.keys(value.extensionToLanguage)) {
         let lower = key_2.toLowerCase();
-        let G = r.get(lower);
-        if (G === undefined) r.set(lower, S);
-        else if (G !== S)
-          n.push({
+        let owner = extensionOwners.get(lower);
+        if (owner === undefined) extensionOwners.set(lower, serverId);
+        else if (owner !== serverId)
+          errors.push({
             type: "lsp-extension-conflict",
-            source: s.source,
-            plugin: s.name,
+            source: plugin.source,
+            plugin: plugin.name,
             serverName: key,
             extension: lower,
-            activeServer: G,
+            activeServer: owner,
           });
       }
     }
   }
-  return n;
+  return errors;
 }
 //@ chunk-e6aww6q8.js:605292-606211 callgraph-witnessed = getPluginLspServers (0.257)
 /**
  * 已启用插件的最终 LSP 服务器配置：解析 ${CLAUDE_PLUGIN_ROOT}/${user_config.X} 等变量，缺 command 的报错；名字加 plugin:<插件>: 前缀。
  */
-async function getPluginLspServers(plugin, n = [], r, s) {
+async function getPluginLspServers(plugin, errors = [], storageV5, credentials) {
   if (!plugin.enabled) return;
-  let servers = plugin.lspServers || (await loadPluginLspServers(plugin, n, r));
+  let servers = plugin.lspServers || (await loadPluginLspServers(plugin, errors, storageV5));
   if (!servers) return;
   let userConfig = plugin.manifest.userConfig
     ? applyUserConfigDefaults(
-        await loadPluginOptions(marketplaceSource(plugin), s),
+        await loadPluginOptions(marketplaceSource(plugin), credentials),
         plugin.manifest.userConfig,
       )
     : undefined;
   let resolvedServers = {};
   for (let [key, value] of Object.entries(servers))
     try {
-      let G = runWithPluginWriteScope(
+      let resolved = runWithPluginWriteScope(
         {
           pluginSource: plugin.source,
         },
-        () => resolvePluginLspServerConfig(value, plugin, userConfig, n),
+        () => resolvePluginLspServerConfig(value, plugin, userConfig, errors),
       );
-      if (!G.command) {
-        n.push({
+      if (!resolved.command) {
+        errors.push({
           type: "lsp-config-invalid",
           plugin: plugin.name,
           serverName: key,
@@ -385,8 +421,8 @@ async function getPluginLspServers(plugin, n = [], r, s) {
         });
         continue;
       }
-      if (!G.extensionToLanguage || Object.keys(G.extensionToLanguage).length === 0) {
-        n.push({
+      if (!resolved.extensionToLanguage || Object.keys(resolved.extensionToLanguage).length === 0) {
+        errors.push({
           type: "lsp-config-invalid",
           plugin: plugin.name,
           serverName: key,
@@ -395,9 +431,9 @@ async function getPluginLspServers(plugin, n = [], r, s) {
         });
         continue;
       }
-      resolvedServers[key] = G;
+      resolvedServers[key] = resolved;
     } catch (error) {
-      n.push({
+      errors.push({
         type: "lsp-config-invalid",
         plugin: plugin.name,
         serverName: key,
@@ -408,34 +444,12 @@ async function getPluginLspServers(plugin, n = [], r, s) {
   return addPluginScopeToServers(resolvedServers, plugin.name, plugin.repository);
 }
 //@ chunk-e6aww6q8.js:3817371-3817440 fingerprint = resolvePluginLspEnvironment (0.601)
-var PLUGIN_ENV_VAR_NAMES = ["CLAUDE_PLUGIN_ROOT", "CLAUDE_PLUGIN_DATA"];
-var PLUGIN_ENV_VAR_SET = new Set(PLUGIN_ENV_VAR_NAMES);
-//@ chunk-6mwt0myy.js:20771-20900 placement
-/**
- * LSP 服务器显示名（含来源插件）。
- */
-function formatMcpServerLabel(e, n) {
-  if (!n) return printableName(e, SERVER_LABEL_MAX_CHARS);
-  let pluginServerName = parsePluginServerName(e);
-  return pluginServerName
-    ? `${printableName(pluginServerName.serverName, SERVER_LABEL_MAX_CHARS)} (from plugin ${printableName(pluginServerName.pluginName, SERVER_LABEL_MAX_CHARS)})`
-    : printableName(e, SERVER_LABEL_MAX_CHARS);
-}
-//@ chunk-6mwt0myy.js:20900-20909 placement
-var SERVER_LABEL_MAX_CHARS = 80;
-//@ chunk-6mwt0myy.js:20909-21056 placement
-/**
- * 解析 plugin:插件:服务器 形式的 id。
- */
-function parsePluginServerName(e) {
-  if (!e.startsWith("plugin:")) return;
-  let parts = e.split(":");
-  if (parts.length < 3) return;
-  return {
-    pluginName: parts[1],
-    serverName: parts.slice(2).join(":"),
-  };
-}
+var PLUGIN_ENV_VAR_NAMES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var PLUGIN_ENV_VAR_SET;
+deferInit("chunk-e6aww6q8.js:3817371", () => {
+  PLUGIN_ENV_VAR_NAMES = ["CLAUDE_PLUGIN_ROOT", "CLAUDE_PLUGIN_DATA"];
+  PLUGIN_ENV_VAR_SET = new Set(PLUGIN_ENV_VAR_NAMES);
+});
 export {
   PLUGIN_ENV_VAR_NAMES,
   loadPluginLspServers,

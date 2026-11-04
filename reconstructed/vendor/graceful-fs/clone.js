@@ -5,10 +5,10 @@
  * pieces: chunk-bmbhxpfm.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../runtime/bun-runtime.js";
+import { __commonJS } from "../../runtime/bun-runtime.js";
 
 //@ chunk-bmbhxpfm.js:5806-6170 cjs-fingerprint
-var require_clone = x(function (cjsExports, cjsModule) {
+var require_clone = __commonJS(function (cjsExports, cjsModule) {
   cjsModule.exports = clone;
   var getPrototypeOf =
     Object.getPrototypeOf ||

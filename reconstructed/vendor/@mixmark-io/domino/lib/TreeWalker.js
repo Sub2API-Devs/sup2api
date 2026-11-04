@@ -5,14 +5,14 @@
  * pieces: chunk-vwj6ccer.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 import { require_Node } from "./Node.js";
 import { require_NodeFilter } from "./NodeFilter.js";
 import { require_NodeTraversal } from "./NodeTraversal.js";
 import { require_utils } from "./utils.js";
 
 //@ chunk-vwj6ccer.js:68270-71450 cjs-fingerprint
-var require_TreeWalker = x(function (cjsExports, cjsModule) {
+var require_TreeWalker = __commonJS(function (cjsExports, cjsModule) {
   cjsModule.exports = TreeWalker;
   var Node = require_Node();
   var NodeFilter = require_NodeFilter();

@@ -14,13 +14,13 @@ import { DoctorLazy } from "../../cli/handlers/util.js";
 import {
   array,
   _enum,
-  u,
+  objectSchema,
   record,
-  string,
+  stringSchema,
   unknown,
-  M,
+  booleanSchema,
   zodStrictObject,
-  E,
+  numberSchema,
 } from "../../../vendor/zod/v4/classic/schemas.js";
 import {
   HEARTBEAT_SETTINGS_SOURCES,
@@ -63,7 +63,7 @@ import { defaultShellKind } from "../../utils/shell/shellToolUtils.js";
 import { getProjectConfigRoot, getProjectRoot } from "../../bootstrap/state.js";
 import { getPlatform } from "../../utils/platform.js";
 import { env } from "../../utils/env.js";
-import { En } from "../../../vendor/lodash-es/_inlinedHelpers.js";
+import { import_sortedIndex_2 } from "../../../vendor/lodash-es/_inlinedHelpers.js";
 import {
   shouldDisableAllHooksIncludingManaged,
   shouldAllowManagedHooksOnly,
@@ -95,18 +95,18 @@ var MAX_HOOK_INPUT_BYTES = 16384;
 var MAX_HOOK_STDERR_BYTES = 8192;
 var hookSourceSchema = DoctorLazy(() => array(_enum(HEARTBEAT_SETTINGS_SOURCES)));
 var listHooksInputSchema = DoctorLazy(() =>
-  u({
+  objectSchema({
     sources: hookSourceSchema(),
   }),
 );
 var listHooksResultSchema = DoctorLazy(() =>
-  u({
-    hooks: record(string(), array(unknown())),
-    cut: M(),
-    leftOut: array(string()),
-    unreadable: M(),
-    stamp: string().max(MAX_HEARTBEAT_BYTES),
-    sources: array(string()),
+  objectSchema({
+    hooks: record(stringSchema(), array(unknown())),
+    cut: booleanSchema(),
+    leftOut: array(stringSchema()),
+    unreadable: booleanSchema(),
+    stamp: stringSchema().max(MAX_HEARTBEAT_BYTES),
+    sources: array(stringSchema()),
   }),
 );
 var runHookInputSchema = DoctorLazy(() =>
@@ -115,9 +115,9 @@ var runHookInputSchema = DoctorLazy(() =>
       pluginId: true,
     })
     .extend({
-      shell: string().optional(),
-      inBackground: M().optional(),
-      asksWhichCopy: M().optional(),
+      shell: stringSchema().optional(),
+      inBackground: booleanSchema().optional(),
+      asksWhichCopy: booleanSchema().optional(),
       sources: hookSourceSchema(),
     }),
 );
@@ -134,62 +134,65 @@ var hookStateByHost = new HostScoped(() => ({
   hooks: new Map(),
 }));
 //@ chunk-wy9dbk5f.js:20581-21319 placement
-async function serveListProjectHooks(e, r, n) {
-  let s = n?.tellToolListChanged === undefined ? undefined : hookStateByHost.of(n.session.host);
-  if (n?.tellToolListChanged !== undefined && s !== undefined)
-    watchRepoSettingsChanges(n.session.host, n.tellToolListChanged, () => refreshHookSnapshot(s));
+async function serveListProjectHooks(input, signal, context) {
+  let hookState =
+    context?.tellToolListChanged === undefined ? undefined : hookStateByHost.of(context.session.host);
+  if (context?.tellToolListChanged !== undefined && hookState !== undefined)
+    watchRepoSettingsChanges(context.session.host, context.tellToolListChanged, () =>
+      refreshHookSnapshot(hookState),
+    );
   let stamp = await getSettingsFilesStamp();
-  let c = {};
-  let y = new Set();
-  let g = 0;
-  let h = 0;
-  let S = 0;
-  let C = 0;
-  let b = false;
-  let R = usableHookSources(listHooksInputSchema().parse(e).sources);
+  let hooksByEvent = {};
+  let leftOutEvents = new Set();
+  let hookCount = 0;
+  let jsonBytes = 0;
+  let argCharCount = 0;
+  let matcherCharCount = 0;
+  let cut = false;
+  let sources = usableHookSources(listHooksInputSchema().parse(input).sources);
   invalidateCommandNames();
-  let x = hooksDisabledForSources(R);
+  let hooksOff = hooksDisabledForSources(sources);
   assertHooksPolicyReady();
-  if (s !== undefined) refreshHookSnapshot(s, R);
-  let unreadable = !x && R.some(isSourceUnparseable);
-  for (let O of x ? [] : HOOK_EVENTS)
-    for (let { matcher, hooks } of collectHookMatchers(O, R))
+  if (hookState !== undefined) refreshHookSnapshot(hookState, sources);
+  let unreadable = !hooksOff && sources.some(isSourceUnparseable);
+  for (let event of hooksOff ? [] : HOOK_EVENTS)
+    for (let { matcher, hooks } of collectHookMatchers(event, sources))
       for (let hook of hooks) {
         if (hook.type !== "command") {
-          y.add(O);
+          leftOutEvents.add(event);
           continue;
         }
-        let B = {
+        let entry = {
           matcher,
           hooks: [hook],
         };
-        let H = byteLengthOfJson(B);
-        let Y = hook.args?.length ?? 0;
-        let Q = matcher?.length ?? 0;
+        let entryBytes = byteLengthOfJson(entry);
+        let argLength = hook.args?.length ?? 0;
+        let matcherLength = matcher?.length ?? 0;
         if (
-          g === MAX_HOOKS ||
-          h + H > MAX_HOOK_OUTPUT_BYTES ||
-          S + Y > MAX_HOOK_STDERR_BYTES ||
-          C + Q > MAX_HOOK_INPUT_BYTES
+          hookCount === MAX_HOOKS ||
+          jsonBytes + entryBytes > MAX_HOOK_OUTPUT_BYTES ||
+          argCharCount + argLength > MAX_HOOK_STDERR_BYTES ||
+          matcherCharCount + matcherLength > MAX_HOOK_INPUT_BYTES
         ) {
-          b = true;
+          cut = true;
           continue;
         }
-        g++;
-        h += H;
-        S += Y;
-        C += Q;
-        (c[O] ??= []).push(B);
+        hookCount++;
+        jsonBytes += entryBytes;
+        argCharCount += argLength;
+        matcherCharCount += matcherLength;
+        (hooksByEvent[event] ??= []).push(entry);
       }
   return {
-    summary: `${g} hooks${b ? ", cut at a limit" : ""}`,
+    summary: `${hookCount} hooks${cut ? ", cut at a limit" : ""}`,
     output: {
-      hooks: c,
-      cut: b,
-      leftOut: [...y],
+      hooks: hooksByEvent,
+      cut,
+      leftOut: [...leftOutEvents],
       unreadable,
       stamp,
-      sources: R,
+      sources,
     },
   };
 }
@@ -197,19 +200,19 @@ async function serveListProjectHooks(e, r, n) {
 var NO_SUCH_HOOK_MESSAGE = "the repo declares no such hook for that event now";
 var REPO_HOOKS_OFF_MESSAGE = "this machine keeps the repo's hooks off";
 //@ chunk-wy9dbk5f.js:21423-22643 placement
-async function serveRunProjectHook(e, r, n) {
-  let s = n.toolUseContext();
-  let a = runHookInputSchema().parse(e);
-  let remoteHookInput = parseRemoteHookInput(a.jsonInput);
-  let y = HookInputUnionSchema().safeParse(remoteHookInput.stdin).data;
-  let projectHook = findProjectHook(a, y, n.session.host);
+async function serveRunProjectHook(input, signal, context) {
+  let toolContext = context.toolUseContext();
+  let request = runHookInputSchema().parse(input);
+  let remoteHookInput = parseRemoteHookInput(request.jsonInput);
+  let hookInput = HookInputUnionSchema().safeParse(remoteHookInput.stdin).data;
+  let projectHook = findProjectHook(request, hookInput, context.session.host);
   if (projectHook?.if) {
     if (!(await evaluateHookCondition(projectHook.if, remoteHookInput))) return NOT_APPLICABLE_RESULT;
-    projectHook = findProjectHook(a, y, n.session.host);
+    projectHook = findProjectHook(request, hookInput, context.session.host);
   }
-  s.abortController.signal.throwIfAborted();
+  toolContext.abortController.signal.throwIfAborted();
   if (projectHook === undefined) return NOT_APPLICABLE_RESULT;
-  if (a.asksWhichCopy)
+  if (request.asksWhichCopy)
     return {
       summary: "it applies",
       output: {
@@ -217,126 +220,128 @@ async function serveRunProjectHook(e, r, n) {
         runsInBackground: projectHook.asyncRewake === true,
       },
     };
-  let h = await runCommandHookWithTimeout(
+  let result = await runCommandHookWithTimeout(
     {
       ...projectHook,
-      timeout: a.timeout ?? projectHook.timeout,
+      timeout: request.timeout ?? projectHook.timeout,
     },
-    a.hookEvent,
+    request.hookEvent,
     remoteHookInput,
-    a.hookIndex,
-    s,
+    request.hookIndex,
+    toolContext,
     undefined,
     false,
     undefined,
-    a.inBackground,
+    request.inBackground,
   );
-  if (!projectHook.asyncRewake) return h;
-  let S = rememberedScriptsRegistry.of(n.session.host);
-  let C = y && hookMatchQuery(y);
-  let R = `${C ? `${a.hookEvent}:${C}` : a.hookEvent}
+  if (!projectHook.asyncRewake) return result;
+  let registry = rememberedScriptsRegistry.of(context.session.host);
+  let matchQuery = hookInput && hookMatchQuery(hookInput);
+  let scriptKey = `${matchQuery ? `${request.hookEvent}:${matchQuery}` : request.hookEvent}
 ${getHookDisplayText(projectHook)}`;
-  if (h.output.status !== 2) {
-    rememberBounded(S, R, undefined);
-    return h;
+  if (result.output.status !== 2) {
+    rememberBounded(registry, scriptKey, undefined);
+    return result;
   }
-  let x = (projectHook.shell ?? defaultShellKind()) === "powershell";
-  let w = projectHook.args !== undefined;
-  let O = expandHookPathVariables({
+  let isPowerShell = (projectHook.shell ?? defaultShellKind()) === "powershell";
+  let hasArgs = projectHook.args !== undefined;
+  let expandedPaths = expandHookPathVariables({
     command: projectHook.command,
     args: projectHook.args,
     pluginRoot: undefined,
     projectDir: getProjectConfigRoot() ?? getProjectRoot(),
     homeDir: homedir(),
-    windowsBash: getPlatform() === "windows" && !x && !w,
-    posixShell: !x && !w && !env.CLAUDE_CODE_SHELL_PREFIX,
+    windowsBash: getPlatform() === "windows" && !isPowerShell && !hasArgs,
+    posixShell: !isPowerShell && !hasArgs && !env.CLAUDE_CODE_SHELL_PREFIX,
   });
   let missingHookScript = await detectMissingHookScript({
-    stdout: h.output.stdout,
-    stderr: h.output.stderr,
-    scriptPaths: O.map((j) => j.path),
+    stdout: result.output.stdout,
+    stderr: result.output.stderr,
+    scriptPaths: expandedPaths.map((expandedPath) => expandedPath.path),
   });
   if (missingHookScript === undefined) {
-    rememberBounded(S, R, undefined);
-    return h;
+    rememberBounded(registry, scriptKey, undefined);
+    return result;
   }
-  let L = {
-    ...h.output,
+  let output = {
+    ...result.output,
     missingScript: {
       scriptPath: missingHookScript.scriptPath,
-      cutFrom: O.find((j) => j.path === missingHookScript.scriptPath)?.cutFrom,
-      isRepeat: a.inBackground === true && rememberBounded(S, R, missingHookScript.output),
+      cutFrom: expandedPaths.find((expandedPath) => expandedPath.path === missingHookScript.scriptPath)
+        ?.cutFrom,
+      isRepeat:
+        request.inBackground === true && rememberBounded(registry, scriptKey, missingHookScript.output),
     },
   };
-  return byteLengthOfJson(L) <= MAX_HOOK_RESULT_BYTES
+  return byteLengthOfJson(output) <= MAX_HOOK_RESULT_BYTES
     ? {
-        ...h,
-        output: L,
+        ...result,
+        output,
       }
-    : h;
+    : result;
 }
 //@ chunk-wy9dbk5f.js:22643-23116 placement
 /**
  * 在当前设置的钩子里查找与请求完全一致的命令钩子（命令、参数、if、shell），检查匹配器；钩子被禁用或不存在时抛 ServedCallError。
  */
-function findProjectHook(e, r, host) {
+function findProjectHook(request, hookInput, host) {
   invalidateCommandNames();
-  let s = usableHookSources(e.sources);
-  let a = hooksDisabledForSources(s);
-  let c = hookStateByHost.of(host);
-  let isOff = En(s, c.sources) ? c.isOff : undefined;
-  if (shouldDisableAllHooksIncludingManaged() || (isOff ?? a))
+  let sources = usableHookSources(request.sources);
+  let sourcesOff = hooksDisabledForSources(sources);
+  let hookState = hookStateByHost.of(host);
+  let isOff = import_sortedIndex_2(sources, hookState.sources) ? hookState.isOff : undefined;
+  if (shouldDisableAllHooksIncludingManaged() || (isOff ?? sourcesOff))
     throw new ServedCallError(REPO_HOOKS_OFF_MESSAGE);
-  let g = false;
-  let h;
-  for (let { matcher, hooks } of collectHookMatchers(e.hookEvent, s, c.hooks))
+  let found = false;
+  let foundHook;
+  for (let { matcher, hooks } of collectHookMatchers(request.hookEvent, sources, hookState.hooks))
     for (let hook of hooks) {
       if (
         hook.type !== "command" ||
-        hook.command !== e.command ||
-        !En(hook.args, e.args) ||
-        hook.if !== e.if ||
-        hook.shell !== e.shell
+        hook.command !== request.command ||
+        !import_sortedIndex_2(hook.args, request.args) ||
+        hook.if !== request.if ||
+        hook.shell !== request.shell
       )
         continue;
-      g = true;
-      if (matcher && matcher !== "*" && r === undefined)
+      found = true;
+      if (matcher && matcher !== "*" && hookInput === undefined)
         throw Error("this machine could not judge the hook's matcher");
-      if (r === undefined || hookMatcherMatches(r, matcher)) h = hook;
+      if (hookInput === undefined || hookMatcherMatches(hookInput, matcher)) foundHook = hook;
     }
-  if (!g) throw new ServedCallError(NO_SUCH_HOOK_MESSAGE);
-  return h;
+  if (!found) throw new ServedCallError(NO_SUCH_HOOK_MESSAGE);
+  return foundHook;
 }
 //@ chunk-wy9dbk5f.js:23116-23186 placement
 /**
  * 判断该来源的钩子是否被禁用。
  */
-function hooksDisabledForSources(e) {
+function hooksDisabledForSources(sources) {
   return (
     isCustomizationDisabled("hooks") ||
     shouldDisableAllHooksIncludingManaged() ||
-    shouldAllowManagedHooksOnly(isDisableAllHooksEffective(e)) ||
+    shouldAllowManagedHooksOnly(isDisableAllHooksEffective(sources)) ||
     isRestrictedToPluginOnly("hooks") ||
     shouldSkipHookDueToTrust()
   );
 }
 //@ chunk-wy9dbk5f.js:23186-23310 placement = getEnabledSettingSources (0.752)
-function isDisableAllHooksEffective(e) {
+function isDisableAllHooksEffective(sources) {
   return (
-    [...e, "flagSettings", "policySettings"]
-      .map((s) => getSettingsForSource(s)?.disableAllHooks)
-      .findLast((s) => s !== undefined) === true
+    [...sources, "flagSettings", "policySettings"]
+      .map((source) => getSettingsForSource(source)?.disableAllHooks)
+      .findLast((setting) => setting !== undefined) === true
   );
 }
 //@ chunk-wy9dbk5f.js:23310-23368 placement
 /**
  * 判断设置来源是否启用但解析失败/为空。
  */
-function isSourceUnparseable(e) {
+function isSourceUnparseable(source) {
   return (
-    isSettingSourceEnabled(e) &&
-    getSettingsForSource(e) === null &&
-    getSettingsParseErrorsForSource(e).length > 0
+    isSettingSourceEnabled(source) &&
+    getSettingsForSource(source) === null &&
+    getSettingsParseErrorsForSource(source).length > 0
   );
 }
 //@ chunk-wy9dbk5f.js:23368-23428 placement
@@ -344,31 +349,33 @@ function isSourceUnparseable(e) {
  * 过滤出可用的钩子来源。
  */
 function usableHookSources(sources) {
-  return HEARTBEAT_SETTINGS_SOURCES.filter((r) => sources.includes(r) && isSettingSourceEnabled(r));
+  return HEARTBEAT_SETTINGS_SOURCES.filter(
+    (source) => sources.includes(source) && isSettingSourceEnabled(source),
+  );
 }
 //@ chunk-wy9dbk5f.js:23428-23558 placement
-function collectHookMatchers(e, r, hooks = new Map()) {
-  let s = [];
-  for (let a of r)
-    if (isSettingSourceEnabled(a)) {
-      let c = hooks.has(a) ? hooks.get(a) : getSettingsForSource(a)?.hooks;
-      s = s.concat(c?.[e] ?? []);
+function collectHookMatchers(event, sources, hooks = new Map()) {
+  let matchers = [];
+  for (let source of sources)
+    if (isSettingSourceEnabled(source)) {
+      let sourceHooks = hooks.has(source) ? hooks.get(source) : getSettingsForSource(source)?.hooks;
+      matchers = matchers.concat(sourceHooks?.[event] ?? []);
     }
-  return s;
+  return matchers;
 }
 //@ chunk-wy9dbk5f.js:23558-23757 placement
-function refreshHookSnapshot(e, r = e.sources) {
+function refreshHookSnapshot(snapshot, sources = snapshot.sources) {
   try {
-    let n = r && hooksDisabledForSources(r);
-    let s = n !== e.isOff;
-    e.isOff = n;
-    e.sources = r;
-    for (let a of HEARTBEAT_SETTINGS_SOURCES) {
-      let hooks = getSettingsForSource(a)?.hooks;
-      s ||= !En(hooks, e.hooks.get(a));
-      e.hooks.set(a, hooks);
+    let isOff = sources && hooksDisabledForSources(sources);
+    let changed = isOff !== snapshot.isOff;
+    snapshot.isOff = isOff;
+    snapshot.sources = sources;
+    for (let source of HEARTBEAT_SETTINGS_SOURCES) {
+      let hooks = getSettingsForSource(source)?.hooks;
+      changed ||= !import_sortedIndex_2(hooks, snapshot.hooks.get(source));
+      snapshot.hooks.set(source, hooks);
     }
-    return s;
+    return changed;
   } catch (error) {
     logError(toError(error));
     return false;
@@ -383,19 +390,19 @@ var runManagedHookInputSchema = DoctorLazy(() =>
   zodStrictObject({
     hookEvent: _enum(HOOK_EVENTS),
     hook: HookCommandSchema(),
-    jsonInput: string(),
-    hookIndex: E().int().nonnegative().optional(),
+    jsonInput: stringSchema(),
+    hookIndex: numberSchema().int().nonnegative().optional(),
   }),
 );
 //@ chunk-wy9dbk5f.js:23883-24195 placement
-async function serveRunManagedHook(e, r, n) {
-  let s = n.toolUseContext();
-  let { hook, hookEvent, jsonInput, hookIndex } = runManagedHookInputSchema().parse(e);
+async function serveRunManagedHook(input, signal, context) {
+  let toolContext = context.toolUseContext();
+  let { hook, hookEvent, jsonInput, hookIndex } = runManagedHookInputSchema().parse(input);
   if (hook.type !== "command") throw Error("only a command hook runs on this machine");
   let remoteHookInput = parseRemoteHookInput(jsonInput);
   if (hook.if && !(await evaluateHookCondition(hook.if, remoteHookInput))) return NOT_APPLICABLE_RESULT;
-  s.abortController.signal.throwIfAborted();
-  return runCommandHookWithTimeout(hook, hookEvent, remoteHookInput, hookIndex, s, undefined, true);
+  toolContext.abortController.signal.throwIfAborted();
+  return runCommandHookWithTimeout(hook, hookEvent, remoteHookInput, hookIndex, toolContext, undefined, true);
 }
 //@ chunk-wy9dbk5f.js:24224-24297 placement
 /**
@@ -418,17 +425,17 @@ function pluginIdFromSkillSuffix(pluginId) {
 var SKILL_HOOKS_OFF_MESSAGE = "this machine's settings keep a skill's hooks off";
 var runSkillHookInputSchema = DoctorLazy(() =>
   zodStrictObject({
-    pluginId: string(),
+    pluginId: stringSchema(),
     hookEvent: _enum(HOOK_EVENTS),
     hook: HookCommandSchema(),
-    jsonInput: string(),
-    hookIndex: E().int().nonnegative().optional(),
+    jsonInput: stringSchema(),
+    hookIndex: numberSchema().int().nonnegative().optional(),
   }),
 );
 //@ chunk-wy9dbk5f.js:24537-25942 placement
-async function serveRunSkillHook(e, r, context) {
-  let s = context.toolUseContext();
-  let { pluginId, hook, hookEvent, jsonInput, hookIndex } = runSkillHookInputSchema().parse(e);
+async function serveRunSkillHook(input, signal, context) {
+  let toolContext = context.toolUseContext();
+  let { pluginId, hook, hookEvent, jsonInput, hookIndex } = runSkillHookInputSchema().parse(input);
   if (hook.type !== "command") throw Error("only a command hook runs on this machine");
   let remoteHookInput = parseRemoteHookInput(jsonInput);
   if (hook.if && !(await evaluateHookCondition(hook.if, remoteHookInput)))
@@ -439,71 +446,78 @@ async function serveRunSkillHook(e, r, context) {
         notStarted: true,
       },
     };
-  let C = pluginId.endsWith(SKILL_HOOK_SUFFIX) ? pluginId.slice(0, -SKILL_HOOK_SUFFIX.length) : undefined;
-  let b = C ? await findLocalSkillCommand(C, s, null) : undefined;
-  if (C && !b) {
+  let skillRef = pluginId.endsWith(SKILL_HOOK_SUFFIX)
+    ? pluginId.slice(0, -SKILL_HOOK_SUFFIX.length)
+    : undefined;
+  let localSkill = skillRef ? await findLocalSkillCommand(skillRef, toolContext, null) : undefined;
+  if (skillRef && !localSkill) {
     clearSkillCaches();
-    b = await findLocalSkillCommand(C, s, null);
+    localSkill = await findLocalSkillCommand(skillRef, toolContext, null);
   }
   let skillName = pluginId.endsWith(CATALOG_SKILL_HOOK_SUFFIX)
     ? stripSyncedSkillPrefix(pluginId.slice(0, -CATALOG_SKILL_HOOK_SUFFIX.length))
     : undefined;
-  let x =
+  let hostSkillDir =
     skillName !== undefined &&
     isValidSkillDirName(skillName) &&
     !("reason" in (await readHostCatalogSkill(skillName)))
       ? join(HOST_SKILLS_MOUNT, PUBLIC, skillName)
       : undefined;
-  let w = pluginIdFromSkillSuffix(pluginId);
-  let { storageV5, credentials } = s;
-  let plugin = w === undefined ? undefined : (await findEnabledPlugin(w, storageV5, credentials)).plugin;
-  let j = true;
-  if (w !== undefined && plugin === undefined) {
-    j = await resyncForMissingEntry(context, s.abortController.signal, async () => {
-      plugin = (await findEnabledPlugin(w, storageV5, credentials)).plugin;
+  let hookPluginId = pluginIdFromSkillSuffix(pluginId);
+  let { storageV5, credentials } = toolContext;
+  let plugin =
+    hookPluginId === undefined
+      ? undefined
+      : (await findEnabledPlugin(hookPluginId, storageV5, credentials)).plugin;
+  let resynced = true;
+  if (hookPluginId !== undefined && plugin === undefined) {
+    resynced = await resyncForMissingEntry(context, toolContext.abortController.signal, async () => {
+      plugin = (await findEnabledPlugin(hookPluginId, storageV5, credentials)).plugin;
       return plugin !== undefined;
     });
-    plugin ??= (await findEnabledPlugin(w, storageV5, credentials)).plugin;
+    plugin ??= (await findEnabledPlugin(hookPluginId, storageV5, credentials)).plugin;
   }
   invalidateCommandNames();
-  let B =
-    w !== undefined
+  let mustRefuse =
+    hookPluginId !== undefined
       ? plugin === undefined || isDefined(await checkSyncedSkillAccess(plugin.source, plugin.path))
-      : C !== undefined && stripSyncedSkillPrefix(C) !== C && (!b || skillUnavailableReason(b) !== undefined);
+      : skillRef !== undefined &&
+        stripSyncedSkillPrefix(skillRef) !== skillRef &&
+        (!localSkill || skillUnavailableReason(localSkill) !== undefined);
   invalidateCommandNames();
   assertHooksNotDisabled();
   assertHooksPolicyReady();
   if (plugin !== undefined) assertSyncedPluginUsable(plugin);
-  else if (w !== undefined) assertPluginSyncSettled(w, j, s.session);
+  else if (hookPluginId !== undefined) assertPluginSyncSettled(hookPluginId, resynced, toolContext.session);
   if (
-    B ||
+    mustRefuse ||
     shouldSkipSessionHooksByPolicy() ||
-    (w === undefined && isRestrictedToPluginOnly("hooks")) ||
+    (hookPluginId === undefined && isRestrictedToPluginOnly("hooks")) ||
     shouldSkipHookDueToTrust()
   )
     throw Error("this machine's settings keep a skill's hooks off");
-  if (skillName !== undefined && x === undefined)
+  if (skillName !== undefined && hostSkillDir === undefined)
     throw Error("the host catalog's skill has no folder on this machine");
-  s.abortController.signal.throwIfAborted();
-  let H = await holdHookUntilManagedSettings(
+  toolContext.abortController.signal.throwIfAborted();
+  let policyAnswer = await holdHookUntilManagedSettings(
     hookEvent,
     remoteHookInput.stdin,
     hook.timeout,
-    s.abortController.signal,
+    toolContext.abortController.signal,
     () => plugin !== undefined && isVouchedMarketplaceRef(plugin.source),
     SKILL_HOOKS_OFF_MESSAGE,
   );
-  if (H === "answered") return serveRunSkillHook(e, r, context);
-  if (H !== undefined) return H;
+  if (policyAnswer === "answered") return serveRunSkillHook(input, signal, context);
+  if (policyAnswer !== undefined) return policyAnswer;
   return runCommandHookWithTimeout(
     hook,
     hookEvent,
     remoteHookInput,
     hookIndex,
-    s,
+    toolContext,
     undefined,
     false,
-    plugin?.path ?? b?.skillRoot ?? x,
+    plugin?.path ?? localSkill?.skillRoot ?? hostSkillDir,
   );
 }
 export {

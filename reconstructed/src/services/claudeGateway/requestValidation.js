@@ -28,47 +28,47 @@ var SKIPPED_SCHEMA_KEYS = new Set([
  * 递归检查请求中嵌套的 model 字段（深度≤1000、最多 100 个），返回第一个不允许的路径与原因。
  */
 function findDisallowedNestedModel(
-  e,
-  t,
-  n = [],
-  o = {
+  value,
+  checkModel,
+  path = [],
+  counter = {
     fields: 0,
   },
 ) {
-  if (n.length >= 1000)
+  if (path.length >= 1000)
     return {
-      path: n.join("."),
+      path: path.join("."),
       reason: `refused by this gateway: the request JSON is nested more than ${(1000).toLocaleString("en-US")} levels deep`,
     };
-  let r = "type" in e && e.type === "fallback";
-  for (let [s, a] of Array.isArray(e) ? e.entries() : Object.entries(e))
-    if (s === "model" && typeof a === "string") {
-      if (n.length === 0) continue;
-      if (++o.fields > 100)
+  let isFallback = "type" in value && value.type === "fallback";
+  for (let [key, child] of Array.isArray(value) ? value.entries() : Object.entries(value))
+    if (key === "model" && typeof child === "string") {
+      if (path.length === 0) continue;
+      if (++counter.fields > 100)
         return {
-          path: [...n, s].join("."),
+          path: [...path, key].join("."),
           reason: "refused by this gateway: the request names more than 100 models in `model` fields",
         };
-      let l = t(a);
-      if (l !== undefined)
+      let reason = checkModel(child);
+      if (reason !== undefined)
         return {
-          path: [...n, s].join("."),
-          reason: l,
+          path: [...path, key].join("."),
+          reason,
         };
-    } else if (s === "model" && n.length > 0 && (typeof a !== "object" || Array.isArray(a)))
+    } else if (key === "model" && path.length > 0 && (typeof child !== "object" || Array.isArray(child)))
       return {
-        path: [...n, s].join("."),
+        path: [...path, key].join("."),
         reason: "refused by this gateway: `model` must be a string",
       };
     else if (
-      typeof a === "object" &&
-      a !== null &&
-      !SKIPPED_SCHEMA_KEYS.has(s) &&
-      !(r && (s === "from" || s === "to"))
+      typeof child === "object" &&
+      child !== null &&
+      !SKIPPED_SCHEMA_KEYS.has(key) &&
+      !(isFallback && (key === "from" || key === "to"))
     ) {
-      n.push(s);
-      let disallowedNestedModel = findDisallowedNestedModel(a, t, n, o);
-      n.pop();
+      path.push(key);
+      let disallowedNestedModel = findDisallowedNestedModel(child, checkModel, path, counter);
+      path.pop();
       if (disallowedNestedModel) return disallowedNestedModel;
     }
   return;

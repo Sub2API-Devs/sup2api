@@ -25,158 +25,172 @@ import {
   setAtPath,
   getAtPath,
 } from "./managedRestrictionKeys.js";
-import { credentialRuleExtractSchema, credentialRuleMaskClaimsSchema } from "./settingsSourceTrust.js";
-import { dt } from "../../../vendor/@modelcontextprotocol/client/dist/cfWorkerProvider-l7BFVI5n.mjs";
+import { AWS_CREDENTIAL_ENV_NAMES, PARENT_PAIR_SUPPRESSOR_SENTINEL } from "./settingsSourceTrust.js";
+import { countCodePointsInString } from "../../../vendor/@modelcontextprotocol/client/dist/cfWorkerProvider-l7BFVI5n.mjs";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-dcmhvw5a.js:348365-348414 placement
-var MAX_CONFUSABLE_SETTING_LENGTH = 65536;
-var regExp_6 = new RegExp(`[${withConfusables("<")}]`, "gu");
+var MAX_CONFUSABLE_SETTING_LENGTH; // deferred: uses withConfusables (../sanitization.js) of its import cycle while loading; runs once the cycle is complete
+var regExp_6;
+deferInit("chunk-dcmhvw5a.js:348365", () => {
+  MAX_CONFUSABLE_SETTING_LENGTH = 65536;
+  regExp_6 = new RegExp(`[${withConfusables("<")}]`, "gu");
+});
 //@ chunk-dcmhvw5a.js:348414-348461 placement
-function hasNoConfusables(e) {
-  return isAcceptableRuleText(e) && e.search(regExp_6) === -1;
+function hasNoConfusables(text) {
+  return isAcceptableRuleText(text) && text.search(regExp_6) === -1;
 }
 //@ chunk-dcmhvw5a.js:348461-349059 placement
 /**
  * 统计各类权限规则数量。
  */
 function summarizePermissionRules(autoMode) {
-  let n = {};
-  let r = MAX_CONFUSABLE_SETTING_LENGTH;
-  let s = 0;
-  let a = 0;
-  for (let c of RESTRICTIVE_NESTED_SETTINGS.toSorted(
-    (g, m) => Number(m === "hard_deny") - Number(g === "hard_deny"),
+  let lists = {};
+  let budget = MAX_CONFUSABLE_SETTING_LENGTH;
+  let leftOut = 0;
+  let mended = 0;
+  for (let key of RESTRICTIVE_NESTED_SETTINGS.toSorted(
+    (a, b) => Number(b === "hard_deny") - Number(a === "hard_deny"),
   )) {
-    let g = isPlainObject_2(autoMode) ? autoMode[c] : undefined;
-    if (g !== undefined && g !== null && !Array.isArray(g)) s++;
-    let m = [DEFAULTS_PLACEHOLDER];
-    for (let f of Array.isArray(g) ? g : []) {
-      if (typeof f !== "string") {
-        s++;
+    let value = isPlainObject_2(autoMode) ? autoMode[key] : undefined;
+    if (value !== undefined && value !== null && !Array.isArray(value)) leftOut++;
+    let entries = [DEFAULTS_PLACEHOLDER];
+    for (let rule of Array.isArray(value) ? value : []) {
+      if (typeof rule !== "string") {
+        leftOut++;
         continue;
       }
-      if (["", DEFAULTS_PLACEHOLDER].includes(f.trim())) continue;
-      let h = f.length > 2 * r ? 1 / 0 : countCodePoints(f);
-      if (h > r) {
-        s++;
+      if (["", DEFAULTS_PLACEHOLDER].includes(rule.trim())) continue;
+      let cost = rule.length > 2 * budget ? 1 / 0 : countCodePoints(rule);
+      if (cost > budget) {
+        leftOut++;
         continue;
       }
-      r -= h;
-      let replaced = Array.from(normalizeFullWidthSpace(f), (C) =>
-        hasControlChars(C) || hasInvisibleRuleChars(C) ? " " : C,
+      budget -= cost;
+      let text = Array.from(normalizeFullWidthSpace(rule), (char) =>
+        hasControlChars(char) || hasInvisibleRuleChars(char) ? " " : char,
       )
         .join("")
         .replace(regExp_6, "&lt;");
-      if (replaced.trim() === DEFAULTS_PLACEHOLDER) continue;
-      let S = countCodePoints(replaced) - h;
-      if (!hasNoConfusables(replaced) || S > r) {
-        s++;
+      if (text.trim() === DEFAULTS_PLACEHOLDER) continue;
+      let extra = countCodePoints(text) - cost;
+      if (!hasNoConfusables(text) || extra > budget) {
+        leftOut++;
         continue;
       }
-      r -= S;
-      m.push(replaced);
-      if (replaced !== f) a++;
+      budget -= extra;
+      entries.push(text);
+      if (text !== rule) mended++;
     }
-    if (m.length > 1) n[c] = m;
+    if (entries.length > 1) lists[key] = entries;
   }
   return {
-    lists: n,
-    leftOut: s,
-    mended: a,
+    lists,
+    leftOut,
+    mended,
   };
 }
 //@ chunk-dcmhvw5a.js:349059-349156 placement
-var HOOK_DISABLE_KEYS = new Set(["disableAllHooks"]);
-var AWS_PAIR_FIELDS = ["accessKeyIdVar", "secretAccessKeyVar", "sessionTokenVar"];
+var HOOK_DISABLE_KEYS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var AWS_PAIR_FIELDS;
+deferInit("chunk-dcmhvw5a.js:349059", () => {
+  HOOK_DISABLE_KEYS = new Set(["disableAllHooks"]);
+  AWS_PAIR_FIELDS = ["accessKeyIdVar", "secretAccessKeyVar", "sessionTokenVar"];
+});
 //@ chunk-dcmhvw5a.js:349156-350801 placement
 /**
  * 收集托管设置中生效的限制。
  */
-function collectManagedRestrictions(e) {
-  let n = {};
-  for (let w of MANAGED_RESTRICTION_KEYS()) {
-    let { path, restrictive } = w;
+function collectManagedRestrictions(doc) {
+  let out = {};
+  for (let def of MANAGED_RESTRICTION_KEYS()) {
+    let { path, restrictive } = def;
     if (HOOK_DISABLE_KEYS.has(path[0])) continue;
-    let j = restrictionValue(w, e);
-    if ((typeof j === "boolean" || typeof j === "string") && asArray(restrictive).includes(j))
-      setAtPath(n, path, j);
+    let value = restrictionValue(def, doc);
+    if ((typeof value === "boolean" || typeof value === "string") && asArray(restrictive).includes(value))
+      setAtPath(out, path, value);
   }
-  if (getAtPath(e, ["attribution"]) === false) setAtPath(n, ["attribution", "sessionUrl"], false);
-  let r = pickDefinedKeys(e.permissions, ["deny", "ask", "disableBypassPermissionsMode", "disableAutoMode"]);
-  if (r)
-    n.permissions = {
-      ...n.permissions,
-      ...r,
+  if (getAtPath(doc, ["attribution"]) === false) setAtPath(out, ["attribution", "sessionUrl"], false);
+  let permissionKeys = pickDefinedKeys(doc.permissions, [
+    "deny",
+    "ask",
+    "disableBypassPermissionsMode",
+    "disableAutoMode",
+  ]);
+  if (permissionKeys)
+    out.permissions = {
+      ...out.permissions,
+      ...permissionKeys,
     };
-  for (let w of MANAGED_ONLY_KEYS_2) if (e[w] !== undefined) n[w] = e[w];
-  for (let [key, value] of Object.entries(e))
+  for (let key of MANAGED_ONLY_KEYS_2) if (doc[key] !== undefined) out[key] = doc[key];
+  for (let [key, value] of Object.entries(doc))
     if (
       ((key.startsWith("disable") && (value === true || value === "disable")) ||
         (key.startsWith("enable") && value === false)) &&
       !HOOK_DISABLE_KEYS.has(key)
     )
-      n[key] = value;
-  if (e.disableAllHooks === true) n.allowManagedHooksOnly = true;
-  if (Array.isArray(e.httpHookAllowedEnvVars) && e.httpHookAllowedEnvVars.length === 0)
-    n.httpHookAllowedEnvVars = [];
-  let s = pickDefinedKeys(e.sandbox?.filesystem, ["denyRead", "denyWrite", "allowManagedReadPathsOnly"]);
-  let a = pickDefinedKeys(e.sandbox?.network, [
+      out[key] = value;
+  if (doc.disableAllHooks === true) out.allowManagedHooksOnly = true;
+  if (Array.isArray(doc.httpHookAllowedEnvVars) && doc.httpHookAllowedEnvVars.length === 0)
+    out.httpHookAllowedEnvVars = [];
+  let fs = pickDefinedKeys(doc.sandbox?.filesystem, ["denyRead", "denyWrite", "allowManagedReadPathsOnly"]);
+  let net = pickDefinedKeys(doc.sandbox?.network, [
     "deniedDomains",
     "strictAllowlist",
     "allowManagedDomainsOnly",
   ]);
-  let c = pickDefinedKeys(e.sandbox?.credentials, ["files", "envVars"]) ?? {};
-  let awsPairs = e.sandbox?.credentials?.awsPairs;
-  let m = isPlainObject_2(awsPairs) && AWS_PAIR_FIELDS.some((w) => w in awsPairs);
-  let flattened = (Array.isArray(awsPairs) ? awsPairs : m ? [awsPairs] : []).flatMap((w) =>
-    isPlainObject_2(w) ? AWS_PAIR_FIELDS.map((L) => w[L]) : [],
+  let creds = pickDefinedKeys(doc.sandbox?.credentials, ["files", "envVars"]) ?? {};
+  let awsPairs = doc.sandbox?.credentials?.awsPairs;
+  let pairObject = isPlainObject_2(awsPairs) && AWS_PAIR_FIELDS.some((field) => field in awsPairs);
+  let flattened = (Array.isArray(awsPairs) ? awsPairs : pairObject ? [awsPairs] : []).flatMap((pair) =>
+    isPlainObject_2(pair) ? AWS_PAIR_FIELDS.map((field) => pair[field]) : [],
   );
-  let y = awsPairs !== undefined && !Array.isArray(awsPairs) && !m;
-  let filtered = credentialRuleExtractSchema.filter((w) => y || flattened.includes(w));
+  let obsoleteShape = awsPairs !== undefined && !Array.isArray(awsPairs) && !pairObject;
+  let filtered = AWS_CREDENTIAL_ENV_NAMES.filter((varName) => obsoleteShape || flattened.includes(varName));
   if (filtered.length > 0)
-    c.awsPairs = filtered.map((accessKeyIdVar, L) => ({
+    creds.awsPairs = filtered.map((accessKeyIdVar, index) => ({
       accessKeyIdVar,
-      secretAccessKeyVar: `${credentialRuleMaskClaimsSchema}${L + 1}_`,
+      secretAccessKeyVar: `${PARENT_PAIR_SUPPRESSOR_SENTINEL}${index + 1}_`,
     }));
-  let sigv4 = e.sandbox?.credentials?.sigv4;
+  let sigv4 = doc.sandbox?.credentials?.sigv4;
   if (sigv4) {
-    let w = {};
-    for (let [key, value] of Object.entries(sigv4)) if (value === "deny") w[key] = "deny";
-    if (Object.keys(w).length > 0) c.sigv4 = w;
+    let kept = {};
+    for (let [key, value] of Object.entries(sigv4)) if (value === "deny") kept[key] = "deny";
+    if (Object.keys(kept).length > 0) creds.sigv4 = kept;
   }
-  let C = Object.keys(c).length > 0;
-  if (s || a || C) {
-    let sandbox = n.sandbox ?? {};
-    n.sandbox = {
+  let hasCredentials = Object.keys(creds).length > 0;
+  if (fs || net || hasCredentials) {
+    let sandbox = out.sandbox ?? {};
+    out.sandbox = {
       ...sandbox,
-      ...(s && {
+      ...(fs && {
         filesystem: {
           ...sandbox.filesystem,
-          ...s,
+          ...fs,
         },
       }),
-      ...(a && {
+      ...(net && {
         network: {
           ...sandbox.network,
-          ...a,
+          ...net,
         },
       }),
-      ...(C && {
+      ...(hasCredentials && {
         credentials: {
           ...sandbox.credentials,
-          ...c,
+          ...creds,
         },
       }),
     };
   }
-  return Object.keys(n).length > 0 ? n : null;
+  return Object.keys(out).length > 0 ? out : null;
 }
 //@ chunk-dcmhvw5a.js:350801-350922 placement
-function pickDefinedKeys(e, n) {
-  if (!e) return;
-  let r = {};
-  for (let s of n) if (e[s] !== undefined) r[s] = e[s];
-  return Object.keys(r).length > 0 ? r : undefined;
+function pickDefinedKeys(doc, keys) {
+  if (!doc) return;
+  let out = {};
+  for (let key of keys) if (doc[key] !== undefined) out[key] = doc[key];
+  return Object.keys(out).length > 0 ? out : undefined;
 }
 //@ chunk-dcmhvw5a.js:350922-351272 placement
 /**
@@ -230,43 +244,43 @@ var caCertEnvVarList = {
 /**
  * 找出值中的换行或不可见字符位置。
  */
-function findUnsafeChar(stderr, { maxLength }) {
-  let r = firstLineBreakIndex(stderr);
-  if (r !== -1)
+function findUnsafeChar(text, { maxLength }) {
+  let index = firstLineBreakIndex(text);
+  if (index !== -1)
     return {
       kind: "line_break",
-      index: dt(stderr, r),
+      index: countCodePointsInString(text, index),
     };
-  for (let j = 0; j < stderr.length; j++) {
-    let code = stderr.charCodeAt(j);
+  for (let j = 0; j < text.length; j++) {
+    let code = text.charCodeAt(j);
     if (code === 0)
       return {
         kind: "nul",
-        index: dt(stderr, j),
+        index: countCodePointsInString(text, j),
       };
     if (code === 32 || code === 9)
       return {
         kind: "whitespace",
-        index: dt(stderr, j),
+        index: countCodePointsInString(text, j),
       };
     if (code < 32 || code === 127)
       return {
         kind: "control_character",
-        index: dt(stderr, j),
+        index: countCodePointsInString(text, j),
         codePoint: code,
       };
     if (code > 126)
       return {
         kind: "non_ascii",
-        index: dt(stderr, j),
-        codePoint: codePointAtOrUnit(stderr, j),
+        index: countCodePointsInString(text, j),
+        codePoint: codePointAtOrUnit(text, j),
       };
   }
-  let s = countUtf16CodePoints(stderr);
-  if (s > maxLength)
+  let length = countUtf16CodePoints(text);
+  if (length > maxLength)
     return {
       kind: "too_long",
-      length: s,
+      length,
       maxLength,
     };
   return null;
@@ -275,29 +289,29 @@ function findUnsafeChar(stderr, { maxLength }) {
 /**
  * 检查值首尾与内部的特殊字符。
  */
-function checkValueChars(e) {
-  let n = 0;
-  let r = e.length;
-  while (n < r && isAsciiWhitespaceCode(e.charCodeAt(n))) n++;
-  while (r > n && isAsciiWhitespaceCode(e.charCodeAt(r - 1))) r--;
-  let s = firstLineBreakIndex(e.slice(n, r));
-  if (s !== -1)
+function checkValueChars(text) {
+  let start = 0;
+  let end = text.length;
+  while (start < end && isAsciiWhitespaceCode(text.charCodeAt(start))) start++;
+  while (end > start && isAsciiWhitespaceCode(text.charCodeAt(end - 1))) end--;
+  let index = firstLineBreakIndex(text.slice(start, end));
+  if (index !== -1)
     return {
       kind: "line_break",
-      index: dt(e, n + s),
+      index: countCodePointsInString(text, start + index),
     };
-  for (let a = n; a < r; a++) {
-    let code = e.charCodeAt(a);
+  for (let index = start; index < end; index++) {
+    let code = text.charCodeAt(index);
     if (code === 0)
       return {
         kind: "nul",
-        index: dt(e, a),
+        index: countCodePointsInString(text, index),
       };
     if (code > 255)
       return {
         kind: "non_ascii",
-        index: dt(e, a),
-        codePoint: codePointAtOrUnit(e, a),
+        index: countCodePointsInString(text, index),
+        codePoint: codePointAtOrUnit(text, index),
       };
   }
   return null;
@@ -306,22 +320,22 @@ function checkValueChars(e) {
 /**
  * 描述值中的问题字符。
  */
-function describeUnsafeValue(e, { length: n, lineCount }) {
-  let s = n === 1 ? "1 character" : `${n} characters`;
-  let a = lineCount > 1 ? `${s} on ${lineCount} lines` : s;
-  switch (e.kind) {
+function describeUnsafeValue(found, { length, lineCount }) {
+  let sizeText = length === 1 ? "1 character" : `${length} characters`;
+  let detail = lineCount > 1 ? `${sizeText} on ${lineCount} lines` : sizeText;
+  switch (found.kind) {
     case "line_break":
-      return `it contains a line break at character ${e.index + 1} (${a})`;
+      return `it contains a line break at character ${found.index + 1} (${detail})`;
     case "nul":
-      return `it contains a NUL byte at character ${e.index + 1} (${a})`;
+      return `it contains a NUL byte at character ${found.index + 1} (${detail})`;
     case "control_character":
-      return `it contains a control character at character ${e.index + 1} (${a})`;
+      return `it contains a control character at character ${found.index + 1} (${detail})`;
     case "whitespace":
-      return `it contains whitespace at character ${e.index + 1} (${a})`;
+      return `it contains whitespace at character ${found.index + 1} (${detail})`;
     case "non_ascii":
-      return `it contains ${describeCodePoint(e.codePoint) ?? "a non-ASCII character"} at character ${e.index + 1} (${a})`;
+      return `it contains ${describeCodePoint(found.codePoint) ?? "a non-ASCII character"} at character ${found.index + 1} (${detail})`;
     case "too_long":
-      return `it is ${e.length} characters long (limit ${e.maxLength})`;
+      return `it is ${found.length} characters long (limit ${found.maxLength})`;
   }
 }
 //@ chunk-dcmhvw5a.js:353285-353871 placement
@@ -360,33 +374,33 @@ function describeCodePoint(codePoint) {
   }
 }
 //@ chunk-dcmhvw5a.js:353871-353944 placement
-function unicodeEscapeLabel(e) {
-  return `U+${e.toString(16).toUpperCase().padStart(4, "0")}`;
+function unicodeEscapeLabel(code) {
+  return `U+${code.toString(16).toUpperCase().padStart(4, "0")}`;
 }
 //@ chunk-dcmhvw5a.js:353944-354047 placement
-function firstLineBreakIndex(e) {
-  let index = e.indexOf(`
+function firstLineBreakIndex(text) {
+  let index = text.indexOf(`
 `);
-  let index_2 = e.indexOf("\r");
+  let index_2 = text.indexOf("\r");
   if (index === -1) return index_2;
   return index_2 === -1 ? index : Math.min(index, index_2);
 }
 //@ chunk-dcmhvw5a.js:354047-354099 placement
-function isAsciiWhitespaceCode(e) {
-  return e === 9 || e === 32 || e === 10 || e === 13;
+function isAsciiWhitespaceCode(code) {
+  return code === 9 || code === 32 || code === 10 || code === 13;
 }
 //@ chunk-dcmhvw5a.js:354099-354157 placement = needsWidthCompensation (1)
-function codePointAtOrUnit(e, n) {
-  return e.codePointAt(n) ?? e.charCodeAt(n);
+function codePointAtOrUnit(text, index) {
+  return text.codePointAt(index) ?? text.charCodeAt(index);
 }
 //@ chunk-dcmhvw5a.js:354313-354350 placement
-function countUtf16CodePoints(e) {
-  return dt(e, e.length);
+function countUtf16CodePoints(text) {
+  return countCodePointsInString(text, text.length);
 }
 export {
+  countUtf16CodePoints,
   findUnsafeChar,
   describeUnsafeValue,
-  countUtf16CodePoints,
   caCertEnvVars,
   caCertEnvVarList,
   CA_CERT_ENV_VARS_2,

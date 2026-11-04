@@ -8,7 +8,7 @@
  * pieces: chunk-e7qhpt47.js (4)
  * attribution: placement 4
  */
-import { init_react_production, P } from "../../vendor/react/cjs/react.production.js";
+import { init_react_production, useEffect } from "../../vendor/react/cjs/react.production.js";
 import { useSelfOpenedDialog } from "../hooks/useSelfOpenedDialog.js";
 import { logEvent } from "../services/analytics/index.js";
 import { lit, fromEnum } from "../services/analytics/safeMetadata.js";
@@ -42,40 +42,40 @@ var _ = 3;
 function DeviceMcpReconsentDialog({ withheld, storageV5, onDone }) {
   let selfOpenedDialog = useSelfOpenedDialog(onDone, {
     selfOpened: true,
-    onCancelled: (i) =>
+    onCancelled: (wasSaving) =>
       logEvent("tengu_device_mcp_reconsent_prompt", {
-        choice: i ? lit("cancelled_saving") : lit("cancelled"),
+        choice: wasSaving ? lit("cancelled_saving") : lit("cancelled"),
       }),
   });
-  useKeybinding("confirm:no", () => u("not_now"), {
+  useKeybinding("confirm:no", () => answerChoice("not_now"), {
     context: "Confirmation",
     isActive: !selfOpenedDialog.decided,
   });
   let keys = Object.keys(withheld);
-  P(() => {
+  useEffect(() => {
     logEvent("tengu_device_mcp_reconsent_prompt_shown", {
       server_count: keys.length,
     });
   }, [keys.length]);
-  function u(i) {
+  function answerChoice(choice) {
     if (!selfOpenedDialog.take()) return;
     logEvent("tengu_device_mcp_reconsent_prompt", {
-      choice: fromEnum(i),
+      choice: fromEnum(choice),
     });
-    if (i === "not_now") {
-      selfOpenedDialog.handBack(i);
+    if (choice === "not_now") {
+      selfOpenedDialog.handBack(choice);
       return;
     }
     let snapshotStore = createSnapshotStore(storageV5);
     readDeviceMcpSnapshot(snapshotStore)
-      .then((deviceMcpSnapshot) =>
-        deviceMcpSnapshot === "unreadable"
+      .then((snapshot) =>
+        snapshot === "unreadable"
           ? undefined
-          : writeDeviceMcpSnapshot(applyConsentChoice(deviceMcpSnapshot, keys, i), snapshotStore),
+          : writeDeviceMcpSnapshot(applyConsentChoice(snapshot, keys, choice), snapshotStore),
       )
       .then(
         () => {
-          if (!selfOpenedDialog.settled()) selfOpenedDialog.handBack(i);
+          if (!selfOpenedDialog.settled()) selfOpenedDialog.handBack(choice);
         },
         (error) => {
           logError(error);
@@ -92,12 +92,12 @@ function DeviceMcpReconsentDialog({ withheld, storageV5, onDone }) {
         })
       : null;
   let sliced = keys.slice(0, MAX_LISTED_RECONSENT_KEYS);
-  let p = keys.length === 1;
+  let isSingleServer = keys.length === 1;
   return jsxProd_default_2(Dialog, {
-    title: p
+    title: isSingleServer
       ? "An MCP server on this machine changed its tools"
       : "MCP servers on this machine changed their tools",
-    onCancel: () => u("not_now"),
+    onCancel: () => answerChoice("not_now"),
     isCancelActive: false,
     inputGuide: selfOpenedDialog.exit.pending
       ? jsxProd_default_2(Text, {
@@ -124,33 +124,33 @@ function DeviceMcpReconsentDialog({ withheld, storageV5, onDone }) {
         children: [
           jsxProd_default_2(Text, {
             children: [
-              p ? "This server has" : "These servers have",
+              isSingleServer ? "This server has" : "These servers have",
               " changed the tools",
               " ",
-              p ? "it lists" : "they list",
+              isSingleServer ? "it lists" : "they list",
               " \u2014 new tools, or new descriptions \u2014 since you approved offering this machine's MCP servers to cloud sessions. ",
-              p ? "It is" : "They are",
+              isSingleServer ? "It is" : "They are",
               " not offered until you say so. Tool descriptions reach the model as text; approve only servers you trust.",
             ],
           }),
           jsxProd_default_2(Box, {
             flexDirection: "column",
             children: [
-              sliced.map((i) =>
+              sliced.map((serverName) =>
                 jsxProd_default_2(
                   Text,
                   {
                     children: [
                       "\xB7 ",
-                      shortServerLabel(i),
+                      shortServerLabel(serverName),
                       " ",
                       jsxProd_default(Text, {
                         dimColor: true,
-                        children: summarizeMcpChanges(withheld[i]),
+                        children: summarizeMcpChanges(withheld[serverName]),
                       }),
                     ],
                   },
-                  i,
+                  serverName,
                 ),
               ),
               keys.length > MAX_LISTED_RECONSENT_KEYS
@@ -174,11 +174,11 @@ function DeviceMcpReconsentDialog({ withheld, storageV5, onDone }) {
       jsxProd_default(ModelSelector, {
         options: [
           {
-            label: p ? "Yes, keep offering this server" : "Yes, keep offering these servers",
+            label: isSingleServer ? "Yes, keep offering this server" : "Yes, keep offering these servers",
             value: "accepted",
           },
           {
-            label: p
+            label: isSingleServer
               ? "No, stop offering this server to cloud sessions"
               : "No, stop offering these servers to cloud sessions",
             value: "declined",
@@ -193,7 +193,7 @@ function DeviceMcpReconsentDialog({ withheld, storageV5, onDone }) {
         disablePrintableKeybindings: true,
         isDisabled: selfOpenedDialog.choicesDisabled,
         refuseInput: selfOpenedDialog.refuseInput,
-        onChange: u,
+        onChange: answerChoice,
       }),
     ],
   });
@@ -202,11 +202,12 @@ function DeviceMcpReconsentDialog({ withheld, storageV5, onDone }) {
 /**
  * 概括新增/变更的设备 MCP 服务器：“(N new, M changed: 名字…)”，超过上限加省略号。
  */
-function summarizeMcpChanges(t) {
-  let m = [];
-  if (t.added.length > 0) m.push(`${t.added.length} new`);
-  if (t.changed.length > 0) m.push(`${t.changed.length} changed`);
-  let joined = [...t.added, ...t.changed].slice(0, _).map(shortServerLabel).join(", ");
-  let o = t.added.length + t.changed.length > _ ? ", \u2026" : "";
-  return `(${m.join(", ")}: ${joined}${o})`;
+function summarizeMcpChanges(changes) {
+  let parts = [];
+  if (changes.added.length > 0) parts.push(`${changes.added.length} new`);
+  if (changes.changed.length > 0) parts.push(`${changes.changed.length} changed`);
+  let joined = [...changes.added, ...changes.changed].slice(0, _).map(shortServerLabel).join(", ");
+  let ellipsis = changes.added.length + changes.changed.length > _ ? ", \u2026" : "";
+  return `(${parts.join(", ")}: ${joined}${ellipsis})`;
 }
+export { DeviceMcpReconsentDialog };

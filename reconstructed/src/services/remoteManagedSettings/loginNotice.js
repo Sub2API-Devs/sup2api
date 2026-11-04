@@ -15,21 +15,21 @@ import { logForDebugging } from "../../utils/debug.js";
 import { errorMessage } from "../../utils/errors.js";
 
 //@ chunk-y5dttnq0.js:368-650 placement
-async function markManagedSettingsNoticeSeen(o, r, storageV5) {
+async function markManagedSettingsNoticeSeen(organizationUuid, surface, storageV5) {
   try {
     await Promise.all([
       saveGlobalConfig(
-        (e) =>
-          e.managedSettingsNoticeSeenOrg === o
-            ? e
+        (config) =>
+          config.managedSettingsNoticeSeenOrg === organizationUuid
+            ? config
             : {
-                ...e,
-                managedSettingsNoticeSeenOrg: o,
+                ...config,
+                managedSettingsNoticeSeenOrg: organizationUuid,
               },
         storageV5,
       ),
       logFeatureOkAsync("remote_managed_settings_login_notice", {
-        surface: fromEnum(r),
+        surface: fromEnum(surface),
       }),
     ]);
   } catch (error) {

@@ -11,7 +11,15 @@
 import { redactSecrets } from "../../services/teamMemorySync/secretScanner.js";
 import { listActiveAgentTaskEntries } from "../../tasks/LocalAgentTask/LocalAgentTask.js";
 import { formatTabStatus, programStatusClearById, PROGRAM_STATUS_CLEAR } from "../../ink/terminal.js";
-import { init_react_production, P, yt, y, Se, R, ce } from "../../../vendor/react/cjs/react.production.js";
+import {
+  init_react_production,
+  useEffect,
+  useSyncExternalStore,
+  useState,
+  useContext,
+  useRef,
+  useCallback,
+} from "../../../vendor/react/cjs/react.production.js";
 import { isBgSession, updateSessionActivity } from "../../utils/concurrentSessions.js";
 import { managedSettingsSecurityDialogDef } from "./StartupNudges.js";
 import { sandboxNetworkAccessDialogDef } from "./SandboxNetworkPrompts.js";
@@ -38,7 +46,7 @@ import { useIsFullscreen } from "../../ink/renderModeContext.js";
 import { isScreenReaderMode } from "../../utils/accessibility/screenReader.js";
 import { isDecstbmRendererEnabled } from "../../ink/nativeCursor.js";
 import { env } from "../../utils/env.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { useStoreSelector } from "../../hooks/useStoreSelector.js";
 import { useVoiceLoginCompleted } from "../../hooks/useVoiceIntegration.js";
 import { useAppState } from "../../state/AppState.js";
@@ -68,6 +76,7 @@ import {
   Fragment,
 } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { AnimatedTerminalTitle } from "../REPL.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-18hwfzwa.js:1429877-1429934 placement
 function completeLabelOrUndefined(description) {
@@ -75,70 +84,76 @@ function completeLabelOrUndefined(description) {
 }
 //@ chunk-18hwfzwa.js:1429934-1430004 placement
 function describePresenceEntries(appState) {
-  return listActiveAgentTaskEntries(appState).map((x) => `${x.id}	${formatTabStatus(x)}`).join(`
+  return listActiveAgentTaskEntries(appState).map((task) => `${task.id}	${formatTabStatus(task)}`).join(`
 `);
 }
 //@ chunk-18hwfzwa.js:1430004-1430132 placement
 /**
  * 每行 “键\t值” 解析为 Map。
  */
-function parseTabSeparatedMap(h) {
-  let x = new Map();
-  for (let line of h.split(`
+function parseTabSeparatedMap(text) {
+  let map = new Map();
+  for (let line of text.split(`
 `)) {
     let index = line.indexOf("\t");
-    if (index > 0) x.set(line.slice(0, index), line.slice(index + 1));
+    if (index > 0) map.set(line.slice(0, index), line.slice(index + 1));
   }
-  return x;
+  return map;
 }
 //@ chunk-18hwfzwa.js:1430132-1430136 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:1430132", () => {
+  init_react_production();
+});
 //@ chunk-18hwfzwa.js:1430136-1430812 placement
 /**
  * 后台会话中把权限、沙箱网络、MCP 输入、托管设置等等待状态发布出去。
  */
 function useBackgroundAskEmitter() {
-  let h = isBgSession();
+  let isBackground = isBgSession();
   let topBlockingDialogKind = selectTopBlockingDialogKind();
-  let D = topBlockingDialogKind === managedSettingsSecurityDialogDef.kind;
+  let isSettingsDialog = topBlockingDialogKind === managedSettingsSecurityDialogDef.kind;
   let sandboxNetworkHost = useSandboxNetworkHost();
-  let ee = topBlockingDialogKind === sandboxNetworkAccessDialogDef.kind;
+  let isSandboxDialog = topBlockingDialogKind === sandboxNetworkAccessDialogDef.kind;
   let topDialogMcpServerName = useTopDialogMcpServerName();
   let previousDialogMcpServerName = usePreviousDialogMcpServerName();
   let peerApprovalAsk = usePeerApprovalAsk();
   let needs =
     topBlockingDialogKind === undefined ? undefined : DIALOG_KIND_META[topBlockingDialogKind]?.needs;
   let topAskOrder = selectTopAskOrder();
-  P(() => {
-    if (!h) return;
+  useEffect(() => {
+    if (!isBackground) return;
     attentionRegistryStore.showAsk(topAskOrder ?? null);
-  }, [h, topAskOrder]);
-  P(() => {
-    if (!h) return;
-    let ze = sandboxNetworkHost ? `allow network: ${sandboxNetworkHost}` : null;
-    attentionRegistryStore.emit(ee ? ze : null, "sandbox");
-    attentionRegistryStore.emit(ee ? null : ze, "sandbox-queued");
-  }, [h, sandboxNetworkHost, ee]);
-  P(() => {
-    if (!h) return;
+  }, [isBackground, topAskOrder]);
+  useEffect(() => {
+    if (!isBackground) return;
+    let sandboxAsk = sandboxNetworkHost ? `allow network: ${sandboxNetworkHost}` : null;
+    attentionRegistryStore.emit(isSandboxDialog ? sandboxAsk : null, "sandbox");
+    attentionRegistryStore.emit(isSandboxDialog ? null : sandboxAsk, "sandbox-queued");
+  }, [isBackground, sandboxNetworkHost, isSandboxDialog]);
+  useEffect(() => {
+    if (!isBackground) return;
     attentionRegistryStore.emit(
       topDialogMcpServerName ? `MCP input: ${topDialogMcpServerName}` : null,
       "elicitation",
     );
-  }, [h, topDialogMcpServerName]);
-  P(() => {
-    if (!h) return;
+  }, [isBackground, topDialogMcpServerName]);
+  useEffect(() => {
+    if (!isBackground) return;
     attentionRegistryStore.emit(
       previousDialogMcpServerName ? `MCP input: ${previousDialogMcpServerName}` : null,
       "elicitation-queued",
     );
-  }, [h, previousDialogMcpServerName]);
-  P(() => {
-    if (!h) return;
-    attentionRegistryStore.emit(D ? "review: managed settings change" : null, "managed-settings");
-  }, [h, D]);
-  P(() => {
-    if (!h) return;
+  }, [isBackground, previousDialogMcpServerName]);
+  useEffect(() => {
+    if (!isBackground) return;
+    attentionRegistryStore.emit(
+      isSettingsDialog ? "review: managed settings change" : null,
+      "managed-settings",
+    );
+  }, [isBackground, isSettingsDialog]);
+  useEffect(() => {
+    if (!isBackground) return;
     attentionRegistryStore.emit(
       peerApprovalAsk !== undefined
         ? {
@@ -148,19 +163,19 @@ function useBackgroundAskEmitter() {
         : (needs ?? null),
       "dialog",
     );
-  }, [h, peerApprovalAsk, needs]);
+  }, [isBackground, peerApprovalAsk, needs]);
 }
 //@ chunk-18hwfzwa.js:1430812-1430889 placement
 function selectTopAskOrder() {
   let dialogStore = useDialogStore();
-  let x = () => topAskOrder(dialogStore.getState());
-  return yt(dialogStore.subscribe, x, x);
+  let read = () => topAskOrder(dialogStore.getState());
+  return useSyncExternalStore(dialogStore.subscribe, read, read);
 }
 //@ chunk-18hwfzwa.js:1430889-1430971 placement
 function selectTopBlockingDialogKind() {
   let dialogStore = useDialogStore();
-  let x = () => topBlockingDialog(dialogStore.getState())?.kind;
-  return yt(dialogStore.subscribe, x, x);
+  let read = () => topBlockingDialog(dialogStore.getState())?.kind;
+  return useSyncExternalStore(dialogStore.subscribe, read, read);
 }
 //@ chunk-18hwfzwa.js:1430971-1431356 placement
 /**
@@ -168,22 +183,22 @@ function selectTopBlockingDialogKind() {
  */
 function usePeerApprovalAsk() {
   let dialogStore = useDialogStore();
-  let x = () => {
-    let D = topBlockingDialog(dialogStore.getState());
-    if (D?.kind !== peerInboundApprovalDialogDef.kind) return;
-    let L = peerInboundApprovalDialogDef.payload().safeParse(D.payload);
-    let fromAddress = L.success ? L.data.fromAddress : undefined;
-    let ke = L.success
-      ? (L.data.claimedName ?? "")
+  let read = () => {
+    let dialog = topBlockingDialog(dialogStore.getState());
+    if (dialog?.kind !== peerInboundApprovalDialogDef.kind) return;
+    let parsed = peerInboundApprovalDialogDef.payload().safeParse(dialog.payload);
+    let fromAddress = parsed.success ? parsed.data.fromAddress : undefined;
+    let name = parsed.success
+      ? (parsed.data.claimedName ?? "")
           .replace(/[^A-Za-z0-9 ._-]/g, " ")
           .replace(/ {2,}/g, " ")
           .trim()
       : "";
     return truncateAttentionText(
-      `approve message from ${fromAddress ?? "another session"}${ke ? ` (claims name: ${ke})` : ""}`,
+      `approve message from ${fromAddress ?? "another session"}${name ? ` (claims name: ${name})` : ""}`,
     );
   };
-  return yt(dialogStore.subscribe, x, x);
+  return useSyncExternalStore(dialogStore.subscribe, read, read);
 }
 //@ chunk-18hwfzwa.js:1431356-1431580 placement
 /**
@@ -191,50 +206,55 @@ function usePeerApprovalAsk() {
  */
 function useSandboxNetworkHost() {
   let dialogStore = useDialogStore();
-  let x = () => {
+  let read = () => {
     let last = dialogStore
       .getState()
-      .open.findLast((ee) => !ee.userInvoked && ee.kind === sandboxNetworkAccessDialogDef.kind);
+      .open.findLast((dialog) => !dialog.userInvoked && dialog.kind === sandboxNetworkAccessDialogDef.kind);
     if (!last) return;
-    let L = sandboxNetworkAccessDialogDef.payload().safeParse(last.payload);
-    return L.success ? L.data.host : undefined;
+    let parsed = sandboxNetworkAccessDialogDef.payload().safeParse(last.payload);
+    return parsed.success ? parsed.data.host : undefined;
   };
-  return yt(dialogStore.subscribe, x, x);
+  return useSyncExternalStore(dialogStore.subscribe, read, read);
 }
 //@ chunk-18hwfzwa.js:1431580-1431813 placement = isToolFromMcpServer (0.657)
 /**
  * getDialogMcpServerName：从对话框栈条目 payload 取服务器名。
  */
-function getDialogMcpServerName(h) {
-  if (h?.kind === MCP_ELICITATION_DIALOG.kind) {
-    let x = MCP_ELICITATION_DIALOG.payload().safeParse(h.payload);
-    return x.success ? x.data.serverName : undefined;
+function getDialogMcpServerName(dialog) {
+  if (dialog?.kind === MCP_ELICITATION_DIALOG.kind) {
+    let parsed = MCP_ELICITATION_DIALOG.payload().safeParse(dialog.payload);
+    return parsed.success ? parsed.data.serverName : undefined;
   }
-  if (h?.kind === MCP_ELICITATION_WAITING_DIALOG.kind) {
-    let x = MCP_ELICITATION_WAITING_DIALOG.payload().safeParse(h.payload);
-    return x.success ? x.data.serverName : undefined;
+  if (dialog?.kind === MCP_ELICITATION_WAITING_DIALOG.kind) {
+    let parsed = MCP_ELICITATION_WAITING_DIALOG.payload().safeParse(dialog.payload);
+    return parsed.success ? parsed.data.serverName : undefined;
   }
   return;
 }
 //@ chunk-18hwfzwa.js:1431813-1431893 placement
 function useTopDialogMcpServerName() {
   let dialogStore = useDialogStore();
-  let x = () => getDialogMcpServerName(topAutoDialog(dialogStore.getState()));
-  return yt(dialogStore.subscribe, x, x);
+  let read = () => getDialogMcpServerName(topAutoDialog(dialogStore.getState()));
+  return useSyncExternalStore(dialogStore.subscribe, read, read);
 }
 //@ chunk-18hwfzwa.js:1431893-1432047 placement
 function usePreviousDialogMcpServerName() {
   let dialogStore = useDialogStore();
-  let x = () => {
+  let read = () => {
     let state = dialogStore.getState();
-    let L = topAutoDialog(state);
-    let last = state.open.findLast((ke) => ke !== L && ke.kind === MCP_ELICITATION_DIALOG.kind);
-    return getDialogMcpServerName(last);
+    let top = topAutoDialog(state);
+    let dialog = state.open.findLast(
+      (dialog) => dialog !== top && dialog.kind === MCP_ELICITATION_DIALOG.kind,
+    );
+    return getDialogMcpServerName(dialog);
   };
-  return yt(dialogStore.subscribe, x, x);
+  return useSyncExternalStore(dialogStore.subscribe, read, read);
 }
 //@ chunk-18hwfzwa.js:1432047-1432051 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:1432047", () => {
+  init_react_production();
+});
 //@ chunk-18hwfzwa.js:1432051-1432062 placement
 var LOCAL_TERM_NAME = "";
 //@ chunk-18hwfzwa.js:1432062-1432170 placement
@@ -242,74 +262,77 @@ var LOCAL_TERM_NAME = "";
  * 终端是否支持程序状态（异步结果）。
  */
 function useProgramStatusSupport() {
-  let [h, x] = y(() => getTerminalCapabilities().now("programStatus"));
-  P(() => getTerminalCapabilities().onSettle("programStatus", x), []);
-  return h;
+  let [supported, setSupported] = useState(() => getTerminalCapabilities().now("programStatus"));
+  useEffect(() => getTerminalCapabilities().onSettle("programStatus", setSupported), []);
+  return supported;
 }
 //@ chunk-18hwfzwa.js:1432170-1432692 placement
 /**
  * 把会话状态写入终端程序状态序列（只写变化的项，卸载时清除）。
  */
-function useTerminalProgramStatus(h, x, D) {
-  let L = Se(TerminalWriteContext);
+function useTerminalProgramStatus(status, blockedOn, queued) {
+  let write = useContext(TerminalWriteContext);
   let programStatusSupport = useProgramStatusSupport();
-  let ke = R(new Map());
-  let Re = R(false);
-  let Be = R(D);
-  let He = formatTabStatus(h);
-  P(() => {
-    if (L && programStatusSupport && !isTerminalShutdown()) {
-      if (Be.current !== D) {
-        Be.current = D;
-        ke.current.clear();
+  let timers = useRef(new Map());
+  let cleared = useRef(false);
+  let queuedRef = useRef(queued);
+  let label = formatTabStatus(status);
+  useEffect(() => {
+    if (write && programStatusSupport && !isTerminalShutdown()) {
+      if (queuedRef.current !== queued) {
+        queuedRef.current = queued;
+        timers.current.clear();
       }
-      let We = new Map([[LOCAL_TERM_NAME, He], ...parseTabSeparatedMap(x)]);
-      let ze = "";
-      for (let [Xe, rt] of We)
-        if (ke.current.get(Xe) !== rt) {
-          ke.current.set(Xe, rt);
-          ze += rt;
+      let statusByTab = new Map([[LOCAL_TERM_NAME, label], ...parseTabSeparatedMap(blockedOn)]);
+      let output = "";
+      for (let [tabName, statusText] of statusByTab)
+        if (timers.current.get(tabName) !== statusText) {
+          timers.current.set(tabName, statusText);
+          output += statusText;
         }
-      for (let key of ke.current.keys())
-        if (!We.has(key)) {
-          ke.current.delete(key);
-          ze += programStatusClearById(key);
+      for (let key of timers.current.keys())
+        if (!statusByTab.has(key)) {
+          timers.current.delete(key);
+          output += programStatusClearById(key);
         }
-      if (ze === "") return;
-      if (!Re.current) {
-        Re.current = true;
+      if (output === "") return;
+      if (!cleared.current) {
+        cleared.current = true;
         logFeatureOk("terminal_program_status");
       }
-      L(ze);
+      write(output);
     }
-  }, [He, x, programStatusSupport, L, D]);
-  P(
+  }, [label, blockedOn, programStatusSupport, write, queued]);
+  useEffect(
     () => () => {
-      if (ke.current.size > 0 && L) {
-        ke.current.clear();
-        L(PROGRAM_STATUS_CLEAR);
+      if (timers.current.size > 0 && write) {
+        timers.current.clear();
+        write(PROGRAM_STATUS_CLEAR);
       }
     },
-    [L],
+    [write],
   );
 }
 //@ chunk-18hwfzwa.js:1432692-1432696 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:1432692", () => {
+  init_react_production();
+});
 //@ chunk-18hwfzwa.js:1432696-1432938 placement
 /**
  * 回合开始/结束时写 OSC 133 语义提示标记。
  */
 function useSemanticPromptMarks() {
-  let h = Se(TerminalWriteContext);
-  let x = usesProgramStatus();
-  let markTurnStart = ce(() => {
-    if (!x || !h) return;
-    h(osc(OSC.SEMANTIC_PROMPT, "A", "redraw=0"));
-  }, [x, h]);
-  let markTurnDone = ce(() => {
-    if (!x || !h) return;
-    h(osc(OSC.SEMANTIC_PROMPT, "C") + osc(OSC.SEMANTIC_PROMPT, "D"));
-  }, [x, h]);
+  let write = useContext(TerminalWriteContext);
+  let usesMarks = usesProgramStatus();
+  let markTurnStart = useCallback(() => {
+    if (!usesMarks || !write) return;
+    write(osc(OSC.SEMANTIC_PROMPT, "A", "redraw=0"));
+  }, [usesMarks, write]);
+  let markTurnDone = useCallback(() => {
+    if (!usesMarks || !write) return;
+    write(osc(OSC.SEMANTIC_PROMPT, "C") + osc(OSC.SEMANTIC_PROMPT, "D"));
+  }, [usesMarks, write]);
   return {
     markTurnStart,
     markTurnDone,
@@ -320,10 +343,10 @@ function useSemanticPromptMarks() {
  * 屏幕阅读器/全屏/WezTerm 下是否启用程序状态（会话在线状态行）。
  */
 function usesProgramStatus() {
-  let h = Se(TerminalWriteContext);
+  let write = useContext(TerminalWriteContext);
   let isFullscreen = useIsFullscreen();
   return (
-    h !== null &&
+    write !== null &&
     isScreenReaderMode() &&
     !isFullscreen &&
     !isDecstbmRendererEnabled() &&
@@ -331,42 +354,42 @@ function usesProgramStatus() {
   );
 }
 //@ chunk-18hwfzwa.js:1433029-1433068 placement
-function selectLastTurnEnd(po) {
-  return po.lastTurnEnd;
+function selectLastTurnEnd(state) {
+  return state.lastTurnEnd;
 }
 //@ chunk-18hwfzwa.js:1433068-1433107 placement
-function selectTaskSummary(ao) {
-  return ao.taskSummary;
+function selectTaskSummary(state) {
+  return state.taskSummary;
 }
 //@ chunk-18hwfzwa.js:1433107-1433165 placement
-function selectTurnStatusDetail(co) {
-  return co.postTurnSummary?.status_detail;
+function selectTurnStatusDetail(state) {
+  return state.postTurnSummary?.status_detail;
 }
 //@ chunk-18hwfzwa.js:1433165-1433198 placement
-function selectTasks4(bo) {
-  return bo.tasks;
+function selectTasks4(state) {
+  return state.tasks;
 }
 //@ chunk-18hwfzwa.js:1433198-1433237 placement
-function selectPromptMarks(Ao) {
-  return Ao.promptMarks;
+function selectPromptMarks(state) {
+  return state.promptMarks;
 }
 //@ chunk-18hwfzwa.js:1433237-1433278 placement
 function currentSpinnerText() {
   return attentionRegistryStore.current()?.text;
 }
 //@ chunk-18hwfzwa.js:1433278-1433333 placement
-function selectSandboxRequestHost(ze) {
-  return ze.pendingSandboxRequest?.host;
+function selectSandboxRequestHost(state) {
+  return state.pendingSandboxRequest?.host;
 }
 //@ chunk-18hwfzwa.js:1433333-1433485 placement
 /**
  * 待审批 worker 请求的提示文本。
  */
-function workerRequestText(Xe) {
-  return Xe.pendingWorkerRequest === null
+function workerRequestText(state) {
+  return state.pendingWorkerRequest === null
     ? undefined
     : truncateAttentionText(
-        `approve ${Xe.pendingWorkerRequest.toolName}: ${Xe.pendingWorkerRequest.description}`,
+        `approve ${state.pendingWorkerRequest.toolName}: ${state.pendingWorkerRequest.description}`,
       );
 }
 //@ chunk-18hwfzwa.js:1433485-1434137 placement
@@ -374,42 +397,42 @@ function workerRequestText(Xe) {
  * 汇总回合、等待、任务等状态并写入终端程序状态。
  */
 function SessionPresenceReporter(props) {
-  let $ = w(5);
+  let $ = useMemoCache(5);
   let { turn, status, blockedOn, queued } = props;
   let storeSelector = useStoreSelector(turn, selectLastTurnEnd);
   let voiceLoginCompleted = useVoiceLoginCompleted();
-  let He;
+  let args;
   if ($[0] !== storeSelector || $[1] !== voiceLoginCompleted) {
-    He = {
+    args = {
       end: storeSelector,
       logins: voiceLoginCompleted,
     };
     $[0] = storeSelector;
     $[1] = voiceLoginCompleted;
-    $[2] = He;
-  } else He = $[2];
-  let [We, ze] = y(He);
-  if (We.end !== storeSelector)
-    ze({
+    $[2] = args;
+  } else args = $[2];
+  let [argsState, setArgs] = useState(args);
+  if (argsState.end !== storeSelector)
+    setArgs({
       end: storeSelector,
       logins: voiceLoginCompleted,
     });
-  let signedInSince = We.end === storeSelector && We.logins !== voiceLoginCompleted;
+  let signedInSince = argsState.end === storeSelector && argsState.logins !== voiceLoginCompleted;
   let appState = useAppState(selectTaskSummary);
-  let [kt, At] = y(appState);
-  if (status === "waiting" && kt !== appState) At(appState);
-  let workingDetail = appState !== kt ? appState?.text : undefined;
+  let [entries, setEntries] = useState(appState);
+  if (status === "waiting" && entries !== appState) setEntries(appState);
+  let workingDetail = appState !== entries ? appState?.text : undefined;
   let doneDetail = useAppState(selectTurnStatusDetail);
   let appState_2 = useAppState(selectTasks4);
-  let Dt;
+  let described;
   if ($[3] !== appState_2) {
-    Dt = describePresenceEntries(appState_2);
+    described = describePresenceEntries(appState_2);
     $[3] = appState_2;
-    $[4] = Dt;
-  } else Dt = $[4];
-  let Lt = Dt;
+    $[4] = described;
+  } else described = $[4];
+  let entryList = described;
   let storeSelector_2 = useStoreSelector(turn, selectPromptMarks);
-  let Xt = usesProgramStatus() ? storeSelector_2 : 0;
+  let tickInterval = usesProgramStatus() ? storeSelector_2 : 0;
   let progress = completedPercent(useTaskListSnapshot());
   let blockedText = useBlockedText(blockedOn);
   useTerminalProgramStatus(
@@ -424,8 +447,8 @@ function SessionPresenceReporter(props) {
       doneDetail,
       progress,
     }),
-    Lt,
-    Xt,
+    entryList,
+    tickInterval,
   );
   return null;
 }
@@ -434,8 +457,8 @@ function SessionPresenceReporter(props) {
  * 按阻塞原因生成提示文本。
  */
 function useBlockedText(blockedOn) {
-  let x = currentSpinnerText;
-  let D = yt(attentionRegistryStore.subscribe, x, x);
+  let read = currentSpinnerText;
+  let currentText = useSyncExternalStore(attentionRegistryStore.subscribe, read, read);
   let sandboxNetworkHost = useSandboxNetworkHost();
   let topDialogMcpServerName = useTopDialogMcpServerName();
   let previousDialogMcpServerName = usePreviousDialogMcpServerName();
@@ -444,15 +467,15 @@ function useBlockedText(blockedOn) {
   switch (blockedOn) {
     case "permission prompt":
     case "goal proposal": {
-      return D;
+      return currentText;
     }
     case "input needed": {
-      let He = previousDialogMcpServerName ?? topDialogMcpServerName;
-      return He === undefined ? D : `MCP input: ${He}`;
+      let serverName = previousDialogMcpServerName ?? topDialogMcpServerName;
+      return serverName === undefined ? currentText : `MCP input: ${serverName}`;
     }
     case "sandbox request": {
-      let We = sandboxNetworkHost ?? appState;
-      return We === undefined ? undefined : `allow network: ${We}`;
+      let host = sandboxNetworkHost ?? appState;
+      return host === undefined ? undefined : `allow network: ${host}`;
     }
     case "worker request": {
       return appState_2;
@@ -468,51 +491,51 @@ function hasPendingWorkerRequest(state) {
   return state.pendingWorkerRequest !== null;
 }
 //@ chunk-18hwfzwa.js:1434579-1434635 placement
-function hasPendingSandboxRequest(Qn) {
-  return Qn.pendingSandboxRequest !== null;
+function hasPendingSandboxRequest(state) {
+  return state.pendingSandboxRequest !== null;
 }
 //@ chunk-18hwfzwa.js:1434635-1434693 placement
-function selectTurnStatusDetailB(ur) {
-  return ur.postTurnSummary?.status_detail;
+function selectTurnStatusDetailB(state) {
+  return state.postTurnSummary?.status_detail;
 }
 //@ chunk-18hwfzwa.js:1434693-1434730 placement
-function selectIsLoading4(Ir) {
-  return Ir.isLoading;
+function selectIsLoading4(state) {
+  return state.isLoading;
 }
 //@ chunk-18hwfzwa.js:1434730-1434771 placement
-function selectIsQueryActive(Pr) {
-  return Pr.isQueryActive;
+function selectIsQueryActive(state) {
+  return state.isQueryActive;
 }
 //@ chunk-18hwfzwa.js:1434771-1434807 placement
-function selectDisabled(ts) {
-  return ts.disabled;
+function selectDisabled(state) {
+  return state.disabled;
 }
 //@ chunk-18hwfzwa.js:1434807-1434844 placement
-function selectHasActiveAgentTasks(Gn) {
-  return hasActiveAgentTasks(Gn.tasks);
+function selectHasActiveAgentTasks(state) {
+  return hasActiveAgentTasks(state.tasks);
 }
 //@ chunk-18hwfzwa.js:1434844-1434882 placement
-function selectHasRunningShellTasks(Ur) {
-  return hasRunningShellTasks(Ur.tasks);
+function selectHasRunningShellTasks(state) {
+  return hasRunningShellTasks(state.tasks);
 }
 //@ chunk-18hwfzwa.js:1434882-1434910 placement
 function readTerminalSize() {
   return releaseSleepPreventer();
 }
 //@ chunk-18hwfzwa.js:1434910-1434994 placement
-function isAutoreactCommandDialog(Zr) {
+function isAutoreactCommandDialog(dialog) {
   return (
-    Zr.kind === LOCAL_JSX_DIALOG.kind &&
-    RATE_LIMIT_OPTIONS_COMMANDS.has(parseLocalJsxDialogPayload(Zr.payload)?.commandName ?? "")
+    dialog.kind === LOCAL_JSX_DIALOG.kind &&
+    RATE_LIMIT_OPTIONS_COMMANDS.has(parseLocalJsxDialogPayload(dialog.payload)?.commandName ?? "")
   );
 }
 //@ chunk-18hwfzwa.js:1434994-1435051 placement
-function hasBlockingDialogOrCommand(wr) {
-  return topAutoDialog(wr) !== null || wr.open.some(isAutoreactCommandDialog);
+function hasBlockingDialogOrCommand(state) {
+  return topAutoDialog(state) !== null || state.open.some(isAutoreactCommandDialog);
 }
 //@ chunk-18hwfzwa.js:1435051-1435146 placement
-function logPresenceWriteFailure(zr) {
-  logForDebugging(`session presence: PID-file status write failed: ${errorMessage(zr)}`, {
+function logPresenceWriteFailure(error) {
+  logForDebugging(`session presence: PID-file status write failed: ${errorMessage(error)}`, {
     level: "error",
   });
 }
@@ -521,7 +544,7 @@ function logPresenceWriteFailure(zr) {
  * useSessionPresence：会话在线状态（同伴、远程客户端）hook。
  */
 function useSessionPresence(props) {
-  let $ = w(58);
+  let $ = useMemoCache(58);
   let { turn, guard, titles, transcript, isSessionWorking } = props;
   let session = useSession();
   let { storageV5 } = useTheme_2();
@@ -534,29 +557,29 @@ function useSessionPresence(props) {
   let storeSelector_2 = useStoreSelector(titles, selectDisabled);
   let isShowingLocalJSXCommand = useDialogOfKind(LOCAL_JSX_DIALOG.kind);
   let appState = useAppState(selectHasActiveAgentTasks);
-  let Dt;
+  let isBlockingDialog;
   if ($[0] !== appState || $[1] !== storeSelector) {
-    Dt = (Lt) => isDialogKindBlocking(Lt, storeSelector || appState);
+    isBlockingDialog = (kind) => isDialogKindBlocking(kind, storeSelector || appState);
     $[0] = appState;
     $[1] = storeSelector;
-    $[2] = Dt;
-  } else Dt = $[2];
-  let topDialogWaitingFor = useDialogSelector(Dt);
-  let Xt;
-  let io;
+    $[2] = isBlockingDialog;
+  } else isBlockingDialog = $[2];
+  let topDialogWaitingFor = useDialogSelector(isBlockingDialog);
+  let getIsRunning;
+  let subscribeGuard;
   if ($[3] !== guard.isRunning) {
-    Xt = () => guard.isRunning;
-    io = () => guard.isRunning;
+    getIsRunning = () => guard.isRunning;
+    subscribeGuard = () => guard.isRunning;
     $[3] = guard.isRunning;
-    $[4] = Xt;
-    $[5] = io;
+    $[4] = getIsRunning;
+    $[5] = subscribeGuard;
   } else {
-    Xt = $[4];
-    io = $[5];
+    getIsRunning = $[4];
+    subscribeGuard = $[5];
   }
-  let isResponseStreaming = yt(guard.subscribe, Xt, io);
+  let isResponseStreaming = useSyncExternalStore(guard.subscribe, getIsRunning, subscribeGuard);
   const queuedElicitation = previousDialogMcpServerName !== undefined;
-  let ao;
+  let presence;
   if (
     $[6] !== appState ||
     $[7] !== isShowingLocalJSXCommand ||
@@ -568,7 +591,7 @@ function useSessionPresence(props) {
     $[13] !== queuedElicitation ||
     $[14] !== topDialogWaitingFor
   ) {
-    ao = computeSessionPresence({
+    presence = computeSessionPresence({
       topDialogWaitingFor,
       queuedElicitation,
       pendingWorkerRequest,
@@ -588,164 +611,164 @@ function useSessionPresence(props) {
     $[12] = pendingWorkerRequest;
     $[13] = queuedElicitation;
     $[14] = topDialogWaitingFor;
-    $[15] = ao;
-  } else ao = $[15];
-  let { status, waitingFor, working } = ao;
-  let Bo;
-  let Ro;
+    $[15] = presence;
+  } else presence = $[15];
+  let { status, waitingFor, working } = presence;
+  let workingEffect;
+  let workingDeps;
   if ($[16] !== session || $[17] !== working) {
-    Bo = () => {
+    workingEffect = () => {
       setWorking(session, working);
     };
-    Ro = [session, working];
+    workingDeps = [session, working];
     $[16] = session;
     $[17] = working;
-    $[18] = Bo;
-    $[19] = Ro;
+    $[18] = workingEffect;
+    $[19] = workingDeps;
   } else {
-    Bo = $[18];
-    Ro = $[19];
+    workingEffect = $[18];
+    workingDeps = $[19];
   }
-  P(Bo, Ro);
-  let Ho;
-  let Io;
+  useEffect(workingEffect, workingDeps);
+  let clearWorking;
+  let clearWorkingDeps;
   if ($[20] !== session) {
-    Ho = () => () => setWorking(session, false);
-    Io = [session];
+    clearWorking = () => () => setWorking(session, false);
+    clearWorkingDeps = [session];
     $[20] = session;
-    $[21] = Ho;
-    $[22] = Io;
+    $[21] = clearWorking;
+    $[22] = clearWorkingDeps;
   } else {
-    Ho = $[21];
-    Io = $[22];
+    clearWorking = $[21];
+    clearWorkingDeps = $[22];
   }
-  P(Ho, Io);
-  let Wo;
-  let mn;
+  useEffect(clearWorking, clearWorkingDeps);
+  let waitingEffect;
+  let waitingDeps;
   if ($[23] !== session || $[24] !== waitingFor) {
-    Wo = () => {
+    waitingEffect = () => {
       setWaitingFor(session, waitingFor);
     };
-    mn = [session, waitingFor];
+    waitingDeps = [session, waitingFor];
     $[23] = session;
     $[24] = waitingFor;
-    $[25] = Wo;
-    $[26] = mn;
+    $[25] = waitingEffect;
+    $[26] = waitingDeps;
   } else {
-    Wo = $[25];
-    mn = $[26];
+    waitingEffect = $[25];
+    waitingDeps = $[26];
   }
-  P(Wo, mn);
-  let Cn;
-  let No;
+  useEffect(waitingEffect, waitingDeps);
+  let clearWaiting;
+  let clearWaitingDeps;
   if ($[27] !== session) {
-    Cn = () => () => setWaitingFor(session, undefined);
-    No = [session];
+    clearWaiting = () => () => setWaitingFor(session, undefined);
+    clearWaitingDeps = [session];
     $[27] = session;
-    $[28] = Cn;
-    $[29] = No;
+    $[28] = clearWaiting;
+    $[29] = clearWaitingDeps;
   } else {
-    Cn = $[28];
-    No = $[29];
+    clearWaiting = $[28];
+    clearWaitingDeps = $[29];
   }
-  P(Cn, No);
+  useEffect(clearWaiting, clearWaitingDeps);
   let appState_2 = useAppState(selectHasRunningShellTasks);
-  let Yo = status === "idle" && appState_2 ? "shell" : status;
-  let kn;
-  let Fn;
+  let reportedStatus = status === "idle" && appState_2 ? "shell" : status;
+  let sleepEffect;
+  let sleepDeps;
   if ($[30] !== status) {
-    kn = () => {
+    sleepEffect = () => {
       if (status === "busy") {
         acquireSleepPreventer();
         return readTerminalSize;
       }
     };
-    Fn = [status];
+    sleepDeps = [status];
     $[30] = status;
-    $[31] = kn;
-    $[32] = Fn;
+    $[31] = sleepEffect;
+    $[32] = sleepDeps;
   } else {
-    kn = $[31];
-    Fn = $[32];
+    sleepEffect = $[31];
+    sleepDeps = $[32];
   }
-  P(kn, Fn);
-  let bn;
+  useEffect(sleepEffect, sleepDeps);
+  let permissionContext;
   if ($[33] === MEMO_CACHE_SENTINEL) {
-    bn = currentToolPermissionContext();
-    $[33] = bn;
-  } else bn = $[33];
-  let Go = bn;
+    permissionContext = currentToolPermissionContext();
+    $[33] = permissionContext;
+  } else permissionContext = $[33];
+  let permissionContext_2 = permissionContext;
   let dialogSelector = useDialogSelector(hasBlockingDialogOrCommand);
   let commandQueueOrDefault = useCommandQueueOrDefault();
-  let Xo;
+  let hasQueued;
   if ($[34] !== commandQueueOrDefault) {
-    Xo = () => commandQueueOrDefault.getMainThreadQueueLength() > 0;
+    hasQueued = () => commandQueueOrDefault.getMainThreadQueueLength() > 0;
     $[34] = commandQueueOrDefault;
-    $[35] = Xo;
-  } else Xo = $[35];
-  let Sn = yt(commandQueueOrDefault.subscribe, Xo);
-  let $n = waitingFor === "dialog open" && !dialogSelector && !Sn;
-  let on = Go && $n;
-  let _o;
-  if ($[36] !== Yo || $[37] !== storageV5 || $[38] !== waitingFor) {
-    _o = () => {
+    $[35] = hasQueued;
+  } else hasQueued = $[35];
+  let hasQueuedCommands = useSyncExternalStore(commandQueueOrDefault.subscribe, hasQueued);
+  let staleDialogWait = waitingFor === "dialog open" && !dialogSelector && !hasQueuedCommands;
+  let reportIdle = permissionContext_2 && staleDialogWait;
+  let presenceWriteEffect;
+  if ($[36] !== reportedStatus || $[37] !== storageV5 || $[38] !== waitingFor) {
+    presenceWriteEffect = () => {
       updateSessionActivity(
         {
-          status: Yo,
+          status: reportedStatus,
           waitingFor,
           ...{},
         },
         storageV5,
       ).catch(logPresenceWriteFailure);
     };
-    $[36] = Yo;
+    $[36] = reportedStatus;
     $[37] = storageV5;
     $[38] = waitingFor;
-    $[39] = _o;
-  } else _o = $[39];
-  let cn;
-  if ($[40] !== Yo || $[41] !== storageV5 || $[42] !== waitingFor || $[43] !== on) {
-    cn = [Yo, waitingFor, on, storageV5];
-    $[40] = Yo;
+    $[39] = presenceWriteEffect;
+  } else presenceWriteEffect = $[39];
+  let presenceWriteDeps;
+  if ($[40] !== reportedStatus || $[41] !== storageV5 || $[42] !== waitingFor || $[43] !== reportIdle) {
+    presenceWriteDeps = [reportedStatus, waitingFor, reportIdle, storageV5];
+    $[40] = reportedStatus;
     $[41] = storageV5;
     $[42] = waitingFor;
-    $[43] = on;
-    $[44] = cn;
-  } else cn = $[44];
-  P(_o, cn);
-  usePeerIdleNotices(transcript, Yo, isSessionWorking);
-  let Dn;
+    $[43] = reportIdle;
+    $[44] = presenceWriteDeps;
+  } else presenceWriteDeps = $[44];
+  useEffect(presenceWriteEffect, presenceWriteDeps);
+  usePeerIdleNotices(transcript, reportedStatus, isSessionWorking);
+  let showTabStatus;
   if ($[45] === MEMO_CACHE_SENTINEL) {
     let featureValue_CACHED_MAY_BE_STALE = getFeatureValue_CACHED_MAY_BE_STALE(
       "tengu_terminal_sidebar",
       false,
     );
-    Dn = featureValue_CACHED_MAY_BE_STALE && (getGlobalConfig().showStatusInTerminalTab ?? false);
-    $[45] = Dn;
-  } else Dn = $[45];
-  let mr = Dn;
-  useTabStatus(storeSelector_2 || !mr ? null : status, idleText);
+    showTabStatus = featureValue_CACHED_MAY_BE_STALE && (getGlobalConfig().showStatusInTerminalTab ?? false);
+    $[45] = showTabStatus;
+  } else showTabStatus = $[45];
+  let showTabStatus_2 = showTabStatus;
+  useTabStatus(storeSelector_2 || !showTabStatus_2 ? null : status, idleText);
   let programStatusSupport = useProgramStatusSupport();
-  const blockedOn = $n ? undefined : waitingFor;
-  let Fr;
-  if ($[46] !== Sn || $[47] !== status || $[48] !== blockedOn || $[49] !== turn) {
-    Fr = jsxProd_default(SessionPresenceReporter, {
+  const blockedOn = staleDialogWait ? undefined : waitingFor;
+  let presenceReporter;
+  if ($[46] !== hasQueuedCommands || $[47] !== status || $[48] !== blockedOn || $[49] !== turn) {
+    presenceReporter = jsxProd_default(SessionPresenceReporter, {
       turn,
       status,
       blockedOn,
-      queued: Sn,
+      queued: hasQueuedCommands,
     });
-    $[46] = Sn;
+    $[46] = hasQueuedCommands;
     $[47] = status;
     $[48] = blockedOn;
     $[49] = turn;
-    $[50] = Fr;
-  } else Fr = $[50];
+    $[50] = presenceReporter;
+  } else presenceReporter = $[50];
   const isAnimating = status === "busy";
-  const noPrefix = mr || programStatusSupport;
-  let dr;
+  const noPrefix = showTabStatus_2 || programStatusSupport;
+  let animatedTitle;
   if ($[51] !== isAnimating || $[52] !== noPrefix || $[53] !== titles) {
-    dr = jsxProd_default(AnimatedTerminalTitle, {
+    animatedTitle = jsxProd_default(AnimatedTerminalTitle, {
       titles,
       isAnimating,
       noPrefix,
@@ -753,17 +776,17 @@ function useSessionPresence(props) {
     $[51] = isAnimating;
     $[52] = noPrefix;
     $[53] = titles;
-    $[54] = dr;
-  } else dr = $[54];
-  let or;
-  if ($[55] !== Fr || $[56] !== dr) {
-    or = jsxProd_default_2(Fragment, {
-      children: [Fr, dr],
+    $[54] = animatedTitle;
+  } else animatedTitle = $[54];
+  let presenceFragment;
+  if ($[55] !== presenceReporter || $[56] !== animatedTitle) {
+    presenceFragment = jsxProd_default_2(Fragment, {
+      children: [presenceReporter, animatedTitle],
     });
-    $[55] = Fr;
-    $[56] = dr;
-    $[57] = or;
-  } else or = $[57];
-  return or;
+    $[55] = presenceReporter;
+    $[56] = animatedTitle;
+    $[57] = presenceFragment;
+  } else presenceFragment = $[57];
+  return presenceFragment;
 }
 export { useBackgroundAskEmitter, useSemanticPromptMarks, completeLabelOrUndefined, useSessionPresence };

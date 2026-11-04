@@ -9,7 +9,7 @@
  * attribution: fingerprint 4, sole-consumer 6, affinity 1, layout 1, placement 3
  */
 import { basename } from "path";
-import { init_react_production, y, P } from "../../vendor/react/cjs/react.production.js";
+import { init_react_production, useState, useEffect } from "../../vendor/react/cjs/react.production.js";
 import { HostScoped } from "../utils/hostScoped.js";
 import { logFeatureBad, logFeatureSad, logFeatureOk } from "../services/analytics/featureTelemetry.js";
 import { createSignal } from "../utils/signal.js";
@@ -28,7 +28,7 @@ import { getBranch } from "../utils/git.js";
 import { useHost } from "../context/session.js";
 import { useTheme_2 } from "../components/design-system/ThemeProvider.js";
 import { useClock } from "../ink/components/ClockContext.js";
-import { useVoiceStateStore } from "../_unattributed/chunk-yj65zw1g/part-001.js";
+import { useVoiceStateStore } from "../context/voice.js";
 import { useTerminalFocus } from "../ink/hooks/use-terminal-focus.js";
 import {
   connectVoiceStream,
@@ -37,6 +37,110 @@ import {
 } from "../services/voiceStreamSTT.js";
 import { useStoreSelector } from "./useStoreSelector.js";
 
+//@ chunk-0777tkjc.js:1031-2049 fingerprint = LANGUAGE_NAME_TO_CODE (1)
+/**
+ * 语言名（含本地写法）到 STT 语言代码的映射。
+ */
+var LANGUAGE_NAME_TO_CODE = {
+  english: "en",
+  spanish: "es",
+  español: "es",
+  espanol: "es",
+  french: "fr",
+  français: "fr",
+  francais: "fr",
+  japanese: "ja",
+  日本語: "ja",
+  german: "de",
+  deutsch: "de",
+  portuguese: "pt",
+  português: "pt",
+  portugues: "pt",
+  italian: "it",
+  italiano: "it",
+  korean: "ko",
+  한국어: "ko",
+  hindi: "hi",
+  हिन्दी: "hi",
+  हिंदी: "hi",
+  indonesian: "id",
+  "bahasa indonesia": "id",
+  bahasa: "id",
+  russian: "ru",
+  русский: "ru",
+  polish: "pl",
+  polski: "pl",
+  turkish: "tr",
+  türkçe: "tr",
+  turkce: "tr",
+  dutch: "nl",
+  nederlands: "nl",
+  ukrainian: "uk",
+  українська: "uk",
+  greek: "el",
+  ελληνικά: "el",
+  czech: "cs",
+  čeština: "cs",
+  cestina: "cs",
+  danish: "da",
+  dansk: "da",
+  swedish: "sv",
+  svenska: "sv",
+  norwegian: "no",
+  norsk: "no",
+};
+var SUPPORTED_STT_LANGUAGES = new Set([
+  "en",
+  "es",
+  "fr",
+  "ja",
+  "de",
+  "pt",
+  "it",
+  "ko",
+  "hi",
+  "id",
+  "ru",
+  "pl",
+  "tr",
+  "nl",
+  "uk",
+  "el",
+  "cs",
+  "da",
+  "sv",
+  "no",
+]);
+//@ chunk-0777tkjc.js:2049-2285 fingerprint = normalizeLanguageForSTT (1)
+function normalizeLanguageForSTT(language) {
+  if (!language)
+    return {
+      code: "en",
+    };
+  let lower = language.toLowerCase().trim();
+  if (!lower)
+    return {
+      code: "en",
+    };
+  if (SUPPORTED_STT_LANGUAGES.has(lower))
+    return {
+      code: lower,
+    };
+  let fromName = LANGUAGE_NAME_TO_CODE[lower];
+  if (fromName)
+    return {
+      code: fromName,
+    };
+  let base = lower.split("-")[0];
+  if (base && SUPPORTED_STT_LANGUAGES.has(base))
+    return {
+      code: base,
+    };
+  return {
+    code: "en",
+    fellBackFrom: language,
+  };
+}
 //@ chunk-a658aeqp.js:5030-5034 sole-consumer
 init_react_production();
 //@ chunk-a658aeqp.js:5034-5048 sole-consumer
@@ -64,8 +168,8 @@ class VoiceSessionState {
 //@ chunk-a658aeqp.js:5347-5370 sole-consumer
 var voiceServiceSlot = new HostScoped(() => new VoiceSessionState());
 //@ chunk-a658aeqp.js:5370-5450 sole-consumer
-function connectionFailureReason(e) {
-  return `voice_transcription_connection_failed_${e ?? "no_response"}`;
+function connectionFailureReason(code) {
+  return `voice_transcription_connection_failed_${code ?? "no_response"}`;
 }
 //@ chunk-a658aeqp.js:5450-5466 sole-consumer
 var VOICE_FLUSH_MS = 200;
@@ -155,35 +259,38 @@ class useVoice {
   #B = false;
   #H = null;
   #M = [];
-  constructor(e) {
-    this.#y = e.host;
-    this.#m = e.clock;
-    this.#n = e.voiceStore;
-    this.#L = e.loadVoiceModule;
-    this.#w = e.connectVoiceStream;
-    this.#V = e.credentials;
-    this.#O = e.isVoiceStreamAvailable;
-    this.#z = e.probeVoiceConnectivity;
-    this.#I = e.getVoiceKeyterms;
-    this.#h = voiceServiceSlot.of(e.host);
-    this.#t = e.inputs;
+  constructor(options) {
+    this.#y = options.host;
+    this.#m = options.clock;
+    this.#n = options.voiceStore;
+    this.#L = options.loadVoiceModule;
+    this.#w = options.connectVoiceStream;
+    this.#V = options.credentials;
+    this.#O = options.isVoiceStreamAvailable;
+    this.#z = options.probeVoiceConnectivity;
+    this.#I = options.getVoiceKeyterms;
+    this.#h = voiceServiceSlot.of(options.host);
+    this.#t = options.inputs;
   }
-  subscribe = (e) => this.#j.subscribe(e);
+  subscribe = (listener) => this.#j.subscribe(listener);
   getSnapshot = () => this.#P;
-  setInputs = (e) => {
+  setInputs = (inputs) => {
     if (this.#E) return;
-    let i = this.#t;
-    let r = !this.#N;
+    let previousInputs = this.#t;
+    let isFirstSet = !this.#N;
     this.#N = true;
-    this.#t = e;
-    let n = r || i.enabled !== e.enabled;
-    let c = n || i.focusMode !== e.focusMode || i.isFocused !== e.isFocused;
-    if (!r) {
-      if (c) this.#C++;
-      if (n) this.#U();
+    this.#t = inputs;
+    let enabledChanged = isFirstSet || previousInputs.enabled !== inputs.enabled;
+    let focusChanged =
+      enabledChanged ||
+      previousInputs.focusMode !== inputs.focusMode ||
+      previousInputs.isFocused !== inputs.isFocused;
+    if (!isFirstSet) {
+      if (focusChanged) this.#C++;
+      if (enabledChanged) this.#U();
     }
-    if (n) this.#Y();
-    if (c) this.#W();
+    if (enabledChanged) this.#Y();
+    if (focusChanged) this.#W();
   };
   dispose = () => {
     if (this.#E) return;
@@ -191,7 +298,7 @@ class useVoice {
     this.#U();
     this.#E = true;
   };
-  handleKeyEvent = (e = VOICE_SILENCE_MS) => {
+  handleKeyEvent = (autoRepeatMs = VOICE_SILENCE_MS) => {
     let { enabled, focusMode, mode } = this.#t;
     if (this.#E || !enabled || !this.#O()) return;
     if (this.#i) return;
@@ -203,22 +310,22 @@ class useVoice {
       this.#A();
       return;
     }
-    let c = this.#e;
-    if (c === "processing") return;
+    let state = this.#e;
+    if (state === "processing") return;
     if (mode === "tap") {
-      if (c === "idle") {
+      if (state === "idle") {
         logForDebugging("[voice] toggle: starting recording");
         this.#p = true;
         this.#D();
         this.#K();
         this.#q();
-      } else if (c === "recording") {
+      } else if (state === "recording") {
         logForDebugging("[voice] toggle: finishing recording");
         this.#g();
       }
       return;
     }
-    if (c === "idle") {
+    if (state === "idle") {
       logForDebugging("[voice] handleKeyEvent: idle, starting recording session immediately");
       this.#D();
       if (this.#c) this.#c();
@@ -229,8 +336,8 @@ class useVoice {
           this.#b = true;
           this.#x();
         }
-      }, e);
-    } else if (c === "recording") {
+      }, autoRepeatMs);
+    } else if (state === "recording") {
       this.#b = true;
       if (this.#c) {
         this.#c();
@@ -361,19 +468,19 @@ class useVoice {
       return;
     }
     if (isFocused && this.#e === "idle" && !this.#_) {
-      let n = this.#C;
-      let c = () => {
-        if (n !== this.#C || this.#e !== "idle" || this.#_) return;
+      let generation = this.#C;
+      let startIfCurrent = () => {
+        if (generation !== this.#C || this.#e !== "idle" || this.#_) return;
         logForDebugging("[voice] Focus gained, starting recording session");
         this.#i = true;
         this.#D();
         this.#A();
       };
-      if (this.#h.voiceModule) c();
+      if (this.#h.voiceModule) startIfCurrent();
       else
         this.#L().then((voiceModule) => {
           this.#h.voiceModule = voiceModule;
-          c();
+          startIfCurrent();
         });
     } else if (!isFocused) {
       this.#_ = false;
@@ -400,23 +507,23 @@ class useVoice {
     this.#r("processing");
     this.#h.voiceModule?.stopRecording(this.#y);
     let recordingDurationMs = Date.now() - this.#G;
-    let r = this.#k;
+    let hadAudioSignal = this.#k;
     let retried = this.#F;
-    let c = this.#$;
-    let h = this.#B;
-    let T = this.#H;
-    let V = this.#u;
-    let isStale = () => this.#u !== V;
+    let flushedChars = this.#$;
+    let wsConnected = this.#B;
+    let connectFailureCode = this.#H;
+    let attemptGeneration = this.#u;
+    let isStale = () => this.#u !== attemptGeneration;
     logForDebugging("[voice] Recording stopped");
     (this.#s ? this.#s.finalize() : Promise.resolve(undefined))
       .then(async (finalizeSource) => {
         if (isStale()) return;
         if (
           finalizeSource === "no_data_timeout" &&
-          r &&
-          h &&
+          hadAudioSignal &&
+          wsConnected &&
           !focusTriggered &&
-          c === 0 &&
+          flushedChars === 0 &&
           this.#o.trim() === "" &&
           !this.#R &&
           this.#f.length > 0
@@ -461,14 +568,14 @@ class useVoice {
                   let SLICE = 32000;
                   let slice = [];
                   let bytes = 0;
-                  for (let E of replayBuffer) {
-                    if (bytes > 0 && bytes + E.length > SLICE) {
+                  for (let chunk of replayBuffer) {
+                    if (bytes > 0 && bytes + chunk.length > SLICE) {
                       conn.send(Buffer.concat(slice));
                       slice = [];
                       bytes = 0;
                     }
-                    slice.push(E);
-                    bytes += E.length;
+                    slice.push(chunk);
+                    bytes += chunk.length;
                   }
                   if (slice.length) conn.send(Buffer.concat(slice));
                   conn.finalize().then(() => {
@@ -483,8 +590,8 @@ class useVoice {
               },
               this.#V,
             ).then(
-              (o) => {
-                if (!o) resolve();
+              (connection) => {
+                if (!connection) resolve();
               },
               () => resolve(),
             );
@@ -495,12 +602,12 @@ class useVoice {
         let text = this.#o.trim();
         logForDebugging(`[voice] Final transcript assembled (${String(text.length)} chars)`);
         logEvent("tengu_voice_recording_completed", {
-          transcriptChars: text.length + c,
+          transcriptChars: text.length + flushedChars,
           recordingDurationMs,
-          hadAudioSignal: r,
+          hadAudioSignal,
           retried,
           silentDropRetried: this.#R,
-          wsConnected: h,
+          wsConnected,
           focusTriggered,
         });
         if (this.#s) {
@@ -511,17 +618,18 @@ class useVoice {
           logForDebugging(`[voice] Injecting transcript (${String(text.length)} chars)`);
           logFeatureOk("voice_transcription");
           this.#t.onTranscript(text);
-        } else if (c === 0 && recordingDurationMs > 2000) {
+        } else if (flushedChars === 0 && recordingDurationMs > 2000) {
           let { message, errorCode } = describeEmptyTranscription({
-            hadAudioSignal: r,
-            wsConnected: h,
+            hadAudioSignal,
+            wsConnected,
           });
           this.#t.onError(message);
           if (errorCode === "voice_transcription_connection_failed") {
-            if (T) logFeatureBad("voice_transcription", connectionFailureReason(T));
+            if (connectFailureCode)
+              logFeatureBad("voice_transcription", connectionFailureReason(connectFailureCode));
             else
-              this.#z().then((d) => {
-                logFeatureBad("voice_transcription", connectionFailureReason(`probe_${d}`));
+              this.#z().then((probeResult) => {
+                logFeatureBad("voice_transcription", connectionFailureReason(`probe_${probeResult}`));
               });
           } else logFeatureBad("voice_transcription", errorCode);
         }
@@ -549,16 +657,19 @@ class useVoice {
       this.#i = false;
       return;
     }
-    let i = this.#h;
+    let breaker = this.#h;
     let now = Date.now();
-    while (i.recentEarlyFailures.length > 0 && now - i.recentEarlyFailures[0] > VOICE_MAX_RECORDING_MS)
-      i.recentEarlyFailures.shift();
-    if (i.recentEarlyFailures.length < VOICE_MAX_ATTEMPTS) i.breakerTrippedLogged = false;
-    if (i.recentEarlyFailures.length >= VOICE_MAX_ATTEMPTS) {
-      if (!i.breakerTrippedLogged) {
-        i.breakerTrippedLogged = true;
+    while (
+      breaker.recentEarlyFailures.length > 0 &&
+      now - breaker.recentEarlyFailures[0] > VOICE_MAX_RECORDING_MS
+    )
+      breaker.recentEarlyFailures.shift();
+    if (breaker.recentEarlyFailures.length < VOICE_MAX_ATTEMPTS) breaker.breakerTrippedLogged = false;
+    if (breaker.recentEarlyFailures.length >= VOICE_MAX_ATTEMPTS) {
+      if (!breaker.breakerTrippedLogged) {
+        breaker.breakerTrippedLogged = true;
         logForDebugging(
-          `[voice] circuit breaker: ${String(i.recentEarlyFailures.length)} early failures in ${String(VOICE_MAX_RECORDING_MS)}ms \u2014 suppressing new sessions until one succeeds`,
+          `[voice] circuit breaker: ${String(breaker.recentEarlyFailures.length)} early failures in ${String(VOICE_MAX_RECORDING_MS)}ms \u2014 suppressing new sessions until one succeeds`,
           {
             level: "error",
           },
@@ -566,8 +677,8 @@ class useVoice {
         logEvent("tengu_voice_circuit_breaker_tripped", {});
         logFeatureBad("voice_start", "voice_start_breaker_paused");
         this.#t.onError(
-          i.lastExpectedHint
-            ? `${i.lastExpectedHint} Voice input is paused for a moment.`
+          breaker.lastExpectedHint
+            ? `${breaker.lastExpectedHint} Voice input is paused for a moment.`
             : "Voice input is failing repeatedly and has been paused. Check your microphone and try again in a moment.",
         );
       }
@@ -585,14 +696,14 @@ class useVoice {
     this.#$ = 0;
     this.#B = false;
     this.#H = null;
-    let n = ++this.#u;
-    let c = await voiceModule.checkRecordingAvailability(this.#y);
-    if (this.#u !== n) return;
-    if (!c.available) {
-      logForDebugging(`[voice] Recording not available: ${c.reason ?? "unknown"}`);
+    let sessionGeneration = ++this.#u;
+    let availability = await voiceModule.checkRecordingAvailability(this.#y);
+    if (this.#u !== sessionGeneration) return;
+    if (!availability.available) {
+      logForDebugging(`[voice] Recording not available: ${availability.reason ?? "unknown"}`);
       logFeatureBad("voice_start", "voice_start_recording_unavailable");
-      this.#t.onError(c.reason ?? "Audio recording is not available.");
-      i.recordEarlyFailure();
+      this.#t.onError(availability.reason ?? "Audio recording is not available.");
+      breaker.recordEarlyFailure();
       this.#i = false;
       this.#S();
       this.#r("idle");
@@ -609,11 +720,11 @@ class useVoice {
     let audioBuffer = [];
     logForDebugging("[voice] startRecording: buffering audio while WebSocket connects");
     this.#M = [];
-    let T = false;
-    let V = await voiceModule.startRecording(
+    let sawAudio = false;
+    let startResult = await voiceModule.startRecording(
       this.#y,
       (chunk) => {
-        T = true;
+        sawAudio = true;
         let owned = Buffer.from(chunk);
         if (!this.#i) this.#f.push(owned);
         if (this.#s) this.#s.send(owned);
@@ -632,7 +743,7 @@ class useVoice {
       },
       () => {
         if (this.#e === "recording") {
-          if (!T && this.#u === n) i.recordEarlyFailure();
+          if (!sawAudio && this.#u === sessionGeneration) breaker.recordEarlyFailure();
           this.#g();
         }
       },
@@ -640,22 +751,22 @@ class useVoice {
         silenceDetection: false,
       },
     );
-    if (this.#u !== n) {
-      if (V.started && this.#e !== "recording") voiceModule.stopRecording(this.#y);
+    if (this.#u !== sessionGeneration) {
+      if (startResult.started && this.#e !== "recording") voiceModule.stopRecording(this.#y);
       return;
     }
-    if (!V.started) {
-      if (V.superseded) {
+    if (!startResult.started) {
+      if (startResult.superseded) {
         logForDebugging("[voice] start superseded mid-connect; ignoring");
         return;
       }
-      let hint = V.hint;
+      let hint = startResult.hint;
       logFeatureBad("voice_start", "voice_start_capture_failed");
       logForDebugging(`[voice] Recording failed \u2014 ${hint ?? "no audio tool found"}`, {
         level: "error",
       });
       this.#t.onError(hint ?? "Failed to start audio capture. Check that your microphone is accessible.");
-      i.recordEarlyFailure(V.expected ? hint : null);
+      breaker.recordEarlyFailure(startResult.expected ? hint : null);
       this.#i = false;
       this.#S();
       this.#r("idle");
@@ -677,16 +788,16 @@ class useVoice {
       systemLocaleLanguage:
         systemLocaleLanguage == null ? undefined : localeOrNonconforming(systemLocaleLanguage),
     });
-    let v = false;
-    let _ = () => this.#u !== n;
-    let F = (keyterms) => {
+    let gotTranscript = false;
+    let isStale = () => this.#u !== sessionGeneration;
+    let connectStream = (keyterms) => {
       let myAttemptGen = this.#T;
       this.#w(
         {
           onTranscript: (text, isFinal) => {
-            if (_()) return;
-            v = true;
-            i.clearEarlyFailures();
+            if (isStale()) return;
+            gotTranscript = true;
+            breaker.clearEarlyFailures();
             logForDebugging(
               `[voice] onTranscript: isFinal=${String(isFinal)} (${String(text.length)} chars)`,
             );
@@ -735,8 +846,8 @@ class useVoice {
               });
             }
           },
-          onError: (error, u) => {
-            if (_()) {
+          onError: (error, errorInfo) => {
+            if (isStale()) {
               logForDebugging(`[voice] ignoring onError from stale session: ${error}`);
               return;
             }
@@ -744,8 +855,8 @@ class useVoice {
               logForDebugging(`[voice] ignoring stale onError from superseded attempt: ${error}`);
               return;
             }
-            if (u?.connectFailureCode) this.#H = u.connectFailureCode;
-            if (!u?.fatal && !v && this.#e === "recording") {
+            if (errorInfo?.connectFailureCode) this.#H = errorInfo.connectFailureCode;
+            if (!errorInfo?.fatal && !gotTranscript && this.#e === "recording") {
               if (!this.#F) {
                 this.#F = true;
                 logForDebugging(`[voice] early voice_stream error (pre-transcript), retrying once: ${error}`);
@@ -753,13 +864,13 @@ class useVoice {
                 this.#s = null;
                 this.#T++;
                 this.#m.setTimeout(() => {
-                  if (this.#e === "recording") F(keyterms);
+                  if (this.#e === "recording") connectStream(keyterms);
                 }, 250);
                 return;
               }
             }
             this.#T++;
-            if (!v) i.recordEarlyFailure();
+            if (!gotTranscript) breaker.recordEarlyFailure();
             logFeatureBad("voice_stream_connect", "voice_stream_connection_error");
             logForDebugging(`[voice] voice_stream error: ${error}`, {
               level: "error",
@@ -780,7 +891,7 @@ class useVoice {
           },
           onClose: () => {},
           onReady: (conn) => {
-            if (_() || this.#e !== "recording") {
+            if (isStale() || this.#e !== "recording") {
               conn.close();
               return;
             }
@@ -790,7 +901,7 @@ class useVoice {
             let SLICE_TARGET_BYTES = 32000;
             if (audioBuffer.length > 0) {
               let totalBytes = 0;
-              for (let R of audioBuffer) totalBytes += R.length;
+              for (let chunk of audioBuffer) totalBytes += chunk.length;
               let slices = [[]];
               let sliceBytes = 0;
               for (let chunk of audioBuffer) {
@@ -818,7 +929,7 @@ class useVoice {
         this.#V,
       ).then(
         (conn) => {
-          if (_()) {
+          if (isStale()) {
             conn?.close();
             return;
           }
@@ -827,7 +938,7 @@ class useVoice {
             logFeatureBad("voice_stream_connect", "voice_stream_no_auth");
             this.#t.onError("Voice mode requires a Claude.ai account. Please run /login to sign in.");
             if (isStorageV5Enabled() && this.#V !== undefined) {
-              i.recordEarlyFailure("Voice mode could not read your Claude.ai login.");
+              breaker.recordEarlyFailure("Voice mode could not read your Claude.ai login.");
               this.#i = false;
             }
             audioBuffer.length = 0;
@@ -844,9 +955,9 @@ class useVoice {
         (error) => {
           logError(toError(error));
           logFeatureBad("voice_stream_connect", "voice_stream_connect_exception");
-          if (_()) return;
+          if (isStale()) return;
           if (this.#e !== "recording") return;
-          i.recordEarlyFailure();
+          breaker.recordEarlyFailure();
           this.#t.onError("Voice connection failed. Check your network and try again.");
           audioBuffer.length = 0;
           this.#i = false;
@@ -855,7 +966,7 @@ class useVoice {
         },
       );
     };
-    this.#I().then(F);
+    this.#I().then(connectStream);
   }
 }
 //@ chunk-a658aeqp.js:18925-18934 placement
@@ -864,25 +975,25 @@ var VOICE_TICK_MS = 50;
 /**
  * 构造语音转写关键词：全局词表 + 项目目录名 + 当前分支名拆出的词 + 最近文件名中的词，最多 I 个。
  */
-async function getVoiceKeyterms(e) {
-  let i = new Set(GLOBAL_KEYTERMS);
+async function getVoiceKeyterms(filePaths) {
+  let keyterms = new Set(GLOBAL_KEYTERMS);
   try {
     let projectRoot = getProjectRoot();
     if (projectRoot) {
-      let n = basename(projectRoot);
-      if (n.length > 2 && n.length <= 50) i.add(n);
+      let projectName = basename(projectRoot);
+      if (projectName.length > 2 && projectName.length <= 50) keyterms.add(projectName);
     }
   } catch {}
   try {
     let name = await getBranch();
-    if (name) for (let n of splitIdentifier(name)) i.add(n);
+    if (name) for (let word of splitIdentifier(name)) keyterms.add(word);
   } catch {}
-  if (e)
-    for (let r of e) {
-      if (i.size >= VOICE_TICK_MS) break;
-      for (let n of fileNameWords(r)) i.add(n);
+  if (filePaths)
+    for (let filePath of filePaths) {
+      if (keyterms.size >= VOICE_TICK_MS) break;
+      for (let word of fileNameWords(filePath)) keyterms.add(word);
     }
-  return [...i].slice(0, VOICE_TICK_MS);
+  return [...keyterms].slice(0, VOICE_TICK_MS);
 }
 //@ chunk-a658aeqp.js:19201-19798 placement
 /**
@@ -894,7 +1005,7 @@ function useVoiceController({ onTranscript, onError, enabled, focusMode, mode = 
   let clock = useClock();
   let voiceStore = useVoiceStateStore();
   let isFocused = useTerminalFocus();
-  let C = {
+  let inputs = {
     onTranscript,
     onError,
     enabled,
@@ -902,135 +1013,31 @@ function useVoiceController({ onTranscript, onError, enabled, focusMode, mode = 
     mode,
     isFocused,
   };
-  let [v] = y(
+  let [controller] = useState(
     () =>
       new useVoice({
         host,
         clock,
         voiceStore,
-        loadVoiceModule: () => import("./chunk-ga5txjrx.js"),
+        loadVoiceModule: () => import("../services/voice.js"),
         connectVoiceStream: (callbacks, options, credentials) =>
           connectVoiceStream(callbacks, options, credentials),
         credentials,
         isVoiceStreamAvailable: () => isVoiceStreamAvailable(),
         probeVoiceConnectivity: () => probeVoiceConnectivity(),
         getVoiceKeyterms: () => getVoiceKeyterms(),
-        inputs: C,
+        inputs,
       }),
   );
-  P(() => {
-    v.setInputs(C);
+  useEffect(() => {
+    controller.setInputs(inputs);
   });
-  P(() => v.dispose, [v]);
-  let { state } = useStoreSelector(v);
+  useEffect(() => controller.dispose, [controller]);
+  let { state } = useStoreSelector(controller);
   return {
     state,
-    handleKeyEvent: v.handleKeyEvent,
-    cancelRecording: v.cancelRecording,
+    handleKeyEvent: controller.handleKeyEvent,
+    cancelRecording: controller.cancelRecording,
   };
 }
-//@ chunk-0777tkjc.js:1031-2049 fingerprint = LANGUAGE_NAME_TO_CODE (1)
-/**
- * 语言名（含本地写法）到 STT 语言代码的映射。
- */
-var LANGUAGE_NAME_TO_CODE = {
-  english: "en",
-  spanish: "es",
-  español: "es",
-  espanol: "es",
-  french: "fr",
-  français: "fr",
-  francais: "fr",
-  japanese: "ja",
-  日本語: "ja",
-  german: "de",
-  deutsch: "de",
-  portuguese: "pt",
-  português: "pt",
-  portugues: "pt",
-  italian: "it",
-  italiano: "it",
-  korean: "ko",
-  한국어: "ko",
-  hindi: "hi",
-  हिन्दी: "hi",
-  हिंदी: "hi",
-  indonesian: "id",
-  "bahasa indonesia": "id",
-  bahasa: "id",
-  russian: "ru",
-  русский: "ru",
-  polish: "pl",
-  polski: "pl",
-  turkish: "tr",
-  türkçe: "tr",
-  turkce: "tr",
-  dutch: "nl",
-  nederlands: "nl",
-  ukrainian: "uk",
-  українська: "uk",
-  greek: "el",
-  ελληνικά: "el",
-  czech: "cs",
-  čeština: "cs",
-  cestina: "cs",
-  danish: "da",
-  dansk: "da",
-  swedish: "sv",
-  svenska: "sv",
-  norwegian: "no",
-  norsk: "no",
-};
-var SUPPORTED_STT_LANGUAGES = new Set([
-  "en",
-  "es",
-  "fr",
-  "ja",
-  "de",
-  "pt",
-  "it",
-  "ko",
-  "hi",
-  "id",
-  "ru",
-  "pl",
-  "tr",
-  "nl",
-  "uk",
-  "el",
-  "cs",
-  "da",
-  "sv",
-  "no",
-]);
-//@ chunk-0777tkjc.js:2049-2285 fingerprint = normalizeLanguageForSTT (1)
-function normalizeLanguageForSTT(language) {
-  if (!language)
-    return {
-      code: "en",
-    };
-  let lower = language.toLowerCase().trim();
-  if (!lower)
-    return {
-      code: "en",
-    };
-  if (SUPPORTED_STT_LANGUAGES.has(lower))
-    return {
-      code: lower,
-    };
-  let fromName = LANGUAGE_NAME_TO_CODE[lower];
-  if (fromName)
-    return {
-      code: fromName,
-    };
-  let base = lower.split("-")[0];
-  if (base && SUPPORTED_STT_LANGUAGES.has(base))
-    return {
-      code: base,
-    };
-  return {
-    code: "en",
-    fellBackFrom: language,
-  };
-}
-export { normalizeLanguageForSTT };
+export { normalizeLanguageForSTT, useVoiceController };

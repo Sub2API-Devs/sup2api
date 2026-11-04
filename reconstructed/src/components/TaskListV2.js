@@ -8,8 +8,13 @@
  * pieces: chunk-zef67v87.js (10)
  * attribution: placement 5, layout 1, callgraph-fingerprint 1, fingerprint 3
  */
-import { init_react_production, y, R, P } from "../../vendor/react/cjs/react.production.js";
-import { w } from "../../vendor/react/compiler-runtime.js";
+import {
+  init_react_production,
+  useState,
+  useRef,
+  useEffect,
+} from "../../vendor/react/cjs/react.production.js";
+import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import { useAppState } from "../state/AppState.js";
 import { useTaskListSnapshot } from "../hooks/useTasksV2.js";
 import {
@@ -29,36 +34,40 @@ import { count } from "../utils/collections.js";
 import { figures_default } from "../../vendor/@inquirer/figures/dist/esm/index.js";
 import { bunStringWidth } from "../ink/stringWidth.js";
 import { truncateToWidth } from "../utils/format.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-zef67v87.js:778-782 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-zef67v87.js:778", () => {
+  init_react_production();
+});
 //@ chunk-zef67v87.js:782-819 placement = _temp4 (1)
 function selectExpandedView(s_1) {
   return s_1.expandedView;
 }
 //@ chunk-zef67v87.js:819-873 placement
-function compareNumbers(T, U) {
-  return parseInt(T, 10) - parseInt(U, 10);
+function compareNumbers(left, right) {
+  return parseInt(left, 10) - parseInt(right, 10);
 }
 //@ chunk-zef67v87.js:873-904 placement
-function taskNumberLabel(ee) {
-  return `#${ee}`;
+function taskNumberLabel(taskNumber) {
+  return `#${taskNumber}`;
 }
 //@ chunk-zef67v87.js:904-1150 placement
 /**
  * 展开视图为 tasks 时显示完整任务列表。
  */
 function ExpandedTaskList(props) {
-  let x = w(2);
+  let $ = useMemoCache(2);
   let { hidden } = props;
-  let f = useAppState(selectExpandedView) === "tasks";
+  let isExpandedTasksView = useAppState(selectExpandedView) === "tasks";
   let taskListSnapshot = useTaskListSnapshot();
-  if (hidden || !f || !taskListSnapshot || taskListSnapshot.length === 0) {
+  if (hidden || !isExpandedTasksView || !taskListSnapshot || taskListSnapshot.length === 0) {
     return null;
   }
-  let z;
-  if (x[0] !== taskListSnapshot) {
-    z = jsxProd_default(Box, {
+  let element;
+  if ($[0] !== taskListSnapshot) {
+    element = jsxProd_default(Box, {
       width: "100%",
       flexDirection: "column",
       children: jsxProd_default(TaskListV2, {
@@ -66,10 +75,10 @@ function ExpandedTaskList(props) {
         isStandalone: true,
       }),
     });
-    x[0] = taskListSnapshot;
-    x[1] = z;
-  } else z = x[1];
-  return z;
+    $[0] = taskListSnapshot;
+    $[1] = element;
+  } else element = $[1];
+  return element;
 }
 //@ chunk-zef67v87.js:1150-1163 layout
 var TASK_REFRESH_MS = 30000;
@@ -82,32 +91,32 @@ function byIdAsc(a, b) {
 }
 //@ chunk-zef67v87.js:1290-3878 fingerprint = TaskListV2 (0.943)
 function TaskListV2({ tasks, isStandalone = false }) {
-  let teamContext = useAppState((t) => t.teamContext);
+  let teamContext = useAppState((appState) => appState.teamContext);
   let appStateTasks = useAppState((s_0) => s_0.tasks);
-  let [x, z] = y(0);
+  let [refreshNonce, setRefreshNonce] = useState(0);
   let { rows, columns } = useTerminalSize();
   let clock = useClock();
-  let previousCompletedIdsRef = R(null);
+  let previousCompletedIdsRef = useRef(null);
   previousCompletedIdsRef.current ??= new Map(
     tasks.filter((task) => task.status === "completed").map((t_0) => [t_0.id, null]),
   );
-  let a = previousCompletedIdsRef.current;
+  let completedAtById = previousCompletedIdsRef.current;
   let maxDisplay = rows <= 10 ? 0 : Math.min(5, Math.max(3, rows - 14));
   let currentCompletedIds = new Set(tasks.filter((t_1) => t_1.status === "completed").map((t_2) => t_2.id));
   let now = Date.now();
-  for (let id of currentCompletedIds) if (!a.has(id)) a.set(id, now);
-  for (let id_0 of a.keys()) if (!currentCompletedIds.has(id_0)) a.delete(id_0);
-  P(() => {
+  for (let id of currentCompletedIds) if (!completedAtById.has(id)) completedAtById.set(id, now);
+  for (let id_0 of completedAtById.keys()) if (!currentCompletedIds.has(id_0)) completedAtById.delete(id_0);
+  useEffect(() => {
     let currentNow = Date.now();
     let earliestExpiry = 1 / 0;
-    for (let ts of a.values()) {
+    for (let ts of completedAtById.values()) {
       if (ts === null) continue;
       let expiry = ts + TASK_REFRESH_MS;
       if (expiry > currentNow && expiry < earliestExpiry) earliestExpiry = expiry;
     }
     if (earliestExpiry === 1 / 0) return;
-    return clock.setTimeout(() => z((n) => n + 1), earliestExpiry - currentNow);
-  }, [tasks, clock, a, x]);
+    return clock.setTimeout(() => setRefreshNonce((n) => n + 1), earliestExpiry - currentNow);
+  }, [tasks, clock, completedAtById, refreshNonce]);
   if (!isTaskToolsEnabled()) return null;
   if (tasks.length === 0) return null;
   let teammateColors = {};
@@ -146,7 +155,7 @@ function TaskListV2({ tasks, isStandalone = false }) {
     let recentCompleted = [];
     let olderCompleted = [];
     for (let task of tasks.filter((t_7) => t_7.status === "completed")) {
-      let ts_0 = a.get(task.id);
+      let ts_0 = completedAtById.get(task.id);
       if (typeof ts_0 === "number" && now - ts_0 < TASK_REFRESH_MS) recentCompleted.push(task);
       else olderCompleted.push(task);
     }
@@ -155,11 +164,11 @@ function TaskListV2({ tasks, isStandalone = false }) {
     let inProgress = tasks.filter((t_8) => t_8.status === "in_progress").sort(byIdAsc);
     let pending = tasks
       .filter((t_9) => t_9.status === "pending")
-      .sort((u, T) => {
-        let aBlocked = u.blockedBy.some((id_1) => unresolvedTaskIds.has(id_1));
-        let bBlocked = T.blockedBy.some((id_2) => unresolvedTaskIds.has(id_2));
+      .sort((taskA, taskB) => {
+        let aBlocked = taskA.blockedBy.some((id_1) => unresolvedTaskIds.has(id_1));
+        let bBlocked = taskB.blockedBy.some((id_2) => unresolvedTaskIds.has(id_2));
         if (aBlocked !== bBlocked) return aBlocked ? 1 : -1;
-        return byIdAsc(u, T);
+        return byIdAsc(taskA, taskB);
       });
     let prioritized = [...recentCompleted, ...inProgress, ...pending, ...olderCompleted];
     visibleTasks = prioritized.slice(0, maxDisplay);
@@ -271,7 +280,7 @@ function getTaskIcon(status) {
 }
 //@ chunk-zef67v87.js:4080-5736 fingerprint = TaskItem (0.926)
 function TaskItem(props) {
-  let $ = w(37);
+  let $ = useMemoCache(37);
   let { task, ownerColor, openBlockers, activity, ownerActive, columns } = props;
   let isCompleted = task.status === "completed";
   let isInProgress = task.status === "in_progress";

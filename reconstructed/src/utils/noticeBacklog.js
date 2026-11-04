@@ -15,12 +15,12 @@ var MAX_NOTICE_BACKLOG = 50;
 //@ chunk-b272vy9d.js:236-501 placement
 function createNoticeBacklog() {
   let signal = createSignal();
-  let t = [];
-  let n = 0;
+  let backlog = [];
+  let subscriberCount = 0;
   return {
-    publish(line, level, r) {
-      let u =
-        r === undefined
+    publish(line, level, notice) {
+      let entry =
+        notice === undefined
           ? {
               line,
               level,
@@ -28,25 +28,25 @@ function createNoticeBacklog() {
           : {
               line,
               level,
-              notice: r,
+              notice,
             };
-      if (n === 0) {
-        t = [...t, u].slice(-MAX_NOTICE_BACKLOG);
+      if (subscriberCount === 0) {
+        backlog = [...backlog, entry].slice(-MAX_NOTICE_BACKLOG);
         return;
       }
-      signal.emit(u);
+      signal.emit(entry);
     },
     takeBacklog() {
-      let e = t;
-      t = [];
-      return e;
+      let pending = backlog;
+      backlog = [];
+      return pending;
     },
-    subscribe(e) {
-      n += 1;
-      let i = signal.subscribe(e);
+    subscribe(listener) {
+      subscriberCount += 1;
+      let unsubscribe = signal.subscribe(listener);
       return () => {
-        n -= 1;
-        i();
+        subscriberCount -= 1;
+        unsubscribe();
       };
     },
   };

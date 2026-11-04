@@ -27,7 +27,7 @@ import { tryUnwrapTextPayload, seedDirFor, getPluginByIdCacheOnly } from "./mark
 import { pMap } from "../../../vendor/p-map/index.js";
 import { resolvePluginEntryPath } from "./localMarketplacePaths.js";
 import { formatPluginId } from "./marketplaceHelpers.js";
-import { isDirectoryOrFalse, mcpAuthCacheContent } from "./safeFileRead.js";
+import { isDirectoryOrFalse, readSmallFileText } from "./safeFileRead.js";
 import { validatePluginManifest } from "./pluginManifestRead.js";
 import { jsonParse } from "../slowOperations.js";
 import { stripBom } from "../json.js";
@@ -45,56 +45,60 @@ import { uniq } from "../collections.js";
 import { getInstalledPlugins, isInstallationRelevantToCurrentProject } from "./installedPluginsManager.js";
 import { CLAUDE_PLUGINS_OFFICIAL } from "./officialMarketplace.js";
 import { isGithubDotCom } from "../git/githubUrl.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-ca06bv0t.js:1586-1638 placement
 var PRINTABLE_NAME_RE = /^[\x21-\x7e]+$/;
 var PLUGIN_NAME_FIELD_RE = /^[A-Za-z0-9._-]{1,64}$/;
 //@ chunk-ca06bv0t.js:1638-1684 placement
-function displayMarketplaceName(r) {
-  return OFFICIAL_MARKETPLACE_DISPLAY === "" || isValidPluginDisplayName(r, PRINTABLE_NAME_RE)
-    ? r
-    : printableDisplayName(r);
+function displayMarketplaceName(name) {
+  return OFFICIAL_MARKETPLACE_DISPLAY === "" || isValidPluginDisplayName(name, PRINTABLE_NAME_RE)
+    ? name
+    : printableDisplayName(name);
 }
 //@ chunk-ca06bv0t.js:1684-1753 placement
-function escapedDisplayText(r) {
-  if (isValidPluginDisplayName(r, PLUGIN_NAME_FIELD_RE)) return r;
-  return escapeXml(OFFICIAL_MARKETPLACE_DISPLAY === "" ? printableName(r, 64) : printableDisplayName(r));
+function escapedDisplayText(text) {
+  if (isValidPluginDisplayName(text, PLUGIN_NAME_FIELD_RE)) return text;
+  return escapeXml(
+    OFFICIAL_MARKETPLACE_DISPLAY === "" ? printableName(text, 64) : printableDisplayName(text),
+  );
 }
 //@ chunk-ca06bv0t.js:1753-1791 placement
-function displayTextOrRaw(r) {
-  return isValidPluginDisplayName(r, PLUGIN_NAME_FIELD_RE) ? r : printableDisplayName(r);
+function displayTextOrRaw(text) {
+  return isValidPluginDisplayName(text, PLUGIN_NAME_FIELD_RE) ? text : printableDisplayName(text);
 }
 //@ chunk-ca06bv0t.js:1791-1848 placement
-function isValidPluginDisplayName(r, n) {
+function isValidPluginDisplayName(name, pattern) {
   return (
-    n.test(r) &&
-    !isAsciiImpersonatingOfficialName(r) &&
-    !isSameFoldedName(OFFICIAL_MARKETPLACE_DISPLAY, cleanDisplayNameText(r))
+    pattern.test(name) &&
+    !isAsciiImpersonatingOfficialName(name) &&
+    !isSameFoldedName(OFFICIAL_MARKETPLACE_DISPLAY, cleanDisplayNameText(name))
   );
 }
 //@ chunk-ca06bv0t.js:1848-1902 placement
-function printableDisplayName(r) {
-  return printableLabel(printableName(cleanDisplayNameText(r), 64)) || "\u201C\u201D";
+function printableDisplayName(name) {
+  return printableLabel(printableName(cleanDisplayNameText(name), 64)) || "\u201C\u201D";
 }
 //@ chunk-ca06bv0t.js:1902-1956 placement
-function cleanDisplayNameText(r) {
-  return stripInvisibleKeepEmoji(r).replace(LEADING_INVISIBLE_TEXT_RE, "").trimEnd();
+function cleanDisplayNameText(text) {
+  return stripInvisibleKeepEmoji(text).replace(LEADING_INVISIBLE_TEXT_RE, "").trimEnd();
 }
 //@ chunk-ca06bv0t.js:1985-2172 placement
-async function pluginInstallPath(r, n, knownMarketplacesWithDeclared, storageV5) {
-  let installLocation = Object.hasOwn(knownMarketplacesWithDeclared, r)
-    ? knownMarketplacesWithDeclared[r]?.installLocation
+async function pluginInstallPath(marketplaceName, plugins, marketplaces, storageV5) {
+  let installLocation = Object.hasOwn(marketplaces, marketplaceName)
+    ? marketplaces[marketplaceName]?.installLocation
     : undefined;
-  if (installLocation === undefined) return n;
-  let f;
+  if (installLocation === undefined) return plugins;
+  let marketplaces_2;
   try {
-    f = tryUnwrapTextPayload();
+    marketplaces_2 = tryUnwrapTextPayload();
   } catch {
-    return n;
+    return plugins;
   }
   return pMap(
-    n,
-    (p) => enrichPluginEntry(p, r, installLocation, knownMarketplacesWithDeclared, f, storageV5),
+    plugins,
+    (plugin) =>
+      enrichPluginEntry(plugin, marketplaceName, installLocation, marketplaces, marketplaces_2, storageV5),
     {
       concurrency: 8,
     },
@@ -104,168 +108,188 @@ async function pluginInstallPath(r, n, knownMarketplacesWithDeclared, storageV5)
 /**
  * 为插件条目补充展示元数据（从安装位置读 manifest、版本等）。
  */
-async function enrichPluginEntry(r, n, installLocation, a, s, f) {
-  let source = r.source;
-  if (!isRelativeSourcePath(source)) return r;
+async function enrichPluginEntry(plugin, marketplaceName, installLocation, marketplaces, extras, storageV5) {
+  let source = plugin.source;
+  if (!isRelativeSourcePath(source)) return plugin;
   try {
     let pluginEntryPath = await resolvePluginEntryPath(
-      formatPluginId(r.name, n),
+      formatPluginId(plugin.name, marketplaceName),
       installLocation,
       source,
-      a,
-      s,
-      f,
+      marketplaces,
+      extras,
+      storageV5,
       seedDirFor(installLocation) !== undefined ? "system" : "workspace",
     );
-    if (pluginEntryPath.kind !== "ok") return r;
-    let m = join(pluginEntryPath.entryPath, ".claude-plugin");
-    if (!(await isDirectoryOrFalse(m))) return r;
-    let h = join(m, "plugin.json");
-    let P = await mcpAuthCacheContent(h);
-    if (P === undefined) return r;
-    let b = validatePluginManifest(jsonParse(stripBom(P)), "plugin-json", {
-      pluginName: r.name,
-      manifestPath: h,
+    if (pluginEntryPath.kind !== "ok") return plugin;
+    let metaDir = join(pluginEntryPath.entryPath, ".claude-plugin");
+    if (!(await isDirectoryOrFalse(metaDir))) return plugin;
+    let manifestPath = join(metaDir, "plugin.json");
+    let text = await readSmallFileText(manifestPath);
+    if (text === undefined) return plugin;
+    let result = validatePluginManifest(jsonParse(stripBom(text)), "plugin-json", {
+      pluginName: plugin.name,
+      manifestPath,
     });
-    if (!b.ok) return r;
-    let manifest = b.manifest;
-    let g = {
-      ...r,
+    if (!result.ok) return plugin;
+    let manifest = result.manifest;
+    let enriched = {
+      ...plugin,
     };
-    if (hasNoOptionalText(g.displayName) && manifest.displayName !== undefined)
-      g.displayName = manifest.displayName;
-    if (hasNoOptionalText(g.description) && manifest.description !== undefined)
-      g.description = manifest.description;
-    if (g.author === undefined && manifest.author !== undefined) g.author = manifest.author;
-    if (hasNoOptionalText(g.homepage) && manifest.homepage !== undefined) g.homepage = manifest.homepage;
-    if (hasNoOptionalText(g.repository) && manifest.repository !== undefined)
-      g.repository = manifest.repository;
-    if (hasNoOptionalText(g.license) && manifest.license !== undefined) g.license = manifest.license;
-    if (!g.keywords?.length && manifest.keywords !== undefined) g.keywords = manifest.keywords;
-    return g;
+    if (hasNoOptionalText(enriched.displayName) && manifest.displayName !== undefined)
+      enriched.displayName = manifest.displayName;
+    if (hasNoOptionalText(enriched.description) && manifest.description !== undefined)
+      enriched.description = manifest.description;
+    if (enriched.author === undefined && manifest.author !== undefined) enriched.author = manifest.author;
+    if (hasNoOptionalText(enriched.homepage) && manifest.homepage !== undefined)
+      enriched.homepage = manifest.homepage;
+    if (hasNoOptionalText(enriched.repository) && manifest.repository !== undefined)
+      enriched.repository = manifest.repository;
+    if (hasNoOptionalText(enriched.license) && manifest.license !== undefined)
+      enriched.license = manifest.license;
+    if (!enriched.keywords?.length && manifest.keywords !== undefined) enriched.keywords = manifest.keywords;
+    return enriched;
   } catch (error) {
     logForDebugging(
-      `Display metadata for ${formatPluginId(r.name, n)} not read from its plugin.json: ${errorMessage(error)}`,
+      `Display metadata for ${formatPluginId(plugin.name, marketplaceName)} not read from its plugin.json: ${errorMessage(error)}`,
     );
-    return r;
+    return plugin;
   }
 }
 //@ chunk-ca06bv0t.js:3145-3182 placement
-function hasNoOptionalText(r) {
-  return cleanOptionalText_2(r) === undefined;
+function hasNoOptionalText(text) {
+  return cleanOptionalText_2(text) === undefined;
 }
 //@ chunk-ca06bv0t.js:3182-3186 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-ca06bv0t.js:3182", () => {
+  init_react_production();
+});
 //@ chunk-ca06bv0t.js:4870-5179 placement
-function pluginUserConfigValues(r, n) {
-  let i = {};
-  for (let key of Object.keys(r)) {
-    let s = r[key];
-    let f = s?.sensitive === true ? undefined : getOwn(n ?? {}, key);
-    let p = userConfigFieldParser(s);
-    if (s?.type === "boolean") {
-      i[key] = String(isTrueOrTrueString(getOwn(n ?? {}, key) ?? s.default));
+function pluginUserConfigValues(schema, saved) {
+  let values = {};
+  for (let key of Object.keys(schema)) {
+    let field = schema[key];
+    let savedValue = field?.sensitive === true ? undefined : getOwn(saved ?? {}, key);
+    let options = userConfigFieldParser(field);
+    if (field?.type === "boolean") {
+      values[key] = String(isTrueOrTrueString(getOwn(saved ?? {}, key) ?? field.default));
       continue;
     }
-    i[key] =
-      p === undefined
-        ? f === undefined
+    values[key] =
+      options === undefined
+        ? savedValue === undefined
           ? ""
-          : String(f)
-        : ([f, s?.default].find((c) => typeof c === "string" && p.includes(c)) ?? p[0] ?? "");
+          : String(savedValue)
+        : ([savedValue, field?.default].find(
+            (candidate) => typeof candidate === "string" && options.includes(candidate),
+          ) ??
+          options[0] ??
+          "");
   }
-  return i;
+  return values;
 }
 //@ chunk-ca06bv0t.js:5179-5288 placement
-function userConfigFieldParser(r) {
-  if (r?.type === "boolean") return semanticBoolean;
-  return r?.type === "string" && r.multiple !== true ? r.options : undefined;
+function userConfigFieldParser(field) {
+  if (field?.type === "boolean") return semanticBoolean;
+  return field?.type === "string" && field.multiple !== true ? field.options : undefined;
 }
 //@ chunk-ca06bv0t.js:5312-5372 placement
 function firstLine(prev) {
   return (prev.split(/\r\n|\r|\n/, 1)[0] ?? "").trim();
 }
 //@ chunk-ca06bv0t.js:5372-5494 placement
-function markFromPluginDirectory(r, knownMarketplacesWithDeclared) {
-  return r.map((i) => {
-    let source = knownMarketplacesWithDeclared[i.marketplaceName]?.source;
+function markFromPluginDirectory(entries, knownMarketplacesWithDeclared) {
+  return entries.map((entry) => {
+    let source = knownMarketplacesWithDeclared[entry.marketplaceName]?.source;
     return source && isPluginDirectorySource(source)
       ? {
-          ...i,
+          ...entry,
           fromPluginDirectory: true,
         }
-      : i;
+      : entry;
   });
 }
 //@ chunk-ca06bv0t.js:5494-5532 placement
-var isFromPluginDirectory = (r) => r.fromPluginDirectory === true;
+var isFromPluginDirectory = (entry) => entry.fromPluginDirectory === true;
 //@ chunk-ca06bv0t.js:5532-5782 placement
-function mergedDisplayFields(entry, n) {
-  let i = (f) => entry[f] ?? n.find((p) => p.entry[f] !== undefined)?.entry[f];
-  let a = ["displayName", "description", "author", "homepage", "category", "tags", "keywords", "relevance"];
-  let s = {};
-  for (let f of a) {
-    let p = i(f);
-    if (p !== undefined)
-      Object.assign(s, {
-        [f]: p,
+function mergedDisplayFields(entry, others) {
+  let fieldOf = (field) =>
+    entry[field] ?? others.find((other) => other.entry[field] !== undefined)?.entry[field];
+  let fields = [
+    "displayName",
+    "description",
+    "author",
+    "homepage",
+    "category",
+    "tags",
+    "keywords",
+    "relevance",
+  ];
+  let result = {};
+  for (let field of fields) {
+    let value = fieldOf(field);
+    if (value !== undefined)
+      Object.assign(result, {
+        [field]: value,
       });
   }
-  return s;
+  return result;
 }
 //@ chunk-ca06bv0t.js:5782-6517 placement
 /**
  * 合并多个市场中重复列出的同一插件，记录 alsoListedIn。
  */
-function dedupeListedPlugins(r, knownMarketplacesWithDeclared) {
-  let i = (c) =>
+function dedupeListedPlugins(plugins, knownMarketplacesWithDeclared) {
+  let sourceKeyOf = (plugin) =>
     samePluginSource(
-      c.entry.source,
-      sourceUrlAndRef(knownMarketplacesWithDeclared[c.marketplaceName]?.source),
+      plugin.entry.source,
+      sourceUrlAndRef(knownMarketplacesWithDeclared[plugin.marketplaceName]?.source),
     );
-  let a = (c) => isFromPluginDirectory(c) && isReviewerMarkedEntry(c.entry.name);
-  let s = new Set();
-  for (let c of r)
-    if (a(c)) {
-      let m = i(c);
-      if (m !== undefined) s.add(m);
+  let isDirectoryMarked = (plugin) =>
+    isFromPluginDirectory(plugin) && isReviewerMarkedEntry(plugin.entry.name);
+  let directoryKeys = new Set();
+  for (let plugin of plugins)
+    if (isDirectoryMarked(plugin)) {
+      let key = sourceKeyOf(plugin);
+      if (key !== undefined) directoryKeys.add(key);
     }
-  if (s.size === 0) return r;
-  let f = new Map();
-  for (let c of r) {
-    if (isFromPluginDirectory(c) || !isOfficialMarketplaceName_3(c.marketplaceName)) continue;
-    if (isOfficialFamilySameSource(c.marketplaceName, c.entry)) continue;
-    let m = i(c);
-    if (m !== undefined && s.has(m)) f.set(m, [...(f.get(m) ?? []), c]);
+  if (directoryKeys.size === 0) return plugins;
+  let shadows = new Map();
+  for (let plugin of plugins) {
+    if (isFromPluginDirectory(plugin) || !isOfficialMarketplaceName_3(plugin.marketplaceName)) continue;
+    if (isOfficialFamilySameSource(plugin.marketplaceName, plugin.entry)) continue;
+    let key = sourceKeyOf(plugin);
+    if (key !== undefined && directoryKeys.has(key)) shadows.set(key, [...(shadows.get(key) ?? []), plugin]);
   }
-  let p = [];
-  for (let c of r) {
-    let m = i(c);
-    let h = m === undefined ? undefined : f.get(m);
-    if (!isFromPluginDirectory(c)) {
-      if (!h?.includes(c)) p.push(c);
+  let result = [];
+  for (let plugin of plugins) {
+    let key = sourceKeyOf(plugin);
+    let shadowing = key === undefined ? undefined : shadows.get(key);
+    if (!isFromPluginDirectory(plugin)) {
+      if (!shadowing?.includes(plugin)) result.push(plugin);
       continue;
     }
-    if (h === undefined || !a(c)) {
-      p.push(c);
+    if (shadowing === undefined || !isDirectoryMarked(plugin)) {
+      result.push(plugin);
       continue;
     }
-    p.push({
-      ...c,
+    result.push({
+      ...plugin,
       entry: {
-        ...c.entry,
-        ...mergedDisplayFields(c.entry, h),
+        ...plugin.entry,
+        ...mergedDisplayFields(plugin.entry, shadowing),
       },
-      isInstalled: c.isInstalled || h.some((P) => P.isInstalled),
-      alsoListedIn: uniq(h.map((P) => P.marketplaceName)),
-      installCountIds: h.map((P) => P.pluginId),
+      isInstalled: plugin.isInstalled || shadowing.some((plugin) => plugin.isInstalled),
+      alsoListedIn: uniq(shadowing.map((plugin) => plugin.marketplaceName)),
+      installCountIds: shadowing.map((plugin) => plugin.pluginId),
     });
   }
-  return p;
+  return result;
 }
 //@ chunk-ca06bv0t.js:6517-6738 placement
-async function allowlistedInstalledPlugins(knownMarketplacesWithDeclared, n) {
-  let i = new Set();
+async function allowlistedInstalledPlugins(knownMarketplacesWithDeclared, storageV5) {
+  let keys = new Set();
   let plugins = getInstalledPlugins().plugins;
   for (let [key, value] of Object.entries(plugins)) {
     if (
@@ -273,134 +297,140 @@ async function allowlistedInstalledPlugins(knownMarketplacesWithDeclared, n) {
       !value.some(isInstallationRelevantToCurrentProject)
     )
       continue;
-    let pluginByIdCacheOnly = await getPluginByIdCacheOnly(key, n);
-    let c =
+    let pluginByIdCacheOnly = await getPluginByIdCacheOnly(key, storageV5);
+    let sourceKey =
       pluginByIdCacheOnly &&
       samePluginSource(
         pluginByIdCacheOnly.entry.source,
         sourceUrlAndRef(knownMarketplacesWithDeclared[OFFICIAL_MARKETPLACE_NAME]?.source),
       );
-    if (c) i.add(c);
+    if (sourceKey) keys.add(sourceKey);
   }
-  return i;
+  return keys;
 }
 //@ chunk-ca06bv0t.js:6738-7193 placement
-function groupBySource(r, knownMarketplacesWithDeclared, i = new Set()) {
-  let a = (c) =>
+function groupBySource(plugins, knownMarketplacesWithDeclared, extraKeys = new Set()) {
+  let sourceKeyOf = (plugin) =>
     samePluginSource(
-      c.entry.source,
-      sourceUrlAndRef(knownMarketplacesWithDeclared[c.marketplaceName]?.source),
+      plugin.entry.source,
+      sourceUrlAndRef(knownMarketplacesWithDeclared[plugin.marketplaceName]?.source),
     );
-  let s = new Set(i);
-  let f = new Set();
-  let p = new Set();
-  for (let c of r) {
-    let m = c.isInstalled ? a(c) : undefined;
-    if (m === undefined) continue;
-    if (isFromPluginDirectory(c)) {
-      s.add(m);
-      f.add(m);
-    } else if (isOfficialMarketplaceName_3(c.marketplaceName)) p.add(m);
+  let directoryKeys = new Set(extraKeys);
+  let directoryInstalled = new Set();
+  let officialKeys = new Set();
+  for (let plugin of plugins) {
+    let key = plugin.isInstalled ? sourceKeyOf(plugin) : undefined;
+    if (key === undefined) continue;
+    if (isFromPluginDirectory(plugin)) {
+      directoryKeys.add(key);
+      directoryInstalled.add(key);
+    } else if (isOfficialMarketplaceName_3(plugin.marketplaceName)) officialKeys.add(key);
   }
-  if (s.size === 0 && p.size === 0) return r;
-  return r.filter((c) => {
-    if (c.isInstalled) return true;
-    let m = a(c);
-    if (m === undefined) return true;
-    if (isFromPluginDirectory(c)) return !p.has(m) && !f.has(m);
-    return !isOfficialMarketplaceName_3(c.marketplaceName) || !s.has(m);
+  if (directoryKeys.size === 0 && officialKeys.size === 0) return plugins;
+  return plugins.filter((plugin) => {
+    if (plugin.isInstalled) return true;
+    let key = sourceKeyOf(plugin);
+    if (key === undefined) return true;
+    if (isFromPluginDirectory(plugin)) return !officialKeys.has(key) && !directoryInstalled.has(key);
+    return !isOfficialMarketplaceName_3(plugin.marketplaceName) || !directoryKeys.has(key);
   });
 }
 //@ chunk-ca06bv0t.js:7193-7345 placement
 /**
  * 取插件安装数（含别名 id 的最大值）
  */
-function getPluginInstallCount(r, n) {
-  if (!n) return;
-  let i = n.get(r.pluginId);
-  for (let a of r.installCountIds ?? []) {
-    let s = n.get(a);
-    if (s !== undefined && (i === undefined || s > i)) i = s;
+function getPluginInstallCount(plugin, counts) {
+  if (!counts) return;
+  let count = counts.get(plugin.pluginId);
+  for (let id of plugin.installCountIds ?? []) {
+    let other = counts.get(id);
+    if (other !== undefined && (count === undefined || other > count)) count = other;
   }
-  return i;
+  return count;
 }
 //@ chunk-ca06bv0t.js:7345-7586 placement = _temp (0.705)
 /**
  * 按安装量降序排序插件，同量时插件目录内的优先并保持原顺序，其余按名称排序。（误归 HelpV2/Commands）
  */
 function sortPluginsByPopularity(a, b) {
-  let i = new Map(a.map((a, s) => [a, s]));
-  a.sort((a, s) => {
-    let f = getPluginInstallCount(a, b) ?? 0;
-    let p = getPluginInstallCount(s, b) ?? 0;
-    if (f !== p) return p - f;
-    let c = isFromPluginDirectory(a);
-    let m = isFromPluginDirectory(s);
-    if (c !== m) return c ? -1 : 1;
-    return c ? (i.get(a) ?? 0) - (i.get(s) ?? 0) : a.entry.name.localeCompare(s.entry.name);
+  let orderMap = new Map(a.map((plugin, index) => [plugin, index]));
+  a.sort((left, right) => {
+    let leftCount = getPluginInstallCount(left, b) ?? 0;
+    let rightCount = getPluginInstallCount(right, b) ?? 0;
+    if (leftCount !== rightCount) return rightCount - leftCount;
+    let leftIsDirectory = isFromPluginDirectory(left);
+    let rightIsDirectory = isFromPluginDirectory(right);
+    if (leftIsDirectory !== rightIsDirectory) return leftIsDirectory ? -1 : 1;
+    return leftIsDirectory
+      ? (orderMap.get(left) ?? 0) - (orderMap.get(right) ?? 0)
+      : left.entry.name.localeCompare(right.entry.name);
   });
 }
 //@ chunk-ca06bv0t.js:7586-7640 placement
-function marketplaceLabel(r) {
-  return isFromPluginDirectory(r) ? OFFICIAL_MARKETPLACE_DISPLAY : displayTextOrRaw(r.marketplaceName);
+function marketplaceLabel(plugin) {
+  return isFromPluginDirectory(plugin)
+    ? OFFICIAL_MARKETPLACE_DISPLAY
+    : displayTextOrRaw(plugin.marketplaceName);
 }
 //@ chunk-ca06bv0t.js:7640-7860 placement
 function installCountsByMarketplace(plugin) {
   let alsoListedIn = plugin.alsoListedIn ?? [];
   if (alsoListedIn.length === 0) return;
-  let i = new Map(installCountEntries(plugin).map((a) => [a.marketplace, a.name]));
+  let byMarketplace = new Map(installCountEntries(plugin).map((entry) => [entry.marketplace, entry.name]));
   return `Also listed in ${alsoListedIn
-    .map((a) => {
-      let s = i.get(a);
-      return s === undefined ? a : `${a} as ${s}`;
+    .map((marketplace) => {
+      let name = byMarketplace.get(marketplace);
+      return name === undefined ? marketplace : `${marketplace} as ${name}`;
     })
     .join(", ")}`;
 }
 //@ chunk-ca06bv0t.js:7860-8035 placement
-function installCountEntries(r) {
+function installCountEntries(plugin) {
   {
-    let n = [];
-    for (let i of r.installCountIds ?? []) {
-      let { name: a, marketplace } = parsePluginIdentifier(i);
-      if (marketplace !== undefined && a !== r.entry.name)
-        n.push({
+    let entries = [];
+    for (let id of plugin.installCountIds ?? []) {
+      let { name, marketplace } = parsePluginIdentifier(id);
+      if (marketplace !== undefined && name !== plugin.entry.name)
+        entries.push({
           marketplace,
-          name: a,
+          name,
         });
     }
-    return n;
+    return entries;
   }
   return [];
 }
 //@ chunk-ca06bv0t.js:8035-8159 placement
 function marketplaceNamesOf(plugin) {
-  let n = (i) => (i === CLAUDE_PLUGINS_OFFICIAL ? "official" : i);
+  let normalize = (name) => (name === CLAUDE_PLUGINS_OFFICIAL ? "official" : name);
   return [
     isFromPluginDirectory(plugin) ? OFFICIAL_MARKETPLACE_DISPLAY : plugin.marketplaceName,
-    ...(plugin.alsoListedIn ?? []).map(n),
+    ...(plugin.alsoListedIn ?? []).map(normalize),
   ].join(" + ");
 }
 //@ chunk-ca06bv0t.js:8159-8234 placement
-function safeNameOrPrintable(r) {
-  return /^[A-Za-z0-9._/@:~-]{1,120}$/.test(r) ? r : printableLabel(printableName(r, 120));
+function safeNameOrPrintable(name) {
+  return /^[A-Za-z0-9._/@:~-]{1,120}$/.test(name) ? name : printableLabel(printableName(name, 120));
 }
 //@ chunk-ca06bv0t.js:8234-8675 placement
-function pluginSourceLink(r) {
-  let source = r.entry.source;
+function pluginSourceLink(plugin) {
+  let source = plugin.entry.source;
   if (typeof source !== "object" || source === null) return;
-  let i;
-  if (source.source === "github") i = source.repo;
-  else if (source.source === "url" || source.source === "git-subdir") i = source.url;
-  if (i === undefined) return;
-  let a = i;
+  let ref;
+  if (source.source === "github") ref = source.repo;
+  else if (source.source === "url" || source.source === "git-subdir") ref = source.url;
+  if (ref === undefined) return;
+  let link = ref;
   try {
-    let f = new URL(i);
-    a = isGithubDotCom(f.hostname) ? f.pathname.replace(/^\/+/, "") : `${f.host}${f.pathname}`;
+    let parsed = new URL(ref);
+    link = isGithubDotCom(parsed.hostname)
+      ? parsed.pathname.replace(/^\/+/, "")
+      : `${parsed.host}${parsed.pathname}`;
   } catch {}
-  a = safeNameOrPrintable(a.replace(/\.git$/, "").replace(/\/+$/, ""));
-  if (a === "") return;
-  let s = source.source === "git-subdir" ? safeNameOrPrintable(source.path) : "";
-  return s === "" ? a : `${a} (${s})`;
+  link = safeNameOrPrintable(link.replace(/\.git$/, "").replace(/\/+$/, ""));
+  if (link === "") return;
+  let path = source.source === "git-subdir" ? safeNameOrPrintable(source.path) : "";
+  return path === "" ? link : `${link} (${path})`;
 }
 export {
   displayMarketplaceName,

@@ -5,9 +5,9 @@
  * pieces: chunk-chabsk0s.js (3)
  * attribution: placement 3
  */
-import { isIterateeCall_2 } from "../../src/utils/settings/settingsSourceTrust.js";
+import { isIterateeCall_2 } from "./_mergeWithFamily.js";
 import { toInteger_default } from "./toInteger.js";
-import { SJt } from "../@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
+import { baseSliceAlias } from "../@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
 
 //@ chunk-chabsk0s.js:269-292 placement
 var { ceil: nativeCeil, max: nativeMax } = Math;
@@ -20,7 +20,7 @@ function chunk(array, size, guard) {
   var index = 0;
   var resIndex = 0;
   var result = Array(nativeCeil(length / size));
-  while (index < length) result[resIndex++] = SJt(array, index, (index += size));
+  while (index < length) result[resIndex++] = baseSliceAlias(array, index, (index += size));
   return result;
 }
 //@ chunk-chabsk0s.js:473-483 placement

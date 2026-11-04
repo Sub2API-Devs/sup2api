@@ -31,13 +31,15 @@ function isHumanTurn_2(m) {
   return m.type === "user" && !m.isMeta && m.toolUseResult === undefined;
 }
 //@ chunk-aepeg2w5.js:608715-608909 placement
-function isHumanInitiatedMessage(e, n) {
+function isHumanInitiatedMessage(message, commandTags) {
   return (
-    isHumanTurn_2(e) ||
-    (e.type === "system" && e.subtype === "local_command" && matchesTaggedCommand(e.content, n)) ||
-    (e.type === "attachment" &&
-      e.attachment.type === "queued_command" &&
-      e.attachment.origin?.kind === "human")
+    isHumanTurn_2(message) ||
+    (message.type === "system" &&
+      message.subtype === "local_command" &&
+      matchesTaggedCommand(message.content, commandTags)) ||
+    (message.type === "attachment" &&
+      message.attachment.type === "queued_command" &&
+      message.attachment.origin?.kind === "human")
   );
 }
 //@ chunk-aepeg2w5.js:608909-609020 placement = isHumanTurn (0.779)
@@ -54,20 +56,22 @@ function isHumanTurn_3(m) {
 /**
  * user 消息正文（剥 system-reminder 前缀后）以“用户在你工作时发来新消息”“协调者发来消息”等插话前缀开头。旧版名 relocateToolReferenceSiblings 为错配。
  */
-function isMidTurnInterjectionMessage(h) {
-  if (h.type !== "user") return false;
-  let content = h.message.content;
-  let D =
+function isMidTurnInterjectionMessage(message) {
+  if (message.type !== "user") return false;
+  let content = message.message.content;
+  let text =
     typeof content === "string"
       ? content
       : Array.isArray(content) && content[0]?.type === "text"
         ? content[0].text
         : "";
-  let L = D.startsWith(SYSTEM_REMINDER_OPEN_PREFIX) ? D.slice(SYSTEM_REMINDER_OPEN_PREFIX.length) : D;
+  let unwrappedText = text.startsWith(SYSTEM_REMINDER_OPEN_PREFIX)
+    ? text.slice(SYSTEM_REMINDER_OPEN_PREFIX.length)
+    : text;
   return (
-    L.startsWith(USER_SENT_MESSAGE_PREFIX) ||
-    L.startsWith(UNNAMED_SOURCE_LABEL) ||
-    L.startsWith(BOUND_THREAD_MESSAGES_HEADER)
+    unwrappedText.startsWith(USER_SENT_MESSAGE_PREFIX) ||
+    unwrappedText.startsWith(UNNAMED_SOURCE_LABEL) ||
+    unwrappedText.startsWith(BOUND_THREAD_MESSAGES_HEADER)
   );
 }
 export {

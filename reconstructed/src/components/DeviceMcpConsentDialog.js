@@ -8,7 +8,7 @@
  * pieces: chunk-tmg3f18n.js (4)
  * attribution: placement 4
  */
-import { init_react_production, P } from "../../vendor/react/cjs/react.production.js";
+import { init_react_production, useEffect } from "../../vendor/react/cjs/react.production.js";
 import { useSelfOpenedDialog } from "../hooks/useSelfOpenedDialog.js";
 import { logEvent } from "../services/analytics/index.js";
 import { lit, fromEnum } from "../services/analytics/safeMetadata.js";
@@ -63,34 +63,34 @@ function describeMcpScopeOwner(scope) {
 function DeviceMcpConsentDialog({ servers, storageV5, onDone }) {
   let selfOpenedDialog = useSelfOpenedDialog(onDone, {
     selfOpened: true,
-    onCancelled: (t) =>
+    onCancelled: (wasSaving) =>
       logEvent("tengu_device_mcp_consent_prompt", {
-        choice: t ? lit("cancelled_saving") : lit("cancelled"),
+        choice: wasSaving ? lit("cancelled_saving") : lit("cancelled"),
       }),
   });
-  useKeybinding("confirm:no", () => p("not_now"), {
+  useKeybinding("confirm:no", () => answerChoice("not_now"), {
     context: "Confirmation",
     isActive: !selfOpenedDialog.decided,
   });
-  P(() => {
+  useEffect(() => {
     logEvent("tengu_device_mcp_consent_prompt_shown", {
       server_count: servers.length,
     });
   }, [servers.length]);
-  function p(choice) {
+  function answerChoice(choice) {
     if (!selfOpenedDialog.take()) return;
     logEvent("tengu_device_mcp_consent_prompt", {
       choice: fromEnum(choice),
     });
-    let f = deviceMcpConsentStore(storageV5);
-    let h = deviceMcpNotNowStore(storageV5);
+    let consentStore = deviceMcpConsentStore(storageV5);
+    let notNowStore = deviceMcpNotNowStore(storageV5);
     if (choice === "not_now") {
-      deviceMcpConsentAnswer(f)
-        .then((i) =>
-          i === "unset"
+      deviceMcpConsentAnswer(consentStore)
+        .then((currentAnswer) =>
+          currentAnswer === "unset"
             ? writeDeviceMcpNotNow(
                 servers.map((server) => server.name),
-                h,
+                notNowStore,
               )
             : undefined,
         )
@@ -98,15 +98,15 @@ function DeviceMcpConsentDialog({ servers, storageV5, onDone }) {
       selfOpenedDialog.handBack(choice);
       return;
     }
-    writeDeviceMcpConsent(choice, f).then(
-      (i) => {
-        if (i) clearDeviceMcpNotNow(h);
+    writeDeviceMcpConsent(choice, consentStore).then(
+      (written) => {
+        if (written) clearDeviceMcpNotNow(notNowStore);
         if (selfOpenedDialog.settled()) return;
-        if (!i)
+        if (!written)
           logEvent("tengu_device_mcp_consent_prompt", {
             choice: lit("write_failed"),
           });
-        selfOpenedDialog.handBack(i ? choice : "not_now");
+        selfOpenedDialog.handBack(written ? choice : "not_now");
       },
       (error) => {
         logError(error);
@@ -125,7 +125,7 @@ function DeviceMcpConsentDialog({ servers, storageV5, onDone }) {
   let sliced = servers.slice(0, MAX_LISTED_CONSENT_SERVERS);
   return jsxProd_default_2(Dialog, {
     title: "Let cloud sessions use this machine's MCP servers?",
-    onCancel: () => p("not_now"),
+    onCancel: () => answerChoice("not_now"),
     isCancelActive: false,
     inputGuide: selfOpenedDialog.exit.pending
       ? jsxProd_default_2(Text, {
@@ -157,21 +157,21 @@ function DeviceMcpConsentDialog({ servers, storageV5, onDone }) {
           jsxProd_default_2(Box, {
             flexDirection: "column",
             children: [
-              sliced.map((t) =>
+              sliced.map((server) =>
                 jsxProd_default_2(
                   Text,
                   {
                     children: [
                       "\xB7 ",
-                      shortServerLabel(t.name),
+                      shortServerLabel(server.name),
                       " ",
                       jsxProd_default_2(Text, {
                         dimColor: true,
-                        children: ["(", describeMcpScopeOwner(t.scope), ")"],
+                        children: ["(", describeMcpScopeOwner(server.scope), ")"],
                       }),
                     ],
                   },
-                  t.name,
+                  server.name,
                 ),
               ),
               servers.length > MAX_LISTED_CONSENT_SERVERS
@@ -215,8 +215,9 @@ function DeviceMcpConsentDialog({ servers, storageV5, onDone }) {
         disablePrintableKeybindings: true,
         isDisabled: selfOpenedDialog.choicesDisabled,
         refuseInput: selfOpenedDialog.refuseInput,
-        onChange: p,
+        onChange: answerChoice,
       }),
     ],
   });
 }
+export { DeviceMcpConsentDialog };

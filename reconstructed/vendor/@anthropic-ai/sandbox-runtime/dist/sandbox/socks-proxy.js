@@ -16,10 +16,14 @@ import {
   connectViaParentProxy,
   dialDirect,
 } from "./parent-proxy.js";
-import { ol } from "./resolved-address-guard.js";
+import { isResolvedAddressDeniedError } from "./resolved-address-guard.js";
+import { deferInit } from "../../../../../runtime/deferred-init.js";
 
 //@ chunk-fq0cr76a.js:698926-698968 esm-layout
-var SOCKS_REPLY_GENERAL_FAILURE = Buffer.from([5, 1, 0, 1, 0, 0, 0, 0, 0, 0]);
+var SOCKS_REPLY_GENERAL_FAILURE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-fq0cr76a.js:698926", () => {
+  SOCKS_REPLY_GENERAL_FAILURE = Buffer.from([5, 1, 0, 1, 0, 0, 0, 0, 0, 0]);
+});
 //@ chunk-fq0cr76a.js:698968-700805 esm-fingerprint
 function createSocksProxyServer(options) {
   let socksServer = createServer();
@@ -111,7 +115,7 @@ function createSocksProxyServer(options) {
         });
         if (!clientGone)
           try {
-            sendStatus(ol(err) ? "CONNECTION_NOT_ALLOWED" : "HOST_UNREACHABLE");
+            sendStatus(isResolvedAddressDeniedError(err) ? "CONNECTION_NOT_ALLOWED" : "HOST_UNREACHABLE");
           } catch {}
       });
   });

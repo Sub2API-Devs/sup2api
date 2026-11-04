@@ -29,16 +29,16 @@ import { wrapCommandLifecycle } from "../../bridge/inboundMessageOrigin.js";
 import { RemoteIO } from "../remoteIO.js";
 
 //@ chunk-tyg7f3ek.js:624353-624415 placement
-function isArchivedAfterRestart(e, n) {
-  return parseInt(n ?? "1", 10) > 1 && e === "archived";
+function isArchivedAfterRestart(status, epoch) {
+  return parseInt(epoch ?? "1", 10) > 1 && status === "archived";
 }
 //@ chunk-tyg7f3ek.js:624415-624480 placement
-function isArchivedAfterRestartNow(reason) {
-  return isArchivedAfterRestart(reason, process.env.CLAUDE_CODE_WORKER_EPOCH);
+function isArchivedAfterRestartNow(status) {
+  return isArchivedAfterRestart(status, process.env.CLAUDE_CODE_WORKER_EPOCH);
 }
 //@ chunk-tyg7f3ek.js:624480-624510 placement
-function isWorkerEpochAfterFirst(e) {
-  return (e ?? 1) > 1;
+function isWorkerEpochAfterFirst(epoch) {
+  return (epoch ?? 1) > 1;
 }
 //@ chunk-tyg7f3ek.js:624966-625143 placement
 /**
@@ -94,18 +94,18 @@ function restoreProactivityOptIn(restoredState, { getAppState, setAppState, sess
     sessionState.notifyMetadataChanged({
       proactivity: proactivityMetadata(getAppState()),
     });
-    let y = proactivityExclusionReason();
+    let reason = proactivityExclusionReason();
     logEvent("tengu_proactivity_opt_in_restored", {
-      enabled: y === undefined,
+      enabled: reason === undefined,
       level_from_mirror: levelFromMirror,
     });
-    let S =
-      y === undefined
+    let selector =
+      reason === undefined
         ? "on"
-        : y === "session_excluded"
+        : reason === "session_excluded"
           ? `off \u2014 session excluded (${BARE_ATTACHMENTS_REASON()})`
           : "off \u2014 a kill switch is set";
-    logForDebugging(`[print.ts] restored proactivity opt-in from prior worker epoch (selector ${S})`);
+    logForDebugging(`[print.ts] restored proactivity opt-in from prior worker epoch (selector ${selector})`);
   }
 }
 //@ chunk-tyg7f3ek.js:626178-626511 placement
@@ -143,16 +143,16 @@ function applyInitializeProactivity(
 function installCommandLifecycleForwarder(session, output) {
   if (session.commandLifecycleForwarderInstalled) return;
   session.commandLifecycleForwarderInstalled = true;
-  wrapCommandLifecycle(session, (commandUuid, state, h) => {
+  wrapCommandLifecycle(session, (commandUuid, state, meta) => {
     output.enqueue({
       type: "command_lifecycle",
       command_uuid: commandUuid,
       state,
-      ...(h !== undefined && {
-        wakeup_source: h.wakeupSource,
+      ...(meta !== undefined && {
+        wakeup_source: meta.wakeupSource,
       }),
-      ...(h?.scheduledFor !== undefined && {
-        scheduled_for: h.scheduledFor,
+      ...(meta?.scheduledFor !== undefined && {
+        scheduled_for: meta.scheduledFor,
       }),
       uuid: randomUUID(),
       session_id: getSessionId(),
@@ -172,4 +172,6 @@ export {
   isArchivedAfterRestartNow,
   applyInitializeProactivity,
   notifyExcludeDynamicSections,
+  installCommandLifecycleForwarder,
+  isArchivedAfterRestart,
 };

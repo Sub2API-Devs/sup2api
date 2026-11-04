@@ -5,11 +5,11 @@
  * pieces: chunk-t4ksmxzx.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 import { require_cancellation } from "./cancellation.js";
 
 //@ chunk-t4ksmxzx.js:16783-17959 cjs-fingerprint
-var require_sharedArrayCancellation = x(function (cjsExports) {
+var require_sharedArrayCancellation = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });

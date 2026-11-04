@@ -16,11 +16,12 @@ import { StreamClosedAbortError } from "./errors.js";
  * 判断错误是否为流关闭中止错误，或满足给定判断。
  */
 var isStreamClosedOrAbortError = (error, signal) =>
-  attempt(error, (o) => o instanceof StreamClosedAbortError) === true || isAbortOf(error, signal);
+  attempt(error, (caughtError) => caughtError instanceof StreamClosedAbortError) === true ||
+  isAbortOf(error, signal);
 //@ chunk-8nnf1scw.js:324-387 placement
 /**
  * 吞掉指定的中止错误，其他错误继续抛出。
  */
-var swallowAbortError = (r, signal) =>
-  r.catch((error) => (isAbortOf(error, signal) ? undefined : Promise.reject(error)));
+var swallowAbortError = (promise, signal) =>
+  promise.catch((error) => (isAbortOf(error, signal) ? undefined : Promise.reject(error)));
 export { isStreamClosedOrAbortError, swallowAbortError };

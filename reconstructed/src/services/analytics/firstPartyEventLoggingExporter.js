@@ -70,15 +70,20 @@ import { to1PEventFormat } from "./metadata.js";
 import { stripProtoFields } from "./index.js";
 import { onceExport } from "../../../vendor/lodash-es/once.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, E } from "../../../vendor/zod/v4/classic/schemas.js";
+import { objectSchema, numberSchema } from "../../../vendor/zod/v4/classic/schemas.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-aepeg2w5.js:874435-874470 fingerprint = FILE_PREFIX (1)
-var EXPORTER_RUN_ID = randomUUID();
-var FAILED_EVENTS_KEY_PREFIX = "1p_failed_events.";
+var EXPORTER_RUN_ID; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var FAILED_EVENTS_KEY_PREFIX;
+deferInit("chunk-aepeg2w5.js:874435", () => {
+  EXPORTER_RUN_ID = randomUUID();
+  FAILED_EVENTS_KEY_PREFIX = "1p_failed_events.";
+});
 //@ chunk-aepeg2w5.js:874470-874581 layout
-function getFlatMigrationKey(e, n) {
-  let sliced = createHash("sha256").update(n).digest("base64url").slice(0, 22);
-  return `flat-migration.${e}.${sliced}`;
+function getFlatMigrationKey(index, text) {
+  let sliced = createHash("sha256").update(text).digest("base64url").slice(0, 22);
+  return `flat-migration.${index}.${sliced}`;
 }
 //@ chunk-aepeg2w5.js:874581-874628 layout = getStorageDir (1)
 /**
@@ -99,10 +104,10 @@ var WIF_MINT_RETRY_MS = 300000;
  * 去掉 principal_stamp 不属于当前身份的事件。
  */
 function dropForeignPrincipalEvents(events) {
-  let n = [];
-  for (let { principal_stamp: principalStamp, ...s } of events)
-    if (principalStamp === undefined || isRowOfCurrentPrincipal(principalStamp)) n.push(s);
-  return n;
+  let kept = [];
+  for (let { principal_stamp: principalStamp, ...rest } of events)
+    if (principalStamp === undefined || isRowOfCurrentPrincipal(principalStamp)) kept.push(rest);
+  return kept;
 }
 //@ chunk-aepeg2w5.js:874758-892785 fingerprint = FirstPartyEventLoggingExporter (0.535)
 /**
@@ -163,7 +168,7 @@ class FirstPartyEventLoggingExporter {
     this.tenantGrant = options.tenantGrant ?? dryRunGrant();
     this.wasPassedAGrant = options.tenantGrant !== undefined;
     let sendMode = options.tenantGrant?.sendMode;
-    this.sendMode = EXPORT_ENVIRONMENTS.find((s) => s === sendMode);
+    this.sendMode = EXPORT_ENVIRONMENTS.find((env) => env === sendMode);
     this.schedule =
       options.schedule ??
       ((fn, ms) => {
@@ -209,18 +214,20 @@ class FirstPartyEventLoggingExporter {
   async loadEventsFromCurrentBatch() {
     return this.loadEventsFromBatch(this.currentBatch());
   }
-  async loadEventsFromBatch(e) {
-    return e.kind === "stream"
-      ? this.loadEventsFromStream(e.storageV5, e.stream)
-      : this.loadEventsFromFile(e.filePath);
+  async loadEventsFromBatch(batch) {
+    return batch.kind === "stream"
+      ? this.loadEventsFromStream(batch.storageV5, batch.stream)
+      : this.loadEventsFromFile(batch.filePath);
   }
-  async deleteBatch(e) {
-    return e.kind === "stream" ? this.deleteStream(e.storageV5, e.stream) : this.deleteFile(e.filePath);
+  async deleteBatch(batch) {
+    return batch.kind === "stream"
+      ? this.deleteStream(batch.storageV5, batch.stream)
+      : this.deleteFile(batch.filePath);
   }
-  async appendEventsToBatch(e, n) {
-    return e.kind === "stream"
-      ? this.appendEventsToStream(e.storageV5, e.stream, n)
-      : this.appendEventsToFile(e.filePath, n);
+  async appendEventsToBatch(batch, events) {
+    return batch.kind === "stream"
+      ? this.appendEventsToStream(batch.storageV5, batch.stream, events)
+      : this.appendEventsToFile(batch.filePath, events);
   }
   async saveEventsToFile(filePath, events) {
     if (this.underATenantsRules()) return;
@@ -249,7 +256,7 @@ class FirstPartyEventLoggingExporter {
       );
     }
   }
-  async appendEventsToFile(e, events) {
+  async appendEventsToFile(filePath, events) {
     if (events.length === 0) return;
     if (this.underATenantsRules()) {
       this.dropInATenant("no_store", events.length);
@@ -264,10 +271,10 @@ class FirstPartyEventLoggingExporter {
 `) +
         `
 `;
-      await appendFile(e, content, "utf8");
+      await appendFile(filePath, content, "utf8");
     } catch (error) {
       logForDebugging(
-        `1P event logging: failed to persist failed-event queue to ${e}: ${errorMessage(error)}`,
+        `1P event logging: failed to persist failed-event queue to ${filePath}: ${errorMessage(error)}`,
         {
           level: "error",
         },
@@ -283,48 +290,48 @@ class FirstPartyEventLoggingExporter {
       return isENOENT(error);
     }
   }
-  async loadEventsFromStream(e, n) {
-    let r = [];
+  async loadEventsFromStream(storageV5, stream) {
+    let events = [];
     let textDecoder = new TextDecoder();
     let fromSeq = 0;
     for (;;) {
-      let records = await e.readRecords(n, {
+      let records = await storageV5.readRecords(stream, {
         fromSeq,
         order: "forward",
       });
       if (!records.ok) return [];
       for (let item of records.value.items) {
-        let w = textDecoder.decode(item.data);
-        let R = w.endsWith(`
+        let text = textDecoder.decode(item.data);
+        let line = text.endsWith(`
 `)
-          ? w.slice(0, -1)
-          : w;
-        if (!R) continue;
+          ? text.slice(0, -1)
+          : text;
+        if (!line) continue;
         try {
-          r.push(jsonParse(R));
+          events.push(jsonParse(line));
         } catch {}
       }
-      if (records.value.nextSeq === undefined) return r;
+      if (records.value.nextSeq === undefined) return events;
       fromSeq = records.value.nextSeq;
     }
   }
-  async deleteStream(e, n) {
-    return (await e.delete(n)).ok;
+  async deleteStream(storageV5, stream) {
+    return (await storageV5.delete(stream)).ok;
   }
-  async appendEventsToStream(e, n, r) {
-    if (r.length === 0) return;
-    let s = await e.append(
-      n,
-      r.map((h) => ({
+  async appendEventsToStream(storageV5, stream, events) {
+    if (events.length === 0) return;
+    let result = await storageV5.append(
+      stream,
+      events.map((event) => ({
         data:
-          jsonStringify(h) +
+          jsonStringify(event) +
           `
 `,
       })),
     );
-    if (!s.ok)
+    if (!result.ok)
       logForDebugging(
-        `1P event logging: failed to persist failed-event queue to v5 stream: ${s.error.code}`,
+        `1P event logging: failed to persist failed-event queue to v5 stream: ${result.error.code}`,
         {
           level: "error",
         },
@@ -344,8 +351,8 @@ class FirstPartyEventLoggingExporter {
       let files;
       try {
         files = (await readdir(getTelemetryStorageDir()))
-          .filter((r) => r.startsWith(prefix) && r.endsWith(".json"))
-          .filter((r) => !r.includes(EXPORTER_RUN_ID));
+          .filter((file) => file.startsWith(prefix) && file.endsWith(".json"))
+          .filter((file) => !file.includes(EXPORTER_RUN_ID));
       } catch (e) {
         if (isFsInaccessible(e)) return;
         throw e;
@@ -370,40 +377,40 @@ class FirstPartyEventLoggingExporter {
       await this.deleteFile(filePath);
       return;
     }
-    let r = filterEventsForPrivacy(events);
-    let s = await this.sendEventsInBatches(r, {
+    let filtered = filterEventsForPrivacy(events);
+    let failedEvents = await this.sendEventsInBatches(filtered, {
       startupRetry: true,
     });
-    if (s.length === 0) await this.deleteFile(filePath);
-    else await this.saveEventsToFile(filePath, s);
+    if (failedEvents.length === 0) await this.deleteFile(filePath);
+    else await this.saveEventsToFile(filePath, failedEvents);
   }
-  async retryPreviousBatchesV5(e) {
+  async retryPreviousBatchesV5(storageV5) {
     let sessionId = getSessionId();
-    let r = {
+    let namespace = {
       namespace: "log",
       sessionId,
       channel: "telemetry",
     };
-    let s = [];
+    let streamKeys = [];
     switch (
       (
         await readAllPages(
-          (y) =>
-            e.listEntries(
-              r,
-              y === undefined
+          (cursor) =>
+            storageV5.listEntries(
+              namespace,
+              cursor === undefined
                 ? undefined
                 : {
-                    cursor: y,
+                    cursor,
                   },
             ),
-          (y) => {
-            for (let S of y) {
-              if (S.kind !== "key" || S.key.namespace !== "log") continue;
-              let key = S.key;
+          (page) => {
+            for (let entry of page) {
+              if (entry.kind !== "key" || entry.key.namespace !== "log") continue;
+              let key = entry.key;
               if (key.agentId !== undefined || key.runId === undefined || key.runId === EXPORTER_RUN_ID)
                 continue;
-              s.push(key);
+              streamKeys.push(key);
             }
           },
         )
@@ -415,59 +422,63 @@ class FirstPartyEventLoggingExporter {
         return;
       case "capped":
         logForDebugging(
-          `1P event logging: previous-batch stream listing truncated at ${DEFAULT_MAX_PAGES} pages; retrying the ${s.length} streams seen`,
+          `1P event logging: previous-batch stream listing truncated at ${DEFAULT_MAX_PAGES} pages; retrying the ${streamKeys.length} streams seen`,
           {
             level: "warn",
           },
         );
         break;
     }
-    for (let y of s)
-      this.retryStreamInBackground(e, y).catch((error) => {
+    for (let key of streamKeys)
+      this.retryStreamInBackground(storageV5, key).catch((error) => {
         logError(error);
       });
     await this.migrateLegacyFlatBatches(
-      e,
+      storageV5,
       sessionId,
-      new Set(s.flatMap((y) => (y.namespace === "log" && y.runId !== undefined ? [y.runId] : []))),
+      new Set(
+        streamKeys.flatMap((key) => (key.namespace === "log" && key.runId !== undefined ? [key.runId] : [])),
+      ),
     );
   }
-  async migrateLegacyFlatBatches(e, n, r) {
+  async migrateLegacyFlatBatches(storageV5, sessionId, migratedRunIds) {
     if (this.underATenantsRules()) return;
-    let s = `${FAILED_EVENTS_KEY_PREFIX}${n}.`;
-    let h;
+    let prefix = `${FAILED_EVENTS_KEY_PREFIX}${sessionId}.`;
+    let files;
     try {
-      h = (await readdir(getTelemetryStorageDir())).filter((y) => y.startsWith(s) && y.endsWith(".json"));
+      files = (await readdir(getTelemetryStorageDir())).filter(
+        (file) => file.startsWith(prefix) && file.endsWith(".json"),
+      );
     } catch (error) {
       if (isFsInaccessible(error)) return;
       throw error;
     }
-    for (let y of h) {
-      let sliced = y.slice(s.length, -5);
+    for (let file of files) {
+      let sliced = file.slice(prefix.length, -5);
       if (sliced.length === 0 || sliced === EXPORTER_RUN_ID) continue;
-      if (r.has(sliced)) continue;
-      let joined = pathModule.join(getTelemetryStorageDir(), y);
-      let R = STORAGE_SPACES.log(n, "telemetry", {
+      if (migratedRunIds.has(sliced)) continue;
+      let joined = pathModule.join(getTelemetryStorageDir(), file);
+      let stream = STORAGE_SPACES.log(sessionId, "telemetry", {
         runId: sliced,
       });
       let eventsFromFile = await this.loadEventsFromFile(joined);
       if (eventsFromFile.length === 0) continue;
-      let P = await e.append(
-        R,
-        eventsFromFile.map((F, L) => {
-          let G =
-            jsonStringify(F) +
+      let appendResult = await storageV5.append(
+        stream,
+        eventsFromFile.map((event, index) => {
+          let recordText =
+            jsonStringify(event) +
             `
 `;
           return {
-            data: G,
-            recordId: getFlatMigrationKey(L, G),
+            data: recordText,
+            recordId: getFlatMigrationKey(index, recordText),
           };
         }),
       );
-      if (!P.ok) {
+      if (!appendResult.ok) {
         logForDebugging(
-          `1P event logging: failed to migrate flat failed-event batch to v5 stream: ${P.error.code}`,
+          `1P event logging: failed to migrate flat failed-event batch to v5 stream: ${appendResult.error.code}`,
           {
             level: "error",
           },
@@ -475,27 +486,28 @@ class FirstPartyEventLoggingExporter {
         continue;
       }
       await this.deleteFile(joined);
-      this.retryStreamInBackground(e, R).catch((error) => {
+      this.retryStreamInBackground(storageV5, stream).catch((error) => {
         logError(error);
       });
     }
   }
-  async retryStreamInBackground(e, n) {
+  async retryStreamInBackground(storageV5, stream) {
     if (this.attempts >= this.maxAttempts) {
-      await this.deleteStream(e, n);
+      await this.deleteStream(storageV5, stream);
       return;
     }
-    let eventsFromStream = await this.loadEventsFromStream(e, n);
+    let eventsFromStream = await this.loadEventsFromStream(storageV5, stream);
     if (eventsFromStream.length === 0) {
-      await this.deleteStream(e, n);
+      await this.deleteStream(storageV5, stream);
       return;
     }
-    let s = filterEventsForPrivacy(eventsFromStream);
-    let h = await this.sendEventsInBatches(s, {
+    let filtered = filterEventsForPrivacy(eventsFromStream);
+    let failedEvents = await this.sendEventsInBatches(filtered, {
       startupRetry: true,
     });
-    if (h.length === 0) await this.deleteStream(e, n);
-    else if (await this.deleteStream(e, n)) await this.appendEventsToStream(e, n, h);
+    if (failedEvents.length === 0) await this.deleteStream(storageV5, stream);
+    else if (await this.deleteStream(storageV5, stream))
+      await this.appendEventsToStream(storageV5, stream, failedEvents);
   }
   async export(logs, resultCallback) {
     if (this.isShutdown) {
@@ -514,7 +526,7 @@ class FirstPartyEventLoggingExporter {
   }
   async doExport(logs, resultCallback) {
     try {
-      this.tellATenantsGrant((y) => y.onExport(logs.length));
+      this.tellATenantsGrant((grant) => grant.onExport(logs.length));
       let eventLogs = logs.filter(
         (log) => log.instrumentationScope?.name === "com.anthropic.claude_code.events",
       );
@@ -565,7 +577,7 @@ class FirstPartyEventLoggingExporter {
       });
     }
   }
-  async sendEventsInBatches(events, n = {}) {
+  async sendEventsInBatches(events, options = {}) {
     let batches = [];
     for (let i = 0; i < events.length; i += this.maxBatchSize)
       batches.push(events.slice(i, i + this.maxBatchSize));
@@ -578,11 +590,11 @@ class FirstPartyEventLoggingExporter {
           {
             events: batch,
           },
-          n,
+          options,
         );
       } catch (error) {
         lastErrorContext = getAxiosErrorContext(error);
-        this.tellATenantsGrant((R) => R.onFailed(classifyPostFailure(error), batch.length));
+        this.tellATenantsGrant((grant) => grant.onFailed(classifyPostFailure(error), batch.length));
         for (let j = i; j < batches.length; j++) failedBatchEvents.push(...batches[j]);
         break;
       }
@@ -591,9 +603,9 @@ class FirstPartyEventLoggingExporter {
     if (failedBatchEvents.length > 0 && lastErrorContext) this.lastExportErrorContext = lastErrorContext;
     return failedBatchEvents;
   }
-  withQueueFileLock(e) {
-    let n = this.queueFileLock.then(e);
-    this.queueFileLock = n.then(
+  withQueueFileLock(fn) {
+    let run = this.queueFileLock.then(fn);
+    this.queueFileLock = run.then(
       () => {
         return;
       },
@@ -601,7 +613,7 @@ class FirstPartyEventLoggingExporter {
         return;
       },
     );
-    return n;
+    return run;
   }
   async queueFailedEvents(events) {
     let filePath = this.currentBatch();
@@ -636,7 +648,7 @@ class FirstPartyEventLoggingExporter {
   async doRetryFailedEvents() {
     let filePath = this.currentBatch();
     while (!this.isShutdown) {
-      let n = await this.withQueueFileLock(async () => {
+      let attempt = await this.withQueueFileLock(async () => {
         let eventsFromBatch = await this.loadEventsFromBatch(filePath);
         if (eventsFromBatch.length === 0)
           return {
@@ -659,22 +671,22 @@ class FirstPartyEventLoggingExporter {
           events: eventsFromBatch,
         };
       });
-      if (n.kind === "empty") break;
-      if (n.kind === "unclaimable") {
+      if (attempt.kind === "empty") break;
+      if (attempt.kind === "unclaimable") {
         this.scheduleBackoffRetry();
         return;
       }
-      if (n.kind === "dropped") {
-        if (!n.deleted) {
+      if (attempt.kind === "dropped") {
+        if (!attempt.deleted) {
           this.scheduleBackoffRetry();
           return;
         }
-        this.dropInATenant("given_up", n.count);
+        this.dropInATenant("given_up", attempt.count);
         this.resetBackoff();
         return;
       }
-      let r = filterEventsForPrivacy(n.events);
-      let failedEvents = await this.sendEventsInBatches(r);
+      let filtered = filterEventsForPrivacy(attempt.events);
+      let failedEvents = await this.sendEventsInBatches(filtered);
       this.attempts++;
       if (failedEvents.length > 0) {
         await this.withQueueFileLock(() => this.appendEventsToBatch(filePath, failedEvents));
@@ -700,7 +712,7 @@ class FirstPartyEventLoggingExporter {
       return;
     }
     this.refreshAttemptedFor = claudeAIOAuthTokens.accessToken;
-    let n = Promise.resolve()
+    let refreshPromise = Promise.resolve()
       .then(() => checkAndRefreshOAuthTokenIfNeeded())
       .then(
         () => {},
@@ -709,13 +721,13 @@ class FirstPartyEventLoggingExporter {
         },
       )
       .finally(() => {
-        if (this.inflightRefresh === n) this.inflightRefresh = null;
+        if (this.inflightRefresh === refreshPromise) this.inflightRefresh = null;
       });
-    this.inflightRefresh = n;
-    await withDeadline(n, this.oauthRefreshTimeoutMs);
+    this.inflightRefresh = refreshPromise;
+    await withDeadline(refreshPromise, this.oauthRefreshTimeoutMs);
   }
-  shouldSkipAuthForSend(e) {
-    if (this.skipAuth || !e) return true;
+  shouldSkipAuthForSend(attachAuth) {
+    if (this.skipAuth || !attachAuth) return true;
     if (!isFirstPartyAnthropicHost(this.endpoint) || !isHttpsEndpoint_2(this.endpoint)) return true;
     if (!isClaudeAISubscriber()) return false;
     let claudeAIOAuthTokens = getClaudeAIOAuthTokens();
@@ -745,13 +757,13 @@ class FirstPartyEventLoggingExporter {
       env.CLAUDE_CODE_OAUTH_TOKEN?.startsWith("sk-ant-oat") === true
     );
   }
-  whyATenantMayNotPost(e, n) {
+  whyATenantMayNotPost(kind, detail) {
     if (!this.underATenantsRules()) return;
-    if (e) return "previous_run";
+    if (kind) return "previous_run";
     try {
-      let s = this.tenantGrant.mayPost();
-      if (s !== true) {
-        Promise.resolve(s).catch(logGrantCallbackError);
+      let reason = this.tenantGrant.mayPost();
+      if (reason !== true) {
+        Promise.resolve(reason).catch(logGrantCallbackError);
         return "refused";
       }
     } catch (error) {
@@ -760,25 +772,26 @@ class FirstPartyEventLoggingExporter {
     }
     if (!this.hostVouchesForEnvBearer()) return "not_vouched";
     if (!(
-      n === undefined ||
-      (!n.error && n.headers.Authorization === `Bearer ${env.CLAUDE_CODE_OAUTH_TOKEN}`)
+      detail === undefined ||
+      (!detail.error && detail.headers.Authorization === `Bearer ${env.CLAUDE_CODE_OAUTH_TOKEN}`)
     ))
       return "no_credential";
-    return n !== undefined && this.sendMode === "dry_run" ? "dry_run" : undefined;
+    return detail !== undefined && this.sendMode === "dry_run" ? "dry_run" : undefined;
   }
-  dropInATenant(e, n) {
-    this.tellATenantsGrant((r) => r.onDrop(e, n));
+  dropInATenant(kind, detail) {
+    this.tellATenantsGrant((grant) => grant.onDrop(kind, detail));
   }
-  tellATenantsGrant(e) {
+  tellATenantsGrant(fn) {
     try {
-      if (this.underATenantsRules()) Promise.resolve(e(this.tenantGrant)).catch(logGrantCallbackError);
+      if (this.underATenantsRules()) Promise.resolve(fn(this.tenantGrant)).catch(logGrantCallbackError);
     } catch (error) {
       logGrantCallbackError(error);
     }
   }
   async authHeadersForSend() {
     if (!(getAnthropicApiKeySafe() === null && shouldUseWIFAuth())) return getAuthHeadersAsync();
-    let { getResolvedWIFBaseUrlSnapshot } = await import("./chunk-7k61ne1e.js");
+    let { getResolvedWIFBaseUrlSnapshot } =
+      await import("../../../vendor/@anthropic-ai/sdk/lib/credentials/TokenCache.lazy.js");
     let apiBaseUrlHost = getApiBaseUrlHost_2(getResolvedWIFBaseUrlSnapshot());
     if (
       apiBaseUrlHost === undefined ||
@@ -806,27 +819,34 @@ class FirstPartyEventLoggingExporter {
       };
     return authHeaders;
   }
-  async sendBatchWithRetry(e, n = {}) {
-    let r = this.whyATenantMayNotPost(n.startupRetry);
-    if (r) {
-      this.dropInATenant(r, e.events.length);
+  async sendBatchWithRetry(batch, options = {}) {
+    let refusal = this.whyATenantMayNotPost(options.startupRetry);
+    if (refusal) {
+      this.dropInATenant(refusal, batch.events.length);
       return;
     }
     if (this.isKilled()) throw new SinkKillSwitchError();
-    let s = {
+    let baseHeaders = {
       "Content-Type": "application/json",
       "User-Agent": claudeCodeUserAgent(),
       "x-service-name": "claude-code",
     };
-    let h =
+    let hasTrust =
       (this.underATenantsRules() && getIsNonInteractiveSession()) ||
       checkHasTrustDialogAccepted() ||
       getIsNonInteractiveSession();
-    if (h && !this.skipAuth && !this.finalFlush && !this.isShutdown && !n.startupRetry && getIsInteractive())
-      await this.refreshExpiredOAuthTokenOnce();
-    let y = this.shouldSkipAuthForSend(h);
     if (
-      !y &&
+      hasTrust &&
+      !this.skipAuth &&
+      !this.finalFlush &&
+      !this.isShutdown &&
+      !options.startupRetry &&
+      getIsInteractive()
+    )
+      await this.refreshExpiredOAuthTokenOnce();
+    let skipAuth = this.shouldSkipAuthForSend(hasTrust);
+    if (
+      !skipAuth &&
       !this.isShutdown &&
       !this.finalFlush &&
       isActualFirstPartyAnthropicBaseUrl() &&
@@ -840,75 +860,79 @@ class FirstPartyEventLoggingExporter {
           this.keyHelperJoinTimeoutMs,
         );
     }
-    let S = y
+    let authResult = skipAuth
       ? {
           headers: {},
           error:
             "auth skipped: skipAuth config, trust not established, endpoint not first-party https, no-profile lane closed, or OAuth token expired",
         }
       : await this.authHeadersForSend();
-    let w = !y && S.reasonCode === "no_api_key" ? (getAuthHeaders_2(this.endpoint) ?? S) : S;
-    let R = guardTelemetryCredentials(w, this.endpoint);
-    let x = !R.error;
-    let P = {
-      events: dropForeignPrincipalEvents(e.events),
+    let authWithFallback =
+      !skipAuth && authResult.reasonCode === "no_api_key"
+        ? (getAuthHeaders_2(this.endpoint) ?? authResult)
+        : authResult;
+    let credential = guardTelemetryCredentials(authWithFallback, this.endpoint);
+    let hasAuth = !credential.error;
+    let payload = {
+      events: dropForeignPrincipalEvents(batch.events),
     };
-    if (P.events.length === 0) return;
-    let F = gzipTelemetryBody({
+    if (payload.events.length === 0) return;
+    let body = gzipTelemetryBody({
       url: this.endpoint,
-      payload: P,
+      payload,
       storageV5: this.storageV5,
     });
-    let L = this.whyATenantMayNotPost(n.startupRetry, R);
-    if (L) {
-      this.dropInATenant(L, P.events.length);
+    let lateRefusal = this.whyATenantMayNotPost(options.startupRetry, credential);
+    if (lateRefusal) {
+      this.dropInATenant(lateRefusal, payload.events.length);
       return;
     }
-    let G = {
-      ...s,
-      ...(x && R.headers),
+    let headers = {
+      ...baseHeaders,
+      ...(hasAuth && credential.headers),
       ...(this.underATenantsRules() &&
         this.sendMode !== "production" && {
           "x-test-mode": "true",
         }),
     };
     try {
-      let j = await this.post(G, F, P);
-      this.logSuccess(P.events.length, x, j);
-      let ee = acceptedEventCount(j, P.events.length);
-      this.tellATenantsGrant((q) => q.onSent(ee));
-      if (ee < P.events.length) this.dropInATenant("rejected_by_ingest", P.events.length - ee);
+      let response = await this.post(headers, body, payload);
+      this.logSuccess(payload.events.length, hasAuth, response);
+      let accepted = acceptedEventCount(response, payload.events.length);
+      this.tellATenantsGrant((grant) => grant.onSent(accepted));
+      if (accepted < payload.events.length)
+        this.dropInATenant("rejected_by_ingest", payload.events.length - accepted);
       return;
     } catch (error) {
       if (
-        x &&
+        hasAuth &&
         !this.underATenantsRules() &&
-        !e.events.some((event) => event.principal_stamp !== undefined) &&
+        !batch.events.some((event) => event.principal_stamp !== undefined) &&
         error instanceof DirectPostError &&
         error.facts.status === 401
       ) {
-        let ee = await this.post(s, F, P);
-        this.logSuccess(P.events.length, false, ee);
+        let finalResponse = await this.post(baseHeaders, body, payload);
+        this.logSuccess(payload.events.length, false, finalResponse);
         return;
       }
       throw error;
     }
   }
-  async post(e, n, r) {
-    let tlsFetchSession = getTLSFetchSession("analytics", withoutSensitiveHeaders(this.endpoint, e));
+  async post(headers, body, payload) {
+    let tlsFetchSession = getTLSFetchSession("analytics", withoutSensitiveHeaders(this.endpoint, headers));
     if (!tlsFetchSession) throw Error("this runtime has no Bun.FetchSession");
-    let h = withVettedSessionsBearer(
+    let bearer = withVettedSessionsBearer(
       {
         Accept: DEFAULT_ACCEPT_HEADER,
-        ...e,
-        ...n?.headers,
+        ...headers,
+        ...body?.headers,
       },
       this.endpoint,
     );
-    let { proxy, tls, ...w } = getProxyFetchOptions({
+    let { proxy, tls, ...rest } = getProxyFetchOptions({
       url: this.endpoint,
     });
-    let R =
+    let fetchOptions =
       proxy !== undefined
         ? {
             proxy: {
@@ -929,16 +953,16 @@ class FirstPartyEventLoggingExporter {
     let { response, text } = await tlsFetchSession
       .fetch(this.endpoint, {
         method: "POST",
-        headers: h,
-        body: n?.body ?? jsonStringify(r),
+        headers: bearer,
+        body: body?.body ?? jsonStringify(payload),
         signal: AbortSignal.timeout(this.timeout),
-        ...w,
-        ...R,
+        ...rest,
+        ...fetchOptions,
         redirect: "manual",
       })
-      .then(async (F) => ({
-        response: F,
-        text: await F.text(),
+      .then(async (response) => ({
+        response,
+        text: await response.text(),
       }))
       .catch((error) => {
         throw error instanceof DOMException && error.name === "TimeoutError"
@@ -954,7 +978,7 @@ class FirstPartyEventLoggingExporter {
             });
       });
     if (!response.ok) {
-      reportSessionsBearerAnswer(response.status, h, this.endpoint);
+      reportSessionsBearerAnswer(response.status, bearer, this.endpoint);
       throw new DirectPostError(`Request failed with status code ${response.status}`, {
         status: response.status,
         requestId: response.headers.get("request-id"),
@@ -972,38 +996,39 @@ class FirstPartyEventLoggingExporter {
       return text;
     }
   }
-  logSuccess(e, n, r) {}
+  logSuccess(count, hasAuth, response) {}
   hrTimeToDate(hrTime) {
     let [seconds, nanoseconds] = hrTime;
     return new Date(seconds * 1000 + nanoseconds / 1e6);
   }
-  transformLogsToEvents(e) {
-    let n = [];
-    let r = isHipaaMode();
-    let s = (R) => (typeof R === "string" ? R : undefined);
-    let h = (R) => (typeof R === "boolean" ? R : undefined);
-    let y = (R) => (typeof R === "number" && Number.isInteger(R) && R >= 0 ? R : undefined);
-    let S = (R, principalStamp) => {
-      n.push({
+  transformLogsToEvents(logs) {
+    let events = [];
+    let hipaa = isHipaaMode();
+    let asString = (value) => (typeof value === "string" ? value : undefined);
+    let asBoolean = (value) => (typeof value === "boolean" ? value : undefined);
+    let asCount = (value) =>
+      typeof value === "number" && Number.isInteger(value) && value >= 0 ? value : undefined;
+    let pushEvent = (event, principalStamp) => {
+      events.push({
         event_type: "ClaudeCodeInternalEvent",
-        event_data: ClaudeCodeInternalEvent.toJSON(r ? sanitizeEventMetadata(R) : R),
+        event_data: ClaudeCodeInternalEvent.toJSON(hipaa ? sanitizeEventMetadata(event) : event),
         ...(principalStamp !== null && {
           principal_stamp: principalStamp,
         }),
       });
     };
-    let w = (R) => {
-      n.push({
+    let pickNumericMetrics_2 = (obj) => {
+      events.push({
         event_type: "GrowthbookExperimentEvent",
-        event_data: GrowthbookExperimentEvent.toJSON(r ? sanitizeExperimentEventFields(R) : R),
+        event_data: GrowthbookExperimentEvent.toJSON(hipaa ? sanitizeExperimentEventFields(obj) : obj),
       });
     };
-    for (let log of e) {
+    for (let log of logs) {
       let attributes = log.attributes || {};
       if (attributes.event_type === "GrowthbookExperimentEvent") {
         let timestamp = this.hrTimeToDate(log.hrTime);
         let { account_uuid, organization_uuid: organizationUuid } = attributes;
-        w({
+        pickNumericMetrics_2({
           event_id: attributes.event_id,
           timestamp,
           experiment_id: attributes.experiment_id,
@@ -1023,16 +1048,16 @@ class FirstPartyEventLoggingExporter {
         });
         continue;
       }
-      let P = attributes.event_name || log.body || "unknown";
+      let eventName = attributes.event_name || log.body || "unknown";
       let { core_metadata: coreMetadata, user_metadata: userMetadata } = attributes;
       let principalStamp = typeof attributes.principal_stamp === "string" ? attributes.principal_stamp : null;
-      if (needsPrincipalStamp(P) || isEventOfAnotherPrincipal(P, principalStamp)) continue;
+      if (needsPrincipalStamp(eventName) || isEventOfAnotherPrincipal(eventName, principalStamp)) continue;
       let eventMetadata = attributes.event_metadata || {};
       if (!coreMetadata) {
-        S(
+        pushEvent(
           {
             event_id: attributes.event_id,
-            event_name: P,
+            event_name: eventName,
             client_timestamp: this.hrTimeToDate(log.hrTime),
             session_id: getSessionId(),
             additional_metadata: Buffer.from(
@@ -1061,11 +1086,11 @@ class FirstPartyEventLoggingExporter {
         ...rest
       } = formatted.additional;
       let additionalMetadata = stripProtoFields(rest);
-      if (r) additionalMetadata = pickNumericMetrics(additionalMetadata, P);
-      S(
+      if (hipaa) additionalMetadata = pickNumericMetrics(additionalMetadata, eventName);
+      pushEvent(
         {
           event_id: attributes.event_id,
-          event_name: P,
+          event_name: eventName,
           client_timestamp: this.hrTimeToDate(log.hrTime),
           device_id: attributes.user_id,
           email: userMetadata?.email,
@@ -1073,15 +1098,15 @@ class FirstPartyEventLoggingExporter {
           ...formatted.core,
           env: formatted.env,
           process: formatted.process,
-          skill_name: s(_PROTO_skill_name),
-          plugin_name: s(_PROTO_plugin_name),
-          marketplace_name: s(_PROTO_marketplace_name),
-          mcp_server_name: s(_PROTO_mcp_server_name),
-          mcp_tool_name: s(_PROTO_mcp_tool_name),
-          head_sha: s(_PROTO_head_sha),
-          is_clean_tree_at_start: h(_PROTO_is_clean_tree_at_start),
-          changed_file_count_at_start: y(_PROTO_changed_file_count_at_start),
-          untracked_file_count_at_start: y(_PROTO_untracked_file_count_at_start),
+          skill_name: asString(_PROTO_skill_name),
+          plugin_name: asString(_PROTO_plugin_name),
+          marketplace_name: asString(_PROTO_marketplace_name),
+          mcp_server_name: asString(_PROTO_mcp_server_name),
+          mcp_tool_name: asString(_PROTO_mcp_tool_name),
+          head_sha: asString(_PROTO_head_sha),
+          is_clean_tree_at_start: asBoolean(_PROTO_is_clean_tree_at_start),
+          changed_file_count_at_start: asCount(_PROTO_changed_file_count_at_start),
+          untracked_file_count_at_start: asCount(_PROTO_untracked_file_count_at_start),
           additional_metadata:
             Object.keys(additionalMetadata).length > 0
               ? Buffer.from(jsonStringify(additionalMetadata)).toString("base64")
@@ -1091,22 +1116,22 @@ class FirstPartyEventLoggingExporter {
       );
     }
     return {
-      events: n,
+      events,
     };
   }
-  adoptInflightRefreshFrom(e) {
-    this.refreshAttemptedFor ??= e.refreshAttemptedFor;
-    let inflightRefresh = e.inflightRefresh;
+  adoptInflightRefreshFrom(other) {
+    this.refreshAttemptedFor ??= other.refreshAttemptedFor;
+    let inflightRefresh = other.inflightRefresh;
     if (!inflightRefresh || this.inflightRefresh) return;
     this.inflightRefresh = inflightRefresh;
     inflightRefresh.finally(() => {
       if (this.inflightRefresh === inflightRefresh) this.inflightRefresh = null;
     });
   }
-  async beginShutdown(e = 0) {
+  async beginShutdown(timeoutMs = 0) {
     this.finalFlush = true;
     this.signalFinalFlush();
-    if (this.inflightRefresh && e > 0) await withDeadline(this.inflightRefresh, e);
+    if (this.inflightRefresh && timeoutMs > 0) await withDeadline(this.inflightRefresh, timeoutMs);
   }
   async shutdown() {
     this.isShutdown = true;
@@ -1152,9 +1177,9 @@ class SinkKillSwitchError extends Error {
   }
 }
 //@ chunk-aepeg2w5.js:893199-893255 placement
-function endpointHost(e) {
+function endpointHost(url) {
   try {
-    return new URL(e).host;
+    return new URL(url).host;
   } catch {
     return;
   }
@@ -1163,9 +1188,9 @@ function endpointHost(e) {
 /**
  * ANTHROPIC_BASE_URL 非 api.anthropic.com 时返回其 host，作为 GrowthBook 属性。
  */
-function getApiBaseUrlHost_2(resolvedWIFBaseUrlSnapshot) {
-  if (resolvedWIFBaseUrlSnapshot === undefined) return;
-  return resolvedWIFBaseUrlSnapshot === null ? "api.anthropic.com" : endpointHost(resolvedWIFBaseUrlSnapshot);
+function getApiBaseUrlHost_2(url) {
+  if (url === undefined) return;
+  return url === null ? "api.anthropic.com" : endpointHost(url);
 }
 //@ chunk-aepeg2w5.js:893603-893676 placement
 function isHttpsEndpoint_2(endpoint) {
@@ -1189,15 +1214,18 @@ function classifyPostFailure(error) {
   return status >= 400 ? "status_4xx" : "status_3xx";
 }
 //@ chunk-aepeg2w5.js:893919-893977 placement
-var acceptedCountSchema = DoctorLazy(() =>
-  u({
-    accepted_count: E().int().nonnegative(),
-  }),
-);
+var acceptedCountSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-aepeg2w5.js:893919", () => {
+  acceptedCountSchema = DoctorLazy(() =>
+    objectSchema({
+      accepted_count: numberSchema().int().nonnegative(),
+    }),
+  );
+});
 //@ chunk-aepeg2w5.js:893977-894071 placement
-function acceptedEventCount(e, n) {
-  let r = acceptedCountSchema().safeParse(e);
-  return r.success ? Math.min(r.data.accepted_count, n) : n;
+function acceptedEventCount(response, fallback) {
+  let parsed = acceptedCountSchema().safeParse(response);
+  return parsed.success ? Math.min(parsed.data.accepted_count, fallback) : fallback;
 }
 //@ chunk-aepeg2w5.js:894071-894295 placement
 /**
@@ -1205,9 +1233,9 @@ function acceptedEventCount(e, n) {
  */
 function logGrantCallbackError(error) {
   try {
-    let n = error instanceof Error ? error.name : typeof error;
+    let errorName = error instanceof Error ? error.name : typeof error;
     logForDebugging(
-      `1P event logging: a function of the tenant's grant threw or rejected (${n}). From mayPost that is a no, from a listener it is ignored.`,
+      `1P event logging: a function of the tenant's grant threw or rejected (${errorName}). From mayPost that is a no, from a listener it is ignored.`,
       {
         level: "error",
       },
@@ -1240,5 +1268,8 @@ function getAxiosErrorContext(error) {
   return parts.join(", ");
 }
 //@ chunk-4m46mxx9.js:6572-6590 fingerprint = getStorageDir (1)
-var getStorageDir = "telemetry";
-export { isHttpsEndpoint_2, getStorageDir, FirstPartyEventLoggingExporter };
+/**
+ * telemetry 插件的目录名 "telemetry"，导出为 MOD_FOLDER；registerPlugin 里 Zfr(B) 在该目录下解析 hooks 模块文件。
+ */
+var MOD_FOLDER = "telemetry";
+export { isHttpsEndpoint_2, MOD_FOLDER, FirstPartyEventLoggingExporter };

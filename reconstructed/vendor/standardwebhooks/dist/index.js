@@ -5,13 +5,13 @@
  * pieces: chunk-hwmsct5x.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../runtime/bun-runtime.js";
 import { require_timing_safe_equal } from "./timing_safe_equal.js";
 import { require_base64 } from "../../@stablelib/base64/lib/base64.js";
 import { require_sha256 } from "../../fast-sha256/sha256.js";
 
 //@ chunk-hwmsct5x.js:14156-16042 cjs-fingerprint
-var require_standardwebhooks = x(function (cjsExports) {
+var require_standardwebhooks = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
@@ -57,13 +57,13 @@ var require_standardwebhooks = x(function (cjsExports) {
       if (!msgSignature || !msgId || !msgTimestamp)
         throw new WebhookVerificationError("Missing required headers");
       let timestamp = this.verifyTimestamp(msgTimestamp);
-      let E = this.sign(msgId, timestamp, payload).split(",")[1];
+      let expectedSignature = this.sign(msgId, timestamp, payload).split(",")[1];
       let passedSignatures = msgSignature.split(" ");
       let encoder = new globalThis.TextEncoder();
       for (let versionedSignature of passedSignatures) {
         let [version, signature] = versionedSignature.split(",");
         if (version !== "v1") continue;
-        if (timing_safe_equal_1.timingSafeEqual(encoder.encode(signature), encoder.encode(E)))
+        if (timing_safe_equal_1.timingSafeEqual(encoder.encode(signature), encoder.encode(expectedSignature)))
           return JSON.parse(payload.toString());
       }
       throw new WebhookVerificationError("No matching signature found");
@@ -74,8 +74,8 @@ var require_standardwebhooks = x(function (cjsExports) {
       else throw Error("Expected payload to be of type string or Buffer.");
       let encoder = new TextEncoder();
       let timestampNumber = Math.floor(timestamp.getTime() / 1000);
-      let y = encoder.encode(`${msgId}.${timestampNumber}.${payload}`);
-      return `v1,${base64.encode(sha256.hmac(this.key, y))}`;
+      let signedContent = encoder.encode(`${msgId}.${timestampNumber}.${payload}`);
+      return `v1,${base64.encode(sha256.hmac(this.key, signedContent))}`;
     }
     verifyTimestamp(timestampHeader) {
       let now = Math.floor(Date.now() / 1000);

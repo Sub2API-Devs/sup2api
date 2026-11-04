@@ -23,3 +23,4 @@ var CHART_BUNDLE_RESOURCE = __cc_resource_0;
 function loadChartBundle() {
   return readEmbeddedText(CHART_BUNDLE_RESOURCE, import.meta.dirname);
 }
+export { loadChartBundle };

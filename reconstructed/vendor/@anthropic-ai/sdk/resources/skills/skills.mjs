@@ -7,9 +7,9 @@
  */
 import { APIResource } from "../../core/resource.mjs";
 import { Versions_3 } from "./versions.mjs";
-import { ut } from "../../internal/uploads.mjs";
+import { withUploadBody } from "../../internal/uploads.mjs";
 import { buildHeaders } from "../../internal/headers.mjs";
-import { I } from "../../internal/utils/path.mjs";
+import { parseUrl_2 } from "../../internal/utils/path.mjs";
 import { TokenPage } from "../../core/pagination.mjs";
 
 //@ chunk-hwmsct5x.js:161297-162129 esm-fingerprint
@@ -23,7 +23,7 @@ var Skills_2 = (() => {
       let { workspace_id, ...body } = params;
       return this._client.post(
         "/v1/skills",
-        ut(
+        withUploadBody(
           {
             body,
             ...options,
@@ -45,7 +45,7 @@ var Skills_2 = (() => {
     }
     retrieve(skillID, params = {}, options) {
       let { workspace_id } = params ?? {};
-      return this._client.get(I`/v1/skills/${skillID}`, {
+      return this._client.get(parseUrl_2`/v1/skills/${skillID}`, {
         ...options,
         headers: buildHeaders([
           {
@@ -78,7 +78,7 @@ var Skills_2 = (() => {
     }
     delete(skillID, params = {}, options) {
       let { workspace_id } = params ?? {};
-      return this._client.delete(I`/v1/skills/${skillID}`, {
+      return this._client.delete(parseUrl_2`/v1/skills/${skillID}`, {
         ...options,
         headers: buildHeaders([
           {

@@ -30,20 +30,25 @@ import {
   daemonRejectedDir,
   daemonDispatchDir,
   hostManagedEntry,
+  ensureDaemonRuntimeDir,
+  ensureDaemonDir,
   redactDaemonPipeKey,
   daemonControlSocket,
   daemonRvDir,
   daemonPtyDir,
+  cleanupStaleDaemonDirs,
   redactErrorPaths,
   daemonTokensFile,
   daemonPtyPidFile,
   ptyErrFile,
   daemonPtySocket,
   ptyLateFile,
+  getExecExitPath,
   daemonAuthFile,
+  getDaemonRuntimeDir,
   daemonPtyPidsDir,
   hostManagedDir,
-} from "../utils/sandbox/userNamespace.js";
+} from "../services/daemon/paths.js";
 import { logForDebugging } from "../utils/debug.js";
 import { logEvent } from "../services/analytics/index.js";
 import { concatSafe, lit, fromNumber, fromEnum } from "../services/analytics/safeMetadata.js";
@@ -83,7 +88,11 @@ import {
 } from "../services/analytics/growthbook.js";
 import { isLowMemory, getLowMemoryState, isAttachUpgradeEnabled } from "./lowMemory.js";
 import { spawnSpare, claimSpare, reapOrphanSpares } from "../services/daemon/spare.js";
-import { processWrapperArgv, PROCESS_WRAPPER_ENV, processWrapperError } from "../utils/processWrapper.js";
+import {
+  processWrapperArgv,
+  PROCESS_WRAPPER_TIMEOUT_MS,
+  processWrapperError,
+} from "../utils/processWrapper.js";
 import { cwdGoneReason, MIN_POLL_MS } from "../services/daemon/sessionRestart.js";
 import {
   isProviderManagedByHost,
@@ -97,13 +106,6 @@ import {
   ensureTombstoneScope,
   DAEMON_START_BUDGET_MS,
 } from "../services/daemon/ensureDaemon.js";
-import {
-  ensureDaemonRuntimeDir,
-  ensureDaemonDir,
-  cleanupStaleDaemonDirs,
-  getExecExitPath,
-  getDaemonRuntimeDir,
-} from "../services/daemon/paths.js";
 import { handleDaemonLease } from "../services/daemon/controlServer.js";
 import {
   pingPtySocket,
@@ -134,168 +136,170 @@ import { diffSkillServers } from "../utils/skills/skillChangeDetector.js";
 var MAX_DISPATCH_INPUT_BYTES = 10485760;
 var regExp = new RegExp(`[${INVISIBLE_CHAR_CLASS_SOURCE}]`, "gu");
 //@ chunk-ss669z1x.js:14561-14647 placement
-function normalizeDispatchInput(r) {
-  let e = redactSecrets(r).trimEnd();
-  return e.includes(`
+function normalizeDispatchInput(input) {
+  let redacted = redactSecrets(input).trimEnd();
+  return redacted.includes(`
 `)
-    ? escapeControlChars(jsonStringify(e))
-    : e.replace(regExp, toUnicodeEscapes);
+    ? escapeControlChars(jsonStringify(redacted))
+    : redacted.replace(regExp, toUnicodeEscapes);
 }
 //@ chunk-ss669z1x.js:14647-15174 placement
 /**
  * 打开后台派发日志（过大时清空），写入带时间戳的条目。
  */
-async function openBgDispatchLog(r) {
+async function openBgDispatchLog(logPath) {
   let isTTY = process.stdout.isTTY;
-  let o = await stat(r)
-    .then((u) => u.size)
+  let size = await stat(logPath)
+    .then((stats) => stats.size)
     .catch(() => 0);
-  if (o > MAX_DISPATCH_INPUT_BYTES) {
-    await rotateLogFile(r);
-    o = 0;
+  if (size > MAX_DISPATCH_INPUT_BYTES) {
+    await rotateLogFile(logPath);
+    size = 0;
   }
-  let appendFd = openAppendFd(r);
-  let i = null;
-  let h = null;
-  let S = false;
+  let stream = openAppendFd(logPath);
+  let rotating = null;
+  let pending = null;
+  let closed = false;
   return {
-    write(u, y) {
-      let D = `[${new Date().toISOString()}] [${u}] ${normalizeDispatchInput(y)}
+    write(tag, message) {
+      let line = `[${new Date().toISOString()}] [${tag}] ${normalizeDispatchInput(message)}
 `;
-      if (isTTY) process.stdout.write(D);
-      if (S) return;
-      o += Buffer.byteLength(D);
-      if (h) h.push(D);
-      else appendFd.write(D);
-      if (o > MAX_DISPATCH_INPUT_BYTES && !i) {
-        let E = appendFd;
-        let L = [];
-        h = L;
-        i = (async () => {
+      if (isTTY) process.stdout.write(line);
+      if (closed) return;
+      size += Buffer.byteLength(line);
+      if (pending) pending.push(line);
+      else stream.write(line);
+      if (size > MAX_DISPATCH_INPUT_BYTES && !rotating) {
+        let oldFd = stream;
+        let buffered = [];
+        pending = buffered;
+        rotating = (async () => {
           try {
-            await endWritable(E);
-            await rotateLogFile(r);
-            appendFd = openAppendFd(r);
-            o = 0;
-            for (let P of L) {
-              o += Buffer.byteLength(P);
-              appendFd.write(P);
+            await endWritable(oldFd);
+            await rotateLogFile(logPath);
+            stream = openAppendFd(logPath);
+            size = 0;
+            for (let entry of buffered) {
+              size += Buffer.byteLength(entry);
+              stream.write(entry);
             }
           } catch {
           } finally {
-            h = null;
-            i = null;
+            pending = null;
+            rotating = null;
           }
         })();
       }
     },
     async close() {
-      S = true;
-      await i;
-      await endWritable(appendFd);
+      closed = true;
+      await rotating;
+      await endWritable(stream);
     },
   };
 }
 //@ chunk-ss669z1x.js:15174-15243 placement
-function openAppendFd(r) {
-  let writeStream = createWriteStream(r, {
+function openAppendFd(logPath) {
+  let writeStream = createWriteStream(logPath, {
     flags: "a",
   });
   writeStream.on("error", () => {});
   return writeStream;
 }
 //@ chunk-ss669z1x.js:15243-15341 placement
-function endWritable(r) {
+function endWritable(stream) {
   return new Promise((resolve) => {
-    if (r.closed) {
+    if (stream.closed) {
       resolve();
       return;
     }
-    r.once("close", () => resolve());
-    r.end();
+    stream.once("close", () => resolve());
+    stream.end();
   });
 }
 //@ chunk-ss669z1x.js:15341-15491 placement
-async function rotateLogFile(r) {
-  let e = `${r}.1`;
+async function rotateLogFile(logPath) {
+  let rotatedPath = `${logPath}.1`;
   try {
-    await rename(r, e);
+    await rename(logPath, rotatedPath);
   } catch (error) {
     if (isENOENT(error)) return;
-    await unlink(e).catch(() => {});
-    await rename(r, e).catch(() => unlink(r).catch(() => {}));
+    await unlink(rotatedPath).catch(() => {});
+    await rename(logPath, rotatedPath).catch(() => unlink(logPath).catch(() => {}));
   }
 }
 //@ chunk-ss669z1x.js:15918-15944 placement
 var DISPATCH_TTL_MS = 86400000;
 var MAX_DISPATCH_FILE_BYTES = 262144;
 //@ chunk-ss669z1x.js:15944-16092 placement
-async function quarantineDispatchFile(r, e) {
+async function quarantineDispatchFile(filePath, reason) {
   await mkdir(daemonRejectedDir(), {
     recursive: true,
     mode: 448,
   }).catch(() => {});
-  await rename(r, join(daemonRejectedDir(), basename(r))).catch(() => unlink(r).catch(() => {}));
-  reportDispatchRejected(basename(r), e);
+  await rename(filePath, join(daemonRejectedDir(), basename(filePath))).catch(() =>
+    unlink(filePath).catch(() => {}),
+  );
+  reportDispatchRejected(basename(filePath), reason);
 }
 //@ chunk-ss669z1x.js:16092-16206 placement
-function reportDispatchRejected(r, e) {
-  logForDebugging(`[bg-dispatch] rejected ${r}: ${e}`, {
+function reportDispatchRejected(filePath, reason) {
+  logForDebugging(`[bg-dispatch] rejected ${filePath}: ${reason}`, {
     level: "warn",
   });
   logEvent("tengu_bg_dispatch_rejected", {
-    reason: e,
+    reason,
   });
 }
 //@ chunk-ss669z1x.js:16206-16268 placement
-function oversizedMessage(r) {
-  return concatSafe(lit("oversized ("), fromNumber(r), lit(" bytes)"));
+function oversizedMessage(size) {
+  return concatSafe(lit("oversized ("), fromNumber(size), lit(" bytes)"));
 }
 //@ chunk-ss669z1x.js:16268-17013 placement
 /**
  * 读取并校验一个派发请求文件（拒绝 symlink、非常规文件、过大文件）。
  */
-async function ingestDispatchFile(r, e) {
-  let o;
+async function ingestDispatchFile(filePath, onDispatch) {
+  let fileStat;
   try {
-    o = await lstat(r);
+    fileStat = await lstat(filePath);
   } catch (error) {
     if (isENOENT(error)) return;
     logFeatureBad("daemon_bg_dispatch_ingest", "read_failed");
-    return quarantineDispatchFile(r, sanitizeErrnoForTelemetry(error) ?? lit("unknown"));
+    return quarantineDispatchFile(filePath, sanitizeErrnoForTelemetry(error) ?? lit("unknown"));
   }
-  if (o.isSymbolicLink()) {
+  if (fileStat.isSymbolicLink()) {
     logFeatureBad("daemon_bg_dispatch_ingest", "symlink");
-    return quarantineDispatchFile(r, lit("symlink"));
+    return quarantineDispatchFile(filePath, lit("symlink"));
   }
-  if (!o.isFile()) {
+  if (!fileStat.isFile()) {
     logFeatureBad("daemon_bg_dispatch_ingest", "not_a_file");
-    logForDebugging(`[bg-dispatch] removed non-regular ${basename(r)}`, {
+    logForDebugging(`[bg-dispatch] removed non-regular ${basename(filePath)}`, {
       level: "warn",
     });
-    await rm(r, {
+    await rm(filePath, {
       recursive: true,
       force: true,
     }).catch(() => {});
     return;
   }
-  if (o.size > MAX_DISPATCH_FILE_BYTES) {
+  if (fileStat.size > MAX_DISPATCH_FILE_BYTES) {
     logFeatureBad("daemon_bg_dispatch_ingest", "oversized");
-    return quarantineDispatchFile(r, oversizedMessage(o.size));
+    return quarantineDispatchFile(filePath, oversizedMessage(fileStat.size));
   }
-  let n;
+  let text;
   try {
-    n = await readFile(r, "utf8");
+    text = await readFile(filePath, "utf8");
   } catch (error) {
     if (isENOENT(error)) return;
     logFeatureBad("daemon_bg_dispatch_ingest", "read_failed");
-    return quarantineDispatchFile(r, sanitizeErrnoForTelemetry(error) ?? lit("unknown"));
+    return quarantineDispatchFile(filePath, sanitizeErrnoForTelemetry(error) ?? lit("unknown"));
   }
-  let dispatchRecord = parseDispatchRecord(n);
-  if (!dispatchRecord.ok) return quarantineDispatchFile(r, dispatchRecord.reason);
-  e(dispatchRecord.dispatch);
+  let dispatchRecord = parseDispatchRecord(text);
+  if (!dispatchRecord.ok) return quarantineDispatchFile(filePath, dispatchRecord.reason);
+  onDispatch(dispatchRecord.dispatch);
   logFeatureOk("daemon_bg_dispatch_ingest");
-  await unlink(r).catch(() => {});
+  await unlink(filePath).catch(() => {});
 }
 //@ chunk-ss669z1x.js:17013-17062 placement
 var DISPATCH_DIR = {
@@ -303,9 +307,9 @@ var DISPATCH_DIR = {
   relPath: ["dispatch"],
 };
 //@ chunk-ss669z1x.js:17062-17208 placement
-async function ensureDispatchDir(r) {
-  if (isStorageV5Enabled() && r !== undefined) {
-    await r.ensureScope(DISPATCH_DIR).catch(() => {
+async function ensureDispatchDir(rootPath) {
+  if (isStorageV5Enabled() && rootPath !== undefined) {
+    await rootPath.ensureScope(DISPATCH_DIR).catch(() => {
       return;
     });
     return;
@@ -319,18 +323,18 @@ async function ensureDispatchDir(r) {
 /**
  * 解析派发记录 JSON 并校验 schema。
  */
-function parseDispatchRecord(r) {
-  let e;
-  let o = true;
+function parseDispatchRecord(text) {
+  let json;
+  let isJsonValid = true;
   try {
-    e = jsonParse(r);
+    json = jsonParse(text);
   } catch {
-    e = undefined;
-    o = false;
+    json = undefined;
+    isJsonValid = false;
   }
-  let n;
+  let parsed;
   try {
-    n = BgDispatchSchema().safeParse(e);
+    parsed = BgDispatchSchema().safeParse(json);
   } catch {
     logFeatureBad("daemon_bg_dispatch_ingest", "transform_throw");
     return {
@@ -338,25 +342,25 @@ function parseDispatchRecord(r) {
       reason: lit("transform_throw"),
     };
   }
-  if (!n.success) {
-    logFeatureBad("daemon_bg_dispatch_ingest", o ? "schema" : "bad_json");
+  if (!parsed.success) {
+    logFeatureBad("daemon_bg_dispatch_ingest", isJsonValid ? "schema" : "bad_json");
     return {
       ok: false,
       reason: lit("schema"),
     };
   }
-  if (Date.now() - n.data.createdAt > DISPATCH_TTL_MS) {
+  if (Date.now() - parsed.data.createdAt > DISPATCH_TTL_MS) {
     logFeatureBad("daemon_bg_dispatch_ingest", "stale");
     return {
       ok: false,
       reason: lit("stale"),
     };
   }
-  let { env, reattachEnv } = n.data;
+  let { env, reattachEnv } = parsed.data;
   return {
     ok: true,
     dispatch: {
-      ...n.data,
+      ...parsed.data,
       env: pickAllowedEnv(env, BG_CARRIED_ENV_ALLOWLIST),
       reattachEnv: reattachEnv && pickAllowedEnv(reattachEnv, BG_INTERNAL_ENV_KEYS),
     },
@@ -378,42 +382,42 @@ async function removeNonRegularDispatch(dirPath) {
   await convertDirectoryToZipInPlace(dirPath);
 }
 //@ chunk-ss669z1x.js:17927-18112 placement
-async function rejectStoredDispatch(r, e, o, n) {
-  if (n !== undefined)
-    await r.write(STORAGE_SPACES.daemon(["dispatch", "rejected", e]), n).catch(() => {
+async function rejectStoredDispatch(filePath, reason, extra, record) {
+  if (record !== undefined)
+    await filePath.write(STORAGE_SPACES.daemon(["dispatch", "rejected", reason]), record).catch(() => {
       return;
     });
-  await r.delete(STORAGE_SPACES.daemon(["dispatch", e])).catch(() => {
+  await filePath.delete(STORAGE_SPACES.daemon(["dispatch", reason])).catch(() => {
     return;
   });
-  reportDispatchRejected(e, o);
+  reportDispatchRejected(reason, extra);
 }
 //@ chunk-ss669z1x.js:18112-18990 placement
 /**
  * 处理一个派发请求条目（拒绝、移入存储、记录）。
  */
-async function ingestDispatchEntry(r, dirPath, o) {
-  let n = STORAGE_SPACES.daemon(["dispatch", dirPath]);
-  let i = await checkJobFileWritable(join(daemonDispatchDir(), dirPath));
-  if (i.kind === "refused") {
-    if (i.symlink) {
+async function ingestDispatchEntry(storage, reason, entry) {
+  let space = STORAGE_SPACES.daemon(["dispatch", reason]);
+  let writable = await checkJobFileWritable(join(daemonDispatchDir(), reason));
+  if (writable.kind === "refused") {
+    if (writable.symlink) {
       logFeatureBad("daemon_bg_dispatch_ingest", "symlink");
-      await convertDirectoryToZipInPlace(dirPath);
-      reportDispatchRejected(dirPath, lit("symlink"));
+      await convertDirectoryToZipInPlace(reason);
+      reportDispatchRejected(reason, lit("symlink"));
       return;
     }
-    await removeNonRegularDispatch(dirPath);
+    await removeNonRegularDispatch(reason);
     return;
   }
-  if (i.kind === "error") {
+  if (writable.kind === "error") {
     logFeatureBad("daemon_bg_dispatch_ingest", "read_failed");
-    reportDispatchRejected(dirPath, sanitizeErrnoForTelemetry(i.error) ?? lit("unknown"));
+    reportDispatchRejected(reason, sanitizeErrnoForTelemetry(writable.error) ?? lit("unknown"));
     return;
   }
-  let h = await r
+  let listed = await storage
     .read([
       {
-        key: n,
+        key: space,
         offset: 0,
         length: MAX_DISPATCH_FILE_BYTES + 1,
       },
@@ -421,95 +425,96 @@ async function ingestDispatchEntry(r, dirPath, o) {
     .catch(() => {
       return;
     });
-  if (h === undefined || !h.ok) {
+  if (listed === undefined || !listed.ok) {
     logFeatureBad("daemon_bg_dispatch_ingest", "read_failed");
-    if (h !== undefined && isUnrecoverableStorageRead(h.error))
-      return rejectStoredDispatch(r, dirPath, lit("v5_read_failed"), undefined);
-    reportDispatchRejected(dirPath, lit("v5_read_failed"));
+    if (listed !== undefined && isUnrecoverableStorageRead(listed.error))
+      return rejectStoredDispatch(storage, reason, lit("v5_read_failed"), undefined);
+    reportDispatchRejected(reason, lit("v5_read_failed"));
     return;
   }
-  let S = h.value.items[0];
-  if (!S.found) return;
-  if (S.totalBytes > MAX_DISPATCH_FILE_BYTES) {
+  let firstItem = listed.value.items[0];
+  if (!firstItem.found) return;
+  if (firstItem.totalBytes > MAX_DISPATCH_FILE_BYTES) {
     logFeatureBad("daemon_bg_dispatch_ingest", "oversized");
-    return rejectStoredDispatch(r, dirPath, oversizedMessage(S.totalBytes), undefined);
+    return rejectStoredDispatch(storage, reason, oversizedMessage(firstItem.totalBytes), undefined);
   }
-  let dispatchRecord = parseDispatchRecord(Buffer.from(S.value).toString("utf8"));
-  if (!dispatchRecord.ok) return rejectStoredDispatch(r, dirPath, dispatchRecord.reason, S.value);
-  o(dispatchRecord.dispatch);
+  let dispatchRecord = parseDispatchRecord(Buffer.from(firstItem.value).toString("utf8"));
+  if (!dispatchRecord.ok)
+    return rejectStoredDispatch(storage, reason, dispatchRecord.reason, firstItem.value);
+  entry(dispatchRecord.dispatch);
   logFeatureOk("daemon_bg_dispatch_ingest");
-  await r.delete(n).catch(() => {
+  await storage.delete(space).catch(() => {
     return;
   });
 }
 //@ chunk-ss669z1x.js:18990-19123 placement
-async function ingestDispatchName(r, dirPath, o) {
+async function ingestDispatchName(storage, dirPath, entry) {
   if (!isValidKeySegment(dirPath)) {
     logFeatureBad("daemon_bg_dispatch_ingest", "bad_name");
     reportDispatchRejected(dirPath, lit("bad_name"));
     await convertDirectoryToZipInPlace(dirPath);
     return;
   }
-  await ingestDispatchEntry(r, dirPath, o);
+  await ingestDispatchEntry(storage, dirPath, entry);
 }
 //@ chunk-ss669z1x.js:19123-19834 placement
 /**
  * 处理积压的派发请求（v5 存储或目录）。
  */
-async function drainDispatchQueue(r, e) {
-  if (isStorageV5Enabled() && e !== undefined) {
-    let n;
-    let i = [];
-    let h = [];
+async function drainDispatchQueue(storage, dir) {
+  if (isStorageV5Enabled() && dir !== undefined) {
+    let drained;
+    let pending = [];
+    let entries = [];
     do {
-      let S = await e.listEntries(DISPATCH_DIR, {
-        cursor: n,
+      let listing = await dir.listEntries(DISPATCH_DIR, {
+        cursor: drained,
         skipKeyStats: true,
         skipScopeStats: true,
       });
-      if (!S.ok)
+      if (!listing.ok)
         throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-          `dispatch drain v5 list failed: ${S.error.code}`,
+          `dispatch drain v5 list failed: ${listing.error.code}`,
           "dispatch drain v5 list failed",
         );
-      for (let item of S.value.items) {
-        let y = item.kind === "key" ? item.key : item.scope;
-        if (y.namespace !== "daemon" || y.relPath?.length !== 2) continue;
-        let D = y.relPath[1];
-        if (D === undefined || !isValidKeySegment(D)) continue;
-        if (item.kind === "key") i.push(D);
-        else h.push(D);
+      for (let item of listing.value.items) {
+        let target = item.kind === "key" ? item.key : item.scope;
+        if (target.namespace !== "daemon" || target.relPath?.length !== 2) continue;
+        let fileName = target.relPath[1];
+        if (fileName === undefined || !isValidKeySegment(fileName)) continue;
+        if (item.kind === "key") pending.push(fileName);
+        else entries.push(fileName);
       }
-      n = S.value.cursor;
-    } while (n !== undefined);
-    for (let S of h) {
-      if (isHiddenOrTempOrRejected(S)) continue;
-      await removeNonRegularDispatch(S);
+      drained = listing.value.cursor;
+    } while (drained !== undefined);
+    for (let entry of entries) {
+      if (isHiddenOrTempOrRejected(entry)) continue;
+      await removeNonRegularDispatch(entry);
     }
-    for (let S of i) {
-      if (isHiddenOrTempOrRejected(S)) continue;
-      await ingestDispatchEntry(e, S, r);
+    for (let entry of pending) {
+      if (isHiddenOrTempOrRejected(entry)) continue;
+      await ingestDispatchEntry(dir, entry, storage);
     }
     return;
   }
-  let o;
+  let remaining;
   try {
-    o = await readdir(daemonDispatchDir());
+    remaining = await readdir(daemonDispatchDir());
   } catch (error) {
     if (isENOENT(error)) return;
     throw error;
   }
-  for (let n of o) {
-    if (isHiddenOrTempOrRejected(n)) continue;
-    await ingestDispatchFile(join(daemonDispatchDir(), n), r);
+  for (let entry of remaining) {
+    if (isHiddenOrTempOrRejected(entry)) continue;
+    await ingestDispatchFile(join(daemonDispatchDir(), entry), storage);
   }
 }
 //@ chunk-ss669z1x.js:19834-19896 placement
 /**
  * 文件名是 .tmp 临时文件。疑似归错文件。
  */
-function isTempFileName(r) {
-  return r.endsWith(".tmp") || r.includes(".tmp.");
+function isTempFileName(fileName) {
+  return fileName.endsWith(".tmp") || fileName.includes(".tmp.");
 }
 //@ chunk-ss669z1x.js:19896-19959 placement = extractQuotaStatusFromError (1)
 /**
@@ -519,23 +524,23 @@ function isHiddenOrTempOrRejected(error) {
   return error.startsWith(".") || isTempFileName(error) || error === "rejected";
 }
 //@ chunk-ss669z1x.js:19959-20031 placement
-async function startBgWatcher(r, storageV5) {
-  return withFeatureTelemetry("daemon_bg_watcher_start", () => watchDispatchDir(r, storageV5));
+async function startBgWatcher(onDispatch, storageV5) {
+  return withFeatureTelemetry("daemon_bg_watcher_start", () => watchDispatchDir(onDispatch, storageV5));
 }
 //@ chunk-ss669z1x.js:20031-20817 placement
 /**
  * 监视派发目录，新文件到达时处理。
  */
-async function watchDispatchDir(r, e) {
-  await ensureDispatchDir(e);
+async function watchDispatchDir(onDispatch, storageV5) {
+  await ensureDispatchDir(storageV5);
   let platform = getPlatform();
   let usePolling = platform === "macos";
-  let i = chokidar_default.watch(daemonDispatchDir(), {
+  let watcher = chokidar_default.watch(daemonDispatchDir(), {
     ignoreInitial: true,
     depth: 0,
     usePolling,
     interval: 100,
-    ignored: (h) => isTempFileName(basename(h)) || basename(h) === "rejected",
+    ignored: (watchPath) => isTempFileName(basename(watchPath)) || basename(watchPath) === "rejected",
     ...(platform === "windows" && {
       awaitWriteFinish: {
         stabilityThreshold: 50,
@@ -543,28 +548,28 @@ async function watchDispatchDir(r, e) {
       },
     }),
   });
-  i.on("add", (h) => {
-    (isStorageV5Enabled() && e !== undefined
-      ? ingestDispatchName(e, basename(h), r)
-      : ingestDispatchFile(h, r)
+  watcher.on("add", (filePath) => {
+    (isStorageV5Enabled() && storageV5 !== undefined
+      ? ingestDispatchName(storageV5, basename(filePath), onDispatch)
+      : ingestDispatchFile(filePath, onDispatch)
     ).catch((error) =>
       logForDebugging(`[bg-dispatch] ${error}`, {
         level: "error",
       }),
     );
   });
-  i.on("error", (h) => {
-    logForDebugging(`[bg-dispatch] watcher error: ${h}`, {
+  watcher.on("error", (error) => {
+    logForDebugging(`[bg-dispatch] watcher error: ${error}`, {
       level: "error",
     });
     logEvent("tengu_bg_dispatch_watcher_failed", {
-      errno: sanitizeErrnoForTelemetry(h) ?? lit("unknown"),
+      errno: sanitizeErrnoForTelemetry(error) ?? lit("unknown"),
     });
   });
-  await withTimeout(once(i, "ready"), 5000, "chokidar ready").catch((error) =>
+  await withTimeout(once(watcher, "ready"), 5000, "chokidar ready").catch((error) =>
     logForDebugging(`[bg-dispatch] watcher ready wait: ${error}`),
   );
-  await drainDispatchQueue(r, e).catch((error) => {
+  await drainDispatchQueue(onDispatch, storageV5).catch((error) => {
     logForDebugging(`[bg-dispatch] cold-start drain: ${error}`, {
       level: "error",
     });
@@ -573,7 +578,7 @@ async function watchDispatchDir(r, e) {
     });
   });
   return {
-    close: () => i.close(),
+    close: () => watcher.close(),
   };
 }
 //@ chunk-ss669z1x.js:20817-20919 placement
@@ -598,69 +603,81 @@ function readStopFlags(storageV5) {
 /**
  * 后台会话管理器主循环：派发、PTY 启动、会话结算、保活。
  */
-async function runBgManagerLoop(r, e = {}) {
-  let o;
-  let n;
+async function runBgManagerLoop(log, options = {}) {
+  let leaseControl;
+  let watcher;
   let handles = new Map();
-  let h = async () => {
-    let S = new Set();
-    let spawnPty = e.spawnPty ?? createPtyHostSpawner();
-    let y = e.onKeepAliveChange ?? (() => {});
-    let D = (short, nonce, K) => o?.noteSettledDispatch(short, nonce, K);
-    let E = false;
-    let L = false;
+  let startManager = async () => {
+    let pendingWrites = new Set();
+    let spawnPty = options.spawnPty ?? createPtyHostSpawner();
+    let notifyKeepAlive = options.onKeepAliveChange ?? (() => {});
+    let noteSettled = (short, nonce, reason) => leaseControl?.noteSettledDispatch(short, nonce, reason);
+    let isClosed = false;
+    let isLeaseOwner = false;
     let deferred = Promise.withResolvers();
-    let R = null;
-    let w = false;
+    let spareHost = null;
+    let spareDisabled = false;
     let launcherNotRunnableEpisode = {
       logged: false,
     };
-    let U = false;
-    let re = false;
-    let X = e.spawnPty === undefined;
-    let Q = () => {
+    let isSpareSpawning = false;
+    let sawDispatch = false;
+    let usesDefaultSpawner = options.spawnPty === undefined;
+    let ensureSpare = () => {
       if (!getFeatureValue_CACHED_MAY_BE_STALE("tengu_bg_spare_enable", true)) {
-        if (R) {
-          R.dispose();
-          R = null;
+        if (spareHost) {
+          spareHost.dispose();
+          spareHost = null;
         }
         return;
       }
       if (isLowMemory()) {
-        if (R) {
-          R.dispose();
-          R = null;
+        if (spareHost) {
+          spareHost.dispose();
+          spareHost = null;
         }
         return;
       }
-      if (!re || R || U || w || E || !L || !spawnPty || !X || getPlatform() === "windows") return;
-      U = true;
-      let p = null;
-      let T = false;
+      if (
+        !sawDispatch ||
+        spareHost ||
+        isSpareSpawning ||
+        spareDisabled ||
+        isClosed ||
+        !isLeaseOwner ||
+        !spawnPty ||
+        !usesDefaultSpawner ||
+        getPlatform() === "windows"
+      )
+        return;
+      isSpareSpawning = true;
+      let pendingSpare = null;
+      let spareExitedEarly = false;
       spawnSpare({
-        log: r,
+        log,
         launcherNotRunnableEpisode,
-        credentials: e.credentials,
-        onExit: (K) => {
-          if (K) w = true;
-          if (p === null) {
-            T = true;
+        credentials: options.credentials,
+        onExit: (exitedUnexpectedly) => {
+          if (exitedUnexpectedly) spareDisabled = true;
+          if (pendingSpare === null) {
+            spareExitedEarly = true;
             return;
           }
-          if (R === p) {
-            R = null;
-            let oe = processWrapperArgv().length > 0 ? PROCESS_WRAPPER_ENV : WATCHER_JITTER_MS;
-            if (Date.now() - p.startedAt >= oe) Q();
+          if (spareHost === pendingSpare) {
+            spareHost = null;
+            let minSpareLifetimeMs =
+              processWrapperArgv().length > 0 ? PROCESS_WRAPPER_TIMEOUT_MS : WATCHER_JITTER_MS;
+            if (Date.now() - pendingSpare.startedAt >= minSpareLifetimeMs) ensureSpare();
           }
         },
       })
         .then((spare) => {
-          p = spare;
-          if (!spare || E || T) {
+          pendingSpare = spare;
+          if (!spare || isClosed || spareExitedEarly) {
             spare?.dispose();
             return;
           }
-          R = spare;
+          spareHost = spare;
           logEvent("tengu_bg_spare_spawn", {});
         })
         .catch((error) => {
@@ -673,119 +690,133 @@ async function runBgManagerLoop(r, e = {}) {
           logError(error);
         })
         .finally(() => {
-          U = false;
+          isSpareSpawning = false;
         });
     };
     let now = Date.now();
-    let onDispatch = async (p, T = 0, K, oe = false) => {
-      if (E) return "closed";
-      re = true;
-      let me = oe;
-      if (T === 0 && !K) {
+    let onDispatch = async (dispatchRequest, attempt = 0, upgradeKind, cwdGoneHint = false) => {
+      if (isClosed) return "closed";
+      sawDispatch = true;
+      let cwdGone = cwdGoneHint;
+      if (attempt === 0 && !upgradeKind) {
         try {
-          await withTimeout(access(p.cwd), WATCHER_POLL_MS, `bg: cwd probe timed out for ${p.short}`);
+          await withTimeout(
+            access(dispatchRequest.cwd),
+            WATCHER_POLL_MS,
+            `bg: cwd probe timed out for ${dispatchRequest.short}`,
+          );
         } catch (error) {
-          me = isENOENT(error);
+          cwdGone = isENOENT(error);
         }
-        if (E) return "closed";
+        if (isClosed) return "closed";
       }
-      if (me && !handles.has(p.short) && T > 0) {
+      if (cwdGone && !handles.has(dispatchRequest.short) && attempt > 0) {
         try {
-          await withTimeout(access(p.cwd), WATCHER_POLL_MS, `bg: cwd re-probe timed out for ${p.short}`);
-          me = false;
+          await withTimeout(
+            access(dispatchRequest.cwd),
+            WATCHER_POLL_MS,
+            `bg: cwd re-probe timed out for ${dispatchRequest.short}`,
+          );
+          cwdGone = false;
         } catch (error) {
-          me = isENOENT(error);
+          cwdGone = isENOENT(error);
         }
-        if (E) return "closed";
+        if (isClosed) return "closed";
       }
-      if (me && !handles.has(p.short)) {
-        let s = cwdGoneReason(p.cwd);
-        r(`bg refused ${p.short} (${p.source}): ${s}`);
+      if (cwdGone && !handles.has(dispatchRequest.short)) {
+        let goneReason = cwdGoneReason(dispatchRequest.cwd);
+        log(`bg refused ${dispatchRequest.short} (${dispatchRequest.source}): ${goneReason}`);
         logEvent("tengu_bg_spawn_cwd_gone", {
-          short: bgShort(p.short),
+          short: bgShort(dispatchRequest.short),
           attempt: 0,
           via: fromEnum("dispatch"),
         });
         logFeatureSad("daemon_bg_session_create", "cwd_gone");
-        if (p.nonce) D(p.short, p.nonce, s);
+        if (dispatchRequest.nonce) noteSettled(dispatchRequest.short, dispatchRequest.nonce, goneReason);
         return "refused";
       }
-      let he = false;
-      if (isProviderManagedByHost(p) && !handles.has(p.short))
+      let wroteTombstone = false;
+      if (isProviderManagedByHost(dispatchRequest) && !handles.has(dispatchRequest.short))
         try {
-          await ensureJobsDir(e.storageV5);
-          let s = encodeHostLineage(p.env);
-          if (e.storageV5) await writeHostTombstone(e.storageV5, p.short, s);
-          else await writeFile(hostManagedEntry(p.short), s);
-          he = true;
+          await ensureJobsDir(options.storageV5);
+          let hostLineage = encodeHostLineage(dispatchRequest.env);
+          if (options.storageV5)
+            await writeHostTombstone(options.storageV5, dispatchRequest.short, hostLineage);
+          else await writeFile(hostManagedEntry(dispatchRequest.short), hostLineage);
+          wroteTombstone = true;
         } catch (error) {
           logError(error);
           logFeatureBad("daemon_bg_session_create", "host_tombstone_write");
           return "dropped";
         }
-      let pe = handles.get(p.short);
-      if (pe) {
-        if ((pe.isKilling || pe.isRetiring || pe.record.outcome) && T < 30) {
-          if (T === 15 && (pe.isKilling || pe.isRetiring)) {
+      let existingHandle = handles.get(dispatchRequest.short);
+      if (existingHandle) {
+        if (
+          (existingHandle.isKilling || existingHandle.isRetiring || existingHandle.record.outcome) &&
+          attempt < 30
+        ) {
+          if (attempt === 15 && (existingHandle.isKilling || existingHandle.isRetiring)) {
             logEvent("tengu_bg_dispatch_sigkill_escalate", {});
-            pe.kill("SIGKILL");
+            existingHandle.kill("SIGKILL");
           }
           await sleep(100);
-          return onDispatch(p, T + 1, K, me);
+          return onDispatch(dispatchRequest, attempt + 1, upgradeKind, cwdGone);
         }
-        let s = pe.isKilling || pe.isRetiring || pe.record.outcome;
-        if (he && !isProviderManagedByHost(pe.dispatch))
-          if (e.storageV5) await deleteHostTombstone(e.storageV5, p.short);
-          else await unlink(hostManagedEntry(p.short)).catch(() => {});
-        r(
-          s
-            ? `bg: dispatch ${p.short} dropped \u2014 retry budget exhausted (handle still settling)`
-            : `bg: dup dispatch ${p.short} dropped (existing handle still live)`,
+        let isHandleSettling =
+          existingHandle.isKilling || existingHandle.isRetiring || existingHandle.record.outcome;
+        if (wroteTombstone && !isProviderManagedByHost(existingHandle.dispatch))
+          if (options.storageV5) await deleteHostTombstone(options.storageV5, dispatchRequest.short);
+          else await unlink(hostManagedEntry(dispatchRequest.short)).catch(() => {});
+        log(
+          isHandleSettling
+            ? `bg: dispatch ${dispatchRequest.short} dropped \u2014 retry budget exhausted (handle still settling)`
+            : `bg: dup dispatch ${dispatchRequest.short} dropped (existing handle still live)`,
         );
-        if (s) {
+        if (isHandleSettling) {
           logFeatureBad("daemon_bg_session_create", "dup_retry_exhausted");
           return "dropped";
         }
         logFeatureOk("daemon_bg_session_create");
         return "dup-live";
       }
-      if (!isProviderManagedByHost(p))
-        if (e.storageV5) deleteHostTombstone(e.storageV5, p.short);
-        else unlink(hostManagedEntry(p.short)).catch(() => {});
+      if (!isProviderManagedByHost(dispatchRequest))
+        if (options.storageV5) deleteHostTombstone(options.storageV5, dispatchRequest.short);
+        else unlink(hostManagedEntry(dispatchRequest.short)).catch(() => {});
       let { lowMem, level } = getLowMemoryState();
       if (lowMem && handles.size > 0) {
-        let s = Date.now() - now;
-        if (s > WATCHER_HEARTBEAT_MS * 2)
-          r(
-            `bg: low memory but sweep anchor is ${Math.round(s / 1000)}s stale (host slept?) \u2014 deferring eager retire to the next sweep tick`,
+        let sweepAnchorAgeMs = Date.now() - now;
+        if (sweepAnchorAgeMs > WATCHER_HEARTBEAT_MS * 2)
+          log(
+            `bg: low memory but sweep anchor is ${Math.round(sweepAnchorAgeMs / 1000)}s stale (host slept?) \u2014 deferring eager retire to the next sweep tick`,
           );
         else {
           let rounded = Math.round(freemem() / 1024 / 1024);
-          r(
-            `bg: low memory (${level !== undefined ? `macOS memorystatus pressure level ${level}` : `${rounded}MB free`}) \u2014 retiring settled workers before spawning ${p.short}`,
+          log(
+            `bg: low memory (${level !== undefined ? `macOS memorystatus pressure level ${level}` : `${rounded}MB free`}) \u2014 retiring settled workers before spawning ${dispatchRequest.short}`,
           );
           logEvent("tengu_bg_dispatch_low_mem", {
             free_mb: rounded,
             handles: handles.size,
             pressure_level: level,
           });
-          readStopFlags(e.storageV5).then((stopFlags) => {
-            for (let de of handles.values())
-              de.retireIfSettled(WATCHER_TICK_MS, stopFlags)
-                .then((Se) => retireIdleWorker(r, de, Se, "low memory"))
+          readStopFlags(options.storageV5).then((stopFlags) => {
+            for (let handle of handles.values())
+              handle
+                .retireIfSettled(WATCHER_TICK_MS, stopFlags)
+                .then((wasRetired) => retireIdleWorker(log, handle, wasRetired, "low memory"))
                 .catch((error) => logError(error));
           });
         }
       }
-      if (p.source === "spare" && lowMem) {
-        r(`bg: low memory \u2014 skipping spare dispatch ${p.short}`);
+      if (dispatchRequest.source === "spare" && lowMem) {
+        log(`bg: low memory \u2014 skipping spare dispatch ${dispatchRequest.short}`);
         return "dropped";
       }
       if (
-        R &&
-        !K &&
-        p.launch.mode !== "exec" &&
-        R.cliVersion ===
+        spareHost &&
+        !upgradeKind &&
+        dispatchRequest.launch.mode !== "exec" &&
+        spareHost.cliVersion ===
           {
             ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
             PACKAGE_URL: "@anthropic-ai/claude-code",
@@ -799,33 +830,40 @@ async function runBgManagerLoop(r, e = {}) {
           }.VERSION &&
         getFeatureValue_CACHED_MAY_BE_STALE("tengu_bg_spare_enable", true)
       ) {
-        let s = R;
-        R = null;
+        let claimedSpare = spareHost;
+        spareHost = null;
         try {
-          let M = claimSpare(p, s, spawnPty, e.getAuthSnapshot, e.storageV5, e.credentials);
-          handles.set(p.short, M);
-          onBgSessionSettled(handles, M, y, S, r, {
-            storageV5: e.storageV5,
-            credentials: e.credentials,
-            noteSettled: D,
+          let handle = claimSpare(
+            dispatchRequest,
+            claimedSpare,
+            spawnPty,
+            options.getAuthSnapshot,
+            options.storageV5,
+            options.credentials,
+          );
+          handles.set(dispatchRequest.short, handle);
+          onBgSessionSettled(handles, handle, notifyKeepAlive, pendingWrites, log, {
+            storageV5: options.storageV5,
+            credentials: options.credentials,
+            noteSettled,
           });
           trackPending(
-            S,
-            updateRoster((G) => {
-              G.workers[p.short] = M.rosterEntry();
-            }, e.storageV5).catch((error) => logError(error)),
+            pendingWrites,
+            updateRoster((rosterDraft) => {
+              rosterDraft.workers[dispatchRequest.short] = handle.rosterEntry();
+            }, options.storageV5).catch((error) => logError(error)),
           );
-          y();
+          notifyKeepAlive();
           logEvent("tengu_bg_spare_claim", {
-            age_ms: Date.now() - s.startedAt,
+            age_ms: Date.now() - claimedSpare.startedAt,
           });
-          r(`bg claimed-spare ${p.short} (${p.source})`);
+          log(`bg claimed-spare ${dispatchRequest.short} (${dispatchRequest.source})`);
           logFeatureOk("daemon_bg_session_create");
-          Q();
+          ensureSpare();
           return "claimed";
         } catch (error) {
           let errnoCode = getErrnoCode(error);
-          let de =
+          let claimFailReason =
             errnoCode === "ENOENT"
               ? "enoent"
               : errnoCode === "ECONNREFUSED"
@@ -834,82 +872,82 @@ async function runBgManagerLoop(r, e = {}) {
                   ? "error"
                   : "unknown";
           logEvent("tengu_bg_spare_claim_fail", {
-            reason: fromEnum(de),
+            reason: fromEnum(claimFailReason),
           });
-          s.dispose();
+          claimedSpare.dispose();
         }
       }
-      let child = DaemonSupervisor.spawn(
-        p,
+      let handle = DaemonSupervisor.spawn(
+        dispatchRequest,
         spawnPty,
-        e.getAuthSnapshot,
-        K
+        options.getAuthSnapshot,
+        upgradeKind
           ? {
-              afterUpgrade: K,
+              afterUpgrade: upgradeKind,
             }
           : undefined,
-        e.storageV5,
-        e.credentials,
+        options.storageV5,
+        options.credentials,
       );
-      handles.set(p.short, child);
-      onBgSessionSettled(handles, child, y, S, r, {
-        storageV5: e.storageV5,
-        credentials: e.credentials,
-        noteSettled: D,
+      handles.set(dispatchRequest.short, handle);
+      onBgSessionSettled(handles, handle, notifyKeepAlive, pendingWrites, log, {
+        storageV5: options.storageV5,
+        credentials: options.credentials,
+        noteSettled,
       });
-      y();
-      Q();
-      r(`bg spawned ${p.short} (${p.source})`);
+      notifyKeepAlive();
+      ensureSpare();
+      log(`bg spawned ${dispatchRequest.short} (${dispatchRequest.source})`);
       logFeatureOk("daemon_bg_session_create");
       return "spawned";
     };
-    let _e = (p = "SIGTERM") => {
-      let T = 0;
-      for (let K of handles.values())
-        if (!K.record.outcome) {
-          K.kill(p);
-          T++;
+    let killAll = (signal = "SIGTERM") => {
+      let killedCount = 0;
+      for (let handle of handles.values())
+        if (!handle.record.outcome) {
+          handle.kill(signal);
+          killedCount++;
         }
-      return T;
+      return killedCount;
     };
     await ensureDaemonRuntimeDir();
     await ensureDaemonDir();
-    let q = await handleDaemonLease(
+    let leaseControl_2 = await handleDaemonLease(
       handles,
       onDispatch,
-      e.onNudge ??
+      options.onNudge ??
         (async () => ({
           restarting: false,
           upgradePending: false,
         })),
-      (p) => {
-        let T = p ? _e("SIGTERM") : 0;
-        e.onShutdown?.();
-        return T;
+      (shutdownRequested) => {
+        let killedCount = shutdownRequested ? killAll("SIGTERM") : 0;
+        options.onShutdown?.();
+        return killedCount;
       },
-      () => L,
-      e.onYield ?? (() => false),
+      () => isLeaseOwner,
+      options.onYield ?? (() => false),
       deferred.promise,
-      e.storageV5,
+      options.storageV5,
     );
-    o = q;
-    r(`bg: control socket bound at ${redactDaemonPipeKey(daemonControlSocket())}`);
-    q.onLeaseChange.subscribe(y);
-    q.onLeaseChange.subscribe(({ op, client }) => {
+    leaseControl = leaseControl_2;
+    log(`bg: control socket bound at ${redactDaemonPipeKey(daemonControlSocket())}`);
+    leaseControl_2.onLeaseChange.subscribe(notifyKeepAlive);
+    leaseControl_2.onLeaseChange.subscribe(({ op, client }) => {
       if (client?.label === CLOUD_SESSION_LEASE_LABEL) {
-        r(
-          `bg lease ${op}: ${client.label} ${client.cloudSessionId ?? "(no session id)"} pid=${client.pid} (leases=${q.leaseCount()})`,
+        log(
+          `bg lease ${op}: ${client.label} ${client.cloudSessionId ?? "(no session id)"} pid=${client.pid} (leases=${leaseControl_2.leaseCount()})`,
         );
         return;
       }
-      if (q.leaseCount() > 0 && !re) {
-        re = true;
-        Q();
+      if (leaseControl_2.leaseCount() > 0 && !sawDispatch) {
+        sawDispatch = true;
+        ensureSpare();
       }
     });
     await Promise.all(
       getPlatform() === "windows"
-        ? [ensureDaemonStateDir(e.storageV5)]
+        ? [ensureDaemonStateDir(options.storageV5)]
         : [
             mkdir(daemonRvDir(), {
               recursive: true,
@@ -922,56 +960,61 @@ async function runBgManagerLoop(r, e = {}) {
           ],
     );
     cleanupStaleDaemonDirs();
-    let roster = await readRoster(undefined, e.storageV5);
-    let B = 0;
-    let V = 0;
-    let x = 0;
-    let ee = 0;
-    let ae = 0;
-    let W = 0;
-    let ge = roster.updatedAt > 0 && Date.now() - roster.updatedAt > ABANDONED_WORKER_MS;
+    let roster = await readRoster(undefined, options.storageV5);
+    let adoptedCount = 0;
+    let deadCount = 0;
+    let deadEpochCount = 0;
+    let upgradeSkippedCount = 0;
+    let deadPlannedCount = 0;
+    let respawnedCount = 0;
+    let isRosterAbandoned = roster.updatedAt > 0 && Date.now() - roster.updatedAt > ABANDONED_WORKER_MS;
     await Promise.all(
       Object.entries(roster.workers).map(async ([key, value]) => {
-        let K;
+        let adoptedHandle;
         try {
-          K = await DaemonSupervisor.adopt(
+          adoptedHandle = await DaemonSupervisor.adopt(
             key,
             value,
             spawnPty,
-            e.getAuthSnapshot,
-            e.storageV5,
-            e.credentials,
+            options.getAuthSnapshot,
+            options.storageV5,
+            options.credentials,
           );
         } catch (error) {
           logError(redactErrorPaths(error));
-          V++;
+          deadCount++;
           return;
         }
-        if (!K && value.procStart === undefined && value.ptySock && (await pingPtySocket(value.ptySock))) {
+        if (
+          !adoptedHandle &&
+          value.procStart === undefined &&
+          value.ptySock &&
+          (await pingPtySocket(value.ptySock))
+        ) {
           value.procStart = await withDeadline(getProcessStartTimeAsync(value.pid), MIN_POLL_MS);
           try {
-            K = await DaemonSupervisor.adopt(
+            adoptedHandle = await DaemonSupervisor.adopt(
               key,
               value,
               spawnPty,
-              e.getAuthSnapshot,
-              e.storageV5,
-              e.credentials,
+              options.getAuthSnapshot,
+              options.storageV5,
+              options.credentials,
             );
           } catch (error) {
             logError(redactErrorPaths(error));
-            K = null;
+            adoptedHandle = null;
           }
-          K ??= DaemonSupervisor.unverified(key, value, e.storageV5, e.credentials);
+          adoptedHandle ??= DaemonSupervisor.unverified(key, value, options.storageV5, options.credentials);
         }
-        if (K) {
-          handles.set(key, K);
-          onBgSessionSettled(handles, K, y, S, r, {
-            storageV5: e.storageV5,
-            credentials: e.credentials,
-            noteSettled: D,
+        if (adoptedHandle) {
+          handles.set(key, adoptedHandle);
+          onBgSessionSettled(handles, adoptedHandle, notifyKeepAlive, pendingWrites, log, {
+            storageV5: options.storageV5,
+            credentials: options.credentials,
+            noteSettled,
           });
-          B++;
+          adoptedCount++;
         } else if (
           value.pendingRespawn === "upgrade" &&
           !rcChannelDiffers(
@@ -988,42 +1031,43 @@ async function runBgManagerLoop(r, e = {}) {
               DD_SOURCEMAP_GROUP: "default",
             }.VERSION,
           ) &&
-          !ge
+          !isRosterAbandoned
         ) {
-          W++;
+          respawnedCount++;
           logEvent("tengu_bg_adopt_upgrade_respawn", {});
           onDispatch(value.dispatch, 0, true).catch((error) => logError(error));
         } else {
-          V++;
-          let oe = false;
-          if (value.pendingRespawn === "upgrade" && ge) {
-            ee++;
-            oe = true;
+          deadCount++;
+          let wasPlanned = false;
+          if (value.pendingRespawn === "upgrade" && isRosterAbandoned) {
+            upgradeSkippedCount++;
+            wasPlanned = true;
           }
           let execExitStatus = await readExecExitStatus(value.ptySock, value.dispatch);
-          let he = execExitStatus ?? {
+          let exitStatus = execExitStatus ?? {
             state: "failed",
             detail: "process gone while supervisor was down",
           };
           if (
             (await writeReapedTerminalState(
               key,
-              he.state,
-              he.detail,
+              exitStatus.state,
+              exitStatus.detail,
               {
                 resumable: execExitStatus ? undefined : "auto-resume",
               },
-              e.storageV5,
+              options.storageV5,
             )) === "dead-epoch"
           ) {
-            x++;
-            oe = true;
+            deadEpochCount++;
+            wasPlanned = true;
           }
-          if (oe) ae++;
-          if (e.credentials) e.credentials.discardSpentCredentialFile(daemonTokensFile(key)).catch(() => {});
+          if (wasPlanned) deadPlannedCount++;
+          if (options.credentials)
+            options.credentials.discardSpentCredentialFile(daemonTokensFile(key)).catch(() => {});
           else unlink(daemonTokensFile(key)).catch(() => {});
           if (getPlatform() === "windows") {
-            if (e.storageV5) deletePtyPidRecords(e.storageV5, key, value.ptySock);
+            if (options.storageV5) deletePtyPidRecords(options.storageV5, key, value.ptySock);
             else {
               unlink(daemonPtyPidFile(key)).catch(() => {});
               unlink(ptyErrFile(daemonPtySocket(key))).catch(() => {});
@@ -1031,7 +1075,8 @@ async function runBgManagerLoop(r, e = {}) {
               unlink(getExecExitPath(value.ptySock ?? daemonPtySocket(key))).catch(() => {});
             }
           } else {
-            if (e.credentials) e.credentials.discardSpentCredentialFile(daemonAuthFile(key)).catch(() => {});
+            if (options.credentials)
+              options.credentials.discardSpentCredentialFile(daemonAuthFile(key)).catch(() => {});
             else unlink(daemonAuthFile(key)).catch(() => {});
             unlink(value.rendezvousSock).catch(() => {});
             if (value.ptySock) {
@@ -1050,144 +1095,154 @@ async function runBgManagerLoop(r, e = {}) {
         }
       }),
     );
-    if (B + V + W > 0) {
-      r(
-        `bg adopt: adopted=${B} respawned=${W} dead=${V}` +
-          (x > 0 ? ` dead_epoch=${x}` : "") +
-          (ee > 0
-            ? ` upgrade_skipped=${ee} (previous roster written ${Math.round((Date.now() - roster.updatedAt) / 86400000)}d ago)`
+    if (adoptedCount + deadCount + respawnedCount > 0) {
+      log(
+        `bg adopt: adopted=${adoptedCount} respawned=${respawnedCount} dead=${deadCount}` +
+          (deadEpochCount > 0 ? ` dead_epoch=${deadEpochCount}` : "") +
+          (upgradeSkippedCount > 0
+            ? ` upgrade_skipped=${upgradeSkippedCount} (previous roster written ${Math.round((Date.now() - roster.updatedAt) / 86400000)}d ago)`
             : ""),
       );
       logEvent("tengu_bg_adopt", {
-        adopted: B,
-        respawned: W,
-        dead: V,
-        dead_epoch: x,
-        upgrade_skipped: ee,
+        adopted: adoptedCount,
+        respawned: respawnedCount,
+        dead: deadCount,
+        dead_epoch: deadEpochCount,
+        upgrade_skipped: upgradeSkippedCount,
       });
-      if (V - ae === 0) logFeatureOk("daemon_bg_adopt");
-      else if (B > 0 || W > 0) logFeatureSad("daemon_bg_adopt", "partial");
+      if (deadCount - deadPlannedCount === 0) logFeatureOk("daemon_bg_adopt");
+      else if (adoptedCount > 0 || respawnedCount > 0) logFeatureSad("daemon_bg_adopt", "partial");
       else logFeatureBad("daemon_bg_adopt", "all_workers_dead");
     }
-    let ce = await readDaemonLock(e.storageV5).catch(() => null);
-    let se = ce?.pid === process.pid;
-    let ve = !(ce !== null && ce.pid !== process.pid) && !(e.isShuttingDown?.() ?? false);
-    if (!se)
-      r(
-        `bg: skipped post-adopt sweeps + roster rewrite \u2014 daemon.lock is ${ce ? `held by pid ${ce.pid}` : "absent"} (yield/handover in flight)`,
+    let daemonLock = await readDaemonLock(options.storageV5).catch(() => null);
+    let ownsDaemonLock = daemonLock?.pid === process.pid;
+    let canSweep =
+      !(daemonLock !== null && daemonLock.pid !== process.pid) && !(options.isShuttingDown?.() ?? false);
+    if (!ownsDaemonLock)
+      log(
+        `bg: skipped post-adopt sweeps + roster rewrite \u2014 daemon.lock is ${daemonLock ? `held by pid ${daemonLock.pid}` : "absent"} (yield/handover in flight)`,
       );
-    if (se && !roster.parseFailed)
-      reapStaleSockets(handles, r, {
-        storageV5: e.storageV5,
+    if (ownsDaemonLock && !roster.parseFailed)
+      reapStaleSockets(handles, log, {
+        storageV5: options.storageV5,
       });
-    if (se && !roster.parseFailed) await reapOrphanSpares(handles, r);
-    if (se && !roster.inspectFailed)
-      await updateRoster((p) => {
-        p.workers = {};
-        for (let [T, K] of handles) p.workers[T] = K.rosterEntry();
-      }, e.storageV5).catch((error) => logError(error));
-    let Ee = ve
-      ? await startBgWatcher((p) => void onDispatch(p).catch((error) => logError(error)), e.storageV5)
+    if (ownsDaemonLock && !roster.parseFailed) await reapOrphanSpares(handles, log);
+    if (ownsDaemonLock && !roster.inspectFailed)
+      await updateRoster((rosterDraft) => {
+        rosterDraft.workers = {};
+        for (let [short, handle] of handles) rosterDraft.workers[short] = handle.rosterEntry();
+      }, options.storageV5).catch((error) => logError(error));
+    let watcher_2 = canSweep
+      ? await startBgWatcher(
+          (dispatchRequest) => void onDispatch(dispatchRequest).catch((error) => logError(error)),
+          options.storageV5,
+        )
       : null;
-    n = Ee ?? undefined;
-    L = ve;
-    if (ve) deferred.resolve();
-    y();
-    if (ve && handles.size > 0) re = true;
-    Q();
-    if (ve) Oe().catch((error) => logError(error));
+    watcher = watcher_2 ?? undefined;
+    isLeaseOwner = canSweep;
+    if (canSweep) deferred.resolve();
+    notifyKeepAlive();
+    if (canSweep && handles.size > 0) sawDispatch = true;
+    ensureSpare();
+    if (canSweep) runPrewarmBurst().catch((error) => logError(error));
     now = Date.now();
-    let Re = false;
+    let isSweepRunning = false;
     let interval = setInterval(
-      async (p, T) => {
-        if (Re) return;
-        Re = true;
+      async (handlesMap, ensureSpare) => {
+        if (isSweepRunning) return;
+        isSweepRunning = true;
         try {
-          await ze(p, T);
+          await runSweep(handlesMap, ensureSpare);
         } finally {
-          Re = false;
+          isSweepRunning = false;
         }
       },
       WATCHER_HEARTBEAT_MS,
       handles,
-      Q,
+      ensureSpare,
     );
-    async function ze(p, T) {
+    async function runSweep(handlesMap, ensureSpare) {
       {
         let now_2 = Date.now();
-        let oe = now_2 - now - WATCHER_HEARTBEAT_MS;
+        let heartbeatGapMs = now_2 - now - WATCHER_HEARTBEAT_MS;
         now = now_2;
-        if (oe > WATCHER_HEARTBEAT_MS) {
-          for (let s of p.values()) s.shiftGraceClocksForward(oe);
-          T();
+        if (heartbeatGapMs > WATCHER_HEARTBEAT_MS) {
+          for (let handle of handlesMap.values()) handle.shiftGraceClocksForward(heartbeatGapMs);
+          ensureSpare();
           return;
         }
-        let me = isLowMemory();
-        let he = me ? WATCHER_TICK_MS : WATCHER_MAX_MS;
-        let pe = me ? WATCHER_TICK_MS : WATCHER_ABSOLUTE_MS;
-        let stopFlags = await readStopFlags(e.storageV5);
-        for (let s of p.values())
-          if (stopFlags.has(s.dispatch.short))
-            s.respawnIfIdleStale(stopFlags).catch((error) => logError(error));
+        let isLowMem = isLowMemory();
+        let retireMs = isLowMem ? WATCHER_TICK_MS : WATCHER_MAX_MS;
+        let absoluteRetireMs = isLowMem ? WATCHER_TICK_MS : WATCHER_ABSOLUTE_MS;
+        let stopFlags = await readStopFlags(options.storageV5);
+        for (let handle of handlesMap.values())
+          if (stopFlags.has(handle.dispatch.short))
+            handle.respawnIfIdleStale(stopFlags).catch((error) => logError(error));
         let results = await Promise.all(
-          [...p.values()].map((s) =>
-            s
-              .retireIfSettled(he, stopFlags, pe)
-              .then((M) => retireIdleWorker(r, s, M, me ? "low memory" : ""))
+          [...handlesMap.values()].map((handle) =>
+            handle
+              .retireIfSettled(retireMs, stopFlags, absoluteRetireMs)
+              .then((wasRetired) => retireIdleWorker(log, handle, wasRetired, isLowMem ? "low memory" : ""))
               .catch((error) => {
                 logError(error);
                 return false;
               }),
           ),
         );
-        let $e = count(results, (s) => s);
-        if (me && $e === 0 && isLowMemory()) {
+        let retiredCount = count(results, (retired) => retired);
+        if (isLowMem && retiredCount === 0 && isLowMemory()) {
           let results = await Promise.all(
-            [...p.values()].map((M) =>
-              M.retireIfSettled(WATCHER_IDLE_MS, stopFlags, WATCHER_IDLE_MS, {
-                shedMonitoringOnly: true,
-              })
-                .then((G) => retireIdleWorker(r, M, G, "low memory, monitoring only"))
+            [...handlesMap.values()].map((handle) =>
+              handle
+                .retireIfSettled(WATCHER_IDLE_MS, stopFlags, WATCHER_IDLE_MS, {
+                  shedMonitoringOnly: true,
+                })
+                .then((wasRetired) =>
+                  retireIdleWorker(log, handle, wasRetired, "low memory, monitoring only"),
+                )
                 .catch((error) => {
                   logError(error);
                   return false;
                 }),
             ),
           );
-          $e += count(results, (M) => M);
+          retiredCount += count(results, (retired) => retired);
         }
-        if (me && $e === 0 && isLowMemory()) {
-          let filtered = [...p.values()].filter((M) => stopFlags.has(M.dispatch.short));
+        if (isLowMem && retiredCount === 0 && isLowMemory()) {
+          let filtered = [...handlesMap.values()].filter((pinnedHandle) =>
+            stopFlags.has(pinnedHandle.dispatch.short),
+          );
           if (filtered.length > 0) {
-            r(
+            log(
               "bg: low memory persists after shedding non-pinned \u2014 retiring pinned settled workers as a last resort",
             );
             logEvent("tengu_bg_retire_pinned_low_mem", {});
-            for (let M of filtered)
-              M.retireIfSettled(he, WATCHER_STOP_FLAGS, pe)
-                .then((G) => retireIdleWorker(r, M, G, "low memory, pinned"))
+            for (let handle of filtered)
+              handle
+                .retireIfSettled(retireMs, WATCHER_STOP_FLAGS, absoluteRetireMs)
+                .then((wasRetired) => retireIdleWorker(log, handle, wasRetired, "low memory, pinned"))
                 .catch((error) => logError(error));
           }
         }
-        if (!me && isAttachUpgradeEnabled()) {
+        if (!isLowMem && isAttachUpgradeEnabled()) {
           let featureValue_CACHED_MAY_BE_STALE = getFeatureValue_CACHED_MAY_BE_STALE(
             "tengu_bg_prewarm_per_sweep",
             3,
           );
-          let M = 12;
-          for (let G of p.values()) {
-            if (featureValue_CACHED_MAY_BE_STALE <= 0 || M <= 0) break;
-            if (stopFlags.has(G.dispatch.short)) continue;
-            if (G.isUnverified) continue;
-            if (G.isBooting) {
+          let refusalBudget = 12;
+          for (let handle of handlesMap.values()) {
+            if (featureValue_CACHED_MAY_BE_STALE <= 0 || refusalBudget <= 0) break;
+            if (stopFlags.has(handle.dispatch.short)) continue;
+            if (handle.isUnverified) continue;
+            if (handle.isBooting) {
               featureValue_CACHED_MAY_BE_STALE--;
               continue;
             }
-            if (!G.isVersionStale) continue;
-            if (G.dispatch.launch.mode === "exec") continue;
+            if (!handle.isVersionStale) continue;
+            if (handle.dispatch.launch.mode === "exec") continue;
             if (
               rcChannelDiffers(
-                G.record.cliVersion,
+                handle.record.cliVersion,
                 {
                   ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
                   PACKAGE_URL: "@anthropic-ai/claude-code",
@@ -1204,9 +1259,9 @@ async function runBgManagerLoop(r, e = {}) {
             )
               continue;
             if (
-              G.record.cliVersion &&
+              handle.record.cliVersion &&
               isNewerBuild(
-                G.record.cliVersion,
+                handle.record.cliVersion,
                 {
                   ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
                   PACKAGE_URL: "@anthropic-ai/claude-code",
@@ -1221,12 +1276,12 @@ async function runBgManagerLoop(r, e = {}) {
                 }.VERSION,
               )
             ) {
-              G.noteDowngradeRefused("prewarm");
+              handle.noteDowngradeRefused("prewarm");
               continue;
             }
             if (
               (
-                await G.respawnIfIdleStale(undefined, "prewarm").catch((error) => {
+                await handle.respawnIfIdleStale(undefined, "prewarm").catch((error) => {
                   logError(error);
                   return {
                     respawned: false,
@@ -1235,14 +1290,14 @@ async function runBgManagerLoop(r, e = {}) {
               ).respawned
             )
               featureValue_CACHED_MAY_BE_STALE--;
-            else M--;
+            else refusalBudget--;
           }
         }
-        T();
+        ensureSpare();
       }
     }
     interval.unref();
-    async function Oe() {
+    async function runPrewarmBurst() {
       let featureValue_CACHED_MAY_BE_STALE = getFeatureValue_CACHED_MAY_BE_STALE(
         "tengu_bg_prewarm_burst_delay_ms",
         15000,
@@ -1250,54 +1305,54 @@ async function runBgManagerLoop(r, e = {}) {
       await sleep(featureValue_CACHED_MAY_BE_STALE, undefined, {
         unref: true,
       });
-      if (E) return;
+      if (isClosed) return;
       let featureValue_CACHED_MAY_BE_STALE_2 = getFeatureValue_CACHED_MAY_BE_STALE(
         "tengu_bg_prewarm_burst_concurrency",
         3,
       );
       if (featureValue_CACHED_MAY_BE_STALE_2 <= 0 || !isAttachUpgradeEnabled()) return;
-      let stopFlags = await readStopFlags(e.storageV5);
-      let oe = new Set(
+      let stopFlags = await readStopFlags(options.storageV5);
+      let staleHandles = new Set(
         [...handles.values()].filter(
-          (G) =>
-            !G.record.outcome &&
-            !G.isUnverified &&
-            G.isVersionStale &&
-            G.dispatch.launch.mode !== "exec" &&
-            !stopFlags.has(G.dispatch.short),
+          (handle) =>
+            !handle.record.outcome &&
+            !handle.isUnverified &&
+            handle.isVersionStale &&
+            handle.dispatch.launch.mode !== "exec" &&
+            !stopFlags.has(handle.dispatch.short),
         ),
       );
-      if (oe.size === 0) return;
-      let size = oe.size;
+      if (staleHandles.size === 0) return;
+      let size = staleHandles.size;
       let now_2 = Date.now();
-      let pe = 0;
-      let ke = 0;
-      let De = 0;
-      let $e = false;
-      let s = false;
-      let M = now_2 + WATCHER_MAX_GAP_MS;
-      while (oe.size > 0 && Date.now() < M && !E) {
+      let respawnedCount = 0;
+      let refusedCount = 0;
+      let bootingCount = 0;
+      let stoppedLowMem = false;
+      let stoppedStaleAnchor = false;
+      let burstDeadline = now_2 + WATCHER_MAX_GAP_MS;
+      while (staleHandles.size > 0 && Date.now() < burstDeadline && !isClosed) {
         if (Date.now() - now > WATCHER_HEARTBEAT_MS * 2) {
-          s = true;
+          stoppedStaleAnchor = true;
           break;
         }
         if (isLowMemory()) {
-          $e = true;
+          stoppedLowMem = true;
           break;
         }
-        let G =
+        let concurrencyBudget =
           featureValue_CACHED_MAY_BE_STALE_2 -
-          count([...handles.values()], (de) => de.isBooting && !de.isUnverified);
-        for (let de of oe) {
-          if (G <= 0) break;
-          oe.delete(de);
-          if (de.isBooting) {
-            De++;
+          count([...handles.values()], (handle) => handle.isBooting && !handle.isUnverified);
+        for (let handle of staleHandles) {
+          if (concurrencyBudget <= 0) break;
+          staleHandles.delete(handle);
+          if (handle.isBooting) {
+            bootingCount++;
             continue;
           }
           if (
             (
-              await de.respawnIfIdleStale(undefined, "burst").catch((error) => {
+              await handle.respawnIfIdleStale(undefined, "burst").catch((error) => {
                 logError(error);
                 return {
                   respawned: false,
@@ -1305,73 +1360,76 @@ async function runBgManagerLoop(r, e = {}) {
               })
             ).respawned
           ) {
-            pe++;
-            G--;
-          } else ke++;
+            respawnedCount++;
+            concurrencyBudget--;
+          } else refusedCount++;
         }
-        if (oe.size === 0) break;
+        if (staleHandles.size === 0) break;
         await sleep(WATCHER_MIN_GAP_MS, undefined, {
           unref: true,
         });
       }
-      r(
-        `bg: post-takeover prewarm burst \u2014 respawned ${pe}/${size} stale workers` +
-          (ke > 0 ? `, ${ke} refused` : "") +
-          ($e ? `, stopped on low memory (${oe.size} left)` : "") +
-          (s ? `, deferred to sweep on stale anchor \u2014 host slept? (${oe.size} left)` : "") +
+      log(
+        `bg: post-takeover prewarm burst \u2014 respawned ${respawnedCount}/${size} stale workers` +
+          (refusedCount > 0 ? `, ${refusedCount} refused` : "") +
+          (stoppedLowMem ? `, stopped on low memory (${staleHandles.size} left)` : "") +
+          (stoppedStaleAnchor
+            ? `, deferred to sweep on stale anchor \u2014 host slept? (${staleHandles.size} left)`
+            : "") +
           ` in ${Math.round((Date.now() - now_2) / 1000)}s`,
       );
       logEvent("tengu_bg_prewarm_burst", {
         candidates: size,
-        respawned: pe,
-        refused: ke,
-        alreadyBooting: De,
-        remaining: oe.size,
-        lowMemStop: $e,
-        sweepStaleStop: s,
+        respawned: respawnedCount,
+        refused: refusedCount,
+        alreadyBooting: bootingCount,
+        remaining: staleHandles.size,
+        lowMemStop: stoppedLowMem,
+        sweepStaleStop: stoppedStaleAnchor,
         durationMs: Date.now() - now_2,
       });
     }
     return {
       handles,
-      dispatch: (p) => void onDispatch(p).catch((error) => logError(error)),
-      leaseCount: q.leaseCount,
-      announceExit: q.announceExit,
+      dispatch: (dispatchRequest) => void onDispatch(dispatchRequest).catch((error) => logError(error)),
+      leaseCount: leaseControl_2.leaseCount,
+      announceExit: leaseControl_2.announceExit,
       liveHandleCount: () => {
-        let p = 0;
-        for (let T of handles.values()) if (!T.record.outcome) p++;
-        return p;
+        let liveCount = 0;
+        for (let handle of handles.values()) if (!handle.record.outcome) liveCount++;
+        return liveCount;
       },
       snapshotConsumerCount: () => {
-        let p = 0;
-        for (let T of handles.values()) if (!T.record.outcome && shouldCarryAuth(T.dispatch)) p++;
-        return p;
+        let consumerCount = 0;
+        for (let handle of handles.values())
+          if (!handle.record.outcome && shouldCarryAuth(handle.dispatch)) consumerCount++;
+        return consumerCount;
       },
-      pendingSettleWrites: () => S.size,
-      killAll: _e,
-      close: async (p) => {
-        let displaced = p?.displaced ?? false;
-        E = true;
+      pendingSettleWrites: () => pendingWrites.size,
+      killAll,
+      close: async (closeOptions) => {
+        let displaced = closeOptions?.displaced ?? false;
+        isClosed = true;
         clearInterval(interval);
-        if (R) {
-          R.dispose();
-          R = null;
+        if (spareHost) {
+          spareHost.dispose();
+          spareHost = null;
         }
         await Promise.all([
-          Ee?.close().catch(() => {}),
-          q
+          watcher_2?.close().catch(() => {}),
+          leaseControl_2
             .close({
-              skipUnlink: displaced || p?.skipPathCleanup,
+              skipUnlink: displaced || closeOptions?.skipPathCleanup,
             })
             .catch(() => {}),
         ]);
-        for (let K of handles.values()) K.stop();
-        await Promise.allSettled([...S]);
+        for (let handle of handles.values()) handle.stop();
+        await Promise.allSettled([...pendingWrites]);
         if (
           !displaced &&
           handles.size === 0 &&
           !roster.parseFailed &&
-          !p?.skipPathCleanup &&
+          !closeOptions?.skipPathCleanup &&
           getPlatform() !== "windows"
         )
           await rm(getDaemonRuntimeDir(), {
@@ -1384,16 +1442,16 @@ async function runBgManagerLoop(r, e = {}) {
   try {
     return await withFeatureTelemetry(
       "daemon_bg_manager_start",
-      h,
-      (S) => sanitizeErrnoForTelemetry(S)?.toLowerCase() ?? "error",
+      startManager,
+      (caughtError) => sanitizeErrnoForTelemetry(caughtError)?.toLowerCase() ?? "error",
     );
   } catch (error) {
-    for (let y of handles.values()) y.stop();
-    await n?.close().catch(() => {});
-    let u = await readDaemonLock(e.storageV5).catch(() => null);
-    await o
+    for (let handle of handles.values()) handle.stop();
+    await watcher?.close().catch(() => {});
+    let daemonLock = await readDaemonLock(options.storageV5).catch(() => null);
+    await leaseControl
       ?.close(
-        u?.pid === process.pid
+        daemonLock?.pid === process.pid
           ? undefined
           : {
               skipUnlink: true,
@@ -1407,25 +1465,25 @@ async function runBgManagerLoop(r, e = {}) {
 /**
  * 后台会话结束时记录结果、通知并清理。
  */
-function onBgSessionSettled(r, e, o, n, i, h) {
-  e.onSettle.subscribe((S) => {
-    let jobDir = getJobDir(e.record.short);
-    let y = S === "done" ? "done" : S === "killed" ? "stopped" : "failed";
-    let detail = e.record.detail;
-    let sessionIdTaken = e.sessionIdTaken;
-    let L =
-      S === "crashed" && detail
+function onBgSessionSettled(handles, handle, notifyKeepAlive, pendingWrites, log, context) {
+  handle.onSettle.subscribe((settleReason) => {
+    let jobDir = getJobDir(handle.record.short);
+    let finalState = settleReason === "done" ? "done" : settleReason === "killed" ? "stopped" : "failed";
+    let detail = handle.record.detail;
+    let sessionIdTaken = handle.sessionIdTaken;
+    let crashDetail =
+      settleReason === "crashed" && detail
         ? redactDaemonPipeKey(detail.replace(/; respawning$/, "")).replace(/\s*\n\s*/g, " \xB7 ")
         : "";
-    i(`bg settled ${e.record.short} (${S})${L ? `: ${L}` : ""}`);
-    if (e.shouldDeleteJobDir)
+    log(`bg settled ${handle.record.short} (${settleReason})${crashDetail ? `: ${crashDetail}` : ""}`);
+    if (handle.shouldDeleteJobDir)
       trackPending(
-        n,
-        h.storageV5 && jobDir === getJobDir(e.record.short)
-          ? deleteJobScope(h.storageV5, e.record.short, jobDir, (R) =>
+        pendingWrites,
+        context.storageV5 && jobDir === getJobDir(handle.record.short)
+          ? deleteJobScope(context.storageV5, handle.record.short, jobDir, (scopeError) =>
               logError(
                 new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-                  `jobdir retire deleteScope: ${R}`,
+                  `jobdir retire deleteScope: ${scopeError}`,
                   "jobdir retire deleteScope failed",
                 ),
               ),
@@ -1435,39 +1493,43 @@ function onBgSessionSettled(r, e, o, n, i, h) {
               force: true,
             }).catch((error) => logError(error)),
       );
-    else if (S === "killed" && e.isHandoffKill)
+    else if (settleReason === "killed" && handle.isHandoffKill)
       logEvent("tengu_bg_handoff_settle", {
-        jobSessionId: sanitizeMarkName(e.record.sessionId),
+        jobSessionId: sanitizeMarkName(handle.record.sessionId),
       });
     else
       trackPending(
-        n,
-        readJobState(jobDir, h.storageV5)
+        pendingWrites,
+        readJobState(jobDir, context.storageV5)
           .then((jobState) => {
             if (
               jobState
-                ? (isSettled(jobState) && !(S === "crashed" && jobState.state === "failed")) ||
-                  (S === "done" && jobState.state === "blocked" && e.dispatch.launch.mode !== "exec")
-                : S !== "crashed" || e.dispatch.source === "spare"
+                ? (isSettled(jobState) && !(settleReason === "crashed" && jobState.state === "failed")) ||
+                  (settleReason === "done" &&
+                    jobState.state === "blocked" &&
+                    handle.dispatch.launch.mode !== "exec")
+                : settleReason !== "crashed" || handle.dispatch.source === "spare"
             ) {
-              if (!jobState && e.dispatch.source === "spare") {
-                if (h.storageV5 && jobDir === getJobDir(e.record.short))
-                  return h.storageV5.statMeta(STORAGE_SPACES.job(e.record.short, ["state.json"])).then(
-                    (U) =>
-                      !U.ok && U.error.code === "NotFound"
-                        ? deleteJobScope(h.storageV5, e.record.short, jobDir, (re) =>
-                            logError(
-                              new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-                                `spare-sweep deleteScope: ${re}`,
-                                "spare-sweep deleteScope failed",
+              if (!jobState && handle.dispatch.source === "spare") {
+                if (context.storageV5 && jobDir === getJobDir(handle.record.short))
+                  return context.storageV5
+                    .statMeta(STORAGE_SPACES.job(handle.record.short, ["state.json"]))
+                    .then(
+                      (statResult) =>
+                        !statResult.ok && statResult.error.code === "NotFound"
+                          ? deleteJobScope(context.storageV5, handle.record.short, jobDir, (scopeError) =>
+                              logError(
+                                new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
+                                  `spare-sweep deleteScope: ${scopeError}`,
+                                  "spare-sweep deleteScope failed",
+                                ),
                               ),
-                            ),
-                          ).catch((error) => logError(error))
-                        : undefined,
-                    () => {
-                      return;
-                    },
-                  );
+                            ).catch((error) => logError(error))
+                          : undefined,
+                      () => {
+                        return;
+                      },
+                    );
                 return access(join(jobDir, "state.json")).then(
                   () => {
                     return;
@@ -1484,7 +1546,7 @@ function onBgSessionSettled(r, e, o, n, i, h) {
               return;
             }
             let iso = new Date().toISOString();
-            let A = jobState ?? {
+            let baseJobState = jobState ?? {
               state: "working",
               detail: "",
               tempo: "active",
@@ -1492,18 +1554,20 @@ function onBgSessionSettled(r, e, o, n, i, h) {
               children: null,
               linkScanOffset: 0,
               template:
-                e.dispatch.launch.mode === "exec" ? "exec" : (e.dispatch.agent ?? e.dispatch.routine ?? "bg"),
-              routine: e.dispatch.routine,
+                handle.dispatch.launch.mode === "exec"
+                  ? "exec"
+                  : (handle.dispatch.agent ?? handle.dispatch.routine ?? "bg"),
+              routine: handle.dispatch.routine,
               respawnFlags:
-                e.dispatch.source === "shell"
-                  ? moveSkipPermissionsLast(splitForwardableArgs([...e.dispatch.respawnFlags]))
-                  : splitForwardableArgs([...e.dispatch.respawnFlags]),
-              intent: e.record.intent,
-              name: e.record.name,
-              sessionId: e.record.sessionId,
-              cwd: e.record.cwd,
-              worktreePath: e.dispatch.worktree?.path ?? e.record.worktreePath,
-              createdAt: new Date(e.dispatch.createdAt).toISOString(),
+                handle.dispatch.source === "shell"
+                  ? moveSkipPermissionsLast(splitForwardableArgs([...handle.dispatch.respawnFlags]))
+                  : splitForwardableArgs([...handle.dispatch.respawnFlags]),
+              intent: handle.record.intent,
+              name: handle.record.name,
+              sessionId: handle.record.sessionId,
+              cwd: handle.record.cwd,
+              worktreePath: handle.dispatch.worktree?.path ?? handle.record.worktreePath,
+              createdAt: new Date(handle.dispatch.createdAt).toISOString(),
               updatedAt: iso,
               firstTerminalAt: null,
               backend: "daemon",
@@ -1511,9 +1575,12 @@ function onBgSessionSettled(r, e, o, n, i, h) {
             return writeStateAtomic(
               jobDir,
               {
-                ...A,
-                state: y,
-                detail: y === "stopped" ? "stopped" : (detail || A.detail).replace(/; respawning$/, ""),
+                ...baseJobState,
+                state: finalState,
+                detail:
+                  finalState === "stopped"
+                    ? "stopped"
+                    : (detail || baseJobState.detail).replace(/; respawning$/, ""),
                 tempo: "idle",
                 inFlight: undefined,
                 needs: undefined,
@@ -1522,118 +1589,124 @@ function onBgSessionSettled(r, e, o, n, i, h) {
                   sessionIdTaken: true,
                 }),
                 updatedAt: iso,
-                firstTerminalAt: A.firstTerminalAt ?? iso,
+                firstTerminalAt: baseJobState.firstTerminalAt ?? iso,
               },
-              h.storageV5,
+              context.storageV5,
             );
           })
           .catch((error) => logError(error)),
       );
     trackPending(
-      n,
-      updateRoster((R) => {
-        delete R.workers[e.record.short];
-      }, h.storageV5).catch((error) => logError(error)),
+      pendingWrites,
+      updateRoster((rosterDraft) => {
+        delete rosterDraft.workers[handle.record.short];
+      }, context.storageV5).catch((error) => logError(error)),
     );
-    if (h.credentials)
+    if (context.credentials)
       trackPending(
-        n,
-        h.credentials.discardSpentCredentialFile(daemonTokensFile(e.record.short)).catch(() => {}),
+        pendingWrites,
+        context.credentials.discardSpentCredentialFile(daemonTokensFile(handle.record.short)).catch(() => {}),
       );
     else
       trackPending(
-        n,
-        unlink(daemonTokensFile(e.record.short)).catch(() => {}),
+        pendingWrites,
+        unlink(daemonTokensFile(handle.record.short)).catch(() => {}),
       );
-    let P = e.rosterEntry();
+    let rosterEntry = handle.rosterEntry();
     if (getPlatform() === "windows") {
-      if (h.storageV5) trackPending(n, deletePtyPidRecords(h.storageV5, e.record.short, P.ptySock));
+      if (context.storageV5)
+        trackPending(
+          pendingWrites,
+          deletePtyPidRecords(context.storageV5, handle.record.short, rosterEntry.ptySock),
+        );
       else {
         trackPending(
-          n,
-          unlink(daemonPtyPidFile(e.record.short)).catch(() => {}),
+          pendingWrites,
+          unlink(daemonPtyPidFile(handle.record.short)).catch(() => {}),
         );
         trackPending(
-          n,
-          unlink(ptyErrFile(daemonPtySocket(e.record.short))).catch(() => {}),
+          pendingWrites,
+          unlink(ptyErrFile(daemonPtySocket(handle.record.short))).catch(() => {}),
         );
         trackPending(
-          n,
-          unlink(ptyLateFile(daemonPtySocket(e.record.short))).catch(() => {}),
+          pendingWrites,
+          unlink(ptyLateFile(daemonPtySocket(handle.record.short))).catch(() => {}),
         );
         trackPending(
-          n,
-          unlink(getExecExitPath(P.ptySock ?? daemonPtySocket(e.record.short))).catch(() => {}),
+          pendingWrites,
+          unlink(getExecExitPath(rosterEntry.ptySock ?? daemonPtySocket(handle.record.short))).catch(
+            () => {},
+          ),
         );
       }
     } else {
-      if (h.credentials)
+      if (context.credentials)
         trackPending(
-          n,
-          h.credentials.discardSpentCredentialFile(daemonAuthFile(e.record.short)).catch(() => {}),
+          pendingWrites,
+          context.credentials.discardSpentCredentialFile(daemonAuthFile(handle.record.short)).catch(() => {}),
         );
       else
         trackPending(
-          n,
-          unlink(daemonAuthFile(e.record.short)).catch(() => {}),
+          pendingWrites,
+          unlink(daemonAuthFile(handle.record.short)).catch(() => {}),
         );
       trackPending(
-        n,
-        unlink(P.rendezvousSock).catch(() => {}),
+        pendingWrites,
+        unlink(rosterEntry.rendezvousSock).catch(() => {}),
       );
-      if (P.ptySock) {
+      if (rosterEntry.ptySock) {
         trackPending(
-          n,
-          unlink(P.ptySock).catch(() => {}),
+          pendingWrites,
+          unlink(rosterEntry.ptySock).catch(() => {}),
         );
         trackPending(
-          n,
-          unlink(ptyErrFile(P.ptySock)).catch(() => {}),
+          pendingWrites,
+          unlink(ptyErrFile(rosterEntry.ptySock)).catch(() => {}),
         );
         trackPending(
-          n,
-          unlink(ptyLateFile(P.ptySock)).catch(() => {}),
+          pendingWrites,
+          unlink(ptyLateFile(rosterEntry.ptySock)).catch(() => {}),
         );
         trackPending(
-          n,
-          unlink(getExecExitPath(P.ptySock)).catch(() => {}),
+          pendingWrites,
+          unlink(getExecExitPath(rosterEntry.ptySock)).catch(() => {}),
         );
       }
     }
-    if (e.dispatch.launch.mode === "exec" && S !== "killed") {
-      o();
+    if (handle.dispatch.launch.mode === "exec" && settleReason !== "killed") {
+      notifyKeepAlive();
       setTimeout(
-        (w, A, U) => {
-          if (w.get(A) === U) w.delete(A);
+        (handlesMap, short, expectedHandle) => {
+          if (handlesMap.get(short) === expectedHandle) handlesMap.delete(short);
         },
         300000,
-        r,
-        e.record.short,
-        e,
+        handles,
+        handle.record.short,
+        handle,
       ).unref();
       return;
     }
-    if (e.record.nonce) h.noteSettled(e.record.short, e.record.nonce);
-    r.delete(e.record.short);
-    o();
+    if (handle.record.nonce) context.noteSettled(handle.record.short, handle.record.nonce);
+    handles.delete(handle.record.short);
+    notifyKeepAlive();
   });
-  e.onState.subscribe((S) => {
-    if (S.pid)
+  handle.onState.subscribe((stateEvent) => {
+    if (stateEvent.pid)
       trackPending(
-        n,
-        updateRoster((u) => {
-          u.workers[e.record.short] = e.rosterEntry();
-        }, h.storageV5).catch((error) => logError(error)),
+        pendingWrites,
+        updateRoster((rosterDraft) => {
+          rosterDraft.workers[handle.record.short] = handle.rosterEntry();
+        }, context.storageV5).catch((error) => logError(error)),
       );
-    if (S.state === "crashed" || S.state === "resuming") {
-      let state = S.state;
-      let detail = e.record.detail;
+    if (stateEvent.state === "crashed" || stateEvent.state === "resuming") {
+      let state = stateEvent.state;
+      let detail = handle.record.detail;
       let tempo = state === "crashed" ? "idle" : "active";
-      let jobDir = getJobDir(e.record.short);
-      let L = readJobState(jobDir, h.storageV5)
+      let jobDir = getJobDir(handle.record.short);
+      let writePromise = readJobState(jobDir, context.storageV5)
         .then((jobState) => {
           if (
-            e.record.outcome ||
+            handle.record.outcome ||
             !jobState ||
             isSettled(jobState) ||
             jobState.state === "blocked" ||
@@ -1651,11 +1724,11 @@ function onBgSessionSettled(r, e, o, n, i, h) {
               inFlight: undefined,
               updatedAt: new Date().toISOString(),
             },
-            h.storageV5,
+            context.storageV5,
           );
         })
         .catch((error) => logError(error));
-      trackPending(n, L);
+      trackPending(pendingWrites, writePromise);
     }
   });
 }
@@ -1663,36 +1736,44 @@ function onBgSessionSettled(r, e, o, n, i, h) {
 /**
  * 清理失效的会话 socket/pid 文件。
  */
-async function reapStaleSockets(r, e, o = {}) {
-  let n = getPlatform() === "windows";
-  let [i, h] = n ? [daemonPtyPidsDir(), ".pid"] : [daemonPtyDir(), ".sock"];
-  let S = n && o.storageV5 ? await listStoredPtyPids(o.storageV5) : await readdir(i).catch(() => []);
-  let u = new Set(S.filter((D) => D.endsWith(h)));
-  let y = 0;
-  for (let D of S) {
-    if (!D.endsWith(h)) {
-      let found = (n ? [".err", ".late", ".err.read"] : [".err", ".late", ".exec-exit", ".err.read"]).find(
-        (w) => D.endsWith(n ? w : `.sock${w}`),
-      );
+async function reapStaleSockets(handles, log, options = {}) {
+  let isWindows = getPlatform() === "windows";
+  let [scanDir, primarySuffix] = isWindows ? [daemonPtyPidsDir(), ".pid"] : [daemonPtyDir(), ".sock"];
+  let entries =
+    isWindows && options.storageV5
+      ? await listStoredPtyPids(options.storageV5)
+      : await readdir(scanDir).catch(() => []);
+  let activeNames = new Set(entries.filter((entry) => entry.endsWith(primarySuffix)));
+  let reapedCount = 0;
+  for (let entry of entries) {
+    if (!entry.endsWith(primarySuffix)) {
+      let found = (
+        isWindows ? [".err", ".late", ".err.read"] : [".err", ".late", ".exec-exit", ".err.read"]
+      ).find((sidecarSuffix) => entry.endsWith(isWindows ? sidecarSuffix : `.sock${sidecarSuffix}`));
       if (found) {
-        let sliced = D.slice(0, -found.length);
-        let A = n ? sliced.lastIndexOf("-pty-") : -1;
-        let U = n ? (A >= 0 ? `${sliced.slice(A + 5)}.pid` : "") : sliced;
-        if (U && !u.has(U))
-          if (n && o.storageV5) o.storageV5.delete(STORAGE_SPACES.daemon(["pty-pids", D])).catch(() => {});
-          else unlink(join(i, D)).catch(() => {});
+        let sliced = entry.slice(0, -found.length);
+        let ptyMarkerIndex = isWindows ? sliced.lastIndexOf("-pty-") : -1;
+        let ownerName = isWindows
+          ? ptyMarkerIndex >= 0
+            ? `${sliced.slice(ptyMarkerIndex + 5)}.pid`
+            : ""
+          : sliced;
+        if (ownerName && !activeNames.has(ownerName))
+          if (isWindows && options.storageV5)
+            options.storageV5.delete(STORAGE_SPACES.daemon(["pty-pids", entry])).catch(() => {});
+          else unlink(join(scanDir, entry)).catch(() => {});
       }
       continue;
     }
-    let sliced = D.slice(0, -h.length);
-    if (r.has(sliced)) continue;
-    y++;
-    let L = daemonPtyPidFile(sliced);
-    killViaPtySocket(daemonPtySocket(sliced), o.storageV5).then((P) => {
-      let R = ptyErrFile(daemonPtySocket(sliced));
-      let w = ptyLateFile(daemonPtySocket(sliced));
+    let sliced = entry.slice(0, -primarySuffix.length);
+    if (handles.has(sliced)) continue;
+    reapedCount++;
+    let pidFile = daemonPtyPidFile(sliced);
+    killViaPtySocket(daemonPtySocket(sliced), options.storageV5).then((killed) => {
+      let errFile = ptyErrFile(daemonPtySocket(sliced));
+      let lateFile = ptyLateFile(daemonPtySocket(sliced));
       let execExitPath = getExecExitPath(daemonPtySocket(sliced));
-      if (!n) {
+      if (!isWindows) {
         writeReapedTerminalState(
           sliced,
           "failed",
@@ -1700,22 +1781,22 @@ async function reapStaleSockets(r, e, o = {}) {
           {
             resumable: "wake-only",
           },
-          o.storageV5,
+          options.storageV5,
         );
-        unlink(w).catch(() => {});
+        unlink(lateFile).catch(() => {});
         unlink(execExitPath).catch(() => {});
         return;
       }
-      let U = () => {
-        if (o.storageV5) deletePtyPidRecords(o.storageV5, sliced, undefined);
+      let cleanupFiles = () => {
+        if (options.storageV5) deletePtyPidRecords(options.storageV5, sliced, undefined);
         else {
-          unlink(L).catch(() => {});
-          unlink(R).catch(() => {});
-          unlink(w).catch(() => {});
+          unlink(pidFile).catch(() => {});
+          unlink(errFile).catch(() => {});
+          unlink(lateFile).catch(() => {});
           unlink(execExitPath).catch(() => {});
         }
       };
-      if (P) {
+      if (killed) {
         writeReapedTerminalState(
           sliced,
           "failed",
@@ -1723,15 +1804,18 @@ async function reapStaleSockets(r, e, o = {}) {
           {
             resumable: "wake-only",
           },
-          o.storageV5,
+          options.storageV5,
         );
-        U();
+        cleanupFiles();
         return;
       }
-      (o.storageV5 ? readStoredPtyPid(o.storageV5, sliced) : readSmallFileOrNull(L, MAX_PID_FILE_BYTES))
-        .then((re) => {
-          if (re === null) return;
-          if (!isProcessRunning(Number(re))) {
+      (options.storageV5
+        ? readStoredPtyPid(options.storageV5, sliced)
+        : readSmallFileOrNull(pidFile, MAX_PID_FILE_BYTES)
+      )
+        .then((pidText) => {
+          if (pidText === null) return;
+          if (!isProcessRunning(Number(pidText))) {
             writeReapedTerminalState(
               sliced,
               "failed",
@@ -1739,18 +1823,18 @@ async function reapStaleSockets(r, e, o = {}) {
               {
                 resumable: "wake-only",
               },
-              o.storageV5,
+              options.storageV5,
             );
-            U();
+            cleanupFiles();
           }
         })
         .catch(() => {});
     });
   }
-  if (y) {
-    e(`bg orphan-reap: ${y} roster-less pty host(s)`);
+  if (reapedCount) {
+    log(`bg orphan-reap: ${reapedCount} roster-less pty host(s)`);
     logEvent("tengu_bg_orphan_reap", {
-      reaped: y,
+      reaped: reapedCount,
     });
   }
 }
@@ -1760,9 +1844,9 @@ var PTY_PIDS_DIR = {
   relPath: ["pty-pids"],
 };
 //@ chunk-ss669z1x.js:39900-40001 placement
-async function ensureJobsDir(storageV5) {
-  if (isStorageV5Enabled() && storageV5 !== undefined) {
-    await ensureTombstoneScope(storageV5);
+async function ensureJobsDir(storage) {
+  if (isStorageV5Enabled() && storage !== undefined) {
+    await ensureTombstoneScope(storage);
     return;
   }
   await mkdir(hostManagedDir(), {
@@ -1783,14 +1867,14 @@ async function ensureDaemonStateDir(storageV5) {
   }).catch(() => {});
 }
 //@ chunk-ss669z1x.js:40138-40290 placement
-async function deletePtyPidRecords(storageV5, e, ptySock) {
-  for (let n of [
-    basename(daemonPtyPidFile(e)),
-    basename(ptyErrFile(daemonPtySocket(e))),
-    basename(ptyLateFile(daemonPtySocket(e))),
-    basename(getExecExitPath(ptySock ?? daemonPtySocket(e))),
+async function deletePtyPidRecords(storageV5, short, ptySock) {
+  for (let fileName of [
+    basename(daemonPtyPidFile(short)),
+    basename(ptyErrFile(daemonPtySocket(short))),
+    basename(ptyLateFile(daemonPtySocket(short))),
+    basename(getExecExitPath(ptySock ?? daemonPtySocket(short))),
   ])
-    await storageV5.delete(STORAGE_SPACES.daemon(["pty-pids", n])).catch(() => {});
+    await storageV5.delete(STORAGE_SPACES.daemon(["pty-pids", fileName])).catch(() => {});
 }
 //@ chunk-ss669z1x.js:40290-40429 placement = convertDirectoryToZipInPlace (1)
 async function removeIfNotDirectory(dirPath) {
@@ -1806,13 +1890,13 @@ async function removeIfNotDirectory(dirPath) {
 /**
  * 删除后台任务的存储作用域（名字配错）。
  */
-async function deleteJobScope(storageV5, jobId, dirPath, n) {
+async function deleteJobScope(storageV5, jobId, dirPath, onError) {
   if (await removeIfNotDirectory(dirPath)) return;
-  let i = await storageV5.deleteScope({
+  let deleteResult = await storageV5.deleteScope({
     namespace: "job",
     jobId,
   });
-  if (!i.ok) n(i.error.code);
+  if (!deleteResult.ok) onError(deleteResult.error.code);
 }
 //@ chunk-ss669z1x.js:40556-40590 placement
 var PTY_PID_KEY_RE = /^[0-9A-Za-z.+_-]{1,100}$/;
@@ -1820,13 +1904,15 @@ var PTY_PID_KEY_RE = /^[0-9A-Za-z.+_-]{1,100}$/;
 /**
  * 空闲超时或版本过旧时退役 worker。
  */
-function retireIdleWorker(r, e, o, n) {
-  if (!o.retired) return false;
-  let rounded = Math.round(o.idleMs / 60000);
-  let h = rounded >= 120 ? `${Math.round(rounded / 60)}h` : `${rounded}m`;
+function retireIdleWorker(log, workerHandle, retirement, tag) {
+  if (!retirement.retired) return false;
+  let rounded = Math.round(retirement.idleMs / 60000);
+  let idleText = rounded >= 120 ? `${Math.round(rounded / 60)}h` : `${rounded}m`;
   let cliVersion =
-    e.record.cliVersion && PTY_PID_KEY_RE.test(e.record.cliVersion) ? e.record.cliVersion : "unrecognized";
-  let u = e.isVersionStale
+    workerHandle.record.cliVersion && PTY_PID_KEY_RE.test(workerHandle.record.cliVersion)
+      ? workerHandle.record.cliVersion
+      : "unrecognized";
+  let versionNote = workerHandle.isVersionStale
     ? `, worker ${cliVersion} (daemon ${
         {
           ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
@@ -1841,13 +1927,15 @@ function retireIdleWorker(r, e, o, n) {
         }.VERSION
       })`
     : "";
-  r(`bg retire ${e.record.short}: ${o.cause}, idle ${h}${u}${n ? ` [${n}]` : ""}`);
+  log(
+    `bg retire ${workerHandle.record.short}: ${retirement.cause}, idle ${idleText}${versionNote}${tag ? ` [${tag}]` : ""}`,
+  );
   return true;
 }
 //@ chunk-ss669z1x.js:41418-41471 placement
-function trackPending(r, e) {
-  r.add(e);
-  e.finally(() => r.delete(e));
+function trackPending(pending, promise) {
+  pending.add(promise);
+  promise.finally(() => pending.delete(promise));
 }
 //@ chunk-ss669z1x.js:41592-41659 placement
 var DISPATCH_POLL_MS = 60000;
@@ -1858,8 +1946,8 @@ var DISPATCH_LOCK_MS = 60000;
 var DISPATCH_LOCK_RETRY_MS = 2000;
 var DISPATCH_STALE_MS = 300000;
 //@ chunk-ss669z1x.js:41659-41715 placement
-function jitterDelay(r) {
-  return Math.round(r * (0.5 + Math.random()));
+function jitterDelay(delayMs) {
+  return Math.round(delayMs * (0.5 + Math.random()));
 }
 //@ chunk-ss669z1x.js:41715-41764 placement
 function backoffDelay(consecutiveCrashes) {
@@ -1901,31 +1989,31 @@ class DaemonWorkerProcess {
   get status() {
     let pid = this.child?.pid;
     if (pid === undefined) return null;
-    let e = {
+    let status = {
       pid,
       startedAt: this.spawnedAt,
     };
-    let o = dirFieldOf(this.config);
-    let n = weakMap.get(this) ?? 0;
-    if (n > 0 && o !== undefined)
-      e.servedFolder = {
-        dir: o,
-        sessions: n,
+    let servedDir = dirFieldOf(this.config);
+    let sessionCount = weakMap.get(this) ?? 0;
+    if (sessionCount > 0 && servedDir !== undefined)
+      status.servedFolder = {
+        dir: servedDir,
+        sessions: sessionCount,
       };
-    return e;
+    return status;
   }
   isBusy() {
     return this.lastBusy && this.child !== null && Date.now() - this.lastBusyAt < DISPATCH_STALE_MS;
   }
-  start(r = 0) {
+  start(delayMs = 0) {
     this.stopping = false;
-    if (r > 0) this.scheduleRespawn(r);
+    if (delayMs > 0) this.scheduleRespawn(delayMs);
     else this.spawn();
   }
   updateConfig(config) {
     this.config = config;
   }
-  async stop(r) {
+  async stop(cause) {
     this.stopping = true;
     this.temporaryEndsInARow = 0;
     if (this.backoffTimer) {
@@ -1935,30 +2023,30 @@ class DaemonWorkerProcess {
     let child = this.child;
     if (!child) return;
     let exitPromise = this.exitPromise;
-    let n = false;
+    let sentShutdown = false;
     if (typeof child.send === "function")
       try {
-        n = child.send(
-          r !== undefined
+        sentShutdown = child.send(
+          cause !== undefined
             ? {
                 type: "shutdown",
-                cause: r,
+                cause,
               }
             : {
                 type: "shutdown",
               },
         );
       } catch {}
-    if (getPlatform() !== "windows" || !n) child.kill("SIGTERM");
-    let timer = setTimeout((h) => h.kill("SIGKILL"), DISPATCH_BACKOFF_MIN_MS, child);
+    if (getPlatform() !== "windows" || !sentShutdown) child.kill("SIGTERM");
+    let timer = setTimeout((childToKill) => childToKill.kill("SIGKILL"), DISPATCH_BACKOFF_MIN_MS, child);
     timer.unref();
     if (exitPromise) await exitPromise;
     clearTimeout(timer);
   }
   spawn() {
-    let r = processWrapperError();
-    if (r) {
-      this.logger.write(this.id, `not started: ${r}`);
+    let wrapperError = processWrapperError();
+    if (wrapperError) {
+      this.logger.write(this.id, `not started: ${wrapperError}`);
       if (!this.wrapperParkLogged) {
         this.wrapperParkLogged = true;
         logFeatureBad("agent_launcher", "registry_worker_refused");
@@ -1968,11 +2056,11 @@ class DaemonWorkerProcess {
     }
     let now = Date.now();
     this.spawnedAt = now;
-    let o = withProcessWrapper(this.invocation);
-    let n = spawn(
-      o.cmd,
+    let resolvedInvocation = withProcessWrapper(this.invocation);
+    let child = spawn(
+      resolvedInvocation.cmd,
       [
-        ...o.prefixArgs,
+        ...resolvedInvocation.prefixArgs,
         "--daemon-worker",
         this.kind,
         ...(this.temporaryEndsInARow > 0 ? [String(this.temporaryEndsInARow)] : []),
@@ -1982,12 +2070,12 @@ class DaemonWorkerProcess {
         windowsHide: true,
       },
     );
-    this.child = n;
+    this.child = child;
     this.onStateChange?.();
-    n.stdin.on("error", (u) => {
-      this.logger.write(this.id, `stdin write error: ${u.message}`);
+    child.stdin.on("error", (stdinError) => {
+      this.logger.write(this.id, `stdin write error: ${stdinError.message}`);
     });
-    n.stdin.write(
+    child.stdin.write(
       jsonStringify({
         config: this.config,
         initialAccessToken: this.authManager?.getAccessToken(),
@@ -1995,92 +2083,92 @@ class DaemonWorkerProcess {
         `
 `,
     );
-    n.stdin.end();
-    if (this.authManager) this.authManager.attachWorker(n);
-    n.on("message", (u) => {
+    child.stdin.end();
+    if (this.authManager) this.authManager.attachWorker(child);
+    child.on("message", (message) => {
       if (
-        this.child === n &&
-        typeof u === "object" &&
-        u !== null &&
-        "type" in u &&
-        u.type === "rc_busy" &&
-        "busy" in u &&
-        typeof u.busy === "boolean"
+        this.child === child &&
+        typeof message === "object" &&
+        message !== null &&
+        "type" in message &&
+        message.type === "rc_busy" &&
+        "busy" in message &&
+        typeof message.busy === "boolean"
       ) {
-        this.lastBusy = u.busy;
+        this.lastBusy = message.busy;
         this.lastBusyAt = Date.now();
       }
       if (
-        this.child === n &&
+        this.child === child &&
         this.kind === "remoteControl" &&
-        typeof u === "object" &&
-        u !== null &&
-        "type" in u &&
-        u.type === "rc_serving_tools" &&
-        "count" in u &&
-        typeof u.count === "number" &&
-        Number.isInteger(u.count) &&
-        u.count >= 0 &&
-        u.count <= SERVED_SESSIONS_MAX &&
-        u.count !== (weakMap.get(this) ?? 0)
+        typeof message === "object" &&
+        message !== null &&
+        "type" in message &&
+        message.type === "rc_serving_tools" &&
+        "count" in message &&
+        typeof message.count === "number" &&
+        Number.isInteger(message.count) &&
+        message.count >= 0 &&
+        message.count <= SERVED_SESSIONS_MAX &&
+        message.count !== (weakMap.get(this) ?? 0)
       ) {
-        weakMap.set(this, u.count);
+        weakMap.set(this, message.count);
         this.onStateChange?.();
       }
     });
-    let i = createInterface({
-      input: n.stdout,
+    let stdoutReader = createInterface({
+      input: child.stdout,
     });
-    i.on("line", (u) => this.logger.write(this.id, u));
-    let h = createInterface({
-      input: n.stderr,
+    stdoutReader.on("line", (line) => this.logger.write(this.id, line));
+    let stderrReader = createInterface({
+      input: child.stderr,
     });
-    h.on("line", (u) => this.logger.write(this.id, u));
-    n.on("spawn", () => {
+    stderrReader.on("line", (line) => this.logger.write(this.id, line));
+    child.on("spawn", () => {
       this.wrapperParkLogged = false;
       logFeatureOk("daemon_worker_spawn");
     });
-    let S = false;
+    let hasExited = false;
     this.exitPromise = new Promise((resolve) => {
-      let y = (D, E) => {
-        if (S) return;
-        S = true;
-        i.close();
-        h.close();
+      let handleExit = (code, signalName) => {
+        if (hasExited) return;
+        hasExited = true;
+        stdoutReader.close();
+        stderrReader.close();
         this.child = null;
         this.lastBusy = false;
         weakMap.delete(this);
         this.onStateChange?.();
-        if (this.authManager) this.authManager.detachWorker(n);
+        if (this.authManager) this.authManager.detachWorker(child);
         this.exitPromise = null;
-        this.onExit(D, E, now);
+        this.onExit(code, signalName, now);
         resolve();
       };
-      n.on("exit", y);
-      n.on("error", (D) => {
-        this.logger.write(this.id, `spawn error: ${D.message}`);
+      child.on("exit", handleExit);
+      child.on("error", (spawnError) => {
+        this.logger.write(this.id, `spawn error: ${spawnError.message}`);
         logFeatureBad(
           "daemon_worker_spawn",
-          isENOENT(D) ? "daemon_worker_spawn_enoent" : "daemon_worker_spawn_error",
+          isENOENT(spawnError) ? "daemon_worker_spawn_enoent" : "daemon_worker_spawn_error",
         );
-        let E = processWrapperArgv()[0];
-        let errnoCode = getErrnoCode(D);
-        if (E && (isENOENT(D) || errnoCode === "EACCES" || errnoCode === "EPERM")) {
+        let launcherPath = processWrapperArgv()[0];
+        let errnoCode = getErrnoCode(spawnError);
+        if (launcherPath && (isENOENT(spawnError) || errnoCode === "EACCES" || errnoCode === "EPERM")) {
           this.logger.write(
             this.id,
-            isENOENT(D)
-              ? `not started: launcher \`${E}\` was deleted or moved (ENOENT) \u2014 fix CLAUDE_CODE_PROCESS_WRAPPER; retrying in the background`
-              : `not started: launcher \`${E}\` cannot be executed (${errnoCode}) \u2014 fix CLAUDE_CODE_PROCESS_WRAPPER or the launcher's permissions; retrying in the background`,
+            isENOENT(spawnError)
+              ? `not started: launcher \`${launcherPath}\` was deleted or moved (ENOENT) \u2014 fix CLAUDE_CODE_PROCESS_WRAPPER; retrying in the background`
+              : `not started: launcher \`${launcherPath}\` cannot be executed (${errnoCode}) \u2014 fix CLAUDE_CODE_PROCESS_WRAPPER or the launcher's permissions; retrying in the background`,
           );
           if (!this.wrapperParkLogged) {
             this.wrapperParkLogged = true;
             logFeatureBad("agent_launcher", "registry_worker_refused");
           }
-          y(EXIT_TEMPFAIL, null);
+          handleExit(EXIT_TEMPFAIL, null);
           return;
         }
-        if (!isENOENT(D)) {
-          y(null, null);
+        if (!isENOENT(spawnError)) {
+          handleExit(null, null);
           return;
         }
         findLatestInstalledVersion().then((latestInstalledVersion) => {
@@ -2096,117 +2184,130 @@ class DaemonWorkerProcess {
             });
             this.consecutiveCrashes = 0;
           }
-          y(null, null);
+          handleExit(null, null);
         });
       });
     });
   }
-  onExit(r, e, o) {
+  onExit(code, signalName, startedAt) {
     if (this.stopping) return;
-    let n = Date.now() - o;
-    this.temporaryEndsInARow = r === EXIT_TEMPFAIL ? this.temporaryEndsInARow + 1 : 0;
-    if (r === EXIT_TEMPFAIL) {
-      let h = jitterDelay(DISPATCH_BACKOFF_STEP_MS);
-      this.logger.write(this.id, `exited tempfail code=${r} uptime=${n}ms \u2014 retry in ${h}ms`);
-      this.scheduleRespawn(h);
+    let uptimeMs = Date.now() - startedAt;
+    this.temporaryEndsInARow = code === EXIT_TEMPFAIL ? this.temporaryEndsInARow + 1 : 0;
+    if (code === EXIT_TEMPFAIL) {
+      let retryDelayMs = jitterDelay(DISPATCH_BACKOFF_STEP_MS);
+      this.logger.write(
+        this.id,
+        `exited tempfail code=${code} uptime=${uptimeMs}ms \u2014 retry in ${retryDelayMs}ms`,
+      );
+      this.scheduleRespawn(retryDelayMs);
       return;
     }
-    if (r === EXIT_CONFIG_ERROR) {
-      this.logger.write(this.id, `exited permanently code=${r} uptime=${n}ms \u2014 will not respawn`);
+    if (code === EXIT_CONFIG_ERROR) {
+      this.logger.write(
+        this.id,
+        `exited permanently code=${code} uptime=${uptimeMs}ms \u2014 will not respawn`,
+      );
       logEvent("tengu_daemon_worker_permanent_exit", {
-        exit_code: r ?? undefined,
-        uptime_ms: n,
+        exit_code: code ?? undefined,
+        uptime_ms: uptimeMs,
         worker_kind: fromEnum(this.kind),
       });
       return;
     }
-    if (r === 0 && n < PROCESS_WRAPPER_ENV && processWrapperArgv().length > 0) {
+    if (code === 0 && uptimeMs < PROCESS_WRAPPER_TIMEOUT_MS && processWrapperArgv().length > 0) {
       this.logger.write(
         this.id,
-        `not started: launcher \`${processWrapperArgv()[0]}\` exited ${n}ms after spawn, before ${this.kind} started \u2014 it must exec its arguments, not daemonize; will not respawn until the launcher is fixed and the daemon restarts`,
+        `not started: launcher \`${processWrapperArgv()[0]}\` exited ${uptimeMs}ms after spawn, before ${this.kind} started \u2014 it must exec its arguments, not daemonize; will not respawn until the launcher is fixed and the daemon restarts`,
       );
       if (!this.wrapperParkLogged) {
         this.wrapperParkLogged = true;
         logFeatureBad("agent_launcher", "registry_worker_launcher_forked");
       }
       logEvent("tengu_daemon_worker_permanent_exit", {
-        exit_code: r ?? undefined,
-        uptime_ms: n,
+        exit_code: code ?? undefined,
+        uptime_ms: uptimeMs,
         worker_kind: fromEnum(this.kind),
       });
       return;
     }
-    if (r !== 0 || n < DISPATCH_POLL_MS) {
+    if (code !== 0 || uptimeMs < DISPATCH_POLL_MS) {
       this.consecutiveCrashes++;
       if (processWrapperArgv().length > 0)
         access(this.invocation.target)
           .catch(() => findLatestInstalledVersion())
-          .then((S) => {
-            if (typeof S === "string" && S && S !== this.invocation.target) {
+          .then((resolvedTarget) => {
+            if (
+              typeof resolvedTarget === "string" &&
+              resolvedTarget &&
+              resolvedTarget !== this.invocation.target
+            ) {
               this.logger.write(
                 this.id,
-                `target \`${this.invocation.target}\` is gone (version GC?) \u2014 re-resolved to ${S}`,
+                `target \`${this.invocation.target}\` is gone (version GC?) \u2014 re-resolved to ${resolvedTarget}`,
               );
               this.invocation = withProcessWrapper({
-                cmd: S,
+                cmd: resolvedTarget,
                 prefixArgs: [],
-                target: S,
+                target: resolvedTarget,
               });
               this.consecutiveCrashes = 0;
             }
           })
           .catch(() => {});
-      let h = backoffDelay(this.consecutiveCrashes);
+      let backoffMs = backoffDelay(this.consecutiveCrashes);
       this.logger.write(
         this.id,
-        `exited code=${r} sig=${e} uptime=${n}ms consecutive=${this.consecutiveCrashes} backoff=${h}ms`,
+        `exited code=${code} sig=${signalName} uptime=${uptimeMs}ms consecutive=${this.consecutiveCrashes} backoff=${backoffMs}ms`,
       );
       logEvent("tengu_daemon_worker_crash", {
         consecutive: this.consecutiveCrashes,
-        exit_code: r ?? undefined,
-        uptime_ms: n,
+        exit_code: code ?? undefined,
+        uptime_ms: uptimeMs,
         worker_kind: fromEnum(this.kind),
       });
-      this.scheduleRespawn(h);
+      this.scheduleRespawn(backoffMs);
     } else {
       this.consecutiveCrashes = 0;
-      this.logger.write(this.id, `exited code=${r} sig=${e} uptime=${n}ms (clean) \u2014 respawning`);
+      this.logger.write(
+        this.id,
+        `exited code=${code} sig=${signalName} uptime=${uptimeMs}ms (clean) \u2014 respawning`,
+      );
       this.spawn();
     }
   }
-  scheduleRespawn(r) {
+  scheduleRespawn(delayMs) {
     if (this.backoffTimer) clearTimeout(this.backoffTimer);
     this.backoffTimer = setTimeout(() => {
       this.backoffTimer = null;
       if (!this.stopping) this.spawn();
-    }, r);
+    }, delayMs);
     this.backoffTimer.unref();
   }
 }
 //@ chunk-ss669z1x.js:47596-47714 placement
-function dirFieldOf(r) {
-  if (typeof r !== "object" || r === null || !("dir" in r)) return;
-  let { dir } = r;
+function dirFieldOf(config) {
+  if (typeof config !== "object" || config === null || !("dir" in config)) return;
+  let { dir } = config;
   return typeof dir === "string" ? dir : undefined;
 }
 //@ chunk-ss669z1x.js:47714-47734 placement
 var DRAIN_RETRY_MS = 1000;
 var DISPATCH_GRACE_MS = 5000;
 //@ chunk-ss669z1x.js:47734-47763 placement
-function countByKind(r) {
-  return isWorkerKindAdmitted(r);
+function countByKind(kind) {
+  return isWorkerKindAdmitted(kind);
 }
 //@ chunk-ss669z1x.js:47763-47846 placement
-function countPendingItems(r) {
-  let e = 0;
-  for (let key of Object.keys(WORKER_KINDS)) e += (r[key] ?? []).length;
-  return e;
+function countPendingItems(config) {
+  let total = 0;
+  for (let key of Object.keys(WORKER_KINDS)) total += (config[key] ?? []).length;
+  return total;
 }
 //@ chunk-ss669z1x.js:47846-50788 placement
 /**
  * daemon supervisor：读取配置、按 kind 管理 worker、处理配置变更。
  */
-async function runDaemonSupervisor(r) {
+async function runDaemonSupervisor(options) {
   let {
     jsonPath,
     invocation,
@@ -2215,73 +2316,81 @@ async function runDaemonSupervisor(r) {
     watch = initialize,
     storageV5,
     onFlagsRefreshed = onGrowthBookRefresh,
-  } = r;
-  let y = new Map();
-  let D = defaultWorkerKindsConfig();
+  } = options;
+  let processes = new Map();
+  let config = defaultWorkerKindsConfig();
   let resolved = Promise.resolve();
-  let L = false;
-  let P;
-  let R = false;
-  let w = false;
+  let isStatusWritePending = false;
+  let statusRetryTimer;
+  let statusWriteFailed = false;
+  let isStopped = false;
   function onStateChange() {
-    if (L || w) return;
-    clearTimeout(P);
-    P = undefined;
-    L = true;
+    if (isStatusWritePending || isStopped) return;
+    clearTimeout(statusRetryTimer);
+    statusRetryTimer = undefined;
+    isStatusWritePending = true;
     resolved = resolved
       .then(async () => {
-        L = false;
-        if (w) return;
+        isStatusWritePending = false;
+        if (isStopped) return;
         let workers = {};
-        for (let [V, x] of y) {
-          let status = x.status;
-          if (status) workers[V] = status;
+        for (let [id, processes_2] of processes) {
+          let status = processes_2.status;
+          if (status) workers[id] = status;
         }
-        if (await writeDaemonStatus(workers, storageV5)) R = false;
-        else if (!R) {
-          R = true;
-          P = setTimeout(onStateChange, DISPATCH_GRACE_MS);
-          P.unref();
+        if (await writeDaemonStatus(workers, storageV5)) statusWriteFailed = false;
+        else if (!statusWriteFailed) {
+          statusWriteFailed = true;
+          statusRetryTimer = setTimeout(onStateChange, DISPATCH_GRACE_MS);
+          statusRetryTimer.unref();
         }
       })
       .catch((error) => logError(error));
   }
   let jsonConfigFile = await readJsonConfigFile(jsonPath, storageV5);
   if (jsonConfigFile.ok) {
-    D = jsonConfigFile.config;
+    config = jsonConfigFile.config;
     for (let unknownKey of jsonConfigFile.unknownKeys)
       logger.write("supervisor", `unknown config key '${unknownKey}' \u2014 upgrade claude?`);
   } else logger.write("supervisor", `config load failed: ${jsonConfigFile.error} \u2014 idling`);
   await authManager.ready;
-  let re = new Set();
-  function X() {
-    let B = 0;
+  let warnedKinds = new Set();
+  function syncProcesses() {
+    let startIndex = 0;
     for (let key of Object.keys(WORKER_KINDS)) {
-      let x = D[key] ?? [];
+      let kindConfigs = config[key] ?? [];
       if (!countByKind(key)) {
-        if (x.length > 0 && !re.has(key)) {
-          re.add(key);
+        if (kindConfigs.length > 0 && !warnedKinds.has(key)) {
+          warnedKinds.add(key);
           logger.write(
             "supervisor",
-            `not starting ${x.length} ${key} worker(s): not available for this account`,
+            `not starting ${kindConfigs.length} ${key} worker(s): not available for this account`,
           );
         }
         continue;
       }
-      re.delete(key);
-      for (let idx = 0; idx < x.length; idx++) {
+      warnedKinds.delete(key);
+      for (let idx = 0; idx < kindConfigs.length; idx++) {
         let id = `${key}:${idx}`;
-        if (y.has(id)) continue;
-        let W = new DaemonWorkerProcess(id, key, x[idx], invocation, logger, authManager, onStateChange);
-        y.set(id, W);
-        W.start(B++ * DISPATCH_LOCK_RETRY_MS);
+        if (processes.has(id)) continue;
+        let workerProcess = new DaemonWorkerProcess(
+          id,
+          key,
+          kindConfigs[idx],
+          invocation,
+          logger,
+          authManager,
+          onStateChange,
+        );
+        processes.set(id, workerProcess);
+        workerProcess.start(startIndex++ * DISPATCH_LOCK_RETRY_MS);
         logger.write("supervisor", `spawned ${id}`);
       }
     }
   }
-  X();
+  syncProcesses();
   onStateChange();
-  let Q = async () => {
+  let reloadConfig = async () => {
     let jsonConfigFile = await readJsonConfigFile(jsonPath, storageV5);
     if (!jsonConfigFile.ok) {
       logger.write(
@@ -2292,97 +2401,108 @@ async function runDaemonSupervisor(r) {
     }
     for (let unknownKey of jsonConfigFile.unknownKeys)
       logger.write("supervisor", `unknown config key '${unknownKey}' \u2014 upgrade claude?`);
-    let V = diffSkillServers(D, jsonConfigFile.config);
-    D = jsonConfigFile.config;
-    let x = new Set((jsonConfigFile.config.remoteControl ?? []).map(dirFieldOf));
-    for (let { id, kind, previousConfig } of V.stop) {
-      let se = y.get(id);
-      if (se) {
-        let be = dirFieldOf(previousConfig);
-        let ve = kind === "remoteControl" && be !== undefined && x.has(be);
-        await se.stop(ve ? "reload" : undefined);
-        y.delete(id);
+    let diff = diffSkillServers(config, jsonConfigFile.config);
+    config = jsonConfigFile.config;
+    let nextServedDirs = new Set((jsonConfigFile.config.remoteControl ?? []).map(dirFieldOf));
+    for (let { id, kind, previousConfig } of diff.stop) {
+      let workerProcess = processes.get(id);
+      if (workerProcess) {
+        let previousDir = dirFieldOf(previousConfig);
+        let stillServed =
+          kind === "remoteControl" && previousDir !== undefined && nextServedDirs.has(previousDir);
+        await workerProcess.stop(stillServed ? "reload" : undefined);
+        processes.delete(id);
         logger.write("supervisor", `stopped ${id}`);
       }
     }
-    for (let { id, kind, previousConfig } of V.restart) {
-      let se = y.get(id);
-      if (se) {
-        let be = dirFieldOf(previousConfig);
-        let ve = kind !== "remoteControl" || (be !== undefined && x.has(be));
-        await se.stop(ve ? "reload" : undefined);
+    for (let { id, kind, previousConfig } of diff.restart) {
+      let workerProcess = processes.get(id);
+      if (workerProcess) {
+        let previousDir = dirFieldOf(previousConfig);
+        let keepServing =
+          kind !== "remoteControl" || (previousDir !== undefined && nextServedDirs.has(previousDir));
+        await workerProcess.stop(keepServing ? "reload" : undefined);
       }
     }
-    let ee = 0;
-    for (let { id, config } of V.restart) {
-      let ce = y.get(id);
-      if (ce) {
-        ce.updateConfig(config);
-        ce.start(ee++ * DISPATCH_LOCK_RETRY_MS);
+    let restartIndex = 0;
+    for (let { id, config } of diff.restart) {
+      let workerProcess = processes.get(id);
+      if (workerProcess) {
+        workerProcess.updateConfig(config);
+        workerProcess.start(restartIndex++ * DISPATCH_LOCK_RETRY_MS);
         logger.write("supervisor", `restarted ${id}`);
       }
     }
-    let ae = 0;
-    for (let { id, kind, config } of V.start) {
+    let startIndex = 0;
+    for (let { id, kind, config } of diff.start) {
       if (!countByKind(kind)) continue;
-      let se = new DaemonWorkerProcess(id, kind, config, invocation, logger, authManager, onStateChange);
-      y.set(id, se);
-      se.start(ae++ * DISPATCH_LOCK_RETRY_MS);
+      let workerProcess = new DaemonWorkerProcess(
+        id,
+        kind,
+        config,
+        invocation,
+        logger,
+        authManager,
+        onStateChange,
+      );
+      processes.set(id, workerProcess);
+      workerProcess.start(startIndex++ * DISPATCH_LOCK_RETRY_MS);
       logger.write("supervisor", `spawned ${id}`);
     }
-    if (V.stop.length + V.start.length + V.restart.length > 0) {
+    if (diff.stop.length + diff.start.length + diff.restart.length > 0) {
       logger.write(
         "supervisor",
-        `reload: stopped=${V.stop.length} started=${V.start.length} restarted=${V.restart.length}`,
+        `reload: stopped=${diff.stop.length} started=${diff.start.length} restarted=${diff.restart.length}`,
       );
       logEvent("tengu_daemon_config_reload", {
-        stopped: V.stop.length,
-        started: V.start.length,
-        restarted: V.restart.length,
+        stopped: diff.stop.length,
+        started: diff.start.length,
+        restarted: diff.restart.length,
       });
     }
   };
   let resolved_2 = Promise.resolve();
-  let le = watch(jsonPath, () => {
-    resolved_2 = resolved_2.then(Q).catch((error) => logError(error));
+  let stopWatching = watch(jsonPath, () => {
+    resolved_2 = resolved_2.then(reloadConfig).catch((error) => logError(error));
   });
-  let _e = false;
-  let q = () => {};
-  function Z() {
-    if (_e) return;
-    _e = true;
-    le();
-    q();
+  let isDisposed = false;
+  let unsubscribeFlags = () => {};
+  function dispose() {
+    if (isDisposed) return;
+    isDisposed = true;
+    stopWatching();
+    unsubscribeFlags();
   }
-  q = onFlagsRefreshed(() => {
+  unsubscribeFlags = onFlagsRefreshed(() => {
     resolved_2 = resolved_2
       .then(() => {
-        if (!_e) {
-          X();
+        if (!isDisposed) {
+          syncProcesses();
           onStateChange();
         }
       })
       .catch((error) => logError(error));
   });
   return {
-    workerCount: () => countPendingItems(D),
+    workerCount: () => countPendingItems(config),
     hasOAuthConsumer: () => {
-      for (let B of y.values()) if (WORKER_KINDS[B.kind].needsOAuth) return true;
+      for (let workerProcess of processes.values())
+        if (WORKER_KINDS[workerProcess.kind].needsOAuth) return true;
       return false;
     },
     busyWorkerCount: () => {
-      let B = 0;
-      for (let V of y.values()) if (V.isBusy()) B++;
-      return B;
+      let busyCount = 0;
+      for (let workerProcess of processes.values()) if (workerProcess.isBusy()) busyCount++;
+      return busyCount;
     },
-    disposeWatcher: Z,
+    disposeWatcher: dispose,
     drainReloads: () => resolved_2,
-    stop: async (B) => {
-      Z();
+    stop: async (cause) => {
+      dispose();
       await resolved_2;
-      await Promise.all(Array.from(y.values()).map((V) => V.stop(B)));
-      w = true;
-      clearTimeout(P);
+      await Promise.all(Array.from(processes.values()).map((workerProcess) => workerProcess.stop(cause)));
+      isStopped = true;
+      clearTimeout(statusRetryTimer);
       await withDeadline(resolved, DRAIN_RETRY_MS);
       await removeDaemonStatus(storageV5);
     },

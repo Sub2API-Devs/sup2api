@@ -8,7 +8,7 @@
  * pieces: chunk-18hwfzwa.js (1)
  * attribution: placement 1
  */
-import { w } from "../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import { useTerminalSize } from "../hooks/useTerminalSize.js";
 import { useSetAppState } from "../state/AppState.js";
 import { renderModelLabel } from "../commands/model/model.js";
@@ -29,42 +29,46 @@ import { Dialog } from "./design-system/Dialog.js";
 
 //@ chunk-18hwfzwa.js:924178-925874 placement
 function ModelEffortSwitchConfirm(props) {
-  let $ = w(27);
+  let $ = useMemoCache(27);
   let { kind, model, effort, hookReason, overDraft, onConfirm, onCancel } = props;
-  let He = overDraft === undefined ? false : overDraft;
+  let isOverDraft = overDraft === undefined ? false : overDraft;
   let { columns } = useTerminalSize();
   let setAppState = useSetAppState();
-  let Xe = kind === "model";
-  let title = Xe ? "Switch model?" : "Change effort level?";
-  let kt = Xe ? "model" : "effort level";
-  let It;
-  if ($[0] !== effort || $[1] !== Xe || $[2] !== model) {
-    It = Xe ? renderModelLabel(model) : effort !== undefined ? effortValueToString(effort) : "auto";
+  let isModelSwitch = kind === "model";
+  let title = isModelSwitch ? "Switch model?" : "Change effort level?";
+  let kindLabel = isModelSwitch ? "model" : "effort level";
+  let targetLabel;
+  if ($[0] !== effort || $[1] !== isModelSwitch || $[2] !== model) {
+    targetLabel = isModelSwitch
+      ? renderModelLabel(model)
+      : effort !== undefined
+        ? effortValueToString(effort)
+        : "auto";
     $[0] = effort;
-    $[1] = Xe;
+    $[1] = isModelSwitch;
     $[2] = model;
-    $[3] = It;
-  } else It = $[3];
-  let Ot = It;
-  let Et;
+    $[3] = targetLabel;
+  } else targetLabel = $[3];
+  let targetLabelText = targetLabel;
+  let handleConfirm;
   if ($[4] !== hookReason || $[5] !== onConfirm || $[6] !== setAppState) {
-    Et = function Dt() {
+    handleConfirm = function handleConfirm() {
       if (hookReason === undefined) setAppState(markCacheMissAcked);
       onConfirm();
     };
     $[4] = hookReason;
     $[5] = onConfirm;
     $[6] = setAppState;
-    $[7] = Et;
-  } else Et = $[7];
-  let onConfirm_2 = Et;
+    $[7] = handleConfirm;
+  } else handleConfirm = $[7];
+  let onConfirm_2 = handleConfirm;
   const subtitle =
     hookReason !== undefined
       ? "A PreModelSwitch hook asked you to confirm"
       : "Your next response will be slower and use more tokens";
-  let oo;
-  if ($[8] !== columns || $[9] !== hookReason || $[10] !== Ot || $[11] !== kt) {
-    oo =
+  let cacheWarningText;
+  if ($[8] !== columns || $[9] !== hookReason || $[10] !== targetLabelText || $[11] !== kindLabel) {
+    cacheWarningText =
       hookReason !== undefined
         ? jsxProd_default(Text, {
             children: truncateLines(
@@ -76,63 +80,63 @@ function ModelEffortSwitchConfirm(props) {
         : jsxProd_default_2(Text, {
             children: [
               "This conversation is cached for the current ",
-              kt,
+              kindLabel,
               ". Switching to",
               " ",
               jsxProd_default(Text, {
                 bold: true,
-                children: Ot,
+                children: targetLabelText,
               }),
               " means the full history gets re-read.",
             ],
           });
     $[8] = columns;
     $[9] = hookReason;
-    $[10] = Ot;
-    $[11] = kt;
-    $[12] = oo;
-  } else oo = $[12];
-  const confirmLabel = `Yes, switch to ${Ot}`;
-  const focus = He ? "cancel" : "confirm";
-  let so;
+    $[10] = targetLabelText;
+    $[11] = kindLabel;
+    $[12] = cacheWarningText;
+  } else cacheWarningText = $[12];
+  const confirmLabel = `Yes, switch to ${targetLabelText}`;
+  const focus = isOverDraft ? "cancel" : "confirm";
+  let confirmSelect;
   if (
     $[13] !== onConfirm_2 ||
     $[14] !== onCancel ||
-    $[15] !== He ||
+    $[15] !== isOverDraft ||
     $[16] !== confirmLabel ||
     $[17] !== focus
   ) {
-    so = jsxProd_default(ConfirmSelect, {
+    confirmSelect = jsxProd_default(ConfirmSelect, {
       confirmLabel,
       cancelLabel: "No, go back",
       focus,
-      hideIndexes: He,
-      disablePrintableKeybindings: He,
+      hideIndexes: isOverDraft,
+      disablePrintableKeybindings: isOverDraft,
       onConfirm: onConfirm_2,
       onCancel,
     });
     $[13] = onConfirm_2;
     $[14] = onCancel;
-    $[15] = He;
+    $[15] = isOverDraft;
     $[16] = confirmLabel;
     $[17] = focus;
-    $[18] = so;
-  } else so = $[18];
+    $[18] = confirmSelect;
+  } else confirmSelect = $[18];
   let children;
-  if ($[19] !== oo || $[20] !== so) {
+  if ($[19] !== cacheWarningText || $[20] !== confirmSelect) {
     children = jsxProd_default_2(Box, {
       flexDirection: "column",
       gap: 1,
       marginBottom: 1,
-      children: [oo, so],
+      children: [cacheWarningText, confirmSelect],
     });
-    $[19] = oo;
-    $[20] = so;
+    $[19] = cacheWarningText;
+    $[20] = confirmSelect;
     $[21] = children;
   } else children = $[21];
-  let ao;
+  let dialog;
   if ($[22] !== onCancel || $[23] !== subtitle || $[24] !== children || $[25] !== title) {
-    ao = jsxProd_default(Dialog, {
+    dialog = jsxProd_default(Dialog, {
       title,
       subtitle,
       color: "warning",
@@ -144,8 +148,8 @@ function ModelEffortSwitchConfirm(props) {
     $[23] = subtitle;
     $[24] = children;
     $[25] = title;
-    $[26] = ao;
-  } else ao = $[26];
-  return ao;
+    $[26] = dialog;
+  } else dialog = $[26];
+  return dialog;
 }
 export { ModelEffortSwitchConfirm };

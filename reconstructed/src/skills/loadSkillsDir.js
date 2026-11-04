@@ -10,10 +10,16 @@
  */
 import { join, basename, dirname, sep, relative, isAbsolute } from "path";
 import { readdir, realpath } from "fs/promises";
-import { Re } from "../../runtime/bun-runtime.js";
+import { __toESM } from "../../runtime/bun-runtime.js";
 import { require_ignore } from "../../vendor/ignore/index.js";
 import { DoctorLazy, DoctorWithPlugins } from "../cli/handlers/util.js";
-import { looseObject, string, QD, E, unknown } from "../../vendor/zod/v4/classic/schemas.js";
+import {
+  looseObject,
+  stringSchema,
+  undefinedSchema,
+  numberSchema,
+  unknown,
+} from "../../vendor/zod/v4/classic/schemas.js";
 import {
   readManifestText,
   parseManifestJson,
@@ -163,7 +169,7 @@ import { logForDiagnosticsNoPII } from "../utils/diagLogs.js";
 import { count } from "../utils/collections.js";
 import { isKilledHostCatalogSkill, isSyncedSkill } from "../utils/commandPredicates.js";
 import { HostScoped } from "../utils/hostScoped.js";
-import { io } from "../../vendor/@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
+import { memoizeAlias } from "../../vendor/@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
 import { findGitRootUncached, findGitRoot } from "../utils/git.js";
 import { isPathGitignored, isPathGitignoredBool } from "../utils/git/gitignore.js";
 import { getCwd, hasOutermostCallFrame } from "../utils/cwd.js";
@@ -175,78 +181,89 @@ import { lit as lit_2 } from "../services/analytics/safeMetadata.js";
 import { filterUsableIgnorePatterns } from "../utils/ignorePatterns.js";
 import { isPathWithinCaseAware } from "../utils/pathPrefix.js";
 import { registerLoaderSide } from "../services/memorySync/syncFiles.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:981425-981439 placement
 /**
  * 技能的身份文件路径。
  */
-var identityPath_2 = (e) => e;
+var identityPath_2 = (path) => path;
 //@ chunk-e6aww6q8.js:981439-981459 placement
-var skillIgnoreDefault = Re(require_ignore(), 1);
+var skillIgnoreDefault; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:981439", () => {
+  skillIgnoreDefault = __toESM(require_ignore(), 1);
+});
 //@ chunk-e6aww6q8.js:981688-982101 placement
 /**
  * 同步技能清单的 schema：单个技能条目（id、名称、来源、版本、插件等）与清单整体。
  */
-var syncedSkillEntrySchema = DoctorLazy(() =>
-  looseObject({
-    skillId: string(),
-    name: string(),
-    description: string().catch(""),
-    source: string().catch(""),
-    updatedAt: string().nullable().catch(null),
-    requestedVersion: string().optional().catch(undefined),
-    backingPluginId: string().optional().catch(undefined),
-    userInvocable: QD().catch(undefined),
-    disableModelInvocation: QD().catch(undefined),
-  }),
-);
-var syncedSkillsManifestSchema = DoctorLazy(() =>
-  looseObject({
-    lastUpdated: E().catch(0),
-    skills: unknown().optional(),
-    staleDirs: unknown().optional(),
-    pendingClaims: unknown().optional(),
-  }),
-);
+var syncedSkillEntrySchema; // deferred: uses DoctorLazy (../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var syncedSkillsManifestSchema;
+deferInit("chunk-e6aww6q8.js:981688", () => {
+  syncedSkillEntrySchema = DoctorLazy(() =>
+    looseObject({
+      skillId: stringSchema(),
+      name: stringSchema(),
+      description: stringSchema().catch(""),
+      source: stringSchema().catch(""),
+      updatedAt: stringSchema().nullable().catch(null),
+      requestedVersion: stringSchema().optional().catch(undefined),
+      backingPluginId: stringSchema().optional().catch(undefined),
+      userInvocable: undefinedSchema().catch(undefined),
+      disableModelInvocation: undefinedSchema().catch(undefined),
+    }),
+  );
+  syncedSkillsManifestSchema = DoctorLazy(() =>
+    looseObject({
+      lastUpdated: numberSchema().catch(0),
+      skills: unknown().optional(),
+      staleDirs: unknown().optional(),
+      pendingClaims: unknown().optional(),
+    }),
+  );
+});
 //@ chunk-e6aww6q8.js:982101-982117 placement
-var EMPTY_SYNCED_SKILL_MAP = new Map();
+var EMPTY_SYNCED_SKILL_MAP; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:982101", () => {
+  EMPTY_SYNCED_SKILL_MAP = new Map();
+});
 //@ chunk-e6aww6q8.js:982117-982515 placement
 /**
  * 读取同步技能清单，按目录名映射到技能 id（跳过冲突落败项与重名项），失败时返回空表。
  */
-async function readSyncedSkillIds(e) {
+async function readSyncedSkillIds(syncedRoot) {
   try {
-    let manifestText = await readManifestText(join(e, SYNCED_MANIFEST_FILE), null);
+    let manifestText = await readManifestText(join(syncedRoot, SYNCED_MANIFEST_FILE), null);
     if (manifestText === null) return EMPTY_SYNCED_SKILL_MAP;
     let manifestJson = parseManifestJson(manifestText, syncedSkillsManifestSchema(), null);
     if (manifestJson === null) return EMPTY_SYNCED_SKILL_MAP;
-    let s = new Map();
-    let h = new Set();
-    for (let y of parseValidRows(syncedSkillEntrySchema(), manifestJson.skills)) {
-      let S;
+    let attributions = new Map();
+    let seenNames = new Set();
+    for (let row of parseValidRows(syncedSkillEntrySchema(), manifestJson.skills)) {
+      let dirName;
       try {
-        S = stripInvisibleChars_3(basename(syncedItemPath(y.name, e)));
+        dirName = stripInvisibleChars_3(basename(syncedItemPath(row.name, syncedRoot)));
       } catch {
         continue;
       }
-      if (y.updatedAt === COLLISION_LOSER) continue;
-      if (h.has(S)) {
-        s.delete(S);
+      if (row.updatedAt === COLLISION_LOSER) continue;
+      if (seenNames.has(dirName)) {
+        attributions.delete(dirName);
         continue;
       }
-      h.add(S);
-      let skillAttribution = buildSkillAttribution(y.skillId, y.backingPluginId);
-      if (skillAttribution !== undefined) s.set(S, skillAttribution);
+      seenNames.add(dirName);
+      let skillAttribution = buildSkillAttribution(row.skillId, row.backingPluginId);
+      if (skillAttribution !== undefined) attributions.set(dirName, skillAttribution);
     }
-    return s;
+    return attributions;
   } catch {
     return EMPTY_SYNCED_SKILL_MAP;
   }
 }
 //@ chunk-e6aww6q8.js:982515-982681 placement
-async function readDirNameSet(e) {
+async function readDirNameSet(dir) {
   try {
-    return new Set(await readdir(e));
+    return new Set(await readdir(dir));
   } catch (error) {
     let code = error instanceof Error && "code" in error ? error.code : undefined;
     return code === "ENOENT" || code === "ENOTDIR" ? new Set() : undefined;
@@ -265,8 +282,8 @@ function isSlateWicketOn() {
 /**
  * 是 SKILL.md 路径，或是非空标识符且开关关闭。
  */
-function isSkillPathEligible(e) {
-  return isNameWithNoJoinerFixes(e) || (isNonEmptyIdentifier(e) && !isSlateWicketOn());
+function isSkillPathEligible(name) {
+  return isNameWithNoJoinerFixes(name) || (isNonEmptyIdentifier(name) && !isSlateWicketOn());
 }
 //@ chunk-e6aww6q8.js:982797-982831 placement
 var SKILL_NAME_PROSE_REGEX = /(?:^|:) | (?::|$)|^:|:$/;
@@ -290,11 +307,11 @@ var INVALID_NAME_MESSAGE =
 var MAX_NAME_WARNINGS = 100;
 var NON_ASCII_SPACE_RE = /[^\P{Z} ]/gu;
 //@ chunk-e6aww6q8.js:984088-984286 placement
-function normalizeArgumentNames(e) {
-  if (!e) return [];
-  let n = (r) => typeof r === "string" && r.trim() !== "" && !/^\d+$/.test(r);
-  if (Array.isArray(e)) return e.filter(n);
-  if (typeof e === "string") return e.split(/\s+/).filter(n);
+function normalizeArgumentNames(value) {
+  if (!value) return [];
+  let isUsableName = (name) => typeof name === "string" && name.trim() !== "" && !/^\d+$/.test(name);
+  if (Array.isArray(value)) return value.filter(isUsableName);
+  if (typeof value === "string") return value.split(/\s+/).filter(isUsableName);
   return [];
 }
 //@ chunk-e6aww6q8.js:984286-984389 placement
@@ -304,7 +321,7 @@ function normalizeArgumentNames(e) {
 function formatExtraArgHints(argNames, typedArgs) {
   let sliced = argNames.slice(typedArgs.length);
   if (sliced.length === 0) return;
-  return sliced.map((s) => `[${s}]`).join(" ");
+  return sliced.map((argName) => `[${argName}]`).join(" ");
 }
 //@ chunk-e6aww6q8.js:1668178-1668487 fingerprint = transformSkillFiles (1)
 function transformSkillFiles(files) {
@@ -331,7 +348,10 @@ function transformSkillFiles(files) {
 /**
  * 按会话保存的已加载命令插槽。
  */
-var sessionCommandsSlot = new SessionRootSlot(() => ({}));
+var sessionCommandsSlot; // deferred: uses SessionRootSlot (../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:3120512", () => {
+  sessionCommandsSlot = new SessionRootSlot(() => ({}));
+});
 //@ chunk-e6aww6q8.js:3120537-3120587 placement
 /**
  * 读当前会话已加载的命令（无则空数组）。
@@ -387,71 +407,71 @@ function getSkillListingText(skill) {
 /**
  * 粗略估算一个 skill 在技能清单中占用的 token 数。
  */
-function estimateSkillListingTokens(skill, bytesPerToken) {
-  return roughTokenCountEstimation(getSkillListingText(skill), bytesPerToken);
+function estimateSkillListingTokens(command, bytesPerToken) {
+  return roughTokenCountEstimation(getSkillListingText(command), bytesPerToken);
 }
 //@ chunk-e6aww6q8.js:3121098-3121182 layout
-async function realpathOrNull(e) {
+async function realpathOrNull(path) {
   if (isDiskless()) return null;
   try {
-    return await realpath(e);
+    return await realpath(path);
   } catch {
     return null;
   }
 }
 //@ chunk-e6aww6q8.js:3121182-3121228 layout
-async function isRealPathSelf(e) {
-  return (await realpathOrNull(e)) === e;
+async function isRealPathSelf(path) {
+  return (await realpathOrNull(path)) === path;
 }
 //@ chunk-e6aww6q8.js:3121228-3121653 layout
-function refuseReservedSkillName({ name: e, path, change }) {
-  let s = {
-    name: quotedPrintable(e),
+function refuseReservedSkillName({ name, path, change }) {
+  let entry = {
+    name: quotedPrintable(name),
     ...(path !== undefined && {
       path: printableOrEmpty(path),
     }),
     change,
   };
-  let h = `${s.path ?? ""}\x00${s.name}\x00${change}`;
+  let entryKey = `${entry.path ?? ""}\x00${entry.name}\x00${change}`;
   let refusedReservedNames = getDynamicSkillState().refusedReservedNames;
-  if (refusedReservedNames.has(h)) return;
-  refusedReservedNames.set(h, s);
-  let S = change === "workflow-name" ? `workflow "${s.name}"` : `"${s.name}"`;
-  let w = s.path ? ` (${s.path})` : "";
-  let L = reservedNameReason(s.name);
+  if (refusedReservedNames.has(entryKey)) return;
+  refusedReservedNames.set(entryKey, entry);
+  let displayName = change === "workflow-name" ? `workflow "${entry.name}"` : `"${entry.name}"`;
+  let pathSuffix = entry.path ? ` (${entry.path})` : "";
+  let reason = reservedNameReason(entry.name);
   logForDebugging(
-    `[skills] not loading ${S}${w}: that name ${L}; ${change === "frontmatter-name" ? "change its name: line" : "rename it"}`,
+    `[skills] not loading ${displayName}${pathSuffix}: that name ${reason}; ${change === "frontmatter-name" ? "change its name: line" : "rename it"}`,
     {
       level: "warn",
     },
   );
 }
 //@ chunk-e6aww6q8.js:3121653-3121867 layout
-function filterReservedSkillNames(e) {
-  return e.filter(({ skill, filePath }) => {
+function filterReservedSkillNames(skills) {
+  return skills.filter(({ skill, filePath }) => {
     if (!formatCommandDescription(skill)) return true;
-    let s = usesReservedSkillNamespace(skill.name);
+    let usesNamespace = usesReservedSkillNamespace(skill.name);
     refuseReservedSkillName({
-      name: s ? skill.name : (skill.userFacingName?.() ?? skill.name),
-      path: s ? getSkillNameRootPath(filePath, skill.name) : filePath,
-      change: s ? "path" : "frontmatter-name",
+      name: usesNamespace ? skill.name : (skill.userFacingName?.() ?? skill.name),
+      path: usesNamespace ? getSkillNameRootPath(filePath, skill.name) : filePath,
+      change: usesNamespace ? "path" : "frontmatter-name",
     });
     return false;
   });
 }
 //@ chunk-e6aww6q8.js:3121867-3122073 layout
 function getSkillNameRootPath(filePath, name) {
-  let r = basename(filePath).toLowerCase() === "skill.md";
-  let s = r ? dirname(filePath) : filePath;
-  let h = s;
-  let y = r ? basename(s) : basename(s).replace(/\.md$/i, "");
-  while (y !== name) {
-    let S = dirname(h);
-    if (S === h || !name.endsWith(`:${y}`)) return s;
-    h = S;
-    y = `${basename(h)}:${y}`;
+  let isSkillFile = basename(filePath).toLowerCase() === "skill.md";
+  let startPath = isSkillFile ? dirname(filePath) : filePath;
+  let currentDir = startPath;
+  let currentName = isSkillFile ? basename(startPath) : basename(startPath).replace(/\.md$/i, "");
+  while (currentName !== name) {
+    let parentDir = dirname(currentDir);
+    if (parentDir === currentDir || !name.endsWith(`:${currentName}`)) return startPath;
+    currentDir = parentDir;
+    currentName = `${basename(currentDir)}:${currentName}`;
   }
-  return h;
+  return currentDir;
 }
 //@ chunk-e6aww6q8.js:3122073-3122798 fingerprint = parseHooksFromFrontmatter (0.391)
 /**
@@ -475,14 +495,14 @@ function parseSkillHooksFromFrontmatter(frontmatter, skillName) {
       hooks: undefined,
       unloadableGuard: false,
     };
-  let r = validateHooksSetting(frontmatter.hooks);
-  for (let note of r.notes)
+  let validation = validateHooksSetting(frontmatter.hooks);
+  for (let note of validation.notes)
     logForDebugging(`Skill '${skillName}': ${note}`, {
       level: "warn",
     });
-  if (r.unloadableGuards.length > 0) {
+  if (validation.unloadableGuards.length > 0) {
     logForDebugging(
-      `Skill '${skillName}': ${r.unloadableGuards.join("; ")} \u2014 ${UNLOADABLE_GUARD_NOTE} (the skill loads with no hooks and no allowed-tools)`,
+      `Skill '${skillName}': ${validation.unloadableGuards.join("; ")} \u2014 ${UNLOADABLE_GUARD_NOTE} (the skill loads with no hooks and no allowed-tools)`,
       {
         level: "error",
       },
@@ -513,7 +533,7 @@ function parseSkillPaths(frontmatter) {
   if (!frontmatter.paths) return;
   let patterns = unwrapResults(frontmatter.paths)
     .map((pattern) => (pattern.endsWith("/**") ? pattern.slice(0, -3) : pattern))
-    .filter((r) => r.length > 0);
+    .filter((pattern) => pattern.length > 0);
   if (patterns.length === 0 || patterns.every((pattern) => pattern === "**")) return;
   return patterns;
 }
@@ -618,14 +638,14 @@ function parseSkillFileToCommand({
   let markdownContent = memoizeLastValue(getHostState().skillContentIntern, skillFilePath, content_2);
   if (!parsedElsewhere) checkFrontmatterShadow("skill", frontmatter_2);
   let skillFrontmatterFields = parseSkillFrontmatterFields(frontmatter_2, markdownContent, skillName);
-  let Me = loadedFrom === "syncedSkills";
+  let isSyncedSource = loadedFrom === "syncedSkills";
   return createSkillCommand({
     ...skillFrontmatterFields,
-    ...(Me ? DoctorWithPlugins(skillFrontmatterFields) : undefined),
+    ...(isSyncedSource ? DoctorWithPlugins(skillFrontmatterFields) : undefined),
     skillName,
     markdownContent,
     textAboveBody:
-      Me && content.endsWith(markdownContent)
+      isSyncedSource && content.endsWith(markdownContent)
         ? memoizeLastValue(
             getHostState().skillContentIntern,
             `${skillFilePath}#above-body`,
@@ -638,7 +658,7 @@ function parseSkillFileToCommand({
     loadedFrom,
     paths: pathScoped ? parseSkillPaths(frontmatter_2) : undefined,
     serverAttribution,
-    skillFile: Me
+    skillFile: isSyncedSource
       ? scrubMemoryKeys(frontmatter, skillFilePath)
       : buildFrontmatterResult(frontmatterAsWritten, skillFilePath, asWrittenProblem),
   });
@@ -684,27 +704,29 @@ function createSkillCommand({
   serverAttribution,
   skillFile,
 }) {
-  let no = loadedFrom === "syncedSkills";
-  let hn = no ? withSyncedSkillPrefix(skillName) : skillName;
-  if (!isSkillFilePathOrIdentifier(hn)) {
-    reportRefusedSkillName(hn, "is not offered");
+  let isSyncedSource = loadedFrom === "syncedSkills";
+  let commandName = isSyncedSource ? withSyncedSkillPrefix(skillName) : skillName;
+  if (!isSkillFilePathOrIdentifier(commandName)) {
+    reportRefusedSkillName(commandName, "is not offered");
     return;
   }
-  let ho = displaySkillFields({
+  let displayFields = displaySkillFields({
     description,
     argumentHint,
     whenToUse,
     argumentNames,
   });
-  let yn = allowedTools.length > 0;
+  let hasAllowedTools = allowedTools.length > 0;
   if (baseDir && allowedTools.length > 0) {
-    let vn = identityPath_2(baseDir);
-    allowedTools = allowedTools.map((allowedTool) => allowedTool.replaceAll(SKILL_DIR_PLACEHOLDER, () => vn));
+    let skillDir = identityPath_2(baseDir);
+    allowedTools = allowedTools.map((allowedTool) =>
+      allowedTool.replaceAll(SKILL_DIR_PLACEHOLDER, () => skillDir),
+    );
   } else if (allowedTools.some((allowedTool) => SKILL_DIR_REF_RE.test(allowedTool))) {
     let filtered = allowedTools.filter((allowedTool) => !SKILL_DIR_REF_RE.test(allowedTool));
-    let co = allowedTools.length - filtered.length;
+    let droppedCount = allowedTools.length - filtered.length;
     logForDebugging(
-      `[skills] ${skillName}: loaded without ${co} allowed-tools ${plural(co, "entry", "entries")} naming CLAUDE_SKILL_DIR, because the skill has no folder of its own`,
+      `[skills] ${skillName}: loaded without ${droppedCount} allowed-tools ${plural(droppedCount, "entry", "entries")} naming CLAUDE_SKILL_DIR, because the skill has no folder of its own`,
       {
         level: "warn",
       },
@@ -713,12 +735,12 @@ function createSkillCommand({
     allowedTools = filtered;
   }
   if (allowedTools.some((allowedTool) => PROJECT_DIR_REF_RE.test(allowedTool))) {
-    let vn = getToolsMachine() ? null : (getProjectConfigRoot() ?? getProjectRootOrNull());
-    if (vn === null) {
+    let projectRoot = getToolsMachine() ? null : (getProjectConfigRoot() ?? getProjectRootOrNull());
+    if (projectRoot === null) {
       let filtered = allowedTools.filter((allowedTool) => !PROJECT_DIR_REF_RE.test(allowedTool));
-      let So = allowedTools.length - filtered.length;
+      let droppedCount = allowedTools.length - filtered.length;
       logForDebugging(
-        `[skills] ${skillName}: loaded without ${So} allowed-tools ${plural(So, "entry", "entries")} naming CLAUDE_PROJECT_DIR, because this process has no folder where the tools run`,
+        `[skills] ${skillName}: loaded without ${droppedCount} allowed-tools ${plural(droppedCount, "entry", "entries")} naming CLAUDE_PROJECT_DIR, because this process has no folder where the tools run`,
         {
           level: "warn",
         },
@@ -727,61 +749,61 @@ function createSkillCommand({
       allowedTools = filtered;
     } else
       allowedTools = allowedTools.map((allowedTool) =>
-        allowedTool.replaceAll(PROJECT_DIR_PLACEHOLDER, () => identityPath_2(vn)),
+        allowedTool.replaceAll(PROJECT_DIR_PLACEHOLDER, () => identityPath_2(projectRoot)),
       );
   }
-  let Kn = displayName || skillName;
-  let Xn = !no
-    ? Kn
+  let baseDisplayName = displayName || skillName;
+  let facingName = !isSyncedSource
+    ? baseDisplayName
     : isSafeSkillName(skillName) &&
-        stripInvisibleChars_3(stripSyncedSkillPrefix(Kn)) === stripInvisibleChars_3(skillName)
+        stripInvisibleChars_3(stripSyncedSkillPrefix(baseDisplayName)) === stripInvisibleChars_3(skillName)
       ? skillName
-      : withSyncedSkillPrefix(Kn);
-  let fo = false;
-  let To = () => {
-    let vn = shouldLoadPermissionRules(hooks) ? [] : (bo.allowedTools ?? []);
-    let co =
-      vn.length === 0
+      : withSyncedSkillPrefix(baseDisplayName);
+  let didReportGrants = false;
+  let getGrantedTools = () => {
+    let grantedTools = shouldLoadPermissionRules(hooks) ? [] : (command.allowedTools ?? []);
+    let withheldReason =
+      grantedTools.length === 0
         ? undefined
         : frontmatterToolGrantWithheldReason(
             source,
             undefined,
-            "fromHostCatalog" in bo && bo.fromHostCatalog === true,
+            "fromHostCatalog" in command && command.fromHostCatalog === true,
           );
-    if (co === undefined) {
-      fo = false;
-      return vn;
+    if (withheldReason === undefined) {
+      didReportGrants = false;
+      return grantedTools;
     }
-    if (!fo) {
-      fo = true;
+    if (!didReportGrants) {
+      didReportGrants = true;
       reportIgnoredFrontmatterToolGrants(
-        hn,
+        commandName,
         {
           source,
         },
-        vn,
-        co,
+        grantedTools,
+        withheldReason,
       );
     }
     return [];
   };
-  let bo = {
+  let command = {
     type: "prompt",
-    name: hn,
-    ...(no && {
+    name: commandName,
+    ...(isSyncedSource && {
       unqualifiedName: skillName,
       aliases: [skillName],
     }),
-    description: ho.description,
+    description: displayFields.description,
     hasUserSpecifiedDescription,
     allowedTools,
-    ...(yn && {
-      getAllowedTools: async () => To(),
+    ...(hasAllowedTools && {
+      getAllowedTools: async () => getGrantedTools(),
     }),
     disallowedTools: disallowedTools?.length ? disallowedTools : undefined,
-    argumentHint: ho.argumentHint,
-    argNames: argumentNames.length > 0 ? ho.argumentNames : undefined,
-    whenToUse: ho.whenToUse,
+    argumentHint: displayFields.argumentHint,
+    argNames: argumentNames.length > 0 ? displayFields.argumentNames : undefined,
+    whenToUse: displayFields.whenToUse,
     version,
     model,
     disableModelInvocation,
@@ -800,7 +822,7 @@ function createSkillCommand({
     isHidden: !userInvocable,
     progressMessage: "running",
     userFacingName() {
-      return Xn;
+      return facingName;
     },
     source,
     loadedFrom,
@@ -812,74 +834,74 @@ function createSkillCommand({
     serverAttribution,
     skillFile,
     async getPromptForCommand(args, context) {
-      let So = resolveBody ? await resolveBody(context) : markdownContent;
-      let ko = baseDir ? `${prependBaseDir(baseDir)}${So}` : So;
+      let body = resolveBody ? await resolveBody(context) : markdownContent;
+      let promptText = baseDir ? `${prependBaseDir(baseDir)}${body}` : body;
       let effortLevel = getEffortLevelOrHigh(
         inlineSkillModelOverride(model) ?? context.options.mainLoopModel,
         getEffortValue(context),
         effort ?? getEffortLayerOverride(context.permissionLayers),
       );
-      let ao = {
+      let placeholderContext = {
         baseDir,
         loadedFrom,
         effortLevel,
       };
-      ko = substituteArguments(
-        ko,
+      promptText = substituteArguments(
+        promptText,
         args,
         true,
         argumentNames,
         isSkillShownToModel({
           loadedFrom,
         })
-          ? ($o) => escapeAngleBrackets(escapeShellBangs(expandSkillPlaceholders($o, ao)))
-          : ($o) => escapeShellBangs(expandSkillPlaceholders($o, ao)),
-        ($o, yo) => expandSkillPlaceholders($o, ao, yo),
+          ? (text) => escapeAngleBrackets(escapeShellBangs(expandSkillPlaceholders(text, placeholderContext)))
+          : (text) => escapeShellBangs(expandSkillPlaceholders(text, placeholderContext)),
+        (text, index) => expandSkillPlaceholders(text, placeholderContext, index),
       );
       if (isSkillDirSource(loadedFrom, source) && isSkillShellExecutionDisabled())
-        ko = replacePromptShellCommands(ko);
+        promptText = replacePromptShellCommands(promptText);
       else if (isHiddenFromModelSource(loadedFrom))
-        ko = await executeShellCommandsInPrompt(
-          ko,
+        promptText = await executeShellCommandsInPrompt(
+          promptText,
           {
             ...context,
-            getAppState: withCommandAllowRules(context, To()),
+            getAppState: withCommandAllowRules(context, getGrantedTools()),
           },
           `/${skillName}`,
           shell,
         );
       if (mcpResourceRoot && !baseDir)
-        ko = `${mcpSkillResourceHint(mcpResourceRoot)}
+        promptText = `${mcpSkillResourceHint(mcpResourceRoot)}
 
-${ko}`;
+${promptText}`;
       return [
         {
           type: "text",
-          text: ko,
+          text: promptText,
         },
       ];
     },
   };
-  if (!isSkillPathEligible(Xn.replace(/&[lg]t;/g, "<"))) {
-    reportRefusedSkillName(Xn, `is not shown for ${hn}`);
-    clearUserFacingName(bo);
+  if (!isSkillPathEligible(facingName.replace(/&[lg]t;/g, "<"))) {
+    reportRefusedSkillName(facingName, `is not shown for ${commandName}`);
+    clearUserFacingName(command);
   }
-  return bo;
+  return command;
 }
 //@ chunk-e6aww6q8.js:3128830-3129260 placement
 /**
  * 读取 skill 目录下 .claude-plugin/plugin.json 的 name，用来判断是否是被禁用的插件 skill。
  */
-async function readSkillPluginManifestName(fsImplementation, n, name, s) {
+async function readSkillPluginManifestName(fsImplementation, dirPath, name, fallbackName) {
   try {
     let smallFileChecked = await readSmallFileChecked(
       fsImplementation,
-      join(n, ".claude-plugin", "plugin.json"),
+      join(dirPath, ".claude-plugin", "plugin.json"),
       MAX_SCOPE_RESPONSE_BYTES,
     );
     if (smallFileChecked === null) {
       logForDebugging(
-        `[skills] skipping ${n}: .claude-plugin/plugin.json is not a regular file or exceeds ${MAX_SCOPE_RESPONSE_BYTES} byte limit`,
+        `[skills] skipping ${dirPath}: .claude-plugin/plugin.json is not a regular file or exceeds ${MAX_SCOPE_RESPONSE_BYTES} byte limit`,
         {
           level: "warn",
         },
@@ -913,33 +935,33 @@ async function readSkillPluginManifestName(fsImplementation, n, name, s) {
   }
 }
 //@ chunk-e6aww6q8.js:3129260-3129738 layout
-async function listUserSkillDirNamesV5(e) {
-  let n = [];
+async function listUserSkillDirNamesV5(storage) {
+  let names = [];
   let allPages = await readAllPages(
-    (s) =>
-      e.listEntries(
+    (cursor) =>
+      storage.listEntries(
         {
           namespace: "userConfigDir",
           dir: "skills",
         },
-        s
+        cursor
           ? {
-              cursor: s,
+              cursor,
             }
           : undefined,
       ),
-    (s) => {
-      for (let h of s)
+    (entries) => {
+      for (let entry of entries)
         if (
-          h.kind === "scope" &&
-          h.scope.namespace === "userConfigDir" &&
-          h.scope.dir === "skills" &&
-          h.scope.relPath?.length === 1 &&
-          isValidKeySegment(h.scope.relPath[0])
+          entry.kind === "scope" &&
+          entry.scope.namespace === "userConfigDir" &&
+          entry.scope.dir === "skills" &&
+          entry.scope.relPath?.length === 1 &&
+          isValidKeySegment(entry.scope.relPath[0])
         ) {
-          let y = h.scope.relPath[0];
-          if (isSyncedDirName(y)) continue;
-          n.push(y);
+          let dirName = entry.scope.relPath[0];
+          if (isSyncedDirName(dirName)) continue;
+          names.push(dirName);
         }
     },
   );
@@ -947,7 +969,7 @@ async function listUserSkillDirNamesV5(e) {
     case "done":
       return {
         status: "ok",
-        names: n,
+        names,
       };
     case "error":
       return {
@@ -964,64 +986,70 @@ async function listUserSkillDirNamesV5(e) {
 /**
  * 通过 storageV5 后端读取用户 skills（userConfigDir/skills/*\/SKILL.md）：跳过被 enabledPlugins 禁用的同名插件 skill，超过大小限制或读失败的跳过并记遥测。
  */
-async function loadUserSkillsFromStorageV5(e, n, r) {
-  let s = await listUserSkillDirNamesV5(r);
-  if (s.status !== "ok") {
-    if (!(s.status === "error" && s.error.code === "Failed" && s.error.failureClass === "permission")) {
-      let q = s.status === "error" ? s.error.code : `listing exceeded ${DEFAULT_MAX_PAGES} pages`;
-      logForDebugging(`Failed to read skills directory ${e}: ${q}`, {
+async function loadUserSkillsFromStorageV5(dirPath, source, storageV5) {
+  let listing = await listUserSkillDirNamesV5(storageV5);
+  if (listing.status !== "ok") {
+    if (!(
+      listing.status === "error" &&
+      listing.error.code === "Failed" &&
+      listing.error.failureClass === "permission"
+    )) {
+      let reason =
+        listing.status === "error" ? listing.error.code : `listing exceeded ${DEFAULT_MAX_PAGES} pages`;
+      logForDebugging(`Failed to read skills directory ${dirPath}: ${reason}`, {
         level: "error",
       });
       logFeatureSad("skill_load_dir", "skill_load_readdir_failed");
     }
     return [];
   }
-  let names = s.names;
-  let y = null;
-  let S = new Set();
+  let names = listing.names;
+  let failureCode = null;
+  let disabledNames = new Set();
   {
-    let G = `@${SKILLS_DIR}`;
-    if (n === "userSettings" && e === getThinkbackSkillDir()) {
+    let suffix = `@${SKILLS_DIR}`;
+    if (source === "userSettings" && dirPath === getThinkbackSkillDir()) {
       let enabledPlugins = getInitialSettings_2().enabledPlugins;
       for (let key in enabledPlugins)
-        if (enabledPlugins[key] === false && key.endsWith(G)) S.add(key.slice(0, -G.length));
+        if (enabledPlugins[key] === false && key.endsWith(suffix))
+          disabledNames.add(key.slice(0, -suffix.length));
     }
   }
   let fs = isSkillAttributionEnabled();
   let results = await Promise.all(
     names.map(async (entry) => {
       try {
-        let skillDirPath = join(e, entry);
+        let skillDirPath = join(dirPath, entry);
         let skillFilePath = join(skillDirPath, "SKILL.md");
-        if (S.size > 0) {
-          let pt = STORAGE_SPACES.userConfigDir("skills", [entry, ".claude-plugin", "plugin.json"]);
-          let Et = await r.read([pt]);
-          if (!Et.ok) {
+        if (disabledNames.size > 0) {
+          let manifestKey = STORAGE_SPACES.userConfigDir("skills", [entry, ".claude-plugin", "plugin.json"]);
+          let manifestRead = await storageV5.read([manifestKey]);
+          if (!manifestRead.ok) {
             logForDebugging(
-              `[skills] skipping ${skillDirPath}: .claude-plugin/plugin.json could not be checked (${Et.error.code})`,
+              `[skills] skipping ${skillDirPath}: .claude-plugin/plugin.json could not be checked (${manifestRead.error.code})`,
               {
                 level: "warn",
               },
             );
-            y = "skill_load_read_failed";
+            failureCode = "skill_load_read_failed";
             return null;
           }
-          let yt = Et.value.items[0];
-          if (yt.found) {
-            if (yt.totalBytes > MAX_SCOPE_RESPONSE_BYTES) {
+          let manifestItem = manifestRead.value.items[0];
+          if (manifestItem.found) {
+            if (manifestItem.totalBytes > MAX_SCOPE_RESPONSE_BYTES) {
               logForDebugging(
                 `[skills] skipping ${skillDirPath}: .claude-plugin/plugin.json exceeds ${MAX_SCOPE_RESPONSE_BYTES} byte limit`,
                 {
                   level: "warn",
                 },
               );
-              y = "skill_load_read_failed";
+              failureCode = "skill_load_read_failed";
               return null;
             }
-            let gt;
+            let pluginName;
             try {
-              let parsed = JSON.parse(stripBom(Buffer.from(yt.value).toString("utf-8")));
-              gt =
+              let parsed = JSON.parse(stripBom(Buffer.from(manifestItem.value).toString("utf-8")));
+              pluginName =
                 parsed !== null &&
                 typeof parsed === "object" &&
                 "name" in parsed &&
@@ -1030,79 +1058,79 @@ async function loadUserSkillsFromStorageV5(e, n, r) {
                   ? parsed.name
                   : entry;
             } catch {
-              gt = entry;
+              pluginName = entry;
             }
-            if (gt !== null && S.has(gt)) return null;
-          } else if (S.has(entry)) {
-            let gt = false;
+            if (pluginName !== null && disabledNames.has(pluginName)) return null;
+          } else if (disabledNames.has(entry)) {
+            let hasPluginDir = false;
             let allPages = await readAllPages(
-              (It) =>
-                r.listEntries(
+              (cursor) =>
+                storageV5.listEntries(
                   {
                     namespace: "userConfigDir",
                     dir: "skills",
                     relPath: [entry],
                   },
-                  It
+                  cursor
                     ? {
                         suffix: ".claude-plugin",
-                        cursor: It,
+                        cursor,
                       }
                     : {
                         suffix: ".claude-plugin",
                       },
                 ),
-              (It) => {
-                gt ||= It.some(
-                  (Yt) =>
-                    Yt.kind === "key" &&
-                    Yt.key.namespace === "userConfigDir" &&
-                    Yt.key.relPath.at(-1) === ".claude-plugin",
+              (pageEntries) => {
+                hasPluginDir ||= pageEntries.some(
+                  (entry) =>
+                    entry.kind === "key" &&
+                    entry.key.namespace === "userConfigDir" &&
+                    entry.key.relPath.at(-1) === ".claude-plugin",
                 );
               },
               {
-                until: () => gt,
+                until: () => hasPluginDir,
               },
             );
             if (allPages.status !== "done") {
-              let It =
+              let reason =
                 allPages.status === "error"
                   ? allPages.error.code
                   : `listing exceeded ${DEFAULT_MAX_PAGES} pages`;
               logForDebugging(
-                `[skills] skipping ${skillDirPath}: .claude-plugin shape could not be checked (${It})`,
+                `[skills] skipping ${skillDirPath}: .claude-plugin shape could not be checked (${reason})`,
                 {
                   level: "warn",
                 },
               );
-              y = "skill_load_read_failed";
+              failureCode = "skill_load_read_failed";
               return null;
             }
-            if (gt) return null;
+            if (hasPluginDir) return null;
           }
         }
-        let Se = STORAGE_SPACES.userConfigDir("skills", [entry, "SKILL.md"]);
-        let ke = await r.read([Se]);
-        if (!ke.ok) {
-          logForDebugging(`[skills] failed to read ${skillFilePath}: ${ke.error.code}`, {
+        let skillKey = STORAGE_SPACES.userConfigDir("skills", [entry, "SKILL.md"]);
+        let readResult = await storageV5.read([skillKey]);
+        if (!readResult.ok) {
+          logForDebugging(`[skills] failed to read ${skillFilePath}: ${readResult.error.code}`, {
             level: "warn",
           });
-          y = "skill_load_read_failed";
+          failureCode = "skill_load_read_failed";
           return null;
         }
-        let we = ke.value.items[0];
-        if (!we.found) return null;
-        if (we.totalBytes > MAX_SCOPE_RESPONSE_BYTES) {
+        let item = readResult.value.items[0];
+        if (!item.found) return null;
+        if (item.totalBytes > MAX_SCOPE_RESPONSE_BYTES) {
           logForDebugging(
-            `[skills] skipping ${skillFilePath}: ${we.totalBytes} bytes exceeds ${MAX_SCOPE_RESPONSE_BYTES} byte limit`,
+            `[skills] skipping ${skillFilePath}: ${item.totalBytes} bytes exceeds ${MAX_SCOPE_RESPONSE_BYTES} byte limit`,
             {
               level: "warn",
             },
           );
-          y = "skill_load_too_large";
+          failureCode = "skill_load_too_large";
           return null;
         }
-        let str = Buffer.from(we.value).toString("utf-8");
+        let str = Buffer.from(item.value).toString("utf-8");
         let { frontmatter, frontmatterAsWritten, asWrittenProblem, content, parseError } = parseFrontmatter(
           str,
           skillFilePath,
@@ -1129,7 +1157,7 @@ async function loadUserSkillsFromStorageV5(e, n, r) {
             skillName: entry,
             markdownContent,
             contentHash: Bun.hash(str).toString(36),
-            source: n,
+            source,
             baseDir: skillDirPath,
             loadedFrom: "skills",
             paths,
@@ -1139,193 +1167,217 @@ async function loadUserSkillsFromStorageV5(e, n, r) {
           filePath: skillFilePath,
         };
       } catch (error) {
-        logForDebugging(`[skills] failed to parse ${join(e, entry, "SKILL.md")}: ${error}`, {
+        logForDebugging(`[skills] failed to parse ${join(dirPath, entry, "SKILL.md")}: ${error}`, {
           level: "error",
         });
-        y = "skill_load_parse_failed";
+        failureCode = "skill_load_parse_failed";
         return null;
       }
     }),
   );
-  if (y) logFeatureBad("skill_load_dir", y);
+  if (failureCode) logFeatureBad("skill_load_dir", failureCode);
   else logFeatureOk("skill_load_dir");
   return results
     .filter((result) => result?.skill !== undefined)
-    .sort((G, q) => G.skill.name.localeCompare(q.skill.name));
+    .sort((left, right) => left.skill.name.localeCompare(right.skill.name));
 }
 //@ chunk-e6aww6q8.js:3132838-3136107 layout
 /**
  * 扫描一个 skills 目录下每个子目录的 SKILL.md 并转成命令：跳过保留目录名（synced）、带冒号的 synced 子目录、被禁用的同名插件；/mnt 下首次 readdir 为空会重试一次；支持 storageV5 与 host catalog 模式。
  */
-async function loadSkillsFromSkillsDir(e, n, r = "skills", s, h) {
-  if (s !== undefined) {
-    if (n === "userSettings" && e === getThinkbackSkillDir())
-      return filterReservedSkillNames(await loadUserSkillsFromStorageV5(e, n, s));
+async function loadSkillsFromSkillsDir(dirPath, source, loadedFrom = "skills", storageV5, hostCatalog) {
+  if (storageV5 !== undefined) {
+    if (source === "userSettings" && dirPath === getThinkbackSkillDir())
+      return filterReservedSkillNames(await loadUserSkillsFromStorageV5(dirPath, source, storageV5));
     logForDebugging(
-      `[skills] storageV5 handed in for non-user base ${e}: not reading it through the backend`,
+      `[skills] storageV5 handed in for non-user base ${dirPath}: not reading it through the backend`,
       {
         level: "warn",
       },
     );
   }
   if (isDiskless()) {
-    logForDebugging(`Not scanning ${e}: the session is diskless, so no skills load from it`, {
+    logForDebugging(`Not scanning ${dirPath}: the session is diskless, so no skills load from it`, {
       level: "warn",
     });
     return [];
   }
   let fsImplementation = getFsImplementation();
-  let S;
+  let entries;
   try {
-    S = await fsImplementation.readdir(e);
+    entries = await fsImplementation.readdir(dirPath);
   } catch (error) {
     if (!isFsInaccessible(error)) {
-      logForDebugging(`Failed to read skills directory ${e}: ${error}`, {
+      logForDebugging(`Failed to read skills directory ${dirPath}: ${error}`, {
         level: "error",
       });
       logFeatureSad("skill_load_dir", "skill_load_readdir_failed");
     }
     return [];
   }
-  if (S.length === 0 && e.startsWith("/mnt/")) {
+  if (entries.length === 0 && dirPath.startsWith("/mnt/")) {
     await sleep(250);
     try {
-      let entries = await fsImplementation.readdir(e);
-      if (entries.length > 0) {
+      let entries_2 = await fsImplementation.readdir(dirPath);
+      if (entries_2.length > 0) {
         logForDebugging(
-          `Skills directory ${e}: first readdir was empty, retry returned ${entries.length} entries (transient mount race)`,
+          `Skills directory ${dirPath}: first readdir was empty, retry returned ${entries_2.length} entries (transient mount race)`,
           {
             level: "warn",
           },
         );
         logFeatureSad("skill_load_dir", "skill_load_mnt_transient_empty");
-        S = entries;
+        entries = entries_2;
       } else logFeatureSad("skill_load_dir", "skill_load_mnt_persistent_empty");
     } catch (error) {
-      let ke = sanitizeErrnoForTelemetry(error);
-      logFeatureSad("skill_load_dir", `skill_load_mnt_retry_${(ke ?? "unknown").toLowerCase()}`);
+      let errnoCode = sanitizeErrnoForTelemetry(error);
+      logFeatureSad("skill_load_dir", `skill_load_mnt_retry_${(errnoCode ?? "unknown").toLowerCase()}`);
       if (!isFsInaccessible(error))
-        logForDebugging(`Skills directory ${e}: retry readdir failed: ${error}`, {
+        logForDebugging(`Skills directory ${dirPath}: retry readdir failed: ${error}`, {
           level: "error",
         });
     }
   }
-  if (h !== undefined) {
-    let filtered = S.filter((we) => h.skills.has(we.name));
-    let results = await Promise.all(filtered.map((we) => isRealPathSelf(join(e, we.name, "SKILL.md"))));
-    S = filtered.filter((we, Ee) => results[Ee]);
+  if (hostCatalog !== undefined) {
+    let filtered = entries.filter((entry) => hostCatalog.skills.has(entry.name));
+    let results = await Promise.all(
+      filtered.map((entry) => isRealPathSelf(join(dirPath, entry.name, "SKILL.md"))),
+    );
+    entries = filtered.filter((entry, index) => results[index]);
   }
-  let w = null;
-  let L = r === "syncedSkills" && h === undefined && S.length > 0 ? readSyncedSkillIds(e) : undefined;
-  let G = isSkillAttributionEnabled();
-  let q = new Set();
+  let failureCode = null;
+  let syncedIdsPromise =
+    loadedFrom === "syncedSkills" && hostCatalog === undefined && entries.length > 0
+      ? readSyncedSkillIds(dirPath)
+      : undefined;
+  let isAttributionEnabled = isSkillAttributionEnabled();
+  let disabledNames = new Set();
   {
-    let Se = `@${SKILLS_DIR}`;
+    let suffix = `@${SKILLS_DIR}`;
     if (
-      (n === "userSettings" && e === getThinkbackSkillDir()) ||
-      (n === "projectSettings" && e === join(getProjectConfigRoot() ?? getOriginalCwd(), ".claude", "skills"))
+      (source === "userSettings" && dirPath === getThinkbackSkillDir()) ||
+      (source === "projectSettings" &&
+        dirPath === join(getProjectConfigRoot() ?? getOriginalCwd(), ".claude", "skills"))
     ) {
       let enabledPlugins = getInitialSettings_2().enabledPlugins;
       for (let key in enabledPlugins)
-        if (enabledPlugins[key] === false && key.endsWith(Se)) q.add(key.slice(0, -Se.length));
+        if (enabledPlugins[key] === false && key.endsWith(suffix))
+          disabledNames.add(key.slice(0, -suffix.length));
     }
   }
   let results = await Promise.all(
-    S.map(async (Se) => {
+    entries.map(async (entry) => {
       try {
-        if (!Se.isDirectory() && !Se.isSymbolicLink()) return null;
-        if (r === "skills" && isSyncedDirName(Se.name)) {
+        if (!entry.isDirectory() && !entry.isSymbolicLink()) return null;
+        if (loadedFrom === "skills" && isSyncedDirName(entry.name)) {
           logForDebugging(
-            `[skills] skipping reserved dir name '${Se.name}' under ${e}: 'synced' is the sync-owned root`,
+            `[skills] skipping reserved dir name '${entry.name}' under ${dirPath}: 'synced' is the sync-owned root`,
           );
           return null;
         }
-        if (r === "syncedSkills" && Se.name.includes(":")) {
+        if (loadedFrom === "syncedSkills" && entry.name.includes(":")) {
           logForDebugging(
-            `[skills] skipping '${Se.name}' under ${e}: its name contains ':', which the sync never writes, so it is not a synced skill`,
+            `[skills] skipping '${entry.name}' under ${dirPath}: its name contains ':', which the sync never writes, so it is not a synced skill`,
           );
           return null;
         }
-        let ke = join(e, Se.name);
-        let we = join(ke, "SKILL.md");
-        if (q.size > 0) {
+        let skillDirPath = join(dirPath, entry.name);
+        let skillFilePath = join(skillDirPath, "SKILL.md");
+        if (disabledNames.size > 0) {
           let skillPluginManifestName = await readSkillPluginManifestName(
             fsImplementation,
-            ke,
-            Se.name,
-            q.has(Se.name),
+            skillDirPath,
+            entry.name,
+            disabledNames.has(entry.name),
           );
           if ("skip" in skillPluginManifestName) {
-            w = "skill_load_read_failed";
+            failureCode = "skill_load_read_failed";
             return null;
           }
-          if (skillPluginManifestName.name !== null && q.has(skillPluginManifestName.name)) return null;
+          if (skillPluginManifestName.name !== null && disabledNames.has(skillPluginManifestName.name))
+            return null;
         }
-        let Ee;
-        let Ae;
-        if (h !== undefined) {
-          let regularFileText = await readRegularFileText(we, h.mountDevice, MAX_SCOPE_RESPONSE_BYTES);
+        let content;
+        let stats;
+        if (hostCatalog !== undefined) {
+          let regularFileText = await readRegularFileText(
+            skillFilePath,
+            hostCatalog.mountDevice,
+            MAX_SCOPE_RESPONSE_BYTES,
+          );
           if ("reason" in regularFileText) {
-            h.misses.set(regularFileText.reason, (h.misses.get(regularFileText.reason) ?? 0) + 1);
+            hostCatalog.misses.set(
+              regularFileText.reason,
+              (hostCatalog.misses.get(regularFileText.reason) ?? 0) + 1,
+            );
             return null;
           }
-          Ee = regularFileText.text;
+          content = regularFileText.text;
         } else
           try {
-            Ee = await readSmallFileChecked(fsImplementation, we, MAX_SCOPE_RESPONSE_BYTES, (Me) => {
-              Ae = Me;
-            });
+            content = await readSmallFileChecked(
+              fsImplementation,
+              skillFilePath,
+              MAX_SCOPE_RESPONSE_BYTES,
+              (fileStats) => {
+                stats = fileStats;
+              },
+            );
           } catch (error) {
             if (!isENOENT(error)) {
-              logForDebugging(`[skills] failed to read ${we}: ${error}`, {
+              logForDebugging(`[skills] failed to read ${skillFilePath}: ${error}`, {
                 level: "warn",
               });
-              w = "skill_load_read_failed";
+              failureCode = "skill_load_read_failed";
             }
             return null;
           }
-        if (Ee === null) {
-          let Me = Ae?.isFile() === true && Ae.size > MAX_SCOPE_RESPONSE_BYTES;
+        if (content === null) {
+          let isTooLarge = stats?.isFile() === true && stats.size > MAX_SCOPE_RESPONSE_BYTES;
           logForDebugging(
-            Me
-              ? `[skills] skipping ${we}: ${Ae?.size} bytes exceeds ${MAX_SCOPE_RESPONSE_BYTES} byte limit`
-              : `[skills] skipping ${we}: not a regular file, or refused for where it leads`,
+            isTooLarge
+              ? `[skills] skipping ${skillFilePath}: ${stats?.size} bytes exceeds ${MAX_SCOPE_RESPONSE_BYTES} byte limit`
+              : `[skills] skipping ${skillFilePath}: not a regular file, or refused for where it leads`,
             {
               level: "warn",
             },
           );
-          w = Me ? "skill_load_too_large" : "skill_load_read_failed";
+          failureCode = isTooLarge ? "skill_load_too_large" : "skill_load_read_failed";
           return null;
         }
         let skillFileToCommand = parseSkillFileToCommand({
-          content: Ee,
-          skillFilePath: we,
-          skillName: Se.name,
-          source: n,
-          baseDir: ke,
-          loadedFrom: r,
-          serverAttribution: (await L)?.get(stripInvisibleChars_3(Se.name)) ?? G(ke),
+          content,
+          skillFilePath,
+          skillName: entry.name,
+          source,
+          baseDir: skillDirPath,
+          loadedFrom,
+          serverAttribution:
+            (await syncedIdsPromise)?.get(stripInvisibleChars_3(entry.name)) ??
+            isAttributionEnabled(skillDirPath),
         });
         if (skillFileToCommand === undefined) return null;
-        if (h !== undefined && skillFileToCommand.type === "prompt")
+        if (hostCatalog !== undefined && skillFileToCommand.type === "prompt")
           skillFileToCommand.fromHostCatalog = true;
         return {
           skill: skillFileToCommand,
-          filePath: we,
+          filePath: skillFilePath,
         };
       } catch (error) {
-        logForDebugging(`[skills] failed to parse ${join(e, Se.name, "SKILL.md")}: ${error}`, {
+        logForDebugging(`[skills] failed to parse ${join(dirPath, entry.name, "SKILL.md")}: ${error}`, {
           level: "error",
         });
-        w = "skill_load_parse_failed";
+        failureCode = "skill_load_parse_failed";
         return null;
       }
     }),
   );
-  if (w) logFeatureBad("skill_load_dir", w);
+  if (failureCode) logFeatureBad("skill_load_dir", failureCode);
   else logFeatureOk("skill_load_dir");
   return filterReservedSkillNames(
-    results.filter((Se) => Se !== null).sort((Se, ke) => Se.skill.name.localeCompare(ke.skill.name)),
+    results
+      .filter((result) => result !== null)
+      .sort((left, right) => left.skill.name.localeCompare(right.skill.name)),
   );
 }
 //@ chunk-e6aww6q8.js:3136107-3136156 layout
@@ -1368,11 +1420,11 @@ function buildNamespace(targetDir, baseDir) {
 }
 //@ chunk-e6aww6q8.js:3136612-3136692 layout
 function getSkillCommandName(filePath, baseDir) {
-  let r = dirname(filePath);
-  let targetDir = dirname(r);
-  let h = basename(r);
+  let skillDir = dirname(filePath);
+  let targetDir = dirname(skillDir);
+  let skillBaseName = basename(skillDir);
   let namespace = buildNamespace(targetDir, baseDir);
-  return namespace ? `${namespace}:${h}` : h;
+  return namespace ? `${namespace}:${skillBaseName}` : skillBaseName;
 }
 //@ chunk-e6aww6q8.js:3136692-3136788 file-local
 function getRegularCommandName(filePath, baseDir) {
@@ -1392,27 +1444,27 @@ function getCommandName(file) {
 /**
  * 加载旧式 .claude/commands/*.md（含 --add-dir 目录）为 skill 命令，loadedFrom=commands_DEPRECATED，名字按子目录用冒号命名空间。
  */
-async function loadSkillsFromCommandsDir(cwd, n, r) {
+async function loadSkillsFromCommandsDir(cwd, extraDirs, storageV5) {
   try {
-    let [markdownFiles, h] = await Promise.all([
-      loadMarkdownFilesCached("commands", cwd, r),
+    let [markdownFiles, extraMarkdownFiles] = await Promise.all([
+      loadMarkdownFilesCached("commands", cwd, storageV5),
       Promise.all(
-        n.map((G) => {
-          let q = join(G, ".claude", "commands");
-          return loadMarkdownFiles(q, r).then((markdownFiles) =>
+        extraDirs.map((extraDir) => {
+          let commandsDir = join(extraDir, ".claude", "commands");
+          return loadMarkdownFiles(commandsDir, storageV5).then((markdownFiles) =>
             markdownFiles.map((markdownFile) => ({
               ...markdownFile,
-              baseDir: q,
+              baseDir: commandsDir,
               source: "projectSettings",
             })),
           );
         }),
       ),
     ]);
-    let files = [...markdownFiles, ...h.flat()];
+    let files = [...markdownFiles, ...extraMarkdownFiles.flat()];
     let processedFiles = transformSkillFiles_2(files);
     let skills = [];
-    let L = false;
+    let hasProjectSettings = false;
     for (let {
       baseDir,
       filePath,
@@ -1452,14 +1504,14 @@ async function loadSkillsFromCommandsDir(cwd, n, r) {
         logForDebugging(`[skills] failed to load command from ${filePath}: ${error}`, {
           level: "error",
         });
-        L = true;
+        hasProjectSettings = true;
       }
-    if (L) logFeatureBad("skill_load_commands_dir", "skill_load_commands_parse_failed");
+    if (hasProjectSettings) logFeatureBad("skill_load_commands_dir", "skill_load_commands_parse_failed");
     else logFeatureOk("skill_load_commands_dir");
     return filterReservedSkillNames(
       skills
         .filter((skill) => skill.skill !== undefined)
-        .sort((G, q) => G.skill.name.localeCompare(q.skill.name)),
+        .sort((left, right) => left.skill.name.localeCompare(right.skill.name)),
     );
   } catch (error) {
     if (isSyscallError(error))
@@ -1472,7 +1524,7 @@ async function loadSkillsFromCommandsDir(cwd, n, r) {
   }
 }
 //@ chunk-e6aww6q8.js:3138092-3138647 layout
-async function getUserSkillFileIds(e) {
+async function getUserSkillFileIds(storageV5) {
   if (
     isRestrictedToPluginOnly("skills") ||
     !isSettingSourceEnabled("userSettings") ||
@@ -1482,71 +1534,73 @@ async function getUserSkillFileIds(e) {
     return null;
   let thinkbackSkillDir = getThinkbackSkillDir();
   if (thinkbackSkillDir === null) return null;
-  if (e !== undefined) return getUserSkillFileIdsV5(thinkbackSkillDir, e);
-  let r;
+  if (storageV5 !== undefined) return getUserSkillFileIdsV5(thinkbackSkillDir, storageV5);
+  let entries;
   try {
-    r = await getFsImplementation().readdir(thinkbackSkillDir);
+    entries = await getFsImplementation().readdir(thinkbackSkillDir);
   } catch {
     return null;
   }
-  let s = `@${SKILLS_DIR}`;
+  let pluginSuffix = `@${SKILLS_DIR}`;
   let enabledPlugins = getInitialSettings_2().enabledPlugins;
-  let y = new Set();
+  let disabledPlugins = new Set();
   for (let key in enabledPlugins)
-    if (enabledPlugins[key] === false && key.endsWith(s)) y.add(key.slice(0, -s.length));
+    if (enabledPlugins[key] === false && key.endsWith(pluginSuffix))
+      disabledPlugins.add(key.slice(0, -pluginSuffix.length));
   let results = await Promise.all(
-    r.map(async (w) => {
-      if (!w.isDirectory() && !w.isSymbolicLink()) return null;
-      if (isSyncedDirName(w.name)) return null;
-      if (y.has(w.name)) return null;
-      return realpathOrNull(join(thinkbackSkillDir, w.name, "SKILL.md"));
+    entries.map(async (entry) => {
+      if (!entry.isDirectory() && !entry.isSymbolicLink()) return null;
+      if (isSyncedDirName(entry.name)) return null;
+      if (disabledPlugins.has(entry.name)) return null;
+      return realpathOrNull(join(thinkbackSkillDir, entry.name, "SKILL.md"));
     }),
   );
-  return new Set(results.filter((w) => w !== null));
+  return new Set(results.filter((filePath) => filePath !== null));
 }
 //@ chunk-e6aww6q8.js:3138647-3139169 layout
-async function getUserSkillFileIdsV5(thinkbackSkillDir, n) {
-  let r = await listUserSkillDirNamesV5(n);
-  if (r.status !== "ok") return null;
-  let names = r.names;
-  let h = `@${SKILLS_DIR}`;
+async function getUserSkillFileIdsV5(thinkbackSkillDir, storageV5) {
+  let listing = await listUserSkillDirNamesV5(storageV5);
+  if (listing.status !== "ok") return null;
+  let names = listing.names;
+  let pluginSuffix = `@${SKILLS_DIR}`;
   let enabledPlugins = getInitialSettings_2().enabledPlugins;
-  let S = new Set();
+  let disabledPlugins = new Set();
   for (let key in enabledPlugins)
-    if (enabledPlugins[key] === false && key.endsWith(h)) S.add(key.slice(0, -h.length));
+    if (enabledPlugins[key] === false && key.endsWith(pluginSuffix))
+      disabledPlugins.add(key.slice(0, -pluginSuffix.length));
   let results = await Promise.all(
     names.map(async (name) => {
-      if (S.has(name)) return null;
-      if (S.size > 0) {
-        let G = await n.read([
+      if (disabledPlugins.has(name)) return null;
+      if (disabledPlugins.size > 0) {
+        let readResult = await storageV5.read([
           STORAGE_SPACES.userConfigDir("skills", [name, ".claude-plugin", "plugin.json"]),
         ]);
-        if (!G.ok) return null;
-        let q = G.value.items[0];
-        if (q.found && q.totalBytes > MAX_SCOPE_RESPONSE_BYTES) return null;
+        if (!readResult.ok) return null;
+        let item = readResult.value.items[0];
+        if (item.found && item.totalBytes > MAX_SCOPE_RESPONSE_BYTES) return null;
       }
       return realpathOrNull(join(thinkbackSkillDir, name, "SKILL.md"));
     }),
   );
-  return new Set(results.filter((L) => L !== null));
+  return new Set(results.filter((filePath) => filePath !== null));
 }
 //@ chunk-e6aww6q8.js:3139169-3139325 layout
 /**
  * getSkillDirCommands 的缓存包装，缓存键包含动态 skill 状态、cwd、存储模式等。
  */
-function getSkillDirCommandsCached(cwd, n) {
-  let r = isManagedFolderWritable();
+function getSkillDirCommandsCached(cwd, storageV5) {
+  let managedWritable = isManagedFolderWritable();
   return getOrCreate(
     getHostState().skillDirCommands,
-    `${getDynamicSkillStateKey()}:${getSkillsSyncVetoed()}:${getAccountCacheKey()}:${isSkillsSyncEnvOn()}:${managedFolderCondition()}${keyOrNull(cwd)}:${n === undefined ? "raw" : "v5"}`,
-    () => getSkillDirCommands(cwd, n, r),
+    `${getDynamicSkillStateKey()}:${getSkillsSyncVetoed()}:${getAccountCacheKey()}:${isSkillsSyncEnvOn()}:${managedFolderCondition()}${keyOrNull(cwd)}:${storageV5 === undefined ? "raw" : "v5"}`,
+    () => getSkillDirCommands(cwd, storageV5, managedWritable),
   );
 }
 //@ chunk-e6aww6q8.js:3139325-3142633 fingerprint = getSkillDirCommands (0.795)
 /**
  * 汇总所有目录来源的 skill：managed（CLAUDE_CODE_DISABLE_POLICY_SKILLS 可关）、用户 ~/.claude/skills、同步 skills、host catalog、项目各级 .claude/skills、--add-dir 的 .claude/skills、旧 commands 目录、插件 skill；按文件身份去重，有 paths 的放入条件 skill 表，返回无条件 skill。bare 模式只读 --add-dir。
  */
-async function getSkillDirCommands(cwd, n, r) {
+async function getSkillDirCommands(cwd, storageV5, managedWritable) {
   getDynamicSkillState().refusedReservedNames.clear();
   let thinkbackSkillDir = getThinkbackSkillDir();
   let managedSkillsDir = join(getManagedFilePath(), ".claude", "skills");
@@ -1557,10 +1611,10 @@ async function getSkillDirCommands(cwd, n, r) {
   );
   let additionalDirs = isDiskless() ? [] : getAdditionalDirectoriesForClaudeMd();
   let skillsLocked = isRestrictedToPluginOnly("skills");
-  let L = isSettingSourceEnabled("projectSettings") && !skillsLocked;
+  let projectSkillsEnabled = isSettingSourceEnabled("projectSettings") && !skillsLocked;
   if (
     isCustomizationDisabled("skills", {
-      explicitlyRequested: additionalDirs.length > 0 && L,
+      explicitlyRequested: additionalDirs.length > 0 && projectSkillsEnabled,
     })
   ) {
     logForDebugging("[reduced mode] Skipping skill dir discovery");
@@ -1575,21 +1629,29 @@ async function getSkillDirCommands(cwd, n, r) {
       )
     )
       .flat()
-      .map((At) => At.skill);
+      .map((skillEntry) => skillEntry.skill);
   let additionalDirs_2 = isHostSkillCatalogEnabled();
-  let q = additionalDirs_2 ? hostSkillCatalogFolders() : null;
+  let hostCatalogEnabled = additionalDirs_2 ? hostSkillCatalogFolders() : null;
   if (!additionalDirs_2 && hostSkillCatalog() !== undefined) logFeatureSad("skill_host_catalog", "gated");
-  let Z = r || isManagedFolderWritable();
-  if (Z && !isDiskless())
+  let managedFolderWritable = managedWritable || isManagedFolderWritable();
+  if (managedFolderWritable && !isDiskless())
     logForDebugging(
       `${managedSkillsDir}: not read: this session takes its managed settings from its organization, and its own account could have written the managed folder`,
     );
-  let [managedSkills, userSkills, projectSkillsNested, Ee, Ae, Ie, Me] = await Promise.all([
-    env.CLAUDE_CODE_DISABLE_POLICY_SKILLS || isDiskless() || Z
+  let [
+    managedSkills,
+    userSkills,
+    projectSkillsNested,
+    hostCatalogSkills,
+    projectSkills,
+    additionalDirSkills,
+    commandSkills,
+  ] = await Promise.all([
+    env.CLAUDE_CODE_DISABLE_POLICY_SKILLS || isDiskless() || managedFolderWritable
       ? Promise.resolve([])
       : loadSkillsFromSkillsDir(managedSkillsDir, "policySettings"),
     thinkbackSkillDir !== null && isSettingSourceEnabled("userSettings") && !skillsLocked
-      ? loadSkillsFromSkillsDir(thinkbackSkillDir, "userSettings", "skills", n)
+      ? loadSkillsFromSkillsDir(thinkbackSkillDir, "userSettings", "skills", storageV5)
       : Promise.resolve([]),
     thinkbackSkillDir !== null &&
     isSettingSourceEnabled("userSettings") &&
@@ -1606,26 +1668,28 @@ async function getSkillDirCommands(cwd, n, r) {
               ),
         )
       : Promise.resolve([]),
-    q === null ? Promise.resolve([]) : loadHostCatalogSkills(q),
-    L
+    hostCatalogEnabled === null ? Promise.resolve([]) : loadHostCatalogSkills(hostCatalogEnabled),
+    projectSkillsEnabled
       ? Promise.all(projectSkillsDirs.map((dir) => loadSkillsFromSkillsDir(dir, "projectSettings")))
       : Promise.resolve([]),
-    L
+    projectSkillsEnabled
       ? Promise.all(
           additionalDirs.map((dir) =>
             loadSkillsFromSkillsDir(join(dir, ".claude", "skills"), "projectSettings"),
           ),
         )
       : Promise.resolve([]),
-    skillsLocked ? Promise.resolve([]) : loadSkillsFromCommandsDir(cwd, L ? additionalDirs : [], n),
+    skillsLocked
+      ? Promise.resolve([])
+      : loadSkillsFromCommandsDir(cwd, projectSkillsEnabled ? additionalDirs : [], storageV5),
   ]);
   let allSkillsWithPaths = [
     ...filterUntrustedSkills(managedSkills),
     ...userSkills,
     ...projectSkillsNested,
-    ...Ae.flat(),
-    ...Ie.flat(),
-    ...Me,
+    ...projectSkills.flat(),
+    ...additionalDirSkills.flat(),
+    ...commandSkills,
     ...(skillsLocked ? [] : peekSessionCommands()).map((dir) => ({
       skill: dir,
       filePath: "",
@@ -1670,10 +1734,10 @@ async function getSkillDirCommands(cwd, n, r) {
   );
   let duplicatesRemoved = allSkillsWithPaths.length - deduplicatedSkills.length;
   if (duplicatesRemoved > 0) logForDebugging(`Deduplicated ${duplicatesRemoved} skills (same file)`);
-  if (q !== null) {
-    let gt = new Set(projectSkillsNested.map(({ skill }) => foldName_2(skill.name)));
-    for (let { skill, fileId } of Ee)
-      if (gt.has(foldName_2(skill.name))) {
+  if (hostCatalogEnabled !== null) {
+    let projectSkillNames = new Set(projectSkillsNested.map(({ skill }) => foldName_2(skill.name)));
+    for (let { skill, fileId } of hostCatalogSkills)
+      if (projectSkillNames.has(foldName_2(skill.name))) {
         logForDebugging(
           `Skipping host catalog skill '${skill.name}': the account syncs a skill of that name`,
         );
@@ -1690,13 +1754,13 @@ async function getSkillDirCommands(cwd, n, r) {
   let newConditionalSkills = [];
   let dynamicSkillState = getDynamicSkillState();
   for (let skill of deduplicatedSkills) {
-    let At = skill.type === "prompt" && !!skill.paths && skill.paths.length > 0;
-    if (At) {
+    let isConditional = skill.type === "prompt" && !!skill.paths && skill.paths.length > 0;
+    if (isConditional) {
       let dynamicSkillKey = getDynamicSkillKey(skill);
       if (dynamicSkillState.dynamicSkills.has(dynamicSkillKey))
         dynamicSkillState.dynamicSkills.set(dynamicSkillKey, skill);
     }
-    if (At && !dynamicSkillState.activatedConditionalSkillNames.has(skill.name))
+    if (isConditional && !dynamicSkillState.activatedConditionalSkillNames.has(skill.name))
       newConditionalSkills.push(skill);
     else unconditionalSkills.push(skill);
   }
@@ -1706,7 +1770,7 @@ async function getSkillDirCommands(cwd, n, r) {
       `[skills] ${newConditionalSkills.length} conditional skills stored (activated when matching files are touched)`,
     );
   logForDebugging(
-    `Loaded ${deduplicatedSkills.length} unique skills (${unconditionalSkills.length} unconditional, ${newConditionalSkills.length} conditional, managed: ${managedSkills.length}, user: ${userSkills.length}, project: ${Ae.flat().length}, additional: ${Ie.flat().length}, legacy commands: ${Me.length})`,
+    `Loaded ${deduplicatedSkills.length} unique skills (${unconditionalSkills.length} unconditional, ${newConditionalSkills.length} conditional, managed: ${managedSkills.length}, user: ${userSkills.length}, project: ${projectSkills.flat().length}, additional: ${additionalDirSkills.flat().length}, legacy commands: ${commandSkills.length})`,
   );
   return unconditionalSkills;
 }
@@ -1737,23 +1801,23 @@ function createDynamicSkillState() {
 /**
  * 从动态/条件 skill 表中删除不在给定集合中的过期条目，返回删除数。
  */
-function pruneDynamicSkillsNotIn(e) {
-  let n = peekDynamicSkillState();
-  if (!n) return 0;
-  let r = 0;
-  for (let [s, h] of n.dynamicSkills)
-    if (isStaleDynamicSkill(h, e)) {
-      n.dynamicSkills.delete(s);
-      n.activatedConditionalSkillNames.delete(h.name);
-      r++;
+function pruneDynamicSkillsNotIn(keepNames) {
+  let state = peekDynamicSkillState();
+  if (!state) return 0;
+  let prunedCount = 0;
+  for (let [key, skill] of state.dynamicSkills)
+    if (isStaleDynamicSkill(skill, keepNames)) {
+      state.dynamicSkills.delete(key);
+      state.activatedConditionalSkillNames.delete(skill.name);
+      prunedCount++;
     }
-  for (let [s, h] of n.conditionalSkills)
-    if (isStaleDynamicSkill(h, e)) {
-      n.conditionalSkills.delete(s);
-      n.activatedConditionalSkillNames.delete(h.name);
-      r++;
+  for (let [key, skill] of state.conditionalSkills)
+    if (isStaleDynamicSkill(skill, keepNames)) {
+      state.conditionalSkills.delete(key);
+      state.activatedConditionalSkillNames.delete(skill.name);
+      prunedCount++;
     }
-  return r;
+  return prunedCount;
 }
 //@ chunk-e6aww6q8.js:3143206-3143276 layout
 /**
@@ -1770,25 +1834,25 @@ function isHostSkillCatalogEnabled() {
 /**
  * 读取宿主提供的 skill 目录（host catalog，挂载点上的同步 skills），逐个校验非链接后加载，记 skill_host_catalog 遥测。
  */
-async function loadHostCatalogSkills(e) {
-  let n = new Map();
-  let r = await probeOneMountKind(PUBLIC);
-  if ("reason" in r) {
-    logForDiagnosticsNoPII("warn", "skill_host_catalog_not_read", r);
-    n.set(r.reason, e.skills.size);
+async function loadHostCatalogSkills(catalog) {
+  let misses = new Map();
+  let probe = await probeOneMountKind(PUBLIC);
+  if ("reason" in probe) {
+    logForDiagnosticsNoPII("warn", "skill_host_catalog_not_read", probe);
+    misses.set(probe.reason, catalog.skills.size);
   }
-  let s = "reason" in r ? null : await realpathOrNull(e.dir);
-  let h =
-    "reason" in r || s === null
+  let publicRoot = "reason" in probe ? null : await realpathOrNull(catalog.dir);
+  let loaded =
+    "reason" in probe || publicRoot === null
       ? []
-      : await loadSkillsFromSkillsDir(s, "userSettings", "syncedSkills", undefined, {
-          skills: e.skills,
-          mountDevice: r.device,
-          misses: n,
+      : await loadSkillsFromSkillsDir(publicRoot, "userSettings", "syncedSkills", undefined, {
+          skills: catalog.skills,
+          mountDevice: probe.device,
+          misses,
         });
-  let results = await Promise.all(h.map(({ filePath }) => isRealPathSelf(filePath)));
-  let flattened = h.flatMap(({ skill, filePath }, q) =>
-    results[q]
+  let results = await Promise.all(loaded.map(({ filePath }) => isRealPathSelf(filePath)));
+  let flattened = loaded.flatMap(({ skill, filePath }, index) =>
+    results[index]
       ? [
           {
             skill,
@@ -1797,25 +1861,26 @@ async function loadHostCatalogSkills(e) {
         ]
       : [],
   );
-  if (flattened.length < e.skills.size) {
-    let L = new Set(flattened.map(({ fileId }) => basename(dirname(fileId))));
+  if (flattened.length < catalog.skills.size) {
+    let loadedNames = new Set(flattened.map(({ fileId }) => basename(dirname(fileId))));
     logForDebugging(
-      `Host catalog: skills not loaded (missing, unreadable, not on the mount, or reached through a link): ${[...e.skills].filter((skill) => !L.has(skill)).join(", ")}`,
+      `Host catalog: skills not loaded (missing, unreadable, not on the mount, or reached through a link): ${[...catalog.skills].filter((skill) => !loadedNames.has(skill)).join(", ")}`,
       {
         level: "warn",
       },
     );
   }
-  let w = {
-    named: e.skills.size,
+  let stats = {
+    named: catalog.skills.size,
     loaded: flattened.length,
     withheld: count(flattened, ({ skill }) => isKilledHostCatalogSkill(skill)),
-    ...flattenMountMissCounts(n),
+    ...flattenMountMissCounts(misses),
   };
-  if (w.withheld > 0 && w.withheld === w.loaded) logFeatureSad("skill_host_catalog", "all_withheld", w);
-  else if (w.loaded === w.named) logFeatureOk("skill_host_catalog", w);
-  else if (w.loaded > 0) logFeatureSad("skill_host_catalog", "some_missing", w);
-  else logFeatureBad("skill_host_catalog", "none_loaded", w);
+  if (stats.withheld > 0 && stats.withheld === stats.loaded)
+    logFeatureSad("skill_host_catalog", "all_withheld", stats);
+  else if (stats.loaded === stats.named) logFeatureOk("skill_host_catalog", stats);
+  else if (stats.loaded > 0) logFeatureSad("skill_host_catalog", "some_missing", stats);
+  else logFeatureBad("skill_host_catalog", "none_loaded", stats);
   return flattened;
 }
 //@ chunk-e6aww6q8.js:3144280-3144514 layout
@@ -1823,22 +1888,22 @@ async function loadHostCatalogSkills(e) {
  * 由 host catalog 的一个 SKILL.md 文本构造命令对象（fromHostCatalog=true）。
  */
 function createHostCatalogSkill({ text, filePath }) {
-  let r = dirname(filePath);
+  let skillDir = dirname(filePath);
   let skillFileToCommand = parseSkillFileToCommand({
     content: text,
     skillFilePath: filePath,
-    skillName: basename(r),
+    skillName: basename(skillDir),
     source: "userSettings",
-    baseDir: r,
+    baseDir: skillDir,
     loadedFrom: "syncedSkills",
-    serverAttribution: isSkillAttributionEnabled()(r),
+    serverAttribution: isSkillAttributionEnabled()(skillDir),
   });
   if (skillFileToCommand?.type === "prompt") skillFileToCommand.fromHostCatalog = true;
   return skillFileToCommand;
 }
 //@ chunk-e6aww6q8.js:3144514-3144565 layout
-function isStaleDynamicSkill(e, n) {
-  return isSyncedSkill(e) && !n.has(stripSyncedSkillPrefix(e.name));
+function isStaleDynamicSkill(skill, keepNames) {
+  return isSyncedSkill(skill) && !keepNames.has(stripSyncedSkillPrefix(skill.name));
 }
 //@ chunk-e6aww6q8.js:3144565-3144615 layout
 function getDynamicSkillStateKey() {
@@ -1852,12 +1917,12 @@ function getDynamicSkillStateKeyExport() {
 function getDynamicSkillState() {
   let dynamicSkillStates = getHostState().dynamicSkillStates;
   let dynamicSkillStateKey = getDynamicSkillStateKey();
-  let r = dynamicSkillStates.get(dynamicSkillStateKey);
-  if (!r) {
-    r = createDynamicSkillState();
-    dynamicSkillStates.set(dynamicSkillStateKey, r);
+  let state = dynamicSkillStates.get(dynamicSkillStateKey);
+  if (!state) {
+    state = createDynamicSkillState();
+    dynamicSkillStates.set(dynamicSkillStateKey, state);
   }
-  return r;
+  return state;
 }
 //@ chunk-e6aww6q8.js:3144740-3144803 layout
 function peekDynamicSkillState() {
@@ -1884,160 +1949,165 @@ function onDynamicSkillsLoaded(callback) {
   });
 }
 //@ chunk-e6aww6q8.js:3144944-3145008 layout
-function foldSkillPath(e) {
+function foldSkillPath(path) {
   return stripInvisibleChars_3(
-    e
+    path
       .split(sep)
-      .map((n) => trimTrailingDotsSpaces(n))
+      .map((segment) => trimTrailingDotsSpaces(segment))
       .join(sep),
   );
 }
 //@ chunk-e6aww6q8.js:3145008-3145035 layout
-var skillPrefixCacheByHost = new HostScoped(() => io(computeSkillPathPrefixes));
+var skillPrefixCacheByHost; // deferred: uses computeSkillPathPrefixes of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:3145008", () => {
+  skillPrefixCacheByHost = new HostScoped(() => memoizeAlias(computeSkillPathPrefixes));
+});
 //@ chunk-e6aww6q8.js:3145035-3145524 layout
-async function computeSkillPathPrefixes(e) {
-  let n = async (y) => {
+async function computeSkillPathPrefixes(configDir) {
+  let variantsOf = async (path) => {
     try {
-      let S = await realpath(y);
-      return S === y ? [y] : [y, S];
+      let realPath = await realpath(path);
+      return realPath === path ? [path] : [path, realPath];
     } catch {
-      return [y];
+      return [path];
     }
   };
-  let r = await n(e);
-  let s = new Set();
-  let h = new Set();
-  for (let y of r) {
-    for (let S of await n(join(y, "skills"))) s.add(S);
-    for (let S of await n(join(y, "plugins"))) h.add(S);
+  let configVariants = await variantsOf(configDir);
+  let skillsDirs = new Set();
+  let pluginsDirs = new Set();
+  for (let configVariant of configVariants) {
+    for (let variant of await variantsOf(join(configVariant, "skills"))) skillsDirs.add(variant);
+    for (let variant of await variantsOf(join(configVariant, "plugins"))) pluginsDirs.add(variant);
   }
   return {
-    skillsBasePrefixesFolded: [...s].map((y) => foldSkillPath(y) + sep),
+    skillsBasePrefixesFolded: [...skillsDirs].map((dir) => foldSkillPath(dir) + sep),
     syncOwnedPrefixes: [
-      ...[...s].flatMap((y) => [
-        join(y, SYNCED_DIR) + sep,
-        join(y, SYNCED_SUBDIR) + sep,
-        join(y, ".staging") + sep,
+      ...[...skillsDirs].flatMap((dir) => [
+        join(dir, SYNCED_DIR) + sep,
+        join(dir, SYNCED_SUBDIR) + sep,
+        join(dir, ".staging") + sep,
       ]),
-      ...[...h].map((y) => join(y, SYNCED_DIR) + sep),
+      ...[...pluginsDirs].map((dir) => join(dir, SYNCED_DIR) + sep),
     ].map(foldSkillPath),
-    syncedSkillsPrefixes: [...s].map((y) => foldSkillPath(join(y, SYNCED_DIR) + sep)),
+    syncedSkillsPrefixes: [...skillsDirs].map((dir) => foldSkillPath(join(dir, SYNCED_DIR) + sep)),
   };
 }
 //@ chunk-e6aww6q8.js:3145524-3145697 layout
-async function isInSyncedSkillsDir(host, n) {
+async function isInSyncedSkillsDir(host, paths) {
   let claudeConfigDirOrNull = getClaudeConfigDirOrNull();
   if (claudeConfigDirOrNull === null) return false;
   let { syncedSkillsPrefixes } = await skillPrefixCacheByHost.of(host)(claudeConfigDirOrNull);
-  return n.some((h) => {
-    let y = foldSkillPath(h);
-    return syncedSkillsPrefixes.some((syncedSkillsPrefix) => y.startsWith(syncedSkillsPrefix));
+  return paths.some((path) => {
+    let folded = foldSkillPath(path);
+    return syncedSkillsPrefixes.some((syncedSkillsPrefix) => folded.startsWith(syncedSkillsPrefix));
   });
 }
 //@ chunk-e6aww6q8.js:3145697-3145756 layout
-async function isGitignoredInWorkTree(filePath, n, cwd) {
-  return findGitRootUncached(filePath) === n ? isPathGitignored(filePath, cwd) : undefined;
+async function isGitignoredInWorkTree(filePath, workTree, cwd) {
+  return findGitRootUncached(filePath) === workTree ? isPathGitignored(filePath, cwd) : undefined;
 }
 //@ chunk-e6aww6q8.js:3145756-3147407 layout
 /**
  * 文件被读写时，从其目录向上（不超过 cwd 根）寻找新的 .claude/skills 目录：跳过同步目录、8.3 短名、gitignore 的目录与目标不确定的链接；返回新发现的目录列表。
  */
-async function discoverSkillDirsForPaths(e, n, r, s, h) {
+async function discoverSkillDirsForPaths(host, paths, stopDir, storageV5, worktreeInfo) {
   if (isCustomizationDisabled("skills")) return [];
   if (getProjectConfigRoot() !== null) return [];
   if (isDiskless()) return [];
   let fsImplementation = getFsImplementation();
-  let S = r.endsWith(sep) ? r.slice(0, -1) : r;
-  let w = [];
+  let stopDirClean = stopDir.endsWith(sep) ? stopDir.slice(0, -1) : stopDir;
+  let found = [];
   let cwd = getCwd();
   let { syncOwnedPrefixes, skillsBasePrefixesFolded } =
-    await skillPrefixCacheByHost.of(e)(getClaudeConfigDir());
-  let Z =
+    await skillPrefixCacheByHost.of(host)(getClaudeConfigDir());
+  let basePrefixes =
     getPlatform() === "windows"
-      ? [...skillsBasePrefixesFolded, foldSkillPath(S) + sep]
+      ? [...skillsBasePrefixesFolded, foldSkillPath(stopDirClean) + sep]
       : skillsBasePrefixesFolded;
-  for (let Se of n) {
-    let ke = dirname(Se);
-    let we = foldSkillPath(ke) + sep;
-    if (syncOwnedPrefixes.some((syncOwnedPrefix) => we.startsWith(syncOwnedPrefix))) continue;
+  for (let path of paths) {
+    let dir = dirname(path);
+    let dirPrefix = foldSkillPath(dir) + sep;
+    if (syncOwnedPrefixes.some((syncOwnedPrefix) => dirPrefix.startsWith(syncOwnedPrefix))) continue;
     if (
-      Z.some(
-        (Ee) =>
-          we.startsWith(Ee) &&
-          we
-            .slice(Ee.length)
+      basePrefixes.some(
+        (basePrefix) =>
+          dirPrefix.startsWith(basePrefix) &&
+          dirPrefix
+            .slice(basePrefix.length)
             .split(sep)
-            .some((Ae) => /~\d/.test(Ae)),
+            .some((segment) => /~\d/.test(segment)),
       )
     )
       continue;
-    while (ke.startsWith(S + sep)) {
-      let Ee = join(ke, ".claude", "skills");
-      let Ae = getDynamicSkillState().deferredSkillDirs.get(Ee);
-      if (Ae !== undefined && Ae !== cwd) {
-        getDynamicSkillState().deferredSkillDirs.delete(Ee);
-        getDynamicSkillState().dynamicSkillDirs.delete(Ee);
+    while (dir.startsWith(stopDirClean + sep)) {
+      let skillsDir = join(dir, ".claude", "skills");
+      let deferredFor = getDynamicSkillState().deferredSkillDirs.get(skillsDir);
+      if (deferredFor !== undefined && deferredFor !== cwd) {
+        getDynamicSkillState().deferredSkillDirs.delete(skillsDir);
+        getDynamicSkillState().dynamicSkillDirs.delete(skillsDir);
       }
-      if (!getDynamicSkillState().dynamicSkillDirs.has(Ee)) {
-        getDynamicSkillState().dynamicSkillDirs.add(Ee);
+      if (!getDynamicSkillState().dynamicSkillDirs.has(skillsDir)) {
+        getDynamicSkillState().dynamicSkillDirs.add(skillsDir);
         try {
-          if (isStorageV5Enabled() && s !== undefined) {
-            let stats = await s.hostFiles.stat(PathSpace.workspace(Ee));
+          if (isStorageV5Enabled() && storageV5 !== undefined) {
+            let stats = await storageV5.hostFiles.stat(PathSpace.workspace(skillsDir));
             if (!stats.ok || stats.value.kind === "absent") continue;
-          } else await fsImplementation.stat(Ee);
-          let Me = h === undefined || ke.startsWith(h.cwd + sep);
-          if (!Me) {
-            let ze = await isGitignoredInWorkTree(ke, h.workTree, S);
-            if (ze !== 1) {
-              if (ze !== 0) getDynamicSkillState().deferredSkillDirs.set(Ee, cwd);
-              logForDebugging(`[skills] Skipped gitignored or unconfirmed skills dir: ${Ee}`);
+          } else await fsImplementation.stat(skillsDir);
+          let isInsideWorkTree = worktreeInfo === undefined || dir.startsWith(worktreeInfo.cwd + sep);
+          if (!isInsideWorkTree) {
+            let ignoreState = await isGitignoredInWorkTree(dir, worktreeInfo.workTree, stopDirClean);
+            if (ignoreState !== 1) {
+              if (ignoreState !== 0) getDynamicSkillState().deferredSkillDirs.set(skillsDir, cwd);
+              logForDebugging(`[skills] Skipped gitignored or unconfirmed skills dir: ${skillsDir}`);
               continue;
             }
-          } else if (await isPathGitignoredBool(ke, h?.cwd ?? S)) {
-            logForDebugging(`[skills] Skipped gitignored skills dir: ${Ee}`);
+          } else if (await isPathGitignoredBool(dir, worktreeInfo?.cwd ?? stopDirClean)) {
+            logForDebugging(`[skills] Skipped gitignored skills dir: ${skillsDir}`);
             continue;
           }
-          let We;
+          let resolvedDir;
           try {
-            We = await realpath(Ee);
+            resolvedDir = await realpath(skillsDir);
           } catch {}
           if (
             syncOwnedPrefixes.some((syncOwnedPrefix) =>
-              (foldSkillPath(We ?? Ee) + sep).startsWith(syncOwnedPrefix),
+              (foldSkillPath(resolvedDir ?? skillsDir) + sep).startsWith(syncOwnedPrefix),
             )
           ) {
-            logForDebugging(`[skills] Skipped sync-owned skills dir (resolved): ${Ee}`);
+            logForDebugging(`[skills] Skipped sync-owned skills dir (resolved): ${skillsDir}`);
             continue;
           }
-          if (!Me) {
-            let ze = await realpath(h.workTree).catch(() => {
+          if (!isInsideWorkTree) {
+            let realWorkTree = await realpath(worktreeInfo.workTree).catch(() => {
               return;
             });
-            let lt =
-              We === undefined || ze === undefined
+            let targetIgnoreState =
+              resolvedDir === undefined || realWorkTree === undefined
                 ? undefined
-                : We === Ee
+                : resolvedDir === skillsDir
                   ? 1
                   : await isGitignoredInWorkTree(
-                      basename(dirname(We)) === ".claude" ? dirname(dirname(We)) : We,
-                      ze,
-                      S,
+                      basename(dirname(resolvedDir)) === ".claude"
+                        ? dirname(dirname(resolvedDir))
+                        : resolvedDir,
+                      realWorkTree,
+                      stopDirClean,
                     );
-            if (lt !== 1) {
-              if (lt !== 0) getDynamicSkillState().deferredSkillDirs.set(Ee, cwd);
-              logForDebugging(`[skills] Skipped skills dir with an unconfirmed target: ${Ee}`);
+            if (targetIgnoreState !== 1) {
+              if (targetIgnoreState !== 0) getDynamicSkillState().deferredSkillDirs.set(skillsDir, cwd);
+              logForDebugging(`[skills] Skipped skills dir with an unconfirmed target: ${skillsDir}`);
               continue;
             }
           }
-          w.push(Ee);
+          found.push(skillsDir);
         } catch {}
       }
-      let Ie = dirname(ke);
-      if (Ie === ke) break;
-      ke = Ie;
+      let parentDir = dirname(dir);
+      if (parentDir === dir) break;
+      dir = parentDir;
     }
   }
-  return w;
+  return found;
 }
 //@ chunk-e6aww6q8.js:3147407-3147484 layout
 function getDynamicSkillKey(skill) {
@@ -2047,7 +2117,7 @@ function getDynamicSkillKey(skill) {
 /**
  * 把新发现的 skill 目录加载进动态 skill 表（replace 时先删该目录下消失的 skill），记 tengu_dynamic_skills_changed 并发出已加载事件；projectSettings 关闭或仅插件策略时跳过。
  */
-async function addSkillDirectories(dirs, n = {}) {
+async function addSkillDirectories(dirs, options = {}) {
   if (
     isCustomizationDisabled("skills") ||
     !isSettingSourceEnabled("projectSettings") ||
@@ -2062,20 +2132,20 @@ async function addSkillDirectories(dirs, n = {}) {
   let results = await Promise.all(dirs.map((dir) => loadSkillsFromSkillsDir(dir, "projectSettings")));
   let previousSkillNamesForLogging = new Set(getDynamicSkillState().dynamicSkills.keys());
   let dynamicSkillState = getDynamicSkillState();
-  if (n.replace) {
-    let S = new Set(results.flat().map(({ skill }) => getDynamicSkillKey(skill)));
-    let w = (L) => {
-      let G = L.type === "prompt" ? (L.skillRoot ?? "") : "";
+  if (options.replace) {
+    let loadedKeys = new Set(results.flat().map(({ skill }) => getDynamicSkillKey(skill)));
+    let isUnderDirs = (skill) => {
+      let root = skill.type === "prompt" ? (skill.skillRoot ?? "") : "";
       return dirs.some((dir) => {
-        let Z = relative(dir, G);
-        return Z === "" || (!Z.startsWith("..") && !isAbsolute(Z));
+        let relativePath = relative(dir, root);
+        return relativePath === "" || (!relativePath.startsWith("..") && !isAbsolute(relativePath));
       });
     };
-    for (let [L, G] of dynamicSkillState.dynamicSkills)
-      if (w(G) && !S.has(L)) dynamicSkillState.dynamicSkills.delete(L);
+    for (let [key, skill] of dynamicSkillState.dynamicSkills)
+      if (isUnderDirs(skill) && !loadedKeys.has(key)) dynamicSkillState.dynamicSkills.delete(key);
   }
-  for (let S of results)
-    for (let { skill } of S)
+  for (let result of results)
+    for (let { skill } of result)
       if (skill.type === "prompt") dynamicSkillState.dynamicSkills.set(getDynamicSkillKey(skill), skill);
   let newSkillCount = results.flat().length;
   if (newSkillCount > 0) {
@@ -2103,15 +2173,19 @@ async function addSkillDirectories(dirs, n = {}) {
 function getDynamicSkills() {
   return Array.from(peekDynamicSkillState()?.dynamicSkills.entries() ?? [])
     .filter(
-      ([, e]) =>
-        e.type !== "prompt" ||
-        e.source !== "policySettings" ||
-        (e.skillRoot === undefined
+      ([, skill]) =>
+        skill.type !== "prompt" ||
+        skill.source !== "policySettings" ||
+        (skill.skillRoot === undefined
           ? managedFolderCondition() === ""
-          : !isUntrustedManagedSkill(join(e.skillRoot, "SKILL.md"))),
+          : !isUntrustedManagedSkill(join(skill.skillRoot, "SKILL.md"))),
     )
-    .sort(([e, n], [r, s]) => (n.name === s.name ? e.localeCompare(r) : n.name.localeCompare(s.name)))
-    .map(([, e]) => e);
+    .sort(([leftKey, leftSkill], [rightKey, rightSkill]) =>
+      leftSkill.name === rightSkill.name
+        ? leftKey.localeCompare(rightKey)
+        : leftSkill.name.localeCompare(rightSkill.name),
+    )
+    .map(([, skill]) => skill);
 }
 //@ chunk-e6aww6q8.js:3148828-3149592 fingerprint = activateConditionalSkillsForPaths (0.838)
 /**
@@ -2154,19 +2228,19 @@ function activateConditionalSkillsForPaths(filePaths, cwd) {
 /**
  * 为访问的文件路径发现嵌套技能目录（处理 worktree 情况），登记新目录后激活与该路径匹配的条件技能。
  */
-async function discoverSkillsForPath(host, n, dynamicSkillDirTriggers, storageV5) {
+async function discoverSkillsForPath(host, path, dynamicSkillDirTriggers, storageV5) {
   let cwd = getCwd();
-  let y = hasOutermostCallFrame() ? cwd : getOriginalCwd();
-  let S = cwd !== y && isPathWithinCaseAware(cwd, y, false) ? findGitRoot(cwd) : null;
-  let w =
-    S !== null && findGitRoot(y) === S
+  let baseCwd = hasOutermostCallFrame() ? cwd : getOriginalCwd();
+  let workTree = cwd !== baseCwd && isPathWithinCaseAware(cwd, baseCwd, false) ? findGitRoot(cwd) : null;
+  let worktreeInfo =
+    workTree !== null && findGitRoot(baseCwd) === workTree
       ? {
           cwd,
-          workTree: S,
+          workTree,
         }
       : undefined;
-  let cwd_2 = w === undefined ? cwd : y;
-  let skillDirsForPaths = await discoverSkillDirsForPaths(host, [n], cwd_2, storageV5, w);
+  let baseDir = worktreeInfo === undefined ? cwd : baseCwd;
+  let skillDirsForPaths = await discoverSkillDirsForPaths(host, [path], baseDir, storageV5, worktreeInfo);
   if (skillDirsForPaths.length > 0) {
     if (dynamicSkillDirTriggers) {
       for (let skillDirsForPath of skillDirsForPaths)
@@ -2175,11 +2249,11 @@ async function discoverSkillsForPath(host, n, dynamicSkillDirTriggers, storageV5
     }
     addSkillDirectories(skillDirsForPaths)
       .then(() => {
-        activateConditionalSkillsForPaths([n], cwd_2);
+        activateConditionalSkillsForPaths([path], baseDir);
       })
       .catch(() => {});
   }
-  activateConditionalSkillsForPaths([n], cwd_2);
+  activateConditionalSkillsForPaths([path], baseDir);
 }
 //@ chunk-e6aww6q8.js:3149884-3149981 layout = getThinkbackSkillDir (1)
 /**
@@ -2204,19 +2278,22 @@ function conditionalSkillEntries() {
  * 清空所有动态 skill 状态。
  */
 function clearDynamicSkills() {
-  let e = peekDynamicSkillState();
-  if (!e) return;
-  e.dynamicSkillDirs.clear();
-  e.deferredSkillDirs.clear();
-  e.dynamicSkills.clear();
-  e.conditionalSkills.clear();
-  e.activatedConditionalSkillNames.clear();
-  e.refusedReservedNames.clear();
+  let state = peekDynamicSkillState();
+  if (!state) return;
+  state.dynamicSkillDirs.clear();
+  state.deferredSkillDirs.clear();
+  state.dynamicSkills.clear();
+  state.conditionalSkills.clear();
+  state.activatedConditionalSkillNames.clear();
+  state.refusedReservedNames.clear();
 }
 //@ chunk-e6aww6q8.js:3150272-3150334 fingerprint
-registerLoaderSide({
-  createSkillCommand,
-  parseSkillFrontmatterFields,
+// deferred: uses registerLoaderSide (../services/memorySync/syncFiles.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:3150272", () => {
+  registerLoaderSide({
+    createSkillCommand,
+    parseSkillFrontmatterFields,
+  });
 });
 export {
   estimateSkillListingTokens,

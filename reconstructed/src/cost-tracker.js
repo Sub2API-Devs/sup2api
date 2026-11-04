@@ -39,7 +39,7 @@ import {
   getCostCounter,
   getTokenCounter,
 } from "./bootstrap/state.js";
-import { xr } from "../vendor/lodash-es/_inlinedHelpers.js";
+import { import_mapValues } from "../vendor/lodash-es/_inlinedHelpers.js";
 import { getContextWindow } from "./utils/model/configs.js";
 import { getModelMaxOutputTokens } from "./utils/context.js";
 import { saveCurrentProjectConfig, saveCurrentProjectConfigSyncForExit } from "./utils/config.js";
@@ -74,7 +74,15 @@ import { isFastModeEnabled } from "./utils/fastMode.js";
 import { getAdvisorUsage } from "./utils/advisor.js";
 import { logEvent } from "./services/analytics/index.js";
 import { telemetrySafeModelName } from "./utils/model/telemetryModelName.js";
+import { deferInit } from "../runtime/deferred-init.js";
 
+//@ chunk-tw8fk0yz.js:15693-15735 file-local
+/**
+ * 按精度四舍五入（round(x, 100) 保留两位）。
+ */
+function round(number, precision) {
+  return Math.round(number * precision) / precision;
+}
 //@ chunk-e6aww6q8.js:964789-964849 placement
 /**
  * 函数 getSessionCostUSD（本次运行成本（扣除恢复部分））；位于「成本与用量统计：每次 API 响应按模型累加 token 与美元成本（含 advisor 子用量、OTel 计数器），会话结束保存到项目配置，/cost 与退出时输出汇总（含提示词缓存状态）」模块。
@@ -87,12 +95,12 @@ function getSessionCostUSD() {
  * 返回本进程累计的 input/output/cache 读/cache 写 token，扣除恢复会话时 costLedger 记入的 restoredTokens（只统计本次运行实际消耗）。
  */
 function getSessionUsageExcludingRestored() {
-  let e = getRootSession().costLedger.restoredTokens();
+  let rootSession = getRootSession().costLedger.restoredTokens();
   return {
-    inputTokens: getTotalInputTokens() - e.inputTokens,
-    outputTokens: getTotalOutputTokens() - e.outputTokens,
-    cacheReadInputTokens: getTotalCacheReadInputTokens() - e.cacheReadInputTokens,
-    cacheCreationInputTokens: getTotalCacheCreationInputTokens() - e.cacheCreationInputTokens,
+    inputTokens: getTotalInputTokens() - rootSession.inputTokens,
+    outputTokens: getTotalOutputTokens() - rootSession.outputTokens,
+    cacheReadInputTokens: getTotalCacheReadInputTokens() - rootSession.cacheReadInputTokens,
+    cacheCreationInputTokens: getTotalCacheCreationInputTokens() - rootSession.cacheCreationInputTokens,
   };
 }
 //@ chunk-e6aww6q8.js:965083-965134 placement
@@ -119,10 +127,13 @@ function maxBudgetReachedMessage(maxBudgetUsd) {
   return `Reached maximum budget ($${maxBudgetUsd})`;
 }
 //@ chunk-e6aww6q8.js:965379-965388 placement
-registerSessionCostSaver(saveSessionCostBeforeExit);
+// deferred: uses registerSessionCostSaver (./bootstrap/state.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:965379", () => {
+  registerSessionCostSaver(saveSessionCostBeforeExit);
+});
 //@ chunk-e6aww6q8.js:965388-965418 placement
-function saveSessionCostBeforeExit(e) {
-  flushAndSaveCosts(undefined, e);
+function saveSessionCostBeforeExit(session) {
+  flushAndSaveCosts(undefined, session);
 }
 //@ chunk-e6aww6q8.js:965418-966114 placement = resetCostState (0.598)
 /**
@@ -141,16 +152,16 @@ function resetCostState() {
     totalLinesRemoved: getTotalLinesRemoved(),
     totalDuration: getTotalDuration(),
     startTime: getSessionStartTime(),
-    modelUsage: xr(getModelUsage(), (e) => ({
-      inputTokens: e.inputTokens,
-      outputTokens: e.outputTokens,
-      thinkingTokens: e.thinkingTokens,
-      cacheReadInputTokens: e.cacheReadInputTokens,
-      cacheCreationInputTokens: e.cacheCreationInputTokens,
-      cacheCreationEphemeral5mInputTokens: e.cacheCreationEphemeral5mInputTokens,
-      cacheCreationEphemeral1hInputTokens: e.cacheCreationEphemeral1hInputTokens,
-      webSearchRequests: e.webSearchRequests,
-      costUSD: e.costUSD,
+    modelUsage: import_mapValues(getModelUsage(), (usage) => ({
+      inputTokens: usage.inputTokens,
+      outputTokens: usage.outputTokens,
+      thinkingTokens: usage.thinkingTokens,
+      cacheReadInputTokens: usage.cacheReadInputTokens,
+      cacheCreationInputTokens: usage.cacheCreationInputTokens,
+      cacheCreationEphemeral5mInputTokens: usage.cacheCreationEphemeral5mInputTokens,
+      cacheCreationEphemeral1hInputTokens: usage.cacheCreationEphemeral1hInputTokens,
+      webSearchRequests: usage.webSearchRequests,
+      costUSD: usage.costUSD,
     })),
     hasUnknownModelCost: hasUnknownModelCost(),
   };
@@ -159,8 +170,8 @@ function resetCostState() {
 /**
  * 从会话记录的 cost-state 恢复费用账本；没有记录时只限定账本范围。
  */
-function setCostStateForRestore(e) {
-  let costState = e.costState;
+function setCostStateForRestore(restored) {
+  let costState = restored.costState;
   if (!costState) {
     scopeCostLedgerToCurrentSession();
     return false;
@@ -174,10 +185,10 @@ function setCostStateForRestore(e) {
     totalLinesRemoved: costState.totalLinesRemoved,
     lastDuration: costState.totalDuration,
     startTime: costState.startTime,
-    modelUsage: xr(costState.modelUsage, (r, s) => ({
-      ...r,
-      contextWindow: getContextWindow(s, getSdkBetas()),
-      maxOutputTokens: getModelMaxOutputTokens(s).default,
+    modelUsage: import_mapValues(costState.modelUsage, (usage, model) => ({
+      ...usage,
+      contextWindow: getContextWindow(model, getSdkBetas()),
+      maxOutputTokens: getModelMaxOutputTokens(model).default,
     })),
     hasUnknownModelCost: costState.hasUnknownModelCost,
   });
@@ -187,10 +198,10 @@ function setCostStateForRestore(e) {
 /**
  * 函数 flushAndSaveCosts（记录成本状态并写项目配置）；位于「成本与用量统计：每次 API 响应按模型累加 token 与美元成本（含 advisor 子用量、OTel 计数器），会话结束保存到项目配置，/cost 与退出时输出汇总（含提示词缓存状态）」模块。
  */
-function flushAndSaveCosts(fpsMetrics, storageV5) {
-  let r = resetCostState();
-  if (r) recordCostStateToTranscript(r, storageV5);
-  saveCurrentProjectConfig(saveCurrentSessionCosts(fpsMetrics), storageV5);
+function flushAndSaveCosts(fpsMetrics, options) {
+  let resetState = resetCostState();
+  if (resetState) recordCostStateToTranscript(resetState, options);
+  saveCurrentProjectConfig(saveCurrentSessionCosts(fpsMetrics), options);
 }
 //@ chunk-e6aww6q8.js:966675-966718 placement
 /**
@@ -211,7 +222,7 @@ function saveCostsOnExit(fpsMetrics) {
  * 生成保存会话成本的更新函数：总成本、API/工具/墙钟时长、增删行数、各类 token、web search 次数、FPS、各模型用量、会话 id。
  */
 function saveCurrentSessionCosts(fpsMetrics) {
-  let n = {
+  let sessionCost = {
     lastCost: getTotalCostUSD(),
     lastAPIDuration: getTotalAPIDuration(),
     lastAPIDurationWithoutRetries: getTotalAPIDurationWithoutRetries(),
@@ -229,7 +240,7 @@ function saveCurrentSessionCosts(fpsMetrics) {
     lastFpsLow1Pct: fpsMetrics?.low1PctFps,
     lastGracefulShutdown: isShuttingDown(),
     lastVersionBase: getVersionBase(),
-    lastModelUsage: xr(getModelUsage(), (usage) => ({
+    lastModelUsage: import_mapValues(getModelUsage(), (usage) => ({
       inputTokens: usage.inputTokens,
       outputTokens: usage.outputTokens,
       thinkingTokens: usage.thinkingTokens,
@@ -240,9 +251,9 @@ function saveCurrentSessionCosts(fpsMetrics) {
     })),
     lastSessionId: getSessionId(),
   };
-  return (r) => ({
-    ...r,
-    ...n,
+  return (state) => ({
+    ...state,
+    ...sessionCost,
   });
 }
 //@ chunk-e6aww6q8.js:967530-968243 layout
@@ -253,12 +264,12 @@ function formatModelUsageSummary() {
   let modelUsage = getModelUsage();
   if (Object.keys(modelUsage).length === 0)
     return "Usage:                 0 input, 0 output, 0 cache read, 0 cache write";
-  let n = new Map();
+  let usageByModel = new Map();
   for (let [key, value] of Object.entries(modelUsage)) {
     let canonicalName = getCanonicalName(key);
-    let S = n.get(canonicalName);
-    if (!S) {
-      S = {
+    let usage = usageByModel.get(canonicalName);
+    if (!usage) {
+      usage = {
         inputTokens: 0,
         outputTokens: 0,
         cacheReadInputTokens: 0,
@@ -268,25 +279,25 @@ function formatModelUsageSummary() {
         contextWindow: 0,
         maxOutputTokens: 0,
       };
-      n.set(canonicalName, S);
+      usageByModel.set(canonicalName, usage);
     }
-    S.inputTokens += value.inputTokens;
-    S.outputTokens += value.outputTokens;
-    S.cacheReadInputTokens += value.cacheReadInputTokens;
-    S.cacheCreationInputTokens += value.cacheCreationInputTokens;
-    S.webSearchRequests += value.webSearchRequests;
-    S.costUSD += value.costUSD;
+    usage.inputTokens += value.inputTokens;
+    usage.outputTokens += value.outputTokens;
+    usage.cacheReadInputTokens += value.cacheReadInputTokens;
+    usage.cacheCreationInputTokens += value.cacheCreationInputTokens;
+    usage.webSearchRequests += value.webSearchRequests;
+    usage.costUSD += value.costUSD;
   }
-  let r = "Usage by model:";
-  for (let [s, h] of n) {
-    let y = `  ${formatModelTokenCounts(h)} (${formatCost(h.costUSD)})`;
-    r +=
+  let header = "Usage by model:";
+  for (let [model, usage] of usageByModel) {
+    let line = `  ${formatModelTokenCounts(usage)} (${formatCost(usage.costUSD)})`;
+    header +=
       `
 ` +
-      `${s}:`.padStart(21) +
-      y;
+      `${model}:`.padStart(21) +
+      line;
   }
-  return r;
+  return header;
 }
 //@ chunk-e6aww6q8.js:968243-968416 layout = aliasMatchesParentTier (0.852)
 /**
@@ -307,25 +318,26 @@ function formatCostBreakdown() {
   let modelUsage = getModelUsage();
   let entries = Object.entries(modelUsage);
   if (entries.length === 0) return null;
-  let r = new Map();
-  let s = 0;
-  let h = 0;
-  let y = 0;
-  let S = 0;
-  for (let [G, q] of entries) {
-    let modelFamilyOrSelf = getModelFamilyOrSelf(getCanonicalName(G));
-    r.set(modelFamilyOrSelf, (r.get(modelFamilyOrSelf) ?? 0) + q.costUSD);
-    s += q.costUSD;
-    h += q.inputTokens;
-    y += q.cacheReadInputTokens;
-    S += q.cacheCreationInputTokens;
+  let costByModel = new Map();
+  let inputTokens = 0;
+  let outputTokens = 0;
+  let cacheReadTokens = 0;
+  let cacheWriteTokens = 0;
+  for (let [model, usage] of entries) {
+    let modelFamilyOrSelf = getModelFamilyOrSelf(getCanonicalName(model));
+    costByModel.set(modelFamilyOrSelf, (costByModel.get(modelFamilyOrSelf) ?? 0) + usage.costUSD);
+    inputTokens += usage.costUSD;
+    outputTokens += usage.inputTokens;
+    cacheReadTokens += usage.cacheReadInputTokens;
+    cacheWriteTokens += usage.cacheCreationInputTokens;
   }
-  let w = [];
-  if (s > 0)
-    for (let [G, q] of [...r].sort((Z, Se) => Se[1] - Z[1])) w.push(`${G}: ${Math.round((q / s) * 100)}%`);
-  let L = h + y + S;
-  if (L > 0) w.push(`cache hit: ${Math.round((y / L) * 100)}%`);
-  return w.length > 0 ? `breakdown \xB7 ${w.join(" \xB7 ")}` : null;
+  let lines = [];
+  if (inputTokens > 0)
+    for (let [model, cost] of [...costByModel].sort((a, b) => b[1] - a[1]))
+      lines.push(`${model}: ${Math.round((cost / inputTokens) * 100)}%`);
+  let totalTokens = outputTokens + cacheReadTokens + cacheWriteTokens;
+  if (totalTokens > 0) lines.push(`cache hit: ${Math.round((cacheReadTokens / totalTokens) * 100)}%`);
+  return lines.length > 0 ? `breakdown \xB7 ${lines.join(" \xB7 ")}` : null;
 }
 //@ chunk-e6aww6q8.js:968900-969274 fingerprint = formatTotalCost (1)
 /**
@@ -338,15 +350,15 @@ function formatTotalCost() {
   ].filter(Boolean);
   let costDisplay = formatCost(getTotalCostUSD()) + (filtered.length > 0 ? ` (${filtered.join("; ")})` : "");
   let modelUsageDisplay = formatModelUsageSummary();
-  let s = formatPromptCacheStatus();
+  let cacheStatus = formatPromptCacheStatus();
   return sequential.dim(`Total cost:            ${costDisplay}
 Total duration (API):  ${formatDuration(getTotalAPIDuration())}
 Total duration (wall): ${formatDuration(getTotalDuration())}
 Total code changes:    ${getTotalLinesAdded()} ${getTotalLinesAdded() === 1 ? "line" : "lines"} added, ${getTotalLinesRemoved()} ${getTotalLinesRemoved() === 1 ? "line" : "lines"} removed
 ${modelUsageDisplay}${
-    s
+    cacheStatus
       ? `
-${s}`
+${cacheStatus}`
       : ""
   }`);
 }
@@ -354,31 +366,35 @@ ${s}`
 /**
  * "Prompt cache (main):" 行：请求数、缓存命中率、miss 次数与原因、预期重建、warm/cold 与 TTL。
  */
-function formatPromptCacheStatus(e = Date.now()) {
-  let promptCacheSummary = getPromptCacheSummary(undefined, e);
+function formatPromptCacheStatus(now = Date.now()) {
+  let promptCacheSummary = getPromptCacheSummary(undefined, now);
   if (promptCacheSummary.requests === 0 || promptCacheSummary.lastRequest === null) return null;
-  let r = [`${promptCacheSummary.requests} ${promptCacheSummary.requests === 1 ? "request" : "requests"}`];
+  let lines = [
+    `${promptCacheSummary.requests} ${promptCacheSummary.requests === 1 ? "request" : "requests"}`,
+  ];
   if (promptCacheSummary.hitRatio !== null)
-    r.push(`${Math.round(promptCacheSummary.hitRatio * 100)}% of input tokens from cache`);
-  r.push(
+    lines.push(`${Math.round(promptCacheSummary.hitRatio * 100)}% of input tokens from cache`);
+  lines.push(
     promptCacheSummary.misses === 0
       ? "no misses"
-      : `${promptCacheSummary.misses} ${promptCacheSummary.misses === 1 ? "miss" : "misses"} (last ${formatDuration(e - (promptCacheSummary.lastMissAt ?? e))} ago${formatCacheMissCauses(promptCacheSummary.lastMissAttribution)}, ${formatNumber(promptCacheSummary.missRecacheTokens)} tokens re-cached)`,
+      : `${promptCacheSummary.misses} ${promptCacheSummary.misses === 1 ? "miss" : "misses"} (last ${formatDuration(now - (promptCacheSummary.lastMissAt ?? now))} ago${formatCacheMissCauses(promptCacheSummary.lastMissAttribution)}, ${formatNumber(promptCacheSummary.missRecacheTokens)} tokens re-cached)`,
   );
   if (promptCacheSummary.expectedRebuilds > 0)
-    r.push(
+    lines.push(
       `${promptCacheSummary.expectedRebuilds} expected ${promptCacheSummary.expectedRebuilds === 1 ? "rebuild" : "rebuilds"} (compaction or tool-result clearing)`,
     );
-  let s = formatDuration(e - (promptCacheSummary.lastActivityAt ?? promptCacheSummary.lastRequest.at));
-  let h = estimateRecacheTokens();
-  if (!promptCacheSummary.cachingObserved) r.push("no prompt caching reported by the API");
+  let agoText = formatDuration(
+    now - (promptCacheSummary.lastActivityAt ?? promptCacheSummary.lastRequest.at),
+  );
+  let recacheTokens = estimateRecacheTokens();
+  if (!promptCacheSummary.cachingObserved) lines.push("no prompt caching reported by the API");
   else
-    r.push(
+    lines.push(
       promptCacheSummary.warm
-        ? `warm (${promptCacheSummary.lastRequest.ttl} TTL, last activity ${s} ago)`
-        : `cold \u2014 idle ${s}, ${h === null ? "next turn re-caches the compacted prompt" : `next turn re-caches ~${formatNumber(h)} tokens`}`,
+        ? `warm (${promptCacheSummary.lastRequest.ttl} TTL, last activity ${agoText} ago)`
+        : `cold \u2014 idle ${agoText}, ${recacheTokens === null ? "next turn re-caches the compacted prompt" : `next turn re-caches ~${formatNumber(recacheTokens)} tokens`}`,
     );
-  return `Prompt cache (main):   ${r.join(" \xB7 ")}`;
+  return `Prompt cache (main):   ${lines.join(" \xB7 ")}`;
 }
 //@ chunk-e6aww6q8.js:970240-970635 layout
 /**
@@ -388,18 +404,18 @@ function formatCacheMissCauses(lastMissAttribution) {
   if (lastMissAttribution === null || lastMissAttribution.causes.length === 0) return "";
   return ` \u2014 likely cause: ${lastMissAttribution.causes
     .map((cause) => {
-      let s = CACHE_BREAK_REASONS[cause];
+      let label = CACHE_BREAK_REASONS[cause];
       if (cause === "tools_changed" && lastMissAttribution.toolsAdded !== undefined)
-        return `${s} (+${lastMissAttribution.toolsAdded}/-${lastMissAttribution.toolsRemoved ?? 0})`;
+        return `${label} (+${lastMissAttribution.toolsAdded}/-${lastMissAttribution.toolsRemoved ?? 0})`;
       if (
         cause === "system_prompt_changed" &&
         lastMissAttribution.systemCharDelta !== undefined &&
         lastMissAttribution.systemCharDelta !== 0
       ) {
         let systemCharDelta = lastMissAttribution.systemCharDelta;
-        return `${s} (${systemCharDelta > 0 ? "+" : ""}${formatNumber(systemCharDelta)} chars)`;
+        return `${label} (${systemCharDelta > 0 ? "+" : ""}${formatNumber(systemCharDelta)} chars)`;
       }
-      return s;
+      return label;
     })
     .join(", ")}`;
 }
@@ -424,11 +440,11 @@ function addToTotalModelUsage(previousUsage, costUSD, usage, model) {
     (modelUsage.thinkingTokens ?? 0) + (usage.output_tokens_details?.thinking_tokens ?? 0);
   modelUsage.cacheReadInputTokens += usage.cache_read_input_tokens ?? 0;
   modelUsage.cacheCreationInputTokens += usage.cache_creation_input_tokens ?? 0;
-  let y = splitCacheCreationTokens(usage);
+  let cacheSplit = splitCacheCreationTokens(usage);
   modelUsage.cacheCreationEphemeral5mInputTokens =
-    (modelUsage.cacheCreationEphemeral5mInputTokens ?? 0) + y.fiveMinute;
+    (modelUsage.cacheCreationEphemeral5mInputTokens ?? 0) + cacheSplit.fiveMinute;
   modelUsage.cacheCreationEphemeral1hInputTokens =
-    (modelUsage.cacheCreationEphemeral1hInputTokens ?? 0) + y.oneHour;
+    (modelUsage.cacheCreationEphemeral1hInputTokens ?? 0) + cacheSplit.oneHour;
   modelUsage.webSearchRequests += usage.server_tool_use?.web_search_requests ?? 0;
   modelUsage.costUSD += costUSD;
   modelUsage.contextWindow = getContextWindow(model, getSdkBetas());
@@ -464,15 +480,15 @@ function addToTotalSessionCost(
     cacheReadInputTokens: usage.cache_read_input_tokens ?? 0,
     cacheCreationInputTokens: usage.cache_creation_input_tokens ?? 0,
   });
-  let Z = classifyQuerySource(querySource);
+  let sourceClass = classifyQuerySource(querySource);
   let attrs = {
     model: maskModelIdIfRelayed(model),
     ...(isFastModeEnabled() &&
       usage.speed === "fast" && {
         speed: "fast",
       }),
-    ...(Z && {
-      query_source: Z,
+    ...(sourceClass && {
+      query_source: sourceClass,
     }),
     ...(effort && {
       effort,
@@ -501,7 +517,7 @@ function addToTotalSessionCost(
   });
   let totalCost = cost;
   for (let advisorUsage of getAdvisorUsage(usage)) {
-    let Ee = {
+    let costEntry = {
       output_tokens_details: null,
       cache_creation: advisorUsage.cache_creation,
       cache_creation_input_tokens: advisorUsage.cache_creation_input_tokens,
@@ -515,7 +531,7 @@ function addToTotalSessionCost(
       speed: null,
       fallback_credit: null,
     };
-    let advisorCost = calculateUSDCost(advisorUsage.model, Ee);
+    let advisorCost = calculateUSDCost(advisorUsage.model, costEntry);
     logEvent("tengu_advisor_tool_token_usage", {
       advisor_model: telemetrySafeModelName(advisorUsage.model),
       input_tokens: advisorUsage.input_tokens,
@@ -526,7 +542,7 @@ function addToTotalSessionCost(
     });
     totalCost += addToTotalSessionCost(
       advisorCost,
-      Ee,
+      costEntry,
       advisorUsage.model,
       querySource,
       undefined,
@@ -537,13 +553,6 @@ function addToTotalSessionCost(
     );
   }
   return totalCost;
-}
-//@ chunk-tw8fk0yz.js:15693-15735 file-local
-/**
- * 按精度四舍五入（round(x, 100) 保留两位）。
- */
-function round(number, precision) {
-  return Math.round(number * precision) / precision;
 }
 export {
   setCostStateForRestore,

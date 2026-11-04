@@ -9,7 +9,7 @@
  * attribution: sole-consumer 2, affinity 1, fingerprint 1
  */
 import { readFileSync } from "fs";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { textColorizer, BaseText } from "./Text.js";
 import { codeExcerpt_default } from "../../../vendor/code-excerpt/dist/index.js";
@@ -20,9 +20,9 @@ import {
 } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 
 //@ chunk-bzr73sfg.js:227142-227193 sole-consumer
-function isTooLongError(n) {
-  let { value: ae } = n;
-  return ae.length > MAX_ERROR_LENGTH;
+function isTooLongError(line) {
+  let { value } = line;
+  return value.length > MAX_ERROR_LENGTH;
 }
 //@ chunk-bzr73sfg.js:227193-227254 sole-consumer = formatUri (1)
 var stripFileUrlPrefix = (file) => file?.replace(`file://${process.cwd()}/`, "");
@@ -44,24 +44,24 @@ function isInternalStackPath(path) {
  * 渲染出错时的错误页：ERROR 标题与消息、出错位置、读源码显示附近几行（超长行不显示）、解析后的堆栈。
  */
 function ErrorOverview(props) {
-  let f = w(22);
+  let $ = useMemoCache(22);
   let { error } = props;
-  let m;
-  if (f[0] === MEMO_CACHE_SENTINEL) {
-    m = new textColorizer.default({
+  let colorizer;
+  if ($[0] === MEMO_CACHE_SENTINEL) {
+    colorizer = new textColorizer.default({
       cwd: process.cwd(),
       internals: textColorizer.default.nodeInternals(),
     });
-    f[0] = m;
-  } else m = f[0];
-  let p = m;
-  let g;
+    $[0] = colorizer;
+  } else colorizer = $[0];
+  let colorizer_2 = colorizer;
+  let containerComponent;
   let flexDirection;
   let padding;
-  let A;
-  let D;
-  let O;
-  if (f[1] !== error.message || f[2] !== error.stack) {
+  let headerElement;
+  let locationElement;
+  let excerptElement;
+  if ($[1] !== error.message || $[2] !== error.stack) {
     let stack = error.stack
       ? error.stack
           .split(
@@ -70,7 +70,7 @@ function ErrorOverview(props) {
           )
           .slice(1)
       : undefined;
-    let origin = stack ? p.parseLine(stack[0]) : undefined;
+    let origin = stack ? colorizer_2.parseLine(stack[0]) : undefined;
     let filePath = stripFileUrlPrefix(origin?.file);
     let excerpt;
     let lineWidth = 0;
@@ -84,31 +84,31 @@ function ErrorOverview(props) {
         }
       } catch {}
     }
-    g = BaseBox;
+    containerComponent = BaseBox;
     flexDirection = "column";
     padding = 1;
-    let K;
-    if (f[9] === MEMO_CACHE_SENTINEL) {
-      K = jsxProd_default_2(BaseText, {
+    let errorLabel;
+    if ($[9] === MEMO_CACHE_SENTINEL) {
+      errorLabel = jsxProd_default_2(BaseText, {
         backgroundColor: "ansi:red",
         color: "ansi:white",
         children: [" ", "ERROR", " "],
       });
-      f[9] = K;
-    } else K = f[9];
-    if (f[10] !== error.message) {
-      A = jsxProd_default_2(BaseBox, {
+      $[9] = errorLabel;
+    } else errorLabel = $[9];
+    if ($[10] !== error.message) {
+      headerElement = jsxProd_default_2(BaseBox, {
         children: [
-          K,
+          errorLabel,
           jsxProd_default_2(BaseText, {
             children: [" ", error.message],
           }),
         ],
       });
-      f[10] = error.message;
-      f[11] = A;
-    } else A = f[11];
-    D =
+      $[10] = error.message;
+      $[11] = headerElement;
+    } else headerElement = $[11];
+    locationElement =
       origin &&
       filePath &&
       jsxProd_default(BaseBox, {
@@ -118,7 +118,7 @@ function ErrorOverview(props) {
           children: [filePath, ":", origin.line, ":", origin.column],
         }),
       });
-    O =
+    excerptElement =
       origin &&
       excerpt &&
       jsxProd_default(BaseBox, {
@@ -154,25 +154,25 @@ function ErrorOverview(props) {
           );
         }),
       });
-    f[1] = error.message;
-    f[2] = error.stack;
-    f[3] = g;
-    f[4] = flexDirection;
-    f[5] = padding;
-    f[6] = A;
-    f[7] = D;
-    f[8] = O;
+    $[1] = error.message;
+    $[2] = error.stack;
+    $[3] = containerComponent;
+    $[4] = flexDirection;
+    $[5] = padding;
+    $[6] = headerElement;
+    $[7] = locationElement;
+    $[8] = excerptElement;
   } else {
-    g = f[3];
-    flexDirection = f[4];
-    padding = f[5];
-    A = f[6];
-    D = f[7];
-    O = f[8];
+    containerComponent = $[3];
+    flexDirection = $[4];
+    padding = $[5];
+    headerElement = $[6];
+    locationElement = $[7];
+    excerptElement = $[8];
   }
-  let K;
-  if (f[12] !== error.stack) {
-    K =
+  let stackElement;
+  if ($[12] !== error.stack) {
+    stackElement =
       error.stack &&
       jsxProd_default(BaseBox, {
         marginTop: 1,
@@ -184,7 +184,7 @@ function ErrorOverview(props) {
           )
           .slice(1)
           .map((line) => {
-            let parsedLine = p.parseLine(line);
+            let parsedLine = colorizer_2.parseLine(line);
             if (!parsedLine) {
               return jsxProd_default_2(
                 BaseBox,
@@ -234,33 +234,33 @@ function ErrorOverview(props) {
             );
           }),
       });
-    f[12] = error.stack;
-    f[13] = K;
-  } else K = f[13];
-  let q;
+    $[12] = error.stack;
+    $[13] = stackElement;
+  } else stackElement = $[13];
+  let overviewElement;
   if (
-    f[14] !== g ||
-    f[15] !== flexDirection ||
-    f[16] !== padding ||
-    f[17] !== A ||
-    f[18] !== D ||
-    f[19] !== O ||
-    f[20] !== K
+    $[14] !== containerComponent ||
+    $[15] !== flexDirection ||
+    $[16] !== padding ||
+    $[17] !== headerElement ||
+    $[18] !== locationElement ||
+    $[19] !== excerptElement ||
+    $[20] !== stackElement
   ) {
-    q = jsxProd_default_2(g, {
+    overviewElement = jsxProd_default_2(containerComponent, {
       flexDirection,
       padding,
-      children: [A, D, O, K],
+      children: [headerElement, locationElement, excerptElement, stackElement],
     });
-    f[14] = g;
-    f[15] = flexDirection;
-    f[16] = padding;
-    f[17] = A;
-    f[18] = D;
-    f[19] = O;
-    f[20] = K;
-    f[21] = q;
-  } else q = f[21];
-  return q;
+    $[14] = containerComponent;
+    $[15] = flexDirection;
+    $[16] = padding;
+    $[17] = headerElement;
+    $[18] = locationElement;
+    $[19] = excerptElement;
+    $[20] = stackElement;
+    $[21] = overviewElement;
+  } else overviewElement = $[21];
+  return overviewElement;
 }
 export { ErrorOverview };

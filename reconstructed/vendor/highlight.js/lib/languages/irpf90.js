@@ -5,10 +5,10 @@
  * pieces: chunk-egr0twnb.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:199129-203858 cjs-fingerprint
-var require_irpf90 = x(function (cjsExports, cjsModule) {
+var require_irpf90 = __commonJS(function (cjsExports, cjsModule) {
   function irpf90(hljs) {
     let regex = hljs.regex;
     let PARAMS = {

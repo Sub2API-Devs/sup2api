@@ -21,8 +21,8 @@ function isShellOutputClipped({ output, fullOutput, totalLines }, columns) {
   return (totalLines ?? 0) > CLIP_HEAD_LINES || clipShellOutput(output, columns).clipped;
 }
 //@ chunk-cqn8yadz.js:2067-2435 placement
-function clipShellOutput(output, m) {
-  let max = Math.max(1, m - SHELL_OUTPUT_CLIP);
+function clipShellOutput(output, columns) {
+  let max = Math.max(1, columns - SHELL_OUTPUT_CLIP);
   let filtered = stripAnsiPerLine(output.trim())
     .replace(
       /\r\n?/g,
@@ -34,34 +34,34 @@ function clipShellOutput(output, m) {
 `,
     )
     .filter((line) => line);
-  let l = [];
-  let u = 0;
-  let o = filtered.length;
-  while (o > 0 && u < CLIP_HEAD_LINES) {
-    let a = filtered[--o];
-    let lines = wrapAnsi(a, max, {
+  let keptLines = [];
+  let keptCount = 0;
+  let index = filtered.length;
+  while (index > 0 && keptCount < CLIP_HEAD_LINES) {
+    let line = filtered[--index];
+    let lines = wrapAnsi(line, max, {
       hard: true,
       trim: false,
     }).split(`
 `);
-    let t = CLIP_HEAD_LINES - u;
-    if (lines.length > t) {
-      l.unshift(stripPrefix(lines.slice(-t).join(""), " "));
+    let budget = CLIP_HEAD_LINES - keptCount;
+    if (lines.length > budget) {
+      keptLines.unshift(stripPrefix(lines.slice(-budget).join(""), " "));
       return {
-        text: l.join(`
+        text: keptLines.join(`
 `),
         clipped: true,
-        dropped: o,
+        dropped: index,
       };
     }
-    l.unshift(a);
-    u += lines.length;
+    keptLines.unshift(line);
+    keptCount += lines.length;
   }
   return {
-    text: l.join(`
+    text: keptLines.join(`
 `),
-    clipped: o > 0,
-    dropped: o,
+    clipped: index > 0,
+    dropped: index,
   };
 }
 export { isShellOutputClipped, clipShellOutput, CLIP_HEAD_LINES };

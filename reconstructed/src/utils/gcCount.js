@@ -22,9 +22,9 @@ var gcCountStateByHost = identity(
     atFirstMessage: undefined,
     giveUp: undefined,
   },
-  (t) => {
+  (state) => {
     takeGarbageCollectionCount();
-    t.isDecided = false;
+    state.isDecided = false;
   },
 );
 //@ chunk-hh66v1ps.js:440-755 placement
@@ -41,12 +41,12 @@ function startGarbageCollectionCount() {
     )
       return;
     let { GCProfiler } = importMetaRequire("v8");
-    let s = new GCProfiler();
-    let i = new GCProfiler();
-    s.start();
-    i.start();
-    gcCountStateByHost.toFirstMessage = s;
-    gcCountStateByHost.toFirstResult = i;
+    let toFirstMessageProfiler = new GCProfiler();
+    let toFirstResultProfiler = new GCProfiler();
+    toFirstMessageProfiler.start();
+    toFirstResultProfiler.start();
+    gcCountStateByHost.toFirstMessage = toFirstMessageProfiler;
+    gcCountStateByHost.toFirstResult = toFirstResultProfiler;
     gcCountStateByHost.giveUp = setTimeout(takeGarbageCollectionCount, GC_COUNT_WINDOW_MS);
     gcCountStateByHost.giveUp.unref();
   } catch {}
@@ -55,23 +55,23 @@ function startGarbageCollectionCount() {
 /**
  * 汇总 GC 统计
  */
-function summarizeGcStats(t) {
-  if (t === undefined) return;
+function summarizeGcStats(profiler) {
+  if (profiler === undefined) return;
   try {
-    let filtered = t
+    let filtered = profiler
       .stop()
-      .statistics.filter((n) => n.gcType === "Scavenge" || n.gcType === "MarkSweepCompact");
-    let i = count(filtered, (n) => n.gcType === "Scavenge");
+      .statistics.filter((gcEntry) => gcEntry.gcType === "Scavenge" || gcEntry.gcType === "MarkSweepCompact");
+    let scavengeCount = count(filtered, (gcEntry) => gcEntry.gcType === "Scavenge");
     let usedHeapSize = filtered.at(-1)?.afterGC.heapStatistics.usedHeapSize;
-    let a = {
-      eden: i,
-      full: filtered.length - i,
-      wall_ms: Math.round(filtered.reduce((acc, u) => acc + u.cost, 0) / 1000),
+    let stats = {
+      eden: scavengeCount,
+      full: filtered.length - scavengeCount,
+      wall_ms: Math.round(filtered.reduce((acc, gcEntry) => acc + gcEntry.cost, 0) / 1000),
       ...(usedHeapSize !== undefined && {
         heap_after_mib: Math.round(usedHeapSize / 1048576),
       }),
     };
-    return Object.values(a).every(Number.isSafeInteger) ? a : undefined;
+    return Object.values(stats).every(Number.isSafeInteger) ? stats : undefined;
   } catch {
     return;
   }
@@ -86,18 +86,18 @@ function takeGarbageCollectionCount() {
   let { atFirstMessage } = gcCountStateByHost;
   clearTimeout(gcCountStateByHost.giveUp);
   summarizeGcStats(gcCountStateByHost.toFirstMessage);
-  let s = summarizeGcStats(gcCountStateByHost.toFirstResult);
+  let toFirstResult = summarizeGcStats(gcCountStateByHost.toFirstResult);
   gcCountStateByHost.toFirstMessage = undefined;
   gcCountStateByHost.toFirstResult = undefined;
   gcCountStateByHost.atFirstMessage = undefined;
   gcCountStateByHost.giveUp = undefined;
   return (
-    s && {
+    toFirstResult && {
       ...(atFirstMessage && {
         to_first_message: atFirstMessage,
       }),
-      to_first_result: s,
+      to_first_result: toFirstResult,
     }
   );
 }
-export { takeGarbageCollectionCount, noteFirstMessageForGarbageCollectionCount };
+export { takeGarbageCollectionCount, noteFirstMessageForGarbageCollectionCount, startGarbageCollectionCount };

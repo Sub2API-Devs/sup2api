@@ -30,10 +30,10 @@ function useCanSwitchToExistingSubscription() {
 }
 //@ chunk-ag5x7vhf.js:87543-87709 fingerprint = _temp2 (0.411)
 function recordSubscriptionNoticeShown(storageV5) {
-  saveGlobalConfig((h) => {
-    let seenNotifications = h.seenNotifications ?? {};
+  saveGlobalConfig((config) => {
+    let seenNotifications = config.seenNotifications ?? {};
     return {
-      ...h,
+      ...config,
       seenNotifications: {
         ...seenNotifications,
         [SUBSCRIPTION_SWITCH]: (seenNotifications[SUBSCRIPTION_SWITCH] ?? 0) + 1,

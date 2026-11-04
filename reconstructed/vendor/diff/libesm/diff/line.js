@@ -9,10 +9,10 @@ import { WordsWithSpaceDiff } from "./word.js";
 import { Diff } from "../../libcjs/diff/base.js";
 
 //@ chunk-7vb8p3zb.js:6614-6626 esm-layout
-var M = new WordsWithSpaceDiff();
+var wordsWithSpaceDiff = new WordsWithSpaceDiff();
 //@ chunk-7vb8p3zb.js:6626-6667 esm-fingerprint
-function tos(oldText, newText, t) {
-  return M.diff(oldText, newText, t);
+function diffWordsWithSpace(oldText, newText, options) {
+  return wordsWithSpaceDiff.diff(oldText, newText, options);
 }
 //@ chunk-7vb8p3zb.js:6667-7019 esm-fingerprint
 class _ extends Diff {
@@ -52,8 +52,8 @@ class _ extends Diff {
 //@ chunk-7vb8p3zb.js:7019-7031 esm-layout
 var lineDiff = new _();
 //@ chunk-7vb8p3zb.js:7031-7072 esm-fingerprint
-function Y5e(n, e, t) {
-  return lineDiff.diff(n, e, t);
+function diffLines(oldStr, newStr, options) {
+  return lineDiff.diff(oldStr, newStr, options);
 }
 //@ chunk-7vb8p3zb.js:7072-7298 esm-fingerprint
 function tokenize(value, options) {
@@ -73,4 +73,4 @@ function tokenize(value, options) {
   }
   return retLines;
 }
-export { Y5e, tos };
+export { diffLines, diffWordsWithSpace };

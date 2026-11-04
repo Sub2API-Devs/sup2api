@@ -9,7 +9,7 @@
  * attribution: fingerprint 3, layout 6, file-local 1, callgraph-fingerprint 1
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, string } from "../../../vendor/zod/v4/classic/schemas.js";
+import { objectSchema, stringSchema } from "../../../vendor/zod/v4/classic/schemas.js";
 import { buildTool } from "../../services/tools/permissionCheckGuard.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
 import { isDisklessContext } from "../../utils/pollEvents.js";
@@ -27,14 +27,20 @@ import { isDemoOrClaubbet } from "../../plugins/functionHooks/policyGate.js";
 import { pendingReloadSlot } from "../../plugins/functionHooks/pluginLifecycle.js";
 import { isClaudeTestPluginEnabled } from "../../plugins/bundled/claudeTest/browserHelper.js";
 import { hasPluginSkill } from "../../components/skills/SkillsMenu.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-22r83hv0.js:24633-24745 fingerprint = outputSchema (0.607)
-var structuredOutputInputSchema = DoctorLazy(() => u({}).passthrough());
-var structuredOutputOutputSchema = DoctorLazy(() => string().describe("Structured output tool result"));
-var STRUCTUREDOUTPUT = "StructuredOutput";
+var structuredOutputInputSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var structuredOutputOutputSchema;
+var STRUCTUREDOUTPUT;
+deferInit("chunk-22r83hv0.js:24633", () => {
+  structuredOutputInputSchema = DoctorLazy(() => objectSchema({}).passthrough());
+  structuredOutputOutputSchema = DoctorLazy(() => stringSchema().describe("Structured output tool result"));
+  STRUCTUREDOUTPUT = "StructuredOutput";
+});
 //@ chunk-22r83hv0.js:24745-24814 layout
-function isNonInteractiveOrBgSession(e) {
-  return e.isNonInteractiveSession || e.isBgSession === true;
+function isNonInteractiveOrBgSession(toolContext) {
+  return toolContext.isNonInteractiveSession || toolContext.isBgSession === true;
 }
 //@ chunk-22r83hv0.js:24814-25041 layout = countToolCallsSince (1)
 function countToolCallsSince_2(messages, sinceUuid) {
@@ -48,9 +54,9 @@ function countToolCallsSince_2(messages, sinceUuid) {
 /**
  * StructuredOutput 工具（SDK --json-schema 用）：输入是任意对象，call 时用 Ajv 校验后作为 structured_output 返回并结束回合；总是内联、只读、并发安全。
  */
-function SyntheticOutputTool(e = {}, n = () => {}) {
+function SyntheticOutputTool(overrides = {}, handleInput = () => {}) {
   return buildTool({
-    ...e,
+    ...overrides,
     isMcp: false,
     isEnabled() {
       return true;
@@ -83,7 +89,7 @@ function SyntheticOutputTool(e = {}, n = () => {}) {
     create() {
       return {
         async call(input) {
-          n(input);
+          handleInput(input);
           return {
             data: "Structured output provided successfully",
             structured_output: input,
@@ -108,8 +114,12 @@ function SyntheticOutputTool(e = {}, n = () => {}) {
   });
 }
 //@ chunk-22r83hv0.js:26067-26095 layout
-var DEFAULT_SYNTHETIC_OUTPUT_TOOL = SyntheticOutputTool();
-var syntheticOutputToolCache = new WeakMap();
+var DEFAULT_SYNTHETIC_OUTPUT_TOOL; // deferred: uses SyntheticOutputTool of its import cycle while loading; runs once the cycle is complete
+var syntheticOutputToolCache;
+deferInit("chunk-22r83hv0.js:26067", () => {
+  DEFAULT_SYNTHETIC_OUTPUT_TOOL = SyntheticOutputTool();
+  syntheticOutputToolCache = new WeakMap();
+});
 //@ chunk-22r83hv0.js:26095-26174 file-local
 /**
  * 按 JSON schema 缓存构造的 StructuredOutput 工具。
@@ -125,18 +135,18 @@ function createSyntheticOutputTool(jsonSchema) {
 var MAX_SCHEMA_NODES_2 = 1e5;
 var MAX_SCHEMA_DEPTH_2 = 1e4;
 //@ chunk-22r83hv0.js:26193-26343 layout
-function isSchemaTooLarge(e, n, r) {
-  if (--n.n < 0 || r > MAX_SCHEMA_DEPTH_2) return true;
-  if (typeof e !== "object" || e === null) return false;
-  for (let s of Object.values(e)) if (isSchemaTooLarge(s, n, r + 1)) return true;
+function isSchemaTooLarge(node, budget, depth) {
+  if (--budget.n < 0 || depth > MAX_SCHEMA_DEPTH_2) return true;
+  if (typeof node !== "object" || node === null) return false;
+  for (let child of Object.values(node)) if (isSchemaTooLarge(child, budget, depth + 1)) return true;
   return false;
 }
 //@ chunk-22r83hv0.js:26343-26910 layout
-function compileOutputSchemaValidator(jsonSchema) {
+function compileOutputSchemaValidator(node) {
   try {
     if (
       isSchemaTooLarge(
-        jsonSchema,
+        node,
         {
           n: MAX_SCHEMA_NODES_2,
         },
@@ -146,7 +156,7 @@ function compileOutputSchemaValidator(jsonSchema) {
       return {
         error: "schema too large",
       };
-    if (Boolean(jsonSchema.$async))
+    if (Boolean(node.$async))
       return {
         error: "$async schemas are not supported",
       };
@@ -160,17 +170,17 @@ function compileOutputSchemaValidator(jsonSchema) {
       validateFormats: false,
       multipleOfPrecision: 6,
     });
-    if (!ajv.validateSchema(jsonSchema))
+    if (!ajv.validateSchema(node))
       return {
         error: ajv.errorsText(ajv.errors),
       };
-    let validateSchema = ajv.compile(jsonSchema);
+    let validateSchema = ajv.compile(node);
     return {
-      validate(f) {
-        if (validateSchema(f)) return;
+      validate(value) {
+        if (validateSchema(value)) return;
         let errors = validateSchema.errors ?? [];
         return {
-          message: errors.map((error) => formatSchemaError(error, f)).join(", "),
+          message: errors.map((error) => formatSchemaError(error, value)).join(", "),
           keywords: errors.map((error) => error.keyword).join(","),
         };
       },
@@ -187,15 +197,15 @@ function compileOutputSchemaValidator(jsonSchema) {
  */
 function buildSyntheticOutputTool(jsonSchema) {
   try {
-    let n = compileOutputSchemaValidator(jsonSchema);
-    if ("error" in n) return n;
-    let r;
+    let validator = compileOutputSchemaValidator(jsonSchema);
+    if ("error" in validator) return validator;
+    let strictSchema;
     try {
-      let d = normalizeOutputSchema(jsonSchema);
-      if (d.ok) r = d.schema;
+      let normalized = normalizeOutputSchema(jsonSchema);
+      if (normalized.ok) strictSchema = normalized.schema;
       logEvent("tengu_structured_output_strict_schema", {
-        outcome: d.ok ? lit("converted") : lit("fallback"),
-        reason: d.ok ? undefined : fromEnum(d.reason),
+        outcome: normalized.ok ? lit("converted") : lit("fallback"),
+        reason: normalized.ok ? undefined : fromEnum(normalized.reason),
       });
     } catch (error) {
       logForDebugging(
@@ -205,10 +215,10 @@ function buildSyntheticOutputTool(jsonSchema) {
         },
       );
     }
-    let s;
+    let unsatisfiableFinding;
     try {
       let isValid = checkOutputSchemaSatisfiable(jsonSchema);
-      if (!isValid.ok) s = isValid.finding;
+      if (!isValid.ok) unsatisfiableFinding = isValid.finding;
       logEvent("tengu_structured_output_schema_lint", {
         outcome: isValid.ok ? lit("ok") : lit("unsatisfiable"),
         reason: isValid.ok ? undefined : fromEnum(isValid.finding.reason),
@@ -218,22 +228,22 @@ function buildSyntheticOutputTool(jsonSchema) {
       logError(error);
     }
     return {
-      ...(s && {
-        unsatisfiable: s,
+      ...(unsatisfiableFinding && {
+        unsatisfiable: unsatisfiableFinding,
       }),
       tool: SyntheticOutputTool(
         {
           inputJSONSchema: jsonSchema,
-          ...(r && {
-            strictInputJSONSchema: r,
+          ...(strictSchema && {
+            strictInputJSONSchema: strictSchema,
           }),
         },
-        (d) => {
-          let f = n.validate(d);
-          if (f)
+        (input) => {
+          let mismatch = validator.validate(input);
+          if (mismatch)
             throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-              `Output does not match required schema: ${f.message}`,
-              `StructuredOutput schema mismatch: ${f.keywords}`,
+              `Output does not match required schema: ${mismatch.message}`,
+              `StructuredOutput schema mismatch: ${mismatch.keywords}`,
             );
         },
       ),

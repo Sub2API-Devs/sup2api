@@ -17,72 +17,72 @@ import { isWslUncPath } from "./networkPaths.js";
 /**
  * 返回路径中第一个通配字符（*、?、成对的 [）的位置，没有则为 -1。
  */
-function firstGlobCharIndex(t) {
-  for (let i = 0; i < t.length; i++) {
-    let e = t[i];
-    if (e === "*" || e === "?") return i;
-    if (e === "[" && t.indexOf("]", i + 1) !== -1) return i;
+function firstGlobCharIndex(text) {
+  for (let i = 0; i < text.length; i++) {
+    let char = text[i];
+    if (char === "*" || char === "?") return i;
+    if (char === "[" && text.indexOf("]", i + 1) !== -1) return i;
   }
   return -1;
 }
 //@ chunk-aat7wt0p.js:11391-11541 placement
-function toUncLongPath(t) {
-  if (t.startsWith("\\\\?\\UNC\\")) return "\\\\" + t.slice(8);
-  if (t.startsWith("\\\\?\\") && t.length >= 7 && t[5] === ":") return t.slice(4);
-  return t;
+function toUncLongPath(path) {
+  if (path.startsWith("\\\\?\\UNC\\")) return "\\\\" + path.slice(8);
+  if (path.startsWith("\\\\?\\") && path.length >= 7 && path[5] === ":") return path.slice(4);
+  return path;
 }
 //@ chunk-aat7wt0p.js:11541-11834 placement
 /**
  * 对 Windows 设备/长路径形式反复去掉 \\?\ 等前缀并合并开头的重复分隔符，得到普通路径。
  */
-function stripLongPathPrefixes(t) {
-  if (isWindowsDevicePath(t)) {
-    let replaced = toUncLongPath(t).replace(/^([\\/])[\\/]+/, "$1");
-    for (let i = 0; i < MAX_PREFIX_STRIPS && hasWin32DevicePrefixSpelling(replaced); i++) {
-      replaced = normalizeWin32Path(replaced).replace(/^([\\/])[\\/]+/, "$1");
-      let r = 1;
+function stripLongPathPrefixes(path) {
+  if (isWindowsDevicePath(path)) {
+    let path_2 = toUncLongPath(path).replace(/^([\\/])[\\/]+/, "$1");
+    for (let i = 0; i < MAX_PREFIX_STRIPS && hasWin32DevicePrefixSpelling(path_2); i++) {
+      path_2 = normalizeWin32Path(path_2).replace(/^([\\/])[\\/]+/, "$1");
+      let index = 1;
       while (
-        replaced[r] === "?" &&
-        replaced[r + 1] === "?" &&
-        (r + 2 === replaced.length || isPathSeparator(replaced[r + 2]))
+        path_2[index] === "?" &&
+        path_2[index + 1] === "?" &&
+        (index + 2 === path_2.length || isPathSeparator(path_2[index + 2]))
       ) {
-        r += 3;
-        while (isPathSeparator(replaced[r])) r++;
+        index += 3;
+        while (isPathSeparator(path_2[index])) index++;
       }
-      replaced = replaced.slice(0, 1) + replaced.slice(r);
+      path_2 = path_2.slice(0, 1) + path_2.slice(index);
     }
-    return hasWin32DevicePrefixSpelling(replaced) ? replaced.slice(0, 1) : replaced;
+    return hasWin32DevicePrefixSpelling(path_2) ? path_2.slice(0, 1) : path_2;
   }
-  return t;
+  return path;
 }
 //@ chunk-aat7wt0p.js:11834-11843 placement
 var MAX_PREFIX_STRIPS = 4;
 //@ chunk-aat7wt0p.js:11843-11883 placement
-function isPathSeparator(t) {
-  return t === "\\" || t === "/";
+function isPathSeparator(char) {
+  return char === "\\" || char === "/";
 }
 //@ chunk-aat7wt0p.js:11883-12019 placement
 /**
  * 判断路径是否为 Windows 设备命名空间形式（卷 GUID、\\?\ 或 \\.\ 前缀等）。
  */
-function isWindowsDevicePath(t) {
-  if (/^\\\\\?\\volume\{/i.test(t)) return containsDotSegmentOrSlash(t);
-  if (hasWin32DevicePrefixSpelling(t)) return true;
-  let uncLongPath = toUncLongPath(t);
-  if (uncLongPath !== t && containsDotSegmentOrSlash(uncLongPath)) return true;
-  return isUncOrDevicePath(uncLongPath) && !isWslUncPath(uncLongPath);
+function isWindowsDevicePath(path) {
+  if (/^\\\\\?\\volume\{/i.test(path)) return containsDotSegmentOrSlash(path);
+  if (hasWin32DevicePrefixSpelling(path)) return true;
+  let path_2 = toUncLongPath(path);
+  if (path_2 !== path && containsDotSegmentOrSlash(path_2)) return true;
+  return isUncOrDevicePath(path_2) && !isWslUncPath(path_2);
 }
 //@ chunk-aat7wt0p.js:12019-12064 placement
-function containsDotSegmentOrSlash(t) {
-  return hasDotSegment(t) || t.includes("/");
+function containsDotSegmentOrSlash(path) {
+  return hasDotSegment(path) || path.includes("/");
 }
 //@ chunk-aat7wt0p.js:12064-12125 placement
 /**
  * 原生 realpath 转长路径形式，失败返回 null。
  */
-function nativeRealpathLong(t) {
+function nativeRealpathLong(path) {
   try {
-    return toUncLongPath(realpathSync.native(t));
+    return toUncLongPath(realpathSync.native(path));
   } catch {
     return null;
   }
@@ -91,11 +91,11 @@ function nativeRealpathLong(t) {
 /**
  * 异步取原生 realpath 并转为长路径形式，失败返回 null。
  */
-async function realpathNativeAsync(t) {
+async function realpathNativeAsync(path) {
   return new Promise((resolve) => {
     try {
-      realpath.native(t, (e, r) => {
-        resolve(e ? null : toUncLongPath(r));
+      realpath.native(path, (error, resolvedPath) => {
+        resolve(error ? null : toUncLongPath(resolvedPath));
       });
     } catch {
       resolve(null);
@@ -106,9 +106,9 @@ async function realpathNativeAsync(t) {
 /**
  * 原生 realpath，失败返回 null。
  */
-function nativeRealpathOrNull(t) {
+function nativeRealpathOrNull(path) {
   try {
-    return realpathSync(t);
+    return realpathSync(path);
   } catch {
     return null;
   }

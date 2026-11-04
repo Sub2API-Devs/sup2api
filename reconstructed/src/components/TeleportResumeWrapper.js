@@ -8,8 +8,8 @@
  * pieces: chunk-0bntfk7p.js (4)
  * attribution: placement 3, facade-exports 1
  */
-import { init_react_production, P } from "../../vendor/react/cjs/react.production.js";
-import { w } from "../../vendor/react/compiler-runtime.js";
+import { init_react_production, useEffect } from "../../vendor/react/cjs/react.production.js";
+import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import { useTeleportResume } from "../hooks/useTeleportResume.js";
 import { logEvent } from "../services/analytics/index.js";
 import { fromEnum } from "../services/analytics/safeMetadata.js";
@@ -36,7 +36,7 @@ init_react_production();
  * teleport 恢复：显示进度，中断键取消（tengu_teleport_cancelled），完成后回调恢复的会话。
  */
 function TeleportResumeWrapper(props) {
-  let $ = w(31);
+  let $ = useMemoCache(31);
   let { onComplete, onCancel, onError, isEmbedded, source, onSettingsReload } = props;
   let isEmbedded_2 = isEmbedded === undefined ? false : isEmbedded;
   let { resumeSession, isResuming, error, selectedSession } = useTeleportResume(source);
@@ -56,7 +56,7 @@ function TeleportResumeWrapper(props) {
     t2 = $[1];
     t3 = $[2];
   }
-  P(t2, t3);
+  useEffect(t2, t3);
   let t4;
   if ($[3] !== error || $[4] !== onComplete || $[5] !== onError || $[6] !== resumeSession) {
     t4 = async (session) => {
@@ -82,7 +82,7 @@ function TeleportResumeWrapper(props) {
     $[8] = onCancel;
     $[9] = t5;
   } else t5 = $[9];
-  let F = t5;
+  let handleCancel = t5;
   const isActive = !!error && !onError;
   let t7;
   if ($[10] !== isActive) {
@@ -93,7 +93,7 @@ function TeleportResumeWrapper(props) {
     $[10] = isActive;
     $[11] = t7;
   } else t7 = $[11];
-  useKeybinding("app:interrupt", F, t7);
+  useKeybinding("app:interrupt", handleCancel, t7);
   let isActive_2;
   if ($[12] !== error || $[13] !== onError) {
     isActive_2 = !!error && !onError && isKbCohesionFixesOn();
@@ -101,16 +101,16 @@ function TeleportResumeWrapper(props) {
     $[13] = onError;
     $[14] = isActive_2;
   } else isActive_2 = $[14];
-  let ee;
+  let cancelKeybindingOptions;
   if ($[15] !== isActive_2) {
-    ee = {
+    cancelKeybindingOptions = {
       context: "Confirmation",
       isActive: isActive_2,
     };
     $[15] = isActive_2;
-    $[16] = ee;
-  } else ee = $[16];
-  useKeybinding("confirm:no", F, ee);
+    $[16] = cancelKeybindingOptions;
+  } else cancelKeybindingOptions = $[16];
+  useKeybinding("confirm:no", handleCancel, cancelKeybindingOptions);
   if (isResuming && selectedSession) {
     let t8;
     if ($[17] === MEMO_CACHE_SENTINEL) {
@@ -191,14 +191,14 @@ function TeleportResumeWrapper(props) {
     return t11;
   }
   let t8;
-  if ($[26] !== F || $[27] !== onSelect || $[28] !== isEmbedded_2 || $[29] !== onSettingsReload) {
+  if ($[26] !== handleCancel || $[27] !== onSelect || $[28] !== isEmbedded_2 || $[29] !== onSettingsReload) {
     t8 = jsxProd_default(ResumeTask, {
       onSelect,
-      onCancel: F,
+      onCancel: handleCancel,
       isEmbedded: isEmbedded_2,
       onSettingsReload,
     });
-    $[26] = F;
+    $[26] = handleCancel;
     $[27] = onSelect;
     $[28] = isEmbedded_2;
     $[29] = onSettingsReload;

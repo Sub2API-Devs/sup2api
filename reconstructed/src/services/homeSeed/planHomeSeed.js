@@ -59,7 +59,7 @@ async function planHomeSeed({
     return;
   },
   launchConsent: consent,
-  now: i = Date.now,
+  now: opts = Date.now,
   hookGuardHere: getHookCoverage = () =>
     resolvePreToolUseCoverage(
       createHookCoverageSources(pluginOptions, getSkillHooks, homeSettingsForwardingFeature(consent).enabled),
@@ -72,7 +72,7 @@ async function planHomeSeed({
       kind: "none",
       reason: "flag_off",
     };
-  let f = i();
+  let result = opts();
   let plan = await buildHomeSeedPlan(signal, getHookCoverage, consent, flags, withRunnerPack).catch(
     (error) => {
       if (isAbortError(error) || isAborted(signal))
@@ -87,7 +87,7 @@ async function planHomeSeed({
       };
     },
   );
-  logHomeSeedPlan(plan, i() - f);
+  logHomeSeedPlan(plan, opts() - result);
   return plan;
 }
 //@ chunk-axmbhcjg.js:35258-36430 placement
@@ -205,32 +205,32 @@ function assembleHomeSeedPlan({
     description: describeHomeSeedPack(inventory, settingsDocument),
     ...common,
   };
-  let y = withRunnerPack ? inventory.entries.find((entry) => entry.kind === "claude_md") : undefined;
+  let pack = withRunnerPack ? inventory.entries.find((entry) => entry.kind === "claude_md") : undefined;
   return plan;
 }
 //@ chunk-axmbhcjg.js:37138-37498 placement
 /**
  * 描述打包内容：是否含 CLAUDE.md、规则与输出样式数、内联 import 数、设置键与权限规则数。
  */
-function describeHomeSeedPack(inventory, settingsDocument) {
+function describeHomeSeedPack(inventory, settings) {
   return {
     claudeMd: inventory.entries.some((entry) => entry.kind === "claude_md"),
-    rules: count(inventory.entries, (r) => r.kind === "rule"),
-    outputStyles: count(inventory.entries, (r) => r.kind === "output_style"),
+    rules: count(inventory.entries, (inventory) => inventory.kind === "rule"),
+    outputStyles: count(inventory.entries, (settings) => settings.kind === "output_style"),
     inlinedImports: inventory.summary.inlinedImports,
-    settingsKeys: settingsDocument === null ? [] : portableSettingKeys(settingsDocument),
+    settingsKeys: settings === null ? [] : portableSettingKeys(settings),
     permissionRules:
-      (settingsDocument?.permissions?.allow?.length ?? 0) +
-      (settingsDocument?.permissions?.deny?.length ?? 0) +
-      (settingsDocument?.permissions?.ask?.length ?? 0),
+      (settings?.permissions?.allow?.length ?? 0) +
+      (settings?.permissions?.deny?.length ?? 0) +
+      (settings?.permissions?.ask?.length ?? 0),
   };
 }
 //@ chunk-axmbhcjg.js:37498-37563 placement
 /**
  * 取对象里出现的可移植设置键。
  */
-function portableSettingKeys(e) {
-  return Object.keys(PORTABLE_SETTING_LABELS).filter((key) => e[key] !== undefined);
+function portableSettingKeys(settings) {
+  return Object.keys(PORTABLE_SETTING_LABELS).filter((key) => settings[key] !== undefined);
 }
 //@ chunk-axmbhcjg.js:37563-38327 placement
 /**
@@ -303,7 +303,7 @@ function logHomeSeedPlan(plan, durationMs) {
     includes_not_sent: summary.includesNotSent,
     symlinks_not_sent: summary.symlinksNotSent,
     claude_md_link_not_sent: plan.leftBehind.some(
-      (u) => u.reason === "symlink_not_sent" && u.path === CLAUDE_MD,
+      (plan) => plan.reason === "symlink_not_sent" && plan.path === CLAUDE_MD,
     ),
     not_destinations: summary.notDestinations,
     over_cap: summary.overCap,
@@ -347,27 +347,29 @@ var PORTABLE_SETTING_LABELS = {
   permissions: "permission rules",
 };
 //@ chunk-axmbhcjg.js:40291-40800 placement
-function formatHomeSeedSentLine(e) {
-  let n = [
-    ...(e.claudeMd ? ["CLAUDE.md"] : []),
-    ...formatCountLine(e.rules, "rules file"),
-    ...formatCountLine(e.outputStyles, "output-style file"),
-    ...formatCountLine(e.permissionRules, "permission rule"),
-    ...e.settingsKeys.flatMap((settingsKey) =>
+function formatHomeSeedSentLine(pack) {
+  let parts = [
+    ...(pack.claudeMd ? ["CLAUDE.md"] : []),
+    ...formatCountLine(pack.rules, "rules file"),
+    ...formatCountLine(pack.outputStyles, "output-style file"),
+    ...formatCountLine(pack.permissionRules, "permission rule"),
+    ...pack.settingsKeys.flatMap((settingsKey) =>
       settingsKey === "permissions" ? [] : [PORTABLE_SETTING_LABELS[settingsKey]],
     ),
-    ...(e.inlinedImports > 0 ? [`${e.inlinedImports} @${plural(e.inlinedImports, "import")} folded in`] : []),
+    ...(pack.inlinedImports > 0
+      ? [`${pack.inlinedImports} @${plural(pack.inlinedImports, "import")} folded in`]
+      : []),
   ];
-  return n.length === 0
+  return parts.length === 0
     ? "Sent settings from this machine to the cloud session: only the narrowed permission allow list"
-    : `Sent settings from this machine to the cloud session: ${n.join(", ")}`;
+    : `Sent settings from this machine to the cloud session: ${parts.join(", ")}`;
 }
 //@ chunk-axmbhcjg.js:40800-40850 placement
 /**
  * 生成 “N 个 X” 的计数行（数量为 0 时为空）。
  */
-function formatCountLine(e, n) {
-  return e > 0 ? [`${e} ${plural(e, n)}`] : [];
+function formatCountLine(count, noun) {
+  return count > 0 ? [`${count} ${plural(count, noun)}`] : [];
 }
 //@ chunk-axmbhcjg.js:40850-41046 placement
 var RULES_NOT_IN_FORCE = "Your deny and ask rules are not in force in the cloud session";
@@ -378,74 +380,75 @@ function formatHomeSeedLeftBehindLine(
   { summary, leftBehind, unreadable, settings, configHome },
   { launch, settingsFile },
 ) {
-  let d = tildify(configHome);
+  let homeDisplay = tildify(configHome);
   let flattened = [
     formatLeftBehindList(
       leftBehind,
       "symlink_not_sent",
       summary.symlinksNotSent,
-      (g) => `${g} linked ${plural(g, "file")} (links are not followed)`,
+      (count) => `${count} linked ${plural(count, "file")} (links are not followed)`,
     ),
     formatLeftBehindList(
       leftBehind,
       "include_not_sent",
       summary.includesNotSent,
-      (g) => `${g} @${plural(g, "import")} outside ${d} or not markdown`,
+      (count) => `${count} @${plural(count, "import")} outside ${homeDisplay} or not markdown`,
     ),
     formatLeftBehindList(
       leftBehind,
       "sensitive",
       summary.withheldSensitive,
-      (g) => `${g} ${plural(g, "file")} named like credentials`,
+      (count) => `${count} ${plural(count, "file")} named like credentials`,
     ),
     formatLeftBehindList(
       leftBehind,
       "read_denied",
       summary.withheldReadDenied,
-      (g) => `${g} ${plural(g, "file")} your Read rules or sandbox settings cover`,
+      (count) => `${count} ${plural(count, "file")} your Read rules or sandbox settings cover`,
     ),
     formatLeftBehindList(
       leftBehind,
       "not_destination",
       summary.notDestinations,
-      (g) => `${g} ${plural(g, "file")} with ${plural(g, "a name", "names")} the cloud session cannot create`,
+      (count) =>
+        `${count} ${plural(count, "file")} with ${plural(count, "a name", "names")} the cloud session cannot create`,
     ),
     formatLeftBehindList(
       leftBehind,
       "over_cap",
       summary.overCap,
-      (g) =>
-        `${g} ${plural(g, "file")} over a limit of ${MAX_WORKING_PATH_CHARS} files, ${formatFileSize(MAX_WORKING_FILE_BYTES_2_2)} per file or ${formatFileSize(MAX_WORKING_FILE_TOTAL_BYTES)} in total`,
+      (count) =>
+        `${count} ${plural(count, "file")} over a limit of ${MAX_WORKING_PATH_CHARS} files, ${formatFileSize(MAX_WORKING_FILE_BYTES_2_2)} per file or ${formatFileSize(MAX_WORKING_FILE_TOTAL_BYTES)} in total`,
     ),
     formatLeftBehindList(
       leftBehind,
       "unreadable",
       unreadable,
-      (g) => `${g} ${plural(g, "file")} that changed while being read`,
+      (count) => `${count} ${plural(count, "file")} that changed while being read`,
     ),
     formatLeftBehindList(
       leftBehind,
       "undefusable",
-      count(leftBehind, (g) => g.reason === "undefusable"),
-      (g) => `${g} ${plural(g, "file")} whose @imports could not be made safe`,
+      count(leftBehind, (entry) => entry.reason === "undefusable"),
+      (count) => `${count} ${plural(count, "file")} whose @imports could not be made safe`,
     ),
     formatLeftBehindList(
       leftBehind,
       "credential",
-      count(leftBehind, (g) => g.reason === "credential"),
-      (g) => `${g} ${plural(g, "file")} ${describeCredentialLike(g)}`,
+      count(leftBehind, (entry) => entry.reason === "credential"),
+      (count) => `${count} ${plural(count, "file")} ${describeCredentialLike(count)}`,
     ),
-  ].flatMap((g) => (g === null ? [] : [g]));
-  let m =
+  ].flatMap((line) => (line === null ? [] : [line]));
+  let droppedDroppedRules =
     summary.droppedRules.rooted +
     summary.droppedRules.device +
     summary.droppedRules.invalid +
     summary.droppedRules.overCap;
   let credentialRestrictions = summary.droppedRules.credentialRestrictions;
-  let y = summary.droppedRules.credential - credentialRestrictions;
+  let credentialAllowRules = summary.droppedRules.credential - credentialRestrictions;
   let credentialTextsWithheld = summary.credentialTextsWithheld;
   let guarded = summary.droppedRules.guarded;
-  let L =
+  let settingsProblem =
     settings === "schema_rejected"
       ? "failed validation"
       : settings === "settings_too_large"
@@ -453,18 +456,22 @@ function formatHomeSeedLeftBehindLine(
         : settings === "settings_unreadable"
           ? "could not be read"
           : null;
-  let E = [
+  let keptLines = [
     ...(summary.settingsKeysWithheld > 0
       ? [
           `${summary.settingsKeysWithheld} ${plural(summary.settingsKeysWithheld, "key")} (hooks, env and the like are never sent)`,
         ]
       : []),
-    ...(m > 0
+    ...(droppedDroppedRules > 0
       ? [
-          `${m} permission ${plural(m, "rule")} that ${plural(m, "names", "name")} a path or device tool on this machine or could not be read`,
+          `${droppedDroppedRules} permission ${plural(droppedDroppedRules, "rule")} that ${plural(droppedDroppedRules, "names", "name")} a path or device tool on this machine or could not be read`,
         ]
       : []),
-    ...(y > 0 ? [`${y} allow ${plural(y, "rule")} ${describeCredentialLike(y)}`] : []),
+    ...(credentialAllowRules > 0
+      ? [
+          `${credentialAllowRules} allow ${plural(credentialAllowRules, "rule")} ${describeCredentialLike(credentialAllowRules)}`,
+        ]
+      : []),
     ...(credentialTextsWithheld > 0
       ? [
           `${credentialTextsWithheld} ${plural(credentialTextsWithheld, "text")} (attribution, language, output style) ${describeCredentialLike(credentialTextsWithheld)}`,
@@ -476,58 +483,61 @@ function formatHomeSeedLeftBehindLine(
         ]
       : []),
   ];
-  let x = flattened.length > 0 ? [`Not sent from ${d}: ${flattened.join("; ")}`] : [];
-  if (L !== null)
+  let notSentLines = flattened.length > 0 ? [`Not sent from ${homeDisplay}: ${flattened.join("; ")}`] : [];
+  if (settingsProblem !== null)
     return [
       launch === "reopen_sent_nothing"
-        ? `${SETTINGS_STAY}: ${settingsFile} ${L}`
-        : `${RULES_NOT_IN_FORCE}: ${settingsFile} ${L}; ${settings === "settings_too_large" ? "make it smaller" : "fix it"} and ${launch === "reopen_sent" ? "re-open the session" : "start a new cloud session"}`,
-      ...x,
+        ? `${SETTINGS_STAY}: ${settingsFile} ${settingsProblem}`
+        : `${RULES_NOT_IN_FORCE}: ${settingsFile} ${settingsProblem}; ${settings === "settings_too_large" ? "make it smaller" : "fix it"} and ${launch === "reopen_sent" ? "re-open the session" : "start a new cloud session"}`,
+      ...notSentLines,
     ].join(". ");
-  let I = E.length > 0 ? [`Settings kept on this machine: ${E.join("; ")}`] : [];
-  let h =
+  let keptLine = keptLines.length > 0 ? [`Settings kept on this machine: ${keptLines.join("; ")}`] : [];
+  let lines =
     credentialRestrictions > 0
       ? [
           `${credentialRestrictions} deny or ask ${plural(credentialRestrictions, "rule is", "rules are")} not in force in the cloud session: ${plural(credentialRestrictions, "it looks like it holds", "they look like they hold")} a credential (reword ${plural(credentialRestrictions, "it", "them")} in ${settingsFile})`,
-          ...I,
-          ...x,
+          ...keptLine,
+          ...notSentLines,
         ]
-      : [...x, ...I];
-  return h.length === 0 ? null : h.join(". ");
+      : [...notSentLines, ...keptLine];
+  return lines.length === 0 ? null : lines.join(". ");
 }
 //@ chunk-axmbhcjg.js:43652-43788 placement
 function filesKeptForCredential(leftBehind) {
-  let mapped = leftBehind.filter((r) => r.reason === "credential").map((r) => r.path);
+  let mapped = leftBehind.filter((entry) => entry.reason === "credential").map((entry) => entry.path);
   return {
     claudeMd: mapped.includes(CLAUDE_MD),
-    others: count(mapped, (r) => r !== CLAUDE_MD),
+    others: count(mapped, (entry) => entry !== CLAUDE_MD),
   };
 }
 //@ chunk-axmbhcjg.js:43788-44019 placement
 function filesKeptAsLinks(leftBehind) {
-  let mapped = leftBehind.filter((o) => o.reason === "symlink_not_sent").map((o) => o.path);
-  let mapped_2 = [...mapped.filter((o) => o === CLAUDE_MD), ...mapped.filter((o) => o !== CLAUDE_MD)]
+  let mapped = leftBehind.filter((entry) => entry.reason === "symlink_not_sent").map((entry) => entry.path);
+  let mapped_2 = [
+    ...mapped.filter((path) => path === CLAUDE_MD),
+    ...mapped.filter((path) => path !== CLAUDE_MD),
+  ]
     .slice(0, 2)
-    .map((o) => (o === RULES || o === OUTPUT_STYLES ? `${o}/` : replaceControlChars(o)));
+    .map((path) => (path === RULES || path === OUTPUT_STYLES ? `${path}/` : replaceControlChars(path)));
   return {
     names: mapped_2,
     more: mapped.length - mapped_2.length,
   };
 }
 //@ chunk-axmbhcjg.js:44019-44119 placement
-function describeCredentialLike(e) {
-  return `that ${plural(e, "looks", "look")} like ${plural(e, "it holds", "they hold")} a credential`;
+function describeCredentialLike(count) {
+  return `that ${plural(count, "looks", "look")} like ${plural(count, "it holds", "they hold")} a credential`;
 }
 //@ chunk-axmbhcjg.js:44119-44364 placement
-function formatLeftBehindList(leftBehind, n, r, o) {
-  if (r === 0) return null;
+function formatLeftBehindList(leftBehind, reason, count, describe) {
+  if (count === 0) return null;
   let mapped = leftBehind
-    .filter((f) => f.reason === n)
-    .map((f) => replaceControlChars(f.path) + (f.line === undefined ? "" : `:${f.line}`));
+    .filter((entry) => entry.reason === reason)
+    .map((entry) => replaceControlChars(entry.path) + (entry.line === undefined ? "" : `:${entry.line}`));
   let sliced = mapped.slice(0, MAX_PLANNED_FILES);
-  let u = mapped.length - sliced.length;
-  let d = sliced.length === 0 ? "" : ` (${sliced.join(", ")}${u > 0 ? ` and ${u} more` : ""})`;
-  return o(r) + d;
+  let more = mapped.length - sliced.length;
+  let listed = sliced.length === 0 ? "" : ` (${sliced.join(", ")}${more > 0 ? ` and ${more} more` : ""})`;
+  return describe(count) + listed;
 }
 export {
   logSelfHostedRunnerPlan,

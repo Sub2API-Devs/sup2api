@@ -5,15 +5,15 @@
  * pieces: chunk-vwj6ccer.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 import { require_style_parser } from "./style_parser.js";
 
 //@ chunk-vwj6ccer.js:77213-79901 cjs-fingerprint
-var require_CSSStyleDeclaration = x(function (cjsExports, cjsModule) {
+var require_CSSStyleDeclaration = __commonJS(function (cjsExports, cjsModule) {
   var { parse } = require_style_parser();
   cjsModule.exports = function (elt) {
-    let t = new CSSStyleDeclaration(elt);
-    return new Proxy(t, {
+    let styleDeclaration = new CSSStyleDeclaration(elt);
+    return new Proxy(styleDeclaration, {
       get: function (target, property) {
         return property in target ? target[property] : target.getPropertyValue(dasherizeProperty(property));
       },

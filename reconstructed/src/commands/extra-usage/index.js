@@ -33,7 +33,7 @@ var usageCreditsNonInteractiveCommand = {
   get isHidden() {
     return !getIsNonInteractiveSession();
   },
-  load: () => import("./chunk-g49d7j62.js"),
+  load: () => import("./call.lazy.js"),
 };
 var extraUsageCommand = {
   type: "local-jsx",
@@ -52,7 +52,7 @@ var extraUsageNonInteractiveCommand = {
   description: "Renamed to /usage-credits",
   isHidden: true,
   isEnabled: () => isExtraUsageAllowed() && getIsNonInteractiveSession(),
-  load: () => import("./chunk-dfy6tq5y.js"),
+  load: () => import("../usage-credits/renameNotice.js"),
 };
 export {
   usageCreditsCommand,

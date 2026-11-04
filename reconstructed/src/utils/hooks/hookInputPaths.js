@@ -20,81 +20,85 @@ import { isPlainObject } from "../isPlainObject.js";
 //@ chunk-hyjyj8hj.js:539-578 placement
 var CLOUD_TRANSCRIPT_UNAVAILABLE = "<cloud-transcript-unavailable>";
 //@ chunk-hyjyj8hj.js:578-687 placement
-function stripTrailingSlashes(e) {
-  let o = e.length;
-  while (o > 0 && e[o - 1] === "/") o -= 1;
-  return o === 0 && e.startsWith("/") ? "/" : e.slice(0, o);
+function stripTrailingSlashes(path) {
+  let length = path.length;
+  while (length > 0 && path[length - 1] === "/") length -= 1;
+  return length === 0 && path.startsWith("/") ? "/" : path.slice(0, length);
 }
 //@ chunk-hyjyj8hj.js:687-777 placement
-function isSafeRelativeSegment(e) {
-  return e !== "" && e !== "." && e !== ".." && !/[\p{Cc}\p{Cf}\u2028\u2029\\:]/u.test(e);
+function isSafeRelativeSegment(segment) {
+  return (
+    segment !== "" && segment !== "." && segment !== ".." && !/[\p{Cc}\p{Cf}\u2028\u2029\\:]/u.test(segment)
+  );
 }
 //@ chunk-hyjyj8hj.js:777-1107 placement
 /**
  * 把容器内项目目录下的路径换算成设备启动目录下的对应路径，不在其下返回 null。
  */
-function translateContainerPath(e, o) {
-  let n = stripTrailingSlashes(o.containerProjectDir);
-  let r = stripTrailingSlashes(o.deviceLaunchDir);
-  if (!n.startsWith("/") || !r.startsWith("/") || n === "/") return null;
-  if (!isPosixPathUnder(e, n)) return null;
-  if (e === n || e === `${n}/`) return r;
-  let parts = e.slice(n.length + 1).split("/");
-  let a = parts.at(-1) === "" ? parts.slice(0, -1) : parts;
-  return a.length > 0 && a.every(isSafeRelativeSegment) ? `${r === "/" ? "" : r}/${a.join("/")}` : null;
+function translateContainerPath(containerPath, roots) {
+  let containerDir = stripTrailingSlashes(roots.containerProjectDir);
+  let deviceDir = stripTrailingSlashes(roots.deviceLaunchDir);
+  if (!containerDir.startsWith("/") || !deviceDir.startsWith("/") || containerDir === "/") return null;
+  if (!isPosixPathUnder(containerPath, containerDir)) return null;
+  if (containerPath === containerDir || containerPath === `${containerDir}/`) return deviceDir;
+  let parts = containerPath.slice(containerDir.length + 1).split("/");
+  let segments = parts.at(-1) === "" ? parts.slice(0, -1) : parts;
+  return segments.length > 0 && segments.every(isSafeRelativeSegment)
+    ? `${deviceDir === "/" ? "" : deviceDir}/${segments.join("/")}`
+    : null;
 }
 //@ chunk-hyjyj8hj.js:2074-2138 placement
 /**
  * 转义 JSON 指针段（~ → ~0，/ → ~1）。
  */
-function escapeJsonPointerSegment(e) {
-  return e.replace(/~/g, "~0").replace(/\//g, "~1");
+function escapeJsonPointerSegment(segment) {
+  return segment.replace(/~/g, "~0").replace(/\//g, "~1");
 }
 //@ chunk-hyjyj8hj.js:2138-2233 placement
 /**
  * 把 JSON 指针路径拆成未转义的段数组。
  */
-function unescapeJsonPointerPath(e) {
-  return e
+function unescapeJsonPointerPath(pointer) {
+  return pointer
     .split("/")
     .slice(1)
-    .map((o) => o.replace(/~1/g, "/").replace(/~0/g, "~"));
+    .map((segment) => segment.replace(/~1/g, "/").replace(/~0/g, "~"));
 }
 //@ chunk-hyjyj8hj.js:2233-2502 placement
-function HOOK_INPUT_TOP_FIELDS(e) {
-  let o = unescapeJsonPointerPath(e);
-  let n = o[0] === "tool_calls" ? o.slice(2) : o;
-  if (n[0] === "tool_input") return n.length >= 1;
-  if (n[0] === "tool_response")
+function HOOK_INPUT_TOP_FIELDS(pointer) {
+  let segments = unescapeJsonPointerPath(pointer);
+  let rest = segments[0] === "tool_calls" ? segments.slice(2) : segments;
+  if (rest[0] === "tool_input") return rest.length >= 1;
+  if (rest[0] === "tool_response")
     return (
-      (n.length === 2 && (n[1] === "filePath" || n[1] === "notebook_path" || n[1] === "file")) ||
-      (n.length === 3 && n[1] === "file" && n[2] === "filePath")
+      (rest.length === 2 && (rest[1] === "filePath" || rest[1] === "notebook_path" || rest[1] === "file")) ||
+      (rest.length === 3 && rest[1] === "file" && rest[2] === "filePath")
     );
   return false;
 }
 //@ chunk-hyjyj8hj.js:2502-2671 placement
-function isToolResponsePathPointer(e) {
-  let o = unescapeJsonPointerPath(e);
-  let n = o[0] === "tool_calls" ? o.slice(2) : o;
+function isToolResponsePathPointer(pointer) {
+  let segments = unescapeJsonPointerPath(pointer);
+  let rest = segments[0] === "tool_calls" ? segments.slice(2) : segments;
   return (
-    n[0] === "tool_response" &&
-    ((n.length === 2 && HOOK_RESPONSE_PATH_MEMBERS.has(n[1] ?? "")) ||
-      (n.length === 3 && HOOK_RESPONSE_NESTED_PATHS.has(`${n[1]}/${n[2]}`)))
+    rest[0] === "tool_response" &&
+    ((rest.length === 2 && HOOK_RESPONSE_PATH_MEMBERS.has(rest[1] ?? "")) ||
+      (rest.length === 3 && HOOK_RESPONSE_NESTED_PATHS.has(`${rest[1]}/${rest[2]}`)))
   );
 }
 //@ chunk-hyjyj8hj.js:2671-2716 placement
 /**
  * 判断字段名是否像路径字段（path/file/dir/cwd 等）。
  */
-function isPathLikeFieldName(e) {
-  return PATH_FIELD_NAME_RE.test(e) || URL_FIELD_NAME_RE.test(e);
+function isPathLikeFieldName(name) {
+  return PATH_FIELD_NAME_RE.test(name) || URL_FIELD_NAME_RE.test(name);
 }
 //@ chunk-hyjyj8hj.js:2716-2755 placement
 /**
  * 取某工具输入中的路径字段值。
  */
-function toolPathFieldInput(toolName, o) {
-  return getToolPathFields(toolName, o)?.input;
+function toolPathFieldInput(toolName, aliases) {
+  return getToolPathFields(toolName, aliases)?.input;
 }
 //@ chunk-hyjyj8hj.js:2755-3280 placement
 /**
@@ -107,96 +111,140 @@ var URL_VALUE_RE = /^(?:https?|s3|gs|ftps?|mailto|data):[^\p{Cc}\p{Cf}\p{Z}\s]*$
 var MAX_PATH_SCAN_DEPTH = 4;
 var MAX_PATH_SCAN_MEMBERS = 256;
 //@ chunk-hyjyj8hj.js:3280-4167 placement
-function collectPathPointers(e, o, n, r, c, a = 0, f = false, s = false) {
-  if (a > MAX_PATH_SCAN_DEPTH || (a > 0 && c.members <= 0)) {
-    if (typeof e === "object" && e !== null) noteUntranslatedPath(r, o);
-    return e;
+function collectPathPointers(
+  value,
+  pointer,
+  roots,
+  state,
+  budget,
+  depth = 0,
+  pathLike = false,
+  allowUrls = false,
+) {
+  if (depth > MAX_PATH_SCAN_DEPTH || (depth > 0 && budget.members <= 0)) {
+    if (typeof value === "object" && value !== null) noteUntranslatedPath(state, pointer);
+    return value;
   }
-  if (Array.isArray(e)) {
-    let i = false;
-    let mapped = e.map((m, g) => {
-      let k = `${o}/${g}`;
-      if (k in r.paths || r.listed.has(k)) return m;
-      let _ = f && !(isPlainObjectRef(m) && Object.keys(m).some(isPathLikeFieldName));
-      let y =
-        f && typeof m === "string"
-          ? s && URL_VALUE_RE.test(m)
-            ? m
-            : translatePathValue(m, k, n, r)
-          : collectPathPointers(m, k, n, r, c, a + 1, _, _ && s);
-      i ||= y !== m;
-      return y;
+  if (Array.isArray(value)) {
+    let changed = false;
+    let mapped = value.map((item, itemIndex) => {
+      let itemPointer = `${pointer}/${itemIndex}`;
+      if (itemPointer in state.paths || state.listed.has(itemPointer)) return item;
+      let childPathLike =
+        pathLike && !(isPlainObjectRef(item) && Object.keys(item).some(isPathLikeFieldName));
+      let replaced =
+        pathLike && typeof item === "string"
+          ? allowUrls && URL_VALUE_RE.test(item)
+            ? item
+            : translatePathValue(item, itemPointer, roots, state)
+          : collectPathPointers(
+              item,
+              itemPointer,
+              roots,
+              state,
+              budget,
+              depth + 1,
+              childPathLike,
+              childPathLike && allowUrls,
+            );
+      changed ||= replaced !== item;
+      return replaced;
     });
-    return i ? mapped : e;
+    return changed ? mapped : value;
   }
-  if (!isPlainObjectRef(e)) return e;
-  let h = e;
-  let u = false;
-  for (let [key, value] of Object.entries(e)) {
-    let m = `${o}/${escapeJsonPointerSegment(key)}`;
-    if (a > 0) {
-      c.members -= 1;
-      if (c.members < 0) {
-        noteUntranslatedPath(r, o);
+  if (!isPlainObjectRef(value)) return value;
+  let copied = value;
+  let changed = false;
+  for (let [key, value_2] of Object.entries(value)) {
+    let memberPointer = `${pointer}/${escapeJsonPointerSegment(key)}`;
+    if (depth > 0) {
+      budget.members -= 1;
+      if (budget.members < 0) {
+        noteUntranslatedPath(state, pointer);
         break;
       }
     }
-    let g = value;
-    let k = false;
-    if ((f || isPathLikeFieldName(key)) && !(m in r.paths) && !r.listed.has(m)) {
-      let _ = s || URL_FIELD_NAME_RE.test(key);
-      if (typeof value === "string") {
-        k = true;
-        g = _ && URL_VALUE_RE.test(value) ? value : translatePathValue(value, m, n, r);
-      } else if (Array.isArray(value)) {
-        k = true;
-        g = collectPathPointers(value, m, n, r, c, a + 1, true, _);
+    let nextValue = value_2;
+    let translated = false;
+    if (
+      (pathLike || isPathLikeFieldName(key)) &&
+      !(memberPointer in state.paths) &&
+      !state.listed.has(memberPointer)
+    ) {
+      let allowUrls_2 = allowUrls || URL_FIELD_NAME_RE.test(key);
+      if (typeof value_2 === "string") {
+        translated = true;
+        nextValue =
+          allowUrls_2 && URL_VALUE_RE.test(value_2)
+            ? value_2
+            : translatePathValue(value_2, memberPointer, roots, state);
+      } else if (Array.isArray(value_2)) {
+        translated = true;
+        nextValue = collectPathPointers(
+          value_2,
+          memberPointer,
+          roots,
+          state,
+          budget,
+          depth + 1,
+          true,
+          allowUrls_2,
+        );
       }
     }
-    if (!k && g === value && typeof value === "object" && value !== null) {
-      let y =
-        (f || isPathLikeFieldName(key)) &&
-        !(isPlainObjectRef(value) && Object.keys(value).some(isPathLikeFieldName));
-      g = collectPathPointers(value, m, n, r, c, a + 1, y, y && (s || URL_FIELD_NAME_RE.test(key)));
+    if (!translated && nextValue === value_2 && typeof value_2 === "object" && value_2 !== null) {
+      let childPathLike =
+        (pathLike || isPathLikeFieldName(key)) &&
+        !(isPlainObjectRef(value_2) && Object.keys(value_2).some(isPathLikeFieldName));
+      nextValue = collectPathPointers(
+        value_2,
+        memberPointer,
+        roots,
+        state,
+        budget,
+        depth + 1,
+        childPathLike,
+        childPathLike && (allowUrls || URL_FIELD_NAME_RE.test(key)),
+      );
     }
-    if (g !== value) {
-      if (!u) {
-        h = {
-          ...e,
+    if (nextValue !== value_2) {
+      if (!changed) {
+        copied = {
+          ...value,
         };
-        u = true;
+        changed = true;
       }
-      h[key] = g;
+      copied[key] = nextValue;
     }
   }
-  return h;
+  return copied;
 }
 //@ chunk-hyjyj8hj.js:4167-4277 placement
-function collectFieldPathPointers(e, o, n, r, c, a) {
-  if (a && typeof e === "string") return translatePathValue(e, o, n, r);
-  return collectPathPointers(e, o, n, r, c, 0, a && Array.isArray(e));
+function collectFieldPathPointers(value, pointer, roots, state, budget, pathLike) {
+  if (pathLike && typeof value === "string") return translatePathValue(value, pointer, roots, state);
+  return collectPathPointers(value, pointer, roots, state, budget, 0, pathLike && Array.isArray(value));
 }
 //@ chunk-hyjyj8hj.js:4277-4366 placement
-function isSuspiciousPathSpelling(e) {
-  let trimmed = e.trim();
-  return trimmed !== e || /^~[^/]*(?:$|\/)/.test(trimmed) || /^[$%`!=]/.test(trimmed);
+function isSuspiciousPathSpelling(path) {
+  let trimmed = path.trim();
+  return trimmed !== path || /^~[^/]*(?:$|\/)/.test(trimmed) || /^[$%`!=]/.test(trimmed);
 }
 //@ chunk-hyjyj8hj.js:4366-4406 placement
-function hasHookToolPathFields(e) {
-  return Object.hasOwn(HOOK_TOOL_PATH_FIELDS, e);
+function hasHookToolPathFields(toolName) {
+  return Object.hasOwn(HOOK_TOOL_PATH_FIELDS, toolName);
 }
 //@ chunk-hyjyj8hj.js:4406-4514 placement
-function getToolPathFields(e, o) {
-  let n = canonicalToolName(e);
-  if (hasHookToolPathFields(n)) return HOOK_TOOL_PATH_FIELDS[n];
-  let found = aliasesFor(n, o).map(canonicalToolName).find(hasHookToolPathFields);
+function getToolPathFields(toolName, aliases) {
+  let canonical = canonicalToolName(toolName);
+  if (hasHookToolPathFields(canonical)) return HOOK_TOOL_PATH_FIELDS[canonical];
+  let found = aliasesFor(canonical, aliases).map(canonicalToolName).find(hasHookToolPathFields);
   return found === undefined ? undefined : HOOK_TOOL_PATH_FIELDS[found];
 }
 //@ chunk-hyjyj8hj.js:4514-4589 placement
-function noteUntranslatedPath(e, o) {
-  if (!e.listed.has(o)) {
-    e.listed.add(o);
-    e.untranslated.push(o);
+function noteUntranslatedPath(state, pointer) {
+  if (!state.listed.has(pointer)) {
+    state.listed.add(pointer);
+    state.untranslated.push(pointer);
   }
 }
 //@ chunk-hyjyj8hj.js:4589-4597 placement
@@ -205,147 +253,182 @@ var isPlainObjectRef = isPlainObject;
 /**
  * 把钩子输入中的一个路径值从云容器视角转换为设备视角：不可判断的值记入未翻译列表；相对路径只检查各段是否安全；绝对路径若位于容器项目目录下则映射到设备启动目录并记录原值。
  */
-function translatePathValue(e, o, n, r) {
-  if (typeof e !== "string") return e;
-  if (isSuspiciousPathSpelling(e)) {
-    noteUntranslatedPath(r, o);
-    return e;
+function translatePathValue(value, pointer, roots, state) {
+  if (typeof value !== "string") return value;
+  if (isSuspiciousPathSpelling(value)) {
+    noteUntranslatedPath(state, pointer);
+    return value;
   }
-  if (!e.startsWith("/")) {
-    let filtered = (e.endsWith("/") ? e.slice(0, -1) : e).split("/").filter((f) => f !== ".");
-    if (e !== "" && filtered.length > 0 && !filtered.every(isSafeRelativeSegment)) noteUntranslatedPath(r, o);
-    return e;
+  if (!value.startsWith("/")) {
+    let filtered = (value.endsWith("/") ? value.slice(0, -1) : value)
+      .split("/")
+      .filter((segment) => segment !== ".");
+    if (value !== "" && filtered.length > 0 && !filtered.every(isSafeRelativeSegment))
+      noteUntranslatedPath(state, pointer);
+    return value;
   }
-  let c = translateContainerPath(e, n);
-  if (c === null) {
-    noteUntranslatedPath(r, o);
-    return e;
+  let translated = translateContainerPath(value, roots);
+  if (translated === null) {
+    noteUntranslatedPath(state, pointer);
+    return value;
   }
-  r.paths[o] = e;
-  return c;
+  state.paths[pointer] = value;
+  return translated;
 }
 //@ chunk-hyjyj8hj.js:4882-4984 placement
-function translatePathMember(e, o, n, r, c) {
-  if (!isPlainObjectRef(e) || !(o in e)) return e;
-  let a = translatePathValue(e[o], n, r, c);
-  return a === e[o]
-    ? e
+function translatePathMember(object, member, pointer, roots, state) {
+  if (!isPlainObjectRef(object) || !(member in object)) return object;
+  let translated = translatePathValue(object[member], pointer, roots, state);
+  return translated === object[member]
+    ? object
     : {
-        ...e,
-        [o]: a,
+        ...object,
+        [member]: translated,
       };
 }
 //@ chunk-hyjyj8hj.js:4984-5147 placement
-function translatePathArrayMember(toolResponse, o, n, r, c) {
-  if (!isPlainObjectRef(toolResponse) || !Array.isArray(toolResponse[o])) return toolResponse;
-  let a = false;
-  let mapped = toolResponse[o].map((s, h) => {
-    let u = translatePathValue(s, `${n}/${h}`, r, c);
-    a ||= u !== s;
-    return u;
+function translatePathArrayMember(toolResponse, member, pointer, roots, state) {
+  if (!isPlainObjectRef(toolResponse) || !Array.isArray(toolResponse[member])) return toolResponse;
+  let changed = false;
+  let mapped = toolResponse[member].map((item, itemIndex) => {
+    let translated = translatePathValue(item, `${pointer}/${itemIndex}`, roots, state);
+    changed ||= translated !== item;
+    return translated;
   });
-  return a
+  return changed
     ? {
         ...toolResponse,
-        [o]: mapped,
+        [member]: mapped,
       }
     : toolResponse;
 }
 //@ chunk-hyjyj8hj.js:5147-5997 placement
-function pathPointersForEvent(e, o, n, r, c) {
-  let toolPathFields = getToolPathFields(e.tool_name, c);
-  if (toolPathFields === undefined || !isPlainObjectRef(e.tool_input)) {
-    let u = {
+function pathPointersForEvent(input, prefix, roots, state, aliases) {
+  let toolPathFields = getToolPathFields(input.tool_name, aliases);
+  if (toolPathFields === undefined || !isPlainObjectRef(input.tool_input)) {
+    let budget = {
       members: MAX_PATH_SCAN_MEMBERS,
     };
-    let toolInput = collectFieldPathPointers(e.tool_input, `${o}/tool_input`, n, r, u, true);
-    return "tool_response" in e
+    let toolInput = collectFieldPathPointers(
+      input.tool_input,
+      `${prefix}/tool_input`,
+      roots,
+      state,
+      budget,
+      true,
+    );
+    return "tool_response" in input
       ? {
-          ...e,
+          ...input,
           tool_input: toolInput,
-          tool_response: collectFieldPathPointers(e.tool_response, `${o}/tool_response`, n, r, u, false),
+          tool_response: collectFieldPathPointers(
+            input.tool_response,
+            `${prefix}/tool_response`,
+            roots,
+            state,
+            budget,
+            false,
+          ),
         }
       : {
-          ...e,
+          ...input,
           tool_input: toolInput,
         };
   }
-  let f =
+  let toolInput =
     toolPathFields.input === undefined
-      ? e.tool_input
+      ? input.tool_input
       : translatePathMember(
-          e.tool_input,
+          input.tool_input,
           toolPathFields.input,
-          `${o}/tool_input/${toolPathFields.input}`,
-          n,
-          r,
+          `${prefix}/tool_input/${toolPathFields.input}`,
+          roots,
+          state,
         );
-  if (!("tool_response" in e))
+  if (!("tool_response" in input))
     return {
-      ...e,
-      tool_input: collectPathPointers(f, `${o}/tool_input`, n, r, {
+      ...input,
+      tool_input: collectPathPointers(toolInput, `${prefix}/tool_input`, roots, state, {
         members: MAX_PATH_SCAN_MEMBERS,
       }),
     };
-  let toolResponse = e.tool_response;
-  for (let u of toolPathFields.responseMembers ?? [])
-    toolResponse = translatePathMember(toolResponse, u, `${o}/tool_response/${u}`, n, r);
-  for (let [u, i] of toolPathFields.responseNested ?? [])
-    if (isPlainObjectRef(toolResponse) && isPlainObjectRef(toolResponse[u]))
+  let toolResponse = input.tool_response;
+  for (let member of toolPathFields.responseMembers ?? [])
+    toolResponse = translatePathMember(
+      toolResponse,
+      member,
+      `${prefix}/tool_response/${member}`,
+      roots,
+      state,
+    );
+  for (let [member, nestedMember] of toolPathFields.responseNested ?? [])
+    if (isPlainObjectRef(toolResponse) && isPlainObjectRef(toolResponse[member]))
       toolResponse = {
         ...toolResponse,
-        [u]: translatePathMember(toolResponse[u], i, `${o}/tool_response/${u}/${i}`, n, r),
+        [member]: translatePathMember(
+          toolResponse[member],
+          nestedMember,
+          `${prefix}/tool_response/${member}/${nestedMember}`,
+          roots,
+          state,
+        ),
       };
-  for (let u of toolPathFields.responseArrays ?? [])
-    toolResponse = translatePathArrayMember(toolResponse, u, `${o}/tool_response/${u}`, n, r);
-  let h = {
+  for (let member of toolPathFields.responseArrays ?? [])
+    toolResponse = translatePathArrayMember(
+      toolResponse,
+      member,
+      `${prefix}/tool_response/${member}`,
+      roots,
+      state,
+    );
+  let budget = {
     members: MAX_PATH_SCAN_MEMBERS,
   };
   return {
-    ...e,
-    tool_input: collectPathPointers(f, `${o}/tool_input`, n, r, h),
-    tool_response: collectPathPointers(toolResponse, `${o}/tool_response`, n, r, h),
+    ...input,
+    tool_input: collectPathPointers(toolInput, `${prefix}/tool_input`, roots, state, budget),
+    tool_response: collectPathPointers(toolResponse, `${prefix}/tool_response`, roots, state, budget),
   };
 }
 //@ chunk-hyjyj8hj.js:5997-6958 placement
 /**
  * 各钩子事件（PreToolUse、PostToolUse 等）中包含路径的 JSON 指针。
  */
-function PATH_POINTERS_BY_EVENT(e, roots, n, r) {
-  let c = {
+function PATH_POINTERS_BY_EVENT(input, roots, roots_2, options) {
+  let state = {
     paths: {},
     untranslated: [],
     listed: new Set(),
   };
-  let a = isSuspiciousPathSpelling(e.cwd) ? null : translateContainerPath(e.cwd, roots);
-  if (a === null) noteUntranslatedPath(c, "/cwd");
-  let cwd = a ?? stripTrailingSlashes(roots.deviceLaunchDir);
-  let s = {
-    ...e,
+  let translatedCwd = isSuspiciousPathSpelling(input.cwd) ? null : translateContainerPath(input.cwd, roots);
+  if (translatedCwd === null) noteUntranslatedPath(state, "/cwd");
+  let cwd = translatedCwd ?? stripTrailingSlashes(roots.deviceLaunchDir);
+  let next = {
+    ...input,
     cwd,
     transcript_path: CLOUD_TRANSCRIPT_UNAVAILABLE,
   };
-  if ("agent_transcript_path" in s)
-    s = {
-      ...s,
+  if ("agent_transcript_path" in next)
+    next = {
+      ...next,
       agent_transcript_path: CLOUD_TRANSCRIPT_UNAVAILABLE,
     };
-  switch (s.hook_event_name) {
+  switch (next.hook_event_name) {
     case "PreToolUse":
     case "PostToolUse":
     case "PostToolUseFailure":
     case "PermissionDenied":
-      s = pathPointersForEvent(s, "", roots, c, r);
+      next = pathPointersForEvent(next, "", roots, state, options);
       break;
     case "PermissionRequest":
-      s = pathPointersForEvent(s, "", roots, c, r);
-      if (s.permission_suggestions !== undefined) noteUntranslatedPath(c, "/permission_suggestions");
+      next = pathPointersForEvent(next, "", roots, state, options);
+      if (next.permission_suggestions !== undefined) noteUntranslatedPath(state, "/permission_suggestions");
       break;
     case "PostToolBatch":
-      s = {
-        ...s,
-        tool_calls: s.tool_calls.map((toolCall, i) =>
-          pathPointersForEvent(toolCall, `/tool_calls/${i}`, roots, c, r),
+      next = {
+        ...next,
+        tool_calls: next.tool_calls.map((toolCall, toolCallIndex) =>
+          pathPointersForEvent(toolCall, `/tool_calls/${toolCallIndex}`, roots, state, options),
         ),
       };
       break;
@@ -353,25 +436,25 @@ function PATH_POINTERS_BY_EVENT(e, roots, n, r) {
       break;
   }
   let cloudSession = {
-    id: n.cloudSessionId,
+    id: roots_2.cloudSessionId,
     container_cwd: roots.containerCwd,
     container_project_dir: roots.containerProjectDir,
     device_launch_dir: roots.deviceLaunchDir,
     original: {
-      cwd: e.cwd,
-      transcript_path: e.transcript_path,
-      ...("agent_transcript_path" in e && {
-        agent_transcript_path: e.agent_transcript_path,
+      cwd: input.cwd,
+      transcript_path: input.transcript_path,
+      ...("agent_transcript_path" in input && {
+        agent_transcript_path: input.agent_transcript_path,
       }),
-      paths: c.paths,
+      paths: state.paths,
     },
   };
   return {
     input: {
-      ...s,
+      ...next,
       cloud_session: cloudSession,
     },
-    untranslated: c.untranslated,
+    untranslated: state.untranslated,
   };
 }
 export {

@@ -20,15 +20,15 @@ var GIT_CONFIG_TIMEOUT_MS = 1e4;
 /**
  * 读取 git 配置中的路径型键（指定作用域、跟随 include，10 秒超时），失败返回空串。
  */
-function readGitConfigPath(e, n, o) {
-  return execFileAsync("git", ["config", ...e, "--includes", "--type=path", "--get", n], {
+function readGitConfigPath(args, key, env) {
+  return execFileAsync("git", ["config", ...args, "--includes", "--type=path", "--get", key], {
     windowsHide: true,
     timeout: GIT_CONFIG_TIMEOUT_MS,
-    ...(o && {
-      env: o,
+    ...(env && {
+      env,
     }),
   }).then(
-    (s) => s.stdout.trim(),
+    (result) => result.stdout.trim(),
     () => "",
   );
 }
@@ -36,10 +36,10 @@ function readGitConfigPath(e, n, o) {
 /**
  * 并行读取某 git 配置键在 system（带来源文件）与 global 作用域的值。
  */
-async function readSystemAndGlobalGitConfigPath(e, n) {
+async function readSystemAndGlobalGitConfigPath(key, env) {
   let [gitConfigPathWithOrigin, gitConfigPath] = await Promise.all([
-    readGitConfigPathWithOrigin(["--system"], e, n),
-    readGitConfigPath(["--global"], e, n),
+    readGitConfigPathWithOrigin(["--system"], key, env),
+    readGitConfigPath(["--global"], key, env),
   ]);
   return {
     ...(gitConfigPathWithOrigin.value !== "" && {
@@ -58,43 +58,43 @@ async function readSystemAndGlobalGitConfigPath(e, n) {
  * 返回该 git 配置键在哪些作用域（system/global）被设置。
  */
 async function getGitConfigScopesWithValue(source, path) {
-  let { system, global: s } = await readSystemAndGlobalGitConfigPath(source, path);
-  return [...(system !== undefined ? ["system"] : []), ...(s !== undefined ? ["global"] : [])];
+  let { system, global: globalPath } = await readSystemAndGlobalGitConfigPath(source, path);
+  return [...(system !== undefined ? ["system"] : []), ...(globalPath !== undefined ? ["global"] : [])];
 }
 //@ chunk-qcqdqsn4.js:4712-5033 placement
-async function readGitConfigPathWithOrigin(e, n, o) {
-  let s = await execFileAsync(
+async function readGitConfigPathWithOrigin(args, key, env) {
+  let stdout = await execFileAsync(
     "git",
-    ["config", ...e, "--includes", "--show-origin", "-z", "--type=path", "--get", n],
+    ["config", ...args, "--includes", "--show-origin", "-z", "--type=path", "--get", key],
     {
       cwd: "/",
       windowsHide: true,
       timeout: GIT_CONFIG_TIMEOUT_MS,
-      ...(o && {
-        env: o,
+      ...(env && {
+        env,
       }),
     },
   ).then(
-    (r) => r.stdout,
+    (stdout) => stdout.stdout,
     () => "",
   );
-  let index = s.indexOf("\x00");
+  let index = stdout.indexOf("\x00");
   if (index < 0)
     return {
-      value: s.trim(),
+      value: stdout.trim(),
     };
   return {
-    value: s
+    value: stdout
       .slice(index + 1)
       .replace(/\0$/, "")
       .trim(),
-    origin: stripFilePrefix(s.slice(0, index)),
+    origin: stripFilePrefix(stdout.slice(0, index)),
   };
 }
 //@ chunk-qcqdqsn4.js:5033-5148 placement = _temp2 (1)
-var stripFilePrefix = (e) => (e.startsWith("file:") ? e.slice(5) : e);
-var stripTrailingSlashes = (e) => (e.length > 1 ? e.replace(/[\\/]+$/, "") : e);
-var isNormalizedAbsolutePath = (e) => isAbsolute(e) && resolve(e) === stripTrailingSlashes(e);
+var stripFilePrefix = (value) => (value.startsWith("file:") ? value.slice(5) : value);
+var stripTrailingSlashes = (value) => (value.length > 1 ? value.replace(/[\\/]+$/, "") : value);
+var isNormalizedAbsolutePath = (value) => isAbsolute(value) && resolve(value) === stripTrailingSlashes(value);
 export {
   GIT_CONFIG_TIMEOUT_MS,
   stripFilePrefix,

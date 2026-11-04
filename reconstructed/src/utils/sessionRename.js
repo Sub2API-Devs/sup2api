@@ -21,3 +21,4 @@ async function runRenameCommand(args, context) {
     value: message,
   };
 }
+export { runRenameCommand };

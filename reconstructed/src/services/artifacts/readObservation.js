@@ -18,45 +18,46 @@ import { compareNumericPrefix } from "../../utils/textNormalize.js";
 import { parseContractVersion } from "./capabilityDeclaration.js";
 
 //@ chunk-06y4szbn.js:44928-45204 placement
-function derivePublishContextFrom(e) {
+function derivePublishContextFrom(options) {
   let entrypointKind = getEntrypointKind();
-  let r = !e.isNonInteractiveSession || entrypointKind === "claude-vscode" || isHostEntrypoint();
+  let interactive =
+    !options.isNonInteractiveSession || entrypointKind === "claude-vscode" || isHostEntrypoint();
   let publishContext =
-    e.agentType === "teammate" || isTeammate()
+    options.agentType === "teammate" || isTeammate()
       ? "teammate"
-      : e.agentId !== undefined
+      : options.agentId !== undefined
         ? "subagent"
         : isBgSession()
           ? "bg_session"
           : entrypointKind === "sdk-ts" || entrypointKind === "sdk-py"
             ? "sdk"
-            : r
+            : interactive
               ? "interactive"
               : "print";
   return {
-    hasInteractiveUI: r,
+    hasInteractiveUI: interactive,
     publishContext,
   };
 }
 //@ chunk-06y4szbn.js:45204-45322 placement
-function artifactReadObservationIn(e) {
-  return (n) => {
-    let r = e();
+function artifactReadObservationIn(state) {
+  return (handler) => {
+    let map = state();
     return {
-      ver: r.artifactReadVersions?.[n],
-      observers: r.artifactReadObservers?.[n],
+      ver: map.artifactReadVersions?.[handler],
+      observers: map.artifactReadObservers?.[handler],
     };
   };
 }
 //@ chunk-06y4szbn.js:45322-45395 placement = getCurrentAgentInfo (0.426)
-function observationStamp(agentId, messageId, r) {
+function observationStamp(agentId, messageId, agentArg) {
   return (
     `${agentId ?? "main"}
 ${messageId ?? ""}` +
-    (r === undefined
+    (agentArg === undefined
       ? ""
       : `
-${r}`)
+${agentArg}`)
   );
 }
 //@ chunk-06y4szbn.js:45395-45423 placement
@@ -65,16 +66,21 @@ var OBSERVATION_KIND_RANK = {
   source: 1,
 };
 //@ chunk-06y4szbn.js:45423-45579 placement
-function sourcelessObservation(e, n, r, s) {
-  let h = getLiveState().readDeliveries.get(replicaKey(e, n));
-  return h !== undefined && s !== undefined && s !== "" && h.ver === r && h.batch === s && h.kind !== "source"
-    ? h.kind
+function sourcelessObservation(agentId, slug, ver, source) {
+  let deliveries = getLiveState().readDeliveries.get(replicaKey(agentId, slug));
+  return deliveries !== undefined &&
+    source !== undefined &&
+    source !== "" &&
+    deliveries.ver === ver &&
+    deliveries.batch === source &&
+    deliveries.kind !== "source"
+    ? deliveries.kind
     : undefined;
 }
 //@ chunk-06y4szbn.js:45579-45679 placement
 function observedWithoutSource(agentId, slug, ver) {
-  let s = getLiveState().readDeliveries.get(replicaKey(agentId, slug));
-  return s !== undefined && s.ver === ver && !s.sourced;
+  let deliveries = getLiveState().readDeliveries.get(replicaKey(agentId, slug));
+  return deliveries !== undefined && deliveries.ver === ver && !deliveries.sourced;
 }
 //@ chunk-06y4szbn.js:45679-45701 placement
 var OWN_MINT_SENTINEL = "\x00own-mint";
@@ -84,19 +90,19 @@ function ownMintStamp(agentId) {
 ${OWN_MINT_SENTINEL}`;
 }
 //@ chunk-06y4szbn.js:45744-45842 placement
-function versionHeldAsOwnMint(e, ver) {
-  return e.ver === ver && e.observers !== undefined && Object.values(e.observers).includes("");
+function versionHeldAsOwnMint(ver, ver_2) {
+  return ver.ver === ver_2 && ver.observers !== undefined && Object.values(ver.observers).includes("");
 }
 //@ chunk-06y4szbn.js:45842-45944 placement
-function mainObservedArtifactVersion(state, n) {
+function mainObservedArtifactVersion(state, readState) {
   return observedVersion({
-    ver: state.artifactReadVersions?.[n],
-    observers: state.artifactReadObservers?.[n],
+    ver: state.artifactReadVersions?.[readState],
+    observers: state.artifactReadObservers?.[readState],
   });
 }
 //@ chunk-06y4szbn.js:45944-45996 placement
-function observedVersion(e) {
-  return hasMainKey(e.observers) ? e.ver : undefined;
+function observedVersion(entry) {
+  return hasMainKey(entry.observers) ? entry.ver : undefined;
 }
 //@ chunk-06y4szbn.js:45996-46033 placement
 function makeMainObservedVersionReader(getArtifactReadObservation, slug) {
@@ -104,161 +110,169 @@ function makeMainObservedVersionReader(getArtifactReadObservation, slug) {
 }
 //@ chunk-06y4szbn.js:46033-47310 placement
 function makeSetArtifactReadVersion(setAppState) {
-  return (n, r, s) => {
-    if (r !== undefined && !ARTIFACT_VERSION_SAFE_RE.test(r)) return;
-    let h =
-      s?.indexOf(`
+  return (slug, ver, observation) => {
+    if (ver !== undefined && !ARTIFACT_VERSION_SAFE_RE.test(ver)) return;
+    let firstNl =
+      observation?.indexOf(`
 `) ?? -1;
-    let b = s === undefined ? undefined : s.slice(0, h);
-    let y = s === undefined ? "" : s.slice(h + 1);
-    let index = y.indexOf(`
+    let owner = observation === undefined ? undefined : observation.slice(0, firstNl);
+    let rest = observation === undefined ? "" : observation.slice(firstNl + 1);
+    let index = rest.indexOf(`
 `);
-    let w = index < 0 ? y : y.slice(0, index);
-    let sliced = y.slice(index + 1);
-    let C = index < 0 ? undefined : sliced === "summary" ? sliced : undefined;
-    let k = w === OWN_MINT_SENTINEL;
-    let V = k ? "" : w;
-    if (b !== undefined) {
+    let batchKey = index < 0 ? rest : rest.slice(0, index);
+    let sliced = rest.slice(index + 1);
+    let kind = index < 0 ? undefined : sliced === "summary" ? sliced : undefined;
+    let ownMint = batchKey === OWN_MINT_SENTINEL;
+    let batch = ownMint ? "" : batchKey;
+    if (owner !== undefined) {
       let readDeliveries = getLiveState().readDeliveries;
-      let q = replicaKey(b, n);
-      let W = readDeliveries.get(q);
-      let G = C ?? "source";
-      let sourced = G === "source" || (W !== undefined && W.ver === r && W.sourced);
-      if (r === undefined) readDeliveries.delete(q);
+      let key = replicaKey(owner, slug);
+      let delivery = readDeliveries.get(key);
+      let deliveryKind = kind ?? "source";
+      let sourced =
+        deliveryKind === "source" || (delivery !== undefined && delivery.ver === ver && delivery.sourced);
+      if (ver === undefined) readDeliveries.delete(key);
       else if (
-        W === undefined ||
-        W.ver !== r ||
-        W.batch !== V ||
-        OBSERVATION_KIND_RANK[G] > OBSERVATION_KIND_RANK[W.kind]
+        delivery === undefined ||
+        delivery.ver !== ver ||
+        delivery.batch !== batch ||
+        OBSERVATION_KIND_RANK[deliveryKind] > OBSERVATION_KIND_RANK[delivery.kind]
       )
-        readDeliveries.set(q, {
-          ver: r,
-          batch: V,
-          kind: G,
+        readDeliveries.set(key, {
+          ver,
+          batch,
+          kind: deliveryKind,
           sourced,
         });
     }
-    if (b !== undefined && !k) {
-      let L = getLiveState().refusedPublishBodies.get(replicaKey(b, n));
-      if (L !== undefined && L.observedFrom === undefined && (V === "" || V !== L.batch)) L.observedFrom = V;
+    if (owner !== undefined && !ownMint) {
+      let refused = getLiveState().refusedPublishBodies.get(replicaKey(owner, slug));
       if (
-        L?.sourceless !== undefined &&
-        !C &&
-        r !== undefined &&
-        (L.live === undefined || r === L.live || (compareNumericPrefix(r, L.live) ?? -1) > 0)
+        refused !== undefined &&
+        refused.observedFrom === undefined &&
+        (batch === "" || batch !== refused.batch)
+      )
+        refused.observedFrom = batch;
+      if (
+        refused?.sourceless !== undefined &&
+        !kind &&
+        ver !== undefined &&
+        (refused.live === undefined ||
+          ver === refused.live ||
+          (compareNumericPrefix(ver, refused.live) ?? -1) > 0)
       ) {
-        delete L.sourceless;
-        L.live ??= r;
+        delete refused.sourceless;
+        refused.live ??= ver;
       }
     }
-    if (b !== undefined && r !== undefined) {
-      let L = getLiveState().refusedPublishBodies.get(replicaKey(b, n));
-      if (L?.withheld) delete L.withheld;
+    if (owner !== undefined && ver !== undefined) {
+      let refused = getLiveState().refusedPublishBodies.get(replicaKey(owner, slug));
+      if (refused?.withheld) delete refused.withheld;
     }
-    setAppState((L) => {
-      let q = L.artifactReadVersions?.[n];
-      let W = L.artifactReadObservers?.[n];
-      let G =
-        r === undefined || b === undefined
+    setAppState((appState) => {
+      let existingVer = appState.artifactReadVersions?.[slug];
+      let observer = appState.artifactReadObservers?.[slug];
+      let rank =
+        ver === undefined || owner === undefined
           ? undefined
-          : r === q
-            ? W === undefined || Object.hasOwn(W, b)
-              ? W
+          : ver === existingVer
+            ? observer === undefined || Object.hasOwn(observer, owner)
+              ? observer
               : {
-                  ...W,
-                  [b]: V,
+                  ...observer,
+                  [owner]: batch,
                 }
             : {
-                [b]: V,
+                [owner]: batch,
               };
-      if (q === r && W === G) return L;
-      let { [n]: P, ...j } = L.artifactReadVersions ?? {};
-      let { [n]: X, ...ge } = L.artifactReadObservers ?? {};
+      if (existingVer === ver && observer === rank) return appState;
+      let { [slug]: next, ...nextObserver } = appState.artifactReadVersions ?? {};
+      let { [slug]: versions, ...observers } = appState.artifactReadObservers ?? {};
       return {
-        ...L,
+        ...appState,
         artifactReadVersions:
-          r === undefined
-            ? j
+          ver === undefined
+            ? nextObserver
             : {
-                ...j,
-                [n]: r,
+                ...nextObserver,
+                [slug]: ver,
               },
         artifactReadObservers:
-          G === undefined
-            ? ge
+          rank === undefined
+            ? observers
             : {
-                ...ge,
-                [n]: G,
+                ...observers,
+                [slug]: rank,
               },
       };
     });
   };
 }
 //@ chunk-06y4szbn.js:47310-47525 placement
-function artifactVersionObserved(e, n, agentId, s) {
-  let h = e?.[n];
-  if (h === undefined)
+function artifactVersionObserved(versions, slug, agentId, batch) {
+  let byAgent = versions?.[slug];
+  if (byAgent === undefined)
     return {
       observed: true,
       siblingInFlight: false,
     };
-  let b = agentId ?? "main";
-  let y = Object.hasOwn(h, b) ? h[b] : undefined;
-  let x = y !== undefined && y !== "" && y === s;
+  let agentKey = agentId ?? "main";
+  let recorded = Object.hasOwn(byAgent, agentKey) ? byAgent[agentKey] : undefined;
+  let siblingInFlight = recorded !== undefined && recorded !== "" && recorded === batch;
   return {
-    observed: y !== undefined && !x,
-    siblingInFlight: x,
+    observed: recorded !== undefined && !siblingInFlight,
+    siblingInFlight,
   };
 }
 //@ chunk-06y4szbn.js:47525-48003 placement
 function makeSetArtifactContractTarget(setAppState) {
-  return (n, r, s) =>
-    setAppState((h) => {
-      let contractVersion = parseContractVersion(r);
-      let artifactRefs = h.artifactRefs ?? [];
-      let found = artifactRefs.find((artifactRef) => artifactRef.slug === n);
-      let w = contractVersion ?? found?.pin;
-      if (s?.cachePinOnly) {
+  return (toolUseId, body, identity) =>
+    setAppState((state) => {
+      let contractVersion = parseContractVersion(body);
+      let artifactRefs = state.artifactRefs ?? [];
+      let found = artifactRefs.find((artifactRef) => artifactRef.slug === toolUseId);
+      let pin = contractVersion ?? found?.pin;
+      if (identity?.cachePinOnly) {
         if (found !== undefined) {
-          if (found.pin === w) return h;
+          if (found.pin === pin) return state;
           return {
-            ...h,
+            ...state,
             artifactRefs: artifactRefs.map((artifactRef) =>
-              artifactRef.slug === n
+              artifactRef.slug === toolUseId
                 ? {
-                    slug: n,
-                    ...(w !== undefined && {
-                      pin: w,
+                    slug: toolUseId,
+                    ...(pin !== undefined && {
+                      pin,
                     }),
                   }
                 : artifactRef,
             ),
           };
         }
-        if (w === undefined) return h;
-        if (artifactRefs.length === 0) return h;
+        if (pin === undefined) return state;
+        if (artifactRefs.length === 0) return state;
         return {
-          ...h,
+          ...state,
           artifactRefs: [
             ...artifactRefs,
             {
-              slug: n,
-              pin: w,
+              slug: toolUseId,
+              pin,
             },
           ],
         };
       }
-      if (artifactRefs[0]?.slug === n && artifactRefs[0].pin === w) return h;
+      if (artifactRefs[0]?.slug === toolUseId && artifactRefs[0].pin === pin) return state;
       return {
-        ...h,
+        ...state,
         artifactRefs: [
           {
-            slug: n,
-            ...(w !== undefined && {
-              pin: w,
+            slug: toolUseId,
+            ...(pin !== undefined && {
+              pin,
             }),
           },
-          ...artifactRefs.filter((artifactRef) => artifactRef.slug !== n),
+          ...artifactRefs.filter((artifactRef) => artifactRef.slug !== toolUseId),
         ],
       };
     });
@@ -267,12 +281,12 @@ function makeSetArtifactContractTarget(setAppState) {
 function makeGetArtifactContractTarget(getAppState) {
   return () => {
     let artifactRefs = getAppState().artifactRefs ?? [];
-    let r = {};
+    let out = {};
     for (let artifactRef of artifactRefs)
-      if (artifactRef.pin !== undefined) r[artifactRef.slug] = artifactRef.pin;
+      if (artifactRef.pin !== undefined) out[artifactRef.slug] = artifactRef.pin;
     return {
       targetSlug: artifactRefs[0]?.slug,
-      pins: r,
+      pins: out,
     };
   };
 }

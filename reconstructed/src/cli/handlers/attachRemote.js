@@ -69,7 +69,7 @@ import {
   isLaunchConsentBlocked,
 } from "../../utils/teleport/homeSettingsMode.js";
 import { isSelfHostedEnvironment } from "../../utils/teleport/environmentSelection.js";
-import { reportSignerLoadFailure } from "../../utils/telemetry/memorySummary.js";
+import { reportSignerLoadFailure } from "../../utils/telemetry/clientEventUploader.js";
 import { getSecondRootError } from "../../ink/terminal.js";
 import { showScreen } from "../../utils/runSteps.js";
 import { createSystemMessage } from "../../utils/messages.js";
@@ -94,60 +94,60 @@ function classifyAttachLookupError(error) {
 }
 //@ chunk-edjpba11.js:14918-15220 placement
 function assertCloudSessionAttachable(error) {
-  let o = classifyAttachLookupError(error);
-  if (o === null) {
+  let refusal = classifyAttachLookupError(error);
+  if (refusal === null) {
     logForDebugging(
       `[attachRemote] preflight fetchSession failed (continuing via WS): ${errorMessage(error)}`,
     );
     return;
   }
   logEvent("tengu_remote_attach_session_rejected", {
-    reason: fromEnum(o.reason),
+    reason: fromEnum(refusal.reason),
   });
   throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-    o.message,
+    refusal.message,
     "cloud attach refused: the id names no session of this account, or is malformed",
-    o.reason,
+    refusal.reason,
   );
 }
 //@ chunk-edjpba11.js:15220-15273 placement
-async function attachRemoteSession(r, o, u, n) {
-  return runAttachRemoteSession(r, o, u, n, undefined);
+async function attachRemoteSession(sessionId, url, options, context) {
+  return runAttachRemoteSession(sessionId, url, options, context, undefined);
 }
 //@ chunk-edjpba11.js:15273-23367 placement
 /**
  * `claude --cloud <id>` 等附着云会话的主流程：预检会话、取令牌、建立 WS 连接并启动 REPL。
  */
-async function runAttachRemoteSession(r, o, u, n, k) {
+async function runAttachRemoteSession(sessionId, url, options, runtime, attachContext) {
   let [
     {
-      prepareApiRequest: L,
-      deviceBridgeAccessToken: ee,
-      fetchSession: R,
-      recoverSessionsApiBearer: te,
-      sessionsApiAccessTokenNow: oe,
+      prepareApiRequest,
+      deviceBridgeAccessToken,
+      fetchSession,
+      recoverSessionsApiBearer,
+      sessionsApiAccessTokenNow,
     },
-    { launchRepl: ne },
-    { getCommands: se, filterCommandsForRemoteMode: ie },
-    { getDefaultAppState: re },
-    { isDebugMode: ae },
-    { consumePrefetchedHistory: de, gateSeed: ce, partialSeedNotice: le, reportPrefetchOutcome: ue },
-    { serviceSessionName: me },
+    { launchRepl },
+    { getCommands, filterCommandsForRemoteMode },
+    { getDefaultAppState },
+    { isDebugMode },
+    { consumePrefetchedHistory, gateSeed, partialSeedNotice, reportPrefetchOutcome },
+    { serviceSessionName },
   ] = await Promise.all([
-    import("./chunk-6phxatm7.js"),
-    import("./chunk-68kbv6e6.js"),
-    import("./chunk-aeccp9b6.js"),
-    import("./chunk-c9766cw2.js"),
-    import("./chunk-cgjee2k6.js"),
-    import("./chunk-pmgfyvx7.js"),
-    import("./chunk-qzae0f47.js"),
+    import("../../utils/teleport/api.js"),
+    import("../../replLauncher.js"),
+    import("../../commands.js"),
+    import("../../state/AppStateStore.js"),
+    import("../../utils/debug.js"),
+    import("../../services/remoteHistory/consumePrefetchedHistory.lazy.js"),
+    import("../../utils/teleport/serviceSessionName.js"),
   ]);
-  let fe = de(o, n?.credentials);
-  let h = await L(n?.credentials).catch((error) => {
+  let prefetched = consumePrefetchedHistory(url, runtime?.credentials);
+  let api = await prepareApiRequest(runtime?.credentials).catch((error) => {
     throw Error(`auth setup failed: ${errorMessage(error)}`);
   });
-  let _ = () => oe(h.profile) ?? h.accessToken;
-  let l = {
+  let currentAccessToken = () => sessionsApiAccessTokenNow(api.profile) ?? api.accessToken;
+  let prevState = {
     sessionId: getSessionId(),
     cwd: getCwdState(),
     isRemoteMode: getIsRemoteMode(),
@@ -160,138 +160,141 @@ async function runAttachRemoteSession(r, o, u, n, k) {
   };
   let [
     {
-      boundDeviceKeyOf: Ie,
-      boundDeviceOf: Le,
-      keepSettingsBesideAHelper: he,
-      pullsBackToThisMachine: Be,
-      registerAttachedDevice: pe,
-      rereadBoundDevice: Se,
-      resolveAttachDeviceBinding: ge,
-      servedToolsForAttach: we,
-      sessionBindingFields: B,
-      SETTINGS_NOT_KEPT_REFUSAL: ye,
+      boundDeviceKeyOf,
+      boundDeviceOf,
+      keepSettingsBesideAHelper: deviceTools,
+      pullsBackToThisMachine,
+      registerAttachedDevice,
+      rereadBoundDevice,
+      resolveAttachDeviceBinding,
+      servedToolsForAttach,
+      sessionBindingFields,
+      SETTINGS_NOT_KEPT_REFUSAL: settingsNotKeptMessage,
     },
-    { deviceHooksProcessMemories: ve },
-  ] = await Promise.all([import("./chunk-0yqdkcyd.js"), import("./chunk-frrbnh1c.js")]);
-  let g = R(o, h);
-  let A = sessionRepositoryTrustReader({
-    sessionId: o,
-    getAccessToken: _,
-    fetchSession: R,
-    initial: g,
+    { deviceHooksProcessMemories },
+  ] = await Promise.all([
+    import("../headlessCloud/attachDeviceBinding.js"),
+    import("../../utils/hooks/deviceHooks/cloudRegistration.js"),
+  ]);
+  let sessionPromise = fetchSession(url, api);
+  let repositoryTrust = sessionRepositoryTrustReader({
+    sessionId: url,
+    getAccessToken: currentAccessToken,
+    fetchSession,
+    initial: sessionPromise,
     createOrigin: undefined,
   });
-  let O = g.then(B);
-  O.catch(() => {});
-  let ke = n?.viewerOnly
+  let session = sessionPromise.then(sessionBindingFields);
+  session.catch(() => {});
+  let bindingInput = runtime?.viewerOnly
     ? Promise.resolve({
         status: "disabled",
       })
-    : ge({
-        sessionId: o,
-        storageV5: n?.storageV5,
-        credentials: n?.credentials,
-        session: O,
+    : resolveAttachDeviceBinding({
+        sessionId: url,
+        storageV5: runtime?.storageV5,
+        credentials: runtime?.credentials,
+        session,
         isEnabled: async () => isDeviceIdentityEnabledCached(),
       });
-  let T = he(ke, {
-    onNotice: deviceToolNoticesTo(u),
+  let binding = deviceTools(bindingInput, {
+    onNotice: deviceToolNoticesTo(options),
   });
-  let { binding } = T;
-  let be =
-    n?.viewerOnly || !isDeviceIdentityEnabledCached()
+  let { binding: binding_2 } = binding;
+  let bindingKept =
+    runtime?.viewerOnly || !isDeviceIdentityEnabledCached()
       ? Promise.resolve(true)
-      : O.then(
+      : session.then(
           ({ boundDeviceId, toolHostLink }) =>
-            boundDeviceId === undefined || isKnownBindingState(toolHostLink) || T.kept,
+            boundDeviceId === undefined || isKnownBindingState(toolHostLink) || binding.kept,
           () => true,
         );
-  let H = () => {};
-  let dirSync = new Promise((resolve) => {
-    H = resolve;
+  let resolve = () => {};
+  let dirSync = new Promise((resolve_2) => {
+    resolve = resolve_2;
   });
-  let y = pe({
-    sessionId: o,
-    getAccessToken: () => ee(h),
-    orgUuid: h.orgUUID,
-    binding,
+  let prefetch = registerAttachedDevice({
+    sessionId: url,
+    getAccessToken: () => deviceBridgeAccessToken(api),
+    orgUuid: api.orgUUID,
+    binding: binding_2,
     cloudClient: true,
     toolServingOn: isViolinWoodEnabledCached(),
-    storageV5: n?.storageV5,
+    storageV5: runtime?.storageV5,
     dirSync,
-    onNotice: deviceToolNoticesTo(u),
-    servedSettingsChanged: ve.of(u.host).servedSettingsChanged,
+    onNotice: deviceToolNoticesTo(options),
+    servedSettingsChanged: deviceHooksProcessMemories.of(options.host).servedSettingsChanged,
   });
-  let D =
-    n?.viewerOnly || !isViolinWoodEnabledCached()
+  let sessionStore =
+    runtime?.viewerOnly || !isViolinWoodEnabledCached()
       ? undefined
-      : await we({
-          sessionId: o,
-          binding,
-          deviceBridge: y,
-          onNotice: deviceToolNoticesTo(u),
-          ...(A && {
-            repositoryTrust: A,
+      : await servedToolsForAttach({
+          sessionId: url,
+          binding: binding_2,
+          deviceBridge: prefetch,
+          onNotice: deviceToolNoticesTo(options),
+          ...(repositoryTrust && {
+            repositoryTrust,
           }),
           readSession: () =>
-            R(o, {
-              accessToken: _(),
+            fetchSession(url, {
+              accessToken: currentAccessToken(),
             }),
         }).catch(async (error) => {
-          T.end();
-          await y.stop();
+          binding.end();
+          await prefetch.stop();
           throw error;
         });
-  let P = false;
+  let didAdoptCwd = false;
   let resolved = Promise.resolve();
   let abortController = new AbortController();
   try {
     setIsRemoteMode(true);
-    switchSession(identityAgentId(o), "remote_attach");
-    let m = g.then(
-      async (e) => {
-        if (e.session_status === "archived") {
+    switchSession(identityAgentId(url), "remote_attach");
+    let attachableCheck = sessionPromise.then(
+      async (session) => {
+        if (session.session_status === "archived") {
           logEvent("tengu_remote_attach_session_rejected", {
             reason: lit("archived"),
           });
-          throw Error(`Cloud session ${o} is archived and cannot accept new messages.
-View it at ${getRemoteSessionUrl(o, undefined, {
+          throw Error(`Cloud session ${url} is archived and cannot accept new messages.
+View it at ${getRemoteSessionUrl(url, undefined, {
             from: "cli",
             m: "0",
           })}`);
         }
-        recordRemoteSessionTeam(o, e.tags);
-        if (e.session_context.cwd && !P && !isHarpForepillarOn()) {
-          if ((await isAdoptableSessionCwd(e.session_context.cwd, "attachRemote")) && !P)
-            setCwdState(e.session_context.cwd);
+        recordRemoteSessionTeam(url, session.tags);
+        if (session.session_context.cwd && !didAdoptCwd && !isHarpForepillarOn()) {
+          if ((await isAdoptableSessionCwd(session.session_context.cwd, "attachRemote")) && !didAdoptCwd)
+            setCwdState(session.session_context.cwd);
         }
       },
       (error) => assertCloudSessionAttachable(error),
     );
-    m.catch(() => {});
-    let remoteSessionUrl = getRemoteSessionUrl(o, undefined, {
+    attachableCheck.catch(() => {});
+    let remoteSessionUrl = getRemoteSessionUrl(url, undefined, {
       from: "cli",
       m: "0",
     });
-    let F = isDeviceIdentityEnabledCached();
-    let j = tryReadFileForSync("attach", remoteSessionUrl, F);
-    let V = re();
-    let W = isAutoModeGateEnabled();
-    let M = {
-      ...V,
+    let isDeviceIdentityEnabled = isDeviceIdentityEnabledCached();
+    let boundFile = tryReadFileForSync("attach", remoteSessionUrl, isDeviceIdentityEnabled);
+    let initialState = getDefaultAppState();
+    let isAutoModeEnabled = isAutoModeGateEnabled();
+    let appState = {
+      ...initialState,
       toolPermissionContext: {
-        ...V.toolPermissionContext,
-        isAutoModeAvailable: W,
-        canAutoClassifierRun: W,
+        ...initialState.toolPermissionContext,
+        isAutoModeAvailable: isAutoModeEnabled,
+        canAutoClassifierRun: isAutoModeEnabled,
       },
-      ...n?.initialStateOverride,
+      ...runtime?.initialStateOverride,
       remoteSessionUrl,
       replBridgeEnabled: false,
       replBridgeOutboundOnly: false,
       replBridgeExplicit: false,
     };
-    let v =
-      n?.viewerOnly || !isSessionRecordLookupEnabled()
+    let historyGate =
+      runtime?.viewerOnly || !isSessionRecordLookupEnabled()
         ? Promise.resolve({
             handle: undefined,
             elsewhere: undefined,
@@ -299,15 +302,17 @@ View it at ${getRemoteSessionUrl(o, undefined, {
             lookup: "not_looked",
           })
         : (async () => {
-            let i = await import("./chunk-dmh8arxx.js").then(({ findSessionRecordElsewhere }) =>
-              findSessionRecordElsewhere(o, n?.storageV5),
+            let recordLookup = await import("../../utils/findSessionRecordElsewhere.lazy.js").then(
+              ({ findSessionRecordElsewhere }) => findSessionRecordElsewhere(url, runtime?.storageV5),
             );
             return {
               handle: undefined,
               elsewhere: undefined,
               maybeElsewhere:
-                i.kind === "unknown" && i.why === "not_looked" ? undefined : i.kind !== "nowhere",
-              lookup: describeSessionRecordWhere(i),
+                recordLookup.kind === "unknown" && recordLookup.why === "not_looked"
+                  ? undefined
+                  : recordLookup.kind !== "nowhere",
+              lookup: describeSessionRecordWhere(recordLookup),
             };
           })().catch((error) => {
             logForDebugging(
@@ -323,44 +328,45 @@ View it at ${getRemoteSessionUrl(o, undefined, {
               lookup: "failed",
             };
           });
-    resolved = v;
-    v.then(({ handle }) => H(handle !== undefined));
-    v.then(({ lookup }) => logAttachRecordLookup(lookup, "terminal"));
-    let Ce = (async () => {
-      if (n?.viewerOnly || !u.host.launchOptions.mayForwardHomeSettings()) return;
-      let e = isSettingsToCloudEnabledCached();
-      let { handle } = await v;
-      let f =
+    resolved = historyGate;
+    historyGate.then(({ handle }) => resolve(handle !== undefined));
+    historyGate.then(({ lookup }) => logAttachRecordLookup(lookup, "terminal"));
+    let resendSettings = (async () => {
+      if (runtime?.viewerOnly || !options.host.launchOptions.mayForwardHomeSettings()) return;
+      let ownFlagsOn = isSettingsToCloudEnabledCached();
+      let { handle } = await historyGate;
+      let projectSynced =
         handle !== undefined &&
         isRemoteCoworkLet(handle) &&
         (await isContainerSyncEnvironment(neverTrue(), handle.gitRoot));
-      if (!e && !f) return;
+      if (!ownFlagsOn && !projectSynced) return;
       let hostConsentMode = resolveHostConsentMode({
-        hostConsent: u.host.launchOptions.homeSettingsHostConsent(),
-        areOwnFlagsOn: e,
+        hostConsent: options.host.launchOptions.homeSettingsHostConsent(),
+        areOwnFlagsOn: ownFlagsOn,
         stored: storedHomeSettingsMode(),
-        isProjectSynced: f,
+        isProjectSynced: projectSynced,
       });
       noteHomeSettingsPrompt({
         launchConsent: hostConsentMode,
-        isProjectSynced: f,
+        isProjectSynced: projectSynced,
         launchMayForward: true,
         surface: "terminal",
         trigger: "attach",
       });
       if (!isForwardModeEffective(hostConsentMode)) return;
-      let { resendHomeSettingsOnAttach } = await import("./chunk-h33znphj.js");
+      let { resendHomeSettingsOnAttach } =
+        await import("../../services/homeSeed/resendHomeSettingsOnAttach.lazy.js");
       return resendHomeSettingsOnAttach({
-        sessionId: o,
-        boundDeviceUuid: binding.then(
-          (J) => (J.status === "bound" ? J.deviceId : undefined),
+        sessionId: url,
+        boundDeviceUuid: binding_2.then(
+          (binding) => (binding.status === "bound" ? binding.deviceId : undefined),
           () => {
             return;
           },
         ),
-        isOnSelfHostedRunner: g.then(isSelfHostedEnvironment, () => false),
-        storageV5: n?.storageV5,
-        credentials: n?.credentials,
+        isOnSelfHostedRunner: sessionPromise.then(isSelfHostedEnvironment, () => false),
+        storageV5: runtime?.storageV5,
+        credentials: runtime?.credentials,
         signal: abortController.signal,
         ...(isLaunchConsentBlocked(hostConsentMode)
           ? {
@@ -379,182 +385,191 @@ View it at ${getRemoteSessionUrl(o, undefined, {
       });
       return;
     });
-    let [Ae, q, { handle: Te, elsewhere: Y, maybeElsewhere: G, lookup: X }, z, Ee] = await Promise.all([
-      se(l.cwd, n?.storageV5).then(ie),
-      fe,
-      v,
-      Ce,
-      be,
+    let [
+      commands,
+      prefetchOutcome,
+      { handle, elsewhere, maybeElsewhere, lookup },
+      seededHistory,
+      isSettingsKept,
+    ] = await Promise.all([
+      getCommands(prevState.cwd, runtime?.storageV5).then(filterCommandsForRemoteMode),
+      prefetched,
+      historyGate,
+      resendSettings,
+      bindingKept,
     ]);
-    if (!Ee) {
+    if (!isSettingsKept) {
       logEvent("tengu_remote_attach_session_rejected", {
         reason: lit("settings_not_kept"),
       });
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        ye,
+        settingsNotKeptMessage,
         "cloud attach refused: the copies of the settings could not be kept beside a helper",
         "settings_not_kept",
       );
     }
-    ue(q);
-    let s = ce(q);
-    M.hasRemoteReplyChannel = false;
-    M.workerInventory = s?.lastWorkerInventory ?? null;
-    let N =
-      isDeviceIdentityEnabledCached() && !n?.viewerOnly
-        ? import("./chunk-pesgm5d3.js").then(
+    reportPrefetchOutcome(prefetchOutcome);
+    let seed = gateSeed(prefetchOutcome);
+    appState.hasRemoteReplyChannel = false;
+    appState.workerInventory = seed?.lastWorkerInventory ?? null;
+    let signerPromise =
+      isDeviceIdentityEnabledCached() && !runtime?.viewerOnly
+        ? import("../../bridge/clientEventSigner.js").then(
             ({ deviceEventSignerOnceBoundHere }) =>
               deviceEventSignerOnceBoundHere(
-                binding.then(
-                  (i) => (i.status === "bound" ? i.deviceId : undefined),
+                binding_2.then(
+                  (binding) => (binding.status === "bound" ? binding.deviceId : undefined),
                   () => {
                     return;
                   },
                 ),
-                n?.credentials,
+                runtime?.credentials,
               ),
             reportSignerLoadFailure,
           )
         : undefined;
-    let x = false;
+    let didAbort = false;
     let remoteSessionConfig = {
-      sessionId: o,
-      getAccessToken: _,
-      consoleProfileBearer: h.profile,
-      orgUuid: h.orgUUID,
-      viewerOnly: n?.viewerOnly ?? false,
+      sessionId: url,
+      getAccessToken: currentAccessToken,
+      consoleProfileBearer: api.profile,
+      orgUuid: api.orgUUID,
+      viewerOnly: runtime?.viewerOnly ?? false,
       isAttachToExisting: true,
-      serviceName: g.then(
-        (e) => me(e.title),
+      serviceName: sessionPromise.then(
+        (session) => serviceSessionName(session.title),
         () => {
           return;
         },
       ),
-      preflightCheck: m,
-      deviceNotBoundNotice: y.notice,
-      ...(n?.endProcessOnExit && {
+      preflightCheck: attachableCheck,
+      deviceNotBoundNotice: prefetch.notice,
+      ...(runtime?.endProcessOnExit && {
         leaveEndsProcess: true,
       }),
-      ...(A && {
-        repositoryTrust: A,
-        boundHere: binding.then(
-          (e) => e.status === "bound",
+      ...(repositoryTrust && {
+        repositoryTrust,
+        boundHere: binding_2.then(
+          (error) => error.status === "bound",
           () => false,
         ),
       }),
-      ...(D && {
-        servedTools: D,
+      ...(sessionStore && {
+        servedTools: sessionStore,
       }),
-      heldServedCall: y.heldServedCall,
-      ...(N && {
-        eventSigner: N,
+      heldServedCall: prefetch.heldServedCall,
+      ...(signerPromise && {
+        eventSigner: signerPromise,
         rebindEventSigner: () => {
-          if (x) return;
-          x = true;
-          N.then((e) => {
-            if (e === undefined) return;
-            let i = Se(
-              R(o, {
-                accessToken: _(),
-              }).then(B),
-            );
-            e.rebind(i);
-            return i;
-          })
+          if (didAbort) return;
+          didAbort = true;
+          signerPromise
+            .then((error) => {
+              if (error === undefined) return;
+              let lookup = rereadBoundDevice(
+                fetchSession(url, {
+                  accessToken: currentAccessToken(),
+                }).then(sessionBindingFields),
+              );
+              error.rebind(lookup);
+              return lookup;
+            })
             .catch((error) =>
               logForDebugging(
                 `[attachRemote] could not re-read the session's binding (the event signer keeps what it had): ${errorMessage(error)}`,
               ),
             )
             .finally(() => {
-              x = false;
+              didAbort = false;
             });
         },
       }),
-      onAuth401: (e) => te(e, n?.credentials, n?.storageV5, h.profile),
-      dirSync: Te,
+      onAuth401: (session) =>
+        recoverSessionsApiBearer(session, runtime?.credentials, runtime?.storageV5, api.profile),
+      dirSync: handle,
       ...false,
-      ...(G !== undefined && {
-        sessionRecordMayBeElsewhere: G,
+      ...(maybeElsewhere !== undefined && {
+        sessionRecordMayBeElsewhere: maybeElsewhere,
       }),
-      ...(X !== "not_looked" && {
-        sessionRecordLookup: X,
+      ...(lookup !== "not_looked" && {
+        sessionRecordLookup: lookup,
       }),
-      ...(z && {
-        homeSeed: z,
+      ...(seededHistory && {
+        homeSeed: seededHistory,
         homeSeedHoldsFirstSend: false,
       }),
-      initialSequenceNum: s?.maxSequenceNum,
-      seedNestedUuidAliases: s?.nestedUuidAliases,
-      seedReplyChannelToolUseIds: s?.replyChannelToolUseIds,
-      seedActiveGoal: s?.lastActiveGoal ?? (s?.complete ? null : undefined),
-      seedAutocompactState: s?.lastAutocompactState,
-      seedSessionArtifacts: s?.lastSessionArtifacts,
-      storedSessionArtifacts: g.then(
-        (e) => e.artifacts,
+      initialSequenceNum: seed?.maxSequenceNum,
+      seedNestedUuidAliases: seed?.nestedUuidAliases,
+      seedReplyChannelToolUseIds: seed?.replyChannelToolUseIds,
+      seedActiveGoal: seed?.lastActiveGoal ?? (seed?.complete ? null : undefined),
+      seedAutocompactState: seed?.lastAutocompactState,
+      seedSessionArtifacts: seed?.lastSessionArtifacts,
+      storedSessionArtifacts: sessionPromise.then(
+        (session) => session.artifacts,
         () => {
           return;
         },
       ),
-      storedAutocompactState: g.then(
-        (e) => e.autocompact_state,
+      storedAutocompactState: sessionPromise.then(
+        (session) => session.autocompact_state,
         () => {
           return;
         },
       ),
-      seedPermissionMode: s?.lastWorkerPermissionMode,
-      adoptSeedPermissionMode: n?.adoptSeedPermissionMode,
-      seedRateLimitInfos: s?.rateLimitInfos,
-      seedBackgroundTasks: s?.backgroundTasks,
-      seedWorkflowRuns: s?.workflowRuns,
-      seedWorkerSendsNow: s?.lastWorkerSendsNow,
-      seedWorkerMovesBash: s?.lastWorkerMovesBash,
-      seedSubagentRequests: s?.openSubagentRequests,
-      seedAskersPastATurn: s?.askersPastATurn,
+      seedPermissionMode: seed?.lastWorkerPermissionMode,
+      adoptSeedPermissionMode: runtime?.adoptSeedPermissionMode,
+      seedRateLimitInfos: seed?.rateLimitInfos,
+      seedBackgroundTasks: seed?.backgroundTasks,
+      seedWorkflowRuns: seed?.workflowRuns,
+      seedWorkerSendsNow: seed?.lastWorkerSendsNow,
+      seedWorkerMovesBash: seed?.lastWorkerMovesBash,
+      seedSubagentRequests: seed?.openSubagentRequests,
+      seedAskersPastATurn: seed?.askersPastATurn,
     };
-    await ne(
-      r,
+    await launchRepl(
+      sessionId,
       {
         getFpsMetrics: () => {
           return;
         },
-        initialState: M,
-        session: u,
-        storageV5: n?.storageV5,
-        credentials: n?.credentials,
-        fleetNudgeStore: n?.fleetNudgeStore,
+        initialState: appState,
+        session: options,
+        storageV5: runtime?.storageV5,
+        credentials: runtime?.credentials,
+        fleetNudgeStore: runtime?.fleetNudgeStore,
       },
       {
-        debug: ae(),
-        commands: Ae,
+        debug: isDebugMode(),
+        commands,
         initialTools: [],
         initialMessagesOrigin: "remote",
         initialMessages: [
-          ...(F ? [] : [j]),
-          ...(s ? (s.complete ? s.messages : [le(o), ...s.messages]) : []),
-          ...(F ? [j] : []),
-          ...(Y === undefined ? [] : [warningSystemMessage(Y)]),
+          ...(isDeviceIdentityEnabled ? [] : [boundFile]),
+          ...(seed ? (seed.complete ? seed.messages : [partialSeedNotice(url), ...seed.messages]) : []),
+          ...(isDeviceIdentityEnabled ? [boundFile] : []),
+          ...(elsewhere === undefined ? [] : [warningSystemMessage(elsewhere)]),
           ...[],
         ],
         mcpClients: [],
         remoteSessionConfig,
-        autoConnectIdeFlag: n?.autoConnectIdeFlag,
-        disableSlashCommands: n?.disableSlashCommands,
-        onDetachToCaller: () => r.unmount(),
+        autoConnectIdeFlag: runtime?.autoConnectIdeFlag,
+        disableSlashCommands: runtime?.disableSlashCommands,
+        onDetachToCaller: () => sessionId.unmount(),
         thinkingConfig: {
           type: "adaptive",
         },
       },
-      async (e, i) => {
-        if (k?.overLoading) getSecondRootError().get(process.stdout)?.keepAltScreenForNextScreen();
-        showScreen(e, i);
+      async (root, store) => {
+        if (attachContext?.overLoading)
+          getSecondRootError().get(process.stdout)?.keepAltScreenForNextScreen();
+        showScreen(root, store);
         let winner = await Promise.race([
-          e.waitUntilExit().then(() => {
+          root.waitUntilExit().then(() => {
             return;
           }),
-          ...(k
+          ...(attachContext
             ? [
-                k.leftForTab.then((screen) => ({
+                attachContext.leftForTab.then((screen) => ({
                   screen,
                 })),
               ]
@@ -562,38 +577,40 @@ View it at ${getRemoteSessionUrl(o, undefined, {
         ]);
         if (winner !== undefined) {
           getSecondRootError().get(process.stdout)?.keepAltScreenForNextScreen();
-          showScreen(e, winner.screen, {
-            session: u,
-            storageV5: n?.storageV5,
+          showScreen(root, winner.screen, {
+            session: options,
+            storageV5: runtime?.storageV5,
           });
           return;
         }
-        await n?.endProcessOnExit?.();
+        await runtime?.endProcessOnExit?.();
       },
     );
   } finally {
-    P = true;
+    didAdoptCwd = true;
     abortController.abort();
-    T.end();
-    await y.stop();
-    setIsRemoteMode(l.isRemoteMode);
-    setAutoModeActive(l.autoModeActive && isAutoModeGateEnabled());
-    switchSession(l.sessionId, "remote_attach", null, {
-      cwd: l.cwd,
+    binding.end();
+    await prefetch.stop();
+    setIsRemoteMode(prevState.isRemoteMode);
+    setAutoModeActive(prevState.autoModeActive && isAutoModeGateEnabled());
+    switchSession(prevState.sessionId, "remote_attach", null, {
+      cwd: prevState.cwd,
     });
-    if (!l.isRemoteMode)
+    if (!prevState.isRemoteMode)
       setCaps({
         ...getCaps(),
-        remote: l.capsRemote,
-        transcriptSource: l.capsTranscriptSource,
+        remote: prevState.capsRemote,
+        transcriptSource: prevState.capsTranscriptSource,
       });
     await noopRefresh();
-    if (getCurrentLimits() !== l.limits)
-      if (getLimitsAccountEpoch() === l.limitsEpoch) restoreLimits(l.limits, l.limitsObserved);
+    if (getCurrentLimits() !== prevState.limits)
+      if (getLimitsAccountEpoch() === prevState.limitsEpoch)
+        restoreLimits(prevState.limits, prevState.limitsObserved);
       else resetCurrentLimits();
   }
 }
 //@ chunk-edjpba11.js:23367-23405 placement
-function warningSystemMessage(r) {
-  return createSystemMessage(r, "warning");
+function warningSystemMessage(text) {
+  return createSystemMessage(text, "warning");
 }
+export { attachRemoteSession };

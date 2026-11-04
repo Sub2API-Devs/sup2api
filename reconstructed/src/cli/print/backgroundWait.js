@@ -107,12 +107,12 @@ class BackgroundWaitPulse {
     this.lastFrameAt = lastFrameAt;
   }
   pass({ backgroundTasks, otherWork, ownedWorkPending, now }) {
-    let h = ownedWorkPending.schedule_wakeup || ownedWorkPending.eval_tool;
-    let any = BACKGROUND_WAIT_PRIORITY_KINDS.some((P) => otherWork[P]);
-    let S = backgroundTasks.length > 0 || any;
-    if (this.broken || !env.CLAUDE_CODE_REMOTE) return S && this.pulse();
-    let R = S && !any && !h;
-    let w = false;
+    let ownedWork = ownedWorkPending.schedule_wakeup || ownedWorkPending.eval_tool;
+    let any = BACKGROUND_WAIT_PRIORITY_KINDS.some((kind) => otherWork[kind]);
+    let hasWork = backgroundTasks.length > 0 || any;
+    if (this.broken || !env.CLAUDE_CODE_REMOTE) return hasWork && this.pulse();
+    let backgroundOnly = hasWork && !any && !ownedWork;
+    let idleOnly = false;
     try {
       this.cpuMsAtLastPass = this.readCpuMs();
       if (this.waitStartedAt === null) {
@@ -121,7 +121,7 @@ class BackgroundWaitPulse {
         this.cpuMsAtStart = this.cpuMsAtLastPass;
         this.exitCleanup = registerCleanup(async () => this.end());
       }
-      let P = now - this.lastPassAt;
+      let elapsedMs = now - this.lastPassAt;
       this.lastPassAt = now;
       this.passes++;
       for (let backgroundTask of backgroundTasks)
@@ -130,14 +130,14 @@ class BackgroundWaitPulse {
             ? "monitor"
             : (BACKGROUND_TASK_KIND_MAP[backgroundTask.type] ?? "other_task"),
         );
-      for (let L of BACKGROUND_WAIT_PRIORITY_KINDS) if (otherWork[L]) this.holds.add(L);
-      if (S && ownedWorkPending.schedule_wakeup) this.holds.add("schedule_wakeup");
-      if (S && ownedWorkPending.eval_tool) this.holds.add("eval_tool");
-      if (S) this.forWorkOnly = sendSessionActivitySignal_2();
-      w = R && !hasActiveWork();
-      if (w) {
-        this.idleMs += P;
-        this.idleStretchMs += P;
+      for (let kind of BACKGROUND_WAIT_PRIORITY_KINDS) if (otherWork[kind]) this.holds.add(kind);
+      if (hasWork && ownedWorkPending.schedule_wakeup) this.holds.add("schedule_wakeup");
+      if (hasWork && ownedWorkPending.eval_tool) this.holds.add("eval_tool");
+      if (hasWork) this.forWorkOnly = sendSessionActivitySignal_2();
+      idleOnly = backgroundOnly && !hasActiveWork();
+      if (idleOnly) {
+        this.idleMs += elapsedMs;
+        this.idleStretchMs += elapsedMs;
         this.longestIdleMs = Math.max(this.longestIdleMs, this.idleStretchMs);
       } else this.idleStretchMs = 0;
     } catch (error) {
@@ -145,8 +145,8 @@ class BackgroundWaitPulse {
       logError(error);
       logFeatureSad("ccr_keepalive_post_turn_wait", "pass_throw");
     }
-    if (!S) return false;
-    if (R && this.forWorkOnly && !this.broken) {
+    if (!hasWork) return false;
+    if (backgroundOnly && this.forWorkOnly && !this.broken) {
       if (now - this.lastFrameAt >= WIND_DOWN_LOG_INTERVAL_MS) {
         this.framesDueBackgroundOnly++;
         this.lastFrameAt = now;
@@ -156,7 +156,7 @@ class BackgroundWaitPulse {
     if (!this.pulse()) return false;
     this.framesSent++;
     this.lastFrameAt = now;
-    if (R) this.framesDueBackgroundOnly++;
+    if (backgroundOnly) this.framesDueBackgroundOnly++;
     return true;
   }
   countLongSleep() {
@@ -213,30 +213,33 @@ function waitForQueueOrIdle({
   clock = systemClock,
 }) {
   return new Promise((resolve) => {
-    let w = clock.monotonicNow();
-    let P;
-    let L = () => {
-      x();
-      P?.();
-      for (let Z of G) Z();
-      turnSignal?.removeEventListener("abort", L);
-      sessionSignal.removeEventListener("abort", L);
+    let startedAt = clock.monotonicNow();
+    let wakeTimer;
+    let finish = () => {
+      heartbeatTimer();
+      wakeTimer?.();
+      for (let unsubscribe of unsubscribes) unsubscribe();
+      turnSignal?.removeEventListener("abort", finish);
+      sessionSignal.removeEventListener("abort", finish);
       resolve();
     };
-    let q = () => {
-      P ??= clock.setTimeout(L, BACKGROUND_POLL_MS - ((clock.monotonicNow() - w) % BACKGROUND_POLL_MS));
+    let requestWake = () => {
+      wakeTimer ??= clock.setTimeout(
+        finish,
+        BACKGROUND_POLL_MS - ((clock.monotonicNow() - startedAt) % BACKGROUND_POLL_MS),
+      );
     };
-    let x = clock.setTimeout(L, BACKGROUND_WAIT_HEARTBEAT_MS);
-    let G = [
-      messageQueue.subscribe(q),
-      store.subscribe(q),
-      sessionState.stateChanged.subscribe(q),
-      spendRecorded.subscribe(q),
+    let heartbeatTimer = clock.setTimeout(finish, BACKGROUND_WAIT_HEARTBEAT_MS);
+    let unsubscribes = [
+      messageQueue.subscribe(requestWake),
+      store.subscribe(requestWake),
+      sessionState.stateChanged.subscribe(requestWake),
+      spendRecorded.subscribe(requestWake),
     ];
-    turnSignal?.addEventListener("abort", L, {
+    turnSignal?.addEventListener("abort", finish, {
       once: true,
     });
-    sessionSignal.addEventListener("abort", L, {
+    sessionSignal.addEventListener("abort", finish, {
       once: true,
     });
   });
@@ -250,12 +253,13 @@ function shouldShowBackgroundWaitStatus({ outputFormat, stderrIsTerminal, stdout
   );
 }
 //@ chunk-tyg7f3ek.js:107972-108137 placement
-function describeRunningBackgroundTasks(e) {
-  return e
-    .map((n) => {
-      let r = n.type === "local_bash" && n.kind === "monitor" ? "monitor" : taskKindLabel(n.type);
-      let s = clippedMessage(n.description, 60);
-      return s ? `${r} "${s}"` : r;
+function describeRunningBackgroundTasks(tasks) {
+  return tasks
+    .map((task) => {
+      let label =
+        task.type === "local_bash" && task.kind === "monitor" ? "monitor" : taskKindLabel(task.type);
+      let description = clippedMessage(task.description, 60);
+      return description ? `${label} "${description}"` : label;
     })
     .join(", ");
 }
@@ -339,14 +343,14 @@ class BackgroundTaskWaiter {
   }
   park({ drainedThisIteration }) {
     if (drainedThisIteration) this.keepAlive.end();
-    let n = false;
+    let didWork = false;
     let appState = this.store.getState();
-    let filtered = getRunningTasks(appState).filter(
-      (He) =>
-        waitForTaskCompletion(He) &&
-        He.type !== "in_process_teammate" &&
-        !(He.type === "monitor_ws" && He.ambient) &&
-        He.type !== "post_turn_memory",
+    let tasks = getRunningTasks(appState).filter(
+      (task) =>
+        waitForTaskCompletion(task) &&
+        task.type !== "in_process_teammate" &&
+        !(task.type === "monitor_ws" && task.ambient) &&
+        task.type !== "post_turn_memory",
     );
     stopAgentsOverBudget({
       maxBudgetUsd: this.maxBudgetUsd,
@@ -356,93 +360,101 @@ class BackgroundTaskWaiter {
       setAppState: this.store.setState,
       storageV5: this.storageV5,
     });
-    let h = this.messageQueue.peek(isActiveMainAgentCommand) !== undefined;
-    let y = h && !this.holdsEvalSettles();
+    let hasMainQueued = this.messageQueue.peek(isActiveMainAgentCommand) !== undefined;
+    let holdsEvalSettles = hasMainQueued && !this.holdsEvalSettles();
     let now = Date.now();
     let owedTaskNotifications = collectOwedTaskNotifications({
       tasks: Object.values(appState.tasks ?? {}),
       waits: this.pendingNotificationWaits,
       now,
     });
-    let w = this.detachedToolCalls.owesResult(now) && !hasReachedBudget(this.maxBudgetUsd);
-    let hasPendingNotification = owedTaskNotifications || w;
-    if (this.drain.inputClosed && !y && !drainedThisIteration) this.bgWaitFirstIdle ??= now;
+    let owedDetachedResult = this.detachedToolCalls.owesResult(now) && !hasReachedBudget(this.maxBudgetUsd);
+    let hasPendingNotification = owedTaskNotifications || owedDetachedResult;
+    if (this.drain.inputClosed && !holdsEvalSettles && !drainedThisIteration) this.bgWaitFirstIdle ??= now;
     else {
       this.bgWaitFirstIdle = null;
       this.bgWaitCeilingWarned = false;
     }
-    let L = printBackgroundWaitCeilingMs();
-    let q = L > 0 && this.bgWaitFirstIdle !== null && now - this.bgWaitFirstIdle >= L;
-    this.bgWaitCeilingExceeded = q;
-    let x =
+    let ceilingMs = printBackgroundWaitCeilingMs();
+    let ceilingExceeded =
+      ceilingMs > 0 && this.bgWaitFirstIdle !== null && now - this.bgWaitFirstIdle >= ceilingMs;
+    this.bgWaitCeilingExceeded = ceilingExceeded;
+    let hasTeammates =
       this.drain.inputClosed &&
       (hasActiveInProcessTeammates(appState) || hasNonLeadTeammate(appState.teamContext));
     let holdForArmedMonitors =
       this.drain.inputClosed &&
       !hasReachedBudget(this.maxBudgetUsd) &&
       getFeatureValue_CACHED_MAY_BE_STALE("tengu_giggly_dragonfly", true);
-    let Z = this.drain.inputClosed && !hasReachedBudget(this.maxBudgetUsd) && isTidySlothGateOn();
-    let re = q && !(Z && hasShellBeforeDeadline(filtered, now));
-    let Ae = decideBackgroundWait({
-      runningBackgroundTasks: filtered,
+    let holdShells = this.drain.inputClosed && !hasReachedBudget(this.maxBudgetUsd) && isTidySlothGateOn();
+    let ceilingExceededNow = ceilingExceeded && !(holdShells && hasShellBeforeDeadline(tasks, now));
+    let decision = decideBackgroundWait({
+      runningBackgroundTasks: tasks,
       inputClosed: this.drain.inputClosed,
-      hasMainThreadQueued: h,
-      hasActiveTeammates: x,
+      hasMainThreadQueued: hasMainQueued,
+      hasActiveTeammates: hasTeammates,
       hasPendingNotification,
       holdForArmedMonitors,
-      holdForBackgroundShells: Z,
-      ceilingExceeded: re,
+      holdForBackgroundShells: holdShells,
+      ceilingExceeded: ceilingExceededNow,
       deadline: this.windDownDeadline,
       swept: this.windDownSwept,
       now,
     });
-    this.windDownDeadline = Ae.deadline;
-    this.windDownSwept = Ae.swept;
-    if (Ae.shouldSweep && !this.drain.abortController?.signal.aborted) {
-      if (re && !this.bgWaitCeilingWarned) {
+    this.windDownDeadline = decision.deadline;
+    this.windDownSwept = decision.swept;
+    if (decision.shouldSweep && !this.drain.abortController?.signal.aborted) {
+      if (ceilingExceededNow && !this.bgWaitCeilingWarned) {
         this.bgWaitCeilingWarned = true;
-        process.stderr.write(`Background tasks still running ${formatDuration(L, {
+        process.stderr.write(`Background tasks still running ${formatDuration(ceilingMs, {
           hideTrailingZeros: true,
-        })} after the last turn (${describeRunningBackgroundTasks(filtered)}); stopping them. Set CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS=0 to wait indefinitely.
+        })} after the last turn (${describeRunningBackgroundTasks(tasks)}); stopping them. Set CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS=0 to wait indefinitely.
 `);
       }
       killBackgroundTasksForWindDown(
-        filtered,
+        tasks,
         createTaskFramework(this.store.getState, this.store.setState),
         this.store.setState,
         getFeatureValue_CACHED_MAY_BE_STALE("tengu_print_ceiling_stop_agents", true),
       );
-      n = true;
+      didWork = true;
     }
-    let Ue = this.drain.inputClosed && !x;
-    let ce = !Ae.swept && filtered.some((He) => Ue || !isParkedMcpTask(He));
-    let nt = Ae.swept ? [] : filtered.filter((He) => (Ue ? !isHoldCappedMcpTask(He) : !isHeldMcpTask(He)));
-    let runningBackgroundTask = nt.length > 0;
-    let Se = false;
+    let shuttingDown = this.drain.inputClosed && !hasTeammates;
+    let hasWorkToWait = !decision.swept && tasks.some((task) => shuttingDown || !isParkedMcpTask(task));
+    let tasksToWait = decision.swept
+      ? []
+      : tasks.filter((task) => (shuttingDown ? !isHoldCappedMcpTask(task) : !isHeldMcpTask(task)));
+    let runningBackgroundTask = tasksToWait.length > 0;
+    let hasEvalTool = false;
     let evalTool = false;
-    let Me = this.hasPendingSessionWakeup({
+    let hasSessionWakeup = this.hasPendingSessionWakeup({
       now,
       parkedSince: this.bgWaitFirstIdle,
     });
-    let Ee = h || owedTaskNotifications || (w && !re) || Se || Me;
+    let hasOtherWork =
+      hasMainQueued ||
+      owedTaskNotifications ||
+      (owedDetachedResult && !ceilingExceededNow) ||
+      hasEvalTool ||
+      hasSessionWakeup;
     if (
-      (ce || Ee) &&
+      (hasWorkToWait || hasOtherWork) &&
       !this.drain.abortController?.signal.aborted &&
       !this.drain.endSessionRequested &&
       !this.stopping()
     ) {
-      n = true;
-      let He = this.io.sessionState.turnEndSummaryOutstanding();
-      if (!y) {
+      didWork = true;
+      let summaryOutstanding = this.io.sessionState.turnEndSummaryOutstanding();
+      if (!holdsEvalSettles) {
         this.drain.runPhase = "waiting_for_agents";
-        if (!He) this.startStopRetirementDue();
+        if (!summaryOutstanding) this.startStopRetirementDue();
         if (
-          !He &&
+          !summaryOutstanding &&
           shouldStayRunningForInput({
             inputClosed: this.drain.inputClosed,
             currentState: this.io.sessionState.getState(),
             hasActiveTeammates: hasWorkingInProcessTeammates(appState),
-            hasRunningBgTasks: filtered.some(isAwaitedBackgroundTask),
+            hasRunningBgTasks: tasks.some(isAwaitedBackgroundTask),
             hasPendingNotification,
           })
         ) {
@@ -450,19 +462,19 @@ class BackgroundTaskWaiter {
           maybeStartCcrRecap(this.ccrRecap, this.io.sessionState);
           this.onIdleReported();
         }
-        this.announceLongWait(now, filtered, Me);
+        this.announceLongWait(now, tasks, hasSessionWakeup);
         if (
           this.keepAlive.pass({
-            backgroundTasks: nt,
+            backgroundTasks: tasksToWait,
             otherWork: {
-              queued_command: h,
+              queued_command: hasMainQueued,
               task_notification: owedTaskNotifications,
-              owed_detached_result: w && !re,
-              eval_tool: Se,
-              schedule_wakeup: Me,
+              owed_detached_result: owedDetachedResult && !ceilingExceededNow,
+              eval_tool: hasEvalTool,
+              schedule_wakeup: hasSessionWakeup,
             },
             ownedWorkPending: {
-              schedule_wakeup: Me || this.hasLiveSessionWakeup(now),
+              schedule_wakeup: hasSessionWakeup || this.hasLiveSessionWakeup(now),
               eval_tool: evalTool,
             },
             now,
@@ -470,20 +482,20 @@ class BackgroundTaskWaiter {
         )
           logForDiagnosticsNoPII("debug", "session_keepalive_background_wait", {
             running_background_task: runningBackgroundTask,
-            queued_command: h,
+            queued_command: hasMainQueued,
             pending_task_notification: owedTaskNotifications,
-            owed_detached_result: w,
-            outstanding_evals: Se,
-            pending_session_wakeup: Me,
+            owed_detached_result: owedDetachedResult,
+            outstanding_evals: hasEvalTool,
+            pending_session_wakeup: hasSessionWakeup,
           });
         if (!(
           !this.drain.inputClosed &&
           !this.sessionSignal.aborted &&
-          !Ee &&
-          !He &&
+          !hasOtherWork &&
+          !summaryOutstanding &&
           this.maxBudgetUsd === undefined &&
-          filtered.every((We) => {
-            switch (We.type) {
+          tasks.every((task) => {
+            switch (task.type) {
               case "local_bash":
               case "local_agent":
               case "local_workflow":
@@ -520,30 +532,30 @@ class BackgroundTaskWaiter {
       }
     }
     this.keepAlive.end();
-    return n ? "again" : "done";
+    return didWork ? "again" : "done";
   }
-  announceLongWait(e, n, r) {
+  announceLongWait(now, tasks, hasWakeup) {
     if (
       this.waitNoticeBroken ||
       this.bgWaitFirstIdle === null ||
-      e - this.bgWaitFirstIdle < backgroundWaitClock
+      now - this.bgWaitFirstIdle < backgroundWaitClock
     )
       return;
     try {
-      let combined = n
-        .map((S) => S.id)
-        .concat(r ? this.pendingSessionWakeupIds().map((S) => `wakeup:${S}`) : []);
-      if (combined.every((S) => this.announcedWork.has(S))) return;
-      for (let S of combined) this.announcedWork.add(S);
-      let joined = [describeRunningBackgroundTasks(n), r ? "scheduled wakeup" : ""]
+      let combined = tasks
+        .map((task) => task.id)
+        .concat(hasWakeup ? this.pendingSessionWakeupIds().map((wakeupId) => `wakeup:${wakeupId}`) : []);
+      if (combined.every((workId) => this.announcedWork.has(workId))) return;
+      for (let workId of combined) this.announcedWork.add(workId);
+      let joined = [describeRunningBackgroundTasks(tasks), hasWakeup ? "scheduled wakeup" : ""]
         .filter(Boolean)
         .join(", ");
-      let y = `Waiting for background work to finish${joined ? ` (${joined})` : ""}. Press Ctrl+C to exit now.`;
+      let notice = `Waiting for background work to finish${joined ? ` (${joined})` : ""}. Press Ctrl+C to exit now.`;
       if (this.waitNoticeOnStderr)
         process.stderr.write(`
-${y}
+${notice}
 `);
-      else logForDebugging(y);
+      else logForDebugging(notice);
       logFeatureOk("print_wait_notice", {
         on_stderr: this.waitNoticeOnStderr,
       });
@@ -558,48 +570,48 @@ ${y}
   }
 }
 //@ chunk-tyg7f3ek.js:114105-114268 placement
-function isPeerHandbackPrompt(e) {
+function isPeerHandbackPrompt(command) {
   return (
-    isActiveMainAgentCommand(e) &&
-    e.mode === "prompt" &&
-    e.shouldQuery !== false &&
-    e.isMeta === true &&
-    e.origin?.kind === "peer" &&
-    e.origin.senderTaskId !== undefined &&
-    e.origin.handback === true
+    isActiveMainAgentCommand(command) &&
+    command.mode === "prompt" &&
+    command.shouldQuery !== false &&
+    command.isMeta === true &&
+    command.origin?.kind === "peer" &&
+    command.origin.senderTaskId !== undefined &&
+    command.origin.handback === true
   );
 }
 //@ chunk-tyg7f3ek.js:114268-114724 placement
 function countQueuedPromptKinds(queued) {
-  let n = {
+  let counts = {
     handbacks: 0,
     other_subagent_prompts: 0,
     outside_peers: 0,
     person_prompts: 0,
     projects_relays: 0,
   };
-  for (let r of queued) {
-    if (isPeerHandbackPrompt(r)) {
-      n.handbacks++;
+  for (let item of queued) {
+    if (isPeerHandbackPrompt(item)) {
+      counts.handbacks++;
       continue;
     }
-    if (!isActiveMainAgentCommand(r) || r.mode !== "prompt" || r.shouldQuery === false) continue;
-    if (isProjectsRelay(r.origin)) {
-      n.projects_relays++;
+    if (!isActiveMainAgentCommand(item) || item.mode !== "prompt" || item.shouldQuery === false) continue;
+    if (isProjectsRelay(item.origin)) {
+      counts.projects_relays++;
       continue;
     }
-    if (r.isMeta !== true) {
-      if (isHumanOrAutoContinuation(r.origin)) n.person_prompts++;
-    } else if (r.origin?.kind !== "peer") continue;
-    else if (r.origin.senderTaskId === undefined) n.outside_peers++;
-    else n.other_subagent_prompts++;
+    if (item.isMeta !== true) {
+      if (isHumanOrAutoContinuation(item.origin)) counts.person_prompts++;
+    } else if (item.origin?.kind !== "peer") continue;
+    else if (item.origin.senderTaskId === undefined) counts.outside_peers++;
+    else counts.other_subagent_prompts++;
   }
-  return n;
+  return counts;
 }
 //@ chunk-tyg7f3ek.js:114724-115000 placement
-function logQueuedInterruptDecision({ queued, turnUnderWay, lateBind, cancelQueued, sendNow }, y) {
+function logQueuedInterruptDecision({ queued, turnUnderWay, lateBind, cancelQueued, sendNow }, report) {
   try {
-    let S = {
+    let fields = {
       ...countQueuedPromptKinds(queued),
       turn_under_way: turnUnderWay,
       late_bind_interrupt: lateBind,
@@ -607,8 +619,8 @@ function logQueuedInterruptDecision({ queued, turnUnderWay, lateBind, cancelQueu
       send_now: sendNow,
       ...chatOriginField(),
     };
-    logForDiagnosticsNoPII("info", "cli_queued_at_interrupt", S);
-    y?.(S);
+    logForDiagnosticsNoPII("info", "cli_queued_at_interrupt", fields);
+    report?.(fields);
   } catch (error) {
     logError(error);
     logForDiagnosticsNoPII("error", "cli_queued_at_interrupt_failed");
@@ -622,13 +634,13 @@ var QUEUED_INTERRUPT_BUDGET_MS = 250;
 class FetchingUserFilesCounter {
   count = 0;
   none;
-  begin(e) {
+  begin(command) {
     if (
-      e.fileCount === 0 ||
-      e.peerFrom !== undefined ||
-      !isHumanOrigin(e.origin) ||
-      e.shouldQuery === false ||
-      e.reRun
+      command.fileCount === 0 ||
+      command.peerFrom !== undefined ||
+      !isHumanOrigin(command.origin) ||
+      command.shouldQuery === false ||
+      command.reRun
     )
       return;
     this.count++;

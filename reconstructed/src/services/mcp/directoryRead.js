@@ -28,8 +28,13 @@ var MAX_DIRECTORY_PAGES = 20;
  * 判断 MCP 服务器是否在技能扩展中声明支持 directoryRead。
  */
 function serverDeclaresDirectoryRead(capabilities) {
-  let e = capabilities?.extensions?.[IO_MODELCONTEXTPROTOCOL_SKILLS];
-  return e != null && typeof e === "object" && "directoryRead" in e && e.directoryRead === true;
+  let extension = capabilities?.extensions?.[IO_MODELCONTEXTPROTOCOL_SKILLS];
+  return (
+    extension != null &&
+    typeof extension === "object" &&
+    "directoryRead" in extension &&
+    extension.directoryRead === true
+  );
 }
 //@ chunk-fvsx0r1g.js:3588-4245 placement
 /**
@@ -42,9 +47,9 @@ async function readMcpDirectory(connection, uri, signal) {
   let cursor;
   let pages = 0;
   do {
-    let i;
+    let page;
     try {
-      i = await identityId2(connection.client).request(
+      page = await identityId2(connection.client).request(
         {
           method: "resources/directory/read",
           params: {
@@ -68,8 +73,8 @@ async function readMcpDirectory(connection, uri, signal) {
       );
       return entries;
     }
-    entries.push(...i.resources);
-    cursor = i.nextCursor;
+    entries.push(...page.resources);
+    cursor = page.nextCursor;
     pages++;
   } while (cursor && pages < MAX_DIRECTORY_PAGES);
   if (cursor)
@@ -79,3 +84,4 @@ async function readMcpDirectory(connection, uri, signal) {
     );
   return entries;
 }
+export { readMcpDirectory, serverDeclaresDirectoryRead };

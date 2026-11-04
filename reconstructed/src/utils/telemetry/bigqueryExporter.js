@@ -16,7 +16,7 @@ import {
   getClaudeAIOAuthTokens,
   handleOAuth401Error,
 } from "../auth.js";
-import { Re } from "../../../runtime/bun-runtime.js";
+import { __toESM } from "../../../runtime/bun-runtime.js";
 import { require_core } from "../../../vendor/@opentelemetry/core/build/src/index.js";
 import { require_sdk_metrics } from "../../../vendor/@opentelemetry/sdk-metrics/build/src/index.js";
 import { classifyAxiosError } from "../errors.js";
@@ -64,8 +64,8 @@ function customerTypeAttributes() {
       };
 }
 //@ chunk-9vvvg0d3.js:24416-24448 placement
-var otelSemconv = Re(require_core(), 1);
-var promClient = Re(require_sdk_metrics(), 1);
+var otelSemconv = __toESM(require_core(), 1);
+var promClient = __toESM(require_sdk_metrics(), 1);
 //@ chunk-9vvvg0d3.js:24448-24772 placement
 /**
  * BigQuery 导出错误归类。
@@ -101,8 +101,8 @@ function shutdownTimeoutMs() {
   );
 }
 //@ chunk-9vvvg0d3.js:25161-25205 affinity
-function reportMetricsAtShutdown(e) {
-  e.reportInFlightAtShutdown();
+function reportMetricsAtShutdown(exporter) {
+  exporter.reportInFlightAtShutdown();
 }
 //@ chunk-9vvvg0d3.js:25205-31114 fingerprint = BigQueryMetricsExporter (0.642)
 /**
@@ -120,13 +120,13 @@ class BigQueryMetricsExporter {
   successReported = false;
   inFlight = 0;
   oauthRefreshAttempted = false;
-  constructor(e) {
+  constructor(options) {
     let defaultEndpoint = `${getOauthConfig().BASE_API_URL}/api/claude_code/metrics`;
-    let o = undefined;
+    let unusedEndpoint = undefined;
     this.isAntEndpointOverride = false;
     this.endpoint = defaultEndpoint;
-    this.timeout = e.timeout || 5000;
-    this.storageV5 = e.storageV5;
+    this.timeout = options.timeout || 5000;
+    this.storageV5 = options.storageV5;
   }
   async export(metrics, resultCallback) {
     if (this.isShutdown) {
@@ -143,11 +143,11 @@ class BigQueryMetricsExporter {
       if (index > -1) this.pendingExports.splice(index, 1);
     });
   }
-  async doExport(e, r) {
+  async doExport(metrics, resultCallback) {
     try {
       if (!(checkHasTrustDialogAccepted() || getIsNonInteractiveSession())) {
         logForDebugging(`${TELEMETRY_LOG_PREFIX} BigQuery metrics export: trust not established, skipping`);
-        r({
+        resultCallback({
           code: otelSemconv.ExportResultCode.SUCCESS,
         });
         return;
@@ -156,65 +156,66 @@ class BigQueryMetricsExporter {
         logForDebugging(
           `${TELEMETRY_LOG_PREFIX} BigQuery metrics export: WIF dispatch host differs from the metrics endpoint host, skipping`,
         );
-        r({
+        resultCallback({
           code: otelSemconv.ExportResultCode.SUCCESS,
         });
         return;
       }
       let authHeaders = await getAuthHeadersAsync();
-      let s = guardTelemetryCredentials(authHeaders, this.endpoint).reasonCode === "misrouted_credential";
-      if (s && !this.isAntEndpointOverride) {
+      let misroutedEndpoint =
+        guardTelemetryCredentials(authHeaders, this.endpoint).reasonCode === "misrouted_credential";
+      if (misroutedEndpoint && !this.isAntEndpointOverride) {
         logForDebugging(
           `${TELEMETRY_LOG_PREFIX} BigQuery metrics export: credential does not belong to the metrics endpoint host, skipping`,
         );
-        r({
+        resultCallback({
           code: otelSemconv.ExportResultCode.SUCCESS,
         });
         return;
       }
-      let u =
+      let misroutedOptOut =
         guardTelemetryCredentials(
           authHeaders,
           `${getOauthConfig().BASE_API_URL}/api/claude_code/organizations/metrics_enabled`,
         ).reasonCode === "misrouted_credential";
-      if (!s && !u) {
-        let E = await refreshMetricsStatus(this.storageV5);
-        if (E.hasError) {
+      if (!misroutedEndpoint && !misroutedOptOut) {
+        let metricsStatus = await refreshMetricsStatus(this.storageV5);
+        if (metricsStatus.hasError) {
           if (authHeaders.reasonCode === "wif_error") {
             this.reportFailure("wif_error");
             this.failures.record(
               `metrics opt-out check failed (WIF exchange failed: ${authHeaders.error}); skipping export`,
             );
           } else this.failures.record("metrics opt-out check failed; skipping export");
-          r({
+          resultCallback({
             code: otelSemconv.ExportResultCode.SUCCESS,
           });
           return;
         }
-        if (!E.enabled) {
+        if (!metricsStatus.enabled) {
           logForDebugging(
             `${TELEMETRY_LOG_PREFIX} BigQuery metrics export disabled by organization setting, skipping`,
           );
-          r({
+          resultCallback({
             code: otelSemconv.ExportResultCode.SUCCESS,
           });
           return;
         }
       }
-      let a = this.transformMetricsForInternal(e);
-      let p = guardTelemetryCredentials(await getAuthHeadersAsync(), this.endpoint);
-      let f = p.reasonCode === "misrouted_credential";
-      if (p.error && !f) {
-        if (p.reasonCode === "wif_error") this.reportFailure("wif_error");
-        this.failures.record(p.error);
-        r({
+      let payload = this.transformMetricsForInternal(metrics);
+      let credentials = guardTelemetryCredentials(await getAuthHeadersAsync(), this.endpoint);
+      let misrouted = credentials.reasonCode === "misrouted_credential";
+      if (credentials.error && !misrouted) {
+        if (credentials.reasonCode === "wif_error") this.reportFailure("wif_error");
+        this.failures.record(credentials.error);
+        resultCallback({
           code: otelSemconv.ExportResultCode.SUCCESS,
         });
         return;
       }
-      let h;
+      let response;
       try {
-        h = await this.postWithOAuth401Recovery(a, f ? {} : p.headers);
+        response = await this.postWithOAuth401Recovery(payload, misrouted ? {} : credentials.headers);
       } catch (error) {
         this.reportFailure(...classifyBigQueryError(error));
         throw error;
@@ -224,8 +225,10 @@ class BigQueryMetricsExporter {
         this.successReported = true;
         logFeatureOk("internal_metrics_export");
       }
-      logForDebugging(`${TELEMETRY_LOG_PREFIX} BigQuery API Response: ${jsonStringify(h.data, null, 2)}`);
-      r({
+      logForDebugging(
+        `${TELEMETRY_LOG_PREFIX} BigQuery API Response: ${jsonStringify(response.data, null, 2)}`,
+      );
+      resultCallback({
         code: otelSemconv.ExportResultCode.SUCCESS,
       });
     } catch (error) {
@@ -238,22 +241,22 @@ class BigQueryMetricsExporter {
           },
         );
       this.failures.record(describeAxiosFailure(error));
-      r({
+      resultCallback({
         code: otelSemconv.ExportResultCode.SUCCESS,
       });
     }
   }
-  reportFailure(e, r) {
-    let o = `${e}:${r ?? ""}`;
-    if (this.reportedFailures.has(o)) return;
-    this.reportedFailures.add(o);
+  reportFailure(reason, httpStatus) {
+    let failureKey = `${reason}:${httpStatus ?? ""}`;
+    if (this.reportedFailures.has(failureKey)) return;
+    this.reportedFailures.add(failureKey);
     logFeatureBad(
       "internal_metrics_export",
-      e,
-      r === undefined
+      reason,
+      httpStatus === undefined
         ? {}
         : {
-            http_status: r,
+            http_status: httpStatus,
           },
     );
   }
@@ -267,23 +270,23 @@ class BigQueryMetricsExporter {
         : new URL(resolvedWIFBaseUrlSnapshot).host) === new URL(this.endpoint).host
     );
   }
-  async postWithOAuth401Recovery(e, r) {
+  async postWithOAuth401Recovery(requestBody, headers) {
     let claudeAIOAuthTokens = getClaudeAIOAuthTokens();
     let accessToken =
       claudeAIOAuthTokens?.accessToken &&
       claudeAIOAuthTokens.refreshToken &&
-      r.Authorization === `Bearer ${claudeAIOAuthTokens.accessToken}`
+      headers.Authorization === `Bearer ${claudeAIOAuthTokens.accessToken}`
         ? claudeAIOAuthTokens.accessToken
         : undefined;
     this.inFlight++;
     try {
-      return await this.postOnce(e, r);
+      return await this.postOnce(requestBody, headers);
     } catch (error) {
       if (!accessToken || !withOAuth401Retry_2(error)) throw error;
       let accessToken_2 = getClaudeAIOAuthTokens()?.accessToken;
       if (accessToken_2 && accessToken_2 !== accessToken)
-        return await this.postOnce(e, {
-          ...r,
+        return await this.postOnce(requestBody, {
+          ...headers,
           Authorization: `Bearer ${accessToken_2}`,
         });
       if (this.oauthRefreshAttempted) throw error;
@@ -295,36 +298,36 @@ class BigQueryMetricsExporter {
       }
       let accessToken_3 = getClaudeAIOAuthTokens()?.accessToken;
       if (!accessToken_3 || accessToken_3 === accessToken) throw error;
-      let p = await this.postOnce(e, {
-        ...r,
+      let nextAccessToken = await this.postOnce(requestBody, {
+        ...headers,
         Authorization: `Bearer ${accessToken_3}`,
       });
       this.oauthRefreshAttempted = false;
-      return p;
+      return nextAccessToken;
     } finally {
       this.inFlight--;
     }
   }
-  postOnce(e, r) {
-    let o = {
+  postOnce(body, extraHeaders) {
+    let baseHeaders = {
       "Content-Type": "application/json",
       "User-Agent": claudeCodeUserAgent(),
-      ...r,
+      ...extraHeaders,
     };
-    let n = gzipTelemetryBody({
+    let gzippedBody = gzipTelemetryBody({
       url: this.endpoint,
-      payload: e,
+      payload: body,
       storageV5: this.storageV5,
     });
-    return axios_default.post(this.endpoint, n?.body ?? e, {
+    return axios_default.post(this.endpoint, gzippedBody?.body ?? body, {
       timeout: this.timeout,
       maxRedirects: 0,
-      headers: n
+      headers: gzippedBody
         ? {
-            ...o,
-            ...n.headers,
+            ...baseHeaders,
+            ...gzippedBody.headers,
           }
-        : o,
+        : baseHeaders,
     });
   }
   transformMetricsForInternal(metrics) {
@@ -357,29 +360,35 @@ class BigQueryMetricsExporter {
       ),
     };
   }
-  extractDataPoints(metric, r) {
+  extractDataPoints(metric, useValidator) {
     let dataPoints = metric.dataPoints || [];
-    let n = new Map();
+    let byDataPointKey = new Map();
     for (let dataPoint of dataPoints) {
       if (typeof dataPoint.value !== "number") continue;
-      let u = applyMetricAttribution(dataPoint.attributes);
-      let a = this.convertAttributes(u);
-      let p = r ? sanitizeByValidators(a, sanitizeFieldValue) : a;
-      let f = this.hrTimeToISOString(dataPoint.endTime || dataPoint.startTime || [Date.now() / 1000, 0]);
-      let h = jsonStringifyRaw(Object.entries(r ? p : u).sort(([O], [T]) => (O < T ? -1 : 1)));
-      let E = n.get(h);
-      if (E) {
-        E.value += dataPoint.value;
-        if (f > E.timestamp) E.timestamp = f;
+      let attrKey = applyMetricAttribution(dataPoint.attributes);
+      let sanitizedAttrs = this.convertAttributes(attrKey);
+      let cleanAttrs = useValidator
+        ? sanitizeByValidators(sanitizedAttrs, sanitizeFieldValue)
+        : sanitizedAttrs;
+      let timestamp = this.hrTimeToISOString(
+        dataPoint.endTime || dataPoint.startTime || [Date.now() / 1000, 0],
+      );
+      let pointKey = jsonStringifyRaw(
+        Object.entries(useValidator ? cleanAttrs : attrKey).sort(([keyA], [keyB]) => (keyA < keyB ? -1 : 1)),
+      );
+      let existingPoint = byDataPointKey.get(pointKey);
+      if (existingPoint) {
+        existingPoint.value += dataPoint.value;
+        if (timestamp > existingPoint.timestamp) existingPoint.timestamp = timestamp;
         continue;
       }
-      n.set(h, {
-        attributes: p,
+      byDataPointKey.set(pointKey, {
+        attributes: cleanAttrs,
         value: dataPoint.value,
-        timestamp: f,
+        timestamp,
       });
     }
-    return Array.from(n.values());
+    return Array.from(byDataPointKey.values());
   }
   async shutdown() {
     this.isShutdown = true;
@@ -387,9 +396,9 @@ class BigQueryMetricsExporter {
     logForDebugging(`${TELEMETRY_LOG_PREFIX} BigQuery metrics exporter shutdown complete`);
   }
   armShutdownReport() {
-    let e = shutdownTimeoutMs();
-    if (e <= 0) return;
-    setTimeout(reportMetricsAtShutdown, e, this).unref?.();
+    let delayMs = shutdownTimeoutMs();
+    if (delayMs <= 0) return;
+    setTimeout(reportMetricsAtShutdown, delayMs, this).unref?.();
   }
   reportInFlightAtShutdown() {
     if (this.inFlight === 0) return;

@@ -11,6 +11,7 @@
 import { env } from "../../utils/env.js";
 import { HostScoped } from "../../utils/hostScoped.js";
 import { getRootSession } from "../../bootstrap/state.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:127851-127967 placement
 class ExplorePlanAgentsGate {
@@ -21,7 +22,10 @@ class ExplorePlanAgentsGate {
   }
 }
 //@ chunk-e6aww6q8.js:127967-127994 placement
-var explorePlanAgentsGateSlots = new HostScoped(() => new ExplorePlanAgentsGate());
+var explorePlanAgentsGateSlots; // deferred: uses ExplorePlanAgentsGate of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:127967", () => {
+  explorePlanAgentsGateSlots = new HostScoped(() => new ExplorePlanAgentsGate());
+});
 //@ chunk-e6aww6q8.js:127994-128044 placement
 /**
  * 判断 Explore/Plan 内置代理是否启用。

@@ -8,41 +8,46 @@
  * pieces: chunk-24t3dkzb.js (3)
  * attribution: affinity 1, fingerprint 2
  */
-import { qt, Se, ce, Q } from "../../vendor/react/cjs/react.production.js";
+import { createContext, useContext, useCallback, useMemo } from "../../vendor/react/cjs/react.production.js";
 import { wrapForMultiplexer, osc, OSC, ITERM2_OSC9, PROGRESS } from "./termio/osc.js";
 import { BEL } from "./termio/ansi.js";
 import { isProgressReportingAvailable } from "./terminal.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-24t3dkzb.js:11434-11549 affinity
 /**
  * 通知文本里的 C0/C1 控制字符换成空格（防止注入转义序列）。
  */
 function sanitizeNotificationText(text) {
-  let n = "";
+  let clean = "";
   for (let k = 0; k < text.length; k++) {
     let code = text.charCodeAt(k);
-    n += code < 32 || (code >= 127 && code <= 159) ? " " : text[k];
+    clean += code < 32 || (code >= 127 && code <= 159) ? " " : text[k];
   }
-  return n;
+  return clean;
 }
 //@ chunk-24t3dkzb.js:11549-11581 fingerprint = TerminalWriteProvider (1)
-var TerminalWriteContext = qt(null);
-var TerminalWriteProvider = TerminalWriteContext.Provider;
+var TerminalWriteContext; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var TerminalWriteProvider;
+deferInit("chunk-24t3dkzb.js:11549", () => {
+  TerminalWriteContext = createContext(null);
+  TerminalWriteProvider = TerminalWriteContext.Provider;
+});
 //@ chunk-24t3dkzb.js:11581-12602 fingerprint = useTerminalNotification (1)
 /**
  * 终端通知钩子：iTerm2（OSC 9）、kitty（OSC 99 标题+正文+聚焦）、Ghostty（OSC 777 notify）、响铃（BEL）、进度条（OSC 9;4：running/error/indeterminate/completed，终端不支持时不写）；全部经 tmux/screen 透传包装。
  */
 function useTerminalNotification() {
-  let writeRaw = Se(TerminalWriteContext);
+  let writeRaw = useContext(TerminalWriteContext);
   if (!writeRaw) throw Error("useTerminalNotification must be used within TerminalWriteProvider");
-  let notifyITerm2 = ce(
+  let notifyITerm2 = useCallback(
     ({ message, title }) => {
       let displayString = title ? `${title}: ${message}` : message;
       writeRaw(wrapForMultiplexer(osc(OSC.ITERM2, sanitizeNotificationText(displayString))));
     },
     [writeRaw],
   );
-  let notifyKitty = ce(
+  let notifyKitty = useCallback(
     ({ message, title, id }) => {
       writeRaw(wrapForMultiplexer(osc(OSC.KITTY, `i=${id}:d=0:p=title`, sanitizeNotificationText(title))));
       writeRaw(wrapForMultiplexer(osc(OSC.KITTY, `i=${id}:p=body`, sanitizeNotificationText(message))));
@@ -50,7 +55,7 @@ function useTerminalNotification() {
     },
     [writeRaw],
   );
-  let notifyGhostty = ce(
+  let notifyGhostty = useCallback(
     ({ message, title }) => {
       writeRaw(
         wrapForMultiplexer(
@@ -60,10 +65,10 @@ function useTerminalNotification() {
     },
     [writeRaw],
   );
-  let notifyBell = ce(() => {
+  let notifyBell = useCallback(() => {
     writeRaw(BEL);
   }, [writeRaw]);
-  let progress = ce(
+  let progress = useCallback(
     (state, percentage) => {
       if (!isProgressReportingAvailable()) return;
       if (!state) {
@@ -90,7 +95,7 @@ function useTerminalNotification() {
     },
     [writeRaw],
   );
-  return Q(
+  return useMemo(
     () => ({
       notifyITerm2,
       notifyKitty,

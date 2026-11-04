@@ -53,17 +53,18 @@ import { replaceControlChars } from "../../utils/resultError.js";
 import { stripControlChars } from "../../utils/settings/writeQueues.js";
 import { cliWarn } from "../exit.js";
 import { logForDebugging } from "../../utils/debug.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-3wek6r2k.js:76896-77145 placement
 function resolveStartupProactivity(proactivity) {
   {
-    let o = takeRelaunchProactivityLevel();
-    let n = takeProactivityEverOn();
+    let relaunchLevel = takeRelaunchProactivityLevel();
+    let everOn = takeProactivityEverOn();
     if (!isProactivityActive()) takeProactivityDecided();
-    if (o !== undefined) {
-      if (n) inheritProactivitySelectorGateEverOn();
+    if (relaunchLevel !== undefined) {
+      if (everOn) inheritProactivitySelectorGateEverOn();
       return {
-        level: o,
+        level: relaunchLevel,
         source: "handoff",
       };
     }
@@ -72,10 +73,10 @@ function resolveStartupProactivity(proactivity) {
         level: proactivity,
         source: "cli",
       };
-    let r = noop();
-    if (r !== undefined)
+    let unsubscribe = noop();
+    if (unsubscribe !== undefined)
       return {
-        level: r,
+        level: unsubscribe,
         source: "persisted",
       };
   }
@@ -102,22 +103,23 @@ function isProactivitySelectorEnabled() {
   );
 }
 //@ chunk-3wek6r2k.js:77421-77465 placement
-function disableProactivitySelector(keybindingsState_2 = keybindingsState, o, n) {
+function disableProactivitySelector(keybindingsState_2 = keybindingsState, options, state) {
   setProactivitySelectorGate(false);
   return () => {};
 }
 //@ chunk-3wek6r2k.js:77465-77588 placement
 function trackProactivitySelectorGate(optIn) {
   {
-    let o = () => optIn && isProactivitySelectorEnabled() && (getIsNonInteractiveSession() || !alwaysFalse());
-    setProactivitySelectorGate(o());
-    let n = optIn
+    let gatePredicate = () =>
+      optIn && isProactivitySelectorEnabled() && (getIsNonInteractiveSession() || !alwaysFalse());
+    setProactivitySelectorGate(gatePredicate());
+    let gateSubscription = optIn
       ? onGrowthBookRefresh(() => {
-          resampleProactivitySelectorGate(o());
+          resampleProactivitySelectorGate(gatePredicate());
         })
       : () => {};
-    replaceProactivityHostGateSubscription(n);
-    return n;
+    replaceProactivityHostGateSubscription(gateSubscription);
+    return gateSubscription;
   }
   return () => {};
 }
@@ -151,29 +153,33 @@ function setAutoMemoryToggleRecorder(record) {
   autoMemoryToggleRecord.record = record;
 }
 //@ chunk-3wek6r2k.js:77945-78062 placement
-function toggleAutoMemoryForSession(e, o, saveAutoMemorySessionSwitch = autoMemoryToggleRecord.record) {
-  setAutoMemoryOffThisSession(!e);
+function toggleAutoMemoryForSession(
+  state,
+  storageV5,
+  saveAutoMemorySessionSwitch = autoMemoryToggleRecord.record,
+) {
+  setAutoMemoryOffThisSession(!state);
   setRestoredAutoMemoryOff(false);
-  saveAutoMemorySessionSwitch?.(!e);
+  saveAutoMemorySessionSwitch?.(!state);
   logEvent("tengu_auto_memory_session_toggled", {
-    enabled: e,
-    source: fromEnum(o),
+    enabled: state,
+    source: fromEnum(storageV5),
   });
 }
 //@ chunk-3wek6r2k.js:78062-78133 placement
 var VERDICT_REASON_PRECEDENCE = ["parse_error", "other", "no_verdict", "permission_denied", "none"];
 //@ chunk-3wek6r2k.js:78133-78331 placement
-function classifyPolicyReadError(e) {
-  if (isPermissionDeniedPolicyError(e)) return "permission_denied";
-  if (e.errorClass === "unreadable") return e.errno === undefined ? "no_verdict" : "other";
-  if (e.path !== "") return;
-  return e.startupFatal === true ? "parse_error" : "other";
+function classifyPolicyReadError(error) {
+  if (isPermissionDeniedPolicyError(error)) return "permission_denied";
+  if (error.errorClass === "unreadable") return error.errno === undefined ? "no_verdict" : "other";
+  if (error.path !== "") return;
+  return error.startupFatal === true ? "parse_error" : "other";
 }
 //@ chunk-3wek6r2k.js:78331-78474 placement
 function summarizeMachineAdminPolicy({ unread, anotherSourceGoverns, errors }) {
   if (!unread || !anotherSourceGoverns) return "none";
-  let r = new Set(errors.map(classifyPolicyReadError));
-  return VERDICT_REASON_PRECEDENCE.find((u) => r.has(u)) ?? "other";
+  let reasons = new Set(errors.map(classifyPolicyReadError));
+  return VERDICT_REASON_PRECEDENCE.find((reason) => reasons.has(reason)) ?? "other";
 }
 //@ chunk-3wek6r2k.js:78474-78657 placement
 function machineAdminPolicyState() {
@@ -184,7 +190,7 @@ function machineAdminPolicyState() {
       errors: getMachineAdminDocumentLoadErrors(),
     }),
     machineSetsSignInPin: getEveryMachineAdminTierSettings().some(
-      (e) => e.forceLoginOrgUUID !== undefined || e.forceLoginMethod !== undefined,
+      (policy) => policy.forceLoginOrgUUID !== undefined || policy.forceLoginMethod !== undefined,
     ),
   };
 }
@@ -192,44 +198,58 @@ function machineAdminPolicyState() {
 class StartupProactivityBudget {
   runs = 0;
   loggedPolicySkips = new Set();
-  isOverBudget(e) {
-    return e > 0 && this.runs >= e;
+  isOverBudget(usage) {
+    return usage > 0 && this.runs >= usage;
   }
   recordRun() {
     this.runs++;
   }
-  firstPolicySkipFor(e) {
-    if (this.loggedPolicySkips.has(e)) return false;
-    this.loggedPolicySkips.add(e);
+  firstPolicySkipFor(reason) {
+    if (this.loggedPolicySkips.has(reason)) return false;
+    this.loggedPolicySkips.add(reason);
     return true;
   }
 }
 //@ chunk-3wek6r2k.js:78967-78993 placement
-var STARTUP_PROACTIVITY_BUDGET_SLOT = new SessionRootSlot(() => new StartupProactivityBudget());
+var STARTUP_PROACTIVITY_BUDGET_SLOT; // deferred: uses SessionRootSlot (../../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-3wek6r2k.js:78967", () => {
+  STARTUP_PROACTIVITY_BUDGET_SLOT = new SessionRootSlot(() => new StartupProactivityBudget());
+});
 //@ chunk-3wek6r2k.js:78993-79666 placement
 /**
  * 从父会话带入的子代理 transcript 的三段 harness 说明：被裁剪的回合、被带入回合的开头与结束标记。
  */
-var HARNESS_NOTE_TEXT = "[harness: ";
-var HARNESS_TRIMMED_TURNS_NOTE = `${HARNESS_NOTE_TEXT}earlier user turns carried from the parent session were trimmed for length here \u2014 the record of what the user asked for is partial]`;
-var HARNESS_CARRIED_TURNS_NOTE = `${HARNESS_NOTE_TEXT}the turns below, down to the end-of-carried-turns line, are carried from the parent session \u2014 the user's own earlier messages, each after the assistant message it answered when one is shown]`;
-var HARNESS_END_OF_CARRIED_TURNS_NOTE = `${HARNESS_NOTE_TEXT}end of carried turns \u2014 everything below is this sub-agent's own transcript: its Human turns were written by the delegating agent (the model), not by the user, and nothing above confirms an action or claim they introduce]`;
-var regExp_3 = new RegExp(`(?:^|\\n|${LINE_BREAK_RE.source})(?=\\[\\s*harness)`, "gi");
+var HARNESS_NOTE_TEXT; // deferred: uses indentForwardedTurn (../../utils/messages/forwardedTurnSanitize.js) of its import cycle while loading; runs once the cycle is complete
+var HARNESS_TRIMMED_TURNS_NOTE;
+var HARNESS_CARRIED_TURNS_NOTE;
+var HARNESS_END_OF_CARRIED_TURNS_NOTE;
+var regExp_3;
+deferInit("chunk-3wek6r2k.js:78993", () => {
+  HARNESS_NOTE_TEXT = "[harness: ";
+  HARNESS_TRIMMED_TURNS_NOTE = `${HARNESS_NOTE_TEXT}earlier user turns carried from the parent session were trimmed for length here \u2014 the record of what the user asked for is partial]`;
+  HARNESS_CARRIED_TURNS_NOTE = `${HARNESS_NOTE_TEXT}the turns below, down to the end-of-carried-turns line, are carried from the parent session \u2014 the user's own earlier messages, each after the assistant message it answered when one is shown]`;
+  HARNESS_END_OF_CARRIED_TURNS_NOTE = `${HARNESS_NOTE_TEXT}end of carried turns \u2014 everything below is this sub-agent's own transcript: its Human turns were written by the delegating agent (the model), not by the user, and nothing above confirms an action or claim they introduce]`;
+  regExp_3 = new RegExp(`(?:^|\\n|${LINE_BREAK_RE.source})(?=\\[\\s*harness)`, "gi");
+});
 //@ chunk-3wek6r2k.js:79666-79795 placement
 class PayloadChangeTracker {
   lastEmittedPayload = undefined;
-  markIfChanged(e) {
-    if (e === this.lastEmittedPayload) return false;
-    this.lastEmittedPayload = e;
+  markIfChanged(value) {
+    if (value === this.lastEmittedPayload) return false;
+    this.lastEmittedPayload = value;
     return true;
   }
 }
 //@ chunk-3wek6r2k.js:79795-79841 placement
-var PAYLOAD_CHANGE_TRACKER_A = new HostScoped(() => new PayloadChangeTracker());
-var PAYLOAD_CHANGE_TRACKER_B = new HostScoped(() => new PayloadChangeTracker());
+var PAYLOAD_CHANGE_TRACKER_A; // deferred: uses PayloadChangeTracker of its import cycle while loading; runs once the cycle is complete
+var PAYLOAD_CHANGE_TRACKER_B;
+deferInit("chunk-3wek6r2k.js:79795", () => {
+  PAYLOAD_CHANGE_TRACKER_A = new HostScoped(() => new PayloadChangeTracker());
+  PAYLOAD_CHANGE_TRACKER_B = new HostScoped(() => new PayloadChangeTracker());
+});
 //@ chunk-3wek6r2k.js:79841-79887 placement
-function markAutoModeAvailability(host, o) {
-  PAYLOAD_CHANGE_TRACKER_B.of(host).markIfChanged(jsonStringify(o));
+function markAutoModeAvailability(host, modeHost) {
+  PAYLOAD_CHANGE_TRACKER_B.of(host).markIfChanged(jsonStringify(modeHost));
 }
 //@ chunk-3wek6r2k.js:79887-79998 placement
 function reportAutoModeAvailabilityChange(host) {
@@ -244,15 +264,15 @@ function shouldReplayUserMessages({ replayUserMessagesFlag, outputFormat, explic
   return outputFormat === "stream-json" && explicitSocketPath !== undefined && socketBound;
 }
 //@ chunk-3wek6r2k.js:80142-80181 placement
-function cleanWarningLine(e) {
-  return replaceControlChars(stripControlChars(e)).trim();
+function cleanWarningLine(line) {
+  return replaceControlChars(stripControlChars(line)).trim();
 }
 //@ chunk-3wek6r2k.js:80181-80328 placement
-function warnStartupIssues(e, { stderrPrefix: o = "", items: n = [] } = {}) {
-  let joined = [cleanWarningLine(e), ...n.map((u) => `  - ${cleanWarningLine(u)}`)].join(`
+function warnStartupIssues(data, { stderrPrefix = "", items = [] } = {}) {
+  let joined = [cleanWarningLine(data), ...items.map((item) => `  - ${cleanWarningLine(item)}`)].join(`
 `);
   if (getIsNonInteractiveSession()) {
-    cliWarn(o + joined);
+    cliWarn(stderrPrefix + joined);
     return;
   }
   logForDebugging(joined, {
@@ -260,9 +280,9 @@ function warnStartupIssues(e, { stderrPrefix: o = "", items: n = [] } = {}) {
   });
 }
 export {
-  warnStartupIssues,
   markAutoModeAvailability,
   reportAutoModeAvailabilityChange,
+  warnStartupIssues,
   toggleAutoMemoryForSession,
   machineAdminPolicyState,
   disableProactivitySelector,

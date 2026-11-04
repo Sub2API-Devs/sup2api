@@ -5,11 +5,11 @@
  * pieces: chunk-t4ksmxzx.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 import { require_is } from "./is.js";
 
 //@ chunk-t4ksmxzx.js:4638-8540 cjs-fingerprint
-var require_messages = x(function (cjsExports) {
+var require_messages = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });

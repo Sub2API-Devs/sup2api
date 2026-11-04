@@ -27,10 +27,10 @@ import {
 import { isAnthropicHost } from "../anthropicHosts.js";
 import { parseGitRemote } from "../detectRepository.js";
 import { execFileNoThrowWithCwd } from "../execFileNoThrow.js";
-import { BMt } from "../git/gitSafeEnv.js";
+import { SAFE_GIT_REPO_ARGS } from "../git/gitSafeEnv.js";
 import { getRemoteHostSessionCount } from "../../commands/insights.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, string, union, array, unknown } from "../../../vendor/zod/v4/classic/schemas.js";
+import { objectSchema, stringSchema, union, array, unknown } from "../../../vendor/zod/v4/classic/schemas.js";
 import { runBuiltinGhApi, ghProxyRefusalText, proxyCaBundleError } from "./ghApiRequest.js";
 import { writeStdStreamOrThrow, handleStreamGoneErrors } from "../process.js";
 import { env } from "../env.js";
@@ -38,6 +38,7 @@ import { cliExit } from "../../cli/exit.js";
 import { readHandleUpTo } from "../fsOperations.js";
 import { getErrnoCode } from "../errors.js";
 import { getCwd } from "../cwd.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-fy5kn7m3.js:4054-4065 placement
 var MAX_LABEL_CHARS = 200;
@@ -45,331 +46,360 @@ var MAX_LABEL_CHARS = 200;
 /**
  * 截断过长的标签文本并在截断处加省略号。
  */
-function truncateLabel(e) {
-  let t = truncateToLength(e, MAX_LABEL_CHARS);
-  return escapeControlCharsForDisplay(t) + (t.length < e.length ? "\u2026" : "");
+function truncateLabel(text) {
+  let truncated = truncateToLength(text, MAX_LABEL_CHARS);
+  return escapeControlCharsForDisplay(truncated) + (truncated.length < text.length ? "\u2026" : "");
 }
 //@ chunk-fy5kn7m3.js:4139-4400 placement
 /**
  * 主机名长度上限、DNS 名正则、GitHub 自有域名列表。
  */
-var MAX_HOSTNAME_LENGTH = 255;
-var DNS_NAME_RE = /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+(?:[a-z]{1,63}|xn--[a-z0-9-]{1,59})$/;
-var GITHUB_OWNED_DOMAINS = [
-  GITHUB_HOST,
-  "githubusercontent.com",
-  "ghcr.io",
-  "github.dev",
-  "githubpreview.dev",
-  "github.io",
-  "github.app",
-  "githubapp.com",
-  "githubassets.com",
-  "githubcopilot.com",
-];
-var API = "api";
+var MAX_HOSTNAME_LENGTH; // deferred: uses GITHUB_HOST (../git/githubUrl.js) of its import cycle while loading; runs once the cycle is complete
+var DNS_NAME_RE;
+var GITHUB_OWNED_DOMAINS;
+var API;
+deferInit("chunk-fy5kn7m3.js:4139", () => {
+  MAX_HOSTNAME_LENGTH = 255;
+  DNS_NAME_RE = /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+(?:[a-z]{1,63}|xn--[a-z0-9-]{1,59})$/;
+  GITHUB_OWNED_DOMAINS = [
+    GITHUB_HOST,
+    "githubusercontent.com",
+    "ghcr.io",
+    "github.dev",
+    "githubpreview.dev",
+    "github.io",
+    "github.app",
+    "githubapp.com",
+    "githubassets.com",
+    "githubcopilot.com",
+  ];
+  API = "api";
+});
 //@ chunk-fy5kn7m3.js:4400-4483 placement
-function normalizeEnterpriseHost(e) {
-  let lower = e.toLowerCase();
+function normalizeEnterpriseHost(host) {
+  let lower = host.toLowerCase();
   return lower.length <= MAX_HOSTNAME_LENGTH && HOST_LABEL_RE.test(lower) ? lower : "that host";
 }
 //@ chunk-fy5kn7m3.js:4483-5181 placement
 /**
  * 校验 GitHub Enterprise 主机名并得到 API 基址（拒绝 IP、github.com 自有域名、Anthropic 主机；ghe.com 子域用 api. 前缀）。
  */
-function resolveEnterpriseHost(e) {
-  let t = normalizeHost(e);
-  let s = normalizeEnterpriseHost(t);
-  let r = {
-    refusal: `${s} is not a host this gh sends a request to: name a GitHub Enterprise host by its DNS name alone (no scheme, port, path or IP address).`,
-  };
-  if (t.length > MAX_HOSTNAME_LENGTH || !DNS_NAME_RE.test(t) || t.endsWith(".localhost")) return r;
-  let n = {
-    refusal: `${s} is not a GitHub Enterprise host; ${GITHUB_HOST} itself is named as ${GITHUB_HOST}.`,
+function resolveEnterpriseHost(host) {
+  let normalizedHost = normalizeHost(host);
+  let safeHost = normalizeEnterpriseHost(normalizedHost);
+  let dnsRefusal = {
+    refusal: `${safeHost} is not a host this gh sends a request to: name a GitHub Enterprise host by its DNS name alone (no scheme, port, path or IP address).`,
   };
   if (
-    t === GHE_HOST_SUFFIX.slice(1) ||
-    GITHUB_OWNED_DOMAINS.some((h) => t === h || t.endsWith(`.${h}`)) ||
-    isAnthropicHost(t)
+    normalizedHost.length > MAX_HOSTNAME_LENGTH ||
+    !DNS_NAME_RE.test(normalizedHost) ||
+    normalizedHost.endsWith(".localhost")
   )
-    return n;
-  let a;
-  let d;
-  if (t.endsWith(GHE_HOST_SUFFIX)) {
-    let parts = t.slice(0, -GHE_HOST_SUFFIX.length).split(".");
-    let [l, y, ...g] = parts;
-    let b = y === undefined ? l : y;
-    if (g.length > 0 || (y !== undefined && l !== API)) return n;
-    let f = b + GHE_HOST_SUFFIX;
-    d = `${API}.${f}`;
-    a = {
-      host: f,
-      apiBase: `https://${d}`,
+    return dnsRefusal;
+  let ownedDomainRefusal = {
+    refusal: `${safeHost} is not a GitHub Enterprise host; ${GITHUB_HOST} itself is named as ${GITHUB_HOST}.`,
+  };
+  if (
+    normalizedHost === GHE_HOST_SUFFIX.slice(1) ||
+    GITHUB_OWNED_DOMAINS.some(
+      (domain) => normalizedHost === domain || normalizedHost.endsWith(`.${domain}`),
+    ) ||
+    isAnthropicHost(normalizedHost)
+  )
+    return ownedDomainRefusal;
+  let resolved;
+  let apiHostname;
+  if (normalizedHost.endsWith(GHE_HOST_SUFFIX)) {
+    let parts = normalizedHost.slice(0, -GHE_HOST_SUFFIX.length).split(".");
+    let [firstLabel, secondLabel, ...extraLabels] = parts;
+    let hostLabel = secondLabel === undefined ? firstLabel : secondLabel;
+    if (extraLabels.length > 0 || (secondLabel !== undefined && firstLabel !== API))
+      return ownedDomainRefusal;
+    let enterpriseHost = hostLabel + GHE_HOST_SUFFIX;
+    apiHostname = `${API}.${enterpriseHost}`;
+    resolved = {
+      host: enterpriseHost,
+      apiBase: `https://${apiHostname}`,
     };
   } else {
-    d = t;
-    a = {
-      host: t,
-      apiBase: githubApiBase(t),
+    apiHostname = normalizedHost;
+    resolved = {
+      host: normalizedHost,
+      apiBase: githubApiBase(normalizedHost),
     };
   }
-  return URL.parse(a.apiBase)?.hostname === d ? a : r;
+  return URL.parse(resolved.apiBase)?.hostname === apiHostname ? resolved : dnsRefusal;
 }
 //@ chunk-fy5kn7m3.js:5181-10500 placement
 /**
  * 内置 gh api 的帮助文本。
  */
-var GH_API_HELP = "repos/{owner}/{repo}";
-var HELP_ISSUE_COMMENT_EXAMPLE = `gh api ${GH_API_HELP}/issues/<number>/comments -f body='<text>'`;
-var HELP_ADD_LABEL_EXAMPLE = `gh api ${GH_API_HELP}/issues/<number>/labels -f 'labels[]=<label>'  # add a label`;
-var HELP_ARTIFACT_DOWNLOAD_NOTE =
-  "which are served from another host that this gh does not follow a redirect to";
-var HELP_NO_TOKEN_NOTES = [
-  "Nothing to sign in to and no token to read: requests go through this session's GitHub proxy, which adds the credential.",
-  "gh api user  # the account behind it, where the credential has one",
-];
-var HELP_SEARCH_REFUSED_NOTE = "where this session's GitHub proxy refuses search/";
-var HELP_PULLS_FOR_BRANCH_EXAMPLE = `gh api '${GH_API_HELP}/pulls?head={owner}:{branch}&state=all'  # <number> of the current branch's pull request (a fork's: its owner in place of {owner} before the colon)`;
-var HELP_CLONE_EXAMPLE = "git clone https://github.com/<owner>/<repo>.git";
-var HELP_PR_SUBCOMMAND_EXAMPLES = new Map([
-  [
-    "pr create",
+var GH_API_HELP; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var HELP_ISSUE_COMMENT_EXAMPLE;
+var HELP_ADD_LABEL_EXAMPLE;
+var HELP_ARTIFACT_DOWNLOAD_NOTE;
+var HELP_NO_TOKEN_NOTES;
+var HELP_SEARCH_REFUSED_NOTE;
+var HELP_PULLS_FOR_BRANCH_EXAMPLE;
+var HELP_CLONE_EXAMPLE;
+var HELP_PR_SUBCOMMAND_EXAMPLES;
+var GH_SUBCOMMAND_ALIASES;
+var REPO_FLAG_RE;
+var REPO_URL_RE;
+var REPO_SLUG_ARG_RE;
+deferInit("chunk-fy5kn7m3.js:5181", () => {
+  GH_API_HELP = "repos/{owner}/{repo}";
+  HELP_ISSUE_COMMENT_EXAMPLE = `gh api ${GH_API_HELP}/issues/<number>/comments -f body='<text>'`;
+  HELP_ADD_LABEL_EXAMPLE = `gh api ${GH_API_HELP}/issues/<number>/labels -f 'labels[]=<label>'  # add a label`;
+  HELP_ARTIFACT_DOWNLOAD_NOTE =
+    "which are served from another host that this gh does not follow a redirect to";
+  HELP_NO_TOKEN_NOTES = [
+    "Nothing to sign in to and no token to read: requests go through this session's GitHub proxy, which adds the credential.",
+    "gh api user  # the account behind it, where the credential has one",
+  ];
+  HELP_SEARCH_REFUSED_NOTE = "where this session's GitHub proxy refuses search/";
+  HELP_PULLS_FOR_BRANCH_EXAMPLE = `gh api '${GH_API_HELP}/pulls?head={owner}:{branch}&state=all'  # <number> of the current branch's pull request (a fork's: its owner in place of {owner} before the colon)`;
+  HELP_CLONE_EXAMPLE = "git clone https://github.com/<owner>/<repo>.git";
+  HELP_PR_SUBCOMMAND_EXAMPLES = new Map([
     [
-      `gh api ${GH_API_HELP}/pulls -f title='<title>' -f head='<branch>' -f base='<base branch>' -f body='<text>'  # a draft: add -F draft=true`,
+      "pr create",
+      [
+        `gh api ${GH_API_HELP}/pulls -f title='<title>' -f head='<branch>' -f base='<base branch>' -f body='<text>'  # a draft: add -F draft=true`,
+      ],
     ],
-  ],
-  [
-    "pr view",
     [
-      `gh api ${GH_API_HELP}/pulls/<number>`,
-      `gh api ${GH_API_HELP}/pulls/<number>/ccr/review_threads  # its review threads`,
-      `gh api ${GH_API_HELP}/issues/<number>/comments  # its conversation comments`,
-      HELP_PULLS_FOR_BRANCH_EXAMPLE,
+      "pr view",
+      [
+        `gh api ${GH_API_HELP}/pulls/<number>`,
+        `gh api ${GH_API_HELP}/pulls/<number>/ccr/review_threads  # its review threads`,
+        `gh api ${GH_API_HELP}/issues/<number>/comments  # its conversation comments`,
+        HELP_PULLS_FOR_BRANCH_EXAMPLE,
+      ],
     ],
-  ],
-  ["pr list", [`gh api '${GH_API_HELP}/pulls?state=open&per_page=100'`]],
-  [
-    "pr merge",
+    ["pr list", [`gh api '${GH_API_HELP}/pulls?state=open&per_page=100'`]],
     [
-      `gh api -X PUT ${GH_API_HELP}/pulls/<number>/merge -f merge_method=squash`,
-      `gh api -X PUT ${GH_API_HELP}/pulls/<number>/ccr/auto_merge -f merge_method=squash  # --auto; -X DELETE cancels it`,
-      HELP_PULLS_FOR_BRANCH_EXAMPLE,
+      "pr merge",
+      [
+        `gh api -X PUT ${GH_API_HELP}/pulls/<number>/merge -f merge_method=squash`,
+        `gh api -X PUT ${GH_API_HELP}/pulls/<number>/ccr/auto_merge -f merge_method=squash  # --auto; -X DELETE cancels it`,
+        HELP_PULLS_FOR_BRANCH_EXAMPLE,
+      ],
     ],
-  ],
-  ["pr comment", [HELP_ISSUE_COMMENT_EXAMPLE, HELP_PULLS_FOR_BRANCH_EXAMPLE]],
-  [
-    "pr checks",
+    ["pr comment", [HELP_ISSUE_COMMENT_EXAMPLE, HELP_PULLS_FOR_BRANCH_EXAMPLE]],
     [
-      `gh api ${GH_API_HELP}/commits/<sha>/check-runs`,
-      `gh api ${GH_API_HELP}/pulls/<number>  # <sha> of a pull request: its head.sha`,
-      HELP_PULLS_FOR_BRANCH_EXAMPLE,
+      "pr checks",
+      [
+        `gh api ${GH_API_HELP}/commits/<sha>/check-runs`,
+        `gh api ${GH_API_HELP}/pulls/<number>  # <sha> of a pull request: its head.sha`,
+        HELP_PULLS_FOR_BRANCH_EXAMPLE,
+      ],
     ],
-  ],
-  [
-    "pr ready",
     [
-      `gh api -X POST ${GH_API_HELP}/pulls/<number>/ccr/ready_for_review`,
-      `gh api -X POST ${GH_API_HELP}/pulls/<number>/ccr/convert_to_draft  # --undo`,
-      HELP_PULLS_FOR_BRANCH_EXAMPLE,
+      "pr ready",
+      [
+        `gh api -X POST ${GH_API_HELP}/pulls/<number>/ccr/ready_for_review`,
+        `gh api -X POST ${GH_API_HELP}/pulls/<number>/ccr/convert_to_draft  # --undo`,
+        HELP_PULLS_FOR_BRANCH_EXAMPLE,
+      ],
     ],
-  ],
-  [
-    "pr review",
     [
-      `gh api ${GH_API_HELP}/pulls/<number>/reviews -f event=COMMENT -f body='<text>'  # or event=REQUEST_CHANGES`,
-      HELP_PULLS_FOR_BRANCH_EXAMPLE,
+      "pr review",
+      [
+        `gh api ${GH_API_HELP}/pulls/<number>/reviews -f event=COMMENT -f body='<text>'  # or event=REQUEST_CHANGES`,
+        HELP_PULLS_FOR_BRANCH_EXAMPLE,
+      ],
     ],
-  ],
-  [
-    "pr diff",
     [
-      `gh api ${GH_API_HELP}/pulls/<number> -H 'Accept: application/vnd.github.diff'`,
-      `gh api ${GH_API_HELP}/pulls/<number>/files  # one patch per file`,
-      HELP_PULLS_FOR_BRANCH_EXAMPLE,
+      "pr diff",
+      [
+        `gh api ${GH_API_HELP}/pulls/<number> -H 'Accept: application/vnd.github.diff'`,
+        `gh api ${GH_API_HELP}/pulls/<number>/files  # one patch per file`,
+        HELP_PULLS_FOR_BRANCH_EXAMPLE,
+      ],
     ],
-  ],
-  ["pr close", [`gh api -X PATCH ${GH_API_HELP}/pulls/<number> -f state=closed`]],
-  [
-    "pr edit",
+    ["pr close", [`gh api -X PATCH ${GH_API_HELP}/pulls/<number> -f state=closed`]],
     [
-      `gh api -X PATCH ${GH_API_HELP}/pulls/<number> -f title='<title>' -f body='<text>'`,
-      HELP_ADD_LABEL_EXAMPLE,
-      HELP_PULLS_FOR_BRANCH_EXAMPLE,
+      "pr edit",
+      [
+        `gh api -X PATCH ${GH_API_HELP}/pulls/<number> -f title='<title>' -f body='<text>'`,
+        HELP_ADD_LABEL_EXAMPLE,
+        HELP_PULLS_FOR_BRANCH_EXAMPLE,
+      ],
     ],
-  ],
-  [
-    "pr checkout",
-    ["No `gh api` form: use git.", "git fetch origin refs/pull/<number>/head && git checkout FETCH_HEAD"],
-  ],
-  ["issue create", [`gh api ${GH_API_HELP}/issues -f title='<title>' -f body='<text>'`]],
-  [
-    "issue view",
     [
-      `gh api ${GH_API_HELP}/issues/<number>`,
-      `gh api ${GH_API_HELP}/issues/<number>/comments  # its comments`,
+      "pr checkout",
+      ["No `gh api` form: use git.", "git fetch origin refs/pull/<number>/head && git checkout FETCH_HEAD"],
     ],
-  ],
-  [
-    "issue list",
+    ["issue create", [`gh api ${GH_API_HELP}/issues -f title='<title>' -f body='<text>'`]],
     [
-      `gh api '${GH_API_HELP}/issues?state=open&per_page=100'  # pull requests are in the list too: each has a pull_request key`,
+      "issue view",
+      [
+        `gh api ${GH_API_HELP}/issues/<number>`,
+        `gh api ${GH_API_HELP}/issues/<number>/comments  # its comments`,
+      ],
     ],
-  ],
-  ["issue comment", [HELP_ISSUE_COMMENT_EXAMPLE]],
-  ["issue close", [`gh api -X PATCH ${GH_API_HELP}/issues/<number> -f state=closed`]],
-  [
-    "issue edit",
     [
-      `gh api -X PATCH ${GH_API_HELP}/issues/<number> -f title='<title>' -f body='<text>'`,
-      HELP_ADD_LABEL_EXAMPLE,
+      "issue list",
+      [
+        `gh api '${GH_API_HELP}/issues?state=open&per_page=100'  # pull requests are in the list too: each has a pull_request key`,
+      ],
     ],
-  ],
-  [
-    "run list",
-    [`gh api '${GH_API_HELP}/actions/runs?per_page=20'  # filters: branch=, event=, status=, head_sha=`],
-  ],
-  [
-    "run view",
+    ["issue comment", [HELP_ISSUE_COMMENT_EXAMPLE]],
+    ["issue close", [`gh api -X PATCH ${GH_API_HELP}/issues/<number> -f state=closed`]],
     [
-      `gh api ${GH_API_HELP}/actions/runs/<run-id>`,
-      `gh api ${GH_API_HELP}/actions/runs/<run-id>/jobs  # its jobs and their steps`,
-      `gh api ${GH_API_HELP}/actions/jobs/<job-id>/logs  # --log: one job's log, where this session's GitHub proxy follows GitHub's redirect for it`,
+      "issue edit",
+      [
+        `gh api -X PATCH ${GH_API_HELP}/issues/<number> -f title='<title>' -f body='<text>'`,
+        HELP_ADD_LABEL_EXAMPLE,
+      ],
     ],
-  ],
-  [
-    "run rerun",
     [
-      `gh api -X POST ${GH_API_HELP}/actions/runs/<run-id>/rerun-failed-jobs  # --failed`,
-      `gh api -X POST ${GH_API_HELP}/actions/runs/<run-id>/rerun  # every job`,
+      "run list",
+      [`gh api '${GH_API_HELP}/actions/runs?per_page=20'  # filters: branch=, event=, status=, head_sha=`],
     ],
-  ],
-  [
-    "run watch",
     [
-      "No `gh api` form: it polls. Poll the run yourself and read its status and conclusion:",
-      `gh api ${GH_API_HELP}/actions/runs/<run-id>`,
+      "run view",
+      [
+        `gh api ${GH_API_HELP}/actions/runs/<run-id>`,
+        `gh api ${GH_API_HELP}/actions/runs/<run-id>/jobs  # its jobs and their steps`,
+        `gh api ${GH_API_HELP}/actions/jobs/<job-id>/logs  # --log: one job's log, where this session's GitHub proxy follows GitHub's redirect for it`,
+      ],
     ],
-  ],
-  ["run cancel", [`gh api -X POST ${GH_API_HELP}/actions/runs/<run-id>/cancel`]],
-  [
-    "run download",
     [
-      `No \`gh api\` form for downloading artifacts, ${HELP_ARTIFACT_DOWNLOAD_NOTE}. Listing them:`,
-      `gh api ${GH_API_HELP}/actions/runs/<run-id>/artifacts`,
+      "run rerun",
+      [
+        `gh api -X POST ${GH_API_HELP}/actions/runs/<run-id>/rerun-failed-jobs  # --failed`,
+        `gh api -X POST ${GH_API_HELP}/actions/runs/<run-id>/rerun  # every job`,
+      ],
     ],
-  ],
-  ["workflow list", [`gh api ${GH_API_HELP}/actions/workflows`]],
-  [
-    "workflow view",
     [
-      `gh api ${GH_API_HELP}/actions/workflows/<workflow>  # <workflow>: its file name (ci.yml) or its id`,
-      `gh api ${GH_API_HELP}/actions/workflows/<workflow>/runs  # its runs`,
+      "run watch",
+      [
+        "No `gh api` form: it polls. Poll the run yourself and read its status and conclusion:",
+        `gh api ${GH_API_HELP}/actions/runs/<run-id>`,
+      ],
     ],
-  ],
-  [
-    "workflow run",
+    ["run cancel", [`gh api -X POST ${GH_API_HELP}/actions/runs/<run-id>/cancel`]],
     [
-      `gh api -X POST ${GH_API_HELP}/actions/workflows/<workflow>/dispatches -f ref=<branch>  # <workflow>: its file name (ci.yml) or its id; inputs: -f 'inputs[<name>]=<value>'`,
+      "run download",
+      [
+        `No \`gh api\` form for downloading artifacts, ${HELP_ARTIFACT_DOWNLOAD_NOTE}. Listing them:`,
+        `gh api ${GH_API_HELP}/actions/runs/<run-id>/artifacts`,
+      ],
     ],
-  ],
-  ["release list", [`gh api ${GH_API_HELP}/releases`]],
-  [
-    "release view",
+    ["workflow list", [`gh api ${GH_API_HELP}/actions/workflows`]],
     [
-      `gh api ${GH_API_HELP}/releases/tags/<tag>`,
-      `gh api ${GH_API_HELP}/releases/latest  # the latest release`,
+      "workflow view",
+      [
+        `gh api ${GH_API_HELP}/actions/workflows/<workflow>  # <workflow>: its file name (ci.yml) or its id`,
+        `gh api ${GH_API_HELP}/actions/workflows/<workflow>/runs  # its runs`,
+      ],
     ],
-  ],
-  [
-    "release create",
     [
-      `gh api ${GH_API_HELP}/releases -f tag_name=<tag> -f name='<title>' -f body='<text>'  # this session's GitHub proxy may refuse release writes`,
-      "No `gh api` form for uploading its files, which go to another host.",
+      "workflow run",
+      [
+        `gh api -X POST ${GH_API_HELP}/actions/workflows/<workflow>/dispatches -f ref=<branch>  # <workflow>: its file name (ci.yml) or its id; inputs: -f 'inputs[<name>]=<value>'`,
+      ],
     ],
-  ],
-  [
-    "release download",
+    ["release list", [`gh api ${GH_API_HELP}/releases`]],
     [
-      `No \`gh api\` form for downloading a release's files, ${HELP_ARTIFACT_DOWNLOAD_NOTE}. Listing them (assets):`,
-      `gh api ${GH_API_HELP}/releases/tags/<tag>`,
+      "release view",
+      [
+        `gh api ${GH_API_HELP}/releases/tags/<tag>`,
+        `gh api ${GH_API_HELP}/releases/latest  # the latest release`,
+      ],
     ],
-  ],
-  [
-    "release upload",
-    ["No `gh api` form: a release's files are uploaded to another host, which this gh does not reach."],
-  ],
-  ["repo view", [`gh api ${GH_API_HELP}`]],
-  ["repo clone", ["No `gh api` form: use git.", HELP_CLONE_EXAMPLE]],
-  ["label list", [`gh api ${GH_API_HELP}/labels`]],
-  [
-    "search issues",
     [
-      "gh api -X GET search/issues -f q='<terms> is:issue'",
-      `gh api '${GH_API_HELP}/issues?state=all&labels=<label>'  # ${HELP_SEARCH_REFUSED_NOTE}: filter a list`,
+      "release create",
+      [
+        `gh api ${GH_API_HELP}/releases -f tag_name=<tag> -f name='<title>' -f body='<text>'  # this session's GitHub proxy may refuse release writes`,
+        "No `gh api` form for uploading its files, which go to another host.",
+      ],
     ],
-  ],
-  [
-    "search prs",
     [
-      "gh api -X GET search/issues -f q='<terms> is:pr'",
-      `gh api '${GH_API_HELP}/pulls?state=all&per_page=100'  # ${HELP_SEARCH_REFUSED_NOTE}: filter a list`,
+      "release download",
+      [
+        `No \`gh api\` form for downloading a release's files, ${HELP_ARTIFACT_DOWNLOAD_NOTE}. Listing them (assets):`,
+        `gh api ${GH_API_HELP}/releases/tags/<tag>`,
+      ],
     ],
-  ],
-  [
-    "search code",
     [
-      "gh api -X GET search/code -f q='<terms> repo:<owner>/<repo>'",
-      `Search a clone of the repository instead ${HELP_SEARCH_REFUSED_NOTE}.`,
+      "release upload",
+      ["No `gh api` form: a release's files are uploaded to another host, which this gh does not reach."],
     ],
-  ],
-  ["search repos", ["gh api -X GET search/repositories -f q='<terms>'"]],
-  ["auth status", HELP_NO_TOKEN_NOTES],
-  ["auth login", HELP_NO_TOKEN_NOTES],
-  ["auth token", HELP_NO_TOKEN_NOTES],
-]);
-var GH_SUBCOMMAND_ALIASES = new Map([
-  ["new", "create"],
-  ["ls", "list"],
-]);
-var REPO_FLAG_RE = /^(-R|--repo)(=|$)|^-R[^-]/;
-var REPO_URL_RE = /^https?:\/\/[^/]+\/[^/]+\/[^/]+/;
-var REPO_SLUG_ARG_RE = /^[^-/][^/]*(\/[^/]+){1,2}$/;
+    ["repo view", [`gh api ${GH_API_HELP}`]],
+    ["repo clone", ["No `gh api` form: use git.", HELP_CLONE_EXAMPLE]],
+    ["label list", [`gh api ${GH_API_HELP}/labels`]],
+    [
+      "search issues",
+      [
+        "gh api -X GET search/issues -f q='<terms> is:issue'",
+        `gh api '${GH_API_HELP}/issues?state=all&labels=<label>'  # ${HELP_SEARCH_REFUSED_NOTE}: filter a list`,
+      ],
+    ],
+    [
+      "search prs",
+      [
+        "gh api -X GET search/issues -f q='<terms> is:pr'",
+        `gh api '${GH_API_HELP}/pulls?state=all&per_page=100'  # ${HELP_SEARCH_REFUSED_NOTE}: filter a list`,
+      ],
+    ],
+    [
+      "search code",
+      [
+        "gh api -X GET search/code -f q='<terms> repo:<owner>/<repo>'",
+        `Search a clone of the repository instead ${HELP_SEARCH_REFUSED_NOTE}.`,
+      ],
+    ],
+    ["search repos", ["gh api -X GET search/repositories -f q='<terms>'"]],
+    ["auth status", HELP_NO_TOKEN_NOTES],
+    ["auth login", HELP_NO_TOKEN_NOTES],
+    ["auth token", HELP_NO_TOKEN_NOTES],
+  ]);
+  GH_SUBCOMMAND_ALIASES = new Map([
+    ["new", "create"],
+    ["ls", "list"],
+  ]);
+  REPO_FLAG_RE = /^(-R|--repo)(=|$)|^-R[^-]/;
+  REPO_URL_RE = /^https?:\/\/[^/]+\/[^/]+\/[^/]+/;
+  REPO_SLUG_ARG_RE = /^[^-/][^/]*(\/[^/]+){1,2}$/;
+});
 //@ chunk-fy5kn7m3.js:10500-11186 placement
 /**
  * 对不支持的 gh 子命令给出用 gh api 或 git 的替代写法（必要时提示替换 {owner}/{repo} 与 --hostname）。
  */
-function ghSubcommandAlternative(e, t) {
-  let [s, r] = e;
-  if (s === undefined || r === undefined) return;
-  let n = `${s} ${GH_SUBCOMMAND_ALIASES.get(r) ?? r}`;
-  let a = HELP_PR_SUBCOMMAND_EXAMPLES.get(n);
-  if (a === undefined) return;
-  let d = t === ANY ? "the repository's GitHub Enterprise host" : t.join(" or ");
-  let h =
-    d !== ""
-      ? a.map((g) =>
-          g === HELP_CLONE_EXAMPLE
-            ? `git clone https://<host>/<owner>/<repo>.git  # <host>: github.com or ${d}`
-            : g,
+function ghSubcommandAlternative(ghArgs, ghesHosts) {
+  let [group, subcommand] = ghArgs;
+  if (group === undefined || subcommand === undefined) return;
+  let commandName = `${group} ${GH_SUBCOMMAND_ALIASES.get(subcommand) ?? subcommand}`;
+  let examples = HELP_PR_SUBCOMMAND_EXAMPLES.get(commandName);
+  if (examples === undefined) return;
+  let hostList = ghesHosts === ANY ? "the repository's GitHub Enterprise host" : ghesHosts.join(" or ");
+  let adjustedExamples =
+    hostList !== ""
+      ? examples.map((example) =>
+          example === HELP_CLONE_EXAMPLE
+            ? `git clone https://<host>/<owner>/<repo>.git  # <host>: github.com or ${hostList}`
+            : example,
         )
-      : a;
-  let sliced = e.slice(2);
-  let y =
-    h.some((g) => g.includes("{owner}")) &&
-    (e.some((g) => REPO_FLAG_RE.test(g)) ||
+      : examples;
+  let sliced = ghArgs.slice(2);
+  let mentionsRepo =
+    adjustedExamples.some((example) => example.includes("{owner}")) &&
+    (ghArgs.some((arg) => REPO_FLAG_RE.test(arg)) ||
       sliced.some(
-        (g, b) =>
-          !(sliced[b - 1] ?? "").startsWith("-") &&
-          (REPO_URL_RE.test(g) || (s === "repo" && REPO_SLUG_ARG_RE.test(g))),
+        (arg, index) =>
+          !(sliced[index - 1] ?? "").startsWith("-") &&
+          (REPO_URL_RE.test(arg) || (group === "repo" && REPO_SLUG_ARG_RE.test(arg))),
       ));
   return (
-    `Instead of \`gh ${n}\`:
-${h.map((g) => `  ${g}`).join(`
+    `Instead of \`gh ${commandName}\`:
+${adjustedExamples.map((example) => `  ${example}`).join(`
 `)}` +
-    (y
+    (mentionsRepo
       ? `
   The command named a repository: write that repository in place of {owner}/{repo}.` +
-        (d !== "" ? " If it is on another host, add --hostname <host>." : "")
+        (hostList !== "" ? " If it is on another host, add --hostname <host>." : "")
       : "")
   );
 }
@@ -382,20 +412,20 @@ var GRAPHQL_UNAVAILABLE_TEXT =
 var BUILTIN_GH_LABEL = "Claude Code's built-in GitHub client, not the GitHub CLI";
 var NO_GH_CLI_TEXT = "no GitHub CLI was found on this machine when this session started";
 //@ chunk-fy5kn7m3.js:11687-14216 placement
-function ghApiUsageText(e) {
-  let t = e === ANY;
-  let s = t || e.length > 0;
+function ghApiUsageText(ghesHosts) {
+  let isAny = ghesHosts === ANY;
+  let mentionsHosts = isAny || ghesHosts.length > 0;
   return `Usage: gh api <endpoint> [flags]
 
 This gh is ${BUILTIN_GH_LABEL}:
 ${NO_GH_CLI_TEXT}.
 ${
-  t
+  isAny
     ? `It makes GitHub REST API requests to ${GITHUB_HOST}, or to the GitHub Enterprise
 host of this checkout's remote (or --hostname <host>), through this session's
 GitHub proxy, which supplies the credential for the hosts and repositories this
 session is connected to, and has no other gh command.`
-    : `It makes GitHub REST API requests to ${[GITHUB_HOST, ...e].join(", ")} through this session's GitHub
+    : `It makes GitHub REST API requests to ${[GITHUB_HOST, ...ghesHosts].join(", ")} through this session's GitHub
 proxy, already authenticated, and has no other gh command.`
 }
 A GitHub CLI installed during the session takes this one's place once it is on
@@ -403,9 +433,9 @@ PATH. On a self-hosted runner that one has only the GitHub credentials the
 runner's operator provides and does not go through this session's GitHub proxy.
 
 Flags:${
-    s
+    mentionsHosts
       ? `
-      --hostname <host>     GitHub host of the request${t ? "" : ", as GH_HOST"} (default ${GITHUB_HOST}, or the
+      --hostname <host>     GitHub host of the request${isAny ? "" : ", as GH_HOST"} (default ${GITHUB_HOST}, or the
                             host of the repository that fills {owner}, {repo} in the endpoint)`
       : ""
   }
@@ -423,9 +453,9 @@ Flags:${
       --silent              Do not print the response body
 
 {owner}, {repo} and {branch} (or :owner, :repo, :branch) in the endpoint and in
--F values are filled in from GH_REPO, else from the ${s && !t ? "remotes on those hosts" : `${GITHUB_HOST} remotes`} of the
+-F values are filled in from GH_REPO, else from the ${mentionsHosts && !isAny ? "remotes on those hosts" : `${GITHUB_HOST} remotes`} of the
 current repository: upstream, github, origin, then the others by name.${
-    t
+    isAny
       ? `
 A repository with no ${GITHUB_HOST} remote is read for its other remotes the same
 way, and the remote chosen names the host the request goes to.
@@ -438,15 +468,18 @@ Example: gh api repos/{owner}/{repo}/pulls -f title='Fix' -f head='my-branch' -f
 `;
 }
 //@ chunk-fy5kn7m3.js:14216-14309 placement
-var GH_HOST_NOTE = ` The host came from GH_HOST: \`--hostname ${GITHUB_HOST}\` names github.com for one command.`;
+var GH_HOST_NOTE; // deferred: uses GITHUB_HOST (../git/githubUrl.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-fy5kn7m3.js:14216", () => {
+  GH_HOST_NOTE = ` The host came from GH_HOST: \`--hostname ${GITHUB_HOST}\` names github.com for one command.`;
+});
 //@ chunk-fy5kn7m3.js:14309-14632 placement
 /**
  * GH_HOST/GH_REPO 指向其他主机时的拒绝说明。
  */
-function hostEnvVarRefusal(e) {
+function hostEnvVarRefusal(varName) {
   return (
-    `${e} names a host other than ${GITHUB_HOST}, and an environment variable is not used to pick a host in this session: ` +
-    (e === "GH_HOST"
+    `${varName} names a host other than ${GITHUB_HOST}, and an environment variable is not used to pick a host in this session: ` +
+    (varName === "GH_HOST"
       ? `pass --hostname <host> on the command instead. For ${GITHUB_HOST}, pass --hostname ${GITHUB_HOST} or unset GH_HOST.`
       : "set GH_REPO=OWNER/REPO and pass --hostname <host> on the command instead.")
   );
@@ -455,56 +488,61 @@ function hostEnvVarRefusal(e) {
 /**
  * 主机不在本会话 GitHub 代理范围内的说明。
  */
-function hostNotServedText(e, t, s = false) {
+function hostNotServedText(host, ghesHosts, viaEnv = false) {
   return (
-    `${normalizeEnterpriseHost(e)} is not served here: this gh reaches ${[GITHUB_HOST, ...t].join(" and ")} only, through this session's GitHub proxy. Which GitHub Enterprise Server hosts it reaches is fixed when the session starts, and nothing run in the session adds one` +
-    (s ? `.${GH_HOST_NOTE}` : ".")
+    `${normalizeEnterpriseHost(host)} is not served here: this gh reaches ${[GITHUB_HOST, ...ghesHosts].join(" and ")} only, through this session's GitHub proxy. Which GitHub Enterprise Server hosts it reaches is fixed when the session starts, and nothing run in the session adds one` +
+    (viaEnv ? `.${GH_HOST_NOTE}` : ".")
   );
 }
 //@ chunk-fy5kn7m3.js:14914-15489 placement
 /**
  * gh api 带值参数、开关参数与不支持参数表。
  */
-var GH_API_VALUE_FLAGS = {
-  "-X": "--method",
-  "-f": "--raw-field",
-  "-F": "--field",
-  "-H": "--header",
-  "-q": "--jq",
-  "-t": "--template",
-  "-p": "--preview",
-  "--method": "--method",
-  "--raw-field": "--raw-field",
-  "--field": "--field",
-  "--header": "--header",
-  "--jq": "--jq",
-  "--input": "--input",
-  "--hostname": "--hostname",
-  "--template": "--template",
-  "--preview": "--preview",
-  "--cache": "--cache",
-};
-var GH_API_BOOLEAN_FLAGS = {
-  "-i": "--include",
-  "-h": "--help",
-  "--include": "--include",
-  "--paginate": "--paginate",
-  "--silent": "--silent",
-  "--help": "--help",
-  "--slurp": "--slurp",
-  "--verbose": "--verbose",
-};
-var GH_API_UNSUPPORTED_FLAGS = new Set(["--template", "--preview", "--slurp", "--verbose"]);
+var GH_API_VALUE_FLAGS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var GH_API_BOOLEAN_FLAGS;
+var GH_API_UNSUPPORTED_FLAGS;
+deferInit("chunk-fy5kn7m3.js:14914", () => {
+  GH_API_VALUE_FLAGS = {
+    "-X": "--method",
+    "-f": "--raw-field",
+    "-F": "--field",
+    "-H": "--header",
+    "-q": "--jq",
+    "-t": "--template",
+    "-p": "--preview",
+    "--method": "--method",
+    "--raw-field": "--raw-field",
+    "--field": "--field",
+    "--header": "--header",
+    "--jq": "--jq",
+    "--input": "--input",
+    "--hostname": "--hostname",
+    "--template": "--template",
+    "--preview": "--preview",
+    "--cache": "--cache",
+  };
+  GH_API_BOOLEAN_FLAGS = {
+    "-i": "--include",
+    "-h": "--help",
+    "--include": "--include",
+    "--paginate": "--paginate",
+    "--silent": "--silent",
+    "--help": "--help",
+    "--slurp": "--slurp",
+    "--verbose": "--verbose",
+  };
+  GH_API_UNSUPPORTED_FLAGS = new Set(["--template", "--preview", "--slurp", "--verbose"]);
+});
 //@ chunk-fy5kn7m3.js:15489-18121 placement
-function parseGhApiArgs(e, ghHost, s, r) {
-  if (e[0] !== "api")
+function parseGhApiArgs(ghArgs, ghHost, ghesHosts, version) {
+  if (ghArgs[0] !== "api")
     return {
       kind: "refuse",
       message:
-        `this gh is ${BUILTIN_GH_LABEL} (Claude Code ${r}): \`gh api <REST endpoint>\` works here, already authenticated through this session's GitHub proxy, and there is no other gh command (${NO_GH_CLI_TEXT}).
-` + (ghSubcommandAlternative(e, s) ?? "Example: gh api repos/{owner}/{repo}/pulls/123"),
+        `this gh is ${BUILTIN_GH_LABEL} (Claude Code ${version}): \`gh api <REST endpoint>\` works here, already authenticated through this session's GitHub proxy, and there is no other gh command (${NO_GH_CLI_TEXT}).
+` + (ghSubcommandAlternative(ghArgs, ghesHosts) ?? "Example: gh api repos/{owner}/{repo}/pulls/123"),
     };
-  let n = {
+  let parsed = {
     endpoint: "",
     host: undefined,
     method: undefined,
@@ -517,153 +555,153 @@ function parseGhApiArgs(e, ghHost, s, r) {
     paginate: false,
     silent: false,
   };
-  let a = [];
-  let d = ghHost;
-  let h = true;
-  let l = [];
-  for (let idx = 1; idx < e.length; idx++) {
-    let f = e[idx];
-    if (f === "--") {
-      a.push(...e.slice(idx + 1));
+  let positional = [];
+  let hostArg = ghHost;
+  let hostFromEnv = true;
+  let flags = [];
+  for (let idx = 1; idx < ghArgs.length; idx++) {
+    let arg = ghArgs[idx];
+    if (arg === "--") {
+      positional.push(...ghArgs.slice(idx + 1));
       break;
     }
-    if (!f.startsWith("-") || f === "-") {
-      a.push(f);
+    if (!arg.startsWith("-") || arg === "-") {
+      positional.push(arg);
       continue;
     }
-    let O = f.startsWith("--");
-    let G = O ? [firstLineOf(f, "=")] : Array.from(f.slice(1), (S) => `-${S}`);
-    for (let [S, H] of G.entries()) {
-      let j = GH_API_BOOLEAN_FLAGS[H];
-      let N = GH_API_VALUE_FLAGS[H];
-      if (j !== undefined) {
-        if (!O || !/=(?:false|0)$/i.test(f)) l.push([j, ""]);
+    let isLongFlag = arg.startsWith("--");
+    let flagNames = isLongFlag ? [firstLineOf(arg, "=")] : Array.from(arg.slice(1), (char) => `-${char}`);
+    for (let [flagIndex, flagName] of flagNames.entries()) {
+      let booleanValue = GH_API_BOOLEAN_FLAGS[flagName];
+      let valueFlag = GH_API_VALUE_FLAGS[flagName];
+      if (booleanValue !== undefined) {
+        if (!isLongFlag || !/=(?:false|0)$/i.test(arg)) flags.push([booleanValue, ""]);
         continue;
       }
-      if (N === undefined)
+      if (valueFlag === undefined)
         return {
           kind: "refuse",
-          message: `unknown ${O ? "flag" : "shorthand flag"}: ${truncateLabel(H)}
+          message: `unknown ${isLongFlag ? "flag" : "shorthand flag"}: ${truncateLabel(flagName)}
 
-${ghApiUsageText(s)}`,
+${ghApiUsageText(ghesHosts)}`,
         };
-      let L =
-        (O
-          ? f.includes("=")
-            ? f.slice(H.length + 1)
+      let flagValue =
+        (isLongFlag
+          ? arg.includes("=")
+            ? arg.slice(flagName.length + 1)
             : undefined
-          : f.slice(S + 2).replace(/^=/, "") || undefined) ?? e[++idx];
-      if (L === undefined)
+          : arg.slice(flagIndex + 2).replace(/^=/, "") || undefined) ?? ghArgs[++idx];
+      if (flagValue === undefined)
         return {
           kind: "refuse",
-          message: `flag needs an argument: ${H}`,
+          message: `flag needs an argument: ${flagName}`,
         };
-      l.push([N, L]);
+      flags.push([valueFlag, flagValue]);
       break;
     }
   }
-  for (let [b, f] of l) {
-    if (GH_API_UNSUPPORTED_FLAGS.has(b))
+  for (let [name, value] of flags) {
+    if (GH_API_UNSUPPORTED_FLAGS.has(name))
       return {
         kind: "refuse",
-        message: `${b} is not supported by this built-in gh.
+        message: `${name} is not supported by this built-in gh.
 
-${ghApiUsageText(s)}`,
+${ghApiUsageText(ghesHosts)}`,
       };
-    switch (b) {
+    switch (name) {
       case "--help":
         return {
           kind: "help",
         };
       case "--method":
-        n.method = f;
+        parsed.method = value;
         break;
       case "--raw-field":
-        n.rawFields.push(f);
+        parsed.rawFields.push(value);
         break;
       case "--field":
-        n.typedFields.push(f);
+        parsed.typedFields.push(value);
         break;
       case "--header":
-        n.headers.push(f);
+        parsed.headers.push(value);
         break;
       case "--jq":
-        n.jq = f;
+        parsed.jq = value;
         break;
       case "--input":
-        n.inputFile = f;
+        parsed.inputFile = value;
         break;
       case "--hostname":
-        d = f;
-        h = false;
+        hostArg = value;
+        hostFromEnv = false;
         break;
       case "--include":
-        n.include = true;
+        parsed.include = true;
         break;
       case "--paginate":
-        n.paginate = true;
+        parsed.paginate = true;
         break;
       case "--silent":
-        n.silent = true;
+        parsed.silent = true;
         break;
     }
   }
-  if (d !== undefined) {
-    let b = normalizeHost(d);
-    if (isGithubDotCom(d)) n.host = GITHUB_HOST;
-    else if (s === ANY && h) {
-      if (d !== "" && !a[0]?.includes("://"))
+  if (hostArg !== undefined) {
+    let normalizedHostArg = normalizeHost(hostArg);
+    if (isGithubDotCom(hostArg)) parsed.host = GITHUB_HOST;
+    else if (ghesHosts === ANY && hostFromEnv) {
+      if (hostArg !== "" && !positional[0]?.includes("://"))
         return {
           kind: "refuse",
           message: hostEnvVarRefusal("GH_HOST"),
         };
-    } else if (s === ANY) {
-      let enterpriseHost = resolveEnterpriseHost(d);
+    } else if (ghesHosts === ANY) {
+      let enterpriseHost = resolveEnterpriseHost(hostArg);
       if ("refusal" in enterpriseHost)
         return {
           kind: "refuse",
           message: enterpriseHost.refusal,
         };
-      n.host = enterpriseHost.host;
-    } else if (s.includes(b)) n.host = b;
+      parsed.host = enterpriseHost.host;
+    } else if (ghesHosts.includes(normalizedHostArg)) parsed.host = normalizedHostArg;
     else
       return {
         kind: "refuse",
-        message: hostNotServedText(d, s, h),
+        message: hostNotServedText(hostArg, ghesHosts, hostFromEnv),
       };
   }
-  let [y, ...g] = a;
-  if (y === undefined || g.length > 0)
+  let [endpoint, ...rest] = positional;
+  if (endpoint === undefined || rest.length > 0)
     return {
       kind: "refuse",
-      message: `accepts 1 arg(s), received ${a.length}
+      message: `accepts 1 arg(s), received ${positional.length}
 
-${ghApiUsageText(s)}`,
+${ghApiUsageText(ghesHosts)}`,
     };
-  if (y === "")
+  if (endpoint === "")
     return {
       kind: "refuse",
       message: "the endpoint is empty; give a REST path such as repos/{owner}/{repo}/pulls",
     };
-  if (n.paginate && n.inputFile !== undefined)
+  if (parsed.paginate && parsed.inputFile !== undefined)
     return {
       kind: "refuse",
       message: "the `--paginate` option is not supported with `--input`",
     };
-  if (n.paginate && n.method !== undefined && n.method.toUpperCase() !== "GET")
+  if (parsed.paginate && parsed.method !== undefined && parsed.method.toUpperCase() !== "GET")
     return {
       kind: "refuse",
       message: "the `--paginate` option is not supported for non-GET requests",
     };
-  if (n.silent && n.jq !== undefined)
+  if (parsed.silent && parsed.jq !== undefined)
     return {
       kind: "refuse",
       message: "only one of `--silent` or `--jq` may be used, since `--silent` prints no response body",
     };
-  n.endpoint = y;
+  parsed.endpoint = endpoint;
   return {
     kind: "api",
-    options: n,
+    options: parsed,
   };
 }
 //@ chunk-fy5kn7m3.js:18121-18144 placement
@@ -675,136 +713,137 @@ class FieldParseError extends Error {}
 /**
  * 把 -f/-F 字段解析为嵌套参数表（-F 值经回调转换，如读文件）。
  */
-async function buildFieldParams(rawFields, typedFields, s) {
-  let r = new Map();
-  for (let n of rawFields) {
-    let { keys, key, value: h } = parseFieldKey(n);
-    setNestedField(r, keys, key, h);
+async function buildFieldParams(rawFields, typedFields, coerceTypedValue) {
+  let params = new Map();
+  for (let rawField of rawFields) {
+    let { keys, key, value } = parseFieldKey(rawField);
+    setNestedField(params, keys, key, value);
   }
-  for (let n of typedFields) {
-    let { keys, key, value: h } = parseFieldKey(n);
-    setNestedField(r, keys, key, h === undefined ? h : await s(h));
+  for (let typedField of typedFields) {
+    let { keys, key, value } = parseFieldKey(typedField);
+    setNestedField(params, keys, key, value === undefined ? value : await coerceTypedValue(value));
   }
-  return r;
+  return params;
 }
 //@ chunk-fy5kn7m3.js:18334-18407 placement
 /**
  * 把 Map 形式的参数表递归转成普通对象。
  */
-function mapToPlainObject(e) {
-  return Object.fromEntries([...e].map(([t, s]) => [t, plainParamValue(s)]));
+function mapToPlainObject(params) {
+  return Object.fromEntries([...params].map(([key, value]) => [key, plainParamValue(value)]));
 }
 //@ chunk-fy5kn7m3.js:18407-18466 placement
 /**
  * 把嵌套参数表展开为 key[sub]、key[] 形式的键值对列表。
  */
-function flattenParamEntries(fieldParams) {
-  let t = [];
-  for (let [s, r] of fieldParams) flattenParams(t, s, r);
-  return t;
+function flattenParamEntries(params) {
+  let entries = [];
+  for (let [key, value] of params) flattenParams(entries, key, value);
+  return entries;
 }
 //@ chunk-fy5kn7m3.js:18466-18550 placement
-function plainParamValue(e) {
-  if (e instanceof Map) return mapToPlainObject(e);
-  return Array.isArray(e) ? e.map(plainParamValue) : e;
+function plainParamValue(value) {
+  if (value instanceof Map) return mapToPlainObject(value);
+  return Array.isArray(value) ? value.map(plainParamValue) : value;
 }
 //@ chunk-fy5kn7m3.js:18550-18720 placement
 /**
  * 把嵌套参数表展开为 key[sub]、key[] 形式的键值对。
  */
-function flattenParams(e, t, s) {
-  if (s instanceof Map) for (let [r, n] of s) flattenParams(e, `${t}[${r}]`, n);
-  else if (Array.isArray(s)) for (let r of s) flattenParams(e, `${t}[]`, r);
-  else e.push([t, s === null ? "" : String(s)]);
+function flattenParams(entries, key, value) {
+  if (value instanceof Map)
+    for (let [key_2, value_2] of value) flattenParams(entries, `${key}[${key_2}]`, value_2);
+  else if (Array.isArray(value)) for (let element of value) flattenParams(entries, `${key}[]`, element);
+  else entries.push([key, value === null ? "" : String(value)]);
 }
 //@ chunk-fy5kn7m3.js:18720-19187 placement
 /**
  * 解析字段 “a[b][]=v” 为键路径、键名与值。
  */
-function parseFieldKey(e) {
-  let t = [];
-  let s = 0;
-  let r = 0;
-  for (let j = 0; j < e.length && r === 0; j++) {
-    let a = e[j];
-    if (a === "[") {
-      if (s === 0) t.push(e.slice(0, j));
-      s = j + 1;
-    } else if (a === "]") t.push(e.slice(s, j));
-    else if (a === "=") {
-      if (s === 0) t.push(e.slice(0, j));
-      r = j + 1;
+function parseFieldKey(text) {
+  let keys = [];
+  let segmentStart = 0;
+  let valueStart = 0;
+  for (let j = 0; j < text.length && valueStart === 0; j++) {
+    let char = text[j];
+    if (char === "[") {
+      if (segmentStart === 0) keys.push(text.slice(0, j));
+      segmentStart = j + 1;
+    } else if (char === "]") keys.push(text.slice(segmentStart, j));
+    else if (char === "=") {
+      if (segmentStart === 0) keys.push(text.slice(0, j));
+      valueStart = j + 1;
     }
   }
-  if (t.length === 0 || t[0] === "") throw new FieldParseError(`invalid key: "${truncateLabel(e)}"`);
-  if (r === 0) {
-    if (t.at(-1) !== "")
-      throw new FieldParseError(`field "${truncateLabel(e)}" requires a value separated by an '=' sign`);
+  if (keys.length === 0 || keys[0] === "") throw new FieldParseError(`invalid key: "${truncateLabel(text)}"`);
+  if (valueStart === 0) {
+    if (keys.at(-1) !== "")
+      throw new FieldParseError(`field "${truncateLabel(text)}" requires a value separated by an '=' sign`);
     return {
-      keys: t,
-      key: e,
+      keys,
+      key: text,
       value: undefined,
     };
   }
   return {
-    keys: t,
-    key: e.slice(0, r - 1),
-    value: e.slice(r),
+    keys,
+    key: text.slice(0, valueStart - 1),
+    value: text.slice(valueStart),
   };
 }
 //@ chunk-fy5kn7m3.js:19187-19633 placement
 /**
  * 按键路径把值写入参数表（[] 为数组追加，重复键报错）。
  */
-function setNestedField(e, keys, key, r) {
-  let n = e;
-  let a = false;
-  let d = "";
-  for (let l of keys) {
-    if (l === "") {
-      a = true;
+function setNestedField(params, keys, key, value) {
+  let cursor = params;
+  let isArrayIndex = false;
+  let pendingKey = "";
+  for (let segment of keys) {
+    if (segment === "") {
+      isArrayIndex = true;
       continue;
     }
-    if (d !== "") {
-      n = nestedContainer(n, d, a ? l : undefined);
-      a = false;
+    if (pendingKey !== "") {
+      cursor = nestedContainer(cursor, pendingKey, isArrayIndex ? segment : undefined);
+      isArrayIndex = false;
     }
-    d = l;
+    pendingKey = segment;
   }
-  let h = n.get(d);
-  if (!a) {
-    if (h !== undefined || r === undefined)
+  let existing = cursor.get(pendingKey);
+  if (!isArrayIndex) {
+    if (existing !== undefined || value === undefined)
       throw new FieldParseError(
-        h !== undefined
-          ? `unexpected override existing field under "${truncateLabel(d)}"`
+        existing !== undefined
+          ? `unexpected override existing field under "${truncateLabel(pendingKey)}"`
           : `field "${truncateLabel(key)}" requires a value separated by an '=' sign`,
       );
-    n.set(d, r);
+    cursor.set(pendingKey, value);
     return;
   }
-  if (h !== undefined && !Array.isArray(h))
-    throw new FieldParseError(`expected array type under "${truncateLabel(d)}"`);
-  n.set(d, r === undefined ? (h ?? []) : [...(h ?? []), r]);
+  if (existing !== undefined && !Array.isArray(existing))
+    throw new FieldParseError(`expected array type under "${truncateLabel(pendingKey)}"`);
+  cursor.set(pendingKey, value === undefined ? (existing ?? []) : [...(existing ?? []), value]);
 }
 //@ chunk-fy5kn7m3.js:19633-19975 placement
 /**
  * 取得或创建下一级 map（数组元素时按需新建）。
  */
-function nestedContainer(e, t, s) {
-  let r = e.get(t);
-  let n = new Map();
-  if (s === undefined) {
-    if (r instanceof Map) return r;
-    if (r !== undefined) throw new FieldParseError(`expected map type under "${truncateLabel(t)}"`);
-    e.set(t, n);
-    return n;
+function nestedContainer(params, key, arrayKey) {
+  let existing = params.get(key);
+  let created = new Map();
+  if (arrayKey === undefined) {
+    if (existing instanceof Map) return existing;
+    if (existing !== undefined) throw new FieldParseError(`expected map type under "${truncateLabel(key)}"`);
+    params.set(key, created);
+    return created;
   }
-  if (r !== undefined && !Array.isArray(r))
-    throw new FieldParseError(`expected array type under "${truncateLabel(t)}"`);
-  let last = r?.at(-1);
-  if (last instanceof Map && !last.has(s)) return last;
-  e.set(t, [...(r ?? []), n]);
-  return n;
+  if (existing !== undefined && !Array.isArray(existing))
+    throw new FieldParseError(`expected array type under "${truncateLabel(key)}"`);
+  let last = existing?.at(-1);
+  if (last instanceof Map && !last.has(arrayKey)) return last;
+  params.set(key, [...(existing ?? []), created]);
+  return created;
 }
 //@ chunk-fy5kn7m3.js:19975-20132 placement
 /**
@@ -824,8 +863,8 @@ class GhApiUsageError extends Error {}
 /**
  * 判断端点里是否含 {owner}/{repo} 之类的仓库占位符。
  */
-function hasRepoPlaceholder(e) {
-  return e.search(REPO_PLACEHOLDER_RE) !== -1;
+function hasRepoPlaceholder(text) {
+  return text.search(REPO_PLACEHOLDER_RE) !== -1;
 }
 //@ chunk-fy5kn7m3.js:20195-23187 placement
 /**
@@ -840,12 +879,12 @@ class GhRepoContext {
   repository;
   branch;
   pathFrom;
-  constructor(cwd, ghRepo, s, ghesHosts) {
+  constructor(cwd, ghRepo, ghRepoHost, ghesHosts) {
     this.cwd = cwd;
     this.ghRepo = ghRepo ?? "";
-    this.ghRepoHost = s ?? GITHUB_HOST;
+    this.ghRepoHost = ghRepoHost ?? GITHUB_HOST;
     this.ghesHosts = ghesHosts;
-    this.host = s;
+    this.host = ghRepoHost;
   }
   pathFilledFromHost() {
     return this.pathFrom?.repository.host;
@@ -853,160 +892,173 @@ class GhRepoContext {
   pathFilledFromRemote() {
     return this.pathFrom?.remote;
   }
-  async fill(e, t) {
-    let s = new Map();
-    for (let [, r, n] of e.matchAll(REPO_PLACEHOLDER_RE)) {
-      let a = r ?? n ?? "";
-      if (s.has(a)) continue;
-      if (a === "branch") {
-        let d = await (this.branch ??= this.findBranch());
-        s.set(a, t ? d.split("/").map(encodeURIComponent).join("/") : d);
+  async fill(template, encodeSegments) {
+    let filled = new Map();
+    for (let [, firstAlternative, secondAlternative] of template.matchAll(REPO_PLACEHOLDER_RE)) {
+      let placeholderKey = firstAlternative ?? secondAlternative ?? "";
+      if (filled.has(placeholderKey)) continue;
+      if (placeholderKey === "branch") {
+        let branchName = await (this.branch ??= this.findBranch());
+        filled.set(
+          placeholderKey,
+          encodeSegments ? branchName.split("/").map(encodeURIComponent).join("/") : branchName,
+        );
       } else {
-        let d = await (this.repository ??= this.findRepository());
-        let { owner, name: l } = d.repository;
-        let y = a === "owner" ? owner : l;
-        if (t && y.includes("/"))
+        let foundRepo = await (this.repository ??= this.findRepository());
+        let { owner, name: repoName } = foundRepo.repository;
+        let filledValue = placeholderKey === "owner" ? owner : repoName;
+        if (encodeSegments && filledValue.includes("/"))
           throw new GhApiUsageError(
-            `{${a}} would be more than one path segment here (this checkout's repository is a nested project path, not OWNER/REPO): spell the endpoint out`,
+            `{${placeholderKey}} would be more than one path segment here (this checkout's repository is a nested project path, not OWNER/REPO): spell the endpoint out`,
           );
-        s.set(a, y);
-        if (t) this.pathFrom = d;
+        filled.set(placeholderKey, filledValue);
+        if (encodeSegments) this.pathFrom = foundRepo;
       }
     }
-    return e.replace(REPO_PLACEHOLDER_RE, (r, n, a) => s.get(n ?? a ?? "") ?? r);
+    return template.replace(
+      REPO_PLACEHOLDER_RE,
+      (wholeMatch, firstAlternative, secondAlternative) =>
+        filled.get(firstAlternative ?? secondAlternative ?? "") ?? wholeMatch,
+    );
   }
   async findRepository() {
     return this.ghesHosts === ANY ? this.findOnAnyHost() : this.findOnServedHost(this.ghesHosts);
   }
   async remoteListing() {
-    let e = ["config", "-z", "--get-regexp", REMOTE_CONFIG_KEY_PATTERN];
-    return (await this.git(e)) ?? "";
+    let args = ["config", "-z", "--get-regexp", REMOTE_CONFIG_KEY_PATTERN];
+    return (await this.git(args)) ?? "";
   }
   ghRepoRepository() {
     return parseGitRemote(
       `https://${OWNER_REPO_RE.test(this.ghRepo) ? `${this.ghRepoHost}/` : ""}${this.ghRepo}`,
     );
   }
-  async findOnServedHost(e) {
-    let t;
-    let s = [GITHUB_HOST, ...e];
-    let r = this.host === undefined ? s : [this.host];
+  async findOnServedHost(servedHosts) {
+    let allServedHosts;
+    let preferredHosts = [GITHUB_HOST, ...servedHosts];
+    let candidateHosts = this.host === undefined ? preferredHosts : [this.host];
     if (this.ghRepo === "") {
-      let n = await this.remoteListing();
-      t = pickPreferredRemote(n, (d) => remoteOnHost(d, r));
-      let found = parseRemoteConfig(n).find(({ repository }) => !remoteOnHost(repository, s));
-      if (!t && found && !preferredRemoteRepository(n, s))
+      let listing = await this.remoteListing();
+      allServedHosts = pickPreferredRemote(listing, (repository) => remoteOnHost(repository, candidateHosts));
+      let found = parseRemoteConfig(listing).find(
+        ({ repository }) => !remoteOnHost(repository, preferredHosts),
+      );
+      if (!allServedHosts && found && !preferredRemoteRepository(listing, preferredHosts))
         throw new GhApiUsageError(
-          `{owner}/{repo} would be this checkout's repository, whose remote is on another host: ${hostNotServedText(found.repository.host, e)}`,
+          `{owner}/{repo} would be this checkout's repository, whose remote is on another host: ${hostNotServedText(found.repository.host, servedHosts)}`,
         );
     } else {
-      let n = this.ghRepoRepository();
-      if (n && !remoteOnHost(n, s)) throw new GhApiUsageError(hostNotServedText(n.host, e));
-      let a = n && remoteOnHost(n, r);
-      t = a
+      let repoFromEnv = this.ghRepoRepository();
+      if (repoFromEnv && !remoteOnHost(repoFromEnv, preferredHosts))
+        throw new GhApiUsageError(hostNotServedText(repoFromEnv.host, servedHosts));
+      let servedRepo = repoFromEnv && remoteOnHost(repoFromEnv, candidateHosts);
+      allServedHosts = servedRepo
         ? {
-            repository: a,
+            repository: servedRepo,
           }
         : undefined;
     }
-    if (!t) {
-      let any = r.some((a) => a !== GITHUB_HOST);
+    if (!allServedHosts) {
+      let any = candidateHosts.some((host) => host !== GITHUB_HOST);
       throw new GhApiUsageError(
-        `could not tell which ${r.join(" or ")} repository {owner}/{repo} is: set GH_REPO=${any ? "[HOST/]" : ""}OWNER/REPO or spell the repository out in the endpoint${r.length > 1 ? " and name its host with --hostname" : ""}`,
+        `could not tell which ${candidateHosts.join(" or ")} repository {owner}/{repo} is: set GH_REPO=${any ? "[HOST/]" : ""}OWNER/REPO or spell the repository out in the endpoint${candidateHosts.length > 1 ? " and name its host with --hostname" : ""}`,
       );
     }
-    return t;
+    return allServedHosts;
   }
   async findOnAnyHost() {
     let host = this.host;
-    let t;
+    let chosen;
     if (this.ghRepo === "") {
-      let s = await this.remoteListing();
-      t = pickPreferredRemote(s, (n) => remoteOnHost(n, [host ?? GITHUB_HOST]));
-      let r = t || host !== undefined ? undefined : pickPreferredRemote(s, (n) => n);
-      if (r) {
-        let enterpriseHost = resolveEnterpriseHost(r.repository.host);
+      let listing = await this.remoteListing();
+      chosen = pickPreferredRemote(listing, (repository) => remoteOnHost(repository, [host ?? GITHUB_HOST]));
+      let fallbackRemote =
+        chosen || host !== undefined ? undefined : pickPreferredRemote(listing, (repository) => repository);
+      if (fallbackRemote) {
+        let enterpriseHost = resolveEnterpriseHost(fallbackRemote.repository.host);
         if ("refusal" in enterpriseHost)
           throw new GhApiUsageError(
-            `{owner}/{repo} would be the repository of ${remoteDescription(r.remote)}: ${enterpriseHost.refusal}`,
+            `{owner}/{repo} would be the repository of ${remoteDescription(fallbackRemote.remote)}: ${enterpriseHost.refusal}`,
           );
-        t = {
-          remote: r.remote,
+        chosen = {
+          remote: fallbackRemote.remote,
           repository: {
-            ...r.repository,
+            ...fallbackRemote.repository,
             host: enterpriseHost.host,
           },
         };
       }
     } else {
-      let s = this.ghRepoRepository();
-      if (s && !OWNER_REPO_RE.test(this.ghRepo) && !isGithubDotCom(s.host))
+      let repoFromEnv = this.ghRepoRepository();
+      if (repoFromEnv && !OWNER_REPO_RE.test(this.ghRepo) && !isGithubDotCom(repoFromEnv.host))
         throw new GhApiUsageError(hostEnvVarRefusal("GH_REPO"));
-      let r = s && remoteOnHost(s, [host ?? GITHUB_HOST]);
-      t = r
+      let servedRepo = repoFromEnv && remoteOnHost(repoFromEnv, [host ?? GITHUB_HOST]);
+      chosen = servedRepo
         ? {
-            repository: r,
+            repository: servedRepo,
           }
         : undefined;
     }
-    if (!t)
+    if (!chosen)
       throw new GhApiUsageError(
         `could not tell which ${host === undefined ? "" : `${host} `}repository {owner}/{repo} is: set GH_REPO=OWNER/REPO or spell the repository out in the endpoint${host === undefined ? " and name its host with --hostname" : ""}`,
       );
-    return t;
+    return chosen;
   }
   async findBranch() {
-    let e = await this.git(["symbolic-ref", "--quiet", "--short", "HEAD"]);
-    if (e === undefined)
+    let branch = await this.git(["symbolic-ref", "--quiet", "--short", "HEAD"]);
+    if (branch === undefined)
       throw new GhApiUsageError("could not tell the current branch for {branch}: spell the branch out");
-    return e;
+    return branch;
   }
-  async git(e) {
-    let t = await execFileNoThrowWithCwd("git", [...BMt, ...e], {
+  async git(args) {
+    let result = await execFileNoThrowWithCwd("git", [...SAFE_GIT_REPO_ARGS, ...args], {
       cwd: this.cwd,
       env: getRemoteHostSessionCount(),
       timeout: GIT_CONFIG_TIMEOUT_MS,
       preserveOutputOnError: false,
     });
-    return t.code === 0 && t.stdout.trim() !== "" ? t.stdout.trim() : undefined;
+    return result.code === 0 && result.stdout.trim() !== "" ? result.stdout.trim() : undefined;
   }
 }
 //@ chunk-fy5kn7m3.js:23187-23276 placement
-function remoteOnHost(e, t) {
-  let s = isGithubDotCom(e.host) ? GITHUB_HOST : normalizeHost(e.host);
-  return t.includes(s)
+function remoteOnHost(remote, hosts) {
+  let normalizedHost = isGithubDotCom(remote.host) ? GITHUB_HOST : normalizeHost(remote.host);
+  return hosts.includes(normalizedHost)
     ? {
-        ...e,
-        host: s,
+        ...remote,
+        host: normalizedHost,
       }
     : undefined;
 }
 //@ chunk-fy5kn7m3.js:23276-23329 placement
-function preferredRemoteRepository(e, t) {
-  return pickPreferredRemote(e, (s) => remoteOnHost(s, t))?.repository;
+function preferredRemoteRepository(listing, hosts) {
+  return pickPreferredRemote(listing, (repository) => remoteOnHost(repository, hosts))?.repository;
 }
 //@ chunk-fy5kn7m3.js:23329-23632 placement
 /**
  * 按 gh-resolved 标记与 upstream/github/origin 顺序选出远程及其仓库。
  */
-function pickPreferredRemote(e, t) {
-  let s = [];
-  for (let { name: n, marked, repository } of parseRemoteConfig(e)) {
-    let h = t(repository);
-    if (!h) continue;
-    let index = PREFERRED_REMOTES.indexOf(n);
-    s.push({
-      name: n,
+function pickPreferredRemote(listing, matchesHost) {
+  let candidates = [];
+  for (let { name: remoteName, marked, repository } of parseRemoteConfig(listing)) {
+    let repository_2 = matchesHost(repository);
+    if (!repository_2) continue;
+    let index = PREFERRED_REMOTES.indexOf(remoteName);
+    candidates.push({
+      name: remoteName,
       rank: marked ? -1 : index === -1 ? PREFERRED_REMOTES.length : index,
-      repository: h,
+      repository: repository_2,
     });
   }
-  s.sort((n, a) => n.rank - a.rank || (n.name < a.name ? -1 : n.name > a.name ? 1 : 0));
-  let [r] = s;
+  candidates.sort(
+    (left, right) => left.rank - right.rank || (left.name < right.name ? -1 : left.name > right.name ? 1 : 0),
+  );
+  let [best] = candidates;
   return (
-    r && {
-      repository: r.repository,
-      remote: r.name,
+    best && {
+      repository: best.repository,
+      remote: best.name,
     }
   );
 }
@@ -1014,119 +1066,148 @@ function pickPreferredRemote(e, t) {
 /**
  * “this checkout's remote X” 文本（名字不合法时用泛称）。
  */
-function remoteDescription(e) {
-  return e !== undefined && /^[A-Za-z0-9._-]{1,64}$/.test(e)
-    ? `this checkout's remote ${e}`
+function remoteDescription(remoteName) {
+  return remoteName !== undefined && /^[A-Za-z0-9._-]{1,64}$/.test(remoteName)
+    ? `this checkout's remote ${remoteName}`
     : "one of this checkout's remotes";
 }
 //@ chunk-fy5kn7m3.js:23762-24152 placement
 /**
  * 解析 git config -z 的 remote.*.url/gh-resolved 输出为远程列表。
  */
-function parseRemoteConfig(e) {
-  let t = new Map();
-  for (let s of e.split("\x00")) {
-    let [r = "", n] = s.split(
+function parseRemoteConfig(listing) {
+  let byName = new Map();
+  for (let entry of listing.split("\x00")) {
+    let [key = "", value] = entry.split(
       `
 `,
       2,
     );
-    let match = /^remote\.(.+)\.(url|gh-resolved)$/.exec(r);
-    if (n === undefined || match === null) continue;
-    let [, d = "", h] = match;
-    let l = t.get(d) ?? {
+    let match = /^remote\.(.+)\.(url|gh-resolved)$/.exec(key);
+    if (value === undefined || match === null) continue;
+    let [, remoteName = "", field] = match;
+    let entryValue = byName.get(remoteName) ?? {
       marked: false,
     };
-    if (h === "url") l.url ??= n;
-    else if (n === "base") l.marked = true;
-    t.set(d, l);
+    if (field === "url") entryValue.url ??= value;
+    else if (value === "base") entryValue.marked = true;
+    byName.set(remoteName, entryValue);
   }
-  return [...t].flatMap(([s, { url: r, marked: n }]) => {
-    let a = r === undefined ? null : parseGitRemote(r);
-    return a
+  return [...byName].flatMap(([name, { url, marked }]) => {
+    let repository = url === undefined ? null : parseGitRemote(url);
+    return repository
       ? [
           {
-            name: s,
-            marked: n,
-            repository: a,
+            name,
+            marked,
+            repository,
           },
         ]
       : [];
   });
 }
 //@ chunk-fy5kn7m3.js:24152-24196 placement
-var MAX_PERCENT_DECODE_ROUNDS = 4;
-var ENTERPRISE_API_PATH_SEGMENTS = new Set(["api", "v3", "uploads"]);
+var MAX_PERCENT_DECODE_ROUNDS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var ENTERPRISE_API_PATH_SEGMENTS;
+deferInit("chunk-fy5kn7m3.js:24152", () => {
+  MAX_PERCENT_DECODE_ROUNDS = 4;
+  ENTERPRISE_API_PATH_SEGMENTS = new Set(["api", "v3", "uploads"]);
+});
 //@ chunk-fy5kn7m3.js:24196-24825 placement
 /**
  * 检查路径（反复百分号解码后）：拒绝 .. 段、GraphQL、控制字符。
  */
-function checkEndpointPath(pathname, t) {
-  let s = pathname;
+function checkEndpointPath(pathname, rejectsDotSegments) {
+  let decodedPath = pathname;
   for (let j = 0; ; j++) {
-    let replaced = s.replace(/%([0-9a-f]{2})/gi, (d, h) => String.fromCharCode(Number.parseInt(h, 16)));
-    if (replaced === s) break;
+    let replaced = decodedPath.replace(/%([0-9a-f]{2})/gi, (wholeMatch, hex) =>
+      String.fromCharCode(Number.parseInt(hex, 16)),
+    );
+    if (replaced === decodedPath) break;
     if (j === MAX_PERCENT_DECODE_ROUNDS)
       return `the path is percent-encoded more than ${MAX_PERCENT_DECODE_ROUNDS} times over; spell it plainly`;
-    s = replaced;
+    decodedPath = replaced;
   }
-  let r = 0;
-  for (let n of s.toLowerCase().replaceAll("\\", "/").split("/")) {
-    let a = firstLineOf(n, ";");
-    if (a === "..") {
-      if (t)
+  let depth = 0;
+  for (let segment of decodedPath.toLowerCase().replaceAll("\\", "/").split("/")) {
+    let beforeParams = firstLineOf(segment, ";");
+    if (beforeParams === "..") {
+      if (rejectsDotSegments)
         return "the path holds a `..` segment (percent-encoded, or with `;` parameters); spell it plainly";
-      r = 0;
-    } else if (r === 0 && /^graphql(?![a-z0-9_-])/.test(a)) return GRAPHQL_UNAVAILABLE_TEXT;
-    else if (a !== "" && a !== "." && !ENTERPRISE_API_PATH_SEGMENTS.has(a)) r++;
+      depth = 0;
+    } else if (depth === 0 && /^graphql(?![a-z0-9_-])/.test(beforeParams)) return GRAPHQL_UNAVAILABLE_TEXT;
+    else if (beforeParams !== "" && beforeParams !== "." && !ENTERPRISE_API_PATH_SEGMENTS.has(beforeParams))
+      depth++;
   }
-  return /[\0-\x1f\x7f]/.test(s) ? "the path contains an encoded control character" : undefined;
+  return /[\0-\x1f\x7f]/.test(decodedPath) ? "the path contains an encoded control character" : undefined;
 }
 //@ chunk-fy5kn7m3.js:24825-25604 placement
 /**
  * 内置 gh api 的默认值常量组（体积上限、超时、重定向状态码、API 版本、允许的头名等）与错误响应 schema。
  */
-var GH_API_DEFAULTS_2 = 26214400;
-var GH_API_DEFAULTS = 104857600;
-var MAX_RESPONSE_BYTES = 8388608;
-var MAX_JQ_INPUT_BYTES = 1048576;
-var PROXY_CONNECT_TIMEOUT_MS = 300000;
-var MAX_PAGINATION_PAGES = 5;
-var ABORTED_EXIT_CODE = 141;
-var MAX_PAGE_BODY_BYTES = 255;
-var REDIRECT_STATUS_SET = new Set([301, 302, 303, 307, 308]);
-var GITHUB_API_VERSION = "2022-11-28";
-var MAX_REDIRECTS = 120;
-var ACTIONS_ENDPOINT_RE = /\/(?:repos\/[^/]+\/[^/]+|repositories\/\d+)\/actions\//;
-var ACTIONS_PROXY_NOTE = `This session's GitHub proxy may have no GitHub Enterprise connection for that host, or it may not be a GitHub Enterprise host; nothing run in the session adds a connection. For ${GITHUB_HOST}, add --hostname ${GITHUB_HOST}.`;
-var INVALID_ENDPOINT_PATH_TEXT = "the endpoint is not a valid URL path";
-var OPEN_BRACKET_CODE = 91;
-var CLOSE_BRACKET_CODE = 93;
-var HEADER_VALUE_SPACE_CODES = new Set([32, 9, 10, 13]);
-var ALLOWED_HEADER_NAMES = new Set([
-  "accept",
-  "accept-language",
-  "content-type",
-  "if-match",
-  "if-modified-since",
-  "if-none-match",
-  "time-zone",
-  "x-github-api-version",
-  "x-github-next-global-id",
-]);
-var ghApiErrorSchema = DoctorLazy(() =>
-  u({
-    message: string().optional().catch(undefined),
-    errors: union([string(), array(unknown())])
-      .optional()
-      .catch(undefined),
-  }),
-);
-var ghApiMessageSchema = DoctorLazy(() =>
-  u({
-    message: string(),
-  }),
-);
+var GH_API_DEFAULTS_2; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var GH_API_DEFAULTS;
+var MAX_RESPONSE_BYTES;
+var MAX_JQ_INPUT_BYTES;
+var PROXY_CONNECT_TIMEOUT_MS;
+var MAX_PAGINATION_PAGES;
+var ABORTED_EXIT_CODE;
+var MAX_PAGE_BODY_BYTES;
+var REDIRECT_STATUS_SET;
+var GITHUB_API_VERSION;
+var MAX_REDIRECTS;
+var ACTIONS_ENDPOINT_RE;
+var ACTIONS_PROXY_NOTE;
+var INVALID_ENDPOINT_PATH_TEXT;
+var OPEN_BRACKET_CODE;
+var CLOSE_BRACKET_CODE;
+var HEADER_VALUE_SPACE_CODES;
+var ALLOWED_HEADER_NAMES;
+var ghApiErrorSchema;
+var ghApiMessageSchema;
+deferInit("chunk-fy5kn7m3.js:24825", () => {
+  GH_API_DEFAULTS_2 = 26214400;
+  GH_API_DEFAULTS = 104857600;
+  MAX_RESPONSE_BYTES = 8388608;
+  MAX_JQ_INPUT_BYTES = 1048576;
+  PROXY_CONNECT_TIMEOUT_MS = 300000;
+  MAX_PAGINATION_PAGES = 5;
+  ABORTED_EXIT_CODE = 141;
+  MAX_PAGE_BODY_BYTES = 255;
+  REDIRECT_STATUS_SET = new Set([301, 302, 303, 307, 308]);
+  GITHUB_API_VERSION = "2022-11-28";
+  MAX_REDIRECTS = 120;
+  ACTIONS_ENDPOINT_RE = /\/(?:repos\/[^/]+\/[^/]+|repositories\/\d+)\/actions\//;
+  ACTIONS_PROXY_NOTE = `This session's GitHub proxy may have no GitHub Enterprise connection for that host, or it may not be a GitHub Enterprise host; nothing run in the session adds a connection. For ${GITHUB_HOST}, add --hostname ${GITHUB_HOST}.`;
+  INVALID_ENDPOINT_PATH_TEXT = "the endpoint is not a valid URL path";
+  OPEN_BRACKET_CODE = 91;
+  CLOSE_BRACKET_CODE = 93;
+  HEADER_VALUE_SPACE_CODES = new Set([32, 9, 10, 13]);
+  ALLOWED_HEADER_NAMES = new Set([
+    "accept",
+    "accept-language",
+    "content-type",
+    "if-match",
+    "if-modified-since",
+    "if-none-match",
+    "time-zone",
+    "x-github-api-version",
+    "x-github-next-global-id",
+  ]);
+  ghApiErrorSchema = DoctorLazy(() =>
+    objectSchema({
+      message: stringSchema().optional().catch(undefined),
+      errors: union([stringSchema(), array(unknown())])
+        .optional()
+        .catch(undefined),
+    }),
+  );
+  ghApiMessageSchema = DoctorLazy(() =>
+    objectSchema({
+      message: stringSchema(),
+    }),
+  );
+});
 //@ chunk-fy5kn7m3.js:25604-25627 placement
 /**
  * gh api 请求本身失败（网络、代理）时抛出的错误。
@@ -1138,18 +1219,18 @@ class GhApiRequestError extends Error {}
  */
 class GhApiResponseError extends Error {}
 //@ chunk-fy5kn7m3.js:25651-26566 placement
-async function ghApiVersionInfo(ghArgs, t) {
-  let s =
-    t.ghesHosts === ANY
-      ? t.ghesHosts
-      : t.ghesHosts.filter(
+async function ghApiVersionInfo(ghArgs, context) {
+  let servedHosts =
+    context.ghesHosts === ANY
+      ? context.ghesHosts
+      : context.ghesHosts.filter(
           (ghesHost) =>
             !ghesHost.endsWith(GHE_HOST_SUFFIX) && URL.parse(githubApiBase(ghesHost))?.hostname === ghesHost,
         );
   let ghApiArgs = parseGhApiArgs(
     ghArgs,
-    t.ghHost,
-    s,
+    context.ghHost,
+    servedHosts,
     {
       ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
       PACKAGE_URL: "@anthropic-ai/claude-code",
@@ -1165,23 +1246,23 @@ async function ghApiVersionInfo(ghArgs, t) {
   try {
     switch (ghApiArgs.kind) {
       case "help":
-        await t.write("stdout", ghApiUsageText(s));
+        await context.write("stdout", ghApiUsageText(servedHosts));
         return 0;
       case "refuse":
-        await t.write(
+        await context.write(
           "stderr",
           `gh: ${ghApiArgs.message}
 `,
         );
         return 1;
       case "api":
-        return await runBuiltinGhApi(ghApiArgs.options, t, s);
+        return await runBuiltinGhApi(ghApiArgs.options, context, servedHosts);
     }
   } catch (error) {
     if (error instanceof GhApiResponseError) return ABORTED_EXIT_CODE;
-    await t.write(
+    await context.write(
       "stderr",
-      `gh: ${ghProxyRefusalText(error, t.statusUrl)}
+      `gh: ${ghProxyRefusalText(error, context.statusUrl)}
 `,
     );
     return 1;
@@ -1192,36 +1273,37 @@ async function ghApiVersionInfo(ghArgs, t) {
  * 内置 gh 入口：确定代理地址、读 CA 文件、执行 gh api 并按结果退出。
  */
 async function runGhApiShim({ port, caBundlePath, ghesHosts, ghArgs }) {
-  let n = writeStdStreamOrThrow;
+  let writeStream = writeStdStreamOrThrow;
   handleStreamGoneErrors(process.stdout);
   handleStreamGoneErrors(process.stderr);
-  let a = 1;
-  let d = port !== STANDALONE_PROXY ? `http://127.0.0.1:${port}` : parseLoopbackProxyUrl(env.HTTPS_PROXY);
-  if (d === undefined) {
-    await n(
+  let exitCode = 1;
+  let proxyUrl =
+    port !== STANDALONE_PROXY ? `http://127.0.0.1:${port}` : parseLoopbackProxyUrl(env.HTTPS_PROXY);
+  if (proxyUrl === undefined) {
+    await writeStream(
       "stderr",
       `${GH_PROXY_UNSET_MESSAGE}
 `,
     );
-    cliExit(a);
+    cliExit(exitCode);
     return;
   }
-  let h;
+  let ca;
   try {
-    await using l = await open(caBundlePath, "r");
-    h = (await readHandleUpTo(l, MAX_RESPONSE_BYTES)).toString("utf8");
+    await using caHandle = await open(caBundlePath, "r");
+    ca = (await readHandleUpTo(caHandle, MAX_RESPONSE_BYTES)).toString("utf8");
   } catch (error) {
-    await n(
+    await writeStream(
       "stderr",
       `gh: ${proxyCaBundleError(getErrnoCode(error) ?? "unreadable")}
 `,
     );
   }
-  if (h !== undefined)
-    a = await ghApiVersionInfo(ghArgs, {
-      proxyUrl: d,
-      statusUrl: port === STANDALONE_PROXY ? undefined : `${d}/__agentproxy/status`,
-      ca: h,
+  if (ca !== undefined)
+    exitCode = await ghApiVersionInfo(ghArgs, {
+      proxyUrl,
+      statusUrl: port === STANDALONE_PROXY ? undefined : `${proxyUrl}/__agentproxy/status`,
+      ca,
       cwd: getCwd(),
       path: env.PATH ?? "",
       ghHost: env.GH_HOST,
@@ -1230,9 +1312,9 @@ async function runGhApiShim({ port, caBundlePath, ghesHosts, ghArgs }) {
       get stdin() {
         return process.stdin;
       },
-      write: n,
+      write: writeStream,
     });
-  cliExit(a);
+  cliExit(exitCode);
 }
 export {
   GhApiResponseError,
@@ -1267,4 +1349,5 @@ export {
   FieldParseError,
   GhApiUsageError,
   MAX_REDIRECTS,
+  runGhApiShim,
 };

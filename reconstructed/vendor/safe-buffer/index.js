@@ -5,33 +5,34 @@
  * pieces: chunk-82d8c88w.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x, importMetaRequire } from "../../runtime/bun-runtime.js";
+import { __commonJS, importMetaRequire } from "../../runtime/bun-runtime.js";
 
 //@ chunk-82d8c88w.js:229-1109 cjs-fingerprint
-var require_safe_buffer = x(function (cjsExports, cjsModule) {
+var require_safe_buffer = __commonJS(function (cjsExports, cjsModule) {
   /*! safe-buffer. MIT License. Feross Aboukhadijeh <https://feross.org/opensource> */
   var buffer = importMetaRequire("buffer");
-  var p = buffer.Buffer;
+  var RealBuffer = buffer.Buffer;
   function copyProps(src, dst) {
     for (var key in src) dst[key] = src[key];
   }
-  if (p.from && p.alloc && p.allocUnsafe && p.allocUnsafeSlow) cjsModule.exports = buffer;
+  if (RealBuffer.from && RealBuffer.alloc && RealBuffer.allocUnsafe && RealBuffer.allocUnsafeSlow)
+    cjsModule.exports = buffer;
   else {
     copyProps(buffer, cjsExports);
     cjsExports.Buffer = SafeBuffer;
   }
   function SafeBuffer(arg, encodingOrOffset, length) {
-    return p(arg, encodingOrOffset, length);
+    return RealBuffer(arg, encodingOrOffset, length);
   }
-  SafeBuffer.prototype = Object.create(p.prototype);
-  copyProps(p, SafeBuffer);
+  SafeBuffer.prototype = Object.create(RealBuffer.prototype);
+  copyProps(RealBuffer, SafeBuffer);
   SafeBuffer.from = function (arg, encodingOrOffset, length) {
     if (typeof arg === "number") throw TypeError("Argument must not be a number");
-    return p(arg, encodingOrOffset, length);
+    return RealBuffer(arg, encodingOrOffset, length);
   };
   SafeBuffer.alloc = function (size, fill, encoding) {
     if (typeof size !== "number") throw TypeError("Argument must be a number");
-    var buf = p(size);
+    var buf = RealBuffer(size);
     if (fill !== undefined) {
       if (typeof encoding === "string") buf.fill(fill, encoding);
       else buf.fill(fill);
@@ -40,7 +41,7 @@ var require_safe_buffer = x(function (cjsExports, cjsModule) {
   };
   SafeBuffer.allocUnsafe = function (size) {
     if (typeof size !== "number") throw TypeError("Argument must be a number");
-    return p(size);
+    return RealBuffer(size);
   };
   SafeBuffer.allocUnsafeSlow = function (size) {
     if (typeof size !== "number") throw TypeError("Argument must be a number");

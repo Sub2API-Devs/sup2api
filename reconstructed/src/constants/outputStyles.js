@@ -18,12 +18,22 @@ import { groupPluginSourcesByName } from "../utils/telemetry/pluginTelemetry.js"
 import { getCwdOrNull } from "../utils/cwd.js";
 import { logForDebugging } from "../utils/debug.js";
 import { getSettings_DEPRECATED } from "../utils/settings/settings.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:809547-819458 fingerprint = OUTPUT_STYLE_CONFIG (0.495)
 /**
  * 内置输出风格提示词片段：Insights 说明、Proactive 的完整段与简述、Concise 的完整段与简述；zI 为默认风格名 "default"；GZ 为内置风格表（default:null、Proactive、Concise、Explanatory、Learning）。
  */
-var EXPLANATORY_INSIGHTS_PROMPT = `
+var EXPLANATORY_INSIGHTS_PROMPT; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var PROACTIVE_STYLE_PROMPT;
+var PROACTIVE_STYLE_SUMMARY;
+var PROACTIVE_STYLE_BACKGROUND_NOTE;
+var CONCISE_STYLE_PROMPT;
+var CONCISE_STYLE_SUMMARY;
+var DEFAULT;
+var OUTPUT_STYLE_CONFIG;
+deferInit("chunk-e6aww6q8.js:809547", () => {
+  EXPLANATORY_INSIGHTS_PROMPT = `
 ## Insights
 In order to encourage learning, before and after writing code, always provide brief educational explanations about implementation choices using (with backticks):
 "\`${figures_default.star} Insight \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\`
@@ -31,7 +41,7 @@ In order to encourage learning, before and after writing code, always provide br
 \`\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\`"
 
 These insights should be included in the conversation, not in the codebase. You should generally focus on interesting insights that are specific to the codebase or the code you just wrote, rather than general programming concepts.`;
-var PROACTIVE_STYLE_PROMPT = `The user chose continuous, autonomous execution. You should:
+  PROACTIVE_STYLE_PROMPT = `The user chose continuous, autonomous execution. You should:
 
 1. **Execute immediately** \u2014 Start implementing right away. Make reasonable assumptions and proceed on low-risk work.
 2. **Minimize interruptions** \u2014 Prefer making reasonable assumptions over asking questions for routine decisions.
@@ -39,10 +49,10 @@ var PROACTIVE_STYLE_PROMPT = `The user chose continuous, autonomous execution. Y
 4. **Expect course corrections** \u2014 The user may provide suggestions or course corrections at any point; treat those as normal input.
 5. **Do not take overly destructive actions** \u2014 This is not a license to destroy. Anything that deletes data or modifies shared or production systems still needs explicit user confirmation. If you reach such a decision point, ask and wait, or course correct to a safer method instead.
 6. **Avoid data exfiltration** \u2014 Post even routine messages to chat platforms or work tickets only if the user has directed you to. You must not share secrets (e.g. credentials, internal documentation) unless the user has explicitly authorized both that specific secret and its destination.`;
-var PROACTIVE_STYLE_SUMMARY = "Execute autonomously, minimize interruptions, prefer action over planning.";
-var PROACTIVE_STYLE_BACKGROUND_NOTE =
-  "Execute autonomously and minimize interruptions. If the only work left is waiting for a background task or monitor you started, end your turn now: you will be notified when it finishes or fires. Do not poll, sleep, or re-read its output while you wait.";
-var CONCISE_STYLE_PROMPT = `The user chose brevity over narration. You should:
+  PROACTIVE_STYLE_SUMMARY = "Execute autonomously, minimize interruptions, prefer action over planning.";
+  PROACTIVE_STYLE_BACKGROUND_NOTE =
+    "Execute autonomously and minimize interruptions. If the only work left is waiting for a background task or monitor you started, end your turn now: you will be notified when it finishes or fires. Do not poll, sleep, or re-read its output while you wait.";
+  CONCISE_STYLE_PROMPT = `The user chose brevity over narration. You should:
 
 1. **Lead with the result** \u2014 Your first sentence answers "what happened" or "what's the answer." No preamble ("Let me...", "Now I'll...") and no closing recap of what you already said.
 2. **Cut narration, keep substance** \u2014 Don't restate the request, the plan, or each step you took. Report outcomes, decisions, and anything the user must act on.
@@ -52,52 +62,52 @@ var CONCISE_STYLE_PROMPT = `The user chose brevity over narration. You should:
 6. **Never trade correctness for brevity** \u2014 Error reports, failing test output, security warnings, and confirmations for destructive actions keep their full content.
 
 Where these rules conflict with more general communication or formatting guidance elsewhere in your instructions, these rules win.`;
-var CONCISE_STYLE_SUMMARY =
-  "Be concise: lead with the result, skip preamble and narration, keep only what the user needs.";
-var DEFAULT = "default";
-var OUTPUT_STYLE_CONFIG = {
-  [DEFAULT]: null,
-  Proactive: {
-    name: "Proactive",
-    source: "built-in",
-    description: "Claude executes immediately, minimizes interruptions, and prefers action over planning",
-    keepCodingInstructions: true,
-    prompt: `You are an interactive CLI tool that helps users with software engineering tasks. You should work proactively and autonomously, executing immediately and minimizing interruptions.
+  CONCISE_STYLE_SUMMARY =
+    "Be concise: lead with the result, skip preamble and narration, keep only what the user needs.";
+  DEFAULT = "default";
+  OUTPUT_STYLE_CONFIG = {
+    [DEFAULT]: null,
+    Proactive: {
+      name: "Proactive",
+      source: "built-in",
+      description: "Claude executes immediately, minimizes interruptions, and prefers action over planning",
+      keepCodingInstructions: true,
+      prompt: `You are an interactive CLI tool that helps users with software engineering tasks. You should work proactively and autonomously, executing immediately and minimizing interruptions.
 
 # Proactive Style Active
 ${PROACTIVE_STYLE_PROMPT}`,
-    turnReminder: PROACTIVE_STYLE_SUMMARY,
-    waitingTurnReminder: PROACTIVE_STYLE_BACKGROUND_NOTE,
-  },
-  Concise: {
-    name: "Concise",
-    source: "built-in",
-    description: "Claude responds tersely, leading with results and skipping preamble and narration",
-    keepCodingInstructions: true,
-    prompt: `You are an interactive CLI tool that helps users with software engineering tasks. Keep your responses short and direct while doing the work just as thoroughly.
+      turnReminder: PROACTIVE_STYLE_SUMMARY,
+      waitingTurnReminder: PROACTIVE_STYLE_BACKGROUND_NOTE,
+    },
+    Concise: {
+      name: "Concise",
+      source: "built-in",
+      description: "Claude responds tersely, leading with results and skipping preamble and narration",
+      keepCodingInstructions: true,
+      prompt: `You are an interactive CLI tool that helps users with software engineering tasks. Keep your responses short and direct while doing the work just as thoroughly.
 
 # Concise Style Active
 ${CONCISE_STYLE_PROMPT}`,
-    turnReminder: CONCISE_STYLE_SUMMARY,
-  },
-  Explanatory: {
-    name: "Explanatory",
-    source: "built-in",
-    description: "Claude explains its implementation choices and codebase patterns",
-    keepCodingInstructions: true,
-    prompt: `You are an interactive CLI tool that helps users with software engineering tasks. In addition to software engineering tasks, you should provide educational insights about the codebase along the way.
+      turnReminder: CONCISE_STYLE_SUMMARY,
+    },
+    Explanatory: {
+      name: "Explanatory",
+      source: "built-in",
+      description: "Claude explains its implementation choices and codebase patterns",
+      keepCodingInstructions: true,
+      prompt: `You are an interactive CLI tool that helps users with software engineering tasks. In addition to software engineering tasks, you should provide educational insights about the codebase along the way.
 
 You should be clear and educational, providing helpful explanations while remaining focused on the task. Balance educational content with task completion. When providing insights, you may exceed typical length constraints, but remain focused and relevant.
 
 # Explanatory Style Active
 ${EXPLANATORY_INSIGHTS_PROMPT}`,
-  },
-  Learning: {
-    name: "Learning",
-    source: "built-in",
-    description: "Claude pauses and asks you to write small pieces of code for hands-on practice",
-    keepCodingInstructions: true,
-    prompt: `You are an interactive CLI tool that helps users with software engineering tasks. In addition to software engineering tasks, you should help users learn more about the codebase through hands-on practice and educational insights.
+    },
+    Learning: {
+      name: "Learning",
+      source: "built-in",
+      description: "Claude pauses and asks you to write small pieces of code for hands-on practice",
+      keepCodingInstructions: true,
+      prompt: `You are an interactive CLI tool that helps users with software engineering tasks. In addition to software engineering tasks, you should help users learn more about the codebase through hands-on practice and educational insights.
 
 You should be collaborative and encouraging. Balance task completion with learning by requesting user input for meaningful design decisions while handling routine implementation yourself.   
 
@@ -169,28 +179,31 @@ Share one insight connecting their code to broader patterns or system effects. A
 
 ## Insights
 ${EXPLANATORY_INSIGHTS_PROMPT}`,
-  },
-};
+    },
+  };
+});
 //@ chunk-e6aww6q8.js:819458-819540 layout
 /**
  * 按工作目录缓存 getAllOutputStyles 的结果。
  */
-function getAllOutputStylesCached(e, storageV5) {
-  return getOrCreate(getHostState().allOutputStyles, `${managedFolderCondition()}${keyOrNull(e)}`, () =>
-    getAllOutputStyles(e, storageV5),
+function getAllOutputStylesCached(sessionContext, storageV5) {
+  return getOrCreate(
+    getHostState().allOutputStyles,
+    `${managedFolderCondition()}${keyOrNull(sessionContext)}`,
+    () => getAllOutputStyles(sessionContext, storageV5),
   );
 }
 //@ chunk-e6aww6q8.js:819540-820209 fingerprint = getAllOutputStyles (0.634)
 /**
  * 所有输出风格：内置 + 插件 + 用户 + 项目 + 策略（后者覆盖前者）；outputStyles 被策略锁定时只给内置。
  */
-async function getAllOutputStyles(e, n) {
+async function getAllOutputStyles(sessionContext, storageV5) {
   if (isCustomizationDisabled("outputStyles"))
     return {
       ...OUTPUT_STYLE_CONFIG,
     };
-  let customStyles = await getOutputStyleDirStyles(e, n);
-  let pluginStyles = await loadPluginOutputStyles(n);
+  let customStyles = await getOutputStyleDirStyles(sessionContext, storageV5);
+  let pluginStyles = await loadPluginOutputStyles(storageV5);
   let allStyles = {
     ...OUTPUT_STYLE_CONFIG,
   };
@@ -205,14 +218,14 @@ async function getAllOutputStyles(e, n) {
     "outputStyle",
     [
       ...Object.values(OUTPUT_STYLE_CONFIG)
-        .filter((G) => G !== null)
-        .map((G) => ({
-          name: G.name,
-          source: G.source,
+        .filter((builtinStyle) => builtinStyle !== null)
+        .map((builtinStyle) => ({
+          name: builtinStyle.name,
+          source: builtinStyle.source,
         })),
-      ...styleGroups.flat().map((G) => ({
-        name: G.name,
-        source: G.source,
+      ...styleGroups.flat().map((styleEntry) => ({
+        name: styleEntry.name,
+        source: styleEntry.source,
       })),
     ],
     {

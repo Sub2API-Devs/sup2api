@@ -10,7 +10,7 @@
  */
 import {
   isTextBlockArrayWithCacheFlag,
-  Reo,
+  ZERO_TOKEN_USAGE,
   getTokenCountFromUsage_3 as getTokenCountFromUsage_3_2,
 } from "./api/operations.js";
 import { isWellFormedString } from "../../utils/stringUtils.js";
@@ -23,7 +23,7 @@ import { isEffortLevel } from "../../utils/effort.js";
 import { parseUserSpecifiedModel } from "../../utils/model/modelDisplay.js";
 import { isModelAllowed } from "../../utils/model/modelAllowlist.js";
 import { getModelMaxOutputTokens } from "../../utils/context.js";
-import { MAX_OUTPUT_TOKENS_CAP as MAX_OUTPUT_TOKENS_CAP_2 } from "../../utils/truncateGraphemes.js";
+import { MAX_OUTPUT_TOKENS_CAP as MAX_OUTPUT_TOKENS_CAP_2 } from "../../utils/mediaLimits.js";
 import { getSideQueryThinkingSettings } from "../../utils/thinking.js";
 import { sideQueryWithCounter, describeApiErrorForPlugin } from "../../utils/sideQuery.js";
 import { withTimeout as withTimeout_2 } from "../../utils/sleep.js";
@@ -40,16 +40,47 @@ import { getSessionId } from "../../bootstrap/state.js";
 import { currentTurn } from "./personHold.js";
 import { createUserMessage, getAssistantMessageText } from "../../utils/messages.js";
 
+//@ chunk-4121qate.js:280961-281189 placement
+/**
+ * prompt/system 为块数组时拼成字符串并保留原块（promptBlocks/systemBlocks）。疑似属于 SDK/钩子输入规整，归错文件。
+ */
+function normalizePromptAndSystemBlocks(options) {
+  let { prompt, system, ...rest } = options;
+  let promptPart = isTextBlockArrayWithCacheFlag(prompt)
+    ? {
+        prompt: prompt.map((promptBlock) => promptBlock.text).join(""),
+        promptBlocks: prompt,
+      }
+    : {
+        prompt,
+      };
+  let systemPart = isTextBlockArrayWithCacheFlag(system)
+    ? {
+        system: system.map((systemBlock) => systemBlock.text).join(""),
+        systemBlocks: system,
+      }
+    : {
+        system,
+      };
+  let hasSystem = Boolean(system);
+  return {
+    ...rest,
+    ...promptPart,
+    ...(hasSystem && systemPart),
+  };
+}
 //@ chunk-e6aww6q8.js:3981077-3981593 placement
 /**
  * 校验 $.model.complete 参数：需要 {model, prompt}，system/prompt 块必须是带可选 cache 的文本块列表。
  */
-function checkModelCompleteArgs(e) {
-  if (!(typeof e?.model === "string" && typeof e.prompt === "string"))
+function checkModelCompleteArgs(args) {
+  if (!(typeof args?.model === "string" && typeof args.prompt === "string"))
     return "takes { model, prompt }, the prompt a string or a list of blocks, each { text } and at most `cache: true`";
-  if (!(typeof e.system === "string" || !e.system))
+  if (!(typeof args.system === "string" || !args.system))
     return "takes a system that is a string or a list of blocks, each { text } and at most `cache: true`";
-  return [e.promptBlocks, e.systemBlocks].every((h) => h === undefined || isTextBlockArrayWithCacheFlag(h))
+  return [args.promptBlocks, args.systemBlocks].every(
+    (blocks) => blocks === undefined || isTextBlockArrayWithCacheFlag(blocks),
+  )
     ? undefined
     : "takes promptBlocks and systemBlocks that are lists of blocks, each { text } and at most `cache: true`";
 }
@@ -57,20 +88,20 @@ function checkModelCompleteArgs(e) {
 /**
  * 把提示文本按给定块前缀切分为 API 文本块（cache 标记转为 ephemeral cache_control）；无可用块时返回原字符串。
  */
-function toPromptBlocks(e, n = []) {
-  let r = 0;
-  let s = 0;
-  for (let S of n) {
-    if (!(isWellFormedString(S.text) && e.startsWith(S.text, s))) break;
-    r += 1;
-    s += S.text.length;
+function toPromptBlocks(prefixText, blocks = []) {
+  let matchedCount = 0;
+  let offset = 0;
+  for (let block of blocks) {
+    if (!(isWellFormedString(block.text) && prefixText.startsWith(block.text, offset))) break;
+    matchedCount += 1;
+    offset += block.text.length;
   }
-  let h = r === 0 || e === "";
-  let sliced = e.slice(s);
-  return h
-    ? e
+  let keepWholeText = matchedCount === 0 || prefixText === "";
+  let sliced = prefixText.slice(offset);
+  return keepWholeText
+    ? prefixText
     : [
-        ...n.slice(0, r),
+        ...blocks.slice(0, matchedCount),
         ...(sliced === ""
           ? []
           : [
@@ -78,10 +109,10 @@ function toPromptBlocks(e, n = []) {
                 text: sliced,
               },
             ]),
-      ].map((S) => ({
+      ].map((block) => ({
         type: "text",
-        text: S.text,
-        ...(S.cache === true && {
+        text: block.text,
+        ...(block.cache === true && {
           cache_control: {
             type: "ephemeral",
           },
@@ -98,21 +129,21 @@ var MODEL_COMPLETE_DEADLINE = "model.complete deadline reached";
  * $.model.complete 失败时的结果：超时/中止记调试日志并返回未回答，HTTP 失败记错误并按失败类型给出结果。
  */
 function modelCompleteFailure({ pluginName, model, error, timedOutAfterMs, failure }) {
-  let y = isAbortError(error) ? "" : `: ${errorMessage(error)}`;
-  let S =
+  let errorSuffix = isAbortError(error) ? "" : `: ${errorMessage(error)}`;
+  let reasonText =
     timedOutAfterMs !== undefined
       ? `timed out after ${timedOutAfterMs} ms`
       : failure === null
-        ? `aborted${y}`
-        : `failed (HTTP ${failure.status ?? "no status"}, ${failure.kind})` + y;
-  logForDebugging(`$.model.complete (${pluginName}): ${model} ${S}`, {
+        ? `aborted${errorSuffix}`
+        : `failed (HTTP ${failure.status ?? "no status"}, ${failure.kind})` + errorSuffix;
+  logForDebugging(`$.model.complete (${pluginName}): ${model} ${reasonText}`, {
     level: failure === null ? "debug" : "error",
   });
   if (failure === null)
     return {
       isAnswered: false,
       reason: "aborted",
-      usage: Reo,
+      usage: ZERO_TOKEN_USAGE,
     };
   return modelApiError(failure);
 }
@@ -122,52 +153,54 @@ function modelCompleteFailure({ pluginName, model, error, timedOutAfterMs, failu
  */
 async function modelCompleteForPlugin(
   { model, prompt, system, promptBlocks, systemBlocks, maxTokens, effort, timeoutMs },
-  L,
+  pluginName,
   record,
-  q,
+  externalSignal,
 ) {
-  let Z = checkModelCompleteArgs({
+  let argsProblem = checkModelCompleteArgs({
     model,
     prompt,
     system,
     promptBlocks,
     systemBlocks,
   });
-  if (Z !== undefined) throw new HooksError(`${L}: $.model.complete: ${Z}`);
+  if (argsProblem !== undefined) throw new HooksError(`${pluginName}: $.model.complete: ${argsProblem}`);
   if (maxTokens !== undefined && (!Number.isInteger(maxTokens) || maxTokens < 1))
     throw new HooksError(
-      `${L}: $.model.complete: maxTokens must be a positive integer (got ${String(maxTokens)})`,
+      `${pluginName}: $.model.complete: maxTokens must be a positive integer (got ${String(maxTokens)})`,
     );
   if (timeoutMs !== undefined && (!Number.isInteger(timeoutMs) || timeoutMs < 1))
     throw new HooksError(
-      `${L}: $.model.complete: timeoutMs must be a positive integer of milliseconds (got ${String(timeoutMs)})`,
+      `${pluginName}: $.model.complete: timeoutMs must be a positive integer of milliseconds (got ${String(timeoutMs)})`,
     );
-  let we = timeoutMs === undefined ? undefined : Math.min(timeoutMs, MAX_TIMER_DELAY_MS);
+  let deadlineMs = timeoutMs === undefined ? undefined : Math.min(timeoutMs, MAX_TIMER_DELAY_MS);
   if (effort !== undefined && (typeof effort !== "string" || !isEffortLevel(effort)))
     throw new HooksError(
-      `${L}: $.model.complete: effort must be one of low, medium, high, xhigh, max (got ${String(effort)})`,
+      `${pluginName}: $.model.complete: effort must be one of low, medium, high, xhigh, max (got ${String(effort)})`,
     );
   let userSpecifiedModel = parseUserSpecifiedModel(model);
   if (!isModelAllowed(userSpecifiedModel))
-    throw new HooksError(`${L}: $.model.complete: model "${model}" is not in this organization's allowlist`);
+    throw new HooksError(
+      `${pluginName}: $.model.complete: model "${model}" is not in this organization's allowlist`,
+    );
   let min = Math.min(getModelMaxOutputTokens(userSpecifiedModel).upperLimit, MAX_OUTPUT_TOKENS_CAP_2);
   if (maxTokens !== undefined && maxTokens > min)
     throw new HooksError(
-      `${L}: $.model.complete: maxTokens ${maxTokens} is past what ${userSpecifiedModel} can produce in one reply (${min})`,
+      `${pluginName}: $.model.complete: maxTokens ${maxTokens} is past what ${userSpecifiedModel} can produce in one reply (${min})`,
     );
-  let [Me, We] = getSideQueryThinkingSettings(userSpecifiedModel);
-  let maxTokens_2 = Math.min((maxTokens ?? MAX_ERROR_TEXT) + We, min);
+  let [thinking, thinkingBudget] = getSideQueryThinkingSettings(userSpecifiedModel);
+  let maxTokens_2 = Math.min((maxTokens ?? MAX_ERROR_TEXT) + thinkingBudget, min);
   let promptBlocks_2 = toPromptBlocks(typeof system === "string" ? system : "", systemBlocks);
   let abortController = new AbortController();
-  let filtered = [q, abortController.signal].filter((qt) => qt !== undefined);
+  let filtered = [externalSignal, abortController.signal].filter((abortSignal) => abortSignal !== undefined);
   let signal = AbortSignal.any(filtered);
   let now = Date.now();
-  let yt;
-  let gt = sideQueryWithCounter({
+  let response;
+  let queryPromise = sideQueryWithCounter({
     querySource: "hook_prompt",
     model: userSpecifiedModel,
     max_tokens: maxTokens_2,
-    thinking: Me,
+    thinking,
     skipSystemPromptPrefix: true,
     dropCacheControlWhenCachingDisabled: true,
     ...(promptBlocks_2.length > 0 && {
@@ -186,31 +219,33 @@ async function modelCompleteForPlugin(
     record,
   });
   try {
-    yt = await (we === undefined ? gt : withTimeout_2(gt, we, MODEL_COMPLETE_DEADLINE));
+    response = await (deadlineMs === undefined
+      ? queryPromise
+      : withTimeout_2(queryPromise, deadlineMs, MODEL_COMPLETE_DEADLINE));
   } catch (error) {
-    let Zt = q?.aborted === true || isAbortError(error);
-    let rn = error instanceof Error && error.message === MODEL_COMPLETE_DEADLINE && !Zt;
-    if (rn) {
+    let isAborted = externalSignal?.aborted === true || isAbortError(error);
+    let isTimedOut = error instanceof Error && error.message === MODEL_COMPLETE_DEADLINE && !isAborted;
+    if (isTimedOut) {
       abortController.abort();
-      gt.catch(() => {});
+      queryPromise.catch(() => {});
     }
-    let pn = rn || Zt;
+    let isCanceled = isTimedOut || isAborted;
     return modelCompleteFailure({
-      pluginName: L,
+      pluginName,
       model: userSpecifiedModel,
       error,
-      ...(rn && {
+      ...(isTimedOut && {
         timedOutAfterMs: timeoutMs,
       }),
-      failure: pn ? null : describeApiErrorForPlugin(error, userSpecifiedModel),
+      failure: isCanceled ? null : describeApiErrorForPlugin(error, userSpecifiedModel),
     });
   }
-  let At = joinTextBlocks(yt.content, "");
-  let usage = getTokenCountFromUsage_3_2(yt.usage);
+  let replyText = joinTextBlocks(response.content, "");
+  let usage = getTokenCountFromUsage_3_2(response.usage);
   logForDebugging(
-    `$.model.complete (${L}): ${userSpecifiedModel} answered in ${Date.now() - now}ms, ${At.length} chars`,
+    `$.model.complete (${pluginName}): ${userSpecifiedModel} answered in ${Date.now() - now}ms, ${replyText.length} chars`,
   );
-  return At === ""
+  return replyText === ""
     ? {
         isAnswered: false,
         reason: "empty-reply",
@@ -218,7 +253,7 @@ async function modelCompleteForPlugin(
       }
     : {
         isAnswered: true,
-        text: At,
+        text: replyText,
         usage,
       };
 }
@@ -252,18 +287,19 @@ var sessionTurnCache = () => forkCacheSafeParamsSlot.current(String(getSessionId
 /**
  * 在主线程 Stop 钩子阶段记录本回合的请求，供插件 $.model.fork 复用。
  */
-function noteMainRequestForFork(e, cacheSafeParams) {
-  let r = String(getSessionId());
+function noteMainRequestForFork(query, cacheSafeParams) {
+  let sessionId = String(getSessionId());
   let turnId = currentTurn()?.turnId;
-  if (turnId !== undefined && isMainThreadQuery(e) && !forkCacheSafeParamsSlot.holdsResponse(r))
-    forkCacheSafeParamsSlot.setRequest(cacheSafeParams, r, turnId);
+  if (turnId !== undefined && isMainThreadQuery(query) && !forkCacheSafeParamsSlot.holdsResponse(sessionId))
+    forkCacheSafeParamsSlot.setRequest(cacheSafeParams, sessionId, turnId);
 }
 //@ chunk-e6aww6q8.js:3984725-3984777 placement
 /**
  * 记住回合请求参数
  */
-function rememberTurnParams(e) {
-  if (isMainThreadQuery(e)) forkCacheSafeParamsSlot.set(createCacheSafeParams(e), String(getSessionId()));
+function rememberTurnParams(query) {
+  if (isMainThreadQuery(query))
+    forkCacheSafeParamsSlot.set(createCacheSafeParams(query), String(getSessionId()));
 }
 //@ chunk-e6aww6q8.js:3984777-3984813 placement
 /**
@@ -277,36 +313,37 @@ function registerTurnParamsHook(registerPostSamplingHook) {
  * 去掉消息末尾连续助手消息中的 tool_use 块（全为 tool_use 的消息丢弃）。
  */
 function stripTrailingToolUses(forkContextMessages) {
-  let n = forkContextMessages.length;
-  let r = false;
-  let s = [];
-  while (n > 0) {
-    let h = forkContextMessages[n - 1];
-    if (!h || h.type !== "assistant") break;
-    n--;
-    let filtered = h.message.content.filter((S) => S.type !== "tool_use");
-    if (filtered.length === h.message.content.length) s.unshift(h);
+  let scanEnd = forkContextMessages.length;
+  let strippedAny = false;
+  let keptTail = [];
+  while (scanEnd > 0) {
+    let message = forkContextMessages[scanEnd - 1];
+    if (!message || message.type !== "assistant") break;
+    scanEnd--;
+    let filtered = message.message.content.filter((contentBlock) => contentBlock.type !== "tool_use");
+    if (filtered.length === message.message.content.length) keptTail.unshift(message);
     else {
-      r = true;
+      strippedAny = true;
       if (filtered.length > 0)
-        s.unshift({
-          ...h,
+        keptTail.unshift({
+          ...message,
           message: {
-            ...h.message,
+            ...message.message,
             content: filtered,
           },
         });
     }
   }
-  return r ? [...forkContextMessages.slice(0, n), ...s] : forkContextMessages;
+  return strippedAny ? [...forkContextMessages.slice(0, scanEnd), ...keptTail] : forkContextMessages;
 }
 //@ chunk-e6aww6q8.js:3985134-3986406 placement
 /**
  * 插件 $.model.fork：在主线程请求的基础上分叉一次模型调用。
  */
-async function modelForkForPlugin(e, plugin, modelCallNames, signal) {
-  let y = (currentTurn() !== undefined ? sessionTurnCache() : undefined) ?? getLastCacheSafeParams();
-  if (!y) {
+async function modelForkForPlugin(args, plugin, modelCallNames, signal) {
+  let cacheSafeParams =
+    (currentTurn() !== undefined ? sessionTurnCache() : undefined) ?? getLastCacheSafeParams();
+  if (!cacheSafeParams) {
     logForDebugging(`$.model.fork (${plugin}): no main-thread request to fork yet`);
     return {
       isAnswered: false,
@@ -314,10 +351,10 @@ async function modelForkForPlugin(e, plugin, modelCallNames, signal) {
     };
   }
   let abortController = new AbortController();
-  let w = () => abortController.abort();
+  let onSignalAbort = () => abortController.abort();
   if (signal?.aborted) abortController.abort();
   else
-    signal?.addEventListener("abort", w, {
+    signal?.addEventListener("abort", onSignalAbort, {
       once: true,
     });
   let now = Date.now();
@@ -325,12 +362,12 @@ async function modelForkForPlugin(e, plugin, modelCallNames, signal) {
     let { messages, totalUsage } = await runForkedAgent({
       promptMessages: [
         createUserMessage({
-          content: e.prompt,
+          content: args.prompt,
         }),
       ],
       cacheSafeParams: {
-        ...y,
-        forkContextMessages: stripTrailingToolUses(y.forkContextMessages),
+        ...cacheSafeParams,
+        forkContextMessages: stripTrailingToolUses(cacheSafeParams.forkContextMessages),
       },
       canUseTool: denyForkToolUse,
       querySource: "hook_prompt",
@@ -346,24 +383,24 @@ async function modelForkForPlugin(e, plugin, modelCallNames, signal) {
     let usage = getTokenCountFromUsage_3_2(totalUsage);
     let filtered = messages.filter((message) => message.type === "assistant");
     let filtered_2 = filtered
-      .filter((Ie) => !Ie.isApiErrorMessage)
+      .filter((assistantMessage) => !assistantMessage.isApiErrorMessage)
       .map(getAssistantMessageText)
-      .filter((Ie) => Ie !== null && Ie !== "");
-    let last = filtered.findLast((Ie) => Ie.isApiErrorMessage);
+      .filter((replyText) => replyText !== null && replyText !== "");
+    let last = filtered.findLast((errorMessage) => errorMessage.isApiErrorMessage);
     let aborted = abortController.signal.aborted;
     logForDebugging(
       `$.model.fork (${plugin}): ${Date.now() - now}ms, ${filtered_2.length} replies` +
         (aborted ? ", aborted" : "") +
         (last ? `, API error ${last.apiErrorStatus ?? "no status"}` : ""),
     );
-    let Ae = filtered_2.length > 0;
+    let hasReplies = filtered_2.length > 0;
     return aborted
       ? {
           isAnswered: false,
           reason: "aborted",
           usage,
         }
-      : Ae
+      : hasReplies
         ? {
             isAnswered: true,
             text: filtered_2.join(`
@@ -384,43 +421,15 @@ async function modelForkForPlugin(e, plugin, modelCallNames, signal) {
               usage,
             };
   } finally {
-    signal?.removeEventListener("abort", w);
+    signal?.removeEventListener("abort", onSignalAbort);
   }
 }
 //@ chunk-e6aww6q8.js:3986406-3986460 placement
 /**
  * 带前缀包装的错误构造
  */
-var prefixedErrorCtor = (e, n, r) => (s) => new HooksError(`${e}: ${n}(${r}) ${s}`);
-//@ chunk-4121qate.js:280961-281189 placement
-/**
- * prompt/system 为块数组时拼成字符串并保留原块（promptBlocks/systemBlocks）。疑似属于 SDK/钩子输入规整，归错文件。
- */
-function normalizePromptAndSystemBlocks(e) {
-  let { prompt, system, ...n } = e;
-  let i = isTextBlockArrayWithCacheFlag(prompt)
-    ? {
-        prompt: prompt.map((m) => m.text).join(""),
-        promptBlocks: prompt,
-      }
-    : {
-        prompt,
-      };
-  let f = isTextBlockArrayWithCacheFlag(system)
-    ? {
-        system: system.map((m) => m.text).join(""),
-        systemBlocks: system,
-      }
-    : {
-        system,
-      };
-  let a = Boolean(system);
-  return {
-    ...n,
-    ...i,
-    ...(a && f),
-  };
-}
+var prefixedErrorCtor = (pluginName, method, apiName) => (detail) =>
+  new HooksError(`${pluginName}: ${method}(${apiName}) ${detail}`);
 export {
   registerTurnParamsHook,
   normalizePromptAndSystemBlocks,

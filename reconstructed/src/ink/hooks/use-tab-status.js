@@ -16,11 +16,11 @@ init_react_production();
 /**
  * 标签页状态预设：idle（绿点，“Idle”）、busy（橙点，“Working…”）、waiting（蓝点，“Waiting”）。
  */
-var rgb = (o, r, l) => ({
+var rgb = (red, green, blue) => ({
   type: "rgb",
-  r: o,
-  g: r,
-  b: l,
+  r: red,
+  g: green,
+  b: blue,
 });
 var TAB_STATUS_PRESETS = {
   idle: {

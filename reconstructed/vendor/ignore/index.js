@@ -5,10 +5,10 @@
  * pieces: chunk-82kqcve8.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../runtime/bun-runtime.js";
+import { __commonJS } from "../../runtime/bun-runtime.js";
 
 //@ chunk-82kqcve8.js:4002-8454 cjs-fingerprint
-var require_ignore = x(function (cjsExports, cjsModule) {
+var require_ignore = __commonJS(function (cjsExports, cjsModule) {
   function makeArray(subject) {
     return Array.isArray(subject) ? subject : [subject];
   }
@@ -173,7 +173,7 @@ var require_ignore = x(function (cjsExports, cjsModule) {
       makeArray(isString(pattern) ? splitPattern(pattern) : pattern).forEach(this._add, this);
       return this._added;
     }
-    test(e, checkUnignored, mode) {
+    test(path, checkUnignored, mode) {
       let ignored = false;
       let unignored = false;
       let matchedRule;
@@ -184,7 +184,7 @@ var require_ignore = x(function (cjsExports, cjsModule) {
           (negative && !ignored && !unignored && !checkUnignored)
         )
           return;
-        if (!rule[mode].test(e)) return;
+        if (!rule[mode].test(path)) return;
         ignored = !negative;
         unignored = negative;
         matchedRule = negative ? UNDEFINED : rule;

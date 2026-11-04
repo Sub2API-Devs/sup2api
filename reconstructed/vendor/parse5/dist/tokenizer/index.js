@@ -10,10 +10,10 @@ import {
   isSurrogate,
   isUndefinedCodePoint,
   isControlCodePoint,
-  m,
+  REPLACEMENT_CHARACTER,
   SEQUENCES,
 } from "../common/unicode.js";
-import { o } from "../../lib/common/error-codes.js";
+import { errors } from "../../lib/common/error-codes.js";
 import { Preprocessor } from "./preprocessor.js";
 import { EntityDecoder, DecodingMode } from "../../../entities/lib/esm/decode.js";
 import { uint16Array } from "../../../entities/lib/esm/generated/decode-data-xml.js";
@@ -147,12 +147,12 @@ function isScriptDataDoubleEscapeSequenceEnd(cp) {
 }
 //@ chunk-6ja29j2n.js:75789-76101 esm-fingerprint
 function getErrorForNumericCharacterReference(code) {
-  if (code === CODE_POINTS.NULL) return o.nullCharacterReference;
-  else if (code > 1114111) return o.characterReferenceOutsideUnicodeRange;
-  else if (isSurrogate(code)) return o.surrogateCharacterReference;
-  else if (isUndefinedCodePoint(code)) return o.noncharacterCharacterReference;
+  if (code === CODE_POINTS.NULL) return errors.nullCharacterReference;
+  else if (code > 1114111) return errors.characterReferenceOutsideUnicodeRange;
+  else if (isSurrogate(code)) return errors.surrogateCharacterReference;
+  else if (isUndefinedCodePoint(code)) return errors.noncharacterCharacterReference;
   else if (isControlCodePoint(code) || code === CODE_POINTS.CARRIAGE_RETURN)
-    return o.controlCharacterReference;
+    return errors.controlCharacterReference;
   return null;
 }
 //@ chunk-6ja29j2n.js:76101-117020 esm-fingerprint
@@ -186,11 +186,11 @@ class Tokenizer {
       handler.onParseError
         ? {
             missingSemicolonAfterCharacterReference: () => {
-              this._err(o.missingSemicolonAfterCharacterReference, 1);
+              this._err(errors.missingSemicolonAfterCharacterReference, 1);
             },
             absenceOfDigitsInNumericCharacterReference: (consumed) => {
               this._err(
-                o.absenceOfDigitsInNumericCharacterReference,
+                errors.absenceOfDigitsInNumericCharacterReference,
                 this.entityStartPos - this.preprocessor.pos + consumed,
               );
             },
@@ -345,7 +345,7 @@ class Tokenizer {
         attrLocations[this.currentAttr.name] = this.currentLocation;
         this._leaveAttrValue();
       }
-    } else this._err(o.duplicateAttribute);
+    } else this._err(errors.duplicateAttribute);
   }
   _leaveAttrValue() {
     if (this.currentLocation) {
@@ -372,8 +372,8 @@ class Tokenizer {
       this.lastStartTagName = ct.tagName;
       this.handler.onStartTag(ct);
     } else {
-      if (ct.attrs.length > 0) this._err(o.endTagWithAttributes);
-      if (ct.selfClosing) this._err(o.endTagWithTrailingSolidus);
+      if (ct.attrs.length > 0) this._err(errors.endTagWithAttributes);
+      if (ct.selfClosing) this._err(errors.endTagWithTrailingSolidus);
       this.handler.onEndTag(ct);
     }
     this.preprocessor.dropParsedChunk();
@@ -777,7 +777,7 @@ class Tokenizer {
         break;
       }
       case CODE_POINTS.NULL: {
-        this._err(o.unexpectedNullCharacter);
+        this._err(errors.unexpectedNullCharacter);
         this._emitCodePoint(cp);
         break;
       }
@@ -800,8 +800,8 @@ class Tokenizer {
         break;
       }
       case CODE_POINTS.NULL: {
-        this._err(o.unexpectedNullCharacter);
-        this._emitChars(m);
+        this._err(errors.unexpectedNullCharacter);
+        this._emitChars(REPLACEMENT_CHARACTER);
         break;
       }
       case CODE_POINTS.EOF: {
@@ -819,8 +819,8 @@ class Tokenizer {
         break;
       }
       case CODE_POINTS.NULL: {
-        this._err(o.unexpectedNullCharacter);
-        this._emitChars(m);
+        this._err(errors.unexpectedNullCharacter);
+        this._emitChars(REPLACEMENT_CHARACTER);
         break;
       }
       case CODE_POINTS.EOF: {
@@ -838,8 +838,8 @@ class Tokenizer {
         break;
       }
       case CODE_POINTS.NULL: {
-        this._err(o.unexpectedNullCharacter);
-        this._emitChars(m);
+        this._err(errors.unexpectedNullCharacter);
+        this._emitChars(REPLACEMENT_CHARACTER);
         break;
       }
       case CODE_POINTS.EOF: {
@@ -853,8 +853,8 @@ class Tokenizer {
   _statePlaintext(cp) {
     switch (cp) {
       case CODE_POINTS.NULL: {
-        this._err(o.unexpectedNullCharacter);
-        this._emitChars(m);
+        this._err(errors.unexpectedNullCharacter);
+        this._emitChars(REPLACEMENT_CHARACTER);
         break;
       }
       case CODE_POINTS.EOF: {
@@ -881,20 +881,20 @@ class Tokenizer {
           break;
         }
         case CODE_POINTS.QUESTION_MARK: {
-          this._err(o.unexpectedQuestionMarkInsteadOfTagName);
+          this._err(errors.unexpectedQuestionMarkInsteadOfTagName);
           this._createCommentToken(1);
           this.state = State.BOGUS_COMMENT;
           this._stateBogusComment(cp);
           break;
         }
         case CODE_POINTS.EOF: {
-          this._err(o.eofBeforeTagName);
+          this._err(errors.eofBeforeTagName);
           this._emitChars("<");
           this._emitEOFToken();
           break;
         }
         default:
-          this._err(o.invalidFirstCharacterOfTagName);
+          this._err(errors.invalidFirstCharacterOfTagName);
           this._emitChars("<");
           this.state = State.DATA;
           this._stateData(cp);
@@ -908,18 +908,18 @@ class Tokenizer {
     } else
       switch (cp) {
         case CODE_POINTS.GREATER_THAN_SIGN: {
-          this._err(o.missingEndTagName);
+          this._err(errors.missingEndTagName);
           this.state = State.DATA;
           break;
         }
         case CODE_POINTS.EOF: {
-          this._err(o.eofBeforeTagName);
+          this._err(errors.eofBeforeTagName);
           this._emitChars("</");
           this._emitEOFToken();
           break;
         }
         default:
-          this._err(o.invalidFirstCharacterOfTagName);
+          this._err(errors.invalidFirstCharacterOfTagName);
           this._createCommentToken(2);
           this.state = State.BOGUS_COMMENT;
           this._stateBogusComment(cp);
@@ -945,12 +945,12 @@ class Tokenizer {
         break;
       }
       case CODE_POINTS.NULL: {
-        this._err(o.unexpectedNullCharacter);
-        token.tagName += m;
+        this._err(errors.unexpectedNullCharacter);
+        token.tagName += REPLACEMENT_CHARACTER;
         break;
       }
       case CODE_POINTS.EOF: {
-        this._err(o.eofInTag);
+        this._err(errors.eofInTag);
         this._emitEOFToken();
         break;
       }
@@ -1097,12 +1097,12 @@ class Tokenizer {
         break;
       }
       case CODE_POINTS.NULL: {
-        this._err(o.unexpectedNullCharacter);
-        this._emitChars(m);
+        this._err(errors.unexpectedNullCharacter);
+        this._emitChars(REPLACEMENT_CHARACTER);
         break;
       }
       case CODE_POINTS.EOF: {
-        this._err(o.eofInScriptHtmlCommentLikeText);
+        this._err(errors.eofInScriptHtmlCommentLikeText);
         this._emitEOFToken();
         break;
       }
@@ -1122,13 +1122,13 @@ class Tokenizer {
         break;
       }
       case CODE_POINTS.NULL: {
-        this._err(o.unexpectedNullCharacter);
+        this._err(errors.unexpectedNullCharacter);
         this.state = State.SCRIPT_DATA_ESCAPED;
-        this._emitChars(m);
+        this._emitChars(REPLACEMENT_CHARACTER);
         break;
       }
       case CODE_POINTS.EOF: {
-        this._err(o.eofInScriptHtmlCommentLikeText);
+        this._err(errors.eofInScriptHtmlCommentLikeText);
         this._emitEOFToken();
         break;
       }
@@ -1153,13 +1153,13 @@ class Tokenizer {
         break;
       }
       case CODE_POINTS.NULL: {
-        this._err(o.unexpectedNullCharacter);
+        this._err(errors.unexpectedNullCharacter);
         this.state = State.SCRIPT_DATA_ESCAPED;
-        this._emitChars(m);
+        this._emitChars(REPLACEMENT_CHARACTER);
         break;
       }
       case CODE_POINTS.EOF: {
-        this._err(o.eofInScriptHtmlCommentLikeText);
+        this._err(errors.eofInScriptHtmlCommentLikeText);
         this._emitEOFToken();
         break;
       }
@@ -1223,12 +1223,12 @@ class Tokenizer {
         break;
       }
       case CODE_POINTS.NULL: {
-        this._err(o.unexpectedNullCharacter);
-        this._emitChars(m);
+        this._err(errors.unexpectedNullCharacter);
+        this._emitChars(REPLACEMENT_CHARACTER);
         break;
       }
       case CODE_POINTS.EOF: {
-        this._err(o.eofInScriptHtmlCommentLikeText);
+        this._err(errors.eofInScriptHtmlCommentLikeText);
         this._emitEOFToken();
         break;
       }
@@ -1249,13 +1249,13 @@ class Tokenizer {
         break;
       }
       case CODE_POINTS.NULL: {
-        this._err(o.unexpectedNullCharacter);
+        this._err(errors.unexpectedNullCharacter);
         this.state = State.SCRIPT_DATA_DOUBLE_ESCAPED;
-        this._emitChars(m);
+        this._emitChars(REPLACEMENT_CHARACTER);
         break;
       }
       case CODE_POINTS.EOF: {
-        this._err(o.eofInScriptHtmlCommentLikeText);
+        this._err(errors.eofInScriptHtmlCommentLikeText);
         this._emitEOFToken();
         break;
       }
@@ -1281,13 +1281,13 @@ class Tokenizer {
         break;
       }
       case CODE_POINTS.NULL: {
-        this._err(o.unexpectedNullCharacter);
+        this._err(errors.unexpectedNullCharacter);
         this.state = State.SCRIPT_DATA_DOUBLE_ESCAPED;
-        this._emitChars(m);
+        this._emitChars(REPLACEMENT_CHARACTER);
         break;
       }
       case CODE_POINTS.EOF: {
-        this._err(o.eofInScriptHtmlCommentLikeText);
+        this._err(errors.eofInScriptHtmlCommentLikeText);
         this._emitEOFToken();
         break;
       }
@@ -1333,7 +1333,7 @@ class Tokenizer {
         break;
       }
       case CODE_POINTS.EQUALS_SIGN: {
-        this._err(o.unexpectedEqualsSignBeforeAttributeName);
+        this._err(errors.unexpectedEqualsSignBeforeAttributeName);
         this._createAttr("=");
         this.state = State.ATTRIBUTE_NAME;
         break;
@@ -1366,13 +1366,13 @@ class Tokenizer {
       case CODE_POINTS.QUOTATION_MARK:
       case CODE_POINTS.APOSTROPHE:
       case CODE_POINTS.LESS_THAN_SIGN: {
-        this._err(o.unexpectedCharacterInAttributeName);
+        this._err(errors.unexpectedCharacterInAttributeName);
         this.currentAttr.name += String.fromCodePoint(cp);
         break;
       }
       case CODE_POINTS.NULL: {
-        this._err(o.unexpectedNullCharacter);
-        this.currentAttr.name += m;
+        this._err(errors.unexpectedNullCharacter);
+        this.currentAttr.name += REPLACEMENT_CHARACTER;
         break;
       }
       default:
@@ -1400,7 +1400,7 @@ class Tokenizer {
         break;
       }
       case CODE_POINTS.EOF: {
-        this._err(o.eofInTag);
+        this._err(errors.eofInTag);
         this._emitEOFToken();
         break;
       }
@@ -1426,7 +1426,7 @@ class Tokenizer {
         break;
       }
       case CODE_POINTS.GREATER_THAN_SIGN: {
-        this._err(o.missingAttributeValue);
+        this._err(errors.missingAttributeValue);
         this.state = State.DATA;
         this.emitCurrentTagToken();
         break;
@@ -1447,12 +1447,12 @@ class Tokenizer {
         break;
       }
       case CODE_POINTS.NULL: {
-        this._err(o.unexpectedNullCharacter);
-        this.currentAttr.value += m;
+        this._err(errors.unexpectedNullCharacter);
+        this.currentAttr.value += REPLACEMENT_CHARACTER;
         break;
       }
       case CODE_POINTS.EOF: {
-        this._err(o.eofInTag);
+        this._err(errors.eofInTag);
         this._emitEOFToken();
         break;
       }
@@ -1471,12 +1471,12 @@ class Tokenizer {
         break;
       }
       case CODE_POINTS.NULL: {
-        this._err(o.unexpectedNullCharacter);
-        this.currentAttr.value += m;
+        this._err(errors.unexpectedNullCharacter);
+        this.currentAttr.value += REPLACEMENT_CHARACTER;
         break;
       }
       case CODE_POINTS.EOF: {
-        this._err(o.eofInTag);
+        this._err(errors.eofInTag);
         this._emitEOFToken();
         break;
       }
@@ -1505,8 +1505,8 @@ class Tokenizer {
         break;
       }
       case CODE_POINTS.NULL: {
-        this._err(o.unexpectedNullCharacter);
-        this.currentAttr.value += m;
+        this._err(errors.unexpectedNullCharacter);
+        this.currentAttr.value += REPLACEMENT_CHARACTER;
         break;
       }
       case CODE_POINTS.QUOTATION_MARK:
@@ -1514,12 +1514,12 @@ class Tokenizer {
       case CODE_POINTS.LESS_THAN_SIGN:
       case CODE_POINTS.EQUALS_SIGN:
       case CODE_POINTS.GRAVE_ACCENT: {
-        this._err(o.unexpectedCharacterInUnquotedAttributeValue);
+        this._err(errors.unexpectedCharacterInUnquotedAttributeValue);
         this.currentAttr.value += String.fromCodePoint(cp);
         break;
       }
       case CODE_POINTS.EOF: {
-        this._err(o.eofInTag);
+        this._err(errors.eofInTag);
         this._emitEOFToken();
         break;
       }
@@ -1549,12 +1549,12 @@ class Tokenizer {
         break;
       }
       case CODE_POINTS.EOF: {
-        this._err(o.eofInTag);
+        this._err(errors.eofInTag);
         this._emitEOFToken();
         break;
       }
       default:
-        this._err(o.missingWhitespaceBetweenAttributes);
+        this._err(errors.missingWhitespaceBetweenAttributes);
         this.state = State.BEFORE_ATTRIBUTE_NAME;
         this._stateBeforeAttributeName(cp);
     }
@@ -1569,12 +1569,12 @@ class Tokenizer {
         break;
       }
       case CODE_POINTS.EOF: {
-        this._err(o.eofInTag);
+        this._err(errors.eofInTag);
         this._emitEOFToken();
         break;
       }
       default:
-        this._err(o.unexpectedSolidusInTag);
+        this._err(errors.unexpectedSolidusInTag);
         this.state = State.BEFORE_ATTRIBUTE_NAME;
         this._stateBeforeAttributeName(cp);
     }
@@ -1593,8 +1593,8 @@ class Tokenizer {
         break;
       }
       case CODE_POINTS.NULL: {
-        this._err(o.unexpectedNullCharacter);
-        token.data += m;
+        this._err(errors.unexpectedNullCharacter);
+        token.data += REPLACEMENT_CHARACTER;
         break;
       }
       default:
@@ -1611,13 +1611,13 @@ class Tokenizer {
     } else if (this._consumeSequenceIfMatch(SEQUENCES.CDATA_START, true)) {
       if (this.inForeignNode) this.state = State.CDATA_SECTION;
       else {
-        this._err(o.cdataInHtmlContent);
+        this._err(errors.cdataInHtmlContent);
         this._createCommentToken(SEQUENCES.CDATA_START.length + 1);
         this.currentToken.data = "[CDATA[";
         this.state = State.BOGUS_COMMENT;
       }
     } else if (!this._ensureHibernation()) {
-      this._err(o.incorrectlyOpenedComment);
+      this._err(errors.incorrectlyOpenedComment);
       this._createCommentToken(2);
       this.state = State.BOGUS_COMMENT;
       this._stateBogusComment(cp);
@@ -1630,7 +1630,7 @@ class Tokenizer {
         break;
       }
       case CODE_POINTS.GREATER_THAN_SIGN: {
-        this._err(o.abruptClosingOfEmptyComment);
+        this._err(errors.abruptClosingOfEmptyComment);
         this.state = State.DATA;
         let token = this.currentToken;
         this.emitCurrentComment(token);
@@ -1649,13 +1649,13 @@ class Tokenizer {
         break;
       }
       case CODE_POINTS.GREATER_THAN_SIGN: {
-        this._err(o.abruptClosingOfEmptyComment);
+        this._err(errors.abruptClosingOfEmptyComment);
         this.state = State.DATA;
         this.emitCurrentComment(token);
         break;
       }
       case CODE_POINTS.EOF: {
-        this._err(o.eofInComment);
+        this._err(errors.eofInComment);
         this.emitCurrentComment(token);
         this._emitEOFToken();
         break;
@@ -1679,12 +1679,12 @@ class Tokenizer {
         break;
       }
       case CODE_POINTS.NULL: {
-        this._err(o.unexpectedNullCharacter);
-        token.data += m;
+        this._err(errors.unexpectedNullCharacter);
+        token.data += REPLACEMENT_CHARACTER;
         break;
       }
       case CODE_POINTS.EOF: {
-        this._err(o.eofInComment);
+        this._err(errors.eofInComment);
         this.emitCurrentComment(token);
         this._emitEOFToken();
         break;
@@ -1725,7 +1725,7 @@ class Tokenizer {
     }
   }
   _stateCommentLessThanSignBangDashDash(cp) {
-    if (cp !== CODE_POINTS.GREATER_THAN_SIGN && cp !== CODE_POINTS.EOF) this._err(o.nestedComment);
+    if (cp !== CODE_POINTS.GREATER_THAN_SIGN && cp !== CODE_POINTS.EOF) this._err(errors.nestedComment);
     this.state = State.COMMENT_END;
     this._stateCommentEnd(cp);
   }
@@ -1737,7 +1737,7 @@ class Tokenizer {
         break;
       }
       case CODE_POINTS.EOF: {
-        this._err(o.eofInComment);
+        this._err(errors.eofInComment);
         this.emitCurrentComment(token);
         this._emitEOFToken();
         break;
@@ -1765,7 +1765,7 @@ class Tokenizer {
         break;
       }
       case CODE_POINTS.EOF: {
-        this._err(o.eofInComment);
+        this._err(errors.eofInComment);
         this.emitCurrentComment(token);
         this._emitEOFToken();
         break;
@@ -1785,13 +1785,13 @@ class Tokenizer {
         break;
       }
       case CODE_POINTS.GREATER_THAN_SIGN: {
-        this._err(o.incorrectlyClosedComment);
+        this._err(errors.incorrectlyClosedComment);
         this.state = State.DATA;
         this.emitCurrentComment(token);
         break;
       }
       case CODE_POINTS.EOF: {
-        this._err(o.eofInComment);
+        this._err(errors.eofInComment);
         this.emitCurrentComment(token);
         this._emitEOFToken();
         break;
@@ -1817,7 +1817,7 @@ class Tokenizer {
         break;
       }
       case CODE_POINTS.EOF: {
-        this._err(o.eofInDoctype);
+        this._err(errors.eofInDoctype);
         this._createDoctypeToken(null);
         let token = this.currentToken;
         token.forceQuirks = true;
@@ -1826,7 +1826,7 @@ class Tokenizer {
         break;
       }
       default:
-        this._err(o.missingWhitespaceBeforeDoctypeName);
+        this._err(errors.missingWhitespaceBeforeDoctypeName);
         this.state = State.BEFORE_DOCTYPE_NAME;
         this._stateBeforeDoctypeName(cp);
     }
@@ -1843,13 +1843,13 @@ class Tokenizer {
         case CODE_POINTS.FORM_FEED:
           break;
         case CODE_POINTS.NULL: {
-          this._err(o.unexpectedNullCharacter);
-          this._createDoctypeToken(m);
+          this._err(errors.unexpectedNullCharacter);
+          this._createDoctypeToken(REPLACEMENT_CHARACTER);
           this.state = State.DOCTYPE_NAME;
           break;
         }
         case CODE_POINTS.GREATER_THAN_SIGN: {
-          this._err(o.missingDoctypeName);
+          this._err(errors.missingDoctypeName);
           this._createDoctypeToken(null);
           let token = this.currentToken;
           token.forceQuirks = true;
@@ -1858,7 +1858,7 @@ class Tokenizer {
           break;
         }
         case CODE_POINTS.EOF: {
-          this._err(o.eofInDoctype);
+          this._err(errors.eofInDoctype);
           this._createDoctypeToken(null);
           let token = this.currentToken;
           token.forceQuirks = true;
@@ -1887,12 +1887,12 @@ class Tokenizer {
         break;
       }
       case CODE_POINTS.NULL: {
-        this._err(o.unexpectedNullCharacter);
-        token.name += m;
+        this._err(errors.unexpectedNullCharacter);
+        token.name += REPLACEMENT_CHARACTER;
         break;
       }
       case CODE_POINTS.EOF: {
-        this._err(o.eofInDoctype);
+        this._err(errors.eofInDoctype);
         token.forceQuirks = true;
         this.emitCurrentDoctype(token);
         this._emitEOFToken();
@@ -1916,7 +1916,7 @@ class Tokenizer {
         break;
       }
       case CODE_POINTS.EOF: {
-        this._err(o.eofInDoctype);
+        this._err(errors.eofInDoctype);
         token.forceQuirks = true;
         this.emitCurrentDoctype(token);
         this._emitEOFToken();
@@ -1928,7 +1928,7 @@ class Tokenizer {
         else if (this._consumeSequenceIfMatch(SEQUENCES.SYSTEM, false))
           this.state = State.AFTER_DOCTYPE_SYSTEM_KEYWORD;
         else if (!this._ensureHibernation()) {
-          this._err(o.invalidCharacterSequenceAfterDoctypeName);
+          this._err(errors.invalidCharacterSequenceAfterDoctypeName);
           token.forceQuirks = true;
           this.state = State.BOGUS_DOCTYPE;
           this._stateBogusDoctype(cp);
@@ -1946,33 +1946,33 @@ class Tokenizer {
         break;
       }
       case CODE_POINTS.QUOTATION_MARK: {
-        this._err(o.missingWhitespaceAfterDoctypePublicKeyword);
+        this._err(errors.missingWhitespaceAfterDoctypePublicKeyword);
         token.publicId = "";
         this.state = State.DOCTYPE_PUBLIC_IDENTIFIER_DOUBLE_QUOTED;
         break;
       }
       case CODE_POINTS.APOSTROPHE: {
-        this._err(o.missingWhitespaceAfterDoctypePublicKeyword);
+        this._err(errors.missingWhitespaceAfterDoctypePublicKeyword);
         token.publicId = "";
         this.state = State.DOCTYPE_PUBLIC_IDENTIFIER_SINGLE_QUOTED;
         break;
       }
       case CODE_POINTS.GREATER_THAN_SIGN: {
-        this._err(o.missingDoctypePublicIdentifier);
+        this._err(errors.missingDoctypePublicIdentifier);
         token.forceQuirks = true;
         this.state = State.DATA;
         this.emitCurrentDoctype(token);
         break;
       }
       case CODE_POINTS.EOF: {
-        this._err(o.eofInDoctype);
+        this._err(errors.eofInDoctype);
         token.forceQuirks = true;
         this.emitCurrentDoctype(token);
         this._emitEOFToken();
         break;
       }
       default:
-        this._err(o.missingQuoteBeforeDoctypePublicIdentifier);
+        this._err(errors.missingQuoteBeforeDoctypePublicIdentifier);
         token.forceQuirks = true;
         this.state = State.BOGUS_DOCTYPE;
         this._stateBogusDoctype(cp);
@@ -1997,21 +1997,21 @@ class Tokenizer {
         break;
       }
       case CODE_POINTS.GREATER_THAN_SIGN: {
-        this._err(o.missingDoctypePublicIdentifier);
+        this._err(errors.missingDoctypePublicIdentifier);
         token.forceQuirks = true;
         this.state = State.DATA;
         this.emitCurrentDoctype(token);
         break;
       }
       case CODE_POINTS.EOF: {
-        this._err(o.eofInDoctype);
+        this._err(errors.eofInDoctype);
         token.forceQuirks = true;
         this.emitCurrentDoctype(token);
         this._emitEOFToken();
         break;
       }
       default:
-        this._err(o.missingQuoteBeforeDoctypePublicIdentifier);
+        this._err(errors.missingQuoteBeforeDoctypePublicIdentifier);
         token.forceQuirks = true;
         this.state = State.BOGUS_DOCTYPE;
         this._stateBogusDoctype(cp);
@@ -2025,19 +2025,19 @@ class Tokenizer {
         break;
       }
       case CODE_POINTS.NULL: {
-        this._err(o.unexpectedNullCharacter);
-        token.publicId += m;
+        this._err(errors.unexpectedNullCharacter);
+        token.publicId += REPLACEMENT_CHARACTER;
         break;
       }
       case CODE_POINTS.GREATER_THAN_SIGN: {
-        this._err(o.abruptDoctypePublicIdentifier);
+        this._err(errors.abruptDoctypePublicIdentifier);
         token.forceQuirks = true;
         this.emitCurrentDoctype(token);
         this.state = State.DATA;
         break;
       }
       case CODE_POINTS.EOF: {
-        this._err(o.eofInDoctype);
+        this._err(errors.eofInDoctype);
         token.forceQuirks = true;
         this.emitCurrentDoctype(token);
         this._emitEOFToken();
@@ -2055,19 +2055,19 @@ class Tokenizer {
         break;
       }
       case CODE_POINTS.NULL: {
-        this._err(o.unexpectedNullCharacter);
-        token.publicId += m;
+        this._err(errors.unexpectedNullCharacter);
+        token.publicId += REPLACEMENT_CHARACTER;
         break;
       }
       case CODE_POINTS.GREATER_THAN_SIGN: {
-        this._err(o.abruptDoctypePublicIdentifier);
+        this._err(errors.abruptDoctypePublicIdentifier);
         token.forceQuirks = true;
         this.emitCurrentDoctype(token);
         this.state = State.DATA;
         break;
       }
       case CODE_POINTS.EOF: {
-        this._err(o.eofInDoctype);
+        this._err(errors.eofInDoctype);
         token.forceQuirks = true;
         this.emitCurrentDoctype(token);
         this._emitEOFToken();
@@ -2093,26 +2093,26 @@ class Tokenizer {
         break;
       }
       case CODE_POINTS.QUOTATION_MARK: {
-        this._err(o.missingWhitespaceBetweenDoctypePublicAndSystemIdentifiers);
+        this._err(errors.missingWhitespaceBetweenDoctypePublicAndSystemIdentifiers);
         token.systemId = "";
         this.state = State.DOCTYPE_SYSTEM_IDENTIFIER_DOUBLE_QUOTED;
         break;
       }
       case CODE_POINTS.APOSTROPHE: {
-        this._err(o.missingWhitespaceBetweenDoctypePublicAndSystemIdentifiers);
+        this._err(errors.missingWhitespaceBetweenDoctypePublicAndSystemIdentifiers);
         token.systemId = "";
         this.state = State.DOCTYPE_SYSTEM_IDENTIFIER_SINGLE_QUOTED;
         break;
       }
       case CODE_POINTS.EOF: {
-        this._err(o.eofInDoctype);
+        this._err(errors.eofInDoctype);
         token.forceQuirks = true;
         this.emitCurrentDoctype(token);
         this._emitEOFToken();
         break;
       }
       default:
-        this._err(o.missingQuoteBeforeDoctypeSystemIdentifier);
+        this._err(errors.missingQuoteBeforeDoctypeSystemIdentifier);
         token.forceQuirks = true;
         this.state = State.BOGUS_DOCTYPE;
         this._stateBogusDoctype(cp);
@@ -2142,14 +2142,14 @@ class Tokenizer {
         break;
       }
       case CODE_POINTS.EOF: {
-        this._err(o.eofInDoctype);
+        this._err(errors.eofInDoctype);
         token.forceQuirks = true;
         this.emitCurrentDoctype(token);
         this._emitEOFToken();
         break;
       }
       default:
-        this._err(o.missingQuoteBeforeDoctypeSystemIdentifier);
+        this._err(errors.missingQuoteBeforeDoctypeSystemIdentifier);
         token.forceQuirks = true;
         this.state = State.BOGUS_DOCTYPE;
         this._stateBogusDoctype(cp);
@@ -2166,33 +2166,33 @@ class Tokenizer {
         break;
       }
       case CODE_POINTS.QUOTATION_MARK: {
-        this._err(o.missingWhitespaceAfterDoctypeSystemKeyword);
+        this._err(errors.missingWhitespaceAfterDoctypeSystemKeyword);
         token.systemId = "";
         this.state = State.DOCTYPE_SYSTEM_IDENTIFIER_DOUBLE_QUOTED;
         break;
       }
       case CODE_POINTS.APOSTROPHE: {
-        this._err(o.missingWhitespaceAfterDoctypeSystemKeyword);
+        this._err(errors.missingWhitespaceAfterDoctypeSystemKeyword);
         token.systemId = "";
         this.state = State.DOCTYPE_SYSTEM_IDENTIFIER_SINGLE_QUOTED;
         break;
       }
       case CODE_POINTS.GREATER_THAN_SIGN: {
-        this._err(o.missingDoctypeSystemIdentifier);
+        this._err(errors.missingDoctypeSystemIdentifier);
         token.forceQuirks = true;
         this.state = State.DATA;
         this.emitCurrentDoctype(token);
         break;
       }
       case CODE_POINTS.EOF: {
-        this._err(o.eofInDoctype);
+        this._err(errors.eofInDoctype);
         token.forceQuirks = true;
         this.emitCurrentDoctype(token);
         this._emitEOFToken();
         break;
       }
       default:
-        this._err(o.missingQuoteBeforeDoctypeSystemIdentifier);
+        this._err(errors.missingQuoteBeforeDoctypeSystemIdentifier);
         token.forceQuirks = true;
         this.state = State.BOGUS_DOCTYPE;
         this._stateBogusDoctype(cp);
@@ -2217,21 +2217,21 @@ class Tokenizer {
         break;
       }
       case CODE_POINTS.GREATER_THAN_SIGN: {
-        this._err(o.missingDoctypeSystemIdentifier);
+        this._err(errors.missingDoctypeSystemIdentifier);
         token.forceQuirks = true;
         this.state = State.DATA;
         this.emitCurrentDoctype(token);
         break;
       }
       case CODE_POINTS.EOF: {
-        this._err(o.eofInDoctype);
+        this._err(errors.eofInDoctype);
         token.forceQuirks = true;
         this.emitCurrentDoctype(token);
         this._emitEOFToken();
         break;
       }
       default:
-        this._err(o.missingQuoteBeforeDoctypeSystemIdentifier);
+        this._err(errors.missingQuoteBeforeDoctypeSystemIdentifier);
         token.forceQuirks = true;
         this.state = State.BOGUS_DOCTYPE;
         this._stateBogusDoctype(cp);
@@ -2245,19 +2245,19 @@ class Tokenizer {
         break;
       }
       case CODE_POINTS.NULL: {
-        this._err(o.unexpectedNullCharacter);
-        token.systemId += m;
+        this._err(errors.unexpectedNullCharacter);
+        token.systemId += REPLACEMENT_CHARACTER;
         break;
       }
       case CODE_POINTS.GREATER_THAN_SIGN: {
-        this._err(o.abruptDoctypeSystemIdentifier);
+        this._err(errors.abruptDoctypeSystemIdentifier);
         token.forceQuirks = true;
         this.emitCurrentDoctype(token);
         this.state = State.DATA;
         break;
       }
       case CODE_POINTS.EOF: {
-        this._err(o.eofInDoctype);
+        this._err(errors.eofInDoctype);
         token.forceQuirks = true;
         this.emitCurrentDoctype(token);
         this._emitEOFToken();
@@ -2275,19 +2275,19 @@ class Tokenizer {
         break;
       }
       case CODE_POINTS.NULL: {
-        this._err(o.unexpectedNullCharacter);
-        token.systemId += m;
+        this._err(errors.unexpectedNullCharacter);
+        token.systemId += REPLACEMENT_CHARACTER;
         break;
       }
       case CODE_POINTS.GREATER_THAN_SIGN: {
-        this._err(o.abruptDoctypeSystemIdentifier);
+        this._err(errors.abruptDoctypeSystemIdentifier);
         token.forceQuirks = true;
         this.emitCurrentDoctype(token);
         this.state = State.DATA;
         break;
       }
       case CODE_POINTS.EOF: {
-        this._err(o.eofInDoctype);
+        this._err(errors.eofInDoctype);
         token.forceQuirks = true;
         this.emitCurrentDoctype(token);
         this._emitEOFToken();
@@ -2311,14 +2311,14 @@ class Tokenizer {
         break;
       }
       case CODE_POINTS.EOF: {
-        this._err(o.eofInDoctype);
+        this._err(errors.eofInDoctype);
         token.forceQuirks = true;
         this.emitCurrentDoctype(token);
         this._emitEOFToken();
         break;
       }
       default:
-        this._err(o.unexpectedCharacterAfterDoctypeSystemIdentifier);
+        this._err(errors.unexpectedCharacterAfterDoctypeSystemIdentifier);
         this.state = State.BOGUS_DOCTYPE;
         this._stateBogusDoctype(cp);
     }
@@ -2332,7 +2332,7 @@ class Tokenizer {
         break;
       }
       case CODE_POINTS.NULL: {
-        this._err(o.unexpectedNullCharacter);
+        this._err(errors.unexpectedNullCharacter);
         break;
       }
       case CODE_POINTS.EOF: {
@@ -2350,7 +2350,7 @@ class Tokenizer {
         break;
       }
       case CODE_POINTS.EOF: {
-        this._err(o.eofInCdata);
+        this._err(errors.eofInCdata);
         this._emitEOFToken();
         break;
       }
@@ -2405,7 +2405,7 @@ class Tokenizer {
   _stateAmbiguousAmpersand(cp) {
     if (isAsciiAlphaNumeric_2(cp)) this._flushCodePointConsumedAsCharacterReference(cp);
     else {
-      if (cp === CODE_POINTS.SEMICOLON) this._err(o.unknownNamedCharacterReference);
+      if (cp === CODE_POINTS.SEMICOLON) this._err(errors.unknownNamedCharacterReference);
       this.state = this.returnState;
       this._callState(cp);
     }

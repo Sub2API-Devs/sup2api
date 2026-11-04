@@ -14,12 +14,16 @@ import { HostScoped } from "./hostScoped.js";
 import { getRootSession, getIsInteractive } from "../bootstrap/state.js";
 import { env } from "./env.js";
 import { isSpawnedByAttendedSession } from "./sessionShape.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-fxf1mb10.js:456-468 affinity
 /**
  * 同进程 teammate 上下文的 AsyncLocalStorage。
  */
-var teammateContextStorage = new AsyncLocalStorage();
+var teammateContextStorage; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-fxf1mb10.js:456", () => {
+  teammateContextStorage = new AsyncLocalStorage();
+});
 //@ chunk-fxf1mb10.js:468-502 facade-exports = getAgentContext (1)
 /**
  * 取当前同进程 teammate 上下文。
@@ -66,12 +70,15 @@ class TeammateProcessState {
   setDynamicTeamContext(dynamicTeamContext) {
     this.dynamicTeamContext = dynamicTeamContext;
   }
-  setAmbientMarkerProbe(e) {
-    this.ambientMarkerProbe = memoizeProbe(e);
+  setAmbientMarkerProbe(marker) {
+    this.ambientMarkerProbe = memoizeProbe(marker);
   }
 }
 //@ chunk-fxf1mb10.js:1114-1139 facade-exports
-var teammateIdentities = new HostScoped(() => new TeammateProcessState());
+var teammateIdentities; // deferred: uses TeammateProcessState of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-fxf1mb10.js:1114", () => {
+  teammateIdentities = new HostScoped(() => new TeammateProcessState());
+});
 //@ chunk-fxf1mb10.js:1139-1176 layout
 function getTeammateProcessState() {
   return teammateIdentities.of(getRootSession().host);
@@ -137,8 +144,8 @@ function isTeammate() {
   return !!(dynamicTeamContext?.agentId && dynamicTeamContext?.teamName);
 }
 //@ chunk-fxf1mb10.js:1759-1827 facade-exports
-function isModelDrivenSession(e) {
-  return e !== undefined || isTeammate() || env.CLAUDE_CODE_CHILD_SESSION;
+function isModelDrivenSession(flag) {
+  return flag !== undefined || isTeammate() || env.CLAUDE_CODE_CHILD_SESSION;
 }
 //@ chunk-fxf1mb10.js:1827-1997 facade-exports
 function isNestedInteractiveClaudeSession() {
@@ -160,27 +167,27 @@ function isOnClaudeCodeSessionSurface() {
   return env.CLAUDE_CODE_SKIP_PROMPT_HISTORY || (!process.stdin.isTTY && !process.stdout.isTTY);
 }
 //@ chunk-fxf1mb10.js:2336-2448 facade-exports
-function _setAmbientMarkerProbeForTesting(e) {
+function _setAmbientMarkerProbeForTesting(probe) {
   getTeammateProcessState().setAmbientMarkerProbe(
-    e === null
+    probe === null
       ? call
       : () => {
-          let t = e();
-          return t === true ? "ambient" : t === false ? "absent" : t;
+          let result = probe();
+          return result === true ? "ambient" : result === false ? "absent" : result;
         },
   );
 }
 //@ chunk-fxf1mb10.js:2448-2534 affinity
-function memoizeProbe(e) {
-  let t = null;
+function memoizeProbe(probe) {
+  let cached = null;
   return () => {
-    if (t === null)
+    if (cached === null)
       try {
-        t = e();
+        cached = probe();
       } catch {
-        t = "unknown";
+        cached = "unknown";
       }
-    return t;
+    return cached;
   };
 }
 //@ chunk-fxf1mb10.js:2853-2943 facade-exports
@@ -296,9 +303,9 @@ function getEffectiveTeammateContext(toolUseContext) {
 }
 export {
   isTeammate,
+  getTeamName,
   isInProcessTeammate,
   getAgentName,
-  getTeamName,
   getTeammateColor,
   isModelDrivenSession,
   isNestedInteractiveClaudeSession,
@@ -317,4 +324,9 @@ export {
   runWithTeammateContext,
   getEffectiveTeammateContext,
   isHeadlessToolCallOfClaudeCodeSession,
+  _setAmbientMarkerProbeForTesting,
+  clearDynamicTeamContext,
+  setCliParentSessionId,
+  setDynamicTeamContext,
+  teammateIdentities,
 };

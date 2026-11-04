@@ -60,8 +60,8 @@ class Stream {
       });
     } else this.queue.push(value);
   }
-  dropNewestQueued(e) {
-    let lastIndex = this.queue.findLastIndex(e);
+  dropNewestQueued(predicate) {
+    let lastIndex = this.queue.findLastIndex(predicate);
     if (lastIndex !== -1) this.queue.splice(lastIndex, 1);
   }
   done() {

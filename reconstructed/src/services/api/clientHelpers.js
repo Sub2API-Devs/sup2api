@@ -43,6 +43,7 @@ import { ENTER_PLAN_MODE_TOOL_NAME } from "../../tools/EnterPlanModeTool/constan
 import { EXITPLANMODE } from "../../tools/ExitPlanModeTool/constants.js";
 import { logFeatureSad } from "../analytics/featureTelemetry.js";
 import { jsonStringifyRaw } from "../../utils/slowOperations.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-hwmsct5x.js:246577-246643 placement
 function isAbortedWithoutStreamError(signal) {
@@ -50,31 +51,36 @@ function isAbortedWithoutStreamError(signal) {
 }
 //@ chunk-hwmsct5x.js:246643-246799 placement
 function modelApiFetch(input, init) {
-  let r = withoutSensitiveHeaders(
+  let url = withoutSensitiveHeaders(
     requestMethodAndUrl(input, init).url,
     init?.headers ?? (input instanceof Request ? input.headers : undefined),
   );
-  let s = init?.tls
+  let fetchInit = init?.tls
     ? {
         ...init,
-        ...getTLSFetchOptions(r),
+        ...getTLSFetchOptions(url),
       }
     : init;
-  return testGuardedFetch(input, s, createTlsSessionFetch("modelApi", s, r));
+  return testGuardedFetch(input, fetchInit, createTlsSessionFetch("modelApi", fetchInit, url));
 }
 //@ chunk-hwmsct5x.js:246799-246935 placement
-var FULL_CHECK_INTERVAL_MS = 120000;
-var WORKER_START = "worker_start";
-var authCacheClockState = identity(
-  {
-    lastFullCheck: WORKER_START,
-    lifetimeSource: "process",
-  },
-  (e) => {
-    e.lastFullCheck = WORKER_START;
-    e.lifetimeSource = "process";
-  },
-);
+var FULL_CHECK_INTERVAL_MS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var WORKER_START;
+var authCacheClockState;
+deferInit("chunk-hwmsct5x.js:246799", () => {
+  FULL_CHECK_INTERVAL_MS = 120000;
+  WORKER_START = "worker_start";
+  authCacheClockState = identity(
+    {
+      lastFullCheck: WORKER_START,
+      lifetimeSource: "process",
+    },
+    (state) => {
+      state.lastFullCheck = WORKER_START;
+      state.lifetimeSource = "process";
+    },
+  );
+});
 //@ chunk-hwmsct5x.js:246935-247061 placement
 function getTenantLifetimeMs() {
   let lifetimeSource = authCacheClockState.lifetimeSource;
@@ -82,43 +88,44 @@ function getTenantLifetimeMs() {
   return env.CLAUDE_CODE_REMOTE && isRemoteCowork() ? FULL_CHECK_INTERVAL_MS : undefined;
 }
 //@ chunk-hwmsct5x.js:247061-247119 placement
-function msSinceLastFullCheck(e) {
-  let elapsedSinceFullCheck = getElapsedSinceFullCheck(e);
-  return elapsedSinceFullCheck === undefined ? undefined : e - elapsedSinceFullCheck;
+function msSinceLastFullCheck(nowMs) {
+  let elapsedSinceFullCheck = getElapsedSinceFullCheck(nowMs);
+  return elapsedSinceFullCheck === undefined ? undefined : nowMs - elapsedSinceFullCheck;
 }
 //@ chunk-hwmsct5x.js:247119-247131 placement
 var AUTH_CACHE_FRESH_MS = 5000;
 //@ chunk-hwmsct5x.js:247131-247306 placement
-function getElapsedSinceFullCheck(e) {
+function getElapsedSinceFullCheck(nowMs) {
   let lastFullCheck = authCacheClockState.lastFullCheck;
   if (lastFullCheck === "worker_start")
     lastFullCheck = isRemoteManagedEnvironment() ? spawnTimestampMs() : undefined;
   if (lastFullCheck === undefined) return;
-  if (lastFullCheck > e)
-    return authCacheClockState.lifetimeSource !== "process" && lastFullCheck - e <= AUTH_CACHE_FRESH_MS
+  if (lastFullCheck > nowMs)
+    return authCacheClockState.lifetimeSource !== "process" && lastFullCheck - nowMs <= AUTH_CACHE_FRESH_MS
       ? 0
       : undefined;
-  return e - lastFullCheck;
+  return nowMs - lastFullCheck;
 }
 //@ chunk-hwmsct5x.js:247306-247376 placement
-function noteFullCheckAt(e, tenantLifetimeMs) {
-  let elapsedSinceFullCheck = getElapsedSinceFullCheck(e);
+function noteFullCheckAt(nowMs, tenantLifetimeMs) {
+  let elapsedSinceFullCheck = getElapsedSinceFullCheck(nowMs);
   if (elapsedSinceFullCheck === undefined || elapsedSinceFullCheck >= tenantLifetimeMs)
-    authCacheClockState.lastFullCheck = e;
+    authCacheClockState.lastFullCheck = nowMs;
 }
 //@ chunk-hwmsct5x.js:247376-247442 placement
-function advanceFullCheckMark(e, n) {
-  if (authCacheClockState.lastFullCheck === e && n > e) authCacheClockState.lastFullCheck = n;
+function advanceFullCheckMark(sentAt, answeredAt) {
+  if (authCacheClockState.lastFullCheck === sentAt && answeredAt > sentAt)
+    authCacheClockState.lastFullCheck = answeredAt;
 }
 //@ chunk-hwmsct5x.js:247442-247506 placement
-function clearFullCheckMarkIf(e) {
-  if (authCacheClockState.lastFullCheck === e) authCacheClockState.lastFullCheck = undefined;
+function clearFullCheckMarkIf(sentAt) {
+  if (authCacheClockState.lastFullCheck === sentAt) authCacheClockState.lastFullCheck = undefined;
 }
 //@ chunk-hwmsct5x.js:247506-247680 placement
-function noteModelRequestSent(e) {
+function noteModelRequestSent(nowMs) {
   try {
     let tenantLifetimeMs = getTenantLifetimeMs();
-    if (tenantLifetimeMs !== undefined) noteFullCheckAt(e, tenantLifetimeMs);
+    if (tenantLifetimeMs !== undefined) noteFullCheckAt(nowMs, tenantLifetimeMs);
   } catch (error) {
     logForDebugging(
       `[authCacheClock] could not note when a model request was sent; the request itself is unaffected: ${errorMessage(error)}`,
@@ -136,13 +143,15 @@ var FOUNDRY_UNSUPPORTED_PATTERN =
 var WEB_SEARCH_UNAVAILABLE_PATTERN = /server-side web search is not available in this environment/i;
 //@ chunk-hwmsct5x.js:247929-248067 placement
 function getFoundryBaseUrl() {
-  let e = normalizeRequestId(env.ANTHROPIC_FOUNDRY_RESOURCE);
-  return env.ANTHROPIC_FOUNDRY_BASE_URL || (e ? `https://${e}.services.ai.azure.com` : undefined);
+  let resource = normalizeRequestId(env.ANTHROPIC_FOUNDRY_RESOURCE);
+  return (
+    env.ANTHROPIC_FOUNDRY_BASE_URL || (resource ? `https://${resource}.services.ai.azure.com` : undefined)
+  );
 }
 //@ chunk-hwmsct5x.js:248067-248144 placement
-function foundryModelKey(e) {
-  let n = stripAnyVersatileSuffix(e);
-  return `${getFoundryBaseUrl() ?? "unknown-foundry-resource"}::${n}`;
+function foundryModelKey(model) {
+  let stripped = stripAnyVersatileSuffix(model);
+  return `${getFoundryBaseUrl() ?? "unknown-foundry-resource"}::${stripped}`;
 }
 //@ chunk-hwmsct5x.js:248144-248171 placement
 var TOOL_NAME_TOKEN_REGEX = /^[a-z][a-z0-9_]*$/;
@@ -151,14 +160,16 @@ var TOOL_NAME_TOKEN_REGEX = /^[a-z][a-z0-9_]*$/;
  * 从自然语言文本里解析出工具名列表（两种正则格式，否则命中关键词时返回 ["web_search"]）。与 WebSearch 工具本身无直接关系。
  */
 function makeToolSchema(input) {
-  let n = input.match(WORKSPACE_UNSUPPORTED_PATTERN)?.[1];
-  if (n) {
-    let mapped = n.split(",").map((h) => h.trim());
-    if (mapped.every((h) => TOOL_NAME_TOKEN_REGEX.test(h))) return mapped;
+  let names = input.match(WORKSPACE_UNSUPPORTED_PATTERN)?.[1];
+  if (names) {
+    let mapped = names.split(",").map((token) => token.trim());
+    if (mapped.every((token) => TOOL_NAME_TOKEN_REGEX.test(token))) return mapped;
   }
-  let r = input.match(FOUNDRY_UNSUPPORTED_PATTERN)?.[1];
-  if (r) {
-    let filtered = r.split(/[,\s]+/).filter((h) => h !== "and" && TOOL_NAME_TOKEN_REGEX.test(h));
+  let tokenNames = input.match(FOUNDRY_UNSUPPORTED_PATTERN)?.[1];
+  if (tokenNames) {
+    let filtered = tokenNames
+      .split(/[,\s]+/)
+      .filter((token) => token !== "and" && TOOL_NAME_TOKEN_REGEX.test(token));
     return filtered.length > 0 ? filtered : null;
   }
   if (WEB_SEARCH_UNAVAILABLE_PATTERN.test(input)) return ["web_search"];
@@ -168,11 +179,11 @@ function makeToolSchema(input) {
 /**
  * 校验插入 claude.googleapis.com 请求路径的 GCP 项目/位置等环境变量只含字母数字连字符下划线。
  */
-function assertGcpPathSegment(e, n) {
-  if (!n) return;
-  if (!SAFE_FOUNDRY_KEY_RE.test(n))
+function assertGcpPathSegment(varName, value) {
+  if (!value) return;
+  if (!SAFE_FOUNDRY_KEY_RE.test(value))
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `${e} may only contain letters, digits, hyphens, and underscores \u2014 ` +
+      `${varName} may only contain letters, digits, hyphens, and underscores \u2014 ` +
         "it is interpolated into the claude.googleapis.com request path, so URL metacharacters in its value would rewrite the project/workspace the request targets. Unset it or correct its value.",
       "GCP path-segment env var failed the charset gate",
     );
@@ -181,11 +192,18 @@ function assertGcpPathSegment(e, n) {
 /**
  * x-claude-code-sandy-plover 请求头（本轮用过的工具名列表）的编码限额：最多 64 项、总长 7168 字节、单项 256 字节。
  */
-var SANDY_PLOVER_HEADER = "x-claude-code-sandy-plover";
-var MAX_TOOL_NAME_LIST_COUNT = 64;
-var MAX_TOOL_NAME_HEADER_BYTES = 7168;
-var MAX_TOOL_NAME_BYTES = 256;
-var UNREADABLE_TOOLS_BEFORE_SUMMARY = UNREADABLE_TOOLS_USED_BEFORE_SUMMARY;
+var SANDY_PLOVER_HEADER; // deferred: uses TOOL_NAME_PATTERN (../../bootstrap/stateSlices.js) of its import cycle while loading; runs once the cycle is complete
+var MAX_TOOL_NAME_LIST_COUNT;
+var MAX_TOOL_NAME_HEADER_BYTES;
+var MAX_TOOL_NAME_BYTES;
+var UNREADABLE_TOOLS_BEFORE_SUMMARY;
+deferInit("chunk-hwmsct5x.js:250329", () => {
+  SANDY_PLOVER_HEADER = "x-claude-code-sandy-plover";
+  MAX_TOOL_NAME_LIST_COUNT = 64;
+  MAX_TOOL_NAME_HEADER_BYTES = 7168;
+  MAX_TOOL_NAME_BYTES = 256;
+  UNREADABLE_TOOLS_BEFORE_SUMMARY = UNREADABLE_TOOLS_USED_BEFORE_SUMMARY;
+});
 //@ chunk-hwmsct5x.js:250395-250448 placement
 function isSnugMittenAndSillyShoreOn() {
   return getFeatureValue_CACHED_MAY_BE_STALE("tengu_snug_mitten", false) && isSillyShoreGateOn();
@@ -194,73 +212,78 @@ function isSnugMittenAndSillyShoreOn() {
 /**
  * 内置工具名集合：编码请求头时把内置工具排在自定义工具之后。
  */
-var BUILTIN_TOOL_NAMES = new Set([
-  BASH_TOOL_NAME,
-  FILE_READ_TOOL_NAME,
-  FILE_EDIT_TOOL_NAME,
-  FILE_WRITE_TOOL_NAME,
-  GLOB_TOOL_NAME,
-  GREP_TOOL_NAME,
-  NOTEBOOK_EDIT_TOOL_NAME,
-  TODO_WRITE_TOOL_NAME,
-  AGENT,
-  TASK,
-  TOOL_SEARCH_TOOL_NAME,
-  ENTER_PLAN_MODE_TOOL_NAME,
-  EXITPLANMODE,
-]);
+var BUILTIN_TOOL_NAMES; // deferred: uses GREP_TOOL_NAME (../../tools/GrepTool/prompt.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-hwmsct5x.js:250448", () => {
+  BUILTIN_TOOL_NAMES = new Set([
+    BASH_TOOL_NAME,
+    FILE_READ_TOOL_NAME,
+    FILE_EDIT_TOOL_NAME,
+    FILE_WRITE_TOOL_NAME,
+    GLOB_TOOL_NAME,
+    GREP_TOOL_NAME,
+    NOTEBOOK_EDIT_TOOL_NAME,
+    TODO_WRITE_TOOL_NAME,
+    AGENT,
+    TASK,
+    TOOL_SEARCH_TOOL_NAME,
+    ENTER_PLAN_MODE_TOOL_NAME,
+    EXITPLANMODE,
+  ]);
+});
 //@ chunk-hwmsct5x.js:250505-250825 placement
 /**
  * 把本轮用到的工具名编码成受长度上限约束的请求头值（超限时截断并加省略标记）。
  */
-function encodeToolsUsedHeader(e) {
-  let filtered = e.filter((h) => h !== "" && Buffer.byteLength(h, "utf8") <= MAX_TOOL_NAME_BYTES);
-  let names = [
-    ...filtered.filter((h) => !BUILTIN_TOOL_NAMES.has(h)),
-    ...filtered.filter((h) => BUILTIN_TOOL_NAMES.has(h)),
+function encodeToolsUsedHeader(names) {
+  let filtered = names.filter(
+    (name) => name !== "" && Buffer.byteLength(name, "utf8") <= MAX_TOOL_NAME_BYTES,
+  );
+  let names_2 = [
+    ...filtered.filter((name) => !BUILTIN_TOOL_NAMES.has(name)),
+    ...filtered.filter((name) => BUILTIN_TOOL_NAMES.has(name)),
   ];
-  let s = encodeToolNameList(names);
-  if (s.length < e.length) {
-    s = encodeToolNameList([UNREADABLE_TOOLS_BEFORE_SUMMARY, ...names]);
+  let encoded = encodeToolNameList(names_2);
+  if (encoded.length < names.length) {
+    encoded = encodeToolNameList([UNREADABLE_TOOLS_BEFORE_SUMMARY, ...names_2]);
     return {
-      value: `[${s.join(",")}]`,
-      sent: s.length - 1,
-      dropped: e.length - (s.length - 1),
+      value: `[${encoded.join(",")}]`,
+      sent: encoded.length - 1,
+      dropped: names.length - (encoded.length - 1),
     };
   }
   return {
-    value: `[${s.join(",")}]`,
-    sent: s.length,
+    value: `[${encoded.join(",")}]`,
+    sent: encoded.length,
     dropped: 0,
   };
 }
 //@ chunk-hwmsct5x.js:250825-251008 placement
 function toolsUsedHeaderBuilder(conversationToolsUsed) {
-  return conversationToolsUsed.built((n) => {
-    let r = encodeToolsUsedHeader(n);
-    if (r.dropped > 0 && conversationToolsUsed.reportTruncationOnce())
+  return conversationToolsUsed.built((names) => {
+    let result = encodeToolsUsedHeader(names);
+    if (result.dropped > 0 && conversationToolsUsed.reportTruncationOnce())
       logFeatureSad("api_tools_used_header", "incomplete_list", {
-        sent: r.sent,
-        dropped: r.dropped,
+        sent: result.sent,
+        dropped: result.dropped,
       });
-    return r.value;
+    return result.value;
   });
 }
 //@ chunk-hwmsct5x.js:251008-251250 placement
 function encodeToolNameList(names) {
-  let n = [];
-  let r = 2;
+  let out = [];
+  let bytes = 2;
   for (let name of names) {
-    if (n.length === MAX_TOOL_NAME_LIST_COUNT) break;
+    if (out.length === MAX_TOOL_NAME_LIST_COUNT) break;
     let replaced = jsonStringifyRaw({
       name,
-    }).replace(/[\u007f-\uffff]/g, (w) => `\\u${w.charCodeAt(0).toString(16).padStart(4, "0")}`);
-    let y = replaced.length + (n.length === 0 ? 0 : 1);
-    if (r + y > MAX_TOOL_NAME_HEADER_BYTES) break;
-    n.push(replaced);
-    r += y;
+    }).replace(/[\u007f-\uffff]/g, (ch) => `\\u${ch.charCodeAt(0).toString(16).padStart(4, "0")}`);
+    let addedBytes = replaced.length + (out.length === 0 ? 0 : 1);
+    if (bytes + addedBytes > MAX_TOOL_NAME_HEADER_BYTES) break;
+    out.push(replaced);
+    bytes += addedBytes;
   }
-  return n;
+  return out;
 }
 export {
   assertGcpPathSegment,

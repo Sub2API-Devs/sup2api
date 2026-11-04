@@ -44,31 +44,33 @@ var USER_INTENT_SETTING_KEYS = [
 /**
  * 解析用户意图类设置（主题、编辑模式等），兼顾旧的全局配置。
  */
-function resolveSetting(n, value) {
+function resolveSetting(key, value) {
   let enabledSettingSources = getEnabledSettingSources();
   for (let j = enabledSettingSources.length - 1; j >= 0; j--) {
-    let t = enabledSettingSources[j];
-    let s = getSettingsForSource(t)?.[n];
-    if (s === undefined) continue;
+    let source = enabledSettingSources[j];
+    let value = getSettingsForSource(source)?.[key];
+    if (value === undefined) continue;
     if (
-      t === "projectSettings" &&
+      source === "projectSettings" &&
       enabledSettingSources.includes("userSettings") &&
       projectSettingsAliasesUserSettings()
     )
       continue;
     return {
-      value: s,
-      source: t,
+      value,
+      source,
     };
   }
-  if (USER_INTENT_SETTING_KEYS.includes(n)) {
-    let e = n;
-    let t = getGlobalConfig()[e];
-    if (t !== undefined && t !== DEFAULT_GLOBAL_CONFIG[e]) {
-      let s = isAutoUploadFlagKey(e) ? isValidGlobalConfigValue(e, t) : validateConfigValue(e, t);
-      if (s !== undefined)
+  if (USER_INTENT_SETTING_KEYS.includes(key)) {
+    let legacyKey = key;
+    let legacyValue = getGlobalConfig()[legacyKey];
+    if (legacyValue !== undefined && legacyValue !== DEFAULT_GLOBAL_CONFIG[legacyKey]) {
+      let validated = isAutoUploadFlagKey(legacyKey)
+        ? isValidGlobalConfigValue(legacyKey, legacyValue)
+        : validateConfigValue(legacyKey, legacyValue);
+      if (validated !== undefined)
         return {
-          value: s,
+          value: validated,
           source: "legacyGlobalConfig",
         };
     }
@@ -79,11 +81,11 @@ function resolveSetting(n, value) {
   };
 }
 //@ chunk-r5n7tcxe.js:1043-1098 placement = _temp5 (1)
-function saveUserIntentSetting(n, i, storageV5) {
+function saveUserIntentSetting(key, value, storageV5) {
   updateSettingsForSource(
     "userSettings",
     {
-      [n]: i,
+      [key]: value,
     },
     undefined,
     storageV5,

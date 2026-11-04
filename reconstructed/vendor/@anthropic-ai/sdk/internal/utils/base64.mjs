@@ -8,7 +8,7 @@
 import { AnthropicError } from "../../core/error.mjs";
 
 //@ chunk-hwmsct5x.js:25846-26197 esm-fingerprint
-var du = (str) => {
+var fromBuffer = (str) => {
   if (typeof globalThis.Buffer !== "undefined") {
     let buf = globalThis.Buffer.from(str, "base64");
     return new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength);
@@ -21,4 +21,4 @@ var du = (str) => {
   }
   throw new AnthropicError("Cannot decode base64 string; Expected `Buffer` or `atob` to be defined");
 };
-export { du };
+export { fromBuffer };

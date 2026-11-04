@@ -12,6 +12,7 @@ import { isPolicyAllowed } from "../../services/policyLimits/policyEvidence.js";
 import { isEssentialTrafficOnly } from "../../utils/privacyLevel.js";
 import { isFirstPartyProvider } from "../../utils/model/providers.js";
 import { ARTIFACT_TOOL_NAME } from "../ArtifactTool/constants.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-bjypc01s.js:335-372 placement
 /**
@@ -42,21 +43,26 @@ var DESIGN_CLOSING_SUPPORT_URL = "https://support.claude.com/en/articles/1744047
 /**
  * DesignSync 支持的全部方法名，用于校验 method 参数与提示词分组。
  */
-var DESIGNSYNC = "DesignSync";
-var DESIGNSYNC_METHODS = [
-  "list_projects",
-  "get_project",
-  "list_files",
-  "get_file",
-  "finalize_plan",
-  "write_files",
-  "delete_files",
-  "register_assets",
-  "unregister_assets",
-  "create_project",
-  "report_validate",
-];
-var DESIGN_SYNC_NO_DESIGN_NOTE = ` Never use it to make a design, deck or prototype: those are made from a Slides or Design Artifact type with the ${ARTIFACT_TOOL_NAME} tool.`;
+var DESIGNSYNC; // deferred: uses ARTIFACT_TOOL_NAME (../ArtifactTool/constants.js) of its import cycle while loading; runs once the cycle is complete
+var DESIGNSYNC_METHODS;
+var DESIGN_SYNC_NO_DESIGN_NOTE;
+deferInit("chunk-bjypc01s.js:847", () => {
+  DESIGNSYNC = "DesignSync";
+  DESIGNSYNC_METHODS = [
+    "list_projects",
+    "get_project",
+    "list_files",
+    "get_file",
+    "finalize_plan",
+    "write_files",
+    "delete_files",
+    "register_assets",
+    "unregister_assets",
+    "create_project",
+    "report_validate",
+  ];
+  DESIGN_SYNC_NO_DESIGN_NOTE = ` Never use it to make a design, deck or prototype: those are made from a Slides or Design Artifact type with the ${ARTIFACT_TOOL_NAME} tool.`;
+});
 //@ chunk-bjypc01s.js:1175-5490 placement
 /**
  * DesignSync 工具提示词：通过 claude.ai 登录（或 /design-login 授权）读写 claude.ai/design 设计系统项目；按 method 分为读方法、建项目、finalize_plan 计划边界与需计划的写方法，并说明独立 Claude Design 将关闭。

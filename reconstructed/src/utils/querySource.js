@@ -15,16 +15,20 @@ import { CACHE_TTL_1H_MS, CACHE_TTL_5M_MS } from "../services/api/promptCacheBre
 import { getLastMainThreadRequestAt } from "../bootstrap/state.js";
 
 //@ chunk-e6aww6q8.js:2076386-2076482 placement = isMainThreadSource (1)
-function isMainThreadSource(messages, n = Date.now()) {
+function isMainThreadSource(messages, now = Date.now()) {
   if (!getPromptCachingEnabled(getMainLoopModel())) return false;
-  return !isCacheCold(messages, isOneHourCacheTtl("repl_main_thread") ? CACHE_TTL_1H_MS : CACHE_TTL_5M_MS, n);
+  return !isCacheCold(
+    messages,
+    isOneHourCacheTtl("repl_main_thread") ? CACHE_TTL_1H_MS : CACHE_TTL_5M_MS,
+    now,
+  );
 }
 //@ chunk-e6aww6q8.js:2076482-2076624 placement
 /**
  * 主线程来源下，返回最近一次响应（仅当它不早于最后一次主线程请求）。
  */
-function lastMainThreadResponse(messages, n = Date.now()) {
-  if (!isMainThreadSource(messages, n)) return;
+function lastMainThreadResponse(messages, now = Date.now()) {
+  if (!isMainThreadSource(messages, now)) return;
   let lastRealAssistantMessage = findLastRealAssistantMessage(messages);
   return {
     response:

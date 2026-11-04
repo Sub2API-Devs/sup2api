@@ -9,7 +9,15 @@
  * attribution: placement 35
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, string, record, unknown, looseObject, E, array } from "../../../vendor/zod/v4/classic/schemas.js";
+import {
+  objectSchema,
+  stringSchema,
+  record,
+  unknown,
+  looseObject,
+  numberSchema,
+  array,
+} from "../../../vendor/zod/v4/classic/schemas.js";
 import { ARTIFACT_SLUG_RE, ArtifactInputError } from "../../tools/ArtifactTool/constants.js";
 import {
   getLocalServerName,
@@ -50,98 +58,113 @@ import {
   DATA_ID_ATTR_LENGTH,
 } from "./pageRuntimes.js";
 import { unwrapSkeletonDocument, repairNestedPage, hasRuntimeSentinelsInHead } from "./composePage.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-06y4szbn.js:48149-49246 placement
 /**
  * 页面准备的基础样式与发布状态/契约/阻塞清单的 schema，以及 echo manifest 的路径 1024 / 条目上限。
  */
-var PAGE_BASE_STYLES =
-  "body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style>";
-var BASE_STYLE_HEAD = "<style>:root{color-scheme:light}" + PAGE_BASE_STYLES;
-var BASE_STYLE_HEAD_WITH_SAFE_AREA =
-  "<style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}" +
-  PAGE_BASE_STYLES;
-var MERGED_CHANGED_KEEP = 256;
-var contractInputSchema = DoctorLazy(() =>
-  u({
-    contract: string().max(64),
-    capabilities: record(string().max(64), unknown()).nullish(),
-    type: unknown().optional(),
-  }),
-);
-var publishStatusSchema = DoctorLazy(() =>
-  looseObject({
-    slug: string().regex(ARTIFACT_SLUG_RE),
-    target: string().max(64).nullish(),
-    current: string().max(64),
-    latest: unknown().optional(),
-    blocked: unknown().optional(),
-  }),
-);
-var latestVersionSchema = DoctorLazy(() => string().min(1).max(64));
-var blockedStatusSchema = DoctorLazy(() =>
-  looseObject({
-    to: string().min(1).max(64).optional().catch(undefined),
-    reason: string().max(64).catch(""),
-    conflict_count: E().int().min(0).max(1e6).optional().catch(undefined),
-    paths: array(string().max(MAX_ECHO_MANIFEST_PATH))
-      .max(MAX_ECHO_MANIFEST_ENTRIES)
-      .optional()
-      .catch(undefined),
-  }),
-);
-var MAX_ECHO_MANIFEST_PATH = 1024;
-var MAX_ECHO_MANIFEST_ENTRIES = 4096;
-var echoManifestSchema = DoctorLazy(() =>
-  looseObject({
-    manifest: record(
-      string().max(MAX_ECHO_MANIFEST_PATH),
-      looseObject({
-        src: looseObject({}).nullish(),
-        doc: string().max(64).nullish().catch(undefined),
-      }),
-    ).refine((e) => Object.keys(e).length <= MAX_ECHO_MANIFEST_ENTRIES),
-  }),
-);
+var PAGE_BASE_STYLES; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var BASE_STYLE_HEAD;
+var BASE_STYLE_HEAD_WITH_SAFE_AREA;
+var MERGED_CHANGED_KEEP;
+var contractInputSchema;
+var publishStatusSchema;
+var latestVersionSchema;
+var blockedStatusSchema;
+var MAX_ECHO_MANIFEST_PATH;
+var MAX_ECHO_MANIFEST_ENTRIES;
+var echoManifestSchema;
+deferInit("chunk-06y4szbn.js:48149", () => {
+  PAGE_BASE_STYLES =
+    "body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style>";
+  BASE_STYLE_HEAD = "<style>:root{color-scheme:light}" + PAGE_BASE_STYLES;
+  BASE_STYLE_HEAD_WITH_SAFE_AREA =
+    "<style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}" +
+    PAGE_BASE_STYLES;
+  MERGED_CHANGED_KEEP = 256;
+  contractInputSchema = DoctorLazy(() =>
+    objectSchema({
+      contract: stringSchema().max(64),
+      capabilities: record(stringSchema().max(64), unknown()).nullish(),
+      type: unknown().optional(),
+    }),
+  );
+  publishStatusSchema = DoctorLazy(() =>
+    looseObject({
+      slug: stringSchema().regex(ARTIFACT_SLUG_RE),
+      target: stringSchema().max(64).nullish(),
+      current: stringSchema().max(64),
+      latest: unknown().optional(),
+      blocked: unknown().optional(),
+    }),
+  );
+  latestVersionSchema = DoctorLazy(() => stringSchema().min(1).max(64));
+  blockedStatusSchema = DoctorLazy(() =>
+    looseObject({
+      to: stringSchema().min(1).max(64).optional().catch(undefined),
+      reason: stringSchema().max(64).catch(""),
+      conflict_count: numberSchema().int().min(0).max(1e6).optional().catch(undefined),
+      paths: array(stringSchema().max(MAX_ECHO_MANIFEST_PATH))
+        .max(MAX_ECHO_MANIFEST_ENTRIES)
+        .optional()
+        .catch(undefined),
+    }),
+  );
+  MAX_ECHO_MANIFEST_PATH = 1024;
+  MAX_ECHO_MANIFEST_ENTRIES = 4096;
+  echoManifestSchema = DoctorLazy(() =>
+    looseObject({
+      manifest: record(
+        stringSchema().max(MAX_ECHO_MANIFEST_PATH),
+        looseObject({
+          src: looseObject({}).nullish(),
+          doc: stringSchema().max(64).nullish().catch(undefined),
+        }),
+      ).refine((manifest) => Object.keys(manifest).length <= MAX_ECHO_MANIFEST_ENTRIES),
+    }),
+  );
+});
 //@ chunk-06y4szbn.js:49246-49429 placement
-function splitManifestPaths(e) {
-  let n = echoManifestSchema().safeParse(e);
-  if (!n.success) return;
-  let r = [];
-  let s = [];
-  for (let [key, value] of Object.entries(n.data.manifest)) (value.src != null ? s : r).push(key);
+function splitManifestPaths(body) {
+  let parsed = echoManifestSchema().safeParse(body);
+  if (!parsed.success) return;
+  let ownPaths = [];
+  let typePaths = [];
+  for (let [key, value] of Object.entries(parsed.data.manifest))
+    (value.src != null ? typePaths : ownPaths).push(key);
   return {
-    own: r.sort(),
-    type: s.sort(),
+    own: ownPaths.sort(),
+    type: typePaths.sort(),
   };
 }
 //@ chunk-06y4szbn.js:49429-49921 placement
 function typeLockFromWire(type) {
   if (type == null) return;
-  let n = publishStatusSchema().safeParse(type);
-  if (!n.success) return;
-  let r = latestVersionSchema().safeParse(n.data.latest);
-  let blocked = n.data.blocked;
-  let h = blockedStatusSchema().safeParse(blocked);
+  let publishParsed = publishStatusSchema().safeParse(type);
+  if (!publishParsed.success) return;
+  let versionParsed = latestVersionSchema().safeParse(publishParsed.data.latest);
+  let blocked = publishParsed.data.blocked;
+  let blockedParsed = blockedStatusSchema().safeParse(blocked);
   return {
-    slug: n.data.slug,
-    target: n.data.target ?? null,
-    current: n.data.current,
-    ...(r.success && {
-      latest: r.data,
+    slug: publishParsed.data.slug,
+    target: publishParsed.data.target ?? null,
+    current: publishParsed.data.current,
+    ...(versionParsed.success && {
+      latest: versionParsed.data,
     }),
-    ...(h.success
+    ...(blockedParsed.success
       ? {
           blocked: {
-            ...(h.data.to !== undefined && {
-              to: h.data.to,
+            ...(blockedParsed.data.to !== undefined && {
+              to: blockedParsed.data.to,
             }),
-            reason: h.data.reason,
-            ...(h.data.conflict_count !== undefined && {
-              conflictCount: h.data.conflict_count,
+            reason: blockedParsed.data.reason,
+            ...(blockedParsed.data.conflict_count !== undefined && {
+              conflictCount: blockedParsed.data.conflict_count,
             }),
-            ...(h.data.paths !== undefined && {
-              paths: h.data.paths,
+            ...(blockedParsed.data.paths !== undefined && {
+              paths: blockedParsed.data.paths,
             }),
           },
         }
@@ -179,8 +202,8 @@ function isRetryableReadBack(frameDecl) {
 //@ chunk-06y4szbn.js:50233-50244 placement
 var READBACK_RETRY_MS = 500;
 //@ chunk-06y4szbn.js:50244-50371 placement
-function usesLocalMcpServers(e) {
-  let servers = e?.mcp?.servers;
+function usesLocalMcpServers(tool) {
+  let servers = tool?.mcp?.servers;
   return (
     Array.isArray(servers) &&
     servers.some(
@@ -189,57 +212,57 @@ function usesLocalMcpServers(e) {
   );
 }
 //@ chunk-06y4szbn.js:50371-51021 placement
-function publishMetadataFields(e) {
+function publishMetadataFields(response) {
   return {
-    ...(e.slug && {
-      slug: e.slug,
+    ...(response.slug && {
+      slug: response.slug,
     }),
-    title: e.title,
-    ...(e.favicon && {
-      favicon: e.favicon,
+    title: response.title,
+    ...(response.favicon && {
+      favicon: response.favicon,
     }),
-    ...(e.icon && {
-      icon: e.icon,
+    ...(response.icon && {
+      icon: response.icon,
     }),
-    ...(e.label && {
-      label: e.label,
+    ...(response.label && {
+      label: response.label,
     }),
-    ...(e.note && {
-      note: e.note,
+    ...(response.note && {
+      note: response.note,
     }),
-    ...(e.description && {
-      description: e.description,
+    ...(response.description && {
+      description: response.description,
     }),
-    ...(e.publishContext && {
-      publish_context: e.publishContext,
+    ...(response.publishContext && {
+      publish_context: response.publishContext,
     }),
     ...false,
-    ...(e.template && {
-      template: e.template,
+    ...(response.template && {
+      template: response.template,
     }),
-    ...(e.autoEditAttribution && {
+    ...(response.autoEditAttribution && {
       auto_edit_attribution: {
-        thread_id: e.autoEditAttribution.threadId,
-        comment_id: e.autoEditAttribution.commentId,
+        thread_id: response.autoEditAttribution.threadId,
+        comment_id: response.autoEditAttribution.commentId,
       },
     }),
     ...(isFrameDeclaredThumbnailEnabled() &&
-      e.thumbnail && {
-        thumbnail: e.thumbnail.toString("base64"),
+      response.thumbnail && {
+        thumbnail: response.thumbnail.toString("base64"),
       }),
     ...(isFrameDeclaredThumbnailEnabled() &&
-      e.thumbnailDark && {
-        thumbnail_dark: e.thumbnailDark.toString("base64"),
+      response.thumbnailDark && {
+        thumbnail_dark: response.thumbnailDark.toString("base64"),
       }),
-    ...(carriesDeadline(e) && {
-      deadline: e.deadline,
+    ...(carriesDeadline(response) && {
+      deadline: response.deadline,
     }),
-    ...requestIdMeta(e.requestId),
+    ...requestIdMeta(response.requestId),
   };
 }
 //@ chunk-06y4szbn.js:51021-51086 placement
-function carriesDeadline(e) {
-  return isHotUpdateFrozenOn() && e.deadline !== undefined && e.slug !== undefined;
+function carriesDeadline(request) {
+  return isHotUpdateFrozenOn() && request.deadline !== undefined && request.slug !== undefined;
 }
 //@ chunk-06y4szbn.js:51086-51255 placement
 var CONTRACT_FETCH_SUBJECT =
@@ -248,49 +271,49 @@ var CONTRACT_FETCH_SUBJECT =
 /**
  * 解析发布请求的能力集：未知能力报错、按契约固定/升级、与页面大小一并决定。
  */
-async function resolvePublishCapabilities(e) {
-  let { capabilities, echoPin, explicitPin, upgrade, pageBytes, credentials } = e;
-  let x = (caps, k, V) => {
-    let L = listUnknownCapabilities(caps, k);
-    if (L.length === 0) return null;
+async function resolvePublishCapabilities(request) {
+  let { capabilities, echoPin, explicitPin, upgrade, pageBytes, credentials } = request;
+  let unknownCapabilityMessage = (caps, contract, contractSource) => {
+    let unknownCaps = listUnknownCapabilities(caps, contract);
+    if (unknownCaps.length === 0) return null;
     logFeatureBad("artifact_publish", "unknown_capability", {
       page_bytes: pageBytes,
-      unknown_count: L.length,
+      unknown_count: unknownCaps.length,
     });
-    let joined = capListForDisplay(L, 8, sanitizeDisplayText).join(", ");
-    let joined_2 = k.capabilities.join(", ");
-    let roster = V === null ? undefined : currentRoster()?.roster;
-    let P =
-      V !== null &&
+    let joined = capListForDisplay(unknownCaps, 8, sanitizeDisplayText).join(", ");
+    let joined_2 = contract.capabilities.join(", ");
+    let roster = contractSource === null ? undefined : currentRoster()?.roster;
+    let rosterHint =
+      contractSource !== null &&
       roster !== undefined &&
-      isNewerContractVersion(roster.version, k.version) &&
-      L.every((j) => roster.capabilities.includes(j))
-        ? ` ${joined} ${L.length === 1 ? "exists" : "exist"} in contract ${roster.version}; this publish is pinned to ${k.version} by ` +
-          (V === "passed" ? "the `contract` you passed." : "the artifact's stored contract.")
+      isNewerContractVersion(roster.version, contract.version) &&
+      unknownCaps.every((capability) => roster.capabilities.includes(capability))
+        ? ` ${joined} ${unknownCaps.length === 1 ? "exists" : "exist"} in contract ${roster.version}; this publish is pinned to ${contract.version} by ` +
+          (contractSource === "passed" ? "the `contract` you passed." : "the artifact's stored contract.")
         : "";
-    return `unknown ${plural(L.length, "capability", "capabilities")}: ${joined} \u2014 contract ${k.version} supports: ${joined_2 || "(none)"}.${P} Fix or drop the declaration; the control plane would reject it anyway.`;
+    return `unknown ${plural(unknownCaps.length, "capability", "capabilities")}: ${joined} \u2014 contract ${contract.version} supports: ${joined_2 || "(none)"}.${rosterHint} Fix or drop the declaration; the control plane would reject it anyway.`;
   };
-  let w = (capabilities, contract, contract_2, L) => {
-    let q = reconcileSelfCapability(capabilities, contract);
-    if ("errMsg" in q) {
+  let reconcileCapabilities = (capabilities, contract, contract_2, contractSource) => {
+    let reconciled = reconcileSelfCapability(capabilities, contract);
+    if ("errMsg" in reconciled) {
       logFeatureBad("artifact_publish", "dual_spelling_ambiguous", {
         page_bytes: pageBytes,
       });
-      return q;
+      return reconciled;
     }
-    let W = x(q.caps, contract, L);
-    if (W !== null)
+    let message = unknownCapabilityMessage(reconciled.caps, contract, contractSource);
+    if (message !== null)
       return {
-        errMsg: W,
+        errMsg: message,
       };
     return {
       fields: {
         contract: contract_2,
-        capabilities: q.caps,
+        capabilities: reconciled.caps,
       },
     };
   };
-  let R = async (C) => {
+  let resolveAgainstContract = async (caps) => {
     let liveState = getLiveState();
     let epoch = liveState.accountEpoch;
     let contract = await resolveContract({
@@ -301,16 +324,16 @@ async function resolvePublishCapabilities(e) {
         page_bytes: pageBytes,
         cause: fromEnum(contract.cause),
       });
-      let q =
+      let outcome =
         contract.cause === "http_4xx" &&
         contract.status === 403 &&
         contract.proxyDeny !== "content_scan_transient";
       return {
         errMsg:
           `couldn't fetch the capability contract (${contract.err}) \u2014 ` +
-          (q
-            ? `the server, or a proxy in front of it, refused this request, so retrying from this session will usually not help. ${C.refused}`
-            : C.retry),
+          (outcome
+            ? `the server, or a proxy in front of it, refused this request, so retrying from this session will usually not help. ${caps.refused}`
+            : caps.retry),
       };
     }
     saveRosterToConfig({
@@ -327,7 +350,7 @@ async function resolvePublishCapabilities(e) {
         version: explicitPin,
         credentials,
       });
-      if (!("err" in contract)) return w(capabilities, contract, explicitPin, "passed");
+      if (!("err" in contract)) return reconcileCapabilities(capabilities, contract, explicitPin, "passed");
     }
     return {
       fields: {
@@ -350,11 +373,11 @@ async function resolvePublishCapabilities(e) {
           capabilities: renameArtifactCapabilityToSelf(capabilities),
         },
       };
-    return w(capabilities, contract, echoPin, "stored");
+    return reconcileCapabilities(capabilities, contract, echoPin, "stored");
   }
   if (capabilities !== undefined) {
-    let C =
-      e.latestFetchRemedy ??
+    let capsInput =
+      request.latestFetchRemedy ??
       (Object.keys(capabilities).length === 0
         ? {
             retry:
@@ -368,9 +391,9 @@ async function resolvePublishCapabilities(e) {
               "a publish that declares capabilities needs the current contract from the server. Retry; or publish without the capabilities field and declare them on a later redeploy (a stored declaration carries forward unchanged).",
             refused: `Nothing was published: a publish that declares capabilities needs the current contract from the server. Tell the user that the declaration has to be published from ${CONTRACT_FETCH_SUBJECT}. Do not publish without the capabilities field unless every capability the page needs is already stored or the user asks: a declaration already stored carries forward unchanged, but capabilities declared for the first time are not granted, so a page that depends on them will not work. If you do publish without the field (and without contract: 'latest' if you passed it), tell the user which capabilities were not granted.`,
           });
-    let k = await R(C);
-    if ("errMsg" in k) return k;
-    return w(capabilities, k, k.version, null);
+    let firstResult = await resolveAgainstContract(capsInput);
+    if ("errMsg" in firstResult) return firstResult;
+    return reconcileCapabilities(capabilities, firstResult, firstResult.version, null);
   }
   if (echoPin !== null)
     return {
@@ -379,15 +402,15 @@ async function resolvePublishCapabilities(e) {
       },
     };
   if (upgrade) {
-    let C = await R({
+    let secondResult = await resolveAgainstContract({
       retry:
         "an upgrade stamps the current contract, which requires the contract service. Retry when it is reachable.",
       refused: `Nothing was published: an upgrade stamps the current contract. Tell the user that the upgrade has to be published from ${CONTRACT_FETCH_SUBJECT}. To publish the content anyway, publish without the contract field (a stored contract stays as it is; if none is stored the page is published without one).`,
     });
-    if ("errMsg" in C) return C;
+    if ("errMsg" in secondResult) return secondResult;
     return {
       fields: {
-        contract: C.version,
+        contract: secondResult.version,
       },
     };
   }
@@ -399,66 +422,74 @@ async function resolvePublishCapabilities(e) {
 /**
  * 页面运行时（frame-runtime / base href / preamble）识别的窗口 8192 字符、最大跨度 5 分钟与相关正则。
  */
-var FRAME_RUNTIME_HEAD_WINDOW = 8192;
-var FRAME_RUNTIME_MAX_SPAN = 300000;
-var FRAME_PREAMBLE_PREFIX = 'window.__FRAME_PREAMBLE={"v":1';
-var BASE_HREF_TAG_RE = new RegExp(
-  `^<base[\\t\\n\\f\\r ]+href="\\/_f\\/[^">]*"(?:${DATA_ID_ATTR_PATTERN})?[\\t\\n\\f\\r ]*\\/?>`,
-);
-var BASE_HREF_STRIP_RE = new RegExp(
-  `<base\\s+href="\\/_f\\/[^">]*"(?:${DATA_ID_ATTR_PATTERN})?\\s*\\/?>\\n?`,
-  "gi",
-);
+var FRAME_RUNTIME_HEAD_WINDOW; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var FRAME_RUNTIME_MAX_SPAN;
+var FRAME_PREAMBLE_PREFIX;
+var BASE_HREF_TAG_RE;
+var BASE_HREF_STRIP_RE;
+deferInit("chunk-06y4szbn.js:55026", () => {
+  FRAME_RUNTIME_HEAD_WINDOW = 8192;
+  FRAME_RUNTIME_MAX_SPAN = 300000;
+  FRAME_PREAMBLE_PREFIX = 'window.__FRAME_PREAMBLE={"v":1';
+  BASE_HREF_TAG_RE = new RegExp(
+    `^<base[\\t\\n\\f\\r ]+href="\\/_f\\/[^">]*"(?:${DATA_ID_ATTR_PATTERN})?[\\t\\n\\f\\r ]*\\/?>`,
+  );
+  BASE_HREF_STRIP_RE = new RegExp(
+    `<base\\s+href="\\/_f\\/[^">]*"(?:${DATA_ID_ATTR_PATTERN})?\\s*\\/?>\\n?`,
+    "gi",
+  );
+});
 //@ chunk-06y4szbn.js:55254-55624 placement
-function isFramePreambleOnly(e) {
-  let n = trimHtmlWhitespace(e);
-  let match = n.match(BASE_HREF_TAG_RE);
-  if (match) n = trimHtmlWhitespace(n.slice(match[0].length));
-  else if (!n.length) return false;
-  let s = match !== null;
-  while (n.length) {
-    if (!/^<script(?=[\t\n\f\r />])/.test(n)) return false;
-    let h = skipQuotedAttribute(n, 7);
-    if (h < 0) return false;
-    let sliced = n.slice(h);
+function isFramePreambleOnly(html) {
+  let rest = trimHtmlWhitespace(html);
+  let match = rest.match(BASE_HREF_TAG_RE);
+  if (match) rest = trimHtmlWhitespace(rest.slice(match[0].length));
+  else if (!rest.length) return false;
+  let sawScript = match !== null;
+  while (rest.length) {
+    if (!/^<script(?=[\t\n\f\r />])/.test(rest)) return false;
+    let openEnd = skipQuotedAttribute(rest, 7);
+    if (openEnd < 0) return false;
+    let text = rest.slice(openEnd);
     if (
-      !s &&
-      (findScriptOpen(n, 0) !== h ||
-        !sliced.startsWith(FRAME_PREAMBLE_PREFIX) ||
-        !",}".includes(sliced[FRAME_PREAMBLE_PREFIX.length] ?? " "))
+      !sawScript &&
+      (findScriptOpen(rest, 0) !== openEnd ||
+        !text.startsWith(FRAME_PREAMBLE_PREFIX) ||
+        !",}".includes(text[FRAME_PREAMBLE_PREFIX.length] ?? " "))
     )
       return false;
-    s = true;
-    let y = scriptBlockEnd(sliced);
-    if (y < 0) return false;
-    n = trimHtmlWhitespace(sliced.slice(y));
+    sawScript = true;
+    let blockEnd = scriptBlockEnd(text);
+    if (blockEnd < 0) return false;
+    rest = trimHtmlWhitespace(text.slice(blockEnd));
   }
   return true;
 }
 //@ chunk-06y4szbn.js:55624-55738 placement
-function isFrameHeadPreambleOnly(e) {
-  let n = trimHtmlWhitespace(e);
-  if (n.startsWith("<head>") && n.endsWith("</head>")) return isFramePreambleOnly(n.slice(6, -7));
-  return isFramePreambleOnly(n);
+function isFrameHeadPreambleOnly(html) {
+  let trimmed = trimHtmlWhitespace(html);
+  if (trimmed.startsWith("<head>") && trimmed.endsWith("</head>"))
+    return isFramePreambleOnly(trimmed.slice(6, -7));
+  return isFramePreambleOnly(trimmed);
 }
 //@ chunk-06y4szbn.js:55738-56021 placement = resolveMetadataBuf (0.737)
 function exciseFrameAssetServeBlock(carry, chunkBuf = () => true) {
-  let r = 4;
+  let offset = 4;
   let firstNl = carry.indexOf(FRAME_RUNTIME_SENTINELS);
-  while (firstNl >= 0 && firstNl < FRAME_RUNTIME_HEAD_WINDOW && r > 0) {
-    let h = firstNl + FRAME_RUNTIME_SENTINELS.length;
+  while (firstNl >= 0 && firstNl < FRAME_RUNTIME_HEAD_WINDOW && offset > 0) {
+    let sentinelsStart = firstNl + FRAME_RUNTIME_SENTINELS.length;
     let index = carry
       .subarray(0, firstNl + FRAME_RUNTIME_MAX_SPAN + FRAME_RUNTIME_END_MARKER.length)
-      .indexOf(FRAME_RUNTIME_END_MARKER, h);
-    if (index >= 0 && isFrameHeadPreambleOnly(carry.toString("utf8", h, index))) {
+      .indexOf(FRAME_RUNTIME_END_MARKER, sentinelsStart);
+    if (index >= 0 && isFrameHeadPreambleOnly(carry.toString("utf8", sentinelsStart, index))) {
       let buffer = Buffer.concat([
         carry.subarray(0, firstNl),
         carry.subarray(index + FRAME_RUNTIME_END_MARKER.length),
       ]);
       if (chunkBuf(buffer)) return buffer;
-      r--;
+      offset--;
     }
-    firstNl = carry.indexOf(FRAME_RUNTIME_SENTINELS, h);
+    firstNl = carry.indexOf(FRAME_RUNTIME_SENTINELS, sentinelsStart);
   }
   return;
 }
@@ -471,51 +502,53 @@ var BASE_TAG_RE = /^<base(?=[\t\n\f\r />])/i;
 var RAW_TEXT_TAG_RE =
   /^<(script|style|title|textarea|xmp|iframe|noembed|noframes|noscript|plaintext)(?=[\t\n\f\r />])/i;
 //@ chunk-06y4szbn.js:56187-57125 placement
-function findTagOutsideComments(e, n, r) {
-  let s = /[\t\n\f\r />]/g;
-  let h = r;
+function findTagOutsideComments(text, pattern, from) {
+  let nameEndRe = /[\t\n\f\r />]/g;
+  let index = from;
   for (;;) {
-    h = e.indexOf("<", h);
-    if (h < 0) return -1;
-    if (e.startsWith("<!--", h)) {
-      let y = -1;
-      if (e.startsWith(">", h + 4)) y = h + 5;
-      else if (e.startsWith("->", h + 4)) y = h + 6;
+    index = text.indexOf("<", index);
+    if (index < 0) return -1;
+    if (text.startsWith("<!--", index)) {
+      let commentEnd = -1;
+      if (text.startsWith(">", index + 4)) commentEnd = index + 5;
+      else if (text.startsWith("->", index + 4)) commentEnd = index + 6;
       else
-        for (let index = e.indexOf("--", h + 4); index >= 0;) {
-          if (e.startsWith(">", index + 2)) y = index + 3;
-          else if (e.startsWith("!>", index + 2)) y = index + 4;
+        for (let index_2 = text.indexOf("--", index + 4); index_2 >= 0;) {
+          if (text.startsWith(">", index_2 + 2)) commentEnd = index_2 + 3;
+          else if (text.startsWith("!>", index_2 + 2)) commentEnd = index_2 + 4;
           else {
-            index = e.indexOf("--", index + 1);
+            index_2 = text.indexOf("--", index_2 + 1);
             continue;
           }
           break;
         }
-      if (y < 0) return -1;
-      h = y;
+      if (commentEnd < 0) return -1;
+      index = commentEnd;
       continue;
     }
-    let match = RAW_TEXT_TAG_RE.exec(e.slice(h, h + 11));
+    let match = RAW_TEXT_TAG_RE.exec(text.slice(index, index + 11));
     if (match) {
       let lower = match[1].toLowerCase();
-      let x = lower === "plaintext" ? -1 : skipQuotedAttribute(e, h + 1 + lower.length);
+      let openEnd = lower === "plaintext" ? -1 : skipQuotedAttribute(text, index + 1 + lower.length);
       let regExp = new RegExp(`</${lower}(?=[\\t\\n\\f\\r />])`, "gi");
-      regExp.lastIndex = Math.max(x, 0);
-      let R = x < 0 ? null : regExp.exec(e);
-      let C = R === null ? -1 : skipQuotedAttribute(e, R.index + R[0].length);
-      if (C < 0 || (lower === "script" && hasCommentAndScript(e.slice(x, R.index)))) return -1;
-      h = C;
-    } else if (n.test(e.slice(h, h + 8))) return h;
-    else if (/^<\/?[a-zA-Z]/.test(e.slice(h, h + 3))) {
-      s.lastIndex = h + 2;
-      let match = s.exec(e);
-      h = match === null ? -1 : skipQuotedAttribute(e, match.index);
-      if (h < 0) return -1;
-    } else if (/^<(?:[?!]|\/(?!>))/.test(e.slice(h, h + 3))) {
-      h = e.indexOf(">", h + 2);
-      if (h < 0) return -1;
-      h++;
-    } else h++;
+      regExp.lastIndex = Math.max(openEnd, 0);
+      let closeMatch = openEnd < 0 ? null : regExp.exec(text);
+      let closeEnd =
+        closeMatch === null ? -1 : skipQuotedAttribute(text, closeMatch.index + closeMatch[0].length);
+      if (closeEnd < 0 || (lower === "script" && hasCommentAndScript(text.slice(openEnd, closeMatch.index))))
+        return -1;
+      index = closeEnd;
+    } else if (pattern.test(text.slice(index, index + 8))) return index;
+    else if (/^<\/?[a-zA-Z]/.test(text.slice(index, index + 3))) {
+      nameEndRe.lastIndex = index + 2;
+      let match = nameEndRe.exec(text);
+      index = match === null ? -1 : skipQuotedAttribute(text, match.index);
+      if (index < 0) return -1;
+    } else if (/^<(?:[?!]|\/(?!>))/.test(text.slice(index, index + 3))) {
+      index = text.indexOf(">", index + 2);
+      if (index < 0) return -1;
+      index++;
+    } else index++;
   }
 }
 //@ chunk-06y4szbn.js:57125-57173 placement
@@ -538,18 +571,21 @@ function newStripBudget(cap, exhausted) {
   };
 }
 //@ chunk-06y4szbn.js:57246-57325 placement
-function spendStripPass(e) {
-  if (e.spent === e.cap) throw new StripUnsettledError(e.exhausted, e.spent);
-  e.spent++;
+function spendStripPass(budget) {
+  if (budget.spent === budget.cap) throw new StripUnsettledError(budget.exhausted, budget.spent);
+  budget.spent++;
 }
 //@ chunk-06y4szbn.js:57325-57413 placement
-class StripUnsettledError extends ArtifactInputError {
-  passes;
-  constructor(e = "blocks", passes) {
-    super(STRIP_FAILURE_TEXT_BY_KIND[e], STRIP_ERROR_TEXT[e]);
-    this.passes = passes;
-  }
-}
+let StripUnsettledError; // deferred: uses ArtifactInputError (../../tools/ArtifactTool/constants.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-06y4szbn.js:57325", () => {
+  StripUnsettledError = class StripUnsettledError extends ArtifactInputError {
+    passes;
+    constructor(mode = "blocks", passes) {
+      super(STRIP_FAILURE_TEXT_BY_KIND[mode], STRIP_ERROR_TEXT[mode]);
+      this.passes = passes;
+    }
+  };
+});
 //@ chunk-06y4szbn.js:57413-58831 placement
 /**
  * 页面剥除运行时标记失败的错误说明：blocks/author 两类说明与嵌套层级超限说明。
@@ -567,110 +603,110 @@ var STRIP_FAILURE_TEXT_BY_KIND = {
   levels: `This page is a published artifact page wrapped inside more than ${MAX_NESTED_SKELETON_LEVELS} nested copies of the artifact skeleton (\`<!doctype html><html><head><!-- frame-runtime -->\u2026\` repeated) \u2014 nothing a genuine page contains. Publish the innermost document on its own: delete the repeated outer skeletons from the source and publish again.`,
 };
 //@ chunk-06y4szbn.js:58831-58898 placement
-function stripUntilStable(e, n, stripBudget) {
+function stripUntilStable(html, stripOnce, budget) {
   for (;;) {
-    spendStripPass(stripBudget);
-    let s = n(e);
-    if (s === e) return s;
-    e = s;
+    spendStripPass(budget);
+    let next = stripOnce(html);
+    if (next === html) return next;
+    html = next;
   }
 }
 //@ chunk-06y4szbn.js:58898-59272 placement
-function findRuntimeBlocks(e) {
-  let n = [];
-  let r = 0;
-  let tagOutsideComments = findTagOutsideComments(e, HTML_TAG_PATTERNS, 0);
-  let h = tagOutsideComments < 0 ? 1 / 0 : tagOutsideComments;
-  let index = e.indexOf(FRAME_RUNTIME_SENTINELS);
-  let y = -1;
-  while (index >= 0 && index < h && index - r < FRAME_RUNTIME_HEAD_WINDOW) {
-    let x = index + FRAME_RUNTIME_SENTINELS.length;
-    if (y < x) {
-      y = e.indexOf(FRAME_RUNTIME_END_MARKER, x);
-      if (y < 0) break;
+function findRuntimeBlocks(html) {
+  let ranges = [];
+  let scannedSpan = 0;
+  let tagOutsideComments = findTagOutsideComments(html, HTML_TAG_PATTERNS, 0);
+  let headLimit = tagOutsideComments < 0 ? 1 / 0 : tagOutsideComments;
+  let index = html.indexOf(FRAME_RUNTIME_SENTINELS);
+  let endMarkerAt = -1;
+  while (index >= 0 && index < headLimit && index - scannedSpan < FRAME_RUNTIME_HEAD_WINDOW) {
+    let searchFrom = index + FRAME_RUNTIME_SENTINELS.length;
+    if (endMarkerAt < searchFrom) {
+      endMarkerAt = html.indexOf(FRAME_RUNTIME_END_MARKER, searchFrom);
+      if (endMarkerAt < 0) break;
     }
-    let index_2 = e.indexOf(FRAME_RUNTIME_SENTINELS, x);
+    let index_2 = html.indexOf(FRAME_RUNTIME_SENTINELS, searchFrom);
     if (
-      (index_2 < 0 || index_2 > y) &&
-      y - index < FRAME_RUNTIME_MAX_SPAN &&
-      isFrameHeadPreambleOnly(e.slice(x, y))
+      (index_2 < 0 || index_2 > endMarkerAt) &&
+      endMarkerAt - index < FRAME_RUNTIME_MAX_SPAN &&
+      isFrameHeadPreambleOnly(html.slice(searchFrom, endMarkerAt))
     ) {
-      let R = y + FRAME_RUNTIME_END_MARKER.length;
+      let blockEnd = endMarkerAt + FRAME_RUNTIME_END_MARKER.length;
       if (
-        e[R] ===
+        html[blockEnd] ===
         `
 `
       )
-        R++;
-      n.push([index, R]);
-      r += R - index;
+        blockEnd++;
+      ranges.push([index, blockEnd]);
+      scannedSpan += blockEnd - index;
     }
     index = index_2;
   }
-  e = findChartSentinelBlocks(removeRanges(e, n));
-  e = findMermaidSentinelBlocks(e);
-  return e.replace(BASE_HREF_STRIP_RE, "").replace(/\sdata-frame-runtime="[^">]*"/gi, "");
+  html = findChartSentinelBlocks(removeRanges(html, ranges));
+  html = findMermaidSentinelBlocks(html);
+  return html.replace(BASE_HREF_STRIP_RE, "").replace(/\sdata-frame-runtime="[^">]*"/gi, "");
 }
 //@ chunk-06y4szbn.js:59272-59306 placement
-function strippedAuthorBody(e) {
-  return stripAuthorInjections(e).body;
+function strippedAuthorBody(html) {
+  return stripAuthorInjections(html).body;
 }
 //@ chunk-06y4szbn.js:59306-59647 placement
-function stripAuthorInjections(e) {
-  let n = (x) => stripMermaidRuntime(findRuntimeBlocks(x));
+function stripAuthorInjections(html) {
+  let stripOnce = (value) => stripMermaidRuntime(findRuntimeBlocks(value));
   let stripBudget = newStripBudget(MAX_STRIP_AUTHOR_PASSES, "author");
-  let s = (x) => stripUntilStable(x, n, stripBudget);
-  let h = s(e);
-  let b = unwrapSkeletonDocument(h);
-  if (b === null)
+  let stripStable = (value) => stripUntilStable(value, stripOnce, stripBudget);
+  let stripped = stripStable(html);
+  let unwrapped = unwrapSkeletonDocument(stripped);
+  if (unwrapped === null)
     return {
-      body: h,
+      body: stripped,
       unwrapped: false,
       passes: stripBudget.spent,
     };
-  let y = repairNestedPage(b.body, b.lang, b.cover, s, stripBudget);
+  let repaired = repairNestedPage(unwrapped.body, unwrapped.lang, unwrapped.cover, stripStable, stripBudget);
   return {
-    body: y.body,
+    body: repaired.body,
     passes: stripBudget.spent,
-    lang: y.lang,
-    cover: y.cover,
+    lang: repaired.lang,
+    cover: repaired.cover,
     unwrapped: true,
-    ...(y.outcome && {
-      repair: y.outcome,
+    ...(repaired.outcome && {
+      repair: repaired.outcome,
     }),
-    ...(b.hoistedCommentsDropped && {
+    ...(unwrapped.hoistedCommentsDropped && {
       hoistedCommentsDropped: true,
     }),
   };
 }
 //@ chunk-06y4szbn.js:59647-59768 placement
 function servedPageLooksNested(html) {
-  let n;
+  let inputHtml;
   try {
-    n = stripStaleInjections(html);
+    inputHtml = stripStaleInjections(html);
   } catch (error) {
     if (error instanceof StripUnsettledError) return false;
     throw error;
   }
-  let r = unwrapSkeletonDocument(n);
-  return r !== null && hasRuntimeSentinelsInHead(r.body);
+  let unwrapped = unwrapSkeletonDocument(inputHtml);
+  return unwrapped !== null && hasRuntimeSentinelsInHead(unwrapped.body);
 }
 //@ chunk-06y4szbn.js:59768-59813 placement
 var LANGUAGE_TAG_RE = /^[A-Za-z]{2,3}(-[A-Za-z0-9]{1,8})*$/;
 //@ chunk-06y4szbn.js:59813-59860 placement
-function isValidLangTag(e) {
-  return e.length <= 35 && LANGUAGE_TAG_RE.test(e);
+function isValidLangTag(tag) {
+  return tag.length <= 35 && LANGUAGE_TAG_RE.test(tag);
 }
 //@ chunk-06y4szbn.js:59860-60853 placement
-async function prepareArtifactBody(e, n = {}) {
-  let { injectDiagramRuntime, injectHighlightRuntime, expectRoundTrippedPage } = n;
-  let b = stripAuthorInjections(e);
-  let { body, lang, cover } = b;
+async function prepareArtifactBody(html, options = {}) {
+  let { injectDiagramRuntime, injectHighlightRuntime, expectRoundTrippedPage } = options;
+  let stripped = stripAuthorInjections(html);
+  let { body, lang, cover } = stripped;
   let unnested;
-  switch (b.repair) {
+  switch (stripped.repair) {
     case "repaired":
     case "partial":
-      unnested = b.repair;
+      unnested = stripped.repair;
       break;
     case "miss":
       logFeatureSad("artifact_publish", "nested_repair_miss");
@@ -678,109 +714,114 @@ async function prepareArtifactBody(e, n = {}) {
     case undefined:
       break;
   }
-  if (!b.unwrapped && expectRoundTrippedPage === true)
+  if (!stripped.unwrapped && expectRoundTrippedPage === true)
     logFeatureSad("artifact_publish", "round_trip_unwrap_miss");
   if (hasRuntimeSentinels(body)) logFeatureSad("artifact_publish", "runtime_sentinel_residual");
   let pageRuntimes = detectPageRuntimes(body);
-  let k = pageRuntimes.chart && isChartRuntimeEnabled();
+  let hasChart = pageRuntimes.chart && isChartRuntimeEnabled();
   let mermaid = injectDiagramRuntime === true && pageRuntimes.mermaid;
   let highlight = injectHighlightRuntime === true && pageRuntimes.highlight;
-  let q = "";
-  if (k) {
+  let runtimeBlocks = "";
+  if (hasChart) {
     let chartRuntime = await loadChartRuntime();
-    if (chartRuntime !== null) q += chartRuntime;
+    if (chartRuntime !== null) runtimeBlocks += chartRuntime;
   }
-  let W = false;
+  let chartInjected = false;
   if (mermaid) {
-    let P = mermaidRuntimeBlock();
-    if (P !== null) {
-      q += P;
-      W = true;
+    let block = mermaidRuntimeBlock();
+    if (block !== null) {
+      runtimeBlocks += block;
+      chartInjected = true;
     }
   }
-  let G = false;
+  let runtimeAppended = false;
   if (highlight) {
     let highlightRuntime = await loadHighlightRuntime();
     if (highlightRuntime !== null) {
-      q += highlightRuntime;
-      G = true;
+      runtimeBlocks += highlightRuntime;
+      runtimeAppended = true;
     }
   }
-  if (q !== "") {
-    let { runtimeBlockInsertionIndex } = await import("./chunk-1c8ngz3c.js");
-    let j = runtimeBlockInsertionIndex(body);
-    if (j === undefined) {
+  if (runtimeBlocks !== "") {
+    let { runtimeBlockInsertionIndex } = await import("./htmlRuntimeBlock.js");
+    let insertionIndex = runtimeBlockInsertionIndex(body);
+    if (insertionIndex === undefined) {
       logFeatureSad("artifact_publish", "runtime_blocks_over_budget");
-      W = false;
-      G = false;
-    } else body = body.slice(0, j) + q + body.slice(j);
+      chartInjected = false;
+      runtimeAppended = false;
+    } else body = body.slice(0, insertionIndex) + runtimeBlocks + body.slice(insertionIndex);
   }
   return {
     body,
-    mermaidInjected: W,
-    hljsInjected: G,
+    mermaidInjected: chartInjected,
+    hljsInjected: runtimeAppended,
     roundTripLang: lang,
     ...(cover !== undefined && {
       roundTripCover: cover,
     }),
     unnested,
-    ...(b.hoistedCommentsDropped && {
+    ...(stripped.hoistedCommentsDropped && {
       hoistedCommentsDropped: true,
     }),
   };
 }
 //@ chunk-06y4szbn.js:60853-60884 placement
-function findChartSentinelBlocks(e) {
-  return findSentinelBlocks(e, MERMAID_SENTINEL_LIMITS);
+function findChartSentinelBlocks(html) {
+  return findSentinelBlocks(html, MERMAID_SENTINEL_LIMITS);
 }
 //@ chunk-06y4szbn.js:60884-60915 placement
-function findMermaidSentinelBlocks(e) {
-  return findSentinelBlocks(e, CHART_SENTINEL_LIMITS);
+function findMermaidSentinelBlocks(html) {
+  return findSentinelBlocks(html, CHART_SENTINEL_LIMITS);
 }
 //@ chunk-06y4szbn.js:60915-61420 placement
-function findSentinelBlocks(e, n) {
-  let r = [];
-  let index = e.indexOf(n.beginPrefix);
+function findSentinelBlocks(html, spec) {
+  let ranges = [];
+  let index = html.indexOf(spec.beginPrefix);
   while (index >= 0) {
-    let h = index + n.beginPrefix.length;
-    let index_2 = e.indexOf(n.beginPrefix, h);
-    let y = h;
-    let x = h + n.lenDigitsMax;
-    while (y < x) {
-      let code = e.charCodeAt(y);
+    let prefixEnd = index + spec.beginPrefix.length;
+    let index_2 = html.indexOf(spec.beginPrefix, prefixEnd);
+    let numEnd = prefixEnd;
+    let scanLimit = prefixEnd + spec.lenDigitsMax;
+    while (numEnd < scanLimit) {
+      let code = html.charCodeAt(numEnd);
       if (code < 48 || code > 57) break;
-      y++;
+      numEnd++;
     }
-    if (y > h && e.startsWith("-->", y)) {
-      let w = Number(e.slice(h, y));
-      let R = y + 3;
-      let C = 0;
-      let k = R + w;
-      while (C <= n.openTags && !e.startsWith(n.end, k)) {
-        C++;
-        k += DATA_ID_ATTR_LENGTH;
+    if (numEnd > prefixEnd && html.startsWith("-->", numEnd)) {
+      let length = Number(html.slice(prefixEnd, numEnd));
+      let payloadStart = numEnd + 3;
+      let skipped = 0;
+      let closingAt = payloadStart + length;
+      while (skipped <= spec.openTags && !html.startsWith(spec.end, closingAt)) {
+        skipped++;
+        closingAt += DATA_ID_ATTR_LENGTH;
       }
-      if (w < n.maxSpan && C <= n.openTags && (index_2 < 0 || index_2 > k) && n.validate(e.slice(R, k), C)) {
-        let V = k + n.end.length;
+      if (
+        length < spec.maxSpan &&
+        skipped <= spec.openTags &&
+        (index_2 < 0 || index_2 > closingAt) &&
+        spec.validate(html.slice(payloadStart, closingAt), skipped)
+      ) {
+        let afterEnd = closingAt + spec.end.length;
         if (
-          e[V] ===
+          html[afterEnd] ===
           `
 `
         )
-          V++;
-        let L =
+          afterEnd++;
+        let tail =
           index > 0 &&
-          e[index - 1] ===
+          html[index - 1] ===
             `
 `
             ? index - 1
             : index;
-        r.push([L, V]);
+        ranges.push([tail, afterEnd]);
       }
     }
     index = index_2;
   }
-  return removeRanges(e, r);
+  return removeRanges(html, ranges);
 }
 //@ chunk-06y4szbn.js:61420-61435 placement
 var MAX_PAGE_BYTES_FOR_STRIP = 2097152;

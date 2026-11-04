@@ -29,15 +29,15 @@ import { toSDKMessages } from "../utils/messages/mappers.js";
 /**
  * 把转录消息逐条转发给桥接端（记录已发送 uuid），最后一条压缩边界附带保留的消息 id，子代理消息附带 agentId。
  */
-function forwardTranscriptMessages(uploadRows, u, serverUuids, agentId) {
-  let lastIndex = u.findLastIndex((S) => isCompactBoundaryMessage_2(S));
-  for (let [S, w] of u.entries()) {
-    serverUuids.add(w.uuid);
-    uploadRows("transcript", w, {
-      ...(S === lastIndex &&
-        isCompactBoundaryMessage_2(w) && {
+function forwardTranscriptMessages(uploadRows, messages, serverUuids, agentId) {
+  let lastIndex = messages.findLastIndex((message) => isCompactBoundaryMessage_2(message));
+  for (let [index, message] of messages.entries()) {
+    serverUuids.add(message.uuid);
+    uploadRows("transcript", message, {
+      ...(index === lastIndex &&
+        isCompactBoundaryMessage_2(message) && {
           isCompaction: true,
-          preservedEventIds: w.compactMetadata?.preservedMessages?.uuids,
+          preservedEventIds: message.compactMetadata?.preservedMessages?.uuids,
         }),
       ...(agentId !== undefined && {
         agentId,
@@ -51,13 +51,15 @@ function forwardTranscriptMessages(uploadRows, u, serverUuids, agentId) {
 function isCompactBoundaryMessage(message) {
   return new Set(
     compactBoundaryUuids(
-      message.filter((u) => u.payload.type === "system" && u.payload.subtype === "compact_boundary"),
+      message.filter(
+        (event) => event.payload.type === "system" && event.payload.subtype === "compact_boundary",
+      ),
     ),
   );
 }
 //@ chunk-cg2r2hy6.js:25131-25218 placement
 function compactBoundaryUuids(events) {
-  return (events ?? []).map((u) => u.payload.uuid).filter((u) => typeof u === "string");
+  return (events ?? []).map((event) => event.payload.uuid).filter((uuid) => typeof uuid === "string");
 }
 //@ chunk-cg2r2hy6.js:25218-25230 placement
 var WORK_SECRET_REFRESH_LEAD_SEC = 2100;
@@ -65,58 +67,58 @@ var WORK_SECRET_REFRESH_LEAD_SEC = 2100;
 /**
  * 远程工作密钥被拒时尝试刷新；宿主无刷新途径时报告
  */
-function refreshWorkSecret(s) {
-  let { sessionId, apiBaseUrl, requestFreshSecret } = s;
-  let y = validateWorkSecretSession(s.secret, sessionId);
-  if (typeof y === "string")
+function refreshWorkSecret(options) {
+  let { sessionId, apiBaseUrl, requestFreshSecret } = options;
+  let secret = validateWorkSecretSession(options.secret, sessionId);
+  if (typeof secret === "string")
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `work secret rejected: ${y}`,
+      `work secret rejected: ${secret}`,
       "work secret rejected",
     );
   let sessionUrl = buildCCRv2SdkUrl(apiBaseUrl, sessionId);
-  let w = null;
-  let B = false;
-  async function _() {
+  let heldSecret = null;
+  let isAuthRejected = false;
+  async function requestFresh() {
     if (!requestFreshSecret) {
       logForDebugging("[bridge:work-secret] the host offers no refresh path");
       return null;
     }
-    let E;
+    let freshSecret;
     try {
-      E = await requestFreshSecret(sessionId);
+      freshSecret = await requestFreshSecret(sessionId);
     } catch (error) {
       logForDebugging(`[bridge:work-secret] host refresh request failed: ${errorMessage(error)}`, {
         level: "warn",
       });
       return null;
     }
-    if (!E) {
+    if (!freshSecret) {
       logForDebugging("[bridge:work-secret] host has no fresh secret yet");
       return null;
     }
-    let A = validateWorkSecretSession(E, sessionId);
-    if (typeof A === "string") {
-      logForDebugging(`[bridge:work-secret] fresh secret rejected: ${A}`, {
+    let parsedSecret = validateWorkSecretSession(freshSecret, sessionId);
+    if (typeof parsedSecret === "string") {
+      logForDebugging(`[bridge:work-secret] fresh secret rejected: ${parsedSecret}`, {
         level: "warn",
       });
       return null;
     }
-    let T = decodeJwtExpiry(A.session_ingress_token);
+    let freshExp = decodeJwtExpiry(parsedSecret.session_ingress_token);
     if (
-      w &&
-      (A.session_ingress_token === w.secret.session_ingress_token ||
-        (w.exp !== null && T !== null && T <= w.exp))
+      heldSecret &&
+      (parsedSecret.session_ingress_token === heldSecret.secret.session_ingress_token ||
+        (heldSecret.exp !== null && freshExp !== null && freshExp <= heldSecret.exp))
     ) {
       logForDebugging("[bridge:work-secret] host returned a secret no fresher than the registered one");
       return null;
     }
-    return A;
+    return parsedSecret;
   }
-  async function b(E, A = false) {
-    let sessionIngressToken = E.session_ingress_token;
-    let v;
+  async function registerWith(secret, canRecoverAuth = false) {
+    let sessionIngressToken = secret.session_ingress_token;
+    let epoch;
     try {
-      v = await registerWorker(sessionUrl, sessionIngressToken);
+      epoch = await registerWorker(sessionUrl, sessionIngressToken);
     } catch (error) {
       let { kind, status } = classifyAxiosError(error);
       logForDebugging(
@@ -132,8 +134,8 @@ function refreshWorkSecret(s) {
           status: 200,
         };
       if (status === undefined || status === 408 || status === 429 || status >= 500) return null;
-      if (A && (status === 401 || status === 403)) {
-        B = true;
+      if (canRecoverAuth && (status === 401 || status === 403)) {
+        isAuthRejected = true;
         return null;
       }
       return {
@@ -142,55 +144,62 @@ function refreshWorkSecret(s) {
         status,
       };
     }
-    let F = decodeJwtExpiry(sessionIngressToken);
-    w = {
-      secret: E,
-      exp: F,
+    let exp = decodeJwtExpiry(sessionIngressToken);
+    heldSecret = {
+      secret,
+      exp,
     };
-    B = false;
-    let I = F === null ? WORK_SECRET_REFRESH_LEAD_SEC : Math.max(0, F - Math.floor(Date.now() / 1000));
-    logForDebugging(`[bridge:work-secret] registered worker epoch=${v} expires_in=${I}s`);
+    isAuthRejected = false;
+    let expiresIn =
+      exp === null ? WORK_SECRET_REFRESH_LEAD_SEC : Math.max(0, exp - Math.floor(Date.now() / 1000));
+    logForDebugging(`[bridge:work-secret] registered worker epoch=${epoch} expires_in=${expiresIn}s`);
     return {
       worker_jwt: sessionIngressToken,
       api_base_url: apiBaseUrl,
-      expires_in: I,
-      worker_epoch: v,
+      expires_in: expiresIn,
+      worker_epoch: epoch,
     };
   }
   return {
-    async register(E, A) {
-      if (E === "initial") return b(y);
-      let T = await _();
-      if (A?.stillWanted && !A.stillWanted()) {
+    async register(mode, options) {
+      if (mode === "initial") return registerWith(secret);
+      let freshSecret = await requestFresh();
+      if (options?.stillWanted && !options.stillWanted()) {
         logForDebugging(
           "[bridge:work-secret] bridge torn down or superseded while the host was asked; not registering",
         );
         return null;
       }
-      if (T) return b(T);
-      let v = w !== null && w.exp !== null ? w.exp - Math.floor(Date.now() / 1000) : 0;
-      if (w !== null && !B && A?.reuseHeldAboveS !== undefined && v > A.reuseHeldAboveS) {
+      if (freshSecret) return registerWith(freshSecret);
+      let heldExpiresIn =
+        heldSecret !== null && heldSecret.exp !== null ? heldSecret.exp - Math.floor(Date.now() / 1000) : 0;
+      if (
+        heldSecret !== null &&
+        !isAuthRejected &&
+        options?.reuseHeldAboveS !== undefined &&
+        heldExpiresIn > options.reuseHeldAboveS
+      ) {
         logForDebugging(
-          `[bridge:work-secret] nothing fresher from the host; re-registering the held secret (${v}s left)`,
+          `[bridge:work-secret] nothing fresher from the host; re-registering the held secret (${heldExpiresIn}s left)`,
         );
-        return b(w.secret, true);
+        return registerWith(heldSecret.secret, true);
       }
       return null;
     },
   };
 }
 //@ chunk-cg2r2hy6.js:27254-27501 placement
-function validateWorkSecretSession(s, sessionId) {
-  let p;
+function validateWorkSecretSession(secret, sessionId) {
+  let parsed;
   try {
-    p = decodeWorkSecret(s);
+    parsed = decodeWorkSecret(secret);
   } catch (error) {
     return error instanceof WorkSecretShapeError ? error.message : "undecodable";
   }
-  let jwtSessionId = getJwtSessionId(p.session_ingress_token);
+  let jwtSessionId = getJwtSessionId(parsed.session_ingress_token);
   if (jwtSessionId === undefined) return "token carries no session_id claim";
   if (!sameSessionId(jwtSessionId, sessionId)) return "token is for a different session";
-  return p;
+  return parsed;
 }
 //@ chunk-cg2r2hy6.js:27501-27641 placement
 /**
@@ -209,8 +218,8 @@ var FLAG_UNAVAILABLE_CAUSES = new Set(["flags_disabled", "flags_unreachable", "g
 //@ chunk-cg2r2hy6.js:27641-27697 placement
 function transcriptForwarder(getTools) {
   return (messages) => {
-    let p = getTools?.();
-    return toSDKMessages(messages, p);
+    let tools = getTools?.();
+    return toSDKMessages(messages, tools);
   };
 }
 export {
@@ -221,4 +230,6 @@ export {
   refreshWorkSecret,
   transcriptForwarder,
   WORK_SECRET_REFRESH_WINDOW_MS,
+  PATIENT_READ_BUDGET,
+  QUICK_READ_BUDGET,
 };

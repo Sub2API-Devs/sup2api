@@ -11,7 +11,7 @@ import { linkAbort } from "../../internal/utils/abort.mjs";
 import { AnthropicError } from "../../core/error.mjs";
 import { loggerFor } from "../../internal/utils/log.mjs";
 import { buildHeaders } from "../../internal/headers.mjs";
-import { isFatal4xx, applyJitter, jitter, isStatus, cs } from "../../internal/utils/backoff.mjs";
+import { isFatal4xx, applyJitter, jitter, isStatus, backoff } from "../../internal/utils/backoff.mjs";
 import { sleepUnlessAborted } from "../../tools/agent-toolset/memories.mjs";
 import { uuid4 } from "../../internal/utils/uuid.mjs";
 
@@ -142,7 +142,7 @@ var WorkPoller = (() => {
               });
               throw e;
             }
-            let wait = applyJitter(backoff(attempt));
+            let wait = applyJitter(backoff_2(attempt));
             log.warn("poll failed, backing off", {
               error: String(e),
               backoff_ms: wait,
@@ -219,8 +219,8 @@ var WorkPoller = (() => {
   return WorkPoller;
 })();
 //@ chunk-hwmsct5x.js:59048-59082 esm-layout
-function backoff(attempt) {
-  return cs(attempt, POLL_BACKOFF_BASE_MS, POLL_BACKOFF_CAP_MS);
+function backoff_2(attempt) {
+  return backoff(attempt, POLL_BACKOFF_BASE_MS, POLL_BACKOFF_CAP_MS);
 }
 //@ chunk-hwmsct5x.js:59082-59732 esm-fingerprint
 var IdleLog = (() => {

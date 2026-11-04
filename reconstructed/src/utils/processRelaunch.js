@@ -46,11 +46,11 @@ import { createSystemMessage, isReorderedRow } from "./messages.js";
 import {
   isProcessWrapperUsable,
   processWrapperError,
-  PROCESS_WRAPPER_ENV_2,
+  PROCESS_WRAPPER_ENV,
   processWrapperArgv,
 } from "./processWrapper.js";
 import { logFeatureBad } from "../services/analytics/featureTelemetry.js";
-import { withHostOwnedEnv } from "./settings/managedSettingsFiles.js";
+import { withHostOwnedEnv } from "./settings/hostEnvWrites.js";
 import { withProcessWrapper, getLaunchCommand } from "./deepLink/registerProtocol.js";
 import {
   getSessionId,
@@ -84,6 +84,7 @@ import {
 } from "./proactivityRelaunch.js";
 import { pauseNonBlockingStdout } from "../ink/nonBlockingStdout.js";
 import { setBgExitCause } from "./bgExitSidecars.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-h52ct3be.js:1479-1758 placement
 async function flushBeforeExec() {
@@ -98,22 +99,22 @@ async function flushBeforeExec() {
 /**
  * 用 execve 原地重启进程（非 Windows）。
  */
-function execveRelaunch(cmd, r, i, n) {
+function execveRelaunch(cmd, argv, env, cwd) {
   assertProgramLaunchAllowed();
   if (getPlatform() === "windows" || !isAbsolute(cmd)) return;
-  let a;
-  let s;
+  let failure;
+  let previousCwd;
   try {
-    if (n) {
-      s = process.cwd();
-      processChdir(n);
+    if (cwd) {
+      previousCwd = process.cwd();
+      processChdir(cwd);
     }
-    process.execve(cmd, r, compactEnvObject(i));
+    process.execve(cmd, argv, compactEnvObject(env));
     logForDebugging(`execve(${cmd}) returned \u2014 handing back to the caller`, {
       level: "warn",
     });
   } catch (error) {
-    a = toError(error);
+    failure = toError(error);
     logForDebugging(
       `execReplaceProcess: ${errorMessage(error)} \u2014 handing the error back to the caller`,
       {
@@ -121,38 +122,38 @@ function execveRelaunch(cmd, r, i, n) {
       },
     );
   } finally {
-    if (s !== undefined)
+    if (previousCwd !== undefined)
       try {
-        processChdir(s);
+        processChdir(previousCwd);
       } catch {}
   }
-  return a;
+  return failure;
 }
 //@ chunk-h52ct3be.js:2149-2209 placement
-async function launcherFileUsable(e) {
+async function launcherFileUsable(storageV5) {
   let materializedSessionFile = getMaterializedSessionFile();
   if (!materializedSessionFile) return false;
-  return isLauncherPresent(materializedSessionFile, e);
+  return isLauncherPresent(materializedSessionFile, storageV5);
 }
 //@ chunk-h52ct3be.js:2209-2515 placement
 /**
  * 启动器文件是否存在且可用。
  */
-async function isLauncherPresent(materializedSessionFile, r) {
+async function isLauncherPresent(materializedSessionFile, storageV5) {
   if (
     await stat(materializedSessionFile).then(
-      (a) => a.size > 0,
+      (stats) => stats.size > 0,
       () => false,
     )
   )
     return true;
-  let transcriptStorageKey = getTranscriptStorageKey(materializedSessionFile, r);
+  let transcriptStorageKey = getTranscriptStorageKey(materializedSessionFile, storageV5);
   if (transcriptStorageKey === undefined) return false;
   try {
-    let a = await transcriptStorageKey.backend.statMeta(transcriptStorageKey.key);
-    if (!a.ok && a.error.code !== "NotFound")
-      logForDebugging(`transcriptHasBytes: backend statMeta failed: ${a.error.code}`);
-    return a.ok && a.value.size > 0;
+    let statResult = await transcriptStorageKey.backend.statMeta(transcriptStorageKey.key);
+    if (!statResult.ok && statResult.error.code !== "NotFound")
+      logForDebugging(`transcriptHasBytes: backend statMeta failed: ${statResult.error.code}`);
+    return statResult.ok && statResult.value.size > 0;
   } catch (error) {
     logError(error);
     return false;
@@ -162,18 +163,18 @@ async function isLauncherPresent(materializedSessionFile, r) {
 /**
  * 重启前确认（流式响应中跳过）。
  */
-async function confirmRelaunch(e, r, { responseStreaming: i = false } = {}, storageV5) {
-  let a = cancelForHandoff(r);
-  if (!a || i) return a;
+async function confirmRelaunch(messages, reason, { responseStreaming = false } = {}, storageV5) {
+  let didCancel = cancelForHandoff(reason);
+  if (!didCancel || responseStreaming) return didCancel;
   try {
     await recordTranscript(
-      [...e, createSystemMessage(AUTO_CONTINUE_CANCEL_MESSAGES[r], "warning")],
+      [...messages, createSystemMessage(AUTO_CONTINUE_CANCEL_MESSAGES[reason], "warning")],
       undefined,
       undefined,
       undefined,
       storageV5,
     );
-    if (r === "relaunch") await saveResumePoint(e, storageV5);
+    if (reason === "relaunch") await saveResumePoint(messages, storageV5);
   } catch (error) {
     clearHandoffInProgress();
     throw error;
@@ -184,55 +185,60 @@ async function confirmRelaunch(e, r, { responseStreaming: i = false } = {}, stor
 /**
  * 进程退出时确认并执行重启 Claude Code，出错只记录日志。
  */
-async function relaunchForExit(e, { responseStreaming: r = false } = {}, i) {
+async function relaunchForExit(messages, { responseStreaming = false } = {}, storageV5) {
   try {
     await confirmRelaunch(
-      e,
+      messages,
       "process_exit",
       {
-        responseStreaming: r,
+        responseStreaming,
       },
-      i,
+      storageV5,
     );
   } catch (error) {
     logError(error);
   }
 }
 //@ chunk-h52ct3be.js:2991-3207 placement
-var AUTO_CONTINUE_CANCELLED_NOTE =
-  "the automatic continue at the usage-limit reset was cancelled (/rate-limit-options to wait again)";
-var AUTO_CONTINUE_CANCELLED_SENTENCE = `${AUTO_CONTINUE_CANCELLED_NOTE.charAt(0).toUpperCase()}${AUTO_CONTINUE_CANCELLED_NOTE.slice(1)}.`;
-var AUTO_CONTINUE_CANCELLED_MESSAGE = "Automatic continue at the usage-limit reset was cancelled.";
+var AUTO_CONTINUE_CANCELLED_NOTE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var AUTO_CONTINUE_CANCELLED_SENTENCE;
+var AUTO_CONTINUE_CANCELLED_MESSAGE;
+deferInit("chunk-h52ct3be.js:2991", () => {
+  AUTO_CONTINUE_CANCELLED_NOTE =
+    "the automatic continue at the usage-limit reset was cancelled (/rate-limit-options to wait again)";
+  AUTO_CONTINUE_CANCELLED_SENTENCE = `${AUTO_CONTINUE_CANCELLED_NOTE.charAt(0).toUpperCase()}${AUTO_CONTINUE_CANCELLED_NOTE.slice(1)}.`;
+  AUTO_CONTINUE_CANCELLED_MESSAGE = "Automatic continue at the usage-limit reset was cancelled.";
+});
 //@ chunk-h52ct3be.js:3207-3290 placement
 /**
  * 命令附带恢复参数。
  */
-function withResumeFlag(e, r) {
-  return r.includes(AUTO_CONTINUE_CANCELLED_NOTE) ||
-    r.includes(AUTO_CONTINUE_CANCELLED_SENTENCE) ||
-    r.includes(AUTO_CONTINUE_CANCELLED_MESSAGE)
-    ? `${e} ${AUTO_CONTINUE_CANCELLED_SENTENCE}`
-    : e;
+function withResumeFlag(text, previousText) {
+  return previousText.includes(AUTO_CONTINUE_CANCELLED_NOTE) ||
+    previousText.includes(AUTO_CONTINUE_CANCELLED_SENTENCE) ||
+    previousText.includes(AUTO_CONTINUE_CANCELLED_MESSAGE)
+    ? `${text} ${AUTO_CONTINUE_CANCELLED_SENTENCE}`
+    : text;
 }
 //@ chunk-h52ct3be.js:3290-3433 placement
 /**
  * 错误信息附加重启提示。
  */
-function withRelaunchHint(e, r, { as: i = "sentence", exitsAfterward: n = false } = {}) {
+function withRelaunchHint(text, cancelled, { as: style = "sentence", exitsAfterward = false } = {}) {
   clearHandoffInProgress();
-  if (!r) return e;
-  if (i === "clause") return `${e} \u2014 ${AUTO_CONTINUE_CANCELLED_NOTE}`;
-  return `${e}
-${n ? AUTO_CONTINUE_CANCELLED_MESSAGE : AUTO_CONTINUE_CANCELLED_SENTENCE}`;
+  if (!cancelled) return text;
+  if (style === "clause") return `${text} \u2014 ${AUTO_CONTINUE_CANCELLED_NOTE}`;
+  return `${text}
+${exitsAfterward ? AUTO_CONTINUE_CANCELLED_MESSAGE : AUTO_CONTINUE_CANCELLED_SENTENCE}`;
 }
 //@ chunk-h52ct3be.js:3433-3564 placement
 /**
  * 重启失败时附加说明再抛出。
  */
-function relaunchOrExplain(e, r, i) {
-  return relaunchClaudeCode(r, i).catch((error) => {
+function relaunchOrExplain(text, options, storageV5) {
+  return relaunchClaudeCode(options, storageV5).catch((error) => {
     if (error instanceof Error)
-      error.message = withRelaunchHint(error.message, e, {
+      error.message = withRelaunchHint(error.message, text, {
         as: "clause",
       });
     else clearHandoffInProgress();
@@ -257,9 +263,12 @@ async function saveResumePoint(messages, storageV5) {
 /**
  * 最后一条可恢复的消息。
  */
-function lastResumableMessage(e) {
-  return e.findLast(
-    (r) => (r.type === "user" || r.type === "assistant") && isLoggableMessage(r) && !isReorderedRow(r.uuid),
+function lastResumableMessage(messages) {
+  return messages.findLast(
+    (message) =>
+      (message.type === "user" || message.type === "assistant") &&
+      isLoggableMessage(message) &&
+      !isReorderedRow(message.uuid),
   );
 }
 //@ chunk-h52ct3be.js:3803-3983 placement
@@ -275,7 +284,7 @@ async function ensureLauncherRunnable() {
   logFeatureBad("agent_launcher", "relaunch_launcher_not_runnable");
   throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
     processWrapperError() ??
-      `${PROCESS_WRAPPER_ENV_2}: launcher \`${processWrapperArgv()[0]}\` was deleted or is not executable \u2014 restore it (or fix the setting), then retry; this session was left running`,
+      `${PROCESS_WRAPPER_ENV}: launcher \`${processWrapperArgv()[0]}\` was deleted or is not executable \u2014 restore it (or fix the setting), then retry; this session was left running`,
     "CLAUDE_CODE_PROCESS_WRAPPER launcher is not runnable",
   );
 }
@@ -283,19 +292,21 @@ async function ensureLauncherRunnable() {
 /**
  * 重启 Claude Code（参数、启动器、恢复）。
  */
-async function relaunchClaudeCode(e = {}, storageV5) {
+async function relaunchClaudeCode(options = {}, storageV5) {
   assertProgramLaunchAllowed();
-  let { cmd, prefixArgs } = withHostOwnedEnv(() => withProcessWrapper(e.launcher ?? getLaunchCommand()));
+  let { cmd, prefixArgs } = withHostOwnedEnv(() =>
+    withProcessWrapper(options.launcher ?? getLaunchCommand()),
+  );
   await ensureLauncherRunnable();
-  let extraArgs = e.extraArgs ?? [];
-  let s;
-  if (e.args) s = e.args;
-  else if (e.freshIfNoTranscript && !(await launcherFileUsable(storageV5))) s = extraArgs;
-  else s = ["--resume", getSessionId(), ...extraArgs];
-  let u = s[0] === "--resume" && !e.args;
-  let S = isShuttingDown();
+  let extraArgs = options.extraArgs ?? [];
+  let args;
+  if (options.args) args = options.args;
+  else if (options.freshIfNoTranscript && !(await launcherFileUsable(storageV5))) args = extraArgs;
+  else args = ["--resume", getSessionId(), ...extraArgs];
+  let isResumeRun = args[0] === "--resume" && !options.args;
+  let wasShuttingDown = isShuttingDown();
   claimShutdown();
-  if (!S) e.onShutdownClaimed?.();
+  if (!wasShuttingDown) options.onShutdownClaimed?.();
   cleanupTerminalModes();
   emitScrollTelemetrySummary();
   await Promise.all([
@@ -304,75 +315,77 @@ async function relaunchClaudeCode(e = {}, storageV5) {
       .catch(() => {})
       .then(() => withTimeout(flushAnalyticsSinks(), 1000, "analytics flush timeout").catch(() => {})),
   ]);
-  e.preSpawn?.();
-  let o = withLaunchValuesOfHybridConnection(
+  options.preSpawn?.();
+  let env = withLaunchValuesOfHybridConnection(
     withoutProtectedEnv(
       withHostOwnedEnv(() => ({
         ...process.env,
       })),
     ),
   );
-  noopStdinReset(o);
-  delete o.CLAUDE_CODE_TUI_JUST_SWITCHED;
-  delete o.CLAUDE_CODE_TUI_TRIAL;
-  delete o.CLAUDE_BRIDGE_REATTACH_SESSION;
-  delete o.CLAUDE_BRIDGE_REATTACH_SEQ;
-  delete o.CLAUDE_BRIDGE_REATTACH_OUTBOUND_ONLY;
-  delete o.CLAUDE_BRIDGE_REATTACH_GROUPING;
-  delete o.CLAUDE_BRIDGE_REATTACH_OWNER_ACCT;
-  delete o.CLAUDE_BRIDGE_REATTACH_OWNER_ORG;
-  delete o.CLAUDE_BRIDGE_REATTACH_NO_BACKFILL;
-  delete o[CLAUDE_RELAUNCH_SESSION_ADD_DIRS];
-  delete o.CLAUDE_BG_WORKSPACE_TRUSTED;
-  delete o.CLAUDE_BG_CARRIED_PROMPTS_SHA256;
-  delete o[CLAUDE_CODE_RELAUNCH_HOME_TRUST];
+  noopStdinReset(env);
+  delete env.CLAUDE_CODE_TUI_JUST_SWITCHED;
+  delete env.CLAUDE_CODE_TUI_TRIAL;
+  delete env.CLAUDE_BRIDGE_REATTACH_SESSION;
+  delete env.CLAUDE_BRIDGE_REATTACH_SEQ;
+  delete env.CLAUDE_BRIDGE_REATTACH_OUTBOUND_ONLY;
+  delete env.CLAUDE_BRIDGE_REATTACH_GROUPING;
+  delete env.CLAUDE_BRIDGE_REATTACH_OWNER_ACCT;
+  delete env.CLAUDE_BRIDGE_REATTACH_OWNER_ORG;
+  delete env.CLAUDE_BRIDGE_REATTACH_NO_BACKFILL;
+  delete env[CLAUDE_RELAUNCH_SESSION_ADD_DIRS];
+  delete env.CLAUDE_BG_WORKSPACE_TRUSTED;
+  delete env.CLAUDE_BG_CARRIED_PROMPTS_SHA256;
+  delete env[CLAUDE_CODE_RELAUNCH_HOME_TRUST];
   if (isHomeDirectorySession() && getHomeTrustDialogAccepted()) {
-    o.CLAUDE_BG_WORKSPACE_TRUSTED = "1";
-    Object.assign(o, await relaunchHomeTrustEnv());
+    env.CLAUDE_BG_WORKSPACE_TRUSTED = "1";
+    Object.assign(env, await relaunchHomeTrustEnv());
   }
-  delete o[CLAUDE_CODE_RELAUNCH_TERMINAL_SIZE];
-  noopRelaunch(o, s);
-  delete o[RELAUNCH_PROACTIVITY_BASELINE_ENV];
-  delete o[CLAUDE_CODE_RELAUNCH_PROACTIVITY_DECIDED];
-  delete o[CLAUDE_CODE_RELAUNCH_PROACTIVITY_EVER_ON];
-  delete o[CLAUDE_CODE_RELAUNCH_PROACTIVITY_LEVEL];
-  if (e.proactivity && !e.args)
-    Object.assign(o, proactivityBaselineEnv(e.proactivity), proactivityLevelEnv(e.proactivity));
-  Object.assign(o, e.env);
-  for (let f of e.dropEnv ?? []) delete o[f];
-  Object.assign(o, getRelaunchTerminalSizeEnv());
-  let _ = projectRootForRelaunch();
+  delete env[CLAUDE_CODE_RELAUNCH_TERMINAL_SIZE];
+  noopRelaunch(env, args);
+  delete env[RELAUNCH_PROACTIVITY_BASELINE_ENV];
+  delete env[CLAUDE_CODE_RELAUNCH_PROACTIVITY_DECIDED];
+  delete env[CLAUDE_CODE_RELAUNCH_PROACTIVITY_EVER_ON];
+  delete env[CLAUDE_CODE_RELAUNCH_PROACTIVITY_LEVEL];
+  if (options.proactivity && !options.args)
+    Object.assign(env, proactivityBaselineEnv(options.proactivity), proactivityLevelEnv(options.proactivity));
+  Object.assign(env, options.env);
+  for (let name of options.dropEnv ?? []) delete env[name];
+  Object.assign(env, getRelaunchTerminalSizeEnv());
+  let cwd = projectRootForRelaunch();
   await flushBeforeExec();
   pauseNonBlockingStdout();
-  execveRelaunch(cmd, [cmd, ...prefixArgs, ...s], o, _);
-  for (let f of ["SIGINT", "SIGTERM", "SIGHUP"]) {
-    process.removeAllListeners(f);
-    process.on(f, () => {});
+  execveRelaunch(cmd, [cmd, ...prefixArgs, ...args], env, cwd);
+  for (let signal of ["SIGINT", "SIGTERM", "SIGHUP"]) {
+    process.removeAllListeners(signal);
+    process.on(signal, () => {});
   }
   await flushBeforeExec();
   resetWindowsStdinMode();
-  let c = spawnSync(cmd, [...prefixArgs, ...s], {
+  let spawnResult = spawnSync(cmd, [...prefixArgs, ...args], {
     stdio: "inherit",
-    env: o,
-    cwd: _,
+    env,
+    cwd,
   });
   process.removeAllListeners("beforeExit");
   process.removeAllListeners("exit");
-  if (c.error) {
-    logForDebugging(`Failed to relaunch: ${c.error.message}`, {
+  if (spawnResult.error) {
+    logForDebugging(`Failed to relaunch: ${spawnResult.error.message}`, {
       level: "error",
     });
     await flushBeforeExec();
-    emitExitMessage(e.failedLine ?? (u ? RESTART_FAILED_RESUME_MESSAGE : RESTART_FAILED_MESSAGE));
+    emitExitMessage(
+      options.failedLine ?? (isResumeRun ? RESTART_FAILED_RESUME_MESSAGE : RESTART_FAILED_MESSAGE),
+    );
     setBgExitCause("relaunch_spawn_error");
     process.exit(1);
   }
-  if (c.signal) {
-    process.removeAllListeners(c.signal);
-    process.kill(process.pid, c.signal);
-    process.exit(128 + (constants.signals[c.signal] ?? 0));
+  if (spawnResult.signal) {
+    process.removeAllListeners(spawnResult.signal);
+    process.kill(process.pid, spawnResult.signal);
+    process.exit(128 + (constants.signals[spawnResult.signal] ?? 0));
   }
-  process.exit(c.status ?? (c.signal ? 1 : 0));
+  process.exit(spawnResult.status ?? (spawnResult.signal ? 1 : 0));
 }
 //@ chunk-h52ct3be.js:6252-6325 placement
 /**

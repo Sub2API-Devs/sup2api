@@ -5,10 +5,10 @@
  * pieces: chunk-fq0cr76a.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../../../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../../../../../../runtime/bun-runtime.js";
 
 //@ chunk-fq0cr76a.js:490216-502006 cjs-fingerprint
-var require_overload_const = x(function (cjsExports) {
+var require_overload_const = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });

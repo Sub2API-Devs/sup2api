@@ -8,7 +8,7 @@
  * pieces: chunk-ey2qag4x.js (7)
  * attribution: placement 6, fingerprint 1
  */
-import { init_react_production, y, ce } from "../../../vendor/react/cjs/react.production.js";
+import { init_react_production, useState, useCallback } from "../../../vendor/react/cjs/react.production.js";
 
 //@ chunk-ey2qag4x.js:37014-37018 placement
 init_react_production();
@@ -20,30 +20,30 @@ init_react_production();
 /**
  * 同时返回状态值、setter 与读取最新值的 getter 的 state hook。
  */
-function useLatestState(t) {
-  let [o] = y(() => ({
-    value: isFunction(t) ? t() : t,
+function useLatestState(initial) {
+  let [holder] = useState(() => ({
+    value: isFunction(initial) ? initial() : initial,
   }));
-  let [i, a] = y(o.value);
-  let l = ce(
-    (d) => {
-      let u = isFunction_2(d) ? d(o.value) : d;
-      if (Object.is(u, o.value)) return;
-      o.value = u;
-      a(() => u);
+  let [value, setValue] = useState(holder.value);
+  let update = useCallback(
+    (next) => {
+      let nextValue = isFunction_2(next) ? next(holder.value) : next;
+      if (Object.is(nextValue, holder.value)) return;
+      holder.value = nextValue;
+      setValue(() => nextValue);
     },
-    [o],
+    [holder],
   );
-  let f = ce(() => o.value, [o]);
-  return [i, l, f];
+  let getLatest = useCallback(() => holder.value, [holder]);
+  return [value, update, getLatest];
 }
 //@ chunk-ey2qag4x.js:37264-37308 placement
-function isFunction(t) {
-  return typeof t === "function";
+function isFunction(value) {
+  return typeof value === "function";
 }
 //@ chunk-ey2qag4x.js:37308-37352 placement
-function isFunction_2(t) {
-  return typeof t === "function";
+function isFunction_2(value) {
+  return typeof value === "function";
 }
 //@ chunk-ey2qag4x.js:37352-37574 fingerprint = OptionMap (1)
 class OptionMap extends Map {

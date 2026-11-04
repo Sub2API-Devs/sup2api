@@ -21,85 +21,85 @@ var MAX_TASK_LABEL_WIDTH = 100;
 var MAX_TASK_DETAIL_LINES = 12;
 var MIN_TASK_ROWS = 6;
 //@ chunk-axsvbsqv.js:13299-13371 placement
-function normalizeTaskText(o) {
-  return stripInvisibleChars(stripAnsiPerLine(o.replace(/\t/g, "  ")).trimEnd()).trimEnd();
+function normalizeTaskText(text) {
+  return stripInvisibleChars(stripAnsiPerLine(text.replace(/\t/g, "  ")).trimEnd()).trimEnd();
 }
 //@ chunk-axsvbsqv.js:13371-14472 placement
 function WorkflowTaskList({ tasks, expanded, width, indent }) {
-  let d = [];
-  let p = count(tasks, (v) => v.status === "completed");
-  d.push([
+  let lines = [];
+  let completedCount = count(tasks, (task) => task.status === "completed");
+  lines.push([
     {
       text: "Tasks",
       bold: true,
       dimColor: true,
     },
     {
-      text: truncateToWidth(` \xB7 ${p}/${tasks.length} done`, width - 5),
+      text: truncateToWidth(` \xB7 ${completedCount}/${tasks.length} done`, width - 5),
       dimColor: true,
     },
   ]);
-  let h = tasks.length > MAX_TASK_ROWS;
-  let b = tasks;
-  let x = [];
-  if (!expanded && h) {
-    let v = [
+  let isCapped = tasks.length > MAX_TASK_ROWS;
+  let visibleTasks = tasks;
+  let hiddenTasks = [];
+  if (!expanded && isCapped) {
+    let sortedTasks = [
       ...tasks.filter((task) => task.status === "in_progress"),
       ...tasks.filter((task) => task.status === "pending"),
       ...tasks.filter((task) => task.status === "completed"),
     ];
-    let T = new Set(v.slice(0, MAX_TASK_ROWS));
-    b = tasks.filter((task) => T.has(task));
-    x = v.slice(MAX_TASK_ROWS);
+    let visibleTaskSet = new Set(sortedTasks.slice(0, MAX_TASK_ROWS));
+    visibleTasks = tasks.filter((task) => visibleTaskSet.has(task));
+    hiddenTasks = sortedTasks.slice(MAX_TASK_ROWS);
   } else if (expanded && tasks.length > MAX_TASK_LABEL_WIDTH) {
-    b = tasks.slice(0, MAX_TASK_LABEL_WIDTH);
-    x = tasks.slice(MAX_TASK_LABEL_WIDTH);
+    visibleTasks = tasks.slice(0, MAX_TASK_LABEL_WIDTH);
+    hiddenTasks = tasks.slice(MAX_TASK_LABEL_WIDTH);
   }
   let max = Math.max(4, width - bunStringWidth(indent) - 2);
-  for (let v of b) {
-    let T = normalizeTaskText(v.content);
-    let M = expanded ? splitByDisplayWidth(T, max) : [truncateToWidth(T, max)];
-    let I = M.length > 0 ? M : [""];
-    for (let [N, E] of I.entries())
-      d.push([
+  for (let task of visibleTasks) {
+    let taskText = normalizeTaskText(task.content);
+    let taskLines = expanded ? splitByDisplayWidth(taskText, max) : [truncateToWidth(taskText, max)];
+    let wrappedLines = taskLines.length > 0 ? taskLines : [""];
+    for (let [lineIndex, lineText] of wrappedLines.entries())
+      lines.push([
         {
           text: indent,
         },
-        N === 0
-          ? StatusIcon_2(v.status)
+        lineIndex === 0
+          ? StatusIcon_2(task.status)
           : {
               text: " ",
             },
         {
-          text: ` ${E}`,
-          bold: v.status === "in_progress",
-          dimColor: v.status !== "in_progress",
+          text: ` ${lineText}`,
+          bold: task.status === "in_progress",
+          dimColor: task.status !== "in_progress",
         },
       ]);
   }
-  if (x.length > 0) {
-    let v;
-    if (expanded) v = `${x.length} more`;
+  if (hiddenTasks.length > 0) {
+    let moreSummary;
+    if (expanded) moreSummary = `${hiddenTasks.length} more`;
     else {
-      let T = [];
-      let M = count(x, (E) => E.status === "in_progress");
-      let I = count(x, (E) => E.status === "pending");
-      let N = count(x, (E) => E.status === "completed");
-      if (M > 0) T.push(`${M} in progress`);
-      if (I > 0) T.push(`${I} pending`);
-      if (N > 0) T.push(`${N} completed`);
-      v = T.join(", ");
+      let summaryParts = [];
+      let inProgressCount = count(hiddenTasks, (task) => task.status === "in_progress");
+      let pendingCount = count(hiddenTasks, (task) => task.status === "pending");
+      let completedHiddenCount = count(hiddenTasks, (task) => task.status === "completed");
+      if (inProgressCount > 0) summaryParts.push(`${inProgressCount} in progress`);
+      if (pendingCount > 0) summaryParts.push(`${pendingCount} pending`);
+      if (completedHiddenCount > 0) summaryParts.push(`${completedHiddenCount} completed`);
+      moreSummary = summaryParts.join(", ");
     }
-    d.push([
+    lines.push([
       {
-        text: truncateToWidth(`${indent}\u2026 +${v}`, width),
+        text: truncateToWidth(`${indent}\u2026 +${moreSummary}`, width),
         dimColor: true,
       },
     ]);
   }
   return {
-    lines: d,
-    capped: h,
+    lines,
+    capped: isCapped,
   };
 }
 export { normalizeTaskText, MAX_TASK_DETAIL_LINES, MIN_TASK_ROWS, WorkflowTaskList };

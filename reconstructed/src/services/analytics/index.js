@@ -10,6 +10,7 @@
  */
 import { HostScoped } from "../../utils/hostScoped.js";
 import { onProcessRootHost } from "../../bootstrap/state.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-8kte1b36.js:262-374 facade-exports = stripProtoFields (1)
 /**
@@ -41,19 +42,22 @@ function createAnalyticsQueueState() {
 /**
  * 事件入队：队列满 1000 时丢弃最旧事件并累计 droppedEventCount。
  */
-function enqueueAnalyticsEvent(state, e) {
+function enqueueAnalyticsEvent(state, event) {
   if (state.eventQueue.length >= MAX_QUEUED_EVENTS) {
     state.eventQueue.shift();
     state.droppedEventCount++;
   }
-  state.eventQueue.push(e);
+  state.eventQueue.push(event);
 }
 //@ chunk-8kte1b36.js:556-574 layout
 class AnalyticsQueueHolder {
   state = createAnalyticsQueueState();
 }
 //@ chunk-8kte1b36.js:574-597 layout
-var analyticsQueueByHost = new HostScoped(() => new AnalyticsQueueHolder());
+var analyticsQueueByHost; // deferred: uses AnalyticsQueueHolder of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-8kte1b36.js:574", () => {
+  analyticsQueueByHost = new HostScoped(() => new AnalyticsQueueHolder());
+});
 //@ chunk-8kte1b36.js:597-623 layout
 function getAnalyticsQueueHolder() {
   return onProcessRootHost(analyticsQueueByHost);

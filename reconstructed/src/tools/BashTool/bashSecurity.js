@@ -8,6 +8,7 @@
  * pieces: chunk-82kqcve8.js (1), chunk-e6aww6q8.js (7)
  * attribution: fingerprint 3, callgraph-fingerprint 3, layout 1, callgraph-witnessed 1
  */
+import { normalizeInternalPathRoot, safetyCheckReasonFields } from "../../utils/permissions/filesystem.js";
 import { getToolPermissionContext } from "../../utils/permissions/toolPermissionContext.js";
 import { areCommandNetworkListsOffered } from "./sandboxNetwork.js";
 import { isAutoModePermissionSurface } from "../../utils/permissions/autoModeState.js";
@@ -30,31 +31,57 @@ import { runWithoutTelemetry } from "./dangerousRemoval.js";
 import { BashTool } from "./BashTool.js";
 import { isAbortError } from "../../utils/errors.js";
 import { logError } from "../../utils/log.js";
-import { safetyCheckReasonFields, normalizeInternalPathRoot } from "../../utils/permissions/filesystem.js";
 
+//@ chunk-82kqcve8.js:282090-282356 fingerprint = validateShellMetacharacters (1)
+/**
+ * 对一组路径/项逐个调用检查函数（passthrough 时再试替代形式）：任一 deny 返回 deny，有非 allow 返回 passthrough，全部 allow 返回第一个 allow。
+ */
+function requireAllAllowed(pathsToCheck, checkPath, context) {
+  let firstAllow;
+  for (let path of pathsToCheck) {
+    let result = checkPath(path, context);
+    if (result.behavior === "passthrough") {
+      let normalizedPath = normalizeInternalPathRoot(path);
+      if (normalizedPath !== path) result = checkPath(normalizedPath, context);
+    }
+    if (result.behavior === "deny") return result;
+    if (result.behavior !== "allow")
+      return {
+        behavior: "passthrough",
+        message: "",
+      };
+    firstAllow ??= result;
+  }
+  return (
+    firstAllow ?? {
+      behavior: "passthrough",
+      message: "",
+    }
+  );
+}
 //@ chunk-e6aww6q8.js:1046433-1047016 callgraph-fingerprint = validateEmpty (0.171)
 /**
  * 命令携带 allowed_domains（沙箱网络放行列表）且 auto 模式分类器可用时，要求分类器复核：返回 safetyCheck 类型的 ask（allow 规则/hook 只批准命令，不批准域名）。
  */
-function askClassifierForAllowedDomains(e, n, r, s) {
-  if (s?.behavior === "ask" || s?.behavior === "deny") return;
-  let toolPermissionContext = getToolPermissionContext(r);
+function askClassifierForAllowedDomains(tool, input, toolUseContext, result) {
+  if (result?.behavior === "ask" || result?.behavior === "deny") return;
+  let toolPermissionContext = getToolPermissionContext(toolUseContext);
   if (
-    e.sandboxNetworkLists?.(n) === undefined ||
+    tool.sandboxNetworkLists?.(input) === undefined ||
     !areCommandNetworkListsOffered() ||
     !isAutoModePermissionSurface(toolPermissionContext)
   )
     return;
   return {
     behavior: "ask",
-    message: `${e.name} carries allowed_domains, which the auto-mode classifier reviews together with the command.`,
-    ...(s?.behavior === "allow" &&
-      s.updatedInput !== undefined && {
-        updatedInput: s.updatedInput,
+    message: `${tool.name} carries allowed_domains, which the auto-mode classifier reviews together with the command.`,
+    ...(result?.behavior === "allow" &&
+      result.updatedInput !== undefined && {
+        updatedInput: result.updatedInput,
       }),
     decisionReason: {
       type: "safetyCheck",
-      reason: `A ${e.name} call that carries allowed_domains is reviewed by the auto-mode classifier; allow rules and hook allows approve the command, not the hosts.`,
+      reason: `A ${tool.name} call that carries allowed_domains is reviewed by the auto-mode classifier; allow rules and hook allows approve the command, not the hosts.`,
       classifierApprovable: true,
     },
   };
@@ -63,19 +90,19 @@ function askClassifierForAllowedDomains(e, n, r, s) {
 /**
  * 把第二个 safetyCheck 结果的 circuitBreaker/also 合并进第一个的 also 列表（去重、去掉自身）。
  */
-function mergeSafetyCheckAlso(e, n) {
-  let decisionReason = e.decisionReason;
-  let decisionReason_2 = n?.decisionReason;
-  if (decisionReason?.type !== "safetyCheck" || decisionReason_2?.type !== "safetyCheck") return e;
+function mergeSafetyCheckAlso(result, otherResult) {
+  let decisionReason = result.decisionReason;
+  let decisionReason_2 = otherResult?.decisionReason;
+  if (decisionReason?.type !== "safetyCheck" || decisionReason_2?.type !== "safetyCheck") return result;
   let filtered = uniq([
     ...(decisionReason.also ?? []),
     ...(decisionReason_2.circuitBreaker !== undefined ? [decisionReason_2.circuitBreaker] : []),
     ...(decisionReason_2.also ?? []),
-  ]).filter((y) => y !== decisionReason.circuitBreaker);
+  ]).filter((breaker) => breaker !== decisionReason.circuitBreaker);
   return filtered.length === 0
-    ? e
+    ? result
     : {
-        ...e,
+        ...result,
         decisionReason: {
           ...decisionReason,
           also: filtered,
@@ -90,15 +117,15 @@ function stripCommandBuiltinPrefixes(context) {
   let sliced = context.slice();
   for (;;)
     if (sliced[0] === "command") {
-      let r = 1;
-      while (sliced[r] !== undefined && /^-p+$/.test(sliced[r])) r++;
-      if (sliced[r] === "--") r++;
-      if (r >= sliced.length || sliced[r].startsWith("-")) return sliced;
-      sliced = sliced.slice(r);
+      let flagsEnd = 1;
+      while (sliced[flagsEnd] !== undefined && /^-p+$/.test(sliced[flagsEnd])) flagsEnd++;
+      if (sliced[flagsEnd] === "--") flagsEnd++;
+      if (flagsEnd >= sliced.length || sliced[flagsEnd].startsWith("-")) return sliced;
+      sliced = sliced.slice(flagsEnd);
     } else if (sliced[0] === "builtin") {
-      let r = sliced[1] === "--" ? 2 : 1;
-      if (r >= sliced.length) return sliced;
-      sliced = sliced.slice(r);
+      let startIdx = sliced[1] === "--" ? 2 : 1;
+      if (startIdx >= sliced.length) return sliced;
+      sliced = sliced.slice(startIdx);
     } else if (sliced[0] === "noglob") {
       if (sliced.length <= 1) return sliced;
       sliced = sliced.slice(1);
@@ -147,7 +174,7 @@ function getSafetyCheckRank(context) {
   if (
     findSafetyCheckReason(
       context.decisionReason,
-      (n) => isBypassImmuneCircuitBreaker(n) && !isClassifierRoutedCircuitBreaker(n),
+      (reason) => isBypassImmuneCircuitBreaker(reason) && !isClassifierRoutedCircuitBreaker(reason),
     ) !== undefined
   )
     return 2;
@@ -157,66 +184,71 @@ function getSafetyCheckRank(context) {
 /**
  * Bash 安全检查入口：先按正常读法跑（XVt），若有 refused 读法差异，再在 refused 模式下跑一遍，按严重度、安全等级择严合并；必要时附加 allowed_domains 分类器复核；检查异常时返回"检查未完成"的 ask。
  */
-async function bashCommandIsSafeAsync(e, context, r, s) {
-  let { result: h, refused } = await runWithRefusalTracking(false, () =>
-    checkBashWithDeclarations(e, context, r, s),
+async function bashCommandIsSafeAsync(input, context, getCommandSubcommandPrefix, finalizeResult) {
+  let { result: firstResult, refused } = await runWithRefusalTracking(false, () =>
+    checkBashWithDeclarations(input, context, getCommandSubcommandPrefix, finalizeResult),
   );
-  if (!refused || h.behavior === "deny") return h;
+  if (!refused || firstResult.behavior === "deny") return firstResult;
   try {
     let { result: context_2 } = await runWithRefusalTracking(true, () =>
-      runWithoutTelemetry(() => checkBashWithDeclarations(e, context, r, s)),
+      runWithoutTelemetry(() =>
+        checkBashWithDeclarations(input, context, getCommandSubcommandPrefix, finalizeResult),
+      ),
     );
-    let w = getDecisionSeverity(context_2) - getDecisionSeverity(h);
-    let G = !(
+    let severityDelta = getDecisionSeverity(context_2) - getDecisionSeverity(firstResult);
+    let chosen = !(
       context_2.behavior !== "allow" &&
       !(getDecisionSeverity(context_2) === 4 && isBypassModeForBash(context)) &&
-      (w > 0 ||
-        (w === 0 &&
-          !buildPendingClassifierCheck(h, context) &&
+      (severityDelta > 0 ||
+        (severityDelta === 0 &&
+          !buildPendingClassifierCheck(firstResult, context) &&
           (buildPendingClassifierCheck(context_2, context) ||
-            (!(h.behavior === "ask" && carriesAskRuleIntent(h)) &&
-              getSafetyCheckRank(context_2) > getSafetyCheckRank(h)))))
+            (!(firstResult.behavior === "ask" && carriesAskRuleIntent(firstResult)) &&
+              getSafetyCheckRank(context_2) > getSafetyCheckRank(firstResult)))))
     )
-      ? h
-      : context_2.behavior === "deny" || h.behavior === "allow"
+      ? firstResult
+      : context_2.behavior === "deny" || firstResult.behavior === "allow"
         ? context_2
         : mergeSafetyCheckAlso(
             {
               ...context_2,
               suggestions: [],
             },
-            h,
+            firstResult,
           );
-    let q =
-      isPlainAsk(G) && (h.behavior !== "ask" || context_2.behavior !== "ask")
-        ? (askClassifierForAllowedDomains(BashTool, e, context, undefined) ?? G)
-        : G;
-    return q.behavior === "ask" && (context_2.behavior === "allow" || isPassthroughOrPlainAsk(context_2))
+    let finalResult =
+      isPlainAsk(chosen) && (firstResult.behavior !== "ask" || context_2.behavior !== "ask")
+        ? (askClassifierForAllowedDomains(BashTool, input, context, undefined) ?? chosen)
+        : chosen;
+    return finalResult.behavior === "ask" &&
+      (context_2.behavior === "allow" || isPassthroughOrPlainAsk(context_2))
       ? {
-          ...q,
+          ...finalResult,
           standsInUnderHookAsk: true,
         }
-      : q;
+      : finalResult;
   } catch (error) {
     if (isAbortError(error)) throw error;
     logError(error);
     if (
-      h.behavior === "ask" &&
-      (buildPendingClassifierCheck(h, context) ||
+      firstResult.behavior === "ask" &&
+      (buildPendingClassifierCheck(firstResult, context) ||
         findSafetyCheckReason(
-          h.decisionReason,
-          (L) => isUnwaivableBypassImmuneCircuitBreaker(L) && !isClassifierRoutedCircuitBreaker(L),
+          firstResult.decisionReason,
+          (reason) =>
+            isUnwaivableBypassImmuneCircuitBreaker(reason) && !isClassifierRoutedCircuitBreaker(reason),
         ) !== undefined)
     )
-      return h;
-    let w = "The permission check for this command did not finish, so its safety checks did not run.";
+      return firstResult;
+    let incompleteMessage =
+      "The permission check for this command did not finish, so its safety checks did not run.";
     return mergeSafetyCheckAlso(
       {
         behavior: "ask",
-        message: w,
+        message: incompleteMessage,
         decisionReason: {
           type: "safetyCheck",
-          reason: w,
+          reason: incompleteMessage,
           ...safetyCheckReasonFields(
             {
               classifierApprovable: false,
@@ -229,36 +261,9 @@ async function bashCommandIsSafeAsync(e, context, r, s) {
         suppressAlwaysAllowRule: true,
         checkIncomplete: true,
       },
-      h,
+      firstResult,
     );
   }
-}
-//@ chunk-82kqcve8.js:282090-282356 fingerprint = validateShellMetacharacters (1)
-/**
- * 对一组路径/项逐个调用检查函数（passthrough 时再试替代形式）：任一 deny 返回 deny，有非 allow 返回 passthrough，全部 allow 返回第一个 allow。
- */
-function requireAllAllowed(pathsToCheck, n, r) {
-  let s;
-  for (let h of pathsToCheck) {
-    let y = n(h, r);
-    if (y.behavior === "passthrough") {
-      let w = normalizeInternalPathRoot(h);
-      if (w !== h) y = n(w, r);
-    }
-    if (y.behavior === "deny") return y;
-    if (y.behavior !== "allow")
-      return {
-        behavior: "passthrough",
-        message: "",
-      };
-    s ??= y;
-  }
-  return (
-    s ?? {
-      behavior: "passthrough",
-      message: "",
-    }
-  );
 }
 export {
   askClassifierForAllowedDomains,

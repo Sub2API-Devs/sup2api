@@ -19,15 +19,15 @@ var MAX_POSIX_PATH_LENGTH = 50000;
 var platformPath = sep === win32.sep ? win32 : posix;
 var PATH_SEPARATOR_RE = sep === win32.sep ? /[\\/]+/ : /\/+/;
 //@ chunk-axmbhcjg.js:8997-9070 placement = setCwdState (1)
-function toPosixNfcPath(e, n) {
-  return (n === "/" ? e : e.split(n).join("/")).normalize("NFC");
+function toPosixNfcPath(path, sep) {
+  return (sep === "/" ? path : path.split(sep).join("/")).normalize("NFC");
 }
 //@ chunk-axmbhcjg.js:9070-9150 placement
 /**
  * isParentOrAbsolute：是 .. 或绝对路径。
  */
-function isParentOrAbsolute(e, n = platformPath) {
-  return e === ".." || e.startsWith(`..${n.sep}`) || n.isAbsolute(e);
+function isParentOrAbsolute(path, pathModule = platformPath) {
+  return path === ".." || path.startsWith(`..${pathModule.sep}`) || pathModule.isAbsolute(path);
 }
 export {
   platformPath,

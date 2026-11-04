@@ -13,10 +13,10 @@
 /**
  * 导出函数 `canonicalFingerprint`：参数 n, { omitCacheControl: t = !1 } = {}，返回 (feedCanonicalJson(n, s, t), s.join(""))。
  */
-function canonicalFingerprint(n, { omitCacheControl: t = false } = {}) {
-  let s = [];
-  feedCanonicalJson(n, s, t);
-  return s.join("");
+function canonicalFingerprint(input, { omitCacheControl = false } = {}) {
+  let parts = [];
+  feedCanonicalJson(input, parts, omitCacheControl);
+  return parts.join("");
 }
 //@ chunk-1fgvxqz2.js:410-422 placement
 /**
@@ -31,9 +31,9 @@ class HashFeeder {
   constructor(hashes) {
     this.hashes = hashes;
   }
-  push(n) {
-    this.pieces.push(n);
-    this.length += n.length;
+  push(item) {
+    this.pieces.push(item);
+    this.length += item.length;
     if (this.length >= FLUSH_THRESHOLD_CHARS) this.flush();
   }
   flush() {
@@ -51,12 +51,12 @@ class HashFeeder {
 function feedCanonicalJson(value, feeder, omitCacheControl, stats) {
   if (typeof value === "string" && value.length > FLUSH_THRESHOLD_CHARS) {
     feeder.push('"');
-    for (let r = 0; r < value.length;) {
-      let min = Math.min(r + FLUSH_THRESHOLD_CHARS, value.length);
+    for (let index = 0; index < value.length;) {
+      let min = Math.min(index + FLUSH_THRESHOLD_CHARS, value.length);
       let code = value.charCodeAt(min - 1);
       if (min < value.length && code >= 55296 && code <= 56319) min--;
-      feeder.push(JSON.stringify(value.slice(r, min)).slice(1, -1));
-      r = min;
+      feeder.push(JSON.stringify(value.slice(index, min)).slice(1, -1));
+      index = min;
     }
     feeder.push('"');
     return;
@@ -67,24 +67,24 @@ function feedCanonicalJson(value, feeder, omitCacheControl, stats) {
   }
   if (Array.isArray(value)) {
     feeder.push("[");
-    value.forEach((r, e) => {
-      if (e > 0) feeder.push(",");
-      feedCanonicalJson(r, feeder, omitCacheControl, stats);
+    value.forEach((item, index) => {
+      if (index > 0) feeder.push(",");
+      feedCanonicalJson(item, feeder, omitCacheControl, stats);
     });
     feeder.push("]");
     return;
   }
   feeder.push("{");
-  let i = true;
+  let equal = true;
   for (let key of Object.keys(value).sort()) {
-    let e = value[key];
+    let valueEntry = value[key];
     if (key === "cache_control" && stats !== undefined) stats.cacheControl = true;
-    if (e === undefined || (omitCacheControl && key === "cache_control")) continue;
-    if (!i) feeder.push(",");
-    i = false;
+    if (valueEntry === undefined || (omitCacheControl && key === "cache_control")) continue;
+    if (!equal) feeder.push(",");
+    equal = false;
     feeder.push(JSON.stringify(key));
     feeder.push(":");
-    feedCanonicalJson(e, feeder, omitCacheControl, stats);
+    feedCanonicalJson(valueEntry, feeder, omitCacheControl, stats);
   }
   feeder.push("}");
 }

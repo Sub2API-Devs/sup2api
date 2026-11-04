@@ -113,12 +113,12 @@ function countLineBreaksInRange(buf, start, end) {
   return n;
 }
 //@ chunk-6zvepy0r.js:19982-20017 layout
-function isUtf8ContinuationByte(e) {
-  return (e & 192) === 128;
+function isUtf8ContinuationByte(byte) {
+  return (byte & 192) === 128;
 }
 //@ chunk-6zvepy0r.js:20017-20068 layout
-function utf8SequenceLength(e) {
-  return e >= 240 ? 4 : e >= 224 ? 3 : e >= 192 ? 2 : 1;
+function utf8SequenceLength(byte) {
+  return byte >= 240 ? 4 : byte >= 224 ? 3 : byte >= 192 ? 2 : 1;
 }
 //@ chunk-6zvepy0r.js:20068-20164 file-local
 function normalizeCRLF(buf, len) {
@@ -145,30 +145,34 @@ async function sliceContext(handle, scratch, matchStart, matchLen, contextLines,
     }
     ctxStart--;
   }
-  let b = matchStart - backRead;
-  for (let idx = 0; idx < 3 && ctxStart < matchStart && isUtf8ContinuationByte(scratch[ctxStart - b]); idx++)
+  let backOffset = matchStart - backRead;
+  for (
+    let idx = 0;
+    idx < 3 && ctxStart < matchStart && isUtf8ContinuationByte(scratch[ctxStart - backOffset]);
+    idx++
+  )
     ctxStart++;
-  let P = matchStart - ctxStart;
-  let lineOffset = linesBeforeMatch - countLineBreaksInRange(scratch, backRead - P, backRead) + 1;
-  let v = matchStart + matchLen;
-  let { bytesRead: fwdRead } = await handle.read(scratch, 0, MAX_DIFF_CONTEXT_BYTES, v);
-  let O = v;
+  let ctxLength = matchStart - ctxStart;
+  let lineOffset = linesBeforeMatch - countLineBreaksInRange(scratch, backRead - ctxLength, backRead) + 1;
+  let end = matchStart + matchLen;
+  let { bytesRead: fwdRead } = await handle.read(scratch, 0, MAX_DIFF_CONTEXT_BYTES, end);
+  let stop = end;
   nlSeen = 0;
   for (let i = 0; i < fwdRead; i++) {
-    O++;
+    stop++;
     if (scratch[i] === DIFF_CONTEXT_LINES_BEFORE) {
       nlSeen++;
       if (nlSeen >= contextLines + 1) break;
     }
   }
-  for (let idx = 0; idx <= 3 && O - 1 - idx >= v; idx++) {
-    let N = scratch[O - 1 - idx - v];
-    if (isUtf8ContinuationByte(N)) continue;
-    if (N >= 192 && utf8SequenceLength(N) > idx + 1) O -= idx + 1;
+  for (let idx = 0; idx <= 3 && stop - 1 - idx >= end; idx++) {
+    let byte = scratch[stop - 1 - idx - end];
+    if (isUtf8ContinuationByte(byte)) continue;
+    if (byte >= 192 && utf8SequenceLength(byte) > idx + 1) stop -= idx + 1;
     break;
   }
-  if (O > v && scratch[O - 1 - v] === DIFF_CONTEXT_LINES_AFTER) O--;
-  let len = O - ctxStart;
+  if (stop > end && scratch[stop - 1 - end] === DIFF_CONTEXT_LINES_AFTER) stop--;
+  let len = stop - ctxStart;
   let out = len <= scratch.length ? scratch : Buffer.allocUnsafe(len);
   let { bytesRead: outRead } = await handle.read(out, 0, len, ctxStart);
   return {

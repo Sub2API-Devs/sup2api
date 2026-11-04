@@ -8,71 +8,89 @@
  * pieces: chunk-18hwfzwa.js (23)
  * attribution: placement 23
  */
-import { init_react_production, y, R, P } from "../../../vendor/react/cjs/react.production.js";
+import {
+  init_react_production,
+  useState,
+  useRef,
+  useEffect,
+} from "../../../vendor/react/cjs/react.production.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { string, u, E, array } from "../../../vendor/zod/v4/classic/schemas.js";
+import { stringSchema, objectSchema, numberSchema, array } from "../../../vendor/zod/v4/classic/schemas.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { setModelFamilyConsent } from "../../utils/planTiers.js";
 import { getMainLoopModel } from "../../utils/model/model.js";
 import { USAGE_SETTINGS_URL } from "../../services/claudeAiLimits.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-18hwfzwa.js:1128195-1128199 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:1128195", () => {
+  init_react_production();
+});
 //@ chunk-18hwfzwa.js:1128249-1128253 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:1128249", () => {
+  init_react_production();
+});
 //@ chunk-18hwfzwa.js:1128253-1129067 placement
 /**
  * 额度提议的 zod 结构：id 字符串、额外额度分档（bonus_pct）、折扣分档（discount_pct）、提议本体（arm_id/kind/headline_pct/default_bundle_id/days_left/custom_bonus_tiers）。
  */
-var offerIdSchema = DoctorLazy(() =>
-  string()
-    .regex(/^[A-Za-z0-9_-]{1,64}$/)
-    .nullable()
-    .optional()
-    .catch(null),
-);
-var bonusTierSchema = DoctorLazy(() =>
-  u({
-    min_pay_minor_units: E().int().min(0),
-    max_pay_minor_units: E().int().min(1).nullable().optional(),
-    local_min_pay_minor_units: E().int().min(0).nullable().optional(),
-    local_max_pay_minor_units: E().int().min(1).nullable().optional(),
-    local_max_bonus_pay_minor_units: E().int().min(0).nullable().optional(),
-    bonus_pct: E().int().min(1).max(300),
-  }),
-);
-var discountTierSchema = DoctorLazy(() =>
-  u({
-    min_credit_minor_units: E().int().min(0),
-    max_credit_minor_units: E().int().min(1).nullable().optional(),
-    discount_pct: E().int().min(1).max(100),
-  }),
-);
-var creditOfferSchema = DoctorLazy(() =>
-  u({
-    arm_id: offerIdSchema(),
-    kind: string(),
-    headline_pct: E().int().min(1).max(300),
-    default_bundle_id: offerIdSchema(),
-    days_left: E().int().min(0).nullable().optional().catch(null),
-    custom_bonus_tiers: array(bonusTierSchema()).nullable().optional().catch(null),
-  }),
-);
+var offerIdSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var bonusTierSchema;
+var discountTierSchema;
+var creditOfferSchema;
+deferInit("chunk-18hwfzwa.js:1128253", () => {
+  offerIdSchema = DoctorLazy(() =>
+    stringSchema()
+      .regex(/^[A-Za-z0-9_-]{1,64}$/)
+      .nullable()
+      .optional()
+      .catch(null),
+  );
+  bonusTierSchema = DoctorLazy(() =>
+    objectSchema({
+      min_pay_minor_units: numberSchema().int().min(0),
+      max_pay_minor_units: numberSchema().int().min(1).nullable().optional(),
+      local_min_pay_minor_units: numberSchema().int().min(0).nullable().optional(),
+      local_max_pay_minor_units: numberSchema().int().min(1).nullable().optional(),
+      local_max_bonus_pay_minor_units: numberSchema().int().min(0).nullable().optional(),
+      bonus_pct: numberSchema().int().min(1).max(300),
+    }),
+  );
+  discountTierSchema = DoctorLazy(() =>
+    objectSchema({
+      min_credit_minor_units: numberSchema().int().min(0),
+      max_credit_minor_units: numberSchema().int().min(1).nullable().optional(),
+      discount_pct: numberSchema().int().min(1).max(100),
+    }),
+  );
+  creditOfferSchema = DoctorLazy(() =>
+    objectSchema({
+      arm_id: offerIdSchema(),
+      kind: stringSchema(),
+      headline_pct: numberSchema().int().min(1).max(300),
+      default_bundle_id: offerIdSchema(),
+      days_left: numberSchema().int().min(0).nullable().optional().catch(null),
+      custom_bonus_tiers: array(bonusTierSchema()).nullable().optional().catch(null),
+    }),
+  );
+});
 //@ chunk-18hwfzwa.js:1129067-1130101 placement
 function parseCreditBundlesOffer(offer) {
   if (offer === undefined || offer === null) return null;
-  let x = creditOfferSchema().safeParse(offer);
-  if (!x.success) {
-    logForDebugging(`[usage-credit-offer] ignoring a malformed bundles offer block: ${x.error.message}`);
+  let parsed = creditOfferSchema().safeParse(offer);
+  if (!parsed.success) {
+    logForDebugging(`[usage-credit-offer] ignoring a malformed bundles offer block: ${parsed.error.message}`);
     return null;
   }
-  let D = x.data;
-  if (D.kind !== "pct_off" && D.kind !== "extra_credit") return null;
-  let L =
-    D.kind === "extra_credit" && D.custom_bonus_tiers
-      ? D.custom_bonus_tiers
+  let data = parsed.data;
+  if (data.kind !== "pct_off" && data.kind !== "extra_credit") return null;
+  let customBonusTiers =
+    data.kind === "extra_credit" && data.custom_bonus_tiers
+      ? data.custom_bonus_tiers
           .filter(
             (customBonusTier) =>
               customBonusTier.max_pay_minor_units === null ||
@@ -83,27 +101,27 @@ function parseCreditBundlesOffer(offer) {
             let maxPayMinorUnits = customBonusTier.max_pay_minor_units ?? null;
             let localMinPayMinorUnits = customBonusTier.local_min_pay_minor_units ?? null;
             let localMaxPayMinorUnits = customBonusTier.local_max_pay_minor_units ?? null;
-            let He =
+            let hasLocalTierBounds =
               localMinPayMinorUnits !== null &&
               (localMaxPayMinorUnits === null) === (maxPayMinorUnits === null) &&
               (localMaxPayMinorUnits === null || localMaxPayMinorUnits > localMinPayMinorUnits);
             return {
               minPayUsdMinor: customBonusTier.min_pay_minor_units,
               maxPayUsdMinor: maxPayMinorUnits,
-              minPayLocalMinor: He ? localMinPayMinorUnits : null,
-              maxPayLocalMinor: He ? localMaxPayMinorUnits : null,
+              minPayLocalMinor: hasLocalTierBounds ? localMinPayMinorUnits : null,
+              maxPayLocalMinor: hasLocalTierBounds ? localMaxPayMinorUnits : null,
               maxBonusPayLocalMinor: customBonusTier.local_max_bonus_pay_minor_units ?? null,
               bonusPct: customBonusTier.bonus_pct,
             };
           })
       : null;
   return {
-    kind: D.kind,
-    headlinePct: D.headline_pct,
-    daysLeft: D.days_left ?? null,
-    defaultBundleId: D.default_bundle_id ?? null,
-    customBonusTiers: L !== null && L.length > 0 ? L : null,
-    armId: D.arm_id ?? null,
+    kind: data.kind,
+    headlinePct: data.headline_pct,
+    daysLeft: data.days_left ?? null,
+    defaultBundleId: data.default_bundle_id ?? null,
+    customBonusTiers: customBonusTiers !== null && customBonusTiers.length > 0 ? customBonusTiers : null,
+    armId: data.arm_id ?? null,
   };
 }
 //@ chunk-18hwfzwa.js:1130101-1130434 placement
@@ -112,69 +130,70 @@ function parseCreditBundlesOffer(offer) {
  */
 function parseDiscountTiers(customDiscountTiers) {
   if (!Array.isArray(customDiscountTiers)) return [];
-  let x = [];
-  for (let D of customDiscountTiers) {
-    let L = discountTierSchema().safeParse(D);
-    if (!L.success) continue;
-    let ee = L.data;
-    let maxCreditMinorUnits = ee.max_credit_minor_units ?? null;
-    if (maxCreditMinorUnits !== null && maxCreditMinorUnits <= ee.min_credit_minor_units) continue;
-    x.push({
-      minCreditUsdMinor: ee.min_credit_minor_units,
+  let tiers = [];
+  for (let rawTier of customDiscountTiers) {
+    let parsed = discountTierSchema().safeParse(rawTier);
+    if (!parsed.success) continue;
+    let tier = parsed.data;
+    let maxCreditMinorUnits = tier.max_credit_minor_units ?? null;
+    if (maxCreditMinorUnits !== null && maxCreditMinorUnits <= tier.min_credit_minor_units) continue;
+    tiers.push({
+      minCreditUsdMinor: tier.min_credit_minor_units,
       maxCreditUsdMinor: maxCreditMinorUnits,
-      discountPct: ee.discount_pct,
+      discountPct: tier.discount_pct,
     });
   }
-  return x;
+  return tiers;
 }
 //@ chunk-18hwfzwa.js:1130434-1130622 placement
 /**
  * 计算本地货币与额度的换算比例（USD 为 1，否则取首个有效价格档推算）。
  */
-function getLocalCurrencyRate(bundles, x) {
-  if (x.toUpperCase() === "USD") return 1;
-  let found = bundles.find((L) => L.credit_minor_units > 0 && L.local_credit_minor_units > 0);
+function getLocalCurrencyRate(bundles, currency) {
+  if (currency.toUpperCase() === "USD") return 1;
+  let found = bundles.find((bundle) => bundle.credit_minor_units > 0 && bundle.local_credit_minor_units > 0);
   return found ? found.credit_minor_units / found.local_credit_minor_units : null;
 }
 //@ chunk-18hwfzwa.js:1130622-1130693 placement
-function discountPercentOfPay(h, x) {
-  if (h <= 0 || x >= h) return 0;
-  return Math.floor(((h - x) * 100) / h);
+function discountPercentOfPay(creditMinor, payMinor) {
+  if (creditMinor <= 0 || payMinor >= creditMinor) return 0;
+  return Math.floor(((creditMinor - payMinor) * 100) / creditMinor);
 }
 //@ chunk-18hwfzwa.js:1130693-1130764 placement
-function percentOfBase(h, x) {
-  if (x <= 0 || h <= x) return 0;
-  return Math.floor(((h - x) * 100) / x);
+function percentOfBase(creditMinor, payMinor) {
+  if (payMinor <= 0 || creditMinor <= payMinor) return 0;
+  return Math.floor(((creditMinor - payMinor) * 100) / payMinor);
 }
 //@ chunk-18hwfzwa.js:1130764-1131026 placement
-function findBonusTier(customBonusTiers, x) {
-  let D = customBonusTiers.length > 0 && customBonusTiers.every((L) => L.minPayLocalMinor !== null);
-  for (let L of customBonusTiers) {
-    let [ee, ke, Re] = D
-      ? [x.localMinor, L.minPayLocalMinor ?? 0, L.maxPayLocalMinor]
-      : [x.usdMinor, L.minPayUsdMinor, L.maxPayUsdMinor];
-    if (ee >= ke && (Re === null || ee < Re)) return L;
+function findBonusTier(customBonusTiers, amount) {
+  let useLocalBounds =
+    customBonusTiers.length > 0 && customBonusTiers.every((tier) => tier.minPayLocalMinor !== null);
+  for (let tier of customBonusTiers) {
+    let [amountMinor, minMinor, maxMinor] = useLocalBounds
+      ? [amount.localMinor, tier.minPayLocalMinor ?? 0, tier.maxPayLocalMinor]
+      : [amount.usdMinor, tier.minPayUsdMinor, tier.maxPayUsdMinor];
+    if (amountMinor >= minMinor && (maxMinor === null || amountMinor < maxMinor)) return tier;
   }
   return null;
 }
 //@ chunk-18hwfzwa.js:1131026-1131228 placement
-function getDiscountPct(discountTiers, x) {
-  let D = 0;
-  let L = -1;
-  for (let ee of discountTiers)
+function getDiscountPct(discountTiers, creditUsdMinor) {
+  let bestPct = 0;
+  let bestMinUsdMinor = -1;
+  for (let tier of discountTiers)
     if (
-      x >= ee.minCreditUsdMinor &&
-      (ee.maxCreditUsdMinor === null || x < ee.maxCreditUsdMinor) &&
-      ee.minCreditUsdMinor > L
+      creditUsdMinor >= tier.minCreditUsdMinor &&
+      (tier.maxCreditUsdMinor === null || creditUsdMinor < tier.maxCreditUsdMinor) &&
+      tier.minCreditUsdMinor > bestMinUsdMinor
     ) {
-      D = ee.discountPct;
-      L = ee.minCreditUsdMinor;
+      bestPct = tier.discountPct;
+      bestMinUsdMinor = tier.minCreditUsdMinor;
     }
-  return D;
+  return bestPct;
 }
 //@ chunk-18hwfzwa.js:1131228-1132312 placement
 function computeCreditOffer({ typedMinor, offer, discountTiers, rate, capRemainingUsdMinor }) {
-  let ke = (withheld = null) => ({
+  let plainOffer = (withheld = null) => ({
     kind: "plain",
     payMinor: typedMinor,
     creditMinor: typedMinor,
@@ -182,81 +201,82 @@ function computeCreditOffer({ typedMinor, offer, discountTiers, rate, capRemaini
     pct: 0,
     withheld,
   });
-  if (rate === null || !Number.isInteger(typedMinor) || typedMinor <= 0) return ke();
-  let Re = (We) =>
+  if (rate === null || !Number.isInteger(typedMinor) || typedMinor <= 0) return plainOffer();
+  let exceedsCap = (creditMinor) =>
     capRemainingUsdMinor !== null &&
-    (capRemainingUsdMinor <= 0 || Math.round(We * rate) > capRemainingUsdMinor);
+    (capRemainingUsdMinor <= 0 || Math.round(creditMinor * rate) > capRemainingUsdMinor);
   if (offer?.kind === "extra_credit") {
     let customBonusTiers = offer.customBonusTiers;
-    if (customBonusTiers === null) return ke();
+    if (customBonusTiers === null) return plainOffer();
     let bonusTier = findBonusTier(customBonusTiers, {
       localMinor: typedMinor,
       usdMinor: Math.round(typedMinor * rate),
     });
-    if (bonusTier === null) return ke();
+    if (bonusTier === null) return plainOffer();
     let bonusPct = bonusTier.bonusPct;
-    let rt = typedMinor + bonusMinorUnits(typedMinor, bonusPct);
+    let creditedMinor = typedMinor + bonusMinorUnits(typedMinor, bonusPct);
     if (bonusTier.maxBonusPayLocalMinor !== null) {
       if (typedMinor > bonusTier.maxBonusPayLocalMinor) {
-        let kt = bonusTier.minPayLocalMinor ?? Math.ceil(bonusTier.minPayUsdMinor / rate);
+        let tierMinLocalMinor = bonusTier.minPayLocalMinor ?? Math.ceil(bonusTier.minPayUsdMinor / rate);
         return {
-          ...ke("bonus"),
-          maxWithBonusMinor: bonusTier.maxBonusPayLocalMinor >= kt ? bonusTier.maxBonusPayLocalMinor : 0,
+          ...plainOffer("bonus"),
+          maxWithBonusMinor:
+            bonusTier.maxBonusPayLocalMinor >= tierMinLocalMinor ? bonusTier.maxBonusPayLocalMinor : 0,
         };
       }
-    } else if (Re(rt)) return ke("bonus");
+    } else if (exceedsCap(creditedMinor)) return plainOffer("bonus");
     return {
       kind: "extra_credit",
       payMinor: typedMinor,
-      creditMinor: rt,
+      creditMinor: creditedMinor,
       amountMinor: typedMinor,
       pct: bonusPct,
       withheld: null,
-      expectedCreditMinor: rt,
+      expectedCreditMinor: creditedMinor,
     };
   }
-  if (discountTiers.length === 0) return ke();
-  let discountPct = getDiscountPct(discountTiers, Math.round(typedMinor * rate));
-  if (discountPct === 0) return ke();
-  if (Re(typedMinor)) return ke("discount");
-  let He = bonusMinorUnits(typedMinor, discountPct);
+  if (discountTiers.length === 0) return plainOffer();
+  let pct = getDiscountPct(discountTiers, Math.round(typedMinor * rate));
+  if (pct === 0) return plainOffer();
+  if (exceedsCap(typedMinor)) return plainOffer("discount");
+  let discountMinor = bonusMinorUnits(typedMinor, pct);
   return {
     kind: "discount",
-    payMinor: typedMinor - He,
+    payMinor: typedMinor - discountMinor,
     creditMinor: typedMinor,
     amountMinor: typedMinor,
-    pct: discountPct,
+    pct,
     withheld: null,
-    expectedPriceMinor: typedMinor - He,
+    expectedPriceMinor: typedMinor - discountMinor,
   };
 }
 //@ chunk-18hwfzwa.js:1132312-1132362 placement
-function bonusMinorUnits(typedMinor, x) {
-  return Math.floor((typedMinor * x + 50) / 100);
+function bonusMinorUnits(typedMinor, pct) {
+  return Math.floor((typedMinor * pct + 50) / 100);
 }
 //@ chunk-18hwfzwa.js:1132362-1132398 placement
-function selectBonusPct(Yo) {
-  return Yo.bonusPct;
+function selectBonusPct(tier) {
+  return tier.bonusPct;
 }
 //@ chunk-18hwfzwa.js:1132398-1132433 placement
-function toBinaryFlag(wn) {
-  return wn === 0 ? 1 : 0;
+function toBinaryFlag(attempts) {
+  return attempts === 0 ? 1 : 0;
 }
 //@ chunk-18hwfzwa.js:1132433-1132474 placement
-function decrementClamped(mr) {
-  return Math.max(0, mr - 1);
+function decrementClamped(index) {
+  return Math.max(0, index - 1);
 }
 //@ chunk-18hwfzwa.js:1132474-1132512 placement
-function decrementOrZero(da) {
-  return da === 0 ? 0 : da - 1;
+function decrementOrZero(index) {
+  return index === 0 ? 0 : index - 1;
 }
 //@ chunk-18hwfzwa.js:1132512-1132550 placement
-function incrementCappedAtTwo(qn) {
-  return qn === 2 ? 2 : qn + 1;
+function incrementCappedAtTwo(index) {
+  return index === 2 ? 2 : index + 1;
 }
 //@ chunk-18hwfzwa.js:1132550-1132591 placement
-function decrementClampedLower(ps) {
-  return Math.max(0, ps - 1);
+function decrementClampedLower(index) {
+  return Math.max(0, index - 1);
 }
 //@ chunk-18hwfzwa.js:1132591-1132619 placement
 function applyEffortOverride(storageV5) {
@@ -266,17 +286,27 @@ function applyEffortOverride(storageV5) {
 /**
  * 购买用量额度相关常量：设置页与条款链接、金额上下限与轮询参数。
  */
-var USAGE_SETTINGS_LINK = USAGE_SETTINGS_URL;
-var CONSUMER_TERMS_URL = "https://www.anthropic.com/legal/consumer-terms";
-var CREDIT_POLL_INTERVAL_MS = 2000;
-var CREDIT_MAX_POLL_COUNT = 30;
-var CREDIT_MIN_AMOUNT_CENTS = 500;
-var CREDIT_AMOUNT_STEP_CENTS = 1000;
-var CREDIT_PRESET_AMOUNTS_CENTS = 1e5;
-var CREDIT_MAX_AMOUNT_CENTS = 1e6;
+var USAGE_SETTINGS_LINK; // deferred: uses USAGE_SETTINGS_URL (../../services/claudeAiLimits.js) of its import cycle while loading; runs once the cycle is complete
+var CONSUMER_TERMS_URL;
+var CREDIT_POLL_INTERVAL_MS;
+var CREDIT_MAX_POLL_COUNT;
+var CREDIT_MIN_AMOUNT_CENTS;
+var CREDIT_AMOUNT_STEP_CENTS;
+var CREDIT_PRESET_AMOUNTS_CENTS;
+var CREDIT_MAX_AMOUNT_CENTS;
+deferInit("chunk-18hwfzwa.js:1132619", () => {
+  USAGE_SETTINGS_LINK = USAGE_SETTINGS_URL;
+  CONSUMER_TERMS_URL = "https://www.anthropic.com/legal/consumer-terms";
+  CREDIT_POLL_INTERVAL_MS = 2000;
+  CREDIT_MAX_POLL_COUNT = 30;
+  CREDIT_MIN_AMOUNT_CENTS = 500;
+  CREDIT_AMOUNT_STEP_CENTS = 1000;
+  CREDIT_PRESET_AMOUNTS_CENTS = 1e5;
+  CREDIT_MAX_AMOUNT_CENTS = 1e6;
+});
 //@ chunk-18hwfzwa.js:1132731-1133109 placement
-function parseAmountInput(h) {
-  let trimmed = h.trim();
+function parseAmountInput(text) {
+  let trimmed = text.trim();
   if (trimmed === "")
     return {
       ok: false,
@@ -288,108 +318,108 @@ function parseAmountInput(h) {
       ok: false,
       error: "Enter an amount like 20 or 20.50",
     };
-  let L = Number(match[1]) * 100 + Number((match[2] ?? "").padEnd(2, "0"));
-  if (L <= 0)
+  let cents = Number(match[1]) * 100 + Number((match[2] ?? "").padEnd(2, "0"));
+  if (cents <= 0)
     return {
       ok: false,
       error: "Enter an amount",
     };
-  if (L > CREDIT_MAX_AMOUNT_CENTS)
+  if (cents > CREDIT_MAX_AMOUNT_CENTS)
     return {
       ok: false,
       error: `Enter an amount of ${CREDIT_MAX_AMOUNT_CENTS / 100} or less`,
     };
   return {
     ok: true,
-    cents: L,
+    cents,
   };
 }
 //@ chunk-18hwfzwa.js:1133109-1133174 placement
-function formatDollarAmount(h) {
-  return h % 100 === 0 ? String(h / 100) : (h / 100).toFixed(2);
+function formatDollarAmount(cents) {
+  return cents % 100 === 0 ? String(cents / 100) : (cents / 100).toFixed(2);
 }
 //@ chunk-18hwfzwa.js:1133174-1134082 placement
-function useAmountInputBuffer(h) {
-  let $ = w(6);
-  let [x, D] = y(h);
-  let [L, ee] = y(h.length);
-  let ke = R(true);
-  let Re = R(h);
-  let Be = R(h.length);
-  let He = R(false);
-  let We = R(null);
-  let ze = R(false);
-  let rt;
+function useAmountInputBuffer(initialValue) {
+  let $ = useMemoCache(6);
+  let [value, setValue] = useState(initialValue);
+  let [cursor, setCursor] = useState(initialValue.length);
+  let isFirstChangeRef = useRef(true);
+  let currentValueRef = useRef(initialValue);
+  let cursorRef = useRef(initialValue.length);
+  let cursorMovedRef = useRef(false);
+  let pendingCursorRef = useRef(null);
+  let isReplacingRef = useRef(false);
+  let resetOnMount;
   if ($[0] === MEMO_CACHE_SENTINEL) {
-    rt = () => {
-      ze.current = false;
+    resetOnMount = () => {
+      isReplacingRef.current = false;
     };
-    $[0] = rt;
-  } else rt = $[0];
-  P(rt);
-  let kt;
+    $[0] = resetOnMount;
+  } else resetOnMount = $[0];
+  useEffect(resetOnMount);
+  let setValueGuarded;
   if ($[1] === MEMO_CACHE_SENTINEL) {
-    let Et = (At, It) => {
-      let sliced = At.slice(It.length);
-      D(sliced);
-      We.current = sliced.length;
-      Be.current = sliced.length;
-      ee(sliced.length);
+    let applyReplacement = (nextText, oldText) => {
+      let sliced = nextText.slice(oldText.length);
+      setValue(sliced);
+      pendingCursorRef.current = sliced.length;
+      cursorRef.current = sliced.length;
+      setCursor(sliced.length);
     };
-    kt = (Dt) => {
-      let Lt = Re.current;
-      if (ke.current) {
-        ke.current = false;
+    setValueGuarded = (nextText) => {
+      let oldText = currentValueRef.current;
+      if (isFirstChangeRef.current) {
+        isFirstChangeRef.current = false;
         if (
-          Lt !== "" &&
-          !He.current &&
-          Be.current === Lt.length &&
-          Dt.length > Lt.length &&
-          Dt.startsWith(Lt)
+          oldText !== "" &&
+          !cursorMovedRef.current &&
+          cursorRef.current === oldText.length &&
+          nextText.length > oldText.length &&
+          nextText.startsWith(oldText)
         ) {
-          ze.current = true;
-          Et(Dt, Lt);
+          isReplacingRef.current = true;
+          applyReplacement(nextText, oldText);
           return;
         }
-      } else if (ze.current && Dt.startsWith(Lt)) {
-        Et(Dt, Lt);
+      } else if (isReplacingRef.current && nextText.startsWith(oldText)) {
+        applyReplacement(nextText, oldText);
         return;
       }
-      D(Dt);
+      setValue(nextText);
     };
-    $[1] = kt;
-  } else kt = $[1];
-  let setValue = kt;
-  let Xt;
+    $[1] = setValueGuarded;
+  } else setValueGuarded = $[1];
+  let setValue_2 = setValueGuarded;
+  let handleCursorChange;
   if ($[2] === MEMO_CACHE_SENTINEL) {
-    Xt = (io) => {
-      let so = We.current;
-      if (so !== null) {
-        We.current = null;
-        Be.current = so;
-        ee(so);
+    handleCursorChange = (nextCursor) => {
+      let pendingCursor = pendingCursorRef.current;
+      if (pendingCursor !== null) {
+        pendingCursorRef.current = null;
+        cursorRef.current = pendingCursor;
+        setCursor(pendingCursor);
         return;
       }
-      if (io !== Re.current.length) He.current = true;
-      Be.current = io;
-      ee(io);
+      if (nextCursor !== currentValueRef.current.length) cursorMovedRef.current = true;
+      cursorRef.current = nextCursor;
+      setCursor(nextCursor);
     };
-    $[2] = Xt;
-  } else Xt = $[2];
-  let setCursor = Xt;
-  let ao;
-  if ($[3] !== L || $[4] !== x) {
-    ao = {
-      value: x,
-      setValue,
-      cursor: L,
-      setCursor,
+    $[2] = handleCursorChange;
+  } else handleCursorChange = $[2];
+  let setCursor_2 = handleCursorChange;
+  let bufferState;
+  if ($[3] !== cursor || $[4] !== value) {
+    bufferState = {
+      value,
+      setValue: setValue_2,
+      cursor,
+      setCursor: setCursor_2,
     };
-    $[3] = L;
-    $[4] = x;
-    $[5] = ao;
-  } else ao = $[5];
-  return ao;
+    $[3] = cursor;
+    $[4] = value;
+    $[5] = bufferState;
+  } else bufferState = $[5];
+  return bufferState;
 }
 export {
   parseCreditBundlesOffer,

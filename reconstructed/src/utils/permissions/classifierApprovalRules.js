@@ -8,28 +8,33 @@
  * pieces: chunk-f25sswmp.js (3)
  * attribution: placement 3
  */
-import { hasPinnedDigest, SHA256_DIGEST_SUFFIX } from "../../cli/transports/ccrMessageMapping.js";
+import { hasPinnedDigest, SHA256_DIGEST_SUFFIX_RE } from "../../cli/transports/ccrMessageMapping.js";
 import { SKILL } from "../../tools/SkillTool/skillToolNames.js";
 
 //@ chunk-f25sswmp.js:14170-14217 placement
 /**
  * isPinnedOrWildcardRule：规则带固定摘要或以 :* 结尾。
  */
-function isPinnedOrWildcardRule(e) {
-  return hasPinnedDigest(e) || e.endsWith(":*");
+function isPinnedOrWildcardRule(rule) {
+  return hasPinnedDigest(rule) || rule.endsWith(":*");
 }
 //@ chunk-f25sswmp.js:14217-14453 placement
 /**
  * 若建议只有一条 Skill 的 allow 规则且内容带 SHA-256 摘要后缀，返回该规则内容。
  */
 function getSkillDigestRule(permissionResult) {
-  let [n, ...r] = permissionResult.suggestions ?? [];
-  let s =
-    r.length === 0 && n?.type === "addRules" && n.behavior === "allow" && n.rules.length === 1
-      ? n.rules[0]
+  let [firstSuggestion, ...otherSuggestions] = permissionResult.suggestions ?? [];
+  let rule =
+    otherSuggestions.length === 0 &&
+    firstSuggestion?.type === "addRules" &&
+    firstSuggestion.behavior === "allow" &&
+    firstSuggestion.rules.length === 1
+      ? firstSuggestion.rules[0]
       : undefined;
-  return s?.toolName === SKILL && s.ruleContent !== undefined && SHA256_DIGEST_SUFFIX.test(s.ruleContent)
-    ? s.ruleContent
+  return rule?.toolName === SKILL &&
+    rule.ruleContent !== undefined &&
+    SHA256_DIGEST_SUFFIX_RE.test(rule.ruleContent)
+    ? rule.ruleContent
     : undefined;
 }
 //@ chunk-f25sswmp.js:14453-14476 placement

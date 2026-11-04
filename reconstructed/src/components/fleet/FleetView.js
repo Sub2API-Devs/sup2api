@@ -142,14 +142,14 @@ import { listRepoWorktrees } from "../../utils/worktree.js";
 import { getCommands, isSkillOff, getHumanFacingDescription } from "../../commands.js";
 import {
   init_react_production,
-  R,
-  P,
-  y,
-  Q,
-  ce,
-  Uy,
-  zt,
-  Se,
+  useRef,
+  useEffect,
+  useState,
+  useMemo,
+  useCallback,
+  useReducer,
+  useLayoutEffect,
+  useContext,
 } from "../../../vendor/react/cjs/react.production.js";
 import { truncateWithEllipsis } from "../../services/sessionStatus/sessionStateClassifier.js";
 import { useTerminalNotification } from "../../ink/useTerminalNotification.js";
@@ -206,7 +206,7 @@ import { getAuthTokenSource } from "../../utils/auth.js";
 import { env } from "../../utils/env.js";
 import { usePasteHandler } from "../../hooks/usePasteHandler.js";
 import { PasteEvent } from "../../ink/frame.js";
-import { kp } from "../../../vendor/convert-to-spaces/dist/index.js";
+import { APP_CONTEXT } from "../../../vendor/convert-to-spaces/dist/index.js";
 import { PromptInputFooterSuggestions } from "../PromptInput/PromptInputFooterSuggestions.js";
 import { getTerminalSize } from "../../ink/ink.js";
 import { eraseViewportInPlace, getEraseScreenSequence } from "../../ink/clearTerminal.js";
@@ -243,80 +243,81 @@ import { isTerminalShutdown, heldUntilExit } from "../../utils/terminalShutdown.
 import { getBaseRenderOptions } from "../../utils/renderOptions.js";
 
 //@ chunk-93kwxas0.js:5808-5932 placement
-function fleetAttachFields(id, E, k) {
+function fleetAttachFields(id, originJobId, visitCount) {
   return {
-    attach_kind: !E ? lit("no_origin") : id === E ? lit("origin_return") : lit("other"),
-    is_first_attach_of_visit: k === 0,
+    attach_kind: !originJobId ? lit("no_origin") : id === originJobId ? lit("origin_return") : lit("other"),
+    is_first_attach_of_visit: visitCount === 0,
   };
 }
 //@ chunk-93kwxas0.js:163196-164309 placement
 /**
  * 在同组内上下移动当前会话（固定排序）。
  */
-function reorderFocusedJob(h, E) {
-  let { roster, selection, editor } = h.submit;
-  let { rows, pendings, byGroup, byState, simpleView } = h;
+function reorderFocusedJob(context, direction) {
+  let { roster, selection, editor } = context.submit;
+  let { rows, pendings, byGroup, byState, simpleView } = context;
   let setError = editor.setError;
   if (selection.reorderIssued) return;
   let focusedIdx = selection.getSnapshot().focusedIdx;
-  let X = rows[focusedIdx];
-  if (X?.kind !== "job") return;
-  let K = focusedIdx + E;
-  while (rows[K]?.kind === "earlier") K += E;
-  let W = rows[K];
-  if (W?.kind !== "job" || X.group !== W.group) return;
-  let job = X.job;
-  let job_2 = W.job;
+  let focusedRow = rows[focusedIdx];
+  if (focusedRow?.kind !== "job") return;
+  let targetIdx = focusedIdx + direction;
+  while (rows[targetIdx]?.kind === "earlier") targetIdx += direction;
+  let targetRow = rows[targetIdx];
+  if (targetRow?.kind !== "job" || focusedRow.group !== targetRow.group) return;
+  let job = focusedRow.job;
+  let job_2 = targetRow.job;
   if (pendings.some((pending) => pending.id === job.id || pending.id === job_2.id)) return;
   if (job.state.backend !== "daemon" || job_2.state.backend !== "daemon") return;
   setError(null);
-  let ge = X.group === "pinned" || X.group === SIMPLE_PINNED;
-  if ((byGroup || simpleView) && !ge) return;
-  let se = byState && !ge;
-  let ne = se ? (Oe) => jobSortKey_2(Oe, X.group) : jobSortKey;
-  let ae = ne(job.state);
-  let me = ne(job_2.state);
-  let Je = new Map();
-  if (ae === me) {
-    let Oe = new Set(pendings.map((pending) => pending.id));
-    let De = 0;
-    for (let Re of rows)
-      if (Re.kind === "job" && Re.group === X.group && !Oe.has(Re.job.id)) Je.set(Re.job.id, De++);
-    let we = Je.get(job.id);
-    Je.set(job.id, Je.get(job_2.id));
-    Je.set(job_2.id, we);
+  let isPinnedGroup = focusedRow.group === "pinned" || focusedRow.group === SIMPLE_PINNED;
+  if ((byGroup || simpleView) && !isPinnedGroup) return;
+  let sortByState = byState && !isPinnedGroup;
+  let sortKey = sortByState ? (job) => jobSortKey_2(job, focusedRow.group) : jobSortKey;
+  let focusedKey = sortKey(job.state);
+  let targetKey = sortKey(job_2.state);
+  let orders = new Map();
+  if (focusedKey === targetKey) {
+    let pendingIds = new Set(pendings.map((pending) => pending.id));
+    let nextOrder = 0;
+    for (let row of rows)
+      if (row.kind === "job" && row.group === focusedRow.group && !pendingIds.has(row.job.id))
+        orders.set(row.job.id, nextOrder++);
+    let focusedOrder = orders.get(job.id);
+    orders.set(job.id, orders.get(job_2.id));
+    orders.set(job_2.id, focusedOrder);
   } else {
-    Je.set(job.id, me);
-    Je.set(job_2.id, ae);
+    orders.set(job.id, targetKey);
+    orders.set(job_2.id, focusedKey);
   }
-  selection.beginReorder(job.id, K);
+  selection.beginReorder(job.id, targetIdx);
   roster.bumpGen();
-  let le = se ? "stateSortOrder" : "sortOrder";
-  roster.updateJobs((Oe) =>
-    Oe
+  let orderField = sortByState ? "stateSortOrder" : "sortOrder";
+  roster.updateJobs((jobs) =>
+    jobs
       ? sortJobs(
-          Oe.map((De) => {
-            let we = Je.get(De.id);
-            return we === undefined
-              ? De
+          jobs.map((job) => {
+            let order = orders.get(job.id);
+            return order === undefined
+              ? job
               : {
-                  ...De,
+                  ...job,
                   state: {
-                    ...De.state,
-                    [le]: we,
+                    ...job.state,
+                    [orderField]: order,
                   },
                 };
           }),
         )
-      : Oe,
+      : jobs,
   );
-  selection.queueOrderWrites(Je, se ? "state" : "directory");
+  selection.queueOrderWrites(orders, sortByState ? "state" : "directory");
 }
 //@ chunk-93kwxas0.js:164309-177025 placement
 /**
  * Agents 视图的键盘处理：导航、打开、派发、重命名、分组、删除、搜索、vim 模式等。
  */
-function handleFleetKey(h, event) {
+function handleFleetKey(ctx, event) {
   let {
     editor,
     roster,
@@ -339,7 +340,7 @@ function handleFleetKey(h, event) {
     openEarlier,
     openNewSessionRow,
     openOrRespawn,
-  } = h.submit;
+  } = ctx.submit;
   let {
     deleteConfirm,
     rows,
@@ -383,10 +384,10 @@ function handleFleetKey(h, event) {
     setSelectedSuggestion,
     setHoveredSuggestionId,
     attachPastedImage,
-  } = h;
-  let rt = (Ce) => editor.setMode(Ce);
+  } = ctx;
+  let setEditorMode = (mode) => editor.setMode(mode);
   let { setError, setHint } = editor;
-  let St = () => clearFleetOfferState(attach, editor);
+  let clearOfferState = () => clearFleetOfferState(attach, editor);
   if (event.key !== " ") view.cancelPeekTap();
   if (
     simpleView &&
@@ -395,12 +396,12 @@ function handleFleetKey(h, event) {
     event.name !== "escape"
   )
     deleteConfirm.disarm();
-  let Ne = () => {
+  let consumeEvent = () => {
     event.preventDefault();
     event.stopImmediatePropagation();
   };
   if (renamingJobId !== null || view.getSnapshot().renaming !== null) {
-    Ne();
+    consumeEvent();
     if (event.ctrl && event.key === "c") {
       clearRename();
       return;
@@ -410,7 +411,7 @@ function handleFleetKey(h, event) {
     return;
   }
   if (groupEdit !== null) {
-    Ne();
+    consumeEvent();
     if (event.ctrl && event.key === "c") {
       clearGroupEdit();
       return;
@@ -459,12 +460,13 @@ function handleFleetKey(h, event) {
       groupKeyDown(event);
       return;
     }
-    let Ce = groupSuggestions;
+    let suggestions = groupSuggestions;
     let trimmed = readGroupDraft().trim();
-    let at = trimmed === "" || trimmed === groupEdit.cur;
+    let isPristine = trimmed === "" || trimmed === groupEdit.cur;
     let groupPickIdx = view.getSnapshot().groupPickIdx;
     if (event.name === "down") {
-      if (Ce.length > 0 && !at) view.setGroupPickIdx(Math.min(groupPickIdx + 1, Ce.length - 1));
+      if (suggestions.length > 0 && !isPristine)
+        view.setGroupPickIdx(Math.min(groupPickIdx + 1, suggestions.length - 1));
       return;
     }
     if (event.name === "up") {
@@ -476,10 +478,10 @@ function handleFleetKey(h, event) {
       return;
     }
     if (event.name === "tab") {
-      if (at) return;
-      let so = Ce[Math.max(groupPickIdx, 0)];
-      if (so !== undefined) {
-        setGroupDraft(so);
+      if (isPristine) return;
+      let suggestion = suggestions[Math.max(groupPickIdx, 0)];
+      if (suggestion !== undefined) {
+        setGroupDraft(suggestion);
         view.setGroupPickIdx(-1);
       }
       return;
@@ -490,16 +492,16 @@ function handleFleetKey(h, event) {
   }
   let resumePicker = view.getSnapshot().resumePicker;
   if (resumePicker !== null) {
-    Ne();
+    consumeEvent();
     if ((event.ctrl && event.key === "c") || event.name === "escape" || event.meta) {
       view.closeResumePicker();
       return;
     }
     let entries = resumePicker.entries;
-    let Ke = entries?.length ?? 0;
+    let entryCount = entries?.length ?? 0;
     let resumePickerIdx = view.getSnapshot().resumePickerIdx;
     if (event.name === "down" || (event.ctrl && event.key === "n")) {
-      view.setResumePickerIdx(Math.min(resumePickerIdx + 1, Math.max(0, Ke - 1)));
+      view.setResumePickerIdx(Math.min(resumePickerIdx + 1, Math.max(0, entryCount - 1)));
       return;
     }
     if (event.name === "up" || (event.ctrl && event.key === "p")) {
@@ -507,22 +509,23 @@ function handleFleetKey(h, event) {
       return;
     }
     if (event.name === "return") {
-      let Mt = entries?.[resumePickerIdx];
-      if (Mt !== undefined) {
-        let so = roster.isDeleting(Mt.sessionId.slice(0, 8)) || roster.isDeletingSession(Mt.sessionId);
-        if (jobSessionIds.has(Mt.sessionId) || so) {
-          logFeatureSad("fleet_view_resume_picker", so ? "deleting_in_flight" : "already_in_list");
+      let entry = entries?.[resumePickerIdx];
+      if (entry !== undefined) {
+        let isDeleting =
+          roster.isDeleting(entry.sessionId.slice(0, 8)) || roster.isDeletingSession(entry.sessionId);
+        if (jobSessionIds.has(entry.sessionId) || isDeleting) {
+          logFeatureSad("fleet_view_resume_picker", isDeleting ? "deleting_in_flight" : "already_in_list");
           view.refuseResumePick(Date.now());
           setError(
-            so
+            isDeleting
               ? "This session is being deleted \u2014 reopen /resume once it finishes"
               : "This session is already in the list \u2014 press enter on its row",
           );
           return;
         }
-        view.resumePromoteSessionId = Mt.sessionId;
+        view.resumePromoteSessionId = entry.sessionId;
         view.closeResumePicker();
-        openEarlier(Mt, "resume_picker");
+        openEarlier(entry, "resume_picker");
       }
       return;
     }
@@ -530,7 +533,7 @@ function handleFleetKey(h, event) {
   }
   let settingPicker = view.getSnapshot().settingPicker;
   if (settingPicker !== null) {
-    Ne();
+    consumeEvent();
     if ((event.ctrl && event.key === "c") || event.name === "escape" || event.meta) {
       view.closeSettingPicker();
       return;
@@ -545,23 +548,23 @@ function handleFleetKey(h, event) {
       return;
     }
     if (event.name === "return") {
-      let Ke = settingPicker.options[settingPickerIdx];
+      let option = settingPicker.options[settingPickerIdx];
       view.closeSettingPicker();
-      if (Ke !== undefined)
+      if (option !== undefined)
         setDispatchWindowValue(
           editor,
-          h.submit.dispatchDefaults,
+          ctx.submit.dispatchDefaults,
           settingPicker.setting,
-          Ke.value,
+          option.value,
           view.getSnapshot().activeTab === "remote",
         );
     }
     return;
   }
   if (view.resumePickerRefusedAt !== 0) {
-    let Ce = Date.now() - view.resumePickerRefusedAt;
-    if (Ce >= 0 && Ce < RENAME_SAVE_WAIT_MS && event.name === "return") {
-      Ne();
+    let sinceRefusalMs = Date.now() - view.resumePickerRefusedAt;
+    if (sinceRefusalMs >= 0 && sinceRefusalMs < RENAME_SAVE_WAIT_MS && event.name === "return") {
+      consumeEvent();
       return;
     }
     view.clearResumePickerRefusal();
@@ -572,23 +575,23 @@ function handleFleetKey(h, event) {
     attachingJobId === null &&
     attach.isPromoting(resumePromoteSessionId)
   ) {
-    Ne();
+    consumeEvent();
     if ((event.ctrl && event.key === "c") || event.name === "escape") view.resumePromoteSessionId = null;
     return;
   }
   view.resumePromoteSessionId = null;
   if (attach.getSnapshot().newSessionOpening) {
-    Ne();
+    consumeEvent();
     if ((event.ctrl && event.key === "c") || event.name === "escape") attach.abandonNewSession();
     return;
   }
   let fleetKeyAction = resolveFleetKeyAction(keyEventToKeystroke(event), keybindings);
   if (attachingJobId !== null) {
-    Ne();
+    consumeEvent();
     if ((event.ctrl && event.key === "c") || event.name === "escape") {
       attach.abandonRespawnAttempt();
-      let Ce = attach.disarm();
-      if (Ce !== null) clearAttachBeacon(Ce, storageV5).catch(() => {});
+      let jobId = attach.disarm();
+      if (jobId !== null) clearAttachBeacon(jobId, storageV5).catch(() => {});
       attach.dropWarming(attachingJobId);
       return;
     }
@@ -604,29 +607,30 @@ function handleFleetKey(h, event) {
           !previewOpen &&
           editor.getSnapshot().query.includes(`
 `)) ||
-        (jumpGroupHeader(h, fleetKeyAction, focusedIdx) ??
-          nextFocusableRow(h, focusedIdx, event.name === "down" || event.key === "n" ? 1 : -1)) === focusedIdx
+        (jumpGroupHeader(ctx, fleetKeyAction, focusedIdx) ??
+          nextFocusableRow(ctx, focusedIdx, event.name === "down" || event.key === "n" ? 1 : -1)) ===
+          focusedIdx
       )
         return;
       attach.abandonRespawnAttempt();
-      let Ce = attach.disarm();
-      if (Ce !== null) clearAttachBeacon(Ce, storageV5).catch(() => {});
+      let attachingJobId = attach.disarm();
+      if (attachingJobId !== null) clearAttachBeacon(attachingJobId, storageV5).catch(() => {});
     } else return;
   }
   if (event.ctrl && event.key === "c") {
-    Ne();
+    consumeEvent();
     if (helpOpen || debugOpen) {
       view.setHelpOpen(false);
       view.setDebugOpen(false);
       return;
     }
     if (editor.getSnapshot().query) setQuery("");
-    if (editor.getSnapshot().mode === "bash") rt("prompt");
+    if (editor.getSnapshot().mode === "bash") setEditorMode("prompt");
     pressExitKey("Ctrl-C");
     return;
   }
   if (event.name === "escape") {
-    Ne();
+    consumeEvent();
     if (previewOpen) view.setPreviewOpen(false);
     else if (helpOpen) view.setHelpOpen(false);
     else if (debugOpen) view.setDebugOpen(false);
@@ -639,7 +643,7 @@ function handleFleetKey(h, event) {
       if (deleteConfirm.pending) deleteConfirm.dismiss();
       searchKeyDown(event);
     } else if (editor.getSnapshot().query) setQuery("");
-    else if (editor.getSnapshot().mode === "bash") rt("prompt");
+    else if (editor.getSnapshot().mode === "bash") setEditorMode("prompt");
     else if (deleteConfirm.pending) deleteConfirm.dismiss();
     else
       switch (
@@ -683,138 +687,139 @@ function handleFleetKey(h, event) {
     suggestions.length === 0 &&
     !previewOpen
   ) {
-    Ne();
-    reorderFocusedJob(h, event.name === "up" ? -1 : 1);
+    consumeEvent();
+    reorderFocusedJob(ctx, event.name === "up" ? -1 : 1);
     return;
   }
   if (fleetKeyAction === "agents:switchView") {
-    Ne();
+    consumeEvent();
     if (simpleView) return;
     if (!selection.getSnapshot().draftPick) {
       selection.followId = focused?.id ?? null;
       selection.followOrigin = null;
     }
     deleteConfirm.disarm();
-    let Ce = groupsEnabled ? ["state", "directory", "group"] : ["state", "directory"];
-    let index = Ce.indexOf(view.getSnapshot().groupMode);
-    let at = Ce[(index + 1) % Ce.length];
-    if (at === "group") logFeatureOk("fleet_view_group_mode");
-    view.setGroupMode(at);
+    let modes = groupsEnabled ? ["state", "directory", "group"] : ["state", "directory"];
+    let index = modes.indexOf(view.getSnapshot().groupMode);
+    let nextMode = modes[(index + 1) % modes.length];
+    if (nextMode === "group") logFeatureOk("fleet_view_group_mode");
+    view.setGroupMode(nextMode);
     saveGlobalConfig(
-      (Mt) =>
-        Mt.fleetViewGroupMode === at
-          ? Mt
+      (config) =>
+        config.fleetViewGroupMode === nextMode
+          ? config
           : {
-              ...Mt,
-              fleetViewGroupMode: at,
+              ...config,
+              fleetViewGroupMode: nextMode,
             },
       storageV5,
     );
     return;
   }
   if (fleetKeyAction === "chat:externalEditor" && !previewOpen && !simpleView) {
-    Ne();
-    let Ce = editPromptInEditor(editor.getSnapshot().query);
-    if (Ce.content !== null && Ce.content !== editor.getSnapshot().query) setQuery(Ce.content);
-    if (Ce.error) setError(Ce.error);
+    consumeEvent();
+    let edited = editPromptInEditor(editor.getSnapshot().query);
+    if (edited.content !== null && edited.content !== editor.getSnapshot().query) setQuery(edited.content);
+    if (edited.error) setError(edited.error);
     return;
   }
   if (fleetKeyAction === "agents:togglePin") {
-    Ne();
-    let Ce = rows[selection.getSnapshot().focusedIdx];
-    let job = Ce?.kind === "job" ? Ce.job : undefined;
+    consumeEvent();
+    let focusedRow = rows[selection.getSnapshot().focusedIdx];
+    let job = focusedRow?.kind === "job" ? focusedRow.job : undefined;
     if (!job || pendings.some((pending) => pending.id === job.id)) return;
-    let at = false;
-    let Mt = at ? remoteRowIdOf(job) : undefined;
-    if (at && Mt === undefined) {
+    let isRemote = false;
+    let remoteRowId = isRemote ? remoteRowIdOf(job) : undefined;
+    if (isRemote && remoteRowId === undefined) {
       setError(STILL_STARTING_MESSAGE);
       return;
     }
-    if (job.state.backend !== "daemon" && !at) {
+    if (job.state.backend !== "daemon" && !isRemote) {
       setError("Can't pin a session that's running in another terminal");
       logFeatureOk("fleet_view_pin_toggle");
       return;
     }
     let id = job.id;
-    let vo = !(
-      (at ? roster.getSnapshot().remoteJobs : roster.jobs)?.find((no) => no.id === id)?.state.pinned ??
-      job.state.pinned
+    let nextPinned = !(
+      (isRemote ? roster.getSnapshot().remoteJobs : roster.jobs)?.find((job) => job.id === id)?.state
+        .pinned ?? job.state.pinned
     );
     selection.followId = id;
-    if (vo) selection.uncollapse(ck("pinned"));
-    if (at && Mt !== undefined) {
+    if (nextPinned) selection.uncollapse(ck("pinned"));
+    if (isRemote && remoteRowId !== undefined) {
       if (editor.getSnapshot().error === STILL_STARTING_MESSAGE) setError(null);
       roster
-        .markRemoteRow(Mt, (no) => ({
-          ...no,
-          pinned: vo ? true : undefined,
+        .markRemoteRow(remoteRowId, (mark) => ({
+          ...mark,
+          pinned: nextPinned ? true : undefined,
         }))
-        .then((no) => {
-          if (no) logFeatureOk("fleet_view_pin_toggle");
+        .then((saved) => {
+          if (saved) logFeatureOk("fleet_view_pin_toggle");
           else logFleetActionFailure(setError, "fleet_view_pin_toggle");
         });
       return;
     }
     roster.bumpGen();
     roster.updateJobs(
-      (no) =>
-        no?.map((_e) =>
-          _e.id === id
+      (jobs) =>
+        jobs?.map((job) =>
+          job.id === id
             ? {
-                ..._e,
+                ...job,
                 state: {
-                  ..._e.state,
-                  pinned: vo,
+                  ...job.state,
+                  pinned: nextPinned,
                 },
               }
-            : _e,
-        ) ?? no,
+            : job,
+        ) ?? jobs,
     );
-    let zo = roster.holdJob(id);
-    writeJobPinned(id, vo, storageV5)
+    let releaseHold = roster.holdJob(id);
+    writeJobPinned(id, nextPinned, storageV5)
       .then(() => {
         logFeatureOk("fleet_view_pin_toggle");
       })
       .catch((error) => {
         logError(error);
-        setError(`Couldn't ${vo ? "pin" : "unpin"} \u2014 ${errorMessage(error)}`);
+        setError(`Couldn't ${nextPinned ? "pin" : "unpin"} \u2014 ${errorMessage(error)}`);
         logFeatureBad("fleet_view_pin_toggle", "pin_write_failed");
         roster.reload();
       })
-      .finally(zo);
+      .finally(releaseHold);
     return;
   }
-  let pt =
+  let findQuery =
     fleetKeyAction === "agents:find" && !previewOpen && !simpleView && editor.getSnapshot().mode === "prompt"
       ? parseNewSessionPrefix(editor.getSnapshot().query)
       : null;
-  if (pt !== null) {
-    Ne();
+  if (findQuery !== null) {
+    consumeEvent();
     let { query, cursorOffset } = editor.getSnapshot();
-    let at = query.trimStart();
-    let max = Math.max(0, cursorOffset - (query.length - at.length));
+    let trimmedQuery = query.trimStart();
+    let max = Math.max(0, cursorOffset - (query.length - trimmedQuery.length));
     editor.setQueryAndCursor(
-      pt,
-      vimMode === undefined ? Math.max(0, max + pt.length - at.length) : pt.length,
+      findQuery,
+      vimMode === undefined ? Math.max(0, max + findQuery.length - trimmedQuery.length) : findQuery.length,
     );
     enterInsertMode();
-    if (pt.length > at.length && view.firstImpression("find")) logFeatureOk("fleet_view_find");
+    if (findQuery.length > trimmedQuery.length && view.firstImpression("find"))
+      logFeatureOk("fleet_view_find");
     return;
   }
   let focusedIdx_2 = selection.getSnapshot().focusedIdx;
-  let oo = jumpGroupHeader(h, fleetKeyAction, focusedIdx_2);
-  if (oo !== null) {
-    Ne();
+  let headerIdx = jumpGroupHeader(ctx, fleetKeyAction, focusedIdx_2);
+  if (headerIdx !== null) {
+    consumeEvent();
     setError(null);
     deleteConfirm.disarm();
-    if (oo !== focusedIdx_2) {
-      selection.jumpToHeader(oo, rows[oo]);
+    if (headerIdx !== focusedIdx_2) {
+      selection.jumpToHeader(headerIdx, rows[headerIdx]);
       if (view.firstImpression("groupJump")) logFeatureOk("fleet_view_group_jump");
     }
     return;
   }
   if (fleetKeyAction === "agents:rename") {
-    Ne();
+    consumeEvent();
     if (
       byGroup &&
       focusedRow?.kind === "header" &&
@@ -823,7 +828,7 @@ function handleFleetKey(h, event) {
       focusedRow.group !== EARLIER
     ) {
       setGroupDraft(focusedRow.group);
-      St();
+      clearOfferState();
       view.openGroupEdit(
         {
           kind: "rename",
@@ -834,27 +839,27 @@ function handleFleetKey(h, event) {
       return;
     }
     if (!focused || pendings.some((pending) => pending.id === focused.id)) return;
-    let Ce = false;
-    if (Ce && !isRemoteRowId(focused.id)) {
+    let isRemoteRow = false;
+    if (isRemoteRow && !isRemoteRowId(focused.id)) {
       setError(STILL_STARTING_MESSAGE);
       return;
     }
-    if (Ce && roster.isRetitling(focused.id)) {
+    if (isRemoteRow && roster.isRetitling(focused.id)) {
       setError(RENAME_BUSY_TEXT);
       return;
     }
-    if (!Ce && focused.state.backend !== "daemon" && !focused.state.sock) return;
-    let Ke = collapseWhitespace(focused.state.name ?? "");
-    if (Ce && editor.getSnapshot().error === STILL_STARTING_MESSAGE) setError(null);
-    setRenameDraft(Ke);
-    St();
+    if (!isRemoteRow && focused.state.backend !== "daemon" && !focused.state.sock) return;
+    let currentName = collapseWhitespace(focused.state.name ?? "");
+    if (isRemoteRow && editor.getSnapshot().error === STILL_STARTING_MESSAGE) setError(null);
+    setRenameDraft(currentName);
+    clearOfferState();
     view.startRename(
       focused.id,
       focused.state.backend !== "daemon" ? (focused.state.sock ?? null) : null,
-      Ce
+      isRemoteRow
         ? {
             sessionId: focused.state.sessionId,
-            prefill: Ke,
+            prefill: currentName,
           }
         : null,
     );
@@ -866,24 +871,24 @@ function handleFleetKey(h, event) {
     !previewOpen &&
     editor.getSnapshot().query === ""
   ) {
-    let at = !!focused && (pendings.some((pending) => pending.id === focused.id) || false);
-    if (!focused || at || (focused.state.backend !== "daemon" && true)) {
-      Ne();
-      let Mt = shortcutDisplayFor("agents:rename", keybindings);
+    let isPending = !!focused && (pendings.some((pending) => pending.id === focused.id) || false);
+    if (!focused || isPending || (focused.state.backend !== "daemon" && true)) {
+      consumeEvent();
+      let renameShortcut = shortcutDisplayFor("agents:rename", keybindings);
       setError(
         !focused
           ? focusedRow?.kind === "header"
-            ? `${shortcutDisplayFor("agents:setGroup", keybindings)} groups a session \u2014 focus a session row${Mt && ` (${Mt} renames this group)`}`
+            ? `${shortcutDisplayFor("agents:setGroup", keybindings)} groups a session \u2014 focus a session row${renameShortcut && ` (${renameShortcut} renames this group)`}`
             : null
-          : at
+          : isPending
             ? STILL_STARTING_MESSAGE
             : "Can't group a session that's running in another terminal",
       );
       return;
     }
-    Ne();
+    consumeEvent();
     setGroupDraft(focused.state.group ?? "");
-    St();
+    clearOfferState();
     view.openGroupEdit(
       {
         kind: "assign",
@@ -895,10 +900,10 @@ function handleFleetKey(h, event) {
     return;
   }
   if (event.name === "up" || (event.ctrl && event.key === "p")) {
-    Ne();
+    consumeEvent();
     if (suggestions.length > 0) {
       setHoveredSuggestionId(null);
-      setSelectedSuggestion((Ke) => Math.max(0, Ke - 1));
+      setSelectedSuggestion((selectedIdx) => Math.max(0, selectedIdx - 1));
       return;
     }
     if (
@@ -911,8 +916,8 @@ function handleFleetKey(h, event) {
       return;
     }
     setError(null);
-    let Ce = nextFocusableRow(h, selection.getSnapshot().focusedIdx, -1);
-    selection.navigateTo(Ce, rows[Ce]);
+    let nextIdx = nextFocusableRow(ctx, selection.getSnapshot().focusedIdx, -1);
+    selection.navigateTo(nextIdx, rows[nextIdx]);
     return;
   }
   if (
@@ -920,33 +925,33 @@ function handleFleetKey(h, event) {
     suggestions.length === 0 &&
     !hasComposedDispatch
   ) {
-    Ne();
+    consumeEvent();
     setError(null);
     let max = Math.max(1, termRows - 6);
-    let Ke = rows.length;
-    if (Ke === 0) {
+    let rowCount = rows.length;
+    if (rowCount === 0) {
       selection.setHoverFocusIdx(null);
       selection.focus(0);
       return;
     }
     let focusedIdx = selection.getSnapshot().focusedIdx;
-    let Mt =
+    let targetIdx =
       event.name === "home"
         ? 0
         : event.name === "end"
-          ? Ke - 1
+          ? rowCount - 1
           : event.name === "pageup"
             ? focusedIdx - max
             : focusedIdx + max;
-    let max_2 = Math.max(0, Math.min(Ke - 1, Mt));
+    let max_2 = Math.max(0, Math.min(rowCount - 1, targetIdx));
     selection.navigateTo(max_2, rows[max_2]);
     return;
   }
   if (event.name === "down" || (event.ctrl && event.key === "n")) {
-    Ne();
+    consumeEvent();
     if (suggestions.length > 0) {
       setHoveredSuggestionId(null);
-      setSelectedSuggestion((Ke) => Math.min(suggestions.length - 1, Ke + 1));
+      setSelectedSuggestion((selectedIdx) => Math.min(suggestions.length - 1, selectedIdx + 1));
       return;
     }
     if (
@@ -959,26 +964,26 @@ function handleFleetKey(h, event) {
       return;
     }
     setError(null);
-    let Ce = nextFocusableRow(h, selection.getSnapshot().focusedIdx, 1);
-    selection.navigateTo(Ce, rows[Ce]);
+    let nextIdx = nextFocusableRow(ctx, selection.getSnapshot().focusedIdx, 1);
+    selection.navigateTo(nextIdx, rows[nextIdx]);
     return;
   }
   if (previewOpen && event.ctrl && event.key === "x") {
-    Ne();
+    consumeEvent();
     if (focused && pendings.some((pending) => pending.id === focused.id)) return;
-    let Ce = rows[selection.getSnapshot().focusedIdx];
-    let job = Ce?.kind === "job" ? Ce.job : undefined;
+    let focusedRow = rows[selection.getSnapshot().focusedIdx];
+    let job = focusedRow?.kind === "job" ? focusedRow.job : undefined;
     if (deleteConfirm.pending !== null && job !== undefined && deleteConfirm.pending.id !== job.id)
       deleteConfirm.disarm();
-    stopOrDeleteJob(h, "x", job);
+    stopOrDeleteJob(ctx, "x", job);
     return;
   }
   if (previewOpen) return;
   if (event.name === "tab") {
-    Ne();
+    consumeEvent();
     if (simpleView) return;
     if (!editor.getSnapshot().query && editor.getSnapshot().mode === "prompt" && templates.length > 0)
-      setShowAllAgents((Ce) => !Ce);
+      setShowAllAgents((prev) => !prev);
     else if (suggestions.length > 0) applySuggestion(pickSuggestion());
     return;
   }
@@ -989,25 +994,25 @@ function handleFleetKey(h, event) {
     editor.getSnapshot().mode === "prompt" &&
     !previewOpen
   ) {
-    Ne();
+    consumeEvent();
     if (focusedRow?.kind === "earlier") openEarlier(focusedRow.entry, "section");
     else if (focusedRow?.kind === "newsession") openNewSessionRow(focusedRow.origin);
     else openOrRespawn(focused);
     return;
   }
   if ((event.meta || event.superKey) && event.key >= "1" && event.key <= "9") {
-    Ne();
-    let Ce = Number(event.key);
-    let found = rows.find((at) => at.kind === "job" && at.origin === altOpenOrigin && --Ce === 0);
+    consumeEvent();
+    let remaining = Number(event.key);
+    let found = rows.find((row) => row.kind === "job" && row.origin === altOpenOrigin && --remaining === 0);
     if (found?.kind === "job") openOrRespawn(found.job);
     return;
   }
   if (event.name === "return") {
-    submitDispatch(h.submit, event);
+    submitDispatch(ctx.submit, event);
     return;
   }
   if (event.ctrl && event.key === "x") {
-    Ne();
+    consumeEvent();
     if (suggestions.length > 0) return;
     if (!hasComposedDispatch && byGroup && focusedRow?.kind === "header") {
       if (focusedRow.group === "pinned" || focusedRow.group === UNGROUPED || focusedRow.group === EARLIER) {
@@ -1023,7 +1028,7 @@ function handleFleetKey(h, event) {
         return;
       }
       deleteConfirm.disarm();
-      stopGroup(h, focusedRow.group);
+      stopGroup(ctx, focusedRow.group);
       return;
     }
     if (!hasComposedDispatch && focusedRow?.kind === "header" && headerJobs.length > 0) {
@@ -1036,34 +1041,34 @@ function handleFleetKey(h, event) {
       deleteConfirm.disarm();
       for (let headerJob of headerJobs) {
         if (pendings.some((pending) => pending.id === headerJob.id)) continue;
-        stopOrDeleteJob(h, "x", headerJob, true);
+        stopOrDeleteJob(ctx, "x", headerJob, true);
       }
       return;
     }
     if (focused && pendings.some((pending) => pending.id === focused.id)) return;
-    let Ce = rows[selection.getSnapshot().focusedIdx];
-    let job = Ce?.kind === "job" ? Ce.job : undefined;
+    let row = rows[selection.getSnapshot().focusedIdx];
+    let job = row?.kind === "job" ? row.job : undefined;
     if (deleteConfirm.pending !== null && job !== undefined && deleteConfirm.pending.id !== job.id)
       deleteConfirm.disarm();
-    stopOrDeleteJob(h, "x", job);
+    stopOrDeleteJob(ctx, "x", job);
     return;
   }
   if (event.ctrl && event.key === "d" && (simpleView || editor.getSnapshot().query === "")) {
-    Ne();
+    consumeEvent();
     if (helpOpen || view.getSnapshot().debugOpen) {
       view.setDebugOpen(false);
       return;
     }
     let snapshot = editor.getSnapshot();
-    if (snapshot.mode === "bash" && snapshot.query === "") rt("prompt");
+    if (snapshot.mode === "bash" && snapshot.query === "") setEditorMode("prompt");
     pressExitKey("Ctrl-D");
     return;
   }
   if (event.ctrl) event.key;
   if (event.key === "?" && editor.getSnapshot().query === "" && editor.getSnapshot().mode === "prompt") {
-    Ne();
+    consumeEvent();
     let helpOpen = view.getSnapshot().helpOpen;
-    if (!helpOpen) St();
+    if (!helpOpen) clearOfferState();
     view.setHelpOpen(!helpOpen);
     logEvent("tengu_bg_agent_action", {
       action: lit("help_toggled"),
@@ -1071,12 +1076,12 @@ function handleFleetKey(h, event) {
     return;
   }
   if (isPasteImageKey(event) && !simpleView) {
-    Ne();
+    consumeEvent();
     pasteImageFromClipboard(
-      (Ce) =>
-        attachPastedImage(Ce.base64, {
-          mediaType: Ce.mediaType,
-          dimensions: Ce.dimensions,
+      (image) =>
+        attachPastedImage(image.base64, {
+          mediaType: image.mediaType,
+          dimensions: image.dimensions,
         }),
       setHint,
     );
@@ -1089,22 +1094,22 @@ function handleFleetKey(h, event) {
     !editor.getSnapshot().query &&
     editor.getSnapshot().mode === "prompt"
   ) {
-    Ne();
-    rt("bash");
+    consumeEvent();
+    setEditorMode("bash");
     return;
   }
   if (event.name === "backspace" && !editor.getSnapshot().query && editor.getSnapshot().mode === "bash") {
-    Ne();
-    rt("prompt");
+    consumeEvent();
+    setEditorMode("prompt");
     return;
   }
   if (simpleView && !previewOpen && renamingJobId === null) {
     if (event.key === "q" && !event.ctrl && !event.meta) {
-      Ne();
+      consumeEvent();
       pressExitKey("Ctrl-C");
     }
     if (event.key === "l" && !event.ctrl && !event.meta && !hasCredentials) {
-      Ne();
+      consumeEvent();
       onAction({
         type: "login",
       });
@@ -1131,101 +1136,109 @@ class FleetCatalogStore {
   };
   #l = new Set();
   getSnapshot = () => this.#e;
-  subscribe = (h) => this.#n.subscribe(h);
-  #t(h) {
+  subscribe = (listener) => this.#n.subscribe(listener);
+  #t(patch) {
     this.#e = {
       ...this.#e,
-      ...h,
+      ...patch,
     };
     this.#n.emit();
   }
-  loadLauncher(h) {
-    this.#r(h, {
+  loadLauncher(cwd) {
+    this.#r(cwd, {
       rescanKnown: false,
     });
   }
-  refreshLauncher(h) {
-    this.#r(h, {
+  refreshLauncher(cwd) {
+    this.#r(cwd, {
       rescanKnown: true,
     });
   }
-  #r(h, { rescanKnown }) {
-    if (this.#l.has(h)) return;
-    let k = [];
-    if (rescanKnown || !this.#e.childRepos.has(h))
-      k.push(
-        findGitRoot(h).then((gitRoot) => {
-          let x = updateCatalogEntry(this.#e.childRepos, h, gitRoot, EMPTY_REPO_UPDATES);
-          if (x)
+  #r(cwd, { rescanKnown }) {
+    if (this.#l.has(cwd)) return;
+    let pending = [];
+    if (rescanKnown || !this.#e.childRepos.has(cwd))
+      pending.push(
+        findGitRoot(cwd).then((updates) => {
+          let nextChildRepos = updateCatalogEntry(this.#e.childRepos, cwd, updates, EMPTY_REPO_UPDATES);
+          if (nextChildRepos)
             this.#t({
-              childRepos: x,
+              childRepos: nextChildRepos,
             });
         }),
       );
-    if (rescanKnown || !this.#e.repoWorktrees.has(h))
-      k.push(
-        listRepoWorktrees(h)
-          .then((C) => {
-            if (C === null) return;
-            let x = updateCatalogEntry(this.#e.repoWorktrees, h, C, EMPTY_CATALOG_STATE);
-            if (x)
+    if (rescanKnown || !this.#e.repoWorktrees.has(cwd))
+      pending.push(
+        listRepoWorktrees(cwd)
+          .then((worktrees) => {
+            if (worktrees === null) return;
+            let nextWorktrees = updateCatalogEntry(
+              this.#e.repoWorktrees,
+              cwd,
+              worktrees,
+              EMPTY_CATALOG_STATE,
+            );
+            if (nextWorktrees)
               this.#t({
-                repoWorktrees: x,
+                repoWorktrees: nextWorktrees,
               });
           })
           .catch(() => {}),
       );
-    if (k.length === 0) return;
-    this.#l.add(h);
-    Promise.all(k).finally(() => {
-      this.#l.delete(h);
+    if (pending.length === 0) return;
+    this.#l.add(cwd);
+    Promise.all(pending).finally(() => {
+      this.#l.delete(cwd);
     });
   }
-  loadTarget(h, E) {
-    let k = false;
-    if (!this.#e.templates.has(h))
-      listUserAgentTemplates(h, E)
+  loadTarget(cwd, storageV5) {
+    let cancelled = false;
+    if (!this.#e.templates.has(cwd))
+      listUserAgentTemplates(cwd, storageV5)
         .catch(() => [])
-        .then((C) => {
-          if (!k && !this.#e.templates.has(h))
+        .then((templates) => {
+          if (!cancelled && !this.#e.templates.has(cwd))
             this.#t({
-              templates: new Map(this.#e.templates).set(h, C),
+              templates: new Map(this.#e.templates).set(cwd, templates),
             });
         });
-    if (!this.#e.skills.has(h))
-      getCommands(h, E)
+    if (!this.#e.skills.has(cwd))
+      getCommands(cwd, storageV5)
         .catch(() => [])
-        .then((C) => {
-          if (k || this.#e.skills.has(h)) return;
-          let mapped = C.filter((T) => !T.isHidden && !isSkillOff(T)).map((T) => ({
-            kind: T.type !== "prompt" ? "command" : T.kind === "workflow" ? "workflow" : "skill",
-            name: T.name,
-            aliases: T.aliases,
-            description:
-              (T.type !== "prompt" && DISPATCH_FLAG_HINTS.get(T.name)) ||
-              getFirstLine(getHumanFacingDescription(T) ?? ""),
-          }));
+        .then((commands) => {
+          if (cancelled || this.#e.skills.has(cwd)) return;
+          let mapped = commands
+            .filter((command) => !command.isHidden && !isSkillOff(command))
+            .map((command) => ({
+              kind:
+                command.type !== "prompt" ? "command" : command.kind === "workflow" ? "workflow" : "skill",
+              name: command.name,
+              aliases: command.aliases,
+              description:
+                (command.type !== "prompt" && DISPATCH_FLAG_HINTS.get(command.name)) ||
+                getFirstLine(getHumanFacingDescription(command) ?? ""),
+            }));
           this.#t({
-            skills: new Map(this.#e.skills).set(h, mapped),
+            skills: new Map(this.#e.skills).set(cwd, mapped),
           });
         });
     return () => {
-      k = true;
+      cancelled = true;
     };
   }
 }
 //@ chunk-93kwxas0.js:178405-178444 placement
-function ensureFleetCatalog(h) {
-  return (h.scope ??= new FleetCatalogStore());
+function ensureFleetCatalog(visit) {
+  return (visit.scope ??= new FleetCatalogStore());
 }
 //@ chunk-93kwxas0.js:178444-178556 placement
 /**
  * 目录项变化时返回新 Map，否则 null。
  */
-function updateCatalogEntry(h, E, k, C) {
-  let x = Object.keys(k).length > 0 ? k : C;
-  if (isDeepStrictEqual(h.get(E), x)) return null;
-  return new Map(h).set(E, x);
+function updateCatalogEntry(entries, key, updates, emptyState) {
+  let next = Object.keys(updates).length > 0 ? updates : emptyState;
+  if (isDeepStrictEqual(entries.get(key), next)) return null;
+  return new Map(entries).set(key, next);
 }
 //@ chunk-93kwxas0.js:178556-178560 placement
 init_react_production();
@@ -1236,36 +1249,40 @@ var IDLE_SEED = "idle-seed";
 /**
  * 比较会话所在分区的变化，生成"需要输入/已完成"通知。
  */
-function diffJobBands(h, E) {
-  let k = new Map();
-  let C = [];
-  let x = [];
-  for (let T of E) {
-    let A = h.get(T.id);
-    let L = T.band === "blocked" && T.needs === IDLE_NEEDS;
-    k.set(T.id, L ? (A ?? IDLE_SEED) : T.band);
-    if (A === undefined || A === T.band || L) continue;
-    switch (T.band) {
+function diffJobBands(previousBands, jobs) {
+  let nextBands = new Map();
+  let notifications = [];
+  let notified = [];
+  for (let job of jobs) {
+    let previousBand = previousBands.get(job.id);
+    let isIdleWaiting = job.band === "blocked" && job.needs === IDLE_NEEDS;
+    nextBands.set(job.id, isIdleWaiting ? (previousBand ?? IDLE_SEED) : job.band);
+    if (previousBand === undefined || previousBand === job.band || isIdleWaiting) continue;
+    switch (job.band) {
       case "blocked":
-        C.push({
-          message: T.needs
-            ? `${T.label} needs your input: ${truncateWithEllipsis(T.needs, NEEDS_INPUT_PREVIEW_CHARS)}`
-            : `${T.label} needs your input`,
+        notifications.push({
+          message: job.needs
+            ? `${job.label} needs your input: ${truncateWithEllipsis(job.needs, NEEDS_INPUT_PREVIEW_CHARS)}`
+            : `${job.label} needs your input`,
           notificationType: "agent_needs_input",
         });
-        x.push({
-          sessionId: T.sessionId,
+        notified.push({
+          sessionId: job.sessionId,
           kind: "needs_input",
         });
         break;
       case "completed":
-        if (T.outcome !== "stopped" && !T.selfDriving && !(A === IDLE_SEED && T.outcome === "success")) {
-          C.push({
-            message: `${T.label} ${T.outcome === "failure" ? "failed" : "finished"}`,
+        if (
+          job.outcome !== "stopped" &&
+          !job.selfDriving &&
+          !(previousBand === IDLE_SEED && job.outcome === "success")
+        ) {
+          notifications.push({
+            message: `${job.label} ${job.outcome === "failure" ? "failed" : "finished"}`,
             notificationType: "agent_completed",
           });
-          x.push({
-            sessionId: T.sessionId,
+          notified.push({
+            sessionId: job.sessionId,
             kind: "completed",
           });
         }
@@ -1275,33 +1292,33 @@ function diffJobBands(h, E) {
     }
   }
   return {
-    next: k,
-    notifications: C,
-    notified: x,
+    next: nextBands,
+    notifications,
+    notified,
   };
 }
 //@ chunk-93kwxas0.js:179308-179650 placement
 /**
  * 会话分区变化时发通知的 hook。
  */
-function useJobBandNotifications(h, E) {
+function useJobBandNotifications(bands, storageV5) {
   let terminalNotification = useTerminalNotification();
-  let { storageV5, credentials } = useTheme_2();
-  let T = R(new Map());
-  P(() => {
-    let { next: A, notifications, notified } = diffJobBands(T.current, h);
-    T.current = A;
+  let { storageV5: storageV5_2, credentials } = useTheme_2();
+  let previousRef = useRef(new Map());
+  useEffect(() => {
+    let { next: nextBands, notifications, notified } = diffJobBands(previousRef.current, bands);
+    previousRef.current = nextBands;
     for (let notification of notifications)
       notifyAsync(notification, terminalNotification, {
-        storageV5,
+        storageV5: storageV5_2,
         credentials,
       });
     let now = Date.now();
-    for (let U of notified)
-      if (markAgentsNotified(E, U.sessionId, U.kind, now))
+    for (let entry of notified)
+      if (markAgentsNotified(storageV5, entry.sessionId, entry.kind, now))
         logEvent("tengu_bg_agent_notification", {
-          kind: fromEnum(U.kind),
-          jobSessionId: sanitizeMarkName(U.sessionId),
+          kind: fromEnum(entry.kind),
+          jobSessionId: sanitizeMarkName(entry.sessionId),
         });
   });
 }
@@ -1333,24 +1350,24 @@ function FleetView({
   let { stdin, isRawModeSupported } = useStdin();
   let { credentials } = useTheme_2();
   let keybindings = useFleetBindings();
-  let me = isAgentsSimpleViewEnabled();
-  let Je = !me || !!initialJobId?.startsWith("remote-");
+  let isSimpleView = isAgentsSimpleViewEnabled();
+  let wantsRemote = !isSimpleView || !!initialJobId?.startsWith("remote-");
   let le = false;
   useTimeout(
     () => {
       if (!isRawModeSupported) return;
-      let ee = stdin.listenerCount("readable");
-      if (ee > 1)
+      let listenerCount = stdin.listenerCount("readable");
+      if (listenerCount > 1)
         logEvent("tengu_fleetview_stdin_contention", {
-          listeners: ee,
+          listeners: listenerCount,
         });
     },
     1500,
     [],
   );
-  let [Oe] = y(() => awayLoop ?? createNotifiedState());
-  let [De] = y(() => host ?? createFleetViewHost());
-  let [roster] = y(() => ensureFleetRoster(De, storageV5));
+  let [awayLoopState] = useState(() => awayLoop ?? createNotifiedState());
+  let [hostState] = useState(() => host ?? createFleetViewHost());
+  let [roster] = useState(() => ensureFleetRoster(hostState, storageV5));
   let {
     jobs,
     adoptedPeers,
@@ -1363,11 +1380,12 @@ function FleetView({
     loopKicks,
     overlaidLoadLanded,
   } = useStoreSelector(roster);
-  let [ke] = y(() => ensureFleetSelection(De, roster, storageV5));
-  let { focusedIdx, hoverFocusIdx, collapsed, capExpanded, draftPick, followOrigin } = useStoreSelector(ke);
-  let Ot = false;
-  let Yt = R(false);
-  let [Ue] = y(() => ensureFleetViewStore(De, Ot, "local"));
+  let [selection] = useState(() => ensureFleetSelection(hostState, roster, storageV5));
+  let { focusedIdx, hoverFocusIdx, collapsed, capExpanded, draftPick, followOrigin } =
+    useStoreSelector(selection);
+  let groupsEnabled = false;
+  let Yt = useRef(false);
+  let [view] = useState(() => ensureFleetViewStore(hostState, groupsEnabled, "local"));
   let {
     groupMode,
     activeTab,
@@ -1378,164 +1396,170 @@ function FleetView({
     previewOpen,
     helpOpen,
     debugOpen,
-  } = useStoreSelector(Ue);
-  let [$e] = y(() => ensureFleetLiveStatus(De));
-  let { attachingJobId, autoOpened } = useStoreSelector($e);
-  let [We] = y(() => ensureFleetEditor(De));
-  let { mode, expandHintPasteId } = useStoreSelector(We);
-  let [He] = y(() =>
-    ensureDeleteConfirmStore(De, {
-      onArm: () => clearFleetOfferState($e, We),
+  } = useStoreSelector(view);
+  let [attach] = useState(() => ensureFleetLiveStatus(hostState));
+  let { attachingJobId, autoOpened } = useStoreSelector(attach);
+  let [editor] = useState(() => ensureFleetEditor(hostState));
+  let { mode, expandHintPasteId } = useStoreSelector(editor);
+  let [deleteConfirm] = useState(() =>
+    ensureDeleteConfirmStore(hostState, {
+      onArm: () => clearFleetOfferState(attach, editor),
     }),
   );
-  let { pending } = useStoreSelector(He);
-  useTimeout(() => He.disarm(), pending ? 2000 : null, [pending]);
-  let [vt] = y(() => ({
+  let { pending } = useStoreSelector(deleteConfirm);
+  useTimeout(() => deleteConfirm.disarm(), pending ? 2000 : null, [pending]);
+  let [owners] = useState(() => ({
     roster,
-    selection: ke,
-    view: Ue,
-    attach: $e,
-    editor: We,
-    deleteConfirm: He,
-    earlier: De.earlier,
+    selection,
+    view,
+    attach,
+    editor,
+    deleteConfirm,
+    earlier: hostState.earlier,
   }));
-  let { setError, setHint } = We;
+  let { setError, setHint } = editor;
   let jobId = renaming?.jobId ?? null;
-  let St = Je ? remoteJobs : EMPTY_REMOTE_JOBS;
-  P(() => {
-    roster.setRemoteWanted(Je);
-  }, [roster, Je]);
-  P(() => roster.attachView(clock), [roster, clock]);
+  let remoteJobsForView = wantsRemote ? remoteJobs : EMPTY_REMOTE_JOBS;
+  useEffect(() => {
+    roster.setRemoteWanted(wantsRemote);
+  }, [roster, wantsRemote]);
+  useEffect(() => roster.attachView(clock), [roster, clock]);
   let cwd = getCwd();
   let launcherGroup = canonicalRepoRoot({
     cwd,
   });
-  let [Kt, po] = y(cwd);
-  P(() => {
-    let ee = false;
-    canonicalizePath(cwd, getRealPathOptions(storageV5)).then((Ve) => {
-      if (!ee && Ve !== cwd) po(Ve);
+  let [canonicalCwd, setCanonicalCwd] = useState(cwd);
+  useEffect(() => {
+    let cancelled = false;
+    canonicalizePath(cwd, getRealPathOptions(storageV5)).then((canonicalPath) => {
+      if (!cancelled && canonicalPath !== cwd) setCanonicalCwd(canonicalPath);
     });
     return () => {
-      ee = true;
+      cancelled = true;
     };
   }, [cwd, storageV5]);
-  let At =
+  let launcherScope =
     cwdFilter &&
     !jobMatchesCwd(
       {
-        cwd: Kt,
+        cwd: canonicalCwd,
       },
       cwdFilter,
     )
       ? cwdFilter
-      : Kt;
-  let [pt, Nt] = y(cwd);
-  let oo = activeTab === "remote" ? At : pt;
-  let [Ce] = y(() => ensureFleetCatalog(De));
-  let { templates, skills, routines, childRepos, repoWorktrees } = useStoreSelector(Ce);
-  P(() => {
-    Ce.loadLauncher(cwd);
-  }, [Ce, cwd]);
-  let vo = childRepos.get(cwd) ?? EMPTY_REPO_UPDATES;
-  let zo = repoWorktrees.get(cwd) ?? EMPTY_CATALOG_STATE;
-  let joined = uniq([...(jobs ?? []), ...adoptedPeers].map((ee) => spawnOrigin(ee.state)))
+      : canonicalCwd;
+  let [dispatchOriginState, setDispatchOrigin] = useState(cwd);
+  let effectiveCwd = activeTab === "remote" ? launcherScope : dispatchOriginState;
+  let [catalog] = useState(() => ensureFleetCatalog(hostState));
+  let { templates, skills, routines, childRepos, repoWorktrees } = useStoreSelector(catalog);
+  useEffect(() => {
+    catalog.loadLauncher(cwd);
+  }, [catalog, cwd]);
+  let repoUpdates = childRepos.get(cwd) ?? EMPTY_REPO_UPDATES;
+  let worktreeState = repoWorktrees.get(cwd) ?? EMPTY_CATALOG_STATE;
+  let joined = uniq([...(jobs ?? []), ...adoptedPeers].map((job) => spawnOrigin(job.state)))
     .sort()
     .join("\x00");
-  let { allRepos, worktreeBranches } = Q(() => {
-    let ee = {
-      ...vo,
+  let { allRepos, worktreeBranches } = useMemo(() => {
+    let repoMap = {
+      ...repoUpdates,
     };
-    for (let et of joined ? joined.split("\x00") : []) {
-      let Xt = basename(et);
-      if (Xt && !/\s/.test(Xt) && ee[Xt] === undefined) ee[Xt] = et;
+    for (let origin of joined ? joined.split("\x00") : []) {
+      let repoName = basename(origin);
+      if (repoName && !/\s/.test(repoName) && repoMap[repoName] === undefined) repoMap[repoName] = origin;
     }
-    let Ve = {};
-    for (let [key, value] of Object.entries(zo)) {
-      if (ee[key] === undefined) ee[key] = value.path;
-      if (ee[key] === value.path) Ve[key] = value.branch;
+    let branchMap = {};
+    for (let [key, value] of Object.entries(worktreeState)) {
+      if (repoMap[key] === undefined) repoMap[key] = value.path;
+      if (repoMap[key] === value.path) branchMap[key] = value.branch;
     }
     return {
-      allRepos: ee,
-      worktreeBranches: Ve,
+      allRepos: repoMap,
+      worktreeBranches: branchMap,
     };
-  }, [vo, joined, zo]);
-  let go = () =>
+  }, [repoUpdates, joined, worktreeState]);
+  let onExit = () =>
     onAction({
       type: "done",
     });
-  let No = R("Ctrl-C");
-  let Qo = useDoublePress((ee) => {
-    if (ee) Cn();
-    Ue.setExitPending(ee ? No.current : null);
-  }, go);
-  let Po = (ee) => {
-    No.current = ee;
-    Qo();
+  let exitKeyRef = useRef("Ctrl-C");
+  let onExitPress = useDoublePress((isFirstPress) => {
+    if (isFirstPress) clearOfferState();
+    view.setExitPending(isFirstPress ? exitKeyRef.current : null);
+  }, onExit);
+  let pressExitKey = (keyLabel) => {
+    exitKeyRef.current = keyLabel;
+    onExitPress();
   };
-  let xe = () => {
-    Ue.clearRename();
+  let clearRename = () => {
+    view.clearRename();
     setQuery_2("");
   };
-  let qt = (ee, Ve) => groupCollapseKey(Ve ?? Ue.getSnapshot().groupMode, ee);
-  let headerArmId = (ee) => `header:${Ue.getSnapshot().groupMode}:${ee}`;
-  let earlierEntries = useStoreSelector(De.earlier, (ee) => ee.entries);
-  P(() => {
+  let groupKeyOf = (group, groupMode) => groupCollapseKey(groupMode ?? view.getSnapshot().groupMode, group);
+  let headerArmId = (group) => `header:${view.getSnapshot().groupMode}:${group}`;
+  let earlierEntries = useStoreSelector(hostState.earlier, (earlierState) => earlierState.entries);
+  useEffect(() => {
     if (cwdFilter || !shouldListPastSessions()) {
-      if (!cwdFilter) De.earlier.clear();
+      if (!cwdFilter) hostState.earlier.clear();
       return;
     }
-    let ee = false;
-    let Ve = De.earlier.beginLoad();
+    let cancelled = false;
+    let loadToken = hostState.earlier.beginLoad();
     listPastSessions(new Set(), false, storageV5)
       .finally(() => {
-        De.earlier.endLoad(Ve);
+        hostState.earlier.endLoad(loadToken);
       })
-      .then((et) => {
-        if (et === null) logFeatureBad("fleet_view_earlier_load", "load_failed");
+      .then((sessions) => {
+        if (sessions === null) logFeatureBad("fleet_view_earlier_load", "load_failed");
         else logFeatureOk("fleet_view_earlier_load");
-        if (!ee && (et === null || et.length === 0) && !initialJobId && ke.restoreAttempts === 1)
-          ke.restoreAttempts = 2;
-        if (et === null) return;
-        De.earlier.setEntries(et);
-        if (!ee && et.length > 0)
+        if (
+          !cancelled &&
+          (sessions === null || sessions.length === 0) &&
+          !initialJobId &&
+          selection.restoreAttempts === 1
+        )
+          selection.restoreAttempts = 2;
+        if (sessions === null) return;
+        hostState.earlier.setEntries(sessions);
+        if (!cancelled && sessions.length > 0)
           logEvent("tengu_fleetview_earlier_loaded", {
-            count: et.length,
+            count: sessions.length,
           });
       });
     return () => {
-      ee = true;
+      cancelled = true;
     };
   }, []);
-  let toggleCollapse = (ee) => ke.toggleCollapsed(qt(ee), Ue.getSnapshot().groupMode === "state" ? ee : null);
+  let toggleCollapse = (group) =>
+    selection.toggleCollapsed(groupKeyOf(group), view.getSnapshot().groupMode === "state" ? group : null);
   let terminalFocus = useTerminalFocus();
-  P(() => {
+  useEffect(() => {
     if (terminalFocus) roster.resetPrFetchGate();
   }, [roster, terminalFocus]);
-  let Ho = useAppState((ee) => ee.autoUpdaterResult?.status === "success");
+  let autoUpdated = useAppState((appState) => appState.autoUpdaterResult?.status === "success");
   let { columns, rows } = useTerminalSize();
-  let { pathOwnRow } = useDispatchWindowDefaults(We, dispatchDefaults);
-  let [kn] = y(() => Date.now());
-  let Qr = R(null);
-  let Xr = R(null);
-  useFocusOnMount(Xr, jobs !== null && !previewOpen);
+  let { pathOwnRow } = useDispatchWindowDefaults(editor, dispatchDefaults);
+  let [mountAt] = useState(() => Date.now());
+  let scrollRef = useRef(null);
+  let containerRef = useRef(null);
+  useFocusOnMount(containerRef, jobs !== null && !previewOpen);
   let voiceAvailable = useVoiceAvailable();
-  let vn = useAppState((ee) => ee.settings.voice?.mode ?? "hold");
+  let voiceMode = useAppState((appState) => appState.settings.voice?.mode ?? "hold");
   let getVoiceState = useGetVoiceState();
-  let un = () => {
-    let ee = ke.focusedRow();
-    let job = ee?.kind === "job" ? ee.job : undefined;
+  let togglePreview = () => {
+    let focusedRow = selection.focusedRow();
+    let job = focusedRow?.kind === "job" ? focusedRow.job : undefined;
     if (!job) return;
-    ui(false);
-    let previewOpen = Ue.getSnapshot().previewOpen;
+    setShowAllAgents(false);
+    let previewOpen = view.getSnapshot().previewOpen;
     if (!previewOpen) {
-      ke.followId = job.id;
-      Cn();
+      selection.followId = job.id;
+      clearOfferState();
     }
-    Ue.setPreviewOpen(!previewOpen);
+    view.setPreviewOpen(!previewOpen);
   };
-  let Nn =
-    !me &&
+  let dispatchInputActive =
+    !isSimpleView &&
     !previewOpen &&
     jobId === null &&
     groupEdit === null &&
@@ -1553,82 +1577,82 @@ function FleetView({
     vimMode,
     enterInsertMode,
   } = useSearchInput({
-    buffer: We,
-    isActive: Nn,
+    buffer: editor,
+    isActive: dispatchInputActive,
     multiline: true,
     honorEditorMode: true,
     onExit: () => {},
-    onCancel: jobs === null ? () => Po("Ctrl-C") : undefined,
+    onCancel: jobs === null ? () => pressExitKey("Ctrl-C") : undefined,
     onSpaceOnEmpty: () => {
-      if (We.getSnapshot().mode === "bash") return;
-      if (voiceAvailable && vn !== "tap")
-        Ue.schedulePeekTap(
-          (ee) => clock.setTimeout(ee, PREVIEW_BACK_TIMEOUT_MS),
+      if (editor.getSnapshot().mode === "bash") return;
+      if (voiceAvailable && voiceMode !== "tap")
+        view.schedulePeekTap(
+          (callback) => clock.setTimeout(callback, PREVIEW_BACK_TIMEOUT_MS),
           () => {
             let voiceState = getVoiceState();
             if (voiceState.voiceState !== "idle" || voiceState.voiceWarmingUp) return;
             if (queryRef.current.trim() !== "") return;
-            un();
+            togglePreview();
           },
         );
-      else un();
+      else togglePreview();
     },
   });
-  useIdeMcpClients((ee) => {
-    let { query, cursorOffset } = We.getSnapshot();
-    We.insertText(formatAtMention(ee, query[cursorOffset - 1]));
+  useIdeMcpClients((client) => {
+    let { query, cursorOffset } = editor.getSnapshot();
+    editor.insertText(formatAtMention(client, query[cursorOffset - 1]));
   });
-  let So = cacheImagePath(() => We.pastes, handlePaste, {
-    onMinted: We.noteMintedPaste,
+  let attachPastedImage = cacheImagePath(() => editor.pastes, handlePaste, {
+    onMinted: editor.noteMintedPaste,
   });
-  P(() => {
-    We.pruneOrphanedPastes();
-  }, [We, query]);
-  useTimeout(() => We.setExpandHintPasteId(null), expandHintPasteId === null ? null : 8000, [
+  useEffect(() => {
+    editor.pruneOrphanedPastes();
+  }, [editor, query]);
+  useTimeout(() => editor.setExpandHintPasteId(null), expandHintPasteId === null ? null : 8000, [
     expandHintPasteId,
   ]);
-  let [zi] = y(() => ({
+  let [composer] = useState(() => ({
     get value() {
-      return We.getSnapshot().query;
+      return editor.getSnapshot().query;
     },
     get cursorOffset() {
-      return We.getSnapshot().cursorOffset;
+      return editor.getSnapshot().cursorOffset;
     },
-    setValueWithCursor: (ee, Ve) => We.setQueryAndCursor(ee, Ve),
+    setValueWithCursor: (value, cursorOffset) => editor.setQueryAndCursor(value, cursorOffset),
   }));
   let voiceIntegration = useVoiceIntegration({
-    composer: zi,
-    isActive: Nn,
+    composer,
+    isActive: dispatchInputActive,
   });
-  let jo = useAppState_2((ee) => ee.voiceState);
-  P(() => {
-    if (jo !== "idle") Ue.cancelPeekTap();
-  }, [Ue, jo]);
+  let voiceState = useAppState_2((appState) => appState.voiceState);
+  useEffect(() => {
+    if (voiceState !== "idle") view.cancelPeekTap();
+  }, [view, voiceState]);
   let { handleKeyDown: handleKeyDown_2 } = useVoiceKeybindingHandler({
     voiceHandleKeyEvent: voiceIntegration.handleKeyEvent,
     voiceCancelRecording: voiceIntegration.cancelRecording,
     stripTrailing: voiceIntegration.stripTrailing,
     resetAnchor: voiceIntegration.resetAnchor,
-    isActive: (vn !== "tap" || query.trim().length > 0) && mode !== "bash" && Nn,
-    composer: zi,
+    isActive: (voiceMode !== "tap" || query.trim().length > 0) && mode !== "bash" && dispatchInputActive,
+    composer,
   });
-  let Ta = useAppState((ee) => isReducedMotion(ee.settings.prefersReducedMotion));
-  let showCursor = jo === "recording" && !Ta;
+  let reducedMotion = useAppState((appState) => isReducedMotion(appState.settings.prefersReducedMotion));
+  let showCursor = voiceState === "recording" && !reducedMotion;
   DispatchModeLine({
-    editor: We,
-    selection: ke,
+    editor,
+    selection,
     query,
     dispatchMode: mode,
     collapsed,
-    canonicalLauncherCwd: Kt,
+    canonicalLauncherCwd: canonicalCwd,
     storageV5,
   });
-  useAttachFleetOwners(vt, {
+  useAttachFleetOwners(owners, {
     clock,
-    groupsEnabled: Ot,
+    groupsEnabled,
   });
-  let Cn = () => clearFleetOfferState($e, We);
-  let fn = Q(modelSuggestions, []);
+  let clearOfferState = () => clearFleetOfferState(attach, editor);
+  let modelSuggestionList = useMemo(modelSuggestions, []);
   let {
     query: query_2,
     queryRef: queryRef_2,
@@ -1640,11 +1664,11 @@ function FleetView({
     isActive: jobId !== null,
     honorEditorMode: true,
     backspaceExitsOnEmpty: false,
-    onExit: () => submitRename(od()),
-    onCancel: xe,
+    onExit: () => submitRename(buildKeyContext()),
+    onCancel: clearRename,
   });
-  let ar = () => {
-    Ue.closeGroupEdit();
+  let cancelGroupEdit = () => {
+    view.closeGroupEdit();
     setQuery_3("");
   };
   let {
@@ -1657,74 +1681,79 @@ function FleetView({
   } = useSearchInput({
     isActive: groupEdit !== null,
     backspaceExitsOnEmpty: false,
-    onExit: () => submitGroupEdit(od()),
-    onCancel: ar,
+    onExit: () => submitGroupEdit(buildKeyContext()),
+    onCancel: cancelGroupEdit,
   });
-  let Xi = Q(() => {
-    let ee = new Set();
-    for (let Ve of jobs ?? []) if (Ve.state.group) ee.add(Ve.state.group);
-    for (let remoteJob of remoteJobs) if (remoteJob.state.group) ee.add(remoteJob.state.group);
-    return ee;
+  let knownGroups = useMemo(() => {
+    let groups = new Set();
+    for (let job of jobs ?? []) if (job.state.group) groups.add(job.state.group);
+    for (let remoteJob of remoteJobs) if (remoteJob.state.group) groups.add(remoteJob.state.group);
+    return groups;
   }, [jobs, remoteJobs]);
-  let Wo = Q(() => {
+  let groupSuggestions = useMemo(() => {
     if (!groupEdit) return [];
-    let ee = new Set();
+    let excluded = new Set();
     if (groupEdit.kind === "assign") {
       let group = (
         jobs?.find((job) => job.id === groupEdit.jobId) ??
         remoteJobs.find((remoteJob) => remoteRowIdOf(remoteJob) === groupEdit.jobId)
       )?.state.group;
-      if (group) ee.add(group);
-    } else ee.add(groupEdit.from);
+      if (group) excluded.add(group);
+    } else excluded.add(groupEdit.from);
     let trimmed = query_3.trim();
     let lower = trimmed.toLowerCase();
-    return [...Xi]
-      .filter((Xt) => !ee.has(Xt) && Xt.toLowerCase().startsWith(lower))
-      .sort((Xt, to) => {
-        let _o = Xt.startsWith(trimmed);
-        let Go = to.startsWith(trimmed);
-        return _o !== Go ? (_o ? -1 : 1) : Xt.localeCompare(to);
+    return [...knownGroups]
+      .filter((group) => !excluded.has(group) && group.toLowerCase().startsWith(lower))
+      .sort((groupA, groupB) => {
+        let aStartsWith = groupA.startsWith(trimmed);
+        let bStartsWith = groupB.startsWith(trimmed);
+        return aStartsWith !== bStartsWith ? (aStartsWith ? -1 : 1) : groupA.localeCompare(groupB);
       });
-  }, [groupEdit, Xi, jobs, remoteJobs, query_3]);
-  let trimmed = query_3.trim();
-  let Zi = trimmed !== "" && isReservedGroupName(trimmed);
+  }, [groupEdit, knownGroups, jobs, remoteJobs, query_3]);
+  let name = query_3.trim();
+  let isReserved = name !== "" && isReservedGroupName(name);
   let isNew =
     groupEdit !== null &&
-    trimmed !== "" &&
-    !Zi &&
-    !Xi.has(trimmed) &&
-    !(groupEdit.kind === "rename" && groupEdit.from === trimmed);
-  let matchesExisting = Wo.includes(trimmed);
-  let joined_2 = Wo.join(`
+    name !== "" &&
+    !isReserved &&
+    !knownGroups.has(name) &&
+    !(groupEdit.kind === "rename" && groupEdit.from === name);
+  let matchesExisting = groupSuggestions.includes(name);
+  let joined_2 = groupSuggestions.join(`
 `);
-  P(() => {
-    Ue.setGroupPickIdx(
-      groupEdit?.kind === "assign" && trimmed !== "" && trimmed !== groupEdit.cur && Wo.length > 0 ? 0 : -1,
+  useEffect(() => {
+    view.setGroupPickIdx(
+      groupEdit?.kind === "assign" && name !== "" && name !== groupEdit.cur && groupSuggestions.length > 0
+        ? 0
+        : -1,
     );
-  }, [joined_2, trimmed]);
+  }, [joined_2, name]);
   let panelOpen =
-    groupEdit?.kind === "assign" && trimmed !== "" && trimmed !== groupEdit.cur && Wo.length > 0;
-  let Aa = templates.get(cwd) ?? EMPTY_AGENT_SUGGESTIONS;
-  let ag = routines.get(cwd) ?? EMPTY_SKILL_SUGGESTIONS;
-  let mentionedTemplate = findMentionedTemplate(query, allRepos, Aa, ag);
-  let Bn = mentionedTemplate ?? oo;
-  let fu = templates.get(Bn) ?? EMPTY_AGENT_SUGGESTIONS;
-  let Jn = Q(() => mergeSuggestionsByName(fu, Aa), [fu, Aa]);
-  let La = skills.get(Bn) ?? skills.get(cwd) ?? EMPTY_SKILL_SUGGESTIONS;
-  let _n = routines.get(Bn) ?? routines.get(cwd) ?? EMPTY_SKILL_SUGGESTIONS;
-  let ur = prependModeCharacterToInput(query, mode, jobs, cwdFilter);
-  let cr = Q(
-    () =>
-      parseDraftInput(query, mode, ur, {
-        templates: Jn,
-        allRepos,
-        routines: _n,
-      }),
-    [mode, ur, query, Jn, allRepos, _n],
+    groupEdit?.kind === "assign" && name !== "" && name !== groupEdit.cur && groupSuggestions.length > 0;
+  let launcherTemplates = templates.get(cwd) ?? EMPTY_AGENT_SUGGESTIONS;
+  let launcherRoutines = routines.get(cwd) ?? EMPTY_SKILL_SUGGESTIONS;
+  let mentionedTemplate = findMentionedTemplate(query, allRepos, launcherTemplates, launcherRoutines);
+  let targetCwd = mentionedTemplate ?? effectiveCwd;
+  let targetTemplates = templates.get(targetCwd) ?? EMPTY_AGENT_SUGGESTIONS;
+  let templatesForTarget = useMemo(
+    () => mergeSuggestionsByName(targetTemplates, launcherTemplates),
+    [targetTemplates, launcherTemplates],
   );
-  let mu = ce(
-    (ee) =>
-      relaunchAgentsView(ee, {
+  let skillsForTarget = skills.get(targetCwd) ?? skills.get(cwd) ?? EMPTY_SKILL_SUGGESTIONS;
+  let routinesForTarget = routines.get(targetCwd) ?? routines.get(cwd) ?? EMPTY_SKILL_SUGGESTIONS;
+  let linkMatchId = prependModeCharacterToInput(query, mode, jobs, cwdFilter);
+  let dispatch = useMemo(
+    () =>
+      parseDraftInput(query, mode, linkMatchId, {
+        templates: templatesForTarget,
+        allRepos,
+        routines: routinesForTarget,
+      }),
+    [mode, linkMatchId, query, templatesForTarget, allRepos, routinesForTarget],
+  );
+  let relaunch = useCallback(
+    (reason) =>
+      relaunchAgentsView(reason, {
         cwdFilter,
         dispatchDefaults,
         typedAgent,
@@ -1735,184 +1764,209 @@ function FleetView({
   );
   useInterval(
     () => {
-      let ee = Number(process.env[CLAUDE_AGENTS_AUTO_RELAUNCHED_AT]) || 0;
-      if (Date.now() - ee < RELAUNCH_COOLDOWN_MS) return;
+      let relaunchedAt = Number(process.env[CLAUDE_AGENTS_AUTO_RELAUNCHED_AT]) || 0;
+      if (Date.now() - relaunchedAt < RELAUNCH_COOLDOWN_MS) return;
       if (Date.now() - getLastInteractionTime() < RELAUNCH_RECENT_MS) return;
-      mu("auto");
+      relaunch("auto");
     },
-    Ho && !terminalFocus ? RELAUNCH_RECENT_MS : null,
+    autoUpdated && !terminalFocus ? RELAUNCH_RECENT_MS : null,
   );
-  let [pr, ui] = y(false);
-  let [Da, gu] = y(0);
-  let [Va, Ba] = y(null);
-  P(() => {
-    if (query && pr) ui(false);
-  }, [query, pr]);
-  P(() => {
-    if (Da !== 0) gu(0);
-  }, [query, pr, Bn]);
-  let [dg, hu] = Uy((ee) => ee + 1, 0);
-  let lg = Q(
+  let [showAllAgents, setShowAllAgents] = useState(false);
+  let [selectedSuggestionIdx, setSelectedSuggestionIdx] = useState(0);
+  let [hoveredSuggestionId, setHoveredSuggestionId] = useState(null);
+  useEffect(() => {
+    if (query && showAllAgents) setShowAllAgents(false);
+  }, [query, showAllAgents]);
+  useEffect(() => {
+    if (selectedSuggestionIdx !== 0) setSelectedSuggestionIdx(0);
+  }, [query, showAllAgents, targetCwd]);
+  let [suggestionsGen, bumpSuggGen] = useReducer((gen) => gen + 1, 0);
+  let dispatchSuggestions = useMemo(
     () =>
       buildDispatchSuggestions(query, {
-        templates: Jn,
-        routines: _n,
+        templates: templatesForTarget,
+        routines: routinesForTarget,
         repos: allRepos,
         worktreeBranches,
-        skills: La,
-        models: fn,
-        dispatch: cr,
-        showAllAgents: pr,
+        skills: skillsForTarget,
+        models: modelSuggestionList,
+        dispatch,
+        showAllAgents,
       }),
-    [query, Jn, _n, allRepos, worktreeBranches, La, fn, cr, pr, dg],
+    [
+      query,
+      templatesForTarget,
+      routinesForTarget,
+      allRepos,
+      worktreeBranches,
+      skillsForTarget,
+      modelSuggestionList,
+      dispatch,
+      showAllAgents,
+      suggestionsGen,
+    ],
   );
   let { firstWord, isSlashQuery, atMatch, slashMatch, modelArgMatch, templateNames, repoNames, suggestions } =
-    lg;
-  P(() => {
-    if (atMatch) Ce.refreshLauncher(cwd);
-  }, [atMatch, Ce, cwd]);
-  let bu = (ee) => {
-    Ba(null);
-    if (ee.kind === "model" && modelArgMatch) {
-      setQuery(`/model ${ee.name}`);
+    dispatchSuggestions;
+  useEffect(() => {
+    if (atMatch) catalog.refreshLauncher(cwd);
+  }, [atMatch, catalog, cwd]);
+  let applySuggestion = (suggestion) => {
+    setHoveredSuggestionId(null);
+    if (suggestion.kind === "model" && modelArgMatch) {
+      setQuery(`/model ${suggestion.name}`);
       return;
     }
-    let Ve = SUGGESTION_KIND_LABELS[ee.kind];
-    setQuery(atMatch || slashMatch ? replaceTrailingMention(query, Ve, ee.name) : `${Ve}${ee.name} `);
+    let kindLabel = SUGGESTION_KIND_LABELS[suggestion.kind];
+    setQuery(
+      atMatch || slashMatch
+        ? replaceTrailingMention(query, kindLabel, suggestion.name)
+        : `${kindLabel}${suggestion.name} `,
+    );
   };
   let pickSuggestion = () =>
-    (Va ? suggestions.find((suggestion) => `${suggestion.kind}:${suggestion.name}` === Va) : undefined) ??
-    suggestions[Math.min(Da, suggestions.length - 1)];
-  let Ga = Q(
+    (hoveredSuggestionId
+      ? suggestions.find((suggestion) => `${suggestion.kind}:${suggestion.name}` === hoveredSuggestionId)
+      : undefined) ?? suggestions[Math.min(selectedSuggestionIdx, suggestions.length - 1)];
+  let jobActions = useMemo(
     () =>
       buildJobActions(
         roster.reload,
         (followId) => {
-          ke.followId = followId;
+          selection.followId = followId;
         },
         roster.optimistic,
         roster.noteDeleteRefusal,
         roster.deleteRefusalOf,
         storageV5,
       ),
-    [roster, ke, storageV5],
+    [roster, selection, storageV5],
   );
-  let onStop = ce(
-    async (ee) => {
-      let found = Ga.find((et) => et.label === "stop");
+  let onStop = useCallback(
+    async (job) => {
+      let found = jobActions.find((action) => action.label === "stop");
       if (!found) throw Error("the stop action is missing");
-      await found.run(ee, {
+      await found.run(job, {
         bulk: false,
       });
     },
-    [Ga],
+    [jobActions],
   );
-  P(() => {
+  useEffect(() => {
     logForDebugging("[PERF:bg-remount-end]");
     logFeatureOk("screen_fleet_view");
   }, []);
-  let Ua = ce(
+  let pruneReplyDraftsNow = useCallback(
     () =>
-      pruneReplyDrafts(We, roster, {
+      pruneReplyDrafts(editor, roster, {
         jobs,
         pendings,
         adoptedPeers,
-        remoteJobs: St,
+        remoteJobs: remoteJobsForView,
         remoteListLoaded,
       }),
-    [We, roster, jobs, pendings, adoptedPeers, St, remoteListLoaded],
+    [editor, roster, jobs, pendings, adoptedPeers, remoteJobsForView, remoteListLoaded],
   );
-  P(() => {
-    Ua();
-  }, [Ua]);
+  useEffect(() => {
+    pruneReplyDraftsNow();
+  }, [pruneReplyDraftsNow]);
   useInterval(() => {
-    if (We.hasReplyDrafts()) Ua();
+    if (editor.hasReplyDrafts()) pruneReplyDraftsNow();
   }, 15000);
-  let wu = R(null);
-  let Ka = ce(() => {
-    let ee = wu.current;
-    wu.current = null;
+  let pendingPersistRef = useRef(null);
+  let flushPending = useCallback(() => {
+    let pendingValue = pendingPersistRef.current;
+    pendingPersistRef.current = null;
   }, [storageV5]);
-  let debouncedCallback = useDebouncedCallback(Ka, 300);
-  P(() => Ka, [Ka]);
-  let switchTab = (ee) => {
-    if (ee === Ue.getSnapshot().activeTab) return;
-    if (ee === "remote" && !returnFalseAttention()) return;
-    Ue.setActiveTab(ee);
+  let debouncedCallback = useDebouncedCallback(flushPending, 300);
+  useEffect(() => flushPending, [flushPending]);
+  let switchTab = (tab) => {
+    if (tab === view.getSnapshot().activeTab) return;
+    if (tab === "remote" && !returnFalseAttention()) return;
+    view.setActiveTab(tab);
     setHint(null);
     setError(null);
-    ke.followOrigin = null;
-    He.disarm();
-    if (ee === "remote") roster.loadRemote();
+    selection.followOrigin = null;
+    deleteConfirm.disarm();
+    if (tab === "remote") roster.loadRemote();
   };
-  let Eu = (ee) => roster.liveStatus(ee);
+  let liveStatus = (job) => roster.liveStatus(job);
   let peersEnabled =
     isCrossSessionMessagingEnabled() && getFeatureValue_CACHED_MAY_BE_STALE("tengu_fleetview_peers", false);
-  let [wg, Sg] = y(() => Date.now());
+  let [ageNowTick, setAgeNowTick] = useState(() => Date.now());
   let isScreenReaderEnabled = useIsScreenReaderEnabled();
-  let ageNow = isScreenReaderEnabled ? wg : undefined;
+  let ageNow = isScreenReaderEnabled ? ageNowTick : undefined;
   let now = Date.now();
-  let ku = Q(() => new Set((jobs ?? []).filter((ee) => isLoopJob(ee.state)).map((ee) => ee.id)), [jobs]);
-  let any = (jobs ?? []).some((ee) => {
-    if (!ku.has(ee.id)) return false;
-    let nextAt = loopKicks.get(ee.state.sessionId)?.nextAt;
+  let loopJobIds = useMemo(
+    () => new Set((jobs ?? []).filter((job) => isLoopJob(job.state)).map((job) => job.id)),
+    [jobs],
+  );
+  let any = (jobs ?? []).some((job) => {
+    if (!loopJobIds.has(job.id)) return false;
+    let nextAt = loopKicks.get(job.state.sessionId)?.nextAt;
     return nextAt != null && nextAt > now && nextAt - now < 60000;
   });
   useInterval(
-    () => Sg(Date.now()),
-    isScreenReaderEnabled ? DISPATCH_TIMEOUT_MS : any ? 1000 : jobs?.length || St.length ? 30000 : null,
+    () => setAgeNowTick(Date.now()),
+    isScreenReaderEnabled
+      ? DISPATCH_TIMEOUT_MS
+      : any
+        ? 1000
+        : jobs?.length || remoteJobsForView.length
+          ? 30000
+          : null,
   );
-  P(() => {
-    claimSpareFromPool(At, true, dispatchDefaults, templates.get(At), storageV5);
-  }, [At, dispatchDefaults, templates, storageV5]);
-  P(() => {
-    if (De.agentLastUsedMigrationDone) return;
-    De.agentLastUsedMigrationDone = true;
-    backfillAgentLastUsed(storageV5).then((ee) => {
-      if (ee) hu();
+  useEffect(() => {
+    claimSpareFromPool(launcherScope, true, dispatchDefaults, templates.get(launcherScope), storageV5);
+  }, [launcherScope, dispatchDefaults, templates, storageV5]);
+  useEffect(() => {
+    if (hostState.agentLastUsedMigrationDone) return;
+    hostState.agentLastUsedMigrationDone = true;
+    backfillAgentLastUsed(storageV5).then((changed) => {
+      if (changed) bumpSuggGen();
     });
-  }, [De, storageV5]);
-  P(() => Ce.loadTarget(Bn, storageV5), [Ce, Bn, storageV5]);
+  }, [hostState, storageV5]);
+  useEffect(() => catalog.loadTarget(targetCwd, storageV5), [catalog, targetCwd, storageV5]);
   let { addNotification } = useNotifications();
-  let selection = useSelection();
-  let onCopied = (ee) => {
-    addNotification(buildCopiedNotification(ee));
+  let selection_2 = useSelection();
+  let onCopied = (text) => {
+    addNotification(buildCopiedNotification(text));
   };
-  let copyOnSelect = useCopyOnSelect(selection, true, onCopied);
-  useSelectionBgColor(selection);
-  let _u = modalPagerAction(selection, copyOnSelect, onCopied);
-  useSelectionClearKeybinding(selection);
-  zt(() => {
-    let ee = getSecondRootError().get(process.stdout);
-    if (!ee) return;
-    ee.onHyperlinkClick = (Ve) => {
+  let copyOnSelect = useCopyOnSelect(selection_2, true, onCopied);
+  useSelectionBgColor(selection_2);
+  let handleModalPager = modalPagerAction(selection_2, copyOnSelect, onCopied);
+  useSelectionClearKeybinding(selection_2);
+  useLayoutEffect(() => {
+    let rootError = getSecondRootError().get(process.stdout);
+    if (!rootError) return;
+    rootError.onHyperlinkClick = (url) => {
       let et = false;
-      let { activeTab, previewOpen } = Ue.getSnapshot();
-      let { error } = We.getSnapshot();
-      openClickedLink(Ve);
+      let { activeTab, previewOpen } = view.getSnapshot();
+      let { error } = editor.getSnapshot();
+      openClickedLink(url);
     };
     return () => {
-      ee.onHyperlinkClick = undefined;
+      rootError.onHyperlinkClick = undefined;
     };
-  }, [Ue, We, false]);
+  }, [view, editor, false]);
   let showRemoteTabs = false;
-  let hasCredentials = Q(() => getAuthTokenSource().hasToken, []);
-  let Tu = CloudListFailureNotice({
-    onCloudTab: activeTab === "remote" && !me && !previewOpen,
-    remoteJobs: St,
+  let hasCredentials = useMemo(() => getAuthTokenSource().hasToken, []);
+  let cloudListNotice = CloudListFailureNotice({
+    onCloudTab: activeTab === "remote" && !isSimpleView && !previewOpen,
+    remoteJobs: remoteJobsForView,
     remoteListLoaded,
     remoteListFailure,
   });
-  let Ou = false;
+  let endsWithOlderSessionsLine = false;
   let fleetRows = buildFleetRows({
     jobs,
     adoptedPeers,
-    remoteJobs: St,
+    remoteJobs: remoteJobsForView,
     pendings,
     prStatuses,
-    liveStatus: Eu,
-    heldInTerminal: (ee) => roster.terminalHolderOf(ee) !== undefined,
-    loopJobIds: ku,
+    liveStatus,
+    heldInTerminal: (job) => roster.terminalHolderOf(job) !== undefined,
+    loopJobIds,
     loopKicks,
     focusedIdx,
     hoverFocusIdx,
@@ -1923,22 +1977,25 @@ function FleetView({
     activeTab,
     query,
     mode,
-    dispatch: cr,
-    linkMatchId: ur,
+    dispatch,
+    linkMatchId,
     dispatchRepoCwd: mentionedTemplate,
     pendingDelete: pending,
     earlierEntries,
     cwdFilter,
     initialJobId,
-    simpleView: me,
-    simpleWantsRemote: Je,
+    simpleView: isSimpleView,
+    simpleWantsRemote: wantsRemote,
     peersEnabled,
     showRemoteTabs,
     launcherCwd: cwd,
     launcherGroup,
-    scopedFallbackOrigin: At,
+    scopedFallbackOrigin: launcherScope,
     termRows:
-      rows - (Tu !== null && St.length > 0 ? CLOUD_LIST_ATTEMPTS : 0) - (pathOwnRow ? 1 : 0) - (Ou ? 1 : 0),
+      rows -
+      (cloudListNotice !== null && remoteJobsForView.length > 0 ? CLOUD_LIST_ATTEMPTS : 0) -
+      (pathOwnRow ? 1 : 0) -
+      (endsWithOlderSessionsLine ? 1 : 0),
     columns,
     now,
     ageNow,
@@ -1969,33 +2026,35 @@ function FleetView({
     queryIsFilter,
     hasNameFilter,
   } = fleetRows;
-  let mi = (ee) => rows_2.findIndex((Ve) => Ve.kind === "job" && Ve.job.id === ee);
-  $e.releasePromoted(jobSessionIds);
-  if (me && Ue.firstImpression("simple")) logFeatureOk("fleet_view_simple");
-  if (hasNameFilter && Ue.firstImpression("nameFilter")) logFeatureOk("fleet_view_name_filter");
-  if (built.doneFoldHidden > 0 && Ue.firstImpression("fold"))
+  let findRowIndex = (jobId) => rows_2.findIndex((row) => row.kind === "job" && row.job.id === jobId);
+  attach.releasePromoted(jobSessionIds);
+  if (isSimpleView && view.firstImpression("simple")) logFeatureOk("fleet_view_simple");
+  if (hasNameFilter && view.firstImpression("nameFilter")) logFeatureOk("fleet_view_name_filter");
+  if (built.doneFoldHidden > 0 && view.firstImpression("fold"))
     logEvent("tengu_fleetview_fold_shown", {
       done_count: built.doneCount,
       hidden_count: built.doneFoldHidden,
       k: simpleBuilt?.doneCap ?? doneCap,
       terminal_rows: rows,
     });
-  P(() => {
+  useEffect(() => {
     if (jobs === null || !overlaidLoadLanded) return;
-    let ee = (et) => isOtherLocalDaemonJob(et, originJobId) && !roster.isHolding(et.id);
-    let Ve = (et) => jobTempo(et.state) === "completed";
-    emitFinishedJobs(De.resultSeen, {
+    let isCandidate = (job) => isOtherLocalDaemonJob(job, originJobId) && !roster.isHolding(job.id);
+    let isCompleted = (job) => jobTempo(job.state) === "completed";
+    emitFinishedJobs(hostState.resultSeen, {
       visibleFinished: rows_2
-        .filter((et) => et.kind === "job")
-        .map((et) => et.job)
-        .filter((et) => ee(et) && Ve(et)),
-      allFinished: jobs.filter((job) => ee(job) && Ve(job)),
-      allCandidates: jobs.filter(ee),
+        .filter((row) => row.kind === "job")
+        .map((row) => row.job)
+        .filter((job) => isCandidate(job) && isCompleted(job)),
+      allFinished: jobs.filter((job) => isCandidate(job) && isCompleted(job)),
+      allCandidates: jobs.filter(isCandidate),
     });
-  }, [De, roster, rows_2, jobs, originJobId, overlaidLoadLanded]);
-  let Fg = Q(() => env.CLAUDE_CODE_DISABLE_TERMINAL_TITLE, []);
+  }, [hostState, roster, rows_2, jobs, originJobId, overlaidLoadLanded]);
+  let disableTitle = useMemo(() => env.CLAUDE_CODE_DISABLE_TERMINAL_TITLE, []);
   useTerminalTitle(
-    Fg ? null : terminalTitle(count(scopedJobs, (ee) => jobTempo(ee.state, Eu(ee)) === "blocked")),
+    disableTitle
+      ? null
+      : terminalTitle(count(scopedJobs, (job) => jobTempo(job.state, liveStatus(job)) === "blocked")),
   );
   useJobBandNotifications(
     scopedLocalJobs
@@ -2009,250 +2068,262 @@ function FleetView({
         outcome: terminalOutcome(scopedLocalJob.state.state),
         selfDriving: isSelfDriving(scopedLocalJob.state),
       })),
-    Oe,
+    awayLoopState,
   );
-  let Pg = ke.followId ?? focused?.id ?? focusedRow?.group;
-  P(() => {
-    if (He.pending !== null && He.pending.id === ke.followId) return;
-    He.disarm();
-  }, [Pg]);
-  zt(() => {
-    ke.syncRows(rows_2);
-    if (!ke.getSnapshot().draftPick) return;
-    if (!queryIsFilter) ke.releasePick(rows_2, homeIdx, !hasComposedDispatch && !byGroup);
-    else if (hasNameFilter && !ke.followId) ke.followPick(homeIdx, rows_2[homeIdx]);
+  let followKey = selection.followId ?? focused?.id ?? focusedRow?.group;
+  useEffect(() => {
+    if (deleteConfirm.pending !== null && deleteConfirm.pending.id === selection.followId) return;
+    deleteConfirm.disarm();
+  }, [followKey]);
+  useLayoutEffect(() => {
+    selection.syncRows(rows_2);
+    if (!selection.getSnapshot().draftPick) return;
+    if (!queryIsFilter) selection.releasePick(rows_2, homeIdx, !hasComposedDispatch && !byGroup);
+    else if (hasNameFilter && !selection.followId) selection.followPick(homeIdx, rows_2[homeIdx]);
   });
-  P(() => {
+  useEffect(() => {
     if (pendings.length === 0 || !jobs) return;
     let filtered = pendings.filter((pending) => jobs.some((job) => job.id === pending.id));
     if (filtered.length === 0) return;
     roster.settleLandedPendings(filtered);
-    let followId = ke.followId;
-    if (followId && filtered.some((et) => et.id === followId)) {
-      let et = mi(followId);
-      if (et >= 0) ke.focus(et);
+    let followId = selection.followId;
+    if (followId && filtered.some((pending) => pending.id === followId)) {
+      let index = findRowIndex(followId);
+      if (index >= 0) selection.focus(index);
     }
-  }, [roster, ke, pendings, jobs]);
-  P(() => {
-    if (ke.isFirstQueryOfLook()) return;
-    if (We.takeProgrammaticChange()) return;
+  }, [roster, selection, pendings, jobs]);
+  useEffect(() => {
+    if (selection.isFirstQueryOfLook()) return;
+    if (editor.takeProgrammaticChange()) return;
     setError(null);
     setHint(null);
     if (!queryIsFilter) return;
-    if (ur) {
-      let ee = mi(ur);
-      if (ee >= 0) ke.followPick(ee, rows_2[ee]);
-      else ke.clearFollow();
+    if (linkMatchId) {
+      let index = findRowIndex(linkMatchId);
+      if (index >= 0) selection.followPick(index, rows_2[index]);
+      else selection.clearFollow();
       return;
     }
     if (hasNameFilter) {
-      ke.followPick(homeIdx, rows_2[homeIdx]);
+      selection.followPick(homeIdx, rows_2[homeIdx]);
       return;
     }
-    ke.clearFollow();
-    ke.focus(homeIdx);
+    selection.clearFollow();
+    selection.focus(homeIdx);
   }, [query]);
-  P(() => {
-    if (focusIsFromHover || (!byState && (draftPick || ke.getSnapshot().draftPick))) return;
-    if (pt !== dispatchOrigin) Nt(dispatchOrigin);
-  }, [dispatchOrigin, focusIsFromHover, draftPick, byState, pt]);
-  P(() => {
-    ke.clampFocus(rows_2.length);
-  }, [ke, rows_2.length]);
-  P(() => {
-    if (ur) {
-      ke.savedFocusJobId = null;
+  useEffect(() => {
+    if (focusIsFromHover || (!byState && (draftPick || selection.getSnapshot().draftPick))) return;
+    if (dispatchOriginState !== dispatchOrigin) setDispatchOrigin(dispatchOrigin);
+  }, [dispatchOrigin, focusIsFromHover, draftPick, byState, dispatchOriginState]);
+  useEffect(() => {
+    selection.clampFocus(rows_2.length);
+  }, [selection, rows_2.length]);
+  useEffect(() => {
+    if (linkMatchId) {
+      selection.savedFocusJobId = null;
       return;
     }
     if (!hasComposedDispatch) {
-      let savedFocusJobId = ke.savedFocusJobId;
-      ke.savedFocusJobId = null;
-      if (savedFocusJobId && hasNameFilter) ke.returnPickTo(savedFocusJobId);
+      let savedFocusJobId = selection.savedFocusJobId;
+      selection.savedFocusJobId = null;
+      if (savedFocusJobId && hasNameFilter) selection.returnPickTo(savedFocusJobId);
       else if (savedFocusJobId) {
-        ke.followOrigin = null;
-        ke.followId = savedFocusJobId;
-        let Go = mi(savedFocusJobId);
-        if (Go >= 0) ke.focus(Go);
+        selection.followOrigin = null;
+        selection.followId = savedFocusJobId;
+        let index = findRowIndex(savedFocusJobId);
+        if (index >= 0) selection.focus(index);
       }
       return;
     }
-    let focusedIdx = ke.getSnapshot().focusedIdx;
-    let Ve = rows_2[focusedIdx];
-    if (Ve?.kind === "job" && ke.savedFocusJobId === null) ke.savedFocusJobId = Ve.job.id;
-    let et = (_o) => rows_2.findIndex((Go) => Go.kind === "header" && _o(Go));
-    let Xt = -1;
-    let to = null;
-    if (byState) to = "working";
+    let focusedIdx = selection.getSnapshot().focusedIdx;
+    let row = rows_2[focusedIdx];
+    if (row?.kind === "job" && selection.savedFocusJobId === null) selection.savedFocusJobId = row.job.id;
+    let findHeaderIndex = (matches) => rows_2.findIndex((row) => row.kind === "header" && matches(row));
+    let headerIdx = -1;
+    let group = null;
+    if (byState) group = "working";
     else if (mentionedTemplate) {
-      Xt = et((_o) => _o.origin === mentionedTemplate && _o.group !== "pinned");
-      if (Xt >= 0) to = rows_2[Xt].group;
-    } else if (Ve?.kind === "job") {
-      if (Ve.group === "pinned")
-        to =
-          rows_2.find((Go) => Go.kind === "header" && Go.origin === Ve.origin && Go.group !== "pinned")
-            ?.group ?? null;
-      else to = Ve.group;
-    } else if (Ve?.kind === "header") {
-      if (Ve.group !== "pinned") {
-        to = Ve.group;
-        Xt = focusedIdx;
+      headerIdx = findHeaderIndex((row) => row.origin === mentionedTemplate && row.group !== "pinned");
+      if (headerIdx >= 0) group = rows_2[headerIdx].group;
+    } else if (row?.kind === "job") {
+      if (row.group === "pinned")
+        group =
+          rows_2.find(
+            (candidateRow) =>
+              candidateRow.kind === "header" &&
+              candidateRow.origin === row.origin &&
+              candidateRow.group !== "pinned",
+          )?.group ?? null;
+      else group = row.group;
+    } else if (row?.kind === "header") {
+      if (row.group !== "pinned") {
+        group = row.group;
+        headerIdx = focusedIdx;
       }
     }
-    if (Xt < 0) return;
-    ke.followId = null;
-    ke.followOrigin = to;
-    if (Xt !== focusedIdx) ke.focus(Xt);
+    if (headerIdx < 0) return;
+    selection.followId = null;
+    selection.followOrigin = group;
+    if (headerIdx !== focusedIdx) selection.focus(headerIdx);
   }, [hasComposedDispatch, byState, mentionedTemplate]);
-  let Vu =
+  let shouldClosePreview =
     previewOpen &&
     (filtered.length === 0 ||
       (focusedRow !== undefined && focusedRow.kind !== "job") ||
-      (focusedRow === undefined && (ke.followId === null || mi(ke.followId) < 0)));
-  P(() => {
-    if (Vu) Ue.setPreviewOpen(false);
-  }, [Vu]);
-  let Bu = R(false);
-  P(() => {
-    if (ke.restoreAttempts >= 2 || jobs === null) return;
-    let ee = !!initialJobId?.startsWith("remote-");
-    let Ve = ee && St.some((to) => to.id === initialJobId);
-    if (ee && !remoteListLoaded && !Ve) return;
-    if (!initialJobId && activeTab === "remote" && !rows_2.some((to) => to.kind === "job")) {
-      Bu.current = St.length > 0;
+      (focusedRow === undefined && (selection.followId === null || findRowIndex(selection.followId) < 0)));
+  useEffect(() => {
+    if (shouldClosePreview) view.setPreviewOpen(false);
+  }, [shouldClosePreview]);
+  let sawRemoteRowsRef = useRef(false);
+  useEffect(() => {
+    if (selection.restoreAttempts >= 2 || jobs === null) return;
+    let isRemoteJob = !!initialJobId?.startsWith("remote-");
+    let remoteRowExists = isRemoteJob && remoteJobsForView.some((job) => job.id === initialJobId);
+    if (isRemoteJob && !remoteListLoaded && !remoteRowExists) return;
+    if (!initialJobId && activeTab === "remote" && !rows_2.some((row) => row.kind === "job")) {
+      sawRemoteRowsRef.current = remoteJobsForView.length > 0;
       return;
     }
-    if (!initialJobId && activeTab === "remote" && Bu.current && ke.followOrigin !== null) {
-      ke.restoreAttempts = 2;
+    if (
+      !initialJobId &&
+      activeTab === "remote" &&
+      sawRemoteRowsRef.current &&
+      selection.followOrigin !== null
+    ) {
+      selection.restoreAttempts = 2;
       return;
     }
-    if (!me && ee && activeTab !== "remote" && Ve) {
-      Ue.setActiveTab("remote");
+    if (!isSimpleView && isRemoteJob && activeTab !== "remote" && remoteRowExists) {
+      view.setActiveTab("remote");
       return;
     }
-    if (!ee && initialJobId && jobs === ke.restoreCountedJobs) return;
-    ke.restoreCountedJobs = jobs;
-    ke.restoreAttempts++;
-    let et = () => {
-      let to = rows_2[homeIdx];
+    if (!isRemoteJob && initialJobId && jobs === selection.restoreCountedJobs) return;
+    selection.restoreCountedJobs = jobs;
+    selection.restoreAttempts++;
+    let restoreFocus = () => {
+      let row = rows_2[homeIdx];
       if (hasNameFilter) {
-        ke.followPick(homeIdx, to);
+        selection.followPick(homeIdx, row);
         return;
       }
-      ke.focus(homeIdx);
-      if (to?.kind === "job") {
-        ke.followId = to.job.id;
-        ke.followOrigin = null;
-      } else if (to?.kind === "earlier") {
-        ke.followId = null;
-        ke.followOrigin = null;
-      } else if (to?.kind === "header") {
-        ke.followId = null;
-        ke.followOrigin = to.group;
+      selection.focus(homeIdx);
+      if (row?.kind === "job") {
+        selection.followId = row.job.id;
+        selection.followOrigin = null;
+      } else if (row?.kind === "earlier") {
+        selection.followId = null;
+        selection.followOrigin = null;
+      } else if (row?.kind === "header") {
+        selection.followId = null;
+        selection.followOrigin = row.group;
       }
     };
     if (!initialJobId) {
-      ke.restoreAttempts =
-        rows_2.some((to) => to.kind === "job" || to.kind === "earlier") || !De.earlier.pending ? 2 : 1;
-      et();
+      selection.restoreAttempts =
+        rows_2.some((row) => row.kind === "job" || row.kind === "earlier") || !hostState.earlier.pending
+          ? 2
+          : 1;
+      restoreFocus();
       return;
     }
-    let Xt = mi(initialJobId);
-    if (Xt >= 0) {
-      ke.restoreAttempts = 2;
-      ke.focus(Xt);
-      ke.followId = initialJobId;
-    } else if (ke.restoreAttempts >= 2) et();
-  }, [jobs, St, remoteListLoaded, activeTab, initialJobId, homeIdx]);
-  let Za = {
-    editor: We,
+    let index = findRowIndex(initialJobId);
+    if (index >= 0) {
+      selection.restoreAttempts = 2;
+      selection.focus(index);
+      selection.followId = initialJobId;
+    } else if (selection.restoreAttempts >= 2) restoreFocus();
+  }, [jobs, remoteJobsForView, remoteListLoaded, activeTab, initialJobId, homeIdx]);
+  let handlers = {
+    editor,
     roster,
-    selection: ke,
-    view: Ue,
-    attach: $e,
-    deleteConfirm: He,
+    selection,
+    view,
+    attach,
+    deleteConfirm,
     storageV5,
     onAction,
     pendings,
-    mountAt: kn,
-    canonicalLauncherCwd: Kt,
+    mountAt,
+    canonicalLauncherCwd: canonicalCwd,
     cwdFilter,
     parseScope: {
-      templates: Jn,
+      templates: templatesForTarget,
       allRepos,
-      routines: _n,
+      routines: routinesForTarget,
     },
   };
-  let openEarlier = (ee, Ve) => openEarlierSession(Za, ee, Ve);
-  let ns = (ee, Ve) => {
-    let et = queryIsFilter && ee ? groupOf.get(ee.id) : undefined;
-    if (et !== undefined) ke.uncollapse(qt(et));
-    attachToJob(Za, ee, Ve);
+  let openEarlier = (entry, channel) => openEarlierSession(handlers, entry, channel);
+  let openOrRespawn = (job, channel) => {
+    let group = queryIsFilter && job ? groupOf.get(job.id) : undefined;
+    if (group !== undefined) selection.uncollapse(groupKeyOf(group));
+    attachToJob(handlers, job, channel);
   };
-  let openNewSessionRow = (ee) => openNewSession(Za, ee);
-  let td = autoOpenJobId !== undefined && (!autoOpened || attachingJobId !== null);
-  P(() => {
-    if ($e.getSnapshot().autoOpened || !autoOpenJobId || jobs === null) return;
-    $e.markAutoOpened();
-    ns(jobs.find((job) => job.id === autoOpenJobId));
+  let openNewSessionRow = (origin) => openNewSession(handlers, origin);
+  let isAutoOpening = autoOpenJobId !== undefined && (!autoOpened || attachingJobId !== null);
+  useEffect(() => {
+    if (attach.getSnapshot().autoOpened || !autoOpenJobId || jobs === null) return;
+    attach.markAutoOpened();
+    openOrRespawn(jobs.find((job) => job.id === autoOpenJobId));
   }, [autoOpenJobId, jobs]);
-  let ju = jobs !== null && !td && onlyOrigin && activeTab !== "remote" && !query && !me;
-  let any_2 = filtered.some((ee) => ee.id === initialJobId);
-  P(() => {
-    if (!ju || !Ue.firstImpression("empty")) return;
+  let showEmptyState =
+    jobs !== null && !isAutoOpening && onlyOrigin && activeTab !== "remote" && !query && !isSimpleView;
+  let any_2 = filtered.some((job) => job.id === initialJobId);
+  useEffect(() => {
+    if (!showEmptyState || !view.firstImpression("empty")) return;
     logEvent("tengu_fleetview_empty_state_shown", {
       skeleton: isOnboarding,
       has_origin: any_2,
     });
-  }, [ju, isOnboarding, any_2]);
-  let od = () => ({
+  }, [showEmptyState, isOnboarding, any_2]);
+  let buildKeyContext = () => ({
     submit: {
-      editor: We,
+      editor,
       roster,
-      selection: ke,
-      view: Ue,
-      attach: $e,
+      selection,
+      view,
+      attach,
       storageV5,
       credentials,
       onAction,
-      exit: go,
-      relaunchForUpdate: mu,
+      exit: onExit,
+      relaunchForUpdate: relaunch,
       searchKeyDown: handleKeyDown,
       willInsertNewline,
       vimMode,
-      dispatchInputActive: Nn,
-      canonicalLauncherCwd: Kt,
+      dispatchInputActive,
+      canonicalLauncherCwd: canonicalCwd,
       launcherCwd: cwd,
-      effectiveCwd: oo,
-      scopedFallbackOrigin: At,
+      effectiveCwd,
+      scopedFallbackOrigin: launcherScope,
       cwdFilter,
       dispatchDefaults,
       query,
-      dispatch: cr,
-      templates: Jn,
+      dispatch,
+      templates: templatesForTarget,
       allRepos,
-      routines: _n,
+      routines: routinesForTarget,
       templateCache: templates,
       suggestions,
-      skills: La,
+      skills: skillsForTarget,
       modelArgMatch,
-      modelSuggestions: fn,
+      modelSuggestions: modelSuggestionList,
       pickSuggestion,
-      applySuggestion: bu,
-      closeAgentBrowse: () => ui(false),
+      applySuggestion,
+      closeAgentBrowse: () => setShowAllAgents(false),
       jobSessionIds,
       builtRows: built.rows,
-      bumpSuggGen: hu,
-      mountAt: kn,
+      bumpSuggGen,
+      mountAt,
       focusedRow,
       focused,
       isOnboarding,
       toggleCollapse,
       openEarlier,
       openNewSessionRow,
-      openOrRespawn: ns,
+      openOrRespawn,
     },
-    deleteConfirm: He,
-    actions: Ga,
+    deleteConfirm,
+    actions: jobActions,
     rows: rows_2,
     focusedIdx,
     altOpenOrigin,
@@ -2262,19 +2333,19 @@ function FleetView({
     dispatchRepoCwd: mentionedTemplate,
     headerJobs,
     groupOf,
-    groupSuggestions: Wo,
+    groupSuggestions,
     previewOpen,
     helpOpen,
     debugOpen,
     groupEdit,
     renamingJobId: jobId,
     attachingJobId,
-    showAllAgents: pr,
+    showAllAgents,
     jobs,
     pendings,
     keybindings,
-    simpleView: me,
-    groupsEnabled: Ot,
+    simpleView: isSimpleView,
+    groupsEnabled,
     hasCredentials,
     termRows: rows,
     canGoBack,
@@ -2288,72 +2359,76 @@ function FleetView({
     setGroupDraft: setQuery_3,
     readRenameDraft: () => queryRef_2.current,
     readGroupDraft: () => queryRef_3.current,
-    pressExitKey: Po,
+    pressExitKey,
     switchTab,
-    clearRename: xe,
-    clearGroupEdit: ar,
+    clearRename,
+    clearGroupEdit: cancelGroupEdit,
     headerArmId,
-    ck: qt,
-    setShowAllAgents: ui,
-    setSelectedSuggestion: gu,
-    setHoveredSuggestionId: Ba,
-    attachPastedImage: So,
+    ck: groupKeyOf,
+    setShowAllAgents,
+    setSelectedSuggestion: setSelectedSuggestionIdx,
+    setHoveredSuggestionId,
+    attachPastedImage,
   });
-  let handleKeyDown_5 = (event) => handleFleetKey(od(), event);
+  let handleKeyDown_5 = (event) => handleFleetKey(buildKeyContext(), event);
   let { handleKeyDown: handleKeyDown_6, handlePaste: handlePaste_4 } = usePasteHandler({
     handleKeyDown: handleKeyDown_5,
-    onPaste: (ee) =>
+    onPaste: (paste) =>
       handlePasteIntoDispatch(
         {
-          editor: We,
-          dispatchInputActive: Nn,
-          insertAtCursor: (Ve) => handlePaste(new PasteEvent(Ve)),
+          editor,
+          dispatchInputActive,
+          insertAtCursor: (text) => handlePaste(new PasteEvent(text)),
         },
-        ee,
+        paste,
       ),
-    onImagePaste: So,
+    onImagePaste: attachPastedImage,
   });
-  let onPaste = (ee) => {
-    let snapshot = Ue.getSnapshot();
+  let onPaste = (paste) => {
+    let snapshot = view.getSnapshot();
     if (snapshot.resumePicker !== null || snapshot.settingPicker !== null) return;
     if (jobId !== null || snapshot.renaming !== null) {
-      handlePaste_2(ee);
+      handlePaste_2(paste);
       return;
     }
     if (groupEdit !== null) {
-      Ue.setGroupPickIdx(-1);
+      view.setGroupPickIdx(-1);
       if (snapshot.groupPristine) {
         setQuery_3("");
-        Ue.setGroupPristine(false);
+        view.setGroupPristine(false);
       }
-      handlePaste_3(ee);
+      handlePaste_3(paste);
       return;
     }
-    if (helpOpen) Ue.setHelpOpen(false);
-    handlePaste_4(ee);
+    if (helpOpen) view.setHelpOpen(false);
+    handlePaste_4(paste);
   };
-  let Dg = jobs !== null && !td;
-  let jE = R(null);
+  let isReady = jobs !== null && !isAutoOpening;
+  let jE = useRef(null);
   let inputClock = useInputClock();
-  let { subscribeFrames } = Se(kp);
-  zt(() => {
+  let { subscribeFrames } = useContext(APP_CONTEXT);
+  useLayoutEffect(() => {
     return;
-  }, [Dg, subscribeFrames]);
-  let Vg = (ee) => false;
-  if (jobs === null || td)
+  }, [isReady, subscribeFrames]);
+  let ignoreKey = (event) => false;
+  if (jobs === null || isAutoOpening)
     return jsxProd_default(Box, {
       tabIndex: 0,
       autoFocus: true,
-      onKeyDownCapture: _u,
+      onKeyDownCapture: handleModalPager,
       onKeyDown: (event) => {
-        if (event.ctrl && event.key === "d" && (me || (jobs === null && We.getSnapshot().query === ""))) {
+        if (
+          event.ctrl &&
+          event.key === "d" &&
+          (isSimpleView || (jobs === null && editor.getSnapshot().query === ""))
+        ) {
           event.stopImmediatePropagation();
-          Po("Ctrl-D");
+          pressExitKey("Ctrl-D");
           return;
         }
-        if (me && (event.name === "escape" || (event.ctrl && event.key === "c"))) {
+        if (isSimpleView && (event.name === "escape" || (event.ctrl && event.key === "c"))) {
           event.stopImmediatePropagation();
-          Po("Ctrl-C");
+          pressExitKey("Ctrl-C");
           return;
         }
         handleKeyDown(event);
@@ -2373,65 +2448,65 @@ function FleetView({
                 : `${SUGGESTION_KIND_LABELS[suggestion.kind]}${suggestion.name}`,
               description: `${SUGGESTION_KIND_LABELS_2[suggestion.kind]} \xB7 ${suggestion.description}`,
             })),
-            selectedSuggestion: Math.min(Da, suggestions.length - 1),
+            selectedSuggestion: Math.min(selectedSuggestionIdx, suggestions.length - 1),
             maxColumnWidth: 35,
             noPad: true,
-            hoveredId: Va,
-            onHoverChange: Ba,
-            onSelect: (ee) => {
-              let Ve = suggestions[ee];
-              if (Ve) {
-                bu(Ve);
-                ui(false);
+            hoveredId: hoveredSuggestionId,
+            onHoverChange: setHoveredSuggestionId,
+            onSelect: (index) => {
+              let suggestion = suggestions[index];
+              if (suggestion) {
+                applySuggestion(suggestion);
+                setShowAllAgents(false);
               }
             },
           }),
         })
       : null;
-  let Jg = new Set([
+  let mentionNames = new Set([
     ...templateNames,
-    ..._n.map((ee) => ee.name.toLowerCase()),
+    ...routinesForTarget.map((routine) => routine.name.toLowerCase()),
     ...repoNames.map((repoName) => repoName.toLowerCase()),
   ]);
-  let nd = isBashDispatch ? [] : mentionRanges(query, Jg);
+  let mentionRangesList = isBashDispatch ? [] : mentionRanges(query, mentionNames);
   let highlights = isBashDispatch
     ? []
-    : cr?.matched && firstWord === cr.template.name.toLowerCase()
-      ? [[0, firstWord.length], ...nd]
+    : dispatch?.matched && firstWord === dispatch.template.name.toLowerCase()
+      ? [[0, firstWord.length], ...mentionRangesList]
       : isSlashQuery
-        ? [[0, firstWord.length], ...nd]
-        : [...newSessionPrefixRanges(query), ...nd];
+        ? [[0, firstWord.length], ...mentionRangesList]
+        : [...newSessionPrefixRanges(query), ...mentionRangesList];
   return jsxProd_default_2(Box, {
-    ref: Xr,
+    ref: containerRef,
     flexDirection: "column",
     flexGrow: 1,
     tabIndex: 0,
     autoFocus: true,
-    onKeyDownCapture: (ee) => {
-      if (Vg(ee)) return;
-      _u(ee);
-      handleKeyDown_2(ee);
+    onKeyDownCapture: (event) => {
+      if (ignoreKey(event)) return;
+      handleModalPager(event);
+      handleKeyDown_2(event);
     },
     onKeyDown: handleKeyDown_6,
     onPaste,
     onWheel: (event) => {
       if (previewOpen) return;
       event.preventDefault();
-      Qr.current?.scrollBy(event.deltaY > 0 ? 3 : -3);
+      scrollRef.current?.scrollBy(event.deltaY > 0 ? 3 : -3);
     },
     children: [
       jsxProd_default(FleetRowList, {
-        owners: vt,
+        owners,
         layout: fleetRows,
-        scrollRef: Qr,
+        scrollRef,
         header: jsxProd_default(FleetComposer, {
-          editor: We,
+          editor,
           layout: fleetRows,
-          simpleView: me,
+          simpleView: isSimpleView,
           dispatchDefaults,
-          targetCwd: Bn,
+          targetCwd,
           launcherCwd: cwd,
-          canonicalLauncherCwd: Kt,
+          canonicalLauncherCwd: canonicalCwd,
           originJobId,
         }),
         renameInput: {
@@ -2441,27 +2516,27 @@ function FleetView({
         groupInput: {
           draft: query_3,
           cursor: cursorOffset_2,
-          suggestions: Wo,
-          reserved: Zi,
+          suggestions: groupSuggestions,
+          reserved: isReserved,
           isNew,
           matchesExisting,
           panelOpen,
         },
         initialJobId,
         cwdFilter,
-        simpleView: me,
-        endsWithOlderSessionsLine: Ou,
+        simpleView: isSimpleView,
+        endsWithOlderSessionsLine,
         hasCredentials,
-        mountAt: kn,
+        mountAt,
         actions: {
           toggleCollapse,
-          openOrRespawn: ns,
+          openOrRespawn,
           openEarlier,
           openNewSessionRow,
         },
       }),
       jsxProd_default(FleetSearchInput, {
-        owners: vt,
+        owners,
         layout: fleetRows,
         onCursorOffsetChange: setCursorOffset,
         highlights,
@@ -2470,40 +2545,40 @@ function FleetView({
           showCursor,
         },
         isTerminalFocused: terminalFocus,
-        simpleView: me,
+        simpleView: isSimpleView,
         showRemoteTabs,
         switchTab,
-        remoteJobs: St,
-        hasGroups: (jobs ?? []).some((ee) => !!ee.state.group),
+        remoteJobs: remoteJobsForView,
+        hasGroups: (jobs ?? []).some((job) => !!job.state.group),
         suggestionList,
-        cloudListNotice: Tu,
+        cloudListNotice,
       }),
       jsxProd_default(FleetBody, {
-        owners: vt,
+        owners,
         layout: fleetRows,
         footer: jsxProd_default(FleetFooter, {
-          owners: vt,
+          owners,
           layout: fleetRows,
-          simpleView: me,
+          simpleView: isSimpleView,
           canGoBack,
           dispatchDefaults,
           launcherCwd: cwd,
           storageV5,
           groupInput: {
             draft: query_3,
-            suggestions: Wo,
+            suggestions: groupSuggestions,
           },
           suggestionsOpen: suggestions.length > 0,
         }),
-        simpleView: me,
-        groupsEnabled: Ot,
+        simpleView: isSimpleView,
+        groupsEnabled,
         showRemoteTabs,
         canGoBack,
-        canMention: Jn.length + _n.length + Object.keys(allRepos).length > 0,
+        canMention: templatesForTarget.length + routinesForTarget.length + Object.keys(allRepos).length > 0,
         isTerminalFocused: terminalFocus,
-        awayLoop: Oe,
+        awayLoop: awayLoopState,
         storageV5,
-        onOpen: ns,
+        onOpen: openOrRespawn,
         onStop,
       }),
     ],
@@ -2512,26 +2587,26 @@ function FleetView({
 //@ chunk-93kwxas0.js:199227-199239 placement
 var awayLoopApi = null;
 //@ chunk-93kwxas0.js:199239-199279 placement
-function seedHostJobs(h, E, k) {
-  ensureFleetRoster(h, k).seedJobs(E);
+function seedHostJobs(visit, jobs, storageV5) {
+  ensureFleetRoster(visit, storageV5).seedJobs(jobs);
 }
 //@ chunk-93kwxas0.js:199279-199412 placement
-function remountClearSeq(h, lastFrameFillsCurrentViewport, k) {
-  if (h) return enterAltScreenSequence();
+function remountClearSeq(inAltScreen, lastFrameFillsCurrentViewport, frameClean) {
+  if (inAltScreen) return enterAltScreenSequence();
   let rows = getTerminalSize(process.stdout, null).rows;
   if (rows !== process.stdout.rows) return "";
-  return lastFrameFillsCurrentViewport && !k ? eraseViewportInPlace(rows) : "";
+  return lastFrameFillsCurrentViewport && !frameClean ? eraseViewportInPlace(rows) : "";
 }
 //@ chunk-93kwxas0.js:199412-209165 placement
-async function mountFleetView(h, E) {
-  let k = false;
-  function C() {
-    k = true;
+async function mountFleetView(renderer, options) {
+  let resized = false;
+  function onResize() {
+    resized = true;
   }
-  process.stdout.on("resize", C);
-  using x = {
+  process.stdout.on("resize", onResize);
+  using resizeCleanup = {
     [Symbol.dispose]: () => {
-      process.stdout.removeListener("resize", C);
+      process.stdout.removeListener("resize", onResize);
     },
   };
   let presentation = "inline";
@@ -2540,213 +2615,217 @@ async function mountFleetView(h, E) {
     await reportFatalAndExit(fatalExit.error);
     return;
   }
-  (await import("./chunk-7dsst868.js")).registerToolHosts();
+  (await import("../../services/remoteTools/registerToolHosts.js")).registerToolHosts();
   initBuiltinPlugins();
   initBundledSkills();
   if (isAgentSwarmsEnabled() && !hasTeammateModeSnapshot()) captureTeammateModeSnapshot();
-  setSpareExtraArgs(E?.dispatchExtraArgs ?? []);
+  setSpareExtraArgs(options?.dispatchExtraArgs ?? []);
   logEvent("tengu_bg_agent_action", {
     action: lit("list_open"),
     mode: fromEnum(getGlobalConfig().fleetViewGroupMode ?? "state"),
   });
-  let L = E?.host ?? createFleetViewHost();
+  let fleetHost = options?.host ?? createFleetViewHost();
   let rootSession = getRootSession();
   let host = rootSession.host;
   let project = getSessionProject(rootSession);
-  markJobFinished(L.resultSeen, E?.entryChannel);
+  markJobFinished(fleetHost.resultSeen, options?.entryChannel);
   if (!getGlobalConfig().hasOpenedAgentsView)
     await saveGlobalConfig(
-      (Fe) => ({
-        ...Fe,
+      (config) => ({
+        ...config,
         hasOpenedAgentsView: true,
       }),
-      E?.storageV5,
+      options?.storageV5,
     );
-  let N = [];
-  function X() {
-    let Fe;
-    while ((Fe = process.stdin.read()) !== null) {
-      if ((typeof Fe === "string" ? Buffer.from(Fe, "utf8") : Fe).includes(3)) {
+  let pendingInput = [];
+  function readStdin() {
+    let chunk;
+    while ((chunk = process.stdin.read()) !== null) {
+      if ((typeof chunk === "string" ? Buffer.from(chunk, "utf8") : chunk).includes(3)) {
         process.emit("SIGINT");
         return;
       }
-      N.push(Fe);
+      pendingInput.push(chunk);
     }
   }
-  process.stdin.on("readable", X);
+  process.stdin.on("readable", readStdin);
   await composePolicyLimitsForFleet({
-    storageV5: E?.storageV5,
-    credentials: E?.credentials,
+    storageV5: options?.storageV5,
+    credentials: options?.credentials,
   });
-  let cwdFilter = E?.cwdFilter
-    ? await canonicalizePath(resolve(E.cwdFilter), getRealPathOptions(E?.storageV5))
+  let cwdFilter = options?.cwdFilter
+    ? await canonicalizePath(resolve(options.cwdFilter), getRealPathOptions(options?.storageV5))
     : undefined;
-  let launch = resolveDispatchPermissionMode(E?.dispatchDefaults);
-  let storageV5 = isStorageV5Enabled() ? E?.storageV5 : undefined;
+  let launch = resolveDispatchPermissionMode(options?.dispatchDefaults);
+  let storageV5 = isStorageV5Enabled() ? options?.storageV5 : undefined;
   registerCleanup(storageV5 ? () => discardSpare(storageV5) : discardSpare);
   registerCleanup(openDaemonLease("claude agents"));
-  let oe = h;
-  let screen = E?.screen;
-  let se = (Fe) => {
-    if (screen) screen.update(Fe);
-    else screen = showScreen(oe, Fe);
+  let root = renderer;
+  let screen = options?.screen;
+  let showFrame = (element) => {
+    if (screen) screen.update(element);
+    else screen = showScreen(root, element);
   };
   let CLAUDE_AGENTS_SELECT = env.CLAUDE_AGENTS_SELECT;
-  let ae = noRemoteSessionCommands();
-  let me = E?.autoOpenJobId ?? ae?.short;
-  let left = ae?.left;
-  let le = me !== undefined && E?.canGoBack && ae === undefined;
-  let Oe = [];
-  let De = new Set();
-  let we;
-  let Re = false;
-  let je = false;
-  let st = new Set();
-  let mt = () =>
+  let cloudCommand = noRemoteSessionCommands();
+  let autoOpenJobId = options?.autoOpenJobId ?? cloudCommand?.short;
+  let left = cloudCommand?.left;
+  let canGoBackNow = autoOpenJobId !== undefined && options?.canGoBack && cloudCommand === undefined;
+  let visitedJobIds = [];
+  let endedJobIds = new Set();
+  let skippedJobId;
+  let resumedTab = false;
+  let firstLoop = false;
+  let takenJobIds = new Set();
+  let shouldStayInLoop = () =>
     awayLoopApi !== null &&
-    !je &&
+    !firstLoop &&
     neverEmbedded({
       presentation,
       rows: getTerminalSize(process.stdout, null).rows,
       embedded: false,
     });
-  let Ye = (Fe, Rt) => {
-    oe.unmount();
-    if (Rt && process.stdin.isTTY) setRawModeSafe(process.stdin, false);
-    if (Rt && shouldUseFullscreenByDefault()) process.stdout.write(exitAltScreenSequence());
-    if (Fe !== undefined)
-      process.stderr.write(`${Fe}
+  let leaveView = (errorMessageText, restoreTerminal) => {
+    root.unmount();
+    if (restoreTerminal && process.stdin.isTTY) setRawModeSafe(process.stdin, false);
+    if (restoreTerminal && shouldUseFullscreenByDefault()) process.stdout.write(exitAltScreenSequence());
+    if (errorMessageText !== undefined)
+      process.stderr.write(`${errorMessageText}
 `);
   };
-  let Lt = false;
-  let dt = CLAUDE_AGENTS_SELECT;
-  let notifiedState = createNotifiedState();
-  let eo = 0;
-  let Wt = (job) => {
-    let Rt = {
-      ...fleetAttachFields(job.id, dt, eo),
-      ...takeNotificationLatency(notifiedState, job.state.sessionId, Date.now()),
+  let booting = false;
+  let cliSelectJobId = CLAUDE_AGENTS_SELECT;
+  let tracker = createNotifiedState();
+  let attachVisitCount = 0;
+  let attachFieldsFor = (job) => {
+    let fields = {
+      ...fleetAttachFields(job.id, cliSelectJobId, attachVisitCount),
+      ...takeNotificationLatency(tracker, job.state.sessionId, Date.now()),
     };
-    eo++;
-    return Rt;
+    attachVisitCount++;
+    return fields;
   };
-  let originJobId = E?.originJobId;
-  let originSpawn = E?.originSpawn;
+  let originJobId = options?.originJobId;
+  let originSpawn = options?.originSpawn;
   delete process.env.CLAUDE_AGENTS_SELECT;
   let relaunchTab;
   let jobDraft = await readJobDraft(
-    await canonicalizePath(getCwd(), getRealPathOptions(E?.storageV5)),
-    E?.storageV5,
+    await canonicalizePath(getCwd(), getRealPathOptions(options?.storageV5)),
+    options?.storageV5,
   );
-  let roster = ensureFleetRoster(L, E?.storageV5);
-  ensureFleetSelection(L, roster, E?.storageV5, jobDraft?.collapsed);
-  let fleetEditor = ensureFleetEditor(L, {
+  let roster = ensureFleetRoster(fleetHost, options?.storageV5);
+  ensureFleetSelection(fleetHost, roster, options?.storageV5, jobDraft?.collapsed);
+  let fleetEditor = ensureFleetEditor(fleetHost, {
     query: jobDraft?.q || undefined,
   });
-  let fleetLiveStatus = ensureFleetLiveStatus(L);
+  let fleetLiveStatus = ensureFleetLiveStatus(fleetHost);
   sweepJobDrafts();
-  let Ot;
-  process.stdin.off("readable", X);
+  let appState;
+  process.stdin.off("readable", readStdin);
   let typedAhead = false;
-  while (N.length) process.stdin.unshift(N.pop());
-  let Ue;
-  if (me !== undefined) {
-    if (roster.jobs === null) roster.seedJobs(await listJobs(undefined, E?.storageV5));
-    let found = roster.jobs?.find((job) => job.id === me);
+  while (pendingInput.length) process.stdin.unshift(pendingInput.pop());
+  let pendingAction;
+  if (autoOpenJobId !== undefined) {
+    if (roster.jobs === null) roster.seedJobs(await listJobs(undefined, options?.storageV5));
+    let found = roster.jobs?.find((job) => job.id === autoOpenJobId);
     if (found) {
       let gestureT0 = performance.now();
-      let Vt = randomUUID();
-      startAttachBeacon(Vt, "fleet", E?.storageV5).catch(() => {});
-      let Be = await safeRespawnBgSession(
+      let gestureId = randomUUID();
+      startAttachBeacon(gestureId, "fleet", options?.storageV5).catch(() => {});
+      let respawnResult = await safeRespawnBgSession(
         found.id,
         {
           knownState: found.state,
         },
-        E?.storageV5,
+        options?.storageV5,
       );
-      if (awayLoopApi && ae !== undefined) {
-        if (!Be.ok && !Be.alive) {
-          await awayLoopApi.backToCloudSession(ae.left, false, E?.storageV5);
+      if (awayLoopApi && cloudCommand !== undefined) {
+        if (!respawnResult.ok && !respawnResult.alive) {
+          await awayLoopApi.backToCloudSession(cloudCommand.left, false, options?.storageV5);
           left = undefined;
         }
         if (shouldUseFullscreenByDefault()) process.stdout.write(enterAltScreenSequence());
       }
-      Ue = {
+      pendingAction = {
         type: "open",
         job: found,
-        respawnResult: Be,
+        respawnResult,
         gestureT0,
-        gestureId: Vt,
+        gestureId,
       };
-    } else if (awayLoopApi && ae !== undefined)
-      await awayLoopApi.backToCloudSession(ae.left, false, E?.storageV5);
-    else if (awayLoopApi && originJobId !== undefined && (mt() || parseSwitchTarget(me).kind === "cloud")) {
-      let Rt = await awayLoopApi.sessionTabsNext({
+    } else if (awayLoopApi && cloudCommand !== undefined)
+      await awayLoopApi.backToCloudSession(cloudCommand.left, false, options?.storageV5);
+    else if (
+      awayLoopApi &&
+      originJobId !== undefined &&
+      (shouldStayInLoop() || parseSwitchTarget(autoOpenJobId).kind === "cloud")
+    ) {
+      let tabResult = await awayLoopApi.sessionTabsNext({
         ending: {
           kind: "asked",
-          intent: parseSwitchTarget(me),
+          intent: parseSwitchTarget(autoOpenJobId),
         },
         leftJobId: originJobId,
         visited: [],
-        ended: De,
+        ended: endedJobIds,
         landed: undefined,
-        storageV5: E?.storageV5,
+        storageV5: options?.storageV5,
       });
-      let Vt =
-        Rt.kind === "cloud"
+      let tabAction =
+        tabResult.kind === "cloud"
           ? await awayLoopApi.stayAfterCloudTab(
-              Rt,
-              E?.dispatchExtraArgs ?? [],
+              tabResult,
+              options?.dispatchExtraArgs ?? [],
               false,
               () => originSpawn?.settled === true && !originSpawn.ok,
-              E?.storageV5,
+              options?.storageV5,
             )
-          : Rt;
-      if (Vt.kind === "open") {
-        if (Vt.jobs) roster.seedJobs(Vt.jobs);
-        let Be = await awayLoopApi.jobToOpen(Vt.jobId, roster.jobs, E?.storageV5);
-        if (Be) {
-          Ue = {
+          : tabResult;
+      if (tabAction.kind === "open") {
+        if (tabAction.jobs) roster.seedJobs(tabAction.jobs);
+        let jobToOpen = await awayLoopApi.jobToOpen(tabAction.jobId, roster.jobs, options?.storageV5);
+        if (jobToOpen) {
+          pendingAction = {
             type: "open",
-            job: Be,
+            job: jobToOpen,
           };
-          Re = !Vt.asked;
-          Lt = Vt.booting;
+          resumedTab = !tabAction.asked;
+          booting = tabAction.booting;
         }
       }
-      if (Ue === undefined) {
+      if (pendingAction === undefined) {
         if (originSpawn) originSpawn.resumeHintRequested = true;
-        Ye(awayLoopApi.NO_SESSION_QUIT_LINE, false);
+        leaveView(awayLoopApi.NO_SESSION_QUIT_LINE, false);
         return;
       }
     }
   }
-  let Qt = false;
-  let tt;
-  let ze = Ue !== undefined && originJobId !== undefined;
+  let commandNamesDirty = false;
+  let defaultsSnapshot;
+  let shouldOfferBack = pendingAction !== undefined && originJobId !== undefined;
   for (;;) {
-    if (Ue === undefined && ze && mt()) {
-      Ye(awayLoopApi?.NO_SESSION_QUIT_LINE, true);
+    if (pendingAction === undefined && shouldOfferBack && shouldStayInLoop()) {
+      leaveView(awayLoopApi?.NO_SESSION_QUIT_LINE, true);
       break;
     }
-    je ||= Ue === undefined;
-    if (Qt) invalidateCommandNames();
-    tt = checkDispatchDefaultsChanged(tt, launch, E?.storageV5);
-    Qt = true;
-    let Fe =
-      Ue ??
+    firstLoop ||= pendingAction === undefined;
+    if (commandNamesDirty) invalidateCommandNames();
+    defaultsSnapshot = checkDispatchDefaultsChanged(defaultsSnapshot, launch, options?.storageV5);
+    commandNamesDirty = true;
+    let action =
+      pendingAction ??
       (await new Promise((resolve) => {
-        se(
+        showFrame(
           jsxProd_default(FleetViewScreen, {
-            killRing: L.killRing,
+            killRing: fleetHost.killRing,
             children: jsxProd_default(
               AppRoot,
               {
                 host,
                 project,
-                storageV5: E?.storageV5,
-                initialState: Ot && {
-                  ...Ot,
+                storageV5: options?.storageV5,
+                initialState: appState && {
+                  ...appState,
                   notifications: {
                     current: null,
                     queue: [],
@@ -2754,25 +2833,25 @@ async function mountFleetView(h, E) {
                   },
                 },
                 onChangeAppState: ({ newState }) => {
-                  Ot = newState;
+                  appState = newState;
                 },
                 children: jsxProd_default(FleetView, {
                   onAction: resolve,
-                  host: L,
+                  host: fleetHost,
                   initialJobId: CLAUDE_AGENTS_SELECT,
-                  awayLoop: notifiedState,
+                  awayLoop: tracker,
                   originJobId,
                   originSpawn,
                   cwdFilter,
                   dispatchDefaults: launch,
-                  typedAgent: E?.dispatchDefaults?.agent,
-                  canGoBack: E?.canGoBack,
-                  autoOpenJobId: me,
-                  entryChannel: E?.entryChannel,
+                  typedAgent: options?.dispatchDefaults?.agent,
+                  canGoBack: options?.canGoBack,
+                  autoOpenJobId,
+                  entryChannel: options?.entryChannel,
                   relaunchTab,
                   typedAhead,
-                  fromLauncher: E?.fromLauncher,
-                  storageV5: E?.storageV5,
+                  fromLauncher: options?.fromLauncher,
+                  storageV5: options?.storageV5,
                 }),
               },
               "agents-list",
@@ -2781,30 +2860,30 @@ async function mountFleetView(h, E) {
         );
         setJitPolicyAfterStartup();
       }));
-    Ue = undefined;
-    let Rt = Re;
-    Re = false;
-    let Vt = Lt;
-    Lt = false;
-    let Be = shouldUseFullscreenByDefault();
-    if (Fe.type === "back") {
-      oe.unmount();
+    pendingAction = undefined;
+    let asked = resumedTab;
+    resumedTab = false;
+    let booting_2 = booting;
+    booting = false;
+    let fullscreen = shouldUseFullscreenByDefault();
+    if (action.type === "back") {
+      root.unmount();
       break;
     }
-    if (Fe.type === "open" && Fe.job.id !== me) le = false;
-    me = undefined;
-    if (Fe.type === "login") {
-      let { getLoginStartingMessage, Login } = await import("./chunk-whwtfsqf.js");
-      let Qe = false;
+    if (action.type === "open" && action.job.id !== autoOpenJobId) canGoBackNow = false;
+    autoOpenJobId = undefined;
+    if (action.type === "login") {
+      let { getLoginStartingMessage, Login } = await import("../../services/oauth/postLoginHooks.js");
+      let orgReloaded = false;
       let winner = await Promise.race([
         new Promise((resolve) => {
           screen = undefined;
           showScreen(
-            oe,
+            root,
             jsxProd_default(AppRoot, {
-              storageV5: E?.storageV5,
-              initialState: Ot && {
-                ...Ot,
+              storageV5: options?.storageV5,
+              initialState: appState && {
+                ...appState,
                 notifications: {
                   current: null,
                   queue: [],
@@ -2812,152 +2891,165 @@ async function mountFleetView(h, E) {
                 },
               },
               onChangeAppState: ({ newState }) => {
-                Ot = newState;
+                appState = newState;
               },
               children: jsxProd_default(Login, {
                 onDone: resolve,
-                onOrgDocumentsReload: (Ne) => {
-                  if (Ne === "previous") Qe = true;
+                onOrgDocumentsReload: (reloadOutcome) => {
+                  if (reloadOutcome === "previous") orgReloaded = true;
                 },
                 startingMessage: getLoginStartingMessage(),
               }),
             }),
           );
         }),
-        oe.waitUntilExit().then(() => "exited"),
+        root.waitUntilExit().then(() => "exited"),
       ]);
       if (winner === "exited") break;
-      showScreen(oe, null);
+      showScreen(root, null);
       if (process.stdout.isTTY) process.stdout.write(getEraseScreenSequence());
       if (winner) {
-        let { runOrgMemoryAuthBoundary } = await import("./chunk-whwtfsqf.js");
+        let { runOrgMemoryAuthBoundary } = await import("../../services/oauth/postLoginHooks.js");
         runOrgMemoryAuthBoundary();
-        await discardSpare(E?.storageV5);
+        await discardSpare(options?.storageV5);
         if (getAPIProvider() === "gateway") {
-          oe.unmount();
+          root.unmount();
           break;
         }
         fleetEditor.setHint("Login successful");
       }
-      if (winner || Qe) {
+      if (winner || orgReloaded) {
         let [
-          { refreshRemoteManagedSettings: St },
-          { refreshPolicyLimits: Ne },
-          { declareNoConsentSurface: uo },
-          { HoldForSettingsReload: Kt, enforceOrgConfigGateAfterStepSignIn: po },
+          { refreshRemoteManagedSettings: refreshRemoteSettings },
+          { refreshPolicyLimits: refreshPolicy },
+          { declareNoConsentSurface: declareNoConsent },
+          {
+            HoldForSettingsReload: holdForSettingsReload,
+            enforceOrgConfigGateAfterStepSignIn: enforceOrgGate,
+          },
         ] = await Promise.all([
-          import("./chunk-r42q9dtm.js"),
-          import("./chunk-qchbrsbw.js"),
-          import("./chunk-0evt542c.js"),
-          import("./chunk-xcagebg7.js"),
+          import("../../services/remoteManagedSettings/loader.js"),
+          import("../../services/policyLimits/DefaultPolicyLimitsClientSlot.lazy.js"),
+          import("../../services/remoteManagedSettings/securityCheck.js"),
+          import("../TeleportError.js"),
         ]);
-        uo();
-        let reload = Promise.all([St(undefined, E?.storageV5, E?.credentials), Ne().catch(() => {})]);
+        declareNoConsent();
+        let reload = Promise.all([
+          refreshRemoteSettings(undefined, options?.storageV5, options?.credentials),
+          refreshPolicy().catch(() => {}),
+        ]);
         await new Promise((resolve) => {
           showScreen(
-            oe,
+            root,
             jsxProd_default(AppRoot, {
-              storageV5: E?.storageV5,
-              children: jsxProd_default(Kt, {
+              storageV5: options?.storageV5,
+              children: jsxProd_default(holdForSettingsReload, {
                 reload,
                 onDone: resolve,
               }),
             }),
           );
         });
-        showScreen(oe, null);
-        await po(oe);
+        showScreen(root, null);
+        await enforceOrgGate(root);
       }
       continue;
     }
-    let gt = getSecondRootError().get(process.stdout);
-    if (Be && Fe.type === "open") gt?.handoffAltScreen();
-    if (getPlatform() === "windows" && Fe.type === "open") gt?.handoffRawMode();
-    let lastFrameFillsCurrentViewport = gt?.lastFrameFillsCurrentViewport ?? false;
-    if (!Be) se(null);
-    oe.unmount();
-    if (Fe.type === "done") break;
+    let termErrors = getSecondRootError().get(process.stdout);
+    if (fullscreen && action.type === "open") termErrors?.handoffAltScreen();
+    if (getPlatform() === "windows" && action.type === "open") termErrors?.handoffRawMode();
+    let lastFrameFillsCurrentViewport = termErrors?.lastFrameFillsCurrentViewport ?? false;
+    if (!fullscreen) showFrame(null);
+    root.unmount();
+    if (action.type === "done") break;
     if (getPlatform() === "windows" && process.stdin.isTTY) {
       setRawModeSafe(process.stdin, true);
       process.stdin.ref();
     }
-    let $e = "";
-    let ht = Be ? onExit(() => void process.stdout.write(exitAltScreenSequence() + $e)) : () => {};
+    let exitNotice = "";
+    let cleanupExitHook = fullscreen
+      ? onExit(() => void process.stdout.write(exitAltScreenSequence() + exitNotice))
+      : () => {};
     if (
       CLAUDE_AGENTS_SELECT !== undefined &&
-      CLAUDE_AGENTS_SELECT !== Fe.job.id &&
-      CLAUDE_AGENTS_SELECT !== we
+      CLAUDE_AGENTS_SELECT !== action.job.id &&
+      CLAUDE_AGENTS_SELECT !== skippedJobId
     ) {
-      let vt = CLAUDE_AGENTS_SELECT;
-      Oe.splice(0, Oe.length, vt, ...Oe.filter((rt) => rt !== vt));
+      let selectedJobId = CLAUDE_AGENTS_SELECT;
+      visitedJobIds.splice(
+        0,
+        visitedJobIds.length,
+        selectedJobId,
+        ...visitedJobIds.filter((visitedId) => visitedId !== selectedJobId),
+      );
     }
-    CLAUDE_AGENTS_SELECT = Fe.job.id;
-    we = undefined;
-    if (!Fe.keepQuery) fleetEditor.dropDraft();
-    L.agentLastUsedMigrationDone = true;
+    CLAUDE_AGENTS_SELECT = action.job.id;
+    skippedJobId = undefined;
+    if (!action.keepQuery) fleetEditor.dropDraft();
+    fleetHost.agentLastUsedMigrationDone = true;
     let now = Date.now();
-    let We;
-    if (Fe.respawnResult === undefined && Fe.gestureId === undefined) {
-      We = randomUUID();
-      startAttachBeacon(We, "fleet", E?.storageV5).catch(() => {});
+    let gestureId_2;
+    if (action.respawnResult === undefined && action.gestureId === undefined) {
+      gestureId_2 = randomUUID();
+      startAttachBeacon(gestureId_2, "fleet", options?.storageV5).catch(() => {});
     }
-    let Jt =
+    let sessionTabsEnabled =
       awayLoopApi !== null &&
       neverEmbedded({
         presentation,
         rows: NOTICE_WIDTH_LIMIT,
         embedded: false,
       }) &&
-      !je &&
-      !(le && E?.screen !== undefined) &&
-      !isExecLaunch(Fe.job.state);
-    if (Jt) le = false;
-    let qe = {
+      !firstLoop &&
+      !(canGoBackNow && options?.screen !== undefined) &&
+      !isExecLaunch(action.job.state);
+    if (sessionTabsEnabled) canGoBackNow = false;
+    let attachEnding = {
       kind: "failed",
     };
-    let He =
-      Fe.respawnResult ??
+    let respawn =
+      action.respawnResult ??
       (await safeRespawnBgSession(
-        Fe.job.id,
-        Fe.freshDispatch
+        action.job.id,
+        action.freshDispatch
           ? undefined
           : {
-              knownState: Fe.job.state,
+              knownState: action.job.state,
             },
-        E?.storageV5,
+        options?.storageV5,
       ));
     logForDebugging(
-      `[FV-attach] respawnJob ${Fe.job.id}: ok=${He.ok} alive=${!He.ok && He.alive} err=${He.ok ? "" : He.error}`,
+      `[FV-attach] respawnJob ${action.job.id}: ok=${respawn.ok} alive=${!respawn.ok && respawn.alive} err=${respawn.ok ? "" : respawn.error}`,
     );
-    if (He.ok || He.alive) {
-      logFleetJobAction("attach", Fe.job.state, {
-        jobId: sanitizeMarkName(Fe.job.id),
-        attachShort: sanitizeMarkName(He.short ?? Fe.job.id),
-        ...Wt(Fe.job),
+    if (respawn.ok || respawn.alive) {
+      logFleetJobAction("attach", action.job.state, {
+        jobId: sanitizeMarkName(action.job.id),
+        attachShort: sanitizeMarkName(respawn.short ?? action.job.id),
+        ...attachFieldsFor(action.job),
       });
-      process.stdout.write(osc(OSC.SET_TITLE_AND_ICON, getJobTitle(Fe.job.state, true)));
+      process.stdout.write(osc(OSC.SET_TITLE_AND_ICON, getJobTitle(action.job.state, true)));
       let now_2 = Date.now();
-      let rt = {
-        gestureId: Fe.gestureId ?? We ?? randomUUID(),
+      let gesture = {
+        gestureId: action.gestureId ?? gestureId_2 ?? randomUUID(),
         attempt: 0,
-        t0: Fe.gestureT0,
+        t0: action.gestureT0,
         surface: "fleet",
         interactive: {},
       };
-      if (Fe.gestureId === undefined && We === undefined)
-        startAttachBeacon(rt.gestureId, "fleet", E?.storageV5).catch(() => {});
-      let Qe = (Ne, gateStdinUntilFirstFrame) =>
-        attachJob(Ne, {
-          alreadyInAlt: Be,
-          onExitNotice: (Kt) => {
-            $e = Kt;
+      if (action.gestureId === undefined && gestureId_2 === undefined)
+        startAttachBeacon(gesture.gestureId, "fleet", options?.storageV5).catch(() => {});
+      let runAttach = (shortJobId, gateStdinUntilFirstFrame) =>
+        attachJob(shortJobId, {
+          alreadyInAlt: fullscreen,
+          onExitNotice: (notice) => {
+            exitNotice = notice;
           },
           gateStdinUntilFirstFrame,
-          gesture: rt,
-          sessionTabs: Jt,
-          cloudTabs: awayLoopApi?.hostRestartsForCloudTabs(E?.dispatchExtraArgs ?? []) ?? false,
-          tabsLanding: Fe.landing,
-          storageV5: E?.storageV5,
+          gesture,
+          sessionTabs: sessionTabsEnabled,
+          cloudTabs: awayLoopApi?.hostRestartsForCloudTabs(options?.dispatchExtraArgs ?? []) ?? false,
+          tabsLanding: action.landing,
+          storageV5: options?.storageV5,
         }).catch((error) => {
           logError(error);
           logFeatureBad("job_attach", "threw");
@@ -2966,140 +3058,166 @@ async function mountFleetView(h, E) {
             msg: `Couldn't attach \u2014 ${errorMessage(error)}`,
           };
         });
-      let Xe = await Qe(He.short ?? Fe.job.id, He.ok || Fe.afterNoResponse === true || Rt || Vt);
-      let St = false;
-      if (Xe.kind === "error" && Xe.orphaned && !isExecLaunch(Fe.job.state) && !isTerminalShutdown()) {
-        let Ne = await safeRespawnBgSession(
-          Fe.job.id,
+      let attachResult = await runAttach(
+        respawn.short ?? action.job.id,
+        respawn.ok || action.afterNoResponse === true || asked || booting_2,
+      );
+      let recovered = false;
+      if (
+        attachResult.kind === "error" &&
+        attachResult.orphaned &&
+        !isExecLaunch(action.job.state) &&
+        !isTerminalShutdown()
+      ) {
+        let retryRespawn = await safeRespawnBgSession(
+          action.job.id,
           {
             force: true,
-            knownState: Fe.job.state,
+            knownState: action.job.state,
           },
-          E?.storageV5,
+          options?.storageV5,
         );
-        if (Ne.ok || Ne.alive) {
-          St = true;
-          Xe = await Qe(Ne.short ?? Fe.job.id, Ne.ok);
+        if (retryRespawn.ok || retryRespawn.alive) {
+          recovered = true;
+          attachResult = await runAttach(retryRespawn.short ?? action.job.id, retryRespawn.ok);
         } else
-          Xe = {
+          attachResult = {
             kind: "error",
-            msg: Ne.error,
+            msg: retryRespawn.error,
           };
       }
-      clearAttachBeacon(rt.gestureId, E?.storageV5).catch(() => {});
+      clearAttachBeacon(gesture.gestureId, options?.storageV5).catch(() => {});
       if (isTerminalShutdown()) return heldUntilExit();
-      if (awayLoopApi) qe = awayLoopApi.attachEndingOf(Xe, !Rt);
-      if (Xe.kind === "error" && !Xe.ended) {
-        if (Xe.notResponding) {
-          if (isExecLaunch(Fe.job.state)) fleetEditor.setError(COMMAND_NOT_RESPONDING_TEXT);
-          else offerJobRestart(fleetLiveStatus, fleetEditor, Fe.job.id);
-        } else fleetEditor.setError(Xe.msg);
-        if (St && Xe.orphaned) logFeatureSad("fleet_view_open", "recovered_then_crashed");
-        else logFeatureBad("fleet_view_open", St ? "orphan_recovery_failed" : "attach_failed");
+      if (awayLoopApi) attachEnding = awayLoopApi.attachEndingOf(attachResult, !asked);
+      if (attachResult.kind === "error" && !attachResult.ended) {
+        if (attachResult.notResponding) {
+          if (isExecLaunch(action.job.state)) fleetEditor.setError(COMMAND_NOT_RESPONDING_TEXT);
+          else offerJobRestart(fleetLiveStatus, fleetEditor, action.job.id);
+        } else fleetEditor.setError(attachResult.msg);
+        if (recovered && attachResult.orphaned) logFeatureSad("fleet_view_open", "recovered_then_crashed");
+        else logFeatureBad("fleet_view_open", recovered ? "orphan_recovery_failed" : "attach_failed");
       } else {
-        if (Xe.msg) fleetEditor.setError(Xe.msg);
+        if (attachResult.msg) fleetEditor.setError(attachResult.msg);
         logFeatureOk("fleet_view_open");
       }
-      logFleetJobAction("detach", Fe.job.state, {
+      logFleetJobAction("detach", action.job.state, {
         attachDurationMs: Date.now() - now_2,
       });
       logForDebugging(`[FV-attach] attachJob returned after ${Date.now() - now}ms \u2014 remounting list`);
     } else {
-      fleetEditor.setError(He.error);
-      let gestureId = Fe.gestureId ?? We;
-      if (gestureId !== undefined) clearAttachBeacon(gestureId, E?.storageV5).catch(() => {});
-      if (He.errorCode === "fork_transcript_never_materialized")
+      fleetEditor.setError(respawn.error);
+      let gestureId = action.gestureId ?? gestureId_2;
+      if (gestureId !== undefined) clearAttachBeacon(gestureId, options?.storageV5).catch(() => {});
+      if (respawn.errorCode === "fork_transcript_never_materialized")
         logFeatureSad("fleet_view_open", "fork_transcript_never_materialized");
       else logFeatureBad("fleet_view_open", "respawn_failed");
     }
     resetInteractionBaseline();
-    let ct = false;
-    if (awayLoopApi && !le && mt()) {
-      oe = await createRoot(getBaseRenderOptions(false));
+    let recreatedRoot = false;
+    if (awayLoopApi && !canGoBackNow && shouldStayInLoop()) {
+      root = await createRoot(getBaseRenderOptions(false));
       screen = undefined;
-      ct = true;
-      if (Be && (qe.kind === "ended" || qe.kind === "failed")) process.stdout.write(enterAltScreenSequence());
-      if (qe.kind === "failed" || (qe.kind === "back" && qe.why === "taken")) st.add(Fe.job.id);
+      recreatedRoot = true;
+      if (fullscreen && (attachEnding.kind === "ended" || attachEnding.kind === "failed"))
+        process.stdout.write(enterAltScreenSequence());
+      if (attachEnding.kind === "failed" || (attachEnding.kind === "back" && attachEnding.why === "taken"))
+        takenJobIds.add(action.job.id);
       else {
-        st.delete(Fe.job.id);
+        takenJobIds.delete(action.job.id);
         left = undefined;
       }
-      let vt = process.stdin.isTTY === true && process.stdin.isRaw !== true;
-      if (vt) setRawModeSafe(process.stdin, true);
-      if (qe.kind === "ended" || (qe.kind === "asked" && qe.intent.kind === "leave" && !qe.intent.running))
-        De.add(Fe.job.id);
-      else De.delete(Fe.job.id);
+      let rawModeChanged = process.stdin.isTTY === true && process.stdin.isRaw !== true;
+      if (rawModeChanged) setRawModeSafe(process.stdin, true);
+      if (
+        attachEnding.kind === "ended" ||
+        (attachEnding.kind === "asked" &&
+          attachEnding.intent.kind === "leave" &&
+          !attachEnding.intent.running)
+      )
+        endedJobIds.add(action.job.id);
+      else endedJobIds.delete(action.job.id);
       let { stayAfterCloudTab } = awayLoopApi;
-      let Qe = await awayLoopApi
+      let nextTab = await awayLoopApi
         .sessionTabsNext({
-          ending: qe,
-          leftJobId: Fe.job.id,
-          visited: Oe.filter((Xe) => !st.has(Xe)),
-          ended: De,
-          landed: He.ok || He.alive ? undefined : Fe.landing,
-          storageV5: E?.storageV5,
+          ending: attachEnding,
+          leftJobId: action.job.id,
+          visited: visitedJobIds.filter((visitedId) => !takenJobIds.has(visitedId)),
+          ended: endedJobIds,
+          landed: respawn.ok || respawn.alive ? undefined : action.landing,
+          storageV5: options?.storageV5,
         })
-        .then((Xe) =>
-          Xe.kind === "cloud"
-            ? stayAfterCloudTab(Xe, E?.dispatchExtraArgs ?? [], true, () => false, E?.storageV5)
-            : Xe,
+        .then((tabDecision) =>
+          tabDecision.kind === "cloud"
+            ? stayAfterCloudTab(
+                tabDecision,
+                options?.dispatchExtraArgs ?? [],
+                true,
+                () => false,
+                options?.storageV5,
+              )
+            : tabDecision,
         )
         .finally(() => {
-          if (vt) setRawModeSafe(process.stdin, false);
+          if (rawModeChanged) setRawModeSafe(process.stdin, false);
         });
-      if (Qe.kind === "quit") {
-        await awayLoopApi.backToCloudSession(left, true, E?.storageV5);
-        Ye(Qe.say, true);
-        ht();
+      if (nextTab.kind === "quit") {
+        await awayLoopApi.backToCloudSession(left, true, options?.storageV5);
+        leaveView(nextTab.say, true);
+        cleanupExitHook();
         break;
       }
-      if (Qe.kind === "open") {
-        if (Qe.jobs) roster.seedJobs(Qe.jobs);
-        let Xe = await awayLoopApi.jobToOpen(Qe.jobId, roster.jobs, E?.storageV5);
-        if (!Xe) {
-          await awayLoopApi.backToCloudSession(left, true, E?.storageV5);
-          Ye(awayLoopApi.NO_SESSION_QUIT_LINE, true);
-          ht();
+      if (nextTab.kind === "open") {
+        if (nextTab.jobs) roster.seedJobs(nextTab.jobs);
+        let jobToOpen = await awayLoopApi.jobToOpen(nextTab.jobId, roster.jobs, options?.storageV5);
+        if (!jobToOpen) {
+          await awayLoopApi.backToCloudSession(left, true, options?.storageV5);
+          leaveView(awayLoopApi.NO_SESSION_QUIT_LINE, true);
+          cleanupExitHook();
           break;
         }
-        Ue = {
+        pendingAction = {
           type: "open",
-          job: Xe,
-          ...(Qe.landing && {
-            landing: Qe.landing,
+          job: jobToOpen,
+          ...(nextTab.landing && {
+            landing: nextTab.landing,
           }),
         };
-        if (qe.kind === "asked" && qe.intent.kind === "quit") {
-          let id = Fe.job.id;
-          we = id;
-          Oe.splice(0, Oe.length, ...Oe.filter((Ne) => Ne !== id));
+        if (attachEnding.kind === "asked" && attachEnding.intent.kind === "quit") {
+          let id = action.job.id;
+          skippedJobId = id;
+          visitedJobIds.splice(
+            0,
+            visitedJobIds.length,
+            ...visitedJobIds.filter((visitedId) => visitedId !== id),
+          );
         }
-        Re = !Qe.asked;
-        Lt = Qe.booting;
-        le = false;
+        resumedTab = !nextTab.asked;
+        booting = nextTab.booting;
+        canGoBackNow = false;
         fleetEditor.setError(null);
-        ht();
+        cleanupExitHook();
         continue;
       }
     }
-    if (!ct) {
-      oe = await createRoot(getBaseRenderOptions(false));
+    if (!recreatedRoot) {
+      root = await createRoot(getBaseRenderOptions(false));
       screen = undefined;
     }
-    if (le) {
-      if (!Be) process.stdout.write(remountClearSeq(Be, lastFrameFillsCurrentViewport, k));
-      le = false;
-      ht();
-      screen ??= showScreen(oe, null);
+    if (canGoBackNow) {
+      if (!fullscreen)
+        process.stdout.write(remountClearSeq(fullscreen, lastFrameFillsCurrentViewport, resized));
+      canGoBackNow = false;
+      cleanupExitHook();
+      screen ??= showScreen(root, null);
       return {
         back: true,
-        root: oe,
+        root,
         screen,
       };
     }
-    process.stdout.write(remountClearSeq(Be, lastFrameFillsCurrentViewport, k));
+    process.stdout.write(remountClearSeq(fullscreen, lastFrameFillsCurrentViewport, resized));
     logForDebugging("[PERF:bg-remount-start]");
-    ht();
+    cleanupExitHook();
   }
 }
-export { mountFleetView };
+export { mountFleetView, remountClearSeq, seedHostJobs };

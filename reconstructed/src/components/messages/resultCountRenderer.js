@@ -17,13 +17,14 @@ import { Text } from "../../ink/components/Text.js";
 import { plural } from "../../utils/stringUtils.js";
 
 //@ chunk-scv4whf4.js:4534-4646 placement
-function createResultCountRenderer(o) {
-  return function (s) {
-    let t = s.results.length;
+function createResultCountRenderer(noun) {
+  return function (result) {
+    let count = result.results.length;
     return jsxProd_default(MessageResponse, {
       children: jsxProd_default_2(Text, {
-        children: [t, " ", plural(t, o)],
+        children: [count, " ", plural(count, noun)],
       }),
     });
   };
 }
+export { createResultCountRenderer };

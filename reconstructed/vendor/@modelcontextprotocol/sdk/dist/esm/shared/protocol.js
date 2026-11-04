@@ -29,7 +29,7 @@ import {
 } from "../types.js";
 import { isTerminal } from "../../cjs/experimental/tasks/interfaces.js";
 import { objectFromShape } from "../server/zod-compat.js";
-import { R, parseWithCompat } from "../server/zod-json-schema-compat.js";
+import { getMethodFromSchema, parseWithCompat } from "../server/zod-json-schema-compat.js";
 
 //@ chunk-zykv69v4.js:11497-11510 esm-fingerprint
 var DEFAULT_REQUEST_TIMEOUT_MSEC = 60000;
@@ -787,7 +787,7 @@ class Protocol {
     await this._transport.send(jsonrpcNotification, options);
   }
   setRequestHandler(requestSchema, handler) {
-    let method = R(requestSchema);
+    let method = getMethodFromSchema(requestSchema);
     this.assertRequestHandlerCapability(method);
     this._requestHandlers.set(method, (request, extra) => {
       let parsed = parseWithCompat(requestSchema, request);
@@ -802,7 +802,7 @@ class Protocol {
       throw Error(`A request handler for ${method} already exists, which would be overridden`);
   }
   setNotificationHandler(notificationSchema, handler) {
-    let method = R(notificationSchema);
+    let method = getMethodFromSchema(notificationSchema);
     this._notificationHandlers.set(method, (notification) => {
       let parsed = parseWithCompat(notificationSchema, notification);
       return Promise.resolve(handler(parsed));

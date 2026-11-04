@@ -12,6 +12,7 @@ import { createHash } from "crypto";
 import { homedir } from "os";
 import { fromSanitizer_SANITIZER_OUTPUT_ONLY, fromEnum } from "../services/analytics/safeMetadata.js";
 import { logEvent } from "../services/analytics/index.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:1399553-1399630 callgraph-fingerprint = hashFilePath (1)
 function hashFilePath(filePath) {
@@ -24,22 +25,26 @@ function hashFileContent(content) {
   return fromSanitizer_SANITIZER_OUTPUT_ONLY(createHash("sha256").update(content).digest("hex"));
 }
 //@ chunk-e6aww6q8.js:1399695-1399869 placement = registerSimplifySkill (0.379)
-var MAX_HASHED_CONTENT_BYTES = 102400;
-var SHADOWABLE_BUILTIN_SKILL_NAMES = new Set(["verify", "pr", "commit", "code-review", "simplify", "go"]);
-var USER_SKILL_PATH_RE =
-  /[/\\]\.claude[/\\](?:skills[/\\]([^/\\]+)[/\\]SKILL\.md|commands[/\\]([^/\\]+)\.md)$/;
+var MAX_HASHED_CONTENT_BYTES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var SHADOWABLE_BUILTIN_SKILL_NAMES;
+var USER_SKILL_PATH_RE;
+deferInit("chunk-e6aww6q8.js:1399695", () => {
+  MAX_HASHED_CONTENT_BYTES = 102400;
+  SHADOWABLE_BUILTIN_SKILL_NAMES = new Set(["verify", "pr", "commit", "code-review", "simplify", "go"]);
+  USER_SKILL_PATH_RE = /[/\\]\.claude[/\\](?:skills[/\\]([^/\\]+)[/\\]SKILL\.md|commands[/\\]([^/\\]+)\.md)$/;
+});
 //@ chunk-e6aww6q8.js:1399869-1400111 layout
-function skillFileMetadata(filePath, n = homedir()) {
+function skillFileMetadata(filePath, homeDir = homedir()) {
   let match = USER_SKILL_PATH_RE.exec(filePath);
   if (match?.index === undefined) return {};
-  let s = match[1] ?? match[2];
-  if (s === undefined) return {};
+  let skillName = match[1] ?? match[2];
+  if (skillName === undefined) return {};
   let sliced = filePath.slice(0, match.index);
   return {
     skill_file_name: fromSanitizer_SANITIZER_OUTPUT_ONLY(
-      SHADOWABLE_BUILTIN_SKILL_NAMES.has(s) ? s : "custom",
+      SHADOWABLE_BUILTIN_SKILL_NAMES.has(skillName) ? skillName : "custom",
     ),
-    skill_file_scope: fromEnum(n.length > 0 && sliced === n ? "user" : "project"),
+    skill_file_scope: fromEnum(homeDir.length > 0 && sliced === homeDir ? "user" : "project"),
   };
 }
 //@ chunk-e6aww6q8.js:1400111-1400523 fingerprint = logFileOperation (0.771)
@@ -56,9 +61,9 @@ function logFileOperation(params) {
     metadata.contentHash = hashFileContent(params.content);
   if (params.type !== undefined) metadata.type = fromEnum(params.type);
   if (params.operation !== "read") {
-    let r = skillFileMetadata(params.filePath);
-    if (r.skill_file_name !== undefined) metadata.skill_file_name = r.skill_file_name;
-    if (r.skill_file_scope !== undefined) metadata.skill_file_scope = r.skill_file_scope;
+    let metadata_2 = skillFileMetadata(params.filePath);
+    if (metadata_2.skill_file_name !== undefined) metadata.skill_file_name = metadata_2.skill_file_name;
+    if (metadata_2.skill_file_scope !== undefined) metadata.skill_file_scope = metadata_2.skill_file_scope;
   }
   logEvent("tengu_file_operation", metadata);
 }

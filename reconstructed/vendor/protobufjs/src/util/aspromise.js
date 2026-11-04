@@ -5,10 +5,10 @@
  * pieces: chunk-798ashq9.js (1)
  * attribution: cjs-require-graph 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-798ashq9.js:6325-6693 cjs-require-graph
-var require_aspromise = x(function (cjsExports, cjsModule) {
+var require_aspromise = __commonJS(function (cjsExports, cjsModule) {
   cjsModule.exports = asPromise;
   function asPromise(fn, ctx) {
     var params = Array(arguments.length - 1);

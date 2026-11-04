@@ -8,9 +8,9 @@
  * pieces: chunk-18hwfzwa.js (1)
  * attribution: fingerprint 1
  */
-import { w } from "../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import { useTheme_2 } from "../components/design-system/ThemeProvider.js";
-import { y, R, P } from "../../vendor/react/cjs/react.production.js";
+import { useState, useRef, useEffect } from "../../vendor/react/cjs/react.production.js";
 import { MEMO_CACHE_SENTINEL } from "../../runtime/bun-runtime.js";
 import { isRemoteSessionAvailable } from "../remote/remoteMode.js";
 import { isBgSession } from "../utils/concurrentSessions.js";
@@ -25,70 +25,70 @@ import { errorMessage } from "../utils/errors.js";
  * IDE 集成：检测可连接的 IDE（ws-ide/sse-ide），按 autoConnectIde 设置/flag 自动连接并加入动态 MCP 配置，必要时自动安装扩展，返回 {installationStatus, installExtension}。
  */
 function useIDEIntegration(props) {
-  let $ = w(13);
+  let $ = useMemoCache(13);
   let { autoConnectIdeFlag, onAutoConnectIde, requestDialog } = props;
   let { storageV5 } = useTheme_2();
-  let [ke, onInstallationComplete] = y(null);
-  let [Be, He] = y(null);
-  let ze;
+  let [installState, setInstallState] = useState(null);
+  let [extensionInstall, setExtensionInstall] = useState(null);
+  let startPromise;
   if ($[0] === MEMO_CACHE_SENTINEL) {
-    ze = Promise.resolve();
-    $[0] = ze;
-  } else ze = $[0];
-  let Xe = R(ze);
-  let rt;
+    startPromise = Promise.resolve();
+    $[0] = startPromise;
+  } else startPromise = $[0];
+  let startedRef = useRef(startPromise);
+  let startFn;
   if ($[1] === MEMO_CACHE_SENTINEL) {
-    rt = new Map();
-    $[1] = rt;
-  } else rt = $[1];
-  let kt = R(rt);
-  let At;
+    startFn = new Map();
+    $[1] = startFn;
+  } else startFn = $[1];
+  let startFnRef = useRef(startFn);
+  let addIde;
   if ($[2] === MEMO_CACHE_SENTINEL) {
-    At = (It) => {
-      let Ot = kt.current;
-      let Et = Ot.get(It);
-      if (Et) {
-        return Et;
+    addIde = (ide) => {
+      let map = startFnRef.current;
+      let existing = map.get(ide);
+      if (existing) {
+        return existing;
       }
-      let oo = Xe.current.then(
+      let pending = startedRef.current.then(
         () =>
           new Promise((resolve) => {
-            onInstallationComplete((Lt) => (Lt?.ideType === It ? null : Lt));
-            He({
-              ide: It,
+            setInstallState((ide_2) => (ide_2?.ideType === ide ? null : ide_2));
+            setExtensionInstall({
+              ide,
               onComplete: resolve,
             });
           }),
       );
-      Xe.current = oo;
-      Ot.set(It, oo);
-      oo.then(() => Ot.delete(It));
-      return oo;
+      startedRef.current = pending;
+      map.set(ide, pending);
+      pending.then(() => map.delete(ide));
+      return pending;
     };
-    $[2] = At;
-  } else At = $[2];
-  let installExtension = At;
-  let ide = Be?.ide ?? null;
-  let so = R(false);
-  let po;
-  let ao;
+    $[2] = addIde;
+  } else addIde = $[2];
+  let installExtension = addIde;
+  let ide = extensionInstall?.ide ?? null;
+  let isRefreshing = useRef(false);
+  let refreshFn;
+  let state;
   if (
     $[3] !== autoConnectIdeFlag ||
     $[4] !== ide ||
-    $[5] !== Be ||
+    $[5] !== extensionInstall ||
     $[6] !== onAutoConnectIde ||
     $[7] !== requestDialog ||
     $[8] !== storageV5
   ) {
-    po = () => {
+    refreshFn = () => {
       if (isRemoteSessionAvailable()) {
-        Be?.onComplete(null);
+        extensionInstall?.onComplete(null);
         return;
       }
       if (isBgSession() && !ide) {
         return;
       }
-      let addIde = function bo(ide_2) {
+      let addIde = function addIde_(ide_2) {
         if (!ide_2) {
           return;
         }
@@ -109,12 +109,12 @@ function useIDEIntegration(props) {
         addIde,
         ide,
         (installationStatus) => {
-          if (isBgSession() || so.current) {
+          if (isBgSession() || isRefreshing.current) {
             return;
           }
-          so.current = true;
-          let Ro = function Ro() {
-            so.current = false;
+          isRefreshing.current = true;
+          let finishInstall = function removeIde() {
+            isRefreshing.current = false;
           };
           requestDialog(
             IDE_ONBOARDING_DIALOG,
@@ -124,25 +124,25 @@ function useIDEIntegration(props) {
             {
               place: "under",
             },
-          ).then(Ro, Ro);
+          ).then(finishInstall, finishInstall);
         },
-        onInstallationComplete,
+        setInstallState,
         globalConfig.signal,
         storageV5,
       ).then(
-        (prev) => Be?.onComplete(prev),
+        (prev) => extensionInstall?.onComplete(prev),
         (status) => {
-          if (!Be) {
+          if (!extensionInstall) {
             return;
           }
-          let Wo = {
+          let result = {
             installed: false,
             error: errorMessage(status),
             installedVersion: null,
-            ideType: Be.ide,
+            ideType: extensionInstall.ide,
           };
-          onInstallationComplete(Wo);
-          Be.onComplete(Wo);
+          setInstallState(result);
+          extensionInstall.onComplete(result);
         },
       );
       return () => {
@@ -150,29 +150,29 @@ function useIDEIntegration(props) {
         abortIdeSearch();
       };
     };
-    ao = [autoConnectIdeFlag, Be, ide, onAutoConnectIde, requestDialog, storageV5];
+    state = [autoConnectIdeFlag, extensionInstall, ide, onAutoConnectIde, requestDialog, storageV5];
     $[3] = autoConnectIdeFlag;
     $[4] = ide;
-    $[5] = Be;
+    $[5] = extensionInstall;
     $[6] = onAutoConnectIde;
     $[7] = requestDialog;
     $[8] = storageV5;
-    $[9] = po;
-    $[10] = ao;
+    $[9] = refreshFn;
+    $[10] = state;
   } else {
-    po = $[9];
-    ao = $[10];
+    refreshFn = $[9];
+    state = $[10];
   }
-  P(po, ao);
-  let mn;
-  if ($[11] !== ke) {
-    mn = {
-      installationStatus: ke,
+  useEffect(refreshFn, state);
+  let snapshot;
+  if ($[11] !== installState) {
+    snapshot = {
+      installationStatus: installState,
       installExtension,
     };
-    $[11] = ke;
-    $[12] = mn;
-  } else mn = $[12];
-  return mn;
+    $[11] = installState;
+    $[12] = snapshot;
+  } else snapshot = $[12];
+  return snapshot;
 }
 export { useIDEIntegration };

@@ -5,7 +5,7 @@
  * pieces: chunk-bwbq4xvm.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../runtime/bun-runtime.js";
 import { require_parse_options } from "../internal/parse-options.js";
 import { require_re } from "../internal/re.js";
 import { require_cmp } from "../functions/cmp.js";
@@ -14,7 +14,7 @@ import { require_semver } from "./semver.js";
 import { require_range } from "./range.js";
 
 //@ chunk-bwbq4xvm.js:19771-21678 cjs-fingerprint
-var require_comparator = x(function (cjsExports, cjsModule) {
+var require_comparator = __commonJS(function (cjsExports, cjsModule) {
   var ANY = Symbol("SemVer ANY");
   class Comparator {
     static get ANY() {

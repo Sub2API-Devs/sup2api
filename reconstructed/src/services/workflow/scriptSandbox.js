@@ -22,14 +22,14 @@ import { registerSwallowedRejectionObserver } from "../../utils/shutdown/pending
 
 //@ chunk-41w44bgm.js:14075-14272 placement
 function slashTokenSpan({ token, tokenTypes, source, offset }) {
-  let T = token.type === tokenTypes.regexp;
-  let y =
+  let isRegexp = token.type === tokenTypes.regexp;
+  let isSlashLike =
     (token.type === tokenTypes.slash || token.type === tokenTypes.assign) && source[token.start] === "/";
-  if (!T && !y) return;
+  if (!isRegexp && !isSlashLike) return;
   return {
     start: token.start - offset,
     end: token.end - offset,
-    regex: T,
+    regex: isRegexp,
   };
 }
 //@ chunk-41w44bgm.js:14272-14519 placement
@@ -48,37 +48,37 @@ function firstAmbiguousSlashIndex({ text, tokens, engineParses }) {
   )
     return -1;
   engineParses(text);
-  let h = 1;
-  let T = tokens.length;
-  while (h < T) {
-    let y = (h + T) >>> 1;
+  let low = 1;
+  let high = tokens.length;
+  while (low < high) {
+    let mid = (low + high) >>> 1;
     if (
       parsesWithSlashesRewritten({
         text,
         tokens,
-        count: y,
+        count: mid,
         engineParses,
       })
     )
-      h = y + 1;
-    else T = y;
+      low = mid + 1;
+    else high = mid;
   }
-  return h - 1;
+  return low - 1;
 }
 //@ chunk-41w44bgm.js:14519-14762 placement
 function parsesWithSlashesRewritten({ text, tokens, count, engineParses }) {
-  let T = [];
-  let y = 0;
+  let parts = [];
+  let cursor = 0;
   for (let token of tokens.slice(0, count)) {
-    T.push(
-      text.slice(y, token.start),
+    parts.push(
+      text.slice(cursor, token.start),
       token.regex ? "/a/.source" : `%${text.slice(token.start + 1, token.end)}`,
     );
-    y = token.end;
+    cursor = token.end;
   }
-  T.push(text.slice(y));
+  parts.push(text.slice(cursor));
   try {
-    engineParses(T.join(""));
+    engineParses(parts.join(""));
     return true;
   } catch {
     return false;
@@ -88,11 +88,11 @@ function parsesWithSlashesRewritten({ text, tokens, count, engineParses }) {
 /**
  * 去掉对象原型链与 constructor/prototype 后再交进 VM。
  */
-function sealPrototype(e) {
-  Object.setPrototypeOf(e, null);
-  delete e.constructor;
-  delete e.prototype;
-  return e;
+function sealPrototype(fn) {
+  Object.setPrototypeOf(fn, null);
+  delete fn.constructor;
+  delete fn.prototype;
+  return fn;
 }
 //@ chunk-41w44bgm.js:14856-16104 placement
 /**
@@ -128,8 +128,8 @@ var DETERMINISM_SHIM_SOURCE = `(() => {
 /**
  * 在给定 VM 上下文里装入确定性垫片（禁止 Date.now/Math.random）。
  */
-function installDeterminismShim(e) {
-  vmModule_2.runInContext(DETERMINISM_SHIM_SOURCE, e);
+function installDeterminismShim(context) {
+  vmModule_2.runInContext(DETERMINISM_SHIM_SOURCE, context);
 }
 //@ chunk-41w44bgm.js:16141-16155 placement
 /**
@@ -141,41 +141,41 @@ var VM_ABORT_TIMEOUT_MS = 30000;
  * 为工作流 VM 提供 setTimeout/clearTimeout：只记录本 VM 创建的定时器，signal 中断时全部清除；回调经可替换的 VM 调用器执行。
  */
 function createVmTimers(signal) {
-  let n = new Set();
-  let r = (T) => T();
-  function h() {
-    for (let T of n) clearTimeout(T);
-    n.clear();
+  let timerIds = new Set();
+  let invoke = (callback) => callback();
+  function clearAll() {
+    for (let timerId of timerIds) clearTimeout(timerId);
+    timerIds.clear();
   }
-  signal?.addEventListener("abort", h, {
+  signal?.addEventListener("abort", clearAll, {
     once: true,
   });
   return {
-    clear: h,
-    setTimeout: sanitizeAndLogError((T, y) => {
+    clear: clearAll,
+    setTimeout: sanitizeAndLogError((callback, delay) => {
       if (signal?.aborted) return 0;
-      let A = typeof y === "number" ? y : typeof y === "string" ? +y || 0 : 0;
-      let L = Number(
+      let delayMs = typeof delay === "number" ? delay : typeof delay === "string" ? +delay || 0 : 0;
+      let timerId = Number(
         setTimeout(() => {
           try {
-            r(T);
+            invoke(callback);
           } catch {}
-        }, A),
+        }, delayMs),
       );
-      n.add(L);
-      return L;
+      timerIds.add(timerId);
+      return timerId;
     }),
-    clearTimeout: sanitizeAndLogError((T) => {
-      if (typeof T === "number" || typeof T === "string") {
-        let y = typeof T === "number" ? T : +T;
-        if (n.has(y)) {
-          n.delete(y);
-          clearTimeout(y);
+    clearTimeout: sanitizeAndLogError((handle) => {
+      if (typeof handle === "number" || typeof handle === "string") {
+        let timerId = typeof handle === "number" ? handle : +handle;
+        if (timerIds.has(timerId)) {
+          timerIds.delete(timerId);
+          clearTimeout(timerId);
         }
       }
     }),
-    bindVMInvoke: (T) => {
-      r = T;
+    bindVMInvoke: (fn) => {
+      invoke = fn;
     },
   };
 }
@@ -191,13 +191,13 @@ var WORKFLOW_VM_RESOLVE = `${WORKFLOW_VM_PREFIX}resolve`;
 /**
  * 在工作流 VM 全局对象上定义只读的 Promise.resolve 引用，供改写后的代码使用。
  */
-function defineVmPromiseResolve(e) {
+function defineVmPromiseResolve(context) {
   vmModule_2.runInContext(
     `Object.defineProperty(globalThis, ${jsonStringify(WORKFLOW_VM_RESOLVE)}, {
       value: Promise.resolve.bind(Promise),
       writable: false, enumerable: false, configurable: false,
     })`,
-    e,
+    context,
   );
 }
 //@ chunk-41w44bgm.js:16937-18735 placement
@@ -206,95 +206,99 @@ function defineVmPromiseResolve(e) {
  */
 function compileWorkflowScriptBody(script) {
   let { parse, tokTypes } = require_acorn();
-  let h = require_walk();
-  let T = `(async () => {'use strict';
+  let walk = require_walk();
+  let prefix = `(async () => {'use strict';
 `;
-  let y = `(async () => {'use strict';
+  let wrapped = `(async () => {'use strict';
 ${script}
 })()`;
   let flagWithOverride = readFlagWithOverride("tengu_steady_metcalfe", {
     safe: true,
   });
-  let L = [];
-  let j = parse(y, {
+  let slashSpans = [];
+  let ast = parse(wrapped, {
     ecmaVersion: "latest",
     sourceType: "script",
     allowHashBang: true,
     onToken: flagWithOverride
       ? (token) => {
-          let ce = slashTokenSpan({
+          let span = slashTokenSpan({
             token,
             tokenTypes: tokTypes,
-            source: y,
+            source: wrapped,
             offset: 28,
           });
-          if (ce) L.push(ce);
+          if (span) slashSpans.push(span);
         }
       : undefined,
   });
-  if (flagWithOverride) assertNoAmbiguousSlash(script, L);
-  h.full(j, (G) => {
-    if (G.name?.startsWith(WORKFLOW_VM_PREFIX)) throw SyntaxError(`Identifier '${G.name}' is reserved.`);
-    if (G.type === "WithStatement")
+  if (flagWithOverride) assertNoAmbiguousSlash(script, slashSpans);
+  walk.full(ast, (node) => {
+    if (node.name?.startsWith(WORKFLOW_VM_PREFIX))
+      throw SyntaxError(`Identifier '${node.name}' is reserved.`);
+    if (node.type === "WithStatement")
       throw SyntaxError("'with' statements are not supported in workflow scripts.");
-    if (G.type === "ImportExpression") throw SyntaxError("import() is not available in workflow scripts.");
+    if (node.type === "ImportExpression") throw SyntaxError("import() is not available in workflow scripts.");
   });
-  let he = [];
-  let ke = (argument) => {
+  let edits = [];
+  let wrapAwait = (argument) => {
     if (!argument) return;
-    he.push([argument.start, ` ${WORKFLOW_VM_PREFIX}((`], [argument.end, "))"]);
+    edits.push([argument.start, ` ${WORKFLOW_VM_PREFIX}((`], [argument.end, "))"]);
   };
-  let te = (G) => {
-    for (let idx = G.length - 2; idx >= 0; idx--) {
-      let E = G[idx];
+  let findEnclosingFunction = (ancestors) => {
+    for (let idx = ancestors.length - 2; idx >= 0; idx--) {
+      let ancestor = ancestors[idx];
       if (
-        E &&
-        (E.type === "FunctionDeclaration" ||
-          E.type === "FunctionExpression" ||
-          E.type === "ArrowFunctionExpression")
+        ancestor &&
+        (ancestor.type === "FunctionDeclaration" ||
+          ancestor.type === "FunctionExpression" ||
+          ancestor.type === "ArrowFunctionExpression")
       )
-        return E;
+        return ancestor;
     }
     return;
   };
-  h.ancestor(j, {
-    VariableDeclaration(G) {
-      if (G.kind === "await using")
+  walk.ancestor(ast, {
+    VariableDeclaration(node) {
+      if (node.kind === "await using")
         throw SyntaxError("'await using' declarations are not supported in workflow scripts.");
     },
-    AwaitExpression(G) {
-      ke(G.argument);
+    AwaitExpression(node) {
+      wrapAwait(node.argument);
     },
-    ArrowFunctionExpression(G) {
-      if (G.async && G.expression) ke(G.body);
+    ArrowFunctionExpression(node) {
+      if (node.async && node.expression) wrapAwait(node.body);
     },
-    ForOfStatement(G) {
-      if (G.await) he.push([G.right.start, ` ${WORKFLOW_VM_PREFIX}a((`], [G.right.end, "))"]);
+    ForOfStatement(node) {
+      if (node.await) edits.push([node.right.start, ` ${WORKFLOW_VM_PREFIX}a((`], [node.right.end, "))"]);
     },
-    ReturnStatement(G, ce, E) {
-      let s = te(E);
-      if (!s?.async) return;
-      if (s.generator) {
-        if (G.argument) he.push([G.argument.start, ` await ${WORKFLOW_VM_PREFIX}((`], [G.argument.end, "))"]);
-      } else ke(G.argument);
+    ReturnStatement(node, state, ancestors) {
+      let fn = findEnclosingFunction(ancestors);
+      if (!fn?.async) return;
+      if (fn.generator) {
+        if (node.argument)
+          edits.push([node.argument.start, ` await ${WORKFLOW_VM_PREFIX}((`], [node.argument.end, "))"]);
+      } else wrapAwait(node.argument);
     },
-    YieldExpression(G, ce, E) {
-      let s = te(E);
-      if (!(s?.async && s.generator)) return;
-      if (G.delegate) {
-        if (G.argument) he.push([G.argument.start, ` ${WORKFLOW_VM_PREFIX}a((`], [G.argument.end, "))"]);
-      } else ke(G.argument);
+    YieldExpression(node, state, ancestors) {
+      let fn = findEnclosingFunction(ancestors);
+      if (!(fn?.async && fn.generator)) return;
+      if (node.delegate) {
+        if (node.argument)
+          edits.push([node.argument.start, ` ${WORKFLOW_VM_PREFIX}a((`], [node.argument.end, "))"]);
+      } else wrapAwait(node.argument);
     },
   });
-  if (he.length === 0) return script;
-  he.sort((G, ce) => ce[0] - G[0]);
-  let me = y;
-  for (let [G, ce] of he) me = me.slice(0, G) + ce + me.slice(G);
-  let sliced = me.slice(28, me.length - 5);
+  if (edits.length === 0) return script;
+  edits.sort((left, right) => right[0] - left[0]);
+  let rewritten = wrapped;
+  for (let [offset, insert] of edits)
+    rewritten = rewritten.slice(0, offset) + insert + rewritten.slice(offset);
+  let sliced = rewritten.slice(28, rewritten.length - 5);
   if (flagWithOverride)
-    assertNoAmbiguousSlash(script, L, {
+    assertNoAmbiguousSlash(script, slashSpans, {
       text: sliced,
-      tokens: remapTokenOffsets(L, he, 28),
+      tokens: remapTokenOffsets(slashSpans, edits, 28),
     });
   return sliced;
 }
@@ -317,13 +321,13 @@ function compileWorkflowScript(script, { bindWords = false } = {}) {
   }
   try {
     syntaxCheckScript(script);
-    let r = compileWorkflowScriptBody(script);
-    let h = bindWords ? `, ${WORKFLOW_VM_BOUND_NAMES}` : "";
-    let T = bindWords ? `, ${WORKFLOW_VM_WORDS}()` : "";
-    let y = `((${WORKFLOW_VM_PREFIX} => ((${WORKFLOW_VM_PREFIX}a${h}) => async () => {'use strict';
-${r}
-})(${WORKFLOW_VM_PREFIX}it => ({[Symbol.asyncIterator](){const ${WORKFLOW_VM_PREFIX}ai = ${WORKFLOW_VM_PREFIX}it[Symbol.asyncIterator];if (${WORKFLOW_VM_PREFIX}ai != null && typeof ${WORKFLOW_VM_PREFIX}ai !== 'function') throw new TypeError('@@asyncIterator is not a function');const ${WORKFLOW_VM_PREFIX}i = ${WORKFLOW_VM_PREFIX}ai != null ? ${WORKFLOW_VM_PREFIX}ai.call(${WORKFLOW_VM_PREFIX}it) : ${WORKFLOW_VM_PREFIX}it[Symbol.iterator]();if (${WORKFLOW_VM_PREFIX}i === null || (typeof ${WORKFLOW_VM_PREFIX}i !== 'object' && typeof ${WORKFLOW_VM_PREFIX}i !== 'function')) throw new TypeError('Iterator is not an object');const ${WORKFLOW_VM_PREFIX}nxt = ${WORKFLOW_VM_PREFIX}i.next;if (typeof ${WORKFLOW_VM_PREFIX}nxt !== 'function') throw new TypeError('Iterator.next is not a function');const ${WORKFLOW_VM_PREFIX}ret = ${WORKFLOW_VM_PREFIX}i.return;const ${WORKFLOW_VM_PREFIX}thr = ${WORKFLOW_VM_PREFIX}i.throw;const ${WORKFLOW_VM_PREFIX}w = s => ${WORKFLOW_VM_PREFIX}(s).then(s => { if (s === null || (typeof s !== 'object' && typeof s !== 'function')) throw new TypeError('Iterator result is not an object'); const done = s.done; return ${WORKFLOW_VM_PREFIX}(s.value).then(value => ({value, done})) });return {next:v=>${WORKFLOW_VM_PREFIX}w(${WORKFLOW_VM_PREFIX}nxt.call(${WORKFLOW_VM_PREFIX}i,v)),return:v=>${WORKFLOW_VM_PREFIX}w(typeof ${WORKFLOW_VM_PREFIX}ret==='function'?${WORKFLOW_VM_PREFIX}ret.call(${WORKFLOW_VM_PREFIX}i,v):{value:v,done:true}),throw:e=>typeof ${WORKFLOW_VM_PREFIX}thr==='function'?${WORKFLOW_VM_PREFIX}w(${WORKFLOW_VM_PREFIX}thr.call(${WORKFLOW_VM_PREFIX}i,e)):${WORKFLOW_VM_PREFIX}(typeof ${WORKFLOW_VM_PREFIX}ret==='function'?${WORKFLOW_VM_PREFIX}ret.call(${WORKFLOW_VM_PREFIX}i):undefined).then(()=>{throw new TypeError('The iterator does not provide a throw method')})}}})${T}))(${WORKFLOW_VM_RESOLVE}))()`;
-    let vmScript = new vmModule_2.Script(y, {
+    let body = compileWorkflowScriptBody(script);
+    let boundNames = bindWords ? `, ${WORKFLOW_VM_BOUND_NAMES}` : "";
+    let words = bindWords ? `, ${WORKFLOW_VM_WORDS}()` : "";
+    let source = `((${WORKFLOW_VM_PREFIX} => ((${WORKFLOW_VM_PREFIX}a${boundNames}) => async () => {'use strict';
+${body}
+})(${WORKFLOW_VM_PREFIX}it => ({[Symbol.asyncIterator](){const ${WORKFLOW_VM_PREFIX}ai = ${WORKFLOW_VM_PREFIX}it[Symbol.asyncIterator];if (${WORKFLOW_VM_PREFIX}ai != null && typeof ${WORKFLOW_VM_PREFIX}ai !== 'function') throw new TypeError('@@asyncIterator is not a function');const ${WORKFLOW_VM_PREFIX}i = ${WORKFLOW_VM_PREFIX}ai != null ? ${WORKFLOW_VM_PREFIX}ai.call(${WORKFLOW_VM_PREFIX}it) : ${WORKFLOW_VM_PREFIX}it[Symbol.iterator]();if (${WORKFLOW_VM_PREFIX}i === null || (typeof ${WORKFLOW_VM_PREFIX}i !== 'object' && typeof ${WORKFLOW_VM_PREFIX}i !== 'function')) throw new TypeError('Iterator is not an object');const ${WORKFLOW_VM_PREFIX}nxt = ${WORKFLOW_VM_PREFIX}i.next;if (typeof ${WORKFLOW_VM_PREFIX}nxt !== 'function') throw new TypeError('Iterator.next is not a function');const ${WORKFLOW_VM_PREFIX}ret = ${WORKFLOW_VM_PREFIX}i.return;const ${WORKFLOW_VM_PREFIX}thr = ${WORKFLOW_VM_PREFIX}i.throw;const ${WORKFLOW_VM_PREFIX}w = s => ${WORKFLOW_VM_PREFIX}(s).then(s => { if (s === null || (typeof s !== 'object' && typeof s !== 'function')) throw new TypeError('Iterator result is not an object'); const done = s.done; return ${WORKFLOW_VM_PREFIX}(s.value).then(value => ({value, done})) });return {next:v=>${WORKFLOW_VM_PREFIX}w(${WORKFLOW_VM_PREFIX}nxt.call(${WORKFLOW_VM_PREFIX}i,v)),return:v=>${WORKFLOW_VM_PREFIX}w(typeof ${WORKFLOW_VM_PREFIX}ret==='function'?${WORKFLOW_VM_PREFIX}ret.call(${WORKFLOW_VM_PREFIX}i,v):{value:v,done:true}),throw:e=>typeof ${WORKFLOW_VM_PREFIX}thr==='function'?${WORKFLOW_VM_PREFIX}w(${WORKFLOW_VM_PREFIX}thr.call(${WORKFLOW_VM_PREFIX}i,e)):${WORKFLOW_VM_PREFIX}(typeof ${WORKFLOW_VM_PREFIX}ret==='function'?${WORKFLOW_VM_PREFIX}ret.call(${WORKFLOW_VM_PREFIX}i):undefined).then(()=>{throw new TypeError('The iterator does not provide a throw method')})}}})${words}))(${WORKFLOW_VM_RESOLVE}))()`;
+    let vmScript = new vmModule_2.Script(source, {
       filename: "workflow.js",
       importModuleDynamically: () => {
         throw createSealedError("import() is not available in workflow scripts.");
@@ -363,38 +367,38 @@ class AmbiguousSlashError extends SyntaxError {}
 /**
  * 若脚本里有既可读作正则又可读作除号的 '/'，抛出带行列号的错误，提示用 ';' 结束前一语句或加括号。
  */
-function assertNoAmbiguousSlash(script, n, r) {
-  let h = firstAmbiguousSlashIndex({
-    text: r?.text ?? script,
-    tokens: r?.tokens ?? n,
+function assertNoAmbiguousSlash(script, spans, override) {
+  let index = firstAmbiguousSlashIndex({
+    text: override?.text ?? script,
+    tokens: override?.tokens ?? spans,
     engineParses: syntaxCheckScript,
   });
-  if (h === -1) return;
-  let parts = script.slice(0, n[h].start).split(/\r\n|[\n\r\u2028\u2029]/);
-  let y = parts.length;
-  let A = parts.at(-1).length + 1;
+  if (index === -1) return;
+  let parts = script.slice(0, spans[index].start).split(/\r\n|[\n\r\u2028\u2029]/);
+  let line = parts.length;
+  let column = parts.at(-1).length + 1;
   throw new AmbiguousSlashError(
-    `Line ${y}, column ${A} of the script body (counted after the meta statement, if any): this '/' could be read either as the start of a regular expression or as a division, so the script was not run. End the statement before it with ';' (or parenthesize the expression) so it reads one way.`,
+    `Line ${line}, column ${column} of the script body (counted after the meta statement, if any): this '/' could be read either as the start of a regular expression or as a division, so the script was not run. End the statement before it with ';' (or parenthesize the expression) so it reads one way.`,
   );
 }
 //@ chunk-41w44bgm.js:21573-21798 placement
-function remapTokenOffsets(e, n, r) {
-  let h = [];
-  let reduced = n.reduce((acc, [, L]) => acc + L.length, 0);
-  let y = 0;
-  for (let j = e.length - 1; j >= 0; j--) {
-    let L = e[j];
-    while (y < n.length && n[y][0] - r > L.start) {
-      reduced -= n[y][1].length;
-      y++;
+function remapTokenOffsets(spans, edits, baseOffset) {
+  let remapped = [];
+  let reduced = edits.reduce((acc, [, insert]) => acc + insert.length, 0);
+  let editIndex = 0;
+  for (let j = spans.length - 1; j >= 0; j--) {
+    let span = spans[j];
+    while (editIndex < edits.length && edits[editIndex][0] - baseOffset > span.start) {
+      reduced -= edits[editIndex][1].length;
+      editIndex++;
     }
-    h[j] = {
-      start: L.start + reduced,
-      end: L.end + reduced,
-      regex: L.regex,
+    remapped[j] = {
+      start: span.start + reduced,
+      end: span.end + reduced,
+      regex: span.regex,
     };
   }
-  return h;
+  return remapped;
 }
 //@ chunk-41w44bgm.js:21798-22301 placement
 /**
@@ -402,24 +406,28 @@ function remapTokenOffsets(e, n, r) {
  */
 function usesNondeterministicTime(source) {
   let { parse } = require_acorn();
-  let r = require_walk();
+  let walk = require_walk();
   let found = false;
   try {
-    let T = parse(source, {
+    let ast = parse(source, {
       ecmaVersion: "latest",
       sourceType: "module",
       allowAwaitOutsideFunction: true,
       allowReturnOutsideFunction: true,
     });
-    r.simple(T, {
-      MemberExpression(y) {
-        if (y.computed || y.object.type !== "Identifier" || y.property.type !== "Identifier") return;
-        let A = y.object.name;
-        let L = y.property.name;
-        if ((A === "Date" && L === "now") || (A === "Math" && L === "random")) found = true;
+    walk.simple(ast, {
+      MemberExpression(node) {
+        if (node.computed || node.object.type !== "Identifier" || node.property.type !== "Identifier") return;
+        let objectName = node.object.name;
+        let propertyName = node.property.name;
+        if (
+          (objectName === "Date" && propertyName === "now") ||
+          (objectName === "Math" && propertyName === "random")
+        )
+          found = true;
       },
-      NewExpression(y) {
-        if (y.callee.type === "Identifier" && y.callee.name === "Date" && y.arguments.length === 0)
+      NewExpression(node) {
+        if (node.callee.type === "Identifier" && node.callee.name === "Date" && node.arguments.length === 0)
           found = true;
       },
     });

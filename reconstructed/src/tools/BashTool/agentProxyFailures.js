@@ -31,42 +31,44 @@ function getAgentProxyFailures() {
 /**
  * 汇总命令运行期间经代理失败的连接（未知主机等）。
  */
-function describeAgentProxyFailures(e) {
+function describeAgentProxyFailures(seenSeq) {
   let proxyRelayState = getProxyRelayState();
-  let r = proxyRelayState.seq - e;
-  if (proxyRelayState.statusUrl === undefined || r <= 0) return;
-  let sliced = proxyRelayState.recent.slice(Math.max(0, proxyRelayState.recent.length - r));
-  let h = new Map();
+  let failureCount = proxyRelayState.seq - seenSeq;
+  if (proxyRelayState.statusUrl === undefined || failureCount <= 0) return;
+  let sliced = proxyRelayState.recent.slice(Math.max(0, proxyRelayState.recent.length - failureCount));
+  let failuresByHostAndKind = new Map();
   for (let idx = sliced.length - 1; idx >= 0; idx--) {
     let { kind, host } = sliced[idx];
-    let G = `${host}\x00${kind}`;
-    let q = h.get(G);
-    if (q) q.count++;
+    let groupKey = `${host}\x00${kind}`;
+    let group = failuresByHostAndKind.get(groupKey);
+    if (group) group.count++;
     else
-      h.set(G, {
+      failuresByHostAndKind.set(groupKey, {
         host: host ?? "unknown host",
         kind,
         count: 1,
       });
   }
-  let y = [
-    `[agent-proxy] While this command ran, ${r} ${plural(r, "connection")} through the agent proxy failed:`,
-    ...[...h.values()]
+  let lines = [
+    `[agent-proxy] While this command ran, ${failureCount} ${plural(failureCount, "connection")} through the agent proxy failed:`,
+    ...[...failuresByHostAndKind.values()]
       .slice(0, PROXY_RELAY_ERROR_MESSAGES)
       .map(
         ({ host, kind, count }) =>
           `- ${truncateWithCount(host, MAX_PROXY_POLICY_REFUSED_HOSTS)} \u2014 ${kind} (${PROXY_RELAY_ERRORS[kind]})${count > 1 ? ` \xD7${count}` : ""}`,
       ),
   ];
-  if (h.size > PROXY_RELAY_ERROR_MESSAGES) y.push(`- and ${h.size - PROXY_RELAY_ERROR_MESSAGES} more`);
-  if (r > sliced.length) y.push(`(oldest ${r - sliced.length} not shown)`);
-  if (isCoworkAny() && sliced.some((S) => S.kind === "connect_rejected")) y.push(PROXY_STATUS_URL_SUFFIX);
-  y.push(`For details: curl -sS ${proxyRelayState.statusUrl}`);
+  if (failuresByHostAndKind.size > PROXY_RELAY_ERROR_MESSAGES)
+    lines.push(`- and ${failuresByHostAndKind.size - PROXY_RELAY_ERROR_MESSAGES} more`);
+  if (failureCount > sliced.length) lines.push(`(oldest ${failureCount - sliced.length} not shown)`);
+  if (isCoworkAny() && sliced.some((failure) => failure.kind === "connect_rejected"))
+    lines.push(PROXY_STATUS_URL_SUFFIX);
+  lines.push(`For details: curl -sS ${proxyRelayState.statusUrl}`);
   logEvent("tengu_agent_proxy_failure_note", {
-    failures: r,
+    failures: failureCount,
     latest_kind: fromEnumOpt(sliced.at(-1)?.kind),
   });
-  return y.join(`
+  return lines.join(`
 `);
 }
 export { getAgentProxyFailures, describeAgentProxyFailures };

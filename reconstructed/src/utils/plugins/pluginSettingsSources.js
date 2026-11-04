@@ -37,25 +37,25 @@ function findUserDisabledOverrides() {
   let filtered = enabledSettingSources.filter(
     (enabledSettingSource) => enabledSettingSource !== "userSettings",
   );
-  let s = [];
+  let overrides = [];
   for (let [key, value] of Object.entries(enabledPlugins)) {
     if (value !== false) continue;
-    let S = hasTrustedOnlyBuiltinPlugin(key)
-      ? filtered.filter((L) => TRUSTED_SETTING_SOURCES_2.includes(L))
+    let sources = hasTrustedOnlyBuiltinPlugin(key)
+      ? filtered.filter((source) => TRUSTED_SETTING_SOURCES_2.includes(source))
       : filtered;
-    let w = null;
-    for (let L of S) {
-      let G = lookupByPluginAliases(getSettingsForSource(L)?.enabledPlugins, canonicalPluginId(key));
-      if (G === undefined) continue;
-      w = G === false ? null : L;
+    let overridingSource = null;
+    for (let source of sources) {
+      let value = lookupByPluginAliases(getSettingsForSource(source)?.enabledPlugins, canonicalPluginId(key));
+      if (value === undefined) continue;
+      overridingSource = value === false ? null : source;
     }
-    if (w === null) continue;
-    s.push({
+    if (overridingSource === null) continue;
+    overrides.push({
       pluginId: key,
-      overriddenBy: w,
+      overriddenBy: overridingSource,
     });
   }
-  return s;
+  return overrides;
 }
 //@ chunk-e6aww6q8.js:696593-696633 placement
 /**
@@ -69,9 +69,9 @@ function settingsSourcesReversed() {
  * enabledPluginRecordsBySource：各设置源的启用插件表。
  */
 function enabledPluginRecordsBySource() {
-  return settingsSourcesReversed().map((e) => ({
-    source: e,
-    record: getSettingsForSource(e)?.enabledPlugins,
+  return settingsSourcesReversed().map((source) => ({
+    source,
+    record: getSettingsForSource(source)?.enabledPlugins,
   }));
 }
 //@ chunk-e6aww6q8.js:696712-696824 placement
@@ -88,37 +88,37 @@ function getEnabledPluginsBySource() {
   );
 }
 //@ chunk-e6aww6q8.js:696824-696877 placement
-function isNonOfficialMarketplacePlugin(e) {
-  let n = marketplaceSuffix(normalizePluginId(e));
-  return !isOfficialMarketplace_2(n) && n !== BUILTIN;
+function isNonOfficialMarketplacePlugin(pluginId) {
+  let suffix = marketplaceSuffix(normalizePluginId(pluginId));
+  return !isOfficialMarketplace_2(suffix) && suffix !== BUILTIN;
 }
 //@ chunk-e6aww6q8.js:696877-697002 placement
 /**
  * 内置插件只保留受信设置源的值。
  */
-function filterTrustedForBuiltin(e, n) {
-  if (!hasTrustedOnlyBuiltinPlugin(e)) return n;
-  let r = settingsSourcesReversed();
-  return n.map((s, h) => {
-    let y = r[h];
-    return y !== undefined && TRUSTED_SETTING_SOURCES_2.includes(y) ? s : undefined;
+function filterTrustedForBuiltin(pluginId, records) {
+  if (!hasTrustedOnlyBuiltinPlugin(pluginId)) return records;
+  let sources = settingsSourcesReversed();
+  return records.map((record, index) => {
+    let source = sources[index];
+    return source !== undefined && TRUSTED_SETTING_SOURCES_2.includes(source) ? record : undefined;
   });
 }
 //@ chunk-e6aww6q8.js:697002-697053 placement
 /**
  * pluginSettingRecords：非官方插件追加 addDir 来源。
  */
-function pluginSettingRecords(e) {
-  let n = enabledPluginRecordsBySource();
-  return isNonOfficialMarketplacePlugin(e) ? withAddDirPlugins(n) : n;
+function pluginSettingRecords(pluginId) {
+  let records = enabledPluginRecordsBySource();
+  return isNonOfficialMarketplacePlugin(pluginId) ? withAddDirPlugins(records) : records;
 }
 //@ chunk-e6aww6q8.js:697053-697113 placement
 /**
  * withAddDirPlugins：追加 addDir 启用插件。
  */
-function withAddDirPlugins(e) {
+function withAddDirPlugins(records) {
   return [
-    ...e,
+    ...records,
     {
       source: "addDir",
       record: getAddDirEnabledPlugins(),
@@ -129,23 +129,26 @@ function withAddDirPlugins(e) {
 /**
  * 两份按源分组的 enabledPlugins 是否等价。
  */
-function enabledPluginsEqual(e, n) {
-  if (e.length !== n.length) return false;
-  return e.every((r, s) => {
-    let h = n[s];
-    if (r === undefined || h === undefined) return r === h;
-    let keys = Object.keys(r.record);
-    if (keys.length !== Object.keys(h.record).length) return false;
+function enabledPluginsEqual(left, right) {
+  if (left.length !== right.length) return false;
+  return left.every((leftRecord, index) => {
+    let rightRecord = right[index];
+    if (leftRecord === undefined || rightRecord === undefined) return leftRecord === rightRecord;
+    let keys = Object.keys(leftRecord.record);
+    if (keys.length !== Object.keys(rightRecord.record).length) return false;
     return keys.every(
-      (S) => S in h.record && describePluginEnablement(h.record[S]) === describePluginEnablement(r.record[S]),
+      (key) =>
+        key in rightRecord.record &&
+        describePluginEnablement(rightRecord.record[key]) ===
+          describePluginEnablement(leftRecord.record[key]),
     );
   });
 }
 //@ chunk-e6aww6q8.js:697392-697490 placement
-function describePluginEnablement(e) {
-  if (e === undefined) return "absent";
-  if (e === false) return "false";
-  return e === true ? "true" : "other";
+function describePluginEnablement(value) {
+  if (value === undefined) return "absent";
+  if (value === false) return "false";
+  return value === true ? "true" : "other";
 }
 export {
   filterTrustedForBuiltin,

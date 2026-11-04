@@ -66,42 +66,42 @@ function parseTaskFilesMeta(structuredContent) {
   if (!isPlainObject(structuredContent)) return;
   let { files } = structuredContent;
   if (!Array.isArray(files)) return;
-  let n = new Map();
+  let byFileId = new Map();
   for (let file of files) {
     if (!isPlainObject(file)) continue;
-    let { file_id: fileId, name: r, size_bytes: sizeBytes } = file;
+    let { file_id: fileId, name, size_bytes: sizeBytes } = file;
     if (
       typeof fileId === "string" &&
       FILE_ID_RE.test(fileId) &&
-      typeof r === "string" &&
+      typeof name === "string" &&
       typeof sizeBytes === "number" &&
       Number.isSafeInteger(sizeBytes) &&
       sizeBytes >= 0 &&
-      !n.has(fileId)
+      !byFileId.has(fileId)
     ) {
-      n.set(fileId, {
+      byFileId.set(fileId, {
         fileId,
-        name: r,
+        name,
         sizeBytes,
       });
-      if (n.size >= MAX_FILES_PER_LIST) break;
+      if (byFileId.size >= MAX_FILES_PER_LIST) break;
     }
   }
-  return [...n.values()];
+  return [...byFileId.values()];
 }
 //@ chunk-h33h7b0z.js:6185-6440 placement
-function rememberTaskFiles(session, taskId, n) {
+function rememberTaskFiles(session, taskId, files) {
   let { lists, known } = taskFileListsBySession.of(session);
-  let mapped = n.map((o) => known.get(o.fileId) ?? o);
+  let mapped = files.map((file) => known.get(file.fileId) ?? file);
   lists.delete(taskId);
   lists.set(taskId, mapped);
   while (lists.size > MAX_REMEMBERED_TASK_LISTS) {
-    let o = lists.keys().next().value;
-    if (o === undefined) break;
-    lists.delete(o);
+    let oldestTaskId = lists.keys().next().value;
+    if (oldestTaskId === undefined) break;
+    lists.delete(oldestTaskId);
   }
   known.clear();
-  for (let o of lists.values()) for (let d of o) known.set(d.fileId, d);
+  for (let list of lists.values()) for (let file of list) known.set(file.fileId, file);
   return mapped;
 }
 //@ chunk-h33h7b0z.js:6440-7082 placement
@@ -130,7 +130,7 @@ function validateSaveTaskFiles(saveTaskFilesInput, session, savePlace) {
     mapped.length === 0 ||
     mapped.length > MAX_SAVE_FILES ||
     new Set(mapped).size !== mapped.length ||
-    !mapped.every((c) => FILE_ID_RE.test(c))
+    !mapped.every((fileId) => FILE_ID_RE.test(fileId))
   )
     return {
       ok: false,
@@ -143,63 +143,63 @@ function validateSaveTaskFiles(saveTaskFilesInput, session, savePlace) {
       code: "no_disk",
       why: "this session cannot save task files.",
     };
-  let a = savePlace.kind === "elsewhere" ? savePlace.standing() : undefined;
-  if (a !== undefined)
+  let standingRefusal = savePlace.kind === "elsewhere" ? savePlace.standing() : undefined;
+  if (standingRefusal !== undefined)
     return {
       ok: false,
-      code: a,
+      code: standingRefusal,
       why: `${saveFailureReasonText({
         ok: false,
-        code: a,
+        code: standingRefusal,
       })}.`,
     };
-  let r = taskFileListsBySession.peek(session)?.lists.get(saveTaskFilesInput.task_id);
-  if (r === undefined)
+  let taskList = taskFileListsBySession.peek(session)?.lists.get(saveTaskFilesInput.task_id);
+  if (taskList === undefined)
     return {
       ok: false,
       code: "list_not_seen",
       why: "this session has not seen the task's file list. Call get_task for the task first, then name files from its answer.",
     };
-  let o = new Map(r.map((c) => [c.fileId, c]));
-  let d = [];
+  let knownById = new Map(taskList.map((file) => [file.fileId, file]));
+  let selectedFiles = [];
   for (let file of saveTaskFilesInput.files) {
     let fileId = file.file_id;
-    let h = o.get(fileId);
-    if (h === undefined)
+    let knownFile = knownById.get(fileId);
+    if (knownFile === undefined)
       return {
         ok: false,
         code: "not_listed",
         why: `${fileId} is not in the file list this session last saw for the task. Call get_task for the task to see its current list.`,
       };
-    if (h.sizeBytes > FILES_API_MAX_FILE_BYTES)
+    if (knownFile.sizeBytes > FILES_API_MAX_FILE_BYTES)
       return {
         ok: false,
         code: "too_large",
         why: `${fileId} is larger than the 500 MiB limit for saved files. Leave it out of the call.`,
       };
-    let T = safeDownloadName(h.name, h.fileId);
-    if (file.save_as !== T)
+    let downloadName = safeDownloadName(knownFile.name, knownFile.fileId);
+    if (file.save_as !== downloadName)
       return {
         ok: false,
         code: "wrong_name",
-        why: `${fileId} is saved as ${escapeNonAscii(T)}, not ${truncatedEscaped(file.save_as)}; give ${escapeNonAscii(T)} as its save_as.`,
+        why: `${fileId} is saved as ${escapeNonAscii(downloadName)}, not ${truncatedEscaped(file.save_as)}; give ${escapeNonAscii(downloadName)} as its save_as.`,
       };
-    if (file.bytes !== h.sizeBytes)
+    if (file.bytes !== knownFile.sizeBytes)
       return {
         ok: false,
         code: "wrong_size",
-        why: `${fileId} is ${h.sizeBytes} bytes, not ${file.bytes}; give ${h.sizeBytes} as its bytes.`,
+        why: `${fileId} is ${knownFile.sizeBytes} bytes, not ${file.bytes}; give ${knownFile.sizeBytes} as its bytes.`,
       };
-    d.push(h);
+    selectedFiles.push(knownFile);
   }
-  let l = {
+  let saveRequest = {
     ok: true,
     taskId: saveTaskFilesInput.task_id,
-    files: d,
+    files: selectedFiles,
     place: savePlace,
   };
-  if (describeSaveAsk(l).length > MAX_ASK_TEXT_LENGTH)
-    return d.length === 1
+  if (describeSaveAsk(saveRequest).length > MAX_ASK_TEXT_LENGTH)
+    return selectedFiles.length === 1
       ? {
           ok: false,
           code: "too_long_to_show",
@@ -210,19 +210,19 @@ function validateSaveTaskFiles(saveTaskFilesInput, session, savePlace) {
           code: "too_many_to_show",
           why: "the list of these files is too long to show the person in one prompt. Name fewer files in one call.",
         };
-  return l;
+  return saveRequest;
 }
 //@ chunk-h33h7b0z.js:8906-9368 placement
 /**
  * 保存任务文件的权限询问描述：文件数、任务 id、保存位置（本机工具结果目录或本聊天容器内的文件夹）、同名加编号，以及每个文件的名称与大小。
  */
-function describeSaveAsk(e) {
-  let t = e.files.length === 1 ? "1 file" : `${e.files.length} files`;
-  let mapped = e.files.map((file) => {
-    let a = safeDownloadName(file.name, file.fileId);
-    return `${a === file.name ? escapeNonAscii(a) : `${truncatedEscaped(file.name)}, saved as ${escapeNonAscii(a)}`} (${formatFileSize(file.sizeBytes)})`;
+function describeSaveAsk(saveRequest) {
+  let fileCountText = saveRequest.files.length === 1 ? "1 file" : `${saveRequest.files.length} files`;
+  let mapped = saveRequest.files.map((file) => {
+    let downloadName = safeDownloadName(file.name, file.fileId);
+    return `${downloadName === file.name ? escapeNonAscii(downloadName) : `${truncatedEscaped(file.name)}, saved as ${escapeNonAscii(downloadName)}`} (${formatFileSize(file.sizeBytes)})`;
   });
-  return `Save ${t} of task ${truncatedEscaped(e.taskId)} to ${shortenPathForList(e.place.kind === "here" ? join(e.place.toolResultsDir, TASK_FILE_CONSTANTS) : e.place.host.folder)}${e.place.kind === "elsewhere" ? " in this chat's container" : ""} (a name already in use there gets a number added): ${mapped.join("; ")}.`;
+  return `Save ${fileCountText} of task ${truncatedEscaped(saveRequest.taskId)} to ${shortenPathForList(saveRequest.place.kind === "here" ? join(saveRequest.place.toolResultsDir, TASK_FILE_CONSTANTS) : saveRequest.place.host.folder)}${saveRequest.place.kind === "elsewhere" ? " in this chat's container" : ""} (a name already in use there gets a number added): ${mapped.join("; ")}.`;
 }
 //@ chunk-h33h7b0z.js:9368-11067 placement
 var SAVE_FAILURE_REASONS = {
@@ -251,22 +251,22 @@ var SAVE_FAILURE_REASONS = {
   write_failed: "it could not be written to this chat's container",
 };
 //@ chunk-h33h7b0z.js:11067-11224 placement
-function saveFailureReasonText(e) {
-  if (Object.hasOwn(SAVE_FAILURE_REASONS, e.code)) return SAVE_FAILURE_REASONS[e.code];
-  return isKnownSaveErrorCode(e)
-    ? saveFailureText(e)
-    : `this chat's container gave a reason this version does not recognize (${e.code})`;
+function saveFailureReasonText(failure) {
+  if (Object.hasOwn(SAVE_FAILURE_REASONS, failure.code)) return SAVE_FAILURE_REASONS[failure.code];
+  return isKnownSaveErrorCode(failure)
+    ? saveFailureText(failure)
+    : `this chat's container gave a reason this version does not recognize (${failure.code})`;
 }
 //@ chunk-h33h7b0z.js:11224-11266 placement
 /**
  * 判断错误码是否在已知列表里。
  */
-function isKnownSaveErrorCode(e) {
-  return keys.includes(e.code);
+function isKnownSaveErrorCode(failure) {
+  return keys.includes(failure.code);
 }
 //@ chunk-h33h7b0z.js:11266-12760 placement
-function saveFailureText(e) {
-  switch (e.code) {
+function saveFailureText(failure) {
+  switch (failure.code) {
     case "too_large":
       return "it is larger than the 500 MiB limit for saved files";
     case "egress_blocked":
@@ -281,9 +281,9 @@ function saveFailureText(e) {
     case "no_room":
       return "the disk does not have room for it";
     case "refused":
-      return e.status === 403 || e.status === 404
-        ? `the Files API refused it (status ${e.status}); a file the person attached to the task, or one of another workspace, cannot be downloaded`
-        : `the Files API refused it (status ${e.status ?? "unknown"})`;
+      return failure.status === 403 || failure.status === 404
+        ? `the Files API refused it (status ${failure.status}); a file the person attached to the task, or one of another workspace, cannot be downloaded`
+        : `the Files API refused it (status ${failure.status ?? "unknown"})`;
     case "size_mismatch":
       return "what arrived was not the size the server listed";
     case "stalled":
@@ -304,40 +304,50 @@ function saveFailureText(e) {
   }
 }
 //@ chunk-h33h7b0z.js:12760-13462 placement
-async function saveTaskFilesResult(e, t) {
-  let n = [];
-  let s = 0;
-  let { place } = e;
-  for (let file of e.files) {
-    let o;
-    let d = "";
+async function saveTaskFilesResult(saveRequest, toolContext) {
+  let lines = [];
+  let savedCount = 0;
+  let { place } = saveRequest;
+  for (let file of saveRequest.files) {
+    let outcome;
+    let failureText = "";
     if (place.kind === "here") {
-      let l = await downloadTaskFile(file, place.toolResultsDir, t.storageV5, t.abortController.signal);
-      o = l;
-      d = l.ok ? "" : saveFailureText(l);
+      let downloadResult = await downloadTaskFile(
+        file,
+        place.toolResultsDir,
+        toolContext.storageV5,
+        toolContext.abortController.signal,
+      );
+      outcome = downloadResult;
+      failureText = downloadResult.ok ? "" : saveFailureText(downloadResult);
     } else {
-      let l = place.standing();
-      o =
-        (l !== undefined
+      let refusalCode = place.standing();
+      outcome =
+        (refusalCode !== undefined
           ? {
               ok: false,
-              code: l,
+              code: refusalCode,
             }
-          : validateTaskFileEntry(file, t.abortController.signal)) ??
-        (await place.host.save(file, safeDownloadName(file.name, file.fileId), t.abortController.signal));
-      d = o.ok ? "" : saveFailureReasonText(o);
+          : validateTaskFileEntry(file, toolContext.abortController.signal)) ??
+        (await place.host.save(
+          file,
+          safeDownloadName(file.name, file.fileId),
+          toolContext.abortController.signal,
+        ));
+      failureText = outcome.ok ? "" : saveFailureReasonText(outcome);
     }
-    if (o.ok) {
-      s++;
-      n.push(`- ${file.fileId} saved to ${escapeNonAscii(o.filepath)}`);
+    if (outcome.ok) {
+      savedCount++;
+      lines.push(`- ${file.fileId} saved to ${escapeNonAscii(outcome.filepath)}`);
     } else {
-      logFeatureSad("managed_agents_task_file_save", o.code);
-      n.push(`- ${file.fileId} was not saved: ${d}.`);
+      logFeatureSad("managed_agents_task_file_save", outcome.code);
+      lines.push(`- ${file.fileId} was not saved: ${failureText}.`);
     }
   }
-  if (s === e.files.length) logFeatureOk("managed_agents_task_file_save");
-  else if (s === 0) logFeatureBad("managed_agents_task_file_save", "none_saved");
-  return [`Saved ${s} of ${e.files.length} files:`, ...n, TASK_FILES_UNTRUSTED_NOTE].join(`
+  if (savedCount === saveRequest.files.length) logFeatureOk("managed_agents_task_file_save");
+  else if (savedCount === 0) logFeatureBad("managed_agents_task_file_save", "none_saved");
+  return [`Saved ${savedCount} of ${saveRequest.files.length} files:`, ...lines, TASK_FILES_UNTRUSTED_NOTE]
+    .join(`
 `);
 }
 //@ chunk-h33h7b0z.js:13462-14721 placement
@@ -354,10 +364,10 @@ var SAVE_TASK_FILES_FIELD_DESCRIPTIONS = {
   elsewhere: `Save files that a task produced into this chat's container, where this session's shell commands and file tools work. ${SAVE_TASK_FILES_USAGE_TEXT} Each file is saved in this chat's task-files folder in the container under that name, with a number added if the name is taken; nothing is overwritten. A saved file stays while the chat's container keeps its disk, so a later turn may find it gone. The person is asked to approve every call. The answer says where each file was saved, or why it was not.`,
 };
 //@ chunk-h33h7b0z.js:14721-15553 placement
-function saveTaskFilesInputSchema(e) {
+function saveTaskFilesInputSchema(savePlaceKind) {
   return {
     name: SAVE_TASK_FILES_TOOL_NAME,
-    description: SAVE_TASK_FILES_FIELD_DESCRIPTIONS[e],
+    description: SAVE_TASK_FILES_FIELD_DESCRIPTIONS[savePlaceKind],
     inputSchema: {
       type: "object",
       properties: {
@@ -404,10 +414,11 @@ function saveTaskFilesInputSchema(e) {
   };
 }
 //@ chunk-h33h7b0z.js:15553-15730 placement
-function isLocalToolboxServer(e) {
+function isLocalToolboxServer(client) {
   return (
-    ((e.config.type === "claudeai-proxy" && e.config.scope === "claudeai") || e.config.type === "sdk") &&
-    matchesToolboxServer(e) &&
+    ((client.config.type === "claudeai-proxy" && client.config.scope === "claudeai") ||
+      client.config.type === "sdk") &&
+    matchesToolboxServer(client) &&
     !env.CLAUDE_CODE_REMOTE &&
     !env.CLAUDE_CODE_ENVIRONMENT_KIND &&
     !isDiskless()
@@ -429,24 +440,25 @@ function taskFileSaveLocation(client) {
 /**
  * 决定任务文件保存到哪里：本机直连工具箱服务器时存到会话工具结果目录（here）；无盘会话时交给宿主文件夹（elsewhere，附带可用状态检查）；否则不可保存。
  */
-function resolveSavePlace(e, session) {
-  if (isLocalToolboxServer(e)) {
-    let s = toolResultsDirFor_2(session);
-    return s === null
+function resolveSavePlace(client, session) {
+  if (isLocalToolboxServer(client)) {
+    let toolResultsDir = toolResultsDirFor_2(session);
+    return toolResultsDir === null
       ? undefined
       : {
           kind: "here",
-          toolResultsDir: s,
+          toolResultsDir,
         };
   }
   if (!isDiskless()) return;
   let host = bootHeldServerIds.peek(session)?.host;
   if (host === undefined) return;
-  if (_() || !isBootHeldServer(host, e)) return;
+  if (_() || !isBootHeldServer(host, client)) return;
   return {
     kind: "elsewhere",
     host,
-    standing: () => (_() ? "switched_off" : !isBootHeldServer(host, e) ? "entry_dropped" : host.refusal()),
+    standing: () =>
+      _() ? "switched_off" : !isBootHeldServer(host, client) ? "entry_dropped" : host.refusal(),
   };
 }
 //@ chunk-h33h7b0z.js:16092-16135 placement
@@ -465,18 +477,18 @@ var SAVE_DISABLED_TEXT = "saving a task's files is switched off.";
 /**
  * 严格解析 SaveTaskFiles 输入：只允许 task_id 与 files，每个文件只允许 file_id/save_as/bytes 且类型正确；不合法返回 undefined。
  */
-function parseSaveTaskFilesInput(e) {
-  let taskId = e?.task_id;
-  let files = e?.files;
+function parseSaveTaskFilesInput(rawInput) {
+  let taskId = rawInput?.task_id;
+  let files = rawInput?.files;
   if (
-    e === undefined ||
+    rawInput === undefined ||
     typeof taskId !== "string" ||
     taskId === "" ||
     !Array.isArray(files) ||
-    !hasOnlyKeys(e, ["task_id", "files"])
+    !hasOnlyKeys(rawInput, ["task_id", "files"])
   )
     return;
-  let s = [];
+  let fileList = [];
   for (let file of files) {
     if (!isPlainObject(file) || !hasOnlyKeys(file, ["file_id", "save_as", "bytes"])) return;
     let { file_id: fileId, save_as: saveAs, bytes } = file;
@@ -487,7 +499,7 @@ function parseSaveTaskFilesInput(e) {
       !Number.isSafeInteger(bytes)
     )
       return;
-    s.push({
+    fileList.push({
       file_id: fileId,
       save_as: saveAs,
       bytes,
@@ -495,15 +507,15 @@ function parseSaveTaskFilesInput(e) {
   }
   return {
     task_id: taskId,
-    files: s,
+    files: fileList,
   };
 }
 //@ chunk-h33h7b0z.js:16596-16660 placement
 /**
  * 判断对象的所有键都在给定列表里。
  */
-function hasOnlyKeys(e, t) {
-  return Object.keys(e).every((key) => t.includes(key));
+function hasOnlyKeys(value, allowedKeys) {
+  return Object.keys(value).every((key) => allowedKeys.includes(key));
 }
 //@ chunk-h33h7b0z.js:16660-16668 placement
 /**
@@ -514,38 +526,41 @@ var MAX_LISTED_SAVED_FILES = 3;
 /**
  * 构造“没有文件被保存”的结果文本。
  */
-function noFileSavedText(e) {
-  return `No file was saved: ${e}`;
+function noFileSavedText(reason) {
+  return `No file was saved: ${reason}`;
 }
 //@ chunk-h33h7b0z.js:16714-18051 placement
-function SaveTaskFilesTool(client, t) {
+function SaveTaskFilesTool(client, savePlaceKind) {
   return {
     backgrounding: "never",
-    getToolUseSummary(n) {
-      let saveTaskFilesInput = parseSaveTaskFilesInput(n);
+    getToolUseSummary(input) {
+      let saveTaskFilesInput = parseSaveTaskFilesInput(input);
       if (saveTaskFilesInput === undefined) return null;
-      let a = saveTaskFilesInput.files.length === 1 ? "1 file" : `${saveTaskFilesInput.files.length} files`;
+      let fileCountText =
+        saveTaskFilesInput.files.length === 1 ? "1 file" : `${saveTaskFilesInput.files.length} files`;
       let mapped = saveTaskFilesInput.files
         .slice(0, MAX_LISTED_SAVED_FILES)
         .map((file) => truncatedEscaped(file.save_as));
-      let o = saveTaskFilesInput.files.length - MAX_LISTED_SAVED_FILES;
+      let hiddenCount = saveTaskFilesInput.files.length - MAX_LISTED_SAVED_FILES;
       let reduced = saveTaskFilesInput.files.reduce((acc, file) => acc + Math.max(0, file.bytes), 0);
-      let l =
-        t === "here" ? "this session's task-files folder" : "this chat's container, in its task-files folder";
-      return `Save ${a} of task ${truncatedEscaped(saveTaskFilesInput.task_id)} to ${l}: ${mapped.join(", ")}${o > 0 ? ` and ${o} more` : ""} (${formatFileSize(reduced)}${saveTaskFilesInput.files.length === 1 ? "" : " in all"})`;
+      let destinationText =
+        savePlaceKind === "here"
+          ? "this session's task-files folder"
+          : "this chat's container, in its task-files folder";
+      return `Save ${fileCountText} of task ${truncatedEscaped(saveTaskFilesInput.task_id)} to ${destinationText}: ${mapped.join(", ")}${hiddenCount > 0 ? ` and ${hiddenCount} more` : ""} (${formatFileSize(reduced)}${saveTaskFilesInput.files.length === 1 ? "" : " in all"})`;
     },
     isReadOnly: () => false,
     isConcurrencySafe: () => false,
     requiresUserInteraction: () => true,
     suppressesAlwaysAllowRule: () => true,
-    async validateInput(n, s) {
+    async validateInput(input, callOptions) {
       if (_())
         return {
           result: false,
           message: noFileSavedText(SAVE_DISABLED_TEXT),
           errorCode: 3,
         };
-      let saveTaskFilesInput = parseSaveTaskFilesInput(n);
+      let saveTaskFilesInput = parseSaveTaskFilesInput(input);
       if (saveTaskFilesInput === undefined)
         return {
           result: false,
@@ -554,41 +569,51 @@ function SaveTaskFilesTool(client, t) {
           ),
           errorCode: 1,
         };
-      let r = validateSaveTaskFiles(saveTaskFilesInput, s.session, resolveSavePlace(client, s.session));
-      return r.ok
+      let validation = validateSaveTaskFiles(
+        saveTaskFilesInput,
+        callOptions.session,
+        resolveSavePlace(client, callOptions.session),
+      );
+      return validation.ok
         ? {
             result: true,
           }
         : {
             result: false,
-            message: noFileSavedText(r.why),
+            message: noFileSavedText(validation.why),
             errorCode: 2,
           };
     },
-    async checkPermissions(n, s) {
-      let saveTaskFilesInput = parseSaveTaskFilesInput(n);
-      let r =
+    async checkPermissions(input, callOptions) {
+      let saveTaskFilesInput = parseSaveTaskFilesInput(input);
+      let validation =
         !_() &&
         saveTaskFilesInput &&
-        validateSaveTaskFiles(saveTaskFilesInput, s.session, resolveSavePlace(client, s.session));
-      if (!r || !r.ok) {
-        let d = noFileSavedText(r === false ? SAVE_DISABLED_TEXT : (r?.why ?? "the call was malformed."));
+        validateSaveTaskFiles(
+          saveTaskFilesInput,
+          callOptions.session,
+          resolveSavePlace(client, callOptions.session),
+        );
+      if (!validation || !validation.ok) {
+        let denialMessage = noFileSavedText(
+          validation === false ? SAVE_DISABLED_TEXT : (validation?.why ?? "the call was malformed."),
+        );
         return {
           behavior: "deny",
-          message: d,
+          message: denialMessage,
           decisionReason: {
             type: "other",
-            reason: d,
+            reason: denialMessage,
           },
         };
       }
-      let o = describeSaveAsk(r);
+      let askText = describeSaveAsk(validation);
       return {
         behavior: "ask",
-        message: o,
+        message: askText,
         decisionReason: {
           type: "other",
-          reason: o,
+          reason: askText,
         },
         suggestions: [],
         suppressAlwaysAllowRule: true,
@@ -597,53 +622,62 @@ function SaveTaskFilesTool(client, t) {
   };
 }
 //@ chunk-h33h7b0z.js:18051-18341 placement
-async function callSaveTaskFiles(client, t, n) {
+async function callSaveTaskFiles(client, input, callOptions) {
   if (_()) {
     logFeatureBad("managed_agents_task_file_save", "switched_off");
     return {
       data: noFileSavedText(SAVE_DISABLED_TEXT),
     };
   }
-  let saveTaskFilesInput = parseSaveTaskFilesInput(t);
-  let a =
+  let saveTaskFilesInput = parseSaveTaskFilesInput(input);
+  let validation =
     saveTaskFilesInput &&
-    validateSaveTaskFiles(saveTaskFilesInput, n.session, resolveSavePlace(client, n.session));
-  if (!a?.ok) {
-    logFeatureBad("managed_agents_task_file_save", a?.code ?? "bad_input");
+    validateSaveTaskFiles(
+      saveTaskFilesInput,
+      callOptions.session,
+      resolveSavePlace(client, callOptions.session),
+    );
+  if (!validation?.ok) {
+    logFeatureBad("managed_agents_task_file_save", validation?.code ?? "bad_input");
     return {
-      data: noFileSavedText(a?.why ?? "the call was malformed."),
+      data: noFileSavedText(validation?.why ?? "the call was malformed."),
     };
   }
   return {
-    data: await saveTaskFilesResult(a, n),
+    data: await saveTaskFilesResult(validation, callOptions),
   };
 }
 //@ chunk-h33h7b0z.js:18341-18801 placement
 /**
  * 当工具箱 MCP 服务器的 get_task 声明了 taskFileIds 元数据且开关 TENGU_SERENE_FROG 打开时，把 SaveTaskFiles 工具组合进该服务器的工具列表（按权限配置，可能被阻止）。
  */
-function installSaveTaskFilesTool(e, t) {
-  weakMap.delete(t.client);
-  let found = e.find((o) => o.mcpInfo?.toolName === GET_TASK);
+function installSaveTaskFilesTool(tools, state) {
+  weakMap.delete(state.client);
+  let found = tools.find((tool) => tool.mcpInfo?.toolName === GET_TASK);
   if (
     found === undefined ||
-    !t.listed.some((o) => o.name === GET_TASK && o._meta?.[ANTHROPIC_TASKFILEIDS] === true)
+    !state.listed.some(
+      (listedTool) => listedTool.name === GET_TASK && listedTool._meta?.[ANTHROPIC_TASKFILEIDS] === true,
+    )
   )
     return;
-  let s = taskFileSaveLocation(t.client);
-  if (s === undefined || !getFeatureValue_SESSION_PINNED(TENGU_SERENE_FROG, false)) return;
-  for (let idx = e.length - 1; idx >= 0; idx--)
-    if (e[idx]?.mcpInfo?.toolName === SAVE_TASK_FILES_TOOL_NAME) e.splice(idx, 1);
-  let a = stricterPermission(saveTaskFilesPermission(t.client), found.mcpInfo?.effectiveMaxPermission);
-  if (a === "blocked") return;
-  let r = t.compose(
-    saveTaskFilesInputSchema(s),
-    (o, d) => callSaveTaskFiles(t.client, o, d),
-    SaveTaskFilesTool(t.client, s),
-    a,
+  let savePlace = taskFileSaveLocation(state.client);
+  if (savePlace === undefined || !getFeatureValue_SESSION_PINNED(TENGU_SERENE_FROG, false)) return;
+  for (let idx = tools.length - 1; idx >= 0; idx--)
+    if (tools[idx]?.mcpInfo?.toolName === SAVE_TASK_FILES_TOOL_NAME) tools.splice(idx, 1);
+  let permission = stricterPermission(
+    saveTaskFilesPermission(state.client),
+    found.mcpInfo?.effectiveMaxPermission,
   );
-  weakMap.set(t.client, r.name);
-  e.push(r);
+  if (permission === "blocked") return;
+  let composedTool = state.compose(
+    saveTaskFilesInputSchema(savePlace),
+    (input, callOptions) => callSaveTaskFiles(state.client, input, callOptions),
+    SaveTaskFilesTool(state.client, savePlace),
+    permission,
+  );
+  weakMap.set(state.client, composedTool.name);
+  tools.push(composedTool);
 }
 //@ chunk-h33h7b0z.js:18801-18819 placement
 var weakMap = new WeakMap();
@@ -651,37 +685,37 @@ var weakMap = new WeakMap();
 /**
  * 包装获取任务的 MCP 调用：若该客户端支持保存任务文件，从结果中解析文件列表并在结果文本后附上"本任务的文件"说明。
  */
-function wrapGetTaskWithFiles(e, t) {
-  let toolName = weakMap.get(t.client);
-  let taskId = t.args.task_id;
-  if (toolName === undefined || typeof taskId !== "string" || taskId === "") return e;
-  return async (a) => {
-    let r = await e(a);
-    let o =
-      resolveSavePlace(t.client, t.session) === undefined
+function wrapGetTaskWithFiles(getTaskCall, state) {
+  let toolName = weakMap.get(state.client);
+  let taskId = state.args.task_id;
+  if (toolName === undefined || typeof taskId !== "string" || taskId === "") return getTaskCall;
+  return async (args) => {
+    let result = await getTaskCall(args);
+    let files =
+      resolveSavePlace(state.client, state.session) === undefined
         ? undefined
-        : parseTaskFilesMeta(r.mcpMeta?.structuredContent);
-    if (o === undefined) return r;
-    let d = describeTaskFilesNote(rememberTaskFiles(t.session, taskId, o), toolName);
-    if (d === undefined) return r;
-    let { data: l } = r;
-    return typeof l === "string" || l === undefined
+        : parseTaskFilesMeta(result.mcpMeta?.structuredContent);
+    if (files === undefined) return result;
+    let note = describeTaskFilesNote(rememberTaskFiles(state.session, taskId, files), toolName);
+    if (note === undefined) return result;
+    let { data } = result;
+    return typeof data === "string" || data === undefined
       ? {
-          ...r,
+          ...result,
           data:
-            l === undefined
-              ? d
-              : `${l}
+            data === undefined
+              ? note
+              : `${data}
 
-${d}`,
+${note}`,
         }
       : {
-          ...r,
+          ...result,
           data: [
-            ...l,
+            ...data,
             {
               type: "text",
-              text: d,
+              text: note,
             },
           ],
         };
@@ -703,8 +737,9 @@ var PERMISSION_RANK = ["blocked", "ask", "allow", undefined];
 /**
  * 取两个权限里更严格的一个。
  */
-function stricterPermission(e, effectiveMaxPermission) {
-  return PERMISSION_RANK.indexOf(e) <= PERMISSION_RANK.indexOf(effectiveMaxPermission)
-    ? e
+function stricterPermission(requested, effectiveMaxPermission) {
+  return PERMISSION_RANK.indexOf(requested) <= PERMISSION_RANK.indexOf(effectiveMaxPermission)
+    ? requested
     : effectiveMaxPermission;
 }
+export { installSaveTaskFilesTool, wrapGetTaskWithFiles };

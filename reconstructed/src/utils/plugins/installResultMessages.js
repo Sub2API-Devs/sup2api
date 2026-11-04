@@ -50,7 +50,7 @@ async function findOtherProjectInstalls(pluginId, entry, knownMarketplaces, stor
       pluginId,
       entry,
       knownMarketplaces,
-      (y) => !isInstallationRelevantToCurrentProject(y),
+      (installation) => !isInstallationRelevantToCurrentProject(installation),
       storageV5,
     )
   ).flatMap(({ otherId, installations }) =>
@@ -72,39 +72,41 @@ async function findOtherProjectInstalls(pluginId, entry, knownMarketplaces, stor
 /**
  * ✓ Installed … 文案，附依赖、其他项目说明与禁用提示。
  */
-function formatInstalledMessage(e) {
-  let r = `\u2713 Installed ${e.otherProjectsNote === "" ? e.name : `"${quotedPrintable(e.name, 120)}"`}${e.depNote}.${e.otherProjectsNote === "" ? "" : ` ${e.otherProjectsNote}.`}`;
-  return e.disabled === undefined
-    ? r
-    : `${r} This plugin is disabled ${e.disabled === "by-default" ? "by default" : "in your settings"} \u2014 ${e.enableHint}`;
+function formatInstalledMessage(options) {
+  let installedText = `\u2713 Installed ${options.otherProjectsNote === "" ? options.name : `"${quotedPrintable(options.name, 120)}"`}${options.depNote}.${options.otherProjectsNote === "" ? "" : ` ${options.otherProjectsNote}.`}`;
+  return options.disabled === undefined
+    ? installedText
+    : `${installedText} This plugin is disabled ${options.disabled === "by-default" ? "by default" : "in your settings"} \u2014 ${options.enableHint}`;
 }
 //@ chunk-e6aww6q8.js:4459637-4460392 placement
-function describeOtherMarketplaceInstall(pluginId, name, r) {
+function describeOtherMarketplaceInstall(pluginId, name, installs) {
   {
-    if (r.length === 0) return "";
-    let s = new Intl.ListFormat("en", {
+    if (installs.length === 0) return "";
+    let marketplaceNames = new Intl.ListFormat("en", {
       type: "conjunction",
-    }).format(uniq(r.map((G) => qualifiedMarketplaceLabel(G.pluginId, "another marketplace"))));
-    let joined = r
-      .map((G) => {
-        let q = printableLabel(printableName(G.projectPath, 200));
-        return q === "" ? `${G.scope} scope` : `${q}, ${G.scope} scope`;
+    }).format(
+      uniq(installs.map((install) => qualifiedMarketplaceLabel(install.pluginId, "another marketplace"))),
+    );
+    let joined = installs
+      .map((install) => {
+        let projectLabel = printableLabel(printableName(install.projectPath, 200));
+        return projectLabel === "" ? `${install.scope} scope` : `${projectLabel}, ${install.scope} scope`;
       })
       .join("; ");
-    let y = canReplaceOfficialInstalls(pluginId, r);
-    let S = uniq(
-      r.flatMap(
-        (G) =>
-          (G.scope === "local" && y
+    let canSwitch = canReplaceOfficialInstalls(pluginId, installs);
+    let commands = uniq(
+      installs.flatMap(
+        (install) =>
+          (install.scope === "local" && canSwitch
             ? claudeCommand("plugin install", pluginId, "--replace --scope local")
-            : claudeCommand("plugin uninstall", G.pluginId, `--scope ${G.scope}`)) ?? [],
+            : claudeCommand("plugin uninstall", install.pluginId, `--scope ${install.scope}`)) ?? [],
       ),
     );
-    let w = r.length > 1;
-    let L = `Note: "${quotedPrintable(name, 120)}" is also installed from ${s} in ${w ? "other projects" : "another project"} (${joined}). Both will load there`;
-    return S.length === 0
-      ? L
-      : `${L}. ${y ? "To switch" : "To keep only this copy in"} ${w ? "one of those projects" : "that project"}${y ? " too" : ""}, run this there: ${S.join(" or ")}`;
+    let isPlural = installs.length > 1;
+    let note = `Note: "${quotedPrintable(name, 120)}" is also installed from ${marketplaceNames} in ${isPlural ? "other projects" : "another project"} (${joined}). Both will load there`;
+    return commands.length === 0
+      ? note
+      : `${note}. ${canSwitch ? "To switch" : "To keep only this copy in"} ${isPlural ? "one of those projects" : "that project"}${canSwitch ? " too" : ""}, run this there: ${commands.join(" or ")}`;
   }
   return "";
 }
@@ -112,49 +114,56 @@ function describeOtherMarketplaceInstall(pluginId, name, r) {
 /**
  * isOfficialFamilySameSource：官方市场族内同源插件。
  */
-function isOfficialFamilySameSource(e, entry) {
-  return e === CLAUDE_PLUGINS_OFFICIAL && typeof entry?.source === "string" && entryDeclaresComponents(entry);
+function isOfficialFamilySameSource(marketplace, entry) {
+  return (
+    marketplace === CLAUDE_PLUGINS_OFFICIAL &&
+    typeof entry?.source === "string" &&
+    entryDeclaresComponents(entry)
+  );
 }
 //@ chunk-e6aww6q8.js:4460461-4461104 placement
 /**
  * 已安装插件来自官方市场族时，在其他官方市场（claude-plugins-official 优先）中找来源相同、未被策略阻止的同名插件，返回 {pluginId, marketplace, sha}。
  */
-async function findOfficialMarketplaceAlternative(e, storageV5) {
+async function findOfficialMarketplaceAlternative(pluginId, storageV5) {
   if (isPluginDirectoryAvailable()) {
-    let { marketplace } = parsePluginIdentifier(e);
+    let { marketplace } = parsePluginIdentifier(pluginId);
     if (!marketplace) return;
     let knownMarketplaces = await loadKnownMarketplacesSafe(storageV5);
-    let pluginByIdCacheOnly = await getPluginByIdCacheOnly(e, storageV5);
-    let y = pluginByIdCacheOnly
+    let pluginByIdCacheOnly = await getPluginByIdCacheOnly(pluginId, storageV5);
+    let sourceKey = pluginByIdCacheOnly
       ? samePluginSource(
           pluginByIdCacheOnly.entry.source,
           sourceUrlAndRef(knownMarketplaces[marketplace]?.source),
         )
       : undefined;
-    if (y === undefined) return;
+    if (sourceKey === undefined) return;
     if (isOfficialFamilySameSource(marketplace, pluginByIdCacheOnly?.entry)) return;
-    let S =
+    let candidates =
       marketplace === OFFICIAL_MARKETPLACE_NAME
         ? Object.keys(knownMarketplaces)
             .filter(isOfficialMarketplaceName_3)
-            .sort((w, L) => Number(L === CLAUDE_PLUGINS_OFFICIAL) - Number(w === CLAUDE_PLUGINS_OFFICIAL))
+            .sort(
+              (leftName, rightName) =>
+                Number(rightName === CLAUDE_PLUGINS_OFFICIAL) - Number(leftName === CLAUDE_PLUGINS_OFFICIAL),
+            )
         : isOfficialMarketplaceName_3(marketplace) &&
             Object.hasOwn(knownMarketplaces, OFFICIAL_MARKETPLACE_NAME)
           ? [OFFICIAL_MARKETPLACE_NAME]
           : [];
-    for (let w of S) {
-      let source = knownMarketplaces[w]?.source;
+    for (let marketplaceName of candidates) {
+      let source = knownMarketplaces[marketplaceName]?.source;
       if (!source || !isSourceAllowedByPolicy(source)) continue;
-      let found = (await getMarketplaceCacheOnly(w, storageV5))?.plugins.find(
+      let found = (await getMarketplaceCacheOnly(marketplaceName, storageV5))?.plugins.find(
         (plugin) =>
-          samePluginSource(plugin.source, sourceUrlAndRef(source)) === y &&
-          (w !== OFFICIAL_MARKETPLACE_NAME || isReviewerMarkedEntry(plugin.name)),
+          samePluginSource(plugin.source, sourceUrlAndRef(source)) === sourceKey &&
+          (marketplaceName !== OFFICIAL_MARKETPLACE_NAME || isReviewerMarkedEntry(plugin.name)),
       );
-      if (!found || isPluginBlockedByPolicy(`${found.name}@${w}`)) continue;
+      if (!found || isPluginBlockedByPolicy(`${found.name}@${marketplaceName}`)) continue;
       let sha = typeof found.source === "object" && "sha" in found.source ? found.source.sha : undefined;
       return {
-        pluginId: `${found.name}@${w}`,
-        marketplace: w,
+        pluginId: `${found.name}@${marketplaceName}`,
+        marketplace: marketplaceName,
         sha,
       };
     }
@@ -175,8 +184,8 @@ function classifyOfficialFetchError(error) {
 /**
  * 官方市场副本下载失败、改从其他市场安装的说明。
  */
-function formatOfficialFallbackNote(e, marketplace) {
-  return ` (The ${OFFICIAL_MARKETPLACE_DISPLAY}'s copy could not be downloaded${e === "git-missing" ? ": git was not found" : " from its host"}. Installed the same plugin from ${
+function formatOfficialFallbackNote(cause, marketplace) {
+  return ` (The ${OFFICIAL_MARKETPLACE_DISPLAY}'s copy could not be downloaded${cause === "git-missing" ? ": git was not found" : " from its host"}. Installed the same plugin from ${
     printableLabel(marketplaceDisplayName(marketplace), {
       head: 60,
       tail: 20,
@@ -184,12 +193,12 @@ function formatOfficialFallbackNote(e, marketplace) {
   } instead.)`;
 }
 //@ chunk-e6aww6q8.js:4461433-4462064 placement
-function describeInstallFetchFailure(e, n, marketplace, scope, h) {
-  let y = e === "git-missing" ? "git was not found" : "git could not fetch it from its host";
-  let S = quotedPrintable(n);
-  let w = printableLabel(
+function describeInstallFetchFailure(cause, pluginId, marketplace, scope, errorText) {
+  let causeText = cause === "git-missing" ? "git was not found" : "git could not fetch it from its host";
+  let pluginLabel = quotedPrintable(pluginId);
+  let detail = printableLabel(
     printableName(
-      truncateMiddle(h, 500, 500, () => " \u2026 "),
+      truncateMiddle(errorText, 500, 500, () => " \u2026 "),
       1100,
     ),
     {
@@ -197,78 +206,78 @@ function describeInstallFetchFailure(e, n, marketplace, scope, h) {
       tail: 200,
     },
   );
-  let L = w === "" ? ", for a reason it did not give" : `: ${w}`;
-  let G = runCommandHint("plugin uninstall", n, {
+  let detailSuffix = detail === "" ? ", for a reason it did not give" : `: ${detail}`;
+  let uninstallHint = runCommandHint("plugin uninstall", pluginId, {
     extra: scope === "user" ? undefined : `--scope ${scope}`,
-    fallback: `run \`claude plugin uninstall\` for "${S}"${scope === "user" ? "" : ` with --scope ${scope}`}`,
+    fallback: `run \`claude plugin uninstall\` for "${pluginLabel}"${scope === "user" ? "" : ` with --scope ${scope}`}`,
   });
-  return `Could not download the ${OFFICIAL_MARKETPLACE_DISPLAY}'s copy (${y}), so the same plugin was installed from ${
+  return `Could not download the ${OFFICIAL_MARKETPLACE_DISPLAY}'s copy (${causeText}), so the same plugin was installed from ${
     printableLabel(marketplaceDisplayName(marketplace), {
       head: 60,
       tail: 20,
     }) || "another marketplace"
-  } instead, but not completely${L}.
-${S} is still installed, and may not load. To remove it, ${G}.`;
+  } instead, but not completely${detailSuffix}.
+${pluginLabel} is still installed, and may not load. To remove it, ${uninstallHint}.`;
 }
 //@ chunk-e6aww6q8.js:4462064-4462357 placement
 /**
  * 汇总各依赖的版本范围要求及要求方。
  */
-function collectDependencyVersionRanges(e, n) {
-  let r = new Map();
-  let s = new Map();
-  for (let h of e) {
-    if (!h.depConstraints || n.has(h.source)) continue;
-    for (let [y, S] of h.depConstraints) {
-      if (S.version === undefined) continue;
-      let w = qualifyDependency(y, h.source);
-      s.set(w, [...(s.get(w) ?? []), h.source]);
-      r.set(w, [...(r.get(w) ?? []), S.version]);
+function collectDependencyVersionRanges(plugins, exclude) {
+  let ranges = new Map();
+  let requirers = new Map();
+  for (let plugin of plugins) {
+    if (!plugin.depConstraints || exclude.has(plugin.source)) continue;
+    for (let [rawDependency, constraint] of plugin.depConstraints) {
+      if (constraint.version === undefined) continue;
+      let dependencyId = qualifyDependency(rawDependency, plugin.source);
+      requirers.set(dependencyId, [...(requirers.get(dependencyId) ?? []), plugin.source]);
+      ranges.set(dependencyId, [...(ranges.get(dependencyId) ?? []), constraint.version]);
     }
   }
   return {
-    ranges: r,
-    requirers: s,
+    ranges,
+    requirers,
   };
 }
 //@ chunk-e6aww6q8.js:4462357-4462968 placement
 /**
  * 安装前检查：插件被策略阻止、插件目录不可用、市场被策略阻止时返回 refusal；通过时返回已知市场与 failClosedOnUnknownSource。
  */
-async function checkInstallAllowed(e, n, storageV5) {
-  if (isPluginBlockedByPolicy(e))
+async function checkInstallAllowed(pluginId, entry, storageV5) {
+  if (isPluginBlockedByPolicy(pluginId))
     return {
       ok: false,
       refusal: {
         ok: false,
         reason: "blocked-by-policy",
-        pluginName: n.name,
+        pluginName: entry.name,
       },
     };
   let knownMarketplaces = await loadKnownMarketplacesSafe(storageV5);
   let failClosedOnUnknownSource =
     isStorageV5Enabled() && storageV5 !== undefined && Object.keys(knownMarketplaces).length === 0;
-  if (await isListingUsableForMarketplace(e, n, knownMarketplaces, storageV5))
+  if (await isListingUsableForMarketplace(pluginId, entry, knownMarketplaces, storageV5))
     return {
       ok: false,
       refusal: {
         ok: false,
         reason: "blocked-by-policy",
-        pluginName: n.name,
+        pluginName: entry.name,
       },
     };
-  let y = await pluginDirectoryUnavailableReason(e);
-  if (y !== null)
+  let unavailableCause = await pluginDirectoryUnavailableReason(pluginId);
+  if (unavailableCause !== null)
     return {
       ok: false,
       refusal: {
         ok: false,
         reason: "plugin-directory-unavailable",
-        pluginName: n.name,
-        cause: y,
+        pluginName: entry.name,
+        cause: unavailableCause,
       },
     };
-  let blockedMarketplace = findBlockedMarketplace(e, knownMarketplaces, {
+  let blockedMarketplace = findBlockedMarketplace(pluginId, knownMarketplaces, {
     failClosedOnUnknownSource,
   });
   if (blockedMarketplace)
@@ -277,7 +286,7 @@ async function checkInstallAllowed(e, n, storageV5) {
       refusal: {
         ok: false,
         reason: "marketplace-blocked-by-policy",
-        pluginName: n.name,
+        pluginName: entry.name,
         marketplaceName: blockedMarketplace,
       },
     };

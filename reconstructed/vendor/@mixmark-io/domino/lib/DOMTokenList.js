@@ -5,11 +5,11 @@
  * pieces: chunk-vwj6ccer.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 import { require_utils } from "./utils.js";
 
 //@ chunk-vwj6ccer.js:29363-31379 cjs-fingerprint
-var require_DOMTokenList = x(function (cjsExports, cjsModule) {
+var require_DOMTokenList = __commonJS(function (cjsExports, cjsModule) {
   var utils = require_utils();
   cjsModule.exports = DOMTokenList;
   function DOMTokenList(getter, setter) {

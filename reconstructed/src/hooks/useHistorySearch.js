@@ -20,7 +20,13 @@ import { logForDebugging } from "../utils/debug.js";
 import { errorMessage } from "../utils/errors.js";
 import { logError } from "../utils/log.js";
 import { useTheme_2 } from "../components/design-system/ThemeProvider.js";
-import { ce, y, R, P, Q } from "../../vendor/react/cjs/react.production.js";
+import {
+  useCallback,
+  useState,
+  useRef,
+  useEffect,
+  useMemo,
+} from "../../vendor/react/cjs/react.production.js";
 import { claimOnce } from "../services/api/verificationRequired.js";
 import { logFeatureOk, logFeatureSad } from "../services/analytics/featureTelemetry.js";
 import {
@@ -30,81 +36,88 @@ import {
 import { useKeybinding } from "../keybindings/useKeybinding.js";
 import { isFullscreenActive } from "../utils/fullscreen.js";
 import { MessageActionsKeybindings } from "../components/messageActions.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-18hwfzwa.js:535581-535620 placement
-var IT = Object.freeze({
-  kind: "history",
+var historyPromptOrigin; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:535581", () => {
+  historyPromptOrigin = Object.freeze({
+    kind: "history",
+  });
 });
 //@ chunk-18hwfzwa.js:535620-535718 placement
-function logHistoryReaderError(h) {
-  if (isTransientHistoryReadError(h)) {
-    logForDebugging(`History search reader failed: ${errorMessage(h)}`, {
+function logHistoryReaderError(error) {
+  if (isTransientHistoryReadError(error)) {
+    logForDebugging(`History search reader failed: ${errorMessage(error)}`, {
       level: "error",
     });
     return;
   }
-  logError(h);
+  logError(error);
 }
 //@ chunk-18hwfzwa.js:535718-535949 layout
-function findMatchCursorOffset(h, pastedContents, D) {
-  let index = h.toLowerCase().lastIndexOf(D);
+function findMatchCursorOffset(text, pastedContents, needle) {
+  let index = text.toLowerCase().lastIndexOf(needle);
   if (index !== -1) return index;
-  let last = parsePastedRefs(h).findLast((ke) => {
-    let Re = pastedContents[ke.id];
-    return Re?.type === "text" && !Re.unavailable && Re.content.toLowerCase().includes(D);
+  let last = parsePastedRefs(text).findLast((ref) => {
+    let entry = pastedContents[ref.id];
+    return entry?.type === "text" && !entry.unavailable && entry.content.toLowerCase().includes(needle);
   });
-  return last ? last.index : h.length;
+  return last ? last.index : text.length;
 }
 //@ chunk-18hwfzwa.js:535949-538827 fingerprint = useHistorySearch (0.689)
 /**
  * Ctrl+R 历史搜索：打开时流式读取全部历史（history_search_scan），输入时增量匹配（含粘贴文本内容），accept 把匹配填回输入框，execute 直接提交，cancel 恢复原输入；记录 history_search_open/accept/execute 事件。
  */
-function useHistorySearch(props, x) {
+function useHistorySearch(props, onExecute) {
   let { storageV5 } = useTheme_2();
-  let L = ce((Ro) => props.attribute(IT, () => props.setValue(Ro)), [props]);
+  let setValue = useCallback(
+    (value) => props.attribute(historyPromptOrigin, () => props.setValue(value)),
+    [props],
+  );
   let { setCursorOffset, setMode, setPastedContents } = props;
-  let [Be, He] = y(false);
-  let [We, ze] = y("");
-  let [Xe, rt] = y(false);
-  let [kt, At] = y(undefined);
-  let historyReader = R(null);
-  let seenPrompts = R(false);
-  let historyReader_2 = R(undefined);
-  let seenPrompts_2 = R(new Set());
-  let closeHistoryReader = ce(() => {
+  let [isSearching, setIsSearching] = useState(false);
+  let [query, setQuery] = useState("");
+  let [exhausted, setExhausted] = useState(false);
+  let [matchedEntry, setMatchedEntry] = useState(undefined);
+  let historyReader = useRef(null);
+  let seenPrompts = useRef(false);
+  let historyReader_2 = useRef(undefined);
+  let seenPrompts_2 = useRef(new Set());
+  let closeHistoryReader = useCallback(() => {
     if (historyReader_2.current) {
       historyReader_2.current.return(undefined).catch(logHistoryReaderError);
       historyReader_2.current = undefined;
     }
   }, []);
-  let reset = ce(
-    (Ro) => {
-      L(Ro.value);
-      setCursorOffset(Ro.cursorOffset);
-      setMode(Ro.mode);
-      setPastedContents(Ro.pastedContents);
+  let reset = useCallback(
+    (snapshot) => {
+      setValue(snapshot.value);
+      setCursorOffset(snapshot.cursorOffset);
+      setMode(snapshot.mode);
+      setPastedContents(snapshot.pastedContents);
     },
-    [L, setCursorOffset, setMode, setPastedContents],
+    [setValue, setCursorOffset, setMode, setPastedContents],
   );
-  let searchHistory = ce(() => {
+  let searchHistory = useCallback(() => {
     historyReader.current = null;
-    He(false);
-    ze("");
-    rt(false);
-    At(undefined);
+    setIsSearching(false);
+    setQuery("");
+    setExhausted(false);
+    setMatchedEntry(undefined);
     closeHistoryReader();
     seenPrompts_2.current.clear();
   }, [closeHistoryReader]);
-  let io = ce(
+  let runSearch = useCallback(
     async (resume, signal) => {
-      let Io = historyReader.current;
-      if (Io === null) return;
-      if (We.length === 0) {
+      let reader = historyReader.current;
+      if (reader === null) return;
+      if (query.length === 0) {
         closeHistoryReader();
         seenPrompts_2.current.clear();
-        At(undefined);
-        rt(false);
-        reset(Io);
+        setMatchedEntry(undefined);
+        setExhausted(false);
+        reset(reader);
         return;
       }
       if (!resume) {
@@ -113,117 +126,117 @@ function useHistorySearch(props, x) {
         seenPrompts_2.current.clear();
       }
       if (!historyReader_2.current) return;
-      let Wo = historyReader_2.current;
-      let lower = We.toLowerCase();
+      let reader_ = historyReader_2.current;
+      let needle = query.toLowerCase();
       while (true) {
         if (signal?.aborted) return;
-        let item = await Wo.next();
+        let item = await reader_.next();
         if (claimOnce().claim("history_search_scan_ok")) logFeatureOk("history_search_scan");
-        if (historyReader_2.current !== Wo) return;
+        if (historyReader_2.current !== reader_) return;
         if (item.done) {
-          rt(true);
+          setExhausted(true);
           return;
         }
         let { display, pastedContents } = item.value;
         let matchPosition =
-          display.toLowerCase().includes(lower) ||
-          expandHistoryDisplay(display, pastedContents).toLowerCase().includes(lower);
+          display.toLowerCase().includes(needle) ||
+          expandHistoryDisplay(display, pastedContents).toLowerCase().includes(needle);
         let promptHistoryKey = getPromptHistoryKey(display, pastedContents);
         if (matchPosition && !seenPrompts_2.current.has(promptHistoryKey)) {
           seenPrompts_2.current.add(promptHistoryKey);
-          At(item.value);
-          rt(false);
+          setMatchedEntry(item.value);
+          setExhausted(false);
           let mode = getModeFromInput_2(display);
           setMode(mode);
-          L(display);
-          setCursorOffset(findMatchCursorOffset(stripModePrefix(display), pastedContents, lower));
+          setValue(display);
+          setCursorOffset(findMatchCursorOffset(stripModePrefix(display), pastedContents, needle));
           return;
         }
       }
     },
-    [We, closeHistoryReader, reset, L, setCursorOffset, setMode, storageV5],
+    [query, closeHistoryReader, reset, setValue, setCursorOffset, setMode, storageV5],
   );
-  let handleStartSearch = ce(() => {
+  let handleStartSearch = useCallback(() => {
     logFeatureOk("history_search_open");
     historyReader.current = props.getSnapshot();
     seenPrompts.current = false;
-    He(true);
+    setIsSearching(true);
     historyReader_2.current = getHistory(storageV5);
     seenPrompts_2.current.clear();
   }, [props, storageV5]);
-  let handleNextMatch = ce(() => {
-    io(true).catch(logHistoryReaderError);
-  }, [io]);
-  let handleAccept = ce(() => {
-    let Ro = historyReader.current;
-    if (!Ro) return;
-    if (kt) {
+  let handleNextMatch = useCallback(() => {
+    runSearch(true).catch(logHistoryReaderError);
+  }, [runSearch]);
+  let handleAccept = useCallback(() => {
+    let reader = historyReader.current;
+    if (!reader) return;
+    if (matchedEntry) {
       logFeatureOk("history_search_accept");
       let mode = renumberPastedContents({
-        display: kt.display,
-        pastedContents: kt.pastedContents,
+        display: matchedEntry.display,
+        pastedContents: matchedEntry.pastedContents,
       });
       let value = getModeFromInput_2(mode.display);
       let value_2 = stripModePrefix(mode.display);
-      L(value_2);
-      setCursorOffset(findMatchCursorOffset(value_2, mode.pastedContents, We.toLowerCase()));
+      setValue(value_2);
+      setCursorOffset(findMatchCursorOffset(value_2, mode.pastedContents, query.toLowerCase()));
       setMode(value);
       setPastedContents(mode.pastedContents);
     } else {
-      if (We.length > 0) logFeatureSad("history_search_accept", "accept_no_match");
-      setPastedContents(Ro.pastedContents);
+      if (query.length > 0) logFeatureSad("history_search_accept", "accept_no_match");
+      setPastedContents(reader.pastedContents);
     }
     searchHistory();
-  }, [kt, We, setCursorOffset, L, setMode, setPastedContents, searchHistory]);
-  let handleCancel = ce(() => {
-    let Ro = historyReader.current;
-    if (Ro) reset(Ro);
+  }, [matchedEntry, query, setCursorOffset, setValue, setMode, setPastedContents, searchHistory]);
+  let handleCancel = useCallback(() => {
+    let reader = historyReader.current;
+    if (reader) reset(reader);
     searchHistory();
   }, [reset, searchHistory]);
-  P(
+  useEffect(
     () => () => {
-      let Ro = historyReader.current;
-      if (Ro) {
-        reset(Ro);
+      let reader = historyReader.current;
+      if (reader) {
+        reset(reader);
         closeHistoryReader();
       }
     },
     [reset, closeHistoryReader],
   );
-  let handleExecute = ce(() => {
+  let handleExecute = useCallback(() => {
     if (seenPrompts.current) return;
-    let Ro = historyReader.current;
-    if (We.length === 0) {
-      if (Ro) {
+    let reader = historyReader.current;
+    if (query.length === 0) {
+      if (reader) {
         seenPrompts.current = true;
-        x({
-          display: Ro.value,
-          pastedContents: Ro.pastedContents,
+        onExecute({
+          display: reader.value,
+          pastedContents: reader.pastedContents,
         });
       }
-    } else if (kt) {
+    } else if (matchedEntry) {
       logFeatureOk("history_search_execute");
       let mode = renumberPastedContents({
-        display: kt.display,
-        pastedContents: kt.pastedContents,
+        display: matchedEntry.display,
+        pastedContents: matchedEntry.pastedContents,
       });
       let value = getModeFromInput_2(mode.display);
-      let Wo = stripModePrefix(mode.display);
-      L(Wo);
+      let value_2 = stripModePrefix(mode.display);
+      setValue(value_2);
       setMode(value);
       seenPrompts.current = true;
-      x({
-        display: Wo,
+      onExecute({
+        display: value_2,
         pastedContents: mode.pastedContents,
       });
     } else logFeatureSad("history_search_execute", "execute_no_match");
     searchHistory();
-  }, [We, kt, x, L, setMode, searchHistory]);
+  }, [query, matchedEntry, onExecute, setValue, setMode, searchHistory]);
   useKeybinding("history:search", handleStartSearch, {
     context: "Global",
-    isActive: isFullscreenActive() ? false : !Be,
+    isActive: isFullscreenActive() ? false : !isSearching,
   });
-  let historySearchHandlers = Q(
+  let historySearchHandlers = useMemo(
     () => ({
       "historySearch:next": handleNextMatch,
       "historySearch:accept": handleAccept,
@@ -234,33 +247,33 @@ function useHistorySearch(props, x) {
   );
   MessageActionsKeybindings(historySearchHandlers, {
     context: "HistorySearch",
-    isActive: Be,
+    isActive: isSearching,
   });
-  let handleKeyDown = ce(
+  let handleKeyDown = useCallback(
     (e) => {
-      if (!Be) return;
-      if (e.key === "backspace" && We === "") {
+      if (!isSearching) return;
+      if (e.key === "backspace" && query === "") {
         e.preventDefault();
         handleCancel();
       }
     },
-    [Be, We, handleCancel],
+    [isSearching, query, handleCancel],
   );
-  P(() => {
+  useEffect(() => {
     let controller = new AbortController();
-    io(false, controller.signal).catch(logHistoryReaderError);
+    runSearch(false, controller.signal).catch(logHistoryReaderError);
     return () => {
       controller.abort();
     };
-  }, [io]);
+  }, [runSearch]);
   return {
-    isSearching: Be,
-    historyQuery: We,
-    setHistoryQuery: ze,
-    historyMatch: kt,
-    historyFailedMatch: Xe,
+    isSearching,
+    historyQuery: query,
+    setHistoryQuery: setQuery,
+    historyMatch: matchedEntry,
+    historyFailedMatch: exhausted,
     handleKeyDown,
     openSearch: handleStartSearch,
   };
 }
-export { useHistorySearch, IT };
+export { useHistorySearch, historyPromptOrigin };

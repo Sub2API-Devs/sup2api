@@ -10,7 +10,7 @@
  */
 import { useCommandQueue } from "../Messages.js";
 import { useAppState } from "../../state/AppState.js";
-import { Q } from "../../../vendor/react/cjs/react.production.js";
+import { useMemo } from "../../../vendor/react/cjs/react.production.js";
 import { truncate } from "../../utils/format.js";
 import { isRefillableInput } from "../../utils/messageQueueManager.js";
 import { isKbCohesionFixesOn } from "../../utils/kbCohesionFixes.js";
@@ -25,30 +25,38 @@ var AGENT_NAME_MAX_LENGTH = 20;
 //@ chunk-18hwfzwa.js:921250-922094 fingerprint = usePromptInputPlaceholder (0.467)
 function usePromptInputPlaceholder({ isInputEmpty, submitCount, hasMessages, viewingAgentName }) {
   let queuedCommands = useCommandQueue();
-  let promptSuggestionEnabled = useAppState((He) => He.promptSuggestionEnabled);
-  let Re = useAppState((He) =>
-    He.queueEditIndex === null ? "none" : He.queueEditIndex === 0 ? "oldest" : "newer",
+  let promptSuggestionEnabled = useAppState((state) => state.promptSuggestionEnabled);
+  let editTarget = useAppState((state) =>
+    state.queueEditIndex === null ? "none" : state.queueEditIndex === 0 ? "oldest" : "newer",
   );
-  return Q(() => {
+  return useMemo(() => {
     if (!isInputEmpty) return;
     if (viewingAgentName) return `Message @${truncate(viewingAgentName, AGENT_NAME_MAX_LENGTH)}\u2026`;
     if (queuedCommands.some(isRefillableInput)) {
-      if (Re !== "none")
-        return Re === "oldest"
+      if (editTarget !== "none")
+        return editTarget === "oldest"
           ? "Press Enter to edit the selected message, or up again for history"
           : "Press Enter to edit the selected message, or up again for an older one";
-      let He = isKbCohesionFixesOn();
+      let cohesionFix = isKbCohesionFixesOn();
       if (isQueuedSendNowEnabled())
-        return He
+        return cohesionFix
           ? "Press up to select a queued message to edit, or Enter to send them now"
           : "Press up to edit queued messages, Enter to send them immediately";
       if ((getGlobalConfig().queuedCommandUpHintCount || 0) < QUEUED_UP_HINT_COUNT)
-        return He
+        return cohesionFix
           ? "Press up to select a queued message, then Enter to edit it"
           : "Press up to edit queued messages";
     }
     if (submitCount < 1 && !hasMessages && promptSuggestionEnabled)
       return getExampleCommandFromCache(getSessionId());
-  }, [isInputEmpty, queuedCommands, Re, submitCount, hasMessages, promptSuggestionEnabled, viewingAgentName]);
+  }, [
+    isInputEmpty,
+    queuedCommands,
+    editTarget,
+    submitCount,
+    hasMessages,
+    promptSuggestionEnabled,
+    viewingAgentName,
+  ]);
 }
 export { usePromptInputPlaceholder };

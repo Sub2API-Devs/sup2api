@@ -5,27 +5,29 @@
  * pieces: chunk-a16kyqj3.js (6)
  * attribution: placement 6
  */
-import { dV } from "./_root.js";
+import { symbolExport } from "./_root.js";
 import { getRawTag_default } from "./_getRawTag.js";
 
 //@ chunk-a16kyqj3.js:614-650 placement
-var S = Object.prototype;
-var toString = S.toString;
+var objectProtoBaseTag = Object.prototype;
+var toString = objectProtoBaseTag.toString;
 //@ chunk-a16kyqj3.js:650-681 placement
-function s(t) {
-  return toString.call(t);
+function objectToString(value) {
+  return toString.call(value);
 }
 //@ chunk-a16kyqj3.js:681-689 placement
-var n = s;
+var import_objectToString = objectToString;
 //@ chunk-a16kyqj3.js:689-761 placement
-var y = "[object Null]";
+var nullTag = "[object Null]";
 var undefinedTag = "[object Undefined]";
-var symToStringTag_2 = dV ? dV.toStringTag : undefined;
+var symToStringTag_2 = symbolExport ? symbolExport.toStringTag : undefined;
 //@ chunk-a16kyqj3.js:761-843 placement
-function v(value) {
-  if (value == null) return value === undefined ? undefinedTag : y;
-  return symToStringTag_2 && symToStringTag_2 in Object(value) ? getRawTag_default(value) : n(value);
+function baseGetTag(value) {
+  if (value == null) return value === undefined ? undefinedTag : nullTag;
+  return symToStringTag_2 && symToStringTag_2 in Object(value)
+    ? getRawTag_default(value)
+    : import_objectToString(value);
 }
 //@ chunk-a16kyqj3.js:843-853 placement
-var yre = v;
-export { yre };
+var baseGetTagExport = baseGetTag;
+export { baseGetTagExport };

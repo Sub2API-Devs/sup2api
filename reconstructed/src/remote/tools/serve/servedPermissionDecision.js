@@ -162,12 +162,12 @@ var REMOTE_CALL_UNRESOLVED_SHELL_WRITE_ASK = "remote_call_unresolved_shell_write
 var REMOTE_CALL_SETTINGS_FILE_NAMED_ASK = "remote_call_settings_file_named_ask";
 var FORCE_NOT_REMOTELY_EXECUTABLE = false;
 //@ chunk-tr0s0d0k.js:51756-51809 placement
-function isNotRemotelyExecutable(e) {
-  return e.isMcp === true || !getToolRemoteExecution(e).supported;
+function isNotRemotelyExecutable(tool) {
+  return tool.isMcp === true || !getToolRemoteExecution(tool).supported;
 }
 //@ chunk-tr0s0d0k.js:51809-51945 placement
-function destructiveCommandAskMessage(e) {
-  return `This command is flagged as destructive. ${e} asks before running destructive commands sent from a cloud session.`;
+function destructiveCommandAskMessage(targetName) {
+  return `This command is flagged as destructive. ${targetName} asks before running destructive commands sent from a cloud session.`;
 }
 //@ chunk-tr0s0d0k.js:51945-52439 placement
 /**
@@ -195,17 +195,17 @@ var STOPPED_BEFORE_ANSWER_DECISION = {
 var REMOTE_CALL_NOT_RUN_HERE = "remote_call_not_run_here";
 var MODES_THAT_ALLOW_SERVED_CALLS = new Set(["default", "plan", "dontAsk", "acceptEdits"]);
 //@ chunk-tr0s0d0k.js:52439-52938 placement
-function effectiveServedMode(e) {
-  if (e.stance.mode !== "session")
+function effectiveServedMode(params) {
+  if (params.stance.mode !== "session")
     return {
-      mode: e.stance.mode,
+      mode: params.stance.mode,
       capped: false,
       autoRefusedHere: false,
     };
-  let n = e.call ?? DEFAULT_SERVING_POLICY;
-  let sessionMode = e.sessionMode ?? "default";
-  let autoRefusedHere = e.sessionMode === "auto" || e.sessionMode === "bypassPermissions";
-  if (isUnattendedAutoAllowed(e.stance, e.sessionMode, n))
+  let call = params.call ?? DEFAULT_SERVING_POLICY;
+  let sessionMode = params.sessionMode ?? "default";
+  let autoRefusedHere = params.sessionMode === "auto" || params.sessionMode === "bypassPermissions";
+  if (isUnattendedAutoAllowed(params.stance, params.sessionMode, call))
     return {
       mode: "acceptEdits",
       capped: sessionMode === "bypassPermissions",
@@ -213,8 +213,8 @@ function effectiveServedMode(e) {
     };
   return {
     mode:
-      (e.stance.unattended === "own_record" ||
-        (e.stance.unattended === "conveyed" && n.modeDecidedByHost === true)) &&
+      (params.stance.unattended === "own_record" ||
+        (params.stance.unattended === "conveyed" && call.modeDecidedByHost === true)) &&
       MODES_THAT_ALLOW_SERVED_CALLS.has(sessionMode)
         ? sessionMode
         : "default",
@@ -223,19 +223,19 @@ function effectiveServedMode(e) {
   };
 }
 //@ chunk-tr0s0d0k.js:52938-53263 placement
-function servedModeRelation(e) {
-  if (e.stance.mode !== "session") return "fixed_stance";
-  if (e.sessionMode === undefined) return "mode_absent";
-  if (e.sessionMode === e.evaluatedMode) return "as_claimed";
-  if (e.sessionMode === "auto" || e.sessionMode === "bypassPermissions")
-    return e.evaluatedMode === "acceptEdits" ? "auto_fast_path" : "auto_refused_here";
+function servedModeRelation(params) {
+  if (params.stance.mode !== "session") return "fixed_stance";
+  if (params.sessionMode === undefined) return "mode_absent";
+  if (params.sessionMode === params.evaluatedMode) return "as_claimed";
+  if (params.sessionMode === "auto" || params.sessionMode === "bypassPermissions")
+    return params.evaluatedMode === "acceptEdits" ? "auto_fast_path" : "auto_refused_here";
   return "mode_unknown";
 }
 //@ chunk-tr0s0d0k.js:53263-53448 placement
-function servedModeTelemetry(e) {
-  let n = servedModeRelation(e);
-  let session = e.sessionMode ?? "absent";
-  return n === "auto_fast_path"
+function servedModeTelemetry(params) {
+  let relation = servedModeRelation(params);
+  let session = params.sessionMode ?? "absent";
+  return relation === "auto_fast_path"
     ? {
         session,
         evaluated: "auto",
@@ -243,21 +243,21 @@ function servedModeTelemetry(e) {
       }
     : {
         session,
-        evaluated: e.evaluatedMode,
-        why: n,
+        evaluated: params.evaluatedMode,
+        why: relation,
       };
 }
 //@ chunk-tr0s0d0k.js:53448-53912 placement
-function servedModeNote(e, n = "none") {
-  switch (e) {
+function servedModeNote(relation, reason = "none") {
+  switch (relation) {
     case "fixed_stance":
     case "as_claimed":
     case "auto_fast_path":
       return;
     case "auto_refused_here":
-      return n === "none"
+      return reason === "none"
         ? `This computer is not accepting auto mode from cloud sessions right now, so it checked this in ${permissionModeTitle("default").toLowerCase()} mode.`
-        : REMOTE_TOOLS_CONSENT_TEXT[`auto_off.reason.${n}`];
+        : REMOTE_TOOLS_CONSENT_TEXT[`auto_off.reason.${reason}`];
     case "mode_absent":
     case "mode_unknown":
       return `This computer could not tell which mode the session is in, so it checked this in ${permissionModeTitle("default").toLowerCase()} mode.`;
@@ -266,13 +266,13 @@ function servedModeNote(e, n = "none") {
 //@ chunk-tr0s0d0k.js:53912-53953 placement
 var REMOTE_CALL_AUTO_MODE_ALLOWLIST = "remote_call_auto_mode_allowlist";
 //@ chunk-tr0s0d0k.js:53953-54157 placement
-function isUnattendedAutoAllowed(stance, sessionMode, o) {
+function isUnattendedAutoAllowed(stance, sessionMode, call) {
   if (sessionMode !== "auto" && sessionMode !== "bypassPermissions") return false;
   switch (stance.unattended) {
     case "own_record":
       return !autoModeRefusedForServedCalls();
     case "conveyed":
-      return o.modeDecidedByHost === true;
+      return call.modeDecidedByHost === true;
     default: {
       let unattended = stance.unattended;
       return false;
@@ -280,14 +280,14 @@ function isUnattendedAutoAllowed(stance, sessionMode, o) {
   }
 }
 //@ chunk-tr0s0d0k.js:54157-54265 placement
-function isUnattendedOwnRecord(e) {
-  switch (e) {
+function isUnattendedOwnRecord(stanceValue) {
+  switch (stanceValue) {
     case "own_record":
       return !autoModeRefusedForServedCalls();
     case "conveyed":
       return false;
     default: {
-      let n = e;
+      let unattended = stanceValue;
       return false;
     }
   }
@@ -297,8 +297,8 @@ function isPlanFloor(sessionMode, unattended = "own_record") {
   return sessionMode === "plan" && planModeUnattendedRefusal(unattended) === undefined;
 }
 //@ chunk-tr0s0d0k.js:54330-54443 placement
-function planModeUnattendedRefusal(e) {
-  if (!isUnattendedOwnRecord(e)) return "answers_refused";
+function planModeUnattendedRefusal(stanceValue) {
+  if (!isUnattendedOwnRecord(stanceValue)) return "answers_refused";
   return getUseAutoModeDuringPlan() && !isServedSettingRefused("plan_asks_a_person")
     ? undefined
     : "plan_setting";
@@ -313,25 +313,26 @@ var SESSION_RULE_SOURCES = new Set(["projectSettings", "localSettings", "session
 /**
  * 为远程调用构造本机权限上下文：按服务立场（session/fixed）合并会话模式、规则来源与 CLI 允许规则。
  */
-function servedPermissionContext(e) {
-  let n = e.call ?? DEFAULT_SERVING_POLICY;
+function servedPermissionContext(params) {
+  let call = params.call ?? DEFAULT_SERVING_POLICY;
   let { mode } = effectiveServedMode({
-    stance: e.stance,
-    sessionMode: e.sessionMode,
-    call: n,
+    stance: params.stance,
+    sessionMode: params.sessionMode,
+    call,
   });
-  let r =
-    isUnattendedAutoAllowed(e.stance, e.sessionMode, n) || isPlanFloor(e.sessionMode, e.stance.unattended);
-  let s = shouldAllowManagedPermissionRulesOnly();
+  let autoAllowed =
+    isUnattendedAutoAllowed(params.stance, params.sessionMode, call) ||
+    isPlanFloor(params.sessionMode, params.stance.unattended);
+  let managedOnly = shouldAllowManagedPermissionRulesOnly();
   let launchPermissions = getLaunchPermissions();
-  let u = launchPermissions.launchedInAutoMode || isAutoModeActive();
-  let p = e.userSettings?.held === true && projectSettingsAliasesUserSettings();
-  let h = e.stance.honorLocalRules
+  let launchedAuto = launchPermissions.launchedInAutoMode || isAutoModeActive();
+  let projectAliasesUser = params.userSettings?.held === true && projectSettingsAliasesUserSettings();
+  let rules = params.stance.honorLocalRules
     ? [
-        ...applyHeldUserRules(loadAllPermissionRulesFromDisk(), e.userSettings, s).filter(
-          (A) => !p || A.source !== "projectSettings" || A.ruleBehavior !== "allow",
+        ...applyHeldUserRules(loadAllPermissionRulesFromDisk(), params.userSettings, managedOnly).filter(
+          (rule) => !projectAliasesUser || rule.source !== "projectSettings" || rule.ruleBehavior !== "allow",
         ),
-        ...(s
+        ...(managedOnly
           ? []
           : launchPermissions.allowRules.map((allowRule) => ({
               source: "cliArg",
@@ -344,53 +345,56 @@ function servedPermissionContext(e) {
         ...applyHeldUserRules(
           getEnabledSettingSources()
             .filter(
-              (A) =>
-                !SESSION_RULE_SOURCES.has(A) &&
-                !(A === "userSettings" && projectSettingsAliasesUserSettings()),
+              (source) =>
+                !SESSION_RULE_SOURCES.has(source) &&
+                !(source === "userSettings" && projectSettingsAliasesUserSettings()),
             )
-            .flatMap((A) => getPermissionRulesForSource(A)),
-          projectSettingsAliasesUserSettings() ? undefined : e.userSettings,
+            .flatMap((source) => getPermissionRulesForSource(source)),
+          projectSettingsAliasesUserSettings() ? undefined : params.userSettings,
           false,
         ),
         ...launchDenyRules(launchPermissions),
-      ].filter((A) => !SESSION_RULE_SOURCES.has(A.source) && A.ruleBehavior === "deny");
-  let _ = new Set(
-    overlyBroadShellAllowsStrippedByEverySession(h).map((A) => formatPermissionRule(A.ruleValue)),
+      ].filter((rule) => !SESSION_RULE_SOURCES.has(rule.source) && rule.ruleBehavior === "deny");
+  let broadAllowKeySet = new Set(
+    overlyBroadShellAllowsStrippedByEverySession(rules).map((rule) => formatPermissionRule(rule.ruleValue)),
   );
-  let filtered = h.filter(
-    (A) =>
-      !isDangerousAllowRule(A.ruleBehavior, A.ruleValue, r || (A.source === "cliArg" && u)) &&
-      !(A.ruleBehavior === "allow" && _.has(formatPermissionRule(A.ruleValue))),
+  let filtered = rules.filter(
+    (rule) =>
+      !isDangerousAllowRule(
+        rule.ruleBehavior,
+        rule.ruleValue,
+        autoAllowed || (rule.source === "cliArg" && launchedAuto),
+      ) && !(rule.ruleBehavior === "allow" && broadAllowKeySet.has(formatPermissionRule(rule.ruleValue))),
   );
-  let R = applyPermissionRulesToPermissionContext(getEmptyToolPermissionContext(), filtered, {
+  let context = applyPermissionRulesToPermissionContext(getEmptyToolPermissionContext(), filtered, {
     announce: false,
   });
-  let honorLocalRules = e.stance.honorLocalRules;
-  let L = {
-    ...R,
+  let honorLocalRules = params.stance.honorLocalRules;
+  let servedContext = {
+    ...context,
     alwaysDenyRules: withHostCredentialDenyRules(
-      R.alwaysDenyRules,
-      e.stance.honorLocalRules && launchPermissions.toolsNarrowingDenyRules.length > 0
+      context.alwaysDenyRules,
+      params.stance.honorLocalRules && launchPermissions.toolsNarrowingDenyRules.length > 0
         ? {
             toolsNarrowing: [...launchPermissions.toolsNarrowingDenyRules],
           }
         : {},
     ),
     additionalWorkingDirectories: new Map([
-      ...(e.stance.honorLocalRules
-        ? [...launchPermissions.additionalWorkingDirectories].flatMap(([, A]) => {
-            let O = {
-              ...A,
-              path: realpathOrSpelling(A.path),
+      ...(params.stance.honorLocalRules
+        ? [...launchPermissions.additionalWorkingDirectories].flatMap(([, dirEntry]) => {
+            let entry = {
+              ...dirEntry,
+              path: realpathOrSpelling(dirEntry.path),
             };
-            if (launchedFromHome(A.path) || !notLaunchedFromHome(O)) return [];
-            return [[O.path, O]];
+            if (launchedFromHome(dirEntry.path) || !notLaunchedFromHome(entry)) return [];
+            return [[entry.path, entry]];
           })
         : []),
       [
-        e.launchDir,
+        params.launchDir,
         {
-          path: e.launchDir,
+          path: params.launchDir,
           source: "session",
         },
       ],
@@ -399,39 +403,39 @@ function servedPermissionContext(e) {
     isBypassPermissionsModeAvailable: mode === "bypassPermissions",
     shouldAvoidPermissionPrompts: false,
     servedCall: true,
-    ...(e.stance.honorLocalRules &&
+    ...(params.stance.honorLocalRules &&
       (hasBlockReadsOutsideWorkingDirectories() || isServedSettingRefused("read_block")) && {
         blockReadsOutsideWorkingDirectories: true,
       }),
-    ...(e.stance.honorLocalRules &&
+    ...(params.stance.honorLocalRules &&
       (isWriteBlockOn() || isServedSettingRefused("write_block")) && {
         blockWritesOutsideWorkingDirectories: true,
       }),
     ...((!honorLocalRules ||
       useSecurityParser() ||
       !isStrictSandboxFullyConfigured() ||
-      e.sandboxTurnedOnByHeldFile === true) && {
+      params.sandboxTurnedOnByHeldFile === true) && {
       sandboxAutoAllowSuspended: true,
     }),
   };
-  if (e.stance.honorLocalRules) {
+  if (params.stance.honorLocalRules) {
     let cliargAllows = launchPermissions.allowRules.length;
     logDroppedServedRules({
       cliarg_allows: cliargAllows,
-      cliarg_allows_kept: (L.alwaysAllowRules.cliArg ?? []).length,
+      cliarg_allows_kept: (servedContext.alwaysAllowRules.cliArg ?? []).length,
       startup_dirs: launchPermissions.additionalWorkingDirectories.size,
-      startup_dirs_kept: L.additionalWorkingDirectories.size - 1,
+      startup_dirs_kept: servedContext.additionalWorkingDirectories.size - 1,
     });
   }
-  let filtered_2 = (e.sessionUpdates ?? []).filter(
-    (A) =>
-      A.type === "addRules" &&
-      !(s && A.behavior === "allow") &&
-      !A.rules.some((rule) => isDangerousAllowRule(A.behavior, rule, r)) &&
+  let filtered_2 = (params.sessionUpdates ?? []).filter(
+    (update) =>
+      update.type === "addRules" &&
+      !(managedOnly && update.behavior === "allow") &&
+      !update.rules.some((rule) => isDangerousAllowRule(update.behavior, rule, autoAllowed)) &&
       !(
-        A.behavior === "allow" &&
+        update.behavior === "allow" &&
         overlyBroadShellAllowsStrippedByEverySession(
-          A.rules.map((ruleValue) => ({
+          update.rules.map((ruleValue) => ({
             source: "session",
             ruleBehavior: "allow",
             ruleValue,
@@ -441,21 +445,22 @@ function servedPermissionContext(e) {
   );
   return filtered_2.length > 0
     ? {
-        ...applyPermissionUpdates(L, filtered_2),
+        ...applyPermissionUpdates(servedContext, filtered_2),
         mode,
       }
-    : L;
+    : servedContext;
 }
 //@ chunk-tr0s0d0k.js:56752-56786 placement
-function notLaunchedFromHome(e) {
-  return !launchedFromHome(e.path);
+function notLaunchedFromHome(entry) {
+  return !launchedFromHome(entry.path);
 }
 //@ chunk-tr0s0d0k.js:56786-56801 placement
 var LOGGED_DROPPED_RULE_SETS = new Set();
 //@ chunk-tr0s0d0k.js:56801-57055 placement
-function logDroppedServedRules(e) {
-  if (e.cliarg_allows === e.cliarg_allows_kept && e.startup_dirs === e.startup_dirs_kept) return;
-  let joined = Object.entries(e)
+function logDroppedServedRules(fields) {
+  if (fields.cliarg_allows === fields.cliarg_allows_kept && fields.startup_dirs === fields.startup_dirs_kept)
+    return;
+  let joined = Object.entries(fields)
     .map(([key, value]) => `${key}=${value}`)
     .join(" ");
   if (LOGGED_DROPPED_RULE_SETS.has(joined)) return;
@@ -463,19 +468,20 @@ function logDroppedServedRules(e) {
   logForDebugging(`[remote-tools] served-context screens dropped rules ${joined}`);
 }
 //@ chunk-tr0s0d0k.js:57055-57109 placement
-function withHostCredentialDenyRules(alwaysDenyRules, n) {
+function withHostCredentialDenyRules(alwaysDenyRules, extra) {
   return {
     ...alwaysDenyRules,
-    ...n,
+    ...extra,
     [HOST_CREDENTIAL_RULE_SOURCE]: hostCredentialDenyRules().map(formatPermissionRule),
   };
 }
 //@ chunk-tr0s0d0k.js:57109-57200 placement
-function isDangerousAllowRule(e, n, o) {
+function isDangerousAllowRule(behavior, rule, treatAsAuto) {
   return (
-    e === "allow" &&
-    o &&
-    (isDangerousClassifierPermission(n.toolName, n.ruleContent) || isAllowRuleIgnoredInAutoMode(n.toolName))
+    behavior === "allow" &&
+    treatAsAuto &&
+    (isDangerousClassifierPermission(rule.toolName, rule.ruleContent) ||
+      isAllowRuleIgnoredInAutoMode(rule.toolName))
   );
 }
 //@ chunk-tr0s0d0k.js:57200-57265 placement
@@ -490,24 +496,24 @@ function classifyToolErrorSafely(error) {
 /**
  * 为远程调用包装 canUseTool：本机钩子、分类器二次检查、破坏性命令询问、设置文件写入判定。
  */
-function createServedCallPermissionCheck(e) {
+function createServedCallPermissionCheck(params) {
   return setPermissionPromptHostProbe(
     "servedCall",
-    async (tool, r, s, d, u, p) => {
-      let h = 0;
-      let _ = false;
-      let S;
-      let R;
-      let B = Object.create(tool, {
+    async (tool, input, toolUseContext, canUseTool, callId, priorAnswer) => {
+      let checkDepth = 0;
+      let parseInFlight = false;
+      let checkError;
+      let parseError;
+      let probedTool = Object.create(tool, {
         checkPermissions: {
-          value: async (...se) => {
-            h += 1;
+          value: async (...args) => {
+            checkDepth += 1;
             try {
-              let ee = await tool.checkPermissions(...se);
-              h -= 1;
-              return ee;
+              let answer = await tool.checkPermissions(...args);
+              checkDepth -= 1;
+              return answer;
             } catch (error) {
-              S = classifyToolErrorSafely(error);
+              checkError = classifyToolErrorSafely(error);
               throw error;
             }
           },
@@ -516,14 +522,14 @@ function createServedCallPermissionCheck(e) {
           get: () =>
             Object.create(tool.inputSchema, {
               parse: {
-                value: (...se) => {
-                  _ = true;
+                value: (...args) => {
+                  parseInFlight = true;
                   try {
-                    let ee = tool.inputSchema.parse(...se);
-                    _ = false;
-                    return ee;
+                    let parsed = tool.inputSchema.parse(...args);
+                    parseInFlight = false;
+                    return parsed;
                   } catch (error) {
-                    R = classifyToolErrorSafely(error);
+                    parseError = classifyToolErrorSafely(error);
                     throw error;
                   }
                 },
@@ -531,27 +537,31 @@ function createServedCallPermissionCheck(e) {
             }),
         },
       });
-      let L = p?.behavior === "ask" ? await checkRuleBasedPermissions(B, r, s) : null;
-      let V = p?.decisionReason?.type === "hook" && p.decisionReason.hookName === TOOL_CHECK;
-      let A =
-        p === undefined || p.behavior === "allow"
-          ? await hasPermissionsToUseTool(B, r, s, d, u)
-          : L?.behavior === "deny" && !V
-            ? L
-            : p;
-      if (h > 0 || _) {
-        e.onOutcome({
+      let ruleAnswer =
+        priorAnswer?.behavior === "ask"
+          ? await checkRuleBasedPermissions(probedTool, input, toolUseContext)
+          : null;
+      let hookAsked =
+        priorAnswer?.decisionReason?.type === "hook" && priorAnswer.decisionReason.hookName === TOOL_CHECK;
+      let decision =
+        priorAnswer === undefined || priorAnswer.behavior === "allow"
+          ? await hasPermissionsToUseTool(probedTool, input, toolUseContext, canUseTool, callId)
+          : ruleAnswer?.behavior === "deny" && !hookAsked
+            ? ruleAnswer
+            : priorAnswer;
+      if (checkDepth > 0 || parseInFlight) {
+        params.onOutcome({
           kind: "denied_by_rule",
           raisedToAsk: false,
           rulesCheckCrashed: {
-            inputParseThrew: _,
-            crashClass: (_ ? R : S) ?? lit("UnknownError"),
+            inputParseThrew: parseInFlight,
+            crashClass: (parseInFlight ? parseError : checkError) ?? lit("UnknownError"),
           },
         });
         return {
           behavior: "deny",
           message: permissionCheckFailedMessage({
-            targetName: e.targetName,
+            targetName: params.targetName,
             toolName: tool.name,
           }),
           decisionReason: {
@@ -560,11 +570,11 @@ function createServedCallPermissionCheck(e) {
           },
         };
       }
-      let O = (se) => {
-        if (e.permissionContextNow === undefined || !readServedBackgroundOverride()) return;
-        if (se === "asked") return getToolPermissionContext(s);
+      let contextFor = (phase) => {
+        if (params.permissionContextNow === undefined || !readServedBackgroundOverride()) return;
+        if (phase === "asked") return getToolPermissionContext(toolUseContext);
         try {
-          return e.permissionContextNow();
+          return params.permissionContextNow();
         } catch (error) {
           logError(
             Error("the rules a served MCP relative name is judged again under could not be read", {
@@ -574,112 +584,143 @@ function createServedCallPermissionCheck(e) {
           return;
         }
       };
-      let X = judgeServedMcpPaths(tool, r, O("asked"));
-      let J = X?.kind === "ask";
-      let K = X?.kind === "web_address";
-      let j = X?.kind === "relative_path";
-      let G =
-        A.behavior === "deny"
-          ? hostCredentialRuleOf(A.decisionReason)
-          : ((await getHostCredentialDenyRule(tool, r)) ?? (X?.kind === "deny" ? X.rule : undefined));
-      let M = A;
-      if (G !== undefined) {
-        let se = credentialRuleKind(G);
+      let mcpJudge = judgeServedMcpPaths(tool, input, contextFor("asked"));
+      let mcpAsk = mcpJudge?.kind === "ask";
+      let webAddress = mcpJudge?.kind === "web_address";
+      let relativePath = mcpJudge?.kind === "relative_path";
+      let credentialRule =
+        decision.behavior === "deny"
+          ? hostCredentialRuleOf(decision.decisionReason)
+          : ((await getHostCredentialDenyRule(tool, input)) ??
+            (mcpJudge?.kind === "deny" ? mcpJudge.rule : undefined));
+      let finalDecision = decision;
+      if (credentialRule !== undefined) {
+        let ruleKind = credentialRuleKind(credentialRule);
         let message = credentialRefusalMessage({
-          targetName: e.targetName,
-          kind: se,
-          subject: se === "keychain" && typeof r.command === "string" ? r.command : stripDoubleSlashPrefix(G),
+          targetName: params.targetName,
+          kind: ruleKind,
+          subject:
+            ruleKind === "keychain" && typeof input.command === "string"
+              ? input.command
+              : stripDoubleSlashPrefix(credentialRule),
         });
-        M =
-          A.behavior === "deny"
+        finalDecision =
+          decision.behavior === "deny"
             ? {
-                ...A,
+                ...decision,
                 message,
               }
             : {
                 behavior: "deny",
                 decisionReason: {
                   type: "rule",
-                  rule: G,
+                  rule: credentialRule,
                 },
                 message,
               };
       }
-      let Z = "updatedInput" in M && M.updatedInput !== undefined ? M.updatedInput : r;
-      let ce =
-        M.behavior !== "deny" && isNonMcpShellTool(tool) && isViolinPurflingEnabled()
-          ? await shouldBypassAskForReadOnly(tool, Z, M, getCwd())
+      let effectiveInput =
+        "updatedInput" in finalDecision && finalDecision.updatedInput !== undefined
+          ? finalDecision.updatedInput
+          : input;
+      let bypassAsk =
+        finalDecision.behavior !== "deny" && isNonMcpShellTool(tool) && isViolinPurflingEnabled()
+          ? await shouldBypassAskForReadOnly(tool, effectiveInput, finalDecision, getCwd())
           : "none";
-      let command = Z.command;
-      let re =
+      let command = effectiveInput.command;
+      let parsedLine =
         isViolinCamberEnabled() &&
-        ce === "uncertain" &&
+        bypassAsk === "uncertain" &&
         tool.name === BASH_TOOL_NAME &&
         typeof command === "string"
           ? await parseServedShellLine(command)
           : undefined;
-      let U =
-        re === undefined
+      let parsedInput =
+        parsedLine === undefined
           ? undefined
           : {
-              ...Z,
-              command: re,
+              ...effectiveInput,
+              command: parsedLine,
             };
-      let Y = U === undefined ? ce : await shouldBypassAskForReadOnly(tool, U, M, getCwd());
-      let ie = Y === "uncertain";
-      let y = isViolinArchingEnabled();
-      let E = isViolinEbonyEnabled();
-      let P = M.behavior !== "deny" && isViolinPurflingGateEnabled();
-      let w =
-        y &&
-        P &&
+      let parsedBypassAsk =
+        parsedInput === undefined
+          ? bypassAsk
+          : await shouldBypassAskForReadOnly(tool, parsedInput, finalDecision, getCwd());
+      let isUncertain = parsedBypassAsk === "uncertain";
+      let writesSettingGate = isViolinArchingEnabled();
+      let checkProtected = isViolinEbonyEnabled();
+      let gateEnabled = finalDecision.behavior !== "deny" && isViolinPurflingGateEnabled();
+      let lineWrites =
+        writesSettingGate &&
+        gateEnabled &&
         isNonMcpShellTool(tool) &&
-        ((await isServedLineWriting(tool, Z, s)) ||
-          (U !== undefined && (await isServedLineWriting(tool, U, s))));
-      let D = y && ie && isViolinTailgutEnabled();
-      let T =
-        w || D ? await checkServedShellSettingsWrite(tool.name, Z, getCwd(), e.stopSignal, E) : undefined;
-      let W =
-        T !== undefined && U !== undefined
-          ? await checkServedShellSettingsWrite(tool.name, U, getCwd(), e.stopSignal, E)
+        ((await isServedLineWriting(tool, effectiveInput, toolUseContext)) ||
+          (parsedInput !== undefined && (await isServedLineWriting(tool, parsedInput, toolUseContext))));
+      let uncertainUnderGate = writesSettingGate && isUncertain && isViolinTailgutEnabled();
+      let writeCheck =
+        lineWrites || uncertainUnderGate
+          ? await checkServedShellSettingsWrite(
+              tool.name,
+              effectiveInput,
+              getCwd(),
+              params.stopSignal,
+              checkProtected,
+            )
           : undefined;
-      let q =
-        T === undefined || W === undefined
-          ? T
+      let parsedWriteCheck =
+        writeCheck !== undefined && parsedInput !== undefined
+          ? await checkServedShellSettingsWrite(
+              tool.name,
+              parsedInput,
+              getCwd(),
+              params.stopSignal,
+              checkProtected,
+            )
+          : undefined;
+      let combinedWriteCheck =
+        writeCheck === undefined || parsedWriteCheck === undefined
+          ? writeCheck
           : {
-              file: T.file !== "none" ? T.file : W.file,
-              fileOrFolder: T.fileOrFolder !== "none" ? T.fileOrFolder : W.fileOrFolder,
+              file: writeCheck.file !== "none" ? writeCheck.file : parsedWriteCheck.file,
+              fileOrFolder:
+                writeCheck.fileOrFolder !== "none" ? writeCheck.fileOrFolder : parsedWriteCheck.fileOrFolder,
             };
-      let Q = y
-        ? w && q?.file !== "none"
-        : P &&
-          ((await servedLineTouchesProtectedPath(tool, Z, s, E)) ||
-            (U !== undefined && (await servedLineTouchesProtectedPath(tool, U, s, E))));
-      let te = isRefactoredGadgetEnabled()
-        ? Q &&
-          (touchesProtectedPath(Z, "own_file") || (U !== undefined && touchesProtectedPath(U, "own_file")))
-        : Q ||
-          (ie &&
-            (y
-              ? !D || q?.fileOrFolder !== "none"
+      let touchesProtected = writesSettingGate
+        ? lineWrites && combinedWriteCheck?.file !== "none"
+        : gateEnabled &&
+          ((await servedLineTouchesProtectedPath(tool, effectiveInput, toolUseContext, checkProtected)) ||
+            (parsedInput !== undefined &&
+              (await servedLineTouchesProtectedPath(tool, parsedInput, toolUseContext, checkProtected))));
+      let unresolvedShellWrite = isRefactoredGadgetEnabled()
+        ? touchesProtected &&
+          (touchesProtectedPath(effectiveInput, "own_file") ||
+            (parsedInput !== undefined && touchesProtectedPath(parsedInput, "own_file")))
+        : touchesProtected ||
+          (isUncertain &&
+            (writesSettingGate
+              ? !uncertainUnderGate || combinedWriteCheck?.fileOrFolder !== "none"
               : !isViolinTailgutEnabled() ||
-                touchesProtectedPath(Z, "file_or_folder") ||
-                (U !== undefined && touchesProtectedPath(U, "file_or_folder"))));
-      let Ae = Q ? (q?.file ?? "error") : D ? (q?.fileOrFolder ?? "error") : "none";
-      if (Y !== "none" || Q)
+                touchesProtectedPath(effectiveInput, "file_or_folder") ||
+                (parsedInput !== undefined && touchesProtectedPath(parsedInput, "file_or_folder"))));
+      let settingsCause = touchesProtected
+        ? (combinedWriteCheck?.file ?? "error")
+        : uncertainUnderGate
+          ? (combinedWriteCheck?.fileOrFolder ?? "error")
+          : "none";
+      if (parsedBypassAsk !== "none" || touchesProtected)
         logEvent("tengu_served_shell_settings_hold", {
-          verdict: fromEnum(Y),
+          verdict: fromEnum(parsedBypassAsk),
           tool: fromEnum(tool.name === BASH_TOOL_NAME ? "bash" : "powershell"),
-          person_only: te,
-          ...(y && {
-            cause: fromEnum(Ae),
+          person_only: unresolvedShellWrite,
+          ...(writesSettingGate && {
+            cause: fromEnum(settingsCause),
           }),
         });
-      if (Y === "settings")
-        M = {
+      if (parsedBypassAsk === "settings")
+        finalDecision = {
           behavior: "deny",
           message: settingsDirRefusalMessage({
-            targetName: e.targetName,
+            targetName: params.targetName,
           }),
           decisionReason: {
             type: "other",
@@ -687,12 +728,12 @@ function createServedCallPermissionCheck(e) {
           },
         };
       else if (
-        M.behavior !== "deny" &&
+        finalDecision.behavior !== "deny" &&
         !isNonMcpShellTool(tool) &&
         isViolinPurflingGateEnabled() &&
         typeof tool.getPath === "function" &&
-        !tool.isReadOnly(Z, s) &&
-        settingsFileCertainty(getPathsForPermissionCheck(tool.getPath(Z))) === "certain"
+        !tool.isReadOnly(effectiveInput, toolUseContext) &&
+        settingsFileCertainty(getPathsForPermissionCheck(tool.getPath(effectiveInput))) === "certain"
       ) {
         logEvent("tengu_served_settings_edit_refused", {
           tool: fromEnum(
@@ -702,12 +743,12 @@ function createServedCallPermissionCheck(e) {
                 ? "write"
                 : "other",
           ),
-          engine: fromEnum(M.behavior),
+          engine: fromEnum(finalDecision.behavior),
         });
-        M = {
+        finalDecision = {
           behavior: "deny",
           message: settingsFileRefusalMessage({
-            targetName: e.targetName,
+            targetName: params.targetName,
           }),
           decisionReason: {
             type: "other",
@@ -715,230 +756,260 @@ function createServedCallPermissionCheck(e) {
           },
         };
       }
-      if (s.remoteCall === undefined)
+      if (toolUseContext.remoteCall === undefined)
         logError(
           Error(
             "served permission step ran with no call record: a PreToolUse hook's refusal or question cannot be held",
           ),
         );
-      let strictestHookAnswer = s.remoteCall?.strictestHookAnswer;
+      let strictestHookAnswer = toolUseContext.remoteCall?.strictestHookAnswer;
       if (strictestHookAnswer?.behavior === "deny") {
         logForDebugging(
-          `[remote-tools call=${u}] refused by a PreToolUse hook here; ${M.behavior} after it set aside tool=${tool.name}`,
+          `[remote-tools call=${callId}] refused by a PreToolUse hook here; ${finalDecision.behavior} after it set aside tool=${tool.name}`,
         );
         return strictestHookAnswer;
       }
-      if (strictestHookAnswer !== undefined && M.behavior === "allow") {
+      if (strictestHookAnswer !== undefined && finalDecision.behavior === "allow") {
         logForDebugging(
-          `[remote-tools call=${u}] asked about by a PreToolUse hook here; allow after it raised back to that question tool=${tool.name}`,
+          `[remote-tools call=${callId}] asked about by a PreToolUse hook here; allow after it raised back to that question tool=${tool.name}`,
         );
-        M = {
+        finalDecision = {
           ...strictestHookAnswer,
-          updatedInput: M.updatedInput,
+          updatedInput: finalDecision.updatedInput,
         };
       }
-      let ge =
-        e.stance.askOnDestructive &&
+      let isDestructive =
+        params.stance.askOnDestructive &&
         tool.name === BASH_TOOL_NAME &&
-        typeof r.command === "string" &&
-        r.command !== "" &&
-        isDestructiveCommand(r.command);
-      let Be = isNotRemotelyExecutable(tool) && (FORCE_NOT_REMOTELY_EXECUTABLE || J);
-      let He = isUnattendedAutoAllowed(e.stance, e.sessionMode, e.call ?? DEFAULT_SERVING_POLICY);
-      let An =
-        e.sessionModel !== undefined &&
-        He &&
-        M.behavior === "allow" &&
-        M.decisionReason?.type === "mode" &&
-        M.decisionReason.mode === "acceptEdits" &&
+        typeof input.command === "string" &&
+        input.command !== "" &&
+        isDestructiveCommand(input.command);
+      let notRemotelyExecutable = isNotRemotelyExecutable(tool) && (FORCE_NOT_REMOTELY_EXECUTABLE || mcpAsk);
+      let autoAllowed = isUnattendedAutoAllowed(
+        params.stance,
+        params.sessionMode,
+        params.call ?? DEFAULT_SERVING_POLICY,
+      );
+      let classifyEdit =
+        params.sessionModel !== undefined &&
+        autoAllowed &&
+        finalDecision.behavior === "allow" &&
+        finalDecision.decisionReason?.type === "mode" &&
+        finalDecision.decisionReason.mode === "acceptEdits" &&
         isFileMutationTool(tool.name) &&
-        shouldClassifyEdits(e.sessionModel);
-      let wo = (He || isPlanFloor(e.sessionMode, e.stance.unattended)) && isNeverDestructiveTool(tool.name);
-      let _e = (ge || Be || K || j || An || wo || ie || Q) && M.behavior === "allow";
-      let bn = M.behavior === "ask" && M.personOnly === true;
-      let Rn =
-        ge ||
-        Be ||
-        K ||
-        j ||
-        Q ||
-        (ie && tool.name === BASH_TOOL_NAME) ||
+        shouldClassifyEdits(params.sessionModel);
+      let neverDestructive =
+        (autoAllowed || isPlanFloor(params.sessionMode, params.stance.unattended)) &&
+        isNeverDestructiveTool(tool.name);
+      let raisedToAskFlag =
+        (isDestructive ||
+          notRemotelyExecutable ||
+          webAddress ||
+          relativePath ||
+          classifyEdit ||
+          neverDestructive ||
+          isUncertain ||
+          touchesProtected) &&
+        finalDecision.behavior === "allow";
+      let personOnlyAsk = finalDecision.behavior === "ask" && finalDecision.personOnly === true;
+      let raisedWhateverAllows =
+        isDestructive ||
+        notRemotelyExecutable ||
+        webAddress ||
+        relativePath ||
+        touchesProtected ||
+        (isUncertain && tool.name === BASH_TOOL_NAME) ||
         strictestHookAnswer !== undefined ||
-        bn;
-      let En = An && !Rn;
-      let bo = M.behavior === "allow" && M.decisionReason?.type === "classifier";
-      let he =
-        _e || bo
+        personOnlyAsk;
+      let fastPathEdit = classifyEdit && !raisedWhateverAllows;
+      let classifierAllowed =
+        finalDecision.behavior === "allow" && finalDecision.decisionReason?.type === "classifier";
+      let asked =
+        raisedToAskFlag || classifierAllowed
           ? escalateToAsk(
-              M,
-              e.targetName,
-              Be
-                ? J
+              finalDecision,
+              params.targetName,
+              notRemotelyExecutable
+                ? mcpAsk
                   ? "served_mcp_path"
                   : "served_mcp"
-                : ge
+                : isDestructive
                   ? "destructive"
-                  : Q && !ie
+                  : touchesProtected && !isUncertain
                     ? "settings_file_named"
-                    : te
+                    : unresolvedShellWrite
                       ? "unresolved_shell_write"
-                      : ie
+                      : isUncertain
                         ? "unreadable_shell_line"
-                        : j
+                        : relativePath
                           ? "served_mcp_relative_path"
-                          : K
+                          : webAddress
                             ? "served_mcp_web_address"
                             : "classifier",
             )
-          : M;
-      let Ue = (p !== undefined && M === p) || strictestHookAnswer !== undefined || bn;
-      let oe =
-        J &&
-        he.behavior === "ask" &&
-        !Ue &&
-        he.decisionReason?.type !== "hook" &&
-        !(he.decisionReason?.type === "other" && he.decisionReason.reason === REMOTE_CALL_SERVED_MCP_ASK)
+          : finalDecision;
+      let forcedByHook =
+        (priorAnswer !== undefined && finalDecision === priorAnswer) ||
+        strictestHookAnswer !== undefined ||
+        personOnlyAsk;
+      let taggedAsk =
+        mcpAsk &&
+        asked.behavior === "ask" &&
+        !forcedByHook &&
+        asked.decisionReason?.type !== "hook" &&
+        !(
+          asked.decisionReason?.type === "other" && asked.decisionReason.reason === REMOTE_CALL_SERVED_MCP_ASK
+        )
           ? {
-              ...he,
+              ...asked,
               decisionReason: {
                 type: "other",
                 reason: REMOTE_CALL_SERVED_MCP_ASK,
               },
             }
-          : he;
-      let Pn =
-        oe.behavior === "ask" &&
-        (isDefenseInDepthAsk(M) || readsNetworkPath(tool, Z, getToolPermissionContext(s)));
-      let Tn = oe.behavior === "ask" && isServerPolicyAskUnderPlanFloor(oe.decisionReason, tool, Z, s);
+          : asked;
+      let networkPath =
+        taggedAsk.behavior === "ask" &&
+        (isDefenseInDepthAsk(finalDecision) ||
+          readsNetworkPath(tool, effectiveInput, getToolPermissionContext(toolUseContext)));
+      let serverAskUnderPlanFloor =
+        taggedAsk.behavior === "ask" &&
+        isServerPolicyAskUnderPlanFloor(taggedAsk.decisionReason, tool, effectiveInput, toolUseContext);
       if (
-        !e.stopSignal.aborted &&
-        He &&
-        !K &&
-        !j &&
-        oe.behavior === "ask" &&
-        !isHostWordedAsk(oe) &&
+        !params.stopSignal.aborted &&
+        autoAllowed &&
+        !webAddress &&
+        !relativePath &&
+        taggedAsk.behavior === "ask" &&
+        !isHostWordedAsk(taggedAsk) &&
         decideServedAskAnswerability(
-          oe,
+          taggedAsk,
           tool,
-          Ue || s.hookAskFloor === true,
-          getToolPermissionContext(s),
-          te,
-          Pn,
-          Tn,
-          e.stance.unattended,
-          En,
+          forcedByHook || toolUseContext.hookAskFloor === true,
+          getToolPermissionContext(toolUseContext),
+          unresolvedShellWrite,
+          networkPath,
+          serverAskUnderPlanFloor,
+          params.stance.unattended,
+          fastPathEdit,
         ).may &&
-        isBrowserToolAutoAllowed(tool, r)
+        isBrowserToolAutoAllowed(tool, input)
       ) {
-        let se = {
+        let allowDecision = {
           behavior: "allow",
-          updatedInput: "updatedInput" in oe && oe.updatedInput !== undefined ? oe.updatedInput : r,
+          updatedInput:
+            "updatedInput" in taggedAsk && taggedAsk.updatedInput !== undefined
+              ? taggedAsk.updatedInput
+              : input,
           decisionReason: {
             type: "other",
             reason: REMOTE_CALL_AUTO_MODE_ALLOWLIST,
           },
         };
-        let ee = notifyAllowLanded(e, tool, se, r);
-        let Ye =
-          ee !== undefined && (await ee, e.stopSignal.aborted)
+        let allowLanded = notifyAllowLanded(params, tool, allowDecision, input);
+        let refusal =
+          allowLanded !== undefined && (await allowLanded, params.stopSignal.aborted)
             ? STOPPED_BEFORE_ANSWER_DECISION
-            : refusalAsAllowLandsDecision(e);
-        if (Ye !== undefined) {
-          e.onOutcome({
-            kind: servedDecisionOutcome(Ye, se),
-            raisedToAsk: _e,
+            : refusalAsAllowLandsDecision(params);
+        if (refusal !== undefined) {
+          params.onOutcome({
+            kind: servedDecisionOutcome(refusal, allowDecision),
+            raisedToAsk: raisedToAskFlag,
           });
-          return Ye;
+          return refusal;
         }
-        e.onOutcome({
-          kind: servedDecisionOutcome(se, se),
-          raisedToAsk: _e,
+        params.onOutcome({
+          kind: servedDecisionOutcome(allowDecision, allowDecision),
+          raisedToAsk: raisedToAskFlag,
           allowBasis: "auto_allowlist",
         });
-        return se;
+        return allowDecision;
       }
-      let servedAsk = await resolveServedAsk(oe, e, r, s, {
-        raisedToAsk: _e,
+      let servedAsk = await resolveServedAsk(taggedAsk, params, input, toolUseContext, {
+        raisedToAsk: raisedToAskFlag,
         tool,
-        forcedByHook: Ue,
-        callId: u,
-        unresolvedShellWrite: te,
-        networkPath: Pn,
-        serverAskUnderPlanFloor: Tn,
-        fastPathEdit: En,
-        raisedWhateverAllows: Rn,
-        mcpPathWhy: X?.kind === "ask" ? X.why : j ? "relieved" : undefined,
+        forcedByHook,
+        callId,
+        unresolvedShellWrite,
+        networkPath,
+        serverAskUnderPlanFloor,
+        fastPathEdit,
+        raisedWhateverAllows,
+        mcpPathWhy: mcpJudge?.kind === "ask" ? mcpJudge.why : relativePath ? "relieved" : undefined,
       });
-      let we =
-        j &&
+      let confirmedAsk =
+        relativePath &&
         servedAsk.behavior === "allow" &&
-        judgeServedMcpPaths(tool, servedAsk.updatedInput ?? r, O("answered"))?.kind !== "relative_path"
+        judgeServedMcpPaths(tool, servedAsk.updatedInput ?? input, contextFor("answered"))?.kind !==
+          "relative_path"
           ? CONFIRMATION_FAILED_DECISION
           : servedAsk;
-      let Mn = notifyAllowLanded(e, tool, we, r);
-      if (Mn !== undefined) await Mn;
-      let aborted = we.behavior === "allow" && e.stopSignal.aborted;
+      let landed = notifyAllowLanded(params, tool, confirmedAsk, input);
+      if (landed !== undefined) await landed;
+      let aborted = confirmedAsk.behavior === "allow" && params.stopSignal.aborted;
       if (aborted)
         logEvent("tengu_remote_tool_allow_after_stop", {
-          road: fromEnum(oe.behavior === "allow" ? "decided_here" : "ask_path"),
+          road: fromEnum(taggedAsk.behavior === "allow" ? "decided_here" : "ask_path"),
           is_mcp: tool.mcpInfo !== undefined,
         });
-      let Ro = we.behavior === "allow" && !aborted ? refusalAsAllowLandsDecision(e) : undefined;
-      let Ze = aborted ? STOPPED_BEFORE_ANSWER_DECISION : (Ro ?? we);
-      e.onOutcome({
-        kind: servedDecisionOutcome(Ze, oe),
-        raisedToAsk: _e,
-        ...(G !== undefined && {
-          throughSecondRootMount: isMountPointRule(G),
+      let lateRefusal =
+        confirmedAsk.behavior === "allow" && !aborted ? refusalAsAllowLandsDecision(params) : undefined;
+      let answer = aborted ? STOPPED_BEFORE_ANSWER_DECISION : (lateRefusal ?? confirmedAsk);
+      params.onOutcome({
+        kind: servedDecisionOutcome(answer, taggedAsk),
+        raisedToAsk: raisedToAskFlag,
+        ...(credentialRule !== undefined && {
+          throughSecondRootMount: isMountPointRule(credentialRule),
         }),
-        ...(A === L && {
+        ...(decision === ruleAnswer && {
           deniedUnderForcedAsk: true,
         }),
-        ...(oe.behavior === "allow" &&
-          Ze.behavior === "allow" && {
-            allowBasis: oe.decisionReason?.type ?? "unspecified",
+        ...(taggedAsk.behavior === "allow" &&
+          answer.behavior === "allow" && {
+            allowBasis: taggedAsk.decisionReason?.type ?? "unspecified",
           }),
-        ...(oe.behavior === "deny" && {
-          denySource: findDenyRuleSource(oe.decisionReason),
-          hostCredentialRefusal: G && credentialRuleKind(G),
-          underWindowsProfileGlob: G && isUnderUserProfiles(stripDoubleSlashPrefix(G)),
+        ...(taggedAsk.behavior === "deny" && {
+          denySource: findDenyRuleSource(taggedAsk.decisionReason),
+          hostCredentialRefusal: credentialRule && credentialRuleKind(credentialRule),
+          underWindowsProfileGlob:
+            credentialRule && isUnderUserProfiles(stripDoubleSlashPrefix(credentialRule)),
         }),
       });
-      return Ze;
+      return answer;
     },
     () => true,
   );
 }
 //@ chunk-tr0s0d0k.js:63626-64287 placement
-function tryAutoModeAllowlist(e) {
+function tryAutoModeAllowlist(params) {
   try {
     if (
       !isServedHairEnabled() ||
-      e.stance.onAsk !== "session" ||
-      !isNonMcpShellTool(e.tool) ||
-      !isNeverDestructiveTool(e.tool.name) ||
-      !isUnattendedOwnRecord(e.stance.unattended) ||
+      params.stance.onAsk !== "session" ||
+      !isNonMcpShellTool(params.tool) ||
+      !isNeverDestructiveTool(params.tool.name) ||
+      !isUnattendedOwnRecord(params.stance.unattended) ||
       !(
-        isUnattendedAutoAllowed(e.stance, e.sessionMode, e.call ?? DEFAULT_SERVING_POLICY) ||
-        isPlanFloor(e.sessionMode, e.stance.unattended)
+        isUnattendedAutoAllowed(params.stance, params.sessionMode, params.call ?? DEFAULT_SERVING_POLICY) ||
+        isPlanFloor(params.sessionMode, params.stance.unattended)
       ) ||
-      !isAutoOrPlanMode(e.sessionMode)
+      !isAutoOrPlanMode(params.sessionMode)
     )
       return;
-    let input = normalizeForwardedInput(e.tool, e.forwardedInput);
-    let childAbortController = createChildAbortController(e.callStop);
+    let input = normalizeForwardedInput(params.tool, params.forwardedInput);
+    let childAbortController = createChildAbortController(params.callStop);
     return {
       input,
       check: runServedSafetyCheck({
-        tool: e.tool,
+        tool: params.tool,
         input,
-        permissionContext: e.permissionContext,
-        serviceWrittenSessionMode: e.serviceWrittenSessionMode,
+        permissionContext: params.permissionContext,
+        serviceWrittenSessionMode: params.serviceWrittenSessionMode,
         stopSignal: childAbortController.signal,
-        callId: e.callId,
-        capMs: classifierBudgetMs(e.legDeadlineAt),
+        callId: params.callId,
+        capMs: classifierBudgetMs(params.legDeadlineAt),
         again: {
-          legDeadlineAt: e.legDeadlineAt,
+          legDeadlineAt: params.legDeadlineAt,
           besideHold: true,
         },
       }).catch((error) => {
@@ -952,35 +1023,38 @@ function tryAutoModeAllowlist(e) {
       giveUp: () => childAbortController.abort(),
     };
   } catch (error) {
-    logUnlessStopped(error, e.callStop.signal);
+    logUnlessStopped(error, params.callStop.signal);
     return;
   }
 }
 //@ chunk-tr0s0d0k.js:64287-64331 placement
-function logUnlessStopped(error, n) {
-  if (!n.aborted && !isAbortError(error)) logError(error);
+function logUnlessStopped(error, signal) {
+  if (!signal.aborted && !isAbortError(error)) logError(error);
 }
 //@ chunk-tr0s0d0k.js:64331-64475 placement
-function normalizeForwardedInput(tool, forwardedInput, o) {
-  let r = safeParseToolInput(tool, forwardedInput);
-  if (!r.success) return forwardedInput;
-  let s = {
-    ...r.data,
+function normalizeForwardedInput(tool, forwardedInput, cwd) {
+  let parsed = safeParseToolInput(tool, forwardedInput);
+  if (!parsed.success) return forwardedInput;
+  let copy = {
+    ...parsed.data,
   };
-  if (o !== undefined) return resolveRemoteFilePathInput(s, o);
-  tool.backfillObservableInput?.(s);
-  return s;
+  if (cwd !== undefined) return resolveRemoteFilePathInput(copy, cwd);
+  tool.backfillObservableInput?.(copy);
+  return copy;
 }
 //@ chunk-tr0s0d0k.js:64475-64626 placement
-function isSameDefinedFields(e, n) {
-  let o = (s) => Object.keys(s).filter((key) => s[key] !== undefined);
-  let r = o(e);
-  return r.length === o(n).length && r.every((s) => n[s] !== undefined && isDeepStrictEqual(e[s], n[s]));
+function isSameDefinedFields(left, right) {
+  let definedKeys = (object) => Object.keys(object).filter((key) => object[key] !== undefined);
+  let leftKeys = definedKeys(left);
+  return (
+    leftKeys.length === definedKeys(right).length &&
+    leftKeys.every((key) => right[key] !== undefined && isDeepStrictEqual(left[key], right[key]))
+  );
 }
 //@ chunk-tr0s0d0k.js:64626-66050 placement
-function escalateToAsk(e, targetName, o = "destructive") {
-  if (e.behavior !== "allow") return e;
-  let r = {
+function escalateToAsk(decision, targetName, cause = "destructive") {
+  if (decision.behavior !== "allow") return decision;
+  let messages = {
     destructive: destructiveCommandAskMessage(targetName),
     classifier: `${targetName} would not decide this one on its own \u2014 it needs approval in this session.`,
     unresolved_shell_write: REMOTE_TOOLS_CONSENT_TEXT["ask.settings_person_only"],
@@ -991,7 +1065,7 @@ function escalateToAsk(e, targetName, o = "destructive") {
     served_mcp_web_address: `This call gives one of ${targetName}'s own MCP tools a web address, so it is checked before it runs.`,
     served_mcp_relative_path: `This call gives one of ${targetName}'s own MCP tools a name with a slash in it, so it is checked before it runs.`,
   };
-  let s = {
+  let reasons = {
     destructive: REMOTE_CALL_DESTRUCTIVE_ASK,
     classifier: REMOTE_CALL_CLASSIFIER_ASK,
     unresolved_shell_write: REMOTE_CALL_UNRESOLVED_SHELL_WRITE_ASK,
@@ -1004,290 +1078,343 @@ function escalateToAsk(e, targetName, o = "destructive") {
   };
   return {
     behavior: "ask",
-    message: r[o],
-    updatedInput: e.updatedInput,
+    message: messages[cause],
+    updatedInput: decision.updatedInput,
     decisionReason: {
       type: "other",
-      reason: s[o],
+      reason: reasons[cause],
     },
   };
 }
 //@ chunk-tr0s0d0k.js:66050-68726 placement
-async function resolveServedAsk(result, n, o, r, s) {
-  if (result.behavior !== "ask") return result;
-  let d = "updatedInput" in result && result.updatedInput !== undefined ? result.updatedInput : o;
-  let u = normalizeForwardedInput(s.tool, n.forwardedInput);
-  let p = !isSameDefinedFields(d, u);
-  let hookRewrites = r.remoteCall?.hookRewrites;
-  let _ = !p
+async function resolveServedAsk(decision, params, input, toolUseContext, extras) {
+  if (decision.behavior !== "ask") return decision;
+  let askedInput =
+    "updatedInput" in decision && decision.updatedInput !== undefined ? decision.updatedInput : input;
+  let forwardedInput = normalizeForwardedInput(extras.tool, params.forwardedInput);
+  let inputRewritten = !isSameDefinedFields(askedInput, forwardedInput);
+  let hookRewrites = toolUseContext.remoteCall?.hookRewrites;
+  let rewriteKind = !inputRewritten
     ? "none"
     : hookRewrites !== undefined &&
         hookRewrites.every(
           (hookRewrite) =>
             hookRewrite.byOwnHook &&
             isPlainObject_2(hookRewrite.handed) &&
-            isSameDefinedFields(hookRewrite.handed, u),
+            isSameDefinedFields(hookRewrite.handed, forwardedInput),
         ) &&
-        hookRewrites.some((hookRewrite) => isSameDefinedFields(hookRewrite.proposed, d))
+        hookRewrites.some((hookRewrite) => isSameDefinedFields(hookRewrite.proposed, askedInput))
       ? "own_hooks_alone"
       : "unvouched";
-  if (p)
+  if (inputRewritten)
     logForDebugging(
-      `[remote-tools call=${s.callId}] ask input rewritten by a hook here; prior answer${_ === "unvouched" ? " and classifier" : ""} set aside tool=${s.tool.name}`,
+      `[remote-tools call=${extras.callId}] ask input rewritten by a hook here; prior answer${rewriteKind === "unvouched" ? " and classifier" : ""} set aside tool=${extras.tool.name}`,
     );
-  if (n.stance.onAsk === "allow")
+  if (params.stance.onAsk === "allow")
     return {
       behavior: "allow",
-      updatedInput: d,
-      decisionReason: result.decisionReason,
+      updatedInput: askedInput,
+      decisionReason: decision.decisionReason,
     };
-  if (n.stopSignal.aborted) return STOPPED_BEFORE_ANSWER_DECISION;
-  if (result.behavior === "ask" && isHostWordedAsk(result))
-    return forwardHostWordedAsk(s.tool.name, "a cloud session", {
-      hostWorded: result.hostDisplay !== undefined,
-      forMcpSkill: result.metadata?.mcpSkill !== undefined,
+  if (params.stopSignal.aborted) return STOPPED_BEFORE_ANSWER_DECISION;
+  if (decision.behavior === "ask" && isHostWordedAsk(decision))
+    return forwardHostWordedAsk(extras.tool.name, "a cloud session", {
+      hostWorded: decision.hostDisplay !== undefined,
+      forMcpSkill: decision.metadata?.mcpSkill !== undefined,
     });
   let { classifierEligible, vetoed, ownCheck, askClass } = await runServedClassifier({
-    mayAnswer: () => classifierRewriteVerdict(result, r, s, _, n.sessionMode, n.stance.unattended),
-    checkAhead: n.ownCheckAhead,
-    tool: s.tool,
-    input: d,
-    permissionContext: getToolPermissionContext(r),
-    serviceWrittenSessionMode: n.serviceWrittenSessionMode,
-    stopSignal: n.stopSignal,
-    callId: r.remoteCall?.origin.callId ?? s.callId,
-    legDeadlineAt: n.legDeadlineAt,
+    mayAnswer: () =>
+      classifierRewriteVerdict(
+        decision,
+        toolUseContext,
+        extras,
+        rewriteKind,
+        params.sessionMode,
+        params.stance.unattended,
+      ),
+    checkAhead: params.ownCheckAhead,
+    tool: extras.tool,
+    input: askedInput,
+    permissionContext: getToolPermissionContext(toolUseContext),
+    serviceWrittenSessionMode: params.serviceWrittenSessionMode,
+    stopSignal: params.stopSignal,
+    callId: toolUseContext.remoteCall?.origin.callId ?? extras.callId,
+    legDeadlineAt: params.legDeadlineAt,
   });
-  if (n.stopSignal.aborted) return STOPPED_BEFORE_ANSWER_DECISION;
+  if (params.stopSignal.aborted) return STOPPED_BEFORE_ANSWER_DECISION;
   let promise = new Promise((resolve, reject) => {
     try {
-      let J = s.forcedByHook || r.hookAskFloor === true;
+      let forcedByHook = extras.forcedByHook || toolUseContext.hookAskFloor === true;
       let priorAnswerOk =
-        !s.raisedToAsk &&
+        !extras.raisedToAsk &&
         !vetoed &&
-        !s.unresolvedShellWrite &&
-        !isServedMcpAsk(result, s.tool) &&
-        !p &&
-        !s.networkPath &&
-        isEscalatableAsk(result, s.tool, J, d);
-      let j = !p && !s.raisedWhateverAllows && offersAlwaysAllowRule(result);
-      let G =
+        !extras.unresolvedShellWrite &&
+        !isServedMcpAsk(decision, extras.tool) &&
+        !inputRewritten &&
+        !extras.networkPath &&
+        isEscalatableAsk(decision, extras.tool, forcedByHook, askedInput);
+      let offersRule = !inputRewritten && !extras.raisedWhateverAllows && offersAlwaysAllowRule(decision);
+      let modeNote =
         !classifierEligible &&
-        !s.raisedToAsk &&
-        !p &&
-        isAskEscalatable(result, s.tool, J, d) &&
+        !extras.raisedToAsk &&
+        !inputRewritten &&
+        isAskEscalatable(decision, extras.tool, forcedByHook, askedInput) &&
         mayAnswerServedAsk(
-          result,
-          s.tool,
-          J,
-          getToolPermissionContext(r),
-          s.unresolvedShellWrite,
-          s.networkPath,
-          s.serverAskUnderPlanFloor,
+          decision,
+          extras.tool,
+          forcedByHook,
+          getToolPermissionContext(toolUseContext),
+          extras.unresolvedShellWrite,
+          extras.networkPath,
+          extras.serverAskUnderPlanFloor,
         ).may
           ? servedModeNote(
               servedModeRelation({
-                stance: n.stance,
-                sessionMode: n.sessionMode,
-                evaluatedMode: getToolPermissionContext(r).mode,
+                stance: params.stance,
+                sessionMode: params.sessionMode,
+                evaluatedMode: getToolPermissionContext(toolUseContext).mode,
               }),
-              n.stance.unattended === "own_record" && isServedNutEnabled()
+              params.stance.unattended === "own_record" && isServedNutEnabled()
                 ? autoModeRefusedForServedCallsWhy()
                 : "none",
             )
           : undefined;
-      let M =
-        result.decisionReason?.type === "hook"
-          ? `PreToolUse hook on ${n.targetName}: ${result.message}`
-          : s.unresolvedShellWrite &&
-              result.decisionReason?.type === "other" &&
-              result.decisionReason.bashMissKind === "no-rule-match" &&
-              result.message === result.decisionReason.reason
+      let message =
+        decision.decisionReason?.type === "hook"
+          ? `PreToolUse hook on ${params.targetName}: ${decision.message}`
+          : extras.unresolvedShellWrite &&
+              decision.decisionReason?.type === "other" &&
+              decision.decisionReason.bashMissKind === "no-rule-match" &&
+              decision.message === decision.decisionReason.reason
             ? REMOTE_TOOLS_CONSENT_TEXT["ask.settings_person_only"]
-            : result.message;
-      let Z =
+            : decision.message;
+      let outsideSandboxPrefix =
         !classifierEligible &&
-        result.decisionReason?.type !== "sandboxOverride" &&
-        isNonMcpShellTool(s.tool) &&
-        scriptAsksToRunUnsandboxed(s.tool, d)
+        decision.decisionReason?.type !== "sandboxOverride" &&
+        isNonMcpShellTool(extras.tool) &&
+        scriptAsksToRunUnsandboxed(extras.tool, askedInput)
           ? `${REMOTE_TOOLS_CONSENT_TEXT["ask.outside_sandbox"]} `
           : "";
-      let ce =
-        s.unresolvedShellWrite &&
-        result.decisionReason?.type !== "hook" &&
-        M !== REMOTE_TOOLS_CONSENT_TEXT["ask.settings_person_only"]
+      let settingsPrefix =
+        extras.unresolvedShellWrite &&
+        decision.decisionReason?.type !== "hook" &&
+        message !== REMOTE_TOOLS_CONSENT_TEXT["ask.settings_person_only"]
           ? `${REMOTE_TOOLS_CONSENT_TEXT["ask.settings_person_only"]} `
           : "";
-      let ue =
-        vetoed && ownCheck !== undefined && result.decisionReason?.type !== "hook"
+      let ownCheckPrefix =
+        vetoed && ownCheck !== undefined && decision.decisionReason?.type !== "hook"
           ? `${ownCheckMessage(ownCheck)} `
           : "";
-      n.onAsk({
-        message: Z + ce + ue + (G === undefined ? M : joinSentences(M, G)),
-        input: d,
-        decisionReason: result.decisionReason?.type,
-        heldHook: result.decisionReason?.type === "hook" && result.decisionReason.heldForServedCall === true,
-        raisedToAsk: s.raisedToAsk,
+      params.onAsk({
+        message:
+          outsideSandboxPrefix +
+          settingsPrefix +
+          ownCheckPrefix +
+          (modeNote === undefined ? message : joinSentences(message, modeNote)),
+        input: askedInput,
+        decisionReason: decision.decisionReason?.type,
+        heldHook:
+          decision.decisionReason?.type === "hook" && decision.decisionReason.heldForServedCall === true,
+        raisedToAsk: extras.raisedToAsk,
         classifierEligible,
         askClass,
-        mcpPathWhy: s.mcpPathWhy,
+        mcpPathWhy: extras.mcpPathWhy,
         priorAnswerOk,
-        standingRowOffered: j,
-        suggestions: j ? getSuggestedRuleStrings(result) : [],
+        standingRowOffered: offersRule,
+        suggestions: offersRule ? getSuggestedRuleStrings(decision) : [],
         answer: resolve,
       });
     } catch (error) {
       reject(error);
     }
   });
-  let A = await raceWithAbort(
+  let answer = await raceWithAbort(
     promise.catch(() => {
       return;
     }),
-    n.stopSignal,
+    params.stopSignal,
   );
-  if (A === undefined || n.stopSignal.aborted) return STOPPED_BEFORE_ANSWER_DECISION;
-  return A;
+  if (answer === undefined || params.stopSignal.aborted) return STOPPED_BEFORE_ANSWER_DECISION;
+  return answer;
 }
 //@ chunk-tr0s0d0k.js:68726-69341 placement
-async function runServedClassifier(e) {
-  let n = e.mayAnswer();
-  let o = n.may ? e.checkAhead?.() : undefined;
-  let r = n.may
-    ? await (o !== undefined && isSameDefinedFields(o.input, e.input)
-        ? o.check
+async function runServedClassifier(params) {
+  let eligibility = params.mayAnswer();
+  let ahead = eligibility.may ? params.checkAhead?.() : undefined;
+  let ownCheck = eligibility.may
+    ? await (ahead !== undefined && isSameDefinedFields(ahead.input, params.input)
+        ? ahead.check
         : runServedSafetyCheck({
-            tool: e.tool,
-            input: e.input,
-            permissionContext: e.permissionContext,
-            serviceWrittenSessionMode: e.serviceWrittenSessionMode,
-            stopSignal: e.stopSignal,
-            callId: e.callId,
-            capMs: classifierBudgetMs(e.legDeadlineAt),
+            tool: params.tool,
+            input: params.input,
+            permissionContext: params.permissionContext,
+            serviceWrittenSessionMode: params.serviceWrittenSessionMode,
+            stopSignal: params.stopSignal,
+            callId: params.callId,
+            capMs: classifierBudgetMs(params.legDeadlineAt),
             ...(isServedHairEnabled() && {
               again: {
-                legDeadlineAt: e.legDeadlineAt,
+                legDeadlineAt: params.legDeadlineAt,
                 besideHold: false,
               },
             }),
           }))
     : undefined;
-  let s = n.may && r?.verdict !== "allow";
-  let aborted = e.stopSignal.aborted;
-  let u = n.may && !aborted ? e.mayAnswer() : MAY_ANSWER;
+  let vetoed = eligibility.may && ownCheck?.verdict !== "allow";
+  let aborted = params.stopSignal.aborted;
+  let afterCheck = eligibility.may && !aborted ? params.mayAnswer() : MAY_ANSWER;
   return {
-    classifierEligible: n.may && u.may && !s && !aborted,
-    vetoed: s,
-    ownCheck: r,
+    classifierEligible: eligibility.may && afterCheck.may && !vetoed && !aborted,
+    vetoed,
+    ownCheck,
     askClass: servedVerdictKind({
-      first: n,
-      vetoed: s,
-      ownCheck: r?.verdict,
-      afterCheck: u,
-      tool: e.tool,
+      first: eligibility,
+      vetoed,
+      ownCheck: ownCheck?.verdict,
+      afterCheck,
+      tool: params.tool,
     }),
   };
 }
 //@ chunk-tr0s0d0k.js:69341-69557 placement
-function notifyAllowLanded(e, n, o, r) {
-  if (o.behavior !== "allow" || e.onAllowLanded === undefined || e.stopSignal.aborted) return;
+function notifyAllowLanded(params, tool, decision, input) {
+  if (decision.behavior !== "allow" || params.onAllowLanded === undefined || params.stopSignal.aborted)
+    return;
   try {
-    return e.onAllowLanded(n, o.updatedInput ?? r)?.catch((error) => logUnlessStopped(error, e.stopSignal));
+    return params
+      .onAllowLanded(tool, decision.updatedInput ?? input)
+      ?.catch((error) => logUnlessStopped(error, params.stopSignal));
   } catch (error) {
-    logUnlessStopped(error, e.stopSignal);
+    logUnlessStopped(error, params.stopSignal);
     return;
   }
 }
 //@ chunk-tr0s0d0k.js:69557-69972 placement
-function classifierRewriteVerdict(e, n, o, r, sessionMode, unattended) {
-  if (r !== "none" && !(r === "own_hooks_alone" && isServedNeckEnabled()))
-    return mayNotAnswer(r === "own_hooks_alone" ? "rewrite_own_hooks" : "rewrite_unvouched");
+function classifierRewriteVerdict(decision, toolUseContext, extras, rewriteKind, sessionMode, unattended) {
+  if (rewriteKind !== "none" && !(rewriteKind === "own_hooks_alone" && isServedNeckEnabled()))
+    return mayNotAnswer(rewriteKind === "own_hooks_alone" ? "rewrite_own_hooks" : "rewrite_unvouched");
   if (!isAutoOrPlanMode(sessionMode)) return mayNotAnswer("not_auto");
-  let u = sessionMode === "plan" ? planModeUnattendedRefusal(unattended) : undefined;
-  if (u !== undefined)
-    return mayNotAnswer(u === "plan_setting" ? "plan_unbacked" : unattendedStanceKind(unattended));
+  let planRefusal = sessionMode === "plan" ? planModeUnattendedRefusal(unattended) : undefined;
+  if (planRefusal !== undefined)
+    return mayNotAnswer(planRefusal === "plan_setting" ? "plan_unbacked" : unattendedStanceKind(unattended));
   return decideServedAskAnswerability(
-    e,
-    o.tool,
-    o.forcedByHook || n.hookAskFloor === true,
-    getToolPermissionContext(n),
-    o.unresolvedShellWrite,
-    o.networkPath,
-    o.serverAskUnderPlanFloor,
+    decision,
+    extras.tool,
+    extras.forcedByHook || toolUseContext.hookAskFloor === true,
+    getToolPermissionContext(toolUseContext),
+    extras.unresolvedShellWrite,
+    extras.networkPath,
+    extras.serverAskUnderPlanFloor,
     unattended,
-    o.fastPathEdit,
+    extras.fastPathEdit,
   );
 }
 //@ chunk-tr0s0d0k.js:69972-70181 placement
-function decideServedAskAnswerability(e, n, o, toolPermissionContext, s, d, u, p, h) {
-  if (e.behavior !== "ask" || o || s) return mayNotAnswer(unanswerableAskKind(e, o));
-  if (!isUnattendedOwnRecord(p)) return mayNotAnswer(unattendedStanceKind(p));
+function decideServedAskAnswerability(
+  decision,
+  tool,
+  forcedByHook,
+  toolPermissionContext,
+  unresolvedShellWrite,
+  networkPath,
+  serverAskUnderPlanFloor,
+  unattended,
+  fastPathEdit,
+) {
+  if (decision.behavior !== "ask" || forcedByHook || unresolvedShellWrite)
+    return mayNotAnswer(unanswerableAskKind(decision, forcedByHook));
+  if (!isUnattendedOwnRecord(unattended)) return mayNotAnswer(unattendedStanceKind(unattended));
   if (
-    p === "own_record" &&
+    unattended === "own_record" &&
     unattendedServingAllowedByHostFlag() &&
-    !isNonMcpShellTool(n) &&
-    !isBrowserToolAutoAllowed(n) &&
-    !(h && isServedFrogEnabled())
+    !isNonMcpShellTool(tool) &&
+    !isBrowserToolAutoAllowed(tool) &&
+    !(fastPathEdit && isServedFrogEnabled())
   )
     return mayNotAnswer("consent");
-  return mayAnswerServedAsk(e, n, o, toolPermissionContext, s, d, u);
+  return mayAnswerServedAsk(
+    decision,
+    tool,
+    forcedByHook,
+    toolPermissionContext,
+    unresolvedShellWrite,
+    networkPath,
+    serverAskUnderPlanFloor,
+  );
 }
 //@ chunk-tr0s0d0k.js:70181-70968 placement
-function mayAnswerServedAsk(e, n, o, r, s, d, u) {
-  if (e.behavior !== "ask" || o || s) return mayNotAnswer(unanswerableAskKind(e, o));
-  if (n.requiresUserInteraction?.() === true) return mayNotAnswer("requires_user_interaction");
-  if (n.mcpInfo?.effectiveMaxPermission === "ask") return mayNotAnswer("org_ceiling");
-  if (isServedMcpAsk(e, n)) return mayNotAnswer("mcp_path");
-  if (e.decisionReason?.type === "hook") return mayNotAnswer(hookAskKind(e));
-  if (u || (e.decisionReason?.type === "mode" && e.decisionReason.mode === "plan"))
+function mayAnswerServedAsk(
+  decision,
+  tool,
+  forcedByHook,
+  toolPermissionContext,
+  unresolvedShellWrite,
+  networkPath,
+  serverAskUnderPlanFloor,
+) {
+  if (decision.behavior !== "ask" || forcedByHook || unresolvedShellWrite)
+    return mayNotAnswer(unanswerableAskKind(decision, forcedByHook));
+  if (tool.requiresUserInteraction?.() === true) return mayNotAnswer("requires_user_interaction");
+  if (tool.mcpInfo?.effectiveMaxPermission === "ask") return mayNotAnswer("org_ceiling");
+  if (isServedMcpAsk(decision, tool)) return mayNotAnswer("mcp_path");
+  if (decision.decisionReason?.type === "hook") return mayNotAnswer(hookAskKind(decision));
+  if (
+    serverAskUnderPlanFloor ||
+    (decision.decisionReason?.type === "mode" && decision.decisionReason.mode === "plan")
+  )
     return mayNotAnswer("plan_floor");
-  if (isSandboxOverrideUnderReadBlock(e.decisionReason, r))
+  if (isSandboxOverrideUnderReadBlock(decision.decisionReason, toolPermissionContext))
     return mayNotAnswer("sandbox_override_read_block");
-  let p = carriesAskRuleIntent(e);
-  let h = isServerPolicyAskReason(e.decisionReason) || e.matchedAskRule?.source === "mcpServerPolicy";
-  if (p && !h) return mayNotAnswer("ask_rule");
+  let carriesAskIntent = carriesAskRuleIntent(decision);
+  let serverPolicyAsk =
+    isServerPolicyAskReason(decision.decisionReason) || decision.matchedAskRule?.source === "mcpServerPolicy";
+  if (carriesAskIntent && !serverPolicyAsk) return mayNotAnswer("ask_rule");
   let safetyCheckReason = findSafetyCheckReason(
-    e.decisionReason,
-    (S) =>
-      (!S.classifierApprovable &&
+    decision.decisionReason,
+    (safetyReason) =>
+      (!safetyReason.classifierApprovable &&
         !(
-          S.circuitBreaker === "backgroundOperator" &&
-          (S.also ?? []).length === 0 &&
+          safetyReason.circuitBreaker === "backgroundOperator" &&
+          (safetyReason.also ?? []).length === 0 &&
           isServedFerruleEnabled()
         )) ||
-      (isHostPersonOnlyCircuitBreaker(S) && isViolinPurflingGateEnabled()),
+      (isHostPersonOnlyCircuitBreaker(safetyReason) && isViolinPurflingGateEnabled()),
   );
   if (safetyCheckReason !== undefined) return mayNotAnswer(safetyCheckKind(safetyCheckReason));
-  return d ? mayNotAnswer("network_path") : MAY_ANSWER;
+  return networkPath ? mayNotAnswer("network_path") : MAY_ANSWER;
 }
 //@ chunk-tr0s0d0k.js:70968-71049 placement
-function isEscalatableAsk(e, tool, o, r = {}) {
-  return isAskEscalatable(e, tool, o, r) && findSafetyCheckReason(e.decisionReason, () => true) === undefined;
+function isEscalatableAsk(decision, tool, forcedByHook, input = {}) {
+  return (
+    isAskEscalatable(decision, tool, forcedByHook, input) &&
+    findSafetyCheckReason(decision.decisionReason, () => true) === undefined
+  );
 }
 //@ chunk-tr0s0d0k.js:71049-71290 placement
-function isAskEscalatable(e, n, o, r) {
-  if (e.behavior !== "ask" || o) return false;
-  if (r.dangerouslyDisableSandbox === true) return false;
-  if (n.requiresUserInteraction?.() === true) return false;
-  if (e.decisionReason?.type === "hook") return false;
-  return e.decisionReason?.type !== "sandboxOverride";
+function isAskEscalatable(decision, tool, forcedByHook, input) {
+  if (decision.behavior !== "ask" || forcedByHook) return false;
+  if (input.dangerouslyDisableSandbox === true) return false;
+  if (tool.requiresUserInteraction?.() === true) return false;
+  if (decision.decisionReason?.type === "hook") return false;
+  return decision.decisionReason?.type !== "sandboxOverride";
 }
 //@ chunk-tr0s0d0k.js:71290-71389 placement
-function isServedMcpAsk(e, n) {
+function isServedMcpAsk(decision, tool) {
   return (
-    (FORCE_NOT_REMOTELY_EXECUTABLE && isNotRemotelyExecutable(n)) ||
-    (e.decisionReason?.type === "other" && e.decisionReason.reason === REMOTE_CALL_SERVED_MCP_ASK)
+    (FORCE_NOT_REMOTELY_EXECUTABLE && isNotRemotelyExecutable(tool)) ||
+    (decision.decisionReason?.type === "other" &&
+      decision.decisionReason.reason === REMOTE_CALL_SERVED_MCP_ASK)
   );
 }
 //@ chunk-tr0s0d0k.js:71389-71598 placement
-function offersAlwaysAllowRule(e) {
+function offersAlwaysAllowRule(decision) {
   return (
     shouldShowAlwaysAllowOptions() &&
-    e.behavior === "ask" &&
-    e.suggestions !== undefined &&
-    e.suggestions.some((suggestion) => suggestion.type === "addRules") &&
-    e.suppressAlwaysAllowRule !== true &&
-    findSafetyCheckReason(e.decisionReason, (n) => !n.classifierApprovable) === undefined
+    decision.behavior === "ask" &&
+    decision.suggestions !== undefined &&
+    decision.suggestions.some((suggestion) => suggestion.type === "addRules") &&
+    decision.suppressAlwaysAllowRule !== true &&
+    findSafetyCheckReason(decision.decisionReason, (reason) => !reason.classifierApprovable) === undefined
   );
 }
 //@ chunk-tr0s0d0k.js:71598-71762 placement = extractRules (0.851)
@@ -1300,37 +1427,37 @@ function getSuggestedRuleStrings(result) {
     .slice(0, SERVED_DECISION_REASONS);
 }
 //@ chunk-tr0s0d0k.js:71762-71953 placement
-function raceWithAbort(e, stopSignal) {
+function raceWithAbort(promise, stopSignal) {
   return new Promise((resolve) => {
     if (stopSignal.aborted) {
       resolve(undefined);
       return;
     }
-    let r = () => resolve(undefined);
-    stopSignal.addEventListener("abort", r, {
+    let onAbort = () => resolve(undefined);
+    stopSignal.addEventListener("abort", onAbort, {
       once: true,
     });
-    e.then(resolve).finally(() => stopSignal.removeEventListener("abort", r));
+    promise.then(resolve).finally(() => stopSignal.removeEventListener("abort", onAbort));
   });
 }
 //@ chunk-tr0s0d0k.js:71953-72151 placement
 function findDenyRuleSource(decisionReason) {
   if (decisionReason?.type === "rule") return decisionReason.rule.source;
   if (decisionReason?.type === "subcommandResults")
-    for (let [, n] of decisionReason.reasons) {
-      let o = n.behavior === "deny" ? findDenyRuleSource(n.decisionReason) : undefined;
-      if (o !== undefined) return o;
+    for (let [, result] of decisionReason.reasons) {
+      let source = result.behavior === "deny" ? findDenyRuleSource(result.decisionReason) : undefined;
+      if (source !== undefined) return source;
     }
   return;
 }
 //@ chunk-tr0s0d0k.js:72151-72317 placement
-function refusalAsAllowLandsDecision(e) {
-  let n = e.refusalAsAllowLands?.();
-  return n === undefined
+function refusalAsAllowLandsDecision(params) {
+  let message = params.refusalAsAllowLands?.();
+  return message === undefined
     ? undefined
     : {
         behavior: "deny",
-        message: n,
+        message,
         decisionReason: {
           type: "other",
           reason: REMOTE_CALL_NOT_RUN_HERE,
@@ -1339,12 +1466,14 @@ function refusalAsAllowLandsDecision(e) {
       };
 }
 //@ chunk-tr0s0d0k.js:72317-72684 placement
-function servedDecisionOutcome(e, n) {
+function servedDecisionOutcome(answer, asked) {
   let reason =
-    e.behavior === "deny" && e.decisionReason.type === "other" ? e.decisionReason.reason : undefined;
+    answer.behavior === "deny" && answer.decisionReason.type === "other"
+      ? answer.decisionReason.reason
+      : undefined;
   if (reason === SERVED_STOP_REASONS || reason === REMOTE_CALL_NOT_RUN_HERE) return "stopped";
-  if (n.behavior !== "ask") return e.behavior === "allow" ? "allowed" : "denied_by_rule";
-  if (e.behavior === "allow") return "approved_by_session";
+  if (asked.behavior !== "ask") return answer.behavior === "allow" ? "allowed" : "denied_by_rule";
+  if (answer.behavior === "allow") return "approved_by_session";
   if (reason !== undefined && isUnforwardedHostAsk(reason)) return "ask_refused_no_surface";
   return reason === ASK_ENDED_REASON ? "stopped" : "denied_by_session";
 }

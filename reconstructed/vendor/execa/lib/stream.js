@@ -7,14 +7,14 @@
  */
 import { readFileSync, createReadStream } from "fs";
 import { setTimeout as Co } from "timers/promises";
-import { Re } from "../../../runtime/bun-runtime.js";
-import { yn } from "../../unresolved-cjs/index.js";
-import { ae } from "./pipe.js";
-import { Le } from "../../get-stream/source/string.js";
-import { getStreamAsBuffer } from "../../get-stream/source/buffer.js";
+import { __toESM } from "../../../runtime/bun-runtime.js";
+import { mergeStreamModule } from "../../unresolved-cjs/index.js";
+import { isStream } from "./pipe.js";
+import { getStreamContentsImpl } from "../../get-stream/source/string.js";
+import { getStreamAsBuffer_2 } from "../../get-stream/source/buffer.js";
 
 //@ chunk-m4p5zn6n.js:24564-25888 esm-layout
-var Sn = Re(yn(), 1);
+var mergeStream = __toESM(mergeStreamModule(), 1);
 var validateInputOptions = (input) => {
   if (input !== undefined) throw TypeError("The `input` and `inputFile` options cannot be both set.");
 };
@@ -25,7 +25,7 @@ var getInputSync = ({ input, inputFile }) => {
 };
 var handleInputSync = (options) => {
   let input = getInputSync(options);
-  if (ae(input)) throw TypeError("The `input` option cannot be a stream in sync mode");
+  if (isStream(input)) throw TypeError("The `input` option cannot be a stream in sync mode");
   return input;
 };
 var getInput = ({ input, inputFile }) => {
@@ -36,12 +36,12 @@ var getInput = ({ input, inputFile }) => {
 var handleInput = (spawned, options) => {
   let input = getInput(options);
   if (input === undefined) return;
-  if (ae(input)) input.pipe(spawned.stdin);
+  if (isStream(input)) input.pipe(spawned.stdin);
   else spawned.stdin.end(input);
 };
 var makeAllStream = (spawned, { all }) => {
   if (!all || (!spawned.stdout && !spawned.stderr)) return;
-  let mixed = Sn.default();
+  let mixed = mergeStream.default();
   if (spawned.stdout) mixed.add(spawned.stdout);
   if (spawned.stderr) mixed.add(spawned.stderr);
   return mixed;
@@ -59,18 +59,18 @@ var getBufferedData = async (stream, streamPromise) => {
 var getStreamPromise = (stream, { encoding, buffer, maxBuffer }) => {
   if (!stream || !buffer) return;
   if (encoding === "utf8" || encoding === "utf-8")
-    return Le(stream, {
+    return getStreamContentsImpl(stream, {
       maxBuffer,
     });
   if (encoding === null || encoding === "buffer")
-    return getStreamAsBuffer(stream, {
+    return getStreamAsBuffer_2(stream, {
       maxBuffer,
     });
   return applyEncoding(stream, maxBuffer, encoding);
 };
 var applyEncoding = async (stream, maxBuffer, encoding) =>
   (
-    await getStreamAsBuffer(stream, {
+    await getStreamAsBuffer_2(stream, {
       maxBuffer,
     })
   ).toString(encoding);

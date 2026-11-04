@@ -8,7 +8,9 @@
  * pieces: chunk-h6f3feta.js (1), chunk-ve85yyeb.js (3)
  * attribution: placement 1, affinity 1, fingerprint 2
  */
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { renderToAnsiString } from "../../utils/staticRender.js";
+import { stripAnsi, stripAnsiPerLine } from "../../utils/stripAnsi.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import {
   jsxProd_default,
   jsxProd_default_2,
@@ -28,46 +30,52 @@ import { logFeatureBad, logFeatureOk } from "../../services/analytics/featureTel
 import { createUserMessage } from "../../utils/messages.js";
 import { withTimeout } from "../../utils/sleep.js";
 import { isBridgeOrTransport } from "../../cli/transportState.js";
-import { stripAnsiPerLine, stripAnsi } from "../../utils/stripAnsi.js";
 import { stripLineBreaks } from "../../utils/stringUtils.js";
 import { peekPlanSlug, getPlanFilePath, notePlanFileForgotten, getPlanAsync } from "../../utils/plans.js";
 import { editFileInEditor } from "../../utils/promptEditor.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { resolveEditorCommand } from "../../utils/editor.js";
 import { toIDEDisplayName } from "../../utils/ide.js";
-import { renderToAnsiString } from "../../utils/staticRender.js";
 
+//@ chunk-h6f3feta.js:1126-1184 placement
+/**
+ * 把 React 元素渲染成 ANSI 字符串（plan 预览用）。
+ */
+async function renderPlanAnsi(element, options) {
+  let rendered = await renderToAnsiString(element, options);
+  return stripAnsi(rendered);
+}
 //@ chunk-ve85yyeb.js:12837-12861 affinity
 var PLAN_SAVE_TIMEOUT_MS = 15000;
 var PLAN_EDIT_TIMEOUT_MS = 1e4;
 var MAX_PLAN_CONTENT_CHARS = 1e6;
 //@ chunk-ve85yyeb.js:12861-13455 fingerprint = PlanDisplay (0.464)
 function PlanDisplay(props) {
-  let $ = w(10);
+  let $ = useMemoCache(10);
   let { planContent, planPath, editorName } = props;
-  let S;
+  let body;
   if ($[0] !== planPath) {
-    S = jsxProd_default(Title, {
+    body = jsxProd_default(Title, {
       subtitle: planPath,
       children: "Current Plan",
     });
     $[0] = planPath;
-    $[1] = S;
-  } else S = $[1];
-  let h;
+    $[1] = body;
+  } else body = $[1];
+  let contentBody;
   if ($[2] !== planContent) {
-    h = jsxProd_default(Box, {
+    contentBody = jsxProd_default(Box, {
       marginTop: 1,
       children: jsxProd_default(Text, {
         children: planContent,
       }),
     });
     $[2] = planContent;
-    $[3] = h;
-  } else h = $[3];
-  let d;
+    $[3] = contentBody;
+  } else contentBody = $[3];
+  let editorBody;
   if ($[4] !== editorName) {
-    d =
+    editorBody =
       editorName &&
       jsxProd_default_2(Box, {
         marginTop: 1,
@@ -88,17 +96,17 @@ function PlanDisplay(props) {
         ],
       });
     $[4] = editorName;
-    $[5] = d;
-  } else d = $[5];
+    $[5] = editorBody;
+  } else editorBody = $[5];
   let t5;
-  if ($[6] !== S || $[7] !== h || $[8] !== d) {
+  if ($[6] !== body || $[7] !== contentBody || $[8] !== editorBody) {
     t5 = jsxProd_default_2(Box, {
       flexDirection: "column",
-      children: [S, h, d],
+      children: [body, contentBody, editorBody],
     });
-    $[6] = S;
-    $[7] = h;
-    $[8] = d;
+    $[6] = body;
+    $[7] = contentBody;
+    $[8] = editorBody;
     $[9] = t5;
   } else t5 = $[9];
   return t5;
@@ -110,8 +118,8 @@ function PlanDisplay(props) {
 async function call(onDone, context, args) {
   let { getAppState, setAppState } = context;
   let mode = getAppState().toolPermissionContext.mode;
-  let d = mode !== "plan";
-  if (d) {
+  let leavesPlanMode = mode !== "plan";
+  if (leavesPlanMode) {
     handlePlanModeTransition(mode, "plan");
     setAppState((prev) => ({
       ...prev,
@@ -127,19 +135,19 @@ async function call(onDone, context, args) {
   }
   if (isRemoteSessionAvailable()) {
     if (!isRemoteControlChannelAvailable()) {
-      onDone(d ? "Enabled plan mode" : "Already in plan mode.");
+      onDone(leavesPlanMode ? "Enabled plan mode" : "Already in plan mode.");
       return null;
     }
     let appState = getRemoteCaps();
     let trimmed = args.trim();
-    if (d && trimmed && trimmed !== "open" && trimmed !== "share") {
+    if (leavesPlanMode && trimmed && trimmed !== "open" && trimmed !== "share") {
       try {
         await registerPendingModeAck(context.session, "plan", PLAN_SAVE_TIMEOUT_MS);
       } catch (error) {
-        let P = error instanceof ModePushTimeoutError;
-        logFeatureBad("plan_remote_query", P ? "mode_push_timeout" : "mode_push_rejected");
+        let pushTimeout = error instanceof ModePushTimeoutError;
+        logFeatureBad("plan_remote_query", pushTimeout ? "mode_push_timeout" : "mode_push_rejected");
         onDone(
-          P
+          pushTimeout
             ? `Enabled plan mode locally, but the cloud session didn\u2019t confirm the switch in time \u2014 your description was not sent: ${trimmed}. The session may be having connection trouble; once it\u2019s responding again, send the description as a normal message.`
             : `The cloud session couldn\u2019t switch to plan mode, so your description was not sent: ${trimmed}`,
         );
@@ -151,7 +159,7 @@ async function call(onDone, context, args) {
           kind: "human",
         },
       });
-      context.setMessages((u) => [...u, userMessage]);
+      context.setMessages((prev) => [...prev, userMessage]);
       if (
         !(await appState.sendMessage(trimmed, {
           uuid: userMessage.uuid,
@@ -173,45 +181,52 @@ async function call(onDone, context, args) {
       return null;
     }
     try {
-      let p = await withTimeout(
+      let planResult = await withTimeout(
         appState.sendControlRequest({
           subtype: "get_plan",
         }),
         PLAN_EDIT_TIMEOUT_MS,
         "get_plan timed out",
       );
-      if (!p.exists || !p.content) {
+      if (!planResult.exists || !planResult.content) {
         logFeatureOk("plan_remote_view");
-        onDone(d ? "Enabled plan mode" : "Already in plan mode. No plan written yet.");
+        onDone(leavesPlanMode ? "Enabled plan mode" : "Already in plan mode. No plan written yet.");
         return null;
       }
       logFeatureOk("plan_remote_view");
       let prev = isBridgeOrTransport(context.session);
-      let content = p.content;
-      let P = (prev) =>
+      let content = planResult.content;
+      let renderPlan = (prev) =>
         jsxProd_default(PlanDisplay, {
           planContent: stripAnsiPerLine(content).slice(0, MAX_PLAN_CONTENT_CHARS),
-          planPath: p.path !== undefined && !prev ? stripLineBreaks(stripAnsiPerLine(p.path)) : undefined,
+          planPath:
+            planResult.path !== undefined && !prev
+              ? stripLineBreaks(stripAnsiPerLine(planResult.path))
+              : undefined,
           editorName: undefined,
         });
-      let A = await renderPlanAnsi(P(prev), {
+      let ansi = await renderPlanAnsi(renderPlan(prev), {
         storageV5: context.storageV5,
       });
       if (!prev && isBridgeOrTransport(context.session))
-        A = await renderPlanAnsi(P(true), {
+        ansi = await renderPlanAnsi(renderPlan(true), {
           storageV5: context.storageV5,
         });
-      onDone(A);
+      onDone(ansi);
       return null;
     } catch (error) {
-      let y = error instanceof Error ? error.message : String(error);
-      let included = y.includes("Unsupported control request subtype");
+      let errorText = error instanceof Error ? error.message : String(error);
+      let included = errorText.includes("Unsupported control request subtype");
       logFeatureBad(
         "plan_remote_view",
-        included ? "unsupported_subtype" : y.includes("get_plan timed out") ? "timeout" : "request_failed",
+        included
+          ? "unsupported_subtype"
+          : errorText.includes("get_plan timed out")
+            ? "timeout"
+            : "request_failed",
       );
       onDone(
-        d
+        leavesPlanMode
           ? "Enabled plan mode"
           : included
             ? "Viewing plans in cloud sessions needs a newer session runtime."
@@ -220,7 +235,7 @@ async function call(onDone, context, args) {
       return null;
     }
   }
-  if (d) {
+  if (leavesPlanMode) {
     let description = args.trim();
     if (description && description !== "open" && description !== "share") {
       onDone("Enabled plan mode", {
@@ -237,46 +252,39 @@ async function call(onDone, context, args) {
   notePlanFileForgotten(planContent);
   let plan = await getPlanAsync(undefined, context.storageV5);
   if (!plan) {
-    onDone(d ? "Enabled plan mode" : "Already in plan mode. No plan written yet.");
+    onDone(leavesPlanMode ? "Enabled plan mode" : "Already in plan mode. No plan written yet.");
     return null;
   }
   if (args.trim().split(/\s+/)[0] === "open") {
     let result = await editFileInEditor(planContent);
     notePlanFileForgotten(planContent);
-    let l = isBridgeOrTransport(context.session);
+    let isBridge = isBridgeOrTransport(context.session);
     if (result.error) {
-      if (l)
+      if (isBridge)
         logForDebugging(`/plan open failed: ${result.error}`, {
           level: "error",
         });
-      onDone(l ? "Couldn't open the plan in the editor" : result.error);
-    } else onDone(l ? "Opened plan in editor" : `Opened plan in editor: ${planContent}`);
+      onDone(isBridge ? "Couldn't open the plan in the editor" : result.error);
+    } else onDone(isBridge ? "Opened plan in editor" : `Opened plan in editor: ${planContent}`);
     return null;
   }
   let editor = resolveEditorCommand();
   let editorName = editor ? toIDEDisplayName(editor) : undefined;
-  let M = isBridgeOrTransport(context.session);
-  let T = (i) =>
+  let isBridge_2 = isBridgeOrTransport(context.session);
+  let renderPlan = (prev) =>
     jsxProd_default(PlanDisplay, {
       planContent: plan,
-      planPath: i ? undefined : planContent,
+      planPath: prev ? undefined : planContent,
       editorName,
     });
-  let N = await renderPlanAnsi(T(M), {
+  let ansi = await renderPlanAnsi(renderPlan(isBridge_2), {
     storageV5: context.storageV5,
   });
-  if (!M && isBridgeOrTransport(context.session))
-    N = await renderPlanAnsi(T(true), {
+  if (!isBridge_2 && isBridgeOrTransport(context.session))
+    ansi = await renderPlanAnsi(renderPlan(true), {
       storageV5: context.storageV5,
     });
-  onDone(N);
+  onDone(ansi);
   return null;
 }
-//@ chunk-h6f3feta.js:1126-1184 placement
-/**
- * 把 React 元素渲染成 ANSI 字符串（plan 预览用）。
- */
-async function renderPlanAnsi(r, t) {
-  let n = await renderToAnsiString(r, t);
-  return stripAnsi(n);
-}
+export { call };

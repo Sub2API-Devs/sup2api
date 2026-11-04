@@ -13,7 +13,7 @@ import {
   isControlCodePoint,
   isUndefinedCodePoint,
 } from "../common/unicode.js";
-import { o } from "../../lib/common/error-codes.js";
+import { errors } from "../../lib/common/error-codes.js";
 
 //@ chunk-6ja29j2n.js:5754-5767 esm-layout
 var DEFAULT_BUFFER_WATERLINE = 65536;
@@ -77,7 +77,7 @@ class Preprocessor {
       this.endOfChunkHit = true;
       return CODE_POINTS.EOF;
     }
-    this._err(o.surrogateInInputStream);
+    this._err(errors.surrogateInInputStream);
     return cp;
   }
   willDropParsedChunk() {
@@ -161,8 +161,8 @@ class Preprocessor {
     return cp;
   }
   _checkForProblematicCharacters(cp) {
-    if (isControlCodePoint(cp)) this._err(o.controlCharacterInInputStream);
-    else if (isUndefinedCodePoint(cp)) this._err(o.noncharacterInInputStream);
+    if (isControlCodePoint(cp)) this._err(errors.controlCharacterInInputStream);
+    else if (isUndefinedCodePoint(cp)) this._err(errors.noncharacterInInputStream);
   }
   retreat(count) {
     this.pos -= count;

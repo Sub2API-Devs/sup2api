@@ -5,10 +5,10 @@
  * pieces: chunk-s82q9s4x.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-s82q9s4x.js:57215-57579 cjs-fingerprint
-var require_data_2 = x(function (cjsExports, cjsModule) {
+var require_data_2 = __commonJS(function (cjsExports, cjsModule) {
   cjsModule.exports = {
     $id: "https://raw.githubusercontent.com/ajv-validator/ajv/master/lib/refs/data.json#",
     description: "Meta-schema for $data reference (JSON AnySchema extension proposal)",

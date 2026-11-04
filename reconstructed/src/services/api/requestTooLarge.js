@@ -9,45 +9,53 @@
  * attribution: placement 17
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { E, u, literal } from "../../../vendor/zod/v4/classic/schemas.js";
+import { numberSchema, objectSchema, literal } from "../../../vendor/zod/v4/classic/schemas.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../analytics/growthbook.js";
-import { MAX_REQUEST_BYTES } from "../../utils/truncateGraphemes.js";
+import { MAX_REQUEST_BYTES } from "../../utils/mediaLimits.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
 import { formatFileSize } from "../../utils/format.js";
 import { getIsNonInteractiveSession } from "../../bootstrap/state.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:173536-173596 placement
 /**
  * 请求过大提示的开关 tengu_wobbly_fern（字节上限）与其 zod schema。
  */
-var TENGU_WOBBLY_FERN = "tengu_wobbly_fern";
-var requestTooLargeLimitSchema = DoctorLazy(() => E().int().positive());
+var TENGU_WOBBLY_FERN; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var requestTooLargeLimitSchema;
+deferInit("chunk-e6aww6q8.js:173536", () => {
+  TENGU_WOBBLY_FERN = "tengu_wobbly_fern";
+  requestTooLargeLimitSchema = DoctorLazy(() => numberSchema().int().positive());
+});
 //@ chunk-e6aww6q8.js:173596-173687 placement
 function requestTooLargeLimitBytes() {
-  let e = requestTooLargeLimitSchema().safeParse(
+  let data = requestTooLargeLimitSchema().safeParse(
     getFeatureValue_CACHED_MAY_BE_STALE(TENGU_WOBBLY_FERN, MAX_REQUEST_BYTES),
   );
-  return e.success ? Math.max(MAX_REQUEST_BYTES, e.data) : MAX_REQUEST_BYTES;
+  return data.success ? Math.max(MAX_REQUEST_BYTES, data.data) : MAX_REQUEST_BYTES;
 }
 //@ chunk-e6aww6q8.js:173687-173746 placement
-var requestTooLargeErrorSchema = DoctorLazy(() =>
-  u({
-    error: u({
-      type: literal("request_too_large"),
+var requestTooLargeErrorSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:173687", () => {
+  requestTooLargeErrorSchema = DoctorLazy(() =>
+    objectSchema({
+      error: objectSchema({
+        type: literal("request_too_large"),
+      }),
     }),
-  }),
-);
+  );
+});
 //@ chunk-e6aww6q8.js:173746-173818 placement
 function parseRequestTooLargeError(error) {
-  let n = requestTooLargeErrorSchema().safeParse(error);
-  return n.success ? n.data : undefined;
+  let parseError = requestTooLargeErrorSchema().safeParse(error);
+  return parseError.success ? parseError.data : undefined;
 }
 //@ chunk-e6aww6q8.js:173818-173956 placement
 function mediaBytesInMessages(messagesForAPI) {
   return messagesForAPI.reduce(
-    (acc, r) =>
-      r.type === "user" && Array.isArray(r.message.content)
-        ? r.message.content.reduce((acc, h) => acc + mediaBytesOfBlock(h), acc)
+    (acc, message) =>
+      message.type === "user" && Array.isArray(message.message.content)
+        ? message.message.content.reduce((acc, block) => acc + mediaBytesOfBlock(block), acc)
         : acc,
     0,
   );
@@ -71,45 +79,52 @@ function mediaBytesOfBlock(block) {
   return 0;
 }
 //@ chunk-e6aww6q8.js:174160-174214 placement
-function jsonByteLength_2(e) {
-  return Buffer.byteLength(jsonStringify(e), "utf8");
+function jsonByteLength_2(value) {
+  return Buffer.byteLength(jsonStringify(value), "utf8");
 }
 //@ chunk-e6aww6q8.js:174214-174426 placement
 function measureRejectedRequest({ messagesForAPI, limitBytes = requestTooLargeLimitBytes() }) {
-  let r = mediaBytesInMessages(messagesForAPI);
-  let s = jsonByteLength_2(messagesForAPI.map((h) => h.message.content));
+  let mediaBytes = mediaBytesInMessages(messagesForAPI);
+  let bodyBytes = jsonByteLength_2(messagesForAPI.map((message) => message.message.content));
   return {
-    kind: s - r > limitBytes ? "unrecoverable" : r > 0 ? "strippable_media" : "compactable",
-    bodyBytes: s,
-    mediaBytes: r,
+    kind:
+      bodyBytes - mediaBytes > limitBytes
+        ? "unrecoverable"
+        : mediaBytes > 0
+          ? "strippable_media"
+          : "compactable",
+    bodyBytes,
+    mediaBytes,
     limitBytes,
   };
 }
 //@ chunk-e6aww6q8.js:174426-174478 placement
-function describeSize(mediaBytes) {
-  return mediaBytes < 1024 ? "less than 1KB" : formatFileSize(mediaBytes);
+function describeSize(byteSize) {
+  return byteSize < 1024 ? "less than 1KB" : formatFileSize(byteSize);
 }
 //@ chunk-e6aww6q8.js:174478-174605 placement
-function formatBodySize(e) {
-  let n = formatFileSize(e.bodyBytes);
-  let r = e.bodyBytes - e.limitBytes;
-  return n === formatFileSize(e.limitBytes) && r > 0 ? `${n} (${describeSize(r)} over it)` : n;
+function formatBodySize(analysis) {
+  let sizeText = formatFileSize(analysis.bodyBytes);
+  let overBytes = analysis.bodyBytes - analysis.limitBytes;
+  return sizeText === formatFileSize(analysis.limitBytes) && overBytes > 0
+    ? `${sizeText} (${describeSize(overBytes)} over it)`
+    : sizeText;
 }
 //@ chunk-e6aww6q8.js:174605-175209 placement
 /**
  * 请求过大时的说明：对话大小以及可移除的图片与文档占比。
  */
-function formatRequestTooLarge(e) {
-  let n = formatFileSize(e.limitBytes);
-  let s = `this conversation is about ${formatBodySize(e)}`;
-  let h =
-    e.mediaBytes === 0
+function formatRequestTooLarge(analysis) {
+  let limitText = formatFileSize(analysis.limitBytes);
+  let bodyText = `this conversation is about ${formatBodySize(analysis)}`;
+  let causeText =
+    analysis.mediaBytes === 0
       ? "none of it is images or documents that could be removed"
-      : `only ${describeSize(e.mediaBytes)} of it is images or documents that could be removed`;
-  let y = `Request too large for the API's ${n} request limit: ${s}, and ${h}, so removing attachments or compacting cannot make it fit.`;
+      : `only ${describeSize(analysis.mediaBytes)} of it is images or documents that could be removed`;
+  let message = `Request too large for the API's ${limitText} request limit: ${bodyText}, and ${causeText}, so removing attachments or compacting cannot make it fit.`;
   return getIsNonInteractiveSession()
-    ? `${y} Reduce the input (large tool results or pasted content) or start a new session; this conversation cannot continue as is.`
-    : `${y} Double press esc to go back past the large content, or /clear to start a new conversation.`;
+    ? `${message} Reduce the input (large tool results or pasted content) or start a new session; this conversation cannot continue as is.`
+    : `${message} Double press esc to go back past the large content, or /clear to start a new conversation.`;
 }
 //@ chunk-e6aww6q8.js:175209-175538 placement
 /**
@@ -129,14 +144,14 @@ function requestTooLargeText() {
   return `Request too large. ${requestTooLargeHint()}`;
 }
 //@ chunk-e6aww6q8.js:175657-175816 placement
-function formatRequestTooLargeMedia(e) {
-  let n = formatFileSize(e.limitBytes);
-  let r = `${describeSize(e.mediaBytes)} of about ${formatBodySize(e)} is images or documents`;
-  return `Request too large (max ${n}; ${r}). ${requestTooLargeHint()}`;
+function formatRequestTooLargeMedia(analysis) {
+  let limitText = formatFileSize(analysis.limitBytes);
+  let mediaText = `${describeSize(analysis.mediaBytes)} of about ${formatBodySize(analysis)} is images or documents`;
+  return `Request too large (max ${limitText}; ${mediaText}). ${requestTooLargeHint()}`;
 }
 //@ chunk-e6aww6q8.js:175816-175948 placement
-function requestTooLargeDebug(e) {
-  return `request_body_over_limit: body=${e.bodyBytes}B (messages only) media=${e.mediaBytes}B limit=${e.limitBytes}B`;
+function requestTooLargeDebug(analysis) {
+  return `request_body_over_limit: body=${analysis.bodyBytes}B (messages only) media=${analysis.mediaBytes}B limit=${analysis.limitBytes}B`;
 }
 export {
   requestTooLargeWithLimitText,

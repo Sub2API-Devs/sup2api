@@ -8,7 +8,13 @@
  * pieces: chunk-p2qwpk2k.js (11)
  * attribution: placement 7, layout 2, fingerprint 1, sole-consumer 1
  */
-import { init_react_production, y, P, zt, Q } from "../../../../vendor/react/cjs/react.production.js";
+import {
+  init_react_production,
+  useState,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+} from "../../../../vendor/react/cjs/react.production.js";
 import { INVISIBLE_SYMBOL_RE } from "../../../utils/emojiPatterns.js";
 import {
   hasVisibleText,
@@ -20,7 +26,7 @@ import {
   replaceLineBreaks,
 } from "../../../utils/permissions/approvalPayloadSerialization.js";
 import { truncateToLength, countCodePoints, plural } from "../../../utils/stringUtils.js";
-import { w } from "../../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../../vendor/react/compiler-runtime.js";
 import { statusSnapshot, statusRowTexts } from "../../Spinner/spinnerStatus.js";
 import { MEMO_CACHE_SENTINEL } from "../../../../runtime/bun-runtime.js";
 import {
@@ -57,158 +63,158 @@ function hasNoVisibleToken(text) {
   return !text.replace(INVISIBLE_SYMBOL_RE, " ").split(/\s+/).some(hasVisibleText);
 }
 //@ chunk-p2qwpk2k.js:26017-26608 placement
-function RecentDenialRow(h, i) {
-  let m = i.get(h);
-  if (m !== undefined) return m;
-  let a = serializeApprovalPayload(h.display, {
+function RecentDenialRow(denial, cache) {
+  let cached = cache.get(denial);
+  if (cached !== undefined) return cached;
+  let payload = serializeApprovalPayload(denial.display, {
     maxUnits: MAX_PAYLOAD_UNITS,
   });
   let label =
-    a.kind !== "withheld" && hasNoVisibleToken(a.text)
-      ? `Call with no description: ${h.toolName}`
-      : h.display;
-  let v =
-    h.command !== undefined
-      ? formatDenialCommand(h.command)
-      : h.input === undefined
+    payload.kind !== "withheld" && hasNoVisibleToken(payload.text)
+      ? `Call with no description: ${denial.toolName}`
+      : denial.display;
+  let quote =
+    denial.command !== undefined
+      ? formatDenialCommand(denial.command)
+      : denial.input === undefined
         ? undefined
-        : h.input.kind === "withheld"
+        : denial.input.kind === "withheld"
           ? {
               ...displayField("Input not shown"),
               refusal: notApprovableHereText("its input can't be read in full"),
             }
           : {
-              text: h.input.text,
-              needsGutter: h.input.needsGutter,
+              text: denial.input.text,
+              needsGutter: denial.input.needsGutter,
             };
-  let x = v === undefined || (v.refusal === undefined && hasNoVisibleToken(v.text));
-  let C = {
+  let isUnreadable = quote === undefined || (quote.refusal === undefined && hasNoVisibleToken(quote.text));
+  let row = {
     label,
-    isUnreadable: x,
-    quote: x
+    isUnreadable,
+    quote: isUnreadable
       ? {
           ...displayField("Input not shown"),
           refusal: notApprovableHereText(
-            v === undefined ? "its input wasn't recorded" : "its input can't be read",
+            quote === undefined ? "its input wasn't recorded" : "its input can't be read",
           ),
         }
-      : v,
+      : quote,
   };
-  i.set(h, C);
-  return C;
+  cache.set(denial, row);
+  return row;
 }
 //@ chunk-p2qwpk2k.js:26608-26646 placement
-function quotedReason(h, i) {
-  return RecentDenialRow(h, i).quote;
+function quotedReason(denial, index) {
+  return RecentDenialRow(denial, index).quote;
 }
 //@ chunk-p2qwpk2k.js:26646-26684 placement
-function shortDenialLabel(denial, i) {
-  return RecentDenialRow(denial, i).label;
+function shortDenialLabel(denial, index) {
+  return RecentDenialRow(denial, index).label;
 }
 //@ chunk-p2qwpk2k.js:26684-26977 placement
 function formatDenialCommand(command) {
-  let i = serializeApprovalPayload(command, {
+  let serialized = serializeApprovalPayload(command, {
     maxUnits: MAX_PAYLOAD_UNITS,
   });
-  if (i.kind !== "withheld")
+  if (serialized.kind !== "withheld")
     return {
-      text: i.text,
-      needsGutter: i.needsGutter,
+      text: serialized.text,
+      needsGutter: serialized.needsGutter,
     };
-  let m = truncateToLength(command, MAX_DISPLAY_UNITS);
-  let a = countCodePoints(command.slice(m.length));
+  let head = truncateToLength(command, MAX_DISPLAY_UNITS);
+  let tail = countCodePoints(command.slice(head.length));
   return {
     ...displayField(command),
     refusal: notApprovableHereText(
-      a > 0
-        ? `the other ${a.toLocaleString("en-US")} ${plural(a, "character")} can't be read`
+      tail > 0
+        ? `the other ${tail.toLocaleString("en-US")} ${plural(tail, "character")} can't be read`
         : "its command can't be read in full",
     ),
   };
 }
 //@ chunk-p2qwpk2k.js:26977-27038 layout
-function notApprovableHereText(h) {
-  return `This row can't be approved here: ${h}`;
+function notApprovableHereText(reason) {
+  return `This row can't be approved here: ${reason}`;
 }
 //@ chunk-p2qwpk2k.js:27038-27115 layout
-function withoutId(h, focusedIndex) {
-  if (!h.has(focusedIndex)) return h;
-  let m = new Set(h);
-  m.delete(focusedIndex);
-  return m;
+function withoutId(ids, id) {
+  if (!ids.has(id)) return ids;
+  let next = new Set(ids);
+  next.delete(id);
+  return next;
 }
 //@ chunk-p2qwpk2k.js:27115-27860 fingerprint = RecentDenialsTab (0.316)
 function RecentDenialsTab(props) {
-  let $ = w(15);
+  let $ = useMemoCache(15);
   let { onHeaderFocusChange, onStateChange, isMidTurn } = props;
   let { getDenials } = statusSnapshot();
-  let [g] = y(getDenials);
-  let t8 = g.length === 0;
-  let C;
-  let c;
+  let [denials] = useState(getDenials);
+  let t8 = denials.length === 0;
+  let hasNone;
+  let approved;
   if ($[0] !== t8 || $[1] !== onHeaderFocusChange) {
-    C = () => {
+    hasNone = () => {
       if (t8) onHeaderFocusChange(true);
     };
-    c = [t8, onHeaderFocusChange];
+    approved = [t8, onHeaderFocusChange];
     $[0] = t8;
     $[1] = onHeaderFocusChange;
-    $[2] = C;
-    $[3] = c;
+    $[2] = hasNone;
+    $[3] = approved;
   } else {
-    C = $[2];
-    c = $[3];
+    hasNone = $[2];
+    approved = $[3];
   }
-  P(C, c);
-  let M;
-  let b;
-  if ($[4] !== g || $[5] !== t8 || $[6] !== onStateChange) {
-    M = () => {
+  useEffect(hasNone, approved);
+  let retry;
+  let deps;
+  if ($[4] !== denials || $[5] !== t8 || $[6] !== onStateChange) {
+    retry = () => {
       if (t8)
         onStateChange({
           approved: new Set(),
           retry: new Set(),
-          denials: g,
+          denials,
           canMark: false,
         });
     };
-    b = [t8, g, onStateChange];
-    $[4] = g;
+    deps = [t8, denials, onStateChange];
+    $[4] = denials;
     $[5] = t8;
     $[6] = onStateChange;
-    $[7] = M;
-    $[8] = b;
+    $[7] = retry;
+    $[8] = deps;
   } else {
-    M = $[7];
-    b = $[8];
+    retry = $[7];
+    deps = $[8];
   }
-  zt(M, b);
+  useLayoutEffect(retry, deps);
   if (t8) {
-    let T;
+    let textElement;
     if ($[9] === MEMO_CACHE_SENTINEL) {
-      T = jsxProd_default(Text, {
+      textElement = jsxProd_default(Text, {
         dimColor: true,
         children: "No recent blocks. Commands auto mode blocks will appear here.",
       });
-      $[9] = T;
-    } else T = $[9];
-    return T;
+      $[9] = textElement;
+    } else textElement = $[9];
+    return textElement;
   }
-  let T;
-  if ($[10] !== g || $[11] !== isMidTurn || $[12] !== onHeaderFocusChange || $[13] !== onStateChange) {
-    T = jsxProd_default(RecentDenialsList, {
-      denials: g,
+  let recentDenialsListElement;
+  if ($[10] !== denials || $[11] !== isMidTurn || $[12] !== onHeaderFocusChange || $[13] !== onStateChange) {
+    recentDenialsListElement = jsxProd_default(RecentDenialsList, {
+      denials,
       onHeaderFocusChange,
       onStateChange,
       isMidTurn,
     });
-    $[10] = g;
+    $[10] = denials;
     $[11] = isMidTurn;
     $[12] = onHeaderFocusChange;
     $[13] = onStateChange;
-    $[14] = T;
-  } else T = $[14];
-  return T;
+    $[14] = recentDenialsListElement;
+  } else recentDenialsListElement = $[14];
+  return recentDenialsListElement;
 }
 //@ chunk-p2qwpk2k.js:27860-32506 sole-consumer
 /**
@@ -216,56 +222,63 @@ function RecentDenialsTab(props) {
  */
 function RecentDenialsList({ denials, onHeaderFocusChange, onStateChange, isMidTurn }) {
   let { headerFocused, focusHeader } = useTabHeaderFocus();
-  P(() => {
+  useEffect(() => {
     onHeaderFocusChange(headerFocused);
   }, [headerFocused, onHeaderFocusChange]);
-  let v = statusRowTexts();
-  let [approved, setApproved] = y(() => new Set());
-  let [retry, setRetry] = y(() => new Set());
-  let [focusedIndex, setFocusedIndex] = y(0);
-  let serialized = Q(
+  let rowTexts = statusRowTexts();
+  let [approved, setApproved] = useState(() => new Set());
+  let [retry, setRetry] = useState(() => new Set());
+  let [focusedIndex, setFocusedIndex] = useState(0);
+  let serialized = useMemo(
     () =>
       serializeApprovalList(
-        denials.map((denial) => shortDenialLabel(denial, v)),
+        denials.map((denial) => shortDenialLabel(denial, rowTexts)),
         {
           maxUnits: MAX_PAYLOAD_UNITS,
         },
       ),
-    [denials, v],
+    [denials, rowTexts],
   );
   let isScreenReader = useIsScreenReaderEnabled();
   let { rows, columns } = useScrollViewportSize(useTerminalSize());
-  let [L, B] = y({
+  let [prevSize, setPrevSize] = useState({
     rows,
     columns,
   });
-  let [Y, se] = y(false);
-  if (rows !== L.rows || columns !== L.columns) {
-    B({
+  let [wasCleared, setWasCleared] = useState(false);
+  if (rows !== prevSize.rows || columns !== prevSize.columns) {
+    setPrevSize({
       rows,
       columns,
     });
-    if (!isScreenReader && approved.size + retry.size > 0 && (rows < L.rows || columns < L.columns)) {
+    if (
+      !isScreenReader &&
+      approved.size + retry.size > 0 &&
+      (rows < prevSize.rows || columns < prevSize.columns)
+    ) {
       setApproved(new Set());
       setRetry(new Set());
-      se(true);
+      setWasCleared(true);
     }
   }
   let max = Math.max(
     1,
     Math.min(MIN_DECISION_COLUMN, Math.floor(columns * MAX_WIDTH_RATIO) - MAX_DENIAL_LINES),
   );
-  let le = Q(
-    () => serialized.map((W) => (W.withheld ? W.text : truncateToWidth(W.text, max))),
+  let denialLabels = useMemo(
+    () => serialized.map((denial) => (denial.withheld ? denial.text : truncateToWidth(denial.text, max))),
     [serialized, max],
   );
-  let J = Q(() => denials.map((denial) => quotedReason(denial, v)), [denials, v]);
-  let K = isScreenReader ? undefined : J[focusedIndex];
+  let quotedReasons = useMemo(
+    () => denials.map((denial) => quotedReason(denial, rowTexts)),
+    [denials, rowTexts],
+  );
+  let focusedReason = isScreenReader ? undefined : quotedReasons[focusedIndex];
   let min = Math.min(10, denials.length);
-  let ue = `${rows}x${columns}:${denials.length}:${K !== undefined}`;
-  let [ee, ce] = y();
-  let te = ee?.listKey === ue ? ee.listed : min;
-  let Se =
+  let listKey = `${rows}x${columns}:${denials.length}:${focusedReason !== undefined}`;
+  let [visibleState, setVisibleState] = useState();
+  let visibleCount = visibleState?.listKey === listKey ? visibleState.listed : min;
+  let escapeHint =
     retry.size > 0
       ? isMidTurn
         ? `   Esc will tell Claude about ${retry.size} blocked ${plural(retry.size, "call")} at your next prompt`
@@ -273,158 +286,180 @@ function RecentDenialsList({ denials, onHeaderFocusChange, onStateChange, isMidT
       : approved.size > 0
         ? `   Esc will approve ${approved.size} blocked ${plural(approved.size, "call")}`
         : "";
-  let de = Q(
+  let offerContentKey = useMemo(
     () => ({
       denials,
       focusedIdx: focusedIndex,
-      listed: te,
-      listKey: ue,
+      listed: visibleCount,
+      listKey,
     }),
-    [denials, focusedIndex, te, ue],
+    [denials, focusedIndex, visibleCount, listKey],
   );
-  let X = FittedOfferBody(K?.text ?? "", {
-    isActive: K !== undefined,
+  let offerBody = FittedOfferBody(focusedReason?.text ?? "", {
+    isActive: focusedReason !== undefined,
     isCut: true,
-    contentKey: de,
+    contentKey: offerContentKey,
     maxRows: MAX_DENIAL_ROWS,
   });
-  let Ve = X.hiddenRows > 0 || X.hiddenAbove > 0;
-  let Le = K !== undefined && X.isBodyOnScreen === false;
-  let vt = K !== undefined && X.isBodyOnScreen !== true;
-  let $e = K?.refusal ?? (Le ? notApprovableHereText("this terminal is too short to show it") : undefined);
-  let trimmed = `${Y ? "Marks cleared: terminal shrank. " : ""}${Le ? $e : ""}`.trim();
-  let [, Ge] = y(0);
-  zt(() => {
-    Ge((W) => W + 1);
-  }, [de]);
-  let isSettled = ee?.listKey === ue && ee.isSettled;
-  let wasShort = ee?.listKey === ue ? ee.wasShort : 0;
-  let wasFocused = ee?.wasFocused;
-  zt(() => {
-    if (X.shortRows === 0 || isSettled) return;
-    if (te > 1)
-      ce({
-        listKey: ue,
-        listed: te - 1,
+  let hasHiddenRows = offerBody.hiddenRows > 0 || offerBody.hiddenAbove > 0;
+  let isTooShort = focusedReason !== undefined && offerBody.isBodyOnScreen === false;
+  let isBodyOffscreen = focusedReason !== undefined && offerBody.isBodyOnScreen !== true;
+  let refusalText =
+    focusedReason?.refusal ??
+    (isTooShort ? notApprovableHereText("this terminal is too short to show it") : undefined);
+  let trimmed =
+    `${wasCleared ? "Marks cleared: terminal shrank. " : ""}${isTooShort ? refusalText : ""}`.trim();
+  let [, bumpTick] = useState(0);
+  useLayoutEffect(() => {
+    bumpTick((tick) => tick + 1);
+  }, [offerContentKey]);
+  let isSettled = visibleState?.listKey === listKey && visibleState.isSettled;
+  let wasShort = visibleState?.listKey === listKey ? visibleState.wasShort : 0;
+  let wasFocused = visibleState?.wasFocused;
+  useLayoutEffect(() => {
+    if (offerBody.shortRows === 0 || isSettled) return;
+    if (visibleCount > 1)
+      setVisibleState({
+        listKey,
+        listed: visibleCount - 1,
         isSettled: false,
-        wasShort: X.shortRows,
+        wasShort: offerBody.shortRows,
         wasFocused: focusedIndex,
       });
-    else if (denials.length === 2 && wasFocused === focusedIndex && X.shortRows >= wasShort)
-      ce({
-        listKey: ue,
+    else if (denials.length === 2 && wasFocused === focusedIndex && offerBody.shortRows >= wasShort)
+      setVisibleState({
+        listKey,
         listed: 2,
         isSettled: true,
         wasShort,
         wasFocused,
       });
-  }, [X.shortRows, isSettled, wasShort, wasFocused, focusedIndex, te, ue, denials.length]);
+  }, [
+    offerBody.shortRows,
+    isSettled,
+    wasShort,
+    wasFocused,
+    focusedIndex,
+    visibleCount,
+    listKey,
+    denials.length,
+  ]);
   let chord = useShortcutDisplay("app:toggleTranscript", "Global", "ctrl+o");
-  let [bt, Te] = y();
-  let et = Q(
-    () => new Set(serialized.flatMap((W, N) => (W.withheld || J[N]?.refusal !== undefined ? [N] : []))),
-    [serialized, J],
+  let [defaultFocusValue, setDefaultFocusValue] = useState();
+  let blockedIndexes = useMemo(
+    () =>
+      new Set(
+        serialized.flatMap((denial, index) =>
+          denial.withheld || quotedReasons[index]?.refusal !== undefined ? [index] : [],
+        ),
+      ),
+    [serialized, quotedReasons],
   );
-  let rt = Q(() => (vt ? new Set(et).add(focusedIndex) : et), [vt, et, focusedIndex]);
-  let dt = isScreenReader ? et.size < denials.length : !et.has(focusedIndex) && !Le;
-  zt(() => {
-    if (Le) {
-      setApproved((W) => withoutId(W, focusedIndex));
-      setRetry((W) => withoutId(W, focusedIndex));
+  let blockedOrFocused = useMemo(
+    () => (isBodyOffscreen ? new Set(blockedIndexes).add(focusedIndex) : blockedIndexes),
+    [isBodyOffscreen, blockedIndexes, focusedIndex],
+  );
+  let canMark = isScreenReader
+    ? blockedIndexes.size < denials.length
+    : !blockedIndexes.has(focusedIndex) && !isTooShort;
+  useLayoutEffect(() => {
+    if (isTooShort) {
+      setApproved((approved) => withoutId(approved, focusedIndex));
+      setRetry((retry) => withoutId(retry, focusedIndex));
     }
-  }, [Le, focusedIndex]);
-  zt(() => {
+  }, [isTooShort, focusedIndex]);
+  useLayoutEffect(() => {
     onStateChange({
       approved,
       retry,
       denials,
-      canMark: dt,
+      canMark,
     });
-  }, [approved, retry, denials, dt, onStateChange]);
-  let [Qe, no] = y();
-  let onChange = (W) => {
-    let N = Number(W);
-    if (isScreenReader) no(N);
-    if (!isScreenReader && N !== focusedIndex) {
-      setFocusedIndex(N);
-      Te(W);
+  }, [approved, retry, denials, canMark, onStateChange]);
+  let [screenReaderFocusIndex, setScreenReaderFocusIndex] = useState();
+  let onChange = (optionValue) => {
+    let index = Number(optionValue);
+    if (isScreenReader) setScreenReaderFocusIndex(index);
+    if (!isScreenReader && index !== focusedIndex) {
+      setFocusedIndex(index);
+      setDefaultFocusValue(optionValue);
       return;
     }
-    if (rt.has(N)) return;
-    se(false);
-    setApproved((ae) => {
-      let ge = new Set(ae);
-      if (ge.has(N)) ge.delete(N);
-      else ge.add(N);
-      return ge;
+    if (blockedOrFocused.has(index)) return;
+    setWasCleared(false);
+    setApproved((prev) => {
+      let next = new Set(prev);
+      if (next.has(index)) next.delete(index);
+      else next.add(index);
+      return next;
     });
-    setRetry((ae) => withoutId(ae, N));
+    setRetry((prev) => withoutId(prev, index));
   };
-  let onFocus = (W) => {
-    if (Number(W) !== focusedIndex) setFocusedIndex(Number(W));
-    if (isScreenReader) no(Number(W));
-    Te(undefined);
+  let onFocus = (optionValue) => {
+    if (Number(optionValue) !== focusedIndex) setFocusedIndex(Number(optionValue));
+    if (isScreenReader) setScreenReaderFocusIndex(Number(optionValue));
+    setDefaultFocusValue(undefined);
   };
-  function fr(event) {
+  function onKeyDown(event) {
     if (headerFocused) return;
     if (event.ctrl || event.meta || event.shift) return;
     if (event.key !== "r") return;
     event.preventDefault();
-    let N = isScreenReader ? Qe : focusedIndex;
-    if (N === undefined || rt.has(N)) return;
-    se(false);
-    setRetry((ae) => {
-      let ge = new Set(ae);
-      if (ge.has(N)) ge.delete(N);
-      else ge.add(N);
-      return ge;
+    let index = isScreenReader ? screenReaderFocusIndex : focusedIndex;
+    if (index === undefined || blockedOrFocused.has(index)) return;
+    setWasCleared(false);
+    setRetry((prev) => {
+      let next = new Set(prev);
+      if (next.has(index)) next.delete(index);
+      else next.add(index);
+      return next;
     });
-    setApproved((ae) => {
-      if (ae.has(N)) return ae;
-      let ge = new Set(ae);
-      ge.add(N);
-      return ge;
+    setApproved((prev) => {
+      if (prev.has(index)) return prev;
+      let next = new Set(prev);
+      next.add(index);
+      return next;
     });
   }
-  let Do = Q(
+  let reasonTexts = useMemo(
     () =>
       denials.map((denial) => {
-        let N = denial.reason
+        let text = denial.reason
           ? replaceLineBreaks(displayField(denial.reason).text).replace(/\s+/g, " ").trim()
           : undefined;
-        return N && !isScreenReader ? truncateToWidth(N, MAX_DENIAL_TEXT) : N;
+        return text && !isScreenReader ? truncateToWidth(text, MAX_DENIAL_TEXT) : text;
       }),
     [denials, isScreenReader],
   );
-  let options = denials.map((denial, N) => {
-    let ae = approved.has(N);
-    let children = retry.has(N)
+  let options = denials.map((denial, index) => {
+    let isApproved = approved.has(index);
+    let children = retry.has(index)
       ? " (retry)"
       : !isScreenReader
         ? ""
-        : ae
+        : isApproved
           ? " (approved)"
-          : J[N]?.refusal !== undefined
+          : quotedReasons[index]?.refusal !== undefined
             ? " (can't be approved)"
             : "";
-    let ke = Do[N];
+    let reason = reasonTexts[index];
     return {
       label: jsxProd_default_2(Text, {
         children: [
           jsxProd_default(StatusIcon, {
-            status: ae ? "success" : "error",
+            status: isApproved ? "success" : "error",
             withSpace: true,
           }),
-          le[N],
+          denialLabels[index],
           jsxProd_default(Text, {
             dimColor: true,
             children,
           }),
         ],
       }),
-      value: String(N),
-      ...(ke && {
-        description: `${AUTO_MODE_PREFIX}${ke}`,
+      value: String(index),
+      ...(reason && {
+        description: `${AUTO_MODE_PREFIX}${reason}`,
         dimDescription: true,
       }),
     };
@@ -434,16 +469,16 @@ function RecentDenialsList({ denials, onHeaderFocusChange, onStateChange, isMidT
       {
         action: "app:toggleTranscript",
         run: () => {
-          if (Ve) X.showNextRows();
+          if (hasHiddenRows) offerBody.showNextRows();
         },
       },
     ],
-    active: K !== undefined && !headerFocused,
+    active: focusedReason !== undefined && !headerFocused,
     flexDirection: "column",
     children: jsxProd_default_2(Box, {
       flexDirection: "column",
       flexShrink: 0,
-      onKeyDown: fr,
+      onKeyDown,
       children: [
         trimmed !== "" &&
           jsxProd_default(Text, {
@@ -454,10 +489,10 @@ function RecentDenialsList({ denials, onHeaderFocusChange, onStateChange, isMidT
           children: "Commands auto mode recently blocked. Approving adds no rule.",
         }),
         isScreenReader &&
-          denials.map((denial, N) => {
-            let ae = J[N];
+          denials.map((denial, index) => {
+            let reason = quotedReasons[index];
             return (
-              ae !== undefined &&
+              reason !== undefined &&
               jsxProd_default_2(
                 Box,
                 {
@@ -465,27 +500,27 @@ function RecentDenialsList({ denials, onHeaderFocusChange, onStateChange, isMidT
                   children: [
                     jsxProd_default_2(Text, {
                       children: [
-                        RecentDenialRow(denial, v).isUnreadable || denial.command === undefined
+                        RecentDenialRow(denial, rowTexts).isUnreadable || denial.command === undefined
                           ? "Input for row"
                           : "Command for row",
                         " ",
-                        N + 1,
+                        index + 1,
                         ":",
                       ],
                     }),
                     jsxProd_default(Blockquote, {
                       multiline: true,
                       children: jsxProd_default(Text, {
-                        children: ae.text,
+                        children: reason.text,
                       }),
                     }),
-                    ae.refusal !== undefined &&
+                    reason.refusal !== undefined &&
                       jsxProd_default(Text, {
-                        children: ae.refusal,
+                        children: reason.refusal,
                       }),
                   ],
                 },
-                N,
+                index,
               )
             );
           }),
@@ -495,68 +530,68 @@ function RecentDenialsList({ denials, onHeaderFocusChange, onStateChange, isMidT
             options,
             onChange,
             onFocus,
-            defaultFocusValue: bt,
+            defaultFocusValue,
             selectedValue: NO_COMMITTED_ROW,
-            visibleOptionCount: te,
+            visibleOptionCount: visibleCount,
             hiddenBelowUnit: "blocked command",
             isDisabled: headerFocused,
             onUpFromFirstItem: focusHeader,
           }),
         }),
-        Se !== "" &&
+        escapeHint !== "" &&
           jsxProd_default(Text, {
             dimColor: true,
             wrap: "truncate-end",
-            children: Se,
+            children: escapeHint,
           }),
-        K !== undefined &&
+        focusedReason !== undefined &&
           jsxProd_default(Box, {
-            marginTop: Se === "" ? 1 : 0,
+            marginTop: escapeHint === "" ? 1 : 0,
             flexDirection: "column",
             children: jsxProd_default_2(DiffFrame, {
               children: [
                 jsxProd_default_2(Box, {
-                  ref: X.box,
+                  ref: offerBody.box,
                   flexDirection: "column",
                   children: [
                     jsxProd_default(Blockquote, {
-                      multiline: K.needsGutter,
+                      multiline: focusedReason.needsGutter,
                       children: jsxProd_default(Box, {
-                        ref: X.textBox,
+                        ref: offerBody.textBox,
                         flexDirection: "column",
                         flexGrow: 1,
                         children: jsxProd_default(Text, {
-                          children: X.text,
+                          children: offerBody.text,
                         }),
                       }),
                     }),
-                    Ve &&
+                    hasHiddenRows &&
                       jsxProd_default(Text, {
                         dimColor: true,
                         wrap: "truncate-end",
                         children: formatHiddenRowsHint({
-                          hiddenRows: X.hiddenRows,
-                          hiddenAbove: X.hiddenAbove,
+                          hiddenRows: offerBody.hiddenRows,
+                          hiddenAbove: offerBody.hiddenAbove,
                           hint: headerFocused
                             ? ""
                             : formatShortcutHint({
                                 chord,
-                                action: X.hiddenRows > 0 ? "see more" : "see the first lines",
+                                action: offerBody.hiddenRows > 0 ? "see more" : "see the first lines",
                                 parens: true,
                                 format: {
                                   keyCase: "lower",
                                 },
                               }),
-                          columns: X.columns,
+                          columns: offerBody.columns,
                         }),
                       }),
                   ],
                 }),
-                $e !== undefined &&
+                refusalText !== undefined &&
                   jsxProd_default(Text, {
                     dimColor: true,
                     wrap: "truncate-end",
-                    children: $e,
+                    children: refusalText,
                   }),
               ],
             }),

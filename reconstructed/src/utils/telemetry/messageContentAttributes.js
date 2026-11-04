@@ -17,167 +17,176 @@ import {
 } from "./accountMemoryRedaction.js";
 import { isTrustedMemoryTool, classifyPlacedTool } from "../../services/mcp/memoryServerVerification.js";
 import { jsonStringify } from "../slowOperations.js";
-import { Re } from "../../../runtime/bun-runtime.js";
+import { __toESM } from "../../../runtime/bun-runtime.js";
 import { require_api } from "../../../vendor/@opentelemetry/api/build/src/index.js";
 import { HostScoped } from "../hostScoped.js";
 import { getRootSession } from "../../bootstrap/state.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-p52gp8zk.js:12080-12358 placement
-function collectToolUseIds(e, n, o = e) {
-  let r = new Set();
-  for (let s of o) {
-    if (s.role !== "assistant" || typeof s.content === "string") continue;
-    for (let c of s.content) {
-      let id = identityRedaction(c).id;
-      if (isTrustedMemoryToolUse(c, n) && typeof id === "string") r.add(id);
+function collectToolUseIds(message, options, messages = message) {
+  let ids = new Set();
+  for (let msg of messages) {
+    if (msg.role !== "assistant" || typeof msg.content === "string") continue;
+    for (let block of msg.content) {
+      let id = identityRedaction(block).id;
+      if (isTrustedMemoryToolUse(block, options) && typeof id === "string") ids.add(id);
     }
   }
-  return e.map((s) => {
-    let c = redactMessageContent_2(s.content, n, r);
-    return c === s.content
-      ? s
+  return message.map((block_2) => {
+    let id = redactMessageContent_2(block_2.content, options, ids);
+    return id === block_2.content
+      ? block_2
       : {
-          ...s,
-          content: c,
+          ...block_2,
+          content: id,
         };
   });
 }
 //@ chunk-p52gp8zk.js:12358-12399 placement
-function redactMessageContent(e, n) {
-  return redactContentBlocks(e, n, new Set());
+function redactMessageContent(content, redaction) {
+  return redactContentBlocks(content, redaction, new Set());
 }
 //@ chunk-p52gp8zk.js:12399-12439 placement
-function redactMessageFields(system, n) {
-  return redactMessageContent_2(system, n, new Set());
+function redactMessageFields(system, redaction) {
+  return redactMessageContent_2(system, redaction, new Set());
 }
 //@ chunk-p52gp8zk.js:12439-12548 placement
-function redactMessageContent_2(content, n, o) {
-  if (typeof content === "string") return applyRedactions(content, n);
-  let r = redactContentBlocks(content, n, o);
-  return r.every((s, c) => s === content[c]) ? content : r;
+function redactMessageContent_2(blocks, content, redaction) {
+  if (typeof blocks === "string") return applyRedactions(blocks, content);
+  let blocks_2 = redactContentBlocks(blocks, content, redaction);
+  return blocks_2.every((block, index) => block === blocks[index]) ? blocks : blocks_2;
 }
 //@ chunk-p52gp8zk.js:12548-13206 placement
 /**
  * 逐块处理消息内容（文本、思考、工具输入/结果）以便记录到遥测并去除敏感信息。
  */
-function redactContentBlocks(e, n, o) {
-  return e.map((r) => {
-    let { text, thinking, input, tool_use_id: toolUseId, content } = identityRedaction(r);
+function redactContentBlocks(blocks, redaction, seenIds) {
+  return blocks.map((block) => {
+    let { text, thinking, input, tool_use_id: toolUseId, content } = identityRedaction(block);
     if (
-      (r.type === "text" && typeof text === "string") ||
-      (r.type === "thinking" && typeof thinking === "string")
+      (block.type === "text" && typeof text === "string") ||
+      (block.type === "thinking" && typeof thinking === "string")
     ) {
-      let m = redactValue(r, n, 0);
-      return m === r ? r : m;
+      let redactedBlock = redactValue(block, redaction, 0);
+      return redactedBlock === block ? block : redactedBlock;
     }
-    if (r.type === "tool_use" || r.type === "server_tool_use") {
-      if (isTrustedMemoryToolUse(r, n))
+    if (block.type === "tool_use" || block.type === "server_tool_use") {
+      if (isTrustedMemoryToolUse(block, redaction))
         return {
-          ...r,
+          ...block,
           input: {
             not_recorded: notRecordedLength(safeJsonString(input)),
           },
         };
-      let m = redactValue(input, n, 0);
-      return m === input
-        ? r
+      let redactedInput = redactValue(input, redaction, 0);
+      return redactedInput === input
+        ? block
         : {
-            ...r,
-            input: m,
+            ...block,
+            input: redactedInput,
           };
     }
-    if (r.type === "tool_result" && content !== undefined && content !== null) {
-      if (typeof toolUseId === "string" && o.has(toolUseId))
+    if (block.type === "tool_result" && content !== undefined && content !== null) {
+      if (typeof toolUseId === "string" && seenIds.has(toolUseId))
         return {
-          ...r,
+          ...block,
           content: notRecordedLength(typeof content === "string" ? content : safeJsonString(content)),
         };
       if (typeof content === "string" || Array.isArray(content)) {
-        let m = redactMessageContent_2(content, n, o);
-        return m === content
-          ? r
+        let redactedContent = redactMessageContent_2(content, redaction, seenIds);
+        return redactedContent === content
+          ? block
           : {
-              ...r,
-              content: m,
+              ...block,
+              content: redactedContent,
             };
       }
     }
-    if (UNREDACTED_BLOCK_TYPES.has(r.type) || isBase64Document(r)) return r;
-    let y = redactValue(r, n, 0);
-    return y === r ? r : y;
+    if (UNREDACTED_BLOCK_TYPES.has(block.type) || isBase64Document(block)) return block;
+    let redactedBlock2 = redactValue(block, redaction, 0);
+    return redactedBlock2 === block ? block : redactedBlock2;
   });
 }
 //@ chunk-p52gp8zk.js:13206-13271 placement
-var UNREDACTED_BLOCK_TYPES = new Set(["image", "redacted_thinking", "container_upload"]);
+var UNREDACTED_BLOCK_TYPES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-p52gp8zk.js:13206", () => {
+  UNREDACTED_BLOCK_TYPES = new Set(["image", "redacted_thinking", "container_upload"]);
+});
 //@ chunk-p52gp8zk.js:13271-13382 placement
-function isBase64Document(e) {
-  let { source } = identityRedaction(e);
-  return e.type === "document" && typeof source === "object" && source !== null && source.type === "base64";
+function isBase64Document(block) {
+  let { source } = identityRedaction(block);
+  return (
+    block.type === "document" && typeof source === "object" && source !== null && source.type === "base64"
+  );
 }
 //@ chunk-p52gp8zk.js:13382-13528 placement
-function isTrustedMemoryToolUse(e, n) {
-  let { name: o } = identityRedaction(e);
+function isTrustedMemoryToolUse(block, ctx) {
+  let { name } = identityRedaction(block);
   return (
-    (e.type === "tool_use" || e.type === "server_tool_use") &&
-    typeof o === "string" &&
-    isTrustedMemoryTool(o, classifyPlacedTool(n.toolNames), "history")
+    (block.type === "tool_use" || block.type === "server_tool_use") &&
+    typeof name === "string" &&
+    isTrustedMemoryTool(name, classifyPlacedTool(ctx.toolNames), "history")
   );
 }
 //@ chunk-p52gp8zk.js:13528-13537 placement
 var MAX_REDACT_DEPTH = 6;
 //@ chunk-p52gp8zk.js:13537-13876 placement
-function redactValue(e, n, o) {
-  if (typeof e === "string") return applyRedactions(e, n);
-  if (typeof e !== "object" || e === null) return e;
-  if (o >= MAX_REDACT_DEPTH) return NOT_RECORDED_PLACEHOLDER;
-  if (Array.isArray(e)) {
-    let mapped = e.map((u) => redactValue(u, n, o + 1));
-    return mapped.every((u, f) => u === e[f]) ? e : mapped;
+function redactValue(value, redaction, depth) {
+  if (typeof value === "string") return applyRedactions(value, redaction);
+  if (typeof value !== "object" || value === null) return value;
+  if (depth >= MAX_REDACT_DEPTH) return NOT_RECORDED_PLACEHOLDER;
+  if (Array.isArray(value)) {
+    let mapped = value.map((entries) => redactValue(entries, redaction, depth + 1));
+    return mapped.every((key, entry) => key === value[entry]) ? value : mapped;
   }
-  let r = false;
-  let mapped = Object.entries(e).map(([key, value]) => {
-    let f = applyRedactions(key, n);
-    let a = redactValue(value, n, o + 1);
-    r ||= a !== value || f !== key;
-    return [f, a];
+  let result = false;
+  let mapped = Object.entries(value).map(([key, value]) => {
+    let item = applyRedactions(key, redaction);
+    let index = redactValue(value, redaction, depth + 1);
+    result ||= index !== value || item !== key;
+    return [item, index];
   });
-  return r ? Object.fromEntries(mapped) : e;
+  return result ? Object.fromEntries(mapped) : value;
 }
 //@ chunk-p52gp8zk.js:13876-13927 placement
-function safeJsonString(e) {
+function safeJsonString(value) {
   try {
-    return jsonStringify(e) ?? "";
+    return jsonStringify(value) ?? "";
   } catch {
     return "";
   }
 }
 //@ chunk-p52gp8zk.js:13927-13944 placement
-var otelApi_2 = Re(require_api(), 1);
+var otelApi_2; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-p52gp8zk.js:13927", () => {
+  otelApi_2 = __toESM(require_api(), 1);
+});
 //@ chunk-p52gp8zk.js:13993-14422 placement
 class AsyncLocalContextManager {
   als = new AsyncLocalStorage();
   active() {
     return this.als.getStore() ?? otelApi_2.ROOT_CONTEXT;
   }
-  with(e, n, o, ...r) {
-    let s = o == null ? n : n.bind(o);
-    return this.als.run(e, s, ...r);
+  with(context, callback, thisArg, ...rest) {
+    let bound = thisArg == null ? callback : callback.bind(thisArg);
+    return this.als.run(context, bound, ...rest);
   }
-  enterWith(e) {
-    this.als.enterWith(e);
+  enterWith(handle) {
+    this.als.enterWith(handle);
   }
-  bind(e, n) {
-    if (typeof n === "function") {
-      let o = (...r) => this.with(e, () => n(...r));
-      Object.defineProperty(o, "length", {
+  bind(ctx, fn) {
+    if (typeof fn === "function") {
+      let thisArg_2 = (...rest_2) => this.with(ctx, () => fn(...rest_2));
+      Object.defineProperty(thisArg_2, "length", {
         configurable: true,
         enumerable: false,
         writable: false,
-        value: n.length,
+        value: fn.length,
       });
-      return o;
+      return thisArg_2;
     }
-    return n;
+    return fn;
   }
   enable() {
     return this;
@@ -188,16 +197,22 @@ class AsyncLocalContextManager {
   }
 }
 //@ chunk-p52gp8zk.js:14422-14437 placement
-var otelContextManager = new AsyncLocalContextManager();
+var otelContextManager; // deferred: uses AsyncLocalContextManager of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-p52gp8zk.js:14422", () => {
+  otelContextManager = new AsyncLocalContextManager();
+});
 //@ chunk-p52gp8zk.js:14437-14461 placement
 class OtelHostContextState {
   current = undefined;
 }
 //@ chunk-p52gp8zk.js:14461-14486 placement
-var otelHostContextByHost = new HostScoped(() => new OtelHostContextState());
+var otelHostContextByHost; // deferred: uses OtelHostContextState of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-p52gp8zk.js:14461", () => {
+  otelHostContextByHost = new HostScoped(() => new OtelHostContextState());
+});
 //@ chunk-p52gp8zk.js:14486-14528 placement
-function setHostOtelContext(e) {
-  otelHostContextByHost.of(getRootSession().host).current = e;
+function setHostOtelContext(context) {
+  otelHostContextByHost.of(getRootSession().host).current = context;
 }
 //@ chunk-p52gp8zk.js:14528-14574 placement
 function getHostOtelContext() {
@@ -205,9 +220,9 @@ function getHostOtelContext() {
 }
 //@ chunk-p52gp8zk.js:14574-14655 placement
 function activeOtelContext() {
-  let e = otelContextManager.active();
-  if (e !== otelApi_2.ROOT_CONTEXT) return e;
-  return getHostOtelContext() ?? e;
+  let context = otelContextManager.active();
+  if (context !== otelApi_2.ROOT_CONTEXT) return context;
+  return getHostOtelContext() ?? context;
 }
 export {
   otelContextManager,

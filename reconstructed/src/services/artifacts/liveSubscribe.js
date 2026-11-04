@@ -25,20 +25,20 @@ import { isCancel } from "../../../vendor/axios/dist/esm/axios.js";
 /**
  * 记录实时订阅听到的某 artifact 新版本（只接受比已记录更新的合法版本；时间超前的版本跳过并只打点一次）。
  */
-function recordHeardVersion(slug, n) {
+function recordHeardVersion(slug, ver) {
   let { live } = getLiveState();
-  if (acceptVersionNotAhead(n) === undefined) {
-    if (!live.heardAheadOfClockReported && VERSION_TS_PREFIX_RE.test(n)) {
+  if (acceptVersionNotAhead(ver) === undefined) {
+    if (!live.heardAheadOfClockReported && VERSION_TS_PREFIX_RE.test(ver)) {
       live.heardAheadOfClockReported = true;
       logFeatureSad("artifact_live_subscribe", "heard_version_skipped_ahead_of_clock");
     }
     return;
   }
-  let s = live.heardVersions.get(slug);
-  let a = s === undefined ? 1 : compareNumericPrefix(n, s.ver);
-  if (a !== null && a > 0)
+  let heard = live.heardVersions.get(slug);
+  let cmp = heard === undefined ? 1 : compareNumericPrefix(ver, heard.ver);
+  if (cmp !== null && cmp > 0)
     live.heardVersions.set(slug, {
-      ver: n,
+      ver,
       toldTo: new Set(),
     });
 }
@@ -46,23 +46,30 @@ function recordHeardVersion(slug, n) {
 /**
  * 判断某个已读版本是否落后于实时听到/携带的最新版本（排除自己正在或已发布的版本）；返回 behind 与最新版本。
  */
-function checkBehindLive(e, ver) {
+function checkBehindLive(slug, heardVersion) {
   let { supervisors, heardVersions } = getLiveState().live;
-  let a = supervisors.get(e);
-  if (a === undefined || ver === undefined)
+  let supervisor = supervisors.get(slug);
+  if (supervisor === undefined || heardVersion === undefined)
     return {
       behind: false,
     };
-  let l = maxVersion(acceptVersionNotAhead(heardVersions.get(e)?.ver), acceptVersionNotAhead(a.carriedVer));
-  if (l === undefined || isPublishInFlight(a.ownPublishes, e) || isOwnPublishedVer(a.ownPublishes, e, l))
+  let liveVer = maxVersion(
+    acceptVersionNotAhead(heardVersions.get(slug)?.ver),
+    acceptVersionNotAhead(supervisor.carriedVer),
+  );
+  if (
+    liveVer === undefined ||
+    isPublishInFlight(supervisor.ownPublishes, slug) ||
+    isOwnPublishedVer(supervisor.ownPublishes, slug, liveVer)
+  )
     return {
       behind: false,
     };
-  let d = compareNumericPrefix(l, ver);
-  return d !== null && d > 0
+  let cmp = compareNumericPrefix(liveVer, heardVersion);
+  return cmp !== null && cmp > 0
     ? {
         behind: true,
-        liveVer: l,
+        liveVer,
       }
     : {
         behind: false,
@@ -73,13 +80,13 @@ function checkBehindLive(e, ver) {
  * 判断某 artifact 是否落后于实时版本且该版本尚未告知给指定 agent；需要告知时返回实时版本。
  */
 function getUntoldLiveVersion(slug, heldVer, agentId) {
-  let s = checkBehindLive(slug, heldVer);
-  if (!s.behind) return;
-  let a = getLiveState().live.heardVersions.get(slug);
-  return a?.ver === s.liveVer && a.toldTo.has(agentId ?? "main")
+  let behind = checkBehindLive(slug, heldVer);
+  if (!behind.behind) return;
+  let heard = getLiveState().live.heardVersions.get(slug);
+  return heard?.ver === behind.liveVer && heard.toldTo.has(agentId ?? "main")
     ? undefined
     : {
-        liveVer: s.liveVer,
+        liveVer: behind.liveVer,
       };
 }
 //@ chunk-jv307fw4.js:18951-19173 placement
@@ -89,32 +96,32 @@ function getUntoldLiveVersion(slug, heldVer, agentId) {
 function markLiveVersionTold(slug, liveVer, agentId) {
   if (acceptVersionNotAhead(liveVer) === undefined) return;
   let heardVersions = getLiveState().live.heardVersions;
-  let a = heardVersions.get(slug);
-  let l = agentId ?? "main";
-  if (a?.ver === liveVer) {
-    a.toldTo.add(l);
+  let heard = heardVersions.get(slug);
+  let agentKey = agentId ?? "main";
+  if (heard?.ver === liveVer) {
+    heard.toldTo.add(agentKey);
     return;
   }
-  let d = a === undefined ? -1 : compareNumericPrefix(a.ver, liveVer);
-  if (d !== null && d < 0)
+  let cmp = heard === undefined ? -1 : compareNumericPrefix(heard.ver, liveVer);
+  if (cmp !== null && cmp < 0)
     heardVersions.set(slug, {
       ver: liveVer,
-      toldTo: new Set([l]),
+      toldTo: new Set([agentKey]),
     });
 }
 //@ chunk-jv307fw4.js:19173-19266 placement
 /**
  * 记录已听过的版本号：与给定版本相同时清除记录。
  */
-function forgetHeardVersion(e, n) {
+function forgetHeardVersion(slug, ver) {
   let heardVersions = getLiveState().live.heardVersions;
-  if (n === undefined || heardVersions.get(e)?.ver === n) heardVersions.delete(e);
+  if (ver === undefined || heardVersions.get(slug)?.ver === ver) heardVersions.delete(slug);
 }
 //@ chunk-jv307fw4.js:19266-19360 placement
-function maxVersion(e, n) {
-  if (e === undefined || n === undefined) return e ?? n;
-  let r = compareNumericPrefix(e, n);
-  return r !== null && r < 0 ? n : e;
+function maxVersion(a, b) {
+  if (a === undefined || b === undefined) return a ?? b;
+  let cmp = compareNumericPrefix(a, b);
+  return cmp !== null && cmp < 0 ? b : a;
 }
 //@ chunk-jv307fw4.js:34155-35071 placement
 /**
@@ -141,13 +148,13 @@ async function fetchLiveSubscription(
       ...(leanVersion !== undefined && {
         lean: {
           version: leanVersion,
-          mustCarry: (T) =>
-            "subscriptionToken" in T &&
-            "syncToken" in T &&
-            "syncClient" in T &&
-            "subscriptionTokenExp" in T &&
-            "watchTokenRenewEnabled" in T &&
-            "perm" in T,
+          mustCarry: (tool) =>
+            "subscriptionToken" in tool &&
+            "syncToken" in tool &&
+            "syncClient" in tool &&
+            "subscriptionTokenExp" in tool &&
+            "watchTokenRenewEnabled" in tool &&
+            "perm" in tool,
         },
       }),
       credentials,

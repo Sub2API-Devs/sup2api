@@ -8,7 +8,7 @@
  * pieces: chunk-6mt8vha1.js (9)
  * attribution: placement 9
  */
-import { Ar } from "../../runtime/bun-runtime.js";
+import { __export } from "../../runtime/bun-runtime.js";
 import { classifyHookAttachmentSource } from "../utils/hooks/hookAttachmentTypes.js";
 import { findAnsweringStep } from "../plugins/functionHooks/pluginRegister.js";
 import { createEventCallersRef } from "../plugins/functionHooks/eventCatalog.js";
@@ -25,7 +25,7 @@ import { hasModuleHookingSite } from "../plugins/hooksModules/loadedModuleFilter
  */
 var attachmentAnswerCache = {};
 //@ chunk-6mt8vha1.js:11932-12133 placement
-Ar(attachmentAnswerCache, {
+__export(attachmentAnswerCache, {
   answerAuthorOf: () => answerAuthorOf,
   askedAnswer: () => askedAnswer,
   attachmentAnswerOf: () => attachmentAnswerOf,
@@ -37,13 +37,13 @@ Ar(attachmentAnswerCache, {
   resolveAttachments: () => resolveAttachments,
 });
 //@ chunk-6mt8vha1.js:12133-12224 placement
-function answerAuthorOf(p, text) {
-  let answeringStep = findAnsweringStep(p, "text", text);
+function answerAuthorOf(trace, text) {
+  let answeringStep = findAnsweringStep(trace, "text", text);
   return answeringStep === undefined ? "a hook" : `${answeringStep.plugin} (${answeringStep.tier})`;
 }
 //@ chunk-6mt8vha1.js:12224-12344 placement
-function attachmentAnswerOf(p, text) {
-  let text_2 = p.text;
+function attachmentAnswerOf(result, text) {
+  let text_2 = result.text;
   if (text_2 === null)
     return {
       kind: "left-out",
@@ -58,20 +58,20 @@ function attachmentAnswerOf(p, text) {
       };
 }
 //@ chunk-6mt8vha1.js:12344-12411 placement
-var envelopeOf = (attachment, text, e) => ({
+var envelopeOf = (attachment, text, agentId) => ({
   text,
   origin: classifyHookAttachmentSource(attachment),
-  ...(e !== undefined && {
-    agentId: e,
+  ...(agentId !== undefined && {
+    agentId,
   }),
 });
 //@ chunk-6mt8vha1.js:12411-13019 placement
 function attachmentInputOf(message, text, agentId) {
   let { attachment } = message;
-  let m = envelopeOf(attachment, text, agentId);
-  let s = {
+  let envelope = envelopeOf(attachment, text, agentId);
+  let basicInput = {
     type: attachment.type,
-    ...m,
+    ...envelope,
   };
   switch (attachment.type) {
     case "plan_mode": {
@@ -81,74 +81,77 @@ function attachmentInputOf(message, text, agentId) {
         typeof planExists === "boolean"
         ? {
             type: attachment.type,
-            ...m,
+            ...envelope,
             detail: {
               reminder: reminderType,
               planFilePath,
               hasPlan: planExists,
             },
           }
-        : s;
+        : basicInput;
     }
     case "plan_mode_reentry": {
       let { planFilePath } = attachment;
       return typeof planFilePath === "string"
         ? {
             type: attachment.type,
-            ...m,
+            ...envelope,
             detail: {
               planFilePath,
             },
           }
-        : s;
+        : basicInput;
     }
     case "plan_mode_exit": {
       let { planFilePath, planExists } = attachment;
       return typeof planFilePath === "string" && typeof planExists === "boolean"
         ? {
             type: attachment.type,
-            ...m,
+            ...envelope,
             detail: {
               planFilePath,
               hasPlan: planExists,
             },
           }
-        : s;
+        : basicInput;
     }
     default:
       return {
         type: attachment.type,
-        ...m,
+        ...envelope,
       };
   }
 }
 //@ chunk-6mt8vha1.js:13019-13159 placement
-function changeDescribed(p, text) {
-  return p.kind === "left-out"
+function changeDescribed(answer, text) {
+  return answer.kind === "left-out"
     ? `left it out (${text.length} characters)`
-    : `rewrote it (${text.length} -> ${p.text.length} characters)`;
+    : `rewrote it (${text.length} -> ${answer.text.length} characters)`;
 }
 //@ chunk-6mt8vha1.js:13159-13623 placement
-async function askedAnswer(p) {
-  let { message, text, bottom, agentId } = p;
-  let s = message.attachment.type;
-  let i = [];
+async function askedAnswer(input) {
+  let { message, text, bottom, agentId } = input;
+  let attachmentType = message.attachment.type;
+  let trace = [];
   try {
-    let r = await createEventCallersRef({
+    let answeringText = await createEventCallersRef({
       signal: bottom.signal,
       origin: bottom.origin,
-      trace: (c) => {
-        i = c;
+      trace: (steps) => {
+        trace = steps;
       },
     }).prompt.attachment(attachmentInputOf(message, text, agentId));
-    let a = attachmentAnswerOf(r, text);
-    if (a.kind !== "engine")
-      logForDebugging(`prompt.attachment ${s}: ${answerAuthorOf(i, r.text)} ` + changeDescribed(a, text));
-    return a;
+    let answer = attachmentAnswerOf(answeringText, text);
+    if (answer.kind !== "engine")
+      logForDebugging(
+        `prompt.attachment ${attachmentType}: ${answerAuthorOf(trace, answeringText.text)} ` +
+          changeDescribed(answer, text),
+      );
+    return answer;
   } catch (error) {
     if (isAbortError(error) || bottom.signal.aborted) throw error;
     logForDebugging(
-      `prompt.attachment ${s}: the dispatch failed, the text stands as the engine rendered it: ${errorMessage(error)}`,
+      `prompt.attachment ${attachmentType}: the dispatch failed, the text stands as the engine rendered it: ${errorMessage(error)}`,
       {
         level: "error",
       },
@@ -159,48 +162,58 @@ async function askedAnswer(p) {
   }
 }
 //@ chunk-6mt8vha1.js:13623-14038 placement
-async function resolveAttachments(p, bottom, agentId) {
-  let o = [];
-  let m = canShortcutAppend("prompt.attachment");
-  for (let s of p) {
-    if (s.type !== "attachment") continue;
-    if (answerOf(s.uuid) !== undefined) continue;
-    let r = pendingOf(s.uuid);
-    if (r !== undefined) {
-      o.push(
-        r.catch(() => {
+async function resolveAttachments(messages, bottom, agentId) {
+  let pendingResolutions = [];
+  let shortcut = canShortcutAppend("prompt.attachment");
+  for (let message of messages) {
+    if (message.type !== "attachment") continue;
+    if (answerOf(message.uuid) !== undefined) continue;
+    let pending = pendingOf(message.uuid);
+    if (pending !== undefined) {
+      pendingResolutions.push(
+        pending.catch(() => {
           return;
         }),
       );
       continue;
     }
-    let a = attachmentText(s);
+    let text = attachmentText(message);
     if (!(
-      a !== null &&
+      text !== null &&
       hasModuleHookingSite(
         "prompt.attachment",
         {
-          type: s.attachment.type,
+          type: message.attachment.type,
         },
-        m,
+        shortcut,
       )
     )) {
-      settle(s.uuid, {
+      settle(message.uuid, {
         kind: "engine",
       });
       continue;
     }
-    o.push(
+    pendingResolutions.push(
       resolve(
-        s.uuid,
+        message.uuid,
         askedAnswer({
-          message: s,
-          text: a,
+          message,
+          text,
           bottom,
           agentId,
         }),
       ),
     );
   }
-  await Promise.all(o);
+  await Promise.all(pendingResolutions);
 }
+export {
+  answerAuthorOf,
+  askedAnswer,
+  attachmentAnswerOf,
+  attachmentInputOf,
+  changeDescribed,
+  attachmentAnswerCache,
+  envelopeOf,
+  resolveAttachments,
+};

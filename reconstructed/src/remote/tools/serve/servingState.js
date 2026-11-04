@@ -10,6 +10,9 @@
  */
 import { hostname, platform, arch, homedir } from "os";
 import { basename } from "path";
+import { isViolinTableFlagOn } from "../../../tools/PowerShellTool/PowerShellTool.js";
+import { getSettingsWithErrors_2 } from "../../../utils/settings/settings.js";
+import { SandboxManager } from "../../../utils/sandbox/sandbox-adapter.js";
 import {
   deviceSlugOrFallback,
   MAX_MACHINE_NAME_CHARS,
@@ -26,10 +29,23 @@ import { getResolvedBashShellPath } from "../../../utils/shell/shellPaths.js";
 import { MAX_TRUNCATED_LINES } from "../protocolSchemas.js";
 import { warmDeviceSandbox } from "../deviceSandboxPosture.js";
 import { createAdmissionGate } from "../../../services/remoteTools/remoteToolAdmission.js";
-import { isViolinTableFlagOn } from "../../../tools/PowerShellTool/PowerShellTool.js";
-import { getSettingsWithErrors_2 } from "../../../utils/settings/settings.js";
-import { SandboxManager } from "../../../utils/sandbox/sandbox-adapter.js";
 
+//@ chunk-5ghnps9r.js:935-1078 placement = isWindowsSandboxPolicyViolation (0.526)
+/**
+ * （切分错误，权限 UI）当前设置无错误且沙箱未启用时返回 true，此时可提供常驻权限更新。
+ */
+function isWindowsSandboxPolicyViolation() {
+  if (!isViolinTableFlagOn()) return false;
+  try {
+    return (
+      getSettingsWithErrors_2().errors.length === 0 &&
+      !SandboxManager.isSandboxEnabledInSettings() &&
+      !SandboxManager.isSandboxingEnabled()
+    );
+  } catch {
+    return false;
+  }
+}
 //@ chunk-ad2e1aj6.js:4093-5099 placement
 /**
  * 本机对云会话的服务公告：服务状态键、Claude Code 版本、机器名、进程姿态与常驻批准限额。
@@ -61,8 +77,8 @@ var CLAUDE_CODE_VERSION =
     : "unknown";
 //@ chunk-ad2e1aj6.js:5099-5162 placement
 function servingMachineName(getHostname = hostname) {
-  let n = deviceSlugOrFallback(firstLineOf(getHostname(), "."), MAX_MACHINE_NAME_CHARS);
-  return isValidMachineSlug(n) ? n : SERVING_STATE_KEY;
+  let slug = deviceSlugOrFallback(firstLineOf(getHostname(), "."), MAX_MACHINE_NAME_CHARS);
+  return isValidMachineSlug(slug) ? slug : SERVING_STATE_KEY;
 }
 //@ chunk-ad2e1aj6.js:5162-5899 placement
 /**
@@ -81,21 +97,24 @@ function buildServingAnnouncement({
   servedToolNames = [],
   inventory,
 }) {
-  let P = policy.notes();
-  let x = servedShellLabel(servedToolNames);
-  let Y = attestationMode() === "off" ? [] : ["vouched_calls"];
-  let F =
+  let notes = policy.notes();
+  let shellLabel = servedShellLabel(servedToolNames);
+  let attestationCaps = attestationMode() === "off" ? [] : ["vouched_calls"];
+  let standingCaps =
     policy.capabilities?.includes("standing_approvals") === true && isWindowsSandboxPolicyViolation()
       ? ["standing_offered_rules"]
       : [];
-  let D = withSyncAtAttach([...(policy.capabilities ?? []), ...F, ...Y], readyToSyncAtAttach);
+  let capabilities = withSyncAtAttach(
+    [...(policy.capabilities ?? []), ...standingCaps, ...attestationCaps],
+    readyToSyncAtAttach,
+  );
   return {
     name: servingMachineName(getHostname),
     kind: policy.kind,
     platform: platform(),
     arch: arch(),
-    ...(x !== undefined && {
-      shell: x,
+    ...(shellLabel !== undefined && {
+      shell: shellLabel,
     }),
     home_dir: homedir(),
     working_dir: launchDir,
@@ -108,11 +127,11 @@ function buildServingAnnouncement({
     limits: policy.limits,
     claude_code_version: CLAUDE_CODE_VERSION,
     tool_host_interface: MINIMAL_INTERFACE_VERSION,
-    ...(D.length > 0 && {
-      capabilities: D,
+    ...(capabilities.length > 0 && {
+      capabilities,
     }),
-    ...(P && {
-      notes: P,
+    ...(notes && {
+      notes,
     }),
     ...(epoch !== undefined && {
       epoch,
@@ -126,29 +145,29 @@ function buildServingAnnouncement({
   };
 }
 //@ chunk-ad2e1aj6.js:5899-5965 placement
-function withSyncAtAttach(e, n) {
-  let filtered = e.filter((h) => h !== SYNC_AT_ATTACH);
-  return n ? [...filtered, SYNC_AT_ATTACH] : filtered;
+function withSyncAtAttach(capabilities, atAttach) {
+  let filtered = capabilities.filter((capability) => capability !== SYNC_AT_ATTACH);
+  return atAttach ? [...filtered, SYNC_AT_ATTACH] : filtered;
 }
 //@ chunk-ad2e1aj6.js:5965-5989 placement
 var SYNC_AT_ATTACH = "sync_at_attach";
 //@ chunk-ad2e1aj6.js:5989-6142 placement
-function servedShellLabel(servedToolNames) {
+function servedShellLabel(toolNames) {
   if (getPlatform() === "windows")
-    return shellCapabilityTag(shellCapabilityFor(servedToolNames, getResolvedPowerShellEdition()));
-  let n = servedToolNames.includes(BASH_TOOL_NAME) ? getResolvedBashShellPath() : undefined;
-  let s = n === undefined ? "" : basename(n);
-  return s !== "" && s.length <= MAX_TRUNCATED_LINES ? s : undefined;
+    return shellCapabilityTag(shellCapabilityFor(toolNames, getResolvedPowerShellEdition()));
+  let bashPath = toolNames.includes(BASH_TOOL_NAME) ? getResolvedBashShellPath() : undefined;
+  let name = bashPath === undefined ? "" : basename(bashPath);
+  return name !== "" && name.length <= MAX_TRUNCATED_LINES ? name : undefined;
 }
 //@ chunk-ad2e1aj6.js:6142-6197 placement
-function isSyncingFolder(e) {
-  return e === "two_way" || e === "upload_only";
+function isSyncingFolder(projectSync) {
+  return projectSync === "two_way" || projectSync === "upload_only";
 }
 //@ chunk-ad2e1aj6.js:6197-6266 placement
-function folderRelationField(e, n) {
-  return e === "off" && n !== undefined
+function folderRelationField(projectSync, folderRelation) {
+  return projectSync === "off" && folderRelation !== undefined
     ? {
-        folder_relation: n,
+        folder_relation: folderRelation,
       }
     : {};
 }
@@ -160,8 +179,8 @@ var readProcessPosture = async () => {
   };
 };
 //@ chunk-ad2e1aj6.js:6324-6467 placement
-function admissionGateFor(e, options) {
-  switch (e.admission) {
+function admissionGateFor(config, options) {
+  switch (config.admission) {
     case "none":
       return;
     case "device_binding":
@@ -181,26 +200,10 @@ var SESSION_APPROVAL_LIMITS = 1800000;
 var SESSION_APPROVAL_STALE_MS = 300000;
 var MAX_SESSION_APPROVALS = 256;
 var MAX_SESSION_APPROVAL_BATCH = 16;
-//@ chunk-5ghnps9r.js:935-1078 placement = isWindowsSandboxPolicyViolation (0.526)
-/**
- * （切分错误，权限 UI）当前设置无错误且沙箱未启用时返回 true，此时可提供常驻权限更新。
- */
-function isWindowsSandboxPolicyViolation() {
-  if (!isViolinTableFlagOn()) return false;
-  try {
-    return (
-      getSettingsWithErrors_2().errors.length === 0 &&
-      !SandboxManager.isSandboxEnabledInSettings() &&
-      !SandboxManager.isSandboxingEnabled()
-    );
-  } catch {
-    return false;
-  }
-}
 export {
+  isWindowsSandboxPolicyViolation,
   MAX_SESSION_APPROVALS,
   MAX_SESSION_APPROVAL_BATCH,
-  isWindowsSandboxPolicyViolation,
   SESSION_APPROVAL_STALE_MS,
   SESSION_APPROVAL_LIMITS,
   buildServingAnnouncement,

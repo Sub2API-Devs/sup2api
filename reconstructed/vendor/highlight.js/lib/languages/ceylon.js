@@ -5,10 +5,10 @@
  * pieces: chunk-egr0twnb.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:63380-64611 cjs-fingerprint
-var require_ceylon = x(function (cjsExports, cjsModule) {
+var require_ceylon = __commonJS(function (cjsExports, cjsModule) {
   function ceylon(hljs) {
     let KEYWORDS = [
       "assembly",

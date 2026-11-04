@@ -157,15 +157,20 @@ function parseAnsi(text) {
       }
       if (line[i] === "\x1B") {
         if (line[i + 1] === "]") {
-          let f = i + 2;
-          while (f < line.length && line[f] !== "\x07" && !(line[f] === "\x1B" && line[f + 1] === "\\")) f++;
-          i = line[f] === "\x1B" ? f + 2 : f + 1;
+          let oscEnd = i + 2;
+          while (
+            oscEnd < line.length &&
+            line[oscEnd] !== "\x07" &&
+            !(line[oscEnd] === "\x1B" && line[oscEnd + 1] === "\\")
+          )
+            oscEnd++;
+          i = line[oscEnd] === "\x1B" ? oscEnd + 2 : oscEnd + 1;
         } else i++;
         continue;
       }
-      let g = i;
+      let textStart = i;
       while (i < line.length && line[i] !== "\x1B") i++;
-      let spanText = line.slice(g, i);
+      let spanText = line.slice(textStart, i);
       if (spanText)
         spans.push({
           text: spanText,
@@ -274,11 +279,11 @@ function get256Color(index) {
     let i_2 = index - 16;
     let floored = Math.floor(i_2 / 36);
     let floored_2 = Math.floor((i_2 % 36) / 6);
-    let s = i_2 % 6;
+    let blueIndex = i_2 % 6;
     return {
       r: floored === 0 ? 0 : 55 + floored * 40,
       g: floored_2 === 0 ? 0 : 55 + floored_2 * 40,
-      b: s === 0 ? 0 : 55 + s * 40,
+      b: blueIndex === 0 ? 0 : 55 + blueIndex * 40,
     };
   }
   let gray = (index - 232) * 10 + 8;

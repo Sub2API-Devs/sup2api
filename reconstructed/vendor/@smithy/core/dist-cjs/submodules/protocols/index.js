@@ -5,7 +5,7 @@
  * pieces: chunk-wjd9n4jx.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../../../runtime/bun-runtime.js";
 import { require_util_stream } from "../../../../util-stream/dist-cjs/index.js";
 import { require_schema } from "../schema/index.js";
 import { require_serde } from "../serde/index.js";
@@ -14,12 +14,12 @@ import { base64Module } from "../../../../../@aws-sdk/credential-provider-web-id
 import { require_util_utf8 } from "../../../../util-utf8/dist-cjs/index.js";
 
 //@ chunk-wjd9n4jx.js:35068-49122 cjs-fingerprint
-var require_protocols = x(function (cjsExports) {
+var require_protocols = __commonJS(function (cjsExports) {
   var Uint8ArrayBlobAdapter = require_util_stream();
   var NormalizedSchema = require_schema();
-  var T = require_serde();
+  var serde = require_serde();
   var HttpRequest = require_protocol_http();
-  var fe = base64Module();
+  var base64 = base64Module();
   var toUtf8 = require_util_utf8();
   var collectBody = async (streamBody = new Uint8Array(), context) => {
     if (streamBody instanceof Uint8Array)
@@ -80,18 +80,20 @@ var require_protocols = x(function (cjsExports) {
         return request;
       }
     }
-    setHostPrefix(request, operationSchema, r) {
+    setHostPrefix(request, operationSchema, input) {
       let inputNs = NormalizedSchema.NormalizedSchema.of(operationSchema.input);
       let opTraits = NormalizedSchema.translateTraits(operationSchema.traits ?? {});
       if (opTraits.endpoint) {
         let hostPrefix = opTraits.endpoint?.[0];
         if (typeof hostPrefix === "string") {
-          let filtered = [...inputNs.structIterator()].filter(([, o]) => o.getMergedTraits().hostLabel);
-          for (let [o] of filtered) {
-            let replacement = r[o];
+          let filtered = [...inputNs.structIterator()].filter(
+            ([, memberSchema]) => memberSchema.getMergedTraits().hostLabel,
+          );
+          for (let [memberName] of filtered) {
+            let replacement = input[memberName];
             if (typeof replacement !== "string")
-              throw Error(`@smithy/core/schema - ${o} in input must be a string as hostLabel.`);
-            hostPrefix = hostPrefix.replace(`{${o}}`, replacement);
+              throw Error(`@smithy/core/schema - ${memberName} in input must be a string as hostLabel.`);
+            hostPrefix = hostPrefix.replace(`{${memberName}}`, replacement);
           }
           request.hostname = hostPrefix + request.hostname;
         }
@@ -123,7 +125,7 @@ var require_protocols = x(function (cjsExports) {
       });
     }
     async loadEventStreamCapability() {
-      let { EventStreamSerde } = await import("./chunk-w1q1hkg4.js");
+      let { EventStreamSerde } = await import("../event-streams/EventStreamSerde.lazy.js");
       return new EventStreamSerde({
         marshaller: this.getEventStreamMarshaller(),
         serializer: this.serializer,
@@ -149,7 +151,7 @@ var require_protocols = x(function (cjsExports) {
   }
   class HttpBindingProtocol extends HttpProtocol {
     async serializeRequest(operationSchema, _input, context) {
-      let s = {
+      let input = {
         ...(_input ?? {}),
       };
       let serializer = this.serializer;
@@ -172,7 +174,7 @@ var require_protocols = x(function (cjsExports) {
       });
       if (endpoint) {
         this.updateServiceEndpoint(request, endpoint);
-        this.setHostPrefix(request, operationSchema, s);
+        this.setHostPrefix(request, operationSchema, input);
         let opTraits = NormalizedSchema.translateTraits(operationSchema.traits);
         if (opTraits.http) {
           request.method = opTraits.http[0];
@@ -185,14 +187,14 @@ var require_protocols = x(function (cjsExports) {
       }
       for (let [memberName, memberNs] of ns.structIterator()) {
         let memberTraits = memberNs.getMergedTraits() ?? {};
-        let inputMemberValue = s[memberName];
+        let inputMemberValue = input[memberName];
         if (inputMemberValue == null && !memberNs.isIdempotencyToken()) continue;
         if (memberTraits.httpPayload) {
           if (memberNs.isStreaming()) {
             if (memberNs.isStructSchema()) {
-              if (s[memberName])
+              if (input[memberName])
                 payload = await this.serializeEventStream({
-                  eventStream: s[memberName],
+                  eventStream: input[memberName],
                   requestSchema: ns,
                 });
             } else payload = inputMemberValue;
@@ -200,7 +202,7 @@ var require_protocols = x(function (cjsExports) {
             serializer.write(memberNs, inputMemberValue);
             payload = serializer.flush();
           }
-          delete s[memberName];
+          delete input[memberName];
         } else if (memberTraits.httpLabel) {
           serializer.write(memberNs, inputMemberValue);
           let replacement = serializer.flush();
@@ -211,11 +213,11 @@ var require_protocols = x(function (cjsExports) {
             );
           else if (request.path.includes(`{${memberName}}`))
             request.path = request.path.replace(`{${memberName}}`, extendedEncodeURIComponent(replacement));
-          delete s[memberName];
+          delete input[memberName];
         } else if (memberTraits.httpHeader) {
           serializer.write(memberNs, inputMemberValue);
           headers[memberTraits.httpHeader.toLowerCase()] = String(serializer.flush());
-          delete s[memberName];
+          delete input[memberName];
         } else if (typeof memberTraits.httpPrefixHeaders === "string") {
           for (let [key, value] of Object.entries(inputMemberValue)) {
             let amalgam = memberTraits.httpPrefixHeaders + key;
@@ -230,14 +232,14 @@ var require_protocols = x(function (cjsExports) {
             );
             headers[amalgam.toLowerCase()] = serializer.flush();
           }
-          delete s[memberName];
+          delete input[memberName];
         } else if (memberTraits.httpQuery || memberTraits.httpQueryParams) {
           this.serializeQuery(memberNs, inputMemberValue, query);
-          delete s[memberName];
+          delete input[memberName];
         } else hasNonHttpBindingMember = true;
       }
-      if (hasNonHttpBindingMember && s) {
-        serializer.write(schema, s);
+      if (hasNonHttpBindingMember && input) {
+        serializer.write(schema, input);
         payload = serializer.flush();
       }
       request.headers = headers;
@@ -300,8 +302,8 @@ var require_protocols = x(function (cjsExports) {
       if (nonHttpBindingMembers.length) {
         let bytes = await collectBody(response.body, context);
         if (bytes.byteLength > 0) {
-          let c = await deserializer.read(ns, bytes);
-          for (let member of nonHttpBindingMembers) dataObject[member] = c[member];
+          let deserialized = await deserializer.read(ns, bytes);
+          for (let member of nonHttpBindingMembers) dataObject[member] = deserialized[member];
         }
       } else if (nonHttpBindingMembers.discardResponseBody) await collectBody(response.body, context);
       dataObject.$metadata = this.deserializeMetadata(response);
@@ -339,8 +341,8 @@ var require_protocols = x(function (cjsExports) {
               headerListValueSchema.getMergedTraits().httpHeader = key;
               let sections;
               if (headerListValueSchema.isTimestampSchema() && headerListValueSchema.getSchema() === 4)
-                sections = T.splitEvery(value, ",", 2);
-              else sections = T.splitHeader(value);
+                sections = serde.splitEvery(value, ",", 2);
+              else sections = serde.splitHeader(value);
               let list = [];
               for (let section of sections)
                 list.push(await deserializer.read(headerListValueSchema, section.trim()));
@@ -363,7 +365,7 @@ var require_protocols = x(function (cjsExports) {
     }
   }
   class RpcProtocol extends HttpProtocol {
-    async serializeRequest(operationSchema, t, context) {
+    async serializeRequest(operationSchema, input, context) {
       let serializer = this.serializer;
       let query = {};
       let headers = {};
@@ -383,29 +385,29 @@ var require_protocols = x(function (cjsExports) {
       });
       if (endpoint) {
         this.updateServiceEndpoint(request, endpoint);
-        this.setHostPrefix(request, operationSchema, t);
+        this.setHostPrefix(request, operationSchema, input);
       }
-      let input = {
-        ...t,
+      let input_2 = {
+        ...input,
       };
-      if (t) {
+      if (input) {
         let eventStreamMember = ns.getEventStreamMember();
         if (eventStreamMember) {
-          if (input[eventStreamMember]) {
+          if (input_2[eventStreamMember]) {
             let initialRequest = {};
             for (let [memberName, memberSchema] of ns.structIterator())
-              if (memberName !== eventStreamMember && input[memberName]) {
-                serializer.write(memberSchema, input[memberName]);
+              if (memberName !== eventStreamMember && input_2[memberName]) {
+                serializer.write(memberSchema, input_2[memberName]);
                 initialRequest[memberName] = serializer.flush();
               }
             payload = await this.serializeEventStream({
-              eventStream: input[eventStreamMember],
+              eventStream: input_2[eventStreamMember],
               requestSchema: ns,
               initialRequest,
             });
           }
         } else {
-          serializer.write(schema, input);
+          serializer.write(schema, input_2);
           payload = serializer.flush();
         }
       }
@@ -468,7 +470,7 @@ var require_protocols = x(function (cjsExports) {
     } else throw Error("No value provided for input HTTP label: " + memberName + ".");
     return resolvedPath;
   };
-  function Mi(input, context) {
+  function requestBuilder(input, context) {
     return new RequestBuilder(input, context);
   }
   class RequestBuilder {
@@ -557,16 +559,17 @@ var require_protocols = x(function (cjsExports) {
     }
     read(_schema, data) {
       let ns = NormalizedSchema.NormalizedSchema.of(_schema);
-      if (ns.isListSchema()) return T.splitHeader(data).map((item) => this.read(ns.getValueSchema(), item));
-      if (ns.isBlobSchema()) return (this.serdeContext?.base64Decoder ?? fe.fromBase64)(data);
+      if (ns.isListSchema())
+        return serde.splitHeader(data).map((item) => this.read(ns.getValueSchema(), item));
+      if (ns.isBlobSchema()) return (this.serdeContext?.base64Decoder ?? base64.fromBase64)(data);
       if (ns.isTimestampSchema())
         switch (determineTimestampFormat(ns, this.settings)) {
           case 5:
-            return T._parseRfc3339DateTimeWithOffset(data);
+            return serde._parseRfc3339DateTimeWithOffset(data);
           case 6:
-            return T._parseRfc7231DateTime(data);
+            return serde._parseRfc7231DateTime(data);
           case 7:
-            return T._parseEpochTimestamp(data);
+            return serde._parseEpochTimestamp(data);
           default:
             console.warn("Missing timestamp format, parsing value with Date constructor:", data);
             return new Date(data);
@@ -577,19 +580,19 @@ var require_protocols = x(function (cjsExports) {
         if (mediaType) {
           if (ns.getMergedTraits().httpHeader) intermediateValue = this.base64ToUtf8(intermediateValue);
           if (mediaType === "application/json" || mediaType.endsWith("+json"))
-            intermediateValue = T.LazyJsonString.from(intermediateValue);
+            intermediateValue = serde.LazyJsonString.from(intermediateValue);
           return intermediateValue;
         }
       }
       if (ns.isNumericSchema()) return Number(data);
       if (ns.isBigIntegerSchema()) return BigInt(data);
-      if (ns.isBigDecimalSchema()) return new T.NumericValue(data, "bigDecimal");
+      if (ns.isBigDecimalSchema()) return new serde.NumericValue(data, "bigDecimal");
       if (ns.isBooleanSchema()) return String(data).toLowerCase() === "true";
       return data;
     }
     base64ToUtf8(base64String) {
       return (this.serdeContext?.utf8Encoder ?? toUtf8.toUtf8)(
-        (this.serdeContext?.base64Decoder ?? fe.fromBase64)(base64String),
+        (this.serdeContext?.base64Decoder ?? base64.fromBase64)(base64String),
       );
     }
   }
@@ -650,7 +653,7 @@ var require_protocols = x(function (cjsExports) {
                 this.stringBuffer = value.toISOString().replace(".000Z", "Z");
                 break;
               case 6:
-                this.stringBuffer = T.dateToUtcString(value);
+                this.stringBuffer = serde.dateToUtcString(value);
                 break;
               case 7:
                 this.stringBuffer = String(value.getTime() / 1000);
@@ -662,7 +665,7 @@ var require_protocols = x(function (cjsExports) {
             return;
           }
           if (ns.isBlobSchema() && "byteLength" in value) {
-            this.stringBuffer = (this.serdeContext?.base64Encoder ?? fe.toBase64)(value);
+            this.stringBuffer = (this.serdeContext?.base64Encoder ?? base64.toBase64)(value);
             return;
           }
           if (ns.isListSchema() && Array.isArray(value)) {
@@ -672,7 +675,7 @@ var require_protocols = x(function (cjsExports) {
               let headerItem = this.flush();
               let serialized = ns.getValueSchema().isTimestampSchema()
                 ? headerItem
-                : T.quoteHeader(headerItem);
+                : serde.quoteHeader(headerItem);
               if (buffer !== "") buffer += ", ";
               buffer += serialized;
             }
@@ -686,9 +689,9 @@ var require_protocols = x(function (cjsExports) {
           let intermediateValue = value;
           if (mediaType) {
             if (mediaType === "application/json" || mediaType.endsWith("+json"))
-              intermediateValue = T.LazyJsonString.from(intermediateValue);
+              intermediateValue = serde.LazyJsonString.from(intermediateValue);
             if (ns.getMergedTraits().httpHeader) {
-              this.stringBuffer = (this.serdeContext?.base64Encoder ?? fe.toBase64)(
+              this.stringBuffer = (this.serdeContext?.base64Encoder ?? base64.toBase64)(
                 intermediateValue.toString(),
               );
               return;
@@ -697,7 +700,7 @@ var require_protocols = x(function (cjsExports) {
           this.stringBuffer = value;
           break;
         default:
-          if (ns.isIdempotencyToken()) this.stringBuffer = T.generateIdempotencyToken();
+          if (ns.isIdempotencyToken()) this.stringBuffer = serde.generateIdempotencyToken();
           else this.stringBuffer = String(value);
       }
     }
@@ -754,7 +757,7 @@ var require_protocols = x(function (cjsExports) {
   cjsExports.collectBody = collectBody;
   cjsExports.determineTimestampFormat = determineTimestampFormat;
   cjsExports.extendedEncodeURIComponent = extendedEncodeURIComponent;
-  cjsExports.requestBuilder = Mi;
+  cjsExports.requestBuilder = requestBuilder;
   cjsExports.resolvedPath = resolvedPath;
 });
 export { require_protocols };

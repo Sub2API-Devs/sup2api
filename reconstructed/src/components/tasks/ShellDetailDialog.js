@@ -8,7 +8,13 @@
  * pieces: chunk-18hwfzwa.js (5)
  * attribution: placement 1, fingerprint 4
  */
-import { init_react_production, y, eJ, fo, Qr } from "../../../vendor/react/cjs/react.production.js";
+import {
+  init_react_production,
+  useState,
+  useDeferredValue,
+  suspenseTypeExport,
+  use,
+} from "../../../vendor/react/cjs/react.production.js";
 import {
   jsxProd_default,
   Fragment,
@@ -16,7 +22,7 @@ import {
 } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Text, Box } from "../../ink/components/Text.js";
 import { tailOutputOfTask } from "../../utils/task/diskOutput.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { useTerminalSize } from "../../hooks/useTerminalSize.js";
 import { useInterval } from "../../ink/components/Input.js";
 import { useConfirmationKeys } from "../ConfirmationPrompt.js";
@@ -27,9 +33,13 @@ import { FlexDirectionRow } from "../design-system/Table.js";
 import { Dialog } from "../design-system/Dialog.js";
 import { FocusColumn } from "../design-system/FocusColumn.js";
 import { HintText } from "../design-system/HintText.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-18hwfzwa.js:721881-721885 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:721881", () => {
+  init_react_production();
+});
 //@ chunk-18hwfzwa.js:721885-721954 fingerprint = _temp2 (1)
 function renderOutputLine(line_0, i_1) {
   return jsxProd_default(
@@ -61,7 +71,7 @@ async function getTaskOutput(shell) {
  * 后台 shell / monitor 详情：命令、运行时长、输出尾部（截断行数），可停止。
  */
 function ShellDetailDialog(props) {
-  let $ = w(51);
+  let $ = useMemoCache(51);
   let { shell, onDone, onKillShell, onBack } = props;
   let { columns } = useTerminalSize();
   let t1;
@@ -70,15 +80,15 @@ function ShellDetailDialog(props) {
     $[0] = shell;
     $[1] = t1;
   } else t1 = $[1];
-  let [outputPromise, setOutputPromise] = y(t1);
-  let deferredOutputPromise = eJ(outputPromise);
-  let Xe;
+  let [outputPromise, setOutputPromise] = useState(t1);
+  let deferredOutputPromise = useDeferredValue(outputPromise);
+  let refreshOutput;
   if ($[2] !== shell) {
-    Xe = () => setOutputPromise(getTaskOutput(shell));
+    refreshOutput = () => setOutputPromise(getTaskOutput(shell));
     $[2] = shell;
-    $[3] = Xe;
-  } else Xe = $[3];
-  useInterval(Xe, shell.status === "running" ? 1000 : null);
+    $[3] = refreshOutput;
+  } else refreshOutput = $[3];
+  useInterval(refreshOutput, shell.status === "running" ? 1000 : null);
   let t4;
   if ($[4] !== onDone) {
     t4 = () =>
@@ -88,21 +98,21 @@ function ShellDetailDialog(props) {
     $[4] = onDone;
     $[5] = t4;
   } else t4 = $[5];
-  let kt = t4;
+  let handleClose = t4;
   const onKill = shell.status === "running" ? onKillShell : undefined;
-  let It;
-  if ($[6] !== kt || $[7] !== onBack || $[8] !== onKill) {
-    It = {
-      onClose: kt,
+  let confirmationHandlers;
+  if ($[6] !== handleClose || $[7] !== onBack || $[8] !== onKill) {
+    confirmationHandlers = {
+      onClose: handleClose,
       onBack,
       onKill,
     };
-    $[6] = kt;
+    $[6] = handleClose;
     $[7] = onBack;
     $[8] = onKill;
-    $[9] = It;
-  } else It = $[9];
-  let handleKeyDown = useConfirmationKeys(It);
+    $[9] = confirmationHandlers;
+  } else confirmationHandlers = $[9];
+  let handleKeyDown = useConfirmationKeys(confirmationHandlers);
   let isMonitor = shell.kind === "monitor";
   let t8;
   if ($[10] !== shell.command) {
@@ -261,7 +271,7 @@ function ShellDetailDialog(props) {
       flexDirection: "column",
       children: [
         t22,
-        jsxProd_default(fo, {
+        jsxProd_default(suspenseTypeExport, {
           fallback,
           children: jsxProd_default(ShellOutputContent, {
             outputPromise: deferredOutputPromise,
@@ -275,15 +285,15 @@ function ShellDetailDialog(props) {
     $[41] = t24;
   } else t24 = $[41];
   let children_2;
-  if ($[42] !== kt || $[43] !== inputGuide || $[44] !== t21 || $[45] !== t24 || $[46] !== title) {
+  if ($[42] !== handleClose || $[43] !== inputGuide || $[44] !== t21 || $[45] !== t24 || $[46] !== title) {
     children_2 = jsxProd_default_2(Dialog, {
       title,
-      onCancel: kt,
+      onCancel: handleClose,
       color: "background",
       inputGuide,
       children: [t21, t24],
     });
-    $[42] = kt;
+    $[42] = handleClose;
     $[43] = inputGuide;
     $[44] = t21;
     $[45] = t24;
@@ -304,9 +314,9 @@ function ShellDetailDialog(props) {
 }
 //@ chunk-18hwfzwa.js:725128-726327 fingerprint = ShellOutputContent (0.835)
 function ShellOutputContent(props) {
-  let $ = w(19);
+  let $ = useMemoCache(19);
   let { outputPromise, columns } = props;
-  let { content, bytesTotal } = Qr(outputPromise);
+  let { content, bytesTotal } = use(outputPromise);
   if (!content) {
     let t1;
     if ($[0] === MEMO_CACHE_SENTINEL) {

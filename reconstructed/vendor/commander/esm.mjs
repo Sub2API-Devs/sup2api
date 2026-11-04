@@ -5,11 +5,11 @@
  * pieces: chunk-b7dyevzy.js (1)
  * attribution: esm-layout 1
  */
-import { Re } from "../../runtime/bun-runtime.js";
+import { __toESM } from "../../runtime/bun-runtime.js";
 import { require_commander_2 } from "./index.js";
 
 //@ chunk-b7dyevzy.js:35561-35767 esm-layout
-var program = Re(require_commander_2(), 1);
+var program = __toESM(require_commander_2(), 1);
 var {
   program: program_2,
   createCommand,
@@ -23,4 +23,4 @@ var {
   Option,
   Help,
 } = program.default;
-export { Option, Command, InvalidArgumentError, Help };
+export { Command, Option, InvalidArgumentError, Help };

@@ -75,6 +75,7 @@ import { formatFileSize } from "../../utils/format.js";
 import { withTimeout } from "../../utils/sleep.js";
 import { getOrgMemoryAuthorization } from "../orgMemory/credential.js";
 import { HostScoped } from "../../utils/hostScoped.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-s61vbvea.js:173260-173312 placement
 /**
@@ -101,27 +102,36 @@ function createWatcherState() {
   };
 }
 //@ chunk-s61vbvea.js:173525-173625 placement
-var DEBOUNCE_MS_2 = 1000;
-var MAX_OFF_RETRIES = 10;
-var BACKOFF_FACTOR = 2;
-var MIN_BACKOFF_MINUTES = 1;
-var MAX_BACKOFF_MINUTES = 60;
-var OFF_RETRY_JITTER_MS = 5000;
-var PERMANENT_FAILURE_CODES = {
-  team: new Set(["http_413", "store_full"]),
-  user: new Set(),
-};
+var DEBOUNCE_MS_2; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var MAX_OFF_RETRIES;
+var BACKOFF_FACTOR;
+var MIN_BACKOFF_MINUTES;
+var MAX_BACKOFF_MINUTES;
+var OFF_RETRY_JITTER_MS;
+var PERMANENT_FAILURE_CODES;
+deferInit("chunk-s61vbvea.js:173525", () => {
+  DEBOUNCE_MS_2 = 1000;
+  MAX_OFF_RETRIES = 10;
+  BACKOFF_FACTOR = 2;
+  MIN_BACKOFF_MINUTES = 1;
+  MAX_BACKOFF_MINUTES = 60;
+  OFF_RETRY_JITTER_MS = 5000;
+  PERMANENT_FAILURE_CODES = {
+    team: new Set(["http_413", "store_full"]),
+    user: new Set(),
+  };
+});
 //@ chunk-s61vbvea.js:173625-173662 placement
 /**
  * 判断某类失败码是否为永久失败。
  */
-function isPermanentFailureCode(e, suppressedReason) {
-  return PERMANENT_FAILURE_CODES[e].has(suppressedReason);
+function isPermanentFailureCode(scope, suppressedReason) {
+  return PERMANENT_FAILURE_CODES[scope].has(suppressedReason);
 }
 //@ chunk-s61vbvea.js:173662-173847 placement = isTeamSubscriber (1)
-function isTeamSubscriber(e) {
+function isTeamSubscriber(path) {
   let autoMemPath = getAutoMemPath();
-  let replaced = relative(autoMemPath, e).replaceAll(sep, "/");
+  let replaced = relative(autoMemPath, path).replaceAll(sep, "/");
   if (replaced === "" || replaced.startsWith("..")) return null;
   let parts = replaced.split("/");
   if (normalizeKeySegment(parts[0]) === "team") return "team";
@@ -139,8 +149,8 @@ function isMultiStoreSyncOn() {
 /**
  * 是否有存储因依据不可用而失效。
  */
-function hasUnusableStore(e) {
-  return e.stores.some((store) => isUsableSuppressedReason(store.basisUnusable));
+function hasUnusableStore(storeState) {
+  return storeState.stores.some((store) => isUsableSuppressedReason(store.basisUnusable));
 }
 //@ chunk-s61vbvea.js:173936-173980 placement
 /**
@@ -159,14 +169,16 @@ var SYNC_FAILURE_CODE_RE =
 /**
  * 判断记忆目录中的路径是否应被同步忽略：临时/暂存文件、team 下的特定前缀，及其他被排除的键。
  */
-function isIgnoredMemoryPath(e, n = {}) {
-  let replaced = relative(getAutoMemPath(), e).replaceAll(sep, "/");
+function isIgnoredMemoryPath(filePath, options = {}) {
+  let replaced = relative(getAutoMemPath(), filePath).replaceAll(sep, "/");
   if (replaced === "" || replaced.startsWith("..")) return false;
   let parts = replaced.split("/");
-  let last = parts.at(-1);
-  if (n.stats?.isFile() === true && isMemoryDocumentKey(last)) return true;
+  let fileName = parts.at(-1);
+  if (options.stats?.isFile() === true && isMemoryDocumentKey(fileName)) return true;
   if (normalizeKeySegment(parts[0]) === "team")
-    return last.startsWith(MEMORY_SYNC_DIR) || (n.backendStaging === true && isHashTempFile(last));
+    return (
+      fileName.startsWith(MEMORY_SYNC_DIR) || (options.backendStaging === true && isHashTempFile(fileName))
+    );
   return isExcludedMemoryKey(replaced);
 }
 //@ chunk-s61vbvea.js:174663-198608 placement
@@ -196,11 +208,11 @@ class MemoryWatcher {
   firstStorePullOwed = false;
   firstStartAtMs = null;
   startHeldByPolicy = false;
-  reset(e) {
+  reset(options) {
     this.watcher = null;
-    this.storeSkillConfigs = e?.storeSkillConfigs ?? null;
-    this.storageV5 = e?.storageV5;
-    this.credentials = e?.credentials;
+    this.storeSkillConfigs = options?.storeSkillConfigs ?? null;
+    this.storageV5 = options?.storageV5;
+    this.credentials = options?.credentials;
     if (this.resyncTimer) {
       clearTimeout(this.resyncTimer);
       this.resyncTimer = null;
@@ -210,13 +222,13 @@ class MemoryWatcher {
     this.clearPolicyVerdictWait();
     this.firstStartAtMs = null;
     this.startHeldByPolicy = false;
-    this.started = e?.skipWatcher ?? false;
-    this.multiStoreState = e?.multiStoreState ?? null;
-    this.userMultiStoreState = e?.userMultiStoreState ?? null;
+    this.started = options?.skipWatcher ?? false;
+    this.multiStoreState = options?.multiStoreState ?? null;
+    this.userMultiStoreState = options?.userMultiStoreState ?? null;
     this.scopeStates.team = createWatcherState();
-    this.scopeStates.team.lastSyncCompletedAt = e?.teamLastSyncCompletedAt ?? null;
+    this.scopeStates.team.lastSyncCompletedAt = options?.teamLastSyncCompletedAt ?? null;
     this.scopeStates.user = createWatcherState();
-    this.scopeStates.user.lastSyncCompletedAt = e?.userLastSyncCompletedAt ?? null;
+    this.scopeStates.user.lastSyncCompletedAt = options?.userLastSyncCompletedAt ?? null;
   }
   refreshStoreSkills() {
     if (this.storeSkillConfigs === null) return;
@@ -226,30 +238,31 @@ class MemoryWatcher {
       this.storageV5,
     );
   }
-  async executePush(e, n = "watch") {
-    let r = this.scopeStates[e];
-    let s = e === "team" ? this.multiStoreState : this.userMultiStoreState;
-    if (!s) return;
-    r.pushInProgress = true;
-    r.backoffRetryAtMs = null;
-    let changeSeq = r.changeSeq;
+  async executePush(scope, trigger = "watch") {
+    let scopeState = this.scopeStates[scope];
+    let storeState = scope === "team" ? this.multiStoreState : this.userMultiStoreState;
+    if (!storeState) return;
+    scopeState.pushInProgress = true;
+    scopeState.backoffRetryAtMs = null;
+    let changeSeq = scopeState.changeSeq;
     try {
-      let stores = s.stores;
-      let S = new Set(
+      let stores = storeState.stores;
+      let suppressedMounts = new Set(
         stores.filter((store) => store.suppressedReason !== null).map((store) => store.mountName),
       );
-      let w = await syncTeamMemoryOnce(s, n, this.storageV5, r.offRetries);
+      let syncResult = await syncTeamMemoryOnce(storeState, trigger, this.storageV5, scopeState.offRetries);
       this.refreshStoreSkills();
-      this.enqueueUnsavedReadOnlyNotices(s, w);
-      let values = Object.values(w.pushes);
-      let any = values.some((G) => !G.success);
+      this.enqueueUnsavedReadOnlyNotices(storeState, syncResult);
+      let values = Object.values(syncResult.pushes);
+      let any = values.some((push) => !push.success);
       let any_2 = stores.some((store) => store.suppressedReason !== null);
-      let any_3 = stores.some((store) => w.pushes[store.mountName]?.backedOff === true);
-      if (!any && !any_2 && !any_3 && r.changeSeq === changeSeq) r.hasPendingChanges = false;
-      this.noteBackoffWake(r, stores, w);
-      if (e === "team") {
+      let any_3 = stores.some((store) => syncResult.pushes[store.mountName]?.backedOff === true);
+      if (!any && !any_2 && !any_3 && scopeState.changeSeq === changeSeq)
+        scopeState.hasPendingChanges = false;
+      this.noteBackoffWake(scopeState, stores, syncResult);
+      if (scope === "team") {
         for (let store of stores)
-          if (store.suppressedReason !== null && !S.has(store.mountName))
+          if (store.suppressedReason !== null && !suppressedMounts.has(store.mountName))
             logEvent("tengu_team_mem_push_suppressed", {
               reason: sanitizedMachineReasonForTelemetry(store.suppressedReason),
               multistore: true,
@@ -258,131 +271,140 @@ class MemoryWatcher {
               expiring: (store.suppressedUntilMs ?? null) !== null,
             });
       }
-      if (getMemoryPushDeleteMode() === "corroborate" && values.some((G) => (G.deletesDeferred ?? 0) > 0))
-        this.armDeleteConfirmTimer(e);
+      if (
+        getMemoryPushDeleteMode() === "corroborate" &&
+        values.some((push) => (push.deletesDeferred ?? 0) > 0)
+      )
+        this.armDeleteConfirmTimer(scope);
     } catch (error) {
-      logForDebugging(`memory-watcher[${e}]: multi-store sync error: ${errorMessage(error)}`, {
+      logForDebugging(`memory-watcher[${scope}]: multi-store sync error: ${errorMessage(error)}`, {
         level: "warn",
       });
     } finally {
-      noteStorePulls(s.stores);
-      r.lastSyncCompletedAt = Date.now();
-      r.pushInProgress = false;
-      r.currentPushPromise = null;
+      noteStorePulls(storeState.stores);
+      scopeState.lastSyncCompletedAt = Date.now();
+      scopeState.pushInProgress = false;
+      scopeState.currentPushPromise = null;
       this.armResyncTimer();
     }
   }
-  massDeleteHoldExposure(e) {
+  massDeleteHoldExposure(scope) {
     return detectMassDelete(
       [...(this.multiStoreState?.stores ?? []), ...(this.userMultiStoreState?.stores ?? [])],
-      e,
+      scope,
       this.storageV5,
     );
   }
-  enqueueUnsavedReadOnlyNotices(e, n) {
-    for (let store of e.stores) {
-      let unsavedReadOnlyPaths = n.pushes[store.mountName]?.unsavedReadOnlyPaths ?? [];
+  enqueueUnsavedReadOnlyNotices(storeState, syncResult) {
+    for (let store of storeState.stores) {
+      let unsavedReadOnlyPaths = syncResult.pushes[store.mountName]?.unsavedReadOnlyPaths ?? [];
       if (unsavedReadOnlyPaths.length === 0) continue;
       let sliced = unsavedReadOnlyPaths.slice(0, MAX_RECORDS_IN_LIST);
-      let y = unsavedReadOnlyPaths.length - sliced.length;
-      let S = this.writableDirsRemedy(store);
+      let leftOutCount = unsavedReadOnlyPaths.length - sliced.length;
+      let remedy = this.writableDirsRemedy(store);
       enqueueMemorySkillLoad(
-        `${unsavedReadOnlyPaths.length} file(s) under ${escapeForTag(store.mountDir)} were NOT saved to shared memory: that store is read-only in this session, so they exist only in this machine's local copy, are not visible to other sessions or people, and are discarded when a hosted session ends: ${sliced.map(quoteStoreName).join(", ")}${y > 0 ? ` (+${y} more)` : ""}. ` +
-          (S !== null
-            ? `To keep content you wrote, ${S}. If you told the user this was saved or remembered, tell them plainly that it was not shared and where you re-saved it (describe the memory location in plain terms, not as a filesystem path).`
+        `${unsavedReadOnlyPaths.length} file(s) under ${escapeForTag(store.mountDir)} were NOT saved to shared memory: that store is read-only in this session, so they exist only in this machine's local copy, are not visible to other sessions or people, and are discarded when a hosted session ends: ${sliced.map(quoteStoreName).join(", ")}${leftOutCount > 0 ? ` (+${leftOutCount} more)` : ""}. ` +
+          (remedy !== null
+            ? `To keep content you wrote, ${remedy}. If you told the user this was saved or remembered, tell them plainly that it was not shared and where you re-saved it (describe the memory location in plain terms, not as a filesystem path).`
             : "There is no writable memory store in this session. If you told the user this was saved or remembered, tell them plainly that it was not."),
       );
     }
   }
-  writableDirsRemedy(e) {
+  writableDirsRemedy(store) {
     let mapped = [this.multiStoreState, this.userMultiStoreState]
-      .flatMap((h) => h?.stores ?? [])
-      .filter((h) => (e.scope === "team" || h.scope === "user") && canPushStore(h) && !isStoreSuppressed(h))
-      .sort((h, y) => +(y.scope === e.scope) - +(h.scope === e.scope))
-      .map((h) => escapeForTag(join(h.mountDir, h.writeDir ?? "")));
+      .flatMap((state) => state?.stores ?? [])
+      .filter(
+        (candidateStore) =>
+          (store.scope === "team" || candidateStore.scope === "user") &&
+          canPushStore(candidateStore) &&
+          !isStoreSuppressed(candidateStore),
+      )
+      .sort((left, right) => +(right.scope === store.scope) - +(left.scope === store.scope))
+      .map((store) => escapeForTag(join(store.mountDir, store.writeDir ?? "")));
     if (mapped.length === 0) return null;
-    let r = escapeForTag(e.mountDir);
-    let any = mapped.some((h) => {
-      let y = relative(h, r);
-      return y === "" || (!y.startsWith("..") && !isAbsolute(y));
+    let ownDir = escapeForTag(store.mountDir);
+    let any = mapped.some((dir) => {
+      let relPath = relative(dir, ownDir);
+      return relPath === "" || (!relPath.startsWith("..") && !isAbsolute(relPath));
     });
-    return `save it under ${mapped.join(" or ")} instead${any ? ` (anywhere except under ${r})` : ""}`;
+    return `save it under ${mapped.join(" or ")} instead${any ? ` (anywhere except under ${ownDir})` : ""}`;
   }
-  schedulePush(e) {
-    let n = this.scopeStates[e];
-    n.hasPendingChanges = true;
-    n.changeSeq++;
-    if (n.debounceTimer) clearTimeout(n.debounceTimer);
-    n.debounceTimer = setTimeout((r) => this.firePush(r), DEBOUNCE_MS, e);
+  schedulePush(scope) {
+    let scopeState = this.scopeStates[scope];
+    scopeState.hasPendingChanges = true;
+    scopeState.changeSeq++;
+    if (scopeState.debounceTimer) clearTimeout(scopeState.debounceTimer);
+    scopeState.debounceTimer = setTimeout((scope) => this.firePush(scope), DEBOUNCE_MS, scope);
   }
-  armDeleteConfirmTimer(e) {
-    if (this.deleteConfirmTimers[e]) return;
+  armDeleteConfirmTimer(scope) {
+    if (this.deleteConfirmTimers[scope]) return;
     let timer = setTimeout(
-      (r) => {
-        this.deleteConfirmTimers[r] = null;
-        this.schedulePush(r);
+      (scope) => {
+        this.deleteConfirmTimers[scope] = null;
+        this.schedulePush(scope);
       },
       PUSH_TIMEOUT_MS + OFF_RETRY_JITTER_MS,
-      e,
+      scope,
     );
     timer.unref?.();
-    this.deleteConfirmTimers[e] = timer;
+    this.deleteConfirmTimers[scope] = timer;
   }
   clearDeleteConfirmTimers() {
-    for (let e of ["team", "user"]) {
-      let n = this.deleteConfirmTimers[e];
-      if (n) {
-        clearTimeout(n);
-        this.deleteConfirmTimers[e] = null;
+    for (let scope of ["team", "user"]) {
+      let timer = this.deleteConfirmTimers[scope];
+      if (timer) {
+        clearTimeout(timer);
+        this.deleteConfirmTimers[scope] = null;
       }
     }
   }
-  firePush(e) {
-    let n = this.scopeStates[e];
+  firePush(scope) {
+    let scopeState = this.scopeStates[scope];
     if (!isMultiStoreSyncOn()) {
-      if (n.debounceTimer) {
-        clearTimeout(n.debounceTimer);
-        n.debounceTimer = null;
+      if (scopeState.debounceTimer) {
+        clearTimeout(scopeState.debounceTimer);
+        scopeState.debounceTimer = null;
       }
-      logForDebugging(`memory-watcher[${e}]: sync disabled mid-session \u2014 pausing (reversible)`, {
+      logForDebugging(`memory-watcher[${scope}]: sync disabled mid-session \u2014 pausing (reversible)`, {
         level: "info",
       });
       return;
     }
-    if (n.pushInProgress) {
-      this.schedulePush(e);
+    if (scopeState.pushInProgress) {
+      this.schedulePush(scope);
       return;
     }
-    if (!n.hasPendingChanges) return;
-    n.currentPushPromise = this.executePush(e);
+    if (!scopeState.hasPendingChanges) return;
+    scopeState.currentPushPromise = this.executePush(scope);
   }
   maybeResyncStaleStores() {
     try {
       if (!this.started) return;
       let memoryStoreResyncIntervalMs = getMemoryStoreResyncIntervalMs();
       let now = Date.now();
-      for (let r of ["team", "user"]) {
-        let s = r === "team" ? this.multiStoreState : this.userMultiStoreState;
-        if (!s) continue;
-        let h = this.scopeStates[r];
-        if (h.pushInProgress || h.lastSyncCompletedAt === null) continue;
-        let y =
+      for (let scope of ["team", "user"]) {
+        let storeState = scope === "team" ? this.multiStoreState : this.userMultiStoreState;
+        if (!storeState) continue;
+        let scopeState = this.scopeStates[scope];
+        if (scopeState.pushInProgress || scopeState.lastSyncCompletedAt === null) continue;
+        let stale =
           memoryStoreResyncIntervalMs > 0 &&
-          now - h.lastSyncCompletedAt > this.resyncIntervalFor(h, s, memoryStoreResyncIntervalMs);
-        let S = h.backoffRetryAtMs !== null && now >= h.backoffRetryAtMs;
-        if (!y && !S) continue;
+          now - scopeState.lastSyncCompletedAt >
+            this.resyncIntervalFor(scopeState, storeState, memoryStoreResyncIntervalMs);
+        let backoffDue = scopeState.backoffRetryAtMs !== null && now >= scopeState.backoffRetryAtMs;
+        if (!stale && !backoffDue) continue;
         if (!isMultiStoreSyncOn()) continue;
-        let w;
-        if (y && hasUnusableStore(s)) {
-          h.offRetries++;
-          h.offRetryJitterMs = backoffJitterMs();
-          w = "off_retry";
-        } else if (y) w = "periodic";
+        let trigger;
+        if (stale && hasUnusableStore(storeState)) {
+          scopeState.offRetries++;
+          scopeState.offRetryJitterMs = backoffJitterMs();
+          trigger = "off_retry";
+        } else if (stale) trigger = "periodic";
         else {
-          h.backoffWakes++;
-          w = "backoff_retry";
+          scopeState.backoffWakes++;
+          trigger = "backoff_retry";
         }
-        h.currentPushPromise = this.executePush(r, w);
+        scopeState.currentPushPromise = this.executePush(scope, trigger);
       }
     } catch (error) {
       logForDebugging(`memory-watcher: stale-store check failed: ${errorMessage(error)}`, {
@@ -396,35 +418,36 @@ class MemoryWatcher {
       this.resyncTimer = null;
     }
     if (!this.started) return;
-    for (let y of ["team", "user"]) {
-      let S = y === "team" ? this.multiStoreState : this.userMultiStoreState;
-      if (S && !hasUnusableStore(S)) {
-        let w = this.scopeStates[y];
-        w.offRetries = 0;
-        w.offRetryJitterMs = backoffJitterMs();
+    for (let scope of ["team", "user"]) {
+      let storeState = scope === "team" ? this.multiStoreState : this.userMultiStoreState;
+      if (storeState && !hasUnusableStore(storeState)) {
+        let scopeState = this.scopeStates[scope];
+        scopeState.offRetries = 0;
+        scopeState.offRetryJitterMs = backoffJitterMs();
       }
     }
     let memoryStoreResyncIntervalMs = getMemoryStoreResyncIntervalMs();
     let now = Date.now();
-    let r = null;
-    for (let y of ["team", "user"]) {
-      let S = y === "team" ? this.multiStoreState : this.userMultiStoreState;
-      if (!S) continue;
-      let w = this.scopeStates[y];
-      if (w.pushInProgress || w.lastSyncCompletedAt === null) continue;
-      let R = isMultiStoreSyncOn();
+    let nextAt = null;
+    for (let scope of ["team", "user"]) {
+      let storeState = scope === "team" ? this.multiStoreState : this.userMultiStoreState;
+      if (!storeState) continue;
+      let scopeState = this.scopeStates[scope];
+      if (scopeState.pushInProgress || scopeState.lastSyncCompletedAt === null) continue;
+      let syncOn = isMultiStoreSyncOn();
       if (memoryStoreResyncIntervalMs > 0) {
-        let x = R
-          ? w.lastSyncCompletedAt + this.resyncIntervalFor(w, S, memoryStoreResyncIntervalMs)
+        let resyncAt = syncOn
+          ? scopeState.lastSyncCompletedAt +
+            this.resyncIntervalFor(scopeState, storeState, memoryStoreResyncIntervalMs)
           : now + memoryStoreResyncIntervalMs;
-        if (r === null || x < r) r = x;
+        if (nextAt === null || resyncAt < nextAt) nextAt = resyncAt;
       }
-      if (R && w.backoffRetryAtMs !== null) {
-        if (r === null || w.backoffRetryAtMs < r) r = w.backoffRetryAtMs;
+      if (syncOn && scopeState.backoffRetryAtMs !== null) {
+        if (nextAt === null || scopeState.backoffRetryAtMs < nextAt) nextAt = scopeState.backoffRetryAtMs;
       }
     }
-    if (r === null) return;
-    let max = Math.max(r - now, DEBOUNCE_MS_2);
+    if (nextAt === null) return;
+    let max = Math.max(nextAt - now, DEBOUNCE_MS_2);
     let timer = setTimeout(() => {
       this.resyncTimer = null;
       this.maybeResyncStaleStores();
@@ -433,97 +456,97 @@ class MemoryWatcher {
     timer.unref?.();
     this.resyncTimer = timer;
   }
-  resyncIntervalFor(e, n, r) {
-    if (!hasUnusableStore(n)) return r;
-    let s = MAX_OFF_RETRIES * 60000 * 2 ** e.offRetries;
-    return Math.min(r, s + e.offRetryJitterMs);
+  resyncIntervalFor(scopeState, storeState, baseIntervalMs) {
+    if (!hasUnusableStore(storeState)) return baseIntervalMs;
+    let backoffMs = MAX_OFF_RETRIES * 60000 * 2 ** scopeState.offRetries;
+    return Math.min(baseIntervalMs, backoffMs + scopeState.offRetryJitterMs);
   }
-  noteBackoffWake(e, n, r) {
+  noteBackoffWake(scopeState, stores, syncResult) {
     let now = Date.now();
-    let h = null;
-    for (let S of n) {
-      let w = r.pulls[S.mountName];
-      let R = r.pushes[S.mountName];
-      if (w?.backedOff !== true && R?.backedOff !== true) continue;
+    let retryAt = null;
+    for (let store of stores) {
+      let pull = syncResult.pulls[store.mountName];
+      let push = syncResult.pushes[store.mountName];
+      if (pull?.backedOff !== true && push?.backedOff !== true) continue;
       if (!(
-        !S.pulled ||
-        (S.downloadsDeferred ?? 0) > 0 ||
-        e.hasPendingChanges ||
-        (R?.backedOff === true && R.skipped !== true)
+        !store.pulled ||
+        (store.downloadsDeferred ?? 0) > 0 ||
+        scopeState.hasPendingChanges ||
+        (push?.backedOff === true && push.skipped !== true)
       ))
         continue;
-      let serverBackoffUntilMs = S.serverBackoffUntilMs ?? now;
-      if (h === null || serverBackoffUntilMs < h) h = serverBackoffUntilMs;
+      let serverBackoffUntilMs = store.serverBackoffUntilMs ?? now;
+      if (retryAt === null || serverBackoffUntilMs < retryAt) retryAt = serverBackoffUntilMs;
     }
-    if (h === null) {
-      e.backoffRetryAtMs = null;
-      e.backoffWakes = 0;
+    if (retryAt === null) {
+      scopeState.backoffRetryAtMs = null;
+      scopeState.backoffWakes = 0;
       return;
     }
-    let y =
-      e.backoffWakes === 0
+    let extraDelayMs =
+      scopeState.backoffWakes === 0
         ? 0
-        : Math.min(MIN_BACKOFF_MINUTES * 2 ** (e.backoffWakes - 1), MAX_BACKOFF_MINUTES) * 60000;
-    e.backoffRetryAtMs = Math.max(h, now + y) + backoffJitterMs();
+        : Math.min(MIN_BACKOFF_MINUTES * 2 ** (scopeState.backoffWakes - 1), MAX_BACKOFF_MINUTES) * 60000;
+    scopeState.backoffRetryAtMs = Math.max(retryAt, now + extraDelayMs) + backoffJitterMs();
   }
-  scopeActive(e) {
-    return e === "team" ? this.multiStoreState !== null : this.userMultiStoreState !== null;
+  scopeActive(scope) {
+    return scope === "team" ? this.multiStoreState !== null : this.userMultiStoreState !== null;
   }
-  async startFileWatcher(e) {
+  async startFileWatcher(dir) {
     if (this.started) return;
     this.started = true;
-    await mkdir(e, {
+    await mkdir(dir, {
       recursive: true,
     }).catch((error) =>
-      logForDebugging(`memory-watcher: mkdir ${e} failed: ${errorMessage(error)}`, {
+      logForDebugging(`memory-watcher: mkdir ${dir} failed: ${errorMessage(error)}`, {
         level: "warn",
       }),
     );
-    let n = (s) => {
-      let h = isTeamSubscriber(s);
-      if (h === null || !this.scopeActive(h)) return;
-      this.schedulePush(h);
+    let onShownChange = (changedPath) => {
+      let scope = isTeamSubscriber(changedPath);
+      if (scope === null || !this.scopeActive(scope)) return;
+      this.schedulePush(scope);
     };
-    let r = (s) => {
-      let h = isTeamSubscriber(s);
-      if (h === null || !this.scopeActive(h)) return;
-      let y = h === "team" ? this.multiStoreState : this.userMultiStoreState;
-      for (let S of y?.stores ?? [])
-        if (S.suppressedReason !== null && isPermanentFailureCode(h, S.suppressedReason)) {
+    let onRemoved = (removedPath) => {
+      let scope = isTeamSubscriber(removedPath);
+      if (scope === null || !this.scopeActive(scope)) return;
+      let storeState = scope === "team" ? this.multiStoreState : this.userMultiStoreState;
+      for (let store of storeState?.stores ?? [])
+        if (store.suppressedReason !== null && isPermanentFailureCode(scope, store.suppressedReason)) {
           logForDebugging(
-            `memory-watcher[${h}]: unlink cleared store suppression for ${S.mountName} (was: ${S.suppressedReason})`,
+            `memory-watcher[${scope}]: unlink cleared store suppression for ${store.mountName} (was: ${store.suppressedReason})`,
             {
               level: "info",
             },
           );
-          S.recoveryUnconfirmedReason = S.suppressedReason;
-          S.suppressedReason = null;
-          S.suppressedUntilMs = null;
-          S.consecutivePermanentFailures = 0;
+          store.recoveryUnconfirmedReason = store.suppressedReason;
+          store.suppressedReason = null;
+          store.suppressedUntilMs = null;
+          store.consecutivePermanentFailures = 0;
         }
-      this.schedulePush(h);
+      this.schedulePush(scope);
     };
-    this.watcher = chokidar_default.watch(e, {
+    this.watcher = chokidar_default.watch(dir, {
       persistent: true,
       ignoreInitial: true,
       usePolling: IS_BUN_RUNTIME,
       interval: POLL_INTERVAL_MS,
       ignorePermissionErrors: true,
-      ignored: (s, stats) =>
-        isIgnoredMemoryPath(s, {
+      ignored: (watchedPath, stats) =>
+        isIgnoredMemoryPath(watchedPath, {
           backendStaging: this.storageV5 !== undefined,
           stats,
         }),
     });
-    this.watcher.on("add", n);
-    this.watcher.on("change", n);
-    this.watcher.on("unlink", r);
-    this.watcher.on("error", (s) => {
-      logForDebugging(`memory-watcher: watcher error: ${errorMessage(s)}`, {
+    this.watcher.on("add", onShownChange);
+    this.watcher.on("change", onShownChange);
+    this.watcher.on("unlink", onRemoved);
+    this.watcher.on("error", (error) => {
+      logForDebugging(`memory-watcher: watcher error: ${errorMessage(error)}`, {
         level: "warn",
       });
     });
-    logForDebugging(`memory-watcher: watching ${e}`, {
+    logForDebugging(`memory-watcher: watching ${dir}`, {
       level: "debug",
     });
     this.armResyncTimer();
@@ -557,19 +580,21 @@ class MemoryWatcher {
       logEvent("tengu_org_memory_connected_mode", {
         active: isOrgMemoryReadEnabled(),
       });
-      let x = await discoverOrgMemoryStoresForDecision(this.storageV5, this.credentials).catch((error) => {
-        logForDebugging(`memory-watcher: org-memory discovery rejected: ${errorMessage(error)}`);
-        return null;
-      });
-      if (x !== null && isSelectionMounted(x))
+      let discovered = await discoverOrgMemoryStoresForDecision(this.storageV5, this.credentials).catch(
+        (error) => {
+          logForDebugging(`memory-watcher: org-memory discovery rejected: ${errorMessage(error)}`);
+          return null;
+        },
+      );
+      if (discovered !== null && isSelectionMounted(discovered))
         logFeatureOk("org_memory_picker", {
           mounted: true,
         });
       return;
     }
-    let r = null;
+    let mountEntries = null;
     try {
-      r = parseMemoryStoresEnv();
+      mountEntries = parseMemoryStoresEnv();
     } catch (error) {
       logForDebugging(
         `memory-watcher: CLAUDE_MEMORY_STORES invalid, disabling sync: ${errorMessage(error)}`,
@@ -584,61 +609,63 @@ class MemoryWatcher {
       return;
     }
     registerCleanup(async () => this.stop());
-    if (r === null) return;
-    let filtered = r.filter((x) => x.scope === "team");
-    let filtered_2 = r.filter((x) => x.scope === "user");
-    if (filtered.length > 0)
+    if (mountEntries === null) return;
+    let stores = mountEntries.filter((entry) => entry.scope === "team");
+    let stores_2 = mountEntries.filter((entry) => entry.scope === "user");
+    if (stores.length > 0)
       this.multiStoreState = createMultiStoreState(
-        createStoreClients(filtered),
-        filtered.map((x) => ({
-          mount: x.mount,
-          scope: x.scope,
+        createStoreClients(stores),
+        stores.map((entry) => ({
+          mount: entry.mount,
+          scope: entry.scope,
           source: "env",
-          writeDir: memoryIndexDirPrefix(x.promptIndex),
+          writeDir: memoryIndexDirPrefix(entry.promptIndex),
         })),
         this.notices,
         this.firstStartAtMs,
       );
-    if (filtered_2.length > 0)
+    if (stores_2.length > 0)
       this.userMultiStoreState = createMultiStoreState(
-        createStoreClients(filtered_2),
-        filtered_2.map((x) => ({
-          mount: x.mount,
-          scope: x.scope,
+        createStoreClients(stores_2),
+        stores_2.map((entry) => ({
+          mount: entry.mount,
+          scope: entry.scope,
           source: "env",
         })),
         this.notices,
         this.firstStartAtMs,
       );
-    let y = async (x, P) => {
-      if (!P) return;
-      let j = this.scopeStates[x];
-      j.pushInProgress = true;
-      let G = syncTeamMemoryOnce(P, "startup", this.storageV5);
-      j.currentPushPromise = G.then(() => {
-        return;
-      }).catch(() => {
-        return;
-      });
+    let startScope = async (scope, storeState) => {
+      if (!storeState) return;
+      let scopeState = this.scopeStates[scope];
+      scopeState.pushInProgress = true;
+      let syncPromise = syncTeamMemoryOnce(storeState, "startup", this.storageV5);
+      scopeState.currentPushPromise = syncPromise
+        .then(() => {
+          return;
+        })
+        .catch(() => {
+          return;
+        });
       try {
-        let L = await G;
-        this.enqueueUnsavedReadOnlyNotices(P, L);
-        this.noteBackoffWake(j, P.stores, L);
+        let syncResult = await syncPromise;
+        this.enqueueUnsavedReadOnlyNotices(storeState, syncResult);
+        this.noteBackoffWake(scopeState, storeState.stores, syncResult);
       } catch (error) {
-        logForDebugging(`memory-watcher[${x}]: multi-store initial sync failed: ${errorMessage(error)}`, {
+        logForDebugging(`memory-watcher[${scope}]: multi-store initial sync failed: ${errorMessage(error)}`, {
           level: "warn",
         });
       } finally {
-        noteStorePulls(P.stores);
-        j.lastSyncCompletedAt = Date.now();
-        j.pushInProgress = false;
-        j.currentPushPromise = null;
+        noteStorePulls(storeState.stores);
+        scopeState.lastSyncCompletedAt = Date.now();
+        scopeState.pushInProgress = false;
+        scopeState.currentPushPromise = null;
         this.armResyncTimer();
       }
     };
     let startTime = performance.now();
-    await y("team", this.multiStoreState);
-    await y("user", this.userMultiStoreState);
+    await startScope("team", this.multiStoreState);
+    await startScope("user", this.userMultiStoreState);
     if (this.multiStoreState || this.userMultiStoreState) {
       let startTime_2 = performance.now();
       recordPhase("memory_store_pull_ms", startTime_2 - startTime, startTime);
@@ -648,7 +675,7 @@ class MemoryWatcher {
         recordedPhase === undefined ? 0 : startTime_2 - recordedPhase,
       );
     }
-    this.storeSkillConfigs = r;
+    this.storeSkillConfigs = mountEntries;
     this.refreshStoreSkills();
     let startHeldByPolicy = this.startHeldByPolicy;
     let heldMs = startHeldByPolicy && this.firstStartAtMs !== null ? Date.now() - this.firstStartAtMs : 0;
@@ -682,9 +709,9 @@ class MemoryWatcher {
         : "memory-watcher: no org policy verdict obtainable and sync stays off without one (HIPAA evidence on this machine, or a taint); waiting for a verdict",
     );
     this.stopAwaitingPolicyVerdict = onPolicyVerdictHeldStart(() => {
-      let e = memorySyncAvailability();
-      if (this.stopAwaitingPolicyVerdict === null || e === "held") return;
-      if (e === "closed" && memorySyncAwaitsVerdict()) {
+      let availability = memorySyncAvailability();
+      if (this.stopAwaitingPolicyVerdict === null || availability === "held") return;
+      if (availability === "closed" && memorySyncAwaitsVerdict()) {
         if (this.firstStorePullOwed) {
           logForDebugging(
             "memory-watcher: org policy route gave no verdict (unreachable); sync stays off on this machine \u2014 HIPAA evidence or a taint \u2014 and will start if a later verdict allows it",
@@ -698,9 +725,9 @@ class MemoryWatcher {
       this.stopAwaitingPolicyVerdict();
       this.stopAwaitingPolicyVerdict = null;
       logForDebugging(
-        `memory-watcher: org policy wait over; sync ${e === "open" ? "starting" : "stays off for the session"}`,
+        `memory-watcher: org policy wait over; sync ${availability === "open" ? "starting" : "stays off for the session"}`,
       );
-      if (e === "open") invalidateMemorySections("policy_verdict");
+      if (availability === "open") invalidateMemorySections("policy_verdict");
       queueMicrotask(() => {
         this.start(this.storageV5, this.credentials)
           .catch((error) =>
@@ -725,88 +752,88 @@ class MemoryWatcher {
     this.firstStorePullOwed = false;
     settleFirstStorePull();
   }
-  memoryKeyForPath(e) {
+  memoryKeyForPath(path) {
     let autoMemPath = getAutoMemPath();
-    let r = projectKeyFromMemoryDir(autoMemPath);
-    if (r === undefined) return;
-    let s = relative(autoMemPath, e);
-    if (s === "" || s.startsWith("..") || isAbsolute(s)) return;
-    let parts = s.split(sep);
-    return parts.every(isValidKeySegment) ? STORAGE_SPACES.memory(r, parts) : undefined;
+    let projectKey = projectKeyFromMemoryDir(autoMemPath);
+    if (projectKey === undefined) return;
+    let relPath = relative(autoMemPath, path);
+    if (relPath === "" || relPath.startsWith("..") || isAbsolute(relPath)) return;
+    let parts = relPath.split(sep);
+    return parts.every(isValidKeySegment) ? STORAGE_SPACES.memory(projectKey, parts) : undefined;
   }
-  teamMountScope(e) {
-    let n = this.memoryKeyForPath(e);
-    return n?.namespace === "memory" && n.relPath.length === 2 && n.relPath[0] === "team"
+  teamMountScope(path) {
+    let space = this.memoryKeyForPath(path);
+    return space?.namespace === "memory" && space.relPath.length === 2 && space.relPath[0] === "team"
       ? {
           namespace: "memory",
-          projectKey: n.projectKey,
-          relPath: n.relPath,
+          projectKey: space.projectKey,
+          relPath: space.relPath,
         }
       : undefined;
   }
-  async manifestPresent(e) {
+  async manifestPresent(filePath) {
     let storageV5 = this.storageV5;
-    let r = storageV5 && this.memoryKeyForPath(e);
-    if (storageV5 && r) {
-      let s = await storageV5.statMeta(r);
-      return s.ok || s.error.code !== "NotFound";
+    let storageKey = storageV5 && this.memoryKeyForPath(filePath);
+    if (storageV5 && storageKey) {
+      let meta = await storageV5.statMeta(storageKey);
+      return meta.ok || meta.error.code !== "NotFound";
     }
-    return stat(e).then(
+    return stat(filePath).then(
       () => true,
       (error) => getErrnoCode(error) !== "ENOENT",
     );
   }
-  async memoryFileSize(e) {
+  async memoryFileSize(filePath) {
     let storageV5 = this.storageV5;
-    let r = storageV5 && this.memoryKeyForPath(e);
-    if (storageV5 && r) {
-      let s = await storageV5.statMeta(r);
-      if (s.ok) return s.value.size;
+    let storageKey = storageV5 && this.memoryKeyForPath(filePath);
+    if (storageV5 && storageKey) {
+      let meta = await storageV5.statMeta(storageKey);
+      if (meta.ok) return meta.value.size;
     }
-    return (await stat(e)).size;
+    return (await stat(filePath)).size;
   }
-  async reapMountDir(e) {
+  async reapMountDir(store) {
     let storageV5 = this.storageV5;
-    let r = storageV5 && this.teamMountScope(e.mountDir);
-    if (storageV5 && r) {
-      let s = await storageV5.deleteScope(r);
-      let h = await checkPathInTeamMemDir(e.mountDir, "team", e.mountName);
-      if (h !== "ok") {
-        if (h === "escape")
+    let scope = storageV5 && this.teamMountScope(store.mountDir);
+    if (storageV5 && scope) {
+      let deleteResult = await storageV5.deleteScope(scope);
+      let dirCheck = await checkPathInTeamMemDir(store.mountDir, "team", store.mountName);
+      if (dirCheck !== "ok") {
+        if (dirCheck === "escape")
           logForDebugging(
-            `memory-watcher: reap ${e.mountName} \u2014 the mount is no longer canonical after the backend sweep (${s.ok ? "ok" : s.error.code}); left in place`,
+            `memory-watcher: reap ${store.mountName} \u2014 the mount is no longer canonical after the backend sweep (${deleteResult.ok ? "ok" : deleteResult.error.code}); left in place`,
             {
               level: "warn",
             },
           );
         return;
       }
-      if (!s.ok)
+      if (!deleteResult.ok)
         logForDebugging(
-          `memory-watcher: reap ${e.mountName} \u2014 backend sweep ${s.error.code}, completing directly`,
+          `memory-watcher: reap ${store.mountName} \u2014 backend sweep ${deleteResult.error.code}, completing directly`,
           {
             level: "warn",
           },
         );
     }
-    await rm(e.mountDir, {
+    await rm(store.mountDir, {
       recursive: true,
       force: true,
     });
   }
-  async getPersistenceWarning(e) {
-    let n = isTeamSubscriber(e);
-    if (n === null) return null;
-    if (!this.scopeActive(n)) {
-      if (n === "team") {
+  async getPersistenceWarning(filePath) {
+    let scope = isTeamSubscriber(filePath);
+    if (scope === null) return null;
+    if (!this.scopeActive(scope)) {
+      if (scope === "team") {
         let memoryDirNfc = getMemoryDirNfc();
-        let R = relative(memoryDirNfc, e);
-        if (R !== "" && !R.startsWith("..")) {
-          let sliced = R.split(sep).slice(0, -1);
-          let P = memoryDirNfc;
-          for (let j of sliced) {
-            P = join(P, j);
-            if (await this.manifestPresent(join(P, MEMORY_SYNC_DIR)))
+        let relPath = relative(memoryDirNfc, filePath);
+        if (relPath !== "" && !relPath.startsWith("..")) {
+          let sliced = relPath.split(sep).slice(0, -1);
+          let dir = memoryDirNfc;
+          for (let segment of sliced) {
+            dir = join(dir, segment);
+            if (await this.manifestPresent(join(dir, MEMORY_SYNC_DIR)))
               return env.CLAUDE_MEMORY_STORES
                 ? "This file's directory belongs to a synced project memory store that is not mounted in this session. The write was saved locally but is NOT being synced, and a future session with the store mounted will overwrite it with server content. Move the content out of this directory to keep it."
                 : "This file's directory is a leftover local copy of a project memory store that is no longer synced. The write was saved locally only: it is not shared with the project and memory recall does not read this directory. Move the content into your memory directory to keep using it.";
@@ -815,104 +842,104 @@ class MemoryWatcher {
       }
       return null;
     }
-    let r = n === "team" ? this.multiStoreState : this.userMultiStoreState;
-    let s = null;
-    let h = null;
-    for (let w of r?.stores ?? []) {
-      let R = relative(w.mountDir, e);
-      if (R !== "" && !R.startsWith("..")) {
-        s = w;
-        h = "/" + R.split(sep).join("/");
+    let storeState = scope === "team" ? this.multiStoreState : this.userMultiStoreState;
+    let store = null;
+    let key = null;
+    for (let matchedStore of storeState?.stores ?? []) {
+      let relPath = relative(matchedStore.mountDir, filePath);
+      if (relPath !== "" && !relPath.startsWith("..")) {
+        store = matchedStore;
+        key = "/" + relPath.split(sep).join("/");
         break;
       }
     }
-    if (s !== null && h !== null && !isMemoryDocumentKey_2(h)) return null;
+    if (store !== null && key !== null && !isMemoryDocumentKey_2(key)) return null;
     if (
-      s !== null &&
-      h !== null &&
-      s.backend.mode === "ro" &&
-      (s.suppressedReason === null || (s.suppressedUntilMs ?? null) !== null)
+      store !== null &&
+      key !== null &&
+      store.backend.mode === "ro" &&
+      (store.suppressedReason === null || (store.suppressedUntilMs ?? null) !== null)
     ) {
-      let roUnsavedNoticed = s.notices.roUnsavedNoticed;
-      roUnsavedNoticed.set(s.mountDir, (roUnsavedNoticed.get(s.mountDir) ?? new Set()).add(h));
-      let R = this.writableDirsRemedy(s);
+      let roUnsavedNoticed = store.notices.roUnsavedNoticed;
+      roUnsavedNoticed.set(store.mountDir, (roUnsavedNoticed.get(store.mountDir) ?? new Set()).add(key));
+      let remedy = this.writableDirsRemedy(store);
       return (
         "This file's memory store is mounted read-only: writes are never synced, and the next sync pull will overwrite local edits with server content. This write was saved locally only and is NOT in shared memory." +
-        (R !== null ? ` To keep content you wrote, ${R}.` : "")
+        (remedy !== null ? ` To keep content you wrote, ${remedy}.` : "")
       );
     }
-    if (s !== null && (s.source ?? "env") === "discovery") {
+    if (store !== null && (store.source ?? "env") === "discovery") {
       let orgMemoryDecision = getOrgMemoryDecision();
       if (orgMemoryDecision.state === "parked" || orgMemoryDecision.state === "ended")
         return `Synced project memory is ${orgMemoryDecision.state} for this session, so this store is not syncing. This write was saved locally but is NOT being persisted to shared memory.`;
     }
-    let suppressedReason = s?.suppressedReason ?? null;
-    if (s !== null && suppressedReason !== null) {
-      let w = SYNC_FAILURE_CODE_RE.test(suppressedReason) ? suppressedReason : "sync_error";
-      if (w === "mount_dir_foreign_partition")
+    let suppressedReason = store?.suppressedReason ?? null;
+    if (store !== null && suppressedReason !== null) {
+      let failureCode = SYNC_FAILURE_CODE_RE.test(suppressedReason) ? suppressedReason : "sync_error";
+      if (failureCode === "mount_dir_foreign_partition")
         return (
-          `Memory sync is disabled for this file's directory: it already holds the synced memory of a different memory store (mount_dir_foreign_partition), so writes here are saved locally but are NOT synced to shared/server memory. To resolve it, rename or relocate the conflicting directory team/${s.mountName}/ \u2014 sync re-enables automatically on the next sync cycle once it is out of the way (within the hour at most, sooner on the next write or restart); deleting it instead discards any unsynced files inside it, and writing new files into it first keeps sync disabled \u2014 ` +
+          `Memory sync is disabled for this file's directory: it already holds the synced memory of a different memory store (mount_dir_foreign_partition), so writes here are saved locally but are NOT synced to shared/server memory. To resolve it, rename or relocate the conflicting directory team/${store.mountName}/ \u2014 sync re-enables automatically on the next sync cycle once it is out of the way (within the hour at most, sooner on the next write or restart); deleting it instead discards any unsynced files inside it, and writing new files into it first keeps sync disabled \u2014 ` +
           "or save this content to a different memory directory. Tell the user the memory directory has a conflict that needs attention."
         );
-      if (w === "mount_dir_unmanifested_nonempty")
+      if (failureCode === "mount_dir_unmanifested_nonempty")
         return (
-          `Memory sync is disabled for this file's directory: it held content before this memory store was mounted (mount_dir_unmanifested_nonempty), so writes here are saved locally but are NOT synced to shared/server memory. To resolve it, rename or relocate the pre-existing directory team/${s.mountName}/ \u2014 the store mounts automatically on the next sync cycle once the directory is empty or gone (within the hour at most, sooner on the next write or restart); deleting its files instead discards them, and writing new files into it first keeps sync disabled \u2014 ` +
+          `Memory sync is disabled for this file's directory: it held content before this memory store was mounted (mount_dir_unmanifested_nonempty), so writes here are saved locally but are NOT synced to shared/server memory. To resolve it, rename or relocate the pre-existing directory team/${store.mountName}/ \u2014 the store mounts automatically on the next sync cycle once the directory is empty or gone (within the hour at most, sooner on the next write or restart); deleting its files instead discards them, and writing new files into it first keeps sync disabled \u2014 ` +
           "or save this content to a different memory directory. Tell the user the memory directory has a conflict that needs attention."
         );
-      let R = MEMORY_SYNC_REJECT_TEXTS[w];
-      if (R !== undefined)
-        return `Memory sync is paused for this file's memory store (${w}): ${R} This write was saved locally but is NOT being persisted to shared memory.`;
-      let x = (s.suppressedUntilMs ?? null) !== null;
+      let reasonText = MEMORY_SYNC_REJECT_TEXTS[failureCode];
+      if (reasonText !== undefined)
+        return `Memory sync is paused for this file's memory store (${failureCode}): ${reasonText} This write was saved locally but is NOT being persisted to shared memory.`;
+      let retrying = (store.suppressedUntilMs ?? null) !== null;
       return (
-        `Memory sync is currently paused after repeated sync failures (${w}). This write was saved locally but is NOT being synced` +
-        (x
+        `Memory sync is currently paused after repeated sync failures (${failureCode}). This write was saved locally but is NOT being synced` +
+        (retrying
           ? " yet \u2014 sync retries automatically and will push it if the server recovers while this session is still running."
           : " to shared/server memory.")
       );
     }
-    let recoveryUnconfirmedReason = s?.recoveryUnconfirmedReason ?? null;
+    let recoveryUnconfirmedReason = store?.recoveryUnconfirmedReason ?? null;
     if (recoveryUnconfirmedReason !== null)
       return (
         `Memory sync for this file's memory store recently failed (${SYNC_FAILURE_CODE_RE.test(recoveryUnconfirmedReason) ? recoveryUnconfirmedReason : "sync_error"}) and is retrying \u2014 recovery is not yet confirmed. ` +
         "This write was saved locally; treat it as NOT yet persisted to shared memory until sync succeeds."
       );
-    if (s !== null && (s.source ?? "env") === "discovery" && s.backend.mode === "rw") {
-      let w = grantedModeFor(s.backend.partitionId);
-      if (!isOrgMemoryWriteOptedIn() || (w !== undefined && w !== "rw"))
+    if (store !== null && (store.source ?? "env") === "discovery" && store.backend.mode === "rw") {
+      let grantedMode = grantedModeFor(store.backend.partitionId);
+      if (!isOrgMemoryWriteOptedIn() || (grantedMode !== undefined && grantedMode !== "rw"))
         return (
           "Synced project memory writes are off for this store this session (the write opt-in or the write grant was withdrawn) \u2014 this write was saved locally only, " +
           "and the store is read-only in this session, so it stays local even once sync recovers."
         );
-      if (w === undefined)
+      if (grantedMode === undefined)
         return "The synced project memory write grant is being re-established, so this write was saved locally and is NOT yet persisted to shared memory; treat it as not yet persisted until sync succeeds at the next credential renewal.";
     }
-    if (s !== null && h !== null)
+    if (store !== null && key !== null)
       try {
-        let w = await this.memoryFileSize(e);
-        if (w > MAX_MEMORY_BYTES)
+        let size = await this.memoryFileSize(filePath);
+        if (size > MAX_MEMORY_BYTES)
           return (
-            `This memory file is ${formatFileSize(w)}, over the ${formatFileSize(MAX_MEMORY_BYTES)} sync limit \u2014 ` +
+            `This memory file is ${formatFileSize(size)}, over the ${formatFileSize(MAX_MEMORY_BYTES)} sync limit \u2014 ` +
             "it was saved locally but will NOT be synced to shared/server memory. Split it into smaller files under the limit."
           );
       } catch {}
     if (
-      s !== null &&
-      (s.source ?? "env") === "discovery" &&
-      s.backend.mode === "rw" &&
-      grantedModeFor(s.backend.partitionId) === "rw" &&
+      store !== null &&
+      (store.source ?? "env") === "discovery" &&
+      store.backend.mode === "rw" &&
+      grantedModeFor(store.backend.partitionId) === "rw" &&
       isOrgMemoryWriteOptedIn() &&
       getOrgMemoryDecision().state === "on" &&
-      !this.orgWriteNoticeShown.has(s.mountName)
+      !this.orgWriteNoticeShown.has(store.mountName)
     ) {
-      this.orgWriteNoticeShown.add(s.mountName);
+      this.orgWriteNoticeShown.add(store.mountName);
       return 'Note: synced project memory writes are enabled for this directory (the "Synced project memory writes" /config setting), so this file syncs to the shared synced project memory store.';
     }
     return null;
   }
-  notifyWrite(e) {
-    let n = isTeamSubscriber(e);
-    if (n === null || !this.scopeActive(n)) return;
-    this.schedulePush(n);
+  notifyWrite(filePath) {
+    let scope = isTeamSubscriber(filePath);
+    if (scope === null || !this.scopeActive(scope)) return;
+    this.schedulePush(scope);
   }
   async stop() {
     this.clearPolicyVerdictWait();
@@ -921,11 +948,11 @@ class MemoryWatcher {
       this.resyncTimer = null;
     }
     this.clearDeleteConfirmTimers();
-    for (let e of ["team", "user"]) {
-      let n = this.scopeStates[e];
-      if (n.debounceTimer) {
-        clearTimeout(n.debounceTimer);
-        n.debounceTimer = null;
+    for (let scope of ["team", "user"]) {
+      let scopeState = this.scopeStates[scope];
+      if (scopeState.debounceTimer) {
+        clearTimeout(scopeState.debounceTimer);
+        scopeState.debounceTimer = null;
       }
     }
     if (this.watcher) {
@@ -933,11 +960,11 @@ class MemoryWatcher {
       this.watcher = null;
     }
     await Promise.all(
-      ["team", "user"].map(async (e) => {
-        let n = this.scopeStates[e];
-        if (n.currentPushPromise)
+      ["team", "user"].map(async (scope) => {
+        let scopeState = this.scopeStates[scope];
+        if (scopeState.currentPushPromise)
           try {
-            await n.currentPushPromise;
+            await scopeState.currentPushPromise;
           } catch {}
       }),
     );
@@ -947,21 +974,21 @@ class MemoryWatcher {
     }
     this.clearDeleteConfirmTimers();
     await Promise.all(
-      ["team", "user"].map(async (e) => {
-        let n = this.scopeStates[e];
-        if (!n.hasPendingChanges) return;
+      ["team", "user"].map(async (scope) => {
+        let scopeState = this.scopeStates[scope];
+        if (!scopeState.hasPendingChanges) return;
         if (!isMultiStoreSyncOn()) {
-          n.hasPendingChanges = false;
-          logForDebugging(`memory-watcher[${e}]: sync disabled \u2014 skipping shutdown flush`, {
+          scopeState.hasPendingChanges = false;
+          logForDebugging(`memory-watcher[${scope}]: sync disabled \u2014 skipping shutdown flush`, {
             level: "info",
           });
           return;
         }
-        let r = e === "team" ? this.multiStoreState : this.userMultiStoreState;
-        if (!r) return;
+        let storeState = scope === "team" ? this.multiStoreState : this.userMultiStoreState;
+        if (!storeState) return;
         try {
           await Promise.all(
-            r.stores.map((store) => {
+            storeState.stores.map((store) => {
               if (!isStoreSuppressed(store))
                 return runSyncCycleWithReport(
                   store,
@@ -988,7 +1015,7 @@ class MemoryWatcher {
       }),
     );
   }
-  async rebuildStoreSet(e) {
+  async rebuildStoreSet(mountEntries) {
     if (!this.started) return;
     if (!isMultiStoreSyncAvailable()) return;
     let team = this.scopeStates.team;
@@ -1008,104 +1035,106 @@ class MemoryWatcher {
     }
     let multiStoreState = this.multiStoreState;
     let { hasPendingChanges, changeSeq } = team;
-    let S = (async () => {
-      let w = new Set(
+    let rebuild = (async () => {
+      let flushFailed = new Set(
         (multiStoreState?.stores ?? [])
-          .filter((Q) => isStoreSuppressed(Q) || !Q.pulled || Q.backend.mode === "ro")
-          .map((Q) => Q.mountName),
+          .filter((store) => isStoreSuppressed(store) || !store.pulled || store.backend.mode === "ro")
+          .map((store) => store.mountName),
       );
       if (multiStoreState)
         await Promise.all(
           multiStoreState.stores
-            .filter((store) => !w.has(store.mountName))
+            .filter((store) => !flushFailed.has(store.mountName))
             .map(async (store) => {
-              let Z = await runSyncCycleWithReport(store, undefined, this.storageV5).catch(() => null);
+              let result = await runSyncCycleWithReport(store, undefined, this.storageV5).catch(() => null);
               if (
-                Z === null ||
-                !Z.success ||
+                result === null ||
+                !result.success ||
                 !store.pulled ||
-                Z.secretsSkipped > 0 ||
-                (Z.filesRefused ?? 0) > 0 ||
-                Z.conflicts > 0 ||
-                Z.diskTrusted === false
+                result.secretsSkipped > 0 ||
+                (result.filesRefused ?? 0) > 0 ||
+                result.conflicts > 0 ||
+                result.diskTrusted === false
               )
-                w.add(store.mountName);
+                flushFailed.add(store.mountName);
             }),
         );
-      let filtered = (e ?? []).filter((Q) => Q.scope !== "user");
-      let x = Boolean(env.CLAUDE_MEMORY_STORES);
-      let P = x
+      let stores = (mountEntries ?? []).filter((entry) => entry.scope !== "user");
+      let fromEnv = Boolean(env.CLAUDE_MEMORY_STORES);
+      let credentialSource = fromEnv
         ? undefined
         : {
             getAuthorization: getOrgMemoryAuthorization,
           };
-      let j =
-        filtered.length > 0
+      let nextState =
+        stores.length > 0
           ? createMultiStoreState(
-              createStoreClients(filtered, P),
-              filtered.map((Q) => ({
-                mount: Q.mount,
-                scope: Q.scope,
-                source: x ? "env" : "discovery",
-                writeDir: memoryIndexDirPrefix(Q.promptIndex),
+              createStoreClients(stores, credentialSource),
+              stores.map((entry) => ({
+                mount: entry.mount,
+                scope: entry.scope,
+                source: fromEnv ? "env" : "discovery",
+                writeDir: memoryIndexDirPrefix(entry.promptIndex),
               })),
               this.notices,
             )
           : null;
-      let G = new Set();
-      if (j && multiStoreState) {
-        let Q = new Map(multiStoreState.stores.map((store) => [store.mountDir, store]));
-        j.stores = j.stores.map((store) => {
-          let ee = Q.get(store.mountDir);
-          if (ee?.backend.partitionId !== store.backend.partitionId) return store;
-          G.add(store.mountDir);
+      let carriedDirs = new Set();
+      if (nextState && multiStoreState) {
+        let previousByDir = new Map(multiStoreState.stores.map((store) => [store.mountDir, store]));
+        nextState.stores = nextState.stores.map((store) => {
+          let previous = previousByDir.get(store.mountDir);
+          if (previous?.backend.partitionId !== store.backend.partitionId) return store;
+          carriedDirs.add(store.mountDir);
           return {
             ...store,
-            remoteHashes: ee.remoteHashes,
-            pulled: ee.pulled,
-            createdAtMs: ee.createdAtMs,
-            pullWritten: ee.pullWritten,
-            suppressedReason: ee.suppressedReason,
-            suppressedUntilMs: ee.suppressedUntilMs,
-            recoveryUnconfirmedReason: ee.recoveryUnconfirmedReason,
-            consecutivePermanentFailures: ee.consecutivePermanentFailures,
-            serverBackoffUntilMs: ee.serverBackoffUntilMs,
-            downloadsDeferred: ee.downloadsDeferred,
-            refusedWrites: ee.refusedWrites,
-            firstWriteEmitted: ee.firstWriteEmitted,
-            conflictRefetches: ee.conflictRefetches,
-            invalidatedBasis: ee.invalidatedBasis,
-            basisUnusable: ee.basisUnusable,
-            basisUnusableReport: ee.basisUnusableReport,
-            heldLocal: ee.heldLocal,
-            rejoinWalkUntrusted: ee.rejoinWalkUntrusted,
-            rejoinOff: ee.rejoinOff,
-            streamListUnsupported: ee.streamListUnsupported,
-            streamListFailureStreak: ee.streamListFailureStreak,
-            streamListSuccessStreak: ee.streamListSuccessStreak,
-            streamListRetryAfterMs: ee.streamListRetryAfterMs,
+            remoteHashes: previous.remoteHashes,
+            pulled: previous.pulled,
+            createdAtMs: previous.createdAtMs,
+            pullWritten: previous.pullWritten,
+            suppressedReason: previous.suppressedReason,
+            suppressedUntilMs: previous.suppressedUntilMs,
+            recoveryUnconfirmedReason: previous.recoveryUnconfirmedReason,
+            consecutivePermanentFailures: previous.consecutivePermanentFailures,
+            serverBackoffUntilMs: previous.serverBackoffUntilMs,
+            downloadsDeferred: previous.downloadsDeferred,
+            refusedWrites: previous.refusedWrites,
+            firstWriteEmitted: previous.firstWriteEmitted,
+            conflictRefetches: previous.conflictRefetches,
+            invalidatedBasis: previous.invalidatedBasis,
+            basisUnusable: previous.basisUnusable,
+            basisUnusableReport: previous.basisUnusableReport,
+            heldLocal: previous.heldLocal,
+            rejoinWalkUntrusted: previous.rejoinWalkUntrusted,
+            rejoinOff: previous.rejoinOff,
+            streamListUnsupported: previous.streamListUnsupported,
+            streamListFailureStreak: previous.streamListFailureStreak,
+            streamListSuccessStreak: previous.streamListSuccessStreak,
+            streamListRetryAfterMs: previous.streamListRetryAfterMs,
           };
         });
       }
-      if (team.changeSeq !== changeSeq) for (let Q of multiStoreState?.stores ?? []) w.add(Q.mountName);
-      this.multiStoreState = j;
-      if (team.changeSeq === changeSeq && w.size === 0) team.hasPendingChanges = false;
+      if (team.changeSeq !== changeSeq)
+        for (let store of multiStoreState?.stores ?? []) flushFailed.add(store.mountName);
+      this.multiStoreState = nextState;
+      if (team.changeSeq === changeSeq && flushFailed.size === 0) team.hasPendingChanges = false;
       team.lastSyncCompletedAt = null;
-      let filtered_2 = (multiStoreState?.stores ?? []).filter(
-        (Q) =>
-          Q.scope !== "user" &&
-          /^[A-Za-z0-9_-]+$/.test(Q.mountName) &&
-          !G.has(Q.mountDir) &&
-          !w.has(Q.mountName) &&
-          (Q.heldLocal?.size ?? 0) === 0,
+      let filtered = (multiStoreState?.stores ?? []).filter(
+        (store) =>
+          store.scope !== "user" &&
+          /^[A-Za-z0-9_-]+$/.test(store.mountName) &&
+          !carriedDirs.has(store.mountDir) &&
+          !flushFailed.has(store.mountName) &&
+          (store.heldLocal?.size ?? 0) === 0,
       );
-      let q = [];
-      for (let Q of filtered_2)
-        if ((await checkPathInTeamMemDir(Q.mountDir, "team", Q.mountName)) === "ok") q.push(Q);
+      let reapable = [];
+      for (let store of filtered)
+        if ((await checkPathInTeamMemDir(store.mountDir, "team", store.mountName)) === "ok")
+          reapable.push(store);
       await Promise.all(
-        q.map((Q) =>
-          this.reapMountDir(Q).catch((error) =>
-            logForDebugging(`memory-watcher: reap ${Q.mountName} failed: ${errorMessage(error)}`, {
+        reapable.map((store) =>
+          this.reapMountDir(store).catch((error) =>
+            logForDebugging(`memory-watcher: reap ${store.mountName} failed: ${errorMessage(error)}`, {
               level: "warn",
             }),
           ),
@@ -1113,29 +1142,34 @@ class MemoryWatcher {
       );
       logEvent("tengu_team_mem_store_set_rebuilt", {
         old_stores: multiStoreState?.stores.length ?? 0,
-        new_stores: j?.stores.length ?? 0,
-        dirs_reaped: q.length,
-        flush_failed_stores: w.size,
+        new_stores: nextState?.stores.length ?? 0,
+        dirs_reaped: reapable.length,
+        flush_failed_stores: flushFailed.size,
         had_in_flight: hadInFlight,
         had_pending_flush: hasPendingChanges,
       });
-      if (j) {
+      if (nextState) {
         try {
-          let Q = await syncTeamMemoryOnce(j, "rebuild", this.storageV5, this.scopeStates.team.offRetries);
-          this.enqueueUnsavedReadOnlyNotices(j, Q);
-          this.noteBackoffWake(team, j.stores, Q);
+          let syncResult = await syncTeamMemoryOnce(
+            nextState,
+            "rebuild",
+            this.storageV5,
+            this.scopeStates.team.offRetries,
+          );
+          this.enqueueUnsavedReadOnlyNotices(nextState, syncResult);
+          this.noteBackoffWake(team, nextState.stores, syncResult);
         } catch (error) {
           logForDebugging(`memory-watcher: rebuild initial sync failed: ${errorMessage(error)}`, {
             level: "warn",
           });
         }
-        noteStorePulls(j.stores);
+        noteStorePulls(nextState.stores);
         team.lastSyncCompletedAt = Date.now();
       }
     })();
-    team.currentPushPromise = S.catch(() => {});
+    team.currentPushPromise = rebuild.catch(() => {});
     try {
-      await S;
+      await rebuild;
     } finally {
       team.pushInProgress = false;
       team.currentPushPromise = null;
@@ -1144,19 +1178,22 @@ class MemoryWatcher {
   }
 }
 //@ chunk-s61vbvea.js:198608-198634 placement
-var memoryWatchers = new HostScoped(() => new MemoryWatcher());
+var memoryWatchers; // deferred: uses MemoryWatcher of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-s61vbvea.js:198608", () => {
+  memoryWatchers = new HostScoped(() => new MemoryWatcher());
+});
 //@ chunk-s61vbvea.js:198634-198898 placement
-async function startMemoryWatcher(e, n) {
-  if (e !== undefined)
+async function startMemoryWatcher(storageV5, credentials) {
+  if (storageV5 !== undefined)
     logForDebugging(
-      `memory-watcher: started with the storage interface (credentials store: ${n === undefined ? "none" : "handed"})`,
+      `memory-watcher: started with the storage interface (credentials store: ${credentials === undefined ? "none" : "handed"})`,
     );
   await getAutoMemPathState().warmCanonicalWcRoot();
-  let r = memoryWatchers.of(getRootSession().host);
+  let watcher = memoryWatchers.of(getRootSession().host);
   try {
-    await r.start(e, n);
+    await watcher.start(storageV5, credentials);
   } finally {
-    if (!r.firstStorePullOwed) settleFirstStorePull();
+    if (!watcher.firstStorePullOwed) settleFirstStorePull();
   }
 }
-export { memoryWatchers };
+export { memoryWatchers, startMemoryWatcher };

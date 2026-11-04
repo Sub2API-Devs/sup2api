@@ -11,34 +11,39 @@
 import { readLocalMarketplaceFile, enoentError } from "./utils/plugins/localMarketplacePaths.js";
 
 //@ chunk-aepeg2w5.js:91282-91688 fingerprint = shouldShowProjectOnboarding (0.618)
-function shouldShowProjectOnboarding(e) {
-  if (!e) return e;
-  let n = {};
-  let r = false;
-  for (let [key, value] of Object.entries(e)) {
+function shouldShowProjectOnboarding(onboardingStateByProject) {
+  if (!onboardingStateByProject) return onboardingStateByProject;
+  let sanitizedState = {};
+  let hasStrippedFields = false;
+  for (let [key, value] of Object.entries(onboardingStateByProject)) {
     if (!value || typeof value !== "object") {
-      n[key] = value;
+      sanitizedState[key] = value;
       continue;
     }
-    let y = value;
+    let projectState = value;
     if (
-      y.history !== undefined ||
-      y.projectOnboardingSeenCount !== undefined ||
-      y.hasCompletedProjectOnboarding !== undefined ||
-      y.devIntentsDetected !== undefined
+      projectState.history !== undefined ||
+      projectState.projectOnboardingSeenCount !== undefined ||
+      projectState.hasCompletedProjectOnboarding !== undefined ||
+      projectState.devIntentsDetected !== undefined
     ) {
-      r = true;
-      let { history, projectOnboardingSeenCount, hasCompletedProjectOnboarding, devIntentsDetected, ...P } =
-        y;
-      n[key] = P;
-    } else n[key] = value;
+      hasStrippedFields = true;
+      let {
+        history,
+        projectOnboardingSeenCount,
+        hasCompletedProjectOnboarding,
+        devIntentsDetected,
+        ...remainingFields
+      } = projectState;
+      sanitizedState[key] = remainingFields;
+    } else sanitizedState[key] = value;
   }
-  return r ? n : e;
+  return hasStrippedFields ? sanitizedState : onboardingStateByProject;
 }
 //@ chunk-e6aww6q8.js:4291532-4291632 fingerprint = getSteps (0.334)
-async function getSteps(e, n) {
-  let localMarketplaceFile = await readLocalMarketplaceFile(e, "workspace", n);
-  if ("absent" in localMarketplaceFile) throw enoentError(n);
+async function getSteps(storage, marketplacePath) {
+  let localMarketplaceFile = await readLocalMarketplaceFile(storage, "workspace", marketplacePath);
+  if ("absent" in localMarketplaceFile) throw enoentError(marketplacePath);
   return localMarketplaceFile.text;
 }
 export { shouldShowProjectOnboarding, getSteps };

@@ -27,8 +27,8 @@ var CLASSIFIER_RETRY_DELAY_MAX_MS = 1e4;
 /**
  * classifierStageDeadlineMs：按转录规模计算的第一阶段截止时间。
  */
-function classifierStageDeadlineMs(e) {
-  let max = Math.max(0, Math.ceil((e - 50000) / 50000));
+function classifierStageDeadlineMs(promptChars) {
+  let max = Math.max(0, Math.ceil((promptChars - 50000) / 50000));
   return Math.min(CLASSIFIER_MAX_DEADLINE_MS, CLASSIFIER_BASE_DEADLINE_MS + max * 1e4);
 }
 //@ chunk-e6aww6q8.js:928374-928415 placement
@@ -71,13 +71,13 @@ var MAX_HOST_ORIGIN_LENGTH = 2000;
 /**
  * 取 URL 的 origin（null origin 时用协议+主机），截断到 2000 字符；无法解析时直接截断原串。
  */
-function formatOriginForClassifier(e) {
+function formatOriginForClassifier(url) {
   try {
-    let n = new URL(e);
-    let r = n.origin === "null" ? `${n.protocol}//${n.host}` : n.origin;
-    return truncateToLength(r, MAX_HOST_ORIGIN_LENGTH);
+    let parsed = new URL(url);
+    let origin = parsed.origin === "null" ? `${parsed.protocol}//${parsed.host}` : parsed.origin;
+    return truncateToLength(origin, MAX_HOST_ORIGIN_LENGTH);
   } catch {
-    return truncateToLength(e, MAX_HOST_ORIGIN_LENGTH);
+    return truncateToLength(url, MAX_HOST_ORIGIN_LENGTH);
   }
 }
 export {

@@ -38,23 +38,25 @@ var engineElement = (props) => ({
  * 渲染门面：已安装实现时委托给它（run/press/input/select/client*），否则给默认结果；onInvalidate 在安装前暂存。
  */
 var createRenderFacade = (renderBridgeState) => ({
-  run: (n) => renderBridgeState.installed.get()?.run(n) ?? Promise.resolve(engineElement(n.props)),
+  run: (request) =>
+    renderBridgeState.installed.get()?.run(request) ?? Promise.resolve(engineElement(request.props)),
   hooked: () => renderBridgeState.installed.get()?.hooked() ?? false,
-  press: (n) => renderBridgeState.installed.get()?.press(n) ?? Promise.resolve(undefined),
-  input: (n) => renderBridgeState.installed.get()?.input(n) ?? Promise.resolve(undefined),
-  select: (n) => renderBridgeState.installed.get()?.select(n) ?? Promise.resolve(undefined),
-  clientModule: (n) => renderBridgeState.installed.get()?.clientModule(n),
-  clientPress: (n) => renderBridgeState.installed.get()?.clientPress(n) ?? Promise.resolve(undefined),
-  clientMessage: (n) => renderBridgeState.installed.get()?.clientMessage(n) ?? Promise.resolve(undefined),
-  clientFault: (n) => renderBridgeState.installed.get()?.clientFault(n) ?? Promise.resolve(undefined),
-  onInvalidate: (n) => {
-    let r = renderBridgeState.installed.get();
-    if (r) return r.onInvalidate(n);
-    renderBridgeState.pending.add(n);
+  press: (press) => renderBridgeState.installed.get()?.press(press) ?? Promise.resolve(undefined),
+  input: (input) => renderBridgeState.installed.get()?.input(input) ?? Promise.resolve(undefined),
+  select: (select) => renderBridgeState.installed.get()?.select(select) ?? Promise.resolve(undefined),
+  clientModule: (client) => renderBridgeState.installed.get()?.clientModule(client),
+  clientPress: (press) => renderBridgeState.installed.get()?.clientPress(press) ?? Promise.resolve(undefined),
+  clientMessage: (message) =>
+    renderBridgeState.installed.get()?.clientMessage(message) ?? Promise.resolve(undefined),
+  clientFault: (fault) => renderBridgeState.installed.get()?.clientFault(fault) ?? Promise.resolve(undefined),
+  onInvalidate: (listener) => {
+    let installed = renderBridgeState.installed.get();
+    if (installed) return installed.onInvalidate(listener);
+    renderBridgeState.pending.add(listener);
     return () => {
-      renderBridgeState.pending.delete(n);
-      renderBridgeState.attached.get(n)?.();
-      renderBridgeState.attached.delete(n);
+      renderBridgeState.pending.delete(listener);
+      renderBridgeState.attached.get(listener)?.();
+      renderBridgeState.attached.delete(listener);
     };
   },
 });
@@ -62,9 +64,10 @@ var createRenderFacade = (renderBridgeState) => ({
 function createRenderBridge() {
   let renderBridgeState = newRenderBridgeState();
   return {
-    install: (n) => {
-      renderBridgeState.installed.set(n);
-      for (let r of renderBridgeState.pending) renderBridgeState.attached.set(r, n.onInvalidate(r));
+    install: (bridge) => {
+      renderBridgeState.installed.set(bridge);
+      for (let listener of renderBridgeState.pending)
+        renderBridgeState.attached.set(listener, bridge.onInvalidate(listener));
       renderBridgeState.pending.clear();
     },
     render: createRenderFacade(renderBridgeState),
@@ -79,8 +82,8 @@ var renderBridge = createRenderBridge();
 /**
  * 安装渲染桥接
  */
-var installRenderBridge = (e) => {
-  renderBridge.install(e);
+var installRenderBridge = (bridge) => {
+  renderBridge.install(bridge);
 };
 //@ chunk-s61vbvea.js:16165-16183 placement
 var render = renderBridge.render;

@@ -8,7 +8,7 @@
  * pieces: chunk-bc20zedk.js (18)
  * attribution: placement 18
  */
-import { Ar } from "../../../../runtime/bun-runtime.js";
+import { __export } from "../../../../runtime/bun-runtime.js";
 import {
   CodeBlock,
   DEFAULT_COLUMNS,
@@ -75,144 +75,169 @@ import {
 } from "./MarkdownBlock.js";
 import { PANE_COLORS, paneColorOf } from "../../../plugins/functionHooks/panes.js";
 import { logRejection } from "../../../plugins/functionHooks/uiApi.js";
-import { init_react_production, qt, Se, y, Q, zt, P } from "../../../../vendor/react/cjs/react.production.js";
+import {
+  init_react_production,
+  createContext,
+  useContext,
+  useState,
+  useMemo,
+  useLayoutEffect,
+  useEffect,
+} from "../../../../vendor/react/cjs/react.production.js";
 import { identity } from "../../../utils/identity.js";
 import { uniq } from "../../../utils/collections.js";
 import { handleUiPress } from "../../../plugins/functionHooks/ui/interactions.js";
 import { useKeybindingContext } from "../../../keybindings/KeybindingContext.js";
 import { useHasAutoDialog } from "../../../state/dialogQueue.js";
+import { deferInit } from "../../../../runtime/deferred-init.js";
 
 //@ chunk-bc20zedk.js:2583-2593 placement
 var actionKeysNamespace = {};
 //@ chunk-bc20zedk.js:2593-4019 placement
-Ar(actionKeysNamespace, {
-  ActionKeysSeat: () => ActionKeysSeat,
-  BodyColumns: () => BodyColumns,
-  ClickedPress: () => ClickedPress,
-  CodeBlock: () => CodeBlock,
-  DEFAULT_COLUMNS: () => DEFAULT_COLUMNS,
-  DrawnTree: () => DrawnTree,
-  FIELD_MIN_COLUMNS: () => FIELD_MIN_COLUMNS,
-  FocusedNode: () => FocusedNode,
-  FocusedPress: () => FocusedPress,
-  HEX_COLOR_PROPS: () => HEX_COLOR_PROPS,
-  HOST_BOUNDED_COMPONENTS: () => HOST_BOUNDED_COMPONENTS,
-  HotkeySeat: () => HotkeySeat,
-  HoverScope: () => HoverScope,
-  HoverStyled: () => HoverStyled,
-  InputField: () => InputField,
-  InputFields: () => InputFields,
-  MARKDOWN_LINK_SCHEMES: () => MARKDOWN_LINK_SCHEMES,
-  MarkdownBlock: () => MarkdownBlock,
-  NAMED_TO_HEX: () => PANE_COLORS,
-  PressButton: () => PressButton,
-  RenderInstance: () => RenderInstance,
-  ScopeHovered: () => ScopeHovered,
-  SelectField: () => SelectField,
-  SelectFields: () => SelectFields,
-  SiteColumns: () => SiteColumns,
-  SiteRows: () => SiteRows,
-  VISIBLE_OPTIONS: () => VISIBLE_OPTIONS,
-  adjustHoverGroup: () => adjustHoverGroup,
-  boundedDrawing: () => boundedDrawing,
-  clippedHunks: () => clippedHunks,
-  clippedLines: () => clippedLines,
-  default: () => actionKeysNamespace,
-  fieldKey: () => fieldKey,
-  focusClick: () => focusClick,
-  groupMember: () => groupMember,
-  groupOf: () => groupOf,
-  heldBack: () => heldBack,
-  heldFor: () => heldFor,
-  heldOff: () => heldOff,
-  hexOfNamed: () => paneColorOf,
-  highlightPath: () => highlightPath,
-  hoverGroupsStore: () => hoverGroupsStore,
-  hoverOverridesOf: () => hoverOverridesOf,
-  inputFromTerminal: () => inputFromTerminal,
-  listWindow: () => listWindow,
-  pressFromTerminal: () => pressFromTerminal,
-  rebuild: () => rebuild,
-  releaseInkFocus: () => releaseInkFocus,
-  renderInputKey: () => renderInputKey,
-  rulerCut: () => rulerCut,
-  selectFromTerminal: () => selectFromTerminal,
-  settleQuietly: () => logRejection,
-  siteFailed: () => siteFailed,
-  useActionKeys: () => useActionKeys,
-  useEngineDrew: () => useEngineDrew,
-  useHasRenderHooks: () => useHasRenderHooks,
-  useHeldRows: () => useHeldRows,
-  useHoverGroup: () => useHoverGroup,
-  useHoverLit: () => useHoverLit,
-  useOnScreenInput: () => useOnScreenInput,
-  useRenderAnswer: () => useRenderAnswer,
-  useRenderDrawing: () => useRenderDrawing,
-  useRenderHook: () => useRenderHook,
-  useRenderInput: () => useRenderInput,
-  useRenderVersion: () => useRenderVersion,
-  useSettledDraw: () => useSettledDraw,
-  useSiteFocus: () => useSiteFocus,
-  withHexColors: () => withHexColors,
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-bc20zedk.js:2593", () => {
+  __export(actionKeysNamespace, {
+    ActionKeysSeat: () => ActionKeysSeat,
+    BodyColumns: () => BodyColumns,
+    ClickedPress: () => ClickedPress,
+    CodeBlock: () => CodeBlock,
+    DEFAULT_COLUMNS: () => DEFAULT_COLUMNS,
+    DrawnTree: () => DrawnTree,
+    FIELD_MIN_COLUMNS: () => FIELD_MIN_COLUMNS,
+    FocusedNode: () => FocusedNode,
+    FocusedPress: () => FocusedPress,
+    HEX_COLOR_PROPS: () => HEX_COLOR_PROPS,
+    HOST_BOUNDED_COMPONENTS: () => HOST_BOUNDED_COMPONENTS,
+    HotkeySeat: () => HotkeySeat,
+    HoverScope: () => HoverScope,
+    HoverStyled: () => HoverStyled,
+    InputField: () => InputField,
+    InputFields: () => InputFields,
+    MARKDOWN_LINK_SCHEMES: () => MARKDOWN_LINK_SCHEMES,
+    MarkdownBlock: () => MarkdownBlock,
+    NAMED_TO_HEX: () => PANE_COLORS,
+    PressButton: () => PressButton,
+    RenderInstance: () => RenderInstance,
+    ScopeHovered: () => ScopeHovered,
+    SelectField: () => SelectField,
+    SelectFields: () => SelectFields,
+    SiteColumns: () => SiteColumns,
+    SiteRows: () => SiteRows,
+    VISIBLE_OPTIONS: () => VISIBLE_OPTIONS,
+    adjustHoverGroup: () => adjustHoverGroup,
+    boundedDrawing: () => boundedDrawing,
+    clippedHunks: () => clippedHunks,
+    clippedLines: () => clippedLines,
+    default: () => actionKeysNamespace,
+    fieldKey: () => fieldKey,
+    focusClick: () => focusClick,
+    groupMember: () => groupMember,
+    groupOf: () => groupOf,
+    heldBack: () => heldBack,
+    heldFor: () => heldFor,
+    heldOff: () => heldOff,
+    hexOfNamed: () => paneColorOf,
+    highlightPath: () => highlightPath,
+    hoverGroupsStore: () => hoverGroupsStore,
+    hoverOverridesOf: () => hoverOverridesOf,
+    inputFromTerminal: () => inputFromTerminal,
+    listWindow: () => listWindow,
+    pressFromTerminal: () => pressFromTerminal,
+    rebuild: () => rebuild,
+    releaseInkFocus: () => releaseInkFocus,
+    renderInputKey: () => renderInputKey,
+    rulerCut: () => rulerCut,
+    selectFromTerminal: () => selectFromTerminal,
+    settleQuietly: () => logRejection,
+    siteFailed: () => siteFailed,
+    useActionKeys: () => useActionKeys,
+    useEngineDrew: () => useEngineDrew,
+    useHasRenderHooks: () => useHasRenderHooks,
+    useHeldRows: () => useHeldRows,
+    useHoverGroup: () => useHoverGroup,
+    useHoverLit: () => useHoverLit,
+    useOnScreenInput: () => useOnScreenInput,
+    useRenderAnswer: () => useRenderAnswer,
+    useRenderDrawing: () => useRenderDrawing,
+    useRenderHook: () => useRenderHook,
+    useRenderInput: () => useRenderInput,
+    useRenderVersion: () => useRenderVersion,
+    useSettledDraw: () => useSettledDraw,
+    useSiteFocus: () => useSiteFocus,
+    withHexColors: () => withHexColors,
+  });
 });
 //@ chunk-bc20zedk.js:4019-4023 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-bc20zedk.js:4019", () => {
+  init_react_production();
+});
 //@ chunk-bc20zedk.js:4023-4081 placement
-var compareActionRank = (o, p) => o.rank > p.rank || (o.rank === p.rank && o.seq > p.seq);
+var compareActionRank = (a, b) => a.rank > b.rank || (a.rank === b.rank && a.seq > b.seq);
 //@ chunk-bc20zedk.js:4081-4343 placement
 function createActionKeyRegistry() {
-  let o = [];
-  let p = 0;
-  function a(m) {
-    let index = o.indexOf(m);
-    if (index >= 0) o.splice(index, 1);
+  let registrations = [];
+  let seq = 0;
+  function remove(registration) {
+    let index = registrations.indexOf(registration);
+    if (index >= 0) registrations.splice(index, 1);
   }
   return {
-    add: (m) => {
-      a(m);
-      m.seq = ++p;
-      o.push(m);
+    add: (registration) => {
+      remove(registration);
+      registration.seq = ++seq;
+      registrations.push(registration);
     },
-    remove: a,
-    winnerOf: (m) =>
-      o
-        .filter((f) => f.action === m)
-        .reduce((acc, u) => (acc === undefined || compareActionRank(u, acc) ? u : acc), undefined),
-    held: () => [...o],
+    remove,
+    winnerOf: (action) =>
+      registrations
+        .filter((state) => state.action === action)
+        .reduce((acc, best) => (acc === undefined || compareActionRank(best, acc) ? best : acc), undefined),
+    held: () => [...registrations],
     clear: () => {
-      o.length = 0;
+      registrations.length = 0;
     },
   };
 }
 //@ chunk-bc20zedk.js:4343-4374 placement
-var clearActionKeys = identity(createActionKeyRegistry(), (o) => o.clear());
+var clearActionKeys; // deferred: uses createActionKeyRegistry of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-bc20zedk.js:4343", () => {
+  clearActionKeys = identity(createActionKeyRegistry(), (state) => state.clear());
+});
 //@ chunk-bc20zedk.js:4374-4439 placement
-var contextsForAction = (action, p) => uniq(p.filter((a) => a.action === action).map((a) => a.context));
+var contextsForAction = (action, registrations) =>
+  uniq(registrations.filter((state) => state.action === action).map((state) => state.context));
 //@ chunk-bc20zedk.js:4439-4486 placement
 var renderPriorityOf = (component) => (component === "Pane" ? 2 : component === "AbovePrompt" ? 1 : 0);
 //@ chunk-bc20zedk.js:4486-4599 placement
-var pressFromTerminal = (o, link) =>
+var pressFromTerminal = (registration, link) =>
   void logRejection(
-    `ui.press ${o.plugin}`,
+    `ui.press ${registration.plugin}`,
     handleUiPress({
-      plugin: o.plugin,
-      handle: o.handle,
+      plugin: registration.plugin,
+      handle: registration.handle,
       surface: "terminal",
       link,
     }),
   );
 //@ chunk-bc20zedk.js:4599-4603 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-bc20zedk.js:4599", () => {
+  init_react_production();
+});
 //@ chunk-bc20zedk.js:4603-4619 placement
-var RenderInstance = qt(null);
+var RenderInstance; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-bc20zedk.js:4603", () => {
+  RenderInstance = createContext(null);
+});
 //@ chunk-bc20zedk.js:4619-5146 placement
 function useActionKeys(props) {
   let { plugin, handle, action } = props;
-  let f = Se(RenderInstance);
+  let renderInstance = useContext(RenderInstance);
   let keybindingContext = useKeybindingContext();
   let hasAutoDialog = useHasAutoDialog();
-  let rank = renderPriorityOf(f?.component);
-  let [x] = y(() => ({
+  let rank = renderPriorityOf(renderInstance?.component);
+  let [registration] = useState(() => ({
     action,
     rank,
     seq: 0,
@@ -220,29 +245,29 @@ function useActionKeys(props) {
     handle,
   }));
   let bindings = keybindingContext?.bindings;
-  let C = Q(() => contextsForAction(action, bindings ?? []), [action, bindings]);
-  zt(() => {
-    x.plugin = plugin;
-    x.handle = handle;
-    x.rank = rank;
+  let contexts = useMemo(() => contextsForAction(action, bindings ?? []), [action, bindings]);
+  useLayoutEffect(() => {
+    registration.plugin = plugin;
+    registration.handle = handle;
+    registration.rank = rank;
   });
-  P(() => {
-    x.action = action;
-    clearActionKeys.add(x);
-    return () => clearActionKeys.remove(x);
-  }, [action, x]);
-  P(() => {
+  useEffect(() => {
+    registration.action = action;
+    clearActionKeys.add(registration);
+    return () => clearActionKeys.remove(registration);
+  }, [action, registration]);
+  useEffect(() => {
     if (!keybindingContext || hasAutoDialog) return;
-    let mapped = C.map((context) =>
+    let mapped = contexts.map((context) =>
       keybindingContext.registerHandler({
         action,
         context,
         handler: () => {
-          let T = clearActionKeys.winnerOf(action);
-          if (T === undefined) return false;
+          let winner = clearActionKeys.winnerOf(action);
+          if (winner === undefined) return false;
           pressFromTerminal({
-            plugin: T.plugin,
-            handle: T.handle,
+            plugin: winner.plugin,
+            handle: winner.handle,
           });
         },
         singleKey: true,
@@ -250,9 +275,9 @@ function useActionKeys(props) {
       }),
     );
     return () => {
-      for (let b of mapped) b();
+      for (let bindings of mapped) bindings();
     };
-  }, [keybindingContext, action, C, hasAutoDialog]);
+  }, [keybindingContext, action, contexts, hasAutoDialog]);
 }
 //@ chunk-bc20zedk.js:5146-5179 placement
 function ActionKeysSeat(props) {
@@ -260,13 +285,28 @@ function ActionKeysSeat(props) {
   return null;
 }
 //@ chunk-bc20zedk.js:5179-5183 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-bc20zedk.js:5179", () => {
+  init_react_production();
+});
 //@ chunk-bc20zedk.js:5183-5200 placement
-var BodyColumns = qt(null);
+var BodyColumns; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-bc20zedk.js:5183", () => {
+  BodyColumns = createContext(null);
+});
 //@ chunk-bc20zedk.js:5200-5204 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-bc20zedk.js:5200", () => {
+  init_react_production();
+});
 //@ chunk-bc20zedk.js:5204-5221 placement
-var ClickedPress = qt(null);
+var ClickedPress; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-bc20zedk.js:5204", () => {
+  ClickedPress = createContext(null);
+});
 //@ chunk-bc20zedk.js:5221-5225 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-bc20zedk.js:5221", () => {
+  init_react_production();
+});
 export { ClickedPress, BodyColumns, actionKeysNamespace, pressFromTerminal, ActionKeysSeat, RenderInstance };

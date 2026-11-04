@@ -18,37 +18,44 @@ import { HooksError } from "../hooksErrors.js";
 import { logForDebugging } from "../../../utils/debug.js";
 import { envSiteRuleFor } from "../sites/siteRules.js";
 import { wellFormedLeaves } from "../ui/validateTree.js";
+import { deferInit } from "../../../../runtime/deferred-init.js";
 
 //@ chunk-s61vbvea.js:599735-599772 placement
 /**
  * 界面/登记类输入集合
  */
-var REGISTRATION_INPUTS = new Set(["session.identity"]);
+var REGISTRATION_INPUTS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-s61vbvea.js:599735", () => {
+  REGISTRATION_INPUTS = new Set(["session.identity"]);
+});
 //@ chunk-s61vbvea.js:599772-599949 placement
 /**
  * 被视为"界面/登记类输入"的 $ 调用集合（ui.open/toast/notify/status/log/notice/ask、tool/command/agent.register、prompt.fill/suggest）。
  */
-var UI_INPUT_EVENTS = new Set([
-  "ui.open",
-  "ui.toast",
-  "ui.notify",
-  "ui.status",
-  "ui.log",
-  "ui.notice",
-  "ui.ask",
-  "tool.register",
-  "command.register",
-  "agent.register",
-  "prompt.fill",
-  "prompt.suggest",
-]);
+var UI_INPUT_EVENTS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-s61vbvea.js:599772", () => {
+  UI_INPUT_EVENTS = new Set([
+    "ui.open",
+    "ui.toast",
+    "ui.notify",
+    "ui.status",
+    "ui.log",
+    "ui.notice",
+    "ui.ask",
+    "tool.register",
+    "command.register",
+    "agent.register",
+    "prompt.fill",
+    "prompt.suggest",
+  ]);
+});
 //@ chunk-s61vbvea.js:599949-600003 placement
 /**
  * raise/among/drawn 结果
  */
-var judgingResult = (e, drawn) => ({
-  raise: e.raise,
-  among: e.among,
+var judgingResult = (judgement, drawn) => ({
+  raise: judgement.raise,
+  among: judgement.among,
   drawn,
 });
 //@ chunk-s61vbvea.js:600003-601196 placement
@@ -58,8 +65,8 @@ var judgingResult = (e, drawn) => ({
 async function judgeHookInput({ event, args, caller, bottom, raise, among }) {
   if (bottom !== undefined && isLoneSecDefaultShortcut(event, caller.origin, among))
     return runInScope(caller.scopeHolder?.scope, () => bottom.run(args, caller));
-  let S = new Map();
-  let w = hookMembersFor(
+  let passedBy = new Map();
+  let members = hookMembersFor(
     event,
     caller.origin,
     judgingResult(
@@ -67,15 +74,17 @@ async function judgeHookInput({ event, args, caller, bottom, raise, among }) {
         raise,
         among,
       },
-      (ee, ae) => {
-        S.set(ee, ae);
+      (plugin, passed) => {
+        passedBy.set(plugin, passed);
       },
     ),
   );
-  let x = REGISTRATION_INPUTS.has(event) ? w.filter((ee) => handlerTier(ee) !== "user") : w;
+  let handlers = REGISTRATION_INPUTS.has(event)
+    ? members.filter((handler) => handlerTier(handler) !== "user")
+    : members;
   let scope = caller.scopeHolder?.scope;
-  if (x.length === 0 && bottom) return runInScope(scope, () => bottom.run(args, caller));
-  let j = awaitHooksRespawn(
+  if (handlers.length === 0 && bottom) return runInScope(scope, () => bottom.run(args, caller));
+  let respawn = awaitHooksRespawn(
     {
       event,
       e: args,
@@ -83,8 +92,8 @@ async function judgeHookInput({ event, args, caller, bottom, raise, among }) {
     },
     caller.signal,
   );
-  if (j !== undefined) {
-    await j;
+  if (respawn !== undefined) {
+    await respawn;
     return judgeHookInput({
       event,
       args,
@@ -93,47 +102,47 @@ async function judgeHookInput({ event, args, caller, bottom, raise, among }) {
       raise,
     });
   }
-  let G = isPluginDefinedEvent(event) && !isPlainObject(args);
-  let L = UI_INPUT_EVENTS.has(event);
-  if (G)
+  let isInputObject = isPluginDefinedEvent(event) && !isPlainObject(args);
+  let isUiInput = UI_INPUT_EVENTS.has(event);
+  if (isInputObject)
     throw new HooksError(
-      `${caller.plugin}: $.${event}: its input is no object, which the hooks on it (${x.map((ee) => ee.name).join(", ")}) take as e; pass one`,
+      `${caller.plugin}: $.${event}: its input is no object, which the hooks on it (${handlers.map((handler) => handler.name).join(", ")}) take as e; pass one`,
     );
-  let q = {
+  let descent = {
     sent: args,
     hooked: () =>
-      x.map((ee) => {
-        let ae = S.get(ee);
-        if (ae === undefined)
+      handlers.map((handler) => {
+        let passed = passedBy.get(handler);
+        if (passed === undefined)
           logForDebugging(
-            `${caller.plugin}: $.${event}: no module is on record for the hook of ${ee.name}; what it passed down is judged a person's`,
+            `${caller.plugin}: $.${event}: no module is on record for the hook of ${handler.name}; what it passed down is judged a person's`,
             {
               level: "warn",
             },
           );
-        return ae;
+        return passed;
       }),
   };
-  let Z = await runInScope(scope, () =>
+  let judged = await runInScope(scope, () =>
     reportChainFailure({
       e: args,
-      handlers: x,
+      handlers,
       site: envSiteRuleFor(event, raise),
       signal: caller.signal,
       origin: hookOriginFromStack(caller.origin),
       bottom:
         bottom &&
-        (async (ee) => {
-          let ae = L ? wellFormedLeaves(ee) : ee;
-          let se = bottom.check?.(ae, caller);
-          if (se !== undefined) throw new HooksError(`${event}: ${se} (host check)`);
+        (async (leaves) => {
+          let normalized = isUiInput ? wellFormedLeaves(leaves) : leaves;
+          let problem = bottom.check?.(normalized, caller);
+          if (problem !== undefined) throw new HooksError(`${event}: ${problem} (host check)`);
           return {
-            value: await bottom.run(ae, caller, q),
+            value: await bottom.run(normalized, caller, descent),
           };
         }),
     }),
   );
-  if (Z.deny !== undefined) throw new HooksError(`${caller.plugin}: $.${event}: ${Z.deny}`);
-  return Z.value;
+  if (judged.deny !== undefined) throw new HooksError(`${caller.plugin}: $.${event}: ${judged.deny}`);
+  return judged.value;
 }
 export { judgeHookInput, UI_INPUT_EVENTS };

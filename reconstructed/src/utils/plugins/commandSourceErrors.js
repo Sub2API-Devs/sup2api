@@ -11,41 +11,46 @@
 import { HostScoped } from "../hostScoped.js";
 import { getRootSession } from "../../bootstrap/state.js";
 import { OFFICIAL_MARKETPLACE_NAME } from "./officialMarketplaceNames.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-csq9ftr9.js:966-2468 placement
 /**
  * COMMAND_SOURCE_NETWORK_ERRORS：命令源网络/可疑链接类错误文案集合。
  */
-var COMMAND_SOURCE_ERRORS = new Set([
-  "plugin command source printed a network path",
-  "plugin command source path resolves to a network path",
-  "plugin command source printed a path through a suspect link",
-  "plugin command source entry traverses a suspect link",
-  "plugin command source link escapes producer directory",
-  "plugin command source relink entry not canonical",
-  "plugin command source relink entry unreadable",
-  "plugin command source relink target resolves to a network path",
-  "plugin command source relink target traverses a suspect link",
-  "plugin command source link marker not a small regular file",
-  "plugin command source printed cwd or an ancestor",
-  "plugin command source printed a relative path",
-  "plugin command source printed nothing",
-  "plugin command source printed multiple lines",
-  "plugin command source exceeded the stdout cap",
-  "plugin command source directory has no plugin content",
-  "plugin command source directory has too many files",
-  "plugin command source directory too large",
-  "plugin command source link mode unsupported on windows",
-  "plugin command source disabled by managed policy",
-  "plugin command source held for the organization answer",
-  "plugin command source not started by a tool server daemon",
-  "plugin command source command changed since consent",
-  "plugin command source never consented for an installed plugin",
-  "plugin command source changed between display and run",
-  "plugin command source without consent",
-  "plugin command source declined at the prompt",
-]);
-var COMMAND_SOURCE_NETWORK_ERRORS = "plugin update refused during cli update: ";
+var COMMAND_SOURCE_ERRORS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var COMMAND_SOURCE_NETWORK_ERRORS;
+deferInit("chunk-csq9ftr9.js:966", () => {
+  COMMAND_SOURCE_ERRORS = new Set([
+    "plugin command source printed a network path",
+    "plugin command source path resolves to a network path",
+    "plugin command source printed a path through a suspect link",
+    "plugin command source entry traverses a suspect link",
+    "plugin command source link escapes producer directory",
+    "plugin command source relink entry not canonical",
+    "plugin command source relink entry unreadable",
+    "plugin command source relink target resolves to a network path",
+    "plugin command source relink target traverses a suspect link",
+    "plugin command source link marker not a small regular file",
+    "plugin command source printed cwd or an ancestor",
+    "plugin command source printed a relative path",
+    "plugin command source printed nothing",
+    "plugin command source printed multiple lines",
+    "plugin command source exceeded the stdout cap",
+    "plugin command source directory has no plugin content",
+    "plugin command source directory has too many files",
+    "plugin command source directory too large",
+    "plugin command source link mode unsupported on windows",
+    "plugin command source disabled by managed policy",
+    "plugin command source held for the organization answer",
+    "plugin command source not started by a tool server daemon",
+    "plugin command source command changed since consent",
+    "plugin command source never consented for an installed plugin",
+    "plugin command source changed between display and run",
+    "plugin command source without consent",
+    "plugin command source declined at the prompt",
+  ]);
+  COMMAND_SOURCE_NETWORK_ERRORS = "plugin update refused during cli update: ";
+});
 //@ chunk-csq9ftr9.js:2468-2685 placement
 class CommandSourceSession {
   nameRegistration;
@@ -60,7 +65,10 @@ class CommandSourceSession {
   blockedLogged = new Set();
 }
 //@ chunk-csq9ftr9.js:2685-2709 placement
-var commandSourceSessionSlot = new HostScoped(() => new CommandSourceSession());
+var commandSourceSessionSlot; // deferred: uses CommandSourceSession of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-csq9ftr9.js:2685", () => {
+  commandSourceSessionSlot = new HostScoped(() => new CommandSourceSession());
+});
 //@ chunk-csq9ftr9.js:2709-2746 placement
 /**
  * commandSourceSession：当前宿主的命令源会话状态。
@@ -90,8 +98,8 @@ function isOfficialNameUsableHere(marketplace) {
  * isBuiltinCatalogAccessAllowed：内建目录且访问允许。
  */
 function isBuiltinCatalogAccessAllowed() {
-  let e = commandSourceSession();
-  return e.nameRegistration === "built-in" && e.isAccessAllowed?.() === true;
+  let session = commandSourceSession();
+  return session.nameRegistration === "built-in" && session.isAccessAllowed?.() === true;
 }
 //@ chunk-csq9ftr9.js:3032-3098 placement
 /**
@@ -104,8 +112,8 @@ function isReviewerMarkedEntry(name) {
 /**
  * isCatalogEntryName：目录条目名且访问允许。
  */
-function isCatalogEntryName(e) {
-  return isBuiltinCatalogAccessAllowed() && commandSourceSession().catalogEntryNames?.has(e) === true;
+function isCatalogEntryName(entryName) {
+  return isBuiltinCatalogAccessAllowed() && commandSourceSession().catalogEntryNames?.has(entryName) === true;
 }
 export {
   COMMAND_SOURCE_NETWORK_ERRORS,

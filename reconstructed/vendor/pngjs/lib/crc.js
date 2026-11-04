@@ -5,10 +5,10 @@
  * pieces: chunk-spjgqa4y.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../runtime/bun-runtime.js";
 
 //@ chunk-spjgqa4y.js:26646-27104 cjs-fingerprint
-var require_crc = x(function (cjsExports, cjsModule) {
+var require_crc = __commonJS(function (cjsExports, cjsModule) {
   var crcTable = [];
   (function () {
     for (let i = 0; i < 256; i++) {

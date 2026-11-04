@@ -24,11 +24,11 @@ import { withLaunchValuesOfHybridConnection } from "../../managedEnvApply.js";
  * 分屏失败的提示文案（空间不足时建议减少并发、放大终端或改用同进程 teammate）。
  */
 function formatPaneCreateError(stderr) {
-  let n = `Failed to create teammate pane: ${stderr}`;
+  let message = `Failed to create teammate pane: ${stderr}`;
   let lower = stderr.toLowerCase();
   return lower.includes("no space") || lower.includes("too small")
-    ? `${n} \u2014 no room for another tmux split. Spawn fewer concurrent teammates, enlarge your terminal if running inside tmux, or switch to in-process teammates via /config.`
-    : n;
+    ? `${message} \u2014 no room for another tmux split. Spawn fewer concurrent teammates, enlarge your terminal if running inside tmux, or switch to in-process teammates via /config.`
+    : message;
 }
 //@ chunk-27ewfych.js:890-1032 fingerprint = getTmuxColorName (1)
 function getTmuxColorName(color) {
@@ -49,8 +49,8 @@ function getTmuxColorName(color) {
  */
 function runTmuxInLeaderSocket(args) {
   let userTmuxSocket = getUserTmuxSocket();
-  let a = userTmuxSocket ? ["-S", userTmuxSocket, ...args] : args;
-  return execFileNoThrow(TMUX, a);
+  let socketArgs = userTmuxSocket ? ["-S", userTmuxSocket, ...args] : args;
+  return execFileNoThrow(TMUX, socketArgs);
 }
 //@ chunk-27ewfych.js:1095-1146 layout
 /**
@@ -69,12 +69,13 @@ async function respawnPaneWithCommand(socketArgs, paneId, command, options) {
     [...socketArgs, "set-option", "-p", "-t", paneId, "remain-on-exit", "failed"],
     options,
   );
-  let s = await execFileNoThrow(
+  let result = await execFileNoThrow(
     TMUX,
     [...socketArgs, "respawn-pane", "-k", "-t", paneId, "--", prefixCgroupJoinCommand("agent", command)],
     options,
   );
-  if (s.code !== 0) throw new SwarmPaneError(`Failed to send command to pane ${paneId}: ${s.stderr}`);
+  if (result.code !== 0)
+    throw new SwarmPaneError(`Failed to send command to pane ${paneId}: ${result.stderr}`);
 }
 //@ chunk-27ewfych.js:1403-7315 facade-exports = TmuxBackend (0.901)
 /**
@@ -101,7 +102,7 @@ class TmuxBackend {
       releaseLock();
     }
   }
-  async sendCommandToPane(paneId, command, a = false) {
+  async sendCommandToPane(paneId, command, useSwarmSocket = false) {
     try {
       assertNoControlChars(command);
     } catch (error) {
@@ -109,7 +110,11 @@ class TmuxBackend {
       throw error;
     }
     let userTmuxSocket = getUserTmuxSocket();
-    let socketArgs = a ? ["-L", getSwarmSocketName()] : userTmuxSocket ? ["-S", userTmuxSocket] : [];
+    let socketArgs = useSwarmSocket
+      ? ["-L", getSwarmSocketName()]
+      : userTmuxSocket
+        ? ["-S", userTmuxSocket]
+        : [];
     await respawnPaneWithCommand(socketArgs, paneId, command);
   }
   async setPaneBorderColor(paneId, color, useExternalSession = false) {
@@ -412,4 +417,4 @@ class TmuxBackend {
     logForDebugging(`[TmuxBackend] Rebalanced ${filtered.length} teammate panes with tiled layout`);
   }
 }
-export { respawnPaneWithCommand };
+export { respawnPaneWithCommand, TmuxBackend };

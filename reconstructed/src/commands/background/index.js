@@ -22,3 +22,4 @@ var backgroundCommandDefinition = {
   isEnabled: () => true,
 };
 var backgroundCommand = backgroundCommandDefinition;
+export { backgroundCommand };

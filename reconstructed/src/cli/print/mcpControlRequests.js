@@ -8,7 +8,7 @@
  * pieces: chunk-nkdv7dw8.js (53)
  * attribution: placement 53
  */
-import { CJt, Ji } from "../../../vendor/lodash-es/uniqBy.js";
+import { import_baseUniq, uniqByExport } from "../../../vendor/lodash-es/uniqBy.js";
 import { identityEpoch } from "../../services/mcp/identityChange.js";
 import { pendingReconnect } from "../../services/mcp/mcpReconnect.js";
 import { isRemoteMcpTransport } from "../../services/mcp/discoveryIdentity.js";
@@ -50,7 +50,7 @@ import { isClientWithoutTransport } from "../../services/mcp/officialPluginPromp
 import { logForDiagnosticsNoPII } from "../../utils/diagLogs.js";
 import { UNSUPPORTED_CONTROL_SUBTYPE_TEXT } from "../../remote/wireFrameShape.js";
 import { takeRecentWithin } from "./rateLimitForwarding.js";
-import { En } from "../../../vendor/lodash-es/_inlinedHelpers.js";
+import { import_sortedIndex_2 } from "../../../vendor/lodash-es/_inlinedHelpers.js";
 import { QueuedNotificationError } from "../../services/queuedNotifications/queuedNotifications.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { isDiscoveryCacheUsable } from "../../services/mcp/mcpAccountKey.js";
@@ -118,160 +118,201 @@ import {
 import { sanitizeSessionTitle } from "../../utils/stringUtils.js";
 import { logTitleChangeError } from "./sessionControlRequests.js";
 import { getSdkHostedBridgeHandle } from "../../bridge/replBridgeHandle.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-nkdv7dw8.js:3284-3371 placement
-function mergeClientConfigsIfAny(e, n) {
-  n = typeof n == "function" ? n : undefined;
-  return e && e.length ? CJt(e, undefined, n) : [];
+function mergeClientConfigsIfAny(configs, transform) {
+  transform = typeof transform == "function" ? transform : undefined;
+  return configs && configs.length ? import_baseUniq(configs, undefined, transform) : [];
 }
 //@ chunk-nkdv7dw8.js:3371-3381 placement
 var mergeMcpClientConfigs = mergeClientConfigsIfAny;
 //@ chunk-nkdv7dw8.js:3381-3419 placement
-var requireVtyyqz9qChunk = require("./chunk-vtyyqz9q.js");
+var requireVtyyqz9qChunk; // deferred: loads other modules while loading; runs once its import cycle is complete
+deferInit("chunk-nkdv7dw8.js:3381", () => {
+  requireVtyyqz9qChunk = require("../../services/mcp/artifactMcpFilter.js");
+});
 //@ chunk-nkdv7dw8.js:3419-3488 placement
 function mcpClientModule_5() {
-  return require("./chunk-asne9cp8.js").mcpClientModule();
+  return require("../../services/mcp/emitTripwireEvent.lazy.js").mcpClientModule();
 }
 //@ chunk-nkdv7dw8.js:3488-3584 placement
-function describeMcpServerStatus(e) {
-  return e.type === "failed" ? (e.error ?? "Connection failed") : `Server status: ${e.type}`;
+function describeMcpServerStatus(serverInfo) {
+  return serverInfo.type === "failed"
+    ? (serverInfo.error ?? "Connection failed")
+    : `Server status: ${serverInfo.type}`;
 }
 //@ chunk-nkdv7dw8.js:3584-5072 placement
 /**
  * 汇总 MCP 服务器状态供 mcp_status 返回。
  */
-function buildMcpStatusList(e, n, clients) {
-  let s = new Map(n.clients.map((client) => [client.name, client]));
-  let r = new Map((clients ?? []).map((w) => [w.name, w]));
-  let u = new Set(n.names);
-  let S = identityEpoch();
-  let y = new Set();
-  let C = new Map();
-  let E = new Set();
-  let D = new Set();
-  let x = (client, P) => {
-    let G = r.get(client.name);
-    if (!G) {
-      D.add(client.name);
+function buildMcpStatusList(status, controlState, clients) {
+  let configuredByName = new Map(controlState.clients.map((client) => [client.name, client]));
+  let liveByName = new Map((clients ?? []).map((liveClient) => [liveClient.name, liveClient]));
+  let configuredNames = new Set(controlState.names);
+  let currentEpoch = identityEpoch();
+  let reconnectNames = new Set();
+  let reconnectTools = new Map();
+  let refreshedNames = new Set();
+  let missingNames = new Set();
+  let reconcileClient = (client, previousClient) => {
+    let existingClient = liveByName.get(client.name);
+    if (!existingClient) {
+      missingNames.add(client.name);
       return;
     }
-    if (G !== P && G.type !== "pending" && mcpClientModule_5().areMcpConfigsEqual(G.config, client.config)) {
-      E.add(client.name);
-      return G;
+    if (
+      existingClient !== previousClient &&
+      existingClient.type !== "pending" &&
+      mcpClientModule_5().areMcpConfigsEqual(existingClient.config, client.config)
+    ) {
+      refreshedNames.add(client.name);
+      return existingClient;
     }
     return client;
   };
-  let clients_2 = e.clients.flatMap((client) => {
+  let clients_2 = status.clients.flatMap((client) => {
     if (client.type !== "pending") return [client];
-    let P = s.get(client.name);
-    if (!P) {
-      if (!u.has(client.name) || clients === undefined) return [client];
-      return x(client, undefined) ?? [];
+    let configuredClient = configuredByName.get(client.name);
+    if (!configuredClient) {
+      if (!configuredNames.has(client.name) || clients === undefined) return [client];
+      return reconcileClient(client, undefined) ?? [];
     }
-    if (!mcpClientModule_5().areMcpConfigsEqual(client.config, P.config)) return [client];
-    if (clients !== undefined && r.get(client.name) === P) {
-      y.add(client.name);
-      let G = pendingReconnect(P);
-      if (G !== undefined) C.set(client.name, G);
-      return [P];
+    if (!mcpClientModule_5().areMcpConfigsEqual(client.config, configuredClient.config)) return [client];
+    if (clients !== undefined && liveByName.get(client.name) === configuredClient) {
+      reconnectNames.add(client.name);
+      let tools = pendingReconnect(configuredClient);
+      if (tools !== undefined) reconnectTools.set(client.name, tools);
+      return [configuredClient];
     }
-    if (n.dialEpochs[client.name] !== S && isRemoteMcpTransport(client.config))
-      return clients === undefined ? [client] : (x(client, P) ?? []);
+    if (controlState.dialEpochs[client.name] !== currentEpoch && isRemoteMcpTransport(client.config))
+      return clients === undefined ? [client] : (reconcileClient(client, configuredClient) ?? []);
     if (clients === undefined) {
-      y.add(client.name);
-      return [P];
+      reconnectNames.add(client.name);
+      return [configuredClient];
     }
-    return x(client, P) ?? [];
+    return reconcileClient(client, configuredClient) ?? [];
   });
-  if (y.size === 0 && E.size === 0 && D.size === 0) return e;
-  let mapped = [...y].map((w) => [w, getMcpPrefix(w)]);
-  let mapped_2 = n.clients.map((client) => [client.name, getMcpPrefix(client.name)]);
-  let B = (tool, P) => P.some(([G, oe]) => isToolFromMcpServer(tool, G, oe));
-  let mapped_3 = [...D].map((w) => [w, getMcpPrefix(w)]);
-  let mapped_4 = [...C.keys()].map((key) => [key, getMcpPrefix(key)]);
-  let U = (tool) => mapped_4.find(([P, G]) => isToolFromMcpServer(tool, P, G))?.[0];
-  let z = new Map();
-  for (let tool of n.tools) {
-    let P = U(tool);
-    if (P !== undefined) z.set(P, (z.get(P) ?? new Set()).add(tool.name));
+  if (reconnectNames.size === 0 && refreshedNames.size === 0 && missingNames.size === 0) return status;
+  let prefixPairs = [...reconnectNames].map((serverName) => [serverName, getMcpPrefix(serverName)]);
+  let prefixPairs_2 = controlState.clients.map((client) => [client.name, getMcpPrefix(client.name)]);
+  let isToolFromAny = (tool, prefixPairs) =>
+    prefixPairs.some(([serverName, prefix]) => isToolFromMcpServer(tool, serverName, prefix));
+  let prefixPairs_3 = [...missingNames].map((serverName) => [serverName, getMcpPrefix(serverName)]);
+  let mapped = [...reconnectTools.keys()].map((key) => [key, getMcpPrefix(key)]);
+  let serverNameForTool = (tool) =>
+    mapped.find(([serverName, prefix]) => isToolFromMcpServer(tool, serverName, prefix))?.[0];
+  let toolNamesByServer = new Map();
+  for (let tool of controlState.tools) {
+    let serverName = serverNameForTool(tool);
+    if (serverName !== undefined)
+      toolNamesByServer.set(serverName, (toolNamesByServer.get(serverName) ?? new Set()).add(tool.name));
   }
-  let J = new Set();
-  let flattened = n.tools.flatMap((tool) => {
-    let P = U(tool);
-    if (P !== undefined) {
-      if (J.has(P)) return [];
-      J.add(P);
-      let G = z.get(P);
-      return (C.get(P) ?? []).filter((oe) => G?.has(oe.name));
+  let emittedServers = new Set();
+  let flattened = controlState.tools.flatMap((tool) => {
+    let serverName = serverNameForTool(tool);
+    if (serverName !== undefined) {
+      if (emittedServers.has(serverName)) return [];
+      emittedServers.add(serverName);
+      let toolNames = toolNamesByServer.get(serverName);
+      return (reconnectTools.get(serverName) ?? []).filter((tool) => toolNames?.has(tool.name));
     }
-    return B(tool, mapped) || (y.size > 0 && !B(tool, mapped_2)) ? [tool] : [];
+    return isToolFromAny(tool, prefixPairs) ||
+      (reconnectNames.size > 0 && !isToolFromAny(tool, prefixPairs_2))
+      ? [tool]
+      : [];
   });
-  let flattened_2 = [...C].flatMap(([w, P]) => P.filter((G) => !z.get(w)?.has(G.name)));
+  let flattened_2 = [...reconnectTools].flatMap(([serverName, tools]) =>
+    tools.filter((tool) => !toolNamesByServer.get(serverName)?.has(tool.name)),
+  );
   return {
-    ...e,
+    ...status,
     clients: clients_2,
-    tools: Ji([...e.tools.filter((tool) => !B(tool, mapped_3)), ...flattened, ...flattened_2], "name"),
+    tools: uniqByExport(
+      [...status.tools.filter((tool) => !isToolFromAny(tool, prefixPairs_3)), ...flattened, ...flattened_2],
+      "name",
+    ),
   };
 }
 //@ chunk-nkdv7dw8.js:5072-7153 placement
 /**
  * 推送的 MCP 服务器被忽略/不接纳的原因文本。
  */
-var BUILTIN_SERVER_IGNORED_REASON = "Builtin server is CLI-owned; ignored";
-var IGNORED_BY_ENTERPRISE_POLICY_TEXT = "Blocked by enterprise policy (allowedMcpServers/deniedMcpServers)";
-var IGNORED_HERMETIC_MODE_TEXT = "Ignored in hermetic mode (not declared in user config)";
-var IGNORED_EXCLUSIVE_MANAGED_CONFIG_TEXT =
-  "Ignored: an enterprise MCP config (managed-mcp.json) is present and has exclusive control over MCP servers";
-var IGNORED_DISABLE_SIDELOAD_TEXT =
-  "Ignored: managed setting disableSideloadFlags forbids server-delivered MCP servers on this machine";
-var IGNORED_REMOTE_CONTROL_TEXT =
-  "Ignored in a Remote Control session: MCP servers are loaded only from the verified startup config on this machine";
-var IGNORED_IDE_TRANSPORT_TEXT =
-  "Ignored: IDE transports are registered by the CLI itself, not mcp_set_servers";
-var NOT_ADMITTED_PROXY_SHAPE_TEXT =
-  "Not admitted: a pushed server must be an http server on this session's MCP proxy route, with a URL of at most 4,096 characters (a non-ASCII character counts as its percent-encoded bytes)";
-var NOT_ADMITTED_RESERVED_NAME_TEXT =
-  "Not admitted: this name is reserved for a first-party server, and this entry cannot be added after session start";
-var NOT_CONNECTED_LIMITS_TEXT =
-  "Not connected: this worker could not take all of this server's per-tool limits; the next worker that the session moves to reads the entry again";
-var NOT_CONNECTED_NOT_TAKEN_TEXT =
-  "Not connected: this worker's start did not take this server, so the worker takes no push of it; the next worker that the session moves to reads the entry again";
-var APPLIED_AT_NEXT_REDISPATCH_TEXT = "Change to a running server is applied at the next re-dispatch";
-var NO_TOOL_POLICY_IN_SESSION_TEXT =
-  "Not applied: this session applies no per-tool permission_policy to a client-hosted MCP server, so no always_ask or always_deny in this entry takes effect; the server is otherwise unchanged";
-var TOGGLED_BY_SERVER_SET_TEXT =
-  "Not applied: in this session, servers are turned on or off by changing the session's server set";
-var UNCONFIRMED_TOGGLE_TEXT =
-  "The session's tool container did not confirm the change, so the server may be on or off. Check its status before trying again";
-var SAVED_FOR_NEXT_START_TEXT =
-  "Saved. The server stays off for now and will be connected the next time this session starts after being idle. There is nothing more to do";
-var KNOWN_MCP_STATUS_TEXTS = new Set([
-  BUILTIN_SERVER_IGNORED_REASON,
-  OPERATOR_SUPPLIED_IGNORED_TEXT,
-  IGNORED_BY_ENTERPRISE_POLICY_TEXT,
-  IGNORED_HERMETIC_MODE_TEXT,
-  IGNORED_EXCLUSIVE_MANAGED_CONFIG_TEXT,
-  IGNORED_DISABLE_SIDELOAD_TEXT,
-  IGNORED_REMOTE_CONTROL_TEXT,
-  IGNORED_IDE_TRANSPORT_TEXT,
-  NOT_ADMITTED_PROXY_SHAPE_TEXT,
-  NOT_ADMITTED_RESERVED_NAME_TEXT,
-  NOT_CONNECTED_LIMITS_TEXT,
-  NOT_CONNECTED_NOT_TAKEN_TEXT,
-  APPLIED_AT_NEXT_REDISPATCH_TEXT,
-  NO_TOOL_POLICY_IN_SESSION_TEXT,
-  TOGGLED_BY_SERVER_SET_TEXT,
-  UNCONFIRMED_TOGGLE_TEXT,
-  SAVED_FOR_NEXT_START_TEXT,
-  BLOCKED_BY_POLICY_REASON,
-  RESERVED_ADDRESS_REASON,
-  ACCOUNT_CHANGED_REASON,
-]);
-var KNOWN_RUNNER_SKIP_REASONS = new Set([
-  "synced-file staging not supported on this runner kind",
-  "CLAUDE_CODE_REMOTE_SESSION_ID unset",
-  "list returned incomplete credential",
-]);
+var BUILTIN_SERVER_IGNORED_REASON; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var IGNORED_BY_ENTERPRISE_POLICY_TEXT;
+var IGNORED_HERMETIC_MODE_TEXT;
+var IGNORED_EXCLUSIVE_MANAGED_CONFIG_TEXT;
+var IGNORED_DISABLE_SIDELOAD_TEXT;
+var IGNORED_REMOTE_CONTROL_TEXT;
+var IGNORED_IDE_TRANSPORT_TEXT;
+var NOT_ADMITTED_PROXY_SHAPE_TEXT;
+var NOT_ADMITTED_RESERVED_NAME_TEXT;
+var NOT_CONNECTED_LIMITS_TEXT;
+var NOT_CONNECTED_NOT_TAKEN_TEXT;
+var APPLIED_AT_NEXT_REDISPATCH_TEXT;
+var NO_TOOL_POLICY_IN_SESSION_TEXT;
+var TOGGLED_BY_SERVER_SET_TEXT;
+var UNCONFIRMED_TOGGLE_TEXT;
+var SAVED_FOR_NEXT_START_TEXT;
+var KNOWN_MCP_STATUS_TEXTS;
+var KNOWN_RUNNER_SKIP_REASONS;
+deferInit("chunk-nkdv7dw8.js:5072", () => {
+  BUILTIN_SERVER_IGNORED_REASON = "Builtin server is CLI-owned; ignored";
+  IGNORED_BY_ENTERPRISE_POLICY_TEXT = "Blocked by enterprise policy (allowedMcpServers/deniedMcpServers)";
+  IGNORED_HERMETIC_MODE_TEXT = "Ignored in hermetic mode (not declared in user config)";
+  IGNORED_EXCLUSIVE_MANAGED_CONFIG_TEXT =
+    "Ignored: an enterprise MCP config (managed-mcp.json) is present and has exclusive control over MCP servers";
+  IGNORED_DISABLE_SIDELOAD_TEXT =
+    "Ignored: managed setting disableSideloadFlags forbids server-delivered MCP servers on this machine";
+  IGNORED_REMOTE_CONTROL_TEXT =
+    "Ignored in a Remote Control session: MCP servers are loaded only from the verified startup config on this machine";
+  IGNORED_IDE_TRANSPORT_TEXT =
+    "Ignored: IDE transports are registered by the CLI itself, not mcp_set_servers";
+  NOT_ADMITTED_PROXY_SHAPE_TEXT =
+    "Not admitted: a pushed server must be an http server on this session's MCP proxy route, with a URL of at most 4,096 characters (a non-ASCII character counts as its percent-encoded bytes)";
+  NOT_ADMITTED_RESERVED_NAME_TEXT =
+    "Not admitted: this name is reserved for a first-party server, and this entry cannot be added after session start";
+  NOT_CONNECTED_LIMITS_TEXT =
+    "Not connected: this worker could not take all of this server's per-tool limits; the next worker that the session moves to reads the entry again";
+  NOT_CONNECTED_NOT_TAKEN_TEXT =
+    "Not connected: this worker's start did not take this server, so the worker takes no push of it; the next worker that the session moves to reads the entry again";
+  APPLIED_AT_NEXT_REDISPATCH_TEXT = "Change to a running server is applied at the next re-dispatch";
+  NO_TOOL_POLICY_IN_SESSION_TEXT =
+    "Not applied: this session applies no per-tool permission_policy to a client-hosted MCP server, so no always_ask or always_deny in this entry takes effect; the server is otherwise unchanged";
+  TOGGLED_BY_SERVER_SET_TEXT =
+    "Not applied: in this session, servers are turned on or off by changing the session's server set";
+  UNCONFIRMED_TOGGLE_TEXT =
+    "The session's tool container did not confirm the change, so the server may be on or off. Check its status before trying again";
+  SAVED_FOR_NEXT_START_TEXT =
+    "Saved. The server stays off for now and will be connected the next time this session starts after being idle. There is nothing more to do";
+  KNOWN_MCP_STATUS_TEXTS = new Set([
+    BUILTIN_SERVER_IGNORED_REASON,
+    OPERATOR_SUPPLIED_IGNORED_TEXT,
+    IGNORED_BY_ENTERPRISE_POLICY_TEXT,
+    IGNORED_HERMETIC_MODE_TEXT,
+    IGNORED_EXCLUSIVE_MANAGED_CONFIG_TEXT,
+    IGNORED_DISABLE_SIDELOAD_TEXT,
+    IGNORED_REMOTE_CONTROL_TEXT,
+    IGNORED_IDE_TRANSPORT_TEXT,
+    NOT_ADMITTED_PROXY_SHAPE_TEXT,
+    NOT_ADMITTED_RESERVED_NAME_TEXT,
+    NOT_CONNECTED_LIMITS_TEXT,
+    NOT_CONNECTED_NOT_TAKEN_TEXT,
+    APPLIED_AT_NEXT_REDISPATCH_TEXT,
+    NO_TOOL_POLICY_IN_SESSION_TEXT,
+    TOGGLED_BY_SERVER_SET_TEXT,
+    UNCONFIRMED_TOGGLE_TEXT,
+    SAVED_FOR_NEXT_START_TEXT,
+    BLOCKED_BY_POLICY_REASON,
+    RESERVED_ADDRESS_REASON,
+    ACCOUNT_CHANGED_REASON,
+  ]);
+  KNOWN_RUNNER_SKIP_REASONS = new Set([
+    "synced-file staging not supported on this runner kind",
+    "CLAUDE_CODE_REMOTE_SESSION_ID unset",
+    "list returned incomplete credential",
+  ]);
+});
 //@ chunk-nkdv7dw8.js:7153-7450 placement
 /**
  * MCP 资源请求错误文字的白名单校验：只放行固定集合或符合 gated/failed/truncated/stalled 格式的文字，其他返回 undefined。
@@ -288,9 +329,9 @@ function sanitizeMcpResourceError(error) {
   return;
 }
 //@ chunk-nkdv7dw8.js:7450-7613 placement
-function allowlistedStatusText(e) {
-  if (e.match(/^Server status: ([a-z][a-z-]{0,31})$/) !== null) return e;
-  if (e.match(/^Server not found: ([A-Za-z0-9 _.-]{1,64})$/) !== null) return e;
+function allowlistedStatusText(text) {
+  if (text.match(/^Server status: ([a-z][a-z-]{0,31})$/) !== null) return text;
+  if (text.match(/^Server not found: ([A-Za-z0-9 _.-]{1,64})$/) !== null) return text;
   return;
 }
 //@ chunk-nkdv7dw8.js:7613-7684 placement
@@ -302,24 +343,24 @@ var SERVERS_OBJECT_REQUIRED_TEXT = "mcp_set_servers: servers must be an object o
 /**
  * 生成可上报的 MCP 服务器状态表：需要脱敏时清洗服务器名（重名加 #n），状态文本只保留白名单内的形状，否则记为 "connection failed"。
  */
-function sanitizeMcpStatusMap(e, errors) {
-  let o = e;
-  let s = Object.create(null);
+function sanitizeMcpStatusMap(shouldSanitize, errors) {
+  let redactEnabled = shouldSanitize;
+  let sanitized = Object.create(null);
   for (let [key, value] of Object.entries(errors)) {
-    let S = o ? sanitizeTelemetryString(key) : key;
-    if (o && Object.hasOwn(s, S)) {
-      let y = 2;
-      while (Object.hasOwn(s, `${S}#${y}`)) y++;
-      S = `${S}#${y}`;
+    let sanitizedKey = redactEnabled ? sanitizeTelemetryString(key) : key;
+    if (redactEnabled && Object.hasOwn(sanitized, sanitizedKey)) {
+      let suffix = 2;
+      while (Object.hasOwn(sanitized, `${sanitizedKey}#${suffix}`)) suffix++;
+      sanitizedKey = `${sanitizedKey}#${suffix}`;
     }
-    s[S] =
-      !e ||
+    sanitized[sanitizedKey] =
+      !shouldSanitize ||
       KNOWN_MCP_STATUS_TEXTS.has(value) ||
       (isPrototypeKey(key) && value === reservedServerNameMessage(key))
         ? value
         : (allowlistedStatusText(value) ?? "connection failed");
   }
-  return s;
+  return sanitized;
 }
 //@ chunk-nkdv7dw8.js:7945-7997 placement
 var NOT_DIALED_SUPERSEDED_TEXT = "not dialed: a newer server set replaced it";
@@ -328,254 +369,274 @@ var NOT_DIALED_SUPERSEDED_TEXT = "not dialed: a newer server set replaced it";
  * 按范围筛选 MCP 服务器配置：严格配置模式返回空；configured 范围全部保留，否则只留内置市场来的服务器。
  */
 function filterServersForScope(servers, { scope, strictMcpConfig }) {
-  let s = emptyServerMap();
-  if (strictMcpConfig) return s;
+  let result = emptyServerMap();
+  if (strictMcpConfig) return result;
   for (let [key, value] of Object.entries(servers))
-    if (scope === "configured" || isFromBuiltinMarketplace(value)) s[key] = value;
-  return s;
+    if (scope === "configured" || isFromBuiltinMarketplace(value)) result[key] = value;
+  return result;
 }
 //@ chunk-nkdv7dw8.js:8143-8230 placement
 /**
  * 从服务器配置表里挑出非内置市场来源的服务器（未知上下文下会整体保留）。
  */
 function nonBuiltinMarketplaceServers(configs) {
-  let n = emptyServerMap();
-  for (let [key, value] of Object.entries(configs)) if (!isFromBuiltinMarketplace(value)) n[key] = value;
-  return n;
+  let result = emptyServerMap();
+  for (let [key, value] of Object.entries(configs)) if (!isFromBuiltinMarketplace(value)) result[key] = value;
+  return result;
 }
 //@ chunk-nkdv7dw8.js:21884-21956 placement
-var teleportRelayEnvModule = require("./chunk-1d5behve.js");
-var chromeSwitchNotesModule = require("./chunk-1cnesc1e.js");
+var teleportRelayEnvModule; // deferred: loads other modules while loading; runs once its import cycle is complete
+var chromeSwitchNotesModule;
+deferInit("chunk-nkdv7dw8.js:21884", () => {
+  teleportRelayEnvModule = require("../../utils/teleport/relayEnv.js");
+  chromeSwitchNotesModule = require("../../services/teleport/relayState.js");
+});
 //@ chunk-nkdv7dw8.js:21956-22026 placement
 function mcpClientModule_7() {
-  return require("./chunk-asne9cp8.js").mcpClientModule();
+  return require("../../services/mcp/emitTripwireEvent.lazy.js").mcpClientModule();
 }
 //@ chunk-nkdv7dw8.js:22026-23645 placement
 /**
  * mcp_reconnect / mcp_toggle 的开关处理：解析 lane 上下文、处理待定手工交换，再按目标状态启用或禁用服务器并回复。
  */
-var handleMcpReconnect = (e, n) => {
-  let o = requireMcpControlLanes(n);
-  o.resolveDeferredPluginStartup();
-  let { serverName } = e;
+var handleMcpReconnect = (request, context) => {
+  let lanes = requireMcpControlLanes(context);
+  lanes.resolveDeferredPluginStartup();
+  let { serverName } = request;
   if (typeof serverName !== "string")
     throw new WireSafeControlError("mcp_reconnect: serverName must be a string");
-  let r = o.pendingManualExchange(serverName);
-  if (r) return awaitExchangeThenToggle(r, n, o, serverName);
-  return toggleMcpServer(n, o, serverName);
+  let exchange = lanes.pendingManualExchange(serverName);
+  if (exchange) return awaitExchangeThenToggle(exchange, context, lanes, serverName);
+  return toggleMcpServer(context, lanes, serverName);
 };
-var handleMcpToggle = (e, n) => {
-  let o = requireMcpControlLanes(n);
-  o.resolveDeferredPluginStartup();
-  let s = n.engineState();
-  let { serverName, enabled } = e;
+var handleMcpToggle = (request, context) => {
+  let lanes = requireMcpControlLanes(context);
+  lanes.resolveDeferredPluginStartup();
+  let engineState = context.engineState();
+  let { serverName, enabled } = request;
   if (typeof serverName !== "string")
     throw new WireSafeControlError("mcp_toggle: serverName must be a string");
   if (typeof enabled !== "boolean") throw new WireSafeControlError("mcp_toggle: enabled must be a boolean");
   if (isClaudeInChromeMCPServer(serverName) && teleportRelayEnvModule?.getTeleportRelayEnvConfig())
     chromeSwitchNotesModule?.noteChromeSwitch(enabled);
-  let S =
-    s.mcp.clients.find((client) => client.name === serverName) ??
-    o.dynamicClients().find((h) => h.name === serverName);
-  let y = isUnadoptedSdkServer(o, s, serverName);
-  let config = y
-    ? o.registeredSdkServer(serverName)
-    : (o.ownerConfig(serverName) ??
-      o.sdkClients().find((h) => h.name === serverName)?.config ??
-      (enabled ? null : (S?.config ?? null)));
-  let E = config ? mcpDialBlockCause(serverName, config) : null;
+  let existingClient =
+    engineState.mcp.clients.find((client) => client.name === serverName) ??
+    lanes.dynamicClients().find((client) => client.name === serverName);
+  let isUnadoptedSdk = isUnadoptedSdkServer(lanes, engineState, serverName);
+  let config = isUnadoptedSdk
+    ? lanes.registeredSdkServer(serverName)
+    : (lanes.ownerConfig(serverName) ??
+      lanes.sdkClients().find((sdkClient) => sdkClient.name === serverName)?.config ??
+      (enabled ? null : (existingClient?.config ?? null)));
+  let blockCause = config ? mcpDialBlockCause(serverName, config) : null;
   if (!config) {
-    if (enabled && isClaudeInChromeMCPServer(serverName)) setServerEnabledEverywhere(n, o, serverName, true);
+    if (enabled && isClaudeInChromeMCPServer(serverName))
+      setServerEnabledEverywhere(context, lanes, serverName, true);
     throw new WireSafeControlError(`Server not found: ${sanitizeTelemetryString(serverName)}`);
   }
   if (!enabled)
-    return y
-      ? disableSdkServerControl(n, o, serverName, config)
-      : reconnectDisabledServer(n, o, serverName, config, s);
-  if (E)
+    return isUnadoptedSdk
+      ? disableSdkServerControl(context, lanes, serverName, config)
+      : reconnectDisabledServer(context, lanes, serverName, config, engineState);
+  if (blockCause)
     throw new WireSafeControlError(
-      E === "managed-policy"
+      blockCause === "managed-policy"
         ? mcpRefusalText(
             serverName,
-            E,
+            blockCause,
             config,
             `MCP server ${sanitizeTelemetryString(serverName)} is blocked by enterprise managed policy`,
           )
         : notApprovedText(serverName, "enabling"),
     );
-  let filtered = [...s.mcp.clients, ...o.dynamicClients(), ...o.sdkClients()].filter(
-    (h) => h.name === serverName,
+  let filtered = [...engineState.mcp.clients, ...lanes.dynamicClients(), ...lanes.sdkClients()].filter(
+    (client) => client.name === serverName,
   );
-  let x =
+  let alreadyConnected =
     config.type !== "sdk" &&
     !isMcpServerDisabled(serverName) &&
-    o.pendingManualExchange(serverName) === undefined &&
-    !o.postOAuthReconnectPending.has(serverName) &&
+    lanes.pendingManualExchange(serverName) === undefined &&
+    !lanes.postOAuthReconnectPending.has(serverName) &&
     filtered.length > 0 &&
     filtered.every(
-      (h) =>
-        h.type === "connected" &&
-        !isClientWithoutTransport(h) &&
-        (h.transportErrorState?.consecutiveErrors ?? 0) === 0 &&
-        h.toolsListError === undefined &&
-        !h.discoveryBearerRejected &&
-        !h.discoveryAuthFailure &&
-        !h.capabilities?.prompts &&
-        !h.capabilities?.resources &&
-        mcpClientModule_7().areMcpConfigsEqual(h.config, config),
+      (client) =>
+        client.type === "connected" &&
+        !isClientWithoutTransport(client) &&
+        (client.transportErrorState?.consecutiveErrors ?? 0) === 0 &&
+        client.toolsListError === undefined &&
+        !client.discoveryBearerRejected &&
+        !client.discoveryAuthFailure &&
+        !client.capabilities?.prompts &&
+        !client.capabilities?.resources &&
+        mcpClientModule_7().areMcpConfigsEqual(client.config, config),
     );
-  setServerEnabledEverywhere(n, o, serverName, true);
-  if (y) return enableSdkServerControl(n, o, serverName, config);
-  if (x) {
+  setServerEnabledEverywhere(context, lanes, serverName, true);
+  if (isUnadoptedSdk) return enableSdkServerControl(context, lanes, serverName, config);
+  if (alreadyConnected) {
     logForDiagnosticsNoPII("info", "cli_mcp_toggle_unchanged");
     return;
   }
-  return reconnectServerForControl(n, o, serverName, config, false);
+  return reconnectServerForControl(context, lanes, serverName, config, false);
 };
 //@ chunk-nkdv7dw8.js:23645-23816 placement
 /**
  * 判断 SDK 注册的 MCP 服务器是否尚未被接管：不是 Chrome 服务器、有 SDK 注册、无归属配置，且不在当前客户端或动态客户端中。
  */
-function isUnadoptedSdkServer(e, n, serverName) {
+function isUnadoptedSdkServer(lanes, engineState, serverName) {
   return (
     !isClaudeInChromeMCPServer(serverName) &&
-    e.registeredSdkServer(serverName) !== null &&
-    e.ownerConfig(serverName) === null &&
-    !n.mcp.clients.some((client) => client.name === serverName) &&
-    !e.dynamicClients().some((s) => s.name === serverName)
+    lanes.registeredSdkServer(serverName) !== null &&
+    lanes.ownerConfig(serverName) === null &&
+    !engineState.mcp.clients.some((client) => client.name === serverName) &&
+    !lanes.dynamicClients().some((client) => client.name === serverName)
   );
 }
 //@ chunk-nkdv7dw8.js:23816-23901 placement
-function requireMcpControlLanes(e) {
-  if (e.mcpControlLanes === null) throw new WireSafeControlError(UNSUPPORTED_CONTROL_SUBTYPE_TEXT);
-  return e.mcpControlLanes;
+function requireMcpControlLanes(context) {
+  if (context.mcpControlLanes === null) throw new WireSafeControlError(UNSUPPORTED_CONTROL_SUBTYPE_TEXT);
+  return context.mcpControlLanes;
 }
 //@ chunk-nkdv7dw8.js:23901-23962 placement
-function setServerEnabledEverywhere(e, n, serverName, s) {
-  setMcpServerEnabled(serverName, s, e.storageV5);
-  n.switchSaved(serverName, s);
+function setServerEnabledEverywhere(context, lanes, serverName, enabled) {
+  setMcpServerEnabled(serverName, enabled, context.storageV5);
+  lanes.switchSaved(serverName, enabled);
 }
 //@ chunk-nkdv7dw8.js:23962-24028 placement
-async function awaitExchangeThenToggle(e, n, o, serverName) {
-  await e.catch(() => {});
-  return toggleMcpServer(n, o, serverName);
+async function awaitExchangeThenToggle(exchange, context, lanes, serverName) {
+  await exchange.catch(() => {});
+  return toggleMcpServer(context, lanes, serverName);
 }
 //@ chunk-nkdv7dw8.js:24028-24596 placement
-function toggleMcpServer(e, n, o) {
-  let s = e.engineState();
-  let r = n.ownerConfig(o) ?? n.sdkClients().find((C) => C.name === o)?.config ?? null;
-  let u = r ? mcpDialBlockCause(o, r) : null;
-  if (!r) throw new WireSafeControlError(`Server not found: ${sanitizeTelemetryString(o)}`);
-  if (u === "managed-policy")
+function toggleMcpServer(context, lanes, serverName) {
+  let engineState = context.engineState();
+  let config =
+    lanes.ownerConfig(serverName) ??
+    lanes.sdkClients().find((client) => client.name === serverName)?.config ??
+    null;
+  let blockCause = config ? mcpDialBlockCause(serverName, config) : null;
+  if (!config) throw new WireSafeControlError(`Server not found: ${sanitizeTelemetryString(serverName)}`);
+  if (blockCause === "managed-policy")
     throw new WireSafeControlError(
       mcpRefusalText(
-        o,
-        u,
-        r,
-        `MCP server ${sanitizeTelemetryString(o)} is blocked by enterprise managed policy`,
+        serverName,
+        blockCause,
+        config,
+        `MCP server ${sanitizeTelemetryString(serverName)} is blocked by enterprise managed policy`,
       ),
     );
-  if (isMcpServerDisabled(o)) throw new WireSafeControlError(disabledEnableBeforeText(o, "reconnecting"));
-  if (u) throw new WireSafeControlError(notApprovedText(o, "reconnecting"));
-  let S = s.mcp.clients.find((client) => client.name === o) ?? n.dynamicClients().find((C) => C.name === o);
+  if (isMcpServerDisabled(serverName))
+    throw new WireSafeControlError(disabledEnableBeforeText(serverName, "reconnecting"));
+  if (blockCause) throw new WireSafeControlError(notApprovedText(serverName, "reconnecting"));
+  let existing =
+    engineState.mcp.clients.find((client) => client.name === serverName) ??
+    lanes.dynamicClients().find((client) => client.name === serverName);
   let distrust =
-    !takeRecentWithin(n.postOAuthReconnectPending, o) &&
-    S !== undefined &&
-    S.type !== "cached" &&
-    S.type !== "pending";
-  return reconnectServerForControl(e, n, o, r, distrust);
+    !takeRecentWithin(lanes.postOAuthReconnectPending, serverName) &&
+    existing !== undefined &&
+    existing.type !== "cached" &&
+    existing.type !== "pending";
+  return reconnectServerForControl(context, lanes, serverName, config, distrust);
 }
 //@ chunk-nkdv7dw8.js:24596-24791 placement
-async function reconnectServerForControl(e, n, o, s, distrust) {
-  n.seedControlDialSlot(o, s);
-  let u = await n.reconnectForControlRequest(o, s, {
+async function reconnectServerForControl(context, lanes, serverName, config, distrust) {
+  lanes.seedControlDialSlot(serverName, config);
+  let result = await lanes.reconnectForControlRequest(serverName, config, {
     distrust,
   });
-  let S = En(n.ownerConfig(o), s);
+  let sameConfig = import_sortedIndex_2(lanes.ownerConfig(serverName), config);
   replyThenThrowOnError(
-    e,
+    context,
     reconnectMcpServer(
-      e,
-      n.landControlResult(
-        o,
-        S
+      context,
+      lanes.landControlResult(
+        serverName,
+        sameConfig
           ? {
-              ...u,
+              ...result,
               asked: true,
             }
-          : u,
+          : result,
       ),
     ),
   );
 }
 //@ chunk-nkdv7dw8.js:24791-24888 placement
-function replyThenThrowOnError(e, n) {
-  if (e.replyNow !== null) e.replyNow(n);
-  if (n.subtype === "error") throw new QueuedNotificationError(n.error);
+function replyThenThrowOnError(context, reply) {
+  if (context.replyNow !== null) context.replyNow(reply);
+  if (reply.subtype === "error") throw new QueuedNotificationError(reply.error);
 }
 //@ chunk-nkdv7dw8.js:24888-25250 placement
-function reconnectMcpServer(e, n) {
-  if (n.type === "connected")
+function reconnectMcpServer(context, client) {
+  if (client.type === "connected")
     return {
       subtype: "success",
     };
-  if (n.type === "failed") {
-    if (e.redactsPersistedLane())
-      logForDebugging(`mcp reconnect/toggle failed: ${n.error ?? "(no detail)"}`, {
+  if (client.type === "failed") {
+    if (context.redactsPersistedLane())
+      logForDebugging(`mcp reconnect/toggle failed: ${client.error ?? "(no detail)"}`, {
         level: "error",
       });
-    let error = n.error ?? "Connection failed";
+    let error = client.error ?? "Connection failed";
     return {
       subtype: "error",
       error: KNOWN_MCP_STATUS_TEXTS.has(error)
         ? error
-        : (allowlistedStatusText(error) ?? (e.redactsPersistedLane() ? "Connection failed" : error)),
+        : (allowlistedStatusText(error) ?? (context.redactsPersistedLane() ? "Connection failed" : error)),
     };
   }
   return {
     subtype: "error",
-    error: describeMcpServerStatus(n),
+    error: describeMcpServerStatus(client),
   };
 }
 //@ chunk-nkdv7dw8.js:25250-25308 placement
-function reconnectDisabledServer(e, n, serverName, s, r) {
-  setServerEnabledEverywhere(e, n, serverName, false);
-  return reconnectMcpServerByName(e, n, serverName, s, r);
+function reconnectDisabledServer(context, lanes, serverName, config, engineState) {
+  setServerEnabledEverywhere(context, lanes, serverName, false);
+  return reconnectMcpServerByName(context, lanes, serverName, config, engineState);
 }
 //@ chunk-nkdv7dw8.js:25308-25697 placement
 /**
  * 处理 mcp_reconnect：找到同名的启动/SDK/动态/已连接客户端，清除已连接实例（按配置去重）的服务器缓存，再重连并回复。
  */
-function reconnectMcpServerByName(e, n, o, s, r, u) {
-  let filtered = [...n.startupClients(), ...n.sdkClients(), ...n.dynamicClients(), ...r.mcp.clients].filter(
-    (C) => C.name === o,
-  );
-  let filtered_2 = filtered.filter((C) => C.type === "connected");
+function reconnectMcpServerByName(context, lanes, serverName, config, engineState, shouldFinish) {
+  let filtered = [
+    ...lanes.startupClients(),
+    ...lanes.sdkClients(),
+    ...lanes.dynamicClients(),
+    ...engineState.mcp.clients,
+  ].filter((client) => client.name === serverName);
+  let filtered_2 = filtered.filter((client) => client.type === "connected");
   if (filtered_2.length > 0) {
-    let C = mcpClientModule_7();
-    return mergeMcpClientConfigs([s, ...filtered_2.map((E) => E.config)], C.areMcpConfigsEqual)
-      .reduce((acc, D) => acc.then(() => C.clearServerCache(o, D)), Promise.resolve())
-      .then(() => finishMcpReconnect(e, n, o, s, filtered_2.at(-1), u));
+    let mcpModule = mcpClientModule_7();
+    return mergeMcpClientConfigs(
+      [config, ...filtered_2.map((client) => client.config)],
+      mcpModule.areMcpConfigsEqual,
+    )
+      .reduce(
+        (acc, config) => acc.then(() => mcpModule.clearServerCache(serverName, config)),
+        Promise.resolve(),
+      )
+      .then(() => finishMcpReconnect(context, lanes, serverName, config, filtered_2.at(-1), shouldFinish));
   }
-  return finishMcpReconnect(e, n, o, s, filtered[0], u);
+  return finishMcpReconnect(context, lanes, serverName, config, filtered[0], shouldFinish);
 }
 //@ chunk-nkdv7dw8.js:25697-25802 placement
-async function disableSdkServerControl(e, n, serverName, s) {
-  setServerEnabledEverywhere(e, n, serverName, false);
-  await n.disableSdkServer(serverName);
-  markServerDisabled(e, n, serverName);
-  replyThenThrowOnError(e, {
+async function disableSdkServerControl(context, lanes, serverName, config) {
+  setServerEnabledEverywhere(context, lanes, serverName, false);
+  await lanes.disableSdkServer(serverName);
+  markServerDisabled(context, lanes, serverName);
+  replyThenThrowOnError(context, {
     subtype: "success",
   });
 }
 //@ chunk-nkdv7dw8.js:25802-25944 placement
-async function enableSdkServerControl(e, n, serverName, config) {
-  let r = await n.enableSdkServer(serverName);
+async function enableSdkServerControl(context, lanes, serverName, config) {
+  let result = await lanes.enableSdkServer(serverName);
   replyThenThrowOnError(
-    e,
+    context,
     reconnectMcpServer(
-      e,
-      r ?? {
+      context,
+      result ?? {
         name: serverName,
         type: "failed",
         config,
@@ -588,94 +649,100 @@ async function enableSdkServerControl(e, n, serverName, config) {
 /**
  * MCP 重连控制请求的收尾：仍有效时找到该服务器的当前客户端；若是缓存/新连接则先刷新其工具再回复成功，否则直接清理并回复成功。
  */
-function finishMcpReconnect(e, n, o, s, r, u = () => true) {
-  if (!u()) return;
-  let S =
-    e.engineState().mcp.clients.find((client) => client.name === o) ??
-    n.dynamicClients().find((C) => C.name === o) ??
-    r;
-  if (S?.type === "cached" || (S?.type === "connected" && S !== r) || isDiscoveryCacheUsable())
-    return dropServerCaches(o, S?.config ?? s, S, r).then(() => {
-      if (!u()) return;
-      markServerDisabled(e, n, o);
-      replyThenThrowOnError(e, {
+function finishMcpReconnect(context, lanes, serverName, config, client, shouldFinish = () => true) {
+  if (!shouldFinish()) return;
+  let current =
+    context.engineState().mcp.clients.find((client) => client.name === serverName) ??
+    lanes.dynamicClients().find((client) => client.name === serverName) ??
+    client;
+  if (
+    current?.type === "cached" ||
+    (current?.type === "connected" && current !== client) ||
+    isDiscoveryCacheUsable()
+  )
+    return dropServerCaches(serverName, current?.config ?? config, current, client).then(() => {
+      if (!shouldFinish()) return;
+      markServerDisabled(context, lanes, serverName);
+      replyThenThrowOnError(context, {
         subtype: "success",
       });
     });
-  markServerDisabled(e, n, o);
-  replyThenThrowOnError(e, {
+  markServerDisabled(context, lanes, serverName);
+  replyThenThrowOnError(context, {
     subtype: "success",
   });
 }
 //@ chunk-nkdv7dw8.js:26281-26511 placement
-async function dropServerCaches(e, n, o, s) {
-  if (o?.type === "cached") mcpClientModule_7().disposeServerConnectionDetached(e, o.config);
-  else if (o?.type === "connected" && o !== s) await mcpClientModule_7().clearServerCache(e, o.config);
+async function dropServerCaches(serverName, config, client, fallbackClient) {
+  if (client?.type === "cached")
+    mcpClientModule_7().disposeServerConnectionDetached(serverName, client.config);
+  else if (client?.type === "connected" && client !== fallbackClient)
+    await mcpClientModule_7().clearServerCache(serverName, client.config);
   if (!isDiscoveryCacheUsable()) return;
-  await flushDiscoveryCache(mcpClientModule_7().dropDiscoveryEntry(e, n));
+  await flushDiscoveryCache(mcpClientModule_7().dropDiscoveryEntry(serverName, config));
 }
 //@ chunk-nkdv7dw8.js:26511-26865 placement
 /**
  * 把 MCP 服务器在引擎状态中标为 disabled：客户端条目改为 disabled，并移除其工具、命令、资源与资源模板。
  */
-function markServerDisabled(e, n, o) {
-  n.markDynamicServerDisabled(o);
-  let mcpPrefix = getMcpPrefix(o);
-  e.setEngineState((r) => ({
-    ...r,
+function markServerDisabled(context, lanes, serverName) {
+  lanes.markDynamicServerDisabled(serverName);
+  let mcpPrefix = getMcpPrefix(serverName);
+  context.setEngineState((state) => ({
+    ...state,
     mcp: {
-      ...r.mcp,
-      clients: r.mcp.clients.map((client) =>
-        client.name === o
+      ...state.mcp,
+      clients: state.mcp.clients.map((client) =>
+        client.name === serverName
           ? {
-              name: o,
+              name: serverName,
               type: "disabled",
               config: client.config,
             }
           : client,
       ),
-      tools: reject_default(r.mcp.tools, (u) => isToolFromMcpServer(u, o, mcpPrefix)),
-      commands: reject_default(r.mcp.commands, (u) => commandBelongsToServer(u, o)),
-      resources: omitKeys(r.mcp.resources, o),
-      resourceTemplates: omitKeys(r.mcp.resourceTemplates, o),
+      tools: reject_default(state.mcp.tools, (tool) => isToolFromMcpServer(tool, serverName, mcpPrefix)),
+      commands: reject_default(state.mcp.commands, (command) => commandBelongsToServer(command, serverName)),
+      resources: omitKeys(state.mcp.resources, serverName),
+      resourceTemplates: omitKeys(state.mcp.resourceTemplates, serverName),
     },
   }));
 }
 //@ chunk-nkdv7dw8.js:26865-26900 placement
-var handleMcpStatus = (e, n) => ({
-  mcpServers: mcpStatusForReply(n),
+var handleMcpStatus = (request, context) => ({
+  mcpServers: mcpStatusForReply(context),
 });
 //@ chunk-nkdv7dw8.js:26900-27000 placement
-function mcpStatusForReply(e) {
-  return e.redactsPersistedLane()
-    ? minimalStatuses(describeMcpServerForStatus(e.mcpConnections()))
-    : describeMcpServerForStatus(e.mcpConnections());
+function mcpStatusForReply(context) {
+  return context.redactsPersistedLane()
+    ? minimalStatuses(describeMcpServerForStatus(context.mcpConnections()))
+    : describeMcpServerForStatus(context.mcpConnections());
 }
 //@ chunk-nkdv7dw8.js:27000-27281 placement
 var handleGetBinaryVersion = () => getVersionReport();
-var handleGetContextUsage = async (e, n) => {
-  if (e.detail != null && e.detail !== "summary" && e.detail !== "full")
+var handleGetContextUsage = async (request, context) => {
+  if (request.detail != null && request.detail !== "summary" && request.detail !== "full")
     throw new WireSafeControlError("get_context_usage: detail must be 'summary' or 'full'");
-  let contextUsage = await collectContextUsage(n, e.detail, mayIncludeAgentPaths(n));
+  let payload = await collectContextUsage(context, request.detail, mayIncludeAgentPaths(context));
   return {
-    ...contextUsage,
-    memoryFiles: n.redactsPersistedLane() ? [] : contextUsage.memoryFiles,
-    ...(!mayIncludeAgentPaths(n) && stripInitializeAgentPaths(contextUsage)),
+    ...payload,
+    memoryFiles: context.redactsPersistedLane() ? [] : payload.memoryFiles,
+    ...(!mayIncludeAgentPaths(context) && stripInitializeAgentPaths(payload)),
   };
 };
 //@ chunk-nkdv7dw8.js:27281-27566 placement
-function collectContextUsage(e, detail, localPaths) {
-  let { messages, mainLoopModel = getMainLoopModel(), ...u } = e.contextUsageInputs();
+function collectContextUsage(context, detail, localPaths) {
+  let { messages, mainLoopModel = getMainLoopModel(), ...rest } = context.contextUsageInputs();
   return collectContextData({
-    session: e.session,
+    session: context.session,
     messages,
-    getAppState: e.engineState,
-    getMcp: () => e.engineState().mcp,
-    storageV5: e.storageV5,
-    credentials: e.credentials,
+    getAppState: context.engineState,
+    getMcp: () => context.engineState().mcp,
+    storageV5: context.storageV5,
+    credentials: context.credentials,
     options: {
       mainLoopModel,
-      ...u,
+      ...rest,
     },
     detail,
     localPaths,
@@ -691,66 +758,67 @@ var handleListModels = () => ({
 var handleGetSessionCost = () => ({
   text: stripAnsi(formatTotalCost()),
 });
-var handleReloadOutputStyles = async (e, n) => {
+var handleReloadOutputStyles = async (request, context) => {
   clearOutputStyleCaches();
   clearOutputStylesCache();
-  let allOutputStyles = await getAllOutputStylesCached(getCwdOrNull(), n.storageV5);
+  let allOutputStyles = await getAllOutputStylesCached(getCwdOrNull(), context.storageV5);
   return {
     available_output_styles: Object.keys(allOutputStyles),
   };
 };
-var handleGetUsage = async (e, n) => {
-  if (e.skip_behaviors != null && typeof e.skip_behaviors !== "boolean")
+var handleGetUsage = async (request, context) => {
+  if (request.skip_behaviors != null && typeof request.skip_behaviors !== "boolean")
     throw new WireSafeControlError("get_usage: skip_behaviors must be a boolean");
-  let o = await projectModelScopedUsage({
-    storageV5: n.storageV5,
-    credentials: n.credentials,
+  let usage = await projectModelScopedUsage({
+    storageV5: context.storageV5,
+    credentials: context.credentials,
     live: effortBelowMaxSaved(
       getMainLoopModel(),
-      resolveEffortLevel(n.engineState()),
-      n.engineState().ultracode,
+      resolveEffortLevel(context.engineState()),
+      context.engineState().ultracode,
     ),
-    includeBehaviors: !n.redactsPersistedLane() && e.skip_behaviors !== true,
+    includeBehaviors: !context.redactsPersistedLane() && request.skip_behaviors !== true,
   });
-  let s = mayIncludeAgentPaths(n);
-  if (!o.behaviors || (s && !isBridgeOrTransport(n.session))) return o;
-  let r = {
+  let includeAgentPaths = mayIncludeAgentPaths(context);
+  if (!usage.behaviors || (includeAgentPaths && !isBridgeOrTransport(context.session))) return usage;
+  let redactions = {
     fix: undefined,
-    ...(!s && {
+    ...(!includeAgentPaths && {
       recommendations: undefined,
     }),
   };
-  let { day, week } = o.behaviors;
+  let { day, week } = usage.behaviors;
   return {
-    ...o,
+    ...usage,
     behaviors: {
       day: {
         ...day,
-        ...r,
+        ...redactions,
       },
       week: {
         ...week,
-        ...r,
+        ...redactions,
       },
     },
   };
 };
 //@ chunk-nkdv7dw8.js:28256-29878 placement
 function describeMcpServerForStatus({ connections, tools }) {
-  let o = Ji(tools, "name");
+  let allTools = uniqByExport(tools, "name");
   return connections
     .filter((connection) => !isArtifacts404Failure(connection))
     .map((connection) => {
-      let u =
+      let isSessionProxied =
         isCcrInjectedMcpUrl(connection.name, connection.config) || isClaudeAiProxyServer(connection.config);
-      let S = mcpServerSource(connection.name, connection.config);
-      let y;
-      let C;
-      let E = false;
+      let source = mcpServerSource(connection.name, connection.config);
+      let configOut;
+      let urlHost;
+      let cloudServiceProvided = false;
       if (connection.config.type === "sse" || connection.config.type === "http") {
-        let h = URL.parse(connection.config.url);
-        E = u && S === "dynamic" && h !== null && ccrPathPrefixIndex(h);
-        y = redactManagedMcpServerConfig(
+        let url = URL.parse(connection.config.url);
+        cloudServiceProvided =
+          isSessionProxied && source === "dynamic" && url !== null && ccrPathPrefixIndex(url);
+        configOut = redactManagedMcpServerConfig(
           {
             type: connection.config.type,
             url: connection.config.url,
@@ -759,57 +827,58 @@ function describeMcpServerForStatus({ connections, tools }) {
           },
           connection.config.scope,
         );
-        if (!u && MCP_SETTINGS_SCOPE_SET.has(connection.config.scope)) {
-          let L = describeMcpServerOrigin(connection.name, connection.config, {
+        if (!isSessionProxied && MCP_SETTINGS_SCOPE_SET.has(connection.config.scope)) {
+          let origin = describeMcpServerOrigin(connection.name, connection.config, {
             detail: "origin",
           });
           try {
-            C = L === undefined || L.includes("${") ? undefined : new URL(L).host || undefined;
+            urlHost =
+              origin === undefined || origin.includes("${") ? undefined : new URL(origin).host || undefined;
           } catch {
-            C = undefined;
+            urlHost = undefined;
           }
         }
       } else if (connection.config.type === "claudeai-proxy")
-        y = {
+        configOut = {
           type: "claudeai-proxy",
           url: connection.config.url,
           id: connection.config.id,
         };
       else if (connection.config.type === "stdio" || connection.config.type === undefined)
-        y = {
+        configOut = {
           type: "stdio",
           command: connection.config.command,
           args: connection.config.args,
         };
       let tools = isConnectedOrCached(connection)
-        ? filterToolsByServer(o, connection.name).map((h) => ({
-            name: h.mcpInfo?.toolName ?? h.name,
+        ? filterToolsByServer(allTools, connection.name).map((tool) => ({
+            name: tool.mcpInfo?.toolName ?? tool.name,
             annotations: {
-              readOnly: h.isReadOnly({}) || undefined,
-              destructive: h.isDestructive?.({}) || undefined,
-              openWorld: h.isOpenWorld?.({}) || undefined,
+              readOnly: tool.isReadOnly({}) || undefined,
+              destructive: tool.isDestructive?.({}) || undefined,
+              openWorld: tool.isOpenWorld?.({}) || undefined,
             },
-            ...(h.mcpInfo?.uiMeta && {
-              _meta: h.mcpInfo.uiMeta,
+            ...(tool.mcpInfo?.uiMeta && {
+              _meta: tool.mcpInfo.uiMeta,
             }),
           }))
         : undefined;
       let capabilities;
       if (isConnectedOrCached(connection) && connection.capabilities.experimental) {
-        let h = {
+        let experimental = {
           ...connection.capabilities.experimental,
         };
         if (
-          "claude/channel" in h &&
+          "claude/channel" in experimental &&
           (!hasExperimentalCapability(connection.capabilities, "claude/channel") ||
             !isChannelsEnabled() ||
             !isChannelAllowlisted(connection.config.pluginSource) ||
             (connection.type === "connected" && connection.protocolEra === "modern"))
         )
-          delete h["claude/channel"];
-        if (Object.keys(h).length > 0)
+          delete experimental["claude/channel"];
+        if (Object.keys(experimental).length > 0)
           capabilities = {
-            experimental: h,
+            experimental,
           };
       }
       return {
@@ -818,37 +887,37 @@ function describeMcpServerForStatus({ connections, tools }) {
         serverInfo: isConnectedOrCached(connection) ? connection.serverInfo : undefined,
         error: connection.type === "failed" ? connection.error : undefined,
         error_code: mcpAuthErrorCode(connection),
-        config: y,
+        config: configOut,
         transport: connection.config.type ?? "stdio",
-        ...(u
+        ...(isSessionProxied
           ? {
-              sessionProxied: u,
-              ...(E && {
-                cloudServiceProvided: E,
+              sessionProxied: isSessionProxied,
+              ...(cloudServiceProvided && {
+                cloudServiceProvided,
               }),
             }
-          : C && {
-              urlHost: C,
+          : urlHost && {
+              urlHost,
             }),
         scope: connection.config.scope,
-        source: S,
+        source,
         tools,
         capabilities,
       };
     });
 }
 //@ chunk-nkdv7dw8.js:29878-29942 placement
-function mayIncludeAgentPaths(e) {
-  return !e.redactsPersistedLane() && !mayTransportPersist(e.session);
+function mayIncludeAgentPaths(context) {
+  return !context.redactsPersistedLane() && !mayTransportPersist(context.session);
 }
 //@ chunk-nkdv7dw8.js:29942-30609 placement
-function handleSetMcpPermissionModeOverride(e) {
-  let { serverName, mode } = e;
+function handleSetMcpPermissionModeOverride(request) {
+  let { serverName, mode } = request;
   if (typeof serverName !== "string")
     throw new WireSafeControlError("set_mcp_permission_mode_override: serverName must be a string");
-  let s = mode === null ? null : parsePermissionMode(mode);
-  if (s === undefined) throw new WireSafeControlError(UNRECOGNIZED_PERMISSION_MODE_ERROR);
-  let mcpModeOverride = parseMcpModeOverride(s);
+  let parsedMode = mode === null ? null : parsePermissionMode(mode);
+  if (parsedMode === undefined) throw new WireSafeControlError(UNRECOGNIZED_PERMISSION_MODE_ERROR);
+  let mcpModeOverride = parseMcpModeOverride(parsedMode);
   if (!mcpModeOverride.ok) {
     logForDebugging(
       `set_mcp_permission_mode_override: rejected mode='${mcpModeOverride.rejected}' for ${sanitizeTelemetryString(serverName)} (tighten-only)`,
@@ -874,56 +943,59 @@ function handleSetMcpPermissionModeOverride(e) {
   };
 }
 //@ chunk-nkdv7dw8.js:30609-30771 placement
-var ASK_FOR_TOOLS_INVALID_MESSAGE = `set_mcp_permission_mode_override: askForTools must be a list of at most ${MCP_ASK_FOR_TOOLS_MAX} {name} entries, each name 1 to 64 letters, digits, underscores or hyphens`;
+var ASK_FOR_TOOLS_INVALID_MESSAGE; // deferred: uses UNRECOGNIZED_PERMISSION_MODE_ERROR (../../types/permissions.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-nkdv7dw8.js:30609", () => {
+  ASK_FOR_TOOLS_INVALID_MESSAGE = `set_mcp_permission_mode_override: askForTools must be a list of at most ${MCP_ASK_FOR_TOOLS_MAX} {name} entries, each name 1 to 64 letters, digits, underscores or hyphens`;
+});
 //@ chunk-nkdv7dw8.js:30771-31143 placement
 /**
  * 校验 set_mcp_permission_mode_override 的 askForTools：至多上限个 {name}、名字合法，去掉服务器前缀后去重返回，空则 undefined；不合法抛 WireSafeControlError。
  */
-function parseAskForTools(e, serverName) {
-  let askForTools = e.askForTools;
+function parseAskForTools(request, serverName) {
+  let askForTools = request.askForTools;
   if (askForTools === undefined || askForTools === null) return;
   if (!Array.isArray(askForTools) || askForTools.length > MCP_ASK_FOR_TOOLS_MAX)
     throw new WireSafeControlError(ASK_FOR_TOOLS_INVALID_MESSAGE);
   let mcpPrefix = getMcpPrefix(serverName);
-  let r = new Set();
+  let names = new Set();
   for (let askForTool of askForTools) {
-    let S =
+    let name =
       typeof askForTool === "object" && askForTool !== null && !Array.isArray(askForTool)
         ? askForTool.name
         : undefined;
-    if (typeof S !== "string" || !MCP_ASK_FOR_TOOLS_NAME.test(S))
+    if (typeof name !== "string" || !MCP_ASK_FOR_TOOLS_NAME.test(name))
       throw new WireSafeControlError(ASK_FOR_TOOLS_INVALID_MESSAGE);
-    let y = S.startsWith(mcpPrefix) ? S.slice(mcpPrefix.length) : S;
-    if (y !== "") r.add(y);
+    let shortName = name.startsWith(mcpPrefix) ? name.slice(mcpPrefix.length) : name;
+    if (shortName !== "") names.add(shortName);
   }
-  return r.size > 0 ? [...r] : undefined;
+  return names.size > 0 ? [...names] : undefined;
 }
 //@ chunk-nkdv7dw8.js:31143-31938 placement
-var clearUnknownServerOverride = (e, n) => {
-  let { serverName, override } = handleSetMcpPermissionModeOverride(e);
-  let askForTools = parseAskForTools(e, serverName);
-  let u = override === "default" ? askForTools : undefined;
-  let S = false;
-  n.setEngineState((y) => {
-    let mcpPermissionModeOverrides = y.toolPermissionContext.mcpPermissionModeOverrides;
-    let mcpAskForTools = y.toolPermissionContext.mcpAskForTools ?? {};
-    S = Object.hasOwn(mcpPermissionModeOverrides, serverName);
+var clearUnknownServerOverride = (request, context) => {
+  let { serverName, override } = handleSetMcpPermissionModeOverride(request);
+  let askForTools = parseAskForTools(request, serverName);
+  let nextAskForTools = override === "default" ? askForTools : undefined;
+  let hadOverride = false;
+  context.setEngineState((state) => {
+    let mcpPermissionModeOverrides = state.toolPermissionContext.mcpPermissionModeOverrides;
+    let mcpAskForTools = state.toolPermissionContext.mcpAskForTools ?? {};
+    hadOverride = Object.hasOwn(mcpPermissionModeOverrides, serverName);
     if (
-      (S ? mcpPermissionModeOverrides[serverName] === override : override === undefined) &&
-      En(getOwn(mcpAskForTools, serverName), u)
+      (hadOverride ? mcpPermissionModeOverrides[serverName] === override : override === undefined) &&
+      import_sortedIndex_2(getOwn(mcpAskForTools, serverName), nextAskForTools)
     )
-      return y;
+      return state;
     let mcpAskForTools_2 =
-      u === undefined
+      nextAskForTools === undefined
         ? omitKeys(mcpAskForTools, serverName)
         : {
             ...mcpAskForTools,
-            [serverName]: u,
+            [serverName]: nextAskForTools,
           };
     return {
-      ...y,
+      ...state,
       toolPermissionContext: {
-        ...y.toolPermissionContext,
+        ...state.toolPermissionContext,
         mcpPermissionModeOverrides:
           override === undefined
             ? omitKeys(mcpPermissionModeOverrides, serverName)
@@ -935,11 +1007,11 @@ var clearUnknownServerOverride = (e, n) => {
       },
     };
   });
-  if (n.isKnownMcpServer(serverName)) return;
+  if (context.isKnownMcpServer(serverName)) return;
   return {
     warning:
       override === undefined
-        ? S
+        ? hadOverride
           ? `MCP server '${sanitizeTelemetryString(serverName)}' is not known; its stored override was cleared.`
           : `MCP server '${sanitizeTelemetryString(serverName)}' is not known; no override was present to clear.`
         : `MCP server '${sanitizeTelemetryString(serverName)}' is not yet known; override stored but will not apply until a server with that exact name connects.`,
@@ -953,47 +1025,47 @@ var MAX_MCP_RESOURCE_JSON_CHARS = 10485760;
 var UI = "ui://";
 //@ chunk-nkdv7dw8.js:31966-32018 placement
 function mcpModulesChunk_3() {
-  return require("./chunk-asne9cp8.js");
+  return require("../../services/mcp/emitTripwireEvent.lazy.js");
 }
 //@ chunk-nkdv7dw8.js:32018-32076 placement
-function refuseMcpReadResource(e, n) {
-  logFeatureBad("mcp_read_resource", e);
-  throw new WireSafeControlError(n);
+function refuseMcpReadResource(reason, message) {
+  logFeatureBad("mcp_read_resource", reason);
+  throw new WireSafeControlError(message);
 }
 //@ chunk-nkdv7dw8.js:32076-34360 placement
-var handleMcpReadResource = async (e, n) => {
-  if (n.redactsPersistedLane())
+var handleMcpReadResource = async (request, context) => {
+  if (context.redactsPersistedLane())
     refuseMcpReadResource("redacting_lane", "mcp_read_resource is not available on this connection");
-  let { serverName, uri } = e;
+  let { serverName, uri } = request;
   if (typeof serverName !== "string")
     refuseMcpReadResource("bad_request", "mcp_read_resource: serverName must be a string");
   if (typeof uri !== "string")
     refuseMcpReadResource("bad_request", "mcp_read_resource: uri must be a string");
   if (!uri.startsWith(UI))
     refuseMcpReadResource("not_ui_uri", "mcp_read_resource: uri must use the ui:// scheme");
-  let found = n.mcpConnections().connections.find((connection) => connection.name === serverName);
+  let found = context.mcpConnections().connections.find((connection) => connection.name === serverName);
   if (!found) {
-    if (n.isKnownMcpServer(serverName))
+    if (context.isKnownMcpServer(serverName))
       refuseMcpReadResource(
         "not_connected",
         `MCP server ${sanitizeTelemetryString(serverName)} is not connected`,
       );
     refuseMcpReadResource("server_not_found", `Server not found: ${sanitizeTelemetryString(serverName)}`);
   }
-  let u = mcpDialBlockCause(found.name, found.config);
-  if (u === "managed-policy")
+  let blockCause = mcpDialBlockCause(found.name, found.config);
+  if (blockCause === "managed-policy")
     refuseMcpReadResource(
       judgeGate(serverName, found.config) ? "reserved_address" : "policy_blocked",
       mcpRefusalText(
         serverName,
-        u,
+        blockCause,
         found.config,
         `MCP server ${sanitizeTelemetryString(serverName)} is blocked by enterprise managed policy`,
       ),
     );
   if (found.type === "disabled" || isMcpServerDisabled(found.name))
     refuseMcpReadResource("disabled", disabledEnableBeforeText(serverName, "reading"));
-  if (u) refuseMcpReadResource("approval_required", notApprovedText(serverName, "reading"));
+  if (blockCause) refuseMcpReadResource("approval_required", notApprovedText(serverName, "reading"));
   if (!isConnectedOrCached(found))
     refuseMcpReadResource(
       "not_connected",
@@ -1004,29 +1076,29 @@ var handleMcpReadResource = async (e, n) => {
       "sdk_server",
       "mcp_read_resource does not support SDK MCP servers: the caller hosts them and can read them directly",
     );
-  let S = hostedDesktopRefusal_2(found);
-  if (S) refuseMcpReadResource("hosted_desktop", S.message);
-  let y = {
+  let hostedRefusal = hostedDesktopRefusal_2(found);
+  if (hostedRefusal) refuseMcpReadResource("hosted_desktop", hostedRefusal.message);
+  let fields = {
     transport: fromEnum(found.config.type ?? "stdio"),
     row_type: fromEnum(found.type),
   };
   let now = Date.now();
   let phase = lit("connect");
-  let D;
+  let resource;
   try {
-    let h = await mcpModulesChunk_3().mcpClientModule().ensureConnectedClient(found, {
+    let client = await mcpModulesChunk_3().mcpClientModule().ensureConnectedClient(found, {
       context: "mcp_read_resource",
     });
     phase = lit("read");
-    D = await readMcpResource(h, uri, {
+    resource = await readMcpResource(client, uri, {
       timeout: getConnectionTimeoutMs(),
     });
   } catch (error) {
-    let L = mcpModulesChunk_3();
-    let mcpErrorCode = L.mcpSdkErrorClassificationModule().getMcpErrorCode(error);
+    let modules = mcpModulesChunk_3();
+    let mcpErrorCode = modules.mcpSdkErrorClassificationModule().getMcpErrorCode(error);
     let errnoCode = getErrnoCode(error);
     logFeatureBad("mcp_read_resource", "read_failed", {
-      ...y,
+      ...fields,
       elapsed_ms: Date.now() - now,
       phase,
       error_source: fromEnum(classifyMcpErrorSourceCategory(error)),
@@ -1034,7 +1106,7 @@ var handleMcpReadResource = async (e, n) => {
         rpc_code: mcpErrorCode,
       }),
       ...(errnoCode !== undefined && {
-        local_code: L.mcpClientModule().sanitizeConnectErrorCodeForTelemetry(errnoCode),
+        local_code: modules.mcpClientModule().sanitizeConnectErrorCodeForTelemetry(errnoCode),
       }),
       ...(error instanceof Error &&
         "status" in error &&
@@ -1050,7 +1122,7 @@ var handleMcpReadResource = async (e, n) => {
     );
     throw new QueuedNotificationError(sanitizeTelemetryString(`mcp_read_resource: ${errorMessage(error)}`));
   }
-  let mapped = D.contents.map((content) => ({
+  let mapped = resource.contents.map((content) => ({
     uri: content.uri,
     mimeType: content.mimeType,
     text: "text" in content ? content.text : undefined,
@@ -1063,7 +1135,7 @@ var handleMcpReadResource = async (e, n) => {
       `mcp_read_resource: the resource exceeds the ${MAX_MCP_RESOURCE_JSON_CHARS}-character limit`,
     );
   logFeatureOk("mcp_read_resource", {
-    ...y,
+    ...fields,
     elapsed_ms: Date.now() - now,
   });
   return {
@@ -1079,8 +1151,8 @@ var noop = () => {};
 var PREFETCH_MAX_FILES = 16;
 var PREFETCH_FILES_SHAPE_ERROR =
   "prefetch_attachments: files must be a list of at most 16 { file_uuid: UUID, file_size?: number }, issued_at a number (epoch milliseconds), and only_these, if present, a boolean";
-var isValidPrefetchAttachmentsRequest = (e, n) => {
-  let { files, issued_at: issuedAt, only_these: onlyThese } = e;
+var isValidPrefetchAttachmentsRequest = (request, context) => {
+  let { files, issued_at: issuedAt, only_these: onlyThese } = request;
   if (
     !Array.isArray(files) ||
     files.length > PREFETCH_MAX_FILES ||
@@ -1091,30 +1163,30 @@ var isValidPrefetchAttachmentsRequest = (e, n) => {
     logPrefetchOutcome("bridge_attachment_prefetch_invalid_request", {});
     throw new QueuedNotificationError(PREFETCH_FILES_SHAPE_ERROR);
   }
-  let u = [];
+  let normalizedFiles = [];
   for (let file of files) {
-    let y = normalizeUuidOrNull(isPlainObjectOrArrayCheck(file) ? file.file_uuid : undefined);
+    let fileUuid = normalizeUuidOrNull(isPlainObjectOrArrayCheck(file) ? file.file_uuid : undefined);
     let fileSize = isPlainObjectOrArrayCheck(file) ? file.file_size : undefined;
-    if (y === null || (fileSize !== undefined && typeof fileSize !== "number")) {
+    if (fileUuid === null || (fileSize !== undefined && typeof fileSize !== "number")) {
       logFeatureSad("bridge_attachment_prefetch", "invalid_request");
       logPrefetchOutcome("bridge_attachment_prefetch_invalid_request", {});
       throw new QueuedNotificationError(PREFETCH_FILES_SHAPE_ERROR);
     }
-    u.push(
+    normalizedFiles.push(
       fileSize === undefined
         ? {
-            file_uuid: y,
+            file_uuid: fileUuid,
           }
         : {
-            file_uuid: y,
+            file_uuid: fileUuid,
             file_size: fileSize,
           },
     );
   }
   return {
-    accepted: prefetchInboundAttachments(u, {
+    accepted: prefetchInboundAttachments(normalizedFiles, {
       issuedAt,
-      credentials: n.credentials,
+      credentials: context.credentials,
       onlyThese: onlyThese === true,
     }),
   };
@@ -1127,10 +1199,10 @@ function isPlainObjectOrArrayCheck(file) {
 /**
  * 创建一次写尝试状态 {latched, attempted, pending, fallback, owed}（MCP 控制请求的写重试用）。
  */
-function initialWriteAttempt(e) {
+function initialWriteAttempt(latched) {
   return {
-    latched: e,
-    attempted: e,
+    latched,
+    attempted: latched,
     pending: undefined,
     fallback: undefined,
     owed: false,
@@ -1140,65 +1212,65 @@ function initialWriteAttempt(e) {
 /**
  * 把写尝试状态锁存到给定值（latched 与 attempted 同时更新）。
  */
-function latchWriteAttempt(e, n) {
-  e.latched = n;
-  e.attempted = n;
+function latchWriteAttempt(state, attempted) {
+  state.latched = attempted;
+  state.attempted = attempted;
 }
 //@ chunk-nkdv7dw8.js:35428-36337 placement
-function saveGeneratedTitle(text, n, signal = n.turnAbortSignal()) {
-  let { titles } = n;
+function saveGeneratedTitle(text, host, signal = host.turnAbortSignal()) {
+  let { titles } = host;
   let sessionId = getSessionId();
   if (titles.pending?.sessionId === sessionId) return titles.pending.title;
-  let u = getMaterializedSessionFile() !== null;
-  let S = {
+  let materialized = getMaterializedSessionFile() !== null;
+  let call = {
     settled: false,
     retracted: false,
   };
-  let y = requestSessionTitle(text, signal, n.credentials)
-    .then((E) => {
-      S.settled = true;
-      if (S.retracted) return null;
-      let D = E;
-      if (E.kind === "titled") {
-        let L = sanitizeSessionTitle(E.title);
-        D = L
+  let titlePromise = requestSessionTitle(text, signal, host.credentials)
+    .then((response) => {
+      call.settled = true;
+      if (call.retracted) return null;
+      let outcome = response;
+      if (response.kind === "titled") {
+        let title = sanitizeSessionTitle(response.title);
+        outcome = title
           ? {
               kind: "titled",
-              title: L,
+              title,
             }
           : {
               kind: "unusable",
             };
       }
       if (titles.fallback?.sessionId === sessionId) {
-        let L = nextTitleFallback(titles.fallback.fallback, D);
-        titles.fallback = L
+        let fallback = nextTitleFallback(titles.fallback.fallback, outcome);
+        titles.fallback = fallback
           ? {
               sessionId,
-              fallback: L,
+              fallback,
             }
           : undefined;
       }
-      if (D.kind !== "titled") {
+      if (outcome.kind !== "titled") {
         titles.attempted = titles.latched;
         return null;
       }
       titles.attempted = true;
-      let { title } = D;
-      let h = () => {
+      let { title } = outcome;
+      let saveLocal = () => {
         try {
-          saveAiGeneratedTitle(sessionId, title, n.storageV5);
+          saveAiGeneratedTitle(sessionId, title, host.storageV5);
         } catch (error) {
           if (isFsInaccessible(error)) logForDebugging(`saveAiGeneratedTitle failed: ${error}`);
-          else logTitleChangeError(n, error);
+          else logTitleChangeError(host, error);
         }
       };
       if (sessionId !== getSessionId()) {
-        if (u) h();
+        if (materialized) saveLocal();
         return title;
       }
       if (!getCurrentSessionDisplayTitle(sessionId)) {
-        if (getMaterializedSessionFile()) h();
+        if (getMaterializedSessionFile()) saveLocal();
         else cacheAiTitle(title);
         getSdkHostedBridgeHandle()?.adoptLocalAiTitle?.();
         syncTitleToRemoteSession(title);
@@ -1206,31 +1278,23 @@ function saveGeneratedTitle(text, n, signal = n.turnAbortSignal()) {
       return title;
     })
     .catch((error) => {
-      S.settled = true;
+      call.settled = true;
       titles.attempted = titles.latched;
-      logTitleChangeError(n, error);
+      logTitleChangeError(host, error);
       return null;
     });
-  let C = {
+  let pending = {
     sessionId,
-    title: y,
-    call: S,
+    title: titlePromise,
+    call,
   };
-  titles.pending = C;
-  y.then((E) => {
-    if (E === null && titles.pending === C) titles.pending = undefined;
+  titles.pending = pending;
+  titlePromise.then((title) => {
+    if (title === null && titles.pending === pending) titles.pending = undefined;
   });
-  return y;
+  return titlePromise;
 }
 export {
-  nonBuiltinMarketplaceServers,
-  initialWriteAttempt,
-  filterServersForScope,
-  latchWriteAttempt,
-  sanitizeMcpResourceError,
-  SERVERS_OBJECT_REQUIRED_TEXT,
-  sanitizeMcpStatusMap,
-  describeMcpServerForStatus,
   BUILTIN_SERVER_IGNORED_REASON,
   IGNORED_IDE_TRANSPORT_TEXT,
   IGNORED_BY_ENTERPRISE_POLICY_TEXT,
@@ -1243,6 +1307,14 @@ export {
   NOT_DIALED_SUPERSEDED_TEXT,
   mcpClientModule_5,
   describeMcpServerStatus,
+  nonBuiltinMarketplaceServers,
+  initialWriteAttempt,
+  filterServersForScope,
+  latchWriteAttempt,
+  sanitizeMcpResourceError,
+  SERVERS_OBJECT_REQUIRED_TEXT,
+  sanitizeMcpStatusMap,
+  describeMcpServerForStatus,
   saveGeneratedTitle,
   handleMcpStatus,
   handleGetContextUsage,

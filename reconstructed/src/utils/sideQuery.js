@@ -201,64 +201,68 @@ async function sideQuery(opts) {
   } = opts;
   let messageText = unlessManagedDeniedModel(model);
   logUnrecognizedModel(messageText, opts.querySource);
-  let gt = mainAgentContext();
-  let At = isMainOrAgentQuerySource(opts.querySource) ? maxRetries : 0;
-  let It = () =>
+  let agentContext = mainAgentContext();
+  let clientRetries = isMainOrAgentQuerySource(opts.querySource) ? maxRetries : 0;
+  let createClient = () =>
     getAnthropicClient({
-      maxRetries: At,
+      maxRetries: clientRetries,
       model: messageText,
       source: "side_query",
       querySource: opts.querySource,
       toolNames: getToolNameList(tools ?? [], messages),
-      agentContext: gt,
+      agentContext,
       classifierJudgesServedCall,
       credentials,
       signal,
       ...((onFetchAttempt || retryAfterBudgetMs) && {
-        fetchOverride: async (as, Vi) => {
+        fetchOverride: async (url, init) => {
           onFetchAttempt?.();
-          let response = await fetchWithRequestBodyCompression(as, Vi);
+          let response = await fetchWithRequestBodyCompression(url, init);
           return retryAfterBudgetMs ? markRetryAfterTooLong(response, retryAfterBudgetMs()) : response;
         },
       }),
     });
-  let Yt = await It();
-  let qt =
+  let client = await createClient();
+  let authToken =
     isAnthropicAuthEnabled() && !hasCustomAuthorizationHeader() && !env.ANTHROPIC_UNIX_SOCKET
-      ? (Yt.authToken ?? undefined)
+      ? (client.authToken ?? undefined)
       : undefined;
-  let Zt = (as) => (isAutoModeQuerySource(opts.querySource) ? withCatalogSuppressed(as) : as());
-  let systemBlocks = Zt(() => getModelBetas(messageText)).filter(
+  let withCatalogsSuppressed = (produce) =>
+    isAutoModeQuerySource(opts.querySource) ? withCatalogSuppressed(produce) : produce();
+  let systemBlocks = withCatalogsSuppressed(() => getModelBetas(messageText)).filter(
     (block) => block !== BETA_THINKING_TOKEN_COUNT && block !== BETA_MID_CONVERSATION_SYSTEM,
   );
-  for (let as of extraBetas ?? []) if (!systemBlocks.includes(as)) systemBlocks.push(as);
-  let pn =
+  for (let extraBeta of extraBetas ?? []) if (!systemBlocks.includes(extraBeta)) systemBlocks.push(extraBeta);
+  let supportsStructuredOutput =
     Boolean(output_format) &&
-    Zt(() => modelSupportsStructuredOutputs(messageText)) &&
+    withCatalogsSuppressed(() => modelSupportsStructuredOutputs(messageText)) &&
     !isStructuredOutputsUnsupportedClaude(messageText);
-  let no = pn && !systemBlocks.includes(BETA_STRUCTURED_OUTPUTS);
-  if (no) systemBlocks.push(BETA_STRUCTURED_OUTPUTS);
+  let shouldAddStructuredBeta = supportsStructuredOutput && !systemBlocks.includes(BETA_STRUCTURED_OUTPUTS);
+  if (shouldAddStructuredBeta) systemBlocks.push(BETA_STRUCTURED_OUTPUTS);
   let sideQuerySystem = buildSideQuerySystem({
     messages,
     system,
     skipSystemPromptPrefix,
     forceAttributionHeader,
-    agentContext: gt,
+    agentContext,
   });
-  let ho;
-  let yn = thinking === false && messageText !== model && Zt(() => modelRejectsDisabledThinking(messageText));
-  if (thinking === false && !yn)
-    ho = {
+  let thinkingConfig;
+  let thinkingRejected =
+    thinking === false &&
+    messageText !== model &&
+    withCatalogsSuppressed(() => modelRejectsDisabledThinking(messageText));
+  if (thinking === false && !thinkingRejected)
+    thinkingConfig = {
       type: "disabled",
     };
   else if (thinking !== undefined && thinking !== false)
-    ho = {
+    thinkingConfig = {
       type: "enabled",
       budget_tokens: Math.min(thinking, max_tokens - 1),
     };
   let outputConfig = {};
   if (effort !== undefined) {
-    let normalizedModel = Zt(() =>
+    let normalizedModel = withCatalogsSuppressed(() =>
       lowerEffort(
         resolveEffortValue(messageText, undefined, {
           hookEffortValue: effort,
@@ -266,34 +270,36 @@ async function sideQuery(opts) {
         learnedEffortCap(messageText, opts.querySource),
       ),
     );
-    let Vi =
-      ho?.type === "disabled" &&
+    let effortCapped =
+      thinkingConfig?.type === "disabled" &&
       typeof normalizedModel === "string" &&
       isAboveHighEffort(normalizedModel) &&
-      Zt(() => modelCapsEffortWhenThinkingDisabled(messageText));
-    if (Vi)
+      withCatalogsSuppressed(() => modelCapsEffortWhenThinkingDisabled(messageText));
+    if (effortCapped)
       logForDebugging(
         `sideQuery: output_config.effort '${normalizedModel}' held to '${THINKING_DISABLED_EFFORT_CAP}': ${messageText} rejects higher effort when thinking is disabled`,
       );
-    let effortValue = Vi ? THINKING_DISABLED_EFFORT_CAP : normalizedModel;
+    let effortValue = effortCapped ? THINKING_DISABLED_EFFORT_CAP : normalizedModel;
     if (effortValue !== undefined)
-      Zt(() => applyEffortToOutputConfig(effortValue, outputConfig, {}, systemBlocks, messageText));
+      withCatalogsSuppressed(() =>
+        applyEffortToOutputConfig(effortValue, outputConfig, {}, systemBlocks, messageText),
+      );
   }
-  let Xn = {
-    ...(pn && {
+  let outputConfigBody = {
+    ...(supportsStructuredOutput && {
       format: output_format,
     }),
     ...(outputConfig.effort !== undefined && {
       effort: outputConfig.effort,
     }),
   };
-  let fo = Object.keys(Xn).length > 0;
-  let To = isOneHourCacheTtl(opts.querySource) ? "1h" : undefined;
-  if (To === "1h" && canSendFirstPartyBetas() && !systemBlocks.includes(BETA_EXTENDED_CACHE_TTL))
+  let hasOutputConfig = Object.keys(outputConfigBody).length > 0;
+  let cacheTtl = isOneHourCacheTtl(opts.querySource) ? "1h" : undefined;
+  if (cacheTtl === "1h" && canSendFirstPartyBetas() && !systemBlocks.includes(BETA_EXTENDED_CACHE_TTL))
     systemBlocks.push(BETA_EXTENDED_CACHE_TTL);
-  let bo = dropCacheControlWhenCachingDisabled === true && !getPromptCachingEnabled(messageText);
-  let vn = bo ? sideQuerySystem.map(withoutCacheControl) : sideQuerySystem;
-  let co = bo
+  let dropCaching = dropCacheControlWhenCachingDisabled === true && !getPromptCachingEnabled(messageText);
+  let systemWithCache = dropCaching ? sideQuerySystem.map(withoutCacheControl) : sideQuerySystem;
+  let messagesWithCache = dropCaching
     ? messages.map((message) =>
         typeof message.content === "string"
           ? message
@@ -303,7 +309,7 @@ async function sideQuery(opts) {
             },
       )
     : messages;
-  let So = bo
+  let droppedCacheMarks = dropCaching
     ? count(
         [
           ...sideQuerySystem,
@@ -312,26 +318,28 @@ async function sideQuery(opts) {
         stripCacheControl,
       )
     : 0;
-  if (So > 0)
+  if (droppedCacheMarks > 0)
     logForDebugging(
-      `sideQuery (${opts.querySource}): ${So} cache mark(s) dropped, prompt caching is off for ${messageText}`,
+      `sideQuery (${opts.querySource}): ${droppedCacheMarks} cache mark(s) dropped, prompt caching is off for ${messageText}`,
     );
-  let system_2 = To ? vn.map((as) => stripCacheControl_3(as, To)) : vn;
-  let messages_2 = To
-    ? co.map((as) =>
-        typeof as.content === "string"
-          ? as
+  let system_2 = cacheTtl
+    ? systemWithCache.map((block) => stripCacheControl_3(block, cacheTtl))
+    : systemWithCache;
+  let messages_2 = cacheTtl
+    ? messagesWithCache.map((message) =>
+        typeof message.content === "string"
+          ? message
           : {
-              ...as,
-              content: as.content.map((Vi) => stripCacheControl_3(Vi, To)),
+              ...message,
+              content: message.content.map((block) => stripCacheControl_3(block, cacheTtl)),
             },
       )
-    : co;
-  let ao = stripAnyVersatileSuffix(messageText);
-  let $o = () => ({});
-  let yo = {
+    : messagesWithCache;
+  let baseModelName = stripAnyVersatileSuffix(messageText);
+  let extraHeaderFields = () => ({});
+  let requestBody = {
     model: toProviderWireModelId(messageText),
-    max_tokens: yn ? max_tokens + 2048 : max_tokens,
+    max_tokens: thinkingRejected ? max_tokens + 2048 : max_tokens,
     system: system_2,
     messages: messages_2,
     ...(tools && {
@@ -340,94 +348,96 @@ async function sideQuery(opts) {
     ...(tool_choice && {
       tool_choice,
     }),
-    ...(fo && {
-      output_config: Xn,
+    ...(hasOutputConfig && {
+      output_config: outputConfigBody,
     }),
     ...(temperature !== undefined &&
-      Zt(() => modelSupportsTemperature(ao)) && {
+      withCatalogsSuppressed(() => modelSupportsTemperature(baseModelName)) && {
         temperature,
       }),
     ...(stop_sequences && {
       stop_sequences,
     }),
-    ...(ho && {
-      thinking: ho,
+    ...(thinkingConfig && {
+      thinking: thinkingConfig,
     }),
     ...betasRequestParam(systemBlocks),
     metadata: getAPIMetadata({
       servedSessionMode,
     }),
     ...extraBodyParams,
-    ...$o(),
+    ...extraHeaderFields(),
   };
-  if (containsMalformedStringDeep(yo)) {
+  if (containsMalformedStringDeep(requestBody)) {
     try {
-      yo = clone(yo);
+      requestBody = clone(requestBody);
     } catch {}
-    repairMalformedStringsDeep(yo);
+    repairMalformedStringsDeep(requestBody);
     logEvent("tengu_lone_surrogate_sanitized", {
       source: lit_2("sideQuery"),
       querySource: agentTypeForTelemetry(opts.querySource),
     });
   }
   let start = performance.now();
-  let llmRequestSpan = startLLMRequestSpan(messageText, gt, undefined, undefined, false, opts.querySource);
-  let br = 0;
-  let Hr = start;
-  let Fr;
-  let cs = (as) =>
-    as && !isLowPriorityActiveSafe() ? getDispatchVersion(classifyQuerySource(opts.querySource)) : null;
-  let _r = false;
-  let Cr = null;
-  let Vr = false;
-  let Oo = {
+  let span = startLLMRequestSpan(messageText, agentContext, undefined, undefined, false, opts.querySource);
+  let attemptCount = 0;
+  let attemptStartedAt = start;
+  let clientRequestId;
+  let dispatchForBackend = (isFirstParty) =>
+    isFirstParty && !isLowPriorityActiveSafe()
+      ? getDispatchVersion(classifyQuerySource(opts.querySource))
+      : null;
+  let dispatchFellBack = false;
+  let sentDispatchId = null;
+  let backendIsFirstParty = false;
+  let cacheMarkCounter = {
     count: 0,
   };
-  let jr = (as) => {
-    let Vi = isFirstPartyApiBackend();
-    Vr = Vi;
-    let ji = _r ? null : cs(Vi);
-    let Wi = _r ? (Vi ? V2P : null) : ji;
-    Cr = Wi;
-    if (Wi !== null) logForDebugging(`[dispatch] sent ${ANTHROPIC_DISPATCH_ID}=${Wi} (side query)`);
-    br++;
-    Hr = performance.now();
-    takeGzipTelemetry(Fr);
-    Fr = hitsAnthropicBackend() ? randomUUID() : undefined;
-    recordLlmRequestAttempt(llmRequestSpan, {
-      attempt: br,
-      clientRequestId: Fr,
+  let sendAttempt = (clientArg) => {
+    let firstParty = isFirstPartyApiBackend();
+    backendIsFirstParty = firstParty;
+    let dispatchId = dispatchFellBack ? null : dispatchForBackend(firstParty);
+    let effectiveDispatchId = dispatchFellBack ? (firstParty ? V2P : null) : dispatchId;
+    sentDispatchId = effectiveDispatchId;
+    if (effectiveDispatchId !== null)
+      logForDebugging(`[dispatch] sent ${ANTHROPIC_DISPATCH_ID}=${effectiveDispatchId} (side query)`);
+    attemptCount++;
+    attemptStartedAt = performance.now();
+    takeGzipTelemetry(clientRequestId);
+    clientRequestId = hitsAnthropicBackend() ? randomUUID() : undefined;
+    recordLlmRequestAttempt(span, {
+      attempt: attemptCount,
+      clientRequestId,
     });
     let upstreamTraceparent = getUpstreamTraceparent();
-    let wa = {
-      ...(Wi !== null && {
-        [ANTHROPIC_DISPATCH_ID]: Wi,
+    let requestHeaders = {
+      ...(effectiveDispatchId !== null && {
+        [ANTHROPIC_DISPATCH_ID]: effectiveDispatchId,
       }),
-      ...(Fr && {
-        [CLIENT_REQUEST_ID_HEADER]: Fr,
+      ...(clientRequestId && {
+        [CLIENT_REQUEST_ID_HEADER]: clientRequestId,
       }),
       ...(upstreamTraceparent && {
         traceparent: upstreamTraceparent,
       }),
     };
-    return as.beta.messages
-      .create(yo, {
+    return clientArg.beta.messages
+      .create(requestBody, {
         signal,
         ...(timeout !== undefined && {
           timeout,
         }),
-        ...(ji !== null && {
+        ...(dispatchId !== null && {
           maxRetries: 0,
         }),
-        ...(Object.keys(wa).length > 0 && {
-          headers: wa,
+        ...(Object.keys(requestHeaders).length > 0 && {
+          headers: requestHeaders,
         }),
       })
       .catch((error) => {
-        let foundryUnsupportedCapabilities = parseFoundryUnsupportedCapabilities(error);
-        if (foundryUnsupportedCapabilities)
-          recordFoundryUnsupportedCapabilities(messageText, foundryUnsupportedCapabilities);
-        if (yo.output_config?.effort !== undefined && isEffortUnsupportedError(error)) {
+        let capabilities = parseFoundryUnsupportedCapabilities(error);
+        if (capabilities) recordFoundryUnsupportedCapabilities(messageText, capabilities);
+        if (requestBody.output_config?.effort !== undefined && isEffortUnsupportedError(error)) {
           markEffortUnsupported(messageText);
           logForDebugging(
             `[effort] side query: the server refused effort for model ${messageText} (the output_config.effort field or the anthropic-beta value ${BETA_EFFORT.header}). Sending the request again without either; this Claude Code process will not send either to this model again.`,
@@ -438,25 +448,25 @@ async function sideQuery(opts) {
           logEvent("tengu_effort_unsupported_retry", {
             model: telemetrySafeModelName(messageText),
           });
-          let { effort, ...$a } = yo.output_config;
-          let { output_config: outputConfig, betas, ...Vs } = yo;
-          let filtered = betas?.filter((jo) => jo !== BETA_EFFORT.header);
-          yo = {
-            ...Vs,
-            ...(Object.keys($a).length > 0 && {
-              output_config: $a,
+          let { effort, ...restOutputConfig } = requestBody.output_config;
+          let { output_config: outputConfig, betas, ...restBody } = requestBody;
+          let filtered = betas?.filter((betaName) => betaName !== BETA_EFFORT.header);
+          requestBody = {
+            ...restBody,
+            ...(Object.keys(restOutputConfig).length > 0 && {
+              output_config: restOutputConfig,
             }),
             ...(filtered !== undefined &&
               filtered.length > 0 && {
                 betas: filtered,
               }),
           };
-          return jr(as);
+          return sendAttempt(clientArg);
         }
         if (
-          pn &&
+          supportsStructuredOutput &&
           !(extraBodyParams !== undefined && "output_config" in extraBodyParams) &&
-          yo.output_config?.format !== undefined &&
+          requestBody.output_config?.format !== undefined &&
           isStructuredOutputsUnsupported(error)
         ) {
           markStructuredOutputsUnsupportedClaude(messageText);
@@ -469,38 +479,40 @@ async function sideQuery(opts) {
           logEvent("tengu_structured_outputs_unsupported_retry", {
             model: telemetrySafeModelName(messageText),
           });
-          let { format, ...$a } = yo.output_config;
-          let { output_config: outputConfig, betas, ...Vs } = yo;
-          let _i = no ? betas?.filter((jo) => jo !== BETA_STRUCTURED_OUTPUTS.header) : betas;
-          yo = {
-            ...Vs,
-            ...(Object.keys($a).length > 0 && {
-              output_config: $a,
+          let { format, ...restOutputConfig } = requestBody.output_config;
+          let { output_config: outputConfig, betas, ...restBody } = requestBody;
+          let keptBetas = shouldAddStructuredBeta
+            ? betas?.filter((betaName) => betaName !== BETA_STRUCTURED_OUTPUTS.header)
+            : betas;
+          requestBody = {
+            ...restBody,
+            ...(Object.keys(restOutputConfig).length > 0 && {
+              output_config: restOutputConfig,
             }),
-            ...(_i !== undefined &&
-              _i.length > 0 && {
-                betas: _i,
+            ...(keptBetas !== undefined &&
+              keptBetas.length > 0 && {
+                betas: keptBetas,
               }),
           };
-          return jr(as);
+          return sendAttempt(clientArg);
         }
         if (
           opts.resendWithoutRefusedContext1m &&
-          yo.betas?.includes(BETA_LONG_CONTEXT.header) &&
+          requestBody.betas?.includes(BETA_LONG_CONTEXT.header) &&
           !hitsAnthropicBackend(getProviderForModel(messageText)) &&
           (isContext1mBetaRejected(error) || isInvalidBetaFlagError(error))
         ) {
-          let { betas, ...$a } = yo;
-          let filtered = betas.filter((Ti) => Ti !== BETA_LONG_CONTEXT.header);
-          yo = {
-            ...$a,
+          let { betas, ...restBody } = requestBody;
+          let filtered = betas.filter((betaName) => betaName !== BETA_LONG_CONTEXT.header);
+          requestBody = {
+            ...restBody,
             ...(filtered.length > 0 && {
               betas: filtered,
             }),
           };
-          return jr(as).then((Ti) => {
+          return sendAttempt(clientArg).then((response) => {
             rejectContextBetaForModel(messageText);
-            return Ti;
+            return response;
           });
         }
         if (alwaysFalseD(error, getProviderForModel(messageText))) {
@@ -523,70 +535,70 @@ async function sideQuery(opts) {
         throw error;
       });
   };
-  let Or = async (as) => {
+  let sendWithFallback = async (clientArg) => {
     try {
-      return await jr(as);
+      return await sendAttempt(clientArg);
     } catch (error) {
-      let ji = Cr;
-      if (_r || signal?.aborted) throw error;
+      let failedDispatchId = sentDispatchId;
+      if (dispatchFellBack || signal?.aborted) throw error;
       let status = error instanceof APIError ? error.status : undefined;
-      let ii = status !== undefined && status >= 500;
-      let wa = error instanceof APIConnectionError;
-      let hr;
-      let mi;
-      let Ha = 0;
-      if (ji === null) {
-        if (!Vr || status !== 503) throw error;
-        hr = headerlessDeclineKind(error);
-        Ha = headerlessDeclineRetryDelay(error);
-        mi = `HTTP 503 with no ${ANTHROPIC_DISPATCH_ID} (side query); retrying once with ${ANTHROPIC_DISPATCH_ID}=${V2P}`;
-      } else if (ii || wa) {
-        hr = ii ? lit_2("5xx") : lit_2("conn_err");
-        mi = `${ii ? `HTTP ${status}` : "connection error"} with ${ANTHROPIC_DISPATCH_ID}=${ji} (side query); retrying once with ${ANTHROPIC_DISPATCH_ID}=${V2P}`;
+      let is5xx = status !== undefined && status >= 500;
+      let isConnectionError = error instanceof APIConnectionError;
+      let fallbackReason;
+      let fallbackLogLine;
+      let retryDelayMs = 0;
+      if (failedDispatchId === null) {
+        if (!backendIsFirstParty || status !== 503) throw error;
+        fallbackReason = headerlessDeclineKind(error);
+        retryDelayMs = headerlessDeclineRetryDelay(error);
+        fallbackLogLine = `HTTP 503 with no ${ANTHROPIC_DISPATCH_ID} (side query); retrying once with ${ANTHROPIC_DISPATCH_ID}=${V2P}`;
+      } else if (is5xx || isConnectionError) {
+        fallbackReason = is5xx ? lit_2("5xx") : lit_2("conn_err");
+        fallbackLogLine = `${is5xx ? `HTTP ${status}` : "connection error"} with ${ANTHROPIC_DISPATCH_ID}=${failedDispatchId} (side query); retrying once with ${ANTHROPIC_DISPATCH_ID}=${V2P}`;
       } else if (
         (status === 408 || status === 409 || status === 429) &&
-        At > 0 &&
+        clientRetries > 0 &&
         !(retryAfterBudgetMs && retryAfterTooLongMs(error) !== undefined)
       ) {
-        hr = lit_2("retryable_4xx");
-        mi = `HTTP ${status} with ${ANTHROPIC_DISPATCH_ID}=${ji} (side query); re-sending with ${ANTHROPIC_DISPATCH_ID}=${V2P} and the client retry budget`;
+        fallbackReason = lit_2("retryable_4xx");
+        fallbackLogLine = `HTTP ${status} with ${ANTHROPIC_DISPATCH_ID}=${failedDispatchId} (side query); re-sending with ${ANTHROPIC_DISPATCH_ID}=${V2P} and the client retry budget`;
       } else throw error;
-      logForDebugging(`[dispatch] ${mi}`, {
+      logForDebugging(`[dispatch] ${fallbackLogLine}`, {
         level: "warn",
       });
       logEvent("tengu_dispatch_header_fallback", {
         model: telemetrySafeModelName(messageText),
-        dispatch: fromEnumOpt(ji) ?? lit_2("none"),
+        dispatch: fromEnumOpt(failedDispatchId) ?? lit_2("none"),
         resend_dispatch: fromEnum(V2P),
-        reason: hr,
+        reason: fallbackReason,
         status: status !== undefined ? fromNumber(status) : lit_2("none"),
         query_source: agentTypeForTelemetry(opts.querySource),
         request_id: sanitizeMarkName(error instanceof APIError ? error.requestID : undefined),
       });
-      _r = true;
-      if (Ha > 0) {
-        await sleep(Ha, signal);
+      dispatchFellBack = true;
+      if (retryDelayMs > 0) {
+        await sleep(retryDelayMs, signal);
         if (signal?.aborted) throw error;
       }
-      return await jr(as);
+      return await sendAttempt(clientArg);
     }
   };
-  let Io;
+  let response;
   try {
     try {
-      Io = await Or(Yt);
+      response = await sendWithFallback(client);
     } catch (error) {
       if (
         !(error instanceof APIError) ||
         !(error.status === 401 || isOAuthTokenRevokedError(error)) ||
         isRoutedFinalAnswerError(error) ||
-        !qt ||
+        !authToken ||
         signal?.aborted
       )
         throw error;
-      let Vi = false;
+      let oauthRefreshed = false;
       try {
-        Vi = await handleOAuth401Error(qt, credentials);
+        oauthRefreshed = await handleOAuth401Error(authToken, credentials);
       } catch (error_2) {
         logForDebugging(
           `sideQuery: OAuth refresh after ${error.status} failed: ${error_2 instanceof Error ? error_2.message : String(error_2)}`,
@@ -595,95 +607,95 @@ async function sideQuery(opts) {
           },
         );
       }
-      if (!Vi) throw error;
+      if (!oauthRefreshed) throw error;
       if (signal?.aborted) throw error;
-      Io = await Or(await It());
+      response = await sendWithFallback(await createClient());
       logEvent("tengu_oauth_401_sidequery_recovered", {
         querySource: agentTypeForTelemetry(opts.querySource),
         httpStatus: error.status,
       });
     }
   } catch (error) {
-    endLLMRequestSpan(llmRequestSpan, {
+    endLLMRequestSpan(span, {
       success: false,
       statusCode: error instanceof APIError ? error.status : undefined,
       error: errorMessage(error),
       errorClass: classifyAPIError(error),
-      attempt: br,
-      clientRequestId: Fr,
+      attempt: attemptCount,
+      clientRequestId,
       requestId: (error instanceof APIError ? error.requestID : undefined) ?? undefined,
     });
-    takeGzipTelemetry(Fr);
+    takeGzipTelemetry(clientRequestId);
     if (record && !signal?.aborted && !isAbortError(error))
       emitSideQueryOtelEvent({
         record,
         event: "api_error",
         attributes: () =>
           apiErrorFields({
-            model: ao,
+            model: baseModelName,
             error: apiErrorText({
               error,
               errorClass: classifyAPIError(error),
               querySource: record.querySource,
             }),
             status: error instanceof APIError ? error.status : undefined,
-            durationMs: Math.max(0, Math.round(performance.now() - Hr)),
-            attempt: br,
+            durationMs: Math.max(0, Math.round(performance.now() - attemptStartedAt)),
+            attempt: attemptCount,
             requestId: error instanceof APIError ? error.requestID : undefined,
-            clientRequestId: Fr,
+            clientRequestId,
             fastMode: false,
             querySource: record.querySource,
-            effort: yo.output_config?.effort ?? undefined,
+            effort: requestBody.output_config?.effort ?? undefined,
           }),
-        agentContext: gt,
+        agentContext,
       });
     throw error;
   }
   resetAuthFailureTracking();
-  let _request_id = Io._request_id ?? undefined;
-  let rs = Cr;
+  let _request_id = response._request_id ?? undefined;
+  let finalDispatchId = sentDispatchId;
   let now = performance.now();
   let now_2 = Date.now();
   let lastCompletion = getLastApiCompletionTimestamp();
-  endLLMRequestSpan(llmRequestSpan, {
+  endLLMRequestSpan(span, {
     success: true,
-    inputTokens: Io.usage.input_tokens,
-    outputTokens: Io.usage.output_tokens,
-    cacheReadTokens: Io.usage.cache_read_input_tokens ?? undefined,
-    cacheCreationTokens: Io.usage.cache_creation_input_tokens ?? undefined,
+    inputTokens: response.usage.input_tokens,
+    outputTokens: response.usage.output_tokens,
+    cacheReadTokens: response.usage.cache_read_input_tokens ?? undefined,
+    cacheCreationTokens: response.usage.cache_creation_input_tokens ?? undefined,
     requestId: _request_id,
-    clientRequestId: Fr,
-    stopReason: Io.stop_reason ?? undefined,
-    attempt: br,
+    clientRequestId,
+    stopReason: response.stop_reason ?? undefined,
+    attempt: attemptCount,
   });
-  addUsageToSession(Io.usage, false);
+  addUsageToSession(response.usage, false);
   logEvent("tengu_api_success", {
     requestId: sanitizeMarkName(_request_id),
-    clientRequestId: sanitizeMarkName(Fr) || undefined,
-    user_message_uuid: sanitizeMarkName(turnAttributionKeyFor(gt)),
+    clientRequestId: sanitizeMarkName(clientRequestId) || undefined,
+    user_message_uuid: sanitizeMarkName(turnAttributionKeyFor(agentContext)),
     querySource: agentTypeForTelemetry(opts.querySource),
-    model: telemetrySafeModelName(ao),
-    inputTokens: Io.usage.input_tokens,
-    outputTokens: Io.usage.output_tokens,
-    cachedInputTokens: Io.usage.cache_read_input_tokens ?? 0,
-    uncachedInputTokens: Io.usage.cache_creation_input_tokens ?? 0,
-    cache_creation_5m_input_tokens: Io.usage.cache_creation?.ephemeral_5m_input_tokens ?? 0,
-    cache_creation_1h_input_tokens: Io.usage.cache_creation?.ephemeral_1h_input_tokens ?? 0,
-    durationMs: Math.max(0, Math.round(now - Hr)),
+    model: telemetrySafeModelName(baseModelName),
+    inputTokens: response.usage.input_tokens,
+    outputTokens: response.usage.output_tokens,
+    cachedInputTokens: response.usage.cache_read_input_tokens ?? 0,
+    uncachedInputTokens: response.usage.cache_creation_input_tokens ?? 0,
+    cache_creation_5m_input_tokens: response.usage.cache_creation?.ephemeral_5m_input_tokens ?? 0,
+    cache_creation_1h_input_tokens: response.usage.cache_creation?.ephemeral_1h_input_tokens ?? 0,
+    durationMs: Math.max(0, Math.round(now - attemptStartedAt)),
     durationMsIncludingRetries: Math.max(0, Math.round(now - start)),
-    attempt: br,
-    dispatch: fromEnumOpt(rs) ?? lit_2("none"),
-    stop_reason: fromEnumOpt(Io.stop_reason) ?? undefined,
-    ...gzipTelemetryFields(takeGzipTelemetry(Fr)),
+    attempt: attemptCount,
+    dispatch: fromEnumOpt(finalDispatchId) ?? lit_2("none"),
+    stop_reason: fromEnumOpt(response.stop_reason) ?? undefined,
+    ...gzipTelemetryFields(takeGzipTelemetry(clientRequestId)),
     timeSinceLastApiCallMs:
       lastCompletion !== null ? Math.max(0, Math.round(now_2 - lastCompletion)) : undefined,
     ...redactAttribution(opts.querySource, buildAttribution(opts.querySource, undefined, undefined)),
   });
   setLastApiCompletionTimestamp(now_2);
-  let fs = Number.NaN;
+  let costUSD = Number.NaN;
   try {
-    fs = calculateCostWithPricingSource(ao, Io.usage).usd;
-    addSideQueryCostUSD(fs);
+    costUSD = calculateCostWithPricingSource(baseModelName, response.usage).usd;
+    addSideQueryCostUSD(costUSD);
   } catch (error) {
     logForDebugging(`sideQuery: not priced: ${errorMessage(error)}`, {
       level: "error",
@@ -696,21 +708,21 @@ async function sideQuery(opts) {
       event: "api_request",
       attributes: () =>
         apiSuccessFields({
-          model: Io.model || ao,
-          usage: Io.usage,
-          costUSD: fs,
-          durationMs: Math.max(0, Math.round(now - Hr)),
+          model: response.model || baseModelName,
+          usage: response.usage,
+          costUSD,
+          durationMs: Math.max(0, Math.round(now - attemptStartedAt)),
           ttftMs: null,
           requestId: _request_id,
-          clientRequestId: Fr,
+          clientRequestId,
           fastMode: false,
           querySource: record.querySource,
-          effort: yo.output_config?.effort ?? undefined,
+          effort: requestBody.output_config?.effort ?? undefined,
         }),
-      agentContext: gt,
+      agentContext,
     });
   emitPrefetchChanged();
-  return Io;
+  return response;
 }
 //@ chunk-e6aww6q8.js:2817687-2817781 placement
 function describeApiErrorForPlugin(error, userSpecifiedModel) {
@@ -725,21 +737,21 @@ function stripCacheControl(items) {
   return "cache_control" in items && Boolean(items.cache_control);
 }
 //@ chunk-e6aww6q8.js:2817849-2817909 placement
-function withoutCacheControl(e) {
-  return stripCacheControl(e)
+function withoutCacheControl(block) {
+  return stripCacheControl(block)
     ? {
-        ...e,
+        ...block,
         cache_control: undefined,
       }
-    : e;
+    : block;
 }
 //@ chunk-e6aww6q8.js:2817909-2818055 placement = stripCacheControl (0.857)
-function stripCacheControl_3(e, ttl) {
-  if (!("cache_control" in e) || !e.cache_control || e.cache_control.ttl) return e;
+function stripCacheControl_3(block, ttl) {
+  if (!("cache_control" in block) || !block.cache_control || block.cache_control.ttl) return block;
   return {
-    ...e,
+    ...block,
     cache_control: {
-      ...e.cache_control,
+      ...block.cache_control,
       ttl,
     },
   };

@@ -11,9 +11,9 @@
 import { dirname, basename } from "path";
 
 //@ chunk-e6aww6q8.js:2315571-2315664 fingerprint = AGENT_PATHS (1)
-function AGENT_PATHS(e) {
-  let n = dirname(e);
-  if (basename(e) === "agents" && basename(n) === ".claude") return dirname(n);
-  return e;
+function AGENT_PATHS(absPath) {
+  let parentDir = dirname(absPath);
+  if (basename(absPath) === "agents" && basename(parentDir) === ".claude") return dirname(parentDir);
+  return absPath;
 }
 export { AGENT_PATHS };

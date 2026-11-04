@@ -87,7 +87,13 @@ import { isAutoResumableLimit } from "../api/errors.js";
 import { logFeatureOk, logFeatureSad } from "../analytics/featureTelemetry.js";
 import { onSessionSwitch, getRootSession } from "../../bootstrap/state.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, _enum, M, string, E } from "../../../vendor/zod/v4/classic/schemas.js";
+import {
+  objectSchema,
+  _enum,
+  booleanSchema,
+  stringSchema,
+  numberSchema,
+} from "../../../vendor/zod/v4/classic/schemas.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { hasProfileScope, getOauthAccountInfo } from "../../utils/auth.js";
 import { fetchUtilization, hasUsageLimitKeys, isAuthRejectedUsageError } from "../api/usage.js";
@@ -96,6 +102,7 @@ import { apiClient } from "../routines/routinesApi.js";
 import { isAxiosError } from "../../../vendor/axios/dist/esm/axios.js";
 import { createSignal } from "../../utils/signal.js";
 import { HostScoped } from "../../utils/hostScoped.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-fm6h4dv7.js:10953-10984 placement
 function now() {
@@ -105,138 +112,139 @@ function now() {
 /**
  * 是否需要重新查询重置资格。
  */
-function shouldRecheckResetStatus(i, s, d, m) {
-  if (i.final) return false;
-  let b = m - i.answeredAtMs;
-  let _ = (A) => b < 0 || b >= A;
-  if (firstAvailableResetOffer(s, m) !== undefined) return false;
-  let timestampOrUndefined = parseTimestampOrUndefined(i.status?.cooldownUntil ?? null);
-  let C =
-    b < 0 ||
-    (b >= RETRY_BACKOFF_MS &&
-      (timestampOrUndefined === undefined || m >= Math.min(timestampOrUndefined, i.answeredAtMs + 150000)));
-  switch (d) {
+function shouldRecheckResetStatus(offer, limits, surface, nowMs) {
+  if (offer.final) return false;
+  let ageMs = nowMs - offer.answeredAtMs;
+  let isOlderThan = (thresholdMs) => ageMs < 0 || ageMs >= thresholdMs;
+  if (firstAvailableResetOffer(limits, nowMs) !== undefined) return false;
+  let timestampOrUndefined = parseTimestampOrUndefined(offer.status?.cooldownUntil ?? null);
+  let shouldRetry =
+    ageMs < 0 ||
+    (ageMs >= RETRY_BACKOFF_MS &&
+      (timestampOrUndefined === undefined ||
+        nowMs >= Math.min(timestampOrUndefined, offer.answeredAtMs + 150000)));
+  switch (surface) {
     case "wall":
-      return _(POLL_INTERVAL_MS);
+      return isOlderThan(POLL_INTERVAL_MS);
     case "command":
-      return C;
+      return shouldRetry;
     case "dialog":
-      return C && (i.status === null || hasPendingGrants(s));
+      return shouldRetry && (offer.status === null || hasPendingGrants(limits));
   }
 }
 //@ chunk-fm6h4dv7.js:11306-11705 placement
 /**
  * 按种类汇总可用的限额重置授权。
  */
-function groupResetGrants(i, rateLimitType, d) {
-  let m = new Map();
-  for (let grant of i.grants) {
+function groupResetGrants(limits, limitType, nowMs) {
+  let groupsByKind = new Map();
+  for (let grant of limits.grants) {
     if (!isUsableLimit(grant)) continue;
     let limitResetKind = getLimitResetKind(grant);
-    let h = m.get(limitResetKind) ?? {
+    let group = groupsByKind.get(limitResetKind) ?? {
       kind: limitResetKind,
       grants: [],
       resetsLeft: 0,
       target: undefined,
     };
-    m.set(limitResetKind, h);
-    h.grants.push(grant);
-    h.resetsLeft += grant.resetsLeft;
-    let C = parseTimestampOrUndefined(grant.endsAt) ?? null;
+    groupsByKind.set(limitResetKind, group);
+    group.grants.push(grant);
+    group.resetsLeft += grant.resetsLeft;
+    let endsAtMs = parseTimestampOrUndefined(grant.endsAt) ?? null;
     if (
-      h.target === undefined &&
+      group.target === undefined &&
       grant.usableNow &&
-      (C === null || C > d) &&
-      (rateLimitType === null || (clearsLimit(grant, rateLimitType) && !isGrantUsable(grant, i)))
+      (endsAtMs === null || endsAtMs > nowMs) &&
+      (limitType === null || (clearsLimit(grant, limitType) && !isGrantUsable(grant, limits)))
     )
-      h.target = {
+      group.target = {
         grant,
-        endsAtMs: C,
+        endsAtMs,
       };
   }
-  return [...m.values()].sort(
-    (b, _) => rankResetKindForLimit(b.kind, rateLimitType) - rankResetKindForLimit(_.kind, rateLimitType),
+  return [...groupsByKind.values()].sort(
+    (a, b) => rankResetKindForLimit(a.kind, limitType) - rankResetKindForLimit(b.kind, limitType),
   );
 }
 //@ chunk-fm6h4dv7.js:11705-12155 placement
 /**
  * 当前达到上限时可用的重置提议。
  */
-function availableResetOffers(i, s = Date.now()) {
-  let d = usableStatusForWall(i);
+function availableResetOffers(limits, nowMs = Date.now()) {
+  let status = usableStatusForWall(limits);
   if (
-    !canAutoResumeLimitType(i) ||
-    d === undefined ||
-    d === null ||
-    i.rateLimitType === undefined ||
-    i.resetsAt === undefined ||
-    i.resetsAt * 1000 <= s ||
+    !canAutoResumeLimitType(limits) ||
+    status === undefined ||
+    status === null ||
+    limits.rateLimitType === undefined ||
+    limits.resetsAt === undefined ||
+    limits.resetsAt * 1000 <= nowMs ||
     isLowPriorityActive() ||
     !isCedarEmberEnabled()
   )
     return [];
-  let rateLimitType = i.rateLimitType;
-  let b = totalResetsLeft(d);
-  let _ = [];
-  for (let h of groupResetGrants(d, rateLimitType, s))
-    if (h.target !== undefined)
-      _.push({
+  let rateLimitType = limits.rateLimitType;
+  let totalLeft = totalResetsLeft(status);
+  let offers = [];
+  for (let group of groupResetGrants(status, rateLimitType, nowMs))
+    if (group.target !== undefined)
+      offers.push({
         origin: "wall",
-        kind: h.kind,
-        grant: h.target.grant,
-        resetsLeft: Math.max(1, h.resetsLeft),
-        totalResetsLeft: Math.max(1, b),
-        weeklyResetsAt: d.weeklyResetsAt,
-        endsAtMs: h.target.endsAtMs,
+        kind: group.kind,
+        grant: group.target.grant,
+        resetsLeft: Math.max(1, group.resetsLeft),
+        totalResetsLeft: Math.max(1, totalLeft),
+        weeklyResetsAt: status.weeklyResetsAt,
+        endsAtMs: group.target.endsAtMs,
         rateLimitType,
       });
-  return _;
+  return offers;
 }
 //@ chunk-fm6h4dv7.js:12155-12202 placement
-function firstAvailableResetOffer(i, s = Date.now()) {
-  return availableResetOffers(i, s)[0];
+function firstAvailableResetOffer(limits, nowMs = Date.now()) {
+  return availableResetOffers(limits, nowMs)[0];
 }
 //@ chunk-fm6h4dv7.js:12202-12332 placement
 /**
  * 当前限额下不能使用的重置及原因。
  */
-function unusableResetsFor(currentLimits, s = Date.now()) {
-  let d = usableStatusForWall(currentLimits);
-  if (d === undefined || d === null || currentLimits.rateLimitType === undefined) return [];
-  return unusableResetOffers(d, currentLimits.rateLimitType, s);
+function unusableResetsFor(limits, nowMs = Date.now()) {
+  let status = usableStatusForWall(limits);
+  if (status === undefined || status === null || limits.rateLimitType === undefined) return [];
+  return unusableResetOffers(status, limits.rateLimitType, nowMs);
 }
 //@ chunk-fm6h4dv7.js:12332-12673 placement
 /**
  * 不能用于当前限额的重置及原因。
  */
-function unusableResetOffers(i, s, d) {
-  let m = [];
-  for (let b of groupResetGrants(i, s, d)) {
-    let _ = b.grants[0];
-    if (b.target !== undefined || b.resetsLeft === 0 || !_) continue;
-    let h =
-      s !== null && !b.grants.some((grant) => clearsLimit(grant, s))
-        ? `doesn't refill your ${resetLimitDisplayName(s)}`
-        : describeResetUnavailable(_, i);
-    let C = formatResetKindName(b.kind);
-    m.push({
-      kind: b.kind,
-      resetsLeft: b.resetsLeft,
-      reason: h,
-      text: `${C.charAt(0).toUpperCase()}${C.slice(1)} \xB7 ${h}`,
+function unusableResetOffers(limits, rateLimitType, nowMs) {
+  let offers = [];
+  for (let group of groupResetGrants(limits, rateLimitType, nowMs)) {
+    let firstGrant = group.grants[0];
+    if (group.target !== undefined || group.resetsLeft === 0 || !firstGrant) continue;
+    let reason =
+      rateLimitType !== null && !group.grants.some((grant) => clearsLimit(grant, rateLimitType))
+        ? `doesn't refill your ${resetLimitDisplayName(rateLimitType)}`
+        : describeResetUnavailable(firstGrant, limits);
+    let kindName = formatResetKindName(group.kind);
+    offers.push({
+      kind: group.kind,
+      resetsLeft: group.resetsLeft,
+      reason,
+      text: `${kindName.charAt(0).toUpperCase()}${kindName.slice(1)} \xB7 ${reason}`,
     });
   }
-  return m;
+  return offers;
 }
 //@ chunk-fm6h4dv7.js:12673-13325 placement
 /**
  * 重置不可用的原因码。
  */
-function resetUnavailableReason(i, s) {
-  if (i.unavailableReason !== null) return i.unavailableReason;
-  if (s.cooldownUntil !== null) return "cooldown";
-  for (let d of i.blocking)
-    switch (d) {
+function resetUnavailableReason(grant, limits) {
+  if (grant.unavailableReason !== null) return grant.unavailableReason;
+  if (limits.cooldownUntil !== null) return "cooldown";
+  for (let blocking of grant.blocking)
+    switch (blocking) {
       case "five_hour":
         return "blocked_five_hour";
       case "seven_day":
@@ -251,23 +259,28 @@ function resetUnavailableReason(i, s) {
       case "seven_day_oauth_apps":
         break;
     }
-  if (i.blocking.length > 0) return "blocked_other";
-  if (s.atLimit && !s.exhausted.some((d) => i.clears.includes(d) || (d === "seven_day" && i.givesBackWeekly)))
+  if (grant.blocking.length > 0) return "blocked_other";
+  if (
+    limits.atLimit &&
+    !limits.exhausted.some(
+      (limitType) => grant.clears.includes(limitType) || (limitType === "seven_day" && grant.givesBackWeekly),
+    )
+  )
     return "cannot_clear";
-  return i.useRequiresLimit ? "needs_limit" : "unavailable";
+  return grant.useRequiresLimit ? "needs_limit" : "unavailable";
 }
 //@ chunk-fm6h4dv7.js:13325-14034 placement
 /**
  * 重置不可用原因的说明。
  */
-function describeResetUnavailable(i, s) {
-  switch (resetUnavailableReason(i, s)) {
+function describeResetUnavailable(grant, limits) {
+  switch (resetUnavailableReason(grant, limits)) {
     case "cooldown":
       return "try again in a minute";
     case "blocked_five_hour":
       return `can't be used while you're at your ${getRateLimitDisplayName("five_hour")}`;
     case "blocked_seven_day":
-      return i.givesBackWeekly
+      return grant.givesBackWeekly
         ? NO_FABLE_USAGE_LINE
         : `can't be used while you're at your ${getRateLimitDisplayName("seven_day")}`;
     case "blocked_opus":
@@ -288,64 +301,72 @@ function describeResetUnavailable(i, s) {
 /**
  * 重置提议的标签文本（Fable 在周限额墙时附加后缀）。
  */
-function resetOfferLabel(i) {
+function resetOfferLabel(offer) {
   let cedarEmberCopy = getCedarEmberCopy();
-  let d = formatLimitResetTemplate(cedarEmberCopy.label, resetOfferFields(i));
-  return i.kind === "fable" && i.origin === "wall" && i.rateLimitType === "seven_day"
-    ? `${d} \xB7 ${cedarEmberCopy.fableAtWeeklySuffix}`
-    : d;
+  let label = formatLimitResetTemplate(cedarEmberCopy.label, resetOfferFields(offer));
+  return offer.kind === "fable" && offer.origin === "wall" && offer.rateLimitType === "seven_day"
+    ? `${label} \xB7 ${cedarEmberCopy.fableAtWeeklySuffix}`
+    : label;
 }
 //@ chunk-fm6h4dv7.js:14195-14258 placement
-function totalResetsLeft(i) {
-  return i.grants.reduce((acc, grant) => acc + grant.resetsLeft, 0);
+function totalResetsLeft(limits) {
+  return limits.grants.reduce((acc, grant) => acc + grant.resetsLeft, 0);
 }
 //@ chunk-fm6h4dv7.js:14258-14383 placement
 /**
  * 重置额度可直接使用：不要求先触达限额，且清除的限额都未耗尽。
  */
-function isGrantUsable(i, s) {
+function isGrantUsable(grant, limits) {
   return (
-    !i.useRequiresLimit &&
-    !s.exhausted.some((d) => i.clears.includes(d) || (d === "seven_day" && i.givesBackWeekly))
+    !grant.useRequiresLimit &&
+    !limits.exhausted.some(
+      (limitType) => grant.clears.includes(limitType) || (limitType === "seven_day" && grant.givesBackWeekly),
+    )
   );
 }
 //@ chunk-fm6h4dv7.js:14383-14855 placement
 /**
  * 重置相关的用量标识。
  */
-function resetUsageBadge(grant, s) {
-  if (!isGrantUsable(grant, s)) return null;
-  let d = null;
-  for (let b of CREDIT_RESETTABLE_LIMIT_TYPES) {
-    let _ = grant.percentUsed[b];
-    if (grant.clears.includes(b) && _ !== undefined && (d === null || _ > d.percentUsed))
-      d = {
-        claimType: b,
-        percentUsed: _,
+function resetUsageBadge(grant, limits) {
+  if (!isGrantUsable(grant, limits)) return null;
+  let best = null;
+  for (let claimType of CREDIT_RESETTABLE_LIMIT_TYPES) {
+    let percentUsed = grant.percentUsed[claimType];
+    if (
+      grant.clears.includes(claimType) &&
+      percentUsed !== undefined &&
+      (best === null || percentUsed > best.percentUsed)
+    )
+      best = {
+        claimType,
+        percentUsed,
       };
   }
-  if (d === null)
+  if (best === null)
     return {
       kind: "unnumbered",
       percentUsedMax: null,
     };
-  let m = limitDisplayName(d.claimType);
-  if (m === null || d.percentUsed >= 100)
+  let limitName = limitDisplayName(best.claimType);
+  if (limitName === null || best.percentUsed >= 100)
     return {
       kind: "unnumbered",
-      percentUsedMax: d.percentUsed,
+      percentUsedMax: best.percentUsed,
     };
   return {
     kind: "numbered",
-    percentLeft: 100 - d.percentUsed,
-    claimType: d.claimType,
-    limitName: m,
-    percentUsedMax: d.percentUsed,
+    percentLeft: 100 - best.percentUsed,
+    claimType: best.claimType,
+    limitName,
+    percentUsedMax: best.percentUsed,
   };
 }
 //@ chunk-fm6h4dv7.js:14855-14913 placement
-function resetLimitDisplayName(type) {
-  return type === "seven_day_sonnet" ? getWeeklyModelLimitName() : getRateLimitDisplayName(type);
+function resetLimitDisplayName(rateLimitType) {
+  return rateLimitType === "seven_day_sonnet"
+    ? getWeeklyModelLimitName()
+    : getRateLimitDisplayName(rateLimitType);
 }
 //@ chunk-fm6h4dv7.js:14913-15148 placement
 /**
@@ -384,36 +405,36 @@ function earlyUseLine(offer) {
  * 是否正在领取重置。
  */
 function isClaimingReset() {
-  let i = usageCreditStateSlots();
+  let state = usageCreditStateSlots();
   return (
-    i.claiming ||
-    (i.unsettledClaimGrantId !== null &&
-      i.unsettledClaimEpoch === getLimitsAccountEpoch() &&
-      hasRecentUnsettledClaim(i))
+    state.claiming ||
+    (state.unsettledClaimGrantId !== null &&
+      state.unsettledClaimEpoch === getLimitsAccountEpoch() &&
+      hasRecentUnsettledClaim(state))
   );
 }
 //@ chunk-fm6h4dv7.js:15460-15513 placement
 /**
  * 判断额度墙上是否可提供重置。
  */
-function isResetOfferAvailable(i, s = Date.now()) {
-  return firstAvailableResetOffer(i, s) !== undefined;
+function isResetOfferAvailable(limits, nowMs = Date.now()) {
+  return firstAvailableResetOffer(limits, nowMs) !== undefined;
 }
 //@ chunk-fm6h4dv7.js:15513-15761 placement
 /**
  * 重置用完时的说明行。
  */
-function resetsUsedUpLine(i, s = Date.now()) {
-  let d = usableStatusForWall(i);
+function resetsUsedUpLine(limits, nowMs = Date.now()) {
+  let status = usableStatusForWall(limits);
   if (
-    !canAutoResumeLimitType(i) ||
-    d === undefined ||
-    d === null ||
-    !d.eligible ||
-    d.grants.length === 0 ||
-    d.grants.some((grant) => grant.resetsLeft > 0 || grant.usableNow) ||
-    i.resetsAt === undefined ||
-    i.resetsAt * 1000 <= s ||
+    !canAutoResumeLimitType(limits) ||
+    status === undefined ||
+    status === null ||
+    !status.eligible ||
+    status.grants.length === 0 ||
+    status.grants.some((grant) => grant.resetsLeft > 0 || grant.usableNow) ||
+    limits.resetsAt === undefined ||
+    limits.resetsAt * 1000 <= nowMs ||
     !isCedarEmberEnabled()
   )
     return;
@@ -425,42 +446,42 @@ function resetsUsedUpLine(i, s = Date.now()) {
 /**
  * 是否存在覆盖最近结束时间的重置授权。
  */
-function hasResetGrantCoveringLatestEnd(i, s = Date.now()) {
-  return getLatestResetGrantEnd(usableStatusForWall(i), s) !== undefined;
+function hasResetGrantCoveringLatestEnd(limits, nowMs = Date.now()) {
+  return getLatestResetGrantEnd(usableStatusForWall(limits), nowMs) !== undefined;
 }
 //@ chunk-fm6h4dv7.js:15819-15956 placement
 /**
  * 有资格、当前无可用额度但仍有剩余重置次数。
  */
-function hasPendingGrants(i) {
-  let s = usableStatusForWall(i);
+function hasPendingGrants(limits) {
+  let status = usableStatusForWall(limits);
   return (
-    s !== undefined &&
-    s !== null &&
-    s.eligible &&
-    !s.grants.some((grant) => grant.usableNow) &&
-    s.grants.some((grant) => grant.resetsLeft > 0)
+    status !== undefined &&
+    status !== null &&
+    status.eligible &&
+    !status.grants.some((grant) => grant.usableNow) &&
+    status.grants.some((grant) => grant.resetsLeft > 0)
   );
 }
 //@ chunk-fm6h4dv7.js:15956-16296 placement
 /**
  * 重置提议的显示字段。
  */
-function resetOfferFields(i) {
+function resetOfferFields(offer) {
   return {
-    kind: formatResetKindName(i.kind),
-    left: i.resetsLeft,
-    kindResets: formatResetCount(i.kind, i.resetsLeft),
-    date: latestGrantStartLine(i.grant.endsAt),
-    deadline: latestGrantEndLine(i.grant.endsAt),
-    week: latestGrantEndLine(i.weeklyResetsAt),
-    limits: resetClearsLimits(i.grant),
-    returns: limitDescription(i.kind),
-    done: formatResetAppliedText(i.kind),
-    ...(i.origin === "anytime" &&
-      i.earlyUse?.kind === "numbered" && {
-        percent: i.earlyUse.percentLeft,
-        limit: i.earlyUse.limitName,
+    kind: formatResetKindName(offer.kind),
+    left: offer.resetsLeft,
+    kindResets: formatResetCount(offer.kind, offer.resetsLeft),
+    date: latestGrantStartLine(offer.grant.endsAt),
+    deadline: latestGrantEndLine(offer.grant.endsAt),
+    week: latestGrantEndLine(offer.weeklyResetsAt),
+    limits: resetClearsLimits(offer.grant),
+    returns: limitDescription(offer.kind),
+    done: formatResetAppliedText(offer.kind),
+    ...(offer.origin === "anytime" &&
+      offer.earlyUse?.kind === "numbered" && {
+        percent: offer.earlyUse.percentLeft,
+        limit: offer.earlyUse.limitName,
       }),
   };
 }
@@ -469,34 +490,34 @@ function resetOfferFields(i) {
  * 重置能清除哪些限额。
  */
 function resetClearsLimits(grant) {
-  let s = new Set();
-  if (grant.givesBackWeekly) s.add("Fable");
+  let names = new Set();
+  if (grant.givesBackWeekly) names.add("Fable");
   for (let clear of grant.clears)
     switch (clear) {
       case "five_hour":
-        s.add("5-hour");
+        names.add("5-hour");
         break;
       case "seven_day":
-        s.add("weekly");
+        names.add("weekly");
         break;
       case "seven_day_overage_included":
-        s.add(grant.givesBackWeekly ? "Fable" : "weekly");
+        names.add(grant.givesBackWeekly ? "Fable" : "weekly");
         break;
       case "seven_day_opus":
-        s.add(stripSuffix(getRateLimitDisplayName(clear), " limit"));
+        names.add(stripSuffix(getRateLimitDisplayName(clear), " limit"));
         break;
       case "seven_day_sonnet":
-        s.add(stripSuffix(getWeeklyModelLimitName(), " limit"));
+        names.add(stripSuffix(getWeeklyModelLimitName(), " limit"));
         break;
       case "seven_day_cowork":
       case "seven_day_omelette":
       case "seven_day_oauth_apps":
         break;
     }
-  let d = [...s];
-  let m = d.pop();
-  if (m === undefined) return "limits";
-  return d.length === 0 ? `${m} limit` : `${d.join(", ")} and ${m} limits`;
+  let listed = [...names];
+  let lastName = listed.pop();
+  if (lastName === undefined) return "limits";
+  return listed.length === 0 ? `${lastName} limit` : `${listed.join(", ")} and ${lastName} limits`;
 }
 //@ chunk-fm6h4dv7.js:16859-16944 placement
 function latestGrantStartLine(endsAt) {
@@ -506,8 +527,8 @@ function latestGrantStartLine(endsAt) {
     : formatResetTimeWithLocale(Math.floor(timestampOrUndefined / 1000), false, false, true);
 }
 //@ chunk-fm6h4dv7.js:16944-17029 placement
-function latestGrantEndLine(i) {
-  let timestampOrUndefined = parseTimestampOrUndefined(i);
+function latestGrantEndLine(endsAt) {
+  let timestampOrUndefined = parseTimestampOrUndefined(endsAt);
   return timestampOrUndefined === undefined
     ? undefined
     : formatResetTimeWithLocale(Math.floor(timestampOrUndefined / 1000), false, true, true);
@@ -523,98 +544,102 @@ function isResetAtWallOffered() {
 /**
  * 在额度墙上从菜单里提供重置入口。
  */
-function offerResetAtWallFromMenu(quotaLimits, credentials) {
-  if (!isResetAtWallOffered() || !canAutoResumeLimitType(quotaLimits)) return;
-  askResetAtWall(quotaLimits, credentials, "cli_menu");
+function offerResetAtWallFromMenu(limits, credentials) {
+  if (!isResetAtWallOffered() || !canAutoResumeLimitType(limits)) return;
+  askResetAtWall(limits, credentials, "cli_menu");
 }
 //@ chunk-fm6h4dv7.js:17136-17268 placement
 /**
  * 周限额（含超额）触墙时询问可用的重置。
  */
 function offerCreditsResetAtWall(credentials) {
-  let currentLimits = getCurrentLimits();
+  let limits = getCurrentLimits();
   if (
     !isCedarEmberEnabled() ||
-    currentLimits.rateLimitType !== "seven_day_overage_included" ||
-    !canAutoResumeLimitType(currentLimits)
+    limits.rateLimitType !== "seven_day_overage_included" ||
+    !canAutoResumeLimitType(limits)
   )
     return;
-  askResetAtWall(currentLimits, credentials, "cli_credits_required");
+  askResetAtWall(limits, credentials, "cli_credits_required");
 }
 //@ chunk-fm6h4dv7.js:17268-17400 placement
 /**
  * 在限额墙询问重置状态（订阅会话切换、清理过期的未结算领取）。
  */
-function askResetAtWall(i, s, d) {
-  let m = usageCreditStateSlots();
-  subscribeWallReset(m);
-  m.continuableWallResetsAt = i.resetsAt ?? null;
-  if (m.unsettledClaimEpoch !== getLimitsAccountEpoch()) clearUnsettledClaim(m);
-  askResetStatus(i, s, "wall", d);
+function askResetAtWall(limits, credentials, surface) {
+  let state = usageCreditStateSlots();
+  subscribeWallReset(state);
+  state.continuableWallResetsAt = limits.resetsAt ?? null;
+  if (state.unsettledClaimEpoch !== getLimitsAccountEpoch()) clearUnsettledClaim(state);
+  askResetStatus(limits, credentials, "wall", surface);
 }
 //@ chunk-fm6h4dv7.js:17400-18383 placement
 /**
  * 查询重置资格（按阶段去重）。
  */
-function askResetStatus(currentLimits, s, d, m) {
-  if (d === "wall" ? !isResetAtWallOffered() : !isCedarEmberEnabled()) return Promise.resolve();
-  let b = captureWallResetIdentity(currentLimits);
-  if (b === null) return Promise.resolve();
-  let _ = usageCreditStateSlots();
-  if (m !== undefined)
-    _.wallSurface = {
-      wall: b,
-      surface: m,
+function askResetStatus(limits, credentials, surfaceKind, eventSurface) {
+  if (surfaceKind === "wall" ? !isResetAtWallOffered() : !isCedarEmberEnabled()) return Promise.resolve();
+  let wall = captureWallResetIdentity(limits);
+  if (wall === null) return Promise.resolve();
+  let creditState = usageCreditStateSlots();
+  if (eventSurface !== undefined)
+    creditState.wallSurface = {
+      wall,
+      surface: eventSurface,
     };
-  let state = _.state;
+  let state = creditState.state;
   let failures = 0;
   let previous = null;
-  if (state.phase !== "idle" && isSameWallReset(state.wall, currentLimits))
+  if (state.phase !== "idle" && isSameWallReset(state.wall, limits))
     switch (state.phase) {
       case "answered":
-        if (!shouldRecheckResetStatus(state, currentLimits, d, now())) return Promise.resolve();
+        if (!shouldRecheckResetStatus(state, limits, surfaceKind, now())) return Promise.resolve();
         previous = state;
         break;
       case "asking":
-        return _.pendingAsk ?? Promise.resolve();
+        return creditState.pendingAsk ?? Promise.resolve();
       case "failed":
-        if (d === "wall" && state.failures >= MAX_ATTEMPTS) return Promise.resolve();
+        if (surfaceKind === "wall" && state.failures >= MAX_ATTEMPTS) return Promise.resolve();
         failures = state.failures;
     }
   setUsageCreditState({
     phase: "asking",
-    wall: b,
+    wall,
   });
   let autoArmed = isQuotaAutoResumeArmed();
   let surface =
-    m ??
-    (_.wallSurface !== null && isSameWallReset(_.wallSurface.wall, currentLimits)
-      ? _.wallSurface.surface
+    eventSurface ??
+    (creditState.wallSurface !== null && isSameWallReset(creditState.wallSurface.wall, limits)
+      ? creditState.wallSurface.surface
       : "cli_menu");
-  let x = withDeadline(
-    fetchCedarEmberStatus(s, {
+  let ask = withDeadline(
+    fetchCedarEmberStatus(credentials, {
       surface,
     }),
     RETRY_AFTER_MS,
   )
-    .then((L) => {
+    .then((answer) => {
       settleResetStatus({
-        wall: b,
+        wall,
         failures,
         previous,
-        result: L ?? {
+        result: answer ?? {
           kind: "failed",
         },
         autoArmed,
       });
-      if (L !== undefined && L.kind === "answered" && L.status?.ineligibleReason !== "unavailable")
-        settleUnsettledClaim(_, L.status, s);
+      if (
+        answer !== undefined &&
+        answer.kind === "answered" &&
+        answer.status?.ineligibleReason !== "unavailable"
+      )
+        settleUnsettledClaim(creditState, answer.status, credentials);
     })
     .catch((error) => {
       logError(toError(error));
       try {
         settleResetStatus({
-          wall: b,
+          wall,
           failures,
           previous,
           result: {
@@ -627,47 +652,47 @@ function askResetStatus(currentLimits, s, d, m) {
       }
     })
     .finally(() => {
-      if (_.pendingAsk === x) _.pendingAsk = null;
+      if (creditState.pendingAsk === ask) creditState.pendingAsk = null;
     });
-  _.pendingAsk = x;
-  return x;
+  creditState.pendingAsk = ask;
+  return ask;
 }
 //@ chunk-fm6h4dv7.js:18383-20100 placement
 /**
  * 处理重置资格查询结果。
  */
-function settleResetStatus({ wall, failures, previous, result: m, autoArmed }) {
-  let _ = currentUsageCreditState();
+function settleResetStatus({ wall, failures, previous, result: askResult, autoArmed }) {
+  let state = currentUsageCreditState();
   if (
-    _.phase !== "asking" ||
-    _.wall.rateLimitType !== wall.rateLimitType ||
-    _.wall.wallResetsAt !== wall.wallResetsAt ||
-    _.wall.accountEpoch !== wall.accountEpoch
+    state.phase !== "asking" ||
+    state.wall.rateLimitType !== wall.rateLimitType ||
+    state.wall.wallResetsAt !== wall.wallResetsAt ||
+    state.wall.accountEpoch !== wall.accountEpoch
   )
     return;
-  let status = m.kind === "answered" ? m.status : null;
-  let C = m.kind === "failed" || status?.ineligibleReason === "unavailable";
-  if (C && previous !== null)
+  let status = askResult.kind === "answered" ? askResult.status : null;
+  let isFailure = askResult.kind === "failed" || status?.ineligibleReason === "unavailable";
+  if (isFailure && previous !== null)
     setUsageCreditState({
       ...previous,
       answeredAtMs: now(),
     });
-  else if (C)
+  else if (isFailure)
     setUsageCreditState({
       phase: "failed",
       wall,
       failures: failures + 1,
     });
   else {
-    let I = m.kind === "no_profile_scope" || m.kind === "not_authorized";
+    let isFinal = askResult.kind === "no_profile_scope" || askResult.kind === "not_authorized";
     setUsageCreditState(
-      I
+      isFinal
         ? {
             phase: "answered",
             wall,
             status,
             answeredAtMs: now(),
-            final: I,
+            final: isFinal,
           }
         : {
             phase: "answered",
@@ -680,7 +705,7 @@ function settleResetStatus({ wall, failures, previous, result: m, autoArmed }) {
   if (!isCedarEmberEnabled()) return;
   let configVersion = cedarEmberVersion();
   logEvent("tengu_cedar_ember_asked", {
-    outcome: fromEnum(resetFlowPhase(m)),
+    outcome: fromEnum(resetFlowPhase(askResult)),
     at_wall: true,
     attempt: failures + 1,
     eligible: status?.eligible ?? false,
@@ -688,12 +713,14 @@ function settleResetStatus({ wall, failures, previous, result: m, autoArmed }) {
     limit_type: fromEnum(wall.rateLimitType),
     config_version: configVersion,
   });
-  if (C || status === null || !status.eligible) return;
-  let k = usageCreditStateSlots();
-  let T = `${wall.accountEpoch}:${wall.rateLimitType}:${wall.wallResetsAt}:${status.eligible}:${status.nextGrantId}`;
-  if (k.wallRecordKey === T) return;
-  k.wallRecordKey = T;
-  let filtered = groupResetGrants(status, wall.rateLimitType, now()).filter((I) => I.target !== undefined);
+  if (isFailure || status === null || !status.eligible) return;
+  let creditState = usageCreditStateSlots();
+  let recordKey = `${wall.accountEpoch}:${wall.rateLimitType}:${wall.wallResetsAt}:${status.eligible}:${status.nextGrantId}`;
+  if (creditState.wallRecordKey === recordKey) return;
+  creditState.wallRecordKey = recordKey;
+  let filtered = groupResetGrants(status, wall.rateLimitType, now()).filter(
+    (group) => group.target !== undefined,
+  );
   let grant = filtered[0]?.target?.grant;
   logEvent("tengu_cedar_ember_wall", {
     eligible: status.eligible,
@@ -701,7 +728,7 @@ function settleResetStatus({ wall, failures, previous, result: m, autoArmed }) {
     usable: grant !== undefined,
     grant_id: sanitizeMarkName(grant?.id ?? status.nextGrantId),
     kind: fromEnumOpt(grant && getLimitResetKind(grant)),
-    kinds_offered: fromEnumArr(filtered.map((I) => I.kind)),
+    kinds_offered: fromEnumArr(filtered.map((group) => group.kind)),
     resets_left: grant?.resetsLeft ?? 0,
     resets_left_total: totalResetsLeft(status),
     grants: status.grants.length,
@@ -723,80 +750,80 @@ function settleResetStatus({ wall, failures, previous, result: m, autoArmed }) {
 /**
  * 核对未结算的重置领取：账号变化或额度已不可用时清除。
  */
-function settleUnsettledClaim(i, status, d) {
-  if (i.unsettledClaimGrantId === null) return;
-  if (i.unsettledClaimEpoch !== getLimitsAccountEpoch()) {
-    clearUnsettledClaim(i);
+function settleUnsettledClaim(state, status, credentials) {
+  if (state.unsettledClaimGrantId === null) return;
+  if (state.unsettledClaimEpoch !== getLimitsAccountEpoch()) {
+    clearUnsettledClaim(state);
     return;
   }
-  if (status?.grants.some((grant) => grant.id === i.unsettledClaimGrantId && grant.usableNow)) return;
-  probeOrFireQuotaResume(d);
-  if (status !== null && !isCooldownActive(status)) clearUnsettledClaim(i);
+  if (status?.grants.some((grant) => grant.id === state.unsettledClaimGrantId && grant.usableNow)) return;
+  probeOrFireQuotaResume(credentials);
+  if (status !== null && !isCooldownActive(status)) clearUnsettledClaim(state);
 }
 //@ chunk-fm6h4dv7.js:20310-20324 placement
 var UNRESOLVED_CLAIM_TTL_MS = 600000;
 //@ chunk-fm6h4dv7.js:20324-20403 placement
-function hasRecentUnsettledClaim(i) {
-  return i.unsettledClaimAtMs !== null && now() - i.unsettledClaimAtMs < UNRESOLVED_CLAIM_TTL_MS;
+function hasRecentUnsettledClaim(state) {
+  return state.unsettledClaimAtMs !== null && now() - state.unsettledClaimAtMs < UNRESOLVED_CLAIM_TTL_MS;
 }
 //@ chunk-fm6h4dv7.js:20403-20485 placement
-function resetFlowPhase(i) {
-  return i.kind === "answered" ? (i.status === null ? "absent" : "block") : i.kind;
+function resetFlowPhase(result) {
+  return result.kind === "answered" ? (result.status === null ? "absent" : "block") : result.kind;
 }
 //@ chunk-fm6h4dv7.js:20485-20574 placement
-function isClaimForGrant(i, id) {
+function isClaimForGrant(state, id) {
   return (
-    i.unsettledClaimGrantId === id &&
-    i.unsettledClaimEpoch === getLimitsAccountEpoch() &&
-    hasRecentUnsettledClaim(i)
+    state.unsettledClaimGrantId === id &&
+    state.unsettledClaimEpoch === getLimitsAccountEpoch() &&
+    hasRecentUnsettledClaim(state)
   );
 }
 //@ chunk-fm6h4dv7.js:20574-20701 placement
 /**
  * 清空未结算的重置领取记录。
  */
-function clearUnsettledClaim(i) {
-  i.unsettledClaimGrantId = null;
-  i.unsettledClaimRequestId = null;
-  i.unsettledClaimEpoch = null;
-  i.unsettledClaimAtMs = null;
+function clearUnsettledClaim(state) {
+  state.unsettledClaimGrantId = null;
+  state.unsettledClaimRequestId = null;
+  state.unsettledClaimEpoch = null;
+  state.unsettledClaimAtMs = null;
 }
 //@ chunk-fm6h4dv7.js:20701-20858 placement
 /**
  * 记录一次未结算的重置领取（额度 id、请求 id、账号代数、时间）。
  */
-function recordUnsettledClaim(i, unsettledClaimGrantId, d, unsettledClaimEpoch) {
-  if (i.unsettledClaimRequestId !== d) i.unsettledClaimAtMs = now();
-  i.unsettledClaimGrantId = unsettledClaimGrantId;
-  i.unsettledClaimRequestId = d;
-  i.unsettledClaimEpoch = unsettledClaimEpoch;
+function recordUnsettledClaim(state, unsettledClaimGrantId, requestId, unsettledClaimEpoch) {
+  if (state.unsettledClaimRequestId !== requestId) state.unsettledClaimAtMs = now();
+  state.unsettledClaimGrantId = unsettledClaimGrantId;
+  state.unsettledClaimRequestId = requestId;
+  state.unsettledClaimEpoch = unsettledClaimEpoch;
 }
 //@ chunk-fm6h4dv7.js:20858-20955 placement
-function claimRequestIdFor(i, id) {
-  return isClaimForGrant(i, id) && i.unsettledClaimRequestId !== null
-    ? i.unsettledClaimRequestId
+function claimRequestIdFor(state, id) {
+  return isClaimForGrant(state, id) && state.unsettledClaimRequestId !== null
+    ? state.unsettledClaimRequestId
     : randomUUID();
 }
 //@ chunk-fm6h4dv7.js:20955-21404 placement
 /**
  * 首次显示重置提议时上报。
  */
-function reportResetOfferShown(i, s) {
-  let d = availableResetOffers(i);
-  let [m] = d;
-  if (m === undefined || i.resetsAt === undefined) return;
-  let b = `${m.rateLimitType}:${i.resetsAt}:${d.map((h) => h.grant.id).join(",")}`;
-  let _ = usageCreditStateSlots();
-  if (_.shownOfferKey === b) return;
-  _.shownOfferKey = b;
+function reportResetOfferShown(limits, surface) {
+  let offers = availableResetOffers(limits);
+  let [firstOffer] = offers;
+  if (firstOffer === undefined || limits.resetsAt === undefined) return;
+  let offerKey = `${firstOffer.rateLimitType}:${limits.resetsAt}:${offers.map((offer) => offer.grant.id).join(",")}`;
+  let creditState = usageCreditStateSlots();
+  if (creditState.shownOfferKey === offerKey) return;
+  creditState.shownOfferKey = offerKey;
   logEvent("tengu_cedar_ember_shown", {
-    surface: fromEnum(s),
-    grant_id: sanitizeMarkName(m.grant.id),
-    kind: fromEnum(m.kind),
-    kinds_offered: fromEnumArr(d.map((h) => h.kind)),
-    resets_left: m.grant.resetsLeft,
-    resets_left_total: m.totalResetsLeft,
-    limit_type: fromEnum(m.rateLimitType),
+    surface: fromEnum(surface),
+    grant_id: sanitizeMarkName(firstOffer.grant.id),
+    kind: fromEnum(firstOffer.kind),
+    kinds_offered: fromEnumArr(offers.map((offer) => offer.kind)),
+    resets_left: firstOffer.grant.resetsLeft,
+    resets_left_total: firstOffer.totalResetsLeft,
+    limit_type: fromEnum(firstOffer.rateLimitType),
     config_version: cedarEmberVersion(),
   });
 }
@@ -804,23 +831,23 @@ function reportResetOfferShown(i, s) {
 /**
  * 对话框打开时需要时重新查询重置状态。
  */
-function refreshResetStatusForDialog(claudeAiLimits, credentials) {
-  let d = currentUsageCreditState();
+function refreshResetStatusForDialog(limits, credentials) {
+  let creditState = currentUsageCreditState();
   if (
-    RainbowText(claudeAiLimits) ||
-    (d.phase === "answered" &&
-      isSameWallReset(d.wall, claudeAiLimits) &&
-      shouldRecheckResetStatus(d, claudeAiLimits, "dialog", now()))
+    RainbowText(limits) ||
+    (creditState.phase === "answered" &&
+      isSameWallReset(creditState.wall, limits) &&
+      shouldRecheckResetStatus(creditState, limits, "dialog", now()))
   )
-    askResetStatus(claudeAiLimits, credentials, "dialog");
+    askResetStatus(limits, credentials, "dialog");
 }
 //@ chunk-fm6h4dv7.js:21516-21650 placement
 /**
  * 执行重置流程，异常时返回 unavailable。
  */
-async function startResetFlowSafe(i, credentials, d) {
+async function startResetFlowSafe(entry, credentials, eventSurface) {
   try {
-    return await startResetFlow(i, credentials, d);
+    return await startResetFlow(entry, credentials, eventSurface);
   } catch (error) {
     logError(toError(error));
     return {
@@ -836,16 +863,17 @@ async function startResetFlowSafe(i, credentials, d) {
 /**
  * 查询重置状态；之前有进行中的查询且仍需刷新时再查一次。
  */
-async function askResetStatusTwice(i, s) {
-  let m = usageCreditStateSlots().pendingAsk !== null;
-  await askResetStatus(getCurrentLimits(), s, i);
-  if (m && RainbowText(getCurrentLimits())) await askResetStatus(getCurrentLimits(), s, i);
+async function askResetStatusTwice(surface, credentials) {
+  let wasAsking = usageCreditStateSlots().pendingAsk !== null;
+  await askResetStatus(getCurrentLimits(), credentials, surface);
+  if (wasAsking && RainbowText(getCurrentLimits()))
+    await askResetStatus(getCurrentLimits(), credentials, surface);
 }
 //@ chunk-fm6h4dv7.js:21753-22153 placement
 /**
  * /reset 流程入口：检查是否可用并给出提议。
  */
-async function startResetFlow(i, s, d) {
+async function startResetFlow(entry, credentials, eventSurface) {
   if (usageCreditStateSlots().claiming)
     return {
       kind: "answer",
@@ -863,43 +891,52 @@ async function startResetFlow(i, s, d) {
           text: LOW_PRIORITY_RESETS_BLOCKED_LINE,
         },
       };
-    return checkResetEligibility(i, s, d);
+    return checkResetEligibility(entry, credentials, eventSurface);
   }
-  await askResetStatusTwice(i, s);
-  let currentLimits = getCurrentLimits();
-  let _ = availableResetOffers(currentLimits);
-  if (_.length === 0) {
-    let h = usableStatusForWall(currentLimits);
-    if (h !== undefined && h !== null && (isCooldownActive(h) || hasUsableGrantFor(h, currentLimits)))
-      probeOrFireQuotaResume(s);
+  await askResetStatusTwice(entry, credentials);
+  let limits = getCurrentLimits();
+  let offers = availableResetOffers(limits);
+  if (offers.length === 0) {
+    let status = usableStatusForWall(limits);
+    if (
+      status !== undefined &&
+      status !== null &&
+      (isCooldownActive(status) || hasUsableGrantFor(status, limits))
+    )
+      probeOrFireQuotaResume(credentials);
     return {
       kind: "answer",
-      result: resetNotOfferedResult(currentLimits),
+      result: resetNotOfferedResult(limits),
     };
   }
-  return chooseResetOffer(i, _, unusableResetsFor(currentLimits), d);
+  return chooseResetOffer(entry, offers, unusableResetsFor(limits), eventSurface);
 }
 //@ chunk-fm6h4dv7.js:22153-22669 placement
 /**
  * 选择或确认重置提议。
  */
-function chooseResetOffer(i, s, d, m) {
-  let [b, ..._] = s;
-  let h = m !== undefined ? s.find((k) => k.kind === m) : b !== undefined && _.length === 0 ? b : undefined;
-  if (h !== undefined) {
-    reportResetSelected(i, h);
+function chooseResetOffer(entry, offers, unusable, requestedKind) {
+  let [firstOffer, ...restOffers] = offers;
+  let chosen =
+    requestedKind !== undefined
+      ? offers.find((offer) => offer.kind === requestedKind)
+      : firstOffer !== undefined && restOffers.length === 0
+        ? firstOffer
+        : undefined;
+  if (chosen !== undefined) {
+    reportResetSelected(entry, chosen);
     return {
       kind: "confirm",
-      offer: h,
+      offer: chosen,
     };
   }
-  if (m === undefined)
+  if (requestedKind === undefined)
     return {
       kind: "choose",
-      offers: s,
-      unusable: d,
+      offers,
+      unusable,
     };
-  let found = d.find((k) => k.kind === m);
+  let found = unusable.find((unusableEntry) => unusableEntry.kind === requestedKind);
   return {
     kind: "answer",
     result: {
@@ -907,12 +944,12 @@ function chooseResetOffer(i, s, d, m) {
       text: `${
         found === undefined
           ? formatLimitResetTemplate(getCedarEmberCopy().noKindLine, {
-              kind: formatResetKindName(m),
+              kind: formatResetKindName(requestedKind),
             })
           : found.reason.startsWith("can't be used")
-            ? `Your ${formatResetKindName(m)} ${found.reason}`
-            : `Your ${formatResetKindName(m)} can't be used right now \xB7 ${found.reason}`
-      } \xB7 you can use ${formatResetChoices(s.map((k) => k.kind))}`,
+            ? `Your ${formatResetKindName(requestedKind)} ${found.reason}`
+            : `Your ${formatResetKindName(requestedKind)} can't be used right now \xB7 ${found.reason}`
+      } \xB7 you can use ${formatResetChoices(offers.map((offer) => offer.kind))}`,
     },
   };
 }
@@ -920,25 +957,25 @@ function chooseResetOffer(i, s, d, m) {
 /**
  * 把可选重置列为 “a X, a Y or a Z”。
  */
-function formatResetChoices(i) {
-  let mapped = i.map((m) => `a ${formatResetKindName(m)}`);
-  let d = mapped.pop();
-  return d === undefined ? "nothing here" : mapped.length === 0 ? d : `${mapped.join(", ")} or ${d}`;
+function formatResetChoices(kinds) {
+  let mapped = kinds.map((kind) => `a ${formatResetKindName(kind)}`);
+  let last = mapped.pop();
+  return last === undefined ? "nothing here" : mapped.length === 0 ? last : `${mapped.join(", ")} or ${last}`;
 }
 //@ chunk-fm6h4dv7.js:22798-23114 placement
 /**
  * 上报选择的重置。
  */
-function reportResetSelected(i, s) {
+function reportResetSelected(entry, offer) {
   logEvent("tengu_cedar_ember_selected", {
-    entry: fromEnum(i),
-    grant_id: sanitizeMarkName(s.grant.id),
-    kind: fromEnum(s.kind),
-    resets_left: s.grant.resetsLeft,
-    resets_left_total: s.totalResetsLeft,
-    limit_type: fromEnumOpt(s.origin === "wall" ? s.rateLimitType : undefined),
-    at_limit: s.origin === "wall" || s.atLimit,
-    early_use: hasEarlyUse(s),
+    entry: fromEnum(entry),
+    grant_id: sanitizeMarkName(offer.grant.id),
+    kind: fromEnum(offer.kind),
+    resets_left: offer.grant.resetsLeft,
+    resets_left_total: offer.totalResetsLeft,
+    limit_type: fromEnumOpt(offer.origin === "wall" ? offer.rateLimitType : undefined),
+    at_limit: offer.origin === "wall" || offer.atLimit,
+    early_use: hasEarlyUse(offer),
     auto_armed: isQuotaAutoResumeArmed(),
     config_version: cedarEmberVersion(),
   });
@@ -947,26 +984,27 @@ function reportResetSelected(i, s) {
 /**
  * 向服务端查询重置资格并上报。
  */
-async function checkResetEligibility(i, s, d) {
-  let m = usageCreditStateSlots();
-  let b = await withDeadline(
-    fetchCedarEmberStatus(s, {
+async function checkResetEligibility(entry, credentials, eventSurface) {
+  let creditState = usageCreditStateSlots();
+  let askResult = await withDeadline(
+    fetchCedarEmberStatus(credentials, {
       read: "cedar_ember",
     }),
     RETRY_AFTER_MS,
   );
-  let status = b?.kind === "answered" ? b.status : null;
-  let h = b === undefined || b.kind === "failed" || status?.ineligibleReason === "unavailable";
+  let status = askResult?.kind === "answered" ? askResult.status : null;
+  let isUnavailable =
+    askResult === undefined || askResult.kind === "failed" || status?.ineligibleReason === "unavailable";
   logEvent("tengu_cedar_ember_asked", {
     outcome: fromEnum(
       resetFlowPhase(
-        b ?? {
+        askResult ?? {
           kind: "failed",
         },
       ),
     ),
     at_wall: false,
-    asker: fromEnum(i),
+    asker: fromEnum(entry),
     eligible: status?.eligible ?? false,
     ineligible_reason: fromEnumOpt(status?.ineligibleReason),
     at_limit: status?.atLimit ?? false,
@@ -974,7 +1012,7 @@ async function checkResetEligibility(i, s, d) {
     grant_id: sanitizeMarkName(status?.nextGrantId ?? null),
     config_version: cedarEmberVersion(),
   });
-  if (h)
+  if (isUnavailable)
     return {
       kind: "answer",
       result: {
@@ -984,42 +1022,42 @@ async function checkResetEligibility(i, s, d) {
           : RESET_STATUS_MESSAGES,
       },
     };
-  settleUnsettledClaim(m, status, s);
+  settleUnsettledClaim(creditState, status, credentials);
   if (status === null)
     return {
       kind: "answer",
       result: describeResetState(status),
     };
-  let C = now();
-  let A = anytimeResetOffers(status, C);
-  if (A.length === 0)
+  let nowMs = now();
+  let offers = anytimeResetOffers(status, nowMs);
+  if (offers.length === 0)
     return {
       kind: "answer",
       result: describeResetState(status),
     };
-  return chooseResetOffer(i, A, unusableResetOffers(status, null, C), d);
+  return chooseResetOffer(entry, offers, unusableResetOffers(status, null, nowMs), eventSurface);
 }
 //@ chunk-fm6h4dv7.js:23825-24148 placement
 /**
  * 非上限时可用的重置提议。
  */
-function anytimeResetOffers(status, s) {
-  let d = totalResetsLeft(status);
-  let m = [];
-  for (let b of groupResetGrants(status, null, s))
-    if (b.target !== undefined)
-      m.push({
+function anytimeResetOffers(limits, nowMs) {
+  let totalLeft = totalResetsLeft(limits);
+  let offers = [];
+  for (let group of groupResetGrants(limits, null, nowMs))
+    if (group.target !== undefined)
+      offers.push({
         origin: "anytime",
-        kind: b.kind,
-        grant: b.target.grant,
-        resetsLeft: Math.max(1, b.resetsLeft),
-        totalResetsLeft: Math.max(1, d),
-        weeklyResetsAt: status.weeklyResetsAt,
-        endsAtMs: b.target.endsAtMs,
-        earlyUse: resetUsageBadge(b.target.grant, status),
-        atLimit: status.atLimit,
+        kind: group.kind,
+        grant: group.target.grant,
+        resetsLeft: Math.max(1, group.resetsLeft),
+        totalResetsLeft: Math.max(1, totalLeft),
+        weeklyResetsAt: limits.weeklyResetsAt,
+        endsAtMs: group.target.endsAtMs,
+        earlyUse: resetUsageBadge(group.target.grant, limits),
+        atLimit: limits.atLimit,
       });
-  return m;
+  return offers;
 }
 //@ chunk-fm6h4dv7.js:24148-24740 placement
 /**
@@ -1032,116 +1070,118 @@ function describeResetState(status) {
       text: `${RESET_MESSAGES} \xB7 ${NOT_AT_LIMIT_LINE}`,
     };
   let filtered = status.grants.filter((grant) => grant.resetsLeft > 0);
-  let d = {
+  let fields = {
     left: totalResetsLeft(status),
     date: latestGrantStartLine(filtered[0]?.endsAt ?? null),
   };
   if (filtered.length === 0)
     return {
       outcome: "spent",
-      text: formatLimitResetTemplate(getCedarEmberCopy().spentLine, d),
+      text: formatLimitResetTemplate(getCedarEmberCopy().spentLine, fields),
     };
-  let m =
+  let blockedLimitName =
     filtered
-      .flatMap((_) => _.blocking)
+      .flatMap((grant) => grant.blocking)
       .map(limitDisplayName)
-      .find((_) => _ !== null) ?? null;
-  let b =
-    m !== null
-      ? noRefillUntilResetLine(m)
-      : filtered.every((_) => _.paused)
+      .find((name) => name !== null) ?? null;
+  let reasonText =
+    blockedLimitName !== null
+      ? noRefillUntilResetLine(blockedLimitName)
+      : filtered.every((grant) => grant.paused)
         ? `${RESET_UNAVAILABLE_LINE} \xB7 it is paused`
         : isCooldownActive(status)
           ? `${RESET_UNAVAILABLE_LINE} \xB7 try again in a minute`
-          : filtered.every((_) => _.useRequiresLimit)
+          : filtered.every((grant) => grant.useRequiresLimit)
             ? SAVED_RESET_AT_LIMIT_LINE
             : `${RESET_UNAVAILABLE_LINE} \xB7 try again later`;
   return {
     outcome: "not_offered",
-    text: formatLimitResetTemplate(`${b} \xB7 {resets} left \xB7 use by {date}`, d),
+    text: formatLimitResetTemplate(`${reasonText} \xB7 {resets} left \xB7 use by {date}`, fields),
   };
 }
 //@ chunk-fm6h4dv7.js:24740-25025 placement
 /**
  * 不提供重置时的结果（已用完、状态未知、当前额度足够或其他原因）。
  */
-function resetNotOfferedResult(currentLimits) {
-  let s = resetsUsedUpLine(currentLimits);
-  if (s !== undefined)
+function resetNotOfferedResult(limits) {
+  let spentLine = resetsUsedUpLine(limits);
+  if (spentLine !== undefined)
     return {
       outcome: "spent",
-      text: s,
+      text: spentLine,
     };
-  if (RainbowText(currentLimits))
+  if (RainbowText(limits))
     return {
       outcome: "unavailable",
       text: isClaimingReset()
         ? formatLimitResetTemplate(getCedarEmberCopy().unconfirmedLine, {})
         : RESET_STATUS_MESSAGES,
     };
-  let d = usableStatusForWall(currentLimits);
-  if (d !== undefined && d !== null && hasUsableGrantFor(d, currentLimits))
+  let wallStatus = usableStatusForWall(limits);
+  if (wallStatus !== undefined && wallStatus !== null && hasUsableGrantFor(wallStatus, limits))
     return {
       outcome: "not_offered",
       text: LIMIT_MAY_HAVE_LIFTED_LINE,
     };
   return {
     outcome: "not_offered",
-    text: withLimitResetTime(resetStatusLine(currentLimits), currentLimits),
+    text: withLimitResetTime(resetStatusLine(limits), limits),
   };
 }
 //@ chunk-fm6h4dv7.js:25025-25166 placement
 /**
  * 是否有可直接用于当前限额的重置额度。
  */
-function hasUsableGrantFor(i, s) {
-  let rateLimitType = s.rateLimitType;
+function hasUsableGrantFor(status, limits) {
+  let rateLimitType = limits.rateLimitType;
   return (
     rateLimitType !== undefined &&
-    !i.exhausted.some((m) => m === rateLimitType) &&
-    i.grants.some((grant) => grant.usableNow && !grant.paused && clearsLimit(grant, rateLimitType))
+    !status.exhausted.some((exhaustedType) => exhaustedType === rateLimitType) &&
+    status.grants.some((grant) => grant.usableNow && !grant.paused && clearsLimit(grant, rateLimitType))
   );
 }
 //@ chunk-fm6h4dv7.js:25166-25233 placement
-function isCooldownActive(i) {
-  let timestampOrUndefined = parseTimestampOrUndefined(i.cooldownUntil);
+function isCooldownActive(status) {
+  let timestampOrUndefined = parseTimestampOrUndefined(status.cooldownUntil);
   return timestampOrUndefined !== undefined && timestampOrUndefined > now();
 }
 //@ chunk-fm6h4dv7.js:25233-25832 placement
 /**
  * 当前限额下的重置状态行。
  */
-function resetStatusLine(i) {
-  let s = usableStatusForWall(i);
-  if (s === undefined || s === null || i.rateLimitType === undefined) return RESET_MESSAGES;
-  let rateLimitType = i.rateLimitType;
-  let filtered = s.grants.filter((grant) => grant.resetsLeft > 0);
+function resetStatusLine(limits) {
+  let status = usableStatusForWall(limits);
+  if (status === undefined || status === null || limits.rateLimitType === undefined) return RESET_MESSAGES;
+  let rateLimitType = limits.rateLimitType;
+  let filtered = status.grants.filter((grant) => grant.resetsLeft > 0);
   if (filtered.length === 0) return RESET_MESSAGES;
-  if (!filtered.some((_) => clearsLimit(_, rateLimitType)))
+  if (!filtered.some((grant) => clearsLimit(grant, rateLimitType)))
     return `${RESETS_REFILL_NOTHING_LINE} ${resetLimitDisplayName(rateLimitType)}`;
   if (
     rateLimitType === "seven_day" &&
-    filtered.every((_) => _.givesBackWeekly && _.blocking.includes("seven_day"))
+    filtered.every((grant) => grant.givesBackWeekly && grant.blocking.includes("seven_day"))
   )
     return `Your Fable reset can't be used right now \xB7 ${NO_FABLE_USAGE_LINE}`;
-  let b =
+  let blockedLimitName =
     filtered
-      .filter((_) => clearsLimit(_, rateLimitType))
-      .flatMap((_) => _.blocking)
+      .filter((grant) => clearsLimit(grant, rateLimitType))
+      .flatMap((grant) => grant.blocking)
       .map(limitDisplayName)
-      .find((_) => _ !== null) ?? null;
-  if (b !== null) return noRefillUntilResetLine(b);
-  if (filtered.every((_) => _.paused)) return `${RESET_NOT_FOR_THIS_LIMIT_LINE} \xB7 it is paused`;
-  if (isCooldownActive(s)) return `${RESET_NOT_FOR_THIS_LIMIT_LINE} \xB7 try again in a minute`;
+      .find((name) => name !== null) ?? null;
+  if (blockedLimitName !== null) return noRefillUntilResetLine(blockedLimitName);
+  if (filtered.every((grant) => grant.paused)) return `${RESET_NOT_FOR_THIS_LIMIT_LINE} \xB7 it is paused`;
+  if (isCooldownActive(status)) return `${RESET_NOT_FOR_THIS_LIMIT_LINE} \xB7 try again in a minute`;
   return RESET_NOT_FOR_THIS_LIMIT_LINE;
 }
 //@ chunk-fm6h4dv7.js:25832-25954 placement
 /**
  * 在说明后附上限额重置时间。
  */
-function withLimitResetTime(i, s) {
-  let d = isAutoResumableLimit(s) ? formatResetTimeWithLocale(s.resetsAt) : undefined;
-  return d !== undefined ? `${i} \xB7 this limit resets ${d}` : `${i} \xB7 ${NOT_AT_LIMIT_LINE}`;
+function withLimitResetTime(line, limits) {
+  let resetText = isAutoResumableLimit(limits) ? formatResetTimeWithLocale(limits.resetsAt) : undefined;
+  return resetText !== undefined
+    ? `${line} \xB7 this limit resets ${resetText}`
+    : `${line} \xB7 ${NOT_AT_LIMIT_LINE}`;
 }
 //@ chunk-fm6h4dv7.js:25954-26328 placement
 /**
@@ -1173,21 +1213,22 @@ function reportResetDeclined(entry, offer) {
  * 用户保留重置时的结果。
  */
 function keepResetForLater(entry, offers) {
-  let [d, ...m] = offers;
-  if (d === undefined)
+  let [firstOffer, ...restOffers] = offers;
+  if (firstOffer === undefined)
     return {
       outcome: "kept",
       text: RESET_MESSAGES,
     };
-  let reduced = m.reduce(
-    (acc, h) => (h.endsAtMs !== null && (acc.endsAtMs === null || h.endsAtMs < acc.endsAtMs) ? h : acc),
-    d,
+  let reduced = restOffers.reduce(
+    (acc, offer) =>
+      offer.endsAtMs !== null && (acc.endsAtMs === null || offer.endsAtMs < acc.endsAtMs) ? offer : acc,
+    firstOffer,
   );
   logEvent("tengu_cedar_ember_confirmed", {
     confirmed: false,
     chose_none: true,
     entry: fromEnum(entry),
-    kinds_offered: fromEnumArr(offers.map((_) => _.kind)),
+    kinds_offered: fromEnumArr(offers.map((offer) => offer.kind)),
     limit_type: fromEnumOpt(reduced.origin === "wall" ? reduced.rateLimitType : undefined),
     at_limit: reduced.origin === "wall" || reduced.atLimit,
     config_version: cedarEmberVersion(),
@@ -1202,13 +1243,13 @@ function keepResetForLater(entry, offers) {
  * 领取重置（防重入）。
  */
 async function claimReset(entry, credentials, offer) {
-  let m = usageCreditStateSlots();
-  if (m.claiming)
+  let creditState = usageCreditStateSlots();
+  if (creditState.claiming)
     return {
       outcome: "unavailable",
       text: LIMITS_ALREADY_RESETTING_LINE,
     };
-  m.claiming = true;
+  creditState.claiming = true;
   try {
     return offer.origin === "wall" || captureWallResetIdentity(getCurrentLimits()) !== null
       ? await claimResetAtWall(entry, credentials, offer)
@@ -1224,41 +1265,41 @@ async function claimReset(entry, credentials, offer) {
       ),
     };
   } finally {
-    m.claiming = false;
+    creditState.claiming = false;
   }
 }
 //@ chunk-fm6h4dv7.js:27116-30155 placement
 /**
  * 达到上限时领取重置并刷新限额。
  */
-async function claimResetAtWall(entry, credentials, d) {
-  let m = usageCreditStateSlots();
+async function claimResetAtWall(wall, credentials, offer) {
+  let creditState = usageCreditStateSlots();
   let cedarEmberCopy = getCedarEmberCopy();
   let configVersion = cedarEmberVersion();
-  let id = d.grant.id;
-  await askResetStatusTwice(entry, credentials);
-  let currentLimits = getCurrentLimits();
-  let A = captureWallResetIdentity(currentLimits);
-  let k = availableResetOffers(currentLimits);
-  let found = k.find((R) => R.kind === d.kind);
+  let id = offer.grant.id;
+  await askResetStatusTwice(wall, credentials);
+  let limits = getCurrentLimits();
+  let wall_2 = captureWallResetIdentity(limits);
+  let offers = availableResetOffers(limits);
+  let found = offers.find((matchedOffer) => matchedOffer.kind === offer.kind);
   logEvent("tengu_cedar_ember_confirmed", {
     confirmed: true,
-    entry: fromEnum(entry),
+    entry: fromEnum(wall),
     grant_id: sanitizeMarkName(id),
-    kind: fromEnum(d.kind),
-    limit_type: fromEnumOpt(currentLimits.rateLimitType),
+    kind: fromEnum(offer.kind),
+    limit_type: fromEnumOpt(limits.rateLimitType),
     still_offered: found !== undefined && found.grant.id === id,
     at_limit: true,
     early_use: false,
     config_version: configVersion,
   });
-  if (A === null || k.length === 0) return resetNotOfferedResult(currentLimits);
+  if (wall_2 === null || offers.length === 0) return resetNotOfferedResult(limits);
   if (found === undefined)
     return {
       outcome: "not_offered",
       text: `${formatLimitResetTemplate(RESET_NO_LONGER_OFFERED_LINE, {
-        kind: formatResetKindName(d.kind),
-      })} \xB7 you can use ${formatResetChoices(k.map((R) => R.kind))}`,
+        kind: formatResetKindName(offer.kind),
+      })} \xB7 you can use ${formatResetChoices(offers.map((offer) => offer.kind))}`,
     };
   if (found.grant.id !== id)
     return {
@@ -1266,9 +1307,9 @@ async function claimResetAtWall(entry, credentials, d) {
       text: DIFFERENT_RESET_OFFERED_LINE,
     };
   let now_2 = Date.now();
-  let L = isClaimForGrant(m, id);
-  let I = claimRequestIdFor(m, id);
-  let O = (await withDeadline(claimCedarEmberGrant(credentials, id, I), RETRY_MAX_MS)) ?? {
+  let wasClaiming = isClaimForGrant(creditState, id);
+  let requestId = claimRequestIdFor(creditState, id);
+  let claimResult = (await withDeadline(claimCedarEmberGrant(credentials, id, requestId), RETRY_MAX_MS)) ?? {
     result: "error",
     reason: null,
     resetsLeft: null,
@@ -1277,20 +1318,20 @@ async function claimResetAtWall(entry, credentials, d) {
   };
   switch (
     (logEvent("tengu_cedar_ember_result", {
-      result: fromEnum(O.result),
-      reason: fromEnumOpt(O.reason),
-      entry: fromEnum(entry),
+      result: fromEnum(claimResult.result),
+      reason: fromEnumOpt(claimResult.reason),
+      entry: fromEnum(wall),
       grant_id: sanitizeMarkName(id),
       kind: fromEnum(found.kind),
-      resets_left: O.resetsLeft ?? undefined,
-      cleared: fromEnumArr(O.cleared),
-      limit_type: fromEnum(A.rateLimitType),
+      resets_left: claimResult.resetsLeft ?? undefined,
+      cleared: fromEnumArr(claimResult.cleared),
+      limit_type: fromEnum(wall_2.rateLimitType),
       at_limit: true,
       early_use: false,
       latency_ms: Date.now() - now_2,
       config_version: configVersion,
     }),
-    O.result)
+    claimResult.result)
   ) {
     case "reset":
     case "not_limited":
@@ -1303,85 +1344,94 @@ async function claimResetAtWall(entry, credentials, d) {
     case "rate_limited":
     case "auth_error":
     case "error":
-      logFeatureSad("cedar_ember", O.result);
+      logFeatureSad("cedar_ember", claimResult.result);
       break;
   }
-  let D = found.resetsLeft - found.grant.resetsLeft;
-  let Fe = O.resetsLeft ?? (O.result === "already_used" ? 0 : Math.max(0, found.grant.resetsLeft - 1));
-  let G = {
+  let usedDiff = found.resetsLeft - found.grant.resetsLeft;
+  let resetsLeft =
+    claimResult.resetsLeft ??
+    (claimResult.result === "already_used" ? 0 : Math.max(0, found.grant.resetsLeft - 1));
+  let fields = {
     ...resetOfferFields(found),
-    left: D + Fe,
-    kindResets: formatResetCount(found.kind, D + Fe),
-    week: latestGrantEndLine(O.weeklyResetsAt ?? found.weeklyResetsAt),
+    left: usedDiff + resetsLeft,
+    kindResets: formatResetCount(found.kind, usedDiff + resetsLeft),
+    week: latestGrantEndLine(claimResult.weeklyResetsAt ?? found.weeklyResetsAt),
   };
-  switch (O.result) {
+  switch (claimResult.result) {
     case "reset": {
-      clearUnsettledClaim(m);
+      clearUnsettledClaim(creditState);
       dropUnusedResetCache();
-      let R = [A.rateLimitType, ...resettableLimitTypes(O.cleared).filter((ae) => ae !== A.rateLimitType)];
-      if (!found.grant.clears.some((clear) => clear === A.rateLimitType)) {
-        forgetHeldWindows(R);
-        let ae = now();
+      let clearedTypes = [
+        wall_2.rateLimitType,
+        ...resettableLimitTypes(claimResult.cleared).filter(
+          (clearedType) => clearedType !== wall_2.rateLimitType,
+        ),
+      ];
+      if (!found.grant.clears.some((clear) => clear === wall_2.rateLimitType)) {
+        forgetHeldWindows(clearedTypes);
+        let probeStartMs = now();
         await withDeadline(
           probeQuotaStatusAtStart(credentials, undefined).catch((error) => {
             logError(toError(error));
           }),
           RETRY_AFTER_MS,
         );
-        let F = lastLimitsObservationAt() > ae;
+        let limitsMoved = lastLimitsObservationAt() > probeStartMs;
         let currentLimits = getCurrentLimits();
-        let _e = F && isAutoResumableLimit(currentLimits);
-        let $e = _e && currentLimits.rateLimitType === A.rateLimitType;
+        let stillLimited = limitsMoved && isAutoResumableLimit(currentLimits);
+        let stillAtSameLimit = stillLimited && currentLimits.rateLimitType === wall_2.rateLimitType;
         logEvent("tengu_cedar_ember_give_back", {
-          outcome: fromEnum($e ? "binds" : _e ? "elsewhere" : F ? "lifted" : "unread"),
-          entry: fromEnum(entry),
+          outcome: fromEnum(
+            stillAtSameLimit ? "binds" : stillLimited ? "elsewhere" : limitsMoved ? "lifted" : "unread",
+          ),
+          entry: fromEnum(wall),
           grant_id: sanitizeMarkName(id),
           config_version: configVersion,
         });
-        if ($e) {
-          resetWallPhase(A);
-          askResetStatus(currentLimits, credentials, entry);
+        if (stillAtSameLimit) {
+          resetWallPhase(wall_2);
+          askResetStatus(currentLimits, credentials, wall);
           return {
             outcome: "reset",
             text: formatLimitResetTemplate(RESET_USED_STILL_LIMITED_LINE, {
-              ...G,
-              limit: resetLimitDisplayName(A.rateLimitType),
+              ...fields,
+              limit: resetLimitDisplayName(wall_2.rateLimitType),
               date: formatResetTimeWithLocale(currentLimits.resetsAt, false, true, true),
             }),
           };
         }
-        R = F ? [] : R;
+        clearedTypes = limitsMoved ? [] : clearedTypes;
       }
-      let q = consumeContinuableWall(m, A);
-      applyClaimedReset(m, A, R, entry, q);
-      let Ke = formatLimitResetTemplate(cedarEmberCopy.successLine, G);
+      let continuable = consumeContinuableWall(creditState, wall_2);
+      applyClaimedReset(creditState, wall_2, clearedTypes, wall, continuable);
+      let successText = formatLimitResetTemplate(cedarEmberCopy.successLine, fields);
       return {
         outcome: "reset",
-        text: q ? Ke : appendContinueHint(Ke),
+        text: continuable ? successText : appendContinueHint(successText),
       };
     }
     case "not_limited": {
-      clearUnsettledClaim(m);
-      let R = consumeContinuableWall(m, A);
-      applyClaimedReset(m, A, [A.rateLimitType], entry, R);
-      let q = L ? LIMITS_CLEAR_LINE : LIMIT_ALREADY_RESET_LINE;
+      clearUnsettledClaim(creditState);
+      let continuable = consumeContinuableWall(creditState, wall_2);
+      applyClaimedReset(creditState, wall_2, [wall_2.rateLimitType], wall, continuable);
+      let text = wasClaiming ? LIMITS_CLEAR_LINE : LIMIT_ALREADY_RESET_LINE;
       return {
         outcome: "reset",
-        text: R ? q : appendContinueHint(q),
+        text: continuable ? text : appendContinueHint(text),
       };
     }
     case "cooldown": {
-      if (!L) clearUnsettledClaim(m);
+      if (!wasClaiming) clearUnsettledClaim(creditState);
       probeOrFireQuotaResume(credentials);
       return {
         outcome: "unavailable",
-        text: L ? EARLIER_RESET_PENDING_LINE : OTHER_RESET_STARTED_LINE,
+        text: wasClaiming ? EARLIER_RESET_PENDING_LINE : OTHER_RESET_STARTED_LINE,
       };
     }
     case "already_used": {
-      if (L) {
-        clearUnsettledClaim(m);
-        resetWallPhase(A);
+      if (wasClaiming) {
+        clearUnsettledClaim(creditState);
+        resetWallPhase(wall_2);
         probeOrFireQuotaResume(credentials);
         return {
           outcome: "spent",
@@ -1389,26 +1439,26 @@ async function claimResetAtWall(entry, credentials, d) {
         };
       }
       if (found.totalResetsLeft - found.grant.resetsLeft > 0) {
-        resetWallPhase(A);
-        askResetStatus(getCurrentLimits(), credentials, entry);
+        resetWallPhase(wall_2);
+        askResetStatus(getCurrentLimits(), credentials, wall);
         probeOrFireQuotaResume(credentials);
         return {
           outcome: "spent",
-          text: formatLimitResetTemplate(`${RESET_ALREADY_USED_LINE} \xB7 ${RUN_RESET_AGAIN_LINE}`, G),
+          text: formatLimitResetTemplate(`${RESET_ALREADY_USED_LINE} \xB7 ${RUN_RESET_AGAIN_LINE}`, fields),
         };
       }
-      refreshAnsweredStatus(A, id);
+      refreshAnsweredStatus(wall_2, id);
       probeOrFireQuotaResume(credentials);
       return {
         outcome: "spent",
-        text: formatLimitResetTemplate(RESET_ALREADY_USED_LINE, G),
+        text: formatLimitResetTemplate(RESET_ALREADY_USED_LINE, fields),
       };
     }
     case "ineligible": {
-      resetWallPhase(A);
-      askResetStatus(getCurrentLimits(), credentials, entry);
-      if (L) {
-        clearUnsettledClaim(m);
+      resetWallPhase(wall_2);
+      askResetStatus(getCurrentLimits(), credentials, wall);
+      if (wasClaiming) {
+        clearUnsettledClaim(creditState);
         probeOrFireQuotaResume(credentials);
         return {
           outcome: "not_offered",
@@ -1417,7 +1467,7 @@ async function claimResetAtWall(entry, credentials, d) {
       }
       return {
         outcome: "not_offered",
-        text: withLimitResetTime(RESET_NOT_AVAILABLE_LINE, currentLimits),
+        text: withLimitResetTime(RESET_NOT_AVAILABLE_LINE, limits),
       };
     }
     case "auth_error":
@@ -1429,62 +1479,62 @@ async function claimResetAtWall(entry, credentials, d) {
       return {
         outcome: "unavailable",
         text: formatLimitResetTemplate(
-          L ? cedarEmberCopy.unconfirmedLine : cedarEmberCopy.unavailableLine,
-          G,
+          wasClaiming ? cedarEmberCopy.unconfirmedLine : cedarEmberCopy.unavailableLine,
+          fields,
         ),
       };
     case "unavailable":
     case "error": {
-      recordUnsettledClaim(m, id, I, A.accountEpoch);
-      let R = resettableLimitTypes(O.cleared);
-      if (R.length > 0) {
-        forgetHeldWindows(R);
-        if (R.includes(A.rateLimitType)) probeOrFireQuotaResume(credentials);
+      recordUnsettledClaim(creditState, id, requestId, wall_2.accountEpoch);
+      let clearedTypes = resettableLimitTypes(claimResult.cleared);
+      if (clearedTypes.length > 0) {
+        forgetHeldWindows(clearedTypes);
+        if (clearedTypes.includes(wall_2.rateLimitType)) probeOrFireQuotaResume(credentials);
       }
-      resetWallPhase(A);
-      askResetStatus(getCurrentLimits(), credentials, entry);
+      resetWallPhase(wall_2);
+      askResetStatus(getCurrentLimits(), credentials, wall);
       return {
         outcome: "unavailable",
         text: formatLimitResetTemplate(
-          L ? cedarEmberCopy.stillUnconfirmedLine : cedarEmberCopy.unconfirmedLine,
-          G,
+          wasClaiming ? cedarEmberCopy.stillUnconfirmedLine : cedarEmberCopy.unconfirmedLine,
+          fields,
         ),
       };
     }
   }
 }
 //@ chunk-fm6h4dv7.js:30155-30240 placement
-function earlyUsePercentUsedMax(i) {
-  return i.origin === "anytime" ? (i.earlyUse?.percentUsedMax ?? undefined) : undefined;
+function earlyUsePercentUsedMax(offer) {
+  return offer.origin === "anytime" ? (offer.earlyUse?.percentUsedMax ?? undefined) : undefined;
 }
 //@ chunk-fm6h4dv7.js:30240-30302 placement
-function hasEarlyUse(i) {
-  return i.origin === "anytime" && i.earlyUse !== null;
+function hasEarlyUse(offer) {
+  return offer.origin === "anytime" && offer.earlyUse !== null;
 }
 //@ chunk-fm6h4dv7.js:30302-32325 placement
 /**
  * 未达上限时提前领取重置。
  */
-async function claimResetEarly(i, credentials, d) {
-  let m = usageCreditStateSlots();
+async function claimResetEarly(entry, credentials, offer) {
+  let creditState = usageCreditStateSlots();
   let cedarEmberCopy = getCedarEmberCopy();
   let configVersion = cedarEmberVersion();
-  let id = d.grant.id;
+  let id = offer.grant.id;
   let unsettledClaimEpoch = getLimitsAccountEpoch();
   logEvent("tengu_cedar_ember_confirmed", {
     confirmed: true,
-    entry: fromEnum(i),
+    entry: fromEnum(entry),
     grant_id: sanitizeMarkName(id),
-    kind: fromEnum(d.kind),
-    at_limit: d.atLimit,
-    early_use: hasEarlyUse(d),
-    percent_used_max: earlyUsePercentUsedMax(d),
+    kind: fromEnum(offer.kind),
+    at_limit: offer.atLimit,
+    early_use: hasEarlyUse(offer),
+    percent_used_max: earlyUsePercentUsedMax(offer),
     config_version: configVersion,
   });
   let now = Date.now();
-  let k = isClaimForGrant(m, id);
-  let T = claimRequestIdFor(m, id);
-  let x = (await withDeadline(claimCedarEmberGrant(credentials, id, T), RETRY_MAX_MS)) ?? {
+  let wasClaiming = isClaimForGrant(creditState, id);
+  let requestId = claimRequestIdFor(creditState, id);
+  let claimResult = (await withDeadline(claimCedarEmberGrant(credentials, id, requestId), RETRY_MAX_MS)) ?? {
     result: "error",
     reason: null,
     resetsLeft: null,
@@ -1493,20 +1543,20 @@ async function claimResetEarly(i, credentials, d) {
   };
   switch (
     (logEvent("tengu_cedar_ember_result", {
-      result: fromEnum(x.result),
-      reason: fromEnumOpt(x.reason),
-      entry: fromEnum(i),
+      result: fromEnum(claimResult.result),
+      reason: fromEnumOpt(claimResult.reason),
+      entry: fromEnum(entry),
       grant_id: sanitizeMarkName(id),
-      kind: fromEnum(d.kind),
-      resets_left: x.resetsLeft ?? undefined,
-      cleared: fromEnumArr(x.cleared),
-      at_limit: d.atLimit,
-      early_use: hasEarlyUse(d),
-      percent_used_max: earlyUsePercentUsedMax(d),
+      kind: fromEnum(offer.kind),
+      resets_left: claimResult.resetsLeft ?? undefined,
+      cleared: fromEnumArr(claimResult.cleared),
+      at_limit: offer.atLimit,
+      early_use: hasEarlyUse(offer),
+      percent_used_max: earlyUsePercentUsedMax(offer),
       latency_ms: Date.now() - now,
       config_version: configVersion,
     }),
-    x.result)
+    claimResult.result)
   ) {
     case "reset":
     case "not_limited":
@@ -1519,32 +1569,34 @@ async function claimResetEarly(i, credentials, d) {
     case "rate_limited":
     case "auth_error":
     case "error":
-      logFeatureSad("cedar_ember", x.result);
+      logFeatureSad("cedar_ember", claimResult.result);
       break;
   }
-  let L = d.resetsLeft - d.grant.resetsLeft;
-  let I = x.resetsLeft ?? (x.result === "already_used" ? 0 : Math.max(0, d.grant.resetsLeft - 1));
-  let O = {
-    ...resetOfferFields(d),
-    left: L + I,
-    kindResets: formatResetCount(d.kind, L + I),
-    week: latestGrantEndLine(x.weeklyResetsAt ?? d.weeklyResetsAt),
+  let usedDiff = offer.resetsLeft - offer.grant.resetsLeft;
+  let resetsLeft =
+    claimResult.resetsLeft ??
+    (claimResult.result === "already_used" ? 0 : Math.max(0, offer.grant.resetsLeft - 1));
+  let fields = {
+    ...resetOfferFields(offer),
+    left: usedDiff + resetsLeft,
+    kindResets: formatResetCount(offer.kind, usedDiff + resetsLeft),
+    week: latestGrantEndLine(claimResult.weeklyResetsAt ?? offer.weeklyResetsAt),
   };
-  switch (x.result) {
+  switch (claimResult.result) {
     case "reset": {
-      clearUnsettledClaim(m);
+      clearUnsettledClaim(creditState);
       dropUnusedResetCache();
-      let D = resettableLimitTypes(x.cleared);
-      if (D.length > 0) forgetHeldWindows(D);
+      let clearedTypes = resettableLimitTypes(claimResult.cleared);
+      if (clearedTypes.length > 0) forgetHeldWindows(clearedTypes);
       probeOrFireQuotaResume(credentials);
       return {
         outcome: "reset",
-        text: formatLimitResetTemplate(cedarEmberCopy.successLine, O),
+        text: formatLimitResetTemplate(cedarEmberCopy.successLine, fields),
       };
     }
     case "not_limited":
-      clearUnsettledClaim(m);
-      if (k) {
+      clearUnsettledClaim(creditState);
+      if (wasClaiming) {
         probeOrFireQuotaResume(credentials);
         return {
           outcome: "not_offered",
@@ -1556,15 +1608,15 @@ async function claimResetEarly(i, credentials, d) {
         text: RESET_ONLY_AT_LIMIT_LINE,
       };
     case "cooldown":
-      if (!k) clearUnsettledClaim(m);
+      if (!wasClaiming) clearUnsettledClaim(creditState);
       probeOrFireQuotaResume(credentials);
       return {
         outcome: "unavailable",
-        text: k ? EARLIER_RESET_PENDING_LINE : OTHER_RESET_STARTED_UNUSED_LINE,
+        text: wasClaiming ? EARLIER_RESET_PENDING_LINE : OTHER_RESET_STARTED_UNUSED_LINE,
       };
     case "already_used":
-      if (k) {
-        clearUnsettledClaim(m);
+      if (wasClaiming) {
+        clearUnsettledClaim(creditState);
         probeOrFireQuotaResume(credentials);
         return {
           outcome: "spent",
@@ -1574,15 +1626,15 @@ async function claimResetEarly(i, credentials, d) {
       return {
         outcome: "spent",
         text: formatLimitResetTemplate(
-          d.totalResetsLeft - d.grant.resetsLeft > 0
+          offer.totalResetsLeft - offer.grant.resetsLeft > 0
             ? `${RESET_ALREADY_USED_LINE} \xB7 ${RUN_RESET_AGAIN_LINE}`
             : RESET_ALREADY_USED_LINE,
-          O,
+          fields,
         ),
       };
     case "ineligible":
-      if (k) {
-        clearUnsettledClaim(m);
+      if (wasClaiming) {
+        clearUnsettledClaim(creditState);
         probeOrFireQuotaResume(credentials);
         return {
           outcome: "not_offered",
@@ -1602,21 +1654,21 @@ async function claimResetEarly(i, credentials, d) {
       return {
         outcome: "unavailable",
         text: formatLimitResetTemplate(
-          k ? cedarEmberCopy.unconfirmedAnytimeLine : cedarEmberCopy.unavailableLine,
-          O,
+          wasClaiming ? cedarEmberCopy.unconfirmedAnytimeLine : cedarEmberCopy.unavailableLine,
+          fields,
         ),
       };
     case "unavailable":
     case "error": {
-      recordUnsettledClaim(m, id, T, unsettledClaimEpoch);
-      let D = resettableLimitTypes(x.cleared);
-      if (D.length > 0) forgetHeldWindows(D);
-      if (D.length > 0 || k) probeOrFireQuotaResume(credentials);
+      recordUnsettledClaim(creditState, id, requestId, unsettledClaimEpoch);
+      let clearedTypes = resettableLimitTypes(claimResult.cleared);
+      if (clearedTypes.length > 0) forgetHeldWindows(clearedTypes);
+      if (clearedTypes.length > 0 || wasClaiming) probeOrFireQuotaResume(credentials);
       return {
         outcome: "unavailable",
         text: formatLimitResetTemplate(
-          k ? cedarEmberCopy.stillUnconfirmedLine : cedarEmberCopy.unconfirmedAnytimeLine,
-          O,
+          wasClaiming ? cedarEmberCopy.stillUnconfirmedLine : cedarEmberCopy.unconfirmedAnytimeLine,
+          fields,
         ),
       };
     }
@@ -1644,8 +1696,8 @@ var RESET_ONLY_AT_LIMIT_LINE =
 /**
  * 说明「这个重置不补回某个限额，要等它自己重置」。
  */
-function noRefillUntilResetLine(i) {
-  return `Your reset doesn't refill your ${i}, so it can't be used until that resets`;
+function noRefillUntilResetLine(limitName) {
+  return `Your reset doesn't refill your ${limitName}, so it can't be used until that resets`;
 }
 //@ chunk-fm6h4dv7.js:33220-34433 placement
 /**
@@ -1677,68 +1729,68 @@ var RESET_LOGIN_ERROR_LINE = "Couldn't reset your limits with this login \xB7 ru
 /**
  * 在重置成功文案后追加「发一条消息继续」。
  */
-function appendContinueHint(i) {
-  return `${i} \xB7 ${SEND_MESSAGE_TO_CONTINUE_LINE}`;
+function appendContinueHint(text) {
+  return `${text} \xB7 ${SEND_MESSAGE_TO_CONTINUE_LINE}`;
 }
 //@ chunk-fm6h4dv7.js:34472-34585 placement
 /**
  * 取出并清除“可继续”的墙标记。
  */
-function consumeContinuableWall(i, s) {
-  let d = cedarEmberAutoContinue() && i.continuableWallResetsAt === s.wallResetsAt;
-  i.continuableWallResetsAt = null;
-  return d;
+function consumeContinuableWall(state, wall) {
+  let isContinuable = cedarEmberAutoContinue() && state.continuableWallResetsAt === wall.wallResetsAt;
+  state.continuableWallResetsAt = null;
+  return isContinuable;
 }
 //@ chunk-fm6h4dv7.js:34585-34849 placement
 /**
  * 过滤出可重置的限额类型。
  */
 function resettableLimitTypes(cleared) {
-  let s = [];
-  for (let d of cleared)
-    switch (d) {
+  let types = [];
+  for (let limitType of cleared)
+    switch (limitType) {
       case "five_hour":
       case "seven_day":
       case "seven_day_overage_included":
       case "seven_day_opus":
       case "seven_day_sonnet":
-        s.push(d);
+        types.push(limitType);
         break;
       case "seven_day_cowork":
       case "seven_day_omelette":
       case "seven_day_oauth_apps":
         break;
     }
-  return s;
+  return types;
 }
 //@ chunk-fm6h4dv7.js:34849-35084 placement
 /**
  * 领取重置后的收尾：取消自动续接、结束低优先级、释放限额、清空状态、发出 reset 事件（每步独立容错）。
  */
-function applyClaimedReset(i, s, d, entry, b) {
-  let _ = [
+function applyClaimedReset(state, wall, clearedTypes, entry, shouldContinue) {
+  let steps = [
     () => cancelQuotaAutoResume("cedar_ember"),
     () => {
       endLowPriority("reset");
     },
-    () => releaseClearedLimits(d),
+    () => releaseClearedLimits(clearedTypes),
     () => {
-      resetWallPhase(s);
-      i.wallRecordKey = null;
-      i.shownOfferKey = null;
+      resetWallPhase(wall);
+      state.wallRecordKey = null;
+      state.shownOfferKey = null;
     },
     () => {
-      if (b) enqueueAutoContinuation();
+      if (shouldContinue) enqueueAutoContinuation();
     },
     () =>
-      i.events.emit({
+      state.events.emit({
         type: "reset",
         entry,
       }),
   ];
-  for (let h of _)
+  for (let step of steps)
     try {
-      h();
+      step();
     } catch (error) {
       logError(toError(error));
     }
@@ -1747,13 +1799,13 @@ function applyClaimedReset(i, s, d, entry, b) {
 /**
  * 忘记被清除的限额窗口；当前被拒的限额已清除时改为 allowed。
  */
-function releaseClearedLimits(i) {
-  if (i.length > 0) forgetHeldWindows(i);
+function releaseClearedLimits(clearedTypes) {
+  if (clearedTypes.length > 0) forgetHeldWindows(clearedTypes);
   let currentLimits = getCurrentLimits();
   if (
     currentLimits.status !== "rejected" ||
     currentLimits.rateLimitType === undefined ||
-    !i.includes(currentLimits.rateLimitType)
+    !clearedTypes.includes(currentLimits.rateLimitType)
   )
     return;
   emitLimitsStatusChange({
@@ -1764,12 +1816,12 @@ function releaseClearedLimits(i) {
   });
 }
 //@ chunk-fm6h4dv7.js:35285-35357 placement
-function probeOrFireQuotaResume(i) {
+function probeOrFireQuotaResume(credentials) {
   if (isQuotaAutoResumeArmed()) {
     confirmAndFire();
     return;
   }
-  probeQuotaStatusAtStart(i, undefined).catch((error) => {
+  probeQuotaStatusAtStart(credentials, undefined).catch((error) => {
     logError(toError(error));
   });
 }
@@ -1777,12 +1829,12 @@ function probeOrFireQuotaResume(i) {
 /**
  * 当前墙已处理时把重置状态置为 idle。
  */
-function resetWallPhase(i) {
-  let s = currentUsageCreditState();
+function resetWallPhase(wall) {
+  let state = currentUsageCreditState();
   if (
-    s.phase !== "idle" &&
-    s.wall.wallResetsAt === i.wallResetsAt &&
-    s.wall.rateLimitType === i.rateLimitType
+    state.phase !== "idle" &&
+    state.wall.wallResetsAt === wall.wallResetsAt &&
+    state.wall.rateLimitType === wall.rateLimitType
   )
     setUsageCreditState({
       phase: "idle",
@@ -1792,22 +1844,22 @@ function resetWallPhase(i) {
 /**
  * 更新已答复的重置状态。
  */
-function refreshAnsweredStatus(i, id) {
-  let d = currentUsageCreditState();
+function refreshAnsweredStatus(wall, id) {
+  let state = currentUsageCreditState();
   if (
-    d.phase !== "answered" ||
-    d.wall.wallResetsAt !== i.wallResetsAt ||
-    d.wall.rateLimitType !== i.rateLimitType ||
-    d.status === null
+    state.phase !== "answered" ||
+    state.wall.wallResetsAt !== wall.wallResetsAt ||
+    state.wall.rateLimitType !== wall.rateLimitType ||
+    state.status === null
   )
     return;
   setUsageCreditState({
-    ...d,
+    ...state,
     answeredAtMs: now(),
     status: {
-      ...d.status,
-      nextGrantId: d.status.nextGrantId === id ? null : d.status.nextGrantId,
-      grants: d.status.grants.map((grant) =>
+      ...state.status,
+      nextGrantId: state.status.nextGrantId === id ? null : state.status.nextGrantId,
+      grants: state.status.grants.map((grant) =>
         grant.id === id
           ? {
               ...grant,
@@ -1823,87 +1875,96 @@ function refreshAnsweredStatus(i, id) {
 /**
  * 订阅会话切换以在对话重置时清除可继续标记（只订阅一次）。
  */
-function subscribeWallReset(i) {
-  if (i.sessionSwitchSubscribed) return;
-  i.sessionSwitchSubscribed = true;
-  onSessionSwitch((s, d) => {
-    if (isConversationResetSwitch(d)) i.continuableWallResetsAt = null;
+function subscribeWallReset(state) {
+  if (state.sessionSwitchSubscribed) return;
+  state.sessionSwitchSubscribed = true;
+  onSessionSwitch((from, to) => {
+    if (isConversationResetSwitch(to)) state.continuableWallResetsAt = null;
   });
 }
 //@ chunk-fm6h4dv7.js:35979-37293 placement
 /**
  * juniper_tide（重置额度）状态 schema。
  */
-var JUNIPER_TIDE_SCHEMA = "juniper_tide";
-var RESET_CLAIM_TIMEOUT_MS = 25000;
-var juniperTideEventSchema = DoctorLazy(() =>
-  u({
-    surface: _enum(["claude_ai", "claude_code_cli", "unknown"]).catch("unknown"),
-    tier: _enum(["claude_pro", "claude_max_5x", "claude_max_20x", "unknown"]).catch("unknown"),
-    tenure_bucket: _enum(["under_14", "14-29", "30-89", "90-364", "365+", "unknown"]).catch("unknown"),
-    billing_path: _enum(["stripe", "apple", "google_play", "other", "unknown"]).catch("unknown"),
-    billing_period: _enum(["monthly", "annual", "unknown"]).catch("unknown"),
-    extra_usage_state: _enum(["not_configured", "disabled", "enabled", "unknown"]).catch("unknown"),
-  }),
-);
-var juniperTideStatusSchema = DoctorLazy(() =>
-  u({
-    eligible: M(),
-    ineligible_reason: _enum([
-      "tier",
-      "tenure",
-      "surface",
-      "mobile",
-      "cli_version",
-      "not_at_wall",
-      "weekly_limit",
-      "no_weekly_limit",
-      "other_experiment",
-      "extra_usage",
-      "unavailable",
-      "unknown",
-    ])
-      .catch("unknown")
-      .nullable()
-      .optional(),
-    in_experiment: M().optional(),
-    arm: _enum(["control", "reset"]).nullable().optional().catch(null),
-    available: M().optional(),
-    next_available_at: string().nullable().optional().catch(null),
-    weekly_resets_at: string().nullable().optional().catch(null),
-    resets_per_week: E().optional().catch(undefined),
-    event_props: juniperTideEventSchema().nullable().optional().catch(null),
-  }),
-);
-var juniperTideClaimResultSchema = DoctorLazy(() =>
-  u({
-    result: _enum(["reset", "already_used", "not_limited", "ineligible", "unavailable"]).catch("unavailable"),
-    next_available_at: string().nullable().optional().catch(null),
-    weekly_resets_at: string().nullable().optional().catch(null),
-  }),
-);
+var JUNIPER_TIDE_PROGRAM; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var RESET_CLAIM_TIMEOUT_MS;
+var juniperTideEventSchema;
+var juniperTideStatusSchema;
+var juniperTideClaimResultSchema;
+deferInit("chunk-fm6h4dv7.js:35979", () => {
+  JUNIPER_TIDE_PROGRAM = "juniper_tide";
+  RESET_CLAIM_TIMEOUT_MS = 25000;
+  juniperTideEventSchema = DoctorLazy(() =>
+    objectSchema({
+      surface: _enum(["claude_ai", "claude_code_cli", "unknown"]).catch("unknown"),
+      tier: _enum(["claude_pro", "claude_max_5x", "claude_max_20x", "unknown"]).catch("unknown"),
+      tenure_bucket: _enum(["under_14", "14-29", "30-89", "90-364", "365+", "unknown"]).catch("unknown"),
+      billing_path: _enum(["stripe", "apple", "google_play", "other", "unknown"]).catch("unknown"),
+      billing_period: _enum(["monthly", "annual", "unknown"]).catch("unknown"),
+      extra_usage_state: _enum(["not_configured", "disabled", "enabled", "unknown"]).catch("unknown"),
+    }),
+  );
+  juniperTideStatusSchema = DoctorLazy(() =>
+    objectSchema({
+      eligible: booleanSchema(),
+      ineligible_reason: _enum([
+        "tier",
+        "tenure",
+        "surface",
+        "mobile",
+        "cli_version",
+        "not_at_wall",
+        "weekly_limit",
+        "no_weekly_limit",
+        "other_experiment",
+        "extra_usage",
+        "unavailable",
+        "unknown",
+      ])
+        .catch("unknown")
+        .nullable()
+        .optional(),
+      in_experiment: booleanSchema().optional(),
+      arm: _enum(["control", "reset"]).nullable().optional().catch(null),
+      available: booleanSchema().optional(),
+      next_available_at: stringSchema().nullable().optional().catch(null),
+      weekly_resets_at: stringSchema().nullable().optional().catch(null),
+      resets_per_week: numberSchema().optional().catch(undefined),
+      event_props: juniperTideEventSchema().nullable().optional().catch(null),
+    }),
+  );
+  juniperTideClaimResultSchema = DoctorLazy(() =>
+    objectSchema({
+      result: _enum(["reset", "already_used", "not_limited", "ineligible", "unavailable"]).catch(
+        "unavailable",
+      ),
+      next_available_at: stringSchema().nullable().optional().catch(null),
+      weekly_resets_at: stringSchema().nullable().optional().catch(null),
+    }),
+  );
+});
 //@ chunk-fm6h4dv7.js:37293-37933 placement
 /**
  * 解析 juniper_tide 状态块。
  */
 function parseJuniperTideStatus(juniperTide) {
   if (juniperTide === undefined || juniperTide === null) return null;
-  let s = juniperTideStatusSchema().safeParse(juniperTide);
-  if (!s.success) {
-    logForDebugging(`[juniper-tide] ignoring a malformed status block: ${s.error.message}`);
+  let parsed = juniperTideStatusSchema().safeParse(juniperTide);
+  if (!parsed.success) {
+    logForDebugging(`[juniper-tide] ignoring a malformed status block: ${parsed.error.message}`);
     return null;
   }
-  let d = s.data;
-  let eventProps = d.event_props;
+  let data = parsed.data;
+  let eventProps = data.event_props;
   return {
-    eligible: d.eligible,
-    ineligibleReason: d.ineligible_reason ?? null,
-    inExperiment: d.in_experiment ?? false,
-    arm: d.arm ?? null,
-    available: d.available ?? false,
-    nextAvailableAt: d.next_available_at ?? null,
-    weeklyResetsAt: d.weekly_resets_at ?? null,
-    resetsPerWeek: d.resets_per_week ?? 1,
+    eligible: data.eligible,
+    ineligibleReason: data.ineligible_reason ?? null,
+    inExperiment: data.in_experiment ?? false,
+    arm: data.arm ?? null,
+    available: data.available ?? false,
+    nextAvailableAt: data.next_available_at ?? null,
+    weeklyResetsAt: data.weekly_resets_at ?? null,
+    resetsPerWeek: data.resets_per_week ?? 1,
     eventProps: eventProps
       ? {
           surface: eventProps.surface,
@@ -1920,13 +1981,13 @@ function parseJuniperTideStatus(juniperTide) {
 /**
  * 获取限额重置状态。
  */
-async function fetchJuniperTideStatus(i) {
+async function fetchJuniperTideStatus(credentials) {
   try {
     if (!hasProfileScope())
       return {
         kind: "no_profile_scope",
       };
-    let utilization = await fetchUtilization(i, {
+    let utilization = await fetchUtilization(credentials, {
       read: "at_wall",
     });
     if (!hasUsageLimitKeys(utilization)) {
@@ -1969,12 +2030,12 @@ async function claimJuniperTide(credentials) {
     };
   }
   try {
-    let d = await withOAuth401Retry(
+    let response = await withOAuth401Retry(
       () =>
         apiClient.post(
           `/api/organizations/${organizationUuid}/reset_rate_limits`,
           {
-            program: JUNIPER_TIDE_SCHEMA,
+            program: JUNIPER_TIDE_PROGRAM,
           },
           {
             auth: "async",
@@ -1990,18 +2051,21 @@ async function claimJuniperTide(credentials) {
         credentials,
       },
     );
-    if (!d.ok) {
-      logForDebugging(`[juniper-tide] claim not sent: ${d.reason === "no-auth" ? d.detail : d.reason}`, {
-        level: "warn",
-      });
+    if (!response.ok) {
+      logForDebugging(
+        `[juniper-tide] claim not sent: ${response.reason === "no-auth" ? response.detail : response.reason}`,
+        {
+          level: "warn",
+        },
+      );
       return {
-        result: d.reason === "no-auth" ? "auth_error" : "error",
+        result: response.reason === "no-auth" ? "auth_error" : "error",
         nextAvailableAt: null,
       };
     }
-    let m = juniperTideClaimResultSchema().safeParse(d.data);
-    if (!m.success) {
-      logForDebugging(`[juniper-tide] unreadable claim response: ${m.error.message}`, {
+    let parsed = juniperTideClaimResultSchema().safeParse(response.data);
+    if (!parsed.success) {
+      logForDebugging(`[juniper-tide] unreadable claim response: ${parsed.error.message}`, {
         level: "error",
       });
       logError(Error("[juniper-tide] unreadable claim response"));
@@ -2011,8 +2075,8 @@ async function claimJuniperTide(credentials) {
       };
     }
     return {
-      result: m.data.result,
-      nextAvailableAt: m.data.next_available_at ?? null,
+      result: parsed.data.result,
+      nextAvailableAt: parsed.data.next_available_at ?? null,
     };
   } catch (error) {
     if (isExpectedApiError(error))
@@ -2065,7 +2129,10 @@ function createResetFlowState() {
 /**
  * 按 host 隔离的重置流程状态容器。
  */
-var resetFlowStateSlots = new HostScoped(createResetFlowState);
+var resetFlowStateSlots; // deferred: uses createResetFlowState of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-fm6h4dv7.js:39746", () => {
+  resetFlowStateSlots = new HostScoped(createResetFlowState);
+});
 //@ chunk-fm6h4dv7.js:39763-39799 placement
 /**
  * 取当前 host 的重置流程状态容器。
@@ -2085,23 +2152,23 @@ function getResetFlowPhase() {
  * 写入重置流程状态并发出变更信号。
  */
 function setResetFlowState(state) {
-  let s = currentResetFlowState();
-  s.state = state;
-  s.changed.emit();
+  let flow = currentResetFlowState();
+  flow.state = state;
+  flow.changed.emit();
 }
 //@ chunk-fm6h4dv7.js:39882-39930 placement
 /**
  * 订阅重置状态变化。
  */
-function subscribeResetChanges(i) {
-  return currentResetFlowState().changed.subscribe(i);
+function subscribeResetChanges(listener) {
+  return currentResetFlowState().changed.subscribe(listener);
 }
 //@ chunk-fm6h4dv7.js:39930-39977 placement
 /**
  * 订阅重置流程事件（用于界面刷新）。
  */
-function onResetFlowEvent(i) {
-  return currentResetFlowState().events.subscribe(i);
+function onResetFlowEvent(listener) {
+  return currentResetFlowState().events.subscribe(listener);
 }
 //@ chunk-fm6h4dv7.js:39977-40004 placement
 var MAX_STATUS_ATTEMPTS = 3;
@@ -2111,41 +2178,39 @@ var STATUS_REQUEST_TIMEOUT_MS = 35000;
 /**
  * 当前重置流程记录是否对应该墙（重置点相同且账号 epoch 未变）。
  */
-function isFlowForWall(i, s) {
-  return s.resetsAt === i.wallResetsAt && i.accountEpoch === getLimitsAccountEpoch();
+function isFlowForWall(flow, limits) {
+  return limits.resetsAt === flow.wallResetsAt && flow.accountEpoch === getLimitsAccountEpoch();
 }
 //@ chunk-fm6h4dv7.js:40079-40158 placement
 /**
  * 该墙的重置流程已答复时返回其状态文本。
  */
-function answeredStatusForWall(i) {
-  let resetFlowPhase = getResetFlowPhase();
-  return resetFlowPhase.phase === "answered" && isFlowForWall(resetFlowPhase, i)
-    ? resetFlowPhase.status
-    : undefined;
+function answeredStatusForWall(limits) {
+  let flow = getResetFlowPhase();
+  return flow.phase === "answered" && isFlowForWall(flow, limits) ? flow.status : undefined;
 }
 //@ chunk-fm6h4dv7.js:40158-40219 placement
 /**
  * 该墙的重置流程是否处于失败阶段。
  */
-function isFailedForWall(currentLimits) {
-  let resetFlowPhase = getResetFlowPhase();
-  return resetFlowPhase.phase === "failed" && isFlowForWall(resetFlowPhase, currentLimits);
+function isFailedForWall(limits) {
+  let flow = getResetFlowPhase();
+  return flow.phase === "failed" && isFlowForWall(flow, limits);
 }
 //@ chunk-fm6h4dv7.js:40219-40379 placement = getMockStatus (0.387)
 /**
  * 被拒且可在重置点提供低优先级等待时为真。旧版名错配；疑似归错文件。
  */
-function canArmLowPriorityReset(i, s = Date.now()) {
-  let timestamp = answeredStatusForWall(i);
+function canArmLowPriorityReset(limits, nowMs = Date.now()) {
+  let timestamp = answeredStatusForWall(limits);
   return (
-    isFiveHourAutoResumable(i) &&
+    isFiveHourAutoResumable(limits) &&
     timestamp !== undefined &&
     timestamp !== null &&
     timestamp.arm === "reset" &&
     timestamp.available &&
-    i.resetsAt !== undefined &&
-    i.resetsAt * 1000 > s &&
+    limits.resetsAt !== undefined &&
+    limits.resetsAt * 1000 > nowMs &&
     !isLowPriorityActive() &&
     isLimitResetEnabled()
   );

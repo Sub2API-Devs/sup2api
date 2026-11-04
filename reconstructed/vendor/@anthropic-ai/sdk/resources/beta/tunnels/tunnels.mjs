@@ -8,7 +8,7 @@
 import { APIResource } from "../../../core/resource.mjs";
 import { Certificates } from "./certificates.mjs";
 import { buildHeaders } from "../../../internal/headers.mjs";
-import { I } from "../../../internal/utils/path.mjs";
+import { parseUrl_2 } from "../../../internal/utils/path.mjs";
 import { TokenPage } from "../../../core/pagination.mjs";
 
 //@ chunk-hwmsct5x.js:139265-140967 esm-fingerprint
@@ -38,7 +38,7 @@ var Tunnels = (() => {
     }
     retrieve(tunnelID, params = {}, options) {
       let { betas, workspace_id } = params ?? {};
-      return this._client.get(I`/v1/tunnels/${tunnelID}?beta=true`, {
+      return this._client.get(parseUrl_2`/v1/tunnels/${tunnelID}?beta=true`, {
         ...options,
         headers: buildHeaders([
           {
@@ -73,7 +73,7 @@ var Tunnels = (() => {
     }
     archive(tunnelID, params = {}, options) {
       let { betas, workspace_id } = params ?? {};
-      return this._client.post(I`/v1/tunnels/${tunnelID}/archive?beta=true`, {
+      return this._client.post(parseUrl_2`/v1/tunnels/${tunnelID}/archive?beta=true`, {
         ...options,
         headers: buildHeaders([
           {
@@ -90,7 +90,7 @@ var Tunnels = (() => {
     }
     revealToken(tunnelID, params = {}, options) {
       let { betas, workspace_id } = params ?? {};
-      return this._client.post(I`/v1/tunnels/${tunnelID}/reveal_token?beta=true`, {
+      return this._client.post(parseUrl_2`/v1/tunnels/${tunnelID}/reveal_token?beta=true`, {
         ...options,
         headers: buildHeaders([
           {
@@ -107,7 +107,7 @@ var Tunnels = (() => {
     }
     rotateToken(tunnelID, params, options) {
       let { betas, workspace_id, ...body } = params;
-      return this._client.post(I`/v1/tunnels/${tunnelID}/rotate_token?beta=true`, {
+      return this._client.post(parseUrl_2`/v1/tunnels/${tunnelID}/rotate_token?beta=true`, {
         body,
         ...options,
         headers: buildHeaders([

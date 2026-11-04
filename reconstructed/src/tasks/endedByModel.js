@@ -13,9 +13,9 @@
 /**
  * 标记任务由模型结束。
  */
-function withEndedByModel(e, endedByModel) {
+function withEndedByModel(task, endedByModel) {
   return {
-    ...e,
+    ...task,
     endedByModel,
   };
 }
@@ -23,8 +23,8 @@ function withEndedByModel(e, endedByModel) {
 /**
  * 读取任务是否由模型结束。
  */
-function getEndedByModel(e) {
-  return e?.endedByModel;
+function getEndedByModel(task) {
+  return task?.endedByModel;
 }
 //@ chunk-mzc7v3jq.js:276-300 placement
 /**
@@ -44,8 +44,8 @@ function taskDescriptionSuffix() {
 /**
  * 给任务描述附加后缀（外部构建为空）。
  */
-function withTaskSuffix(e) {
-  let n = taskDescriptionSuffix();
-  return n === "" ? e : `${e} ${n}`;
+function withTaskSuffix(description) {
+  let suffix = taskDescriptionSuffix();
+  return suffix === "" ? description : `${description} ${suffix}`;
 }
 export { withEndedByModel, getEndedByModel, isModelEndCheckSupported, withTaskSuffix, taskDescriptionSuffix };

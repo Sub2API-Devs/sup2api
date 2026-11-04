@@ -47,17 +47,17 @@ var MAX_PROJECT_TEXT_BYTES = 200000;
 /**
  * 说明某行过长时如何用 grep/offset 读取 local_file。
  */
-function formatLongLineNote(tools, e) {
-  let t = (r) => tools.some((a) => toolMatchesName(a, r));
-  if (!t(FILE_READ_TOOL_NAME) || !t(BASH_TOOL_NAME)) return;
+function formatLongLineNote(tools, hasLongLine) {
+  let hasTool = (toolName) => tools.some((tool) => toolMatchesName(tool, toolName));
+  if (!hasTool(FILE_READ_TOOL_NAME) || !hasTool(BASH_TOOL_NAME)) return;
   let featureValue_CACHED_MAY_BE_STALE = getFeatureValue_CACHED_MAY_BE_STALE(TENGU_BREEZY_PELICAN, null);
   if (
     featureValue_CACHED_MAY_BE_STALE?.copy_hint !== true ||
-    (e && (featureValue_CACHED_MAY_BE_STALE.long_lines !== true || !t(GREP_TOOL_NAME)))
+    (hasLongLine && (featureValue_CACHED_MAY_BE_STALE.long_lines !== true || !hasTool(GREP_TOOL_NAME)))
   )
     return;
-  let s = t(GREP_TOOL_NAME) ? GREP_TOOL_NAME : "`grep`";
-  return `local_file is for reading only${e ? `. One of its lines is too long for ${FILE_READ_TOOL_NAME} to page through, because ${FILE_READ_TOOL_NAME}'s offset and limit count lines. ${FILE_READ_TOOL_NAME} with no offset or limit gives only the first part of the file. ${FILE_READ_TOOL_NAME} with an offset and limit gives whole lines, or an error if those lines do not fit. The file is too large for project_read to return inline. ${GREP_TOOL_NAME} shows a line or a match of over 500 characters as [Omitted long matching line]. With output_mode \`content\`, \`-o\` true and a pattern such as \`.{0,200}term.{0,200}\`, ${GREP_TOOL_NAME} shows each match of term with up to 200 characters on each side. In ${BASH_TOOL_NAME}, \`grep -ob 'term' /path/of/local_file | head\` gives the byte offset of each match of term, counted from 0. \`tail -c +START /path/of/local_file | head -c 20000\` gives 20000 bytes from byte START, counted from 1: START is an offset plus 1, or any number from 1 to size_bytes.` : `: read the parts you need with ${FILE_READ_TOOL_NAME}'s offset and limit, or search it with ${s}.`} Edits to ${e ? "local_file" : "it"} never reach the project, and project_write rejects it as local_path. To change the document or make a file from it, run \`cat /path/of/local_file > new-name\` in the working directory, where new-name is a name that no file there has, and work on that file. To save a change, call project_write with the document's path and that file as local_path. If the document is an upload such as a PDF, that saves a new text document and leaves the upload as it is.`;
+  let searchHint = hasTool(GREP_TOOL_NAME) ? GREP_TOOL_NAME : "`grep`";
+  return `local_file is for reading only${hasLongLine ? `. One of its lines is too long for ${FILE_READ_TOOL_NAME} to page through, because ${FILE_READ_TOOL_NAME}'s offset and limit count lines. ${FILE_READ_TOOL_NAME} with no offset or limit gives only the first part of the file. ${FILE_READ_TOOL_NAME} with an offset and limit gives whole lines, or an error if those lines do not fit. The file is too large for project_read to return inline. ${GREP_TOOL_NAME} shows a line or a match of over 500 characters as [Omitted long matching line]. With output_mode \`content\`, \`-o\` true and a pattern such as \`.{0,200}term.{0,200}\`, ${GREP_TOOL_NAME} shows each match of term with up to 200 characters on each side. In ${BASH_TOOL_NAME}, \`grep -ob 'term' /path/of/local_file | head\` gives the byte offset of each match of term, counted from 0. \`tail -c +START /path/of/local_file | head -c 20000\` gives 20000 bytes from byte START, counted from 1: START is an offset plus 1, or any number from 1 to size_bytes.` : `: read the parts you need with ${FILE_READ_TOOL_NAME}'s offset and limit, or search it with ${searchHint}.`} Edits to ${hasLongLine ? "local_file" : "it"} never reach the project, and project_write rejects it as local_path. To change the document or make a file from it, run \`cat /path/of/local_file > new-name\` in the working directory, where new-name is a name that no file there has, and work on that file. To save a change, call project_write with the document's path and that file as local_path. If the document is an upload such as a PDF, that saves a new text document and leaves the upload as it is.`;
 }
 //@ chunk-dtckr4w3.js:2511-3101 placement
 function shouldCutProjectTexts({ model, configuredWindow, messages, room }) {
@@ -73,12 +73,12 @@ function shouldCutProjectTexts({ model, configuredWindow, messages, room }) {
   if (autoCompactThresholdTokens > MAX_PROJECT_TEXT_BYTES) {
     let stepShare = featureValue_CACHED_MAY_BE_STALE.step_share;
     if (room === undefined || !(typeof stepShare === "number" && stepShare > 0 && stepShare <= 1)) return;
-    let u =
+    let thresholdTokens =
       modelContextInfo.longContextWindowWithoutOptIn > 0
         ? autoCompactThresholdTokens
         : Math.min(autoCompactThresholdTokens, room.threshold);
     return {
-      maxTokens: Math.max(0, Math.floor(u * stepShare) - room.claimed()),
+      maxTokens: Math.max(0, Math.floor(thresholdTokens * stepShare) - room.claimed()),
       bytesPerToken: modelContextInfo.bytesPerToken,
       claim: room.claim,
     };
@@ -101,146 +101,157 @@ function shouldCutProjectTexts({ model, configuredWindow, messages, room }) {
 var TENGU_IMPERATIVE_WHISTLE = "tengu_imperative_whistle";
 var MAX_TRUNCATED_TEXT_BYTES = 200;
 //@ chunk-dtckr4w3.js:3140-3417 placement
-function formatTruncatedTextNote(o, e) {
+function formatTruncatedTextNote(shownBytes, totalBytes) {
   return `
 
-[Only the first ${o} of ${e} bytes of this text are shown. To see the rest, call \`project_info\`: it can give a file that holds all of this text. \`project_search\` does not search it. Read or search only the parts of that file that the task needs.]`;
+[Only the first ${shownBytes} of ${totalBytes} bytes of this text are shown. To see the rest, call \`project_info\`: it can give a file that holds all of this text. \`project_search\` does not search it. Read or search only the parts of that file that the task needs.]`;
 }
 //@ chunk-dtckr4w3.js:3417-3983 placement
-function cutProjectText(o, e, t) {
-  let modelContextInfo = getModelContextInfo(e);
-  let autoCompactThresholdTokens = getAutoCompactThresholdTokens(modelContextInfo, t);
+function cutProjectText(text, model, configuredWindow) {
+  let modelContextInfo = getModelContextInfo(model);
+  let autoCompactThresholdTokens = getAutoCompactThresholdTokens(modelContextInfo, configuredWindow);
   if (
     !(autoCompactThresholdTokens > 0) ||
     autoCompactThresholdTokens > MAX_PROJECT_TEXT_BYTES ||
     !isAutoCompactEnabled()
   )
     return;
-  let i = Math.round(autoCompactThresholdTokens * LONG_LINE_NOTE_RATIO) * modelContextInfo.bytesPerToken;
-  let description = o.description ?? "";
-  let promptTemplate = o.prompt_template ?? "";
-  let c = Buffer.byteLength(promptTemplate, "utf8");
-  if (Buffer.byteLength(o.name, "utf8") + Buffer.byteLength(description, "utf8") + c <= i) return;
+  let maxBytes =
+    Math.round(autoCompactThresholdTokens * LONG_LINE_NOTE_RATIO) * modelContextInfo.bytesPerToken;
+  let description = text.description ?? "";
+  let promptTemplate = text.prompt_template ?? "";
+  let promptBytes = Buffer.byteLength(promptTemplate, "utf8");
+  if (Buffer.byteLength(text.name, "utf8") + Buffer.byteLength(description, "utf8") + promptBytes <= maxBytes)
+    return;
   if (!getFeatureValue_SESSION_PINNED(TENGU_IMPERATIVE_WHISTLE, false)) {
     logFeatureSad("projects_texts_cut", "sent_whole");
     return;
   }
-  let u =
-    Buffer.byteLength(o.name, "utf8") <= MAX_TRUNCATED_TEXT_BYTES
-      ? o.name
-      : `${truncateUtf8Bytes(o.name, MAX_TRUNCATED_TEXT_BYTES - 3)}\u2026`;
-  let m = i - Buffer.byteLength(u, "utf8");
-  let p = truncateUtf8WithNote(description, Math.max(Math.floor(m / 4), m - c));
+  let shortName =
+    Buffer.byteLength(text.name, "utf8") <= MAX_TRUNCATED_TEXT_BYTES
+      ? text.name
+      : `${truncateUtf8Bytes(text.name, MAX_TRUNCATED_TEXT_BYTES - 3)}\u2026`;
+  let remainingBytes = maxBytes - Buffer.byteLength(shortName, "utf8");
+  let shortDescription = truncateUtf8WithNote(
+    description,
+    Math.max(Math.floor(remainingBytes / 4), remainingBytes - promptBytes),
+  );
   logFeatureOk("projects_texts_cut");
   return {
-    name: u,
-    description: p,
-    prompt_template: truncateUtf8WithNote(promptTemplate, m - Buffer.byteLength(p, "utf8")),
+    name: shortName,
+    description: shortDescription,
+    prompt_template: truncateUtf8WithNote(
+      promptTemplate,
+      remainingBytes - Buffer.byteLength(shortDescription, "utf8"),
+    ),
   };
 }
 //@ chunk-dtckr4w3.js:3983-4400 placement
-function logProjectTextCutFailure(o, e) {
+function logProjectTextCutFailure(attachments, context) {
   try {
-    let t =
-      o.attachedProject === undefined
+    let builtBlock =
+      attachments.attachedProject === undefined
         ? undefined
-        : builtProjectBlocks.peek(e.session)?.get(o.attachedProject);
-    let { mainLoopModel } = e.options;
-    if (t === undefined || mainLoopModel === undefined) return o;
-    let [s, ...i] = t;
-    let r = cutProjectText(
-      s,
+        : builtProjectBlocks.peek(context.session)?.get(attachments.attachedProject);
+    let { mainLoopModel } = context.options;
+    if (builtBlock === undefined || mainLoopModel === undefined) return attachments;
+    let [textEntry, ...otherEntries] = builtBlock;
+    let cut = cutProjectText(
+      textEntry,
       getMainLoopModel({
         options: {
           mainLoopModel,
         },
-        permissionLayers: e.permissionLayers,
+        permissionLayers: context.permissionLayers,
       }),
-      e.options.autoCompactWindow,
+      context.options.autoCompactWindow,
     );
-    return r === undefined
-      ? o
+    return cut === undefined
+      ? attachments
       : {
-          ...o,
+          ...attachments,
           attachedProject: formatProjectContext(
             {
-              ...s,
-              ...r,
+              ...textEntry,
+              ...cut,
             },
-            ...i,
+            ...otherEntries,
           ),
         };
   } catch (error) {
     logError(withTelemetryMessage(toError(error), "project texts could not be cut"));
-    return o;
+    return attachments;
   }
 }
 //@ chunk-dtckr4w3.js:4400-4556 placement
-function truncateUtf8WithNote(o, e) {
-  let t = Buffer.byteLength(o, "utf8");
-  if (t <= e) return o;
-  let n = truncateUtf8Bytes(o, e - Buffer.byteLength(formatTruncatedTextNote(e, t), "utf8"));
-  return n + formatTruncatedTextNote(Buffer.byteLength(n, "utf8"), t);
+function truncateUtf8WithNote(text, maxBytes) {
+  let totalBytes = Buffer.byteLength(text, "utf8");
+  if (totalBytes <= maxBytes) return text;
+  let truncated = truncateUtf8Bytes(
+    text,
+    maxBytes - Buffer.byteLength(formatTruncatedTextNote(maxBytes, totalBytes), "utf8"),
+  );
+  return truncated + formatTruncatedTextNote(Buffer.byteLength(truncated, "utf8"), totalBytes);
 }
 //@ chunk-dtckr4w3.js:4556-4620 placement
 /**
  * 取项目的工具别名表与权限层的别名表。
  */
-function projectToolAliasSources(o) {
-  return [o.toolAliases, o.permissions().toolAliases];
+function projectToolAliasSources(appState) {
+  return [appState.toolAliases, appState.permissions().toolAliases];
 }
 //@ chunk-dtckr4w3.js:4620-4801 placement
 /**
  * 列出 Projects 工具的所有名称：本身、工具别名表里与它互为别名的名字，以及这些别名的别名。
  */
-function getProjectsToolAliases(o) {
-  let flattened = projectToolAliasSources(o).flatMap((n) => Object.entries(n ?? {}));
-  let flattened_2 = flattened.flatMap(([n, s]) => [
-    ...(s === PROJECTS_TOOL_NAME ? [n] : []),
-    ...(n === PROJECTS_TOOL_NAME ? [s] : []),
+function getProjectsToolAliases(appState) {
+  let flattened = projectToolAliasSources(appState).flatMap((aliasMap) => Object.entries(aliasMap ?? {}));
+  let flattened_2 = flattened.flatMap(([from, to]) => [
+    ...(to === PROJECTS_TOOL_NAME ? [from] : []),
+    ...(from === PROJECTS_TOOL_NAME ? [to] : []),
   ]);
   return [
     PROJECTS_TOOL_NAME,
     ...flattened_2,
-    ...flattened.flatMap(([n, s]) => (flattened_2.includes(s) ? [n] : [])),
+    ...flattened.flatMap(([from, to]) => (flattened_2.includes(to) ? [from] : [])),
   ];
 }
 //@ chunk-dtckr4w3.js:4801-4966 placement
-function hasProjectsPathRule(o) {
-  let e = o.permissions();
-  let projectsToolAliases = getProjectsToolAliases(o);
-  return [...getDenyRules(e), ...getAskRules(e)].some(
-    (n) =>
-      firstLineOf(n.ruleValue.ruleContent ?? "", ":").trim() === "path" &&
+function hasProjectsPathRule(appState) {
+  let permissions = appState.permissions();
+  let projectsToolAliases = getProjectsToolAliases(appState);
+  return [...getDenyRules(permissions), ...getAskRules(permissions)].some(
+    (rule) =>
+      firstLineOf(rule.ruleValue.ruleContent ?? "", ":").trim() === "path" &&
       projectsToolAliases.some((name) =>
         toolMatchesRule(
-          e,
+          permissions,
           {
             name,
           },
-          n,
+          rule,
         ),
       ),
   );
 }
 //@ chunk-dtckr4w3.js:4966-5145 placement
-function hasProjectsToolHook(o, toolInput, t) {
-  return projectToolAliasSources(t).some((toolAliases) =>
+function hasProjectsToolHook(hookEvent, toolInput, context) {
+  return projectToolAliasSources(context).some((toolAliases) =>
     hasToolHookMatching({
-      hookEvent: o,
+      hookEvent,
       toolName: PROJECTS_TOOL_NAME,
       toolInput,
-      tools: t.tools,
+      tools: context.tools,
       toolAliases,
-      sessionHooks: t.sessionHooksRegistry,
-      sessionId: registerAgent(t, o, t.session.id),
+      sessionHooks: context.sessionHooksRegistry,
+      sessionId: registerAgent(context, hookEvent, context.session.id),
     }),
   );
 }
 //@ chunk-dtckr4w3.js:5145-5503 placement
-function buildProjectTextHooks(toolInput, e) {
+function buildProjectTextHooks(toolInput, context) {
   if (
-    getProjectsToolAliases(e).some(
+    getProjectsToolAliases(context).some(
       (tool) =>
         hasModuleHookingSite("tool.call", {
           tool,
@@ -256,23 +267,23 @@ function buildProjectTextHooks(toolInput, e) {
     dispatchClassicEvent("PostToolBatch") ||
     hasSettingsHookForEvent(
       "PostToolBatch",
-      e.sessionHooksRegistry,
-      registerAgent(e, "PostToolBatch", e.session.id),
+      context.sessionHooksRegistry,
+      registerAgent(context, "PostToolBatch", context.session.id),
     ) ||
-    hasProjectsToolHook("PostToolUse", toolInput, e)
+    hasProjectsToolHook("PostToolUse", toolInput, context)
   )
     return "hook";
-  let t = hasProjectsPathRule(e);
-  if (hasProjectsToolHook("PreToolUse", toolInput, e))
-    return t || getProjectsToolAliases(e).length > 1 ? "hook" : "pre_tool_use_hook";
-  return t ? "path_rule" : undefined;
+  let hasPathRule = hasProjectsPathRule(context);
+  if (hasProjectsToolHook("PreToolUse", toolInput, context))
+    return hasPathRule || getProjectsToolAliases(context).length > 1 ? "hook" : "pre_tool_use_hook";
+  return hasPathRule ? "path_rule" : undefined;
 }
 //@ chunk-dtckr4w3.js:5503-5576 placement
 /**
  * 把 pre_tool_use_hook 归一成 hook。
  */
-function projectTextHooksKind(o, e) {
-  let projectTextHooks = buildProjectTextHooks(o, e);
+function projectTextHooksKind(toolInput, context) {
+  let projectTextHooks = buildProjectTextHooks(toolInput, context);
   return projectTextHooks === "pre_tool_use_hook" ? "hook" : projectTextHooks;
 }
 export {

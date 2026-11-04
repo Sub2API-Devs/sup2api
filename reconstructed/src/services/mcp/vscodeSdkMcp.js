@@ -13,7 +13,7 @@ import {
   getFeatureValue_CACHED_MAY_BE_STALE,
 } from "../analytics/growthbook.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, literal, string } from "../../../vendor/zod/v4/classic/schemas.js";
+import { objectSchema, literal, stringSchema } from "../../../vendor/zod/v4/classic/schemas.js";
 import { getCliOwnedState } from "./cliOwnedClients.js";
 import { onMcpNotification } from "./mcpWireUtils.js";
 import { isVsCodeTopSession } from "../../utils/sessionShape.js";
@@ -25,40 +25,45 @@ import {
   MATH_RENDERING_DRAWN,
   findMathRenderingField,
 } from "../../cli/print/hostTelemetryProxy.js";
-import { hookClientNotificationErrors } from "../../cli/print/mcpTurnRedial.js";
+import { hookClientNotificationErrors } from "../../cli/print/hostOtelEvents.js";
 import { identityId2 } from "../../types/ids.js";
 import { onPolicyVerdictChanged } from "../policyLimits/policyState.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { TENGU_WISE_BEAR_COPY } from "../usageCreditOffers.js";
 import { isPlainObject } from "../../utils/objectUtils.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-tyg7f3ek.js:534738-534947 fingerprint = readAutoModeEnabledState (0.807)
 /**
  * readAutoModeEnabledState：GrowthBook tengu_auto_mode_config.enabled（enabled/disabled/opt-in），非覆盖来源的 disabled 视为 enabled。
  */
 function readAutoModeEnabledState() {
-  let { value: e, source } = getFeatureValueWithSource_CACHED_MAY_BE_STALE("tengu_auto_mode_config", {});
-  let v = e?.enabled;
+  let { value, source } = getFeatureValueWithSource_CACHED_MAY_BE_STALE("tengu_auto_mode_config", {});
+  let v = value?.enabled;
   if (v === "disabled" && source !== "override" && source !== "payload") return "enabled";
   return v === "enabled" || v === "disabled" || v === "opt-in" ? v : "enabled";
 }
 //@ chunk-tyg7f3ek.js:534947-535129 file-local
-var LogEventNotificationSchema = DoctorLazy(() =>
-  u({
-    method: literal("log_event"),
-    params: u({
-      eventName: string(),
-      eventData: u({}).passthrough(),
+var LogEventNotificationSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var AdminLimitRequestNotificationSchema;
+deferInit("chunk-tyg7f3ek.js:534947", () => {
+  LogEventNotificationSchema = DoctorLazy(() =>
+    objectSchema({
+      method: literal("log_event"),
+      params: objectSchema({
+        eventName: stringSchema(),
+        eventData: objectSchema({}).passthrough(),
+      }),
     }),
-  }),
-);
-var AdminLimitRequestNotificationSchema = DoctorLazy(() =>
-  u({
-    method: literal("admin_limit_request"),
-    params: u({}).passthrough().optional(),
-  }),
-);
+  );
+  AdminLimitRequestNotificationSchema = DoctorLazy(() =>
+    objectSchema({
+      method: literal("admin_limit_request"),
+      params: objectSchema({}).passthrough().optional(),
+    }),
+  );
+});
 //@ chunk-tyg7f3ek.js:535129-537401 layout
 /**
  * setupVscodeSdkMcp：找到名为 claude-vscode 的 SDK 客户端，注册 log_event 与 admin_limit_request 通知处理（转发遥测、反馈问卷、自动模式提示等），推送 experiment_gates，并在策略变化时重发。
@@ -70,8 +75,8 @@ function setupVscodeSdkMcp(sdkClients, callbacks) {
   state.stopVscodePolicyGatesRefresh = null;
   if (vscodeClient && vscodeClient.type === "connected") {
     state.vscodeClient = vscodeClient;
-    onMcpNotification(vscodeClient, LogEventNotificationSchema(), async (w) => {
-      let { eventName, eventData } = w.params;
+    onMcpNotification(vscodeClient, LogEventNotificationSchema(), async (notification) => {
+      let { eventName, eventData } = notification.params;
       if (eventName === "tengu_feedback_survey_event") {
         if (vscodeClient.config?.type === "sdk" && isVsCodeTopSession())
           callbacks?.onFeedbackSurveyEvent?.(eventData);
@@ -138,15 +143,15 @@ function setupVscodeSdkMcp(sdkClients, callbacks) {
       tengu_ccr_v2_session_crud_cli: callbacks?.ccrV2SessionCrudEnabled ?? false,
     };
     sendVscodeExperimentGates(vscodeClient, gates);
-    let S = false;
+    let disposed = false;
     let unsubscribePolicy = onPolicyVerdictChanged(() => {
       queueMicrotask(() => {
-        if (S) return;
+        if (disposed) return;
         try {
-          let w = isPolicyAllowed("allow_product_feedback");
-          if (w === allowProductFeedback) return;
-          allowProductFeedback = w;
-          Object.assign(gates, buildVscodeExperimentGates(w));
+          let allowed = isPolicyAllowed("allow_product_feedback");
+          if (allowed === allowProductFeedback) return;
+          allowProductFeedback = allowed;
+          Object.assign(gates, buildVscodeExperimentGates(allowed));
           sendVscodeExperimentGates(vscodeClient, gates);
         } catch (error) {
           logForDebugging(
@@ -156,7 +161,7 @@ function setupVscodeSdkMcp(sdkClients, callbacks) {
       });
     });
     state.stopVscodePolicyGatesRefresh = () => {
-      S = true;
+      disposed = true;
       unsubscribePolicy();
     };
   }
@@ -165,7 +170,7 @@ function setupVscodeSdkMcp(sdkClients, callbacks) {
 /**
  * buildVscodeExperimentGates：读取一组 tengu_* GrowthBook 开关组成发给 VS Code 扩展的 gates 对象。
  */
-function buildVscodeExperimentGates(e) {
+function buildVscodeExperimentGates(session) {
   let featureValue_CACHED_MAY_BE_STALE = getFeatureValue_CACHED_MAY_BE_STALE(
     "tengu_vscode_review_upsell",
     false,
@@ -178,7 +183,7 @@ function buildVscodeExperimentGates(e) {
   );
   let featureValue_CACHED_MAY_BE_STALE_4 = getFeatureValue_CACHED_MAY_BE_STALE(TENGU_WISE_BEAR_COPY, null);
   return {
-    tengu_vscode_review_upsell: featureValue_CACHED_MAY_BE_STALE && e,
+    tengu_vscode_review_upsell: featureValue_CACHED_MAY_BE_STALE && session,
     tengu_cobalt_harbor_notice: getFeatureValue_CACHED_MAY_BE_STALE("tengu_cobalt_harbor_notice", true),
     tengu_vscode_onboarding: getFeatureValue_CACHED_MAY_BE_STALE("tengu_vscode_onboarding", false),
     tengu_vscode_resume_precheck: getFeatureValue_CACHED_MAY_BE_STALE("tengu_vscode_resume_precheck", true),
@@ -202,7 +207,7 @@ function buildVscodeExperimentGates(e) {
     tengu_tranquil_cloud: Boolean(getFeatureValue_CACHED_MAY_BE_STALE("tengu_tranquil_cloud", true)),
     tengu_staged_ladybug: getFeatureValue_CACHED_MAY_BE_STALE("tengu_staged_ladybug", true),
     tengu_brick_follow: getFeatureValue_CACHED_MAY_BE_STALE("tengu_brick_follow", false),
-    tengu_vellum_siding: featureValue_CACHED_MAY_BE_STALE_2 && e,
+    tengu_vellum_siding: featureValue_CACHED_MAY_BE_STALE_2 && session,
     tengu_lantern_sconce: getFeatureValue_CACHED_MAY_BE_STALE("tengu_lantern_sconce", false),
     tengu_auto_mode_state: autoModeEnabledState === "opt-in" ? "enabled" : autoModeEnabledState,
     tengu_lantern_sconce_copy: isPlainObject(featureValue_CACHED_MAY_BE_STALE_3)
@@ -226,13 +231,13 @@ function sendVscodeExperimentGates(vscodeClient, gates) {
       },
     })
     .catch((client) => {
-      let s = "unreadable error value";
+      let message = "unreadable error value";
       try {
-        let message = client?.message;
-        s = typeof message === "string" ? message : String(client);
+        let message_2 = client?.message;
+        message = typeof message_2 === "string" ? message_2 : String(client);
       } catch {}
       try {
-        logForDebugging(`[VSCode] Failed to send experiment_gates notification: ${s}`);
+        logForDebugging(`[VSCode] Failed to send experiment_gates notification: ${message}`);
       } catch {}
     });
 }

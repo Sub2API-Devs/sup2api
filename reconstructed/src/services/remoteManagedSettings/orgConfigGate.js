@@ -11,8 +11,8 @@
 import { TENGU_ORG_CONFIG_REQUIRED } from "../policyLimits/orgConfigRequired.js";
 
 //@ chunk-2wc2xwxh.js:228-478 placement
-function orgConfigGateFlagOnHand(n, r) {
-  let cachedGrowthBookFeatures = n.cachedGrowthBookFeatures;
+function orgConfigGateFlagOnHand(state, requiredFlagNames) {
+  let cachedGrowthBookFeatures = state.cachedGrowthBookFeatures;
   if (
     typeof cachedGrowthBookFeatures !== "object" ||
     cachedGrowthBookFeatures === null ||
@@ -20,12 +20,13 @@ function orgConfigGateFlagOnHand(n, r) {
     Object.keys(cachedGrowthBookFeatures).length === 0
   )
     return true;
-  let growthBookOverrides = n.growthBookOverrides;
+  let growthBookOverrides = state.growthBookOverrides;
   return (
     TENGU_ORG_CONFIG_REQUIRED in cachedGrowthBookFeatures ||
     (typeof growthBookOverrides === "object" &&
       growthBookOverrides !== null &&
       TENGU_ORG_CONFIG_REQUIRED in growthBookOverrides) ||
-    (r !== undefined && r.includes(TENGU_ORG_CONFIG_REQUIRED))
+    (requiredFlagNames !== undefined && requiredFlagNames.includes(TENGU_ORG_CONFIG_REQUIRED))
   );
 }
+export { orgConfigGateFlagOnHand };

@@ -39,29 +39,30 @@ import { isScratchpadEnabled, getScratchpadDir } from "../permissions/filesystem
 import { getFeatureValue_SESSION_PINNED } from "../../services/analytics/growthbook.js";
 import { resetSteerLatch } from "../model/subagentSteer.js";
 import { setPromptSectionInvalidator } from "../../plugins/functionHooks/promptComposition.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:97909-98300 placement
 /**
  * 收集环境信息附件的事实：工作目录、是否 worktree、是否 git 仓库、附加工作目录、平台、shell、OS 版本、scratchpad 目录与 GitHub CLI；工具运行在远端机器时改用 remoteEnvironmentFacts。
  */
 async function collectEnvironmentFacts({ cwd, additionalWorkingDirectories }) {
-  let r = remoteEnvironmentFacts();
-  if (r !== undefined) return r;
-  let [s, unameSR] = await Promise.all([cwd !== null && getIsGit(), getUnameSR()]);
-  let y = scratchpadDirOrUndefined();
+  let remoteFacts = remoteEnvironmentFacts();
+  if (remoteFacts !== undefined) return remoteFacts;
+  let [isGit, unameSR] = await Promise.all([cwd !== null && getIsGit(), getUnameSR()]);
+  let scratchpadDir = scratchpadDirOrUndefined();
   let agentProxyGhStandin = getAgentProxyGhStandin();
   return {
     ...(cwd !== null && {
       workingDirectory: cwd,
     }),
     isWorktree: cwd !== null && (getCurrentWorktreeSession() !== null || isLinkedWorktree(cwd)),
-    isGitRepo: s,
+    isGitRepo: isGit,
     additionalWorkingDirectories: [...(additionalWorkingDirectories ?? [])],
     platform: env.platform,
     shell: getShellDescription(),
     osVersion: unameSR,
-    ...(y && {
-      scratchpadDirectory: y,
+    ...(scratchpadDir && {
+      scratchpadDirectory: scratchpadDir,
     }),
     ...(agentProxyGhStandin && {
       githubCli: agentProxyGhStandin,
@@ -75,7 +76,7 @@ async function collectEnvironmentFacts({ cwd, additionalWorkingDirectories }) {
 function remoteEnvironmentFacts(latest) {
   let toolsMachine = getToolsMachine();
   if (toolsMachine === undefined) return;
-  let r =
+  let remoteInfo =
     !toolsMachine.said &&
     latest !== undefined &&
     getGitEmail(latest) &&
@@ -88,13 +89,13 @@ function remoteEnvironmentFacts(latest) {
         }
       : toolsMachine.directory;
   let agentProxy = toolsMachine.agentProxy === undefined ? latest?.agentProxy : toolsMachine.agentProxy;
-  let h = toolsMachine.shell === undefined ? r?.path : toolsMachine.shell;
+  let workingDirectory = toolsMachine.shell === undefined ? remoteInfo?.path : toolsMachine.shell;
   return {
-    ...(typeof h === "string" && {
-      workingDirectory: h,
+    ...(typeof workingDirectory === "string" && {
+      workingDirectory,
     }),
     isWorktree: false,
-    isGitRepo: r?.isGitRepo ?? false,
+    isGitRepo: remoteInfo?.isGitRepo ?? false,
     additionalWorkingDirectories: [],
     platform: toolsMachine.platform,
     ...(agentProxy && {
@@ -132,11 +133,11 @@ function isFoamySedgewickOff() {
   return getFeatureValue_SESSION_PINNED(TENGU_FOAMY_SEDGEWICK, false) !== true;
 }
 //@ chunk-e6aww6q8.js:100948-101795 placement
-function buildEnvironmentInfo(latest, n) {
-  let r = [];
-  let workingDirectory = n.workingDirectory;
+function buildEnvironmentInfo(latest, previous) {
+  let lines = [];
+  let workingDirectory = previous.workingDirectory;
   if (workingDirectory !== latest.workingDirectory)
-    r.push({
+    lines.push({
       field: "workingDirectory",
       ...(workingDirectory !== undefined &&
         (!getGitEmail(latest) ||
@@ -145,56 +146,56 @@ function buildEnvironmentInfo(latest, n) {
           from: latest.workingDirectory,
         }),
     });
-  if (workingDirectory !== undefined && n.isWorktree !== latest.isWorktree)
-    r.push({
+  if (workingDirectory !== undefined && previous.isWorktree !== latest.isWorktree)
+    lines.push({
       field: "isWorktree",
     });
-  if (workingDirectory !== undefined && n.isGitRepo !== latest.isGitRepo)
-    r.push({
+  if (workingDirectory !== undefined && previous.isGitRepo !== latest.isGitRepo)
+    lines.push({
       field: "isGitRepo",
     });
-  let h = new Set(latest.additionalWorkingDirectories);
-  let y = new Set(n.additionalWorkingDirectories);
-  let filtered = n.additionalWorkingDirectories.filter(
-    (additionalWorkingDirectory) => !h.has(additionalWorkingDirectory),
+  let currentDirs = new Set(latest.additionalWorkingDirectories);
+  let previousDirs = new Set(previous.additionalWorkingDirectories);
+  let filtered = previous.additionalWorkingDirectories.filter(
+    (additionalWorkingDirectory) => !currentDirs.has(additionalWorkingDirectory),
   );
   let filtered_2 = latest.additionalWorkingDirectories.filter(
-    (additionalWorkingDirectory) => !y.has(additionalWorkingDirectory),
+    (additionalWorkingDirectory) => !previousDirs.has(additionalWorkingDirectory),
   );
   if (filtered.length > 0 || filtered_2.length > 0)
-    r.push({
+    lines.push({
       field: "additionalWorkingDirectories",
       added: filtered,
       removed: filtered_2,
     });
-  if (n.scratchpadDirectory !== latest.scratchpadDirectory)
-    r.push({
+  if (previous.scratchpadDirectory !== latest.scratchpadDirectory)
+    lines.push({
       field: "scratchpadDirectory",
     });
-  if (n.githubCli !== latest.githubCli)
-    r.push({
+  if (previous.githubCli !== latest.githubCli)
+    lines.push({
       field: "githubCli",
     });
-  if (formatAgentProxyNote(n) !== formatAgentProxyNote(latest))
-    r.push({
+  if (formatAgentProxyNote(previous) !== formatAgentProxyNote(latest))
+    lines.push({
       field: "agentProxy",
     });
-  return r;
+  return lines;
 }
 //@ chunk-e6aww6q8.js:101795-101971 placement
 /**
  * 列出环境信息附件缺少的字段（工作目录，以及需要时的草稿目录）。
  */
-function missingEnvFields(e, n) {
+function missingEnvFields(env, schema) {
   return [
-    ...(n.workingDirectory === undefined
+    ...(schema.workingDirectory === undefined
       ? [
           {
             field: "workingDirectory",
           },
         ]
       : []),
-    ...(n.scratchpadDirectory === undefined && e.withScratchpad
+    ...(schema.scratchpadDirectory === undefined && env.withScratchpad
       ? [
           {
             field: "scratchpadDirectory",
@@ -207,73 +208,74 @@ function missingEnvFields(e, n) {
 /**
  * 生成环境信息附件（工作目录、是否 worktree、是否 git 仓库），并标注与上次相比的变化。
  */
-function buildEnvironmentAttachment(e, n) {
-  let r = [];
-  for (let s of n)
-    switch (s.field) {
+function buildEnvironmentAttachment(latest, changes) {
+  let lines = [];
+  for (let change of changes)
+    switch (change.field) {
       case "workingDirectory":
-        if (e.workingDirectory === undefined) r.push(WORKING_DIRECTORY_NO_LONGER_APPLIES);
+        if (latest.workingDirectory === undefined) lines.push(WORKING_DIRECTORY_NO_LONGER_APPLIES);
         else {
-          let h = s.from === undefined ? "" : ` (was ${escapeForTag(s.from)})`;
-          r.push(`Primary working directory: ${escapeForTag(e.workingDirectory)}${h}`);
+          let wasNote = change.from === undefined ? "" : ` (was ${escapeForTag(change.from)})`;
+          lines.push(`Primary working directory: ${escapeForTag(latest.workingDirectory)}${wasNote}`);
         }
         break;
       case "isWorktree":
-        if (e.workingDirectory === undefined) break;
-        if (e.isWorktree) r.push(WORKTREE_NOTICE, WORKTREE_GIT_STASH_WARNING);
-        else r.push(NO_LONGER_WORKTREE_NOTICE);
+        if (latest.workingDirectory === undefined) break;
+        if (latest.isWorktree) lines.push(WORKTREE_NOTICE, WORKTREE_GIT_STASH_WARNING);
+        else lines.push(NO_LONGER_WORKTREE_NOTICE);
         break;
       case "isGitRepo":
-        if (e.workingDirectory !== undefined)
-          r.push(`Is a git repository: ${e.isGitRepo} (was ${!e.isGitRepo})`);
+        if (latest.workingDirectory !== undefined)
+          lines.push(`Is a git repository: ${latest.isGitRepo} (was ${!latest.isGitRepo})`);
         break;
       case "additionalWorkingDirectories":
-        if (s.added.length > 0) r.push("Additional working directories added:", s.added.map(escapeForTag));
-        if (s.removed.length > 0)
-          r.push("Additional working directories removed:", s.removed.map(escapeForTag));
+        if (change.added.length > 0)
+          lines.push("Additional working directories added:", change.added.map(escapeForTag));
+        if (change.removed.length > 0)
+          lines.push("Additional working directories removed:", change.removed.map(escapeForTag));
         break;
       case "scratchpadDirectory":
-        r.push(
-          e.scratchpadDirectory !== undefined
-            ? scratchpadInstruction(escapeForTag(e.scratchpadDirectory))
+        lines.push(
+          latest.scratchpadDirectory !== undefined
+            ? scratchpadInstruction(escapeForTag(latest.scratchpadDirectory))
             : "The scratchpad directory announced earlier is no longer available; use it no further.",
         );
         break;
       case "githubCli": {
-        if (e.githubCli === undefined) {
-          r.push(GH_API_NOT_ACTIVE_NOTE);
+        if (latest.githubCli === undefined) {
+          lines.push(GH_API_NOT_ACTIVE_NOTE);
           break;
         }
-        let agentProxyGhPrompt = buildAgentProxyGhPrompt(e.githubCli);
-        if (agentProxyGhPrompt !== undefined) r.push(agentProxyGhPrompt + GH_CLI_REPLACES_EARLIER_NOTE);
+        let agentProxyGhPrompt = buildAgentProxyGhPrompt(latest.githubCli);
+        if (agentProxyGhPrompt !== undefined) lines.push(agentProxyGhPrompt + GH_CLI_REPLACES_EARLIER_NOTE);
         break;
       }
       case "agentProxy":
-        r.push(formatAgentProxyNote(e) ?? AGENT_PROXY_NOT_ACTIVE_NOTE);
+        lines.push(formatAgentProxyNote(latest) ?? AGENT_PROXY_NOT_ACTIVE_NOTE);
         break;
     }
-  if (r.length === 0) return "";
-  return [ENVIRONMENT_UPDATE_HEADER, ...prependBullets(r)].join(`
+  if (lines.length === 0) return "";
+  return [ENVIRONMENT_UPDATE_HEADER, ...prependBullets(lines)].join(`
 `);
 }
 //@ chunk-e6aww6q8.js:103072-103152 placement
 /**
  * 判断消息是否为环境信息附件。
  */
-function isEnvironmentAttachment(e) {
-  return e.type === "attachment" && e.attachment.type === "environment";
+function isEnvironmentAttachment(attachment) {
+  return attachment.type === "attachment" && attachment.attachment.type === "environment";
 }
 //@ chunk-e6aww6q8.js:103152-103690 placement
 /**
  * 从历史环境附件中归纳：最新快照、最新可读快照、是否发过完整块、是否告知过内置 gh / agentProxy，以及当前与最近一次提到的 scratchpad 状态。
  */
-function summarizeEnvironmentHistory(e) {
-  let environmentAttachments = readEnvironmentAttachments(e);
+function summarizeEnvironmentHistory(messages) {
+  let environmentAttachments = readEnvironmentAttachments(messages);
   let flattened = environmentAttachments.flatMap((environmentAttachment) =>
     environmentAttachment.readable ? [environmentAttachment] : [],
   );
   let last = environmentAttachments.at(-1);
-  let last_2 = environmentAttachments.findLast(
+  let state = environmentAttachments.findLast(
     (environmentAttachment) =>
       isReadableEnvironmentSnapshot(environmentAttachment) ||
       isWorkingDirectoryCleared(environmentAttachment),
@@ -281,16 +283,16 @@ function summarizeEnvironmentHistory(e) {
   return {
     latest: last?.readable ? last.snapshot : undefined,
     newestReadable: flattened.at(-1)?.snapshot,
-    hasWholeBlock: flattened.some((y) => y.changes === undefined),
+    hasWholeBlock: flattened.some((entry) => entry.changes === undefined),
     toldOfBuiltinGh: flattened.some(
-      (y) =>
-        y.snapshot.githubCli !== undefined ||
-        y.changes?.some((change) => change.field === "githubCli") === true,
+      (entry) =>
+        entry.snapshot.githubCli !== undefined ||
+        entry.changes?.some((change) => change.field === "githubCli") === true,
     ),
     toldOfAgentProxy: flattened.some(
-      (y) =>
-        y.snapshot.agentProxy !== undefined ||
-        y.changes?.some((change) => change.field === "agentProxy") === true,
+      (entry) =>
+        entry.snapshot.agentProxy !== undefined ||
+        entry.changes?.some((change) => change.field === "agentProxy") === true,
     ),
     standing: environmentAttachments.reduce(
       (acc, environmentAttachment) =>
@@ -301,7 +303,7 @@ function summarizeEnvironmentHistory(e) {
             : acc,
       undefined,
     ),
-    mentioned: last_2 && scratchpadStanding(last_2),
+    mentioned: state && scratchpadStanding(state),
   };
 }
 //@ chunk-e6aww6q8.js:103690-103769 placement
@@ -322,39 +324,39 @@ function isWorkingDirectoryCleared(environmentAttachment) {
   );
 }
 //@ chunk-e6aww6q8.js:103898-104114 placement
-function scratchpadStanding(e) {
-  if (!e.readable)
+function scratchpadStanding(state) {
+  if (!state.readable)
     return {
       withScratchpad: true,
     };
   return {
     withScratchpad:
-      e.snapshot.workingDirectory !== undefined
-        ? e.snapshot.scratchpadDirectory !== undefined
-        : e.changes?.some((change) => change.field === "scratchpadDirectory") === true,
+      state.snapshot.workingDirectory !== undefined
+        ? state.snapshot.scratchpadDirectory !== undefined
+        : state.changes?.some((change) => change.field === "scratchpadDirectory") === true,
   };
 }
 //@ chunk-e6aww6q8.js:104114-104482 placement
 /**
  * 从消息中收集环境信息附件：可解析的给出快照与变更列表，不可解析的记录是否已显示、是否整块。
  */
-function readEnvironmentAttachments(e) {
-  return e.flatMap((n, index) => {
-    if (!isEnvironmentAttachment(n)) return [];
-    let s = envInfoFactsSchema().safeParse(n.attachment.snapshot).data;
-    let changes = n.attachment.changes;
+function readEnvironmentAttachments(messages) {
+  return messages.flatMap((message, index) => {
+    if (!isEnvironmentAttachment(message)) return [];
+    let snapshot = envInfoFactsSchema().safeParse(message.attachment.snapshot).data;
+    let changes = message.attachment.changes;
     return [
-      s === undefined
+      snapshot === undefined
         ? {
             index,
             readable: false,
-            shown: Array.isArray(n.rendered) && n.rendered.length > 0,
+            shown: Array.isArray(message.rendered) && message.rendered.length > 0,
             wholeBlock: !Array.isArray(changes),
           }
         : {
             index,
             readable: true,
-            snapshot: s,
+            snapshot,
             changes: Array.isArray(changes)
               ? changes.flatMap((change) => envInfoChangeSchema().safeParse(change).data ?? [])
               : undefined,
@@ -366,8 +368,8 @@ function readEnvironmentAttachments(e) {
 /**
  * 原样返回第二个参数（占位）。
  */
-function secondArgument(e, n) {
-  return n;
+function secondArgument(defaultValue, args) {
+  return args;
 }
 //@ chunk-e6aww6q8.js:105000-105015 placement
 /**
@@ -378,13 +380,16 @@ var ENVIRONMENT_DEDUP_SEPARATOR = "\x00";
 /**
  * 清除系统提示段状态、beta 头锁存与相关缓存。
  */
-function resetEnvironmentCaches(e) {
-  clearSystemPromptSectionState(e);
+function resetEnvironmentCaches(host) {
+  clearSystemPromptSectionState(host);
   clearBetaHeaderLatches();
   resetSteerLatch();
 }
 //@ chunk-e6aww6q8.js:105182-105191 placement
-setPromptSectionInvalidator(clearSystemPromptSectionState);
+// deferred: uses setPromptSectionInvalidator (../../plugins/functionHooks/promptComposition.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:105182", () => {
+  setPromptSectionInvalidator(clearSystemPromptSectionState);
+});
 export {
   scratchpadInstruction,
   isFoamySedgewickOff,

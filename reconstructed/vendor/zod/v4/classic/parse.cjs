@@ -5,12 +5,12 @@
  * pieces: chunk-1ny7cxrt.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 import { require_core_2 } from "../core/index.cjs";
 import { require_errors_3 } from "./errors.cjs";
 
 //@ chunk-1ny7cxrt.js:593194-595236 cjs-fingerprint
-var require_parse_2 = x(function (cjsExports) {
+var require_parse_2 = __commonJS(function (cjsExports) {
   var __createBinding =
     (cjsExports && cjsExports.__createBinding) ||
     (Object.create

@@ -28,8 +28,12 @@ import {
   excludeDirs,
   isSamePathEntry,
 } from "./agentsMdFiles.js";
-import { isMcpServerFromProjectOrLocalSettings } from "../../../services/mcp/headersHelper.js";
+import { MCP_SETTINGS_SCOPE_KINDS } from "../../../services/mcp/headersHelper.js";
+import { beginDeferredInits, runDeferredInits } from "../../../../runtime/deferred-init.js";
 
+// This module is the first evaluated of an import cycle of 3 modules closed by ./agentsMdFiles.js;
+// the load-time work of the cycle's statements marked "deferred" waits until the cycle is complete (runtime/deferred-init.js).
+beginDeferredInits("src/plugins/bundled/agentsMd/agentsMdFiles.js");
 //@ chunk-8jbcmznm.js:5228-5433 placement
 var PLUGIN_DESCRIPTION =
   "AGENTS.md as project instructions: by default loaded where the project has no CLAUDE.md; by its instructionFiles option, loaded beside CLAUDE.md, left out, or with the project instructions dropped";
@@ -38,16 +42,16 @@ var PLUGIN_DESCRIPTION =
  * 1/true/yes/on
  */
 var TRUTHY_ENV_VALUES = new Set(["1", "true", "yes", "on"]);
-var isSwitchedOn = (e) => e !== undefined && TRUTHY_ENV_VALUES.has(e.trim().toLowerCase());
+var isSwitchedOn = (value) => value !== undefined && TRUTHY_ENV_VALUES.has(value.trim().toLowerCase());
 //@ chunk-8jbcmznm.js:5523-5541 placement
 var FEATURE_NAME = "agents_md";
 //@ chunk-8jbcmznm.js:5541-5737 placement
-function loadCountsOf(e, isYielded, isWalkFailed) {
-  let reduced = e.reduce((acc, s) => acc + (s.parent === undefined ? 0 : 1), 0);
+function loadCountsOf(entries, isYielded, isWalkFailed) {
+  let reduced = entries.reduce((acc, entry) => acc + (entry.parent === undefined ? 0 : 1), 0);
   return {
-    fileCount: e.length - reduced,
+    fileCount: entries.length - reduced,
     importCount: reduced,
-    totalContentLength: e.reduce((acc, s) => acc + s.content.length, 0),
+    totalContentLength: entries.reduce((acc, entry) => acc + entry.content.length, 0),
     isYielded,
     isWalkFailed,
   };
@@ -74,10 +78,10 @@ var modeChoiceOf = (value) => ({
   of: AGENTS_MD_MODES,
 });
 //@ chunk-8jbcmznm.js:5890-6073 placement
-var loadRowOf = (e, countsOf) => ({
+var loadRowOf = (state, countsOf) => ({
   event: LOAD_EVENT,
   props: {
-    mode: modeChoiceOf(e),
+    mode: modeChoiceOf(state),
     file_count: countsOf.fileCount,
     import_count: countsOf.importCount,
     total_content_length: countsOf.totalContentLength,
@@ -88,10 +92,10 @@ var loadRowOf = (e, countsOf) => ({
 //@ chunk-8jbcmznm.js:6073-6096 placement
 var MODE_EVENT = "agents_md_mode";
 //@ chunk-8jbcmznm.js:6096-6157 placement
-var modeRowOf = (e, isInteractive) => ({
+var modeRowOf = (state, isInteractive) => ({
   event: MODE_EVENT,
   props: {
-    mode: modeChoiceOf(e),
+    mode: modeChoiceOf(state),
     is_interactive: isInteractive,
   },
 });
@@ -106,62 +110,64 @@ var nestedRowOf = (mode, fileCount) => ({
   },
 });
 //@ chunk-8jbcmznm.js:6239-6298 placement
-var quietly = (e) => {
+var quietly = (fn) => {
   Promise.resolve()
-    .then(e)
+    .then(fn)
     .catch(() => {
       return;
     });
 };
 //@ chunk-8jbcmznm.js:6298-6404 placement = isFileReadDenied (0.778)
-function holdPending(e, loop, o) {
-  let i = e.pending.get(loop) ?? new Map();
-  e.pending.set(loop, i);
-  for (let f of o) i.set(f.path, "read");
+function holdPending(state, loop, files) {
+  let byPath = state.pending.get(loop) ?? new Map();
+  state.pending.set(loop, byPath);
+  for (let file of files) byPath.set(file.path, "read");
 }
 //@ chunk-8jbcmznm.js:6404-6440 placement
 var PENDING_STAGES = ["read", "submitted", "riding"];
 //@ chunk-8jbcmznm.js:6440-6457 placement
 var RIDING = ["riding"];
 //@ chunk-8jbcmznm.js:6457-6591 placement
-function takeBack(e, t, o) {
-  let i = e.pending.get(t);
-  let f = e.given.get(t);
-  for (let [s, y] of i ?? [])
-    if (o === undefined || o.includes(y)) {
-      f?.delete(s);
-      i?.delete(s);
+function takeBack(state, loop, stages) {
+  let pendingByPath = state.pending.get(loop);
+  let givenByPath = state.given.get(loop);
+  for (let [filePath, stage] of pendingByPath ?? [])
+    if (stages === undefined || stages.includes(stage)) {
+      givenByPath?.delete(filePath);
+      pendingByPath?.delete(filePath);
     }
 }
 //@ chunk-8jbcmznm.js:6591-6775 placement
-function settlePending(e, t, o) {
-  let i = e.pending.get(t);
-  let s = [...(i?.values() ?? [])].includes("riding") ? RIDING : undefined;
-  if (o.isAborted) takeBack(e, t, s);
-  for (let [y, h] of [...(i ?? [])]) if (s === undefined || s.includes(h)) i?.delete(y);
+function settlePending(state, loop, signal) {
+  let pendingByPath = state.pending.get(loop);
+  let stages = [...(pendingByPath?.values() ?? [])].includes("riding") ? RIDING : undefined;
+  if (signal.isAborted) takeBack(state, loop, stages);
+  for (let [filePath, stage] of [...(pendingByPath ?? [])])
+    if (stages === undefined || stages.includes(stage)) pendingByPath?.delete(filePath);
 }
 //@ chunk-8jbcmznm.js:6775-6886 placement
-function stagePending(e, t, o) {
-  let i = e.pending.get(t);
-  let index = PENDING_STAGES.indexOf(o);
-  for (let [s, y] of [...(i ?? [])]) if (PENDING_STAGES.indexOf(y) < index) i?.set(s, o);
+function stagePending(state, loop, stage) {
+  let pendingByPath = state.pending.get(loop);
+  let index = PENDING_STAGES.indexOf(stage);
+  for (let [filePath, currentStage] of [...(pendingByPath ?? [])])
+    if (PENDING_STAGES.indexOf(currentStage) < index) pendingByPath?.set(filePath, stage);
 }
 //@ chunk-8jbcmznm.js:6886-6974 placement
-function startOver(e) {
-  e.given.clear();
-  for (let [t, o] of e.pending) e.given.set(t, new Set(o.keys()));
+function startOver(state) {
+  state.given.clear();
+  for (let [loop, stages] of state.pending) state.given.set(loop, new Set(stages.keys()));
 }
 //@ chunk-8jbcmznm.js:6974-7071 placement
-var touchedOf = (path, t, road) => ({
+var touchedOf = (path, touched, road) => ({
   path,
   road,
-  loop: t.agentId ?? MAIN_THREAD,
-  isWhole: t.offset === undefined && t.limit === undefined,
+  loop: touched.agentId ?? MAIN_THREAD,
+  isWhole: touched.offset === undefined && touched.limit === undefined,
 });
 //@ chunk-8jbcmznm.js:7071-7228 placement
-var walkOf = (e) => ({
-  mode: e,
-  isFallback: e === "claude-md-or-agents-md",
+var walkOf = (mode) => ({
+  mode,
+  isFallback: mode === "claude-md-or-agents-md",
   given: new Map(),
   pending: new Map(),
   inContext: [],
@@ -179,89 +185,90 @@ var EMPTY_OBJECT = {};
 /**
  * 在 session.start 时把 AGENTS.md 作为项目指令加载。
  */
-function loadAgentsMdInstructions(e, t) {
-  let agentsMdMode = resolveAgentsMdMode(t.instructionFiles);
-  let i = instructionModeLabel(t.projectInstructions);
-  let f = i !== undefined && agentsMdMode === DEFAULT_AGENTS_MD_MODE;
-  let s = f ? i : agentsMdMode;
-  let y = i === undefined;
-  let h = s !== "claude-md" && s !== "managed-only";
+function loadAgentsMdInstructions(on, options) {
+  let agentsMdMode = resolveAgentsMdMode(options.instructionFiles);
+  let projectModeLabel = instructionModeLabel(options.projectInstructions);
+  let projectModeOverrides = projectModeLabel !== undefined && agentsMdMode === DEFAULT_AGENTS_MD_MODE;
+  let mode = projectModeOverrides ? projectModeLabel : agentsMdMode;
+  let projectModeWarned = projectModeLabel === undefined;
+  let sendsUsageRows = mode !== "claude-md" && mode !== "managed-only";
   let deferred = Promise.withResolvers();
-  let T = false;
-  e("session.start", (d, r, a) => {
-    T = true;
+  let sessionStarted = false;
+  on("session.start", (ctx, payload, next) => {
+    sessionStarted = true;
     quietly(async () => {
-      let n = EMPTY_OBJECT;
+      let dedupResult = EMPTY_OBJECT;
       try {
-        let m = r.isInteractive ? EMPTY_OBJECT : await getUsageRowsDedupKey(d, s);
-        let { key, noted } = m;
-        let P =
+        let dedup = payload.isInteractive ? EMPTY_OBJECT : await getUsageRowsDedupKey(ctx, mode);
+        let { key, noted } = dedup;
+        let alreadyNoted =
           key !== undefined && typeof noted === "string" && (noted === key || noted.startsWith(`${key} `));
-        if (!P) await d.telemetry.log(modeRowOf(s, r.isInteractive));
-        n = m;
-        if (!P && !h && key !== undefined) await d.store.set("usage-rows-queued", key);
+        if (!alreadyNoted) await ctx.telemetry.log(modeRowOf(mode, payload.isInteractive));
+        dedupResult = dedup;
+        if (!alreadyNoted && !sendsUsageRows && key !== undefined)
+          await ctx.store.set("usage-rows-queued", key);
       } finally {
-        deferred.resolve(n);
+        deferred.resolve(dedupResult);
       }
     });
-    if (!y) {
-      y = true;
-      d.ui.log(
-        f
-          ? `option projectInstructions in settings is honoured for now, read as instructionFiles ${s}; set instructionFiles to ${s} and remove projectInstructions`
-          : `option projectInstructions in settings is not read: instructionFiles ${s} is set; remove projectInstructions`,
+    if (!projectModeWarned) {
+      projectModeWarned = true;
+      ctx.ui.log(
+        projectModeOverrides
+          ? `option projectInstructions in settings is honoured for now, read as instructionFiles ${mode}; set instructionFiles to ${mode} and remove projectInstructions`
+          : `option projectInstructions in settings is not read: instructionFiles ${mode} is set; remove projectInstructions`,
       );
     }
-    return a(r);
+    return next(payload);
   });
-  if (s === "claude-md") return;
-  if (s === "managed-only") {
-    e(
+  if (mode === "claude-md") return;
+  if (mode === "managed-only") {
+    on(
       "prompt.context",
       {
         instructionFiles: {
-          kind: isMcpServerFromProjectOrLocalSettings,
+          kind: MCP_SETTINGS_SCOPE_KINDS,
         },
       },
-      (d, r, a) =>
-        a({
-          ...r,
-          instructionFiles: r.instructionFiles?.filter(isProjectLocalMcpSource),
+      (ctx, payload, next) =>
+        next({
+          ...payload,
+          instructionFiles: payload.instructionFiles?.filter(isProjectLocalMcpSource),
         }),
     );
     return;
   }
-  let p = walkOf(s);
-  let { isFallback, given } = p;
-  let N;
-  let c = false;
-  e("prompt.context", async (d, r, a) => {
-    let instructionFiles = r.instructionFiles;
+  let walkState = walkOf(mode);
+  let { isFallback, given } = walkState;
+  let lastRoot;
+  let logCountsDone = false;
+  on("prompt.context", async (ctx, payload, next) => {
+    let instructionFiles = payload.instructionFiles;
     if (instructionFiles === undefined)
-      return a(r).finally(() => {
-        startOver(p);
+      return next(payload).finally(() => {
+        startOver(walkState);
       });
-    let m = isFallback ? await d.session.root() : undefined;
-    p.rootSeen = m ?? p.rootSeen;
+    let root = isFallback ? await ctx.session.root() : undefined;
+    walkState.rootSeen = root ?? walkState.rootSeen;
     let isWalkFailed = false;
-    let u =
-      m !== undefined &&
-      (instructionFiles.some((instructionFile) => isClaudeMdAtDir(instructionFile, m)) ||
-        (await d.fs
+    let isClaudeProject =
+      root !== undefined &&
+      (instructionFiles.some((instructionFile) => isClaudeMdAtDir(instructionFile, root)) ||
+        (await ctx.fs
           .ancestors({
             names: CLAUDE_MD_FILENAMES,
           })
           .then(
-            (g) => g.length > 0,
+            (ancestors) => ancestors.length > 0,
             () => {
               isWalkFailed = true;
               return true;
             },
           )));
-    p.isClaudeProject = u;
-    let P = u
+    walkState.isClaudeProject = isClaudeProject;
+    let agentsAncestors = isClaudeProject
       ? EMPTY_LIST
-      : await d.fs
+      : await ctx.fs
           .ancestors({
             names: AGENTS_MD_FILENAMES,
           })
@@ -269,191 +276,197 @@ function loadAgentsMdInstructions(e, t) {
             isWalkFailed = true;
             return EMPTY_LIST;
           });
-    let L = dedupeInstructionFiles(flattenProjectInstructionParts(P), instructionFiles);
-    if (!c) {
-      c = true;
-      let countsOf = loadCountsOf(L, u && !isWalkFailed, isWalkFailed);
+    let mergedInstructionFiles = dedupeInstructionFiles(
+      flattenProjectInstructionParts(agentsAncestors),
+      instructionFiles,
+    );
+    if (!logCountsDone) {
+      logCountsDone = true;
+      let countsOf = loadCountsOf(mergedInstructionFiles, isClaudeProject && !isWalkFailed, isWalkFailed);
       quietly(async () => {
         let { key, noted } = await deferred.promise;
         let markOf = loadMarkOf(countsOf);
-        let M = key && `${key} ${markOf.kind}`;
-        if (M !== undefined && noted === M) return;
-        await Promise.all([d.telemetry.log(loadRowOf(s, countsOf)), d.telemetry.mark(markOf)]);
-        if (M !== undefined) await d.store.set("usage-rows-queued", M);
+        let rowKey = key && `${key} ${markOf.kind}`;
+        if (rowKey !== undefined && noted === rowKey) return;
+        await Promise.all([ctx.telemetry.log(loadRowOf(mode, countsOf)), ctx.telemetry.mark(markOf)]);
+        if (rowKey !== undefined) await ctx.store.set("usage-rows-queued", rowKey);
       });
     }
-    if (m !== undefined && m !== N && L.length > 0) {
-      N = m;
-      d.ui.log(
+    if (root !== undefined && root !== lastRoot && mergedInstructionFiles.length > 0) {
+      lastRoot = root;
+      ctx.ui.log(
         "no CLAUDE.md found; AGENTS.md loaded: " +
-          L.filter((g) => g.parent === undefined)
-            .map((g) => g.path)
+          mergedInstructionFiles
+            .filter((file) => file.parent === undefined)
+            .map((file) => file.path)
             .join(", "),
         {
           to: "debug",
         },
       );
     }
-    let Y = insertAgentsMdFiles(instructionFiles, L);
-    return a({
-      ...r,
-      instructionFiles: Y,
+    let mergedFiles = insertAgentsMdFiles(instructionFiles, mergedInstructionFiles);
+    return next({
+      ...payload,
+      instructionFiles: mergedFiles,
     }).finally(() => {
-      startOver(p);
-      p.inContext = Y;
+      startOver(walkState);
+      walkState.inContext = mergedFiles;
     });
   });
-  e(
+  on(
     "command.run",
     {
       command: CLAUDE_MD_RESET_EVENTS,
     },
-    async (d, r, a) => {
-      let n = await a(r);
+    async (ctx, payload, next) => {
+      let result = await next(payload);
       given.clear();
-      p.pending.clear();
-      return n;
+      walkState.pending.clear();
+      return result;
     },
   );
-  e("session.compact", async (d, r, a) => {
-    let n = await a(r);
-    if (n.skip === undefined) takeBack(p, r.agentId ?? MAIN_THREAD);
-    return n;
+  on("session.compact", async (ctx, payload, next) => {
+    let result = await next(payload);
+    if (result.skip === undefined) takeBack(walkState, payload.agentId ?? MAIN_THREAD);
+    return result;
   });
-  e("prompt.submit", (d, r, a) => {
-    takeBack(p, MAIN_THREAD, ["submitted"]);
-    stagePending(p, MAIN_THREAD, "submitted");
-    return a(r);
+  on("prompt.submit", (ctx, payload, next) => {
+    takeBack(walkState, MAIN_THREAD, ["submitted"]);
+    stagePending(walkState, MAIN_THREAD, "submitted");
+    return next(payload);
   });
-  e("turn.start", (d, r, a) => {
-    if (!T) deferred.resolve(EMPTY_OBJECT);
-    if (r.agentId === undefined) stagePending(p, MAIN_THREAD, "riding");
-    return a(r);
+  on("turn.start", (ctx, payload, next) => {
+    if (!sessionStarted) deferred.resolve(EMPTY_OBJECT);
+    if (payload.agentId === undefined) stagePending(walkState, MAIN_THREAD, "riding");
+    return next(payload);
   });
-  e("turn.complete", (d, r, a) => {
-    settlePending(p, r.agentId ?? MAIN_THREAD, r);
-    return a(r);
+  on("turn.complete", (ctx, payload, next) => {
+    settlePending(walkState, payload.agentId ?? MAIN_THREAD, payload);
+    return next(payload);
   });
-  e(
+  on(
     "agent.spawn",
     {
       fork: true,
     },
-    async (d, r, a) => {
-      let n = await a(r);
-      if (r.resume === undefined && n.agentId !== undefined) {
-        let m = given.get(r.parentAgentId ?? MAIN_THREAD);
-        let l = given.get(n.agentId);
-        given.set(n.agentId, new Set([...(m ?? []), ...(l ?? [])]));
+    async (ctx, payload, next) => {
+      let result = await next(payload);
+      if (payload.resume === undefined && result.agentId !== undefined) {
+        let parentGiven = given.get(payload.parentAgentId ?? MAIN_THREAD);
+        let childGiven = given.get(result.agentId);
+        given.set(result.agentId, new Set([...(parentGiven ?? []), ...(childGiven ?? [])]));
       }
-      return n;
+      return result;
     },
   );
-  e(
+  on(
     "tool.call",
     {
       tool: "Read",
     },
-    async (d, r, a) => {
-      let n = await a(r);
-      if (r.tool !== "Read" || n.deny !== undefined || n.isError) return n;
-      let l = touchedOf(r.file_path, r, "read");
-      let u = await agentsMdForMention(d, l, p);
-      return u.length > 0
+    async (ctx, payload, next) => {
+      let result = await next(payload);
+      if (payload.tool !== "Read" || result.deny !== undefined || result.isError) return result;
+      let touched = touchedOf(payload.file_path, payload, "read");
+      let parts = await agentsMdForMention(ctx, touched, walkState);
+      return parts.length > 0
         ? {
-            ...n,
-            context: appendInstructionParts(n.context, u),
+            ...result,
+            context: appendInstructionParts(result.context, parts),
           }
-        : n;
+        : result;
     },
   );
-  e("prompt.mention", async (d, r, a) => {
-    let n = await a(r);
-    let m = touchedOf(r.path, r, "mention");
-    takeBack(p, m.loop, ["submitted"]);
-    if (n.deny !== undefined || n.type === "pdf_reference") return n;
-    let u = await agentsMdForMention(d, m, p);
-    return u.length > 0
+  on("prompt.mention", async (ctx, payload, next) => {
+    let result = await next(payload);
+    let touched = touchedOf(payload.path, payload, "mention");
+    takeBack(walkState, touched.loop, ["submitted"]);
+    if (result.deny !== undefined || result.type === "pdf_reference") return result;
+    let parts = await agentsMdForMention(ctx, touched, walkState);
+    return parts.length > 0
       ? {
-          ...n,
-          context: appendInstructionParts(n.context, u),
+          ...result,
+          context: appendInstructionParts(result.context, parts),
         }
-      : n;
+      : result;
   });
 }
 //@ chunk-8jbcmznm.js:10262-11156 placement
-async function agentsMdForMention(e, t, o) {
-  if (!(await isAgentsMdAttachmentEnabled(e))) return [];
-  let [i, f] = await Promise.all([e.session.root(), e.session.cwd()]);
-  o.home ??= await getHomeDir(e, f);
-  let includePath = resolveIncludePath(t.path, f, o.home);
-  if (i !== o.rootSeen) {
-    o.rootSeen = i;
-    o.isClaudeProject = undefined;
-    o.given.clear();
-    o.pending.clear();
+async function agentsMdForMention(ctx, touched, walkState) {
+  if (!(await isAgentsMdAttachmentEnabled(ctx))) return [];
+  let [root, cwd] = await Promise.all([ctx.session.root(), ctx.session.cwd()]);
+  walkState.home ??= await getHomeDir(ctx, cwd);
+  let includePath = resolveIncludePath(touched.path, cwd, walkState.home);
+  if (root !== walkState.rootSeen) {
+    walkState.rootSeen = root;
+    walkState.isClaudeProject = undefined;
+    walkState.given.clear();
+    walkState.pending.clear();
   }
-  o.isClaudeProject ??=
-    o.isFallback &&
+  walkState.isClaudeProject ??=
+    walkState.isFallback &&
     (
-      await e.fs.ancestors({
+      await ctx.fs.ancestors({
         names: CLAUDE_MD_FILENAMES,
       })
     ).length > 0;
-  if (o.isClaudeProject || !isPathUnder(includePath, i)) return [];
-  let [h, O] = await Promise.all([
-    e.fs.ancestors({
+  if (walkState.isClaudeProject || !isPathUnder(includePath, root)) return [];
+  let [agentsAncestors, claudeAncestors] = await Promise.all([
+    ctx.fs.ancestors({
       names: AGENTS_MD_FILENAMES,
       of: includePath,
-      below: i,
+      below: root,
     }),
-    e.fs.ancestors({
+    ctx.fs.ancestors({
       names: CLAUDE_MD_FILENAMES,
       of: includePath,
-      below: i,
+      below: root,
     }),
   ]).catch(() => [EMPTY_LIST, EMPTY_LIST]);
-  let T = o.given.get(t.loop) ?? new Set();
-  o.given.set(t.loop, T);
-  let filtered = (o.isFallback ? excludeDirs(h, O) : h).filter((c) => isPathUnder(c.dir, i));
+  let givenPaths = walkState.given.get(touched.loop) ?? new Set();
+  walkState.given.set(touched.loop, givenPaths);
+  let filtered = (
+    walkState.isFallback ? excludeDirs(agentsAncestors, claudeAncestors) : agentsAncestors
+  ).filter((file) => isPathUnder(file.dir, root));
   let filtered_2 = dedupeInstructionFiles(flattenProjectInstructionParts(filtered), [
-    ...o.inContext,
-    ...flattenProjectInstructionParts(O),
-  ]).filter((c) => !T.has(c.path));
-  let filtered_3 = filtered_2.filter((c) => !isSamePathEntry(c, includePath));
-  let filtered_4 = filtered_2.filter(
-    (c) => filtered_3.includes(c) || (isSamePathEntry(c, includePath) && t.isWhole),
+    ...walkState.inContext,
+    ...flattenProjectInstructionParts(claudeAncestors),
+  ]).filter((file) => !givenPaths.has(file.path));
+  let filtered_3 = filtered_2.filter((file) => !isSamePathEntry(file, includePath));
+  let files = filtered_2.filter(
+    (file) => filtered_3.includes(file) || (isSamePathEntry(file, includePath) && touched.isWhole),
   );
-  for (let c of filtered_4) T.add(c.path);
-  if (t.road === "mention") holdPending(o, t.loop, filtered_4);
-  if (filtered_3.length > 0) quietly(() => e.telemetry.log(nestedRowOf(o.mode, filtered_3.length)));
+  for (let file of files) givenPaths.add(file.path);
+  if (touched.road === "mention") holdPending(walkState, touched.loop, files);
+  if (filtered_3.length > 0) quietly(() => ctx.telemetry.log(nestedRowOf(walkState.mode, filtered_3.length)));
   return filtered_3;
 }
 //@ chunk-8jbcmznm.js:11156-11303 placement
 /**
  * CLAUDE_CODE_SIMPLE 与 CLAUDE_CODE_DISABLE_ATTACHMENTS 都未开启时为 true。
  */
-async function isAgentsMdAttachmentEnabled(e) {
-  let [t, o] = await Promise.all([
-    e.env.get("CLAUDE_CODE_SIMPLE"),
-    e.env.get("CLAUDE_CODE_DISABLE_ATTACHMENTS"),
+async function isAgentsMdAttachmentEnabled(ctx) {
+  let [simpleMode, attachmentsDisabled] = await Promise.all([
+    ctx.env.get("CLAUDE_CODE_SIMPLE"),
+    ctx.env.get("CLAUDE_CODE_DISABLE_ATTACHMENTS"),
   ]);
-  return !isSwitchedOn(t) && !isSwitchedOn(o);
+  return !isSwitchedOn(simpleMode) && !isSwitchedOn(attachmentsDisabled);
 }
 //@ chunk-8jbcmznm.js:11303-11647 placement
 /**
  * 用量行去重键（会话 id + 名字）；设置 CLAUDE_CODE_AGENTS_MD_ROWS_EVERY_PROCESS 或读取失败时每个进程都发送。
  */
-async function getUsageRowsDedupKey(e, t) {
+async function getUsageRowsDedupKey(ctx, mode) {
   try {
-    return isSwitchedOn(await e.env.get("CLAUDE_CODE_AGENTS_MD_ROWS_EVERY_PROCESS"))
+    return isSwitchedOn(await ctx.env.get("CLAUDE_CODE_AGENTS_MD_ROWS_EVERY_PROCESS"))
       ? EMPTY_OBJECT
       : {
-          key: `${await e.session.id()} ${t}`,
-          noted: await e.store.get("usage-rows-queued"),
+          key: `${await ctx.session.id()} ${mode}`,
+          noted: await ctx.store.get("usage-rows-queued"),
         };
   } catch (error) {
-    e.ui.log(
+    ctx.ui.log(
       `AGENTS.md usage rows: could not read whether this session already sent them, so this process sends them (${String(error)})`,
       {
         to: "debug",
@@ -466,10 +479,14 @@ async function getUsageRowsDedupKey(e, t) {
 /**
  * 取 HOME 或 USERPROFILE（路径含反斜杠时优先 USERPROFILE）。
  */
-async function getHomeDir(e, t) {
-  let [o, i] = await Promise.all([e.env.get("HOME"), e.env.get("USERPROFILE")]);
-  return t.includes("\\") ? (i ?? o) : (o ?? i);
+async function getHomeDir(ctx, cwd) {
+  let [home, userProfile] = await Promise.all([ctx.env.get("HOME"), ctx.env.get("USERPROFILE")]);
+  return cwd.includes("\\") ? (userProfile ?? home) : (home ?? userProfile);
 }
+
+// The import cycle this module closes (3 modules) is complete: run the load-time work its statements
+// marked "deferred" waited for, in the official build's order (runtime/deferred-init.js).
+runDeferredInits("src/plugins/bundled/agentsMd/agentsMd.js");
 export {
   PLUGIN_DESCRIPTION,
   FEATURE_NAME,

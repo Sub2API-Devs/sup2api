@@ -51,11 +51,11 @@ var cachedBreakLinesWithSpaces = {
       ),
   },
 };
-var K = [
+var EOL = [
   `
 `,
   "\r",
   `\r
 `,
 ];
-export { K, cachedSpaces, cachedBreakLinesWithSpaces };
+export { EOL, cachedSpaces, cachedBreakLinesWithSpaces };

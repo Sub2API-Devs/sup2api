@@ -22,19 +22,20 @@ var call = async (args, context) => {
   let clearedSessionTitle = args.trim() || undefined;
   let sessionId = getSessionId();
   context.dialogStore?.dismissKind(LOCAL_JSX_DIALOG.kind);
-  for await (let o of clearConversation({
+  for await (let session of clearConversation({
     ...context,
     clearedSessionTitle,
     resetTrigger: "clear",
     resetUserMessageUuid: context.commandMessageUuid,
   }))
-    context.onQueryEvent?.(o);
-  let r = isHumanOrigin(context.submissionOrigin) && !hasAgentTaskSurvivingClear(context.taskRegistry.all());
-  import("./chunk-9a6n2431.js")
-    .then((o) =>
-      o.closeSessionTabGroup({
+    context.onQueryEvent?.(session);
+  let keepTabGroup =
+    isHumanOrigin(context.submissionOrigin) && !hasAgentTaskSurvivingClear(context.taskRegistry.all());
+  import("../../utils/claudeInChrome/closeSessionTabGroup.lazy.js")
+    .then((tabs) =>
+      tabs.closeSessionTabGroup({
         sessionId,
-        onlyIfEmpty: !r,
+        onlyIfEmpty: !keepTabGroup,
       }),
     )
     .catch(logError);
@@ -43,3 +44,4 @@ var call = async (args, context) => {
     value: "",
   };
 };
+export { call };

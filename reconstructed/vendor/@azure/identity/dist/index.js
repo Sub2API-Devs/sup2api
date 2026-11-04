@@ -13,6 +13,7 @@ import { DEVELOPER_SIGN_ON_CLIENT_ID, ALL_TENANTS } from "./esm/constants.js";
 import { createMsalClient } from "./esm/msal/nodeFlows/msalClient.js";
 import { tracingClient } from "./esm/util/tracing.js";
 import { ensureValidScopeForDevTimeCreds, getScopeResource, ensureScopes } from "./esm/util/scopeUtils.js";
+import { deferInit } from "../../../../runtime/deferred-init.js";
 
 //@ chunk-mrx6y2r5.js:27655-27745 esm-fingerprint
 function isErrorResponse(errorBody) {
@@ -30,7 +31,7 @@ class CredentialUnavailableError extends Error {
 //@ chunk-mrx6y2r5.js:27845-27874 esm-fingerprint
 var AuthenticationErrorName = "AuthenticationError";
 //@ chunk-mrx6y2r5.js:27874-28577 esm-fingerprint
-class $n extends Error {
+class AuthenticationError extends Error {
   constructor(statusCode, errorBody, options) {
     let errorResponse = {
       error: "unknown",
@@ -118,7 +119,7 @@ function createConfigurationErrorMessage(tenantId) {
   return `The current credential is not configured to acquire tokens for tenant ${tenantId}. To enable acquiring tokens for this tenant add it to the AdditionallyAllowedTenants on the credential options, or add "*" to AdditionallyAllowedTenants to allow acquiring tokens for any tenant.`;
 }
 //@ chunk-mrx6y2r5.js:29371-29698 esm-fingerprint
-function processMultiTenantRequest(tenantId, getTokenOptions, additionallyAllowedTenantIds = [], n) {
+function processMultiTenantRequest(tenantId, getTokenOptions, additionallyAllowedTenantIds = [], logger) {
   var _a;
   let resolvedTenantId;
   if (process.env.AZURE_IDENTITY_DISABLE_MULTITENANTAUTH) resolvedTenantId = tenantId;
@@ -137,7 +138,7 @@ function processMultiTenantRequest(tenantId, getTokenOptions, additionallyAllowe
     !additionallyAllowedTenantIds.some((t) => t.localeCompare(resolvedTenantId) === 0)
   ) {
     let configurationErrorMessage = createConfigurationErrorMessage(resolvedTenantId);
-    if (!(n === null || n === undefined)) n.info(configurationErrorMessage);
+    if (!(logger === null || logger === undefined)) logger.info(configurationErrorMessage);
     throw new CredentialUnavailableError(configurationErrorMessage);
   }
   return resolvedTenantId;
@@ -146,13 +147,13 @@ function processMultiTenantRequest(tenantId, getTokenOptions, additionallyAllowe
 /**
  * Azure Identity：校验 tenant id 格式（第三方 @azure/identity 代码）。
  */
-function checkTenantId(e, tenantId) {
+function checkTenantId(logger, tenantId) {
   if (!tenantId.match(/^[0-9a-zA-Z-.]+$/)) {
-    let r = Error(
+    let tenantId = Error(
       "Invalid tenant id provided. You can locate your tenant id by following the instructions listed here: https://learn.microsoft.com/partner-center/find-ids-and-domain-names.",
     );
-    e.info(formatError("", r));
-    throw r;
+    logger.info(formatError("", tenantId));
+    throw tenantId;
   }
 }
 //@ chunk-mrx6y2r5.js:29959-30058 esm-fingerprint
@@ -291,8 +292,8 @@ class WorkloadIdentityCredential {
 }
 //@ chunk-mrx6y2r5.js:305977-306645 esm-fingerprint
 var msiName_2 = "ManagedIdentityCredential - Token Exchange";
-var cC = credentialLogger(msiName_2);
-var vc = {
+var TOKEN_EXCHANGE_MSI_NAME = credentialLogger(msiName_2);
+var tokenExchangeMsi = {
   name: "tokenExchangeMsi",
   async isAvailable(clientId) {
     let env = process.env;
@@ -300,7 +301,7 @@ var vc = {
       (clientId || env.AZURE_CLIENT_ID) && env.AZURE_TENANT_ID && process.env.AZURE_FEDERATED_TOKEN_FILE,
     );
     if (!result)
-      cC.info(
+      TOKEN_EXCHANGE_MSI_NAME.info(
         `${msiName_2}: Unavailable. The environment variables needed are: AZURE_CLIENT_ID (or the client ID sent through the parameters), AZURE_TENANT_ID and AZURE_FEDERATED_TOKEN_FILE`,
       );
     return result;
@@ -480,21 +481,32 @@ async function runCommands(commands, timeout) {
   return results;
 }
 //@ chunk-mrx6y2r5.js:317518-318208 esm-fingerprint
-var powerShellErrors = {
-  login: "Run Connect-AzAccount to login",
-  installed:
-    "The specified module 'Az.Accounts' with version '2.2.0' was not loaded because no valid module file was found in any module directory",
-};
-var powerShellPublicErrorMessages = {
-  login: "Please run 'Connect-AzAccount' from PowerShell to authenticate before using this credential.",
-  installed: `The 'Az.Account' module >= 2.2.0 is not installed. Install the Azure Az PowerShell module with: "Install-Module -Name Az -Scope CurrentUser -Repository PSGallery -Force".`,
-  troubleshoot: "To troubleshoot, visit https://aka.ms/azsdk/js/identity/powershellcredential/troubleshoot.",
-};
-var isLoginError = (err) => err.message.match(`(.*)${powerShellErrors.login}(.*)`);
-var isNotInstalledError = (err) => err.message.match(powerShellErrors.installed);
-var commandStack = [formatCommand("pwsh")];
+var powerShellErrors; // deferred: uses formatCommand of its import cycle while loading; runs once the cycle is complete
+var powerShellPublicErrorMessages;
+var isLoginError;
+var isNotInstalledError;
+var commandStack;
+deferInit("chunk-mrx6y2r5.js:317518", () => {
+  powerShellErrors = {
+    login: "Run Connect-AzAccount to login",
+    installed:
+      "The specified module 'Az.Accounts' with version '2.2.0' was not loaded because no valid module file was found in any module directory",
+  };
+  powerShellPublicErrorMessages = {
+    login: "Please run 'Connect-AzAccount' from PowerShell to authenticate before using this credential.",
+    installed: `The 'Az.Account' module >= 2.2.0 is not installed. Install the Azure Az PowerShell module with: "Install-Module -Name Az -Scope CurrentUser -Repository PSGallery -Force".`,
+    troubleshoot:
+      "To troubleshoot, visit https://aka.ms/azsdk/js/identity/powershellcredential/troubleshoot.",
+  };
+  isLoginError = (err) => err.message.match(`(.*)${powerShellErrors.login}(.*)`);
+  isNotInstalledError = (err) => err.message.match(powerShellErrors.installed);
+  commandStack = [formatCommand("pwsh")];
+});
 //@ chunk-mrx6y2r5.js:318208-318240 esm-fingerprint
-if (isWindows) commandStack.push(formatCommand("powershell"));
+// deferred: uses powerShellErrors of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-mrx6y2r5.js:318208", () => {
+  if (isWindows) commandStack.push(formatCommand("powershell"));
+});
 //@ chunk-mrx6y2r5.js:318240-320501 esm-fingerprint
 class AzurePowerShellCredential {
   constructor(options) {
@@ -615,7 +627,10 @@ async function parseJsonToken(result) {
   throw Error(`No access token found in the output. Received output: ${result}`);
 }
 //@ chunk-mrx6y2r5.js:320882-320917 esm-fingerprint
-var logger$a = credentialLogger("ChainedTokenCredential");
+var logger$a; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-mrx6y2r5.js:320882", () => {
+  logger$a = credentialLogger("ChainedTokenCredential");
+});
 //@ chunk-mrx6y2r5.js:320917-321699 esm-fingerprint
 class ChainedTokenCredential {
   constructor(...sources) {
@@ -658,7 +673,10 @@ class ChainedTokenCredential {
   }
 }
 //@ chunk-mrx6y2r5.js:324245-324280 esm-fingerprint
-var logger$8 = credentialLogger("ClientSecretCredential");
+var logger$8; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-mrx6y2r5.js:324245", () => {
+  logger$8 = credentialLogger("ClientSecretCredential");
+});
 //@ chunk-mrx6y2r5.js:324280-325326 esm-fingerprint
 class ClientSecretCredential {
   constructor(tenantId, clientId, clientSecret, options = {}) {
@@ -702,7 +720,10 @@ class ClientSecretCredential {
   }
 }
 //@ chunk-mrx6y2r5.js:325326-325365 esm-fingerprint
-var logger$7 = credentialLogger("UsernamePasswordCredential");
+var logger$7; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-mrx6y2r5.js:325326", () => {
+  logger$7 = credentialLogger("UsernamePasswordCredential");
+});
 //@ chunk-mrx6y2r5.js:325365-326641 esm-fingerprint
 class UsernamePasswordCredential {
   constructor(tenantId, clientId, username, password, options = {}) {
@@ -755,12 +776,12 @@ class UsernamePasswordCredential {
   }
 }
 export {
-  $n,
+  AuthenticationError,
   AuthenticationErrorName,
   AuthenticationRequiredError,
   CredentialUnavailableError,
   resolveTenantId,
-  vc,
+  tokenExchangeMsi,
   checkTenantId,
   resolveAdditionallyAllowedTenantIds,
   processMultiTenantRequest,

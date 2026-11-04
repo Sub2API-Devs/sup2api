@@ -22,36 +22,36 @@ var ZSTD_MAGIC_BYTES = [40, 181, 47, 253];
  * 判断数据是否以 zstd 魔数开头。
  */
 function isZstdCompressed(file) {
-  return file.length >= 4 && ZSTD_MAGIC_BYTES.every((t, e) => file[e] === t);
+  return file.length >= 4 && ZSTD_MAGIC_BYTES.every((expected, index) => file[index] === expected);
 }
 //@ chunk-sgzeept5.js:389-426 placement
 /**
  * 内嵌资源路径解析（相对路径拼上基准目录）。
  */
-function resolveResourcePath(r, t) {
-  return isAbsolute(r) ? r : join(t, r);
+function resolveResourcePath(name, dir) {
+  return isAbsolute(name) ? name : join(dir, name);
 }
 //@ chunk-sgzeept5.js:426-532 placement
 /**
  * 读取内嵌资源（zstd 压缩时解压）为文本。
  */
-async function readEmbeddedText(r, dirname) {
-  let file = await readFile(resolveResourcePath(r, dirname));
+async function readEmbeddedText(name, dirname) {
+  let file = await readFile(resolveResourcePath(name, dirname));
   return (isZstdCompressed(file) ? await Bun.zstdDecompress(file) : file).toString("utf8");
 }
 //@ chunk-sgzeept5.js:532-582 placement
 /**
  * 同步读取内嵌资源并转成文本。
  */
-function readEmbeddedTextSync(r, dirname) {
-  return readEmbeddedSync(r, dirname).toString("utf8");
+function readEmbeddedTextSync(name, dirname) {
+  return readEmbeddedSync(name, dirname).toString("utf8");
 }
 //@ chunk-sgzeept5.js:582-764 placement
 /**
  * 同步读取内嵌资源（必要时解压），缺失时抛错。
  */
-function readEmbeddedSync(r, t) {
-  let resourcePath = resolveResourcePath(r, t);
+function readEmbeddedSync(name, dir) {
+  let resourcePath = resolveResourcePath(name, dir);
   try {
     let file = readFileSync(resourcePath);
     return isZstdCompressed(file) ? Bun.zstdDecompressSync(file) : file;

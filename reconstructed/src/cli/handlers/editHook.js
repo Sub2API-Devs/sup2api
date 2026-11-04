@@ -26,35 +26,35 @@ function registerEditHookCommand(program, withStorageV5) {
     .description("Apply one hook edit read as JSON from stdin (used by the VS Code extension)")
     .requiredOption("--json", "Read the edit as JSON from stdin")
     .action(
-      withStorageV5(async (S) => {
+      withStorageV5(async (storage) => {
         if (process.stdin.isTTY) {
           await logFeatureBadAsync("cli_edit_hook", "stdin_is_tty");
           return cliErrorAfterAnalyticsFlush(
             "claude edit-hook reads one JSON edit from stdin; it is run by the VS Code extension, not by hand",
           );
         }
-        let { refusedFromSession } = await import("./chunk-tnfa2xpk.js");
-        let r = await refusedFromSession();
-        if (r !== undefined) {
+        let { refusedFromSession } = await import("./editSettingsCommands.js");
+        let refusal = await refusedFromSession();
+        if (refusal !== undefined) {
           await logFeatureBadAsync("cli_edit_hook", "spawned_by_session");
-          return cliErrorAfterAnalyticsFlush(r);
+          return cliErrorAfterAnalyticsFlush(refusal);
         }
-        let { runHookEdit } = await import("./chunk-azbt01vf.js");
+        let { runHookEdit } = await import("../../utils/hooks/runHookEdit.lazy.js");
         let text = await new Response(Bun.stdin.stream()).text();
-        let E = text.length <= 524288 ? safeParseJSON(text, false) : null;
-        if (E === null) {
+        let parsed = text.length <= 524288 ? safeParseJSON(text, false) : null;
+        if (parsed === null) {
           await logFeatureBadAsync("cli_edit_hook", "stdin_not_json");
           return cliErrorAfterAnalyticsFlush("claude edit-hook: stdin is not a JSON edit");
         }
-        let x = await runHookEdit(E, S);
-        if (!x.ok) {
+        let result = await runHookEdit(parsed, storage);
+        if (!result.ok) {
           process.stdout.write(
-            jsonStringify(x) +
+            jsonStringify(result) +
               `
 `,
           );
-          await logFeatureBadAsync("cli_edit_hook", x.code);
-          return cliErrorAfterAnalyticsFlush(x.error);
+          await logFeatureBadAsync("cli_edit_hook", result.code);
+          return cliErrorAfterAnalyticsFlush(result.error);
         }
         await logFeatureOkAsync("cli_edit_hook");
         return cliOkAfterAnalyticsFlush('{"ok":true}');

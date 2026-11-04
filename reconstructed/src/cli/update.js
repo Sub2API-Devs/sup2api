@@ -52,7 +52,7 @@ import { bgSupervisorNounCap } from "../utils/fleetGates.js";
 /**
  * claude update：检查安装方式（native/npm-local/npm-global/package-manager/development），包管理器安装只提示命令（Homebrew/winget/apk…），原生安装走 installLatest，npm 安装走全局/本地 npm；处理多重安装与配置的 installMethod 不一致。
  */
-async function update(l) {
+async function update(options) {
   if (env.DISABLE_UPDATES) {
     writeToStdout(`Updates are disabled by your administrator. Contact your IT team to get the latest version.
 `);
@@ -73,22 +73,22 @@ async function update(l) {
     }.VERSION
   }
 `);
-  let y = autoUpdatesChannel();
+  let channel = autoUpdatesChannel();
   let homebrewCaskName = getHomebrewCaskName();
-  let channelOrVersion = homebrewCaskName
+  let resolvedChannel = homebrewCaskName
     ? homebrewCaskName === "claude-code@latest"
       ? "latest"
       : "stable"
     : detectHomebrew()
       ? "stable"
-      : y;
-  let h = channelOrVersion === "rc" ? "slow" : channelOrVersion;
-  writeToStdout(`Checking for updates to ${h} version...
+      : channel;
+  let targetChannel = resolvedChannel === "rc" ? "slow" : resolvedChannel;
+  writeToStdout(`Checking for updates to ${targetChannel} version...
 `);
   logForDebugging("update: Starting update check");
   logForDebugging("update: Running diagnostic");
   let diagnostic = await getDoctorDiagnostic({
-    storageV5: l,
+    storageV5: options,
   });
   logForDebugging(`update: Installation type: ${diagnostic.installationType}`);
   logForDebugging(`update: Config install method: ${diagnostic.configInstallMethod}`);
@@ -147,7 +147,7 @@ async function update(l) {
         ...current,
         installMethod: detectedMethod,
       }),
-      l,
+      options,
     );
     writeToStdout(`Installation method set to: ${detectedMethod}
 `);
@@ -169,15 +169,15 @@ async function update(l) {
     if (packageManager === "homebrew") {
       writeToStdout(`Claude is managed by Homebrew.
 `);
-      let n = `brew upgrade ${homebrewCaskName ?? "claude-code"}`;
-      let R = await latestVersionFromSources(homebrewCaskName ?? "claude-code", channelOrVersion);
-      if (R === null) {
+      let brewCommand = `brew upgrade ${homebrewCaskName ?? "claude-code"}`;
+      let latest = await latestVersionFromSources(homebrewCaskName ?? "claude-code", resolvedChannel);
+      if (latest === null) {
         writeToStdout(`Could not check for updates (network check skipped or unavailable).
 `);
         writeToStdout(`To update manually, run:
 `);
         writeToStdout(
-          sequential.bold(`  ${n}`) +
+          sequential.bold(`  ${brewCommand}`) +
             `
 `,
         );
@@ -194,7 +194,7 @@ async function update(l) {
             HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
             DD_SOURCEMAP_GROUP: "default",
           }.VERSION,
-          R,
+          latest,
         )
       ) {
         writeToStdout(`Update available: ${
@@ -209,14 +209,14 @@ async function update(l) {
             HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
             DD_SOURCEMAP_GROUP: "default",
           }.VERSION
-        } \u2192 ${R}
+        } \u2192 ${latest}
 `);
         writeToStdout(`
 `);
         writeToStdout(`To update, run:
 `);
         writeToStdout(
-          sequential.bold(`  ${n}`) +
+          sequential.bold(`  ${brewCommand}`) +
             `
 `,
         );
@@ -241,7 +241,7 @@ async function update(l) {
     } else if (packageManager === "winget") {
       writeToStdout(`Claude is managed by winget.
 `);
-      let latest = await getLatestVersion(channelOrVersion);
+      let latest = await getLatestVersion(resolvedChannel);
       if (latest === null) {
         writeToStdout(`Could not check for updates (npm lookup failed or returned an invalid response).
 `);
@@ -297,7 +297,7 @@ async function update(l) {
     } else if (packageManager === "apk") {
       writeToStdout(`Claude is managed by apk.
 `);
-      let latest = await getLatestVersion(channelOrVersion);
+      let latest = await getLatestVersion(resolvedChannel);
       if (latest === null) {
         writeToStdout(`Could not check for updates (npm lookup failed or returned an invalid response).
 `);
@@ -364,7 +364,7 @@ async function update(l) {
     diagnostic.installationType !== "package-manager"
   ) {
     let { installationType: runningType, configInstallMethod: configExpects } = diagnostic;
-    let k =
+    let result =
       {
         "npm-local": "local",
         "npm-global": "global",
@@ -372,7 +372,7 @@ async function update(l) {
         development: "development",
         unknown: "unknown",
       }[runningType] || runningType;
-    if (k !== configExpects && configExpects !== "unknown") {
+    if (result !== configExpects && configExpects !== "unknown") {
       writeToStdout(`
 `);
       writeToStdout(
@@ -392,11 +392,11 @@ async function update(l) {
       saveGlobalConfig(
         (current) => ({
           ...current,
-          installMethod: k,
+          installMethod: result,
         }),
-        l,
+        options,
       );
-      writeToStdout(`Config updated to reflect current installation method: ${k}
+      writeToStdout(`Config updated to reflect current installation method: ${result}
 `);
     }
   }
@@ -406,12 +406,12 @@ async function update(l) {
       getInitialSettings_2()?.minimumVersion ||
       getSettingsForSource("policySettings")?.requiredMaximumVersion
     ) {
-      let e = await getLatestVersion_2(channelOrVersion).catch(() => null);
-      let n = e ? getVersionSkipReason(e) : null;
-      if (e && n) {
+      let version = await getLatestVersion_2(resolvedChannel).catch(() => null);
+      let skipReason = version ? getVersionSkipReason(version) : null;
+      if (version && skipReason) {
         writeToStdout(
           sequential.yellow(
-            `The ${h} channel is at ${e}, which is ${n}. Staying on ${
+            `The ${targetChannel} channel is at ${version}, which is ${skipReason}. Staying on ${
               {
                 ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
                 PACKAGE_URL: "@anthropic-ai/claude-code",
@@ -432,7 +432,7 @@ async function update(l) {
         await gracefulShutdown(0);
       }
     }
-    getLatestVersion_2(channelOrVersion)
+    getLatestVersion_2(resolvedChannel)
       .then((latestVersion) => {
         if (
           !latestVersion ||
@@ -465,7 +465,7 @@ async function update(l) {
               DD_SOURCEMAP_GROUP: "default",
             }.VERSION,
           )
-            ? `@${channelOrVersion} is at ${latestVersion} (older than ${
+            ? `@${resolvedChannel} is at ${latestVersion} (older than ${
                 {
                   ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
                   PACKAGE_URL: "@anthropic-ai/claude-code",
@@ -486,9 +486,9 @@ async function update(l) {
       })
       .catch(() => {});
     try {
-      let e = await installLatest(channelOrVersion, false, l);
-      if (e.lockFailed) {
-        let pidInfo = e.lockHolderPid ? ` (PID ${e.lockHolderPid})` : "";
+      let installResult = await installLatest(resolvedChannel, false, options);
+      if (installResult.lockFailed) {
+        let pidInfo = installResult.lockHolderPid ? ` (PID ${installResult.lockHolderPid})` : "";
         writeToStdout(
           sequential.yellow(
             `Another Claude process${pidInfo} is currently running. Please try again in a moment.`,
@@ -498,14 +498,14 @@ async function update(l) {
         );
         await gracefulShutdown(0);
       }
-      if (!e.latestVersion) {
+      if (!installResult.latestVersion) {
         process.stderr.write(`Failed to check for updates
 `);
         await gracefulShutdown(1);
       }
       if (
-        e.wasUpdated &&
-        e.latestVersion !==
+        installResult.wasUpdated &&
+        installResult.latestVersion !==
           {
             ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
             PACKAGE_URL: "@anthropic-ai/claude-code",
@@ -533,17 +533,17 @@ async function update(l) {
                   import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
                 DD_SOURCEMAP_GROUP: "default",
               }.VERSION
-            } to version ${e.latestVersion}`,
+            } to version ${installResult.latestVersion}`,
           ) +
             `
 `,
         );
         await regenerateCompletionCache();
-        await noteSupervisorRestart(e.latestVersion, l);
-      } else if (e.skippedUnverifiedRelease)
+        await noteSupervisorRestart(installResult.latestVersion, options);
+      } else if (installResult.skippedUnverifiedRelease)
         writeToStdout(
           sequential.yellow(
-            `Update target ${e.latestVersion} (from @${channelOrVersion} or a server-side override) predates release-signature enforcement; staying on ${
+            `Update target ${installResult.latestVersion} (from @${resolvedChannel} or a server-side override) predates release-signature enforcement; staying on ${
               {
                 ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
                 PACKAGE_URL: "@anthropic-ai/claude-code",
@@ -556,7 +556,7 @@ async function update(l) {
                   import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
                 DD_SOURCEMAP_GROUP: "default",
               }.VERSION
-            }. Run \`claude install ${e.latestVersion}\` to switch to it explicitly.`,
+            }. Run \`claude install ${installResult.latestVersion}\` to switch to it explicitly.`,
           ) +
             `
 `,
@@ -613,7 +613,7 @@ async function update(l) {
       }.PACKAGE_URL
     }`,
   );
-  let npmTag = channelOrVersion === "stable" ? "stable" : "latest";
+  let npmTag = resolvedChannel === "stable" ? "stable" : "latest";
   let npmCommand = `npm view ${
     {
       ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
@@ -628,7 +628,7 @@ async function update(l) {
     }.PACKAGE_URL
   }@${npmTag} version`;
   logForDebugging(`update: Running: ${npmCommand}`);
-  let latestVersion = await getLatestVersion(channelOrVersion);
+  let latestVersion = await getLatestVersion(resolvedChannel);
   logForDebugging(`update: Latest version from npm: ${latestVersion || "FAILED"}`);
   if (!latestVersion) {
     logForDebugging("update: Failed to get latest version from npm registry");
@@ -702,8 +702,8 @@ async function update(l) {
     await gracefulShutdown(1);
   }
   let { maxVersion, forceDowngradeEnabled } = await resolveMaxVersionConfig();
-  let specificVersion = latestVersion;
-  let C = false;
+  let candidateVersion = latestVersion;
+  let updated = false;
   if (
     forceDowngradeEnabled &&
     maxVersion &&
@@ -723,13 +723,13 @@ async function update(l) {
       "auto_updater",
     )
   ) {
-    specificVersion = maxVersion;
-    C = true;
+    candidateVersion = maxVersion;
+    updated = true;
   } else if (maxVersion && latestVersion && semverGte(latestVersion, maxVersion)) {
     logForDebugging(
       `update: maxVersion ${maxVersion} is set, capping update from ${latestVersion} to ${maxVersion}`,
     );
-    specificVersion = semverGte(
+    candidateVersion = semverGte(
       maxVersion,
       {
         ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
@@ -756,15 +756,15 @@ async function update(l) {
           DD_SOURCEMAP_GROUP: "default",
         }.VERSION;
   }
-  let v = specificVersion ? getVersionSkipReason(specificVersion) : null;
-  if (specificVersion && v) {
-    let e =
-      specificVersion === latestVersion
-        ? `The ${h} channel is at ${specificVersion}`
-        : `The update target is capped at ${specificVersion} by a server-side version policy`;
+  let specificSkipReason = candidateVersion ? getVersionSkipReason(candidateVersion) : null;
+  if (candidateVersion && specificSkipReason) {
+    let isLatest =
+      candidateVersion === latestVersion
+        ? `The ${targetChannel} channel is at ${candidateVersion}`
+        : `The update target is capped at ${candidateVersion} by a server-side version policy`;
     writeToStdout(
       sequential.yellow(
-        `${e}, which is ${v}. Staying on ${
+        `${isLatest}, which is ${specificSkipReason}. Staying on ${
           {
             ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
             PACKAGE_URL: "@anthropic-ai/claude-code",
@@ -784,7 +784,7 @@ async function update(l) {
     await gracefulShutdown(0);
   }
   if (
-    specificVersion ===
+    candidateVersion ===
     {
       ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
       PACKAGE_URL: "@anthropic-ai/claude-code",
@@ -819,10 +819,10 @@ async function update(l) {
     await gracefulShutdown(0);
   }
   if (
-    !C &&
-    specificVersion &&
+    !updated &&
+    candidateVersion &&
     lt(
-      specificVersion,
+      candidateVersion,
       {
         ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
         PACKAGE_URL: "@anthropic-ai/claude-code",
@@ -850,14 +850,14 @@ async function update(l) {
             HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
             DD_SOURCEMAP_GROUP: "default",
           }.VERSION
-        }, which is newer than the ${h} channel's ${specificVersion}. Skipping update. To switch back to the channel version, run claude install ${specificVersion}.`,
+        }, which is newer than the ${targetChannel} channel's ${candidateVersion}. Skipping update. To switch back to the channel version, run claude install ${candidateVersion}.`,
       ) +
         `
 `,
     );
     await gracefulShutdown(0);
   }
-  if (C) {
+  if (updated) {
     logEvent("tengu_auto_updater_forced_downgrade", {
       from_version: sanitizeVersion(
         {
@@ -872,11 +872,11 @@ async function update(l) {
           DD_SOURCEMAP_GROUP: "default",
         }.VERSION,
       ),
-      to_version: sanitizeVersion(specificVersion),
+      to_version: sanitizeVersion(candidateVersion),
     });
     writeToStdout(
       sequential.yellow(
-        `Downgrading to ${specificVersion} (current: ${
+        `Downgrading to ${candidateVersion} (current: ${
           {
             ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
             PACKAGE_URL: "@anthropic-ai/claude-code",
@@ -894,7 +894,7 @@ async function update(l) {
 `,
     );
   } else
-    writeToStdout(`New version available: ${specificVersion} (current: ${
+    writeToStdout(`New version available: ${candidateVersion} (current: ${
       {
         ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
         PACKAGE_URL: "@anthropic-ai/claude-code",
@@ -910,20 +910,20 @@ async function update(l) {
 `);
   writeToStdout(`Installing update...
 `);
-  let c = false;
+  let installed = false;
   let updateMethodName = "";
   switch (diagnostic.installationType) {
     case "npm-local":
-      c = true;
+      installed = true;
       updateMethodName = "local";
       break;
     case "npm-global":
-      c = false;
+      installed = false;
       updateMethodName = "global";
       break;
     case "unknown": {
       let isLocal = await localInstallationExists();
-      c = isLocal;
+      installed = isLocal;
       updateMethodName = isLocal ? "local" : "global";
       writeToStdout(
         sequential.yellow("Warning: Could not determine installation type") +
@@ -943,25 +943,25 @@ async function update(l) {
   writeToStdout(`Using ${updateMethodName} installation update method...
 `);
   logForDebugging(`update: Update method determined: ${updateMethodName}`);
-  logForDebugging(`update: useLocalUpdate: ${c}`);
-  let p;
-  let w;
-  if (c) {
+  logForDebugging(`update: useLocalUpdate: ${installed}`);
+  let output;
+  let code;
+  if (installed) {
     logForDebugging("update: Calling installOrUpdateClaudePackage() for local update");
-    p = await installOrUpdateClaudePackage(channelOrVersion, specificVersion, l);
+    output = await installOrUpdateClaudePackage(resolvedChannel, candidateVersion, options);
   } else {
     logForDebugging("update: Calling installGlobalPackage() for global update");
-    w = await installGlobalPackage(specificVersion, l);
-    p = w.status;
+    code = await installGlobalPackage(candidateVersion, options);
+    output = code.status;
   }
-  logForDebugging(`update: Installation status: ${p}`);
-  if (p !== "in_progress")
+  logForDebugging(`update: Installation status: ${output}`);
+  if (output !== "in_progress")
     await recordUpdateResult(
       {
         timestamp: new Date().toISOString(),
-        path: c ? "npm-local" : "npm-global",
-        outcome: p === "success" ? "success" : "failed",
-        status: p,
+        path: installed ? "npm-local" : "npm-global",
+        outcome: output === "success" ? "success" : "failed",
+        status: output,
         version_from: {
           ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
           PACKAGE_URL: "@anthropic-ai/claude-code",
@@ -973,19 +973,19 @@ async function update(l) {
           HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
           DD_SOURCEMAP_GROUP: "default",
         }.VERSION,
-        version_to: specificVersion,
+        version_to: candidateVersion,
         error_code:
-          p === "install_failed" && getUpdateRestoreFailure()
+          output === "install_failed" && getUpdateRestoreFailure()
             ? "update_apply_restore_failed"
-            : updateApplyErrorKey(w?.failureHint),
+            : updateApplyErrorKey(code?.failureHint),
       },
-      l,
+      options,
     );
-  switch (p) {
+  switch (output) {
     case "success":
       writeToStdout(
         sequential.green(
-          C
+          updated
             ? `Successfully downgraded from ${
                 {
                   ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
@@ -999,7 +999,7 @@ async function update(l) {
                     import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
                   DD_SOURCEMAP_GROUP: "default",
                 }.VERSION
-              } to version ${specificVersion}`
+              } to version ${candidateVersion}`
             : `Successfully updated from ${
                 {
                   ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
@@ -1013,18 +1013,18 @@ async function update(l) {
                     import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
                   DD_SOURCEMAP_GROUP: "default",
                 }.VERSION
-              } to version ${specificVersion}`,
+              } to version ${candidateVersion}`,
         ) +
           `
 `,
       );
       await regenerateCompletionCache();
-      await noteSupervisorRestart(specificVersion, l);
+      await noteSupervisorRestart(candidateVersion, options);
       break;
     case "no_permissions":
       process.stderr.write(`Error: Insufficient permissions to install update
 `);
-      if (c) {
+      if (installed) {
         process.stderr.write(`Try manually updating with:
 `);
         process.stderr.write(`  cd ~/.claude/local && npm update ${
@@ -1051,8 +1051,8 @@ async function update(l) {
       break;
     case "install_failed": {
       let updateRestoreFailure = getUpdateRestoreFailure();
-      if (!updateRestoreFailure && w?.failureHint) {
-        switch (w.failureHint) {
+      if (!updateRestoreFailure && code?.failureHint) {
+        switch (code.failureHint) {
           case "windows_running_exe_lock":
             process.stderr
               .write(`Error: Update failed because claude.exe is in use. Close other Claude Code sessions (including VS Code), then run claude update again, or run claude doctor.
@@ -1141,7 +1141,7 @@ async function update(l) {
             }.PACKAGE_URL
           }
 `);
-      } else if (c) {
+      } else if (installed) {
         process.stderr.write(`Try manually updating with:
 `);
         process.stderr.write(`  cd ~/.claude/local && npm update ${
@@ -1175,8 +1175,8 @@ async function update(l) {
   await gracefulShutdown(0);
 }
 //@ chunk-rkjj4sjx.js:42648-42795 sole-consumer
-async function noteSupervisorRestart(l, y) {
-  if (await isServerVersionMismatch(l, y))
+async function noteSupervisorRestart(options, state) {
+  if (await isServerVersionMismatch(options, state))
     writeToStdout(
       sequential.dim(
         `${bgSupervisorNounCap()} will restart on the new version shortly; background jobs continue uninterrupted`,
@@ -1185,3 +1185,4 @@ async function noteSupervisorRestart(l, y) {
 `,
     );
 }
+export { update };

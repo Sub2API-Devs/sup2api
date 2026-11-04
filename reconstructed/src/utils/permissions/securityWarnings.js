@@ -18,26 +18,26 @@ var MAX_SEEN_SECURITY_WARNINGS = 256;
 /**
  * 过滤掉全局配置里记为已看过的安全警告。
  */
-function filterUnseenSecurityWarnings(e) {
-  let n = new Set(stringArray(getGlobalConfig().seenSecurityWarnings));
-  return e.filter((r) => r.seenKey === undefined || !n.has(r.seenKey));
+function filterUnseenSecurityWarnings(warnings) {
+  let seen = new Set(stringArray(getGlobalConfig().seenSecurityWarnings));
+  return warnings.filter((warning) => warning.seenKey === undefined || !seen.has(warning.seenKey));
 }
 //@ chunk-vqy2q2s8.js:434-645 placement
 /**
  * 把安全警告键加入全局配置的已看列表（去重，只保留最近若干条）。
  */
-function markSecurityWarningsSeen(e, n) {
-  if (e.length === 0) return;
-  saveGlobalConfig((r) => {
-    let i = stringArray(r.seenSecurityWarnings);
-    let o = new Set(i);
-    let filtered = uniq(e).filter((s) => !o.has(s));
-    if (filtered.length === 0) return r;
+function markSecurityWarningsSeen(keys, storageV5) {
+  if (keys.length === 0) return;
+  saveGlobalConfig((config) => {
+    let existing = stringArray(config.seenSecurityWarnings);
+    let known = new Set(existing);
+    let filtered = uniq(keys).filter((key) => !known.has(key));
+    if (filtered.length === 0) return config;
     return {
-      ...r,
-      seenSecurityWarnings: [...i, ...filtered].slice(-MAX_SEEN_SECURITY_WARNINGS),
+      ...config,
+      seenSecurityWarnings: [...existing, ...filtered].slice(-MAX_SEEN_SECURITY_WARNINGS),
     };
-  }, n);
+  }, storageV5);
 }
 //@ chunk-vqy2q2s8.js:645-938 placement
 /**
@@ -46,15 +46,15 @@ function markSecurityWarningsSeen(e, n) {
 async function collectPermissionRuleWarningLines() {
   try {
     let [
-      { getAllBaseTools: e },
-      { collectPermissionRuleAdvisories: n },
-      { loadAllPermissionRulesFromDisk: r },
+      { getAllBaseTools },
+      { collectPermissionRuleAdvisories: collectAdvisories },
+      { loadAllPermissionRulesFromDisk: loadAllRules },
     ] = await Promise.all([
-      import("./chunk-swszrtvp.js"),
-      import("./chunk-x38v0jj9.js"),
-      import("./chunk-8qwkkc63.js"),
+      import("../../tools.js"),
+      import("./permissionSetup.js"),
+      import("./permissionsLoader.js"),
     ]);
-    return uniq(n(r(), e).map((i) => i.line));
+    return uniq(collectAdvisories(loadAllRules(), getAllBaseTools).map((warning) => warning.line));
   } catch (error) {
     logError(error);
     return [];

@@ -8,8 +8,30 @@
  * pieces: chunk-7p2hc4jn.js (4), chunk-e6aww6q8.js (4)
  * attribution: placement 7, callgraph-witnessed 1
  */
-import { isAbsolute, basename, resolve as resolve_2 } from "path";
-import { init_react_production, Se, y, R, Q, P, Oo, ce } from "../../vendor/react/cjs/react.production.js";
+import { resolve as resolve_2, isAbsolute, basename } from "path";
+import {
+  readPinnedFile,
+  DEFAULT_READ_TIMEOUT_MS,
+  matchesExpectedSpellings,
+  isDeviceNamespacePath,
+  isInstructionReadRestricted,
+  spellingsForReadOrFallback,
+} from "../utils/instructionFileAccess.js";
+import { expandPath } from "../utils/path.js";
+import { logForDebugging } from "../utils/debug.js";
+import { uniq } from "../utils/collections.js";
+import { isUntrustedAutomountPath } from "../utils/permissions/filesystem.js";
+import { getFsImplementation } from "../utils/fsOperations.js";
+import {
+  init_react_production,
+  useContext,
+  useState,
+  useRef,
+  useMemo,
+  useEffect,
+  useEffectEvent,
+  useCallback,
+} from "../../vendor/react/cjs/react.production.js";
 import { imageLimitsForModel } from "../utils/attachmentMedia.js";
 import { getMainLoopModel } from "../utils/model/model.js";
 import { useClock } from "../ink/components/ClockContext.js";
@@ -28,23 +50,84 @@ import { logError } from "../utils/log.js";
 import { useDebouncedCallback } from "../ink/components/Input.js";
 import { withNoDenyRules } from "../utils/claudemd.js";
 import { getAttachmentReadBlockReason } from "../utils/attachments/fileAttachments.js";
-import { logForDebugging } from "../utils/debug.js";
 import { PasteEvent } from "../ink/frame.js";
-import {
-  readPinnedFile,
-  DEFAULT_READ_TIMEOUT_MS,
-  matchesExpectedSpellings,
-  isDeviceNamespacePath,
-  isInstructionReadRestricted,
-  spellingsForReadOrFallback,
-} from "../utils/instructionFileAccess.js";
-import { expandPath } from "../utils/path.js";
-import { uniq } from "../utils/collections.js";
-import { isUntrustedAutomountPath } from "../utils/permissions/filesystem.js";
-import { getFsImplementation } from "../utils/fsOperations.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
+//@ chunk-e6aww6q8.js:1328376-1328638 placement
+async function readPastedPathAnchored(path, anchor) {
+  let content = await readPinnedFile(
+    expandPath(path),
+    anchor,
+    AbortSignal.timeout(DEFAULT_READ_TIMEOUT_MS),
+  )((pinnedFile) => pinnedFile.handle.readFile());
+  let refusal =
+    content === undefined &&
+    (await matchesExpectedSpellings(path, anchor, AbortSignal.timeout(DEFAULT_READ_TIMEOUT_MS)))
+      ? "absent"
+      : "refused";
+  if (content === undefined)
+    logForDebugging(`Pasted path is not read where it lands: ${refusal}`, {
+      level: "warn",
+    });
+  return content ?? refusal;
+}
+//@ chunk-e6aww6q8.js:1328671-1328724 placement
+var expandDotDotPath = (path) => (path.split(/[\\/]/).includes("..") ? expandPath(path) : path);
+//@ chunk-e6aww6q8.js:1328724-1329189 placement
+/**
+ * 检查粘贴的路径能否安全读取：在可写范围内拒绝，必要时限时检查真实路径。
+ */
+async function examinePastedPath(rawPath, getDenyContexts, blockReason) {
+  let expandedPath = expandPath(rawPath);
+  let contexts = getDenyContexts();
+  if (
+    contexts.length === 0 ||
+    contexts.some((permissionContext) => blockReason(rawPath, permissionContext) !== undefined)
+  )
+    return "refused";
+  if (isDeviceNamespacePath(expandedPath) && !contexts.some(isInstructionReadRestricted)) return "unexamined";
+  let timeoutSignal = AbortSignal.timeout(DEFAULT_READ_TIMEOUT_MS);
+  let results = await Promise.all(
+    uniq([expandedPath, resolve_2(expandDotDotPath(rawPath))]).map((spelling) =>
+      spellingsForReadOrFallback(spelling, timeoutSignal),
+    ),
+  );
+  let [primarySpellings] = results;
+  let contexts_2 = getDenyContexts();
+  let isAnchored =
+    !results.includes(undefined) &&
+    contexts_2.length > 0 &&
+    !contexts_2.some((permissionContext) =>
+      [rawPath, ...results.flatMap((spellings) => spellings ?? [])].some(
+        (candidate) =>
+          blockReason(candidate, permissionContext) !== undefined ||
+          isUntrustedAutomountPath(candidate, permissionContext.trustedNetworkDirectories),
+      ),
+    );
+  let anchor = contexts_2.some(isInstructionReadRestricted) ? primarySpellings : "unexamined";
+  return isAnchored && anchor !== undefined ? anchor : "refused";
+}
+//@ chunk-e6aww6q8.js:1329189-1329439 placement
+/**
+ * 读取粘贴进输入框的文件路径内容：先做权限与不可信自动挂载检查（拒绝时返回 "refused"），本地普通路径直接读字节，否则通过锚定句柄读取。
+ */
+async function readPastedPathSafely(line, getDenyContexts, blockReason) {
+  let anchor = await examinePastedPath(line, getDenyContexts, blockReason).catch(() => "refused");
+  if (anchor === "refused") {
+    logForDebugging("Pasted path is not read: the read is refused", {
+      level: "warn",
+    });
+    return "refused";
+  }
+  return anchor === "unexamined"
+    ? getFsImplementation().readFileBytes(expandDotDotPath(line))
+    : readPastedPathAnchored(line, anchor).catch(() => "refused");
+}
 //@ chunk-7p2hc4jn.js:51533-51537 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-7p2hc4jn.js:51533", () => {
+  init_react_production();
+});
 //@ chunk-7p2hc4jn.js:51587-51826 placement
 var CLIPBOARD_CHECK_DEBOUNCE_MS = 50;
 var PATH_SPLIT_RE = / (?=["']?(?:\/|[A-Za-z]:\\))/;
@@ -62,21 +145,21 @@ function getClipboardPlatform() {
  */
 function usePasteHandler({ onPaste, handleKeyDown, onImagePaste, onUnreadImagePaste }) {
   let clock = useClock();
-  let u = Se(appStoreContext);
-  let [isPasting, setIsPasting] = y(false);
-  let isMountedRef = R(true);
-  let isPasteInProgressRef = R(false);
-  let pendingReturnRef = R(false);
-  let [A, F] = y(0);
-  let isMacOS = Q(() => getPlatform() === "macos", []);
-  let isWSL = Q(() => getPlatform() === "wsl", []);
-  P(
+  let appStore = useContext(appStoreContext);
+  let [isPasting, setIsPasting] = useState(false);
+  let isMountedRef = useRef(true);
+  let isPasteInProgressRef = useRef(false);
+  let pendingReturnRef = useRef(false);
+  let [pasteCounter, setPasteCounter] = useState(0);
+  let isMacOS = useMemo(() => getPlatform() === "macos", []);
+  let isWSL = useMemo(() => getPlatform() === "wsl", []);
+  useEffect(
     () => () => {
       isMountedRef.current = false;
     },
     [],
   );
-  let replayReturn = Oo(() => {
+  let replayReturn = useEffectEvent(() => {
     handleKeyDown(
       new KeyboardEvent({
         kind: "key",
@@ -95,8 +178,8 @@ function usePasteHandler({ onPaste, handleKeyDown, onImagePaste, onUnreadImagePa
       }),
     );
   });
-  P(() => {
-    if (A === 0) return;
+  useEffect(() => {
+    if (pasteCounter === 0) return;
     return clock.setTimeout(() => {
       isPasteInProgressRef.current = false;
       if (pendingReturnRef.current) {
@@ -104,8 +187,8 @@ function usePasteHandler({ onPaste, handleKeyDown, onImagePaste, onUnreadImagePa
         replayReturn();
       }
     }, 0);
-  }, [A, clock]);
-  let readClipboardImage = ce(() => {
+  }, [pasteCounter, clock]);
+  let readClipboardImage = useCallback(() => {
     if (!onImagePaste || !isMountedRef.current) return;
     getImageFromClipboard(getClipboardPlatform())
       .then((imageData) => {
@@ -126,9 +209,9 @@ function usePasteHandler({ onPaste, handleKeyDown, onImagePaste, onUnreadImagePa
       });
   }, [onImagePaste]);
   let checkClipboardForImage = useDebouncedCallback(readClipboardImage, CLIPBOARD_CHECK_DEBOUNCE_MS);
-  function submitPastedText(S) {
+  function submitPastedText(text) {
     if (onPaste) {
-      onPaste(S);
+      onPaste(text);
       return;
     }
     handleKeyDown(
@@ -141,8 +224,8 @@ function usePasteHandler({ onPaste, handleKeyDown, onImagePaste, onUnreadImagePa
         shift: false,
         option: false,
         super: false,
-        sequence: S,
-        raw: S,
+        sequence: text,
+        raw: text,
         code: undefined,
         col: undefined,
         row: undefined,
@@ -155,9 +238,9 @@ function usePasteHandler({ onPaste, handleKeyDown, onImagePaste, onUnreadImagePa
     pendingReturnRef.current = false;
     setIsPasting(false);
   }
-  function k() {
+  function finishPasteText() {
     setIsPasting(false);
-    F((currentTimeoutId) => currentTimeoutId + 1);
+    setPasteCounter((currentTimeoutId) => currentTimeoutId + 1);
   }
   function processPastedText(
     text,
@@ -165,15 +248,15 @@ function usePasteHandler({ onPaste, handleKeyDown, onImagePaste, onUnreadImagePa
     rawEndedWithFocusTail = text.endsWith("[I") || text.endsWith("[O"),
   ) {
     isPasteInProgressRef.current = true;
-    let te = rawEndedWithFocusTail ? text.replace(/\[[IO]$/, "") : text;
+    let trimmedText = rawEndedWithFocusTail ? text.replace(/\[[IO]$/, "") : text;
     if (rawEmpty && (isMacOS || isWSL) && onImagePaste) {
       checkClipboardForImage();
       return;
     }
     if (rawEmpty && onImagePaste) onUnreadImagePaste?.();
-    let J = [];
-    let M = [];
-    for (let line of te.split(`
+    let imagePaths = [];
+    let parts = [];
+    for (let line of trimmedText.split(`
 `)) {
       let lines = line.split(PATH_SPLIT_RE).filter((part) => part.trim());
       if (
@@ -186,30 +269,30 @@ function usePasteHandler({ onPaste, handleKeyDown, onImagePaste, onUnreadImagePa
           );
         })
       ) {
-        M.push(line);
+        parts.push(line);
         continue;
       }
       for (let line of lines)
         if (isImageFilePath(line)) {
-          M.push(J.length);
-          J.push(line);
-        } else M.push(line);
+          parts.push(imagePaths.length);
+          imagePaths.push(line);
+        } else parts.push(line);
     }
-    if (onImagePaste && J.length > 0) {
-      let any = J.some((B) => MACOS_SCREENSHOT_TEMP_RE.test(B));
+    if (onImagePaste && imagePaths.length > 0) {
+      let any = imagePaths.some((path) => MACOS_SCREENSHOT_TEMP_RE.test(path));
       let clipboardPlatform = getClipboardPlatform();
       Promise.all(
-        J.map((B) =>
-          tryReadImageFromPath(B, clipboardPlatform, (line) =>
+        imagePaths.map((path) =>
+          tryReadImageFromPath(path, clipboardPlatform, (line) =>
             readPastedPathSafely(
               line,
               () => {
-                let toolPermissionContext = u?.getState().toolPermissionContext;
+                let toolPermissionContext = appStore?.getState().toolPermissionContext;
                 return toolPermissionContext
                   ? [toolPermissionContext, withNoDenyRules(toolPermissionContext)]
                   : [];
               },
-              (le, ye) => getAttachmentReadBlockReason(le, ye, "person"),
+              (path, denyRules) => getAttachmentReadBlockReason(path, denyRules, "person"),
             ),
           ),
         ),
@@ -217,37 +300,37 @@ function usePasteHandler({ onPaste, handleKeyDown, onImagePaste, onUnreadImagePa
         .then((imagePath) => {
           if (!isMountedRef.current) return;
           let included = imagePath.includes("refused");
-          let all = J.every((results) => isAbsolute(asImageFilePath(results) ?? ""));
-          let validImages = imagePath.filter((X) => X !== null && X !== "refused");
-          let Le = validImages.length === 0 && any && isMacOS && !included && all;
-          let joined = M.flatMap((X) => {
-            if (typeof X === "string") return [X];
-            let ge = J[X] ?? "";
-            return (imagePath[X] === null || imagePath[X] === "refused") &&
-              !(Le && MACOS_SCREENSHOT_TEMP_RE.test(ge))
-              ? [ge]
+          let all = imagePaths.every((results) => isAbsolute(asImageFilePath(results) ?? ""));
+          let validImages = imagePath.filter((image) => image !== null && image !== "refused");
+          let useClipboardFallback = validImages.length === 0 && any && isMacOS && !included && all;
+          let joined = parts.flatMap((part) => {
+            if (typeof part === "string") return [part];
+            let path = imagePaths[part] ?? "";
+            return (imagePath[part] === null || imagePath[part] === "refused") &&
+              !(useClipboardFallback && MACOS_SCREENSHOT_TEMP_RE.test(path))
+              ? [path]
               : [];
           }).join(`
 `);
           if (validImages.length > 0) {
-            for (let [X, ge] of validImages.entries()) {
-              let filename = basename(ge.path);
-              onImagePaste(ge.base64, {
-                mediaType: ge.mediaType,
+            for (let [imageIndex, image] of validImages.entries()) {
+              let filename = basename(image.path);
+              onImagePaste(image.base64, {
+                mediaType: image.mediaType,
                 filename,
-                dimensions: ge.dimensions,
-                sourcePath: ge.path,
-                continuesGesture: X > 0,
+                dimensions: image.dimensions,
+                sourcePath: image.path,
+                continuesGesture: imageIndex > 0,
               });
             }
             if (joined) submitPastedText(joined);
             finishPaste();
-          } else if (Le) {
+          } else if (useClipboardFallback) {
             if (joined) submitPastedText(joined);
             checkClipboardForImage();
           } else {
             logFeatureSad("input_image_drag", included ? "read_withheld" : "read_failed");
-            submitPastedText(te);
+            submitPastedText(trimmedText);
             finishPaste();
           }
         })
@@ -257,13 +340,13 @@ function usePasteHandler({ onPaste, handleKeyDown, onImagePaste, onUnreadImagePa
           logForDebugging(`Image paste read failed: ${line instanceof Error ? line.message : String(line)}`, {
             level: "error",
           });
-          submitPastedText(te);
+          submitPastedText(trimmedText);
           finishPaste();
         });
       return;
     }
-    submitPastedText(te);
-    k();
+    submitPastedText(trimmedText);
+    finishPasteText();
   }
   function handlePaste(part) {
     part.preventDefault();
@@ -285,8 +368,8 @@ function usePasteHandler({ onPaste, handleKeyDown, onImagePaste, onUnreadImagePa
     ) {
       line.preventDefault();
       setIsPasting(true);
-      let U = new PasteEvent(line.key);
-      processPastedText(U.text, U.rawEmpty, U.rawEndedWithFocusTail);
+      let pasteEvent = new PasteEvent(line.key);
+      processPastedText(pasteEvent.text, pasteEvent.rawEmpty, pasteEvent.rawEndedWithFocusTail);
       return;
     }
     handleKeyDown(line);
@@ -296,66 +379,5 @@ function usePasteHandler({ onPaste, handleKeyDown, onImagePaste, onUnreadImagePa
     handlePaste,
     isPasting,
   };
-}
-//@ chunk-e6aww6q8.js:1328376-1328638 placement
-async function readPastedPathAnchored(e, n) {
-  let r = await readPinnedFile(
-    expandPath(e),
-    n,
-    AbortSignal.timeout(DEFAULT_READ_TIMEOUT_MS),
-  )((y) => y.handle.readFile());
-  let h =
-    r === undefined && (await matchesExpectedSpellings(e, n, AbortSignal.timeout(DEFAULT_READ_TIMEOUT_MS)))
-      ? "absent"
-      : "refused";
-  if (r === undefined)
-    logForDebugging(`Pasted path is not read where it lands: ${h}`, {
-      level: "warn",
-    });
-  return r ?? h;
-}
-//@ chunk-e6aww6q8.js:1328671-1328724 placement
-var expandDotDotPath = (e) => (e.split(/[\\/]/).includes("..") ? expandPath(e) : e);
-//@ chunk-e6aww6q8.js:1328724-1329189 placement
-/**
- * 检查粘贴的路径能否安全读取：在可写范围内拒绝，必要时限时检查真实路径。
- */
-async function examinePastedPath(e, n, r) {
-  let s = expandPath(e);
-  let h = n();
-  if (h.length === 0 || h.some((ke) => r(e, ke) !== undefined)) return "refused";
-  if (isDeviceNamespacePath(s) && !h.some(isInstructionReadRestricted)) return "unexamined";
-  let w = AbortSignal.timeout(DEFAULT_READ_TIMEOUT_MS);
-  let results = await Promise.all(
-    uniq([s, resolve_2(expandDotDotPath(e))]).map((ke) => spellingsForReadOrFallback(ke, w)),
-  );
-  let [G] = results;
-  let q = n();
-  let Z =
-    !results.includes(undefined) &&
-    q.length > 0 &&
-    !q.some((ke) =>
-      [e, ...results.flatMap((we) => we ?? [])].some(
-        (we) => r(we, ke) !== undefined || isUntrustedAutomountPath(we, ke.trustedNetworkDirectories),
-      ),
-    );
-  let Se = q.some(isInstructionReadRestricted) ? G : "unexamined";
-  return Z && Se !== undefined ? Se : "refused";
-}
-//@ chunk-e6aww6q8.js:1329189-1329439 placement
-/**
- * 读取粘贴进输入框的文件路径内容：先做权限与不可信自动挂载检查（拒绝时返回 "refused"），本地普通路径直接读字节，否则通过锚定句柄读取。
- */
-async function readPastedPathSafely(line, n, r) {
-  let s = await examinePastedPath(line, n, r).catch(() => "refused");
-  if (s === "refused") {
-    logForDebugging("Pasted path is not read: the read is refused", {
-      level: "warn",
-    });
-    return "refused";
-  }
-  return s === "unexamined"
-    ? getFsImplementation().readFileBytes(expandDotDotPath(line))
-    : readPastedPathAnchored(line, s).catch(() => "refused");
 }
 export { usePasteHandler };

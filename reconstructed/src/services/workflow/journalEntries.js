@@ -9,6 +9,7 @@
  * attribution: placement 14
  */
 import { createHash } from "crypto";
+import { computeContentHash, SHA256_HEX_RE } from "../../utils/commitAttribution.js";
 import { readFlagWithOverride } from "../analytics/flagOverrides.js";
 import {
   getAutoModeClassifierRole,
@@ -17,8 +18,71 @@ import {
   classifyServerVerdict,
 } from "../../utils/permissions/serverClassifier/arbiter.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
-import { SHA256_HEX_RE, computeContentHash } from "../../utils/commitAttribution.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
+//@ chunk-0djyfj7x.js:227-262 placement
+/**
+ * 按工作流运行 id 缓存隐藏脚本的 sha256。
+ */
+class HiddenScriptShaCache {
+  scriptSha256ById = new Map();
+}
+//@ chunk-0djyfj7x.js:262-527 placement
+/**
+ * 取隐藏脚本的工作流运行的脚本 sha256：先查缓存，再在任务列表中找对应运行并计算脚本哈希。
+ */
+function hiddenScriptSha(workflowRunId, slot, runs) {
+  let cachedSha = slot.get(HiddenScriptShaCache).scriptSha256ById.get(workflowRunId);
+  if (cachedSha !== undefined) return cachedSha;
+  let found = Object.values(runs.all()).find(
+    (run) =>
+      run.type === "local_workflow" &&
+      run.workflowRunId === workflowRunId &&
+      run.withholdScriptFromSdkEvents === true,
+  );
+  if (found === undefined) return;
+  return found.script === "" ? "" : computeContentHash(found.script);
+}
+//@ chunk-0djyfj7x.js:527-688 placement
+/**
+ * 隐藏脚本的工作流运行无法在未加载脚本的会话中恢复时的拒绝文案。
+ */
+var HIDDEN_SCRIPT_RESUME_REFUSAL =
+  "This workflow run hides its script, and this session has not loaded that script, so it cannot resume the run. Start a new run without resumeFromRunId.";
+//@ chunk-0djyfj7x.js:688-1427 placement
+async function readWorkflowJournal(workflowRunId, slot, runs, readRun) {
+  let sha = hiddenScriptSha(workflowRunId, slot, runs);
+  if (sha === "")
+    return {
+      kind: "refused",
+      reason: HIDDEN_SCRIPT_RESUME_REFUSAL,
+    };
+  if (sha !== undefined)
+    return {
+      kind: "hidden",
+      scriptSha256: sha,
+    };
+  let runInfo = await readRun();
+  if ("refusal" in runInfo)
+    return {
+      kind: "refused",
+      reason: runInfo.refusal,
+    };
+  if (runInfo.hiddenScriptSha256 !== undefined)
+    return {
+      kind: "refused",
+      reason:
+        "This workflow run hides its script, and this process has no record of starting it, so it will not resume it. Start a new run without resumeFromRunId.",
+    };
+  if (runInfo.hasUnreadLine === true)
+    return {
+      kind: "refused",
+      reason: `A line of the journal of workflow run ${workflowRunId} cannot be read, so this session cannot tell whether the run hides its script and will not resume it. Start a new run without resumeFromRunId; it runs again the agents this run had finished.`,
+    };
+  return {
+    kind: "shared",
+  };
+}
 //@ chunk-41w44bgm.js:28151-28243 placement
 /**
  * 判断 agent 结构化输出审查是否生效（开关打开且当前角色为 arbiter）。
@@ -37,14 +101,14 @@ function isArbiterStructuredOutputReviewOn(mode) {
 /**
  * 对 agent 结构化输出做服务端审查判定：被标记时返回原因，否则返回未标记；非判定结果返回 undefined。
  */
-async function structuredOutputVerdict(response, n) {
-  let r = await awaitServerVerdict(response, n);
-  let h = summarizeServerVerdict(r, n);
-  if (h.kind !== "verdict") return;
-  return h.outcome === "flagged"
+async function structuredOutputVerdict(assistantMessage, options) {
+  let serverVerdict = await awaitServerVerdict(assistantMessage, options);
+  let summary = summarizeServerVerdict(serverVerdict, options);
+  if (summary.kind !== "verdict") return;
+  return summary.outcome === "flagged"
     ? {
         flagged: true,
-        reason: classifyServerVerdict(r, n, () => {
+        reason: classifyServerVerdict(serverVerdict, options, () => {
           return;
         }).reason,
       }
@@ -56,37 +120,45 @@ async function structuredOutputVerdict(response, n) {
 /**
  * 工作流日志的固定行：键版本 v2，restoring/restored/resumed 标记行，launched 行前缀，以及不可读标记。
  */
-var JOURNAL_KEY_VERSION = "v2";
-var RESTORING_LINE = jsonStringify({
-  type: "restoring",
+var JOURNAL_KEY_VERSION; // deferred: uses jsonStringify (../../utils/slowOperations.js) of its import cycle while loading; runs once the cycle is complete
+var RESTORING_LINE;
+var RESTORED_LINE;
+var RESUMED_LINE;
+var sliced;
+var UNREADABLE;
+deferInit("chunk-41w44bgm.js:28578", () => {
+  JOURNAL_KEY_VERSION = "v2";
+  RESTORING_LINE = jsonStringify({
+    type: "restoring",
+  });
+  RESTORED_LINE = jsonStringify({
+    type: "restored",
+  });
+  RESUMED_LINE = jsonStringify({
+    type: "resumed",
+  });
+  sliced = jsonStringify({
+    type: "launched",
+  }).slice(0, -1);
+  UNREADABLE = "unreadable";
 });
-var RESTORED_LINE = jsonStringify({
-  type: "restored",
-});
-var RESUMED_LINE = jsonStringify({
-  type: "resumed",
-});
-var sliced = jsonStringify({
-  type: "launched",
-}).slice(0, -1);
-var UNREADABLE = "unreadable";
 //@ chunk-41w44bgm.js:28714-28794 placement
 /**
  * 合法文本原样返回，否则返回 unreadable 标记。
  */
-function textOrUnreadable(e) {
-  if (e === undefined) return;
-  return typeof e === "string" && SHA256_HEX_RE.test(e) ? e : UNREADABLE;
+function textOrUnreadable(value) {
+  if (value === undefined) return;
+  return typeof value === "string" && SHA256_HEX_RE.test(value) ? value : UNREADABLE;
 }
 //@ chunk-41w44bgm.js:28794-28964 placement
 /**
  * 判断文本中是否包含 launched 日志行（含被截断在末尾的部分前缀）。
  */
-function containsLaunchedLine(e) {
-  for (let index = e.indexOf("{"); index !== -1; index = e.indexOf("{", index + 1)) {
-    let r = e.startsWith(sliced, index);
-    let h = e.length - index < sliced.length && sliced.startsWith(e.slice(index));
-    if (r || h) return true;
+function containsLaunchedLine(text) {
+  for (let index = text.indexOf("{"); index !== -1; index = text.indexOf("{", index + 1)) {
+    let isFullMatch = text.startsWith(sliced, index);
+    let isPartialMatch = text.length - index < sliced.length && sliced.startsWith(text.slice(index));
+    if (isFullMatch || isPartialMatch) return true;
   }
   return false;
 }
@@ -109,8 +181,8 @@ function indexJournalEntries(entries) {
       demoted.delete(entry.key);
     } else if (entry.type === "started") {
       if (results.delete(entry.key)) demoted.add(entry.key);
-      let j = started.get(entry.key);
-      if (j) j.push(entry);
+      let list = started.get(entry.key);
+      if (list) list.push(entry);
       else started.set(entry.key, [entry]);
     } else if (entry.type === "failed") {
       results.delete(entry.key);
@@ -143,27 +215,27 @@ function agentOptionsKey(options) {
     "disallowedTools",
     "bashCommandClamp",
   ];
-  for (let T of OPTION_KEYS) {
-    let y = options[T];
-    if (y === undefined || typeof y === "function") continue;
-    picked[T] = y;
+  for (let optionKey of OPTION_KEYS) {
+    let optionValue = options[optionKey];
+    if (optionValue === undefined || typeof optionValue === "function") continue;
+    picked[optionKey] = optionValue;
   }
   let canonicalize = (picked) => {
     if (typeof picked === "function") return;
     if (Array.isArray(picked)) {
-      let y = [];
-      let A = picked.length;
-      let L = Number.isSafeInteger(A) ? A : 0;
-      for (let j = 0; j < L; j++) y[j] = canonicalize(picked[j]);
-      return y;
+      let out = [];
+      let length = picked.length;
+      let safeLength = Number.isSafeInteger(length) ? length : 0;
+      for (let index = 0; index < safeLength; index++) out[index] = canonicalize(picked[index]);
+      return out;
     }
     if (picked && typeof picked === "object") {
-      let y = {};
+      let out = {};
       for (let key of Object.keys(picked).sort()) {
         if (key === "__proto__") continue;
-        y[key] = canonicalize(picked[key]);
+        out[key] = canonicalize(picked[key]);
       }
-      return y;
+      return out;
     }
     return picked;
   };
@@ -173,96 +245,36 @@ function agentOptionsKey(options) {
 /**
  * 计算 agent() 调用的日志键：对调用点、提示词与稳定化后的选项做 sha256，并加版本前缀。
  */
-function agentCallKey(e, options, prev) {
-  let h = createHash("sha256")
+function agentCallKey(prompt, options, prev) {
+  let hash = createHash("sha256")
     .update(prev)
     .update("\x00")
-    .update(e)
+    .update(prompt)
     .update("\x00")
     .update(agentOptionsKey(options))
     .digest("hex");
-  return `${JOURNAL_KEY_VERSION}:${h}`;
+  return `${JOURNAL_KEY_VERSION}:${hash}`;
 }
 //@ chunk-41w44bgm.js:30135-30391 placement
 /**
  * 计算子调用的日志键：父键与名称加上槽位号、fork 或 join 成员列表后做 sha256。
  */
-function childCallKey(prev, n, r) {
-  let h = createHash("sha256").update(prev).update("\x00").update(n).update("\x00");
-  if (typeof r === "number") h.update(`slot:${r}`);
-  else if (r === "fork") h.update("fork");
+function childCallKey(prev, target, slot) {
+  let hash = createHash("sha256").update(prev).update("\x00").update(target).update("\x00");
+  if (typeof slot === "number") hash.update(`slot:${slot}`);
+  else if (slot === "fork") hash.update("fork");
   else {
-    h.update("join");
-    for (let T of r) h.update("\x00").update(T);
+    hash.update("join");
+    for (let priorKey of slot) hash.update("\x00").update(priorKey);
   }
-  return h.digest("hex");
+  return hash.digest("hex");
 }
 //@ chunk-41w44bgm.js:30391-30489 placement
 /**
  * 计算「旧内容 → 新内容」替换后的 sha256。
  */
-function hashReplacedContent(e, n) {
-  return createHash("sha256").update(e).update("\x00replaced\x00").update(n).digest("hex");
-}
-//@ chunk-0djyfj7x.js:227-262 placement
-/**
- * 按工作流运行 id 缓存隐藏脚本的 sha256。
- */
-class HiddenScriptShaCache {
-  scriptSha256ById = new Map();
-}
-//@ chunk-0djyfj7x.js:262-527 placement
-/**
- * 取隐藏脚本的工作流运行的脚本 sha256：先查缓存，再在任务列表中找对应运行并计算脚本哈希。
- */
-function hiddenScriptSha(r, s, i) {
-  let n = s.get(HiddenScriptShaCache).scriptSha256ById.get(r);
-  if (n !== undefined) return n;
-  let found = Object.values(i.all()).find(
-    (t) => t.type === "local_workflow" && t.workflowRunId === r && t.withholdScriptFromSdkEvents === true,
-  );
-  if (found === undefined) return;
-  return found.script === "" ? "" : computeContentHash(found.script);
-}
-//@ chunk-0djyfj7x.js:527-688 placement
-/**
- * 隐藏脚本的工作流运行无法在未加载脚本的会话中恢复时的拒绝文案。
- */
-var HIDDEN_SCRIPT_RESUME_REFUSAL =
-  "This workflow run hides its script, and this session has not loaded that script, so it cannot resume the run. Start a new run without resumeFromRunId.";
-//@ chunk-0djyfj7x.js:688-1427 placement
-async function readWorkflowJournal(r, toolState, taskRegistry, n) {
-  let e = hiddenScriptSha(r, toolState, taskRegistry);
-  if (e === "")
-    return {
-      kind: "refused",
-      reason: HIDDEN_SCRIPT_RESUME_REFUSAL,
-    };
-  if (e !== undefined)
-    return {
-      kind: "hidden",
-      scriptSha256: e,
-    };
-  let t = await n();
-  if ("refusal" in t)
-    return {
-      kind: "refused",
-      reason: t.refusal,
-    };
-  if (t.hiddenScriptSha256 !== undefined)
-    return {
-      kind: "refused",
-      reason:
-        "This workflow run hides its script, and this process has no record of starting it, so it will not resume it. Start a new run without resumeFromRunId.",
-    };
-  if (t.hasUnreadLine === true)
-    return {
-      kind: "refused",
-      reason: `A line of the journal of workflow run ${r} cannot be read, so this session cannot tell whether the run hides its script and will not resume it. Start a new run without resumeFromRunId; it runs again the agents this run had finished.`,
-    };
-  return {
-    kind: "shared",
-  };
+function hashReplacedContent(key, content) {
+  return createHash("sha256").update(key).update("\x00replaced\x00").update(content).digest("hex");
 }
 export {
   HiddenScriptShaCache,

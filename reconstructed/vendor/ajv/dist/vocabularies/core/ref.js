@@ -5,7 +5,7 @@
  * pieces: chunk-s82q9s4x.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../../runtime/bun-runtime.js";
 import { require_ref_error_2 } from "../../compile/ref_error.js";
 import { require_code_2 } from "../code.js";
 import { require_codegen_2 } from "../../compile/codegen/index.js";
@@ -14,7 +14,7 @@ import { require_compile_2 } from "../../compile/index.js";
 import { require_util_2 } from "../../compile/util.js";
 
 //@ chunk-s82q9s4x.js:81297-83654 cjs-fingerprint
-var require_ref = x(function (cjsExports) {
+var require_ref = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
@@ -30,10 +30,10 @@ var require_ref = x(function (cjsExports) {
     schemaType: "string",
     code(cxt) {
       let { gen, schema: $ref, it } = cxt;
-      let { baseId, schemaEnv: env, validateName, opts, self: c } = it;
+      let { baseId, schemaEnv: env, validateName, opts, self: ajvInstance } = it;
       let { root } = env;
       if (($ref === "#" || $ref === "#/") && baseId === root.baseId) return callRootRef();
-      let schOrEnv = compile_1.resolveRef.call(c, root, baseId, $ref);
+      let schOrEnv = compile_1.resolveRef.call(ajvInstance, root, baseId, $ref);
       if (schOrEnv === undefined) throw new ref_error_1.default(it.opts.uriResolver, baseId, $ref);
       if (schOrEnv instanceof compile_1.SchemaEnv) return callValidate(schOrEnv);
       return inlineRefSchema(schOrEnv);

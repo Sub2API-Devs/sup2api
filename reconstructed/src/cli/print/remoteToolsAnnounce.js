@@ -16,27 +16,31 @@ import { REMOTE_DEVICES } from "../../services/mcp/firstPartyServerIds.js";
 import { logForDiagnosticsNoPII } from "../../utils/diagLogs.js";
 import { logError } from "../../utils/log.js";
 import { isEnvTruthy, getClaudeConfigDir } from "../../utils/envUtils.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-tyg7f3ek.js:618438-618479 placement
-var REMOTE_TOOLS_ANNOUNCE_ENTRYPOINTS = new Set([...GIT_CREDENTIAL_ENTRYPOINTS, "remote_mobile"]);
+var REMOTE_TOOLS_ANNOUNCE_ENTRYPOINTS; // deferred: uses GIT_CREDENTIAL_ENTRYPOINTS (../remoteIO/workerAuth.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-tyg7f3ek.js:618438", () => {
+  REMOTE_TOOLS_ANNOUNCE_ENTRYPOINTS = new Set([...GIT_CREDENTIAL_ENTRYPOINTS, "remote_mobile"]);
+});
 //@ chunk-tyg7f3ek.js:618479-618834 placement
-function admitRemoteToolsAnnounce(e) {
-  if (!e.sdkUrl || !e.remoteSessionId || e.environmentKind !== undefined)
+function admitRemoteToolsAnnounce(session) {
+  if (!session.sdkUrl || !session.remoteSessionId || session.environmentKind !== undefined)
     return {
       admitted: false,
       reason: "not_managed_cloud_worker",
     };
-  if (e.entrypoint !== undefined && !REMOTE_TOOLS_ANNOUNCE_ENTRYPOINTS.has(e.entrypoint))
+  if (session.entrypoint !== undefined && !REMOTE_TOOLS_ANNOUNCE_ENTRYPOINTS.has(session.entrypoint))
     return {
       admitted: false,
       reason: "entrypoint",
     };
-  if (e.channelOff)
+  if (session.channelOff)
     return {
       admitted: false,
       reason: "session_channel_off",
     };
-  if (e.hermetic)
+  if (session.hermetic)
     return {
       admitted: false,
       reason: "hermetic",
@@ -49,29 +53,29 @@ function admitRemoteToolsAnnounce(e) {
 /**
  * 处理 remote_tools_announce：仅托管云 worker 准入，转发到会话通道工具服务。
  */
-function createRemoteToolsAnnounceHandler(e, n) {
-  let r;
-  return async (s, h) => {
-    if (!e.admitted) {
-      logFeatureBad("remote_tools_announce", e.reason);
-      h({
+function createRemoteToolsAnnounceHandler(deps, options) {
+  let pending;
+  return async (request, extra) => {
+    if (!deps.admitted) {
+      logFeatureBad("remote_tools_announce", deps.reason);
+      extra({
         kind: "error",
-        error: `remote_tools_disabled: ${e.reason}`,
+        error: `remote_tools_disabled: ${deps.reason}`,
       });
       return;
     }
     try {
-      r ??= import("./chunk-qqkcdb5s.js")
-        .then(async (y) =>
-          y.createRemoteToolsAnnounceWorker(
-            await y.productionRemoteToolsAnnounceDeps({
-              workerEpoch: n.workerEpoch,
-              toolState: n.toolState,
-              sender: n.sender,
+      pending ??= import("../../remote/tools/createRemoteToolsAnnounceWorker.lazy.js")
+        .then(async (result) =>
+          result.createRemoteToolsAnnounceWorker(
+            await result.productionRemoteToolsAnnounceDeps({
+              workerEpoch: options.workerEpoch,
+              toolState: options.toolState,
+              sender: options.sender,
               bridgeServer: () => {
-                let found = n
+                let found = options
                   .mcpClients()
-                  .find((R) => R.name === REMOTE_DEVICES && R.config.scope === "dynamic");
+                  .find((client) => client.name === REMOTE_DEVICES && client.config.scope === "dynamic");
                 return found === undefined
                   ? undefined
                   : {
@@ -84,15 +88,15 @@ function createRemoteToolsAnnounceHandler(e, n) {
           ),
         )
         .catch((error) => {
-          r = undefined;
+          pending = undefined;
           throw error;
         });
-      h(await (await r).handle(s));
+      extra(await (await pending).handle(request));
     } catch (error) {
       logForDiagnosticsNoPII("warn", "remote_tools_announce_handler_failed", {});
       logError(error);
       logFeatureBad("remote_tools_announce", "internal_error");
-      h({
+      extra({
         kind: "error",
         error: "remote_tools_not_ready: internal_error; retry",
       });
@@ -109,45 +113,45 @@ function safeHomedir() {
 }
 //@ chunk-tyg7f3ek.js:619761-619863 placement = getProjectDirsUpToHome (0.875)
 function getProjectDirsUpToHome(subdir, cwd) {
-  let r = subdir.HOME !== undefined && isAbsolute(subdir.HOME) ? subdir.HOME : cwd();
-  return join(r, ".claude").normalize("NFC");
+  let homeDir = subdir.HOME !== undefined && isAbsolute(subdir.HOME) ? subdir.HOME : cwd();
+  return join(homeDir, ".claude").normalize("NFC");
 }
 //@ chunk-tyg7f3ek.js:619863-620512 placement
-function decideWorkerDirSync(e) {
-  if (e.admittedAs === null)
+function decideWorkerDirSync(host) {
+  if (host.admittedAs === null)
     return {
       start: false,
       reason: "not_admitted",
     };
-  if (e.admittedAs === "runner_child")
+  if (host.admittedAs === "runner_child")
     return {
       start: false,
       reason: "self_hosted_runner",
     };
-  if (!e.dirSyncStarts)
+  if (!host.dirSyncStarts)
     return {
       start: false,
       reason: "file_store_worker_off",
     };
-  let subdir = e.spawnEnv();
+  let subdir = host.spawnEnv();
   if (isEnvTruthy(subdir.CLAUDE_CODE_DISABLE_HOME_SETTINGS_SEED))
     return {
       start: false,
       reason: "disabled",
     };
-  if (e.hermetic)
+  if (host.hermetic)
     return {
       start: false,
       reason: "hermetic",
     };
   let CLAUDE_CONFIG_DIR = subdir.CLAUDE_CONFIG_DIR;
-  if (e.admittedAs === "managed" && CLAUDE_CONFIG_DIR !== undefined)
+  if (host.admittedAs === "managed" && CLAUDE_CONFIG_DIR !== undefined)
     return {
       start: false,
       reason: "config_dir",
     };
-  let projectDirsUpToHome = getProjectDirsUpToHome(subdir, e.accountHome);
-  if (e.currentConfigHome() !== projectDirsUpToHome)
+  let projectDirsUpToHome = getProjectDirsUpToHome(subdir, host.accountHome);
+  if (host.currentConfigHome() !== projectDirsUpToHome)
     return {
       start: false,
       reason: "config_home_moved",

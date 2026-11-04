@@ -8,10 +8,12 @@
  * pieces: chunk-9h8dr0qb.js (9), chunk-ae5g0zb5.js (1)
  * attribution: fingerprint 6, layout 4
  */
-import { join } from "path";
 import { randomBytes } from "crypto";
 import { open, rm } from "fs/promises";
 import { constants } from "fs";
+import { join } from "path";
+import { READ_LIMITS } from "./fsBoundRead.js";
+import { retryFsOp } from "./atomicPublishWrite.js";
 import { getClaudeConfigDir } from "./envUtils.js";
 import { STORAGE_SPACES } from "./storage/storageSpaces.js";
 import { logForDebugging } from "./debug.js";
@@ -21,9 +23,30 @@ import { getFileReader } from "./fileStore.js";
 import { jsonParse, jsonStringify } from "./slowOperations.js";
 import { mergeCacheWithNewStats_2 } from "./stats.js";
 import { errorMessage } from "./errors.js";
-import { READ_LIMITS } from "./fsBoundRead.js";
-import { retryFsOp } from "./atomicPublishWrite.js";
 
+//@ chunk-ae5g0zb5.js:76247-76500 fingerprint = saveStatsCache (0.461)
+async function saveStatsCache(path, content) {
+  let tempPath = `${path}.${randomBytes(6).toString("hex")}.tmp`;
+  try {
+    let handle = await open(
+      tempPath,
+      constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | READ_LIMITS,
+      384,
+    );
+    try {
+      await handle.writeFile(content, "utf8");
+      await handle.sync();
+    } finally {
+      await handle.close();
+    }
+    await retryFsOp(tempPath, path);
+  } catch (error) {
+    await rm(tempPath, {
+      force: true,
+    });
+    throw error;
+  }
+}
 //@ chunk-9h8dr0qb.js:72773-72822 fingerprint = STATS_CACHE_FILENAME (1)
 var STATS_CACHE_VERSION = 5;
 var MIN_STATS_CACHE_VERSION = 1;
@@ -102,25 +125,25 @@ function getEmptyCache_2(parsed) {
 /**
  * 读取 /stats 用的缓存 <配置目录>/stats-cache.json（或 storage state/stats-cache），版本不符时重算。
  */
-async function loadStatsCache(o) {
+async function loadStatsCache(storage) {
   try {
-    let u;
-    if (o !== undefined) {
-      let D = await o.read([STORAGE_SPACES.state("stats-cache")]);
-      if (!D.ok) {
-        logForDebugging(`Failed to load stats cache: ${formatStorageError(D.error)}`);
+    let text;
+    if (storage !== undefined) {
+      let readResult = await storage.read([STORAGE_SPACES.state("stats-cache")]);
+      if (!readResult.ok) {
+        logForDebugging(`Failed to load stats cache: ${formatStorageError(readResult.error)}`);
         return getEmptyCache();
       }
-      if (!D.value.items[0].found) {
+      if (!readResult.value.items[0].found) {
         logForDebugging("Failed to load stats cache: not found");
         return getEmptyCache();
       }
-      u = Buffer.from(D.value.items[0].value).toString("utf8");
+      text = Buffer.from(readResult.value.items[0].value).toString("utf8");
     } else {
       if (isDiskless()) return getEmptyCache();
-      u = await getFileReader().read(getStatsCachePath());
+      text = await getFileReader().read(getStatsCachePath());
     }
-    let parsed = jsonParse(u);
+    let parsed = jsonParse(text);
     if (parsed.version !== STATS_CACHE_VERSION) {
       let migrated = getEmptyCache_2(parsed);
       if (!migrated) {
@@ -131,7 +154,7 @@ async function loadStatsCache(o) {
       }
       logForDebugging(`Migrated stats cache from v${parsed.version} to v${STATS_CACHE_VERSION}`);
       let migrated_2 = mergeCacheWithNewStats_2(migrated);
-      await writeStatsCache(migrated_2, o);
+      await writeStatsCache(migrated_2, storage);
       return migrated_2;
     }
     if (
@@ -150,28 +173,28 @@ async function loadStatsCache(o) {
   }
 }
 //@ chunk-9h8dr0qb.js:74741-75277 layout
-async function writeStatsCache(o, u) {
+async function writeStatsCache(cache, storage) {
   try {
-    let p = jsonStringify(o, null, 2);
-    if (u !== undefined) {
-      let D = await u.write(STORAGE_SPACES.state("stats-cache"), p, {
+    let text = jsonStringify(cache, null, 2);
+    if (storage !== undefined) {
+      let writeResult = await storage.write(STORAGE_SPACES.state("stats-cache"), text, {
         mode: 384,
         publishDiscipline: "atomic",
       });
-      if (!D.ok) {
-        logForDebugging(`Failed to save stats cache: ${formatStorageError(D.error)}`, {
+      if (!writeResult.ok) {
+        logForDebugging(`Failed to save stats cache: ${formatStorageError(writeResult.error)}`, {
           level: "error",
         });
         return;
       }
-      logForDebugging(`Stats cache saved successfully (lastComputedDate: ${o.lastComputedDate})`);
+      logForDebugging(`Stats cache saved successfully (lastComputedDate: ${cache.lastComputedDate})`);
       return;
     }
     if (isDiskless()) return;
     let claudeConfigDir = getClaudeConfigDir();
     await getFileReader().mkdir(claudeConfigDir);
-    await getFileReader().atomicWrite(getStatsCachePath(), p, 384);
-    logForDebugging(`Stats cache saved successfully (lastComputedDate: ${o.lastComputedDate})`);
+    await getFileReader().atomicWrite(getStatsCachePath(), text, 384);
+    logForDebugging(`Stats cache saved successfully (lastComputedDate: ${cache.lastComputedDate})`);
   } catch (error) {
     logForDebugging(`Failed to save stats cache: ${errorMessage(error)}`, {
       level: "error",
@@ -248,13 +271,15 @@ function mergeCacheWithNewStats(existingCache, newStats, newLastComputedDate) {
   return {
     version: STATS_CACHE_VERSION,
     lastComputedDate: newLastComputedDate,
-    dailyActivity: Array.from(dailyActivityMap.values()).sort((M, B) => M.date.localeCompare(B.date)),
+    dailyActivity: Array.from(dailyActivityMap.values()).sort((left, right) =>
+      left.date.localeCompare(right.date),
+    ),
     dailyModelTokens: Array.from(dailyModelTokensMap.entries())
       .map(([date, tokensByModel]) => ({
         date,
         tokensByModel,
       }))
-      .sort((M, B) => M.date.localeCompare(B.date)),
+      .sort((left, right) => left.date.localeCompare(right.date)),
     dailyModelTokensVersion: existingCache.dailyModelTokensVersion,
     modelUsage,
     totalSessions,
@@ -269,29 +294,6 @@ function toDateString(date) {
   let dateStr = date.toISOString().split("T")[0];
   if (!dateStr) throw Error("Invalid ISO date string");
   return dateStr;
-}
-//@ chunk-ae5g0zb5.js:76247-76500 fingerprint = saveStatsCache (0.461)
-async function saveStatsCache(e, n) {
-  let tempPath = `${e}.${randomBytes(6).toString("hex")}.tmp`;
-  try {
-    let o = await open(
-      tempPath,
-      constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | READ_LIMITS,
-      384,
-    );
-    try {
-      await o.writeFile(n, "utf8");
-      await o.sync();
-    } finally {
-      await o.close();
-    }
-    await retryFsOp(tempPath, e);
-  } catch (error) {
-    await rm(tempPath, {
-      force: true,
-    });
-    throw error;
-  }
 }
 export {
   toDateString,

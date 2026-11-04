@@ -64,9 +64,9 @@ var MARKETPLACE_SUBCOMMAND_COMPLETIONS = [
   },
 ];
 //@ chunk-rkhcn3s2.js:12316-14075 placement
-async function pluginArgCompletions(i, t, storage) {
-  if (i.length === 0) {
-    let n = [
+async function pluginArgCompletions(arg, context, storage) {
+  if (arg.length === 0) {
+    let completions = [
       {
         value: "list",
         description: "List installed plugins",
@@ -110,10 +110,10 @@ async function pluginArgCompletions(i, t, storage) {
           ]
         : []),
     ];
-    return filterCompletionsByPrefix(n, t);
+    return filterCompletionsByPrefix(completions, context);
   }
-  let lower = i[0]?.toLowerCase();
-  if (i.length === 1)
+  let lower = arg[0]?.toLowerCase();
+  if (arg.length === 1)
     switch (lower) {
       case "enable":
       case "disable":
@@ -124,46 +124,46 @@ async function pluginArgCompletions(i, t, storage) {
         );
         if (lower === "enable" || lower === "disable") {
           let pluginEditableScopes = getPluginEditableScopes();
-          let o = lower === "disable";
-          filtered = filtered.filter(([d]) => pluginEditableScopes.has(d) === o);
+          let scopeName = lower === "disable";
+          filtered = filtered.filter(([scope]) => pluginEditableScopes.has(scope) === scopeName);
         }
         let sorted = filtered
-          .map(([a, o]) => {
-            let version = (findInstallationForCurrentProject(o) ?? o[0])?.version;
+          .map(([scope, value]) => {
+            let version = (findInstallationForCurrentProject(value) ?? value[0])?.version;
             return {
-              value: a,
+              value: scope,
               description: formatFirstKnownVersion(version),
               isFinal: true,
             };
           })
-          .sort((a, o) => a.value.localeCompare(o.value));
-        return filterCompletionsByPrefix(sorted, t);
+          .sort((left, b) => left.value.localeCompare(b.value));
+        return filterCompletionsByPrefix(sorted, context);
       }
       case "install":
       case "i": {
-        if (t.includes("/") || t.includes("\\")) return [];
+        if (context.includes("/") || context.includes("\\")) return [];
         return filterCompletionsByPrefix(
           await getInstallablePluginCompletions(
             INSTALLABLE_COMPLETIONS_CACHE.of(getRootSession().host),
             storage,
           ),
-          t,
+          context,
         );
       }
       case "list":
       case "ls":
-        return filterCompletionsByPrefix(LIST_FLAG_COMPLETIONS, t);
+        return filterCompletionsByPrefix(LIST_FLAG_COMPLETIONS, context);
       case "marketplace":
       case "market":
-        return filterCompletionsByPrefix(MARKETPLACE_SUBCOMMAND_COMPLETIONS, t);
+        return filterCompletionsByPrefix(MARKETPLACE_SUBCOMMAND_COMPLETIONS, context);
       default:
         return [];
     }
-  let u =
-    t !== "" && i.length === 2 && (lower === "install" || lower === "i")
-      ? parsePluginArgs(i.join(" "))
+  let list =
+    context !== "" && arg.length === 2 && (lower === "install" || lower === "i")
+      ? parsePluginArgs(arg.join(" "))
       : undefined;
-  if (u?.type === "install" && u.plugin !== undefined && u.marketplace === undefined)
+  if (list?.type === "install" && list.plugin !== undefined && list.marketplace === undefined)
     return filterCompletionsByPrefix(
       [
         {
@@ -171,10 +171,10 @@ async function pluginArgCompletions(i, t, storage) {
           description: "Install from a marketplace source, adding it first",
         },
       ],
-      t,
+      context,
     );
-  if (i.length === 2 && (lower === "marketplace" || lower === "market")) {
-    let lower = i[1]?.toLowerCase();
+  if (arg.length === 2 && (lower === "marketplace" || lower === "market")) {
+    let lower = arg[1]?.toLowerCase();
     if (lower === "remove" || lower === "rm" || lower === "update") {
       let knownMarketplaces = await loadKnownMarketplacesSafe(storage);
       let sorted = Object.entries(knownMarketplaces)
@@ -183,8 +183,8 @@ async function pluginArgCompletions(i, t, storage) {
           description: getMarketplaceSourceDisplay(value.source),
           isFinal: true,
         }))
-        .sort((a, o) => a.value.localeCompare(o.value));
-      return filterCompletionsByPrefix(sorted, t);
+        .sort((left, b) => left.value.localeCompare(b.value));
+      return filterCompletionsByPrefix(sorted, context);
     }
   }
   return [];
@@ -193,8 +193,8 @@ async function pluginArgCompletions(i, t, storage) {
 class SingleEntryCache {
   key = null;
   candidates = [];
-  get(i) {
-    return this.key === i ? this.candidates : undefined;
+  get(key) {
+    return this.key === key ? this.candidates : undefined;
   }
   store(key, candidates) {
     this.key = key;
@@ -210,28 +210,32 @@ var INSTALLABLE_COMPLETIONS_CACHE = new HostScoped(() => new SingleEntryCache())
 async function getInstallablePluginCompletions(cache, storage) {
   let knownMarketplaces = await loadKnownMarketplacesSafe(storage);
   let sorted = Object.keys(knownMarketplaces).sort();
-  let u = jsonStringify(
-    sorted.map((e) => [e, knownMarketplaces[e]?.installLocation, knownMarketplaces[e]?.lastUpdated]),
+  let payload = jsonStringify(
+    sorted.map((pair) => [
+      pair,
+      knownMarketplaces[pair]?.installLocation,
+      knownMarketplaces[pair]?.lastUpdated,
+    ]),
   );
-  let candidates = cache.get(u);
+  let candidates = cache.get(payload);
   if (candidates === undefined) {
     let results = await Promise.all(
-      sorted.map(async (s) => ({
-        name: s,
-        marketplace: await getMarketplaceCacheOnly(s, storage),
+      sorted.map(async (entry) => ({
+        name: entry,
+        marketplace: await getMarketplaceCacheOnly(entry, storage),
       })),
     );
     candidates = [];
-    for (let { name: s, marketplace } of results) {
+    for (let { name, marketplace } of results) {
       if (!marketplace) continue;
       for (let plugin of marketplace.plugins)
         candidates.push({
-          pluginId: formatPluginId(plugin.name, s),
+          pluginId: formatPluginId(plugin.name, name),
           description: plugin.description,
         });
     }
-    candidates.sort((s, a) => s.pluginId.localeCompare(a.pluginId));
-    cache.store(u, candidates);
+    candidates.sort((left, b) => left.pluginId.localeCompare(b.pluginId));
+    cache.store(payload, candidates);
   }
   return candidates
     .filter(
@@ -244,15 +248,16 @@ async function getInstallablePluginCompletions(cache, storage) {
     }));
 }
 //@ chunk-rkhcn3s2.js:14774-14961 placement
-function filterCompletionsByPrefix(i, t) {
-  if (!t) return i;
-  let lower = t.toLowerCase();
-  let l = [];
-  let u = [];
-  for (let n of i) {
-    let lower_2 = n.value.toLowerCase();
-    if (lower_2.startsWith(lower)) l.push(n);
-    else if (lower_2.includes(lower)) u.push(n);
+function filterCompletionsByPrefix(completions, prefix) {
+  if (!prefix) return completions;
+  let lower = prefix.toLowerCase();
+  let matched = [];
+  let rest = [];
+  for (let completion of completions) {
+    let lower_2 = completion.value.toLowerCase();
+    if (lower_2.startsWith(lower)) matched.push(completion);
+    else if (lower_2.includes(lower)) rest.push(completion);
   }
-  return l.concat(u);
+  return matched.concat(rest);
 }
+export { pluginArgCompletions };

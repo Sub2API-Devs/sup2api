@@ -15,6 +15,7 @@ import { identity } from "../../../utils/identity.js";
 import { getPluginRegistry } from "../../../utils/plugins/pluginLoadState.js";
 import { csi } from "../../../ink/termio/csi.js";
 import { checkCellSize } from "../sites/uiSites.js";
+import { deferInit } from "../../../../runtime/deferred-init.js";
 
 //@ chunk-4121qate.js:160366-160378 placement
 /**
@@ -39,17 +40,26 @@ var HALF_SPLIT_CONSTANTS = {
 /**
  * 取高 16 位
  */
-var upperHalf = (e) => (e >>> HALF_SPLIT_CONSTANTS.halfBits) & HALF_SPLIT_CONSTANTS.halfMask;
+var upperHalf = (value) => (value >>> HALF_SPLIT_CONSTANTS.halfBits) & HALF_SPLIT_CONSTANTS.halfMask;
 //@ chunk-4121qate.js:160485-161022 placement
-function checkRasterPaintArgs(e) {
-  let o = typeof e?.requestId === "string" && e.requestId !== "" && typeof e.key === "string" && e.key !== "";
-  let r = e;
-  let n = typeof r?.cells === "string";
-  let s = isPlainObject(r?.source);
-  if (!(o && n !== s && (r?.cells === undefined || n) && (r?.source === undefined || s)))
+function checkRasterPaintArgs(args) {
+  let hasPlace =
+    typeof args?.requestId === "string" &&
+    args.requestId !== "" &&
+    typeof args.key === "string" &&
+    args.key !== "";
+  let request = args;
+  let hasCells = typeof request?.cells === "string";
+  let hasSource = isPlainObject(request?.source);
+  if (!(
+    hasPlace &&
+    hasCells !== hasSource &&
+    (request?.cells === undefined || hasCells) &&
+    (request?.source === undefined || hasSource)
+  ))
     return "takes { requestId, key, cells } (strings; the site, the Raster's key, its encoded cells) or { requestId, key, source } (the Image's key, its next ImageSource)";
-  return (e.columns === undefined || typeof e.columns === "number") &&
-    (e.rows === undefined || typeof e.rows === "number")
+  return (args.columns === undefined || typeof args.columns === "number") &&
+    (args.rows === undefined || typeof args.rows === "number")
     ? undefined
     : "columns and rows are numbers when given";
 }
@@ -62,8 +72,8 @@ var RGBA_BYTES = 12;
 /**
  * 估算单元格字节
  */
-var estimateCellBytes = (e, o) =>
-  Math.ceil((e * o * RGBA_BYTES) / base64BytesPerFour.bytes) * base64BytesPerFour.characters;
+var estimateCellBytes = (columns, rows) =>
+  Math.ceil((columns * rows * RGBA_BYTES) / base64BytesPerFour.bytes) * base64BytesPerFour.characters;
 //@ chunk-4121qate.js:161087-161207 placement
 var CODE_POINT_LIMITS = {
   bmpLast: 65535,
@@ -90,31 +100,31 @@ var RASTER_MEASURE_STATES = {
  */
 var EMPTY_RASTER_MAP = {};
 //@ chunk-4121qate.js:161258-161542 placement
-function isNarrowPrintable(e) {
-  let o = (EMPTY_RASTER_MAP.table ??= new Uint8Array(CODE_POINT_LIMITS.bmpLast + 1));
-  let r = o[e] ?? RASTER_MEASURE_STATES.unmeasured;
-  if (r !== RASTER_MEASURE_STATES.unmeasured) return r === RASTER_MEASURE_STATES.narrow;
-  let n =
-    e > CODE_POINT_LIMITS.c0Last &&
-    (e < CODE_POINT_LIMITS.delete || e > CODE_POINT_LIMITS.c1Last) &&
-    (e < CODE_POINT_LIMITS.surrogateFirst || e > CODE_POINT_LIMITS.surrogateLast) &&
-    bunStringWidth(String.fromCodePoint(e)) === 1;
-  o[e] = n ? RASTER_MEASURE_STATES.narrow : RASTER_MEASURE_STATES.refused;
-  return n;
+function isNarrowPrintable(codePoint) {
+  let table = (EMPTY_RASTER_MAP.table ??= new Uint8Array(CODE_POINT_LIMITS.bmpLast + 1));
+  let known = table[codePoint] ?? RASTER_MEASURE_STATES.unmeasured;
+  if (known !== RASTER_MEASURE_STATES.unmeasured) return known === RASTER_MEASURE_STATES.narrow;
+  let isNarrow =
+    codePoint > CODE_POINT_LIMITS.c0Last &&
+    (codePoint < CODE_POINT_LIMITS.delete || codePoint > CODE_POINT_LIMITS.c1Last) &&
+    (codePoint < CODE_POINT_LIMITS.surrogateFirst || codePoint > CODE_POINT_LIMITS.surrogateLast) &&
+    bunStringWidth(String.fromCodePoint(codePoint)) === 1;
+  table[codePoint] = isNarrow ? RASTER_MEASURE_STATES.narrow : RASTER_MEASURE_STATES.refused;
+  return isNarrow;
 }
 //@ chunk-4121qate.js:161542-161858 placement
 /**
  * 校验栅格单元的码点（基本多文种平面内、可打印窄字符）。
  */
-function checkRasterCodePoint(e, o) {
-  if (e > CODE_POINT_LIMITS.bmpLast)
-    return `cell ${o} holds code point ${e}, beyond the Basic Multilingual Plane`;
-  if (isNarrowPrintable(e)) return;
-  let padded = e
+function checkRasterCodePoint(codePoint, cellIndex) {
+  if (codePoint > CODE_POINT_LIMITS.bmpLast)
+    return `cell ${cellIndex} holds code point ${codePoint}, beyond the Basic Multilingual Plane`;
+  if (isNarrowPrintable(codePoint)) return;
+  let padded = codePoint
     .toString(CODE_POINT_LIMITS.hexRadix)
     .toUpperCase()
     .padStart(CODE_POINT_LIMITS.hexDigits, "0");
-  return `cell ${o} holds U+${padded}, which is not one printable width-1 code point (a control, combining or wide character)`;
+  return `cell ${cellIndex} holds U+${padded}, which is not one printable width-1 code point (a control, combining or wide character)`;
 }
 //@ chunk-4121qate.js:161858-161874 placement
 /**
@@ -135,7 +145,7 @@ var TRUECOLOR_SHIFTS = {
 /**
  * 合法颜色整数
  */
-var isValidColorInt = (e) => e <= TRUECOLOR_SHIFTS.mask || e === TRANSPARENT_SENTINEL;
+var isValidColorInt = (color) => color <= TRUECOLOR_SHIFTS.mask || color === TRANSPARENT_SENTINEL;
 //@ chunk-4121qate.js:161969-161978 placement
 /**
  * 3
@@ -143,27 +153,29 @@ var isValidColorInt = (e) => e <= TRUECOLOR_SHIFTS.mask || e === TRANSPARENT_SEN
 var RASTER_RETRY_COUNT = 3;
 //@ chunk-4121qate.js:161978-162560 placement
 function checkRasterCells(cells, columns, rows) {
-  let n = columns * rows;
-  let s = estimateCellBytes(columns, rows);
-  if (typeof cells !== "string" || cells.length !== s)
+  let cellCount = columns * rows;
+  let expectedChars = estimateCellBytes(columns, rows);
+  if (typeof cells !== "string" || cells.length !== expectedChars)
     return {
-      problem: `cells must be the base64 of ${n} cells of ${RGBA_BYTES} bytes (${s} characters for ${columns}x${rows})`,
+      problem: `cells must be the base64 of ${cellCount} cells of ${RGBA_BYTES} bytes (${expectedChars} characters for ${columns}x${rows})`,
     };
   let buffer = Buffer.from(cells, "base64");
-  if (buffer.length !== n * RGBA_BYTES)
+  if (buffer.length !== cellCount * RGBA_BYTES)
     return {
       problem: "cells is not base64 (standard alphabet, padded)",
     };
-  let uint32Array = new Uint32Array(n * RASTER_RETRY_COUNT);
+  let uint32Array = new Uint32Array(cellCount * RASTER_RETRY_COUNT);
   new Uint8Array(uint32Array.buffer).set(buffer);
-  for (let j = 0; j < n; j++) {
-    let a = j * RASTER_RETRY_COUNT;
-    let m = checkRasterCodePoint(uint32Array[a] ?? 0, j);
-    if (m !== undefined)
+  for (let j = 0; j < cellCount; j++) {
+    let wordIndex = j * RASTER_RETRY_COUNT;
+    let codePointProblem = checkRasterCodePoint(uint32Array[wordIndex] ?? 0, j);
+    if (codePointProblem !== undefined)
       return {
-        problem: m,
+        problem: codePointProblem,
       };
-    if (!(isValidColorInt(uint32Array[a + 1] ?? 0) && isValidColorInt(uint32Array[a + 2] ?? 0)))
+    if (!(
+      isValidColorInt(uint32Array[wordIndex + 1] ?? 0) && isValidColorInt(uint32Array[wordIndex + 2] ?? 0)
+    ))
       return {
         problem: `cell ${j} holds a color that is neither 0xRRGGBB nor 0x1000000 (the default)`,
       };
@@ -184,14 +196,17 @@ var denyLater = (deny) =>
 /**
  * 已挂载 raster
  */
-var mountedRasters = identity(
-  () => getPluginRegistry().mountedRasters,
-  (e) => e().clear(),
-);
+var mountedRasters; // deferred: uses getPluginRegistry (../../../utils/plugins/pluginLoadState.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-4121qate.js:162599", () => {
+  mountedRasters = identity(
+    () => getPluginRegistry().mountedRasters,
+    (registry) => registry().clear(),
+  );
+});
 //@ chunk-4121qate.js:162651-162782 placement
 function isRasterKeyTakenByOther(requestId, key, plugin) {
-  for (let n of mountedRasters().values())
-    for (let raster of n.rasters)
+  for (let entry of mountedRasters().values())
+    for (let raster of entry.rasters)
       if (raster.requestId === requestId && raster.key === key && raster.plugin !== plugin) return true;
   return false;
 }
@@ -201,12 +216,15 @@ function isRasterKeyTakenByOther(requestId, key, plugin) {
  */
 var MAX_BLITS_PER_SECOND = 120;
 //@ chunk-4121qate.js:162794-162825 placement
-var Vme = String.fromCharCode(0);
+var KEY_SEPARATOR; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-4121qate.js:162794", () => {
+  KEY_SEPARATOR = String.fromCharCode(0);
+});
 //@ chunk-4121qate.js:162825-162860 placement
 /**
  * raster 键
  */
-var rasterKey = (requestId, key, plugin) => [plugin, requestId, key].join(Vme);
+var rasterKey = (requestId, key, plugin) => [plugin, requestId, key].join(KEY_SEPARATOR);
 //@ chunk-4121qate.js:162860-162872 placement
 /**
  * 1000
@@ -216,47 +234,49 @@ var BLIT_WINDOW_MS = 1000;
 /**
  * 每秒最多 120 次 blit 的限流：窗口过期重置，返回本次是否允许。
  */
-function takeBlitToken(e, o) {
-  if (o - e.windowStart >= BLIT_WINDOW_MS) {
-    e.windowStart = o;
-    e.blits = 0;
+function takeBlitToken(budget, now) {
+  if (now - budget.windowStart >= BLIT_WINDOW_MS) {
+    budget.windowStart = now;
+    budget.blits = 0;
   }
-  let r = e.blits < MAX_BLITS_PER_SECOND;
-  e.blits += r ? 1 : 0;
-  return r;
+  let isAllowed = budget.blits < MAX_BLITS_PER_SECOND;
+  budget.blits += isAllowed ? 1 : 0;
+  return isAllowed;
 }
 //@ chunk-4121qate.js:162981-163191 placement
 /**
  * 描述挂载冲突：该 key 下的元素属于其他插件，或不存在。
  */
-function describeForeignMount(e, o, r) {
-  let { requestId, key } = o;
-  return r
-    ? `the ${e} under key "${key}" in ${requestId} is another plugin's, not its to ${e === "Raster" ? "paint" : "swap"}`
-    : `no ${e} of its own is mounted under key "${key}" in ${requestId}`;
+function describeForeignMount(noun, args, isOther) {
+  let { requestId, key } = args;
+  return isOther
+    ? `the ${noun} under key "${key}" in ${requestId} is another plugin's, not its to ${noun === "Raster" ? "paint" : "swap"}`
+    : `no ${noun} of its own is mounted under key "${key}" in ${requestId}`;
 }
 //@ chunk-4121qate.js:163191-163849 placement
-function checkMountedRaster(e, o) {
-  let { requestId, key } = e;
-  let s = mountedRasters().get(rasterKey(requestId, key, o.plugin));
-  let i = [...(s?.rasters ?? [])];
-  let [p] = i;
-  if (s === undefined || p === undefined)
-    return denyLater(describeForeignMount("Raster", e, isRasterKeyTakenByOther(requestId, key, o.plugin)));
-  let columns = e.columns ?? p.columns;
-  let rows = e.rows ?? p.rows;
-  let filtered = i.filter((u) => u.columns === columns && u.rows === rows);
+function checkMountedRaster(args, context) {
+  let { requestId, key } = args;
+  let mounted = mountedRasters().get(rasterKey(requestId, key, context.plugin));
+  let rasters = [...(mounted?.rasters ?? [])];
+  let [firstRaster] = rasters;
+  if (mounted === undefined || firstRaster === undefined)
+    return denyLater(
+      describeForeignMount("Raster", args, isRasterKeyTakenByOther(requestId, key, context.plugin)),
+    );
+  let columns = args.columns ?? firstRaster.columns;
+  let rows = args.rows ?? firstRaster.rows;
+  let filtered = rasters.filter((raster) => raster.columns === columns && raster.rows === rows);
   if (filtered.length === 0)
     return denyLater(
-      `the mounted Raster is ${p.columns}x${p.rows}, not ${columns}x${rows}; a resize is a redraw (ui.invalidate)`,
+      `the mounted Raster is ${firstRaster.columns}x${firstRaster.rows}, not ${columns}x${rows}; a resize is a redraw (ui.invalidate)`,
     );
-  if (!takeBlitToken(s, Date.now()))
+  if (!takeBlitToken(mounted, Date.now()))
     return denyLater(
       `more than ${MAX_BLITS_PER_SECOND} blits a second; the surface paints at its frame rate, so one blit a frame is all that shows`,
     );
-  let c = checkRasterCells(e.cells, columns, rows);
-  if (c.problem !== undefined) return denyLater(c.problem);
-  for (let u of filtered) u.paint(c.words);
+  let checked = checkRasterCells(args.cells, columns, rows);
+  if (checked.problem !== undefined) return denyLater(checked.problem);
+  for (let raster of filtered) raster.paint(checked.words);
   return Promise.resolve({});
 }
 //@ chunk-4121qate.js:163849-163918 placement
@@ -274,32 +294,35 @@ var ANSI_16_COLOR_SHIFTS = {
 /**
  * 展开 4 位通道
  */
-var expandChannel = (e, o) => ((e >> o) & ANSI_16_COLOR_SHIFTS.channelMax) * ANSI_16_COLOR_SHIFTS.step;
+var expandChannel = (color, shift) =>
+  ((color >> shift) & ANSI_16_COLOR_SHIFTS.channelMax) * ANSI_16_COLOR_SHIFTS.step;
 //@ chunk-4121qate.js:163961-163974 placement
 /**
  * 32768
  */
 var MAX_COLOR_DISTANCE = 32768;
 //@ chunk-4121qate.js:163974-164134 placement
-function quantizeColor(e) {
-  if (e === TRANSPARENT_SENTINEL) return MAX_COLOR_DISTANCE;
-  let o = (r) => Math.round(((e >> r) & TRUECOLOR_SHIFTS.channelMask) / ANSI_16_COLOR_SHIFTS.step);
+function quantizeColor(color) {
+  if (color === TRANSPARENT_SENTINEL) return MAX_COLOR_DISTANCE;
+  let channelOf = (shift) =>
+    Math.round(((color >> shift) & TRUECOLOR_SHIFTS.channelMask) / ANSI_16_COLOR_SHIFTS.step);
   return (
-    (o(TRUECOLOR_SHIFTS.redShift) << ANSI_16_COLOR_SHIFTS.redShift) |
-    (o(TRUECOLOR_SHIFTS.greenShift) << ANSI_16_COLOR_SHIFTS.greenShift) |
-    o(0)
+    (channelOf(TRUECOLOR_SHIFTS.redShift) << ANSI_16_COLOR_SHIFTS.redShift) |
+    (channelOf(TRUECOLOR_SHIFTS.greenShift) << ANSI_16_COLOR_SHIFTS.greenShift) |
+    channelOf(0)
   );
 }
 //@ chunk-4121qate.js:164134-164173 placement
 /**
  * 打包前景/背景色
  */
-var packColorPair = (e, o) => quantizeColor(e) | (quantizeColor(o) << HALF_SPLIT_CONSTANTS.halfBits);
+var packColorPair = (first, second) =>
+  quantizeColor(first) | (quantizeColor(second) << HALF_SPLIT_CONSTANTS.halfBits);
 //@ chunk-4121qate.js:164173-164199 placement
 /**
  * 取低 16 位
  */
-var lowerHalf = (e) => e & HALF_SPLIT_CONSTANTS.halfMask;
+var lowerHalf = (value) => value & HALF_SPLIT_CONSTANTS.halfMask;
 //@ chunk-4121qate.js:164199-164292 placement
 /**
  * 38/48/39/49
@@ -312,24 +335,25 @@ var COLOR_SGR_CODES = {
   truecolor: 2,
 };
 //@ chunk-4121qate.js:164292-164501 placement
-function colorSgrPart(e, o) {
-  let r = o === "foreground";
-  return e === MAX_COLOR_DISTANCE
-    ? String(r ? COLOR_SGR_CODES.resetForeground : COLOR_SGR_CODES.resetBackground)
+function colorSgrPart(color, layer) {
+  let isForeground = layer === "foreground";
+  return color === MAX_COLOR_DISTANCE
+    ? String(isForeground ? COLOR_SGR_CODES.resetForeground : COLOR_SGR_CODES.resetBackground)
     : [
-        r ? COLOR_SGR_CODES.setForeground : COLOR_SGR_CODES.setBackground,
+        isForeground ? COLOR_SGR_CODES.setForeground : COLOR_SGR_CODES.setBackground,
         COLOR_SGR_CODES.truecolor,
-        expandChannel(e, ANSI_16_COLOR_SHIFTS.redShift),
-        expandChannel(e, ANSI_16_COLOR_SHIFTS.greenShift),
-        expandChannel(e, 0),
+        expandChannel(color, ANSI_16_COLOR_SHIFTS.redShift),
+        expandChannel(color, ANSI_16_COLOR_SHIFTS.greenShift),
+        expandChannel(color, 0),
       ].join(";");
 }
 //@ chunk-4121qate.js:164501-164579 placement
 /**
  * 生成前景+背景 SGR
  */
-var colorPairSgr = (e) =>
-  csi(`${colorSgrPart(lowerHalf(e), "foreground")}m`) + csi(`${colorSgrPart(upperHalf(e), "background")}m`);
+var colorPairSgr = (colorPair) =>
+  csi(`${colorSgrPart(lowerHalf(colorPair), "foreground")}m`) +
+  csi(`${colorSgrPart(upperHalf(colorPair), "background")}m`);
 //@ chunk-4121qate.js:164579-164604 placement
 /**
  * 透明色 SGR
@@ -371,12 +395,12 @@ var createRasterStreamState = () => ({
 });
 //@ chunk-4121qate.js:165005-165156 placement
 function staleSlotsByAge(rasterStreamState) {
-  let o = [];
-  let r = (n) => rasterStreamState.slots[n]?.lastPaint ?? 0;
-  rasterStreamState.slots.forEach((slot, s) => {
-    if (slot.lastPaint < rasterStreamState.paint) o.push(s);
+  let stale = [];
+  let lastPaintOf = (slotIndex) => rasterStreamState.slots[slotIndex]?.lastPaint ?? 0;
+  rasterStreamState.slots.forEach((slot, slotIndex) => {
+    if (slot.lastPaint < rasterStreamState.paint) stale.push(slotIndex);
   });
-  return o.toSorted((n, s) => r(n) - r(s));
+  return stale.toSorted((a, b) => lastPaintOf(a) - lastPaintOf(b));
 }
 //@ chunk-4121qate.js:165156-165169 placement
 /**
@@ -387,31 +411,36 @@ var PALETTE_CACHE_SIZE = 16384;
 /**
  * 在调色板中找最接近的颜色槽。
  */
-function nearestColorSlot(table, o, probe) {
-  let n = -1;
-  let s = 1 / 0;
-  for (let i = 0; i < o; i++) {
-    let p = i * COLOR_ENTRY_LAYOUT.width;
-    let f = 0;
-    for (let a = 0; a < COLOR_ENTRY_LAYOUT.width; a += COLOR_ENTRY_LAYOUT.backgroundDefault) {
-      let m = (table[p + a] ?? 0) === 1;
-      let c = (probe[a] ?? 0) === 1;
-      if (m || c) f += m === c ? 0 : HALF_SPLIT_CONSTANTS.defaultMismatch;
+function nearestColorSlot(table, slotCount, probe) {
+  let bestIndex = -1;
+  let bestDistance = 1 / 0;
+  for (let slotIndex = 0; slotIndex < slotCount; slotIndex++) {
+    let base = slotIndex * COLOR_ENTRY_LAYOUT.width;
+    let distance = 0;
+    for (
+      let layerOffset = 0;
+      layerOffset < COLOR_ENTRY_LAYOUT.width;
+      layerOffset += COLOR_ENTRY_LAYOUT.backgroundDefault
+    ) {
+      let isDefault = (table[base + layerOffset] ?? 0) === 1;
+      let probeDefault = (probe[layerOffset] ?? 0) === 1;
+      if (isDefault || probeDefault)
+        distance += isDefault === probeDefault ? 0 : HALF_SPLIT_CONSTANTS.defaultMismatch;
       else {
-        let u = (table[p + a + 1] ?? 0) - (probe[a + 1] ?? 0);
-        let l = (table[p + a + 2] ?? 0) - (probe[a + 2] ?? 0);
-        let y =
-          (table[p + a + COLOR_ENTRY_LAYOUT.foregroundBlue] ?? 0) -
-          (probe[a + COLOR_ENTRY_LAYOUT.foregroundBlue] ?? 0);
-        f += u * u + l * l + y * y;
+        let redDiff = (table[base + layerOffset + 1] ?? 0) - (probe[layerOffset + 1] ?? 0);
+        let greenDiff = (table[base + layerOffset + 2] ?? 0) - (probe[layerOffset + 2] ?? 0);
+        let blueDiff =
+          (table[base + layerOffset + COLOR_ENTRY_LAYOUT.foregroundBlue] ?? 0) -
+          (probe[layerOffset + COLOR_ENTRY_LAYOUT.foregroundBlue] ?? 0);
+        distance += redDiff * redDiff + greenDiff * greenDiff + blueDiff * blueDiff;
       }
     }
-    if (f < s) {
-      s = f;
-      n = i;
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      bestIndex = slotIndex;
     }
   }
-  return n;
+  return bestIndex;
 }
 //@ chunk-4121qate.js:165534-165546 placement
 /**
@@ -430,12 +459,15 @@ var newAdmissionState = () => ({
 /**
  * raster 准入槽
  */
-var rasterAdmissionSlot = identity(
-  () => (getPluginRegistry().rasterAdmission ??= newAdmissionState()),
-  () => {
-    getPluginRegistry().rasterAdmission = undefined;
-  },
-);
+var rasterAdmissionSlot; // deferred: uses getPluginRegistry (../../../utils/plugins/pluginLoadState.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-4121qate.js:165584", () => {
+  rasterAdmissionSlot = identity(
+    () => (getPluginRegistry().rasterAdmission ??= newAdmissionState()),
+    () => {
+      getPluginRegistry().rasterAdmission = undefined;
+    },
+  );
+});
 //@ chunk-4121qate.js:165661-165673 placement
 /**
  * 1024
@@ -452,129 +484,135 @@ var MAX_RASTER_BYTES = 131072;
  */
 var MAX_RASTER_ROW_WIDTH = 160;
 //@ chunk-4121qate.js:165698-165841 placement
-function takeColorToken(e, o, r) {
-  e.tokens = Math.min(
+function takeColorToken(bucket, now, cost) {
+  bucket.tokens = Math.min(
     RASTER_ADMISSION_TOKENS,
-    e.tokens + (Math.max(0, o - e.refilledAt) * MAX_RASTER_ROW_WIDTH) / MAX_RASTER_COLUMNS,
+    bucket.tokens + (Math.max(0, now - bucket.refilledAt) * MAX_RASTER_ROW_WIDTH) / MAX_RASTER_COLUMNS,
   );
-  e.refilledAt = o;
-  let n = e.tokens - r >= 1;
-  e.tokens -= n ? 1 : 0;
-  return n;
+  bucket.refilledAt = now;
+  let isAllowed = bucket.tokens - cost >= 1;
+  bucket.tokens -= isAllowed ? 1 : 0;
+  return isAllowed;
 }
 //@ chunk-4121qate.js:165841-166085 placement
-function writeColorEntry(e, o, r) {
+function writeColorEntry(table, slotIndex, colorPair) {
   let { redShift, greenShift, channelMax } = ANSI_16_COLOR_SHIFTS;
-  function p(f, a) {
-    e[f] = a === MAX_COLOR_DISTANCE ? 1 : 0;
-    e[f + COLOR_ENTRY_LAYOUT.foregroundRed] = (a >> redShift) & channelMax;
-    e[f + COLOR_ENTRY_LAYOUT.foregroundGreen] = (a >> greenShift) & channelMax;
-    e[f + COLOR_ENTRY_LAYOUT.foregroundBlue] = a & channelMax;
+  function writeLayer(offset, color) {
+    table[offset] = color === MAX_COLOR_DISTANCE ? 1 : 0;
+    table[offset + COLOR_ENTRY_LAYOUT.foregroundRed] = (color >> redShift) & channelMax;
+    table[offset + COLOR_ENTRY_LAYOUT.foregroundGreen] = (color >> greenShift) & channelMax;
+    table[offset + COLOR_ENTRY_LAYOUT.foregroundBlue] = color & channelMax;
   }
-  p(o * COLOR_ENTRY_LAYOUT.width, lowerHalf(r));
-  p(o * COLOR_ENTRY_LAYOUT.width + COLOR_ENTRY_LAYOUT.backgroundDefault, upperHalf(r));
+  writeLayer(slotIndex * COLOR_ENTRY_LAYOUT.width, lowerHalf(colorPair));
+  writeLayer(
+    slotIndex * COLOR_ENTRY_LAYOUT.width + COLOR_ENTRY_LAYOUT.backgroundDefault,
+    upperHalf(colorPair),
+  );
 }
 //@ chunk-4121qate.js:166085-167861 placement
-function RasterStream(e = Date.now, o = rasterAdmissionSlot()) {
+function RasterStream(now = Date.now, bucket = rasterAdmissionSlot()) {
   let rasterStreamState = createRasterStreamState();
-  let n = (u) => u !== undefined && rasterStreamState.held.get(u.entry.key) === u.entry;
-  function s(u, l) {
-    let y = {
-      key: l,
-      sgr: colorPairSgr(l),
+  let isHeld = (aliasEntry) =>
+    aliasEntry !== undefined && rasterStreamState.held.get(aliasEntry.entry.key) === aliasEntry.entry;
+  function admitSlot(slotIndex, colorPair) {
+    let slot = {
+      key: colorPair,
+      sgr: colorPairSgr(colorPair),
       lastPaint: rasterStreamState.paint,
     };
-    let g = rasterStreamState.slots[u];
-    if (g !== undefined) rasterStreamState.held.delete(g.key);
-    rasterStreamState.slots[u] = y;
-    rasterStreamState.held.set(l, y);
+    let previous = rasterStreamState.slots[slotIndex];
+    if (previous !== undefined) rasterStreamState.held.delete(previous.key);
+    rasterStreamState.slots[slotIndex] = slot;
+    rasterStreamState.held.set(colorPair, slot);
     rasterStreamState.admissions += 1;
-    writeColorEntry(rasterStreamState.table, u, l);
+    writeColorEntry(rasterStreamState.table, slotIndex, colorPair);
   }
-  function i() {
-    let u = [];
-    for (let g of rasterStreamState.frame) {
-      let x = rasterStreamState.held.get(g);
-      let T = rasterStreamState.aliases.get(g);
-      if (x !== undefined) {
-        x.lastPaint = rasterStreamState.paint;
+  function dropStale() {
+    let missing = [];
+    for (let colorPair of rasterStreamState.frame) {
+      let entry = rasterStreamState.held.get(colorPair);
+      let aliasEntry = rasterStreamState.aliases.get(colorPair);
+      if (entry !== undefined) {
+        entry.lastPaint = rasterStreamState.paint;
         continue;
       }
-      u.push(g);
-      if (T !== undefined) {
-        rasterStreamState.aliases.delete(g);
-        rasterStreamState.aliases.set(g, T);
+      missing.push(colorPair);
+      if (aliasEntry !== undefined) {
+        rasterStreamState.aliases.delete(colorPair);
+        rasterStreamState.aliases.set(colorPair, aliasEntry);
       }
     }
-    let l = staleSlotsByAge(rasterStreamState);
-    let y = 0;
-    for (let g of u) {
-      let x = rasterStreamState.slots.length < MAX_PALETTE_ENTRIES;
-      let T = x ? rasterStreamState.slots.length : l[y];
-      if (T === undefined) break;
-      if (!takeColorToken(o, e(), x ? 0 : MAX_RASTER_CACHE)) {
+    let stale = staleSlotsByAge(rasterStreamState);
+    let staleIndex = 0;
+    for (let colorPair of missing) {
+      let isFreshSlot = rasterStreamState.slots.length < MAX_PALETTE_ENTRIES;
+      let targetSlot = isFreshSlot ? rasterStreamState.slots.length : stale[staleIndex];
+      if (targetSlot === undefined) break;
+      if (!takeColorToken(bucket, now(), isFreshSlot ? 0 : MAX_RASTER_CACHE)) {
         rasterStreamState.isStarved = true;
         break;
       }
-      s(T, g);
-      y += x ? 0 : 1;
+      admitSlot(targetSlot, colorPair);
+      staleIndex += isFreshSlot ? 0 : 1;
     }
   }
-  let p = (u) =>
-    !rasterStreamState.frame.has(u) || rasterStreamState.held.has(u) || !n(rasterStreamState.aliases.get(u));
-  function f() {
-    let u;
-    let l = 0;
+  let isDroppable = (colorPair) =>
+    !rasterStreamState.frame.has(colorPair) ||
+    rasterStreamState.held.has(colorPair) ||
+    !isHeld(rasterStreamState.aliases.get(colorPair));
+  function evictOne() {
+    let victim;
+    let scanned = 0;
     for (let key of rasterStreamState.aliases.keys()) {
-      u ??= key;
-      if (p(key)) {
-        u = key;
+      victim ??= key;
+      if (isDroppable(key)) {
+        victim = key;
         break;
       }
-      l += 1;
-      if (l >= MAX_RASTER_ROWS) break;
+      scanned += 1;
+      if (scanned >= MAX_RASTER_ROWS) break;
     }
-    if (u !== undefined) {
-      rasterStreamState.netMatched -= p(u) ? 0 : 1;
-      rasterStreamState.aliases.delete(u);
+    if (victim !== undefined) {
+      rasterStreamState.netMatched -= isDroppable(victim) ? 0 : 1;
+      rasterStreamState.aliases.delete(victim);
     }
   }
-  function a(u, entry) {
-    let y = !n(rasterStreamState.aliases.get(u));
-    if (rasterStreamState.aliases.has(u)) rasterStreamState.aliases.delete(u);
-    else if (rasterStreamState.aliases.size >= PALETTE_CACHE_SIZE) f();
-    rasterStreamState.aliases.set(u, {
+  function noteAlias(colorPair, entry) {
+    let wasUnheld = !isHeld(rasterStreamState.aliases.get(colorPair));
+    if (rasterStreamState.aliases.has(colorPair)) rasterStreamState.aliases.delete(colorPair);
+    else if (rasterStreamState.aliases.size >= PALETTE_CACHE_SIZE) evictOne();
+    rasterStreamState.aliases.set(colorPair, {
       entry,
       after: rasterStreamState.admissions,
     });
-    rasterStreamState.netMatched += y ? 1 : 0;
+    rasterStreamState.netMatched += wasUnheld ? 1 : 0;
   }
-  function m(u) {
+  function bestEntry(colorPair) {
     if (!(
       rasterStreamState.slots.length > 0 &&
       rasterStreamState.evaluated + rasterStreamState.slots.length <= MAX_RASTER_BYTES
     ))
       return;
-    writeColorEntry(rasterStreamState.probe, 0, u);
+    writeColorEntry(rasterStreamState.probe, 0, colorPair);
     rasterStreamState.evaluated += rasterStreamState.slots.length;
     let entry =
       rasterStreamState.slots[
         nearestColorSlot(rasterStreamState.table, rasterStreamState.slots.length, rasterStreamState.probe)
       ];
-    if (entry !== undefined) a(u, entry);
+    if (entry !== undefined) noteAlias(colorPair, entry);
     return entry;
   }
-  function c(u) {
-    let l = rasterStreamState.aliases.get(u);
-    let y = l !== undefined && n(l);
-    if (y && l.after === rasterStreamState.admissions) return l.entry;
-    let g = m(u);
-    if (g === undefined && y) {
+  function entryFor(colorPair) {
+    let aliasEntry = rasterStreamState.aliases.get(colorPair);
+    let isAliasHeld = aliasEntry !== undefined && isHeld(aliasEntry);
+    if (isAliasHeld && aliasEntry.after === rasterStreamState.admissions) return aliasEntry.entry;
+    let entry = bestEntry(colorPair);
+    if (entry === undefined && isAliasHeld) {
       rasterStreamState.hasStale = true;
-      return l.entry;
+      return aliasEntry.entry;
     }
-    rasterStreamState.hasCarried ||= g === undefined && rasterStreamState.slots.length > 0;
-    return g;
+    rasterStreamState.hasCarried ||= entry === undefined && rasterStreamState.slots.length > 0;
+    return entry;
   }
   return {
     beginPaint: (frame) => {
@@ -586,10 +624,11 @@ function RasterStream(e = Date.now, o = rasterAdmissionSlot()) {
       rasterStreamState.hasCarried = false;
       rasterStreamState.netMatched = 0;
       rasterStreamState.hasStale = false;
-      i();
+      dropStale();
     },
-    sgrOf: (u) => {
-      rasterStreamState.lastSgr = (rasterStreamState.held.get(u) ?? c(u))?.sgr ?? rasterStreamState.lastSgr;
+    sgrOf: (colorPair) => {
+      rasterStreamState.lastSgr =
+        (rasterStreamState.held.get(colorPair) ?? entryFor(colorPair))?.sgr ?? rasterStreamState.lastSgr;
       return rasterStreamState.lastSgr;
     },
     size: () => rasterStreamState.held.size,
@@ -601,60 +640,60 @@ function RasterStream(e = Date.now, o = rasterAdmissionSlot()) {
   };
 }
 //@ chunk-4121qate.js:167861-168100 placement
-function collectColorKeys(e, o) {
-  let { columns, rows } = o;
-  let s = [];
-  let i = new Set();
+function collectColorKeys(words, size) {
+  let { columns, rows } = size;
+  let keys = [];
+  let distinct = new Set();
   for (let j = 0; j < rows; j++) {
-    let f = -1;
-    let a = -1;
+    let previousForeground = -1;
+    let previousBackground = -1;
     for (let j_2 = 0; j_2 < columns; j_2++) {
-      let c = (j * columns + j_2) * RASTER_RETRY_COUNT;
-      let u = e[c + 1] ?? 0;
-      let l = e[c + 2] ?? 0;
-      if (u !== f || l !== a) {
-        let y = packColorPair(u, l);
-        s.push(y);
-        i.add(y);
-        f = u;
-        a = l;
+      let wordIndex = (j * columns + j_2) * RASTER_RETRY_COUNT;
+      let foreground = words[wordIndex + 1] ?? 0;
+      let background = words[wordIndex + 2] ?? 0;
+      if (foreground !== previousForeground || background !== previousBackground) {
+        let colorPair = packColorPair(foreground, background);
+        keys.push(colorPair);
+        distinct.add(colorPair);
+        previousForeground = foreground;
+        previousBackground = background;
       }
     }
   }
   return {
-    keys: s,
-    distinct: i,
+    keys,
+    distinct,
   };
 }
 //@ chunk-4121qate.js:168100-168408 placement
 /**
  * 把 Raster 单元格（字符 + 前景 + 背景）转换为带 SGR 颜色序列的终端文本行。
  */
-function rasterToAnsi(e, o, r) {
-  let { columns, rows } = o;
-  let colorKeys = collectColorKeys(e, o);
-  let p = Array(rows);
-  let f = 0;
-  r.beginPaint(colorKeys.distinct);
+function rasterToAnsi(words, size, paint) {
+  let { columns, rows } = size;
+  let colorKeys = collectColorKeys(words, size);
+  let lines = Array(rows);
+  let keyIndex = 0;
+  paint.beginPaint(colorKeys.distinct);
   for (let j = 0; j < rows; j++) {
-    let m = "";
-    let c = -1;
-    let u = -1;
+    let line = "";
+    let previousForeground = -1;
+    let previousBackground = -1;
     for (let j_2 = 0; j_2 < columns; j_2++) {
-      let y = (j * columns + j_2) * RASTER_RETRY_COUNT;
-      let g = e[y + 1] ?? 0;
-      let x = e[y + 2] ?? 0;
-      if (g !== c || x !== u) {
-        m += r.sgrOf(colorKeys.keys[f] ?? 0);
-        f += 1;
-        c = g;
-        u = x;
+      let wordIndex = (j * columns + j_2) * RASTER_RETRY_COUNT;
+      let foreground = words[wordIndex + 1] ?? 0;
+      let background = words[wordIndex + 2] ?? 0;
+      if (foreground !== previousForeground || background !== previousBackground) {
+        line += paint.sgrOf(colorKeys.keys[keyIndex] ?? 0);
+        keyIndex += 1;
+        previousForeground = foreground;
+        previousBackground = background;
       }
-      m += String.fromCharCode(e[y] ?? 0);
+      line += String.fromCharCode(words[wordIndex] ?? 0);
     }
-    p[j] = m;
+    lines[j] = line;
   }
-  return p.join(`
+  return lines.join(`
 `);
 }
 //@ chunk-4121qate.js:168408-168419 placement
@@ -671,27 +710,27 @@ var MAX_MOUNT_ROWS = 256;
 /**
  * 把挂载项加入按 key 索引的站点（不存在则新建），返回卸载函数（空站点会被删除）。
  */
-function mountOnSite(e) {
-  let { sites, siteKey, mount, mountsOf, freshSite } = e;
-  let p = sites.get(siteKey) ?? freshSite();
-  mountsOf(p).add(mount);
-  sites.set(siteKey, p);
+function mountOnSite(options) {
+  let { sites, siteKey, mount, mountsOf, freshSite } = options;
+  let site = sites.get(siteKey) ?? freshSite();
+  mountsOf(site).add(mount);
+  sites.set(siteKey, site);
   return () => {
-    let f = mountsOf(p);
-    f.delete(mount);
-    if (f.size === 0 && sites.get(siteKey) === p) sites.delete(siteKey);
+    let mounts = mountsOf(site);
+    mounts.delete(mount);
+    if (mounts.size === 0 && sites.get(siteKey) === site) sites.delete(siteKey);
   };
 }
 //@ chunk-4121qate.js:168617-168776 placement
 /**
  * 把栅格挂载到按（请求, key, 插件）索引的站点。
  */
-var mountRaster = (e) =>
+var mountRaster = (mount) =>
   mountOnSite({
     sites: mountedRasters(),
-    siteKey: rasterKey(e.requestId, e.key, e.plugin),
-    mount: e,
-    mountsOf: (o) => o.rasters,
+    siteKey: rasterKey(mount.requestId, mount.key, mount.plugin),
+    mount,
+    mountsOf: (site) => site.rasters,
     freshSite: () => ({
       rasters: new Set(),
       windowStart: 0,
@@ -708,7 +747,7 @@ var checkMountCellSize = (columns, rows) =>
     rows: MAX_MOUNT_ROWS,
   });
 export {
-  Vme,
+  KEY_SEPARATOR,
   checkMountCellSize,
   checkRasterCells,
   rasterKey,

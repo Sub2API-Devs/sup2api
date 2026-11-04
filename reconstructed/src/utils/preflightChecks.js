@@ -15,8 +15,8 @@ import { getUserAgent } from "./http.js";
 import { getSSLErrorHint } from "../services/api/errorUtils.js";
 import { logEvent } from "../services/analytics/index.js";
 import { logError } from "./log.js";
-import { w } from "../../vendor/react/compiler-runtime.js";
-import { y, P } from "../../vendor/react/cjs/react.production.js";
+import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
+import { useState, useEffect } from "../../vendor/react/cjs/react.production.js";
 import { useTimeout } from "../ink/hooks/useTerminalHooks.js";
 import { MEMO_CACHE_SENTINEL } from "../../runtime/bun-runtime.js";
 import {
@@ -111,10 +111,10 @@ async function checkEndpoints() {
  * 首次运行的连通性检查界面：显示 Checking connectivity...，失败时提示 Unable to connect to Anthropic services 并退出。
  */
 function PreflightStep(props) {
-  let $ = w(14);
+  let $ = useMemoCache(14);
   let { onSuccess } = props;
-  let [result, setResult] = y(null);
-  let [isChecking, setIsChecking] = y(true);
+  let [result, setResult] = useState(null);
+  let [isChecking, setIsChecking] = useState(true);
   let source = getProxyUrlWithSource()?.source;
   let showSpinner = useTimeout(1000) && isChecking;
   let t1;
@@ -135,24 +135,24 @@ function PreflightStep(props) {
     t1 = $[0];
     t2 = $[1];
   }
-  P(t1, t2);
-  let W;
+  useEffect(t1, t2);
+  let notifySuccess;
   if ($[2] !== onSuccess || $[3] !== result?.success) {
-    W = () => {
+    notifySuccess = () => {
       if (result?.success) onSuccess();
     };
     $[2] = onSuccess;
     $[3] = result?.success;
-    $[4] = W;
-  } else W = $[4];
-  let N;
+    $[4] = notifySuccess;
+  } else notifySuccess = $[4];
+  let effectDeps;
   if ($[5] !== onSuccess || $[6] !== result) {
-    N = [result, onSuccess];
+    effectDeps = [result, onSuccess];
     $[5] = onSuccess;
     $[6] = result;
-    $[7] = N;
-  } else N = $[7];
-  P(W, N);
+    $[7] = effectDeps;
+  } else effectDeps = $[7];
+  useEffect(notifySuccess, effectDeps);
   useTimeout(exitPreflightFailed, result && !result.success ? 100 : null);
   let children;
   if ($[8] !== isChecking || $[9] !== result || $[10] !== showSpinner) {

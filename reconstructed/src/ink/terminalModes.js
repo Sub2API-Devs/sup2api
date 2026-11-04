@@ -9,7 +9,7 @@
  * attribution: placement 13
  */
 import { StdinContext } from "./components/StdinContext.js";
-import { init_react_production, qt } from "../../vendor/react/cjs/react.production.js";
+import { init_react_production, createContext } from "../../vendor/react/cjs/react.production.js";
 import { osc, OSC } from "./termio/osc.js";
 import {
   EBP,
@@ -31,15 +31,28 @@ import {
   popKittyKeyboardSequence,
 } from "./terminal.js";
 import { ERASE_SCREEN, CURSOR_HOME } from "./termio/csi.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-24t3dkzb.js:8756-8766 placement
-var StdinContextAlias = StdinContext;
+var StdinContextAlias; // deferred: uses StdinContext (./components/StdinContext.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-24t3dkzb.js:8756", () => {
+  StdinContextAlias = StdinContext;
+});
 //@ chunk-24t3dkzb.js:8766-8770 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-24t3dkzb.js:8766", () => {
+  init_react_production();
+});
 //@ chunk-24t3dkzb.js:8770-8786 placement
-var TerminalSizeContext = qt(null);
+var TerminalSizeContext; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-24t3dkzb.js:8770", () => {
+  TerminalSizeContext = createContext(null);
+});
 //@ chunk-24t3dkzb.js:8786-8790 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-24t3dkzb.js:8786", () => {
+  init_react_production();
+});
 //@ chunk-24t3dkzb.js:8790-8881 placement
 function setSurfaceColorsSequence({ background, foreground }) {
   return osc(OSC.SET_BG_COLOR, background) + osc(OSC.SET_FG_COLOR, foreground);
@@ -131,101 +144,121 @@ class TerminalModes {
   get isSuspended() {
     return this.suspended;
   }
-  isSet(r) {
-    return this.entries.some((entry) => entry.mode === r);
+  isSet(mode) {
+    return this.entries.some((entry) => entry.mode === mode);
   }
-  set(r, n) {
-    if (this.isSet(r)) return "";
-    let o = this.add(this.entry(r, n));
-    if (r === "altScreen") o += this.add(modeEntry("altScreenKeys"));
-    return this.suspended ? "" : o;
+  set(mode, value) {
+    if (this.isSet(mode)) return "";
+    let sequences = this.add(this.entry(mode, value));
+    if (mode === "altScreen") sequences += this.add(modeEntry("altScreenKeys"));
+    return this.suspended ? "" : sequences;
   }
-  reset(r) {
-    if (!this.isSet(r)) return "";
-    let n = r === "altScreen" ? this.remove("altScreenKeys") : "";
-    let o = this.remove(r);
-    if (this.suspended && r === this.kept) {
+  reset(mode) {
+    if (!this.isSet(mode)) return "";
+    let keysSequence = mode === "altScreen" ? this.remove("altScreenKeys") : "";
+    let modeSequence = this.remove(mode);
+    if (this.suspended && mode === this.kept) {
       this.kept = undefined;
-      return o;
+      return modeSequence;
     }
-    return this.suspended ? "" : n + o;
+    return this.suspended ? "" : keysSequence + modeSequence;
   }
-  reassert(r) {
+  reassert(mode) {
     if (this.suspended) return "";
-    return this.entries.find((entry) => entry.mode === r)?.on ?? "";
+    return this.entries.find((entry) => entry.mode === mode)?.on ?? "";
   }
   reassertKeys() {
     if (this.suspended) return "";
-    let r = this.isSet("altScreen") ? "altScreenKeys" : "extendedKeys";
-    return this.entries.find((entry) => entry.mode === r)?.on ?? "";
+    let keyMode = this.isSet("altScreen") ? "altScreenKeys" : "extendedKeys";
+    return this.entries.find((entry) => entry.mode === keyMode)?.on ?? "";
   }
-  reassertFrom(r) {
-    if (this.suspended || !this.isSet(r)) return "";
+  reassertFrom(mode) {
+    if (this.suspended || !this.isSet(mode)) return "";
     return this.entries
-      .filter((entry) => MODE_LAYER[entry.mode] >= MODE_LAYER[r])
+      .filter((entry) => MODE_LAYER[entry.mode] >= MODE_LAYER[mode])
       .reduce((acc, entry) => acc + entry.on, "");
   }
-  suspend(r) {
+  suspend(keptMode) {
     if (this.suspended) return "";
     this.suspended = true;
-    this.kept = r;
-    return this.entries.reduceRight((n, o) => (o.mode === r ? n : n + o.off), "");
+    this.kept = keptMode;
+    return this.entries.reduceRight(
+      (accumulated, entry) => (entry.mode === keptMode ? accumulated : accumulated + entry.off),
+      "",
+    );
   }
-  resume({ clearKeys: r = false } = {}) {
+  resume({ clearKeys = false } = {}) {
     if (!this.suspended) return "";
     this.suspended = false;
     this.kept = undefined;
-    let n = this.isSet("altScreen");
-    let o = r ? disableModifyOtherKeysSequence() + (n ? "" : popKittyKeyboardSequence()) : "";
+    let hasAltScreen = this.isSet("altScreen");
+    let keysResetSequence = clearKeys
+      ? disableModifyOtherKeysSequence() + (hasAltScreen ? "" : popKittyKeyboardSequence())
+      : "";
     return this.entries.reduce(
-      (acc, entry) => acc + entry.on + (r && entry.mode === "altScreen" ? popKittyKeyboardSequence() : ""),
-      o,
+      (acc, entry) =>
+        acc + entry.on + (clearKeys && entry.mode === "altScreen" ? popKittyKeyboardSequence() : ""),
+      keysResetSequence,
     );
   }
   resetAll() {
-    let r = this.suspended ? this.entries.filter((entry) => entry.mode === this.kept) : this.entries;
+    let activeEntries = this.suspended
+      ? this.entries.filter((entry) => entry.mode === this.kept)
+      : this.entries;
     this.entries = [];
     this.kept = undefined;
-    return r.reduceRight((n, o) => n + o.off, "");
+    return activeEntries.reduceRight((accumulated, entry) => accumulated + entry.off, "");
   }
-  entry(mode, n) {
+  entry(mode, value) {
     switch (mode) {
       case "mouse": {
-        let o = typeof n === "string" ? n : "off";
+        let tracking = typeof value === "string" ? value : "off";
         return {
           mode,
-          on: mouseTrackingSequence(o),
-          off: o === "off" ? "" : DISABLE_MOUSE_TRACKING,
+          on: mouseTrackingSequence(tracking),
+          off: tracking === "off" ? "" : DISABLE_MOUSE_TRACKING,
         };
       }
       case "surface":
         return {
           mode,
-          on: typeof n === "object" ? setSurfaceColorsSequence(n) : "",
+          on: typeof value === "object" ? setSurfaceColorsSequence(value) : "",
           off: resetSurfaceColorsSequence(),
         };
       default:
         return modeEntry(mode);
     }
   }
-  add(r) {
-    let index = this.entries.findIndex((entry) => MODE_LAYER[entry.mode] > MODE_LAYER[r.mode]);
-    if (index === -1) this.entries.push(r);
-    else this.entries.splice(index, 0, r);
-    return r.on;
+  add(entry) {
+    let index = this.entries.findIndex((entry_2) => MODE_LAYER[entry_2.mode] > MODE_LAYER[entry.mode]);
+    if (index === -1) this.entries.push(entry);
+    else this.entries.splice(index, 0, entry);
+    return entry.on;
   }
-  remove(r) {
-    let index = this.entries.findIndex((entry) => entry.mode === r);
+  remove(mode) {
+    let index = this.entries.findIndex((entry) => entry.mode === mode);
     if (index === -1) return "";
     return this.entries.splice(index, 1)[0].off;
   }
 }
 //@ chunk-24t3dkzb.js:11357-11375 placement
-var TerminalModesContext = qt(new TerminalModes());
+var TerminalModesContext; // deferred: uses TerminalModes of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-24t3dkzb.js:11357", () => {
+  TerminalModesContext = createContext(new TerminalModes());
+});
 //@ chunk-24t3dkzb.js:11375-11420 placement
-TerminalModesContext.displayName = "InternalTerminalModesContext";
+// deferred: uses TerminalModesContext of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-24t3dkzb.js:11375", () => {
+  TerminalModesContext.displayName = "InternalTerminalModesContext";
+});
 //@ chunk-24t3dkzb.js:11420-11430 placement
-var TerminalModesContextAlias = TerminalModesContext;
+var TerminalModesContextAlias; // deferred: uses TerminalModesContext of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-24t3dkzb.js:11420", () => {
+  TerminalModesContextAlias = TerminalModesContext;
+});
 //@ chunk-24t3dkzb.js:11430-11434 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-24t3dkzb.js:11430", () => {
+  init_react_production();
+});
 export { TerminalSizeContext, StdinContextAlias, TerminalModesContextAlias, TerminalModes };

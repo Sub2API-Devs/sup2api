@@ -8,26 +8,26 @@
 import { decompressResponsePolicy } from "../../../../../@typespec/ts-http-runtime/dist/esm/policies/decompressResponsePolicy.js";
 import { defaultRetryPolicy } from "../../../../../@typespec/ts-http-runtime/dist/esm/policies/defaultRetryPolicy.js";
 import { formDataPolicy } from "../../../../../@typespec/ts-http-runtime/dist/esm/policies/formDataPolicy.js";
-import { ua } from "../../../../../@typespec/ts-http-runtime/dist/commonjs/policies/proxyPolicy.js";
+import { proxyPolicy } from "../../../../../@typespec/ts-http-runtime/dist/commonjs/policies/proxyPolicy.js";
 
 //@ chunk-mrx6y2r5.js:57271-57297 esm-layout
-function rd() {
+function generateRequestId() {
   return decompressResponsePolicy();
 }
 //@ chunk-mrx6y2r5.js:57297-57328 esm-layout
-function nd(options = {}) {
+function getDefaultRequestIdHeader(options = {}) {
   return defaultRetryPolicy(options);
 }
 //@ chunk-mrx6y2r5.js:57328-57354 esm-layout
-function od() {
+function getRequestIdHeaderName() {
   return formDataPolicy();
 }
 //@ chunk-mrx6y2r5.js:57354-57386 esm-layout
-function id(proxySettings, t) {
-  return ua(proxySettings, t);
+function withHeaderName(proxySettings, requestIdHeaderName) {
+  return proxyPolicy(proxySettings, requestIdHeaderName);
 }
 //@ chunk-mrx6y2r5.js:57386-57552 esm-fingerprint
-function sd(requestIdHeaderName = "x-ms-client-request-id") {
+function setClientRequestIdPolicy(requestIdHeaderName = "x-ms-client-request-id") {
   return {
     name: "setClientRequestIdPolicy",
     async sendRequest(request, next) {
@@ -37,4 +37,10 @@ function sd(requestIdHeaderName = "x-ms-client-request-id") {
     },
   };
 }
-export { id, rd, od, sd, nd };
+export {
+  withHeaderName,
+  generateRequestId,
+  getRequestIdHeaderName,
+  setClientRequestIdPolicy,
+  getDefaultRequestIdHeader,
+};

@@ -9,7 +9,7 @@
  * attribution: placement 10
  */
 import { DoctorLazy } from "../cli/handlers/util.js";
-import { u, E } from "../../vendor/zod/v4/classic/schemas.js";
+import { objectSchema, numberSchema } from "../../vendor/zod/v4/classic/schemas.js";
 import { scheduledConfigSchema, runScheduledWorker } from "./scheduledWorker.js";
 import {
   DaemonConfigSchema,
@@ -30,129 +30,136 @@ import { initDefaultDebugLog } from "../utils/debug.js";
 import { watchGlobalConfigThroughStorage, seedInstallIDs } from "../utils/config.js";
 import { FOLDER_ALREADY_SERVED_ERROR_TYPE } from "../bridge/types.js";
 import { getPlatform } from "../utils/platform.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-e3de30et.js:14268-14480 placement
 /**
  * 心跳 worker 的配置 schema（intervalSeconds，默认 30）。
  */
-var heartbeatConfigSchema = DoctorLazy(() =>
-  u({
-    intervalSeconds: E().positive().default(30),
-  }).strict(),
-);
-var WORKER_KINDS = {
-  heartbeat: {
-    schema: heartbeatConfigSchema,
-    run: runHeartbeatWorker,
-    needsOAuth: false,
-  },
-  scheduled: {
-    schema: scheduledConfigSchema,
-    run: runScheduledWorker,
-    needsOAuth: true,
-  },
-  remoteControl: {
-    schema: DaemonConfigSchema,
-    run: handleRemoteControlInput,
-    needsOAuth: true,
-  },
-};
+var heartbeatConfigSchema; // deferred: uses DoctorLazy (../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var WORKER_KINDS;
+deferInit("chunk-e3de30et.js:14268", () => {
+  heartbeatConfigSchema = DoctorLazy(() =>
+    objectSchema({
+      intervalSeconds: numberSchema().positive().default(30),
+    }).strict(),
+  );
+  WORKER_KINDS = {
+    heartbeat: {
+      schema: heartbeatConfigSchema,
+      run: runHeartbeatWorker,
+      needsOAuth: false,
+    },
+    scheduled: {
+      schema: scheduledConfigSchema,
+      run: runScheduledWorker,
+      needsOAuth: true,
+    },
+    remoteControl: {
+      schema: DaemonConfigSchema,
+      run: handleRemoteControlInput,
+      needsOAuth: true,
+    },
+  };
+});
 //@ chunk-e3de30et.js:14480-14554 placement
-function isWorkerKindAdmitted(r) {
+function isWorkerKindAdmitted(kind) {
   return (
-    r === "heartbeat" || isDaemonWorkerRegistryEnabled() || (r === "remoteControl" && radiantHeronFlag())
+    kind === "heartbeat" ||
+    isDaemonWorkerRegistryEnabled() ||
+    (kind === "remoteControl" && radiantHeronFlag())
   );
 }
 //@ chunk-e3de30et.js:14554-14729 placement
-async function runHeartbeatWorker(r, n, a, s) {
-  let { intervalSeconds } = heartbeatConfigSchema().parse(r);
-  a(`heartbeat worker started (interval=${intervalSeconds}s)`);
-  while (!n.aborted) {
-    await sleep(intervalSeconds * 1000, n);
-    if (!n.aborted) a("heartbeat");
+async function runHeartbeatWorker(config, signal, log, authClient) {
+  let { intervalSeconds } = heartbeatConfigSchema().parse(config);
+  log(`heartbeat worker started (interval=${intervalSeconds}s)`);
+  while (!signal.aborted) {
+    await sleep(intervalSeconds * 1000, signal);
+    if (!signal.aborted) log("heartbeat");
   }
 }
 //@ chunk-e3de30et.js:14729-14843 placement
-function bindWorkerAbortSignals(r, abortController) {
-  let a = () => abortController.abort();
-  r.on("SIGTERM", a);
-  r.on("SIGINT", a);
-  r.on("message", (s) => {
-    if (isShutdownResult(s)) abortController.abort();
+function bindWorkerAbortSignals(proc, abortController) {
+  let onSignal = () => abortController.abort();
+  proc.on("SIGTERM", onSignal);
+  proc.on("SIGINT", onSignal);
+  proc.on("message", (message) => {
+    if (isShutdownResult(message)) abortController.abort();
   });
 }
 //@ chunk-e3de30et.js:14843-16114 placement
-async function runDaemonWorker(r, n) {
-  if (!r || !(r in WORKER_KINDS)) {
-    process.stderr.write(`unknown worker kind: ${r}
+async function runDaemonWorker(kind, storageV5) {
+  if (!kind || !(kind in WORKER_KINDS)) {
+    process.stderr.write(`unknown worker kind: ${kind}
 `);
     process.exit(2);
   }
-  if (!isWorkerKindAdmitted(r)) {
-    process.stderr.write(`worker kind '${r}' is not available.
+  if (!isWorkerKindAdmitted(kind)) {
+    process.stderr.write(`worker kind '${kind}' is not available.
 `);
     process.exit(EXIT_CONFIG_ERROR);
   }
-  let a = WORKER_KINDS[r];
-  let s = [];
-  for await (let v of process.stdin) s.push(v);
-  let h;
+  let spec = WORKER_KINDS[kind];
+  let stdinChunks = [];
+  for await (let chunk of process.stdin) stdinChunks.push(chunk);
+  let config;
   try {
-    h = jsonParse(Buffer.concat(s).toString("utf8"));
+    config = jsonParse(Buffer.concat(stdinChunks).toString("utf8"));
   } catch (error) {
     process.stderr.write(`invalid config JSON on stdin: ${errorMessage(error)}
 `);
     process.exit(2);
   }
-  let w = a.schema().safeParse(h.config);
-  if (!w.success) {
-    process.stderr.write(`config validation failed: ${w.error.message}
+  let parsed = spec.schema().safeParse(config.config);
+  if (!parsed.success) {
+    process.stderr.write(`config validation failed: ${parsed.error.message}
 `);
     process.exit(2);
   }
   let abortController = new AbortController();
   bindWorkerAbortSignals(process, abortController);
   watchParentProcess(abortController);
-  let k = pinStorageV5(n);
-  let T = credentialsStoreFor(k);
-  let workerAuthClient = createWorkerAuthClient(h.initialAccessToken, T, k);
-  if (isStorageV5Enabled() && k !== undefined) {
+  let pinnedStorage = pinStorageV5(storageV5);
+  let credentials = credentialsStoreFor(pinnedStorage);
+  let workerAuthClient = createWorkerAuthClient(config.initialAccessToken, credentials, pinnedStorage);
+  if (isStorageV5Enabled() && pinnedStorage !== undefined) {
     initDefaultDebugLog({
-      storageV5: k,
+      storageV5: pinnedStorage,
     });
-    watchGlobalConfigThroughStorage(k);
+    watchGlobalConfigThroughStorage(pinnedStorage);
     let [
-      { composePolicyLimitsClient: v, primePolicyLimitsCache: b },
-      { primeFastPathCredentials: x },
-      { setGrowthBookCredentials: W, setGrowthBookStorageBackend: L },
+      { composePolicyLimitsClient, primePolicyLimitsCache },
+      { primeFastPathCredentials },
+      { setGrowthBookCredentials, setGrowthBookStorageBackend },
     ] = await Promise.all([
-      import("./chunk-qchbrsbw.js"),
-      import("./chunk-ts9rfgqd.js"),
-      import("./chunk-6df1d6re.js"),
+      import("../services/policyLimits/DefaultPolicyLimitsClientSlot.lazy.js"),
+      import("../utils/primeFastPathCredentials.lazy.js"),
+      import("../services/analytics/ATIS_REQUEST_HEADER.lazy.js"),
     ]);
-    v({
-      storageV5: k,
-      credentials: T,
+    composePolicyLimitsClient({
+      storageV5: pinnedStorage,
+      credentials,
     });
-    W(T);
-    L(k);
-    await x(T);
-    await b(k);
-    await seedInstallIDs(k);
+    setGrowthBookCredentials(credentials);
+    setGrowthBookStorageBackend(pinnedStorage);
+    await primeFastPathCredentials(credentials);
+    await primePolicyLimitsCache(pinnedStorage);
+    await seedInstallIDs(pinnedStorage);
   }
   try {
-    await a.run(
-      w.data,
+    await spec.run(
+      parsed.data,
       abortController.signal,
-      (v) =>
+      (line) =>
         process.stdout.write(
-          v +
+          line +
             `
 `,
         ),
       workerAuthClient,
-      k,
-      T,
+      pinnedStorage,
+      credentials,
     );
   } catch (error) {
     if (getErrorHttpStatus(error) === 429) {
@@ -170,31 +177,31 @@ async function runDaemonWorker(r, n) {
 }
 //@ chunk-e3de30et.js:16114-16216 placement
 function isFolderAlreadyServedError(error) {
-  let n = error;
-  for (let i = 0; n != null && i < 8; i++) {
-    if (n.errorType === FOLDER_ALREADY_SERVED_ERROR_TYPE) return true;
-    n = n.cause;
+  let current = error;
+  for (let i = 0; current != null && i < 8; i++) {
+    if (current.errorType === FOLDER_ALREADY_SERVED_ERROR_TYPE) return true;
+    current = current.cause;
   }
   return false;
 }
 //@ chunk-e3de30et.js:16216-16390 placement
 function getErrorHttpStatus(error) {
-  let n = error;
-  for (let i = 0; n != null && i < 8; i++) {
-    let status = n.status;
+  let current = error;
+  for (let i = 0; current != null && i < 8; i++) {
+    let status = current.status;
     if (typeof status === "number") return status;
-    let status_2 = n.response?.status;
+    let status_2 = current.response?.status;
     if (typeof status_2 === "number") return status_2;
-    n = n.cause;
+    current = current.cause;
   }
   return;
 }
 //@ chunk-e3de30et.js:16390-16403 placement
 var WORKER_STOP_TIMEOUT_MS = 30000;
 //@ chunk-e3de30et.js:16403-16466 placement
-function isProcessAlive(r) {
+function isProcessAlive(pid) {
   try {
-    process.kill(r, 0);
+    process.kill(pid, 0);
     return true;
   } catch {
     return false;
@@ -204,34 +211,34 @@ function isProcessAlive(r) {
 /**
  * 定期检查父进程是否存活，父进程消失时退出 worker。
  */
-function watchParentProcess(abortController, n) {
-  let a = {
+function watchParentProcess(abortController, overrides) {
+  let hooks = {
     ppid: () => process.ppid,
     isAlive: isProcessAlive,
-    log: (m) =>
+    log: (line) =>
       process.stdout.write(
-        m +
+        line +
           `
 `,
       ),
     onGone: () => process.exit(0),
     intervalMs: WORKER_STOP_TIMEOUT_MS,
     exitGraceMs: 2000,
-    ...n,
+    ...overrides,
   };
-  let s = a.ppid();
-  if (s <= 1) return;
-  let h = false;
+  let parentPid = hooks.ppid();
+  if (parentPid <= 1) return;
+  let exited = false;
   let interval = setInterval(() => {
-    if (h) return;
-    if (!(!a.isAlive(s) || (getPlatform() !== "windows" && a.ppid() !== s))) return;
-    h = true;
+    if (exited) return;
+    if (!(!hooks.isAlive(parentPid) || (getPlatform() !== "windows" && hooks.ppid() !== parentPid))) return;
+    exited = true;
     clearInterval(interval);
-    a.log("parent supervisor gone \u2014 exiting");
+    hooks.log("parent supervisor gone \u2014 exiting");
     abortController.abort();
-    setTimeout(a.onGone, a.exitGraceMs).unref();
-  }, a.intervalMs);
+    setTimeout(hooks.onGone, hooks.exitGraceMs).unref();
+  }, hooks.intervalMs);
   interval.unref();
   return interval;
 }
-export { WORKER_KINDS, isWorkerKindAdmitted };
+export { WORKER_KINDS, isWorkerKindAdmitted, runDaemonWorker };

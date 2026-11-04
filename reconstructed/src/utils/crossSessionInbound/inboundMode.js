@@ -22,6 +22,7 @@ import { sleep } from "../sleep.js";
 import { isSettingSourceEnabled } from "../settings/constants.js";
 import { getSettingsForSource } from "../settings/settings.js";
 import { hasKeybindingWarning } from "../../components/KeybindingWarnings.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-q40vccff.js:714-772 placement
 /**
@@ -49,13 +50,18 @@ function getInboundDecidedBy() {
 /**
  * 入站策略的严格程度排序（accept < hold < refuse）。
  */
-var POLICY_RANK = {
-  accept: 0,
-  hold: 1,
-  refuse: 2,
-};
-var MAX_POLICY_SETTING_CHARS = 100;
-var PERMISSION_MODE_SET = new Set(PERMISSION_MODES);
+var POLICY_RANK; // deferred: uses EXTERNAL_PERMISSION_MODES (../../types/permissions.js) of its import cycle while loading; runs once the cycle is complete
+var MAX_POLICY_SETTING_CHARS;
+var PERMISSION_MODE_SET;
+deferInit("chunk-q40vccff.js:1013", () => {
+  POLICY_RANK = {
+    accept: 0,
+    hold: 1,
+    refuse: 2,
+  };
+  MAX_POLICY_SETTING_CHARS = 100;
+  PERMISSION_MODE_SET = new Set(PERMISSION_MODES);
+});
 //@ chunk-q40vccff.js:1066-1347 placement
 /**
  * 设置跨会话入站模式的读取函数：设置时清除关闭状态并通知模式变化；清除时先记住当前模式。
@@ -95,7 +101,7 @@ function setSendPeerReceipt(sendPeerReceipt) {
 /**
  * 发送 prompt 模式的对等回执。
  */
-function sendPromptReceipt(origin, n) {
+function sendPromptReceipt(origin, requestId) {
   swarmHostState().inbound.sendPeerReceipt?.(
     {
       mode: "prompt",
@@ -103,7 +109,7 @@ function sendPromptReceipt(origin, n) {
       value: "",
       origin,
     },
-    n,
+    requestId,
   );
 }
 //@ chunk-q40vccff.js:1535-1721 placement
@@ -157,17 +163,17 @@ async function settleHeldInboundOnShutdown() {
   inbound.shutdownSettleHandle = null;
   inbound.shuttingDown = true;
   if (inbound.held.length === 0) return;
-  let n = inbound.held.splice(0, inbound.held.length);
+  let held = inbound.held.splice(0, inbound.held.length);
   logForDebugging(
-    `[cross-session-inbound] shutdown: settling ${n.length} still-held peer message(s) as expired`,
+    `[cross-session-inbound] shutdown: settling ${held.length} still-held peer message(s) as expired`,
   );
-  let o = [];
-  for (let s of n) {
-    o.push(inbound.sendPeerReceipt?.(s, "expired"));
-    inbound.onPeerHoldDropped?.(s, "expired");
+  let admitted = [];
+  for (let message of held) {
+    admitted.push(inbound.sendPeerReceipt?.(message, "expired"));
+    inbound.onPeerHoldDropped?.(message, "expired");
   }
   await Promise.race([
-    Promise.allSettled(o),
+    Promise.allSettled(admitted),
     sleep(SHUTDOWN_SETTLE_MS, undefined, {
       unref: true,
     }),
@@ -177,9 +183,9 @@ async function settleHeldInboundOnShutdown() {
 /**
  * 返回暂扣消息已公告的内容。
  */
-function announcedHeldMessage(e) {
+function announcedHeldMessage(message) {
   let { inbound } = swarmHostState();
-  return inbound.held.includes(e) ? inbound.announced.get(e) : undefined;
+  return inbound.held.includes(message) ? inbound.announced.get(message) : undefined;
 }
 //@ chunk-q40vccff.js:2478-2527 placement
 /**
@@ -209,18 +215,18 @@ function currentInboundSetting() {
 function resolveInboundSetting() {
   let value;
   let decidedBy;
-  for (let o of ["policySettings", "flagSettings", "userSettings"]) {
-    if (!isSettingSourceEnabled(o)) continue;
-    let crossSessionInbound = getSettingsForSource(o)?.crossSessionInbound;
+  for (let source of ["policySettings", "flagSettings", "userSettings"]) {
+    if (!isSettingSourceEnabled(source)) continue;
+    let crossSessionInbound = getSettingsForSource(source)?.crossSessionInbound;
     if (crossSessionInbound !== undefined) {
       value = crossSessionInbound;
-      decidedBy = o;
+      decidedBy = source;
       break;
     }
   }
-  for (let o of ["localSettings", "projectSettings"]) {
-    if (!isSettingSourceEnabled(o)) continue;
-    let crossSessionInbound = getSettingsForSource(o)?.crossSessionInbound;
+  for (let source of ["localSettings", "projectSettings"]) {
+    if (!isSettingSourceEnabled(source)) continue;
+    let crossSessionInbound = getSettingsForSource(source)?.crossSessionInbound;
     if (crossSessionInbound === undefined) continue;
     if (POLICY_RANK[crossSessionInbound] > POLICY_RANK[value ?? "accept"]) {
       value = crossSessionInbound;

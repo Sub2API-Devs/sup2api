@@ -8,7 +8,7 @@
  * pieces: chunk-x6v6jz2y.js (2)
  * attribution: affinity 1, fingerprint 1
  */
-import { Se, yt } from "../../../vendor/react/cjs/react.production.js";
+import { useContext, useSyncExternalStore } from "../../../vendor/react/cjs/react.production.js";
 import { StdinContextAlias } from "../terminalModes.js";
 import { getSecondRootError } from "../terminal.js";
 
@@ -20,8 +20,11 @@ var alwaysFalse = () => false;
  * 订阅式读取“是否有选区”（useSyncExternalStore）。
  */
 function useHasSelection(enabled = true) {
-  Se(StdinContextAlias);
+  useContext(StdinContextAlias);
   let ink = enabled ? getSecondRootError().get(process.stdout) : undefined;
-  return yt(ink ? ink.subscribeToSelectionChange : noopSubscribe, ink ? ink.hasTextSelection : alwaysFalse);
+  return useSyncExternalStore(
+    ink ? ink.subscribeToSelectionChange : noopSubscribe,
+    ink ? ink.hasTextSelection : alwaysFalse,
+  );
 }
 export { useHasSelection };

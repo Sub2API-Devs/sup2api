@@ -5,8 +5,8 @@
  *
  * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/skills/bundledSkills.ts
- * pieces: chunk-41w44bgm.js (1), chunk-e6aww6q8.js (1), chunk-hddjmtjj.js (1), chunk-wy9dbk5f.js (1), chunk-yjaa68dq.js (15)
- * attribution: fingerprint 5, placement 14
+ * pieces: chunk-e6aww6q8.js (1), chunk-hddjmtjj.js (1), chunk-wy9dbk5f.js (1), chunk-yjaa68dq.js (15)
+ * attribution: fingerprint 4, placement 14
  */
 import { constants } from "fs";
 import { open, mkdir, lstat } from "fs/promises";
@@ -22,7 +22,6 @@ import {
 } from "./bundledSkillsGate.js";
 import { getBundledSkillsRoot } from "../utils/permissions/filesystem.js";
 import { logFeatureOk, logFeatureBad } from "../services/analytics/featureTelemetry.js";
-import { getPlatform } from "../utils/platform.js";
 import { openPinnedForWrite } from "../services/agentImport/importSafety.js";
 import { NOFOLLOW_NONBLOCK_FLAGS } from "../utils/fsFlags.js";
 
@@ -33,36 +32,36 @@ import { NOFOLLOW_NONBLOCK_FLAGS } from "../utils/fsFlags.js";
 var O_NOFOLLOW_FLAG = constants.O_NOFOLLOW ?? 0;
 var SECURE_WRITE_OPEN_FLAGS = constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | O_NOFOLLOW_FLAG;
 //@ chunk-yjaa68dq.js:676-810 placement
-async function writeFileWithMode(e, o, n = 384) {
-  let r = await open(e, SECURE_WRITE_OPEN_FLAGS, n);
+async function writeFileWithMode(filePath, content, mode = 384) {
+  let handle = await open(filePath, SECURE_WRITE_OPEN_FLAGS, mode);
   try {
-    if (n !== 384) await r.chmod(n);
-    await r.writeFile(o, "utf8");
+    if (mode !== 384) await handle.chmod(mode);
+    await handle.writeFile(content, "utf8");
   } finally {
-    await r.close();
+    await handle.close();
   }
 }
 //@ chunk-yjaa68dq.js:810-1009 placement
-function safeJoinBundledPath(dir, relPath, n = path) {
-  let normalized = n.normalize(relPath);
+function safeJoinBundledPath(dir, relPath, pathModule = path) {
+  let normalized = pathModule.normalize(relPath);
   if (
-    n.isAbsolute(normalized) ||
-    normalized.split(n.sep).includes("..") ||
+    pathModule.isAbsolute(normalized) ||
+    normalized.split(pathModule.sep).includes("..") ||
     normalized.split("/").includes("..")
   )
     throw Error("bundled file path escapes its extraction dir");
-  return n.join(dir, normalized);
+  return pathModule.join(dir, normalized);
 }
 //@ chunk-yjaa68dq.js:1009-1642 placement
 /**
  * 按目录批量写出技能附带文件。
  */
-async function writeSkillFiles(dir, files, n) {
+async function writeSkillFiles(dir, files, options) {
   let byParent = new Map();
   for (let [relPath, content] of Object.entries(files)) {
     let target = safeJoinBundledPath(dir, relPath);
     let parent = dirname(target);
-    let entry = [target, content, n?.mode?.(relPath) ?? 384];
+    let entry = [target, content, options?.mode?.(relPath) ?? 384];
     let group = byParent.get(parent);
     if (group) group.push(entry);
     else byParent.set(parent, [entry]);
@@ -74,27 +73,27 @@ async function writeSkillFiles(dir, files, n) {
         mode: 448,
       });
       await Promise.all(
-        entries.map(([a, d, u]) =>
-          writeFileWithMode(a, d, u).catch((error) => {
-            if (n?.tolerateExisting && getErrnoCode(error) === "EEXIST") {
-              if (n.tolerateExisting !== "verify-content")
-                return lstat(a).then((s) => {
-                  if (!s.isFile()) throw error;
+        entries.map(([filePath, content, mode]) =>
+          writeFileWithMode(filePath, content, mode).catch((error) => {
+            if (options?.tolerateExisting && getErrnoCode(error) === "EEXIST") {
+              if (options.tolerateExisting !== "verify-content")
+                return lstat(filePath).then((existing) => {
+                  if (!existing.isFile()) throw error;
                 });
-              return open(a, constants.O_RDONLY | O_NOFOLLOW_FLAG | (constants.O_NONBLOCK ?? 0))
-                .then((s) =>
-                  s
+              return open(filePath, constants.O_RDONLY | O_NOFOLLOW_FLAG | (constants.O_NONBLOCK ?? 0))
+                .then((handle) =>
+                  handle
                     .stat()
-                    .then((y) => {
-                      if (!y.isFile()) throw error;
-                      return s.readFile({
+                    .then((stats) => {
+                      if (!stats.isFile()) throw error;
+                      return handle.readFile({
                         encoding: "utf8",
                       });
                     })
-                    .finally(() => s.close()),
+                    .finally(() => handle.close()),
                 )
-                .then((s) => {
-                  if (s !== d) throw error;
+                .then((current) => {
+                  if (current !== content) throw error;
                 });
             }
             throw error;
@@ -105,8 +104,8 @@ async function writeSkillFiles(dir, files, n) {
   );
 }
 //@ chunk-yjaa68dq.js:1642-1701 placement
-function registerBundledSkillSessionReset(e) {
-  getHostState().bundledSkillSessionResetHooks.push(e);
+function registerBundledSkillSessionReset(hook) {
+  getHostState().bundledSkillSessionResetHooks.push(hook);
 }
 //@ chunk-yjaa68dq.js:1701-1865 placement
 function runBundledSkillSessionResets() {
@@ -125,50 +124,50 @@ function runBundledSkillSessionResets() {
  */
 function wireSkillFilesExtraction(definition) {
   let { files } = definition;
-  let n = typeof files === "function";
-  if (!files || (!n && Object.keys(files).length === 0))
+  let isFilesFunction = typeof files === "function";
+  if (!files || (!isFilesFunction && Object.keys(files).length === 0))
     return {
       skillRoot: undefined,
       getPromptForCommand: definition.getPromptForCommand,
     };
-  let r;
-  let l;
+  let cachedFiles;
+  let inFlight;
   let getPromptForCommand = definition.getPromptForCommand;
-  let getPromptForCommand_2 = async (d, u) => {
-    l ??= (async () => {
-      let files_2 = r ?? (n ? await files(u) : files);
-      if (Object.keys(files_2).length > 0) r = files_2;
+  let getPromptForCommand_2 = async (args, context) => {
+    inFlight ??= (async () => {
+      let files_2 = cachedFiles ?? (isFilesFunction ? await files(context) : files);
+      if (Object.keys(files_2).length > 0) cachedFiles = files_2;
       return extractBundledSkillFiles(definition.name, files_2);
     })();
-    let i = l;
-    let f;
+    let pending = inFlight;
+    let extractDir;
     try {
-      f = await i;
+      extractDir = await pending;
     } catch (error) {
-      if (l === i) {
-        l = undefined;
-        r = undefined;
+      if (inFlight === pending) {
+        inFlight = undefined;
+        cachedFiles = undefined;
       }
       throw error;
     }
-    if (l === i) l = undefined;
-    let promptForCommand = await getPromptForCommand(d, u, f);
-    if (f === null) return promptForCommand;
-    let y = `Base directory for this skill: ${f}
+    if (inFlight === pending) inFlight = undefined;
+    let promptForCommand = await getPromptForCommand(args, context, extractDir);
+    if (extractDir === null) return promptForCommand;
+    let baseDirHeader = `Base directory for this skill: ${extractDir}
 
 `;
     if (promptForCommand.length > 0 && promptForCommand[0].type === "text")
       return [
         {
           type: "text",
-          text: y + promptForCommand[0].text,
+          text: baseDirHeader + promptForCommand[0].text,
         },
         ...promptForCommand.slice(1),
       ];
     return [
       {
         type: "text",
-        text: y,
+        text: baseDirHeader,
       },
       ...promptForCommand,
     ];
@@ -184,7 +183,7 @@ function wireSkillFilesExtraction(definition) {
  */
 function registerBundledSkill(definition) {
   let { skillRoot, getPromptForCommand } = wireSkillFilesExtraction(definition);
-  let r = {
+  let command = {
     type: "prompt",
     name: definition.name,
     description: typeof definition.description === "function" ? "" : definition.description,
@@ -230,15 +229,15 @@ function registerBundledSkill(definition) {
     getArgumentCompletions: definition.getArgumentCompletions,
     enterTakesArgumentCompletion: definition.enterTakesArgumentCompletion,
   };
-  defineLazyGetter(r, "description", definition.description);
-  defineLazyGetter(r, "menuDescription", definition.menuDescription);
-  defineLazyGetter(r, "argumentHint", definition.argumentHint);
-  defineLazyGetter(r, "whenToUse", definition.whenToUse);
-  defineLazyGetterAlt(r, "disableModelInvocation", definition.disableModelInvocation);
-  definePolicyGate(r, definition.policyGate);
+  defineLazyGetter(command, "description", definition.description);
+  defineLazyGetter(command, "menuDescription", definition.menuDescription);
+  defineLazyGetter(command, "argumentHint", definition.argumentHint);
+  defineLazyGetter(command, "whenToUse", definition.whenToUse);
+  defineLazyGetterAlt(command, "disableModelInvocation", definition.disableModelInvocation);
+  definePolicyGate(command, definition.policyGate);
   let hostState = getHostState();
-  if (definition.survivesBundledKillSwitch) hostState.bundledSkillKillSwitchSurvivors.add(r);
-  hostState.bundledSkills.push(r);
+  if (definition.survivesBundledKillSwitch) hostState.bundledSkillKillSwitchSurvivors.add(command);
+  hostState.bundledSkills.push(command);
 }
 //@ chunk-yjaa68dq.js:4342-4579 placement
 function getBundledSkills() {
@@ -274,11 +273,11 @@ function getRegisteredBundledSkillsIgnoringKillSwitch() {
 /**
  * 内置 skill 的解压目录：有 bundledSkillFilesElsewhere 时用其 root（posix），否则 getBundledSkillsRoot()/<name>。
  */
-function getBundledSkillExtractDir(e) {
+function getBundledSkillExtractDir(skillName) {
   let bundledSkillFilesElsewhere = getHostState().bundledSkillFilesElsewhere;
   return bundledSkillFilesElsewhere
-    ? posix.join(bundledSkillFilesElsewhere.root, e)
-    : join(getBundledSkillsRoot(), e);
+    ? posix.join(bundledSkillFilesElsewhere.root, skillName)
+    : join(getBundledSkillsRoot(), skillName);
 }
 //@ chunk-yjaa68dq.js:4886-5213 fingerprint = extractBundledSkillFiles (0.558)
 /**
@@ -300,15 +299,15 @@ async function extractBundledSkillFiles(skillName, files) {
   }
 }
 //@ chunk-yjaa68dq.js:5213-5450 placement
-async function extractAdditionalSkillFiles(e, capabilityDefs) {
+async function extractAdditionalSkillFiles(skillName, capabilityDefs) {
   if (Object.keys(capabilityDefs).length === 0) return null;
-  let bundledSkillExtractDir = getBundledSkillExtractDir(e);
+  let bundledSkillExtractDir = getBundledSkillExtractDir(skillName);
   try {
     await writeBundledSkillFiles(bundledSkillExtractDir, capabilityDefs, true);
     return bundledSkillExtractDir;
   } catch (error) {
     logForDebugging(
-      `Failed to extract additional skill files for '${e}' to ${bundledSkillExtractDir}: ${error instanceof Error ? error.message : String(error)}`,
+      `Failed to extract additional skill files for '${skillName}' to ${bundledSkillExtractDir}: ${error instanceof Error ? error.message : String(error)}`,
     );
     return null;
   }
@@ -322,12 +321,6 @@ function writeBundledSkillFiles(dir, files, tolerateExisting) {
         tolerateExisting,
       });
 }
-//@ chunk-41w44bgm.js:13979-14053 fingerprint = O_NOFOLLOW (0.659)
-/**
- * 平台不支持的 O_NONBLOCK 回退为 0。
- */
-var O_NONBLOCK_FLAG = getPlatform() === "windows" ? 0 : constants.O_NONBLOCK;
-var O_NOFOLLOW_FLAG_2 = getPlatform() === "windows" ? 0 : constants.O_NOFOLLOW;
 //@ chunk-e6aww6q8.js:3124728-3124790 fingerprint = prependBaseDir (1)
 /**
  * 返回「Base directory for this skill: <dir>」前缀行，skill 提示词前置使用。
@@ -338,11 +331,11 @@ function prependBaseDir(baseDir) {
 `;
 }
 //@ chunk-hddjmtjj.js:7191-7333 fingerprint = safeWriteFile (0.722)
-async function safeWriteFile(n, e, r) {
-  let pinnedForWrite = await openPinnedForWrite(n, e);
+async function safeWriteFile(filePath, directory, content) {
+  let pinnedForWrite = await openPinnedForWrite(filePath, directory);
   if (pinnedForWrite === null) return false;
   try {
-    await pinnedForWrite.writeFile(r, {
+    await pinnedForWrite.writeFile(content, {
       encoding: "utf8",
     });
   } finally {
@@ -351,10 +344,10 @@ async function safeWriteFile(n, e, r) {
   return true;
 }
 //@ chunk-wy9dbk5f.js:65065-65138 fingerprint = SAFE_WRITE_FLAGS (0.719)
-function SAFE_WRITE_FLAGS(e, r) {
+function SAFE_WRITE_FLAGS(filePath, isExclusive) {
   return open(
-    e,
-    constants.O_WRONLY | NOFOLLOW_NONBLOCK_FLAGS | (r ? constants.O_CREAT | constants.O_EXCL : 0),
+    filePath,
+    constants.O_WRONLY | NOFOLLOW_NONBLOCK_FLAGS | (isExclusive ? constants.O_CREAT | constants.O_EXCL : 0),
     384,
   );
 }
@@ -364,12 +357,11 @@ export {
   getBundledSkills,
   getRegisteredBundledSkillsIgnoringKillSwitch,
   isShippedSkillExecutionBlocked,
-  O_NONBLOCK_FLAG,
-  O_NOFOLLOW_FLAG_2,
   prependBaseDir,
   getBundledSkillExtractDir,
   registerBundledSkillSessionReset,
   extractAdditionalSkillFiles,
   safeWriteFile,
   SAFE_WRITE_FLAGS,
+  wireSkillFilesExtraction,
 };

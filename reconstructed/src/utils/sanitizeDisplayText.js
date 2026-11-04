@@ -15,8 +15,8 @@ var FORMAT_CHARS_RE = /(?![\u200C\u200D])[\p{Cf}\u2028\u2029]/gu;
 var C1_CONTROL_RE = /[\u001b\u0080-\u009f]/g;
 var MAX_ESCAPE_RUN = 8;
 //@ chunk-7k75rpzj.js:310-509 placement
-function sanitizeDisplayText(u) {
-  let replaced = u
+function sanitizeDisplayText(text) {
+  let replaced = text
     .replace(C1_CONTROL_RE, "")
     .replace(CONTROL_CHARS_EXCEPT_WS_RE, "")
     .replace(/[\v\f\r]/g, "");

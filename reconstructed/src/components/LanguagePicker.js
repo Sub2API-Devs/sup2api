@@ -8,8 +8,8 @@
  * pieces: chunk-9h8dr0qb.js (1)
  * attribution: fingerprint 1
  */
-import { w } from "../../vendor/react/compiler-runtime.js";
-import { y } from "../../vendor/react/cjs/react.production.js";
+import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
+import { useState } from "../../vendor/react/cjs/react.production.js";
 import { MEMO_CACHE_SENTINEL } from "../../runtime/bun-runtime.js";
 import { useKeybinding } from "../keybindings/useKeybinding.js";
 import {
@@ -22,10 +22,10 @@ import { TextInput } from "./TextInput.js";
 
 //@ chunk-9h8dr0qb.js:10277-11300 fingerprint = LanguagePicker (0.822)
 function LanguagePicker(props) {
-  let $ = w(13);
+  let $ = useMemoCache(13);
   let { initialLanguage, onComplete, onCancel } = props;
-  let [language, setLanguage] = y(initialLanguage);
-  let [cursorOffset, setCursorOffset] = y((initialLanguage ?? "").length);
+  let [language, setLanguage] = useState(initialLanguage);
+  let [cursorOffset, setCursorOffset] = useState((initialLanguage ?? "").length);
   let t1;
   if ($[0] === MEMO_CACHE_SENTINEL) {
     t1 = {

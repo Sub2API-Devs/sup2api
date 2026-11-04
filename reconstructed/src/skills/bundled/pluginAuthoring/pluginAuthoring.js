@@ -80,6 +80,7 @@ import { identityPath_2 } from "../../loadSkillsDir.js";
 import { SEND_USER_FILE_TOOL_NAME } from "../../../tools/SendUserFileTool/prompt.js";
 import { buildPrompt } from "../claudeApi.js";
 import { registerBuiltinPlugin, builtinHooksModuleRef } from "../../../plugins/builtinPlugins.js";
+import { deferInit } from "../../../../runtime/deferred-init.js";
 
 //@ chunk-jy3v56kg.js:33238-33321 placement
 function isHookInputPathAllowed(matcher) {
@@ -94,72 +95,84 @@ function isHookInputPathAllowed(matcher) {
 /**
  * 插件编写技能里报告路径长度上限与相关说明文本。
  */
-var createPluginAuthoringHooks = (e) => ({
-  register: (n) => {
-    e.registerHooks(n, {
-      absolute: (t) => resolve(getCwd(), t),
-      shownPlain: (t) => sanitizePathForReport(resolve(getCwd(), t)),
-      isNetworkPath: (t) =>
-        [t, resolve(getCwd(), t)].some((r) => isUncOrDeviceSpelling(r) || isUntouchableSpelling(r)),
-      resolveFolder: (t) => describeModFolder(resolve(getCwd(), t)),
+var createPluginAuthoringHooks = (host) => ({
+  register: (context) => {
+    host.registerHooks(context, {
+      absolute: (folder) => resolve(getCwd(), folder),
+      shownPlain: (folder) => sanitizePathForReport(resolve(getCwd(), folder)),
+      isNetworkPath: (folder) =>
+        [folder, resolve(getCwd(), folder)].some(
+          (candidate) => isUncOrDeviceSpelling(candidate) || isUntouchableSpelling(candidate),
+        ),
+      resolveFolder: (folder) => describeModFolder(resolve(getCwd(), folder)),
       complianceOff: () => scanOffReason(),
       session: () => getSessionId(),
       inChat: () => getSessionEntrypoint() === "remote_cowork",
-      handedOver: (t, r) => recordPackageHandOver(t, r),
+      handedOver: (modFolder, packagePath) => recordPackageHandOver(modFolder, packagePath),
       mayAsk: () => {
-        let t = currentSurfaceBinding();
-        if (t === undefined) return false;
+        let binding = currentSurfaceBinding();
+        if (binding === undefined) return false;
         try {
-          return canPromptForConfirmation(t.toolContext(new AbortController()));
+          return canPromptForConfirmation(binding.toolContext(new AbortController()));
         } catch {
           return false;
         }
       },
-      refuse: (t, r = true) => {
+      refuse: (errorText, reason = true) => {
         clearLastPackagedMod();
-        if (r === "managed_read_hook") logFeatureBad("plugin_authoring_scan_secrets", "managed_read_hook");
-        else if (r === "managed_settings_unreadable")
+        if (reason === "managed_read_hook")
+          logFeatureBad("plugin_authoring_scan_secrets", "managed_read_hook");
+        else if (reason === "managed_settings_unreadable")
           logFeatureBad("plugin_authoring_scan_secrets", "managed_settings_unreadable");
-        else if (r) logFeatureBad("plugin_authoring_scan_secrets", "scan_not_run");
+        else if (reason) logFeatureBad("plugin_authoring_scan_secrets", "scan_not_run");
         return {
-          text: `Result: the scan could not run: ${t}`,
+          text: `Result: the scan could not run: ${errorText}`,
           isError: true,
         };
       },
       managedReadHook: () => buildScanCheckHooks(),
-      scan: (t, r, approved, d) =>
+      scan: (folderArg, checkFiles, approved, packageArg) =>
         outsideBudget(async () => {
-          let s = resolve(getCwd(), t);
-          let h = d === undefined ? s : resolve(getCwd(), d);
-          let c = (_) => (h === s ? [join(s, _)] : [join(s, _), join(h, _)]);
-          let w;
+          let folderPath = resolve(getCwd(), folderArg);
+          let packagePath = packageArg === undefined ? folderPath : resolve(getCwd(), packageArg);
+          let pathsFor = (relPath) =>
+            packagePath === folderPath
+              ? [join(folderPath, relPath)]
+              : [join(folderPath, relPath), join(packagePath, relPath)];
+          let scanResult;
           try {
-            w = await collectScanFiles(s, {
+            scanResult = await collectScanFiles(folderPath, {
               approved,
-              readDenied: async (_) => {
-                let y = new Set();
-                let S = await r(uniq(_.flatMap(c)));
-                for (let E of _) if (c(E).some((b) => S.has(b))) y.add(E);
-                return y;
+              readDenied: async (paths) => {
+                let denied = new Set();
+                let deniedPaths = await checkFiles(uniq(paths.flatMap(pathsFor)));
+                for (let path of paths)
+                  if (pathsFor(path).some((candidate) => deniedPaths.has(candidate))) denied.add(path);
+                return denied;
               },
             });
           } catch {
             logError(Error("the secret scan threw an unexpected error"));
-            w = {
+            scanResult = {
               ok: false,
               error: "the scan hit an unexpected error.",
             };
           }
-          if (w.ok)
-            noteLastPackagedMod(s, w.findings.length === 0 && w.notScanned.length === 0 && w.capped !== true);
+          if (scanResult.ok)
+            noteLastPackagedMod(
+              folderPath,
+              scanResult.findings.length === 0 &&
+                scanResult.notScanned.length === 0 &&
+                scanResult.capped !== true,
+            );
           else clearLastPackagedMod();
-          await logScanOutcome(w).catch(() => {
+          await logScanOutcome(scanResult).catch(() => {
             return;
           });
           return {
-            ...formatScanSkipped(t, w),
-            ...(!w.ok &&
-              w.error === FOLDER_CHANGED_ERROR && {
+            ...formatScanSkipped(folderArg, scanResult),
+            ...(!scanResult.ok &&
+              scanResult.error === FOLDER_CHANGED_ERROR && {
                 changed: true,
               }),
           };
@@ -172,49 +185,50 @@ var MAX_REPORT_PATH_CHARS = 200;
 /**
  * 报告里展示路径前先清洗并截断。
  */
-function sanitizePathForReport(e) {
-  return sanitizeForReport(e, MAX_REPORT_PATH_CHARS);
+function sanitizePathForReport(path) {
+  return sanitizeForReport(path, MAX_REPORT_PATH_CHARS);
 }
 //@ chunk-jy3v56kg.js:34686-34983 placement
-async function describeModFolder(e) {
-  if (realpathAllowMissing(e))
+async function describeModFolder(folderPath) {
+  if (realpathAllowMissing(folderPath))
     return {
       network: true,
-      shown: `Folder: ${sanitizePathForReport(e)}`,
+      shown: `Folder: ${sanitizePathForReport(folderPath)}`,
     };
-  let filePath = await realpath(e).catch(() => {
+  let filePath = await realpath(folderPath).catch(() => {
     return;
   });
-  let t = filePath === undefined ? undefined : await getFileIdentity_2(filePath);
+  let identity = filePath === undefined ? undefined : await getFileIdentity_2(filePath);
   return {
     network: false,
     real: filePath,
-    identity: t,
-    unidentified: filePath !== undefined && t === undefined,
+    identity,
+    unidentified: filePath !== undefined && identity === undefined,
     shown:
-      filePath === undefined || filePath === e
-        ? `Folder: ${sanitizePathForReport(e)}`
-        : `Folder: ${sanitizePathForReport(e)}
+      filePath === undefined || filePath === folderPath
+        ? `Folder: ${sanitizePathForReport(folderPath)}`
+        : `Folder: ${sanitizePathForReport(folderPath)}
 It leads to: ${sanitizePathForReport(filePath)}`,
   };
 }
 //@ chunk-jy3v56kg.js:34983-35428 placement
-async function logScanOutcome(e) {
-  if (!e.ok) {
+async function logScanOutcome(scanResult) {
+  if (!scanResult.ok) {
     logFeatureBad("plugin_authoring_scan_secrets", "scan_not_run");
     return;
   }
-  let pluginNames = e.pluginNames;
-  let t = {
-    files_with_secrets: e.findings.length,
-    files_not_scanned: e.notScanned.length,
+  let pluginNames = scanResult.pluginNames;
+  let eventProps = {
+    files_with_secrets: scanResult.findings.length,
+    files_not_scanned: scanResult.notScanned.length,
     ...(pluginNames !== undefined && {
       plugin_id_hash: pluginIdHash(pluginNames.plugin, pluginNames.marketplace),
     }),
   };
-  if (e.capped === true) logFeatureSad("plugin_authoring_scan_secrets", "folder_capped", t);
-  else if (e.notScanned.length > 0) logFeatureSad("plugin_authoring_scan_secrets", "files_not_scanned", t);
-  else logFeatureOk("plugin_authoring_scan_secrets", t);
+  if (scanResult.capped === true) logFeatureSad("plugin_authoring_scan_secrets", "folder_capped", eventProps);
+  else if (scanResult.notScanned.length > 0)
+    logFeatureSad("plugin_authoring_scan_secrets", "files_not_scanned", eventProps);
+  else logFeatureOk("plugin_authoring_scan_secrets", eventProps);
 }
 //@ chunk-jy3v56kg.js:35516-35553 placement
 var GH_HOSTNAME_REGEX = /^[a-z0-9][a-z0-9_-]{0,38}$/i;
@@ -226,21 +240,24 @@ function getGhConfigDir() {
 }
 //@ chunk-jy3v56kg.js:35695-36095 placement
 function readPluginJsonFields(content) {
-  let n;
+  let hostsFile;
   try {
-    n = parseYaml(content);
+    hostsFile = parseYaml(content);
   } catch {
     return [];
   }
-  if (typeof n !== "object" || n === null) return [];
-  let t = [];
-  for (let [key, value] of Object.entries(n)) {
+  if (typeof hostsFile !== "object" || hostsFile === null) return [];
+  let hostNames = [];
+  for (let [key, value] of Object.entries(hostsFile)) {
     if (!isGithubDotCom(key) || typeof value !== "object" || value === null) continue;
     let { user, users } = value;
-    if (typeof user === "string" || typeof user === "number") t.push(String(user));
-    if (typeof users === "object" && users !== null && !Array.isArray(users)) t.push(...Object.keys(users));
+    if (typeof user === "string" || typeof user === "number") hostNames.push(String(user));
+    if (typeof users === "object" && users !== null && !Array.isArray(users))
+      hostNames.push(...Object.keys(users));
   }
-  return uniq(t.map((r) => r.trim()).filter((r) => GH_HOSTNAME_REGEX.test(r)));
+  return uniq(
+    hostNames.map((hostName) => hostName.trim()).filter((hostName) => GH_HOSTNAME_REGEX.test(hostName)),
+  );
 }
 //@ chunk-jy3v56kg.js:36095-36108 placement
 var MAX_GH_HOSTS_FILE_BYTES = 65536;
@@ -253,11 +270,11 @@ async function isRepoOwnedByGhUser() {
   if (currentRepositoryWithHost === null) return describeGitRemote(getCwd());
   if (!isGithubDotCom(currentRepositoryWithHost.host)) return false;
   let lower = currentRepositoryWithHost.owner.toLowerCase();
-  return (await readGhHostUsers()).some((t) => t.toLowerCase() === lower);
+  return (await readGhHostUsers()).some((hostName) => hostName.toLowerCase() === lower);
 }
 //@ chunk-jy3v56kg.js:36324-36562 placement
 async function describeGitRemote(cwd) {
-  let n = await execFileNoThrowWithCwd(gitExe(), [...GIT_SAFE_GLOBAL_ARGS, "remote"], {
+  let gitRemoteResult = await execFileNoThrowWithCwd(gitExe(), [...GIT_SAFE_GLOBAL_ARGS, "remote"], {
     cwd,
     env: {
       ...subprocessEnv(),
@@ -265,8 +282,8 @@ async function describeGitRemote(cwd) {
     },
     preserveOutputOnError: true,
   });
-  if (n.exitCode === 0) return n.stdout.trim() === "";
-  return n.exitCode === 128 && n.stderr.includes("not a git repository (or any");
+  if (gitRemoteResult.exitCode === 0) return gitRemoteResult.stdout.trim() === "";
+  return gitRemoteResult.exitCode === 128 && gitRemoteResult.stderr.includes("not a git repository (or any");
 }
 //@ chunk-jy3v56kg.js:36562-36664 placement
 async function readGhHostUsers() {
@@ -329,28 +346,29 @@ var isOrglessConsumerSession = () =>
 //@ chunk-jy3v56kg.js:38684-38989 placement
 var TERMINAL_SURFACE_NOTE = `THIS SESSION is drawn in a terminal. A pane the person opened seats at any width; one opened unasked seats from 144 columns, or 110 as \`$.ui.open\`'s doc says, and waits below that. Where hot reloading is off as ${NO_ONE_TO_ASK_TEXT}, \`claude --plugin-dir <mod folder>\` starts a session with the mod loaded.`;
 //@ chunk-jy3v56kg.js:38989-39496 placement
-function describeSharingSurface(e, n, t) {
-  let r = !isPolicyAllowed(ALLOW_PLUGIN_PUBLISH_KEY);
-  let a =
-    e &&
-    !r &&
+function describeSharingSurface(canPublish, repoOwnedByUser, canSendFile) {
+  let publishForbidden = !isPolicyAllowed(ALLOW_PLUGIN_PUBLISH_KEY);
+  let librarySharing =
+    canPublish &&
+    !publishForbidden &&
     isPluginPublishAllowed() &&
     envSessionKind() &&
     getAuthUnavailableReason() === undefined &&
     !isOrglessConsumerSession();
-  let d = (a ? ORGANIZATION_LIBRARY_NOTE : "") + (r ? GIT_PUSH_ONLY_SHARING_NOTE : "");
+  let orgNotes =
+    (librarySharing ? ORGANIZATION_LIBRARY_NOTE : "") + (publishForbidden ? GIT_PUSH_ONLY_SHARING_NOTE : "");
   if (isHeadlessHostEntrypoint() || isRemoteEntrypoint()) {
     if (
       getSessionEntrypoint() !== "remote_cowork" ||
       !envSessionKind() ||
-      r ||
-      a ||
-      !t ||
+      publishForbidden ||
+      librarySharing ||
+      !canSendFile ||
       scanOffReason() !== undefined ||
       buildScanCheckHooks() !== undefined ||
       !isWovenParcelOn()
     )
-      return CLOUD_SURFACE_NOTE + d;
+      return CLOUD_SURFACE_NOTE + orgNotes;
     switch (getSubscriptionType()) {
       case "team":
       case "enterprise":
@@ -363,15 +381,22 @@ function describeSharingSurface(e, n, t) {
     }
   }
   let isNonInteractiveSession = getIsNonInteractiveSession();
-  let c = (isNonInteractiveSession ? HOSTED_SURFACE_NOTE : TERMINAL_SURFACE_NOTE) + d;
-  let w =
+  let baseSurface = (isNonInteractiveSession ? HOSTED_SURFACE_NOTE : TERMINAL_SURFACE_NOTE) + orgNotes;
+  let canShareInTerminal =
     !isNonInteractiveSession ||
     (isNativeTerminalNotifySupported() &&
       !hostScheduledRun() &&
       env.CLAUDE_SSH_DAEMON_CHILD === undefined &&
       env.CLAUDE_SSH_RUN_DIR === undefined);
-  if (r || !envSessionKind() || !w || (!a && (!isConsumerSubscriber() || !n)) || !isSpicyPearlOn()) return c;
-  return c + (a ? ORG_LIBRARY_SHARING_NOTE : TERMINAL_SHARING_NOTE);
+  if (
+    publishForbidden ||
+    !envSessionKind() ||
+    !canShareInTerminal ||
+    (!librarySharing && (!isConsumerSubscriber() || !repoOwnedByUser)) ||
+    !isSpicyPearlOn()
+  )
+    return baseSurface;
+  return baseSurface + (librarySharing ? ORG_LIBRARY_SHARING_NOTE : TERMINAL_SHARING_NOTE);
 }
 //@ chunk-jy3v56kg.js:39496-39531 placement
 /**
@@ -392,14 +417,14 @@ var TYPES_CLAUDE_CODE_D_TS = "types/claude-code.d.ts";
 /**
  * 加载 plugin-authoring 技能附带的参考文件（类型定义、示例）。
  */
-async function loadPluginAuthoringFiles(e) {
-  let [n, t, r] = await Promise.all([
-    import("./chunk-z88hz9c9.js"),
-    import("./chunk-72n15jmc.js"),
-    import("./chunk-k7f98cn0.js"),
+async function loadPluginAuthoringFiles(extractDir) {
+  let [skillModule, declarationsModule, examplesModule] = await Promise.all([
+    import("../mods/EXAMPLE_BAND.lazy.js"),
+    import("../../../plugins/hooksModules/PLUGIN_DECLARATIONS_TEXT.lazy.js"),
+    import("../../../plugins/functionHooks/types/builtinToolSchemasOf.lazy.js"),
   ]);
   return {
-    [TYPES_CLAUDE_CODE_D_TS]: t.pluginDeclarationsOf(
+    [TYPES_CLAUDE_CODE_D_TS]: declarationsModule.pluginDeclarationsOf(
       {
         ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
         PACKAGE_URL: "@anthropic-ai/claude-code",
@@ -411,21 +436,21 @@ async function loadPluginAuthoringFiles(e) {
         HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
         DD_SOURCEMAP_GROUP: "default",
       }.VERSION,
-      r.builtinToolSchemasOf(getAllBaseToolsFromRegistry() ?? e.options.tools),
+      examplesModule.builtinToolSchemasOf(getAllBaseToolsFromRegistry() ?? extractDir.options.tools),
     ),
-    "examples/pane.tsx": n.EXAMPLE_PANE,
-    "examples/pane-state.d.ts": n.EXAMPLE_PANE_STATE,
-    "examples/pane.test.tsx": n.EXAMPLE_PANE_TEST,
-    "examples/band.tsx": n.EXAMPLE_BAND,
-    "examples/band-state.d.ts": n.EXAMPLE_BAND_STATE,
-    "examples/tool-call.ts": n.EXAMPLE_TOOL_CALL,
-    "reference.md": n.REFERENCE_MD,
+    "examples/pane.tsx": skillModule.EXAMPLE_PANE,
+    "examples/pane-state.d.ts": skillModule.EXAMPLE_PANE_STATE,
+    "examples/pane.test.tsx": skillModule.EXAMPLE_PANE_TEST,
+    "examples/band.tsx": skillModule.EXAMPLE_BAND,
+    "examples/band-state.d.ts": skillModule.EXAMPLE_BAND_STATE,
+    "examples/tool-call.ts": skillModule.EXAMPLE_TOOL_CALL,
+    "reference.md": skillModule.REFERENCE_MD,
   };
 }
 //@ chunk-jy3v56kg.js:40846-41106 placement
 var FILES_NOT_WRITTEN_NOTE = (
-  e,
-) => `The engine could not write this skill's folder, ${e}, this time, so the files named below under it are absent; once the engine has loaded the mod from its folder the same declarations are in its \`.claude-plugin/types/claude-code/index.d.ts\`.
+  folder,
+) => `The engine could not write this skill's folder, ${folder}, this time, so the files named below under it are absent; once the engine has loaded the mod from its folder the same declarations are in its \`.claude-plugin/types/claude-code/index.d.ts\`.
 
 `;
 //@ chunk-jy3v56kg.js:41106-41132 placement
@@ -434,40 +459,45 @@ var PLUGIN_AUTHORING_2 = "plugin-authoring";
 /**
  * plugin-authoring 内置技能定义（名称、描述、可由用户调用、附带文件）。
  */
-var PLUGIN_AUTHORING_SKILL = Object.freeze({
-  name: PLUGIN_AUTHORING_2,
-  description: PLUGIN_AUTHORING_DESCRIPTION,
-  menuDescription: "Write a mod: a live pane, view or behaviour change in Claude Code",
-  userInvocable: true,
-  files: loadPluginAuthoringFiles,
-  async getPromptForCommand(e, n, t) {
-    let { SKILL_MD } = await import("./chunk-z88hz9c9.js");
-    let a = identityPath_2(
-      t ?? (await import("./chunk-et4cgz1y.js")).getBundledSkillExtractDir(PLUGIN_AUTHORING_2),
-    );
-    let d = await isRepoOwnedByGhUser().catch((error) => {
-      logError(error);
-      return false;
-    });
-    let s = await expandDevModsPlaceholder(
-      SKILL_MD.replaceAll(SKILL_DIR_PLACEHOLDER, () => a).replaceAll(SESSION_SURFACE_PLACEHOLDER, () =>
-        describeSharingSurface(
-          n.options.tools.some((tool) => toolMatchesName(tool, PUBLISH_PLUGIN_TOOL_NAME)),
-          d,
-          n.options.tools.some((tool) => toolMatchesName(tool, SEND_USER_FILE_TOOL_NAME)),
+var PLUGIN_AUTHORING_SKILL; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-jy3v56kg.js:41250", () => {
+  PLUGIN_AUTHORING_SKILL = Object.freeze({
+    name: PLUGIN_AUTHORING_2,
+    description: PLUGIN_AUTHORING_DESCRIPTION,
+    menuDescription: "Write a mod: a live pane, view or behaviour change in Claude Code",
+    userInvocable: true,
+    files: loadPluginAuthoringFiles,
+    async getPromptForCommand(args, context, extractDir) {
+      let { SKILL_MD } = await import("../mods/EXAMPLE_BAND.lazy.js");
+      let skillDir = identityPath_2(
+        extractDir ?? (await import("../../bundledSkills.js")).getBundledSkillExtractDir(PLUGIN_AUTHORING_2),
+      );
+      let repoOwnedByGhUser = await isRepoOwnedByGhUser().catch((error) => {
+        logError(error);
+        return false;
+      });
+      let prompt = await expandDevModsPlaceholder(
+        SKILL_MD.replaceAll(SKILL_DIR_PLACEHOLDER, () => skillDir).replaceAll(
+          SESSION_SURFACE_PLACEHOLDER,
+          () =>
+            describeSharingSurface(
+              context.options.tools.some((tool) => toolMatchesName(tool, PUBLISH_PLUGIN_TOOL_NAME)),
+              repoOwnedByGhUser,
+              context.options.tools.some((tool) => toolMatchesName(tool, SEND_USER_FILE_TOOL_NAME)),
+            ),
         ),
-      ),
-      {
-        isPreload: n.options.isSkillPreload === true,
-      },
-    );
-    return [
-      {
-        type: "text",
-        text: (t === null ? FILES_NOT_WRITTEN_NOTE(a) : "") + buildPrompt(s, e),
-      },
-    ];
-  },
+        {
+          isPreload: context.options.isSkillPreload === true,
+        },
+      );
+      return [
+        {
+          type: "text",
+          text: (extractDir === null ? FILES_NOT_WRITTEN_NOTE(skillDir) : "") + buildPrompt(prompt, args),
+        },
+      ];
+    },
+  });
 });
 //@ chunk-jy3v56kg.js:41836-42087 placement
 var PLUGIN_AUTHORING_PLUGIN = () =>

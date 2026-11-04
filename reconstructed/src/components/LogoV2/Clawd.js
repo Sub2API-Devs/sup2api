@@ -11,7 +11,7 @@
 import { identity } from "../../utils/identity.js";
 import { createValueSlot } from "../../utils/valueSlot.js";
 import { env } from "../../utils/env.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { useIsScreenReaderEnabled } from "../../ink/components/ErrorBoundary.js";
 import {
   jsxProd_default,
@@ -19,12 +19,16 @@ import {
 } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Text, Box } from "../../ink/components/Text.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-8jypjjdf.js:11218-11254 placement
 /**
  * 导出值：clawdPoseStore（Clawd 姿态 store）；位于「Clawd 字符画渲染：按姿态（眼/手/脚）拼块字符并着色，含 Apple Terminal 专用版本」模块。
  */
-var clawdPoseStore = identity(createValueSlot(), (o) => o.set(undefined));
+var clawdPoseStore; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-8jypjjdf.js:11218", () => {
+  clawdPoseStore = identity(createValueSlot(), (slot) => slot.set(undefined));
+});
 //@ chunk-8jypjjdf.js:11254-11311 placement
 /**
  * 读取 Clawd 吉祥物姿态的全局状态（保留的姿态、取用时间、运行次数）。
@@ -374,15 +378,15 @@ var CLAWD_TURN_GLYPHS = {
 /**
  * 函数 normalizePose（字符串姿态名转定义）；位于「Clawd 字符画渲染：按姿态（眼/手/脚）拼块字符并着色，含 Apple Terminal 专用版本」模块。
  */
-function normalizePose(o) {
-  return typeof o === "string" ? CLAWD_POSES[o] : o;
+function normalizePose(pose) {
+  return typeof pose === "string" ? CLAWD_POSES[pose] : pose;
 }
 //@ chunk-8jypjjdf.js:14820-14877 layout
 /**
  * 函数 isPoseSpec（非字符串且带 facing）；位于「Clawd 字符画渲染：按姿态（眼/手/脚）拼块字符并着色，含 Apple Terminal 专用版本」模块。
  */
-function isPoseSpec(pose) {
-  return typeof pose !== "string" && "facing" in pose;
+function isPoseSpec(poseSpec) {
+  return typeof poseSpec !== "string" && "facing" in poseSpec;
 }
 //@ chunk-8jypjjdf.js:14877-14929 placement = chalkForChart (1)
 function chalkForChart() {
@@ -390,95 +394,95 @@ function chalkForChart() {
 }
 //@ chunk-8jypjjdf.js:14929-17028 fingerprint = Clawd (0.367)
 function Clawd(t0) {
-  let $ = w(47);
-  let t;
+  let $ = useMemoCache(47);
+  let props;
   if ($[0] !== t0) {
-    t = t0 === undefined ? {} : t0;
+    props = t0 === undefined ? {} : t0;
     $[0] = t0;
-    $[1] = t;
-  } else t = $[1];
-  let { pose, color, paint } = t;
-  let p = pose === undefined ? "default" : pose;
-  let d = color === undefined ? "clawd_body" : color;
+    $[1] = props;
+  } else props = $[1];
+  let { pose, color, paint } = props;
+  let poseName = pose === undefined ? "default" : pose;
+  let bodyColor = color === undefined ? "clawd_body" : color;
   if (useIsScreenReaderEnabled()) {
     return null;
   }
-  if (isPoseSpec(p)) {
-    let h;
-    if ($[2] !== d || $[3] !== p) {
-      h = chalkForChart()
+  if (isPoseSpec(poseName)) {
+    let frame;
+    if ($[2] !== bodyColor || $[3] !== poseName) {
+      frame = chalkForChart()
         ? jsxProd_default(ClawdTurnFrame, {
-            facing: p.facing,
-            color: d,
+            facing: poseName.facing,
+            color: bodyColor,
           })
         : jsxProd_default(AppleTerminalClawd, {
             eyes: "open",
-            color: d,
+            color: bodyColor,
           });
-      $[2] = d;
-      $[3] = p;
-      $[4] = h;
-    } else h = $[4];
-    return h;
+      $[2] = bodyColor;
+      $[3] = poseName;
+      $[4] = frame;
+    } else frame = $[4];
+    return frame;
   }
-  let h;
-  if ($[5] !== p) {
-    h = normalizePose(p);
-    $[5] = p;
-    $[6] = h;
-  } else h = $[6];
-  let u = h;
+  let poseSpec;
+  if ($[5] !== poseName) {
+    poseSpec = normalizePose(poseName);
+    $[5] = poseName;
+    $[6] = poseSpec;
+  } else poseSpec = $[6];
+  let poseValue = poseSpec;
   if (!chalkForChart()) {
-    let b;
-    if ($[7] !== d || $[8] !== u.eyes) {
-      b = jsxProd_default(AppleTerminalClawd, {
-        eyes: u.eyes,
-        color: d,
+    let smallFrame;
+    if ($[7] !== bodyColor || $[8] !== poseValue.eyes) {
+      smallFrame = jsxProd_default(AppleTerminalClawd, {
+        eyes: poseValue.eyes,
+        color: bodyColor,
       });
-      $[7] = d;
-      $[8] = u.eyes;
-      $[9] = b;
-    } else b = $[9];
-    return b;
+      $[7] = bodyColor;
+      $[8] = poseValue.eyes;
+      $[9] = smallFrame;
+    } else smallFrame = $[9];
+    return smallFrame;
   }
-  let C = CLAWD_ARM_GLYPHS[u.arms];
-  let b;
-  if ($[10] !== d || $[11] !== paint) {
-    b = paint ?? (() => d);
-    $[10] = d;
+  let arms = CLAWD_ARM_GLYPHS[poseValue.arms];
+  let paintFn;
+  if ($[10] !== bodyColor || $[11] !== paint) {
+    paintFn = paint ?? (() => bodyColor);
+    $[10] = bodyColor;
     $[11] = paint;
-    $[12] = b;
-  } else b = $[12];
-  let paint_2 = b;
-  let W;
-  if ($[13] !== u.eyes) {
-    W = [];
-    for (const span of CLAWD_EYE_GLYPHS[u.eyes]) {
-      let last = W.at(-1);
-      W.push({
+    $[12] = paintFn;
+  } else paintFn = $[12];
+  let paint_2 = paintFn;
+  let eyeSpans;
+  if ($[13] !== poseValue.eyes) {
+    eyeSpans = [];
+    for (const span of CLAWD_EYE_GLYPHS[poseValue.eyes]) {
+      let last = eyeSpans.at(-1);
+      eyeSpans.push({
         span,
         column: last ? last.column + last.span.glyphs.length : 2,
       });
     }
-    $[13] = u.eyes;
-    $[14] = W;
-  } else W = $[14];
-  let H;
-  if ($[15] !== C.r1L || $[16] !== paint_2) {
-    H = jsxProd_default(renderPaintedGlyphs, {
-      glyphs: C.r1L,
+    $[13] = poseValue.eyes;
+    $[14] = eyeSpans;
+  } else eyeSpans = $[14];
+  let row1Left;
+  if ($[15] !== arms.r1L || $[16] !== paint_2) {
+    row1Left = jsxProd_default(renderPaintedGlyphs, {
+      glyphs: arms.r1L,
       column: 0,
       row: 0,
       paint: paint_2,
     });
-    $[15] = C.r1L;
+    $[15] = arms.r1L;
     $[16] = paint_2;
-    $[17] = H;
-  } else H = $[17];
-  let M;
-  if ($[18] !== paint_2 || $[19] !== W) {
-    M = W.map((I) => {
-      let { span, column } = I;
+    $[17] = row1Left;
+  } else row1Left = $[17];
+  let row1Eyes;
+  if ($[18] !== paint_2 || $[19] !== eyeSpans) {
+    row1Eyes = eyeSpans.map((eyeSpan) => {
+      let { span, column } = eyeSpan;
       return jsxProd_default(
         renderPaintedGlyphs,
         {
@@ -492,46 +496,46 @@ function Clawd(t0) {
       );
     });
     $[18] = paint_2;
-    $[19] = W;
-    $[20] = M;
-  } else M = $[20];
-  let I;
-  if ($[21] !== C.r1R || $[22] !== paint_2) {
-    I = jsxProd_default(renderPaintedGlyphs, {
-      glyphs: C.r1R,
+    $[19] = eyeSpans;
+    $[20] = row1Eyes;
+  } else row1Eyes = $[20];
+  let row1Right;
+  if ($[21] !== arms.r1R || $[22] !== paint_2) {
+    row1Right = jsxProd_default(renderPaintedGlyphs, {
+      glyphs: arms.r1R,
       column: 8,
       row: 0,
       paint: paint_2,
     });
-    $[21] = C.r1R;
+    $[21] = arms.r1R;
     $[22] = paint_2;
-    $[23] = I;
-  } else I = $[23];
-  let q;
-  if ($[24] !== H || $[25] !== M || $[26] !== I) {
-    q = jsxProd_default_2(Text, {
-      children: [H, M, I],
+    $[23] = row1Right;
+  } else row1Right = $[23];
+  let row1;
+  if ($[24] !== row1Left || $[25] !== row1Eyes || $[26] !== row1Right) {
+    row1 = jsxProd_default_2(Text, {
+      children: [row1Left, row1Eyes, row1Right],
     });
-    $[24] = H;
-    $[25] = M;
-    $[26] = I;
-    $[27] = q;
-  } else q = $[27];
-  let A;
-  if ($[28] !== C.r2L || $[29] !== paint_2) {
-    A = jsxProd_default(renderPaintedGlyphs, {
-      glyphs: C.r2L,
+    $[24] = row1Left;
+    $[25] = row1Eyes;
+    $[26] = row1Right;
+    $[27] = row1;
+  } else row1 = $[27];
+  let row2Left;
+  if ($[28] !== arms.r2L || $[29] !== paint_2) {
+    row2Left = jsxProd_default(renderPaintedGlyphs, {
+      glyphs: arms.r2L,
       column: 0,
       row: 1,
       paint: paint_2,
     });
-    $[28] = C.r2L;
+    $[28] = arms.r2L;
     $[29] = paint_2;
-    $[30] = A;
-  } else A = $[30];
-  let K;
+    $[30] = row2Left;
+  } else row2Left = $[30];
+  let row2Mid;
   if ($[31] !== paint_2) {
-    K = jsxProd_default(renderPaintedGlyphs, {
+    row2Mid = jsxProd_default(renderPaintedGlyphs, {
       glyphs: "\u2588\u2588\u2588\u2588\u2588",
       column: 2,
       row: 1,
@@ -539,34 +543,34 @@ function Clawd(t0) {
       on: "eyes",
     });
     $[31] = paint_2;
-    $[32] = K;
-  } else K = $[32];
-  let k;
-  if ($[33] !== C.r2R || $[34] !== paint_2) {
-    k = jsxProd_default(renderPaintedGlyphs, {
-      glyphs: C.r2R,
+    $[32] = row2Mid;
+  } else row2Mid = $[32];
+  let row2Right;
+  if ($[33] !== arms.r2R || $[34] !== paint_2) {
+    row2Right = jsxProd_default(renderPaintedGlyphs, {
+      glyphs: arms.r2R,
       column: 7,
       row: 1,
       paint: paint_2,
     });
-    $[33] = C.r2R;
+    $[33] = arms.r2R;
     $[34] = paint_2;
-    $[35] = k;
-  } else k = $[35];
-  let R;
-  if ($[36] !== A || $[37] !== K || $[38] !== k) {
-    R = jsxProd_default_2(Text, {
-      children: [A, K, k],
+    $[35] = row2Right;
+  } else row2Right = $[35];
+  let row2;
+  if ($[36] !== row2Left || $[37] !== row2Mid || $[38] !== row2Right) {
+    row2 = jsxProd_default_2(Text, {
+      children: [row2Left, row2Mid, row2Right],
     });
-    $[36] = A;
-    $[37] = K;
-    $[38] = k;
-    $[39] = R;
-  } else R = $[39];
-  const glyphs = CLAWD_FEET_GLYPHS[u.feet];
-  let F;
+    $[36] = row2Left;
+    $[37] = row2Mid;
+    $[38] = row2Right;
+    $[39] = row2;
+  } else row2 = $[39];
+  const glyphs = CLAWD_FEET_GLYPHS[poseValue.feet];
+  let feetRow;
   if ($[40] !== paint_2 || $[41] !== glyphs) {
-    F = jsxProd_default(Text, {
+    feetRow = jsxProd_default(Text, {
       children: jsxProd_default(renderPaintedGlyphs, {
         glyphs,
         column: 0,
@@ -576,47 +580,47 @@ function Clawd(t0) {
     });
     $[40] = paint_2;
     $[41] = glyphs;
-    $[42] = F;
-  } else F = $[42];
-  let J;
-  if ($[43] !== R || $[44] !== F || $[45] !== q) {
-    J = jsxProd_default_2(Box, {
+    $[42] = feetRow;
+  } else feetRow = $[42];
+  let clawd;
+  if ($[43] !== row2 || $[44] !== feetRow || $[45] !== row1) {
+    clawd = jsxProd_default_2(Box, {
       flexDirection: "column",
       flexShrink: 0,
-      children: [q, R, F],
+      children: [row1, row2, feetRow],
     });
-    $[43] = R;
-    $[44] = F;
-    $[45] = q;
-    $[46] = J;
-  } else J = $[46];
-  return J;
+    $[43] = row2;
+    $[44] = feetRow;
+    $[45] = row1;
+    $[46] = clawd;
+  } else clawd = $[46];
+  return clawd;
 }
 //@ chunk-8jypjjdf.js:17028-17380 layout
 /**
  * 把一串字符按 paint(列,行) 给出的颜色分段（相邻同色合并，空格沿用前一段颜色）渲染成 Text 列表；on=lid 时前景背景对调。
  */
 function renderPaintedGlyphs({ glyphs, column, row, paint, on }) {
-  let m = [];
-  for (let [p, d] of Array.from(glyphs).entries()) {
-    let last = m.at(-1);
-    let h = d === " " && last ? last.color : paint(column + p, row);
-    if (last?.color === h) last.glyphs += d;
+  let runs = [];
+  for (let [columnOffset, char] of Array.from(glyphs).entries()) {
+    let last = runs.at(-1);
+    let color = char === " " && last ? last.color : paint(column + columnOffset, row);
+    if (last?.color === color) last.glyphs += char;
     else
-      m.push({
-        glyphs: d,
-        color: h,
+      runs.push({
+        glyphs: char,
+        color,
       });
   }
-  return m.map((p, d) =>
+  return runs.map((run, index) =>
     jsxProd_default(
       Text,
       {
-        color: on === "lid" ? "clawd_background" : p.color,
-        backgroundColor: on === "lid" ? p.color : on && "clawd_background",
-        children: p.glyphs,
+        color: on === "lid" ? "clawd_background" : run.color,
+        backgroundColor: on === "lid" ? run.color : on && "clawd_background",
+        children: run.glyphs,
       },
-      d,
+      index,
     ),
   );
 }
@@ -625,15 +629,15 @@ function renderPaintedGlyphs({ glyphs, column, row, paint, on }) {
  * 渲染 Clawd 转身视角帧：每行的 from..to 区间加 clawd_background 背景色。
  */
 function ClawdTurnFrame(props) {
-  let $ = w(7);
+  let $ = useMemoCache(7);
   let { facing, color } = props;
-  const l = CLAWD_TURN_GLYPHS[facing];
+  const rows = CLAWD_TURN_GLYPHS[facing];
   let children;
-  if ($[0] !== color || $[1] !== l) {
-    let p;
+  if ($[0] !== color || $[1] !== rows) {
+    let renderRow;
     if ($[3] !== color) {
-      p = (d, f) => {
-        let { glyphs, from, to } = d;
+      renderRow = (row, index) => {
+        let { glyphs, from, to } = row;
         return jsxProd_default_2(
           Text,
           {
@@ -647,42 +651,42 @@ function ClawdTurnFrame(props) {
               glyphs.slice(to),
             ],
           },
-          f,
+          index,
         );
       };
       $[3] = color;
-      $[4] = p;
-    } else p = $[4];
-    children = l.map(p);
+      $[4] = renderRow;
+    } else renderRow = $[4];
+    children = rows.map(renderRow);
     $[0] = color;
-    $[1] = l;
+    $[1] = rows;
     $[2] = children;
   } else children = $[2];
-  let p;
+  let frame;
   if ($[5] !== children) {
-    p = jsxProd_default(Box, {
+    frame = jsxProd_default(Box, {
       flexDirection: "column",
       flexShrink: 0,
       children,
     });
     $[5] = children;
-    $[6] = p;
-  } else p = $[6];
-  return p;
+    $[6] = frame;
+  } else frame = $[6];
+  return frame;
 }
 //@ chunk-8jypjjdf.js:17829-18653 fingerprint = AppleTerminalClawd (0.558)
 function AppleTerminalClawd(props) {
-  let $ = w(19);
+  let $ = useMemoCache(19);
   let { eyes, color } = props;
-  let c;
+  let leftEar;
   if ($[0] !== color) {
-    c = jsxProd_default(Text, {
+    leftEar = jsxProd_default(Text, {
       color,
       children: "\u2597",
     });
     $[0] = color;
-    $[1] = c;
-  } else c = $[1];
+    $[1] = leftEar;
+  } else leftEar = $[1];
   const children = CLAWD_SMALL_EYE_GLYPHS[eyes];
   let t3;
   if ($[2] !== color || $[3] !== children) {
@@ -695,58 +699,58 @@ function AppleTerminalClawd(props) {
     $[3] = children;
     $[4] = t3;
   } else t3 = $[4];
-  let d;
+  let rightEar;
   if ($[5] !== color) {
-    d = jsxProd_default(Text, {
+    rightEar = jsxProd_default(Text, {
       color,
       children: "\u2596",
     });
     $[5] = color;
-    $[6] = d;
-  } else d = $[6];
-  let f;
-  if ($[7] !== c || $[8] !== t3 || $[9] !== d) {
-    f = jsxProd_default_2(Text, {
-      children: [c, t3, d],
+    $[6] = rightEar;
+  } else rightEar = $[6];
+  let head;
+  if ($[7] !== leftEar || $[8] !== t3 || $[9] !== rightEar) {
+    head = jsxProd_default_2(Text, {
+      children: [leftEar, t3, rightEar],
     });
-    $[7] = c;
+    $[7] = leftEar;
     $[8] = t3;
-    $[9] = d;
-    $[10] = f;
-  } else f = $[10];
+    $[9] = rightEar;
+    $[10] = head;
+  } else head = $[10];
   let children_2;
   if ($[11] === MEMO_CACHE_SENTINEL) {
     children_2 = " ".repeat(7);
     $[11] = children_2;
   } else children_2 = $[11];
-  let u;
-  let b;
+  let bodyFill;
+  let legs;
   if ($[12] !== color) {
-    u = jsxProd_default(Text, {
+    bodyFill = jsxProd_default(Text, {
       backgroundColor: color,
       children: children_2,
     });
-    b = jsxProd_default(Text, {
+    legs = jsxProd_default(Text, {
       color,
       children: "\u2598\u2598   \u259D\u259D",
     });
     $[12] = color;
-    $[13] = u;
-    $[14] = b;
+    $[13] = bodyFill;
+    $[14] = legs;
   } else {
-    u = $[13];
-    b = $[14];
+    bodyFill = $[13];
+    legs = $[14];
   }
   let t8;
-  if ($[15] !== f || $[16] !== u || $[17] !== b) {
+  if ($[15] !== head || $[16] !== bodyFill || $[17] !== legs) {
     t8 = jsxProd_default_2(Box, {
       flexDirection: "column",
       alignItems: "center",
-      children: [f, u, b],
+      children: [head, bodyFill, legs],
     });
-    $[15] = f;
-    $[16] = u;
-    $[17] = b;
+    $[15] = head;
+    $[16] = bodyFill;
+    $[17] = legs;
     $[18] = t8;
   } else t8 = $[18];
   return t8;

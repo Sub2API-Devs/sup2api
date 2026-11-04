@@ -9,7 +9,13 @@
  * attribution: placement 13
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, M, array, string, E } from "../../../vendor/zod/v4/classic/schemas.js";
+import {
+  objectSchema,
+  booleanSchema,
+  array,
+  stringSchema,
+  numberSchema,
+} from "../../../vendor/zod/v4/classic/schemas.js";
 import { HostScoped } from "../../utils/hostScoped.js";
 import { createStore } from "../../state/store.js";
 import { createSignal } from "../../utils/signal.js";
@@ -28,45 +34,53 @@ import { classifyAxiosError } from "../../utils/errors.js";
 import { logFeatureSad, logFeatureOk, logFeatureBad } from "../analytics/featureTelemetry.js";
 import { logError } from "../../utils/log.js";
 import { logEvent } from "../analytics/index.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-dyv7vy4v.js:680-1094 placement
 /**
  * 通知偏好 API 的响应 schema。
  */
-var NotificationPreferencesSchema = DoctorLazy(() => {
-  let e = u({
-    enable_email: M().nullish(),
-    enable_push: M().nullish(),
-  });
-  let t = u({
-    bogosort: e.nullish(),
-    code_requires_action: e.nullish(),
-  });
-  let r = u({
-    has_active_channel: M(),
-    platforms: array(string())
-      .nullish()
-      .transform((n) => n ?? []),
-    most_recent_token_refresh: string().nullish(),
-  });
-  return u({
-    account_id: E().nullish(),
-    organization_id: E().nullish(),
-    preferences: u({
-      feature_preference: t.nullish(),
-    }).nullish(),
-    push_reachability: r.nullish(),
+var NotificationPreferencesSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-dyv7vy4v.js:680", () => {
+  NotificationPreferencesSchema = DoctorLazy(() => {
+    let channelPrefs = objectSchema({
+      enable_email: booleanSchema().nullish(),
+      enable_push: booleanSchema().nullish(),
+    });
+    let featurePrefs = objectSchema({
+      bogosort: channelPrefs.nullish(),
+      code_requires_action: channelPrefs.nullish(),
+    });
+    let pushReachability = objectSchema({
+      has_active_channel: booleanSchema(),
+      platforms: array(stringSchema())
+        .nullish()
+        .transform((platforms) => platforms ?? []),
+      most_recent_token_refresh: stringSchema().nullish(),
+    });
+    return objectSchema({
+      account_id: numberSchema().nullish(),
+      organization_id: numberSchema().nullish(),
+      preferences: objectSchema({
+        feature_preference: featurePrefs.nullish(),
+      }).nullish(),
+      push_reachability: pushReachability.nullish(),
+    });
   });
 });
 //@ chunk-dyv7vy4v.js:1094-1159 placement
 /**
  * 按宿主保存的通知偏好状态。
  */
-var PREFERENCES_TIMEOUT_MS = 1e4;
-var notificationPrefsState = new HostScoped(() => ({
-  reachability: createStore(undefined),
-  hydrated: createSignal(),
-}));
+var PREFERENCES_TIMEOUT_MS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var notificationPrefsState;
+deferInit("chunk-dyv7vy4v.js:1094", () => {
+  PREFERENCES_TIMEOUT_MS = 1e4;
+  notificationPrefsState = new HostScoped(() => ({
+    reachability: createStore(undefined),
+    hydrated: createSignal(),
+  }));
+});
 //@ chunk-dyv7vy4v.js:1159-1194 placement
 /**
  * 取当前宿主的通知偏好状态。
@@ -85,15 +99,15 @@ function getReachability() {
 /**
  * 订阅可送达性变化。
  */
-function onReachabilityChange(e) {
-  return getNotificationPrefsState().reachability.subscribe(e);
+function onReachabilityChange(listener) {
+  return getNotificationPrefsState().reachability.subscribe(listener);
 }
 //@ chunk-dyv7vy4v.js:1297-1346 placement
 /**
  * 订阅“已水合”信号。
  */
-function onHydrated(e) {
-  return getNotificationPrefsState().hydrated.subscribe(e);
+function onHydrated(listener) {
+  return getNotificationPrefsState().hydrated.subscribe(listener);
 }
 //@ chunk-dyv7vy4v.js:1346-1593 placement
 function localNotificationPreferences() {
@@ -131,18 +145,18 @@ async function fetchNotificationPreferences() {
       reason: "no_auth",
     };
   try {
-    let e = await apiClient.get(PREFERENCES_PATH, {
+    let response = await apiClient.get(PREFERENCES_PATH, {
       timeout: PREFERENCES_TIMEOUT_MS,
     });
-    if (!e.ok)
+    if (!response.ok)
       return {
         ok: false,
         reason: "fetch_failed",
       };
-    let t = NotificationPreferencesSchema().safeParse(e.data);
-    if (!t.success) {
+    let parsed = NotificationPreferencesSchema().safeParse(response.data);
+    if (!parsed.success) {
       logForDiagnosticsNoPII("warn", "notif_prefs_fetch_parse_failed", {
-        issues: t.error.issues.map((issue) => issue.path.join(".")).join(","),
+        issues: parsed.error.issues.map((issue) => issue.path.join(".")).join(","),
       });
       return {
         ok: false,
@@ -151,7 +165,7 @@ async function fetchNotificationPreferences() {
     }
     return {
       ok: true,
-      prefs: t.data,
+      prefs: parsed.data,
     };
   } catch (error) {
     let { kind } = classifyAxiosError(error);
@@ -165,12 +179,12 @@ async function fetchNotificationPreferences() {
   }
 }
 //@ chunk-dyv7vy4v.js:2130-2420 placement
-async function patchNotificationPreferences(e) {
+async function patchNotificationPreferences(preferences) {
   if (!isClaudeAISubscriber_2()) return;
   try {
     if (
       !(
-        await apiClient.patch(PREFERENCES_PATH, e, {
+        await apiClient.patch(PREFERENCES_PATH, preferences, {
           timeout: PREFERENCES_TIMEOUT_MS,
         })
       ).ok
@@ -195,20 +209,20 @@ async function patchNotificationPreferences(e) {
 function pushNotificationPreferences() {
   drainSettingsWrites()
     .then(() => {
-      let e = localNotificationPreferences();
-      let t = {};
-      if (typeof e.agentPushNotifEnabled === "boolean")
-        t.bogosort = {
-          enable_push: e.agentPushNotifEnabled,
+      let localPrefs = localNotificationPreferences();
+      let featurePrefs = {};
+      if (typeof localPrefs.agentPushNotifEnabled === "boolean")
+        featurePrefs.bogosort = {
+          enable_push: localPrefs.agentPushNotifEnabled,
         };
-      if (typeof e.inputNeededNotifEnabled === "boolean")
-        t.code_requires_action = {
-          enable_push: e.inputNeededNotifEnabled,
+      if (typeof localPrefs.inputNeededNotifEnabled === "boolean")
+        featurePrefs.code_requires_action = {
+          enable_push: localPrefs.inputNeededNotifEnabled,
         };
-      if (Object.keys(t).length === 0) return;
+      if (Object.keys(featurePrefs).length === 0) return;
       return patchNotificationPreferences({
         preferences: {
-          feature_preference: t,
+          feature_preference: featurePrefs,
         },
       });
     })
@@ -247,23 +261,23 @@ async function hydrateNotificationPreferences(storageV5) {
   let featurePreference = prefs.preferences?.feature_preference;
   let enablePush = featurePreference?.bogosort?.enable_push;
   let enablePush_2 = featurePreference?.code_requires_action?.enable_push;
-  let b = localNotificationPreferences();
-  let s = {};
-  if (b.agentPushNotifEnabled === undefined && typeof enablePush === "boolean")
-    s.agentPushNotifEnabled = enablePush;
-  if (b.inputNeededNotifEnabled === undefined && typeof enablePush_2 === "boolean")
-    s.inputNeededNotifEnabled = enablePush_2;
+  let localPrefs = localNotificationPreferences();
+  let seedSettings = {};
+  if (localPrefs.agentPushNotifEnabled === undefined && typeof enablePush === "boolean")
+    seedSettings.agentPushNotifEnabled = enablePush;
+  if (localPrefs.inputNeededNotifEnabled === undefined && typeof enablePush_2 === "boolean")
+    seedSettings.inputNeededNotifEnabled = enablePush_2;
   logForDiagnosticsNoPII("info", "notif_prefs_hydrate_result", {
     has_active_channel: pushReachability?.has_active_channel,
     server_bogosort: enablePush,
     server_code_requires_action: enablePush_2,
-    seeded: Object.keys(s).length > 0,
+    seeded: Object.keys(seedSettings).length > 0,
   });
-  if (Object.keys(s).length === 0) {
+  if (Object.keys(seedSettings).length === 0) {
     logFeatureOk("notif_prefs_hydrate");
     return;
   }
-  await updateSettingsForSource("userSettings", s, undefined, storageV5);
+  await updateSettingsForSource("userSettings", seedSettings, undefined, storageV5);
   getNotificationPrefsState().hydrated.emit();
   logFeatureOk("notif_prefs_hydrate");
 }

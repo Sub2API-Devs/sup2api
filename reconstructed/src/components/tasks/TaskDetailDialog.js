@@ -9,7 +9,7 @@
  * attribution: placement 2
  */
 import { remoteSessionProgressLabel } from "./RemoteSessionProgress.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { useElapsedTicker, useConfirmationKeys } from "../ConfirmationPrompt.js";
 import {
   jsxProd_default,
@@ -25,20 +25,20 @@ import { FocusColumn } from "../design-system/FocusColumn.js";
 /**
  * 远程任务状态短标签：completed→done，failed→error，否则取进度标签。
  */
-function remoteTaskStatusLabel(h) {
-  if (h.status === "completed") return "done";
-  if (h.status === "failed") return "error";
-  return remoteSessionProgressLabel(h);
+function remoteTaskStatusLabel(task) {
+  if (task.status === "completed") return "done";
+  if (task.status === "failed") return "error";
+  return remoteSessionProgressLabel(task);
 }
 //@ chunk-18hwfzwa.js:699033-700976 placement
 function TaskDetailDialog(props) {
-  let $ = w(25);
+  let $ = useMemoCache(25);
   let { task, onDone, onBack, onKill } = props;
   let children = useElapsedTicker(task.startTime, task.status === "running", 1000, 0, task.endTime);
   const onKill_2 = task.status === "running" ? onKill : undefined;
-  let He;
+  let confirmationHandlers;
   if ($[0] !== onBack || $[1] !== onDone || $[2] !== onKill_2) {
-    He = {
+    confirmationHandlers = {
       onClose: onDone,
       onBack,
       onKill: onKill_2,
@@ -46,9 +46,9 @@ function TaskDetailDialog(props) {
     $[0] = onBack;
     $[1] = onDone;
     $[2] = onKill_2;
-    $[3] = He;
-  } else He = $[3];
-  let onKeyDown = useConfirmationKeys(He);
+    $[3] = confirmationHandlers;
+  } else confirmationHandlers = $[3];
+  let onKeyDown = useConfirmationKeys(confirmationHandlers);
   let subtitle;
   if ($[4] !== children) {
     subtitle = jsxProd_default(Text, {
@@ -70,19 +70,19 @@ function TaskDetailDialog(props) {
     $[7] = showStop;
     $[8] = inputGuide;
   } else inputGuide = $[8];
-  let At;
+  let statusLabel;
   if ($[9] === MEMO_CACHE_SENTINEL) {
-    At = jsxProd_default(Text, {
+    statusLabel = jsxProd_default(Text, {
       bold: true,
       children: "Status:",
     });
-    $[9] = At;
-  } else At = $[9];
-  let It;
+    $[9] = statusLabel;
+  } else statusLabel = $[9];
+  let statusElement;
   if ($[10] !== task.status) {
-    It = jsxProd_default_2(Text, {
+    statusElement = jsxProd_default_2(Text, {
       children: [
-        At,
+        statusLabel,
         " ",
         task.status === "running"
           ? jsxProd_default(Text, {
@@ -101,8 +101,8 @@ function TaskDetailDialog(props) {
       ],
     });
     $[10] = task.status;
-    $[11] = It;
-  } else It = $[11];
+    $[11] = statusElement;
+  } else statusElement = $[11];
   const children_2 =
     task.status === "running"
       ? task.gathersFromGitHubOrg
@@ -111,24 +111,24 @@ function TaskDetailDialog(props) {
       : task.status === "completed"
         ? "Scan finished \u2014 the proposal review pops up next (or has already been shown)."
         : "The scan ended without producing a proposal.";
-  let Et;
+  let descriptionElement;
   if ($[12] !== children_2) {
-    Et = jsxProd_default(Text, {
+    descriptionElement = jsxProd_default(Text, {
       dimColor: true,
       children: children_2,
     });
     $[12] = children_2;
-    $[13] = Et;
-  } else Et = $[13];
+    $[13] = descriptionElement;
+  } else descriptionElement = $[13];
   let children_3;
-  if ($[14] !== Et || $[15] !== It) {
+  if ($[14] !== descriptionElement || $[15] !== statusElement) {
     children_3 = jsxProd_default_2(Box, {
       flexDirection: "column",
       gap: 1,
-      children: [It, Et],
+      children: [statusElement, descriptionElement],
     });
-    $[14] = Et;
-    $[15] = It;
+    $[14] = descriptionElement;
+    $[15] = statusElement;
     $[16] = children_3;
   } else children_3 = $[16];
   let children_4;
@@ -147,16 +147,16 @@ function TaskDetailDialog(props) {
     $[20] = inputGuide;
     $[21] = children_4;
   } else children_4 = $[21];
-  let oo;
+  let dialogElement;
   if ($[22] !== onKeyDown || $[23] !== children_4) {
-    oo = jsxProd_default(FocusColumn, {
+    dialogElement = jsxProd_default(FocusColumn, {
       onKeyDown,
       children: children_4,
     });
     $[22] = onKeyDown;
     $[23] = children_4;
-    $[24] = oo;
-  } else oo = $[24];
-  return oo;
+    $[24] = dialogElement;
+  } else dialogElement = $[24];
+  return dialogElement;
 }
 export { TaskDetailDialog, remoteTaskStatusLabel };

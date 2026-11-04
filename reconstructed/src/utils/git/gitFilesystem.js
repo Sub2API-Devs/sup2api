@@ -59,6 +59,7 @@ import { O_NONBLOCK } from "../fsFlags.js";
 import { lstatErrnoOrFalse } from "./gitDirResolution.js";
 import { MAX_PLACEMENT_DEPTH } from "./builderGit/gitConfigAudit.js";
 import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-t0gq9gyw.js:80246-80537 callgraph-fingerprint = getRemoteUrlForDir (0.543)
 /**
@@ -71,11 +72,11 @@ function getRemoteUrlForDir_2(cwd) {
       `[git] could not read the git config of ${cwd} (a NUL byte, an unsafe path or a read error), so its origin is unknown`,
     );
   if (typeof gitConfigValue !== "string") return gitConfigValue;
-  let r = (o) => {
-    let s = firstGitConfigValue(gitConfigValue, "remote", "origin", o);
-    return s ? normalizeGitRemoteUrl(s) : null;
+  let readOriginValue = (key) => {
+    let value = firstGitConfigValue(gitConfigValue, "remote", "origin", key);
+    return value ? normalizeGitRemoteUrl(value) : null;
   };
-  return r("pushurl") ?? r("url") ?? REPO_NEGATIVE_RESULT;
+  return readOriginValue("pushurl") ?? readOriginValue("url") ?? REPO_NEGATIVE_RESULT;
 }
 //@ chunk-t0gq9gyw.js:86395-86531 placement
 class TrustGuardHolder {
@@ -96,7 +97,10 @@ class TrustGuardHolder {
 /**
  * 宿主隔离的信任守卫状态注册表。
  */
-var trustGuardRegistry = new HostScoped(() => new TrustGuardHolder());
+var trustGuardRegistry; // deferred: uses TrustGuardHolder of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-t0gq9gyw.js:86531", () => {
+  trustGuardRegistry = new HostScoped(() => new TrustGuardHolder());
+});
 //@ chunk-t0gq9gyw.js:86622-86684 layout
 var PACKED_REFS_CHUNK_BYTES = 65536;
 var PACKED_REFS_OVERLAP_BYTES = 4096;
@@ -109,69 +113,73 @@ var HEX_STRING_RE = /^[0-9a-f]+$/;
 /**
  * 打开 packed-refs，按块二分查找 ref 名，跳过注释与剥离行，自动识别 sha1/sha256 长度；找到返回对象 id，否则 null。
  */
-async function lookupPackedRef(e, n) {
-  let buffer = Buffer.from(n, "utf-8");
-  let o = buffer.length;
-  let s = Buffer.allocUnsafe(PACKED_REFS_CHUNK_BYTES + 1);
-  let a;
-  let c = 0;
-  let u = 0;
-  let p = 0;
-  let y = 0;
-  let w = 0;
-  let E = 0;
-  let h = 0;
-  let b = 0;
-  let v = 0;
-  let _ = 0;
-  let R = 0;
-  let L = 0;
-  let P;
+async function lookupPackedRef(gitDir, refName) {
+  let buffer = Buffer.from(refName, "utf-8");
+  let needle = buffer.length;
+  let buffer_2 = Buffer.allocUnsafe(PACKED_REFS_CHUNK_BYTES + 1);
+  let handle;
+  let fileSize = 0;
+  let low = 0;
+  let high = 0;
+  let mid = 0;
+  let chunkLength = 0;
+  let readStart = 0;
+  let chunkSize = 0;
+  let lineStart = 0;
+  let hashLength = 0;
+  let hashStart = 0;
+  let newlineIndex = 0;
+  let cmp = 0;
+  let hash;
   try {
-    a = await open(join(e, "packed-refs"), "r");
-    c = (await a.stat()).size;
-    p = c;
-    while (u < p) {
-      y = u + Math.floor((p - u) / 2);
-      E = Math.max(u, y - PACKED_REFS_OVERLAP_BYTES);
-      h = (await a.read(s, 0, Math.min(PACKED_REFS_CHUNK_BYTES, c - E), E)).bytesRead;
-      w = y - E;
-      if (w >= h) return null;
-      s[h] = NEWLINE_CODE;
-      b = w > 0 ? s.lastIndexOf(NEWLINE_CODE, w - 1) + 1 : 0;
-      if (b > 1 && s[b] === CARET_CODE) b = s.lastIndexOf(NEWLINE_CODE, b - 2) + 1;
-      if (s[b] === SPACE_CODE) {
-        R = s.indexOf(NEWLINE_CODE, b);
-        u = E + (R < 0 || R >= h ? h : R + 1);
+    handle = await open(join(gitDir, "packed-refs"), "r");
+    fileSize = (await handle.stat()).size;
+    high = fileSize;
+    while (low < high) {
+      mid = low + Math.floor((high - low) / 2);
+      readStart = Math.max(low, mid - PACKED_REFS_OVERLAP_BYTES);
+      chunkSize = (
+        await handle.read(buffer_2, 0, Math.min(PACKED_REFS_CHUNK_BYTES, fileSize - readStart), readStart)
+      ).bytesRead;
+      chunkLength = mid - readStart;
+      if (chunkLength >= chunkSize) return null;
+      buffer_2[chunkSize] = NEWLINE_CODE;
+      lineStart = chunkLength > 0 ? buffer_2.lastIndexOf(NEWLINE_CODE, chunkLength - 1) + 1 : 0;
+      if (lineStart > 1 && buffer_2[lineStart] === CARET_CODE)
+        lineStart = buffer_2.lastIndexOf(NEWLINE_CODE, lineStart - 2) + 1;
+      if (buffer_2[lineStart] === SPACE_CODE) {
+        newlineIndex = buffer_2.indexOf(NEWLINE_CODE, lineStart);
+        low = readStart + (newlineIndex < 0 || newlineIndex >= chunkSize ? chunkSize : newlineIndex + 1);
         continue;
       }
-      if (v === 0) v = b + 40 < h && s[b + 40] === SHA256_HEX_LENGTH ? 40 : 64;
-      _ = b + v + 1;
-      if (_ >= h) return null;
-      L = s.compare(buffer, 0, o, _, Math.min(_ + o, h));
-      if (L === 0) {
-        if (_ + o < h && s[_ + o] !== NEWLINE_CODE) {
-          p = E + b;
+      if (hashLength === 0)
+        hashLength = lineStart + 40 < chunkSize && buffer_2[lineStart + 40] === SHA256_HEX_LENGTH ? 40 : 64;
+      hashStart = lineStart + hashLength + 1;
+      if (hashStart >= chunkSize) return null;
+      cmp = buffer_2.compare(buffer, 0, needle, hashStart, Math.min(hashStart + needle, chunkSize));
+      if (cmp === 0) {
+        if (hashStart + needle < chunkSize && buffer_2[hashStart + needle] !== NEWLINE_CODE) {
+          high = readStart + lineStart;
           continue;
         }
-        P = s.toString("ascii", b, b + v);
-        return HEX_STRING_RE.test(P) ? P : null;
+        hash = buffer_2.toString("ascii", lineStart, lineStart + hashLength);
+        return HEX_STRING_RE.test(hash) ? hash : null;
       }
-      if (L < 0) {
-        R = s.indexOf(NEWLINE_CODE, w);
-        if (R < 0 || R >= h) R = h - 1;
-        if (R + 1 < h && s[R + 1] === CARET_CODE) {
-          R = s.indexOf(NEWLINE_CODE, R + 1);
-          if (R < 0 || R >= h) R = h - 1;
+      if (cmp < 0) {
+        newlineIndex = buffer_2.indexOf(NEWLINE_CODE, chunkLength);
+        if (newlineIndex < 0 || newlineIndex >= chunkSize) newlineIndex = chunkSize - 1;
+        if (newlineIndex + 1 < chunkSize && buffer_2[newlineIndex + 1] === CARET_CODE) {
+          newlineIndex = buffer_2.indexOf(NEWLINE_CODE, newlineIndex + 1);
+          if (newlineIndex < 0 || newlineIndex >= chunkSize) newlineIndex = chunkSize - 1;
         }
-        u = E + R + 1;
-      } else p = E + b;
+        low = readStart + newlineIndex + 1;
+      } else high = readStart + lineStart;
     }
     return null;
   } catch {
     return null;
   } finally {
-    await a?.close();
+    await handle?.close();
   }
 }
 //@ chunk-t0gq9gyw.js:87558-87598 facade-exports
@@ -179,106 +187,106 @@ function clearResolveGitDirCache() {
   getGitRepoCache().gitDirByCwd.clear();
 }
 //@ chunk-t0gq9gyw.js:87598-87749 facade-exports
-async function resolveGitDir(e) {
-  let n = e ?? (isRemoteSessionAvailable() ? getOriginalCwdOrNull() : getCwdOrNull());
-  if (n === null) return null;
-  let r = resolve(n);
-  let o = getGitRepoCache().gitDirByCwd.get(r);
-  if (o !== undefined) return o;
-  return resolveGitDirForCwd(r, findGitRoot(r));
+async function resolveGitDir(cwd) {
+  let startPath = cwd ?? (isRemoteSessionAvailable() ? getOriginalCwdOrNull() : getCwdOrNull());
+  if (startPath === null) return null;
+  let resolved = resolve(startPath);
+  let cached = getGitRepoCache().gitDirByCwd.get(resolved);
+  if (cached !== undefined) return cached;
+  return resolveGitDirForCwd(resolved, findGitRoot(resolved));
 }
 //@ chunk-t0gq9gyw.js:87749-87802 facade-exports
-async function refreshGitDir(e) {
-  let n = resolve(e);
-  return resolveGitDirForCwd(n, findGitRootUncached(n));
+async function refreshGitDir(cwd) {
+  let resolved = resolve(cwd);
+  return resolveGitDirForCwd(resolved, findGitRootUncached(resolved));
 }
 //@ chunk-t0gq9gyw.js:87802-88271 layout
 /**
  * 解析目录的 git 目录（.git 文件中的 gitdir 指针，带安全检查与缓存）。
  */
-async function resolveGitDirForCwd(e, n) {
+async function resolveGitDirForCwd(cwd, gitRoot) {
   let gitDirByCwd = getGitRepoCache().gitDirByCwd;
-  if (!n) {
-    gitDirByCwd.set(e, null);
+  if (!gitRoot) {
+    gitDirByCwd.set(cwd, null);
     return null;
   }
-  let o = join(n, ".git");
+  let dotGitPath = join(gitRoot, ".git");
   try {
-    if ((await stat(o)).isFile()) {
-      let fileGuarded = await readFileGuarded(o, GIT_POINTER_MAX_BYTES, {
+    if ((await stat(dotGitPath)).isFile()) {
+      let fileGuarded = await readFileGuarded(dotGitPath, GIT_POINTER_MAX_BYTES, {
         sniffEncoding: true,
         withBytes: true,
       });
       if (fileGuarded === null || fileGuarded.truncated) {
-        gitDirByCwd.set(e, null);
+        gitDirByCwd.set(cwd, null);
         return null;
       }
       let trimmed = fileGuarded.content.trim();
       if (trimmed.startsWith("gitdir:")) {
         let trimmed_2 = trimmed.slice(7).trim();
-        if (isOnForeignMount(trimmed_2, n)) {
-          gitDirByCwd.set(e, null);
+        if (isOnForeignMount(trimmed_2, gitRoot)) {
+          gitDirByCwd.set(cwd, null);
           return null;
         }
-        let p = resolve(n, trimmed_2);
-        if (isPointerPathUnsafe(trimmed_2, n)) {
-          gitDirByCwd.set(e, null);
+        let resolvedGitDir = resolve(gitRoot, trimmed_2);
+        if (isPointerPathUnsafe(trimmed_2, gitRoot)) {
+          gitDirByCwd.set(cwd, null);
           return null;
         }
-        gitDirByCwd.set(e, p);
-        return p;
+        gitDirByCwd.set(cwd, resolvedGitDir);
+        return resolvedGitDir;
       }
     }
-    gitDirByCwd.set(e, o);
-    return o;
+    gitDirByCwd.set(cwd, dotGitPath);
+    return dotGitPath;
   } catch {
-    gitDirByCwd.set(e, null);
+    gitDirByCwd.set(cwd, null);
     return null;
   }
 }
 //@ chunk-t0gq9gyw.js:88271-88470 layout
-function lstatKind(e) {
+function lstatKind(path) {
   try {
-    let n = lstatSync(e);
-    if (n.isSymbolicLink()) return "symlink";
-    return n.isFile() ? "file" : n.isDirectory() ? "dir" : "special";
+    let stats = lstatSync(path);
+    if (stats.isSymbolicLink()) return "symlink";
+    return stats.isFile() ? "file" : stats.isDirectory() ? "dir" : "special";
   } catch (error) {
     let errnoCode = getErrnoCode(error);
     return errnoCode === "ENOENT" || errnoCode === "ENOTDIR" ? "absent" : "other";
   }
 }
 //@ chunk-t0gq9gyw.js:88470-88641 facade-exports
-function readLinkTextSafe(e) {
+function readLinkTextSafe(linkPath) {
   try {
-    let n = readlinkSync(e, {
+    let raw = readlinkSync(linkPath, {
       encoding: "buffer",
     });
-    let str = n.toString("utf-8");
-    if (str.includes("\x00") || !Buffer.from(str, "utf-8").equals(n)) return null;
+    let str = raw.toString("utf-8");
+    if (str.includes("\x00") || !Buffer.from(str, "utf-8").equals(raw)) return null;
     return str;
   } catch {
     return null;
   }
 }
 //@ chunk-t0gq9gyw.js:88641-88740 facade-exports
-function pointerFileIsSuspect(e, n) {
-  if (!walkPathSafely(e, n)) return true;
-  let r = lstatKind(e);
-  return r === "symlink" || r === "special" || r === "other";
+function pointerFileIsSuspect(filePath, baseDir) {
+  if (!walkPathSafely(filePath, baseDir)) return true;
+  let kind = lstatKind(filePath);
+  return kind === "symlink" || kind === "special" || kind === "other";
 }
 //@ chunk-t0gq9gyw.js:88740-88814 file-local
-function isSafeRefName(e, n) {
-  let r = relative(n, e);
-  return !(r === "" || r.startsWith("..") || isAbsolute(r));
+function isSafeRefName(filePath, baseDir) {
+  let relPath = relative(baseDir, filePath);
+  return !(relPath === "" || relPath.startsWith("..") || isAbsolute(relPath));
 }
 //@ chunk-t0gq9gyw.js:88814-88867 facade-exports
-function readPositionIsUnsafe(e, n) {
-  if (!isSafeRefName(e, n)) return true;
-  return !walkPathSafely(e, n);
+function readPositionIsUnsafe(filePath, baseDir) {
+  if (!isSafeRefName(filePath, baseDir)) return true;
+  return !walkPathSafely(filePath, baseDir);
 }
 //@ chunk-t0gq9gyw.js:88867-88899 layout
-function isPathOnForeignMount(e, n) {
-  return isOnForeignMount(e, n);
+function isPathOnForeignMount(path, baseDir) {
+  return isOnForeignMount(path, baseDir);
 }
 //@ chunk-t0gq9gyw.js:88899-88939 layout
 var SEPARATOR_RUN_RE = /\/+/;
@@ -289,43 +297,71 @@ var LEADING_SLASH_ANCHORED_RE = /^\//;
 /**
  * 逐段检查路径（拒绝特殊文件、记录链接与缺失）。
  */
-function walkPathSafely(e, n, r = 40, o = n, s = false, a, c = Number.POSITIVE_INFINITY, u) {
-  if (r <= 0) return false;
-  let match = LEADING_SLASH_ANCHORED_RE.exec(e);
-  let y = match ? match[0] : "";
-  let parts = e.slice(y.length).split(SEPARATOR_RUN_RE);
-  let min = Math.min(c, parts.length);
+function walkPathSafely(
+  startPath,
+  baseDir,
+  hopsLeft = 40,
+  mountBase = baseDir,
+  allowSpecial = false,
+  report,
+  tailParts = Number.POSITIVE_INFINITY,
+  memo,
+) {
+  if (hopsLeft <= 0) return false;
+  let match = LEADING_SLASH_ANCHORED_RE.exec(startPath);
+  let currentPath = match ? match[0] : "";
+  let parts = startPath.slice(currentPath.length).split(SEPARATOR_RUN_RE);
+  let min = Math.min(tailParts, parts.length);
   for (let j = 0; j < parts.length; j++) {
-    let b = parts[j];
-    if (b === "" || b === ".") continue;
-    if (b === "..") {
-      y = dirname(y);
-      if (a && j >= parts.length - min) a.missingTail = null;
+    let segment = parts[j];
+    if (segment === "" || segment === ".") continue;
+    if (segment === "..") {
+      currentPath = dirname(currentPath);
+      if (report && j >= parts.length - min) report.missingTail = null;
       continue;
     }
-    y = join(y, b);
-    if (isForeignMountPath(y, o) || isUnderNetworkDirCached(y)) return false;
-    let v = u ? memoizedCall(u.kinds, y, lstatKind) : lstatKind(y);
-    if (a && a.stoppedAt === undefined && (v === "absent" || v === "other" || (v === "special" && !s)))
-      a.stoppedAt = {
-        path: y,
-        kind: v,
+    currentPath = join(currentPath, segment);
+    if (isForeignMountPath(currentPath, mountBase) || isUnderNetworkDirCached(currentPath)) return false;
+    let kind = memo ? memoizedCall(memo.kinds, currentPath, lstatKind) : lstatKind(currentPath);
+    if (
+      report &&
+      report.stoppedAt === undefined &&
+      (kind === "absent" || kind === "other" || (kind === "special" && !allowSpecial))
+    )
+      report.stoppedAt = {
+        path: currentPath,
+        kind,
       };
-    if (v === "other" || (v === "special" && !s)) return false;
-    if (v === "absent" && a && a.missingTail === undefined)
-      a.missingTail = j >= parts.length - min ? parts.length - j : null;
-    if (v === "symlink") {
-      if (a) a.throughLink = true;
-      let _ = u ? memoizedCall(u.linkTexts, y, readLinkTextSafe) : readLinkTextSafe(y);
-      if (_ === null) return false;
-      if (isPathOnForeignMount(_, dirname(y))) return false;
-      let R = LEADING_SLASH_RE.test(_) ? _ : dirname(y) + sep + _;
+    if (kind === "other" || (kind === "special" && !allowSpecial)) return false;
+    if (kind === "absent" && report && report.missingTail === undefined)
+      report.missingTail = j >= parts.length - min ? parts.length - j : null;
+    if (kind === "symlink") {
+      if (report) report.throughLink = true;
+      let linkText = memo
+        ? memoizedCall(memo.linkTexts, currentPath, readLinkTextSafe)
+        : readLinkTextSafe(currentPath);
+      if (linkText === null) return false;
+      if (isPathOnForeignMount(linkText, dirname(currentPath))) return false;
+      let nextPath = LEADING_SLASH_RE.test(linkText) ? linkText : dirname(currentPath) + sep + linkText;
       let joined = parts.slice(j + 1).join(sep);
-      let P = joined ? (TRAILING_SEPARATOR_RE.test(R) ? R + joined : R + sep + joined) : R;
-      return walkPathSafely(P, n, r - 1, o, s, a, Math.min(min, parts.length - j - 1), u);
+      let restPath = joined
+        ? TRAILING_SEPARATOR_RE.test(nextPath)
+          ? nextPath + joined
+          : nextPath + sep + joined
+        : nextPath;
+      return walkPathSafely(
+        restPath,
+        baseDir,
+        hopsLeft - 1,
+        mountBase,
+        allowSpecial,
+        report,
+        Math.min(min, parts.length - j - 1),
+        memo,
+      );
     }
   }
-  if (a && a.missingTail === undefined) a.missingTail = 0;
+  if (report && report.missingTail === undefined) report.missingTail = 0;
   return true;
 }
 //@ chunk-t0gq9gyw.js:89847-89902 facade-exports
@@ -336,47 +372,58 @@ function createWalkMemo() {
   };
 }
 //@ chunk-t0gq9gyw.js:89902-89988 layout
-function memoizedCall(e, n, r) {
-  let o = e.get(n);
-  if (o === undefined && !e.has(n)) {
-    o = r(n);
-    e.set(n, o);
+function memoizedCall(memo, key, compute) {
+  let value = memo.get(key);
+  if (value === undefined && !memo.has(key)) {
+    value = compute(key);
+    memo.set(key, value);
   }
-  return o;
+  return value;
 }
 //@ chunk-t0gq9gyw.js:89988-90249 layout
-function isPointerPathUnsafe(e, n, r = n, o = false, s, a) {
-  let c = LEADING_SLASH_RE.test(e) ? e : n + sep + e;
-  let u = resolve(n, e);
-  let p = u === c ? s : undefined;
-  if (s && !p) s.throughLink = true;
-  if (!walkPathSafely(c, n, undefined, r, o, p, undefined, a)) {
-    if (s) s.missingTail = null;
+function isPointerPathUnsafe(pointer, baseDir, mountBase = baseDir, allowSpecial = false, report, memo) {
+  let spelledPath = LEADING_SLASH_RE.test(pointer) ? pointer : baseDir + sep + pointer;
+  let resolved = resolve(baseDir, pointer);
+  let reportForSpelled = resolved === spelledPath ? report : undefined;
+  if (report && !reportForSpelled) report.throughLink = true;
+  if (
+    !walkPathSafely(
+      spelledPath,
+      baseDir,
+      undefined,
+      mountBase,
+      allowSpecial,
+      reportForSpelled,
+      undefined,
+      memo,
+    )
+  ) {
+    if (report) report.missingTail = null;
     return true;
   }
-  if (u === c) return false;
-  if (s) s.missingTail = null;
-  return !walkPathSafely(u, n, undefined, r, o, undefined, undefined, a);
+  if (resolved === spelledPath) return false;
+  if (report) report.missingTail = null;
+  return !walkPathSafely(resolved, baseDir, undefined, mountBase, allowSpecial, undefined, undefined, memo);
 }
 //@ chunk-t0gq9gyw.js:90249-90287 facade-exports
-function rawPointerPathIsUnsafe(e, n, r = n) {
-  return isPointerPathUnsafe(e, n, r);
+function rawPointerPathIsUnsafe(pointer, cwd, mountBase = cwd) {
+  return isPointerPathUnsafe(pointer, cwd, mountBase);
 }
 //@ chunk-t0gq9gyw.js:90287-90450 facade-exports
-function rawPointerPathWalk(path, cwdState, r) {
-  let o = {
+function rawPointerPathWalk(gitDir, cwdState, memo) {
+  let report = {
     missingTail: undefined,
   };
   return {
-    unsafe: isPointerPathUnsafe(path, cwdState, cwdState, false, o, r),
-    missingTail: o.missingTail ?? null,
-    stoppedAt: o.stoppedAt,
-    throughLink: o.throughLink ?? false,
+    unsafe: isPointerPathUnsafe(gitDir, cwdState, cwdState, false, report, memo),
+    missingTail: report.missingTail ?? null,
+    stoppedAt: report.stoppedAt,
+    throughLink: report.throughLink ?? false,
   };
 }
 //@ chunk-t0gq9gyw.js:90450-90488 facade-exports
-function linkChainIsUnsafeToFollow(e, n) {
-  return isPointerPathUnsafe(e, n, n, true);
+function linkChainIsUnsafeToFollow(pointer, cwd) {
+  return isPointerPathUnsafe(pointer, cwd, cwd, true);
 }
 //@ chunk-t0gq9gyw.js:90488-90560 facade-exports
 function isValidGitSha(s) {
@@ -393,8 +440,8 @@ async function readGitHead(gitDir) {
     if (content.startsWith("ref:")) {
       let ref = content.slice(4).trim();
       if (ref === REFS_HEADS_INVALID) {
-        let s = await runGitForWatcher(gitDir, ["symbolic-ref", "-q", "--no-recurse", "HEAD"]);
-        if (s?.exitCode === 1) {
+        let symrefResult = await runGitForWatcher(gitDir, ["symbolic-ref", "-q", "--no-recurse", "HEAD"]);
+        if (symrefResult?.exitCode === 1) {
           let ref = await resolveRef(gitDir, "HEAD");
           return ref
             ? {
@@ -403,8 +450,8 @@ async function readGitHead(gitDir) {
               }
             : null;
         }
-        if (s === null || s.code !== 0) return null;
-        ref = s.stdout.trim();
+        if (symrefResult === null || symrefResult.code !== 0) return null;
+        ref = symrefResult.stdout.trim();
       }
       if (ref.startsWith("refs/heads/")) {
         let name = ref.slice(11);
@@ -439,38 +486,44 @@ async function readGitHead(gitDir) {
 /**
  * 把 ref 解析成 sha：先在 gitDir 再在 commondir 查 loose ref 文件与 packed-refs，最多跟随 5 层符号引用；reftable 时用 git show-ref。
  */
-async function resolveRef(gitDir, n, r = 5) {
-  if (r <= 0) return null;
+async function resolveRef(gitDir, refName, hopsLeft = 5) {
+  if (hopsLeft <= 0) return null;
   if (await keepsRefsInReftable(gitDir)) {
-    if (n !== "HEAD" && (!n.startsWith("refs/") || !isSafeRefName_2(n))) return null;
-    let result = await runGitForWatcher(gitDir, ["show-ref", "--verify", "--hash", "--end-of-options", n]);
-    let c = result?.code === 0 ? result.stdout.trim() : null;
-    return c !== null && isValidGitSha(c) ? c : null;
+    if (refName !== "HEAD" && (!refName.startsWith("refs/") || !isSafeRefName_2(refName))) return null;
+    let result = await runGitForWatcher(gitDir, [
+      "show-ref",
+      "--verify",
+      "--hash",
+      "--end-of-options",
+      refName,
+    ]);
+    let sha = result?.code === 0 ? result.stdout.trim() : null;
+    return sha !== null && isValidGitSha(sha) ? sha : null;
   }
-  let refInDir = await resolveRefInDir(gitDir, n, r);
+  let refInDir = await resolveRefInDir(gitDir, refName, hopsLeft);
   if (refInDir) return refInDir;
   let commonDir = await getCommonDir(gitDir);
-  if (commonDir && commonDir !== gitDir) return resolveRefInDir(commonDir, n, r);
+  if (commonDir && commonDir !== gitDir) return resolveRefInDir(commonDir, refName, hopsLeft);
   return null;
 }
 //@ chunk-t0gq9gyw.js:91551-91831 fingerprint = resolveRefInDir (1)
 /**
  * 在单个 git 目录中按 loose 文件 → packed-refs 顺序查找 ref。
  */
-async function resolveRefInDir(e, n, r) {
+async function resolveRefInDir(gitDir, refName, hopsLeft) {
   try {
-    if (readPositionIsUnsafe(join(e, n), e)) return null;
-    let content = (await readFile(join(e, n), "utf-8")).trim();
+    if (readPositionIsUnsafe(join(gitDir, refName), gitDir)) return null;
+    let content = (await readFile(join(gitDir, refName), "utf-8")).trim();
     if (content.startsWith("ref:")) {
       let target = content.slice(4).trim();
       if (!isSafeRefName_2(target)) return null;
-      return resolveRef(e, target, r - 1);
+      return resolveRef(gitDir, target, hopsLeft - 1);
     }
     if (!isValidGitSha(content)) return null;
     return content;
   } catch {}
-  if (readPositionIsUnsafe(join(e, "packed-refs"), e)) return null;
-  return lookupPackedRef(e, n);
+  if (readPositionIsUnsafe(join(gitDir, "packed-refs"), gitDir)) return null;
+  return lookupPackedRef(gitDir, refName);
 }
 //@ chunk-t0gq9gyw.js:91831-91845 facade-exports
 var GIT_POINTER_MAX_BYTES = 65536;
@@ -495,22 +548,28 @@ async function getCommonDir(gitDir) {
   }
 }
 //@ chunk-t0gq9gyw.js:92117-92607 layout
-async function resolveSymrefTarget(commonDir, n, r) {
+async function resolveSymrefTarget(commonDir, refName, prefix) {
   if (await keepsRefsInReftable(commonDir)) {
-    if (!n.startsWith("refs/") || !isSafeRefName_2(n)) return null;
-    let o = await runGitForWatcher(commonDir, ["symbolic-ref", "-q", "--no-recurse", "--end-of-options", n]);
-    let s = o?.code === 0 ? o.stdout.trim() : "";
-    if (!s.startsWith(r)) return null;
-    let sliced = s.slice(r.length);
+    if (!refName.startsWith("refs/") || !isSafeRefName_2(refName)) return null;
+    let result = await runGitForWatcher(commonDir, [
+      "symbolic-ref",
+      "-q",
+      "--no-recurse",
+      "--end-of-options",
+      refName,
+    ]);
+    let stdout = result?.code === 0 ? result.stdout.trim() : "";
+    if (!stdout.startsWith(prefix)) return null;
+    let sliced = stdout.slice(prefix.length);
     return isSafeRefName_2(sliced) ? sliced : null;
   }
   try {
-    if (readPositionIsUnsafe(join(commonDir, n), commonDir)) return null;
-    let trimmed = (await readFile(join(commonDir, n), "utf-8")).trim();
+    if (readPositionIsUnsafe(join(commonDir, refName), commonDir)) return null;
+    let trimmed = (await readFile(join(commonDir, refName), "utf-8")).trim();
     if (trimmed.startsWith("ref:")) {
       let trimmed_2 = trimmed.slice(4).trim();
-      if (trimmed_2.startsWith(r)) {
-        let sliced = trimmed_2.slice(r.length);
+      if (trimmed_2.startsWith(prefix)) {
+        let sliced = trimmed_2.slice(prefix.length);
         if (!isSafeRefName_2(sliced)) return null;
         return sliced;
       }
@@ -540,50 +599,61 @@ async function keepsRefsInReftable(gitDir) {
   }
 }
 //@ chunk-t0gq9gyw.js:92866-93644 layout
-async function runGitForWatcher(e, n) {
+async function runGitForWatcher(gitDir, args) {
   if (isGitSpawnBlocked()) return null;
-  let r = (await getCommonDir(e)) ?? e;
+  let commonDir = (await getCommonDir(gitDir)) ?? gitDir;
   let originalCwdOrNull = getOriginalCwdOrNull();
-  let s = originalCwdOrNull === null ? null : await resolveGitDir(originalCwdOrNull);
-  if (s === null) return null;
-  let [a, c, u] = await Promise.all([
-    realpathAsyncOrNull(e),
-    realpathAsyncOrNull(r),
-    realpathAsyncOrNull((await getCommonDir(s)) ?? s),
+  let sessionGitDir = originalCwdOrNull === null ? null : await resolveGitDir(originalCwdOrNull);
+  if (sessionGitDir === null) return null;
+  let [realGitDir, realCommonDir, sessionCommonDir] = await Promise.all([
+    realpathAsyncOrNull(gitDir),
+    realpathAsyncOrNull(commonDir),
+    realpathAsyncOrNull((await getCommonDir(sessionGitDir)) ?? sessionGitDir),
   ]);
-  if (a === null || c === null || u === null || (a !== c && dirname(a) !== join(c, "worktrees"))) return null;
-  let [p, y, w] = await Promise.all([
-    stat(c, {
-      bigint: true,
-    }).catch(() => null),
-    stat(u, {
-      bigint: true,
-    }).catch(() => null),
-    stat(dirname(c), {
-      bigint: true,
-    }).catch(() => null),
-  ]);
-  if (p === null || !p.isDirectory()) return null;
   if (
-    !(w !== null && p.dev !== 0n && !isSentinelInode(p.ino) && !(p.dev === w.dev && p.ino === w.ino)
-      ? y !== null && p.dev === y.dev && p.ino === y.ino
-      : c === u)
+    realGitDir === null ||
+    realCommonDir === null ||
+    sessionCommonDir === null ||
+    (realGitDir !== realCommonDir && dirname(realGitDir) !== join(realCommonDir, "worktrees"))
   )
     return null;
-  let b = await execFileNoThrowWithCwd(gitExe(), [...GIT_SAFE_GLOBAL_ARGS, ...n], {
-    cwd: a,
+  let [commonDirStats, sessionStats, parentStats] = await Promise.all([
+    stat(realCommonDir, {
+      bigint: true,
+    }).catch(() => null),
+    stat(sessionCommonDir, {
+      bigint: true,
+    }).catch(() => null),
+    stat(dirname(realCommonDir), {
+      bigint: true,
+    }).catch(() => null),
+  ]);
+  if (commonDirStats === null || !commonDirStats.isDirectory()) return null;
+  if (
+    !(parentStats !== null &&
+    commonDirStats.dev !== 0n &&
+    !isSentinelInode(commonDirStats.ino) &&
+    !(commonDirStats.dev === parentStats.dev && commonDirStats.ino === parentStats.ino)
+      ? sessionStats !== null &&
+        commonDirStats.dev === sessionStats.dev &&
+        commonDirStats.ino === sessionStats.ino
+      : realCommonDir === sessionCommonDir)
+  )
+    return null;
+  let result = await execFileNoThrowWithCwd(gitExe(), [...GIT_SAFE_GLOBAL_ARGS, ...args], {
+    cwd: realGitDir,
     timeout: INVALID_HEAD_REF,
     preserveOutputOnError: false,
     env: getRemoteHostSessionCount(undefined, {
       repository: {
-        gitDir: a,
-        commonDir: c,
+        gitDir: realGitDir,
+        commonDir: realCommonDir,
         workTree: null,
       },
     }),
   });
-  if (b.exitCode === undefined) getGitFileWatcher().noteInconclusiveRefRead();
-  return b;
+  if (result.exitCode === undefined) getGitFileWatcher().noteInconclusiveRefRead();
+  return result;
 }
 //@ chunk-t0gq9gyw.js:93644-93679 layout
 var GIT_WATCH_POLL_MS_2 = 1000;
@@ -591,9 +661,9 @@ var GIT_WATCH_POLL_MS = 60000;
 var GIT_WATCH_SAFETY_POLL_MS = 200;
 var GIT_CHECK_DEADLINE_MS = 100;
 //@ chunk-t0gq9gyw.js:93679-93846 layout
-async function statFileIdentity(e) {
+async function statFileIdentity(path) {
   try {
-    let { dev, ino, size, mtimeNs, ctimeNs, birthtimeNs } = await stat(e, {
+    let { dev, ino, size, mtimeNs, ctimeNs, birthtimeNs } = await stat(path, {
       bigint: true,
     });
     return `${dev}:${ino}:${size}:${mtimeNs}:${ctimeNs}:${birthtimeNs}`;
@@ -683,47 +753,48 @@ class GitFileWatcher {
     }
     await this.watchCurrentBranchRef();
   }
-  watchPath(e, n, r) {
-    if (readPositionIsUnsafe(e, n)) return;
+  watchPath(filePath, baseDir, onChange) {
+    if (readPositionIsUnsafe(filePath, baseDir)) return;
     this.watchedFiles.push({
-      path: e,
-      stop: this.watchFile(e, r),
+      path: filePath,
+      stop: this.watchFile(filePath, onChange),
     });
   }
-  watchFile(e, n) {
+  watchFile(filePath, onChange) {
     if (isConfigWatchEventsEnabled()) {
-      let o = {
-        path: e,
-        onChange: n,
-        seen: statFileIdentity(e),
+      let watchedEntry = {
+        path: filePath,
+        onChange,
+        seen: statFileIdentity(filePath),
       };
-      this.filesCheckedOnRead.add(o);
-      return () => this.filesCheckedOnRead.delete(o);
+      this.filesCheckedOnRead.add(watchedEntry);
+      return () => this.filesCheckedOnRead.delete(watchedEntry);
     }
-    let r = watchFileSafe(
-      e,
+    let listener = watchFileSafe(
+      filePath,
       {
         interval: GIT_WATCH_POLL_MS_2,
       },
-      n,
+      onChange,
     );
-    return () => unwatchFile(e, r);
+    return () => unwatchFile(filePath, listener);
   }
-  checkFiles(e) {
+  checkFiles(mode) {
     if (this.checkUnderWay) {
-      this.mustCheckAgain ||= e === "now";
+      this.mustCheckAgain ||= mode === "now";
       return this.checkUnderWay;
     }
     if (
       this.filesCheckedOnRead.size === 0 ||
-      (e === "ifDue" && performance.now() - this.lastCheckMs < GIT_WATCH_POLL_MS_2)
+      (mode === "ifDue" && performance.now() - this.lastCheckMs < GIT_WATCH_POLL_MS_2)
     )
       return;
     this.lastCheckMs = performance.now();
-    let n = new Map();
-    for (let { path } of this.filesCheckedOnRead) if (!n.has(path)) n.set(path, statFileIdentity(path));
-    let r = Promise.all(
-      Array.from(this.filesCheckedOnRead, (o) => this.reportIfChanged(o, n.get(o.path))),
+    let identities = new Map();
+    for (let { path } of this.filesCheckedOnRead)
+      if (!identities.has(path)) identities.set(path, statFileIdentity(path));
+    let checkPromise = Promise.all(
+      Array.from(this.filesCheckedOnRead, (entry) => this.reportIfChanged(entry, identities.get(entry.path))),
     ).then(() => {
       this.checkUnderWay = undefined;
       if (this.mustCheckAgain) {
@@ -731,15 +802,15 @@ class GitFileWatcher {
         this.checkFilesNow();
       }
     });
-    this.checkUnderWay = withDeadline(r, GIT_CHECK_DEADLINE_MS);
+    this.checkUnderWay = withDeadline(checkPromise, GIT_CHECK_DEADLINE_MS);
     return this.checkUnderWay;
   }
-  async reportIfChanged(e, n) {
-    let [r, o] = await Promise.all([e.seen, n]);
-    if (o === r || !this.filesCheckedOnRead.has(e)) return;
-    e.seen = n;
+  async reportIfChanged(entry, identityPromise) {
+    let [previousIdentity, identity] = await Promise.all([entry.seen, identityPromise]);
+    if (identity === previousIdentity || !this.filesCheckedOnRead.has(entry)) return;
+    entry.seen = identityPromise;
     try {
-      e.onChange();
+      entry.onChange();
     } catch (error) {
       logError(error);
     }
@@ -747,10 +818,10 @@ class GitFileWatcher {
   async watchCurrentBranchRef() {
     if (!this.gitDir) return;
     let generation = this.generation;
-    let n = this.reftable ? null : await readGitHead(this.gitDir);
+    let head = this.reftable ? null : await readGitHead(this.gitDir);
     if (generation !== this.generation) return;
     let refsDir = this.commonDir ?? this.gitDir;
-    let refPath = n?.type === "branch" ? join(refsDir, "refs", "heads", n.name) : null;
+    let refPath = head?.type === "branch" ? join(refsDir, "refs", "heads", head.name) : null;
     if (refPath === this.branchRefPath) return;
     if (this.branchRefPath) {
       for (let { path, stop } of this.watchedFiles) if (path === this.branchRefPath) stop();
@@ -768,26 +839,26 @@ class GitFileWatcher {
     let branchRefPath = this.branchRefPath;
     await this.watchCurrentBranchRef();
     if (this.branchRefPath !== branchRefPath && this.filesCheckedOnRead.size > 0) {
-      await Promise.all(Array.from(this.filesCheckedOnRead, (n) => n.seen));
+      await Promise.all(Array.from(this.filesCheckedOnRead, (entry) => entry.seen));
       this.invalidate();
     }
   }
   invalidate() {
-    for (let e of this.cache.values()) e.dirty = true;
+    for (let entry of this.cache.values()) entry.dirty = true;
     this.computing.clear();
     this.retriesLeft.clear();
     this.stateChanged.emit();
   }
-  onStateChange(e) {
-    let n = this.stateChanged.subscribe(e);
-    if (!isConfigWatchEventsEnabled()) return n;
+  onStateChange(listener) {
+    let unsubscribe = this.stateChanged.subscribe(listener);
+    if (!isConfigWatchEventsEnabled()) return unsubscribe;
     let interval = setInterval(this.checkFilesNow, GIT_WATCH_POLL_MS_2);
     interval.unref();
     this.stateChangeTimers.add(interval);
     return () => {
       clearInterval(interval);
       this.stateChangeTimers.delete(interval);
-      n();
+      unsubscribe();
     };
   }
   stopWatching() {
@@ -798,58 +869,61 @@ class GitFileWatcher {
     this.watchedFiles = [];
     this.branchRefPath = null;
   }
-  async get(e, n) {
+  async get(key, compute) {
     for (;;) {
       let generation = this.generation;
       await this.ensureStarted();
-      let o = this.checkFiles("ifDue");
-      if (o) await o;
-      let s = this.cache.get(e);
-      if (s && !s.dirty) return s.value;
-      let a = s ? undefined : this.computing.get(e);
-      if (a?.generation === generation && !(a.awaitedTrust && !(this.reftable && isGitSpawnBlocked()))) {
-        let b = await a.value;
+      let checkPromise = this.checkFiles("ifDue");
+      if (checkPromise) await checkPromise;
+      let cached = this.cache.get(key);
+      if (cached && !cached.dirty) return cached.value;
+      let inFlight = cached ? undefined : this.computing.get(key);
+      if (
+        inFlight?.generation === generation &&
+        !(inFlight.awaitedTrust && !(this.reftable && isGitSpawnBlocked()))
+      ) {
+        let value = await inFlight.value;
         if (generation !== this.generation) continue;
-        return b;
+        return value;
       }
-      if (s) s.dirty = false;
-      let c = this.reftable && isGitSpawnBlocked();
+      if (cached) cached.dirty = false;
+      let needsRetry = this.reftable && isGitSpawnBlocked();
       let inconclusiveRefReads = this.inconclusiveRefReads;
-      let p = n();
-      let y = {
+      let promise = compute();
+      let entry = {
         generation,
-        awaitedTrust: c,
-        value: p,
+        awaitedTrust: needsRetry,
+        value: promise,
       };
-      this.computing.set(e, y);
-      let w;
+      this.computing.set(key, entry);
+      let value;
       try {
-        w = await p;
+        value = await promise;
       } finally {
-        if (this.computing.get(e) === y) this.computing.delete(e);
+        if (this.computing.get(key) === entry) this.computing.delete(key);
       }
       if (generation !== this.generation) continue;
-      let dirty = c || this.retryAfterNoAnswer(e, inconclusiveRefReads);
-      let h = this.cache.get(e);
-      if (h && !h.dirty) {
-        h.value = w;
-        h.dirty = dirty;
+      let dirty = needsRetry || this.retryAfterNoAnswer(key, inconclusiveRefReads);
+      let existing = this.cache.get(key);
+      if (existing && !existing.dirty) {
+        existing.value = value;
+        existing.dirty = dirty;
       }
-      if (!h)
-        this.cache.set(e, {
-          value: w,
+      if (!existing)
+        this.cache.set(key, {
+          value,
           dirty,
         });
-      return w;
+      return value;
     }
   }
   async getDefaultBranchIfKnownAnchored() {
-    let e = await this.get("defaultBranchIfKnown", this.computeDefaultBranchIfKnownAnchored);
-    if (e === null) return e;
-    let n = this.commonDir ?? this.gitDir;
-    if (n && (await resolveRef(n, `refs/remotes/origin/${e}`))) return e;
-    let r = this.cache.get("defaultBranchIfKnown");
-    if (r) r.dirty = true;
+    let branch = await this.get("defaultBranchIfKnown", this.computeDefaultBranchIfKnownAnchored);
+    if (branch === null) return branch;
+    let commonDir = this.commonDir ?? this.gitDir;
+    if (commonDir && (await resolveRef(commonDir, `refs/remotes/origin/${branch}`))) return branch;
+    let cached = this.cache.get("defaultBranchIfKnown");
+    if (cached) cached.dirty = true;
     return this.get("defaultBranchIfKnown", this.computeDefaultBranchIfKnownAnchored);
   }
   computeDefaultBranchIfKnownAnchored = async () => {
@@ -865,17 +939,17 @@ class GitFileWatcher {
       return symrefTarget;
     return null;
   };
-  async addRepo(e) {
-    if (this.repoWatchers.has(e)) return;
-    let gitDir = await resolveGitDir(e);
+  async addRepo(repoPath) {
+    if (this.repoWatchers.has(repoPath)) return;
+    let gitDir = await resolveGitDir(repoPath);
     if (!gitDir) return;
-    let r = await keepsRefsInReftable(gitDir);
-    if (this.repoWatchers.has(e)) return;
-    let file = r ? join(gitDir, "reftable", "tables.list") : join(gitDir, "HEAD");
+    let reftable = await keepsRefsInReftable(gitDir);
+    if (this.repoWatchers.has(repoPath)) return;
+    let file = reftable ? join(gitDir, "reftable", "tables.list") : join(gitDir, "HEAD");
     if (readPositionIsUnsafe(file, gitDir)) return;
     let stop = this.watchFile(file, () => {
-      this.repoBranches.delete(e);
-      this.retriesLeft.delete(`repo:${e}`);
+      this.repoBranches.delete(repoPath);
+      this.retriesLeft.delete(`repo:${repoPath}`);
       for (let repoBranchListener of this.repoBranchListeners) repoBranchListener();
     });
     if (isConfigWatchEventsEnabled() && !this.repoHeadWatches.has(file))
@@ -891,49 +965,50 @@ class GitFileWatcher {
           this.checkFilesNow,
         ),
       );
-    this.repoWatchers.set(e, {
+    this.repoWatchers.set(repoPath, {
       gitDir,
       headPath: file,
       stop,
-      reftable: r,
+      reftable,
     });
   }
-  removeRepo(e) {
-    let n = this.repoWatchers.get(e);
-    if (!n) return;
-    n.stop();
-    this.repoWatchers.delete(e);
-    this.repoBranches.delete(e);
-    this.retriesLeft.delete(`repo:${e}`);
+  removeRepo(repoPath) {
+    let watcher = this.repoWatchers.get(repoPath);
+    if (!watcher) return;
+    watcher.stop();
+    this.repoWatchers.delete(repoPath);
+    this.repoBranches.delete(repoPath);
+    this.retriesLeft.delete(`repo:${repoPath}`);
   }
-  onRepoBranchChange(e) {
-    this.repoBranchListeners.push(e);
+  onRepoBranchChange(listener) {
+    this.repoBranchListeners.push(listener);
     return () => {
-      let index = this.repoBranchListeners.indexOf(e);
+      let index = this.repoBranchListeners.indexOf(listener);
       if (index !== -1) this.repoBranchListeners.splice(index, 1);
     };
   }
-  async getBranchForRepo(e) {
-    let n = this.checkFiles("ifDue");
-    if (n) await n;
-    if (this.repoBranches.has(e)) return this.repoBranches.get(e);
-    let r = this.repoWatchers.get(e);
-    if (!r) return;
-    let o = r.reftable && isGitSpawnBlocked();
+  async getBranchForRepo(repoPath) {
+    let checkPromise = this.checkFiles("ifDue");
+    if (checkPromise) await checkPromise;
+    if (this.repoBranches.has(repoPath)) return this.repoBranches.get(repoPath);
+    let watcher = this.repoWatchers.get(repoPath);
+    if (!watcher) return;
+    let needsRetry = watcher.reftable && isGitSpawnBlocked();
     let inconclusiveRefReads = this.inconclusiveRefReads;
-    let gitHead = await readGitHead(r.gitDir);
-    let c = gitHead?.type === "branch" ? gitHead.name : null;
-    if (!o && !this.retryAfterNoAnswer(`repo:${e}`, inconclusiveRefReads)) this.repoBranches.set(e, c);
-    return c;
+    let gitHead = await readGitHead(watcher.gitDir);
+    let branch = gitHead?.type === "branch" ? gitHead.name : null;
+    if (!needsRetry && !this.retryAfterNoAnswer(`repo:${repoPath}`, inconclusiveRefReads))
+      this.repoBranches.set(repoPath, branch);
+    return branch;
   }
   noteInconclusiveRefRead() {
     this.inconclusiveRefReads++;
   }
-  retryAfterNoAnswer(e, n) {
-    if (this.inconclusiveRefReads === n) return false;
-    let r = this.retriesLeft.get(e) ?? GIT_PROBE_RETRIES;
-    if (r === 0) return false;
-    this.retriesLeft.set(e, r - 1);
+  retryAfterNoAnswer(key, seenReads) {
+    if (this.inconclusiveRefReads === seenReads) return false;
+    let remaining = this.retriesLeft.get(key) ?? GIT_PROBE_RETRIES;
+    if (remaining === 0) return false;
+    this.retriesLeft.set(key, remaining - 1);
     return true;
   }
   reset() {
@@ -975,7 +1050,10 @@ class GitFileWatcher {
   }
 }
 //@ chunk-t0gq9gyw.js:101450-101475 layout
-var gitFileWatcherByHost = new HostScoped(() => new GitFileWatcher());
+var gitFileWatcherByHost; // deferred: uses GitFileWatcher of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-t0gq9gyw.js:101450", () => {
+  gitFileWatcherByHost = new HostScoped(() => new GitFileWatcher());
+});
 //@ chunk-t0gq9gyw.js:101475-101512 layout
 /**
  * 取当前宿主的 GitFileWatcher 单例。
@@ -996,11 +1074,11 @@ async function computeHead() {
 /**
  * 从 <gitDir>/config 文本解析 remote.origin.pushurl 或 url。
  */
-async function readOriginUrlFromConfig(e) {
-  if (readPositionIsUnsafe(join(e, "config"), e)) return null;
+async function readOriginUrlFromConfig(gitDir) {
+  if (readPositionIsUnsafe(join(gitDir, "config"), gitDir)) return null;
   return (
-    (await readGitConfigValueAsync(e, "remote", "origin", "pushurl")) ||
-    (await readGitConfigValueAsync(e, "remote", "origin", "url"))
+    (await readGitConfigValueAsync(gitDir, "remote", "origin", "pushurl")) ||
+    (await readGitConfigValueAsync(gitDir, "remote", "origin", "url"))
   );
 }
 //@ chunk-t0gq9gyw.js:101820-101962 layout
@@ -1071,18 +1149,18 @@ function addWatchedRepo(checkoutPath) {
   return getGitFileWatcher().addRepo(checkoutPath);
 }
 //@ chunk-t0gq9gyw.js:102555-102590 facade-exports
-function removeWatchedRepo(e) {
-  getGitFileWatcher().removeRepo(e);
+function removeWatchedRepo(repoPath) {
+  getGitFileWatcher().removeRepo(repoPath);
 }
 //@ chunk-t0gq9gyw.js:102590-102640 facade-exports
-function onRepoBranchChange(e) {
-  return getGitFileWatcher().onRepoBranchChange(e);
+function onRepoBranchChange(listener) {
+  return getGitFileWatcher().onRepoBranchChange(listener);
 }
 //@ chunk-t0gq9gyw.js:102640-102711 facade-exports
-function onWatchedGitStateChange(e) {
+function onWatchedGitStateChange(listener) {
   let gitFileWatcher = getGitFileWatcher();
   gitFileWatcher.ensureStarted();
-  return gitFileWatcher.onStateChange(e);
+  return gitFileWatcher.onStateChange(listener);
 }
 //@ chunk-t0gq9gyw.js:102711-102759 facade-exports
 function getCachedBranchForRepo(checkoutPath) {
@@ -1097,8 +1175,8 @@ function reanchorGitFileWatcher() {
   getGitFileWatcher().reanchor();
 }
 //@ chunk-t0gq9gyw.js:102817-102982 facade-exports = computeHead (1)
-async function getHeadForDir(e) {
-  let gitDir = await resolveGitDir(e);
+async function getHeadForDir(startPath) {
+  let gitDir = await resolveGitDir(startPath);
   if (!gitDir) return null;
   let head = await readGitHead(gitDir);
   if (!head) return null;
@@ -1106,22 +1184,27 @@ async function getHeadForDir(e) {
   return head.sha;
 }
 //@ chunk-t0gq9gyw.js:102982-103100 facade-exports = computeBranch (1)
-async function getBranchForDir(e) {
-  let gitDir = await resolveGitDir(e);
+async function getBranchForDir(startPath) {
+  let gitDir = await resolveGitDir(startPath);
   if (!gitDir) return "HEAD";
   let head = await readGitHead(gitDir);
   return head?.type === "branch" ? head.name : "HEAD";
 }
 //@ chunk-t0gq9gyw.js:103100-103190 layout
-var reflogWatchesByGitDir = new Map();
-var reflogWatchRegistry = 4096;
-var COMMIT_SUBJECT_RE = /^commit(?: \((?:amend|initial|merge|cherry-pick|rebase)\))?: /;
+var reflogWatchesByGitDir; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var reflogWatchRegistry;
+var COMMIT_SUBJECT_RE;
+deferInit("chunk-t0gq9gyw.js:103100", () => {
+  reflogWatchesByGitDir = new Map();
+  reflogWatchRegistry = 4096;
+  COMMIT_SUBJECT_RE = /^commit(?: \((?:amend|initial|merge|cherry-pick|rebase)\))?: /;
+});
 //@ chunk-t0gq9gyw.js:103190-103383 layout
 async function getHeadReflogSize(gitDir) {
   if (readPositionIsUnsafe(join(gitDir, "logs", "HEAD"), gitDir)) return null;
   try {
-    let n = await lstat(join(gitDir, "logs", "HEAD"));
-    return n.isFile() ? n.size : null;
+    let stats = await lstat(join(gitDir, "logs", "HEAD"));
+    return stats.isFile() ? stats.size : null;
   } catch (error) {
     let errnoCode = getErrnoCode(error);
     return errnoCode === "ENOENT" || errnoCode === "ENOTDIR" ? 0 : null;
@@ -1130,65 +1213,65 @@ async function getHeadReflogSize(gitDir) {
 //@ chunk-t0gq9gyw.js:103383-103828 facade-exports
 async function markHeadReflog(cwd) {
   if (isRemoteSessionAvailable()) return;
-  let n;
+  let mark;
   try {
     let gitDir = await resolveGitDir(cwd);
     if (gitDir === null) return;
     if (linkChainIsUnsafeToFollow(gitDir, cwd)) return;
-    let o = realpathSync(gitDir);
-    let s = reflogWatchesByGitDir.get(o) ?? new Set();
-    n = {
+    let realGitDir = realpathSync(gitDir);
+    let marks = reflogWatchesByGitDir.get(realGitDir) ?? new Set();
+    mark = {
       gitDir,
-      realGitDir: o,
+      realGitDir,
       size: 0,
-      overlapped: s.size > 0,
+      overlapped: marks.size > 0,
     };
-    for (let c of s) c.overlapped = true;
-    reflogWatchesByGitDir.set(o, s.add(n));
+    for (let otherMark of marks) otherMark.overlapped = true;
+    reflogWatchesByGitDir.set(realGitDir, marks.add(mark));
     if (await keepsRefsInReftable(gitDir)) {
       let reflogEntries = await readReflogEntries(gitDir, 1);
       if (reflogEntries === undefined) {
-        releaseHeadReflogMark(n);
+        releaseHeadReflogMark(mark);
         return;
       }
-      n.reftableNewest = reflogEntries[0]?.key ?? null;
-      return n;
+      mark.reftableNewest = reflogEntries[0]?.key ?? null;
+      return mark;
     }
     let headReflogSize = await getHeadReflogSize(gitDir);
     if (headReflogSize === null) {
-      releaseHeadReflogMark(n);
+      releaseHeadReflogMark(mark);
       return;
     }
-    n.size = headReflogSize;
-    return n;
+    mark.size = headReflogSize;
+    return mark;
   } catch {
-    if (n !== undefined) releaseHeadReflogMark(n);
+    if (mark !== undefined) releaseHeadReflogMark(mark);
     return;
   }
 }
 //@ chunk-t0gq9gyw.js:103828-103913 facade-exports
-function releaseHeadReflogMark(e) {
-  for (let [n, r] of reflogWatchesByGitDir)
-    if (r.delete(e)) {
-      if (r.size === 0) reflogWatchesByGitDir.delete(n);
+function releaseHeadReflogMark(mark) {
+  for (let [realGitDir, marks] of reflogWatchesByGitDir)
+    if (marks.delete(mark)) {
+      if (marks.size === 0) reflogWatchesByGitDir.delete(realGitDir);
       return;
     }
 }
 //@ chunk-t0gq9gyw.js:103913-104542 facade-exports
-async function readCommitAppendedToHeadReflog(e) {
-  if (e.reftableNewest !== undefined) return readNewCommitFromReftable(e, e.reftableNewest);
-  let n = join(e.gitDir, "logs", "HEAD");
-  if (e.overlapped || readPositionIsUnsafe(n, e.gitDir)) return;
-  let fileGuarded = await readFileGuarded(n, reflogWatchRegistry, {
+async function readCommitAppendedToHeadReflog(mark) {
+  if (mark.reftableNewest !== undefined) return readNewCommitFromReftable(mark, mark.reftableNewest);
+  let reflogPath = join(mark.gitDir, "logs", "HEAD");
+  if (mark.overlapped || readPositionIsUnsafe(reflogPath, mark.gitDir)) return;
+  let fileGuarded = await readFileGuarded(reflogPath, reflogWatchRegistry, {
     noFollow: true,
     fromTail: true,
     requireNlink1: true,
-    verifyHandlePath: (p) => p === join(e.realGitDir, "logs", "HEAD"),
+    verifyHandlePath: (handlePath) => handlePath === join(mark.realGitDir, "logs", "HEAD"),
   });
   if (
     fileGuarded === null ||
     fileGuarded === "unreadable" ||
-    fileGuarded.end <= e.size ||
+    fileGuarded.end <= mark.size ||
     !fileGuarded.content.endsWith(`
 `)
   )
@@ -1198,51 +1281,56 @@ async function readCommitAppendedToHeadReflog(e) {
     sliced.lastIndexOf(`
 `) + 1,
   );
-  if (sliced_2.includes("\uFFFD") || fileGuarded.end - Buffer.byteLength(sliced_2) - 1 !== e.size) return;
+  if (sliced_2.includes("\uFFFD") || fileGuarded.end - Buffer.byteLength(sliced_2) - 1 !== mark.size) return;
   let index = sliced_2.indexOf("\t");
   if (index === -1) return;
-  let [c = "", u = ""] = sliced_2.slice(0, index).split(" ");
-  if (!isValidGitSha(c) || !isValidGitSha(u) || c === u || !COMMIT_SUBJECT_RE.test(sliced_2.slice(index + 1)))
-    return;
-  return getHeadForDir_2(e, u);
-}
-//@ chunk-t0gq9gyw.js:104542-104732 layout
-async function readNewCommitFromReftable(e, reftableNewest) {
-  if (e.overlapped) return;
-  let reflogEntries = await readReflogEntries(e.gitDir, 2);
-  let [o, s] = reflogEntries ?? [];
+  let [newId = "", oldId = ""] = sliced_2.slice(0, index).split(" ");
   if (
-    o === undefined ||
-    o.key === reftableNewest ||
-    (s?.key ?? null) !== reftableNewest ||
-    o.id === s?.id ||
-    !COMMIT_SUBJECT_RE.test(o.subject)
+    !isValidGitSha(newId) ||
+    !isValidGitSha(oldId) ||
+    newId === oldId ||
+    !COMMIT_SUBJECT_RE.test(sliced_2.slice(index + 1))
   )
     return;
-  return getHeadForDir_2(e, o.id);
+  return getHeadForDir_2(mark, oldId);
+}
+//@ chunk-t0gq9gyw.js:104542-104732 layout
+async function readNewCommitFromReftable(mark, reftableNewest) {
+  if (mark.overlapped) return;
+  let reflogEntries = await readReflogEntries(mark.gitDir, 2);
+  let [newest, previous] = reflogEntries ?? [];
+  if (
+    newest === undefined ||
+    newest.key === reftableNewest ||
+    (previous?.key ?? null) !== reftableNewest ||
+    newest.id === previous?.id ||
+    !COMMIT_SUBJECT_RE.test(newest.subject)
+  )
+    return;
+  return getHeadForDir_2(mark, newest.id);
 }
 //@ chunk-t0gq9gyw.js:104732-104937 callgraph-fingerprint = getHeadForDir (0.683)
-async function getHeadForDir_2(e, n) {
-  let gitDir = await readGitHead(e.gitDir);
+async function getHeadForDir_2(mark, commitId) {
+  let gitDir = await readGitHead(mark.gitDir);
   if (
-    (gitDir?.type === "branch" ? await resolveRef(e.gitDir, `refs/heads/${gitDir.name}`) : gitDir?.sha) !==
-      n ||
-    e.overlapped
+    (gitDir?.type === "branch" ? await resolveRef(mark.gitDir, `refs/heads/${gitDir.name}`) : gitDir?.sha) !==
+      commitId ||
+    mark.overlapped
   )
     return;
   return {
-    commitId: n,
+    commitId,
     ...(gitDir?.type === "branch" && {
       branch: gitDir.name,
     }),
   };
 }
 //@ chunk-t0gq9gyw.js:104937-105584 layout
-async function readReflogEntries(gitDir, n) {
-  let r = await runGitForWatcher(gitDir, [
+async function readReflogEntries(gitDir, count) {
+  let result = await runGitForWatcher(gitDir, [
     "log",
     "--walk-reflogs",
-    `--max-count=${n}`,
+    `--max-count=${count}`,
     "--no-show-signature",
     "--no-mailmap",
     "--no-decorate",
@@ -1252,46 +1340,47 @@ async function readReflogEntries(gitDir, n) {
     "HEAD",
     "--",
   ]);
-  if (r === null || r.exitCode === undefined) return;
-  if (r.code !== 0) {
-    let s = await runGitForWatcher(gitDir, ["symbolic-ref", "-q", "HEAD"]);
-    let a = s?.code === 0 ? s.stdout.trim() : "";
-    if (!a.startsWith("refs/heads/") || !isSafeRefName_2(a)) return;
-    return (await runGitForWatcher(gitDir, ["show-ref", "--exists", "--end-of-options", a]))?.exitCode === 2
+  if (result === null || result.exitCode === undefined) return;
+  if (result.code !== 0) {
+    let symrefResult = await runGitForWatcher(gitDir, ["symbolic-ref", "-q", "HEAD"]);
+    let branchRef = symrefResult?.code === 0 ? symrefResult.stdout.trim() : "";
+    if (!branchRef.startsWith("refs/heads/") || !isSafeRefName_2(branchRef)) return;
+    return (await runGitForWatcher(gitDir, ["show-ref", "--exists", "--end-of-options", branchRef]))
+      ?.exitCode === 2
       ? []
       : undefined;
   }
-  let o = [];
-  for (let line of r.stdout.split(`
+  let entries = [];
+  for (let line of result.stdout.split(`
 `)) {
     if (line === "") continue;
-    let [a = "", c = "", ...u] = line.split("\t");
-    if (!isValidGitSha(a) || c === "") return;
-    o.push({
+    let [id = "", selector = "", ...subjectParts] = line.split("\t");
+    if (!isValidGitSha(id) || selector === "") return;
+    entries.push({
       key: line,
-      id: a,
-      subject: u.join("\t"),
+      id,
+      subject: subjectParts.join("\t"),
     });
   }
-  return o;
+  return entries;
 }
 //@ chunk-t0gq9gyw.js:105584-106036 facade-exports
-async function probeHeadForDirBounded(e, n) {
+async function probeHeadForDirBounded(dir, cwd) {
   if (isDiskless())
     return {
       repo: true,
       sha: null,
     };
-  let r = resolve(e);
-  let gitRoot = findGitRoot(r);
-  let s = identity(resolve(n));
+  let resolvedDir = resolve(dir);
+  let gitRoot = findGitRoot(resolvedDir);
+  let resolvedCwd = identity(resolve(cwd));
   if (
     gitRoot === null ||
-    !isPathWithin(s, gitRoot, {
+    !isPathWithin(resolvedCwd, gitRoot, {
       alreadyComparable: true,
     })
   )
-    return (await hasNoNestedRepoBetween(r, s))
+    return (await hasNoNestedRepoBetween(resolvedDir, resolvedCwd))
       ? {
           repo: false,
         }
@@ -1299,11 +1388,14 @@ async function probeHeadForDirBounded(e, n) {
           repo: true,
           sha: null,
         };
-  let [a, c] = await Promise.all([normalizedRealpathOrNull(s), normalizedRealpathOrNull(gitRoot)]);
+  let [realDir, realRoot] = await Promise.all([
+    normalizedRealpathOrNull(resolvedCwd),
+    normalizedRealpathOrNull(gitRoot),
+  ]);
   if (
-    a === null ||
-    c === null ||
-    !isPathWithin(a, c, {
+    realDir === null ||
+    realRoot === null ||
+    !isPathWithin(realDir, realRoot, {
       alreadyComparable: true,
     })
   )
@@ -1311,9 +1403,9 @@ async function probeHeadForDirBounded(e, n) {
       repo: true,
       sha: null,
     };
-  let gitDir = await resolveGitDir(r);
+  let gitDir = await resolveGitDir(resolvedDir);
   if (gitDir !== null && (await isPathAbsentLstat(join(gitDir, "HEAD")))) {
-    if (await hasNoNestedRepoBetween(r, s, gitRoot))
+    if (await hasNoNestedRepoBetween(resolvedDir, resolvedCwd, gitRoot))
       return {
         repo: false,
       };
@@ -1324,18 +1416,18 @@ async function probeHeadForDirBounded(e, n) {
   }
   return {
     repo: true,
-    sha: await getHeadForDir(r),
+    sha: await getHeadForDir(resolvedDir),
   };
 }
 //@ chunk-t0gq9gyw.js:106036-106173 layout
-async function hasNoNestedRepoBetween(e, n, gitRoot) {
-  let o = e;
+async function hasNoNestedRepoBetween(dir, limitDir, limitKey) {
+  let currentDir = dir;
   for (;;) {
-    let s = identity(o);
-    if (s !== gitRoot && !(await isPathAbsentLstat(join(o, ".git")))) return false;
-    let a = dirname(o);
-    if (s === n || a === o) return true;
-    o = a;
+    let currentKey = identity(currentDir);
+    if (currentKey !== limitKey && !(await isPathAbsentLstat(join(currentDir, ".git")))) return false;
+    let parentDir = dirname(currentDir);
+    if (currentKey === limitDir || parentDir === currentDir) return true;
+    currentDir = parentDir;
   }
 }
 //@ chunk-t0gq9gyw.js:106173-106276 layout = isRealPathWithinTeamDir (1)
@@ -1349,14 +1441,14 @@ async function isPathAbsentLstat(realCandidate) {
   }
 }
 //@ chunk-t0gq9gyw.js:106276-106342 layout
-async function normalizedRealpathOrNull(e) {
-  let n = await realpathAsyncOrNull(e);
-  return n === null ? null : identity(n);
+async function normalizedRealpathOrNull(path) {
+  let real = await realpathAsyncOrNull(path);
+  return real === null ? null : identity(real);
 }
 //@ chunk-t0gq9gyw.js:106342-106405 layout
-async function realpathAsyncOrNull(e) {
+async function realpathAsyncOrNull(path) {
   try {
-    return await realpath(e);
+    return await realpath(path);
   } catch {
     return null;
   }
@@ -1384,8 +1476,8 @@ async function readWorktreeHeadSha(worktreePath) {
   return head.sha;
 }
 //@ chunk-t0gq9gyw.js:106760-106832 facade-exports
-async function getRemoteUrlForDir(e) {
-  let gitDir = await resolveGitDir(e);
+async function getRemoteUrlForDir(dir) {
+  let gitDir = await resolveGitDir(dir);
   if (!gitDir) return null;
   return getRemoteUrlForGitDir(gitDir);
 }
@@ -1393,8 +1485,8 @@ async function getRemoteUrlForDir(e) {
 async function getRemoteUrlForGitDir(gitDir, commonDir) {
   let originUrlFromConfig = await readOriginUrlFromConfig(gitDir);
   if (originUrlFromConfig) return originUrlFromConfig;
-  let o = commonDir ?? (await getCommonDir(gitDir));
-  if (o && o !== gitDir) return readOriginUrlFromConfig(o);
+  let commonDir_2 = commonDir ?? (await getCommonDir(gitDir));
+  if (commonDir_2 && commonDir_2 !== gitDir) return readOriginUrlFromConfig(commonDir_2);
   return null;
 }
 //@ chunk-t0gq9gyw.js:106946-107057 facade-exports
@@ -1403,8 +1495,8 @@ function getRemoteUrlForDirSync(startPath) {
   if (!gitDir) return null;
   let originUrl = readOriginUrlSync(gitDir);
   if (originUrl) return originUrl;
-  let commonDir = readCommonDirSync(gitDir);
-  return commonDir && commonDir !== gitDir ? readOriginUrlSync(commonDir) : null;
+  let gitDir_2 = readCommonDirSync(gitDir);
+  return gitDir_2 && gitDir_2 !== gitDir ? readOriginUrlSync(gitDir_2) : null;
 }
 //@ chunk-t0gq9gyw.js:107057-107383 layout
 /**
@@ -1416,11 +1508,12 @@ function resolveGitDirSync(startPath) {
   if (cached !== undefined) return cached;
   let gitRoot = findGitRoot(cwd);
   if (!gitRoot) return null;
-  let s = join(gitRoot, ".git");
+  let dotGitPath = join(gitRoot, ".git");
   try {
-    if (!statSync(s).isFile()) return s;
-    let content = readBoundedSync(s, GIT_POINTER_MAX_BYTES)?.trim();
-    if (content === undefined || !content.startsWith("gitdir:")) return content === undefined ? null : s;
+    if (!statSync(dotGitPath).isFile()) return dotGitPath;
+    let content = readBoundedSync(dotGitPath, GIT_POINTER_MAX_BYTES)?.trim();
+    if (content === undefined || !content.startsWith("gitdir:"))
+      return content === undefined ? null : dotGitPath;
     let trimmed = content.slice(7).trim();
     return isOnForeignMount(trimmed, gitRoot) || isPointerPathUnsafe(trimmed, gitRoot)
       ? null
@@ -1444,10 +1537,10 @@ function readCommonDirSync(gitDir) {
 //@ chunk-t0gq9gyw.js:107548-107560 facade-exports
 var GIT_CONFIG_MAX_BYTES = 1e6;
 //@ chunk-t0gq9gyw.js:107560-107743 layout
-function readOriginUrlSync(e) {
-  let n = join(e, "config");
-  if (readPositionIsUnsafe(n, e)) return null;
-  let bounded = readBoundedSync(n, GIT_CONFIG_MAX_BYTES);
+function readOriginUrlSync(gitDir) {
+  let configPath = join(gitDir, "config");
+  if (readPositionIsUnsafe(configPath, gitDir)) return null;
+  let bounded = readBoundedSync(configPath, GIT_CONFIG_MAX_BYTES);
   if (bounded === undefined || hasNulByte(bounded)) return null;
   return (
     firstGitConfigValue(bounded, "remote", "origin", "pushurl") ||
@@ -1458,24 +1551,24 @@ function readOriginUrlSync(e) {
 /**
  * 以 O_NONBLOCK 同步读取小文件：必须是普通文件且不超过上限，否则返回 undefined（避免读到 FIFO/设备或巨型文件）。
  */
-function readBoundedSync(e, n) {
-  let r;
+function readBoundedSync(filePath, maxBytes) {
+  let fd;
   try {
-    r = openSync(e, constants.O_RDONLY | O_NONBLOCK);
-    let o = fstatSync(r);
-    if (!o.isFile() || o.size > n) return;
-    let s = Buffer.allocUnsafe(n + 1);
-    let a = 0;
-    while (a < s.length) {
-      let c = readSync(r, s, a, s.length - a, a);
-      if (c === 0) break;
-      a += c;
+    fd = openSync(filePath, constants.O_RDONLY | O_NONBLOCK);
+    let stats = fstatSync(fd);
+    if (!stats.isFile() || stats.size > maxBytes) return;
+    let buffer = Buffer.allocUnsafe(maxBytes + 1);
+    let totalRead = 0;
+    while (totalRead < buffer.length) {
+      let bytesRead = readSync(fd, buffer, totalRead, buffer.length - totalRead, totalRead);
+      if (bytesRead === 0) break;
+      totalRead += bytesRead;
     }
-    return a > n ? undefined : s.toString("utf-8", 0, a);
+    return totalRead > maxBytes ? undefined : buffer.toString("utf-8", 0, totalRead);
   } catch {
     return;
   } finally {
-    if (r !== undefined) closeSync(r);
+    if (fd !== undefined) closeSync(fd);
   }
 }
 //@ chunk-t0gq9gyw.js:108024-108197 facade-exports = getWorktreeCountFromFs (1)
@@ -1493,19 +1586,23 @@ async function getWorktreeCountFromFs() {
     return 1;
   }
 }
-//@ chunk-ca06bv0t.js:16992-17085 fingerprint = computeRemoteUrl (0.798)
-var computeRemoteUrl_2 = (r) =>
-  hasNulByte(r)
-    ? ""
-    : firstGitConfigValue(r, "remote", "origin", "pushurl") ||
-      firstGitConfigValue(r, "remote", "origin", "url") ||
-      "";
 //@ chunk-dgqyqzy0.js:3870-3908 fingerprint = getCommonDir (0.737)
 /**
  * 读 gitDir/commondir 得到共享 git 目录，没有则返回 gitDir 本身。
  */
 function getCommonDir_2(gitDir) {
   return lstatErrnoOrFalse(gitDir, "commondir");
+}
+//@ chunk-s61vbvea.js:254014-254155 fingerprint = isShallowClone (0.431)
+/**
+ * 根据 .git/shallow 等文件判断是否浅克隆。
+ */
+function isShallowClone(layout, sharedIndexNames) {
+  return [
+    [layout.gitDir, "index", "index"],
+    [layout.commonDir, "shallow", "shallow"],
+    ...sharedIndexNames.slice(0, MAX_PLACEMENT_DEPTH).map((name) => [layout.gitDir, name, "shared_index"]),
+  ];
 }
 //@ chunk-e6aww6q8.js:3599115-3599365 fingerprint = resolveGitDir (1)
 /**
@@ -1524,28 +1621,24 @@ async function resolveGitDir_2(startPath) {
     return null;
   }
 }
-//@ chunk-s61vbvea.js:254014-254155 fingerprint = isShallowClone (0.431)
-/**
- * 根据 .git/shallow 等文件判断是否浅克隆。
- */
-function isShallowClone(e, n) {
-  return [
-    [e.gitDir, "index", "index"],
-    [e.commonDir, "shallow", "shallow"],
-    ...n.slice(0, MAX_PLACEMENT_DEPTH).map((r) => [e.gitDir, r, "shared_index"]),
-  ];
-}
 //@ chunk-yj65zw1g.js:625-708 fingerprint = resetGitFileWatcher (0.682)
 class resetGitFileWatcher_2 {
   #e = 0;
-  next(o, t) {
-    this.#e = this.#e * t + o * (1 - t);
+  next(input, factor) {
+    this.#e = this.#e * factor + input * (1 - factor);
     return this.#e;
   }
   reset() {
     this.#e = 0;
   }
 }
+//@ chunk-ca06bv0t.js:16992-17085 fingerprint = computeRemoteUrl (0.798)
+var computeRemoteUrl_2 = (text) =>
+  hasNulByte(text)
+    ? ""
+    : firstGitConfigValue(text, "remote", "origin", "pushurl") ||
+      firstGitConfigValue(text, "remote", "origin", "url") ||
+      "";
 export {
   reanchorGitFileWatcher,
   rawPointerPathIsUnsafe,
@@ -1594,4 +1687,6 @@ export {
   isShallowClone,
   readCommitAppendedToHeadReflog,
   trustGuardRegistry,
+  getRemoteUrlForDirSync,
+  removeWatchedRepo,
 };

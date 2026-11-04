@@ -67,7 +67,7 @@ function errorResult(message) {
 /**
  * 预热备用进程（warm spare）被认领：校验进程是以备用模式启动的，接收会话凭证与设置（CLAUDE_CODE_OAUTH_TOKEN/SESSION_ACCESS_TOKEN 等），应用设置并记录启动耗时。
  */
-async function claimWarmSpareSession(m, e) {
+async function claimWarmSpareSession(claim, spare) {
   let startTime = performance.now();
   profileCheckpoint("claim_received");
   headlessProfilerCheckpoint("claim_received");
@@ -75,27 +75,27 @@ async function claimWarmSpareSession(m, e) {
     return errorResult(
       "not_a_spare: claim_session is only accepted by a process started with --await-claim that has not been claimed yet",
     );
-  let u = e.parkedSettingsRefusal();
-  if (u !== undefined)
+  let settingsRefusal = spare.parkedSettingsRefusal();
+  if (settingsRefusal !== undefined)
     return errorResult(
-      `settings_not_applied: ${u} \u2014 nothing was claimed; start the session with query()`,
+      `settings_not_applied: ${settingsRefusal} \u2014 nothing was claimed; start the session with query()`,
     );
-  if (e.isBusy()) return errorResult("busy: a turn is in progress");
-  if (!e.isFreshSession())
+  if (spare.isBusy()) return errorResult("busy: a turn is in progress");
+  if (!spare.isFreshSession())
     return errorResult("turn_started: the spare already ran a turn and cannot be claimed");
   if (isScrubEnabled())
     return errorResult(
       "scrub_mode: a spare cannot be claimed while CLAUDE_CODE_SUBPROCESS_ENV_SCRUB is on \u2014 its sandbox paths are pinned to the launch directory",
     );
-  let p = SDKClaimSessionClaimSessionMessageSchema().safeParse(m);
-  if (!p.success) {
-    let s = p.error.issues[0];
+  let parsed = SDKClaimSessionClaimSessionMessageSchema().safeParse(claim);
+  if (!parsed.success) {
+    let firstIssue = parsed.error.issues[0];
     return errorResult(
-      `invalid_request: ${s ? `${sanitizeTelemetryString(s.path.join(".") || "(root)")} \u2014 ${sanitizeTelemetryString(s.message)}` : "malformed claim_session request"}`,
+      `invalid_request: ${firstIssue ? `${sanitizeTelemetryString(firstIssue.path.join(".") || "(root)")} \u2014 ${sanitizeTelemetryString(firstIssue.message)}` : "malformed claim_session request"}`,
     );
   }
-  let i = p.data;
-  let env = i.env ?? {};
+  let claimData = parsed.data;
+  let env = claimData.env ?? {};
   for (let key of Object.keys(env))
     if (!CLAIM_ENV_KEYS.has(key))
       return errorResult(
@@ -105,26 +105,32 @@ async function claimWarmSpareSession(m, e) {
     return errorResult(
       "env_key_not_claimable: CLAUDE_CODE_OAUTH_TOKEN in a process an organization's launcher started; such a process takes the sign-in only by asking its host at start-up (oauth_token_refresh)",
     );
-  let found = i.sdk_mcp_servers?.find(isPrototypeKey);
+  let found = claimData.sdk_mcp_servers?.find(isPrototypeKey);
   if (found !== undefined)
     return errorResult("invalid_request: sdk_mcp_servers \u2014 " + reservedServerNameMessage(found));
-  if (i.cwd.trim() === "") return errorResult("invalid_request: cwd \u2014 must be a non-empty string");
-  let n;
+  if (claimData.cwd.trim() === "")
+    return errorResult("invalid_request: cwd \u2014 must be a non-empty string");
+  let settingsError;
   try {
-    n = expandPath(i.cwd);
+    settingsError = expandPath(claimData.cwd);
     if (
-      !vetPathSpellingsOrChain(i.cwd, n, e.getToolPermissionContext().trustedNetworkDirectories, {
-        allowLinkTextClimbs: true,
-      }).ok
+      !vetPathSpellingsOrChain(
+        claimData.cwd,
+        settingsError,
+        spare.getToolPermissionContext().trustedNetworkDirectories,
+        {
+          allowLinkTextClimbs: true,
+        },
+      ).ok
     )
       return errorResult("unsafe_path: the claim cwd is a network path or an obfuscated spelling");
   } catch {
     return errorResult("unsafe_path: the claim cwd could not be screened");
   }
-  if (!isAbsolute(n))
+  if (!isAbsolute(settingsError))
     return errorResult("invalid_request: cwd \u2014 must be an absolute path (or ~/\u2026)");
   try {
-    if (!(await stat(n)).isDirectory())
+    if (!(await stat(settingsError)).isDirectory())
       return errorResult("cwd_not_a_directory: the claim cwd is not a directory");
   } catch (error) {
     if (!isFsInaccessible(error))
@@ -133,23 +139,30 @@ async function claimWarmSpareSession(m, e) {
       });
     return errorResult("cwd_not_found: the claim cwd does not exist or is not accessible");
   }
-  let d = n;
+  let blockingError = settingsError;
   try {
-    d = await realpath(n);
+    blockingError = await realpath(settingsError);
   } catch {
-    d = n;
+    blockingError = settingsError;
   }
-  if (pathVettingReason(d, e.getToolPermissionContext().trustedNetworkDirectories) !== undefined)
+  if (
+    pathVettingReason(blockingError, spare.getToolPermissionContext().trustedNetworkDirectories) !== undefined
+  )
     return errorResult("unsafe_path: the claim cwd resolved to a network path or an obfuscated spelling");
-  let _ = [];
-  for (let s of i.additional_directories ?? []) {
-    let c;
+  let extraDirs = [];
+  for (let dir of claimData.additional_directories ?? []) {
+    let resolvedDir;
     try {
-      c = resolve(d, expandPath(s, d));
+      resolvedDir = resolve(blockingError, expandPath(dir, blockingError));
       if (
-        !vetPathSpellingsOrChain(s, c, e.getToolPermissionContext().trustedNetworkDirectories, {
-          allowLinkTextClimbs: true,
-        }).ok
+        !vetPathSpellingsOrChain(
+          dir,
+          resolvedDir,
+          spare.getToolPermissionContext().trustedNetworkDirectories,
+          {
+            allowLinkTextClimbs: true,
+          },
+        ).ok
       )
         return errorResult(
           "unsafe_path: an additional directory is a network path or an obfuscated spelling",
@@ -158,61 +171,72 @@ async function claimWarmSpareSession(m, e) {
       return errorResult("unsafe_path: an additional directory could not be screened");
     }
     try {
-      if ((await stat(c)).isDirectory()) _.push(c);
+      if ((await stat(resolvedDir)).isDirectory()) extraDirs.push(resolvedDir);
       else
-        logForDebugging(`claim_session: additional directory ${c} is not a directory \u2014 skipped`, {
-          level: "warn",
-        });
+        logForDebugging(
+          `claim_session: additional directory ${resolvedDir} is not a directory \u2014 skipped`,
+          {
+            level: "warn",
+          },
+        );
     } catch {}
   }
-  let E = i.permission_mode ?? e.currentPermissionMode();
-  let toolPermissionContext = e.getToolPermissionContext();
+  let permissionMode = claimData.permission_mode ?? spare.currentPermissionMode();
+  let toolPermissionContext = spare.getToolPermissionContext();
   let modesInPlay = new Set(
-    [E, toolPermissionContext.mode, toolPermissionContext.prePlanMode].filter((s) => s !== undefined),
+    [permissionMode, toolPermissionContext.mode, toolPermissionContext.prePlanMode].filter(
+      (value) => value !== undefined,
+    ),
   );
-  let message = await projectSettingsFilesToApply(d, {
-    permissionModeSupplied: e.permissionModeSuppliedOnInvocation || i.permission_mode !== undefined,
+  let message = await projectSettingsFilesToApply(blockingError, {
+    permissionModeSupplied:
+      spare.permissionModeSuppliedOnInvocation || claimData.permission_mode !== undefined,
     modesInPlay,
   });
   if (message !== undefined) return errorResult(message);
-  if (i.permission_mode !== undefined) {
-    let s = e.checkPermissionMode(i.permission_mode);
-    if (s !== undefined) return errorResult(`permission_mode_not_claimable: ${s}`);
+  if (claimData.permission_mode !== undefined) {
+    let modeCheck = spare.checkPermissionMode(claimData.permission_mode);
+    if (modeCheck !== undefined) return errorResult(`permission_mode_not_claimable: ${modeCheck}`);
   }
   profileCheckpoint("claim_validated");
   headlessProfilerCheckpoint("claim_validated");
-  let g = markSpareClaiming();
-  let sdkMcpSettled = e.sdkMcpSettled();
-  let C = false;
+  let claimingMarker = markSpareClaiming();
+  let sdkMcpSettled = spare.sdkMcpSettled();
+  let hasApplied = false;
   for (let [key, value] of Object.entries(env)) {
     process.env[key] = value;
-    if (TOKEN_ENV_KEYS.has(key)) C = true;
+    if (TOKEN_ENV_KEYS.has(key)) hasApplied = true;
   }
-  if (C) resetEnvDerivedAuthCaches();
+  if (hasApplied) resetEnvDerivedAuthCaches();
   if (Object.keys(env).length > 0) emitCredentialChange();
   resetStartTime();
   markWarmSpareClaimed();
-  if (_.length > 0) {
-    e.setToolPermissionContext(
-      applyValidatedPermissionUpdate(e.getToolPermissionContext(), {
+  if (extraDirs.length > 0) {
+    spare.setToolPermissionContext(
+      applyValidatedPermissionUpdate(spare.getToolPermissionContext(), {
         type: "addDirectories",
-        directories: _,
+        directories: extraDirs,
         destination: "cliArg",
       }),
     );
-    setAdditionalDirectoriesForClaudeMd([...getAdditionalDirectoriesForClaudeMd(), ..._]);
+    setAdditionalDirectoriesForClaudeMd([...getAdditionalDirectoriesForClaudeMd(), ...extraDirs]);
   }
-  let { departedAdditionalDirectories } = await relocateSession(e.session, d, "claim_session", {
-    storageV5: e.storageV5,
-    credentials: e.credentials,
-    freshSession: true,
-    confirmFresh: () => !e.isBusy() && e.isFreshSession(),
-    requestBuilt: () => false,
-  });
+  let { departedAdditionalDirectories } = await relocateSession(
+    spare.session,
+    blockingError,
+    "claim_session",
+    {
+      storageV5: spare.storageV5,
+      credentials: spare.credentials,
+      freshSession: true,
+      confirmFresh: () => !spare.isBusy() && spare.isFreshSession(),
+      requestBuilt: () => false,
+    },
+  );
   headlessProfilerCheckpoint("claim_relocated");
-  e.setToolPermissionContext(e.settlePlanAutoMode(e.getToolPermissionContext()));
+  spare.setToolPermissionContext(spare.settlePlanAutoMode(spare.getToolPermissionContext()));
   try {
-    e.retireDepartedAdditionalDirectories(departedAdditionalDirectories);
+    spare.retireDepartedAdditionalDirectories(departedAdditionalDirectories);
   } catch (error) {
     logForDebugging(
       `claim_session: retiring the spare directory's additional directories failed (continuing): ${String(error)}`,
@@ -222,7 +246,7 @@ async function claimWarmSpareSession(m, e) {
     );
   }
   try {
-    await e.startDeferredMcpServers();
+    await spare.startDeferredMcpServers();
   } catch (error) {
     logForDebugging(
       `claim_session: starting the held-back MCP servers failed (continuing): ${String(error)}`,
@@ -233,7 +257,7 @@ async function claimWarmSpareSession(m, e) {
   }
   headlessProfilerCheckpoint("claim_deferred_mcp");
   try {
-    await e.rehomePluginsAndMcp();
+    await spare.rehomePluginsAndMcp();
   } catch (error) {
     logForDebugging(
       `claim_session: re-homing plugins/MCP for the claimed directory failed (continuing): ${String(error)}`,
@@ -243,18 +267,19 @@ async function claimWarmSpareSession(m, e) {
     );
   }
   headlessProfilerCheckpoint("claim_plugins_mcp");
-  if (i.permission_mode !== undefined) {
-    let s = e.applyPermissionMode(i.permission_mode);
-    if (s !== undefined) throw Error(`permission mode not applied after relocation: ${s}`);
+  if (claimData.permission_mode !== undefined) {
+    let applyResult = spare.applyPermissionMode(claimData.permission_mode);
+    if (applyResult !== undefined)
+      throw Error(`permission mode not applied after relocation: ${applyResult}`);
     setNeedsPlanModeExitAttachment(false);
     setHasExitedPlanMode(false);
     setNeedsAutoModeExitAttachment(false);
-    setSessionBypassPermissionsMode(i.permission_mode === "bypassPermissions");
+    setSessionBypassPermissionsMode(claimData.permission_mode === "bypassPermissions");
   }
-  e.recheckAutoModeGate();
-  let h;
+  spare.recheckAutoModeGate();
+  let claimResult;
   try {
-    h = await e.applyWorkspaceTrust(i.workspace_trust);
+    claimResult = await spare.applyWorkspaceTrust(claimData.workspace_trust);
   } catch (error) {
     logForDebugging(
       `claim_session: recording the host's workspace trust failed (continuing): ${String(error)}`,
@@ -263,25 +288,25 @@ async function claimWarmSpareSession(m, e) {
       },
     );
   }
-  registerSession(e.storageV5).catch(() => {});
-  e.applyPromptOptions({
-    systemPrompt: i.system_prompt,
-    appendSystemPrompt: i.append_system_prompt,
-    title: i.title,
-    agents: i.agents,
+  registerSession(spare.storageV5).catch(() => {});
+  spare.applyPromptOptions({
+    systemPrompt: claimData.system_prompt,
+    appendSystemPrompt: claimData.append_system_prompt,
+    title: claimData.title,
+    agents: claimData.agents,
   });
-  if (i.sdk_mcp_servers !== undefined) e.setSdkMcpServers(i.sdk_mcp_servers);
-  e.startSessionStartHooks();
-  e.announceStartingChange();
+  if (claimData.sdk_mcp_servers !== undefined) spare.setSdkMcpServers(claimData.sdk_mcp_servers);
+  spare.startSessionStartHooks();
+  spare.announceStartingChange();
   markSpareClaimed();
   profileCheckpoint("spare_claimed");
   headlessProfilerCheckpoint("spare_claimed");
-  let S;
-  let y;
-  if (i.include_initialize) {
+  let a;
+  let b;
+  if (claimData.include_initialize) {
     let startTime = performance.now();
     try {
-      S = await e.buildInitializePayload(h);
+      a = await spare.buildInitializePayload(claimResult);
     } catch (error) {
       logForDebugging(
         `claim_session: building the initialize payload failed (continuing without it): ${String(error)}`,
@@ -290,91 +315,100 @@ async function claimWarmSpareSession(m, e) {
         },
       );
     }
-    y = Math.round(performance.now() - startTime);
+    b = Math.round(performance.now() - startTime);
     headlessProfilerCheckpoint("spare_claim_initialize");
   }
   let rounded = Math.round(performance.now() - startTime);
   addStartupContext({
     spare_claimed: 1,
-    ...(g !== undefined && {
-      spare_parked_ms: g,
+    ...(claimingMarker !== undefined && {
+      spare_parked_ms: claimingMarker,
     }),
     spare_claim_ms: rounded,
-    ...(y !== undefined && {
-      spare_claim_initialize_ms: y,
+    ...(b !== undefined && {
+      spare_claim_initialize_ms: b,
     }),
   });
   logEvent("tengu_spare_claimed", {
-    parked_ms: g,
+    parked_ms: claimingMarker,
     claim_ms: rounded,
-    initialize_ms: y,
+    initialize_ms: b,
     sdk_mcp_settled: sdkMcpSettled,
     env_keys: Object.keys(env).length,
-    additional_directories: _.length,
-    sdk_mcp_servers: i.sdk_mcp_servers?.length,
+    additional_directories: extraDirs.length,
+    sdk_mcp_servers: claimData.sdk_mcp_servers?.length,
   });
   return {
     kind: "ok",
     response: {
       status: "ok",
-      ...(!hasUnsafePathGlyphs(d) && {
-        cwd: d,
+      ...(!hasUnsafePathGlyphs(blockingError) && {
+        cwd: blockingError,
       }),
       session_id: getSessionId(),
-      ...(g !== undefined && {
-        parked_ms: g,
+      ...(claimingMarker !== undefined && {
+        parked_ms: claimingMarker,
       }),
       sdk_mcp_settled: sdkMcpSettled,
-      ...(S !== undefined && {
-        initialize: S,
+      ...(a !== undefined && {
+        initialize: a,
       }),
-      ...(h !== undefined && {
-        workspace_trust_recorded: h,
+      ...(claimResult !== undefined && {
+        workspace_trust_recorded: claimResult,
       }),
     },
   };
 }
 //@ chunk-7n18p51h.js:18455-19981 placement
-async function projectSettingsFilesToApply(m, e) {
+async function projectSettingsFilesToApply(dir, options) {
   if (getProjectConfigRoot() !== null) return;
-  let f = [];
+  let files = [];
   if (isSettingSourceEnabled("projectSettings"))
-    f.push({
+    files.push({
       label: "settings.json",
-      path: join(m, ".claude", "settings.json"),
+      path: join(dir, ".claude", "settings.json"),
     });
   if (isSettingSourceEnabled("localSettings")) {
-    let localSettingsStoreRoot = resolveLocalSettingsStoreRoot(m, uncachedStorageRootFor);
-    for (let p of new Set([m, localSettingsStoreRoot]))
-      f.push({
+    let localSettingsStoreRoot = resolveLocalSettingsStoreRoot(dir, uncachedStorageRootFor);
+    for (let root of new Set([dir, localSettingsStoreRoot]))
+      files.push({
         label: "settings.local.json",
-        path: join(p, ".claude", "settings.local.json"),
+        path: join(root, ".claude", "settings.local.json"),
       });
   }
-  for (let { label, path } of f) {
+  for (let { label, path } of files) {
     let settings = parseSettingsFileUncached(path).settings;
     if (!settings || typeof settings !== "object") continue;
-    let r = settings;
-    let l = (d) =>
-      `project_settings_not_claimable: ${label} in the claimed directory sets ${d}, which a cold start applies during start-up and a claim cannot; start this session cold`;
-    if (r.env && typeof r.env === "object" && Object.keys(r.env).length > 0) return l("env");
-    if (typeof r.agent === "string" && r.agent !== "") return l("agent");
-    if (typeof r.model === "string" && r.model !== "") return l("model");
-    if (Array.isArray(r.fallbackModel) && r.fallbackModel.length > 0) return l("fallbackModel");
-    let permissions = r.permissions && typeof r.permissions === "object" ? r.permissions : undefined;
-    if (!e.permissionModeSupplied && typeof permissions?.defaultMode === "string")
-      return l(
+    let settings_2 = settings;
+    let refuse = (key) =>
+      `project_settings_not_claimable: ${label} in the claimed directory sets ${key}, which a cold start applies during start-up and a claim cannot; start this session cold`;
+    if (settings_2.env && typeof settings_2.env === "object" && Object.keys(settings_2.env).length > 0)
+      return refuse("env");
+    if (typeof settings_2.agent === "string" && settings_2.agent !== "") return refuse("agent");
+    if (typeof settings_2.model === "string" && settings_2.model !== "") return refuse("model");
+    if (Array.isArray(settings_2.fallbackModel) && settings_2.fallbackModel.length > 0)
+      return refuse("fallbackModel");
+    let permissions =
+      settings_2.permissions && typeof settings_2.permissions === "object"
+        ? settings_2.permissions
+        : undefined;
+    if (!options.permissionModeSupplied && typeof permissions?.defaultMode === "string")
+      return refuse(
         "permissions.defaultMode (no permission mode was given: neither --permission-mode on the spare nor permission_mode in the claim)",
       );
-    if (permissions?.disableBypassPermissionsMode === "disable" && e.modesInPlay.has("bypassPermissions"))
-      return l(
+    if (
+      permissions?.disableBypassPermissionsMode === "disable" &&
+      options.modesInPlay.has("bypassPermissions")
+    )
+      return refuse(
         "permissions.disableBypassPermissionsMode while the session would run in, or could return to, bypassPermissions mode",
       );
     if (
-      (permissions?.disableAutoMode === "disable" || r.disableAutoMode === "disable") &&
-      e.modesInPlay.has("auto")
+      (permissions?.disableAutoMode === "disable" || settings_2.disableAutoMode === "disable") &&
+      options.modesInPlay.has("auto")
     )
-      return l("disableAutoMode while the session would run in, or could return to, auto mode");
+      return refuse("disableAutoMode while the session would run in, or could return to, auto mode");
   }
   return;
 }
+export { claimWarmSpareSession };

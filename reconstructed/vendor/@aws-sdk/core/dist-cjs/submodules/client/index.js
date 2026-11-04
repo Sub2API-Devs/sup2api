@@ -5,10 +5,10 @@
  * pieces: chunk-wr5gyt6x.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../../../runtime/bun-runtime.js";
 
 //@ chunk-wr5gyt6x.js:226-1118 cjs-fingerprint
-var require_client = x(function (cjsExports) {
+var require_client = __commonJS(function (cjsExports) {
   var state = {
     warningEmitted: false,
   };

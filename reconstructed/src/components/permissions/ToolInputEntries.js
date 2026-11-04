@@ -10,7 +10,7 @@
  */
 import { useTheme } from "../design-system/ThemeProvider.js";
 import { useSettingsState } from "../../hooks/useSettings.js";
-import { R, Q } from "../../../vendor/react/cjs/react.production.js";
+import { useRef, useMemo } from "../../../vendor/react/cjs/react.production.js";
 import { getCliHighlightModule } from "../../utils/cliHighlight.js";
 import { canHighlightAsCode, VALUE_WRAP_WIDTH } from "./ToolParameterDisplay.js";
 import {
@@ -43,35 +43,35 @@ import { splitGraphemes } from "../../utils/intl.js";
 function ToolInputEntries({ entries: props, contentColumns }) {
   let [theme] = useTheme();
   let syntaxHighlightingDisabled = useSettingsState().syntaxHighlightingDisabled ?? false;
-  let highlightCache = R(new Map());
-  let highlighted = Q(() => {
-    let g = syntaxHighlightingDisabled ? null : getCliHighlightModule();
-    let M = new Map();
+  let highlightCache = useRef(new Map());
+  let highlighted = useMemo(() => {
+    let highlight = syntaxHighlightingDisabled ? null : getCliHighlightModule();
+    let cache = new Map();
     let mapped = props.map((prop) => {
       if (prop.kind !== "block") return null;
-      let A = `${theme}\x00${syntaxHighlightingDisabled}\x00${prop.language ?? ""}\x00${prop.text}`;
-      let T = M.get(A) ?? highlightCache.current.get(A);
-      if (T === undefined)
-        T =
-          canHighlightAsCode(prop, g) && prop.language !== undefined && g !== null
-            ? g.highlight(prop.text, {
+      let cacheKey = `${theme}\x00${syntaxHighlightingDisabled}\x00${prop.language ?? ""}\x00${prop.text}`;
+      let highlighted = cache.get(cacheKey) ?? highlightCache.current.get(cacheKey);
+      if (highlighted === undefined)
+        highlighted =
+          canHighlightAsCode(prop, highlight) && prop.language !== undefined && highlight !== null
+            ? highlight.highlight(prop.text, {
                 language: prop.language,
               })
             : hasDisplayUnsafeChar(prop.text)
               ? prop.text
               : ValidationErrorsList_2(prop.text, theme);
-      M.set(A, T);
-      return T;
+      cache.set(cacheKey, highlighted);
+      return highlighted;
     });
-    highlightCache.current = M;
+    highlightCache.current = cache;
     return mapped;
   }, [props, theme, syntaxHighlightingDisabled]);
-  let wrapped = Q(
+  let wrapped = useMemo(
     () =>
-      highlighted.map((g) =>
-        g === null
+      highlighted.map((lines) =>
+        lines === null
           ? null
-          : wrapAnsi(g, Math.max(10, contentColumns - 4), {
+          : wrapAnsi(lines, Math.max(10, contentColumns - 4), {
               hard: true,
               trim: false,
             }),
@@ -91,7 +91,7 @@ function ToolInputEntries({ entries: props, contentColumns }) {
   if (props.length === 0) return null;
   return jsxProd_default(Box, {
     flexDirection: "column",
-    children: props.map((prop, M) =>
+    children: props.map((prop, index) =>
       prop.kind === "inline"
         ? jsxProd_default_2(
             Text,
@@ -114,7 +114,7 @@ function ToolInputEntries({ entries: props, contentColumns }) {
                   }),
               ],
             },
-            M,
+            index,
           )
         : jsxProd_default_2(
             Box,
@@ -135,7 +135,7 @@ function ToolInputEntries({ entries: props, contentColumns }) {
                   borderDimColor: true,
                   paddingLeft: 1,
                   children: jsxProd_default(Ansi, {
-                    children: wrapped[M] ?? prop.text,
+                    children: wrapped[index] ?? prop.text,
                   }),
                 }),
                 prop.annotation !== undefined &&
@@ -148,33 +148,37 @@ function ToolInputEntries({ entries: props, contentColumns }) {
                   }),
               ],
             },
-            M,
+            index,
           ),
     ),
   });
 }
 //@ chunk-0e8j1zzj.js:42744-42788 placement
-function isUnrenderableEntry(ed) {
-  return ed.unrenderable === true;
+function isUnrenderableEntry(entry) {
+  return entry.unrenderable === true;
 }
 //@ chunk-0e8j1zzj.js:42788-42818 placement
-function describeToolInputEntry(td) {
-  return hasVisibleText(td);
+function describeToolInputEntry(text) {
+  return hasVisibleText(text);
 }
 //@ chunk-0e8j1zzj.js:42818-42844 placement
-function isMissingEntry(nd) {
-  return !nd;
+function isMissingEntry(entry) {
+  return !entry;
 }
 //@ chunk-0e8j1zzj.js:42844-42930 placement
-function entryDisplayWidth(od, as) {
-  return od + bunStringWidth(as) + (as.split(/\r\n|[\r\n\u2028\u2029]/).length - 1) * VALUE_WRAP_WIDTH;
+function entryDisplayWidth(labelWidth, valueText) {
+  return (
+    labelWidth +
+    bunStringWidth(valueText) +
+    (valueText.split(/\r\n|[\r\n\u2028\u2029]/).length - 1) * VALUE_WRAP_WIDTH
+  );
 }
 //@ chunk-0e8j1zzj.js:42930-43282 placement
 /**
  * 通用（Fallback）权限选项转换为结果：yes/启用 auto、不再询问（带权限更新）、no（带反馈）。
  */
-function fallbackChoiceToResult(o, payload, d, feedback) {
-  switch (o) {
+function fallbackChoiceToResult(choice, payload, consentRow, feedback) {
+  switch (choice) {
     case "yes":
     case "yes-enable-auto-mode":
       return {
@@ -185,7 +189,7 @@ function fallbackChoiceToResult(o, payload, d, feedback) {
         }),
       };
     case "yes-dont-ask-again": {
-      if (d === null || !isConsentRow(d))
+      if (consentRow === null || !isConsentRow(consentRow))
         return {
           behavior: "allow",
           updatedInput: payload.input,
@@ -193,7 +197,7 @@ function fallbackChoiceToResult(o, payload, d, feedback) {
       return {
         behavior: "allow",
         updatedInput: payload.input,
-        permissionUpdates: d.applies,
+        permissionUpdates: consentRow.applies,
       };
     }
     case "no":
@@ -225,34 +229,35 @@ function buildToolDontAskAgainRule(tool, options) {
     ],
     {
       displayedTypes: RULE_ADDING_UPDATE_TYPES,
-      renderLabel: (d) => {
-        let c = d.length === 1 ? d[0] : undefined;
+      renderLabel: (updates) => {
+        let update = updates.length === 1 ? updates[0] : undefined;
         if (
-          c === undefined ||
-          c.type !== "addRules" ||
-          c.rules.length !== 1 ||
-          c.rules[0]?.toolName !== tool.toolName ||
-          c.rules[0]?.ruleContent !== undefined
+          update === undefined ||
+          update.type !== "addRules" ||
+          update.rules.length !== 1 ||
+          update.rules[0]?.toolName !== tool.toolName ||
+          update.rules[0]?.ruleContent !== undefined
         )
           return null;
-        let m = String(tool.userFacingName);
-        if (bunStringWidth(m) >= SHORT_LABEL_WIDTH || m.includes("\u2026")) return null;
+        let rows = String(tool.userFacingName);
+        if (bunStringWidth(rows) >= SHORT_LABEL_WIDTH || rows.includes("\u2026")) return null;
         if (options.cwd.includes("\u2026")) return null;
         let max = Math.max(24, options.maxLabelWidth);
-        let formatLabel = (M) => `Yes, and don't ask again for ${tool.userFacingName} commands in ${M}`;
+        let formatLabel = (label) =>
+          `Yes, and don't ask again for ${tool.userFacingName} commands in ${label}`;
         let displayCwd = stripInvisibleChars(options.cwd);
         if (bunStringWidth(formatLabel(displayCwd)) <= max) return formatLabel(displayCwd);
         if (displayCwd !== options.cwd) return null;
         let tildeCwd = tildify(options.cwd);
         if (bunStringWidth(formatLabel(tildeCwd)) <= max) return formatLabel(tildeCwd);
-        let f = splitGraphemes(tildeCwd);
-        let g = "";
-        for (let idx = 0; idx < f.length; idx++) {
-          let N = g + f[idx];
-          if (bunStringWidth(formatLabel(`${N}\u2026`)) > max) break;
-          g = N;
+        let row = splitGraphemes(tildeCwd);
+        let element = "";
+        for (let idx = 0; idx < row.length; idx++) {
+          let accumulated = element + row[idx];
+          if (bunStringWidth(formatLabel(`${accumulated}\u2026`)) > max) break;
+          element = accumulated;
         }
-        if (g.length > 0) return formatLabel(`${g}\u2026`);
+        if (element.length > 0) return formatLabel(`${element}\u2026`);
         return null;
       },
     },

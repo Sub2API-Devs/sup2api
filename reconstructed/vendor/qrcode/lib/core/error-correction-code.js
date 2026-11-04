@@ -5,11 +5,11 @@
  * pieces: chunk-spjgqa4y.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 import { require_error_correction_level } from "./error-correction-level.js";
 
 //@ chunk-spjgqa4y.js:5121-6599 cjs-fingerprint
-var require_error_correction_code = x(function (cjsExports) {
+var require_error_correction_code = __commonJS(function (cjsExports) {
   var ECLevel = require_error_correction_level();
   var EC_BLOCKS_TABLE = [
     1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 1, 2, 2, 4, 1, 2, 4, 4, 2, 4, 4, 4, 2, 4, 6, 5, 2, 4, 6, 6, 2, 5, 8,

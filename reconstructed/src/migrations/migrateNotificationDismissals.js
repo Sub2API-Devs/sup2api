@@ -19,24 +19,24 @@ var NOTIFICATION_DISMISSAL_KEYS = {
 /**
  * 316 新增迁移：subscriptionNoticeCount 等通知计数 → seenNotifications。
  */
-function migrateNotificationDismissals(e) {
+function migrateNotificationDismissals(context) {
   let globalConfig = getGlobalConfig();
   if (globalConfig.seenNotifications !== undefined) return;
-  let n = {};
+  let seenNotifications = {};
   for (let [key, value] of Object.entries(NOTIFICATION_DISMISSAL_KEYS)) {
-    let y = globalConfig[value];
-    if (typeof y === "number" && y > 0) n[key] = y;
-    else if (y === true) n[key] = 1;
+    let dismissCount = globalConfig[value];
+    if (typeof dismissCount === "number" && dismissCount > 0) seenNotifications[key] = dismissCount;
+    else if (dismissCount === true) seenNotifications[key] = 1;
   }
   saveGlobalConfig(
-    (s) =>
-      s.seenNotifications !== undefined
-        ? s
+    (config) =>
+      config.seenNotifications !== undefined
+        ? config
         : {
-            ...s,
-            seenNotifications: n,
+            ...config,
+            seenNotifications,
           },
-    e,
+    context,
   );
   logFeatureOk("migration_notification_dismissals");
 }

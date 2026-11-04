@@ -14,33 +14,38 @@ import { escapeControlCharsForDisplay } from "../utils/stringUtils.js";
 import { HOOK_EVENTS } from "../entrypoints/sdk/coreSchemas.js";
 import { array } from "../../vendor/zod/v4/classic/schemas.js";
 import { mcpInfoFromString, getMcpPrefix } from "../services/mcp/mcpStringUtils.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-dcmhvw5a.js:57897-59011 placement
 /**
  * 检查 hook 命令只用允许的变量展开。
  */
-function checkHookCommandExpansion(e) {
+function checkHookCommandExpansion(command) {
   if (
-    /\$(?!\{CLAUDE_(?:PROJECT_DIR|PLUGIN_ROOT|PLUGIN_DATA)\})/.test(e) ||
-    e.includes("`") ||
-    /%[A-Za-z_][A-Za-z0-9_]*%/.test(e)
+    /\$(?!\{CLAUDE_(?:PROJECT_DIR|PLUGIN_ROOT|PLUGIN_DATA)\})/.test(command) ||
+    command.includes("`") ||
+    /%[A-Za-z_][A-Za-z0-9_]*%/.test(command)
   )
     return "Only ${CLAUDE_PROJECT_DIR}, ${CLAUDE_PLUGIN_ROOT} and ${CLAUDE_PLUGIN_DATA} are expanded in `file` (no shell runs); any other $\u2026, backtick or %NAME% is not expanded";
-  let n = /^[a-zA-Z]:/.test(e) || e.includes("\\");
-  if (getPlatform() === "windows" ? /^[\\/](?![\\/])/.test(e) || /^[a-zA-Z]:(?![\\/])/.test(e) : n)
+  let looksWindows = /^[a-zA-Z]:/.test(command) || command.includes("\\");
+  if (
+    getPlatform() === "windows"
+      ? /^[\\/](?![\\/])/.test(command) || /^[a-zA-Z]:(?![\\/])/.test(command)
+      : looksWindows
+  )
     return getPlatform() === "windows"
       ? "`file` is drive-relative on Windows (\\path or C:path); use a drive-absolute path, ~/ or a ${CLAUDE_\u2026} placeholder"
       : "`file` is a Windows path (C:\u2026 or \\\u2026) read on another platform; use ~/, a ${CLAUDE_\u2026} placeholder or a relative path so the hook resolves everywhere";
-  if (e.startsWith("~") && e !== "~" && !/^~[\\/]/.test(e))
+  if (command.startsWith("~") && command !== "~" && !/^~[\\/]/.test(command))
     return "`file` starting with ~name is not expanded; use an absolute path or ~/";
   if (
-    e.trim() === "" ||
-    e === "." ||
-    e === ".." ||
-    e === "~" ||
-    /[\\/]$/.test(e) ||
-    /[\\/]\.{1,2}$/.test(e) ||
-    /^\$\{CLAUDE_(?:PROJECT_DIR|PLUGIN_ROOT|PLUGIN_DATA)\}$/.test(e)
+    command.trim() === "" ||
+    command === "." ||
+    command === ".." ||
+    command === "~" ||
+    /[\\/]$/.test(command) ||
+    /[\\/]\.{1,2}$/.test(command) ||
+    /^\$\{CLAUDE_(?:PROJECT_DIR|PLUGIN_ROOT|PLUGIN_DATA)\}$/.test(command)
   )
     return "`file` must name a script file, not a directory or an empty path";
   return;
@@ -53,38 +58,40 @@ function knownHookTypes() {
 /**
  * 校验 hook 条目（对象、type 字段、已知类型），返回问题说明。
  */
-function validateHookEntry(e, n) {
-  if (!e || typeof e !== "object" || Array.isArray(e)) {
-    let a = describeValueType(e);
+function validateHookEntry(entry, eventName) {
+  if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
+    let typeName = describeValueType(entry);
     return {
-      problem: `Hook entry must be an object; received ${a}`,
-      received: a,
+      problem: `Hook entry must be an object; received ${typeName}`,
+      received: typeName,
       aboutType: false,
     };
   }
-  let r = e.type;
-  if (typeof r !== "string") {
-    let a = describeValueType(r);
+  let type = entry.type;
+  if (typeof type !== "string") {
+    let typeName = describeValueType(type);
     return {
       problem:
-        r === undefined ? 'Hook entry has no "type"' : `Hook entry "type" must be a string; received ${a}`,
-      received: a,
+        type === undefined
+          ? 'Hook entry has no "type"'
+          : `Hook entry "type" must be a string; received ${typeName}`,
+      received: typeName,
       aboutType: true,
     };
   }
-  if (!n.has(r)) {
-    let a = escapeControlCharsForDisplay(r);
+  if (!eventName.has(type)) {
+    let displayType = escapeControlCharsForDisplay(type);
     return {
-      problem: `Unknown hook type "${a}"`,
-      received: a,
+      problem: `Unknown hook type "${displayType}"`,
+      received: displayType,
       aboutType: true,
     };
   }
-  let s = HookCommandSchema().safeParse(e);
-  if (!s.success)
+  let parsed = HookCommandSchema().safeParse(entry);
+  if (!parsed.success)
     return {
-      problem: `Invalid ${r} hook (${formatZodIssues(s.error)})`,
-      received: r,
+      problem: `Invalid ${type} hook (${formatZodIssues(parsed.error)})`,
+      received: type,
       aboutType: false,
     };
   return;
@@ -99,40 +106,40 @@ function formatZodIssues(error) {
 /**
  * 值是否像 hooks 匹配项：带 matcher 或 hooks 字段（非空数组，或带 type 的对象）；把事件名当键的对象不算。
  */
-function looksLikeHookMatcher(e) {
-  if (!e || typeof e !== "object" || Array.isArray(e)) return false;
-  if (!("matcher" in e) && Object.keys(e).some((key) => HOOK_EVENTS.includes(key))) return false;
-  let hooks = e.hooks;
+function looksLikeHookMatcher(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  if (!("matcher" in value) && Object.keys(value).some((key) => HOOK_EVENTS.includes(key))) return false;
+  let hooks = value.hooks;
   if (Array.isArray(hooks)) return hooks.length > 0;
-  return !!hooks && typeof hooks === "object" && ("matcher" in e || typeof hooks.type === "string");
+  return !!hooks && typeof hooks === "object" && ("matcher" in value || typeof hooks.type === "string");
 }
 //@ chunk-dcmhvw5a.js:60023-60480 placement
 /**
  * 递归判断值里是否含 hooks 定义。
  */
 function containsHooks(
-  e,
-  n = 3,
-  { matchersCount: r = true, unscannedKeys: s = NO_SKIPPED_KEYS, inHooksList: a = false } = {},
+  value,
+  depth = 3,
+  { matchersCount = true, unscannedKeys = NO_SKIPPED_KEYS, inHooksList = false } = {},
 ) {
-  if (hasGuardHooks(e)) return true;
-  if (r && looksLikeHookMatcher(e)) return true;
-  if (n === 0 || !e || typeof e !== "object") return false;
-  if (Array.isArray(e))
-    return e.some((c) =>
-      containsHooks(c, n - 1, {
-        matchersCount: r,
-        unscannedKeys: s,
-        inHooksList: a,
+  if (hasGuardHooks(value)) return true;
+  if (matchersCount && looksLikeHookMatcher(value)) return true;
+  if (depth === 0 || !value || typeof value !== "object") return false;
+  if (Array.isArray(value))
+    return value.some((item) =>
+      containsHooks(item, depth - 1, {
+        matchersCount,
+        unscannedKeys,
+        inHooksList,
       }),
     );
-  if (a && typeof e.type === "string") return false;
-  return Object.entries(e).some(
+  if (inHooksList && typeof value.type === "string") return false;
+  return Object.entries(value).some(
     ([key, value]) =>
-      !s.has(key) &&
-      containsHooks(value, n - 1, {
-        unscannedKeys: s,
-        matchersCount: r && !HOOK_EVENTS.includes(key),
+      !unscannedKeys.has(key) &&
+      containsHooks(value, depth - 1, {
+        unscannedKeys,
+        matchersCount: matchersCount && !HOOK_EVENTS.includes(key),
         inHooksList: key === "hooks" && Array.isArray(value),
       }),
   );
@@ -141,16 +148,16 @@ function containsHooks(
 /**
  * 对象除 hooks 键外是否还含 hooks 定义。
  */
-function hasNestedHooks(e, n) {
-  if (!e || typeof e !== "object" || Array.isArray(e)) return false;
+function hasNestedHooks(value, skippedKeys) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   return (
-    hasGuardHooks(e) ||
-    Object.entries(e).some(
+    hasGuardHooks(value) ||
+    Object.entries(value).some(
       ([key, value]) =>
         key !== "hooks" &&
-        !n.has(key) &&
+        !skippedKeys.has(key) &&
         containsHooks(value, 3, {
-          unscannedKeys: n,
+          unscannedKeys: skippedKeys,
           matchersCount: !HOOK_EVENTS.includes(key),
         }),
     )
@@ -160,25 +167,32 @@ function hasNestedHooks(e, n) {
 /**
  * 扫描 hooks 时跳过的键集合：设置中值为映射的键、插件清单中非 hooks 的键（含 experimental），以及空集合别名。
  */
-var NO_SKIPPED_KEYS = new Set();
-var OPAQUE_SETTING_KEYS = new Set([
-  "mcpServers",
-  "managedMcpServers",
-  "lspServers",
-  "pluginConfigs",
-  "enabledPlugins",
-  "extraKnownMarketplaces",
-  "env",
-  "skillOverrides",
-  "modelSettings",
-]);
-var PLUGIN_NON_HOOK_KEYS = new Set(["metadata", "mcpServers", "lspServers"]);
-var PLUGIN_SKIPPED_KEYS = new Set([...PLUGIN_NON_HOOK_KEYS, "experimental"]);
-var SETTINGS_SKIPPED_KEYS = NO_SKIPPED_KEYS;
+var NO_SKIPPED_KEYS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var OPAQUE_SETTING_KEYS;
+var PLUGIN_NON_HOOK_KEYS;
+var PLUGIN_SKIPPED_KEYS;
+var SETTINGS_SKIPPED_KEYS;
+deferInit("chunk-dcmhvw5a.js:60680", () => {
+  NO_SKIPPED_KEYS = new Set();
+  OPAQUE_SETTING_KEYS = new Set([
+    "mcpServers",
+    "managedMcpServers",
+    "lspServers",
+    "pluginConfigs",
+    "enabledPlugins",
+    "extraKnownMarketplaces",
+    "env",
+    "skillOverrides",
+    "modelSettings",
+  ]);
+  PLUGIN_NON_HOOK_KEYS = new Set(["metadata", "mcpServers", "lspServers"]);
+  PLUGIN_SKIPPED_KEYS = new Set([...PLUGIN_NON_HOOK_KEYS, "experimental"]);
+  SETTINGS_SKIPPED_KEYS = NO_SKIPPED_KEYS;
+});
 //@ chunk-dcmhvw5a.js:60948-61124 placement
-function hasGuardHooks(e) {
-  if (!e || typeof e !== "object" || Array.isArray(e)) return false;
-  return Object.entries(e).some(
+function hasGuardHooks(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  return Object.entries(value).some(
     ([key, value]) =>
       GUARD_HOOK_EVENTS.has(key) &&
       value !== null &&
@@ -190,11 +204,11 @@ function hasGuardHooks(e) {
 /**
  * 是否含 PreToolUse/PermissionRequest hooks。
  */
-function hasGuardHooks_2(e) {
-  if (looksLikeHookMatcher(e)) return true;
-  if (Array.isArray(e)) return e.some(hasGuardHooks_2);
-  if (!e || typeof e !== "object") return false;
-  return Object.entries(e).some(
+function hasGuardHooks_2(value) {
+  if (looksLikeHookMatcher(value)) return true;
+  if (Array.isArray(value)) return value.some(hasGuardHooks_2);
+  if (!value || typeof value !== "object") return false;
+  return Object.entries(value).some(
     ([key, value]) =>
       GUARD_HOOK_EVENTS.has(key) &&
       value !== null &&
@@ -206,27 +220,30 @@ function hasGuardHooks_2(e) {
 /**
  * 守护型 hook 事件（PreToolUse、PermissionRequest）。
  */
-var GUARD_HOOK_EVENTS = new Set(["PreToolUse", "PermissionRequest"]);
+var GUARD_HOOK_EVENTS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-dcmhvw5a.js:61339", () => {
+  GUARD_HOOK_EVENTS = new Set(["PreToolUse", "PermissionRequest"]);
+});
 //@ chunk-dcmhvw5a.js:61390-62508 placement
 /**
  * 剔除无效 hook 条目；守护型事件的无效条目记为无法加载的守护。
  */
-function stripInvalidHookEntries(e, n) {
-  if (!Array.isArray(e))
+function stripInvalidHookEntries(entries, eventName) {
+  if (!Array.isArray(entries))
     return {
       stripped: [],
       unloadableGuards: [],
     };
-  let r = GUARD_HOOK_EVENTS.has(n);
-  let s = knownHookTypes();
-  let a = HookMatcherSchema();
-  let c = [];
-  let g = [];
-  for (let j = e.length - 1; j >= 0; j--) {
-    let f = e[j];
-    let h = (problem, received) => {
-      if (!r) e.splice(j, 1);
-      c.push({
+  let isGuardEvent = GUARD_HOOK_EVENTS.has(eventName);
+  let knownTypes = knownHookTypes();
+  let matcherSchema = HookMatcherSchema();
+  let stripped = [];
+  let unloadableGuards = [];
+  for (let j = entries.length - 1; j >= 0; j--) {
+    let entry = entries[j];
+    let report = (problem, received) => {
+      if (!isGuardEvent) entries.splice(j, 1);
+      stripped.push({
         matcherIndex: j,
         hookIndex: undefined,
         path: `${j}`,
@@ -236,69 +253,72 @@ function stripInvalidHookEntries(e, n) {
       });
     };
     if (
-      containsHooks(f, 3, {
+      containsHooks(entry, 3, {
         matchersCount: false,
       })
     ) {
-      (r ? c : g).push({
+      (isGuardEvent ? stripped : unloadableGuards).push({
         matcherIndex: j,
         hookIndex: undefined,
         path: `${j}`,
         problem: "holds PreToolUse/PermissionRequest hooks where a matcher was expected",
-        received: describeValueType(f),
+        received: describeValueType(entry),
         aboutType: false,
       });
       continue;
     }
-    if (!f || typeof f !== "object" || Array.isArray(f)) {
-      h(`Hook matcher must be an object; received ${describeValueType(f)}`, describeValueType(f));
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
+      report(
+        `Hook matcher must be an object; received ${describeValueType(entry)}`,
+        describeValueType(entry),
+      );
       continue;
     }
-    let hooks = f.hooks;
+    let hooks = entry.hooks;
     if (!Array.isArray(hooks)) {
-      h(
+      report(
         `Hook matcher "hooks" must be an array of hook entries; received ${describeValueType(hooks)}`,
         describeValueType(hooks),
       );
       continue;
     }
-    let b = [];
+    let problems = [];
     for (let j_2 = hooks.length - 1; j_2 >= 0; j_2--) {
-      let w = validateHookEntry(hooks[j_2], s);
-      if (w !== undefined) {
-        if (!r) hooks.splice(j_2, 1);
-        b.push({
+      let problem = validateHookEntry(hooks[j_2], knownTypes);
+      if (problem !== undefined) {
+        if (!isGuardEvent) hooks.splice(j_2, 1);
+        problems.push({
           matcherIndex: j,
           hookIndex: j_2,
           path: `${j}.hooks.${j_2}`,
-          ...w,
+          ...problem,
         });
       }
     }
-    let S = a.safeParse(
-      r
+    let parsed = matcherSchema.safeParse(
+      isGuardEvent
         ? {
-            ...f,
+            ...entry,
             hooks: [],
           }
-        : f,
+        : entry,
     );
-    if (!S.success) {
-      h(`Invalid hook matcher (${formatZodIssues(S.error)})`, "matcher");
+    if (!parsed.success) {
+      report(`Invalid hook matcher (${formatZodIssues(parsed.error)})`, "matcher");
       continue;
     }
-    c.push(...b);
+    stripped.push(...problems);
   }
-  c.reverse();
-  g.reverse();
-  return r
+  stripped.reverse();
+  unloadableGuards.reverse();
+  return isGuardEvent
     ? {
         stripped: [],
-        unloadableGuards: c,
+        unloadableGuards: stripped,
       }
     : {
-        stripped: c,
-        unloadableGuards: g,
+        stripped,
+        unloadableGuards,
       };
 }
 //@ chunk-dcmhvw5a.js:62508-62533 placement
@@ -329,23 +349,25 @@ function validateHooksSetting(hooks) {
       notes: [],
       unloadableGuards: [],
     };
-  let n = hooks;
-  let r = new Set(HOOK_EVENTS);
-  let s = [];
-  let a = [];
-  for (let [key, value] of Object.entries(n)) {
-    let m = escapeControlCharsForDisplay(key);
-    if (!r.has(key)) {
+  let hooksMap = hooks;
+  let eventSet = new Set(HOOK_EVENTS);
+  let notes = [];
+  let notes_2 = [];
+  for (let [key, value] of Object.entries(hooksMap)) {
+    let displayKey = escapeControlCharsForDisplay(key);
+    if (!eventSet.has(key)) {
       if (
         containsHooks(value, 3, {
           matchersCount: !Array.isArray(value),
         })
       ) {
-        a.push(`hooks.${m}: not a hook event, but it holds PreToolUse/PermissionRequest hooks`);
+        notes_2.push(
+          `hooks.${displayKey}: not a hook event, but it holds PreToolUse/PermissionRequest hooks`,
+        );
         continue;
       }
-      delete n[key];
-      s.push(`hooks.${m}: unknown hook event; entry ignored`);
+      delete hooksMap[key];
+      notes.push(`hooks.${displayKey}: unknown hook event; entry ignored`);
       continue;
     }
     if (!Array.isArray(value)) {
@@ -355,40 +377,45 @@ function validateHooksSetting(hooks) {
           matchersCount: false,
         })
       ) {
-        a.push(`hooks.${m}: must be an array of matchers; received ${describeValueType(value)}`);
+        notes_2.push(
+          `hooks.${displayKey}: must be an array of matchers; received ${describeValueType(value)}`,
+        );
         continue;
       }
-      delete n[key];
-      s.push(`hooks.${m}: must be an array of matchers; received ${describeValueType(value)}; entry ignored`);
+      delete hooksMap[key];
+      notes.push(
+        `hooks.${displayKey}: must be an array of matchers; received ${describeValueType(value)}; entry ignored`,
+      );
       continue;
     }
-    let f = stripInvalidHookEntries(value, key);
-    for (let h of f.stripped) s.push(`hooks.${m}.${h.path}: ${h.problem}; entry ignored`);
-    for (let unloadableGuard of f.unloadableGuards)
-      a.push(`hooks.${m}.${unloadableGuard.path}: ${unloadableGuard.problem}`);
+    let stripped = stripInvalidHookEntries(value, key);
+    for (let entry of stripped.stripped)
+      notes.push(`hooks.${displayKey}.${entry.path}: ${entry.problem}; entry ignored`);
+    for (let unloadableGuard of stripped.unloadableGuards)
+      notes_2.push(`hooks.${displayKey}.${unloadableGuard.path}: ${unloadableGuard.problem}`);
   }
   return {
-    notes: s,
-    unloadableGuards: a,
+    notes,
+    unloadableGuards: notes_2,
   };
 }
 //@ chunk-dcmhvw5a.js:63819-65299 placement
 /**
  * 解析 hooks 设置，返回合法 hooks、无效项与无法加载的守护。
  */
-function parseHooksSetting(e) {
-  if (typeof e !== "object" || e === null || Array.isArray(e))
+function parseHooksSetting(value) {
+  if (typeof value !== "object" || value === null || Array.isArray(value))
     return {
       hooks: undefined,
       invalid: [
         {
           path: "hooks",
-          reason: `must be an object mapping hook event names to matcher arrays; received ${describeValueType(e)}`,
+          reason: `must be an object mapping hook event names to matcher arrays; received ${describeValueType(value)}`,
         },
       ],
-      unloadableGuards: Array.isArray(e) && e.some(looksLikeHookMatcher) ? ["hooks"] : [],
+      unloadableGuards: Array.isArray(value) && value.some(looksLikeHookMatcher) ? ["hooks"] : [],
     };
-  if (looksLikeHookMatcher(e))
+  if (looksLikeHookMatcher(value))
     return {
       hooks: undefined,
       invalid: [
@@ -399,10 +426,10 @@ function parseHooksSetting(e) {
       ],
       unloadableGuards: ["hooks"],
     };
-  let n = new Set(HOOK_EVENTS);
-  let r = array(HookMatcherSchema());
-  let mapped = Object.entries(e).map(([key, value]) => {
-    if (!n.has(key))
+  let knownEvents = new Set(HOOK_EVENTS);
+  let matcherArraySchema = array(HookMatcherSchema());
+  let mapped = Object.entries(value).map(([key, value]) => {
+    if (!knownEvents.has(key))
       return {
         invalid: {
           path: `hooks.${key}`,
@@ -418,26 +445,26 @@ function parseHooksSetting(e) {
         },
         unloadableGuard: true,
       };
-    let mapped = stripped.map((S) => `${S.path}: ${S.problem}; entry ignored`);
-    let y = r.safeParse(value);
-    if (y.success) {
-      let S = mapped.length > 0 && {
+    let mapped = stripped.map((problem) => `${problem.path}: ${problem.problem}; entry ignored`);
+    let parsed = matcherArraySchema.safeParse(value);
+    if (parsed.success) {
+      let strippedNote = mapped.length > 0 && {
         invalid: {
           path: `hooks.${key}`,
           reason: mapped.join("; "),
         },
       };
-      if (S && !y.data.some((C) => C.hooks.length > 0))
+      if (strippedNote && !parsed.data.some((matcher) => matcher.hooks.length > 0))
         return {
-          ...S,
+          ...strippedNote,
         };
       return {
-        entry: [key, y.data],
-        ...S,
+        entry: [key, parsed.data],
+        ...strippedNote,
       };
     }
     let reason = Array.isArray(value)
-      ? [...mapped, formatZodIssues(y.error)].join("; ")
+      ? [...mapped, formatZodIssues(parsed.error)].join("; ")
       : `must be an array of matchers; received ${describeValueType(value)}`;
     return {
       invalid: {
@@ -451,30 +478,32 @@ function parseHooksSetting(e) {
         }),
     };
   });
-  let flattened = mapped.flatMap((c) => (c.entry ? [c.entry] : []));
+  let flattened = mapped.flatMap((result) => (result.entry ? [result.entry] : []));
   return {
     hooks: flattened.length > 0 ? Object.fromEntries(flattened) : undefined,
-    invalid: mapped.flatMap((c) => (c.invalid ? [c.invalid] : [])),
-    unloadableGuards: mapped.flatMap((c) => (c.unloadableGuard && c.invalid ? [c.invalid.path] : [])),
+    invalid: mapped.flatMap((result) => (result.invalid ? [result.invalid] : [])),
+    unloadableGuards: mapped.flatMap((result) =>
+      result.unloadableGuard && result.invalid ? [result.invalid.path] : [],
+    ),
   };
 }
 //@ chunk-dcmhvw5a.js:65299-65445 placement
-function describeValueType(e) {
-  if (e === null || e === undefined) return String(e);
-  if (Array.isArray(e)) return "an array";
-  let n = typeof e;
-  return `${n === "object" ? "an" : "a"} ${n}`;
+function describeValueType(value) {
+  if (value === null || value === undefined) return String(value);
+  if (Array.isArray(value)) return "an array";
+  let typeName = typeof value;
+  return `${typeName === "object" ? "an" : "a"} ${typeName}`;
 }
 //@ chunk-dcmhvw5a.js:65445-65490 placement
-function isUnparsableServerName(e) {
-  return mcpInfoFromString(`${getMcpPrefix(e)}t`) === null;
+function isUnparsableServerName(name) {
+  return mcpInfoFromString(`${getMcpPrefix(name)}t`) === null;
 }
 //@ chunk-dcmhvw5a.js:65490-65541 placement
 /**
  * 键名是否为 Object.prototype 上的名字。
  */
-function isPrototypeKey(e) {
-  return e in Object.prototype && isUnparsableServerName(e);
+function isPrototypeKey(key) {
+  return key in Object.prototype && isUnparsableServerName(key);
 }
 //@ chunk-dcmhvw5a.js:65541-65746 placement
 var SERVER_NAME_RULE_MESSAGE =

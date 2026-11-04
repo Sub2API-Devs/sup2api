@@ -50,73 +50,78 @@ async function autoMemoryStatus({ session, storageV5, credentials, activeAgents,
     await getMemoryFilesCached(session, false, storageV5, credentials),
     await getNonMemoryInstructionFiles(session),
   );
-  let i = isSafeMode();
-  let s = isAutoMemoryEnabledIgnoringPause();
+  let safeMode = isSafeMode();
+  let autoMemoryEnabled = isAutoMemoryEnabledIgnoringPause();
   let raiseAllowed = autoMemoryToggleState();
-  let a = describeAutoMemoryToggle({
-    enabled: s,
+  let memoryToggle = describeAutoMemoryToggle({
+    enabled: autoMemoryEnabled,
     modelDisabled: isAutoMemoryDisabledForCurrentMainLoopModel(),
-    safeMode: i,
+    safeMode,
     raiseAllowed,
   });
-  let F = isAutoMemoryHeldForSession();
-  let r = null;
-  let f = s && isAutoDreamFeatureOn();
-  let d = describeAutoDreamToggle({
-    autoMemoryOn: s,
+  let memoryHeldForSession = isAutoMemoryHeldForSession();
+  let sessionToggle = null;
+  let dreamShown = autoMemoryEnabled && isAutoDreamFeatureOn();
+  let dreamToggle = describeAutoDreamToggle({
+    autoMemoryOn: autoMemoryEnabled,
     enabled: isAutoDreamEnabled(),
     running: dreamRunning,
-    lastDreamAt: f ? await readLastConsolidatedAt(undefined, storageV5) : null,
+    lastDreamAt: dreamShown ? await readLastConsolidatedAt(undefined, storageV5) : null,
     raiseAllowed,
     heldDetail: undefined,
   });
-  let y = settingSourceLabel("autoMemoryEnabled");
-  let g = settingSourceLabel("autoDreamEnabled");
+  let memorySourceLabel = settingSourceLabel("autoMemoryEnabled");
+  let dreamSourceLabel = settingSourceLabel("autoDreamEnabled");
   let files = await Promise.all(
-    buildMemoryFileChoices(memoryFiles, getSessionProject(session).originalCwd).map(async (m) =>
-      m.exists
-        ? m
+    buildMemoryFileChoices(memoryFiles, getSessionProject(session).originalCwd).map(async (fileChoice) =>
+      fileChoice.exists
+        ? fileChoice
         : {
-            ...m,
-            exists: await fileExists(m.path),
+            ...fileChoice,
+            exists: await fileExists(fileChoice.path),
           },
     ),
   );
-  let p = s || i;
-  let M = accountMemoryDialogModule?.accountMemoryDialogBlock(session.host);
+  let memoryOptionsShown = autoMemoryEnabled || safeMode;
+  let accountMemoryBlock = accountMemoryDialogModule?.accountMemoryDialogBlock(session.host);
   return {
     files,
-    folders: p ? [...getAutoMemoryChoices(), ...getAgentMemoryChoices(activeAgents)] : [],
-    ...(p && {
+    folders: memoryOptionsShown ? [...getAutoMemoryChoices(), ...getAgentMemoryChoices(activeAgents)] : [],
+    ...(memoryOptionsShown && {
       memories: await findRelevantMemories(storageV5),
     }),
     auto_memory: {
-      enabled: s,
-      toggleable: a.toggleable && y === null,
-      status: withSetter(a.detail ? `${a.status} \u2014 ${a.detail}` : a.status, y),
-      ...(r !== null && {
+      enabled: autoMemoryEnabled,
+      toggleable: memoryToggle.toggleable && memorySourceLabel === null,
+      status: withSetter(
+        memoryToggle.detail ? `${memoryToggle.status} \u2014 ${memoryToggle.detail}` : memoryToggle.status,
+        memorySourceLabel,
+      ),
+      ...(sessionToggle !== null && {
         this_session: {
-          enabled: r.on,
-          toggleable: r.toggleable,
-          status: r.detail ? `${r.status} \u2014 ${r.detail}` : r.status,
+          enabled: sessionToggle.on,
+          toggleable: sessionToggle.toggleable,
+          status: sessionToggle.detail
+            ? `${sessionToggle.status} \u2014 ${sessionToggle.detail}`
+            : sessionToggle.status,
         },
       }),
     },
     auto_dream: {
-      shown: f,
+      shown: dreamShown,
       enabled: isAutoDreamEnabled(),
-      toggleable: d.toggleable && g === null,
-      status: withSetter(d.status, g),
-      detail: d.detail,
+      toggleable: dreamToggle.toggleable && dreamSourceLabel === null,
+      status: withSetter(dreamToggle.status, dreamSourceLabel),
+      detail: dreamToggle.detail,
     },
-    ...(M !== undefined && {
-      account_memory: M,
+    ...(accountMemoryBlock !== undefined && {
+      account_memory: accountMemoryBlock,
     }),
   };
 }
 //@ chunk-7sekx49c.js:13752-13867 placement
-function settingSourceLabel(o) {
-  let { source } = resolveSetting(o, true);
+function settingSourceLabel(settingKey) {
+  let { source } = resolveSetting(settingKey, true);
   return source === "default" || source === "legacyGlobalConfig" || source === "userSettings"
     ? null
     : getSettingSourceDisplayNameLowercase(source);
@@ -137,6 +142,7 @@ async function fileExists(path) {
 /**
  * 追加 “, set by …”
  */
-function withSetter(o, e) {
-  return e === null ? o : `${o}, set by ${e}`;
+function withSetter(status, setter) {
+  return setter === null ? status : `${status}, set by ${setter}`;
 }
+export { autoMemoryStatus };

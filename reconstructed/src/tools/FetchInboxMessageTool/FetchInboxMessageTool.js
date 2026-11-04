@@ -11,7 +11,12 @@
 import { backoffDelayMs, sleep } from "../../utils/sleep.js";
 import { SessionRootSlot } from "../../bootstrap/sessionSlices.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { zodStrictObject, string, u, M } from "../../../vendor/zod/v4/classic/schemas.js";
+import {
+  zodStrictObject,
+  stringSchema,
+  objectSchema,
+  booleanSchema,
+} from "../../../vendor/zod/v4/classic/schemas.js";
 import {
   INBOX_FILE_ID_PATTERN,
   renderInboxContentEnvelope,
@@ -59,22 +64,22 @@ class InboxFetchBackoff {
   unservedInARow = 0;
   waitMs = 0;
   waitSetAt = 0;
-  remainingMs(e) {
-    return Math.max(0, this.waitSetAt + this.waitMs - e);
+  remainingMs(nowMs) {
+    return Math.max(0, this.waitSetAt + this.waitMs - nowMs);
   }
-  noteUnserved(e, s) {
-    if (e < this.waitSetAt) return;
-    if (s - this.waitSetAt > INBOX_BACKOFF_RESET_MS) this.unservedInARow = 0;
+  noteUnserved(nowMs, observedAtMs) {
+    if (nowMs < this.waitSetAt) return;
+    if (observedAtMs - this.waitSetAt > INBOX_BACKOFF_RESET_MS) this.unservedInARow = 0;
     this.unservedInARow += 1;
     this.waitMs = backoffDelayMs({
       attempt: this.unservedInARow,
       baseMs: INBOX_BACKOFF_BASE_MS,
       capMs: INBOX_BACKOFF_CAP_MS,
     });
-    this.waitSetAt = s;
+    this.waitSetAt = observedAtMs;
   }
-  noteAnswered(e) {
-    if (e < this.waitSetAt) return;
+  noteAnswered(nowMs) {
+    if (nowMs < this.waitSetAt) return;
     this.unservedInARow = 0;
     this.waitMs = 0;
   }
@@ -90,25 +95,25 @@ var inboxBackoffByRoot = new SessionRootSlot(() => new InboxFetchBackoff());
  */
 var FetchInboxMessageInputSchema = DoctorLazy(() =>
   zodStrictObject({
-    file_id: string()
+    file_id: stringSchema()
       .regex(INBOX_FILE_ID_PATTERN, "must be the file_id from the notification")
       .describe("The file_id from the session-inbox notification you received"),
   }),
 );
 var fetchInboxOutputSchema = DoctorLazy(() =>
-  u({
-    ok: M(),
-    file_id: string().optional(),
-    message_id: string().optional(),
-    enveloped_text: string().optional(),
-    body: string().optional(),
-    sender_display: string().optional(),
-    sender_kind: string().optional(),
-    source: string().optional(),
-    slack_permalink: string().optional(),
-    received_at: string().optional(),
-    attachments_prefix: string().optional(),
-    reason: string().optional(),
+  objectSchema({
+    ok: booleanSchema(),
+    file_id: stringSchema().optional(),
+    message_id: stringSchema().optional(),
+    enveloped_text: stringSchema().optional(),
+    body: stringSchema().optional(),
+    sender_display: stringSchema().optional(),
+    sender_kind: stringSchema().optional(),
+    source: stringSchema().optional(),
+    slack_permalink: stringSchema().optional(),
+    received_at: stringSchema().optional(),
+    attachments_prefix: stringSchema().optional(),
+    reason: stringSchema().optional(),
   }),
 );
 //@ chunk-psktkvhp.js:6453-6507 placement
@@ -122,8 +127,10 @@ function inboxMessageScope(tools) {
 /**
  * 项目范围时为工具名加 "IP:" 前缀（用于提示与描述）。
  */
-function inboxSurfaceCacheKeyBit(e, s) {
-  return toolMatchesName(e, FETCH_INBOX_MESSAGE_TOOL_NAME) && inboxMessageScope(s) === "project" ? "IP:" : "";
+function inboxSurfaceCacheKeyBit(tool, tools) {
+  return toolMatchesName(tool, FETCH_INBOX_MESSAGE_TOOL_NAME) && inboxMessageScope(tools) === "project"
+    ? "IP:"
+    : "";
 }
 //@ chunk-psktkvhp.js:6568-11598 placement
 /**
@@ -160,75 +167,75 @@ var FetchInboxMessageTool_2 = buildTool({
   isReadOnly() {
     return true;
   },
-  toAutoClassifierInput(e) {
-    return e.file_id ? `read inbox message ${e.file_id}` : "read inbox message";
+  toAutoClassifierInput(input) {
+    return input.file_id ? `read inbox message ${input.file_id}` : "read inbox message";
   },
-  async description(e, { tools }) {
+  async description(input, { tools }) {
     return fetchInboxMessageDescription(inboxMessageScope(tools));
   },
   async prompt({ tools }) {
     return fetchInboxMessagePrompt(inboxMessageScope(tools));
   },
-  mapToolResultToToolResultBlockParam(e, toolUseId) {
-    let n;
-    if (e.ok && e.enveloped_text) n = e.enveloped_text;
+  mapToolResultToToolResultBlockParam(result, toolUseId) {
+    let contentText;
+    if (result.ok && result.enveloped_text) contentText = result.enveloped_text;
     else
-      switch (e.reason) {
+      switch (result.reason) {
         case "not_found":
-          n = `No inbox message at ${e.file_id ?? "that id"} for this session (unknown id, another session's message, or expired \u2014 messages are kept about a week).`;
+          contentText = `No inbox message at ${result.file_id ?? "that id"} for this session (unknown id, another session's message, or expired \u2014 messages are kept about a week).`;
           break;
         case "wrong_session":
-          n = `No inbox message at ${e.file_id ?? "that id"} for this session (it names a different session, so it was not read).`;
+          contentText = `No inbox message at ${result.file_id ?? "that id"} for this session (it names a different session, so it was not read).`;
           break;
         case "untrusted_device":
-          n =
+          contentText =
             "The session service refused the read because this device is not trusted for this session. Tell the user; don't retry.";
           break;
         case "relogin":
-          n =
+          contentText =
             "The session service refused the read because the login on this device is stale (run /login again). Tell the user; do not retry.";
           break;
         case "forbidden":
-          n =
+          contentText =
             "The session service refused the read for this session (not a device-trust problem). Tell the user; do not retry.";
           break;
         case "owner_changed":
-          n =
+          contentText =
             "Remote Control on this device switched to another account, so this session can no longer read its inbox from here. Tell the user; do not retry.";
           break;
         case "no_token":
-          n =
+          contentText =
             "This machine is not signed in to claude.ai for Remote Control (or is not on the first-party API), so the session inbox cannot be read from here. Tell the user; do not retry.";
           break;
         case "owner_unverified":
-          n =
+          contentText =
             "This device's Remote Control login could not be verified just now (a login or account change may still be in progress), so the inbox was not read. Try again in a moment; if it keeps failing, tell the user.";
           break;
         case "feature_disabled":
-          n = "The session inbox isn't enabled for this organization, so there is nothing to read.";
+          contentText = "The session inbox isn't enabled for this organization, so there is nothing to read.";
           break;
         case "no_bridge":
-          n = "Remote Control is not connected, so the session inbox is unreachable right now.";
+          contentText = "Remote Control is not connected, so the session inbox is unreachable right now.";
           break;
         case "traffic_disabled":
-          n =
+          contentText =
             "Nonessential network traffic is disabled on this device, so the session inbox cannot be read from here. Tell the user; do not retry.";
           break;
         case "base_url_override":
-          n =
+          contentText =
             "The Remote Control API host is overridden by a settings file rather than this process's own environment, so the inbox was not read. Tell the user; don't retry.";
           break;
         default:
-          n = `Couldn't read inbox message ${e.file_id ?? ""} (${e.reason ?? "error"}). Check the debug log for [bridge] inbox fetch.`;
+          contentText = `Couldn't read inbox message ${result.file_id ?? ""} (${result.reason ?? "error"}). Check the debug log for [bridge] inbox fetch.`;
       }
     return {
       tool_use_id: toolUseId,
       type: "tool_result",
-      content: n,
+      content: contentText,
     };
   },
-  renderToolUseMessage(e) {
-    return e.file_id ? `read ${truncateToLength(e.file_id, 13)}` : "";
+  renderToolUseMessage(input) {
+    return input.file_id ? `read ${truncateToLength(input.file_id, 13)}` : "";
   },
   create({ credentials, storageV5, session, messageQueue, messages }) {
     return {
@@ -239,64 +246,68 @@ var FetchInboxMessageTool_2 = buildTool({
         };
       },
       async call({ file_id: fileId }, { signal }) {
-        let f = getReplBridgeHandle() ?? getSdkHostedBridgeHandle();
-        let g = inboxBackoffByRoot.of(session);
+        let bridgeHandle = getReplBridgeHandle() ?? getSdkHostedBridgeHandle();
+        let backoff = inboxBackoffByRoot.of(session);
         let clock = session.host.clock;
-        let h = clock.monotonicNow();
-        if (!f?.outboundOnly) {
-          for (let d = g.remainingMs(h); d > 0; d = g.remainingMs(h)) {
+        let nowMs = clock.monotonicNow();
+        if (!bridgeHandle?.outboundOnly) {
+          for (let waitMs = backoff.remainingMs(nowMs); waitMs > 0; waitMs = backoff.remainingMs(nowMs)) {
             logForDebugging(
-              `[bridge] inbox fetch: waiting ${Math.ceil(d)}ms after a read the service did not serve`,
+              `[bridge] inbox fetch: waiting ${Math.ceil(waitMs)}ms after a read the service did not serve`,
             );
-            await sleep(d, signal, {
+            await sleep(waitMs, signal, {
               clock,
               abortError: () => new AbortError(),
             });
-            h = clock.monotonicNow();
+            nowMs = clock.monotonicNow();
           }
-          f = getReplBridgeHandle() ?? getSdkHostedBridgeHandle();
+          bridgeHandle = getReplBridgeHandle() ?? getSdkHostedBridgeHandle();
         }
-        let r;
-        if (f?.outboundOnly) {
+        let fetchResult;
+        if (bridgeHandle?.outboundOnly) {
           logFeatureBad("bridge_inbox_fetch", "no_bridge");
-          r = {
+          fetchResult = {
             ok: false,
             reason: "no_bridge",
           };
         } else
-          r = f
-            ? await f.fetchInboxMessage(fileId)
+          fetchResult = bridgeHandle
+            ? await bridgeHandle.fetchInboxMessage(fileId)
             : await fetchSupervisedInboxMessage(fileId, {
                 credentials,
                 storageV5,
               });
-        if (r.ok || FetchInboxMessageTool.has(r.reason)) g.noteAnswered(h);
-        else if (r.reason === "request_failed" || r.reason === "http_error" || r.reason === "malformed")
-          g.noteUnserved(h, clock.monotonicNow());
-        let O = sessionInboxPointers.peek(session)?.wasAnnouncedAsOwners(fileId) === true;
-        sessionInboxPointers.peek(session)?.noteFetchAttempt(fileId, r, messageQueue);
-        if (!r.ok)
+        if (fetchResult.ok || FetchInboxMessageTool.has(fetchResult.reason)) backoff.noteAnswered(nowMs);
+        else if (
+          fetchResult.reason === "request_failed" ||
+          fetchResult.reason === "http_error" ||
+          fetchResult.reason === "malformed"
+        )
+          backoff.noteUnserved(nowMs, clock.monotonicNow());
+        let wasAnnouncedAsOwners = sessionInboxPointers.peek(session)?.wasAnnouncedAsOwners(fileId) === true;
+        sessionInboxPointers.peek(session)?.noteFetchAttempt(fileId, fetchResult, messageQueue);
+        if (!fetchResult.ok)
           return {
             data: {
               ok: false,
               file_id: fileId,
-              reason: r.reason,
+              reason: fetchResult.reason,
             },
-            ...(r.reason === "relogin" && {
+            ...(fetchResult.reason === "relogin" && {
               remedy: authExpiredBlockFor(await getClaudeAIOAuthTokenOriginAsync(credentials)),
             }),
           };
-        let message = r.message;
-        let envelopedText = r.envelopedText;
+        let message = fetchResult.message;
+        let envelopedText = fetchResult.envelopedText;
         if (
           message.senderKind === "rc_owner" &&
           getFeatureValue_CACHED_MAY_BE_STALE("tengu_humming_star", true) &&
-          !O &&
-          !messages().some((d) => buildTranscriptEntries(d, fileId))
+          !wasAnnouncedAsOwners &&
+          !messages().some((message) => buildTranscriptEntries(message, fileId))
         ) {
-          let { attachments, senderDisplay, ...E } = message;
+          let { attachments, senderDisplay, ...rebuiltMessage } = message;
           message = {
-            ...E,
+            ...rebuiltMessage,
             senderKind: "unknown",
           };
           envelopedText = renderInboxContentEnvelope(message);
@@ -308,20 +319,20 @@ var FetchInboxMessageTool_2 = buildTool({
           );
           logEvent("tengu_inbox_owner_kind_unannounced", {});
         }
-        let y;
+        let attachmentsPrefix;
         let attachments = message.attachments ?? [];
         if (attachments.length > 0) {
-          let { resolveInboundAttachments } = await import("./chunk-xth3wpgt.js");
+          let { resolveInboundAttachments } = await import("../../bridge/inboundAttachments.js");
           let { prefix } = await resolveInboundAttachments(
             attachments,
             false,
             false,
             storageV5,
             credentials,
-            r.download,
+            fetchResult.download,
           );
-          y = prefix;
-          envelopedText = renderInboxContentEnvelope(message, y.trim());
+          attachmentsPrefix = prefix;
+          envelopedText = renderInboxContentEnvelope(message, attachmentsPrefix.trim());
         }
         return {
           data: {
@@ -335,42 +346,45 @@ var FetchInboxMessageTool_2 = buildTool({
             source: message.source,
             slack_permalink: message.slackPermalink,
             received_at: message.createdAt,
-            attachments_prefix: y,
+            attachments_prefix: attachmentsPrefix,
           },
         };
       },
     };
   },
-  extractSearchText(e) {
-    if (!e.ok) return e.reason ?? "";
+  extractSearchText(result) {
+    if (!result.ok) return result.reason ?? "";
     return [
-      inboxSenderProvenanceCaption(e.sender_kind),
-      foldSenderDisplayBrackets(e.sender_display ?? "") || e.sender_kind,
-      e.attachments_prefix,
-      e.body,
-      e.slack_permalink,
-      e.received_at,
+      inboxSenderProvenanceCaption(result.sender_kind),
+      foldSenderDisplayBrackets(result.sender_display ?? "") || result.sender_kind,
+      result.attachments_prefix,
+      result.body,
+      result.slack_permalink,
+      result.received_at,
     ].filter(Boolean).join(`
 `);
   },
 });
 //@ chunk-psktkvhp.js:11598-11804 placement = buildTranscriptEntries (0.777)
-function buildTranscriptEntries(e, fileId) {
-  switch (e.type) {
+function buildTranscriptEntries(message, fileId) {
+  switch (message.type) {
     case "user":
-      return mentionsInboxNoticeFile(e.origin, e.message.content, fileId);
+      return mentionsInboxNoticeFile(message.origin, message.message.content, fileId);
     case "attachment":
       return (
-        e.attachment.type === "queued_command" &&
-        mentionsInboxNoticeFile(e.attachment.origin, e.attachment.prompt, fileId)
+        message.attachment.type === "queued_command" &&
+        mentionsInboxNoticeFile(message.attachment.origin, message.attachment.prompt, fileId)
       );
     default:
       return false;
   }
 }
 //@ chunk-psktkvhp.js:11804-11922 placement
-function mentionsInboxNoticeFile(origin, s, n) {
-  return (typeof s === "string" ? [s] : s.flatMap((l) => (l.type === "text" ? [l.text] : []))).some(
-    (l) => ownerInboxNoticeFileId(origin, l) === n,
-  );
+function mentionsInboxNoticeFile(delivery, content, fileId) {
+  return (
+    typeof content === "string"
+      ? [content]
+      : content.flatMap((block) => (block.type === "text" ? [block.text] : []))
+  ).some((text) => ownerInboxNoticeFileId(delivery, text) === fileId);
 }
+export { FetchInboxMessageTool_2, inboxSurfaceCacheKeyBit };

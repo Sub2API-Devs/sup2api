@@ -21,10 +21,10 @@ import { BUILTIN_SKILL_NAMES } from "./bundled/builtinSkillNames.js";
 /**
  * 判断内置技能是否被环境变量或设置关闭。
  */
-function isBundledSkillsDisabled(initialSettings) {
+function isBundledSkillsDisabled(context) {
   return (
     env.CLAUDE_CODE_DISABLE_BUNDLED_SKILLS ||
-    (initialSettings ?? getInitialSettings_2()).disableBundledSkills === true
+    (context ?? getInitialSettings_2()).disableBundledSkills === true
   );
 }
 //@ chunk-9acpp0pb.js:438-469 placement
@@ -51,8 +51,8 @@ function isSkillOutsideCorePolicy(name) {
 /**
  * 内置技能的综合门控判断（全局关闭或按名被挡）。
  */
-function isBundledSkillGatedOff(e, t) {
-  return isBundledSkillsDisabled(t) || isSkillOutsideCorePolicy(e);
+function isBundledSkillGatedOff(skillName, context) {
+  return isBundledSkillsDisabled(context) || isSkillOutsideCorePolicy(skillName);
 }
 //@ chunk-9acpp0pb.js:614-667 placement
 /**
@@ -65,16 +65,18 @@ function bundledSkillsDeniedReason() {
 /**
  * 由关闭状态与核心名单拼出的门控缓存键。
  */
-function bundledSkillsGateKey(e) {
-  let t = isBundledSkillsPolicyDenied();
-  return `${isBundledSkillsDisabled(e)}:${t}:${t ? coreSkillNames().join(",") : ""}`;
+function bundledSkillsGateKey(context) {
+  let isPolicyDenied = isBundledSkillsPolicyDenied();
+  return `${isBundledSkillsDisabled(context)}:${isPolicyDenied}:${isPolicyDenied ? coreSkillNames().join(",") : ""}`;
 }
 //@ chunk-9acpp0pb.js:739-819 placement
 /**
  * 判断某内置技能条目是否被门控关闭。
  */
-function isBuiltinSkillGated(e, t) {
-  return e.type === "prompt" && e.source === "builtin" && isBundledSkillGatedOff(e.name, t);
+function isBuiltinSkillGated(command, context) {
+  return (
+    command.type === "prompt" && command.source === "builtin" && isBundledSkillGatedOff(command.name, context)
+  );
 }
 export {
   isBundledSkillsDisabled,

@@ -5,11 +5,11 @@
  * pieces: chunk-fq0cr76a.js (1)
  * attribution: cjs-require-graph 1
  */
-import { x } from "../../../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../../../runtime/bun-runtime.js";
 import { require_unsafe } from "../../cjs/reflect/unsafe.js";
 
 //@ chunk-fq0cr76a.js:353042-353129 cjs-require-graph
-var require_reflect_types = x(function (cjsExports) {
+var require_reflect_types = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });

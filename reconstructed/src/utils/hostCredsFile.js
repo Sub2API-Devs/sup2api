@@ -23,35 +23,44 @@ import { isProcessRunning } from "./genericProcessUtils.js";
 import { getProcessCreationTimeMsAsync } from "./processIdentity.js";
 import { isENOENT, errorMessage } from "./errors.js";
 import { isEnvTruthy } from "./envUtils.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-8p2yt59w.js:723-1097 placement
 /**
  * 宿主凭据文件的常量与状态：可接收的环境变量集合、文件 schema（env、过期时间、pid、进程启动时间）、已应用的键等。
  */
-var HOST_CRED_ENV_KEYS = new Set(BASE_URL_ENV_VARS);
-var SEEDABLE_ENV_KEYS = new Set([
-  ...PROVIDER_CREDENTIAL_ENV_VARS,
-  ...BASE_URL_ENV_VARS.filter(
-    (e) =>
-      e !== "_CLAUDE_CODE_ASSUME_FIRST_PARTY_BASE_URL" &&
-      !e.startsWith("CLAUDE_CODE_ARTIFACT") &&
-      !isHelperEnvVar(e),
-  ),
-  "ANTHROPIC_CUSTOM_HEADERS",
-  "CLAUDE_CODE_SKIP_VERTEX_AUTH",
-]);
-var hostCredsFileSchema = DoctorLazy(() => {
-  let e = create_16([create_3(), create_2()]).pipe(zodCoerce.number());
-  return create({
-    env: create_20(create_2()),
-    expiresAt: e.nullable().default(null),
-    pid: create_3().int(),
-    procStart: e,
+var HOST_CRED_ENV_KEYS; // deferred: uses ARTIFACT_PROVIDER_ENV_VARS (./managedEnvConstants.js) of its import cycle while loading; runs once the cycle is complete
+var SEEDABLE_ENV_KEYS;
+var hostCredsFileSchema;
+var HOST_CREDS_POLL_MS;
+var appliedEnvKeys;
+var hostCredsState;
+deferInit("chunk-8p2yt59w.js:723", () => {
+  HOST_CRED_ENV_KEYS = new Set(BASE_URL_ENV_VARS);
+  SEEDABLE_ENV_KEYS = new Set([
+    ...PROVIDER_CREDENTIAL_ENV_VARS,
+    ...BASE_URL_ENV_VARS.filter(
+      (envKey) =>
+        envKey !== "_CLAUDE_CODE_ASSUME_FIRST_PARTY_BASE_URL" &&
+        !envKey.startsWith("CLAUDE_CODE_ARTIFACT") &&
+        !isHelperEnvVar(envKey),
+    ),
+    "ANTHROPIC_CUSTOM_HEADERS",
+    "CLAUDE_CODE_SKIP_VERTEX_AUTH",
+  ]);
+  hostCredsFileSchema = DoctorLazy(() => {
+    let procStartField = create_16([create_3(), create_2()]).pipe(zodCoerce.number());
+    return create({
+      env: create_20(create_2()),
+      expiresAt: procStartField.nullable().default(null),
+      pid: create_3().int(),
+      procStart: procStartField,
+    });
   });
+  HOST_CREDS_POLL_MS = 2000;
+  appliedEnvKeys = new Set();
+  hostCredsState = null;
 });
-var HOST_CREDS_POLL_MS = 2000;
-var appliedEnvKeys = new Set();
-var hostCredsState = null;
 //@ chunk-8p2yt59w.js:1097-1175 placement
 /**
  * 宿主认证用的环境变量名（未指定时用 ANTHROPIC_AUTH_TOKEN）。
@@ -73,10 +82,10 @@ function withoutHostManagedProviderVars() {
 async function readHostCredsFile() {
   let CLAUDE_CODE_HOST_CREDS_FILE = env.CLAUDE_CODE_HOST_CREDS_FILE;
   if (!CLAUDE_CODE_HOST_CREDS_FILE || !isAbsolute(CLAUDE_CODE_HOST_CREDS_FILE)) return null;
-  let r;
+  let handle;
   try {
-    r = await open(CLAUDE_CODE_HOST_CREDS_FILE, "r");
-    let stats = await r.stat();
+    handle = await open(CLAUDE_CODE_HOST_CREDS_FILE, "r");
+    let stats = await handle.stat();
     if (stats.size > 65536) return null;
     if (getPlatform() !== "windows") {
       if ((stats.mode & 63) !== 0 || stats.uid !== process.getuid?.()) {
@@ -89,22 +98,26 @@ async function readHostCredsFile() {
         return null;
       }
     }
-    let content = await r.readFile({
+    let content = await handle.readFile({
       encoding: "utf8",
     });
-    let s = hostCredsFileSchema().safeParse(jsonParse(content));
-    if (!s.success || !Number.isFinite(s.data.procStart)) return null;
-    let a = s.data;
-    if (!isProcessRunning(a.pid)) return null;
-    let processCreationTimeMs = await getProcessCreationTimeMsAsync(a.pid);
-    if (processCreationTimeMs !== null && Math.abs(a.procStart - processCreationTimeMs) > HOST_CREDS_POLL_MS)
+    let parsed = hostCredsFileSchema().safeParse(jsonParse(content));
+    if (!parsed.success || !Number.isFinite(parsed.data.procStart)) return null;
+    let creds = parsed.data;
+    if (!isProcessRunning(creds.pid)) return null;
+    let processCreationTimeMs = await getProcessCreationTimeMsAsync(creds.pid);
+    if (
+      processCreationTimeMs !== null &&
+      Math.abs(creds.procStart - processCreationTimeMs) > HOST_CREDS_POLL_MS
+    )
       return null;
-    if (a.expiresAt !== null && a.expiresAt < Date.now()) return null;
-    let _ = {};
-    for (let [key, value] of Object.entries(a.env)) if (SEEDABLE_ENV_KEYS.has(key)) _[key] = value;
+    if (creds.expiresAt !== null && creds.expiresAt < Date.now()) return null;
+    let seedableEnv = {};
+    for (let [key, value] of Object.entries(creds.env))
+      if (SEEDABLE_ENV_KEYS.has(key)) seedableEnv[key] = value;
     return {
-      ...a,
-      env: _,
+      ...creds,
+      env: seedableEnv,
     };
   } catch (error) {
     if (!isENOENT(error))
@@ -113,7 +126,7 @@ async function readHostCredsFile() {
       });
     return null;
   } finally {
-    await r?.close().catch(() => {});
+    await handle?.close().catch(() => {});
   }
 }
 //@ chunk-8p2yt59w.js:2105-3022 placement
@@ -122,13 +135,13 @@ async function loadHostCredentials() {
   if (!env.CLAUDE_CODE_HOST_CREDS_FILE || !isEnvTruthy(env.CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST)) return;
   let hostCredsFile = await readHostCredsFile();
   if (hostCredsFile) {
-    let r = new Map();
-    let n = {};
+    let endpointEnv = new Map();
+    let otherEnv = {};
     for (let [key, value] of Object.entries(hostCredsFile.env))
-      if (HOST_CRED_ENV_KEYS.has(key)) seedEndpointEnv(r, key, value);
-      else n[key] = value;
-    hostCredsState = r;
-    applyHostCredsEnv(n);
+      if (HOST_CRED_ENV_KEYS.has(key)) seedEndpointEnv(endpointEnv, key, value);
+      else otherEnv[key] = value;
+    hostCredsState = endpointEnv;
+    applyHostCredsEnv(otherEnv);
   } else
     logForDebugging(
       `CLAUDE_CODE_HOST_CREDS_FILE is set (${env.CLAUDE_CODE_HOST_CREDS_FILE}) but no usable host credentials were read`,
@@ -139,46 +152,51 @@ async function loadHostCredentials() {
   setHostAuthTokenRefreshCallback(async () => {
     let hostCredsFile = await readHostCredsFile();
     if (!hostCredsFile) throw Error("host-creds file re-read failed (missing/stale/expired)");
-    let n = {};
+    let otherEnv = {};
     for (let [key, value] of Object.entries(hostCredsFile.env))
-      if (!HOST_CRED_ENV_KEYS.has(key)) n[key] = value;
+      if (!HOST_CRED_ENV_KEYS.has(key)) otherEnv[key] = value;
       else if (hostCredsState && hostCredsState.get(key) !== value) {
         logForDebugging(`host-creds refresh rejected: endpoint changed (${key})`, {
           level: "warn",
         });
         throw Error("host-creds refresh rejected: endpoint changed");
       }
-    let o = hostAuthEnvVarName();
-    if (appliedEnvKeys.has(o) && !n[o]) throw Error("host-creds refresh dropped the bearer key");
+    let authEnvKey = hostAuthEnvVarName();
+    if (appliedEnvKeys.has(authEnvKey) && !otherEnv[authEnvKey])
+      throw Error("host-creds refresh dropped the bearer key");
     if (!hostCredsState) {
-      let s = new Map();
+      let endpointEnv = new Map();
       for (let [key, value] of Object.entries(hostCredsFile.env))
-        if (HOST_CRED_ENV_KEYS.has(key)) seedEndpointEnv(s, key, value);
-      hostCredsState = s;
+        if (HOST_CRED_ENV_KEYS.has(key)) seedEndpointEnv(endpointEnv, key, value);
+      hostCredsState = endpointEnv;
     }
-    applyHostCredsEnv(n);
+    applyHostCredsEnv(otherEnv);
     return {
-      authToken: n[o] ?? null,
+      authToken: otherEnv[authEnvKey] ?? null,
     };
   });
 }
 //@ chunk-8p2yt59w.js:3022-3224 placement
-function seedEndpointEnv(e, r, n) {
-  let o = process.env[r];
-  if (o && o !== n) {
-    logForDebugging(`host-creds seed: keeping the launch env's ${r}; the file names a different endpoint`, {
-      level: "warn",
-    });
-    e.set(r, o);
+function seedEndpointEnv(endpoints, envKey, value) {
+  let launchValue = process.env[envKey];
+  if (launchValue && launchValue !== value) {
+    logForDebugging(
+      `host-creds seed: keeping the launch env's ${envKey}; the file names a different endpoint`,
+      {
+        level: "warn",
+      },
+    );
+    endpoints.set(envKey, launchValue);
     return;
   }
-  process.env[r] = n;
-  e.set(r, n);
+  process.env[envKey] = value;
+  endpoints.set(envKey, value);
 }
 //@ chunk-8p2yt59w.js:3224-3343 placement
-function applyHostCredsEnv(e) {
-  for (let appliedEnvKey of appliedEnvKeys) if (!(appliedEnvKey in e)) delete process.env[appliedEnvKey];
-  Object.assign(process.env, e);
-  appliedEnvKeys = new Set(Object.keys(e));
+function applyHostCredsEnv(envValues) {
+  for (let appliedEnvKey of appliedEnvKeys)
+    if (!(appliedEnvKey in envValues)) delete process.env[appliedEnvKey];
+  Object.assign(process.env, envValues);
+  appliedEnvKeys = new Set(Object.keys(envValues));
 }
 export { loadHostCredentials, withoutHostManagedProviderVars, hostAuthEnvVarName };

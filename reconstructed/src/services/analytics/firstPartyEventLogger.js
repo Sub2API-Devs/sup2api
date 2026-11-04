@@ -36,15 +36,16 @@ import { getPlatform, getWslVersion } from "../../utils/platform.js";
 import { FirstPartyEventLoggingExporter } from "./firstPartyEventLoggingExporter.js";
 import { BatchLogRecordProcessor } from "../../../vendor/@opentelemetry/sdk-logs/build/esm/platform/node/export/BatchLogRecordProcessor.js";
 import { LoggerProvider } from "../../../vendor/@opentelemetry/sdk-logs/build/src/LoggerProvider.js";
-import { En } from "../../../vendor/lodash-es/_inlinedHelpers.js";
+import { import_sortedIndex_2 } from "../../../vendor/lodash-es/_inlinedHelpers.js";
 import { logError } from "../../utils/log.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-aepeg2w5.js:894709-894752 affinity
 /**
  * sink killswitch：动态配置 tengu_frond_boric 中对应 sink（datadog / firstParty）为 true 时停发。
  */
-function isSinkKilled(e) {
-  return getDynamicConfig_CACHED_MAY_BE_STALE(SINK_KILLSWITCH_CONFIG_NAME, {})?.[e] === true;
+function isSinkKilled(sink) {
+  return getDynamicConfig_CACHED_MAY_BE_STALE(SINK_KILLSWITCH_CONFIG_NAME, {})?.[sink] === true;
 }
 //@ chunk-aepeg2w5.js:894752-894789 fingerprint = EVENT_SAMPLING_CONFIG_NAME (1)
 /**
@@ -59,10 +60,10 @@ function getEventSamplingConfig() {
 /**
  * 按采样率随机决定是否发送，返回实际采样率或 0。
  */
-function shouldSampleEvent(e) {
-  let r = getEventSamplingConfig()[e];
-  if (!r) return null;
-  return rollSampleRate(r.sample_rate);
+function shouldSampleEvent(eventName) {
+  let rate = getEventSamplingConfig()[eventName];
+  if (!rate) return null;
+  return rollSampleRate(rate.sample_rate);
 }
 //@ chunk-aepeg2w5.js:894896-895026 facade-exports = shouldSampleEvent (0.568)
 function rollSampleRate(sampleRate) {
@@ -98,7 +99,10 @@ class FirstPartyLoggerState {
   reinitInFlight = null;
 }
 //@ chunk-aepeg2w5.js:895358-895383 layout
-var firstPartyLoggerStateByHost = new HostScoped(() => new FirstPartyLoggerState());
+var firstPartyLoggerStateByHost; // deferred: uses FirstPartyLoggerState of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-aepeg2w5.js:895358", () => {
+  firstPartyLoggerStateByHost = new HostScoped(() => new FirstPartyLoggerState());
+});
 //@ chunk-aepeg2w5.js:895383-895490 facade-exports
 async function settle1PEventLoggingBeforeExit() {
   let { firstPartyEventExporter } = firstPartyLoggerStateByHost.of(getRootSession().host);
@@ -111,18 +115,18 @@ async function settle1PEventLoggingBeforeExit() {
  * 强制 flush 1P logger provider 与 exporter。
  */
 async function shutdown1PEventLogging() {
-  let e = firstPartyLoggerStateByHost.of(getRootSession().host);
-  let { firstPartyEventLoggerProvider, firstPartyEventExporter } = e;
+  let state = firstPartyLoggerStateByHost.of(getRootSession().host);
+  let { firstPartyEventLoggerProvider, firstPartyEventExporter } = state;
   if (!firstPartyEventLoggerProvider) return;
   try {
-    if (e.loggerBeingReplaced !== null) {
-      e.firstPartyEventLogger = e.loggerBeingReplaced;
-      flushPreInitQueue(e);
-      await _clearOutputsForTest(e, OUTPUT_CLEAR_RETRY_MS);
+    if (state.loggerBeingReplaced !== null) {
+      state.firstPartyEventLogger = state.loggerBeingReplaced;
+      flushPreInitQueue(state);
+      await _clearOutputsForTest(state, OUTPUT_CLEAR_RETRY_MS);
     }
-    let s = firstPartyEventExporter?.beginShutdown(DEFAULT_1P_BATCH_DELAY_MS);
+    let shutdownPromise = firstPartyEventExporter?.beginShutdown(DEFAULT_1P_BATCH_DELAY_MS);
     await firstPartyEventLoggerProvider.shutdown();
-    await s;
+    await shutdownPromise;
   } catch {}
 }
 //@ chunk-aepeg2w5.js:895773-895822 layout
@@ -144,7 +148,7 @@ async function logEventTo1PAsync(
   firstPartyEventLogger,
   eventName,
   metadata = {},
-  s = principalStampForEvent(eventName),
+  principalStamp = principalStampForEvent(eventName),
 ) {
   try {
     let coreMetadata = await getEventMetadata({
@@ -157,8 +161,8 @@ async function logEventTo1PAsync(
       core_metadata: coreMetadata,
       user_metadata: buildCoreUserData(true),
       event_metadata: metadata,
-      ...(s !== undefined && {
-        principal_stamp: s,
+      ...(principalStamp !== undefined && {
+        principal_stamp: principalStamp,
       }),
     };
     let userId = getOrCreateUserID();
@@ -176,7 +180,7 @@ async function logEventTo1PAsync(
 /**
  * 同步发 1P 事件：不允许时直接返回；logger 未初始化时进入 preInitQueue（上限 1024）；killswitch 开启时丢弃；否则交给 logEventTo1PAsync。
  */
-function logEventTo1P(eventName, n = {}, principalStamp = principalStampForEvent(eventName)) {
+function logEventTo1P(eventName, metadata = {}, principalStamp = principalStampForEvent(eventName)) {
   if (!is1PEventLoggingEnabled()) return;
   let { firstPartyEventLogger, preInitQueue, emitsInFlight } = firstPartyLoggerStateByHost.of(
     getRootSession().host,
@@ -185,21 +189,21 @@ function logEventTo1P(eventName, n = {}, principalStamp = principalStampForEvent
     if (preInitQueue !== null && preInitQueue.length < MAX_PRE_INIT_QUEUE)
       preInitQueue.push({
         eventName,
-        metadata: n,
+        metadata,
         principalStamp,
       });
     return;
   }
   if (isSinkKilled("firstParty")) return;
-  trackInFlightEmit(emitsInFlight, firstPartyEventLogger, eventName, n, principalStamp);
+  trackInFlightEmit(emitsInFlight, firstPartyEventLogger, eventName, metadata, principalStamp);
 }
 //@ chunk-aepeg2w5.js:896419-896503 layout
-function trackInFlightEmit(emitsInFlight, firstPartyEventLogger, eventName, metadata, h) {
-  let y = logEventTo1PAsync(firstPartyEventLogger, eventName, metadata, h).finally(() =>
-    emitsInFlight.delete(y),
+function trackInFlightEmit(emitsInFlight, firstPartyEventLogger, eventName, metadata, principalStamp) {
+  let promise = logEventTo1PAsync(firstPartyEventLogger, eventName, metadata, principalStamp).finally(() =>
+    emitsInFlight.delete(promise),
   );
-  emitsInFlight.add(y);
-  return y;
+  emitsInFlight.add(promise);
+  return promise;
 }
 //@ chunk-aepeg2w5.js:896503-896768 facade-exports
 /**
@@ -207,7 +211,7 @@ function trackInFlightEmit(emitsInFlight, firstPartyEventLogger, eventName, meta
  */
 async function logEventTo1PAwaitable(eventName, metadataWithSampleRate = {}) {
   if (!is1PEventLoggingEnabled()) return;
-  let r = principalStampForEvent(eventName);
+  let stamp = principalStampForEvent(eventName);
   let { firstPartyEventLogger, preInitQueue, emitsInFlight } = firstPartyLoggerStateByHost.of(
     getRootSession().host,
   );
@@ -216,12 +220,12 @@ async function logEventTo1PAwaitable(eventName, metadataWithSampleRate = {}) {
       preInitQueue.push({
         eventName,
         metadata: metadataWithSampleRate,
-        principalStamp: r,
+        principalStamp: stamp,
       });
     return;
   }
   if (isSinkKilled("firstParty")) return;
-  return trackInFlightEmit(emitsInFlight, firstPartyEventLogger, eventName, metadataWithSampleRate, r);
+  return trackInFlightEmit(emitsInFlight, firstPartyEventLogger, eventName, metadataWithSampleRate, stamp);
 }
 //@ chunk-aepeg2w5.js:896768-896801 fingerprint = getEnvironmentForGrowthBook (1)
 /**
@@ -302,25 +306,25 @@ class FirstPartyLogger {
     this.resource = resource;
     this.instrumentationScope = instrumentationScope;
   }
-  emit(e) {
+  emit(record) {
     let now = Date.now();
-    let r = {};
-    for (let [key, value] of Object.entries(e.attributes ?? {}))
+    let attributes = {};
+    for (let [key, value] of Object.entries(record.attributes ?? {}))
       if (
         value !== null &&
         key.length > 0 &&
         (nodeModuleA.isAttributeValue(value) ||
           (typeof value === "object" && !Array.isArray(value) && Object.keys(value).length > 0))
       )
-        r[key] = value;
+        attributes[key] = value;
     this.processor.onEmit({
-      hrTime: nodeModuleA.timeInputToHrTime(e.timestamp ?? now),
-      hrTimeObserved: nodeModuleA.timeInputToHrTime(e.observedTimestamp ?? now),
-      severityText: e.severityText,
-      severityNumber: e.severityNumber,
-      body: e.body,
-      eventName: e.eventName,
-      attributes: r,
+      hrTime: nodeModuleA.timeInputToHrTime(record.timestamp ?? now),
+      hrTimeObserved: nodeModuleA.timeInputToHrTime(record.observedTimestamp ?? now),
+      severityText: record.severityText,
+      severityNumber: record.severityNumber,
+      body: record.body,
+      eventName: record.eventName,
+      attributes,
       resource: this.resource,
       instrumentationScope: this.instrumentationScope,
       droppedAttributesCount: 0,
@@ -329,7 +333,7 @@ class FirstPartyLogger {
 }
 //@ chunk-aepeg2w5.js:898402-899558 layout
 function create1PLogger(firstPartyEventLoggerProvider, processor, resource) {
-  return OTEL_LOG_LIMIT_ENV_VARS.some((h) => nodeModuleA.getStringFromEnv(h) !== undefined)
+  return OTEL_LOG_LIMIT_ENV_VARS.some((envVar) => nodeModuleA.getStringFromEnv(envVar) !== undefined)
     ? firstPartyEventLoggerProvider.getLogger(
         "com.anthropic.claude_code.events",
         {
@@ -377,12 +381,12 @@ function clampMaxQueueSize(maxQueueSize) {
 /**
  * 初始化 1P 事件日志：读 tengu_1p_event_batch_config（延迟、批大小、队列、path/baseUrl、skipAuth），创建 FirstPartyEventLoggingExporter + BatchLogRecordProcessor 和 LoggerProvider（resource service.name=claude-code）。不允许时清空预排队。
  */
-function initialize1PEventLogging(e, tenantGrant) {
-  let r = firstPartyLoggerStateByHost.of(getRootSession().host);
-  if (e !== undefined && r.retainedStorageV5 === undefined) r.retainedStorageV5 = e;
+function initialize1PEventLogging(storageV5, tenantGrant) {
+  let state = firstPartyLoggerStateByHost.of(getRootSession().host);
+  if (storageV5 !== undefined && state.retainedStorageV5 === undefined) state.retainedStorageV5 = storageV5;
   profileCheckpoint("1p_event_logging_start");
   if (!is1PEventLoggingEnabled()) {
-    r.preInitQueue = null;
+    state.preInitQueue = null;
     return;
   }
   let batchConfig = get1PEventBatchConfig();
@@ -413,7 +417,7 @@ function initialize1PEventLogging(e, tenantGrant) {
     let wslVersion = getWslVersion();
     if (wslVersion) attributes["wsl.version"] = wslVersion;
   }
-  let P = nodeModuleB.resourceFromAttributes(attributes);
+  let resource = nodeModuleB.resourceFromAttributes(attributes);
   let eventLoggingExporter = wrapExporterFailures(
     new FirstPartyEventLoggingExporter({
       maxBatchSize: maxExportBatchSize,
@@ -423,72 +427,76 @@ function initialize1PEventLogging(e, tenantGrant) {
       path: batchConfig.path,
       baseUrl: batchConfig.baseUrl,
       isKilled: () => isSinkKilled("firstParty"),
-      storageV5: r.retainedStorageV5,
+      storageV5: state.retainedStorageV5,
       tenantGrant,
     }),
     new ExportFailureCounter("1P event logging"),
   );
-  let L = new BatchLogRecordProcessor(eventLoggingExporter, {
+  let logRecordProcessor = new BatchLogRecordProcessor(eventLoggingExporter, {
     scheduledDelayMillis,
     maxExportBatchSize,
     maxQueueSize,
   });
-  r.firstPartyEventLoggerProvider = new LoggerProvider({
-    resource: P,
-    processors: [L],
+  state.firstPartyEventLoggerProvider = new LoggerProvider({
+    resource,
+    processors: [logRecordProcessor],
   });
-  r.firstPartyEventExporter = eventLoggingExporter;
-  r.firstPartyEventLogger = create1PLogger(r.firstPartyEventLoggerProvider, L, P);
-  r.lastBatchConfig = batchConfig;
-  flushPreInitQueue(r);
+  state.firstPartyEventExporter = eventLoggingExporter;
+  state.firstPartyEventLogger = create1PLogger(
+    state.firstPartyEventLoggerProvider,
+    logRecordProcessor,
+    resource,
+  );
+  state.lastBatchConfig = batchConfig;
+  flushPreInitQueue(state);
 }
 //@ chunk-aepeg2w5.js:901268-901455 affinity
 /**
  * 初始化后补发预初始化期间排队的事件与实验曝光。
  */
-function flushPreInitQueue(e) {
-  if (e.preInitQueue === null) return;
-  let preInitQueue = e.preInitQueue;
-  e.preInitQueue = null;
-  for (let r of preInitQueue)
-    if ("exposure" in r) logGrowthBookExperimentTo1P(r.exposure);
-    else logEventTo1P(r.eventName, r.metadata, r.principalStamp);
+function flushPreInitQueue(state) {
+  if (state.preInitQueue === null) return;
+  let preInitQueue = state.preInitQueue;
+  state.preInitQueue = null;
+  for (let entry of preInitQueue)
+    if ("exposure" in entry) logGrowthBookExperimentTo1P(entry.exposure);
+    else logEventTo1P(entry.eventName, entry.metadata, entry.principalStamp);
 }
 //@ chunk-aepeg2w5.js:901455-901578 facade-exports
 function reinitialize1PEventLoggingIfConfigChanged() {
-  let e = firstPartyLoggerStateByHost.of(getRootSession().host);
-  e.reinitInFlight ??= reinitialize1PEventLoggingIfConfigChanged_2(e).finally(() => {
-    e.reinitInFlight = null;
+  let state = firstPartyLoggerStateByHost.of(getRootSession().host);
+  state.reinitInFlight ??= reinitialize1PEventLoggingIfConfigChanged_2(state).finally(() => {
+    state.reinitInFlight = null;
   });
-  return e.reinitInFlight;
+  return state.reinitInFlight;
 }
 //@ chunk-aepeg2w5.js:901578-902197 callgraph-fingerprint = reinitialize1PEventLoggingIfConfigChanged (0.2)
-async function reinitialize1PEventLoggingIfConfigChanged_2(e) {
-  if (!is1PEventLoggingEnabled() || !e.firstPartyEventLoggerProvider) return;
+async function reinitialize1PEventLoggingIfConfigChanged_2(host) {
+  if (!is1PEventLoggingEnabled() || !host.firstPartyEventLoggerProvider) return;
   let newConfig = get1PEventBatchConfig();
-  if (En(newConfig, e.lastBatchConfig)) return;
-  let { firstPartyEventLoggerProvider, firstPartyEventLogger, firstPartyEventExporter } = e;
-  e.firstPartyEventLogger = null;
-  e.loggerBeingReplaced = firstPartyEventLogger;
-  e.preInitQueue ??= [];
-  await _clearOutputsForTest(e, OUTPUT_CLEAR_TIMEOUT_MS);
+  if (import_sortedIndex_2(newConfig, host.lastBatchConfig)) return;
+  let { firstPartyEventLoggerProvider, firstPartyEventLogger, firstPartyEventExporter } = host;
+  host.firstPartyEventLogger = null;
+  host.loggerBeingReplaced = firstPartyEventLogger;
+  host.preInitQueue ??= [];
+  await _clearOutputsForTest(host, OUTPUT_CLEAR_TIMEOUT_MS);
   try {
     await firstPartyEventLoggerProvider.forceFlush();
   } catch {}
-  e.firstPartyEventLoggerProvider = null;
-  e.loggerBeingReplaced = null;
+  host.firstPartyEventLoggerProvider = null;
+  host.loggerBeingReplaced = null;
   try {
     initialize1PEventLogging();
-  } catch (e_2) {
-    e.firstPartyEventLoggerProvider = firstPartyEventLoggerProvider;
-    e.firstPartyEventLogger = firstPartyEventLogger;
-    e.firstPartyEventExporter = firstPartyEventExporter;
-    flushPreInitQueue(e);
-    logError(e_2);
+  } catch (e) {
+    host.firstPartyEventLoggerProvider = firstPartyEventLoggerProvider;
+    host.firstPartyEventLogger = firstPartyEventLogger;
+    host.firstPartyEventExporter = firstPartyEventExporter;
+    flushPreInitQueue(host);
+    logError(e);
     return;
   }
   if (firstPartyEventExporter) {
-    e.firstPartyEventExporter?.adoptInflightRefreshFrom(firstPartyEventExporter);
+    host.firstPartyEventExporter?.adoptInflightRefreshFrom(firstPartyEventExporter);
     firstPartyEventExporter.beginShutdown();
   }
   firstPartyEventLoggerProvider.shutdown().catch(() => {});
@@ -504,4 +512,6 @@ export {
   shouldSampleEvent,
   getEventSamplingConfig,
   logEventTo1P,
+  reinitialize1PEventLoggingIfConfigChanged,
+  settle1PEventLoggingBeforeExit,
 };

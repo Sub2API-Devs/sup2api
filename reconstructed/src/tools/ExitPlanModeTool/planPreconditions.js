@@ -25,10 +25,10 @@ function teammateModeAfterPlan({
   proactivityLevel,
   tasks,
 }) {
-  let d = Object.values(tasks).some((m) => isResumableTeammate(m, recipientName))
+  let nextLeaderMode = Object.values(tasks).some((task) => isResumableTeammate(task, recipientName))
     ? leaderMode
     : cycleAllTeammateModes(leaderMode, proactivityLevel, leaderAutoPickedByLevel);
-  let externalPermissionMode = toExternalPermissionMode(d);
+  let externalPermissionMode = toExternalPermissionMode(nextLeaderMode);
   return externalPermissionMode === "plan" ? "default" : externalPermissionMode;
 }
 //@ chunk-fnhsh6ng.js:2420-2579 placement
@@ -37,25 +37,25 @@ function teammateModeAfterPlan({
  */
 function isTeammateAwaitingPlan(from, tasks) {
   return Object.values(tasks).some(
-    (n) =>
-      isInProcessTeammateTask(n) &&
-      n.status === "running" &&
-      n.identity.agentName === from &&
-      n.identity.planModeRequired &&
-      !n.planHeldAfterSpawn,
+    (task) =>
+      isInProcessTeammateTask(task) &&
+      task.status === "running" &&
+      task.identity.agentName === from &&
+      task.identity.planModeRequired &&
+      !task.planHeldAfterSpawn,
   );
 }
 //@ chunk-fnhsh6ng.js:2579-2719 placement
 /**
  * 判断任务是否为正在运行、指定名字、未拆除面板且可恢复的进程内队友。
  */
-function isResumableTeammate(r, e) {
+function isResumableTeammate(task, agentName) {
   return (
-    isInProcessTeammateTask(r) &&
-    r.status === "running" &&
-    r.identity.agentName === e &&
-    r.paneTeardown === undefined &&
-    r.identity.resumableAgentId !== undefined
+    isInProcessTeammateTask(task) &&
+    task.status === "running" &&
+    task.identity.agentName === agentName &&
+    task.paneTeardown === undefined &&
+    task.identity.resumableAgentId !== undefined
   );
 }
 //@ chunk-fnhsh6ng.js:2719-2800 placement
@@ -69,8 +69,8 @@ class PlanPreconditionError extends Error {
 /**
  * 计划提示的附加句：建议把可并行的任务交给命名队友（仅默认子代理引导时）。
  */
-function teammateSpawnPlanHint(r) {
-  if (!r || getSubagentSteer() !== "default") return "";
+function teammateSpawnPlanHint(steer) {
+  if (!steer || getSubagentSteer() !== "default") return "";
   return `
 
 If this plan can be broken down into multiple independent tasks, consider spawning named teammates with the ${AGENT} tool (pass a \`name\`) to parallelize the work.`;

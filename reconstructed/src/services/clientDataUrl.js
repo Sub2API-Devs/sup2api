@@ -40,16 +40,17 @@ import { stripAnyVersatileSuffix } from "../utils/model/modelIds.js";
 import { getMainLoopModel } from "../utils/model/model.js";
 import { lt_2 as lt } from "../utils/semver.js";
 import { splitOnDash } from "../utils/model/modelCatalog/catalogCapabilities.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-5ghme4bp.js:689-921 placement
-function formatClientDataFatal(e) {
-  return `Error: --client-data-url: ${e}. Claude Code does not start without the configuration it was given; to start without it, remove the flag, or remove CLAUDE_CODE_CLIENT_DATA_URL from your environment or settings.`;
+function formatClientDataFatal(error) {
+  return `Error: --client-data-url: ${error}. Claude Code does not start without the configuration it was given; to start without it, remove the flag, or remove CLAUDE_CODE_CLIENT_DATA_URL from your environment or settings.`;
 }
 //@ chunk-5ghme4bp.js:921-2769 placement
 /**
  * --client-data-url 各类失败（URL 无效、云/远程/ssh 会话不可用、第三方提供商、策略、不存在、超时、过大、签名错误）的说明。
  */
-function CLIENT_DATA_URL_ERRORS(failure, { httpStatus: n, minClaudeCodeVersion: r, buildVersion: o } = {}) {
+function CLIENT_DATA_URL_ERRORS(failure, { httpStatus, minClaudeCodeVersion, buildVersion } = {}) {
   switch (failure) {
     case "invalid_url":
       return "the URL must be the https://downloads.claude.ai/ address Anthropic gave you, exactly as given";
@@ -65,7 +66,7 @@ function CLIENT_DATA_URL_ERRORS(failure, { httpStatus: n, minClaudeCodeVersion: 
     case "timeout":
     case "network":
     case "read_failed":
-      return `Claude Code could not fetch the document from downloads.claude.ai (${failure === "http_status" ? `HTTP ${n ?? "error"}` : failure}); check that your network or proxy allows https://downloads.claude.ai`;
+      return `Claude Code could not fetch the document from downloads.claude.ai (${failure === "http_status" ? `HTTP ${httpStatus ?? "error"}` : failure}); check that your network or proxy allows https://downloads.claude.ai`;
     case "too_large":
       return "the server returned something too large to be a configuration document; try again, and if it keeps happening ask Anthropic";
     case "unsigned":
@@ -80,42 +81,42 @@ function CLIENT_DATA_URL_ERRORS(failure, { httpStatus: n, minClaudeCodeVersion: 
     case "replayed_version":
       return "the server returned an older document than one already accepted on this machine; a proxy on your network may be serving an old copy; if not, ask Anthropic for a new URL";
     case "below_minimum_version":
-      return `the document requires Claude Code ${r} or newer and this build is ${o}; run claude update`;
+      return `the document requires Claude Code ${minClaudeCodeVersion} or newer and this build is ${buildVersion}; run claude update`;
     case "exception":
       return "Claude Code hit an internal error loading it; run with --debug for details";
   }
 }
 //@ chunk-5ghme4bp.js:2769-3283 placement
-function describeNoModelEntry(e, n) {
-  let r = describePatterns(e);
-  return r === ""
+function describeNoModelEntry(doc, model) {
+  let patterns = describePatterns(doc);
+  return patterns === ""
     ? "Error: --client-data-url: the document has nothing for any model (its publisher switched it off). Remove --client-data-url or CLAUDE_CODE_CLIENT_DATA_URL, or pass --allow-other-models (CLAUDE_CODE_ALLOW_OTHER_MODELS=1) to start without applying it."
-    : `Error: --client-data-url: the document has no entry for ${sanitizeForMessage(n)}; it has entries for models matching ${r}. Pass a matching --model, or --allow-other-models (CLAUDE_CODE_ALLOW_OTHER_MODELS=1) to start without applying it.`;
+    : `Error: --client-data-url: the document has no entry for ${sanitizeForMessage(model)}; it has entries for models matching ${patterns}. Pass a matching --model, or --allow-other-models (CLAUDE_CODE_ALLOW_OTHER_MODELS=1) to start without applying it.`;
 }
 //@ chunk-5ghme4bp.js:3283-3637 placement
-function describeDocumentApplied(e, n, assumesFirstPartyBaseUrl) {
-  let o = describePatterns(e);
-  let a =
-    clientDataForModel(e, n) !== null
-      ? `applied to ${sanitizeForMessage(n)} (document v${e.version})`
-      : o === ""
-        ? `loaded (document v${e.version}), nothing in it for any model (its publisher switched it off)`
-        : `loaded (document v${e.version}), nothing in it for ${sanitizeForMessage(n)}; it has entries for models matching ${o}`;
-  return assumesFirstPartyBaseUrl ? `${a}; base URL treated as the Anthropic API` : a;
+function describeDocumentApplied(doc, model, assumesFirstPartyBaseUrl) {
+  let patterns = describePatterns(doc);
+  let summary =
+    clientDataForModel(doc, model) !== null
+      ? `applied to ${sanitizeForMessage(model)} (document v${doc.version})`
+      : patterns === ""
+        ? `loaded (document v${doc.version}), nothing in it for any model (its publisher switched it off)`
+        : `loaded (document v${doc.version}), nothing in it for ${sanitizeForMessage(model)}; it has entries for models matching ${patterns}`;
+  return assumesFirstPartyBaseUrl ? `${summary}; base URL treated as the Anthropic API` : summary;
 }
 //@ chunk-5ghme4bp.js:3637-3709 placement
 /**
  * 把各条目模式拼成可读列表（再清洗控制字符）。
  */
-function describePatterns(e) {
-  return sanitizeForMessage(e.entries.map((entry) => entry.pattern.source).join(", "));
+function describePatterns(doc) {
+  return sanitizeForMessage(doc.entries.map((entry) => entry.pattern.source).join(", "));
 }
 //@ chunk-5ghme4bp.js:3709-3739 placement
 /**
  * 去掉终端控制字符并替换控制字符，用于报错文案。
  */
-function sanitizeForMessage(e) {
-  return replaceControlChars(stripVTControlCharacters(e));
+function sanitizeForMessage(text) {
+  return replaceControlChars(stripVTControlCharacters(text));
 }
 //@ chunk-5ghme4bp.js:3739-4144 placement
 function parseClientDataUrl() {
@@ -124,22 +125,22 @@ function parseClientDataUrl() {
     return {
       kind: "unset",
     };
-  let n;
+  let parsed;
   try {
-    n = new URL(trimmed);
+    parsed = new URL(trimmed);
   } catch {
     return {
       kind: "invalid_url",
     };
   }
   if (
-    n.protocol !== "https:" ||
-    n.username !== "" ||
-    n.password !== "" ||
-    n.port !== "" ||
-    !isAnthropicOwnedHost(n.hostname) ||
+    parsed.protocol !== "https:" ||
+    parsed.username !== "" ||
+    parsed.password !== "" ||
+    parsed.port !== "" ||
+    !isAnthropicOwnedHost(parsed.hostname) ||
     /[?#]/.test(trimmed) ||
-    !CLIENT_DATA_PATH_RE.test(n.pathname)
+    !CLIENT_DATA_PATH_RE.test(parsed.pathname)
   )
     return {
       kind: "invalid_url",
@@ -147,9 +148,9 @@ function parseClientDataUrl() {
   return {
     kind: "ok",
     source: {
-      url: n.toString(),
-      signingContext: clientDataSchema(n.pathname),
-      cacheKey: shortHash(n.pathname),
+      url: parsed.toString(),
+      signingContext: clientDataSchema(parsed.pathname),
+      cacheKey: shortHash(parsed.pathname),
       roots: COMPILED_CATALOG_ROOTS,
     },
   };
@@ -166,9 +167,9 @@ function clientDataState() {
  * 启动时加载客户端数据文档（失败则拒绝启动并说明）。
  */
 function loadClientDataForStartup({
-  flagUrl: e,
-  runsOnAnotherMachine: n = false,
-  buildVersion: r = {
+  flagUrl,
+  runsOnAnotherMachine = false,
+  buildVersion = {
     ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
     PACKAGE_URL: "@anthropic-ai/claude-code",
     README_URL: "https://code.claude.com/docs/en/overview",
@@ -181,15 +182,15 @@ function loadClientDataForStartup({
   }.VERSION,
 } = {}) {
   try {
-    if (e !== undefined) env.set("CLAUDE_CODE_CLIENT_DATA_URL", e);
+    if (flagUrl !== undefined) env.set("CLAUDE_CODE_CLIENT_DATA_URL", flagUrl);
     let clientDataUrl = parseClientDataUrl();
     if (
       clientDataUrl.kind === "unset" ||
       !needsFirstPartyBaseUrlAssumption() ||
-      getClientDataSkipReason(clientDataUrl, n) !== undefined
+      getClientDataSkipReason(clientDataUrl, runsOnAnotherMachine) !== undefined
     )
       return;
-    let signedClientData = fetchSignedClientData(clientDataUrl, n, r);
+    let signedClientData = fetchSignedClientData(clientDataUrl, runsOnAnotherMachine, buildVersion);
     signedClientData.catch(() => {});
     clientDataState().pending = {
       resolution: clientDataUrl,
@@ -216,8 +217,8 @@ async function applyPendingClientDataBaseUrl() {
 }
 //@ chunk-5ghme4bp.js:5087-6415 placement
 async function applyClientDataToSession({
-  runsOnAnotherMachine: e = false,
-  buildVersion: n = {
+  runsOnAnotherMachine = false,
+  buildVersion = {
     ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
     PACKAGE_URL: "@anthropic-ai/claude-code",
     README_URL: "https://code.claude.com/docs/en/overview",
@@ -233,7 +234,7 @@ async function applyClientDataToSession({
     let clientDataUrl = parseClientDataUrl();
     let pending = clientDataState().pending;
     clientDataState().pending = undefined;
-    let a =
+    let reused =
       pending !== undefined && isSameClientDataSource(pending.resolution, clientDataUrl)
         ? pending
         : undefined;
@@ -241,30 +242,30 @@ async function applyClientDataToSession({
       withdrawFirstPartyBaseUrlAssumption();
       return;
     }
-    let clientDataSkipReason = getClientDataSkipReason(clientDataUrl, e);
-    if (clientDataSkipReason !== undefined || (pending !== undefined && a === undefined))
+    let clientDataSkipReason = getClientDataSkipReason(clientDataUrl, runsOnAnotherMachine);
+    if (clientDataSkipReason !== undefined || (pending !== undefined && reused === undefined))
       withdrawFirstPartyBaseUrlAssumption();
-    if (clientDataSkipReason === undefined && a === undefined && !isPolicyAllowed("allow_model_catalog"))
+    if (clientDataSkipReason === undefined && reused === undefined && !isPolicyAllowed("allow_model_catalog"))
       return formatClientDataFatal(CLIENT_DATA_URL_ERRORS("policy_denied"));
-    let u =
+    let loaded =
       clientDataSkipReason !== undefined
         ? {
             failure: clientDataSkipReason,
           }
-        : a !== undefined
-          ? await a.loaded
-          : await fetchSignedClientData(clientDataUrl, e, n);
-    if (a !== undefined && "failure" in u && FAILURE_KINDS_REQUIRING_REFETCH.has(u.failure))
-      u = await fetchSignedClientData(clientDataUrl, e, n);
-    if ("failure" in u) return formatClientDataFatal(CLIENT_DATA_URL_ERRORS(u.failure, u));
-    if (a !== undefined && !isPolicyAllowed("allow_model_catalog"))
+        : reused !== undefined
+          ? await reused.loaded
+          : await fetchSignedClientData(clientDataUrl, runsOnAnotherMachine, buildVersion);
+    if (reused !== undefined && "failure" in loaded && FAILURE_KINDS_REQUIRING_REFETCH.has(loaded.failure))
+      loaded = await fetchSignedClientData(clientDataUrl, runsOnAnotherMachine, buildVersion);
+    if ("failure" in loaded) return formatClientDataFatal(CLIENT_DATA_URL_ERRORS(loaded.failure, loaded));
+    if (reused !== undefined && !isPolicyAllowed("allow_model_catalog"))
       return formatClientDataFatal(CLIENT_DATA_URL_ERRORS("policy_denied"));
-    if (applyAssumeFirstPartyBaseUrl(u.document)) ensurePolicyLimitsLoadRequested();
+    if (applyAssumeFirstPartyBaseUrl(loaded.document)) ensurePolicyLimitsLoadRequested();
     if (clientDataUrl.kind === "ok")
-      await recordPublishedCatalogFloor(clientDataUrl.source.cacheKey, u.document);
-    clientDataState().document = u.document;
+      await recordPublishedCatalogFloor(clientDataUrl.source.cacheKey, loaded.document);
+    clientDataState().document = loaded.document;
     logForDebugging(
-      `[clientDataUrl] loaded document v${u.document.version} covering ${u.document.entries.length} model pattern(s)`,
+      `[clientDataUrl] loaded document v${loaded.document.version} covering ${loaded.document.entries.length} model pattern(s)`,
     );
     return;
   } catch (error) {
@@ -273,9 +274,9 @@ async function applyClientDataToSession({
   }
 }
 //@ chunk-5ghme4bp.js:6415-7013 placement
-function applyAssumeFirstPartyBaseUrl(e) {
+function applyAssumeFirstPartyBaseUrl(doc) {
   if (clientDataState().assumesFirstPartyBaseUrl) return false;
-  let found = e.entries.find((entry) => entry.clientData.assume_first_party_base_url === true);
+  let found = doc.entries.find((entry) => entry.clientData.assume_first_party_base_url === true);
   if (found === undefined || isActualFirstPartyAnthropicBaseUrl()) return false;
   if (env._CLAUDE_CODE_ASSUME_FIRST_PARTY_BASE_URL !== undefined || isProviderManagedByHost()) {
     logForDebugging(
@@ -296,24 +297,24 @@ function applyAssumeFirstPartyBaseUrl(e) {
  * 客户端数据文档中没有当前模型的条目时返回说明（允许其他模型时跳过）。
  */
 function checkClientDataModelEntry() {
-  let { document: e } = clientDataState();
-  if (e === undefined || env.CLAUDE_CODE_ALLOW_OTHER_MODELS) return;
-  let n = stripAnyVersatileSuffix(getMainLoopModel());
-  return clientDataForModel(e, n) === null ? describeNoModelEntry(e, n) : undefined;
+  let { document: doc } = clientDataState();
+  if (doc === undefined || env.CLAUDE_CODE_ALLOW_OTHER_MODELS) return;
+  let model = stripAnyVersatileSuffix(getMainLoopModel());
+  return clientDataForModel(doc, model) === null ? describeNoModelEntry(doc, model) : undefined;
 }
 //@ chunk-5ghme4bp.js:7155-7271 placement
 /**
  * 用客户端数据文档中当前模型的条目覆盖传入的客户端数据。
  */
-function applyClientDataModelOverrides(e, n) {
-  let { document: r } = clientDataState();
-  if (r === undefined) return e;
-  let o = clientDataForModel(r, stripAnyVersatileSuffix(n ?? getMainLoopModel()));
-  return o === null
-    ? e
+function applyClientDataModelOverrides(modelConfig, model) {
+  let { document: doc } = clientDataState();
+  if (doc === undefined) return modelConfig;
+  let override = clientDataForModel(doc, stripAnyVersatileSuffix(model ?? getMainLoopModel()));
+  return override === null
+    ? modelConfig
     : {
-        ...e,
-        ...o,
+        ...modelConfig,
+        ...override,
       };
 }
 //@ chunk-5ghme4bp.js:7271-7372 placement
@@ -321,11 +322,11 @@ function applyClientDataModelOverrides(e, n) {
  * 判断客户端数据文档非空但缺少指定模型的条目。
  */
 function isModelMissingFromClientData(mainLoopModel) {
-  let { document: n } = clientDataState();
+  let { document: doc } = clientDataState();
   return (
-    n !== undefined &&
-    n.entries.length > 0 &&
-    clientDataForModel(n, stripAnyVersatileSuffix(mainLoopModel ?? getMainLoopModel())) === null
+    doc !== undefined &&
+    doc.entries.length > 0 &&
+    clientDataForModel(doc, stripAnyVersatileSuffix(mainLoopModel ?? getMainLoopModel())) === null
   );
 }
 //@ chunk-5ghme4bp.js:7372-7475 placement
@@ -333,11 +334,11 @@ function isModelMissingFromClientData(mainLoopModel) {
  * 描述客户端数据文档对当前模型的应用状态。
  */
 function describeClientDataStatus() {
-  let { document: e } = clientDataState();
-  return e === undefined
+  let { document: doc } = clientDataState();
+  return doc === undefined
     ? undefined
     : describeDocumentApplied(
-        e,
+        doc,
         stripAnyVersatileSuffix(getMainLoopModel()),
         clientDataState().assumesFirstPartyBaseUrl,
       );
@@ -346,8 +347,8 @@ function describeClientDataStatus() {
 /**
  * 下载并校验签名文档（hosted、编译内置根）。
  */
-async function fetchSignedClientData(clientDataUrl, n, r) {
-  let clientDataSkipReason = getClientDataSkipReason(clientDataUrl, n);
+async function fetchSignedClientData(clientDataUrl, runsOnAnotherMachine, buildVersion) {
+  let clientDataSkipReason = getClientDataSkipReason(clientDataUrl, runsOnAnotherMachine);
   if (clientDataSkipReason !== undefined || clientDataUrl.kind !== "ok")
     return {
       failure: clientDataSkipReason ?? "invalid_url",
@@ -393,41 +394,41 @@ async function fetchSignedClientData(clientDataUrl, n, r) {
           httpStatus: sidecarHttpStatus,
         };
   }
-  let u = await verifyCatalogSignature({
+  let verified = await verifyCatalogSignature({
     documentBytes: publishedCatalog.documentBytes,
     sidecar: publishedCatalog.sidecar,
     roots: source.roots,
     context: source.signingContext,
   });
-  if (!u.ok)
+  if (!verified.ok)
     return {
-      failure: u.reason,
+      failure: verified.reason,
     };
   let catalogDocument = parseCatalogDocument(publishedCatalog.documentBytes);
   if (!catalogDocument.ok)
     return {
       failure: catalogDocument.reason,
     };
-  let { document: h } = catalogDocument;
-  if (h.version < (await publishedFloorVersion(source.cacheKey)))
+  let { document: doc } = catalogDocument;
+  if (doc.version < (await publishedFloorVersion(source.cacheKey)))
     return {
       failure: "replayed_version",
     };
-  let { minClaudeCodeVersion } = h;
-  if (minClaudeCodeVersion !== undefined && lt(splitOnDash(r), minClaudeCodeVersion))
+  let { minClaudeCodeVersion } = doc;
+  if (minClaudeCodeVersion !== undefined && lt(splitOnDash(buildVersion), minClaudeCodeVersion))
     return {
       failure: "below_minimum_version",
       minClaudeCodeVersion,
-      buildVersion: r,
+      buildVersion,
     };
   return {
-    document: h,
+    document: doc,
   };
 }
 //@ chunk-5ghme4bp.js:8493-8642 placement
-function getClientDataSkipReason(clientDataUrl, n) {
+function getClientDataSkipReason(clientDataUrl, runsOnAnotherMachine) {
   if (clientDataUrl.kind === "invalid_url") return "invalid_url";
-  if (n) return "remote_session";
+  if (runsOnAnotherMachine) return "remote_session";
   if (getAPIProvider() !== "firstParty") return "third_party_provider";
   return;
 }
@@ -448,7 +449,10 @@ function needsFirstPartyBaseUrlAssumption() {
 /**
  * 需要重新拉取签名文档的失败类型（network、http_status、read_failed）。
  */
-var FAILURE_KINDS_REQUIRING_REFETCH = new Set(["network", "http_status", "read_failed"]);
+var FAILURE_KINDS_REQUIRING_REFETCH; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-5ghme4bp.js:8849", () => {
+  FAILURE_KINDS_REQUIRING_REFETCH = new Set(["network", "http_status", "read_failed"]);
+});
 //@ chunk-5ghme4bp.js:8904-9007 placement
 function isSameClientDataSource(resolution, clientDataUrl) {
   return resolution.kind === "ok"

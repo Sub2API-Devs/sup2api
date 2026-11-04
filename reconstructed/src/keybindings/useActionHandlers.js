@@ -9,80 +9,93 @@
  * attribution: placement 5
  */
 import { useKeybindingContext } from "./KeybindingContext.js";
-import { yt, y, zt, P, init_react_production, R, Oo, ce } from "../../vendor/react/cjs/react.production.js";
+import {
+  useSyncExternalStore,
+  useState,
+  useLayoutEffect,
+  useEffect,
+  init_react_production,
+  useRef,
+  useEffectEvent,
+  useCallback,
+} from "../../vendor/react/cjs/react.production.js";
 import { noopClock, useClock } from "../ink/components/ClockContext.js";
 import { useInputClock } from "../ink/components/Input.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-yzt83vwd.js:940-1094 placement
-function useActionHandler(e) {
+function useActionHandler(action) {
   let keybindingContext = useKeybindingContext();
-  let n = yt(
+  let hasHandler = useSyncExternalStore(
     keybindingContext?.keyHandlerRegistry.handlersChanged.subscribe ?? noopClock,
-    () => keybindingContext?.hasHandler(e) ?? false,
+    () => keybindingContext?.hasHandler(action) ?? false,
   );
-  return keybindingContext !== null && n ? () => keybindingContext.runAction(e) : null;
+  return keybindingContext !== null && hasHandler ? () => keybindingContext.runAction(action) : null;
 }
 //@ chunk-yzt83vwd.js:1094-1286 placement
-function usePreDispatchKeyHandler(handler, { isActive: t = true } = {}) {
+function usePreDispatchKeyHandler(handler, { isActive = true } = {}) {
   let keybindingContext = useKeybindingContext();
-  let [r] = y(() => ({
+  let [handlerRef] = useState(() => ({
     handler,
   }));
-  zt(() => {
-    r.handler = handler;
+  useLayoutEffect(() => {
+    handlerRef.handler = handler;
   });
-  P(() => {
-    if (!t || !keybindingContext) return;
+  useEffect(() => {
+    if (!isActive || !keybindingContext) return;
     return keybindingContext.registerPreDispatch({
-      handler: (o, s, i) => r.handler(o, s, i),
+      handler: (event, context, action) => handlerRef.handler(event, context, action),
     });
-  }, [t, keybindingContext, r]);
+  }, [isActive, keybindingContext, handlerRef]);
 }
 //@ chunk-yzt83vwd.js:1286-1290 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-yzt83vwd.js:1286", () => {
+  init_react_production();
+});
 //@ chunk-yzt83vwd.js:1290-1300 placement
 /**
  * 800
  */
 var DOUBLE_TAP_WINDOW_MS = 800;
 //@ chunk-yzt83vwd.js:1300-1654 placement
-function useDoublePress(e, t, noop, r = DOUBLE_TAP_WINDOW_MS) {
+function useDoublePress(onPendingChange, onDoublePress, noop, windowMs = DOUBLE_TAP_WINDOW_MS) {
   let clock = useClock();
   let inputClock = useInputClock();
-  let i = R(0);
-  let c = R(undefined);
-  let u = Oo(() => e(false));
-  let l = ce(() => {
-    if (c.current) {
-      c.current();
-      c.current = undefined;
+  let lastPressAtRef = useRef(0);
+  let resetTimerRef = useRef(undefined);
+  let clearPending = useEffectEvent(() => onPendingChange(false));
+  let cancelPending = useCallback(() => {
+    if (resetTimerRef.current) {
+      resetTimerRef.current();
+      resetTimerRef.current = undefined;
     }
   }, []);
-  P(
+  useEffect(
     () => () => {
-      if (c.current) {
-        l();
-        u();
+      if (resetTimerRef.current) {
+        cancelPending();
+        clearPending();
       }
     },
-    [l],
+    [cancelPending],
   );
-  return ce(() => {
-    let d = inputClock();
-    if (d - i.current <= r && c.current !== undefined) {
-      l();
-      e(false);
-      t();
+  return useCallback(() => {
+    let now = inputClock();
+    if (now - lastPressAtRef.current <= windowMs && resetTimerRef.current !== undefined) {
+      cancelPending();
+      onPendingChange(false);
+      onDoublePress();
     } else {
       noop?.();
-      e(true);
-      l();
-      c.current = clock.setTimeout(() => {
-        e(false);
-        c.current = undefined;
-      }, r);
+      onPendingChange(true);
+      cancelPending();
+      resetTimerRef.current = clock.setTimeout(() => {
+        onPendingChange(false);
+        resetTimerRef.current = undefined;
+      }, windowMs);
     }
-    i.current = d;
-  }, [e, t, noop, l, clock, inputClock, r]);
+    lastPressAtRef.current = now;
+  }, [onPendingChange, onDoublePress, noop, cancelPending, clock, inputClock, windowMs]);
 }
 export { usePreDispatchKeyHandler, useActionHandler, useDoublePress };

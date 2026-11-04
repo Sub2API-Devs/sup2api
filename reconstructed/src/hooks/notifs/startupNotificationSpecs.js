@@ -8,18 +8,24 @@
  * pieces: chunk-18hwfzwa.js (15), chunk-6vnxsn99.js (1)
  * attribution: placement 16
  */
+import { isInProcessTeammateTask } from "../../tasks/InProcessTeammateTask/types.js";
 import { COMPUTED_NOTICE_SPECS, installIssuesNoticeSpec } from "./specs/installNotices.js";
 import { useNotifications } from "../../context/notifications.js";
 import { useSession } from "../../context/session.js";
 import { useTheme_2 } from "../../components/design-system/ThemeProvider.js";
-import { R, P, init_react_production, Q, yt } from "../../../vendor/react/cjs/react.production.js";
+import {
+  useRef,
+  useEffect,
+  init_react_production,
+  useMemo,
+  useSyncExternalStore,
+} from "../../../vendor/react/cjs/react.production.js";
 import { getIsRemoteMode, onAttacherCapsChange, getAttacherCaps } from "../../bootstrap/state.js";
 import { getGlobalConfig, saveGlobalConfig } from "../../utils/config.js";
 import { logError } from "../../utils/log.js";
 import { withTelemetryMessage, toError } from "../../utils/errors.js";
 import { useStartupNotification } from "./useStartupNotification.js";
 import { getRemoteCaps } from "../../remote/remoteMode.js";
-import { isInProcessTeammateTask } from "../../tasks/InProcessTeammateTask/types.js";
 import { makeSpawnNotif, makeShutdownNotif } from "./useTeammateShutdownNotification.js";
 import {
   replMountLogNoticeSpec,
@@ -93,55 +99,70 @@ import { useSettingsState } from "../useSettings.js";
 import { useRateLimitState } from "../../components/rateLimit/quotaAutoResume.js";
 import { useCommandQueue } from "../../components/Messages.js";
 import { useQueuedMessageText } from "../../context/QueuedMessageContext.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
+//@ chunk-6vnxsn99.js:22755-22854 placement
+/**
+ * teammate 任务状态签名串（id:status;…），用于判断是否变化。
+ */
+function teammateStatusSignature(tasks) {
+  let signature = "";
+  for (let task of Object.values(tasks))
+    if (isInProcessTeammateTask(task)) signature += `${task.id}:${task.status};`;
+  return signature;
+}
 //@ chunk-18hwfzwa.js:1751044-1751835 placement
-function runStartupNotificationSpecs(h = COMPUTED_NOTICE_SPECS) {
+function runStartupNotificationSpecs(specs = COMPUTED_NOTICE_SPECS) {
   let { addNotification } = useNotifications();
   let session = useSession();
   let { storageV5, credentials } = useTheme_2();
-  let ke = R(false);
-  P(() => {
-    if (getIsRemoteMode() || ke.current) return;
-    ke.current = true;
+  let hasRunRef = useRef(false);
+  useEffect(() => {
+    if (getIsRemoteMode() || hasRunRef.current) return;
+    hasRunRef.current = true;
     let seenNotifications = getGlobalConfig().seenNotifications ?? {};
-    let Be = [];
+    let countedIds = [];
     Promise.allSettled(
-      h.map(async (He) => {
-        if (He.maxImpressions !== undefined && (seenNotifications[He.id] ?? 0) >= He.maxImpressions) return;
-        let We = await He.compute({
+      specs.map(async (spec) => {
+        if (spec.maxImpressions !== undefined && (seenNotifications[spec.id] ?? 0) >= spec.maxImpressions)
+          return;
+        let result = await spec.compute({
           session,
           storageV5,
           credentials,
         });
-        if (!We || (Array.isArray(We) && We.length === 0)) return;
-        for (let ze of Array.isArray(We) ? We : [We]) addNotification(ze);
-        He.onShown?.();
-        if (He.maxImpressions !== undefined) Be.push(He.id);
+        if (!result || (Array.isArray(result) && result.length === 0)) return;
+        for (let notice of Array.isArray(result) ? result : [result]) addNotification(notice);
+        spec.onShown?.();
+        if (spec.maxImpressions !== undefined) countedIds.push(spec.id);
       }),
-    ).then((He) => {
-      for (let We of He)
-        if (We.status === "rejected")
-          logError(withTelemetryMessage(toError(We.reason), "startup notification spec failed"));
-      if (Be.length === 0) return;
-      saveGlobalConfig((We) => {
-        let ze = {
-          ...(We.seenNotifications ?? {}),
+    ).then((settledResults) => {
+      for (let settled of settledResults)
+        if (settled.status === "rejected")
+          logError(withTelemetryMessage(toError(settled.reason), "startup notification spec failed"));
+      if (countedIds.length === 0) return;
+      saveGlobalConfig((config) => {
+        let seenNotifications = {
+          ...(config.seenNotifications ?? {}),
         };
-        for (let Xe of Be) ze[Xe] = (ze[Xe] ?? 0) + 1;
+        for (let noticeId of countedIds) seenNotifications[noticeId] = (seenNotifications[noticeId] ?? 0) + 1;
         return {
-          ...We,
-          seenNotifications: ze,
+          ...config,
+          seenNotifications,
         };
       }, storageV5);
     });
-  }, [addNotification, session, h, storageV5, credentials]);
+  }, [addNotification, session, specs, storageV5, credentials]);
 }
 //@ chunk-18hwfzwa.js:1751835-1751839 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:1751835", () => {
+  init_react_production();
+});
 //@ chunk-18hwfzwa.js:1785931-1786045 placement
 var ROLLOUT_COHORT_NOTICE_SPEC = {
   id: "rollout-cohort-notice",
-  deps: (h) => [h.addNotification, h.removeNotification, h.storageV5],
+  deps: (noticeState) => [noticeState.addNotification, noticeState.removeNotification, noticeState.storageV5],
   setup: () => useStartupNotification,
 };
 //@ chunk-18hwfzwa.js:1788457-1788831 placement
@@ -150,20 +171,20 @@ var ROLLOUT_COHORT_NOTICE_SPEC = {
  */
 var TEAMMATE_LIFECYCLE_NOTICE_SPEC = {
   id: "teammate-lifecycle",
-  deps: (h) => [h.teammateStatusSignature, h.addNotification],
+  deps: (noticeState) => [noticeState.teammateStatusSignature, noticeState.addNotification],
   setup() {
-    let h = new Set();
-    let x = new Set();
+    let announcedRunning = new Set();
+    let announcedCompleted = new Set();
     return ({ addNotification, store }) => {
       if (getRemoteCaps() !== null) return;
       for (let [key, value] of Object.entries(store.getState().tasks)) {
         if (!isInProcessTeammateTask(value)) continue;
-        if (value.status === "running" && !h.has(key)) {
-          h.add(key);
+        if (value.status === "running" && !announcedRunning.has(key)) {
+          announcedRunning.add(key);
           addNotification(makeSpawnNotif(1));
         }
-        if (value.status === "completed" && !x.has(key)) {
-          x.add(key);
+        if (value.status === "completed" && !announcedCompleted.has(key)) {
+          announcedCompleted.add(key);
           addNotification(makeShutdownNotif(1));
         }
       }
@@ -171,61 +192,67 @@ var TEAMMATE_LIFECYCLE_NOTICE_SPEC = {
   },
 };
 //@ chunk-18hwfzwa.js:1789557-1789771 placement
-var STARTUP_NOTIFICATION_SPECS = [
-  replMountLogNoticeSpec,
-  dialogWaitingTranscriptNoticeSpec,
-  deviceToolNoticesNoticeSpec,
-  repoMemoryImportNoticeSpec,
-  managedSettingsNoticeNoticeSpec,
-  installIssuesNoticeSpec,
-  officialMarketplaceCheckNoticeSpec,
-  chromeExtensionCheckNoticeSpec,
-  antOrgAuthCheckNoticeSpec,
-  signinOfferNoticeSpec,
-  subscriptionSwitchCheckNoticeSpec,
-  promoCreditCheckSpec,
-  IDE_DISCONNECTED_NOTICE_SPEC,
-  IDE_INSTALL_ERROR_NOTICE_SPEC,
-  useAutoModeUnavailableNotification,
-  usePluginAutoupdateNotification,
-  SETTINGS_ERRORS_NOTIFICATION_KEY,
-  sandboxDeniesOnAnotherHostNoticeSpec,
-  otelHeadersHelperFailedNoticeSpec,
-  projectTelemetryEnvNoticeSpec,
-  projectChromeEnvNoticeSpec,
-  projectSignInEnvNoticeSpec,
-  complianceTaintNoticeSpec,
-  complianceTaintNoticeSpec_2,
-  fableUsageCreditsNoticeSpec,
-  LIMIT_REACHED_NOTICE_SPEC,
-  RATE_LIMIT_WARNING_NOTICE_SPEC,
-  fastModeOrgChangedNoticeSpec,
-  OVERAGE_REJECTED_KEY,
-  fastModeCooldownNoticeSpec,
-  fastModeFallbackRejectedNoticeSpec,
-  advisorToolNoticeSpec,
-  useDeprecationWarningNotification,
-  sessionModelRestrictedNoticeSpec,
-  lspInitializationNoticeSpec,
-  TEAMMATE_LIFECYCLE_NOTICE_SPEC,
-  ROLLOUT_COHORT_NOTICE_SPEC,
-  wellbeingNoticeSpec,
-  issueFlagNotification,
-  remoteControlUpsellNoticeSpec,
-  rcLongTurnNudgeNoticeSpec,
-  rcPermissionNudgeNoticeSpec,
-  dialogWaitingInTranscriptNoticeSpec,
-  autoModeEntryWarningSpec,
-  planModeBypassNoticeSpec,
-  worktreeSparseTipSpec,
-  costThresholdNoticeSpec,
-  autocompactOfferNoticeSpec,
-  proTrialExpiredAutoOpenNoticeSpec,
-  promptQueueUseCountNoticeSpec,
-  slackFooterOfferNoticeSpec,
-];
+var STARTUP_NOTIFICATION_SPECS; // deferred: uses RC_PERMISSION_NUDGE (./specs/remoteControlNudges.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-18hwfzwa.js:1789557", () => {
+  STARTUP_NOTIFICATION_SPECS = [
+    replMountLogNoticeSpec,
+    dialogWaitingTranscriptNoticeSpec,
+    deviceToolNoticesNoticeSpec,
+    repoMemoryImportNoticeSpec,
+    managedSettingsNoticeNoticeSpec,
+    installIssuesNoticeSpec,
+    officialMarketplaceCheckNoticeSpec,
+    chromeExtensionCheckNoticeSpec,
+    antOrgAuthCheckNoticeSpec,
+    signinOfferNoticeSpec,
+    subscriptionSwitchCheckNoticeSpec,
+    promoCreditCheckSpec,
+    IDE_DISCONNECTED_NOTICE_SPEC,
+    IDE_INSTALL_ERROR_NOTICE_SPEC,
+    useAutoModeUnavailableNotification,
+    usePluginAutoupdateNotification,
+    SETTINGS_ERRORS_NOTIFICATION_KEY,
+    sandboxDeniesOnAnotherHostNoticeSpec,
+    otelHeadersHelperFailedNoticeSpec,
+    projectTelemetryEnvNoticeSpec,
+    projectChromeEnvNoticeSpec,
+    projectSignInEnvNoticeSpec,
+    complianceTaintNoticeSpec,
+    complianceTaintNoticeSpec_2,
+    fableUsageCreditsNoticeSpec,
+    LIMIT_REACHED_NOTICE_SPEC,
+    RATE_LIMIT_WARNING_NOTICE_SPEC,
+    fastModeOrgChangedNoticeSpec,
+    OVERAGE_REJECTED_KEY,
+    fastModeCooldownNoticeSpec,
+    fastModeFallbackRejectedNoticeSpec,
+    advisorToolNoticeSpec,
+    useDeprecationWarningNotification,
+    sessionModelRestrictedNoticeSpec,
+    lspInitializationNoticeSpec,
+    TEAMMATE_LIFECYCLE_NOTICE_SPEC,
+    ROLLOUT_COHORT_NOTICE_SPEC,
+    wellbeingNoticeSpec,
+    issueFlagNotification,
+    remoteControlUpsellNoticeSpec,
+    rcLongTurnNudgeNoticeSpec,
+    rcPermissionNudgeNoticeSpec,
+    dialogWaitingInTranscriptNoticeSpec,
+    autoModeEntryWarningSpec,
+    planModeBypassNoticeSpec,
+    worktreeSparseTipSpec,
+    costThresholdNoticeSpec,
+    autocompactOfferNoticeSpec,
+    proTrialExpiredAutoOpenNoticeSpec,
+    promptQueueUseCountNoticeSpec,
+    slackFooterOfferNoticeSpec,
+  ];
+});
 //@ chunk-18hwfzwa.js:1789771-1789775 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:1789771", () => {
+  init_react_production();
+});
 //@ chunk-18hwfzwa.js:1789775-1791674 placement
 function useStartupNotifications({
   mainLoopModel,
@@ -248,7 +275,7 @@ function useStartupNotifications({
   let storeSelector_3 = useStoreSelector(turn, selectLastTurnEnd2);
   let storeSelector_4 = useStoreSelector(turn, selectSubmitCount3);
   useStoreSelector(transcript);
-  let Dt = Q(
+  let turnSnapshot = useMemo(
     () => ({
       isLoading: storeSelector,
       lastQueryCompletionTime: storeSelector_2,
@@ -264,30 +291,32 @@ function useStartupNotifications({
   let clock = useClock();
   let terminalSize = useTerminalSize();
   let forceRender = useForceRender();
-  let Ao = yt(onAttacherCapsChange, () => getAttacherCaps() !== null);
+  let hasBgAttacher = useSyncExternalStore(onAttacherCapsChange, () => getAttacherCaps() !== null);
   let settingsState = useSettingsState();
   let rateLimitState = useRateLimitState();
-  let Ho = useAppState((Mn) => Mn.toolPermissionContext.mode);
-  let Io = useAppState((Mn) => Mn.toolPermissionContext.isAutoModeAvailable);
-  let Wo = useAppState((Mn) => Mn.toolPermissionContext.isBypassPermissionsModeAvailable);
-  let mn = useAppState((Mn) => Mn.attribution.permissionPromptCount);
-  let Cn = useAppState((Mn) => Mn.replBridgeConnected && !Mn.replBridgeOutboundOnly);
-  let No = useAppState((Mn) => Mn.replBridgeSessionUrl);
-  let vo = useAppState((Mn) => Mn.fastMode);
-  let Yo = useAppState((Mn) => Mn.advisorModel);
+  let permissionMode = useAppState((state) => state.toolPermissionContext.mode);
+  let isAutoModeAvailable = useAppState((state) => state.toolPermissionContext.isAutoModeAvailable);
+  let isBypassPermissionsModeAvailable = useAppState(
+    (state) => state.toolPermissionContext.isBypassPermissionsModeAvailable,
+  );
+  let permissionPromptCount = useAppState((state) => state.attribution.permissionPromptCount);
+  let replBridgeActive = useAppState((state) => state.replBridgeConnected && !state.replBridgeOutboundOnly);
+  let replBridgeSessionUrl = useAppState((state) => state.replBridgeSessionUrl);
+  let fastMode = useAppState((state) => state.fastMode);
+  let advisorModel = useAppState((state) => state.advisorModel);
   let appState = useAppState(selectTeammateStatusSignature);
-  let Fn = useAppState((Mn) => Mn.initialMessage);
-  let bn = useCommandQueue().length;
-  let Go = useAppState((Mn) => Mn.mainLoopModelForSession ?? Mn.mainLoopModel);
+  let initialMessage = useAppState((state) => state.initialMessage);
+  let queuedCommandCount = useCommandQueue().length;
+  let userSpecifiedModel = useAppState((state) => state.mainLoopModelForSession ?? state.mainLoopModel);
   let queuedMessageText = useQueuedMessageText();
-  return Q(
+  return useMemo(
     () => ({
       mainLoopModel,
       mcpClients,
       ideInstallationStatus,
       dynamicMcpConfig,
       turn,
-      turnAtRender: Dt,
+      turnAtRender: turnSnapshot,
       transcript,
       requestDialog,
       submitPrompt,
@@ -306,21 +335,21 @@ function useStartupNotifications({
       clock,
       terminalSize,
       growthBookVersion: forceRender,
-      hasBgAttacher: Ao,
+      hasBgAttacher,
       settings: settingsState,
       claudeAiLimits: rateLimitState,
-      permissionMode: Ho,
-      isAutoModeAvailable: Io,
-      isBypassPermissionsModeAvailable: Wo,
-      permissionPromptCount: mn,
-      replBridgeActive: Cn,
-      replBridgeSessionUrl: No,
-      fastMode: vo,
-      advisorModel: Yo,
+      permissionMode,
+      isAutoModeAvailable,
+      isBypassPermissionsModeAvailable,
+      permissionPromptCount,
+      replBridgeActive,
+      replBridgeSessionUrl,
+      fastMode,
+      advisorModel,
       teammateStatusSignature: appState,
-      initialMessage: Fn,
-      queuedCommandCount: bn,
-      userSpecifiedModel: Go,
+      initialMessage,
+      queuedCommandCount,
+      userSpecifiedModel,
       effortValue: queuedMessageText,
     }),
     [
@@ -329,7 +358,7 @@ function useStartupNotifications({
       ideInstallationStatus,
       dynamicMcpConfig,
       turn,
-      Dt,
+      turnSnapshot,
       transcript,
       requestDialog,
       submitPrompt,
@@ -348,47 +377,50 @@ function useStartupNotifications({
       clock,
       terminalSize,
       forceRender,
-      Ao,
+      hasBgAttacher,
       settingsState,
       rateLimitState,
-      Ho,
-      Io,
-      Wo,
-      mn,
-      Cn,
-      No,
-      vo,
-      Yo,
+      permissionMode,
+      isAutoModeAvailable,
+      isBypassPermissionsModeAvailable,
+      permissionPromptCount,
+      replBridgeActive,
+      replBridgeSessionUrl,
+      fastMode,
+      advisorModel,
       appState,
-      Fn,
-      bn,
-      Go,
+      initialMessage,
+      queuedCommandCount,
+      userSpecifiedModel,
       queuedMessageText,
     ],
   );
 }
 //@ chunk-18hwfzwa.js:1791674-1791710 placement
-function selectTeammateStatusSignature(h) {
-  return teammateStatusSignature(h.tasks);
+function selectTeammateStatusSignature(state) {
+  return teammateStatusSignature(state.tasks);
 }
 //@ chunk-18hwfzwa.js:1791710-1791745 placement
-function selectIsLoading6(h) {
-  return h.isLoading;
+function selectIsLoading6(state) {
+  return state.isLoading;
 }
 //@ chunk-18hwfzwa.js:1791745-1791794 placement
-function selectLastQueryCompletionTime(h) {
-  return h.lastQueryCompletionTime;
+function selectLastQueryCompletionTime(state) {
+  return state.lastQueryCompletionTime;
 }
 //@ chunk-18hwfzwa.js:1791794-1791831 placement
-function selectLastTurnEnd2(h) {
-  return h.lastTurnEnd;
+function selectLastTurnEnd2(state) {
+  return state.lastTurnEnd;
 }
 //@ chunk-18hwfzwa.js:1791831-1791868 placement
-function selectSubmitCount3(h) {
-  return h.submitCount;
+function selectSubmitCount3(state) {
+  return state.submitCount;
 }
 //@ chunk-18hwfzwa.js:1791868-1791872 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:1791868", () => {
+  init_react_production();
+});
 //@ chunk-18hwfzwa.js:1791941-1792030 placement
 var STARTUP_FLAG_TTL_MS = 180000;
 var STARTUP_MIN_INTERVAL_MS = 30000;
@@ -401,17 +433,8 @@ var STARTUP_GRACE_TURNS = 3;
 var STARTUP_GRACE_TURNS_MIN = 2;
 var STARTUP_GRACE_TURNS_MAX = 3;
 //@ chunk-18hwfzwa.js:1792030-1792115 placement
-function isRealUserMessage(h) {
-  return h.type === "user" && !h.isMeta && !h.isCompactSummary && !h.isVirtual;
-}
-//@ chunk-6vnxsn99.js:22755-22854 placement
-/**
- * teammate 任务状态签名串（id:status;…），用于判断是否变化。
- */
-function teammateStatusSignature(tasks) {
-  let n = "";
-  for (let r of Object.values(tasks)) if (isInProcessTeammateTask(r)) n += `${r.id}:${r.status};`;
-  return n;
+function isRealUserMessage(message) {
+  return message.type === "user" && !message.isMeta && !message.isCompactSummary && !message.isVirtual;
 }
 export {
   runStartupNotificationSpecs,

@@ -19,39 +19,47 @@ import { FileWriteToolCreatedMessage } from "../../tools/FileWriteTool/UI.js";
 /**
  * 从工具结果（字符串或文本块）中解析 Write 结果 JSON，形状不对时返回 undefined。
  */
-function parseFileWriteResult(r) {
-  let n =
-    typeof r === "string"
-      ? r
-      : Array.isArray(r)
-        ? r.find((s) => s.type === "text" && typeof s.text === "string")?.text
+function parseFileWriteResult(result) {
+  let text =
+    typeof result === "string"
+      ? result
+      : Array.isArray(result)
+        ? result.find((part) => part.type === "text" && typeof part.text === "string")?.text
         : undefined;
-  let t = safeParseJSON(n, false);
-  if (typeof t !== "object" || t === null || !("ok" in t) || !("file" in t) || !("sha256" in t)) return null;
-  return t.ok === true && typeof t.file === "string" && typeof t.sha256 === "string"
+  let parsed = safeParseJSON(text, false);
+  if (
+    typeof parsed !== "object" ||
+    parsed === null ||
+    !("ok" in parsed) ||
+    !("file" in parsed) ||
+    !("sha256" in parsed)
+  )
+    return null;
+  return parsed.ok === true && typeof parsed.file === "string" && typeof parsed.sha256 === "string"
     ? {
-        file: t.file,
-        sha256: t.sha256,
+        file: parsed.file,
+        sha256: parsed.sha256,
       }
     : null;
 }
 //@ chunk-ytava78w.js:13651-13706 placement
 var CONTROL_OR_CR_RE = /[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f]|\r(?!\n)/;
 //@ chunk-ytava78w.js:13706-13950 placement
-function renderVerifiedFileWriteResult(r, n, t) {
-  let s = mergeClients_2(t.input);
-  let fileWriteResult = parseFileWriteResult(r);
-  let replaced = s?.text.replace(/^\uFEFF/, "");
+function renderVerifiedFileWriteResult(result, messageId, toolUse) {
+  let clients = mergeClients_2(toolUse.input);
+  let fileWriteResult = parseFileWriteResult(result);
+  let replaced = clients?.text.replace(/^\uFEFF/, "");
   if (
     fileWriteResult === null ||
     replaced === undefined ||
     CONTROL_OR_CR_RE.test(replaced) ||
     createHash("sha256").update(replaced, "utf8").digest("hex") !== fileWriteResult.sha256
   )
-    return renderMcpToolResultMessage(r, n, t);
+    return renderMcpToolResultMessage(result, messageId, toolUse);
   return jsxProd_default(FileWriteToolCreatedMessage, {
     filePath: fileWriteResult.file,
     content: replaced,
-    verbose: t.verbose,
+    verbose: toolUse.verbose,
   });
 }
+export { renderVerifiedFileWriteResult };

@@ -15,18 +15,18 @@ import {
   FILLED_CIRCLE,
   FISHEYE,
   DIAMOND_IN_DIAMOND,
-} from "../utils/permissions/autoModeRulesPrompt.js";
+} from "../constants/figures.js";
 import { getThemeWithOverrides } from "../utils/systemTheme.js";
 import { resolveSetting } from "../utils/settings/userIntentSettings.js";
 import { color } from "./design-system/color.js";
 import { sequential } from "../utils/sequential.js";
 import { usePrefersReducedMotion } from "./Spinner/spinnerFlags.js";
-import { y, R, P } from "../../vendor/react/cjs/react.production.js";
+import { useState, useRef, useEffect } from "../../vendor/react/cjs/react.production.js";
 import { useAnimationFrame } from "../ink/components/Input.js";
 
 //@ chunk-18hwfzwa.js:154428-154472 placement
-function isEffortIndicatorShown(h, x, D) {
-  return D ? undefined : getAppliedEffortLevel(x, h);
+function isEffortIndicatorShown(level, context, hidden) {
+  return hidden ? undefined : getAppliedEffortLevel(context, level);
 }
 //@ chunk-18hwfzwa.js:154472-154494 placement
 var EFFORT_LEVEL_KEY = "effort-level";
@@ -34,13 +34,19 @@ var EFFORT_LEVEL_KEY = "effort-level";
 /**
  * 状态栏 effort 文案：等级符号（或 "effort:"）、等级名（可附实际生效等级）、ultracode 后缀，以及 /effort 或"可能等待下一条消息"提示。
  */
-function effortStatusText(level, x = false, isScreenReaderEnabled = false, L = false, ee = level) {
+function effortStatusText(
+  level,
+  ultracode = false,
+  isScreenReaderEnabled = false,
+  deferred = false,
+  spokenLevel = level,
+) {
   if (!level) return;
-  let ke = isScreenReaderEnabled ? "effort:" : effortLevelToSymbol(level);
-  let Re = x ? " \xB7 ultracode" : "";
-  let Be = L ? "may wait for your next message" : "/effort";
-  let He = isScreenReaderEnabled && ee !== level ? `${ee} (${level})` : ee;
-  return `${ke} ${He}${Re} \xB7 ${Be}`;
+  let prefix = isScreenReaderEnabled ? "effort:" : effortLevelToSymbol(level);
+  let ultracodeSuffix = ultracode ? " \xB7 ultracode" : "";
+  let actionText = deferred ? "may wait for your next message" : "/effort";
+  let shownLevel = isScreenReaderEnabled && spokenLevel !== level ? `${spokenLevel} (${level})` : spokenLevel;
+  return `${prefix} ${shownLevel}${ultracodeSuffix} \xB7 ${actionText}`;
 }
 //@ chunk-18hwfzwa.js:154708-154864 fingerprint = effortLevelToSymbol (0.879)
 function effortLevelToSymbol(level) {
@@ -66,15 +72,15 @@ function effortLevelToSymbol(level) {
 function treeify(obj, options) {
   if (obj) {
     let valueStr = getThemeWithOverrides(resolveSetting("theme", "dark").value);
-    let L = color("effortUltra", valueStr);
-    if (options === undefined) return L(ULTRACODE);
+    let theme = color("effortUltra", valueStr);
+    if (options === undefined) return theme(ULTRACODE);
     return [...ULTRACODE]
       .map((key, index) =>
         index === options
           ? sequential.hex(ULTRACODE_HIGHLIGHT_COLOR).bold(key)
           : index === options - 1 || index === options + 1
-            ? sequential.bold(L(key))
-            : L(key),
+            ? sequential.bold(theme(key))
+            : theme(key),
       )
       .join("");
   }
@@ -92,24 +98,24 @@ var ULTRACODE_SHIMMER_FRAME_MS = 120;
 /**
  * ultracode 开启时的闪光动画帧：按动画帧推进若干步后停止，偏好减少动画时不播放；返回当前帧序号或 undefined。
  */
-function useUltracodeShimmer(h) {
+function useUltracodeShimmer(enabled) {
   let prefersReducedMotion = usePrefersReducedMotion();
-  let [D, L] = y(false);
-  let ee = R(null);
-  P(() => {
-    if (h && !prefersReducedMotion) {
-      ee.current = null;
-      L(true);
-    } else L(false);
-  }, [h, prefersReducedMotion]);
-  let [, ke] = useAnimationFrame(D ? ULTRACODE_SHIMMER_FRAME_MS : null);
-  ee.current ??= ke;
-  let floored = Math.floor((ke - ee.current) / ULTRACODE_SHIMMER_FRAME_MS);
-  let Be = floored >= ULTRACODE_SHIMMER_STEPS;
-  P(() => {
-    if (Be) L(false);
-  }, [Be]);
-  if (!D || Be) return;
+  let [isAnimating, setIsAnimating] = useState(false);
+  let startFrameRef = useRef(null);
+  useEffect(() => {
+    if (enabled && !prefersReducedMotion) {
+      startFrameRef.current = null;
+      setIsAnimating(true);
+    } else setIsAnimating(false);
+  }, [enabled, prefersReducedMotion]);
+  let [, frame] = useAnimationFrame(isAnimating ? ULTRACODE_SHIMMER_FRAME_MS : null);
+  startFrameRef.current ??= frame;
+  let floored = Math.floor((frame - startFrameRef.current) / ULTRACODE_SHIMMER_FRAME_MS);
+  let isFinished = floored >= ULTRACODE_SHIMMER_STEPS;
+  useEffect(() => {
+    if (isFinished) setIsAnimating(false);
+  }, [isFinished]);
+  if (!isAnimating || isFinished) return;
   return floored - 1;
 }
 export {

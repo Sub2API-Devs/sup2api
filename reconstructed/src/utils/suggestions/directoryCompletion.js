@@ -8,11 +8,12 @@
  * pieces: chunk-18hwfzwa.js (10), chunk-23fm9f0d.js (1)
  * attribution: fingerprint 5, layout 3, placement 3
  */
-import { sep, dirname, basename, join } from "path";
+import { join, sep, dirname, basename } from "path";
+import { isENOENT, errorMessage, isFsInaccessible, isSyscallError, getErrnoCode } from "../errors.js";
+import { entryKind } from "../cleanup.js";
 import { getCwd } from "../cwd.js";
 import { expandPath } from "../path.js";
 import { logForDebugging } from "../debug.js";
-import { errorMessage, isFsInaccessible, isSyscallError, getErrnoCode, isENOENT } from "../errors.js";
 import { suggestionCacheBySessionRoot } from "./suggestionCache.js";
 import { getFsImplementation } from "../fsOperations.js";
 import {
@@ -22,8 +23,41 @@ import {
 } from "./commandArgSuggestions.js";
 import { isRemoteSessionAvailable } from "../../remote/remoteMode.js";
 import { COMMAND_NAME_SEPARATORS } from "./commandSuggestions.js";
-import { entryKind } from "../cleanup.js";
 
+//@ chunk-23fm9f0d.js:11309-11802 fingerprint = scanDirectoryForPaths (0.669)
+async function scanDirectoryForPaths(dir, fs, { requireCompleteWalk = false } = {}) {
+  let newestMtime = -1 / 0;
+  let entries = await fs.readdir(dir).catch((entry) => {
+    if (requireCompleteWalk && !isENOENT(entry)) throw entry;
+    return [];
+  });
+  for (let entry of entries) {
+    let entryPath = join(dir, entry.name);
+    let kind = requireCompleteWalk
+      ? await entryKind(entry, entryPath, fs).catch((entry) => {
+          if (isENOENT(entry)) return "other";
+          throw entry;
+        })
+      : entry.isDirectory()
+        ? "directory"
+        : entry.isFile()
+          ? "file"
+          : "other";
+    if (kind === "directory") {
+      let childMtime = await scanDirectoryForPaths(entryPath, fs, {
+        requireCompleteWalk,
+      });
+      if (childMtime !== null) newestMtime = Math.max(newestMtime, childMtime);
+    } else if (kind === "file")
+      try {
+        let { mtimeMs } = await fs.stat(entryPath);
+        newestMtime = Math.max(newestMtime, mtimeMs);
+      } catch (error) {
+        if (requireCompleteWalk && !isENOENT(error)) throw error;
+      }
+  }
+  return newestMtime === -1 / 0 ? null : newestMtime;
+}
 //@ chunk-18hwfzwa.js:550848-551040 fingerprint = parsePartialPath (1)
 function parsePartialPath(partialPath, basePath) {
   if (!partialPath)
@@ -54,13 +88,13 @@ function tryParsePartialPath(partialPath, basePath) {
   }
 }
 //@ chunk-18hwfzwa.js:551165-551707 layout
-async function scanDirectoryCached(h, directory) {
-  let { directoryScanCache } = suggestionCacheBySessionRoot.of(h);
-  let L = directoryScanCache.get(directory);
-  if (L) return L;
+async function scanDirectoryCached(session, directory) {
+  let { directoryScanCache } = suggestionCacheBySessionRoot.of(session);
+  let cached = directoryScanCache.get(directory);
+  if (cached) return cached;
   try {
     let sliced = (await getFsImplementation().readdir(directory))
-      .filter((Be) => Be.isDirectory() && !Be.name.startsWith("."))
+      .filter((entry) => entry.isDirectory() && !entry.name.startsWith("."))
       .map((entry) => ({
         name: entry.name,
         path: join(directory, entry.name),
@@ -94,15 +128,16 @@ async function scanDirectoryCached(h, directory) {
 /**
  * 目录补全：解析部分路径，列出匹配的子目录（带缓存，隐藏目录除外）。
  */
-async function getDirectoryCompletions(session, x, D = {}) {
+async function getDirectoryCompletions(session, input, options = {}) {
   if (isRemoteSessionAvailable()) return [];
-  let { basePath = getCwd(), maxResults = 10 } = D;
-  let ke = tryParsePartialPath(x, basePath);
-  if (!ke) return [];
-  let { directory, prefix } = ke;
-  let He = await scanDirectoryCached(session, directory);
+  let { basePath = getCwd(), maxResults = 10 } = options;
+  let parsed = tryParsePartialPath(input, basePath);
+  if (!parsed) return [];
+  let { directory, prefix } = parsed;
+  let entries = await scanDirectoryCached(session, directory);
   let prefixLower = prefix.toLowerCase();
-  return He.filter((entry) => entry.name.toLowerCase().startsWith(prefixLower))
+  return entries
+    .filter((entry) => entry.name.toLowerCase().startsWith(prefixLower))
     .slice(0, maxResults)
     .map((entry) => ({
       id: entry.path,
@@ -132,22 +167,22 @@ function looksLikePathToken(normalized) {
 /**
  * 扫描目录供路径补全（隐藏文件除外、目录在前、数量上限），结果缓存；不可访问时缓存空列表。
  */
-async function scanPathEntries(h, directory) {
-  let { pathScanCache } = suggestionCacheBySessionRoot.of(h);
-  let L = pathScanCache.get(directory);
-  if (L) return L;
+async function scanPathEntries(session, directory) {
+  let { pathScanCache } = suggestionCacheBySessionRoot.of(session);
+  let cached = pathScanCache.get(directory);
+  if (cached) return cached;
   try {
     let sliced = (await getFsImplementation().readdir(directory))
-      .filter((Be) => !Be.name.startsWith("."))
-      .map((Be) => ({
-        name: Be.name,
-        path: join(directory, Be.name),
-        type: Be.isDirectory() ? "directory" : "file",
+      .filter((entry) => !entry.name.startsWith("."))
+      .map((entry) => ({
+        name: entry.name,
+        path: join(directory, entry.name),
+        type: entry.isDirectory() ? "directory" : "file",
       }))
-      .sort((Be, He) => {
-        if (Be.type === "directory" && He.type !== "directory") return -1;
-        if (Be.type !== "directory" && He.type === "directory") return 1;
-        return Be.name.localeCompare(He.name);
+      .sort((left, right) => {
+        if (left.type === "directory" && right.type !== "directory") return -1;
+        if (left.type !== "directory" && right.type === "directory") return 1;
+        return left.name.localeCompare(right.name);
       })
       .slice(0, SHELL_HISTORY_TTL_MS);
     pathScanCache.set(directory, sliced);
@@ -171,24 +206,24 @@ async function scanPathEntries(h, directory) {
   }
 }
 //@ chunk-18hwfzwa.js:552867-553468 fingerprint = getPathCompletions (0.871)
-async function getPathCompletions(session, x, D = {}) {
+async function getPathCompletions(session, input, options = {}) {
   if (isRemoteSessionAvailable()) return [];
-  let { basePath = getCwd(), maxResults = 10, keepDotPrefix = false } = D;
-  let Re = tryParsePartialPath(x, basePath);
-  if (!Re) return [];
-  let { directory, prefix } = Re;
+  let { basePath = getCwd(), maxResults = 10, keepDotPrefix = false } = options;
+  let parsed = tryParsePartialPath(input, basePath);
+  if (!parsed) return [];
+  let { directory, prefix } = parsed;
   let entries = await scanPathEntries(session, directory);
   let prefixLower = prefix.toLowerCase();
   let matches = entries
     .filter((entry) => entry.name.toLowerCase().startsWith(prefixLower))
     .slice(0, maxResults);
-  let hasSeparator = x.includes("/") || x.includes(sep);
+  let hasSeparator = input.includes("/") || input.includes(sep);
   let dirPortion = "";
   if (hasSeparator) {
-    let lastSlash = x.lastIndexOf("/");
-    let lastSep = x.lastIndexOf(sep);
+    let lastSlash = input.lastIndexOf("/");
+    let lastSep = input.lastIndexOf(sep);
     let lastSeparatorPos = Math.max(lastSlash, lastSep);
-    dirPortion = x.substring(0, lastSeparatorPos + 1);
+    dirPortion = input.substring(0, lastSeparatorPos + 1);
   }
   if (!keepDotPrefix && (dirPortion.startsWith("./") || dirPortion.startsWith("." + sep)))
     dirPortion = dirPortion.slice(2);
@@ -211,51 +246,17 @@ function isCacheableScanError(error) {
 /**
  * 判断查询是否匹配命令名的某个词起始（忽略分隔符与大小写）。
  */
-function matchesCommandWords(h, x, D = COMMAND_NAME_SEPARATORS) {
-  let joined = h.toLowerCase().trim().split(D).join("");
+function matchesCommandWords(query, candidates, separators = COMMAND_NAME_SEPARATORS) {
+  let joined = query.toLowerCase().trim().split(separators).join("");
   if (joined === "") return false;
-  return x.some((ee) => {
-    let filtered = ee.toLowerCase().split(D).filter(Boolean);
-    return filtered.some((Re, Be) => filtered.slice(Be).join("").startsWith(joined));
+  return candidates.some((candidate) => {
+    let filtered = candidate.toLowerCase().split(separators).filter(Boolean);
+    return filtered.some((part, index) => filtered.slice(index).join("").startsWith(joined));
   });
 }
 //@ chunk-18hwfzwa.js:930340-930395 fingerprint = scanDirectory (0.766)
 function scanDirectory(dirPath) {
   return dirPath.description === "directory";
-}
-//@ chunk-23fm9f0d.js:11309-11802 fingerprint = scanDirectoryForPaths (0.669)
-async function scanDirectoryForPaths(e, r, { requireCompleteWalk: s = false } = {}) {
-  let n = -1 / 0;
-  let f = await r.readdir(e).catch((entry) => {
-    if (s && !isENOENT(entry)) throw entry;
-    return [];
-  });
-  for (let i of f) {
-    let m = join(e, i.name);
-    let g = s
-      ? await entryKind(i, m, r).catch((entry) => {
-          if (isENOENT(entry)) return "other";
-          throw entry;
-        })
-      : i.isDirectory()
-        ? "directory"
-        : i.isFile()
-          ? "file"
-          : "other";
-    if (g === "directory") {
-      let y = await scanDirectoryForPaths(m, r, {
-        requireCompleteWalk: s,
-      });
-      if (y !== null) n = Math.max(n, y);
-    } else if (g === "file")
-      try {
-        let { mtimeMs } = await r.stat(m);
-        n = Math.max(n, mtimeMs);
-      } catch (error) {
-        if (s && !isENOENT(error)) throw error;
-      }
-  }
-  return n === -1 / 0 ? null : n;
 }
 export {
   scanDirectory,

@@ -5,10 +5,10 @@
  * pieces: chunk-egr0twnb.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:124117-125540 cjs-fingerprint
-var require_dts = x(function (cjsExports, cjsModule) {
+var require_dts = __commonJS(function (cjsExports, cjsModule) {
   function dts(hljs) {
     let STRINGS = {
       className: "string",

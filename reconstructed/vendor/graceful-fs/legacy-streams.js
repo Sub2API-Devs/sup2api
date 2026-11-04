@@ -5,10 +5,10 @@
  * pieces: chunk-bmbhxpfm.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x, importMetaRequire } from "../../runtime/bun-runtime.js";
+import { __commonJS, importMetaRequire } from "../../runtime/bun-runtime.js";
 
 //@ chunk-bmbhxpfm.js:4288-5806 cjs-fingerprint
-var require_legacy_streams = x(function (cjsExports, cjsModule) {
+var require_legacy_streams = __commonJS(function (cjsExports, cjsModule) {
   var Stream = importMetaRequire("stream").Stream;
   cjsModule.exports = legacy;
   function legacy(fs) {
@@ -19,7 +19,7 @@ var require_legacy_streams = x(function (cjsExports, cjsModule) {
     function ReadStream(path, options) {
       if (!(this instanceof ReadStream)) return new ReadStream(path, options);
       Stream.call(this);
-      var c = this;
+      var selfRef = this;
       this.path = path;
       this.fd = null;
       this.readable = true;
@@ -43,19 +43,19 @@ var require_legacy_streams = x(function (cjsExports, cjsModule) {
       }
       if (this.fd !== null) {
         process.nextTick(function () {
-          c._read();
+          selfRef._read();
         });
         return;
       }
       fs.open(this.path, this.flags, this.mode, function (err, fd) {
         if (err) {
-          c.emit("error", err);
-          c.readable = false;
+          selfRef.emit("error", err);
+          selfRef.readable = false;
           return;
         }
-        c.fd = fd;
-        c.emit("open", fd);
-        c._read();
+        selfRef.fd = fd;
+        selfRef.emit("open", fd);
+        selfRef._read();
       });
     }
     function WriteStream(path, options) {

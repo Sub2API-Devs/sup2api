@@ -15,12 +15,13 @@ import { HostScoped } from "../../../src/utils/hostScoped.js";
 import { getRootSession } from "../../../src/bootstrap/state.js";
 import { isEnvVarTruthy, getClaudeConfigDir } from "../../../src/utils/envUtils.js";
 import { getFileReader } from "../../../src/utils/fileStore.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-y805ph4h.js:2771-2793 placement
-var Me = 500;
-var we = 1048576;
+var DEFAULT_MAX_PENDING_ENTRIES = 500;
+var DEFAULT_MAX_PENDING_BYTES = 1048576;
 //@ chunk-y805ph4h.js:2793-2810 placement
-var ks = [200, 800];
+var DEFAULT_BACKOFF_MS = [200, 800];
 //@ chunk-y805ph4h.js:2810-4447 placement
 /**
  * Agent SDK 的转录镜像批处理器：把会话转录行批量转发给宿主（日志前缀 [TranscriptMirrorBatcher]）。
@@ -36,82 +37,85 @@ class TranscriptMirrorBatcher {
   maxPendingEntries;
   maxPendingBytes;
   backoffMs;
-  constructor(send, s) {
+  constructor(send, options) {
     this.send = send;
     let {
       sendTimeoutMs = 60000,
       onError,
-      maxPendingEntries = Me,
-      maxPendingBytes = we,
-      backoffMs = ks,
-    } = s ?? {};
+      maxPendingEntries = DEFAULT_MAX_PENDING_ENTRIES,
+      maxPendingBytes = DEFAULT_MAX_PENDING_BYTES,
+      backoffMs = DEFAULT_BACKOFF_MS,
+    } = options ?? {};
     this.sendTimeoutMs = sendTimeoutMs;
     this.onError = onError;
     this.maxPendingEntries = maxPendingEntries;
     this.maxPendingBytes = maxPendingBytes;
     this.backoffMs = backoffMs;
   }
-  enqueue(filePath, s) {
-    let r = jsonStringify(s).length;
+  enqueue(filePath, entries) {
+    let bytes = jsonStringify(entries).length;
     this.pending.push({
       filePath,
-      entries: s,
-      bytes: r,
+      entries,
+      bytes,
     });
-    this.pendingEntries += s.length;
-    this.pendingBytes += r;
+    this.pendingEntries += entries.length;
+    this.pendingBytes += bytes;
     if (this.pendingEntries > this.maxPendingEntries || this.pendingBytes > this.maxPendingBytes) {
       this.flushPromise = this.drain();
       this.flushPromise.catch(() => {});
     }
   }
   async flush() {
-    let e = this.drain();
-    this.flushPromise = e;
-    await e;
-    if (this.flushPromise === e) this.flushPromise = null;
+    let drainPromise = this.drain();
+    this.flushPromise = drainPromise;
+    await drainPromise;
+    if (this.flushPromise === drainPromise) this.flushPromise = null;
   }
   async drain() {
     let flushPromise = this.flushPromise;
-    let s = this.pending.splice(0);
+    let inflight = this.pending.splice(0);
     this.pendingEntries = 0;
     this.pendingBytes = 0;
     if (flushPromise) await flushPromise;
-    if (s.length === 0) return;
-    await this.doFlush(s);
+    if (inflight.length === 0) return;
+    await this.doFlush(inflight);
   }
-  async doFlush(e) {
-    let s = new Map();
-    for (let r of e) {
-      let n = s.get(r.filePath);
-      if (n) n.push(...r.entries);
-      else s.set(r.filePath, r.entries.slice());
+  async doFlush(pending) {
+    let byFile = new Map();
+    for (let batch of pending) {
+      let entries = byFile.get(batch.filePath);
+      if (entries) entries.push(...batch.entries);
+      else byFile.set(batch.filePath, batch.entries.slice());
     }
-    for (let [r, n] of s) await this.sendWithRetry(r, n);
+    for (let [filePath, entries] of byFile) await this.sendWithRetry(filePath, entries);
   }
-  async sendWithRetry(e, s) {
-    let r = this.backoffMs.length + 1;
-    let n = `SessionStore.append() timed out after ${this.sendTimeoutMs}ms for ${e}`;
-    let i;
-    let m = 1;
-    for (; m <= r; m++)
+  async sendWithRetry(filePath, entries) {
+    let maxAttempts = this.backoffMs.length + 1;
+    let timeoutMessage = `SessionStore.append() timed out after ${this.sendTimeoutMs}ms for ${filePath}`;
+    let lastError;
+    let attempt = 1;
+    for (; attempt <= maxAttempts; attempt++)
       try {
-        await withTimeout(this.send(e, s), this.sendTimeoutMs, n);
-        i = undefined;
+        await withTimeout(this.send(filePath, entries), this.sendTimeoutMs, timeoutMessage);
+        lastError = undefined;
         break;
       } catch (error) {
-        i = toError(error);
-        if (i.message === n) break;
-        let h = this.backoffMs[m - 1];
-        if (h === undefined) break;
-        await sleep(h);
+        lastError = toError(error);
+        if (lastError.message === timeoutMessage) break;
+        let backoffMs = this.backoffMs[attempt - 1];
+        if (backoffMs === undefined) break;
+        await sleep(backoffMs);
       }
-    if (i) {
-      logForDebugging(`[TranscriptMirrorBatcher] flush failed for ${e} after ${m} attempt(s): ${i}`, {
-        level: "error",
-      });
+    if (lastError) {
+      logForDebugging(
+        `[TranscriptMirrorBatcher] flush failed for ${filePath} after ${attempt} attempt(s): ${lastError}`,
+        {
+          level: "error",
+        },
+      );
       try {
-        this.onError?.(e, i);
+        this.onError?.(filePath, lastError);
       } catch (error) {
         logForDebugging(`[TranscriptMirrorBatcher] onError callback threw: ${error}`, {
           level: "error",
@@ -121,55 +125,69 @@ class TranscriptMirrorBatcher {
   }
 }
 //@ chunk-y805ph4h.js:4447-4454 placement
-var Et;
+var McpToolKind;
 //@ chunk-y805ph4h.js:4454-4513 placement
-(function (e) {
-  e.Completable = "McpCompletable";
-})(Et || (Et = {}));
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-y805ph4h.js:4454", () => {
+  (function (holder) {
+    holder.Completable = "McpCompletable";
+  })(McpToolKind || (McpToolKind = {}));
+});
 //@ chunk-y805ph4h.js:4579-4639 placement
-class Tt {
+class DebugState {
   debugFilePath = undefined;
   initPromise = null;
   logStem = null;
 }
 //@ chunk-y805ph4h.js:4639-4664 placement
-var xs = new HostScoped(() => new Tt());
+var debugStateByHost; // deferred: uses DebugState of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-y805ph4h.js:4639", () => {
+  debugStateByHost = new HostScoped(() => new DebugState());
+});
 //@ chunk-y805ph4h.js:4664-4701 placement
-function Pt() {
-  return xs.of(getRootSession().host);
+function getDebugState() {
+  return debugStateByHost.of(getRootSession().host);
 }
 //@ chunk-y805ph4h.js:4701-5073 placement
-function Mt(e) {
-  if (e.initPromise) return e.initPromise;
+function ensureDebugFile(state) {
+  if (state.initPromise) return state.initPromise;
   if (!isEnvVarTruthy("DEBUG_CLAUDE_AGENT_SDK")) {
-    e.debugFilePath = null;
-    e.initPromise = Promise.resolve();
-    return e.initPromise;
+    state.debugFilePath = null;
+    state.initPromise = Promise.resolve();
+    return state.initPromise;
   }
-  let s = join(getClaudeConfigDir(), "debug");
-  e.logStem = `sdk-${randomUUID_2()}`;
-  e.debugFilePath = join(s, `${e.logStem}.txt`);
-  process.stderr.write(`SDK debug logs: ${e.debugFilePath}
+  let debugDir = join(getClaudeConfigDir(), "debug");
+  state.logStem = `sdk-${randomUUID_2()}`;
+  state.debugFilePath = join(debugDir, `${state.logStem}.txt`);
+  process.stderr.write(`SDK debug logs: ${state.debugFilePath}
 `);
-  e.initPromise = getFileReader()
-    .mkdir(s)
+  state.initPromise = getFileReader()
+    .mkdir(debugDir)
     .catch(() => {});
-  return e.initPromise;
+  return state.initPromise;
 }
 //@ chunk-y805ph4h.js:5073-5171 placement
-function js(e) {
-  return e.logStem === null
+function getDebugLogMeta(state) {
+  return state.logStem === null
     ? null
     : {
         namespace: "log",
-        sessionId: e.logStem,
+        sessionId: state.logStem,
         channel: "debug",
       };
 }
 //@ chunk-y805ph4h.js:5171-5231 placement
-function It() {
-  let e = Pt();
-  Mt(e);
-  return e.debugFilePath ?? null;
+function getDebugFilePath() {
+  let state = getDebugState();
+  ensureDebugFile(state);
+  return state.debugFilePath ?? null;
 }
-export { Pt, Mt, js, It, TranscriptMirrorBatcher, Me, we };
+export {
+  getDebugState,
+  ensureDebugFile,
+  getDebugLogMeta,
+  getDebugFilePath,
+  TranscriptMirrorBatcher,
+  DEFAULT_MAX_PENDING_ENTRIES,
+  DEFAULT_MAX_PENDING_BYTES,
+};

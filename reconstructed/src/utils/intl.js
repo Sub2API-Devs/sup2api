@@ -44,36 +44,36 @@ function lastGrapheme(text) {
   return last;
 }
 //@ chunk-bfrv6ttc.js:648-729 placement
-function splitGraphemes(e) {
-  if (!e) return [];
-  return Array.from(getGraphemeSegmenter().segment(e), (t) => t.segment);
+function splitGraphemes(text) {
+  if (!text) return [];
+  return Array.from(getGraphemeSegmenter().segment(text), (grapheme) => grapheme.segment);
 }
 //@ chunk-bfrv6ttc.js:729-999 placement
-function mergeCombiningGraphemes(e) {
-  if (e.length < 2) return e;
-  let joined = e.join("");
-  if (!hasNonAsciiOrCr(joined)) return e;
-  let r = [];
-  let n = "";
-  let i = 0;
-  let o = e[0].length;
-  for (let { segment, index } of getGraphemeSegmenter().segment(joined)) {
-    while (index >= o && i < e.length - 1) {
-      r.push(n);
-      n = "";
-      i++;
-      o += e[i].length;
+function mergeCombiningGraphemes(graphemes) {
+  if (graphemes.length < 2) return graphemes;
+  let text = graphemes.join("");
+  if (!hasNonAsciiOrCr(text)) return graphemes;
+  let merged = [];
+  let currentGrapheme = "";
+  let graphemeIndex = 0;
+  let nextBoundary = graphemes[0].length;
+  for (let { segment, index } of getGraphemeSegmenter().segment(text)) {
+    while (index >= nextBoundary && graphemeIndex < graphemes.length - 1) {
+      merged.push(currentGrapheme);
+      currentGrapheme = "";
+      graphemeIndex++;
+      nextBoundary += graphemes[graphemeIndex].length;
     }
-    n += segment;
+    currentGrapheme += segment;
   }
-  r.push(n);
-  while (r.length < e.length) r.push("");
-  return r;
+  merged.push(currentGrapheme);
+  while (merged.length < graphemes.length) merged.push("");
+  return merged;
 }
 //@ chunk-bfrv6ttc.js:999-1099 placement
-function hasNonAsciiOrCr(e) {
-  for (let i = 0; i < e.length; i++) {
-    let code = e.charCodeAt(i);
+function hasNonAsciiOrCr(text) {
+  for (let i = 0; i < text.length; i++) {
+    let code = text.charCodeAt(i);
     if (code >= 128 || code === 13) return true;
   }
   return false;
@@ -93,10 +93,10 @@ function getWordSegmenter() {
 function countWords(text) {
   let trimmed = text.trim();
   if (trimmed === "") return 0;
-  let r = trimmed.split(/\s+/).length;
-  let n = 0;
-  for (let i of getWordSegmenter().segment(trimmed)) if (i.isWordLike) n++;
-  return Math.max(r, n);
+  let whitespaceWordCount = trimmed.split(/\s+/).length;
+  let wordLikeCount = 0;
+  for (let segment of getWordSegmenter().segment(trimmed)) if (segment.isWordLike) wordLikeCount++;
+  return Math.max(whitespaceWordCount, wordLikeCount);
 }
 //@ chunk-bfrv6ttc.js:1332-1346 layout
 var relativeTimeFormatCache = new Map();
@@ -136,48 +136,48 @@ function getSystemLocaleLanguage() {
 //@ chunk-bfrv6ttc.js:1716-1734 placement
 var weakMap = new WeakMap();
 //@ chunk-bfrv6ttc.js:1734-1923 placement
-function stableOptionsKey(e) {
-  if (!e) return "";
-  let t = weakMap.get(e);
-  if (t !== undefined) return t;
-  let sorted = Object.entries(e).sort(([i], [o]) => (i < o ? -1 : i > o ? 1 : 0));
-  let n = "";
-  for (let [i, o] of sorted) n += `${i}=${String(o)};`;
-  weakMap.set(e, n);
-  return n;
+function stableOptionsKey(options) {
+  if (!options) return "";
+  let cachedKey = weakMap.get(options);
+  if (cachedKey !== undefined) return cachedKey;
+  let sorted = Object.entries(options).sort(([keyA], [keyB]) => (keyA < keyB ? -1 : keyA > keyB ? 1 : 0));
+  let keyParts = "";
+  for (let [key, value] of sorted) keyParts += `${key}=${String(value)};`;
+  weakMap.set(options, keyParts);
+  return keyParts;
 }
 //@ chunk-bfrv6ttc.js:1923-1937 placement
 var dateTimeFormatCache = new Map();
 //@ chunk-bfrv6ttc.js:1937-1984 placement
-function withTimeZone(e, t) {
-  return t
+function withTimeZone(options, timeZone) {
+  return timeZone
     ? {
-        ...e,
-        timeZone: t,
+        ...options,
+        timeZone,
       }
-    : e;
+    : options;
 }
 //@ chunk-bfrv6ttc.js:1984-2094 placement
-function getDateTimeFormat(e, t) {
-  let r = `${e ?? ""}|${stableOptionsKey(t)}`;
-  let n = dateTimeFormatCache.get(r);
-  if (!n) {
-    n = new Intl.DateTimeFormat(e, t);
-    dateTimeFormatCache.set(r, n);
+function getDateTimeFormat(locales, options) {
+  let cacheKey = `${locales ?? ""}|${stableOptionsKey(options)}`;
+  let formatter = dateTimeFormatCache.get(cacheKey);
+  if (!formatter) {
+    formatter = new Intl.DateTimeFormat(locales, options);
+    dateTimeFormatCache.set(cacheKey, formatter);
   }
-  return n;
+  return formatter;
 }
 //@ chunk-bfrv6ttc.js:2094-2108 placement
 var numberFormatCache = new Map();
 //@ chunk-bfrv6ttc.js:2108-2217 placement
-function getNumberFormat(e, t) {
-  let r = `${e ?? ""}|${stableOptionsKey(t)}`;
-  let n = numberFormatCache.get(r);
-  if (!n) {
-    n = new Intl.NumberFormat(e, t);
-    numberFormatCache.set(r, n);
+function getNumberFormat(locales, options) {
+  let cacheKey = `${locales ?? ""}|${stableOptionsKey(options)}`;
+  let formatter = numberFormatCache.get(cacheKey);
+  if (!formatter) {
+    formatter = new Intl.NumberFormat(locales, options);
+    numberFormatCache.set(cacheKey, formatter);
   }
-  return n;
+  return formatter;
 }
 export {
   getSystemLocaleLanguage,

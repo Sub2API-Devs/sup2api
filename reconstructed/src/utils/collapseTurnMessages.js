@@ -16,112 +16,120 @@ import { SYNTHETIC_MODEL } from "../constants/messages.js";
 import { sanitizedMessageText } from "./messages/mappers.js";
 
 //@ chunk-ag5x7vhf.js:118205-118292 placement
-function isAsyncHookResponse(m) {
-  return m.type === "attachment" && m.attachment.type === "async_hook_response";
+function isAsyncHookResponse(message) {
+  return message.type === "attachment" && message.attachment.type === "async_hook_response";
 }
 //@ chunk-ag5x7vhf.js:118292-118764 placement
 /**
  * 把连续的钩子附件合并为按事件计数的一条。
  */
-function collapseHookAttachments(m) {
-  let h = [];
-  let x = 0;
-  while (x < m.length) {
-    let T = m[x];
-    if (isAsyncHookResponse(T)) {
-      let k = new Map();
-      let index = 0;
-      while (x < m.length) {
-        let I = m[x];
-        if (!isAsyncHookResponse(I)) break;
-        let hookEvent = I.attachment.hookEvent;
-        k.set(hookEvent, (k.get(hookEvent) ?? 0) + 1);
+function collapseHookAttachments(messages) {
+  let result = [];
+  let index = 0;
+  while (index < messages.length) {
+    let firstMessage = messages[index];
+    if (isAsyncHookResponse(firstMessage)) {
+      let countsByEvent = new Map();
+      let index_2 = 0;
+      while (index < messages.length) {
+        let message = messages[index];
+        if (!isAsyncHookResponse(message)) break;
+        let hookEvent = message.attachment.hookEvent;
+        countsByEvent.set(hookEvent, (countsByEvent.get(hookEvent) ?? 0) + 1);
+        index_2++;
         index++;
-        x++;
       }
-      if (index === 1) h.push(T);
+      if (index_2 === 1) result.push(firstMessage);
       else {
-        let I = [];
-        for (let [A, L] of k)
-          I.push({
-            hookEvent: A,
-            count: L,
+        let hooks = [];
+        for (let [hookEvent, count] of countsByEvent)
+          hooks.push({
+            hookEvent,
+            count,
           });
-        let uuid = T.uuid;
-        h.push({
+        let uuid = firstMessage.uuid;
+        result.push({
           type: "attachment",
-          uuid: typeof uuid === "string" && uuid !== "" ? deriveUUID(T.uuid, index) : T.uuid,
-          timestamp: T.timestamp,
+          uuid:
+            typeof uuid === "string" && uuid !== ""
+              ? deriveUUID(firstMessage.uuid, index_2)
+              : firstMessage.uuid,
+          timestamp: firstMessage.timestamp,
           attachment: {
             type: "async_hook_response_batch",
-            hooks: I,
+            hooks,
           },
         });
       }
     } else {
-      h.push(T);
-      x++;
+      result.push(firstMessage);
+      index++;
     }
   }
-  return h;
+  return result;
 }
 //@ chunk-ag5x7vhf.js:118764-119283 placement
 /**
  * 去掉后台代理/工作流计数未变的重复回合耗时行。
  */
-function dropRepeatedTurnDurations(m, h) {
-  if (h) return m;
-  let x = 0;
-  let T = 0;
-  let k = null;
-  for (let [_, I] of m.entries()) {
-    if (I.type === "system" && I.subtype === "turn_duration") {
-      let pendingBackgroundAgentCount = I.pendingBackgroundAgentCount ?? 0;
-      let pendingWorkflowCount = I.pendingWorkflowCount ?? 0;
-      let L =
+function dropRepeatedTurnDurations(messages, keepAll) {
+  if (keepAll) return messages;
+  let lastAgentCount = 0;
+  let lastWorkflowCount = 0;
+  let kept = null;
+  for (let [messageIndex, message] of messages.entries()) {
+    if (message.type === "system" && message.subtype === "turn_duration") {
+      let pendingBackgroundAgentCount = message.pendingBackgroundAgentCount ?? 0;
+      let pendingWorkflowCount = message.pendingWorkflowCount ?? 0;
+      let isRepeated =
         (pendingBackgroundAgentCount > 0 || pendingWorkflowCount > 0) &&
-        pendingBackgroundAgentCount === x &&
-        pendingWorkflowCount === T &&
-        I.budgetLimit === undefined &&
-        (I.briefHiddenCount ?? 0) === 0;
-      x = pendingBackgroundAgentCount;
-      T = pendingWorkflowCount;
-      if (L) {
-        k ??= m.slice(0, _);
+        pendingBackgroundAgentCount === lastAgentCount &&
+        pendingWorkflowCount === lastWorkflowCount &&
+        message.budgetLimit === undefined &&
+        (message.briefHiddenCount ?? 0) === 0;
+      lastAgentCount = pendingBackgroundAgentCount;
+      lastWorkflowCount = pendingWorkflowCount;
+      if (isRepeated) {
+        kept ??= messages.slice(0, messageIndex);
         continue;
       }
     } else if (
-      I.type === "user"
-        ? isHumanTurn_3(I)
-        : I.type === "attachment" &&
-          I.attachment.type === "queued_command" &&
-          I.attachment.isMeta !== true &&
-          isHumanOrUnset(resolveTaskNotificationOrigin(I.attachment.origin, I.attachment.commandMode))
+      message.type === "user"
+        ? isHumanTurn_3(message)
+        : message.type === "attachment" &&
+          message.attachment.type === "queued_command" &&
+          message.attachment.isMeta !== true &&
+          isHumanOrUnset(
+            resolveTaskNotificationOrigin(message.attachment.origin, message.attachment.commandMode),
+          )
     ) {
-      x = 0;
-      T = 0;
+      lastAgentCount = 0;
+      lastWorkflowCount = 0;
     }
-    k?.push(I);
+    kept?.push(message);
   }
-  return k ?? m;
+  return kept ?? messages;
 }
 //@ chunk-ag5x7vhf.js:119283-119362 placement
-function dropDuplicateRemoteErrors(m, h) {
-  if (h || !m.some(isDuplicateRemoteError)) return m;
-  return m.filter((x, T) => !isDuplicateRemoteError(x, T, m));
+function dropDuplicateRemoteErrors(messages, skip) {
+  if (skip || !messages.some(isDuplicateRemoteError)) return messages;
+  return messages.filter((message, index) => !isDuplicateRemoteError(message, index, messages));
 }
 //@ chunk-ag5x7vhf.js:119362-119609 placement
-function isDuplicateRemoteError(m, h, x) {
-  let T = x[h - 1];
+function isDuplicateRemoteError(message, index, messages) {
+  let previous = messages[index - 1];
   if (
-    m.type !== "system" ||
-    m.subtype !== "informational" ||
-    m.fromRemoteErrorResult !== true ||
-    T?.type !== "assistant" ||
-    T.message.model !== SYNTHETIC_MODEL
+    message.type !== "system" ||
+    message.subtype !== "informational" ||
+    message.fromRemoteErrorResult !== true ||
+    previous?.type !== "assistant" ||
+    previous.message.model !== SYNTHETIC_MODEL
   )
     return false;
-  let k = T.message.content[0];
-  return k?.type === "text" && sanitizedMessageText(k.text) === sanitizedMessageText(m.content);
+  let firstBlock = previous.message.content[0];
+  return (
+    firstBlock?.type === "text" &&
+    sanitizedMessageText(firstBlock.text) === sanitizedMessageText(message.content)
+  );
 }
 export { collapseHookAttachments, dropDuplicateRemoteErrors, dropRepeatedTurnDurations };

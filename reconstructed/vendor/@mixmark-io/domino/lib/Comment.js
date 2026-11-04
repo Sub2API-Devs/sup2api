@@ -5,12 +5,12 @@
  * pieces: chunk-vwj6ccer.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 import { require_Node } from "./Node.js";
 import { require_CharacterData } from "./CharacterData.js";
 
 //@ chunk-vwj6ccer.js:64873-65458 cjs-fingerprint
-var require_Comment = x(function (cjsExports, cjsModule) {
+var require_Comment = __commonJS(function (cjsExports, cjsModule) {
   cjsModule.exports = Comment;
   var Node = require_Node();
   var CharacterData = require_CharacterData();

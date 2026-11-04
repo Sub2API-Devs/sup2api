@@ -23,7 +23,7 @@ import { getCheckRunner, hasRegisteredCheck } from "../../utils/permissions/chec
 /**
  * 用全 undefined 的 Proxy 调一次 create，探测返回对象里是否有指定方法（避免为不实现 permissionCheckFailureDecision 的工具构造真实上下文）。
  */
-function createReturnsMethod(create, n) {
+function createReturnsMethod(create, methodName) {
   let proxy = new Proxy(
     {},
     {
@@ -32,7 +32,7 @@ function createReturnsMethod(create, n) {
       },
     },
   );
-  return n in create(proxy);
+  return methodName in create(proxy);
 }
 //@ chunk-g54kbxqw.js:167123-170242 placement
 /**
@@ -40,162 +40,177 @@ function createReturnsMethod(create, n) {
  */
 function buildTool(def) {
   let create = def.create;
-  let s = (k, session) => {
+  let createChecked = (context, session) => {
     assertNativeToolRunsHere(def.name, session);
-    return create.call(def, k);
+    return create.call(def, context);
   };
-  let r = (k, onProgress, R, S, w) => ({
-    tool: s(createToolUseContextView(k), k?.session),
+  let buildCall = (context, onProgress, parentMessage, canUseTool, options) => ({
+    tool: createChecked(createToolUseContextView(context), context?.session),
     call: {
-      parentMessage: R,
-      userModified: w?.userModified,
-      globLimits: w?.globLimits,
-      userTypedShellDispatch: w?.userTypedShellDispatch,
-      pdfRenderSignal: w?.pdfRenderSignal,
-      gitDiffRead: w?.gitDiffRead,
-      outsideResultReader: w?.outsideResultReader,
+      parentMessage,
+      userModified: options?.userModified,
+      globLimits: options?.globLimits,
+      userTypedShellDispatch: options?.userTypedShellDispatch,
+      pdfRenderSignal: options?.pdfRenderSignal,
+      gitDiffRead: options?.gitDiffRead,
+      outsideResultReader: options?.outsideResultReader,
       ...false,
-      smallResultAsked: w?.smallResultAsked,
-      callerLogsSharedEvents: w?.callerLogsSharedEvents,
-      timing: w?.timing,
-      runEngine: (P, L) =>
-        P({
-          ...L,
+      smallResultAsked: options?.smallResultAsked,
+      callerLogsSharedEvents: options?.callerLogsSharedEvents,
+      timing: options?.timing,
+      runEngine: (runFn, args) =>
+        runFn({
+          ...args,
           toolUseContext:
-            k.permissionRound === undefined
-              ? k
+            context.permissionRound === undefined
+              ? context
               : {
-                  ...k,
+                  ...context,
                   permissionRound: undefined,
                 },
-          canUseTool: S,
+          canUseTool,
         }),
       ask:
-        S && R
-          ? (P, L) => {
-              let j = runPermissionCheckWithReentry(
-                S,
+        canUseTool && parentMessage
+          ? (input, askOptions) => {
+              let checkPromise = runPermissionCheckWithReentry(
+                canUseTool,
                 merged,
-                L.withdraw === undefined
-                  ? k
+                askOptions.withdraw === undefined
+                  ? context
                   : {
-                      ...k,
-                      abortController: withdrawablePromptScope(k.abortController, L.withdraw),
+                      ...context,
+                      abortController: withdrawablePromptScope(context.abortController, askOptions.withdraw),
                     },
-                R,
-                P,
-                L,
+                parentMessage,
+                input,
+                askOptions,
               );
-              return L.toolUseId === k.toolUseId
-                ? j
-                : j.finally(() => clearToolUsePermissionState(k.session, L.toolUseId));
+              return askOptions.toolUseId === context.toolUseId
+                ? checkPromise
+                : checkPromise.finally(() =>
+                    clearToolUsePermissionState(context.session, askOptions.toolUseId),
+                  );
             }
           : undefined,
       get toolUseId() {
-        return k.toolUseId;
+        return context.toolUseId;
       },
       get signal() {
-        return k.abortController.signal;
+        return context.abortController.signal;
       },
       get permissionPhase() {
-        return k.permissionPhase;
+        return context.permissionPhase;
       },
       get permissionRound() {
-        return k.permissionRound;
+        return context.permissionRound;
       },
-      abort: (P) => k.abortController.abort(P),
-      abortTurn: (P) => turnAbortControllerOf(k.abortController).abort(P),
+      abort: (reason) => context.abortController.abort(reason),
+      abortTurn: (reason) => turnAbortControllerOf(context.abortController).abort(reason),
       onProgress,
       get innerCall() {
-        return k.innerCall;
+        return context.innerCall;
       },
       get shellWallCapMs() {
-        return k.shellWallCapMs;
+        return context.shellWallCapMs;
       },
       get promptShellPluginId() {
-        return k.promptShellPluginId;
+        return context.promptShellPluginId;
       },
       get fileReadingLimits() {
-        return k.fileReadingLimits;
+        return context.fileReadingLimits;
       },
       get sameTurnToolUses() {
-        return k.sameTurnToolUses;
+        return context.sameTurnToolUses;
       },
       get remoteCall() {
-        return k.remoteCall;
+        return context.remoteCall;
       },
       get keptBackgroundShells() {
-        return k.keptBackgroundShells;
+        return context.keptBackgroundShells;
       },
       get inputFromAnotherMachine() {
-        return k.inputFromAnotherMachine;
+        return context.inputFromAnotherMachine;
       },
       get permissionSurface() {
-        return k.toolUseId === undefined ? undefined : k.toolDecisions.get(k.toolUseId)?.surface;
+        return context.toolUseId === undefined
+          ? undefined
+          : context.toolDecisions.get(context.toolUseId)?.surface;
       },
     },
   });
-  let h = {
-    create: (k) => s(k, k.session),
-    call: (k, C, R, S, w, P) => {
-      let checkRunner = getCheckRunner(C?.session, def.name);
-      let j =
-        P?.runnerCheckedHere !== undefined &&
+  let overrides = {
+    create: (context) => createChecked(context, context.session),
+    call: (input, context, canUseTool, parentMessage, onProgress, options) => {
+      let checkRunner = getCheckRunner(context?.session, def.name);
+      let wallRunner =
+        options?.runnerCheckedHere !== undefined &&
         checkRunner !== undefined &&
-        hasRegisteredCheck(C?.session, def.name)
-          ? P.runnerCheckedHere
+        hasRegisteredCheck(context?.session, def.name)
+          ? options.runnerCheckedHere
           : checkRunner;
-      if (P?.permissionCheckedFor !== undefined && P.permissionCheckedFor !== j)
+      if (options?.permissionCheckedFor !== undefined && options.permissionCheckedFor !== wallRunner)
         return Promise.reject(
           new NativeToolElsewhereError(
             `${def.name} was not run: where it runs changed after its permission was checked. Send the call again.`,
             "NOT_RUN",
           ),
         );
-      if (j) return runPermissionCheck(def, j, k, C.abortController.signal, C, P, S?.message.model);
-      let { tool, call: q } = r(C, w, S, R, P);
-      return tool.call(k, q);
+      if (wallRunner)
+        return runPermissionCheck(
+          def,
+          wallRunner,
+          input,
+          context.abortController.signal,
+          context,
+          options,
+          parentMessage?.message.model,
+        );
+      let { tool, call } = buildCall(context, onProgress, parentMessage, canUseTool, options);
+      return tool.call(input, call);
     },
-    validateInput: async (k, C) => {
-      let checkRunner = getCheckRunner(C?.session, def.name);
+    validateInput: async (input, context) => {
+      let checkRunner = getCheckRunner(context?.session, def.name);
       if (checkRunner) {
-        let P = checkRunner.refusedUnasked?.(k, C);
-        return P === undefined
+        let refusal = checkRunner.refusedUnasked?.(input, context);
+        return refusal === undefined
           ? NATIVE_TOOL_OK
           : {
               result: false,
-              message: P,
+              message: refusal,
               errorCode: 1,
             };
       }
-      let { tool, call: w } = r(C);
+      let { tool, call } = buildCall(context);
       return tool.validateInput
-        ? tool.validateInput(k, w)
+        ? tool.validateInput(input, call)
         : {
             result: true,
           };
     },
-    checkPermissions: (k, C) => {
-      let checkRunner = getCheckRunner(C?.session, def.name);
+    checkPermissions: (input, context) => {
+      let checkRunner = getCheckRunner(context?.session, def.name);
       if (checkRunner) {
-        let P = {
+        let defaultDecision = {
           behavior: "passthrough",
           message: `${def.name} requires permission.`,
         };
-        return checkRunner.checkPermissions === undefined || C.toolUseId === undefined
-          ? Promise.resolve(P)
-          : checkRunner.checkPermissions(merged, k, C).then((L) => L ?? P);
+        return checkRunner.checkPermissions === undefined || context.toolUseId === undefined
+          ? Promise.resolve(defaultDecision)
+          : checkRunner
+              .checkPermissions(merged, input, context)
+              .then((decision) => decision ?? defaultDecision);
       }
-      let { tool, call: w } = r(C);
+      let { tool, call } = buildCall(context);
       return tool.checkPermissions
-        ? tool.checkPermissions(k, w)
+        ? tool.checkPermissions(input, call)
         : Promise.resolve({
             behavior: "allow",
-            updatedInput: k,
+            updatedInput: input,
           });
     },
-    permissionCheckFailureDecision: (k, C) => {
-      if (getCheckRunner(C?.session, def.name))
+    permissionCheckFailureDecision: (input, context) => {
+      if (getCheckRunner(context?.session, def.name))
         return {
           behavior: "deny",
           message: `${def.name} was not run: its permission check could not be completed.`,
@@ -205,8 +220,8 @@ function buildTool(def) {
           },
         };
       if (!createReturnsMethod(create, "permissionCheckFailureDecision")) return;
-      let { tool, call: S } = r(C);
-      return tool.permissionCheckFailureDecision?.(k, S);
+      let { tool, call } = buildCall(context);
+      return tool.permissionCheckFailureDecision?.(input, call);
     },
   };
   let merged = Object.assign(
@@ -217,7 +232,7 @@ function buildTool(def) {
       },
       Object.getOwnPropertyDescriptors(def),
     ),
-    h,
+    overrides,
   );
   return merged;
 }
@@ -225,13 +240,13 @@ function buildTool(def) {
 /**
  * 判断工具是否是 V2 多条目别名工具（有 underlyingV1ToolName、entryFieldName、perEntryHookInputs、reassemble），这类工具的 hook 按条目拆分。
  */
-function isMultiEntryAliasTool(e) {
-  let n = e;
+function isMultiEntryAliasTool(tool) {
+  let candidate = tool;
   return (
-    typeof n.underlyingV1ToolName === "string" &&
-    typeof n.entryFieldName === "string" &&
-    typeof n.perEntryHookInputs === "function" &&
-    typeof n.reassemble === "function"
+    typeof candidate.underlyingV1ToolName === "string" &&
+    typeof candidate.entryFieldName === "string" &&
+    typeof candidate.perEntryHookInputs === "function" &&
+    typeof candidate.reassemble === "function"
   );
 }
 //@ chunk-g54kbxqw.js:170425-170588 placement
@@ -246,7 +261,7 @@ function toolMatchesAnyName(tool, names) {
   );
 }
 //@ chunk-g54kbxqw.js:170588-170644 placement
-function collectionHas(names, n) {
-  return "has" in names ? names.has(n) : names.includes(n);
+function collectionHas(names, name) {
+  return "has" in names ? names.has(name) : names.includes(name);
 }
 export { toolMatchesAnyName, buildTool, isMultiEntryAliasTool };

@@ -5,10 +5,10 @@
  * pieces: chunk-spjgqa4y.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-spjgqa4y.js:357-1074 cjs-fingerprint
-var require_utils = x(function (cjsExports) {
+var require_utils = __commonJS(function (cjsExports) {
   var toSJISFunction;
   var CODEWORDS_COUNT = [
     0, 26, 44, 70, 100, 134, 172, 196, 242, 292, 346, 404, 466, 532, 581, 655, 733, 815, 901, 991, 1085, 1156,

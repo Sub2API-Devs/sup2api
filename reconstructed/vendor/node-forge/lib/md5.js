@@ -5,13 +5,13 @@
  * pieces: chunk-fq0cr76a.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../runtime/bun-runtime.js";
 import { require_forge } from "./forge.js";
 import { require_md } from "./md.js";
 import { require_util } from "./util.js";
 
 //@ chunk-fq0cr76a.js:65722-68269 cjs-fingerprint
-var require_md5 = x(function (cjsExports, cjsModule) {
+var require_md5 = __commonJS(function (cjsExports, cjsModule) {
   var forge = require_forge();
   require_md();
   require_util();

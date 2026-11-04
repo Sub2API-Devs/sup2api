@@ -16,21 +16,25 @@ import { logRemoteTools } from "./remoteToolsDebug.js";
 import { logError } from "../../utils/log.js";
 import { toError } from "../../utils/errors.js";
 import { isRanOutcome } from "../../remote/tools/protocolConstants.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-qmsrnapp.js:9616-9739 placement
-function isRefusedDrop(e) {
-  if (e.kind !== "dropped") return false;
-  let envelope = e.reported?.envelope;
+function isRefusedDrop(outcome) {
+  if (outcome.kind !== "dropped") return false;
+  let envelope = outcome.reported?.envelope;
   return envelope?.outcome === "refused" && envelope.code === "unbound";
 }
 //@ chunk-qmsrnapp.js:9739-9811 placement
-var NON_RETRYABLE_REFUSALS = new Set(["invalid_request", "unsupported_protocol", "not_served"]);
+var NON_RETRYABLE_REFUSALS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-qmsrnapp.js:9739", () => {
+  NON_RETRYABLE_REFUSALS = new Set(["invalid_request", "unsupported_protocol", "not_served"]);
+});
 //@ chunk-qmsrnapp.js:9811-10606 placement
 /**
  * 解析远程调用信封（envelope）：result/answer/refused/in_progress/unknown_call 等，转为统一结局。
  */
-function interpretCallOutcome(e, dispatchEpoch) {
-  let { envelope } = e;
+function interpretCallOutcome(transported, dispatchEpoch) {
+  let { envelope } = transported;
   if (envelope === undefined)
     return {
       kind: "unknown",
@@ -42,7 +46,7 @@ function interpretCallOutcome(e, dispatchEpoch) {
       return envelope.replayed === true
         ? {
             kind: "answer",
-            transported: e,
+            transported,
           }
         : {
             kind: "unknown",
@@ -66,7 +70,7 @@ function interpretCallOutcome(e, dispatchEpoch) {
       if (envelope.replayed === true)
         return {
           kind: "answer",
-          transported: e,
+          transported,
         };
       return NON_RETRYABLE_REFUSALS.has(envelope.code)
         ? {
@@ -79,7 +83,7 @@ function interpretCallOutcome(e, dispatchEpoch) {
     case "needs_approval":
       return {
         kind: "answer",
-        transported: e,
+        transported,
       };
     case "in_progress":
       return {
@@ -104,8 +108,8 @@ function hostEpochOf(envelope) {
     : undefined;
 }
 //@ chunk-qmsrnapp.js:10697-10932 placement
-function isTransportFailure(e) {
-  switch (e.kind) {
+function isTransportFailure(outcome) {
+  switch (outcome.kind) {
     case "dropped":
     case "unreachable":
     case "stalled":
@@ -113,7 +117,7 @@ function isTransportFailure(e) {
     case "approval_unverified":
       return true;
     case "transport_error":
-      return e.unreadableResult !== true;
+      return outcome.unreadableResult !== true;
     case "result":
     case "host_gone":
     case "cancelled":
@@ -143,250 +147,265 @@ class RemoteCallLedger {
   constructor(now = Date.now) {
     this.now = now;
   }
-  onLastWordQueued(e) {
-    return this.#n.subscribe(e);
+  onLastWordQueued(listener) {
+    return this.#n.subscribe(listener);
   }
   lastWordWaitsForMain() {
-    return this.#t.some((e) => e.agentId === undefined && e.toldAs === undefined);
+    return this.#t.some((line) => line.agentId === undefined && line.toldAs === undefined);
   }
-  mainCallOpenOn(e) {
-    for (let n of this.#e.values()) if (n.agentId === undefined && n.hostName === e) return true;
+  mainCallOpenOn(hostName) {
+    for (let entry of this.#e.values())
+      if (entry.agentId === undefined && entry.hostName === hostName) return true;
     return false;
   }
-  gaveUp(e) {
+  gaveUp(entry) {
     this.#s();
-    evictOldest(this.#e, MAX_LEDGER_ENTRIES).set(e.callId, {
-      ...e,
+    evictOldest(this.#e, MAX_LEDGER_ENTRIES).set(entry.callId, {
+      ...entry,
       askedAt: undefined,
-      stoppedAt: e.toldAs === "interrupted" ? e.givenUpAt : undefined,
+      stoppedAt: entry.toldAs === "interrupted" ? entry.givenUpAt : undefined,
     });
     logEvent("tengu_remote_tool_targets", {
       event: lit("given_up"),
-      told_as: fromEnum(e.toldAs),
-      standing: e.standing,
+      told_as: fromEnum(entry.toldAs),
+      standing: entry.standing,
     });
   }
-  answeredLate(e, n) {
-    let o = this.#e.get(e);
-    if (o === undefined) return false;
-    let r = {
-      ...o,
+  answeredLate(callId, transported) {
+    let entry = this.#e.get(callId);
+    if (entry === undefined) return false;
+    let settled = {
+      ...entry,
       standing: false,
       withdraw: undefined,
       givenUpAt: this.now(),
       askedAt: undefined,
     };
-    if (n.kind !== "result" || n.envelope === undefined) {
-      this.#e.set(e, r);
+    if (transported.kind !== "result" || transported.envelope === undefined) {
+      this.#e.set(callId, settled);
       return false;
     }
-    let s = lateOutcomeMessage(o, n);
-    logRemoteTools(e, "late outcome: answer on the standing request", {
-      outcome: n.envelope.outcome,
-      final: s !== undefined,
+    let message = lateOutcomeMessage(entry, transported);
+    logRemoteTools(callId, "late outcome: answer on the standing request", {
+      outcome: transported.envelope.outcome,
+      final: message !== undefined,
     });
-    if (s === undefined) {
-      let u =
-        n.envelope.outcome === "in_progress" && n.envelope.state === "running"
-          ? askedOutcomeMessage(o, {
+    if (message === undefined) {
+      let runningMessage =
+        transported.envelope.outcome === "in_progress" && transported.envelope.state === "running"
+          ? askedOutcomeMessage(entry, {
               kind: "still_running",
               state: "running",
             })
           : undefined;
       this.#e.set(
-        e,
-        u === undefined
-          ? r
+        callId,
+        runningMessage === undefined
+          ? settled
           : {
-              ...r,
+              ...settled,
               toldAs: "still_running",
             },
       );
-      if (u !== undefined) this.#r(o, u, "standing_request", "still_running");
+      if (runningMessage !== undefined) this.#r(entry, runningMessage, "standing_request", "still_running");
       return true;
     }
-    this.#e.delete(e);
-    this.#r(o, s, "standing_request");
+    this.#e.delete(callId);
+    this.#r(entry, message, "standing_request");
     return true;
   }
-  outstandingOn(e, n) {
-    let o = this.now();
+  outstandingOn(hostName, agentId) {
+    let now = this.now();
     return [...this.#e.values()].some(
-      (r) => r.hostName === e && r.agentId === n && (r.standing || o - r.givenUpAt <= GIVEN_UP_RETENTION_MS),
+      (entry) =>
+        entry.hostName === hostName &&
+        entry.agentId === agentId &&
+        (entry.standing || now - entry.givenUpAt <= GIVEN_UP_RETENTION_MS),
     );
   }
-  forget(e) {
-    this.#e.delete(e);
-    this.#t = this.#t.filter((n) => n.callId !== e);
+  forget(callId) {
+    this.#e.delete(callId);
+    this.#t = this.#t.filter((line) => line.callId !== callId);
   }
-  dueForQuery(e, n, o) {
+  dueForQuery(cutoff, stillWanted, wanted) {
     this.#s();
     let sliced = [...this.#e.values()]
       .filter(
-        (i) =>
-          i.askedAt === undefined && i.givenUpAt < e && (!i.standing || n(i.hostName, i.givenUpAt)) && o(i),
+        (entry) =>
+          entry.askedAt === undefined &&
+          entry.givenUpAt < cutoff &&
+          (!entry.standing || stillWanted(entry.hostName, entry.givenUpAt)) &&
+          wanted(entry),
       )
       .slice(0, MAX_QUERIES_PER_SWEEP);
     let askedAt = this.now();
-    for (let i of sliced)
-      this.#e.set(i.callId, {
-        ...i,
+    for (let entry of sliced)
+      this.#e.set(entry.callId, {
+        ...entry,
         askedAt,
       });
     return sliced;
   }
-  askedAfterward(e, n) {
-    let o = this.#e.get(e);
-    if (o === undefined) return;
-    if (n.kind !== "result") {
-      this.#e.set(e, {
-        ...o,
+  askedAfterward(callId, transported) {
+    let entry = this.#e.get(callId);
+    if (entry === undefined) return;
+    if (transported.kind !== "result") {
+      this.#e.set(callId, {
+        ...entry,
         askedAt: undefined,
       });
       return;
     }
-    this.settleVerdict(e, interpretCallOutcome(n, o.dispatchEpoch));
+    this.settleVerdict(callId, interpretCallOutcome(transported, entry.dispatchEpoch));
   }
-  settleVerdict(e, n, o = false) {
-    let r = this.#e.get(e);
-    if (r === undefined) return;
-    let s = (u = r) => {
-      this.#e.set(e, {
-        ...u,
+  settleVerdict(callId, verdict, inferred = false) {
+    let entry = this.#e.get(callId);
+    if (entry === undefined) return;
+    let settleUnasked = (target = entry) => {
+      this.#e.set(callId, {
+        ...target,
         askedAt: undefined,
       });
     };
-    let i = () => {
-      if (r.standing)
-        this.#e.set(e, {
-          ...r,
+    let settleAsked = () => {
+      if (entry.standing)
+        this.#e.set(callId, {
+          ...entry,
           askedAt: this.now(),
         });
-      else this.#e.delete(e);
+      else this.#e.delete(callId);
     };
     switch (
-      (logRemoteTools(e, "late outcome: record verdict", {
-        verdict: n.kind,
+      (logRemoteTools(callId, "late outcome: record verdict", {
+        verdict: verdict.kind,
       }),
       logEvent("tengu_remote_tool_targets", {
         event: lit("late_query"),
-        told_as: fromEnum(r.toldAs),
-        verdict: fromEnum(n.kind),
-        source: fromEnum(o ? "inferred" : "record"),
+        told_as: fromEnum(entry.toldAs),
+        verdict: fromEnum(verdict.kind),
+        source: fromEnum(inferred ? "inferred" : "record"),
       }),
-      n.kind)
+      verdict.kind)
     ) {
       case "query_turned_away":
-        s();
+        settleUnasked();
         return;
       case "unknown":
-        i();
+        settleAsked();
         return;
       case "still_running":
       case "answer":
       case "not_received":
       case "host_restarted": {
-        if (n.kind === "not_received" && r.machineHadCall) {
-          i();
+        if (verdict.kind === "not_received" && entry.machineHadCall) {
+          settleAsked();
           return;
         }
-        let h =
-          n.kind === "still_running" &&
-          r.stoppedAt !== undefined &&
-          this.now() - r.stoppedAt < STILL_RUNNING_GRACE_MS
+        let message =
+          verdict.kind === "still_running" &&
+          entry.stoppedAt !== undefined &&
+          this.now() - entry.stoppedAt < STILL_RUNNING_GRACE_MS
             ? undefined
-            : askedOutcomeMessage(r, n);
-        let p = n.kind !== "still_running" && h !== undefined;
-        let y = !p && this.#t.some((S) => S.callId === e && S.toldAs === "still_running");
-        if (h !== undefined && !y) this.#r(r, h, "record", p ? undefined : "still_running");
-        if (p) {
-          r.withdraw?.();
-          this.#e.delete(e);
+            : askedOutcomeMessage(entry, verdict);
+        let finalAnswer = verdict.kind !== "still_running" && message !== undefined;
+        let alreadyTold =
+          !finalAnswer && this.#t.some((line) => line.callId === callId && line.toldAs === "still_running");
+        if (message !== undefined && !alreadyTold)
+          this.#r(entry, message, "record", finalAnswer ? undefined : "still_running");
+        if (finalAnswer) {
+          entry.withdraw?.();
+          this.#e.delete(callId);
           return;
         }
-        let _ =
-          n.kind === "still_running"
+        let nextEntry =
+          verdict.kind === "still_running"
             ? {
-                ...r,
+                ...entry,
                 givenUpAt: this.now(),
               }
-            : r;
-        if (r.standing)
-          this.#e.set(e, {
-            ..._,
+            : entry;
+        if (entry.standing)
+          this.#e.set(callId, {
+            ...nextEntry,
             askedAt: this.now(),
           });
-        else s(_);
+        else settleUnasked(nextEntry);
         return;
       }
     }
   }
-  takeCorrections(e, { turnStart: n = false } = {}) {
-    let o = this.now();
-    let r = (u) => e === undefined && n && u.agentId !== undefined && o - u.at > SUBAGENT_CORRECTION_STALE_MS;
-    let s = (u) => u.agentId === e || r(u);
-    let filtered = this.#t.filter(s);
-    this.#t = this.#t.filter((u) => !s(u));
-    for (let u of filtered) this.#o(u);
-    return filtered.map((u) => (r(u) ? `${SUBAGENT_EARLIER_WORK_PREFIX}${u.line}` : u.line));
+  takeCorrections(agentId, { turnStart = false } = {}) {
+    let now = this.now();
+    let isStaleSubagentLine = (line) =>
+      agentId === undefined &&
+      turnStart &&
+      line.agentId !== undefined &&
+      now - line.at > SUBAGENT_CORRECTION_STALE_MS;
+    let belongs = (line) => line.agentId === agentId || isStaleSubagentLine(line);
+    let filtered = this.#t.filter(belongs);
+    this.#t = this.#t.filter((line) => !belongs(line));
+    for (let line of filtered) this.#o(line);
+    return filtered.map((line) =>
+      isStaleSubagentLine(line) ? `${SUBAGENT_EARLIER_WORK_PREFIX}${line.line}` : line.line,
+    );
   }
-  #o(e) {
-    let n = e.toldAs === undefined ? undefined : this.#e.get(e.callId);
-    if (e.toldAs !== undefined && n !== undefined)
-      this.#e.set(e.callId, {
-        ...n,
-        toldAs: e.toldAs,
+  #o(line) {
+    let entry = line.toldAs === undefined ? undefined : this.#e.get(line.callId);
+    if (line.toldAs !== undefined && entry !== undefined)
+      this.#e.set(line.callId, {
+        ...entry,
+        toldAs: line.toldAs,
       });
   }
-  #r(e, line, o, r) {
-    this.#t = this.#t.filter((s) => s.callId !== e.callId);
+  #r(entry, line, source, toldAs) {
+    this.#t = this.#t.filter((line) => line.callId !== entry.callId);
     if (this.#t.length >= MAX_PENDING_CORRECTIONS) {
-      let s = this.#t.shift();
-      if (s !== undefined) this.#o(s);
+      let dropped = this.#t.shift();
+      if (dropped !== undefined) this.#o(dropped);
     }
     this.#t.push({
-      callId: e.callId,
-      agentId: e.agentId,
+      callId: entry.callId,
+      agentId: entry.agentId,
       line,
       at: this.now(),
-      toldAs: r,
+      toldAs,
     });
     logEvent("tengu_remote_tool_targets", {
       event: lit("late_outcome"),
-      told_as: fromEnum(e.toldAs),
-      source: fromEnum(o),
+      told_as: fromEnum(entry.toldAs),
+      source: fromEnum(source),
     });
-    if (r === undefined)
+    if (toldAs === undefined)
       try {
-        this.#n.emit(e.agentId);
+        this.#n.emit(entry.agentId);
       } catch (error) {
         logError(toError(error));
       }
   }
   #s() {
-    let e = this.now();
-    for (let [n, o] of this.#e)
-      if (!o.standing && e - o.givenUpAt > GIVEN_UP_RETENTION_MS) {
-        this.#e.delete(n);
+    let now = this.now();
+    for (let [callId, entry] of this.#e)
+      if (!entry.standing && now - entry.givenUpAt > GIVEN_UP_RETENTION_MS) {
+        this.#e.delete(callId);
         logEvent("tengu_remote_tool_targets", {
           event: lit("given_up_expired"),
-          told_as: fromEnum(o.toldAs),
+          told_as: fromEnum(entry.toldAs),
         });
       }
   }
 }
 //@ chunk-qmsrnapp.js:14792-14895 placement
-function evictOldest(e, n) {
-  while (e.size >= n) {
-    let o = e.keys().next().value;
-    if (o === undefined) break;
-    e.delete(o);
+function evictOldest(map, maxSize) {
+  while (map.size >= maxSize) {
+    let oldestKey = map.keys().next().value;
+    if (oldestKey === undefined) break;
+    map.delete(oldestKey);
   }
-  return e;
+  return map;
 }
 //@ chunk-qmsrnapp.js:14895-15565 placement
-function givenUpCallPreamble(e) {
-  let n = {
+function givenUpCallPreamble(givenUp) {
+  let reasonText = {
     host_unresponsive:
       "was reported with its state unknown after that machine stopped answering this session's checks on it",
     host_asleep: "was reported as paused, its state unknown, when that machine went to sleep",
@@ -395,8 +414,8 @@ function givenUpCallPreamble(e) {
     still_running: "was reported as still running there",
     delivery_unknown: "was reported with its outcome unknown",
     interrupted: "was reported as interrupted",
-  }[e.toldAs];
-  return `Correction: the earlier ${e.toolName} call on ${e.hostName} \u2014 ${e.spelled} \u2014 ${n}.`;
+  }[givenUp.toldAs];
+  return `Correction: the earlier ${givenUp.toolName} call on ${givenUp.hostName} \u2014 ${givenUp.spelled} \u2014 ${reasonText}.`;
 }
 //@ chunk-qmsrnapp.js:15565-16743 placement
 /**
@@ -429,8 +448,8 @@ var CANNOT_FULFILL_PHRASES = {
   withdrawn: "its pending approval request was withdrawn",
 };
 //@ chunk-qmsrnapp.js:16743-16870 placement
-function checkEffectsAdvice(e) {
-  return `Check its effects on ${e.hostName} with a read-only command there before relying on it or repeating it.`;
+function checkEffectsAdvice(call) {
+  return `Check its effects on ${call.hostName} with a read-only command there before relying on it or repeating it.`;
 }
 //@ chunk-qmsrnapp.js:16870-17185 placement
 /**
@@ -445,26 +464,30 @@ var LATE_OUTCOME_REASONS = {
   unrecognized: "it failed there",
 };
 //@ chunk-qmsrnapp.js:17185-18144 placement
-function lateOutcomeMessage(e, n) {
-  if (n.kind !== "result" || n.envelope === undefined) return;
-  let { envelope } = n;
-  let r = givenUpCallPreamble(e);
+function lateOutcomeMessage(givenUp, transported) {
+  if (transported.kind !== "result" || transported.envelope === undefined) return;
+  let { envelope } = transported;
+  let preamble = givenUpCallPreamble(givenUp);
   switch (envelope.outcome) {
     case "completed": {
       if (isRanOutcome(envelope.disposition))
         return envelope.is_error
-          ? `${r} That machine now reports it ended there with an error (recorded there, not delivered here): the command ran and failed, or was refused before it started. ${checkEffectsAdvice(e)}`
-          : `${r} That machine now reports it DID run and completed (its output was recorded there, not delivered here). ${checkEffectsAdvice(e)}`;
-      let s = HOST_REFUSAL_PHRASES[envelope.disposition ?? "ran"];
-      return s === undefined ? undefined : `${r} That machine now reports it did not run it (${s}).`;
+          ? `${preamble} That machine now reports it ended there with an error (recorded there, not delivered here): the command ran and failed, or was refused before it started. ${checkEffectsAdvice(givenUp)}`
+          : `${preamble} That machine now reports it DID run and completed (its output was recorded there, not delivered here). ${checkEffectsAdvice(givenUp)}`;
+      let refusalPhrase = HOST_REFUSAL_PHRASES[envelope.disposition ?? "ran"];
+      return refusalPhrase === undefined
+        ? undefined
+        : `${preamble} That machine now reports it did not run it (${refusalPhrase}).`;
     }
     case "failed":
-      return `${r} That machine now reports ${LATE_OUTCOME_REASONS[envelope.code]} \u2014 ${PARTIAL_RUN_HINT}`;
+      return `${preamble} That machine now reports ${LATE_OUTCOME_REASONS[envelope.code]} \u2014 ${PARTIAL_RUN_HINT}`;
     case "refused": {
       if (envelope.code === "result_lost")
-        return `${r} That machine now reports it DID run and ended; its result is no longer held there. ${checkEffectsAdvice(e)}`;
-      let s = CANNOT_FULFILL_PHRASES[envelope.code];
-      return s === undefined ? undefined : `${r} That machine now reports it did not run it (${s}).`;
+        return `${preamble} That machine now reports it DID run and ended; its result is no longer held there. ${checkEffectsAdvice(givenUp)}`;
+      let refusalPhrase = CANNOT_FULFILL_PHRASES[envelope.code];
+      return refusalPhrase === undefined
+        ? undefined
+        : `${preamble} That machine now reports it did not run it (${refusalPhrase}).`;
     }
     case "acknowledged":
     case "needs_approval":
@@ -481,22 +504,22 @@ function isDuplicateCompleted(transported) {
   );
 }
 //@ chunk-qmsrnapp.js:18262-19087 placement
-function askedOutcomeMessage(e, n) {
-  let o = givenUpCallPreamble(e);
-  switch (n.kind) {
+function askedOutcomeMessage(givenUp, outcome) {
+  let preamble = givenUpCallPreamble(givenUp);
+  switch (outcome.kind) {
     case "answer":
-      return isDuplicateCompleted(n.transported)
-        ? `${o} That machine's record shows the call reached it and has ended there, but the result is no longer held. ${checkEffectsAdvice(e)}`
-        : lateOutcomeMessage(e, n.transported);
+      return isDuplicateCompleted(outcome.transported)
+        ? `${preamble} That machine's record shows the call reached it and has ended there, but the result is no longer held. ${checkEffectsAdvice(givenUp)}`
+        : lateOutcomeMessage(givenUp, outcome.transported);
     case "not_received":
-      return e.machineHadCall
+      return givenUp.machineHadCall
         ? undefined
-        : `${o} That machine has no record of it: it never ran there, and it is safe to send again if still wanted.`;
+        : `${preamble} That machine has no record of it: it never ran there, and it is safe to send again if still wanted.`;
     case "host_restarted":
-      return `${o} Claude Code on ${e.hostName} has restarted since, and the command was lost with it \u2014 it may have partially run before the restart; check its effects before repeating it.`;
+      return `${preamble} Claude Code on ${givenUp.hostName} has restarted since, and the command was lost with it \u2014 it may have partially run before the restart; check its effects before repeating it.`;
     case "still_running":
-      return n.state === "running" && e.toldAs !== "still_running"
-        ? `${o} That machine now reports it IS running there; its outcome is not known yet \u2014 do not run it again.`
+      return outcome.state === "running" && givenUp.toldAs !== "still_running"
+        ? `${preamble} That machine now reports it IS running there; its outcome is not known yet \u2014 do not run it again.`
         : undefined;
     case "unknown":
     case "query_turned_away":

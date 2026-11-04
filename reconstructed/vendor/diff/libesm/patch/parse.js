@@ -10,22 +10,22 @@
 function parsePatch(uniDiff) {
   let diffstr = uniDiff.split(/\n/);
   let list = [];
-  let i = 0;
+  let lineIndex = 0;
   function parseIndex() {
     let index = {};
     list.push(index);
-    while (i < diffstr.length) {
-      let line = diffstr[i];
+    while (lineIndex < diffstr.length) {
+      let line = diffstr[lineIndex];
       if (/^(---|\+\+\+|@@)\s/.test(line)) break;
       let headerMatch = /^(?:Index:|diff(?: -r \w+)+)\s+/.exec(line);
       if (headerMatch) index.index = line.substring(headerMatch[0].length).trim();
-      i++;
+      lineIndex++;
     }
     parseFileHeader(index);
     parseFileHeader(index);
     index.hunks = [];
-    while (i < diffstr.length) {
-      let line = diffstr[i];
+    while (lineIndex < diffstr.length) {
+      let line = diffstr[lineIndex];
       if (
         /^(Index:\s|diff\s|---\s|\+\+\+\s|===================================================================)/.test(
           line,
@@ -33,15 +33,15 @@ function parsePatch(uniDiff) {
       )
         break;
       else if (/^@@/.test(line)) index.hunks.push(parseHunk());
-      else if (line) throw Error("Unknown line " + (i + 1) + " " + JSON.stringify(line));
-      else i++;
+      else if (line) throw Error("Unknown line " + (lineIndex + 1) + " " + JSON.stringify(line));
+      else lineIndex++;
     }
   }
   function parseFileHeader(index) {
-    let fileHeaderMatch = /^(---|\+\+\+)\s+/.exec(diffstr[i]);
+    let fileHeaderMatch = /^(---|\+\+\+)\s+/.exec(diffstr[lineIndex]);
     if (fileHeaderMatch) {
       let prefix = fileHeaderMatch[1];
-      let data = diffstr[i].substring(3).trim().split("\t", 2);
+      let data = diffstr[lineIndex].substring(3).trim().split("\t", 2);
       let header = (data[1] || "").trim();
       let fileName = data[0].replace(/\\\\/g, "\\");
       if (fileName.startsWith('"') && fileName.endsWith('"'))
@@ -53,13 +53,13 @@ function parsePatch(uniDiff) {
         index.newFileName = fileName;
         index.newHeader = header;
       }
-      i++;
+      lineIndex++;
     }
   }
   function parseHunk() {
     var _a;
-    let chunkHeaderIndex = i;
-    let chunkHeaderLine = diffstr[i++];
+    let chunkHeaderIndex = lineIndex;
+    let chunkHeaderLine = diffstr[lineIndex++];
     let chunkHeader = chunkHeaderLine.split(/@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/);
     let hunk = {
       oldStart: +chunkHeader[1],
@@ -74,22 +74,23 @@ function parsePatch(uniDiff) {
     let removeCount = 0;
     for (
       ;
-      i < diffstr.length &&
+      lineIndex < diffstr.length &&
       (removeCount < hunk.oldLines ||
         addCount < hunk.newLines ||
-        ((_a = diffstr[i]) === null || _a === undefined ? undefined : _a.startsWith("\\")));
-      i++
+        ((_a = diffstr[lineIndex]) === null || _a === undefined ? undefined : _a.startsWith("\\")));
+      lineIndex++
     ) {
-      let operation = diffstr[i].length == 0 && i != diffstr.length - 1 ? " " : diffstr[i][0];
+      let operation =
+        diffstr[lineIndex].length == 0 && lineIndex != diffstr.length - 1 ? " " : diffstr[lineIndex][0];
       if (operation === "+" || operation === "-" || operation === " " || operation === "\\") {
-        hunk.lines.push(diffstr[i]);
+        hunk.lines.push(diffstr[lineIndex]);
         if (operation === "+") addCount++;
         else if (operation === "-") removeCount++;
         else if (operation === " ") {
           addCount++;
           removeCount++;
         }
-      } else throw Error(`Hunk at line ${chunkHeaderIndex + 1} contained invalid line ${diffstr[i]}`);
+      } else throw Error(`Hunk at line ${chunkHeaderIndex + 1} contained invalid line ${diffstr[lineIndex]}`);
     }
     if (!addCount && hunk.newLines === 1) hunk.newLines = 0;
     if (!removeCount && hunk.oldLines === 1) hunk.oldLines = 0;
@@ -99,7 +100,7 @@ function parsePatch(uniDiff) {
       throw Error("Removed line count did not match for hunk at line " + (chunkHeaderIndex + 1));
     return hunk;
   }
-  while (i < diffstr.length) parseIndex();
+  while (lineIndex < diffstr.length) parseIndex();
   return list;
 }
 export { parsePatch };

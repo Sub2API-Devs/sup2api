@@ -125,12 +125,18 @@ function decodeWin32InputSequence(sequence, pendingHighSurrogate) {
     );
   }
   if (virtualKey >= VK_F1 && virtualKey <= VK_F4) {
-    let Y = String.fromCharCode(80 + (virtualKey - VK_F1));
-    return repeatSequences(repeatCount, modifierParam === 1 ? `\x1BO${Y}` : csi(1, modifierParam, Y));
+    let letter = String.fromCharCode(80 + (virtualKey - VK_F1));
+    return repeatSequences(
+      repeatCount,
+      modifierParam === 1 ? `\x1BO${letter}` : csi(1, modifierParam, letter),
+    );
   }
   if (virtualKey >= VK_F5 && virtualKey <= VK_F12) {
-    let Y = WIN32_F5_F12_CODES[virtualKey - VK_F5];
-    return repeatSequences(repeatCount, modifierParam === 1 ? csi(Y, "~") : csi(Y, modifierParam, "~"));
+    let fKeyCode = WIN32_F5_F12_CODES[virtualKey - VK_F5];
+    return repeatSequences(
+      repeatCount,
+      modifierParam === 1 ? csi(fKeyCode, "~") : csi(fKeyCode, modifierParam, "~"),
+    );
   }
   let altPrefix = alt ? "\x1B" : "";
   switch (virtualKey) {
@@ -155,14 +161,14 @@ function decodeWin32InputSequence(sequence, pendingHighSurrogate) {
   let charCode = unicodeChar;
   if (ctrl && virtualKey === VK_SPACE) charCode = 0;
   else if (charCode === 0) {
-    let Y = virtualKey >= 65 && virtualKey <= 90;
-    let J = virtualKey >= 48 && virtualKey <= 57;
-    if (!(ctrl || alt) || !(Y || J))
+    let isLetter = virtualKey >= 65 && virtualKey <= 90;
+    let isDigit = virtualKey >= 48 && virtualKey <= 57;
+    if (!(ctrl || alt) || !(isLetter || isDigit))
       return {
         sequences: [],
         highSurrogate: pendingHighSurrogate,
       };
-    charCode = Y && !hasShift ? virtualKey + 32 : virtualKey;
+    charCode = isLetter && !hasShift ? virtualKey + 32 : virtualKey;
     if (ctrl) charCode = toControlCharCode(charCode);
   } else if (ctrl) charCode = toControlCharCode(charCode);
   if (charCode >= 55296 && charCode <= 56319)
@@ -170,24 +176,24 @@ function decodeWin32InputSequence(sequence, pendingHighSurrogate) {
       sequences: [],
       highSurrogate: String.fromCharCode(charCode),
     };
-  let q = String.fromCharCode(charCode);
+  let text = String.fromCharCode(charCode);
   if (charCode >= 56320 && charCode <= 57343) {
     if (!pendingHighSurrogate)
       return {
         sequences: [],
         highSurrogate: "",
       };
-    q = pendingHighSurrogate + q;
+    text = pendingHighSurrogate + text;
   }
-  return repeatSequences(repeatCount, altPrefix + q);
+  return repeatSequences(repeatCount, altPrefix + text);
 }
 //@ chunk-bzr73sfg.js:131427-131500 placement
 /**
  * 取 params[index] 转整数，缺失或空串返回 fallback。
  */
 function parseIntParam(params, index, fallback) {
-  let m = params[index];
-  return m === undefined || m === "" ? fallback : parseInt(m, 10);
+  let raw = params[index];
+  return raw === undefined || raw === "" ? fallback : parseInt(raw, 10);
 }
 //@ chunk-bzr73sfg.js:131500-131569 placement
 function repeatSequences(count, sequence) {
@@ -360,7 +366,7 @@ function parseTerminalResponse(s) {
  */
 function splitNumericParams(params) {
   if (!params) return [];
-  return params.split(";").map((u) => parseInt(u, 10));
+  return params.split(";").map((part) => parseInt(part, 10));
 }
 //@ chunk-bzr73sfg.js:133751-133891 fingerprint = INITIAL_STATE (0.629)
 /**
@@ -488,67 +494,67 @@ function parseMultipleKeypresses(prevState, input = "") {
   let flushedEscapePrefix = prevState.flushedEscapePrefix;
   let tokens;
   if (isFlush && prevState.mode !== "IN_PASTE") {
-    let K = tokenizer.buffer();
-    if (isPlausibleIncompleteSequence(K)) tokens = [];
-    else if (SGR_MOUSE_PREFIX_RE.test(K)) {
+    let buffered = tokenizer.buffer();
+    if (isPlausibleIncompleteSequence(buffered)) tokens = [];
+    else if (SGR_MOUSE_PREFIX_RE.test(buffered)) {
       tokenizer.reset();
-      droppedMousePrefix = K;
+      droppedMousePrefix = buffered;
       tokens = [];
     } else {
-      if (K === "\x1B" || K === "\x1B[") flushedPrefixOut = K;
+      if (buffered === "\x1B" || buffered === "\x1B[") flushedPrefixOut = buffered;
       tokens = tokenizer.flush();
     }
   } else tokens = isFlush ? tokenizer.flush() : tokenizer.feed(text);
   let keys = [];
   let inPaste = prevState.mode === "IN_PASTE";
   let { pasteBuffer, pendingByteEvents, win32HighSurrogate } = prevState;
-  function emitByteEvent(K) {
-    if (inPaste) pasteBuffer += String.fromCharCode(K.byte);
-    else keys.push(parseKeypress(K.seq));
+  function emitByteEvent(event) {
+    if (inPaste) pasteBuffer += String.fromCharCode(event.byte);
+    else keys.push(parseKeypress(event.seq));
   }
   function flushPendingBytes() {
     for (let pendingByteEvent of pendingByteEvents) emitByteEvent(pendingByteEvent);
     pendingByteEvents = [];
   }
-  function pushByteEvent(K, q) {
+  function pushByteEvent(seq, byte) {
     if (pendingByteEvents.length === 0) {
-      if (q >= 194 && q <= 244) {
+      if (byte >= 194 && byte <= 244) {
         pendingByteEvents = [
           {
-            seq: K,
-            byte: q,
+            seq,
+            byte,
           },
         ];
         return;
       }
       emitByteEvent({
-        seq: K,
-        byte: q,
+        seq,
+        byte,
       });
       return;
     }
-    if (q >= 128 && q <= 191) {
+    if (byte >= 128 && byte <= 191) {
       pendingByteEvents = [
         ...pendingByteEvents,
         {
-          seq: K,
-          byte: q,
+          seq,
+          byte,
         },
       ];
-      let byte = pendingByteEvents[0].byte;
-      let J = byte <= 223 ? 2 : byte <= 239 ? 3 : 4;
-      if (pendingByteEvents.length < J) return;
-      let V = pendingByteEvents;
+      let byte_2 = pendingByteEvents[0].byte;
+      let expectedBytes = byte_2 <= 223 ? 2 : byte_2 <= 239 ? 3 : 4;
+      if (pendingByteEvents.length < expectedBytes) return;
+      let group = pendingByteEvents;
       pendingByteEvents = [];
-      let str = Nc.from(V.map((ne) => ne.byte)).toString("utf8");
-      if ([...str].length !== 1 || Nc.byteLength(str, "utf8") !== V.length)
-        for (let ne of V) emitByteEvent(ne);
+      let str = Nc.from(group.map((pending) => pending.byte)).toString("utf8");
+      if ([...str].length !== 1 || Nc.byteLength(str, "utf8") !== group.length)
+        for (let pending of group) emitByteEvent(pending);
       else if (inPaste) pasteBuffer += str;
       else keys.push(parseKeypress(str));
       return;
     }
     flushPendingBytes();
-    pushByteEvent(K, q);
+    pushByteEvent(seq, byte);
   }
   for (let token of tokens)
     if (token.type === "sequence") {
@@ -576,11 +582,11 @@ function parseMultipleKeypresses(prevState, input = "") {
         if (!parseTerminalResponse(token.value) && !X10_MOUSE_RE.test(token.value)) flushPendingBytes();
         pasteBuffer += csiKeyToPasteText(token.value);
       } else {
-        let q = decodeWin32InputSequence(token.value, win32HighSurrogate);
-        if (q) {
+        let win32Result = decodeWin32InputSequence(token.value, win32HighSurrogate);
+        if (win32Result) {
           flushPendingBytes();
-          win32HighSurrogate = q.highSurrogate;
-          for (let sequence of q.sequences) keys.push(parseKeypress(sequence));
+          win32HighSurrogate = win32Result.highSurrogate;
+          for (let sequence of win32Result.sequences) keys.push(parseKeypress(sequence));
           continue;
         }
         let mouse = getEncodedByte(token.value);
@@ -620,13 +626,13 @@ function parseMultipleKeypresses(prevState, input = "") {
       flushPendingBytes();
       let text = token.value;
       if (!inPaste && flushedEscapePrefix) {
-        let Y = flushedEscapePrefix + text;
-        let match = SGR_MOUSE_COMPLETE_RE.exec(Y);
+        let combined = flushedEscapePrefix + text;
+        let match = SGR_MOUSE_COMPLETE_RE.exec(combined);
         flushedEscapePrefix = "";
         if (match) {
           let mouse = parseMouseEvent(match[0]);
           keys.push(mouse ?? parseKeypress(match[0]));
-          text = Y.slice(match[0].length);
+          text = combined.slice(match[0].length);
           if (!text) continue;
         }
       }
@@ -647,9 +653,9 @@ function parseMultipleKeypresses(prevState, input = "") {
       }
       if (inPaste) pasteBuffer += text;
       else if (/^\[<\d+;-?\d+;-?\d+[Mm]$/.test(text) || /^\[M[\x60-\x7f][\x20-\uffff]{2}$/.test(text)) {
-        let Y = "\x1B" + text;
-        let mouseEvent = parseMouseEvent(Y);
-        keys.push(mouseEvent ?? parseKeypress(Y));
+        let sequence = "\x1B" + text;
+        let mouseEvent = parseMouseEvent(sequence);
+        keys.push(mouseEvent ?? parseKeypress(sequence));
       } else keys.push(parseKeypress(text));
     }
   if (isFlush) flushPendingBytes();
@@ -1000,14 +1006,14 @@ function parseKeypress(s = "") {
     let modifier = match[4] ? parseInt(match[4], 10) : 1;
     let mods = decodeModifier(modifier);
     if (isAltGrText(mods, codepoint)) return createAltGrTextKey(s, codepoint, mods.shift);
-    let T = match[3] ? parseInt(match[3], 10) : undefined;
-    let codePoint = mods.ctrl && codepoint > 127 && T !== undefined ? T : codepoint;
-    let D = keycodeToName(mods, codePoint);
+    let alternateKey = match[3] ? parseInt(match[3], 10) : undefined;
+    let codePoint = mods.ctrl && codepoint > 127 && alternateKey !== undefined ? alternateKey : codepoint;
+    let namedKey = keycodeToName(mods, codePoint);
     return {
       kind: "key",
-      name: D ?? codePointToKeyName(codePoint),
+      name: namedKey ?? codePointToKeyName(codePoint),
       fn: false,
-      ctrl: D === undefined && mods.ctrl,
+      ctrl: namedKey === undefined && mods.ctrl,
       meta: mods.meta,
       shift: mods.shift,
       option: false,
@@ -1023,12 +1029,12 @@ function parseKeypress(s = "") {
     let name = decodeModifier(parseInt(match[1], 10));
     let codePoint = parseInt(match[2], 10);
     if (isAltGrText(name, codePoint)) return createAltGrTextKey(s, codePoint, name.shift);
-    let E = keycodeToName(name, codePoint);
+    let otherNamedKey = keycodeToName(name, codePoint);
     return {
       kind: "key",
-      name: E ?? codePointToKeyName(codePoint),
+      name: otherNamedKey ?? codePointToKeyName(codePoint),
       fn: false,
-      ctrl: E === undefined && name.ctrl,
+      ctrl: otherNamedKey === undefined && name.ctrl,
       meta: name.meta,
       shift: name.shift,
       option: false,
@@ -1148,11 +1154,11 @@ function parseKeypress(s = "") {
  * 鼠标按钮码是滚轮（64/65）时生成 wheelup/wheeldown 键并带上 ctrl/meta/shift 与坐标；否则返回 null。
  */
 function createWheelKey(sequence, buttonCode, col, row) {
-  let p = buttonCode & 67;
-  if (p !== 64 && p !== 65) return null;
+  let wheelBits = buttonCode & 67;
+  if (wheelBits !== 64 && wheelBits !== 65) return null;
   return {
     kind: "key",
-    name: p === 64 ? "wheelup" : "wheeldown",
+    name: wheelBits === 64 ? "wheelup" : "wheeldown",
     fn: false,
     ctrl: (buttonCode & 16) !== 0,
     meta: (buttonCode & 8) !== 0,

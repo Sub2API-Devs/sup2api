@@ -11,6 +11,30 @@
 import { LOCAL_COMMAND_STDOUT } from "../../constants/xml.js";
 import { isTextBlock } from "../../utils/messages/textLineCount.js";
 
+//@ chunk-5dq2r0r3.js:264-446 fingerprint = getCompactUserSummaryMessage (0.508)
+/**
+ * 摘要消息开头的“本会话从耗尽上下文的前一段对话继续”说明。
+ */
+var POST_COMPACT_HOOK_MARKER = "PostCompact [";
+var COMPACT_CONTINUATION_PREAMBLE =
+  "This session is being continued from a previous conversation that ran out of context. The summary below covers the earlier portion of the conversation.";
+//@ chunk-5dq2r0r3.js:446-508 placement
+/**
+ * 文本以 system-reminder 标签开头且包含 "PostCompact [" 时为真（PostCompact 钩子输出）。
+ */
+function isPostCompactHookText(text) {
+  return text.startsWith(`<${LOCAL_COMMAND_STDOUT}>`) && text.includes(POST_COMPACT_HOOK_MARKER);
+}
+//@ chunk-5dq2r0r3.js:508-639 placement
+/**
+ * 消息内容（字符串或单个文本块）是否为 PostCompact 钩子输出。
+ */
+function isPostCompactHookContent(content) {
+  if (typeof content === "string") return isPostCompactHookText(content);
+  if (!Array.isArray(content) || content.length !== 1) return false;
+  let contentArg = content[0];
+  return isTextBlock(contentArg) && isPostCompactHookText(contentArg.text);
+}
 //@ chunk-e6aww6q8.js:2085841-2085924 sole-consumer
 /**
  * 摘要回复形状描述："an analysis block followed by a summary block" 与 "a summary block"（嵌进禁止工具前后缀）。
@@ -21,13 +45,13 @@ var REPLY_SHAPE_SUMMARY_ONLY = "a <summary> block";
 /**
  * 摘要提示词开头：只回复文本、禁止调用任何工具。
  */
-function getNoToolsPreamble(e) {
+function getNoToolsPreamble(toolNote) {
   return `CRITICAL: Respond with TEXT ONLY. Do NOT call any tools.
 
 - Do NOT use Read, Bash, Grep, Glob, Edit, Write, or ANY other tool.
 - You already have all the context you need in the conversation above.
 - Tool calls will be REJECTED and will waste your only turn \u2014 you will fail the task.
-- Your entire response must be plain text: ${e}.
+- Your entire response must be plain text: ${toolNote}.
 
 `;
 }
@@ -165,14 +189,14 @@ When you are using compact - please focus on test output and code changes. Inclu
 /**
  * lean 变体：说明压缩后窗口还会有什么（系统提示、最近 5 个文件、计划/技能/后台任务、可选转录路径）。
  */
-function buildLeanCompactPrompt(e) {
+function buildLeanCompactPrompt(instructions) {
   return `This conversation is being compacted. Your reply replaces everything above: the next context window opens with what you write inside <summary></summary> tags, and you carry on from there. Work is paused until you finish writing.
 
 Next to your summary, the next window will have:
 - the system prompt, project instructions and memory files, unchanged
 - up to five of the files you read most recently, re-read from disk (long ones cut short)
 - the plan, any skills you loaded, and the status of background agents and shells${
-    e
+    instructions
       ? `
 - the path to the full transcript on disk, which you can open for exact code, output or wording`
       : ""
@@ -196,8 +220,8 @@ var SHORT_COMPACT_PROMPT =
 /**
  * 在摘要指令后追加安全指令说明、用户消息定义与“遵循附加摘要指令”提示。
  */
-function appendSummaryNotes(e) {
-  return `${e}
+function appendSummaryNotes(notes) {
+  return `${notes}
 
 ${SECURITY_INSTRUCTIONS_NOTE}${USER_MESSAGE_DEFINITION_NOTE}
 
@@ -386,12 +410,12 @@ Please provide your summary following this structure, ensuring precision and tho
 /**
  * 摘要提示词末尾提醒：不要调用工具、只回复纯文本，否则任务失败。
  */
-function getNoToolsTrailer(e) {
+function getNoToolsTrailer(toolRule) {
   return (
     `
 
 REMINDER: Do NOT call any tools. Respond with plain text only \u2014 ` +
-    `${e}. Tool calls will be rejected and you will fail the task.`
+    `${toolRule}. Tool calls will be rejected and you will fail the task.`
   );
 }
 //@ chunk-e6aww6q8.js:2102922-2103064 fingerprint = getPartialCompactPrompt (1)
@@ -413,9 +437,9 @@ ${customInstructions}`;
 /**
  * 整段压缩提示词：按变体取回复形状与正文（可带转录路径），追加自定义指令与禁止工具后缀。
  */
-function getCompactPrompt(customInstructions, n, r) {
-  let { replyShape, instructions } = COMPACT_PROMPT_ARMS[n];
-  let prompt = getNoToolsPreamble(replyShape) + instructions(r);
+function getCompactPrompt(customInstructions, arm, hasTranscript) {
+  let { replyShape, instructions } = COMPACT_PROMPT_ARMS[arm];
+  let prompt = getNoToolsPreamble(replyShape) + instructions(hasTranscript);
   if (customInstructions && customInstructions.trim() !== "")
     prompt += `
 
@@ -439,8 +463,8 @@ function formatCompactSummary(summary) {
   formattedSummary = formattedSummary.replace(ANALYSIS_BLOCK_RE, "");
   formattedSummary = formattedSummary.replace(
     SUMMARY_BLOCK_RE,
-    (r, s) => `Summary:
-${s.trim()}`,
+    (summary, stripped) => `Summary:
+${stripped.trim()}`,
   );
   formattedSummary = formattedSummary.replace(
     /\n\n+/g,
@@ -454,39 +478,15 @@ ${s.trim()}`,
 /**
  * 去掉 analysis 后是否含完整 summary 块。
  */
-function hasSummaryBlock(e) {
-  return SUMMARY_BLOCK_RE.test(e.replace(ANALYSIS_BLOCK_RE, ""));
+function hasSummaryBlock(text) {
+  return SUMMARY_BLOCK_RE.test(text.replace(ANALYSIS_BLOCK_RE, ""));
 }
 //@ chunk-e6aww6q8.js:2103477-2103543 placement
 /**
  * 去掉 analysis 后是否有以 summary 开标签开头的行（可能未闭合）。
  */
-function hasSummaryTagLine(e) {
-  return /^[ \t]*<summary>/m.test(e.replace(ANALYSIS_BLOCK_RE, ""));
-}
-//@ chunk-5dq2r0r3.js:264-446 fingerprint = getCompactUserSummaryMessage (0.508)
-/**
- * 摘要消息开头的“本会话从耗尽上下文的前一段对话继续”说明。
- */
-var POST_COMPACT_HOOK_MARKER = "PostCompact [";
-var COMPACT_CONTINUATION_PREAMBLE =
-  "This session is being continued from a previous conversation that ran out of context. The summary below covers the earlier portion of the conversation.";
-//@ chunk-5dq2r0r3.js:446-508 placement
-/**
- * 文本以 system-reminder 标签开头且包含 "PostCompact [" 时为真（PostCompact 钩子输出）。
- */
-function isPostCompactHookText(o) {
-  return o.startsWith(`<${LOCAL_COMMAND_STDOUT}>`) && o.includes(POST_COMPACT_HOOK_MARKER);
-}
-//@ chunk-5dq2r0r3.js:508-639 placement
-/**
- * 消息内容（字符串或单个文本块）是否为 PostCompact 钩子输出。
- */
-function isPostCompactHookContent(content) {
-  if (typeof content === "string") return isPostCompactHookText(content);
-  if (!Array.isArray(content) || content.length !== 1) return false;
-  let t = content[0];
-  return isTextBlock(t) && isPostCompactHookText(t.text);
+function hasSummaryTagLine(text) {
+  return /^[ \t]*<summary>/m.test(text.replace(ANALYSIS_BLOCK_RE, ""));
 }
 export {
   isPostCompactHookContent,

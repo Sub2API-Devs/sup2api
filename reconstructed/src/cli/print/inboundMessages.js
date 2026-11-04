@@ -57,80 +57,81 @@ import { pluginsMatchingEvent } from "../../plugins/functionHooks/hookDispatch.j
 import { toError } from "../../utils/errors.js";
 import { isVsCodeTopSession } from "../../utils/sessionShape.js";
 import { isVsCodeHooksSuppressed } from "../sdkMcpManifests.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-tyg7f3ek.js:72484-73731 placement
 /**
  * 判断两个排队 prompt 能否合并为一次轮次（mode、workload、isMeta、来源等一致）。
  */
-function canMergePromptCommands(e, n) {
+function canMergePromptCommands(a, b) {
   return (
-    n !== undefined &&
-    e.mode === "prompt" &&
-    n.mode === "prompt" &&
-    n.workload === e.workload &&
-    n.isMeta === e.isMeta &&
-    n.shouldQuery === e.shouldQuery &&
-    n.wakeupSource === e.wakeupSource &&
-    sameSchedulingPlugin(n, e) &&
-    isSameOrigin(e.origin, n.origin) &&
-    !isHandbackOrigin(e.origin) &&
-    !isHandbackOrigin(n.origin) &&
-    !!n.verifiedSlackHumanTurn === !!e.verifiedSlackHumanTurn &&
-    !!n.projectsUserTurn === !!e.projectsUserTurn &&
-    n.emailSenderTurn === e.emailSenderTurn &&
-    !!n.localStdinOrigin === !!e.localStdinOrigin &&
-    !!n.sessionChannelPersonTyped === !!e.sessionChannelPersonTyped &&
-    originKindForWakeup(n.hostInitiator) === originKindForWakeup(e.hostInitiator) &&
-    !!n.skipAttachments === !!e.skipAttachments &&
-    !!n.skipSlashCommands === !!e.skipSlashCommands &&
-    !isDrainOnlyResume(e) &&
-    !isDrainOnlyResume(n) &&
-    e.seededSummon !== true &&
-    n.seededSummon !== true &&
-    !isCommentNotificationText(e.value) &&
-    !isCommentNotificationText(n.value) &&
-    e.hearthRelayRows === undefined &&
-    n.hearthRelayRows === undefined &&
-    e.hearthRelayThreadTs === undefined &&
-    n.hearthRelayThreadTs === undefined &&
-    e.hearthRelayMessageIds === undefined &&
-    n.hearthRelayMessageIds === undefined &&
-    n.priority === e.priority &&
-    !e.inlinedImagePaths?.length &&
-    !n.inlinedImagePaths?.length &&
-    !e.imageFileUuids?.length &&
-    !n.imageFileUuids?.length &&
-    !e.runsAlone &&
-    !n.runsAlone &&
-    !e.textNotTyped &&
-    !n.textNotTyped &&
-    (e.shouldQuery !== false || (!e.fileAttachments?.length && !n.fileAttachments?.length)) &&
-    !e.taskDelivery &&
-    !n.taskDelivery &&
-    !looksLikeSlashInput(e.value) &&
-    !looksLikeSlashInput(n.value)
+    b !== undefined &&
+    a.mode === "prompt" &&
+    b.mode === "prompt" &&
+    b.workload === a.workload &&
+    b.isMeta === a.isMeta &&
+    b.shouldQuery === a.shouldQuery &&
+    b.wakeupSource === a.wakeupSource &&
+    sameSchedulingPlugin(b, a) &&
+    isSameOrigin(a.origin, b.origin) &&
+    !isHandbackOrigin(a.origin) &&
+    !isHandbackOrigin(b.origin) &&
+    !!b.verifiedSlackHumanTurn === !!a.verifiedSlackHumanTurn &&
+    !!b.projectsUserTurn === !!a.projectsUserTurn &&
+    b.emailSenderTurn === a.emailSenderTurn &&
+    !!b.localStdinOrigin === !!a.localStdinOrigin &&
+    !!b.sessionChannelPersonTyped === !!a.sessionChannelPersonTyped &&
+    originKindForWakeup(b.hostInitiator) === originKindForWakeup(a.hostInitiator) &&
+    !!b.skipAttachments === !!a.skipAttachments &&
+    !!b.skipSlashCommands === !!a.skipSlashCommands &&
+    !isDrainOnlyResume(a) &&
+    !isDrainOnlyResume(b) &&
+    a.seededSummon !== true &&
+    b.seededSummon !== true &&
+    !isCommentNotificationText(a.value) &&
+    !isCommentNotificationText(b.value) &&
+    a.hearthRelayRows === undefined &&
+    b.hearthRelayRows === undefined &&
+    a.hearthRelayThreadTs === undefined &&
+    b.hearthRelayThreadTs === undefined &&
+    a.hearthRelayMessageIds === undefined &&
+    b.hearthRelayMessageIds === undefined &&
+    b.priority === a.priority &&
+    !a.inlinedImagePaths?.length &&
+    !b.inlinedImagePaths?.length &&
+    !a.imageFileUuids?.length &&
+    !b.imageFileUuids?.length &&
+    !a.runsAlone &&
+    !b.runsAlone &&
+    !a.textNotTyped &&
+    !b.textNotTyped &&
+    (a.shouldQuery !== false || (!a.fileAttachments?.length && !b.fileAttachments?.length)) &&
+    !a.taskDelivery &&
+    !b.taskDelivery &&
+    !looksLikeSlashInput(a.value) &&
+    !looksLikeSlashInput(b.value)
   );
 }
 //@ chunk-tyg7f3ek.js:73731-73742 placement
 var MAX_MERGED_PROMPTS = MAX_MERGED_PROMPTS_2;
 //@ chunk-tyg7f3ek.js:73742-73984 placement
-function canBatchCommands(e, n) {
+function canBatchCommands(a, b) {
   return (
-    n.priority === e.priority &&
-    n.workload === e.workload &&
-    !!n.isMeta === !!e.isMeta &&
-    !!n.skipAttachments === !!e.skipAttachments &&
-    n.wakeupSource === e.wakeupSource &&
-    sameSchedulingPlugin(n, e) &&
-    n.ccrTurnId === e.ccrTurnId &&
-    messageTurnAttributionKey(n) === messageTurnAttributionKey(e) &&
-    isTaskDeliveredPrompt(e) &&
-    isTaskDeliveredPrompt(n)
+    b.priority === a.priority &&
+    b.workload === a.workload &&
+    !!b.isMeta === !!a.isMeta &&
+    !!b.skipAttachments === !!a.skipAttachments &&
+    b.wakeupSource === a.wakeupSource &&
+    sameSchedulingPlugin(b, a) &&
+    b.ccrTurnId === a.ccrTurnId &&
+    messageTurnAttributionKey(b) === messageTurnAttributionKey(a) &&
+    isTaskDeliveredPrompt(a) &&
+    isTaskDeliveredPrompt(b)
   );
 }
 //@ chunk-tyg7f3ek.js:73984-74028 placement
-function isDispatchablePrompt(e) {
-  return isMainAgentCommand(e) && !isPollEventMode(e) && !isPassiveMainAgentCommand(e);
+function isDispatchablePrompt(command) {
+  return isMainAgentCommand(command) && !isPollEventMode(command) && !isPassiveMainAgentCommand(command);
 }
 //@ chunk-tyg7f3ek.js:74028-74390 placement
 function isTaskDeliveredPrompt(queuedCommands) {
@@ -147,13 +148,13 @@ function isTaskDeliveredPrompt(queuedCommands) {
   )
     return false;
   let trimmed = queuedCommands.value.trim();
-  let r = `<${TASK_NOTIFICATION}>`;
-  let s = `</${TASK_NOTIFICATION}>`;
+  let openTag = `<${TASK_NOTIFICATION}>`;
+  let closeTag = `</${TASK_NOTIFICATION}>`;
   return (
-    trimmed.startsWith(r) &&
-    trimmed.indexOf(r, 1) === -1 &&
-    trimmed.endsWith(s) &&
-    trimmed.indexOf(s) === trimmed.length - s.length &&
+    trimmed.startsWith(openTag) &&
+    trimmed.indexOf(openTag, 1) === -1 &&
+    trimmed.endsWith(closeTag) &&
+    trimmed.indexOf(closeTag) === trimmed.length - closeTag.length &&
     extractTag(trimmed, STATUS) !== null
   );
 }
@@ -193,7 +194,7 @@ function isSameOrigin(origin, origin_2) {
       origin.permalink === origin_2.permalink
     );
   if (origin.kind === "peer" && origin_2.kind === "peer")
-    return INBOUND_ORIGIN_KEYS.every((r) => origin[r] === origin_2[r]);
+    return INBOUND_ORIGIN_KEYS.every((key) => origin[key] === origin_2[key]);
   if (origin.kind === "channel" && origin_2.kind === "channel") return origin.server === origin_2.server;
   if (origin.kind === "plugin" && origin_2.kind === "plugin")
     return origin.name === origin_2.name && origin.asUser === origin_2.asUser;
@@ -202,20 +203,20 @@ function isSameOrigin(origin, origin_2) {
   return true;
 }
 //@ chunk-tyg7f3ek.js:75273-75399 placement
-function mergeTurnUuids(currentTurn, n) {
-  if (isHandedOffBatch(n))
+function mergeTurnUuids(currentTurn, batch) {
+  if (isHandedOffBatch(batch))
     return {
       known: false,
-      uuids: batchUuids(n),
+      uuids: batchUuids(batch),
     };
-  return isResumedTurnBatch(n)
+  return isResumedTurnBatch(batch)
     ? {
         known: true,
-        uuids: batchUuids(n),
+        uuids: batchUuids(batch),
       }
     : {
         ...currentTurn,
-        uuids: [...currentTurn.uuids, ...batchUuids(n)],
+        uuids: [...currentTurn.uuids, ...batchUuids(batch)],
       };
 }
 //@ chunk-tyg7f3ek.js:75399-76475 placement
@@ -234,9 +235,9 @@ class PrintRunState {
   get endSessionRequested() {
     return this.isEndSessionRequested;
   }
-  set endSessionRequested(e) {
-    this.isEndSessionRequested = e;
-    if (e) this.endingLatch.resolve();
+  set endSessionRequested(requested) {
+    this.isEndSessionRequested = requested;
+    if (requested) this.endingLatch.resolve();
   }
   batchLeftUnstarted = false;
   organizationsLoadFailed = false;
@@ -257,37 +258,37 @@ class PrintRunState {
   dequeueCount = 0;
   drainingHandoff;
   turnStartClock = new InputWaitStopwatch();
-  noteStoredLastPrompt(e) {
-    if (e !== undefined)
+  noteStoredLastPrompt(uuid) {
+    if (uuid !== undefined)
       this.currentTurn = {
         known: true,
-        uuids: [e],
+        uuids: [uuid],
       };
   }
-  noteStoredTurnTookIn(e) {
+  noteStoredTurnTookIn(uuids) {
     if (this.currentTurn.known)
       this.currentTurn = {
         ...this.currentTurn,
-        uuids: [...this.currentTurn.uuids, ...e],
+        uuids: [...this.currentTurn.uuids, ...uuids],
       };
   }
-  noteTurnStarted(e) {
-    this.turnUnderWayAnswersAClient = isResumedTurnBatch(e);
-    this.currentTurn = mergeTurnUuids(this.currentTurn, e);
+  noteTurnStarted(batch) {
+    this.turnUnderWayAnswersAClient = isResumedTurnBatch(batch);
+    this.currentTurn = mergeTurnUuids(this.currentTurn, batch);
   }
-  noteTakenIn(e, n) {
-    this.turnUnderWayAnswersAClient ||= n;
+  noteTakenIn(uuid, answersClient) {
+    this.turnUnderWayAnswersAClient ||= answersClient;
     this.currentTurn = {
       ...this.currentTurn,
-      uuids: [...this.currentTurn.uuids, e],
+      uuids: [...this.currentTurn.uuids, uuid],
     };
   }
 }
 //@ chunk-tyg7f3ek.js:76475-76657 placement = countUserPromptsFromEntries (0.884)
-function countUserPromptsFromEntries_4(sessionTranscriptRows, n) {
+function countUserPromptsFromEntries_4(entries, options) {
   return (
-    countUserPromptsFromEntries_3(sessionTranscriptRows, n, true) === true &&
-    trimTrailingAfterTurn(sessionTranscriptRows, n, true).findLast(
+    countUserPromptsFromEntries_3(entries, options, true) === true &&
+    trimTrailingAfterTurn(entries, options, true).findLast(
       (entry) =>
         (entry.type === "user" || entry.type === "assistant") &&
         !("isSidechain" in entry && entry.isSidechain === true) &&
@@ -297,42 +298,46 @@ function countUserPromptsFromEntries_4(sessionTranscriptRows, n) {
   );
 }
 //@ chunk-tyg7f3ek.js:76657-76938 placement
-function interruptedTurnUuids(e) {
-  let n = new Set();
+function interruptedTurnUuids(messages) {
+  let uuids = new Set();
   try {
-    let r = false;
-    for (let s of e.toReversed())
+    let inInterrupted = false;
+    for (let message of messages.toReversed())
       if (
-        s.type === "user" &&
-        s.interruptedByShutdown !== true &&
-        isInterruptionOnlyMessage(s) &&
-        !isToolResultMessage(s)
+        message.type === "user" &&
+        message.interruptedByShutdown !== true &&
+        isInterruptionOnlyMessage(message) &&
+        !isToolResultMessage(message)
       )
-        r = true;
-      else if (r && s.type !== "assistant") {
-        for (let h of heldMessageUuidSet([s])) n.add(h);
-        r = s.type !== "user" || isToolResultMessage(s) || isNonPromptUserRow(s) || isSyntheticUserMessage(s);
+        inInterrupted = true;
+      else if (inInterrupted && message.type !== "assistant") {
+        for (let uuid of heldMessageUuidSet([message])) uuids.add(uuid);
+        inInterrupted =
+          message.type !== "user" ||
+          isToolResultMessage(message) ||
+          isNonPromptUserRow(message) ||
+          isSyntheticUserMessage(message);
       }
   } catch (error) {
     logError(error);
     return new Set();
   }
-  return n;
+  return uuids;
 }
 //@ chunk-tyg7f3ek.js:76938-77670 placement
-function wrapPersistenceWithFollowupCheck(persistenceChecker, n, r) {
-  let s = new Set();
+function wrapPersistenceWithFollowupCheck(persistenceChecker, isFollowup, readRows) {
+  let closed = new Set();
   return () => {
-    let h = persistenceChecker();
-    let y;
+    let persistence = persistenceChecker();
+    let closureCheck;
     return {
-      persisted: (S) => {
-        if (s.has(S) || !n(S)) return h.persisted(S);
-        let R = h.persisted(S);
-        y = R.then(
-          async (w) =>
-            !w &&
-            (await r(S).catch((error) => {
+      persisted: (uuid) => {
+        if (closed.has(uuid) || !isFollowup(uuid)) return persistence.persisted(uuid);
+        let persisted = persistence.persisted(uuid);
+        closureCheck = persisted.then(
+          async (runFollowup) =>
+            !runFollowup &&
+            (await readRows(uuid).catch((error) => {
               logForDebugging(
                 `could not read the stored rows for a follow-up of a stopped turn; it runs: ${error instanceof Error ? error.message : String(error)}`,
                 {
@@ -342,28 +347,32 @@ function wrapPersistenceWithFollowupCheck(persistenceChecker, n, r) {
               logFeatureSad("ccr_stopped_follow_up_closed", "rows_unreadable");
               return false;
             })) &&
-            n(S),
+            isFollowup(uuid),
         );
-        return y.then(async (w) => {
-          if (w) {
-            s.add(S);
+        return closureCheck.then(async (runFollowup) => {
+          if (runFollowup) {
+            closed.add(uuid);
             logFeatureOk("ccr_stopped_follow_up_closed");
             logForDiagnosticsNoPII("info", "cli_follow_up_of_stopped_turn_closed");
           }
-          return w || (await R);
+          return runFollowup || (await persisted);
         });
       },
-      turnUnanswered: (S) =>
-        y === undefined ? h.turnUnanswered(S) : y.then((R) => !R && h.turnUnanswered(S)),
-      holdersTurnUnanswered: (S) =>
-        y === undefined
-          ? h.holdersTurnUnanswered(S)
-          : y.then((R) => (R ? false : h.holdersTurnUnanswered(S))),
+      turnUnanswered: (lookup) =>
+        closureCheck === undefined
+          ? persistence.turnUnanswered(lookup)
+          : closureCheck.then((runFollowup) => !runFollowup && persistence.turnUnanswered(lookup)),
+      holdersTurnUnanswered: (holders) =>
+        closureCheck === undefined
+          ? persistence.holdersTurnUnanswered(holders)
+          : closureCheck.then((runFollowup) =>
+              runFollowup ? false : persistence.holdersTurnUnanswered(holders),
+            ),
     };
   };
 }
 //@ chunk-tyg7f3ek.js:77670-77918 placement
-function isImmediateCommandCandidate(command, n) {
+function isImmediateCommandCandidate(command, commands) {
   if (command.mode === "poll-event") return false;
   if (
     command.skipSlashCommands === true &&
@@ -371,45 +380,45 @@ function isImmediateCommandCandidate(command, n) {
     !(command.bridgeOrigin === true && command.textNotTyped !== true)
   )
     return false;
-  let r = lastTextBlockText(command.value);
-  let s = r === null ? null : parseSlashCommand(r);
-  return s !== null && !hasCommand(s.commandName, [...n()]);
+  let text = lastTextBlockText(command.value);
+  let parsed = text === null ? null : parseSlashCommand(text);
+  return parsed !== null && !hasCommand(parsed.commandName, [...commands()]);
 }
 //@ chunk-tyg7f3ek.js:77918-78379 placement
-function runCommandInGate(uuid, n) {
+function runCommandInGate(uuid, plan) {
   let deferred = Promise.withResolvers();
   let abortController = new AbortController();
-  let h = releaseServerHold(pluginCommandRegistry.ownerOf(n.command));
-  let y = h.then(() =>
+  let holdRelease = releaseServerHold(pluginCommandRegistry.ownerOf(plan.command));
+  let answer = holdRelease.then(() =>
     NO_CORE_AT_CHAIN_BOTTOM("command.run", {
       core: {
         "command.run": {
           name: "core",
           isCore: true,
           budgetMs: 0,
-          run: async (...S) => (await deferred.promise).run(...S),
+          run: async (...args) => (await deferred.promise).run(...args),
         },
       },
       signal: abortController.signal,
-    })(n),
+    })(plan),
   );
-  y.catch(() => {});
+  answer.catch(() => {});
   deferred.promise.catch(() => {});
   inflightCommandRuns.set(uuid, {
-    input: n,
+    input: plan,
     reading: snapshotHookRegistration(),
-    hooking: h
+    hooking: holdRelease
       .then(() =>
         pluginsMatchingEvent("command.run", {
-          command: n.command,
+          command: plan.command,
         }),
       )
       .catch(() => []),
-    answer: y,
+    answer,
     seat: deferred.resolve,
-    stop: (S) => {
-      abortController.abort(S);
-      deferred.reject(toError(S));
+    stop: (reason) => {
+      abortController.abort(reason);
+      deferred.reject(toError(reason));
     },
   });
 }
@@ -418,7 +427,10 @@ function isImmediateCommandsEnabled() {
   return isVsCodeTopSession() && !isVsCodeHooksSuppressed();
 }
 //@ chunk-tyg7f3ek.js:78413-78432 placement
-var WATCHED_IMMEDIATE_IOS = new WeakSet();
+var WATCHED_IMMEDIATE_IOS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-tyg7f3ek.js:78413", () => {
+  WATCHED_IMMEDIATE_IOS = new WeakSet();
+});
 export {
   interruptedTurnUuids,
   PrintRunState,

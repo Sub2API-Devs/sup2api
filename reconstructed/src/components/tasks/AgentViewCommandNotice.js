@@ -12,18 +12,18 @@
 //@ chunk-18hwfzwa.js:769919-769954 placement
 var AGENT_VIEW_COMMAND_NOTICE = "agent-view-command-notice";
 //@ chunk-18hwfzwa.js:769954-770485 placement
-function AgentViewCommandNotice(h, { invokedAs, isTeammate }) {
-  let L = isTeammate ? "teammate" : "agent";
-  switch (h.name) {
+function AgentViewCommandNotice(command, { invokedAs, isTeammate }) {
+  let viewKindLabel = isTeammate ? "teammate" : "agent";
+  switch (command.name) {
     case "model":
     case "fast": {
-      let ee = isTeammate ? "the team lead" : "the main conversation";
-      let ke = h.name === "model" ? "model" : "fast mode";
+      let targetOwnerLabel = isTeammate ? "the team lead" : "the main conversation";
+      let settingLabel = command.name === "model" ? "model" : "fast mode";
       return {
         onSubmit: "block",
         segments: [
           {
-            text: `/${invokedAs} changes ${ee}'s ${ke}, not this ${L}'s`,
+            text: `/${invokedAs} changes ${targetOwnerLabel}'s ${settingLabel}, not this ${viewKindLabel}'s`,
           },
         ],
       };
@@ -31,12 +31,12 @@ function AgentViewCommandNotice(h, { invokedAs, isTeammate }) {
     case "compact":
     case "clear":
     case "rewind": {
-      let ee = isTeammate ? "the team lead's conversation" : "the main conversation";
+      let targetConversationLabel = isTeammate ? "the team lead's conversation" : "the main conversation";
       return {
         onSubmit: "confirm",
-        commandName: h.name,
-        title: `/${invokedAs} acts on ${ee}, not this ${L}`,
-        confirmLabel: `Run /${invokedAs} on ${ee}`,
+        commandName: command.name,
+        title: `/${invokedAs} acts on ${targetConversationLabel}, not this ${viewKindLabel}`,
+        confirmLabel: `Run /${invokedAs} on ${targetConversationLabel}`,
       };
     }
     default:
@@ -44,7 +44,7 @@ function AgentViewCommandNotice(h, { invokedAs, isTeammate }) {
   }
 }
 //@ chunk-18hwfzwa.js:770485-770563 placement
-function isSameAgentViewCommand(h, { input, taskId }) {
-  return h !== null && h.input === input && h.taskId === taskId;
+function isSameAgentViewCommand(previousCommand, { input, taskId }) {
+  return previousCommand !== null && previousCommand.input === input && previousCommand.taskId === taskId;
 }
 export { AGENT_VIEW_COMMAND_NOTICE, AgentViewCommandNotice, isSameAgentViewCommand };

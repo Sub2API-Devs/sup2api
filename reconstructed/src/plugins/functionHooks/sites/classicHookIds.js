@@ -34,7 +34,7 @@ function classicPreToolUseHookId_2(hookName, name) {
 /**
  * PreToolUse 或 tool.check
  */
-function toolCheckHookId(n) {
-  return n === "PreToolUse" || n === "tool.check" ? n : undefined;
+function toolCheckHookId(hookName) {
+  return hookName === "PreToolUse" || hookName === "tool.check" ? hookName : undefined;
 }
 export { classicPreToolUseHookId_2, classicPreToolUseHookId, classicHookId, toolCheckHookId };

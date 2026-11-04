@@ -10,60 +10,6 @@
  */
 import { splitRuleList } from "../../utils/permissions/disallowedToolsFlag.js";
 
-//@ chunk-3fqpd3gk.js:227-255 placement
-var SELF_HOSTED_RUNNER = "self_hosted_runner_";
-//@ chunk-3fqpd3gk.js:255-294 placement
-/**
- * 判断一个工具规格名是否以自托管 runner 前缀开头。
- */
-function isRunnerToolSpec(n) {
-  return n.startsWith(SELF_HOSTED_RUNNER);
-}
-//@ chunk-3fqpd3gk.js:294-338 placement
-/**
- * 判断规则列表里是否混入了 runner 工具规格。
- */
-function hasRunnerToolSpec(baseTools) {
-  return splitRuleList([...baseTools]).some(isRunnerToolSpec);
-}
-//@ chunk-3fqpd3gk.js:338-400 placement
-/**
- * 过滤掉 runner 工具规格并把其余规则拼回字符串。
- */
-function dropRunnerToolSpecs(n) {
-  return splitRuleList([n])
-    .filter((t) => !isRunnerToolSpec(t))
-    .join(",");
-}
-//@ chunk-3fqpd3gk.js:400-502 placement
-/**
- * 判断 runner 传入的工具列表中是否含不允许的工具规格。
- */
-function hasDisallowedToolSpec(n) {
-  if (n === undefined) return false;
-  let t = typeof n === "string" ? n : String(n);
-  return splitRuleList([t]).some(isRunnerToolSpec);
-}
-//@ chunk-3fqpd3gk.js:502-674 placement
-/**
- * 规范化会话参数中的 tools：转为字符串，并在含不允许规格时改写。
- */
-function normalizeToolsArg(claudeCodeArgs) {
-  let tools = claudeCodeArgs.tools;
-  if (tools === undefined) return claudeCodeArgs;
-  let o = typeof tools === "string" ? tools : String(tools);
-  if (!hasDisallowedToolSpec(o))
-    return typeof tools === "string"
-      ? claudeCodeArgs
-      : {
-          ...claudeCodeArgs,
-          tools: o,
-        };
-  return {
-    ...claudeCodeArgs,
-    tools: dropRunnerToolSpecs(o),
-  };
-}
 //@ chunk-31fzpab5.js:191-531 placement
 var SELF_HOSTED_RUNNER_GET_POOL = "self_hosted_runner_get_pool";
 var SELF_HOSTED_RUNNER_LIST_RUNNERS = "self_hosted_runner_list_runners";
@@ -91,6 +37,60 @@ var RUNNER_METRICS_TOOL_DESCRIPTION =
 var RUNNER_LOGS_TOOL_DESCRIPTION =
   "Read the last N bytes of the runner's --log-file with the shared secret redaction (key=value secrets, sk-ant/Bearer/Basic, URL userinfo, JWTs, and VCS/service PATs \u2014 see redact() in src/utils/secretRedaction.ts for the current rule set) applied before the content reaches model context.";
 var REQUEUE_SESSION_TOOL_DESCRIPTION = `Requeue an assigned session onto a different runner. Appends the observed runner to the session's excluded_runner_ids so the queue pop doesn't immediately hand it back. Takes session_id + runner_id (the runner the caller observed failing). Only write operation in the doctor tool suite.${"\nThe result includes an `equivalent.ui` string with the Admin-UI path. Surface it to the operator so they can repeat the action without you.\nAuth: handled internally via the operator's `claude login` OAuth session \u2014 secrets never enter the conversation."}`;
+//@ chunk-3fqpd3gk.js:227-255 placement
+var SELF_HOSTED_RUNNER = "self_hosted_runner_";
+//@ chunk-3fqpd3gk.js:255-294 placement
+/**
+ * 判断一个工具规格名是否以自托管 runner 前缀开头。
+ */
+function isRunnerToolSpec(spec) {
+  return spec.startsWith(SELF_HOSTED_RUNNER);
+}
+//@ chunk-3fqpd3gk.js:294-338 placement
+/**
+ * 判断规则列表里是否混入了 runner 工具规格。
+ */
+function hasRunnerToolSpec(baseTools) {
+  return splitRuleList([...baseTools]).some(isRunnerToolSpec);
+}
+//@ chunk-3fqpd3gk.js:338-400 placement
+/**
+ * 过滤掉 runner 工具规格并把其余规则拼回字符串。
+ */
+function dropRunnerToolSpecs(spec) {
+  return splitRuleList([spec])
+    .filter((entry) => !isRunnerToolSpec(entry))
+    .join(",");
+}
+//@ chunk-3fqpd3gk.js:400-502 placement
+/**
+ * 判断 runner 传入的工具列表中是否含不允许的工具规格。
+ */
+function hasDisallowedToolSpec(tools) {
+  if (tools === undefined) return false;
+  let text = typeof tools === "string" ? tools : String(tools);
+  return splitRuleList([text]).some(isRunnerToolSpec);
+}
+//@ chunk-3fqpd3gk.js:502-674 placement
+/**
+ * 规范化会话参数中的 tools：转为字符串，并在含不允许规格时改写。
+ */
+function normalizeToolsArg(claudeCodeArgs) {
+  let tools = claudeCodeArgs.tools;
+  if (tools === undefined) return claudeCodeArgs;
+  let text = typeof tools === "string" ? tools : String(tools);
+  if (!hasDisallowedToolSpec(text))
+    return typeof tools === "string"
+      ? claudeCodeArgs
+      : {
+          ...claudeCodeArgs,
+          tools: text,
+        };
+  return {
+    ...claudeCodeArgs,
+    tools: dropRunnerToolSpecs(text),
+  };
+}
 export {
   hasRunnerToolSpec,
   isRunnerToolSpec,

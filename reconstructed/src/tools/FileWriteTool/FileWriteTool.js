@@ -21,7 +21,14 @@ import {
   checkForeignFilePath,
   pushUnique,
 } from "../../utils/filePathValidation.js";
-import { zodStrictObject, string, u, _enum, array, M } from "../../../vendor/zod/v4/classic/schemas.js";
+import {
+  zodStrictObject,
+  stringSchema,
+  objectSchema,
+  _enum,
+  array,
+  booleanSchema,
+} from "../../../vendor/zod/v4/classic/schemas.js";
 import {
   attachedMachineInputField,
   HOST_TOOL_INPUT_FIELD,
@@ -129,64 +136,78 @@ import {
 import { logForDebugging } from "../../utils/debug.js";
 import { shouldSendToolDiff, fetchSingleFileGitDiff, isPatchWithinSizeLimit } from "../../utils/gitDiff.js";
 import { logFileOperation } from "../../utils/fileOperationAnalytics.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:1367698-1367917 placement
 /**
  * Write 输出 schema 的扩展部分：同步技能结果（syncedSkillNext）。
  */
-var stagedWordingSchema = DoctorLazy(() =>
-  objectKeysArray(SKILL_SAVE_SURFACES)
-    .optional()
-    .catch(undefined)
-    .describe("@internal Which message a staged result gave (see stagedResultWording); absent unless staged"),
-);
-var fileWriteOutputSchemaExtension = DoctorLazy(() => ({
-  syncedSkillNext: objectKeysArray(SKILL_SAVE_OUTCOMES).optional().catch(undefined),
-}));
+var stagedWordingSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var fileWriteOutputSchemaExtension;
+deferInit("chunk-e6aww6q8.js:1367698", () => {
+  stagedWordingSchema = DoctorLazy(() =>
+    objectKeysArray(SKILL_SAVE_SURFACES)
+      .optional()
+      .catch(undefined)
+      .describe(
+        "@internal Which message a staged result gave (see stagedResultWording); absent unless staged",
+      ),
+  );
+  fileWriteOutputSchemaExtension = DoctorLazy(() => ({
+    syncedSkillNext: objectKeysArray(SKILL_SAVE_OUTCOMES).optional().catch(undefined),
+  }));
+});
 //@ chunk-e6aww6q8.js:1412568-1413761 fingerprint = outputSchema (0.542)
 /**
  * Write 的 zod schema：输入 file_path/content；输出 type(create|update)/filePath/content/structuredPatch/originalFile/gitDiff/userModified/staged；跨进程版附 memdirStamped。
  */
-var fileWriteInputSchema = DoctorLazy(() =>
-  zodStrictObject({
-    file_path: string().describe("The absolute path to the file to write (must be absolute, not relative)"),
-    content: string().describe("The content to write to the file"),
-    ...attachedMachineInputField(),
-  }),
-);
-var fileWriteOutputSchema = DoctorLazy(() =>
-  u({
-    type: _enum(["create", "update"]).describe(
-      "Whether a new file was created or an existing file was updated",
-    ),
-    filePath: string().describe("The path to the file that was written"),
-    content: string().describe("The content that was written to the file"),
-    structuredPatch: array(hunkSchema()).describe(
-      "Diff patch showing the changes (empty when nothing changed, the diff timed out, or \u2014 with originalFile null on an update \u2014 the previous content was too large to diff)",
-    ),
-    originalFile: string()
-      .nullable()
-      .describe(
-        "The original file content before the write (null for new files, or when the previous content was too large to include)",
+var fileWriteInputSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var fileWriteOutputSchema;
+var fileWriteOutputSchemaAcrossProcesses;
+deferInit("chunk-e6aww6q8.js:1412568", () => {
+  fileWriteInputSchema = DoctorLazy(() =>
+    zodStrictObject({
+      file_path: stringSchema().describe(
+        "The absolute path to the file to write (must be absolute, not relative)",
       ),
-    gitDiff: gitDiffSchema().optional(),
-    userModified: M()
-      .optional()
-      .describe("True when the user edited the proposed content in the permission dialog before accepting"),
-    staged: M()
-      .optional()
-      .describe(
-        "True when the write was held for the machine owner to review instead of written; the file is unchanged",
+      content: stringSchema().describe("The content to write to the file"),
+      ...attachedMachineInputField(),
+    }),
+  );
+  fileWriteOutputSchema = DoctorLazy(() =>
+    objectSchema({
+      type: _enum(["create", "update"]).describe(
+        "Whether a new file was created or an existing file was updated",
       ),
-    stagedWording: stagedWordingSchema(),
-  }),
-);
-var fileWriteOutputSchemaAcrossProcesses = DoctorLazy(() =>
-  fileWriteOutputSchema().extend({
-    memdirStamped: M().optional().catch(undefined),
-    ...fileWriteOutputSchemaExtension(),
-  }),
-);
+      filePath: stringSchema().describe("The path to the file that was written"),
+      content: stringSchema().describe("The content that was written to the file"),
+      structuredPatch: array(hunkSchema()).describe(
+        "Diff patch showing the changes (empty when nothing changed, the diff timed out, or \u2014 with originalFile null on an update \u2014 the previous content was too large to diff)",
+      ),
+      originalFile: stringSchema()
+        .nullable()
+        .describe(
+          "The original file content before the write (null for new files, or when the previous content was too large to include)",
+        ),
+      gitDiff: gitDiffSchema().optional(),
+      userModified: booleanSchema()
+        .optional()
+        .describe("True when the user edited the proposed content in the permission dialog before accepting"),
+      staged: booleanSchema()
+        .optional()
+        .describe(
+          "True when the write was held for the machine owner to review instead of written; the file is unchanged",
+        ),
+      stagedWording: stagedWordingSchema(),
+    }),
+  );
+  fileWriteOutputSchemaAcrossProcesses = DoctorLazy(() =>
+    fileWriteOutputSchema().extend({
+      memdirStamped: booleanSchema().optional().catch(undefined),
+      ...fileWriteOutputSchemaExtension(),
+    }),
+  );
+});
 //@ chunk-e6aww6q8.js:1413761-1413812 layout
 /**
  * GrowthBook tengu_noble_mountain（默认 true）：是否允许 Write 的 coerceInput 修正输入。
@@ -198,8 +219,8 @@ function isWriteInputCoercionEnabled() {
 /**
  * 去掉结尾点和空格后是否为 .ipynb。
  */
-function isNotebookPathIgnoringTrailingDots(e) {
-  return isNotebookPath(e.replace(/[. ]+$/, ""));
+function isNotebookPathIgnoringTrailingDots(filePath) {
+  return isNotebookPath(filePath.replace(/[. ]+$/, ""));
 }
 //@ chunk-e6aww6q8.js:1413862-1414204 layout
 /**
@@ -236,381 +257,404 @@ async function assertWriteReadStateFresh({
 /**
  * Write 工具定义（name "Write"）。validateInput：空字节、不稳定路径、用户电脑路径、工作树隔离、子代理禁止写 REPORT/SUMMARY/FINDINGS/ANALYSIS*.md、记忆目录 lint、deny/Read deny、目录/非普通文件、Perforce 只读、只读过开头、必须先读且未被修改。
  */
-var FileWriteTool = buildTool({
-  name: FILE_WRITE_TOOL_NAME,
-  ruleContentField: "file_path",
-  searchHint: "create or overwrite files",
-  remoteExecution: {
-    supported: true,
-    decidingInputFields: ["file_path", "content"],
-  },
-  backgrounding: "never",
-  maxResultSizeChars: 1e5,
-  strict: true,
-  async description() {
-    return "Write a file to the local filesystem.";
-  },
-  userFacingName,
-  getToolUseSummary: getToolUseSummary_3,
-  getActivityDescription(e) {
-    let toolUseSummary = getToolUseSummary_3(e);
-    return toolUseSummary ? `Writing ${toolUseSummary}` : "Writing file";
-  },
-  async prompt({ model, leanPrompt }) {
-    return getWriteToolDescription(model, leanPrompt);
-  },
-  get inputSchema() {
-    return fileWriteInputSchema();
-  },
-  get outputSchema() {
-    return fileWriteOutputSchema();
-  },
-  get outputSchemaAcrossProcesses() {
-    return fileWriteOutputSchemaAcrossProcesses();
-  },
-  fromAnotherProcess(e, n, r, s) {
-    if (s !== undefined && !e.staged)
-      if (e.type === "create") logFileChanged([], s, String(n.content ?? ""));
-      else logFileChanged(e.structuredPatch, s);
-    return {
-      data: {
-        ...e,
-        filePath: String(n.file_path ?? ""),
-        userModified: r?.userModified === true,
-      },
-    };
-  },
-  coerceInput(e) {
-    let n = normalizeWriteInputAliases(e);
-    return n !== null && isWriteInputCoercionEnabled()
-      ? parsedToolInputOrNull(fileWriteInputSchema(), n)
-      : null;
-  },
-  stripForStorage(output) {
-    if (typeof output !== "object" || output === null) return output;
-    if (output.type !== "update") return output;
-    if (output.content === "" && (output.originalFile ?? "") === "") return output;
-    if (
-      Array.isArray(output.structuredPatch) &&
-      output.structuredPatch.length === 0 &&
-      output.originalFile === null
-    )
-      return output;
-    return {
-      ...output,
-      content: "",
-      originalFile: null,
-    };
-  },
-  toAutoClassifierInput(input) {
-    let n = remoteRoutingCandidate(input);
-    return n === undefined
-      ? `${input.file_path}: ${input.content}`
-      : {
-          file_path: input.file_path,
-          content: input.content,
-          [HOST_TOOL_INPUT_FIELD]: n,
-          ...hostContextMeta(input),
-        };
-  },
-  suppressesAllPermissionUpdates(e) {
-    return hasHostField(e);
-  },
-  getPath(e) {
-    return e.file_path;
-  },
-  inputsEquivalent(e, n) {
-    if (e.file_path !== n.file_path) return false;
-    if (e.content === n.content) return true;
-    let r = expandPathOrNull(e.file_path);
-    let s = (content) => (r === null ? content : lintMemoryTextIfEnabled(r, content)).replace(/\n+$/, "");
-    return s(e.content) === s(n.content);
-  },
-  backfillObservableInput(e) {
-    if (typeof e.file_path === "string" && !isRemoteOnlyCheck(FILE_WRITE_TOOL_NAME))
-      e.file_path = expandStablePath(e.file_path);
-  },
-  async preparePermissionMatcher({ file_path }) {
-    return (pattern) => matchesPathRule(pattern, file_path);
-  },
-  extractSearchText() {
-    return "";
-  },
-  create(toolContext) {
-    return {
-      permissionCheckFailureDecision(n) {
-        return buildUnfinishedCheckDecision(
-          FILE_WRITE_TOOL_NAME,
-          isPlainObject_5(n) ? n.file_path : undefined,
-          toolContext.permissions(),
+var FileWriteTool; // deferred: uses buildTool (../../services/tools/permissionCheckGuard.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:1414204", () => {
+  FileWriteTool = buildTool({
+    name: FILE_WRITE_TOOL_NAME,
+    ruleContentField: "file_path",
+    searchHint: "create or overwrite files",
+    remoteExecution: {
+      supported: true,
+      decidingInputFields: ["file_path", "content"],
+    },
+    backgrounding: "never",
+    maxResultSizeChars: 1e5,
+    strict: true,
+    async description() {
+      return "Write a file to the local filesystem.";
+    },
+    userFacingName,
+    getToolUseSummary: getToolUseSummary_3,
+    getActivityDescription(input) {
+      let toolUseSummary = getToolUseSummary_3(input);
+      return toolUseSummary ? `Writing ${toolUseSummary}` : "Writing file";
+    },
+    async prompt({ model, leanPrompt }) {
+      return getWriteToolDescription(model, leanPrompt);
+    },
+    get inputSchema() {
+      return fileWriteInputSchema();
+    },
+    get outputSchema() {
+      return fileWriteOutputSchema();
+    },
+    get outputSchemaAcrossProcesses() {
+      return fileWriteOutputSchemaAcrossProcesses();
+    },
+    fromAnotherProcess(result, input, callOptions, toolUseId) {
+      if (toolUseId !== undefined && !result.staged)
+        if (result.type === "create") logFileChanged([], toolUseId, String(input.content ?? ""));
+        else logFileChanged(result.structuredPatch, toolUseId);
+      return {
+        data: {
+          ...result,
+          filePath: String(input.file_path ?? ""),
+          userModified: callOptions?.userModified === true,
+        },
+      };
+    },
+    coerceInput(rawInput) {
+      let normalizedInput = normalizeWriteInputAliases(rawInput);
+      return normalizedInput !== null && isWriteInputCoercionEnabled()
+        ? parsedToolInputOrNull(fileWriteInputSchema(), normalizedInput)
+        : null;
+    },
+    stripForStorage(output) {
+      if (typeof output !== "object" || output === null) return output;
+      if (output.type !== "update") return output;
+      if (output.content === "" && (output.originalFile ?? "") === "") return output;
+      if (
+        Array.isArray(output.structuredPatch) &&
+        output.structuredPatch.length === 0 &&
+        output.originalFile === null
+      )
+        return output;
+      return {
+        ...output,
+        content: "",
+        originalFile: null,
+      };
+    },
+    toAutoClassifierInput(input) {
+      let hostRouting = remoteRoutingCandidate(input);
+      return hostRouting === undefined
+        ? `${input.file_path}: ${input.content}`
+        : {
+            file_path: input.file_path,
+            content: input.content,
+            [HOST_TOOL_INPUT_FIELD]: hostRouting,
+            ...hostContextMeta(input),
+          };
+    },
+    suppressesAllPermissionUpdates(input) {
+      return hasHostField(input);
+    },
+    getPath(input) {
+      return input.file_path;
+    },
+    inputsEquivalent(leftInput, rightInput) {
+      if (leftInput.file_path !== rightInput.file_path) return false;
+      if (leftInput.content === rightInput.content) return true;
+      let expandedPath = expandPathOrNull(leftInput.file_path);
+      let normalizeContent = (content) =>
+        (expandedPath === null ? content : lintMemoryTextIfEnabled(expandedPath, content)).replace(
+          /\n+$/,
+          "",
         );
-      },
-      async checkPermissions(n, r) {
-        let s = expandStablePath(n.file_path);
-        let h = walkPermissionCheckPaths(s);
-        toolContext.session.writePermissionStash.stash(r.toolUseId, s, h.spellings);
-        let y = checkWritePermissionForTool(FileWriteTool, n, toolContext.permissions(), h);
-        let permissionResult = y.behavior === "deny" ? y : (leafSymlinkWriteRefusal(s, h) ?? y);
-        if (
-          permissionResult.behavior === "deny" ||
-          (permissionResult.updatedInput !== undefined && permissionResult.updatedInput !== n)
-        )
-          return permissionResult;
-        let toolUseSummary = getToolUseSummary_2(n, "content", memoryWriteSource(toolContext), {
-          host: toolContext.session.host,
-          toolUseId: r.toolUseId,
-        });
-        return toolUseSummary === n
-          ? permissionResult
-          : {
-              ...permissionResult,
-              updatedInput: toolUseSummary,
-            };
-      },
-      async validateInput(n, r) {
-        let callContext = createToolContextView(toolContext, r);
-        let { file_path: filePath, content } = n;
-        if (canRunToolsOnThisMachine() && hasHostField(n))
-          return {
-            result: false,
-            message: hostFieldNotForwardedMessage(),
-            errorCode: 14,
-          };
-        let S = rejectNullBytes(FILE_WRITE_TOOL_NAME, [["file_path", filePath]]);
-        if (S) return S;
-        let w = rejectTrailingWhitespace(FILE_WRITE_TOOL_NAME, [["file_path", filePath]]);
-        if (w) return w;
-        let L = checkForeignFilePath(FILE_WRITE_TOOL_NAME, [["file_path", filePath]]);
-        if (L) return L;
-        let absolutePath = expandStablePath(filePath);
-        let q = checkWorktreeIsolation_2(absolutePath, callContext);
-        if (q)
-          return {
-            result: false,
-            message: q,
-            errorCode: 7,
-          };
-        if (
-          callContext.agentId &&
-          /^(REPORT|SUMMARY|FINDINGS|ANALYSIS).*\.md$/i.test(basename(absolutePath))
-        ) {
-          logEvent("tengu_subagent_md_report_blocked", {
-            contentBytes: Buffer.byteLength(content),
+      return normalizeContent(leftInput.content) === normalizeContent(rightInput.content);
+    },
+    backfillObservableInput(input) {
+      if (typeof input.file_path === "string" && !isRemoteOnlyCheck(FILE_WRITE_TOOL_NAME))
+        input.file_path = expandStablePath(input.file_path);
+    },
+    async preparePermissionMatcher({ file_path }) {
+      return (pattern) => matchesPathRule(pattern, file_path);
+    },
+    extractSearchText() {
+      return "";
+    },
+    create(toolContext) {
+      return {
+        permissionCheckFailureDecision(input) {
+          return buildUnfinishedCheckDecision(
+            FILE_WRITE_TOOL_NAME,
+            isPlainObject_5(input) ? input.file_path : undefined,
+            toolContext.permissions(),
+          );
+        },
+        async checkPermissions(input, callOptions) {
+          let stablePath = expandStablePath(input.file_path);
+          let pathSpellings = walkPermissionCheckPaths(stablePath);
+          toolContext.session.writePermissionStash.stash(
+            callOptions.toolUseId,
+            stablePath,
+            pathSpellings.spellings,
+          );
+          let writeDecision = checkWritePermissionForTool(
+            FileWriteTool,
+            input,
+            toolContext.permissions(),
+            pathSpellings,
+          );
+          let permissionResult =
+            writeDecision.behavior === "deny"
+              ? writeDecision
+              : (leafSymlinkWriteRefusal(stablePath, pathSpellings) ?? writeDecision);
+          if (
+            permissionResult.behavior === "deny" ||
+            (permissionResult.updatedInput !== undefined && permissionResult.updatedInput !== input)
+          )
+            return permissionResult;
+          let toolUseSummary = getToolUseSummary_2(input, "content", memoryWriteSource(toolContext), {
+            host: toolContext.session.host,
+            toolUseId: callOptions.toolUseId,
           });
-          return {
-            result: false,
-            message:
-              "Subagents should return findings as text, not write report files. Include this content in your final response instead.",
-            errorCode: 5,
-          };
-        }
-        let Z = secretWarning(absolutePath, content);
-        if (Z)
-          return {
-            result: false,
-            message: Z,
-            errorCode: 0,
-          };
-        let Se = lintMemoryFilePath(absolutePath, content, memoryWriteSource(callContext));
-        if (Se)
-          return {
-            result: false,
-            message: Se,
-            errorCode: 0,
-          };
-        let ke = matchingRuleForInput(absolutePath, callContext.permissions(), "edit", "deny");
-        if (ke !== null)
-          return {
-            result: false,
-            message: DENIED_DIRECTORY_ERROR,
-            errorCode: 1,
-            deniedByPermissionRule: true,
-            denyRule: ke,
-          };
-        let denyRuleForPath = readDenyRuleForPath(absolutePath, callContext.permissions());
-        if (denyRuleForPath !== undefined)
-          return {
-            result: false,
-            message: READ_DENY_RULE_WRITE_ERROR,
-            errorCode: 13,
-            deniedByPermissionRule: true,
-            denyRule: denyRuleForPath,
-          };
-        if (isUntouchableSpelling(absolutePath))
-          return {
-            result: true,
-          };
-        let fsImplementation = getFsImplementation();
-        let Ae;
-        try {
-          let stats = await fsImplementation.stat(absolutePath);
-          Ae = stats.mtimeMs;
-          if (stats.isDirectory())
+          return toolUseSummary === input
+            ? permissionResult
+            : {
+                ...permissionResult,
+                updatedInput: toolUseSummary,
+              };
+        },
+        async validateInput(input, callOptions) {
+          let callContext = createToolContextView(toolContext, callOptions);
+          let { file_path: filePath, content } = input;
+          if (canRunToolsOnThisMachine() && hasHostField(input))
             return {
               result: false,
-              message: `${encodeControlChars(filePath)} is a directory, not a file. To create a file inside it, include the file name in file_path.`,
-              errorCode: 17,
+              message: hostFieldNotForwardedMessage(),
+              errorCode: 14,
             };
-          if (!stats.isFile())
+          let nullByteRefusal = rejectNullBytes(FILE_WRITE_TOOL_NAME, [["file_path", filePath]]);
+          if (nullByteRefusal) return nullByteRefusal;
+          let trailingWhitespaceRefusal = rejectTrailingWhitespace(FILE_WRITE_TOOL_NAME, [
+            ["file_path", filePath],
+          ]);
+          if (trailingWhitespaceRefusal) return trailingWhitespaceRefusal;
+          let foreignPathRefusal = checkForeignFilePath(FILE_WRITE_TOOL_NAME, [["file_path", filePath]]);
+          if (foreignPathRefusal) return foreignPathRefusal;
+          let absolutePath = expandStablePath(filePath);
+          let worktreeRefusal = checkWorktreeIsolation_2(absolutePath, callContext);
+          if (worktreeRefusal)
             return {
               result: false,
-              message: `${encodeControlChars(filePath)} exists but is not a regular file (a device, FIFO or socket). Write only creates or overwrites regular files.`,
-              errorCode: 18,
+              message: worktreeRefusal,
+              errorCode: 7,
             };
-          if (isPerforceReadOnlyFile(stats.mode))
+          if (
+            callContext.agentId &&
+            /^(REPORT|SUMMARY|FINDINGS|ANALYSIS).*\.md$/i.test(basename(absolutePath))
+          ) {
+            logEvent("tengu_subagent_md_report_blocked", {
+              contentBytes: Buffer.byteLength(content),
+            });
             return {
               result: false,
-              message: PERFORCE_READ_ONLY_MESSAGE,
-              errorCode: 6,
+              message:
+                "Subagents should return findings as text, not write report files. Include this content in your final response instead.",
+              errorCode: 5,
             };
-        } catch (error) {
-          if (isENOENT(error))
+          }
+          let secretRefusal = secretWarning(absolutePath, content);
+          if (secretRefusal)
+            return {
+              result: false,
+              message: secretRefusal,
+              errorCode: 0,
+            };
+          let memoryLintRefusal = lintMemoryFilePath(absolutePath, content, memoryWriteSource(callContext));
+          if (memoryLintRefusal)
+            return {
+              result: false,
+              message: memoryLintRefusal,
+              errorCode: 0,
+            };
+          let denyRule = matchingRuleForInput(absolutePath, callContext.permissions(), "edit", "deny");
+          if (denyRule !== null)
+            return {
+              result: false,
+              message: DENIED_DIRECTORY_ERROR,
+              errorCode: 1,
+              deniedByPermissionRule: true,
+              denyRule,
+            };
+          let denyRuleForPath = readDenyRuleForPath(absolutePath, callContext.permissions());
+          if (denyRuleForPath !== undefined)
+            return {
+              result: false,
+              message: READ_DENY_RULE_WRITE_ERROR,
+              errorCode: 13,
+              deniedByPermissionRule: true,
+              denyRule: denyRuleForPath,
+            };
+          if (isUntouchableSpelling(absolutePath))
             return {
               result: true,
             };
-          throw error;
-        }
-        if (callContext.readFileState.holdsOnlyStartOf(absolutePath))
-          return {
-            result: false,
-            message: PARTIAL_READ_WRITE_ERROR,
-            errorCode: 19,
-          };
-        let readState = callContext.readFileState.get(absolutePath);
-        if (!readState || readState.isPartialView) {
-          let canonicalName = getCanonicalName(callContext.model());
-          let modelBucket = toTelemetryModelSlug(canonicalName);
-          let lt =
-            !readState &&
-            !isNotebookPathIgnoringTrailingDots(absolutePath) &&
-            !isLegacyPromptModelOrOverride(canonicalName, callContext.remoteCall) &&
-            readAutoAllowedForMutation(
-              FILE_WRITE_TOOL_NAME,
-              absolutePath,
-              callContext,
-              callContext.permissions(),
-            );
-          let readBaseline = lt ? callContext.remoteCall?.readBaseline : undefined;
-          let nt =
-            readBaseline === undefined
-              ? "absent"
-              : await compareWithDisk(absolutePath, readBaseline, () =>
-                  readAutoAllowedForMutation(
-                    FILE_WRITE_TOOL_NAME,
-                    absolutePath,
-                    callContext,
-                    callContext.permissions(),
-                  ),
-                );
-          logEvent("tengu_write_tool_not_read_hypothetical", {
-            wouldHaveResult:
-              readState && Math.floor(Ae) > readState.timestamp ? lit_2("errorCode3") : lit_2("success"),
-            isPartialView: readState?.isPartialView === true,
-            isFilePathAbsolute: isAbsolute(filePath),
-            guardSkipped: lt,
-            modelBucket,
-            servedCall: callContext.remoteCall !== undefined,
-            ...(callContext.remoteCall?.model !== undefined && {
-              callerModelBucket: toTelemetryModelSlug(callContext.remoteCall.model),
-            }),
-            readBaseline: fromEnum(nt),
-          });
-          if (!lt)
+          let fsImplementation = getFsImplementation();
+          let fileMtimeMs;
+          try {
+            let stats = await fsImplementation.stat(absolutePath);
+            fileMtimeMs = stats.mtimeMs;
+            if (stats.isDirectory())
+              return {
+                result: false,
+                message: `${encodeControlChars(filePath)} is a directory, not a file. To create a file inside it, include the file name in file_path.`,
+                errorCode: 17,
+              };
+            if (!stats.isFile())
+              return {
+                result: false,
+                message: `${encodeControlChars(filePath)} exists but is not a regular file (a device, FIFO or socket). Write only creates or overwrites regular files.`,
+                errorCode: 18,
+              };
+            if (isPerforceReadOnlyFile(stats.mode))
+              return {
+                result: false,
+                message: PERFORCE_READ_ONLY_MESSAGE,
+                errorCode: 6,
+              };
+          } catch (error) {
+            if (isENOENT(error))
+              return {
+                result: true,
+              };
+            throw error;
+          }
+          if (callContext.readFileState.holdsOnlyStartOf(absolutePath))
             return {
               result: false,
-              message: FILE_NOT_READ_ERROR,
-              errorCode: 2,
+              message: PARTIAL_READ_WRITE_ERROR,
+              errorCode: 19,
             };
-          if (nt === "mismatch")
+          let readState = callContext.readFileState.get(absolutePath);
+          if (!readState || readState.isPartialView) {
+            let canonicalName = getCanonicalName(callContext.model());
+            let modelBucket = toTelemetryModelSlug(canonicalName);
+            let guardSkipped =
+              !readState &&
+              !isNotebookPathIgnoringTrailingDots(absolutePath) &&
+              !isLegacyPromptModelOrOverride(canonicalName, callContext.remoteCall) &&
+              readAutoAllowedForMutation(
+                FILE_WRITE_TOOL_NAME,
+                absolutePath,
+                callContext,
+                callContext.permissions(),
+              );
+            let readBaseline = guardSkipped ? callContext.remoteCall?.readBaseline : undefined;
+            let baselineState =
+              readBaseline === undefined
+                ? "absent"
+                : await compareWithDisk(absolutePath, readBaseline, () =>
+                    readAutoAllowedForMutation(
+                      FILE_WRITE_TOOL_NAME,
+                      absolutePath,
+                      callContext,
+                      callContext.permissions(),
+                    ),
+                  );
+            logEvent("tengu_write_tool_not_read_hypothetical", {
+              wouldHaveResult:
+                readState && Math.floor(fileMtimeMs) > readState.timestamp
+                  ? lit_2("errorCode3")
+                  : lit_2("success"),
+              isPartialView: readState?.isPartialView === true,
+              isFilePathAbsolute: isAbsolute(filePath),
+              guardSkipped,
+              modelBucket,
+              servedCall: callContext.remoteCall !== undefined,
+              ...(callContext.remoteCall?.model !== undefined && {
+                callerModelBucket: toTelemetryModelSlug(callContext.remoteCall.model),
+              }),
+              readBaseline: fromEnum(baselineState),
+            });
+            if (!guardSkipped)
+              return {
+                result: false,
+                message: FILE_NOT_READ_ERROR,
+                errorCode: 2,
+              };
+            if (baselineState === "mismatch")
+              return {
+                result: false,
+                message: REMOTE_FILE_MODIFIED_ERROR(callContext.remoteCall?.origin.hostName),
+                errorCode: 3,
+              };
             return {
-              result: false,
-              message: REMOTE_FILE_MODIFIED_ERROR(callContext.remoteCall?.origin.hostName),
-              errorCode: 3,
+              result: true,
             };
+          }
+          if (Math.floor(fileMtimeMs) > readState.timestamp) {
+            let isFullView = isFullFileView(readState);
+            let contentMatches = false;
+            if (isFullView) {
+              let fileBytes = await fsImplementation.readFileBytes(absolutePath);
+              contentMatches = matchesNormalizedContent(
+                readState,
+                fileBytes.toString(detectTextEncoding(fileBytes).encoding),
+              );
+            }
+            if (!contentMatches)
+              return {
+                result: false,
+                message: REMOTE_FILE_MODIFIED_ERROR(),
+                errorCode: 3,
+              };
+          }
           return {
             result: true,
           };
-        }
-        if (Math.floor(Ae) > readState.timestamp) {
-          let We = isFullFileView(readState);
-          let ze = false;
-          if (We) {
-            let fileBytes = await fsImplementation.readFileBytes(absolutePath);
-            ze = matchesNormalizedContent(
-              readState,
-              fileBytes.toString(detectTextEncoding(fileBytes).encoding),
-            );
-          }
-          if (!ze)
-            return {
-              result: false,
-              message: REMOTE_FILE_MODIFIED_ERROR(),
-              errorCode: 3,
-            };
-        }
-        return {
-          result: true,
-        };
-      },
-      async call(n, r) {
-        let { parentMessage } = r;
-        if (parentMessage === undefined) throw Error("Write: a call needs the message that issued it");
-        return callFileWrite(n, createToolContextView(toolContext, r), parentMessage);
-      },
-    };
-  },
-  mapToolResultToToolResultBlockParam(
-    { filePath, type: n, userModified, memdirStamped, staged, stagedWording, syncedSkillNext },
-    toolUseId,
-  ) {
-    if (staged)
-      return {
-        tool_use_id: toolUseId,
-        type: "tool_result",
-        content: settingsNotAppliedMessage(filePath, stagedWording ?? "review"),
+        },
+        async call(input, callOptions) {
+          let { parentMessage } = callOptions;
+          if (parentMessage === undefined) throw Error("Write: a call needs the message that issued it");
+          return callFileWrite(input, createToolContextView(toolContext, callOptions), parentMessage);
+        },
       };
-    let L = userModified ? " The user modified your proposed content before accepting it." : "";
-    let G = userModified || memdirStamped ? "" : FILE_STATE_CURRENT_SUFFIX;
-    let q = syncedSkillSaveHint(syncedSkillNext);
-    switch (n) {
-      case "create":
+    },
+    mapToolResultToToolResultBlockParam(
+      { filePath, type: resultType, userModified, memdirStamped, staged, stagedWording, syncedSkillNext },
+      toolUseId,
+    ) {
+      if (staged)
         return {
           tool_use_id: toolUseId,
           type: "tool_result",
-          content: `File created successfully at: ${filePath}${L}${G}${q}`,
+          content: settingsNotAppliedMessage(filePath, stagedWording ?? "review"),
         };
-      case "update":
-        return {
-          tool_use_id: toolUseId,
-          type: "tool_result",
-          content: `The file ${filePath} has been updated successfully.${L}${G}${q}`,
-        };
-    }
-  },
+      let modifiedNote = userModified ? " The user modified your proposed content before accepting it." : "";
+      let fileStateNote = userModified || memdirStamped ? "" : FILE_STATE_CURRENT_SUFFIX;
+      let skillSaveHint = syncedSkillSaveHint(syncedSkillNext);
+      switch (resultType) {
+        case "create":
+          return {
+            tool_use_id: toolUseId,
+            type: "tool_result",
+            content: `File created successfully at: ${filePath}${modifiedNote}${fileStateNote}${skillSaveHint}`,
+          };
+        case "update":
+          return {
+            tool_use_id: toolUseId,
+            type: "tool_result",
+            content: `The file ${filePath} has been updated successfully.${modifiedNote}${fileStateNote}${skillSaveHint}`,
+          };
+      }
+    },
+  });
 });
 //@ chunk-e6aww6q8.js:1419759-1423789 placement
 /**
  * Write 工具的执行：权限与写入阻止检查、读状态新鲜度校验、记忆文件处理、写入或暂存审阅，之后通知 LSP、计算 diff 并返回 create/update 结果。
  */
-async function callFileWrite({ file_path: filePath, content }, context, parentMessage) {
+async function callFileWrite({ file_path: filePath, content }, toolContextView, parentMessage) {
   let { readFileState, userModified, getFileHistoryState, applyFileHistoryOp, dynamicSkillDirTriggers } =
-    context;
+    toolContextView;
   let absolutePath = expandStablePath(filePath);
-  let writePermission = consumeWritePermission(context, absolutePath);
-  if (hasReadDenyRuleForPath(absolutePath, context.permissions()))
+  let writePermission = consumeWritePermission(toolContextView, absolutePath);
+  if (hasReadDenyRuleForPath(absolutePath, toolContextView.permissions()))
     throw new FileStateError(READ_DENY_RULE_WRITE_ERROR);
-  let blockRefusal = writeBlockRefusal(absolutePath, context.permissions(), writePermission);
+  let blockRefusal = writeBlockRefusal(absolutePath, toolContextView.permissions(), writePermission);
   if (blockRefusal !== undefined) throw new FileStateError(blockRefusal);
-  if (context.remoteCall === undefined)
+  if (toolContextView.remoteCall === undefined)
     await discoverSkillsForPath(
-      context.session.host,
+      toolContextView.session.host,
       absolutePath,
       dynamicSkillDirTriggers,
-      context.storageV5,
+      toolContextView.storageV5,
     );
-  if (context.remoteCall === undefined)
-    await diagnosticTrackingSlot.of(context.session).beforeFileEdited(absolutePath);
-  let stagingTarget = await checkSettingsWrite(context, writePermission, {
+  if (toolContextView.remoteCall === undefined)
+    await diagnosticTrackingSlot.of(toolContextView.session).beforeFileEdited(absolutePath);
+  let stagingTarget = await checkSettingsWrite(toolContextView, writePermission, {
     toolName: FILE_WRITE_TOOL_NAME,
     absolutePath,
     input: {
@@ -619,62 +663,71 @@ async function callFileWrite({ file_path: filePath, content }, context, parentMe
     },
   });
   let syncedSkillNext = skillSaveMode(
-    context,
+    toolContextView,
     writePermission,
-    await isInSyncedSkillsDir(context.session.host, writePermission),
+    await isInSyncedSkillsDir(toolContextView.session.host, writePermission),
   );
   if (stagingTarget === undefined)
     await fileHistoryTrackEdit(getFileHistoryState, applyFileHistoryOp, absolutePath, parentMessage.uuid);
   let writeOutcome = await runWithFileWriteContext(absolutePath, async () => {
-    let nt = await pinWriteTarget(absolutePath, writePermission, {
+    let target = await pinWriteTarget(absolutePath, writePermission, {
       createParents: stagingTarget === undefined,
     }).catch((error) => {
       if (stagingTarget !== undefined && isENOENT(error)) return null;
       throw error;
     });
     try {
-      let pt = nt === null ? null : await nt.readExisting();
-      if (nt !== null && pt !== null) {
+      let existing = target === null ? null : await target.readExisting();
+      if (target !== null && existing !== null) {
         if (readFileState.holdsOnlyStartOf(absolutePath)) throw new FileStateError(PARTIAL_READ_WRITE_ERROR);
         await assertWriteReadStateFresh({
           fullFilePath: absolutePath,
-          ioPath: nt.ioPath,
-          diskContent: pt.content,
+          ioPath: target.ioPath,
+          diskContent: existing.content,
           lastRead: readFileState.get(absolutePath),
-          preReadGuard: isLegacyPromptModelOrOverride(getCanonicalName(context.model()), context.remoteCall),
-          readBaseline: context.remoteCall?.readBaseline,
-          servedOn: context.remoteCall?.origin.hostName,
+          preReadGuard: isLegacyPromptModelOrOverride(
+            getCanonicalName(toolContextView.model()),
+            toolContextView.remoteCall,
+          ),
+          readBaseline: toolContextView.remoteCall?.readBaseline,
+          servedOn: toolContextView.remoteCall?.origin.hostName,
           readNotAutoAllowed: () =>
-            !readAutoAllowedForMutation(FILE_WRITE_TOOL_NAME, absolutePath, context, context.permissions()),
+            !readAutoAllowedForMutation(
+              FILE_WRITE_TOOL_NAME,
+              absolutePath,
+              toolContextView,
+              toolContextView.permissions(),
+            ),
         });
       }
-      if (pt?.notText) throw new FileStateError(fileWriteRefusalMessage(pt.notText));
-      let encoding = pt?.encoding ?? "utf8";
-      let content_2 = pt?.content ?? null;
-      let gt = content;
-      let At = memoryWriteSource(context);
-      let It = lintMemoryFilePath(absolutePath, content, At) ?? secretWarning(absolutePath, content);
-      if (It !== null)
+      if (existing?.notText) throw new FileStateError(fileWriteRefusalMessage(existing.notText));
+      let encoding = existing?.encoding ?? "utf8";
+      let content_2 = existing?.content ?? null;
+      let originalContent = content;
+      let memorySource = memoryWriteSource(toolContextView);
+      let writeRefusal =
+        lintMemoryFilePath(absolutePath, content, memorySource) ?? secretWarning(absolutePath, content);
+      if (writeRefusal !== null)
         throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-          It,
+          writeRefusal,
           "memory-directory write refused at call time",
         );
-      content = lintBackgroundMemoryWrite(absolutePath, content, At);
-      let Yt = forgetLintedWrite(context.session.host, context.toolUseId);
+      content = lintBackgroundMemoryWrite(absolutePath, content, memorySource);
+      let staleLintCleared = forgetLintedWrite(toolContextView.session.host, toolContextView.toolUseId);
       let filePath = await mapToMirrorPath(absolutePath);
-      let Zt =
-        stagingTarget !== undefined || nt === null
+      let syncOutcome =
+        stagingTarget !== undefined || target === null
           ? undefined
-          : await memoryItemStampContext(context, filePath, content_2, content, {
-              remote: context.remoteCall !== undefined,
+          : await memoryItemStampContext(toolContextView, filePath, content_2, content, {
+              remote: toolContextView.remoteCall !== undefined,
             });
-      let memoryContent = prepareMemoryContent(filePath, content, Zt?.context);
+      let memoryContent = prepareMemoryContent(filePath, content, syncOutcome?.context);
       logMemoryItemBlock(memoryContent.sharedItemBlock, "team");
       content = memoryContent.content;
-      let pn = content !== gt || Yt;
-      if (stagingTarget !== undefined || nt === null) {
+      let contentAdjusted = content !== originalContent || staleLintCleared;
+      if (stagingTarget !== undefined || target === null) {
         await stageSettingsWrite({
-          writeCtx: context,
+          writeCtx: toolContextView,
           tool: "Write",
           absolutePath: stagingTarget?.path ?? absolutePath,
           currentContent: content_2,
@@ -682,26 +735,26 @@ async function callFileWrite({ file_path: filePath, content }, context, parentMe
         });
         return {
           oldContent: content_2,
-          memdirStamped: pn,
+          memdirStamped: contentAdjusted,
           staged: true,
         };
       }
       let timestamp;
       content = preserveBomPrefix(content_2, content);
-      await nt.recheckBeforeWrite();
+      await target.recheckBeforeWrite();
       try {
-        timestamp = await writeTextContentVerified(nt.ioPath, content, encoding, "LF");
+        timestamp = await writeTextContentVerified(target.ioPath, content, encoding, "LF");
       } catch (error) {
         notePlanFileForgotten(absolutePath);
         throw error;
       }
-      await noteMemoryItemWritten(filePath, content, memoryContent.item, Zt?.rev);
+      await noteMemoryItemWritten(filePath, content, memoryContent.item, syncOutcome?.rev);
       readFileState.set(absolutePath, {
         content: stripBomAndCarriageReturn(content),
         timestamp,
         offset: undefined,
         limit: undefined,
-        ...((userModified || pn) && {
+        ...((userModified || contentAdjusted) && {
           contentNotInModelContext: true,
         }),
       });
@@ -709,22 +762,23 @@ async function callFileWrite({ file_path: filePath, content }, context, parentMe
       else notePlanFileForgotten(absolutePath);
       return {
         oldContent: content_2,
-        memdirStamped: pn,
+        memdirStamped: contentAdjusted,
         staged: false,
       };
     } catch (error) {
-      if (nt === null) throw error;
-      rethrowWithPath(error, nt, absolutePath);
+      if (target === null) throw error;
+      rethrowWithPath(error, target, absolutePath);
     } finally {
-      await nt?.close();
+      await target?.close();
     }
   });
   let { oldContent, memdirStamped, staged } = writeOutcome;
   let isOldContentLarge = oldContent !== null && oldContent.length > MAX_SETTINGS_FILE_BYTES;
   if (staged) {
-    let nt = context.remoteCall !== undefined || context.inputFromAnotherMachine === true;
+    let isRemoteOrForeign =
+      toolContextView.remoteCall !== undefined || toolContextView.inputFromAnotherMachine === true;
     let structuredPatch =
-      nt || oldContent === null || isOldContentLarge
+      isRemoteOrForeign || oldContent === null || isOldContentLarge
         ? []
         : getPatchFromContents({
             filePath,
@@ -738,12 +792,12 @@ async function callFileWrite({ file_path: filePath, content }, context, parentMe
         filePath,
         content,
         structuredPatch,
-        originalFile: nt || isOldContentLarge ? null : oldContent,
+        originalFile: isRemoteOrForeign || isOldContentLarge ? null : oldContent,
         userModified: userModified ?? false,
         staged: true,
         stagedWording: settingsWriteRoute({
-          session: context.session,
-          served: context.remoteCall !== undefined,
+          session: toolContextView.session,
+          served: toolContextView.remoteCall !== undefined,
           cause: stagingTarget?.cause ?? "unapproved",
         }),
       },
@@ -753,11 +807,12 @@ async function callFileWrite({ file_path: filePath, content }, context, parentMe
       },
     };
   }
-  if (context.remoteCall === undefined) pushUnique(context.nestedMemoryAttachmentTriggers, absolutePath);
-  let lspManager = context.remoteCall === undefined ? getLspServerManager() : undefined;
+  if (toolContextView.remoteCall === undefined)
+    pushUnique(toolContextView.nestedMemoryAttachmentTriggers, absolutePath);
+  let lspManager = toolContextView.remoteCall === undefined ? getLspServerManager() : undefined;
   if (lspManager) {
-    clearDeliveredDiagnosticsForFile(context.session, absolutePath);
-    clearPendingDiagnosticsForFile(context.session, absolutePath);
+    clearDeliveredDiagnosticsForFile(toolContextView.session, absolutePath);
+    clearPendingDiagnosticsForFile(toolContextView.session, absolutePath);
     lspManager.changeFile(absolutePath, content).catch((error) => {
       logForDebugging(`LSP: Failed to notify server of file change for ${absolutePath}: ${error.message}`, {
         level: "error",
@@ -772,7 +827,7 @@ async function callFileWrite({ file_path: filePath, content }, context, parentMe
   lintMemoryWrite(absolutePath, isOldContentLarge ? null : oldContent, content);
   if (absolutePath.endsWith(`${sep}CLAUDE.md`)) logEvent("tengu_write_claudemd", {});
   let gitDiff;
-  if (shouldSendToolDiff(context) && !isOldContentLarge) {
+  if (shouldSendToolDiff(toolContextView) && !isOldContentLarge) {
     let now = Date.now();
     let singleFileGitDiff = await fetchSingleFileGitDiff(absolutePath);
     if (singleFileGitDiff && isPatchWithinSizeLimit(singleFileGitDiff)) gitDiff = singleFileGitDiff;
@@ -782,9 +837,9 @@ async function callFileWrite({ file_path: filePath, content }, context, parentMe
       hasDiff: !!singleFileGitDiff,
     });
   }
-  let logChangedLines = context.callerLogsSharedEvents ? countLinesChanged : logFileChanged;
+  let logChangedLines = toolContextView.callerLogsSharedEvents ? countLinesChanged : logFileChanged;
   if (oldContent) {
-    let nt = isOldContentLarge
+    let structuredPatch = isOldContentLarge
       ? []
       : getPatchFromContents({
           filePath,
@@ -797,7 +852,7 @@ async function callFileWrite({ file_path: filePath, content }, context, parentMe
       type: "update",
       filePath,
       content,
-      structuredPatch: nt,
+      structuredPatch,
       originalFile: isOldContentLarge ? null : oldContent,
       userModified: userModified ?? false,
       ...(memdirStamped && {
@@ -811,7 +866,7 @@ async function callFileWrite({ file_path: filePath, content }, context, parentMe
       }),
     };
     logChangedLines(
-      nt,
+      structuredPatch,
       parentMessage.message.model,
       isOldContentLarge ? content : undefined,
       isOldContentLarge ? oldContent : undefined,

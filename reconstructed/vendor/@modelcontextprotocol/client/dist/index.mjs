@@ -19,7 +19,7 @@ import {
   UnsupportedProtocolVersionError,
   modernProtocolVersions,
   isModernProtocolVersion,
-  cn,
+  defaultModernVersions,
   legacyProtocolVersions,
   isJSONRPCResultResponse,
   isJSONRPCErrorResponse,
@@ -29,7 +29,7 @@ import {
   resolveInputRequiredDriverConfig,
   isJSONRPCRequest,
   runInputRequiredFlow,
-  qi,
+  mergeCapabilities,
   ProtocolError,
   ProtocolErrorCode,
   DEFAULT_REQUEST_TIMEOUT_MSEC,
@@ -39,11 +39,11 @@ import {
   parseSchema,
   createFetchWithInit,
   normalizeHeaders,
-  Rt,
+  parseJsonRpcMessage,
   encodeMcpParamValue,
-  lYn,
-  qNr,
-  Oi,
+  isInitializeMessage,
+  isInitializedNotification,
+  parseContentType,
 } from "./src-D_zzAWoS.mjs";
 import {
   OAuthErrorResponseSchema,
@@ -58,132 +58,141 @@ import {
   SUBSCRIPTION_ID_META_KEY,
   ListChangedOptionsBaseSchema,
   PROTOCOL_VERSION_META_KEY,
-  TokenExchangeResponseSchema,
   TokenExchangeResponseSchema_2,
+  TokenExchangeResponseSchema,
 } from "../../core/dist/auth-CUe6YdwF.mjs";
 import { pkceChallenge } from "../../../pkce-challenge/dist/index.node.js";
-import { Udn } from "./ajvProvider-BIwGVY6G.mjs";
+import { AjvJsonSchemaValidator } from "./ajvProvider-BIwGVY6G.mjs";
 import { EventSource } from "../../../eventsource/dist/index.js";
 import { EventSourceParserStream } from "../../../eventsource-parser/dist/stream.esm.js";
 import {
-  defaultXaaFetch,
-  TOKEN_EXCHANGE_GRANT,
-  ID_JAG_TOKEN_TYPE,
-  ID_TOKEN_TYPE,
-  redactTokens,
-  XaaTokenExchangeError,
   defaultXaaFetch_2,
   TOKEN_EXCHANGE_GRANT_2,
   ID_JAG_TOKEN_TYPE_2,
   ID_TOKEN_TYPE_2,
   redactTokens_2,
   XaaTokenExchangeError_2,
+  defaultXaaFetch,
+  TOKEN_EXCHANGE_GRANT,
+  ID_JAG_TOKEN_TYPE,
+  ID_TOKEN_TYPE,
+  redactTokens,
+  XaaTokenExchangeError,
 } from "../../../../src/services/mcp/xaa.js";
 import { redactUrlSecrets } from "../../../../src/utils/urlRedaction.js";
+import { deferInit } from "../../../../runtime/deferred-init.js";
 
 //@ chunk-r1g76qsy.js:256668-256678 esm-layout
-var ec = false;
+var isDevMode = false;
 //@ chunk-r1g76qsy.js:256678-258898 esm-fingerprint
-var OAuthClientFlowError = class extends Error {
-  static {
-    Object.defineProperty(this, "mcpBrand", {
-      value: "mcp.OAuthClientFlowError",
-    });
-  }
-  static [Symbol.hasInstance](e) {
-    return brandedHasInstance(this, e);
-  }
-  static isInstance(value) {
-    if (typeof this !== "function")
-      throw TypeError(
-        "isInstance must be called on the class (e.g. `SdkError.isInstance(value)`); for callbacks use `v => SdkError.isInstance(v)`",
+var OAuthClientFlowError; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var IssuerMismatchError;
+var RegistrationRejectedError;
+var InsecureTokenEndpointError;
+var AuthorizationServerMismatchError;
+var InsufficientScopeError;
+deferInit("chunk-r1g76qsy.js:256678", () => {
+  OAuthClientFlowError = class extends Error {
+    static {
+      Object.defineProperty(this, "mcpBrand", {
+        value: "mcp.OAuthClientFlowError",
+      });
+    }
+    static [Symbol.hasInstance](value) {
+      return brandedHasInstance(this, value);
+    }
+    static isInstance(value) {
+      if (typeof this !== "function")
+        throw TypeError(
+          "isInstance must be called on the class (e.g. `SdkError.isInstance(value)`); for callbacks use `v => SdkError.isInstance(v)`",
+        );
+      return brandedHasInstance(this, value);
+    }
+    constructor(message) {
+      super(message);
+      this.name = new.target.name;
+      stampErrorBrands(this, new.target);
+    }
+  };
+  IssuerMismatchError = class extends OAuthClientFlowError {
+    static {
+      Object.defineProperty(this, "mcpBrand", {
+        value: "mcp.IssuerMismatchError",
+      });
+    }
+    kind;
+    expected;
+    received;
+    constructor(kind, expected, received) {
+      super(
+        `Issuer mismatch in ${kind === "metadata" ? "authorization server metadata (RFC 8414 \xA73.3)" : "authorization response (RFC 9207)"}: expected ${JSON.stringify(expected)}, received ${JSON.stringify(received)}`,
       );
-    return brandedHasInstance(this, value);
-  }
-  constructor(message) {
-    super(message);
-    this.name = new.target.name;
-    stampErrorBrands(this, new.target);
-  }
-};
-var IssuerMismatchError = class extends OAuthClientFlowError {
-  static {
-    Object.defineProperty(this, "mcpBrand", {
-      value: "mcp.IssuerMismatchError",
-    });
-  }
-  kind;
-  expected;
-  received;
-  constructor(kind, expected, received) {
-    super(
-      `Issuer mismatch in ${kind === "metadata" ? "authorization server metadata (RFC 8414 \xA73.3)" : "authorization response (RFC 9207)"}: expected ${JSON.stringify(expected)}, received ${JSON.stringify(received)}`,
-    );
-    this.kind = kind;
-    this.expected = expected;
-    this.received = received;
-  }
-};
-var RegistrationRejectedError = class extends OAuthClientFlowError {
-  static {
-    Object.defineProperty(this, "mcpBrand", {
-      value: "mcp.RegistrationRejectedError",
-    });
-  }
-  status;
-  body;
-  submittedMetadata;
-  constructor(args) {
-    super(`Dynamic Client Registration rejected (HTTP ${args.status}): ${args.body}`);
-    this.status = args.status;
-    this.body = args.body;
-    this.submittedMetadata = args.submittedMetadata;
-  }
-};
-var InsecureTokenEndpointError = class extends OAuthClientFlowError {
-  static {
-    Object.defineProperty(this, "mcpBrand", {
-      value: "mcp.InsecureTokenEndpointError",
-    });
-  }
-  tokenEndpoint;
-  constructor(tokenEndpoint) {
-    super(
-      `Refusing to send credentials to non-https token endpoint '${tokenEndpoint}'. OAuth token requests MUST use TLS (localhost / 127.0.0.1 / ::1 are exempt).`,
-    );
-    this.tokenEndpoint = tokenEndpoint;
-  }
-};
-var AuthorizationServerMismatchError = class extends OAuthClientFlowError {
-  static {
-    Object.defineProperty(this, "mcpBrand", {
-      value: "mcp.AuthorizationServerMismatchError",
-    });
-  }
-  constructor(recordedIssuer, currentIssuer) {
-    super(
-      `Authorization server changed between redirect and callback (redirected to ${JSON.stringify(recordedIssuer)}, callback resolved ${JSON.stringify(currentIssuer)}); refusing to send authorization_code/code_verifier to a different token endpoint`,
-    );
-    this.recordedIssuer = recordedIssuer;
-    this.currentIssuer = currentIssuer;
-  }
-};
-var InsufficientScopeError = class extends OAuthClientFlowError {
-  static {
-    Object.defineProperty(this, "mcpBrand", {
-      value: "mcp.InsufficientScopeError",
-    });
-  }
-  requiredScope;
-  resourceMetadataUrl;
-  errorDescription;
-  constructor(init) {
-    super(`Insufficient scope${init.requiredScope ? `: required "${init.requiredScope}"` : ""}`);
-    this.requiredScope = init.requiredScope;
-    this.resourceMetadataUrl = init.resourceMetadataUrl;
-    this.errorDescription = init.errorDescription;
-  }
-};
+      this.kind = kind;
+      this.expected = expected;
+      this.received = received;
+    }
+  };
+  RegistrationRejectedError = class extends OAuthClientFlowError {
+    static {
+      Object.defineProperty(this, "mcpBrand", {
+        value: "mcp.RegistrationRejectedError",
+      });
+    }
+    status;
+    body;
+    submittedMetadata;
+    constructor(args) {
+      super(`Dynamic Client Registration rejected (HTTP ${args.status}): ${args.body}`);
+      this.status = args.status;
+      this.body = args.body;
+      this.submittedMetadata = args.submittedMetadata;
+    }
+  };
+  InsecureTokenEndpointError = class extends OAuthClientFlowError {
+    static {
+      Object.defineProperty(this, "mcpBrand", {
+        value: "mcp.InsecureTokenEndpointError",
+      });
+    }
+    tokenEndpoint;
+    constructor(tokenEndpoint) {
+      super(
+        `Refusing to send credentials to non-https token endpoint '${tokenEndpoint}'. OAuth token requests MUST use TLS (localhost / 127.0.0.1 / ::1 are exempt).`,
+      );
+      this.tokenEndpoint = tokenEndpoint;
+    }
+  };
+  AuthorizationServerMismatchError = class extends OAuthClientFlowError {
+    static {
+      Object.defineProperty(this, "mcpBrand", {
+        value: "mcp.AuthorizationServerMismatchError",
+      });
+    }
+    constructor(recordedIssuer, currentIssuer) {
+      super(
+        `Authorization server changed between redirect and callback (redirected to ${JSON.stringify(recordedIssuer)}, callback resolved ${JSON.stringify(currentIssuer)}); refusing to send authorization_code/code_verifier to a different token endpoint`,
+      );
+      this.recordedIssuer = recordedIssuer;
+      this.currentIssuer = currentIssuer;
+    }
+  };
+  InsufficientScopeError = class extends OAuthClientFlowError {
+    static {
+      Object.defineProperty(this, "mcpBrand", {
+        value: "mcp.InsufficientScopeError",
+      });
+    }
+    requiredScope;
+    resourceMetadataUrl;
+    errorDescription;
+    constructor(init) {
+      super(`Insufficient scope${init.requiredScope ? `: required "${init.requiredScope}"` : ""}`);
+      this.requiredScope = init.requiredScope;
+      this.resourceMetadataUrl = init.resourceMetadataUrl;
+      this.errorDescription = init.errorDescription;
+    }
+  };
+});
 //@ chunk-r1g76qsy.js:258898-259270 esm-fingerprint
 function discardIfIssuerMismatch(stored, issuer, opts) {
   if (stored === undefined) return;
@@ -228,28 +237,31 @@ function adaptOAuthProvider(provider, extraAuthOptions) {
   };
 }
 //@ chunk-r1g76qsy.js:259797-260252 esm-fingerprint
-var UnauthorizedError = class extends Error {
-  static {
-    Object.defineProperty(this, "mcpBrand", {
-      value: "mcp.UnauthorizedError",
-    });
-  }
-  static [Symbol.hasInstance](e) {
-    return brandedHasInstance(this, e);
-  }
-  static isInstance(value) {
-    if (typeof this !== "function")
-      throw TypeError(
-        "isInstance must be called on the class (e.g. `SdkError.isInstance(value)`); for callbacks use `v => SdkError.isInstance(v)`",
-      );
-    return brandedHasInstance(this, value);
-  }
-  constructor(message) {
-    super(message ?? "Unauthorized");
-    this.name = "UnauthorizedError";
-    stampErrorBrands(this, new.target);
-  }
-};
+var UnauthorizedError; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-r1g76qsy.js:259797", () => {
+  UnauthorizedError = class extends Error {
+    static {
+      Object.defineProperty(this, "mcpBrand", {
+        value: "mcp.UnauthorizedError",
+      });
+    }
+    static [Symbol.hasInstance](value) {
+      return brandedHasInstance(this, value);
+    }
+    static isInstance(value) {
+      if (typeof this !== "function")
+        throw TypeError(
+          "isInstance must be called on the class (e.g. `SdkError.isInstance(value)`); for callbacks use `v => SdkError.isInstance(v)`",
+        );
+      return brandedHasInstance(this, value);
+    }
+    constructor(message) {
+      super(message ?? "Unauthorized");
+      this.name = "UnauthorizedError";
+      stampErrorBrands(this, new.target);
+    }
+  };
+});
 //@ chunk-r1g76qsy.js:260252-260329 esm-fingerprint
 function isIssParameterSupported(metadata) {
   return metadata?.authorization_response_iss_parameter_supported === true;
@@ -752,7 +764,7 @@ async function fetchWithCorsRetry(url, headers, fetchFn = fetch) {
       headers,
     });
   } catch (error) {
-    if (!(error instanceof TypeError) || !ec) throw error;
+    if (!(error instanceof TypeError) || !isDevMode) throw error;
     if (headers)
       try {
         return await fetchFn(url, {});
@@ -927,8 +939,8 @@ async function startAuthorization(
         `Incompatible auth server: does not support code challenge method ${AUTHORIZATION_CODE_CHALLENGE_METHOD}`,
       );
   } else authorizationUrl = new URL("/authorize", authorizationServerUrl);
-  let c = await pkceChallenge();
-  let { code_verifier: codeVerifier, code_challenge: codeChallenge } = c;
+  let pkce = await pkceChallenge();
+  let { code_verifier: codeVerifier, code_challenge: codeChallenge } = pkce;
   authorizationUrl.searchParams.set("response_type", AUTHORIZATION_CODE_RESPONSE_TYPE);
   authorizationUrl.searchParams.set("client_id", clientInformation.client_id);
   authorizationUrl.searchParams.set("code_challenge", codeChallenge);
@@ -1109,65 +1121,69 @@ async function registerClient(authorizationServerUrl, { metadata, clientMetadata
 /**
  * McpResponseCache：MCP SDK 响应缓存，键为 method\0JSON([partition,params])；列表类方法与 server/discover 不计入上限（默认 512），其他方法超限时淘汰最早一条。归属疑为 SDK（见 lead 建议）。
  */
-var UNCAPPED_CACHE_METHODS = new Set([
-  "tools/list",
-  "prompts/list",
-  "resources/list",
-  "resources/templates/list",
-  "server/discover",
-]);
-var McpResponseCache = class {
-  _entries = new Map();
-  _maxEntries;
-  _stamp = 0;
-  _cappedSize = 0;
-  constructor(options) {
-    this._maxEntries = options?.maxEntries ?? 512;
-  }
-  get size() {
-    return this._entries.size;
-  }
-  get(key) {
-    return this._entries.get(responseCacheKey(key));
-  }
-  set(key, entry) {
-    let k = responseCacheKey(key);
-    let exempt = UNCAPPED_CACHE_METHODS.has(key.method);
-    let isNew = !this._entries.has(k);
-    if (!exempt && isNew && this._maxEntries > 0 && this._cappedSize >= this._maxEntries) {
-      for (let key of this._entries.keys())
-        if (!UNCAPPED_CACHE_METHODS.has(key.slice(0, key.indexOf("\x00")))) {
-          this._entries.delete(key);
-          this._cappedSize--;
-          break;
+var UNCAPPED_CACHE_METHODS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var McpResponseCache;
+deferInit("chunk-r1g76qsy.js:275399", () => {
+  UNCAPPED_CACHE_METHODS = new Set([
+    "tools/list",
+    "prompts/list",
+    "resources/list",
+    "resources/templates/list",
+    "server/discover",
+  ]);
+  McpResponseCache = class {
+    _entries = new Map();
+    _maxEntries;
+    _stamp = 0;
+    _cappedSize = 0;
+    constructor(options) {
+      this._maxEntries = options?.maxEntries ?? 512;
+    }
+    get size() {
+      return this._entries.size;
+    }
+    get(key) {
+      return this._entries.get(responseCacheKey(key));
+    }
+    set(key, entry) {
+      let k = responseCacheKey(key);
+      let exempt = UNCAPPED_CACHE_METHODS.has(key.method);
+      let isNew = !this._entries.has(k);
+      if (!exempt && isNew && this._maxEntries > 0 && this._cappedSize >= this._maxEntries) {
+        for (let key of this._entries.keys())
+          if (!UNCAPPED_CACHE_METHODS.has(key.slice(0, key.indexOf("\x00")))) {
+            this._entries.delete(key);
+            this._cappedSize--;
+            break;
+          }
+      }
+      let stamp = ++this._stamp;
+      this._entries.set(k, {
+        ...entry,
+        stamp,
+      });
+      if (isNew && !exempt) this._cappedSize++;
+      return stamp;
+    }
+    delete(key) {
+      if (this._entries.delete(responseCacheKey(key)) && !UNCAPPED_CACHE_METHODS.has(key.method))
+        this._cappedSize--;
+    }
+    evict(method) {
+      let prefix = `${method}\x00`;
+      let exempt = UNCAPPED_CACHE_METHODS.has(method);
+      for (let k of this._entries.keys())
+        if (k.startsWith(prefix)) {
+          this._entries.delete(k);
+          if (!exempt) this._cappedSize--;
         }
     }
-    let stamp = ++this._stamp;
-    this._entries.set(k, {
-      ...entry,
-      stamp,
-    });
-    if (isNew && !exempt) this._cappedSize++;
-    return stamp;
-  }
-  delete(key) {
-    if (this._entries.delete(responseCacheKey(key)) && !UNCAPPED_CACHE_METHODS.has(key.method))
-      this._cappedSize--;
-  }
-  evict(method) {
-    let prefix = `${method}\x00`;
-    let exempt = UNCAPPED_CACHE_METHODS.has(method);
-    for (let k of this._entries.keys())
-      if (k.startsWith(prefix)) {
-        this._entries.delete(k);
-        if (!exempt) this._cappedSize--;
-      }
-  }
-  clear() {
-    this._entries.clear();
-    this._cappedSize = 0;
-  }
-};
+    clear() {
+      this._entries.clear();
+      this._cappedSize = 0;
+    }
+  };
+});
 //@ chunk-r1g76qsy.js:276316-276404 esm-fingerprint
 /**
  * responseCacheKey：缓存键 = method + \0 + JSON([partition, params])。
@@ -1333,40 +1349,41 @@ var ClientResponseCache = class {
     }
     return this._toolIndex.byName.get(name);
   }
-  async outputValidator(e, compile) {
-    let r = await this._probe("tools/list");
-    if (r === undefined) {
+  async outputValidator(toolName, compile) {
+    let entry = await this._probe("tools/list");
+    if (entry === undefined) {
       this._toolOutputValidatorIndex = undefined;
       return;
     }
     let _toolOutputValidatorIndex = this._toolOutputValidatorIndex;
-    let a;
-    if (_toolOutputValidatorIndex?.stamp !== r.stamp) {
-      a = this._decodeListTools(r);
+    let list;
+    if (_toolOutputValidatorIndex?.stamp !== entry.stamp) {
+      list = this._decodeListTools(entry);
       _toolOutputValidatorIndex = {
-        stamp: r.stamp,
+        stamp: entry.stamp,
         byName: new Map(),
         pending: new Set(),
-        whole: String(r.value).includes('"$id"'),
+        whole: String(entry.value).includes('"$id"'),
       };
-      for (let n of a?.tools ?? []) if (n.outputSchema) _toolOutputValidatorIndex.pending.add(n.name);
+      for (let tool of list?.tools ?? [])
+        if (tool.outputSchema) _toolOutputValidatorIndex.pending.add(tool.name);
     }
     if (
       _toolOutputValidatorIndex.whole
         ? _toolOutputValidatorIndex.pending.size > 0
-        : _toolOutputValidatorIndex.pending.has(e)
+        : _toolOutputValidatorIndex.pending.has(toolName)
     ) {
-      a ??= this._decodeListTools(r);
-      for (let n of a?.tools ?? [])
-        if (_toolOutputValidatorIndex.whole || n.name === e) {
-          let i = compile(n);
-          if (i !== undefined) _toolOutputValidatorIndex.byName.set(n.name, i);
+      list ??= this._decodeListTools(entry);
+      for (let tool of list?.tools ?? [])
+        if (_toolOutputValidatorIndex.whole || tool.name === toolName) {
+          let validator = compile(tool);
+          if (validator !== undefined) _toolOutputValidatorIndex.byName.set(tool.name, validator);
         }
       if (_toolOutputValidatorIndex.whole) _toolOutputValidatorIndex.pending.clear();
-      else _toolOutputValidatorIndex.pending.delete(e);
+      else _toolOutputValidatorIndex.pending.delete(toolName);
     }
     this._toolOutputValidatorIndex = _toolOutputValidatorIndex;
-    return _toolOutputValidatorIndex.byName.get(e);
+    return _toolOutputValidatorIndex.byName.get(toolName);
   }
   _decodeListTools(entry) {
     try {
@@ -1395,8 +1412,12 @@ function encodeCacheValue(value) {
   return json;
 }
 //@ chunk-r1g76qsy.js:280268-280317 esm-fingerprint
-var UNSUPPORTED_PROTOCOL_VERSION = -32022;
-var NOT_PROBE_RECOGNIZED = new Set([-32001, -32020, -32021]);
+var UNSUPPORTED_PROTOCOL_VERSION; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var NOT_PROBE_RECOGNIZED;
+deferInit("chunk-r1g76qsy.js:280268", () => {
+  UNSUPPORTED_PROTOCOL_VERSION = -32022;
+  NOT_PROBE_RECOGNIZED = new Set([-32001, -32020, -32021]);
+});
 //@ chunk-r1g76qsy.js:280317-280959 esm-fingerprint
 function classifyProbeOutcome(outcome, context) {
   switch (outcome.kind) {
@@ -1608,7 +1629,7 @@ function resolveVersionNegotiation(options, supportedProtocolVersionsOption) {
     : [];
   return {
     kind: "auto",
-    modernVersions: explicitModern.length > 0 ? explicitModern : [...cn],
+    modernVersions: explicitModern.length > 0 ? explicitModern : [...defaultModernVersions],
     fallbackAvailable: supportedProtocolVersionsOption
       ? legacyProtocolVersions(supportedProtocolVersionsOption).length > 0
       : true,
@@ -1625,205 +1646,213 @@ function detectProbeTransportKind(transport) {
   return "stderr" in transport && "pid" in transport ? "stdio" : "http";
 }
 //@ chunk-r1g76qsy.js:283435-286144 esm-fingerprint
-var ProbeWindow = class ProbeWindow {
-  _pending;
-  _probeCounter = 0;
-  _transportKind;
-  _issuedIds = new Set();
-  _errorSinceSend;
-  _savedOnMessage;
-  _savedOnError;
-  _savedOnClose;
-  _closeDelivered = false;
-  constructor(t) {
-    this._transport = t;
-    this._savedOnMessage = t.onmessage;
-    this._savedOnError = t.onerror;
-    this._savedOnClose = t.onclose;
-  }
-  static async open(t, _transportKind) {
-    let s = new ProbeWindow(t);
-    s._transportKind = _transportKind;
-    t.onmessage = (a) => {
-      let _pending = s._pending;
-      if (
-        _pending !== undefined &&
-        (isJSONRPCResultResponse(a) || isJSONRPCErrorResponse(a)) &&
-        a.id === _pending.id
-      ) {
-        s._pending = undefined;
-        if (isJSONRPCResultResponse(a))
-          _pending.resolve({
-            kind: "response",
-            result: a.result,
-          });
-        else
-          _pending.resolve({
-            kind: "response",
-            error: a.error,
-          });
-        return;
-      }
-      if (
-        _pending !== undefined &&
-        s._transportKind === "http" &&
-        (isJSONRPCResultResponse(a) || isJSONRPCErrorResponse(a)) &&
-        !s._issuedIds.has(a.id)
-      ) {
-        s._pending = undefined;
-        let i = cc(JSON.stringify(a.id));
-        let l = Error(
-          `server/discover probe reply did not echo the request id (expected ${JSON.stringify(_pending.id)}, got ${i}) \u2014 treating the server as pre-2026-07-28`,
-        );
-        l.name = "McpProbeIdMismatchError";
-        s._savedOnError?.(l);
-        _pending.resolve({
-          kind: "id-mismatch",
-        });
-        return;
-      }
-    };
-    t.onerror = (a) => {
-      if (s._pending !== undefined && s._errorSinceSend === undefined) s._errorSinceSend = a;
-      let _pending = s._pending;
-      if (_pending !== undefined && s._transportKind === "http" && lc(a))
-        setTimeout(() => {
-          if (s._pending !== _pending) return;
-          s._pending = undefined;
-          let i = Error(
-            `server/discover probe reply failed JSON-RPC message decoding (${cc(a instanceof Error ? a.message : String(a))}) \u2014 treating the server as pre-2026-07-28`,
-          );
-          i.name = "McpProbeMalformedReplyError";
-          s._savedOnError?.(i);
-          _pending.resolve({
-            kind: "malformed",
-          });
-        }, 0);
-      s._savedOnError?.(a);
-    };
-    t.onclose = () => {
-      let _pending = s._pending;
-      if (_pending !== undefined) {
-        s._pending = undefined;
-        _pending.resolve({
-          kind: "closed",
-        });
-      }
-      s._closeDelivered = true;
-      s._savedOnClose?.();
-    };
-    try {
-      await t.start();
-    } catch (error) {
-      s.detach();
-      throw error;
+var ProbeWindow; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var weakMap;
+deferInit("chunk-r1g76qsy.js:283435", () => {
+  ProbeWindow = class ProbeWindow {
+    _pending;
+    _probeCounter = 0;
+    _transportKind;
+    _issuedIds = new Set();
+    _errorSinceSend;
+    _savedOnMessage;
+    _savedOnError;
+    _savedOnClose;
+    _closeDelivered = false;
+    constructor(transport) {
+      this._transport = transport;
+      this._savedOnMessage = transport.onmessage;
+      this._savedOnError = transport.onerror;
+      this._savedOnClose = transport.onclose;
     }
-    return s;
-  }
-  async exchange(t, r) {
-    let s = `server-discover-probe-${++this._probeCounter}`;
-    this._issuedIds.add(s);
-    this._errorSinceSend = undefined;
-    return new Promise((resolve) => {
-      let n = false;
-      let i = (c) => {
-        if (n) return;
-        n = true;
-        clearTimeout(timer);
-        if (this._pending?.id === s) this._pending = undefined;
-        resolve(c);
-      };
-      let timer = setTimeout(
-        () =>
-          i({
-            kind: "timeout",
-          }),
-        r,
-      );
-      this._pending = {
-        id: s,
-        resolve: i,
-      };
-      this._transport
-        .send(t(s), {
-          onRequestStreamEnd: () => {
-            setTimeout(() => {
-              let _errorSinceSend = this._errorSinceSend;
-              if (_errorSinceSend !== undefined && !lc(_errorSinceSend)) {
-                i({
-                  kind: "send-error",
-                  error: _errorSinceSend instanceof Error ? _errorSinceSend : Error(String(_errorSinceSend)),
-                });
-                return;
-              }
-              i({
-                kind: "stream-end",
-              });
-            }, 0);
-          },
-        })
-        .catch((error) =>
-          i({
-            kind: "send-error",
-            error,
-          }),
-        );
-    });
-  }
-  detach() {
-    this._pending = undefined;
-    this._transport.onmessage = this._savedOnMessage;
-    this._transport.onerror = this._savedOnError;
-    if (this._closeDelivered && this._savedOnClose !== undefined) {
-      let _savedOnClose = this._savedOnClose;
-      let _transport = this._transport;
-      let s = false;
-      let a = () => {
-        if (!s) {
-          s = true;
+    static async open(transport, _transportKind) {
+      let probe = new ProbeWindow(transport);
+      probe._transportKind = _transportKind;
+      transport.onmessage = (message) => {
+        let _pending = probe._pending;
+        if (
+          _pending !== undefined &&
+          (isJSONRPCResultResponse(message) || isJSONRPCErrorResponse(message)) &&
+          message.id === _pending.id
+        ) {
+          probe._pending = undefined;
+          if (isJSONRPCResultResponse(message))
+            _pending.resolve({
+              kind: "response",
+              result: message.result,
+            });
+          else
+            _pending.resolve({
+              kind: "response",
+              error: message.error,
+            });
           return;
         }
-        _savedOnClose();
+        if (
+          _pending !== undefined &&
+          probe._transportKind === "http" &&
+          (isJSONRPCResultResponse(message) || isJSONRPCErrorResponse(message)) &&
+          !probe._issuedIds.has(message.id)
+        ) {
+          probe._pending = undefined;
+          let receivedId = truncateForError(JSON.stringify(message.id));
+          let probeError = Error(
+            `server/discover probe reply did not echo the request id (expected ${JSON.stringify(_pending.id)}, got ${receivedId}) \u2014 treating the server as pre-2026-07-28`,
+          );
+          probeError.name = "McpProbeIdMismatchError";
+          probe._savedOnError?.(probeError);
+          _pending.resolve({
+            kind: "id-mismatch",
+          });
+          return;
+        }
       };
-      _transport.onclose = a;
-      weakMap.set(_transport, () => {
-        if (_transport.onclose === a) _transport.onclose = _savedOnClose;
-      });
-    } else this._transport.onclose = this._savedOnClose;
-  }
-  release() {
-    this.detach();
-    let _transport = this._transport;
-    let start = _transport.start;
-    let s = true;
-    _transport.start = async function () {
-      if (s) {
-        s = false;
-        _transport.start = start;
-        return;
+      transport.onerror = (errorEvent) => {
+        if (probe._pending !== undefined && probe._errorSinceSend === undefined)
+          probe._errorSinceSend = errorEvent;
+        let _pending = probe._pending;
+        if (_pending !== undefined && probe._transportKind === "http" && isDecodeError(errorEvent))
+          setTimeout(() => {
+            if (probe._pending !== _pending) return;
+            probe._pending = undefined;
+            let probeError = Error(
+              `server/discover probe reply failed JSON-RPC message decoding (${truncateForError(errorEvent instanceof Error ? errorEvent.message : String(errorEvent))}) \u2014 treating the server as pre-2026-07-28`,
+            );
+            probeError.name = "McpProbeMalformedReplyError";
+            probe._savedOnError?.(probeError);
+            _pending.resolve({
+              kind: "malformed",
+            });
+          }, 0);
+        probe._savedOnError?.(errorEvent);
+      };
+      transport.onclose = () => {
+        let _pending = probe._pending;
+        if (_pending !== undefined) {
+          probe._pending = undefined;
+          _pending.resolve({
+            kind: "closed",
+          });
+        }
+        probe._closeDelivered = true;
+        probe._savedOnClose?.();
+      };
+      try {
+        await transport.start();
+      } catch (error) {
+        probe.detach();
+        throw error;
       }
-      return start.call(_transport);
-    };
-  }
-};
-var weakMap = new WeakMap();
+      return probe;
+    }
+    async exchange(buildRequest, timeoutMs) {
+      let requestId = `server-discover-probe-${++this._probeCounter}`;
+      this._issuedIds.add(requestId);
+      this._errorSinceSend = undefined;
+      return new Promise((resolve) => {
+        let settled = false;
+        let settle = (outcome) => {
+          if (settled) return;
+          settled = true;
+          clearTimeout(timer);
+          if (this._pending?.id === requestId) this._pending = undefined;
+          resolve(outcome);
+        };
+        let timer = setTimeout(
+          () =>
+            settle({
+              kind: "timeout",
+            }),
+          timeoutMs,
+        );
+        this._pending = {
+          id: requestId,
+          resolve: settle,
+        };
+        this._transport
+          .send(buildRequest(requestId), {
+            onRequestStreamEnd: () => {
+              setTimeout(() => {
+                let _errorSinceSend = this._errorSinceSend;
+                if (_errorSinceSend !== undefined && !isDecodeError(_errorSinceSend)) {
+                  settle({
+                    kind: "send-error",
+                    error:
+                      _errorSinceSend instanceof Error ? _errorSinceSend : Error(String(_errorSinceSend)),
+                  });
+                  return;
+                }
+                settle({
+                  kind: "stream-end",
+                });
+              }, 0);
+            },
+          })
+          .catch((error) =>
+            settle({
+              kind: "send-error",
+              error,
+            }),
+          );
+      });
+    }
+    detach() {
+      this._pending = undefined;
+      this._transport.onmessage = this._savedOnMessage;
+      this._transport.onerror = this._savedOnError;
+      if (this._closeDelivered && this._savedOnClose !== undefined) {
+        let _savedOnClose = this._savedOnClose;
+        let _transport = this._transport;
+        let closeSeen = false;
+        let onCloseReplay = () => {
+          if (!closeSeen) {
+            closeSeen = true;
+            return;
+          }
+          _savedOnClose();
+        };
+        _transport.onclose = onCloseReplay;
+        weakMap.set(_transport, () => {
+          if (_transport.onclose === onCloseReplay) _transport.onclose = _savedOnClose;
+        });
+      } else this._transport.onclose = this._savedOnClose;
+    }
+    release() {
+      this.detach();
+      let _transport = this._transport;
+      let start = _transport.start;
+      let isFirstStart = true;
+      _transport.start = async function () {
+        if (isFirstStart) {
+          isFirstStart = false;
+          _transport.start = start;
+          return;
+        }
+        return start.call(_transport);
+      };
+    }
+  };
+  weakMap = new WeakMap();
+});
 //@ chunk-r1g76qsy.js:286144-286291 esm-layout
-function cc(e) {
-  let t = String(e);
-  if (t.length <= 200) return t;
-  let r = (t.charCodeAt(199) & 64512) === 55296 ? 199 : 200;
-  return `${t.slice(0, r)}\u2026 [truncated]`;
+function truncateForError(text) {
+  let str = String(text);
+  if (str.length <= 200) return str;
+  let sliceEnd = (str.charCodeAt(199) & 64512) === 55296 ? 199 : 200;
+  return `${str.slice(0, sliceEnd)}\u2026 [truncated]`;
 }
 //@ chunk-r1g76qsy.js:286291-286428 esm-layout
-function lc(e) {
-  if (e instanceof SyntaxError) return true;
-  return typeof e === "object" && e !== null && (e.name === "ZodError" || Array.isArray(e.issues));
+function isDecodeError(error) {
+  if (error instanceof SyntaxError) return true;
+  return (
+    typeof error === "object" && error !== null && (error.name === "ZodError" || Array.isArray(error.issues))
+  );
 }
 //@ chunk-r1g76qsy.js:286428-286478 esm-fingerprint
 function disarmSpentCloseGuard(transport) {
-  let t = weakMap.get(transport);
+  let restoreOnClose = weakMap.get(transport);
   weakMap.delete(transport);
-  t?.();
+  restoreOnClose?.();
 }
 //@ chunk-r1g76qsy.js:286478-286644 esm-fingerprint
 function buildProbeRequest(id, protocolVersion, clientInfo, capabilities) {
@@ -1905,13 +1934,13 @@ async function negotiateEra(negotiation, deps) {
   let maxRetries = Math.max(0, negotiation.probe.maxRetries ?? 0);
   let clientModernVersions = negotiation.kind === "pin" ? [negotiation.version] : negotiation.modernVersions;
   let fallbackAvailable = negotiation.kind === "auto" && negotiation.fallbackAvailable;
-  let i = await ProbeWindow.open(deps.transport, deps.transportKind);
-  let probe = async () => {
+  let probe = await ProbeWindow.open(deps.transport, deps.transportKind);
+  let probe_2 = async () => {
     let requestedVersion = clientModernVersions[0];
     let correctiveUsed = false;
     let timeoutRetriesRemaining = maxRetries;
     for (;;) {
-      let reply = await i.exchange(
+      let reply = await probe.exchange(
         (id) => buildProbeRequest(id, requestedVersion, deps.clientInfo, deps.capabilities),
         timeoutMs,
       );
@@ -1975,12 +2004,12 @@ async function negotiateEra(negotiation, deps) {
   };
   let result;
   try {
-    result = await probe();
+    result = await probe_2();
   } catch (error) {
-    i.detach();
+    probe.detach();
     throw error;
   }
-  i.release();
+  probe.release();
   return result;
 }
 //@ chunk-r1g76qsy.js:289241-289456 esm-fingerprint
@@ -2091,1511 +2120,1540 @@ function validatePrior(prior) {
   );
 }
 //@ chunk-r1g76qsy.js:291095-316569 esm-fingerprint
-var LIST_CHANGED_EVICTIONS = {
-  "notifications/tools/list_changed": ["tools/list"],
-  "notifications/prompts/list_changed": ["prompts/list"],
-  "notifications/resources/list_changed": ["resources/list", "resources/templates/list"],
-};
-var DEFAULT_LIST_MAX_PAGES = 64;
-var Client = class extends Protocol {
-  _serverCapabilities;
-  _serverVersion;
-  _capabilities;
-  _instructions;
-  _jsonSchemaValidator;
-  _cache;
-  _defaultCacheTtlMs;
-  _listMaxPages;
-  _listChangedDebounceTimers = new Map();
-  _listChangedConfig;
-  _enforceStrictCapabilities;
-  _versionNegotiation;
-  _supportedProtocolVersionsOption;
-  _inputRequiredDriverConfig;
-  _listenState = new Map();
-  _nextListenId = 0;
-  _autoOpenedSubscription;
-  _discoverResult;
-  _resetConnectionState() {
-    this._negotiatedProtocolVersion = undefined;
-    this._serverCapabilities = undefined;
-    this._serverVersion = undefined;
-    this._instructions = undefined;
-    this._discoverResult = undefined;
-    this._autoOpenedSubscription = undefined;
-    if (this._listenState.size > 0) {
-      let reason = new SdkError(
-        SdkErrorCode.ConnectionClosed,
-        "subscriptions/listen: client reconnected or closed; subscription state from the previous connection was reset",
-      );
-      for (let entry of this._listenState.values())
-        entry.settle({
-          cause: "remote",
-          error: reason,
-        });
-    }
-    this._listenState.clear();
-    for (let timer of this._listChangedDebounceTimers.values()) clearTimeout(timer);
-    this._listChangedDebounceTimers.clear();
-    this._cache.resetForReconnect();
-  }
-  async close() {
-    try {
-      await super.close();
-    } finally {
-      this._resetConnectionState();
-    }
-  }
-  constructor(_clientInfo, options) {
-    super(options);
-    this._clientInfo = _clientInfo;
-    this._capabilities = options?.capabilities
-      ? {
-          ...options.capabilities,
-        }
-      : {};
-    this._jsonSchemaValidator = options?.jsonSchemaValidator ?? new Udn();
-    this._enforceStrictCapabilities = options?.enforceStrictCapabilities ?? false;
-    this._versionNegotiation = options?.versionNegotiation;
-    this._supportedProtocolVersionsOption = options?.supportedProtocolVersions;
-    this._inputRequiredDriverConfig = resolveInputRequiredDriverConfig(options?.inputRequired);
-    this._cache = new ClientResponseCache(
-      options?.responseCacheStore ?? new McpResponseCache(),
-      options?.responseCacheStore !== undefined,
-      (error) => this._reportStoreError(error),
-      options?.cachePartition ?? "",
-    );
-    this._defaultCacheTtlMs = options?.defaultCacheTtlMs ?? 0;
-    this._listMaxPages = options?.listMaxPages ?? DEFAULT_LIST_MAX_PAGES;
-    if (options?.listChanged) this._listChangedConfig = options.listChanged;
-  }
-  buildContext(ctx, _transportInfo) {
-    return ctx;
-  }
-  _shouldDropInbound(message) {
-    if (
-      this._negotiatedProtocolVersion !== undefined &&
-      isModernProtocolVersion(this._negotiatedProtocolVersion) &&
-      isJSONRPCRequest(message)
-    )
-      return "drop";
-  }
-  _outboundMetaEnvelope() {
-    let version = this._negotiatedProtocolVersion;
-    if (version === undefined) return;
-    return this._wireCodec().outboundEnvelope({
-      protocolVersion: version,
-      clientInfo: this._clientInfo,
-      clientCapabilities: this._capabilities,
-    });
-  }
-  _resolveNonCompleteResult(decoded, flow) {
-    if (!this._inputRequiredDriverConfig.autoFulfill)
-      return Promise.reject(
-        new SdkError(
-          SdkErrorCode.UnsupportedResultType,
-          `Unsupported result type 'input_required' for ${flow.request.method}: multi-round-trip auto-fulfilment is not enabled on this instance \u2014 pass allowInputRequired: true to handle it manually, or enable inputRequired.autoFulfill`,
-          {
-            resultType: "input_required",
-            method: flow.request.method,
-          },
-        ),
-      );
-    return runInputRequiredFlow(
-      {
-        getRequestHandler: (method) => this._getRequestHandler(method),
-        buildContext: (baseCtx) => this.buildContext(baseCtx, undefined),
-        sessionId: this.transport?.sessionId,
-      },
-      this._inputRequiredDriverConfig,
-      decoded,
-      flow,
-    );
-  }
-  _setupListChangedHandlers(config) {
-    if (config.tools && this._serverCapabilities?.tools?.listChanged)
-      this._setupListChangedHandler(
-        "tools",
-        "notifications/tools/list_changed",
-        config.tools,
-        async () =>
-          (
-            await this.listTools(undefined, {
-              cacheMode: "refresh",
-            })
-          ).tools,
-      );
-    if (config.prompts && this._serverCapabilities?.prompts?.listChanged)
-      this._setupListChangedHandler(
-        "prompts",
-        "notifications/prompts/list_changed",
-        config.prompts,
-        async () =>
-          (
-            await this.listPrompts(undefined, {
-              cacheMode: "refresh",
-            })
-          ).prompts,
-      );
-    if (config.resources && this._serverCapabilities?.resources?.listChanged)
-      this._setupListChangedHandler(
-        "resources",
-        "notifications/resources/list_changed",
-        config.resources,
-        async () =>
-          (
-            await this.listResources(undefined, {
-              cacheMode: "refresh",
-            })
-          ).resources,
-      );
-  }
-  registerCapabilities(capabilities) {
-    if (this.transport) throw Error("Cannot register capabilities after connecting to transport");
-    this._capabilities = qi(this._capabilities, capabilities);
-  }
-  setVersionNegotiation(options) {
-    if (this.transport) throw Error("Cannot configure version negotiation after connecting to transport");
-    this._versionNegotiation = options;
-  }
-  _wrapHandler(method, handler) {
-    if (method === "elicitation/create")
-      return async (request, ctx) => {
-        let codec = codecForVersion(this._negotiatedProtocolVersion);
-        let validatedRequest = codec.validateRequest("elicitation/create", request);
-        if (!validatedRequest.ok && validatedRequest.reason === "not-in-era")
-          validatedRequest = codec.validateInputRequest("elicitation/create", request);
-        if (!validatedRequest.ok)
-          throw new ProtocolError(
-            validatedRequest.reason === "not-in-era"
-              ? ProtocolErrorCode.InternalError
-              : ProtocolErrorCode.InvalidParams,
-            validatedRequest.reason === "not-in-era"
-              ? "No wire schema for elicitation/create in the resolved era"
-              : `Invalid elicitation request: ${validatedRequest.message}`,
-          );
-        let { params } = validatedRequest.value;
-        params.mode = params.mode ?? "form";
-        let { supportsFormMode, supportsUrlMode } = getSupportedElicitationModes(
-          this._capabilities.elicitation,
-        );
-        if (params.mode === "form" && !supportsFormMode)
-          throw new ProtocolError(
-            ProtocolErrorCode.InvalidParams,
-            "Client does not support form-mode elicitation requests",
-          );
-        if (params.mode === "url" && !supportsUrlMode)
-          throw new ProtocolError(
-            ProtocolErrorCode.InvalidParams,
-            "Client does not support URL-mode elicitation requests",
-          );
-        let result = await handler(request, ctx);
-        let validationResult = codec.validateResult("elicitation/create", result);
-        if (!validationResult.ok && validationResult.reason === "not-in-era")
-          validationResult = codec.validateInputResponse("elicitation/create", result);
-        if (!validationResult.ok)
-          throw new ProtocolError(
-            validationResult.reason === "not-in-era"
-              ? ProtocolErrorCode.InternalError
-              : ProtocolErrorCode.InvalidParams,
-            validationResult.reason === "not-in-era"
-              ? "No wire schema for elicitation/create in the resolved era"
-              : `Invalid elicitation result: ${validationResult.message}`,
-          );
-        let validatedResult = validationResult.value;
-        let requestedSchema = params.mode === "form" ? params.requestedSchema : undefined;
-        if (
-          params.mode === "form" &&
-          validatedResult.action === "accept" &&
-          validatedResult.content &&
-          requestedSchema &&
-          this._capabilities.elicitation?.form?.applyDefaults
-        )
-          try {
-            applyElicitationDefaults(requestedSchema, validatedResult.content);
-          } catch {}
-        return validatedResult;
-      };
-    if (method === "sampling/createMessage")
-      return async (request, ctx) => {
-        let codec = codecForVersion(this._negotiatedProtocolVersion);
-        let validatedRequest = codec.validateRequest("sampling/createMessage", request);
-        if (!validatedRequest.ok && validatedRequest.reason === "not-in-era")
-          validatedRequest = codec.validateInputRequest("sampling/createMessage", request);
-        if (!validatedRequest.ok)
-          throw new ProtocolError(
-            validatedRequest.reason === "not-in-era"
-              ? ProtocolErrorCode.InternalError
-              : ProtocolErrorCode.InvalidParams,
-            validatedRequest.reason === "not-in-era"
-              ? "No wire schema for sampling/createMessage in the resolved era"
-              : `Invalid sampling request: ${validatedRequest.message}`,
-          );
-        let { params } = validatedRequest.value;
-        let result = await handler(request, ctx);
-        let hasTools = Boolean(params.tools || params.toolChoice);
-        let validatedResult = codec.samplingResultVariant(hasTools, result);
-        if (!validatedResult.ok && validatedResult.reason === "not-in-era")
-          validatedResult = codec.validateInputResponse("sampling/createMessage", result);
-        if (!validatedResult.ok)
-          throw new ProtocolError(
-            validatedResult.reason === "not-in-era"
-              ? ProtocolErrorCode.InternalError
-              : ProtocolErrorCode.InvalidParams,
-            validatedResult.reason === "not-in-era"
-              ? "No result schema for sampling/createMessage in the resolved era"
-              : `Invalid sampling result: ${validatedResult.message}`,
-          );
-        return validatedResult.value;
-      };
-    return handler;
-  }
-  assertCapability(capability, method) {
-    if (!this._serverCapabilities?.[capability])
-      throw new SdkError(
-        SdkErrorCode.CapabilityNotSupported,
-        `Server does not support ${capability} (required for ${method})`,
-      );
-  }
-  async connect(transport, options) {
-    if (options?.prior != null)
-      return this._connectFromPrior(transport, validatePrior(options.prior), options);
-    let negotiation = resolveVersionNegotiation(
-      this._versionNegotiation,
-      this._supportedProtocolVersionsOption,
-    );
-    if (negotiation.kind !== "legacy") return this._connectNegotiated(transport, negotiation, options);
-    return this._connectPlainLegacy(transport, options);
-  }
-  async _connectPlainLegacy(transport, options) {
-    await super.connect(transport);
-    if (transport.sessionId !== undefined) {
-      let negotiatedProtocolVersion = this._negotiatedProtocolVersion;
-      if (negotiatedProtocolVersion !== undefined) transport.setProtocolVersion?.(negotiatedProtocolVersion);
-      return;
-    }
-    this._resetConnectionState();
-    await this._legacyHandshake(transport, options);
-  }
-  async _legacyHandshake(transport, options, r = true) {
-    let legacyVersions = legacyProtocolVersions(this._supportedProtocolVersions);
-    try {
-      let offeredVersion = legacyVersions[0];
-      if (offeredVersion === undefined)
-        throw new SdkError(
-          SdkErrorCode.EraNegotiationFailed,
-          "Cannot run the initialize handshake: supportedProtocolVersions contains no pre-2026-07-28 protocol version",
-        );
-      let result = await this.request(
-        {
-          method: "initialize",
-          params: {
-            protocolVersion: offeredVersion,
-            capabilities: this._capabilities,
-            clientInfo: this._clientInfo,
-          },
-        },
-        options,
-      );
-      if (result === undefined) throw Error(`Server sent invalid initialize result: ${result}`);
-      if (!legacyVersions.includes(result.protocolVersion))
-        throw Error(`Server's protocol version is not supported: ${result.protocolVersion}`);
-      this._serverCapabilities = result.capabilities;
-      this._serverVersion = result.serverInfo;
-      this._cache.setServerIdentity(this._deriveServerIdentity(transport));
-      if (transport.setProtocolVersion) transport.setProtocolVersion(result.protocolVersion);
-      this._instructions = result.instructions;
-      await this.notification({
-        method: "notifications/initialized",
-      });
-      this._negotiatedProtocolVersion = result.protocolVersion;
-      if (this._listChangedConfig) this._setupListChangedHandlers(this._listChangedConfig);
-    } catch (error) {
-      if (r) this.close();
-      throw error;
-    }
-  }
-  async _discoverAfterRejectedInitialize(e, t, r, s) {
-    let a = r.kind === "auto" && e._anthropicProbeTimedOut === true && t instanceof ProtocolError;
-    let n =
-      a && t.code === ProtocolErrorCode.UnsupportedProtocolVersion ? parseSupportedList(t.data) : undefined;
-    let i = !a
-      ? undefined
-      : n === undefined
-        ? r.modernVersions[0]
-        : r.modernVersions.find((modernVersion) => n.includes(modernVersion));
-    if (i === undefined) {
-      this.close();
-      throw t;
-    }
-    try {
-      this._negotiatedProtocolVersion = i;
-      let l = await this.discover({
-        ...s,
-        timeout: Math.min(3000, r.probe.timeoutMs ?? s?.timeout ?? DEFAULT_REQUEST_TIMEOUT_MSEC),
-      });
-      if (!l.supportedVersions.includes(i)) throw Error(`the second server/discover does not offer ${i}`);
-      return {
-        era: "modern",
-        version: i,
-        discover: l,
-      };
-    } catch (error) {
-      e._anthropicRediscoverError = error;
+var LIST_CHANGED_EVICTIONS; // deferred: uses NO_REQUEST_STATE (./src-D_zzAWoS.mjs) of its import cycle while loading; runs once the cycle is complete
+var DEFAULT_LIST_MAX_PAGES;
+var Client;
+deferInit("chunk-r1g76qsy.js:291095", () => {
+  LIST_CHANGED_EVICTIONS = {
+    "notifications/tools/list_changed": ["tools/list"],
+    "notifications/prompts/list_changed": ["prompts/list"],
+    "notifications/resources/list_changed": ["resources/list", "resources/templates/list"],
+  };
+  DEFAULT_LIST_MAX_PAGES = 64;
+  Client = class extends Protocol {
+    _serverCapabilities;
+    _serverVersion;
+    _capabilities;
+    _instructions;
+    _jsonSchemaValidator;
+    _cache;
+    _defaultCacheTtlMs;
+    _listMaxPages;
+    _listChangedDebounceTimers = new Map();
+    _listChangedConfig;
+    _enforceStrictCapabilities;
+    _versionNegotiation;
+    _supportedProtocolVersionsOption;
+    _inputRequiredDriverConfig;
+    _listenState = new Map();
+    _nextListenId = 0;
+    _autoOpenedSubscription;
+    _discoverResult;
+    _resetConnectionState() {
       this._negotiatedProtocolVersion = undefined;
-      this.close();
-      throw t;
-    }
-  }
-  async _connectNegotiated(transport, negotiation, options) {
-    if (transport.sessionId !== undefined) {
-      await super.connect(transport);
-      let negotiatedProtocolVersion = this._negotiatedProtocolVersion;
-      if (negotiatedProtocolVersion !== undefined && transport.setProtocolVersion)
-        transport.setProtocolVersion(negotiatedProtocolVersion);
-      return;
-    }
-    this._resetConnectionState();
-    let result;
-    try {
-      let transportKind = detectProbeTransportKind(transport);
-      let baseDeps = {
-        clientInfo: this._clientInfo,
-        capabilities: this._capabilities,
-        environment: detectProbeEnvironment(),
-        defaultTimeoutMs: options?.timeout ?? DEFAULT_REQUEST_TIMEOUT_MSEC,
-      };
-      let stdioParams = transportKind === "stdio" ? readStdioServerParams(transport) : undefined;
-      result =
-        stdioParams === undefined
-          ? await negotiateEra(negotiation, {
-              ...baseDeps,
-              transport,
-              transportKind,
-            })
-          : await negotiateStdioViaSibling(negotiation, transport, stdioParams, baseDeps);
-    } catch (error) {
-      await transport.close().catch(() => {});
-      disarmSpentCloseGuard(transport);
-      throw error;
-    }
-    disarmSpentCloseGuard(transport);
-    await super.connect(transport);
-    if (result.era === "legacy")
-      try {
-        await this._legacyHandshake(transport, options, false);
-        return;
-      } catch (error) {
-        result = await this._discoverAfterRejectedInitialize(transport, error, negotiation, options);
+      this._serverCapabilities = undefined;
+      this._serverVersion = undefined;
+      this._instructions = undefined;
+      this._discoverResult = undefined;
+      this._autoOpenedSubscription = undefined;
+      if (this._listenState.size > 0) {
+        let reason = new SdkError(
+          SdkErrorCode.ConnectionClosed,
+          "subscriptions/listen: client reconnected or closed; subscription state from the previous connection was reset",
+        );
+        for (let entry of this._listenState.values())
+          entry.settle({
+            cause: "remote",
+            error: reason,
+          });
       }
-    this._serverCapabilities = result.discover.capabilities;
-    this._serverVersion = serverInfoFromDiscover(result.discover);
-    this._cache.setServerIdentity(this._deriveServerIdentity(transport));
-    this._instructions = result.discover.instructions;
-    this._discoverResult = result.discover;
-    this._negotiatedProtocolVersion = result.version;
-    if (transport.setProtocolVersion) transport.setProtocolVersion(result.version);
-    if (this._listChangedConfig) {
-      let config = this._listChangedConfig;
-      let advertised = this._serverCapabilities;
-      let effective = {
-        ...(config.tools &&
-          advertised?.tools?.listChanged && {
-            tools: config.tools,
-          }),
-        ...(config.prompts &&
-          advertised?.prompts?.listChanged && {
-            prompts: config.prompts,
-          }),
-        ...(config.resources &&
-          advertised?.resources?.listChanged && {
-            resources: config.resources,
-          }),
-      };
-      let handlersRegistered = true;
+      this._listenState.clear();
+      for (let timer of this._listChangedDebounceTimers.values()) clearTimeout(timer);
+      this._listChangedDebounceTimers.clear();
+      this._cache.resetForReconnect();
+    }
+    async close() {
       try {
-        this._setupListChangedHandlers(effective);
-      } catch (error) {
-        handlersRegistered = false;
-        this.onerror?.(error instanceof Error ? error : Error(String(error)));
+        await super.close();
+      } finally {
+        this._resetConnectionState();
       }
-      let filter = handlersRegistered
+    }
+    constructor(_clientInfo, options) {
+      super(options);
+      this._clientInfo = _clientInfo;
+      this._capabilities = options?.capabilities
         ? {
-            ...(effective.tools && {
-              toolsListChanged: true,
-            }),
-            ...(effective.prompts && {
-              promptsListChanged: true,
-            }),
-            ...(effective.resources && {
-              resourcesListChanged: true,
-            }),
+            ...options.capabilities,
           }
         : {};
-      if (Object.keys(filter).length > 0) {
-        let ackAbort = new AbortController();
-        let onConnectAbort = () => ackAbort.abort(options?.signal?.reason);
-        if (options?.signal?.aborted) onConnectAbort();
-        options?.signal?.addEventListener("abort", onConnectAbort);
+      this._jsonSchemaValidator = options?.jsonSchemaValidator ?? new AjvJsonSchemaValidator();
+      this._enforceStrictCapabilities = options?.enforceStrictCapabilities ?? false;
+      this._versionNegotiation = options?.versionNegotiation;
+      this._supportedProtocolVersionsOption = options?.supportedProtocolVersions;
+      this._inputRequiredDriverConfig = resolveInputRequiredDriverConfig(options?.inputRequired);
+      this._cache = new ClientResponseCache(
+        options?.responseCacheStore ?? new McpResponseCache(),
+        options?.responseCacheStore !== undefined,
+        (error) => this._reportStoreError(error),
+        options?.cachePartition ?? "",
+      );
+      this._defaultCacheTtlMs = options?.defaultCacheTtlMs ?? 0;
+      this._listMaxPages = options?.listMaxPages ?? DEFAULT_LIST_MAX_PAGES;
+      if (options?.listChanged) this._listChangedConfig = options.listChanged;
+    }
+    buildContext(ctx, _transportInfo) {
+      return ctx;
+    }
+    _shouldDropInbound(message) {
+      if (
+        this._negotiatedProtocolVersion !== undefined &&
+        isModernProtocolVersion(this._negotiatedProtocolVersion) &&
+        isJSONRPCRequest(message)
+      )
+        return "drop";
+    }
+    _outboundMetaEnvelope() {
+      let version = this._negotiatedProtocolVersion;
+      if (version === undefined) return;
+      return this._wireCodec().outboundEnvelope({
+        protocolVersion: version,
+        clientInfo: this._clientInfo,
+        clientCapabilities: this._capabilities,
+      });
+    }
+    _resolveNonCompleteResult(decoded, flow) {
+      if (!this._inputRequiredDriverConfig.autoFulfill)
+        return Promise.reject(
+          new SdkError(
+            SdkErrorCode.UnsupportedResultType,
+            `Unsupported result type 'input_required' for ${flow.request.method}: multi-round-trip auto-fulfilment is not enabled on this instance \u2014 pass allowInputRequired: true to handle it manually, or enable inputRequired.autoFulfill`,
+            {
+              resultType: "input_required",
+              method: flow.request.method,
+            },
+          ),
+        );
+      return runInputRequiredFlow(
+        {
+          getRequestHandler: (method) => this._getRequestHandler(method),
+          buildContext: (baseCtx) => this.buildContext(baseCtx, undefined),
+          sessionId: this.transport?.sessionId,
+        },
+        this._inputRequiredDriverConfig,
+        decoded,
+        flow,
+      );
+    }
+    _setupListChangedHandlers(config) {
+      if (config.tools && this._serverCapabilities?.tools?.listChanged)
+        this._setupListChangedHandler(
+          "tools",
+          "notifications/tools/list_changed",
+          config.tools,
+          async () =>
+            (
+              await this.listTools(undefined, {
+                cacheMode: "refresh",
+              })
+            ).tools,
+        );
+      if (config.prompts && this._serverCapabilities?.prompts?.listChanged)
+        this._setupListChangedHandler(
+          "prompts",
+          "notifications/prompts/list_changed",
+          config.prompts,
+          async () =>
+            (
+              await this.listPrompts(undefined, {
+                cacheMode: "refresh",
+              })
+            ).prompts,
+        );
+      if (config.resources && this._serverCapabilities?.resources?.listChanged)
+        this._setupListChangedHandler(
+          "resources",
+          "notifications/resources/list_changed",
+          config.resources,
+          async () =>
+            (
+              await this.listResources(undefined, {
+                cacheMode: "refresh",
+              })
+            ).resources,
+        );
+    }
+    registerCapabilities(capabilities) {
+      if (this.transport) throw Error("Cannot register capabilities after connecting to transport");
+      this._capabilities = mergeCapabilities(this._capabilities, capabilities);
+    }
+    setVersionNegotiation(options) {
+      if (this.transport) throw Error("Cannot configure version negotiation after connecting to transport");
+      this._versionNegotiation = options;
+    }
+    _wrapHandler(method, handler) {
+      if (method === "elicitation/create")
+        return async (request, ctx) => {
+          let codec = codecForVersion(this._negotiatedProtocolVersion);
+          let validatedRequest = codec.validateRequest("elicitation/create", request);
+          if (!validatedRequest.ok && validatedRequest.reason === "not-in-era")
+            validatedRequest = codec.validateInputRequest("elicitation/create", request);
+          if (!validatedRequest.ok)
+            throw new ProtocolError(
+              validatedRequest.reason === "not-in-era"
+                ? ProtocolErrorCode.InternalError
+                : ProtocolErrorCode.InvalidParams,
+              validatedRequest.reason === "not-in-era"
+                ? "No wire schema for elicitation/create in the resolved era"
+                : `Invalid elicitation request: ${validatedRequest.message}`,
+            );
+          let { params } = validatedRequest.value;
+          params.mode = params.mode ?? "form";
+          let { supportsFormMode, supportsUrlMode } = getSupportedElicitationModes(
+            this._capabilities.elicitation,
+          );
+          if (params.mode === "form" && !supportsFormMode)
+            throw new ProtocolError(
+              ProtocolErrorCode.InvalidParams,
+              "Client does not support form-mode elicitation requests",
+            );
+          if (params.mode === "url" && !supportsUrlMode)
+            throw new ProtocolError(
+              ProtocolErrorCode.InvalidParams,
+              "Client does not support URL-mode elicitation requests",
+            );
+          let result = await handler(request, ctx);
+          let validationResult = codec.validateResult("elicitation/create", result);
+          if (!validationResult.ok && validationResult.reason === "not-in-era")
+            validationResult = codec.validateInputResponse("elicitation/create", result);
+          if (!validationResult.ok)
+            throw new ProtocolError(
+              validationResult.reason === "not-in-era"
+                ? ProtocolErrorCode.InternalError
+                : ProtocolErrorCode.InvalidParams,
+              validationResult.reason === "not-in-era"
+                ? "No wire schema for elicitation/create in the resolved era"
+                : `Invalid elicitation result: ${validationResult.message}`,
+            );
+          let validatedResult = validationResult.value;
+          let requestedSchema = params.mode === "form" ? params.requestedSchema : undefined;
+          if (
+            params.mode === "form" &&
+            validatedResult.action === "accept" &&
+            validatedResult.content &&
+            requestedSchema &&
+            this._capabilities.elicitation?.form?.applyDefaults
+          )
+            try {
+              applyElicitationDefaults(requestedSchema, validatedResult.content);
+            } catch {}
+          return validatedResult;
+        };
+      if (method === "sampling/createMessage")
+        return async (request, ctx) => {
+          let codec = codecForVersion(this._negotiatedProtocolVersion);
+          let validatedRequest = codec.validateRequest("sampling/createMessage", request);
+          if (!validatedRequest.ok && validatedRequest.reason === "not-in-era")
+            validatedRequest = codec.validateInputRequest("sampling/createMessage", request);
+          if (!validatedRequest.ok)
+            throw new ProtocolError(
+              validatedRequest.reason === "not-in-era"
+                ? ProtocolErrorCode.InternalError
+                : ProtocolErrorCode.InvalidParams,
+              validatedRequest.reason === "not-in-era"
+                ? "No wire schema for sampling/createMessage in the resolved era"
+                : `Invalid sampling request: ${validatedRequest.message}`,
+            );
+          let { params } = validatedRequest.value;
+          let result = await handler(request, ctx);
+          let hasTools = Boolean(params.tools || params.toolChoice);
+          let validatedResult = codec.samplingResultVariant(hasTools, result);
+          if (!validatedResult.ok && validatedResult.reason === "not-in-era")
+            validatedResult = codec.validateInputResponse("sampling/createMessage", result);
+          if (!validatedResult.ok)
+            throw new ProtocolError(
+              validatedResult.reason === "not-in-era"
+                ? ProtocolErrorCode.InternalError
+                : ProtocolErrorCode.InvalidParams,
+              validatedResult.reason === "not-in-era"
+                ? "No result schema for sampling/createMessage in the resolved era"
+                : `Invalid sampling result: ${validatedResult.message}`,
+            );
+          return validatedResult.value;
+        };
+      return handler;
+    }
+    assertCapability(capability, method) {
+      if (!this._serverCapabilities?.[capability])
+        throw new SdkError(
+          SdkErrorCode.CapabilityNotSupported,
+          `Server does not support ${capability} (required for ${method})`,
+        );
+    }
+    async connect(transport, options) {
+      if (options?.prior != null)
+        return this._connectFromPrior(transport, validatePrior(options.prior), options);
+      let negotiation = resolveVersionNegotiation(
+        this._versionNegotiation,
+        this._supportedProtocolVersionsOption,
+      );
+      if (negotiation.kind !== "legacy") return this._connectNegotiated(transport, negotiation, options);
+      return this._connectPlainLegacy(transport, options);
+    }
+    async _connectPlainLegacy(transport, options) {
+      await super.connect(transport);
+      if (transport.sessionId !== undefined) {
+        let negotiatedProtocolVersion = this._negotiatedProtocolVersion;
+        if (negotiatedProtocolVersion !== undefined)
+          transport.setProtocolVersion?.(negotiatedProtocolVersion);
+        return;
+      }
+      this._resetConnectionState();
+      await this._legacyHandshake(transport, options);
+    }
+    async _legacyHandshake(transport, options, closeOnError = true) {
+      let legacyVersions = legacyProtocolVersions(this._supportedProtocolVersions);
+      try {
+        let offeredVersion = legacyVersions[0];
+        if (offeredVersion === undefined)
+          throw new SdkError(
+            SdkErrorCode.EraNegotiationFailed,
+            "Cannot run the initialize handshake: supportedProtocolVersions contains no pre-2026-07-28 protocol version",
+          );
+        let result = await this.request(
+          {
+            method: "initialize",
+            params: {
+              protocolVersion: offeredVersion,
+              capabilities: this._capabilities,
+              clientInfo: this._clientInfo,
+            },
+          },
+          options,
+        );
+        if (result === undefined) throw Error(`Server sent invalid initialize result: ${result}`);
+        if (!legacyVersions.includes(result.protocolVersion))
+          throw Error(`Server's protocol version is not supported: ${result.protocolVersion}`);
+        this._serverCapabilities = result.capabilities;
+        this._serverVersion = result.serverInfo;
+        this._cache.setServerIdentity(this._deriveServerIdentity(transport));
+        if (transport.setProtocolVersion) transport.setProtocolVersion(result.protocolVersion);
+        this._instructions = result.instructions;
+        await this.notification({
+          method: "notifications/initialized",
+        });
+        this._negotiatedProtocolVersion = result.protocolVersion;
+        if (this._listChangedConfig) this._setupListChangedHandlers(this._listChangedConfig);
+      } catch (error) {
+        if (closeOnError) this.close();
+        throw error;
+      }
+    }
+    async _discoverAfterRejectedInitialize(transport, initializeError, negotiation, options) {
+      let canRediscover =
+        negotiation.kind === "auto" &&
+        transport._anthropicProbeTimedOut === true &&
+        initializeError instanceof ProtocolError;
+      let supportedVersions =
+        canRediscover && initializeError.code === ProtocolErrorCode.UnsupportedProtocolVersion
+          ? parseSupportedList(initializeError.data)
+          : undefined;
+      let modernVersion = !canRediscover
+        ? undefined
+        : supportedVersions === undefined
+          ? negotiation.modernVersions[0]
+          : negotiation.modernVersions.find((modernVersion) => supportedVersions.includes(modernVersion));
+      if (modernVersion === undefined) {
+        this.close();
+        throw initializeError;
+      }
+      try {
+        this._negotiatedProtocolVersion = modernVersion;
+        let discoverResult = await this.discover({
+          ...options,
+          timeout: Math.min(
+            3000,
+            negotiation.probe.timeoutMs ?? options?.timeout ?? DEFAULT_REQUEST_TIMEOUT_MSEC,
+          ),
+        });
+        if (!discoverResult.supportedVersions.includes(modernVersion))
+          throw Error(`the second server/discover does not offer ${modernVersion}`);
+        return {
+          era: "modern",
+          version: modernVersion,
+          discover: discoverResult,
+        };
+      } catch (error) {
+        transport._anthropicRediscoverError = error;
+        this._negotiatedProtocolVersion = undefined;
+        this.close();
+        throw initializeError;
+      }
+    }
+    async _connectNegotiated(transport, negotiation, options) {
+      if (transport.sessionId !== undefined) {
+        await super.connect(transport);
+        let negotiatedProtocolVersion = this._negotiatedProtocolVersion;
+        if (negotiatedProtocolVersion !== undefined && transport.setProtocolVersion)
+          transport.setProtocolVersion(negotiatedProtocolVersion);
+        return;
+      }
+      this._resetConnectionState();
+      let result;
+      try {
+        let transportKind = detectProbeTransportKind(transport);
+        let baseDeps = {
+          clientInfo: this._clientInfo,
+          capabilities: this._capabilities,
+          environment: detectProbeEnvironment(),
+          defaultTimeoutMs: options?.timeout ?? DEFAULT_REQUEST_TIMEOUT_MSEC,
+        };
+        let stdioParams = transportKind === "stdio" ? readStdioServerParams(transport) : undefined;
+        result =
+          stdioParams === undefined
+            ? await negotiateEra(negotiation, {
+                ...baseDeps,
+                transport,
+                transportKind,
+              })
+            : await negotiateStdioViaSibling(negotiation, transport, stdioParams, baseDeps);
+      } catch (error) {
+        await transport.close().catch(() => {});
+        disarmSpentCloseGuard(transport);
+        throw error;
+      }
+      disarmSpentCloseGuard(transport);
+      await super.connect(transport);
+      if (result.era === "legacy")
         try {
-          this._autoOpenedSubscription = await this.listen(filter, {
-            timeout: options?.timeout,
-            signal: ackAbort.signal,
-          });
+          await this._legacyHandshake(transport, options, false);
+          return;
         } catch (error) {
-          if (options?.signal?.aborted) {
-            await this.close().catch(() => {});
-            throw error;
-          }
+          result = await this._discoverAfterRejectedInitialize(transport, error, negotiation, options);
+        }
+      this._serverCapabilities = result.discover.capabilities;
+      this._serverVersion = serverInfoFromDiscover(result.discover);
+      this._cache.setServerIdentity(this._deriveServerIdentity(transport));
+      this._instructions = result.discover.instructions;
+      this._discoverResult = result.discover;
+      this._negotiatedProtocolVersion = result.version;
+      if (transport.setProtocolVersion) transport.setProtocolVersion(result.version);
+      if (this._listChangedConfig) {
+        let config = this._listChangedConfig;
+        let advertised = this._serverCapabilities;
+        let effective = {
+          ...(config.tools &&
+            advertised?.tools?.listChanged && {
+              tools: config.tools,
+            }),
+          ...(config.prompts &&
+            advertised?.prompts?.listChanged && {
+              prompts: config.prompts,
+            }),
+          ...(config.resources &&
+            advertised?.resources?.listChanged && {
+              resources: config.resources,
+            }),
+        };
+        let handlersRegistered = true;
+        try {
+          this._setupListChangedHandlers(effective);
+        } catch (error) {
+          handlersRegistered = false;
           this.onerror?.(error instanceof Error ? error : Error(String(error)));
-        } finally {
-          options?.signal?.removeEventListener("abort", onConnectAbort);
+        }
+        let filter = handlersRegistered
+          ? {
+              ...(effective.tools && {
+                toolsListChanged: true,
+              }),
+              ...(effective.prompts && {
+                promptsListChanged: true,
+              }),
+              ...(effective.resources && {
+                resourcesListChanged: true,
+              }),
+            }
+          : {};
+        if (Object.keys(filter).length > 0) {
+          let ackAbort = new AbortController();
+          let onConnectAbort = () => ackAbort.abort(options?.signal?.reason);
+          if (options?.signal?.aborted) onConnectAbort();
+          options?.signal?.addEventListener("abort", onConnectAbort);
+          try {
+            this._autoOpenedSubscription = await this.listen(filter, {
+              timeout: options?.timeout,
+              signal: ackAbort.signal,
+            });
+          } catch (error) {
+            if (options?.signal?.aborted) {
+              await this.close().catch(() => {});
+              throw error;
+            }
+            this.onerror?.(error instanceof Error ? error : Error(String(error)));
+          } finally {
+            options?.signal?.removeEventListener("abort", onConnectAbort);
+          }
         }
       }
     }
-  }
-  async _connectFromPrior(transport, prior, options) {
-    if (prior.kind === "legacy") return this._connectPlainLegacy(transport, options);
-    let discover = prior.discover;
-    this._resetConnectionState();
-    let explicit = this._supportedProtocolVersionsOption;
-    let version = (
-      explicit && modernProtocolVersions(explicit).length > 0 ? modernProtocolVersions(explicit) : cn
-    ).find((v) => discover.supportedVersions.includes(v));
-    if (version === undefined)
-      throw new SdkError(
-        SdkErrorCode.EraNegotiationFailed,
-        "connect({ prior }) with a modern verdict requires a 2026-07-28+ mutual protocol version; the supplied DiscoverResult and this client's supportedProtocolVersions have no modern overlap. For a server known to be legacy, pass prior: { kind: 'legacy' } to skip the probe and initialize directly, or use versionNegotiation: { mode: 'auto' } to re-probe with legacy fallback.",
-      );
-    await super.connect(transport);
-    this._discoverResult = discover;
-    this._serverCapabilities = discover.capabilities;
-    this._serverVersion = serverInfoFromDiscover(discover);
-    this._cache.setServerIdentity(this._deriveServerIdentity(transport));
-    this._instructions = discover.instructions;
-    this._negotiatedProtocolVersion = version;
-    transport.setProtocolVersion?.(version);
-    if (this._listChangedConfig)
-      try {
-        this._setupListChangedHandlers(this._listChangedConfig);
-      } catch (error) {
-        this.onerror?.(error instanceof Error ? error : Error(String(error)));
-      }
-  }
-  getServerCapabilities() {
-    return this._serverCapabilities;
-  }
-  getServerVersion() {
-    return this._serverVersion;
-  }
-  _deriveServerIdentity(transport) {
-    let v = this._serverVersion;
-    if (v !== undefined) return `${v.name}@${v.version}`;
-    return transport.sessionId ?? `anonymous:${Date.now()}-${Math.random().toString(36).slice(2)}`;
-  }
-  getNegotiatedProtocolVersion() {
-    return this._negotiatedProtocolVersion;
-  }
-  getProtocolEra() {
-    let version = this._negotiatedProtocolVersion;
-    if (version === undefined) return;
-    return isModernProtocolVersion(version) ? "modern" : "legacy";
-  }
-  getInstructions() {
-    return this._instructions;
-  }
-  getDiscoverResult() {
-    return this._discoverResult;
-  }
-  assertCapabilityForMethod(method) {
-    switch (method) {
-      case "logging/setLevel":
-        if (!this._serverCapabilities?.logging)
-          throw new SdkError(
-            SdkErrorCode.CapabilityNotSupported,
-            `Server does not support logging (required for ${method})`,
-          );
-        break;
-      case "prompts/get":
-      case "prompts/list":
-        if (!this._serverCapabilities?.prompts)
-          throw new SdkError(
-            SdkErrorCode.CapabilityNotSupported,
-            `Server does not support prompts (required for ${method})`,
-          );
-        break;
-      case "resources/list":
-      case "resources/templates/list":
-      case "resources/read":
-      case "resources/subscribe":
-      case "resources/unsubscribe":
-        if (!this._serverCapabilities?.resources)
-          throw new SdkError(
-            SdkErrorCode.CapabilityNotSupported,
-            `Server does not support resources (required for ${method})`,
-          );
-        if (method === "resources/subscribe" && !this._serverCapabilities.resources.subscribe)
-          throw new SdkError(
-            SdkErrorCode.CapabilityNotSupported,
-            `Server does not support resource subscriptions (required for ${method})`,
-          );
-        break;
-      case "tools/call":
-      case "tools/list":
-        if (!this._serverCapabilities?.tools)
-          throw new SdkError(
-            SdkErrorCode.CapabilityNotSupported,
-            `Server does not support tools (required for ${method})`,
-          );
-        break;
-      case "completion/complete":
-        if (!this._serverCapabilities?.completions)
-          throw new SdkError(
-            SdkErrorCode.CapabilityNotSupported,
-            `Server does not support completions (required for ${method})`,
-          );
-        break;
-      case "initialize":
-        break;
-      case "server/discover":
-        break;
-      case "ping":
-        break;
-    }
-  }
-  assertNotificationCapability(method) {
-    switch (method) {
-      case "notifications/roots/list_changed":
-        if (!this._capabilities.roots?.listChanged)
-          throw new SdkError(
-            SdkErrorCode.CapabilityNotSupported,
-            `Client does not support roots list changed notifications (required for ${method})`,
-          );
-        break;
-      case "notifications/initialized":
-        break;
-      case "notifications/cancelled":
-        break;
-      case "notifications/progress":
-        break;
-    }
-  }
-  assertRequestHandlerCapability(method) {
-    switch (method) {
-      case "sampling/createMessage":
-        if (!this._capabilities.sampling)
-          throw new SdkError(
-            SdkErrorCode.CapabilityNotSupported,
-            `Client does not support sampling capability (required for ${method})`,
-          );
-        break;
-      case "elicitation/create":
-        if (!this._capabilities.elicitation)
-          throw new SdkError(
-            SdkErrorCode.CapabilityNotSupported,
-            `Client does not support elicitation capability (required for ${method})`,
-          );
-        break;
-      case "roots/list":
-        if (!this._capabilities.roots)
-          throw new SdkError(
-            SdkErrorCode.CapabilityNotSupported,
-            `Client does not support roots capability (required for ${method})`,
-          );
-        break;
-      case "ping":
-        break;
-    }
-  }
-  async ping(options) {
-    return this.request(
-      {
-        method: "ping",
-      },
-      options,
-    );
-  }
-  async discover(options) {
-    let result = await this._requestWithSchema(
-      {
-        method: "server/discover",
-      },
-      DiscoverResultSchema,
-      options,
-    );
-    this._discoverResult = result;
-    return result;
-  }
-  async complete(params, options) {
-    return this.request(
-      {
-        method: "completion/complete",
-        params,
-      },
-      options,
-    );
-  }
-  async setLoggingLevel(level, options) {
-    return this.request(
-      {
-        method: "logging/setLevel",
-        params: {
-          level,
-        },
-      },
-      options,
-    );
-  }
-  async getPrompt(params, options) {
-    return this.request(
-      {
-        method: "prompts/get",
-        params,
-      },
-      options,
-    );
-  }
-  async listPrompts(params, options) {
-    if (!this._serverCapabilities?.prompts && !this._enforceStrictCapabilities) {
-      console.debug(
-        "Client.listPrompts() called but server does not advertise prompts capability - returning empty list",
-      );
-      return {
-        prompts: [],
-      };
-    }
-    if (params?.cursor !== undefined)
-      return this.request(
-        {
-          method: "prompts/list",
-          params,
-        },
-        options,
-      );
-    let hit = await this._serveFromCache("prompts/list", undefined, options);
-    if (hit !== undefined) return hit;
-    return this._listAllPages("prompts/list", params, options, (acc, page) =>
-      acc.prompts.push(...page.prompts),
-    );
-  }
-  async listResources(params, options) {
-    if (!this._serverCapabilities?.resources && !this._enforceStrictCapabilities) {
-      console.debug(
-        "Client.listResources() called but server does not advertise resources capability - returning empty list",
-      );
-      return {
-        resources: [],
-      };
-    }
-    if (params?.cursor !== undefined)
-      return this.request(
-        {
-          method: "resources/list",
-          params,
-        },
-        options,
-      );
-    let hit = await this._serveFromCache("resources/list", undefined, options);
-    if (hit !== undefined) return hit;
-    return this._listAllPages("resources/list", params, options, (acc, page) =>
-      acc.resources.push(...page.resources),
-    );
-  }
-  async listResourceTemplates(params, options) {
-    if (!this._serverCapabilities?.resources && !this._enforceStrictCapabilities) {
-      console.debug(
-        "Client.listResourceTemplates() called but server does not advertise resources capability - returning empty list",
-      );
-      return {
-        resourceTemplates: [],
-      };
-    }
-    if (params?.cursor !== undefined)
-      return this.request(
-        {
-          method: "resources/templates/list",
-          params,
-        },
-        options,
-      );
-    let hit = await this._serveFromCache("resources/templates/list", undefined, options);
-    if (hit !== undefined) return hit;
-    return this._listAllPages("resources/templates/list", params, options, (acc, page) =>
-      acc.resourceTemplates.push(...page.resourceTemplates),
-    );
-  }
-  async _listAllPages(method, baseParams, options, append, finalize) {
-    let bypass = options?.cacheMode === "bypass";
-    let generation = this._cache.captureGeneration(method);
-    let acc = await this.request(
-      {
-        method,
-        ...(baseParams && {
-          params: {
-            ...baseParams,
-          },
-        }),
-      },
-      options,
-    );
-    let cursor = acc.nextCursor;
-    let seen = new Set();
-    let pages = 1;
-    while (cursor !== undefined && !seen.has(cursor)) {
-      if (this._listMaxPages !== 0 && pages >= this._listMaxPages)
+    async _connectFromPrior(transport, prior, options) {
+      if (prior.kind === "legacy") return this._connectPlainLegacy(transport, options);
+      let discover = prior.discover;
+      this._resetConnectionState();
+      let explicit = this._supportedProtocolVersionsOption;
+      let version = (
+        explicit && modernProtocolVersions(explicit).length > 0
+          ? modernProtocolVersions(explicit)
+          : defaultModernVersions
+      ).find((v) => discover.supportedVersions.includes(v));
+      if (version === undefined)
         throw new SdkError(
-          SdkErrorCode.ListPaginationExceeded,
-          `${method}: exceeded listMaxPages (${this._listMaxPages}); server pagination did not terminate`,
-          {
-            method,
-            listMaxPages: this._listMaxPages,
-          },
+          SdkErrorCode.EraNegotiationFailed,
+          "connect({ prior }) with a modern verdict requires a 2026-07-28+ mutual protocol version; the supplied DiscoverResult and this client's supportedProtocolVersions have no modern overlap. For a server known to be legacy, pass prior: { kind: 'legacy' } to skip the probe and initialize directly, or use versionNegotiation: { mode: 'auto' } to re-probe with legacy fallback.",
         );
-      seen.add(cursor);
-      let page = await this.request(
+      await super.connect(transport);
+      this._discoverResult = discover;
+      this._serverCapabilities = discover.capabilities;
+      this._serverVersion = serverInfoFromDiscover(discover);
+      this._cache.setServerIdentity(this._deriveServerIdentity(transport));
+      this._instructions = discover.instructions;
+      this._negotiatedProtocolVersion = version;
+      transport.setProtocolVersion?.(version);
+      if (this._listChangedConfig)
+        try {
+          this._setupListChangedHandlers(this._listChangedConfig);
+        } catch (error) {
+          this.onerror?.(error instanceof Error ? error : Error(String(error)));
+        }
+    }
+    getServerCapabilities() {
+      return this._serverCapabilities;
+    }
+    getServerVersion() {
+      return this._serverVersion;
+    }
+    _deriveServerIdentity(transport) {
+      let v = this._serverVersion;
+      if (v !== undefined) return `${v.name}@${v.version}`;
+      return transport.sessionId ?? `anonymous:${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    }
+    getNegotiatedProtocolVersion() {
+      return this._negotiatedProtocolVersion;
+    }
+    getProtocolEra() {
+      let version = this._negotiatedProtocolVersion;
+      if (version === undefined) return;
+      return isModernProtocolVersion(version) ? "modern" : "legacy";
+    }
+    getInstructions() {
+      return this._instructions;
+    }
+    getDiscoverResult() {
+      return this._discoverResult;
+    }
+    assertCapabilityForMethod(method) {
+      switch (method) {
+        case "logging/setLevel":
+          if (!this._serverCapabilities?.logging)
+            throw new SdkError(
+              SdkErrorCode.CapabilityNotSupported,
+              `Server does not support logging (required for ${method})`,
+            );
+          break;
+        case "prompts/get":
+        case "prompts/list":
+          if (!this._serverCapabilities?.prompts)
+            throw new SdkError(
+              SdkErrorCode.CapabilityNotSupported,
+              `Server does not support prompts (required for ${method})`,
+            );
+          break;
+        case "resources/list":
+        case "resources/templates/list":
+        case "resources/read":
+        case "resources/subscribe":
+        case "resources/unsubscribe":
+          if (!this._serverCapabilities?.resources)
+            throw new SdkError(
+              SdkErrorCode.CapabilityNotSupported,
+              `Server does not support resources (required for ${method})`,
+            );
+          if (method === "resources/subscribe" && !this._serverCapabilities.resources.subscribe)
+            throw new SdkError(
+              SdkErrorCode.CapabilityNotSupported,
+              `Server does not support resource subscriptions (required for ${method})`,
+            );
+          break;
+        case "tools/call":
+        case "tools/list":
+          if (!this._serverCapabilities?.tools)
+            throw new SdkError(
+              SdkErrorCode.CapabilityNotSupported,
+              `Server does not support tools (required for ${method})`,
+            );
+          break;
+        case "completion/complete":
+          if (!this._serverCapabilities?.completions)
+            throw new SdkError(
+              SdkErrorCode.CapabilityNotSupported,
+              `Server does not support completions (required for ${method})`,
+            );
+          break;
+        case "initialize":
+          break;
+        case "server/discover":
+          break;
+        case "ping":
+          break;
+      }
+    }
+    assertNotificationCapability(method) {
+      switch (method) {
+        case "notifications/roots/list_changed":
+          if (!this._capabilities.roots?.listChanged)
+            throw new SdkError(
+              SdkErrorCode.CapabilityNotSupported,
+              `Client does not support roots list changed notifications (required for ${method})`,
+            );
+          break;
+        case "notifications/initialized":
+          break;
+        case "notifications/cancelled":
+          break;
+        case "notifications/progress":
+          break;
+      }
+    }
+    assertRequestHandlerCapability(method) {
+      switch (method) {
+        case "sampling/createMessage":
+          if (!this._capabilities.sampling)
+            throw new SdkError(
+              SdkErrorCode.CapabilityNotSupported,
+              `Client does not support sampling capability (required for ${method})`,
+            );
+          break;
+        case "elicitation/create":
+          if (!this._capabilities.elicitation)
+            throw new SdkError(
+              SdkErrorCode.CapabilityNotSupported,
+              `Client does not support elicitation capability (required for ${method})`,
+            );
+          break;
+        case "roots/list":
+          if (!this._capabilities.roots)
+            throw new SdkError(
+              SdkErrorCode.CapabilityNotSupported,
+              `Client does not support roots capability (required for ${method})`,
+            );
+          break;
+        case "ping":
+          break;
+      }
+    }
+    async ping(options) {
+      return this.request(
+        {
+          method: "ping",
+        },
+        options,
+      );
+    }
+    async discover(options) {
+      let result = await this._requestWithSchema(
+        {
+          method: "server/discover",
+        },
+        DiscoverResultSchema,
+        options,
+      );
+      this._discoverResult = result;
+      return result;
+    }
+    async complete(params, options) {
+      return this.request(
+        {
+          method: "completion/complete",
+          params,
+        },
+        options,
+      );
+    }
+    async setLoggingLevel(level, options) {
+      return this.request(
+        {
+          method: "logging/setLevel",
+          params: {
+            level,
+          },
+        },
+        options,
+      );
+    }
+    async getPrompt(params, options) {
+      return this.request(
+        {
+          method: "prompts/get",
+          params,
+        },
+        options,
+      );
+    }
+    async listPrompts(params, options) {
+      if (!this._serverCapabilities?.prompts && !this._enforceStrictCapabilities) {
+        console.debug(
+          "Client.listPrompts() called but server does not advertise prompts capability - returning empty list",
+        );
+        return {
+          prompts: [],
+        };
+      }
+      if (params?.cursor !== undefined)
+        return this.request(
+          {
+            method: "prompts/list",
+            params,
+          },
+          options,
+        );
+      let hit = await this._serveFromCache("prompts/list", undefined, options);
+      if (hit !== undefined) return hit;
+      return this._listAllPages("prompts/list", params, options, (acc, page) =>
+        acc.prompts.push(...page.prompts),
+      );
+    }
+    async listResources(params, options) {
+      if (!this._serverCapabilities?.resources && !this._enforceStrictCapabilities) {
+        console.debug(
+          "Client.listResources() called but server does not advertise resources capability - returning empty list",
+        );
+        return {
+          resources: [],
+        };
+      }
+      if (params?.cursor !== undefined)
+        return this.request(
+          {
+            method: "resources/list",
+            params,
+          },
+          options,
+        );
+      let hit = await this._serveFromCache("resources/list", undefined, options);
+      if (hit !== undefined) return hit;
+      return this._listAllPages("resources/list", params, options, (acc, page) =>
+        acc.resources.push(...page.resources),
+      );
+    }
+    async listResourceTemplates(params, options) {
+      if (!this._serverCapabilities?.resources && !this._enforceStrictCapabilities) {
+        console.debug(
+          "Client.listResourceTemplates() called but server does not advertise resources capability - returning empty list",
+        );
+        return {
+          resourceTemplates: [],
+        };
+      }
+      if (params?.cursor !== undefined)
+        return this.request(
+          {
+            method: "resources/templates/list",
+            params,
+          },
+          options,
+        );
+      let hit = await this._serveFromCache("resources/templates/list", undefined, options);
+      if (hit !== undefined) return hit;
+      return this._listAllPages("resources/templates/list", params, options, (acc, page) =>
+        acc.resourceTemplates.push(...page.resourceTemplates),
+      );
+    }
+    async _listAllPages(method, baseParams, options, append, finalize) {
+      let bypass = options?.cacheMode === "bypass";
+      let generation = this._cache.captureGeneration(method);
+      let acc = await this.request(
         {
           method,
-          params: {
-            ...baseParams,
-            cursor,
-          },
+          ...(baseParams && {
+            params: {
+              ...baseParams,
+            },
+          }),
         },
         options,
       );
-      append(acc, page);
-      cursor = page.nextCursor;
-      pages++;
+      let cursor = acc.nextCursor;
+      let seen = new Set();
+      let pages = 1;
+      while (cursor !== undefined && !seen.has(cursor)) {
+        if (this._listMaxPages !== 0 && pages >= this._listMaxPages)
+          throw new SdkError(
+            SdkErrorCode.ListPaginationExceeded,
+            `${method}: exceeded listMaxPages (${this._listMaxPages}); server pagination did not terminate`,
+            {
+              method,
+              listMaxPages: this._listMaxPages,
+            },
+          );
+        seen.add(cursor);
+        let page = await this.request(
+          {
+            method,
+            params: {
+              ...baseParams,
+              cursor,
+            },
+          },
+          options,
+        );
+        append(acc, page);
+        cursor = page.nextCursor;
+        pages++;
+      }
+      delete acc.nextCursor;
+      finalize?.(acc);
+      if (bypass) return acc;
+      await this._cache.write(method, acc, generation, this._freshness(acc));
+      return acc;
     }
-    delete acc.nextCursor;
-    finalize?.(acc);
-    if (bypass) return acc;
-    await this._cache.write(method, acc, generation, this._freshness(acc));
-    return acc;
-  }
-  _freshness(result, params) {
-    let body = result;
-    let ttlMs = typeof body.ttlMs === "number" ? body.ttlMs : this._defaultCacheTtlMs;
-    let scope = body.cacheScope === "public" ? "public" : "private";
-    return {
-      expiresAt: this._cache.now() + Math.min(Math.max(0, ttlMs), MAX_CACHE_TTL_MS),
-      scope,
-      params,
-    };
-  }
-  async _serveFromCache(method, params, options) {
-    if (options?.cacheMode === "bypass" || options?.cacheMode === "refresh") return;
-    let hit = await this._cache.read(method, params).catch((error) => void this._reportStoreError(error));
-    if (hit !== undefined) {
+    _freshness(result, params) {
+      let body = result;
+      let ttlMs = typeof body.ttlMs === "number" ? body.ttlMs : this._defaultCacheTtlMs;
+      let scope = body.cacheScope === "public" ? "public" : "private";
+      return {
+        expiresAt: this._cache.now() + Math.min(Math.max(0, ttlMs), MAX_CACHE_TTL_MS),
+        scope,
+        params,
+      };
+    }
+    async _serveFromCache(method, params, options) {
+      if (options?.cacheMode === "bypass" || options?.cacheMode === "refresh") return;
+      let hit = await this._cache.read(method, params).catch((error) => void this._reportStoreError(error));
+      if (hit !== undefined) {
+        if (options?.signal?.aborted) {
+          let reason = options.signal.reason;
+          throw reason instanceof SdkError
+            ? reason
+            : new SdkError(SdkErrorCode.RequestTimeout, String(reason));
+        }
+        return hit.value;
+      }
+    }
+    _reportStoreError(error) {
+      this.onerror?.(error instanceof Error ? error : Error(String(error)));
+    }
+    _compileOutputValidator(tool) {
+      if (!tool.outputSchema) return;
+      try {
+        return {
+          ok: true,
+          validator: this._jsonSchemaValidator.getValidator(tool.outputSchema),
+        };
+      } catch (error) {
+        return {
+          ok: false,
+          compileError: error,
+        };
+      }
+    }
+    async _resolveXMcpHeaderScan(name, override) {
+      let tool = override ?? (await this._cache.toolDefinition(name));
+      return tool === undefined ? undefined : scanXMcpHeaderDeclarations(tool.inputSchema);
+    }
+    async readResource(params, options) {
+      let hit = await this._serveFromCache("resources/read", params.uri, options);
+      if (hit !== undefined) return hit;
+      let generation = this._cache.captureGeneration("resources/read", params.uri);
+      let result = await this.request(
+        {
+          method: "resources/read",
+          params,
+        },
+        options,
+      );
+      if (options?.cacheMode !== "bypass") {
+        let freshness = this._freshness(result, params.uri);
+        if (freshness.expiresAt > this._cache.now())
+          await this._cache.write("resources/read", result, generation, freshness);
+        else if (options?.cacheMode === "refresh") await this._cache.evictKey("resources/read", params.uri);
+      }
+      return result;
+    }
+    async subscribeResource(params, options) {
+      return this.request(
+        {
+          method: "resources/subscribe",
+          params,
+        },
+        options,
+      );
+    }
+    async unsubscribeResource(params, options) {
+      return this.request(
+        {
+          method: "resources/unsubscribe",
+          params,
+        },
+        options,
+      );
+    }
+    async listen(filter, options) {
+      if (this.transport === undefined) throw new SdkError(SdkErrorCode.NotConnected, "Not connected");
+      let negotiated = this._negotiatedProtocolVersion;
+      if (negotiated === undefined || !isModernProtocolVersion(negotiated))
+        throw new SdkError(
+          SdkErrorCode.MethodNotSupportedByProtocolVersion,
+          `subscriptions/listen requires a 2026-07-28-era connection (negotiated: ${negotiated ?? "none"}). On a 2025-era connection, change notifications are delivered unsolicited: use ClientOptions.listChanged and resources/subscribe instead.`,
+          {
+            method: "subscriptions/listen",
+            protocolVersion: negotiated,
+          },
+        );
       if (options?.signal?.aborted) {
         let reason = options.signal.reason;
         throw reason instanceof SdkError ? reason : new SdkError(SdkErrorCode.RequestTimeout, String(reason));
       }
-      return hit.value;
-    }
-  }
-  _reportStoreError(e) {
-    this.onerror?.(e instanceof Error ? e : Error(String(e)));
-  }
-  _compileOutputValidator(tool) {
-    if (!tool.outputSchema) return;
-    try {
-      return {
-        ok: true,
-        validator: this._jsonSchemaValidator.getValidator(tool.outputSchema),
-      };
-    } catch (error) {
-      return {
-        ok: false,
-        compileError: error,
-      };
-    }
-  }
-  async _resolveXMcpHeaderScan(name, override) {
-    let tool = override ?? (await this._cache.toolDefinition(name));
-    return tool === undefined ? undefined : scanXMcpHeaderDeclarations(tool.inputSchema);
-  }
-  async readResource(params, options) {
-    let hit = await this._serveFromCache("resources/read", params.uri, options);
-    if (hit !== undefined) return hit;
-    let generation = this._cache.captureGeneration("resources/read", params.uri);
-    let result = await this.request(
-      {
-        method: "resources/read",
-        params,
-      },
-      options,
-    );
-    if (options?.cacheMode !== "bypass") {
-      let freshness = this._freshness(result, params.uri);
-      if (freshness.expiresAt > this._cache.now())
-        await this._cache.write("resources/read", result, generation, freshness);
-      else if (options?.cacheMode === "refresh") await this._cache.evictKey("resources/read", params.uri);
-    }
-    return result;
-  }
-  async subscribeResource(params, options) {
-    return this.request(
-      {
-        method: "resources/subscribe",
-        params,
-      },
-      options,
-    );
-  }
-  async unsubscribeResource(params, options) {
-    return this.request(
-      {
-        method: "resources/unsubscribe",
-        params,
-      },
-      options,
-    );
-  }
-  async listen(filter, options) {
-    if (this.transport === undefined) throw new SdkError(SdkErrorCode.NotConnected, "Not connected");
-    let negotiated = this._negotiatedProtocolVersion;
-    if (negotiated === undefined || !isModernProtocolVersion(negotiated))
-      throw new SdkError(
-        SdkErrorCode.MethodNotSupportedByProtocolVersion,
-        `subscriptions/listen requires a 2026-07-28-era connection (negotiated: ${negotiated ?? "none"}). On a 2025-era connection, change notifications are delivered unsolicited: use ClientOptions.listChanged and resources/subscribe instead.`,
-        {
-          method: "subscriptions/listen",
-          protocolVersion: negotiated,
-        },
-      );
-    if (options?.signal?.aborted) {
-      let reason = options.signal.reason;
-      throw reason instanceof SdkError ? reason : new SdkError(SdkErrorCode.RequestTimeout, String(reason));
-    }
-    let requestAbort = new AbortController();
-    let listenId = `listen:${this._nextListenId++}`;
-    let state = "opening";
-    let ackTimer;
-    let onCallerAbort;
-    let resolveOpening;
-    let rejectOpening;
-    let opening = new Promise((resolve, reject) => {
-      resolveOpening = resolve;
-      rejectOpening = reject;
-    });
-    opening.catch(() => {});
-    let resolveClosed;
-    let closed = new Promise((resolve) => {
-      resolveClosed = resolve;
-    });
-    let settle = (outcome) => {
-      if (state === "closed") return;
-      let wasOpening = state === "opening";
-      if (ackTimer !== undefined) {
-        clearTimeout(ackTimer);
-        ackTimer = undefined;
-      }
-      if ("ack" in outcome) {
-        state = "open";
-        resolveOpening(outcome.ack);
-        return;
-      }
-      state = "closed";
-      if (onCallerAbort !== undefined) options?.signal?.removeEventListener("abort", onCallerAbort);
-      this._listenState.delete(listenId);
-      requestAbort.abort();
-      resolveClosed(outcome.cause);
-      if (wasOpening)
-        rejectOpening(
-          outcome.error ??
-            new SdkError(
-              SdkErrorCode.ConnectionClosed,
-              "subscriptions/listen closed before the server acknowledged",
-            ),
-        );
-    };
-    let wireTeardown = async () => {
-      requestAbort.abort();
-      await this.notification({
-        method: "notifications/cancelled",
-        params: {
-          requestId: listenId,
-        },
-      }).catch(() => {});
-    };
-    let close = async () => {
-      if (state === "closed") return;
-      settle({
-        cause: "local",
+      let requestAbort = new AbortController();
+      let listenId = `listen:${this._nextListenId++}`;
+      let state = "opening";
+      let ackTimer;
+      let onCallerAbort;
+      let resolveOpening;
+      let rejectOpening;
+      let opening = new Promise((resolve, reject) => {
+        resolveOpening = resolve;
+        rejectOpening = reject;
       });
-      await wireTeardown();
-    };
-    this._listenState.set(listenId, {
-      settle,
-    });
-    let ackTimeout = options?.timeout ?? DEFAULT_REQUEST_TIMEOUT_MSEC;
-    ackTimer = setTimeout(() => {
-      settle({
-        cause: "remote",
-        error: new SdkError(SdkErrorCode.RequestTimeout, "subscriptions/listen ack timed out", {
-          timeout: ackTimeout,
-        }),
+      opening.catch(() => {});
+      let resolveClosed;
+      let closed = new Promise((resolve) => {
+        resolveClosed = resolve;
       });
-      wireTeardown().catch(() => {});
-    }, ackTimeout);
-    if (options?.signal) {
-      let callerSignal = options.signal;
-      onCallerAbort = () => {
+      let settle = (outcome) => {
         if (state === "closed") return;
-        let reason = callerSignal.reason;
+        let wasOpening = state === "opening";
+        if (ackTimer !== undefined) {
+          clearTimeout(ackTimer);
+          ackTimer = undefined;
+        }
+        if ("ack" in outcome) {
+          state = "open";
+          resolveOpening(outcome.ack);
+          return;
+        }
+        state = "closed";
+        if (onCallerAbort !== undefined) options?.signal?.removeEventListener("abort", onCallerAbort);
+        this._listenState.delete(listenId);
+        requestAbort.abort();
+        resolveClosed(outcome.cause);
+        if (wasOpening)
+          rejectOpening(
+            outcome.error ??
+              new SdkError(
+                SdkErrorCode.ConnectionClosed,
+                "subscriptions/listen closed before the server acknowledged",
+              ),
+          );
+      };
+      let wireTeardown = async () => {
+        requestAbort.abort();
+        await this.notification({
+          method: "notifications/cancelled",
+          params: {
+            requestId: listenId,
+          },
+        }).catch(() => {});
+      };
+      let close = async () => {
+        if (state === "closed") return;
         settle({
           cause: "local",
-          error: reason instanceof Error ? reason : Error(String(reason ?? "Aborted")),
+        });
+        await wireTeardown();
+      };
+      this._listenState.set(listenId, {
+        settle,
+      });
+      let ackTimeout = options?.timeout ?? DEFAULT_REQUEST_TIMEOUT_MSEC;
+      ackTimer = setTimeout(() => {
+        settle({
+          cause: "remote",
+          error: new SdkError(SdkErrorCode.RequestTimeout, "subscriptions/listen ack timed out", {
+            timeout: ackTimeout,
+          }),
         });
         wireTeardown().catch(() => {});
-      };
-      callerSignal.addEventListener("abort", onCallerAbort, {
-        once: true,
-      });
-    }
-    let jsonrpcRequest = {
-      jsonrpc: "2.0",
-      id: listenId,
-      method: "subscriptions/listen",
-      params: {
-        _meta: {
-          ...this._outboundMetaEnvelope(),
-        },
-        notifications: filter,
-      },
-    };
-    try {
-      await this.transport.send(jsonrpcRequest, {
-        requestSignal: requestAbort.signal,
-        onRequestStreamEnd: () =>
+      }, ackTimeout);
+      if (options?.signal) {
+        let callerSignal = options.signal;
+        onCallerAbort = () => {
+          if (state === "closed") return;
+          let reason = callerSignal.reason;
           settle({
-            cause: "remote",
-            error: Error("subscriptions/listen: stream ended"),
-          }),
-      });
-    } catch (error) {
-      settle({
-        cause: "remote",
-        error: error instanceof Error ? error : Error(String(error)),
-      });
-    }
-    return {
-      honoredFilter: await opening,
-      close,
-      closed,
-    };
-  }
-  get autoOpenedSubscription() {
-    return this._autoOpenedSubscription;
-  }
-  _onnotification(raw, extra) {
-    let evicted = Object.hasOwn(LIST_CHANGED_EVICTIONS, raw.method)
-      ? LIST_CHANGED_EVICTIONS[raw.method]
-      : undefined;
-    if (raw.method === "notifications/resources/updated") {
-      let uri = raw.params?.uri;
-      if (typeof uri === "string") this._cache.evictKey("resources/read", uri);
-    } else if (evicted !== undefined) for (let method of evicted) this._cache.evict(method);
-    if (raw.method === "notifications/subscriptions/acknowledged") {
-      let subscriptionId = raw.params?._meta?.[SUBSCRIPTION_ID_META_KEY];
-      let entry = typeof subscriptionId === "string" ? this._listenState.get(subscriptionId) : undefined;
-      if (entry !== undefined) {
-        let honored = this._wireCodec().validateNotification("notifications/subscriptions/acknowledged", raw);
-        entry.settle({
-          ack: honored.ok ? honored.value.params.notifications : {},
+            cause: "local",
+            error: reason instanceof Error ? reason : Error(String(reason ?? "Aborted")),
+          });
+          wireTeardown().catch(() => {});
+        };
+        callerSignal.addEventListener("abort", onCallerAbort, {
+          once: true,
         });
-        return;
       }
-    }
-    if (raw.method === "notifications/cancelled") {
-      let cancelledId = raw.params?.requestId;
-      let entry = typeof cancelledId === "string" ? this._listenState.get(cancelledId) : undefined;
-      if (entry !== undefined) {
-        entry.settle({
-          cause: "remote",
-          error: Error("subscriptions/listen: server cancelled the subscription"),
-        });
-        return;
-      }
-    }
-    super._onnotification(raw, extra);
-  }
-  _onresponse(response) {
-    let id = response.id;
-    let entry = typeof id === "string" ? this._listenState.get(id) : undefined;
-    if (entry !== undefined) {
-      if (isJSONRPCErrorResponse(response))
-        entry.settle({
-          cause: "remote",
-          error: ProtocolError.fromError(response.error.code, response.error.message, response.error.data),
-        });
-      else
-        entry.settle({
-          cause: "graceful",
-          error: new SdkError(
-            SdkErrorCode.ConnectionClosed,
-            "subscriptions/listen: server closed the subscription gracefully before acknowledging",
-          ),
-        });
-      return;
-    }
-    super._onresponse(response);
-  }
-  _onclose() {
-    if (this._listenState.size > 0) {
-      let reason = new SdkError(SdkErrorCode.ConnectionClosed, "Connection closed");
-      for (let entry of this._listenState.values())
-        entry.settle({
-          cause: "remote",
-          error: reason,
-        });
-      this._listenState.clear();
-    }
-    super._onclose();
-  }
-  async callTool(params, options) {
-    let mirroringActive = this.getProtocolEra() === "modern" && detectProbeEnvironment() !== "browser";
-    let buildSendOptions = async () => {
-      if (!mirroringActive) return options;
-      let scan;
-      try {
-        scan = await this._resolveXMcpHeaderScan(params.name, options?.toolDefinition);
-      } catch (error) {
-        this._reportStoreError(error);
-      }
-      if (!scan?.valid || scan.declarations.length === 0) return options;
-      let paramHeaders = buildMcpParamHeaders(scan.declarations, params.arguments);
-      return Object.keys(paramHeaders).length === 0
-        ? options
-        : {
-            ...options,
-            headers: {
-              ...options?.headers,
-              ...paramHeaders,
-            },
-          };
-    };
-    let compiled =
-      options?.toolDefinition === undefined
-        ? await this._cache
-            .outputValidator(params.name, (tool) => this._compileOutputValidator(tool))
-            .catch((error) => void this._reportStoreError(error))
-        : this._compileOutputValidator(options.toolDefinition);
-    let assertCompiled = () => {
-      if (compiled === undefined || compiled.ok) return;
-      let err = compiled.compileError;
-      let message = (err instanceof Error ? err.message : String(err)).slice(0, 200);
-      throw new ProtocolError(
-        ProtocolErrorCode.InvalidParams,
-        `Tool '${params.name}' has an invalid outputSchema: ${message}`,
-      );
-    };
-    assertCompiled();
-    let result;
-    try {
-      result = await this.request(
-        {
-          method: "tools/call",
-          params,
+      let jsonrpcRequest = {
+        jsonrpc: "2.0",
+        id: listenId,
+        method: "subscriptions/listen",
+        params: {
+          _meta: {
+            ...this._outboundMetaEnvelope(),
+          },
+          notifications: filter,
         },
-        await buildSendOptions(),
-      );
-    } catch (error) {
-      let isHeaderMismatch = error instanceof ProtocolError && error.code === HEADER_MISMATCH_ERROR_CODE;
-      if (!mirroringActive || !isHeaderMismatch || options?.toolDefinition !== undefined) throw error;
-      let refreshOptions = {
-        signal: options?.signal,
-        timeout: options?.timeout,
-        cacheMode: "refresh",
       };
-      await this._cache.evict("tools/list");
-      await this.listTools(undefined, refreshOptions).catch((error_) => this._reportStoreError(error_));
-      compiled = await this._cache
-        .outputValidator(params.name, (tool) => this._compileOutputValidator(tool))
-        .catch((error_) => void this._reportStoreError(error_));
-      assertCompiled();
-      result = await this.request(
-        {
-          method: "tools/call",
-          params,
-        },
-        await buildSendOptions(),
-      );
+      try {
+        await this.transport.send(jsonrpcRequest, {
+          requestSignal: requestAbort.signal,
+          onRequestStreamEnd: () =>
+            settle({
+              cause: "remote",
+              error: Error("subscriptions/listen: stream ended"),
+            }),
+        });
+      } catch (error) {
+        settle({
+          cause: "remote",
+          error: error instanceof Error ? error : Error(String(error)),
+        });
+      }
+      return {
+        honoredFilter: await opening,
+        close,
+        closed,
+      };
     }
-    if (options?.allowTask === true && result.resultType === "task") return result;
-    let validator = compiled !== undefined && compiled.ok ? compiled.validator : undefined;
-    if (validator) {
-      if (result.structuredContent === undefined && !result.isError)
-        throw new ProtocolError(
-          ProtocolErrorCode.InvalidRequest,
-          `Tool ${params.name} has an output schema but did not return structured content`,
-        );
-      if (result.structuredContent !== undefined && !result.isError)
+    get autoOpenedSubscription() {
+      return this._autoOpenedSubscription;
+    }
+    _onnotification(raw, extra) {
+      let evicted = Object.hasOwn(LIST_CHANGED_EVICTIONS, raw.method)
+        ? LIST_CHANGED_EVICTIONS[raw.method]
+        : undefined;
+      if (raw.method === "notifications/resources/updated") {
+        let uri = raw.params?.uri;
+        if (typeof uri === "string") this._cache.evictKey("resources/read", uri);
+      } else if (evicted !== undefined) for (let method of evicted) this._cache.evict(method);
+      if (raw.method === "notifications/subscriptions/acknowledged") {
+        let subscriptionId = raw.params?._meta?.[SUBSCRIPTION_ID_META_KEY];
+        let entry = typeof subscriptionId === "string" ? this._listenState.get(subscriptionId) : undefined;
+        if (entry !== undefined) {
+          let honored = this._wireCodec().validateNotification(
+            "notifications/subscriptions/acknowledged",
+            raw,
+          );
+          entry.settle({
+            ack: honored.ok ? honored.value.params.notifications : {},
+          });
+          return;
+        }
+      }
+      if (raw.method === "notifications/cancelled") {
+        let cancelledId = raw.params?.requestId;
+        let entry = typeof cancelledId === "string" ? this._listenState.get(cancelledId) : undefined;
+        if (entry !== undefined) {
+          entry.settle({
+            cause: "remote",
+            error: Error("subscriptions/listen: server cancelled the subscription"),
+          });
+          return;
+        }
+      }
+      super._onnotification(raw, extra);
+    }
+    _onresponse(response) {
+      let id = response.id;
+      let entry = typeof id === "string" ? this._listenState.get(id) : undefined;
+      if (entry !== undefined) {
+        if (isJSONRPCErrorResponse(response))
+          entry.settle({
+            cause: "remote",
+            error: ProtocolError.fromError(response.error.code, response.error.message, response.error.data),
+          });
+        else
+          entry.settle({
+            cause: "graceful",
+            error: new SdkError(
+              SdkErrorCode.ConnectionClosed,
+              "subscriptions/listen: server closed the subscription gracefully before acknowledging",
+            ),
+          });
+        return;
+      }
+      super._onresponse(response);
+    }
+    _onclose() {
+      if (this._listenState.size > 0) {
+        let reason = new SdkError(SdkErrorCode.ConnectionClosed, "Connection closed");
+        for (let entry of this._listenState.values())
+          entry.settle({
+            cause: "remote",
+            error: reason,
+          });
+        this._listenState.clear();
+      }
+      super._onclose();
+    }
+    async callTool(params, options) {
+      let mirroringActive = this.getProtocolEra() === "modern" && detectProbeEnvironment() !== "browser";
+      let buildSendOptions = async () => {
+        if (!mirroringActive) return options;
+        let scan;
         try {
-          let validationResult = validator(result.structuredContent);
-          if (!validationResult.valid)
+          scan = await this._resolveXMcpHeaderScan(params.name, options?.toolDefinition);
+        } catch (error) {
+          this._reportStoreError(error);
+        }
+        if (!scan?.valid || scan.declarations.length === 0) return options;
+        let paramHeaders = buildMcpParamHeaders(scan.declarations, params.arguments);
+        return Object.keys(paramHeaders).length === 0
+          ? options
+          : {
+              ...options,
+              headers: {
+                ...options?.headers,
+                ...paramHeaders,
+              },
+            };
+      };
+      let compiled =
+        options?.toolDefinition === undefined
+          ? await this._cache
+              .outputValidator(params.name, (tool) => this._compileOutputValidator(tool))
+              .catch((error) => void this._reportStoreError(error))
+          : this._compileOutputValidator(options.toolDefinition);
+      let assertCompiled = () => {
+        if (compiled === undefined || compiled.ok) return;
+        let err = compiled.compileError;
+        let message = (err instanceof Error ? err.message : String(err)).slice(0, 200);
+        throw new ProtocolError(
+          ProtocolErrorCode.InvalidParams,
+          `Tool '${params.name}' has an invalid outputSchema: ${message}`,
+        );
+      };
+      assertCompiled();
+      let result;
+      try {
+        result = await this.request(
+          {
+            method: "tools/call",
+            params,
+          },
+          await buildSendOptions(),
+        );
+      } catch (error) {
+        let isHeaderMismatch = error instanceof ProtocolError && error.code === HEADER_MISMATCH_ERROR_CODE;
+        if (!mirroringActive || !isHeaderMismatch || options?.toolDefinition !== undefined) throw error;
+        let refreshOptions = {
+          signal: options?.signal,
+          timeout: options?.timeout,
+          cacheMode: "refresh",
+        };
+        await this._cache.evict("tools/list");
+        await this.listTools(undefined, refreshOptions).catch((error_) => this._reportStoreError(error_));
+        compiled = await this._cache
+          .outputValidator(params.name, (tool) => this._compileOutputValidator(tool))
+          .catch((error_) => void this._reportStoreError(error_));
+        assertCompiled();
+        result = await this.request(
+          {
+            method: "tools/call",
+            params,
+          },
+          await buildSendOptions(),
+        );
+      }
+      if (options?.allowTask === true && result.resultType === "task") return result;
+      let validator = compiled !== undefined && compiled.ok ? compiled.validator : undefined;
+      if (validator) {
+        if (result.structuredContent === undefined && !result.isError)
+          throw new ProtocolError(
+            ProtocolErrorCode.InvalidRequest,
+            `Tool ${params.name} has an output schema but did not return structured content`,
+          );
+        if (result.structuredContent !== undefined && !result.isError)
+          try {
+            let validationResult = validator(result.structuredContent);
+            if (!validationResult.valid)
+              throw new ProtocolError(
+                ProtocolErrorCode.InvalidParams,
+                `Structured content does not match the tool's output schema: ${validationResult.errorMessage}`,
+              );
+          } catch (error) {
+            if (error instanceof ProtocolError) throw error;
             throw new ProtocolError(
               ProtocolErrorCode.InvalidParams,
-              `Structured content does not match the tool's output schema: ${validationResult.errorMessage}`,
+              `Failed to validate structured content: ${error instanceof Error ? error.message : String(error)}`,
             );
-        } catch (error) {
-          if (error instanceof ProtocolError) throw error;
-          throw new ProtocolError(
-            ProtocolErrorCode.InvalidParams,
-            `Failed to validate structured content: ${error instanceof Error ? error.message : String(error)}`,
-          );
-        }
+          }
+      }
+      return result;
     }
-    return result;
-  }
-  async listTools(params, options) {
-    if (!this._serverCapabilities?.tools && !this._enforceStrictCapabilities) {
-      console.debug(
-        "Client.listTools() called but server does not advertise tools capability - returning empty list",
-      );
-      return {
-        tools: [],
-      };
-    }
-    if (params?.cursor !== undefined) {
-      let page = await this.request(
-        {
-          method: "tools/list",
-          params,
-        },
-        options,
-      );
-      this._excludeInvalidXMcpHeaderTools(page);
-      return page;
-    }
-    let hit = await this._serveFromCache("tools/list", undefined, options);
-    if (hit !== undefined) return hit;
-    return this._listAllPages(
-      "tools/list",
-      params,
-      options,
-      (acc, page) => acc.tools.push(...page.tools),
-      (acc) => this._excludeInvalidXMcpHeaderTools(acc),
-    );
-  }
-  _excludeInvalidXMcpHeaderTools(result) {
-    if (
-      this.getProtocolEra() !== "modern" ||
-      !this.transport ||
-      detectProbeTransportKind(this.transport) === "stdio"
-    )
-      return;
-    try {
-      if (!JSON.stringify(result.tools).includes("x-mcp-header")) return;
-    } catch {}
-    let filtered = result.tools.filter((tool) => {
-      let scan = scanXMcpHeaderDeclarations(tool.inputSchema);
-      if (!scan.valid) {
-        console.warn(
-          `[mcp-sdk] excluding tool '${tool.name}' from tools/list: invalid x-mcp-header declaration \u2014 ${scan.reason}`,
+    async listTools(params, options) {
+      if (!this._serverCapabilities?.tools && !this._enforceStrictCapabilities) {
+        console.debug(
+          "Client.listTools() called but server does not advertise tools capability - returning empty list",
         );
-        return false;
+        return {
+          tools: [],
+        };
       }
-      return true;
-    });
-    if (filtered.length !== result.tools.length) result.tools = filtered;
-  }
-  _setupListChangedHandler(listType, notificationMethod, options, fetcher) {
-    let parseResult = parseSchema(ListChangedOptionsBaseSchema, options);
-    if (!parseResult.success)
-      throw Error(`Invalid ${listType} listChanged options: ${parseResult.error.message}`);
-    if (typeof options.onChanged !== "function")
-      throw TypeError(`Invalid ${listType} listChanged options: onChanged must be a function`);
-    let { autoRefresh, debounceMs } = parseResult.data;
-    let { onChanged } = options;
-    let refresh = async () => {
-      if (!autoRefresh) {
-        onChanged(null, null);
-        return;
+      if (params?.cursor !== undefined) {
+        let page = await this.request(
+          {
+            method: "tools/list",
+            params,
+          },
+          options,
+        );
+        this._excludeInvalidXMcpHeaderTools(page);
+        return page;
       }
-      try {
-        onChanged(null, await fetcher());
-      } catch (error) {
-        onChanged(error instanceof Error ? error : Error(String(error)), null);
-      }
-    };
-    let handler = () => {
-      if (debounceMs) {
-        let existingTimer = this._listChangedDebounceTimers.get(listType);
-        if (existingTimer) clearTimeout(existingTimer);
-        let timer = setTimeout(refresh, debounceMs);
-        this._listChangedDebounceTimers.set(listType, timer);
-      } else refresh();
-    };
-    this.setNotificationHandler(notificationMethod, handler);
-  }
-  async sendRootsListChanged() {
-    return this.notification({
-      method: "notifications/roots/list_changed",
-    });
-  }
-};
-//@ chunk-r1g76qsy.js:316569-321626 esm-fingerprint
-var SseError = class extends Error {
-  static {
-    Object.defineProperty(this, "mcpBrand", {
-      value: "mcp.SseError",
-    });
-  }
-  static [Symbol.hasInstance](value) {
-    return brandedHasInstance(this, value);
-  }
-  static isInstance(value) {
-    if (typeof this !== "function")
-      throw TypeError(
-        "isInstance must be called on the class (e.g. `SdkError.isInstance(value)`); for callbacks use `v => SdkError.isInstance(v)`",
+      let hit = await this._serveFromCache("tools/list", undefined, options);
+      if (hit !== undefined) return hit;
+      return this._listAllPages(
+        "tools/list",
+        params,
+        options,
+        (acc, page) => acc.tools.push(...page.tools),
+        (acc) => this._excludeInvalidXMcpHeaderTools(acc),
       );
-    return brandedHasInstance(this, value);
-  }
-  constructor(code, message, event) {
-    super(`SSE error: ${message}`);
-    this.code = code;
-    this.event = event;
-    stampErrorBrands(this, new.target);
-  }
-};
-var SSEClientTransport = class {
-  _eventSource;
-  _endpoint;
-  _abortController;
-  _url;
-  _resourceMetadataUrl;
-  _scope;
-  _eventSourceInit;
-  _requestInit;
-  _authProvider;
-  _oauthProvider;
-  _skipIssuerMetadataValidation;
-  _fetch;
-  _fetchWithInit;
-  _protocolVersion;
-  onclose;
-  onerror;
-  onmessage;
-  constructor(url, opts) {
-    this._url = url;
-    this._resourceMetadataUrl = undefined;
-    this._scope = undefined;
-    this._eventSourceInit = opts?.eventSourceInit;
-    this._requestInit = opts?.requestInit;
-    this._skipIssuerMetadataValidation = opts?.skipIssuerMetadataValidation;
-    if (isOAuthClientProvider(opts?.authProvider)) {
-      this._oauthProvider = opts.authProvider;
-      this._authProvider = adaptOAuthProvider(opts.authProvider, {
-        skipIssuerMetadataValidation: opts.skipIssuerMetadataValidation,
+    }
+    _excludeInvalidXMcpHeaderTools(result) {
+      if (
+        this.getProtocolEra() !== "modern" ||
+        !this.transport ||
+        detectProbeTransportKind(this.transport) === "stdio"
+      )
+        return;
+      try {
+        if (!JSON.stringify(result.tools).includes("x-mcp-header")) return;
+      } catch {}
+      let filtered = result.tools.filter((tool) => {
+        let scan = scanXMcpHeaderDeclarations(tool.inputSchema);
+        if (!scan.valid) {
+          console.warn(
+            `[mcp-sdk] excluding tool '${tool.name}' from tools/list: invalid x-mcp-header declaration \u2014 ${scan.reason}`,
+          );
+          return false;
+        }
+        return true;
       });
-    } else this._authProvider = opts?.authProvider;
-    this._fetch = opts?.fetch;
-    this._fetchWithInit = createFetchWithInit(opts?.fetch, opts?.requestInit);
-  }
-  _last401Response;
-  async _commonHeaders() {
-    let headers = {};
-    let token = await this._authProvider?.token();
-    if (token) headers.Authorization = `Bearer ${token}`;
-    if (this._protocolVersion) headers["mcp-protocol-version"] = this._protocolVersion;
-    let extraHeaders = normalizeHeaders(this._requestInit?.headers);
-    return new Headers({
-      ...headers,
-      ...extraHeaders,
-    });
-  }
-  _startOrAuth() {
-    let fetchImpl = this?._eventSourceInit?.fetch ?? this._fetch ?? fetch;
-    return new Promise((resolve, reject) => {
-      this._eventSource = new EventSource(this._url.href, {
-        ...this._eventSourceInit,
-        fetch: async (url, init) => {
-          let headers = await this._commonHeaders();
-          headers.set("Accept", "text/event-stream");
-          let response = await fetchImpl(url, {
-            ...init,
-            headers,
-          });
-          if (response.status === 401) {
-            this._last401Response = response;
+      if (filtered.length !== result.tools.length) result.tools = filtered;
+    }
+    _setupListChangedHandler(listType, notificationMethod, options, fetcher) {
+      let parseResult = parseSchema(ListChangedOptionsBaseSchema, options);
+      if (!parseResult.success)
+        throw Error(`Invalid ${listType} listChanged options: ${parseResult.error.message}`);
+      if (typeof options.onChanged !== "function")
+        throw TypeError(`Invalid ${listType} listChanged options: onChanged must be a function`);
+      let { autoRefresh, debounceMs } = parseResult.data;
+      let { onChanged } = options;
+      let refresh = async () => {
+        if (!autoRefresh) {
+          onChanged(null, null);
+          return;
+        }
+        try {
+          onChanged(null, await fetcher());
+        } catch (error) {
+          onChanged(error instanceof Error ? error : Error(String(error)), null);
+        }
+      };
+      let handler = () => {
+        if (debounceMs) {
+          let existingTimer = this._listChangedDebounceTimers.get(listType);
+          if (existingTimer) clearTimeout(existingTimer);
+          let timer = setTimeout(refresh, debounceMs);
+          this._listChangedDebounceTimers.set(listType, timer);
+        } else refresh();
+      };
+      this.setNotificationHandler(notificationMethod, handler);
+    }
+    async sendRootsListChanged() {
+      return this.notification({
+        method: "notifications/roots/list_changed",
+      });
+    }
+  };
+});
+//@ chunk-r1g76qsy.js:316569-321626 esm-fingerprint
+var SseError; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var SSEClientTransport;
+var DEFAULT_MAX_STEP_UP_RETRIES;
+var DEFAULT_STREAMABLE_HTTP_RECONNECTION_OPTIONS;
+var RESERVED_REQUEST_HEADER_NAMES;
+deferInit("chunk-r1g76qsy.js:316569", () => {
+  SseError = class extends Error {
+    static {
+      Object.defineProperty(this, "mcpBrand", {
+        value: "mcp.SseError",
+      });
+    }
+    static [Symbol.hasInstance](value) {
+      return brandedHasInstance(this, value);
+    }
+    static isInstance(value) {
+      if (typeof this !== "function")
+        throw TypeError(
+          "isInstance must be called on the class (e.g. `SdkError.isInstance(value)`); for callbacks use `v => SdkError.isInstance(v)`",
+        );
+      return brandedHasInstance(this, value);
+    }
+    constructor(code, message, event) {
+      super(`SSE error: ${message}`);
+      this.code = code;
+      this.event = event;
+      stampErrorBrands(this, new.target);
+    }
+  };
+  SSEClientTransport = class {
+    _eventSource;
+    _endpoint;
+    _abortController;
+    _url;
+    _resourceMetadataUrl;
+    _scope;
+    _eventSourceInit;
+    _requestInit;
+    _authProvider;
+    _oauthProvider;
+    _skipIssuerMetadataValidation;
+    _fetch;
+    _fetchWithInit;
+    _protocolVersion;
+    onclose;
+    onerror;
+    onmessage;
+    constructor(url, opts) {
+      this._url = url;
+      this._resourceMetadataUrl = undefined;
+      this._scope = undefined;
+      this._eventSourceInit = opts?.eventSourceInit;
+      this._requestInit = opts?.requestInit;
+      this._skipIssuerMetadataValidation = opts?.skipIssuerMetadataValidation;
+      if (isOAuthClientProvider(opts?.authProvider)) {
+        this._oauthProvider = opts.authProvider;
+        this._authProvider = adaptOAuthProvider(opts.authProvider, {
+          skipIssuerMetadataValidation: opts.skipIssuerMetadataValidation,
+        });
+      } else this._authProvider = opts?.authProvider;
+      this._fetch = opts?.fetch;
+      this._fetchWithInit = createFetchWithInit(opts?.fetch, opts?.requestInit);
+    }
+    _last401Response;
+    async _commonHeaders() {
+      let headers = {};
+      let token = await this._authProvider?.token();
+      if (token) headers.Authorization = `Bearer ${token}`;
+      if (this._protocolVersion) headers["mcp-protocol-version"] = this._protocolVersion;
+      let extraHeaders = normalizeHeaders(this._requestInit?.headers);
+      return new Headers({
+        ...headers,
+        ...extraHeaders,
+      });
+    }
+    _startOrAuth() {
+      let fetchImpl = this?._eventSourceInit?.fetch ?? this._fetch ?? fetch;
+      return new Promise((resolve, reject) => {
+        this._eventSource = new EventSource(this._url.href, {
+          ...this._eventSourceInit,
+          fetch: async (url, init) => {
+            let headers = await this._commonHeaders();
+            headers.set("Accept", "text/event-stream");
+            let response = await fetchImpl(url, {
+              ...init,
+              headers,
+            });
+            if (response.status === 401) {
+              this._last401Response = response;
+              if (response.headers.has("www-authenticate")) {
+                let { resourceMetadataUrl, scope } = extractWWWAuthenticateParams(response);
+                this._resourceMetadataUrl = resourceMetadataUrl;
+                this._scope = scope;
+              }
+            }
+            return response;
+          },
+        });
+        this._abortController = new AbortController();
+        this._eventSource.onerror = (event) => {
+          if (event.code === 401 && this._authProvider) {
+            if (this._authProvider.onUnauthorized && this._last401Response) {
+              let response = this._last401Response;
+              this._last401Response = undefined;
+              this._eventSource?.close();
+              this._authProvider
+                .onUnauthorized({
+                  response,
+                  serverUrl: this._url,
+                  fetchFn: this._fetchWithInit,
+                })
+                .then(
+                  () => this._startOrAuth().then(resolve, reject),
+                  (error$2) => {
+                    this.onerror?.(error$2);
+                    reject(error$2);
+                  },
+                );
+              return;
+            }
+            let error$1 = new UnauthorizedError();
+            reject(error$1);
+            this.onerror?.(error$1);
+            return;
+          }
+          let error = new SseError(event.code, event.message, event);
+          reject(error);
+          this.onerror?.(error);
+        };
+        this._eventSource.onopen = () => {};
+        this._eventSource.addEventListener("endpoint", (event) => {
+          let messageEvent = event;
+          try {
+            this._endpoint = new URL(messageEvent.data, this._url);
+            if (this._endpoint.origin !== this._url.origin)
+              throw Error(`Endpoint origin does not match connection origin: ${this._endpoint.origin}`);
+          } catch (error) {
+            reject(error);
+            this.onerror?.(error);
+            this.close();
+            return;
+          }
+          resolve();
+        });
+        this._eventSource.onmessage = (event) => {
+          let messageEvent = event;
+          let message;
+          try {
+            message = parseJsonRpcMessage(JSON.parse(messageEvent.data));
+          } catch (error) {
+            this.onerror?.(error);
+            return;
+          }
+          this.onmessage?.(message);
+        };
+      });
+    }
+    async start() {
+      if (this._eventSource)
+        throw Error(
+          "SSEClientTransport already started! If using Client class, note that connect() calls start() automatically.",
+        );
+      return await this._startOrAuth();
+    }
+    async finishAuth(codeOrParams, iss) {
+      if (!this._oauthProvider) throw new UnauthorizedError("finishAuth requires an OAuthClientProvider");
+      let { authorizationCode, iss: issParam } = await resolveAuthorizationCallbackParams(
+        codeOrParams,
+        iss,
+        this._oauthProvider,
+        this._url,
+        {
+          fetchFn: this._fetchWithInit,
+          resourceMetadataUrl: this._resourceMetadataUrl,
+        },
+      );
+      if (
+        (await auth(this._oauthProvider, {
+          serverUrl: this._url,
+          authorizationCode,
+          iss: issParam,
+          resourceMetadataUrl: this._resourceMetadataUrl,
+          scope: this._scope,
+          fetchFn: this._fetchWithInit,
+          skipIssuerMetadataValidation: this._skipIssuerMetadataValidation,
+        })) !== "AUTHORIZED"
+      )
+        throw new UnauthorizedError("Failed to authorize");
+    }
+    async close() {
+      this._abortController?.abort();
+      this._eventSource?.close();
+      this.onclose?.();
+    }
+    async send(message) {
+      return this._send(message, false);
+    }
+    async _send(message, isAuthRetry) {
+      if (!this._endpoint) throw new SdkError(SdkErrorCode.NotConnected, "Not connected");
+      try {
+        let headers = await this._commonHeaders();
+        headers.set("content-type", "application/json");
+        let init = {
+          ...this._requestInit,
+          method: "POST",
+          headers,
+          body: JSON.stringify(message),
+          signal: this._abortController?.signal,
+        };
+        let response = await (this._fetch ?? fetch)(this._endpoint, init);
+        if (!response.ok) {
+          if (response.status === 401 && this._authProvider) {
             if (response.headers.has("www-authenticate")) {
               let { resourceMetadataUrl, scope } = extractWWWAuthenticateParams(response);
               this._resourceMetadataUrl = resourceMetadataUrl;
               this._scope = scope;
             }
-          }
-          return response;
-        },
-      });
-      this._abortController = new AbortController();
-      this._eventSource.onerror = (event) => {
-        if (event.code === 401 && this._authProvider) {
-          if (this._authProvider.onUnauthorized && this._last401Response) {
-            let response = this._last401Response;
-            this._last401Response = undefined;
-            this._eventSource?.close();
-            this._authProvider
-              .onUnauthorized({
+            if (this._authProvider.onUnauthorized && !isAuthRetry) {
+              await this._authProvider.onUnauthorized({
                 response,
                 serverUrl: this._url,
                 fetchFn: this._fetchWithInit,
-              })
-              .then(
-                () => this._startOrAuth().then(resolve, reject),
-                (error$2) => {
-                  this.onerror?.(error$2);
-                  reject(error$2);
+              });
+              await response.text?.().catch(() => {});
+              return this._send(message, true);
+            }
+            await response.text?.().catch(() => {});
+            if (isAuthRetry)
+              throw new SdkHttpError(
+                SdkErrorCode.ClientHttpAuthentication,
+                "Server returned 401 after re-authentication",
+                {
+                  status: 401,
+                  statusText: response.statusText,
                 },
               );
-            return;
+            throw new UnauthorizedError();
           }
-          let error$1 = new UnauthorizedError();
-          reject(error$1);
-          this.onerror?.(error$1);
-          return;
+          let text = await response.text?.().catch(() => null);
+          throw Error(`Error POSTing to endpoint (HTTP ${response.status}): ${text}`);
         }
-        let error = new SseError(event.code, event.message, event);
-        reject(error);
+        await response.text?.().catch(() => {});
+      } catch (error) {
         this.onerror?.(error);
-      };
-      this._eventSource.onopen = () => {};
-      this._eventSource.addEventListener("endpoint", (event) => {
-        let messageEvent = event;
-        try {
-          this._endpoint = new URL(messageEvent.data, this._url);
-          if (this._endpoint.origin !== this._url.origin)
-            throw Error(`Endpoint origin does not match connection origin: ${this._endpoint.origin}`);
-        } catch (error) {
-          reject(error);
-          this.onerror?.(error);
-          this.close();
-          return;
-        }
-        resolve();
-      });
-      this._eventSource.onmessage = (event) => {
-        let messageEvent = event;
-        let message;
-        try {
-          message = Rt(JSON.parse(messageEvent.data));
-        } catch (error) {
-          this.onerror?.(error);
-          return;
-        }
-        this.onmessage?.(message);
-      };
-    });
-  }
-  async start() {
-    if (this._eventSource)
-      throw Error(
-        "SSEClientTransport already started! If using Client class, note that connect() calls start() automatically.",
-      );
-    return await this._startOrAuth();
-  }
-  async finishAuth(codeOrParams, iss) {
-    if (!this._oauthProvider) throw new UnauthorizedError("finishAuth requires an OAuthClientProvider");
-    let { authorizationCode, iss: issParam } = await resolveAuthorizationCallbackParams(
-      codeOrParams,
-      iss,
-      this._oauthProvider,
-      this._url,
-      {
-        fetchFn: this._fetchWithInit,
-        resourceMetadataUrl: this._resourceMetadataUrl,
-      },
-    );
-    if (
-      (await auth(this._oauthProvider, {
-        serverUrl: this._url,
-        authorizationCode,
-        iss: issParam,
-        resourceMetadataUrl: this._resourceMetadataUrl,
-        scope: this._scope,
-        fetchFn: this._fetchWithInit,
-        skipIssuerMetadataValidation: this._skipIssuerMetadataValidation,
-      })) !== "AUTHORIZED"
-    )
-      throw new UnauthorizedError("Failed to authorize");
-  }
-  async close() {
-    this._abortController?.abort();
-    this._eventSource?.close();
-    this.onclose?.();
-  }
-  async send(message) {
-    return this._send(message, false);
-  }
-  async _send(message, isAuthRetry) {
-    if (!this._endpoint) throw new SdkError(SdkErrorCode.NotConnected, "Not connected");
-    try {
-      let headers = await this._commonHeaders();
-      headers.set("content-type", "application/json");
-      let init = {
-        ...this._requestInit,
-        method: "POST",
-        headers,
-        body: JSON.stringify(message),
-        signal: this._abortController?.signal,
-      };
-      let response = await (this._fetch ?? fetch)(this._endpoint, init);
-      if (!response.ok) {
-        if (response.status === 401 && this._authProvider) {
-          if (response.headers.has("www-authenticate")) {
-            let { resourceMetadataUrl, scope } = extractWWWAuthenticateParams(response);
-            this._resourceMetadataUrl = resourceMetadataUrl;
-            this._scope = scope;
-          }
-          if (this._authProvider.onUnauthorized && !isAuthRetry) {
-            await this._authProvider.onUnauthorized({
-              response,
-              serverUrl: this._url,
-              fetchFn: this._fetchWithInit,
-            });
-            await response.text?.().catch(() => {});
-            return this._send(message, true);
-          }
-          await response.text?.().catch(() => {});
-          if (isAuthRetry)
-            throw new SdkHttpError(
-              SdkErrorCode.ClientHttpAuthentication,
-              "Server returned 401 after re-authentication",
-              {
-                status: 401,
-                statusText: response.statusText,
-              },
-            );
-          throw new UnauthorizedError();
-        }
-        let text = await response.text?.().catch(() => null);
-        throw Error(`Error POSTing to endpoint (HTTP ${response.status}): ${text}`);
+        throw error;
       }
-      await response.text?.().catch(() => {});
-    } catch (error) {
-      this.onerror?.(error);
-      throw error;
     }
-  }
-  setProtocolVersion(version) {
-    this._protocolVersion = version;
-  }
-};
-var DEFAULT_MAX_STEP_UP_RETRIES = 1;
-var DEFAULT_STREAMABLE_HTTP_RECONNECTION_OPTIONS = {
-  initialReconnectionDelay: 1000,
-  maxReconnectionDelay: 30000,
-  reconnectionDelayGrowFactor: 1.5,
-  maxRetries: 2,
-};
-var RESERVED_REQUEST_HEADER_NAMES = new Set([
-  "authorization",
-  "content-type",
-  "mcp-protocol-version",
-  "mcp-method",
-  "mcp-name",
-  "mcp-session-id",
-]);
+    setProtocolVersion(version) {
+      this._protocolVersion = version;
+    }
+  };
+  DEFAULT_MAX_STEP_UP_RETRIES = 1;
+  DEFAULT_STREAMABLE_HTTP_RECONNECTION_OPTIONS = {
+    initialReconnectionDelay: 1000,
+    maxReconnectionDelay: 30000,
+    reconnectionDelayGrowFactor: 1.5,
+    maxRetries: 2,
+  };
+  RESERVED_REQUEST_HEADER_NAMES = new Set([
+    "authorization",
+    "content-type",
+    "mcp-protocol-version",
+    "mcp-method",
+    "mcp-name",
+    "mcp-session-id",
+  ]);
+});
 //@ chunk-r1g76qsy.js:321626-322076 esm-fingerprint
 function anySignal(a_2, b) {
   if (typeof AbortSignal.any === "function") return AbortSignal.any([a_2, b]);
@@ -3914,7 +3972,7 @@ var StreamableHTTPClientTransport = class {
           if (!event.data) continue;
           if (!event.event || event.event === "message")
             try {
-              let message = Rt(JSON.parse(event.data));
+              let message = parseJsonRpcMessage(JSON.parse(event.data));
               if (isJSONRPCResultResponse(message) || isJSONRPCErrorResponse(message)) {
                 receivedResponse = true;
                 if (replayMessageId !== undefined) message.id = replayMessageId;
@@ -4028,7 +4086,9 @@ var StreamableHTTPClientTransport = class {
       }
       let headers = await this._commonHeaders();
       this._applyBodyDerivedHeaders(headers, message);
-      let isHandshake = Array.isArray(message) ? message.some((m) => lYn(m)) : lYn(message);
+      let isHandshake = Array.isArray(message)
+        ? message.some((m) => isInitializeMessage(m))
+        : isInitializeMessage(message);
       if (isHandshake) headers.delete("mcp-session-id");
       if (options?.headers !== undefined)
         for (let [name, value] of Object.entries(options.headers)) {
@@ -4110,7 +4170,7 @@ var StreamableHTTPClientTransport = class {
         }
         if (response.status === 400 && typeof text === "string" && this._isModernEnvelopedRequest(message))
           try {
-            let parsed = Rt(JSON.parse(text));
+            let parsed = parseJsonRpcMessage(JSON.parse(text));
             let requests = (Array.isArray(message) ? message : [message]).filter((m) => isJSONRPCRequest(m));
             if (isJSONRPCErrorResponse(parsed) && requests.some((r) => r.id === parsed.id)) {
               this.onmessage?.(parsed);
@@ -4125,7 +4185,7 @@ var StreamableHTTPClientTransport = class {
       }
       if (response.status === 202) {
         await response.text?.().catch(() => {});
-        if (qNr(message))
+        if (isInitializedNotification(message))
           this._startOrAuthSse({
             resumptionToken: undefined,
           }).catch((error) => this.onerror?.(error));
@@ -4135,7 +4195,7 @@ var StreamableHTTPClientTransport = class {
         (msg) => "method" in msg && "id" in msg && msg.id !== undefined,
       );
       let contentType = response.headers.get("content-type");
-      let responseMediaType = Oi(contentType);
+      let responseMediaType = parseContentType(contentType);
       if (hasRequests) {
         if (responseMediaType === "text/event-stream")
           this._handleSseStream(
@@ -4149,7 +4209,9 @@ var StreamableHTTPClientTransport = class {
           );
         else if (responseMediaType === "application/json") {
           let data = await response.json();
-          let responseMessages = Array.isArray(data) ? data.map((msg) => Rt(msg)) : [Rt(data)];
+          let responseMessages = Array.isArray(data)
+            ? data.map((msg) => parseJsonRpcMessage(msg))
+            : [parseJsonRpcMessage(data)];
           for (let msg of responseMessages) this.onmessage?.(msg);
         } else {
           await response.text?.().catch(() => {});
@@ -4210,11 +4272,72 @@ var StreamableHTTPClientTransport = class {
     });
   }
 };
+//@ chunk-n1aavqzh.js:4420-5535 esm-fingerprint
+/**
+ * requestJwtAuthorizationGrant（v2 副本）。
+ */
+async function exchangeIdTokenForJag_2(opts) {
+  let fetchFn = opts.fetchFn ?? defaultXaaFetch_2;
+  let params = new URLSearchParams({
+    grant_type: TOKEN_EXCHANGE_GRANT_2,
+    requested_token_type: ID_JAG_TOKEN_TYPE_2,
+    audience: opts.audience,
+    resource: opts.resource,
+    subject_token: opts.idToken,
+    subject_token_type: ID_TOKEN_TYPE_2,
+    client_id: opts.clientId,
+  });
+  if (opts.clientSecret) params.set("client_secret", opts.clientSecret);
+  if (opts.scope) params.set("scope", opts.scope);
+  let res = await fetchFn(opts.tokenEndpoint, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    body: params,
+  });
+  if (!res.ok) {
+    let body = redactTokens_2(await res.text()).slice(0, 200);
+    let shouldClear = res.status < 500;
+    throw new XaaTokenExchangeError_2(`XAA: token exchange failed: HTTP ${res.status}: ${body}`, shouldClear);
+  }
+  let rawExchange;
+  try {
+    rawExchange = await res.json();
+  } catch {
+    throw new XaaTokenExchangeError_2(
+      `XAA: token exchange returned non-JSON (captive portal?) at ${redactUrlSecrets(opts.tokenEndpoint)}`,
+      false,
+    );
+  }
+  let exchangeParsed = TokenExchangeResponseSchema_2().safeParse(rawExchange);
+  if (!exchangeParsed.success)
+    throw new XaaTokenExchangeError_2(
+      `XAA: token exchange response did not match expected shape: ${redactTokens_2(rawExchange)}`,
+      true,
+    );
+  let result = exchangeParsed.data;
+  if (!result.access_token)
+    throw new XaaTokenExchangeError_2(
+      `XAA: token exchange response missing access_token: ${redactTokens_2(result)}`,
+      true,
+    );
+  if (result.issued_token_type !== ID_JAG_TOKEN_TYPE_2)
+    throw new XaaTokenExchangeError_2(
+      `XAA: token exchange returned unexpected issued_token_type: ${result.issued_token_type}`,
+      true,
+    );
+  return {
+    jwtAuthGrant: result.access_token,
+    expiresIn: result.expires_in,
+    scope: result.scope,
+  };
+}
 //@ chunk-1kaj6e83.js:4349-5464 esm-fingerprint
 /**
  * requestJwtAuthorizationGrant：RFC 8693 token exchange（subject_token=id_token，requested_token_type=id-jag），失败抛 XaaTokenExchangeError（4xx 时 shouldClearIdToken）。
  */
-async function qe(opts) {
+async function exchangeIdTokenForJag(opts) {
   let fetchFn = opts.fetchFn ?? defaultXaaFetch;
   let params = new URLSearchParams({
     grant_type: TOKEN_EXCHANGE_GRANT,
@@ -4272,85 +4395,27 @@ async function qe(opts) {
   };
 }
 //@ chunk-1ny7cxrt.js:1387514-1387570 esm-fingerprint
-var Wz = new Set(["localhost", "127.0.0.1", "::1", "[::1]"]);
-//@ chunk-n1aavqzh.js:4420-5535 esm-fingerprint
-/**
- * requestJwtAuthorizationGrant（v2 副本）。
- */
-async function et(opts) {
-  let fetchFn = opts.fetchFn ?? defaultXaaFetch_2;
-  let params = new URLSearchParams({
-    grant_type: TOKEN_EXCHANGE_GRANT_2,
-    requested_token_type: ID_JAG_TOKEN_TYPE_2,
-    audience: opts.audience,
-    resource: opts.resource,
-    subject_token: opts.idToken,
-    subject_token_type: ID_TOKEN_TYPE_2,
-    client_id: opts.clientId,
-  });
-  if (opts.clientSecret) params.set("client_secret", opts.clientSecret);
-  if (opts.scope) params.set("scope", opts.scope);
-  let res = await fetchFn(opts.tokenEndpoint, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/x-www-form-urlencoded",
-    },
-    body: params,
-  });
-  if (!res.ok) {
-    let body = redactTokens_2(await res.text()).slice(0, 200);
-    let shouldClear = res.status < 500;
-    throw new XaaTokenExchangeError_2(`XAA: token exchange failed: HTTP ${res.status}: ${body}`, shouldClear);
-  }
-  let rawExchange;
-  try {
-    rawExchange = await res.json();
-  } catch {
-    throw new XaaTokenExchangeError_2(
-      `XAA: token exchange returned non-JSON (captive portal?) at ${redactUrlSecrets(opts.tokenEndpoint)}`,
-      false,
-    );
-  }
-  let exchangeParsed = TokenExchangeResponseSchema_2().safeParse(rawExchange);
-  if (!exchangeParsed.success)
-    throw new XaaTokenExchangeError_2(
-      `XAA: token exchange response did not match expected shape: ${redactTokens_2(rawExchange)}`,
-      true,
-    );
-  let result = exchangeParsed.data;
-  if (!result.access_token)
-    throw new XaaTokenExchangeError_2(
-      `XAA: token exchange response missing access_token: ${redactTokens_2(result)}`,
-      true,
-    );
-  if (result.issued_token_type !== ID_JAG_TOKEN_TYPE_2)
-    throw new XaaTokenExchangeError_2(
-      `XAA: token exchange returned unexpected issued_token_type: ${result.issued_token_type}`,
-      true,
-    );
-  return {
-    jwtAuthGrant: result.access_token,
-    expiresIn: result.expires_in,
-    scope: result.scope,
-  };
-}
+var LOOPBACK_HOSTS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-1ny7cxrt.js:1387514", () => {
+  LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "::1", "[::1]"]);
+});
 export {
   UnauthorizedError,
   StreamableHTTPClientTransport,
   SSEClientTransport,
   Client,
   SseError,
-  qe,
+  exchangeIdTokenForJag,
   discoverOAuthProtectedResourceMetadata,
   discoverAuthorizationServerMetadata,
-  et,
+  exchangeIdTokenForJag_2,
   IssuerMismatchError,
   RegistrationRejectedError,
   discoverOAuthServerInfo,
   auth,
   extractWWWAuthenticateParams,
   refreshAuthorization,
-  Wz,
+  LOOPBACK_HOSTS,
   startAuthorization,
   exchangeAuthorization,
 };

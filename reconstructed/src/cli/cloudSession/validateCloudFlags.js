@@ -49,62 +49,74 @@ import { isPrivateNetworkHost } from "../../services/mcp/config.js";
 /**
  * 解析 --cloud/--remote/--teleport/--attach-serve/--environment/--project 等启动选项组合，校验互斥并得出云会话启动方案。
  */
-async function resolveCloudLaunchOptions(e, o) {
-  let teleport = e.teleport ?? null;
-  let r = e.cloud ?? e.remote;
-  let u = null;
-  let p = u === "named" && typeof e.resume === "string" ? e.resume : r;
-  let h = p === true ? "" : (p ?? null);
-  let S = false;
-  if (e.attachServe !== undefined) {
-    if (p !== undefined)
+async function resolveCloudLaunchOptions(parsed, env) {
+  let teleport = parsed.teleport ?? null;
+  let cloudOrRemote = parsed.cloud ?? parsed.remote;
+  let resumeMode = null;
+  let cloudValue =
+    resumeMode === "named" && typeof parsed.resume === "string" ? parsed.resume : cloudOrRemote;
+  let remoteTarget = cloudValue === true ? "" : (cloudValue ?? null);
+  let isServeOnly = false;
+  if (parsed.attachServe !== undefined) {
+    if (cloudValue !== undefined)
       return {
         ok: false,
         error: "Error: --attach-serve cannot be combined with --cloud/--remote",
       };
-    if (extractRepoSlug(e.attachServe) === null)
+    if (extractRepoSlug(parsed.attachServe) === null)
       return {
         ok: false,
-        error: `Error: --attach-serve expects a session id (cse_...), got ${truncateCloudSessionLabel(e.attachServe)}`,
+        error: `Error: --attach-serve expects a session id (cse_...), got ${truncateCloudSessionLabel(parsed.attachServe)}`,
       };
-    h = e.attachServe;
-    S = true;
+    remoteTarget = parsed.attachServe;
+    isServeOnly = true;
   }
-  let y = typeof p === "string" ? extractRepoSlug(p) : S ? extractRepoSlug(e.attachServe ?? "") : null;
-  let M = typeof p === "string" && y === null && !e.initOnly && /^\s*\S+\s*$/.test(p) ? p : undefined;
-  let E = null;
-  let w = null;
-  let P = false;
-  let A = null;
+  let attachSlug =
+    typeof cloudValue === "string"
+      ? extractRepoSlug(cloudValue)
+      : isServeOnly
+        ? extractRepoSlug(parsed.attachServe ?? "")
+        : null;
+  let loneWord =
+    typeof cloudValue === "string" &&
+    attachSlug === null &&
+    !parsed.initOnly &&
+    /^\s*\S+\s*$/.test(cloudValue)
+      ? cloudValue
+      : undefined;
+  let poolId = null;
+  let environmentQuery = null;
+  let isPoolPromotedRemote = false;
+  let poolRef = null;
   let poolOnBranch = null;
-  let q = e.noMonorepo === true ? noopAnthropicRepoHint() : undefined;
-  let ce = false;
-  let pe = e.environment ?? e.pool ?? q;
-  if (pe !== undefined) {
-    let { prefix, flag } = environmentFlagErrorPrefix(q !== undefined);
-    let error = `Error: --environment expects a self-hosted environment id (ccpool_...), got ${truncateCloudSessionLabel(pe)}`;
-    if ((e.environment === undefined || true) && !isCcpoolId(pe))
+  let noMonorepoHint = parsed.noMonorepo === true ? noopAnthropicRepoHint() : undefined;
+  let asksTheService = false;
+  let environmentChoice = parsed.environment ?? parsed.pool ?? noMonorepoHint;
+  if (environmentChoice !== undefined) {
+    let { prefix, flag } = environmentFlagErrorPrefix(noMonorepoHint !== undefined);
+    let error = `Error: --environment expects a self-hosted environment id (ccpool_...), got ${truncateCloudSessionLabel(environmentChoice)}`;
+    if ((parsed.environment === undefined || true) && !isCcpoolId(environmentChoice))
       return {
         ok: false,
         error,
       };
-    let environmentSelector = parseEnvironmentSelector(pe);
+    let environmentSelector = parseEnvironmentSelector(environmentChoice);
     if (environmentSelector === null)
       return {
         ok: false,
         error,
       };
-    if (e.resume || e.continue || teleport)
+    if (parsed.resume || parsed.continue || teleport)
       return {
         ok: false,
         error: `${prefix}${flag} cannot be combined with --resume, --continue, or --teleport`,
       };
-    if (e.initOnly || o.sessionId)
+    if (parsed.initOnly || env.sessionId)
       return {
         ok: false,
-        error: `${prefix}${flag} cannot be combined with ${e.initOnly ? "--init-only" : "--session-id"}`,
+        error: `${prefix}${flag} cannot be combined with ${parsed.initOnly ? "--init-only" : "--session-id"}`,
       };
-    if (y !== null)
+    if (attachSlug !== null)
       return {
         ok: false,
         error:
@@ -112,45 +124,50 @@ async function resolveCloudLaunchOptions(e, o) {
       };
     if (
       environmentSelector.kind === "pool" &&
-      (e.print || o.nonInteractive) &&
-      typeof p === "string" &&
-      p.length > 0
+      (parsed.print || env.nonInteractive) &&
+      typeof cloudValue === "string" &&
+      cloudValue.length > 0
     )
       return {
         ok: false,
         error: `${prefix}non-interactive ${flag} reads the prompt from the positional or stdin; drop --cloud/--remote <description>.`,
       };
-    if ((e.print || o.nonInteractive) && o.outputFormat === "stream-json")
+    if ((parsed.print || env.nonInteractive) && env.outputFormat === "stream-json")
       return {
         ok: false,
         error: `${prefix}${flag} does not support --output-format stream-json`,
       };
-    if (typeof p === "string" && p.length > 0 && typeof o.prompt === "string" && o.prompt.length > 0)
+    if (
+      typeof cloudValue === "string" &&
+      cloudValue.length > 0 &&
+      typeof env.prompt === "string" &&
+      env.prompt.length > 0
+    )
       return {
         ok: false,
         error: `${prefix}${flag} with --cloud <description> cannot also take a positional prompt. Pass the task as the description, or drop --cloud.`,
       };
-    if (environmentSelector.kind === "pool") E = environmentSelector.poolId;
-    else w = environmentSelector;
-    if (h === null || h === "") {
-      let prompt = typeof o.prompt === "string" ? o.prompt : "";
-      if (!(e.print || o.nonInteractive) && extractRepoSlug(prompt) !== null)
+    if (environmentSelector.kind === "pool") poolId = environmentSelector.poolId;
+    else environmentQuery = environmentSelector;
+    if (remoteTarget === null || remoteTarget === "") {
+      let prompt = typeof env.prompt === "string" ? env.prompt : "";
+      if (!(parsed.print || env.nonInteractive) && extractRepoSlug(prompt) !== null)
         return {
           ok: false,
           error: `${prefix}${flag} creates a new session; it cannot be combined with a session id or url`,
         };
-      h = E === null ? "" : prompt;
-      P = E !== null;
+      remoteTarget = poolId === null ? "" : prompt;
+      isPoolPromotedRemote = poolId !== null;
     }
   }
-  let ref = e.ref;
+  let ref = parsed.ref;
   if (ref !== undefined) {
-    if (E === null && h === null)
+    if (poolId === null && remoteTarget === null)
       return {
         ok: false,
-        error: `Error: --ref sets the base branch for a cloud session; pass --cloud or --environment${e.project !== undefined ? " \u2014 --project no longer starts cloud sessions" : ""}`,
+        error: `Error: --ref sets the base branch for a cloud session; pass --cloud or --environment${parsed.project !== undefined ? " \u2014 --project no longer starts cloud sessions" : ""}`,
       };
-    if (y !== null)
+    if (attachSlug !== null)
       return {
         ok: false,
         error:
@@ -161,22 +178,22 @@ async function resolveCloudLaunchOptions(e, o) {
         ok: false,
         error: "Error: --ref requires a non-empty branch, tag, or SHA",
       };
-    A = ref;
+    poolRef = ref;
   }
-  let onBranch = e.onBranch;
+  let onBranch = parsed.onBranch;
   if (onBranch !== undefined) {
-    if (E === null && h === null)
+    if (poolId === null && remoteTarget === null)
       return {
         ok: false,
-        error: `Error: --on-branch resumes work on a branch in a cloud session; pass --cloud or --environment${e.project !== undefined ? " \u2014 --project no longer starts cloud sessions" : ""}`,
+        error: `Error: --on-branch resumes work on a branch in a cloud session; pass --cloud or --environment${parsed.project !== undefined ? " \u2014 --project no longer starts cloud sessions" : ""}`,
       };
-    if (y !== null)
+    if (attachSlug !== null)
       return {
         ok: false,
         error:
           "Error: --on-branch resumes a branch in a new cloud session; it cannot be combined with --cloud <session_id|url>",
       };
-    if (A !== null)
+    if (poolRef !== null)
       return {
         ok: false,
         error: "Error: --on-branch and --ref both set the cloud session's base branch; pass one or the other",
@@ -188,13 +205,13 @@ async function resolveCloudLaunchOptions(e, o) {
       };
     poolOnBranch = onBranch;
   }
-  let $e = false;
-  let ve = null;
-  let pt = null;
+  let projectForRemoteControl = false;
+  let projectFlag = null;
+  let projectBrowse = null;
   let correlationId = null;
-  let correlationId_2 = e.correlationId;
+  let correlationId_2 = parsed.correlationId;
   if (correlationId_2 !== undefined) {
-    if (E === null)
+    if (poolId === null)
       return {
         ok: false,
         error: "Error: --correlation-id requires --environment",
@@ -207,74 +224,74 @@ async function resolveCloudLaunchOptions(e, o) {
       };
     correlationId = correlationId_2;
   }
-  let mt =
-    h !== null &&
-    E === null &&
-    ve === null &&
+  let isHeadlessCloud =
+    remoteTarget !== null &&
+    poolId === null &&
+    projectFlag === null &&
     isStreamJsonRemoteMode({
-      print: Boolean(e.print),
-      initOnly: Boolean(e.initOnly),
-      nonInteractive: o.nonInteractive,
-      inputFormat: o.inputFormat,
-      outputFormat: o.outputFormat,
-      hasSdkUrl: o.hasSdkUrl,
+      print: Boolean(parsed.print),
+      initOnly: Boolean(parsed.initOnly),
+      nonInteractive: env.nonInteractive,
+      inputFormat: env.inputFormat,
+      outputFormat: env.outputFormat,
+      hasSdkUrl: env.hasSdkUrl,
     }) &&
-    (await (S ? o.isViolinWoodEnabled : o.isConnectedSessionsEnabled)().catch(() => false));
-  let Le = q !== undefined;
-  let et =
-    o.cloudPrintEnabled &&
-    h !== null &&
-    (typeof p !== "string" || p.trim() !== "" || Le) &&
-    (E === null || Le) &&
-    ve === null &&
-    y === null &&
-    M === undefined &&
+    (await (isServeOnly ? env.isViolinWoodEnabled : env.isConnectedSessionsEnabled)().catch(() => false));
+  let isFromNoMonorepo = noMonorepoHint !== undefined;
+  let isHeadlessCloudPrint =
+    env.cloudPrintEnabled &&
+    remoteTarget !== null &&
+    (typeof cloudValue !== "string" || cloudValue.trim() !== "" || isFromNoMonorepo) &&
+    (poolId === null || isFromNoMonorepo) &&
+    projectFlag === null &&
+    attachSlug === null &&
+    loneWord === undefined &&
     isPrintNonStreamMode({
-      print: Boolean(e.print),
-      initOnly: Boolean(e.initOnly),
-      hasSdkUrl: o.hasSdkUrl,
-      outputFormat: o.outputFormat,
+      print: Boolean(parsed.print),
+      initOnly: Boolean(parsed.initOnly),
+      hasSdkUrl: env.hasSdkUrl,
+      outputFormat: env.outputFormat,
     });
-  if (et && Le) {
-    h = "";
-    P = false;
+  if (isHeadlessCloudPrint && isFromNoMonorepo) {
+    remoteTarget = "";
+    isPoolPromotedRemote = false;
   }
   if (
-    et &&
-    typeof p === "string" &&
-    p.trim() !== "" &&
-    typeof o.prompt === "string" &&
-    o.prompt.trim() !== ""
+    isHeadlessCloudPrint &&
+    typeof cloudValue === "string" &&
+    cloudValue.trim() !== "" &&
+    typeof env.prompt === "string" &&
+    env.prompt.trim() !== ""
   )
     return {
       ok: false,
-      error: `Error: the task was given twice: as --cloud's value (${truncateCloudSessionLabel(p)}) and as the prompt. With --print, give it in one place; to name the session, use -n/--name.`,
+      error: `Error: the task was given twice: as --cloud's value (${truncateCloudSessionLabel(cloudValue)}) and as the prompt. With --print, give it in one place; to name the session, use -n/--name.`,
     };
   if (
-    et &&
-    (Boolean(e.dangerouslySkipPermissions) ||
-      e.permissionMode === "bypassPermissions" ||
-      e.inheritPermissionMode === "bypassPermissions")
+    isHeadlessCloudPrint &&
+    (Boolean(parsed.dangerouslySkipPermissions) ||
+      parsed.permissionMode === "bypassPermissions" ||
+      parsed.inheritPermissionMode === "bypassPermissions")
   )
     return {
       ok: false,
       error: BYPASS_REFUSAL_MESSAGE,
     };
-  if (S && !mt)
+  if (isServeOnly && !isHeadlessCloud)
     return {
       ok: false,
       error:
         "Error: --attach-serve requires the serve-only headless launch (non-interactive, --input-format stream-json and --output-format stream-json) and an enabled headless cloud client; it never falls back to a plain attach",
     };
-  let triBoolFlag = parseTriBoolFlag(e.forwardHomeSettings);
+  let triBoolFlag = parseTriBoolFlag(parsed.forwardHomeSettings);
   if (triBoolFlag === "invalid")
     return {
       ok: false,
-      error: `Error: --forward-home-settings takes true or false, not ${truncateCloudSessionLabel(String(e.forwardHomeSettings))}.`,
+      error: `Error: --forward-home-settings takes true or false, not ${truncateCloudSessionLabel(String(parsed.forwardHomeSettings))}.`,
     };
   let forwardHomeSettings = triBoolFlag !== false;
   let homeSettingsConsent = triBoolFlag === true ? "forward" : null;
-  if (triBoolFlag !== null && E === null && h === null && y === null)
+  if (triBoolFlag !== null && poolId === null && remoteTarget === null && attachSlug === null)
     return {
       ok: false,
       error:
@@ -283,108 +300,108 @@ async function resolveCloudLaunchOptions(e, o) {
   let persistentVolume = false;
   let persistentVolumeFromSessionId = null;
   let monorepo = false;
-  if (h !== null) {
-    let x = validateCloudSessionFlags({
-      print: e.print,
-      nonInteractive: o.nonInteractive,
-      continue: e.continue,
-      resume: u === null ? e.resume : undefined,
-      fromPr: e.fromPr,
+  if (remoteTarget !== null) {
+    let flagError = validateCloudSessionFlags({
+      print: parsed.print,
+      nonInteractive: env.nonInteractive,
+      continue: parsed.continue,
+      resume: resumeMode === null ? parsed.resume : undefined,
+      fromPr: parsed.fromPr,
       hasTeleport: teleport !== null,
-      hasConnect: o.hasConnect,
-      hasSSH: o.hasSSH,
+      hasConnect: env.hasConnect,
+      hasSSH: env.hasSSH,
       hasAssistant: false,
-      hasPool: E !== null,
-      hasEnvironmentQuery: w !== null,
-      isChosenByNoMonorepo: q !== undefined,
-      isCloudAttach: y !== null,
-      headlessCloud: mt,
-      headlessCloudPrint: et,
-      loneWordValue: M,
+      hasPool: poolId !== null,
+      hasEnvironmentQuery: environmentQuery !== null,
+      isChosenByNoMonorepo: noMonorepoHint !== undefined,
+      isCloudAttach: attachSlug !== null,
+      headlessCloud: isHeadlessCloud,
+      headlessCloudPrint: isHeadlessCloudPrint,
+      loneWordValue: loneWord,
     });
-    if (x)
+    if (flagError)
       return {
         ok: false,
-        error: x,
+        error: flagError,
       };
   }
-  let Ve =
-    h === null &&
+  let mayDefaultToCloud =
+    remoteTarget === null &&
     validateCloudSessionFlags({
-      print: e.print,
-      nonInteractive: o.nonInteractive || Boolean(e.initOnly),
-      continue: e.continue,
-      resume: e.resume,
-      fromPr: e.fromPr,
+      print: parsed.print,
+      nonInteractive: env.nonInteractive || Boolean(parsed.initOnly),
+      continue: parsed.continue,
+      resume: parsed.resume,
+      fromPr: parsed.fromPr,
       hasTeleport: teleport !== null,
-      hasConnect: o.hasConnect,
-      hasSSH: o.hasSSH,
+      hasConnect: env.hasConnect,
+      hasSSH: env.hasSSH,
     }) === null &&
-    !o.sessionId &&
-    pt === null &&
-    !$e &&
-    e.remoteControl === undefined &&
-    e.rc === undefined &&
-    !cliCarriesSessionConfig(_pendingSSH(e)) &&
-    e.watchArtifact === undefined &&
-    e.watchArtifactNoAutoreact === undefined &&
-    e.worktree === undefined &&
-    !e.deepLinkOrigin;
-  let At = !(o.cloudSessionsByDefault && Ve)
+    !env.sessionId &&
+    projectBrowse === null &&
+    !projectForRemoteControl &&
+    parsed.remoteControl === undefined &&
+    parsed.rc === undefined &&
+    !cliCarriesSessionConfig(_pendingSSH(parsed)) &&
+    parsed.watchArtifact === undefined &&
+    parsed.watchArtifactNoAutoreact === undefined &&
+    parsed.worktree === undefined &&
+    !parsed.deepLinkOrigin;
+  let cloudDefault = !(env.cloudSessionsByDefault && mayDefaultToCloud)
     ? "none"
-    : e.local || e.unsandboxed
+    : parsed.local || parsed.unsandboxed
       ? "declined"
-      : (await o.cloudSessionsDeniedByOrgPolicy())
+      : (await env.cloudSessionsDeniedByOrgPolicy())
         ? "not_allowed"
         : "applied";
-  if (At === "applied") h = "";
-  let sandboxVmDefault = !(o.sandboxVmByDefault && Ve && h === null)
+  if (cloudDefault === "applied") remoteTarget = "";
+  let sandboxVmDefault = !(env.sandboxVmByDefault && mayDefaultToCloud && remoteTarget === null)
     ? "none"
-    : e.unsandboxed
+    : parsed.unsandboxed
       ? "declined"
       : "applied";
-  let z = false;
-  let Q = u !== null ? "resume" : y !== null ? "attach" : null;
+  let isPersonal = false;
+  let personalMode = resumeMode !== null ? "resume" : attachSlug !== null ? "attach" : null;
   return {
     ok: true,
     value: {
       teleport,
-      remote: h,
-      cloudAttachId: y,
-      resumeInCloud: u,
-      poolId: E,
-      environmentQuery: w,
-      poolPromotedRemote: P,
-      poolRef: A,
+      remote: remoteTarget,
+      cloudAttachId: attachSlug,
+      resumeInCloud: resumeMode,
+      poolId,
+      environmentQuery,
+      poolPromotedRemote: isPoolPromotedRemote,
+      poolRef,
       poolOnBranch,
       forwardHomeSettings,
       homeSettingsConsent,
-      projectFlag: ve,
-      projectBrowse: pt,
-      projectForRemoteControl: $e,
+      projectFlag,
+      projectBrowse,
+      projectForRemoteControl,
       correlationId,
-      headlessCloud: mt,
-      headlessCloudPrint: et,
-      serveOnly: S,
-      cloudDefault: At,
+      headlessCloud: isHeadlessCloud,
+      headlessCloudPrint: isHeadlessCloudPrint,
+      serveOnly: isServeOnly,
+      cloudDefault,
       sandboxVmDefault,
       persistentVolume,
       persistentVolumeFromSessionId,
       monorepo,
-      noMonorepo: ce || E === q,
-      noMonorepoAsksTheService: ce,
-      personal: z && h !== null && Q === null,
-      personalWithoutEffect: z ? Q : null,
+      noMonorepo: asksTheService || poolId === noMonorepoHint,
+      noMonorepoAsksTheService: asksTheService,
+      personal: isPersonal && remoteTarget !== null && personalMode === null,
+      personalWithoutEffect: isPersonal ? personalMode : null,
     },
   };
 }
 //@ chunk-3wek6r2k.js:56846-57082 placement
-function validateSessionIdFlag(e) {
-  if (!e.sessionId)
+function validateSessionIdFlag(options) {
+  if (!options.sessionId)
     return {
       ok: true,
     };
-  if ((e.continue || e.resume) && !e.forkSession && !e.sdkUrl)
+  if ((options.continue || options.resume) && !options.forkSession && !options.sdkUrl)
     return {
       ok: false,
       error:
@@ -398,73 +415,73 @@ function validateSessionIdFlag(e) {
 var MCP_REMOTE_WORKSPACE_NOTE = "MCP runs in the remote workspace";
 //@ chunk-3wek6r2k.js:57124-57506 placement
 function mcpConfigIgnoredOnCloud({ mcpConfigFlagServers, agent, chromeFlag, dynamicMcpConfig }) {
-  let u = new Set([
+  let serverNames = new Set([
     ...Object.keys(mcpConfigFlagServers),
     ...(agent ? Object.keys(agentMcpSpecsToScopedConfigs(agent)) : []),
   ]);
-  let p = [];
-  if (u.size > 0)
-    p.push(
+  let messages = [];
+  if (serverNames.size > 0)
+    messages.push(
       createSystemMessage(
-        `MCP ${plural(u.size, "server")} from --mcp-config/agent frontmatter ignored \u2014 ${MCP_REMOTE_WORKSPACE_NOTE}: ${[...u].join(", ")}`,
+        `MCP ${plural(serverNames.size, "server")} from --mcp-config/agent frontmatter ignored \u2014 ${MCP_REMOTE_WORKSPACE_NOTE}: ${[...serverNames].join(", ")}`,
         "warning",
       ),
     );
   if (chromeFlag === true && Object.hasOwn(dynamicMcpConfig, CLAUDE_IN_CHROME_MCP_SERVER_NAME))
-    p.push(createSystemMessage(`--chrome has no effect: ${MCP_REMOTE_WORKSPACE_NOTE}.`, "warning"));
-  return p;
+    messages.push(createSystemMessage(`--chrome has no effect: ${MCP_REMOTE_WORKSPACE_NOTE}.`, "warning"));
+  return messages;
 }
 //@ chunk-3wek6r2k.js:57506-57844 placement
-function trackSessionSwitches(e) {
-  let o = {};
+function trackSessionSwitches(options) {
+  let extraFields = {};
   let sessionId = getSessionId();
   return {
-    unsubscribe: onSessionSwitch((u, p) => {
-      if (u === sessionId) return;
-      let h = sessionId;
-      sessionId = u;
+    unsubscribe: onSessionSwitch((nextSessionId, source) => {
+      if (nextSessionId === sessionId) return;
+      let previousSessionId = sessionId;
+      sessionId = nextSessionId;
       logEvent("tengu_session_start", {
-        previous_session_id: sanitizeMarkName(h),
-        source: fromEnum(p),
-        permissionMode: fromEnum(e.permissionMode),
-        dangerouslySkipPermissionsPassed: e.dangerouslySkipPermissionsPassed,
-        modeIsBypass: e.modeIsBypass,
-        print: e.print,
-        ...o,
+        previous_session_id: sanitizeMarkName(previousSessionId),
+        source: fromEnum(source),
+        permissionMode: fromEnum(options.permissionMode),
+        dangerouslySkipPermissionsPassed: options.dangerouslySkipPermissionsPassed,
+        modeIsBypass: options.modeIsBypass,
+        print: options.print,
+        ...extraFields,
       });
     }),
-    updateContext(u) {
-      o = {
-        ...o,
-        ...u,
+    updateContext(fields) {
+      extraFields = {
+        ...extraFields,
+        ...fields,
       };
     },
   };
 }
 //@ chunk-3wek6r2k.js:57844-58621 placement
-function oneMillionContextNotice(resolvedInitialModel, windowArg, n) {
+function oneMillionContextNotice(model, windowArg, modelInfo) {
   try {
     if (!is1mContextDisabled() || !isAutoCompactEnabled()) return null;
-    if (isUnresolvedInferenceProfile(resolvedInitialModel)) return null;
-    let modelContextInfo = getModelContextInfo(resolvedInitialModel, n);
+    if (isUnresolvedInferenceProfile(model)) return null;
+    let modelContextInfo = getModelContextInfo(model, modelInfo);
     let { recognized } = modelContextInfo;
-    let p =
+    let isAboveDefault =
       !recognized ||
       modelContextInfo.apiContextWindowWithoutOptIn > DEFAULT_CONTEXT_WINDOW ||
-      hasOptedInto1mContext(resolvedInitialModel, n);
-    let h = DEFAULT_CONTEXT_WINDOW;
-    let { window: S, source } = getAutoCompactWindow(modelContextInfo, windowArg, n);
-    if ((source !== "auto" && S <= h) || !p) {
+      hasOptedInto1mContext(model, modelInfo);
+    let defaultWindow = DEFAULT_CONTEXT_WINDOW;
+    let { window: autoCompactWindow, source } = getAutoCompactWindow(modelContextInfo, windowArg, modelInfo);
+    if ((source !== "auto" && autoCompactWindow <= defaultWindow) || !isAboveDefault) {
       logFeatureOk("compact_context_cap_enforcement");
       return null;
     }
-    let E = recognized ? "" : ` or update to a Claude Code version that recognizes ${resolvedInitialModel}`;
-    let w = `CLAUDE_CODE_DISABLE_1M_CONTEXT is set, but the ${h / 1000}K limit isn't enforced for ${resolvedInitialModel}, so this session can grow past it. To enforce it, set CLAUDE_CODE_AUTO_COMPACT_WINDOW=${h} (or the autoCompactWindow setting)${E}.`;
+    let upgradeHint = recognized ? "" : ` or update to a Claude Code version that recognizes ${model}`;
+    let message = `CLAUDE_CODE_DISABLE_1M_CONTEXT is set, but the ${defaultWindow / 1000}K limit isn't enforced for ${model}, so this session can grow past it. To enforce it, set CLAUDE_CODE_AUTO_COMPACT_WINDOW=${defaultWindow} (or the autoCompactWindow setting)${upgradeHint}.`;
     logFeatureBad(
       "compact_context_cap_enforcement",
       source === "auto" ? "window_source_auto" : "window_above_boundary",
     );
-    return w;
+    return message;
   } catch (error) {
     logFeatureSad("compact_context_cap_enforcement", "resolve_failed");
     logError(withTelemetryMessage(toError(error), "cap enforcement check failed"));
@@ -472,17 +489,17 @@ function oneMillionContextNotice(resolvedInitialModel, windowArg, n) {
   }
 }
 //@ chunk-3wek6r2k.js:58621-58826 placement
-function hasOptedInto1mContext(e, o) {
+function hasOptedInto1mContext(model, betas) {
   if (isHipaaOrg()) return false;
   if (!(
-    o?.includes(BETA_LONG_CONTEXT.header) === true ||
+    betas?.includes(BETA_LONG_CONTEXT.header) === true ||
     (env.ANTHROPIC_BETAS ?? "")
       .split(",")
-      .map((r) => r.trim())
+      .map((beta) => beta.trim())
       .includes(BETA_LONG_CONTEXT.header)
   ))
     return false;
-  return getCatalogEntry(strip1mSuffix(getCanonicalName(e)))?.context?.supports_1m_beta === true;
+  return getCatalogEntry(strip1mSuffix(getCanonicalName(model)))?.context?.supports_1m_beta === true;
 }
 //@ chunk-3wek6r2k.js:58826-58940 placement
 var PRIVATE_DNS_SUFFIXES = [
@@ -518,38 +535,38 @@ function classifyServerLocation(config) {
 //@ chunk-3wek6r2k.js:59143-59598 placement
 function classifyUrlHost(url) {
   if (/\$\{[^}]*\}/.test(url) || /^[a-z][a-z0-9+.-]*:\/\/\//i.test(url)) return "other";
-  let o;
+  let host;
   try {
-    o = new URL(url).hostname
+    host = new URL(url).hostname
       .toLowerCase()
       .replace(/^\[|\]$/g, "")
       .replace(/\.$/, "");
   } catch {
     return "other";
   }
-  if (!o) return "other";
-  let n = ipv4FromMappedIpv6(o);
-  if (n !== null) o = n;
+  if (!host) return "other";
+  let ipv4 = ipv4FromMappedIpv6(host);
+  if (ipv4 !== null) host = ipv4;
   if (
-    o === "localhost" ||
-    o === "localhost.localdomain" ||
-    o === "0.0.0.0" ||
-    o === "::1" ||
-    o === "::" ||
-    o.endsWith(".localhost") ||
-    /^127\.\d+\.\d+\.\d+$/.test(o)
+    host === "localhost" ||
+    host === "localhost.localdomain" ||
+    host === "0.0.0.0" ||
+    host === "::1" ||
+    host === "::" ||
+    host.endsWith(".localhost") ||
+    /^127\.\d+\.\d+\.\d+$/.test(host)
   )
     return "localhost";
-  if (isPrivateNetworkHost(o)) return "private_network";
+  if (isPrivateNetworkHost(host)) return "private_network";
   return "public";
 }
 //@ chunk-3wek6r2k.js:59598-59775 placement
-function ipv4FromMappedIpv6(e) {
-  let match = e.match(/^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/);
+function ipv4FromMappedIpv6(host) {
+  let match = host.match(/^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/);
   if (match) {
-    let n = parseInt(match[1], 16);
-    let r = parseInt(match[2], 16);
-    return `${n >> 8}.${n & 255}.${r >> 8}.${r & 255}`;
+    let high = parseInt(match[1], 16);
+    let low = parseInt(match[2], 16);
+    return `${high >> 8}.${high & 255}.${low >> 8}.${low & 255}`;
   }
   return null;
 }

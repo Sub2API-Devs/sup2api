@@ -5,14 +5,14 @@
  * pieces: chunk-bwbq4xvm.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../runtime/bun-runtime.js";
 import { require_range } from "../classes/range.js";
 import { require_comparator } from "../classes/comparator.js";
 import { require_satisfies } from "../functions/satisfies.js";
 import { require_compare } from "../functions/compare.js";
 
 //@ chunk-bwbq4xvm.js:24544-26792 cjs-fingerprint
-var require_subset = x(function (cjsExports, cjsModule) {
+var require_subset = __commonJS(function (cjsExports, cjsModule) {
   var Range = require_range();
   var Comparator = require_comparator();
   var { ANY } = Comparator;

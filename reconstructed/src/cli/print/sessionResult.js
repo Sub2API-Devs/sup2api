@@ -46,20 +46,20 @@ import { logForDiagnosticsNoPII } from "../../utils/diagLogs.js";
  */
 function mergeResultMessages(pending, result) {
   if (pending.length === 0) return result;
-  let r = [...pending, result];
-  let s = r.find((y) => y.subtype !== "success" || y.is_error) ?? result;
+  let results = [...pending, result];
+  let failure = results.find((entry) => entry.subtype !== "success" || entry.is_error) ?? result;
   pending.length = 0;
-  let max = Math.max(...r.map((y) => y.safety_stops ?? 0));
+  let max = Math.max(...results.map((entry) => entry.safety_stops ?? 0));
   return {
-    ...s,
+    ...failure,
     total_cost_usd: result.total_cost_usd,
     duration_api_ms: result.duration_api_ms,
     modelUsage: result.modelUsage,
-    safety_stops: max === 0 && r.some((y) => y.safety_stops === undefined) ? undefined : max,
-    usage: r.reduce((acc, S) => addUsage_2(acc, S.usage), EMPTY_USAGE),
-    num_turns: r.reduce((acc, S) => acc + S.num_turns, 0),
-    duration_ms: r.reduce((acc, S) => acc + S.duration_ms, 0),
-    permission_denials: r.flatMap((y) => y.permission_denials),
+    safety_stops: max === 0 && results.some((entry) => entry.safety_stops === undefined) ? undefined : max,
+    usage: results.reduce((acc, entry) => addUsage_2(acc, entry.usage), EMPTY_USAGE),
+    num_turns: results.reduce((acc, entry) => acc + entry.num_turns, 0),
+    duration_ms: results.reduce((acc, entry) => acc + entry.duration_ms, 0),
+    permission_denials: results.flatMap((entry) => entry.permission_denials),
   };
 }
 //@ chunk-tyg7f3ek.js:170980-171022 placement
@@ -118,7 +118,7 @@ class SdkResultReporter {
     this.terminalResultEmitted = true;
     this.endTurn();
   }
-  reportUnrunTurnFailed(e, n) {
+  reportUnrunTurnFailed(result, context) {
     logEvent("tengu_sdk_result", {
       subtype: lit("error_during_execution"),
       is_error: true,
@@ -129,11 +129,11 @@ class SdkResultReporter {
       saw_compact: false,
       installed_mods: this.installedModsSeen(),
     });
-    publishFailedSummary(e, n);
+    publishFailedSummary(result, context);
   }
-  async emitSessionCrash(e, { io, session, sessionMirror }) {
+  async emitSessionCrash(error, { io, session, sessionMirror }) {
     logEvent("tengu_sdk_session_crash", {
-      ...errorTelemetryFields(e),
+      ...errorTelemetryFields(error),
       installed_mods: this.installedModsSeen(),
     });
     if (!this.terminalResultEmitted) {
@@ -156,18 +156,18 @@ class SdkResultReporter {
         flushSessionStorage,
         FLUSH_SESSION_BEFORE_RESULT_ABORT_MS,
       );
-      let h = errorTelemetryFields(e);
+      let fields = errorTelemetryFields(error);
       publishFailedSummary(
         io.sessionState,
-        isBridgeOrTransport(session) ? `Session crashed (${h.error_name})` : errorMessage(e),
+        isBridgeOrTransport(session) ? `Session crashed (${fields.error_name})` : errorMessage(error),
       );
       await io.write(
         emitLoadError(
           session.id,
           orderForTransport(
             session,
-            `[session_crash] error_name=${h.error_name} api_error_status=${h.api_error_status ?? "none"} cause_name=${h.cause_name ?? "none"}`,
-            [errorMessage(e), ...this.recentErrors()],
+            `[session_crash] error_name=${fields.error_name} api_error_status=${fields.api_error_status ?? "none"} cause_name=${fields.cause_name ?? "none"}`,
+            [errorMessage(error), ...this.recentErrors()],
           ),
         ),
       );
@@ -187,7 +187,7 @@ var FLUSH_SESSION_BEFORE_RESULT_ABORT_MS = 5000;
 async function flushSessionBeforeResult(
   sessionMirror,
   flushSessionStorage_2 = flushSessionStorage,
-  r = FLUSH_SESSION_BEFORE_RESULT_MS,
+  flushMs = FLUSH_SESSION_BEFORE_RESULT_MS,
 ) {
   if (sessionMirror) {
     await flushSessionStorage_2();
@@ -197,10 +197,10 @@ async function flushSessionBeforeResult(
     if (
       (await withDeadline(
         flushSessionStorage_2().then(() => true),
-        r,
+        flushMs,
       )) === undefined
     )
-      logForDebugging(`transcript drain still running after ${r}ms; the result goes out without it`, {
+      logForDebugging(`transcript drain still running after ${flushMs}ms; the result goes out without it`, {
         level: "warn",
       });
   } catch (error) {
@@ -208,19 +208,20 @@ async function flushSessionBeforeResult(
   }
 }
 //@ chunk-tyg7f3ek.js:173230-173327 placement
-function publishFailedSummary(sessionState, n) {
+function publishFailedSummary(sessionState, statusDetail) {
   publishPostTurnSummary(sessionState, {
     status_category: "failed",
-    status_detail: n || "Run failed",
+    status_detail: statusDetail || "Run failed",
     needs_action: "",
   });
 }
 //@ chunk-tyg7f3ek.js:173327-173545 placement
-function errorTelemetryFields(e) {
-  let n = e instanceof APIError;
-  let errorName = n ? fromEnum(classifyAPIError(e)) : classifyToolError(e);
-  let apiErrorStatus = n && typeof e.status === "number" ? e.status : undefined;
-  let causeName = e instanceof Error && e.cause !== undefined ? classifyToolError(e.cause) : undefined;
+function errorTelemetryFields(error) {
+  let isApiError = error instanceof APIError;
+  let errorName = isApiError ? fromEnum(classifyAPIError(error)) : classifyToolError(error);
+  let apiErrorStatus = isApiError && typeof error.status === "number" ? error.status : undefined;
+  let causeName =
+    error instanceof Error && error.cause !== undefined ? classifyToolError(error.cause) : undefined;
   return {
     error_name: errorName,
     api_error_status: apiErrorStatus,
@@ -280,17 +281,17 @@ class HeldResultsController {
     this.storageV5 = storageV5;
     this.sessionMirror = sessionMirror;
     this.flushSessionStorage = flushSessionStorage;
-    this.emit = (ce) => {
-      if (ce.type === "result") {
-        if (this.pendingPointerResults.delete(ce.uuid)) handbackPointerResults.add(ce);
-        if (this.pendingLateResults.delete(ce.uuid)) lateReleasedResults.add(ce);
-        let nt = this.pendingStopNotices.get(ce.uuid);
-        if (nt !== undefined) {
-          this.pendingStopNotices.delete(ce.uuid);
-          autoModeStopNotices.set(ce, nt);
+    this.emit = (result) => {
+      if (result.type === "result") {
+        if (this.pendingPointerResults.delete(result.uuid)) handbackPointerResults.add(result);
+        if (this.pendingLateResults.delete(result.uuid)) lateReleasedResults.add(result);
+        let notice = this.pendingStopNotices.get(result.uuid);
+        if (notice !== undefined) {
+          this.pendingStopNotices.delete(result.uuid);
+          autoModeStopNotices.set(result, notice);
         }
       }
-      emit(ce);
+      emit(result);
     };
     this.heldResultTotals = heldResultTotals;
     this.turnAbortedForShutdown = turnAbortedForShutdown;
@@ -303,8 +304,8 @@ class HeldResultsController {
     return this.heldBackResults.length > 0 || this.carriedEvalResults.length > 0;
   }
   route(result, { command }) {
-    let r = result.subtype === "error_during_execution" ? getAutoModeUnavailableStopNotice() : undefined;
-    if (r !== undefined) this.pendingStopNotices.set(result.uuid, r);
+    let notice = result.subtype === "error_during_execution" ? getAutoModeUnavailableStopNotice() : undefined;
+    if (notice !== undefined) this.pendingStopNotices.set(result.uuid, notice);
     if (
       command.shouldQuery !== false &&
       this.drain.inputClosed &&
@@ -316,9 +317,9 @@ class HeldResultsController {
     let message =
       command.shouldQuery === false ? result : mergeResultMessages(this.carriedEvalResults, result);
     let state = this.store.getState();
-    let y = command.handbackPointer === true || command.repeatsUsageLimitAlert === true;
-    if (y) this.pendingPointerResults.add(result.uuid);
-    if (command.shouldQuery === false && command.queryHeldForNextTurn !== true && !y)
+    let holdsPointer = command.handbackPointer === true || command.repeatsUsageLimitAlert === true;
+    if (holdsPointer) this.pendingPointerResults.add(result.uuid);
+    if (command.shouldQuery === false && command.queryHeldForNextTurn !== true && !holdsPointer)
       return this.flushBeforeResult().then(() => {
         this.emit(result);
       });
@@ -338,11 +339,11 @@ class HeldResultsController {
         message,
         held: this.heldBackResults,
         holdBackActive: true,
-        emit: (R) => this.emit(R),
+        emit: (result) => this.emit(result),
       });
       return;
     }
-    let S = () => {
+    let flushThenEmit = () => {
       this.markLateResults(
         command.shouldQuery === false ? this.heldBackResults.length - 1 : this.heldBackResults.length,
       );
@@ -350,10 +351,10 @@ class HeldResultsController {
         message,
         held: this.heldBackResults,
         holdBackActive: false,
-        emit: (R) => this.emit(withResultExtras(R, this.heldResultTotals())),
+        emit: (result) => this.emit(withResultExtras(result, this.heldResultTotals())),
       });
     };
-    return this.flushBeforeResult().then(S);
+    return this.flushBeforeResult().then(flushThenEmit);
   }
   release() {
     let result = this.carriedEvalResults.pop();
@@ -378,17 +379,17 @@ class HeldResultsController {
       this.emitHeldResults();
     });
   }
-  markLateResults(e) {
-    for (let heldBackResult of this.heldBackResults.slice(0, Math.max(e, 0)))
+  markLateResults(count) {
+    for (let heldBackResult of this.heldBackResults.slice(0, Math.max(count, 0)))
       if (heldBackResult.type === "result") this.pendingLateResults.add(heldBackResult.uuid);
   }
   flushBeforeResult() {
     return flushSessionBeforeResult(this.sessionMirror, this.flushSessionStorage);
   }
   emitHeldResults() {
-    let e = this.drain.endSessionRequested || this.stopping();
-    flushHeldResults(this.heldBackResults, (n) =>
-      this.emit(clearQueuedTurnCount(withResultExtras(n, this.heldResultTotals()), e)),
+    let clearQueued = this.drain.endSessionRequested || this.stopping();
+    flushHeldResults(this.heldBackResults, (result) =>
+      this.emit(clearQueuedTurnCount(withResultExtras(result, this.heldResultTotals()), clearQueued)),
     );
     this.emitPendingSuggestion();
   }
@@ -398,24 +399,24 @@ var RESUME_LOAD_HOLD = "resume-load-hold";
 var RESUME_LOAD_HOLD_MAX_MS = 1800000;
 //@ chunk-tyg7f3ek.js:177015-177167 placement
 function startResumeLoadHold() {
-  let e = true;
-  let n = () => {
-    if (!e) return;
-    e = false;
+  let active = true;
+  let endHold = () => {
+    if (!active) return;
+    active = false;
     clearTimeout(timer);
     endActivity("resume_load", RESUME_LOAD_HOLD);
   };
   startSessionActivity("resume_load", RESUME_LOAD_HOLD);
-  let timer = setTimeout(onResumeLoadHoldExpired, RESUME_LOAD_HOLD_MAX_MS, n);
+  let timer = setTimeout(onResumeLoadHoldExpired, RESUME_LOAD_HOLD_MAX_MS, endHold);
   timer.unref();
-  return n;
+  return endHold;
 }
 //@ chunk-tyg7f3ek.js:177167-177252 placement
-function onResumeLoadHoldExpired(e) {
+function onResumeLoadHoldExpired(endHold) {
   logForDiagnosticsNoPII("warn", "session_activity_resume_load_hold_expired", {
     max_ms: RESUME_LOAD_HOLD_MAX_MS,
   });
-  e();
+  endHold();
 }
 //@ chunk-tyg7f3ek.js:177289-177301 placement
 var SUMMARY_RETRY_DELAY_MS = 2000;

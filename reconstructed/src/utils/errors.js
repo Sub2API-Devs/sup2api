@@ -12,8 +12,9 @@ import { dirname, join, relative } from "path";
 import { realpath, lstat } from "fs/promises";
 import { APIUserAbortError } from "../../vendor/@anthropic-ai/sdk/core/error.mjs";
 import { fromSanitizer_SANITIZER_OUTPUT_ONLY, lit } from "../services/analytics/safeMetadata.js";
-import { ARTIFACT_DOC_PATH_RE } from "../services/artifacts/artifactToolGates.js";
 import { stripStackHeader } from "./errorStackSanitize.js";
+import { ARTIFACT_DOC_PATH_RE } from "../services/artifacts/artifactToolGates.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-2g090z7k.js:2325-2406 placement
 class ClaudeError extends Error {
@@ -36,7 +37,10 @@ class AbortError extends Error {
   }
 }
 //@ chunk-2g090z7k.js:2544-2565 placement
-class StreamClosedAbortError extends AbortError {}
+let StreamClosedAbortError; // deferred: uses AbortError of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-2g090z7k.js:2544", () => {
+  StreamClosedAbortError = class StreamClosedAbortError extends AbortError {};
+});
 //@ chunk-2g090z7k.js:2565-2728 placement = isAbortError (0.47)
 /**
  * 判断是否为中断错误（AbortError、内部取消、name=AbortError 或 axios __CANCEL__）。
@@ -72,16 +76,16 @@ class ShellError extends Error {
   hadSandboxViolation;
   sandboxViolations;
   sandboxed;
-  constructor(n) {
+  constructor(details) {
     super("Shell command failed");
     this.name = "ShellError";
-    this.stdout = n.stdout;
-    this.stderr = n.stderr;
-    this.code = n.code;
-    this.interrupted = n.interrupted;
-    this.hadSandboxViolation = n.hadSandboxViolation ?? false;
-    this.sandboxViolations = n.sandboxViolations;
-    this.sandboxed = n.sandboxed;
+    this.stdout = details.stdout;
+    this.stderr = details.stderr;
+    this.code = details.code;
+    this.interrupted = details.interrupted;
+    this.hadSandboxViolation = details.hadSandboxViolation ?? false;
+    this.sandboxViolations = details.sandboxViolations;
+    this.sandboxed = details.sandboxed;
   }
 }
 //@ chunk-2g090z7k.js:3251-3377 placement = TeleportOperationError (0.815)
@@ -108,39 +112,49 @@ class TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS extends Error 
   }
 }
 //@ chunk-2g090z7k.js:3532-3552 placement
-class WireSafeControlError extends TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS {}
+let WireSafeControlError; // deferred: uses TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-2g090z7k.js:3532", () => {
+  WireSafeControlError = class WireSafeControlError extends (
+    TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
+  ) {};
+});
 //@ chunk-2g090z7k.js:3552-3851 placement
-var withTelemetryMessage = (error, telemetryMessage) => {
-  try {
-    if (
-      error !== null &&
-      typeof error === "object" &&
-      !("telemetryMessage" in error) &&
-      Object.isExtensible(error)
-    )
-      Object.assign(error, {
-        telemetryMessage,
-      });
-  } catch {}
-  return error;
-};
-var BUILTIN_ERROR_NAMES = [
-  "AggregateError",
-  "Error",
-  "EvalError",
-  "RangeError",
-  "ReferenceError",
-  "SuppressedError",
-  "SyntaxError",
-  "TypeError",
-  "URIError",
-];
-var LANGUAGE_ERROR_NAMES = new Set(BUILTIN_ERROR_NAMES);
+var withTelemetryMessage; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var BUILTIN_ERROR_NAMES;
+var LANGUAGE_ERROR_NAMES;
+deferInit("chunk-2g090z7k.js:3552", () => {
+  withTelemetryMessage = (error, telemetryMessage) => {
+    try {
+      if (
+        error !== null &&
+        typeof error === "object" &&
+        !("telemetryMessage" in error) &&
+        Object.isExtensible(error)
+      )
+        Object.assign(error, {
+          telemetryMessage,
+        });
+    } catch {}
+    return error;
+  };
+  BUILTIN_ERROR_NAMES = [
+    "AggregateError",
+    "Error",
+    "EvalError",
+    "RangeError",
+    "ReferenceError",
+    "SuppressedError",
+    "SyntaxError",
+    "TypeError",
+    "URIError",
+  ];
+  LANGUAGE_ERROR_NAMES = new Set(BUILTIN_ERROR_NAMES);
+});
 //@ chunk-2g090z7k.js:3851-4006 placement
 function languageErrorNameOf(error) {
   try {
-    let e = error instanceof Error ? error.name : undefined;
-    let found = BUILTIN_ERROR_NAMES.find((r) => r === e);
+    let errorName = error instanceof Error ? error.name : undefined;
+    let found = BUILTIN_ERROR_NAMES.find((builtinName) => builtinName === errorName);
     if (found !== undefined) return found;
   } catch {}
   return "a value that is not a built-in error";
@@ -149,48 +163,55 @@ function languageErrorNameOf(error) {
 /**
  * 把非空的附加字段并入一个可扩展对象（只补缺失键，失败时原样返回），用于给错误对象附加退出状态等元信息。
  */
-var withTelemetryFacts = (n, e) => {
-  try {
-    if (n !== null && typeof n === "object" && Object.isExtensible(n)) {
-      let t = n;
-      let filtered = Object.entries(e).filter(([key, value]) => value !== undefined && !(key in t));
-      Object.assign(t, Object.fromEntries(filtered));
-    }
-  } catch {}
-  return n;
-};
-var CHILD_EXIT_STATUS_SYMBOL = Symbol("telemetryChildExitStatus");
-var withTelemetryChildExitStatus = (n, e) => {
-  try {
-    if (
-      e !== undefined &&
-      n !== null &&
-      typeof n === "object" &&
-      !Object.hasOwn(n, CHILD_EXIT_STATUS_SYMBOL) &&
-      Object.isExtensible(n)
-    )
-      Object.defineProperty(n, CHILD_EXIT_STATUS_SYMBOL, {
-        value: e,
-        enumerable: false,
-        writable: false,
-        configurable: false,
-      });
-  } catch {}
-  return n;
-};
+var withTelemetryFacts; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var CHILD_EXIT_STATUS_SYMBOL;
+var withTelemetryChildExitStatus;
+deferInit("chunk-2g090z7k.js:4006", () => {
+  withTelemetryFacts = (target, facts) => {
+    try {
+      if (target !== null && typeof target === "object" && Object.isExtensible(target)) {
+        let targetObject = target;
+        let filtered = Object.entries(facts).filter(
+          ([key, value]) => value !== undefined && !(key in targetObject),
+        );
+        Object.assign(targetObject, Object.fromEntries(filtered));
+      }
+    } catch {}
+    return target;
+  };
+  CHILD_EXIT_STATUS_SYMBOL = Symbol("telemetryChildExitStatus");
+  withTelemetryChildExitStatus = (target, status) => {
+    try {
+      if (
+        status !== undefined &&
+        target !== null &&
+        typeof target === "object" &&
+        !Object.hasOwn(target, CHILD_EXIT_STATUS_SYMBOL) &&
+        Object.isExtensible(target)
+      )
+        Object.defineProperty(target, CHILD_EXIT_STATUS_SYMBOL, {
+          value: status,
+          enumerable: false,
+          writable: false,
+          configurable: false,
+        });
+    } catch {}
+    return target;
+  };
+});
 //@ chunk-2g090z7k.js:4446-4600 placement
 /**
  * 读取错误对象上附加的 telemetryMessage（可安全上报的描述）。
  */
-function getTelemetryMessage(n) {
+function getTelemetryMessage(value) {
   try {
     if (
-      n !== null &&
-      typeof n === "object" &&
-      "telemetryMessage" in n &&
-      typeof n.telemetryMessage === "string"
+      value !== null &&
+      typeof value === "object" &&
+      "telemetryMessage" in value &&
+      typeof value.telemetryMessage === "string"
     )
-      return n.telemetryMessage;
+      return value.telemetryMessage;
   } catch {}
   return;
 }
@@ -225,22 +246,29 @@ function sanitizeErrnoForTelemetry(error) {
   return sanitizeErrnoTokenForTelemetry(getErrnoCode(error));
 }
 //@ chunk-2g090z7k.js:4907-4978 placement
-function sanitizeErrnoTokenForTelemetry(n) {
-  return n && /^[A-Z][A-Z0-9_]{0,63}$/.test(n) ? fromSanitizer_SANITIZER_OUTPUT_ONLY(n) : undefined;
+function sanitizeErrnoTokenForTelemetry(token) {
+  return token && /^[A-Z][A-Z0-9_]{0,63}$/.test(token)
+    ? fromSanitizer_SANITIZER_OUTPUT_ONLY(token)
+    : undefined;
 }
 //@ chunk-2g090z7k.js:4978-5009 placement
 var MIN_INT32 = -2147483648;
 var MAX_UINT32 = 4294967295;
 //@ chunk-2g090z7k.js:5009-5249 placement
-function getTelemetryChildExitStatus(n) {
+function getTelemetryChildExitStatus(target) {
   try {
-    if (n === null || typeof n !== "object") return;
-    let ownPropertyDescriptor = Object.getOwnPropertyDescriptor(n, CHILD_EXIT_STATUS_SYMBOL);
-    let t =
+    if (target === null || typeof target !== "object") return;
+    let ownPropertyDescriptor = Object.getOwnPropertyDescriptor(target, CHILD_EXIT_STATUS_SYMBOL);
+    let status =
       ownPropertyDescriptor !== undefined && Object.hasOwn(ownPropertyDescriptor, "value")
         ? ownPropertyDescriptor.value
         : undefined;
-    return typeof t === "number" && Number.isInteger(t) && t >= MIN_INT32 && t <= MAX_UINT32 ? t : undefined;
+    return typeof status === "number" &&
+      Number.isInteger(status) &&
+      status >= MIN_INT32 &&
+      status <= MAX_UINT32
+      ? status
+      : undefined;
   } catch {
     return;
   }
@@ -250,16 +278,16 @@ var DAEMON_UNREACHABLE_TIMEOUT_PHRASE = "did not become reachable within";
 var DAEMON_EXITED_BEFORE_REACHABLE_PHRASE = "exited before it became reachable";
 var BUN_CONNECTION_CLOSED_MESSAGE_PREFIX = "The socket connection was closed unexpectedly";
 //@ chunk-2g090z7k.js:5383-5508 placement
-function extractErrnoTokens(n) {
-  return [...n.matchAll(/\bE\d?[A-Z]{2,14}\b/g)]
-    .filter((e) => !"/\\".includes(n[e.index - 1] ?? "."))
-    .map((e) => e[0]);
+function extractErrnoTokens(text) {
+  return [...text.matchAll(/\bE\d?[A-Z]{2,14}\b/g)]
+    .filter((match) => !"/\\".includes(text[match.index - 1] ?? "."))
+    .map((match) => match[0]);
 }
 //@ chunk-2g090z7k.js:5508-5610 placement
 function sanitizeErrorName(error) {
-  let e = error?.name;
-  return typeof e === "string" && /^[A-Z][a-zA-Z]{0,63}$/.test(e)
-    ? fromSanitizer_SANITIZER_OUTPUT_ONLY(e)
+  let errorName = error?.name;
+  return typeof errorName === "string" && /^[A-Z][a-zA-Z]{0,63}$/.test(errorName)
+    ? fromSanitizer_SANITIZER_OUTPUT_ONLY(errorName)
     : undefined;
 }
 //@ chunk-2g090z7k.js:5610-5645 placement
@@ -282,45 +310,49 @@ function sanitizedConnectionCodeForTelemetry(code) {
 }
 //@ chunk-2g090z7k.js:5813-5887 placement
 function sanitizedConnectionCodeLowerForTelemetry(errnoCode) {
-  let e = sanitizedConnectionCodeForTelemetry(errnoCode);
-  return e === undefined ? undefined : fromSanitizer_SANITIZER_OUTPUT_ONLY(e.toLowerCase());
+  let sanitizedCode = sanitizedConnectionCodeForTelemetry(errnoCode);
+  return sanitizedCode === undefined
+    ? undefined
+    : fromSanitizer_SANITIZER_OUTPUT_ONLY(sanitizedCode.toLowerCase());
 }
 //@ chunk-2g090z7k.js:5887-5975 placement
-function sanitizeClassName(n) {
-  return typeof n === "string" && /^[A-Z][a-zA-Z]{0,63}$/.test(n)
-    ? fromSanitizer_SANITIZER_OUTPUT_ONLY(n)
+function sanitizeClassName(className) {
+  return typeof className === "string" && /^[A-Z][a-zA-Z]{0,63}$/.test(className)
+    ? fromSanitizer_SANITIZER_OUTPUT_ONLY(className)
     : undefined;
 }
 //@ chunk-2g090z7k.js:5975-6072 placement
-function sanitizedOAuthErrorTypeForTelemetry(n) {
-  return typeof n === "string" && /^[a-z][a-z_]{0,39}$/.test(n)
-    ? fromSanitizer_SANITIZER_OUTPUT_ONLY(n)
+function sanitizedOAuthErrorTypeForTelemetry(errorType) {
+  return typeof errorType === "string" && /^[a-z][a-z_]{0,39}$/.test(errorType)
+    ? fromSanitizer_SANITIZER_OUTPUT_ONLY(errorType)
     : lit("unparseable");
 }
 //@ chunk-2g090z7k.js:6072-6149 placement
-function sanitizedMachineReasonForTelemetry(n) {
-  return /^[a-z][a-z0-9_]{0,39}$/.test(n) ? fromSanitizer_SANITIZER_OUTPUT_ONLY(n) : lit("unparseable");
+function sanitizedMachineReasonForTelemetry(reason) {
+  return /^[a-z][a-z0-9_]{0,39}$/.test(reason)
+    ? fromSanitizer_SANITIZER_OUTPUT_ONLY(reason)
+    : lit("unparseable");
 }
 //@ chunk-2g090z7k.js:6149-6265 placement
-function sanitizedFeatureErrorCodeForTelemetry(n) {
-  if (typeof n !== "string") return;
-  return /^[A-Za-z][A-Za-z0-9_-]{0,63}$/.test(n)
-    ? fromSanitizer_SANITIZER_OUTPUT_ONLY(n)
+function sanitizedFeatureErrorCodeForTelemetry(errorCode) {
+  if (typeof errorCode !== "string") return;
+  return /^[A-Za-z][A-Za-z0-9_-]{0,63}$/.test(errorCode)
+    ? fromSanitizer_SANITIZER_OUTPUT_ONLY(errorCode)
     : lit("nonconforming");
 }
 //@ chunk-2g090z7k.js:6265-6531 placement
-function sanitizedBgExitCauseForTelemetry(n) {
-  if (n === undefined) return;
-  let index = n.indexOf(":");
-  let t = index === -1 ? n : n.slice(0, index);
-  if (!/^[a-z][a-z0-9_]{0,39}$/.test(t)) return lit("unparseable");
-  if (index === -1) return fromSanitizer_SANITIZER_OUTPUT_ONLY(t);
-  let sliced = n.slice(index + 1);
-  let o =
+function sanitizedBgExitCauseForTelemetry(cause) {
+  if (cause === undefined) return;
+  let index = cause.indexOf(":");
+  let causeKind = index === -1 ? cause : cause.slice(0, index);
+  if (!/^[a-z][a-z0-9_]{0,39}$/.test(causeKind)) return lit("unparseable");
+  if (index === -1) return fromSanitizer_SANITIZER_OUTPUT_ONLY(causeKind);
+  let sliced = cause.slice(index + 1);
+  let causeDetail =
     sanitizeErrnoTokenForTelemetry(sliced) ??
     sanitizeClassName(sliced) ??
     (sliced === "string" || sliced === "non-error" ? sliced : "Error");
-  return fromSanitizer_SANITIZER_OUTPUT_ONLY(`${t}:${o}`);
+  return fromSanitizer_SANITIZER_OUTPUT_ONLY(`${causeKind}:${causeDetail}`);
 }
 //@ chunk-2g090z7k.js:6531-6560 placement
 function sanitizedClassNameForTelemetry(name) {
@@ -328,40 +360,47 @@ function sanitizedClassNameForTelemetry(name) {
 }
 //@ chunk-2g090z7k.js:6560-6693 placement
 function sanitizedErrorClassNameForTelemetry(error) {
-  let e = error?.constructor?.name;
-  return typeof e === "string" && /^[A-Za-z][A-Za-z0-9_]{0,39}$/.test(e)
-    ? fromSanitizer_SANITIZER_OUTPUT_ONLY(e)
+  let className = error?.constructor?.name;
+  return typeof className === "string" && /^[A-Za-z][A-Za-z0-9_]{0,39}$/.test(className)
+    ? fromSanitizer_SANITIZER_OUTPUT_ONLY(className)
     : lit("unparseable");
 }
 //@ chunk-2g090z7k.js:6693-6739 placement
-function sanitizeTopFrame(n) {
-  return STACK_FRAME_FILE_RE.test(n) ? fromSanitizer_SANITIZER_OUTPUT_ONLY(n) : undefined;
+function sanitizeTopFrame(frame) {
+  return STACK_FRAME_FILE_RE.test(frame) ? fromSanitizer_SANITIZER_OUTPUT_ONLY(frame) : undefined;
 }
 //@ chunk-2g090z7k.js:6739-7221 placement
 /**
  * 匹配堆栈帧文件名的正则（用户代码、常见脚本扩展名、node 内部模块等），以及表示资源耗尽的 errno 集合。
  */
-var STACK_FRAME_FILE_RE =
-  /^(?:<user-code>|(?:[\w$.\-<>[\]]{1,72}\.(?:[cm]?[jt]sx?|json|node|wasm|exe)|node:internal(?:\/[a-z0-9_-]{1,40}){1,4}|node:[a-z0-9_]{1,30}(?:\/(?:promises|web|consumers|posix|win32|types|strict|reporters))?|bun:[a-z0-9_]{1,20}|internal:[a-z0-9_-]{1,30}(?:\/[a-z0-9_-]{1,40}){0,3}|<anonymous>|\[eval\](?:-wrapper)?|native|unknown|cli|claude|ws|undici|node-fetch|isomorphic-fetch|vercel_fetch|utf-8-validate)(?::\d{1,8}){2})$/;
-var RESOURCE_EXHAUSTION_CODES = new Set(["ENOSPC", "EDQUOT", "ENFILE", "EMFILE"]);
+var STACK_FRAME_FILE_RE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var RESOURCE_EXHAUSTION_CODES;
+deferInit("chunk-2g090z7k.js:6739", () => {
+  STACK_FRAME_FILE_RE =
+    /^(?:<user-code>|(?:[\w$.\-<>[\]]{1,72}\.(?:[cm]?[jt]sx?|json|node|wasm|exe)|node:internal(?:\/[a-z0-9_-]{1,40}){1,4}|node:[a-z0-9_]{1,30}(?:\/(?:promises|web|consumers|posix|win32|types|strict|reporters))?|bun:[a-z0-9_]{1,20}|internal:[a-z0-9_-]{1,30}(?:\/[a-z0-9_-]{1,40}){0,3}|<anonymous>|\[eval\](?:-wrapper)?|native|unknown|cli|claude|ws|undici|node-fetch|isomorphic-fetch|vercel_fetch|utf-8-validate)(?::\d{1,8}){2})$/;
+  RESOURCE_EXHAUSTION_CODES = new Set(["ENOSPC", "EDQUOT", "ENFILE", "EMFILE"]);
+});
 //@ chunk-2g090z7k.js:7221-7282 placement
 function isDiskFullErrno(error) {
   let errnoCode = getErrnoCode(error);
   return errnoCode === "ENOSPC" || errnoCode === "EDQUOT";
 }
 //@ chunk-2g090z7k.js:7282-7326 placement
-var PERMISSION_DENIED_CODES = new Set(["EACCES", "EPERM", "EROFS"]);
+var PERMISSION_DENIED_CODES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-2g090z7k.js:7282", () => {
+  PERMISSION_DENIED_CODES = new Set(["EACCES", "EPERM", "EROFS"]);
+});
 //@ chunk-2g090z7k.js:7326-7418 placement
 function isSyscallError(error) {
   return error !== null && typeof error === "object" && "errno" in error && typeof error.errno === "number";
 }
 //@ chunk-2g090z7k.js:7418-7534 placement
-function findInCauseChain(n, e, t = 5) {
-  let r = n;
-  for (let i = 0; i < t; i++) {
-    if (!(r instanceof Error)) return;
-    if (e(r)) return r;
-    r = r.cause;
+function findInCauseChain(error, matches, maxDepth = 5) {
+  let current = error;
+  for (let i = 0; i < maxDepth; i++) {
+    if (!(current instanceof Error)) return;
+    if (matches(current)) return current;
+    current = current.cause;
   }
   return;
 }
@@ -386,10 +425,10 @@ function isE2BIG(error) {
   return getErrnoCode(error) === "E2BIG";
 }
 //@ chunk-2g090z7k.js:7708-7956 placement
-function isHttpServerConnReset(n) {
+function isHttpServerConnReset(error) {
   try {
-    if (getErrnoCode(n) !== "ECONNRESET") return false;
-    let stack = n instanceof Error ? n.stack : undefined;
+    if (getErrnoCode(error) !== "ECONNRESET") return false;
+    let stack = error instanceof Error ? error.stack : undefined;
     if (typeof stack !== "string") return false;
     let found = stack
       .split(
@@ -411,20 +450,23 @@ function getErrnoPath(e) {
 /**
  * 格式化 `name: message` 加调用栈。
  */
-function errorStackOrMessage(n) {
-  let e = n.message ? `${n.name}: ${n.message}` : n.name;
-  let stack = n.stack;
-  if (!stack) return e;
-  if (stack.startsWith(e)) return stack;
+function errorStackOrMessage(error) {
+  let header = error.message ? `${error.name}: ${error.message}` : error.name;
+  let stack = error.stack;
+  if (!stack) return header;
+  if (stack.startsWith(header)) return stack;
   let lines = stack.split(`
 `);
-  let o = lines[0] ?? "";
-  let i = o === n.name || o.startsWith(`${n.name}:`) ? lines.slice(1) : lines;
-  return [e, ...i].join(`
+  let firstLine = lines[0] ?? "";
+  let bodyLines = firstLine === error.name || firstLine.startsWith(`${error.name}:`) ? lines.slice(1) : lines;
+  return [header, ...bodyLines].join(`
 `);
 }
 //@ chunk-2g090z7k.js:8284-8368 placement
-var FS_ACCESS_ERRNOS = new Set(["ENOENT", "EACCES", "EPERM", "ENOTDIR", "ELOOP", "ENAMETOOLONG", "EROFS"]);
+var FS_ACCESS_ERRNOS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-2g090z7k.js:8284", () => {
+  FS_ACCESS_ERRNOS = new Set(["ENOENT", "EACCES", "EPERM", "ENOTDIR", "ELOOP", "ENAMETOOLONG", "EROFS"]);
+});
 //@ chunk-2g090z7k.js:8368-8399 placement
 function isFsInaccessible(error) {
   return isFsInaccessibleCode(getErrnoCode(error));
@@ -433,48 +475,51 @@ function isFsInaccessible(error) {
 /**
  * errno 是否属于文件访问类错误（ENOENT/EACCES/EPERM/ENOTDIR/ELOOP/ENAMETOOLONG/EROFS）。
  */
-function isFsInaccessibleCode(n) {
-  return n !== undefined && FS_ACCESS_ERRNOS.has(n);
+function isFsInaccessibleCode(code) {
+  return code !== undefined && FS_ACCESS_ERRNOS.has(code);
 }
 //@ chunk-2g090z7k.js:8442-8625 placement
 /**
  * 读取 error.cause.telemetryCode（存储层错误的遥测码）。
  */
-function storageCauseErrnoCode(n) {
-  let cause = n instanceof Error ? n.cause : undefined;
+function storageCauseErrnoCode(error) {
+  let cause = error instanceof Error ? error.cause : undefined;
   if (typeof cause !== "object" || cause === null || !("telemetryCode" in cause)) return;
   return typeof cause.telemetryCode === "string" ? cause.telemetryCode : undefined;
 }
 //@ chunk-2g090z7k.js:8625-8675 placement
-var FS_RESOURCE_ERRNOS = new Set(["ENOSPC", "EDQUOT", "ENFILE", "EIO"]);
+var FS_RESOURCE_ERRNOS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-2g090z7k.js:8625", () => {
+  FS_RESOURCE_ERRNOS = new Set(["ENOSPC", "EDQUOT", "ENFILE", "EIO"]);
+});
 //@ chunk-2g090z7k.js:8675-8707 placement
 function isEnvFsErrno(error) {
   return isEnvFsErrnoCode(getErrnoCode(error));
 }
 //@ chunk-2g090z7k.js:8707-8880 placement
-function isEnvFsErrnoCode(n) {
+function isEnvFsErrnoCode(code) {
   return (
-    n === "EDEADLK" ||
-    n === "EINTR" ||
-    n === "ENXIO" ||
-    n === "ENODEV" ||
-    n === "ECANCELED" ||
-    n === "ENEEDAUTH" ||
-    n === "ESTALE" ||
-    n === "EUNKNOWN" ||
-    n === "ENOMEM" ||
-    (n !== undefined && isUnknownSystemError(n))
+    code === "EDEADLK" ||
+    code === "EINTR" ||
+    code === "ENXIO" ||
+    code === "ENODEV" ||
+    code === "ECANCELED" ||
+    code === "ENEEDAUTH" ||
+    code === "ESTALE" ||
+    code === "EUNKNOWN" ||
+    code === "ENOMEM" ||
+    (code !== undefined && isUnknownSystemError(code))
   );
 }
 //@ chunk-2g090z7k.js:8880-8953 placement
-function isUnknownSystemError(n) {
-  return n === "UNKNOWN" || n.startsWith("Unknown system error");
+function isUnknownSystemError(error) {
+  return error === "UNKNOWN" || error.startsWith("Unknown system error");
 }
 //@ chunk-2g090z7k.js:8953-9074 placement
-function isWin32ReadEbadf(n, e = "linux") {
-  if (e !== "win32") return false;
+function isWin32ReadEbadf(error, platform = "linux") {
+  if (platform !== "win32") return false;
   try {
-    return isSyscallError(n) && n.code === "EBADF" && n.syscall === "read";
+    return isSyscallError(error) && error.code === "EBADF" && error.syscall === "read";
   } catch {
     return false;
   }
@@ -496,15 +541,17 @@ function isSadFsErrno(error) {
   return isSadFsErrnoCode(getErrnoCode(error));
 }
 //@ chunk-2g090z7k.js:9250-9320 placement
-function isSadFsErrnoCode(n) {
-  return n !== undefined && (FS_ACCESS_ERRNOS.has(n) || n === "EISDIR" || FS_RESOURCE_ERRNOS.has(n));
+function isSadFsErrnoCode(code) {
+  return (
+    code !== undefined && (FS_ACCESS_ERRNOS.has(code) || code === "EISDIR" || FS_RESOURCE_ERRNOS.has(code))
+  );
 }
 //@ chunk-2g090z7k.js:9320-9502 placement
 /**
  * axios 错误是否为认证/限流类（无状态码、401、403、429），可由调用方追加判断。
  */
-function isExpectedApiError(error, e) {
-  if (e?.(error)) return true;
+function isExpectedApiError(error, apiError) {
+  if (apiError?.(error)) return true;
   if (!error || typeof error !== "object" || !("isAxiosError" in error) || !error.isAxiosError) return false;
   let status = error.response?.status;
   return status === undefined || status === 401 || status === 403 || status === 429;
@@ -561,62 +608,65 @@ function isNonRetryableClientError(status) {
     status !== 429
   );
 }
+//@ chunk-sycgf9xs.js:3842-4108 fingerprint = shortErrorStack (0.88)
+function shortErrorStack(error, maxFrames) {
+  try {
+    let stack = typeof error.stack === "string" ? error.stack : "";
+    let stripped = stripStackHeader(error);
+    let frames =
+      stripped.length < stack.length && stack.endsWith(stripped)
+        ? stripped.replace(/\n$/, "").split(`
+`)
+        : [];
+    let stackLines = frames.every((line) => line.trimStart().startsWith("at ")) ? frames : [];
+    error.stack = [`${error.name}: ${maxFrames}`, ...stackLines].join(`
+`);
+    error.message = maxFrames;
+  } catch {}
+  return error;
+}
 //@ chunk-06y4szbn.js:173375-173506 fingerprint = getErrnoPath (1)
-function getErrnoPath_2(e) {
-  if (e === null || typeof e !== "object" || !("path" in e)) return;
-  let path = e.path;
+function getErrnoPath_2(error) {
+  if (error === null || typeof error !== "object" || !("path" in error)) return;
+  let path = error.path;
   return typeof path === "string" && ARTIFACT_DOC_PATH_RE.test(path) ? path : undefined;
 }
-//@ chunk-24t3dkzb.js:4838-4916 placement = isConnectionError (1)
-function getErrorCodeString(err) {
-  return err && typeof err === "object" && "code" in err ? String(err.code) : undefined;
-}
 //@ chunk-e6aww6q8.js:1386147-1386405 callgraph-witnessed = isENOENT (0)
-async function isENOENT_2(e) {
-  let n = dirname(e);
+async function isENOENT_2(filePath) {
+  let parentDir = dirname(filePath);
   try {
-    return await realpath(n);
+    return await realpath(parentDir);
   } catch (error) {
     if (!isENOENT(error)) throw error;
   }
-  let r = n;
+  let currentDir = parentDir;
   for (;;) {
-    let s = dirname(r);
-    if (s === r) return;
-    r = s;
+    let grandparentDir = dirname(currentDir);
+    if (grandparentDir === currentDir) return;
+    currentDir = grandparentDir;
     try {
-      await lstat(r);
+      await lstat(currentDir);
     } catch (error) {
       if (!isENOENT(error)) throw error;
       continue;
     }
-    return realpath(r)
-      .then((h) => join(h, relative(r, n)))
+    return realpath(currentDir)
+      .then((realGrandparent) => join(realGrandparent, relative(currentDir, parentDir)))
       .catch((error) => {
         if (isENOENT(error)) return;
         throw error;
       });
   }
 }
-//@ chunk-hm0ce8vc.js:32169-32240 fingerprint = isFsInaccessible (0.878)
-var isFsInaccessible_2 = new Set(["ENOENT", "ELOOP", "ENOTDIR", "EISDIR", "EACCES", "EPERM"]);
-//@ chunk-sycgf9xs.js:3842-4108 fingerprint = shortErrorStack (0.88)
-function shortErrorStack(e, maxFrames) {
-  try {
-    let stack = typeof e.stack === "string" ? e.stack : "";
-    let o = stripStackHeader(e);
-    let u =
-      o.length < stack.length && stack.endsWith(o)
-        ? o.replace(/\n$/, "").split(`
-`)
-        : [];
-    let c = u.every((d) => d.trimStart().startsWith("at ")) ? u : [];
-    e.stack = [`${e.name}: ${maxFrames}`, ...c].join(`
-`);
-    e.message = maxFrames;
-  } catch {}
-  return e;
+//@ chunk-24t3dkzb.js:4838-4916 placement = isConnectionError (1)
+function getErrorCodeString(err) {
+  return err && typeof err === "object" && "code" in err ? String(err.code) : undefined;
 }
+//@ chunk-hm0ce8vc.js:32169-32240 fingerprint = isFsInaccessible (0.878)
+var isFsInaccessible_2; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-hm0ce8vc.js:32169", () => {
+  isFsInaccessible_2 = new Set(["ENOENT", "ELOOP", "ENOTDIR", "EISDIR", "EACCES", "EPERM"]);
+});
 export {
   errorMessage,
   withTelemetryMessage,

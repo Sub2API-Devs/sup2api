@@ -13,7 +13,7 @@ import { readdir, readFile, stat } from "fs/promises";
 import { join } from "path";
 import { BUILD_TOOL_NAMES, scanPathForExecutables, env, isScanCandidate } from "./env.js";
 import { DoctorLazy } from "../cli/handlers/util.js";
-import { u, string } from "../../vendor/zod/v4/classic/schemas.js";
+import { objectSchema, stringSchema } from "../../vendor/zod/v4/classic/schemas.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../services/analytics/growthbook.js";
 import { POLICY_HELPER_LOG_LEVELS } from "./settings/types.js";
 import {
@@ -41,103 +41,124 @@ import { MCP_SETTINGS_SCOPES, getMcpConfigsByScope } from "../services/mcp/confi
 import { logForDebugging } from "./debug.js";
 import { TOOL_HOST_ID_RE } from "../remote/tools/protocolConstants.js";
 import { uniq } from "./collections.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-3dq9c61y.js:1129-1856 placement
 /**
- * 主机档案探测常量组：探针文件大小、工具/发行版/架构正则、候选工具名、CLT 与 CUDA 路径。
+ * 主机档案探测的常量组：探测截止时间、读文件上限、工具/发行版/架构名的正则、候选工具名，以及 plist 与 CUDA 的路径。
  */
-var HOST_PROFILE_DEADLINE_MS = 1500;
-var MAX_PROFILE_FILE_BYTES = 262144;
-var MAX_LISTED_TOOLS = 32;
-var MAX_LISTED_MCP_SERVERS = 16;
-var OS_VERSION_RE = /^[0-9][0-9A-Za-z.+_-]{0,23}$/;
-var ARCH_NAME_RE = /^[a-z0-9_]{1,16}$/;
-var DISTRO_NAME_RE = /^[a-z0-9._-]{1,24}$/;
-var TOOL_NAME_RE = /^[A-Za-z0-9_.-]{1,64}$/;
-var PROFILE_TOOL_CANDIDATES = [
-  "swift",
-  "xcodebuild",
-  "xcrun",
-  "pod",
-  "fastlane",
-  "carthage",
-  "adb",
-  "emulator",
-  "sdkmanager",
-  "flutter",
-  "dart",
-  "xcodes",
-  "kubectl",
-  "helm",
-  "terraform",
-  "bazel",
-  "bazelisk",
-  "nix",
-  "conda",
-  "mamba",
-  "pipx",
-  "podman",
-  "nerdctl",
-  "nvidia-smi",
-  "psql",
-  "mysql",
-  "redis-cli",
-  ...BUILD_TOOL_NAMES,
-];
-var NON_PROFILE_TOOLS = new Set([
-  "xcodebuild",
-  "swift",
-  "swiftc",
-  "xcrun",
-  "git",
-  "make",
-  "clang",
-  "clang++",
-  "gcc",
-  "g++",
-  "python3",
-  "pip3",
-]);
-var XCODE_APP_PATH = "/System/Library/CoreServices/SystemVersion.plist";
-var APPLICATIONS_DIR = "/Applications";
-var XCODE_CLT_DIR = "/Library/Developer/CommandLineTools/usr/bin";
-var MACOS_VERSION_PLIST = "/usr/local/cuda/version.json";
-var CUDA_LIBRARY_PATH = "/proc/driver/nvidia/version";
-var hostProfileConfigSchema = DoctorLazy(() =>
-  u({
-    cuda: u({
-      version: string(),
+var HOST_PROFILE_DEADLINE_MS; // deferred: uses BUILD_TOOL_NAMES (./env.js) of its import cycle while loading; runs once the cycle is complete
+var MAX_PROFILE_FILE_BYTES;
+var MAX_LISTED_TOOLS;
+var MAX_LISTED_MCP_SERVERS;
+var OS_VERSION_RE;
+var ARCH_NAME_RE;
+var DISTRO_NAME_RE;
+var TOOL_NAME_RE;
+var PROFILE_TOOL_CANDIDATES;
+var NON_PROFILE_TOOLS;
+var XCODE_APP_PATH;
+var APPLICATIONS_DIR;
+var XCODE_CLT_DIR;
+var MACOS_VERSION_PLIST;
+var CUDA_LIBRARY_PATH;
+var hostProfileConfigSchema;
+deferInit("chunk-3dq9c61y.js:1129", () => {
+  HOST_PROFILE_DEADLINE_MS = 1500;
+  MAX_PROFILE_FILE_BYTES = 262144;
+  MAX_LISTED_TOOLS = 32;
+  MAX_LISTED_MCP_SERVERS = 16;
+  OS_VERSION_RE = /^[0-9][0-9A-Za-z.+_-]{0,23}$/;
+  ARCH_NAME_RE = /^[a-z0-9_]{1,16}$/;
+  DISTRO_NAME_RE = /^[a-z0-9._-]{1,24}$/;
+  TOOL_NAME_RE = /^[A-Za-z0-9_.-]{1,64}$/;
+  PROFILE_TOOL_CANDIDATES = [
+    "swift",
+    "xcodebuild",
+    "xcrun",
+    "pod",
+    "fastlane",
+    "carthage",
+    "adb",
+    "emulator",
+    "sdkmanager",
+    "flutter",
+    "dart",
+    "xcodes",
+    "kubectl",
+    "helm",
+    "terraform",
+    "bazel",
+    "bazelisk",
+    "nix",
+    "conda",
+    "mamba",
+    "pipx",
+    "podman",
+    "nerdctl",
+    "nvidia-smi",
+    "psql",
+    "mysql",
+    "redis-cli",
+    ...BUILD_TOOL_NAMES,
+  ];
+  NON_PROFILE_TOOLS = new Set([
+    "xcodebuild",
+    "swift",
+    "swiftc",
+    "xcrun",
+    "git",
+    "make",
+    "clang",
+    "clang++",
+    "gcc",
+    "g++",
+    "python3",
+    "pip3",
+  ]);
+  XCODE_APP_PATH = "/System/Library/CoreServices/SystemVersion.plist";
+  APPLICATIONS_DIR = "/Applications";
+  XCODE_CLT_DIR = "/Library/Developer/CommandLineTools/usr/bin";
+  MACOS_VERSION_PLIST = "/usr/local/cuda/version.json";
+  CUDA_LIBRARY_PATH = "/proc/driver/nvidia/version";
+  hostProfileConfigSchema = DoctorLazy(() =>
+    objectSchema({
+      cuda: objectSchema({
+        version: stringSchema(),
+      }),
     }),
-  }),
-);
+  );
+});
 //@ chunk-3dq9c61y.js:1856-1947 placement
 function hostProfileSharingMode() {
   let featureValue_CACHED_MAY_BE_STALE = getFeatureValue_CACHED_MAY_BE_STALE(
     "tengu_bridge_host_profile",
     "off",
   );
-  return POLICY_HELPER_LOG_LEVELS.find((e) => e === featureValue_CACHED_MAY_BE_STALE) ?? "off";
+  return POLICY_HELPER_LOG_LEVELS.find((value) => value === featureValue_CACHED_MAY_BE_STALE) ?? "off";
 }
 //@ chunk-3dq9c61y.js:1947-2244 placement
 /**
  * 按设置决定远程控制是否分享主机档案（off/basic/full）；相关设置解析出错时为 off。
  */
-function hostProfileSharing(n) {
+function hostProfileSharing(options) {
   if (hostProfileSettingsBroken()) return "off";
-  let e = (s) => s?.remoteControl?.shareHostProfile;
+  let read = (settings) => settings?.remoteControl?.shareHostProfile;
   let mapped = [
     ...getAllPolicyTierSettings(),
     getSettingsForSource("policySettings"),
     getSettingsForSource("flagSettings"),
     getSettingsForSource("userSettings"),
-  ].map(e);
-  let S = POLICY_HELPER_LOG_LEVELS.find((s) => mapped.includes(s)) ?? n;
-  let c = [
-    S,
-    e(getSettingsForSourceTightenOnly("userSettings")),
-    ...REPO_DIR_SETTING_SOURCE_LIST.filter(isSettingSourceEnabled).map((s) => e(getSettingsForSource(s))),
+  ].map(read);
+  let strongestBefore = POLICY_HELPER_LOG_LEVELS.find((level) => mapped.includes(level)) ?? options;
+  let levels = [
+    strongestBefore,
+    read(getSettingsForSourceTightenOnly("userSettings")),
+    ...REPO_DIR_SETTING_SOURCE_LIST.filter(isSettingSourceEnabled).map((source) =>
+      read(getSettingsForSource(source)),
+    ),
   ];
-  return POLICY_HELPER_LOG_LEVELS.find((s) => c.includes(s)) ?? S;
+  return POLICY_HELPER_LOG_LEVELS.find((level) => levels.includes(level)) ?? strongestBefore;
 }
 //@ chunk-3dq9c61y.js:2244-2535 placement
 function hostProfileSettingsBroken() {
@@ -145,17 +166,17 @@ function hostProfileSettingsBroken() {
     ...getPolicySettingsLoadErrors(),
     ...getSettingsParseErrorsForSource("flagSettings"),
     ...getSettingsParseErrorsForSource("userSettings"),
-    ...REPO_DIR_SETTING_SOURCE_LIST.filter(isSettingSourceEnabled).flatMap((e) =>
-      getSettingsParseErrorsForSource(e),
+    ...REPO_DIR_SETTING_SOURCE_LIST.filter(isSettingSourceEnabled).flatMap((errors) =>
+      getSettingsParseErrorsForSource(errors),
     ),
-  ].some((e) => {
-    if (e.path === "") return true;
-    if (e.statusOnly) return false;
-    if (e.severity !== "warning") return true;
+  ].some((other) => {
+    if (other.path === "") return true;
+    if (other.statusOnly) return false;
+    if (other.severity !== "warning") return true;
     return (
-      e.path === REMOTECONTROL_SHAREHOSTPROFILE ||
-      e.path === "remoteControl" ||
-      e.path.startsWith("remoteControl.")
+      other.path === REMOTECONTROL_SHAREHOSTPROFILE ||
+      other.path === "remoteControl" ||
+      other.path.startsWith("remoteControl.")
     );
   });
 }
@@ -166,26 +187,27 @@ function hostProfileSettingsBroken() {
 async function filterSharedEnvironment(hostProfile) {
   if (hostProfile === undefined) return;
   try {
-    let e = hostProfileSharingMode();
-    if (e === "off") return;
+    let mode = hostProfileSharingMode();
+    if (mode === "off") return;
     let mdmSnapshot = await readMdmSnapshot();
     invalidateCommandNames();
-    let S = hostProfileSharing(e);
-    let c = mdmReadSnapshot();
-    let s;
+    let sharingBefore = hostProfileSharing(mode);
+    let mdmBefore = mdmReadSnapshot();
+    let sharingAfter;
     replaceMdmSetting(mdmSnapshot.mdm, mdmSnapshot.hkcu, mdmSnapshot.wslInherits, mdmSnapshot.whereAsked);
     try {
       invalidateCommandNames();
-      s = hostProfileSharing(e);
+      sharingAfter = hostProfileSharing(mode);
     } finally {
-      replaceMdmSetting(c.mdm, c.hkcu, c.wslInherits, c.whereAsked);
+      replaceMdmSetting(mdmBefore.mdm, mdmBefore.hkcu, mdmBefore.wslInherits, mdmBefore.whereAsked);
       invalidateCommandNames();
     }
-    let _ = POLICY_HELPER_LOG_LEVELS.find((P) => P === S || P === s) ?? "off";
-    if (_ === "off") return;
-    if (_ === "basic" && hostProfile.mcp_servers !== undefined) {
-      let { mcp_servers: mcpServers, ...h } = hostProfile;
-      return h;
+    let sharingLogLevel =
+      POLICY_HELPER_LOG_LEVELS.find((level) => level === sharingBefore || level === sharingAfter) ?? "off";
+    if (sharingLogLevel === "off") return;
+    if (sharingLogLevel === "basic" && hostProfile.mcp_servers !== undefined) {
+      let { mcp_servers: mcpServers, ...rest } = hostProfile;
+      return rest;
     }
     return hostProfile;
   } catch (error) {
@@ -199,17 +221,17 @@ async function filterSharedEnvironment(hostProfile) {
  */
 async function collectHostProfileIfShared(signal) {
   try {
-    let e = hostProfileSharingMode();
-    if (e === "off") return;
-    let r = hostProfileSharing(e);
-    if (r === "off") {
+    let mode = hostProfileSharingMode();
+    if (mode === "off") return;
+    let profile = hostProfileSharing(mode);
+    if (profile === "off") {
       logEvent("tengu_bridge_host_profile_collect", {
         outcome: lit("disabled"),
       });
       return;
     }
     return await collectHostProfile({
-      includeMcpServers: r === "full",
+      includeMcpServers: profile === "full",
       signal,
     });
   } catch (error) {
@@ -223,7 +245,7 @@ async function collectHostProfileIfShared(signal) {
  */
 async function collectHostProfile({ includeMcpServers, signal }) {
   let now = Date.now();
-  let S = hostPlatform();
+  let platformResult = hostPlatform();
   try {
     let hostProfile = await gatherHostProfile({
       includeMcpServers,
@@ -236,7 +258,7 @@ async function collectHostProfile({ includeMcpServers, signal }) {
       duration_ms: Date.now() - now,
       tools_count: profile.tools.length,
       mcp_count: profile.mcp_servers?.length ?? 0,
-      platform: fromEnumOpt(S),
+      platform: fromEnumOpt(platformResult),
       arch: fromEnumOpt("x64"),
       wsl: profile.wsl === true,
     });
@@ -248,7 +270,7 @@ async function collectHostProfile({ includeMcpServers, signal }) {
     logEvent("tengu_bridge_host_profile_collect", {
       outcome: lit("error"),
       duration_ms: Date.now() - now,
-      platform: fromEnumOpt(S),
+      platform: fromEnumOpt(platformResult),
       arch: fromEnumOpt("x64"),
     });
     logFeatureBad("bridge_host_profile", "error");
@@ -265,53 +287,58 @@ async function gatherHostProfile({
   alsoLookFor = [],
   maxTools = MAX_LISTED_TOOLS,
 }) {
-  let c = hostPlatform();
-  if (c === undefined) return;
-  let s = [...PROFILE_TOOL_CANDIDATES, ...alsoLookFor];
-  let _ = {
+  let platform = hostPlatform();
+  if (platform === undefined) return;
+  let pathToolsToList = [...PROFILE_TOOL_CANDIDATES, ...alsoLookFor];
+  let detectionState = {
     pathTools: new Set(),
     mcpServers: [],
   };
-  let P = [detectOsVersion(c, _), detectAndroidSdk(_), scanPathForExecutables(s, _.pathTools)];
-  if (c === "darwin") P.push(detectXcode(_), detectXcodeCommandLineTools(_));
-  if (c === "linux") P.push(detectCuda(_));
-  if (includeMcpServers) P.push(collectMcpServerNames(_));
-  let h = withDeadline(
+  let detectionTasks = [
+    detectOsVersion(platform, detectionState),
+    detectAndroidSdk(detectionState),
+    scanPathForExecutables(pathToolsToList, detectionState.pathTools),
+  ];
+  if (platform === "darwin")
+    detectionTasks.push(detectXcode(detectionState), detectXcodeCommandLineTools(detectionState));
+  if (platform === "linux") detectionTasks.push(detectCuda(detectionState));
+  if (includeMcpServers) detectionTasks.push(collectMcpServerNames(detectionState));
+  let detectionPromise = withDeadline(
     Promise.all(
-      P.map((E) =>
-        E.catch((error) => {
+      detectionTasks.map((task) =>
+        task.catch((error) => {
           logError(error);
         }),
       ),
     ).then(() => true),
     HOST_PROFILE_DEADLINE_MS,
-  ).then((E) => E === true);
+  ).then((isComplete) => isComplete === true);
   let aborted = false;
   let complete =
     signal === undefined
-      ? await h
-      : await raceWithAbortSignal(h, signal, () => new AbortError()).catch(() => {
+      ? await detectionPromise
+      : await raceWithAbortSignal(detectionPromise, signal, () => new AbortError()).catch(() => {
           aborted = true;
           return false;
         });
   return {
     profile: {
-      platform: c,
+      platform,
       ...(ARCH_NAME_RE.test("x64") && {
         arch: "x64",
       }),
-      ...(_.osVersion !== undefined && {
-        os_version: _.osVersion,
+      ...(detectionState.osVersion !== undefined && {
+        os_version: detectionState.osVersion,
       }),
-      ...(_.distro !== undefined && {
-        distro: _.distro,
+      ...(detectionState.distro !== undefined && {
+        distro: detectionState.distro,
       }),
       ...(getPlatform() === "wsl" && {
         wsl: true,
       }),
-      tools: orderHostTools(c, _, s, maxTools),
+      tools: orderHostTools(platform, detectionState, pathToolsToList, maxTools),
       ...(includeMcpServers && {
-        mcp_servers: _.mcpServers.slice(0, MAX_LISTED_MCP_SERVERS),
+        mcp_servers: detectionState.mcpServers.slice(0, MAX_LISTED_MCP_SERVERS),
       }),
       collected_at: new Date().toISOString(),
     },
@@ -337,87 +364,90 @@ function hostPlatform() {
 /**
  * 探测系统版本与发行版。
  */
-async function detectOsVersion(n, e) {
-  switch (n) {
+async function detectOsVersion(platform, profile) {
+  switch (platform) {
     case "darwin":
-      e.osVersion = await readPlistVersion(XCODE_APP_PATH, "ProductVersion");
+      profile.osVersion = await readPlistVersion(XCODE_APP_PATH, "ProductVersion");
       return;
     case "linux": {
-      let r = await linuxDistroInfo();
-      if (r?.linuxDistroVersion && OS_VERSION_RE.test(r.linuxDistroVersion))
-        e.osVersion = r.linuxDistroVersion;
-      let lower = r?.linuxDistroId?.toLowerCase();
-      if (lower && DISTRO_NAME_RE.test(lower)) e.distro = lower;
+      let distroInfo = await linuxDistroInfo();
+      if (distroInfo?.linuxDistroVersion && OS_VERSION_RE.test(distroInfo.linuxDistroVersion))
+        profile.osVersion = distroInfo.linuxDistroVersion;
+      let lower = distroInfo?.linuxDistroId?.toLowerCase();
+      if (lower && DISTRO_NAME_RE.test(lower)) profile.distro = lower;
       return;
     }
     case "win32": {
-      let r = release();
-      if (OS_VERSION_RE.test(r)) e.osVersion = r;
+      let releaseName = release();
+      if (OS_VERSION_RE.test(releaseName)) profile.osVersion = releaseName;
       return;
     }
   }
 }
 //@ chunk-3dq9c61y.js:5020-5162 placement
-async function readPlistVersion(n, e) {
-  let smallFileOrNull = await readSmallFileOrNull(n, MAX_PROFILE_FILE_BYTES);
-  if (smallFileOrNull === null) return;
-  let plistXml = parsePlistXml(smallFileOrNull);
-  let c = isPlainObjectPlist(plistXml) ? plistXml[e] : undefined;
-  return typeof c === "string" && OS_VERSION_RE.test(c) ? c : undefined;
+async function readPlistVersion(path, key) {
+  let xml = await readSmallFileOrNull(path, MAX_PROFILE_FILE_BYTES);
+  if (xml === null) return;
+  let plistXml = parsePlistXml(xml);
+  let plistValue = isPlainObjectPlist(plistXml) ? plistXml[key] : undefined;
+  return typeof plistValue === "string" && OS_VERSION_RE.test(plistValue) ? plistValue : undefined;
 }
 //@ chunk-3dq9c61y.js:5162-5501 placement
 /**
  * 探测 Xcode 版本。
  */
-async function detectXcode(n) {
-  let e;
+async function detectXcode(profile) {
+  let entries;
   try {
-    e = await readdir(APPLICATIONS_DIR);
+    entries = await readdir(APPLICATIONS_DIR);
   } catch {
     return;
   }
-  let sorted = e
-    .filter((s) => /^Xcode.*\.app$/.test(s))
-    .sort((s, _) =>
-      _.localeCompare(s, undefined, {
+  let sorted = entries
+    .filter((appName) => /^Xcode.*\.app$/.test(appName))
+    .sort((left, right) =>
+      right.localeCompare(left, undefined, {
         numeric: true,
       }),
     );
   if (sorted.length === 0) return;
-  let S = sorted.includes("Xcode.app") ? "Xcode.app" : sorted[0];
+  let xcodeApp = sorted.includes("Xcode.app") ? "Xcode.app" : sorted[0];
   let plistVersion = await readPlistVersion(
-    join(APPLICATIONS_DIR, S, "Contents", "version.plist"),
+    join(APPLICATIONS_DIR, xcodeApp, "Contents", "version.plist"),
     "CFBundleShortVersionString",
   );
-  n.xcode = plistVersion === undefined ? "xcode" : `xcode@${plistVersion}`;
+  profile.xcode = plistVersion === undefined ? "xcode" : `xcode@${plistVersion}`;
 }
 //@ chunk-3dq9c61y.js:5501-5548 placement
-async function detectXcodeCommandLineTools(n) {
-  if (await isDirectoryAsync(XCODE_CLT_DIR)) n.clt = "clt";
+async function detectXcodeCommandLineTools(profile) {
+  if (await isDirectoryAsync(XCODE_CLT_DIR)) profile.clt = "clt";
 }
 //@ chunk-3dq9c61y.js:5548-5686 placement
-async function detectAndroidSdk(n) {
-  let e = env.ANDROID_HOME ?? env.ANDROID_SDK_ROOT;
-  if (e === undefined || !(await isScanCandidate(e)) || !(await isDirectoryAsync(e))) return;
-  n.androidSdk = "android-sdk";
+async function detectAndroidSdk(profile) {
+  let root = env.ANDROID_HOME ?? env.ANDROID_SDK_ROOT;
+  if (root === undefined || !(await isScanCandidate(root)) || !(await isDirectoryAsync(root))) return;
+  profile.androidSdk = "android-sdk";
 }
 //@ chunk-3dq9c61y.js:5686-5904 placement
-async function detectCuda(n) {
+async function detectCuda(profile) {
   let smallFileOrNull = await readSmallFileOrNull(MACOS_VERSION_PLIST, MAX_PROFILE_FILE_BYTES);
   if (smallFileOrNull !== null) {
-    let r = hostProfileConfigSchema().safeParse(safeParseJSON(smallFileOrNull, false));
-    n.cuda = r.success && OS_VERSION_RE.test(r.data.cuda.version) ? `cuda@${r.data.cuda.version}` : "cuda";
+    let parsed = hostProfileConfigSchema().safeParse(safeParseJSON(smallFileOrNull, false));
+    profile.cuda =
+      parsed.success && OS_VERSION_RE.test(parsed.data.cuda.version)
+        ? `cuda@${parsed.data.cuda.version}`
+        : "cuda";
     return;
   }
   try {
     await readFile(CUDA_LIBRARY_PATH, "utf8");
-    n.cuda = "cuda";
+    profile.cuda = "cuda";
   } catch {}
 }
 //@ chunk-3dq9c61y.js:5904-5977 placement
-async function isDirectoryAsync(n) {
+async function isDirectoryAsync(path) {
   try {
-    return (await stat(n)).isDirectory();
+    return (await stat(path)).isDirectory();
   } catch {
     return false;
   }
@@ -426,46 +456,48 @@ async function isDirectoryAsync(n) {
 /**
  * 收集用户与托管范围的 MCP 服务器名。
  */
-async function collectMcpServerNames(n) {
-  let e = new Set();
-  for (let r of MCP_SETTINGS_SCOPES) {
-    if (r === "project") continue;
-    let S;
+async function collectMcpServerNames(profile) {
+  let names = new Set();
+  for (let scope of MCP_SETTINGS_SCOPES) {
+    if (scope === "project") continue;
+    let serverNames;
     try {
-      S = Object.keys(
-        getMcpConfigsByScope(r, {
+      serverNames = Object.keys(
+        getMcpConfigsByScope(scope, {
           expandVars: false,
         }).servers,
       );
     } catch (error) {
-      logForDebugging(`[bridge:host-profile] could not read ${r} MCP config: ${errorMessage(error)}`, {
+      logForDebugging(`[bridge:host-profile] could not read ${scope} MCP config: ${errorMessage(error)}`, {
         level: "warn",
       });
       continue;
     }
-    let scope = r === "managed" ? "enterprise" : r;
-    for (let s of S) {
-      if (!TOOL_NAME_RE.test(s) || e.has(s)) continue;
-      e.add(s);
-      n.mcpServers.push({
-        name: s,
-        scope,
+    let scope_2 = scope === "managed" ? "enterprise" : scope;
+    for (let serverName of serverNames) {
+      if (!TOOL_NAME_RE.test(serverName) || names.has(serverName)) continue;
+      names.add(serverName);
+      profile.mcpServers.push({
+        name: serverName,
+        scope: scope_2,
       });
     }
   }
 }
 //@ chunk-3dq9c61y.js:6341-6625 placement
-function orderHostTools(n, e, r, maxTools) {
-  let c = n !== "darwin" || e.xcode !== undefined || e.clt !== undefined;
-  let filtered = r.filter((P) => e.pathTools.has(P) && (c || !NON_PROFILE_TOOLS.has(P)));
+function orderHostTools(platform, profile, ordered, maxTools) {
+  let hasXcode = platform !== "darwin" || profile.xcode !== undefined || profile.clt !== undefined;
+  let filtered = ordered.filter(
+    (tool) => profile.pathTools.has(tool) && (hasXcode || !NON_PROFILE_TOOLS.has(tool)),
+  );
   let filtered_2 = [
-    e.xcode,
-    e.clt,
-    ...filtered.filter((P) => P === "swift"),
-    e.androidSdk,
-    e.cuda,
-    ...filtered.filter((P) => P !== "swift"),
-  ].filter((P) => P !== undefined && TOOL_HOST_ID_RE.test(P));
+    profile.xcode,
+    profile.clt,
+    ...filtered.filter((tool) => tool === "swift"),
+    profile.androidSdk,
+    profile.cuda,
+    ...filtered.filter((tool) => tool !== "swift"),
+  ].filter((toolId) => toolId !== undefined && TOOL_HOST_ID_RE.test(toolId));
   return uniq(filtered_2).slice(0, maxTools);
 }
-export { collectHostProfileIfShared, filterSharedEnvironment, hostProfileSharing, gatherHostProfile };
+export { filterSharedEnvironment, collectHostProfileIfShared, hostProfileSharing, gatherHostProfile };

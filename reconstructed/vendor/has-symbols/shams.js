@@ -5,10 +5,10 @@
  * pieces: chunk-h6b7mazd.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../runtime/bun-runtime.js";
+import { __commonJS } from "../../runtime/bun-runtime.js";
 
 //@ chunk-h6b7mazd.js:8571-9455 cjs-fingerprint
-var require_shams = x(function (cjsExports, cjsModule) {
+var require_shams = __commonJS(function (cjsExports, cjsModule) {
   cjsModule.exports = function () {
     if (typeof Symbol !== "function" || typeof Object.getOwnPropertySymbols !== "function") return false;
     if (typeof Symbol.iterator === "symbol") return true;

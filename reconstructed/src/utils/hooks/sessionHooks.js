@@ -15,7 +15,36 @@ import { HOOK_EVENTS } from "../../entrypoints/sdk/coreSchemas.js";
 import { HostScoped } from "../hostScoped.js";
 import { propagateAbort, liveWeakRefs } from "../diagLogs.js";
 import { collectAllHookSnapshots } from "./hookEventSets.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
+//@ chunk-gvva3ecm.js:191-209 placement
+var weakMap; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-gvva3ecm.js:191", () => {
+  weakMap = new WeakMap();
+});
+//@ chunk-gvva3ecm.js:209-231 placement
+/**
+ * 从弱映射取会话钩子的来源标记。
+ */
+var hookSourceOf = (hook) => weakMap.get(hook);
+//@ chunk-gvva3ecm.js:231-375 placement
+function getSessionFunctionHooks(hooks) {
+  let flattened = Object.values(hooks ?? {}).flatMap((sessionMatchers) =>
+    (sessionMatchers ?? []).flatMap((sm) => (sm.hooks ?? []).map(hookSourceOf)),
+  );
+  let [firstSource] = flattened;
+  return flattened.every((source) => source === firstSource) ? firstSource : undefined;
+}
+//@ chunk-gvva3ecm.js:375-499 callgraph-fingerprint = removeSessionHook (0.172)
+/**
+ * 记录每个钩子对象的来源（WeakMap），供后续判定归属。
+ */
+function tagHooksWithSource(hooks, source) {
+  if (source === undefined) return;
+  for (let matchers of Object.values(hooks))
+    for (let sessionMatcher of matchers ?? [])
+      for (let hook of sessionMatcher.hooks ?? []) weakMap.set(hook, source);
+}
 //@ chunk-f9asxqh1.js:4888-5098 sole-consumer = convertToHookMatchers (0.77)
 function convertToHookMatchers(sessionMatchers) {
   return sessionMatchers.map((sm) => ({
@@ -27,7 +56,7 @@ function convertToHookMatchers(sessionMatchers) {
     ...(sm.checkout === true && {
       checkout: true,
     }),
-    hooks: sm.hooks.map((hook) => hook.hook).filter((s) => s.type !== "function"),
+    hooks: sm.hooks.map((hook) => hook.hook).filter((hook) => hook.type !== "function"),
   }));
 }
 //@ chunk-f9asxqh1.js:5098-5248 affinity = convertToHookMatchers (0.839)
@@ -35,7 +64,7 @@ function convertToHookMatchers_2(sessionMatchers) {
   return sessionMatchers
     .map((sm) => ({
       matcher: sm.matcher,
-      hooks: sm.hooks.map((hook) => hook.hook).filter((s) => s.type === "function"),
+      hooks: sm.hooks.map((hook) => hook.hook).filter((hook) => hook.type === "function"),
     }))
     .filter((m) => m.hooks.length > 0);
 }
@@ -46,98 +75,110 @@ function convertToHookMatchers_2(sessionMatchers) {
 class SessionHooksRegistry {
   sessions = new Map();
   draws = new Map();
-  skillDraws(e) {
-    let n = this.draws.get(e) ?? new Map();
-    this.draws.set(e, n);
-    return n;
+  skillDraws(skillRoot) {
+    let drawsBySkillRoot = this.draws.get(skillRoot) ?? new Map();
+    this.draws.set(skillRoot, drawsBySkillRoot);
+    return drawsBySkillRoot;
   }
-  add(e, n, s, r, f) {
-    this.addEntry(e, n, s, r, f?.onHookSuccess, f?.skillRoot, f?.personal === true, f?.checkout === true);
+  add(setAppState, sessionId, event, hook, options) {
+    this.addEntry(
+      setAppState,
+      sessionId,
+      event,
+      hook,
+      options?.onHookSuccess,
+      options?.skillRoot,
+      options?.personal === true,
+      options?.checkout === true,
+    );
   }
-  addFunctionHook(setAppState, sessionId, event, callback, errorMessage, y) {
-    let id = y?.id || `function-hook-${Date.now()}-${Math.random()}`;
-    let h = {
+  addFunctionHook(setAppState, sessionId, event, callback, errorMessage, options) {
+    let id = options?.id || `function-hook-${Date.now()}-${Math.random()}`;
+    let hook = {
       type: "function",
       id,
-      timeout: y?.timeout || 5000,
+      timeout: options?.timeout || 5000,
       callback,
       errorMessage,
     };
-    this.addEntry(setAppState, sessionId, event, h, undefined, undefined, false, false);
+    this.addEntry(setAppState, sessionId, event, hook, undefined, undefined, false, false);
     return id;
   }
-  addEntry(e, n, s, r, onHookSuccess, y, S, h) {
-    let w = this.sessions.get(e) ?? {
+  addEntry(setAppState, sessionId, event, hook, onHookSuccess, skillRoot, personal, checkout) {
+    let sessionHooks = this.sessions.get(setAppState) ?? {
       hooks: {},
     };
-    let b = w.hooks[n] || [];
-    let index = b.findIndex(
-      (H) =>
-        H.matcher === s && H.skillRoot === y && (H.personal === true) === S && (H.checkout === true) === h,
+    let matchers = sessionHooks.hooks[sessionId] || [];
+    let index = matchers.findIndex(
+      (matcherEntry) =>
+        matcherEntry.matcher === event &&
+        matcherEntry.skillRoot === skillRoot &&
+        (matcherEntry.personal === true) === personal &&
+        (matcherEntry.checkout === true) === checkout,
     );
-    let C;
+    let nextMatchers;
     if (index >= 0) {
-      C = [...b];
-      let H = C[index];
-      let index_2 = H.hooks.findIndex((hook) =>
-        r.type === "function"
-          ? Boolean(r.id) && hook.hook.type === "function" && hook.hook.id === r.id
-          : isHookEqual(hook.hook, r),
+      nextMatchers = [...matchers];
+      let matcherEntry = nextMatchers[index];
+      let index_2 = matcherEntry.hooks.findIndex((hook_2) =>
+        hook.type === "function"
+          ? Boolean(hook.id) && hook_2.hook.type === "function" && hook_2.hook.id === hook.id
+          : isHookEqual(hook_2.hook, hook),
       );
       let hooks =
         index_2 >= 0
-          ? H.hooks.with(index_2, {
-              ...H.hooks[index_2],
-              hook: r,
+          ? matcherEntry.hooks.with(index_2, {
+              ...matcherEntry.hooks[index_2],
+              hook,
             })
           : [
-              ...H.hooks,
+              ...matcherEntry.hooks,
               {
-                hook: r,
+                hook,
                 onHookSuccess,
               },
             ];
-      C[index] = {
-        ...H,
+      nextMatchers[index] = {
+        ...matcherEntry,
         hooks,
       };
     } else
-      C = [
-        ...b,
+      nextMatchers = [
+        ...matchers,
         {
-          matcher: s,
-          skillRoot: y,
-          ...(S && {
+          matcher: event,
+          skillRoot,
+          ...(personal && {
             personal: true,
           }),
-          ...(h && {
+          ...(checkout && {
             checkout: true,
           }),
           hooks: [
             {
-              hook: r,
+              hook,
               onHookSuccess,
             },
           ],
         },
       ];
-    this.sessions.set(e, {
+    this.sessions.set(setAppState, {
       hooks: {
-        ...w.hooks,
-        [n]: C,
+        ...sessionHooks.hooks,
+        [sessionId]: nextMatchers,
       },
     });
     trackSessionHookRegistry(this.sessions);
     emitHookStoresChanged();
-    logForDebugging(`Added session hook for event ${n} in session ${e}`);
+    logForDebugging(`Added session hook for event ${sessionId} in session ${setAppState}`);
   }
-  remove(e, n, s, r) {
-    let f = this.sessions.get(e);
-    if (f) {
-      let filtered = (f.hooks[n] || [])
+  remove(setAppState, sessionId, event, match) {
+    let sessionHooks = this.sessions.get(setAppState);
+    if (sessionHooks) {
+      let filtered = (sessionHooks.hooks[sessionId] || [])
         .map((matcher) => {
-          if (r !== undefined && matcher.skillRoot !== r.skillRoot) return matcher;
-          let updatedHooks = matcher.hooks.filter((hook) => !isHookEqual(hook.hook, s));
+          if (match !== undefined && matcher.skillRoot !== match.skillRoot) return matcher;
+          let updatedHooks = matcher.hooks.filter((hook) => !isHookEqual(hook.hook, event));
           return updatedHooks.length > 0
             ? {
                 ...matcher,
@@ -145,70 +186,76 @@ class SessionHooksRegistry {
               }
             : null;
         })
-        .filter((w) => w !== null);
-      let h =
+        .filter((matcherEntry) => matcherEntry !== null);
+      let hooks =
         filtered.length > 0
           ? {
-              ...f.hooks,
-              [n]: filtered,
+              ...sessionHooks.hooks,
+              [sessionId]: filtered,
             }
           : {
-              ...f.hooks,
+              ...sessionHooks.hooks,
             };
-      if (filtered.length === 0) delete h[n];
-      this.sessions.set(e, {
-        ...f,
-        hooks: h,
+      if (filtered.length === 0) delete hooks[sessionId];
+      this.sessions.set(setAppState, {
+        ...sessionHooks,
+        hooks,
       });
       emitHookStoresChanged();
     }
-    logForDebugging(`Removed session hook for event ${n} in session ${e}`);
+    logForDebugging(`Removed session hook for event ${sessionId} in session ${setAppState}`);
   }
-  clear(e) {
-    this.sessions.delete(e);
-    this.draws.delete(e);
+  clear(setAppState) {
+    this.sessions.delete(setAppState);
+    this.draws.delete(setAppState);
     emitHookStoresChanged();
-    logForDebugging(`Cleared all session hooks for session ${e}`);
+    logForDebugging(`Cleared all session hooks for session ${setAppState}`);
   }
-  get(e, n) {
-    let s = new Map();
-    let r = this.sessions.get(e);
-    if (!r) return s;
-    for (let f of n ? [n] : HOOK_EVENTS) {
-      let sessionMatchers = r.hooks[f];
-      if (sessionMatchers) s.set(f, convertToHookMatchers(sessionMatchers));
+  get(setAppState, event) {
+    let result = new Map();
+    let sessionHooks = this.sessions.get(setAppState);
+    if (!sessionHooks) return result;
+    for (let hookEvent of event ? [event] : HOOK_EVENTS) {
+      let sessionMatchers = sessionHooks.hooks[hookEvent];
+      if (sessionMatchers) result.set(hookEvent, convertToHookMatchers(sessionMatchers));
     }
-    return s;
+    return result;
   }
-  getFunctionHooks(e, n) {
-    let s = new Map();
-    let r = this.sessions.get(e);
-    if (!r) return s;
-    for (let f of n ? [n] : HOOK_EVENTS) {
-      let sessionMatchers = r.hooks[f];
+  getFunctionHooks(setAppState, event) {
+    let result = new Map();
+    let sessionHooks = this.sessions.get(setAppState);
+    if (!sessionHooks) return result;
+    for (let hookEvent of event ? [event] : HOOK_EVENTS) {
+      let sessionMatchers = sessionHooks.hooks[hookEvent];
       if (sessionMatchers) {
-        let S = convertToHookMatchers_2(sessionMatchers);
-        if (S.length > 0) s.set(f, S);
+        let functionMatchers = convertToHookMatchers_2(sessionMatchers);
+        if (functionMatchers.length > 0) result.set(hookEvent, functionMatchers);
       }
     }
-    return s;
+    return result;
   }
-  getEntry(e, n, s, r, f) {
-    let y = this.sessions.get(e)?.hooks[n];
-    if (!y) return;
-    for (let matcherEntry of y)
-      if ((matcherEntry.matcher === s || s === "") && matcherEntry.skillRoot === f.skillRoot) {
-        let hookEntry = matcherEntry.hooks.find((hook) => isHookEqual(hook.hook, r));
+  getEntry(setAppState, sessionId, matcher, hook, match) {
+    let matchers = this.sessions.get(setAppState)?.hooks[sessionId];
+    if (!matchers) return;
+    for (let matcherEntry of matchers)
+      if (
+        (matcherEntry.matcher === matcher || matcher === "") &&
+        matcherEntry.skillRoot === match.skillRoot
+      ) {
+        let hookEntry = matcherEntry.hooks.find((hook_2) => isHookEqual(hook_2.hook, hook));
         if (hookEntry) return hookEntry;
       }
     return;
   }
-  has(e, n) {
-    return this.sessions.get(e)?.hooks[n] !== undefined;
+  has(setAppState, sessionId) {
+    return this.sessions.get(setAppState)?.hooks[sessionId] !== undefined;
   }
 }
 //@ chunk-f9asxqh1.js:7419-7445 layout
-var sessionHookRegistriesByHost = new HostScoped(() => new Set());
+var sessionHookRegistriesByHost; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-f9asxqh1.js:7419", () => {
+  sessionHookRegistriesByHost = new HostScoped(() => new Set());
+});
 //@ chunk-f9asxqh1.js:7445-7472 layout
 function getSessionHookRegistries() {
   return onProcessRootHost(sessionHookRegistriesByHost);
@@ -222,62 +269,42 @@ function trackSessionHookRegistry(weakChild) {
  * 遍历所有会话注册表，列出全部非 function 会话钩子 {event, hook, skillRoot}。
  */
 function getAllSessionHookEntries() {
-  let e = [];
-  for (let n of liveWeakRefs(getSessionHookRegistries()))
-    for (let s of n.values())
-      for (let r of HOOK_EVENTS)
-        for (let f of s.hooks[r] ?? [])
-          for (let { hook } of f.hooks)
+  let entries = [];
+  for (let registry of liveWeakRefs(getSessionHookRegistries()))
+    for (let hookSets of registry.values())
+      for (let event of HOOK_EVENTS)
+        for (let matcherEntry of hookSets.hooks[event] ?? [])
+          for (let { hook } of matcherEntry.hooks)
             if (hook.type !== "function")
-              e.push({
-                event: r,
+              entries.push({
+                event,
                 hook,
-                skillRoot: f.skillRoot,
+                skillRoot: matcherEntry.skillRoot,
               });
-  return e;
-}
-//@ chunk-gvva3ecm.js:191-209 placement
-var weakMap = new WeakMap();
-//@ chunk-gvva3ecm.js:209-231 placement
-/**
- * 从弱映射取会话钩子的来源标记。
- */
-var hookSourceOf = (hook) => weakMap.get(hook);
-//@ chunk-gvva3ecm.js:231-375 placement
-function getSessionFunctionHooks(hooks) {
-  let flattened = Object.values(hooks ?? {}).flatMap((sessionMatchers) =>
-    (sessionMatchers ?? []).flatMap((sm) => (sm.hooks ?? []).map(hookSourceOf)),
-  );
-  let [e] = flattened;
-  return flattened.every((r) => r === e) ? e : undefined;
-}
-//@ chunk-gvva3ecm.js:375-499 callgraph-fingerprint = removeSessionHook (0.172)
-/**
- * 记录每个钩子对象的来源（WeakMap），供后续判定归属。
- */
-function tagHooksWithSource(hooks, t) {
-  if (t === undefined) return;
-  for (let e of Object.values(hooks)) for (let r of e ?? []) for (let s of r.hooks ?? []) weakMap.set(s, t);
+  return entries;
 }
 //@ chunk-s61vbvea.js:306347-306638 affinity
-var MCP_TOOL_GUARD_EVENTS = new Set([
-  "UserPromptSubmit",
-  "UserPromptExpansion",
-  "PreToolUse",
-  "PermissionRequest",
-  "PermissionDenied",
-  "PostToolUse",
-  "PostToolUseFailure",
-  "PostToolBatch",
-  "SubagentStart",
-  "SubagentStop",
-  "TaskCreated",
-  "TaskCompleted",
-  "Elicitation",
-  "ElicitationResult",
-  "WorktreeCreate",
-  "WorktreeRemove",
-]);
+var MCP_TOOL_GUARD_EVENTS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-s61vbvea.js:306347", () => {
+  MCP_TOOL_GUARD_EVENTS = new Set([
+    "UserPromptSubmit",
+    "UserPromptExpansion",
+    "PreToolUse",
+    "PermissionRequest",
+    "PermissionDenied",
+    "PostToolUse",
+    "PostToolUseFailure",
+    "PostToolBatch",
+    "SubagentStart",
+    "SubagentStop",
+    "TaskCreated",
+    "TaskCompleted",
+    "Elicitation",
+    "ElicitationResult",
+    "WorktreeCreate",
+    "WorktreeRemove",
+  ]);
+});
 //@ chunk-s61vbvea.js:306638-306943 callgraph-fingerprint = getSessionHooks (0.251)
 /**
  * 收集 mcp_tool 钩子引用的 MCP 服务器名（守卫类事件），会话钩子与各 settings 一起统计。
@@ -286,12 +313,13 @@ function getMcpServersReferencedByHooks() {
   let result = new Set();
   for (let { event, hook } of getAllSessionHookEntries())
     if (MCP_TOOL_GUARD_EVENTS.has(event) && hook.type === "mcp_tool") result.add(hook.server);
-  for (let n of collectAllHookSnapshots()) {
-    if (!n) continue;
-    for (let [key, value] of Object.entries(n)) {
+  for (let snapshot of collectAllHookSnapshots()) {
+    if (!snapshot) continue;
+    for (let [key, value] of Object.entries(snapshot)) {
       if (!MCP_TOOL_GUARD_EVENTS.has(key)) continue;
-      for (let h of value ?? [])
-        for (let y of h.hooks ?? []) if (y.type === "mcp_tool" && y.server) result.add(y.server);
+      for (let matcherEntry of value ?? [])
+        for (let hook of matcherEntry.hooks ?? [])
+          if (hook.type === "mcp_tool" && hook.server) result.add(hook.server);
     }
   }
   return result;

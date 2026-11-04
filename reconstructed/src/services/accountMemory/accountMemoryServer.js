@@ -10,7 +10,7 @@
  */
 import { HostScoped } from "../../utils/hostScoped.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, string, _enum, array } from "../../../vendor/zod/v4/classic/schemas.js";
+import { objectSchema, stringSchema, _enum, array } from "../../../vendor/zod/v4/classic/schemas.js";
 import {
   isMemoryToolServer_2,
   MEMORY_SEARCH_TOOLS,
@@ -22,159 +22,186 @@ import { normalizeMemoryText } from "../../memdir/memdir.js";
 import { hasCommsRoledServer } from "../../coordinator/coordinatorMcpServers.js";
 import { MEMORY_READ } from "../../tools/MemoryTool/memoryToolNames.js";
 import { isCoordinatorMode_2 } from "../../coordinator/coordinatorMode.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-s61vbvea.js:65885-65938 placement
 /**
  * 导出函数 `normalizeServerPath`：参数 e，返回 ("/" + e).replace(/\/{2,}/g, "/")。
  */
-function normalizeServerPath(e) {
-  return ("/" + e).replace(/\/{2,}/g, "/");
+function normalizeServerPath(path) {
+  return ("/" + path).replace(/\/{2,}/g, "/");
 }
 //@ chunk-s61vbvea.js:65938-65970 placement
-var memoryServerPortSlot = new HostScoped(() => ({
-  port: null,
-}));
+var memoryServerPortSlot; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-s61vbvea.js:65938", () => {
+  memoryServerPortSlot = new HostScoped(() => ({
+    port: null,
+  }));
+});
 //@ chunk-s61vbvea.js:65970-66000 placement
-var memoryServerRequestSchema = DoctorLazy(() =>
-  u({
-    method: string(),
-  }),
-);
+var memoryServerRequestSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-s61vbvea.js:65970", () => {
+  memoryServerRequestSchema = DoctorLazy(() =>
+    objectSchema({
+      method: stringSchema(),
+    }),
+  );
+});
 //@ chunk-s61vbvea.js:66000-66051 placement
-var memoryServerHandleSlot = new HostScoped(() => ({
-  handle: null,
-  undelivered: null,
-}));
+var memoryServerHandleSlot; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-s61vbvea.js:66000", () => {
+  memoryServerHandleSlot = new HostScoped(() => ({
+    handle: null,
+    undelivered: null,
+  }));
+});
 //@ chunk-s61vbvea.js:66051-66401 placement
 /**
  * 账号记忆服务器的模式常量（all/read_only/none 及排序）与 capabilities.experimental["anthropic/memory"] 的 schema。
  */
-var COORDINATOR = "coordinator";
-var ANTHROPIC_MEMORY = "anthropic/memory";
-var READ_ONLY = "read_only";
-var NONE = "none";
-var MAX_SUBAGENT_NOTE_CHARS = 4096;
-var MEMORY_MODE_RANK = {
-  all: 0,
-  read_only: 1,
-  none: 2,
-};
-var memoryCapabilitiesSchema = DoctorLazy(() =>
-  u({
-    subagent_memory: _enum(["all", "read_only", "none"]).optional().catch(NONE),
-    subagent_note: string().max(MAX_SUBAGENT_NOTE_CHARS).optional().catch(undefined),
-    coordinator_memory: _enum(["all", "read_only", "none"]).optional().catch(NONE),
-    callers: array(string()).optional().catch(undefined),
-  }),
-);
+var COORDINATOR; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var ANTHROPIC_MEMORY;
+var READ_ONLY;
+var NONE;
+var MAX_SUBAGENT_NOTE_CHARS;
+var MEMORY_MODE_RANK;
+var memoryCapabilitiesSchema;
+deferInit("chunk-s61vbvea.js:66051", () => {
+  COORDINATOR = "coordinator";
+  ANTHROPIC_MEMORY = "anthropic/memory";
+  READ_ONLY = "read_only";
+  NONE = "none";
+  MAX_SUBAGENT_NOTE_CHARS = 4096;
+  MEMORY_MODE_RANK = {
+    all: 0,
+    read_only: 1,
+    none: 2,
+  };
+  memoryCapabilitiesSchema = DoctorLazy(() =>
+    objectSchema({
+      subagent_memory: _enum(["all", "read_only", "none"]).optional().catch(NONE),
+      subagent_note: stringSchema().max(MAX_SUBAGENT_NOTE_CHARS).optional().catch(undefined),
+      coordinator_memory: _enum(["all", "read_only", "none"]).optional().catch(NONE),
+      callers: array(stringSchema()).optional().catch(undefined),
+    }),
+  );
+});
 //@ chunk-s61vbvea.js:66401-67008 placement
-function accountMemoryServerState(e, n) {
-  let r;
-  let s;
-  let h;
-  let y = false;
-  for (let x of e ?? []) {
-    if (!isMemoryToolServer_2(x)) continue;
-    if (x.type !== "connected") {
-      y ||= x.type !== "disabled";
+function accountMemoryServerState(servers, state) {
+  let server;
+  let capabilities;
+  let connected;
+  let failed = false;
+  for (let memoryServer of servers ?? []) {
+    if (!isMemoryToolServer_2(memoryServer)) continue;
+    if (memoryServer.type !== "connected") {
+      failed ||= memoryServer.type !== "disabled";
       continue;
     }
-    let P = x.capabilities.experimental?.[ANTHROPIC_MEMORY];
-    if (P === undefined) continue;
-    let j = memoryCapabilitiesSchema().safeParse(P);
-    let G = j.success ? j.data.subagent_memory : NONE;
-    let L = j.success ? normalizeMemoryText(j.data.subagent_note ?? "").trim() || undefined : undefined;
-    if (G === undefined) h ??= L;
-    else if (r === undefined || MEMORY_MODE_RANK[G] > MEMORY_MODE_RANK[r]) {
-      r = G;
-      s = L;
+    let capability = memoryServer.capabilities.experimental?.[ANTHROPIC_MEMORY];
+    if (capability === undefined) continue;
+    let parsed = memoryCapabilitiesSchema().safeParse(capability);
+    let subagentMode = parsed.success ? parsed.data.subagent_memory : NONE;
+    let subagentNote = parsed.success
+      ? normalizeMemoryText(parsed.data.subagent_note ?? "").trim() || undefined
+      : undefined;
+    if (subagentMode === undefined) connected ??= subagentNote;
+    else if (server === undefined || MEMORY_MODE_RANK[subagentMode] > MEMORY_MODE_RANK[server]) {
+      server = subagentMode;
+      capabilities = subagentNote;
     }
   }
-  let S = r === undefined ? n : n === undefined || MEMORY_MODE_RANK[r] >= MEMORY_MODE_RANK[n] ? r : n;
-  let source = S === undefined ? "default" : S === r ? "served" : "fallback";
-  let R = r === undefined || S === r;
-  if (r === undefined) s = h;
+  let mode =
+    server === undefined
+      ? state
+      : state === undefined || MEMORY_MODE_RANK[server] >= MEMORY_MODE_RANK[state]
+        ? server
+        : state;
+  let source = mode === undefined ? "default" : mode === server ? "served" : "fallback";
+  let fromServer = server === undefined || mode === server;
+  if (server === undefined) capabilities = connected;
   return {
-    mode: S ?? READ_ONLY,
+    mode: mode ?? READ_ONLY,
     source,
-    ...(s !== undefined &&
-      R && {
-        note: s,
+    ...(capabilities !== undefined &&
+      fromServer && {
+        note: capabilities,
       }),
-    ...(S === undefined &&
-      y && {
+    ...(mode === undefined &&
+      failed && {
         serverPending: true,
       }),
   };
 }
 //@ chunk-s61vbvea.js:67008-67041 placement
-function isAccountMemoryToolName(e) {
-  return MEMORY_SEARCH_TOOLS.has(e);
+function isAccountMemoryToolName(toolName) {
+  return MEMORY_SEARCH_TOOLS.has(toolName);
 }
 //@ chunk-s61vbvea.js:67041-67382 placement
 /**
  * 创建判断工具是否为账号记忆服务器工具且需受控的函数：惰性计算协调记忆模式（取所有记忆服务器中最宽的），按模式与工具名决定。
  */
-function createAccountMemoryToolGate(e) {
-  let n;
-  return (r) => {
-    let mcpInfo = r.mcpInfo;
+function createAccountMemoryToolGate(getClients) {
+  let mode;
+  return (tool) => {
+    let mcpInfo = tool.mcpInfo;
     if (mcpInfo?.accountMemoryServer !== true) return false;
-    if (n === undefined) {
-      let h = e();
-      let y = hasCommsRoledServer(h) ? "none" : undefined;
-      for (let S of h) {
-        if (!isMemoryToolServer_2(S)) continue;
-        let w =
-          (isCoordinatorCapable(S) &&
-            !isLocalAgentDynamicMemoryServer(S, MEMORY_READ) &&
-            getMemoryCapabilities(S)?.coordinator_memory) ||
+    if (mode === undefined) {
+      let clients = getClients();
+      let next = hasCommsRoledServer(clients) ? "none" : undefined;
+      for (let client of clients) {
+        if (!isMemoryToolServer_2(client)) continue;
+        let candidates =
+          (isCoordinatorCapable(client) &&
+            !isLocalAgentDynamicMemoryServer(client, MEMORY_READ) &&
+            getMemoryCapabilities(client)?.coordinator_memory) ||
           "none";
-        if (y === undefined || MEMORY_MODE_RANK[w] > MEMORY_MODE_RANK[y]) y = w;
+        if (next === undefined || MEMORY_MODE_RANK[candidates] > MEMORY_MODE_RANK[next]) next = candidates;
       }
-      n = y ?? "none";
+      mode = next ?? "none";
     }
     return (
-      n !== "none" &&
-      (isAccountMemoryToolName(mcpInfo.toolName) || (n === "all" && mcpInfo.cliOwned !== true))
+      mode !== "none" &&
+      (isAccountMemoryToolName(mcpInfo.toolName) || (mode === "all" && mcpInfo.cliOwned !== true))
     );
   };
 }
 //@ chunk-s61vbvea.js:67382-67515 placement
-function getMemoryCapabilities(e) {
-  if (e.type !== "connected") return;
-  let n = memoryCapabilitiesSchema().safeParse(e.capabilities.experimental?.[ANTHROPIC_MEMORY]);
-  return n.success ? n.data : undefined;
+function getMemoryCapabilities(client) {
+  if (client.type !== "connected") return;
+  let parsed = memoryCapabilitiesSchema().safeParse(client.capabilities.experimental?.[ANTHROPIC_MEMORY]);
+  return parsed.success ? parsed.data : undefined;
 }
 //@ chunk-s61vbvea.js:67515-67571 placement
-function isCoordinatorCapable(e) {
-  return getMemoryCapabilities(e)?.callers?.includes(COORDINATOR) === true;
+function isCoordinatorCapable(client) {
+  return getMemoryCapabilities(client)?.callers?.includes(COORDINATOR) === true;
 }
 //@ chunk-s61vbvea.js:67571-67659 placement
 /**
  * 导出函数 `isServedAccountMemoryTool`：参数 e, n，返回 e.mcpInfo?.accountMemoryServer === !0 && pVo(e.mcpInfo.toolName, n)。
  */
-function isServedAccountMemoryTool(tool, n) {
-  return tool.mcpInfo?.accountMemoryServer === true && isMemoryToolAllowed(tool.mcpInfo.toolName, n);
+function isServedAccountMemoryTool(tool, mode) {
+  return tool.mcpInfo?.accountMemoryServer === true && isMemoryToolAllowed(tool.mcpInfo.toolName, mode);
 }
 //@ chunk-s61vbvea.js:67659-67703 placement
 /**
  * 导出函数 `isMemoryToolAllowed`：参数 e, n，返回 n === "none" || !eu(e)。
  */
-function isMemoryToolAllowed(e, n) {
-  return n === "none" || !isAccountMemoryToolName(e);
+function isMemoryToolAllowed(toolName, mode) {
+  return mode === "none" || !isAccountMemoryToolName(toolName);
 }
 //@ chunk-s61vbvea.js:67703-67755 placement
-function isMemextractCall(e) {
-  return e.mcpRequestMeta?.[MEMORY_CALLER_META_KEY] === MEMEXTRACT;
+function isMemextractCall(tool) {
+  return tool.mcpRequestMeta?.[MEMORY_CALLER_META_KEY] === MEMEXTRACT;
 }
 //@ chunk-s61vbvea.js:67755-67860 placement
-function getMemoryCallerMeta(e, n, r) {
-  if (!e || isMemextractCall(n)) return;
-  let s = n.memoryCaller ?? (isCoordinatorMode_2() && isCoordinatorCapable(r) ? COORDINATOR : undefined);
+function getMemoryCallerMeta(enabled, tool, client) {
+  if (!enabled || isMemextractCall(tool)) return;
+  let caller =
+    tool.memoryCaller ?? (isCoordinatorMode_2() && isCoordinatorCapable(client) ? COORDINATOR : undefined);
   return (
-    s && {
-      [MEMORY_CALLER_META_KEY]: s,
+    caller && {
+      [MEMORY_CALLER_META_KEY]: caller,
     }
   );
 }
@@ -182,16 +209,20 @@ function getMemoryCallerMeta(e, n, r) {
 /**
  * 把调用方记忆元数据写入（或从）目标对象中移除，来源为工具输入或 MCP 请求元数据。
  */
-function applyMemoryCallerMeta(e, n, r, s) {
-  let h =
-    getMemoryCallerMeta(n, r, s)?.[MEMORY_CALLER_META_KEY] ?? r.mcpRequestMeta?.[MEMORY_CALLER_META_KEY];
-  if (h === undefined) delete e[MEMORY_CALLER_META_KEY];
-  else e[MEMORY_CALLER_META_KEY] = h;
+function applyMemoryCallerMeta(meta, enabled, tool, client) {
+  let caller =
+    getMemoryCallerMeta(enabled, tool, client)?.[MEMORY_CALLER_META_KEY] ??
+    tool.mcpRequestMeta?.[MEMORY_CALLER_META_KEY];
+  if (caller === undefined) delete meta[MEMORY_CALLER_META_KEY];
+  else meta[MEMORY_CALLER_META_KEY] = caller;
 }
 //@ chunk-s61vbvea.js:67972-68322 placement
-function refuseNonMainAccountMemoryWrite(accountMemoryServer, name, r) {
-  let s = r.agentContext?.agentType !== "main" || r.agentId !== undefined || r.memoryCaller !== undefined;
-  return accountMemoryServer && s && !isMemextractCall(r) && !isAccountMemoryToolName(name)
+function refuseNonMainAccountMemoryWrite(isMainContext, name, context) {
+  let notMain =
+    context.agentContext?.agentType !== "main" ||
+    context.agentId !== undefined ||
+    context.memoryCaller !== undefined;
+  return isMainContext && notMain && !isMemextractCall(context) && !isAccountMemoryToolName(name)
     ? "Only the session's main agent can change the user's account memory; a subagent, teammate, fork or backgrounded query cannot. If something should be saved, say so in your reply so the main agent can save it."
     : undefined;
 }
@@ -206,8 +237,8 @@ function memoryCallerKind({ isTeammate, isBackground }) {
 /**
  * 导出函数 `memoryNoteIfEnabled`：参数 e，返回 e.mode === "none" ? void 0 : e.note; } export { READ_ONLY, Y2t, tZs, nZs, createAccountMemoryToolGate, refuseN…。
  */
-function memoryNoteIfEnabled(e) {
-  return e.mode === "none" ? undefined : e.note;
+function memoryNoteIfEnabled(state) {
+  return state.mode === "none" ? undefined : state.note;
 }
 export {
   READ_ONLY,

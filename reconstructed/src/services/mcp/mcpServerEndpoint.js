@@ -13,19 +13,19 @@ import { normalizeEnvRefs, maskEnvRefs } from "./envExpansion.js";
 import { isSameOriginAsCcr } from "./ccrMcpUrls.js";
 
 //@ chunk-1wpnxx5r.js:16647-16712 placement
-function mcpTransportType(e) {
-  return e.type ?? ("command" in e ? "stdio" : "unknown");
+function mcpTransportType(config) {
+  return config.type ?? ("command" in config ? "stdio" : "unknown");
 }
 //@ chunk-1wpnxx5r.js:16712-17106 placement
-function describeEndpointOrigin(e) {
-  let { authoredUnexpanded, expanded, cliOwned } = e;
-  let detail = e.detail ?? "endpoint";
+function describeEndpointOrigin(params) {
+  let { authoredUnexpanded, expanded, cliOwned } = params;
+  let detail = params.detail ?? "endpoint";
   if (authoredUnexpanded) {
-    let serverUrl = getServerUrl(authoredUnexpanded);
-    if (serverUrl) {
-      if (detail === "endpoint") return normalizeEnvRefs(serverUrl);
-      if (authorityHasEnvRef(serverUrl)) return redactEndpointUserinfo(serverUrl);
-      return originOfUrl(serverUrl) ?? redactEndpointUserinfo(serverUrl);
+    let url = getServerUrl(authoredUnexpanded);
+    if (url) {
+      if (detail === "endpoint") return normalizeEnvRefs(url);
+      if (authorityHasEnvRef(url)) return redactEndpointUserinfo(url);
+      return originOfUrl(url) ?? redactEndpointUserinfo(url);
     }
     let serverCommandArray = getServerCommandArray(authoredUnexpanded);
     if (serverCommandArray)
@@ -34,9 +34,9 @@ function describeEndpointOrigin(e) {
   }
   let url = getServerUrl(expanded);
   if (url) {
-    let i = cliOwned && isSameOriginAsCcr(url) ? unwrapCcrProxyUrl(url) : url;
-    let a = originOfUrl(i);
-    if (a !== undefined) return a;
+    let effectiveUrl = cliOwned && isSameOriginAsCcr(url) ? unwrapCcrProxyUrl(url) : url;
+    let origin = originOfUrl(effectiveUrl);
+    if (origin !== undefined) return origin;
   }
   return detail === "endpoint" ? mcpTransportType(expanded) : undefined;
 }
@@ -44,50 +44,54 @@ function describeEndpointOrigin(e) {
 /**
  * 取 URL 的 origin（无效或为 null 时 undefined）。
  */
-function originOfUrl(e) {
+function originOfUrl(url) {
   try {
-    let origin = new URL(e).origin;
+    let origin = new URL(url).origin;
     return origin === "null" ? undefined : origin;
   } catch {
     return;
   }
 }
 //@ chunk-1wpnxx5r.js:17189-17482 placement
-function splitSchemeAuthority(e, r = e) {
-  let n = (i) => {
-    let a = e.length;
-    for (let l of ["/", "?", "#", "\\"]) {
-      let index = r.indexOf(l, i);
-      if (index !== -1 && index < a) a = index;
+function splitSchemeAuthority(text, masked = text) {
+  let authorityEnd = (fromIndex) => {
+    let endIndex = text.length;
+    for (let delimiter of ["/", "?", "#", "\\"]) {
+      let index = masked.indexOf(delimiter, fromIndex);
+      if (index !== -1 && index < endIndex) endIndex = index;
     }
-    return a;
+    return endIndex;
   };
-  let index = r.indexOf("://");
-  let s = index !== -1 && index < n(0) && /^[A-Za-z][A-Za-z0-9+.-]*$/.test(r.slice(0, index)) ? index + 3 : 0;
-  let o = n(s);
+  let index = masked.indexOf("://");
+  let authorityStart =
+    index !== -1 && index < authorityEnd(0) && /^[A-Za-z][A-Za-z0-9+.-]*$/.test(masked.slice(0, index))
+      ? index + 3
+      : 0;
+  let authorityEndIndex = authorityEnd(authorityStart);
   return {
-    scheme: e.slice(0, s),
-    authority: e.slice(s, o),
-    rest: e.slice(o),
+    scheme: text.slice(0, authorityStart),
+    authority: text.slice(authorityStart, authorityEndIndex),
+    rest: text.slice(authorityEndIndex),
   };
 }
 //@ chunk-1wpnxx5r.js:17482-17543 placement
 /**
  * 判断地址的 authority 部分是否含未展开的 ${...}。
  */
-function authorityHasEnvRef(serverUrl) {
-  return splitSchemeAuthority(serverUrl, maskEnvRefs(serverUrl)).authority.includes("${");
+function authorityHasEnvRef(text) {
+  return splitSchemeAuthority(text, maskEnvRefs(text)).authority.includes("${");
 }
 //@ chunk-1wpnxx5r.js:17543-17793 placement
-function redactEndpointUserinfo(serverUrl) {
-  let r = maskEnvRefs(serverUrl);
-  let { scheme, authority } = splitSchemeAuthority(r);
-  let s = scheme.length;
-  let o = s + authority.length;
-  if (r.includes("@", o)) return normalizeEnvRefs(serverUrl.slice(0, s)) + "[unparseable-authority]";
+function redactEndpointUserinfo(text) {
+  let masked = maskEnvRefs(text);
+  let { scheme, authority } = splitSchemeAuthority(masked);
+  let schemeEnd = scheme.length;
+  let authorityEnd = schemeEnd + authority.length;
+  if (masked.includes("@", authorityEnd))
+    return normalizeEnvRefs(text.slice(0, schemeEnd)) + "[unparseable-authority]";
   let index = authority.lastIndexOf("@");
-  let sliced = serverUrl.slice(index === -1 ? s : s + index + 1, o);
+  let sliced = text.slice(index === -1 ? schemeEnd : schemeEnd + index + 1, authorityEnd);
   if (sliced === "") return;
-  return normalizeEnvRefs(serverUrl.slice(0, s) + sliced);
+  return normalizeEnvRefs(text.slice(0, schemeEnd) + sliced);
 }
 export { describeEndpointOrigin, mcpTransportType, splitSchemeAuthority };

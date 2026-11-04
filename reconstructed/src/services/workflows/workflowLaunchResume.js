@@ -11,7 +11,12 @@
 import { createHash, timingSafeEqual, randomUUID } from "crypto";
 import { MAX_SCRIPT_BUNDLE_BYTES } from "../workflow/scriptFile.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { looseObject, string, E, M } from "../../../vendor/zod/v4/classic/schemas.js";
+import {
+  looseObject,
+  stringSchema,
+  numberSchema,
+  booleanSchema,
+} from "../../../vendor/zod/v4/classic/schemas.js";
 import { normalizeUuidOrNull } from "../../utils/agentId.js";
 import { HostScoped } from "../../utils/hostScoped.js";
 import { withDeadline, sleep } from "../../utils/sleep.js";
@@ -36,32 +41,32 @@ var FILESTORE_OBJECT_REGEX = /^(?!\.+$)[A-Za-z0-9._-]{1,128}$/;
 /**
  * 校验启动事件字段
  */
-function validateLaunchEvent(e) {
-  let t = (error) => ({
+function validateLaunchEvent(event) {
+  let fail = (error) => ({
     ok: false,
     error,
   });
-  let filestorePath = e.filestore_path;
+  let filestorePath = event.filestore_path;
   if (typeof filestorePath !== "string" || filestorePath.length === 0)
-    return t("filestore_path is missing or not a non-empty string");
+    return fail("filestore_path is missing or not a non-empty string");
   if (
     !filestorePath.startsWith(WORKFLOW_FILESTORE_PREFIX) ||
     !FILESTORE_OBJECT_REGEX.test(filestorePath.slice(WORKFLOW_FILESTORE_PREFIX.length))
   )
-    return t(`filestore_path must name one object directly under ${WORKFLOW_FILESTORE_PREFIX}`);
-  let artifactSha256 = e.artifact_sha256;
+    return fail(`filestore_path must name one object directly under ${WORKFLOW_FILESTORE_PREFIX}`);
+  let artifactSha256 = event.artifact_sha256;
   if (typeof artifactSha256 !== "string" || !/^[0-9a-f]{64}$/.test(artifactSha256))
-    return t("artifact_sha256 is missing or not 64 lowercase hex chars");
-  let bundleSizeBytes = e.bundle_size_bytes;
+    return fail("artifact_sha256 is missing or not 64 lowercase hex chars");
+  let bundleSizeBytes = event.bundle_size_bytes;
   if (typeof bundleSizeBytes !== "number" || !Number.isSafeInteger(bundleSizeBytes) || bundleSizeBytes <= 0)
-    return t("bundle_size_bytes is missing or not a positive integer");
-  if (bundleSizeBytes > MAX_BUNDLE_BYTES) return t(`bundle_size_bytes exceeds ${MAX_BUNDLE_BYTES}`);
+    return fail("bundle_size_bytes is missing or not a positive integer");
+  if (bundleSizeBytes > MAX_BUNDLE_BYTES) return fail(`bundle_size_bytes exceeds ${MAX_BUNDLE_BYTES}`);
   let workflowName =
-    typeof e.workflow_name === "string"
-      ? e.workflow_name.replace(/[\x00-\x1f\x7f-\x9f\u2028\u2029]/g, "").slice(0, 200)
+    typeof event.workflow_name === "string"
+      ? event.workflow_name.replace(/[\x00-\x1f\x7f-\x9f\u2028\u2029]/g, "").slice(0, 200)
       : "";
   let sessionOrigin =
-    e.session_origin === undefined ? undefined : e.session_origin === "review" ? "review" : "other";
+    event.session_origin === undefined ? undefined : event.session_origin === "review" ? "review" : "other";
   return {
     ok: true,
     pointer: {
@@ -74,10 +79,10 @@ function validateLaunchEvent(e) {
   };
 }
 //@ chunk-n2x174m4.js:1805-1917 placement
-function digestMatches(buf, t) {
-  let r = createHash("sha256").update(buf).digest();
-  let buffer = Buffer.from(t, "hex");
-  return buffer.length === r.length && timingSafeEqual(r, buffer);
+function digestMatches(buf, expectedHex) {
+  let actual = createHash("sha256").update(buf).digest();
+  let buffer = Buffer.from(expectedHex, "hex");
+  return buffer.length === actual.length && timingSafeEqual(actual, buffer);
 }
 //@ chunk-n2x174m4.js:1917-1925 placement
 /**
@@ -89,50 +94,50 @@ var WORKFLOW_BUNDLE_VERSION = 1;
  * 解析工作流包帧
  */
 function parseWorkflowBundle(buf) {
-  let t = (error) => ({
+  let fail = (error) => ({
     ok: false,
     error,
   });
-  if (buf.length < 1) return t("bundle is empty");
+  if (buf.length < 1) return fail("bundle is empty");
   if (buf[0] !== WORKFLOW_BUNDLE_VERSION)
-    return t(`unsupported bundle format version ${buf[0]} (expected ${WORKFLOW_BUNDLE_VERSION})`);
-  let r = 1;
-  let n = (l, d) => {
-    if (r + 8 > buf.length)
+    return fail(`unsupported bundle format version ${buf[0]} (expected ${WORKFLOW_BUNDLE_VERSION})`);
+  let offset = 1;
+  let readFrame = (maxBytes, label) => {
+    if (offset + 8 > buf.length)
       return {
         ok: false,
-        error: `bundle truncated in ${d} length frame`,
+        error: `bundle truncated in ${label} length frame`,
       };
-    let bigUInt64BE = buf.readBigUInt64BE(r);
-    r += 8;
-    if (bigUInt64BE > BigInt(l))
+    let bigUInt64BE = buf.readBigUInt64BE(offset);
+    offset += 8;
+    if (bigUInt64BE > BigInt(maxBytes))
       return {
         ok: false,
-        error: `${d} frame exceeds ${l} bytes`,
+        error: `${label} frame exceeds ${maxBytes} bytes`,
       };
-    let h = Number(bigUInt64BE);
-    if (r + h > buf.length)
+    let frameLength = Number(bigUInt64BE);
+    if (offset + frameLength > buf.length)
       return {
         ok: false,
-        error: `bundle truncated in ${d} frame`,
+        error: `bundle truncated in ${label} frame`,
       };
-    let buf_2 = buf.subarray(r, r + h);
-    r += h;
+    let buf_2 = buf.subarray(offset, offset + frameLength);
+    offset += frameLength;
     return {
       ok: true,
       buf: buf_2,
     };
   };
-  let s = n(MAX_SCRIPT_BUNDLE_BYTES, "script");
-  if (!s.ok) return t(s.error);
-  if (s.buf.length === 0) return t("script frame is empty");
-  let u = n(MAX_BUNDLE_BYTES, "args_json");
-  if (!u.ok) return t(u.error);
-  if (r !== buf.length) return t(`bundle has ${buf.length - r} trailing bytes`);
+  let scriptFrame = readFrame(MAX_SCRIPT_BUNDLE_BYTES, "script");
+  if (!scriptFrame.ok) return fail(scriptFrame.error);
+  if (scriptFrame.buf.length === 0) return fail("script frame is empty");
+  let argsFrame = readFrame(MAX_BUNDLE_BYTES, "args_json");
+  if (!argsFrame.ok) return fail(argsFrame.error);
+  if (offset !== buf.length) return fail(`bundle has ${buf.length - offset} trailing bytes`);
   return {
     ok: true,
-    script: s.buf.toString("utf8"),
-    argsJson: u.buf.toString("utf8"),
+    script: scriptFrame.buf.toString("utf8"),
+    argsJson: argsFrame.buf.toString("utf8"),
   };
 }
 //@ chunk-n2x174m4.js:2715-2793 placement
@@ -147,42 +152,42 @@ function createWorkflowLaunchState(restoredRecord = null) {
 /**
  * 工作流启动记录 schema
  */
-var launchRecordSchema = 2;
-var launchRecordSchema_2 = DoctorLazy(() =>
+var MAX_LAUNCH_ATTEMPTS = 2;
+var launchRecordSchema = DoctorLazy(() =>
   looseObject({
-    event_uuid: string().refine((e) => normalizeUuidOrNull(e) !== null),
-    dispatched_epoch: E().int().min(0).max(Number.MAX_SAFE_INTEGER),
-    attempts: E().int().min(1).max(Number.MAX_SAFE_INTEGER),
-    settled: M(),
+    event_uuid: stringSchema().refine((uuid) => normalizeUuidOrNull(uuid) !== null),
+    dispatched_epoch: numberSchema().int().min(0).max(Number.MAX_SAFE_INTEGER),
+    attempts: numberSchema().int().min(1).max(Number.MAX_SAFE_INTEGER),
+    settled: booleanSchema(),
   }),
 );
 //@ chunk-n2x174m4.js:2988-3378 placement
-function readWorkflowLaunchRecord(e) {
-  let t = launchRecordSchema_2().safeParse(e);
-  if (!t.success) return null;
-  let r = validateLaunchEvent(t.data);
-  if (!r.ok) return null;
+function readWorkflowLaunchRecord(raw) {
+  let parsed = launchRecordSchema().safeParse(raw);
+  if (!parsed.success) return null;
+  let validated = validateLaunchEvent(parsed.data);
+  if (!validated.ok) return null;
   return {
-    event_uuid: t.data.event_uuid,
-    filestore_path: r.pointer.filestorePath,
-    artifact_sha256: r.pointer.artifactSha256,
-    bundle_size_bytes: r.pointer.bundleSizeBytes,
-    workflow_name: r.pointer.workflowName,
-    dispatched_epoch: t.data.dispatched_epoch,
-    attempts: t.data.attempts,
-    settled: t.data.settled,
+    event_uuid: parsed.data.event_uuid,
+    filestore_path: validated.pointer.filestorePath,
+    artifact_sha256: validated.pointer.artifactSha256,
+    bundle_size_bytes: validated.pointer.bundleSizeBytes,
+    workflow_name: validated.pointer.workflowName,
+    dispatched_epoch: parsed.data.dispatched_epoch,
+    attempts: parsed.data.attempts,
+    settled: parsed.data.settled,
   };
 }
 //@ chunk-n2x174m4.js:3378-3494 placement
 class WorkflowLaunchHandoffs {
   slots = new Map();
-  stash(e, t) {
-    this.slots.set(e, t);
+  stash(key, handoff) {
+    this.slots.set(key, handoff);
   }
-  take(e) {
-    let t = this.slots.get(e);
-    this.slots.delete(e);
-    return t;
+  take(key) {
+    let handoff = this.slots.get(key);
+    this.slots.delete(key);
+    return handoff;
   }
 }
 //@ chunk-n2x174m4.js:3494-3527 placement
@@ -192,13 +197,13 @@ class WorkflowLaunchHandoffs {
 var workflowLaunchHandoffs = new HostScoped(() => new WorkflowLaunchHandoffs());
 var DEFAULT_RECORD_FLUSH_TIMEOUT_MS = 5000;
 //@ chunk-n2x174m4.js:3527-3652 placement
-async function flushLaunchRecord(e) {
+async function flushLaunchRecord(record) {
   return (
     (await withDeadline(
       Promise.resolve()
-        .then(() => e.flushRecord())
+        .then(() => record.flushRecord())
         .catch(() => false),
-      e.recordFlushBoundMs ?? DEFAULT_RECORD_FLUSH_TIMEOUT_MS,
+      record.recordFlushBoundMs ?? DEFAULT_RECORD_FLUSH_TIMEOUT_MS,
     )) === true
   );
 }
@@ -212,132 +217,132 @@ var MAX_LAUNCH_ATTEMPT_DELAY_MS = 1e4;
 /**
  * 发出 workflow_launch_result 事件
  */
-function postLaunchResultEvent(e, artifactLine, r) {
-  let n = {
+function postLaunchResultEvent(host, artifactLine, options) {
+  let event = {
     type: "system",
     subtype: WORKFLOW_LAUNCH_RESULT,
     artifact_line: artifactLine,
     uuid: randomUUID(),
-    session_id: e.getSessionId(),
+    session_id: host.getSessionId(),
   };
-  if (r.launchUuid !== undefined) n.launch_uuid = r.launchUuid;
-  if (r.artifactSha256 !== undefined) n.artifact_sha256 = r.artifactSha256;
-  e.postEvent(n);
+  if (options.launchUuid !== undefined) event.launch_uuid = options.launchUuid;
+  if (options.artifactSha256 !== undefined) event.artifact_sha256 = options.artifactSha256;
+  host.postEvent(event);
 }
 //@ chunk-n2x174m4.js:3912-4045 placement
-function reportLaunchFailure(e, t, r, n) {
-  postLaunchResultEvent(e, remoteWorkflowErrorLine(t, r), n);
+function reportLaunchFailure(host, layer, message, options) {
+  postLaunchResultEvent(host, remoteWorkflowErrorLine(layer, message), options);
   logForDiagnosticsNoPII("warn", "workflow_launch_failed", {
-    layer: t,
+    layer,
   });
   logEvent("tengu_workflow_launch_event", {
     ok: false,
-    layer: fromEnum(t),
+    layer: fromEnum(layer),
   });
 }
 //@ chunk-n2x174m4.js:4045-4105 placement
 /**
  * 上报工作流启动失败（事件 + 功能降级日志）。
  */
-function reportWorkflowLaunchFailure(e, t, r, n) {
-  reportLaunchFailure(e, t, r, n);
-  logFeatureBad("workflow_event_launch", t);
+function reportWorkflowLaunchFailure(host, layer, message, options) {
+  reportLaunchFailure(host, layer, message, options);
+  logFeatureBad("workflow_event_launch", layer);
 }
 //@ chunk-n2x174m4.js:4105-4215 placement
-function settleLaunchFailedFinal(e, uuid, r, n, s) {
-  reportWorkflowLaunchFailure(e, r, n, s);
-  e.state.ledger.set(uuid, {
+function settleLaunchFailedFinal(session, uuid, layer, message, options) {
+  reportWorkflowLaunchFailure(session, layer, message, options);
+  session.state.ledger.set(uuid, {
     eventUuid: uuid,
     outcome: "failed-final",
   });
-  e.ackProcessed(uuid);
+  session.ackProcessed(uuid);
 }
 //@ chunk-n2x174m4.js:4215-4396 placement
 /**
  * 启动失败定案
  */
-async function settleLaunchFailed(e, t, r, n, s) {
-  let eventUuid = t.event_uuid;
-  e.state.ledger.set(eventUuid, {
+async function settleLaunchFailed(session, record, layer, message, options) {
+  let eventUuid = record.event_uuid;
+  session.state.ledger.set(eventUuid, {
     eventUuid,
     outcome: "failed-final",
   });
-  e.persistRecord({
-    ...t,
+  session.persistRecord({
+    ...record,
     settled: true,
   });
-  await flushLaunchRecord(e);
-  reportWorkflowLaunchFailure(e, r, n, s);
-  e.ackProcessed(eventUuid);
+  await flushLaunchRecord(session);
+  reportWorkflowLaunchFailure(session, layer, message, options);
+  session.ackProcessed(eventUuid);
 }
 //@ chunk-n2x174m4.js:4396-6626 placement
 /**
  * 下载、校验并启动工作流包
  */
-async function attemptWorkflowLaunch(e, t, r, n, s) {
-  let { ledger } = e.state;
-  let eventUuid = t.eventUuid;
-  let d = (s?.attempts ?? 0) + 1;
-  let L = (settled) => ({
+async function attemptWorkflowLaunch(session, entry, pointer, options, restoredRecord) {
+  let { ledger } = session.state;
+  let eventUuid = entry.eventUuid;
+  let attempts = (restoredRecord?.attempts ?? 0) + 1;
+  let makeRecord = (settled) => ({
     event_uuid: eventUuid,
-    filestore_path: r.filestorePath,
-    artifact_sha256: r.artifactSha256,
-    bundle_size_bytes: r.bundleSizeBytes,
-    workflow_name: r.workflowName,
-    dispatched_epoch: e.getWorkerEpoch() ?? 0,
-    attempts: d,
+    filestore_path: pointer.filestorePath,
+    artifact_sha256: pointer.artifactSha256,
+    bundle_size_bytes: pointer.bundleSizeBytes,
+    workflow_name: pointer.workflowName,
+    dispatched_epoch: session.getWorkerEpoch() ?? 0,
+    attempts,
     settled,
   });
-  let h = () => {
-    if (e.state.firstLaunch === t) e.state.firstLaunch = null;
+  let clearFirstLaunch = () => {
+    if (session.state.firstLaunch === entry) session.state.firstLaunch = null;
   };
-  let w = async (_, error) => {
-    h();
-    if (s) {
-      await settleLaunchFailed(e, s, _, error, n);
+  let failLaunch = async (layer, message) => {
+    clearFirstLaunch();
+    if (restoredRecord) {
+      await settleLaunchFailed(session, restoredRecord, layer, message, options);
       return;
     }
-    settleLaunchFailedFinal(e, eventUuid, _, error, n);
+    settleLaunchFailedFinal(session, eventUuid, layer, message, options);
   };
   let now = Date.now();
-  let fetchRetryWindowMs = e.fetchRetryWindowMs ?? MAX_LAUNCH_ATTEMPT_DELAY_MS;
-  let bundle = await e.fetchBundle(r.filestorePath);
-  let P = 1;
-  for (let _ of e.fetchRetryDelaysMs ?? LAUNCH_RETRY_BACKOFF_MS) {
-    if (bundle.ok || bundle.gated || Date.now() - now + _ >= fetchRetryWindowMs) break;
-    P++;
+  let fetchRetryWindowMs = session.fetchRetryWindowMs ?? MAX_LAUNCH_ATTEMPT_DELAY_MS;
+  let bundle = await session.fetchBundle(pointer.filestorePath);
+  let fetchAttempts = 1;
+  for (let delayMs of session.fetchRetryDelaysMs ?? LAUNCH_RETRY_BACKOFF_MS) {
+    if (bundle.ok || bundle.gated || Date.now() - now + delayMs >= fetchRetryWindowMs) break;
+    fetchAttempts++;
     logForDiagnosticsNoPII("warn", "workflow_launch_bundle_fetch_retry", {
-      attempt: P,
+      attempt: fetchAttempts,
     });
-    await sleep(_);
-    bundle = await e.fetchBundle(r.filestorePath);
+    await sleep(delayMs);
+    bundle = await session.fetchBundle(pointer.filestorePath);
   }
   if (!bundle.ok) {
     if (bundle.gated) {
-      await w("bundle-fetch", `bundle fetch gated: ${bundle.error}`);
+      await failLaunch("bundle-fetch", `bundle fetch gated: ${bundle.error}`);
       return;
     }
     ledger.delete(eventUuid);
-    h();
-    if (s) {
+    clearFirstLaunch();
+    if (restoredRecord) {
       logForDiagnosticsNoPII("warn", "workflow_launch_rescue_fetch_failed", {});
       logFeatureSad("workflow_event_launch", "rescue_fetch_transient");
       return;
     }
-    reportLaunchFailure(e, "bundle-fetch", `bundle fetch failed: ${bundle.error}`, n);
+    reportLaunchFailure(session, "bundle-fetch", `bundle fetch failed: ${bundle.error}`, options);
     logFeatureSad("workflow_event_launch", "bundle_fetch_transient");
     return;
   }
   let buf = bundle.buf;
-  if (buf.byteLength > MAX_BUNDLE_BYTES || buf.byteLength !== r.bundleSizeBytes) {
-    await w(
+  if (buf.byteLength > MAX_BUNDLE_BYTES || buf.byteLength !== pointer.bundleSizeBytes) {
+    await failLaunch(
       "payload-digest-mismatch",
-      `staged bundle is ${buf.byteLength} bytes, event pinned ${r.bundleSizeBytes}`,
+      `staged bundle is ${buf.byteLength} bytes, event pinned ${pointer.bundleSizeBytes}`,
     );
     return;
   }
-  if (!digestMatches(buf, r.artifactSha256)) {
-    await w(
+  if (!digestMatches(buf, pointer.artifactSha256)) {
+    await failLaunch(
       "payload-digest-mismatch",
       "staged bundle sha256 does not match the artifact_sha256 the event pinned",
     );
@@ -345,7 +350,7 @@ async function attemptWorkflowLaunch(e, t, r, n, s) {
   }
   let workflowBundle = parseWorkflowBundle(buf);
   if (!workflowBundle.ok) {
-    await w("launch-payload", workflowBundle.error);
+    await failLaunch("launch-payload", workflowBundle.error);
     return;
   }
   let args;
@@ -353,82 +358,82 @@ async function attemptWorkflowLaunch(e, t, r, n, s) {
     try {
       args = JSON.parse(workflowBundle.argsJson);
     } catch (error) {
-      await w(
+      await failLaunch(
         "args-parse",
         `args_json is not valid JSON: ${error instanceof Error ? error.message : String(error)}`,
       );
       return;
     }
-  e.state.firstLaunch = t;
-  e.persistRecord(L(false));
-  let G = await flushLaunchRecord(e);
-  if (s && !G) {
+  session.state.firstLaunch = entry;
+  session.persistRecord(makeRecord(false));
+  let recordFlushed = await flushLaunchRecord(session);
+  if (restoredRecord && !recordFlushed) {
     ledger.delete(eventUuid);
-    h();
+    clearFirstLaunch();
     logForDiagnosticsNoPII("warn", "workflow_launch_rescue_uncounted", {});
     logFeatureSad("workflow_event_launch", "rescue_record_unconfirmed");
     return;
   }
-  let N = randomUUID();
-  workflowLaunchHandoffs.of(e.host).stash(N, {
+  let launchUuid = randomUUID();
+  workflowLaunchHandoffs.of(session.host).stash(launchUuid, {
     script: workflowBundle.script,
     args,
-    eventSessionOrigin: r.sessionOrigin,
-    postResultLine: (artifactLine) => postLaunchResultEvent(e, artifactLine, n),
-    onRunSettled: async (_) => {
-      t.outcome = _ ? "executed" : "run-failed";
-      e.persistRecord(L(true));
-      if (!(await flushLaunchRecord(e))) e.persistRecord(L(true));
+    eventSessionOrigin: pointer.sessionOrigin,
+    postResultLine: (artifactLine) => postLaunchResultEvent(session, artifactLine, options),
+    onRunSettled: async (didRun) => {
+      entry.outcome = didRun ? "executed" : "run-failed";
+      session.persistRecord(makeRecord(true));
+      if (!(await flushLaunchRecord(session))) session.persistRecord(makeRecord(true));
     },
   });
-  e.prependUserMessage(`/workflow-launch-exec ${N}`);
-  e.ackProcessed(eventUuid);
+  session.prependUserMessage(`/workflow-launch-exec ${launchUuid}`);
+  session.ackProcessed(eventUuid);
   logEvent("tengu_workflow_launch_event", {
     ok: true,
-    attempt: d,
+    attempt: attempts,
   });
   logFeatureOk("workflow_event_launch");
   logForDiagnosticsNoPII("info", "workflow_launch_dispatched", {
-    attempt: d,
+    attempt: attempts,
   });
 }
 //@ chunk-n2x174m4.js:6626-6928 placement
 /**
  * 重试用尽定案
  */
-function settleAttemptsSpent(e, t) {
-  let r = {
-    eventUuid: t.event_uuid,
+function settleAttemptsSpent(session, record) {
+  let entry = {
+    eventUuid: record.event_uuid,
     outcome: "failed-final",
   };
-  e.state.ledger.set(t.event_uuid, r);
-  e.state.firstLaunch ??= r;
-  e.persistRecord({
-    ...t,
+  session.state.ledger.set(record.event_uuid, entry);
+  session.state.firstLaunch ??= entry;
+  session.persistRecord({
+    ...record,
     settled: true,
   });
-  e.ackProcessed(t.event_uuid);
+  session.ackProcessed(record.event_uuid);
   logForDiagnosticsNoPII("warn", "workflow_launch_attempts_spent", {
-    attempts: t.attempts,
+    attempts: record.attempts,
   });
   logFeatureSad("workflow_event_launch", "attempts_spent");
 }
 //@ chunk-n2x174m4.js:6928-8171 placement
-async function handleWorkflowLaunchEvent(e, t) {
-  let uuid = typeof e.uuid === "string" ? e.uuid : undefined;
+async function handleWorkflowLaunchEvent(event, session) {
+  let uuid = typeof event.uuid === "string" ? event.uuid : undefined;
   if (!uuid) {
-    reportWorkflowLaunchFailure(t, "launch-payload", "event has no uuid", {});
+    reportWorkflowLaunchFailure(session, "launch-payload", "event has no uuid", {});
     return;
   }
-  let { ledger } = t.state;
-  let s = ledger.get(uuid);
-  if (s) {
-    if (s.outcome !== "pending") t.ackProcessed(uuid);
+  let { ledger } = session.state;
+  let existing = ledger.get(uuid);
+  if (existing) {
+    if (existing.outcome !== "pending") session.ackProcessed(uuid);
     return;
   }
-  if (!t.isRemoteTransport() || !env.CLAUDE_CODE_REMOTE || !env.CLAUDE_CODE_REMOTE_SESSION_ID) {
+  if (!session.isRemoteTransport() || !env.CLAUDE_CODE_REMOTE || !env.CLAUDE_CODE_REMOTE_SESSION_ID) {
     reportWorkflowLaunchFailure(
-      t,
+      session,
       "not-remote-session",
       "workflow_launch received outside a remote (CCR) session",
       {
@@ -437,90 +442,90 @@ async function handleWorkflowLaunchEvent(e, t) {
     );
     return;
   }
-  let u = validateLaunchEvent(e);
-  if (!u.ok) {
-    settleLaunchFailedFinal(t, uuid, "launch-payload", u.error, {
+  let validated = validateLaunchEvent(event);
+  if (!validated.ok) {
+    settleLaunchFailedFinal(session, uuid, "launch-payload", validated.error, {
       launchUuid: uuid,
     });
     return;
   }
-  let pointer = u.pointer;
-  let d = {
+  let pointer = validated.pointer;
+  let options = {
     launchUuid: uuid,
     artifactSha256: pointer.artifactSha256,
   };
-  let restoredRecord = t.state.restoredRecord;
-  let h = restoredRecord && restoredRecord.event_uuid === uuid ? restoredRecord : null;
-  if (h) {
-    if (h.settled) {
-      let k = {
+  let restoredRecord = session.state.restoredRecord;
+  let matchingRecord = restoredRecord && restoredRecord.event_uuid === uuid ? restoredRecord : null;
+  if (matchingRecord) {
+    if (matchingRecord.settled) {
+      let entry = {
         eventUuid: uuid,
         outcome: "executed",
       };
-      ledger.set(uuid, k);
-      t.state.firstLaunch ??= k;
-      t.ackProcessed(uuid);
+      ledger.set(uuid, entry);
+      session.state.firstLaunch ??= entry;
+      session.ackProcessed(uuid);
       logForDiagnosticsNoPII("info", "workflow_launch_redelivery_settled", {});
       return;
     }
-    if (h.attempts >= launchRecordSchema) {
-      settleAttemptsSpent(t, h);
+    if (matchingRecord.attempts >= MAX_LAUNCH_ATTEMPTS) {
+      settleAttemptsSpent(session, matchingRecord);
       return;
     }
   }
-  let w = workflowPolicyRefusal({
+  let policyRefusal = workflowPolicyRefusal({
     serverAuthoredCarrier: true,
     eventSessionOrigin: pointer.sessionOrigin,
   });
-  if (w) {
-    if (h) {
-      await settleLaunchFailed(t, h, "policy-gate", w, d);
+  if (policyRefusal) {
+    if (matchingRecord) {
+      await settleLaunchFailed(session, matchingRecord, "policy-gate", policyRefusal, options);
       return;
     }
-    settleLaunchFailedFinal(t, uuid, "policy-gate", w, d);
+    settleLaunchFailedFinal(session, uuid, "policy-gate", policyRefusal, options);
     return;
   }
-  let { firstLaunch } = t.state;
+  let { firstLaunch } = session.state;
   if (firstLaunch && firstLaunch.eventUuid !== uuid) {
     settleLaunchFailedFinal(
-      t,
+      session,
       uuid,
       "launch-protocol",
       "a second distinct workflow_launch event arrived in this session; at most one launch per session is permitted",
-      d,
+      options,
     );
     return;
   }
-  let R = {
+  let ledgerEntry = {
     eventUuid: uuid,
     outcome: "pending",
   };
-  ledger.set(uuid, R);
-  t.state.firstLaunch = R;
-  await attemptWorkflowLaunch(t, R, pointer, d, h);
+  ledger.set(uuid, ledgerEntry);
+  session.state.firstLaunch = ledgerEntry;
+  await attemptWorkflowLaunch(session, ledgerEntry, pointer, options, matchingRecord);
 }
 //@ chunk-n2x174m4.js:8171-9487 placement
 /**
  * 恢复工作流启动：校验事件、下载与校验包、启动并记录结果，失败重试有上限。
  */
-async function resumeWorkflowLaunch(e) {
-  let restoredRecord = e.state.restoredRecord;
+async function resumeWorkflowLaunch(session) {
+  let restoredRecord = session.state.restoredRecord;
   if (!restoredRecord) return;
-  if (!e.isRemoteTransport() || !env.CLAUDE_CODE_REMOTE || !env.CLAUDE_CODE_REMOTE_SESSION_ID) return;
+  if (!session.isRemoteTransport() || !env.CLAUDE_CODE_REMOTE || !env.CLAUDE_CODE_REMOTE_SESSION_ID) return;
   if (restoredRecord.settled) {
     logForDiagnosticsNoPII("info", "workflow_launch_resume_skipped", {
       reason: "settled",
     });
     return;
   }
-  let workerEpoch = e.getWorkerEpoch();
+  let workerEpoch = session.getWorkerEpoch();
   if (workerEpoch === undefined || restoredRecord.dispatched_epoch >= workerEpoch) {
     logForDiagnosticsNoPII("info", "workflow_launch_resume_skipped", {
       reason: "not_a_later_epoch",
     });
     return;
   }
-  let dispatchedDigest = e.getDispatchedDigest();
+  let dispatchedDigest = session.getDispatchedDigest();
   if (
     dispatchedDigest === undefined ||
     !/^[0-9a-f]{64}$/.test(dispatchedDigest) ||
@@ -531,22 +536,22 @@ async function resumeWorkflowLaunch(e) {
     });
     return;
   }
-  let { ledger } = e.state;
-  if (ledger.has(restoredRecord.event_uuid) || e.state.firstLaunch) return;
-  if (restoredRecord.attempts >= launchRecordSchema) {
-    settleAttemptsSpent(e, restoredRecord);
+  let { ledger } = session.state;
+  if (ledger.has(restoredRecord.event_uuid) || session.state.firstLaunch) return;
+  if (restoredRecord.attempts >= MAX_LAUNCH_ATTEMPTS) {
+    settleAttemptsSpent(session, restoredRecord);
     return;
   }
-  let u = {
+  let options = {
     launchUuid: restoredRecord.event_uuid,
     artifactSha256: restoredRecord.artifact_sha256,
   };
-  let l = workflowPolicyRefusal({
+  let policyRefusal = workflowPolicyRefusal({
     serverAuthoredCarrier: true,
   });
-  if (l) {
+  if (policyRefusal) {
     if (
-      !e.isAccountLaunchedReview() &&
+      !session.isAccountLaunchedReview() &&
       isReviewSession() &&
       workflowPolicyRefusal({
         serverAuthoredCarrier: true,
@@ -558,29 +563,36 @@ async function resumeWorkflowLaunch(e) {
       });
       return;
     }
-    await settleLaunchFailed(e, restoredRecord, "policy-gate", l, u);
+    await settleLaunchFailed(session, restoredRecord, "policy-gate", policyRefusal, options);
     return;
   }
-  let d = {
+  let ledgerEntry = {
     eventUuid: restoredRecord.event_uuid,
     outcome: "pending",
   };
-  ledger.set(restoredRecord.event_uuid, d);
-  e.state.firstLaunch = d;
+  ledger.set(restoredRecord.event_uuid, ledgerEntry);
+  session.state.firstLaunch = ledgerEntry;
   logForDiagnosticsNoPII("info", "workflow_launch_resuming", {
     attempt: restoredRecord.attempts + 1,
   });
   await attemptWorkflowLaunch(
-    e,
-    d,
+    session,
+    ledgerEntry,
     {
       workflowName: restoredRecord.workflow_name,
       filestorePath: restoredRecord.filestore_path,
       artifactSha256: restoredRecord.artifact_sha256,
       bundleSizeBytes: restoredRecord.bundle_size_bytes,
     },
-    u,
+    options,
     restoredRecord,
   );
 }
-export { workflowLaunchHandoffs };
+export {
+  workflowLaunchHandoffs,
+  WORKFLOW_LAUNCH_DIGEST_ENV,
+  createWorkflowLaunchState,
+  handleWorkflowLaunchEvent,
+  readWorkflowLaunchRecord,
+  resumeWorkflowLaunch,
+};

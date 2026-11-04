@@ -11,6 +11,7 @@
 import { normalizeFullWidthSpace, truncateWithCount, takeLastChars } from "./stringUtils.js";
 import { INVISIBLE_FORMAT_RANGES, stripCombiningRepeated } from "./sanitization.js";
 import { stripAnsi } from "./stripAnsi.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-qg0af0yq.js:957-1127 placement
 var NON_PRINTABLE_ASCII_RE = /[^\t\n\x20-\x7e]/;
@@ -21,87 +22,103 @@ var EMOJI_RE = /^[\p{Emoji}\p{Extended_Pictographic}]$/u;
 var EXTENDED_PICTOGRAPHIC_RE = /^\p{Extended_Pictographic}$/u;
 var MATH_SYMBOL_RE = /^\p{Sm}$/u;
 //@ chunk-qg0af0yq.js:1127-1233 placement
-function unicodePropertyClassRe(e, n) {
-  let joined = n
+function unicodePropertyClassRe(propertyName, scriptNames) {
+  let joined = scriptNames
     .split(" ")
-    .map((r) => `\\p{${e}=${r}}`)
+    .map((scriptName) => `\\p{${propertyName}=${scriptName}}`)
     .join("");
   return new RegExp(`^[${joined}]$`, "u");
 }
 //@ chunk-qg0af0yq.js:1233-1306 placement
-function scriptAndExtensionClass(e) {
+function scriptAndExtensionClass(scriptNames) {
   return {
-    base: unicodePropertyClassRe("Script", e),
-    mark: unicodePropertyClassRe("Script_Extensions", e),
+    base: unicodePropertyClassRe("Script", scriptNames),
+    mark: unicodePropertyClassRe("Script_Extensions", scriptNames),
   };
 }
 //@ chunk-qg0af0yq.js:1306-1342 placement
-function sameScriptRe(e) {
+function sameScriptRe(scriptClass) {
   return {
-    base: e,
-    mark: e,
+    base: scriptClass,
+    mark: scriptClass,
   };
 }
 //@ chunk-qg0af0yq.js:1342-2273 placement
 /**
  * 判定不可见字符时使用的 RTL 语言的 base/mark 脚本正则组，以及若干特定脚本的判定正则集合。
  */
-var INVISIBLE_CHAR_SCRIPTS =
-  /^[\p{Script=Arabic}\p{Script=Hebrew}\p{Script=Syriac}\p{Script=Thaana}\p{Script=Nko}\p{Script=Samaritan}\p{Script=Mandaic}\p{Script=Adlam}\p{Script=Hanifi_Rohingya}\p{Script=Yezidi}]$/u;
-var RTL_CONTEXT_SCRIPTS =
-  /^[\p{Script=Arabic}\p{Script=Syriac}\p{Script=Thaana}\p{Script=Hanifi_Rohingya}]$/u;
-var DECIMAL_DIGIT_RE = /^\p{Nd}$/u;
-var ZWJ_BASE_SCRIPTS = scriptAndExtensionClass(
-  "Arabic Syriac Nko Mongolian Devanagari Bengali Gurmukhi Gujarati Oriya Tamil Telugu Kannada Malayalam Sinhala Myanmar Khmer Tibetan",
-);
-var ZWNJ_BASE_SCRIPTS = scriptAndExtensionClass(
-  "Devanagari Bengali Gurmukhi Gujarati Oriya Tamil Telugu Kannada Malayalam Sinhala Myanmar Khmer Tibetan Arabic Syriac Tifinagh",
-);
-var ZWJ_STRICT_SCRIPTS = scriptAndExtensionClass("Arabic Syriac Mongolian Nko");
-var SOUTHEAST_ASIAN_SCRIPTS = /^[\p{Script=Khmer}\p{Script=Thai}\p{Script=Lao}\p{Script=Myanmar}]$/u;
-var southeastAsianScriptClasses = sameScriptRe(SOUTHEAST_ASIAN_SCRIPTS);
-var ASCII_DIGIT_RE = /^[0-9]$/;
-var MONGOLIAN_SCRIPT_CLASS = sameScriptRe(/^\p{Script=Mongolian}$/u);
-var KHMER_SCRIPT_CLASS = sameScriptRe(/^\p{Script=Khmer}$/u);
-var EGYPTIAN_HIEROGLYPH_CLASS = sameScriptRe(/^\p{Script=Egyptian_Hieroglyphs}$/u);
-var DUPLOYAN_SCRIPT_CLASS = sameScriptRe(/^\p{Script=Duployan}$/u);
-var BRAHMI_SCRIPT_RE = /^\p{Script=Brahmi}$/u;
-var VERTICAL_ORIENTATION_SCRIPTS = /^[\p{Script=Myanmar}\p{Script=Phags_Pa}\p{Script=Manichaean}]$/u;
+var INVISIBLE_CHAR_SCRIPTS; // deferred: uses scriptAndExtensionClass of its import cycle while loading; runs once the cycle is complete
+var RTL_CONTEXT_SCRIPTS;
+var DECIMAL_DIGIT_RE;
+var ZWJ_BASE_SCRIPTS;
+var ZWNJ_BASE_SCRIPTS;
+var ZWJ_STRICT_SCRIPTS;
+var SOUTHEAST_ASIAN_SCRIPTS;
+var southeastAsianScriptClasses;
+var ASCII_DIGIT_RE;
+var MONGOLIAN_SCRIPT_CLASS;
+var KHMER_SCRIPT_CLASS;
+var EGYPTIAN_HIEROGLYPH_CLASS;
+var DUPLOYAN_SCRIPT_CLASS;
+var BRAHMI_SCRIPT_RE;
+var VERTICAL_ORIENTATION_SCRIPTS;
+deferInit("chunk-qg0af0yq.js:1342", () => {
+  INVISIBLE_CHAR_SCRIPTS =
+    /^[\p{Script=Arabic}\p{Script=Hebrew}\p{Script=Syriac}\p{Script=Thaana}\p{Script=Nko}\p{Script=Samaritan}\p{Script=Mandaic}\p{Script=Adlam}\p{Script=Hanifi_Rohingya}\p{Script=Yezidi}]$/u;
+  RTL_CONTEXT_SCRIPTS = /^[\p{Script=Arabic}\p{Script=Syriac}\p{Script=Thaana}\p{Script=Hanifi_Rohingya}]$/u;
+  DECIMAL_DIGIT_RE = /^\p{Nd}$/u;
+  ZWJ_BASE_SCRIPTS = scriptAndExtensionClass(
+    "Arabic Syriac Nko Mongolian Devanagari Bengali Gurmukhi Gujarati Oriya Tamil Telugu Kannada Malayalam Sinhala Myanmar Khmer Tibetan",
+  );
+  ZWNJ_BASE_SCRIPTS = scriptAndExtensionClass(
+    "Devanagari Bengali Gurmukhi Gujarati Oriya Tamil Telugu Kannada Malayalam Sinhala Myanmar Khmer Tibetan Arabic Syriac Tifinagh",
+  );
+  ZWJ_STRICT_SCRIPTS = scriptAndExtensionClass("Arabic Syriac Mongolian Nko");
+  SOUTHEAST_ASIAN_SCRIPTS = /^[\p{Script=Khmer}\p{Script=Thai}\p{Script=Lao}\p{Script=Myanmar}]$/u;
+  southeastAsianScriptClasses = sameScriptRe(SOUTHEAST_ASIAN_SCRIPTS);
+  ASCII_DIGIT_RE = /^[0-9]$/;
+  MONGOLIAN_SCRIPT_CLASS = sameScriptRe(/^\p{Script=Mongolian}$/u);
+  KHMER_SCRIPT_CLASS = sameScriptRe(/^\p{Script=Khmer}$/u);
+  EGYPTIAN_HIEROGLYPH_CLASS = sameScriptRe(/^\p{Script=Egyptian_Hieroglyphs}$/u);
+  DUPLOYAN_SCRIPT_CLASS = sameScriptRe(/^\p{Script=Duployan}$/u);
+  BRAHMI_SCRIPT_RE = /^\p{Script=Brahmi}$/u;
+  VERTICAL_ORIENTATION_SCRIPTS = /^[\p{Script=Myanmar}\p{Script=Phags_Pa}\p{Script=Manichaean}]$/u;
+});
 //@ chunk-qg0af0yq.js:2273-2691 placement
 /**
  * 判断码点是否为不可见字符：控制字符（除 Tab/换行）、软连字符、各类零宽/方向控制、变体选择符、BOM、韩文填充符、标签字符等。
  */
-function isInvisibleCodePoint(e) {
-  if (e < 160) return (e < 32 && e !== 9 && e !== 10) || e >= 127;
-  if (e < 8192)
+function isInvisibleCodePoint(codePoint) {
+  if (codePoint < 160) return (codePoint < 32 && codePoint !== 9 && codePoint !== 10) || codePoint >= 127;
+  if (codePoint < 8192)
     return (
-      e === 173 ||
-      e === 847 ||
-      e === 1564 ||
-      e === 4447 ||
-      e === 4448 ||
-      e === 6068 ||
-      e === 6069 ||
-      (e >= 6155 && e <= 6159)
+      codePoint === 173 ||
+      codePoint === 847 ||
+      codePoint === 1564 ||
+      codePoint === 4447 ||
+      codePoint === 4448 ||
+      codePoint === 6068 ||
+      codePoint === 6069 ||
+      (codePoint >= 6155 && codePoint <= 6159)
     );
-  if (e < 65536)
+  if (codePoint < 65536)
     return (
-      (e >= 8203 && e <= 8207) ||
-      (e >= 8232 && e <= 8238) ||
-      (e >= 8288 && e <= 8303) ||
-      e === 12644 ||
-      (e >= 65024 && e <= 65039) ||
-      e === 65279 ||
-      e === 65440 ||
-      (e >= 65520 && e <= 65531)
+      (codePoint >= 8203 && codePoint <= 8207) ||
+      (codePoint >= 8232 && codePoint <= 8238) ||
+      (codePoint >= 8288 && codePoint <= 8303) ||
+      codePoint === 12644 ||
+      (codePoint >= 65024 && codePoint <= 65039) ||
+      codePoint === 65279 ||
+      codePoint === 65440 ||
+      (codePoint >= 65520 && codePoint <= 65531)
     );
   return (
-    e === 69759 ||
-    (e >= 78896 && e <= 78911) ||
-    e === 94180 ||
-    (e >= 113824 && e <= 113827) ||
-    (e >= 119155 && e <= 119162) ||
-    (e >= 917504 && e <= 921599)
+    codePoint === 69759 ||
+    (codePoint >= 78896 && codePoint <= 78911) ||
+    codePoint === 94180 ||
+    (codePoint >= 113824 && codePoint <= 113827) ||
+    (codePoint >= 119155 && codePoint <= 119162) ||
+    (codePoint >= 917504 && codePoint <= 921599)
   );
 }
 //@ chunk-qg0af0yq.js:2691-2729 placement
@@ -111,232 +128,254 @@ var MAX_TAG_SEQUENCE_LEN = 5;
 /**
  * 匹配 Unicode 标签字符序列（U+E0061–E007A 后跟 U+E007F 结束），序列是允许的标签时返回结束位置，否则 −1。
  */
-function matchTagSequenceEnd(e, n) {
-  let t = "";
-  let r = n + MAX_TAG_SEQUENCE_LEN + 1;
-  for (let i = n + 1; i <= r && i < e.length; i++) {
-    let s = e[i].codePointAt(0) ?? 0;
-    if (s === 917631) return ALLOWED_TAG_SEQUENCES.includes(t) ? i : -1;
-    if (s < 917601 || s > 917626) return -1;
-    t += String.fromCharCode(s - 917504);
+function matchTagSequenceEnd(codePoints, startIndex) {
+  let tagText = "";
+  let maxEnd = startIndex + MAX_TAG_SEQUENCE_LEN + 1;
+  for (let index = startIndex + 1; index <= maxEnd && index < codePoints.length; index++) {
+    let codePoint = codePoints[index].codePointAt(0) ?? 0;
+    if (codePoint === 917631) return ALLOWED_TAG_SEQUENCES.includes(tagText) ? index : -1;
+    if (codePoint < 917601 || codePoint > 917626) return -1;
+    tagText += String.fromCharCode(codePoint - 917504);
   }
   return -1;
 }
 //@ chunk-qg0af0yq.js:2944-5079 placement
-function stripInvisibleChars_2(e) {
-  let n = {
+function stripInvisibleChars_2(text) {
+  let removedByClass = {
     tags: 0,
     bidi: 0,
     zeroWidth: 0,
     selectors: 0,
     other: 0,
   };
-  if (!NON_PRINTABLE_ASCII_RE.test(e))
+  if (!NON_PRINTABLE_ASCII_RE.test(text))
     return {
-      text: e,
+      text,
       removedTotal: 0,
-      removedByClass: n,
+      removedByClass,
       keptConditional: 0,
     };
-  let t = normalizeFullWidthSpace(e);
-  let r = [];
-  let i = 0;
-  let s = t === e ? 0 : countLoneSurrogates(e);
-  n.other += s;
-  let o = {
+  let normalizedText = normalizeFullWidthSpace(text);
+  let keptParts = [];
+  let sliceStart = 0;
+  let removedTotal = normalizedText === text ? 0 : countLoneSurrogates(text);
+  removedByClass.other += removedTotal;
+  let history = {
     ring: Array(RECENT_HISTORY_SIZE).fill(0),
     next: 0,
     size: 0,
     lastWasHidden: false,
     keptConditional: 0,
   };
-  let a = 0;
-  let l;
-  let S;
-  for (let g = 0; g < t.length;) {
-    let codePoint = t.codePointAt(g);
-    let x = g + (codePoint > 65535 ? 2 : 1);
+  let lineStart = 0;
+  let lrmRlmRtlAhead;
+  let almRtlAhead;
+  for (let cursor = 0; cursor < normalizedText.length;) {
+    let codePoint = normalizedText.codePointAt(cursor);
+    let nextIndex = cursor + (codePoint > 65535 ? 2 : 1);
     if (!isInvisibleCodePoint(codePoint)) {
       if (codePoint === 10) {
-        a = x;
-        l = undefined;
-        S = undefined;
+        lineStart = nextIndex;
+        lrmRlmRtlAhead = undefined;
+        almRtlAhead = undefined;
       } else if (codePoint === 127988) {
-        let list = Array.from(t.slice(g, g + 2 * (MAX_TAG_SEQUENCE_LEN + 2)));
-        let m = matchTagSequenceEnd(list, 0);
-        if (m !== -1) {
-          pushRecentCodePoint(o, codePoint, false);
-          g = x;
-          for (let idx = 1; idx <= m; idx++) {
-            pushRecentCodePoint(o, list[idx].codePointAt(0), true);
-            g += list[idx].length;
+        let list = Array.from(normalizedText.slice(cursor, cursor + 2 * (MAX_TAG_SEQUENCE_LEN + 2)));
+        let tagEnd = matchTagSequenceEnd(list, 0);
+        if (tagEnd !== -1) {
+          pushRecentCodePoint(history, codePoint, false);
+          cursor = nextIndex;
+          for (let idx = 1; idx <= tagEnd; idx++) {
+            pushRecentCodePoint(history, list[idx].codePointAt(0), true);
+            cursor += list[idx].length;
           }
           continue;
         }
       }
-      pushRecentCodePoint(o, codePoint, false);
-      g = x;
+      pushRecentCodePoint(history, codePoint, false);
+      cursor = nextIndex;
       continue;
     }
     if (isLineBreakCodePoint(codePoint)) {
-      let h = codePoint === 13 && t.charCodeAt(x) === 10;
-      if (g > i) r.push(t.slice(i, g));
-      i = x;
-      if (!h) {
-        r.push(`
+      let isCrLf = codePoint === 13 && normalizedText.charCodeAt(nextIndex) === 10;
+      if (cursor > sliceStart) keptParts.push(normalizedText.slice(sliceStart, cursor));
+      sliceStart = nextIndex;
+      if (!isCrLf) {
+        keptParts.push(`
 `);
-        s++;
-        n.other++;
-        pushRecentCodePoint(o, 10, false);
-        a = x;
-        l = undefined;
-        S = undefined;
+        removedTotal++;
+        removedByClass.other++;
+        pushRecentCodePoint(history, 10, false);
+        lineStart = nextIndex;
+        lrmRlmRtlAhead = undefined;
+        almRtlAhead = undefined;
       }
-      g = x;
+      cursor = nextIndex;
       continue;
     }
-    let p = x < t.length ? t.codePointAt(x) : undefined;
-    let d = recentAt(o, 0);
-    let { lastWasHidden } = o;
-    let f = false;
+    let nextCodePoint = nextIndex < normalizedText.length ? normalizedText.codePointAt(nextIndex) : undefined;
+    let previousCodePoint = recentAt(history, 0);
+    let { lastWasHidden } = history;
+    let isKeepable = false;
     switch (codePoint) {
       case 8204:
       case 8205: {
-        f = recentBaseMatchesNoSkip(o, codePoint === 8204 ? ZWJ_BASE_SCRIPTS : ZWNJ_BASE_SCRIPTS);
-        if (!f && codePoint === 8205) {
-          let m = d;
-          if (m !== undefined && (m === 65039 || isEmojiModifier(m))) {
-            m = recentAt(o, 1);
-            if (m !== undefined && (m === 65039 || isEmojiModifier(m))) m = recentAt(o, 2);
+        isKeepable = recentBaseMatchesNoSkip(
+          history,
+          codePoint === 8204 ? ZWJ_BASE_SCRIPTS : ZWNJ_BASE_SCRIPTS,
+        );
+        if (!isKeepable && codePoint === 8205) {
+          let lookbackCodePoint = previousCodePoint;
+          if (
+            lookbackCodePoint !== undefined &&
+            (lookbackCodePoint === 65039 || isEmojiModifier(lookbackCodePoint))
+          ) {
+            lookbackCodePoint = recentAt(history, 1);
+            if (
+              lookbackCodePoint !== undefined &&
+              (lookbackCodePoint === 65039 || isEmojiModifier(lookbackCodePoint))
+            )
+              lookbackCodePoint = recentAt(history, 2);
           }
-          f =
-            d !== undefined &&
-            d !== 8205 &&
-            codePointMatches(EXTENDED_PICTOGRAPHIC_RE, m) &&
-            currentOrPreviousMatches(p, EXTENDED_PICTOGRAPHIC_RE);
+          isKeepable =
+            previousCodePoint !== undefined &&
+            previousCodePoint !== 8205 &&
+            codePointMatches(EXTENDED_PICTOGRAPHIC_RE, lookbackCodePoint) &&
+            currentOrPreviousMatches(nextCodePoint, EXTENDED_PICTOGRAPHIC_RE);
         }
-        if (!f && d !== undefined && !lastWasHidden)
-          f =
+        if (!isKeepable && previousCodePoint !== undefined && !lastWasHidden)
+          isKeepable =
             codePoint === 8204
-              ? previousMatchesScript(p, ZWJ_BASE_SCRIPTS) &&
-                !codePointMatches(WHITE_SPACE_RE, d) &&
-                !codePointMatches(MARK_RE, d)
-              : previousMatchesScript(p, ZWJ_STRICT_SCRIPTS) &&
-                !codePointMatches(LETTER_RE, d) &&
-                !codePointMatches(DECIMAL_DIGIT_RE, d) &&
-                !codePointMatches(MARK_RE, d);
+              ? previousMatchesScript(nextCodePoint, ZWJ_BASE_SCRIPTS) &&
+                !codePointMatches(WHITE_SPACE_RE, previousCodePoint) &&
+                !codePointMatches(MARK_RE, previousCodePoint)
+              : previousMatchesScript(nextCodePoint, ZWJ_STRICT_SCRIPTS) &&
+                !codePointMatches(LETTER_RE, previousCodePoint) &&
+                !codePointMatches(DECIMAL_DIGIT_RE, previousCodePoint) &&
+                !codePointMatches(MARK_RE, previousCodePoint);
         break;
       }
       case 8203: {
-        let h = recentBaseMatches(o, southeastAsianScriptClasses, true);
-        let m = currentOrPreviousMatches(p, SOUTHEAST_ASIAN_SCRIPTS) && !codePointMatches(MARK_RE, p);
-        f =
-          (h && (m || currentOrPreviousMatches(p, ASCII_DIGIT_RE))) ||
-          (m && previousBaseMatches(o, ASCII_DIGIT_RE));
+        let isSoutheastAsianBase = recentBaseMatches(history, southeastAsianScriptClasses, true);
+        let nextIsSoutheastAsian =
+          currentOrPreviousMatches(nextCodePoint, SOUTHEAST_ASIAN_SCRIPTS) &&
+          !codePointMatches(MARK_RE, nextCodePoint);
+        isKeepable =
+          (isSoutheastAsianBase &&
+            (nextIsSoutheastAsian || currentOrPreviousMatches(nextCodePoint, ASCII_DIGIT_RE))) ||
+          (nextIsSoutheastAsian && previousBaseMatches(history, ASCII_DIGIT_RE));
         break;
       }
       case 65038:
       case 65039:
-        f =
-          d !== undefined &&
+        isKeepable =
+          previousCodePoint !== undefined &&
           !lastWasHidden &&
-          ((d >= 169 && codePointMatches(EMOJI_RE, d)) || (isKeycapBase(d) && p === 8419));
+          ((previousCodePoint >= 169 && codePointMatches(EMOJI_RE, previousCodePoint)) ||
+            (isKeycapBase(previousCodePoint) && nextCodePoint === 8419));
         break;
       case 65024:
       case 65025:
       case 65026:
-        f =
-          d !== undefined &&
+        isKeepable =
+          previousCodePoint !== undefined &&
           !lastWasHidden &&
-          (codePointMatches(EGYPTIAN_HIEROGLYPH_CLASS.base, d) ||
+          (codePointMatches(EGYPTIAN_HIEROGLYPH_CLASS.base, previousCodePoint) ||
             (codePoint === 65024 &&
-              ((d >= 8704 && d <= 11007 && codePointMatches(MATH_SYMBOL_RE, d)) ||
-                codePointMatches(VERTICAL_ORIENTATION_SCRIPTS, d))));
+              ((previousCodePoint >= 8704 &&
+                previousCodePoint <= 11007 &&
+                codePointMatches(MATH_SYMBOL_RE, previousCodePoint)) ||
+                codePointMatches(VERTICAL_ORIENTATION_SCRIPTS, previousCodePoint))));
         break;
       case 8206:
       case 8207:
       case 1564:
         if (codePoint === 1564) {
-          if (S === undefined) S = hasRtlContextAhead(RTL_CONTEXT_SCRIPTS, t, a);
-          f = S;
+          if (almRtlAhead === undefined)
+            almRtlAhead = hasRtlContextAhead(RTL_CONTEXT_SCRIPTS, normalizedText, lineStart);
+          isKeepable = almRtlAhead;
         } else {
-          if (l === undefined) l = hasRtlContextAhead(INVISIBLE_CHAR_SCRIPTS, t, a);
-          f = l;
+          if (lrmRlmRtlAhead === undefined)
+            lrmRlmRtlAhead = hasRtlContextAhead(INVISIBLE_CHAR_SCRIPTS, normalizedText, lineStart);
+          isKeepable = lrmRlmRtlAhead;
         }
-        f =
-          f &&
+        isKeepable =
+          isKeepable &&
           !lastWasHidden &&
-          (p === undefined ||
-            isLineBreakCodePoint(p) ||
-            (!isInvisibleCodePoint(p) && !codePointMatches(MARK_RE, p))) &&
-          !joinerHasContext(o, p);
+          (nextCodePoint === undefined ||
+            isLineBreakCodePoint(nextCodePoint) ||
+            (!isInvisibleCodePoint(nextCodePoint) && !codePointMatches(MARK_RE, nextCodePoint))) &&
+          !joinerHasContext(history, nextCodePoint);
         break;
       case 847:
-        f = previousBaseMatches(o, MARK_RE) || (!lastWasHidden && currentOrPreviousMatches(p, MARK_RE));
+        isKeepable =
+          previousBaseMatches(history, MARK_RE) ||
+          (!lastWasHidden && currentOrPreviousMatches(nextCodePoint, MARK_RE));
         break;
       case 6068:
       case 6069:
-        f = recentBaseMatchesNoSkip(o, KHMER_SCRIPT_CLASS);
+        isKeepable = recentBaseMatchesNoSkip(history, KHMER_SCRIPT_CLASS);
         break;
       case 6155:
       case 6156:
       case 6157:
       case 6158:
       case 6159:
-        f =
-          recentBaseMatchesNoSkip(o, MONGOLIAN_SCRIPT_CLASS) ||
-          (!lastWasHidden && previousMatchesScript(p, MONGOLIAN_SCRIPT_CLASS));
+        isKeepable =
+          recentBaseMatchesNoSkip(history, MONGOLIAN_SCRIPT_CLASS) ||
+          (!lastWasHidden && previousMatchesScript(nextCodePoint, MONGOLIAN_SCRIPT_CLASS));
         break;
       case 69759:
-        f = previousBaseMatches(o, BRAHMI_SCRIPT_RE) && currentOrPreviousMatches(p, BRAHMI_SCRIPT_RE);
+        isKeepable =
+          previousBaseMatches(history, BRAHMI_SCRIPT_RE) &&
+          currentOrPreviousMatches(nextCodePoint, BRAHMI_SCRIPT_RE);
         break;
       default:
         if (codePoint >= 78896 && codePoint <= 78911)
-          f =
-            recentBaseMatchesNoSkip(o, EGYPTIAN_HIEROGLYPH_CLASS) ||
-            (!lastWasHidden && previousMatchesScript(p, EGYPTIAN_HIEROGLYPH_CLASS));
+          isKeepable =
+            recentBaseMatchesNoSkip(history, EGYPTIAN_HIEROGLYPH_CLASS) ||
+            (!lastWasHidden && previousMatchesScript(nextCodePoint, EGYPTIAN_HIEROGLYPH_CLASS));
         else if (codePoint >= 113824 && codePoint <= 113827)
-          f =
-            recentBaseMatchesNoSkip(o, DUPLOYAN_SCRIPT_CLASS) ||
-            (!lastWasHidden && previousMatchesScript(p, DUPLOYAN_SCRIPT_CLASS));
+          isKeepable =
+            recentBaseMatchesNoSkip(history, DUPLOYAN_SCRIPT_CLASS) ||
+            (!lastWasHidden && previousMatchesScript(nextCodePoint, DUPLOYAN_SCRIPT_CLASS));
     }
-    if (f) pushRecentCodePoint(o, codePoint, true);
+    if (isKeepable) pushRecentCodePoint(history, codePoint, true);
     else {
-      if (g > i) r.push(t.slice(i, g));
-      i = x;
-      s++;
-      n[invisibleCategory(codePoint)]++;
+      if (cursor > sliceStart) keptParts.push(normalizedText.slice(sliceStart, cursor));
+      sliceStart = nextIndex;
+      removedTotal++;
+      removedByClass[invisibleCategory(codePoint)]++;
     }
-    g = x;
+    cursor = nextIndex;
   }
-  let { keptConditional } = o;
-  if (i === 0)
+  let { keptConditional } = history;
+  if (sliceStart === 0)
     return {
-      text: t,
-      removedTotal: s,
-      removedByClass: n,
+      text: normalizedText,
+      removedTotal,
+      removedByClass,
       keptConditional,
     };
-  r.push(t.slice(i));
+  keptParts.push(normalizedText.slice(sliceStart));
   return {
-    text: r.join(""),
-    removedTotal: s,
-    removedByClass: n,
+    text: keptParts.join(""),
+    removedTotal,
+    removedByClass,
     keptConditional,
   };
 }
 //@ chunk-qg0af0yq.js:5079-5146 placement
-function codePointMatches(e, n) {
-  return n !== undefined && e.test(String.fromCodePoint(n));
+function codePointMatches(pattern, codePoint) {
+  return codePoint !== undefined && pattern.test(String.fromCodePoint(codePoint));
 }
 //@ chunk-qg0af0yq.js:5146-5184 placement
-function isLetterOfScript(base, n) {
-  return codePointMatches(LETTER_RE, n) && codePointMatches(base, n);
+function isLetterOfScript(scriptClass, codePoint) {
+  return codePointMatches(LETTER_RE, codePoint) && codePointMatches(scriptClass, codePoint);
 }
 //@ chunk-qg0af0yq.js:5184-5413 placement
-function hasRtlContextAhead(e, n, t) {
-  for (let r = t; r < n.length;) {
-    let codePoint = n.codePointAt(r);
+function hasRtlContextAhead(scriptClass, text, startIndex) {
+  for (let index = startIndex; index < text.length;) {
+    let codePoint = text.codePointAt(index);
     if (isLineBreakCodePoint(codePoint)) return false;
     if (
       ((codePoint >= 1424 && codePoint <= 2303) ||
@@ -344,161 +383,191 @@ function hasRtlContextAhead(e, n, t) {
         (codePoint >= 65136 && codePoint <= 65279) ||
         (codePoint >= 67584 && codePoint <= 69631) ||
         (codePoint >= 124928 && codePoint <= 126975)) &&
-      isLetterOfScript(e, codePoint)
+      isLetterOfScript(scriptClass, codePoint)
     )
       return true;
-    r += codePoint > 65535 ? 2 : 1;
+    index += codePoint > 65535 ? 2 : 1;
   }
   return false;
 }
 //@ chunk-qg0af0yq.js:5413-5453 placement
-function scriptBucket(e) {
-  return e === 1600 || codePointMatches(INVISIBLE_CHAR_SCRIPTS, e);
+function scriptBucket(codePoint) {
+  return codePoint === 1600 || codePointMatches(INVISIBLE_CHAR_SCRIPTS, codePoint);
 }
 //@ chunk-qg0af0yq.js:5453-5637 placement
-function joinerHasContext(e, n) {
-  let t = codePointMatches(LETTER_RE, n);
-  if (!t && !codePointMatches(DECIMAL_DIGIT_RE, n)) return false;
-  for (let idx = 0; idx < e.size; idx++) {
-    let i = recentAt(e, idx);
-    if (isInvisibleCodePoint(i)) return true;
-    if (codePointMatches(MARK_RE, i)) continue;
-    return t
-      ? codePointMatches(LETTER_RE, i) && scriptBucket(i) === scriptBucket(n)
-      : codePointMatches(DECIMAL_DIGIT_RE, i);
+function joinerHasContext(history, codePoint) {
+  let isLetter = codePointMatches(LETTER_RE, codePoint);
+  if (!isLetter && !codePointMatches(DECIMAL_DIGIT_RE, codePoint)) return false;
+  for (let idx = 0; idx < history.size; idx++) {
+    let recentCodePoint = recentAt(history, idx);
+    if (isInvisibleCodePoint(recentCodePoint)) return true;
+    if (codePointMatches(MARK_RE, recentCodePoint)) continue;
+    return isLetter
+      ? codePointMatches(LETTER_RE, recentCodePoint) &&
+          scriptBucket(recentCodePoint) === scriptBucket(codePoint)
+      : codePointMatches(DECIMAL_DIGIT_RE, recentCodePoint);
   }
-  return e.size >= RECENT_HISTORY_SIZE;
+  return history.size >= RECENT_HISTORY_SIZE;
 }
 //@ chunk-qg0af0yq.js:5637-5718 placement
-function isLineBreakCodePoint(e) {
-  return e === 10 || e === 11 || e === 12 || e === 13 || e === 133 || e === 8232 || e === 8233;
+function isLineBreakCodePoint(codePoint) {
+  return (
+    codePoint === 10 ||
+    codePoint === 11 ||
+    codePoint === 12 ||
+    codePoint === 13 ||
+    codePoint === 133 ||
+    codePoint === 8232 ||
+    codePoint === 8233
+  );
 }
 //@ chunk-qg0af0yq.js:5718-5727 placement
 var RECENT_HISTORY_SIZE = 16;
 //@ chunk-qg0af0yq.js:5727-5846 placement
-function pushRecentCodePoint(e, n, t) {
-  e.ring[e.next] = n;
-  e.next = (e.next + 1) % RECENT_HISTORY_SIZE;
-  if (e.size < RECENT_HISTORY_SIZE) e.size++;
-  e.lastWasHidden = t;
-  if (t) e.keptConditional++;
+function pushRecentCodePoint(history, codePoint, isHidden) {
+  history.ring[history.next] = codePoint;
+  history.next = (history.next + 1) % RECENT_HISTORY_SIZE;
+  if (history.size < RECENT_HISTORY_SIZE) history.size++;
+  history.lastWasHidden = isHidden;
+  if (isHidden) history.keptConditional++;
 }
 //@ chunk-qg0af0yq.js:5846-5916 placement
-function recentAt(e, n) {
-  if (n >= e.size) return;
-  return e.ring[(e.next - 1 - n + 2 * RECENT_HISTORY_SIZE) % RECENT_HISTORY_SIZE];
+function recentAt(history, offset) {
+  if (offset >= history.size) return;
+  return history.ring[(history.next - 1 - offset + 2 * RECENT_HISTORY_SIZE) % RECENT_HISTORY_SIZE];
 }
 //@ chunk-qg0af0yq.js:5916-5979 placement
-function previousBaseMatches(e, n) {
-  return e.size > 0 && !e.lastWasHidden && codePointMatches(n, recentAt(e, 0));
+function previousBaseMatches(history, pattern) {
+  return history.size > 0 && !history.lastWasHidden && codePointMatches(pattern, recentAt(history, 0));
 }
 //@ chunk-qg0af0yq.js:5979-6013 placement
-function recentBaseMatchesNoSkip(e, n) {
-  return recentBaseMatches(e, n, false);
+function recentBaseMatchesNoSkip(history, scriptClasses) {
+  return recentBaseMatches(history, scriptClasses, false);
 }
 //@ chunk-qg0af0yq.js:6013-6186 placement
-function recentBaseMatches(e, n, t) {
-  if (e.lastWasHidden) return false;
-  for (let idx = 0; idx < e.size; idx++) {
-    let i = recentAt(e, idx);
-    if (codePointMatches(MARK_RE, i)) {
-      if (!codePointMatches(n.mark, i)) return false;
+function recentBaseMatches(history, scriptClasses, matchBaseOnly) {
+  if (history.lastWasHidden) return false;
+  for (let idx = 0; idx < history.size; idx++) {
+    let recentCodePoint = recentAt(history, idx);
+    if (codePointMatches(MARK_RE, recentCodePoint)) {
+      if (!codePointMatches(scriptClasses.mark, recentCodePoint)) return false;
       continue;
     }
-    return t ? codePointMatches(n.base, i) : isLetterOfScript(n.base, i);
+    return matchBaseOnly
+      ? codePointMatches(scriptClasses.base, recentCodePoint)
+      : isLetterOfScript(scriptClasses.base, recentCodePoint);
   }
   return false;
 }
 //@ chunk-qg0af0yq.js:6186-6235 placement
-function currentOrPreviousMatches(e, n) {
-  return e !== undefined && !isInvisibleCodePoint(e) && codePointMatches(n, e);
+function currentOrPreviousMatches(codePoint, pattern) {
+  return codePoint !== undefined && !isInvisibleCodePoint(codePoint) && codePointMatches(pattern, codePoint);
 }
 //@ chunk-qg0af0yq.js:6235-6289 placement
-function previousMatchesScript(e, n) {
-  return e !== undefined && !isInvisibleCodePoint(e) && isLetterOfScript(n.base, e);
+function previousMatchesScript(codePoint, scriptClass) {
+  return (
+    codePoint !== undefined &&
+    !isInvisibleCodePoint(codePoint) &&
+    isLetterOfScript(scriptClass.base, codePoint)
+  );
 }
 //@ chunk-qg0af0yq.js:6289-6332 placement
-function isEmojiModifier(e) {
-  return e >= 127995 && e <= 127999;
+function isEmojiModifier(codePoint) {
+  return codePoint >= 127995 && codePoint <= 127999;
 }
 //@ chunk-qg0af0yq.js:6332-6383 placement
-function isKeycapBase(e) {
-  return (e >= 48 && e <= 57) || e === 35 || e === 42;
+function isKeycapBase(codePoint) {
+  return (codePoint >= 48 && codePoint <= 57) || codePoint === 35 || codePoint === 42;
 }
 //@ chunk-qg0af0yq.js:6383-6578 placement
-function countLoneSurrogates(e) {
-  let n = 0;
-  for (let idx = 0; idx < e.length; idx++) {
-    let code = e.charCodeAt(idx);
+function countLoneSurrogates(text) {
+  let loneSurrogateCount = 0;
+  for (let idx = 0; idx < text.length; idx++) {
+    let code = text.charCodeAt(idx);
     if (code >= 55296 && code <= 56319) {
-      let code = e.charCodeAt(idx + 1);
+      let code = text.charCodeAt(idx + 1);
       if (code >= 56320 && code <= 57343) idx++;
-      else n++;
-    } else if (code >= 56320 && code <= 57343) n++;
+      else loneSurrogateCount++;
+    } else if (code >= 56320 && code <= 57343) loneSurrogateCount++;
   }
-  return n;
+  return loneSurrogateCount;
 }
 //@ chunk-qg0af0yq.js:6578-6874 placement
-function invisibleCategory(e) {
-  if (e >= 917504 && e <= 917631) return "tags";
-  if (e === 1564 || e === 8206 || e === 8207 || (e >= 8234 && e <= 8238) || (e >= 8294 && e <= 8297))
+function invisibleCategory(codePoint) {
+  if (codePoint >= 917504 && codePoint <= 917631) return "tags";
+  if (
+    codePoint === 1564 ||
+    codePoint === 8206 ||
+    codePoint === 8207 ||
+    (codePoint >= 8234 && codePoint <= 8238) ||
+    (codePoint >= 8294 && codePoint <= 8297)
+  )
     return "bidi";
-  if ((e >= 8203 && e <= 8205) || e === 8288 || e === 65279) return "zeroWidth";
-  if ((e >= 65024 && e <= 65039) || (e >= 917760 && e <= 917999) || (e >= 6155 && e <= 6157) || e === 6159)
+  if ((codePoint >= 8203 && codePoint <= 8205) || codePoint === 8288 || codePoint === 65279)
+    return "zeroWidth";
+  if (
+    (codePoint >= 65024 && codePoint <= 65039) ||
+    (codePoint >= 917760 && codePoint <= 917999) ||
+    (codePoint >= 6155 && codePoint <= 6157) ||
+    codePoint === 6159
+  )
     return "selectors";
   return "other";
 }
 //@ chunk-qg0af0yq.js:6874-7270 placement
-function formatInvisibleCharsRemoved(removedTotal, n = "review", t = "Enter") {
-  let r =
+function formatInvisibleCharsRemoved(removedTotal, context = "review", confirmKey = "Enter") {
+  let summary =
     removedTotal === 1 ? "Removed 1 invisible character" : `Removed ${removedTotal} invisible characters`;
-  switch (n) {
+  switch (context) {
     case "review":
-      return `${r} \xB7 review and press ${t} to send`;
+      return `${summary} \xB7 review and press ${confirmKey} to send`;
     case "empty":
-      return `${r} \xB7 nothing left to send`;
+      return `${summary} \xB7 nothing left to send`;
     case "sent":
-      return `${r} from the launch prompt before sending it`;
+      return `${summary} from the launch prompt before sending it`;
     case "cleaned":
-      return `${r} from your prompt`;
+      return `${summary} from your prompt`;
     case "pasted":
-      return `${r} from the pasted text`;
+      return `${summary} from the pasted text`;
   }
 }
 //@ chunk-qg0af0yq.js:7270-7601 placement
 /**
  * 显示不安全字符正则（控制字符、方向覆盖、私用区与未分配码点），以及上下文相关的零宽字符正则（ZWJ/ZWNJ 只在不连接字母或表情时匹配）。
  */
-var DISPLAY_UNSAFE_CHARS_RE =
-  /[\x00-\x1f\x7f-\x9f\u061c\u2028\u2029\u202a-\u202e\u2066-\u2069\p{Co}\p{Cn}]/gu;
-var regExp = new RegExp(
-  String.raw`[\u200b\u200e\u200f\u2800]|[${INVISIBLE_FORMAT_RANGES}\u{110bd}\u{110cd}](?!\p{Nd})|(?<![\p{L}\p{M}\p{Extended_Pictographic}\p{Emoji_Modifier}\ufe0f])[\u200c\u200d]|(?<!\p{M})[\u200c\u200d](?![\p{L}\p{M}\p{Extended_Pictographic}])`,
-  "gu",
-);
+var DISPLAY_UNSAFE_CHARS_RE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var regExp;
+deferInit("chunk-qg0af0yq.js:7270", () => {
+  DISPLAY_UNSAFE_CHARS_RE = /[\x00-\x1f\x7f-\x9f\u061c\u2028\u2029\u202a-\u202e\u2066-\u2069\p{Co}\p{Cn}]/gu;
+  regExp = new RegExp(
+    String.raw`[\u200b\u200e\u200f\u2800]|[${INVISIBLE_FORMAT_RANGES}\u{110bd}\u{110cd}](?!\p{Nd})|(?<![\p{L}\p{M}\p{Extended_Pictographic}\p{Emoji_Modifier}\ufe0f])[\u200c\u200d]|(?<!\p{M})[\u200c\u200d](?![\p{L}\p{M}\p{Extended_Pictographic}])`,
+    "gu",
+  );
+});
 //@ chunk-qg0af0yq.js:7601-7633 placement
 /**
  * 去掉文本中的不可见字符（保留合法连接符等）。
  */
-function stripInvisibleChars(e) {
-  return stripCombiningRepeated(escapeDisplayUnsafeChars(e));
+function stripInvisibleChars(text) {
+  return stripCombiningRepeated(escapeDisplayUnsafeChars(text));
 }
 //@ chunk-qg0af0yq.js:7633-7817 placement
 /**
  * 把路径等文本转成安全显示形式：规范全角空格，把控制字符、双向控制、私用区、零宽等不可见字符替换为可见转义（与 stripInvisibleChars 的结果对照只替换被移除的字符）。
  */
-function escapePathForDisplay(e) {
-  let replaced = normalizeFullWidthSpace(escapeDisplayUnsafeChars(e)).replace(regExp, unicodeEscape);
+function escapePathForDisplay(inputPath) {
+  let replaced = normalizeFullWidthSpace(escapeDisplayUnsafeChars(inputPath)).replace(regExp, unicodeEscape);
   let { text, removedTotal } = stripInvisibleChars_2(replaced);
   if (removedTotal === 0) return replaced;
   let list = Array.from(text);
-  let s = 0;
-  let o = "";
-  for (let a of replaced)
-    if (a === list[s]) {
-      s++;
-      o += a;
-    } else o += unicodeEscape(a);
-  return o;
+  let keptIndex = 0;
+  let escaped = "";
+  for (let character of replaced)
+    if (character === list[keptIndex]) {
+      keptIndex++;
+      escaped += character;
+    } else escaped += unicodeEscape(character);
+  return escaped;
 }
 //@ chunk-qg0af0yq.js:7817-7827 placement
 var MAX_DISPLAY_PATH_CHARS = 160;
@@ -506,25 +575,25 @@ var MAX_DISPLAY_PATH_CHARS = 160;
 /**
  * 清理不可见字符并截断到展示宽度，用于展示路径。
  */
-function truncatePathForDisplay(e) {
-  return truncateWithCount(stripInvisibleChars(e), MAX_DISPLAY_PATH_CHARS);
+function truncatePathForDisplay(path) {
+  return truncateWithCount(stripInvisibleChars(path), MAX_DISPLAY_PATH_CHARS);
 }
 //@ chunk-qg0af0yq.js:7861-8022 placement
 /**
  * 路径在磁盘上的指向无法确定（链接或目录无法检查、链接不可解析）时的说明。
  */
-function unresolvablePathMessage(e) {
-  return `Where ${truncatePathForDisplay(e)} leads on disk could not be determined (a link or directory on the way could not be examined, or the links do not resolve)`;
+function unresolvablePathMessage(path) {
+  return `Where ${truncatePathForDisplay(path)} leads on disk could not be determined (a link or directory on the way could not be examined, or the links do not resolve)`;
 }
 //@ chunk-qg0af0yq.js:8022-8137 placement
 /**
  * 过长路径只保留末尾若干字符显示，前面标注省略的字符数。
  */
-function truncatePathForDisplay_2(e) {
-  let n = stripInvisibleChars(e);
-  if (n.length <= MAX_DISPLAY_PATH_CHARS) return n;
-  let t = takeLastChars(n, MAX_DISPLAY_PATH_CHARS);
-  return `[+${n.length - t.length} chars] \u2026${t}`;
+function truncatePathForDisplay_2(path) {
+  let stripped = stripInvisibleChars(path);
+  if (stripped.length <= MAX_DISPLAY_PATH_CHARS) return stripped;
+  let tail = takeLastChars(stripped, MAX_DISPLAY_PATH_CHARS);
+  return `[+${stripped.length - tail.length} chars] \u2026${tail}`;
 }
 //@ chunk-qg0af0yq.js:8137-8199 placement
 /**
@@ -540,13 +609,16 @@ function stripInvisibleCharsMultiLine(details) {
 `);
 }
 //@ chunk-qg0af0yq.js:8199-8274 placement
-function escapeDisplayUnsafeChars(e) {
-  let n = stripAnsi(e);
-  return (n === e ? n : n + "\uFFFD").replace(DISPLAY_UNSAFE_CHARS_RE, "\uFFFD");
+function escapeDisplayUnsafeChars(text) {
+  let withoutAnsi = stripAnsi(text);
+  return (withoutAnsi === text ? withoutAnsi : withoutAnsi + "\uFFFD").replace(
+    DISPLAY_UNSAFE_CHARS_RE,
+    "\uFFFD",
+  );
 }
 //@ chunk-qg0af0yq.js:8274-8349 placement
-function unicodeEscape(e) {
-  return `\\u{${e.codePointAt(0).toString(16).toUpperCase()}}`;
+function unicodeEscape(character) {
+  return `\\u{${character.codePointAt(0).toString(16).toUpperCase()}}`;
 }
 export {
   stripInvisibleChars,

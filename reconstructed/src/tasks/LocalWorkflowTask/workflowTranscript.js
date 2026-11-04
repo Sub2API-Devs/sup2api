@@ -39,166 +39,182 @@ import { jsonStringify } from "../../utils/slowOperations.js";
 import { getAgentMissState, isAgentFlagged, agentContract } from "../../tools/AgentTool/handbackReport.js";
 import { count } from "../../utils/collections.js";
 import { truncateToLength, countCharInString } from "../../utils/stringUtils.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-axsvbsqv.js:2394-2398 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-axsvbsqv.js:2394", () => {
+  init_react_production();
+});
 //@ chunk-axsvbsqv.js:2427-2475 placement
 /**
  * 转录提示词/输出字段字符上限与保留的工具结果条数、任务工具名列表。
  */
-var MAX_TRANSCRIPT_PROMPT_CHARS = 4000;
-var MAX_TRANSCRIPT_OUTPUT_CHARS = 2000;
-var MAX_TRANSCRIPT_TOOL_RESULTS = 3;
-var TASK_TODO_TOOL_NAMES = [
-  TODO_WRITE_TOOL_NAME,
-  TASK_CREATE_TOOL_NAME,
-  TASK_UPDATE_TOOL_NAME,
-  TASK_LIST_TOOL_NAME,
-  TASK_GET_TOOL_NAME,
-  STRUCTUREDOUTPUT,
-];
+var MAX_TRANSCRIPT_PROMPT_CHARS; // deferred: uses structuredOutputInputSchema (../../tools/SyntheticOutputTool/SyntheticOutputTool.js) of its import cycle while loading; runs once the cycle is complete
+var MAX_TRANSCRIPT_OUTPUT_CHARS;
+var MAX_TRANSCRIPT_TOOL_RESULTS;
+var TASK_TODO_TOOL_NAMES;
+deferInit("chunk-axsvbsqv.js:2427", () => {
+  MAX_TRANSCRIPT_PROMPT_CHARS = 4000;
+  MAX_TRANSCRIPT_OUTPUT_CHARS = 2000;
+  MAX_TRANSCRIPT_TOOL_RESULTS = 3;
+  TASK_TODO_TOOL_NAMES = [
+    TODO_WRITE_TOOL_NAME,
+    TASK_CREATE_TOOL_NAME,
+    TASK_UPDATE_TOOL_NAME,
+    TASK_LIST_TOOL_NAME,
+    TASK_GET_TOOL_NAME,
+    STRUCTUREDOUTPUT,
+  ];
+});
 //@ chunk-axsvbsqv.js:2475-4981 placement
-async function readWorkflowAgentTranscript(o, i, { promptFramed: l } = {}) {
-  let filePath = join(subagentWorkflowDir(o), `agent-${i}.jsonl`);
-  let d;
+async function readWorkflowAgentTranscript(workflowRunId, agentIndex, { promptFramed } = {}) {
+  let filePath = join(subagentWorkflowDir(workflowRunId), `agent-${agentIndex}.jsonl`);
+  let rows;
   try {
-    d = await readJSONLFile_2(filePath);
+    rows = await readJSONLFile_2(filePath);
   } catch (error) {
     logForDebugging(
       `readWorkflowAgentTranscript: ${filePath} not readable (${error instanceof Error ? error.message : String(error)})`,
     );
     return null;
   }
-  let filtered = d.filter(isTranscriptMessage);
-  let index = filtered.findIndex((U) => U.type === "user");
-  let b = index === -1 ? undefined : filtered[index];
+  let filtered = rows.filter(isTranscriptMessage);
+  let index = filtered.findIndex((message) => message.type === "user");
+  let lastUserMessage = index === -1 ? undefined : filtered[index];
   for (let idx = index + 1; index !== -1 && idx < filtered.length; idx++) {
-    let X = filtered[idx];
-    if (X === undefined || X.type !== "user" || X.isMeta === true) break;
-    b = X;
+    let message = filtered[idx];
+    if (message === undefined || message.type !== "user" || message.isMeta === true) break;
+    lastUserMessage = message;
   }
-  let content = b?.type === "user" ? b.message?.content : undefined;
-  let A = typeof content === "string" ? content : textOfBlocks(content).trim();
-  let prompt = l ? stripHarnessFraming(A) : A;
-  let T = [];
-  let M = emptyWorkflowToolUseTracker();
-  let I = new Map();
-  let N;
-  let E = new Map();
-  let V = {
+  let content = lastUserMessage?.type === "user" ? lastUserMessage.message?.content : undefined;
+  let promptText = typeof content === "string" ? content : textOfBlocks(content).trim();
+  let prompt = promptFramed ? stripHarnessFraming(promptText) : promptText;
+  let toolUseEntries = [];
+  let toolUseTracker = emptyWorkflowToolUseTracker();
+  let virtualToolUseIds = new Map();
+  let pendingResponseId;
+  let resultByToolUseId = new Map();
+  let taskTracker = {
     pendingCreates: new Map(),
     tasks: new Map(),
   };
-  let J = undefined;
-  let z = "";
-  let L = [];
-  let B = "";
-  for (let [U, X] of filtered.entries()) {
-    if (X.type === "user") {
-      let content = X.message?.content;
+  let todoWriteInput = undefined;
+  let finalText = "";
+  let handbackMessages = [];
+  let lastResponseId = "";
+  for (let [rowIndex, message] of filtered.entries()) {
+    if (message.type === "user") {
+      let content = message.message?.content;
       if (Array.isArray(content))
-        for (let G of content) {
-          if (!isContentBlock(G) || G.type !== "tool_result" || typeof G.tool_use_id !== "string") continue;
-          let dt = G.is_error === true;
-          settleWorkflowToolUse(M, G.tool_use_id, X.isVirtual === true, dt);
-          if (X.isVirtual !== true && M.uses.has(G.tool_use_id)) N = G.tool_use_id;
-          let St = contentToText(G.content);
-          let kt = St;
-          E.set(G.tool_use_id, {
-            ...textHead(kt, MAX_TRANSCRIPT_OUTPUT_CHARS),
-            isError: dt,
+        for (let block of content) {
+          if (!isContentBlock(block) || block.type !== "tool_result" || typeof block.tool_use_id !== "string")
+            continue;
+          let isError = block.is_error === true;
+          settleWorkflowToolUse(toolUseTracker, block.tool_use_id, message.isVirtual === true, isError);
+          if (message.isVirtual !== true && toolUseTracker.uses.has(block.tool_use_id))
+            pendingResponseId = block.tool_use_id;
+          let resultText = contentToText(block.content);
+          let headSource = resultText;
+          resultByToolUseId.set(block.tool_use_id, {
+            ...textHead(headSource, MAX_TRANSCRIPT_OUTPUT_CHARS),
+            isError,
           });
-          resolvePendingTaskCreate(V, {
-            tool_use_id: G.tool_use_id,
-            is_error: dt,
-            content: St,
+          resolvePendingTaskCreate(taskTracker, {
+            tool_use_id: block.tool_use_id,
+            is_error: isError,
+            content: resultText,
           });
         }
       continue;
     }
-    if (X.type !== "assistant" || !Array.isArray(X.message?.content)) continue;
-    let ot = X.message.id || `entry-${U}`;
-    B = ot;
-    N = undefined;
-    let rt = "";
-    for (let W of X.message.content) {
-      if (!isContentBlock(W)) continue;
-      if (W.type === "tool_use" && typeof W.name === "string") {
+    if (message.type !== "assistant" || !Array.isArray(message.message?.content)) continue;
+    let responseId = message.message.id || `entry-${rowIndex}`;
+    lastResponseId = responseId;
+    pendingResponseId = undefined;
+    let responseText = "";
+    for (let block of message.message.content) {
+      if (!isContentBlock(block)) continue;
+      if (block.type === "tool_use" && typeof block.name === "string") {
         noteWorkflowToolUse(
-          M,
+          toolUseTracker,
           {
-            id: W.id,
-            name: W.name,
+            id: block.id,
+            name: block.name,
           },
-          X.isVirtual === true,
+          message.isVirtual === true,
         );
-        if (X.isVirtual === true && typeof W.id === "string" && N !== undefined) I.set(W.id, N);
-        T.push({
-          id: typeof W.id === "string" ? W.id : "",
-          name: W.name,
-          input: W.input,
-          responseKey: ot,
+        if (message.isVirtual === true && typeof block.id === "string" && pendingResponseId !== undefined)
+          virtualToolUseIds.set(block.id, pendingResponseId);
+        toolUseEntries.push({
+          id: typeof block.id === "string" ? block.id : "",
+          name: block.name,
+          input: block.input,
+          responseKey: responseId,
         });
-        if (typeof W.id === "string" && W.id !== "") trackTaskToolUse(V, W);
-        if (W.name === TODO_WRITE_TOOL_NAME) J = W.input;
+        if (typeof block.id === "string" && block.id !== "") trackTaskToolUse(taskTracker, block);
+        if (block.name === TODO_WRITE_TOOL_NAME) todoWriteInput = block.input;
         if (
-          W.name === SUBAGENTHANDBACK &&
-          typeof W.id === "string" &&
-          isPlainObject(W.input) &&
-          typeof W.input.message === "string"
+          block.name === SUBAGENTHANDBACK &&
+          typeof block.id === "string" &&
+          isPlainObject(block.input) &&
+          typeof block.input.message === "string"
         )
-          L.push({
-            id: W.id,
-            message: W.input.message,
+          handbackMessages.push({
+            id: block.id,
+            message: block.input.message,
           });
-        if (W.name === STRUCTUREDOUTPUT && W.input !== undefined)
+        if (block.name === STRUCTUREDOUTPUT && block.input !== undefined)
           try {
-            rt = jsonStringify(W.input, null, 2);
+            responseText = jsonStringify(block.input, null, 2);
           } catch {
-            rt = String(W.input);
+            responseText = String(block.input);
           }
-      } else if (W.type === "text" && typeof W.text === "string") rt += W.text;
+      } else if (block.type === "text" && typeof block.text === "string") responseText += block.text;
     }
-    if (rt) z = rt;
+    if (responseText) finalText = responseText;
   }
-  let agentMissState = getAgentMissState(i);
-  let found = L.find((U) => U.id === agentMissState);
+  let agentMissState = getAgentMissState(agentIndex);
+  let found = handbackMessages.find((handback) => handback.id === agentMissState);
   if (found !== undefined)
-    z = isAgentFlagged(i)
+    finalText = isAgentFlagged(agentIndex)
       ? `Auto mode's check flagged this report or could not review it. Read it with care.
 
 ${found.message}`
       : found.message;
   else if (
-    agentContract(i) === undefined &&
-    L.some((U) => {
-      let X = E.get(U.id);
-      return X !== undefined && !X.isError && X.head.startsWith('{"success":true');
+    agentContract(agentIndex) === undefined &&
+    handbackMessages.some((handback) => {
+      let result = resultByToolUseId.get(handback.id);
+      return result !== undefined && !result.isError && result.head.startsWith('{"success":true');
     })
   )
-    z = "";
-  let pt = T;
-  let gt = (U) => false;
-  let wt = count(pt, (U) => !gt(U));
-  let toolCalls = pt.map((U) => {
-    let X = U.responseKey === B;
-    let ot = gt(U);
-    if (!ot) wt--;
-    let rt = ot || ((wt < MAX_TRANSCRIPT_TOOL_RESULTS || X) && !TASK_TODO_TOOL_NAMES.includes(U.name));
+    finalText = "";
+  let allToolEntries = toolUseEntries;
+  let isHidden = (entry) => false;
+  let visibleBudget = count(allToolEntries, (entry) => !isHidden(entry));
+  let toolCalls = allToolEntries.map((entry) => {
+    let isLastResponse = entry.responseKey === lastResponseId;
+    let hidden = isHidden(entry);
+    if (!hidden) visibleBudget--;
+    let includeFields =
+      hidden ||
+      ((visibleBudget < MAX_TRANSCRIPT_TOOL_RESULTS || isLastResponse) &&
+        !TASK_TODO_TOOL_NAMES.includes(entry.name));
     return {
-      name: U.name,
-      summary: ot ? "" : describeWorkflowStep(U.input, U.name),
-      fromLastResponse: X,
-      fields: rt && !ot ? inputFieldsPreview(U.input) : [],
-      result: textHeadOrError(U.id ? E.get(U.id) : undefined, rt),
+      name: entry.name,
+      summary: hidden ? "" : describeWorkflowStep(entry.input, entry.name),
+      fromLastResponse: isLastResponse,
+      fields: includeFields && !hidden ? inputFieldsPreview(entry.input) : [],
+      result: textHeadOrError(entry.id ? resultByToolUseId.get(entry.id) : undefined, includeFields),
     };
   });
-  let allTrackedTasks = getAllTrackedTasks(V);
-  let tasks = allTrackedTasks.length > 0 ? allTrackedTasks : parseTodoWriteTodos(J);
+  let allTrackedTasks = getAllTrackedTasks(taskTracker);
+  let tasks = allTrackedTasks.length > 0 ? allTrackedTasks : parseTodoWriteTodos(todoWriteInput);
   return {
     prompt,
     toolCalls,
-    finalText: z,
+    finalText,
     tasks,
   };
 }
@@ -215,69 +231,69 @@ var EMPTY_TEXT_HEAD = {
 /**
  * 无文本时返回空文本头（保留 isError）。
  */
-function textHeadOrError(o, i) {
-  if (!o) return null;
-  return i
-    ? o
+function textHeadOrError(result, includeBody) {
+  if (!result) return null;
+  return includeBody
+    ? result
     : {
         ...EMPTY_TEXT_HEAD,
-        isError: o.isError,
+        isError: result.isError,
       };
 }
 //@ chunk-axsvbsqv.js:5099-5227 placement
-function textHead(o, i) {
-  let l = o.trimEnd();
-  let u = l.length > i ? truncateToLength(l, i) : l;
+function textHead(text, maxChars) {
+  let trimmed = text.trimEnd();
+  let head = trimmed.length > maxChars ? truncateToLength(trimmed, maxChars) : trimmed;
   return {
-    head: u,
+    head,
     lineCount:
       countCharInString(
-        l,
+        trimmed,
         `
 `,
       ) + 1,
-    truncatedChars: l.length - u.length,
+    truncatedChars: trimmed.length - head.length,
   };
 }
 //@ chunk-axsvbsqv.js:5227-5305 placement
 /**
  * 判断值是否是带 type 字符串的内容块。
  */
-function isContentBlock(o) {
-  return typeof o === "object" && o !== null && typeof o.type === "string";
+function isContentBlock(value) {
+  return typeof value === "object" && value !== null && typeof value.type === "string";
 }
 //@ chunk-axsvbsqv.js:5305-5446 placement
-function textOfBlocks(o) {
-  if (!Array.isArray(o)) return "";
-  return o
+function textOfBlocks(blocks) {
+  if (!Array.isArray(blocks)) return "";
+  return blocks
     .filter(isContentBlock)
-    .flatMap((i) => (i.type === "text" && typeof i.text === "string" ? i.text : [])).join(`
+    .flatMap((block) => (block.type === "text" && typeof block.text === "string" ? block.text : [])).join(`
 `);
 }
 //@ chunk-axsvbsqv.js:5446-5625 placement
-function contentToText(content) {
-  if (typeof content === "string") return content;
-  let i = textOfBlocks(content);
-  if (i || !Array.isArray(content)) return i;
-  let filtered = content.filter(isContentBlock);
-  return filtered.length === 0 ? "" : `(${filtered.map((u) => u.type).join(", ")} content)`;
+function contentToText(blocks) {
+  if (typeof blocks === "string") return blocks;
+  let text = textOfBlocks(blocks);
+  if (text || !Array.isArray(blocks)) return text;
+  let filtered = blocks.filter(isContentBlock);
+  return filtered.length === 0 ? "" : `(${filtered.map((block) => block.type).join(", ")} content)`;
 }
 //@ chunk-axsvbsqv.js:5625-5872 placement = _temp7 (1)
 function inputFieldsPreview(opt) {
   if (opt === undefined || opt === null) return [];
   return (typeof opt === "object" && !Array.isArray(opt) ? Object.entries(opt) : [["input", opt]]).map(
-    ([l, u]) => {
-      let d;
-      if (typeof u === "string") d = u;
+    ([key, value]) => {
+      let text;
+      if (typeof value === "string") text = value;
       else
         try {
-          d = jsonStringify(u) ?? String(u);
+          text = jsonStringify(value) ?? String(value);
         } catch {
-          d = String(u);
+          text = String(value);
         }
       return {
-        key: l,
-        ...textHead(d, MAX_TRANSCRIPT_PROMPT_CHARS),
+        key,
+        ...textHead(text, MAX_TRANSCRIPT_PROMPT_CHARS),
       };
     },
   );

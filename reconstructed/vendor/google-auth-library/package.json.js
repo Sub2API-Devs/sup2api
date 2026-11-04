@@ -5,10 +5,10 @@
  * pieces: chunk-na3pph4p.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../runtime/bun-runtime.js";
+import { __commonJS } from "../../runtime/bun-runtime.js";
 
 //@ chunk-na3pph4p.js:61969-64137 cjs-fingerprint
-var require_package_2 = x(function (cjsExports, cjsModule) {
+var require_package_2 = __commonJS(function (cjsExports, cjsModule) {
   cjsModule.exports = {
     name: "google-auth-library",
     version: "10.6.2",

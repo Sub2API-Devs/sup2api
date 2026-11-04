@@ -8,7 +8,7 @@
  * pieces: chunk-cpqpnzp4.js (2)
  * attribution: affinity 1, fingerprint 1
  */
-import { ce, y, R, P } from "../../../vendor/react/cjs/react.production.js";
+import { useCallback, useState, useRef, useEffect } from "../../../vendor/react/cjs/react.production.js";
 import { sanitizeTelemetryString } from "../../utils/sanitization.js";
 import { useTheme } from "../design-system/ThemeProvider.js";
 import { useIsScreenReaderEnabled } from "../../ink/components/ErrorBoundary.js";
@@ -39,22 +39,23 @@ import { ModelSelector } from "../agents/ModelSelector.js";
 
 //@ chunk-cpqpnzp4.js:17999-18067 affinity
 function getMcpAuthModule() {
-  return require("./chunk-asne9cp8.js").mcpAuthModule();
+  return require("../../services/mcp/emitTripwireEvent.lazy.js").mcpAuthModule();
 }
 //@ chunk-cpqpnzp4.js:18067-21061 fingerprint = MCPAgentServerMenu (0.595)
 function MCPAgentServerMenu({ agentServer, onCancel, onComplete }) {
-  let c = ce(
-    (T, ...X) => onComplete(typeof T === "string" ? sanitizeTelemetryString(T) : T, ...X),
+  let complete = useCallback(
+    (message, ...rest) =>
+      onComplete(typeof message === "string" ? sanitizeTelemetryString(message) : message, ...rest),
     [onComplete],
   );
-  let [v] = useTheme();
+  let [theme] = useTheme();
   let isScreenReaderEnabled = useIsScreenReaderEnabled();
-  let [isAuthenticating, setIsAuthenticating] = y(false);
-  let [error, setError] = y(null);
-  let [authorizationUrl, setAuthorizationUrl] = y(null);
-  let authAbortControllerRef = R(null);
-  P(() => () => authAbortControllerRef.current?.abort(), []);
-  let handleEscCancel = ce(() => {
+  let [isAuthenticating, setIsAuthenticating] = useState(false);
+  let [error, setError] = useState(null);
+  let [authorizationUrl, setAuthorizationUrl] = useState(null);
+  let authAbortControllerRef = useRef(null);
+  useEffect(() => () => authAbortControllerRef.current?.abort(), []);
+  let handleEscCancel = useCallback(() => {
     if (isAuthenticating) {
       authAbortControllerRef.current?.abort();
       authAbortControllerRef.current = null;
@@ -66,7 +67,7 @@ function MCPAgentServerMenu({ agentServer, onCancel, onComplete }) {
     context: "Confirmation",
     isActive: isAuthenticating,
   });
-  let handleAuthenticate = ce(async () => {
+  let handleAuthenticate = useCallback(async () => {
     if (isUnattendedBgSession()) {
       setError(CANNOT_AUTH_WITHOUT_TERMINAL);
       return;
@@ -77,15 +78,15 @@ function MCPAgentServerMenu({ agentServer, onCancel, onComplete }) {
       (agentServer.transport !== "http" && agentServer.transport !== "sse")
     )
       return;
-    let T = classifyMcpAuthTarget(agentServer.name, {
+    let target = classifyMcpAuthTarget(agentServer.name, {
       type: agentServer.transport,
       url: agentServer.url,
     });
-    if (T.kind === "anthropic-hosted") {
-      setError(T.message);
+    if (target.kind === "anthropic-hosted") {
+      setError(target.message);
       return;
     }
-    if (T.kind !== "oauth") return;
+    if (target.kind !== "oauth") return;
     setIsAuthenticating(true);
     setError(null);
     let controller = new AbortController();
@@ -93,21 +94,21 @@ function MCPAgentServerMenu({ agentServer, onCancel, onComplete }) {
     try {
       await getMcpAuthModule().performMCPOAuthFlow(
         agentServer.name,
-        T.config,
+        target.config,
         setAuthorizationUrl,
         controller.signal,
       );
-      c(
+      complete(
         `Authentication successful for ${normalizeServerNameShort(agentServer.name)}. The server will connect when the agent runs.`,
       );
     } catch (err) {
       if (err instanceof Error && !(err instanceof getMcpAuthModule().AuthenticationCancelledError))
-        setError(sanitizeErrorDetail(redactMcpErrorDetail(agentServer.name, T.config, err.message)));
+        setError(sanitizeErrorDetail(redactMcpErrorDetail(agentServer.name, target.config, err.message)));
     } finally {
       setIsAuthenticating(false);
       authAbortControllerRef.current = null;
     }
-  }, [agentServer, c]);
+  }, [agentServer, complete]);
   let capitalizedServerName = capitalize(String(agentServer.name));
   if (isAuthenticating)
     return jsxProd_default_2(Box, {
@@ -267,7 +268,10 @@ function MCPAgentServerMenu({ agentServer, onCancel, onComplete }) {
                   children: "Status:",
                 }),
                 jsxProd_default_2(Text, {
-                  children: [color("inactive", v)(figures_default.radioOff), " not connected (agent-only)"],
+                  children: [
+                    color("inactive", theme)(figures_default.radioOff),
+                    " not connected (agent-only)",
+                  ],
                 }),
               ],
             }),

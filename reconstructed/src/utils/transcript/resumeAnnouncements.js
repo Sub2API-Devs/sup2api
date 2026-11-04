@@ -9,7 +9,7 @@
  * attribution: placement 23
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, string, M, array } from "../../../vendor/zod/v4/classic/schemas.js";
+import { objectSchema, stringSchema, booleanSchema, array } from "../../../vendor/zod/v4/classic/schemas.js";
 import { isPlainObject as isPlainObject_5 } from "../isPlainObject.js";
 import {
   contentHasBlockType,
@@ -26,46 +26,60 @@ import { sessionContextValuesSchema, sessionDateSchema } from "../contextAttachm
 import { trackedProjectReads } from "../../tools/ProjectsTool/readTracking.js";
 import { logEvent } from "../../services/analytics/index.js";
 import { SKIP_PRECOMPACT_THRESHOLD } from "../sessionStoragePortable.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:304122-304177 placement
 /**
  * 公告附件 schema（content + 可选 changed）。
  */
-var announcementSchema = DoctorLazy(() =>
-  u({
-    content: string(),
-    changed: M().optional(),
-  }),
-);
+var announcementSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:304122", () => {
+  announcementSchema = DoctorLazy(() =>
+    objectSchema({
+      content: stringSchema(),
+      changed: booleanSchema().optional(),
+    }),
+  );
+});
 //@ chunk-e6aww6q8.js:304177-304297 placement
 /**
  * 恢复/压缩后需重新公告的附件类型。
  */
-var REANNOUNCED_ATTACHMENT_TYPES = new Set([
-  "instructions",
-  "session_context",
-  "coordinator_context",
-  "context_sections",
-  "project_doc_reads",
-  "date",
-]);
+var REANNOUNCED_ATTACHMENT_TYPES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:304177", () => {
+  REANNOUNCED_ATTACHMENT_TYPES = new Set([
+    "instructions",
+    "session_context",
+    "coordinator_context",
+    "context_sections",
+    "project_doc_reads",
+    "date",
+  ]);
+});
 //@ chunk-e6aww6q8.js:304297-304352 placement
 /**
  * 上下文分段公告 schema。
  */
-var contextSectionsSchema = DoctorLazy(() =>
-  u({
-    sections: array(
-      u({
-        name: string(),
-        text: string(),
-      }),
-    ),
-  }),
-);
+var contextSectionsSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:304297", () => {
+  contextSectionsSchema = DoctorLazy(() =>
+    objectSchema({
+      sections: array(
+        objectSchema({
+          name: stringSchema(),
+          text: stringSchema(),
+        }),
+      ),
+    }),
+  );
+});
 //@ chunk-e6aww6q8.js:304352-304380 placement
-var REANNOUNCED_ATTACHMENT_TYPE_SET = REANNOUNCED_ATTACHMENT_TYPES;
-var weakSet = new WeakSet();
+var REANNOUNCED_ATTACHMENT_TYPE_SET; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var weakSet;
+deferInit("chunk-e6aww6q8.js:304352", () => {
+  REANNOUNCED_ATTACHMENT_TYPE_SET = REANNOUNCED_ATTACHMENT_TYPES;
+  weakSet = new WeakSet();
+});
 //@ chunk-e6aww6q8.js:304380-304453 placement = isCompactBoundaryMessage (1)
 function isCompactBoundaryMessage_2(message) {
   return message.type === "system" && message.subtype === "compact_boundary";
@@ -73,45 +87,45 @@ function isCompactBoundaryMessage_2(message) {
 //@ chunk-e6aww6q8.js:304453-304590 placement = isNullRenderingAttachment (1)
 function getNullRenderingAttachmentType(msg) {
   if (msg.type !== "attachment" || !isPlainObject_5(msg.attachment)) return;
-  let n = msg.attachment.type;
-  return typeof n === "string" && REANNOUNCED_ATTACHMENT_TYPE_SET.has(n) ? n : undefined;
+  let msg_2 = msg.attachment.type;
+  return typeof msg_2 === "string" && REANNOUNCED_ATTACHMENT_TYPE_SET.has(msg_2) ? msg_2 : undefined;
 }
 //@ chunk-e6aww6q8.js:304590-304655 placement
-function hasChangedFlag(e) {
-  return isPlainObject_5(e.attachment) && e.attachment.changed === true;
+function hasChangedFlag(msg) {
+  return isPlainObject_5(msg.attachment) && msg.attachment.changed === true;
 }
 //@ chunk-e6aww6q8.js:304655-304767 placement
-function isRealUserPrompt(e) {
+function isRealUserPrompt(msg) {
   return (
-    e.type === "user" &&
-    e.isMeta !== true &&
-    !contentHasBlockType(isPlainObject_5(e.message) ? e.message.content : undefined, "tool_result")
+    msg.type === "user" &&
+    msg.isMeta !== true &&
+    !contentHasBlockType(isPlainObject_5(msg.message) ? msg.message.content : undefined, "tool_result")
   );
 }
 //@ chunk-e6aww6q8.js:304767-305008 placement
-function findFirstTurn(e) {
-  let index = e.findIndex((s) => s.type === "assistant");
+function findFirstTurn(messages) {
+  let index = messages.findIndex((msg) => msg.type === "assistant");
   if (index < 0) return;
-  let r;
+  let promptIndex;
   for (let idx = index - 1; idx >= 0; idx--) {
-    let h = e[idx];
-    if (isCompactBoundaryMessage_2(h) || h.isCompactSummary === true) return;
-    if (r === undefined && isRealUserPrompt(h)) r = idx;
+    let row = messages[idx];
+    if (isCompactBoundaryMessage_2(row) || row.isCompactSummary === true) return;
+    if (promptIndex === undefined && isRealUserPrompt(row)) promptIndex = idx;
   }
-  return r === undefined
+  return promptIndex === undefined
     ? undefined
     : {
-        promptIndex: r,
+        promptIndex,
         responseIndex: index,
       };
 }
 //@ chunk-e6aww6q8.js:305008-305120 placement
-function announceFirstTurnOnce(e, n, seen) {
+function announceFirstTurnOnce(messages, options, options_2) {
   try {
-    if (weakSet.has(e)) return;
-    let firstTurnAnnouncements = computeFirstTurnAnnouncements(e, n, seen);
+    if (weakSet.has(messages)) return;
+    let firstTurnAnnouncements = computeFirstTurnAnnouncements(messages, options, options_2);
     if (firstTurnAnnouncements !== undefined) {
-      weakSet.add(e);
+      weakSet.add(messages);
       collectFirstTurnAnnouncements(firstTurnAnnouncements);
     }
   } catch (error) {
@@ -122,10 +136,10 @@ function announceFirstTurnOnce(e, n, seen) {
 /**
  * 公告类附件的负载是否通过校验。
  */
-function isValidAnnouncement(e) {
-  if (e.type !== "attachment" || !isPlainObject_5(e.attachment)) return false;
-  let attachment = e.attachment;
-  switch (getNullRenderingAttachmentType(e)) {
+function isValidAnnouncement(msg) {
+  if (msg.type !== "attachment" || !isPlainObject_5(msg.attachment)) return false;
+  let attachment = msg.attachment;
+  switch (getNullRenderingAttachmentType(msg)) {
     case "instructions":
       return memoryAttachmentSchema().safeParse(attachment).success;
     case "session_context":
@@ -146,44 +160,44 @@ function isValidAnnouncement(e) {
 var MAX_ANCESTOR_HOPS = 64;
 var MAX_ANCESTOR_SCAN = 256;
 //@ chunk-e6aww6q8.js:305581-305720 placement
-function findRootAncestor(e, n) {
-  let r = n;
+function findRootAncestor(byUuid, index) {
+  let row = index;
   for (let idx = 0; idx < MAX_ANCESTOR_HOPS; idx++) {
-    if (r.parentUuid === null) return r;
-    let h = e.get(r.parentUuid);
-    if (h === undefined) return;
-    r = h;
+    if (row.parentUuid === null) return row;
+    let parentRow = byUuid.get(row.parentUuid);
+    if (parentRow === undefined) return;
+    row = parentRow;
   }
   return;
 }
 //@ chunk-e6aww6q8.js:305720-305779 placement
-function hasRealPromptAncestor(e, n) {
-  let rootAncestor = findRootAncestor(e, n);
+function hasRealPromptAncestor(byUuid, index) {
+  let rootAncestor = findRootAncestor(byUuid, index);
   return rootAncestor !== undefined && isRealUserPrompt(rootAncestor);
 }
 //@ chunk-e6aww6q8.js:305779-305838 placement
-function hasCompactBoundaryAncestor(e, n) {
-  let rootAncestor = findRootAncestor(e, n);
+function hasCompactBoundaryAncestor(byUuid, index) {
+  let rootAncestor = findRootAncestor(byUuid, index);
   return rootAncestor !== undefined && isCompactBoundaryMessage_2(rootAncestor);
 }
 //@ chunk-e6aww6q8.js:305838-305984 placement
-function findIndexedAncestor(e, n, r) {
-  let s = r;
-  for (let idx = 0; s && idx < MAX_ANCESTOR_HOPS; idx++) {
-    let y = n.get(s.uuid);
-    if (y !== undefined) return y;
-    s = s.parentUuid ? e.get(s.parentUuid) : undefined;
+function findIndexedAncestor(byUuid, indexByUuid, index) {
+  let row = index;
+  for (let idx = 0; row && idx < MAX_ANCESTOR_HOPS; idx++) {
+    let index = indexByUuid.get(row.uuid);
+    if (index !== undefined) return index;
+    row = row.parentUuid ? byUuid.get(row.parentUuid) : undefined;
   }
   return;
 }
 //@ chunk-e6aww6q8.js:305984-306157 placement
-function isBeforePromptAncestor(e, n, promptIndex, s) {
-  let h = s;
-  for (let idx = 0; h && idx < MAX_ANCESTOR_HOPS; idx++) {
-    let S = h.parentUuid ? e.get(h.parentUuid) : undefined;
-    let w = S ? n.get(S.uuid) : undefined;
-    if (w !== undefined) return w < promptIndex && isRealUserPrompt(h);
-    h = S;
+function isBeforePromptAncestor(byUuid, index, promptIndex, startRow) {
+  let row = startRow;
+  for (let idx = 0; row && idx < MAX_ANCESTOR_HOPS; idx++) {
+    let parentRow = row.parentUuid ? byUuid.get(row.parentUuid) : undefined;
+    let parentIndex = parentRow ? index.get(parentRow.uuid) : undefined;
+    if (parentIndex !== undefined) return parentIndex < promptIndex && isRealUserPrompt(row);
+    row = parentRow;
   }
   return false;
 }
@@ -191,202 +205,231 @@ function isBeforePromptAncestor(e, n, promptIndex, s) {
 /**
  * 在主链首回合（第一条用户提示与回复）之前，找出不在链上的公告类附件（指令、会话上下文、日期、项目文档已读等）， 判断哪些应该归属首回合并返回重放计划；条件不满足时返回 undefined。
  */
-function computeFirstTurnAnnouncements(e, n, r) {
-  let firstTurn = findFirstTurn(n);
+function computeFirstTurnAnnouncements(msg, messages, options) {
+  let firstTurn = findFirstTurn(messages);
   if (firstTurn === undefined) return;
   let { promptIndex, responseIndex } = firstTurn;
-  let S = n[responseIndex];
-  if (S.isSidechain) return;
-  let timestamp = Date.parse(S.timestamp);
-  let L = new Set();
-  for (let idx = 0; idx < responseIndex; idx++) L.add(n[idx].uuid);
-  let G = false;
-  let q = false;
-  let Z = false;
-  for (let un of e.values()) {
-    if (r.has(un.uuid) || un.isSidechain) continue;
-    let ao = un.parentUuid !== null && L.has(un.parentUuid);
-    if (ao) G = true;
-    if (getNullRenderingAttachmentType(un) !== undefined) {
-      q = true;
-      if (!ao && !hasChangedFlag(un) && Date.parse(un.timestamp) < timestamp) Z = true;
+  let responseRow = messages[responseIndex];
+  if (responseRow.isSidechain) return;
+  let timestamp = Date.parse(responseRow.timestamp);
+  let preResponseUuids = new Set();
+  for (let idx = 0; idx < responseIndex; idx++) preResponseUuids.add(messages[idx].uuid);
+  let hasPreResponseParent = false;
+  let hasAttachment = false;
+  let hasUnanchoredAttachment = false;
+  for (let row of msg.values()) {
+    if (options.has(row.uuid) || row.isSidechain) continue;
+    let isPreResponseChild = row.parentUuid !== null && preResponseUuids.has(row.parentUuid);
+    if (isPreResponseChild) hasPreResponseParent = true;
+    if (getNullRenderingAttachmentType(row) !== undefined) {
+      hasAttachment = true;
+      if (!isPreResponseChild && !hasChangedFlag(row) && Date.parse(row.timestamp) < timestamp)
+        hasUnanchoredAttachment = true;
     }
   }
-  if (!(G && q) && !Z) return;
-  let Se = new Map();
-  n.forEach((un, ao) => Se.set(un.uuid, ao));
-  let ke = new Set();
-  let we = new Set();
-  let Ee = new Set();
-  let Ae = new Map();
-  let Ie = new Set();
-  let Me = [];
-  let We = 0;
-  for (let un of e.values()) {
-    if (un.isSidechain) continue;
-    let nullRenderingAttachmentType = getNullRenderingAttachmentType(un);
+  if (!(hasPreResponseParent && hasAttachment) && !hasUnanchoredAttachment) return;
+  let indexByUuid = new Map();
+  messages.forEach((row, messageIndex) => indexByUuid.set(row.uuid, messageIndex));
+  let announcedTypes = new Set();
+  let unmaskedTypes = new Set();
+  let offChainTypes = new Set();
+  let latestByType = new Map();
+  let changedTypes = new Set();
+  let preResponseRows = [];
+  let unanchoredCount = 0;
+  for (let message of msg.values()) {
+    if (message.isSidechain) continue;
+    let nullRenderingAttachmentType = getNullRenderingAttachmentType(message);
     if (nullRenderingAttachmentType === undefined) continue;
-    let $o = Se.get(un.uuid);
-    if ($o !== undefined) {
-      if ($o < responseIndex) ke.add(nullRenderingAttachmentType);
+    let rowIndex = indexByUuid.get(message.uuid);
+    if (rowIndex !== undefined) {
+      if (rowIndex < responseIndex) announcedTypes.add(nullRenderingAttachmentType);
       else {
-        let Ho = Ae.get(nullRenderingAttachmentType);
-        if (Ho === undefined || (Se.get(Ho.uuid) ?? -1) < $o) Ae.set(nullRenderingAttachmentType, un);
-        if (hasChangedFlag(un)) Ie.add(nullRenderingAttachmentType);
-        else we.add(nullRenderingAttachmentType);
+        let latestRow = latestByType.get(nullRenderingAttachmentType);
+        if (latestRow === undefined || (indexByUuid.get(latestRow.uuid) ?? -1) < rowIndex)
+          latestByType.set(nullRenderingAttachmentType, message);
+        if (hasChangedFlag(message)) changedTypes.add(nullRenderingAttachmentType);
+        else unmaskedTypes.add(nullRenderingAttachmentType);
       }
       continue;
     }
-    if (hasChangedFlag(un)) continue;
-    let indexedAncestor = findIndexedAncestor(e, Se, un);
+    if (hasChangedFlag(message)) continue;
+    let indexedAncestor = findIndexedAncestor(msg, indexByUuid, message);
     if (indexedAncestor !== undefined && indexedAncestor < responseIndex) {
-      Me.push(un);
+      preResponseRows.push(message);
       continue;
     }
-    if (indexedAncestor !== undefined || !(Date.parse(un.timestamp) < timestamp)) {
-      if (indexedAncestor !== undefined || !hasCompactBoundaryAncestor(e, un))
-        Ee.add(nullRenderingAttachmentType);
-    } else if (!hasRealPromptAncestor(e, un)) We++;
+    if (indexedAncestor !== undefined || !(Date.parse(message.timestamp) < timestamp)) {
+      if (indexedAncestor !== undefined || !hasCompactBoundaryAncestor(msg, message))
+        offChainTypes.add(nullRenderingAttachmentType);
+    } else if (!hasRealPromptAncestor(msg, message)) unanchoredCount++;
   }
-  let childrenIndex = buildChildrenIndex(e);
-  let lt = [];
-  let Je = new Set();
-  let nt = new Set();
-  let pt = 0;
-  let Et = 0;
-  let yt = false;
-  let gt = false;
-  let At = false;
-  let It = false;
-  let Yt = false;
-  let qt = false;
-  let Zt = false;
-  let rn = false;
+  let childrenIndex = buildChildrenIndex(msg);
+  let runs = [];
+  let candidateTypes = new Set();
+  let countedUuids = new Set();
+  let declinedCount = 0;
+  let nonAnnouncementRuns = 0;
+  let declinedOpenRun = false;
+  let declinedMixedRun = false;
+  let declinedRepeatedType = false;
+  let declinedReplacingCopy = false;
+  let declinedUnreadableRow = false;
+  let declinedBadTimestamp = false;
+  let declinedTypeOnChain = false;
+  let vetoedTypeInTwoRuns = false;
   for (let idx = 0; idx < responseIndex; idx++) {
-    let ao = n[idx];
-    let timestamp_2 = Date.parse(ao.timestamp);
-    for (let yo of childrenIndex.get(ao.uuid) ?? []) {
-      if (r.has(yo.uuid) || yo.isSidechain) continue;
-      let linearChain = collectLinearChain(yo, ao, childrenIndex, r);
+    let parentMessage = messages[idx];
+    let timestamp_2 = Date.parse(parentMessage.timestamp);
+    for (let child of childrenIndex.get(parentMessage.uuid) ?? []) {
+      if (options.has(child.uuid) || child.isSidechain) continue;
+      let linearChain = collectLinearChain(child, parentMessage, childrenIndex, options);
       if (linearChain.length === 0) {
-        let Oo = countAnnouncementsUnder(yo, childrenIndex, r, nt);
-        if (Oo > 0) {
-          pt += Oo;
-          yt = true;
+        let nestedCount = countAnnouncementsUnder(child, childrenIndex, options, countedUuids);
+        if (nestedCount > 0) {
+          declinedCount += nestedCount;
+          declinedOpenRun = true;
         }
         continue;
       }
       let mapped = linearChain.map(getNullRenderingAttachmentType);
-      let filtered = linearChain.filter((Oo, jr) => mapped[jr] !== undefined);
-      for (let Oo of filtered) nt.add(Oo.uuid);
+      let filtered = linearChain.filter((row, rowIndex) => mapped[rowIndex] !== undefined);
+      for (let row of filtered) countedUuids.add(row.uuid);
       if (filtered.length === 0) {
-        Et++;
+        nonAnnouncementRuns++;
         continue;
       }
-      let Hr = filtered.length !== linearChain.length;
-      let filtered_2 = mapped.filter((Oo) => Oo !== undefined);
-      let cs = new Set(filtered_2).size !== filtered_2.length;
+      let droppedRows = filtered.length !== linearChain.length;
+      let filtered_2 = mapped.filter((type) => type !== undefined);
+      let repeatedType = new Set(filtered_2).size !== filtered_2.length;
       let any = filtered.some(hasChangedFlag);
-      let any_2 = filtered.some((Oo) => !isValidAnnouncement(Oo));
+      let any_2 = filtered.some((row) => !isValidAnnouncement(row));
       let any_3 = linearChain.some(
-        (Oo) => !(Date.parse(Oo.timestamp) >= timestamp_2) || !(Date.parse(Oo.timestamp) < timestamp),
+        (row) => !(Date.parse(row.timestamp) >= timestamp_2) || !(Date.parse(row.timestamp) < timestamp),
       );
-      if (Hr || cs || any || any_2 || any_3) {
-        pt += filtered.length;
-        gt ||= Hr;
-        At ||= cs;
-        It ||= any;
-        Yt ||= any_2;
-        qt ||= any_3;
+      if (droppedRows || repeatedType || any || any_2 || any_3) {
+        declinedCount += filtered.length;
+        declinedMixedRun ||= droppedRows;
+        declinedRepeatedType ||= repeatedType;
+        declinedReplacingCopy ||= any;
+        declinedUnreadableRow ||= any_2;
+        declinedBadTimestamp ||= any_3;
         continue;
       }
-      if (mapped.some((Oo) => ke.has(Oo))) {
-        pt += filtered.length;
-        Zt = true;
+      if (mapped.some((type) => announcedTypes.has(type))) {
+        declinedCount += filtered.length;
+        declinedTypeOnChain = true;
         continue;
       }
-      if (mapped.some((Oo) => Je.has(Oo))) rn = true;
-      for (let Oo of mapped) Je.add(Oo);
-      lt.push({
-        parent: ao,
+      if (mapped.some((type) => candidateTypes.has(type))) vetoedTypeInTwoRuns = true;
+      for (let type of mapped) candidateTypes.add(type);
+      runs.push({
+        parent: parentMessage,
         rows: linearChain,
       });
     }
   }
-  let pn = lt.length > 0 && !Je.has("date");
-  let no = lt.length > 1;
-  let filtered = ["date", "session_context"].filter((un) => Je.has(un));
-  let anchorTypesMasked = filtered.length > 0 && filtered.every((un) => Ie.has(un));
-  let reduced = lt.reduce((acc, ao) => acc + ao.rows.length, 0);
-  let turnStartByDuration = findTurnStartByDuration(n, responseIndex);
-  let Xn = lt.length > 0 && turnStartByDuration !== undefined && turnStartByDuration !== -reduced;
-  let fo = We > 0 || Me.some((un) => !nt.has(un.uuid) && !isBeforePromptAncestor(e, Se, promptIndex, un));
-  let To = [...Je];
-  let any = To.some((un) => we.has(un));
-  let any_2 = To.some((un) => Ee.has(un));
-  let any_3 = To.some((un) => {
-    if (un === "instructions") return false;
-    let ao = Ae.get(un);
-    return ao !== undefined && !isValidAnnouncement(ao);
+  let declinedNoDate = runs.length > 0 && !candidateTypes.has("date");
+  let vetoedMultipleRuns = runs.length > 1;
+  let filtered = ["date", "session_context"].filter((type) => candidateTypes.has(type));
+  let anchorTypesMasked = filtered.length > 0 && filtered.every((type) => changedTypes.has(type));
+  let reduced = runs.reduce((acc, run) => acc + run.rows.length, 0);
+  let turnStartByDuration = findTurnStartByDuration(messages, responseIndex);
+  let declinedCheckpointDisagrees =
+    runs.length > 0 && turnStartByDuration !== undefined && turnStartByDuration !== -reduced;
+  let vetoedStrayFirstCopy =
+    unanchoredCount > 0 ||
+    preResponseRows.some(
+      (row) => !countedUuids.has(row.uuid) && !isBeforePromptAncestor(msg, indexByUuid, promptIndex, row),
+    );
+  let candidateTypeList = [...candidateTypes];
+  let any = candidateTypeList.some((type) => unmaskedTypes.has(type));
+  let any_2 = candidateTypeList.some((type) => offChainTypes.has(type));
+  let any_3 = candidateTypeList.some((type) => {
+    if (type === "instructions") return false;
+    let latestRow = latestByType.get(type);
+    return latestRow !== undefined && !isValidAnnouncement(latestRow);
   });
-  let So = yt || gt || At || It || Yt || qt || Zt || pn || Xn || no || fo || any || any_2 || any_3 || rn;
-  if (So) pt += lt.reduce((acc, ao) => acc + ao.rows.length, 0);
-  if (lt.length === 0 && pt === 0 && We === 0) return;
-  let ko = mapKeysToIndex(e);
+  let vetoed =
+    declinedOpenRun ||
+    declinedMixedRun ||
+    declinedRepeatedType ||
+    declinedReplacingCopy ||
+    declinedUnreadableRow ||
+    declinedBadTimestamp ||
+    declinedTypeOnChain ||
+    declinedNoDate ||
+    declinedCheckpointDisagrees ||
+    vetoedMultipleRuns ||
+    vetoedStrayFirstCopy ||
+    any ||
+    any_2 ||
+    any_3 ||
+    vetoedTypeInTwoRuns;
+  if (vetoed) declinedCount += runs.reduce((acc, run) => acc + run.rows.length, 0);
+  if (runs.length === 0 && declinedCount === 0 && unanchoredCount === 0) return;
+  let indexByUuid_2 = mapKeysToIndex(msg);
   return {
-    runs: lt,
-    vetoed: So,
-    declinedRows: pt,
-    unanchoredRows: We,
-    nonAnnouncementRuns: Et,
-    declinedOpenRun: yt,
-    declinedMixedRun: gt,
-    declinedRepeatedType: At,
-    declinedReplacingCopy: It,
-    declinedUnreadableRow: Yt,
-    declinedBadTimestamp: qt,
-    declinedTypeOnChain: Zt,
-    declinedNoDate: pn,
-    declinedCheckpointDisagrees: Xn,
-    vetoedMultipleRuns: no,
+    runs,
+    vetoed,
+    declinedRows: declinedCount,
+    unanchoredRows: unanchoredCount,
+    nonAnnouncementRuns,
+    declinedOpenRun,
+    declinedMixedRun,
+    declinedRepeatedType,
+    declinedReplacingCopy,
+    declinedUnreadableRow,
+    declinedBadTimestamp,
+    declinedTypeOnChain,
+    declinedNoDate,
+    declinedCheckpointDisagrees,
+    vetoedMultipleRuns,
     anchorTypesMasked,
-    vetoedStrayFirstCopy: fo,
+    vetoedStrayFirstCopy,
     vetoedLaterFirstCopyOnChain: any,
     vetoedLaterFirstCopyOffChain: any_2,
     vetoedUnreadableLaterCopy: any_3,
-    vetoedTypeInTwoRuns: rn,
-    candidateTypes: Je,
-    writtenInFileBeforeParent: lt.some((un) => indexOrMax(ko, un.rows[0]) < indexOrMax(ko, un.parent)),
-    parentIsPrompt: lt.some((un) => un.parent === n[promptIndex]),
-    runParentDistanceToResponse: lt.length > 0 ? responseIndex - (Se.get(lt[0].parent.uuid) ?? 0) : 0,
+    vetoedTypeInTwoRuns,
+    candidateTypes,
+    writtenInFileBeforeParent: runs.some(
+      (run) => indexOrMax(indexByUuid_2, run.rows[0]) < indexOrMax(indexByUuid_2, run.parent),
+    ),
+    parentIsPrompt: runs.some((run) => run.parent === messages[promptIndex]),
+    runParentDistanceToResponse:
+      runs.length > 0 ? responseIndex - (indexByUuid.get(runs[0].parent.uuid) ?? 0) : 0,
     promptDistanceToResponse: responseIndex - promptIndex,
     firstTurnCheckpointDelta: turnStartByDuration,
   };
 }
 //@ chunk-e6aww6q8.js:309487-309678 placement
-function findTurnStartByDuration(e, responseIndex) {
-  for (let idx = responseIndex + 1; idx < e.length; idx++) {
-    let s = e[idx];
-    if (isRealUserPrompt(s)) return;
-    if (s.type === "system" && s.subtype === "turn_duration" && typeof s.messageCount === "number")
-      return idx - s.messageCount;
+function findTurnStartByDuration(messages, responseIndex) {
+  for (let idx = responseIndex + 1; idx < messages.length; idx++) {
+    let starts = messages[idx];
+    if (isRealUserPrompt(starts)) return;
+    if (
+      starts.type === "system" &&
+      starts.subtype === "turn_duration" &&
+      typeof starts.messageCount === "number"
+    )
+      return idx - starts.messageCount;
   }
   return;
 }
 //@ chunk-e6aww6q8.js:309678-309871 placement
-function countAnnouncementsUnder(e, childrenIndex, r, s) {
-  let h = 0;
-  let y = [e];
-  for (let idx = 0; y.length > 0 && idx < MAX_ANCESTOR_SCAN; idx++) {
-    let w = y.pop();
-    if (r.has(w.uuid) || !isAuxiliaryEntry(w)) continue;
-    if (getNullRenderingAttachmentType(w) !== undefined) {
-      h++;
-      s.add(w.uuid);
+function countAnnouncementsUnder(index, parentIndex, keptUuids, newUuids) {
+  let count = 0;
+  let queue = [index];
+  for (let idx = 0; queue.length > 0 && idx < MAX_ANCESTOR_SCAN; idx++) {
+    let entry = queue.pop();
+    if (keptUuids.has(entry.uuid) || !isAuxiliaryEntry(entry)) continue;
+    if (getNullRenderingAttachmentType(entry) !== undefined) {
+      count++;
+      newUuids.add(entry.uuid);
     }
-    y.push(...(childrenIndex.get(w.uuid) ?? []));
+    queue.push(...(parentIndex.get(entry.uuid) ?? []));
   }
-  return h;
+  return count;
 }
 //@ chunk-e6aww6q8.js:309871-311738 placement
 /**
@@ -441,64 +484,71 @@ function collectFirstTurnAnnouncements(firstTurnAnnouncements) {
 function censusResumeAnnouncements(messages, fileSize) {
   try {
     let firstTurn = findFirstTurn(messages);
-    let s = {};
-    for (let S of REANNOUNCED_ATTACHMENT_TYPES) s[S] = 0;
+    let byTurn = {};
+    for (let attachmentType of REANNOUNCED_ATTACHMENT_TYPES) byTurn[attachmentType] = 0;
     let hasPromptSnapshot = false;
-    let y = {};
-    for (let S of REANNOUNCED_ATTACHMENT_TYPES) y[S] = 0;
+    let laterCounts = {};
+    for (let attachmentType of REANNOUNCED_ATTACHMENT_TYPES) laterCounts[attachmentType] = 0;
     if (firstTurn !== undefined) {
       for (let idx = 0; idx < firstTurn.responseIndex; idx++) {
-        let w = messages[idx];
-        let nullRenderingAttachmentType = getNullRenderingAttachmentType(w);
+        let row = messages[idx];
+        let nullRenderingAttachmentType = getNullRenderingAttachmentType(row);
         if (nullRenderingAttachmentType !== undefined)
-          s[nullRenderingAttachmentType] = (s[nullRenderingAttachmentType] ?? 0) + 1;
+          byTurn[nullRenderingAttachmentType] = (byTurn[nullRenderingAttachmentType] ?? 0) + 1;
         else if (
-          w.type === "attachment" &&
-          isPlainObject_5(w.attachment) &&
-          w.attachment.type === "prompt_snapshot"
+          row.type === "attachment" &&
+          isPlainObject_5(row.attachment) &&
+          row.attachment.type === "prompt_snapshot"
         )
           hasPromptSnapshot = true;
       }
       for (let idx = firstTurn.responseIndex + 1; idx < messages.length; idx++) {
-        let w = messages[idx];
-        if (isCompactBoundaryMessage_2(w)) break;
-        let nullRenderingAttachmentType = getNullRenderingAttachmentType(w);
-        if (nullRenderingAttachmentType !== undefined && !hasChangedFlag(w))
-          y[nullRenderingAttachmentType] = (y[nullRenderingAttachmentType] ?? 0) + 1;
+        let row = messages[idx];
+        if (isCompactBoundaryMessage_2(row)) break;
+        let nullRenderingAttachmentType = getNullRenderingAttachmentType(row);
+        if (nullRenderingAttachmentType !== undefined && !hasChangedFlag(row))
+          laterCounts[nullRenderingAttachmentType] = (laterCounts[nullRenderingAttachmentType] ?? 0) + 1;
       }
     }
     logEvent("tengu_resume_first_turn_announcement_census", {
       has_first_turn: firstTurn !== undefined,
-      has_compact_boundary: messages.some((S) => isCompactBoundaryMessage_2(S)),
+      has_compact_boundary: messages.some((row) => isCompactBoundaryMessage_2(row)),
       prompt_index: firstTurn?.promptIndex ?? -1,
       rows_between_prompt_and_response:
         firstTurn === undefined ? 0 : firstTurn.responseIndex - firstTurn.promptIndex - 1,
-      instructions_count: s.instructions ?? 0,
-      session_context_count: s.session_context ?? 0,
-      context_sections_count: s.context_sections ?? 0,
-      project_doc_reads_count: s.project_doc_reads ?? 0,
-      coordinator_context_count: s.coordinator_context ?? 0,
-      date_count: s.date ?? 0,
+      instructions_count: byTurn.instructions ?? 0,
+      session_context_count: byTurn.session_context ?? 0,
+      context_sections_count: byTurn.context_sections ?? 0,
+      project_doc_reads_count: byTurn.project_doc_reads ?? 0,
+      coordinator_context_count: byTurn.coordinator_context ?? 0,
+      date_count: byTurn.date ?? 0,
       has_prompt_snapshot: hasPromptSnapshot,
       transcript_size_known: fileSize !== undefined,
       over_prune_threshold: fileSize !== undefined && fileSize > SKIP_PRECOMPACT_THRESHOLD,
-      later_instructions_first_copy_count: y.instructions ?? 0,
-      later_session_context_first_copy_count: y.session_context ?? 0,
-      later_context_sections_first_copy_count: y.context_sections ?? 0,
-      later_project_doc_reads_first_copy_count: y.project_doc_reads ?? 0,
-      later_coordinator_context_first_copy_count: y.coordinator_context ?? 0,
-      later_date_first_copy_count: y.date ?? 0,
+      later_instructions_first_copy_count: laterCounts.instructions ?? 0,
+      later_session_context_first_copy_count: laterCounts.session_context ?? 0,
+      later_context_sections_first_copy_count: laterCounts.context_sections ?? 0,
+      later_project_doc_reads_first_copy_count: laterCounts.project_doc_reads ?? 0,
+      later_coordinator_context_first_copy_count: laterCounts.coordinator_context ?? 0,
+      later_date_first_copy_count: laterCounts.date ?? 0,
     });
   } catch (error) {
     logError(toError(error));
   }
 }
 //@ chunk-e6aww6q8.js:313084-313160 placement
-var MAX_ANNOUNCEMENTS = 500;
-var weakMap_2 = new WeakMap();
-var weakMap_3 = new WeakMap();
-var weakMap_4 = new WeakMap();
-var weakMap_5 = new WeakMap();
+var MAX_ANNOUNCEMENTS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var weakMap_2;
+var weakMap_3;
+var weakMap_4;
+var weakMap_5;
+deferInit("chunk-e6aww6q8.js:313084", () => {
+  MAX_ANNOUNCEMENTS = 500;
+  weakMap_2 = new WeakMap();
+  weakMap_3 = new WeakMap();
+  weakMap_4 = new WeakMap();
+  weakMap_5 = new WeakMap();
+});
 export {
   announcementSchema,
   contextSectionsSchema,

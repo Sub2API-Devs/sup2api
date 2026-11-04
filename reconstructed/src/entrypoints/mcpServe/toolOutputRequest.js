@@ -92,8 +92,8 @@ var OUTPUT_CAPABLE_TOOLS = new Set([
 ]);
 var MAX_TOOL_OUTPUT_BYTES = 12582912;
 //@ chunk-e3wfm0b3.js:1462-1530 placement
-function toolOutputServerCapabilities(e, t) {
-  let announcedCapability = buildAnnouncedCapability(e, t);
+function toolOutputServerCapabilities(getTools, launchPermissionContext) {
+  let announcedCapability = buildAnnouncedCapability(getTools, launchPermissionContext);
   return (
     announcedCapability && {
       experimental: {
@@ -103,19 +103,19 @@ function toolOutputServerCapabilities(e, t) {
   );
 }
 //@ chunk-e3wfm0b3.js:1530-1778 placement
-function buildAnnouncedCapability(e, t) {
-  if (!isToolOutputEnvOn() || t === undefined) return;
-  let n = classifyToolsForOutput(e(), t);
-  if (!validateDenyRules(n.deny_rules)) {
+function buildAnnouncedCapability(getTools, launchPermissionContext) {
+  if (!isToolOutputEnvOn() || launchPermissionContext === undefined) return;
+  let classification = classifyToolsForOutput(getTools(), launchPermissionContext);
+  if (!validateDenyRules(classification.deny_rules)) {
     logFeatureBad("mcp_serve_tool_output", "deny_rules_over_bounds");
     return;
   }
-  let o = isReturnOutputSupported() ? rangeToAnnounce() : undefined;
+  let interfaceRange = isReturnOutputSupported() ? rangeToAnnounce() : undefined;
   return {
-    ...n,
-    ...(o !== undefined && {
-      tools: [...n.tools, ...SERVE_MODE_KEYS, MONITOR],
-      tool_host_interface: o,
+    ...classification,
+    ...(interfaceRange !== undefined && {
+      tools: [...classification.tools, ...SERVE_MODE_KEYS, MONITOR],
+      tool_host_interface: interfaceRange,
     }),
   };
 }
@@ -129,10 +129,10 @@ function isToolOutputRequested() {
   return isToolOutputEnvOn() && isReturnOutputSupported();
 }
 //@ chunk-e3wfm0b3.js:1874-1954 placement
-function classifyToolsForOutput(e, t) {
+function classifyToolsForOutput(tools, launchPermissionContext) {
   return buildReturnToolOutputPayload({
-    tools: outputCapableToolNames(e),
-    denyRules: t.alwaysDenyRules.cliArg ?? [],
+    tools: outputCapableToolNames(tools),
+    denyRules: launchPermissionContext.alwaysDenyRules.cliArg ?? [],
   });
 }
 //@ chunk-e3wfm0b3.js:1954-3012 placement
@@ -140,7 +140,7 @@ function classifyToolsForOutput(e, t) {
  * 回答 mcp serve 的工具输出对象请求：协商版本、核对拒绝规则摘要、执行工具并编码输出。
  */
 async function answerToolOutputRequest({
-  name: e,
+  name,
   args,
   meta,
   tools,
@@ -150,56 +150,59 @@ async function answerToolOutputRequest({
 }) {
   let returnOutputRequest = parseReturnOutputRequest(meta);
   if (returnOutputRequest.kind === "absent") return;
-  let i =
+  let checked =
     readCallerAsks(meta).kind === "absent"
-      ? checkToolOutputRequest(returnOutputRequest, e, tools, launchPermissionContext)
+      ? checkToolOutputRequest(returnOutputRequest, name, tools, launchPermissionContext)
       : refusalResult(
           "invalid_request",
-          `${e} was not run: a call that carries _meta["${CALLER_ASKS_KEY}"] is answered only as a plain call. Call it without asking for its output object.`,
+          `${name} was not run: a call that carries _meta["${CALLER_ASKS_KEY}"] is answered only as a plain call. Call it without asking for its output object.`,
           "carries_asks_key",
         );
-  if ("refusal" in i) {
-    logFeatureSad("mcp_serve_tool_output", i.reason, {
-      tool: toolNameForAnalytics(e),
+  if ("refusal" in checked) {
+    logFeatureSad("mcp_serve_tool_output", checked.reason, {
+      tool: toolNameForAnalytics(name),
     });
-    return refusedResult(i.refusal);
+    return refusedResult(checked.refusal);
   }
   let { toolUseContext, release } = newCall();
   try {
-    let d = await runToolForOutput(
-      i.tool,
+    let result = await runToolForOutput(
+      checked.tool,
       args,
-      buildServedToolUseContext(toolUseContext, addSessionWorkingDirectories(i.launchPermissionContext)),
+      buildServedToolUseContext(
+        toolUseContext,
+        addSessionWorkingDirectories(checked.launchPermissionContext),
+      ),
       startHeartbeat,
     );
     if (!toolUseContext.abortController.signal.aborted) {
-      let tool = toolNameForAnalytics(i.tool.name);
-      if ("unsent" in d)
-        logFeatureBad("mcp_serve_tool_output", d.unsent, {
+      let tool = toolNameForAnalytics(checked.tool.name);
+      if ("unsent" in result)
+        logFeatureBad("mcp_serve_tool_output", result.unsent, {
           tool,
         });
-      else if (d.objection === "crashed_check")
-        logFeatureBad("mcp_serve_tool_output", d.objection, {
+      else if (result.objection === "crashed_check")
+        logFeatureBad("mcp_serve_tool_output", result.objection, {
           tool,
         });
-      else if (d.objection !== undefined)
-        logFeatureSad("mcp_serve_tool_output", d.objection, {
+      else if (result.objection !== undefined)
+        logFeatureSad("mcp_serve_tool_output", result.objection, {
           tool,
         });
       else
         logFeatureOk("mcp_serve_tool_output", {
           tool,
-          answer: fromEnum(d.answer),
-          safety_ask_skipped: d.wasSafetyAskSkipped === true,
-          ...(d.wasOutputCut && {
+          answer: fromEnum(result.answer),
+          safety_ask_skipped: result.wasSafetyAskSkipped === true,
+          ...(result.wasOutputCut && {
             output_cut: true,
           }),
-          ...(d.diffLeftOut && {
-            diff_left_out: fromEnum(d.diffLeftOut),
+          ...(result.diffLeftOut && {
+            diff_left_out: fromEnum(result.diffLeftOut),
           }),
         });
     }
-    return d.result;
+    return result.result;
   } finally {
     release();
   }
@@ -208,61 +211,61 @@ async function answerToolOutputRequest({
 /**
  * 检查输出对象请求（协议版本、规则摘要等）
  */
-function checkToolOutputRequest(returnOutputRequest, t, tools, launchPermissionContext) {
+function checkToolOutputRequest(returnOutputRequest, name, tools, launchPermissionContext) {
   if (!isToolOutputEnvOn())
     return refusalResult(
       "unsupported_protocol",
-      `${t} was not run: this server is not set up to return output objects (CLAUDE_CODE_MCP_SERVE_TOOL_OUTPUT is not on). Call it without asking for its output object.`,
+      `${name} was not run: this server is not set up to return output objects (CLAUDE_CODE_MCP_SERVE_TOOL_OUTPUT is not on). Call it without asking for its output object.`,
     );
   if (launchPermissionContext === undefined)
     return refusalResult(
       "unsupported_protocol",
-      `${t} was not run: this server holds no permission rules (CLAUDE_CODE_MCP_SERVE_SETTINGS was unset or empty when it started), and it returns output objects only for calls it can judge. Call it without asking for its output object.`,
+      `${name} was not run: this server holds no permission rules (CLAUDE_CODE_MCP_SERVE_SETTINGS was unset or empty when it started), and it returns output objects only for calls it can judge. Call it without asking for its output object.`,
       "no_launch_rules",
     );
   let { deny_rules: denyRules } = classifyToolsForOutput(tools, launchPermissionContext);
   if (!validateDenyRules(denyRules))
     return refusalResult(
       "unsupported_protocol",
-      `${t} was not run: this server was launched with more or longer deny rules than it can advertise, so it returns no output objects. Call it without asking for its output object.`,
+      `${name} was not run: this server was launched with more or longer deny rules than it can advertise, so it returns no output objects. Call it without asking for its output object.`,
       "deny_rules_over_bounds",
     );
   if (returnOutputRequest.kind === "malformed")
     return refusalResult(
       "invalid_request",
-      `${t} was not run: _meta["${ANTHROPIC_RETURNTOOLOUTPUT}"] must be exactly { versions, deny_rules_digest }. versions: up to 64 whole numbers. deny_rules_digest: the SHA-256 of JSON.stringify(deny_rules), for the deny_rules this server advertises, as 64 lower-case hex characters.`,
+      `${name} was not run: _meta["${ANTHROPIC_RETURNTOOLOUTPUT}"] must be exactly { versions, deny_rules_digest }. versions: up to 64 whole numbers. deny_rules_digest: the SHA-256 of JSON.stringify(deny_rules), for the deny_rules this server advertises, as 64 lower-case hex characters.`,
     );
   if (returnOutputRequest.kind === "no_shared_version")
     return refusalResult(
       "unsupported_protocol",
-      `${t} was not run: this server returns output objects only in version ${SUPPORTED_RETURN_OUTPUT_VERSIONS.join(", ")}, and the request lists ${returnOutputRequest.versions.join(", ") || "none"}.`,
+      `${name} was not run: this server returns output objects only in version ${SUPPORTED_RETURN_OUTPUT_VERSIONS.join(", ")}, and the request lists ${returnOutputRequest.versions.join(", ") || "none"}.`,
     );
   if (returnOutputRequest.denyRulesDigest !== hashJsonSha256(denyRules))
     return refusalResult(
       "unsupported_protocol",
-      `${t} was not run: the request's deny_rules_digest is not that of the deny_rules this server advertises. Reconnect and read them again.`,
+      `${name} was not run: the request's deny_rules_digest is not that of the deny_rules this server advertises. Reconnect and read them again.`,
       "deny_rules_digest_mismatch",
     );
-  let toolByName = findToolByName(tools, t);
+  let toolByName = findToolByName(tools, name);
   if (toolByName === undefined)
-    return refusalResult("not_served", `${t} was not run: this server has no tool by that name.`);
-  return OUTPUT_CAPABLE_TOOLS.has(t)
+    return refusalResult("not_served", `${name} was not run: this server has no tool by that name.`);
+  return OUTPUT_CAPABLE_TOOLS.has(name)
     ? {
         tool: toolByName,
         launchPermissionContext,
       }
     : refusalResult(
         "not_served",
-        `${t} was not run: the tools this server answers with an output object are ${outputCapableToolNames(tools).join(", ") || "none"}. Call it without asking for its output object.`,
+        `${name} was not run: the tools this server answers with an output object are ${outputCapableToolNames(tools).join(", ") || "none"}. Call it without asking for its output object.`,
       );
 }
 //@ chunk-e3wfm0b3.js:4881-4913 placement
-function isAnsweredWithOutput(e) {
-  return OUTPUT_CAPABLE_TOOLS.has(e);
+function isAnsweredWithOutput(toolName) {
+  return OUTPUT_CAPABLE_TOOLS.has(toolName);
 }
 //@ chunk-e3wfm0b3.js:4913-4975 placement
-function outputCapableToolNames(e) {
-  return e.map((t) => t.name).filter((t) => OUTPUT_CAPABLE_TOOLS.has(t));
+function outputCapableToolNames(tools) {
+  return tools.map((tool) => tool.name).filter((toolName) => OUTPUT_CAPABLE_TOOLS.has(toolName));
 }
 //@ chunk-e3wfm0b3.js:4975-5032 placement
 function toolNameForAnalytics(name) {
@@ -271,15 +274,15 @@ function toolNameForAnalytics(name) {
     : getUnknownToolAnalyticsName(name);
 }
 //@ chunk-e3wfm0b3.js:5032-5135 placement
-function refusedResult(e) {
+function refusedResult(refusal) {
   return buildRemoteToolCallResult({
     envelope: {
       v: REMOTE_TOOL_PROTOCOL_VERSION,
       outcome: "refused",
       target: servedTarget(),
-      ...e,
+      ...refusal,
     },
-    content: clipText(e.message),
+    content: clipText(refusal.message),
   });
 }
 //@ chunk-e3wfm0b3.js:5135-5315 placement
@@ -295,10 +298,10 @@ function acknowledgedResult(askId) {
   });
 }
 //@ chunk-e3wfm0b3.js:5315-5379 placement
-function refusalResult(e, message, reason = e) {
+function refusalResult(code, message, reason = code) {
   return {
     refusal: {
-      code: e,
+      code,
       message,
     },
     reason,
@@ -308,62 +311,62 @@ function refusalResult(e, message, reason = e) {
 /**
  * 校验并执行工具，返回输出对象
  */
-async function runToolForOutput(tool, t, servedToolUseContext, startHeartbeat) {
-  let s = {
-    ...t,
+async function runToolForOutput(tool, args, toolUseContext, startHeartbeat) {
+  let input = {
+    ...args,
   };
-  let filtered = SERVE_MODE_VALUE.filter((h) => h in s);
-  let u = filtered.length > 0 ? [strippedPrivilegeFieldsNote(filtered)] : [];
-  let a = await validateToolCallInput(tool, s, servedToolUseContext);
-  if ("rejection" in a)
+  let fields = SERVE_MODE_VALUE.filter((field) => field in input);
+  let notes = fields.length > 0 ? [strippedPrivilegeFieldsNote(fields)] : [];
+  let validated = await validateToolCallInput(tool, input, toolUseContext);
+  if ("rejection" in validated)
     return {
-      result: completedError(a.rejection, objectionToAnswer(a.objection), u),
+      result: completedError(validated.rejection, objectionToAnswer(validated.objection), notes),
       answer: "not_run",
-      objection: a.objection,
+      objection: validated.objection,
     };
-  let i = await ranTool(tool, a.input, servedToolUseContext, startHeartbeat);
+  let ran = await ranTool(tool, validated.input, toolUseContext, startHeartbeat);
   return {
-    ...("failure" in i
+    ...("failure" in ran
       ? {
-          result: completedError(i.failure, "ran", u),
+          result: completedError(ran.failure, "ran", notes),
           answer: "tool_failed",
         }
-      : outputAnswer(tool, i.data, u)),
-    wasSafetyAskSkipped: a.wasSafetyAskSkipped,
+      : outputAnswer(tool, ran.data, notes)),
+    wasSafetyAskSkipped: validated.wasSafetyAskSkipped,
   };
 }
 //@ chunk-e3wfm0b3.js:5762-6217 placement
 /**
  * 检查工具启用与输入校验
  */
-async function validateToolCallInput(e, t, n) {
+async function validateToolCallInput(tool, args, toolUseContext) {
   try {
-    if (!e.isEnabled())
+    if (!tool.isEnabled())
       return {
-        rejection: `Tool ${e.name} is not enabled`,
+        rejection: `Tool ${tool.name} is not enabled`,
       };
-    let serveModeInput = parseServeModeInput(e, t);
+    let serveModeInput = parseServeModeInput(tool, args);
     if (!serveModeInput.success)
       return {
-        rejection: `InputValidationError: ${formatZodValidationError(e.name, serveModeInput.error)}`,
+        rejection: `InputValidationError: ${formatZodValidationError(tool.name, serveModeInput.error)}`,
       };
-    let s = await e.validateInput?.(serveModeInput.data, n);
-    if (s !== undefined && !s.result)
+    let inputResult = await tool.validateInput?.(serveModeInput.data, toolUseContext);
+    if (inputResult !== undefined && !inputResult.result)
       return {
-        rejection: s.message,
-        ...(s.deniedByPermissionRule === true && {
+        rejection: inputResult.message,
+        ...(inputResult.deniedByPermissionRule === true && {
           objection: "deny_rule",
         }),
       };
-    let r = await runSafetyCheck(e, serveModeInput.data, n);
-    return "rejection" in r
-      ? r
+    let safety = await runSafetyCheck(tool, serveModeInput.data, toolUseContext);
+    return "rejection" in safety
+      ? safety
       : {
           input: serveModeInput.data,
-          ...r,
+          ...safety,
         };
   } catch (error) {
-    logUnexpectedThrow(e, error);
+    logUnexpectedThrow(tool, error);
     return {
       rejection: formatToolErrorMessage(error),
     };
@@ -373,124 +376,129 @@ async function validateToolCallInput(e, t, n) {
 /**
  * 为远端调用构造工具上下文（标记来自其他机器、挂起沙箱自动允许）
  */
-function buildServedToolUseContext(e, t) {
-  let n = {
+function buildServedToolUseContext(toolUseContext, permissionContext) {
+  let appState = {
     ...serveModeDefaultAppState(),
     toolPermissionContext: {
-      ...t,
+      ...permissionContext,
       sandboxAutoAllowSuspended: true,
     },
   };
   return {
-    ...e,
+    ...toolUseContext,
     inputFromAnotherMachine: true,
     toolUseId: `toolu_${randomUUID()}`,
-    getAppState: () => n,
+    getAppState: () => appState,
   };
 }
 //@ chunk-e3wfm0b3.js:6391-7523 placement
 /**
  * 运行工具权限检查并处理崩溃
  */
-async function runSafetyCheck(e, t, n) {
-  let o = await checkRuleBasedPermissions(e, t, n, {
+async function runSafetyCheck(tool, input, toolUseContext) {
+  let result = await checkRuleBasedPermissions(tool, input, toolUseContext, {
     crashIsObjection: true,
   }).catch((error) => {
-    if (n.abortController.signal.aborted) throw error;
-    logUnexpectedThrow(e, error);
+    if (toolUseContext.abortController.signal.aborted) throw error;
+    logUnexpectedThrow(tool, error);
     return "crashed";
   });
-  if (o === null)
+  if (result === null)
     return {
       wasSafetyAskSkipped: false,
     };
   if (
-    o === "crashed" ||
-    (o.decisionReason?.type === "other" && o.decisionReason.reason === PERMISSION_CHECK_CRASHED_REASON)
+    result === "crashed" ||
+    (result.decisionReason?.type === "other" &&
+      result.decisionReason.reason === PERMISSION_CHECK_CRASHED_REASON)
   )
     return {
-      rejection: `${e.name} was not run: the permission rules could not be evaluated for this call (internal error).`,
+      rejection: `${tool.name} was not run: the permission rules could not be evaluated for this call (internal error).`,
       objection: "crashed_check",
     };
-  if (o.behavior === "deny")
+  if (result.behavior === "deny")
     return {
-      rejection: o.message,
+      rejection: result.message,
       objection: "deny_rule",
     };
-  if (carriesAskRuleIntent(o))
+  if (carriesAskRuleIntent(result))
     return {
-      rejection: `${e.name} was not run: a permission rule says to ask a person before a call like this one, and a call that runs in this environment cannot ask. Retrying won't help while that rule is in effect.`,
+      rejection: `${tool.name} was not run: a permission rule says to ask a person before a call like this one, and a call that runs in this environment cannot ask. Retrying won't help while that rule is in effect.`,
       objection: "ask_rule",
     };
-  let safetyCheckReason = findSafetyCheckReason(o.decisionReason, isAutoModeDenyCircuitBreaker);
-  if (safetyCheckReason !== undefined)
+  let safetyReason = findSafetyCheckReason(result.decisionReason, isAutoModeDenyCircuitBreaker);
+  if (safetyReason !== undefined)
     return {
-      rejection: buildDangerousRemovalDenial(flaggedPartMessage(o, safetyCheckReason)),
+      rejection: buildDangerousRemovalDenial(flaggedPartMessage(result, safetyReason)),
       objection: "circuit_breaker",
     };
-  let r = findSafetyCheckReason(o.decisionReason, isBypassImmuneCircuitBreaker) !== undefined;
-  return !r && findSafetyCheckReason(o.decisionReason) !== undefined
+  let isImmune = findSafetyCheckReason(result.decisionReason, isBypassImmuneCircuitBreaker) !== undefined;
+  return !isImmune && findSafetyCheckReason(result.decisionReason) !== undefined
     ? {
         wasSafetyAskSkipped: true,
-        ask: o,
+        ask: result,
       }
     : {
-        rejection: `${e.name} was not run: ${o.message} A call that runs in this environment cannot put that to a person. Retrying won't help.`,
-        objection: r ? "circuit_breaker" : "other_ask",
+        rejection: `${tool.name} was not run: ${result.message} A call that runs in this environment cannot put that to a person. Retrying won't help.`,
+        objection: isImmune ? "circuit_breaker" : "other_ask",
       };
 }
 //@ chunk-e3wfm0b3.js:7523-8323 placement
-async function checkPlainCall(e, t, n, o, s) {
-  if (o === undefined)
+async function checkPlainCall(tool, args, toolUseContext, launchPermissionContext, session) {
+  if (launchPermissionContext === undefined)
     return {
-      toolUseContext: n,
+      toolUseContext,
     };
-  let r = {
-    ...buildServedToolUseContext(n, o),
-    inputFromAnotherMachine: n.inputFromAnotherMachine,
+  let callContext = {
+    ...buildServedToolUseContext(toolUseContext, launchPermissionContext),
+    inputFromAnotherMachine: toolUseContext.inputFromAnotherMachine,
   };
-  let { toolUseId } = r;
-  let a =
+  let { toolUseId } = callContext;
+  let permissionRoundInfo =
     toolUseId === undefined
       ? undefined
       : {
           toolUseId,
-          opened: startPermissionRound(r, toolUseId, e.name),
+          opened: startPermissionRound(callContext, toolUseId, tool.name),
         };
-  let i = await runSafetyCheck(e, t, {
-    ...r,
+  let safety = await runSafetyCheck(tool, args, {
+    ...callContext,
     permissionPhase: undefined,
-    permissionRound: a?.opened,
+    permissionRound: permissionRoundInfo?.opened,
   }).catch((error) => {
-    if (a) takePermissionRecord(r, a.toolUseId, a.opened);
+    if (permissionRoundInfo)
+      takePermissionRecord(callContext, permissionRoundInfo.toolUseId, permissionRoundInfo.opened);
     throw error;
   });
-  let permissionPhase = (a && takePermissionRecord(r, a.toolUseId, a.opened)) ?? {};
-  if (!("rejection" in i)) {
-    let y = await settlePlainCallAsk(s, e, t, r.session, i.ask);
-    if (y !== "run" && y !== "as_without_the_key") return y;
+  let permissionPhase =
+    (permissionRoundInfo &&
+      takePermissionRecord(callContext, permissionRoundInfo.toolUseId, permissionRoundInfo.opened)) ??
+    {};
+  if (!("rejection" in safety)) {
+    let decision = await settlePlainCallAsk(session, tool, args, callContext.session, safety.ask);
+    if (decision !== "run" && decision !== "as_without_the_key") return decision;
     logFeatureOk(
       "mcp_serve_plain_call",
-      y === "run"
+      decision === "run"
         ? {
             safety_ask_skipped: false,
             caller_attested: true,
           }
         : {
-            safety_ask_skipped: i.wasSafetyAskSkipped,
+            safety_ask_skipped: safety.wasSafetyAskSkipped,
           },
     );
     return {
       toolUseContext: {
-        ...r,
+        ...callContext,
         permissionPhase,
       },
     };
   }
-  if (i.objection === "crashed_check") logFeatureBad("mcp_serve_plain_call", i.objection);
-  else logFeatureSad("mcp_serve_plain_call", i.objection);
+  if (safety.objection === "crashed_check") logFeatureBad("mcp_serve_plain_call", safety.objection);
+  else logFeatureSad("mcp_serve_plain_call", safety.objection);
   return {
-    rejection: i.rejection,
+    rejection: safety.rejection,
   };
 }
 //@ chunk-e3wfm0b3.js:8323-8529 placement
@@ -511,12 +519,20 @@ function objectionToAnswer(objection) {
   }
 }
 //@ chunk-e3wfm0b3.js:8529-8759 placement
-async function ranTool(e, t, n, o, denyNestedPermissionAsk = hasPermissionsToUseTool, r = false, u = false) {
-  using a = o();
+async function ranTool(
+  tool,
+  input,
+  toolUseContext,
+  startHeartbeat,
+  denyNestedPermissionAsk = hasPermissionsToUseTool,
+  callerLogsSharedEvents = false,
+  smallResultAsked = false,
+) {
+  using heartbeatScope = startHeartbeat();
   try {
-    return await e.call(
-      t,
-      n,
+    return await tool.call(
+      input,
+      toolUseContext,
       denyNestedPermissionAsk,
       createAssistantMessage({
         content: [],
@@ -524,124 +540,127 @@ async function ranTool(e, t, n, o, denyNestedPermissionAsk = hasPermissionsToUse
       undefined,
       {
         gitDiffRead: true,
-        ...(r && {
-          callerLogsSharedEvents: r,
+        ...(callerLogsSharedEvents && {
+          callerLogsSharedEvents,
         }),
-        ...(u && {
-          smallResultAsked: u,
+        ...(smallResultAsked && {
+          smallResultAsked,
         }),
       },
     );
   } catch (error) {
-    logUnexpectedThrow(e, error);
+    logUnexpectedThrow(tool, error);
     return {
       failure: formatToolErrorMessage(error),
     };
   }
 }
 //@ chunk-e3wfm0b3.js:8759-8889 placement
-function logUnexpectedThrow(e, error) {
+function logUnexpectedThrow(tool, error) {
   if (isAbortOrCancelError(error) || classifyToolErrorCode(error).isSad) return;
   let error_2 = toError(error);
   logError(
     "telemetryMessage" in error_2
       ? error_2
-      : withTelemetryMessage(error_2, `mcp server tool '${e.name}' threw`),
+      : withTelemetryMessage(error_2, `mcp server tool '${tool.name}' threw`),
   );
 }
 //@ chunk-e3wfm0b3.js:8889-9337 placement
-function outputAnswer(e, t, n, o) {
+function outputAnswer(tool, output, notes, interfaceInfo) {
   try {
-    let outputVariants = buildOutputVariants(e, t, o);
-    for (let [r, { output, ...a }] of outputVariants.entries())
+    let outputVariants = buildOutputVariants(tool, output, interfaceInfo);
+    for (let [index, { output: output_2, ...variantRest }] of outputVariants.entries())
       try {
-        let i = encodeServedOutput(
-          `${e.name} ran. Its output is in this answer's structured content.`,
-          output,
+        let encoded = encodeServedOutput(
+          `${tool.name} ran. Its output is in this answer's structured content.`,
+          output_2,
           false,
-          n,
+          notes,
         );
-        if (Buffer.byteLength(jsonStringify(i), "utf8") <= MAX_TOOL_OUTPUT_BYTES)
+        if (Buffer.byteLength(jsonStringify(encoded), "utf8") <= MAX_TOOL_OUTPUT_BYTES)
           return {
-            ...a,
-            result: i,
+            ...variantRest,
+            result: encoded,
             answer: "output",
-            ...(hasPersistedBashOutput(e, t) && {
+            ...(hasPersistedBashOutput(tool, output) && {
               wasOutputCut: true,
             }),
           };
       } catch (error) {
-        if (r === outputVariants.length - 1) throw error;
-        logEncodeFailure(e, error, " in one form, so a smaller one is tried");
+        if (index === outputVariants.length - 1) throw error;
+        logEncodeFailure(tool, error, " in one form, so a smaller one is tried");
       }
-    return unsentResult(e, "result_too_large", n);
+    return unsentResult(tool, "result_too_large", notes);
   } catch (error) {
-    logEncodeFailure(e, error, "");
-    return unsentResult(e, "result_unbuildable", n);
+    logEncodeFailure(tool, error, "");
+    return unsentResult(tool, "result_unbuildable", notes);
   }
 }
 //@ chunk-e3wfm0b3.js:9337-9429 placement
-function logEncodeFailure(e, error, n) {
+function logEncodeFailure(tool, error, suffix) {
   logError(
-    withTelemetryMessage(toError(error), `mcp server tool '${e.name}' output could not be encoded${n}`),
+    withTelemetryMessage(
+      toError(error),
+      `mcp server tool '${tool.name}' output could not be encoded${suffix}`,
+    ),
   );
 }
 //@ chunk-e3wfm0b3.js:9429-10018 placement
 /**
  * 生成工具输出对象的若干裁剪版本
  */
-function buildOutputVariants(e, t, n) {
-  if (e.name === FILE_WRITE_TOOL_NAME && isPlainObject(t))
-    return withDiffLeftOutVariants(t, [
+function buildOutputVariants(tool, output, interfaceInfo) {
+  if (tool.name === FILE_WRITE_TOOL_NAME && isPlainObject(output))
+    return withDiffLeftOutVariants(output, [
       {
-        output: toolOutputForWire(e, t),
+        output: toolOutputForWire(tool, output),
       },
     ]);
-  if (e.name !== FILE_EDIT_TOOL_NAME || !isPlainObject(t))
+  if (tool.name !== FILE_EDIT_TOOL_NAME || !isPlainObject(output))
     return [
       {
-        output: toolOutputForWire(e, t),
+        output: toolOutputForWire(tool, output),
       },
     ];
-  let output = {
-    ...t,
+  let output_2 = {
+    ...output,
     originalFile: null,
   };
-  if (typeof t.originalFile !== "string" || n === undefined)
-    return withDiffLeftOutVariants(t, [
+  if (typeof output.originalFile !== "string" || interfaceInfo === undefined)
+    return withDiffLeftOutVariants(output, [
       {
-        output,
+        output: output_2,
       },
     ]);
-  if (n.isSubagent)
-    return withDiffLeftOutVariants(t, [
+  if (interfaceInfo.isSubagent)
+    return withDiffLeftOutVariants(output, [
       {
-        output,
+        output: output_2,
         originalFileLeftOutReason: "for_subagent",
       },
     ]);
-  if (n.sessionVersion < TOOL_HOST_INTERFACE_FEATURES.editOriginalFile)
-    return withDiffLeftOutVariants(t, [
+  if (interfaceInfo.sessionVersion < TOOL_HOST_INTERFACE_FEATURES.editOriginalFile)
+    return withDiffLeftOutVariants(output, [
       {
-        output,
+        output: output_2,
         originalFileLeftOutReason: "older_session",
       },
     ]);
   return withDiffLeftOutVariants(
-    t,
-    Buffer.byteLength(t.originalFile, "utf8") > MAX_RETURNED_OUTPUT_BYTES
+    output,
+    Buffer.byteLength(output.originalFile, "utf8") > MAX_RETURNED_OUTPUT_BYTES
       ? [
           {
-            output,
+            output: output_2,
             originalFileLeftOutReason: "over_limit",
           },
         ]
       : [
           {
-            output: t,
+            output,
           },
           {
-            output,
+            output: output_2,
             originalFileLeftOutReason: "answer_too_large",
           },
         ],
@@ -651,24 +670,24 @@ function buildOutputVariants(e, t, n) {
 /**
  * 加上去掉 gitDiff 的变体
  */
-function withDiffLeftOutVariants(e, t) {
-  let n =
-    e.gitDiff === undefined
+function withDiffLeftOutVariants(output, variants) {
+  let withoutDiff =
+    output.gitDiff === undefined
       ? []
-      : t.map((o) => ({
-          ...o,
-          output: mergeIfObject(o.output, {
+      : variants.map((variant) => ({
+          ...variant,
+          output: mergeIfObject(variant.output, {
             gitDiff: undefined,
           }),
           diffLeftOut: "git_diff",
         }));
   return [
-    ...t,
-    ...n,
+    ...variants,
+    ...withoutDiff,
     {
-      ...t.at(-1),
+      ...variants.at(-1),
       output: {
-        ...e,
+        ...output,
         gitDiff: undefined,
         structuredPatch: [],
         originalFile: null,
@@ -681,88 +700,88 @@ function withDiffLeftOutVariants(e, t) {
 /**
  * 输出对象转可发送形式（截断说明）
  */
-function toolOutputForWire(e, t) {
-  if (hasPersistedBashOutput(e, t)) {
-    let persistedOutputSize = t.persistedOutputSize;
-    let o =
+function toolOutputForWire(tool, output) {
+  if (hasPersistedBashOutput(tool, output)) {
+    let persistedOutputSize = output.persistedOutputSize;
+    let sizeNote =
       typeof persistedOutputSize === "number"
         ? `the command printed ${formatFileSize(persistedOutputSize)}; `
         : "";
-    let s =
+    let whereNote =
       typeof persistedOutputSize === "number" && persistedOutputSize >= MAX_PERSISTED_OUTPUT_BYTES
         ? `The first ${formatFileSize(MAX_PERSISTED_OUTPUT_BYTES)} of the command's output are`
         : "The command's whole output is";
-    let r = `(output truncated: ${o}only the start was returned, and a saved copy of this result holds only that start. ${s} in the file ${t.persistedOutputPath}. If the file is gone, run the command again with ${outputFilterHint(e.name)}, if that is safe.)
+    let prefix = `(output truncated: ${sizeNote}only the start was returned, and a saved copy of this result holds only that start. ${whereNote} in the file ${output.persistedOutputPath}. If the file is gone, run the command again with ${outputFilterHint(tool.name)}, if that is safe.)
 `;
-    let u = Math.max(getMaxOutputLength(), MIN_MAX_OUTPUT_LENGTH) - r.length;
+    let keepLength = Math.max(getMaxOutputLength(), MIN_MAX_OUTPUT_LENGTH) - prefix.length;
     return {
-      ...t,
-      stdout: `${r}${truncateToLength(t.stdout, u)}`,
+      ...output,
+      stdout: `${prefix}${truncateToLength(output.stdout, keepLength)}`,
     };
   }
-  switch (e.name) {
+  switch (tool.name) {
     case FILE_WRITE_TOOL_NAME:
-      return e.stripForStorage?.(t) ?? t;
+      return tool.stripForStorage?.(output) ?? output;
     case NOTEBOOK_EDIT_TOOL_NAME:
-      return mergeIfObject(t, {
+      return mergeIfObject(output, {
         original_file: "",
         updated_file: "",
       });
     default:
-      return t;
+      return output;
   }
 }
 //@ chunk-e3wfm0b3.js:10922-11040 placement
-function hasPersistedBashOutput(e, t) {
+function hasPersistedBashOutput(tool, output) {
   return (
-    e.name === BASH_TOOL_NAME &&
-    isPlainObject(t) &&
-    typeof t.stdout === "string" &&
-    Boolean(t.persistedOutputPath) &&
-    t.isImage !== true
+    tool.name === BASH_TOOL_NAME &&
+    isPlainObject(output) &&
+    typeof output.stdout === "string" &&
+    Boolean(output.persistedOutputPath) &&
+    output.isImage !== true
   );
 }
 //@ chunk-e3wfm0b3.js:11040-11083 placement
-function mergeIfObject(e, t) {
-  return isPlainObject(e)
+function mergeIfObject(base, patch) {
+  return isPlainObject(base)
     ? {
-        ...e,
-        ...t,
+        ...base,
+        ...patch,
       }
-    : e;
+    : base;
 }
 //@ chunk-e3wfm0b3.js:11083-11235 placement
 /**
  * 结果无法回传时的说明
  */
-function unsentResult(e, unsent, n) {
+function unsentResult(tool, unsent, notes) {
   return {
     result: failedResult(
-      `${e.name} ran, but its result could not be sent back. Check what it changed before running it again.`,
-      n,
+      `${tool.name} ran, but its result could not be sent back. Check what it changed before running it again.`,
+      notes,
     ),
     unsent,
   };
 }
 //@ chunk-e3wfm0b3.js:11235-11379 placement
-function failedResult(e, t) {
+function failedResult(message, notes) {
   return buildRemoteToolCallResult({
     envelope: {
       v: REMOTE_TOOL_PROTOCOL_VERSION,
       outcome: "failed",
       target: servedTarget(),
       code: "internal_error",
-      message: e,
-      ...(t.length > 0 && {
-        notes: t,
+      message,
+      ...(notes.length > 0 && {
+        notes,
       }),
     },
-    content: e,
+    content: message,
   });
 }
 //@ chunk-e3wfm0b3.js:11379-11544 placement
-function completedError(e, disposition, n) {
-  let content = truncateMiddle(e);
+function completedError(message, disposition, notes) {
+  let content = truncateMiddle(message);
   return buildRemoteToolCallResult({
     envelope: {
       v: REMOTE_TOOL_PROTOCOL_VERSION,
@@ -771,8 +790,8 @@ function completedError(e, disposition, n) {
       is_error: true,
       content,
       disposition,
-      ...(n.length > 0 && {
-        notes: n,
+      ...(notes.length > 0 && {
+        notes,
       }),
     },
     content,
@@ -790,4 +809,7 @@ export {
   failedResult,
   ranTool,
   outputAnswer,
+  answerToolOutputRequest,
+  checkPlainCall,
+  toolOutputServerCapabilities,
 };

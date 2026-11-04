@@ -13,7 +13,7 @@ import { dirname } from "path";
 import { toSet, checkJobFileWritable, sanitizeJsonPath } from "./sessionCron.js";
 import { STORAGE_SPACES } from "../../utils/storage/storageSpaces.js";
 import { BG_PROTO, RosterSchema, SHORT_RE } from "./leaseProtocol.js";
-import { daemonRosterFile } from "../../utils/sandbox/userNamespace.js";
+import { daemonRosterFile } from "./paths.js";
 import { logError } from "../../utils/log.js";
 import { logEvent } from "../analytics/index.js";
 import {
@@ -36,6 +36,7 @@ import { logForDebugging } from "../../utils/debug.js";
 import { formatStorageError } from "../../utils/storage/storageErrors.js";
 import { writeFileAtomic } from "../../utils/atomicPublishWrite.js";
 import { createKeyedQueue } from "../../utils/promiseQueue.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-y162pn60.js:11738-11897 placement
 /**
@@ -54,62 +55,66 @@ function isUnrecoverableStorageRead(error) {
 /**
  * 后台会话名册允许的字段集合及名册文件大小上限。
  */
-var ROSTER_KEYS = toSet([
-  "proto",
-  "supervisorPid",
-  "updatedAt",
-  "workers",
-  "pid",
-  "procStart",
-  "sessionId",
-  "rendezvousSock",
-  "ptySock",
-  "messagingSock",
-  "rvAuth",
-  "ptyAuth",
-  "replPid",
-  "replProcStart",
-  "cliVersion",
-  "startedAt",
-  "attempt",
-  "cwd",
-  "worktreePath",
-  "dispatch",
-  "pendingRespawn",
-  "decModes",
-  "firedInteractiveMarks",
-  "kind",
-  "msgsLoaded",
-  "msgsInJsonl",
-  "msgsRenderedAtFirstPaint",
-  "short",
-  "restoresTranscript",
-  "nonce",
-  "createdAt",
-  "cols",
-  "rows",
-  "source",
-  "launch",
-  "mode",
-  "args",
-  "fork",
-  "flagArgs",
-  "cmd",
-  "env",
-  "reattachEnv",
-  "worktree",
-  "path",
-  "ownershipToken",
-  "isolation",
-  "respawnFlags",
-  "seed",
-  "intent",
-  "name",
-  "agent",
-  "routine",
-  "attachStallRespawns",
-]);
-var MAX_ROSTER_BYTES = 8388608;
+var ROSTER_KEYS; // deferred: uses toSet (./sessionCron.js) of its import cycle while loading; runs once the cycle is complete
+var MAX_ROSTER_BYTES;
+deferInit("chunk-y162pn60.js:11897", () => {
+  ROSTER_KEYS = toSet([
+    "proto",
+    "supervisorPid",
+    "updatedAt",
+    "workers",
+    "pid",
+    "procStart",
+    "sessionId",
+    "rendezvousSock",
+    "ptySock",
+    "messagingSock",
+    "rvAuth",
+    "ptyAuth",
+    "replPid",
+    "replProcStart",
+    "cliVersion",
+    "startedAt",
+    "attempt",
+    "cwd",
+    "worktreePath",
+    "dispatch",
+    "pendingRespawn",
+    "decModes",
+    "firedInteractiveMarks",
+    "kind",
+    "msgsLoaded",
+    "msgsInJsonl",
+    "msgsRenderedAtFirstPaint",
+    "short",
+    "restoresTranscript",
+    "nonce",
+    "createdAt",
+    "cols",
+    "rows",
+    "source",
+    "launch",
+    "mode",
+    "args",
+    "fork",
+    "flagArgs",
+    "cmd",
+    "env",
+    "reattachEnv",
+    "worktree",
+    "path",
+    "ownershipToken",
+    "isolation",
+    "respawnFlags",
+    "seed",
+    "intent",
+    "name",
+    "agent",
+    "routine",
+    "attachStallRespawns",
+  ]);
+  MAX_ROSTER_BYTES = 8388608;
+});
 //@ chunk-y162pn60.js:12529-12578 placement
 function rosterKey() {
   return STORAGE_SPACES.daemon(["roster.json"]);
@@ -127,9 +132,9 @@ function emptyRoster() {
   };
 }
 //@ chunk-y162pn60.js:12666-13462 placement
-async function readRoster(options, n) {
-  if (n) {
-    let { roster, inspectFailed } = await readRosterFile(n, options);
+async function readRoster(options, inspectSource) {
+  if (inspectSource) {
+    let { roster, inspectFailed } = await readRosterFile(inspectSource, options);
     return inspectFailed
       ? {
           ...roster,
@@ -139,20 +144,20 @@ async function readRoster(options, n) {
   }
   let raw;
   try {
-    let s = await lstat(daemonRosterFile());
-    if (!s.isFile() || s.size > MAX_ROSTER_BYTES) {
+    let stats = await lstat(daemonRosterFile());
+    if (!stats.isFile() || stats.size > MAX_ROSTER_BYTES) {
       if (!options?.silent) {
         logError(
           Error(
-            `roster.json ${s.isFile() ? `too large (${s.size} bytes) \u2014 quarantining` : "is not a regular file \u2014 removing"}`,
+            `roster.json ${stats.isFile() ? `too large (${stats.size} bytes) \u2014 quarantining` : "is not a regular file \u2014 removing"}`,
           ),
         );
         logEvent("tengu_bg_roster_parse_failed", {
           orphaned: -1,
           quarantined: 1,
-          errCode: s.isFile() ? lit("E2BIG") : lit("EFTYPE"),
+          errCode: stats.isFile() ? lit("E2BIG") : lit("EFTYPE"),
         });
-        if (s.isFile()) await quarantineRoster(undefined);
+        if (stats.isFile()) await quarantineRoster(undefined);
         else
           await rm(daemonRosterFile(), {
             recursive: true,
@@ -209,8 +214,8 @@ async function parseRosterJson(raw, options, storage) {
   if (parsed.success) {
     delete parsed.data.parseFailed;
     delete parsed.data.inspectFailed;
-    let f = raw;
-    let filtered = ["supervisorPid", "updatedAt"].filter((g) => !Number.isFinite(f[g]));
+    let raw_2 = raw;
+    let filtered = ["supervisorPid", "updatedAt"].filter((key) => !Number.isFinite(raw_2[key]));
     if (filtered.length > 0 && !options?.silent) {
       logForDebugging(`[daemon] roster.json stamp field(s) healed on read: ${filtered.join(", ")}`, {
         level: "warn",
@@ -225,18 +230,18 @@ async function parseRosterJson(raw, options, storage) {
     return parsed.data;
   }
   if (!options?.silent) {
-    let f = countRosterWorkers(raw);
-    let m = parsed.error.issues[0];
+    let orphaned = countRosterWorkers(raw);
+    let issue = parsed.error.issues[0];
     logError(
       Error(
-        `roster.json parse failed at ${sanitizeRosterIssuePath(m?.path) || "<root>"} (orphaning ${f} worker(s)): ${m?.message}`,
+        `roster.json parse failed at ${sanitizeRosterIssuePath(issue?.path) || "<root>"} (orphaning ${orphaned} worker(s)): ${issue?.message}`,
       ),
     );
     logEvent("tengu_bg_roster_parse_failed", {
-      orphaned: f,
+      orphaned,
       quarantined: 1,
-      issuePath: sanitizeRosterIssuePath(m?.path),
-      issueCode: fromEnumOpt(m?.code),
+      issuePath: sanitizeRosterIssuePath(issue?.path),
+      issueCode: fromEnumOpt(issue?.code),
     });
     await quarantineRoster(storage);
   }
@@ -256,15 +261,15 @@ async function quarantineRoster(storage) {
     );
     return;
   }
-  let n = await storage
+  let storageArg = await storage
     .move(rosterKey(), STORAGE_SPACES.daemon([`roster.json.corrupt.${Date.now()}`]))
     .catch(() => {
       return;
     });
-  if (n === undefined || !n.ok)
+  if (storageArg === undefined || !storageArg.ok)
     logError(
       new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        `roster quarantine v5 move failed: ${n === undefined ? "threw" : formatStorageError(n.error)}`,
+        `roster quarantine v5 move failed: ${storageArg === undefined ? "threw" : formatStorageError(storageArg.error)}`,
         "roster quarantine v5 move failed",
       ),
     );
@@ -277,15 +282,15 @@ async function removeRecursiveLogged(dirPath) {
   }).catch((error) => logError(error));
 }
 //@ chunk-y162pn60.js:14749-14912 placement
-async function discardUnreadableRoster(e, n, r, s) {
-  if (!n?.silent) {
-    logError(r);
+async function discardUnreadableRoster(storage, options, error, code) {
+  if (!options?.silent) {
+    logError(error);
     logEvent("tengu_bg_roster_parse_failed", {
       orphaned: -1,
       quarantined: 1,
-      errCode: lit(s),
+      errCode: lit(code),
     });
-    await deleteRosterKey(e);
+    await deleteRosterKey(storage);
   }
   return {
     ...emptyRoster(),
@@ -296,10 +301,10 @@ async function discardUnreadableRoster(e, n, r, s) {
 /**
  * 读取名册：不是普通文件时删除并返回空；读取出错返回 inspectFailed；否则从存储读取解析。
  */
-async function readRosterFile(e, n) {
-  let r = await checkJobFileWritable(daemonRosterFile());
-  if (r.kind === "refused") {
-    if (!n?.silent) {
+async function readRosterFile(storage, options) {
+  let writable = await checkJobFileWritable(daemonRosterFile());
+  if (writable.kind === "refused") {
+    if (!options?.silent) {
       logError(Error("roster.json is not a regular file \u2014 removing"));
       logEvent("tengu_bg_roster_parse_failed", {
         orphaned: -1,
@@ -316,18 +321,18 @@ async function readRosterFile(e, n) {
       inspectFailed: false,
     };
   }
-  if (r.kind === "error")
+  if (writable.kind === "error")
     return rosterInspectFailed(
-      n,
-      withTelemetryMessage(toError(r.error), "bg roster.json read/parse failed"),
-      sanitizedErrCodeForTelemetry(r.error),
+      options,
+      withTelemetryMessage(toError(writable.error), "bg roster.json read/parse failed"),
+      sanitizedErrCodeForTelemetry(writable.error),
     );
-  return readRosterFromStorage(e, n);
+  return readRosterFromStorage(storage, options);
 }
 //@ chunk-y162pn60.js:15319-15485 placement
-function rosterInspectFailed(e, n, errCode) {
-  if (!e?.silent) {
-    logError(n);
+function rosterInspectFailed(options, error, errCode) {
+  if (!options?.silent) {
+    logError(error);
     logEvent("tengu_bg_roster_parse_failed", {
       orphaned: -1,
       quarantined: 0,
@@ -427,14 +432,14 @@ async function readRosterFromStorage(storage, options) {
   };
 }
 //@ chunk-y162pn60.js:16515-16716 placement
-async function deleteRosterKey(e) {
-  let n = await e.delete(rosterKey()).catch(() => {
+async function deleteRosterKey(storage) {
+  let result = await storage.delete(rosterKey()).catch(() => {
     return;
   });
-  if (n === undefined || !n.ok)
+  if (result === undefined || !result.ok)
     logError(
       new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        `roster quarantine v5 delete failed: ${n?.error.code ?? "threw"}`,
+        `roster quarantine v5 delete failed: ${result?.error.code ?? "threw"}`,
         "roster quarantine v5 delete failed",
       ),
     );
@@ -462,13 +467,13 @@ function countRosterWorkers(raw) {
  * 写回名册（去掉解析状态字段）：存储 v5 或原子写文件；资源耗尽类错误只记日志不抛。
  */
 async function writeRoster(roster, storage) {
-  let { parseFailed, inspectFailed, ...f } = roster;
+  let { parseFailed, inspectFailed, ...rest } = roster;
   if (storage) {
-    let g = await storage.write(rosterKey(), jsonStringify(f, null, 2), {
+    let result = await storage.write(rosterKey(), jsonStringify(rest, null, 2), {
       mode: 384,
     });
-    if (!g.ok) {
-      let error = g.error;
+    if (!result.ok) {
+      let error = result.error;
       let telemetryCode = "telemetryCode" in error ? error.telemetryCode : undefined;
       if (telemetryCode !== undefined && RESOURCE_EXHAUSTION_CODES.has(telemetryCode)) {
         logForDebugging(`[daemon] roster write failed: ${telemetryCode}`, {
@@ -488,7 +493,7 @@ async function writeRoster(roster, storage) {
     recursive: true,
     mode: 448,
   }).catch(() => {});
-  await writeFileAtomic(rosterPath, jsonStringify(f, null, 2), 384).catch((error) => {
+  await writeFileAtomic(rosterPath, jsonStringify(rest, null, 2), 384).catch((error) => {
     let errnoCode = getErrnoCode(error);
     if (errnoCode && RESOURCE_EXHAUSTION_CODES.has(errnoCode)) {
       logForDebugging(`[daemon] roster write failed: ${errnoCode}`, {
@@ -503,21 +508,24 @@ async function writeRoster(roster, storage) {
 /**
  * 名册写入的串行队列。
  */
-var rosterWriteQueue = createKeyedQueue();
+var rosterWriteQueue; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-y162pn60.js:17520", () => {
+  rosterWriteQueue = createKeyedQueue();
+});
 //@ chunk-y162pn60.js:17532-17678 placement
-function updateRoster(e, storageV5) {
+function updateRoster(update, storage) {
   return rosterWriteQueue.run("roster", async () => {
-    let rosterForUpdate = await readRosterForUpdate(storageV5);
-    let roster = e(rosterForUpdate) ?? rosterForUpdate;
+    let rosterForUpdate = await readRosterForUpdate(storage);
+    let roster = update(rosterForUpdate) ?? rosterForUpdate;
     roster.supervisorPid = process.pid;
     roster.updatedAt = Date.now();
-    await writeRoster(roster, storageV5);
+    await writeRoster(roster, storage);
   });
 }
 //@ chunk-y162pn60.js:17678-17913 placement
-async function readRosterForUpdate(e) {
-  if (!e) return readRoster();
-  let rosterFile = await readRosterFile(e);
+async function readRosterForUpdate(storage) {
+  if (!storage) return readRoster();
+  let rosterFile = await readRosterFile(storage);
   if (rosterFile.inspectFailed)
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
       "bg roster.json update skipped: the file could not be inspected",

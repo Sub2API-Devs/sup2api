@@ -28,18 +28,18 @@ var MODEL_WINDOW_DOCS_URL = `${MODEL_CONFIG_DOCS_URL}#correct-the-window-for-a-g
 /**
  * 记录未知模型提示；无头模式直接输出，交互模式返回提示。
  */
-function emitUnknownModelNotice(unknownModelNotice, e) {
+function emitUnknownModelNotice(unknownModelNotice, mode) {
   logForDebugging(`[autocompact] ${unknownModelNotice.detail}`, {
     level: "warn",
   });
-  if (e.interactive) return unknownModelNotice;
-  e.headless(unknownModelNotice.text);
+  if (mode.interactive) return unknownModelNotice;
+  mode.headless(unknownModelNotice.text);
   return null;
 }
 //@ chunk-ck9j9jgt.js:693-797 placement
-function buildUnknownModelNotice(o, e, n) {
+function buildUnknownModelNotice(model, autoCompactWindow, info) {
   try {
-    return buildUnknownModelNoticeText(o, e, n);
+    return buildUnknownModelNoticeText(model, autoCompactWindow, info);
   } catch (error) {
     logError(withTelemetryMessage(toError(error), "unknown-model notice failed"));
     return null;
@@ -49,22 +49,30 @@ function buildUnknownModelNotice(o, e, n) {
 /**
  * 模型不在目录中时，说明假设的上下文窗口与如何修正（[1m] 或 CLAUDE_CODE_MAX_CONTEXT_TOKENS）。
  */
-function buildUnknownModelNoticeText(o, e, n) {
-  let { source, window: r } = getAutoCompactWindow(getModelContextInfo(o, n), e, n);
+function buildUnknownModelNoticeText(model, autoCompactWindow, facts) {
+  let { source, window: contextWindow } = getAutoCompactWindow(
+    getModelContextInfo(model, facts),
+    autoCompactWindow,
+    facts,
+  );
   if (source !== "unknown-model") return null;
-  let a = isCompactDisabledOrCustom(o);
+  let compactDisabled = isCompactDisabledOrCustom(model);
   let CLAUDE_CODE_MAX_CONTEXT_TOKENS = env.CLAUDE_CODE_MAX_CONTEXT_TOKENS;
-  if (a && CLAUDE_CODE_MAX_CONTEXT_TOKENS !== undefined && CLAUDE_CODE_MAX_CONTEXT_TOKENS > 0) return null;
-  let w = r < 1e6;
-  let s = [];
-  if (!is1mContextDisabled() && w) s.push("append [1m] to the model name for 1M");
-  if (a) s.push("set CLAUDE_CODE_MAX_CONTEXT_TOKENS to its real window");
-  let c = s.length > 0 ? `; if the model accepts ${w ? "more" : "less"}, ${s.join(", or ")}` : "";
+  if (compactDisabled && CLAUDE_CODE_MAX_CONTEXT_TOKENS !== undefined && CLAUDE_CODE_MAX_CONTEXT_TOKENS > 0)
+    return null;
+  let belowOneMillion = contextWindow < 1e6;
+  let hints = [];
+  if (!is1mContextDisabled() && belowOneMillion) hints.push("append [1m] to the model name for 1M");
+  if (compactDisabled) hints.push("set CLAUDE_CODE_MAX_CONTEXT_TOKENS to its real window");
+  let hintSuffix =
+    hints.length > 0
+      ? `; if the model accepts ${belowOneMillion ? "more" : "less"}, ${hints.join(", or ")}`
+      : "";
   return {
-    model: o,
-    window: r,
-    text: `Claude Code doesn't recognize the model "${displayModelName(o)}", so it assumes a context window of ${formatTokens(r)} tokens. Update Claude Code, or see ${MODEL_WINDOW_DOCS_URL} to set the window.`,
-    detail: `"${o}" isn't described by this version's model catalog; update Claude Code, or map it with behavesAs on a modelPicker row (or modelOverrides, if it is a provider id of a model this version knows). Until then auto-compact keeps this session within ${formatTokens(r)} tokens (the context window it assumes)${c}; CLAUDE_CODE_DISABLE_UNKNOWN_MODEL_WINDOW_ENFORCEMENT=1 restores the previous wait-for-the-API behavior.`,
+    model,
+    window: contextWindow,
+    text: `Claude Code doesn't recognize the model "${displayModelName(model)}", so it assumes a context window of ${formatTokens(contextWindow)} tokens. Update Claude Code, or see ${MODEL_WINDOW_DOCS_URL} to set the window.`,
+    detail: `"${model}" isn't described by this version's model catalog; update Claude Code, or map it with behavesAs on a modelPicker row (or modelOverrides, if it is a provider id of a model this version knows). Until then auto-compact keeps this session within ${formatTokens(contextWindow)} tokens (the context window it assumes)${hintSuffix}; CLAUDE_CODE_DISABLE_UNKNOWN_MODEL_WINDOW_ENFORCEMENT=1 restores the previous wait-for-the-API behavior.`,
   };
 }
 export { MODEL_WINDOW_DOCS_URL, MODEL_CONFIG_DOCS_URL, buildUnknownModelNotice, emitUnknownModelNotice };

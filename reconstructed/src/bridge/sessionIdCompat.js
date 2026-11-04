@@ -21,8 +21,8 @@ function validateBridgeId(id, label) {
   return id;
 }
 //@ chunk-s7k22nbx.js:4121-4161 placement
-function isSafeBridgeId(e) {
-  return e !== "" && SAFE_ID_PATTERN.test(e);
+function isSafeBridgeId(id) {
+  return id !== "" && SAFE_ID_PATTERN.test(id);
 }
 //@ chunk-s7k22nbx.js:4161-4210 placement
 function isUsableCreatedSessionId(id) {
@@ -33,15 +33,15 @@ function setCseShimGate(cseShimGate) {
   bridgeHostState().cseShimGate = cseShimGate;
 }
 //@ chunk-s7k22nbx.js:4245-4351 placement
-function toCompatSessionId(e) {
-  if (!e.startsWith("cse_")) return e;
+function toCompatSessionId(sessionId) {
+  if (!sessionId.startsWith("cse_")) return sessionId;
   let cseShimGate = bridgeHostState().cseShimGate;
-  if (cseShimGate && !cseShimGate()) return e;
-  return toCompatSessionId_2(e);
+  if (cseShimGate && !cseShimGate()) return sessionId;
+  return toCompatSessionId_2(sessionId);
 }
 //@ chunk-s7k22nbx.js:4351-4397 placement
-function remoteRowId(e) {
-  return `remote-${e.slice(-8)}`;
+function remoteRowId(sessionId) {
+  return `remote-${sessionId.slice(-8)}`;
 }
 //@ chunk-s7k22nbx.js:4397-4474 placement = toCompatSessionId (1)
 /**

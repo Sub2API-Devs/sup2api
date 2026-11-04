@@ -5,11 +5,11 @@
  * pieces: chunk-t4ksmxzx.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x, importMetaRequire } from "../../../../runtime/bun-runtime.js";
+import { __commonJS, importMetaRequire } from "../../../../runtime/bun-runtime.js";
 import { require_api } from "../common/api.js";
 
 //@ chunk-t4ksmxzx.js:51933-54469 cjs-fingerprint
-var require_ril = x(function (cjsExports) {
+var require_ril = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });

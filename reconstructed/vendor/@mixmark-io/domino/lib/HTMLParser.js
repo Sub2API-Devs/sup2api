@@ -6,7 +6,7 @@
  * attribution: esm-fingerprint 1, cjs-fingerprint 1
  */
 import { TokenizerMode } from "../../../parse5/dist/tokenizer/index.js";
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 import { require_Document } from "./Document.js";
 import { require_DocumentType } from "./DocumentType.js";
 import { require_Node } from "./Node.js";
@@ -14,12 +14,12 @@ import { require_utils } from "./utils.js";
 import { require_htmlelts } from "./htmlelts.js";
 
 //@ chunk-ktx79ksk.js:231-2221 esm-fingerprint
-var W = 4096;
-var F = 200000;
-var w = 50000000;
-var G = 200000;
-var j = 64;
-var H = new Set([
+var MAX_TREE_DEPTH = 4096;
+var MAX_TOTAL_OPENS = 200000;
+var MAX_FORMAT_ESTIMATE = 50000000;
+var MAX_TAG_COUNT = 200000;
+var LAST_ANCESTOR_SCAN_DEPTH = 64;
+var voidElements = new Set([
   "area",
   "base",
   "br",
@@ -46,9 +46,9 @@ var RAWTEXT_MODES = new Map([
   ["textarea", TokenizerMode.RCDATA],
   ["plaintext", TokenizerMode.PLAINTEXT],
 ]);
-var q = new Set(["foreignobject", "desc", "title"]);
-var K = new Set(["mi", "mo", "mn", "ms", "mtext"]);
-var V = new Set([
+var svgBreakoutElements = new Set(["foreignobject", "desc", "title"]);
+var mathTextIntegrationPoints = new Set(["mi", "mo", "mn", "ms", "mtext"]);
+var foreignContentElements = new Set([
   "applet",
   "caption",
   "html",
@@ -70,7 +70,7 @@ var V = new Set([
   "mtext",
   "annotation-xml",
 ]);
-var P = new Set([
+var specialElements = new Set([
   "address",
   "applet",
   "area",
@@ -163,7 +163,7 @@ var P = new Set([
   "mtext",
   "annotation-xml",
 ]);
-var U = new Set([
+var formattingElements = new Set([
   "b",
   "big",
   "blockquote",
@@ -210,7 +210,7 @@ var U = new Set([
   "ul",
   "var",
 ]);
-var B = new Set([
+var formattingElementsWithoutNobr = new Set([
   "a",
   "b",
   "big",
@@ -226,13 +226,13 @@ var B = new Set([
   "tt",
   "u",
 ]);
-var Y = 1024;
-var Z = new Map([
+var MAX_ACTIVE_FORMATTING = 1024;
+var impliedEndTagsByOpener = new Map([
   ["li", new Set(["ul", "ol"])],
   ["p", new Set(["button"])],
 ]);
-var J = new Set(["body", "html"]);
-var Q = new Set([
+var scopeBoundaryElements = new Set(["body", "html"]);
+var scopeBreakElements = new Set([
   "caption",
   "col",
   "colgroup",
@@ -248,7 +248,7 @@ var Q = new Set([
   "title",
 ]);
 //@ chunk-vwj6ccer.js:120707-233747 cjs-fingerprint
-var require_HTMLParser = x(function (cjsExports, cjsModule) {
+var require_HTMLParser = __commonJS(function (cjsExports, cjsModule) {
   cjsModule.exports = HTMLParser;
   var Document = require_Document();
   var DocumentType = require_DocumentType();
@@ -2991,11 +2991,11 @@ var require_HTMLParser = x(function (cjsExports, cjsModule) {
     this.elements = [];
     this.top = null;
   };
-  HTMLParser.ElementStack.prototype.push = function (e) {
-    this.elements.push(e);
-    this.top = e;
+  HTMLParser.ElementStack.prototype.push = function (element) {
+    this.elements.push(element);
+    this.top = element;
   };
-  HTMLParser.ElementStack.prototype.pop = function (e) {
+  HTMLParser.ElementStack.prototype.pop = function (element) {
     this.elements.pop();
     this.top = this.elements[this.elements.length - 1];
   };
@@ -3012,15 +3012,15 @@ var require_HTMLParser = x(function (cjsExports, cjsModule) {
     this.elements.length = i;
     this.top = this.elements[i - 1];
   };
-  HTMLParser.ElementStack.prototype.popElement = function (e) {
-    for (var i = this.elements.length - 1; i > 0; i--) if (this.elements[i] === e) break;
+  HTMLParser.ElementStack.prototype.popElement = function (element) {
+    for (var i = this.elements.length - 1; i > 0; i--) if (this.elements[i] === element) break;
     this.elements.length = i;
     this.top = this.elements[i - 1];
   };
-  HTMLParser.ElementStack.prototype.removeElement = function (e) {
-    if (this.top === e) this.pop();
+  HTMLParser.ElementStack.prototype.removeElement = function (element) {
+    if (this.top === element) this.pop();
     else {
-      var idx = this.elements.lastIndexOf(e);
+      var idx = this.elements.lastIndexOf(element);
       if (idx !== -1) this.elements.splice(idx, 1);
     }
   };
@@ -3059,8 +3059,8 @@ var require_HTMLParser = x(function (cjsExports, cjsModule) {
   HTMLParser.ElementStack.prototype.inScope = function (tag) {
     return this.inSpecificScope(tag, inScopeSet);
   };
-  HTMLParser.ElementStack.prototype.elementInScope = function (e) {
-    return this.elementInSpecificScope(e, inScopeSet);
+  HTMLParser.ElementStack.prototype.elementInScope = function (element) {
+    return this.elementInSpecificScope(element, inScopeSet);
   };
   HTMLParser.ElementStack.prototype.elementTypeInScope = function (type) {
     return this.elementTypeInSpecificScope(type, inScopeSet);
@@ -3148,11 +3148,11 @@ var require_HTMLParser = x(function (cjsExports, cjsModule) {
     }
     return null;
   };
-  HTMLParser.ActiveFormattingElements.prototype.indexOf = function (e) {
-    return this.list.lastIndexOf(e);
+  HTMLParser.ActiveFormattingElements.prototype.indexOf = function (entry) {
+    return this.list.lastIndexOf(entry);
   };
-  HTMLParser.ActiveFormattingElements.prototype.remove = function (e) {
-    var idx = this.list.lastIndexOf(e);
+  HTMLParser.ActiveFormattingElements.prototype.remove = function (entry) {
+    var idx = this.list.lastIndexOf(entry);
     if (idx !== -1) {
       this.list.splice(idx, 1);
       this.attrs.splice(idx, 1);
@@ -3637,7 +3637,8 @@ var require_HTMLParser = x(function (cjsExports, cjsModule) {
       });
     }
     function lastElementOfType(type) {
-      for (var i = stack.elements.length - 1; i >= 0; i--) if (stack.elements[i] instanceof type) return i;
+      for (var index = stack.elements.length - 1; index >= 0; index--)
+        if (stack.elements[index] instanceof type) return index;
       return -1;
     }
     function fosterParent(eltFunc) {
@@ -3673,9 +3674,9 @@ var require_HTMLParser = x(function (cjsExports, cjsModule) {
     }
     function resetInsertionMode() {
       var last = false;
-      for (var i = stack.elements.length - 1; i >= 0; i--) {
-        var node = stack.elements[i];
-        if (i === 0) {
+      for (var index = stack.elements.length - 1; index >= 0; index--) {
+        var node = stack.elements[index];
+        if (index === 0) {
           last = true;
           if (fragment) node = fragmentContext;
         }
@@ -3683,7 +3684,7 @@ var require_HTMLParser = x(function (cjsExports, cjsModule) {
           var tag = node.localName;
           switch (tag) {
             case "select":
-              for (var j = i; j > 0;) {
+              for (var j = index; j > 0;) {
                 var ancestor = stack.elements[--j];
                 if (ancestor instanceof impl.HTMLTemplateElement) break;
                 else if (ancestor instanceof impl.HTMLTableElement) {
@@ -3754,10 +3755,10 @@ var require_HTMLParser = x(function (cjsExports, cjsModule) {
       originalInsertionMode = parser;
       parser = text_mode;
     }
-    function afeclone(doc, i) {
+    function afeclone(doc, index) {
       return {
-        elt: createHTMLElt(doc, afe.list[i].localName, afe.attrs[i]),
-        attrs: afe.attrs[i],
+        elt: createHTMLElt(doc, afe.list[index].localName, afe.attrs[index]),
+        attrs: afe.attrs[index],
       };
     }
     function afereconstruct() {
@@ -3765,16 +3766,16 @@ var require_HTMLParser = x(function (cjsExports, cjsModule) {
       var entry = afe.list[afe.list.length - 1];
       if (entry === afe.MARKER) return;
       if (stack.elements.lastIndexOf(entry) !== -1) return;
-      for (var i = afe.list.length - 2; i >= 0; i--) {
-        entry = afe.list[i];
+      for (var index = afe.list.length - 2; index >= 0; index--) {
+        entry = afe.list[index];
         if (entry === afe.MARKER) break;
         if (stack.elements.lastIndexOf(entry) !== -1) break;
       }
-      for (i = i + 1; i < afe.list.length; i++) {
+      for (index = index + 1; index < afe.list.length; index++) {
         var newelt = insertElement(function (doc) {
-          return afeclone(doc, i).elt;
+          return afeclone(doc, index).elt;
         });
-        afe.list[i] = newelt;
+        afe.list[index] = newelt;
       }
     }
     var BOOKMARK = {
@@ -8039,4 +8040,23 @@ var require_HTMLParser = x(function (cjsExports, cjsModule) {
     return htmlparser;
   }
 });
-export { RAWTEXT_MODES, W, F, w, G, U, H, B, Y, q, K, J, P, Z, Q, j, V, require_HTMLParser };
+export {
+  RAWTEXT_MODES,
+  MAX_TREE_DEPTH,
+  MAX_TOTAL_OPENS,
+  MAX_FORMAT_ESTIMATE,
+  MAX_TAG_COUNT,
+  formattingElements,
+  voidElements,
+  formattingElementsWithoutNobr,
+  MAX_ACTIVE_FORMATTING,
+  svgBreakoutElements,
+  mathTextIntegrationPoints,
+  scopeBoundaryElements,
+  specialElements,
+  impliedEndTagsByOpener,
+  scopeBreakElements,
+  LAST_ANCESTOR_SCAN_DEPTH,
+  foreignContentElements,
+  require_HTMLParser,
+};

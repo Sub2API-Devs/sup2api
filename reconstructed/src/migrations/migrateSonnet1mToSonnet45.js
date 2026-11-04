@@ -18,9 +18,9 @@ import { getMainLoopModelOverride, setMainLoopModelOverride } from "../bootstrap
 /**
  * 迁移：sonnet[1m] → sonnet-4-5-20250929[1m]（只做一次，sonnet1m45MigrationComplete）。
  */
-async function migrateSonnet1mToSonnet45(e) {
+async function migrateSonnet1mToSonnet45(context) {
   if (getGlobalConfig().sonnet1m45MigrationComplete) return true;
-  let n = false;
+  let changed = false;
   if (getSettingsForSourceForUpkeep("userSettings")?.model === "sonnet[1m]") {
     let { error } = await updateSettingsForSource(
       "userSettings",
@@ -28,7 +28,7 @@ async function migrateSonnet1mToSonnet45(e) {
         model: "sonnet-4-5-20250929[1m]",
       },
       undefined,
-      e,
+      context,
     );
     if (error) {
       logForDebugging(`Failed to migrate sonnet[1m] model setting: ${error}`, {
@@ -37,20 +37,20 @@ async function migrateSonnet1mToSonnet45(e) {
       logFeatureBad("migration_sonnet1m_to_sonnet45", "migration_sonnet1m_write_failed");
       return false;
     }
-    n = true;
+    changed = true;
   }
   if (getMainLoopModelOverride() === "sonnet[1m]") {
     setMainLoopModelOverride("sonnet-4-5-20250929[1m]");
-    n = true;
+    changed = true;
   }
   saveGlobalConfig(
     (current) => ({
       ...current,
       sonnet1m45MigrationComplete: true,
     }),
-    e,
+    context,
   );
-  if (n) logFeatureOk("migration_sonnet1m_to_sonnet45");
+  if (changed) logFeatureOk("migration_sonnet1m_to_sonnet45");
   return true;
 }
 export { migrateSonnet1mToSonnet45 };

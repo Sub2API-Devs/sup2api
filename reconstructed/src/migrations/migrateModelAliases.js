@@ -21,22 +21,22 @@ var MODEL_ALIAS_MIGRATIONS = {};
 /**
  * 迁移：按别名表改写 userSettings.model（仅第一方）。
  */
-async function migrateModelAliases(e = MODEL_ALIAS_MIGRATIONS, r) {
+async function migrateModelAliases(aliasMap = MODEL_ALIAS_MIGRATIONS, context) {
   if (getAPIProvider() !== "firstParty") return true;
   let model = getSettingsForSourceForUpkeep("userSettings")?.model;
   if (!model) return true;
-  let s = strip1mSuffix(model);
-  if (!Object.hasOwn(e, s)) return true;
-  let S = e[s];
-  if (S === undefined) return true;
-  let y = s !== model;
+  let baseModel = strip1mSuffix(model);
+  if (!Object.hasOwn(aliasMap, baseModel)) return true;
+  let mappedModel = aliasMap[baseModel];
+  if (mappedModel === undefined) return true;
+  let has1m = baseModel !== model;
   let { error } = await updateSettingsForSource(
     "userSettings",
     {
-      model: y ? `${S}[1m]` : S,
+      model: has1m ? `${mappedModel}[1m]` : mappedModel,
     },
     undefined,
-    r,
+    context,
   );
   if (error) {
     logForDebugging(`Failed to apply model alias migration: ${error}`, {
@@ -45,9 +45,9 @@ async function migrateModelAliases(e = MODEL_ALIAS_MIGRATIONS, r) {
     return false;
   }
   logEvent("tengu_alias_migration", {
-    from_model: telemetrySafeModelName(s),
-    to_model: telemetrySafeModelName(S),
-    has_1m: y,
+    from_model: telemetrySafeModelName(baseModel),
+    to_model: telemetrySafeModelName(mappedModel),
+    has_1m: has1m,
   });
   return true;
 }

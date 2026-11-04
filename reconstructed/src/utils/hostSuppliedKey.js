@@ -19,9 +19,9 @@ var CHAT_KEY_RE = /^chat:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f
  * 宿主提供的 key 状态：未设置、格式错误、诊断范围内忽略或使用。
  */
 function getHostSuppliedKeyStatus() {
-  let e = chromeTabGroupKey();
-  if (!e) return "unset";
-  if (!CHAT_KEY_RE.test(e)) return "malformed";
+  let key = chromeTabGroupKey();
+  if (!key) return "unset";
+  if (!CHAT_KEY_RE.test(key)) return "malformed";
   return isInDiagScope() ? "ignored" : "used";
 }
 //@ chunk-2v5n5pp4.js:485-533 placement
@@ -33,14 +33,14 @@ function hostSuppliedKeyIfUsed() {
  * 取本次会话使用的 key 及其来源（宿主提供或本地会话 id）。
  */
 function keyWithOrigin() {
-  let e = hostSuppliedKeyIfUsed();
-  return e === undefined
+  let hostKey = hostSuppliedKeyIfUsed();
+  return hostKey === undefined
     ? {
         key: getSessionId(),
         fromHost: false,
       }
     : {
-        key: e,
+        key: hostKey,
         fromHost: true,
       };
 }

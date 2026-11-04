@@ -25,45 +25,45 @@ import { isCloudSessionAccessError } from "./environments.js";
 import { logError } from "../log.js";
 
 //@ chunk-f25sswmp.js:19007-19944 placement
-async function fetchSelfHostedPools(e, credentials) {
+async function fetchSelfHostedPools(options, credentials) {
   if (getAPIProvider() !== "firstParty") return [];
-  let r = isConsoleProfileSessionsCredential();
-  let s = e ?? (await sessionsApiAccessToken(r));
-  if (!s) return [];
-  let i = await sessionsApiOrganizationUUID(r);
-  if (!i) return [];
-  let y = `${getOauthConfig().BASE_API_URL}/v1/code/runners/self-hosted/pools`;
+  let isConsoleProfile = isConsoleProfileSessionsCredential();
+  let token = options ?? (await sessionsApiAccessToken(isConsoleProfile));
+  if (!token) return [];
+  let orgUUID = await sessionsApiOrganizationUUID(isConsoleProfile);
+  if (!orgUUID) return [];
+  let poolsUrl = `${getOauthConfig().BASE_API_URL}/v1/code/runners/self-hosted/pools`;
   try {
-    let h = await withSessionsApiBearer401Retry(
-      (E) =>
-        axios_default.get(y, {
+    let poolsResponse = await withSessionsApiBearer401Retry(
+      (bearerToken) =>
+        axios_default.get(poolsUrl, {
           headers: {
-            ...getOAuthRequestHeaders(E),
+            ...getOAuthRequestHeaders(bearerToken),
             "anthropic-beta": "ccr-byoc-2025-07-29",
-            "x-organization-uuid": i,
+            "x-organization-uuid": orgUUID,
           },
           timeout: 15000,
         }),
       {
-        profile: r,
-        fallbackToken: s,
+        profile: isConsoleProfile,
+        fallbackToken: token,
         credentials,
       },
     );
-    if (h.status !== 200) {
-      logForDebugging(`fetchSelfHostedPools: ${h.status} ${h.statusText}`, {
+    if (poolsResponse.status !== 200) {
+      logForDebugging(`fetchSelfHostedPools: ${poolsResponse.status} ${poolsResponse.statusText}`, {
         level: "error",
       });
       logFeatureSad("teleport_self_hosted_pool_list", "non_200");
       return [];
     }
     return withFeatureTelemetry("teleport_self_hosted_pool_list", async () =>
-      (h.data.pools ?? []).map((E) => ({
+      (poolsResponse.data.pools ?? []).map((pool) => ({
         kind: "self_hosted_pool",
-        pool_id: E.pool_id,
-        name: E.name,
-        created_at: E.created_at,
-        alive_runner_count: E.alive_runner_count ?? 0,
+        pool_id: pool.pool_id,
+        name: pool.name,
+        created_at: pool.created_at,
+        alive_runner_count: pool.alive_runner_count ?? 0,
       })),
     );
   } catch (error) {

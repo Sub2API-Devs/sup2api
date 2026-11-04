@@ -20,27 +20,28 @@ import { getAgentProxyEndpoint } from "../../utils/agentProxy/agentProxyState.js
 import { jsonStringify } from "../../utils/slowOperations.js";
 import { ANT_KEY_PFX } from "../teamMemorySync/secretScanner.js";
 import { gzipBody, gzipWatermarkedBody } from "../analytics/eventSerialization.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-sh3bk7pt.js:977-1055 placement
 var HOSTNAME_LABEL_RE = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
 var NUMERIC_HOST_LABEL_RE = /^(?:0x[0-9a-f]*|[0-9]+)$/;
 //@ chunk-sh3bk7pt.js:1055-1282 placement
-function parseFrameHostsList(e) {
-  if (e === undefined) return;
-  let n;
-  for (let r of e.split(",")) {
-    let lower = r.trim().toLowerCase();
+function parseFrameHostsList(list) {
+  if (list === undefined) return;
+  let host;
+  for (let part of list.split(",")) {
+    let lower = part.trim().toLowerCase();
     if (lower === "") continue;
     let parts = lower.split(".");
     if (
       lower.length > 253 ||
-      !parts.every((y) => HOSTNAME_LABEL_RE.test(y)) ||
-      parts.every((y) => NUMERIC_HOST_LABEL_RE.test(y))
+      !parts.every((label) => HOSTNAME_LABEL_RE.test(label)) ||
+      parts.every((label) => NUMERIC_HOST_LABEL_RE.test(label))
     )
       return;
-    n ??= lower;
+    host ??= lower;
   }
-  return n;
+  return host;
 }
 //@ chunk-sh3bk7pt.js:1282-1438 placement
 /**
@@ -49,8 +50,8 @@ function parseFrameHostsList(e) {
 function isProxyOrConnectRefusal(error) {
   if (findProxyError(error) !== undefined) return true;
   return (
-    findInCauseChain(error, (n) => {
-      let errnoCode = getErrnoCode(n);
+    findInCauseChain(error, (cause) => {
+      let errnoCode = getErrnoCode(cause);
       return (
         errnoCode === "ECONNREFUSED" ||
         errnoCode === "ConnectionRefused" ||
@@ -67,30 +68,33 @@ class FrameTunnelAgentCache {
   builtFor = undefined;
   agent = undefined;
   warnedMalformed = undefined;
-  agentFor(e) {
-    if (this.agent === undefined || this.builtFor !== e) {
-      let n = new ConnectProxyAgent(e.proxyUrl, {
-        ca: e.gatewayCa,
+  agentFor(options) {
+    if (this.agent === undefined || this.builtFor !== options) {
+      let agent = new ConnectProxyAgent(options.proxyUrl, {
+        ca: options.gatewayCa,
       });
-      n.options = {
-        ...n.options,
-        ca: e.gatewayCa,
+      agent.options = {
+        ...agent.options,
+        ca: options.gatewayCa,
       };
-      this.builtFor = e;
-      this.agent = n;
+      this.builtFor = options;
+      this.agent = agent;
     }
     return this.agent;
   }
-  warnMalformedOnce(e) {
-    if (this.warnedMalformed === e) return;
-    this.warnedMalformed = e;
+  warnMalformedOnce(reason) {
+    if (this.warnedMalformed === reason) return;
+    this.warnedMalformed = reason;
     logForDebugging("[frame-tunnel] CCR_AGENT_PROXY_FRAME_HOSTS is malformed; keeping the gateway routes", {
       level: "warn",
     });
   }
 }
 //@ chunk-sh3bk7pt.js:1867-1891 placement
-var frameTunnelAgentCache = new HostScoped(() => new FrameTunnelAgentCache());
+var frameTunnelAgentCache; // deferred: uses FrameTunnelAgentCache of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-sh3bk7pt.js:1867", () => {
+  frameTunnelAgentCache = new HostScoped(() => new FrameTunnelAgentCache());
+});
 //@ chunk-sh3bk7pt.js:1891-2136 placement
 /**
  * 云会话下读取 CCR_AGENT_PROXY_FRAME_HOSTS，解析出第一个合法主机名并返回经网关代理的 {host, agent}；格式错误只警告一次；没有可用网关代理配置或已有其他代理时返回 undefined。
@@ -99,17 +103,17 @@ function getFrameTunnelRoute() {
   if (!isRemoteManagedEnvironment()) return;
   let CCR_AGENT_PROXY_FRAME_HOSTS = env.CCR_AGENT_PROXY_FRAME_HOSTS;
   if (CCR_AGENT_PROXY_FRAME_HOSTS === undefined) return;
-  let n = frameTunnelAgentCache.of(getRootSession().host);
+  let cache = frameTunnelAgentCache.of(getRootSession().host);
   let frameHostsList = parseFrameHostsList(CCR_AGENT_PROXY_FRAME_HOSTS);
   if (frameHostsList === undefined) {
-    n.warnMalformedOnce(CCR_AGENT_PROXY_FRAME_HOSTS);
+    cache.warnMalformedOnce(CCR_AGENT_PROXY_FRAME_HOSTS);
     return;
   }
   let agentProxyEndpoint = getAgentProxyEndpoint();
   if (agentProxyEndpoint === undefined || getUsableProxyUrl() !== undefined) return;
   return {
     host: frameHostsList,
-    agent: n.agentFor(agentProxyEndpoint),
+    agent: cache.agentFor(agentProxyEndpoint),
   };
 }
 //@ chunk-sh3bk7pt.js:2136-2255 placement
@@ -130,16 +134,16 @@ var GZIP_JSON_HEADERS = {
 /**
  * 导出函数 `publishReadDeadlineS`：参数 e，返回 PUBLISH_READ_DEADLINE_S; return Math.min( PUBLISH_READ_DEADLINE_MAX_S, PUBLISH_READ_DEADLINE_S + Math.floor(e …。
  */
-function publishReadDeadlineS(e) {
-  if (e === undefined || e <= 0) return PUBLISH_READ_DEADLINE_S;
+function publishReadDeadlineS(jsonBytes) {
+  if (jsonBytes === undefined || jsonBytes <= 0) return PUBLISH_READ_DEADLINE_S;
   return Math.min(
     PUBLISH_READ_DEADLINE_MAX_S,
-    PUBLISH_READ_DEADLINE_S + Math.floor(e / BYTES_PER_EXTRA_SECOND),
+    PUBLISH_READ_DEADLINE_S + Math.floor(jsonBytes / BYTES_PER_EXTRA_SECOND),
   );
 }
 //@ chunk-sh3bk7pt.js:2339-2377 placement
-function fitsPublishDeadline(jsonBytes, n) {
-  return n * publishReadDeadlineS(jsonBytes) <= jsonBytes * PUBLISH_READ_DEADLINE_S;
+function fitsPublishDeadline(jsonBytes, byteCount) {
+  return byteCount * publishReadDeadlineS(jsonBytes) <= jsonBytes * PUBLISH_READ_DEADLINE_S;
 }
 //@ chunk-sh3bk7pt.js:2377-3381 placement
 /**
@@ -167,13 +171,13 @@ async function gzipPublishBody({ url: options, body, storageV5 }) {
     },
   });
   if (!gzipDecision.gzip) return uncompressed(gzipDecision.reason);
-  let u = publishReadDeadlineS(jsonBytes) / PUBLISH_READ_DEADLINE_S;
+  let factor = publishReadDeadlineS(jsonBytes) / PUBLISH_READ_DEADLINE_S;
   if (jsonBytes >= GZIP_SAMPLE_THRESHOLD) {
-    let sliced = json.slice(0, GZIP_SAMPLE_CHARS);
-    let w = Buffer.byteLength(sliced) / (await gzipBody(sliced)).length;
-    if (w * GZIP_RATIO_MARGIN < u) {
+    let body = json.slice(0, GZIP_SAMPLE_CHARS);
+    let ratio = Buffer.byteLength(body) / (await gzipBody(body)).length;
+    if (ratio * GZIP_RATIO_MARGIN < factor) {
       logForDebugging(
-        `[artifact] publish body sent uncompressed: its first ${GZIP_SAMPLE_CHARS} characters compress only ${w.toFixed(2)}x, and a body of ${jsonBytes} bytes needs ${u.toFixed(2)}x to finish inside the server's 60-second read limit for a compressed upload`,
+        `[artifact] publish body sent uncompressed: its first ${GZIP_SAMPLE_CHARS} characters compress only ${ratio.toFixed(2)}x, and a body of ${jsonBytes} bytes needs ${factor.toFixed(2)}x to finish inside the server's 60-second read limit for a compressed upload`,
       );
       return uncompressed("deadline_ratio");
     }
@@ -208,8 +212,8 @@ function isPlainRecord(body) {
 /**
  * 把框架请求结果转为统一的响应信息（状态码、按名取响应头、读取正文）；请求失败时状态为 0、正文为空。
  */
-function toResponseFacts(e) {
-  if (!e.ok)
+function toResponseFacts(response) {
+  if (!response.ok)
     return {
       status: 0,
       header: () => {
@@ -218,13 +222,17 @@ function toResponseFacts(e) {
       bodyText: async () => "",
     };
   return {
-    status: e.status,
-    header: (n) => {
-      let r = e.response?.headers?.[n];
-      return typeof r === "string" ? r : undefined;
+    status: response.status,
+    header: (name) => {
+      let value = response.response?.headers?.[name];
+      return typeof value === "string" ? value : undefined;
     },
     bodyText: async () =>
-      typeof e.data === "string" ? e.data : e.data === undefined ? "" : jsonStringify(e.data),
+      typeof response.data === "string"
+        ? response.data
+        : response.data === undefined
+          ? ""
+          : jsonStringify(response.data),
   };
 }
 export {

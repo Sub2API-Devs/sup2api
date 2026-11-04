@@ -8,8 +8,8 @@
  * pieces: chunk-4v9zy7gn.js (2)
  * attribution: placement 1, fingerprint 1
  */
-import { init_react_production, y } from "../../../vendor/react/cjs/react.production.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { init_react_production, useState } from "../../../vendor/react/cjs/react.production.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { useTerminalSize } from "../../hooks/useTerminalSize.js";
 import { useTheme } from "../../components/design-system/ThemeProvider.js";
 import { MessageActionsKeybindings } from "../../components/messageActions.js";
@@ -27,9 +27,9 @@ import { TextInput } from "../../components/TextInput.js";
 init_react_production();
 //@ chunk-4v9zy7gn.js:25467-27429 fingerprint = CheckExistingSecretStep (0.705)
 function CheckExistingSecretStep(props) {
-  let $ = w(38);
+  let $ = useMemoCache(38);
   let { useExistingSecret, secretName, onToggleUseExistingSecret, onSecretNameChange, onSubmit } = props;
-  let [cursorOffset, setCursorOffset] = y(0);
+  let [cursorOffset, setCursorOffset] = useState(0);
   let terminalSize = useTerminalSize();
   let [theme] = useTheme();
   let t1;
@@ -108,23 +108,23 @@ function CheckExistingSecretStep(props) {
     });
     $[16] = t9;
   } else t9 = $[16];
-  let F;
+  let body;
   if ($[17] !== theme || $[18] !== useExistingSecret) {
-    F = useExistingSecret ? color("success", theme)("> ") : "  ";
+    body = useExistingSecret ? color("success", theme)("> ") : "  ";
     $[17] = theme;
     $[18] = useExistingSecret;
-    $[19] = F;
-  } else F = $[19];
-  let U;
-  if ($[20] !== F) {
-    U = jsxProd_default(Box, {
+    $[19] = body;
+  } else body = $[19];
+  let checkboxRow;
+  if ($[20] !== body) {
+    checkboxRow = jsxProd_default(Box, {
       children: jsxProd_default_2(Text, {
-        children: [F, "Use the existing API key"],
+        children: [body, "Use the existing API key"],
       }),
     });
-    $[20] = F;
-    $[21] = U;
-  } else U = $[21];
+    $[20] = body;
+    $[21] = checkboxRow;
+  } else checkboxRow = $[21];
   let t13;
   if ($[22] !== theme || $[23] !== useExistingSecret) {
     t13 = !useExistingSecret ? color("success", theme)("> ") : "  ";
@@ -132,17 +132,17 @@ function CheckExistingSecretStep(props) {
     $[23] = useExistingSecret;
     $[24] = t13;
   } else t13 = $[24];
-  let Y;
+  let helpText;
   if ($[25] !== t13) {
-    Y = jsxProd_default(Box, {
+    helpText = jsxProd_default(Box, {
       children: jsxProd_default_2(Text, {
         children: [t13, "Create a new secret with a different name"],
       }),
     });
     $[25] = t13;
-    $[26] = Y;
-  } else Y = $[26];
-  let X;
+    $[26] = helpText;
+  } else helpText = $[26];
+  let statusLine;
   if (
     $[27] !== cursorOffset ||
     $[28] !== onSecretNameChange ||
@@ -151,7 +151,7 @@ function CheckExistingSecretStep(props) {
     $[31] !== terminalSize ||
     $[32] !== useExistingSecret
   ) {
-    X =
+    statusLine =
       !useExistingSecret &&
       jsxProd_default_2(Fragment, {
         children: [
@@ -179,20 +179,20 @@ function CheckExistingSecretStep(props) {
     $[30] = secretName;
     $[31] = terminalSize;
     $[32] = useExistingSecret;
-    $[33] = X;
-  } else X = $[33];
-  let pe;
-  if ($[34] !== U || $[35] !== Y || $[36] !== X) {
-    pe = jsxProd_default_2(Box, {
+    $[33] = statusLine;
+  } else statusLine = $[33];
+  let footer;
+  if ($[34] !== checkboxRow || $[35] !== helpText || $[36] !== statusLine) {
+    footer = jsxProd_default_2(Box, {
       flexDirection: "column",
       gap: 1,
-      children: [t8, t9, U, Y, X],
+      children: [t8, t9, checkboxRow, helpText, statusLine],
     });
-    $[34] = U;
-    $[35] = Y;
-    $[36] = X;
-    $[37] = pe;
-  } else pe = $[37];
-  return pe;
+    $[34] = checkboxRow;
+    $[35] = helpText;
+    $[36] = statusLine;
+    $[37] = footer;
+  } else footer = $[37];
+  return footer;
 }
 export { CheckExistingSecretStep };

@@ -7,7 +7,7 @@
  */
 
 //@ chunk-hwmsct5x.js:104825-104913 esm-fingerprint
-function SEn() {
+function promiseWithResolvers() {
   let resolve;
   let reject;
   return {
@@ -19,4 +19,4 @@ function SEn() {
     reject,
   };
 }
-export { SEn };
+export { promiseWithResolvers };

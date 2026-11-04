@@ -8,6 +8,11 @@
  * pieces: chunk-18hwfzwa.js (3), chunk-e6aww6q8.js (1)
  * attribution: placement 2, fingerprint 1, callgraph-fingerprint 1
  */
+import { getPluginRegistry } from "../../utils/plugins/pluginLoadState.js";
+import {
+  clearMarketplaceAdmissionVerdicts,
+  hiddenRegistryEntries,
+} from "../../utils/plugins/marketplaceSources.js";
 import { shouldSkipPluginAutoupdate } from "../../utils/config.js";
 import { checkEnabledPlugins } from "../../utils/plugins/pluginStartupCheck.js";
 import {
@@ -40,104 +45,122 @@ import { diffMarketplaces, reconcileMarketplaces } from "../../utils/plugins/rec
 import { logForDiagnosticsNoPII } from "../../utils/diagLogs.js";
 import { refreshActivePlugins } from "../../utils/plugins/refresh.js";
 import { logFeatureSad, logFeatureOk, logFeatureBad } from "../analytics/featureTelemetry.js";
-import { getPluginRegistry } from "../../utils/plugins/pluginLoadState.js";
-import {
-  clearMarketplaceAdmissionVerdicts,
-  hiddenRegistryEntries,
-} from "../../utils/plugins/marketplaceSources.js";
 
+//@ chunk-e6aww6q8.js:4233013-4233217 callgraph-fingerprint = updateMarketplaceStatus (0.212)
+/**
+ * 重置全局市场安装状态（marketplaces 状态表与进行中的刷新）。
+ */
+function updateMarketplaceStatus() {
+  let pluginRegistry = getPluginRegistry();
+  pluginRegistry.marketplaces.clear();
+  pluginRegistry.marketplaceRefreshesInFlight.clear();
+  clearMarketplaceAdmissionVerdicts();
+  hiddenRegistryEntries().raw.clear();
+  hiddenRegistryEntries().v5.clear();
+  pluginRegistry.marketplaceHelperMemo.clear();
+  pluginRegistry.marketplaceResolutionNoticesLogged.clear();
+}
 //@ chunk-18hwfzwa.js:202646-204071 placement
-async function refreshMarketplacesOnMiss(h = new Set(), x) {
-  let D = new Set();
-  if (shouldSkipPluginAutoupdate()) return D;
+async function refreshMarketplacesOnMiss(attempted = new Set(), storageV5) {
+  let refreshed = new Set();
+  if (shouldSkipPluginAutoupdate()) return refreshed;
   try {
-    let L = await checkEnabledPlugins();
-    if (L.length === 0) return D;
-    let knownMarketplaces = await loadKnownMarketplacesSafe(x);
+    let enabledPlugins = await checkEnabledPlugins();
+    if (enabledPlugins.length === 0) return refreshed;
+    let knownMarketplaces = await loadKnownMarketplacesSafe(storageV5);
     let declaredMarketplaces = getDeclaredMarketplaces();
-    let Re = new Map();
-    let Be = new Map();
-    for (let He of L) {
-      let { name: We, marketplace } = parsePluginIdentifier(He);
-      let Xe =
+    let missingByMarketplace = new Map();
+    let cacheByMarketplace = new Map();
+    for (let pluginId of enabledPlugins) {
+      let { name: pluginName, marketplace } = parsePluginIdentifier(pluginId);
+      let marketplaceEntry =
         marketplace && Object.hasOwn(knownMarketplaces, marketplace)
           ? knownMarketplaces[marketplace]
           : undefined;
       if (
-        !We ||
+        !pluginName ||
         !marketplace ||
-        !Xe ||
+        !marketplaceEntry ||
         isReservedMarketplaceName(marketplace.toLowerCase()) ||
-        h.has(marketplace) ||
-        Xe.source.source === "settings" ||
-        isPluginDirectorySource(Xe.source) ||
-        !isSourceAllowedByPolicy(Xe.source) ||
-        seedDirFor(Xe.installLocation) !== undefined ||
-        !isMarketplaceAutoUpdate(marketplace, Xe, getMarketplaceAutoUpdate(marketplace, declaredMarketplaces))
+        attempted.has(marketplace) ||
+        marketplaceEntry.source.source === "settings" ||
+        isPluginDirectorySource(marketplaceEntry.source) ||
+        !isSourceAllowedByPolicy(marketplaceEntry.source) ||
+        seedDirFor(marketplaceEntry.installLocation) !== undefined ||
+        !isMarketplaceAutoUpdate(
+          marketplace,
+          marketplaceEntry,
+          getMarketplaceAutoUpdate(marketplace, declaredMarketplaces),
+        )
       )
         continue;
-      let rt = Be.get(marketplace);
-      if (rt === undefined) {
-        rt = await getMarketplaceCacheOnly(marketplace, x);
-        Be.set(marketplace, rt);
+      let catalog = cacheByMarketplace.get(marketplace);
+      if (catalog === undefined) {
+        catalog = await getMarketplaceCacheOnly(marketplace, storageV5);
+        cacheByMarketplace.set(marketplace, catalog);
       }
-      if (rt === null) continue;
-      if (!rt.plugins.some((plugin) => plugin.name === We)) {
-        let kt = Re.get(marketplace);
-        if (kt) kt.push(He);
-        else Re.set(marketplace, [He]);
+      if (catalog === null) continue;
+      if (!catalog.plugins.some((plugin) => plugin.name === pluginName)) {
+        let missingPlugins = missingByMarketplace.get(marketplace);
+        if (missingPlugins) missingPlugins.push(pluginId);
+        else missingByMarketplace.set(marketplace, [pluginId]);
       }
     }
-    if (Re.size === 0) return D;
+    if (missingByMarketplace.size === 0) return refreshed;
     logForDebugging(
-      `refresh-on-miss: ${Re.size} marketplace(s) have enabled plugins missing from local catalog; refreshing`,
+      `refresh-on-miss: ${missingByMarketplace.size} marketplace(s) have enabled plugins missing from local catalog; refreshing`,
     );
     await sleep(Math.floor(Math.random() * REMOUNT_SETTLE_MS), undefined, {
       unref: true,
     });
-    for (let [He, We] of Re) {
-      let ze;
+    for (let [marketplaceName, missingPlugins] of missingByMarketplace) {
+      let refreshError;
       try {
-        await refreshMarketplaceDeduped(He, x, undefined, {
+        await refreshMarketplaceDeduped(marketplaceName, storageV5, undefined, {
           skipIfRecent: true,
         });
       } catch (error) {
-        ze = error;
-        logForDebugging(`refresh-on-miss: failed to refresh marketplace '${He}': ${errorMessage(error)}`, {
-          level: "warn",
-        });
+        refreshError = error;
+        logForDebugging(
+          `refresh-on-miss: failed to refresh marketplace '${marketplaceName}': ${errorMessage(error)}`,
+          {
+            level: "warn",
+          },
+        );
       }
-      let Xe = ze !== undefined ? null : await getMarketplaceCacheOnly(He, x);
-      let rt = false;
-      for (let kt of We) {
-        let { name: At } = parsePluginIdentifier(kt);
-        let It = Xe !== null && Xe.plugins.some((plugin) => plugin.name === At);
-        rt ||= It;
-        let Ot = ze !== undefined ? "refresh_failed" : It ? "resolved" : "still_missing";
-        logForDebugging(`refresh-on-miss: ${kt} \u2192 ${Ot}`);
+      let refreshedCatalog =
+        refreshError !== undefined ? null : await getMarketplaceCacheOnly(marketplaceName, storageV5);
+      let anyResolved = false;
+      for (let pluginId of missingPlugins) {
+        let { name: pluginName } = parsePluginIdentifier(pluginId);
+        let resolved =
+          refreshedCatalog !== null && refreshedCatalog.plugins.some((plugin) => plugin.name === pluginName);
+        anyResolved ||= resolved;
+        let outcome = refreshError !== undefined ? "refresh_failed" : resolved ? "resolved" : "still_missing";
+        logForDebugging(`refresh-on-miss: ${pluginId} \u2192 ${outcome}`);
         logEvent("tengu_plugin_refresh_on_miss", {
-          outcome: fromEnum(Ot),
-          ...(ze !== undefined && {
-            error_kind: fromEnum(classifyPluginCommandError(ze)),
+          outcome: fromEnum(outcome),
+          ...(refreshError !== undefined && {
+            error_kind: fromEnum(classifyPluginCommandError(refreshError)),
           }),
-          ...buildPluginEventFieldsFromId(kt),
+          ...buildPluginEventFieldsFromId(pluginId),
         });
       }
-      if (rt) D.add(He);
+      if (anyResolved) refreshed.add(marketplaceName);
     }
   } catch (error) {
     logForDebugging(`refresh-on-miss: unexpected error: ${errorMessage(error)}`, {
       level: "warn",
     });
   }
-  return D;
+  return refreshed;
 }
 //@ chunk-18hwfzwa.js:204071-204622 placement
-async function marketplaceLoadErrors(h, x = BRIDGE_RETRY_DELAYS_MS) {
-  let D = new Set();
+async function marketplaceLoadErrors(storageV5, retryDelays = BRIDGE_RETRY_DELAYS_MS) {
+  let recovered = new Set();
   try {
-    let { errors } = await loadAllPluginsCacheOnly(h);
-    let ee = new Set(
+    let { errors } = await loadAllPluginsCacheOnly(storageV5);
+    let failedMarketplaces = new Set(
       errors.flatMap((error) =>
         (error.type === "marketplace-load-failed" || error.type === "marketplace-not-found") &&
         pluginErrorSummary(error)
@@ -145,48 +168,50 @@ async function marketplaceLoadErrors(h, x = BRIDGE_RETRY_DELAYS_MS) {
           : [],
       ),
     );
-    if (ee.size === 0) return D;
-    let knownMarketplaces = await loadKnownMarketplacesSafe(h);
-    let Re = new Set([...ee].filter((He) => Object.hasOwn(knownMarketplaces, He)));
-    let Be = [...x];
-    while (Re.size > 0) {
-      for (let We of [...Re])
+    if (failedMarketplaces.size === 0) return recovered;
+    let knownMarketplaces = await loadKnownMarketplacesSafe(storageV5);
+    let stillMissing = new Set(
+      [...failedMarketplaces].filter((marketplaceName) => Object.hasOwn(knownMarketplaces, marketplaceName)),
+    );
+    let delays = [...retryDelays];
+    while (stillMissing.size > 0) {
+      for (let marketplaceName of [...stillMissing])
         if (
-          (await getMarketplaceCacheOnly(We, h, {
-            registryEntry: knownMarketplaces[We],
+          (await getMarketplaceCacheOnly(marketplaceName, storageV5, {
+            registryEntry: knownMarketplaces[marketplaceName],
             registryEntryIsSaved: true,
           })) !== null
         ) {
-          Re.delete(We);
-          D.add(We);
+          stillMissing.delete(marketplaceName);
+          recovered.add(marketplaceName);
         }
-      let He = Be.shift();
-      if (Re.size === 0 || He === undefined) break;
-      await sleep(He, undefined, {
+      let delayMs = delays.shift();
+      if (stillMissing.size === 0 || delayMs === undefined) break;
+      await sleep(delayMs, undefined, {
         unref: true,
       });
     }
   } catch (error) {
     logError(error);
   }
-  return D;
+  return recovered;
 }
 //@ chunk-18hwfzwa.js:204622-206503 fingerprint = performBackgroundPluginInstallations (0.672)
 /**
  * 后台插件安装：对比 settings 声明的市场与 known_marketplaces，reconcileMarketplaces 安装缺失/变化的市场，更新全局市场安装状态，必要时刷新插件；记 tengu_marketplace_background_install。
  */
-async function performBackgroundPluginInstallations(setAppState, x) {
+async function performBackgroundPluginInstallations(setAppState, storageV5) {
   logForDebugging("performBackgroundPluginInstallations called");
   try {
     let declared = getDeclaredMarketplaces();
-    let materialized = await loadKnownMarketplacesWithDeclared(x).catch(() => ({}));
+    let materialized = await loadKnownMarketplacesWithDeclared(storageV5).catch(() => ({}));
     let diff = diffMarketplaces(declared, materialized);
-    let pendingNames = [...diff.missing, ...diff.sourceChanged.map((ze) => ze.name)];
+    let pendingNames = [...diff.missing, ...diff.sourceChanged.map((change) => change.name)];
     setAppState.setPendingMarketplaces(pendingNames);
     if (pendingNames.length > 0)
       logForDebugging(`Installing ${pendingNames.length} marketplace(s) in background`);
     let result = await reconcileMarketplaces({
-      storageV5: x,
+      storageV5,
       onProgress: (event) => {
         switch (event.type) {
           case "installing":
@@ -211,21 +236,27 @@ async function performBackgroundPluginInstallations(setAppState, x) {
       logEvent("tengu_marketplace_background_install", metrics);
       logForDiagnosticsNoPII("info", "tengu_marketplace_background_install", metrics);
     }
-    let Be = await refreshMarketplacesOnMiss(new Set([...result.installed, ...result.updated]), x);
-    let He = result.installed.length > 0 || Be.size > 0;
-    let We = await marketplaceLoadErrors(x, He ? [] : BRIDGE_RETRY_DELAYS_MS);
-    if (result.installed.length > 0 || Be.size > 0 || We.size > 0) {
+    let refreshedMarketplaces = await refreshMarketplacesOnMiss(
+      new Set([...result.installed, ...result.updated]),
+      storageV5,
+    );
+    let appliedStagedInstalls = result.installed.length > 0 || refreshedMarketplaces.size > 0;
+    let recoveredMarketplaces = await marketplaceLoadErrors(
+      storageV5,
+      appliedStagedInstalls ? [] : BRIDGE_RETRY_DELAYS_MS,
+    );
+    if (result.installed.length > 0 || refreshedMarketplaces.size > 0 || recoveredMarketplaces.size > 0) {
       updateMarketplaceStatus();
       logForDebugging(
-        `Auto-refreshing plugins (installed: ${result.installed.length}, stale-refreshed: ${Be.size}, missed at session start: ${We.size})`,
+        `Auto-refreshing plugins (installed: ${result.installed.length}, stale-refreshed: ${refreshedMarketplaces.size}, missed at session start: ${recoveredMarketplaces.size})`,
       );
       try {
-        await refreshActivePlugins(setAppState, x, undefined, {
-          applyStagedInstalls: He,
+        await refreshActivePlugins(setAppState, storageV5, undefined, {
+          applyStagedInstalls: appliedStagedInstalls,
         });
-        if (We.size > 0)
+        if (recoveredMarketplaces.size > 0)
           logEvent("tengu_plugin_load_refresh_window_recovered", {
-            marketplace_count: We.size,
+            marketplace_count: recoveredMarketplaces.size,
           });
       } catch (refreshError) {
         logForDebugging(`Auto-refresh failed, falling back to needsRefresh: ${refreshError}`, {
@@ -247,19 +278,5 @@ async function performBackgroundPluginInstallations(setAppState, x) {
     logError(error);
     logFeatureBad("plugin_marketplace_bg_install", "reconcile_error");
   }
-}
-//@ chunk-e6aww6q8.js:4233013-4233217 callgraph-fingerprint = updateMarketplaceStatus (0.212)
-/**
- * 重置全局市场安装状态（marketplaces 状态表与进行中的刷新）。
- */
-function updateMarketplaceStatus() {
-  let pluginRegistry = getPluginRegistry();
-  pluginRegistry.marketplaces.clear();
-  pluginRegistry.marketplaceRefreshesInFlight.clear();
-  clearMarketplaceAdmissionVerdicts();
-  hiddenRegistryEntries().raw.clear();
-  hiddenRegistryEntries().v5.clear();
-  pluginRegistry.marketplaceHelperMemo.clear();
-  pluginRegistry.marketplaceResolutionNoticesLogged.clear();
 }
 export { updateMarketplaceStatus, performBackgroundPluginInstallations };

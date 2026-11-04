@@ -5,11 +5,12 @@
  *
  * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/analytics/metadata.ts
- * pieces: chunk-18hwfzwa.js (1), chunk-1wpnxx5r.js (1), chunk-6vnxsn99.js (1), chunk-aepeg2w5.js (137)
- * attribution: fingerprint 15, placement 83, sole-consumer 2, layout 39, file-local 1
+ * pieces: chunk-18hwfzwa.js (1), chunk-1wpnxx5r.js (1), chunk-6vnxsn99.js (1), chunk-aepeg2w5.js (135)
+ * attribution: fingerprint 15, placement 81, sole-consumer 2, layout 39, file-local 1
  */
-import { join, basename, extname } from "path";
+import { basename, extname } from "path";
 import { createHash, randomBytes } from "crypto";
+import { FIRST_PARTY_API_HOSTS } from "../../utils/model/providers.js";
 import { getSessionEntrypoint, isTopHostSession } from "../../utils/sessionShape.js";
 import {
   REMOTE_COWORK_SERVER_NAMES,
@@ -75,12 +76,11 @@ import { getCliOwnedState, firstPartyServerIdFor } from "../mcp/cliOwnedClients.
 import { isRosyElephantEnabled } from "./growthbookGates.js";
 import { startupCcrEnv } from "../../tasks/RemoteAgentTask/remoteAgentKinds.js";
 import { ToolPermissionValueSchema } from "../mcp/types.js";
-import { isSafeMode, getClaudeConfigDir, isEnvTruthy } from "../../utils/envUtils.js";
-import { xr } from "../../../vendor/lodash-es/_inlinedHelpers.js";
+import { isSafeMode, isEnvTruthy } from "../../utils/envUtils.js";
+import { import_mapValues } from "../../../vendor/lodash-es/_inlinedHelpers.js";
 import { getCcrOrigin, CCR_SESSION_BASE_PATHS, BRIDGE_DEVICE_URL_PREFIXES } from "../mcp/ccrMcpUrls.js";
 import { toInfraSessionId, sessionIdBody, isSafeBridgeId } from "../../bridge/sessionIdCompat.js";
 import { uniq } from "../../utils/collections.js";
-import { isValidKeySegment, STORAGE_SPACES } from "../../utils/storage/storageSpaces.js";
 import { slugifyPromptWords, shortWordSlugFromSeed } from "../../utils/words.js";
 import { isStableAddressEnabled } from "../../utils/sessionAddresses.js";
 import { hashSessionAddress } from "../../utils/sessionUrl.js";
@@ -90,11 +90,7 @@ import {
   WORKSPACE_WEB_FETCH_TOOL,
 } from "../../utils/permissions/permissionRuleParser.js";
 import { shortHash } from "../../utils/shortHash.js";
-import {
-  IOS_SIMULATOR_DISPLAY_NAME,
-  ANDROID_EMULATOR_DISPLAY_NAME,
-  isOfficialMcpUrl,
-} from "../routines/routinesApi.js";
+import { isOfficialMcpUrl } from "../routines/routinesApi.js";
 import { isDesignMcpUrl } from "../mcp/auth.js";
 import { COMPUTER_USE_MCP_SERVER_NAME } from "../../utils/computerUse/common.js";
 import {
@@ -136,8 +132,21 @@ import { maskModelIdForTelemetry } from "../../utils/model/modelCatalog/catalogE
 import { envSessionKind } from "../../utils/concurrentSessions.js";
 import { desktopEntrypointSetting, getEntrypointKind } from "../../utils/entrypointKinds.js";
 import { truncateToLength } from "../../utils/stringUtils.js";
-import { FIRST_PARTY_API_HOSTS } from "../../utils/model/providers.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
+//@ chunk-1wpnxx5r.js:920-952 placement
+/**
+ * 主机名是否为第一方 API 主机。
+ */
+function isFirstPartyApiHost(hostname) {
+  return FIRST_PARTY_API_HOSTS.has(hostname);
+}
+//@ chunk-aepeg2w5.js:817603-817674 placement
+/**
+ * 两个移动设备模拟器连接的显示名（iOS Simulator、Android Emulator）。
+ */
+var IOS_SIMULATOR_DISPLAY_NAME = "Claude Code iOS Simulator";
+var ANDROID_EMULATOR_DISPLAY_NAME = "Claude Code Android Emulator";
 //@ chunk-aepeg2w5.js:820317-820372 sole-consumer
 function isRemoteDevicesBuiltinVisible() {
   let sessionEntrypoint = getSessionEntrypoint();
@@ -147,11 +156,11 @@ function isRemoteDevicesBuiltinVisible() {
 /**
  * 内置 MCP 服务器（Chrome、computer use、远程设备、远程浏览器）的已知工具名集合。
  */
-function knownToolNamesForServer(e) {
-  if (isClaudeInChromeMCPServer(e)) return CHROME_TOOL_NAMES;
-  if (isComputerUseServer(e)) return COMPUTER_USE_TOOL_NAMES;
-  if (e === REMOTE_DEVICES && isRemoteDevicesBuiltinVisible()) return DEVICE_TOOL_NAME_SET;
-  if (e === REMOTE_BROWSER_SERVER_NAME && isPolicyAllowed()) return UPSTREAM_TOOL_NAME_SET;
+function knownToolNamesForServer(serverName) {
+  if (isClaudeInChromeMCPServer(serverName)) return CHROME_TOOL_NAMES;
+  if (isComputerUseServer(serverName)) return COMPUTER_USE_TOOL_NAMES;
+  if (serverName === REMOTE_DEVICES && isRemoteDevicesBuiltinVisible()) return DEVICE_TOOL_NAME_SET;
+  if (serverName === REMOTE_BROWSER_SERVER_NAME && isPolicyAllowed()) return UPSTREAM_TOOL_NAME_SET;
   return;
 }
 //@ chunk-aepeg2w5.js:820486-820531 fingerprint = isToolDetailsLoggingEnabled (1)
@@ -176,7 +185,10 @@ class AnalyticsMcpRegistry {
 /**
  * 遥测用的 MCP 登记表（按宿主）：第一方插件、可记录服务器、工具名是否扣留、CCR 注入配置等，以及归因字段可见性规则。
  */
-var analyticsMcpRegistrySlot = new HostScoped(() => new AnalyticsMcpRegistry());
+var analyticsMcpRegistrySlot; // deferred: uses AnalyticsMcpRegistry of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-aepeg2w5.js:820685", () => {
+  analyticsMcpRegistrySlot = new HostScoped(() => new AnalyticsMcpRegistry());
+});
 //@ chunk-aepeg2w5.js:820710-820747 placement
 function analyticsMcpRegistry() {
   return analyticsMcpRegistrySlot.of(getRootSession().host);
@@ -203,28 +215,28 @@ function markMcpServerLoggable(name) {
 /**
  * 登记某服务器的工具名不进入遥测。
  */
-function withholdToolNames(e) {
+function withholdToolNames(toolName) {
   let toolNamesWithheldMcpServers = analyticsMcpRegistry().toolNamesWithheldMcpServers;
-  let r = normalizeNameForMCP(e);
-  let s = toolNamesWithheldMcpServers.get(r) ?? new Set();
-  s.add(e);
-  toolNamesWithheldMcpServers.set(r, s);
+  let serverKey = normalizeNameForMCP(toolName);
+  let withheld = toolNamesWithheldMcpServers.get(serverKey) ?? new Set();
+  withheld.add(toolName);
+  toolNamesWithheldMcpServers.set(serverKey, withheld);
 }
 //@ chunk-aepeg2w5.js:820998-821130 placement
 /**
  * 取消对某服务器工具名的隐藏。
  */
-function releaseToolNames(e) {
+function releaseToolNames(toolName) {
   let toolNamesWithheldMcpServers = analyticsMcpRegistry().toolNamesWithheldMcpServers;
-  let r = normalizeNameForMCP(e);
-  let s = toolNamesWithheldMcpServers.get(r);
-  if (s === undefined) return;
-  s.delete(e);
-  if (s.size === 0) toolNamesWithheldMcpServers.delete(r);
+  let serverKey = normalizeNameForMCP(toolName);
+  let withheld = toolNamesWithheldMcpServers.get(serverKey);
+  if (withheld === undefined) return;
+  withheld.delete(toolName);
+  if (withheld.size === 0) toolNamesWithheldMcpServers.delete(serverKey);
 }
 //@ chunk-aepeg2w5.js:821130-821196 placement
-function withholdsToolNames(e) {
-  return analyticsMcpRegistry().toolNamesWithheldMcpServers.has(normalizeNameForMCP(e));
+function withholdsToolNames(serverName) {
+  return analyticsMcpRegistry().toolNamesWithheldMcpServers.has(normalizeNameForMCP(serverName));
 }
 //@ chunk-aepeg2w5.js:821196-821241 placement
 var CUSTOM = "custom";
@@ -236,15 +248,15 @@ var CUSTOM_2 = "custom";
  */
 function buildAttribution(querySource, spawnedBySkill, activeSkill, activeMcpServer, activeMcpTool) {
   try {
-    let y = attributionFromQuerySource(querySource, spawnedBySkill, activeSkill);
+    let attribution = attributionFromQuerySource(querySource, spawnedBySkill, activeSkill);
     if (activeMcpServer) {
-      let S = classifyQuerySource(querySource);
-      if (S === "main" || S === "subagent") {
-        y.attributionMcpServer = activeMcpServer;
-        if (activeMcpTool) y.attributionMcpTool = activeMcpTool;
+      let sourceKind = classifyQuerySource(querySource);
+      if (sourceKind === "main" || sourceKind === "subagent") {
+        attribution.attributionMcpServer = activeMcpServer;
+        if (activeMcpTool) attribution.attributionMcpTool = activeMcpTool;
       }
     }
-    return y;
+    return attribution;
   } catch (error) {
     logError(error);
     return {};
@@ -254,40 +266,40 @@ function buildAttribution(querySource, spawnedBySkill, activeSkill, activeMcpSer
 /**
  * 按查询来源（内置/自定义 agent、主线程）生成归因字段。
  */
-function attributionFromQuerySource(e, n, r) {
-  if (!e) return {};
-  if (e.startsWith("agent:builtin:"))
+function attributionFromQuerySource(querySource, spawnedBySkill, activeSkill) {
+  if (!querySource) return {};
+  if (querySource.startsWith("agent:builtin:"))
     return {
-      attributionAgent: e.slice(14),
-      ...skillAttribution(n),
+      attributionAgent: querySource.slice(14),
+      ...skillAttribution(spawnedBySkill),
     };
-  if (e.startsWith("agent:custom:")) {
-    let sliced = e.slice(13);
+  if (querySource.startsWith("agent:custom:")) {
+    let querySource_2 = querySource.slice(13);
     return {
-      attributionAgent: sliced,
-      ...skillAttribution(n, querySourceFamily(sliced)),
+      attributionAgent: querySource_2,
+      ...skillAttribution(spawnedBySkill, querySourceFamily(querySource_2)),
     };
   }
-  if (e.startsWith("agent:")) return skillAttribution(n);
-  if (classifyQuerySource(e) === "main" && r) return skillAttribution(r);
+  if (querySource.startsWith("agent:")) return skillAttribution(spawnedBySkill);
+  if (classifyQuerySource(querySource) === "main" && activeSkill) return skillAttribution(activeSkill);
   return {};
 }
 //@ chunk-aepeg2w5.js:821712-821839 placement
 /**
  * 技能与所属插件的归因字段。
  */
-function skillAttribution(e, sourceFamily) {
-  if (!e)
+function skillAttribution(querySource, sourceFamily) {
+  if (!querySource)
     return sourceFamily
       ? {
           attributionPlugin: sourceFamily,
         }
       : {};
-  let r = querySourceFamily(e) ?? sourceFamily;
+  let family = querySourceFamily(querySource) ?? sourceFamily;
   return {
-    attributionSkill: e,
-    ...(r && {
-      attributionPlugin: r,
+    attributionSkill: querySource,
+    ...(family && {
+      attributionPlugin: family,
     }),
   };
 }
@@ -297,42 +309,58 @@ function skillAttribution(e, sourceFamily) {
  */
 function redactAttribution(querySource, attribution) {
   let attribution_2 = resolveAttributionSafe(querySource, attribution);
-  let s = {};
+  let redacted = {};
   if (attribution_2.attributionAgent !== undefined) {
-    s.attributionAgent = sanitizeAttributionValue(attribution_2.attributionAgent);
-    let h = metricAttributionKey(attribution.attributionAgent, attribution_2.attributionAgent, CUSTOM);
-    if (h !== undefined) s.attributionAgentHash = h;
+    redacted.attributionAgent = sanitizeAttributionValue(attribution_2.attributionAgent);
+    let agentHash = metricAttributionKey(
+      attribution.attributionAgent,
+      attribution_2.attributionAgent,
+      CUSTOM,
+    );
+    if (agentHash !== undefined) redacted.attributionAgentHash = agentHash;
   }
   if (attribution_2.attributionSkill !== undefined) {
-    s.attributionSkill = sanitizeAttributionValue(attribution_2.attributionSkill);
-    let h = metricAttributionKey(attribution.attributionSkill, attribution_2.attributionSkill, THIRD_PARTY);
-    if (h !== undefined) s.attributionSkillHash = h;
+    redacted.attributionSkill = sanitizeAttributionValue(attribution_2.attributionSkill);
+    let skillHash = metricAttributionKey(
+      attribution.attributionSkill,
+      attribution_2.attributionSkill,
+      THIRD_PARTY,
+    );
+    if (skillHash !== undefined) redacted.attributionSkillHash = skillHash;
   }
   if (attribution_2.attributionPlugin !== undefined) {
-    s.attributionPlugin = sanitizeAttributionValue(attribution_2.attributionPlugin);
-    let h = metricAttributionKey(attribution.attributionPlugin, attribution_2.attributionPlugin, THIRD_PARTY);
-    if (h !== undefined) s.attributionPluginHash = h;
+    redacted.attributionPlugin = sanitizeAttributionValue(attribution_2.attributionPlugin);
+    let pluginHash = metricAttributionKey(
+      attribution.attributionPlugin,
+      attribution_2.attributionPlugin,
+      THIRD_PARTY,
+    );
+    if (pluginHash !== undefined) redacted.attributionPluginHash = pluginHash;
   }
   if (attribution_2.attributionMcpServer !== undefined) {
-    s.attributionMcpServer = sanitizeAttributionValue(attribution_2.attributionMcpServer);
-    let h = metricAttributionKey(
+    redacted.attributionMcpServer = sanitizeAttributionValue(attribution_2.attributionMcpServer);
+    let serverHash = metricAttributionKey(
       attribution.attributionMcpServer,
       attribution_2.attributionMcpServer,
       CUSTOM_2,
     );
-    if (h !== undefined) s.attributionMcpServerHash = h;
+    if (serverHash !== undefined) redacted.attributionMcpServerHash = serverHash;
   }
   if (attribution_2.attributionMcpTool !== undefined) {
-    s.attributionMcpTool = sanitizeAttributionValue(attribution_2.attributionMcpTool);
-    let h = metricAttributionKey(attribution.attributionMcpTool, attribution_2.attributionMcpTool, CUSTOM_2);
-    if (h !== undefined) s.attributionMcpToolHash = h;
+    redacted.attributionMcpTool = sanitizeAttributionValue(attribution_2.attributionMcpTool);
+    let toolHash = metricAttributionKey(
+      attribution.attributionMcpTool,
+      attribution_2.attributionMcpTool,
+      CUSTOM_2,
+    );
+    if (toolHash !== undefined) redacted.attributionMcpToolHash = toolHash;
   }
-  return s;
+  return redacted;
 }
 //@ chunk-aepeg2w5.js:822747-822819 placement
-function metricAttributionKey(e, n, r) {
-  if (n !== r || e === undefined || e === r) return;
-  return sanitizeAttributionValue(hashPluginId(e));
+function metricAttributionKey(actual, observed, fallbackValue) {
+  if (observed !== fallbackValue || actual === undefined || actual === fallbackValue) return;
+  return sanitizeAttributionValue(hashPluginId(actual));
 }
 //@ chunk-aepeg2w5.js:822819-823041 placement
 /**
@@ -372,29 +400,29 @@ function attributionWithMetrics(querySource, attribution) {
 /**
  * 生成归因字段（可选包含指标归因映射）。
  */
-function attributionFor(e, n, r) {
+function attributionFor(querySource, attribution, trackMetrics) {
   try {
-    let attributionAttributes = toAttributionAttributes(resolveAttribution(e, n));
-    let { attributionMcpServer, attributionMcpTool } = n;
-    let S = isToolDetailsLoggingEnabled()
+    let attributionAttributes = toAttributionAttributes(resolveAttribution(querySource, attribution));
+    let { attributionMcpServer, attributionMcpTool } = attribution;
+    let normalized = isToolDetailsLoggingEnabled()
       ? toAttributionAttributes({
-          ...n,
+          ...attribution,
           attributionMcpServer: attributionMcpServer && normalizeNameForMCP(attributionMcpServer),
           attributionMcpTool:
             attributionMcpServer && attributionMcpTool && normalizeNameForMCP(attributionMcpTool),
         })
       : attributionAttributes;
-    if (!r) return S;
-    let w = analyticsMcpRegistry();
-    let anthropicMetricAttribution = w.anthropicMetricAttribution;
-    let x = attributionKeySignature(S);
-    if (x !== attributionKeySignature(attributionAttributes)) w.emittedUnredacted = true;
-    let P = anthropicMetricAttribution.get(x);
+    if (!trackMetrics) return normalized;
+    let registry = analyticsMcpRegistry();
+    let anthropicMetricAttribution = registry.anthropicMetricAttribution;
+    let signature = attributionKeySignature(normalized);
+    if (signature !== attributionKeySignature(attributionAttributes)) registry.emittedUnredacted = true;
+    let existing = anthropicMetricAttribution.get(signature);
     anthropicMetricAttribution.set(
-      x,
-      P === undefined ? attributionAttributes : mergeAttribution(P, attributionAttributes),
+      signature,
+      existing === undefined ? attributionAttributes : mergeAttribution(existing, attributionAttributes),
     );
-    return S;
+    return normalized;
   } catch (error) {
     logError(error);
     return {};
@@ -405,30 +433,30 @@ function attributionFor(e, n, r) {
  * 给指标附加归因标签。
  */
 function applyMetricAttribution(attributes) {
-  let n = {};
-  for (let y of ATTRIBUTION_KEYS) {
-    let S = attributes[y];
-    if (S !== undefined) n[y] = String(S);
+  let present = {};
+  for (let key of ATTRIBUTION_KEYS) {
+    let value = attributes[key];
+    if (value !== undefined) present[key] = String(value);
   }
-  if (Object.keys(n).length === 0) return attributes;
-  let r = attributionKeySignature(n);
-  let s;
+  if (Object.keys(present).length === 0) return attributes;
+  let signature = attributionKeySignature(present);
+  let merged;
   try {
-    let y = analyticsMcpRegistry();
-    if (!y.emittedUnredacted && !isToolDetailsLoggingEnabled()) return attributes;
-    s = y.anthropicMetricAttribution.get(r) ?? mergeAttribution(n, {});
+    let registry = analyticsMcpRegistry();
+    if (!registry.emittedUnredacted && !isToolDetailsLoggingEnabled()) return attributes;
+    merged = registry.anthropicMetricAttribution.get(signature) ?? mergeAttribution(present, {});
   } catch (error) {
     logError(error);
-    s = mergeAttribution(n, {});
+    merged = mergeAttribution(present, {});
   }
-  if (attributionKeySignature(s) === r) return attributes;
-  let h = {
+  if (attributionKeySignature(merged) === signature) return attributes;
+  let next = {
     ...attributes,
   };
-  for (let y of ATTRIBUTION_KEYS)
-    if (s[y] === undefined) delete h[y];
-    else h[y] = s[y];
-  return h;
+  for (let key of ATTRIBUTION_KEYS)
+    if (merged[key] === undefined) delete next[key];
+    else next[key] = merged[key];
+  return next;
 }
 //@ chunk-aepeg2w5.js:823829-824128 placement
 /**
@@ -441,7 +469,7 @@ function toAttributionAttributes({
   attributionMcpServer,
   attributionMcpTool,
 }) {
-  let y = attributionPlugin ? firstPartyPluginId(attributionPlugin) : undefined;
+  let pluginId = attributionPlugin ? firstPartyPluginId(attributionPlugin) : undefined;
   return {
     ...(attributionAgent && {
       "agent.name": attributionAgent,
@@ -452,8 +480,8 @@ function toAttributionAttributes({
     ...(attributionPlugin && {
       "plugin.name": attributionPlugin,
     }),
-    ...(y && {
-      "marketplace.name": y,
+    ...(pluginId && {
+      "marketplace.name": pluginId,
     }),
     ...(attributionMcpServer && {
       "mcp_server.name": attributionMcpServer,
@@ -467,22 +495,22 @@ function toAttributionAttributes({
 /**
  * 两组归因相同时保留，不同时用占位值。
  */
-function mergeAttribution(e, n) {
-  let r = {};
-  for (let s of ATTRIBUTION_KEYS) {
-    let h = e[s] === n[s] ? e[s] : ATTRIBUTION_FALLBACKS[s];
-    if (h !== undefined) r[s] = h;
+function mergeAttribution(a, b) {
+  let merged = {};
+  for (let key of ATTRIBUTION_KEYS) {
+    let value = a[key] === b[key] ? a[key] : ATTRIBUTION_FALLBACKS[key];
+    if (value !== undefined) merged[key] = value;
   }
-  return r;
+  return merged;
 }
 //@ chunk-aepeg2w5.js:824230-824274 placement
-function attributionKeySignature(e) {
-  return jsonStringifyRaw(ATTRIBUTION_KEYS.map((n) => e[n]));
+function attributionKeySignature(attribution) {
+  return jsonStringifyRaw(ATTRIBUTION_KEYS.map((key) => attribution[key]));
 }
 //@ chunk-aepeg2w5.js:824274-824335 placement
-function resolveAttributionSafe(e, n) {
+function resolveAttributionSafe(querySource, attribution) {
   try {
-    return resolveAttribution(e, n);
+    return resolveAttribution(querySource, attribution);
   } catch (error) {
     logError(error);
     return {};
@@ -492,50 +520,51 @@ function resolveAttributionSafe(e, n) {
 /**
  * 按第一方插件、可记录 MCP 服务器等规则决定归因的可见性。
  */
-function resolveAttribution(e, n) {
-  let { attributionAgent, attributionSkill, attributionPlugin, attributionMcpServer, attributionMcpTool } = n;
+function resolveAttribution(querySource, attribution) {
+  let { attributionAgent, attributionSkill, attributionPlugin, attributionMcpServer, attributionMcpTool } =
+    attribution;
   let { firstPartyPlugins, loggableMcpServers, toolNamesWithheldMcpServers } = analyticsMcpRegistry();
-  let P = {};
+  let resolved = {};
   if (attributionMcpServer !== undefined) {
-    let F = loggableMcpServers.has(attributionMcpServer);
-    P.attributionMcpServer = F ? normalizeNameForMCP(attributionMcpServer) : CUSTOM_2;
+    let serverLoggable = loggableMcpServers.has(attributionMcpServer);
+    resolved.attributionMcpServer = serverLoggable ? normalizeNameForMCP(attributionMcpServer) : CUSTOM_2;
     if (attributionMcpTool !== undefined) {
-      let L = F ? knownToolNamesForServer(attributionMcpServer) : undefined;
-      let G =
-        F &&
+      let knownTools = serverLoggable ? knownToolNamesForServer(attributionMcpServer) : undefined;
+      let toolLoggable =
+        serverLoggable &&
         !toolNamesWithheldMcpServers.has(normalizeNameForMCP(attributionMcpServer)) &&
-        (L === undefined || L.has(normalizeNameForMCP(attributionMcpTool)));
-      P.attributionMcpTool = G ? normalizeNameForMCP(attributionMcpTool) : CUSTOM_2;
+        (knownTools === undefined || knownTools.has(normalizeNameForMCP(attributionMcpTool)));
+      resolved.attributionMcpTool = toolLoggable ? normalizeNameForMCP(attributionMcpTool) : CUSTOM_2;
     }
   }
   if (attributionAgent !== undefined)
-    if (e?.startsWith("agent:builtin:")) P.attributionAgent = attributionAgent;
+    if (querySource?.startsWith("agent:builtin:")) resolved.attributionAgent = attributionAgent;
     else {
-      let F = attributionPlugin !== undefined && firstPartyPlugins.has(attributionPlugin);
-      P.attributionAgent = F ? attributionAgent : CUSTOM;
+      let pluginIsFirstParty = attributionPlugin !== undefined && firstPartyPlugins.has(attributionPlugin);
+      resolved.attributionAgent = pluginIsFirstParty ? attributionAgent : CUSTOM;
     }
   if (attributionPlugin !== undefined) {
     if (firstPartyPlugins.has(attributionPlugin)) {
-      P.attributionPlugin = attributionPlugin;
-      if (attributionSkill !== undefined) P.attributionSkill = attributionSkill;
+      resolved.attributionPlugin = attributionPlugin;
+      if (attributionSkill !== undefined) resolved.attributionSkill = attributionSkill;
     } else {
-      P.attributionPlugin = THIRD_PARTY;
-      if (attributionSkill !== undefined) P.attributionSkill = THIRD_PARTY;
+      resolved.attributionPlugin = THIRD_PARTY;
+      if (attributionSkill !== undefined) resolved.attributionSkill = THIRD_PARTY;
     }
-  } else if (attributionSkill !== undefined) P.attributionSkill = attributionSkill;
-  return P;
+  } else if (attributionSkill !== undefined) resolved.attributionSkill = attributionSkill;
+  return resolved;
 }
 //@ chunk-aepeg2w5.js:825050-825078 placement
-function sanitizeAttributionValue(e) {
-  return fromSanitizer_SANITIZER_OUTPUT_ONLY(e);
+function sanitizeAttributionValue(value) {
+  return fromSanitizer_SANITIZER_OUTPUT_ONLY(value);
 }
 //@ chunk-aepeg2w5.js:825078-825247 placement
 /**
  * 内置工具是否由 MCP 提供（返回工具名）。
  */
-function builtinToolServedByMcp(e) {
+function builtinToolServedByMcp(toolName) {
   let builtinToolsServedByMcp = getHostState().builtinToolsServedByMcp;
-  let mcpInfo = e.mcpInfo;
+  let mcpInfo = toolName.mcpInfo;
   return builtinToolsServedByMcp !== undefined &&
     mcpInfo !== undefined &&
     mcpInfo.serverName === builtinToolsServedByMcp.serverName &&
@@ -547,169 +576,183 @@ function builtinToolServedByMcp(e) {
 /**
  * 由 MCP 提供的内置工具对应的原工具名。
  */
-function builtinToolNameForMcp(e) {
+function builtinToolNameForMcp(mcpToolName) {
   let builtinToolsServedByMcp = getHostState().builtinToolsServedByMcp;
   return builtinToolsServedByMcp === undefined
     ? undefined
     : Array.from(builtinToolsServedByMcp.toolNames).find(
-        (toolName) => buildMcpToolName(builtinToolsServedByMcp.serverName, toolName) === e,
+        (toolName) => buildMcpToolName(builtinToolsServedByMcp.serverName, toolName) === mcpToolName,
       );
 }
 //@ chunk-aepeg2w5.js:825381-826238 placement
 /**
  * Artifact MCP 工具名映射。
  */
-var ARTIFACT_MCP_TOOL_NAMES = new Map([
-  ["publish_version", ARTIFACT_TOOL_NAME],
-  ["edit_version", ARTIFACT_TOOL_NAME],
-  ["publish_files", ARTIFACT_TOOL_NAME],
-  ["authorize_upload", ARTIFACT_TOOL_NAME],
-  ["copy_file", ARTIFACT_TOOL_NAME],
-  ["create_from_type", ARTIFACT_TOOL_NAME],
-  ["list_types", ARTIFACT_TOOL_NAME],
-  ["describe_type", ARTIFACT_TOOL_NAME],
-  ["declare_capabilities", ARTIFACT_TOOL_NAME],
-  ["describe_capabilities", ARTIFACT_TOOL_NAME],
-  ["read_declaration", ARTIFACT_TOOL_NAME],
-  ["get_artifact", ARTIFACT_TOOL_NAME],
-  ["read_artifact", ARTIFACT_TOOL_NAME],
-  ["read_shared_artifact", ARTIFACT_TOOL_NAME],
-  ["list_artifacts", ARTIFACT_TOOL_NAME],
-  ["delete_artifact", ARTIFACT_TOOL_NAME],
-  ["pin_artifact", ARTIFACT_TOOL_NAME],
-  ["unpin_artifact", ARTIFACT_TOOL_NAME],
-  ["guide", ARTIFACT_TOOL_NAME],
-  ["list_files", ARTIFACT_TOOL_NAME],
-  ["read_file", ARTIFACT_TOOL_NAME],
-  ["upload_asset", ARTIFACT_TOOL_NAME],
-  ["list_assets", ARTIFACT_TOOL_NAME],
-  ["read_asset", ARTIFACT_TOOL_NAME],
-  ["copy_asset", ARTIFACT_TOOL_NAME],
-  ["delete_asset", ARTIFACT_TOOL_NAME],
-  ["read_comments", ARTIFACT_COMMENTS_TOOL_NAME],
-  ["reply_comment", ARTIFACT_COMMENTS_TOOL_NAME],
-  ["reply_shared_comment", ARTIFACT_COMMENTS_TOOL_NAME],
-  ["resolve_comment", ARTIFACT_COMMENTS_TOOL_NAME],
-  ["watch", ARTIFACT_COMMENTS_TOOL_NAME],
-  ["unwatch", ARTIFACT_COMMENTS_TOOL_NAME],
-  ["db_get", ARTIFACT_DATA_TOOL_NAME],
-  ["db_list", ARTIFACT_DATA_TOOL_NAME],
-  ["db_query", ARTIFACT_DATA_TOOL_NAME],
-  ["db_write", ARTIFACT_DATA_TOOL_NAME],
-  ["db_str_replace", ARTIFACT_DATA_TOOL_NAME],
-  ["db_usage", ARTIFACT_DATA_TOOL_NAME],
-  ["db_whoami", ARTIFACT_DATA_TOOL_NAME],
-  ["db_profiles", ARTIFACT_DATA_TOOL_NAME],
-  ["db_rules_get", ARTIFACT_DATA_TOOL_NAME],
-]);
-var ARTIFACT_TOOL_NAMES_DISKLESS = new Map([]);
+var ARTIFACT_MCP_TOOL_NAMES; // deferred: uses ARTIFACT_TOOL_NAME (../../tools/ArtifactTool/constants.js) of its import cycle while loading; runs once the cycle is complete
+var ARTIFACT_TOOL_NAMES_DISKLESS;
+deferInit("chunk-aepeg2w5.js:825381", () => {
+  ARTIFACT_MCP_TOOL_NAMES = new Map([
+    ["publish_version", ARTIFACT_TOOL_NAME],
+    ["edit_version", ARTIFACT_TOOL_NAME],
+    ["publish_files", ARTIFACT_TOOL_NAME],
+    ["authorize_upload", ARTIFACT_TOOL_NAME],
+    ["copy_file", ARTIFACT_TOOL_NAME],
+    ["create_from_type", ARTIFACT_TOOL_NAME],
+    ["list_types", ARTIFACT_TOOL_NAME],
+    ["describe_type", ARTIFACT_TOOL_NAME],
+    ["declare_capabilities", ARTIFACT_TOOL_NAME],
+    ["describe_capabilities", ARTIFACT_TOOL_NAME],
+    ["read_declaration", ARTIFACT_TOOL_NAME],
+    ["get_artifact", ARTIFACT_TOOL_NAME],
+    ["read_artifact", ARTIFACT_TOOL_NAME],
+    ["read_shared_artifact", ARTIFACT_TOOL_NAME],
+    ["list_artifacts", ARTIFACT_TOOL_NAME],
+    ["delete_artifact", ARTIFACT_TOOL_NAME],
+    ["pin_artifact", ARTIFACT_TOOL_NAME],
+    ["unpin_artifact", ARTIFACT_TOOL_NAME],
+    ["guide", ARTIFACT_TOOL_NAME],
+    ["list_files", ARTIFACT_TOOL_NAME],
+    ["read_file", ARTIFACT_TOOL_NAME],
+    ["upload_asset", ARTIFACT_TOOL_NAME],
+    ["list_assets", ARTIFACT_TOOL_NAME],
+    ["read_asset", ARTIFACT_TOOL_NAME],
+    ["copy_asset", ARTIFACT_TOOL_NAME],
+    ["delete_asset", ARTIFACT_TOOL_NAME],
+    ["read_comments", ARTIFACT_COMMENTS_TOOL_NAME],
+    ["reply_comment", ARTIFACT_COMMENTS_TOOL_NAME],
+    ["reply_shared_comment", ARTIFACT_COMMENTS_TOOL_NAME],
+    ["resolve_comment", ARTIFACT_COMMENTS_TOOL_NAME],
+    ["watch", ARTIFACT_COMMENTS_TOOL_NAME],
+    ["unwatch", ARTIFACT_COMMENTS_TOOL_NAME],
+    ["db_get", ARTIFACT_DATA_TOOL_NAME],
+    ["db_list", ARTIFACT_DATA_TOOL_NAME],
+    ["db_query", ARTIFACT_DATA_TOOL_NAME],
+    ["db_write", ARTIFACT_DATA_TOOL_NAME],
+    ["db_str_replace", ARTIFACT_DATA_TOOL_NAME],
+    ["db_usage", ARTIFACT_DATA_TOOL_NAME],
+    ["db_whoami", ARTIFACT_DATA_TOOL_NAME],
+    ["db_profiles", ARTIFACT_DATA_TOOL_NAME],
+    ["db_rules_get", ARTIFACT_DATA_TOOL_NAME],
+  ]);
+  ARTIFACT_TOOL_NAMES_DISKLESS = new Map([]);
+});
 //@ chunk-aepeg2w5.js:826238-826340 placement
 /**
  * 按谓词过滤对象键。
  */
-function filterObject(e, n) {
-  let r = Object.create(null);
-  for (let [key, value] of Object.entries(e)) if (n(value, key)) r[key] = value;
-  return r;
+function filterObject(object, predicate) {
+  let result = Object.create(null);
+  for (let [key, value] of Object.entries(object)) if (predicate(value, key)) result[key] = value;
+  return result;
 }
 //@ chunk-aepeg2w5.js:826340-826576 placement
 /**
  * URL 查询参数是否每个只出现一次。
  */
-function hasUniqueQueryParams(url, n) {
+function hasUniqueQueryParams(url, params) {
   if (url.includes("#")) return false;
   let index = url.indexOf("?");
   if (index === -1) return true;
   let sliced = url.slice(index + 1);
   if (sliced.includes(";") || /%(?![0-9A-Fa-f]{2})/.test(sliced)) return false;
   let uRLSearchParams = new URLSearchParams(sliced);
-  return n.every((y) => uRLSearchParams.getAll(y).length <= 1);
+  return params.every((param) => uRLSearchParams.getAll(param).length <= 1);
 }
 //@ chunk-aepeg2w5.js:826576-827026 placement
 /**
  * CCR 注入的 MCP 服务器路径模式（slackbot、slack-thread 等）。
  */
-var CCR_INJECTED_MCP_PATHS = new Map([
-  ["slackbot", /^\/v2\/ccr-sessions\/[A-Za-z0-9_-]+\/slackbot\/mcp$/],
-  ["slackbot_read", /^\/v2\/ccr-sessions\/[A-Za-z0-9_-]+\/slackbot\/mcp\/read$/],
-  ["ccr-slack-thread", /^\/v2\/ccr-sessions\/[A-Za-z0-9_-]+\/slack-thread\/mcp$/],
-  ["teamsbot", /^\/v2\/ccr-sessions\/[A-Za-z0-9_-]+\/teamsbot\/mcp$/],
-]);
-var INJECTED_MCP_SERVER_NAMES = [...CCR_INJECTED_MCP_PATHS.keys()];
-var INJECTED_MCP_CONFIG_KEYS = new Set([
-  "type",
-  "url",
-  "headers",
-  "tools",
-  "toolPermissions",
-  "request_timeout_ms",
-  "timeout",
-  "role",
-  "alwaysLoad",
-  "scope",
-]);
+var CCR_INJECTED_MCP_PATHS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var INJECTED_MCP_SERVER_NAMES;
+var INJECTED_MCP_CONFIG_KEYS;
+deferInit("chunk-aepeg2w5.js:826576", () => {
+  CCR_INJECTED_MCP_PATHS = new Map([
+    ["slackbot", /^\/v2\/ccr-sessions\/[A-Za-z0-9_-]+\/slackbot\/mcp$/],
+    ["slackbot_read", /^\/v2\/ccr-sessions\/[A-Za-z0-9_-]+\/slackbot\/mcp\/read$/],
+    ["ccr-slack-thread", /^\/v2\/ccr-sessions\/[A-Za-z0-9_-]+\/slack-thread\/mcp$/],
+    ["teamsbot", /^\/v2\/ccr-sessions\/[A-Za-z0-9_-]+\/teamsbot\/mcp$/],
+  ]);
+  INJECTED_MCP_SERVER_NAMES = [...CCR_INJECTED_MCP_PATHS.keys()];
+  INJECTED_MCP_CONFIG_KEYS = new Set([
+    "type",
+    "url",
+    "headers",
+    "tools",
+    "toolPermissions",
+    "request_timeout_ms",
+    "timeout",
+    "role",
+    "alwaysLoad",
+    "scope",
+  ]);
+});
 //@ chunk-aepeg2w5.js:827026-827258 placement
 /**
  * 标记 CCR 注入的 MCP 配置。
  */
-function markCcrInjectedConfig(e, n, isLockedOutByOrgMcpPolicy = () => false) {
-  if (e !== CLAUDE_CODE_REMOTE) {
-    let h = CCR_INJECTED_MCP_PATHS.get(e);
-    let y = h && isRemoteStartupMcpConfig(n);
-    if (y && y.search === "" && h?.test(y.pathname)) getCliOwnedState().ccrInjectedConfigs.add(n);
-    return n;
+function markCcrInjectedConfig(mcpKey, server, isLockedOutByOrgMcpPolicy = () => false) {
+  if (mcpKey !== CLAUDE_CODE_REMOTE) {
+    let pathRegex = CCR_INJECTED_MCP_PATHS.get(mcpKey);
+    let url = pathRegex && isRemoteStartupMcpConfig(server);
+    if (url && url.search === "" && pathRegex?.test(url.pathname))
+      getCliOwnedState().ccrInjectedConfigs.add(server);
+    return server;
   }
-  let s = ccrMetaEntryFor(n);
-  if (s === undefined || isRosyElephantEnabled() || !isLockedOutByOrgMcpPolicy(e, n)) return n;
-  getCliOwnedState().ccrMetaEntries.add(s);
-  return s;
+  let entry = ccrMetaEntryFor(server);
+  if (entry === undefined || isRosyElephantEnabled() || !isLockedOutByOrgMcpPolicy(mcpKey, server))
+    return server;
+  getCliOwnedState().ccrMetaEntries.add(entry);
+  return entry;
 }
 //@ chunk-aepeg2w5.js:827258-827452 placement
 /**
  * 复制配置对象上的 CCR 标记。
  */
-function copyCcrMarks(e, n) {
-  if (typeof e === "object" && e !== null) {
+function copyCcrMarks(from, to) {
+  if (typeof from === "object" && from !== null) {
     let cliOwnedState = getCliOwnedState();
-    if (cliOwnedState.ccrMetaEntries.has(e)) cliOwnedState.ccrMetaEntries.add(n);
-    else if (cliOwnedState.ccrInjectedConfigs.has(e)) cliOwnedState.ccrInjectedConfigs.add(n);
+    if (cliOwnedState.ccrMetaEntries.has(from)) cliOwnedState.ccrMetaEntries.add(to);
+    else if (cliOwnedState.ccrInjectedConfigs.has(from)) cliOwnedState.ccrInjectedConfigs.add(to);
   }
-  return copyOwnServerMarks(e, n);
+  return copyOwnServerMarks(from, to);
 }
 //@ chunk-aepeg2w5.js:827452-827750 placement
 /**
  * 配置替换时把“自有工具容器/回复服务器”标记复制到新配置。
  */
-function copyOwnServerMarks(e, n) {
+function copyOwnServerMarks(from, to) {
   if (
-    typeof e === "object" &&
-    e !== null &&
-    Reflect.get(n, "type") === Reflect.get(e, "type") &&
-    Reflect.get(n, "url") === Reflect.get(e, "url")
+    typeof from === "object" &&
+    from !== null &&
+    Reflect.get(to, "type") === Reflect.get(from, "type") &&
+    Reflect.get(to, "url") === Reflect.get(from, "url")
   ) {
     let cliOwnedState = getCliOwnedState();
-    if (cliOwnedState.ownToolContainerConfigs.has(e)) cliOwnedState.ownToolContainerConfigs.add(n);
-    if (cliOwnedState.ownReplyServerConfigs.has(e)) cliOwnedState.ownReplyServerConfigs.add(n);
+    if (cliOwnedState.ownToolContainerConfigs.has(from)) cliOwnedState.ownToolContainerConfigs.add(to);
+    if (cliOwnedState.ownReplyServerConfigs.has(from)) cliOwnedState.ownReplyServerConfigs.add(to);
   }
-  return n;
+  return to;
 }
 //@ chunk-aepeg2w5.js:827750-827840 placement
 /**
  * 导出函数 `isOwnToolContainerConfig`：参数 e，返回 typeof e === "object" && e !== null && ht().ownToolContainerConfigs.has(e)。
  */
-function isOwnToolContainerConfig(e) {
-  return typeof e === "object" && e !== null && getCliOwnedState().ownToolContainerConfigs.has(e);
+function isOwnToolContainerConfig(config) {
+  return (
+    typeof config === "object" && config !== null && getCliOwnedState().ownToolContainerConfigs.has(config)
+  );
 }
 //@ chunk-aepeg2w5.js:827840-827975 placement
 /**
  * 配置是否为 CCR 注入。
  */
-function isCcrInjectedConfig(e) {
-  return hasCcrMeta(e)
+function isCcrInjectedConfig(config) {
+  return hasCcrMeta(config)
     ? !isRosyElephantEnabled()
-    : typeof e === "object" &&
-        e !== null &&
-        (getCliOwnedState().ccrInjectedConfigs.has(e) || getCliOwnedState().ownReplyServerConfigs.has(e));
+    : typeof config === "object" &&
+        config !== null &&
+        (getCliOwnedState().ccrInjectedConfigs.has(config) ||
+          getCliOwnedState().ownReplyServerConfigs.has(config));
 }
 //@ chunk-aepeg2w5.js:827975-828523 placement
 /**
@@ -728,19 +771,19 @@ function ccrConfigHosts(config) {
     typeof config.url !== "string"
   )
     return [];
-  let n = URL.parse(config.url);
-  if (n === null) return [];
-  let r = getCliOwnedState().ownReplyServerConfigs.has(config)
-    ? [n.pathname, n.pathname.replace(/^(\/v2\/ccr-sessions\/)[^/]+/, "$1-")]
-    : [n.pathname];
-  return [n.hostname, "api.anthropic.com"].flatMap((s) =>
-    r.map((pathname) => {
-      let y = new URL(n.href);
-      if (s === "api.anthropic.com") y.protocol = "https:";
-      y.hostname = s;
-      y.port = "";
-      y.pathname = pathname;
-      return y.href;
+  let url = URL.parse(config.url);
+  if (url === null) return [];
+  let paths = getCliOwnedState().ownReplyServerConfigs.has(config)
+    ? [url.pathname, url.pathname.replace(/^(\/v2\/ccr-sessions\/)[^/]+/, "$1-")]
+    : [url.pathname];
+  return [url.hostname, "api.anthropic.com"].flatMap((host) =>
+    paths.map((pathname) => {
+      let copy = new URL(url.href);
+      if (host === "api.anthropic.com") copy.protocol = "https:";
+      copy.hostname = host;
+      copy.port = "";
+      copy.pathname = pathname;
+      return copy.href;
     }),
   );
 }
@@ -748,32 +791,34 @@ function ccrConfigHosts(config) {
 /**
  * 导出函数 `hasCcrMeta`：参数 e，返回 typeof e === "object" && e !== null && ht().ccrMetaEntries.has(e)。
  */
-function hasCcrMeta(e) {
-  return typeof e === "object" && e !== null && getCliOwnedState().ccrMetaEntries.has(e);
+function hasCcrMeta(config) {
+  return typeof config === "object" && config !== null && getCliOwnedState().ccrMetaEntries.has(config);
 }
 //@ chunk-aepeg2w5.js:828604-828650 placement
-function isCcrShapedConfig(e) {
-  return hasCcrMeta(e) || "onlyTools" in e;
+function isCcrShapedConfig(config) {
+  return hasCcrMeta(config) || "onlyTools" in config;
 }
 //@ chunk-aepeg2w5.js:828650-828719 placement
 /**
  * 对 claude-code-remote 服务器只保留允许的工具。
  */
-function filterRemoteRepoTools(config, n) {
-  return isCcrShapedConfig(config) ? n.filter((r) => REPO_TOOL_NAMES_WITH_ROOT.includes(r.name)) : n;
+function filterRemoteRepoTools(config, tools) {
+  return isCcrShapedConfig(config)
+    ? tools.filter((tool) => REPO_TOOL_NAMES_WITH_ROOT.includes(tool.name))
+    : tools;
 }
 //@ chunk-aepeg2w5.js:828719-828964 placement
 /**
  * 包装 fetch：claude-code-remote 只允许仓库相关调用。
  */
-function restrictRemoteRepoCalls(e, serverRef) {
-  if (!isCcrShapedConfig(serverRef)) return e;
-  return async (r, s) => {
-    if (s?.body != null && !isAllowedRemoteRepoCall(s.body))
+function restrictRemoteRepoCalls(callTool, config) {
+  if (!isCcrShapedConfig(config)) return callTool;
+  return async (request, options) => {
+    if (options?.body != null && !isAllowedRemoteRepoCall(options.body))
       throw Error(
         "claude-code-remote serves only add_repo, check_repo_access, list_repos, register_repo_root under your organization's MCP policy",
       );
-    return e(r, s);
+    return callTool(request, options);
   };
 }
 //@ chunk-aepeg2w5.js:828964-829024 placement
@@ -783,15 +828,15 @@ var MCP_CONTROL_METHODS = ["initialize", "server/discover", "ping", "tools/list"
  * 请求体是否只调用允许的工具。
  */
 function isAllowedRemoteRepoCall(body) {
-  let n;
+  let parsed;
   try {
-    n = typeof body === "string" ? JSON.parse(body) : null;
+    parsed = typeof body === "string" ? JSON.parse(body) : null;
   } catch {
     return false;
   }
-  return (Array.isArray(n) ? n : [n]).every((r) => {
-    let caseExactKey = readCaseExactKey(r, "method");
-    let caseExactKey_2 = readCaseExactKey(readCaseExactKey(r, "params"), "name");
+  return (Array.isArray(parsed) ? parsed : [parsed]).every((message) => {
+    let caseExactKey = readCaseExactKey(message, "method");
+    let caseExactKey_2 = readCaseExactKey(readCaseExactKey(message, "params"), "name");
     return caseExactKey === "tools/call"
       ? typeof caseExactKey_2 === "string" && REPO_TOOL_NAMES_WITH_ROOT.includes(caseExactKey_2)
       : caseExactKey === undefined ||
@@ -800,67 +845,73 @@ function isAllowedRemoteRepoCall(body) {
   });
 }
 //@ chunk-aepeg2w5.js:829340-829368 placement
-var UNREADABLE_SENTINEL = Symbol("unreadable");
+var UNREADABLE_SENTINEL; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-aepeg2w5.js:829340", () => {
+  UNREADABLE_SENTINEL = Symbol("unreadable");
+});
 //@ chunk-aepeg2w5.js:829368-829518 placement
 /**
  * 对象只有大小写精确的该键时取值。
  */
-function readCaseExactKey(e, n) {
-  return typeof e === "object" &&
-    e !== null &&
-    !Array.isArray(e) &&
-    Object.keys(e).every((key) => key === n || key.toUpperCase().toLowerCase() !== n)
-    ? e[n]
+function readCaseExactKey(object, key) {
+  return typeof object === "object" &&
+    object !== null &&
+    !Array.isArray(object) &&
+    Object.keys(object).every((key_2) => key_2 === key || key_2.toUpperCase().toLowerCase() !== key)
+    ? object[key]
     : UNREADABLE_SENTINEL;
 }
 //@ chunk-aepeg2w5.js:829518-829885 placement
 /**
  * 配置是否为远程会话启动时注入的 MCP。
  */
-function isRemoteStartupMcpConfig(e, n = false) {
-  let r = URL.parse(startupCcrEnv.atStartup ?? "");
-  let s = "url" in e && typeof e.url === "string" ? URL.parse(e.url) : null;
+function isRemoteStartupMcpConfig(config, allowAnyHttps = false) {
+  let startupUrl = URL.parse(startupCcrEnv.atStartup ?? "");
+  let configUrl = "url" in config && typeof config.url === "string" ? URL.parse(config.url) : null;
   return env.CLAUDE_CODE_REMOTE &&
-    r !== null &&
-    s !== null &&
-    Object.keys(e).every((key) => INJECTED_MCP_CONFIG_KEYS.has(key)) &&
-    "type" in e &&
-    e.type === "http" &&
-    s.origin === r.origin &&
-    (n ? s.origin !== "null" : s.protocol === "https:" && isFirstPartyApiHost(s.hostname)) &&
-    s.username === "" &&
-    s.password === "" &&
-    s.hash === ""
-    ? s
+    startupUrl !== null &&
+    configUrl !== null &&
+    Object.keys(config).every((key) => INJECTED_MCP_CONFIG_KEYS.has(key)) &&
+    "type" in config &&
+    config.type === "http" &&
+    configUrl.origin === startupUrl.origin &&
+    (allowAnyHttps
+      ? configUrl.origin !== "null"
+      : configUrl.protocol === "https:" && isFirstPartyApiHost(configUrl.hostname)) &&
+    configUrl.username === "" &&
+    configUrl.password === "" &&
+    configUrl.hash === ""
+    ? configUrl
     : undefined;
 }
 //@ chunk-aepeg2w5.js:829885-829916 placement
 var SAFE_MCP_KEY_RE = /^[a-zA-Z0-9_-]{1,64}$/;
 //@ chunk-aepeg2w5.js:829916-829990 placement
 function toolPermissionValueOrBlocked(orgMaxPermission) {
-  let n = ToolPermissionValueSchema().safeParse(orgMaxPermission);
-  return n.success ? n.data : "blocked";
+  let parsed = ToolPermissionValueSchema().safeParse(orgMaxPermission);
+  return parsed.success ? parsed.data : "blocked";
 }
 //@ chunk-aepeg2w5.js:829990-831205 placement
 /**
  * 生成 CCR 注入配置的元信息条目。
  */
-function ccrMetaEntryFor(e) {
-  let n = isRemoteStartupMcpConfig(e) && ccrMcpUrls().find(({ url }) => "url" in e && url === e.url);
-  let headers = "headers" in e ? e.headers : undefined;
+function ccrMetaEntryFor(server) {
+  let urlEntry =
+    isRemoteStartupMcpConfig(server) && ccrMcpUrls().find(({ url }) => "url" in server && url === server.url);
+  let headers = "headers" in server ? server.headers : undefined;
   let filtered = Object.entries(headers ?? {}).filter(
     ([key]) => key.toLowerCase() === X_MCP_SERVER_ID.toLowerCase(),
   );
-  let tools = "tools" in e ? e.tools : undefined;
-  let toolPermissions = "toolPermissions" in e ? e.toolPermissions : undefined;
-  let alwaysLoad = "alwaysLoad" in e ? e.alwaysLoad : undefined;
+  let tools = "tools" in server ? server.tools : undefined;
+  let toolPermissions = "toolPermissions" in server ? server.toolPermissions : undefined;
+  let alwaysLoad = "alwaysLoad" in server ? server.alwaysLoad : undefined;
   if (
     !startupCcrEnv.isSelfHostedRunnerChild ||
     isSafeMode() ||
-    n === undefined ||
+    urlEntry === undefined ||
     filtered.length !== 1 ||
     filtered[0]?.[1] !== BF7C680D_5FDC_5EF4_B4A0_ABADB619BF0A ||
-    ("role" in e && e.role !== undefined) ||
+    ("role" in server && server.role !== undefined) ||
     (tools !== undefined && !Array.isArray(tools)) ||
     (toolPermissions !== undefined &&
       (typeof toolPermissions !== "object" ||
@@ -868,48 +919,53 @@ function ccrMetaEntryFor(e) {
         Array.isArray(toolPermissions) ||
         !Object.keys(toolPermissions).every((key) => SAFE_MCP_KEY_RE.test(key)))) ||
     (alwaysLoad !== undefined && typeof alwaysLoad !== "boolean") ||
-    ("scope" in e && e.scope !== "dynamic")
+    ("scope" in server && server.scope !== "dynamic")
   )
     return;
-  let w = [];
-  for (let R of tools ?? []) {
-    if (typeof R !== "object" || R === null || typeof R.name !== "string" || !SAFE_MCP_KEY_RE.test(R.name))
+  let safeTools = [];
+  for (let tool of tools ?? []) {
+    if (
+      typeof tool !== "object" ||
+      tool === null ||
+      typeof tool.name !== "string" ||
+      !SAFE_MCP_KEY_RE.test(tool.name)
+    )
       return;
-    if (!REPO_TOOL_NAMES_WITH_ROOT.includes(R.name)) continue;
-    let permissionPolicy = R.permission_policy;
-    w.push({
-      name: R.name,
+    if (!REPO_TOOL_NAMES_WITH_ROOT.includes(tool.name)) continue;
+    let permissionPolicy = tool.permission_policy;
+    safeTools.push({
+      name: tool.name,
       ...((permissionPolicy === "always_ask" ||
         permissionPolicy === "always_deny" ||
         permissionPolicy === "always_allow") && {
         permission_policy: permissionPolicy,
       }),
-      ...(R.org_max_permission && {
-        org_max_permission: toolPermissionValueOrBlocked(R.org_max_permission),
+      ...(tool.org_max_permission && {
+        org_max_permission: toolPermissionValueOrBlocked(tool.org_max_permission),
       }),
     });
   }
   return {
     type: "http",
-    url: n.url,
+    url: urlEntry.url,
     headers: {
       [X_MCP_SERVER_ID]: BF7C680D_5FDC_5EF4_B4A0_ABADB619BF0A,
-      "X-Session-UUID": n.sessionId,
+      "X-Session-UUID": urlEntry.sessionId,
     },
     ...(tools !== undefined && {
-      tools: w,
+      tools: safeTools,
     }),
     ...(toolPermissions !== undefined && {
-      toolPermissions: xr(
-        filterObject(toolPermissions, (R, x) => REPO_TOOL_NAMES_WITH_ROOT.includes(x)),
+      toolPermissions: import_mapValues(
+        filterObject(toolPermissions, (value, key) => REPO_TOOL_NAMES_WITH_ROOT.includes(key)),
         toolPermissionValueOrBlocked,
       ),
     }),
     ...(alwaysLoad !== undefined && {
       alwaysLoad,
     }),
-    ...("scope" in e && {
-      scope: e.scope,
+    ...("scope" in server && {
+      scope: server.scope,
     }),
     onlyTools: REPO_TOOL_NAMES_WITH_ROOT,
   };
@@ -921,11 +977,11 @@ function ccrMetaEntryFor(e) {
 function ccrMcpUrls() {
   let ccrOrigin = getCcrOrigin();
   if (ccrOrigin === null) return [];
-  return [...new Set(startupCcrEnv.ownCcrSessionIds.map(toInfraSessionId))].flatMap((r) => {
-    let s = `${r}/mcp?mcp_server_id=${derivedServerId(r, CLAUDE_CODE_REMOTE)}&mcp_url=${encodeURIComponent(ccrOrigin + CCR_META_MCP_PATH)}&toolbox_mcp_server_id=${BF7C680D_5FDC_5EF4_B4A0_ABADB619BF0A}`;
-    return CCR_SESSION_BASE_PATHS.map((h) => ({
-      url: ccrOrigin + h + s,
-      sessionId: r,
+  return [...new Set(startupCcrEnv.ownCcrSessionIds.map(toInfraSessionId))].flatMap((sessionId) => {
+    let suffix = `${sessionId}/mcp?mcp_server_id=${derivedServerId(sessionId, CLAUDE_CODE_REMOTE)}&mcp_url=${encodeURIComponent(ccrOrigin + CCR_META_MCP_PATH)}&toolbox_mcp_server_id=${BF7C680D_5FDC_5EF4_B4A0_ABADB619BF0A}`;
+    return CCR_SESSION_BASE_PATHS.map((basePath) => ({
+      url: ccrOrigin + basePath + suffix,
+      sessionId,
     }));
   });
 }
@@ -936,10 +992,10 @@ function ccrMcpUrls() {
 var ANTHROPIC_API_HOSTS = ["api.anthropic.com", "api-staging.anthropic.com", "api-pr-preview.anthropic.com"];
 var CCR_MCP_QUERY_KEYS = ["toolbox_mcp_server_id", "mcp_server_id", "mcp_url"];
 //@ chunk-aepeg2w5.js:831615-831707 placement
-function isOwnCcrMcpServerMeta(e) {
+function isOwnCcrMcpServerMeta(url) {
   return isCcsTenant()
     ? startupCcrEnv.isSessionIngressUrlSet
-    : e.protocol === "https:" && isFirstPartyApiHost(e.hostname);
+    : url.protocol === "https:" && isFirstPartyApiHost(url.hostname);
 }
 //@ chunk-aepeg2w5.js:831707-832490 placement
 /**
@@ -957,17 +1013,17 @@ function isOwnCcrMcpServer(config) {
   )
     return false;
   let ccrOrigin = getCcrOrigin();
-  let r = URL.parse(config.url);
+  let url = URL.parse(config.url);
   if (
     ccrOrigin === null ||
-    r === null ||
-    r.origin !== ccrOrigin ||
-    !isOwnCcrMcpServerMeta(r) ||
-    r.username !== "" ||
-    r.password !== "" ||
-    r.hash !== "" ||
+    url === null ||
+    url.origin !== ccrOrigin ||
+    !isOwnCcrMcpServerMeta(url) ||
+    url.username !== "" ||
+    url.password !== "" ||
+    url.hash !== "" ||
     !hasUniqueQueryParams(config.url, CCR_MCP_QUERY_KEYS) ||
-    [...r.searchParams.keys()].length !== CCR_MCP_QUERY_KEYS.length
+    [...url.searchParams.keys()].length !== CCR_MCP_QUERY_KEYS.length
   )
     return false;
   let found = uniq(
@@ -975,24 +1031,26 @@ function isOwnCcrMcpServer(config) {
       toInfraSessionId(ownCcrSessionId),
       ownCcrSessionId,
     ]),
-  ).find((y) => CCR_SESSION_BASE_PATHS.some((S) => r.pathname === `${S}${y}/mcp`));
+  ).find((sessionId) =>
+    CCR_SESSION_BASE_PATHS.some((basePath) => url.pathname === `${basePath}${sessionId}/mcp`),
+  );
   if (
     found === undefined ||
-    r.searchParams.get("toolbox_mcp_server_id") !== ARTIFACTS_SERVER_ID ||
-    r.searchParams.get("mcp_server_id") !== derivedServerId(found, CLAUDE_ARTIFACTS)
+    url.searchParams.get("toolbox_mcp_server_id") !== ARTIFACTS_SERVER_ID ||
+    url.searchParams.get("mcp_server_id") !== derivedServerId(found, CLAUDE_ARTIFACTS)
   )
     return false;
-  let h = URL.parse(r.searchParams.get("mcp_url") ?? "");
+  let mcpUrl = URL.parse(url.searchParams.get("mcp_url") ?? "");
   return (
-    h !== null &&
-    h.protocol === "https:" &&
-    h.username === "" &&
-    h.password === "" &&
-    h.search === "" &&
-    h.hash === "" &&
-    h.port === "" &&
-    ANTHROPIC_API_HOSTS.includes(h.hostname) &&
-    h.pathname === CCR_ARTIFACTS_MCP_PATH
+    mcpUrl !== null &&
+    mcpUrl.protocol === "https:" &&
+    mcpUrl.username === "" &&
+    mcpUrl.password === "" &&
+    mcpUrl.search === "" &&
+    mcpUrl.hash === "" &&
+    mcpUrl.port === "" &&
+    ANTHROPIC_API_HOSTS.includes(mcpUrl.hostname) &&
+    mcpUrl.pathname === CCR_ARTIFACTS_MCP_PATH
   );
 }
 //@ chunk-aepeg2w5.js:832490-832856 placement
@@ -1002,16 +1060,16 @@ function isOwnCcrMcpServer(config) {
 function buildCcrMcpProxyUrls(prefix) {
   let ccrOrigin = getCcrOrigin();
   if (ccrOrigin === null) return [];
-  return [...new Set(startupCcrEnv.ownCcrSessionIds.map(sessionIdBody))].flatMap((s) => {
-    let h = `${prefix}${s}`;
-    let y = derivedServerId(h, REMOTE_DEVICES);
-    let S =
+  return [...new Set(startupCcrEnv.ownCcrSessionIds.map(sessionIdBody))].flatMap((sessionBody) => {
+    let sessionId = `${prefix}${sessionBody}`;
+    let serverId = derivedServerId(sessionId, REMOTE_DEVICES);
+    let serverIds =
       prefix === "session_"
-        ? [y, derivedServerId(`cse_${s}`, REMOTE_DEVICES), REMOTE_DEVICES]
-        : [y, REMOTE_DEVICES];
-    return BRIDGE_DEVICE_URL_PREFIXES.flatMap((w) => {
-      let R = `${ccrOrigin}/v2/ccr-sessions/${h}/mcp?mcp_server_id=${y}&mcp_url=${encodeURIComponent(w)}`;
-      return [...S.map((x) => `${R}&toolbox_mcp_server_id=${x}`), R];
+        ? [serverId, derivedServerId(`cse_${sessionBody}`, REMOTE_DEVICES), REMOTE_DEVICES]
+        : [serverId, REMOTE_DEVICES];
+    return BRIDGE_DEVICE_URL_PREFIXES.flatMap((prefix) => {
+      let baseUrl = `${ccrOrigin}/v2/ccr-sessions/${sessionId}/mcp?mcp_server_id=${serverId}&mcp_url=${encodeURIComponent(prefix)}`;
+      return [...serverIds.map((id) => `${baseUrl}&toolbox_mcp_server_id=${id}`), baseUrl];
     });
   });
 }
@@ -1035,28 +1093,30 @@ function getServerUrl(config) {
   if (!("url" in config)) return [];
   let url = config.url;
   let mapped = ccrMcpUrls().map(({ url }) => url);
-  if (!mapped.some((s) => s === url)) return [];
-  return [...mapped.filter((s) => s !== url), `${getCcrOrigin()}${CCR_META_MCP_PATH}`].map((url) => ({
-    ...config,
-    url,
-  }));
+  if (!mapped.some((candidate) => candidate === url)) return [];
+  return [...mapped.filter((candidate) => candidate !== url), `${getCcrOrigin()}${CCR_META_MCP_PATH}`].map(
+    (url) => ({
+      ...config,
+      url,
+    }),
+  );
 }
 //@ chunk-aepeg2w5.js:833150-833416 placement
 /**
  * 远程会话中该配置 URL 是否为启动时注入的 CCR 服务器。
  */
-function isInjectedCcrServer(e) {
+function isInjectedCcrServer(server) {
   if (
     !env.CLAUDE_CODE_REMOTE ||
-    typeof e !== "object" ||
-    e === null ||
-    !("url" in e) ||
-    typeof e.url !== "string"
+    typeof server !== "object" ||
+    server === null ||
+    !("url" in server) ||
+    typeof server.url !== "string"
   )
     return false;
-  return [e.url, URL.parse(e.url)?.href ?? ""].some((n) =>
-    n
-      .replace(/%([0-9a-f]{2})/gi, (r, s) => String.fromCharCode(Number.parseInt(s, 16)))
+  return [server.url, URL.parse(server.url)?.href ?? ""].some((candidate) =>
+    candidate
+      .replace(/%([0-9a-f]{2})/gi, (match, hex) => String.fromCharCode(Number.parseInt(hex, 16)))
       .includes(CCR_ARTIFACTS_MCP_PATH),
   );
 }
@@ -1079,8 +1139,10 @@ function isRunnerDynamicServer(config) {
 /**
  * 导出函数 `isSelfHostedRunnerCcrServer`：参数 e，返回 startupCcrEnv.isSelfHostedRunnerChild && isInjectedCcrServer(e) && !isRunnerDynamicServer(e)。
  */
-function isSelfHostedRunnerCcrServer(e) {
-  return startupCcrEnv.isSelfHostedRunnerChild && isInjectedCcrServer(e) && !isRunnerDynamicServer(e);
+function isSelfHostedRunnerCcrServer(server) {
+  return (
+    startupCcrEnv.isSelfHostedRunnerChild && isInjectedCcrServer(server) && !isRunnerDynamicServer(server)
+  );
 }
 //@ chunk-aepeg2w5.js:833654-833730 placement
 /**
@@ -1096,54 +1158,35 @@ function isOwnArtifactMcpTool(name, config) {
  * Artifact MCP 工具在遥测中的映射名（只在服务器为自有时）。
  */
 function artifactToolNameForAnalytics(toolName) {
-  let n = mcpInfoFromString(toolName);
-  let r =
-    n?.serverName === CLAUDE_ARTIFACTS && n.toolName !== undefined
-      ? (ARTIFACT_MCP_TOOL_NAMES.get(n.toolName) ??
-        (isDiskless() ? undefined : ARTIFACT_TOOL_NAMES_DISKLESS.get(n.toolName)))
+  let parsed = mcpInfoFromString(toolName);
+  let artifactName =
+    parsed?.serverName === CLAUDE_ARTIFACTS && parsed.toolName !== undefined
+      ? (ARTIFACT_MCP_TOOL_NAMES.get(parsed.toolName) ??
+        (isDiskless() ? undefined : ARTIFACT_TOOL_NAMES_DISKLESS.get(parsed.toolName)))
       : undefined;
-  if (r === undefined || getCliOwnedState().subagentBroughtOwnArtifactsServer) return;
-  let filtered = (getMcpClientsFromAccessor() ?? []).filter((h) => h.name === CLAUDE_ARTIFACTS);
-  return filtered.length > 0 && filtered.every((h) => isOwnArtifactMcpTool(h.name, h.config)) ? r : undefined;
-}
-//@ chunk-aepeg2w5.js:834319-834357 placement
-/**
- * 导出函数 `jobsDir`：返回 join_11(getClaudeConfigDir(), "jobs")。
- */
-function jobsDir() {
-  return join(getClaudeConfigDir(), "jobs");
-}
-//@ chunk-aepeg2w5.js:834357-834393 placement
-/**
- * 导出常量或表 `JOB_PARENT_TRANSCRIPT_FILE`：值为 ["parent-transcript.jsonl"]。
- */
-var JOB_PARENT_TRANSCRIPT_FILE = ["parent-transcript.jsonl"];
-//@ chunk-aepeg2w5.js:834393-834476 placement
-/**
- * 导出函数 `jobStorageSpace`：参数 e, n，返回 STORAGE_SPACES.job(r, n)。
- */
-function jobStorageSpace(e, n) {
-  let r = basename(e);
-  if (!isValidKeySegment(r) || e !== join(jobsDir(), r)) return;
-  return STORAGE_SPACES.job(r, n);
+  if (artifactName === undefined || getCliOwnedState().subagentBroughtOwnArtifactsServer) return;
+  let filtered = (getMcpClientsFromAccessor() ?? []).filter((client) => client.name === CLAUDE_ARTIFACTS);
+  return filtered.length > 0 && filtered.every((client) => isOwnArtifactMcpTool(client.name, client.config))
+    ? artifactName
+    : undefined;
 }
 //@ chunk-aepeg2w5.js:834564-834693 placement
 /**
  * 由目录名与随机或种子短词生成会话 slug。
  */
-function sessionSlug(e, sessionId) {
-  let r = slugifyPromptWords(basename(e)) || "claude";
-  let s = isStableAddressEnabled()
-    ? shortWordSlugFromSeed(createHash("sha256").update(sessionId).digest())
+function sessionSlug(cwd, sessionSeed) {
+  let words = slugifyPromptWords(basename(cwd)) || "claude";
+  let suffix = isStableAddressEnabled()
+    ? shortWordSlugFromSeed(createHash("sha256").update(sessionSeed).digest())
     : randomBytes(1).toString("hex");
-  return `${r}-${s}`;
+  return `${words}-${suffix}`;
 }
 //@ chunk-aepeg2w5.js:834693-834858 placement
 /**
  * 会话启动方式是否沿用原会话 id。
  */
-function keepsSessionId(e) {
-  switch (e) {
+function keepsSessionId(session) {
+  switch (session) {
     case "resume":
     case "remote_attach":
     case "spare_claim":
@@ -1183,24 +1226,27 @@ var MAX_INJECTED_CONFIG_BYTES = 8192;
 /**
  * 合法的桥接会话 id 转为 {sessionId, remoteSessionId}。
  */
-function parseBridgeSessionId(e) {
-  return typeof e === "string" && e.length <= 128 && isSafeBridgeId(e)
+function parseBridgeSessionId(sessionId) {
+  return typeof sessionId === "string" && sessionId.length <= 128 && isSafeBridgeId(sessionId)
     ? {
-        sessionId: hashSessionAddress(e),
-        remoteSessionId: e,
+        sessionId: hashSessionAddress(sessionId),
+        remoteSessionId: sessionId,
       }
     : undefined;
 }
 //@ chunk-aepeg2w5.js:855813-855836 placement
-var mcpServeNamedSession = new HostScoped(() => ({}));
+var mcpServeNamedSession; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-aepeg2w5.js:855813", () => {
+  mcpServeNamedSession = new HostScoped(() => ({}));
+});
 //@ chunk-aepeg2w5.js:855836-856073 placement
 /**
  * mcp serve 调用指定会话 id 时设置事件归属。
  */
-function setMcpServeSession(host, n) {
-  if (n === undefined) return false;
-  let bridgeSessionId = parseBridgeSessionId(n);
-  if (bridgeSessionId === undefined && n !== EMPTY_SESSION_NAME)
+function setMcpServeSession(host, sessionName) {
+  if (sessionName === undefined) return false;
+  let bridgeSessionId = parseBridgeSessionId(sessionName);
+  if (bridgeSessionId === undefined && sessionName !== EMPTY_SESSION_NAME)
     logForDebugging(
       `mcp serve: a call's _meta['${ANTHROPIC_SESSION}'] is not a session id, so events are logged under this process's own id`,
       {
@@ -1218,24 +1264,28 @@ function mcpServeSessionName(host) {
 /**
  * 遥测中按 MCP 工具名推断的内置工具名（Bash、WebFetch）映射与 Artifact 工具名集合。
  */
-var MCP_INFERRED_TOOL_NAMES = {
-  [WORKSPACE_BASH_TOOL]: "Bash",
-  [WORKSPACE_WEB_FETCH_TOOL]: "WebFetch",
-};
-var ARTIFACT_TOOL_NAME_SET = new Set(ARTIFACT_MCP_TOOL_NAMES.values());
+var MCP_INFERRED_TOOL_NAMES; // deferred: uses WORKSPACE (../../utils/permissions/permissionRuleParser.js) of its import cycle while loading; runs once the cycle is complete
+var ARTIFACT_TOOL_NAME_SET;
+deferInit("chunk-aepeg2w5.js:856110", () => {
+  MCP_INFERRED_TOOL_NAMES = {
+    [WORKSPACE_BASH_TOOL]: "Bash",
+    [WORKSPACE_WEB_FETCH_TOOL]: "WebFetch",
+  };
+  ARTIFACT_TOOL_NAME_SET = new Set(ARTIFACT_MCP_TOOL_NAMES.values());
+});
 //@ chunk-aepeg2w5.js:856173-856216 placement
 /**
  * 导出函数 `isInferredMcpToolName`：参数 e，返回 Object.hasOwn(Td, e)。
  */
-function isInferredMcpToolName(e) {
-  return Object.hasOwn(MCP_INFERRED_TOOL_NAMES, e);
+function isInferredMcpToolName(toolName) {
+  return Object.hasOwn(MCP_INFERRED_TOOL_NAMES, toolName);
 }
 //@ chunk-aepeg2w5.js:856216-856244 placement
 /**
  * 遥测用工具名。
  */
-function toolNameForTelemetry(e) {
-  return shortHash(e);
+function toolNameForTelemetry(toolName) {
+  return shortHash(toolName);
 }
 //@ chunk-aepeg2w5.js:856244-856324 placement
 /**
@@ -1253,27 +1303,32 @@ function isMcpFamilyToolName(name) {
  * 工具名脱敏：MCP 工具（mcp__*）统一记为 mcp_tool，内置工具原样。
  */
 function sanitizeToolNameForAnalytics(toolName) {
-  let n = Object.hasOwn(MCP_INFERRED_TOOL_NAMES, toolName) ? MCP_INFERRED_TOOL_NAMES[toolName] : undefined;
-  if (n) return fromSanitizer_SANITIZER_OUTPUT_ONLY(n);
+  let inferred = Object.hasOwn(MCP_INFERRED_TOOL_NAMES, toolName)
+    ? MCP_INFERRED_TOOL_NAMES[toolName]
+    : undefined;
+  if (inferred) return fromSanitizer_SANITIZER_OUTPUT_ONLY(inferred);
   if (toolName.startsWith("mcp__")) {
-    let r = builtinToolNameForMcp(toolName) ?? artifactToolNameForAnalytics(toolName);
-    return r === undefined ? lit("mcp_tool") : fromSanitizer_SANITIZER_OUTPUT_ONLY(r);
+    let builtinName = builtinToolNameForMcp(toolName) ?? artifactToolNameForAnalytics(toolName);
+    return builtinName === undefined ? lit("mcp_tool") : fromSanitizer_SANITIZER_OUTPUT_ONLY(builtinName);
   }
   return fromSanitizer_SANITIZER_OUTPUT_ONLY(toolName);
 }
 //@ chunk-aepeg2w5.js:856493-856563 layout
-function sanitizeToolNameWithMcpFlag(e, n) {
-  let r = sanitizeToolNameForAnalytics(e);
-  return n && String(r) === e ? lit("mcp_tool") : r;
+function sanitizeToolNameWithMcpFlag(toolName, isMcp) {
+  let sanitized = sanitizeToolNameForAnalytics(toolName);
+  return isMcp && String(sanitized) === toolName ? lit("mcp_tool") : sanitized;
 }
 //@ chunk-aepeg2w5.js:856563-856699 layout
-var SECURE_STORAGE_KINDS_2 = new Set([
-  "keychain",
-  "plaintext",
-  "windows-credman",
-  "keychain-with-plaintext-fallback",
-  "windows-credman-with-plaintext-fallback",
-]);
+var SECURE_STORAGE_KINDS_2; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-aepeg2w5.js:856563", () => {
+  SECURE_STORAGE_KINDS_2 = new Set([
+    "keychain",
+    "plaintext",
+    "windows-credman",
+    "keychain-with-plaintext-fallback",
+    "windows-credman-with-plaintext-fallback",
+  ]);
+});
 //@ chunk-aepeg2w5.js:856699-856761 layout
 function sanitizeStorageKindForAnalytics(backendName) {
   return backendName !== undefined && SECURE_STORAGE_KINDS_2.has(backendName)
@@ -1302,8 +1357,8 @@ function mcpToolDetailsForAnalytics(toolName, mcpServerType, mcpServerBaseUrl) {
   };
 }
 //@ chunk-aepeg2w5.js:857094-857144 layout
-function isSdkMcpServerWithDetails(e) {
-  return e?.serverType === "sdk" && isTopHostSession();
+function isSdkMcpServerWithDetails(server) {
+  return server?.serverType === "sdk" && isTopHostSession();
 }
 //@ chunk-aepeg2w5.js:857144-857215 placement
 var SDK_HOST_SERVER_SOURCES = {
@@ -1314,9 +1369,9 @@ var SDK_HOST_SERVER_SOURCES = {
 /**
  * SDK 宿主内置 MCP 工具的来源映射。
  */
-function sdkHostToolSource(e) {
-  if (!e || !isSdkMcpServerWithDetails(e)) return;
-  let { serverName } = e;
+function sdkHostToolSource(server) {
+  if (!server || !isSdkMcpServerWithDetails(server)) return;
+  let { serverName } = server;
   return serverName !== undefined && Object.hasOwn(SDK_HOST_SERVER_SOURCES, serverName)
     ? SDK_HOST_SERVER_SOURCES[serverName]
     : undefined;
@@ -1326,9 +1381,9 @@ function sdkHostToolSource(e) {
  * 工具来源（builtin/sdk_host_builtin_mcp/mcp）。
  */
 function toolSourceMetadata(mcpInfo) {
-  let n = !mcpInfo ? "builtin" : isSdkMcpServerWithDetails(mcpInfo) ? "sdk_host_builtin_mcp" : "mcp";
+  let sourceKind = !mcpInfo ? "builtin" : isSdkMcpServerWithDetails(mcpInfo) ? "sdk_host_builtin_mcp" : "mcp";
   return {
-    tool_source: fromEnum(n),
+    tool_source: fromEnum(sourceKind),
   };
 }
 //@ chunk-aepeg2w5.js:857419-857456 placement
@@ -1347,38 +1402,50 @@ function isAnalyticsToolDetailsLoggingEnabled(mcpServerType, mcpServerBaseUrl) {
   return false;
 }
 //@ chunk-aepeg2w5.js:857681-857702 layout
-var FIRST_PARTY_MCP_SERVERS = new Set([COMPUTER_USE_MCP_SERVER_NAME]);
+var FIRST_PARTY_MCP_SERVERS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-aepeg2w5.js:857681", () => {
+  FIRST_PARTY_MCP_SERVERS = new Set([COMPUTER_USE_MCP_SERVER_NAME]);
+});
 //@ chunk-aepeg2w5.js:857702-858054 layout
 /**
  * 官方市场且被担保的插件远程 MCP 服务器。
  */
-function isOfficialPluginServer(e) {
-  if (!("pluginSource" in e) || typeof e.pluginSource !== "string") return false;
-  if (!("pluginOfficialSourceVouched" in e) || e.pluginOfficialSourceVouched !== true) return false;
-  if ("pluginEndpointTemplated" in e && e.pluginEndpointTemplated) return false;
-  if ((e.type !== "http" && e.type !== "sse" && e.type !== "ws") || !("url" in e)) return false;
-  return isOfficialMarketplaceName_3(parsePluginIdentifier_2(e.pluginSource).marketplace);
+function isOfficialPluginServer(server) {
+  if (!("pluginSource" in server) || typeof server.pluginSource !== "string") return false;
+  if (!("pluginOfficialSourceVouched" in server) || server.pluginOfficialSourceVouched !== true) return false;
+  if ("pluginEndpointTemplated" in server && server.pluginEndpointTemplated) return false;
+  if ((server.type !== "http" && server.type !== "sse" && server.type !== "ws") || !("url" in server))
+    return false;
+  return isOfficialMarketplaceName_3(parsePluginIdentifier_2(server.pluginSource).marketplace);
 }
 //@ chunk-aepeg2w5.js:858054-858314 layout = getServerUrl (1)
 /**
  * isMcpServerLoggableInAnalytics：决定该服务器的工具名/详情能否进入遥测（内置、官方注册表 URL 等）。
  */
-function isMcpServerLoggableInAnalytics(name, config) {
-  if (config === undefined) {
-    if (FIRST_PARTY_MCP_SERVERS.has(name)) return true;
+function isMcpServerLoggableInAnalytics(toolName, server) {
+  if (server === undefined) {
+    if (FIRST_PARTY_MCP_SERVERS.has(toolName)) return true;
     return isAnalyticsToolDetailsLoggingEnabled(undefined, undefined);
   }
-  if (isReservedStdioServer(name, config)) return true;
-  if ("url" in config && isKnownProxyEndpointUrl(config.url) && normalizeNameForMCP(name) === REMOTE_DEVICES)
+  if (isReservedStdioServer(toolName, server)) return true;
+  if (
+    "url" in server &&
+    isKnownProxyEndpointUrl(server.url) &&
+    normalizeNameForMCP(toolName) === REMOTE_DEVICES
+  )
     return true;
-  if (name === REMOTE_BROWSER_SERVER_NAME && isRemoteBrowserHttpConfig(config) && isRemoteBrowserEnabled())
+  if (
+    toolName === REMOTE_BROWSER_SERVER_NAME &&
+    isRemoteBrowserHttpConfig(server) &&
+    isRemoteBrowserEnabled()
+  )
     return true;
-  if (isAnalyticsToolDetailsLoggingEnabled(config.type, getLoggingSafeMcpBaseUrl(config))) {
-    if (isOfficialPluginServer(config)) releaseToolNames(name);
+  if (isAnalyticsToolDetailsLoggingEnabled(server.type, getLoggingSafeMcpBaseUrl(server))) {
+    if (isOfficialPluginServer(server)) releaseToolNames(toolName);
     return true;
   }
-  if (isOfficialPluginServer(config)) {
-    withholdToolNames(name);
+  if (isOfficialPluginServer(server)) {
+    withholdToolNames(toolName);
     return true;
   }
   return false;
@@ -1401,8 +1468,8 @@ function mcpToolAnalyticsFields(name, mcpNameLoggable) {
       mcpServerName,
       mcpToolNameHash: fromSanitizer_SANITIZER_OUTPUT_ONLY(hashPluginId(mcpToolDetails.mcpToolName)),
     };
-  let h = knownToolNamesForServer(mcpToolDetails.serverName);
-  if (h !== undefined && !h.has(mcpToolDetails.mcpToolName))
+  let knownTools = knownToolNamesForServer(mcpToolDetails.serverName);
+  if (knownTools !== undefined && !knownTools.has(mcpToolDetails.mcpToolName))
     return {
       mcpServerName,
     };
@@ -1425,12 +1492,12 @@ function claudeAiServerIdField(mcpInfo) {
 /**
  * 可记录的 MCP 工具名（内置服务器只记已知工具）。
  */
-function loggableMcpToolName(e, n, r) {
-  if (!r || withholdsToolNames(e)) return;
-  let s = knownToolNamesForServer(e);
-  if (s === undefined) return fromSanitizer_SANITIZER_OUTPUT_ONLY(n);
-  let h = normalizeNameForMCP(n);
-  return s.has(h) ? fromSanitizer_SANITIZER_OUTPUT_ONLY(h) : undefined;
+function loggableMcpToolName(serverName, toolName, loggable) {
+  if (!loggable || withholdsToolNames(serverName)) return;
+  let knownNames = knownToolNamesForServer(serverName);
+  if (knownNames === undefined) return fromSanitizer_SANITIZER_OUTPUT_ONLY(toolName);
+  let normalized = normalizeNameForMCP(toolName);
+  return knownNames.has(normalized) ? fromSanitizer_SANITIZER_OUTPUT_ONLY(normalized) : undefined;
 }
 //@ chunk-aepeg2w5.js:858929-859106 fingerprint = extractMcpToolDetails (1)
 function extractMcpToolDetails(toolName) {
@@ -1466,56 +1533,57 @@ function extractSubagentType(toolName, input) {
 }
 //@ chunk-aepeg2w5.js:859412-860389 layout
 function extractToolInputDetailsForAnalytics(toolName, observableInput, mcpInfo) {
-  let s = {};
+  let result = {};
   if (!isToolDetailsLoggingEnabled()) {
     if (mcpInfo && isSdkMcpServerWithDetails(mcpInfo)) {
-      s.mcp_server_name = truncateNormalizedText(mcpInfo.serverName);
-      s.mcp_tool_name = truncateNormalizedText(mcpInfo.toolName);
+      result.mcp_server_name = truncateNormalizedText(mcpInfo.serverName);
+      result.mcp_tool_name = truncateNormalizedText(mcpInfo.toolName);
     }
-    return s;
+    return result;
   }
-  let h =
+  let modelInfo =
     toolName === BASH_TOOL_NAME &&
     observableInput !== null &&
     typeof observableInput === "object" &&
     "command" in observableInput &&
     typeof observableInput.command === "string";
-  let y =
+  let serverInfo =
     toolName === WORKSPACE_BASH_TOOL &&
     observableInput !== null &&
     typeof observableInput === "object" &&
     "command" in observableInput &&
     typeof observableInput.command === "string";
-  if (h) {
-    let R = observableInput;
-    let parts = R.command.trim().split(/\s+/);
-    s.bash_command = parts[0] || "";
-    s.full_command = R.command;
-    if (R.timeout !== undefined) s.timeout = R.timeout;
-    if (R.description !== undefined) s.description = R.description;
-    if ("dangerouslyDisableSandbox" in R) s.dangerouslyDisableSandbox = R.dangerouslyDisableSandbox;
-  } else if (y) {
-    let R = observableInput;
-    let parts = R.command.trim().split(/\s+/);
-    s.bash_command = parts[0] || "";
-    s.full_command = R.command;
-    if (R.timeout_ms !== undefined) s.timeout = R.timeout_ms;
+  if (modelInfo) {
+    let input = observableInput;
+    let parts = input.command.trim().split(/\s+/);
+    result.bash_command = parts[0] || "";
+    result.full_command = input.command;
+    if (input.timeout !== undefined) result.timeout = input.timeout;
+    if (input.description !== undefined) result.description = input.description;
+    if ("dangerouslyDisableSandbox" in input)
+      result.dangerouslyDisableSandbox = input.dangerouslyDisableSandbox;
+  } else if (serverInfo) {
+    let input = observableInput;
+    let parts = input.command.trim().split(/\s+/);
+    result.bash_command = parts[0] || "";
+    result.full_command = input.command;
+    if (input.timeout_ms !== undefined) result.timeout = input.timeout_ms;
   }
   if (mcpInfo && isSdkMcpServerWithDetails(mcpInfo)) {
-    s.mcp_server_name = truncateNormalizedText(mcpInfo.serverName);
-    s.mcp_tool_name = truncateNormalizedText(mcpInfo.toolName);
+    result.mcp_server_name = truncateNormalizedText(mcpInfo.serverName);
+    result.mcp_tool_name = truncateNormalizedText(mcpInfo.toolName);
   } else {
     let mcpToolDetails = extractMcpToolDetails(toolName);
     if (mcpToolDetails) {
-      s.mcp_server_name = mcpToolDetails.serverName;
-      s.mcp_tool_name = mcpToolDetails.mcpToolName;
+      result.mcp_server_name = mcpToolDetails.serverName;
+      result.mcp_tool_name = mcpToolDetails.mcpToolName;
     }
   }
   let skillName = extractSkillName(toolName, observableInput);
-  if (skillName) s.skill_name = skillName;
+  if (skillName) result.skill_name = skillName;
   let subagentType = extractSubagentType(toolName, observableInput);
-  if (subagentType) s.subagent_type = subagentType;
-  return s;
+  if (subagentType) result.subagent_type = subagentType;
+  return result;
 }
 //@ chunk-aepeg2w5.js:860389-860426 layout
 /**
@@ -1577,27 +1645,32 @@ function getFileExtensionForAnalytics(filePath) {
 /**
  * 统计文件扩展名时识别的命令与分隔正则。
  */
-var FILE_COMMANDS = new Set([
-  "rm",
-  "mv",
-  "cp",
-  "touch",
-  "mkdir",
-  "chmod",
-  "chown",
-  "cat",
-  "head",
-  "tail",
-  "sort",
-  "stat",
-  "diff",
-  "wc",
-  "grep",
-  "rg",
-  "sed",
-]);
-var COMMAND_SEPARATOR_RE = /\s*(?:&&|\|\||[;|])\s*/;
-var WHITESPACE_RE = /\s+/;
+var FILE_COMMANDS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var COMMAND_SEPARATOR_RE;
+var WHITESPACE_RE;
+deferInit("chunk-aepeg2w5.js:861238", () => {
+  FILE_COMMANDS = new Set([
+    "rm",
+    "mv",
+    "cp",
+    "touch",
+    "mkdir",
+    "chmod",
+    "chown",
+    "cat",
+    "head",
+    "tail",
+    "sort",
+    "stat",
+    "diff",
+    "wc",
+    "grep",
+    "rg",
+    "sed",
+  ]);
+  COMMAND_SEPARATOR_RE = /\s*(?:&&|\|\||[;|])\s*/;
+  WHITESPACE_RE = /\s+/;
+});
 //@ chunk-aepeg2w5.js:861404-861772 layout = getFileExtensionsFromBashCommand (1)
 function getFileExtensionsFromBashCommand_2(command) {
   if (!command.includes(".")) return;
@@ -1632,10 +1705,10 @@ var DOCUMENT_EXTENSION_RE = /\.(csv|docx?|html|json|md|od[pst]|pdf|pptx?|rtf|txt
  */
 function extensionsInCommand(command) {
   if (!command.includes(".")) return;
-  let n = new Set();
-  for (let s of command.toLowerCase().matchAll(DOCUMENT_EXTENSION_RE)) n.add(s[1]);
-  if (n.size === 0) return;
-  let joined = [...n].sort().join(",");
+  let extensions = new Set();
+  for (let match of command.toLowerCase().matchAll(DOCUMENT_EXTENSION_RE)) extensions.add(match[1]);
+  if (extensions.size === 0) return;
+  let joined = [...extensions].sort().join(",");
   return fromSanitizer_SANITIZER_OUTPUT_ONLY(joined);
 }
 //@ chunk-aepeg2w5.js:862018-862054 layout
@@ -1644,33 +1717,33 @@ var MCP_COWORK_PRESENT_FILES = "mcp__cowork__present_files";
 /**
  * 记 tengu_file_activity 事件。
  */
-function logFileActivity(e) {
+function logFileActivity(activity) {
   logEvent("tengu_file_activity", {
-    messageID: e.messageID,
-    activity: fromEnum(e.activity),
-    fileExtension: e.fileExtension,
-    toolName: sanitizeToolNameForAnalytics(e.toolName),
-    isNewFile: e.isNewFile,
-    deliverChannel: fromEnumOpt(e.deliverChannel),
+    messageID: activity.messageID,
+    activity: fromEnum(activity.activity),
+    fileExtension: activity.fileExtension,
+    toolName: sanitizeToolNameForAnalytics(activity.toolName),
+    isNewFile: activity.isNewFile,
+    deliverChannel: fromEnumOpt(activity.deliverChannel),
   });
 }
 //@ chunk-aepeg2w5.js:862253-862678 layout
 /**
  * 对交付的文件按扩展名去重后记录文件活动。
  */
-function logDeliveredFiles(e, toolName, deliverChannel, messageID) {
-  let h = new Set();
-  for (let y of e) {
-    let S;
-    if (typeof y === "string") S = y;
-    else if (y && typeof y === "object" && "file_name" in y && typeof y.file_name === "string")
-      S = y.file_name;
-    else if (y && typeof y === "object" && "file_path" in y && typeof y.file_path === "string")
-      S = y.file_path;
+function logDeliveredFiles(files, toolName, deliverChannel, messageID) {
+  let seenExtensions = new Set();
+  for (let file of files) {
+    let path;
+    if (typeof file === "string") path = file;
+    else if (file && typeof file === "object" && "file_name" in file && typeof file.file_name === "string")
+      path = file.file_name;
+    else if (file && typeof file === "object" && "file_path" in file && typeof file.file_path === "string")
+      path = file.file_path;
     else continue;
-    let fileExtensionForAnalytics = getFileExtensionForAnalytics(S);
-    if (h.has(fileExtensionForAnalytics)) continue;
-    h.add(fileExtensionForAnalytics);
+    let fileExtensionForAnalytics = getFileExtensionForAnalytics(path);
+    if (seenExtensions.has(fileExtensionForAnalytics)) continue;
+    seenExtensions.add(fileExtensionForAnalytics);
     logFileActivity({
       activity: "deliver",
       fileExtension: fileExtensionForAnalytics,
@@ -1685,72 +1758,73 @@ function logDeliveredFiles(e, toolName, deliverChannel, messageID) {
 /**
  * 按工具（编辑、写入、notebook、shell、artifact、发送文件等）记录文件活动遥测。
  */
-function logToolFileActivity(e, observableInput, messageId) {
+function logToolFileActivity(toolName, observableInput, messageId) {
   if (!observableInput || typeof observableInput !== "object") return;
-  let s = observableInput;
-  let h = sanitizeMarkName(messageId);
-  if (e === FILE_EDIT_TOOL_NAME && typeof s.file_path === "string")
+  let input = observableInput;
+  let markName = sanitizeMarkName(messageId);
+  if (toolName === FILE_EDIT_TOOL_NAME && typeof input.file_path === "string")
     logFileActivity({
       activity: "edit",
-      fileExtension: getFileExtensionForAnalytics(s.file_path),
-      toolName: e,
-      isNewFile: s.old_string === "",
+      fileExtension: getFileExtensionForAnalytics(input.file_path),
+      toolName,
+      isNewFile: input.old_string === "",
       deliverChannel: undefined,
-      messageID: h,
+      messageID: markName,
     });
-  else if (e === FILE_WRITE_TOOL_NAME && typeof s.file_path === "string")
+  else if (toolName === FILE_WRITE_TOOL_NAME && typeof input.file_path === "string")
     logFileActivity({
       activity: "write",
-      fileExtension: getFileExtensionForAnalytics(s.file_path),
-      toolName: e,
+      fileExtension: getFileExtensionForAnalytics(input.file_path),
+      toolName,
       isNewFile: undefined,
       deliverChannel: undefined,
-      messageID: h,
+      messageID: markName,
     });
-  else if (e === NOTEBOOK_EDIT_TOOL_NAME && typeof s.notebook_path === "string")
+  else if (toolName === NOTEBOOK_EDIT_TOOL_NAME && typeof input.notebook_path === "string")
     logFileActivity({
       activity: "notebook_edit",
-      fileExtension: getFileExtensionForAnalytics(s.notebook_path),
-      toolName: e,
+      fileExtension: getFileExtensionForAnalytics(input.notebook_path),
+      toolName,
       isNewFile: false,
       deliverChannel: undefined,
-      messageID: h,
+      messageID: markName,
     });
   else if (
-    (e === BASH_TOOL_NAME || e === WORKSPACE_BASH_TOOL || e === POWERSHELL_TOOL_NAME) &&
-    typeof s.command === "string"
+    (toolName === BASH_TOOL_NAME || toolName === WORKSPACE_BASH_TOOL || toolName === POWERSHELL_TOOL_NAME) &&
+    typeof input.command === "string"
   ) {
-    let y = extensionsInCommand(s.command);
-    if (y)
-      for (let S of y.split(","))
+    let extensions = extensionsInCommand(input.command);
+    if (extensions)
+      for (let extension of extensions.split(","))
         logFileActivity({
           activity: "bash_mention",
-          fileExtension: fromSanitizer_SANITIZER_OUTPUT_ONLY(S),
-          toolName: e,
+          fileExtension: fromSanitizer_SANITIZER_OUTPUT_ONLY(extension),
+          toolName,
           isNewFile: undefined,
           deliverChannel: undefined,
-          messageID: h,
+          messageID: markName,
         });
-  } else if (e === ARTIFACT_TOOL_NAME && typeof s.file_path === "string")
-    logDeliveredFiles([s.file_path], e, "artifact", h);
-  else if (e === MCP_COWORK_PRESENT_FILES && Array.isArray(s.files))
-    logDeliveredFiles(s.files, e, "cowork_present_files", h);
-  else if (e === SEND_USER_FILE_TOOL_NAME && Array.isArray(s.files))
-    logDeliveredFiles(s.files, e, "send_user_file", h);
-  else if (e === BRIEF_TOOL_NAME && Array.isArray(s.attachments))
-    logDeliveredFiles(s.attachments, e, "brief", h);
+  } else if (toolName === ARTIFACT_TOOL_NAME && typeof input.file_path === "string")
+    logDeliveredFiles([input.file_path], toolName, "artifact", markName);
+  else if (toolName === MCP_COWORK_PRESENT_FILES && Array.isArray(input.files))
+    logDeliveredFiles(input.files, toolName, "cowork_present_files", markName);
+  else if (toolName === SEND_USER_FILE_TOOL_NAME && Array.isArray(input.files))
+    logDeliveredFiles(input.files, toolName, "send_user_file", markName);
+  else if (toolName === BRIEF_TOOL_NAME && Array.isArray(input.attachments))
+    logDeliveredFiles(input.attachments, toolName, "brief", markName);
 }
 //@ chunk-aepeg2w5.js:863780-864019 layout = isMedia (1)
 function isMedia(block) {
   if (!block) return 0;
-  let n = 0;
-  for (let r of block) {
-    if (r.type !== "user" && r.type !== "assistant") continue;
-    let content = r.message.content;
+  let bytes = 0;
+  for (let message of block) {
+    if (message.type !== "user" && message.type !== "assistant") continue;
+    let content = message.message.content;
     if (!Array.isArray(content)) continue;
-    for (let h of content) if (h.type === "document" || h.type === "image") n += jsonStringify(h).length;
+    for (let block of content)
+      if (block.type === "document" || block.type === "image") bytes += jsonStringify(block).length;
   }
-  return n;
+  return bytes;
 }
 //@ chunk-aepeg2w5.js:864019-864229 layout
 var VERSION_STRING_RE =
@@ -1759,43 +1833,46 @@ var VERSION_STRING_RE =
 /**
  * 版本字符串规范化（不合格式为 other，空为 none）。
  */
-function sanitizeVersion(e) {
-  if (e == null) return lit("none");
-  if (typeof e !== "string") return lit("other");
-  let match = e.match(VERSION_STRING_RE);
+function sanitizeVersion(version) {
+  if (version == null) return lit("none");
+  if (typeof version !== "string") return lit("other");
+  let match = version.match(VERSION_STRING_RE);
   if (match) return fromSanitizer_SANITIZER_OUTPUT_ONLY(match[0]);
   return lit("other");
 }
 //@ chunk-aepeg2w5.js:864370-864705 layout
-var KNOWN_PLATFORMS = new Set([
-  "darwin",
-  "linux",
-  "win32",
-  "freebsd",
-  "openbsd",
-  "netbsd",
-  "android",
-  "aix",
-  "sunos",
-  "cygwin",
-  "haiku",
-  "macos",
-  "windows",
-  "wsl",
-  "unknown",
-  "darwin-x64",
-  "darwin-arm64",
-  "win32-x64",
-  "win32-arm64",
-  "linux-x64",
-  "linux-arm64",
-  "linux-x64-musl",
-  "linux-arm64-musl",
-  "linux-x64-android",
-  "linux-arm64-android",
-  "freebsd-x64",
-  "freebsd-arm64",
-]);
+var KNOWN_PLATFORMS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-aepeg2w5.js:864370", () => {
+  KNOWN_PLATFORMS = new Set([
+    "darwin",
+    "linux",
+    "win32",
+    "freebsd",
+    "openbsd",
+    "netbsd",
+    "android",
+    "aix",
+    "sunos",
+    "cygwin",
+    "haiku",
+    "macos",
+    "windows",
+    "wsl",
+    "unknown",
+    "darwin-x64",
+    "darwin-arm64",
+    "win32-x64",
+    "win32-arm64",
+    "linux-x64",
+    "linux-arm64",
+    "linux-x64-musl",
+    "linux-arm64-musl",
+    "linux-x64-android",
+    "linux-arm64-android",
+    "freebsd-x64",
+    "freebsd-arm64",
+  ]);
+});
 //@ chunk-aepeg2w5.js:864705-864792 layout
 /**
  * 导出函数 `platformOrOther`：参数 e，返回 lit("none"); if (KNOWN_PLATFORMS.has(e)) return fromSanitizer_SANITIZER_OUTPUT_ONLY(e); return lit("other")。
@@ -1811,8 +1888,8 @@ var LOCALE_RE = /^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})?$/;
 /**
  * 导出函数 `localeOrNonconforming`：参数 e，返回 fromSanitizer_SANITIZER_OUTPUT_ONLY(e); return lit("nonconforming")。
  */
-function localeOrNonconforming(e) {
-  if (LOCALE_RE.test(e)) return fromSanitizer_SANITIZER_OUTPUT_ONLY(e);
+function localeOrNonconforming(locale) {
+  if (LOCALE_RE.test(locale)) return fromSanitizer_SANITIZER_OUTPUT_ONLY(locale);
   return lit("nonconforming");
 }
 //@ chunk-aepeg2w5.js:864906-865361 fingerprint = getAgentIdentification (0.874)
@@ -1874,17 +1951,17 @@ function getVersionBase() {
  * 构造环境上下文（进程内缓存）：platform/platformRaw/arch/nodeVersion/terminal/shell/包管理器/运行时/是否 CI/远程/GitHub Action、版本与构建时间、部署环境、WSL、Linux 发行版、VCS。
  */
 async function buildEnvContext() {
-  let e = isDiskless();
-  let n = e ? undefined : await detectEnvToolchain();
+  let diskless = isDiskless();
+  let toolchain = diskless ? undefined : await detectEnvToolchain();
   return {
     platform: getHostPlatformForAnalytics(),
     platformRaw: process.env.CLAUDE_CODE_HOST_PLATFORM || "linux",
     arch: env.arch,
     nodeVersion: env.nodeVersion,
-    terminal: e ? null : envDynamicProbe.terminal,
-    shell: e ? "none" : getShellForAnalytics(),
-    packageManagers: n?.packageManagers.join(","),
-    runtimes: n?.runtimes.join(","),
+    terminal: diskless ? null : envDynamicProbe.terminal,
+    shell: diskless ? "none" : getShellForAnalytics(),
+    packageManagers: toolchain?.packageManagers.join(","),
+    runtimes: toolchain?.runtimes.join(","),
     isRunningWithBun: env.isRunningWithBun(),
     isCi: isEnvTruthy(false),
     isClaubbit: env.CLAUBBIT,
@@ -1929,7 +2006,7 @@ async function buildEnvContext() {
       HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
       DD_SOURCEMAP_GROUP: "default",
     }.BUILD_TIME,
-    deploymentEnvironment: n?.deploymentEnvironment,
+    deploymentEnvironment: toolchain?.deploymentEnvironment,
     ...(isEnvTruthy(process.env.GITHUB_ACTIONS) && {
       githubEventName: process.env.GITHUB_EVENT_NAME,
       githubActionsRunnerEnvironment: process.env.RUNNER_ENVIRONMENT,
@@ -1938,13 +2015,13 @@ async function buildEnvContext() {
         ? process.env.GITHUB_ACTION_PATH.split("claude-code-action/")[1]
         : undefined,
     }),
-    ...(n?.wslVersion && {
-      wslVersion: n.wslVersion,
+    ...(toolchain?.wslVersion && {
+      wslVersion: toolchain.wslVersion,
     }),
-    ...n?.linuxDistroInfo,
-    ...(n &&
-      n.vcs.length > 0 && {
-        vcs: n.vcs.join(","),
+    ...toolchain?.linuxDistroInfo,
+    ...(toolchain &&
+      toolchain.vcs.length > 0 && {
+        vcs: toolchain.vcs.join(","),
       }),
   };
 }
@@ -1953,17 +2030,17 @@ async function buildEnvContext() {
  * 探测运行环境工具链：包管理器、运行时、Linux 发行版信息、VCS 类型（envContext 用）。
  */
 async function detectEnvToolchain() {
-  let [e, n, r, s] = await Promise.all([
+  let [packageManagers, runtimes, linuxInfo, vcs] = await Promise.all([
     env.getPackageManagers(),
     env.getRuntimes(),
     linuxDistroInfo(),
     detectVcs(),
   ]);
   return {
-    packageManagers: e,
-    runtimes: n,
-    linuxDistroInfo: r,
-    vcs: s,
+    packageManagers,
+    runtimes,
+    linuxDistroInfo: linuxInfo,
+    vcs,
     deploymentEnvironment: env.detectDeploymentEnvironment(),
     wslVersion: getWslVersion(),
   };
@@ -1988,7 +2065,10 @@ class EventMetadataState {
   };
 }
 //@ chunk-aepeg2w5.js:868890-868915 layout
-var eventMetadataStateByHost = new HostScoped(() => new EventMetadataState());
+var eventMetadataStateByHost; // deferred: uses EventMetadataState of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-aepeg2w5.js:868890", () => {
+  eventMetadataStateByHost = new HostScoped(() => new EventMetadataState());
+});
 //@ chunk-aepeg2w5.js:868915-868966 layout
 function getMemoryPeaks() {
   return {
@@ -1999,8 +2079,8 @@ function getMemoryPeaks() {
 /**
  * 进程指标：RSS、堆、CPU 使用差值、内存峰值等。
  */
-function buildProcessMetrics(e) {
-  let { memPeaks } = e;
+function buildProcessMetrics(state) {
+  let { memPeaks } = state;
   try {
     let mem = process.memoryUsage();
     if (mem.rss > memPeaks.rss) memPeaks.rss = mem.rss;
@@ -2010,7 +2090,7 @@ function buildProcessMetrics(e) {
     let now = Date.now();
     let cpuPercent;
     let cpuWindowMs;
-    let { prevCpuUsage, prevWallTimeMs } = e;
+    let { prevCpuUsage, prevWallTimeMs } = state;
     if (prevCpuUsage && prevWallTimeMs) {
       let wallDeltaMs = now - prevWallTimeMs;
       if (wallDeltaMs > 0) {
@@ -2020,8 +2100,8 @@ function buildProcessMetrics(e) {
         cpuWindowMs = wallDeltaMs;
       }
     }
-    e.prevCpuUsage = cpu;
-    e.prevWallTimeMs = now;
+    state.prevCpuUsage = cpu;
+    state.prevWallTimeMs = now;
     return {
       uptime: process.uptime(),
       rss: mem.rss,
@@ -2041,13 +2121,13 @@ function buildProcessMetrics(e) {
 //@ chunk-aepeg2w5.js:869590-869597 layout
 var currentEventModel;
 //@ chunk-aepeg2w5.js:869597-869658 layout
-function withEventModel(currentModel, n) {
-  let r = currentEventModel;
+function withEventModel(currentModel, fn) {
+  let previousModel = currentEventModel;
   currentEventModel = currentModel;
   try {
-    return n();
+    return fn();
   } finally {
-    currentEventModel = r;
+    currentEventModel = previousModel;
   }
 }
 //@ chunk-aepeg2w5.js:869658-871072 fingerprint = getEventMetadata (0.64)
@@ -2055,66 +2135,66 @@ function withEventModel(currentModel, n) {
  * 构造每个事件附带的元数据：model、sessionId、userType=external、betas、envContext、isClaudeAiAuth、entrypoint、sessionKind、agentSdkVersion、isInteractive、clientType、processMetrics、SWE-bench id、agent 标识、subscriptionType、rh（仓库哈希）、head_sha（消费者计划）、promptId 等。
  */
 async function getEventMetadata(options = {}) {
-  let n = options.model ? String(options.model) : (currentEventModel ?? getMainLoopModel());
+  let model = options.model ? String(options.model) : (currentEventModel ?? getMainLoopModel());
   let betas =
-    typeof options.betas === "string" ? options.betas : hashToolNames(betaHeaderValues(getModelBetas(n)));
+    typeof options.betas === "string" ? options.betas : hashToolNames(betaHeaderValues(getModelBetas(model)));
   let processMetrics = getPromptId();
-  let h = currentAuthSurface();
+  let authSurface = currentAuthSurface();
   let currentAuthSurface_2 = getCurrentAuthSurface();
-  let S = false;
-  let w = isClaudeAISubscriber();
+  let isSdk = false;
+  let isClaudeAi = isClaudeAISubscriber();
   let plan = getSubscriptionType();
   let sessionId = getSessionId();
   let rootSession = getRootSession();
-  let F = mcpServeSessionName(rootSession.host);
-  let L = isDiskless();
-  let G = !L && ((w && plan !== null && isConsumerPlan(plan)) || false);
-  let j = eventMetadataStateByHost.of(rootSession.host);
-  j.envContext ??= buildEnvContext();
-  let [ee, q, Q, , , re] = await Promise.all([
-    j.envContext,
-    L ? undefined : getRepoHashForAnalytics(),
-    L ? undefined : getHeadShaForAnalytics(),
+  let serveSession = mcpServeSessionName(rootSession.host);
+  let diskless = isDiskless();
+  let consumerPlan = !diskless && ((isClaudeAi && plan !== null && isConsumerPlan(plan)) || false);
+  let state = eventMetadataStateByHost.of(rootSession.host);
+  state.envContext ??= buildEnvContext();
+  let [envContext, repoHash, headSha, , , treeState] = await Promise.all([
+    state.envContext,
+    diskless ? undefined : getRepoHashForAnalytics(),
+    diskless ? undefined : getHeadShaForAnalytics(),
     hydrateMaskedIds(),
-    L ? undefined : sampleChildMemoryPeaks(),
-    G ? getCachedAgentAnswer(rootSession, sessionId) : undefined,
+    diskless ? undefined : sampleChildMemoryPeaks(),
+    consumerPlan ? getCachedAgentAnswer(rootSession, sessionId) : undefined,
   ]);
-  let model = maskModelIdForTelemetry(n);
-  let processMetrics_2 = L ? undefined : buildProcessMetrics(j);
-  let ae = envSessionKind();
-  let ie = ae ? (getAttacherCaps() ? "1" : "0") : undefined;
+  let model_2 = maskModelIdForTelemetry(model);
+  let processMetrics_2 = diskless ? undefined : buildProcessMetrics(state);
+  let sessionKind = envSessionKind();
+  let hasAttacher = sessionKind ? (getAttacherCaps() ? "1" : "0") : undefined;
   let rendererModeForAnalytics = getRendererModeForAnalytics();
   let CLAUDE_AGENT_SDK_VERSION = env.CLAUDE_AGENT_SDK_VERSION;
-  let fe = desktopEntrypointSetting();
+  let desktopVersion = desktopEntrypointSetting();
   return {
-    model,
-    sessionId: F?.sessionId ?? sessionId,
+    model: model_2,
+    sessionId: serveSession?.sessionId ?? sessionId,
     userType: "external",
     ...(betas.length > 0 && {
       betas,
     }),
-    envContext: F
+    envContext: serveSession
       ? {
-          ...ee,
-          claudeCodeRemoteSessionId: F.remoteSessionId,
+          ...envContext,
+          claudeCodeRemoteSessionId: serveSession.remoteSessionId,
         }
-      : ee,
-    isClaudeAiAuth: w,
+      : envContext,
+    isClaudeAiAuth: isClaudeAi,
     ...(process.env.CLAUDE_CODE_ENTRYPOINT && {
       entrypoint: getEntrypointKind() ?? "other",
     }),
-    ...(ae && {
-      sessionKind: ae,
+    ...(sessionKind && {
+      sessionKind,
     }),
-    ...(ie && {
-      hasAttacher: ie,
+    ...(hasAttacher && {
+      hasAttacher,
     }),
     ...(CLAUDE_AGENT_SDK_VERSION && {
       agentSdkVersion:
         CLAUDE_AGENT_SDK_VERSION === "unknown" ? "unknown" : sanitizeVersion(CLAUDE_AGENT_SDK_VERSION),
     }),
-    ...(fe && {
-      desktopAppVersion: sanitizeVersion(fe),
+    ...(desktopVersion && {
+      desktopAppVersion: sanitizeVersion(desktopVersion),
     }),
     isInteractive: String(getIsInteractive()),
     clientType: getClientType(),
@@ -2128,23 +2208,23 @@ async function getEventMetadata(options = {}) {
     ...(plan && {
       subscriptionType: plan,
     }),
-    ...(q && {
-      rh: q,
+    ...(repoHash && {
+      rh: repoHash,
     }),
-    ...(Q &&
-      G && {
-        head_sha: Q,
+    ...(headSha &&
+      consumerPlan && {
+        head_sha: headSha,
       }),
-    ...(re !== undefined && {
-      is_clean_tree_at_start: re.isCleanTree,
-      changed_file_count_at_start: re.changedFileCount,
-      untracked_file_count_at_start: re.untrackedFileCount,
+    ...(treeState !== undefined && {
+      is_clean_tree_at_start: treeState.isCleanTree,
+      changed_file_count_at_start: treeState.changedFileCount,
+      untracked_file_count_at_start: treeState.untrackedFileCount,
     }),
     ...(rendererModeForAnalytics && {
       rendererMode: rendererModeForAnalytics,
     }),
-    ...(h && {
-      remoteControlLane: h,
+    ...(authSurface && {
+      remoteControlLane: authSurface,
     }),
     ...(currentAuthSurface_2 && {
       projectsSession: "1",
@@ -2319,47 +2399,41 @@ function to1PEventFormat(metadata, userMetadata, additionalMetadata = {}) {
     },
   };
 }
-//@ chunk-18hwfzwa.js:1743869-1743938 fingerprint = extractToolInputForTelemetry (1)
-function extractToolInputForTelemetry(h, x) {
-  return h.length <= x ? h : `${truncateToLength(h, x)} \u2026[truncated]`;
-}
-//@ chunk-1wpnxx5r.js:920-952 placement
-/**
- * 主机名是否为第一方 API 主机。
- */
-function isFirstPartyApiHost(hostname) {
-  return FIRST_PARTY_API_HOSTS.has(hostname);
-}
 //@ chunk-6vnxsn99.js:43721-44057 fingerprint = getFileExtensionsFromBashCommand (1)
 function getFileExtensionsFromBashCommand(command, simulatedSedEditFilePath) {
   let min = Math.min(command.length, simulatedSedEditFilePath.length);
-  let o = 0;
-  while (o < min && command.charCodeAt(o) === simulatedSedEditFilePath.charCodeAt(o)) o++;
-  o =
-    o === 0
+  let prefixLen = 0;
+  while (prefixLen < min && command.charCodeAt(prefixLen) === simulatedSedEditFilePath.charCodeAt(prefixLen))
+    prefixLen++;
+  prefixLen =
+    prefixLen === 0
       ? 0
       : command.lastIndexOf(
           `
 `,
-          o - 1,
+          prefixLen - 1,
         ) + 1;
-  let s = 0;
+  let suffixLen = 0;
   while (
-    s < min - o &&
-    command.charCodeAt(command.length - 1 - s) ===
-      simulatedSedEditFilePath.charCodeAt(simulatedSedEditFilePath.length - 1 - s)
+    suffixLen < min - prefixLen &&
+    command.charCodeAt(command.length - 1 - suffixLen) ===
+      simulatedSedEditFilePath.charCodeAt(simulatedSedEditFilePath.length - 1 - suffixLen)
   )
-    s++;
+    suffixLen++;
   let index = command.indexOf(
     `
 `,
-    command.length - s,
+    command.length - suffixLen,
   );
-  s = s === 0 || index === -1 ? 0 : command.length - index - 1;
+  suffixLen = suffixLen === 0 || index === -1 ? 0 : command.length - index - 1;
   return [
-    command.slice(o, command.length - s),
-    simulatedSedEditFilePath.slice(o, simulatedSedEditFilePath.length - s),
+    command.slice(prefixLen, command.length - suffixLen),
+    simulatedSedEditFilePath.slice(prefixLen, simulatedSedEditFilePath.length - suffixLen),
   ];
+}
+//@ chunk-18hwfzwa.js:1743869-1743938 fingerprint = extractToolInputForTelemetry (1)
+function extractToolInputForTelemetry(toolName, input) {
+  return toolName.length <= input ? toolName : `${truncateToLength(toolName, input)} \u2026[truncated]`;
 }
 export {
   builtinToolNameForMcp,
@@ -2380,9 +2454,9 @@ export {
   sanitizeVersion,
   isMcpFamilyToolName,
   getEventMetadata,
-  platformOrOther,
   filterObject,
-  JOB_PARENT_TRANSCRIPT_FILE,
+  platformOrOther,
+  loggableMcpToolName,
   toolNameForTelemetry,
   restrictRemoteRepoCalls,
   filterRemoteRepoTools,
@@ -2391,7 +2465,6 @@ export {
   isOwnCcrMcpServer,
   isOwnArtifactMcpTool,
   markMcpServerLoggable,
-  loggableMcpToolName,
   markCcrInjectedConfig,
   copyOwnServerMarks,
   getVersionBase,
@@ -2403,7 +2476,6 @@ export {
   isValidLocalTaskId,
   sessionSlug,
   keepsSessionId,
-  jobStorageSpace,
   getFileExtensionsFromBashCommand,
   getFileExtensionForAnalytics,
   EMPTY_SESSION_HOOKS_NAME,
@@ -2417,6 +2489,8 @@ export {
   extractMcpToolDetails,
   registerFirstPartyPlugin,
   isInferredMcpToolName,
+  IOS_SIMULATOR_DISPLAY_NAME,
+  ANDROID_EMULATOR_DISPLAY_NAME,
   sdkHostToolSource,
   sanitizeToolNameWithMcpFlag,
   claudeAiServerIdField,
@@ -2440,5 +2514,4 @@ export {
   buildCcrMcpProxyUrls,
   sanitizeStorageKindForAnalytics,
   isInjectedCcrServer,
-  jobsDir,
 };

@@ -8,36 +8,51 @@
  * pieces: chunk-095ptjmr.js (7)
  * attribution: placement 6, fingerprint 1
  */
-import { init_react_production, qt, y, P } from "../../../vendor/react/cjs/react.production.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import {
+  init_react_production,
+  createContext,
+  useState,
+  useEffect,
+} from "../../../vendor/react/cjs/react.production.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { useGlobalExitKeybindings } from "../../keybindings/useKeybinding.js";
 import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-095ptjmr.js:821-825 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-095ptjmr.js:821", () => {
+  init_react_production();
+});
 //@ chunk-095ptjmr.js:825-829 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-095ptjmr.js:825", () => {
+  init_react_production();
+});
 //@ chunk-095ptjmr.js:829-857 placement
-function incrementStep(yo) {
-  return yo + 1;
+function incrementStep(index) {
+  return index + 1;
 }
 //@ chunk-095ptjmr.js:857-895 placement
 function popStep(prev) {
   return prev.slice(0, -1);
 }
 //@ chunk-095ptjmr.js:895-923 placement
-function decrementStep(vo) {
-  return vo - 1;
+function decrementStep(index) {
+  return index - 1;
 }
 //@ chunk-095ptjmr.js:923-939 placement
-var wizardSlot = qt(null);
+var wizardSlot; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-095ptjmr.js:923", () => {
+  wizardSlot = createContext(null);
+});
 //@ chunk-095ptjmr.js:939-2900 fingerprint = WizardProvider (0.652)
 /**
  * 向导上下文：步骤列表与当前步骤、共享数据、next/back/goTo/cancel，Esc 双击退出。
  */
 function WizardProvider(props) {
-  let $ = w(40);
+  let $ = useMemoCache(40);
   let {
     steps,
     stepProps,
@@ -57,16 +72,16 @@ function WizardProvider(props) {
   } else t3 = $[1];
   let initialData_2 = t3;
   let showStepCounter_2 = showStepCounter === undefined ? true : showStepCounter;
-  let se = exitOnCtrlCD === undefined ? false : exitOnCtrlCD;
-  let [currentStepIndex, setCurrentStepIndex] = y(0);
-  let [wizardData, setWizardData] = y(initialData_2);
-  let [isCompleted, setIsCompleted] = y(false);
+  let exitOnCtrlCD_ = exitOnCtrlCD === undefined ? false : exitOnCtrlCD;
+  let [currentStepIndex, setCurrentStepIndex] = useState(0);
+  let [wizardData, setWizardData] = useState(initialData_2);
+  let [isCompleted, setIsCompleted] = useState(false);
   let t4;
   if ($[2] === MEMO_CACHE_SENTINEL) {
     t4 = [];
     $[2] = t4;
   } else t4 = $[2];
-  let [navigationHistory, setNavigationHistory] = y(t4);
+  let [navigationHistory, setNavigationHistory] = useState(t4);
   let t5;
   let t6;
   if ($[3] !== isCompleted || $[4] !== onComplete || $[5] !== wizardData) {
@@ -86,7 +101,7 @@ function WizardProvider(props) {
     t5 = $[6];
     t6 = $[7];
   }
-  P(t5, t6);
+  useEffect(t5, t6);
   let t7;
   if ($[8] !== currentStepIndex || $[9] !== navigationHistory || $[10] !== steps.length) {
     t7 = () => {
@@ -142,9 +157,9 @@ function WizardProvider(props) {
     $[20] = t10;
   } else t10 = $[20];
   let cancel = t10;
-  let globalExitKeybindings = useGlobalExitKeybindings(se ? undefined : cancel);
+  let globalExitKeybindings = useGlobalExitKeybindings(exitOnCtrlCD_ ? undefined : cancel);
   let pendingExitHint = globalExitKeybindings.pending
-    ? `Press ${globalExitKeybindings.keyName} again to ${se ? "exit" : "cancel"}`
+    ? `Press ${globalExitKeybindings.keyName} again to ${exitOnCtrlCD_ ? "exit" : "cancel"}`
     : null;
   let t11;
   if ($[21] === MEMO_CACHE_SENTINEL) {

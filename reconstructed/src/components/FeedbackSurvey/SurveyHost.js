@@ -8,7 +8,7 @@
  * pieces: chunk-18hwfzwa.js (12)
  * attribution: placement 12
  */
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { useStoreValue } from "../../screens/repl/storeHooks.js";
 import { pickActiveSurvey, PluginSurveyQuestion } from "./PluginSurvey.js";
 import {
@@ -18,7 +18,7 @@ import {
 import { FeedbackSurvey } from "./FeedbackSurvey.js";
 import { SurveyCard } from "./SurveyCard.js";
 import { logForDebugging } from "../../utils/debug.js";
-import { string } from "../../../vendor/zod/v4/classic/schemas.js";
+import { stringSchema } from "../../../vendor/zod/v4/classic/schemas.js";
 import { createSignal } from "../../utils/signal.js";
 import { Text, Box } from "../../ink/components/Text.js";
 import { fromEnum } from "../../services/analytics/safeMetadata.js";
@@ -27,10 +27,11 @@ import { logEvent } from "../../services/analytics/index.js";
 import { errorMessage } from "../../utils/errors.js";
 import { logError } from "../../utils/log.js";
 import { sumAssistantTokensSince } from "../../utils/tokens.js";
-import { init_react_production, y, P } from "../../../vendor/react/cjs/react.production.js";
+import { init_react_production, useState, useEffect } from "../../../vendor/react/cjs/react.production.js";
 import { getDynamicConfig_BLOCKS_ON_INIT } from "../../services/analytics/growthbook.js";
 import { useClock } from "../../ink/components/ClockContext.js";
 import { collectTrailingAssistantTexts } from "../../utils/messages.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-18hwfzwa.js:1009885-1009901 placement
 function noopSelect() {}
@@ -41,7 +42,7 @@ function noopUndo() {}
  * SurveyHost：统一挂载反馈、长上下文、记忆、压缩后、插件、组织等各类调查，保证同一时间只显示一个。
  */
 function SurveyHost(props) {
-  let $ = w(83);
+  let $ = useMemoCache(83);
   let {
     postCompactSurvey,
     longContextSurvey,
@@ -67,7 +68,7 @@ function SurveyHost(props) {
     })
   ) {
     case "postCompact": {
-      let At;
+      let postCompactElement;
       if (
         $[0] !== handleSurveyRequestFeedback ||
         $[1] !== inputValue ||
@@ -79,7 +80,7 @@ function SurveyHost(props) {
         $[7] !== postCompactSurvey.state ||
         $[8] !== setInputValue
       ) {
-        At = jsxProd_default(FeedbackSurvey, {
+        postCompactElement = jsxProd_default(FeedbackSurvey, {
           state: postCompactSurvey.state,
           thanksFromFollowup: false,
           lastResponse: postCompactSurvey.lastResponse,
@@ -101,12 +102,12 @@ function SurveyHost(props) {
         $[6] = postCompactSurvey.lastResponse;
         $[7] = postCompactSurvey.state;
         $[8] = setInputValue;
-        $[9] = At;
-      } else At = $[9];
-      return At;
+        $[9] = postCompactElement;
+      } else postCompactElement = $[9];
+      return postCompactElement;
     }
     case "longContext": {
-      let At;
+      let longContextElement;
       if (
         $[10] !== handleSurveyRequestFeedback ||
         $[11] !== inputValue ||
@@ -119,7 +120,7 @@ function SurveyHost(props) {
         $[18] !== longContextSurvey.state ||
         $[19] !== setInputValue
       ) {
-        At = jsxProd_default(FeedbackSurvey, {
+        longContextElement = jsxProd_default(FeedbackSurvey, {
           state: longContextSurvey.state,
           thanksFromFollowup: false,
           lastResponse: longContextSurvey.lastResponse,
@@ -143,9 +144,9 @@ function SurveyHost(props) {
         $[17] = longContextSurvey.question;
         $[18] = longContextSurvey.state;
         $[19] = setInputValue;
-        $[20] = At;
-      } else At = $[20];
-      return At;
+        $[20] = longContextElement;
+      } else longContextElement = $[20];
+      return longContextElement;
     }
     case "plugin": {
       let message;
@@ -156,7 +157,7 @@ function SurveyHost(props) {
         $[21] = pluginSurvey.subject;
         $[22] = message;
       } else message = $[22];
-      let It;
+      let pluginElement;
       if (
         $[23] !== handleSurveyRequestFeedback ||
         $[24] !== inputValue ||
@@ -168,7 +169,7 @@ function SurveyHost(props) {
         $[30] !== setInputValue ||
         $[31] !== message
       ) {
-        It = jsxProd_default(FeedbackSurvey, {
+        pluginElement = jsxProd_default(FeedbackSurvey, {
           state: pluginSurvey.state,
           thanksFromFollowup: false,
           lastResponse: pluginSurvey.lastResponse,
@@ -191,13 +192,13 @@ function SurveyHost(props) {
         $[29] = pluginSurvey.state;
         $[30] = setInputValue;
         $[31] = message;
-        $[32] = It;
-      } else It = $[32];
-      return It;
+        $[32] = pluginElement;
+      } else pluginElement = $[32];
+      return pluginElement;
     }
     case "memory": {
       const memoryCitation = memorySurvey.citation ?? undefined;
-      let It;
+      let memoryElement;
       if (
         $[33] !== handleSurveyRequestFeedback ||
         $[34] !== inputValue ||
@@ -211,7 +212,7 @@ function SurveyHost(props) {
         $[42] !== setInputValue ||
         $[43] !== memoryCitation
       ) {
-        It = jsxProd_default(FeedbackSurvey, {
+        memoryElement = jsxProd_default(FeedbackSurvey, {
           state: memorySurvey.state,
           thanksFromFollowup: false,
           lastResponse: memorySurvey.lastResponse,
@@ -239,14 +240,14 @@ function SurveyHost(props) {
         $[41] = memorySurvey.state;
         $[42] = setInputValue;
         $[43] = memoryCitation;
-        $[44] = It;
-      } else It = $[44];
-      return It;
+        $[44] = memoryElement;
+      } else memoryElement = $[44];
+      return memoryElement;
     }
     case "feedback": {
       const canUndo = !feedbackSurvey.turnMovedOn;
       const onRequestFeedback = feedbackSurvey.typedOver ? undefined : handleSurveyRequestFeedback;
-      let Ot;
+      let feedbackElement;
       if (
         $[45] !== feedbackSurvey.abandon ||
         $[46] !== feedbackSurvey.appearanceId ||
@@ -269,7 +270,7 @@ function SurveyHost(props) {
         $[63] !== canUndo ||
         $[64] !== onRequestFeedback
       ) {
-        Ot = jsxProd_default(FeedbackSurvey, {
+        feedbackElement = jsxProd_default(FeedbackSurvey, {
           state: feedbackSurvey.state,
           lastResponse: feedbackSurvey.lastResponse,
           handleSelect: feedbackSurvey.handleSelect,
@@ -312,12 +313,12 @@ function SurveyHost(props) {
         $[62] = setInputValue;
         $[63] = canUndo;
         $[64] = onRequestFeedback;
-        $[65] = Ot;
-      } else Ot = $[65];
-      return Ot;
+        $[65] = feedbackElement;
+      } else feedbackElement = $[65];
+      return feedbackElement;
     }
     case "orgSurvey": {
-      let At;
+      let orgSurveyElement;
       if (
         $[66] !== inputRowReplaced ||
         $[67] !== inputValue ||
@@ -330,7 +331,7 @@ function SurveyHost(props) {
         $[74] !== orgSurvey.survey ||
         $[75] !== setInputValue
       ) {
-        At = jsxProd_default(SurveyCard, {
+        orgSurveyElement = jsxProd_default(SurveyCard, {
           state: orgSurvey.state,
           survey: orgSurvey.survey,
           starting: orgSurvey.starting,
@@ -352,12 +353,12 @@ function SurveyHost(props) {
         $[73] = orgSurvey.state;
         $[74] = orgSurvey.survey;
         $[75] = setInputValue;
-        $[76] = At;
-      } else At = $[76];
-      return At;
+        $[76] = orgSurveyElement;
+      } else orgSurveyElement = $[76];
+      return orgSurveyElement;
     }
     case "frustration": {
-      let At;
+      let frustrationElement;
       if (
         $[77] !== frustrationDetection.handleTranscriptSelect ||
         $[78] !== frustrationDetection.state ||
@@ -365,7 +366,7 @@ function SurveyHost(props) {
         $[80] !== inputValue ||
         $[81] !== setInputValue
       ) {
-        At = jsxProd_default(FeedbackSurvey, {
+        frustrationElement = jsxProd_default(FeedbackSurvey, {
           state: frustrationDetection.state,
           thanksFromFollowup: false,
           lastResponse: null,
@@ -381,9 +382,9 @@ function SurveyHost(props) {
         $[79] = frustrationDetection.transcriptBundlePath;
         $[80] = inputValue;
         $[81] = setInputValue;
-        $[82] = At;
-      } else At = $[82];
-      return At;
+        $[82] = frustrationElement;
+      } else frustrationElement = $[82];
+      return frustrationElement;
     }
     case null: {
       return null;
@@ -413,7 +414,7 @@ class AssistantTokenCounter {
     this.#n = transcript.subscribe(this.#l);
   }
   getSnapshot = () => this.#s;
-  subscribe = (h) => this.#o.subscribe(h);
+  subscribe = (listener) => this.#o.subscribe(listener);
   dispose() {
     if (this.#c) return;
     this.#c = true;
@@ -429,64 +430,74 @@ class AssistantTokenCounter {
     });
   };
   #d() {
-    let snapshot = this.#e.getSnapshot();
-    let x = this.#i;
-    let min = Math.min(x.length, snapshot.length);
-    let L = 0;
-    while (L < min && x[L] === snapshot[L]) L++;
-    this.#i = snapshot;
-    let ee = this.#a;
+    let messages = this.#e.getSnapshot();
+    let previousMessages = this.#i;
+    let min = Math.min(previousMessages.length, messages.length);
+    let unchangedCount = 0;
+    while (unchangedCount < min && previousMessages[unchangedCount] === messages[unchangedCount])
+      unchangedCount++;
+    this.#i = messages;
+    let pendingIndexes = this.#a;
     this.#a = [];
-    let ke = 0;
-    for (let Re of ee) {
-      if (Re >= L) continue;
-      ke += sumAssistantTokensSince([snapshot[Re]], this.#t, 0, () => this.#a.push(Re));
+    let addedTokens = 0;
+    for (let index of pendingIndexes) {
+      if (index >= unchangedCount) continue;
+      addedTokens += sumAssistantTokensSince([messages[index]], this.#t, 0, () => this.#a.push(index));
     }
-    ke += sumAssistantTokensSince(snapshot, this.#t, L, (Re) => this.#a.push(Re));
-    if (ke > 0) {
-      this.#s += ke;
+    addedTokens += sumAssistantTokensSince(messages, this.#t, unchangedCount, (index) => this.#a.push(index));
+    if (addedTokens > 0) {
+      this.#s += addedTokens;
       this.#o.emit();
     }
   }
 }
 //@ chunk-18hwfzwa.js:1016687-1016691 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:1016687", () => {
+  init_react_production();
+});
 //@ chunk-18hwfzwa.js:1016691-1016695 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:1016691", () => {
+  init_react_production();
+});
 //@ chunk-18hwfzwa.js:1016695-1016766 placement
-function useDynamicConfigValue(h, x) {
-  let [D, L] = y(x);
-  P(() => {
-    getDynamicConfig_BLOCKS_ON_INIT(h, x).then(L);
-  }, [h, x]);
-  return D;
+function useDynamicConfigValue(key, fallback) {
+  let [value, setValue] = useState(fallback);
+  useEffect(() => {
+    getDynamicConfig_BLOCKS_ON_INIT(key, fallback).then(setValue);
+  }, [key, fallback]);
+  return value;
 }
 //@ chunk-18hwfzwa.js:1016766-1016770 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:1016766", () => {
+  init_react_production();
+});
 //@ chunk-18hwfzwa.js:1016770-1016783 placement
 var DELAYED_FLAG_DEFAULT_MS = 2000;
 //@ chunk-18hwfzwa.js:1016783-1016923 placement
 /**
  * 条件 h 为假时，延迟 x 毫秒（默认 2000）后变为真；h 为真时立即复位为假。
  */
-function useDelayedFlag(h, x = DELAYED_FLAG_DEFAULT_MS) {
+function useDelayedFlag(busy, delayMs = DELAYED_FLAG_DEFAULT_MS) {
   let clock = useClock();
-  let [L, ee] = y(!h);
-  P(() => {
-    if (h) {
-      ee(false);
+  let [elapsed, setElapsed] = useState(!busy);
+  useEffect(() => {
+    if (busy) {
+      setElapsed(false);
       return;
     }
-    let ke = clock.setTimeout(() => ee(true), x);
-    return () => ke();
-  }, [h, clock, x]);
-  return L;
+    let timer = clock.setTimeout(() => setElapsed(true), delayMs);
+    return () => timer();
+  }, [busy, clock, delayMs]);
+  return elapsed;
 }
 //@ chunk-18hwfzwa.js:1016923-1016958 placement
 var NUMBERED_LINE_RE = /^[ \t]*\d{1,2}[.)][ \t]/m;
 //@ chunk-18hwfzwa.js:1016958-1017029 placement
-function endsWithNumberedList(h) {
-  let [x] = collectTrailingAssistantTexts(h, 1).messages;
-  return x !== undefined && NUMBERED_LINE_RE.test(x);
+function endsWithNumberedList(messages) {
+  let [last] = collectTrailingAssistantTexts(messages, 1).messages;
+  return last !== undefined && NUMBERED_LINE_RE.test(last);
 }
 export { endsWithNumberedList, useDynamicConfigValue, useDelayedFlag, AssistantTokenCounter, SurveyHost };

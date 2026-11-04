@@ -5,7 +5,7 @@
  * pieces: chunk-spjgqa4y.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 import { require_utils } from "./utils.js";
 import { require_error_correction_code } from "./error-correction-code.js";
 import { require_error_correction_level } from "./error-correction-level.js";
@@ -13,7 +13,7 @@ import { require_mode } from "./mode.js";
 import { require_version_check } from "./version-check.js";
 
 //@ chunk-spjgqa4y.js:9968-11234 cjs-fingerprint
-var require_version = x(function (cjsExports) {
+var require_version = __commonJS(function (cjsExports) {
   var Utils = require_utils();
   var ECCode = require_error_correction_code();
   var ECLevel = require_error_correction_level();

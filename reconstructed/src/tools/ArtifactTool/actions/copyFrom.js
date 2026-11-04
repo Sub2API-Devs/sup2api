@@ -109,18 +109,19 @@ import { capResultRows, peerOrFallback, numberText } from "../../../services/art
 import { jsonStringify } from "../../../utils/slowOperations.js";
 
 //@ chunk-8wvtd8sr.js:81989-82230 placement
-function readCopyFromInput(e) {
-  let n = (h) => (e === undefined ? undefined : Reflect.get(e, h));
-  let s = (h) => {
-    let y = n(h);
-    return typeof y === "string" ? y : undefined;
+function readCopyFromInput(input) {
+  let readField = (key) => (input === undefined ? undefined : Reflect.get(input, key));
+  let readString = (key) => {
+    let value = readField(key);
+    return typeof value === "string" ? value : undefined;
   };
-  let untrustedArrayOrUndefined = readUntrustedArrayOrUndefined(n("asset_ids"));
+  let untrustedArrayOrUndefined = readUntrustedArrayOrUndefined(readField("asset_ids"));
   return {
-    url: s("url"),
-    fromUrl: s("from_url"),
+    url: readString("url"),
+    fromUrl: readString("from_url"),
     ids:
-      untrustedArrayOrUndefined !== undefined && untrustedArrayOrUndefined.every((h) => typeof h === "string")
+      untrustedArrayOrUndefined !== undefined &&
+      untrustedArrayOrUndefined.every((id) => typeof id === "string")
         ? untrustedArrayOrUndefined
         : undefined,
   };
@@ -144,8 +145,8 @@ function assetIdsInputError(assetIds) {
 /**
  * 把集合去重排序后用逗号连接。
  */
-function sortedJoinedKeys(e) {
-  return [...e].sort().join(",");
+function sortedJoinedKeys(ids) {
+  return [...ids].sort().join(",");
 }
 //@ chunk-8wvtd8sr.js:82786-83636 placement
 /**
@@ -177,15 +178,15 @@ var COPY_ALREADY_APPROVED_NOTE =
   "Asset uploads into this artifact and reads of the source already approved this session";
 var ARTIFACT_COPY_FROM_ACTION_HANDLER = {
   actions: ["copy_from"],
-  async checkPermissions(e, n, s) {
-    let { url, fromUrl, ids } = readCopyFromInput(n);
-    let p = url !== undefined ? parseArtifactUrl(url) : null;
-    let w = fromUrl !== undefined ? parseArtifactUrl(fromUrl) : null;
-    if (p === null || w === null || p.slug === w.slug)
+  async checkPermissions(tool, input, context) {
+    let { url, fromUrl, ids } = readCopyFromInput(input);
+    let destUrl = url !== undefined ? parseArtifactUrl(url) : null;
+    let sourceUrl = fromUrl !== undefined ? parseArtifactUrl(fromUrl) : null;
+    if (destUrl === null || sourceUrl === null || destUrl.slug === sourceUrl.slug)
       return {
         behavior: "deny",
         message:
-          p === null || w === null
+          destUrl === null || sourceUrl === null
             ? "copy_from needs two artifact urls Claude can address \u2014 url (the destination) and from_url (the source), from the list or publish results."
             : "copy_from needs two different artifacts \u2014 from_url names the destination itself.",
         decisionReason: {
@@ -195,70 +196,70 @@ var ARTIFACT_COPY_FROM_ACTION_HANDLER = {
           classifierApprovable: false,
         },
       };
-    let A = assetIdsInputError(ids);
-    if (A !== undefined)
+    let assetIdsProblem = assetIdsInputError(ids);
+    if (assetIdsProblem !== undefined)
       return {
         behavior: "deny",
-        message: A,
+        message: assetIdsProblem,
         decisionReason: {
           type: "other",
           reason: "Asset copy input has missing or malformed asset_ids",
         },
       };
-    let S = ($e) =>
-      artifactReadRule(getToolPermissionContext(s), w, fromUrl, $e, {
+    let sourceRuleFor = (mode) =>
+      artifactReadRule(getToolPermissionContext(context), sourceUrl, fromUrl, mode, {
         copySource: true,
         action: "copy_from",
       });
-    let R = S("deny");
-    if (R !== null) return denyByArtifactRule(R, "nothing was copied", true);
-    let T = () => hasOtherCommentPending(p.slug);
-    let P = ($e) => ({
+    let sourceDenyRule = sourceRuleFor("deny");
+    if (sourceDenyRule !== null) return denyByArtifactRule(sourceDenyRule, "nothing was copied", true);
+    let hasOtherComment = () => hasOtherCommentPending(destUrl.slug);
+    let pinBuilder = (askedFlags) => ({
       [ASSET_TARGET_PIN_TAG]: {
         action: "copy_from",
-        slug: p.slug,
-        from: w.slug,
+        slug: destUrl.slug,
+        from: sourceUrl.slug,
         ids: sortedJoinedKeys(ids ?? []),
-        dstAsked: $e.dst,
-        srcAsked: $e.src,
-        ...($e.dst && {
-          otherCommentSeq: otherCommentPendingSeq(p.slug),
+        dstAsked: askedFlags.dst,
+        srcAsked: askedFlags.src,
+        ...(askedFlags.dst && {
+          otherCommentSeq: otherCommentPendingSeq(destUrl.slug),
         }),
       },
     });
-    let L = P({
+    let basePins = pinBuilder({
       dst: false,
       src: false,
     });
-    let V = {
+    let baseTags = {
       [CONSENT_ASK_TAG]: false,
       [PLAN_CONSENT_ASK_TAG]: false,
       [USER_ONLY_CONSENT_ASK_TAG]: false,
     };
-    let M = () => {
-      let toolPermissionContext = getToolPermissionContext(s);
+    let readConsentState = () => {
+      let toolPermissionContext = getToolPermissionContext(context);
       let inPlanMode = toolPermissionContext.mode === "plan";
       let coversSession = toolPermissionContext.mode !== "auto";
-      let Se = needsHumanAssetConsent(s, p.slug);
-      let ce = Se && T();
-      let dstConsented = Se && !ce;
-      let shareEntry = getShareEntry(w.slug);
-      let xe = copySourceConsented(s, w, "assets");
-      let userOnly = !xe && !ownedByUser(shareEntry) && othersArtifactReadIsUserOnly(w);
+      let needsConsent = needsHumanAssetConsent(context, destUrl.slug);
+      let askedAgain = needsConsent && hasOtherComment();
+      let dstConsented = needsConsent && !askedAgain;
+      let shareEntry = getShareEntry(sourceUrl.slug);
+      let sourceConsented = copySourceConsented(context, sourceUrl, "assets");
+      let userOnly = !sourceConsented && !ownedByUser(shareEntry) && othersArtifactReadIsUserOnly(sourceUrl);
       return {
         inPlanMode,
         coversSession,
-        askedAgain: ce,
+        askedAgain,
         dstConsented,
         srcEntry: shareEntry,
-        srcConsented: xe,
+        srcConsented: sourceConsented,
         userOnly,
       };
     };
-    let x = () =>
-      denyOtherOrgArtifact(p, "Nothing was copied") ??
-      denyOtherOrgArtifact(w, "Nothing was copied") ??
-      (otherOrgCopySource(getShareEntry(p.slug))
+    let orgDeny = () =>
+      denyOtherOrgArtifact(destUrl, "Nothing was copied") ??
+      denyOtherOrgArtifact(sourceUrl, "Nothing was copied") ??
+      (otherOrgCopySource(getShareEntry(destUrl.slug))
         ? {
             behavior: "deny",
             message: `${COPY_INTO_OTHER_ORG_MESSAGE}. Tell the user.`,
@@ -268,61 +269,72 @@ var ARTIFACT_COPY_FROM_ACTION_HANDLER = {
             },
           }
         : null);
-    if (othersArtifactReadConsentSurface()) await probeArtifactHostEgress(w, s.abortController.signal);
-    await Promise.all([warmShareEntry(p, s, "copy_from"), warmShareEntry(w, s, "copy_from")]);
-    let q = x();
-    if (q !== null) return q;
-    let re = artifactCallReadRule(getToolPermissionContext(s), w, fromUrl, "deny", {
-      copySource: true,
-      action: "copy_from",
-    });
-    if (re !== null) return denyByArtifactRule(re, "nothing was copied", true);
-    let Z = S("ask");
-    if (Z === null && !readKeepsFlagOffAsk(s)) {
-      let $e = classifyArtifactConsent(classFactsFor("write", p, s));
-      if (!writeKeepsFlagOffAsk($e, s) && !T())
+    if (othersArtifactReadConsentSurface())
+      await probeArtifactHostEgress(sourceUrl, context.abortController.signal);
+    await Promise.all([
+      warmShareEntry(destUrl, context, "copy_from"),
+      warmShareEntry(sourceUrl, context, "copy_from"),
+    ]);
+    let orgDenyResult = orgDeny();
+    if (orgDenyResult !== null) return orgDenyResult;
+    let sourceCallDenyRule = artifactCallReadRule(
+      getToolPermissionContext(context),
+      sourceUrl,
+      fromUrl,
+      "deny",
+      {
+        copySource: true,
+        action: "copy_from",
+      },
+    );
+    if (sourceCallDenyRule !== null)
+      return denyByArtifactRule(sourceCallDenyRule, "nothing was copied", true);
+    let sourceAskRule = sourceRuleFor("ask");
+    if (sourceAskRule === null && !readKeepsFlagOffAsk(context)) {
+      let writeRuling = classifyArtifactConsent(classFactsFor("write", destUrl, context));
+      if (!writeKeepsFlagOffAsk(writeRuling, context) && !hasOtherComment())
         return decideByClasses(
           {
-            ...n,
-            ...P({
+            ...input,
+            ...pinBuilder({
               dst: false,
               src: false,
             }),
-            ...V,
+            ...baseTags,
           },
-          s,
+          context,
           [
             {
-              ruling: $e,
-              slug: p.slug,
-              display: artifactCardTitleFor(p, s),
+              ruling: writeRuling,
+              slug: destUrl.slug,
+              display: artifactCardTitleFor(destUrl, context),
               action: "write",
             },
             {
-              ruling: copySourceRulingFor(w, s),
-              slug: w.slug,
-              display: artifactCardTitleFor(w, s),
+              ruling: copySourceRulingFor(sourceUrl, context),
+              slug: sourceUrl.slug,
+              display: artifactCardTitleFor(sourceUrl, context),
               action: "copy_from",
-              userOnly: othersArtifactReadIsUserOnly(w),
+              userOnly: othersArtifactReadIsUserOnly(sourceUrl),
             },
           ],
         );
     }
-    let ue = M();
-    if (ue.dstConsented && ue.srcConsented && Z === null)
+    let consentState = readConsentState();
+    if (consentState.dstConsented && consentState.srcConsented && sourceAskRule === null)
       return {
         behavior: "allow",
         updatedInput: {
-          ...n,
-          ...L,
-          ...V,
+          ...input,
+          ...basePins,
+          ...baseTags,
         },
         decisionReason: {
           type: "other",
           reason: COPY_ALREADY_APPROVED_NOTE,
         },
       };
-    if (planConsentMustDeny(s) || (!ue.srcConsented && coworkConsentMustDeny(s)))
+    if (planConsentMustDeny(context) || (!consentState.srcConsented && coworkConsentMustDeny(context)))
       return {
         behavior: "deny",
         message:
@@ -333,81 +345,87 @@ var ARTIFACT_COPY_FROM_ACTION_HANDLER = {
           classifierApprovable: false,
         },
       };
-    let we =
-      !ue.srcConsented && Z === null ? othersContentFloorDeny(s, "Nothing was copied", ue.userOnly) : null;
-    if (we !== null) return we;
-    let share = getShareEntry(p.slug);
-    let ie = ids.length;
-    let _e = ($e) => {
-      let { title } = artifactCardTitleFor($e, s);
+    let othersFloorDeny =
+      !consentState.srcConsented && sourceAskRule === null
+        ? othersContentFloorDeny(context, "Nothing was copied", consentState.userOnly)
+        : null;
+    if (othersFloorDeny !== null) return othersFloorDeny;
+    let share = getShareEntry(destUrl.slug);
+    let assetCount = ids.length;
+    let labelFor = (url) => {
+      let { title } = artifactCardTitleFor(url, context);
       return title !== undefined && title !== "" ? `"${title}"` : "an untitled artifact";
     };
-    let Oe = `
+    let sourceBlock = `
 
-source: ${artifactViewerUrlFor(w)}
-into: ${artifactViewerUrlFor(p)}`;
-    let me = `${ie} ${plural(ie, "asset")} from ${_e(w)} into ${_e(p)}`;
-    let ge = ue.srcConsented ? "" : copyOwnershipNote("source", ue.srcEntry);
-    let Je = copyOwnershipNote("destination", share);
-    let He = ue.srcConsented || Z !== null;
-    let se = !ue.coversSession
+source: ${artifactViewerUrlFor(sourceUrl)}
+into: ${artifactViewerUrlFor(destUrl)}`;
+    let copyPhrase = `${assetCount} ${plural(assetCount, "asset")} from ${labelFor(sourceUrl)} into ${labelFor(destUrl)}`;
+    let sourceOwnershipNote = consentState.srcConsented
       ? ""
-      : ue.askedAgain
-        ? He
+      : copyOwnershipNote("source", consentState.srcEntry);
+    let destOwnershipNote = copyOwnershipNote("destination", share);
+    let hasSourceConsent = consentState.srcConsented || sourceAskRule !== null;
+    let coverageNote = !consentState.coversSession
+      ? ""
+      : consentState.askedAgain
+        ? hasSourceConsent
           ? " Approving covers later uploads and copies here until someone else comments on this artifact again."
           : " Approving covers later uploads and copies here until someone else comments on this artifact again, and reads of the source this session."
-        : He
+        : hasSourceConsent
           ? ASSET_UPLOAD_COVERS_SESSION_COPIES_NOTE
           : COPY_FROM_COVERS_SESSION_AND_SOURCE_NOTE;
-    let B = Z === null ? "" : askRuleCoverageNote(Z);
-    let U = ue.askedAgain && He ? "" : se;
-    let he = `${COPY_FROM_CARD_LEDE}${ue.inPlanMode ? planModeCardNote(false) : ""}${ge}${Je}${U}`;
+    let ruleNote = sourceAskRule === null ? "" : askRuleCoverageNote(sourceAskRule);
+    let coverageText = consentState.askedAgain && hasSourceConsent ? "" : coverageNote;
+    let cardReason = `${COPY_FROM_CARD_LEDE}${consentState.inPlanMode ? planModeCardNote(false) : ""}${sourceOwnershipNote}${destOwnershipNote}${coverageText}`;
     recordNamedOtherOrgs(
-      s,
-      !ue.srcConsented && otherOrgCopySource(ue.srcEntry) ? [w.slug] : [],
-      consentAskCanReachUser(s),
+      context,
+      !consentState.srcConsented && otherOrgCopySource(consentState.srcEntry) ? [sourceUrl.slug] : [],
+      consentAskCanReachUser(context),
     );
     return {
       behavior: "ask",
       message:
-        `Claude wants to copy ${me} on the server, so everyone who can open that artifact can load them${B}.` +
-        ge +
-        Je +
-        (ue.coversSession ? se : " Each such copy asks again.") +
-        (Z !== null && ue.coversSession ? " A copy from this source asks again." : "") +
-        Oe,
+        `Claude wants to copy ${copyPhrase} on the server, so everyone who can open that artifact can load them${ruleNote}.` +
+        sourceOwnershipNote +
+        destOwnershipNote +
+        (consentState.coversSession ? coverageNote : " Each such copy asks again.") +
+        (sourceAskRule !== null && consentState.coversSession ? " A copy from this source asks again." : "") +
+        sourceBlock,
       updatedInput: {
-        ...n,
-        ...P({
-          dst: !ue.dstConsented,
-          src: !ue.srcConsented && Z === null,
+        ...input,
+        ...pinBuilder({
+          dst: !consentState.dstConsented,
+          src: !consentState.srcConsented && sourceAskRule === null,
         }),
-        [CONSENT_ASK_TAG]: ue.coversSession && consentAskCanReachUser(s),
-        [PLAN_CONSENT_ASK_TAG]: ue.inPlanMode,
-        [USER_ONLY_CONSENT_ASK_TAG]: ue.userOnly,
+        [CONSENT_ASK_TAG]: consentState.coversSession && consentAskCanReachUser(context),
+        [PLAN_CONSENT_ASK_TAG]: consentState.inPlanMode,
+        [USER_ONLY_CONSENT_ASK_TAG]: consentState.userOnly,
       },
       suppressAlwaysAllowRule: true,
-      decisionReason: ue.inPlanMode
+      decisionReason: consentState.inPlanMode
         ? {
             type: "safetyCheck",
-            reason: he,
+            reason: cardReason,
             classifierApprovable: false,
           }
-        : Z !== null && !ue.userOnly
+        : sourceAskRule !== null && !consentState.userOnly
           ? {
               type: "rule",
-              rule: Z,
+              rule: sourceAskRule,
             }
-          : consentDecisionReason(ue.userOnly, he),
-      ...(Z !== null && {
-        matchedAskRule: Z,
+          : consentDecisionReason(consentState.userOnly, cardReason),
+      ...(sourceAskRule !== null && {
+        matchedAskRule: sourceAskRule,
       }),
       localDisplayOnly: true,
     };
   },
-  async validateInput(e, n) {
-    let s = ["action", "url", "from_url", "asset_ids"];
-    let filtered = Object.keys(n).filter((key) => !s.includes(key) && n[key] !== undefined);
+  async validateInput(tool, input) {
+    let allowedFields = ["action", "url", "from_url", "asset_ids"];
+    let filtered = Object.keys(input).filter(
+      (key) => !allowedFields.includes(key) && input[key] !== undefined,
+    );
     if (filtered.length > 0)
       return {
         result: false,
@@ -420,28 +438,28 @@ into: ${artifactViewerUrlFor(p)}`;
         message: 'action "copy_from" is not enabled for this account.',
         errorCode: 9,
       };
-    let { url, fromUrl, ids } = readCopyFromInput(n);
-    for (let [A, S] of [
+    let { url, fromUrl, ids } = readCopyFromInput(input);
+    for (let [fieldName, fieldValue] of [
       ["url", url],
       ["from_url", fromUrl],
     ]) {
-      if (S === undefined)
+      if (fieldValue === undefined)
         return {
           result: false,
-          message: `action "copy_from" requires \`${A}\` \u2014 the ${A === "url" ? "DESTINATION" : "SOURCE"} Artifact's claude.ai URL (find it with action: "list").`,
+          message: `action "copy_from" requires \`${fieldName}\` \u2014 the ${fieldName === "url" ? "DESTINATION" : "SOURCE"} Artifact's claude.ai URL (find it with action: "list").`,
           errorCode: 7,
         };
-      let sessionArtifactUrl = parseSessionArtifactUrl(S, {
-        field: A,
+      let sessionArtifactUrl = parseSessionArtifactUrl(fieldValue, {
+        field: fieldName,
       });
       if (!sessionArtifactUrl.ok)
         return {
           result: false,
-          message: `\`${A}\`: ${sessionArtifactUrl.message}`,
+          message: `\`${fieldName}\`: ${sessionArtifactUrl.message}`,
           errorCode: sessionArtifactUrl.errorCode,
         };
-      let T = urlSubPathError(S, "", A);
-      if (T !== undefined) return T;
+      let urlError = urlSubPathError(fieldValue, "", fieldName);
+      if (urlError !== undefined) return urlError;
     }
     if (parseArtifactUrl(url).slug === parseArtifactUrl(fromUrl).slug)
       return {
@@ -450,100 +468,104 @@ into: ${artifactViewerUrlFor(p)}`;
           "`from_url` names the destination itself \u2014 its assets are already there; nothing to copy.",
         errorCode: 4,
       };
-    let w = assetIdsInputError(ids);
-    if (w !== undefined)
+    let idsProblem = assetIdsInputError(ids);
+    if (idsProblem !== undefined)
       return {
         result: false,
-        message: w,
+        message: idsProblem,
         errorCode: 7,
       };
     return {
       result: true,
     };
   },
-  async call(e, n, s) {
+  async call(tool, input, context) {
     if (!artifactCopyFromFrozen())
       throw new ArtifactInputError(
         'action "copy_from" is not enabled for this account',
         "copy_from_disabled",
       );
-    let { url, fromUrl, ids } = readCopyFromInput(n);
-    let p = url !== undefined && parseSessionArtifactUrl(url).ok ? parseArtifactUrl(url) : null;
-    let w = fromUrl !== undefined && parseSessionArtifactUrl(fromUrl).ok ? parseArtifactUrl(fromUrl) : null;
-    if (p === null || w === null || p.slug === w.slug)
+    let { url, fromUrl, ids } = readCopyFromInput(input);
+    let destUrl = url !== undefined && parseSessionArtifactUrl(url).ok ? parseArtifactUrl(url) : null;
+    let sourceUrl =
+      fromUrl !== undefined && parseSessionArtifactUrl(fromUrl).ok ? parseArtifactUrl(fromUrl) : null;
+    if (destUrl === null || sourceUrl === null || destUrl.slug === sourceUrl.slug)
       throw new ArtifactInputError(
         'url and from_url must be two different artifact URLs for action "copy_from"',
         "asset_copy_bad_url",
       );
-    let A = assetIdsInputError(ids);
-    if (A !== undefined || ids === undefined)
-      throw new ArtifactInputError(A ?? "asset_ids missing", "asset_copy_bad_ids");
-    let S = Reflect.get(n, ASSET_TARGET_PIN_TAG);
+    let idsProblem = assetIdsInputError(ids);
+    if (idsProblem !== undefined || ids === undefined)
+      throw new ArtifactInputError(idsProblem ?? "asset_ids missing", "asset_copy_bad_ids");
+    let targetPin = Reflect.get(input, ASSET_TARGET_PIN_TAG);
     if (
-      carriesForeignPin(n, ASSET_TARGET_PIN_TAG) ||
-      (S !== undefined &&
-        (S?.action !== "copy_from" ||
-          S.slug !== p.slug ||
-          S.from !== w.slug ||
-          S.ids !== sortedJoinedKeys(ids)))
+      carriesForeignPin(input, ASSET_TARGET_PIN_TAG) ||
+      (targetPin !== undefined &&
+        (targetPin?.action !== "copy_from" ||
+          targetPin.slug !== destUrl.slug ||
+          targetPin.from !== sourceUrl.slug ||
+          targetPin.ids !== sortedJoinedKeys(ids)))
     )
       throw new ArtifactInputError(
         "url, from_url or asset_ids no longer name the copy that was approved \u2014 nothing was copied; retry so it is checked again",
         "asset_copy_target_changed",
       );
-    let deniedByRule = readDeniedByRule(s, w, fromUrl, "nothing was copied", {
+    let deniedByRule = readDeniedByRule(context, sourceUrl, fromUrl, "nothing was copied", {
       copySource: true,
       action: "copy_from",
     });
     if (deniedByRule !== undefined) throw deniedByRule;
-    if (otherOrgCopySource(getShareEntry(p.slug)))
+    if (otherOrgCopySource(getShareEntry(destUrl.slug)))
       throw new ArtifactInputError(`${COPY_INTO_OTHER_ORG_MESSAGE}.`, "asset_copy_outside_org_destination");
-    let shareEntry = getShareEntry(w.slug);
-    let P = wasOtherOrgNamed(s, w.slug);
-    forgetNamedOtherOrg(s);
-    let L = P && consentAskCanReachUser(s);
-    let V = () => crossOrgCopyOk(s, w.slug, L);
-    if (otherOrgCopySource(shareEntry) && !V()) throw outsideOrgConsentRefusal(s, "asset_copy");
-    let M = () =>
+    let shareEntry = getShareEntry(sourceUrl.slug);
+    let otherOrgWasNamed = wasOtherOrgNamed(context, sourceUrl.slug);
+    forgetNamedOtherOrg(context);
+    let canAsk = otherOrgWasNamed && consentAskCanReachUser(context);
+    let crossOrgOk = () => crossOrgCopyOk(context, sourceUrl.slug, canAsk);
+    if (otherOrgCopySource(shareEntry) && !crossOrgOk())
+      throw outsideOrgConsentRefusal(context, "asset_copy");
+    let doCopy = () =>
       copyArtifactAsset(
         {
-          slug: p.slug,
-          fromSlug: w.slug,
+          slug: destUrl.slug,
+          fromSlug: sourceUrl.slug,
           ids,
-          crossOrgOk: V(),
-          credentials: s.credentials,
+          crossOrgOk: crossOrgOk(),
+          credentials: context.credentials,
         },
-        s.abortController.signal,
+        context.abortController.signal,
       );
-    let x = await M();
+    let copyResult = await doCopy();
     if (
-      x.kind === "error" &&
-      x.reason === "not_found" &&
+      copyResult.kind === "error" &&
+      copyResult.reason === "not_found" &&
       isFramePublicReadEnabled() &&
       !otherOrgCopySource(shareEntry) &&
       (shareEntry === undefined || shareEntry.probeFailed === true)
     ) {
-      await reprobeShareEntry(w, s, "copy_from retry");
-      if (otherOrgCopySource(getShareEntry(w.slug))) {
-        if (!V()) throw outsideOrgConsentRefusal(s, "asset_copy");
-        x = await M();
+      await reprobeShareEntry(sourceUrl, context, "copy_from retry");
+      if (otherOrgCopySource(getShareEntry(sourceUrl.slug))) {
+        if (!crossOrgOk()) throw outsideOrgConsentRefusal(context, "asset_copy");
+        copyResult = await doCopy();
       }
     }
-    if (x.kind === "error") throw new ArtifactInputError(x.message, `asset_copy_${x.reason}`);
-    if (S?.dstAsked === true)
+    if (copyResult.kind === "error")
+      throw new ArtifactInputError(copyResult.message, `asset_copy_${copyResult.reason}`);
+    if (targetPin?.dstAsked === true)
       stampArtifactAssetUploadConsent(
-        n,
-        s,
-        p.slug,
-        typeof S.otherCommentSeq === "number" ? S.otherCommentSeq : undefined,
+        input,
+        context,
+        destUrl.slug,
+        typeof targetPin.otherCommentSeq === "number" ? targetPin.otherCommentSeq : undefined,
       );
-    if (S?.srcAsked === true) stampArtifactAssetReadConsent(n, s, w.slug, P);
+    if (targetPin?.srcAsked === true)
+      stampArtifactAssetReadConsent(input, context, sourceUrl.slug, otherOrgWasNamed);
     return {
       data: {
         asset_copy: {
-          url: artifactViewerUrlFor(p),
-          from_url: artifactViewerUrlFor(w),
-          assets: x.assets.map((asset) => ({
+          url: artifactViewerUrlFor(destUrl),
+          from_url: artifactViewerUrlFor(sourceUrl),
+          assets: copyResult.assets.map((asset) => ({
             from_id: asset.fromId,
             id: asset.id,
             url: asset.url,
@@ -557,70 +579,73 @@ into: ${artifactViewerUrlFor(p)}`;
       },
     };
   },
-  toAutoClassifierInput(e) {
-    let { url, fromUrl, ids } = readCopyFromInput(e);
-    let h = url !== undefined ? parseArtifactUrl(url) : null;
-    let y = fromUrl !== undefined ? parseArtifactUrl(fromUrl) : null;
-    let p = h !== null ? getShareEntry(h.slug) : undefined;
-    let w = y !== null ? getShareEntry(y.slug) : undefined;
-    let A = p?.probeFailed
+  toAutoClassifierInput(input) {
+    let { url, fromUrl, ids } = readCopyFromInput(input);
+    let destUrl = url !== undefined ? parseArtifactUrl(url) : null;
+    let sourceUrl = fromUrl !== undefined ? parseArtifactUrl(fromUrl) : null;
+    let destEntry = destUrl !== null ? getShareEntry(destUrl.slug) : undefined;
+    let sourceEntry = sourceUrl !== null ? getShareEntry(sourceUrl.slug) : undefined;
+    let sharedLiveMark = destEntry?.probeFailed
       ? " [shared-live: unknown]"
-      : p !== undefined && p.mode !== "owner"
-        ? ` [shared-live: ${p.mode}]`
+      : destEntry !== undefined && destEntry.mode !== "owner"
+        ? ` [shared-live: ${destEntry.mode}]`
         : "";
-    let S = ids?.length ?? 0;
-    return `copy ${S} runtime ${plural(S, "asset")} server side from artifact ${classifierArtifactTargetFor(fromUrl, "(unrecognized address)")}${ownershipClassifierTag(w, "assets")} into the asset store of artifact ${classifierArtifactTargetFor(url, "(unrecognized address)")}${ownershipClassifierMark(p)}${shareClassifierMarks(p)}${A} (no local file is read or written)`;
+    let assetCount = ids?.length ?? 0;
+    return `copy ${assetCount} runtime ${plural(assetCount, "asset")} server side from artifact ${classifierArtifactTargetFor(fromUrl, "(unrecognized address)")}${ownershipClassifierTag(sourceEntry, "assets")} into the asset store of artifact ${classifierArtifactTargetFor(url, "(unrecognized address)")}${ownershipClassifierMark(destEntry)}${shareClassifierMarks(destEntry)}${sharedLiveMark} (no local file is read or written)`;
   },
-  async description(e, n, s) {
-    let { url, fromUrl, ids } = readCopyFromInput(n);
-    let p = ids?.length ?? 0;
-    let w = url !== undefined ? parseArtifactUrl(url) : null;
-    let A = fromUrl !== undefined ? parseArtifactUrl(fromUrl) : null;
-    let S = w !== null ? getShareEntry(w.slug) : undefined;
-    let R = ownershipSuffix(A !== null ? getShareEntry(A.slug) : undefined, "assets");
-    let T = S?.probeFailed
+  async description(tool, input, options) {
+    let { url, fromUrl, ids } = readCopyFromInput(input);
+    let assetCount = ids?.length ?? 0;
+    let destUrl = url !== undefined ? parseArtifactUrl(url) : null;
+    let sourceUrl = fromUrl !== undefined ? parseArtifactUrl(fromUrl) : null;
+    let destEntry = destUrl !== null ? getShareEntry(destUrl.slug) : undefined;
+    let sourceOwnership = ownershipSuffix(
+      sourceUrl !== null ? getShareEntry(sourceUrl.slug) : undefined,
+      "assets",
+    );
+    let audienceText = destEntry?.probeFailed
       ? "share status unconfirmed"
-      : S !== undefined && S.mode !== "owner"
-        ? `shared \u2014 loadable by ${entryAudience(S)}`
+      : destEntry !== undefined && destEntry.mode !== "owner"
+        ? `shared \u2014 loadable by ${entryAudience(destEntry)}`
         : "loadable by anyone who can open the artifact";
-    let P = s?.toolPermissionContext.mode === "auto";
-    return `Copy ${p} ${plural(p, "asset")} from the published artifact ${canonicalArtifactTargetFor(fromUrl, "(unrecognized address)")}${R} into the asset store of ${canonicalArtifactTargetFor(url, "(unrecognized address)")}${ownershipTag(S)} on claude.ai, server side (${T}); ${P ? "each copy asks separately" : "approving covers further uploads and copies into this artifact for the rest of this session"}.`;
+    let asksEach = options?.toolPermissionContext.mode === "auto";
+    return `Copy ${assetCount} ${plural(assetCount, "asset")} from the published artifact ${canonicalArtifactTargetFor(fromUrl, "(unrecognized address)")}${sourceOwnership} into the asset store of ${canonicalArtifactTargetFor(url, "(unrecognized address)")}${ownershipTag(destEntry)} on claude.ai, server side (${audienceText}); ${asksEach ? "each copy asks separately" : "approving covers further uploads and copies into this artifact for the rest of this session"}.`;
   },
-  getToolUseSummary(e) {
-    let { url, fromUrl, ids } = readCopyFromInput(e);
-    let h = ids?.length ?? 0;
-    let y = url !== undefined ? parseArtifactUrl(url) : null;
-    let p = fromUrl !== undefined ? parseArtifactUrl(fromUrl) : null;
-    let w = y !== null ? getShareEntry(y.slug) : undefined;
-    let A = p !== null ? getShareEntry(p.slug) : undefined;
-    return `copy ${h} ${plural(h, "asset")} from ${canonicalArtifactTargetFor(fromUrl, "(unrecognized address)")}${ownershipSuffix(A, "assets")} into an artifact's asset store${shareAudienceMark(w)}${ownershipTag(w)}`;
+  getToolUseSummary(input) {
+    let { url, fromUrl, ids } = readCopyFromInput(input);
+    let assetCount = ids?.length ?? 0;
+    let destUrl = url !== undefined ? parseArtifactUrl(url) : null;
+    let sourceUrl = fromUrl !== undefined ? parseArtifactUrl(fromUrl) : null;
+    let destEntry = destUrl !== null ? getShareEntry(destUrl.slug) : undefined;
+    let sourceEntry = sourceUrl !== null ? getShareEntry(sourceUrl.slug) : undefined;
+    return `copy ${assetCount} ${plural(assetCount, "asset")} from ${canonicalArtifactTargetFor(fromUrl, "(unrecognized address)")}${ownershipSuffix(sourceEntry, "assets")} into an artifact's asset store${shareAudienceMark(destEntry)}${ownershipTag(destEntry)}`;
   },
 };
-var renderCopyFromResult = (e, toolUseId) => {
-  let assetCopy = "asset_copy" in e && isPlainObject(e.asset_copy) ? e.asset_copy : {};
-  let r = capResultRows(assetCopy.assets);
-  let mapped = r.rows.map(
-    (w) =>
-      `- ${peerOrFallback(w.url, ASSET_BLOB_URL_RE, "(unrecognized url)")}  ${peerOrFallback(w.content_type, CONTENT_TYPE_RE, "(unrecognized type)")}  ${numberText(w.size_bytes)} bytes  \u2190 source id ${peerOrFallback(w.from_id, ASSET_ID_RE, "unreadable")}${typeof w.sha256 === "string" ? `  sha256 ${peerOrFallback(w.sha256, SHA256_HEX_RE, "unreadable")}` : ""}`,
+var renderCopyFromResult = (result, toolUseId) => {
+  let assetCopy = "asset_copy" in result && isPlainObject(result.asset_copy) ? result.asset_copy : {};
+  let capped = capResultRows(assetCopy.assets);
+  let mapped = capped.rows.map(
+    (asset) =>
+      `- ${peerOrFallback(asset.url, ASSET_BLOB_URL_RE, "(unrecognized url)")}  ${peerOrFallback(asset.content_type, CONTENT_TYPE_RE, "(unrecognized type)")}  ${numberText(asset.size_bytes)} bytes  \u2190 source id ${peerOrFallback(asset.from_id, ASSET_ID_RE, "unreadable")}${typeof asset.sha256 === "string" ? `  sha256 ${peerOrFallback(asset.sha256, SHA256_HEX_RE, "unreadable")}` : ""}`,
   );
-  let y = r.rows.length;
-  let p = peerOrFallback(r.rows[0]?.url, ASSET_BLOB_URL_RE, "_blob/\u2026");
+  let rowCount = capped.rows.length;
+  let exampleUrl = peerOrFallback(capped.rows[0]?.url, ASSET_BLOB_URL_RE, "_blob/\u2026");
   return {
     tool_use_id: toolUseId,
     type: "tool_result",
     content:
-      `Copied ${y} ${plural(y, "asset")} from ${canonicalArtifactTargetFor(assetCopy.from_url, "(unrecognized source address)")} into ${canonicalArtifactTargetFor(assetCopy.url, "(unrecognized address)")} \u2014 each is now a separate asset of the destination (new id, same bytes), independent of the source from here on:
+      `Copied ${rowCount} ${plural(rowCount, "asset")} from ${canonicalArtifactTargetFor(assetCopy.from_url, "(unrecognized source address)")} into ${canonicalArtifactTargetFor(assetCopy.url, "(unrecognized address)")} \u2014 each is now a separate asset of the destination (new id, same bytes), independent of the source from here on:
 ` +
       (mapped.length > 0
         ? mapped.join(`
 `)
         : "- (this record lists no copies)") +
-      (r.unreadable + r.pastCap > 0
+      (capped.unreadable + capped.pastCap > 0
         ? `
-(${r.unreadable + r.pastCap} more ${plural(r.unreadable + r.pastCap, "row")} not shown \u2014 run ${pickByToolset('action "list_assets"', () => 'action "list" with `scope: "assets"`')} on the destination for the real listing)`
+(${capped.unreadable + capped.pastCap} more ${plural(capped.unreadable + capped.pastCap, "row")} not shown \u2014 run ${pickByToolset('action "list_assets"', () => 'action "list" with `scope: "assets"`')} on the destination for the real listing)`
         : "") +
       `
-Reference a copy from the destination's page by its url verbatim \u2014 e.g. <img src=${jsonStringify(p)}> \u2014 never by the source's id, which resolves only on the source artifact. Everyone who can open the destination can load these; they stay until deleted with ${pickByToolset('action "delete_asset"', () => 'action "delete" and an id as `path`')}.`,
+Reference a copy from the destination's page by its url verbatim \u2014 e.g. <img src=${jsonStringify(exampleUrl)}> \u2014 never by the source's id, which resolves only on the source artifact. Everyone who can open the destination can load these; they stay until deleted with ${pickByToolset('action "delete_asset"', () => 'action "delete" and an id as `path`')}.`,
   };
 };
 export { ARTIFACT_COPY_FROM_ACTION_HANDLER, renderCopyFromResult };

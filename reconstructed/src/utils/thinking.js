@@ -31,10 +31,10 @@ function showThinkingSummaries() {
 /**
  * 取思考显示方式的覆盖值：命令行参数优先，其次 showThinkingSummaries 设置。
  */
-function getThinkingDisplayOverride(e) {
-  if (e !== undefined)
+function getThinkingDisplayOverride(flag) {
+  if (flag !== undefined)
     return {
-      display: e,
+      display: flag,
       source: "flag",
     };
   let showThinkingSummaries = getInitialSettings_2().showThinkingSummaries;
@@ -75,16 +75,16 @@ function suppressesThinkingDisplay({ isNonInteractive, outputFormat, verbose }) 
 function resolveThinkingConfig(
   thinkingEnabled,
   thinkingConfig,
-  r,
+  options,
   thinkingDisplayOverride,
   thinkingDisplayFlag,
 ) {
-  if (!isThinkingEffectivelyEnabled(r, thinkingEnabled))
+  if (!isThinkingEffectivelyEnabled(options, thinkingEnabled))
     return {
       type: "disabled",
     };
-  let y;
-  if (thinkingConfig.type !== "disabled") y = thinkingConfig;
+  let thinkingEnabled_2;
+  if (thinkingConfig.type !== "disabled") thinkingEnabled_2 = thinkingConfig;
   else {
     let thinkingDisplay = resolveThinkingDisplay({
       explicitDisplay: thinkingDisplayFlag,
@@ -92,7 +92,7 @@ function resolveThinkingConfig(
       outputFormat: "text",
       verbose: false,
     });
-    y = thinkingDisplay
+    thinkingEnabled_2 = thinkingDisplay
       ? {
           type: "adaptive",
           display: thinkingDisplay,
@@ -100,11 +100,11 @@ function resolveThinkingConfig(
       : {
           type: "adaptive",
         };
-    if (thinkingDisplayFlag !== undefined) y.displayExplicit = true;
+    if (thinkingDisplayFlag !== undefined) thinkingEnabled_2.displayExplicit = true;
   }
-  if (thinkingDisplayOverride === undefined) return y;
+  if (thinkingDisplayOverride === undefined) return thinkingEnabled_2;
   return {
-    ...y,
+    ...thinkingEnabled_2,
     display: thinkingDisplayOverride,
     displayExplicit: true,
   };
@@ -199,8 +199,8 @@ function modelSupportsThinking(model) {
 /**
  * 模型是否拒绝 thinking.type=disabled：已知旧模型为 false，否则看 catalog 能力 rejects_disabled_thinking，再否则第一方类提供商为真。
  */
-function modelRejectsDisabledThinking(e) {
-  let canonicalName = getCanonicalName(e);
+function modelRejectsDisabledThinking(model) {
+  let canonicalName = getCanonicalName(model);
   if (
     canonicalName.includes("claude-3-") ||
     canonicalName === "claude-opus-4-0" ||
@@ -217,29 +217,29 @@ function modelRejectsDisabledThinking(e) {
     canonicalName === "claude-haiku-4-5"
   )
     return false;
-  let r = modelSupportsCapability(canonicalName, "rejects_disabled_thinking", e);
-  if (r !== undefined) return r;
-  return hasFirstPartyCapabilities(getProviderForModel(e));
+  let canonicalName_2 = modelSupportsCapability(canonicalName, "rejects_disabled_thinking", model);
+  if (canonicalName_2 !== undefined) return canonicalName_2;
+  return hasFirstPartyCapabilities(getProviderForModel(model));
 }
 //@ chunk-aepeg2w5.js:478942-479018 layout
 /**
  * 能力 rejects_disabled_thinking 明确为真且模型拒绝关闭思考。
  */
-function isThinkingAlwaysOn(e) {
+function isThinkingAlwaysOn(model) {
   return (
-    modelSupportsCapability(getCanonicalName(e), "rejects_disabled_thinking", e) === true &&
-    modelRejectsDisabledThinking(e)
+    modelSupportsCapability(getCanonicalName(model), "rejects_disabled_thinking", model) === true &&
+    modelRejectsDisabledThinking(model)
   );
 }
 //@ chunk-aepeg2w5.js:479018-479124 layout
 /**
  * "Thinking can't be turned off for <模型>"（总是开思考的模型）。
  */
-function getThinkingCannotBeDisabledMessage(e) {
-  if (!isThinkingAlwaysOn(e)) return;
+function getThinkingCannotBeDisabledMessage(model) {
+  if (!isThinkingAlwaysOn(model)) return;
   return `Thinking can't be turned off for ${sanitizeTitle(
     renderModelName(
-      getCanonicalName(e, {
+      getCanonicalName(model, {
         identity: true,
       }),
     ),
@@ -262,15 +262,15 @@ function upgradeDisabledThinkingForModel(thinkingConfig, thinkingAlwaysOn) {
 /**
  * 设置未显式关闭或模型思考常开。
  */
-function isThinkingEffectivelyEnabled(e, thinkingEnabled) {
-  return thinkingEnabled !== false || isThinkingAlwaysOn(e);
+function isThinkingEffectivelyEnabled(model, thinkingEnabled) {
+  return thinkingEnabled !== false || isThinkingAlwaysOn(model);
 }
 //@ chunk-aepeg2w5.js:479342-479400 layout
 /**
  * 辅助查询的思考设置：模型拒绝关闭思考时 [undefined, 2048]，否则 [false, 0]。
  */
-function getSideQueryThinkingSettings(e) {
-  if (modelRejectsDisabledThinking(e)) return [undefined, 2048];
+function getSideQueryThinkingSettings(model) {
+  if (modelRejectsDisabledThinking(model)) return [undefined, 2048];
   return [false, 0];
 }
 //@ chunk-aepeg2w5.js:479400-479437 layout
@@ -286,19 +286,19 @@ function getSideQueryThinkingSettingsOffline(model) {
  */
 function modelSupportsAdaptiveThinking({ runtimeOverride, resolvedModel, canonicalModel }) {
   if (runtimeOverride !== undefined) return runtimeOverride;
-  let s =
+  let opts =
     env.CLAUDE_CODE_DISABLE_ADAPTIVE_THINKING &&
     (canonicalModel.includes("opus-4-6") || canonicalModel.includes("sonnet-4-6"));
-  return modelSupportsAdaptiveThinkingByCatalog(resolvedModel) && !s ? "adaptive" : "enabled";
+  return modelSupportsAdaptiveThinkingByCatalog(resolvedModel) && !opts ? "adaptive" : "enabled";
 }
 //@ chunk-aepeg2w5.js:479664-480035 layout
 /**
  * 能力覆盖 → 旧模型黑名单 → catalog 能力 adaptive_thinking → mythos-5 → 第一方类提供商默认。
  */
-function modelSupportsAdaptiveThinkingByCatalog(e) {
-  let capabilityOverride = getCapabilityOverrideCached(e, "adaptive_thinking");
+function modelSupportsAdaptiveThinkingByCatalog(model) {
+  let capabilityOverride = getCapabilityOverrideCached(model, "adaptive_thinking");
   if (capabilityOverride !== undefined) return capabilityOverride;
-  let canonicalName = getCanonicalName(e);
+  let canonicalName = getCanonicalName(model);
   if (
     canonicalName.includes("claude-3-") ||
     canonicalName === "claude-opus-4-0" ||
@@ -309,10 +309,10 @@ function modelSupportsAdaptiveThinkingByCatalog(e) {
     canonicalName === "claude-haiku-4-5"
   )
     return false;
-  let s = modelSupportsCapability(canonicalName, "adaptive_thinking", e);
-  if (s !== undefined) return s;
+  let capabilityOverride_2 = modelSupportsCapability(canonicalName, "adaptive_thinking", model);
+  if (capabilityOverride_2 !== undefined) return capabilityOverride_2;
   if (canonicalName === "claude-mythos-5") return true;
-  return hasFirstPartyCapabilities(getProviderForModel(e));
+  return hasFirstPartyCapabilities(getProviderForModel(model));
 }
 //@ chunk-aepeg2w5.js:480035-480243 fingerprint = shouldEnableThinkingByDefault (0.592)
 /**

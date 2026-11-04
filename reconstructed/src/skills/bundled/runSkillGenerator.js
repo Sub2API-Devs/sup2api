@@ -23,26 +23,26 @@ function registerRunSkillGeneratorSkill() {
     userInvocable: true,
     disableModelInvocation: true,
     files: async () => {
-      let [{ TEMPLATE_MD: t }, { RUN_EXAMPLE_FILES: e }] = await Promise.all([
-        import("./chunk-z2aczm6x.js"),
-        import("./chunk-sbfx2p3f.js"),
+      let [{ TEMPLATE_MD: template }, { RUN_EXAMPLE_FILES: runExampleFiles }] = await Promise.all([
+        import("./skillTemplateResources.js"),
+        import("./run/RUN_EXAMPLE_FILES.lazy.js"),
       ]);
       return {
-        "template.md": t,
-        ...e,
+        "template.md": template,
+        ...runExampleFiles,
       };
     },
-    async getPromptForCommand(t) {
-      let { SKILL_MD } = await import("./chunk-z2aczm6x.js");
-      let r = [parseFrontmatter(SKILL_MD).content.trimStart()];
-      if (t)
-        r.push(`## User Request
+    async getPromptForCommand(args) {
+      let { SKILL_MD } = await import("./skillTemplateResources.js");
+      let sections = [parseFrontmatter(SKILL_MD).content.trimStart()];
+      if (args)
+        sections.push(`## User Request
 
-${t}`);
+${args}`);
       return [
         {
           type: "text",
-          text: r.join(`
+          text: sections.join(`
 
 `),
         },
@@ -50,3 +50,4 @@ ${t}`);
     },
   });
 }
+export { registerRunSkillGeneratorSkill };

@@ -46,7 +46,7 @@ import { getUserServerClassifierSwitch } from "./flags.js";
 import { withHideWhile } from "../../../components/dialogs/dialogRequests.js";
 import { AUTO_MODE_SERVER_FALLBACK } from "../../../components/nudges/nudgeIds.js";
 import { DoctorLazy } from "../../../cli/handlers/util.js";
-import { u, string, array, _enum } from "../../../../vendor/zod/v4/classic/schemas.js";
+import { objectSchema, stringSchema, array, _enum } from "../../../../vendor/zod/v4/classic/schemas.js";
 import { logEvent } from "../../../services/analytics/index.js";
 import { fromEnum } from "../../../services/analytics/safeMetadata.js";
 import {
@@ -58,12 +58,18 @@ import { isAutoClassifierActive } from "../autoModeState.js";
 import { isAutoAllowedInMode } from "../browserToolNames.js";
 import { isServerArbiterActive } from "./arbiter.js";
 import { getAutoModeConfigOrDefault } from "../permissionSetup.js";
+import { deferInit } from "../../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:1298626-1298721 placement
-var CLASSIFIER_CHECK_HOLD = "classifier-check-hold";
-var CLASSIFIER_CHECK_HOLD_MS = 1200000;
-var merged = Object.assign(() => {}, {
-  restartDeadline: () => {},
+var CLASSIFIER_CHECK_HOLD; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var CLASSIFIER_CHECK_HOLD_MS;
+var merged;
+deferInit("chunk-e6aww6q8.js:1298626", () => {
+  CLASSIFIER_CHECK_HOLD = "classifier-check-hold";
+  CLASSIFIER_CHECK_HOLD_MS = 1200000;
+  merged = Object.assign(() => {}, {
+    restartDeadline: () => {},
+  });
 });
 //@ chunk-e6aww6q8.js:1298721-1299213 placement
 /**
@@ -81,61 +87,61 @@ function startClassifierKeepalive() {
     logError(error);
     return merged;
   }
-  let e = true;
-  let n = false;
-  let r;
-  let s = () => {
-    if (!e) return;
-    e = false;
+  let active = true;
+  let rearmed = false;
+  let timer;
+  let stop = () => {
+    if (!active) return;
+    active = false;
     try {
-      clearTimeout(r);
+      clearTimeout(timer);
       endActivity("api_call", CLASSIFIER_CHECK_HOLD);
     } catch (error) {
       logError(error);
     }
   };
-  let h = () => {
-    r = setTimeout(onClassifierHoldExpired, CLASSIFIER_CHECK_HOLD_MS, s);
-    r.unref();
+  let armTimer = () => {
+    timer = setTimeout(onClassifierHoldExpired, CLASSIFIER_CHECK_HOLD_MS, stop);
+    timer.unref();
   };
-  let y = () => {
+  let startHold = () => {
     try {
       startSessionActivity("api_call", CLASSIFIER_CHECK_HOLD);
-      h();
+      armTimer();
     } catch (error) {
       logError(error);
-      s();
+      stop();
     }
   };
   let merged_2 = Object.assign(
     () => {
-      n = true;
-      s();
+      rearmed = true;
+      stop();
     },
     {
       restartDeadline: () => {
-        if (n) return;
-        if (!e) {
-          e = true;
-          y();
+        if (rearmed) return;
+        if (!active) {
+          active = true;
+          startHold();
           return;
         }
         try {
-          clearTimeout(r);
-          h();
+          clearTimeout(timer);
+          armTimer();
         } catch (error) {
           logError(error);
-          s();
+          stop();
         }
       },
     },
   );
-  y();
+  startHold();
   return merged_2;
 }
 //@ chunk-e6aww6q8.js:1299213-1299299 placement
-function onClassifierHoldExpired(e) {
-  e();
+function onClassifierHoldExpired(stop) {
+  stop();
   logForDiagnosticsNoPII("warn", "session_activity_classifier_hold_expired", {
     max_ms: CLASSIFIER_CHECK_HOLD_MS,
   });
@@ -157,10 +163,10 @@ class enqueuePermissionCheckStatus {
   hold() {
     this.holds++;
     if (this.holds === 1) this.arm();
-    let e = false;
+    let released = false;
     return () => {
-      if (e) return;
-      e = true;
+      if (released) return;
+      released = true;
       this.holds--;
       if (this.holds === 0) this.settle();
     };
@@ -190,7 +196,7 @@ class enqueuePermissionCheckStatus {
     this.announced = false;
     this.send("done");
   }
-  send(e) {
+  send(status) {
     try {
       enqueueTaskNotification_2({
         type: "system",
@@ -199,13 +205,13 @@ class enqueuePermissionCheckStatus {
         ...(this.agentId !== undefined && {
           agent_id: this.agentId,
         }),
-        status: e,
+        status,
       });
     } catch (error) {
       this.failed = true;
       logError(toError(error));
     }
-    if (e === "done") this.record();
+    if (status === "done") this.record();
   }
   record() {
     let failed = this.failed;
@@ -229,22 +235,22 @@ var GATEWAY_AUTO_MODE_DOCS_URL =
 /**
  * 生成自动模式切换到内置安全检查时的提示。
  */
-function buildClassifierFallbackNotice(e) {
-  if (e.gatewayHost !== undefined && e.desktopTurnedCheckOn)
+function buildClassifierFallbackNotice(notice) {
+  if (notice.gatewayHost !== undefined && notice.desktopTurnedCheckOn)
     return {
       title: "Auto mode switched to its built-in safety check for this session",
       paragraphs: [
-        `Auto mode is set to have actions checked through ${e.gatewayHost}, the server that connects you to Claude. In this session those checks aren't working.`,
+        `Auto mode is set to have actions checked through ${notice.gatewayHost}, the server that connects you to Claude. In this session those checks aren't working.`,
         "You can keep working. The built-in check reviews actions before they run. It sends extra requests to Claude, which are paid for like the rest of your work.",
         `This guide says how to find out why. If an administrator manages Claude for you, share it with them: ${GATEWAY_AUTO_MODE_DOCS_URL}`,
       ],
       helpUrl: GATEWAY_AUTO_MODE_DOCS_URL,
     };
-  if (e.gatewayHost !== undefined)
+  if (notice.gatewayHost !== undefined)
     return {
       title: "We're changing auto mode to no longer charge for classifier requests in Claude Code.",
       paragraphs: [
-        `However, this session isn't eligible because your requests go through ${e.gatewayHost}, which isn't compatible with this update.`,
+        `However, this session isn't eligible because your requests go through ${notice.gatewayHost}, which isn't compatible with this update.`,
         "Nothing breaks: auto mode keeps working, and its classifier requests are billed as before.",
         `To fix it and access the new version of auto mode, ask your gateway to implement: ${CLASSIFIER_BILLING_DOCS_URL}`,
       ],
@@ -278,8 +284,8 @@ function hasOpusAccess() {
   )
     return false;
   if (gatewayDisplayName() === undefined) return true;
-  let n = getGlobalConfig().autoModeClassifierBillingNoticeAcknowledgedAt;
-  return n === undefined || Date.now() - n >= BILLING_NOTICE_ACK_TTL_MS;
+  let acknowledgedAt = getGlobalConfig().autoModeClassifierBillingNoticeAcknowledgedAt;
+  return acknowledgedAt === undefined || Date.now() - acknowledgedAt >= BILLING_NOTICE_ACK_TTL_MS;
 }
 //@ chunk-e6aww6q8.js:1302190-1302349 placement
 var NO_CHECK_FOR_SESSION_TITLE =
@@ -290,54 +296,54 @@ var NO_CHECK_FOR_ACTION_TITLE = "Auto mode couldn't check this action, so it nee
  * 说明服务端分类器不可用的原因（未提供、未请求、需要实验 beta）。
  */
 function describeServerClassifierUnavailable({ why, asks, heldByDenyRules = false }) {
-  let s = why === "not_served" || why === "not_requested" ? gatewayDisplayName() : undefined;
-  let h = `If this keeps happening, contact support or your company's admin: ${SERVER_CLASSIFIER_DOCS_URL}`;
-  let y;
-  let S;
+  let gateway = why === "not_served" || why === "not_requested" ? gatewayDisplayName() : undefined;
+  let supportLine = `If this keeps happening, contact support or your company's admin: ${SERVER_CLASSIFIER_DOCS_URL}`;
+  let cause;
+  let nextStep;
   switch (why) {
     case "betas_off":
-      y =
+      cause =
         "Its safety check runs on the server and needs experimental betas, which are turned off here (CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS, or your organization's policy).";
-      S = `If a setting of yours or of this project turns them off, remove it and start a new session. If your organization's policy does, auto mode can't check actions here: ${SERVER_CLASSIFIER_DOCS_URL}`;
+      nextStep = `If a setting of yours or of this project turns them off, remove it and start a new session. If your organization's policy does, auto mode can't check actions here: ${SERVER_CLASSIFIER_DOCS_URL}`;
       break;
     case "switched_off":
-      y = "Its safety check runs on the server, and Anthropic has turned it off for now.";
-      S = "It comes back on its own.";
+      cause = "Its safety check runs on the server, and Anthropic has turned it off for now.";
+      nextStep = "It comes back on its own.";
       break;
     case "own_switch_off":
-      y =
+      cause =
         "Its safety check runs on the server, and CLAUDE_CODE_AUTO_MODE_SERVER turns that check off here. Claude Code no longer has a check of its own to use instead.";
-      S =
+      nextStep =
         "To use auto mode, set CLAUDE_CODE_AUTO_MODE_SERVER to 1 or remove it, in your shell or in the settings file that sets it, then start a new session. If your organization's settings set it, only your admin can change it.";
       break;
     case "feature_not_covered":
-      y = "Its safety check runs on the server, and the server isn't running it for this session.";
-      S = h;
+      cause = "Its safety check runs on the server, and the server isn't running it for this session.";
+      nextStep = supportLine;
       break;
     case "not_requested":
-      y = `Its safety check runs on the server, and Claude Code's requests in this conversation don't ask for it${s !== undefined ? `, which can happen after ${s} rejects one that does` : ""}.`;
-      S = `A new conversation may bring the check back. ${s !== undefined ? `If it doesn't, ask whoever runs ${s} to pass Claude Code's server-side safety check through: ${SERVER_CLASSIFIER_DOCS_URL}` : h}`;
+      cause = `Its safety check runs on the server, and Claude Code's requests in this conversation don't ask for it${gateway !== undefined ? `, which can happen after ${gateway} rejects one that does` : ""}.`;
+      nextStep = `A new conversation may bring the check back. ${gateway !== undefined ? `If it doesn't, ask whoever runs ${gateway} to pass Claude Code's server-side safety check through: ${SERVER_CLASSIFIER_DOCS_URL}` : supportLine}`;
       break;
     case "not_served":
-      y =
-        s !== undefined
-          ? `Its safety check runs on the server, and your requests go through ${s}, which doesn't pass it through.`
+      cause =
+        gateway !== undefined
+          ? `Its safety check runs on the server, and your requests go through ${gateway}, which doesn't pass it through.`
           : "Its safety check runs on the server, and the server isn't running it for this session.";
-      S =
-        s !== undefined
-          ? `To use auto mode, ask whoever runs ${s} to pass Claude Code's server-side safety check through: ${SERVER_CLASSIFIER_DOCS_URL}`
-          : h;
+      nextStep =
+        gateway !== undefined
+          ? `To use auto mode, ask whoever runs ${gateway} to pass Claude Code's server-side safety check through: ${SERVER_CLASSIFIER_DOCS_URL}`
+          : supportLine;
       break;
   }
   return [
     "Auto mode can't check actions in this session.",
-    y,
+    cause,
     asks
       ? "Actions that need the check now ask for your approval. To work without these prompts, switch permission mode with Shift+Tab."
       : heldByDenyRules
         ? "The settings here hold auto mode deny rules, which only the automatic check applies, so every action that needs the check is refused and you are not asked. To run these actions, use another permission mode."
         : "Nobody can be asked to approve actions in this session, so every action that needs the check is refused. To run these actions, use another permission mode.",
-    S,
+    nextStep,
   ].join(" ");
 }
 //@ chunk-e6aww6q8.js:1304878-1304974 placement
@@ -345,11 +351,11 @@ function describeServerClassifierUnavailable({ why, asks, heldByDenyRules = fals
  * takeNoServerCheckNotice：取一次性的无服务端检查说明。
  */
 function takeNoServerCheckNotice(asks, heldByDenyRules = false) {
-  let r = takeNoServerCheckAnnouncement();
-  return r === undefined
+  let why = takeNoServerCheckAnnouncement();
+  return why === undefined
     ? undefined
     : describeServerClassifierUnavailable({
-        why: r,
+        why,
         asks,
         heldByDenyRules,
       });
@@ -367,9 +373,9 @@ function getNoServerCheckStoppedNotice() {
 /**
  * takeServerFallbackAnnouncement：取一次性的回退公告。
  */
-function takeServerFallbackAnnouncement(e) {
+function takeServerFallbackAnnouncement(hasOpus) {
   return isThirdPartyServerClassifierRefused() &&
-    !e() &&
+    !hasOpus() &&
     hasOpusAccess() &&
     takeServerClassifierFallbackAnnouncement()
     ? fallbackNoticeText(getGatewayNoticeInfo())
@@ -397,12 +403,12 @@ function getNonAnthropicHost(url) {
   }
 }
 //@ chunk-e6aww6q8.js:1305626-1305769 placement
-function getProviderEndpointHost(apiProvider) {
-  let n = providerEndpointVariables(apiProvider)[0]?.name;
-  let r = n === undefined ? undefined : env[n] || undefined;
-  if (!r || isProviderServiceUrl(apiProvider, r)) return;
+function getProviderEndpointHost(provider) {
+  let envVarName = providerEndpointVariables(provider)[0]?.name;
+  let url = envVarName === undefined ? undefined : env[envVarName] || undefined;
+  if (!url || isProviderServiceUrl(provider, url)) return;
   try {
-    return new URL(r).host || undefined;
+    return new URL(url).host || undefined;
   } catch {
     return;
   }
@@ -422,21 +428,23 @@ var MAX_GATEWAY_NAME_LENGTH = 80;
  * truncateGatewayHost：截断网关主机名。
  */
 function truncateGatewayHost(gatewayHost) {
-  let n = stripNonPrintable(gatewayHost);
-  return n.length <= MAX_GATEWAY_NAME_LENGTH ? n : `${n.slice(0, MAX_GATEWAY_NAME_LENGTH - 1)}\u2026`;
+  let cleaned = stripNonPrintable(gatewayHost);
+  return cleaned.length <= MAX_GATEWAY_NAME_LENGTH
+    ? cleaned
+    : `${cleaned.slice(0, MAX_GATEWAY_NAME_LENGTH - 1)}\u2026`;
 }
 //@ chunk-e6aww6q8.js:1305917-1305987 placement
 function knownGatewayName() {
-  let e = isDiskless() ? undefined : getObservedGateway();
-  return e === undefined ? undefined : KNOWN_GATEWAY_NAMES[e];
+  let observed = isDiskless() ? undefined : getObservedGateway();
+  return observed === undefined ? undefined : KNOWN_GATEWAY_NAMES[observed];
 }
 //@ chunk-e6aww6q8.js:1305987-1306249 placement
 function getGatewayHost() {
   let apiProvider = getAPIProvider();
   switch (apiProvider) {
     case "firstParty": {
-      let n = configuredApiProxyHost();
-      return n === undefined ? undefined : getNonAnthropicHost(`https://${n}`);
+      let proxyHost = configuredApiProxyHost();
+      return proxyHost === undefined ? undefined : getNonAnthropicHost(`https://${proxyHost}`);
     }
     case "bedrock":
     case "mantle":
@@ -451,68 +459,68 @@ function getGatewayHost() {
 }
 //@ chunk-e6aww6q8.js:1306249-1306434 placement
 function getGatewayNoticeInfo() {
-  let e = gatewayDisplayName();
-  if (e === undefined) return {};
+  let name = gatewayDisplayName();
+  if (name === undefined) return {};
   return isHostEntrypoint() &&
     env.CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST &&
     configuredApiProxyHost() !== undefined &&
     getUserServerClassifierSwitch() === true
     ? {
-        gatewayHost: e,
+        gatewayHost: name,
         desktopTurnedCheckOn: true,
       }
     : {
-        gatewayHost: e,
+        gatewayHost: name,
       };
 }
 //@ chunk-e6aww6q8.js:1306434-1306523 placement
 /**
  * withGatewayHost：公告带上网关主机。
  */
-function withGatewayHost(e) {
+function withGatewayHost(info) {
   return {
-    ...(e.gatewayHost !== undefined && {
-      gatewayHost: e.gatewayHost,
+    ...(info.gatewayHost !== undefined && {
+      gatewayHost: info.gatewayHost,
     }),
-    ...buildClassifierFallbackNotice(e),
+    ...buildClassifierFallbackNotice(info),
   };
 }
 //@ chunk-e6aww6q8.js:1306523-1306621 placement
-function fallbackNoticeText(gatewayNoticeInfo) {
-  let { title, paragraphs } = buildClassifierFallbackNotice(gatewayNoticeInfo);
+function fallbackNoticeText(notice) {
+  let { title, paragraphs } = buildClassifierFallbackNotice(notice);
   return [title.endsWith(".") ? title : `${title}.`, ...paragraphs].join(" ");
 }
 //@ chunk-e6aww6q8.js:1306621-1306847 placement
-function resolveServerFallbackChoice(e) {
+function resolveServerFallbackChoice(askDialog) {
   let serverClassifierFallbackChoice = getServerClassifierFallbackChoice();
   if (serverClassifierFallbackChoice !== undefined) return serverClassifierFallbackChoice;
   if (!hasOpusAccess()) return Promise.resolve("continue");
-  let r = e().then((s) => {
-    if (s === "continue_unacknowledged") {
+  let choice = askDialog().then((answer) => {
+    if (answer === "continue_unacknowledged") {
       clearServerClassifierFallbackChoice();
       return "continue";
     }
-    if (s === "interrupt") clearServerClassifierFallbackChoice();
-    return s;
+    if (answer === "interrupt") clearServerClassifierFallbackChoice();
+    return answer;
   });
-  setServerClassifierFallbackChoice(r);
-  return r;
+  setServerClassifierFallbackChoice(choice);
+  return choice;
 }
 //@ chunk-e6aww6q8.js:1306847-1307113 placement
-function raceChoiceWithAbort(e, signal) {
+function raceChoiceWithAbort(choice, signal) {
   if (signal.aborted) return Promise.resolve("interrupt");
   return new Promise((resolve) => {
-    let s = () => resolve("interrupt");
-    signal.addEventListener("abort", s, {
+    let onAbort = () => resolve("interrupt");
+    signal.addEventListener("abort", onAbort, {
       once: true,
     });
-    e.then(
-      (h) => {
-        signal.removeEventListener("abort", s);
-        resolve(h);
+    choice.then(
+      (value) => {
+        signal.removeEventListener("abort", onAbort);
+        resolve(value);
       },
       () => {
-        signal.removeEventListener("abort", s);
+        signal.removeEventListener("abort", onAbort);
         resolve("interrupt");
       },
     );
@@ -522,18 +530,21 @@ function raceChoiceWithAbort(e, signal) {
 /**
  * 服务端分类器回退提示对话框的宿主请求规格：载荷含网关主机、标题、段落与帮助链接，结果为 continue/interrupt/cancelled。
  */
-var serverFallbackNoticeSpec = withHideWhile({
-  kind: AUTO_MODE_SERVER_FALLBACK,
-  payload: DoctorLazy(() =>
-    u({
-      gatewayHost: string().optional(),
-      title: string(),
-      paragraphs: array(string()),
-      helpUrl: string(),
-    }),
-  ),
-  result: DoctorLazy(() => _enum(["continue", "interrupt", "cancelled"])),
-  default: "cancelled",
+var serverFallbackNoticeSpec; // deferred: uses DoctorLazy (../../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:1307113", () => {
+  serverFallbackNoticeSpec = withHideWhile({
+    kind: AUTO_MODE_SERVER_FALLBACK,
+    payload: DoctorLazy(() =>
+      objectSchema({
+        gatewayHost: stringSchema().optional(),
+        title: stringSchema(),
+        paragraphs: array(stringSchema()),
+        helpUrl: stringSchema(),
+      }),
+    ),
+    result: DoctorLazy(() => _enum(["continue", "interrupt", "cancelled"])),
+    default: "cancelled",
+  });
 });
 //@ chunk-e6aww6q8.js:1307297-1307351 placement
 /**
@@ -548,57 +559,67 @@ var INTERRUPT = "interrupt";
 /**
  * 展示服务端分类器回退提示并记 tengu_auto_mode_server_fallback_notice_closed；继续且经网关时记下计费提示已确认时间；未作答且用户已继续时返回 continue_unacknowledged。
  */
-async function showServerFallbackNotice(requestDialog, gatewayNoticeInfo, r) {
-  let s;
-  let h = await requestDialog(serverFallbackNoticeSpec, withGatewayHost(gatewayNoticeInfo), {
-    signal: r.signal,
+async function showServerFallbackNotice(requestDialog, info, context) {
+  let unansweredReason;
+  let answer = await requestDialog(serverFallbackNoticeSpec, withGatewayHost(info), {
+    signal: context.signal,
     armInputGrace: true,
-    onSettledUnanswered: (y) => {
-      s = y;
+    onSettledUnanswered: (reason) => {
+      unansweredReason = reason;
     },
   });
   switch (
     (logEvent("tengu_auto_mode_server_fallback_notice_closed", {
-      choice: fromEnum(h),
-      ...(h === "cancelled" && {
-        unanswered: fromEnum(s ?? "closed"),
+      choice: fromEnum(answer),
+      ...(answer === "cancelled" && {
+        unanswered: fromEnum(unansweredReason ?? "closed"),
       }),
     }),
-    h)
+    answer)
   ) {
     case "continue":
-      if (gatewayNoticeInfo.gatewayHost !== undefined)
+      if (info.gatewayHost !== undefined)
         saveGlobalConfig(
-          (y) => ({
-            ...y,
+          (config) => ({
+            ...config,
             autoModeClassifierBillingNoticeAcknowledgedAt: Date.now(),
           }),
-          r.storageV5,
+          context.storageV5,
         );
       return "continue";
     case "interrupt":
       return "interrupt";
     case "cancelled":
-      return s === "moved_on" ? "continue_unacknowledged" : INTERRUPT;
+      return unansweredReason === "moved_on" ? "continue_unacknowledged" : INTERRUPT;
   }
 }
 //@ chunk-e6aww6q8.js:1307862-1307962 placement
-function isChromeClassifierFloorTool(e, n) {
-  let toolNameForPermissionCheck = getToolNameForPermissionCheck_4(e);
+function isChromeClassifierFloorTool(tool, toolPermissionContext) {
+  let toolNameForPermissionCheck = getToolNameForPermissionCheck_4(tool);
   if (!isChromeToolName(toolNameForPermissionCheck)) return false;
-  return isBrowserPreviewToolName(toolNameForPermissionCheck) || n.chromeClassifierFloorEnabled === true;
+  return (
+    isBrowserPreviewToolName(toolNameForPermissionCheck) ||
+    toolPermissionContext.chromeClassifierFloorEnabled === true
+  );
 }
 //@ chunk-e6aww6q8.js:1307962-1308025 placement
 /**
  * isChromeClassifierFloorCall：浏览器工具且分类器可跑。
  */
-function isChromeClassifierFloorCall(e, n) {
-  return isChromeClassifierFloorTool(e, n) && n.canAutoClassifierRun === true;
+function isChromeClassifierFloorCall(tool, toolPermissionContext) {
+  return (
+    isChromeClassifierFloorTool(tool, toolPermissionContext) &&
+    toolPermissionContext.canAutoClassifierRun === true
+  );
 }
 //@ chunk-e6aww6q8.js:1308025-1308245 placement
-var UNREVIEWED_ACTION_NOTICE =
-  "Claude Code's automatic safety check couldn't review this action, so the action hasn't run. Allow it only if you expected Claude to do this.";
-var NON_AUTO_MODES = new Set(["default", "acceptEdits", "dontAsk", "bypassPermissions"]);
+var UNREVIEWED_ACTION_NOTICE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var NON_AUTO_MODES;
+deferInit("chunk-e6aww6q8.js:1308025", () => {
+  UNREVIEWED_ACTION_NOTICE =
+    "Claude Code's automatic safety check couldn't review this action, so the action hasn't run. Allow it only if you expected Claude to do this.";
+  NON_AUTO_MODES = new Set(["default", "acceptEdits", "dontAsk", "bypassPermissions"]);
+});
 //@ chunk-e6aww6q8.js:1308245-1308279 placement
 /**
  * isNonAutoMode：是否非 auto 模式。

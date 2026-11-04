@@ -5,10 +5,10 @@
  * pieces: chunk-egr0twnb.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:130357-132930 cjs-fingerprint
-var require_erlang = x(function (cjsExports, cjsModule) {
+var require_erlang = __commonJS(function (cjsExports, cjsModule) {
   function erlang(hljs) {
     let FUNCTION_NAME_RE = "([a-z'][a-zA-Z0-9_']*:[a-z'][a-zA-Z0-9_']*|[a-z'][a-zA-Z0-9_']*)";
     let ERLANG_RESERVED = {

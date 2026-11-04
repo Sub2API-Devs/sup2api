@@ -7,7 +7,7 @@
  */
 import { APIResource } from "../../core/resource.mjs";
 import { buildHeaders } from "../../internal/headers.mjs";
-import { I } from "../../internal/utils/path.mjs";
+import { parseUrl_2 } from "../../internal/utils/path.mjs";
 import { TokenPage } from "../../core/pagination.mjs";
 
 //@ chunk-hwmsct5x.js:45994-48117 esm-fingerprint
@@ -32,7 +32,7 @@ class Deployments extends APIResource {
   }
   retrieve(deploymentID, params = {}, options) {
     let { betas, workspace_id } = params ?? {};
-    return this._client.get(I`/v1/deployments/${deploymentID}?beta=true`, {
+    return this._client.get(parseUrl_2`/v1/deployments/${deploymentID}?beta=true`, {
       ...options,
       headers: buildHeaders([
         {
@@ -49,7 +49,7 @@ class Deployments extends APIResource {
   }
   update(deploymentID, params, options) {
     let { betas, workspace_id, ...body } = params;
-    return this._client.post(I`/v1/deployments/${deploymentID}?beta=true`, {
+    return this._client.post(parseUrl_2`/v1/deployments/${deploymentID}?beta=true`, {
       body,
       ...options,
       headers: buildHeaders([
@@ -85,7 +85,7 @@ class Deployments extends APIResource {
   }
   archive(deploymentID, params = {}, options) {
     let { betas, workspace_id } = params ?? {};
-    return this._client.post(I`/v1/deployments/${deploymentID}/archive?beta=true`, {
+    return this._client.post(parseUrl_2`/v1/deployments/${deploymentID}/archive?beta=true`, {
       ...options,
       headers: buildHeaders([
         {
@@ -102,7 +102,7 @@ class Deployments extends APIResource {
   }
   pause(deploymentID, params = {}, options) {
     let { betas, workspace_id } = params ?? {};
-    return this._client.post(I`/v1/deployments/${deploymentID}/pause?beta=true`, {
+    return this._client.post(parseUrl_2`/v1/deployments/${deploymentID}/pause?beta=true`, {
       ...options,
       headers: buildHeaders([
         {
@@ -119,7 +119,7 @@ class Deployments extends APIResource {
   }
   run(deploymentID, params = {}, options) {
     let { betas, workspace_id } = params ?? {};
-    return this._client.post(I`/v1/deployments/${deploymentID}/run?beta=true`, {
+    return this._client.post(parseUrl_2`/v1/deployments/${deploymentID}/run?beta=true`, {
       ...options,
       headers: buildHeaders([
         {
@@ -136,7 +136,7 @@ class Deployments extends APIResource {
   }
   unpause(deploymentID, params = {}, options) {
     let { betas, workspace_id } = params ?? {};
-    return this._client.post(I`/v1/deployments/${deploymentID}/unpause?beta=true`, {
+    return this._client.post(parseUrl_2`/v1/deployments/${deploymentID}/unpause?beta=true`, {
       ...options,
       headers: buildHeaders([
         {

@@ -9,7 +9,16 @@
  * attribution: placement 22
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, literal, string, array, _enum, E, unknown, M } from "../../../vendor/zod/v4/classic/schemas.js";
+import {
+  objectSchema,
+  literal,
+  stringSchema,
+  array,
+  _enum,
+  numberSchema,
+  unknown,
+  booleanSchema,
+} from "../../../vendor/zod/v4/classic/schemas.js";
 import { HostScoped } from "../../utils/hostScoped.js";
 import { getRootSession } from "../../bootstrap/state.js";
 import { logFeatureSad, logFeatureOk } from "../analytics/featureTelemetry.js";
@@ -21,55 +30,65 @@ import {
   redactFragmentForLog,
   isExpectedSendError,
 } from "../../utils/udsMessaging/peerGuard.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-sqqsb7w7.js:534-1261 placement
 /**
  * 评论自动回复让渡协议：4 s 超时、最多 16 个 slug、表上限 64，以及 yield/unyield 消息 schema 与 unref 定时器。
  */
-var REPLY_YIELD_TIMEOUT_MS = 4000;
-var MAX_YIELD_SLUGS = 16;
-var MAX_TRACKED_TABLE = 64;
-var yieldRequestSchema = DoctorLazy(() =>
-  u({
-    action: literal("yield_artifact_replies"),
-    from: string().max(512),
-    msg_id: string().min(1).max(128),
-    session_id: string().max(512),
-    slugs: array(string().max(128)).max(MAX_YIELD_SLUGS),
-    reason: _enum(["resume", "claim"]).catch("claim"),
-    sent_at: E().finite(),
-    claimed_at: E().finite().optional(),
-    requester: u({
-      cwd: unknown().optional(),
-      tmux: unknown().optional(),
-    }).optional(),
-  }),
-);
-var yieldedResponseSchema = DoctorLazy(() =>
-  u({
-    action: literal("artifact_replies_yielded"),
-    orig_msg_id: string().max(128),
-    yielded: unknown().optional(),
-    not_held: unknown().optional(),
-    refused: unknown().optional(),
-  }),
-);
-var unyieldRequestSchema = DoctorLazy(() =>
-  u({
-    action: literal("unyield_artifact_replies"),
-    orig_msg_id: string().max(128),
-    slugs: array(string().max(128)).max(MAX_YIELD_SLUGS),
-    stopped: M().optional(),
-  }),
-);
-var unrefTimers = {
-  setTimeout: (e, i) => {
-    let timer = setTimeout(e, i);
-    timer.unref?.();
-    return timer;
-  },
-  clearTimeout: (e) => clearTimeout(e),
-};
+var REPLY_YIELD_TIMEOUT_MS; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var MAX_YIELD_SLUGS;
+var MAX_TRACKED_TABLE;
+var yieldRequestSchema;
+var yieldedResponseSchema;
+var unyieldRequestSchema;
+var unrefTimers;
+deferInit("chunk-sqqsb7w7.js:534", () => {
+  REPLY_YIELD_TIMEOUT_MS = 4000;
+  MAX_YIELD_SLUGS = 16;
+  MAX_TRACKED_TABLE = 64;
+  yieldRequestSchema = DoctorLazy(() =>
+    objectSchema({
+      action: literal("yield_artifact_replies"),
+      from: stringSchema().max(512),
+      msg_id: stringSchema().min(1).max(128),
+      session_id: stringSchema().max(512),
+      slugs: array(stringSchema().max(128)).max(MAX_YIELD_SLUGS),
+      reason: _enum(["resume", "claim"]).catch("claim"),
+      sent_at: numberSchema().finite(),
+      claimed_at: numberSchema().finite().optional(),
+      requester: objectSchema({
+        cwd: unknown().optional(),
+        tmux: unknown().optional(),
+      }).optional(),
+    }),
+  );
+  yieldedResponseSchema = DoctorLazy(() =>
+    objectSchema({
+      action: literal("artifact_replies_yielded"),
+      orig_msg_id: stringSchema().max(128),
+      yielded: unknown().optional(),
+      not_held: unknown().optional(),
+      refused: unknown().optional(),
+    }),
+  );
+  unyieldRequestSchema = DoctorLazy(() =>
+    objectSchema({
+      action: literal("unyield_artifact_replies"),
+      orig_msg_id: stringSchema().max(128),
+      slugs: array(stringSchema().max(128)).max(MAX_YIELD_SLUGS),
+      stopped: booleanSchema().optional(),
+    }),
+  );
+  unrefTimers = {
+    setTimeout: (fn, ms) => {
+      let timer = setTimeout(fn, ms);
+      timer.unref?.();
+      return timer;
+    },
+    clearTimeout: (handle) => clearTimeout(handle),
+  };
+});
 //@ chunk-sqqsb7w7.js:1261-1619 placement
 class ReplyYieldTable {
   outstanding = new Map();
@@ -80,7 +99,7 @@ class ReplyYieldTable {
   ownAddress = null;
   delivered = new Map();
   reset() {
-    for (let e of this.outstanding.values()) e.timers.clearTimeout(e.timer);
+    for (let entry of this.outstanding.values()) entry.timers.clearTimeout(entry.timer);
     this.outstanding.clear();
     this.pendingClaims.clear();
     this.holder = null;
@@ -91,55 +110,58 @@ class ReplyYieldTable {
   }
 }
 //@ chunk-sqqsb7w7.js:1619-1642 placement
-var replyYieldSlot = new HostScoped(() => new ReplyYieldTable());
+var replyYieldSlot; // deferred: uses ReplyYieldTable of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-sqqsb7w7.js:1619", () => {
+  replyYieldSlot = new HostScoped(() => new ReplyYieldTable());
+});
 //@ chunk-sqqsb7w7.js:1642-1677 placement
 function replyYieldTable() {
   return replyYieldSlot.of(getRootSession().host);
 }
 //@ chunk-sqqsb7w7.js:1677-1794 placement
-function evictOverCap(e, i) {
-  while (e.size > MAX_TRACKED_TABLE) {
-    let n = e.keys().next().value;
-    if (n === undefined) break;
-    let r = e.get(n);
-    e.delete(n);
-    i?.(r, n);
+function evictOverCap(map, cap) {
+  while (map.size > MAX_TRACKED_TABLE) {
+    let oldest = map.keys().next().value;
+    if (oldest === undefined) break;
+    let entry = map.get(oldest);
+    map.delete(oldest);
+    cap?.(entry, oldest);
   }
 }
 //@ chunk-sqqsb7w7.js:1794-2376 placement
-function waitForYieldAnswer(msgId, i, n) {
-  let timers = n.timers ?? unrefTimers;
-  let s = replyYieldTable();
+function waitForYieldAnswer(msgId, msg, slugs) {
+  let timers = slugs.timers ?? unrefTimers;
+  let table = replyYieldTable();
   return new Promise((resolve) => {
-    let a = {
-      asked: new Set(i),
-      expectPid: n.expectPid,
-      sentAt: n.sentAt,
+    let entry = {
+      asked: new Set(msg),
+      expectPid: slugs.expectPid,
+      sentAt: slugs.sentAt,
       lost: new Map(),
       resolve,
-      onLate: n.onLate,
+      onLate: slugs.onLate,
       timer: undefined,
       timers,
     };
-    a.timer = timers.setTimeout(() => {
-      if (s.outstanding.get(msgId) !== a || a.resolve === null) return;
-      a.resolve = null;
+    entry.timer = timers.setTimeout(() => {
+      if (table.outstanding.get(msgId) !== entry || entry.resolve === null) return;
+      entry.resolve = null;
       resolve({
         kind: "timeout",
-        lost: [...a.lost.keys()],
-        lostTo: [...a.lost],
+        lost: [...entry.lost.keys()],
+        lostTo: [...entry.lost],
       });
-      if (a.onLate === undefined) s.outstanding.delete(msgId);
-    }, n.timeoutMs ?? REPLY_YIELD_TIMEOUT_MS);
-    s.outstanding.set(msgId, a);
-    evictOverCap(s.outstanding, (d) => {
-      d.timers.clearTimeout(d.timer);
-      d.resolve?.({
+      if (entry.onLate === undefined) table.outstanding.delete(msgId);
+    }, slugs.timeoutMs ?? REPLY_YIELD_TIMEOUT_MS);
+    table.outstanding.set(msgId, entry);
+    evictOverCap(table.outstanding, (entry) => {
+      entry.timers.clearTimeout(entry.timer);
+      entry.resolve?.({
         kind: "timeout",
-        lost: [...d.lost.keys()],
-        lostTo: [...d.lost],
+        lost: [...entry.lost.keys()],
+        lostTo: [...entry.lost],
       });
-      d.resolve = null;
+      entry.resolve = null;
     });
   });
 }
@@ -147,30 +169,30 @@ function waitForYieldAnswer(msgId, i, n) {
 /**
  * 开始一次回复让渡认领：生成唯一 id，记录涉及的 slug 与发送时间，挂进待处理认领表，返回带 end() 的认领对象。
  */
-function startYieldClaim(e, i) {
-  let n = `claim-${i}-${Math.random().toString(36).slice(2)}`;
-  let r = replyYieldTable();
-  let s = {
-    id: n,
-    slugs: new Set(e),
-    sentAt: i,
+function startYieldClaim(slugs, now) {
+  let claimId = `claim-${now}-${Math.random().toString(36).slice(2)}`;
+  let table = replyYieldTable();
+  let claim = {
+    id: claimId,
+    slugs: new Set(slugs),
+    sentAt: now,
     lost: new Map(),
-    end: () => void r.pendingClaims.delete(n),
+    end: () => void table.pendingClaims.delete(claimId),
   };
-  r.pendingClaims.set(n, s);
-  return s;
+  table.pendingClaims.set(claimId, claim);
+  return claim;
 }
 //@ chunk-sqqsb7w7.js:2579-2725 placement
 /**
  * 取出并清除某个待回复记录的丢失列表（同时取消其定时器）。
  */
 function takeOutstandingLost(msgId) {
-  let i = replyYieldTable();
-  let n = i.outstanding.get(msgId);
-  if (n === undefined) return [];
-  n.timers.clearTimeout(n.timer);
-  i.outstanding.delete(msgId);
-  return [...n.lost];
+  let table = replyYieldTable();
+  let entry = table.outstanding.get(msgId);
+  if (entry === undefined) return [];
+  entry.timers.clearTimeout(entry.timer);
+  table.outstanding.delete(msgId);
+  return [...entry.lost];
 }
 //@ chunk-sqqsb7w7.js:2725-2792 placement
 /**
@@ -183,43 +205,44 @@ function hasOutstanding(origMsgId) {
 /**
  * 处理让出请求（pid 不符、超时、表满）。
  */
-function handleYieldRequest(e, i) {
-  let n = replyYieldTable();
-  let r = n.outstanding.get(e.orig_msg_id);
-  if (r === undefined) return false;
-  if (r.expectPid !== undefined && i !== undefined && i !== r.expectPid) {
+function handleYieldRequest(request, senderPid) {
+  let table = replyYieldTable();
+  let pending = table.outstanding.get(request.orig_msg_id);
+  if (pending === undefined) return false;
+  if (pending.expectPid !== undefined && senderPid !== undefined && senderPid !== pending.expectPid) {
     logFeatureSad("artifact_live_subscribe", "yield_answer_pid_mismatch");
     return false;
   }
-  r.timers.clearTimeout(r.timer);
-  let s = (a) => (Array.isArray(a) ? a.filter((d) => typeof d === "string" && r.asked.has(d)) : []);
-  let c =
-    e.refused === true
+  pending.timers.clearTimeout(pending.timer);
+  let filterAsked = (list) =>
+    Array.isArray(list) ? list.filter((slug) => typeof slug === "string" && pending.asked.has(slug)) : [];
+  let answer =
+    request.refused === true
       ? {
           kind: "refused",
         }
       : {
           kind: "yielded",
-          yielded: s(e.yielded),
-          notHeld: s(e.not_held),
+          yielded: filterAsked(request.yielded),
+          notHeld: filterAsked(request.not_held),
         };
-  if (r.resolve !== null) {
-    n.outstanding.delete(e.orig_msg_id);
-    r.resolve({
-      ...c,
-      lost: [...r.lost.keys()],
-      lostTo: [...r.lost],
+  if (pending.resolve !== null) {
+    table.outstanding.delete(request.orig_msg_id);
+    pending.resolve({
+      ...answer,
+      lost: [...pending.lost.keys()],
+      lostTo: [...pending.lost],
     });
   } else {
-    n.outstanding.delete(e.orig_msg_id);
+    table.outstanding.delete(request.orig_msg_id);
     logFeatureOk("artifact_live_subscribe", {
       yield_answer_late: true,
     });
     try {
-      r.onLate?.({
-        ...c,
-        lost: [...r.lost.keys()],
-        lostTo: [...r.lost],
+      pending.onLate?.({
+        ...answer,
+        lost: [...pending.lost.keys()],
+        lostTo: [...pending.lost],
       });
     } catch (error) {
       logError(error);
@@ -232,96 +255,99 @@ function handleYieldRequest(e, i) {
  * 导出函数 `setYieldHolder`：参数 e, i = null。
  */
 function setYieldHolder(holder, reverter = null) {
-  let n = replyYieldTable();
-  n.holder = holder;
-  n.reverter = reverter;
+  let table = replyYieldTable();
+  table.holder = holder;
+  table.reverter = reverter;
 }
 //@ chunk-sqqsb7w7.js:3562-3983 placement
 /**
  * 记录把某些 slug 让渡给某接收方（合并 slug、记接收方 pid 与进程启动标识）；超出上限时优先淘汰同进程的其他记录，再淘汰最早的，并对被淘汰的调用回滚函数。
  */
-function recordDelivered(e, msgId, yielded, r) {
-  let s = e.delivered.get(msgId);
-  e.delivered.delete(msgId);
-  let pid = r?.pid ?? s?.pid;
-  e.delivered.set(msgId, {
-    slugs: new Set([...(s?.slugs ?? []), ...yielded]),
+function recordDelivered(table, msgId, yielded, info) {
+  let previous = table.delivered.get(msgId);
+  table.delivered.delete(msgId);
+  let pid = info?.pid ?? previous?.pid;
+  table.delivered.set(msgId, {
+    slugs: new Set([...(previous?.slugs ?? []), ...yielded]),
     pid,
-    procStart: r?.procStart ?? s?.procStart,
+    procStart: info?.procStart ?? previous?.procStart,
   });
-  let a = (d, _) => {
+  let revertEntry = (entry, otherMsgId) => {
     try {
-      e.reverter?.(_, [...d.slugs]);
+      table.reverter?.(otherMsgId, [...entry.slugs]);
     } catch (error) {
       logError(error);
     }
   };
-  while (e.delivered.size > MAX_TRACKED_TABLE) {
-    let found = [...e.delivered].find(([_, m]) => _ !== msgId && pid !== undefined && m.pid === pid);
+  while (table.delivered.size > MAX_TRACKED_TABLE) {
+    let found = [...table.delivered].find(
+      ([otherMsgId, record]) => otherMsgId !== msgId && pid !== undefined && record.pid === pid,
+    );
     if (found === undefined) break;
-    e.delivered.delete(found[0]);
-    a(found[1], found[0]);
+    table.delivered.delete(found[0]);
+    revertEntry(found[1], found[0]);
   }
-  evictOverCap(e.delivered, a);
+  evictOverCap(table.delivered, revertEntry);
 }
 //@ chunk-sqqsb7w7.js:3983-4118 placement
-function isDeliveredFull(e, pid) {
-  if (e.delivered.size < MAX_TRACKED_TABLE) return false;
+function isDeliveredFull(entry, pid) {
+  if (entry.delivered.size < MAX_TRACKED_TABLE) return false;
   if (pid === undefined) return true;
-  for (let n of e.delivered.values()) if (n.pid === pid) return false;
+  for (let delivered of entry.delivered.values()) if (delivered.pid === pid) return false;
   return true;
 }
 //@ chunk-sqqsb7w7.js:4118-4150 placement
 /**
  * 导出函数 `revertGoneTakersNow`：参数 e，返回 revertGoneTakers(y(), e)。
  */
-function revertGoneTakersNow(e) {
-  return revertGoneTakers(replyYieldTable(), e);
+function revertGoneTakersNow(entry) {
+  return revertGoneTakers(replyYieldTable(), entry);
 }
 //@ chunk-sqqsb7w7.js:4150-4282 placement
-function revertGoneTakers(e, i) {
-  let n = [];
-  for (let [r, s] of [...e.delivered])
-    if (s.pid !== undefined && isProcessProvablyGone(s.pid))
-      n.push(...revertDelivered(e, r, [...s.slugs], i));
-  revertReusedPids(e);
-  return n;
+function revertGoneTakers(entry, pid) {
+  let out = [];
+  for (let [slug, sent] of [...entry.delivered])
+    if (sent.pid !== undefined && isProcessProvablyGone(sent.pid))
+      out.push(...revertDelivered(entry, slug, [...sent.slugs], pid));
+  revertReusedPids(entry);
+  return out;
 }
 //@ chunk-sqqsb7w7.js:4282-4400 placement
 /**
  * 从所有已投递记录中移除某 slug，记录变空时一并删除。
  */
 function forgetDeliveredSlug(slug) {
-  let i = replyYieldTable();
-  for (let [n, r] of [...i.delivered]) if (r.slugs.delete(slug) && r.slugs.size === 0) i.delivered.delete(n);
+  let table = replyYieldTable();
+  for (let [pid, entry] of [...table.delivered])
+    if (entry.slugs.delete(slug) && entry.slugs.size === 0) table.delivered.delete(pid);
 }
 //@ chunk-sqqsb7w7.js:4400-4668 placement
-async function revertReusedPids(e) {
-  for (let [i, n] of [...e.delivered]) {
-    if (n.pid === undefined || n.procStart === undefined) continue;
-    let r;
+async function revertReusedPids(entry) {
+  for (let [pid, item] of [...entry.delivered]) {
+    if (item.pid === undefined || item.procStart === undefined) continue;
+    let revert;
     try {
-      r = await provenSameProcessAsync(n.pid, n.procStart);
+      revert = await provenSameProcessAsync(item.pid, item.procStart);
     } catch {
-      r = undefined;
+      revert = undefined;
     }
-    if (r === false && e.delivered.get(i) === n) {
+    if (revert === false && entry.delivered.get(pid) === item) {
       logFeatureOk("artifact_comments_autoreact", {
         yield_taker_reused: true,
       });
-      revertDelivered(e, i, [...n.slugs]);
+      revertDelivered(entry, pid, [...item.slugs]);
     }
   }
 }
 //@ chunk-sqqsb7w7.js:4668-4907 placement
-function revertDelivered(e, i, n, r) {
-  let s = e.delivered.get(i);
-  if (s === undefined) return [];
-  let filtered = [...n].filter((a) => s.slugs.delete(a));
-  if (s.slugs.size === 0) e.delivered.delete(i);
+function revertDelivered(entry, pid, slugs, options) {
+  let delivered = entry.delivered.get(pid);
+  if (delivered === undefined) return [];
+  let filtered = [...slugs].filter((slug) => delivered.slugs.delete(slug));
+  if (delivered.slugs.size === 0) entry.delivered.delete(pid);
   if (filtered.length === 0) return [];
   try {
-    return e.reverter?.(i, filtered, r) ?? [];
+    return entry.reverter?.(pid, filtered, options) ?? [];
   } catch (error) {
     logError(error);
     return [];
@@ -332,129 +358,132 @@ function revertDelivered(e, i, n, r) {
  * 导出函数 `setSendAnswer`：参数 e, i = null。
  */
 function setSendAnswer(sendAnswer, ownAddress = null) {
-  let n = replyYieldTable();
-  n.sendAnswer = sendAnswer;
-  n.ownAddress = ownAddress;
+  let table = replyYieldTable();
+  table.sendAnswer = sendAnswer;
+  table.ownAddress = ownAddress;
 }
 //@ chunk-sqqsb7w7.js:4970-5376 placement
-function decideYield(e, i) {
-  let n = i.claimed_at ?? i.sent_at;
-  let r = false;
-  let s = [...e.pendingClaims.values()];
-  for (let [c, a] of e.outstanding)
-    if (a.resolve !== null)
-      s.push({
-        id: c,
-        slugs: a.asked,
-        sentAt: a.sentAt,
-        lost: a.lost,
+function decideYield(table, claim) {
+  let claimAt = claim.claimed_at ?? claim.sent_at;
+  let refuse = false;
+  let claims = [...table.pendingClaims.values()];
+  for (let [id, outstanding] of table.outstanding)
+    if (outstanding.resolve !== null)
+      claims.push({
+        id,
+        slugs: outstanding.asked,
+        sentAt: outstanding.sentAt,
+        lost: outstanding.lost,
       });
-  for (let c of s) {
-    if (!i.slugs.some((slug) => c.slugs.has(slug))) continue;
-    if (n > c.sentAt || (n === c.sentAt && i.from > (e.ownAddress ?? ""))) {
-      for (let slug of i.slugs) if (c.slugs.has(slug)) c.lost.set(slug, i.from);
-    } else r = true;
+  for (let pendingClaim of claims) {
+    if (!claim.slugs.some((slug) => pendingClaim.slugs.has(slug))) continue;
+    if (
+      claimAt > pendingClaim.sentAt ||
+      (claimAt === pendingClaim.sentAt && claim.from > (table.ownAddress ?? ""))
+    ) {
+      for (let slug of claim.slugs) if (pendingClaim.slugs.has(slug)) pendingClaim.lost.set(slug, claim.from);
+    } else refuse = true;
   }
-  return r ? "refuse" : "proceed";
+  return refuse ? "refuse" : "proceed";
 }
 //@ chunk-sqqsb7w7.js:5376-6673 placement
 /**
  * 回答其他会话的让出请求（过期、处理器抛错、投递不明）。
  */
-function answerYieldRequest(e, i, n, r, s) {
-  let pid = n?.pid;
-  let writeToken = n?.writeToken;
-  let d = replyYieldTable();
-  let sendAnswer = d.sendAnswer;
+function answerYieldRequest(request, extra, identity, now, options) {
+  let pid = identity?.pid;
+  let writeToken = identity?.writeToken;
+  let table = replyYieldTable();
+  let sendAnswer = table.sendAnswer;
   if (sendAnswer === null) return;
-  let m;
-  if (s?.refuse === true) m = "refused";
+  let result;
+  if (options?.refuse === true) result = "refused";
   else if (
-    r - e.sent_at > REPLY_YIELD_TIMEOUT_MS - 500 ||
-    e.sent_at > r + 1000 ||
-    (e.claimed_at !== undefined && e.claimed_at > e.sent_at + 1000)
+    now - request.sent_at > REPLY_YIELD_TIMEOUT_MS - 500 ||
+    request.sent_at > now + 1000 ||
+    (request.claimed_at !== undefined && request.claimed_at > request.sent_at + 1000)
   ) {
     logFeatureSad("artifact_comments_autoreact", "yield_request_stale");
-    m = "refused";
-  } else if (decideYield(d, e) === "refuse") m = "refused";
-  else if (d.holder === null)
-    m = {
+    result = "refused";
+  } else if (decideYield(table, request) === "refuse") result = "refused";
+  else if (table.holder === null)
+    result = {
       yielded: [],
-      notHeld: [...e.slugs],
+      notHeld: [...request.slugs],
     };
   else
     try {
-      revertGoneTakers(d, {
-        transferring: new Set(e.slugs),
+      revertGoneTakers(table, {
+        transferring: new Set(request.slugs),
       });
-      if (isDeliveredFull(d, n?.pid)) {
+      if (isDeliveredFull(table, identity?.pid)) {
         logFeatureSad("artifact_comments_autoreact", "yield_table_full");
-        m = "refused";
+        result = "refused";
       } else
-        m = d.holder({
-          msgId: e.msg_id,
-          slugs: e.slugs,
-          reason: e.reason,
+        result = table.holder({
+          msgId: request.msg_id,
+          slugs: request.slugs,
+          reason: request.reason,
           requester: {
-            cwd: e.requester?.cwd,
-            tmux: e.requester?.tmux,
+            cwd: request.requester?.cwd,
+            tmux: request.requester?.tmux,
           },
         });
     } catch (error) {
       logError(error);
       logFeatureSad("artifact_comments_autoreact", "yield_handler_threw");
-      m = "refused";
+      result = "refused";
     }
-  let Y =
-    m === "refused"
+  let answer =
+    result === "refused"
       ? {
-          orig_msg_id: e.msg_id,
+          orig_msg_id: request.msg_id,
           yielded: [],
           not_held: [],
           refused: true,
         }
       : {
-          orig_msg_id: e.msg_id,
-          yielded: m.yielded.slice(0, MAX_YIELD_SLUGS),
-          not_held: m.notHeld.slice(0, MAX_YIELD_SLUGS),
+          orig_msg_id: request.msg_id,
+          yielded: result.yielded.slice(0, MAX_YIELD_SLUGS),
+          not_held: result.notHeld.slice(0, MAX_YIELD_SLUGS),
         };
-  let w = m !== "refused" && m.yielded.length > 0 ? m : null;
-  if (w !== null) recordDelivered(d, e.msg_id, w.yielded, n);
-  sendAnswer(i, Y, pid, writeToken).then(
-    () => w?.onDelivered?.(),
+  let yieldedResult = result !== "refused" && result.yielded.length > 0 ? result : null;
+  if (yieldedResult !== null) recordDelivered(table, request.msg_id, yieldedResult.yielded, identity);
+  sendAnswer(extra, answer, pid, writeToken).then(
+    () => yieldedResult?.onDelivered?.(),
     (error) => {
       logForDebugging(
-        `[reply-yield] answer to ${fragmentForLog(i)} failed: ${redactFragmentForLog(String(error))}`,
+        `[reply-yield] answer to ${fragmentForLog(extra)} failed: ${redactFragmentForLog(String(error))}`,
       );
-      if (w === null) return;
+      if (yieldedResult === null) return;
       if (!isExpectedSendError(error)) {
         logFeatureSad("artifact_comments_autoreact", "yield_answer_send_ambiguous");
-        sendAnswer(i, Y, pid, writeToken).catch(() => {});
-        w.onDelivered?.();
+        sendAnswer(extra, answer, pid, writeToken).catch(() => {});
+        yieldedResult.onDelivered?.();
         return;
       }
       logFeatureSad("artifact_comments_autoreact", "yield_answer_undelivered");
-      revertDelivered(d, e.msg_id, w.yielded);
+      revertDelivered(table, request.msg_id, yieldedResult.yielded);
     },
   );
 }
 //@ chunk-sqqsb7w7.js:6673-7033 placement
-function handleUnyield(e, i) {
-  let n = replyYieldTable();
-  let r = n.delivered.get(e.orig_msg_id);
-  if (r === undefined) return false;
-  if (r.pid !== undefined && i !== undefined && i !== r.pid) {
+function handleUnyield(msg, ctx) {
+  let table = replyYieldTable();
+  let entry = table.delivered.get(msg.orig_msg_id);
+  if (entry === undefined) return false;
+  if (entry.pid !== undefined && ctx !== undefined && ctx !== entry.pid) {
     logFeatureSad("artifact_comments_autoreact", "unyield_pid_mismatch");
     return false;
   }
-  let s = revertDelivered(n, e.orig_msg_id, e.slugs, {
-    ...(e.stopped === true && {
-      stopped: new Set(e.slugs),
+  let reverted = revertDelivered(table, msg.orig_msg_id, msg.slugs, {
+    ...(msg.stopped === true && {
+      stopped: new Set(msg.slugs),
     }),
   });
-  s.push(...revertGoneTakers(n));
+  reverted.push(...revertGoneTakers(table));
   logFeatureOk("artifact_comments_autoreact", {
-    yield_handed_back: s.length,
+    yield_handed_back: reverted.length,
   });
   return true;
 }

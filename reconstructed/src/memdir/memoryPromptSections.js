@@ -32,8 +32,8 @@ var MEMORY_TYPES_GUIDANCE =
 /**
  * 记忆私有/共享的默认规则文案。
  */
-function memoryVisibilityDefaults(e) {
-  return `\`user\` memories are always private; default \`feedback\` to private, \`project\` and \`reference\` to ${e}.`;
+function memoryVisibilityDefaults(scopeLabel) {
+  return `\`user\` memories are always private; default \`feedback\` to private, \`project\` and \`reference\` to ${scopeLabel}.`;
 }
 //@ chunk-82kqcve8.js:112855-113100 placement
 /**

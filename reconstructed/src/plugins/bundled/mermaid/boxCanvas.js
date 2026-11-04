@@ -12,106 +12,106 @@ import { segmentGraphemesWithWidth, linkCells, textDisplayWidth } from "../../..
 
 //@ chunk-yb0ajcmt.js:8392-8549 placement = styledCharsWithGraphemeClustering (0.365)
 function createBoxCanvas(chars, stylePool) {
-  let n = chars * stylePool;
+  let size = chars * stylePool;
   return {
     width: chars,
     height: stylePool,
-    links: new Uint8Array(n),
-    styles: new Uint8Array(n),
-    rounded: new Uint8Array(n),
+    links: new Uint8Array(size),
+    styles: new Uint8Array(size),
+    rounded: new Uint8Array(size),
     glyphs: Array.from({
-      length: n,
+      length: size,
     }),
   };
 }
 //@ chunk-yb0ajcmt.js:9141-9443 placement = unionRect (0.809)
-function drawCanvasText(e, t, n) {
-  if (t.y < 0 || t.y >= e.height) return;
-  let o = t.x;
-  for (let i of segmentGraphemesWithWidth(n)) {
-    let u = o >= 0 && o + i.width <= e.width;
-    if (u && i.width > 0) {
-      e.glyphs[t.y * e.width + o] = i.text;
-      for (let k = 1; k < i.width; k++) e.glyphs[t.y * e.width + o + k] = "";
-    } else if (u && o > t.x) {
-      let r = t.y * e.width + o - 1;
-      e.glyphs[r] = (e.glyphs[r] ?? "") + i.text;
+function drawCanvasText(canvas, at, text) {
+  if (at.y < 0 || at.y >= canvas.height) return;
+  let x = at.x;
+  for (let grapheme of segmentGraphemesWithWidth(text)) {
+    let fits = x >= 0 && x + grapheme.width <= canvas.width;
+    if (fits && grapheme.width > 0) {
+      canvas.glyphs[at.y * canvas.width + x] = grapheme.text;
+      for (let k = 1; k < grapheme.width; k++) canvas.glyphs[at.y * canvas.width + x + k] = "";
+    } else if (fits && x > at.x) {
+      let index = at.y * canvas.width + x - 1;
+      canvas.glyphs[index] = (canvas.glyphs[index] ?? "") + grapheme.text;
     }
-    o += i.width;
+    x += grapheme.width;
   }
 }
 //@ chunk-yb0ajcmt.js:9443-9934 placement = clearRegion (0.37)
-function drawCanvasBox(boxCanvas, t, n, o) {
-  let i = t.x + t.width - 1;
-  let u = t.y + t.height - 1;
-  for (let s = t.x; s < i; s++) {
+function drawCanvasBox(boxCanvas, box, lines, isRounded) {
+  let right = box.x + box.width - 1;
+  let bottom = box.y + box.height - 1;
+  for (let x = box.x; x < right; x++) {
     linkCells(
       boxCanvas,
       {
-        x: s,
-        y: t.y,
+        x,
+        y: box.y,
       },
       {
-        x: s + 1,
-        y: t.y,
+        x: x + 1,
+        y: box.y,
       },
     );
     linkCells(
       boxCanvas,
       {
-        x: s,
-        y: u,
+        x,
+        y: bottom,
       },
       {
-        x: s + 1,
-        y: u,
-      },
-    );
-  }
-  for (let s = t.y; s < u; s++) {
-    linkCells(
-      boxCanvas,
-      {
-        x: t.x,
-        y: s,
-      },
-      {
-        x: t.x,
-        y: s + 1,
-      },
-    );
-    linkCells(
-      boxCanvas,
-      {
-        x: i,
-        y: s,
-      },
-      {
-        x: i,
-        y: s + 1,
+        x: x + 1,
+        y: bottom,
       },
     );
   }
-  for (let k = t.y + 1; k < u; k++)
-    for (let k_2 = t.x + 1; k_2 < i; k_2++) boxCanvas.glyphs[k * boxCanvas.width + k_2] = " ";
-  if (o)
-    for (let [s, l] of [
-      [t.x, t.y],
-      [i, t.y],
-      [t.x, u],
-      [i, u],
+  for (let y = box.y; y < bottom; y++) {
+    linkCells(
+      boxCanvas,
+      {
+        x: box.x,
+        y,
+      },
+      {
+        x: box.x,
+        y: y + 1,
+      },
+    );
+    linkCells(
+      boxCanvas,
+      {
+        x: right,
+        y,
+      },
+      {
+        x: right,
+        y: y + 1,
+      },
+    );
+  }
+  for (let k = box.y + 1; k < bottom; k++)
+    for (let k_2 = box.x + 1; k_2 < right; k_2++) boxCanvas.glyphs[k * boxCanvas.width + k_2] = " ";
+  if (isRounded)
+    for (let [x, y] of [
+      [box.x, box.y],
+      [right, box.y],
+      [box.x, bottom],
+      [right, bottom],
     ])
-      boxCanvas.rounded[l * boxCanvas.width + s] = 1;
-  let r = t.y + Math.floor((t.height - n.length) / 2);
-  n.forEach((s, l) => {
-    let a = t.x + Math.floor((t.width - textDisplayWidth(s)) / 2);
+      boxCanvas.rounded[y * boxCanvas.width + x] = 1;
+  let top = box.y + Math.floor((box.height - lines.length) / 2);
+  lines.forEach((line, index) => {
+    let left = box.x + Math.floor((box.width - textDisplayWidth(line)) / 2);
     drawCanvasText(
       boxCanvas,
       {
-        x: a,
-        y: r + l,
+        x: left,
+        y: top + index,
       },
-      s,
+      line,
     );
   });
 }

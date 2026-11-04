@@ -8,67 +8,71 @@
  * pieces: chunk-dcmhvw5a.js (11), chunk-tbfde207.js (2)
  * attribution: fingerprint 4, callgraph-witnessed 1, layout 4, file-local 3, sole-consumer 1
  */
-import { PAUSE_GLYPH, FAST_FORWARD_GLYPH } from "./autoModeRulesPrompt.js";
+import { PAUSE_GLYPH, FAST_FORWARD_GLYPH } from "../../constants/figures.js";
 import { parsePermissionMode } from "../../types/permissions.js";
 import { isPlanBypass } from "./browserToolNames.js";
 import { shouldAllowManagedPermissionRulesOnly } from "./permissionsLoader.js";
 import { filterEditableRules } from "../../components/permissions/hooks.js";
 import { externalMetadataToAppState } from "../../state/onChangeAppState.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-dcmhvw5a.js:207975-208707 fingerprint = PERMISSION_MODE_CONFIG (0.746)
 /**
  * 六种对外权限模式的显示配置表：title/shortTitle/indicator/symbol/color/external。default 显示为 "Manual"；bubble 不在表内（getModeConfig 回落 default）。
  */
-var PERMISSION_MODE_CONFIG = {
-  default: {
-    title: "Manual",
-    shortTitle: "Manual",
-    indicator: "manual mode",
-    symbol: PAUSE_GLYPH,
-    color: "inactive",
-    external: "default",
-  },
-  plan: {
-    title: "Plan",
-    shortTitle: "Plan",
-    indicator: "plan mode",
-    symbol: PAUSE_GLYPH,
-    color: "planMode",
-    external: "plan",
-  },
-  acceptEdits: {
-    title: "Accept edits",
-    shortTitle: "Accept",
-    indicator: "accept edits",
-    symbol: FAST_FORWARD_GLYPH,
-    color: "autoAccept",
-    external: "acceptEdits",
-  },
-  bypassPermissions: {
-    title: "Bypass Permissions",
-    shortTitle: "Bypass",
-    indicator: "bypass permissions",
-    symbol: FAST_FORWARD_GLYPH,
-    color: "error",
-    external: "bypassPermissions",
-  },
-  dontAsk: {
-    title: "Don't Ask",
-    shortTitle: "DontAsk",
-    indicator: "don't ask",
-    symbol: FAST_FORWARD_GLYPH,
-    color: "error",
-    external: "dontAsk",
-  },
-  auto: {
-    title: "Auto",
-    shortTitle: "Auto",
-    indicator: "auto mode",
-    symbol: FAST_FORWARD_GLYPH,
-    color: "warning",
-    external: "auto",
-  },
-};
+var PERMISSION_MODE_CONFIG; // deferred: uses PAUSE_GLYPH (../../constants/figures.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-dcmhvw5a.js:207975", () => {
+  PERMISSION_MODE_CONFIG = {
+    default: {
+      title: "Manual",
+      shortTitle: "Manual",
+      indicator: "manual mode",
+      symbol: PAUSE_GLYPH,
+      color: "inactive",
+      external: "default",
+    },
+    plan: {
+      title: "Plan",
+      shortTitle: "Plan",
+      indicator: "plan mode",
+      symbol: PAUSE_GLYPH,
+      color: "planMode",
+      external: "plan",
+    },
+    acceptEdits: {
+      title: "Accept edits",
+      shortTitle: "Accept",
+      indicator: "accept edits",
+      symbol: FAST_FORWARD_GLYPH,
+      color: "autoAccept",
+      external: "acceptEdits",
+    },
+    bypassPermissions: {
+      title: "Bypass Permissions",
+      shortTitle: "Bypass",
+      indicator: "bypass permissions",
+      symbol: FAST_FORWARD_GLYPH,
+      color: "error",
+      external: "bypassPermissions",
+    },
+    dontAsk: {
+      title: "Don't Ask",
+      shortTitle: "DontAsk",
+      indicator: "don't ask",
+      symbol: FAST_FORWARD_GLYPH,
+      color: "error",
+      external: "dontAsk",
+    },
+    auto: {
+      title: "Auto",
+      shortTitle: "Auto",
+      indicator: "auto mode",
+      symbol: FAST_FORWARD_GLYPH,
+      color: "warning",
+      external: "auto",
+    },
+  };
+});
 //@ chunk-dcmhvw5a.js:208707-208743 fingerprint = isExternalPermissionMode (0.47)
 /**
  * 是否对外可见模式：只有内部模式 "bubble"（子代理把权限请求冒泡给父级）返回 false。
@@ -152,23 +156,23 @@ function permissionModeSymbol(mode) {
 /**
  * 根据元数据里的 session_allow_rules（去掉 mcp__ 规则、托管独占时忽略）返回把它们设为会话 allow 规则的 AppState 更新函数。
  */
-function applySessionAllowRules(e) {
-  let sessionAllowRules = e.session_allow_rules;
-  if (!Array.isArray(sessionAllowRules)) return (i) => i;
-  if (shouldAllowManagedPermissionRulesOnly()) return (i) => i;
-  let n = filterEditableRules(
+function applySessionAllowRules(request) {
+  let sessionAllowRules = request.session_allow_rules;
+  if (!Array.isArray(sessionAllowRules)) return (appState) => appState;
+  if (shouldAllowManagedPermissionRulesOnly()) return (appState) => appState;
+  let rules = filterEditableRules(
     sessionAllowRules.filter(
       (sessionAllowRule) => typeof sessionAllowRule === "string" && !sessionAllowRule.startsWith("mcp__"),
     ),
   );
-  if (n.length === 0) return (i) => i;
-  return (i) => ({
-    ...i,
+  if (rules.length === 0) return (appState) => appState;
+  return (appState) => ({
+    ...appState,
     toolPermissionContext: {
-      ...i.toolPermissionContext,
+      ...appState.toolPermissionContext,
       alwaysAllowRules: {
-        ...i.toolPermissionContext.alwaysAllowRules,
-        session: n,
+        ...appState.toolPermissionContext.alwaysAllowRules,
+        session: rules,
       },
     },
   });

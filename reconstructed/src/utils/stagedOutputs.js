@@ -25,11 +25,11 @@ var STAGED_OUTPUT_CONCURRENCY = 4;
 /**
  * 读取并记录暂存输出文件；二进制、notebook 或文件不存在等返回 not_recordable，其他错误返回 read_failed。
  */
-async function recordStagedOutput(r, o) {
+async function recordStagedOutput(store, filePath) {
   try {
-    let t = expandPath(o);
-    if (hasBinaryExtension(t) || isNotebookPath(t)) return "not_recordable";
-    return await stagedOutputStore.readAndRecord(r, t);
+    let expandedPath = expandPath(filePath);
+    if (hasBinaryExtension(expandedPath) || isNotebookPath(expandedPath)) return "not_recordable";
+    return await stagedOutputStore.readAndRecord(store, expandedPath);
   } catch (error) {
     let errnoCode = getErrnoCode(error);
     return errnoCode === "ENOENT" ||
@@ -49,28 +49,33 @@ var stagedOutputStore = identity(
   {
     readAndRecord: createStagedOutputLimiter(),
   },
-  (r) => {
-    r.readAndRecord = createStagedOutputLimiter();
+  (store) => {
+    store.readAndRecord = createStagedOutputLimiter();
   },
 );
 //@ chunk-qqey4ng3.js:1521-2059 placement
-async function recordStagedOutput_2(r, o) {
-  await using t = await open(o, nonblockingReadFlags());
-  let floored = Math.floor((await t.stat()).mtimeMs);
-  let e = r.get(o);
+async function recordStagedOutput_2(store, filePath) {
+  await using fileHandle = await open(filePath, nonblockingReadFlags());
+  let floored = Math.floor((await fileHandle.stat()).mtimeMs);
+  let existing = store.get(filePath);
   if (
-    e !== undefined &&
-    !(e.contentFromTranscript && e.limit === undefined && isFullFileView(e) && e.timestamp < floored)
+    existing !== undefined &&
+    !(
+      existing.contentFromTranscript &&
+      existing.limit === undefined &&
+      isFullFileView(existing) &&
+      existing.timestamp < floored
+    )
   )
     return "kept_existing";
-  let fileHandleChecked = await readFileHandleChecked(t, o, MAX_STAGED_OUTPUT_BYTES);
+  let fileHandleChecked = await readFileHandleChecked(fileHandle, filePath, MAX_STAGED_OUTPUT_BYTES);
   if (fileHandleChecked.content.slice(0, 4096).includes("\x00")) return "not_recordable";
-  let a = stripBom(fileHandleChecked.content);
-  if (e !== undefined && !matchesContentHash(e, a.trim())) return "kept_existing";
-  let d = r.get(o);
-  if (d !== undefined && d !== e) return "kept_existing";
-  r.set(o, {
-    content: a,
+  let bomStripped = stripBom(fileHandleChecked.content);
+  if (existing !== undefined && !matchesContentHash(existing, bomStripped.trim())) return "kept_existing";
+  let currentEntry = store.get(filePath);
+  if (currentEntry !== undefined && currentEntry !== existing) return "kept_existing";
+  store.set(filePath, {
+    content: bomStripped,
     timestamp: floored,
     offset: undefined,
     limit: undefined,
@@ -78,3 +83,4 @@ async function recordStagedOutput_2(r, o) {
   });
   return "recorded";
 }
+export { recordStagedOutput };

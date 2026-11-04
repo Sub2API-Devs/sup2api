@@ -14,9 +14,12 @@ import { COMMAND_DIALOG_LOADERS } from "../screens/repl/commandDialogLoaders.js"
 /**
  * resolveCommandDialog：local-jsx 命令未提供 load 时，按 dialogKey ?? name 从 COMMAND_DIALOG_LOADERS 懒加载实现 chunk。
  */
-function resolveCommandDialog(h) {
-  if (h.type !== "local-jsx") return;
-  let x = h.dialogKey ?? h.name;
-  return h.load ?? (Object.hasOwn(COMMAND_DIALOG_LOADERS, x) ? COMMAND_DIALOG_LOADERS[x] : undefined);
+function resolveCommandDialog(command) {
+  if (command.type !== "local-jsx") return;
+  let dialogKey = command.dialogKey ?? command.name;
+  return (
+    command.load ??
+    (Object.hasOwn(COMMAND_DIALOG_LOADERS, dialogKey) ? COMMAND_DIALOG_LOADERS[dialogKey] : undefined)
+  );
 }
 export { resolveCommandDialog };

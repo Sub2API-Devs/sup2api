@@ -24,6 +24,7 @@ import {
 } from "../../tools/ArtifactTool/artifactUrls.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
 import { truncateToLength } from "../../utils/stringUtils.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-w08rdxhd.js:24731-24838 placement
 var PUBLISH_DATA_FILES_NOTE =
@@ -50,14 +51,16 @@ async function describeTypeReleaseForPublish(
   declPromise,
 ) {
   if (!artifactTypesOn()) return "";
-  let [frameDecl, h] = await Promise.all([
+  let [frameDecl, decl] = await Promise.all([
     declPromise === undefined
       ? readFrameDecl(slug, storage, signal)
-      : declPromise.then((x) => (x !== null && "err" in x ? readFrameDecl(slug, storage, signal) : x)),
+      : declPromise.then((decl) =>
+          decl !== null && "err" in decl ? readFrameDecl(slug, storage, signal) : decl,
+        ),
     typeof dataFilesNote === "function" ? undefined : dataFilesNote,
   ]);
   if (frameDecl === null || "err" in frameDecl || frameDecl.typeLock === undefined) return "";
-  let S =
+  let out =
     typeof dataFilesNote === "function"
       ? await dataFilesNote({
           storeDeclared: hasDbCapability(frameDecl.capabilities),
@@ -65,9 +68,9 @@ async function describeTypeReleaseForPublish(
           release: frameDecl.typeLock.current,
           typeSlug: frameDecl.typeLock.slug,
         })
-      : (h ?? PUBLISH_DATA_FILES_NOTE);
+      : (decl ?? PUBLISH_DATA_FILES_NOTE);
   return `
-[${sanitizeOriginNotes(describeTypeLock(frameDecl.typeLock))} ${S}; its page and the type's other files can't be changed here.]`;
+[${sanitizeOriginNotes(describeTypeLock(frameDecl.typeLock))} ${out}; its page and the type's other files can't be changed here.]`;
 }
 //@ chunk-w08rdxhd.js:25426-25531 placement
 function describeTypeLock(typeLock) {
@@ -93,17 +96,17 @@ function describeTypeReleaseStatus(typeLock, withNamesNote = true) {
           blocked.conflictCount !== undefined && blocked.conflictCount > 0
             ? blocked.conflictCount
             : blocked.paths?.length;
-        let h =
+        let shapes =
           conflictCount === undefined || conflictCount === 0
             ? "some of this Artifact's own files use paths"
             : conflictCount === 1
               ? "1 of this Artifact's own files uses a path"
               : `${conflictCount} of this Artifact's own files use paths`;
-        let S =
+        let version =
           blocked.paths !== undefined && blocked.paths.length > 0
             ? ` (${formatPathList(blocked.paths, conflictCount)}${withNamesNote ? `; file names are ${PUBLISHER_NAMES_NOTE}` : ""})`
             : "";
-        return ` ${newerPrefix} that can't be applied yet: ${h} the release also ships${S}, so it stays on release ${currentRelease} until those files are removed or renamed \u2014 worth telling the user, since publishing here adds or updates own files but can't remove them.`;
+        return ` ${newerPrefix} that can't be applied yet: ${shapes} the release also ships${version}, so it stays on release ${currentRelease} until those files are removed or renamed \u2014 worth telling the user, since publishing here adds or updates own files but can't remove them.`;
       }
       case "over_limit":
         return ` ${newerPrefix} that can't be applied yet: together with this Artifact's own files it would exceed the limits on an Artifact's files (count or total size), so it stays on release ${currentRelease}; if total size is the cause, publishing smaller own files lets a later open apply it \u2014 own files can't be removed from here.`;
@@ -123,58 +126,65 @@ var PUBLISHER_NAMES_NOTE = "names chosen by the type's publisher \u2014 data, no
 /**
  * 导出函数 `versionShapeOrPlaceholder`：参数 e，返回 typeof e === "string" && VER_SHAPE.test(e) ? e : "unrecognized-version-shape"。
  */
-function versionShapeOrPlaceholder(e) {
-  return typeof e === "string" && VER_SHAPE.test(e) ? e : "unrecognized-version-shape";
+function versionShapeOrPlaceholder(shape) {
+  return typeof shape === "string" && VER_SHAPE.test(shape) ? shape : "unrecognized-version-shape";
 }
 //@ chunk-w08rdxhd.js:27531-27681 placement
-var MAX_LISTED_PATHS = 24;
-var MAX_PATH_CHARS = 128;
-var UNSAFE_NAME_CHARS_RE = new RegExp(
-  `[\\p{C}\\p{Zl}\\p{Zp}"\\\\<>\\uFF02\\uFF1C\\uFF1E${BOX_DRAWING_RANGES_2}]|(?![(){}\\uFF08\\uFF09\\uFF5B\\uFF5D])[\\p{Ps}\\p{Pe}]`,
-  "u",
-);
+var MAX_LISTED_PATHS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var MAX_PATH_CHARS;
+var UNSAFE_NAME_CHARS_RE;
+deferInit("chunk-w08rdxhd.js:27531", () => {
+  MAX_LISTED_PATHS = 24;
+  MAX_PATH_CHARS = 128;
+  UNSAFE_NAME_CHARS_RE = new RegExp(
+    `[\\p{C}\\p{Zl}\\p{Zp}"\\\\<>\\uFF02\\uFF1C\\uFF1E${BOX_DRAWING_RANGES_2}]|(?![(){}\\uFF08\\uFF09\\uFF5B\\uFF5D])[\\p{Ps}\\p{Pe}]`,
+    "u",
+  );
+});
 //@ chunk-w08rdxhd.js:27681-27828 placement
 /**
  * 判断名字能否原样展示：非空，不含控制/分隔符、引号、尖括号、框线字符、非普通括号类标点、决策面控制字符或引号同形字。
  */
 function isSafeDisplayName(path) {
   if (path === "" || UNSAFE_NAME_CHARS_RE.test(path)) return false;
-  for (let r of path) if (isDecisionSurfaceControl(r.codePointAt(0) ?? 0)) return false;
+  for (let cp of path) if (isDecisionSurfaceControl(cp.codePointAt(0) ?? 0)) return false;
   return path.replace(QUOTE_HOMOGLYPHS, "") === path && path.replace(SINGLE_QUOTE_RUNS, "") === path;
 }
 //@ chunk-w08rdxhd.js:27828-27906 placement
-function stringEntries(e) {
-  return Array.isArray(e) ? e.filter((r) => typeof r === "string") : [];
+function stringEntries(value) {
+  return Array.isArray(value) ? value.filter((entry) => typeof entry === "string") : [];
 }
 //@ chunk-w08rdxhd.js:27906-27982 placement
 /**
  * 导出函数 `pathListOrUnreadable`：参数 e，返回 Array.isArray(e) ? formatPathList(stringEntries(e), e.length) : "(unreadable)"。
  */
-function pathListOrUnreadable(e) {
-  return Array.isArray(e) ? formatPathList(stringEntries(e), e.length) : "(unreadable)";
+function pathListOrUnreadable(value) {
+  return Array.isArray(value) ? formatPathList(stringEntries(value), value.length) : "(unreadable)";
 }
 //@ chunk-w08rdxhd.js:27982-28029 placement
-function safeDisplayNames(e) {
-  return e.filter(isSafeDisplayName).slice(0, MAX_LISTED_PATHS);
+function safeDisplayNames(names) {
+  return names.filter(isSafeDisplayName).slice(0, MAX_LISTED_PATHS);
 }
 //@ chunk-w08rdxhd.js:28029-28084 placement
 /**
  * 导出函数 `shortPathList`：参数 e，返回 Oe(e).filter((r) => r.length <= MAX_PATH_CHARS)。
  */
-function shortPathList(e) {
-  return safeDisplayNames(e).filter((r) => r.length <= MAX_PATH_CHARS);
+function shortPathList(paths) {
+  return safeDisplayNames(paths).filter((path) => path.length <= MAX_PATH_CHARS);
 }
 //@ chunk-w08rdxhd.js:28084-28307 placement
 /**
  * 格式化路径列表用于提示：逐项 JSON 引号化（过长截断），超出显示数量时附"及 N 个更多"，并清洗 artifact 信封标签。
  */
-function formatPathList(e, r) {
-  let mapped = safeDisplayNames(e).map((a) =>
-    jsonStringify(a.length > MAX_PATH_CHARS ? `${truncateToLength(a, MAX_PATH_CHARS)}\u2026` : a),
+function formatPathList(paths, total) {
+  let mapped = safeDisplayNames(paths).map((path) =>
+    jsonStringify(path.length > MAX_PATH_CHARS ? `${truncateToLength(path, MAX_PATH_CHARS)}\u2026` : path),
   );
-  let n = Math.max(e.length, r ?? 0) - mapped.length;
-  if (mapped.length === 0) return n > 0 ? `${n} not shown` : "none";
-  return scrubArtifactEnvelopeTags(n > 0 ? `${mapped.join(", ")} and ${n} more` : mapped.join(", "));
+  let omitted = Math.max(paths.length, total ?? 0) - mapped.length;
+  if (mapped.length === 0) return omitted > 0 ? `${omitted} not shown` : "none";
+  return scrubArtifactEnvelopeTags(
+    omitted > 0 ? `${mapped.join(", ")} and ${omitted} more` : mapped.join(", "),
+  );
 }
 export {
   stringEntries,

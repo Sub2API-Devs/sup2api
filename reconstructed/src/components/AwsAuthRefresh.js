@@ -8,7 +8,7 @@
  * pieces: chunk-s5p7fp0c.js (1)
  * attribution: placement 1
  */
-import { w } from "../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import {
   getConfiguredAwsAuthRefresh,
   isAwsAuthRefreshFromProjectSettings,
@@ -18,7 +18,7 @@ import {
 } from "../utils/auth.js";
 import { checkHasTrustDialogAccepted } from "../utils/config.js";
 import { MEMO_CACHE_SENTINEL } from "../../runtime/bun-runtime.js";
-import { P } from "../../vendor/react/cjs/react.production.js";
+import { useEffect } from "../../vendor/react/cjs/react.production.js";
 import {
   jsxProd_default_2,
   jsxProd_default,
@@ -29,11 +29,11 @@ import { AwsAuthStatusBox } from "./AwsAuthStatusBox.js";
 
 //@ chunk-s5p7fp0c.js:24518-25025 placement = call (0.356)
 function call(props) {
-  let D = w(4);
+  let $ = useMemoCache(4);
   let { onComplete } = props;
-  let M;
-  if (D[0] !== onComplete) {
-    M = () => {
+  let refreshEffect;
+  if ($[0] !== onComplete) {
+    refreshEffect = () => {
       let configuredAwsAuthRefresh = getConfiguredAwsAuthRefresh();
       if (!configuredAwsAuthRefresh) {
         onComplete(false);
@@ -44,30 +44,30 @@ function call(props) {
         return;
       }
       let abortController = new AbortController();
-      refreshAwsAuth(configuredAwsAuthRefresh, abortController.signal).then((F) => {
+      refreshAwsAuth(configuredAwsAuthRefresh, abortController.signal).then((refreshResult) => {
         if (abortController.signal.aborted) {
           return;
         }
-        if (F) {
+        if (refreshResult) {
           clearAwsCredentialsCache();
           resetAwsAuthRefreshCooldown();
         }
-        onComplete(F);
+        onComplete(refreshResult);
       });
       return () => abortController.abort();
     };
-    D[0] = onComplete;
-    D[1] = M;
-  } else M = D[1];
-  let U;
-  if (D[2] === MEMO_CACHE_SENTINEL) {
-    U = [];
-    D[2] = U;
-  } else U = D[2];
-  P(M, U);
-  let i;
-  if (D[3] === MEMO_CACHE_SENTINEL) {
-    i = jsxProd_default_2(Box, {
+    $[0] = onComplete;
+    $[1] = refreshEffect;
+  } else refreshEffect = $[1];
+  let effectDeps;
+  if ($[2] === MEMO_CACHE_SENTINEL) {
+    effectDeps = [];
+    $[2] = effectDeps;
+  } else effectDeps = $[2];
+  useEffect(refreshEffect, effectDeps);
+  let statusElement;
+  if ($[3] === MEMO_CACHE_SENTINEL) {
+    statusElement = jsxProd_default_2(Box, {
       flexDirection: "column",
       gap: 1,
       children: [
@@ -82,8 +82,8 @@ function call(props) {
         jsxProd_default(AwsAuthStatusBox, {}),
       ],
     });
-    D[3] = i;
-  } else i = D[3];
-  return i;
+    $[3] = statusElement;
+  } else statusElement = $[3];
+  return statusElement;
 }
 export { call };

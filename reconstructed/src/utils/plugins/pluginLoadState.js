@@ -12,17 +12,21 @@ import { createStore } from "../../state/store.js";
 import { createSignal } from "../signal.js";
 import { HostScoped } from "../hostScoped.js";
 import { getRootSession } from "../../bootstrap/state.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-yf5m6p65.js:333-517 placement
-var hpr = Object.freeze({
-  open: Object.freeze([]),
-  unplaced: Object.freeze([]),
-  asked: Object.freeze([]),
-  shownId: null,
-  focusedId: null,
-  focusRequest: null,
-  placements: 0,
-  closing: Object.freeze([]),
+var EMPTY_PLUGIN_LOAD_LISTS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-yf5m6p65.js:333", () => {
+  EMPTY_PLUGIN_LOAD_LISTS = Object.freeze({
+    open: Object.freeze([]),
+    unplaced: Object.freeze([]),
+    asked: Object.freeze([]),
+    shownId: null,
+    focusedId: null,
+    focusRequest: null,
+    placements: 0,
+    closing: Object.freeze([]),
+  });
 });
 //@ chunk-yf5m6p65.js:517-812 placement
 /**
@@ -130,7 +134,7 @@ function createPluginLoadState() {
     unnamedSteered: new Set(),
     registeredAgents: new Map(),
     renderVersions: createStore(new Map()),
-    panes: createStore(hpr),
+    panes: createStore(EMPTY_PLUGIN_LOAD_LISTS),
     placed: createSignal(),
     pluginState: createPluginStateStore(),
     toastClock: emptyPluginLoadState(),
@@ -201,7 +205,10 @@ class PluginRegistryHolder {
   registry = createPluginLoadState();
 }
 //@ chunk-yf5m6p65.js:4002-4025 placement
-var pluginRegistryHolder = new HostScoped(() => new PluginRegistryHolder());
+var pluginRegistryHolder; // deferred: uses PluginRegistryHolder of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-yf5m6p65.js:4002", () => {
+  pluginRegistryHolder = new HostScoped(() => new PluginRegistryHolder());
+});
 //@ chunk-yf5m6p65.js:4025-4060 placement
 function pluginRegistryHost() {
   return pluginRegistryHolder.of(getRootSession().host);
@@ -267,5 +274,5 @@ export {
   clearPluginSkillsCache,
   clearPluginWorkflows,
   createPluginStateStore,
-  hpr,
+  EMPTY_PLUGIN_LOAD_LISTS,
 };

@@ -8,8 +8,8 @@
  * pieces: chunk-am3vy82s.js (3)
  * attribution: sole-consumer 1, affinity 1, fingerprint 1
  */
-import { w } from "../../vendor/react/compiler-runtime.js";
-import { y } from "../../vendor/react/cjs/react.production.js";
+import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
+import { useState } from "../../vendor/react/cjs/react.production.js";
 import { useTerminalSize } from "../hooks/useTerminalSize.js";
 import { useProject } from "../context/session.js";
 import { useCwdDerived } from "../utils/cwd.js";
@@ -32,39 +32,39 @@ import { TextInput } from "./TextInput.js";
 import { Dialog } from "./design-system/Dialog.js";
 
 //@ chunk-am3vy82s.js:18832-18870 sole-consumer
-function selectOriginalCwd(Le) {
-  return Le.originalCwd;
+function selectOriginalCwd(state) {
+  return state.originalCwd;
 }
 //@ chunk-am3vy82s.js:18870-18900 affinity
-function selectCwd(Re) {
-  return Re.cwd;
+function selectCwd(state) {
+  return state.cwd;
 }
 //@ chunk-am3vy82s.js:18900-21471 fingerprint = ExportDialog (0.776)
 /**
  * /export：选择复制到剪贴板或导出到文件（默认文件名带时间），完成后显示结果。
  */
 function ExportDialog(props) {
-  let $ = w(32);
+  let $ = useMemoCache(32);
   let { content, defaultFilename, onDone } = props;
-  let [, setSelectedOption] = y(null);
-  let [filename, setFilename] = y(defaultFilename);
-  let [cursorOffset, setCursorOffset] = y(defaultFilename.length);
-  let [showFilenameInput, setShowFilenameInput] = y(false);
+  let [, setSelectedOption] = useState(null);
+  let [filename, setFilename] = useState(defaultFilename);
+  let [cursorOffset, setCursorOffset] = useState(defaultFilename.length);
+  let [showFilenameInput, setShowFilenameInput] = useState(false);
   let { columns } = useTerminalSize();
   let originalCwd = useProject(selectOriginalCwd);
   let cwdDerived = useCwdDerived(useProject(selectCwd));
-  let z;
+  let resetSelectionCached;
   if ($[0] === MEMO_CACHE_SENTINEL) {
-    z = () => {
+    resetSelectionCached = () => {
       setShowFilenameInput(false);
       setSelectedOption(null);
     };
-    $[0] = z;
-  } else z = $[0];
-  let Te = z;
-  let K;
+    $[0] = resetSelectionCached;
+  } else resetSelectionCached = $[0];
+  let resetSelection = resetSelectionCached;
+  let changeHandlerCached;
   if ($[1] !== content || $[2] !== onDone) {
-    K = async (value) => {
+    changeHandlerCached = async (value) => {
       if (value === "clipboard") {
         let raw = await setClipboard(content);
         if (raw) process.stdout.write(raw);
@@ -80,38 +80,38 @@ function ExportDialog(props) {
     };
     $[1] = content;
     $[2] = onDone;
-    $[3] = K;
-  } else K = $[3];
-  let onChange = K;
-  let Y;
+    $[3] = changeHandlerCached;
+  } else changeHandlerCached = $[3];
+  let onChange = changeHandlerCached;
+  let submitCached;
   if ($[4] !== content || $[5] !== filename || $[6] !== onDone) {
-    Y = async () => {
+    submitCached = async () => {
       try {
-        let _e = await writeExportFile(filename, content);
+        let writtenPath = await writeExportFile(filename, content);
         logFeatureOk("export_file");
         onDone({
           success: true,
-          message: `Conversation exported to: ${_e}`,
+          message: `Conversation exported to: ${writtenPath}`,
         });
       } catch (error) {
-        let Z = error;
+        let writeError = error;
         logFeatureBad("export_file", "write_failed");
         onDone({
           success: false,
-          message: `Failed to export conversation: ${Z instanceof Error ? Z.message : "Unknown error"}`,
+          message: `Failed to export conversation: ${writeError instanceof Error ? writeError.message : "Unknown error"}`,
         });
       }
     };
     $[4] = content;
     $[5] = filename;
     $[6] = onDone;
-    $[7] = Y;
-  } else Y = $[7];
-  let onSubmit = Y;
-  let C;
+    $[7] = submitCached;
+  } else submitCached = $[7];
+  let onSubmit = submitCached;
+  let handleCancelCached;
   if ($[8] !== onDone || $[9] !== showFilenameInput) {
-    C = () => {
-      if (showFilenameInput) Te();
+    handleCancelCached = () => {
+      if (showFilenameInput) resetSelection();
       else
         onDone({
           success: false,
@@ -120,26 +120,26 @@ function ExportDialog(props) {
     };
     $[8] = onDone;
     $[9] = showFilenameInput;
-    $[10] = C;
-  } else C = $[10];
-  let d = C;
-  let Ge = getCaps().workspace === "remote" && originalCwd !== cwdDerived;
-  let H;
+    $[10] = handleCancelCached;
+  } else handleCancelCached = $[10];
+  let handleCancel = handleCancelCached;
+  let showsRemotePath = getCaps().workspace === "remote" && originalCwd !== cwdDerived;
+  let clipboardOption;
   if ($[11] === MEMO_CACHE_SENTINEL) {
-    H = {
+    clipboardOption = {
       label: "Copy to clipboard",
       value: "clipboard",
       description: "Copy the conversation to your system clipboard",
     };
-    $[11] = H;
-  } else H = $[11];
-  const finalFilename = Ge
+    $[11] = clipboardOption;
+  } else clipboardOption = $[11];
+  const finalFilename = showsRemotePath
     ? "Save the conversation to a file in the directory claude was launched from"
     : "Save the conversation to a file in the current directory";
-  let ee;
+  let optionsCached;
   if ($[12] !== finalFilename) {
-    ee = [
-      H,
+    optionsCached = [
+      clipboardOption,
       {
         label: "Save to file",
         value: "file",
@@ -147,12 +147,12 @@ function ExportDialog(props) {
       },
     ];
     $[12] = finalFilename;
-    $[13] = ee;
-  } else ee = $[13];
-  let options = ee;
-  let oe;
+    $[13] = optionsCached;
+  } else optionsCached = $[13];
+  let options = optionsCached;
+  let inputGuideCached;
   if ($[14] !== showFilenameInput) {
-    oe = showFilenameInput
+    inputGuideCached = showFilenameInput
       ? jsxProd_default_2(Byline, {
           children: [
             jsxProd_default(KeyboardShortcutHint, {
@@ -174,26 +174,26 @@ function ExportDialog(props) {
           description: "cancel",
         });
     $[14] = showFilenameInput;
-    $[15] = oe;
-  } else oe = $[15];
-  let inputGuide = oe;
-  let te;
+    $[15] = inputGuideCached;
+  } else inputGuideCached = $[15];
+  let inputGuide = inputGuideCached;
+  let cancelKeyOptions;
   if ($[16] !== showFilenameInput) {
-    te = {
+    cancelKeyOptions = {
       context: "Settings",
       isActive: showFilenameInput,
     };
     $[16] = showFilenameInput;
-    $[17] = te;
-  } else te = $[17];
-  useKeybinding("confirm:no", d, te);
+    $[17] = cancelKeyOptions;
+  } else cancelKeyOptions = $[17];
+  useKeybinding("confirm:no", handleCancel, cancelKeyOptions);
   const isCancelActive = !showFilenameInput;
   let children;
   if (
     $[18] !== columns ||
     $[19] !== cursorOffset ||
     $[20] !== filename ||
-    $[21] !== d ||
+    $[21] !== handleCancel ||
     $[22] !== onSubmit ||
     $[23] !== onChange ||
     $[24] !== options ||
@@ -203,7 +203,7 @@ function ExportDialog(props) {
       ? jsxProd_default(ModelSelector, {
           options,
           onChange,
-          onCancel: d,
+          onCancel: handleCancel,
         })
       : jsxProd_default_2(Box, {
           flexDirection: "column",
@@ -236,30 +236,30 @@ function ExportDialog(props) {
     $[18] = columns;
     $[19] = cursorOffset;
     $[20] = filename;
-    $[21] = d;
+    $[21] = handleCancel;
     $[22] = onSubmit;
     $[23] = onChange;
     $[24] = options;
     $[25] = showFilenameInput;
     $[26] = children;
   } else children = $[26];
-  let ne;
-  if ($[27] !== d || $[28] !== inputGuide || $[29] !== isCancelActive || $[30] !== children) {
-    ne = jsxProd_default(Dialog, {
+  let dialogElement;
+  if ($[27] !== handleCancel || $[28] !== inputGuide || $[29] !== isCancelActive || $[30] !== children) {
+    dialogElement = jsxProd_default(Dialog, {
       title: "Export conversation",
       subtitle: "Select export method",
       color: "permission",
-      onCancel: d,
+      onCancel: handleCancel,
       inputGuide,
       isCancelActive,
       children,
     });
-    $[27] = d;
+    $[27] = handleCancel;
     $[28] = inputGuide;
     $[29] = isCancelActive;
     $[30] = children;
-    $[31] = ne;
-  } else ne = $[31];
-  return ne;
+    $[31] = dialogElement;
+  } else dialogElement = $[31];
+  return dialogElement;
 }
 export { ExportDialog };

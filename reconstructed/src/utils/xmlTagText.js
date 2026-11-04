@@ -19,74 +19,83 @@ import {
   COMMAND_ARGS,
 } from "../constants/xml.js";
 import { escapeXml_2 as escapeXml, unescapeHtmlEntities } from "./confusables.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:128547-128660 placement
 /**
  * 生成 forked skill launch 标签（描述截断后 JSON 序列化并做 XML 转义）。
  */
-function forkedSkillLaunchTag(e) {
-  let n = {
-    ...e,
-    description: truncateToLength(e.description, MAX_DESCRIPTION_LENGTH),
+function forkedSkillLaunchTag(launch) {
+  let cappedLaunch = {
+    ...launch,
+    description: truncateToLength(launch.description, MAX_DESCRIPTION_LENGTH),
   };
-  return `<${FORKED_SKILL_LAUNCH}>${escapeXml(JSON.stringify(n))}</${FORKED_SKILL_LAUNCH}>`;
+  return `<${FORKED_SKILL_LAUNCH}>${escapeXml(JSON.stringify(cappedLaunch))}</${FORKED_SKILL_LAUNCH}>`;
 }
 //@ chunk-e6aww6q8.js:128660-128759 placement
-var REPLACEMENT_CHAR = "\uFFFD";
-var regExp = new RegExp(
-  `^[\\s${REPLACEMENT_CHAR}]*<${FORKED_SKILL_LAUNCH}>([^<]*)</${FORKED_SKILL_LAUNCH}>\\s*$`,
-);
-var QUOTED_TAG_NAMES = [
-  LOCAL_COMMAND_STDOUT,
-  LOCAL_COMMAND_STDERR,
-  COMMAND_NAME,
-  COMMAND_MESSAGE,
-  COMMAND_ARGS,
-];
+var REPLACEMENT_CHAR; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var regExp;
+var QUOTED_TAG_NAMES;
+deferInit("chunk-e6aww6q8.js:128660", () => {
+  REPLACEMENT_CHAR = "\uFFFD";
+  regExp = new RegExp(
+    `^[\\s${REPLACEMENT_CHAR}]*<${FORKED_SKILL_LAUNCH}>([^<]*)</${FORKED_SKILL_LAUNCH}>\\s*$`,
+  );
+  QUOTED_TAG_NAMES = [
+    LOCAL_COMMAND_STDOUT,
+    LOCAL_COMMAND_STDERR,
+    COMMAND_NAME,
+    COMMAND_MESSAGE,
+    COMMAND_ARGS,
+  ];
+});
 //@ chunk-e6aww6q8.js:128759-129010 placement
-function stripQuotedTagBlocks(e) {
-  let n = "";
-  let r = 0;
+function stripQuotedTagBlocks(text) {
+  let out = "";
+  let offset = 0;
   for (;;) {
-    let s = -1;
-    let h = -1;
-    for (let y of QUOTED_TAG_NAMES) {
-      let index = e.indexOf(`<${y}>`, r);
-      let index_2 = e.lastIndexOf(`</${y}>`);
-      if (index !== -1 && index_2 >= index + `<${y}>`.length && (s === -1 || index < s)) {
-        s = index;
-        h = index_2 + `</${y}>`.length;
+    let start = -1;
+    let end = -1;
+    for (let tagName of QUOTED_TAG_NAMES) {
+      let index = text.indexOf(`<${tagName}>`, offset);
+      let index_2 = text.lastIndexOf(`</${tagName}>`);
+      if (index !== -1 && index_2 >= index + `<${tagName}>`.length && (start === -1 || index < start)) {
+        start = index;
+        end = index_2 + `</${tagName}>`.length;
       }
     }
-    if (s === -1) return n + e.slice(r);
-    n += e.slice(r, s) + REPLACEMENT_CHAR;
-    r = h;
+    if (start === -1) return out + text.slice(offset);
+    out += text.slice(offset, start) + REPLACEMENT_CHAR;
+    offset = end;
   }
 }
 //@ chunk-e6aww6q8.js:129010-129049 placement
-var regExp_2 = new RegExp(`<(/?)${FORKED_SKILL_LAUNCH}>`, "g");
+var regExp_2; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:129010", () => {
+  regExp_2 = new RegExp(`<(/?)${FORKED_SKILL_LAUNCH}>`, "g");
+});
 //@ chunk-e6aww6q8.js:129049-129111 placement
 /**
  * 把 forked skill launch 标签转义。
  */
-function escapeForkedSkillTag(e) {
-  return e.replace(regExp_2, (n, r) => `&lt;${r}${FORKED_SKILL_LAUNCH}>`);
+function escapeForkedSkillTag(text) {
+  return text.replace(regExp_2, (match, prefix) => `&lt;${prefix}${FORKED_SKILL_LAUNCH}>`);
 }
 //@ chunk-e6aww6q8.js:129111-129314 placement
 /**
  * 从文本中解析 forked skill launch 标签内容（反转义后 JSON 解析并校验）。
  */
-function parseForkedSkillLaunches(content) {
-  if (!content.includes(`<${FORKED_SKILL_LAUNCH}>`)) return [];
-  let r = stripQuotedTagBlocks(content).match(regExp)?.[1];
-  if (r === undefined) return [];
-  let s;
+function parseForkedSkillLaunches(text) {
+  if (!text.includes(`<${FORKED_SKILL_LAUNCH}>`)) return [];
+  let json = stripQuotedTagBlocks(text).match(regExp)?.[1];
+  if (json === undefined) return [];
+  let parsed;
   try {
-    s = JSON.parse(unescapeHtmlEntities(r));
+    parsed = JSON.parse(unescapeHtmlEntities(json));
   } catch {
     return [];
   }
-  let h = AGENT_SKILL_REF_SCHEMA().safeParse(s);
-  return h.success ? [h.data] : [];
+  let validation = AGENT_SKILL_REF_SCHEMA().safeParse(parsed);
+  return validation.success ? [validation.data] : [];
 }
 export { escapeForkedSkillTag, parseForkedSkillLaunches, forkedSkillLaunchTag };

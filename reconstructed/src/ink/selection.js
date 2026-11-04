@@ -9,6 +9,7 @@
  * attribution: fingerprint 21, layout 9, file-local 2, callgraph-fingerprint 1
  */
 import { clamp, cellAt, softWrapStartCol, SW_ELIDED_SEP, cellAtIndex, setCellStyleId } from "./screen.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-bzr73sfg.js:213752-213930 fingerprint = createSelectionState (1)
 /**
@@ -31,24 +32,24 @@ function createSelectionState() {
 /**
  * 鼠标按下开始选区：记录锚点（限制在 scope 列范围内，例如只选某个面板）、清掉焦点与滚出缓存、进入拖动。
  */
-function startSelection(s, col, row, scope) {
-  s.scope = scope;
-  s.anchor = {
-    col: clampColToScope(s, col),
+function startSelection(selection, col, row, scope) {
+  selection.scope = scope;
+  selection.anchor = {
+    col: clampColToScope(selection, col),
     row,
   };
-  s.focus = null;
-  s.isDragging = true;
-  s.anchorSpan = null;
-  s.scrolledOffAbove = [];
-  s.scrolledOffBelow = [];
-  s.scrolledOffAboveSW = [];
-  s.scrolledOffBelowSW = [];
-  s.virtualAnchorRow = undefined;
-  s.virtualFocusRow = undefined;
-  s.virtualAnchorCol = undefined;
-  s.virtualFocusCol = undefined;
-  s.lastPressHadAlt = false;
+  selection.focus = null;
+  selection.isDragging = true;
+  selection.anchorSpan = null;
+  selection.scrolledOffAbove = [];
+  selection.scrolledOffBelow = [];
+  selection.scrolledOffAboveSW = [];
+  selection.scrolledOffBelowSW = [];
+  selection.virtualAnchorRow = undefined;
+  selection.virtualFocusRow = undefined;
+  selection.virtualAnchorCol = undefined;
+  selection.virtualFocusCol = undefined;
+  selection.lastPressHadAlt = false;
 }
 //@ chunk-bzr73sfg.js:214252-214396 fingerprint = updateSelection (1)
 /**
@@ -56,26 +57,26 @@ function startSelection(s, col, row, scope) {
  */
 function updateSelection(s, col, row) {
   if (!s.isDragging) return;
-  let m = clampColToScope(s, col);
-  if (!s.focus && s.anchor && s.anchor.col === m && s.anchor.row === row) return;
+  let clampedCol = clampColToScope(s, col);
+  if (!s.focus && s.anchor && s.anchor.col === clampedCol && s.anchor.row === row) return;
   s.focus = {
-    col: m,
+    col: clampedCol,
     row,
   };
 }
 //@ chunk-bzr73sfg.js:214396-214460 layout
-function clampColToScope(s, col) {
-  return s.scope ? clamp(col, s.scope.x1, s.scope.x2 - 1) : col;
+function clampColToScope(selection, col) {
+  return selection.scope ? clamp(col, selection.scope.x1, selection.scope.x2 - 1) : col;
 }
 //@ chunk-bzr73sfg.js:214460-214550 layout
 /**
  * 选区可用的列范围：有 scope 时为 [scope.x1, min(scope.x2,width)-1]，否则整行。
  */
-function selectionColRange(s, width) {
-  return s.scope
+function selectionColRange(selection, width) {
+  return selection.scope
     ? {
-        lo: s.scope.x1,
-        hi: Math.min(s.scope.x2, width) - 1,
+        lo: selection.scope.x1,
+        hi: Math.min(selection.scope.x2, width) - 1,
       }
     : {
         lo: 0,
@@ -191,14 +192,14 @@ function comparePoints(a, b) {
  * 双击：选中该词并设锚定范围 kind=word（后续拖动按词扩展）。
  */
 function selectWordAt(s, screen, col, row) {
-  let p = wordBoundsAt(screen, col, row);
-  if (!p) return;
+  let bounds = wordBoundsAt(screen, col, row);
+  if (!bounds) return;
   let lo = {
-    col: clampColToScope(s, p.lo),
+    col: clampColToScope(s, bounds.lo),
     row,
   };
   let hi = {
-    col: clampColToScope(s, p.hi),
+    col: clampColToScope(s, bounds.hi),
     row,
   };
   s.anchor = lo;
@@ -211,7 +212,10 @@ function selectWordAt(s, screen, col, row) {
   };
 }
 //@ chunk-bzr73sfg.js:215908-215939 fingerprint = URL_BOUNDARY (1)
-var URL_BOUNDARY = new Set([..."<>\"'` "]);
+var URL_BOUNDARY; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-bzr73sfg.js:215908", () => {
+  URL_BOUNDARY = new Set([..."<>\"'` "]);
+});
 //@ chunk-bzr73sfg.js:215939-216034 callgraph-fingerprint = isUrlChar (1)
 /**
  * 可出现在纯文本 URL 中的字符（可打印 ASCII，不含 <>"'` 与空格）。
@@ -224,8 +228,8 @@ function isUrlChar(c) {
 //@ chunk-bzr73sfg.js:216034-216158 layout
 function urlCharAt(screen, col, row) {
   if (screen.noSelect[row * screen.width + col] === 1) return null;
-  let m = cellAt(screen, col, row);
-  return m && m.width === 0 && isUrlChar(m.char) ? m.char : null;
+  let cell = cellAt(screen, col, row);
+  return cell && cell.width === 0 && isUrlChar(cell.char) ? cell.char : null;
 }
 //@ chunk-bzr73sfg.js:216158-216413 layout
 /**
@@ -233,28 +237,28 @@ function urlCharAt(screen, col, row) {
  */
 function scanUrlRun(screen, row, col, minCol, maxCol) {
   if (col < minCol || col > maxCol) return null;
-  let g = urlCharAt(screen, col, row);
-  if (g === null) return null;
+  let char = urlCharAt(screen, col, row);
+  if (char === null) return null;
   let lo = col;
   let before = "";
   while (lo > minCol) {
-    let O = urlCharAt(screen, lo - 1, row);
-    if (O === null) break;
-    before = O + before;
+    let prevChar = urlCharAt(screen, lo - 1, row);
+    if (prevChar === null) break;
+    before = prevChar + before;
     lo--;
   }
   let hi = col;
   let after = "";
   while (hi < maxCol) {
-    let O = urlCharAt(screen, hi + 1, row);
-    if (O === null) break;
-    after += O;
+    let nextChar = urlCharAt(screen, hi + 1, row);
+    if (nextChar === null) break;
+    after += nextChar;
     hi++;
   }
   return {
     lo,
     hi,
-    text: before + g + after,
+    text: before + char + after,
   };
 }
 //@ chunk-bzr73sfg.js:216413-216536 layout
@@ -290,8 +294,8 @@ function findPlainTextUrlAt(screen, col, row) {
   let span = softWrapSpanOfRow(screen, row);
   let minCol;
   let maxCol;
-  let D = col_2 >= span.start && col_2 < span.end;
-  if (D) {
+  let insideSpan = col_2 >= span.start && col_2 < span.end;
+  if (insideSpan) {
     minCol = span.start;
     maxCol = span.end - 1;
   } else if (col_2 >= span.end) {
@@ -309,28 +313,29 @@ function findPlainTextUrlAt(screen, col, row) {
   let hi = run.hi;
   let firstRow = row;
   let lo = run.lo;
-  if (D) {
+  if (insideSpan) {
     while (lastRow + 1 < screen.height) {
-      let ne = softWrap[lastRow + 1];
-      if (ne === 0 || hi + 1 !== ne >>> 16 || (ne & SW_ELIDED_SEP) !== 0) break;
-      let de = softWrapSpanOfRow(screen, lastRow + 1);
-      let se = scanUrlRun(screen, lastRow + 1, de.start, de.start, de.end - 1);
-      if (!se) break;
-      text += se.text;
+      let nextWrap = softWrap[lastRow + 1];
+      if (nextWrap === 0 || hi + 1 !== nextWrap >>> 16 || (nextWrap & SW_ELIDED_SEP) !== 0) break;
+      let nextSpan = softWrapSpanOfRow(screen, lastRow + 1);
+      let nextRun = scanUrlRun(screen, lastRow + 1, nextSpan.start, nextSpan.start, nextSpan.end - 1);
+      if (!nextRun) break;
+      text += nextRun.text;
       lastRow++;
-      hi = se.hi;
+      hi = nextRun.hi;
     }
     while (firstRow > 0) {
-      let ne = softWrap[firstRow];
-      let de = ne >>> 16;
-      if (ne === 0 || lo !== softWrapStartCol(ne) || de === 0 || (ne & SW_ELIDED_SEP) !== 0) break;
-      let se = softWrapSpanOfRow(screen, firstRow - 1);
-      let ye = scanUrlRun(screen, firstRow - 1, de - 1, se.start, de - 1);
-      if (!ye) break;
-      text = ye.text + text;
-      offsetInText += ye.text.length;
+      let wrap = softWrap[firstRow];
+      let prevRowStart = wrap >>> 16;
+      if (wrap === 0 || lo !== softWrapStartCol(wrap) || prevRowStart === 0 || (wrap & SW_ELIDED_SEP) !== 0)
+        break;
+      let prevSpan = softWrapSpanOfRow(screen, firstRow - 1);
+      let prevRun = scanUrlRun(screen, firstRow - 1, prevRowStart - 1, prevSpan.start, prevRowStart - 1);
+      if (!prevRun) break;
+      text = prevRun.text + text;
+      offsetInText += prevRun.text.length;
       firstRow--;
-      lo = ye.lo;
+      lo = prevRun.lo;
     }
   }
   let schemeRe = /(?:https?|file):\/\//g;
@@ -372,9 +377,9 @@ function findPlainTextUrlAt(screen, col, row) {
     else break;
   }
   if (offsetInText >= urlStart + url.length) return;
-  let V = offsetInText - (col_2 - run.lo);
-  let lo_2 = run.lo + Math.max(0, urlStart - V);
-  let hi_2 = run.lo + Math.min(run.hi - run.lo, urlStart + url.length - 1 - V);
+  let urlOffsetInRun = offsetInText - (col_2 - run.lo);
+  let lo_2 = run.lo + Math.max(0, urlStart - urlOffsetInRun);
+  let hi_2 = run.lo + Math.min(run.hi - run.lo, urlStart + url.length - 1 - urlOffsetInRun);
   return {
     url,
     lo: lo_2,
@@ -387,13 +392,13 @@ function findPlainTextUrlAt(screen, col, row) {
  */
 function selectLineAt(s, screen, row) {
   if (row < 0 || row >= screen.height) return;
-  let m = selectionColRange(s, screen.width);
+  let range = selectionColRange(s, screen.width);
   let lo = {
-    col: m.lo,
+    col: range.lo,
     row,
   };
   let hi = {
-    col: m.hi,
+    col: range.hi,
     row,
   };
   s.anchor = lo;
@@ -415,24 +420,24 @@ function extendSelection(s, screen, col, row) {
   let mLo;
   let mHi;
   if (span.kind === "word") {
-    let T = wordBoundsAt(screen, col, row);
+    let bounds = wordBoundsAt(screen, col, row);
     mLo = {
-      col: clampColToScope(s, T ? T.lo : col),
+      col: clampColToScope(s, bounds ? bounds.lo : col),
       row,
     };
     mHi = {
-      col: clampColToScope(s, T ? T.hi : col),
+      col: clampColToScope(s, bounds ? bounds.hi : col),
       row,
     };
   } else {
     let row_2 = clamp(row, 0, screen.height - 1);
-    let A = selectionColRange(s, screen.width);
+    let selectionCols = selectionColRange(s, screen.width);
     mLo = {
-      col: A.lo,
+      col: selectionCols.lo,
       row: row_2,
     };
     mHi = {
-      col: A.hi,
+      col: selectionCols.hi,
       row: row_2,
     };
   }
@@ -506,48 +511,48 @@ function shiftSelection(s, dRow, minRow, maxRow, width) {
     s.scrolledOffBelowSW = s.scrolledOffBelowSW.slice(0, belowAfter);
   }
   let colRange = selectionColRange(s, width);
-  let shift = (Y, vRow) => {
-    if (Y < minRow)
+  let shift = (row, vRow) => {
+    if (row < minRow)
       return {
         col: colRange.lo,
         row: minRow,
       };
-    if (Y > maxRow)
+    if (row > maxRow)
       return {
         col: colRange.hi,
         row: maxRow,
       };
     return {
       col: vRow,
-      row: Y,
+      row,
     };
   };
   let anchorCol = s.virtualAnchorCol ?? s.anchor.col;
   let focusCol = s.virtualFocusCol ?? s.focus.col;
   s.anchor = shift(anchorRow, anchorCol);
   s.focus = shift(focusRow, focusCol);
-  let K = anchorRow < minRow || anchorRow > maxRow;
-  let q = focusRow < minRow || focusRow > maxRow;
-  s.virtualAnchorRow = K ? anchorRow : undefined;
-  s.virtualAnchorCol = K ? anchorCol : undefined;
-  s.virtualFocusRow = q ? focusRow : undefined;
-  s.virtualFocusCol = q ? focusCol : undefined;
+  let anchorOffscreen = anchorRow < minRow || anchorRow > maxRow;
+  let focusOffscreen = focusRow < minRow || focusRow > maxRow;
+  s.virtualAnchorRow = anchorOffscreen ? anchorRow : undefined;
+  s.virtualAnchorCol = anchorOffscreen ? anchorCol : undefined;
+  s.virtualFocusRow = focusOffscreen ? focusRow : undefined;
+  s.virtualFocusCol = focusOffscreen ? focusCol : undefined;
   if (s.anchorSpan) {
-    let sp = (J) => {
-      let V = J.row + dRow;
-      if (V < minRow)
+    let sp = (point) => {
+      let clampedRow = point.row + dRow;
+      if (clampedRow < minRow)
         return {
           col: colRange.lo,
           row: minRow,
         };
-      if (V > maxRow)
+      if (clampedRow > maxRow)
         return {
           col: colRange.hi,
           row: maxRow,
         };
       return {
-        col: J.col,
-        row: V,
+        col: point.col,
+        row: clampedRow,
       };
     };
     s.anchorSpan = {
@@ -564,18 +569,18 @@ function shiftSelection(s, dRow, minRow, maxRow, width) {
 function shiftAnchor(s, dRow, minRow, maxRow) {
   if (!s.anchor) return;
   let raw = (s.virtualAnchorRow ?? s.anchor.row) + dRow;
-  let g = raw < minRow || raw > maxRow;
-  let E = s.virtualAnchorCol ?? s.anchor.col;
+  let offscreen = raw < minRow || raw > maxRow;
+  let col = s.virtualAnchorCol ?? s.anchor.col;
   s.anchor = {
-    col: g ? s.anchor.col : E,
+    col: offscreen ? s.anchor.col : col,
     row: clamp(raw, minRow, maxRow),
   };
-  s.virtualAnchorRow = g ? raw : undefined;
-  s.virtualAnchorCol = g ? E : undefined;
+  s.virtualAnchorRow = offscreen ? raw : undefined;
+  s.virtualAnchorCol = offscreen ? col : undefined;
   if (s.anchorSpan) {
-    let shift = (A) => ({
-      col: A.col,
-      row: clamp(A.row + dRow, minRow, maxRow),
+    let shift = (point) => ({
+      col: point.col,
+      row: clamp(point.row + dRow, minRow, maxRow),
     });
     s.anchorSpan = {
       lo: shift(s.anchorSpan.lo),
@@ -595,12 +600,17 @@ function hasSelection(s) {
 /**
  * 选区两端都因滚动被钳到同一侧（虚拟行都在视口上方或都在下方），即整段选区已不在屏幕上。
  */
-function isSelectionFullyOffscreen(s) {
-  if (!s.anchor || !s.focus || s.virtualAnchorRow === undefined || s.virtualFocusRow === undefined)
+function isSelectionFullyOffscreen(selection) {
+  if (
+    !selection.anchor ||
+    !selection.focus ||
+    selection.virtualAnchorRow === undefined ||
+    selection.virtualFocusRow === undefined
+  )
     return false;
   return (
-    (s.virtualAnchorRow < s.anchor.row && s.virtualFocusRow < s.focus.row) ||
-    (s.virtualAnchorRow > s.anchor.row && s.virtualFocusRow > s.focus.row)
+    (selection.virtualAnchorRow < selection.anchor.row && selection.virtualFocusRow < selection.focus.row) ||
+    (selection.virtualAnchorRow > selection.anchor.row && selection.virtualFocusRow > selection.focus.row)
   );
 }
 //@ chunk-bzr73sfg.js:221045-221185 layout = hasSelection (1)
@@ -622,8 +632,8 @@ function selectionBounds(s) {
 //@ chunk-bzr73sfg.js:221185-221257 layout
 function isSoftWrapInRange(packed, colRange) {
   if (!(packed > 0)) return false;
-  let f = softWrapStartCol(packed);
-  return f >= colRange.lo && f <= colRange.hi;
+  let startCol = softWrapStartCol(packed);
+  return startCol >= colRange.lo && startCol <= colRange.hi;
 }
 //@ chunk-bzr73sfg.js:221257-221675 fingerprint = extractRowText (1)
 /**
@@ -632,17 +642,23 @@ function isSoftWrapInRange(packed, colRange) {
 function extractRowText(screen, row, startCol, endCol, isContinuation, colRange) {
   let noSelect = screen.noSelect;
   let rowOff = row * screen.width;
-  let A = isSoftWrapInRange(screen.softWrap[row], colRange) ? screen.softWrap[row] : 0;
+  let softWrap = isSoftWrapInRange(screen.softWrap[row], colRange) ? screen.softWrap[row] : 0;
   let contentEnd =
     (row + 1 < screen.height && isSoftWrapInRange(screen.softWrap[row + 1], colRange)
       ? screen.softWrap[row + 1]
       : 0) >>> 16;
   let lastCol = contentEnd > 0 ? Math.min(endCol, contentEnd - 1) : endCol;
-  let U = A !== 0 ? softWrapStartCol(A) : 0;
-  let L = A !== 0 ? Math.max(startCol, U) : startCol;
+  let wrapStart = softWrap !== 0 ? softWrapStartCol(softWrap) : 0;
+  let firstCol = softWrap !== 0 ? Math.max(startCol, wrapStart) : startCol;
   let line =
-    isContinuation && A !== 0 && (A & SW_ELIDED_SEP) !== 0 && startCol <= U && endCol >= U ? " " : "";
-  for (let col = L; col <= lastCol; col++) {
+    isContinuation &&
+    softWrap !== 0 &&
+    (softWrap & SW_ELIDED_SEP) !== 0 &&
+    startCol <= wrapStart &&
+    endCol >= wrapStart
+      ? " "
+      : "";
+  for (let col = firstCol; col <= lastCol; col++) {
     if (noSelect[rowOff + col] === 1) continue;
     let cell = cellAt(screen, col, row);
     if (!cell) continue;
@@ -664,9 +680,9 @@ function joinRows(lines, text, sw) {
  * 得到选中文本：滚出上方的缓存行 + 屏幕上的行 + 滚出下方的缓存行，按软换行合并。
  */
 function getSelectedText(s, screen) {
-  let f = selectionBounds(s);
-  if (!f) return "";
-  let { start, end } = f;
+  let selection = selectionBounds(s);
+  if (!selection) return "";
+  let { start, end } = selection;
   let sw = screen.softWrap;
   let lines = [];
   for (let i = 0; i < s.scrolledOffAbove.length; i++)
@@ -693,26 +709,26 @@ function getSelectedText(s, screen) {
  * 内容滚动前把即将滚出视口的已选行文本存进 scrolledOffAbove/Below（复制时还能拿到），并把锚点移到边界。
  */
 function captureScrolledRows(s, screen, firstRow, lastRow, side) {
-  let g = selectionBounds(s);
-  if (!g || firstRow > lastRow || isSelectionFullyOffscreen(s)) return;
-  let { start, end } = g;
+  let bounds = selectionBounds(s);
+  if (!bounds || firstRow > lastRow || isSelectionFullyOffscreen(s)) return;
+  let { start, end } = bounds;
   let lo = Math.max(firstRow, start.row);
   let hi = Math.min(lastRow, end.row);
   if (lo > hi) return;
   let { width, softWrap } = screen;
-  let U = [];
-  let L = [];
+  let rowTexts = [];
+  let rowWraps = [];
   let colRange = selectionColRange(s, width);
   for (let row = lo; row <= hi; row++) {
     let colStart = row === start.row ? Math.max(start.col, colRange.lo) : colRange.lo;
     let colEnd = row === end.row ? Math.min(end.col, colRange.hi) : colRange.hi;
     let isContinuation = row > start.row || s.scrolledOffAbove.length > 0;
-    U.push(extractRowText(screen, row, colStart, colEnd, isContinuation, colRange));
-    L.push(isSoftWrapInRange(softWrap[row], colRange));
+    rowTexts.push(extractRowText(screen, row, colStart, colEnd, isContinuation, colRange));
+    rowWraps.push(isSoftWrapInRange(softWrap[row], colRange));
   }
   if (side === "above") {
-    s.scrolledOffAbove.push(...U);
-    s.scrolledOffAboveSW.push(...L);
+    s.scrolledOffAbove.push(...rowTexts);
+    s.scrolledOffAboveSW.push(...rowWraps);
     if (s.anchor && s.anchor.row === start.row && lo === start.row) {
       s.virtualAnchorCol ??= s.anchor.col;
       s.anchor = {
@@ -733,8 +749,8 @@ function captureScrolledRows(s, screen, firstRow, lastRow, side) {
         };
     }
   } else {
-    s.scrolledOffBelow.unshift(...U);
-    s.scrolledOffBelowSW.unshift(...L);
+    s.scrolledOffBelow.unshift(...rowTexts);
+    s.scrolledOffBelowSW.unshift(...rowWraps);
     if (s.anchor && s.anchor.row === end.row && hi === end.row) {
       s.virtualAnchorCol ??= s.anchor.col;
       s.anchor = {
@@ -761,14 +777,14 @@ function captureScrolledRows(s, screen, firstRow, lastRow, side) {
  * 把选区画到屏幕上：选区内每格换成 withSelectionBg 派生样式（noSelect 格跳过）。
  */
 function applySelectionOverlay(screen, selection, stylePool) {
-  let m = selectionBounds(selection);
-  if (!m || isSelectionFullyOffscreen(selection)) return;
-  let { start, end } = m;
+  let bounds = selectionBounds(selection);
+  if (!bounds || isSelectionFullyOffscreen(selection)) return;
+  let { start, end } = bounds;
   let { width, noSelect } = screen;
-  let A = selectionColRange(selection, width);
+  let colRange = selectionColRange(selection, width);
   for (let row = start.row; row <= end.row && row < screen.height; row++) {
-    let colStart = row === start.row ? Math.max(start.col, A.lo) : A.lo;
-    let colEnd = row === end.row ? Math.min(end.col, width - 1, A.hi) : A.hi;
+    let colStart = row === start.row ? Math.max(start.col, colRange.lo) : colRange.lo;
+    let colEnd = row === end.row ? Math.min(end.col, width - 1, colRange.hi) : colRange.hi;
     let rowOff = row * width;
     for (let col = colStart; col <= colEnd; col++) {
       let idx = rowOff + col;

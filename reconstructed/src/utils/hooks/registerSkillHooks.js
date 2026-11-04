@@ -32,23 +32,23 @@ var SKILL_HOOKS_NOT_REGISTERED_TEXT =
  * 检查技能声明的钩子是否在同一来源的预算内（钩子数、matcher 字符数、可测试性）；超出时不注册钩子并返回原因。
  */
 function checkSkillHooksFit(sessionHooksRegistry, sessionId, source, commandRepository, name, hooks) {
-  let p = sessionHooksRegistry.skillDraws(sessionId);
-  if (p === undefined) return;
-  let sourceDraws = p.get(commandRepository ?? source) ?? {
+  let draws = sessionHooksRegistry.skillDraws(sessionId);
+  if (draws === undefined) return;
+  let sourceDraws = draws.get(commandRepository ?? source) ?? {
     hooks: 0,
     characters: 0,
     texts: new Map(),
     unfitTexts: 0,
   };
-  p.set(commandRepository ?? source, sourceDraws);
-  let y = jsonStringify([name, computeContentHash(jsonStringify(hooks))]);
-  if (sourceDraws.texts.has(y)) return sourceDraws.texts.get(y);
+  draws.set(commandRepository ?? source, sourceDraws);
+  let textKey = jsonStringify([name, computeContentHash(jsonStringify(hooks))]);
+  if (sourceDraws.texts.has(textKey)) return sourceDraws.texts.get(textKey);
   let hooksAsked = 0;
   let charactersAsked = 0;
-  for (let H of Object.values(hooks).flatMap((D) => D ?? [])) {
-    let max = Math.max(1, H.hooks.length);
+  for (let matcher of Object.values(hooks).flatMap((matchers) => matchers ?? [])) {
+    let max = Math.max(1, matcher.hooks.length);
     hooksAsked += max;
-    charactersAsked += (H.matcher?.length ?? 0) * max;
+    charactersAsked += (matcher.matcher?.length ?? 0) * max;
   }
   let unfitReason;
   if (sourceDraws.characters + charactersAsked > MAX_MATCHER_SET_SIZE) unfitReason = "characters";
@@ -58,7 +58,7 @@ function checkSkillHooksFit(sessionHooksRegistry, sessionId, source, commandRepo
     if (sourceDraws.unfitTexts === MAX_UNFIT_TEXTS) return unfitReason;
     sourceDraws.unfitTexts++;
   }
-  sourceDraws.texts.set(y, unfitReason);
+  sourceDraws.texts.set(textKey, unfitReason);
   logEvent("tengu_skill_hooks_bounds_checked", {
     outcome: fromEnum(unfitReason ?? "fits"),
     source_kind: fromEnum(source),
@@ -104,7 +104,7 @@ function registerSkillHooks(
   sessionId,
   hooks,
   skillName,
-  s,
+  skillRoot,
   personal = false,
   checkout = false,
   commandRepository,
@@ -120,13 +120,13 @@ function registerSkillHooks(
           ? () => {
               logForDebugging(`Removing one-shot hook for event ${eventName} in skill '${skillName}'`);
               setAppState.remove(sessionId, eventName, hook, {
-                skillRoot: s,
+                skillRoot,
               });
             }
           : undefined;
         setAppState.add(sessionId, eventName, matcher.matcher || "", hook, {
           onHookSuccess,
-          skillRoot: s,
+          skillRoot,
           personal,
           checkout,
         });
@@ -134,7 +134,7 @@ function registerSkillHooks(
       }
   }
   if (registeredCount > 0) {
-    if (s !== undefined) getPluginHookRunner()?.skillHooksRegistered(s, hooks);
+    if (skillRoot !== undefined) getPluginHookRunner()?.skillHooksRegistered(skillRoot, hooks);
     logForDebugging(`Registered ${registeredCount} hooks from skill '${skillName}'`);
   }
 }

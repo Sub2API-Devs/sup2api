@@ -25,7 +25,7 @@ import { isAutoreactArmed, disarmAutoreact } from "./comments/postReply.js";
 import { logFeatureBad, logFeatureSad, logFeatureOk } from "../analytics/featureTelemetry.js";
 import { isSlugStoppedAnywhere } from "./summonArms.js";
 import { describeFrameDomains } from "./frameDomains.js";
-import { BOXED_DIAMOND_GLYPH } from "../../utils/permissions/autoModeRulesPrompt.js";
+import { BOXED_DIAMOND_GLYPH } from "../../constants/figures.js";
 import { takePendingWatchArtifact } from "../../cli/watchArtifactArgs.js";
 import { findToolByName } from "../../Tool.js";
 import { isArtifactsAvailable } from "./artifactAvailability.js";
@@ -33,8 +33,8 @@ import { mainObservedArtifactVersion } from "./readObservation.js";
 import { isAbortError } from "../../utils/errors.js";
 
 //@ chunk-18hwfzwa.js:364649-364722 placement
-function renameSessionQuietly(h, x, storageV5, credentials) {
-  return renameSession(h, x, storageV5, false, false, credentials).then(
+function renameSessionQuietly(title, sessionId, storageV5, credentials) {
+  return renameSession(title, sessionId, storageV5, false, false, credentials).then(
     () => {},
     (error) => logError(error),
   );
@@ -67,33 +67,35 @@ var ARTIFACT_WATCH_REASON_TEXTS = {
 var WATCH_RESTART_PREFIX = "The artifact watch on ";
 var WATCH_RESTART_SUFFIX = " could not be restarted \u2014 you are NOT currently watching it.";
 //@ chunk-18hwfzwa.js:366016-366057 placement
-function watchRestartText(h) {
-  return `${WATCH_RESTART_PREFIX}${h}${WATCH_RESTART_SUFFIX}`;
+function watchRestartText(text) {
+  return `${WATCH_RESTART_PREFIX}${text}${WATCH_RESTART_SUFFIX}`;
 }
 //@ chunk-18hwfzwa.js:366057-366460 placement
-function artifactWatchStartNotice(h, x, userMessageFinder) {
-  let L = watchRestartText(x.url);
-  let ee = artifactViewerUrlSpellings({
-    slug: x.slug,
+function artifactWatchStartNotice(state, target, userMessageFinder) {
+  let restartText = watchRestartText(target.url);
+  let spellings = artifactViewerUrlSpellings({
+    slug: target.slug,
     env: claudeAiEnvironment(),
   });
   let max = Math.max(
-    ...ee.map((He) => userMessageFinder(watchRestartText(He))),
+    ...spellings.map((spelling) => userMessageFinder(watchRestartText(spelling))),
     userMessageFinder(WATCH_NOT_CARRIED_NOTICE),
   );
-  let metaMessage = h.metaMessage;
+  let metaMessage = state.metaMessage;
   if (metaMessage !== undefined) {
-    let max_2 = Math.max(...ee.map((We) => userMessageFinder(metaMessage.replaceAll(x.url, We))));
+    let max_2 = Math.max(
+      ...spellings.map((spelling) => userMessageFinder(metaMessage.replaceAll(target.url, spelling))),
+    );
     return max_2 !== -1 && max_2 > max ? undefined : metaMessage;
   }
   let max_2 = Math.max(
-    ...ee.map((He) =>
+    ...spellings.map((spelling) =>
       userMessageFinder(
-        `The user started this session watching the artifact ${He} (via claude --watch-artifact)`,
+        `The user started this session watching the artifact ${spelling} (via claude --watch-artifact)`,
       ),
     ),
   );
-  if (max_2 !== -1 && max_2 > max) return L;
+  if (max_2 !== -1 && max_2 > max) return restartText;
   return;
 }
 //@ chunk-18hwfzwa.js:366460-366782 placement
@@ -106,45 +108,48 @@ var WATCH_NOT_CARRIED_NOTICE =
 /**
  * 从后往前扫描提醒文本：若找到"本会话通过 --watch-artifact 监听某 artifact"的记录且与当前监听目标不同（并且之后没有已发过的提示），返回"监听不会延续到本会话"的提示。
  */
-function getWatchNotCarriedNotice(h, slugFromAnyText, url) {
-  for (let idx = h.length - 1; idx >= 0; idx--) {
-    let ee = h[idx];
+function getWatchNotCarriedNotice(text, slugFromAnyText, url) {
+  for (let idx = text.length - 1; idx >= 0; idx--) {
+    let match = text[idx];
     if (
-      ee.startsWith(WATCH_NOT_CARRIED_NOTICE) ||
-      (ee.startsWith(WATCH_RESTART_PREFIX) && ee.includes(WATCH_RESTART_SUFFIX))
+      match.startsWith(WATCH_NOT_CARRIED_NOTICE) ||
+      (match.startsWith(WATCH_RESTART_PREFIX) && match.includes(WATCH_RESTART_SUFFIX))
     )
       return;
-    let match =
-      /^The user started this session watching the artifact (\S+) \(via claude --watch-artifact\)/.exec(ee);
-    let Re = match === null ? null : slugFromAnyText(match[1]);
-    if (Re !== null && (url === undefined || Re !== slugFromAnyText(url))) return WATCH_NOT_CARRIED_NOTICE;
+    let match_2 =
+      /^The user started this session watching the artifact (\S+) \(via claude --watch-artifact\)/.exec(
+        match,
+      );
+    let slug = match_2 === null ? null : slugFromAnyText(match_2[1]);
+    if (slug !== null && (url === undefined || slug !== slugFromAnyText(url)))
+      return WATCH_NOT_CARRIED_NOTICE;
   }
   return;
 }
 //@ chunk-18hwfzwa.js:367104-367153 placement
-function userMessageTexts(h) {
-  return h.flatMap((x) => getUserMessageText(x) ?? []);
+function userMessageTexts(messages) {
+  return messages.flatMap((message) => getUserMessageText(message) ?? []);
 }
 //@ chunk-18hwfzwa.js:367153-367262 placement
-function makeUserMessageFinder(h) {
-  return (x) => {
-    for (let idx = h.length - 1; idx >= 0; idx--)
-      if ((getUserMessageText(h[idx]) ?? "").startsWith(x)) return idx;
+function makeUserMessageFinder(messages) {
+  return (text) => {
+    for (let idx = messages.length - 1; idx >= 0; idx--)
+      if ((getUserMessageText(messages[idx]) ?? "").startsWith(text)) return idx;
     return -1;
   };
 }
 //@ chunk-18hwfzwa.js:367262-367349 placement
-function slugFromAnyText(h) {
-  let lower = h.toLowerCase();
+function slugFromAnyText(text) {
+  let lower = text.toLowerCase();
   if (ARTIFACT_SLUG_RE.test(lower)) return lower;
-  return parseArtifactUrlAnyCase(h)?.slug ?? null;
+  return parseArtifactUrlAnyCase(text)?.slug ?? null;
 }
 //@ chunk-18hwfzwa.js:367349-368800 placement
-async function startArtifactWatch(h) {
-  let { target, commentVerbsInSchema, getKnownVer, context } = h;
-  let ke = isBuiltInArtifactHiddenForMcp();
+async function startArtifactWatch(options) {
+  let { target, commentVerbsInSchema, getKnownVer, context } = options;
+  let hidden = isBuiltInArtifactHiddenForMcp();
   let tool =
-    ke &&
+    hidden &&
     canPostReply(
       context,
       {
@@ -154,10 +159,10 @@ async function startArtifactWatch(h) {
       target.url,
     )
       ? undefined
-      : h.tool;
-  let arm = h.arm ?? watchArtifactFromStartup;
-  let commentWakeGate = h.commentWakeGate ?? isAutoreactArmed;
-  let We = await arm({
+      : options.tool;
+  let arm = options.arm ?? watchArtifactFromStartup;
+  let commentWakeGate = options.commentWakeGate ?? isAutoreactArmed;
+  let outcome = await arm({
     slug: target.slug,
     url: target.url,
     getKnownVer,
@@ -165,40 +170,41 @@ async function startArtifactWatch(h) {
     commentVerbsInSchema,
     context,
   });
-  if (We.outcome === "skipped") {
-    (We.reason === "not_found" ||
-      We.reason === "other_org" ||
-      We.reason === "boot_failed" ||
-      We.reason === "ws_open_error"
+  if (outcome.outcome === "skipped") {
+    (outcome.reason === "not_found" ||
+      outcome.reason === "other_org" ||
+      outcome.reason === "boot_failed" ||
+      outcome.reason === "ws_open_error"
       ? logFeatureBad
-      : logFeatureSad)("artifact_watch_startup", We.reason);
+      : logFeatureSad)("artifact_watch_startup", outcome.reason);
     return {
       notificationText:
-        ARTIFACT_WATCH_REASON_TEXTS[We.reason] ?? `Could not start the artifact watch (${We.reason}).`,
+        ARTIFACT_WATCH_REASON_TEXTS[outcome.reason] ??
+        `Could not start the artifact watch (${outcome.reason}).`,
     };
   }
-  let ze =
+  let notice =
     tool !== undefined && commentVerbsInSchema && commentWakeGate() && !isSlugStoppedAnywhere(target.slug);
   logFeatureOk("artifact_watch_startup", {
-    already_watching: We.outcome === "already_watching",
-    comments: ze,
+    already_watching: outcome.outcome === "already_watching",
+    comments: notice,
   });
-  let Xe =
-    ze &&
+  let notice2 =
+    notice &&
     !(
-      ke &&
+      hidden &&
       canAutoreactWithoutPrompts({
         ...context,
         permissionLayers: undefined,
       })
     );
-  let rt = describeFrameDomains();
+  let domains = describeFrameDomains();
   return {
     notificationText:
-      Xe && ke
+      notice2 && hidden
         ? `${BOXED_DIAMOND_GLYPH} Watching artifact for new versions and comments you send to Claude.`
-        : `${BOXED_DIAMOND_GLYPH} Watching artifact \u2014 Claude keeps track of new versions${Xe ? " and hears comments" : ""}.`,
-    metaMessage: `The user started this session watching the artifact ${target.url} (via claude --watch-artifact). It is the current artifact of interest. ${rt.contentReadsBlocked ?? `Re-read it before editing or republishing${ke ? "" : ` (${rt.readRemedy})`}.`} A republish starts no turn${ke ? "" : "; some Artifact results open with one line saying a newer version was published"}.${Xe ? (ke ? " You will be notified when the user sends you one of its comments." : " You will be notified when it receives comments.") : ""}`,
+        : `${BOXED_DIAMOND_GLYPH} Watching artifact \u2014 Claude keeps track of new versions${notice2 ? " and hears comments" : ""}.`,
+    metaMessage: `The user started this session watching the artifact ${target.url} (via claude --watch-artifact). It is the current artifact of interest. ${domains.contentReadsBlocked ?? `Re-read it before editing or republishing${hidden ? "" : ` (${domains.readRemedy})`}.`} A republish starts no turn${hidden ? "" : "; some Artifact results open with one line saying a newer version was published"}.${notice2 ? (hidden ? " You will be notified when the user sends you one of its comments." : " You will be notified when it receives comments.") : ""}`,
   };
 }
 //@ chunk-18hwfzwa.js:368800-369774 placement
@@ -210,8 +216,8 @@ function useArtifactWatchStartup({
   addNotification,
   artifactMountGate,
 }) {
-  let Re = initialMessages ?? [];
-  let Be = (watchNotCarriedNotice) => {
+  let initial = initialMessages ?? [];
+  let noticeFn = (watchNotCarriedNotice) => {
     if (watchNotCarriedNotice === undefined) return;
     transcript.apply({
       type: "append",
@@ -223,31 +229,31 @@ function useArtifactWatchStartup({
       ],
     });
   };
-  let He = takePendingWatchArtifact();
-  if (He === null) {
-    Be(getWatchNotCarriedNotice(userMessageTexts(Re), slugFromAnyText));
+  let pending = takePendingWatchArtifact();
+  if (pending === null) {
+    noticeFn(getWatchNotCarriedNotice(userMessageTexts(initial), slugFromAnyText));
     return;
   }
-  Be(getWatchNotCarriedNotice(userMessageTexts(Re), slugFromAnyText, He.url));
-  if (He.autoReactDisarmed)
+  noticeFn(getWatchNotCarriedNotice(userMessageTexts(initial), slugFromAnyText, pending.url));
+  if (pending.autoReactDisarmed)
     disarmAutoreact({
       storageV5,
     });
-  let We = (text) =>
+  let normalizer = (text) =>
     addNotification({
       key: "watch-artifact",
       kind: "feedback",
       text,
       priority: "immediate",
     });
-  let userMessageFinder = makeUserMessageFinder(Re);
-  let Xe = () => {
-    Be(
+  let userMessageFinder = makeUserMessageFinder(initial);
+  let reader = () => {
+    noticeFn(
       artifactWatchStartNotice(
         {
           notificationText: "",
         },
-        He,
+        pending,
         userMessageFinder,
       ),
     );
@@ -256,24 +262,24 @@ function useArtifactWatchStartup({
     .then(({ toolUseContext, allowed }) => {
       if (!allowed) {
         logFeatureSad("artifact_watch_startup", "fetch_gate");
-        We(ARTIFACT_WATCH_ERRORS.fetch_gate);
-        Xe();
+        normalizer(ARTIFACT_WATCH_ERRORS.fetch_gate);
+        reader();
         return;
       }
-      let At =
+      let out =
         findToolByName(toolUseContext.options.tools ?? [], ARTIFACT_TOOL_NAME) ?? hiddenBuiltInArtifactTool();
       return startArtifactWatch({
-        target: He,
-        ...(At !== undefined && {
-          tool: At,
+        target: pending,
+        ...(out !== undefined && {
+          tool: out,
         }),
         commentVerbsInSchema: isArtifactsAvailable(),
-        getKnownVer: () => mainObservedArtifactVersion(store.getState(), He.slug),
+        getKnownVer: () => mainObservedArtifactVersion(store.getState(), pending.slug),
         context: toolUseContext,
-      }).then((artifactWatch) => {
+      }).then((state) => {
         try {
-          We(artifactWatch.notificationText);
-          Be(artifactWatchStartNotice(artifactWatch, He, userMessageFinder));
+          normalizer(state.notificationText);
+          noticeFn(artifactWatchStartNotice(state, pending, userMessageFinder));
         } catch (error) {
           if (!isAbortError(error)) logError(error);
         }
@@ -281,9 +287,9 @@ function useArtifactWatchStartup({
     })
     .catch(() => {
       logFeatureBad("artifact_watch_startup", "arm_error");
-      We(ARTIFACT_WATCH_ERRORS.arm_error);
+      normalizer(ARTIFACT_WATCH_ERRORS.arm_error);
       try {
-        Xe();
+        reader();
       } catch (error) {
         if (!isAbortError(error)) logError(error);
       }

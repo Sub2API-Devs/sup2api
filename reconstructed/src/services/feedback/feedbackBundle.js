@@ -32,7 +32,7 @@ import {
 } from "../teamMemorySync/secretScanner.js";
 import { truncateToLength } from "../../utils/stringUtils.js";
 import { env } from "../../utils/env.js";
-import { wi, xr } from "../../../vendor/lodash-es/_inlinedHelpers.js";
+import { import_reject, import_mapValues } from "../../../vendor/lodash-es/_inlinedHelpers.js";
 import { submitFeedback } from "../../components/Feedback.js";
 import { logFeatureOk, logFeatureBad, logFeatureSad } from "../analytics/featureTelemetry.js";
 import { logEvent } from "../analytics/index.js";
@@ -57,34 +57,38 @@ import {
 import { getSessionId } from "../../bootstrap/state.js";
 import { memoryScopeForPath } from "../../utils/memoryFileDetection.js";
 import { isCommentNotificationText } from "../artifacts/comments/autoreactState.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-xx1vmpsq.js:20766-20827 placement = logEventTo1P (1)
 function logEventTo1P() {
   return isFeedbackAllowed() && getAPIProvider() === "firstParty" && feedbackCredentialStatus() === null;
 }
 //@ chunk-xx1vmpsq.js:20827-21189 placement
-var FEEDBACK_META_FIELDS = new Set([
-  "latestAssistantMessageId",
-  "latestAssistantAPIMessageId",
-  "lastInterruptedAssistantAPIMessageId",
-  "message_count",
-  "datetime",
-  "description",
-  "surface",
-  "platform",
-  "gitRepo",
-  "commitSha",
-  "remoteWorkspace",
-  "remoteSessionId",
-  "version",
-  "hostEnvironment",
-  ...[],
-  "transcript",
-  "subagentTranscripts",
-  "rawTranscriptJsonl",
-  "recentSessionTranscripts",
-  "debugLog",
-]);
+var FEEDBACK_META_FIELDS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-xx1vmpsq.js:20827", () => {
+  FEEDBACK_META_FIELDS = new Set([
+    "latestAssistantMessageId",
+    "latestAssistantAPIMessageId",
+    "lastInterruptedAssistantAPIMessageId",
+    "message_count",
+    "datetime",
+    "description",
+    "surface",
+    "platform",
+    "gitRepo",
+    "commitSha",
+    "remoteWorkspace",
+    "remoteSessionId",
+    "version",
+    "hostEnvironment",
+    ...[],
+    "transcript",
+    "subagentTranscripts",
+    "rawTranscriptJsonl",
+    "recentSessionTranscripts",
+    "debugLog",
+  ]);
+});
 //@ chunk-xx1vmpsq.js:21189-22269 placement
 async function submitFeedbackReport({
   description,
@@ -101,14 +105,17 @@ async function submitFeedbackReport({
       failureReason: "not_first_party",
     };
   let lastRealAssistantMessage = findLastRealAssistantMessage(messages);
-  let I = redactSecrets_2(description);
-  let M = {
+  let redactedDescription = redactSecrets_2(description);
+  let payload = {
     latestAssistantMessageId: lastRealAssistantMessage?.requestId ?? null,
     latestAssistantAPIMessageId: lastRealAssistantMessage?.message.id ?? null,
     lastInterruptedAssistantAPIMessageId,
     message_count: messages.length,
     datetime: new Date().toISOString(),
-    description: maxDescriptionChars === undefined ? I : truncateToLength(I, maxDescriptionChars),
+    description:
+      maxDescriptionChars === undefined
+        ? redactedDescription
+        : truncateToLength(redactedDescription, maxDescriptionChars),
     surface: "cli",
     platform: env.platform,
     gitRepo: false,
@@ -125,9 +132,9 @@ async function submitFeedbackReport({
       DD_SOURCEMAP_GROUP: "default",
     }.VERSION,
     transcript: [],
-    ...wi(fields, (R, E) => FEEDBACK_META_FIELDS.has(E)),
+    ...import_reject(fields, (value, fieldName) => FEEDBACK_META_FIELDS.has(fieldName)),
   };
-  return submitFeedback(M, signal, undefined, credentials);
+  return submitFeedback(payload, signal, undefined, credentials);
 }
 //@ chunk-xx1vmpsq.js:22269-22708 placement
 async function submitSurveyFollowup({
@@ -139,7 +146,7 @@ async function submitSurveyFollowup({
   lastInterruptedAssistantAPIMessageId,
   credentials,
 }) {
-  let C = await submitFeedbackReport({
+  let cr = await submitFeedbackReport({
     description,
     messages,
     lastInterruptedAssistantAPIMessageId,
@@ -151,9 +158,9 @@ async function submitSurveyFollowup({
     },
     credentials,
   });
-  if (C.success) logFeatureOk("feedback_survey_followup");
-  else logFeatureBad("feedback_survey_followup", C.failureReason ?? "unknown");
-  return C;
+  if (cr.success) logFeatureOk("feedback_survey_followup");
+  else logFeatureBad("feedback_survey_followup", cr.failureReason ?? "unknown");
+  return cr;
 }
 //@ chunk-xx1vmpsq.js:22708-24811 placement
 /**
@@ -189,10 +196,10 @@ async function postFeedbackSubmission({
     payload.rawTranscriptJsonl,
     payload.latestAssistantAPIMessageId,
   );
-  let re = await submitFeedback(payload, signal, sessionIdForMessage, credentials);
-  let z = re;
-  let fe = 0;
-  if (!z.success && z.payloadTooLarge) {
+  let firstResult = await submitFeedback(payload, signal, sessionIdForMessage, credentials);
+  let result = firstResult;
+  let stripLevel = 0;
+  if (!result.success && result.payloadTooLarge) {
     let {
       transcript,
       subagentTranscripts,
@@ -200,12 +207,12 @@ async function postFeedbackSubmission({
       recentSessionTranscripts,
       rawTranscriptJsonl,
       debugLog,
-      ...nt
+      ...rest
     } = payload;
-    fe = 1;
-    z = await submitFeedback(
+    stripLevel = 1;
+    result = await submitFeedback(
       {
-        ...nt,
+        ...rest,
         transcript: [],
         ...(rawTranscriptJsonl && {
           rawTranscriptJsonl,
@@ -218,11 +225,11 @@ async function postFeedbackSubmission({
       sessionIdForMessage,
       credentials,
     );
-    if (!z.success && z.payloadTooLarge) {
-      fe = 2;
-      z = await submitFeedback(
+    if (!result.success && result.payloadTooLarge) {
+      stripLevel = 2;
+      result = await submitFeedback(
         {
-          ...nt,
+          ...rest,
           transcript: [],
         },
         signal,
@@ -231,15 +238,15 @@ async function postFeedbackSubmission({
       );
     }
   }
-  if (z.success) {
+  if (result.success) {
     logEvent("tengu_bug_report_submitted", {
       surface: fromEnum(surface),
       remote_workspace: lit(payload.remoteWorkspace ? "true" : "false"),
-      retried_after_too_large: !re.success && re.payloadTooLarge === true,
-      strip_level: fromNumber(fe),
+      retried_after_too_large: !firstResult.success && firstResult.payloadTooLarge === true,
+      strip_level: fromNumber(stripLevel),
       third_party_transcripts_dropped: fromNumber(thirdPartyDroppedCount),
       laptop_memory_rows_dropped: fromNumber(laptopMemoryDroppedCount),
-      feedback_id: sanitizeMarkName(z.feedbackId),
+      feedback_id: sanitizeMarkName(result.feedbackId),
       last_assistant_message_id: sanitizeMarkName(latestAssistantMessageId),
       last_assistant_api_message_id: sanitizeMarkName(payload.latestAssistantAPIMessageId),
       last_interrupted_assistant_api_message_id: sanitizeMarkName(
@@ -252,34 +259,34 @@ async function postFeedbackSubmission({
       }),
     });
     logEventTo1P_2("tengu_bug_report_description", {
-      feedback_id: sanitizeMarkName(z.feedbackId),
+      feedback_id: sanitizeMarkName(result.feedbackId),
       descriptionLength: description.length,
     });
-    let ee = !re.success && re.payloadTooLarge === true;
-    if (ee) logFeatureSad("feedback_submit", "payload_stripped");
+    let stripped = !firstResult.success && firstResult.payloadTooLarge === true;
+    if (stripped) logFeatureSad("feedback_submit", "payload_stripped");
     else logFeatureOk("feedback_submit");
     return {
       success: true,
-      feedbackId: z.feedbackId,
-      retriedAfterTooLarge: ee,
+      feedbackId: result.feedbackId,
+      retriedAfterTooLarge: stripped,
     };
   }
-  if (z.failureReason) {
-    logFeatureBad("feedback_submit", z.failureReason);
+  if (result.failureReason) {
+    logFeatureBad("feedback_submit", result.failureReason);
     logEvent("tengu_bug_report_failed", {
       surface: fromEnum(surface),
       remote_workspace: lit(payload.remoteWorkspace ? "true" : "false"),
-      reason: fromEnum(z.failureReason),
-      status_code: fromNumberOpt(z.statusCode) ?? lit(""),
-      first_attempt_too_large: !re.success && re.payloadTooLarge === true,
+      reason: fromEnum(result.failureReason),
+      status_code: fromNumberOpt(result.statusCode) ?? lit(""),
+      first_attempt_too_large: !firstResult.success && firstResult.payloadTooLarge === true,
     });
   }
   return {
     success: false,
-    isZdrOrg: z.isZdrOrg,
-    failureReason: z.failureReason,
-    statusCode: z.statusCode,
-    refusal: z.refusal,
+    isZdrOrg: result.isZdrOrg,
+    failureReason: result.failureReason,
+    statusCode: result.statusCode,
+    refusal: result.refusal,
   };
 }
 //@ chunk-xx1vmpsq.js:24811-24873 placement
@@ -296,80 +303,84 @@ var MAX_TRANSCRIPT_STREAM_BYTES = 3758096384;
 /**
  * 把反馈内容写成本地 zip 包（feedback.json + transcript.jsonl），供无法上传时手动分享。
  */
-async function writeFeedbackBundle(e, s = "feedback.json", signal, y) {
+async function writeFeedbackBundle(text, entryName = "feedback.json", signal, transcriptSource) {
   if (signal?.aborted) return CANCELLED_RESULT;
-  let T = `cc-${new Date().toISOString().replace(/[-:]/g, "").replace("T", "-").slice(0, 15)}-${randomBytes(3).toString("hex")}`;
-  let C = join(getClaudeConfigDir(), "feedback-bundles");
-  let I = join(C, `${T}.zip`);
+  let bundleId = `cc-${new Date().toISOString().replace(/[-:]/g, "").replace("T", "-").slice(0, 15)}-${randomBytes(3).toString("hex")}`;
+  let bundleDir = join(getClaudeConfigDir(), "feedback-bundles");
+  let zipPath = join(bundleDir, `${bundleId}.zip`);
   try {
-    await mkdir(C, {
+    await mkdir(bundleDir, {
       recursive: true,
       mode: 448,
     });
-    let { Zip, ZipDeflate } = await import("./chunk-9t1jcaah.js");
-    let writeStream = createWriteStream(I, {
+    let { Zip, ZipDeflate } = await import("../../../vendor/fflate/esm/index.mjs");
+    let writeStream = createWriteStream(zipPath, {
       mode: 384,
     });
-    let A;
+    let transcriptProblem;
     await new Promise((resolve, reject) => {
-      let Q = false;
-      let re = (Y) => {
-        Q = true;
+      let failed = false;
+      let fail = (error) => {
+        failed = true;
         writeStream.destroy();
-        reject(Y);
+        reject(error);
       };
-      writeStream.on("error", re);
-      let z = new Zip((Y, ue, ze) => {
-        if (Y) return re(Y);
-        writeStream.write(ue);
-        if (ze) writeStream.end((_e) => (_e ? re(_e) : resolve()));
+      writeStream.on("error", fail);
+      let zip = new Zip((error, chunk, final) => {
+        if (error) return fail(error);
+        writeStream.write(chunk);
+        if (final) writeStream.end((error) => (error ? fail(error) : resolve()));
       });
-      let fe = new ZipDeflate(s);
-      z.add(fe);
-      fe.push(e, true);
-      if (y === undefined) {
-        z.end();
+      let jsonEntry = new ZipDeflate(entryName);
+      zip.add(jsonEntry);
+      jsonEntry.push(text, true);
+      if (transcriptSource === undefined) {
+        zip.end();
         return;
       }
-      let ee = streamTranscriptFile(y.path, y.inPlay, (Y) => {
-        A = Y;
-      });
+      let transcriptLines = streamTranscriptFile(
+        transcriptSource.path,
+        transcriptSource.inPlay,
+        (problem) => {
+          transcriptProblem = problem;
+        },
+      );
       (async () => {
         try {
-          let Y;
-          for await (let ue of ee) {
-            if (Q || signal?.aborted) break;
-            if (Y === undefined) {
-              Y = new ZipDeflate("transcript.jsonl");
-              z.add(Y);
+          let transcriptEntry;
+          for await (let line of transcriptLines) {
+            if (failed || signal?.aborted) break;
+            if (transcriptEntry === undefined) {
+              transcriptEntry = new ZipDeflate("transcript.jsonl");
+              zip.add(transcriptEntry);
             }
-            Y.push(ue, false);
+            transcriptEntry.push(line, false);
             if (writeStream.writableNeedDrain) await once(writeStream, "drain");
           }
-          if (Q) return;
-          Y?.push(new Uint8Array(0), true);
-          z.end();
+          if (failed) return;
+          transcriptEntry?.push(new Uint8Array(0), true);
+          zip.end();
         } catch (error) {
-          re(error);
+          fail(error);
         }
       })();
     });
     if (signal?.aborted) {
-      await retryTransient(() => unlink(I)).catch(() => {});
+      await retryTransient(() => unlink(zipPath)).catch(() => {});
       return CANCELLED_RESULT;
     }
-    if (A === undefined) logFeatureOk("feedback_bundle");
-    else logFeatureSad("feedback_bundle", A);
+    if (transcriptProblem === undefined) logFeatureOk("feedback_bundle");
+    else logFeatureSad("feedback_bundle", transcriptProblem);
     return {
       success: true,
-      bundleId: T,
-      zipPath: I,
-      ...(A !== undefined && {
-        transcriptProblem: A,
+      bundleId,
+      zipPath,
+      ...(transcriptProblem !== undefined && {
+        transcriptProblem,
       }),
     };
   } catch (error) {
-    await rm(I, {
+    await rm(zipPath, {
       force: true,
     }).catch(() => {});
     logError(error);
@@ -384,7 +395,10 @@ async function writeFeedbackBundle(e, s = "feedback.json", signal, y) {
 /**
  * 反馈载荷里原样保留的字段名（type、description、title）。
  */
-var KEEP_VERBATIM_FIELDS = new Set(["type", "description", "title"]);
+var KEEP_VERBATIM_FIELDS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-xx1vmpsq.js:26066", () => {
+  KEEP_VERBATIM_FIELDS = new Set(["type", "description", "title"]);
+});
 //@ chunk-xx1vmpsq.js:26113-26201 placement = redactSecrets (0.815)
 function redactSecrets(content) {
   return typeof content === "string" || (content !== null && typeof content === "object")
@@ -400,69 +414,69 @@ var SHA256_HEX_RE = /(?<![0-9a-f])[0-9a-f]{64}(?![0-9a-f])/g;
 /**
  * 对 api-request 类型的内容把 64 位哈希替换成 [REDACTED]。
  */
-function redactHashInApiRequest(e, line) {
-  return line.includes("api-request") ? e.replace(SHA256_HEX_RE, "[REDACTED]") : e;
+function redactHashInApiRequest(text, line) {
+  return line.includes("api-request") ? text.replace(SHA256_HEX_RE, "[REDACTED]") : text;
 }
 //@ chunk-xx1vmpsq.js:26328-27242 placement
-function redactSecretsInValue(e, s = "data") {
-  if (typeof e === "string") return redactHashInApiRequest(redactSecrets_2(e), e);
-  if (Array.isArray(e)) return e.map((r) => redactSecretsInValue(r));
-  if (e === null || typeof e !== "object") return e;
-  let n = "type" in e && e.type === "object";
-  let y = Object.create(null);
-  for (let [key, value] of Object.entries(e)) {
-    let T = value !== null && typeof value === "object" && !Array.isArray(value);
-    let C = false;
-    let I = "data";
-    if (s === "credentialProperty") {
-      if (T && (key === "items" || (key === "properties" && n)))
-        I = key === "items" ? "credentialProperty" : "credentialPropertyNames";
-      else if (KEEP_VERBATIM_FIELDS.has(key) && Array.isArray(value)) {
-        y[redactSecrets_2(key)] = value.map((M) =>
-          typeof M === "string" ? redactSecrets_2(M) : redactSecrets(M),
+function redactSecretsInValue(value, mode = "data") {
+  if (typeof value === "string") return redactHashInApiRequest(redactSecrets_2(value), value);
+  if (Array.isArray(value)) return value.map((entry) => redactSecretsInValue(entry));
+  if (value === null || typeof value !== "object") return value;
+  let isObjectSchema = "type" in value && value.type === "object";
+  let copy = Object.create(null);
+  for (let [key, value_2] of Object.entries(value)) {
+    let childIsObject = value_2 !== null && typeof value_2 === "object" && !Array.isArray(value_2);
+    let redactWhole = false;
+    let childMode = "data";
+    if (mode === "credentialProperty") {
+      if (childIsObject && (key === "items" || (key === "properties" && isObjectSchema)))
+        childMode = key === "items" ? "credentialProperty" : "credentialPropertyNames";
+      else if (KEEP_VERBATIM_FIELDS.has(key) && Array.isArray(value_2)) {
+        copy[redactSecrets_2(key)] = value_2.map((entry) =>
+          typeof entry === "string" ? redactSecrets_2(entry) : redactSecrets(entry),
         );
         continue;
-      } else C = !KEEP_VERBATIM_FIELDS.has(key) || T;
-    } else if (s === "credentialPropertyNames") {
-      C = !T;
-      I = "credentialProperty";
-    } else if (s === "propertyNames" && T)
-      I =
+      } else redactWhole = !KEEP_VERBATIM_FIELDS.has(key) || childIsObject;
+    } else if (mode === "credentialPropertyNames") {
+      redactWhole = !childIsObject;
+      childMode = "credentialProperty";
+    } else if (mode === "propertyNames" && childIsObject)
+      childMode =
         redactSecrets_3({
           [key]: "",
         })[key] === "[REDACTED]"
           ? "credentialProperty"
           : "data";
-    else if (key === "properties" && T && n) I = "propertyNames";
+    else if (key === "properties" && childIsObject && isObjectSchema) childMode = "propertyNames";
     else
-      C =
+      redactWhole =
         redactSecrets_3({
           [key]: "",
         })[key] === "[REDACTED]";
-    if (C) y[redactSecrets_2(key)] = redactSecrets(value);
-    else if (typeof value === "string")
-      y[redactSecrets_2(key)] = redactHashInApiRequest(redactKeyedValue(key, value), value);
-    else y[redactSecrets_2(key)] = redactSecretsInValue(value, I);
+    if (redactWhole) copy[redactSecrets_2(key)] = redactSecrets(value_2);
+    else if (typeof value_2 === "string")
+      copy[redactSecrets_2(key)] = redactHashInApiRequest(redactKeyedValue(key, value_2), value_2);
+    else copy[redactSecrets_2(key)] = redactSecretsInValue(value_2, childMode);
   }
-  return y;
+  return copy;
 }
 //@ chunk-xx1vmpsq.js:27242-27271 placement
-function redactFeedbackValue(e) {
-  return redactSecretsInValue(e);
+function redactFeedbackValue(value) {
+  return redactSecretsInValue(value);
 }
 //@ chunk-xx1vmpsq.js:27271-27435 placement
-function redactJsonlLines(e) {
-  return e
+function redactJsonlLines(text) {
+  return text
     .split(
       `
 `,
     )
     .map((line) => {
       if (!line) return line;
-      let n = safeParseJSON(line, false);
-      if (n === null) return redactHashInApiRequest(redactSecrets_2(line), line);
+      let jsonlLine = safeParseJSON(line, false);
+      if (jsonlLine === null) return redactHashInApiRequest(redactSecrets_2(line), line);
       try {
-        return jsonStringify(redactSecretsInValue(n));
+        return jsonStringify(redactSecretsInValue(jsonlLine));
       } catch {
         return redactHashInApiRequest(redactSecrets_2(line), line);
       }
@@ -470,61 +484,66 @@ function redactJsonlLines(e) {
 `);
 }
 //@ chunk-xx1vmpsq.js:27435-28144 placement
-async function* streamTranscriptFile(path, inPlay, n, y = MAX_TRANSCRIPT_STREAM_BYTES) {
-  let lines = readLines(path);
-  let w;
-  let T = [];
-  let C = 0;
-  let I = 0;
+async function* streamTranscriptFile(
+  filePath,
+  inPlay,
+  transcriptPath,
+  inPlayContext = MAX_TRANSCRIPT_STREAM_BYTES,
+) {
+  let lines = readLines(filePath);
+  let lineError;
+  let pendingLines = [];
+  let pendingBytes = 0;
+  let emittedBytes = 0;
   try {
     for (;;) {
-      let R = await lines.next().catch((error) => {
-        w = {
+      let next = await lines.next().catch((error) => {
+        lineError = {
           error,
         };
         return;
       });
-      let E = R === undefined || R.done === true;
-      if (R !== undefined && R.done !== true) {
-        T.push(R.value.toString("utf8"));
-        C += R.value.byteLength;
+      let done = next === undefined || next.done === true;
+      if (next !== undefined && next.done !== true) {
+        pendingLines.push(next.value.toString("utf8"));
+        pendingBytes += next.value.byteLength;
       }
-      if (E ? T.length > 0 : C >= MAX_INLINE_TRANSCRIPT_BYTES) {
-        let A = redactTranscript(
+      if (done ? pendingLines.length > 0 : pendingBytes >= MAX_INLINE_TRANSCRIPT_BYTES) {
+        let redacted = redactTranscript(
           withholdTranscriptLine(
-            T.join(`
+            pendingLines.join(`
 `),
             inPlay,
           ).jsonl,
         );
         let buffer = Buffer.from(
-          A === ""
+          redacted === ""
             ? ""
-            : `${A}
+            : `${redacted}
 `,
         );
-        if (I + buffer.byteLength > y) {
-          n("transcript_over_zip_limit");
+        if (emittedBytes + buffer.byteLength > inPlayContext) {
+          transcriptPath("transcript_over_zip_limit");
           return;
         }
         yield buffer;
-        I += buffer.byteLength;
-        T = [];
-        C = 0;
+        emittedBytes += buffer.byteLength;
+        pendingLines = [];
+        pendingBytes = 0;
       }
-      if (E) break;
+      if (done) break;
     }
   } catch (error) {
     logError(error);
-    n("transcript_incomplete");
+    transcriptPath("transcript_incomplete");
     return;
   } finally {
     await lines.return();
   }
-  if (w === undefined) return;
-  let { error } = w;
+  if (lineError === undefined) return;
+  let { error } = lineError;
   if (isPathAbsent(error)) {
-    n("transcript_missing");
+    transcriptPath("transcript_missing");
     return;
   }
   if (isFsInaccessible(error) || isEISDIR(error))
@@ -532,14 +551,14 @@ async function* streamTranscriptFile(path, inPlay, n, y = MAX_TRANSCRIPT_STREAM_
       level: "error",
     });
   else logError(error);
-  n("transcript_incomplete");
+  transcriptPath("transcript_incomplete");
 }
 //@ chunk-xx1vmpsq.js:28144-28178 placement
 /**
  * 先按行脱敏再对整段做 JSON 行脱敏。
  */
-function redactTranscript(e) {
-  return redactJsonlLines(redactTranscriptLines(e));
+function redactTranscript(text) {
+  return redactJsonlLines(redactTranscriptLines(text));
 }
 //@ chunk-xx1vmpsq.js:28178-29008 placement
 async function saveFeedbackBundle({
@@ -555,12 +574,12 @@ async function saveFeedbackBundle({
   storageV5,
   host,
 }) {
-  let E;
-  let A;
+  let payloadText;
+  let transcriptSource;
   try {
     if (wholeTranscript) {
       let materializedSessionFile = getMaterializedSessionFile();
-      A = {
+      transcriptSource = {
         path:
           materializedSessionFile !== null && isOwnTranscriptFile(getSessionId(), materializedSessionFile)
             ? materializedSessionFile
@@ -582,21 +601,21 @@ async function saveFeedbackBundle({
       storageV5,
       host,
     });
-    let { rawTranscriptJsonl, recentSessionTranscripts, transcript, subagentTranscripts, ...fe } = payload;
-    let ee = {
-      ...redactSecretsDeep(fe),
+    let { rawTranscriptJsonl, recentSessionTranscripts, transcript, subagentTranscripts, ...rest } = payload;
+    let redacted = {
+      ...redactSecretsDeep(rest),
       transcript: redactFeedbackValue(transcript),
       ...(subagentTranscripts !== undefined && {
-        subagentTranscripts: xr(subagentTranscripts, redactFeedbackValue),
+        subagentTranscripts: import_mapValues(subagentTranscripts, redactFeedbackValue),
       }),
       ...(rawTranscriptJsonl !== undefined && {
         rawTranscriptJsonl: redactTranscript(rawTranscriptJsonl),
       }),
       ...(recentSessionTranscripts !== undefined && {
-        recentSessionTranscripts: xr(recentSessionTranscripts, redactTranscript),
+        recentSessionTranscripts: import_mapValues(recentSessionTranscripts, redactTranscript),
       }),
     };
-    E = buildFeedbackPayload(ee, TRANSCRIPT_FIELDS, SUBAGENT_TRANSCRIPT_FIELDS);
+    payloadText = buildFeedbackPayload(redacted, TRANSCRIPT_FIELDS, SUBAGENT_TRANSCRIPT_FIELDS);
   } catch (error) {
     logError(error);
     logFeatureBad("feedback_bundle", "write_failed");
@@ -605,24 +624,24 @@ async function saveFeedbackBundle({
       error: errorMessage(error),
     };
   }
-  return writeFeedbackBundle(E, undefined, signal, A);
+  return writeFeedbackBundle(payloadText, undefined, signal, transcriptSource);
 }
 //@ chunk-xx1vmpsq.js:29008-29865 placement
-function buildInitMessageFields(e) {
+function buildInitMessageFields(initParams) {
   return {
-    commands: e.commands ?? [],
-    agents: e.agents ?? [],
-    output_style: e.outputStyle ?? "default",
-    available_output_styles: e.availableOutputStyles ?? ["default"],
-    models: e.models ?? [],
-    ...(e.unavailableModels &&
-      e.unavailableModels.length > 0 && {
-        unavailable_models: e.unavailableModels,
+    commands: initParams.commands ?? [],
+    agents: initParams.agents ?? [],
+    output_style: initParams.outputStyle ?? "default",
+    available_output_styles: initParams.availableOutputStyles ?? ["default"],
+    models: initParams.models ?? [],
+    ...(initParams.unavailableModels &&
+      initParams.unavailableModels.length > 0 && {
+        unavailable_models: initParams.unavailableModels,
       }),
-    account: e.account ?? {
+    account: initParams.account ?? {
       apiProvider: "firstParty",
     },
-    pid: e.pid ?? process.pid,
+    pid: initParams.pid ?? process.pid,
     claude_code_version: {
       ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
       PACKAGE_URL: "@anthropic-ai/claude-code",
@@ -643,18 +662,18 @@ function memoryRecallMessage(memories) {
     type: "system",
     subtype: "memory_recall",
     mode: "select",
-    memories: memories.map((s) => ({
-      path: s.path,
-      scope: memoryScopeForPath(s.path) ?? "personal",
+    memories: memories.map((memory) => ({
+      path: memory.path,
+      scope: memoryScopeForPath(memory.path) ?? "personal",
     })),
     uuid: randomUUID(),
     session_id: getSessionId(),
   };
 }
 //@ chunk-xx1vmpsq.js:30129-30208 placement
-function hasSeededComment(e) {
-  if (!Array.isArray(e)) return isCommentNotificationText(e);
-  return e.some((s) => isCommentNotificationText([s]));
+function hasSeededComment(content) {
+  if (!Array.isArray(content)) return isCommentNotificationText(content);
+  return content.some((block) => isCommentNotificationText([block]));
 }
 export {
   logEventTo1P,

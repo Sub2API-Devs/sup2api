@@ -12,6 +12,7 @@ import { HostScoped } from "./hostScoped.js";
 import { computeContentHash } from "./commitAttribution.js";
 import { installSessionsBearerHooks } from "../services/oauth/sessionsBearerHooks.js";
 import { getRootSession } from "../bootstrap/state.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-bwbq4xvm.js:163476-163532 placement
 var HOST_BEARER_RETRY_MS_2 = 60000;
@@ -37,33 +38,36 @@ class HostSessionsBearerState {
   source = null;
 }
 //@ chunk-bwbq4xvm.js:163717-163742 placement
-var hostSessionsBearerStates = new HostScoped(() => new HostSessionsBearerState());
+var hostSessionsBearerStates; // deferred: uses HostSessionsBearerState of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-bwbq4xvm.js:163717", () => {
+  hostSessionsBearerStates = new HostScoped(() => new HostSessionsBearerState());
+});
 //@ chunk-bwbq4xvm.js:163742-163811 placement
 function isHostHandedSessionsBearer(fallbackToken) {
   let hostBearerState = getHostBearerState();
   return hostBearerState.given.size > 0 && hostBearerState.given.has(computeContentHash(fallbackToken));
 }
 //@ chunk-bwbq4xvm.js:163811-164131 placement
-function sendableHostSessionsBearer(e) {
-  let s = null;
+function sendableHostSessionsBearer(bearer) {
+  let held = null;
   try {
     let hostBearerState = getHostBearerState();
-    if (hostBearerState.given.size > 0 && e !== hostBearerState.token) {
-      let l = hostBearerState.given.get(computeContentHash(e));
-      if (l !== undefined)
-        s = {
+    if (hostBearerState.given.size > 0 && bearer !== hostBearerState.token) {
+      let generation = hostBearerState.given.get(computeContentHash(bearer));
+      if (generation !== undefined)
+        held = {
           bearer: hostBearerState,
-          handedUnder: l,
+          handedUnder: generation,
         };
     }
   } catch {
-    return e;
+    return bearer;
   }
-  if (s === null) return e;
-  let { bearer, handedUnder } = s;
+  if (held === null) return bearer;
+  let { bearer: bearer_2, handedUnder } = held;
   try {
-    if (bearer.source !== null && bearer.source.isSignInToken(e)) return e;
-    return handedUnder === bearer.generation ? heldHostSessionsBearer() : null;
+    if (bearer_2.source !== null && bearer_2.source.isSignInToken(bearer)) return bearer;
+    return handedUnder === bearer_2.generation ? heldHostSessionsBearer() : null;
   } catch {
     return null;
   }
@@ -81,17 +85,17 @@ function readHostSessionsBearer() {
   return hostBearerState.token;
 }
 //@ chunk-bwbq4xvm.js:164282-164347 placement
-function setHostSessionsBearerSource(e) {
-  getHostBearerState().source = e;
-  if (e === null) forgetHeldHostSessionsBearer();
+function setHostSessionsBearerSource(source) {
+  getHostBearerState().source = source;
+  if (source === null) forgetHeldHostSessionsBearer();
   else installSessionsBearerHooks(recoverHostSessionsBearer, sendableHostSessionsBearer);
 }
 //@ chunk-bwbq4xvm.js:164347-164559 placement
-function forgetHeldHostSessionsBearer(e) {
+function forgetHeldHostSessionsBearer(previousSignIn) {
   let hostBearerState = getHostBearerState();
   hostBearerState.token = null;
   hostBearerState.generation++;
-  hostBearerState.previousSignIn = e === undefined ? null : computeContentHash(e);
+  hostBearerState.previousSignIn = previousSignIn === undefined ? null : computeContentHash(previousSignIn);
   hostBearerState.lastUnansweredAt = null;
   hostBearerState.refused.clear();
   hostBearerState.recentRefusals = 0;
@@ -100,11 +104,11 @@ function forgetHeldHostSessionsBearer(e) {
   hostBearerState.inFlight = null;
 }
 //@ chunk-bwbq4xvm.js:164559-164659 placement
-function acceptPushedHostSessionsBearer(e) {
+function acceptPushedHostSessionsBearer(token) {
   let hostBearerState = getHostBearerState();
-  if (!isAcceptablePushedBearer(hostBearerState, e)) return false;
-  hostBearerState.token = e;
-  rememberGivenBearer(hostBearerState, e);
+  if (!isAcceptablePushedBearer(hostBearerState, token)) return false;
+  hostBearerState.token = token;
+  rememberGivenBearer(hostBearerState, token);
   hostBearerState.lastUnansweredAt = null;
   return true;
 }
@@ -114,8 +118,8 @@ function acceptPushedHostSessionsBearer(e) {
  */
 function ensureHostSessionsBearer() {
   let hostBearerState = getHostBearerState();
-  let s = hostBearerSourceWithSignIn(hostBearerState);
-  if (s === null) return Promise.resolve(null);
+  let source = hostBearerSourceWithSignIn(hostBearerState);
+  if (source === null) return Promise.resolve(null);
   if (hostBearerState.token !== null) return Promise.resolve(hostBearerState.token);
   if (hostBearerState.inFlight !== null) return hostBearerState.inFlight;
   if (
@@ -125,18 +129,18 @@ function ensureHostSessionsBearer() {
   )
     return Promise.resolve(null);
   let generation = hostBearerState.generation;
-  hostBearerState.inFlight = s
+  hostBearerState.inFlight = source
     .ask()
     .then(
-      (r) => {
+      (answer) => {
         if (hostBearerState.token !== null || generation !== hostBearerState.generation)
           return hostBearerState.token;
-        if (!isAcceptablePushedBearer(hostBearerState, r.accessToken)) {
+        if (!isAcceptablePushedBearer(hostBearerState, answer.accessToken)) {
           hostBearerState.lastUnansweredAt = Date.now();
           return null;
         }
-        hostBearerState.token = r.accessToken;
-        rememberGivenBearer(hostBearerState, r.accessToken);
+        hostBearerState.token = answer.accessToken;
+        rememberGivenBearer(hostBearerState, answer.accessToken);
         hostBearerState.lastUnansweredAt = null;
         return hostBearerState.token;
       },
@@ -155,36 +159,38 @@ function ensureHostSessionsBearer() {
 /**
  * 会话令牌被拒后向宿主（SDK host）恢复 sessions bearer：返回 refused/not_held/withheld/recovered/stale/unrecovered 等结果。
  */
-async function recoverHostSessionsBearer(e, s = "refused") {
+async function recoverHostSessionsBearer(token, kind = "refused") {
   let hostBearerState = getHostBearerState();
   if (hostBearerState.source === null || hostBearerState.given.size === 0) return "not_held";
-  let contentHash = computeContentHash(e);
-  let a = hostBearerState.given.get(contentHash);
+  let contentHash = computeContentHash(token);
+  let handedUnder = hostBearerState.given.get(contentHash);
   if (
-    a === undefined ||
+    handedUnder === undefined ||
     contentHash === hostBearerState.previousSignIn ||
-    hostBearerState.source.isSignInToken(e)
+    hostBearerState.source.isSignInToken(token)
   )
     return "not_held";
-  if (s === "withheld" && hostBearerState.token === e) return "recovered";
-  if (s === "stale" && hostBearerState.token === e) {
+  if (kind === "withheld" && hostBearerState.token === token) return "recovered";
+  if (kind === "stale" && hostBearerState.token === token) {
     if (hostBearerState.inFlight !== null) await hostBearerState.inFlight;
     else {
-      let l = isBearerRefusalBackoff(hostBearerState) ? null : hostBearerSourceWithSignIn(hostBearerState);
-      if (l !== null) {
+      let source = isBearerRefusalBackoff(hostBearerState)
+        ? null
+        : hostBearerSourceWithSignIn(hostBearerState);
+      if (source !== null) {
         let generation = hostBearerState.generation;
-        hostBearerState.inFlight = l
+        hostBearerState.inFlight = source
           .ask()
           .then(
-            (h) => {
+            (answer) => {
               if (
                 generation === hostBearerState.generation &&
-                (hostBearerState.token === e || hostBearerState.token === null) &&
-                h.accessToken !== hostBearerState.token &&
-                isAcceptablePushedBearer(hostBearerState, h.accessToken)
+                (hostBearerState.token === token || hostBearerState.token === null) &&
+                answer.accessToken !== hostBearerState.token &&
+                isAcceptablePushedBearer(hostBearerState, answer.accessToken)
               ) {
-                hostBearerState.token = h.accessToken;
-                rememberGivenBearer(hostBearerState, h.accessToken);
+                hostBearerState.token = answer.accessToken;
+                rememberGivenBearer(hostBearerState, answer.accessToken);
               }
               return hostBearerState.token;
             },
@@ -200,10 +206,11 @@ async function recoverHostSessionsBearer(e, s = "refused") {
       ? "recovered"
       : "unrecovered";
   }
-  if (s === "refused" && a === hostBearerState.generation) hostBearerState.refused.add(contentHash);
-  if (hostBearerState.token === e) {
+  if (kind === "refused" && handedUnder === hostBearerState.generation)
+    hostBearerState.refused.add(contentHash);
+  if (hostBearerState.token === token) {
     hostBearerState.token = null;
-    if (s === "refused") {
+    if (kind === "refused") {
       let now = Date.now();
       if (hostBearerState.lastRefusalAt === null || now - hostBearerState.lastRefusalAt >= REFUSAL_BACKOFF_MS)
         hostBearerState.recentRefusals = 0;
@@ -215,8 +222,8 @@ async function recoverHostSessionsBearer(e, s = "refused") {
   return (await ensureHostSessionsBearer()) !== null ? "recovered" : "unrecovered";
 }
 //@ chunk-bwbq4xvm.js:166393-166541 placement
-function rememberGivenBearer(hostBearerState, accessToken) {
-  let contentHash = computeContentHash(accessToken);
+function rememberGivenBearer(hostBearerState, token) {
+  let contentHash = computeContentHash(token);
   hostBearerState.given.delete(contentHash);
   hostBearerState.given.set(contentHash, hostBearerState.generation);
   if (hostBearerState.given.size > MAX_GIVEN_BEARERS)
@@ -245,20 +252,20 @@ function isBearerRefusalBackoff(hostBearerState) {
   return false;
 }
 //@ chunk-bwbq4xvm.js:166812-166982 placement
-function isAcceptablePushedBearer(hostBearerState, accessToken) {
-  let n = hostBearerSourceWithSignIn(hostBearerState);
+function isAcceptablePushedBearer(hostBearerState, token) {
+  let source = hostBearerSourceWithSignIn(hostBearerState);
   if (
-    n === null ||
+    source === null ||
     isBearerRefusalBackoff(hostBearerState) ||
-    typeof accessToken !== "string" ||
-    !BEARER_FORMAT_RE.test(accessToken)
+    typeof token !== "string" ||
+    !BEARER_FORMAT_RE.test(token)
   )
     return false;
-  let contentHash = computeContentHash(accessToken);
+  let contentHash = computeContentHash(token);
   return (
     !hostBearerState.refused.has(contentHash) &&
     contentHash !== hostBearerState.previousSignIn &&
-    !n.isSignInToken(accessToken)
+    !source.isSignInToken(token)
   );
 }
 export {

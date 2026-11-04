@@ -7,20 +7,30 @@
  */
 import { HttpStatus } from "../../../msal-common/lib/index-node-DhUjlPuB.js";
 import { ExponentialRetryStrategy } from "../../lib/msal-node.cjs";
+import { deferInit } from "../../../../../runtime/deferred-init.js";
 
 //@ chunk-mrx6y2r5.js:277618-277725 esm-fingerprint
-var HTTP_STATUS_400_CODES_FOR_EXPONENTIAL_STRATEGY = [
-  HttpStatus.NOT_FOUND,
-  HttpStatus.REQUEST_TIMEOUT,
-  HttpStatus.GONE,
-  HttpStatus.TOO_MANY_REQUESTS,
-];
-var EXPONENTIAL_STRATEGY_NUM_RETRIES = 3;
-var LINEAR_STRATEGY_NUM_RETRIES = 7;
-var MIN_EXPONENTIAL_BACKOFF_MS = 1000;
-var MAX_EXPONENTIAL_BACKOFF_MS = 4000;
-var EXPONENTIAL_DELTA_BACKOFF_MS = 2000;
-var HTTP_STATUS_GONE_RETRY_AFTER_MS = 1e4;
+var HTTP_STATUS_400_CODES_FOR_EXPONENTIAL_STRATEGY; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var EXPONENTIAL_STRATEGY_NUM_RETRIES;
+var LINEAR_STRATEGY_NUM_RETRIES;
+var MIN_EXPONENTIAL_BACKOFF_MS;
+var MAX_EXPONENTIAL_BACKOFF_MS;
+var EXPONENTIAL_DELTA_BACKOFF_MS;
+var HTTP_STATUS_GONE_RETRY_AFTER_MS;
+deferInit("chunk-mrx6y2r5.js:277618", () => {
+  HTTP_STATUS_400_CODES_FOR_EXPONENTIAL_STRATEGY = [
+    HttpStatus.NOT_FOUND,
+    HttpStatus.REQUEST_TIMEOUT,
+    HttpStatus.GONE,
+    HttpStatus.TOO_MANY_REQUESTS,
+  ];
+  EXPONENTIAL_STRATEGY_NUM_RETRIES = 3;
+  LINEAR_STRATEGY_NUM_RETRIES = 7;
+  MIN_EXPONENTIAL_BACKOFF_MS = 1000;
+  MAX_EXPONENTIAL_BACKOFF_MS = 4000;
+  EXPONENTIAL_DELTA_BACKOFF_MS = 2000;
+  HTTP_STATUS_GONE_RETRY_AFTER_MS = 1e4;
+});
 //@ chunk-mrx6y2r5.js:277725-278573 esm-fingerprint
 class ImdsRetryPolicy {
   constructor() {

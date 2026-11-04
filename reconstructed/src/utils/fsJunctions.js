@@ -22,27 +22,27 @@ import { passThroughPath, traversesOrResolvesUntrustedLink } from "./pathResolut
 /**
  * 同步求真实路径（转 UNC 长路径），返回 {real, code}。
  */
-function realpathNativeLongSync(t) {
-  let n = captureSyncResult(() => toUncLongPath(realpathSync.native(t)));
+function realpathNativeLongSync(path) {
+  let result = captureSyncResult(() => toUncLongPath(realpathSync.native(path)));
   return {
-    real: n.value,
-    code: n.code,
+    real: result.value,
+    code: result.code,
   };
 }
 //@ chunk-aat7wt0p.js:17309-17452 placement
-async function realpathNativeLong(t) {
-  let n = await captureErrnoAsync(
+async function realpathNativeLong(path) {
+  let result = await captureErrnoAsync(
     () =>
       new Promise((resolve, reject) => {
-        realpath.native(t, (o, i) => {
-          if (o) reject(o);
-          else resolve(toUncLongPath(i));
+        realpath.native(path, (error, resolvedPath) => {
+          if (error) reject(error);
+          else resolve(toUncLongPath(resolvedPath));
         });
       }),
   );
   return {
-    real: n.value,
-    code: n.code,
+    real: result.value,
+    code: result.code,
   };
 }
 //@ chunk-aat7wt0p.js:17452-17554 placement = isConnectionError (1)
@@ -55,10 +55,10 @@ function getErrnoCode_2(err) {
 /**
  * 执行同步函数并捕获 errno，返回 {value} 或 {code}。
  */
-function captureSyncResult(t) {
+function captureSyncResult(fn) {
   try {
     return {
-      value: attemptSyncOnce(t),
+      value: attemptSyncOnce(fn),
     };
   } catch (error) {
     return {
@@ -67,35 +67,35 @@ function captureSyncResult(t) {
   }
 }
 //@ chunk-aat7wt0p.js:17620-17655 placement
-function attemptSyncOnce(t) {
-  return attemptSync(t, () => true);
+function attemptSyncOnce(fn) {
+  return attemptSync(fn, () => true);
 }
 //@ chunk-aat7wt0p.js:17655-17735 placement
 /**
  * 返回一个带字节预算的重试判定函数（超过预算后不再重试）。
  */
-function byteBudgetedRetry(t) {
-  let n = 0;
-  return (e) =>
-    attemptSync(e, () => {
-      if (n + MAX_REALPATH_DEPTH > t) return false;
-      n += MAX_REALPATH_DEPTH;
+function byteBudgetedRetry(budget) {
+  let spent = 0;
+  return (fn) =>
+    attemptSync(fn, () => {
+      if (spent + MAX_REALPATH_DEPTH > budget) return false;
+      spent += MAX_REALPATH_DEPTH;
       return true;
     });
 }
 //@ chunk-aat7wt0p.js:17735-17813 placement
-function attemptSync(t, n) {
+function attemptSync(fn, shouldRetry) {
   for (let i = 0; ; i++)
     try {
-      return t();
+      return fn();
     } catch (error) {
       let errnoCode_2 = getErrnoCode_2(error);
       throw error;
     }
 }
 //@ chunk-aat7wt0p.js:17813-17937 placement
-function classifyReadlinkError(t) {
-  let errnoCode_2 = getErrnoCode_2(t);
+function classifyReadlinkError(error) {
+  let errnoCode_2 = getErrnoCode_2(error);
   return errnoCode_2 === "EINVAL"
     ? {
         kind: "directory",
@@ -107,51 +107,51 @@ function classifyReadlinkError(t) {
       : {
           kind: "error",
           code: errnoCode_2,
-          error: t,
+          error,
         };
 }
 //@ chunk-aat7wt0p.js:17937-18071 placement
 function readJunctionSync(dirPath) {
-  let n;
-  let e = captureSyncResult(() => {
+  let caughtError;
+  let result = captureSyncResult(() => {
     try {
       return readlinkSync(dirPath);
     } catch (error) {
-      n = error;
+      caughtError = error;
       throw error;
     }
   });
-  return e.value !== undefined
+  return result.value !== undefined
     ? {
         kind: "junction",
-        target: e.value,
+        target: result.value,
       }
-    : classifyReadlinkError(n);
+    : classifyReadlinkError(caughtError);
 }
 //@ chunk-aat7wt0p.js:18071-18229 placement
-async function readJunction(t) {
-  let n;
-  let e = await captureErrnoAsync(async () => {
+async function readJunction(dirPath) {
+  let caughtError;
+  let result = await captureErrnoAsync(async () => {
     try {
-      return await readlink(t);
+      return await readlink(dirPath);
     } catch (error) {
-      n = error;
+      caughtError = error;
       throw error;
     }
   });
-  return e.value !== undefined
+  return result.value !== undefined
     ? {
         kind: "junction",
-        target: e.value,
+        target: result.value,
       }
-    : classifyReadlinkError(n);
+    : classifyReadlinkError(caughtError);
 }
 //@ chunk-aat7wt0p.js:18229-18331 placement
-async function captureErrnoAsync(t) {
+async function captureErrnoAsync(fn) {
   for (let i = 0; ; i++)
     try {
       return {
-        value: await t(),
+        value: await fn(),
       };
     } catch (error) {
       let code = getErrnoCode_2(error);
@@ -164,118 +164,130 @@ async function captureErrnoAsync(t) {
 /**
  * 判断路径是否为网络路径或设备/UNC 拼写。
  */
-function isNetworkOrDevicePath(t) {
-  return isUncOrDeviceSpelling(t) || isNetworkMountRoot(t);
+function isNetworkOrDevicePath(path) {
+  return isUncOrDeviceSpelling(path) || isNetworkMountRoot(path);
 }
 //@ chunk-aat7wt0p.js:18367-18501 placement
-function hasAmbiguousWindowsPathSpelling(t) {
+function hasAmbiguousWindowsPathSpelling(path) {
   return (
-    hasDotSegment(t) ||
-    /[. :](?=[\\/]|$)/.test(t) ||
-    t
+    hasDotSegment(path) ||
+    /[. :](?=[\\/]|$)/.test(path) ||
+    path
       .split(/[\\/]/)
-      .some((n) => isReservedDeviceName(n) || isReservedDeviceName(n.slice(0, Math.max(0, n.indexOf(":")))))
+      .some(
+        (segment) =>
+          isReservedDeviceName(segment) ||
+          isReservedDeviceName(segment.slice(0, Math.max(0, segment.indexOf(":")))),
+      )
   );
 }
 //@ chunk-aat7wt0p.js:18501-18686 placement
-function stripWin32DevicePrefix(t) {
-  let match = /^(?:\\\\[?.]\\|\\\?\?\\)(?=[A-Za-z]:[\\/])/.exec(t);
-  if (!match) return t;
-  let sliced = t.slice(match[0].length);
-  let sliced_2 = sliced.slice(2);
-  return (match[0].includes("\\") && sliced_2.includes("/")) || hasAmbiguousWindowsPathSpelling(sliced_2)
-    ? t
+function stripWin32DevicePrefix(path) {
+  let match = /^(?:\\\\[?.]\\|\\\?\?\\)(?=[A-Za-z]:[\\/])/.exec(path);
+  if (!match) return path;
+  let sliced = path.slice(match[0].length);
+  let path_2 = sliced.slice(2);
+  return (match[0].includes("\\") && path_2.includes("/")) || hasAmbiguousWindowsPathSpelling(path_2)
+    ? path
     : sliced;
 }
 //@ chunk-aat7wt0p.js:18686-19084 placement
 /**
  * 把路径转成可比较形式：去掉 Win32 设备前缀；UNC/设备路径或可疑路径只做 resolve；否则对最深已存在祖先求 realpath 后拼回剩余部分，NFC 规范化，foldCase 时转小写。
  */
-function toComparablePath(t, { foldCase: n, knownNotSuspect: e = false } = {}) {
-  n ??= false;
-  t = stripWin32DevicePrefix(t);
-  if (isUncOrDeviceSpelling(t) || isNetworkMountRoot(t)) {
-    let normalized = passThroughPath(resolve(passThroughPath(t))).normalize("NFC");
-    return n ? normalized.toLowerCase() : normalized;
+function toComparablePath(path, { foldCase, knownNotSuspect = false } = {}) {
+  foldCase ??= false;
+  path = stripWin32DevicePrefix(path);
+  if (isUncOrDeviceSpelling(path) || isNetworkMountRoot(path)) {
+    let normalized = passThroughPath(resolve(passThroughPath(path))).normalize("NFC");
+    return foldCase ? normalized.toLowerCase() : normalized;
   }
-  if (!e && traversesOrResolvesUntrustedLink(isAbsolute(t) ? t : resolve(t))) {
-    let normalized = resolve(t).normalize("NFC");
-    return n ? normalized.toLowerCase() : normalized;
+  if (!knownNotSuspect && traversesOrResolvesUntrustedLink(isAbsolute(path) ? path : resolve(path))) {
+    let normalized = resolve(path).normalize("NFC");
+    return foldCase ? normalized.toLowerCase() : normalized;
   }
-  let r = resolve(t);
-  let o = [];
-  let i = nativeRealpathLong(r);
-  while (i === null && dirname(r) !== r) {
-    o.unshift(basename(r));
-    r = dirname(r);
-    i = nativeRealpathLong(r);
+  let currentPath = resolve(path);
+  let missingParts = [];
+  let realPath = nativeRealpathLong(currentPath);
+  while (realPath === null && dirname(currentPath) !== currentPath) {
+    missingParts.unshift(basename(currentPath));
+    currentPath = dirname(currentPath);
+    realPath = nativeRealpathLong(currentPath);
   }
-  i = o.length > 0 ? resolve(i ?? r, ...o) : (i ?? r);
-  let normalized = passThroughPath(i).normalize("NFC");
-  return n ? normalized.toLowerCase() : normalized;
+  realPath =
+    missingParts.length > 0 ? resolve(realPath ?? currentPath, ...missingParts) : (realPath ?? currentPath);
+  let normalized = passThroughPath(realPath).normalize("NFC");
+  return foldCase ? normalized.toLowerCase() : normalized;
 }
 //@ chunk-aat7wt0p.js:19084-19251 placement
 /**
  * 判断路径 t 是否等于或位于 n 之下（两者先转为可比较形式，除非 alreadyComparable），用 relative 结果判定，不受 .. 前缀误判。
  */
-function isPathWithin(t, n, { alreadyComparable: e = false, foldCase: r } = {}) {
-  let o = relative(
-    e
-      ? t
-      : toComparablePath(t, {
-          foldCase: r,
+function isPathWithin(parentPath, childPath, { alreadyComparable = false, foldCase } = {}) {
+  let relPath = relative(
+    alreadyComparable
+      ? parentPath
+      : toComparablePath(parentPath, {
+          foldCase,
         }),
-    e
-      ? n
-      : toComparablePath(n, {
-          foldCase: r,
+    alreadyComparable
+      ? childPath
+      : toComparablePath(childPath, {
+          foldCase,
         }),
   );
-  return o === "" || (!isAbsolute(o) && o !== ".." && !o.startsWith(`..${sep}`));
+  return relPath === "" || (!isAbsolute(relPath) && relPath !== ".." && !relPath.startsWith(`..${sep}`));
 }
 //@ chunk-aat7wt0p.js:19251-19328 placement
 /**
  * 判断两个路径的 realpath 是否相同（都解析成功且可比较形式相等）。
  */
-function isSameRealPath(t, n) {
-  let e = nativeRealpathLong(t);
-  let r = nativeRealpathLong(n);
-  return e !== null && r !== null && canonicalPathKey(e) === canonicalPathKey(r);
+function isSameRealPath(leftPath, rightPath) {
+  let leftReal = nativeRealpathLong(leftPath);
+  let rightReal = nativeRealpathLong(rightPath);
+  return (
+    leftReal !== null && rightReal !== null && canonicalPathKey(leftReal) === canonicalPathKey(rightReal)
+  );
 }
 //@ chunk-aat7wt0p.js:19328-19412 placement
 /**
  * 判断两个路径的 realpath 是否构成前缀关系。
  */
-function isRealPathSegmentPrefix(t, n) {
-  let e = nativeRealpathLong(t);
-  let r = nativeRealpathLong(n);
-  return e !== null && r !== null && isSegmentPrefix(canonicalPathKey(e), canonicalPathKey(r), /\//);
+function isRealPathSegmentPrefix(prefixPath, fullPath) {
+  let prefixReal = nativeRealpathLong(prefixPath);
+  let fullReal = nativeRealpathLong(fullPath);
+  return (
+    prefixReal !== null &&
+    fullReal !== null &&
+    isSegmentPrefix(canonicalPathKey(prefixReal), canonicalPathKey(fullReal), /\//)
+  );
 }
 //@ chunk-aat7wt0p.js:19412-19575 placement
-function isSegmentPrefix(t, n, e) {
-  let regExp = new RegExp(`(?:${e.source})+$`);
-  let parts = t.replace(regExp, "").split(e);
-  let parts_2 = n.replace(regExp, "").split(e);
-  return parts.length <= parts_2.length && parts.every((s, u) => s === parts_2[u]);
+function isSegmentPrefix(prefix, full, sepPattern) {
+  let regExp = new RegExp(`(?:${sepPattern.source})+$`);
+  let parts = prefix.replace(regExp, "").split(sepPattern);
+  let parts_2 = full.replace(regExp, "").split(sepPattern);
+  return parts.length <= parts_2.length && parts.every((prefixPart, index) => prefixPart === parts_2[index]);
 }
 //@ chunk-aat7wt0p.js:19575-19607 placement
-function canonicalPathKey(t) {
-  return identity(passThroughPath(t));
+function canonicalPathKey(path) {
+  return identity(passThroughPath(path));
 }
 //@ chunk-aat7wt0p.js:19607-19635 placement
 /**
  * 判断路径是否为 UNC 或设备路径拼写。
  */
-function isUncOrDeviceSpelling(t) {
-  return isUncOrDevicePath(t);
+function isUncOrDeviceSpelling(path) {
+  return isUncOrDevicePath(path);
 }
 //@ chunk-aat7wt0p.js:19635-19702 placement
 /**
  * 判断路径是否带 Win32 设备前缀（\\?\ 或 /\?\?/）。
  */
-function hasWin32DevicePrefixSpelling(t) {
+function hasWin32DevicePrefixSpelling(path) {
   return (
-    WIN32_DEVICE_PREFIX_RE.test(t) || (t.includes("??") && WIN32_DEVICE_PREFIX_RE.test(normalizeWin32Path(t)))
+    WIN32_DEVICE_PREFIX_RE.test(path) ||
+    (path.includes("??") && WIN32_DEVICE_PREFIX_RE.test(normalizeWin32Path(path)))
   );
 }
 //@ chunk-aat7wt0p.js:19702-19727 placement
@@ -284,8 +296,8 @@ var WIN32_DEVICE_PREFIX_RE = /^[\\/]\?\?[\\/]/;
 /**
  * 在 win32 语义下规范化路径。
  */
-function normalizeWin32Path(t) {
-  return pathModule.win32 ? pathModule.win32.normalize(t) : t;
+function normalizeWin32Path(path) {
+  return pathModule.win32 ? pathModule.win32.normalize(path) : path;
 }
 export {
   isPathWithin,

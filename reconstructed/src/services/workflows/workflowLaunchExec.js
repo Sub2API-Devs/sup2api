@@ -20,8 +20,8 @@ import { settlePendingAsyncHooks } from "../../utils/hooks/AsyncHookRegistry.js"
 var HOOK_SETTLE_GRACE_MS = 5000;
 var callWorkflowLaunchExec = async (args, context) => {
   let trimmed = args.trim();
-  let e = trimmed ? workflowLaunchHandoffs.of(context.session.host).take(trimmed) : undefined;
-  if (!e) {
+  let handoff = trimmed ? workflowLaunchHandoffs.of(context.session.host).take(trimmed) : undefined;
+  if (!handoff) {
     logForDiagnosticsNoPII("info", "workflow_launch_exec_no_slot", {});
     return {
       type: "text",
@@ -29,15 +29,15 @@ var callWorkflowLaunchExec = async (args, context) => {
         "workflow-launch-exec: no pending launch handoff for this invocation (expected when a restored session replays the dispatch turn); nothing executed.",
     };
   }
-  let o = await runRemoteWorkflow({
-    script: e.script,
-    args: e.args,
+  let runResult = await runRemoteWorkflow({
+    script: handoff.script,
+    args: handoff.args,
     telemetrySource: "remote_event",
     serverAuthoredCarrier: true,
-    eventSessionOrigin: e.eventSessionOrigin,
+    eventSessionOrigin: handoff.eventSessionOrigin,
     context,
   });
-  let a = settlePendingAsyncHooks({
+  let hookSettle = settlePendingAsyncHooks({
     hookEvent: "SessionStart",
     graceMs: HOOK_SETTLE_GRACE_MS,
   })
@@ -52,18 +52,19 @@ var callWorkflowLaunchExec = async (args, context) => {
       logForDiagnosticsNoPII("warn", "workflow_launch_hook_settle_failed", {});
     });
   try {
-    await e.onRunSettled(o.ok);
+    await handoff.onRunSettled(runResult.ok);
   } catch {
     logForDiagnosticsNoPII("warn", "workflow_launch_settle_failed", {});
   }
   try {
-    e.postResultLine(o.line);
+    handoff.postResultLine(runResult.line);
   } catch {
     logForDiagnosticsNoPII("warn", "workflow_launch_result_post_failed", {});
   }
-  await a;
+  await hookSettle;
   return {
     type: "text",
-    value: o.line,
+    value: runResult.line,
   };
 };
+export { callWorkflowLaunchExec };

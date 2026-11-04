@@ -9,7 +9,13 @@
  * attribution: placement 4
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { zodStrictObject, array, string, u, literal } from "../../../vendor/zod/v4/classic/schemas.js";
+import {
+  zodStrictObject,
+  array,
+  stringSchema,
+  objectSchema,
+  literal,
+} from "../../../vendor/zod/v4/classic/schemas.js";
 import {
   connectorResultSchema,
   listConnectorSuggestions,
@@ -30,36 +36,36 @@ import { jsonStringify } from "../../utils/slowOperations.js";
  */
 var LIST_CONNECTORS_INPUT_SCHEMA = DoctorLazy(() =>
   zodStrictObject({
-    keywords: array(string().min(1).max(64))
+    keywords: array(stringSchema().min(1).max(64))
       .max(8)
       .optional()
       .describe("Optional filter; omit to list everything."),
   }),
 );
 var LIST_CONNECTORS_OUTPUT_SCHEMA = DoctorLazy(() =>
-  u({
+  objectSchema({
     connectors: array(connectorResultSchema()),
     opt_in_required: literal(true).optional(),
-    message: string().optional(),
+    message: stringSchema().optional(),
   }),
 );
 //@ chunk-ry7vktx8.js:4816-4902 placement
 /**
  * 判断名称或描述里是否含任意关键词（忽略大小写）。
  */
-function matchesKeyword(e, t) {
-  let lower = e.toLowerCase();
-  return t.some((n) => lower.includes(n.toLowerCase()));
+function matchesKeyword(text, keywords) {
+  let lower = text.toLowerCase();
+  return keywords.some((keyword) => lower.includes(keyword.toLowerCase()));
 }
 //@ chunk-ry7vktx8.js:4902-5070 placement
 /**
  * 按关键词过滤连接器（名称或描述）。
  */
-function filterConnectors(e, keywords) {
-  if (!keywords?.length) return e;
-  return e.filter((r) => {
-    if (typeof r.name === "string" && matchesKeyword(r.name, keywords)) return true;
-    let description = r.description;
+function filterConnectors(connectors, keywords) {
+  if (!keywords?.length) return connectors;
+  return connectors.filter((connector) => {
+    if (typeof connector.name === "string" && matchesKeyword(connector.name, keywords)) return true;
+    let description = connector.description;
     return typeof description === "string" && matchesKeyword(description, keywords);
   });
 }
@@ -95,21 +101,21 @@ var ListConnectorsTool = buildTool({
   },
   create({ credentials, mcpClients, session }) {
     return {
-      async call(n, { signal }) {
+      async call(input, { signal }) {
         try {
-          let s = await listConnectorSuggestions(signal, credentials);
-          if (isOptInRequired(s))
+          let suggestions = await listConnectorSuggestions(signal, credentials);
+          if (isOptInRequired(suggestions))
             return {
               data: {
                 connectors: [],
-                ...s,
+                ...suggestions,
               },
             };
-          let c = mcpClients();
-          let l = markEnabledInChat(s, c, session);
+          let mcpClientsList = mcpClients();
+          let enabledConnectors = markEnabledInChat(suggestions, mcpClientsList, session);
           return {
             data: {
-              connectors: filterConnectors(l, n.keywords),
+              connectors: filterConnectors(enabledConnectors, input.keywords),
             },
           };
         } catch (error) {
@@ -122,14 +128,15 @@ var ListConnectorsTool = buildTool({
       },
     };
   },
-  mapToolResultToToolResultBlockParam(e, toolUseId) {
+  mapToolResultToToolResultBlockParam(result, toolUseId) {
     return {
       tool_use_id: toolUseId,
       type: "tool_result",
-      content: jsonStringify(e.opt_in_required ? e : e.connectors),
+      content: jsonStringify(result.opt_in_required ? result : result.connectors),
     };
   },
-  renderToolUseMessage(e) {
-    return (e.keywords ?? []).join(", ");
+  renderToolUseMessage(input) {
+    return (input.keywords ?? []).join(", ");
   },
 });
+export { ListConnectorsTool };

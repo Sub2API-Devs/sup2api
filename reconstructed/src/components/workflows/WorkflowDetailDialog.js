@@ -11,11 +11,12 @@
 import {
   BLACK_CIRCLE,
   DOTTED_CIRCLE,
+  RESPONSE_CONNECTOR,
   HORIZONTAL_LINE_GLYPH,
   RETURN_SYMBOL,
   UP_ARROW,
   DOWN_ARROW,
-} from "../../utils/permissions/autoModeRulesPrompt.js";
+} from "../../constants/figures.js";
 import { bunStringWidth } from "../../ink/stringWidth.js";
 import {
   normalizeTaskText,
@@ -36,7 +37,6 @@ import {
   MAX_TRANSCRIPT_TOOL_RESULTS,
   readWorkflowAgentTranscript,
 } from "../../tasks/LocalWorkflowTask/workflowTranscript.js";
-import { RESPONSE_CONNECTOR } from "../../constants/figures.js";
 import { truncateToLength, plural } from "../../utils/stringUtils.js";
 import {
   jsxProd_default,
@@ -56,10 +56,16 @@ import {
   WorkflowHeader,
   WorkflowPhaseRow,
 } from "../workflow/WorkflowProgress.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
-import { _S, Gxi, Kk } from "../../../vendor/chart.js/dist/chart.js";
-import { y, Se, R, P, Q } from "../../../vendor/react/cjs/react.production.js";
+import { TREE_GLYPHS, EN_DASH, ROUNDED_BOX_CORNERS } from "../../../vendor/chart.js/dist/chart.js";
+import {
+  useState,
+  useContext,
+  useRef,
+  useEffect,
+  useMemo,
+} from "../../../vendor/react/cjs/react.production.js";
 import { clockContext, defaultSetTimeout } from "../../ink/components/ClockContext.js";
 import { USAGE_LIMIT_SUFFIX, USAGE_LIMIT_TEXT } from "../../utils/usageLimitText.js";
 import { renderJsonOutcomeLines } from "./outcomeRender.js";
@@ -74,17 +80,18 @@ import { WorkflowSaveDialog } from "./WorkflowSaveDialog.js";
 import { FocusColumn } from "../design-system/FocusColumn.js";
 import { Dialog } from "../design-system/Dialog.js";
 import { HintText } from "../design-system/HintText.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-axsvbsqv.js:14537-14662 placement
-function getCallDisplayState(o, i) {
-  if (o.result === null) return i && o.fromLastResponse ? "running" : "unanswered";
-  return o.result.isError ? "error" : "ok";
+function getCallDisplayState(call, isLive) {
+  if (call.result === null) return isLive && call.fromLastResponse ? "running" : "unanswered";
+  return call.result.isError ? "error" : "ok";
 }
 //@ chunk-axsvbsqv.js:14662-15241 placement
 /**
  * 渲染工作流内单个工具调用的标题行：状态符号（运行中、无结果、成功、错误）、工具名与按宽度截断的摘要。
  */
-function renderWorkflowCallHeader({ call: o, state, width, indent }) {
+function renderWorkflowCallHeader({ call, state, width, indent }) {
   let marker;
   let suffix = null;
   switch (state) {
@@ -133,13 +140,13 @@ function renderWorkflowCallHeader({ call: o, state, width, indent }) {
       1 -
       (suffix ? bunStringWidth(suffix.text) : 0),
   );
-  let toolName = normalizeTaskText(identity(o.name));
+  let toolName = normalizeTaskText(identity(call.name));
   let remaining = max - bunStringWidth(toolName);
   let label =
     remaining < 0
       ? truncateToWidth(toolName, max)
-      : o.summary && remaining > 3
-        ? `${toolName}(${truncateToWidth(normalizeTaskText(o.summary), remaining - 2)})`
+      : call.summary && remaining > 3
+        ? `${toolName}(${truncateToWidth(normalizeTaskText(call.summary), remaining - 2)})`
         : toolName;
   return [
     {
@@ -157,38 +164,38 @@ function renderWorkflowCallHeader({ call: o, state, width, indent }) {
 /**
  * 渲染工具调用的完整行：标题、输入字段，以及结果（空、内容或"未记录"）。
  */
-function renderWorkflowCallLines({ call: o, state, width, indent }) {
+function renderWorkflowCallLines({ call, state, width, indent }) {
   let lines = [
     renderWorkflowCallHeader({
-      call: o,
+      call,
       state,
       width,
       indent,
     }),
   ];
-  if (TASK_TODO_TOOL_NAMES.includes(o.name)) return lines;
+  if (TASK_TODO_TOOL_NAMES.includes(call.name)) return lines;
   let fieldIndent = `${indent}  `;
-  renderCallFields(lines, o.fields, {
+  renderCallFields(lines, call.fields, {
     indent: fieldIndent,
     width,
     maxLines: MAX_TASK_DETAIL_LINES,
   });
   let resultPrefix = `${fieldIndent}${RESPONSE_CONNECTOR}  `;
-  if (o.result && o.result.head === "")
+  if (call.result && call.result.head === "")
     lines.push([
       {
         text: truncateToWidth(`${resultPrefix}(empty)`, width),
-        color: o.result.isError ? "error" : undefined,
-        dimColor: !o.result.isError,
+        color: call.result.isError ? "error" : undefined,
+        dimColor: !call.result.isError,
       },
     ]);
-  else if (o.result)
-    renderWrappedText(lines, o.result, {
+  else if (call.result)
+    renderWrappedText(lines, call.result, {
       firstPrefix: resultPrefix,
       restPrefix: " ".repeat(bunStringWidth(resultPrefix)),
       width,
       maxLines: MIN_TASK_ROWS,
-      color: o.result.isError ? "error" : undefined,
+      color: call.result.isError ? "error" : undefined,
     });
   else if (state === "unanswered")
     lines.push([
@@ -204,93 +211,97 @@ function renderWorkflowCallLines({ call: o, state, width, indent }) {
  * 按行数预算渲染调用的输入字段（键过宽时单独成行），最后汇总隐藏的行与字符数。
  */
 function renderCallFields(lines, fields, { indent, width, maxLines }) {
-  let p = maxLines;
-  let h = 0;
-  let b = 0;
-  let x = `${indent}  `;
-  for (let A of fields) {
-    if (p <= 0) {
-      h += A.lineCount;
+  let remainingLines = maxLines;
+  let hiddenLines = 0;
+  let hiddenChars = 0;
+  let continuationPrefix = `${indent}  `;
+  for (let field of fields) {
+    if (remainingLines <= 0) {
+      hiddenLines += field.lineCount;
       continue;
     }
-    let v = normalizeTaskText(A.key);
-    let T = `${indent}${v}: `;
+    let fieldKey = normalizeTaskText(field.key);
+    let fieldPrefix = `${indent}${fieldKey}: `;
     if (
       !(
-        A.lineCount === 1 &&
-        A.truncatedChars === 0 &&
-        bunStringWidth(T) + bunStringWidth(normalizeTaskText(A.head)) <= width
+        field.lineCount === 1 &&
+        field.truncatedChars === 0 &&
+        bunStringWidth(fieldPrefix) + bunStringWidth(normalizeTaskText(field.head)) <= width
       ) &&
-      bunStringWidth(T) > Math.floor(width / 2)
+      bunStringWidth(fieldPrefix) > Math.floor(width / 2)
     ) {
       lines.push([
         {
-          text: truncateToWidth(`${indent}${v}:`, width),
+          text: truncateToWidth(`${indent}${fieldKey}:`, width),
           dimColor: true,
         },
       ]);
-      p--;
-      T = x;
-      if (p <= 0) {
-        h += A.lineCount;
+      remainingLines--;
+      fieldPrefix = continuationPrefix;
+      if (remainingLines <= 0) {
+        hiddenLines += field.lineCount;
         continue;
       }
     }
-    let I = renderWrappedText(lines, A, {
-      firstPrefix: T,
-      restPrefix: x,
+    let result = renderWrappedText(lines, field, {
+      firstPrefix: fieldPrefix,
+      restPrefix: continuationPrefix,
       width,
-      maxLines: p,
+      maxLines: remainingLines,
       color: undefined,
       reportHidden: false,
     });
-    p -= I.lines;
-    h += I.hiddenLines;
-    b += I.hiddenChars;
+    remainingLines -= result.lines;
+    hiddenLines += result.hiddenLines;
+    hiddenChars += result.hiddenChars;
   }
-  pushHiddenSummary(lines, indent, width, h, b);
+  pushHiddenSummary(lines, indent, width, hiddenLines, hiddenChars);
 }
 //@ chunk-axsvbsqv.js:16294-16901 placement
 /**
  * 把文本按宽度与行数上限折行输出（首行与续行前缀不同），返回渲染行数与隐藏的行/字符数，可选追加隐藏提示。
  */
-function renderWrappedText(o, i, { firstPrefix, restPrefix, width, maxLines, color, reportHidden = true }) {
-  let lines = i.head.split(`
+function renderWrappedText(
+  lines,
+  wrapped,
+  { firstPrefix, restPrefix, width, maxLines, color, reportHidden = true },
+) {
+  let lines_2 = wrapped.head.split(`
 `);
   let rendered = 0;
-  let max = Math.max(0, i.lineCount - lines.length);
+  let max = Math.max(0, wrapped.lineCount - lines_2.length);
   let complete = true;
   let max_2 = Math.max(1, width - bunStringWidth(restPrefix));
-  t: for (let [N, E] of lines.entries()) {
-    let V = normalizeTaskText(E);
-    let J = truncateToLength(V, (maxLines - rendered + 1) * width);
-    let z = rendered === 0 ? Math.max(1, width - bunStringWidth(firstPrefix)) : max_2;
-    let L = splitByDisplayWidth(J, z)[0] ?? "";
-    let sliced = J.slice(L.length);
-    let H = sliced ? [L, ...splitByDisplayWidth(sliced, max_2)] : [L];
-    for (let [Y, pt] of H.entries()) {
+  t: for (let [lineIndex, rawLine] of lines_2.entries()) {
+    let lineText = normalizeTaskText(rawLine);
+    let truncatedText = truncateToLength(lineText, (maxLines - rendered + 1) * width);
+    let firstWidth = rendered === 0 ? Math.max(1, width - bunStringWidth(firstPrefix)) : max_2;
+    let firstChunk = splitByDisplayWidth(truncatedText, firstWidth)[0] ?? "";
+    let sliced = truncatedText.slice(firstChunk.length);
+    let segments = sliced ? [firstChunk, ...splitByDisplayWidth(sliced, max_2)] : [firstChunk];
+    for (let [segmentIndex, segmentText] of segments.entries()) {
       if (rendered >= maxLines) {
-        max += lines.length - N;
+        max += lines_2.length - lineIndex;
         complete = false;
         break t;
       }
-      o.push([
+      lines.push([
         {
-          text: (rendered === 0 && Y === 0 ? firstPrefix : restPrefix) + pt,
+          text: (rendered === 0 && segmentIndex === 0 ? firstPrefix : restPrefix) + segmentText,
           color,
           dimColor: color === undefined,
         },
       ]);
       rendered++;
     }
-    if (J.length < V.length) {
-      max += lines.length - N;
+    if (truncatedText.length < lineText.length) {
+      max += lines_2.length - lineIndex;
       complete = false;
       break;
     }
   }
-  let truncatedChars = complete ? i.truncatedChars : 0;
-  if (reportHidden) pushHiddenSummary(o, restPrefix, width, max, truncatedChars);
+  let truncatedChars = complete ? wrapped.truncatedChars : 0;
+  if (reportHidden) pushHiddenSummary(lines, restPrefix, width, max, truncatedChars);
   return {
     lines: rendered,
     hiddenLines: max,
@@ -298,27 +309,32 @@ function renderWrappedText(o, i, { firstPrefix, restPrefix, width, maxLines, col
   };
 }
 //@ chunk-axsvbsqv.js:16901-17047 placement
-function pushHiddenSummary(o, i, width, u, d) {
-  let p = u > 0 ? `\u2026 ${u} more ${plural(u, "line")}` : d > 0 ? `\u2026 +${d} chars` : "";
-  if (p)
-    o.push([
+function pushHiddenSummary(lines, indent, width, hiddenLines, hiddenChars) {
+  let summary =
+    hiddenLines > 0
+      ? `\u2026 ${hiddenLines} more ${plural(hiddenLines, "line")}`
+      : hiddenChars > 0
+        ? `\u2026 +${hiddenChars} chars`
+        : "";
+  if (summary)
+    lines.push([
       {
-        text: truncateToWidth(`${i}${p}`, width),
+        text: truncateToWidth(`${indent}${summary}`, width),
         dimColor: true,
       },
     ]);
 }
 //@ chunk-axsvbsqv.js:17047-17146 placement
-function renderStyledLine(A, v) {
+function renderStyledLine(segment, key) {
   return jsxProd_default(
     Text,
     {
-      color: A.color,
-      dimColor: A.dimColor,
-      bold: A.bold ?? false,
-      children: A.text,
+      color: segment.color,
+      dimColor: segment.dimColor,
+      bold: segment.bold ?? false,
+      children: segment.text,
     },
-    v,
+    key,
   );
 }
 //@ chunk-axsvbsqv.js:17146-17172 placement
@@ -326,38 +342,38 @@ function renderNothing() {
   return null;
 }
 //@ chunk-axsvbsqv.js:17172-17333 placement
-function computeScrollWindow(o, i, viewport) {
-  if (i <= viewport)
+function computeScrollWindow(scrollRow, totalRows, viewport) {
+  if (totalRows <= viewport)
     return {
       from: 0,
-      to: i,
+      to: totalRows,
       above: 0,
       below: 0,
     };
   let floored = Math.floor(viewport / 2);
-  let max = Math.max(0, Math.min(o - floored, i - viewport));
-  let p = max + viewport;
+  let max = Math.max(0, Math.min(scrollRow - floored, totalRows - viewport));
+  let endRow = max + viewport;
   return {
     from: max,
-    to: p,
+    to: endRow,
     above: max,
-    below: i - p,
+    below: totalRows - endRow,
   };
 }
 //@ chunk-axsvbsqv.js:17333-17395 placement
-function isRunningState(o) {
-  return o.state === "start" || o.state === "progress";
+function isRunningState(row) {
+  return row.state === "start" || row.state === "progress";
 }
 //@ chunk-axsvbsqv.js:17395-17628 placement
-function getAgentDisplayState(o, i) {
-  if (o.state === "done") return "done";
-  if (o.state === "error") {
-    if (o.skipped) return "skipped";
-    if (o.blocked) return "blocked";
+function getAgentDisplayState(agent, isWorkflowActive) {
+  if (agent.state === "done") return "done";
+  if (agent.state === "error") {
+    if (agent.skipped) return "skipped";
+    if (agent.blocked) return "blocked";
     return "failed";
   }
-  if (!i) return "interrupted";
-  return o.queuedAt != null && o.startedAt == null ? "queued" : "running";
+  if (!isWorkflowActive) return "interrupted";
+  return agent.queuedAt != null && agent.startedAt == null ? "queued" : "running";
 }
 //@ chunk-axsvbsqv.js:17628-17971 placement
 /**
@@ -410,17 +426,17 @@ var WORKFLOW_TASK_FILTERS = [
   "interrupted",
 ];
 //@ chunk-axsvbsqv.js:18055-18124 placement
-function agentCountLabel(o, filterLabel) {
-  return filterLabel ? `showing ${o} ${filterLabel}` : `${o} ${plural(o, "agent")}`;
+function agentCountLabel(count, filterLabel) {
+  return filterLabel ? `showing ${count} ${filterLabel}` : `${count} ${plural(count, "agent")}`;
 }
 //@ chunk-axsvbsqv.js:18124-18231 placement
-function describeEmptyAgentList(o, filterLabel) {
-  if (o.status === "not-started") return "Not started yet";
+function describeEmptyAgentList(workflow, filterLabel) {
+  if (workflow.status === "not-started") return "Not started yet";
   return filterLabel ? `No ${filterLabel} agents` : "No agents";
 }
 //@ chunk-axsvbsqv.js:18231-18283 placement
-function clamp(cardScroll, i, l) {
-  return Math.max(i, Math.min(l, cardScroll));
+function clamp(value, min, max) {
+  return Math.max(min, Math.min(max, value));
 }
 //@ chunk-axsvbsqv.js:18283-18914 placement
 /**
@@ -461,7 +477,7 @@ function renderAgentRowTail(agent, width, isSelected, now) {
   let { model, stats, time } = getAgentRowStats(agent, now);
   let color = isSelected ? "permission" : undefined;
   let dim = !isSelected;
-  let clip = (J, z) => (z <= 0 ? "" : truncateToWidth(J, z));
+  let clip = (text, maxWidth) => (maxWidth <= 0 ? "" : truncateToWidth(text, maxWidth));
   let timeText = time ? clip(time, width).padStart(Math.min(WORKFLOW_HEADER_ROWS, width)) : "";
   let available = timeText ? width - bunStringWidth(timeText) - 1 : width;
   let separatorWidth = (modelText, statsText) => (modelText && statsText ? 3 : 0);
@@ -520,165 +536,165 @@ function renderAgentRowTail(agent, width, isSelected, now) {
 var MAX_AGENT_NAME_WIDTH = 40;
 var MIN_AGENT_NAME_WIDTH = 30;
 //@ chunk-axsvbsqv.js:19445-19622 placement
-function getAgentLabelWidth(agents, i) {
+function getAgentLabelWidth(agents, width) {
   let min = Math.min(
     MAX_AGENT_NAME_WIDTH,
-    Math.max(22, i - MIN_AGENT_NAME_WIDTH),
-    Math.max(4, Math.min(i, Math.max(12, i - WORKFLOW_HEADER_ROWS - 1))),
+    Math.max(22, width - MIN_AGENT_NAME_WIDTH),
+    Math.max(4, Math.min(width, Math.max(12, width - WORKFLOW_HEADER_ROWS - 1))),
   );
-  let reduced = agents.reduce((acc, p) => Math.max(acc, bunStringWidth(p.label)), 0);
+  let reduced = agents.reduce((acc, agent) => Math.max(acc, bunStringWidth(agent.label)), 0);
   return Math.min(Math.max(12, reduced), min);
 }
 //@ chunk-axsvbsqv.js:19622-19862 placement
 function fitSegments(segs, width) {
-  let l = 0;
+  let usedWidth = 0;
   for (let idx = 0; idx < segs.length; idx++) {
-    let d = segs[idx];
-    let p = bunStringWidth(d.text);
-    if (l + p > width) {
-      let h = width - l;
-      let b = h > 0 ? truncateToWidth(d.text, h) : "";
+    let segment = segs[idx];
+    let segmentWidth = bunStringWidth(segment.text);
+    if (usedWidth + segmentWidth > width) {
+      let remainingWidth = width - usedWidth;
+      let truncatedText = remainingWidth > 0 ? truncateToWidth(segment.text, remainingWidth) : "";
       let sliced = segs.slice(0, idx);
-      if (b)
+      if (truncatedText)
         sliced.push({
-          ...d,
-          text: b,
+          ...segment,
+          text: truncatedText,
         });
       return {
         segs: sliced,
-        pad: Math.max(0, h - bunStringWidth(b)),
+        pad: Math.max(0, remainingWidth - bunStringWidth(truncatedText)),
       };
     }
-    l += p;
+    usedWidth += segmentWidth;
   }
   return {
     segs,
-    pad: Math.max(0, width - l),
+    pad: Math.max(0, width - usedWidth),
   };
 }
 //@ chunk-axsvbsqv.js:19862-20129 placement
 function SegmentLine(props) {
-  let $ = w(7);
+  let $ = useMemoCache(7);
   let { segs, width } = props;
-  let d;
-  let p;
+  let styledSegments;
+  let padding;
   if ($[0] !== segs || $[1] !== width) {
     let { segs: segs_2, pad } = fitSegments(segs, width);
-    d = segs_2.map(renderStyledLine);
-    p = " ".repeat(pad);
+    styledSegments = segs_2.map(renderStyledLine);
+    padding = " ".repeat(pad);
     $[0] = segs;
     $[1] = width;
-    $[2] = d;
-    $[3] = p;
+    $[2] = styledSegments;
+    $[3] = padding;
   } else {
-    d = $[2];
-    p = $[3];
+    styledSegments = $[2];
+    padding = $[3];
   }
-  let x;
-  if ($[4] !== d || $[5] !== p) {
-    x = jsxProd_default_2(Fragment, {
-      children: [d, p],
+  let lineElement;
+  if ($[4] !== styledSegments || $[5] !== padding) {
+    lineElement = jsxProd_default_2(Fragment, {
+      children: [styledSegments, padding],
     });
-    $[4] = d;
-    $[5] = p;
-    $[6] = x;
-  } else x = $[6];
-  return x;
+    $[4] = styledSegments;
+    $[5] = padding;
+    $[6] = lineElement;
+  } else lineElement = $[6];
+  return lineElement;
 }
 //@ chunk-axsvbsqv.js:20129-20530 placement
 /**
  * 渲染带竖线边框的一行分段文本（超宽截断）。
  */
 function BoxedSegmentLine(props) {
-  let $ = w(7);
+  let $ = useMemoCache(7);
   let { segs, contentWidth } = props;
-  let d;
+  let leftPipe;
   if ($[0] === MEMO_CACHE_SENTINEL) {
-    d = jsxProd_default_2(Text, {
+    leftPipe = jsxProd_default_2(Text, {
       color: "text",
-      children: [" ", _S.pipe, " "],
+      children: [" ", TREE_GLYPHS.pipe, " "],
     });
-    $[0] = d;
-  } else d = $[0];
-  let p;
+    $[0] = leftPipe;
+  } else leftPipe = $[0];
+  let segmentLineElement;
   if ($[1] !== contentWidth || $[2] !== segs) {
-    p = jsxProd_default(SegmentLine, {
+    segmentLineElement = jsxProd_default(SegmentLine, {
       segs,
       width: contentWidth,
     });
     $[1] = contentWidth;
     $[2] = segs;
-    $[3] = p;
-  } else p = $[3];
-  let h;
+    $[3] = segmentLineElement;
+  } else segmentLineElement = $[3];
+  let rightPipe;
   if ($[4] === MEMO_CACHE_SENTINEL) {
-    h = jsxProd_default_2(Text, {
+    rightPipe = jsxProd_default_2(Text, {
       color: "text",
-      children: [" ", _S.pipe],
+      children: [" ", TREE_GLYPHS.pipe],
     });
-    $[4] = h;
-  } else h = $[4];
-  let b;
-  if ($[5] !== p) {
-    b = jsxProd_default_2(Text, {
+    $[4] = rightPipe;
+  } else rightPipe = $[4];
+  let boxedLineElement;
+  if ($[5] !== segmentLineElement) {
+    boxedLineElement = jsxProd_default_2(Text, {
       wrap: "truncate-end",
-      children: [d, p, h],
+      children: [leftPipe, segmentLineElement, rightPipe],
     });
-    $[5] = p;
-    $[6] = b;
-  } else b = $[6];
-  return b;
+    $[5] = segmentLineElement;
+    $[6] = boxedLineElement;
+  } else boxedLineElement = $[6];
+  return boxedLineElement;
 }
 //@ chunk-axsvbsqv.js:20530-20654 placement
-function formatScrollRange(scrollWindow, i) {
+function formatScrollRange(scrollWindow, totalRows) {
   let arrowUp = scrollWindow.from > 0 ? figures_default.arrowUp : " ";
-  let arrowDown = scrollWindow.to < i ? figures_default.arrowDown : " ";
-  return `${arrowUp} ${scrollWindow.from + 1}${Gxi}${scrollWindow.to} of ${i} ${arrowDown}`;
+  let arrowDown = scrollWindow.to < totalRows ? figures_default.arrowDown : " ";
+  return `${arrowUp} ${scrollWindow.from + 1}${EN_DASH}${scrollWindow.to} of ${totalRows} ${arrowDown}`;
 }
 //@ chunk-axsvbsqv.js:20654-20887 placement
 function ScrollRangeIndicator(props) {
-  let $ = w(5);
+  let $ = useMemoCache(5);
   let { win, total } = props;
-  let d;
+  let rangeText;
   if ($[0] !== total || $[1] !== win) {
-    d = formatScrollRange(win, total);
+    rangeText = formatScrollRange(win, total);
     $[0] = total;
     $[1] = win;
-    $[2] = d;
-  } else d = $[2];
-  const children = `  ${d}`;
-  let h;
+    $[2] = rangeText;
+  } else rangeText = $[2];
+  const children = `  ${rangeText}`;
+  let indicatorElement;
   if ($[3] !== children) {
-    h = jsxProd_default(Text, {
+    indicatorElement = jsxProd_default(Text, {
       dimColor: true,
       wrap: "truncate-end",
       children,
     });
     $[3] = children;
-    $[4] = h;
-  } else h = $[4];
-  return h;
+    $[4] = indicatorElement;
+  } else indicatorElement = $[4];
+  return indicatorElement;
 }
 //@ chunk-axsvbsqv.js:20887-23906 placement
 /**
  * 工作流详情中的代理列表栏。
  */
 function WorkflowAgentsPane(props) {
-  let $ = w(53);
+  let $ = useMemoCache(53);
   let { phase, selectedAgent, level, contentWidth, viewport, tight, workflowActive, filterLabel } = props;
   let agents = phase.agents;
-  let T;
+  let topRule;
   if ($[0] !== contentWidth) {
-    T = HORIZONTAL_LINE_GLYPH.repeat(contentWidth + 2);
+    topRule = HORIZONTAL_LINE_GLYPH.repeat(contentWidth + 2);
     $[0] = contentWidth;
-    $[1] = T;
-  } else T = $[1];
-  let M = T;
-  let I;
-  let N;
+    $[1] = topRule;
+  } else topRule = $[1];
+  let ruleLine = topRule;
+  let bottomBorderElement;
+  let rows;
   if (
     $[2] !== agents ||
-    $[3] !== M ||
+    $[3] !== ruleLine ||
     $[4] !== contentWidth ||
     $[5] !== filterLabel ||
     $[6] !== level ||
@@ -689,11 +705,11 @@ function WorkflowAgentsPane(props) {
     $[11] !== workflowActive
   ) {
     let scrollWindow = computeScrollWindow(selectedAgent, agents.length, viewport);
-    N = [];
-    let V = agentCountLabel(agents.length, filterLabel);
+    rows = [];
+    let countLabel = agentCountLabel(agents.length, filterLabel);
     if (tight) {
-      let J = truncateToWidth(` \xB7 ${V}`, Math.max(1, contentWidth - 1));
-      let max = Math.max(1, contentWidth - bunStringWidth(J));
+      let countSuffix = truncateToWidth(` \xB7 ${countLabel}`, Math.max(1, contentWidth - 1));
+      let max = Math.max(1, contentWidth - bunStringWidth(countSuffix));
       let text;
       if ($[14] !== phase.title || $[15] !== max) {
         text = truncateToWidth(phase.title, max);
@@ -701,35 +717,35 @@ function WorkflowAgentsPane(props) {
         $[15] = max;
         $[16] = text;
       } else text = $[16];
-      let B;
+      let titleSegment;
       if ($[17] !== text) {
-        B = {
+        titleSegment = {
           text,
           color: "permission",
           bold: true,
         };
         $[17] = text;
-        $[18] = B;
-      } else B = $[18];
-      let H;
-      if ($[19] !== J) {
-        H = {
-          text: J,
+        $[18] = titleSegment;
+      } else titleSegment = $[18];
+      let countSegment;
+      if ($[19] !== countSuffix) {
+        countSegment = {
+          text: countSuffix,
           dimColor: true,
         };
-        $[19] = J;
-        $[20] = H;
-      } else H = $[20];
+        $[19] = countSuffix;
+        $[20] = countSegment;
+      } else countSegment = $[20];
       let segs;
-      if ($[21] !== B || $[22] !== H) {
-        segs = [B, H];
-        $[21] = B;
-        $[22] = H;
+      if ($[21] !== titleSegment || $[22] !== countSegment) {
+        segs = [titleSegment, countSegment];
+        $[21] = titleSegment;
+        $[22] = countSegment;
         $[23] = segs;
       } else segs = $[23];
-      let pt;
+      let titleLineElement;
       if ($[24] !== contentWidth || $[25] !== segs) {
-        pt = jsxProd_default(
+        titleLineElement = jsxProd_default(
           BoxedSegmentLine,
           {
             contentWidth,
@@ -739,11 +755,11 @@ function WorkflowAgentsPane(props) {
         );
         $[24] = contentWidth;
         $[25] = segs;
-        $[26] = pt;
-      } else pt = $[26];
-      N.push(pt);
+        $[26] = titleLineElement;
+      } else titleLineElement = $[26];
+      rows.push(titleLineElement);
     } else {
-      N.push(
+      rows.push(
         jsxProd_default(
           BoxedSegmentLine,
           {
@@ -759,14 +775,14 @@ function WorkflowAgentsPane(props) {
           "title",
         ),
       );
-      N.push(
+      rows.push(
         jsxProd_default(
           BoxedSegmentLine,
           {
             contentWidth,
             segs: [
               {
-                text: truncateToWidth(V, contentWidth),
+                text: truncateToWidth(countLabel, contentWidth),
                 dimColor: true,
               },
             ],
@@ -774,7 +790,7 @@ function WorkflowAgentsPane(props) {
           "count",
         ),
       );
-      N.push(
+      rows.push(
         jsxProd_default(
           BoxedSegmentLine,
           {
@@ -789,7 +805,7 @@ function WorkflowAgentsPane(props) {
         ),
       );
     }
-    let gt = N.length;
+    let rowCountBeforeAgents = rows.length;
     if (agents.length === 0) {
       let text;
       if ($[27] !== filterLabel || $[28] !== phase) {
@@ -809,9 +825,9 @@ function WorkflowAgentsPane(props) {
         $[30] = text;
         $[31] = segs;
       } else segs = $[31];
-      let H;
+      let emptyLineElement;
       if ($[32] !== contentWidth || $[33] !== segs) {
-        H = jsxProd_default(
+        emptyLineElement = jsxProd_default(
           BoxedSegmentLine,
           {
             contentWidth,
@@ -821,19 +837,19 @@ function WorkflowAgentsPane(props) {
         );
         $[32] = contentWidth;
         $[33] = segs;
-        $[34] = H;
-      } else H = $[34];
-      N.push(H);
+        $[34] = emptyLineElement;
+      } else emptyLineElement = $[34];
+      rows.push(emptyLineElement);
     } else {
       let agentLabelWidth = getAgentLabelWidth(agents, contentWidth - 5);
       for (let from = scrollWindow.from; from < scrollWindow.to; from++) {
         let agent = agents[from];
         let isSelected = level === "agents" && from === selectedAgent;
         let { glyph, color } = getAgentStateGlyph(getAgentDisplayState(agent, workflowActive));
-        let ot = truncateToWidth(agent.label, agentLabelWidth);
-        let rt = " ".repeat(Math.max(0, agentLabelWidth - bunStringWidth(ot)));
+        let agentLabelText = truncateToWidth(agent.label, agentLabelWidth);
+        let labelPadding = " ".repeat(Math.max(0, agentLabelWidth - bunStringWidth(agentLabelText)));
         let max = Math.max(0, contentWidth - (agentLabelWidth + 5));
-        N.push(
+        rows.push(
           jsxProd_default(
             BoxedSegmentLine,
             {
@@ -854,7 +870,7 @@ function WorkflowAgentsPane(props) {
                   text: " ",
                 },
                 {
-                  text: `${ot}${rt}`,
+                  text: `${agentLabelText}${labelPadding}`,
                   color: isSelected ? "permission" : undefined,
                   dimColor: !isSelected && isRunningState(agent),
                 },
@@ -869,9 +885,9 @@ function WorkflowAgentsPane(props) {
         );
       }
     }
-    let G = N.length - gt;
-    for (let dt = G; dt < viewport; dt++)
-      N.push(
+    let agentRowCount = rows.length - rowCountBeforeAgents;
+    for (let padRowIndex = agentRowCount; padRowIndex < viewport; padRowIndex++)
+      rows.push(
         jsxProd_default(
           BoxedSegmentLine,
           {
@@ -882,70 +898,70 @@ function WorkflowAgentsPane(props) {
               },
             ],
           },
-          `pad-${dt}`,
+          `pad-${padRowIndex}`,
         ),
       );
     if (agents.length > viewport) {
-      let St = ` ${formatScrollRange(scrollWindow, agents.length)} `;
-      let max = Math.max(0, contentWidth + 2 - bunStringWidth(St));
-      let L;
+      let scrollRangeText = ` ${formatScrollRange(scrollWindow, agents.length)} `;
+      let max = Math.max(0, contentWidth + 2 - bunStringWidth(scrollRangeText));
+      let bottomRule;
       if ($[35] !== max) {
-        L = HORIZONTAL_LINE_GLYPH.repeat(max);
+        bottomRule = HORIZONTAL_LINE_GLYPH.repeat(max);
         $[35] = max;
-        $[36] = L;
-      } else L = $[36];
-      let B;
-      if ($[37] !== L) {
-        B = jsxProd_default_2(Text, {
+        $[36] = bottomRule;
+      } else bottomRule = $[36];
+      let bottomLeftElement;
+      if ($[37] !== bottomRule) {
+        bottomLeftElement = jsxProd_default_2(Text, {
           color: "text",
-          children: [" ", Kk.bottomLeft, L],
+          children: [" ", ROUNDED_BOX_CORNERS.bottomLeft, bottomRule],
         });
-        $[37] = L;
-        $[38] = B;
-      } else B = $[38];
-      let H;
-      if ($[39] !== St) {
-        H = jsxProd_default(Text, {
+        $[37] = bottomRule;
+        $[38] = bottomLeftElement;
+      } else bottomLeftElement = $[38];
+      let scrollRangeElement;
+      if ($[39] !== scrollRangeText) {
+        scrollRangeElement = jsxProd_default(Text, {
           dimColor: true,
-          children: St,
+          children: scrollRangeText,
         });
-        $[39] = St;
-        $[40] = H;
-      } else H = $[40];
-      let Y;
+        $[39] = scrollRangeText;
+        $[40] = scrollRangeElement;
+      } else scrollRangeElement = $[40];
+      let bottomRightElement;
       if ($[41] === MEMO_CACHE_SENTINEL) {
-        Y = jsxProd_default(Text, {
+        bottomRightElement = jsxProd_default(Text, {
           color: "text",
-          children: Kk.bottomRight,
+          children: ROUNDED_BOX_CORNERS.bottomRight,
         });
-        $[41] = Y;
-      } else Y = $[41];
-      let pt;
-      if ($[42] !== B || $[43] !== H) {
-        pt = jsxProd_default_2(Text, {
+        $[41] = bottomRightElement;
+      } else bottomRightElement = $[41];
+      let scrollFooterElement;
+      if ($[42] !== bottomLeftElement || $[43] !== scrollRangeElement) {
+        scrollFooterElement = jsxProd_default_2(Text, {
           wrap: "truncate-end",
-          children: [B, H, Y],
+          children: [bottomLeftElement, scrollRangeElement, bottomRightElement],
         });
-        $[42] = B;
-        $[43] = H;
-        $[44] = pt;
-      } else pt = $[44];
-      I = pt;
+        $[42] = bottomLeftElement;
+        $[43] = scrollRangeElement;
+        $[44] = scrollFooterElement;
+      } else scrollFooterElement = $[44];
+      bottomBorderElement = scrollFooterElement;
     } else {
-      let L;
-      if ($[45] !== M) {
-        L = jsxProd_default_2(Text, {
+      let plainFooterElement;
+      if ($[45] !== ruleLine) {
+        plainFooterElement = jsxProd_default_2(Text, {
           color: "text",
           wrap: "truncate-end",
-          children: [" ", Kk.bottomLeft, M, Kk.bottomRight],
+          children: [" ", ROUNDED_BOX_CORNERS.bottomLeft, ruleLine, ROUNDED_BOX_CORNERS.bottomRight],
         });
-        $[45] = M;
-        $[46] = L;
-      } else L = $[46];
-      I = L;
+        $[45] = ruleLine;
+        $[46] = plainFooterElement;
+      } else plainFooterElement = $[46];
+      bottomBorderElement = plainFooterElement;
     }
     $[2] = agents;
-    $[3] = M;
+    $[3] = ruleLine;
     $[4] = contentWidth;
     $[5] = filterLabel;
     $[6] = level;
@@ -954,47 +970,47 @@ function WorkflowAgentsPane(props) {
     $[9] = tight;
     $[10] = viewport;
     $[11] = workflowActive;
-    $[12] = I;
-    $[13] = N;
+    $[12] = bottomBorderElement;
+    $[13] = rows;
   } else {
-    I = $[12];
-    N = $[13];
+    bottomBorderElement = $[12];
+    rows = $[13];
   }
-  let L;
-  if ($[47] !== M) {
-    L = jsxProd_default_2(Text, {
+  let topBorderElement;
+  if ($[47] !== ruleLine) {
+    topBorderElement = jsxProd_default_2(Text, {
       color: "text",
       wrap: "truncate-end",
-      children: [" ", Kk.topLeft, M, Kk.topRight],
+      children: [" ", ROUNDED_BOX_CORNERS.topLeft, ruleLine, ROUNDED_BOX_CORNERS.topRight],
     });
-    $[47] = M;
-    $[48] = L;
-  } else L = $[48];
-  let B;
-  if ($[49] !== I || $[50] !== N || $[51] !== L) {
-    B = jsxProd_default_2(Box, {
+    $[47] = ruleLine;
+    $[48] = topBorderElement;
+  } else topBorderElement = $[48];
+  let paneBox;
+  if ($[49] !== bottomBorderElement || $[50] !== rows || $[51] !== topBorderElement) {
+    paneBox = jsxProd_default_2(Box, {
       flexDirection: "column",
-      children: [L, N, I],
+      children: [topBorderElement, rows, bottomBorderElement],
     });
-    $[49] = I;
-    $[50] = N;
-    $[51] = L;
-    $[52] = B;
-  } else B = $[52];
-  return B;
+    $[49] = bottomBorderElement;
+    $[50] = rows;
+    $[51] = topBorderElement;
+    $[52] = paneBox;
+  } else paneBox = $[52];
+  return paneBox;
 }
 //@ chunk-axsvbsqv.js:23906-24523 placement
 /**
  * 渲染带竖线边框的两栏行，左右各自按宽度渲染分段文本。
  */
 function TwoColumnRow(props) {
-  let $ = w(12);
+  let $ = useMemoCache(12);
   let { left, right, leftWidth, rightWidth } = props;
   let leftEdge;
   if ($[0] === MEMO_CACHE_SENTINEL) {
     leftEdge = jsxProd_default_2(Text, {
       color: "text",
-      children: [" ", _S.pipe, " "],
+      children: [" ", TREE_GLYPHS.pipe, " "],
     });
     $[0] = leftEdge;
   } else leftEdge = $[0];
@@ -1012,7 +1028,7 @@ function TwoColumnRow(props) {
   if ($[4] === MEMO_CACHE_SENTINEL) {
     separator = jsxProd_default_2(Text, {
       color: "text",
-      children: [" ", _S.pipe, " "],
+      children: [" ", TREE_GLYPHS.pipe, " "],
     });
     $[4] = separator;
   } else separator = $[4];
@@ -1030,7 +1046,7 @@ function TwoColumnRow(props) {
   if ($[8] === MEMO_CACHE_SENTINEL) {
     rightEdge = jsxProd_default_2(Text, {
       color: "text",
-      children: [" ", _S.pipe],
+      children: [" ", TREE_GLYPHS.pipe],
     });
     $[8] = rightEdge;
   } else rightEdge = $[8];
@@ -1050,27 +1066,27 @@ function TwoColumnRow(props) {
 /**
  * 渲染分节标题线：可选标签与标签尾注，其余用横线填满宽度。
  */
-function renderSectionRule(o, i) {
-  let l = [];
-  let u = 0;
-  if (i.label) {
-    let h = ` ${truncateToWidth(i.label.text, Math.max(1, o - 2))} `;
-    u += bunStringWidth(h);
-    l.push(
+function renderSectionRule(width, section) {
+  let segments = [];
+  let usedWidth = 0;
+  if (section.label) {
+    let labelText = ` ${truncateToWidth(section.label.text, Math.max(1, width - 2))} `;
+    usedWidth += bunStringWidth(labelText);
+    segments.push(
       jsxProd_default(
         Text,
         {
-          color: i.label.color ?? "text",
-          bold: i.label.bold,
-          children: h,
+          color: section.label.color ?? "text",
+          bold: section.label.bold,
+          children: labelText,
         },
         "label",
       ),
     );
   }
-  let d = i.tag ? ` ${truncateToWidth(i.tag, Math.max(0, o - u - 2))} ` : "";
-  let max = Math.max(0, o - u - bunStringWidth(d));
-  l.push(
+  let tagText = section.tag ? ` ${truncateToWidth(section.tag, Math.max(0, width - usedWidth - 2))} ` : "";
+  let max = Math.max(0, width - usedWidth - bunStringWidth(tagText));
+  segments.push(
     jsxProd_default(
       Text,
       {
@@ -1080,39 +1096,39 @@ function renderSectionRule(o, i) {
       "dash",
     ),
   );
-  if (d)
-    l.push(
+  if (tagText)
+    segments.push(
       jsxProd_default(
         Text,
         {
           dimColor: true,
-          children: d,
+          children: tagText,
         },
         "tag",
       ),
     );
-  return l;
+  return segments;
 }
 //@ chunk-axsvbsqv.js:24889-25789 placement
 function SplitPaneBorder(props) {
-  let $ = w(20);
+  let $ = useMemoCache(20);
   let { pos, leftWidth, rightWidth, leftTitle, rightTitle, leftTag, rightTag } = props;
-  let x = pos === "top" ? Kk.topLeft : Kk.bottomLeft;
-  let children = pos === "top" ? _S.teeDown : _S.teeUp;
-  let children_2 = pos === "top" ? Kk.topRight : Kk.bottomRight;
-  let M;
-  if ($[0] !== x) {
-    M = jsxProd_default_2(Text, {
+  let leftCornerGlyph = pos === "top" ? ROUNDED_BOX_CORNERS.topLeft : ROUNDED_BOX_CORNERS.bottomLeft;
+  let children = pos === "top" ? TREE_GLYPHS.teeDown : TREE_GLYPHS.teeUp;
+  let children_2 = pos === "top" ? ROUNDED_BOX_CORNERS.topRight : ROUNDED_BOX_CORNERS.bottomRight;
+  let leftCornerElement;
+  if ($[0] !== leftCornerGlyph) {
+    leftCornerElement = jsxProd_default_2(Text, {
       color: "text",
-      children: [" ", x],
+      children: [" ", leftCornerGlyph],
     });
-    $[0] = x;
-    $[1] = M;
-  } else M = $[1];
-  const I = leftWidth + 2;
-  let N;
-  if ($[2] !== leftTag || $[3] !== leftTitle || $[4] !== I) {
-    N = renderSectionRule(I, {
+    $[0] = leftCornerGlyph;
+    $[1] = leftCornerElement;
+  } else leftCornerElement = $[1];
+  const leftRuleWidth = leftWidth + 2;
+  let leftRuleSegments;
+  if ($[2] !== leftTag || $[3] !== leftTitle || $[4] !== leftRuleWidth) {
+    leftRuleSegments = renderSectionRule(leftRuleWidth, {
       label: leftTitle
         ? {
             text: leftTitle,
@@ -1122,22 +1138,22 @@ function SplitPaneBorder(props) {
     });
     $[2] = leftTag;
     $[3] = leftTitle;
-    $[4] = I;
-    $[5] = N;
-  } else N = $[5];
-  let E;
+    $[4] = leftRuleWidth;
+    $[5] = leftRuleSegments;
+  } else leftRuleSegments = $[5];
+  let teeElement;
   if ($[6] !== children) {
-    E = jsxProd_default(Text, {
+    teeElement = jsxProd_default(Text, {
       color: "text",
       children,
     });
     $[6] = children;
-    $[7] = E;
-  } else E = $[7];
-  const V = rightWidth + 2;
-  let J;
-  if ($[8] !== rightTag || $[9] !== rightTitle || $[10] !== V) {
-    J = renderSectionRule(V, {
+    $[7] = teeElement;
+  } else teeElement = $[7];
+  const rightRuleWidth = rightWidth + 2;
+  let rightRuleSegments;
+  if ($[8] !== rightTag || $[9] !== rightTitle || $[10] !== rightRuleWidth) {
+    rightRuleSegments = renderSectionRule(rightRuleWidth, {
       label: rightTitle
         ? {
             text: rightTitle,
@@ -1147,32 +1163,38 @@ function SplitPaneBorder(props) {
     });
     $[8] = rightTag;
     $[9] = rightTitle;
-    $[10] = V;
-    $[11] = J;
-  } else J = $[11];
-  let z;
+    $[10] = rightRuleWidth;
+    $[11] = rightRuleSegments;
+  } else rightRuleSegments = $[11];
+  let rightCornerElement;
   if ($[12] !== children_2) {
-    z = jsxProd_default(Text, {
+    rightCornerElement = jsxProd_default(Text, {
       color: "text",
       children: children_2,
     });
     $[12] = children_2;
-    $[13] = z;
-  } else z = $[13];
-  let L;
-  if ($[14] !== M || $[15] !== N || $[16] !== E || $[17] !== J || $[18] !== z) {
-    L = jsxProd_default_2(Text, {
+    $[13] = rightCornerElement;
+  } else rightCornerElement = $[13];
+  let borderLineElement;
+  if (
+    $[14] !== leftCornerElement ||
+    $[15] !== leftRuleSegments ||
+    $[16] !== teeElement ||
+    $[17] !== rightRuleSegments ||
+    $[18] !== rightCornerElement
+  ) {
+    borderLineElement = jsxProd_default_2(Text, {
       wrap: "truncate-end",
-      children: [M, N, E, J, z],
+      children: [leftCornerElement, leftRuleSegments, teeElement, rightRuleSegments, rightCornerElement],
     });
-    $[14] = M;
-    $[15] = N;
-    $[16] = E;
-    $[17] = J;
-    $[18] = z;
-    $[19] = L;
-  } else L = $[19];
-  return L;
+    $[14] = leftCornerElement;
+    $[15] = leftRuleSegments;
+    $[16] = teeElement;
+    $[17] = rightRuleSegments;
+    $[18] = rightCornerElement;
+    $[19] = borderLineElement;
+  } else borderLineElement = $[19];
+  return borderLineElement;
 }
 //@ chunk-axsvbsqv.js:25789-26371 placement
 /**
@@ -1228,11 +1250,11 @@ function renderPhaseRow(phase, index, selectedIndex, focus, width) {
 /**
  * 生成代理列表中一行的分段：选中指针、状态符号、按宽度补齐的名称，以及右侧详情分段。
  */
-function renderAgentRow(agent, i, clampedAgent, level, rightWidth, agentLabelWidth, now) {
-  let isSelected = level === "agents" && i === clampedAgent;
+function renderAgentRow(agent, agentIndex, clampedAgent, level, rightWidth, agentLabelWidth, now) {
+  let isSelected = level === "agents" && agentIndex === clampedAgent;
   let { glyph, color } = getAgentStateGlyph(getAgentDisplayState(agent, now));
-  let v = truncateToWidth(agent.label, agentLabelWidth);
-  let T = " ".repeat(Math.max(0, agentLabelWidth - bunStringWidth(v)));
+  let labelText = truncateToWidth(agent.label, agentLabelWidth);
+  let labelPadding = " ".repeat(Math.max(0, agentLabelWidth - bunStringWidth(labelText)));
   let max = Math.max(0, rightWidth - (agentLabelWidth + 4));
   return [
     {
@@ -1247,7 +1269,7 @@ function renderAgentRow(agent, i, clampedAgent, level, rightWidth, agentLabelWid
       text: " ",
     },
     {
-      text: `${v}${T}`,
+      text: `${labelText}${labelPadding}`,
       color: isSelected ? "permission" : undefined,
       dimColor: !isSelected && isRunningState(agent),
     },
@@ -1258,13 +1280,13 @@ function renderAgentRow(agent, i, clampedAgent, level, rightWidth, agentLabelWid
   ];
 }
 //@ chunk-axsvbsqv.js:26696-26933 placement
-function renderCompactAgentRow(o, i, clampedAgent, leftWidth, workflowActive) {
-  let p = i === clampedAgent;
-  let { glyph, color } = getAgentStateGlyph(getAgentDisplayState(o, workflowActive));
-  let text = truncateToWidth(o.label, Math.max(1, leftWidth - 4));
+function renderCompactAgentRow(agent, agentIndex, clampedAgent, leftWidth, workflowActive) {
+  let isSelected = agentIndex === clampedAgent;
+  let { glyph, color } = getAgentStateGlyph(getAgentDisplayState(agent, workflowActive));
+  let text = truncateToWidth(agent.label, Math.max(1, leftWidth - 4));
   return [
     {
-      text: p ? `${figures_default.pointer} ` : "  ",
+      text: isSelected ? `${figures_default.pointer} ` : "  ",
       color: "permission",
     },
     {
@@ -1276,14 +1298,14 @@ function renderCompactAgentRow(o, i, clampedAgent, leftWidth, workflowActive) {
     },
     {
       text,
-      color: p ? "permission" : undefined,
-      dimColor: !p && isRunningState(o),
+      color: isSelected ? "permission" : undefined,
+      dimColor: !isSelected && isRunningState(agent),
     },
   ];
 }
 //@ chunk-axsvbsqv.js:26933-28627 placement
 function WorkflowPhasesPane(props) {
-  let $ = w(41);
+  let $ = useMemoCache(41);
   let {
     phases,
     selectedPhase,
@@ -1297,16 +1319,16 @@ function WorkflowPhasesPane(props) {
     filterLabel,
   } = props;
   let agents = selectedPhase.agents;
-  let I;
-  let N;
+  let borderComponent;
+  let containerComponent;
   let pos;
   let leftWidth_2;
   let rightWidth_2;
   let leftTag;
   let rightTag;
   let flexDirection;
-  let H;
-  let Y;
+  let topBorderElement;
+  let rowElements;
   if (
     $[0] !== agents ||
     $[1] !== clampedAgent ||
@@ -1323,29 +1345,37 @@ function WorkflowPhasesPane(props) {
     let scrollWindow = computeScrollWindow(clampedPhase, phases.length, viewport);
     let scrollWindow_2 = computeScrollWindow(clampedAgent, agents.length, viewport);
     let agentLabelWidth = getAgentLabelWidth(agents, rightWidth - 4);
-    let ft = [];
+    let rowElements_2 = [];
     for (let idx = 0; idx < viewport; idx++) {
       let index = scrollWindow.from + idx;
-      let U = scrollWindow_2.from + idx;
+      let agentRowIndex = scrollWindow_2.from + idx;
       let left =
         index < scrollWindow.to ? renderPhaseRow(phases[index], index, clampedPhase, level, leftWidth) : [];
-      let ot;
-      if (U < scrollWindow_2.to)
-        ot = renderAgentRow(agents[U], U, clampedAgent, level, rightWidth, agentLabelWidth, workflowActive);
+      let rightSegments;
+      if (agentRowIndex < scrollWindow_2.to)
+        rightSegments = renderAgentRow(
+          agents[agentRowIndex],
+          agentRowIndex,
+          clampedAgent,
+          level,
+          rightWidth,
+          agentLabelWidth,
+          workflowActive,
+        );
       else if (agents.length === 0 && idx === 0)
-        ot = [
+        rightSegments = [
           {
             text: describeEmptyAgentList(selectedPhase, filterLabel),
             dimColor: true,
           },
         ];
-      else ot = [];
-      ft.push(
+      else rightSegments = [];
+      rowElements_2.push(
         jsxProd_default(
           TwoColumnRow,
           {
             left,
-            right: ot,
+            right: rightSegments,
             leftWidth,
             rightWidth,
           },
@@ -1354,18 +1384,18 @@ function WorkflowPhasesPane(props) {
       );
     }
     const title = selectedPhase.title;
-    let W;
+    let countLabel;
     if ($[21] !== agents.length || $[22] !== filterLabel) {
-      W = agentCountLabel(agents.length, filterLabel);
+      countLabel = agentCountLabel(agents.length, filterLabel);
       $[21] = agents.length;
       $[22] = filterLabel;
-      $[23] = W;
-    } else W = $[23];
-    let rightTitle = `${title} \xB7 ${W}`;
-    N = Box;
+      $[23] = countLabel;
+    } else countLabel = $[23];
+    let rightTitle = `${title} \xB7 ${countLabel}`;
+    containerComponent = Box;
     flexDirection = "column";
     if ($[24] !== leftWidth || $[25] !== rightTitle || $[26] !== rightWidth) {
-      H = jsxProd_default(SplitPaneBorder, {
+      topBorderElement = jsxProd_default(SplitPaneBorder, {
         pos: "top",
         leftWidth,
         rightWidth,
@@ -1375,10 +1405,10 @@ function WorkflowPhasesPane(props) {
       $[24] = leftWidth;
       $[25] = rightTitle;
       $[26] = rightWidth;
-      $[27] = H;
-    } else H = $[27];
-    Y = ft;
-    I = SplitPaneBorder;
+      $[27] = topBorderElement;
+    } else topBorderElement = $[27];
+    rowElements = rowElements_2;
+    borderComponent = SplitPaneBorder;
     pos = "bottom";
     leftWidth_2 = leftWidth;
     rightWidth_2 = rightWidth;
@@ -1395,225 +1425,245 @@ function WorkflowPhasesPane(props) {
     $[8] = selectedPhase;
     $[9] = viewport;
     $[10] = workflowActive;
-    $[11] = I;
-    $[12] = N;
+    $[11] = borderComponent;
+    $[12] = containerComponent;
     $[13] = pos;
     $[14] = leftWidth_2;
     $[15] = rightWidth_2;
     $[16] = leftTag;
     $[17] = rightTag;
     $[18] = flexDirection;
-    $[19] = H;
-    $[20] = Y;
+    $[19] = topBorderElement;
+    $[20] = rowElements;
   } else {
-    I = $[11];
-    N = $[12];
+    borderComponent = $[11];
+    containerComponent = $[12];
     pos = $[13];
     leftWidth_2 = $[14];
     rightWidth_2 = $[15];
     leftTag = $[16];
     rightTag = $[17];
     flexDirection = $[18];
-    H = $[19];
-    Y = $[20];
+    topBorderElement = $[19];
+    rowElements = $[20];
   }
-  let rt;
+  let bottomBorderElement;
   if (
-    $[28] !== I ||
+    $[28] !== borderComponent ||
     $[29] !== pos ||
     $[30] !== leftWidth_2 ||
     $[31] !== rightWidth_2 ||
     $[32] !== leftTag ||
     $[33] !== rightTag
   ) {
-    rt = jsxProd_default(I, {
+    bottomBorderElement = jsxProd_default(borderComponent, {
       pos,
       leftWidth: leftWidth_2,
       rightWidth: rightWidth_2,
       leftTag,
       rightTag,
     });
-    $[28] = I;
+    $[28] = borderComponent;
     $[29] = pos;
     $[30] = leftWidth_2;
     $[31] = rightWidth_2;
     $[32] = leftTag;
     $[33] = rightTag;
-    $[34] = rt;
-  } else rt = $[34];
-  let W;
-  if ($[35] !== N || $[36] !== flexDirection || $[37] !== H || $[38] !== Y || $[39] !== rt) {
-    W = jsxProd_default_2(N, {
+    $[34] = bottomBorderElement;
+  } else bottomBorderElement = $[34];
+  let paneElement;
+  if (
+    $[35] !== containerComponent ||
+    $[36] !== flexDirection ||
+    $[37] !== topBorderElement ||
+    $[38] !== rowElements ||
+    $[39] !== bottomBorderElement
+  ) {
+    paneElement = jsxProd_default_2(containerComponent, {
       flexDirection,
-      children: [H, Y, rt],
+      children: [topBorderElement, rowElements, bottomBorderElement],
     });
-    $[35] = N;
+    $[35] = containerComponent;
     $[36] = flexDirection;
-    $[37] = H;
-    $[38] = Y;
-    $[39] = rt;
-    $[40] = W;
-  } else W = $[40];
-  return W;
+    $[37] = topBorderElement;
+    $[38] = rowElements;
+    $[39] = bottomBorderElement;
+    $[40] = paneElement;
+  } else paneElement = $[40];
+  return paneElement;
 }
 //@ chunk-axsvbsqv.js:28627-28662 placement
-var WORKFLOW_INDENT_STEP = 2;
-var MAX_AGENT_ROWS = 20;
-var WORKFLOW_SPINNER_FRAMES = MAX_TRANSCRIPT_TOOL_RESULTS;
-var REFRESH_FAST_MS = 100;
-var REFRESH_SLOW_MS = 250;
+var WORKFLOW_INDENT_STEP; // deferred: uses MAX_TRANSCRIPT_PROMPT_CHARS (../../tasks/LocalWorkflowTask/workflowTranscript.js) of its import cycle while loading; runs once the cycle is complete
+var MAX_AGENT_ROWS;
+var WORKFLOW_SPINNER_FRAMES;
+var REFRESH_FAST_MS;
+var REFRESH_SLOW_MS;
+deferInit("chunk-axsvbsqv.js:28627", () => {
+  WORKFLOW_INDENT_STEP = 2;
+  MAX_AGENT_ROWS = 20;
+  WORKFLOW_SPINNER_FRAMES = MAX_TRANSCRIPT_TOOL_RESULTS;
+  REFRESH_FAST_MS = 100;
+  REFRESH_SLOW_MS = 250;
+});
 //@ chunk-axsvbsqv.js:28662-29466 placement
-function useWorkflowAgentTranscript(workflowRunId, agentId, lastProgressAt, promptFramed) {
-  let $ = w(13);
-  let [d, p] = y(null);
-  let b = Se(clockContext)?.setTimeout ?? defaultSetTimeout;
-  let x = R(undefined);
-  let A = R(0);
-  let v = R(0);
-  let T = R(null);
-  let I;
-  let N;
+function useWorkflowAgentTranscript(workflowRunId, agentIndex, lastProgressAt, promptFramed) {
+  let $ = useMemoCache(13);
+  let [loadedTranscript, setLoadedTranscript] = useState(null);
+  let setTimeoutImpl = useContext(clockContext)?.setTimeout ?? defaultSetTimeout;
+  let lastLoadedAgentIdRef = useRef(undefined);
+  let requestIdRef = useRef(0);
+  let appliedRequestIdRef = useRef(0);
+  let activeRequestRef = useRef(null);
+  let cleanupEffect;
+  let cleanupDeps;
   if ($[0] === MEMO_CACHE_SENTINEL) {
-    I = () => () => {
-      T.current = null;
+    cleanupEffect = () => () => {
+      activeRequestRef.current = null;
     };
-    N = [];
-    $[0] = I;
-    $[1] = N;
+    cleanupDeps = [];
+    $[0] = cleanupEffect;
+    $[1] = cleanupDeps;
   } else {
-    I = $[0];
-    N = $[1];
+    cleanupEffect = $[0];
+    cleanupDeps = $[1];
   }
-  P(I, N);
-  let E;
-  if ($[2] !== agentId || $[3] !== promptFramed || $[4] !== b || $[5] !== workflowRunId) {
-    E = () => {
-      if (!workflowRunId || !agentId) {
+  useEffect(cleanupEffect, cleanupDeps);
+  let loadEffect;
+  if ($[2] !== agentIndex || $[3] !== promptFramed || $[4] !== setTimeoutImpl || $[5] !== workflowRunId) {
+    loadEffect = () => {
+      if (!workflowRunId || !agentIndex) {
         return;
       }
-      T.current = {
+      activeRequestRef.current = {
         runId: workflowRunId,
-        agentId,
+        agentId: agentIndex,
       };
-      let V = (A.current = A.current + 1);
-      let z = () => {
-        readWorkflowAgentTranscript(workflowRunId, agentId, {
+      let requestId = (requestIdRef.current = requestIdRef.current + 1);
+      let loadTranscript = () => {
+        readWorkflowAgentTranscript(workflowRunId, agentIndex, {
           promptFramed,
         })
           .catch(renderNothing)
           .then((transcript) => {
-            if (V > v.current && T.current?.runId === workflowRunId && T.current.agentId === agentId) {
-              v.current = V;
-              x.current = agentId;
-              p({
-                agentId,
+            if (
+              requestId > appliedRequestIdRef.current &&
+              activeRequestRef.current?.runId === workflowRunId &&
+              activeRequestRef.current.agentId === agentIndex
+            ) {
+              appliedRequestIdRef.current = requestId;
+              lastLoadedAgentIdRef.current = agentIndex;
+              setLoadedTranscript({
+                agentId: agentIndex,
                 transcript,
               });
             }
           });
       };
-      if (x.current === agentId) {
-        return b(z, REFRESH_SLOW_MS);
+      if (lastLoadedAgentIdRef.current === agentIndex) {
+        return setTimeoutImpl(loadTranscript, REFRESH_SLOW_MS);
       }
-      z();
+      loadTranscript();
     };
-    $[2] = agentId;
+    $[2] = agentIndex;
     $[3] = promptFramed;
-    $[4] = b;
+    $[4] = setTimeoutImpl;
     $[5] = workflowRunId;
-    $[6] = E;
-  } else E = $[6];
-  let L;
+    $[6] = loadEffect;
+  } else loadEffect = $[6];
+  let effectDeps;
   if (
-    $[7] !== agentId ||
+    $[7] !== agentIndex ||
     $[8] !== promptFramed ||
     $[9] !== lastProgressAt ||
-    $[10] !== b ||
+    $[10] !== setTimeoutImpl ||
     $[11] !== workflowRunId
   ) {
-    L = [workflowRunId, agentId, lastProgressAt, promptFramed, b];
-    $[7] = agentId;
+    effectDeps = [workflowRunId, agentIndex, lastProgressAt, promptFramed, setTimeoutImpl];
+    $[7] = agentIndex;
     $[8] = promptFramed;
     $[9] = lastProgressAt;
-    $[10] = b;
+    $[10] = setTimeoutImpl;
     $[11] = workflowRunId;
-    $[12] = L;
-  } else L = $[12];
-  P(E, L);
-  if (!workflowRunId || !agentId) {
+    $[12] = effectDeps;
+  } else effectDeps = $[12];
+  useEffect(loadEffect, effectDeps);
+  if (!workflowRunId || !agentIndex) {
     return null;
   }
-  if (!d || d.agentId !== agentId) {
+  if (!loadedTranscript || loadedTranscript.agentId !== agentIndex) {
     return "loading";
   }
-  return d.transcript;
+  return loadedTranscript.transcript;
 }
 //@ chunk-axsvbsqv.js:29466-29603 placement
-function wrapLines(o, i) {
-  let l = [];
-  for (let line of o.split(`
+function wrapLines(text, maxWidth) {
+  let wrappedLines = [];
+  for (let line of text.split(`
 `)) {
     if (line === "") {
-      l.push("");
+      wrappedLines.push("");
       continue;
     }
-    for (let d of splitByDisplayWidth(line, Math.max(1, i))) l.push(d);
+    for (let chunk of splitByDisplayWidth(line, Math.max(1, maxWidth))) wrappedLines.push(chunk);
   }
-  return l;
+  return wrappedLines;
 }
 //@ chunk-axsvbsqv.js:29603-30006 placement
 /**
  * 渲染可折叠段：标题（超过折叠行数时显示总行数与展开提示）、正文（折叠时截取）与剩余行提示，返回隐藏行数。
  */
 function pushCollapsibleSection({ lines, title, body, collapsedLines, expanded, indent, width }) {
-  let b = body.length - collapsedLines;
-  let x = b >= 2 ? b : 0;
-  let A = [
+  let hiddenLineCount = body.length - collapsedLines;
+  let collapsedExtraLines = hiddenLineCount >= 2 ? hiddenLineCount : 0;
+  let headerSegments = [
     {
       text: title,
       bold: true,
       dimColor: true,
     },
   ];
-  if (x > 0)
-    A.push({
+  if (collapsedExtraLines > 0)
+    headerSegments.push({
       text: truncateToWidth(
         ` \xB7 ${body.length} lines${expanded ? "" : ` \xB7 ${RETURN_SYMBOL} expand`}`,
         width - bunStringWidth(title),
       ),
       dimColor: true,
     });
-  lines.push(A);
-  let v = expanded || x === 0 ? body : body.slice(0, collapsedLines);
-  for (let T of v) lines.push(T);
-  if (!expanded && x > 0)
+  lines.push(headerSegments);
+  let visibleBodyLines = expanded || collapsedExtraLines === 0 ? body : body.slice(0, collapsedLines);
+  for (let bodyLine of visibleBodyLines) lines.push(bodyLine);
+  if (!expanded && collapsedExtraLines > 0)
     lines.push([
       {
-        text: truncateToWidth(`${indent}\u2026 ${x} more ${plural(x, "line")}`, width),
+        text: truncateToWidth(
+          `${indent}\u2026 ${collapsedExtraLines} more ${plural(collapsedExtraLines, "line")}`,
+          width,
+        ),
         dimColor: true,
       },
     ]);
-  return x;
+  return collapsedExtraLines;
 }
 //@ chunk-axsvbsqv.js:30006-30087 placement
 function addPrecedingGrowth(scroll, folds) {
-  let l = 0;
-  for (let u of folds) {
-    if (scroll < u.end) break;
-    l += u.growth;
+  let growthBefore = 0;
+  for (let fold of folds) {
+    if (scroll < fold.end) break;
+    growthBefore += fold.growth;
   }
-  return scroll + l;
+  return scroll + growthBefore;
 }
 //@ chunk-axsvbsqv.js:30087-30207 placement
 function mapRowThroughGrowth(scroll, folds) {
-  let l = 0;
-  for (let u of folds) {
-    let d = u.end + l;
-    if (scroll < d) break;
-    if (scroll < d + u.growth) return u.end;
-    l += u.growth;
+  let growthBefore = 0;
+  for (let fold of folds) {
+    let foldEnd = fold.end + growthBefore;
+    if (scroll < foldEnd) break;
+    if (scroll < foldEnd + fold.growth) return fold.end;
+    growthBefore += fold.growth;
   }
-  return scroll - l;
+  return scroll - growthBefore;
 }
 //@ chunk-axsvbsqv.js:30207-30341 placement
 var AGENT_STATE_LABELS = {
@@ -1630,23 +1680,23 @@ var AGENT_STATE_LABELS = {
  * 工作流详情中的代理卡片。
  */
 function WorkflowAgentCard({ agent, status, transcript, expanded, width, nowMs }) {
-  let h = [];
-  let b = "  ";
+  let lines = [];
+  let indent = "  ";
   let max = Math.max(8, width - 2);
-  let A = transcript === "loading" ? null : transcript;
+  let loadedTranscript = transcript === "loading" ? null : transcript;
   let { glyph, color } = getAgentStateGlyph(status);
-  let M = [];
-  if (agent.model != null) M.push(modelTransitionText(agent.model, agent.fallbackModel));
-  if (agent.agentType != null) M.push(agent.agentType);
+  let metaParts = [];
+  if (agent.model != null) metaParts.push(modelTransitionText(agent.model, agent.fallbackModel));
+  if (agent.agentType != null) metaParts.push(agent.agentType);
   if (agent.isolation != null)
-    M.push(
+    metaParts.push(
       agent.isolation === "remote" && agent.remoteSessionId
         ? `remote ${agent.remoteSessionId}`
         : agent.isolation,
     );
-  if (agent.cached) M.push("from resume journal");
+  if (agent.cached) metaParts.push("from resume journal");
   if (agent.attempt != null && agent.attempt > 1) {
-    let W =
+    let attemptReasonText =
       agent.lastAttemptReason === "throttled"
         ? agent.label.endsWith(USAGE_LIMIT_SUFFIX)
           ? USAGE_LIMIT_TEXT
@@ -1654,11 +1704,14 @@ function WorkflowAgentCard({ agent, status, transcript, expanded, width, nowMs }
         : agent.lastAttemptReason === "user-retry"
           ? "user retry"
           : "stalled";
-    M.push(`attempt ${agent.attempt} (${W})`);
+    metaParts.push(`attempt ${agent.attempt} (${attemptReasonText})`);
   }
-  let I = bunStringWidth(glyph) + 1 + bunStringWidth(AGENT_STATE_LABELS[status]);
-  let N = M.length > 0 ? truncateToWidth(` \xB7 ${M.join(" \xB7 ")}`, Math.max(0, width - I)) : "";
-  h.push([
+  let headerWidth = bunStringWidth(glyph) + 1 + bunStringWidth(AGENT_STATE_LABELS[status]);
+  let metaSuffix =
+    metaParts.length > 0
+      ? truncateToWidth(` \xB7 ${metaParts.join(" \xB7 ")}`, Math.max(0, width - headerWidth))
+      : "";
+  lines.push([
     {
       text: glyph,
       color,
@@ -1671,44 +1724,44 @@ function WorkflowAgentCard({ agent, status, transcript, expanded, width, nowMs }
       color,
       bold: true,
     },
-    ...(N
+    ...(metaSuffix
       ? [
           {
-            text: N,
+            text: metaSuffix,
             dimColor: true,
           },
         ]
       : []),
   ]);
-  let E = [];
-  if (agent.tokens != null) E.push(`${formatTokens(agent.tokens)} tok`);
+  let statParts = [];
+  if (agent.tokens != null) statParts.push(`${formatTokens(agent.tokens)} tok`);
   if (agent.toolCalls != null && agent.toolCalls > 0)
-    E.push(`${agent.toolCalls} ${plural(agent.toolCalls, "tool call")}`);
-  if (agent.durationMs != null) E.push(formatDuration(agent.durationMs));
+    statParts.push(`${agent.toolCalls} ${plural(agent.toolCalls, "tool call")}`);
+  if (agent.durationMs != null) statParts.push(formatDuration(agent.durationMs));
   if (status === "queued" && agent.queuedAt != null)
-    E.push(`waiting ${formatDuration(Math.max(0, nowMs - agent.queuedAt))}`);
+    statParts.push(`waiting ${formatDuration(Math.max(0, nowMs - agent.queuedAt))}`);
   if (status === "running" && agent.lastProgressAt != null) {
     let floored = Math.floor((nowMs - agent.lastProgressAt) / 1000);
-    if (floored >= 30) E.push(`idle ${formatDuration(floored * 1000)}`);
+    if (floored >= 30) statParts.push(`idle ${formatDuration(floored * 1000)}`);
   }
-  if (E.length > 0)
-    h.push([
+  if (statParts.length > 0)
+    lines.push([
       {
-        text: truncateToWidth(E.join(" \xB7 "), width),
+        text: truncateToWidth(statParts.join(" \xB7 "), width),
         dimColor: true,
       },
     ]);
-  h.push([
+  lines.push([
     {
       text: "",
     },
   ]);
-  let toolCalls = status !== "queued" && A ? A.toolCalls : [];
-  let J = status === "running";
-  let filtered = toolCalls.filter((toolCall) => getCallDisplayState(toolCall, J) === "running");
-  let L = toolCalls;
-  let tasks = A?.tasks ?? [];
-  let H =
+  let toolCalls = status !== "queued" && loadedTranscript ? loadedTranscript.toolCalls : [];
+  let isRunning = status === "running";
+  let filtered = toolCalls.filter((toolCall) => getCallDisplayState(toolCall, isRunning) === "running");
+  let toolCalls_2 = toolCalls;
+  let tasks = loadedTranscript?.tasks ?? [];
+  let collapsedTaskLines =
     tasks.length > 0
       ? WorkflowTaskList({
           tasks,
@@ -1717,7 +1770,7 @@ function WorkflowAgentCard({ agent, status, transcript, expanded, width, nowMs }
           indent: "  ",
         })
       : null;
-  let Y =
+  let expandedTaskLines =
     tasks.length > 0
       ? WorkflowTaskList({
           tasks,
@@ -1726,13 +1779,14 @@ function WorkflowAgentCard({ agent, status, transcript, expanded, width, nowMs }
           indent: "  ",
         })
       : null;
-  let pt = expanded ? Y : H;
-  let gt = L.length > 0 || (pt?.capped ?? false);
-  let wt = transcript !== "loading" && transcript?.prompt ? transcript.prompt : (agent.promptPreview ?? "");
-  let body = wt
-    ? wrapLines(wt, max).map((W) => [
+  let taskLines = expanded ? expandedTaskLines : collapsedTaskLines;
+  let hasActivityDetail = toolCalls_2.length > 0 || (taskLines?.capped ?? false);
+  let promptText =
+    transcript !== "loading" && transcript?.prompt ? transcript.prompt : (agent.promptPreview ?? "");
+  let body = promptText
+    ? wrapLines(promptText, max).map((promptLine) => [
         {
-          text: "  " + W,
+          text: "  " + promptLine,
           dimColor: true,
         },
       ])
@@ -1752,8 +1806,8 @@ function WorkflowAgentCard({ agent, status, transcript, expanded, width, nowMs }
           },
         ],
       ];
-  let at = pushCollapsibleSection({
-    lines: h,
+  let promptHiddenLines = pushCollapsibleSection({
+    lines,
     title: "Prompt",
     body,
     collapsedLines: WORKFLOW_INDENT_STEP,
@@ -1761,126 +1815,129 @@ function WorkflowAgentCard({ agent, status, transcript, expanded, width, nowMs }
     indent: "  ",
     width,
   });
-  let ct = at > 0 ? at - 1 : 0;
-  let U = ct;
-  let X = [
+  let promptGrowth = promptHiddenLines > 0 ? promptHiddenLines - 1 : 0;
+  let hiddenGrowth = promptGrowth;
+  let folds = [
     {
-      end: h.length - (expanded ? U : 0),
-      growth: ct,
+      end: lines.length - (expanded ? hiddenGrowth : 0),
+      growth: promptGrowth,
     },
   ];
-  h.push([
+  lines.push([
     {
       text: "",
     },
   ]);
-  if (pt && H && Y) {
-    for (let line of pt.lines) h.push(line);
-    let W = Y.lines.length - H.lines.length;
-    U += W;
-    X.push({
-      end: h.length - (expanded ? U : 0),
-      growth: W,
+  if (taskLines && collapsedTaskLines && expandedTaskLines) {
+    for (let line of taskLines.lines) lines.push(line);
+    let taskGrowth = expandedTaskLines.lines.length - collapsedTaskLines.lines.length;
+    hiddenGrowth += taskGrowth;
+    folds.push({
+      end: lines.length - (expanded ? hiddenGrowth : 0),
+      growth: taskGrowth,
     });
-    h.push([
+    lines.push([
       {
         text: "",
       },
     ]);
   }
   if (status !== "queued") {
-    let W = L.length - WORKFLOW_SPINNER_FRAMES;
-    let max = Math.max(0, W - WORKFLOW_SPINNER_FRAMES);
-    while (false) W--;
-    let filtered = L.filter((Rt, yt) => yt >= W || getCallDisplayState(Rt, J) === "running");
-    let St = [];
-    for (let [Rt, yt] of filtered.entries()) {
-      if (Rt > 0)
-        St.push([
+    let visibleToolCount = toolCalls_2.length - WORKFLOW_SPINNER_FRAMES;
+    let max = Math.max(0, visibleToolCount - WORKFLOW_SPINNER_FRAMES);
+    while (false) visibleToolCount--;
+    let filtered = toolCalls_2.filter(
+      (toolCall, callIndex) =>
+        callIndex >= visibleToolCount || getCallDisplayState(toolCall, isRunning) === "running",
+    );
+    let callLines = [];
+    for (let [callIndex, toolCall] of filtered.entries()) {
+      if (callIndex > 0)
+        callLines.push([
           {
             text: "",
           },
         ]);
-      let state = getCallDisplayState(yt, J);
-      St.push(
+      let state = getCallDisplayState(toolCall, isRunning);
+      callLines.push(
         ...renderWorkflowCallLines({
-          call: yt,
+          call: toolCall,
           state,
           width,
           indent: "  ",
         }),
       );
     }
-    let kt = "";
-    if (L.length > filtered.length)
-      kt = ` \xB7 ${filtered.length <= WORKFLOW_SPINNER_FRAMES ? "last " : ""}${filtered.length} of ${L.length} tool calls`;
+    let activitySuffix = "";
+    if (toolCalls_2.length > filtered.length)
+      activitySuffix = ` \xB7 ${filtered.length <= WORKFLOW_SPINNER_FRAMES ? "last " : ""}${filtered.length} of ${toolCalls_2.length} tool calls`;
     let max_2 = Math.max(0, width - bunStringWidth("Activity"));
-    let ee = ` \xB7 ${RETURN_SYMBOL} expand`;
-    kt =
-      !expanded && gt && bunStringWidth(kt) + bunStringWidth(ee) <= max_2
-        ? kt + ee
-        : truncateToWidth(kt, max_2);
-    h.push([
+    let expandHint = ` \xB7 ${RETURN_SYMBOL} expand`;
+    activitySuffix =
+      !expanded && hasActivityDetail && bunStringWidth(activitySuffix) + bunStringWidth(expandHint) <= max_2
+        ? activitySuffix + expandHint
+        : truncateToWidth(activitySuffix, max_2);
+    lines.push([
       {
         text: "Activity",
         bold: true,
         dimColor: true,
       },
-      ...(kt
+      ...(activitySuffix
         ? [
             {
-              text: kt,
+              text: activitySuffix,
               dimColor: true,
             },
           ]
         : []),
     ]);
-    if (L.length > 0) {
-      if (expanded) for (let yt of St) h.push(yt);
+    if (toolCalls_2.length > 0) {
+      if (expanded) for (let line of callLines) lines.push(line);
       else
-        for (let yt of filtered) {
-          let state = getCallDisplayState(yt, J);
-          h.push(
+        for (let toolCall of filtered) {
+          let state = getCallDisplayState(toolCall, isRunning);
+          lines.push(
             renderWorkflowCallHeader({
-              call: yt,
+              call: toolCall,
               state,
               width,
               indent: "  ",
             }),
           );
         }
-      let Rt = St.length - filtered.length;
-      U += Rt;
-      X.push({
-        end: h.length - (expanded ? U : 0),
-        growth: Rt,
+      let callGrowth = callLines.length - filtered.length;
+      hiddenGrowth += callGrowth;
+      folds.push({
+        end: lines.length - (expanded ? hiddenGrowth : 0),
+        growth: callGrowth,
       });
     } else if (agent.lastToolName != null) {
-      let Rt = agent.lastToolSummary ? `(${agent.lastToolSummary})` : "";
-      let yt = identity(agent.lastToolName);
-      h.push([
+      let lastToolSummaryText = agent.lastToolSummary ? `(${agent.lastToolSummary})` : "";
+      let lastToolName = identity(agent.lastToolName);
+      lines.push([
         {
-          text: truncateToWidth(`  ${yt}${Rt}`, width),
+          text: truncateToWidth(`  ${lastToolName}${lastToolSummaryText}`, width),
           dimColor: true,
         },
       ]);
     } else
-      h.push([
+      lines.push([
         {
           text: `  ${status === "running" ? "No tool calls yet." : "No tool calls."}`,
           dimColor: true,
         },
       ]);
-    h.push([
+    lines.push([
       {
         text: "",
       },
     ]);
   }
-  let ot = [];
+  let outcomeLines = [];
   switch (status) {
     case "queued":
-      ot.push([
+      outcomeLines.push([
         {
           text: "  Waiting for an agent slot.",
           dimColor: true,
@@ -1888,7 +1945,7 @@ function WorkflowAgentCard({ agent, status, transcript, expanded, width, nowMs }
       ]);
       break;
     case "running":
-      ot.push([
+      outcomeLines.push([
         {
           text: `${"  "}Still running\u2026`,
           dimColor: true,
@@ -1896,7 +1953,7 @@ function WorkflowAgentCard({ agent, status, transcript, expanded, width, nowMs }
       ]);
       break;
     case "interrupted":
-      ot.push([
+      outcomeLines.push([
         {
           text: "  The workflow stopped before this agent finished.",
           dimColor: true,
@@ -1904,7 +1961,7 @@ function WorkflowAgentCard({ agent, status, transcript, expanded, width, nowMs }
       ]);
       break;
     case "skipped":
-      ot.push([
+      outcomeLines.push([
         {
           text: "  Skipped by user.",
           dimColor: true,
@@ -1913,22 +1970,22 @@ function WorkflowAgentCard({ agent, status, transcript, expanded, width, nowMs }
       break;
     case "blocked":
     case "failed": {
-      for (let W of wrapLines(agent.error ?? "failed", max))
-        ot.push([
+      for (let errorLine of wrapLines(agent.error ?? "failed", max))
+        outcomeLines.push([
           {
-            text: "  " + W,
+            text: "  " + errorLine,
             color: "error",
           },
         ]);
       break;
     }
     case "done": {
-      let W =
+      let finalText =
         transcript !== "loading" && transcript?.finalText
           ? transcript.finalText
           : (agent.resultPreview ?? "");
-      if (!W) {
-        ot.push([
+      if (!finalText) {
+        outcomeLines.push([
           {
             text: "  " + (transcript === "loading" ? "Loading\u2026" : "(empty)"),
             dimColor: true,
@@ -1936,44 +1993,44 @@ function WorkflowAgentCard({ agent, status, transcript, expanded, width, nowMs }
         ]);
         break;
       }
-      let G = renderJsonOutcomeLines(W, max);
-      if (G)
-        for (let dt of G)
-          ot.push([
+      let jsonOutcomeLines = renderJsonOutcomeLines(finalText, max);
+      if (jsonOutcomeLines)
+        for (let jsonLine of jsonOutcomeLines)
+          outcomeLines.push([
             {
               text: "  ",
             },
-            ...dt,
+            ...jsonLine,
           ]);
       else
-        for (let dt of wrapLines(W, max))
-          ot.push([
+        for (let textLine of wrapLines(finalText, max))
+          outcomeLines.push([
             {
-              text: "  " + dt,
+              text: "  " + textLine,
             },
           ]);
       break;
     }
   }
-  let rt = pushCollapsibleSection({
-    lines: h,
+  let outcomeHiddenLines = pushCollapsibleSection({
+    lines,
     title: "Outcome",
-    body: ot,
+    body: outcomeLines,
     collapsedLines: MAX_AGENT_ROWS,
     expanded,
     indent: "  ",
     width,
   });
   return {
-    lines: h,
-    expandable: at > 0 || rt > 0 || gt,
-    folds: X,
-    detailExpandable: gt,
+    lines,
+    expandable: promptHiddenLines > 0 || outcomeHiddenLines > 0 || hasActivityDetail,
+    folds,
+    detailExpandable: hasActivityDetail,
   };
 }
 //@ chunk-axsvbsqv.js:34482-36147 placement
 function WorkflowAgentDetailPane(props) {
-  let $ = w(42);
+  let $ = useMemoCache(42);
   let {
     phase,
     clampedAgent,
@@ -1987,16 +2044,16 @@ function WorkflowAgentDetailPane(props) {
     filterLabel,
   } = props;
   let agents = phase.agents;
-  let I;
-  let N;
+  let borderComponent;
+  let containerComponent;
   let pos;
   let leftWidth_2;
   let rightWidth_2;
   let leftTag;
   let rightTag;
   let flexDirection;
-  let H;
-  let Y;
+  let topBorderElement;
+  let rowElements;
   if (
     $[0] !== agentLabel ||
     $[1] !== agents ||
@@ -2012,18 +2069,24 @@ function WorkflowAgentDetailPane(props) {
   ) {
     let scrollWindow = computeScrollWindow(clampedAgent, agents.length, viewport);
     let max = Math.max(0, detailLines.length - viewport);
-    let wt = clamp(cardScroll, 0, max);
-    let min = Math.min(detailLines.length, wt + viewport);
-    let at = [];
+    let clampedCardScroll = clamp(cardScroll, 0, max);
+    let min = Math.min(detailLines.length, clampedCardScroll + viewport);
+    let rowElements_2 = [];
     for (let idx = 0; idx < viewport; idx++) {
-      let U = scrollWindow.from + idx;
+      let agentRowIndex = scrollWindow.from + idx;
       let left =
-        U < scrollWindow.to
-          ? renderCompactAgentRow(agents[U], U, clampedAgent, leftWidth, workflowActive)
+        agentRowIndex < scrollWindow.to
+          ? renderCompactAgentRow(
+              agents[agentRowIndex],
+              agentRowIndex,
+              clampedAgent,
+              leftWidth,
+              workflowActive,
+            )
           : [];
-      let ot = wt + idx;
-      let right = ot < min ? detailLines[ot] : [];
-      at.push(
+      let detailLineIndex = clampedCardScroll + idx;
+      let right = detailLineIndex < min ? detailLines[detailLineIndex] : [];
+      rowElements_2.push(
         jsxProd_default(
           TwoColumnRow,
           {
@@ -2036,19 +2099,19 @@ function WorkflowAgentDetailPane(props) {
         ),
       );
     }
-    N = Box;
+    containerComponent = Box;
     flexDirection = "column";
     const title = phase.title;
-    let G;
+    let countLabel;
     if ($[21] !== agents.length || $[22] !== filterLabel) {
-      G = agentCountLabel(agents.length, filterLabel);
+      countLabel = agentCountLabel(agents.length, filterLabel);
       $[21] = agents.length;
       $[22] = filterLabel;
-      $[23] = G;
-    } else G = $[23];
-    const leftTitle = `${title} \xB7 ${G}`;
+      $[23] = countLabel;
+    } else countLabel = $[23];
+    const leftTitle = `${title} \xB7 ${countLabel}`;
     if ($[24] !== agentLabel || $[25] !== leftWidth || $[26] !== rightWidth || $[27] !== leftTitle) {
-      H = jsxProd_default(SplitPaneBorder, {
+      topBorderElement = jsxProd_default(SplitPaneBorder, {
         pos: "top",
         leftWidth,
         rightWidth,
@@ -2059,10 +2122,10 @@ function WorkflowAgentDetailPane(props) {
       $[25] = leftWidth;
       $[26] = rightWidth;
       $[27] = leftTitle;
-      $[28] = H;
-    } else H = $[28];
-    Y = at;
-    I = SplitPaneBorder;
+      $[28] = topBorderElement;
+    } else topBorderElement = $[28];
+    rowElements = rowElements_2;
+    borderComponent = SplitPaneBorder;
     pos = "bottom";
     leftWidth_2 = leftWidth;
     rightWidth_2 = rightWidth;
@@ -2071,7 +2134,7 @@ function WorkflowAgentDetailPane(props) {
       detailLines.length > viewport
         ? formatScrollRange(
             {
-              from: wt,
+              from: clampedCardScroll,
               to: min,
             },
             detailLines.length,
@@ -2088,84 +2151,90 @@ function WorkflowAgentDetailPane(props) {
     $[8] = rightWidth;
     $[9] = viewport;
     $[10] = workflowActive;
-    $[11] = I;
-    $[12] = N;
+    $[11] = borderComponent;
+    $[12] = containerComponent;
     $[13] = pos;
     $[14] = leftWidth_2;
     $[15] = rightWidth_2;
     $[16] = leftTag;
     $[17] = rightTag;
     $[18] = flexDirection;
-    $[19] = H;
-    $[20] = Y;
+    $[19] = topBorderElement;
+    $[20] = rowElements;
   } else {
-    I = $[11];
-    N = $[12];
+    borderComponent = $[11];
+    containerComponent = $[12];
     pos = $[13];
     leftWidth_2 = $[14];
     rightWidth_2 = $[15];
     leftTag = $[16];
     rightTag = $[17];
     flexDirection = $[18];
-    H = $[19];
-    Y = $[20];
+    topBorderElement = $[19];
+    rowElements = $[20];
   }
-  let W;
+  let bottomBorderElement;
   if (
-    $[29] !== I ||
+    $[29] !== borderComponent ||
     $[30] !== pos ||
     $[31] !== leftWidth_2 ||
     $[32] !== rightWidth_2 ||
     $[33] !== leftTag ||
     $[34] !== rightTag
   ) {
-    W = jsxProd_default(I, {
+    bottomBorderElement = jsxProd_default(borderComponent, {
       pos,
       leftWidth: leftWidth_2,
       rightWidth: rightWidth_2,
       leftTag,
       rightTag,
     });
-    $[29] = I;
+    $[29] = borderComponent;
     $[30] = pos;
     $[31] = leftWidth_2;
     $[32] = rightWidth_2;
     $[33] = leftTag;
     $[34] = rightTag;
-    $[35] = W;
-  } else W = $[35];
-  let G;
-  if ($[36] !== N || $[37] !== flexDirection || $[38] !== H || $[39] !== Y || $[40] !== W) {
-    G = jsxProd_default_2(N, {
+    $[35] = bottomBorderElement;
+  } else bottomBorderElement = $[35];
+  let paneElement;
+  if (
+    $[36] !== containerComponent ||
+    $[37] !== flexDirection ||
+    $[38] !== topBorderElement ||
+    $[39] !== rowElements ||
+    $[40] !== bottomBorderElement
+  ) {
+    paneElement = jsxProd_default_2(containerComponent, {
       flexDirection,
-      children: [H, Y, W],
+      children: [topBorderElement, rowElements, bottomBorderElement],
     });
-    $[36] = N;
+    $[36] = containerComponent;
     $[37] = flexDirection;
-    $[38] = H;
-    $[39] = Y;
-    $[40] = W;
-    $[41] = G;
-  } else G = $[41];
-  return G;
+    $[38] = topBorderElement;
+    $[39] = rowElements;
+    $[40] = bottomBorderElement;
+    $[41] = paneElement;
+  } else paneElement = $[41];
+  return paneElement;
 }
 //@ chunk-axsvbsqv.js:36147-38187 placement
 function WorkflowAgentDetail(props) {
-  let $ = w(43);
+  let $ = useMemoCache(43);
   let { agentLabel, position, detailLines, cardScroll, contentWidth, viewport } = props;
-  let x;
+  let ruleLine;
   if ($[0] !== contentWidth) {
-    x = HORIZONTAL_LINE_GLYPH.repeat(contentWidth + 2);
+    ruleLine = HORIZONTAL_LINE_GLYPH.repeat(contentWidth + 2);
     $[0] = contentWidth;
-    $[1] = x;
-  } else x = $[1];
-  let A = x;
+    $[1] = ruleLine;
+  } else ruleLine = $[1];
+  let rule = ruleLine;
   let max = Math.max(0, detailLines.length - viewport);
-  let T;
-  let M;
+  let bottomBorderElement;
+  let rows;
   if (
     $[2] !== agentLabel ||
-    $[3] !== A ||
+    $[3] !== rule ||
     $[4] !== cardScroll ||
     $[5] !== contentWidth ||
     $[6] !== detailLines ||
@@ -2173,11 +2242,11 @@ function WorkflowAgentDetail(props) {
     $[8] !== position ||
     $[9] !== viewport
   ) {
-    let I = clamp(cardScroll, 0, max);
-    let min = Math.min(detailLines.length, I + viewport);
-    M = [];
-    let E = ` \xB7 ${position}`;
-    const max_2 = Math.max(1, contentWidth - bunStringWidth(E));
+    let scrollTop = clamp(cardScroll, 0, max);
+    let min = Math.min(detailLines.length, scrollTop + viewport);
+    rows = [];
+    let positionSuffix = ` \xB7 ${position}`;
+    const max_2 = Math.max(1, contentWidth - bunStringWidth(positionSuffix));
     let text;
     if ($[12] !== agentLabel || $[13] !== max_2) {
       text = truncateToWidth(agentLabel, max_2);
@@ -2185,35 +2254,35 @@ function WorkflowAgentDetail(props) {
       $[13] = max_2;
       $[14] = text;
     } else text = $[14];
-    let z;
+    let labelSegment;
     if ($[15] !== text) {
-      z = {
+      labelSegment = {
         text,
         color: "permission",
         bold: true,
       };
       $[15] = text;
-      $[16] = z;
-    } else z = $[16];
-    let L;
-    if ($[17] !== E) {
-      L = {
-        text: E,
+      $[16] = labelSegment;
+    } else labelSegment = $[16];
+    let positionSegment;
+    if ($[17] !== positionSuffix) {
+      positionSegment = {
+        text: positionSuffix,
         dimColor: true,
       };
-      $[17] = E;
-      $[18] = L;
-    } else L = $[18];
+      $[17] = positionSuffix;
+      $[18] = positionSegment;
+    } else positionSegment = $[18];
     let segs;
-    if ($[19] !== z || $[20] !== L) {
-      segs = [z, L];
-      $[19] = z;
-      $[20] = L;
+    if ($[19] !== labelSegment || $[20] !== positionSegment) {
+      segs = [labelSegment, positionSegment];
+      $[19] = labelSegment;
+      $[20] = positionSegment;
       $[21] = segs;
     } else segs = $[21];
-    let H;
+    let titleLineElement;
     if ($[22] !== contentWidth || $[23] !== segs) {
-      H = jsxProd_default(
+      titleLineElement = jsxProd_default(
         BoxedSegmentLine,
         {
           contentWidth,
@@ -2223,22 +2292,22 @@ function WorkflowAgentDetail(props) {
       );
       $[22] = contentWidth;
       $[23] = segs;
-      $[24] = H;
-    } else H = $[24];
-    M.push(H);
-    for (let Y = I; Y < min; Y++)
-      M.push(
+      $[24] = titleLineElement;
+    } else titleLineElement = $[24];
+    rows.push(titleLineElement);
+    for (let lineIndex = scrollTop; lineIndex < min; lineIndex++)
+      rows.push(
         jsxProd_default(
           BoxedSegmentLine,
           {
             contentWidth,
-            segs: detailLines[Y],
+            segs: detailLines[lineIndex],
           },
-          `l-${Y}`,
+          `l-${lineIndex}`,
         ),
       );
-    for (let idx = min - I; idx < viewport; idx++)
-      M.push(
+    for (let idx = min - scrollTop; idx < viewport; idx++)
+      rows.push(
         jsxProd_default(
           BoxedSegmentLine,
           {
@@ -2253,106 +2322,106 @@ function WorkflowAgentDetail(props) {
         ),
       );
     if (detailLines.length > viewport) {
-      let gt = ` ${formatScrollRange(
+      let scrollRangeText = ` ${formatScrollRange(
         {
-          from: I,
+          from: scrollTop,
           to: min,
         },
         detailLines.length,
       )} `;
-      let max = Math.max(0, contentWidth + 2 - bunStringWidth(gt));
-      let ft;
+      let max = Math.max(0, contentWidth + 2 - bunStringWidth(scrollRangeText));
+      let bottomRule;
       if ($[25] !== max) {
-        ft = HORIZONTAL_LINE_GLYPH.repeat(max);
+        bottomRule = HORIZONTAL_LINE_GLYPH.repeat(max);
         $[25] = max;
-        $[26] = ft;
-      } else ft = $[26];
-      let at;
-      if ($[27] !== ft) {
-        at = jsxProd_default_2(Text, {
+        $[26] = bottomRule;
+      } else bottomRule = $[26];
+      let bottomLeftElement;
+      if ($[27] !== bottomRule) {
+        bottomLeftElement = jsxProd_default_2(Text, {
           color: "text",
-          children: [" ", Kk.bottomLeft, ft],
+          children: [" ", ROUNDED_BOX_CORNERS.bottomLeft, bottomRule],
         });
-        $[27] = ft;
-        $[28] = at;
-      } else at = $[28];
-      let ct;
-      if ($[29] !== gt) {
-        ct = jsxProd_default(Text, {
+        $[27] = bottomRule;
+        $[28] = bottomLeftElement;
+      } else bottomLeftElement = $[28];
+      let scrollRangeElement;
+      if ($[29] !== scrollRangeText) {
+        scrollRangeElement = jsxProd_default(Text, {
           dimColor: true,
-          children: gt,
+          children: scrollRangeText,
         });
-        $[29] = gt;
-        $[30] = ct;
-      } else ct = $[30];
-      let U;
+        $[29] = scrollRangeText;
+        $[30] = scrollRangeElement;
+      } else scrollRangeElement = $[30];
+      let bottomRightElement;
       if ($[31] === MEMO_CACHE_SENTINEL) {
-        U = jsxProd_default(Text, {
+        bottomRightElement = jsxProd_default(Text, {
           color: "text",
-          children: Kk.bottomRight,
+          children: ROUNDED_BOX_CORNERS.bottomRight,
         });
-        $[31] = U;
-      } else U = $[31];
-      let X;
-      if ($[32] !== ct || $[33] !== at) {
-        X = jsxProd_default_2(Text, {
+        $[31] = bottomRightElement;
+      } else bottomRightElement = $[31];
+      let bottomFooterElement;
+      if ($[32] !== scrollRangeElement || $[33] !== bottomLeftElement) {
+        bottomFooterElement = jsxProd_default_2(Text, {
           wrap: "truncate-end",
-          children: [at, ct, U],
+          children: [bottomLeftElement, scrollRangeElement, bottomRightElement],
         });
-        $[32] = ct;
-        $[33] = at;
-        $[34] = X;
-      } else X = $[34];
-      T = X;
+        $[32] = scrollRangeElement;
+        $[33] = bottomLeftElement;
+        $[34] = bottomFooterElement;
+      } else bottomFooterElement = $[34];
+      bottomBorderElement = bottomFooterElement;
     } else {
-      let ft;
-      if ($[35] !== A) {
-        ft = jsxProd_default_2(Text, {
+      let ruleElement;
+      if ($[35] !== rule) {
+        ruleElement = jsxProd_default_2(Text, {
           color: "text",
           wrap: "truncate-end",
-          children: [" ", Kk.bottomLeft, A, Kk.bottomRight],
+          children: [" ", ROUNDED_BOX_CORNERS.bottomLeft, rule, ROUNDED_BOX_CORNERS.bottomRight],
         });
-        $[35] = A;
-        $[36] = ft;
-      } else ft = $[36];
-      T = ft;
+        $[35] = rule;
+        $[36] = ruleElement;
+      } else ruleElement = $[36];
+      bottomBorderElement = ruleElement;
     }
     $[2] = agentLabel;
-    $[3] = A;
+    $[3] = rule;
     $[4] = cardScroll;
     $[5] = contentWidth;
     $[6] = detailLines;
     $[7] = max;
     $[8] = position;
     $[9] = viewport;
-    $[10] = T;
-    $[11] = M;
+    $[10] = bottomBorderElement;
+    $[11] = rows;
   } else {
-    T = $[10];
-    M = $[11];
+    bottomBorderElement = $[10];
+    rows = $[11];
   }
-  let V;
-  if ($[37] !== A) {
-    V = jsxProd_default_2(Text, {
+  let overflowRuleElement;
+  if ($[37] !== rule) {
+    overflowRuleElement = jsxProd_default_2(Text, {
       color: "text",
       wrap: "truncate-end",
-      children: [" ", Kk.topLeft, A, Kk.topRight],
+      children: [" ", ROUNDED_BOX_CORNERS.topLeft, rule, ROUNDED_BOX_CORNERS.topRight],
     });
-    $[37] = A;
-    $[38] = V;
-  } else V = $[38];
-  let J;
-  if ($[39] !== T || $[40] !== M || $[41] !== V) {
-    J = jsxProd_default_2(Box, {
+    $[37] = rule;
+    $[38] = overflowRuleElement;
+  } else overflowRuleElement = $[38];
+  let footerBox;
+  if ($[39] !== bottomBorderElement || $[40] !== rows || $[41] !== overflowRuleElement) {
+    footerBox = jsxProd_default_2(Box, {
       flexDirection: "column",
-      children: [V, M, T],
+      children: [overflowRuleElement, rows, bottomBorderElement],
     });
-    $[39] = T;
-    $[40] = M;
-    $[41] = V;
-    $[42] = J;
-  } else J = $[42];
-  return J;
+    $[39] = bottomBorderElement;
+    $[40] = rows;
+    $[41] = overflowRuleElement;
+    $[42] = footerBox;
+  } else footerBox = $[42];
+  return footerBox;
 }
 //@ chunk-axsvbsqv.js:38187-44815 placement
 /**
@@ -2373,149 +2442,185 @@ function WorkflowDetailDialog({
   useRegisterOverlay("workflow-detail-dialog");
   let { availableRows, width, rows } = useWorkflowProgressRows(promptVisibleBelow);
   let max = Math.max(12, width - 6);
-  let N = ElapsedClock(workflow);
-  let E = Q(() => workflowPhaseRows(workflow), [workflow.workflowProgress, workflow.phases]);
-  let V = Q(() => sumPhaseCounts(E, workflow.agentCount), [E, workflow.agentCount]);
-  let [J, z] = y(() => (initialPhaseIndex !== undefined ? Math.max(0, initialPhaseIndex) : 0));
-  let [L, B] = y(0);
-  let [H, Y] = y(initialPhaseIndex !== undefined ? "agents" : "phases");
-  let [pt, gt] = y(false);
-  let [wt, ft] = y({
+  let elapsedMs = ElapsedClock(workflow);
+  let phaseRows = useMemo(() => workflowPhaseRows(workflow), [workflow.workflowProgress, workflow.phases]);
+  let agentCounts = useMemo(
+    () => sumPhaseCounts(phaseRows, workflow.agentCount),
+    [phaseRows, workflow.agentCount],
+  );
+  let [phaseIndex, setPhaseIndex] = useState(() =>
+    initialPhaseIndex !== undefined ? Math.max(0, initialPhaseIndex) : 0,
+  );
+  let [agentIndex, setAgentIndex] = useState(0);
+  let [level, setLevel] = useState(initialPhaseIndex !== undefined ? "agents" : "phases");
+  let [isAwaitingTranscript, setIsAwaitingTranscript] = useState(false);
+  let [cardScrollState, setCardScrollState] = useState({
     scroll: 0,
     expanded: false,
   });
-  let { scroll, expanded } = wt;
-  let [U, X] = y("all");
-  let min = Math.min(J, Math.max(0, E.length - 1));
-  let rt = E[min];
-  let W = workflow.status === "running";
-  let G = Q(() => {
-    if (!rt || U === "all" || H === "phases") return rt;
+  let { scroll, expanded } = cardScrollState;
+  let [agentFilter, setAgentFilter] = useState("all");
+  let min = Math.min(phaseIndex, Math.max(0, phaseRows.length - 1));
+  let currentPhaseRow = phaseRows[min];
+  let isWorkflowRunning = workflow.status === "running";
+  let visiblePhaseRow = useMemo(() => {
+    if (!currentPhaseRow || agentFilter === "all" || level === "phases") return currentPhaseRow;
     return {
-      ...rt,
-      agents: rt.agents.filter((agent) => getAgentDisplayState(agent, W) === U),
+      ...currentPhaseRow,
+      agents: currentPhaseRow.agents.filter(
+        (agent) => getAgentDisplayState(agent, isWorkflowRunning) === agentFilter,
+      ),
     };
-  }, [rt, U, H, W]);
-  let dt = G ? Math.min(L, Math.max(0, G.agents.length - 1)) : 0;
-  let [St, kt] = y(false);
-  let zt = workflow.script.length > 0;
-  let defaultName = Q(() => {
-    if (!zt) return "";
+  }, [currentPhaseRow, agentFilter, level, isWorkflowRunning]);
+  let clampedAgentIndex = visiblePhaseRow
+    ? Math.min(agentIndex, Math.max(0, visiblePhaseRow.agents.length - 1))
+    : 0;
+  let [isSaveDialogOpen, setIsSaveDialogOpen] = useState(false);
+  let hasScript = workflow.script.length > 0;
+  let defaultName = useMemo(() => {
+    if (!hasScript) return "";
     let workflowScript = parseWorkflowScript(workflow.script);
     if (!("error" in workflowScript)) return workflowScript.meta.name;
     return slugifyWorkflowName(workflow.summary ?? workflow.description);
-  }, [zt, workflow.script, workflow.summary, workflow.description]);
-  let Rt = Q(() => workflowDescription(workflow), [workflow.script, workflow.description, workflow.summary]);
-  let { name: yt, subtext, stats } = workflowStatusLine(workflow, Rt, V, N);
-  function fe() {
-    ft({
+  }, [hasScript, workflow.script, workflow.summary, workflow.description]);
+  let description = useMemo(
+    () => workflowDescription(workflow),
+    [workflow.script, workflow.description, workflow.summary],
+  );
+  let {
+    name: workflowName,
+    subtext,
+    stats,
+  } = workflowStatusLine(workflow, description, agentCounts, elapsedMs);
+  function resetCardScroll() {
+    setCardScrollState({
       scroll: 0,
       expanded: false,
     });
   }
-  function qe(K) {
-    z((Ct) => clamp(clamp(Ct, 0, E.length - 1) + K, 0, E.length - 1));
-    B(0);
-    fe();
+  function movePhase(delta) {
+    setPhaseIndex((currentIndex) =>
+      clamp(clamp(currentIndex, 0, phaseRows.length - 1) + delta, 0, phaseRows.length - 1),
+    );
+    setAgentIndex(0);
+    resetCardScroll();
   }
-  function sn(K) {
-    if (!G) return;
-    B((Ct) => clamp(clamp(Ct, 0, G.agents.length - 1) + K, 0, G.agents.length - 1));
-    fe();
+  function moveAgent(delta) {
+    if (!visiblePhaseRow) return;
+    setAgentIndex((currentIndex) =>
+      clamp(
+        clamp(currentIndex, 0, visiblePhaseRow.agents.length - 1) + delta,
+        0,
+        visiblePhaseRow.agents.length - 1,
+      ),
+    );
+    resetCardScroll();
   }
-  function po(K) {
-    ft((Ct) => ({
-      ...Ct,
-      scroll: Math.max(0, Ct.scroll + K),
+  function scrollCard(delta) {
+    setCardScrollState((previousState) => ({
+      ...previousState,
+      scroll: Math.max(0, previousState.scroll + delta),
     }));
   }
-  function oe(K) {
-    if (H === "phases") {
-      qe(K);
+  function moveSelection(delta) {
+    if (level === "phases") {
+      movePhase(delta);
       return;
     }
-    sn(K);
+    moveAgent(delta);
   }
-  function fo() {
-    gt(false);
-    if (H === "agent") {
-      Y("agents");
+  function goBack() {
+    setIsAwaitingTranscript(false);
+    if (level === "agent") {
+      setLevel("agents");
       return;
     }
-    if (H === "agents") {
-      Y("phases");
+    if (level === "agents") {
+      setLevel("phases");
       return;
     }
     if (onBack) onBack();
     else onDone();
   }
-  function an() {
-    if (rt && rt.agents.length > 0) {
-      B(0);
-      X("all");
-      Y("agents");
+  function openAgentsLevel() {
+    if (currentPhaseRow && currentPhaseRow.agents.length > 0) {
+      setAgentIndex(0);
+      setAgentFilter("all");
+      setLevel("agents");
     }
   }
-  function mo() {
-    if (!st || !rt) return;
-    if (U !== "all") {
-      X("all");
-      B(rt.agents.indexOf(st));
+  function openAgentDetail() {
+    if (!selectedAgent || !currentPhaseRow) return;
+    if (agentFilter !== "all") {
+      setAgentFilter("all");
+      setAgentIndex(currentPhaseRow.agents.indexOf(selectedAgent));
     }
-    fe();
-    if (workflowAgentTranscript === "loading") gt(true);
-    else Y("agent");
+    resetCardScroll();
+    if (workflowAgentTranscript === "loading") setIsAwaitingTranscript(true);
+    else setLevel("agent");
   }
-  function go() {
-    if (!rt || pt) return;
-    let K = new Set(rt.agents.map((agent) => getAgentDisplayState(agent, W)));
-    X((Ct) => {
-      let index = WORKFLOW_TASK_FILTERS.indexOf(Ct);
+  function cycleAgentFilter() {
+    if (!currentPhaseRow || isAwaitingTranscript) return;
+    let presentStates = new Set(
+      currentPhaseRow.agents.map((agent) => getAgentDisplayState(agent, isWorkflowRunning)),
+    );
+    setAgentFilter((currentFilter) => {
+      let index = WORKFLOW_TASK_FILTERS.indexOf(currentFilter);
       for (let idx = 0; idx < WORKFLOW_TASK_FILTERS.length; idx++) {
         index = (index + 1) % WORKFLOW_TASK_FILTERS.length;
-        let ls = WORKFLOW_TASK_FILTERS[index];
-        if (ls === "all" || K.has(ls)) break;
+        let candidateFilter = WORKFLOW_TASK_FILTERS[index];
+        if (candidateFilter === "all" || presentStates.has(candidateFilter)) break;
       }
       return WORKFLOW_TASK_FILTERS[index];
     });
-    B(0);
-    fe();
+    setAgentIndex(0);
+    resetCardScroll();
   }
-  let st = H !== "phases" && G ? G.agents[dt] : undefined;
-  let Yt = st ? getAgentDisplayState(st, W) : undefined;
-  let ve = !!st && isRunningState(st) && !!st.agentId && !!onSkipAgent;
-  let We = !!st && isRunningState(st) && !!st.agentId && !!onRetryAgent;
-  let se = width - 9;
-  let cn = G ? Math.max(14, ...G.agents.map((agent) => 4 + bunStringWidth(agent.label))) : 14;
-  let max_2 = Math.max(12, Math.min(30, cn, se - 30));
-  let ho = se - max_2;
-  let pn = H === "agent" && E.length > 0 && width >= 64 && ho >= 30;
-  let Yr = pn ? ho : max;
+  let selectedAgent =
+    level !== "phases" && visiblePhaseRow ? visiblePhaseRow.agents[clampedAgentIndex] : undefined;
+  let selectedAgentStatus = selectedAgent
+    ? getAgentDisplayState(selectedAgent, isWorkflowRunning)
+    : undefined;
+  let canSkipAgent =
+    !!selectedAgent && isRunningState(selectedAgent) && !!selectedAgent.agentId && !!onSkipAgent;
+  let canRetryAgent =
+    !!selectedAgent && isRunningState(selectedAgent) && !!selectedAgent.agentId && !!onRetryAgent;
+  let contentWidth = width - 9;
+  let agentLabelWidth = visiblePhaseRow
+    ? Math.max(14, ...visiblePhaseRow.agents.map((agent) => 4 + bunStringWidth(agent.label)))
+    : 14;
+  let max_2 = Math.max(12, Math.min(30, agentLabelWidth, contentWidth - 30));
+  let detailPaneWidth = contentWidth - max_2;
+  let isSplitAgentView = level === "agent" && phaseRows.length > 0 && width >= 64 && detailPaneWidth >= 30;
+  let cardWidth = isSplitAgentView ? detailPaneWidth : max;
   let workflowAgentTranscript = useWorkflowAgentTranscript(
     workflow.workflowRunId,
-    st?.agentId,
-    st?.lastProgressAt,
-    st?.promptFramed,
+    selectedAgent?.agentId,
+    selectedAgent?.lastProgressAt,
+    selectedAgent?.promptFramed,
   );
-  let timeout = useTimeout(pt ? REFRESH_FAST_MS : null);
-  if (pt) {
-    if (!st) gt(false);
+  let timeout = useTimeout(isAwaitingTranscript ? REFRESH_FAST_MS : null);
+  if (isAwaitingTranscript) {
+    if (!selectedAgent) setIsAwaitingTranscript(false);
     else if (workflowAgentTranscript !== "loading" || timeout) {
-      gt(false);
-      Y("agent");
+      setIsAwaitingTranscript(false);
+      setLevel("agent");
     }
   }
-  let Qr = Yt === "queued" || Yt === "running" ? Math.floor(Date.now() / 1000) * 1000 : 0;
-  let Ue = Q(
+  let nowMs =
+    selectedAgentStatus === "queued" || selectedAgentStatus === "running"
+      ? Math.floor(Date.now() / 1000) * 1000
+      : 0;
+  let agentCard = useMemo(
     () =>
-      H === "agent" && st && Yt
+      level === "agent" && selectedAgent && selectedAgentStatus
         ? WorkflowAgentCard({
-            agent: st,
-            status: Yt,
+            agent: selectedAgent,
+            status: selectedAgentStatus,
             transcript: workflowAgentTranscript,
             expanded,
-            width: Yr,
-            nowMs: Qr,
+            width: cardWidth,
+            nowMs,
           })
         : {
             lines: [],
@@ -2523,153 +2628,163 @@ function WorkflowDetailDialog({
             folds: [],
             detailExpandable: false,
           },
-    [H, st, Yt, workflowAgentTranscript, expanded, Yr, Qr],
+    [level, selectedAgent, selectedAgentStatus, workflowAgentTranscript, expanded, cardWidth, nowMs],
   );
-  let lines = Ue.lines;
-  function Pi() {
-    if (st && isRunningState(st) && st.agentId) onSkipAgent?.(st.agentId);
+  let lines = agentCard.lines;
+  function skipSelectedAgent() {
+    if (selectedAgent && isRunningState(selectedAgent) && selectedAgent.agentId)
+      onSkipAgent?.(selectedAgent.agentId);
   }
-  function Ni() {
-    if (st && isRunningState(st) && st.agentId) onRetryAgent?.(st.agentId);
+  function retrySelectedAgent() {
+    if (selectedAgent && isRunningState(selectedAgent) && selectedAgent.agentId)
+      onRetryAgent?.(selectedAgent.agentId);
   }
   MessageActionsKeybindings(
     {
-      "confirm:previous": () => oe(-1),
-      "confirm:next": () => oe(1),
+      "confirm:previous": () => moveSelection(-1),
+      "confirm:next": () => moveSelection(1),
     },
     {
       context: "Confirmation",
     },
   );
-  let fn = workflow.status === "running" && !!onPause;
-  let mn = workflow.status === "paused" && !!workflow.scriptPath && !!workflow.workflowRunId && !!onResume;
-  let Xr = workflow.status === "running" && !!onKill && H === "phases";
-  function Oi() {
-    if (fn) onPause?.();
-    else if (mn) onResume?.(buildResumePrompt(workflow));
+  let canPause = workflow.status === "running" && !!onPause;
+  let canResume =
+    workflow.status === "paused" && !!workflow.scriptPath && !!workflow.workflowRunId && !!onResume;
+  let canKill = workflow.status === "running" && !!onKill && level === "phases";
+  function togglePause() {
+    if (canPause) onPause?.();
+    else if (canResume) onResume?.(buildResumePrompt(workflow));
   }
   let onKeyDown = (event) => {
     if (event.ctrl || event.meta) return;
     if (event.key === "j") {
       event.preventDefault();
-      if (H === "agent") po(1);
-      else oe(1);
+      if (level === "agent") scrollCard(1);
+      else moveSelection(1);
     } else if (event.key === "k") {
       event.preventDefault();
-      if (H === "agent") po(-1);
-      else oe(-1);
+      if (level === "agent") scrollCard(-1);
+      else moveSelection(-1);
     } else if (event.key === "return" || event.key === "right") {
       event.preventDefault();
-      if (H === "phases") an();
-      else if (H === "agents") mo();
-      else if (event.key === "return" && Ue.expandable) {
-        if (!expanded && Ue.detailExpandable) logFeatureOk("workflow_agent_card_detail");
-        let { folds } = Ue;
-        ft(({ scroll, expanded }) => ({
+      if (level === "phases") openAgentsLevel();
+      else if (level === "agents") openAgentDetail();
+      else if (event.key === "return" && agentCard.expandable) {
+        if (!expanded && agentCard.detailExpandable) logFeatureOk("workflow_agent_card_detail");
+        let { folds } = agentCard;
+        setCardScrollState(({ scroll, expanded }) => ({
           expanded: !expanded,
           scroll: expanded ? mapRowThroughGrowth(scroll, folds) : addPrecedingGrowth(scroll, folds),
         }));
       }
     } else if (event.key === "left") {
       event.preventDefault();
-      fo();
-    } else if (event.key === "r" && We) {
+      goBack();
+    } else if (event.key === "r" && canRetryAgent) {
       event.preventDefault();
-      Ni();
-    } else if (event.key === "x" && ve) {
+      retrySelectedAgent();
+    } else if (event.key === "x" && canSkipAgent) {
       event.preventDefault();
-      Pi();
-    } else if (event.key === "x" && Xr) {
+      skipSelectedAgent();
+    } else if (event.key === "x" && canKill) {
       event.preventDefault();
       onKill?.();
     } else if (event.key === " ") {
       event.preventDefault();
       onDone();
-    } else if (event.key === "p" && (fn || mn)) {
+    } else if (event.key === "p" && (canPause || canResume)) {
       event.preventDefault();
-      Oi();
-    } else if (event.key === "f" && H === "agents") {
+      togglePause();
+    } else if (event.key === "f" && level === "agents") {
       event.preventDefault();
-      go();
-    } else if (event.key === "s" && zt) {
+      cycleAgentFilter();
+    } else if (event.key === "s" && hasScript) {
       event.preventDefault();
-      kt(true);
+      setIsSaveDialogOpen(true);
     }
   };
-  let wo = E.length > 0;
-  if (St)
+  let hasAgents = phaseRows.length > 0;
+  if (isSaveDialogOpen)
     return jsxProd_default(WorkflowSaveDialog, {
       script: workflow.script,
       defaultName,
-      onDone: (K) => {
-        if (K) onDone(K);
-        else kt(false);
+      onDone: (saveResult) => {
+        if (saveResult) onDone(saveResult);
+        else setIsSaveDialogOpen(false);
       },
     });
-  let Qt = availableRows < 18;
-  let Zr = availableRows - (Qt ? 8 : 11);
-  let max_3 = Math.max(1, Zr - 3);
-  let gn = E.length > max_3;
-  let es = gn ? Math.max(1, max_3 - 1) : E.length;
-  let viewport = Math.max(1, Zr - es - (gn ? 1 : 0));
-  let scrollWindow = computeScrollWindow(min, E.length, es);
+  let isCompact = availableRows < 18;
+  let bodyRows = availableRows - (isCompact ? 8 : 11);
+  let max_3 = Math.max(1, bodyRows - 3);
+  let hasPhaseOverflow = phaseRows.length > max_3;
+  let phaseViewport = hasPhaseOverflow ? Math.max(1, max_3 - 1) : phaseRows.length;
+  let viewport = Math.max(1, bodyRows - phaseViewport - (hasPhaseOverflow ? 1 : 0));
+  let scrollWindow = computeScrollWindow(min, phaseRows.length, phaseViewport);
   let max_4 = Math.max(
     14,
-    ...E.map((K, Ct) => {
-      let Mt =
-        K.status === "done"
+    ...phaseRows.map((phaseRow, phaseIndex) => {
+      let statusGlyph =
+        phaseRow.status === "done"
           ? figures_default.tick
-          : K.status === "failed"
+          : phaseRow.status === "failed"
             ? figures_default.cross
-            : String(Ct + 1);
-      let le = K.totalCount > 0 ? `${K.doneCount}/${K.totalCount}` : "";
-      return 2 + bunStringWidth(Mt) + 1 + bunStringWidth(K.title) + (le ? 1 + bunStringWidth(le) : 0);
+            : String(phaseIndex + 1);
+      let countText = phaseRow.totalCount > 0 ? `${phaseRow.doneCount}/${phaseRow.totalCount}` : "";
+      return (
+        2 +
+        bunStringWidth(statusGlyph) +
+        1 +
+        bunStringWidth(phaseRow.title) +
+        (countText ? 1 + bunStringWidth(countText) : 0)
+      );
     }),
   );
-  let max_5 = Math.max(12, Math.min(34, max_4, se - 24));
-  let ns = se - max_5;
-  let Hi = H !== "agent" && wo && width >= 64 && ns >= 20;
-  let max_6 = Math.max(1, availableRows - (Qt ? 7 : 8));
-  let max_7 = Math.max(3, availableRows - (Qt ? 8 : 9));
-  let ss = pn ? max_6 : max_7;
-  let max_8 = Math.max(0, lines.length - ss);
+  let max_5 = Math.max(12, Math.min(34, max_4, contentWidth - 24));
+  let phasesPaneWidth = contentWidth - max_5;
+  let isSplitPhaseView = level !== "agent" && hasAgents && width >= 64 && phasesPaneWidth >= 20;
+  let max_6 = Math.max(1, availableRows - (isCompact ? 7 : 8));
+  let max_7 = Math.max(3, availableRows - (isCompact ? 8 : 9));
+  let cardViewport = isSplitAgentView ? max_6 : max_7;
+  let max_8 = Math.max(0, lines.length - cardViewport);
   if (scroll > max_8)
-    ft({
+    setCardScrollState({
       scroll: max_8,
       expanded,
     });
-  let Je = U !== "all" && H !== "phases" ? AGENT_STATE_LABELS[U].toLowerCase() : undefined;
-  let Wt = [];
-  if (H === "agent") {
-    Wt.push(`${UP_ARROW}${DOWN_ARROW} agent`);
-    if (lines.length > ss) Wt.push("j/k scroll");
-    if (Ue.expandable) Wt.push(`${RETURN_SYMBOL} ${expanded ? "collapse" : "expand"}`);
-  } else if (wo) Wt.push(`${UP_ARROW}${DOWN_ARROW} select`);
-  if (ve) Wt.push("x stop");
-  if (Xr) Wt.push("x stop workflow");
-  if (We) Wt.push("r restart");
-  if (fn) Wt.push("p pause");
-  else if (mn) Wt.push("p resume");
-  if (H === "agents" && wo) Wt.push(Je ? `f filter: ${Je}` : "f filter");
-  Wt.push("esc back");
-  if (zt) Wt.push("s save");
-  let joined = Wt.join(" \xB7 ");
+  let filterLabel =
+    agentFilter !== "all" && level !== "phases" ? AGENT_STATE_LABELS[agentFilter].toLowerCase() : undefined;
+  let hints = [];
+  if (level === "agent") {
+    hints.push(`${UP_ARROW}${DOWN_ARROW} agent`);
+    if (lines.length > cardViewport) hints.push("j/k scroll");
+    if (agentCard.expandable) hints.push(`${RETURN_SYMBOL} ${expanded ? "collapse" : "expand"}`);
+  } else if (hasAgents) hints.push(`${UP_ARROW}${DOWN_ARROW} select`);
+  if (canSkipAgent) hints.push("x stop");
+  if (canKill) hints.push("x stop workflow");
+  if (canRetryAgent) hints.push("r restart");
+  if (canPause) hints.push("p pause");
+  else if (canResume) hints.push("p resume");
+  if (level === "agents" && hasAgents) hints.push(filterLabel ? `f filter: ${filterLabel}` : "f filter");
+  hints.push("esc back");
+  if (hasScript) hints.push("s save");
+  let joined = hints.join(" \xB7 ");
   return jsxProd_default(FocusColumn, {
     onKeyDown,
     children: jsxProd_default(Dialog, {
       title: null,
       hideBorder: true,
       hideInputGuide: true,
-      onCancel: fo,
+      onCancel: goBack,
       color: "text",
       children: jsxProd_default_2(Box, {
         flexDirection: "column",
         width,
-        minHeight: Math.max(Qt ? 8 : 12, Math.min(availableRows - 1, rows - 6)),
-        maxHeight: Math.max(Qt ? 8 : 11, availableRows - 1),
+        minHeight: Math.max(isCompact ? 8 : 12, Math.min(availableRows - 1, rows - 6)),
+        maxHeight: Math.max(isCompact ? 8 : 11, availableRows - 1),
         overflowY: "hidden",
         children: [
-          !wo
+          !hasAgents
             ? jsxProd_default_2(Fragment, {
                 children: [
                   jsxProd_default(HintText, {
@@ -2680,35 +2795,35 @@ function WorkflowDetailDialog({
                   }),
                 ],
               })
-            : H === "agent" && st && G
+            : level === "agent" && selectedAgent && visiblePhaseRow
               ? jsxProd_default_2(Fragment, {
                   children: [
                     jsxProd_default(WorkflowHeader, {
-                      name: yt,
+                      name: workflowName,
                       subtext,
                       stats,
                       width,
                     }),
-                    !Qt &&
+                    !isCompact &&
                       jsxProd_default(Box, {
                         height: 1,
                       }),
-                    pn
+                    isSplitAgentView
                       ? jsxProd_default(WorkflowAgentDetailPane, {
-                          phase: G,
-                          clampedAgent: dt,
-                          agentLabel: st.label,
+                          phase: visiblePhaseRow,
+                          clampedAgent: clampedAgentIndex,
+                          agentLabel: selectedAgent.label,
                           detailLines: lines,
                           cardScroll: scroll,
                           leftWidth: max_2,
-                          rightWidth: ho,
+                          rightWidth: detailPaneWidth,
                           viewport: max_6,
-                          workflowActive: W,
-                          filterLabel: Je,
+                          workflowActive: isWorkflowRunning,
+                          filterLabel,
                         })
                       : jsxProd_default(WorkflowAgentDetail, {
-                          agentLabel: st.label,
-                          position: `${dt + 1}/${G.agents.length}`,
+                          agentLabel: selectedAgent.label,
+                          position: `${clampedAgentIndex + 1}/${visiblePhaseRow.agents.length}`,
                           detailLines: lines,
                           cardScroll: scroll,
                           contentWidth: max,
@@ -2719,30 +2834,30 @@ function WorkflowDetailDialog({
                     }),
                   ],
                 })
-              : Hi && G
+              : isSplitPhaseView && visiblePhaseRow
                 ? jsxProd_default_2(Fragment, {
                     children: [
                       jsxProd_default(WorkflowHeader, {
-                        name: yt,
+                        name: workflowName,
                         subtext,
                         stats,
                         width,
                       }),
-                      !Qt &&
+                      !isCompact &&
                         jsxProd_default(Box, {
                           height: 1,
                         }),
                       jsxProd_default(WorkflowPhasesPane, {
-                        phases: E,
-                        selectedPhase: G,
+                        phases: phaseRows,
+                        selectedPhase: visiblePhaseRow,
                         clampedPhase: min,
-                        clampedAgent: dt,
-                        level: H === "phases" ? "phases" : "agents",
+                        clampedAgent: clampedAgentIndex,
+                        level: level === "phases" ? "phases" : "agents",
                         leftWidth: max_5,
-                        rightWidth: ns,
+                        rightWidth: phasesPaneWidth,
                         viewport: max_6,
-                        workflowActive: W,
-                        filterLabel: Je,
+                        workflowActive: isWorkflowRunning,
+                        filterLabel,
                       }),
                       jsxProd_default(Box, {
                         flexGrow: 1,
@@ -2752,48 +2867,48 @@ function WorkflowDetailDialog({
                 : jsxProd_default_2(Fragment, {
                     children: [
                       jsxProd_default(WorkflowHeader, {
-                        name: yt,
+                        name: workflowName,
                         subtext,
                         stats,
                         width,
                       }),
-                      !Qt &&
+                      !isCompact &&
                         jsxProd_default(Box, {
                           height: 1,
                         }),
-                      E.slice(scrollWindow.from, scrollWindow.to).map((K, Ct) => {
-                        let Mt = scrollWindow.from + Ct;
+                      phaseRows.slice(scrollWindow.from, scrollWindow.to).map((phaseRow, indexInWindow) => {
+                        let rowIndex = scrollWindow.from + indexInWindow;
                         return jsxProd_default(
                           WorkflowPhaseRow,
                           {
-                            index: Mt + 1,
-                            title: K.title,
-                            done: K.doneCount,
-                            total: K.totalCount,
-                            status: K.status,
-                            selected: Mt === min,
+                            index: rowIndex + 1,
+                            title: phaseRow.title,
+                            done: phaseRow.doneCount,
+                            total: phaseRow.totalCount,
+                            status: phaseRow.status,
+                            selected: rowIndex === min,
                           },
-                          `${Mt}-${K.title}`,
+                          `${rowIndex}-${phaseRow.title}`,
                         );
                       }),
-                      gn &&
+                      hasPhaseOverflow &&
                         jsxProd_default(ScrollRangeIndicator, {
                           win: scrollWindow,
-                          total: E.length,
+                          total: phaseRows.length,
                         }),
                       jsxProd_default(Box, {
                         flexGrow: 1,
                       }),
-                      G
+                      visiblePhaseRow
                         ? jsxProd_default(WorkflowAgentsPane, {
-                            phase: G,
-                            selectedAgent: dt,
-                            level: H === "phases" ? "phases" : "agents",
+                            phase: visiblePhaseRow,
+                            selectedAgent: clampedAgentIndex,
+                            level: level === "phases" ? "phases" : "agents",
                             contentWidth: max,
                             viewport,
-                            tight: Qt,
-                            workflowActive: W,
-                            filterLabel: Je,
+                            tight: isCompact,
+                            workflowActive: isWorkflowRunning,
+                            filterLabel,
                           })
                         : null,
                     ],

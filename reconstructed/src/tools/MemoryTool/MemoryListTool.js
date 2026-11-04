@@ -9,7 +9,15 @@
  * attribution: placement 3
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { zodStrictObject, string, u, _enum, array, E, M } from "../../../vendor/zod/v4/classic/schemas.js";
+import {
+  zodStrictObject,
+  stringSchema,
+  objectSchema,
+  _enum,
+  array,
+  numberSchema,
+  booleanSchema,
+} from "../../../vendor/zod/v4/classic/schemas.js";
 import { buildTool } from "../../services/tools/permissionCheckGuard.js";
 import { MEMORY_LIST_TOOL_NAME } from "./memoryToolNames.js";
 import {
@@ -37,263 +45,278 @@ import {
 import { normalizePathPrefix } from "../../services/orgMemory/storeApi.js";
 import { MemoryNotFoundError } from "../../services/orgMemory/storeErrors.js";
 import { AbortError } from "../../utils/errors.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-kxyd0g16.js:63209-64072 placement
 /**
- * MemoryList 的输入 schema。
+ * 列目录（MemoryList）时一次返回的条目上限 50；Ps 是输入 schema，zs 是输出 schema。
  */
-var MemoryListInputSchema = 50;
-var memoryListInputSchema = DoctorLazy(() =>
-  zodStrictObject({
-    store: string()
-      .optional()
-      .describe(
-        "Id of the memory store to list. Omit to list the memory stores available in this session (id, description, writable or read-only, and the path of its index document).",
-      ),
-    path_prefix: string()
-      .optional()
-      .describe(
-        "Optional directory prefix to list only documents under it (e.g. /feedback/). Matching is directory-aligned (/x is the same as /x/). Omit to list the whole store.",
-      ),
-    cursor: string()
-      .optional()
-      .describe("Path of the last entry from a previous call. Returns entries after this path."),
-  }),
-);
-var memoryListOutputSchema = DoctorLazy(() =>
-  u({
-    outcome: _enum(["ok", "refused", "failed"]),
-    store_kind: _enum(["personal", "project"]).optional(),
-    entries: array(
-      u({
-        path: string(),
-        bytes: E().optional(),
-        updatedAt: string().optional(),
-      }),
-    ).optional(),
-    remaining: E().optional(),
-    stores: array(
-      u({
-        id: string(),
-        description: string(),
-        writable: M(),
-        index: string(),
-      }),
-    ).optional(),
-    reason: string().optional(),
-    message: string().optional(),
-  }),
-);
+var MAX_LIST_ENTRIES; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var memoryListInputSchema;
+var memoryListOutputSchema;
+deferInit("chunk-kxyd0g16.js:63209", () => {
+  MAX_LIST_ENTRIES = 50;
+  memoryListInputSchema = DoctorLazy(() =>
+    zodStrictObject({
+      store: stringSchema()
+        .optional()
+        .describe(
+          "Id of the memory store to list. Omit to list the memory stores available in this session (id, description, writable or read-only, and the path of its index document).",
+        ),
+      path_prefix: stringSchema()
+        .optional()
+        .describe(
+          "Optional directory prefix to list only documents under it (e.g. /feedback/). Matching is directory-aligned (/x is the same as /x/). Omit to list the whole store.",
+        ),
+      cursor: stringSchema()
+        .optional()
+        .describe("Path of the last entry from a previous call. Returns entries after this path."),
+    }),
+  );
+  memoryListOutputSchema = DoctorLazy(() =>
+    objectSchema({
+      outcome: _enum(["ok", "refused", "failed"]),
+      store_kind: _enum(["personal", "project"]).optional(),
+      entries: array(
+        objectSchema({
+          path: stringSchema(),
+          bytes: numberSchema().optional(),
+          updatedAt: stringSchema().optional(),
+        }),
+      ).optional(),
+      remaining: numberSchema().optional(),
+      stores: array(
+        objectSchema({
+          id: stringSchema(),
+          description: stringSchema(),
+          writable: booleanSchema(),
+          index: stringSchema(),
+        }),
+      ).optional(),
+      reason: stringSchema().optional(),
+      message: stringSchema().optional(),
+    }),
+  );
+});
 //@ chunk-kxyd0g16.js:64072-64302 placement
-function formatMemoryDocEntry(e) {
-  let r = e.bytes === undefined ? "" : `${e.bytes} bytes`;
-  let n = e.updatedAt?.match(/^\d{4}-\d{2}-\d{2}/)?.[0];
-  let s = n === undefined ? "" : `updated ${n}`;
-  let joined = [r, s].filter(Boolean).join(", ");
-  let json = JSON.stringify(e.path);
+function formatMemoryDocEntry(entry) {
+  let sizeText = entry.bytes === undefined ? "" : `${entry.bytes} bytes`;
+  let updatedDate = entry.updatedAt?.match(/^\d{4}-\d{2}-\d{2}/)?.[0];
+  let updatedText = updatedDate === undefined ? "" : `updated ${updatedDate}`;
+  let joined = [sizeText, updatedText].filter(Boolean).join(", ");
+  let json = JSON.stringify(entry.path);
   return joined === "" ? json : `${json}  (${joined})`;
 }
 //@ chunk-kxyd0g16.js:64302-67217 placement
 /**
  * memory_list 工具：列出记忆存储及其文档。
  */
-var MemoryListTool = buildTool({
-  name: MEMORY_LIST_TOOL_NAME,
-  searchHint: "list the memory stores and the documents in them",
-  shouldDefer: false,
-  backgrounding: "never",
-  maxResultSizeChars: 1 / 0,
-  async description() {
-    return MEMORY_LIST_DESCRIPTION;
-  },
-  async prompt() {
-    return joined;
-  },
-  get inputSchema() {
-    return memoryListInputSchema();
-  },
-  get outputSchema() {
-    return memoryListOutputSchema();
-  },
-  userFacingName() {
-    return MEMORY_LIST_TOOL_NAME;
-  },
-  isEnabled() {
-    return areMemoryToolsEnabled();
-  },
-  isReadOnly() {
-    return true;
-  },
-  isConcurrencySafe() {
-    return true;
-  },
-  toAutoClassifierInput(e) {
-    return `list ${e.store ?? "stores"} ${e.path_prefix ?? ""}`.trim();
-  },
-  renderToolUseMessage(e) {
-    return joinPrintable(e.store, e.path_prefix);
-  },
-  extractSearchText() {
-    return "";
-  },
-  getActivityDescription() {
-    return "Listing memory documents";
-  },
-  create() {
-    return {
-      async call({ store, path_prefix: pathPrefix, cursor }, { signal }) {
-        if (store === undefined) {
-          let y = checkMemoryToolsAllowed();
-          if (y) {
-            logMemoryToolSad("stores", `refused_${y.reason}`);
-            return {
-              data: {
-                outcome: "refused",
-                reason: y.reason,
-                message: y.message,
-              },
-              ...memoryUnavailableRemedy(y),
-            };
-          }
-          let k = listMemoryStoreEntries();
-          let w = describeMemoryStores(k);
-          let S = isProjectStoreConnecting(k);
-          if (w.length === 0) logMemoryToolSad("stores", S ? "stores_connecting" : "stores_none");
-          else logMemoryToolOk("stores", "none");
-          return {
-            data: {
-              outcome: "ok",
-              stores: w,
-              ...(S && {
-                message: PROJECT_STORE_CONNECTING_TEXT,
-              }),
-            },
-          };
-        }
-        let memoryStore = resolveMemoryStore({
-          storeId: store,
-        });
-        if (memoryStore.outcome === "refused") {
-          logMemoryToolSad("list", `refused_${memoryStore.reason}`);
-          return {
-            data: {
-              outcome: "refused",
-              reason: memoryStore.reason,
-              message: memoryStore.message,
-            },
-            ...memoryUnavailableRemedy(memoryStore),
-          };
-        }
-        let { kind } = memoryStore.served;
-        try {
-          let y = pathPrefix === undefined ? undefined : normalizePathPrefix(pathPrefix);
-          let k =
-            pathPrefix === undefined || y === undefined
-              ? null
-              : (checkAbsoluteMemoryPath(pathPrefix, memoryStore.served.promptIndex) ??
-                validateMemoryPath(y, {
-                  trailingSlashAllowed: true,
-                }));
-          if (k) {
-            logMemoryToolSad("list", `refused_${k.reason}`, kind);
-            return {
-              data: {
-                outcome: "refused",
-                reason: k.reason,
-                message: k.message,
-              },
-            };
-          }
-          let w = y === undefined || y === "/" ? undefined : y.endsWith("/") ? y : `${y}/`;
-          let S = await memoryStore.backend
-            .list(w, {
-              signal,
-            })
-            .catch((error) => {
-              if (error instanceof MemoryNotFoundError && error.kind === "store") return [];
-              throw error;
-            });
-          if (signal.aborted) throw new AbortError();
-          let sorted = S.filter((x) => isValidMemoryDocumentKey(x.path)).sort((x, B) =>
-            x.path < B.path ? -1 : x.path > B.path ? 1 : 0,
-          );
-          let I = cursor === undefined ? sorted : sorted.filter((x) => x.path > cursor);
-          let sliced = I.slice(0, MemoryListInputSchema);
-          logMemoryToolOk("list", kind);
-          return {
-            data: {
-              outcome: "ok",
-              store_kind: kind,
-              entries: sliced.map((x) => ({
-                path: x.path,
-                bytes: x.sizeBytes,
-                updatedAt: x.updatedAt,
-              })),
-              remaining: I.length - sliced.length,
-            },
-          };
-        } catch (error) {
-          if (signal.aborted) throw new AbortError();
-          let k = logMemoryErrorResult("list", error);
-          return {
-            data: {
-              outcome: "failed",
-              reason: k.reason,
-              message: k.message,
-            },
-          };
-        }
-      },
-    };
-  },
-  mapToolResultToToolResultBlockParam(e, toolUseId) {
-    if (e.outcome !== "ok")
+var MemoryListTool; // deferred: uses buildTool (../../services/tools/permissionCheckGuard.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-kxyd0g16.js:64302", () => {
+  MemoryListTool = buildTool({
+    name: MEMORY_LIST_TOOL_NAME,
+    searchHint: "list the memory stores and the documents in them",
+    shouldDefer: false,
+    backgrounding: "never",
+    maxResultSizeChars: 1 / 0,
+    async description() {
+      return MEMORY_LIST_DESCRIPTION;
+    },
+    async prompt() {
+      return joined;
+    },
+    get inputSchema() {
+      return memoryListInputSchema();
+    },
+    get outputSchema() {
+      return memoryListOutputSchema();
+    },
+    userFacingName() {
+      return MEMORY_LIST_TOOL_NAME;
+    },
+    isEnabled() {
+      return areMemoryToolsEnabled();
+    },
+    isReadOnly() {
+      return true;
+    },
+    isConcurrencySafe() {
+      return true;
+    },
+    toAutoClassifierInput(input) {
+      return `list ${input.store ?? "stores"} ${input.path_prefix ?? ""}`.trim();
+    },
+    renderToolUseMessage(input) {
+      return joinPrintable(input.store, input.path_prefix);
+    },
+    extractSearchText() {
+      return "";
+    },
+    getActivityDescription() {
+      return "Listing memory documents";
+    },
+    create() {
       return {
-        tool_use_id: toolUseId,
-        type: "tool_result",
-        is_error: true,
-        content: e.message ?? `${MEMORY_LIST_TOOL_NAME} failed: ${e.reason}`,
+        async call({ store, path_prefix: pathPrefix, cursor }, { signal }) {
+          if (store === undefined) {
+            let refusal = checkMemoryToolsAllowed();
+            if (refusal) {
+              logMemoryToolSad("stores", `refused_${refusal.reason}`);
+              return {
+                data: {
+                  outcome: "refused",
+                  reason: refusal.reason,
+                  message: refusal.message,
+                },
+                ...memoryUnavailableRemedy(refusal),
+              };
+            }
+            let storeEntries = listMemoryStoreEntries();
+            let storeDescriptions = describeMemoryStores(storeEntries);
+            let projectConnecting = isProjectStoreConnecting(storeEntries);
+            if (storeDescriptions.length === 0)
+              logMemoryToolSad("stores", projectConnecting ? "stores_connecting" : "stores_none");
+            else logMemoryToolOk("stores", "none");
+            return {
+              data: {
+                outcome: "ok",
+                stores: storeDescriptions,
+                ...(projectConnecting && {
+                  message: PROJECT_STORE_CONNECTING_TEXT,
+                }),
+              },
+            };
+          }
+          let memoryStore = resolveMemoryStore({
+            storeId: store,
+          });
+          if (memoryStore.outcome === "refused") {
+            logMemoryToolSad("list", `refused_${memoryStore.reason}`);
+            return {
+              data: {
+                outcome: "refused",
+                reason: memoryStore.reason,
+                message: memoryStore.message,
+              },
+              ...memoryUnavailableRemedy(memoryStore),
+            };
+          }
+          let { kind } = memoryStore.served;
+          try {
+            let normalizedPrefix = pathPrefix === undefined ? undefined : normalizePathPrefix(pathPrefix);
+            let refusal =
+              pathPrefix === undefined || normalizedPrefix === undefined
+                ? null
+                : (checkAbsoluteMemoryPath(pathPrefix, memoryStore.served.promptIndex) ??
+                  validateMemoryPath(normalizedPrefix, {
+                    trailingSlashAllowed: true,
+                  }));
+            if (refusal) {
+              logMemoryToolSad("list", `refused_${refusal.reason}`, kind);
+              return {
+                data: {
+                  outcome: "refused",
+                  reason: refusal.reason,
+                  message: refusal.message,
+                },
+              };
+            }
+            let listPrefix =
+              normalizedPrefix === undefined || normalizedPrefix === "/"
+                ? undefined
+                : normalizedPrefix.endsWith("/")
+                  ? normalizedPrefix
+                  : `${normalizedPrefix}/`;
+            let documents = await memoryStore.backend
+              .list(listPrefix, {
+                signal,
+              })
+              .catch((error) => {
+                if (error instanceof MemoryNotFoundError && error.kind === "store") return [];
+                throw error;
+              });
+            if (signal.aborted) throw new AbortError();
+            let sorted = documents
+              .filter((doc) => isValidMemoryDocumentKey(doc.path))
+              .sort((left, right) => (left.path < right.path ? -1 : left.path > right.path ? 1 : 0));
+            let afterCursor = cursor === undefined ? sorted : sorted.filter((doc) => doc.path > cursor);
+            let sliced = afterCursor.slice(0, MAX_LIST_ENTRIES);
+            logMemoryToolOk("list", kind);
+            return {
+              data: {
+                outcome: "ok",
+                store_kind: kind,
+                entries: sliced.map((doc) => ({
+                  path: doc.path,
+                  bytes: doc.sizeBytes,
+                  updatedAt: doc.updatedAt,
+                })),
+                remaining: afterCursor.length - sliced.length,
+              },
+            };
+          } catch (error) {
+            if (signal.aborted) throw new AbortError();
+            let failure = logMemoryErrorResult("list", error);
+            return {
+              data: {
+                outcome: "failed",
+                reason: failure.reason,
+                message: failure.message,
+              },
+            };
+          }
+        },
       };
-    if (e.stores !== undefined)
-      return {
-        tool_use_id: toolUseId,
-        type: "tool_result",
-        content:
-          e.stores.length === 0
-            ? (e.message ?? "No memory stores are available in this session.")
-            : `Memory stores available in this session \u2014 pass an id as store to list or read one:
-${e.stores.map(
+    },
+    mapToolResultToToolResultBlockParam(result, toolUseId) {
+      if (result.outcome !== "ok")
+        return {
+          tool_use_id: toolUseId,
+          type: "tool_result",
+          is_error: true,
+          content: result.message ?? `${MEMORY_LIST_TOOL_NAME} failed: ${result.reason}`,
+        };
+      if (result.stores !== undefined)
+        return {
+          tool_use_id: toolUseId,
+          type: "tool_result",
+          content:
+            result.stores.length === 0
+              ? (result.message ?? "No memory stores are available in this session.")
+              : `Memory stores available in this session \u2014 pass an id as store to list or read one:
+${result.stores.map(
   (store) =>
     `${store.id}  (${store.description}, ${store.writable ? "writable" : "read-only"}, index ${store.index})`,
 ).join(`
 `)}${
-                e.message === undefined
-                  ? ""
-                  : `
-${e.message}`
-              }`,
-      };
-    let entries = e.entries ?? [];
-    if (entries.length === 0)
+                  result.message === undefined
+                    ? ""
+                    : `
+${result.message}`
+                }`,
+        };
+      let entries = result.entries ?? [];
+      if (entries.length === 0)
+        return {
+          tool_use_id: toolUseId,
+          type: "tool_result",
+          content: "(empty)",
+        };
+      let remaining = result.remaining ?? 0;
+      let moreSuffix =
+        remaining > 0
+          ? `
+\u2026 ${remaining} more \u2014 call again with cursor=${JSON.stringify(entries.at(-1)?.path ?? "")} to continue.`
+          : "";
       return {
         tool_use_id: toolUseId,
         type: "tool_result",
-        content: "(empty)",
-      };
-    let remaining = e.remaining ?? 0;
-    let f =
-      remaining > 0
-        ? `
-\u2026 ${remaining} more \u2014 call again with cursor=${JSON.stringify(entries.at(-1)?.path ?? "")} to continue.`
-        : "";
-    return {
-      tool_use_id: toolUseId,
-      type: "tool_result",
-      content: `${memoryStoreNote(e.store_kind)}
+        content: `${memoryStoreNote(result.store_kind)}
 
 ${entries.map(formatMemoryDocEntry).join(`
-`)}${f}`,
-    };
-  },
+`)}${moreSuffix}`,
+      };
+    },
+  });
 });
 export { MemoryListTool };

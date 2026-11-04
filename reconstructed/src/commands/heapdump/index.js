@@ -23,12 +23,12 @@ var heapdumpCommandDefinition = {
   supportsNonInteractive: true,
   fleetHostCall: async ({ setInfo, setError }) => {
     setInfo("Writing heap dump\u2026");
-    let { performHeapDump } = await import("./chunk-1as23pg8.js");
-    let s = await performHeapDump();
-    if (s.success) setInfo(`Heap dump written to ${s.heapPath}`);
-    else setError(`Couldn't write heap dump \u2014 ${s.error}`);
+    let { performHeapDump } = await import("../../utils/heapDumpService.js");
+    let report = await performHeapDump();
+    if (report.success) setInfo(`Heap dump written to ${report.heapPath}`);
+    else setError(`Couldn't write heap dump \u2014 ${report.error}`);
   },
-  load: () => import("./chunk-dhgx9s0b.js"),
+  load: () => import("./heapdump.js"),
 };
 var heapdumpCommand = heapdumpCommandDefinition;
 export { heapdumpCommand };

@@ -11,42 +11,63 @@
 import { GITHUB_HOST } from "../git/githubUrl.js";
 import { foldName, INVISIBLE_FORMAT_CHAR_RE } from "../permissions/protectedDirNames.js";
 import { OFFICIAL_MARKETPLACE_NAME } from "./officialMarketplaceNames.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-dcmhvw5a.js:20639-21039 placement
 /**
  * 插件来源 URL 的主机/路径正则片段。
  */
-var HOST_PATTERNS = String.raw`[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)*\.?`;
-var PLUGIN_NAME_CHARS = "[A-Za-z0-9._-]+";
-var PATH_SAFE_CHARS = "[A-Za-z0-9._~-]";
-var USER_SEGMENT_CHARS = `${PATH_SAFE_CHARS}+(?::${PATH_SAFE_CHARS}*)?@`;
-var HOST_SEGMENT_CHARS = ":[1-9][0-9]{0,4}";
-var PORT_SEGMENT_PATTERN = `(?:/(?:${PATH_SAFE_CHARS}|%[0-9A-Fa-f]{2})*)*`;
-var regExp_2 = new RegExp(`^${PLUGIN_NAME_CHARS}/${PLUGIN_NAME_CHARS}$`);
-var regExp_3 = new RegExp(`^git@(${HOST_PATTERNS}):(${PLUGIN_NAME_CHARS}(?:/${PLUGIN_NAME_CHARS})*)/?$`);
-var HOST_CHARS = `(?:${USER_SEGMENT_CHARS})?(${HOST_PATTERNS})(?:${HOST_SEGMENT_CHARS})?(${PORT_SEGMENT_PATTERN})$`;
-var regExp_4 = new RegExp(`^https://${HOST_CHARS}`);
-var regExp_5 = new RegExp(`^https?://${HOST_CHARS}`);
-var REPO_PATH_CHARS = `ssh.${GITHUB_HOST}`;
-var WIDE = "wide:";
+var HOST_PATTERNS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var PLUGIN_NAME_CHARS;
+var PATH_SAFE_CHARS;
+var USER_SEGMENT_CHARS;
+var HOST_SEGMENT_CHARS;
+var PORT_SEGMENT_PATTERN;
+var regExp_2;
+var regExp_3;
+var HOST_CHARS;
+var regExp_4;
+var regExp_5;
+var REPO_PATH_CHARS;
+var WIDE;
+deferInit("chunk-dcmhvw5a.js:20639", () => {
+  HOST_PATTERNS = String.raw`[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)*\.?`;
+  PLUGIN_NAME_CHARS = "[A-Za-z0-9._-]+";
+  PATH_SAFE_CHARS = "[A-Za-z0-9._~-]";
+  USER_SEGMENT_CHARS = `${PATH_SAFE_CHARS}+(?::${PATH_SAFE_CHARS}*)?@`;
+  HOST_SEGMENT_CHARS = ":[1-9][0-9]{0,4}";
+  PORT_SEGMENT_PATTERN = `(?:/(?:${PATH_SAFE_CHARS}|%[0-9A-Fa-f]{2})*)*`;
+  regExp_2 = new RegExp(`^${PLUGIN_NAME_CHARS}/${PLUGIN_NAME_CHARS}$`);
+  regExp_3 = new RegExp(`^git@(${HOST_PATTERNS}):(${PLUGIN_NAME_CHARS}(?:/${PLUGIN_NAME_CHARS})*)/?$`);
+  HOST_CHARS = `(?:${USER_SEGMENT_CHARS})?(${HOST_PATTERNS})(?:${HOST_SEGMENT_CHARS})?(${PORT_SEGMENT_PATTERN})$`;
+  regExp_4 = new RegExp(`^https://${HOST_CHARS}`);
+  regExp_5 = new RegExp(`^https?://${HOST_CHARS}`);
+  REPO_PATH_CHARS = `ssh.${GITHUB_HOST}`;
+  WIDE = "wide:";
+});
 //@ chunk-dcmhvw5a.js:21039-21429 placement
 /**
  * 解析 git 托管 URL。
  */
-function parseGitHostUrl(e, n) {
-  let matches = regExp_2.test(e);
-  let match = regExp_3.exec(e);
-  let match_2 = (n ? regExp_5 : regExp_4).exec(e);
-  let c = matches ? GITHUB_HOST : (match?.[1] ?? match_2?.[1]);
-  if (c === undefined) return;
-  let replaced = c.toLowerCase().replace(/\.$/, "");
-  if (c.endsWith(".") && replaced !== GITHUB_HOST && replaced !== `www.${GITHUB_HOST}`) return;
-  let m = matches ? `/${e}` : match ? `/${match[2]}` : match_2?.[2] || "/";
-  if (m.split("/").some((h) => /^(?:\.|%2e){1,2}$/i.test(h) || (matches && /^\.git$/i.test(h)))) return;
+function parseGitHostUrl(url, blocklist) {
+  let matches = regExp_2.test(url);
+  let match = regExp_3.exec(url);
+  let match_2 = (blocklist ? regExp_5 : regExp_4).exec(url);
+  let host = matches ? GITHUB_HOST : (match?.[1] ?? match_2?.[1]);
+  if (host === undefined) return;
+  let replaced = host.toLowerCase().replace(/\.$/, "");
+  if (host.endsWith(".") && replaced !== GITHUB_HOST && replaced !== `www.${GITHUB_HOST}`) return;
+  let repoPath = matches ? `/${url}` : match ? `/${match[2]}` : match_2?.[2] || "/";
+  if (
+    repoPath
+      .split("/")
+      .some((segment) => /^(?:\.|%2e){1,2}$/i.test(segment) || (matches && /^\.git$/i.test(segment)))
+  )
+    return;
   return {
-    url: match_2 ? e : `https://${c}${m}`,
-    host: c,
-    path: m,
+    url: match_2 ? url : `https://${host}${repoPath}`,
+    host,
+    path: repoPath,
     scp: match !== null,
   };
 }
@@ -54,107 +75,111 @@ function parseGitHostUrl(e, n) {
 /**
  * 规范化插件仓库 URL。
  */
-function normalizePluginRepoUrl(url, path, r) {
-  let s = r?.blocklistDirection === true;
-  let a;
-  let c;
-  let g;
-  let gitHostUrl = parseGitHostUrl(url, s);
+function normalizePluginRepoUrl(url, path, options) {
+  let blocklist = options?.blocklistDirection === true;
+  let hostPort;
+  let pathname;
+  let isGithub;
+  let gitHostUrl = parseGitHostUrl(url, blocklist);
   if (gitHostUrl === undefined) return;
   try {
-    let S = new URL(gitHostUrl.url);
-    if (S.hostname !== gitHostUrl.host.toLowerCase() || S.pathname !== gitHostUrl.path) return;
-    let replaced = S.hostname.replace(/\.$/, "");
-    if (replaced === REPO_PATH_CHARS && !gitHostUrl.scp && !s) return;
-    let w = replaced === `www.${GITHUB_HOST}` || replaced === REPO_PATH_CHARS ? GITHUB_HOST : replaced;
-    g = s || (w === GITHUB_HOST && S.port === "");
-    let port = s && (S.port === "80" || S.port === "443") ? "" : S.port;
-    a = `${w}${port === "" ? "" : `:${port}`}`;
-    c = S.pathname;
+    let parsed = new URL(gitHostUrl.url);
+    if (parsed.hostname !== gitHostUrl.host.toLowerCase() || parsed.pathname !== gitHostUrl.path) return;
+    let replaced = parsed.hostname.replace(/\.$/, "");
+    if (replaced === REPO_PATH_CHARS && !gitHostUrl.scp && !blocklist) return;
+    let host = replaced === `www.${GITHUB_HOST}` || replaced === REPO_PATH_CHARS ? GITHUB_HOST : replaced;
+    isGithub = blocklist || (host === GITHUB_HOST && parsed.port === "");
+    let port = blocklist && (parsed.port === "80" || parsed.port === "443") ? "" : parsed.port;
+    hostPort = `${host}${port === "" ? "" : `:${port}`}`;
+    pathname = parsed.pathname;
   } catch {
     return;
   }
-  let replaced = c.replace(/%([0-9a-f]{2})/gi, (S, C) => {
-    let w = String.fromCharCode(parseInt(C, 16));
-    return /^[A-Za-z0-9._~-]$/.test(w) ? w : S;
+  let replaced = pathname.replace(/%([0-9a-f]{2})/gi, (wholeMatch, hex) => {
+    let char = String.fromCharCode(parseInt(hex, 16));
+    return /^[A-Za-z0-9._~-]$/.test(char) ? char : wholeMatch;
   });
   if (replaced.includes("%")) return;
-  let replaced_2 = (g ? replaced.toLowerCase() : replaced)
+  let replaced_2 = (isGithub ? replaced.toLowerCase() : replaced)
     .replace(/\/{2,}/g, "/")
     .replace(/\/+$/, "")
     .replace(/\/?\.git$/, "");
-  if (s) {
-    let S = replaced_2.length;
-    while (replaced_2.endsWith(".git", S)) S -= replaced_2[S - 5] === "/" ? 5 : 4;
-    replaced_2 = replaced_2.slice(0, S);
+  if (blocklist) {
+    let end = replaced_2.length;
+    while (replaced_2.endsWith(".git", end)) end -= replaced_2[end - 5] === "/" ? 5 : 4;
+    replaced_2 = replaced_2.slice(0, end);
   }
   if (path?.includes("\\")) return;
-  let y = [];
-  for (let S of (path ?? "").split("/")) {
-    if (S === "" || S === ".") continue;
-    if (S !== "..") {
-      y.push(S);
+  let segments = [];
+  for (let segment of (path ?? "").split("/")) {
+    if (segment === "" || segment === ".") continue;
+    if (segment !== "..") {
+      segments.push(segment);
       continue;
     }
-    if (y.length === 0) return;
-    y.pop();
+    if (segments.length === 0) return;
+    segments.pop();
   }
-  if (!s) return `${a}${replaced_2}#${y.join("/")}`;
-  let b = [];
-  for (let S of y) {
-    let windowsShortNameKey = toWindowsShortNameKey(S);
+  if (!blocklist) return `${hostPort}${replaced_2}#${segments.join("/")}`;
+  let keys = [];
+  for (let segment of segments) {
+    let windowsShortNameKey = toWindowsShortNameKey(segment);
     if (windowsShortNameKey === undefined) return;
-    b.push(windowsShortNameKey);
+    keys.push(windowsShortNameKey);
   }
-  return `${WIDE}${a}${replaced_2}#${b.join("/")}`;
+  return `${WIDE}${hostPort}${replaced_2}#${keys.join("/")}`;
 }
 //@ chunk-dcmhvw5a.js:22470-22731 placement = setCwdState (0.867)
 function toWindowsShortNameKey(cwd) {
-  let n = cwd.length;
-  while (n > 0 && (cwd[n - 1] === "." || cwd[n - 1] === " ")) n--;
-  let sliced = cwd.slice(0, n);
+  let end = cwd.length;
+  while (end > 0 && (cwd[end - 1] === "." || cwd[end - 1] === " ")) end--;
+  let sliced = cwd.slice(0, end);
   if (sliced === "" || sliced.length > 255) return;
-  let s = foldName(sliced.normalize("NFC"));
-  if (/~\d/.test(s) || s.includes(":") || INVISIBLE_FORMAT_CHAR_RE.test(s)) return;
-  return s.toUpperCase().toLowerCase().normalize("NFC");
+  let folded = foldName(sliced.normalize("NFC"));
+  if (/~\d/.test(folded) || folded.includes(":") || INVISIBLE_FORMAT_CHAR_RE.test(folded)) return;
+  return folded.toUpperCase().toLowerCase().normalize("NFC");
 }
 //@ chunk-dcmhvw5a.js:22731-22841 placement = getCurrentRepoHttpsUrl (0.803)
 /**
  * 解析 repo#ref 写法。
  */
-function parseRepoWithRef(e) {
-  let index = e.indexOf("#");
-  if (index === -1) return e;
-  return normalizePluginRepoUrl(`https://${e.slice(0, index)}`, e.slice(index + 1)) ?? e;
+function parseRepoWithRef(key) {
+  let index = key.indexOf("#");
+  if (index === -1) return key;
+  return normalizePluginRepoUrl(`https://${key.slice(0, index)}`, key.slice(index + 1)) ?? key;
 }
 //@ chunk-dcmhvw5a.js:22841-23385 placement
 /**
  * 两个插件来源是否相同。
  */
-function samePluginSource(source, n, r) {
-  let s = r?.blocklistDirection !== true;
+function samePluginSource(source, ref, options) {
+  let requireNoRef = options?.blocklistDirection !== true;
   if (typeof source === "string") {
-    let m =
-      typeof n === "string"
+    let info =
+      typeof ref === "string"
         ? {
-            url: n,
+            url: ref,
             ref: undefined,
           }
-        : n;
-    if (!m?.url || (s && m.ref !== undefined)) return;
-    return normalizePluginRepoUrl(m.url, source, r);
+        : ref;
+    if (!info?.url || (requireNoRef && info.ref !== undefined)) return;
+    return normalizePluginRepoUrl(info.url, source, options);
   }
   if (typeof source !== "object" || source === null) return;
-  let a = source;
-  let c = typeof a.sha === "string" && /^[a-f0-9]{40}$/.test(a.sha);
-  if (s && a.ref !== undefined && !c) return;
-  let path = typeof a.path === "string" ? a.path : undefined;
-  switch (a.source) {
+  let source_2 = source;
+  let hasSha = typeof source_2.sha === "string" && /^[a-f0-9]{40}$/.test(source_2.sha);
+  if (requireNoRef && source_2.ref !== undefined && !hasSha) return;
+  let path = typeof source_2.path === "string" ? source_2.path : undefined;
+  switch (source_2.source) {
     case "github":
-      return typeof a.repo === "string" ? normalizePluginRepoUrl(a.repo, path, r) : undefined;
+      return typeof source_2.repo === "string"
+        ? normalizePluginRepoUrl(source_2.repo, path, options)
+        : undefined;
     case "url":
     case "git-subdir":
-      return typeof a.url === "string" ? normalizePluginRepoUrl(a.url, path, r) : undefined;
+      return typeof source_2.url === "string"
+        ? normalizePluginRepoUrl(source_2.url, path, options)
+        : undefined;
     default:
       return;
   }
@@ -183,9 +208,9 @@ function sourceUrlAndRef(source) {
 /**
  * 官方插件固定的 sha。
  */
-function pinnedSha(e, source) {
+function pinnedSha(pluginId, source) {
   {
-    if (!e.endsWith(`@${OFFICIAL_MARKETPLACE_NAME}`)) return;
+    if (!pluginId.endsWith(`@${OFFICIAL_MARKETPLACE_NAME}`)) return;
     if (typeof source !== "object" || source === null) return;
     let sha = source.sha;
     return typeof sha === "string" && sha !== "" ? sha : undefined;
@@ -196,9 +221,9 @@ function pinnedSha(e, source) {
 /**
  * 名字附加 sha 前缀。
  */
-function withShaSuffix(e, n) {
-  let r = `-${n.substring(0, 12)}`;
-  return e.endsWith(r) ? e : `${e}${r}`;
+function withShaSuffix(version, sha) {
+  let suffix = `-${sha.substring(0, 12)}`;
+  return version.endsWith(suffix) ? version : `${version}${suffix}`;
 }
 //@ chunk-dcmhvw5a.js:23751-23844 placement
 /**
@@ -228,13 +253,19 @@ var SCRIPT_EXTENSION_LOADERS = {
 /**
  * 脚本扩展名列表。
  */
-var SCRIPT_EXTENSIONS = Object.keys(SCRIPT_EXTENSION_LOADERS);
+var SCRIPT_EXTENSIONS; // deferred: uses SCRIPT_EXTENSION_LOADERS of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-dcmhvw5a.js:23992", () => {
+  SCRIPT_EXTENSIONS = Object.keys(SCRIPT_EXTENSION_LOADERS);
+});
 //@ chunk-dcmhvw5a.js:24017-24080 placement
 /**
  * SCRIPT_EXTENSIONS_TEXT：脚本后缀的列举文字。
  */
-var SCRIPT_EXTENSIONS_TEXT =
-  `${SCRIPT_EXTENSIONS.slice(0, -1).join(", ")} or ` + String(SCRIPT_EXTENSIONS.at(-1));
+var SCRIPT_EXTENSIONS_TEXT; // deferred: uses SCRIPT_EXTENSIONS of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-dcmhvw5a.js:24017", () => {
+  SCRIPT_EXTENSIONS_TEXT =
+    `${SCRIPT_EXTENSIONS.slice(0, -1).join(", ")} or ` + String(SCRIPT_EXTENSIONS.at(-1));
+});
 export {
   PluginDirectoryUnavailableError,
   samePluginSource,

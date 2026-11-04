@@ -10,6 +10,7 @@
  */
 import { analyzeCommand } from "./treeSitterAnalysis.js";
 import { isGuardOff, runGuarded, markGuardFired } from "./bashParserFlags.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:1053980-1054036 callgraph-witnessed = visitNodes (0)
 /**
@@ -31,7 +32,7 @@ function extractPipePositions(rootNode) {
         if (child.type === "|" || child.type === "|&") pipePositions.push([child.startIndex, child.endIndex]);
     }
   });
-  return pipePositions.sort((r, s) => r[0] - s[0]);
+  return pipePositions.sort((leftRange, rightRange) => leftRange[0] - rightRange[0]);
 }
 //@ chunk-e6aww6q8.js:1054221-1054484 fingerprint = extractRedirectionNodes (0.822)
 /**
@@ -80,10 +81,10 @@ class TreeSitterParsedCommand {
     if (this.pipePositions.length === 0) return [this.originalCommand];
     let segments = [];
     let cursor = 0;
-    for (let [pipePos, h] of this.pipePositions) {
+    for (let [pipePos, pipeEnd] of this.pipePositions) {
       let segment = this.commandBytes.subarray(cursor, pipePos).toString("utf8").trim();
       if (segment) segments.push(segment);
-      cursor = h;
+      cursor = pipeEnd;
     }
     let lastSegment = this.commandBytes.subarray(cursor).toString("utf8").trim();
     if (lastSegment) segments.push(lastSegment);
@@ -91,7 +92,9 @@ class TreeSitterParsedCommand {
   }
   withoutOutputRedirections() {
     if (this.redirectionNodes.length === 0) return this.originalCommand;
-    let sorted = [...this.redirectionNodes].sort((r, s) => s.startIndex - r.startIndex);
+    let sorted = [...this.redirectionNodes].sort(
+      (leftRedir, rightRedir) => rightRedir.startIndex - leftRedir.startIndex,
+    );
     let result = this.commandBytes;
     for (let redir of sorted)
       result = Buffer.concat([result.subarray(0, redir.startIndex), result.subarray(redir.endIndex)]);
@@ -129,7 +132,7 @@ function buildParsedCommandFromRoot(command, root) {
 async function doParse(command) {
   if (!command) return null;
   try {
-    let { parseCommand } = await import("./chunk-52jrbcze.js");
+    let { parseCommand } = await import("./parser.js");
     let data = await parseCommand(command);
     if (data) return buildParsedCommandFromRoot(command, data.rootNode);
   } catch {}
@@ -148,14 +151,17 @@ class CachedParsedCommand {
       this.lastCommand = command;
       this.lastResult = runGuarded(false, () => doParse(command));
     }
-    let { result: n, fired } = await this.lastResult;
+    let { result, fired } = await this.lastResult;
     if (fired) markGuardFired();
-    return n;
+    return result;
   }
 }
 //@ chunk-e6aww6q8.js:1056000-1056016 callgraph-witnessed = ParsedCommand (0)
 /**
  * 全局 ParsedCommand 单例，parse(command) 返回 TreeSitterParsedCommand 或 null。
  */
-var ParsedCommand = new CachedParsedCommand();
+var ParsedCommand; // deferred: uses CachedParsedCommand of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:1056000", () => {
+  ParsedCommand = new CachedParsedCommand();
+});
 export { ParsedCommand, buildParsedCommandFromRoot };

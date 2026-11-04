@@ -9,19 +9,19 @@
  * attribution: placement 5
  */
 import {
-  Tqn,
-  Aqn,
-  Qln,
-  Cqn,
-  Rqn,
-  Zln,
-  edn,
-  tdn,
-  xqn,
-  Pqn,
-  Iqn,
-  Oqn,
-  y_t,
+  EMPTY_ARTIFACT_DB_READ_CONSENT,
+  EMPTY_ARTIFACT_DB_READ_HUMAN_CONSENT,
+  EMPTY_ARTIFACT_READ_CONSENT,
+  EMPTY_ARTIFACT_ASSET_UPLOAD_CONSENT,
+  EMPTY_ARTIFACT_ASSET_UPLOAD_HUMAN_CONSENT,
+  EMPTY_ARTIFACT_ASSET_READ_CONSENT,
+  EMPTY_ARTIFACT_ASSET_READ_HUMAN_CONSENT,
+  EMPTY_ARTIFACT_OUTSIDE_ORG_CONSENT,
+  EMPTY_ARTIFACT_HANDLERS_READ_CONSENT,
+  EMPTY_ARTIFACT_HANDLERS_READ_HUMAN_CONSENT,
+  EMPTY_ARTIFACT_HANDLERS_WRITE_CONSENT,
+  EMPTY_ARTIFACT_HANDLERS_WRITE_HUMAN_CONSENT,
+  EMPTY_ARTIFACT_ROOM_JOIN_CONSENT,
   FROZEN_EMPTY_OBJECTS,
 } from "./frozenSentinels.js";
 import { getDefaultWebBrowserState } from "./webBrowserSlice.js";
@@ -30,8 +30,8 @@ import { getDefaultWebBrowserState } from "./webBrowserSlice.js";
 /**
  * Artifact 读取状态的初始切片与构造器。
  */
-var r = Object.freeze({});
-var i = Object.freeze({});
+var EMPTY_ARTIFACT_READ_VERSIONS = Object.freeze({});
+var EMPTY_ARTIFACT_READ_OBSERVERS = Object.freeze({});
 var INITIAL_SLICE_STATE = {
   bagelActive: undefined,
   bagelUrl: undefined,
@@ -46,42 +46,42 @@ var INITIAL_SLICE_STATE = {
   artifactWatchApproved: false,
   artifactDbWriteApproved: false,
   artifactDbWriteHumanApproved: false,
-  artifactDbReadConsentSlugs: Tqn,
-  artifactDbReadHumanConsentSlugs: Aqn,
-  artifactReadConsentSlugs: Qln,
+  artifactDbReadConsentSlugs: EMPTY_ARTIFACT_DB_READ_CONSENT,
+  artifactDbReadHumanConsentSlugs: EMPTY_ARTIFACT_DB_READ_HUMAN_CONSENT,
+  artifactReadConsentSlugs: EMPTY_ARTIFACT_READ_CONSENT,
   artifactConsentEpoch: 0,
-  artifactAssetUploadConsentSlugs: Cqn,
-  artifactAssetUploadHumanConsentSlugs: Rqn,
-  artifactAssetReadConsentSlugs: Zln,
-  artifactAssetReadHumanConsentSlugs: edn,
-  artifactOutsideOrgConsentSlugs: tdn,
-  artifactHandlersReadConsentSlugs: xqn,
-  artifactHandlersReadHumanConsentSlugs: Pqn,
-  artifactHandlersWriteConsentSlugs: Iqn,
-  artifactHandlersWriteHumanConsentSlugs: Oqn,
-  artifactRoomJoinConsentSlugs: y_t,
+  artifactAssetUploadConsentSlugs: EMPTY_ARTIFACT_ASSET_UPLOAD_CONSENT,
+  artifactAssetUploadHumanConsentSlugs: EMPTY_ARTIFACT_ASSET_UPLOAD_HUMAN_CONSENT,
+  artifactAssetReadConsentSlugs: EMPTY_ARTIFACT_ASSET_READ_CONSENT,
+  artifactAssetReadHumanConsentSlugs: EMPTY_ARTIFACT_ASSET_READ_HUMAN_CONSENT,
+  artifactOutsideOrgConsentSlugs: EMPTY_ARTIFACT_OUTSIDE_ORG_CONSENT,
+  artifactHandlersReadConsentSlugs: EMPTY_ARTIFACT_HANDLERS_READ_CONSENT,
+  artifactHandlersReadHumanConsentSlugs: EMPTY_ARTIFACT_HANDLERS_READ_HUMAN_CONSENT,
+  artifactHandlersWriteConsentSlugs: EMPTY_ARTIFACT_HANDLERS_WRITE_CONSENT,
+  artifactHandlersWriteHumanConsentSlugs: EMPTY_ARTIFACT_HANDLERS_WRITE_HUMAN_CONSENT,
+  artifactRoomJoinConsentSlugs: EMPTY_ARTIFACT_ROOM_JOIN_CONSENT,
   artifactPlanPublishConsentPaths: FROZEN_EMPTY_OBJECTS,
   prResolvedThisSession: false,
   ultrareviewOverageConfirmed: false,
-  artifactReadVersions: r,
-  artifactReadObservers: i,
+  artifactReadVersions: EMPTY_ARTIFACT_READ_VERSIONS,
+  artifactReadObservers: EMPTY_ARTIFACT_READ_OBSERVERS,
 };
 var sliceInitialState = {
-  artifactReadConsentSlugs: Qln,
-  artifactAssetReadConsentSlugs: Zln,
-  artifactAssetReadHumanConsentSlugs: edn,
-  artifactOutsideOrgConsentSlugs: tdn,
+  artifactReadConsentSlugs: EMPTY_ARTIFACT_READ_CONSENT,
+  artifactAssetReadConsentSlugs: EMPTY_ARTIFACT_ASSET_READ_CONSENT,
+  artifactAssetReadHumanConsentSlugs: EMPTY_ARTIFACT_ASSET_READ_HUMAN_CONSENT,
+  artifactOutsideOrgConsentSlugs: EMPTY_ARTIFACT_OUTSIDE_ORG_CONSENT,
 };
 var keys = Object.keys(sliceInitialState);
 //@ chunk-b5yaajx0.js:1474-1537 placement
 /**
  * 已是初始状态则原样返回，否则合回初始值。
  */
-function resetSliceIfUnchanged(e) {
-  return keys.every((t) => e[t] === sliceInitialState[t])
-    ? e
+function resetSliceIfUnchanged(state) {
+  return keys.every((key) => state[key] === sliceInitialState[key])
+    ? state
     : {
-        ...e,
+        ...state,
         ...sliceInitialState,
       };
 }
@@ -93,27 +93,29 @@ var keys_2 = Object.keys(INITIAL_SLICE_STATE);
  */
 function resetArtifactReadState(prev) {
   let webBrowser = prev.webBrowser;
-  let s =
+  let isWebBrowserEmpty =
     webBrowser.view === undefined &&
     webBrowser.logs.length === 0 &&
     webBrowser.unreadErrors === 0 &&
     webBrowser.unreadWarnings === 0;
-  let S =
+  let isArtifactStateEmpty =
     Object.keys(prev.artifactReadVersions ?? {}).length === 0 &&
     Object.keys(prev.artifactReadObservers ?? {}).length === 0;
   if (
-    s &&
-    S &&
+    isWebBrowserEmpty &&
+    isArtifactStateEmpty &&
     keys_2.every(
-      (a) =>
-        a === "artifactReadVersions" || a === "artifactReadObservers" || prev[a] === INITIAL_SLICE_STATE[a],
+      (key) =>
+        key === "artifactReadVersions" ||
+        key === "artifactReadObservers" ||
+        prev[key] === INITIAL_SLICE_STATE[key],
     )
   )
     return prev;
   return {
     ...prev,
     ...INITIAL_SLICE_STATE,
-    webBrowser: s
+    webBrowser: isWebBrowserEmpty
       ? webBrowser
       : {
           ...getDefaultWebBrowserState(),
@@ -125,8 +127,8 @@ function resetArtifactReadState(prev) {
 /**
  * 若存在 WebView 视图，关闭 Bun 的全部 WebView，返回是否关闭。
  */
-function closeWebViews(e) {
-  if (e().webBrowser.view && typeof Bun !== "undefined" && "WebView" in Bun) {
+function closeWebViews(getState) {
+  if (getState().webBrowser.view && typeof Bun !== "undefined" && "WebView" in Bun) {
     Bun.WebView.closeAll();
     return true;
   }

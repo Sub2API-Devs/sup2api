@@ -8,9 +8,9 @@
  * pieces: chunk-18hwfzwa.js (1)
  * attribution: fingerprint 1
  */
-import { w } from "../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import { useSession } from "../context/session.js";
-import { yt, P } from "../../vendor/react/cjs/react.production.js";
+import { useSyncExternalStore, useEffect } from "../../vendor/react/cjs/react.production.js";
 import { useNotifications } from "../context/notifications.js";
 import { useTheme_2 } from "../components/design-system/ThemeProvider.js";
 import {
@@ -29,32 +29,32 @@ import { installPluginFromMarketplace } from "../utils/plugins/pluginInstallatio
 
 //@ chunk-18hwfzwa.js:1806264-1807723 fingerprint = useClaudeCodeHintRecommendation (0.695)
 function useClaudeCodeHintRecommendation(requestDialog, recommendationGate) {
-  let $ = w(11);
+  let $ = useMemoCache(11);
   let { pendingHint } = useSession();
-  let hint = yt(pendingHint.subscribe, pendingHint.getSnapshot);
+  let hint = useSyncExternalStore(pendingHint.subscribe, pendingHint.getSnapshot);
   let { addNotification } = useNotifications();
   let { storageV5 } = useTheme_2();
-  let Be;
-  let He;
+  let subscribeEffect;
+  let subscribeDeps;
   if ($[0] !== pendingHint) {
-    Be = () => {
-      let ze = () => {
-        for (const We of pendingHint.takeSubmitted()) maybeRecordPluginHint(We, pendingHint);
+    subscribeEffect = () => {
+      let onSubmitted = () => {
+        for (const text of pendingHint.takeSubmitted()) maybeRecordPluginHint(text, pendingHint);
       };
-      ze();
-      return pendingHint.subscribeSubmitted(ze);
+      onSubmitted();
+      return pendingHint.subscribeSubmitted(onSubmitted);
     };
-    He = [pendingHint];
+    subscribeDeps = [pendingHint];
     $[0] = pendingHint;
-    $[1] = Be;
-    $[2] = He;
+    $[1] = subscribeEffect;
+    $[2] = subscribeDeps;
   } else {
-    Be = $[1];
-    He = $[2];
+    subscribeEffect = $[1];
+    subscribeDeps = $[2];
   }
-  P(Be, He);
-  let Xe;
-  let rt;
+  useEffect(subscribeEffect, subscribeDeps);
+  let hintEffect;
+  let hintDeps;
   if (
     $[3] !== addNotification ||
     $[4] !== recommendationGate ||
@@ -63,7 +63,7 @@ function useClaudeCodeHintRecommendation(requestDialog, recommendationGate) {
     $[7] !== requestDialog ||
     $[8] !== storageV5
   ) {
-    Xe = () => {
+    hintEffect = () => {
       if (!hint) {
         return;
       }
@@ -81,7 +81,7 @@ function useClaudeCodeHintRecommendation(requestDialog, recommendationGate) {
         if (!pluginHint) {
           return;
         }
-        let At = await requestDialog(
+        let response = await requestDialog(
           PLUGIN_HINT_DIALOG,
           {
             pluginName: pluginHint.pluginName,
@@ -93,7 +93,7 @@ function useClaudeCodeHintRecommendation(requestDialog, recommendationGate) {
             place: "under",
           },
         );
-        if (At === "cancelled") {
+        if (response === "cancelled") {
           return;
         }
         oo: switch (
@@ -102,9 +102,9 @@ function useClaudeCodeHintRecommendation(requestDialog, recommendationGate) {
           logEvent("tengu_plugin_hint_response", {
             _PROTO_plugin_name: parsePluginIdentifier(pluginHint.pluginId).name,
             _PROTO_marketplace_name: pluginHint.marketplaceName,
-            response: fromEnum(At),
+            response: fromEnum(response),
           }),
-          At)
+          response)
         ) {
           case "yes": {
             let { pluginId, pluginName, marketplaceName } = pluginHint;
@@ -138,19 +138,19 @@ function useClaudeCodeHintRecommendation(requestDialog, recommendationGate) {
         }
       });
     };
-    rt = [hint, pendingHint, recommendationGate, requestDialog, addNotification, storageV5];
+    hintDeps = [hint, pendingHint, recommendationGate, requestDialog, addNotification, storageV5];
     $[3] = addNotification;
     $[4] = recommendationGate;
     $[5] = pendingHint;
     $[6] = hint;
     $[7] = requestDialog;
     $[8] = storageV5;
-    $[9] = Xe;
-    $[10] = rt;
+    $[9] = hintEffect;
+    $[10] = hintDeps;
   } else {
-    Xe = $[9];
-    rt = $[10];
+    hintEffect = $[9];
+    hintDeps = $[10];
   }
-  P(Xe, rt);
+  useEffect(hintEffect, hintDeps);
 }
 export { useClaudeCodeHintRecommendation };

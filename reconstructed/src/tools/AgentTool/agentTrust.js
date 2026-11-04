@@ -28,86 +28,95 @@ import { firstGatedTrustDiagnosticFor } from "../../utils/permissions/permission
 import { logForDebugging } from "../../utils/debug.js";
 import { logEvent } from "../../services/analytics/index.js";
 import { fromEnum } from "../../services/analytics/safeMetadata.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:2315215-2315374 placement
-function isAgentDefinitionTrusted(e) {
-  if (isSourceAdminTrusted(e.source)) return true;
-  if (e.source === "userSettings" || e.source === "flagSettings") return true;
-  if (!e.baseDir) return isWorkspacePersistedTrusted();
-  return isTrustKeyPersistedTrusted(getAgentFolderTrustKey(e.baseDir));
+function isAgentDefinitionTrusted(agentDefinition) {
+  if (isSourceAdminTrusted(agentDefinition.source)) return true;
+  if (agentDefinition.source === "userSettings" || agentDefinition.source === "flagSettings") return true;
+  if (!agentDefinition.baseDir) return isWorkspacePersistedTrusted();
+  return isTrustKeyPersistedTrusted(getAgentFolderTrustKey(agentDefinition.baseDir));
 }
 //@ chunk-e6aww6q8.js:2315374-2315433 placement
 /**
  * 取代理定义所在目录的信任键。
  */
-function agentBaseDirTrustKey(e) {
-  if (!e.baseDir) return;
-  return getAgentFolderTrustKey(e.baseDir);
+function agentBaseDirTrustKey(agentDefinition) {
+  if (!agentDefinition.baseDir) return;
+  return getAgentFolderTrustKey(agentDefinition.baseDir);
 }
 //@ chunk-e6aww6q8.js:2315433-2315460 placement
-var agentFolderTrustKeySlots = new HostScoped(() => new Map());
+var agentFolderTrustKeySlots; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:2315433", () => {
+  agentFolderTrustKeySlots = new HostScoped(() => new Map());
+});
 //@ chunk-e6aww6q8.js:2315460-2315571 placement
-function getAgentFolderTrustKey(baseDir) {
-  let n = agentFolderTrustKeySlots.of(getRootSession().host);
-  let r = n.get(baseDir);
-  if (r !== undefined) return r;
-  let persistedTrustKeyForPath = getPersistedTrustKeyForPath(AGENT_PATHS(baseDir));
-  n.set(baseDir, persistedTrustKeyForPath);
+function getAgentFolderTrustKey(absPath) {
+  let cache = agentFolderTrustKeySlots.of(getRootSession().host);
+  let cachedKey = cache.get(absPath);
+  if (cachedKey !== undefined) return cachedKey;
+  let persistedTrustKeyForPath = getPersistedTrustKeyForPath(AGENT_PATHS(absPath));
+  cache.set(absPath, persistedTrustKeyForPath);
   return persistedTrustKeyForPath;
 }
 //@ chunk-e6aww6q8.js:2315664-2315697 placement
 /**
  * JSON 字符串化并转义不可见字符。
  */
-function escapedJsonStringify(e) {
-  return escapeInvisibleChars(jsonStringify(e));
+function escapedJsonStringify(value) {
+  return escapeInvisibleChars(jsonStringify(value));
 }
 //@ chunk-e6aww6q8.js:2315697-2315778 placement
 /**
  * 判断代理定义是否含对象形式 mcpServers 且未被信任。
  */
-function hasUntrustedMcpServerEntries(e) {
-  return (e.mcpServers ?? []).some((n) => typeof n !== "string") && !isAgentDefinitionTrusted(e);
+function hasUntrustedMcpServerEntries(agentDefinition) {
+  return (
+    (agentDefinition.mcpServers ?? []).some((server) => typeof server !== "string") &&
+    !isAgentDefinitionTrusted(agentDefinition)
+  );
 }
 //@ chunk-e6aww6q8.js:2315778-2316209 placement
 /**
  * 生成项目代理定义所在文件夹未被信任时的提示文字。
  */
-function agentFolderTrustHint(e) {
+function agentFolderTrustHint(agentDefinition) {
   if (ignoresPersistedTrust())
     return `${capitalize(PERSISTED_TRUST_IGNORED)}. Move the definition to the user or managed agents folder instead.`;
   let originalCwdOrNull = getOriginalCwdOrNull();
-  let r =
-    agentBaseDirTrustKey(e) ??
+  let trustKey =
+    agentBaseDirTrustKey(agentDefinition) ??
     (originalCwdOrNull === null ? null : getWorkspacePersistedTrustKey(originalCwdOrNull));
-  if (r === null)
+  if (trustKey === null)
     return "This session has no working directory and the definition has no folder of its own, so there is no folder to trust.";
-  return `Run Claude Code in that folder once and accept the trust dialog, or set projects[${escapedJsonStringify(r)}].hasTrustDialogAccepted: true in ${describeGlobalConfigFile()}.`;
+  return `Run Claude Code in that folder once and accept the trust dialog, or set projects[${escapedJsonStringify(trustKey)}].hasTrustDialogAccepted: true in ${describeGlobalConfigFile()}.`;
 }
 //@ chunk-e6aww6q8.js:2316209-2316796 placement
-function checkAgentOriginTrust(e, n, r = "hooks") {
+function checkAgentOriginTrust(agentDefinition, surface, what = "hooks") {
   if (
-    r === "mcpServers" &&
-    !firstGatedTrustDiagnosticFor(`agent-origin-skip\x00${n}\x00${r}\x00${e.agentType}\x00${e.baseDir ?? ""}`)
+    what === "mcpServers" &&
+    !firstGatedTrustDiagnosticFor(
+      `agent-origin-skip\x00${surface}\x00${what}\x00${agentDefinition.agentType}\x00${agentDefinition.baseDir ?? ""}`,
+    )
   )
     return;
-  let s = n === "mainThread" ? "main-thread agent" : "agent";
-  let h = replaceControlChars(e.agentType);
-  let y =
-    r === "definition"
-      ? `${s} '${h}'`
-      : `frontmatter ${r === "hooks" ? "hooks" : "MCP servers"} for ${s} '${h}'`;
+  let agentLabel = surface === "mainThread" ? "main-thread agent" : "agent";
+  let agentTypeName = replaceControlChars(agentDefinition.agentType);
+  let subject =
+    what === "definition"
+      ? `${agentLabel} '${agentTypeName}'`
+      : `frontmatter ${what === "hooks" ? "hooks" : "MCP servers"} for ${agentLabel} '${agentTypeName}'`;
   logForDebugging(
-    `Skipping ${y}: the folder its definition file came from is not trusted (source: ${e.source}). ${agentFolderTrustHint(e)}`,
+    `Skipping ${subject}: the folder its definition file came from is not trusted (source: ${agentDefinition.source}). ${agentFolderTrustHint(agentDefinition)}`,
     {
       level: "error",
     },
   );
   logEvent("tengu_agent_hooks_origin_untrusted", {
-    what: fromEnum(r),
-    source: fromEnum(e.source),
-    surface: fromEnum(n),
-    fromAdditionalDirectory: fromEnum(e.fromAdditionalDirectory === true ? "true" : "false"),
+    what: fromEnum(what),
+    source: fromEnum(agentDefinition.source),
+    surface: fromEnum(surface),
+    fromAdditionalDirectory: fromEnum(agentDefinition.fromAdditionalDirectory === true ? "true" : "false"),
   });
 }
 export {

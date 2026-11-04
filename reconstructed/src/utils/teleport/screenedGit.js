@@ -45,92 +45,100 @@ import { replaceControlChars } from "../resultError.js";
 import { GIT_FAILURE_CLASSIFIERS, pickPreservedEnv } from "../git/builderGit/gitRun.js";
 import { DEV_NULL } from "../git/gitIndexReader.js";
 import { GIT_ALLOW_PROTOCOL_VALUE } from "../git/gitSafeEnv.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:1915792-1915836 placement
-function gitBinaryErrorForHostShape(e) {
+function gitBinaryErrorForHostShape(hostShape) {
   return new GitBinaryError("operation");
 }
 //@ chunk-e6aww6q8.js:1915836-1915966 placement
-function gitBinaryErrorForHost(e) {
-  let n = e[0] ?? "";
-  let r = gitVersionCacheByHost.of(getRootSession().host);
-  let s = r.get(n);
-  if (s !== undefined) return s;
-  let h = new GitBinaryError("checkout");
-  r.set(n, h);
-  return h;
+function gitBinaryErrorForHost(hostInfo) {
+  let host = hostInfo[0] ?? "";
+  let cache = gitVersionCacheByHost.of(getRootSession().host);
+  let cached = cache.get(host);
+  if (cached !== undefined) return cached;
+  let error = new GitBinaryError("checkout");
+  cache.set(host, error);
+  return error;
 }
 //@ chunk-e6aww6q8.js:1915966-1916059 placement
-function buildScreenedGitEnv(e, n = preservedGitEnv()) {
-  return e === undefined || e === IN_TREE_SETTINGS_UNREADABLE
-    ? buildGitEnv(e, undefined, n)
-    : buildGitEnvForReach(e, gitBinaryErrorForHost(e).screenMemo, n);
+function buildScreenedGitEnv(settings, preservedEnv = preservedGitEnv()) {
+  return settings === undefined || settings === IN_TREE_SETTINGS_UNREADABLE
+    ? buildGitEnv(settings, undefined, preservedEnv)
+    : buildGitEnvForReach(settings, gitBinaryErrorForHost(settings).screenMemo, preservedEnv);
 }
 //@ chunk-e6aww6q8.js:1916059-1916120 placement
-function describeGitBinaryFile(e) {
+function describeGitBinaryFile(settings) {
   return {
-    file: locateScreenedGitBinary(e),
-    startsOutside: e !== undefined,
+    file: locateScreenedGitBinary(settings),
+    startsOutside: settings !== undefined,
   };
 }
 //@ chunk-e6aww6q8.js:1916120-1916746 placement
 /**
  * 定位受审查的 git 可执行文件并上报其可写范围结论。
  */
-function locateScreenedGitBinary(e) {
-  let n =
-    e === undefined || e === IN_TREE_SETTINGS_UNREADABLE
-      ? gitExeOnPathInEnv(buildGitEnv(e))
-      : gitExeOnPathInEnv(buildScreenedGitEnv(e), gitBinaryErrorForHost(e));
-  if (n !== null) return n;
-  let r = e === IN_TREE_SETTINGS_UNREADABLE;
-  let s = typeof e === "object" ? e : [];
-  let h = typeof e === "object" ? gitExeOnPathInEnv(buildGitEnv(undefined)) : null;
-  let filtered = s.filter(isVolumeRoot);
-  let S = h !== null && filtered.some((G) => isPathInside(G, h));
-  let w = typeof e === "object" && !S && h !== null;
-  let L = r ? "settings_unreadable" : S ? "volume_in_reach" : w ? "only_inside_reach" : "not_on_path";
-  if (dirSyncSession().sayGitNotOnStartPath(L)) {
-    let G = s[0] ?? "";
-    let q = L === "only_inside_reach" ? nearestRepoAncestor(G) : null;
+function locateScreenedGitBinary(settings) {
+  let path =
+    settings === undefined || settings === IN_TREE_SETTINGS_UNREADABLE
+      ? gitExeOnPathInEnv(buildGitEnv(settings))
+      : gitExeOnPathInEnv(buildScreenedGitEnv(settings), gitBinaryErrorForHost(settings));
+  if (path !== null) return path;
+  let settingsUnreadable = settings === IN_TREE_SETTINGS_UNREADABLE;
+  let roots = typeof settings === "object" ? settings : [];
+  let gitOnPlainPath = typeof settings === "object" ? gitExeOnPathInEnv(buildGitEnv(undefined)) : null;
+  let filtered = roots.filter(isVolumeRoot);
+  let gitOnReachableVolume =
+    gitOnPlainPath !== null && filtered.some((volumeRoot) => isPathInside(volumeRoot, gitOnPlainPath));
+  let onlyInsideReach = typeof settings === "object" && !gitOnReachableVolume && gitOnPlainPath !== null;
+  let notOnPathCause = settingsUnreadable
+    ? "settings_unreadable"
+    : gitOnReachableVolume
+      ? "volume_in_reach"
+      : onlyInsideReach
+        ? "only_inside_reach"
+        : "not_on_path";
+  if (dirSyncSession().sayGitNotOnStartPath(notOnPathCause)) {
+    let firstRoot = roots[0] ?? "";
+    let homeCheckout = notOnPathCause === "only_inside_reach" ? nearestRepoAncestor(firstRoot) : null;
     logForDebugging(
       `[screenedGit] ${runScreenedGit({
-        cause: L,
-        tree: G,
-        found: h,
+        cause: notOnPathCause,
+        tree: firstRoot,
+        found: gitOnPlainPath,
         volumes: filtered,
-        homeCheckout: q,
+        homeCheckout,
       })}`,
       {
         level: "warn",
       },
     );
     logScreenedGitReach({
-      only_inside_reach: w,
-      settings_unreadable: r,
-      volume_in_reach: S,
-      home_checkout: q !== null,
+      only_inside_reach: onlyInsideReach,
+      settings_unreadable: settingsUnreadable,
+      volume_in_reach: gitOnReachableVolume,
+      home_checkout: homeCheckout !== null,
     });
   }
-  return unreachableGitPath(e);
+  return unreachableGitPath(settings);
 }
 //@ chunk-e6aww6q8.js:1916746-1917352 placement
-async function checkGitVersionForScreening(e, n) {
-  let { dir, env, signal, startsInProject = false } = n;
+async function checkGitVersionForScreening(opts, opts_2) {
+  let { dir, env, signal, startsInProject = false } = opts_2;
   let startsOutside = !startsInProject;
-  let w = {
-    ...describeGitBinaryFile(e),
+  let descriptor = {
+    ...describeGitBinaryFile(opts),
     startsOutside,
   };
-  let file = w.file;
-  let G = {
-    file: unreachableGitPath(e),
+  let file = descriptor.file;
+  let unreachable = {
+    file: unreachableGitPath(opts),
     startsOutside,
   };
-  if (file === G.file) return G;
-  let q = await cachedGitVersionProbe(
+  if (file === unreachable.file) return unreachable;
+  let versionText = await cachedGitVersionProbe(
     async () => {
-      let Z = await runGitWithEnv(w, ["version"], {
+      let versionResult = await runGitWithEnv(descriptor, ["version"], {
         dir,
         env: {
           ...env,
@@ -141,12 +149,12 @@ async function checkGitVersionForScreening(e, n) {
         stdin: "ignore",
         preserveOutputOnError: false,
       });
-      return Z.code === 0 ? Z.stdout : null;
+      return versionResult.code === 0 ? versionResult.stdout : null;
     },
-    gitProbeCacheKey(w, dir),
+    gitProbeCacheKey(descriptor, dir),
   );
-  if (isVersionAtLeast2_32(q === null ? null : parseGitVersion(q))) return w;
-  if (q === null && signal?.aborted) return G;
+  if (isVersionAtLeast2_32(versionText === null ? null : parseGitVersion(versionText))) return descriptor;
+  if (versionText === null && signal?.aborted) return unreachable;
   if (dirSyncSession().sayGitNotOnStartPath("old_git")) {
     logForDebugging(
       `[screenedGit] ${runScreenedGit({
@@ -164,7 +172,7 @@ async function checkGitVersionForScreening(e, n) {
       old_git: true,
     });
   }
-  return G;
+  return unreachable;
 }
 //@ chunk-e6aww6q8.js:1917352-1917499 placement
 var SCREENED_GIT_FLAGS = {
@@ -177,10 +185,10 @@ var SCREENED_GIT_FLAGS = {
   did_not_run_from_outside: false,
 };
 //@ chunk-e6aww6q8.js:1917499-1917571 placement
-function logScreenedGitReach(e) {
+function logScreenedGitReach(reach) {
   logEvent("tengu_dir_sync_git_not_on_start_path", {
     ...SCREENED_GIT_FLAGS,
-    ...e,
+    ...reach,
   });
 }
 //@ chunk-e6aww6q8.js:1917571-1920015 placement
@@ -188,39 +196,41 @@ function logScreenedGitReach(e) {
  * 运行受审查的 git：确认可写范围后才执行。
  */
 function runScreenedGit({ cause, tree, found, volumes, homeCheckout }) {
-  let y = tree === "" ? "" : ` (${tree})`;
-  let S = found ?? "git";
+  let treeText = tree === "" ? "" : ` (${tree})`;
+  let found_2 = found ?? "git";
   switch (cause) {
     case "settings_unreadable":
       return IN_TREE_SETTINGS_UNREADABLE_MESSAGE;
     case "volume_in_reach":
-      return `no screened git runs here${y} this time: a whole volume (${volumes.filter((volume) => isPathInside(volume, S)).join(", ")}) counts as writable by the bound cloud session for now, so ${S} is not vouched for. If it persists, either a grant names a whole volume, or a directory the session can write could not be examined (the \xABcannot be vouched for\xBB line above names that directory)`;
+      return `no screened git runs here${treeText} this time: a whole volume (${volumes.filter((volume) => isPathInside(volume, found_2)).join(", ")}) counts as writable by the bound cloud session for now, so ${found_2} is not vouched for. If it persists, either a grant names a whole volume, or a directory the session can write could not be examined (the \xABcannot be vouched for\xBB line above names that directory)`;
     case "only_inside_reach":
       return homeCheckout === null
-        ? `no screened git runs here${y}: ${S}, the git on the PATH this process was started with, stands where the bound cloud session can write (this checkout, one enclosing it, a directory granted to the session, a linked tree's main checkout), links into such a place, or is on another host \u2014 and nothing there is searched. Install or link git elsewhere on that PATH and restart Claude Code`
-        : `no screened git runs here${y}: your home directory is a git checkout, or lies in one (${homeCheckout}), so a cloud session bound there could write everything beneath it, and ${S} stands there or somewhere else a session can write; nothing there is searched. Install or link git outside your home (the system's or a package manager's directory) and restart Claude Code, or move the .git directory out of ${homeCheckout} (kept elsewhere, it keeps its history)`;
+        ? `no screened git runs here${treeText}: ${found_2}, the git on the PATH this process was started with, stands where the bound cloud session can write (this checkout, one enclosing it, a directory granted to the session, a linked tree's main checkout), links into such a place, or is on another host \u2014 and nothing there is searched. Install or link git elsewhere on that PATH and restart Claude Code`
+        : `no screened git runs here${treeText}: your home directory is a git checkout, or lies in one (${homeCheckout}), so a cloud session bound there could write everything beneath it, and ${found_2} stands there or somewhere else a session can write; nothing there is searched. Install or link git outside your home (the system's or a package manager's directory) and restart Claude Code, or move the .git directory out of ${homeCheckout} (kept elsewhere, it keeps its history)`;
     case "not_on_path":
       return "git is not on the absolute entries of the PATH this process was started with; no screened git runs";
     case "did_not_run_from_outside":
       return "";
     case "old_git":
-      return `git reads made before a cloud session starts (such as which remote this checkout uses, or which pushed commit to start from) were skipped here${y}: ${S} is older than 2.32, or its version could not be read, and only git 2.32 or newer can be told to ignore your personal git configuration file \u2014 a file a cloud session could change when your home directory is itself a git checkout. Update git to 2.32 or newer and restart Claude Code`;
+      return `git reads made before a cloud session starts (such as which remote this checkout uses, or which pushed commit to start from) were skipped here${treeText}: ${found_2} is older than 2.32, or its version could not be read, and only git 2.32 or newer can be told to ignore your personal git configuration file \u2014 a file a cloud session could change when your home directory is itself a git checkout. Update git to 2.32 or newer and restart Claude Code`;
     case "reach_unplaced":
-      return `git reads made before a cloud session starts (such as which remote this checkout uses, or which pushed commit to start from) were skipped here${y} this time: what a bound cloud session can write could not be worked out from this checkout\u2019s git layout, or there is no usable git on the PATH to read it with (the \xABcould not work out\xBB line above, at debug level, says which)`;
+      return `git reads made before a cloud session starts (such as which remote this checkout uses, or which pushed commit to start from) were skipped here${treeText} this time: what a bound cloud session can write could not be worked out from this checkout\u2019s git layout, or there is no usable git on the PATH to read it with (the \xABcould not work out\xBB line above, at debug level, says which)`;
   }
 }
 //@ chunk-e6aww6q8.js:1920015-1920335 placement
 /**
  * 返回一个不存在的 git 路径，用于在不能运行 git 时让调用失败。
  */
-function unreachableGitPath(e) {
+function unreachableGitPath(settings) {
   if (getPlatform() !== "windows") return "/nonexistent/git-not-on-the-PATH-this-process-was-started-with";
   let envCaseInsensitive = getEnvCaseInsensitive(buildGitEnv(undefined), "SystemRoot");
   return join(
     envCaseInsensitive !== undefined &&
       /^[A-Za-z]:[\\/]/.test(envCaseInsensitive) &&
-      e !== IN_TREE_SETTINGS_UNREADABLE &&
-      !(e ?? []).some((r) => isPathInside(r, envCaseInsensitive) || isPathInside(envCaseInsensitive, r))
+      settings !== IN_TREE_SETTINGS_UNREADABLE &&
+      !(settings ?? []).some(
+        (root) => isPathInside(root, envCaseInsensitive) || isPathInside(envCaseInsensitive, root),
+      )
       ? envCaseInsensitive
       : "C:\\Windows",
     "System32",
@@ -235,49 +245,49 @@ function gitProbeCacheKey({ file, startsOutside }, dir) {
 /**
  * 按宿主缓存一次性探测的 git 版本，失败时清缓存。
  */
-function cachedGitVersionProbe(e, n) {
-  let r = gitProbeCacheByHost.of(getRootSession().host);
-  let s = r.get(n);
-  if (s !== undefined) return s;
-  let h = () => {
-    r.delete(n);
+function cachedGitVersionProbe(hostInfo, host) {
+  let cache = gitProbeCacheByHost.of(getRootSession().host);
+  let cached = cache.get(host);
+  if (cached !== undefined) return cached;
+  let forget = () => {
+    cache.delete(host);
     return null;
   };
-  let y = e().then((S) => {
-    if (S === null) return h();
-    let gitVersion = parseGitVersion(S);
+  let probePromise = hostInfo().then((versionText) => {
+    if (versionText === null) return forget();
+    let gitVersion = parseGitVersion(versionText);
     try {
       logEvent("tengu_dir_sync_git_version", {
         release: gitVersion !== null,
         major: gitVersion?.major ?? 0,
         minor: gitVersion?.minor ?? 0,
-        in_shims_folder: basename(dirname(firstLineOf(n, "\x00"))) === "shims",
+        in_shims_folder: basename(dirname(firstLineOf(host, "\x00"))) === "shims",
       });
     } catch {}
-    return S;
-  }, h);
-  r.set(n, y);
-  return y;
+    return versionText;
+  }, forget);
+  cache.set(host, probePromise);
+  return probePromise;
 }
 //@ chunk-e6aww6q8.js:1920742-1920790 placement
-function screenedGitPreservedEnv(e = preservedGitEnv()) {
-  return gitConfigLocationEnv(buildScreenedGitEnv(undefined, e));
+function screenedGitPreservedEnv(preservedEnv = preservedGitEnv()) {
+  return gitConfigLocationEnv(buildScreenedGitEnv(undefined, preservedEnv));
 }
 //@ chunk-e6aww6q8.js:1920790-1920925 placement
-function screenedGitEnv(e, n, r) {
-  let s = r ?? preservedGitEnv();
-  let screenedGitEnv = buildScreenedGitEnv(n, s);
+function screenedGitEnv(settings, extra, baseEnv) {
+  let preservedEnv = baseEnv ?? preservedGitEnv();
+  let env = buildScreenedGitEnv(extra, preservedEnv);
   return {
     ...getRemoteHostSessionCount(
       {
-        ...screenedGitPreservedEnv(s),
+        ...screenedGitPreservedEnv(preservedEnv),
         ...SCREENED_GIT_SAFE_ENV,
         ...{},
-        ...scrubGitTrace2Env(screenedGitEnv),
-        ...e,
+        ...scrubGitTrace2Env(env),
+        ...settings,
       },
       {
-        base: screenedGitEnv,
+        base: env,
       },
     ),
     GIT_CONFIG: undefined,
@@ -285,34 +295,37 @@ function screenedGitEnv(e, n, r) {
   };
 }
 //@ chunk-e6aww6q8.js:1920925-1920957 placement
-var REACH_UNPLACED = Symbol("reach unplaced");
+var REACH_UNPLACED; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:1920925", () => {
+  REACH_UNPLACED = Symbol("reach unplaced");
+});
 //@ chunk-e6aww6q8.js:1920957-1921434 placement
 /**
  * 读取启动目录的 git 布局（含链接工作树），计算云会话可写范围并上报 tengu_cloud_launch_git_layout_read 事件。
  */
-async function readLaunchGitLayout(cwd, signal, startsInProject = false) {
+async function readLaunchGitLayout(startDir, signal, startsInProject = false) {
   let startTime = performance.now();
-  let layoutRead = await inspectGitLayout(cwd, signal, {
+  let layoutRead = await inspectGitLayout(startDir, signal, {
     linkedTrees: true,
     bound: true,
     startsInProject,
-    probes: gitBinaryErrorForHostShape(cwd),
+    probes: gitBinaryErrorForHostShape(startDir),
   });
-  let y = vouchedReachForLayout(cwd, layoutRead);
-  let S = signal?.aborted === true;
+  let reach = vouchedReachForLayout(startDir, layoutRead);
+  let wasAborted = signal?.aborted === true;
   try {
     logEvent("tengu_cloud_launch_git_layout_read", {
       outcome: fromEnum(
-        y === REACH_UNPLACED
+        reach === REACH_UNPLACED
           ? "unplaced"
-          : y === IN_TREE_SETTINGS_UNREADABLE
+          : reach === IN_TREE_SETTINGS_UNREADABLE
             ? "nothing_vouched"
             : layoutRead.kind === "read"
               ? "placed"
               : "widened",
       ),
-      reason: S ? undefined : fromEnumOpt(layoutReadReason(layoutRead)),
-      cut_short: S,
+      reason: wasAborted ? undefined : fromEnumOpt(layoutReadReason(layoutRead)),
+      cut_short: wasAborted,
       git_within_reach:
         layoutRead.kind === "failed" &&
         layoutRead.why !== "changed_under_hold" &&
@@ -320,13 +333,13 @@ async function readLaunchGitLayout(cwd, signal, startsInProject = false) {
       duration_ms: Math.round(performance.now() - startTime),
     });
   } catch {}
-  return y;
+  return reach;
 }
 //@ chunk-e6aww6q8.js:1921434-1921575 placement
-function layoutReadReason(e) {
-  if (e.kind === "read") return;
-  if (e.kind === "tampered") return e.misplaced;
-  return e.why === "changed_under_hold" ? e.why : (e.why ?? e.cause);
+function layoutReadReason(layoutRead) {
+  if (layoutRead.kind === "read") return;
+  if (layoutRead.kind === "tampered") return layoutRead.misplaced;
+  return layoutRead.why === "changed_under_hold" ? layoutRead.why : (layoutRead.why ?? layoutRead.cause);
 }
 //@ chunk-e6aww6q8.js:1921575-1922409 placement
 /**
@@ -334,11 +347,11 @@ function layoutReadReason(e) {
  */
 function vouchedReachForLayout(cwd, layoutRead) {
   if (layoutRead.kind === "read") return workTreeReachRoots(cwd, layoutRead.layout);
-  let r =
+  let unplacedDir =
     layoutRead.kind === "tampered" && layoutRead.misplaced !== "temp_root"
-      ? [layoutRead.commonDir, layoutRead.gitDir].find((h) => isAbsolute(h))
+      ? [layoutRead.commonDir, layoutRead.gitDir].find((dir) => isAbsolute(dir))
       : undefined;
-  if (r === undefined) {
+  if (unplacedDir === undefined) {
     if (layoutRead.kind === "failed" && layoutRead.why === "settings_unreadable")
       return IN_TREE_SETTINGS_UNREADABLE;
     if (
@@ -363,16 +376,19 @@ function vouchedReachForLayout(cwd, layoutRead) {
         did_not_run_from_outside: true,
       });
     }
-    let h =
+    let tamperDetail =
       layoutRead.kind === "tampered" ? layoutRead.misplaced : layoutRead.detail.slice(0, 200) || "no message";
     logForDebugging(
       replaceControlChars(
-        `[screenedGit] could not work out what a bound cloud session can write in ${cwd} (${layoutRead.kind}: ${h})`,
+        `[screenedGit] could not work out what a bound cloud session can write in ${cwd} (${layoutRead.kind}: ${tamperDetail})`,
       ),
     );
     return REACH_UNPLACED;
   }
-  let commonDir = basename(dirname(r)).toLowerCase() === "worktrees" ? dirname(dirname(r)) : r;
+  let commonDir =
+    basename(dirname(unplacedDir)).toLowerCase() === "worktrees"
+      ? dirname(dirname(unplacedDir))
+      : unplacedDir;
   return workTreeReachRoots(cwd, {
     workTree: cwd,
     commonDir,
@@ -382,13 +398,13 @@ function vouchedReachForLayout(cwd, layoutRead) {
 /**
  * 根据可达范围构造筛查后的 git 环境，范围无法确定时记录并降级。
  */
-async function screenedGitEnvForReach(e, n, signal, s = false) {
-  if (e === REACH_UNPLACED) {
+async function screenedGitEnvForReach(reach, extra, signal, startsInProject = false) {
+  if (reach === REACH_UNPLACED) {
     if (!signal?.aborted && dirSyncSession().sayGitNotOnStartPath("reach_unplaced")) {
       logForDebugging(
         `[screenedGit] ${runScreenedGit({
           cause: "reach_unplaced",
-          tree: n,
+          tree: extra,
           found: null,
           volumes: [],
           homeCheckout: null,
@@ -402,45 +418,45 @@ async function screenedGitEnvForReach(e, n, signal, s = false) {
       });
     }
     let env = buildScreenedGitEnv_2({}, IN_TREE_SETTINGS_UNREADABLE);
-    let w = {
+    let descriptor = {
       file: unreachableGitPath(IN_TREE_SETTINGS_UNREADABLE),
-      startsOutside: !s,
+      startsOutside: !startsInProject,
     };
-    return (L) =>
-      buildGitInvocation(w, L, {
-        dir: n,
+    return (args) =>
+      buildGitInvocation(descriptor, args, {
+        dir: extra,
         env,
       });
   }
-  let env = buildScreenedGitEnv_2({}, e);
-  let y = await checkGitVersionForScreening(e, {
-    dir: n,
+  let env = buildScreenedGitEnv_2({}, reach);
+  let checked = await checkGitVersionForScreening(reach, {
+    dir: extra,
     env,
     signal,
-    startsInProject: s,
+    startsInProject,
   });
-  return (S) =>
-    buildGitInvocation(y, S, {
-      dir: n,
+  return (args) =>
+    buildGitInvocation(checked, args, {
+      dir: extra,
       env,
     });
 }
 //@ chunk-e6aww6q8.js:1922843-1923045 placement
-function buildScreenedGitEnv_2(e, n) {
-  let r = GIT_FAILURE_CLASSIFIERS(getPreSettingsEnv());
-  if (n === undefined)
+function buildScreenedGitEnv_2(settings, extra) {
+  let baseEnv = GIT_FAILURE_CLASSIFIERS(getPreSettingsEnv());
+  if (extra === undefined)
     return {
-      ...screenedGitEnv(e, undefined, r),
-      GIT_REFERENCE_BACKEND: getEnvCaseInsensitive(r, "GIT_REFERENCE_BACKEND"),
+      ...screenedGitEnv(settings, undefined, baseEnv),
+      GIT_REFERENCE_BACKEND: getEnvCaseInsensitive(baseEnv, "GIT_REFERENCE_BACKEND"),
     };
   return {
     ...screenedGitEnv(
       {
-        ...e,
+        ...settings,
         GIT_CONFIG_GLOBAL: DEV_NULL,
       },
-      n,
-      r,
+      extra,
+      baseEnv,
     ),
     GIT_CONFIG_SYSTEM: undefined,
   };

@@ -51,7 +51,7 @@ class DirectConnectSessionManager {
           continue;
         }
         if (!hasStringType_3(raw)) continue;
-        safeEmit((Re) => this.routeInboundFrame(Re), raw, "DirectConnect");
+        safeEmit((frame) => this.routeInboundFrame(frame), raw, "DirectConnect");
       }
     });
     this.ws.addEventListener("close", () => {
@@ -113,14 +113,14 @@ class DirectConnectSessionManager {
       ok: true,
     };
   }
-  respondToPermissionRequest(requestId, x) {
+  respondToPermissionRequest(requestId, response) {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
       logForDebugging(`[DirectConnect] Dropping permission response for ${requestId}: socket not open`, {
         level: "error",
       });
       return;
     }
-    this.ws.send(jsonStringify(buildControlResponse(requestId, x)));
+    this.ws.send(jsonStringify(buildControlResponse(requestId, response)));
   }
   sendInterrupt() {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;

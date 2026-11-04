@@ -6,47 +6,47 @@
  * attribution: placement 11
  */
 import { isSymbol } from "../../src/utils/bash/shellQuote.js";
-import { dV } from "./_root.js";
+import { symbolExport } from "./_root.js";
 
 //@ chunk-byv2e1t5.js:231-280 placement
-function s(r) {
-  return r != null && typeof r == "object";
+function value(value) {
+  return value != null && typeof value == "object";
 }
 //@ chunk-byv2e1t5.js:280-289 placement
-var lV = s;
+var import_isObjectLike = value;
 //@ chunk-byv2e1t5.js:289-314 placement
 var isArray = Array.isArray;
-var ME = isArray;
+var isArrayAlias = isArray;
 //@ chunk-byv2e1t5.js:396-406 placement
 var isSymbolAlias = isSymbol;
 //@ chunk-byv2e1t5.js:406-501 placement
-function u(r, t) {
-  var o = -1;
-  var i = r == null ? 0 : r.length;
-  var n = Array(i);
-  while (++o < i) n[o] = t(r[o], o, r);
-  return n;
+function arrayMap(array, iteratee) {
+  var index = -1;
+  var length = array == null ? 0 : array.length;
+  var result = Array(length);
+  while (++index < length) result[index] = iteratee(array[index], index, array);
+  return result;
 }
 //@ chunk-byv2e1t5.js:501-511 placement
-var s9e = u;
+var import_arrayMap = arrayMap;
 //@ chunk-byv2e1t5.js:511-568 placement
-var a = 1 / 0;
-var e = dV ? dV.prototype : undefined;
-var toString = e ? e.toString : undefined;
+var INFINITY = 1 / 0;
+var symbolProto = symbolExport ? symbolExport.prototype : undefined;
+var toString = symbolProto ? symbolProto.toString : undefined;
 //@ chunk-byv2e1t5.js:568-714 placement
-function m(r) {
-  if (typeof r == "string") return r;
-  if (ME(r)) return s9e(r, m) + "";
-  if (isSymbolAlias(r)) return toString ? toString.call(r) : "";
-  var t = r + "";
-  return t == "0" && 1 / r == -a ? "-0" : t;
+function baseToString(value) {
+  if (typeof value == "string") return value;
+  if (isArrayAlias(value)) return import_arrayMap(value, baseToString) + "";
+  if (isSymbolAlias(value)) return toString ? toString.call(value) : "";
+  var result = value + "";
+  return result == "0" && 1 / value == -INFINITY ? "-0" : result;
 }
 //@ chunk-byv2e1t5.js:714-722 placement
-var p = m;
+var import_baseToString = baseToString;
 //@ chunk-byv2e1t5.js:722-759 placement
-function d(r) {
-  return r == null ? "" : p(r);
+function toStringInline(value) {
+  return value == null ? "" : import_baseToString(value);
 }
 //@ chunk-byv2e1t5.js:759-769 placement
-var vde = d;
-export { s9e, vde, ME, lV, isSymbolAlias };
+var toStringExport = toStringInline;
+export { import_arrayMap, toStringExport, isArrayAlias, import_isObjectLike, isSymbolAlias };

@@ -5,14 +5,14 @@
  * pieces: chunk-s82q9s4x.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../../runtime/bun-runtime.js";
 import { require_codegen_2 } from "../codegen/index.js";
 import { require_names } from "../names.js";
 import { require_code_2 } from "../../vocabularies/code.js";
 import { require_errors } from "../errors.js";
 
 //@ chunk-s82q9s4x.js:33752-36663 cjs-fingerprint
-var require_keyword = x(function (cjsExports) {
+var require_keyword = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
@@ -148,7 +148,7 @@ var require_keyword = x(function (cjsExports) {
     );
   }
   cjsExports.validSchemaType = validSchemaType;
-  function validateKeywordUsage({ schema, opts, self: r, errSchemaPath }, def, keyword) {
+  function validateKeywordUsage({ schema, opts, self: ajvInstance, errSchemaPath }, def, keyword) {
     if (Array.isArray(def.keyword) ? !def.keyword.includes(keyword) : def.keyword !== keyword)
       throw Error("ajv implementation error");
     let deps = def.dependencies;
@@ -162,8 +162,8 @@ var require_keyword = x(function (cjsExports) {
       if (!def.validateSchema(schema[keyword])) {
         let msg =
           `keyword "${keyword}" value is invalid at path "${errSchemaPath}": ` +
-          r.errorsText(def.validateSchema.errors);
-        if (opts.validateSchema === "log") r.logger.error(msg);
+          ajvInstance.errorsText(def.validateSchema.errors);
+        if (opts.validateSchema === "log") ajvInstance.logger.error(msg);
         else throw Error(msg);
       }
     }

@@ -126,8 +126,8 @@ class StreamableHTTPClientTransport {
     if (!stream) return;
     let { onresumptiontoken, replayMessageId } = options;
     let lastEventId;
-    let n = false;
-    let u = false;
+    let hasReceivedReplayEvent = false;
+    let hasReplayedMessage = false;
     (async () => {
       try {
         let reader = stream
@@ -145,7 +145,7 @@ class StreamableHTTPClientTransport {
           if (done) break;
           if (event.id) {
             lastEventId = event.id;
-            n = true;
+            hasReceivedReplayEvent = true;
             onresumptiontoken?.(event.id);
           }
           if (!event.data) continue;
@@ -153,7 +153,7 @@ class StreamableHTTPClientTransport {
             try {
               let message = JSONRPCMessageSchema.parse(JSON.parse(event.data));
               if (isJSONRPCResultResponse(message)) {
-                u = true;
+                hasReplayedMessage = true;
                 if (replayMessageId !== undefined) message.id = replayMessageId;
               }
               this.onmessage?.(message);
@@ -161,7 +161,12 @@ class StreamableHTTPClientTransport {
               this.onerror?.(error);
             }
         }
-        if ((isReconnectable || n) && !u && this._abortController && !this._abortController.signal.aborted)
+        if (
+          (isReconnectable || hasReceivedReplayEvent) &&
+          !hasReplayedMessage &&
+          this._abortController &&
+          !this._abortController.signal.aborted
+        )
           this._scheduleReconnection(
             {
               resumptionToken: lastEventId,
@@ -172,7 +177,12 @@ class StreamableHTTPClientTransport {
           );
       } catch (error) {
         this.onerror?.(Error(`SSE stream disconnected: ${error}`));
-        if ((isReconnectable || n) && !u && this._abortController && !this._abortController.signal.aborted)
+        if (
+          (isReconnectable || hasReceivedReplayEvent) &&
+          !hasReplayedMessage &&
+          this._abortController &&
+          !this._abortController.signal.aborted
+        )
           try {
             this._scheduleReconnection(
               {
@@ -294,12 +304,12 @@ class StreamableHTTPClientTransport {
           }).catch((err) => this.onerror?.(err));
         return;
       }
-      let l =
+      let hasRequestMessages =
         (Array.isArray(message) ? message : [message]).filter(
           (msg) => "method" in msg && "id" in msg && msg.id !== undefined,
         ).length > 0;
       let contentType = response.headers.get("content-type");
-      if (l) {
+      if (hasRequestMessages) {
         if (contentType?.includes("text/event-stream"))
           this._handleSseStream(
             response.body,

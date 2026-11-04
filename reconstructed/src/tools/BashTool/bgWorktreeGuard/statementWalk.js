@@ -74,6 +74,7 @@ import {
   isExecInfluencingVar,
   TEST_ARITH_CMP_OPS,
 } from "../../../utils/bash/ast.js";
+import { deferInit } from "../../../../runtime/deferred-init.js";
 
 //@ chunk-63f0f3kd.js:36615-36928 placement
 /**
@@ -90,65 +91,70 @@ var TENGU_FERROUS_ALMANAC = "tengu_ferrous_almanac";
 /**
  * 判断命令替换体是否只是产出无害值的简单命令（date +格式、wc -l、seq、nproc、id -u、echo 数字、stat -c %Y），用于放行赋值中的命令替换。
  */
-function isSafeValueCommand(children, e) {
-  let filtered = children.filter((u) => STATEMENT_NODE_TYPES.has(u.type));
-  let n = filtered.length === 1 && !e.pathAssigned ? filtered[0] : null;
-  if (n?.type === "list") {
-    let [u, l, d] = n.children;
-    return l?.type === "||" && !!u && /^echo -?\d+$/.test(d?.text ?? "") && isSafeValueCommand([u], e);
+function isSafeValueCommand(children, state) {
+  let filtered = children.filter((child) => STATEMENT_NODE_TYPES.has(child.type));
+  let statement = filtered.length === 1 && !state.pathAssigned ? filtered[0] : null;
+  if (statement?.type === "list") {
+    let [left, operator, right] = statement.children;
+    return (
+      operator?.type === "||" &&
+      !!left &&
+      /^echo -?\d+$/.test(right?.text ?? "") &&
+      isSafeValueCommand([left], state)
+    );
   }
-  if (n?.type === "pipeline")
-    n = n.children.findLast((child) => STATEMENT_NODE_TYPES.has(child.type)) ?? null;
+  if (statement?.type === "pipeline")
+    statement = statement.children.findLast((child) => STATEMENT_NODE_TYPES.has(child.type)) ?? null;
   let flagWithOverride = readFlagWithOverride(BOT_PROTECTED_TENGU_HUSHED_HYPHEN, {
     safe: true,
   });
-  let s = n?.type === "redirected_statement" ? n : null;
+  let redirectedStatement = statement?.type === "redirected_statement" ? statement : null;
   if (
-    n?.type === "redirected_statement" &&
-    n.children.every(
+    statement?.type === "redirected_statement" &&
+    statement.children.every(
       (child) =>
         child.type !== "heredoc_redirect" &&
         child.type !== "herestring_redirect" &&
         !(flagWithOverride && child.type === "file_redirect" && !SAFE_REDIRECT_RE.test(child.text)),
     )
   )
-    n = n.children.find((child) => STATEMENT_NODE_TYPES.has(child.type)) ?? null;
-  if (n?.type !== "command" || n.children[0]?.type !== "command_name") return false;
-  let filtered_2 = n.children.slice(1).filter((child) => WORD_NODE_TYPES.has(child.type));
-  let mapped = filtered_2.map((u) => {
-    let l = evaluateWord(u, e, true);
-    return l.kind === "literal" ? l.text : l.kind === "dynamic" ? null : "";
+    statement = statement.children.find((child) => STATEMENT_NODE_TYPES.has(child.type)) ?? null;
+  if (statement?.type !== "command" || statement.children[0]?.type !== "command_name") return false;
+  let filtered_2 = statement.children.slice(1).filter((child) => WORD_NODE_TYPES.has(child.type));
+  let mapped = filtered_2.map((word) => {
+    let evaluated = evaluateWord(word, state, true);
+    return evaluated.kind === "literal" ? evaluated.text : evaluated.kind === "dynamic" ? null : "";
   });
-  switch (n.children[0].text) {
+  switch (statement.children[0].text) {
     case "date": {
       if (
         readFlagWithOverride(TENGU_GILDED_SUNDIAL, {
           safe: true,
         })
       ) {
-        if (n.children.length !== filtered_2.length + 1) return false;
-        if (mapped.some((u) => /^\+.*%[-_0-9^#EO]*[Nq]/s.test(u ?? ""))) {
-          e.dateDirectiveDenied = true;
+        if (statement.children.length !== filtered_2.length + 1) return false;
+        if (mapped.some((text) => /^\+.*%[-_0-9^#EO]*[Nq]/s.test(text ?? ""))) {
+          state.dateDirectiveDenied = true;
           return false;
         }
       }
       return (
-        count(mapped, (u) => !!u && u.startsWith("+")) === 1 &&
+        count(mapped, (text) => !!text && text.startsWith("+")) === 1 &&
         !(
           flagWithOverride &&
           mapped.some(
-            (u, l) =>
-              LEADING_PLUS_FLAG_RE.test(u ?? "") ||
-              (u === null && !isQuotedLiteral(filtered_2[l])) ||
-              (DATE_REFERENCE_FLAGS.test(mapped[l - 1] ?? "") &&
-                (u?.startsWith("+") || DATE_REFERENCE_FLAGS.test(u ?? ""))),
+            (text, idx) =>
+              LEADING_PLUS_FLAG_RE.test(text ?? "") ||
+              (text === null && !isQuotedLiteral(filtered_2[idx])) ||
+              (DATE_REFERENCE_FLAGS.test(mapped[idx - 1] ?? "") &&
+                (text?.startsWith("+") || DATE_REFERENCE_FLAGS.test(text ?? ""))),
           )
         ) &&
         mapped.every(
-          (u, l) =>
-            DATE_REFERENCE_FLAGS.test(mapped[l - 1] ?? "") ||
-            (u !== null &&
-              /^(?:-u|--utc|-d|--date|-r|--reference|\+(?:%[sYmdHMSjuUwWVCgGeNq]|[-:/. 0-9])*)$/.test(u)),
+          (text, idx) =>
+            DATE_REFERENCE_FLAGS.test(mapped[idx - 1] ?? "") ||
+            (text !== null &&
+              /^(?:-u|--utc|-d|--date|-r|--reference|\+(?:%[sYmdHMSjuUwWVCgGeNq]|[-:/. 0-9])*)$/.test(text)),
         )
       );
     }
@@ -169,28 +175,28 @@ function isSafeValueCommand(children, e) {
         /^%[YXZWsbB]$/.test(mapped[1] ?? "") &&
         mapped[2] === "--" &&
         filtered_2[3].type === "string" &&
-        (s?.children ?? [])
-          .filter((d) => REDIRECT_NODE_TYPES.has(d.type))
-          .every((d) => /^2>\s*\/dev\/null$/.test(d.text))
+        (redirectedStatement?.children ?? [])
+          .filter((child) => REDIRECT_NODE_TYPES.has(child.type))
+          .every((redirect) => /^2>\s*\/dev\/null$/.test(redirect.text))
       )
         return true;
       if (
-        mapped.some((d) => d === null || /^~(?!\/)/.test(d)) &&
+        mapped.some((text) => text === null || /^~(?!\/)/.test(text)) &&
         readFlagWithOverride(TENGU_FERROUS_ALMANAC, {
           safe: true,
         })
       ) {
-        e.statPathDenied ||= mapped.some((d) => /^(?:-c|--format)/.test(d ?? ""));
+        state.statPathDenied ||= mapped.some((text) => /^(?:-c|--format)/.test(text ?? ""));
         return false;
       }
-      let u = (d) => d === null || !/^(?:-c|--format|%[YXZWsbB])$/.test(d);
-      let index = mapped.findIndex(u);
+      let isNonFormat = (text) => text === null || !/^(?:-c|--format|%[YXZWsbB])$/.test(text);
+      let index = mapped.findIndex(isNonFormat);
       return (
         mapped.length === 3 &&
-        count(mapped, u) === 1 &&
+        count(mapped, isNonFormat) === 1 &&
         (mapped[index] === null ? filtered_2[index].type === "string" : /^[^-%]/.test(mapped[index])) &&
-        mapped.some((d) => /^%[YXZWsbB]$/.test(d ?? "")) &&
-        mapped.some((d) => /^(?:-c|--format)$/.test(d ?? ""))
+        mapped.some((text) => /^%[YXZWsbB]$/.test(text ?? "")) &&
+        mapped.some((text) => /^(?:-c|--format)$/.test(text ?? ""))
       );
     }
     default:
@@ -198,52 +204,55 @@ function isSafeValueCommand(children, e) {
   }
 }
 //@ chunk-63f0f3kd.js:39012-39070 placement
-function allMatch(t, e) {
-  return t.every((i) => i !== null && e.test(i));
+function allMatch(values, pattern) {
+  return values.every((value) => value !== null && pattern.test(value));
 }
 //@ chunk-63f0f3kd.js:39070-39193 placement
-var CONTAINER_NODE_TYPES = wordSet(`program compound_statement subshell do_group
+var CONTAINER_NODE_TYPES; // deferred: uses wordSet (./shellState.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-63f0f3kd.js:39070", () => {
+  CONTAINER_NODE_TYPES = wordSet(`program compound_statement subshell do_group
   command_substitution process_substitution else_clause case_item`);
+});
 //@ chunk-63f0f3kd.js:39193-39450 placement
-function withStdinState(t, e, stdinFed, pipedFrom) {
-  let r = {
-    stdinFed: e.stdinFed,
-    pipedFrom: e.pipedFrom,
+function withStdinState(node, state, stdinFed, pipedFrom) {
+  let saved = {
+    stdinFed: state.stdinFed,
+    pipedFrom: state.pipedFrom,
   };
-  e.stdinFed = stdinFed;
-  e.pipedFrom = pipedFrom;
-  let s = t.type !== "program" && t.type !== "list";
-  if (s) e.scopes.push(new Map());
-  let a = analyzeStatement(t, e);
-  if (s) e.scopes.pop();
-  e.stdinFed = r.stdinFed;
-  e.pipedFrom = r.pipedFrom;
-  return a;
+  state.stdinFed = stdinFed;
+  state.pipedFrom = pipedFrom;
+  let opensScope = node.type !== "program" && node.type !== "list";
+  if (opensScope) state.scopes.push(new Map());
+  let reason = analyzeStatement(node, state);
+  if (opensScope) state.scopes.pop();
+  state.stdinFed = saved.stdinFed;
+  state.pipedFrom = saved.pipedFrom;
+  return reason;
 }
 //@ chunk-63f0f3kd.js:39450-42752 placement
 /**
  * 按语法节点类型分派分析：注释、赋值、声明、命令、管道、列表、重定向、子 shell、函数定义等。
  */
-function analyzeStatement(t, e) {
-  let { stdinFed } = e;
-  switch (t.type) {
+function analyzeStatement(node, state) {
+  let { stdinFed } = state;
+  switch (node.type) {
     case "comment":
       return null;
     case "variable_assignment":
-      return analyzeVariableAssignment(t, e, undefined);
+      return analyzeVariableAssignment(node, state, undefined);
     case "declaration_command":
-      return analyzeDeclarationCommand(t, e);
+      return analyzeDeclarationCommand(node, state);
     case "command": {
-      let inputAssembled = e.inputAssembled;
-      e.inputAssembled ||= t.children.some(
-        (child) => REDIRECT_NODE_TYPES.has(child.type) && analyzeFileRedirect(child, e),
+      let inputAssembled = state.inputAssembled;
+      state.inputAssembled ||= node.children.some(
+        (child) => REDIRECT_NODE_TYPES.has(child.type) && analyzeFileRedirect(child, state),
       );
-      let r = analyzeCommand(t, e, []);
-      e.inputAssembled = inputAssembled;
-      return r;
+      let reason = analyzeCommand(node, state, []);
+      state.inputAssembled = inputAssembled;
+      return reason;
     }
     case "unset_command":
-      return t.children
+      return node.children
         .slice(1)
         .every(
           (child) =>
@@ -253,74 +262,76 @@ function analyzeStatement(t, e) {
         ? null
         : unverifiableRunReason("unset", "with an operand that is not a plain name");
     case "test_command":
-      return analyzeTestExpression(t, e, t.children[0]?.type === "[[");
+      return analyzeTestExpression(node, state, node.children[0]?.type === "[[");
     case "compound_statement":
-      if (t.children[0]?.type === "((") return checkArithmeticNode(t, e);
+      if (node.children[0]?.type === "((") return checkArithmeticNode(node, state);
       break;
     case "c_style_for_statement":
-      for (let child of t.children) {
-        let r =
+      for (let child of node.children) {
+        let reason =
           child.type === "do_group"
-            ? withStdinState(child, e, stdinFed)
+            ? withStdinState(child, state, stdinFed)
             : child.children.length > 0 || /^(?:word|number|variable_name)$/.test(child.type)
-              ? checkArithmeticNode(child, e)
+              ? checkArithmeticNode(child, state)
               : null;
-        if (r !== null)
+        if (reason !== null)
           return child.type === "compound_statement" && isShellSpecialVariableTypingEnabled()
             ? tooComplexReason("a { \u2026 } body after for ((\u2026)) (write it as do \u2026; done)")
-            : r;
+            : reason;
       }
       return null;
     case "pipeline": {
-      let n;
-      let inputAssembled = e.inputAssembled;
-      for (let child of t.children) {
-        e.inputAssembled ||= !!n;
-        let a = STATEMENT_NODE_TYPES.has(child.type)
-          ? withStdinState(child, e, stdinFed || !!n, n)
+      let previousStatement;
+      let inputAssembled = state.inputAssembled;
+      for (let child of node.children) {
+        state.inputAssembled ||= !!previousStatement;
+        let reason = STATEMENT_NODE_TYPES.has(child.type)
+          ? withStdinState(child, state, stdinFed || !!previousStatement, previousStatement)
           : /^\|&?$/.test(child.type)
             ? null
             : tooComplexReason(`a ${child.type} in a pipeline`);
-        if (a !== null) return a;
-        n = STATEMENT_NODE_TYPES.has(child.type) ? child : n;
+        if (reason !== null) return reason;
+        previousStatement = STATEMENT_NODE_TYPES.has(child.type) ? child : previousStatement;
       }
-      e.inputAssembled = inputAssembled;
+      state.inputAssembled = inputAssembled;
       return null;
     }
     case "redirected_statement": {
-      let filtered = t.children.filter((child) => REDIRECT_NODE_TYPES.has(child.type));
-      let found = t.children.find((child) => STATEMENT_NODE_TYPES.has(child.type));
-      let s = [];
-      for (let child of t.children) {
-        let c = REDIRECT_NODE_TYPES.has(child.type)
-          ? analyzeHeredocRedirect(child, e, s)
-          : child !== found && child.children.length > 0
+      let redirects = node.children.filter((child) => REDIRECT_NODE_TYPES.has(child.type));
+      let commandNode = node.children.find((child) => STATEMENT_NODE_TYPES.has(child.type));
+      let heredocBodies = [];
+      for (let child of node.children) {
+        let reason = REDIRECT_NODE_TYPES.has(child.type)
+          ? analyzeHeredocRedirect(child, state, heredocBodies)
+          : child !== commandNode && child.children.length > 0
             ? tooComplexReason(`a ${child.type} after a redirect`)
             : null;
-        if (c !== null) return c;
+        if (reason !== null) return reason;
       }
-      let a = stdinFed || filtered.some(isStdinRedirect);
-      let inputAssembled = e.inputAssembled;
-      e.inputAssembled ||= [
-        ...filtered,
-        ...(found?.type === "command"
-          ? found.children.filter((child) => REDIRECT_NODE_TYPES.has(child.type))
+      let feedsStdin = stdinFed || redirects.some(isStdinRedirect);
+      let inputAssembled = state.inputAssembled;
+      state.inputAssembled ||= [
+        ...redirects,
+        ...(commandNode?.type === "command"
+          ? commandNode.children.filter((child) => REDIRECT_NODE_TYPES.has(child.type))
           : []),
-      ].some((d) => analyzeFileRedirect(d, e));
-      let u = !found
-        ? filtered.some((d) => analyzeRedirect(d, e))
+      ].some((redirect) => analyzeFileRedirect(redirect, state));
+      let reason = !commandNode
+        ? redirects.some((redirect) => analyzeRedirect(redirect, state))
           ? tooComplexReason("a here-string after a compound command")
           : null
-        : found.type === "command"
-          ? analyzeCommand(found, e, filtered)
-          : withStdinState(found, e, a);
-      e.inputAssembled ||= s.length > 0;
-      let l = u ?? s.map((d) => withStdinState(d, e, true)).find((d) => d !== null);
-      e.inputAssembled = inputAssembled;
-      return l ?? null;
+        : commandNode.type === "command"
+          ? analyzeCommand(commandNode, state, redirects)
+          : withStdinState(commandNode, state, feedsStdin);
+      state.inputAssembled ||= heredocBodies.length > 0;
+      let result =
+        reason ??
+        heredocBodies.map((body) => withStdinState(body, state, true)).find((reason) => reason !== null);
+      state.inputAssembled = inputAssembled;
+      return result ?? null;
     }
     case "function_definition": {
-      let found = t.children.find((child) => child.type === "word");
+      let found = node.children.find((child) => child.type === "word");
       if (
         !found ||
         !SAFE_PATH_TOKEN_RE.test(found.text) ||
@@ -332,80 +343,88 @@ function analyzeStatement(t, e) {
         /^(?:nproc|command_name)$/.test(found.text)
       )
         return tooComplexReason("a function named like a program this guard knows");
-      let found_2 = t.children.find((child) => child !== found && STATEMENT_NODE_TYPES.has(child.type));
-      return found_2 ? withStdinState(found_2, e, false) : null;
+      let found_2 = node.children.find((child) => child !== found && STATEMENT_NODE_TYPES.has(child.type));
+      return found_2 ? withStdinState(found_2, state, false) : null;
     }
     default:
-      if (!STATEMENT_NODE_TYPES.has(t.type) && !/^(?:command|process)_substitution$/.test(t.type))
-        return tooComplexReason(`a ${t.type} statement`);
+      if (!STATEMENT_NODE_TYPES.has(node.type) && !/^(?:command|process)_substitution$/.test(node.type))
+        return tooComplexReason(`a ${node.type} statement`);
   }
-  for (let [n, r] of t.children.entries()) {
-    let s = null;
-    if (STATEMENT_NODE_TYPES.has(r.type)) {
-      s = withStdinState(r, e, stdinFed);
-      let a = r.type === "declaration_command" && r.children.length === 2 ? r.children[1] : r;
-      let [o, u, l] = a.children;
-      let d =
-        a.type === "variable_assignment" &&
-        o?.type === "variable_name" &&
-        u?.type === "=" &&
-        l &&
-        isStaticNode(l) &&
-        (CONTAINER_NODE_TYPES.has(t.type) || (t.type === "list" && n === 0)) &&
-        t.children[n + 1]?.type !== "&" &&
-        e.bindingSites.get(o.text) === 1 &&
-        !e.integerNames.has(o.text) &&
-        !e.arrayNames.has(o.text) &&
-        !INTEGER_ATTR_DEFAULT_VARS.has(o.text) &&
-        !SHELL_SPECIAL_VARIABLES.test(o.text) &&
-        !BASH_IMPLICITLY_REBOUND_VARS.has(o.text) &&
-        !PATH_LIKE_VARIABLES_RE.test(o.text)
-          ? evaluateWord(l, e, false)
+  for (let [idx, child] of node.children.entries()) {
+    let reason = null;
+    if (STATEMENT_NODE_TYPES.has(child.type)) {
+      reason = withStdinState(child, state, stdinFed);
+      let innerNode =
+        child.type === "declaration_command" && child.children.length === 2 ? child.children[1] : child;
+      let [nameNode, equalsNode, valueNode] = innerNode.children;
+      let value =
+        innerNode.type === "variable_assignment" &&
+        nameNode?.type === "variable_name" &&
+        equalsNode?.type === "=" &&
+        valueNode &&
+        isStaticNode(valueNode) &&
+        (CONTAINER_NODE_TYPES.has(node.type) || (node.type === "list" && idx === 0)) &&
+        node.children[idx + 1]?.type !== "&" &&
+        state.bindingSites.get(nameNode.text) === 1 &&
+        !state.integerNames.has(nameNode.text) &&
+        !state.arrayNames.has(nameNode.text) &&
+        !INTEGER_ATTR_DEFAULT_VARS.has(nameNode.text) &&
+        !SHELL_SPECIAL_VARIABLES.test(nameNode.text) &&
+        !BASH_IMPLICITLY_REBOUND_VARS.has(nameNode.text) &&
+        !PATH_LIKE_VARIABLES_RE.test(nameNode.text)
+          ? evaluateWord(valueNode, state, false)
           : null;
-      if (d?.kind === "literal") e.scopes.at(-1).set(o.text, d.text);
-    } else if (WORD_NODE_TYPES.has(r.type)) {
-      let a = t.children[n + 1];
-      let o = evaluateWord(r, e, t.type === "for_statement");
-      s =
-        a?.startIndex === r.endIndex && isDollarQuoteEdge(r, a)
-          ? tooComplexReason(`the pattern ${shortenForReason(r.text + a.text)}`)
-          : o.kind === "refuse"
-            ? o.detail
+      if (value?.kind === "literal") state.scopes.at(-1).set(nameNode.text, value.text);
+    } else if (WORD_NODE_TYPES.has(child.type)) {
+      let nextNode = node.children[idx + 1];
+      let evaluated = evaluateWord(child, state, node.type === "for_statement");
+      reason =
+        nextNode?.startIndex === child.endIndex && isDollarQuoteEdge(child, nextNode)
+          ? tooComplexReason(`the pattern ${shortenForReason(child.text + nextNode.text)}`)
+          : evaluated.kind === "refuse"
+            ? evaluated.detail
             : null;
-    } else if (r.type === "variable_name") s = describeUnsafeBinding(r.text, e);
-    else if (r.children.length > 0 || r.type === "ERROR")
-      s = tooComplexReason(r.type === "ERROR" ? "syntax the parser could not recover" : `a ${r.type} here`);
-    if (s !== null) return s;
+    } else if (child.type === "variable_name") reason = describeUnsafeBinding(child.text, state);
+    else if (child.children.length > 0 || child.type === "ERROR")
+      reason = tooComplexReason(
+        child.type === "ERROR" ? "syntax the parser could not recover" : `a ${child.type} here`,
+      );
+    if (reason !== null) return reason;
   }
   return null;
 }
 //@ chunk-63f0f3kd.js:42752-43358 placement
-function analyzeFileRedirect(t, e) {
-  if (t.type === "file_redirect") {
-    let found = t.children.find((child) => WORD_NODE_TYPES.has(child.type));
-    let text = /^\d*<(?!>)/.test(t.text) ? found?.text : undefined;
-    let [, , s, a] = SINGLE_VAR_REF_RE.exec(found?.text ?? "") ?? [];
-    let o = s ?? a ?? "";
-    let u = found && !isStaticNode(found) ? evaluateWord(found, e, true) : null;
-    let l = !!u && (u.kind !== "dynamic" || !u.inert) && !(e.pathNames.has(o) && e.bindingSites.get(o) === 1);
+function analyzeFileRedirect(node, state) {
+  if (node.type === "file_redirect") {
+    let found = node.children.find((child) => WORD_NODE_TYPES.has(child.type));
+    let text = /^\d*<(?!>)/.test(node.text) ? found?.text : undefined;
+    let [, , bracedVarName, plainVarName] = SINGLE_VAR_REF_RE.exec(found?.text ?? "") ?? [];
+    let varName = bracedVarName ?? plainVarName ?? "";
+    let targetValue = found && !isStaticNode(found) ? evaluateWord(found, state, true) : null;
+    let isUnsafeTarget =
+      !!targetValue &&
+      (targetValue.kind !== "dynamic" || !targetValue.inert) &&
+      !(state.pathNames.has(varName) && state.bindingSites.get(varName) === 1);
     return (
-      /[<>]\(|<&|&</.test(t.text) || (text !== undefined && (l || isDevicePath(text.replace(/["'\\]/g, ""))))
+      /[<>]\(|<&|&</.test(node.text) ||
+      (text !== undefined && (isUnsafeTarget || isDevicePath(text.replace(/["'\\]/g, ""))))
     );
   }
-  let i = t.type === "heredoc_redirect" ? t.children.find((child) => child.type === "heredoc_body") : t;
+  let wordParent =
+    node.type === "heredoc_redirect" ? node.children.find((child) => child.type === "heredoc_body") : node;
   return (
-    (!isStdinRedirect(t) && analyzeRedirect(t, e)) ||
-    (i?.children ?? [])
-      .filter((n) => WORD_NODE_TYPES.has(n.type))
-      .some((n) => {
-        let r = evaluateWord(n, e, false);
-        return r.kind !== "literal" && (r.kind !== "dynamic" || !r.inert);
+    (!isStdinRedirect(node) && analyzeRedirect(node, state)) ||
+    (wordParent?.children ?? [])
+      .filter((wordNode) => WORD_NODE_TYPES.has(wordNode.type))
+      .some((wordNode) => {
+        let wordValue = evaluateWord(wordNode, state, false);
+        return wordValue.kind !== "literal" && (wordValue.kind !== "dynamic" || !wordValue.inert);
       })
   );
 }
 //@ chunk-63f0f3kd.js:43358-43590 placement
-function isStdinRedirect(t) {
-  let found = t.children.find((child) => child.type === "file_descriptor");
+function isStdinRedirect(redirect) {
+  let found = redirect.children.find((child) => child.type === "file_descriptor");
   return (
     (!found ||
       found.text === "0" ||
@@ -413,18 +432,18 @@ function isStdinRedirect(t) {
         readFlagWithOverride(BOT_PROTECTED_TENGU_HUSHED_HYPHEN, {
           safe: true,
         }))) &&
-    (t.type !== "file_redirect" ||
-      t.children.some((child) => child.children.length === 0 && /^<(?!\()/.test(child.type)))
+    (redirect.type !== "file_redirect" ||
+      redirect.children.some((child) => child.children.length === 0 && /^<(?!\()/.test(child.type)))
   );
 }
 //@ chunk-63f0f3kd.js:43590-44867 placement
-function analyzeHeredocRedirect(child, e, i) {
+function analyzeHeredocRedirect(child, state, pendingStatements) {
   if (child.type !== "heredoc_redirect") {
     for (let child_2 of child.children) {
-      let o = WORD_NODE_TYPES.has(child_2.type)
-        ? evaluateWord(child_2, e, child.type === "file_redirect")
+      let wordValue = WORD_NODE_TYPES.has(child_2.type)
+        ? evaluateWord(child_2, state, child.type === "file_redirect")
         : null;
-      if (o?.kind === "refuse") return o.detail;
+      if (wordValue?.kind === "refuse") return wordValue.detail;
     }
     return null;
   }
@@ -434,18 +453,18 @@ function analyzeHeredocRedirect(child, e, i) {
   if (!match || found_2?.text.trim() !== match[2])
     return tooComplexReason("a here-document whose delimiter it cannot match the way bash does");
   for (let child_2 of child.children) {
-    let o = null;
+    let refusalReason = null;
     if (child_2.type === "heredoc_body") {
-      let u = child_2.children[0];
+      let firstBodyChild = child_2.children[0];
       let joined = [
-        u
+        firstBodyChild
           ? Buffer.from(child_2.text, "utf8")
-              .subarray(0, u.startIndex - child_2.startIndex)
+              .subarray(0, firstBodyChild.startIndex - child_2.startIndex)
               .toString("utf8")
           : child_2.text,
         ...child_2.children.filter((child) => child.type === "heredoc_content").map((child) => child.text),
       ].join("\x00");
-      o =
+      refusalReason =
         match[1] === "" &&
         (child_2.text.replace(/\\[\\$`]/g, "").includes("`") ||
           /\$(?![ \t\r\n"').,/|]|$)/.test(joined.replace(/\\[\\$`]/g, "")))
@@ -454,100 +473,131 @@ function analyzeHeredocRedirect(child, e, i) {
               (child_2.text
                 .split("$")
                 .slice(1)
-                .some((d) => DOLLAR_QUOTE_EDGE_RE.test(d)) ||
-                child_2.children.some((child, c) => {
-                  let f = child_2.children[c + 1];
-                  return f?.startIndex === child.endIndex && isRiskyExpansionOperand(child, f.text);
+                .some((dollarSegment) => DOLLAR_QUOTE_EDGE_RE.test(dollarSegment)) ||
+                child_2.children.some((child, bodyChildIndex) => {
+                  let nextBodyChild = child_2.children[bodyChildIndex + 1];
+                  return (
+                    nextBodyChild?.startIndex === child.endIndex &&
+                    isRiskyExpansionOperand(child, nextBodyChild.text)
+                  );
                 }))
             ? tooComplexReason("a here-document body zsh expands differently")
-            : withStdinState(child_2, e, false);
+            : withStdinState(child_2, state, false);
     } else if (child_2.type === "pipeline")
-      i.push(...child_2.children.filter((child) => STATEMENT_NODE_TYPES.has(child.type)));
-    else if (REDIRECT_NODE_TYPES.has(child_2.type)) o = analyzeHeredocRedirect(child_2, e, i);
-    else if (child_2.children.length > 0) o = tooComplexReason(`a ${child_2.type} after a here-document`);
-    if (o !== null) return o;
+      pendingStatements.push(...child_2.children.filter((child) => STATEMENT_NODE_TYPES.has(child.type)));
+    else if (REDIRECT_NODE_TYPES.has(child_2.type))
+      refusalReason = analyzeHeredocRedirect(child_2, state, pendingStatements);
+    else if (child_2.children.length > 0)
+      refusalReason = tooComplexReason(`a ${child_2.type} after a here-document`);
+    if (refusalReason !== null) return refusalReason;
   }
   return null;
 }
 //@ chunk-63f0f3kd.js:44867-45218 placement
-function analyzeRedirect(t, e) {
-  if (t.type === "file_redirect") return analyzeFileRedirect(t, e);
-  let found = t.children.find((child) => child.type === "heredoc_body");
-  let found_2 = t.children.find((child) => WORD_NODE_TYPES.has(child.type));
-  let r =
-    t.type === "herestring_redirect" && found_2
-      ? evaluateWord(found_2, e, false)
-      : t.type === "heredoc_redirect" && found?.children.length === 0
+function analyzeRedirect(redirect, state) {
+  if (redirect.type === "file_redirect") return analyzeFileRedirect(redirect, state);
+  let found = redirect.children.find((child) => child.type === "heredoc_body");
+  let found_2 = redirect.children.find((child) => WORD_NODE_TYPES.has(child.type));
+  let wordValue =
+    redirect.type === "herestring_redirect" && found_2
+      ? evaluateWord(found_2, state, false)
+      : redirect.type === "heredoc_redirect" && found?.children.length === 0
         ? {
             kind: "literal",
             text: found.text,
           }
         : null;
-  return !(r?.kind === "literal" ? isPlainWordText(r.text) : r?.kind === "dynamic" && r.inert);
+  return !(wordValue?.kind === "literal"
+    ? isPlainWordText(wordValue.text)
+    : wordValue?.kind === "dynamic" && wordValue.inert);
 }
 //@ chunk-63f0f3kd.js:45218-46806 placement
-function analyzeVariableAssignment(t, e, i, n = false, r = false, s = false) {
-  let [a, o, u] = t.children;
-  let l = a?.type === "subscript" ? a.children[0] : a;
-  if (!l || !o || !SHELL_NAME_PATTERN.test(l.text) || !/^(?:variable_name|subscript)$/.test(a.type))
+function analyzeVariableAssignment(
+  assignmentNode,
+  state,
+  integerAttr,
+  allExported = false,
+  isStringExec = false,
+  precedesCommandName = false,
+) {
+  let [nameNode, operatorNode, valueNode] = assignmentNode.children;
+  let plainNameNode = nameNode?.type === "subscript" ? nameNode.children[0] : nameNode;
+  if (
+    !plainNameNode ||
+    !operatorNode ||
+    !SHELL_NAME_PATTERN.test(plainNameNode.text) ||
+    !/^(?:variable_name|subscript)$/.test(nameNode.type)
+  )
     return tooComplexReason("an assignment whose name is not a plain word");
-  let text = l.text;
-  let c = a.type === "subscript" ? checkSubscript(a, e) : null;
-  if (c !== null) return c;
-  if (GIT_LOCATION_ENV_RE.test(text) && !e.simple)
+  let text = plainNameNode.text;
+  let subscriptReason = nameNode.type === "subscript" ? checkSubscript(nameNode, state) : null;
+  if (subscriptReason !== null) return subscriptReason;
+  if (GIT_LOCATION_ENV_RE.test(text) && !state.simple)
     return `assigns ${text} ${TOO_COMPLEX_SUFFIX}, which redirects git or its configuration to a location this guard cannot verify`;
-  let f = !!i?.integer || e.integerNames.has(text) || INTEGER_ATTR_DEFAULT_VARS.has(text);
-  if (u?.type === "array") {
-    for (let child of u.children) {
+  let isIntegerVar =
+    !!integerAttr?.integer || state.integerNames.has(text) || INTEGER_ATTR_DEFAULT_VARS.has(text);
+  if (valueNode?.type === "array") {
+    for (let child of valueNode.children) {
       if (!WORD_NODE_TYPES.has(child.type)) {
         if (child.type !== "(" && child.type !== ")") return tooComplexReason(`a ${child.type} in an array`);
         continue;
       }
-      let S =
+      let indexEnd =
         child.type === "concatenation" && child.children[0]?.text === "["
           ? child.children.findIndex((child) => child.text === "]")
           : 0;
-      for (let child_2 of child.children.slice(1, Math.max(S, 1))) {
-        let x = checkArithmeticNode(child_2, e);
-        if (x !== null) return x;
+      for (let child_2 of child.children.slice(1, Math.max(indexEnd, 1))) {
+        let arithmeticReason = checkArithmeticNode(child_2, state);
+        if (arithmeticReason !== null) return arithmeticReason;
       }
-      let p = f ? checkArithmeticWord(child, e) : null;
-      let m = evaluateWord(child, e, true);
-      if (p !== null || m.kind === "refuse") return p ?? describeWordValue(m);
+      let arithmeticReason = isIntegerVar ? checkArithmeticWord(child, state) : null;
+      let elementValue = evaluateWord(child, state, true);
+      if (arithmeticReason !== null || elementValue.kind === "refuse")
+        return arithmeticReason ?? describeWordValue(elementValue);
     }
-    return environmentAssignmentReason(text, dynamicValue("an array"), u.text);
+    return environmentAssignmentReason(text, dynamicValue("an array"), valueNode.text);
   }
-  if (u && !WORD_NODE_TYPES.has(u.type)) return tooComplexReason(`a ${u.type} as an assignment value`);
-  let h = u && f ? checkArithmeticWord(u, e) : null;
-  if (h !== null) return h;
-  let b = u
-    ? evaluateWord(u, e, false)
+  if (valueNode && !WORD_NODE_TYPES.has(valueNode.type))
+    return tooComplexReason(`a ${valueNode.type} as an assignment value`);
+  let arithmeticReason = valueNode && isIntegerVar ? checkArithmeticWord(valueNode, state) : null;
+  if (arithmeticReason !== null) return arithmeticReason;
+  let valueResult = valueNode
+    ? evaluateWord(valueNode, state, false)
     : {
         kind: "literal",
         text: "",
       };
-  if (b.kind === "refuse") return b.detail;
+  if (valueResult.kind === "refuse") return valueResult.detail;
   if (
-    i &&
-    (i.array || e.arrayNames.has(text)) &&
-    (b.kind !== "literal" || b.text.trimStart().startsWith("("))
+    integerAttr &&
+    (integerAttr.array || state.arrayNames.has(text)) &&
+    (valueResult.kind !== "literal" || valueResult.text.trimStart().startsWith("("))
   )
     return unverifiableRunReason(
       `declare ${text}=`,
       "with a string it would re-parse as an array assignment",
     );
   if (
-    (i?.exported || (e.allExported && !n)) &&
-    (b.kind === "dynamic"
-      ? !b.inert
-      : b.text.split(/\s+/).some((g) => GIT_COMMAND_PATTERN.test(programBaseName(g)))) &&
+    (integerAttr?.exported || (state.allExported && !allExported)) &&
+    (valueResult.kind === "dynamic"
+      ? !valueResult.inert
+      : valueResult.text
+          .split(/\s+/)
+          .some((wordPart) => GIT_COMMAND_PATTERN.test(programBaseName(wordPart)))) &&
     !/^(?:PATH|(?:DY)?LD_\w+)$/.test(text)
   )
     return unverifiableRunReason(
       `export ${text}=`,
-      `with a value every later program inherits (${b.kind === "dynamic" ? b.why : "a git command"})`,
+      `with a value every later program inherits (${valueResult.kind === "dynamic" ? valueResult.why : "a git command"})`,
     );
-  return environmentAssignmentReason(text, b, u?.text ?? "", n, r, s);
+  return environmentAssignmentReason(
+    text,
+    valueResult,
+    valueNode?.text ?? "",
+    allExported,
+    isStringExec,
+    precedesCommandName,
+  );
 }
 //@ chunk-63f0f3kd.js:46806-46836 placement
 var TENGU_DRIFTING_LEMUR = "tengu_drifting_lemur";
@@ -568,20 +618,20 @@ function containsSubstitution(child) {
 /**
  * 在文本中查找 shell 自身设置的特殊变量名（仅在相应模式开启时）。
  */
-function findShellVarName(t) {
-  let found = t
+function findShellVarName(text) {
+  let found = text
     .replace(/\\\n|"/g, "")
     .match(/[A-Za-z_]\w*/g)
-    ?.find((i) => LOCALE_PATH_ENV_RE.test(i));
+    ?.find((wordPart) => LOCALE_PATH_ENV_RE.test(wordPart));
   return found !== undefined && shouldTreatLocalePathAsHazard() ? found : undefined;
 }
 //@ chunk-63f0f3kd.js:47090-47334 placement
 /**
  * 若内建命令可把 shell 自身变量设为整数/浮点类型，返回风险说明。
  */
-function describeIntegerTyping(t) {
-  return isSpecialVariableTypingRisk(t)
-    ? `can make ${t} an integer or float variable ${TOO_COMPLEX_SUFFIX}; ${t} is a variable bash or zsh sets by itself, and with that type the shell can evaluate what it later stores there as arithmetic, so use another variable name`
+function describeIntegerTyping(varName) {
+  return isSpecialVariableTypingRisk(varName)
+    ? `can make ${varName} an integer or float variable ${TOO_COMPLEX_SUFFIX}; ${varName} is a variable bash or zsh sets by itself, and with that type the shell can evaluate what it later stores there as arithmetic, so use another variable name`
     : null;
 }
 //@ chunk-63f0f3kd.js:47334-47659 placement
@@ -601,127 +651,145 @@ function describeUnsafeBinding(text, state) {
     : null;
 }
 //@ chunk-63f0f3kd.js:47659-48864 placement
-function environmentAssignmentReason(text, e, i, n = false, r = false, s = false) {
-  let upper = text.toUpperCase();
-  let o = isPlainOrInertValue(e);
-  let u =
-    ((r && CHARSET_LOCALE_ENV_RE.test(upper)) || (s && upper === "IFS")) && shouldTreatLocalePathAsHazard();
-  if (n && !u && (upper === "IFS" || LOCALE_ENV_RE.test(upper))) return null;
-  if (LOCALE_PATH_ENV_RE.test(text) && shouldTreatLocalePathAsHazard())
+function environmentAssignmentReason(
+  variableName,
+  value,
+  rawValue,
+  allowShellStateVars = false,
+  isCommandValue = false,
+  isDeclaration = false,
+) {
+  let upper = variableName.toUpperCase();
+  let isPlainValue = isPlainOrInertValue(value);
+  let isLocalePathHazard =
+    ((isCommandValue && CHARSET_LOCALE_ENV_RE.test(upper)) || (isDeclaration && upper === "IFS")) &&
+    shouldTreatLocalePathAsHazard();
+  if (allowShellStateVars && !isLocalePathHazard && (upper === "IFS" || LOCALE_ENV_RE.test(upper)))
+    return null;
+  if (LOCALE_PATH_ENV_RE.test(variableName) && shouldTreatLocalePathAsHazard())
     return unverifiableRunReason(
-      `${text}=${shortenForReason(i)}`,
+      `${variableName}=${shortenForReason(rawValue)}`,
       "with locale or character-set tables from a path of its choosing (no value is accepted in a command: drop it)",
     );
-  if (SHELL_STATE_SETTING_VARIABLES.test(text))
+  if (SHELL_STATE_SETTING_VARIABLES.test(variableName))
     return unverifiableRunReason(
-      `${text}=`,
+      `${variableName}=`,
       "which changes what a later command word, tilde directory or child shell option resolves to",
     );
-  if ((e.kind === "literal" ? e.text : i.replace(/["'\\]/g, "")).split(/\s+/).some(isStdinLikeDevicePath))
+  if (
+    (value.kind === "literal" ? value.text : rawValue.replace(/["'\\]/g, ""))
+      .split(/\s+/)
+      .some(isStdinLikeDevicePath)
+  )
     return unverifiableRunReason(
-      `${text}=`,
+      `${variableName}=`,
       "with a descriptor path whose content a program may read as its program or configuration",
     );
   if (upper === "IFS")
-    return EMPTY_VALUE_RE.test(i)
+    return EMPTY_VALUE_RE.test(rawValue)
       ? null
       : unverifiableRunReason("IFS=", "with a separator other than whitespace");
   if (LOCALE_ENV_RE.test(upper))
-    return e.kind === "literal" && /^(?:C|POSIX|[A-Za-z_]*\.UTF-?8)?$/i.test(e.text)
+    return value.kind === "literal" && /^(?:C|POSIX|[A-Za-z_]*\.UTF-?8)?$/i.test(value.text)
       ? null
       : unverifiableRunReason(
-          `${text}=${shortenForReason(i)}`,
+          `${variableName}=${shortenForReason(rawValue)}`,
           "with a locale whose character set cannot be verified (only C, POSIX or a name of letters and underscores ending in .UTF-8, such as en_US.UTF-8, is accepted: use one of those or remove the assignment)",
         );
   if (upper === "PATH" || upper.startsWith("LD_") || upper.startsWith("DYLD_")) return null;
-  if (isExecInfluencingVar(text) || (COMMAND_VALUED_ENV_RE.test(text) && !o))
+  if (isExecInfluencingVar(variableName) || (COMMAND_VALUED_ENV_RE.test(variableName) && !isPlainValue))
     return unverifiableRunReason(
-      `${text}=`,
-      `with a value the shell or another program acts on (${describeWordValue(e)})`,
+      `${variableName}=`,
+      `with a value the shell or another program acts on (${describeWordValue(value)})`,
     );
   return null;
 }
 //@ chunk-63f0f3kd.js:48864-49768 placement
-function analyzeDeclarationCommand(t, e) {
-  let text = t.children[0]?.text ?? "declare";
-  let n = {
+function analyzeDeclarationCommand(node, state) {
+  let text = node.children[0]?.text ?? "declare";
+  let flags = {
     integer: false,
     array: false,
     exported: text === "export",
   };
-  let r = false;
-  for (let child of t.children.slice(1)) {
-    let a = null;
+  let hasIntegerOrFormat = false;
+  for (let child of node.children.slice(1)) {
+    let reason = null;
     if (child.type === "word" && DECLARE_FLAGS_RE.test(child.text)) {
-      n.integer ||= child.text[0] === "-" && child.text.includes("i");
-      r ||= child.text[0] === "-" && /[iF]/.test(child.text);
-      n.array ||= /[aA]/.test(child.text);
-      n.exported ||= child.text.includes("x");
+      flags.integer ||= child.text[0] === "-" && child.text.includes("i");
+      hasIntegerOrFormat ||= child.text[0] === "-" && /[iF]/.test(child.text);
+      flags.array ||= /[aA]/.test(child.text);
+      flags.exported ||= child.text.includes("x");
     } else if (child.type === "variable_name")
-      a =
-        GIT_LOCATION_ENV_RE.test(child.text) && !e.simple
+      reason =
+        GIT_LOCATION_ENV_RE.test(child.text) && !state.simple
           ? `exports ${child.text} ${TOO_COMPLEX_SUFFIX}, which redirects git to a location this guard cannot verify`
-          : n.exported && e.kinds.get(child.text) === "other"
+          : flags.exported && state.kinds.get(child.text) === "other"
             ? unverifiableRunReason(
                 `${text} ${child.text}`,
                 "exporting a value this command computes to every later program",
               )
             : null;
     else if (child.type === "variable_assignment") {
-      let o = child.children[0];
-      let text = (o?.type === "subscript" ? o.children[0] : o)?.text;
-      a = (r ? describeIntegerTyping(text ?? "") : null) ?? analyzeVariableAssignment(child, e, n);
+      let nameNode = child.children[0];
+      let text = (nameNode?.type === "subscript" ? nameNode.children[0] : nameNode)?.text;
+      reason =
+        (hasIntegerOrFormat ? describeIntegerTyping(text ?? "") : null) ??
+        analyzeVariableAssignment(child, state, flags);
     } else if (child.children.length > 0 || WORD_NODE_TYPES.has(child.type))
-      a = unverifiableRunReason(
+      reason = unverifiableRunReason(
         text,
         `with an operand it would expand or evaluate (${shortenForReason(child.text)})`,
       );
-    if (a !== null) return a;
+    if (reason !== null) return reason;
   }
   return null;
 }
 //@ chunk-63f0f3kd.js:49768-50717 placement
-function analyzeTestExpression(t, e, i) {
-  if (WORD_NODE_TYPES.has(t.type)) {
-    let r = evaluateWord(t, e, !i);
-    return r.kind === "refuse" ? r.detail : null;
+function analyzeTestExpression(node, state, isDoubleBracket) {
+  if (WORD_NODE_TYPES.has(node.type)) {
+    let evaluated = evaluateWord(node, state, !isDoubleBracket);
+    return evaluated.kind === "refuse" ? evaluated.detail : null;
   }
-  let text = t.children.find((child) => child.type === "test_operator")?.text ?? "";
+  let text = node.children.find((child) => child.type === "test_operator")?.text ?? "";
   if (
     /^-[vRt]$/.test(text) &&
-    (t.type === "unary_expression" ||
-      (t.type === "binary_expression" &&
-        t.children.length > 2 &&
-        !i &&
+    (node.type === "unary_expression" ||
+      (node.type === "binary_expression" &&
+        node.children.length > 2 &&
+        !isDoubleBracket &&
         readFlagWithOverride(TENGU_HOLLOW_SANDPIPER, {
           safe: true,
         })))
   ) {
-    let last = t.children.at(-1);
-    let s =
+    let last = node.children.at(-1);
+    let reason =
       /^(?:word|number)$/.test(last?.type ?? "") && /^(?:[A-Za-z_]\w*|\d+)$/.test(last?.text ?? "")
         ? null
-        : arithmeticEvalReason(t.text);
-    if (s !== null || t.type === "unary_expression") return s;
+        : arithmeticEvalReason(node.text);
+    if (reason !== null || node.type === "unary_expression") return reason;
   }
-  if (t.type === "binary_expression" && i && TEST_ARITH_CMP_OPS.has(text))
+  if (node.type === "binary_expression" && isDoubleBracket && TEST_ARITH_CMP_OPS.has(text))
     return (
-      t.children
+      node.children
         .filter((child) => child.type !== "test_operator")
-        .map((child) => checkArithmeticWord(child, e))
-        .find((r) => r !== null) ?? null
+        .map((child) => checkArithmeticWord(child, state))
+        .find((reason) => reason !== null) ?? null
     );
-  if (!/expression|test_command/.test(t.type)) return tooComplexReason(`a ${t.type} in a test`);
-  for (let [r, s] of t.children.entries()) {
-    let a = t.children[r + 1];
-    if (a?.startIndex === s.endIndex && (isRiskyExpansionOperand(s, a.text) || isDollarQuoteEdge(s, a)))
-      return tooComplexReason(`the pattern ${shortenForReason(s.text + a.text)}`);
+  if (!/expression|test_command/.test(node.type)) return tooComplexReason(`a ${node.type} in a test`);
+  for (let [idx, child] of node.children.entries()) {
+    let nextChild = node.children[idx + 1];
+    if (
+      nextChild?.startIndex === child.endIndex &&
+      (isRiskyExpansionOperand(child, nextChild.text) || isDollarQuoteEdge(child, nextChild))
+    )
+      return tooComplexReason(`the pattern ${shortenForReason(child.text + nextChild.text)}`);
   }
   return (
-    t.children
+    node.children
       .filter((child) => child.children.length > 0 || WORD_NODE_TYPES.has(child.type))
-      .map((child) => analyzeTestExpression(child, e, i))
-      .find((r) => r !== null) ?? null
+      .map((child) => analyzeTestExpression(child, state, isDoubleBracket))
+      .find((reason) => reason !== null) ?? null
   );
 }
 export {

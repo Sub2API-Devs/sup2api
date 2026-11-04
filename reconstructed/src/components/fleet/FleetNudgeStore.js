@@ -8,7 +8,11 @@
  * pieces: chunk-5gatfnjn.js (9)
  * attribution: placement 9
  */
-import { init_react_production, qt, Se } from "../../../vendor/react/cjs/react.production.js";
+import {
+  init_react_production,
+  createContext,
+  useContext,
+} from "../../../vendor/react/cjs/react.production.js";
 import {
   listJobs,
   IDLE_NEEDS,
@@ -21,19 +25,23 @@ import { logFeatureOk, logFeatureSad } from "../../services/analytics/featureTel
 import { createSignal } from "../../utils/signal.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { logEvent } from "../../services/analytics/index.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-5gatfnjn.js:426-430 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-5gatfnjn.js:426", () => {
+  init_react_production();
+});
 //@ chunk-5gatfnjn.js:430-509 placement
 /**
  * 函数 requestNudgeOnce（未获批时返回 nudge）；位于「fleet 提示状态存储（2.1.316 新增）」模块。
  */
 async function requestNudgeOnce(storageV5) {
-  let s = false;
-  let i = await listJobs(undefined, storageV5, () => {
-    s = true;
+  let failed = false;
+  let jobs = await listJobs(undefined, storageV5, () => {
+    failed = true;
   });
-  return s ? null : i;
+  return failed ? null : jobs;
 }
 //@ chunk-5gatfnjn.js:509-542 placement
 var NUDGE_MIN_GAP_MS = 120000;
@@ -66,26 +74,26 @@ class FleetNudgeStore {
   #i = null;
   #l = 0;
   #S;
-  constructor(e) {
-    this.#p = e?.sweepMs ?? NUDGE_POLL_MS;
-    this.#g = e?.ignoredAfterMs ?? NUDGE_MAX_GAP_MS;
-    let storageV5 = e?.storageV5;
+  constructor(options) {
+    this.#p = options?.sweepMs ?? NUDGE_POLL_MS;
+    this.#g = options?.ignoredAfterMs ?? NUDGE_MAX_GAP_MS;
+    let storageV5 = options?.storageV5;
     this.#S = () => requestNudgeOnce(storageV5);
   }
   getSnapshot = () => this.#s;
-  subscribe = (e) => {
-    let s = this.#m.subscribe(e);
+  subscribe = (listener) => {
+    let unsubscribe = this.#m.subscribe(listener);
     this.#h++;
     if (!this.#n) {
       this.#n = true;
       if (this.#s === undefined) this.#r();
       else this.#f();
     }
-    let i = false;
+    let cleaned = false;
     return () => {
-      if (i) return;
-      i = true;
-      s();
+      if (cleaned) return;
+      cleaned = true;
+      unsubscribe();
       this.#h--;
       if (this.#h === 0) this.#N();
     };
@@ -94,11 +102,11 @@ class FleetNudgeStore {
   async quiesce() {
     while (this.#e) await this.#e;
   }
-  setFocused(e) {
-    if (e === this.#u) return;
-    this.#u = e;
+  setFocused(focused) {
+    if (focused === this.#u) return;
+    this.#u = focused;
     if (!this.#n) return;
-    if (e) {
+    if (focused) {
       this.#l = 0;
       this.#r();
     } else this.#a();
@@ -127,14 +135,14 @@ class FleetNudgeStore {
     return this.#e;
   }
   async #b() {
-    let e;
+    let jobs;
     try {
-      e = await this.#S();
+      jobs = await this.#S();
     } catch {
-      e = [];
+      jobs = [];
     }
     if (!this.#n) return;
-    if (e !== null) this.#l = 0;
+    if (jobs !== null) this.#l = 0;
     else if (++this.#l <= NUDGE_MAX_COUNT) {
       if (this.#l === 1)
         logForDebugging(
@@ -146,47 +154,47 @@ class FleetNudgeStore {
       if (this.#u) this.#f();
       return;
     }
-    let s = e ?? [];
-    let i = 0;
-    let r = 0;
-    let u = 0;
-    let d = 0;
+    let jobList = jobs ?? [];
+    let needsInput = 0;
+    let done = 0;
+    let succeeded = 0;
+    let running = 0;
     let ownJobShortId = getOwnJobShortId();
-    for (let n of s) {
-      if (n.id === ownJobShortId) continue;
-      if (isDoneJob(n.state)) {
-        r++;
-        if (terminalOutcome(n.state.state) === "success") u++;
+    for (let job of jobList) {
+      if (job.id === ownJobShortId) continue;
+      if (isDoneJob(job.state)) {
+        done++;
+        if (terminalOutcome(job.state.state) === "success") succeeded++;
         continue;
       }
-      d++;
-      if (isBlockedNeedingNudge(n.state)) i++;
+      running++;
+      if (isBlockedNeedingNudge(job.state)) needsInput++;
     }
-    if (i === 0) {
+    if (needsInput === 0) {
       this.#c();
       this.#t = 0;
     }
-    let o = this.#s;
-    if (o?.needsInput !== i || o?.done !== r || o?.succeeded !== u) {
-      let n = o !== undefined && i > o.needsInput;
+    let previous = this.#s;
+    if (previous?.needsInput !== needsInput || previous?.done !== done || previous?.succeeded !== succeeded) {
+      let increased = previous !== undefined && needsInput > previous.needsInput;
       this.#s = {
-        needsInput: i,
-        done: r,
-        succeeded: u,
+        needsInput,
+        done,
+        succeeded,
       };
       logEvent("tengu_fleet_nudge_state", {
-        needs_input_count: i,
-        done_count: r,
-        succeeded_count: u,
-        increased: n,
+        needs_input_count: needsInput,
+        done_count: done,
+        succeeded_count: succeeded,
+        increased,
       });
-      if (n) {
+      if (increased) {
         this.#t = Date.now();
         this.#_();
       }
       this.#m.emit();
     }
-    if (d > 0 && this.#u) this.#f();
+    if (running > 0 && this.#u) this.#f();
   }
   #f() {
     this.#a();
@@ -221,21 +229,31 @@ class FleetNudgeStore {
   }
 }
 //@ chunk-5gatfnjn.js:2632-2718 placement
-function ensureFleetNudgeStore(e, storageV5) {
-  e.fleetNudgeStore ??= new FleetNudgeStore({
+function ensureFleetNudgeStore(state, storageV5) {
+  state.fleetNudgeStore ??= new FleetNudgeStore({
     storageV5,
   });
-  return e.fleetNudgeStore;
+  return state.fleetNudgeStore;
 }
 //@ chunk-5gatfnjn.js:2718-2735 placement
-var FleetNudgeStoreContext = qt(null);
+var FleetNudgeStoreContext; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-5gatfnjn.js:2718", () => {
+  FleetNudgeStoreContext = createContext(null);
+});
 //@ chunk-5gatfnjn.js:2735-2918 placement
 function useFleetNudgeStore() {
-  let e = Se(FleetNudgeStoreContext);
-  if (!e)
+  let store = useContext(FleetNudgeStoreContext);
+  if (!store)
     throw ReferenceError(
       "useFleetNudgeStore cannot be called outside of a FleetNudgeStoreContext provider (mounted by <AppStateProvider />)",
     );
-  return e;
+  return store;
 }
-export { useFleetNudgeStore, FleetNudgeStore, requestNudgeOnce, isDoneJob, FleetNudgeStoreContext };
+export {
+  useFleetNudgeStore,
+  FleetNudgeStore,
+  requestNudgeOnce,
+  isDoneJob,
+  FleetNudgeStoreContext,
+  ensureFleetNudgeStore,
+};

@@ -9,11 +9,12 @@
  * attribution: placement 7
  */
 import { env } from "./env.js";
-import { io } from "../../vendor/@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
-import { Re } from "../../runtime/bun-runtime.js";
+import { memoizeAlias } from "../../vendor/@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
+import { __toESM } from "../../runtime/bun-runtime.js";
 import { nonEmptyOrUndefined, getAWSRegion, getDefaultAwsRegion } from "./envUtils.js";
 import { HostScoped } from "./hostScoped.js";
 import { getRootSession } from "../bootstrap/state.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-bwbq4xvm.js:151409-151514 placement
 function awsSharedConfigCacheKey() {
@@ -25,39 +26,47 @@ function awsSharedConfigCacheKey() {
  */
 class AwsRegionResolver {
   resolvedSharedConfigRegions = new Map();
-  readAwsSharedConfigRegion = io(async () => {
-    let e = awsSharedConfigCacheKey();
-    let s;
+  readAwsSharedConfigRegion = memoizeAlias(async () => {
+    let cacheKey = awsSharedConfigCacheKey();
+    let region;
     try {
-      let [n, r] = await Promise.all([
-        import("./chunk-m61cyfw5.js").then((m) => Re(m.default, 1)),
-        import("./chunk-7bc3fmtk.js").then((m) => Re(m.default, 1)),
+      let [configModule, constantsModule] = await Promise.all([
+        import("../../vendor/@smithy/node-config-provider/default.js").then((configSdkModule) =>
+          __toESM(configSdkModule.default, 1),
+        ),
+        import("../../vendor/@smithy/core/configNative.js").then((constantsSdkModule) =>
+          __toESM(constantsSdkModule.default, 1),
+        ),
       ]);
-      let loadConfig = n.loadConfig ?? n.default?.loadConfig;
+      let loadConfig = configModule.loadConfig ?? configModule.default?.loadConfig;
       let NODE_REGION_CONFIG_FILE_OPTIONS =
-        r.NODE_REGION_CONFIG_FILE_OPTIONS ?? r.default?.NODE_REGION_CONFIG_FILE_OPTIONS;
-      let c = await loadConfig(
+        constantsModule.NODE_REGION_CONFIG_FILE_OPTIONS ??
+        constantsModule.default?.NODE_REGION_CONFIG_FILE_OPTIONS;
+      let region_2 = await loadConfig(
         {
           environmentVariableSelector: () => {
             return;
           },
-          configFileSelector: (h) => h.region,
+          configFileSelector: (profile) => profile.region,
           default: () => {
             return;
           },
         },
         NODE_REGION_CONFIG_FILE_OPTIONS,
       )();
-      s = nonEmptyOrUndefined(c?.trim());
+      region = nonEmptyOrUndefined(region_2?.trim());
     } catch {
-      s = undefined;
+      region = undefined;
     }
-    this.resolvedSharedConfigRegions.set(e, s);
-    return s;
+    this.resolvedSharedConfigRegions.set(cacheKey, region);
+    return region;
   }, awsSharedConfigCacheKey);
 }
 //@ chunk-bwbq4xvm.js:152077-152102 placement
-var awsRegionResolvers = new HostScoped(() => new AwsRegionResolver());
+var awsRegionResolvers; // deferred: uses AwsRegionResolver of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-bwbq4xvm.js:152077", () => {
+  awsRegionResolvers = new HostScoped(() => new AwsRegionResolver());
+});
 //@ chunk-bwbq4xvm.js:152102-152139 placement
 function getAwsRegionResolver() {
   return awsRegionResolvers.of(getRootSession().host);
@@ -86,16 +95,16 @@ function describeAwsRegion() {
       region: awsRegion,
       source: "env",
     };
-  let s = getAwsRegionResolver().resolvedSharedConfigRegions.get(awsSharedConfigCacheKey());
-  if (s)
+  let sharedRegion = getAwsRegionResolver().resolvedSharedConfigRegions.get(awsSharedConfigCacheKey());
+  if (sharedRegion)
     return {
-      region: s,
+      region: sharedRegion,
       source: "shared-config",
     };
-  let n = !!(env.AWS_REGION || env.AWS_DEFAULT_REGION);
+  let hasEnvRegion = !!(env.AWS_REGION || env.AWS_DEFAULT_REGION);
   return {
     region: getDefaultAwsRegion(),
-    source: n ? "env-invalid" : "default",
+    source: hasEnvRegion ? "env-invalid" : "default",
   };
 }
 export { describeAwsRegion, resolveAwsRegion, getAwsRegionSync };

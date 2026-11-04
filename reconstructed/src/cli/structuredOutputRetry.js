@@ -26,26 +26,26 @@ var MAX_TOOL_ERROR_EXCERPT_CHARS = 600;
 /**
  * 结构化输出多次失败（含被模型回退撤回）时的错误文本
  */
-function formatStructuredOutputFailure(t, r, e) {
-  if (r > 0)
-    return `Failed to provide surviving structured output after ${t} attempts (${r} retracted by a model fallback)`;
-  let n = `Failed to provide valid structured output after ${t} attempts`;
-  return e === undefined ? n : `${n} \u2014 last StructuredOutput error: ${e}`;
+function formatStructuredOutputFailure(attempts, lastError, schema) {
+  if (lastError > 0)
+    return `Failed to provide surviving structured output after ${attempts} attempts (${lastError} retracted by a model fallback)`;
+  let message = `Failed to provide valid structured output after ${attempts} attempts`;
+  return schema === undefined ? message : `${message} \u2014 last StructuredOutput error: ${schema}`;
 }
 //@ chunk-mx88mbsd.js:764-1173 placement
 /**
  * 从工具结果（字符串或文本块数组）提取错误摘录：去掉 tool_use_error 标签、逐行清理、两次消毒，超过 600 字符截断加省略号；空则 undefined。
  */
 function extractToolErrorExcerpt(content) {
-  let r =
+  let text =
     typeof content === "string"
       ? content
       : Array.isArray(content)
-        ? content.flatMap((i) => (i.type === "text" ? [i.text] : [])).join(`
+        ? content.flatMap((block) => (block.type === "text" ? [block.text] : [])).join(`
 `)
         : undefined;
-  if (r === undefined) return;
-  let joined = r
+  if (text === undefined) return;
+  let joined = text
     .replace(/^<tool_use_error>/, "")
     .replace(/<\/tool_use_error>$/, "")
     .replace(
@@ -62,13 +62,13 @@ function extractToolErrorExcerpt(content) {
   let sanitized = sanitizeSubagentOutput(joined, {
     prependMarker: false,
   }).sanitized;
-  let u = collapseWhitespace(sanitized);
-  if (u.length === 0) return;
-  let s =
-    u.length > MAX_TOOL_ERROR_EXCERPT_CHARS
-      ? truncateToLength(u, MAX_TOOL_ERROR_EXCERPT_CHARS) + "\u2026"
-      : u;
-  return sanitizeSubagentOutput(s, {
+  let collapsed = collapseWhitespace(sanitized);
+  if (collapsed.length === 0) return;
+  let sanitizedText =
+    collapsed.length > MAX_TOOL_ERROR_EXCERPT_CHARS
+      ? truncateToLength(collapsed, MAX_TOOL_ERROR_EXCERPT_CHARS) + "\u2026"
+      : collapsed;
+  return sanitizeSubagentOutput(sanitizedText, {
     prependMarker: false,
   }).sanitized;
 }
@@ -76,10 +76,10 @@ function extractToolErrorExcerpt(content) {
 /**
  * 从消息列表中某条消息之后（找不到则全量）检查是否有成功的工具调用；异常记日志返回 undefined。
  */
-function hasSuccessfulToolCallSince(initialMessages, r) {
+function hasSuccessfulToolCallSince(initialMessages, marker) {
   try {
-    let e = r === undefined ? 0 : initialMessages.lastIndexOf(r) + 1;
-    return hasSuccessfulToolCall(e === 0 ? initialMessages : initialMessages.slice(e));
+    let start = marker === undefined ? 0 : initialMessages.lastIndexOf(marker) + 1;
+    return hasSuccessfulToolCall(start === 0 ? initialMessages : initialMessages.slice(start));
   } catch (error) {
     logError(error);
     return;
@@ -92,19 +92,23 @@ function hasSuccessfulToolCall(messages) {
     if (message?.type !== "assistant") continue;
     let content = message.message.content;
     if (!Array.isArray(content)) continue;
-    for (let o of content)
-      if (o.type === "tool_use" && o.name === STRUCTUREDOUTPUT) mostRecentToolUseId.add(o.id);
+    for (let block of content)
+      if (block.type === "tool_use" && block.name === STRUCTUREDOUTPUT) mostRecentToolUseId.add(block.id);
   }
   if (mostRecentToolUseId.size === 0) return;
   for (let i = messages.length - 1; i >= 0; i--) {
-    let n = messages[i];
-    if (n?.type !== "user") continue;
-    let content = n.message.content;
+    let message = messages[i];
+    if (message?.type !== "user") continue;
+    let content = message.message.content;
     if (!Array.isArray(content)) continue;
     for (let j = content.length - 1; j >= 0; j--) {
-      let s = content[j];
-      if (s?.type === "tool_result" && s.is_error === true && mostRecentToolUseId.has(s.tool_use_id))
-        return extractToolErrorExcerpt(s.content);
+      let block = content[j];
+      if (
+        block?.type === "tool_result" &&
+        block.is_error === true &&
+        mostRecentToolUseId.has(block.tool_use_id)
+      )
+        return extractToolErrorExcerpt(block.content);
     }
   }
   return;

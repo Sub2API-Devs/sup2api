@@ -97,32 +97,32 @@ function win32AnchorError(code) {
 }
 //@ chunk-tb11za84.js:2575-2619 placement
 function win32AnchorErrorWithCode(code) {
-  let e = win32AnchorError(code);
-  e.code = code;
-  return e;
+  let error = win32AnchorError(code);
+  error.code = code;
+  return error;
 }
 //@ chunk-tb11za84.js:2619-2782 placement
-function assertPlainWin32Name(i, e = false) {
+function assertPlainWin32Name(name, allowShortName = false) {
   if (
-    i === "" ||
-    i === "." ||
-    i === ".." ||
-    /[\\/:*?"<>|\x00-\x1f]/.test(i) ||
-    TRAILING_DOT_SPACE_RE.test(i) ||
-    isReservedDeviceName(i) ||
-    isConDeviceName(i) ||
-    (!e && hasDosShortNameSegment(i))
+    name === "" ||
+    name === "." ||
+    name === ".." ||
+    /[\\/:*?"<>|\x00-\x1f]/.test(name) ||
+    TRAILING_DOT_SPACE_RE.test(name) ||
+    isReservedDeviceName(name) ||
+    isConDeviceName(name) ||
+    (!allowShortName && hasDosShortNameSegment(name))
   )
     throw win32AnchorErrorWithCode("WORKING_NAME_NOT_PLAIN");
-  return i;
+  return name;
 }
 //@ chunk-tb11za84.js:2782-2814 placement
-function filetimeToUnixNs(i) {
-  return (i - FILETIME_EPOCH_OFFSET) * 100n;
+function filetimeToUnixNs(filetime) {
+  return (filetime - FILETIME_EPOCH_OFFSET) * 100n;
 }
 //@ chunk-tb11za84.js:2814-2868 placement
-function unixMsToFiletime(i) {
-  return BigInt(Math.round(i * 1e6)) * 10n + FILETIME_EPOCH_OFFSET;
+function unixMsToFiletime(unixMs) {
+  return BigInt(Math.round(unixMs * 1e6)) * 10n + FILETIME_EPOCH_OFFSET;
 }
 //@ chunk-tb11za84.js:2868-3628 placement
 /**
@@ -134,8 +134,8 @@ function buildWin32Stats(dev, identity, times, allocationSize) {
   let isDir = !isLink && (identity.attributes & ATTRIBUTE.DIRECTORY) !== 0;
   let typeBits = isLink ? 0o120000n : isDir ? 0o040000n : 0o100000n;
   let permBits = (identity.attributes & ATTRIBUTE.READONLY) !== 0 ? 0o444n : 0o666n;
-  let h = (y) => y / 1000000n;
-  let L = (y) => new Date(Number(y / 1000000n));
+  let toMs = (ns) => ns / 1000000n;
+  let toDate = (ns) => new Date(Number(ns / 1000000n));
   return {
     dev,
     ino: identity.ino,
@@ -147,18 +147,18 @@ function buildWin32Stats(dev, identity, times, allocationSize) {
     size: isDir ? 0n : identity.size,
     blksize: 4096n,
     blocks: allocationSize / 512n,
-    atimeMs: h(times.atimeNs),
-    mtimeMs: h(identity.mtimeNs),
-    ctimeMs: h(identity.ctimeNs),
-    birthtimeMs: h(times.birthtimeNs),
+    atimeMs: toMs(times.atimeNs),
+    mtimeMs: toMs(identity.mtimeNs),
+    ctimeMs: toMs(identity.ctimeNs),
+    birthtimeMs: toMs(times.birthtimeNs),
     atimeNs: times.atimeNs,
     mtimeNs: identity.mtimeNs,
     ctimeNs: identity.ctimeNs,
     birthtimeNs: times.birthtimeNs,
-    atime: L(times.atimeNs),
-    mtime: L(identity.mtimeNs),
-    ctime: L(identity.ctimeNs),
-    birthtime: L(times.birthtimeNs),
+    atime: toDate(times.atimeNs),
+    mtime: toDate(identity.mtimeNs),
+    ctime: toDate(identity.ctimeNs),
+    birthtime: toDate(times.birthtimeNs),
     isFile: () => !isLink && !isDir,
     isDirectory: () => isDir,
     isSymbolicLink: () => isLink,
@@ -173,7 +173,7 @@ function buildWin32Stats(dev, identity, times, allocationSize) {
  * 把 bigint 形式的 stats 转为数字形式的 fs.Stats（时间换算为毫秒，设备类判断恒为 false）。
  */
 function toNumberStats(stats) {
-  let toNumber = (E) => Number(E);
+  let toNumber = (value) => Number(value);
   return {
     dev: toNumber(stats.dev),
     ino: toNumber(stats.ino),
@@ -207,109 +207,118 @@ function toNumberStats(stats) {
  * 查询 NT 句柄的文件信息（属性、重解析标签、文件 ID、卷序列号与时间），返回原始字段与按设备号来源生成 stats 的函数。
  */
 function queryWin32FileInfo(nt, handle) {
-  let E = nt.queryInformation(handle);
+  let info = nt.queryInformation(handle);
   let reparseTag =
-    (E.attributes & ATTRIBUTE.REPARSE_POINT) !== 0 ? nt.queryAttributeTag(handle).reparseTag : 0;
-  let R = nt.queryId(handle);
-  let O = nt.queryVolume(handle);
+    (info.attributes & ATTRIBUTE.REPARSE_POINT) !== 0 ? nt.queryAttributeTag(handle).reparseTag : 0;
+  let idInfo = nt.queryId(handle);
+  let volumeInfo = nt.queryVolume(handle);
   let identity = {
-    dev32: BigInt(O.serialNumber),
-    dev64: R?.volumeSerialNumber ?? null,
-    ino: E.indexNumber,
-    size: E.size,
-    nlink: BigInt(E.numberOfLinks),
-    mtimeNs: filetimeToUnixNs(E.lastWriteTime),
-    ctimeNs: filetimeToUnixNs(E.changeTime),
-    attributes: E.attributes,
+    dev32: BigInt(volumeInfo.serialNumber),
+    dev64: idInfo?.volumeSerialNumber ?? null,
+    ino: info.indexNumber,
+    size: info.size,
+    nlink: BigInt(info.numberOfLinks),
+    mtimeNs: filetimeToUnixNs(info.lastWriteTime),
+    ctimeNs: filetimeToUnixNs(info.changeTime),
+    attributes: info.attributes,
     reparseTag,
   };
   let times = {
-    atimeNs: filetimeToUnixNs(E.lastAccessTime),
-    birthtimeNs: filetimeToUnixNs(E.creationTime),
+    atimeNs: filetimeToUnixNs(info.lastAccessTime),
+    birthtimeNs: filetimeToUnixNs(info.creationTime),
   };
   return {
     ...identity,
-    stats: (h) =>
+    stats: (devMode) =>
       buildWin32Stats(
-        h === "serial64" && identity.dev64 !== null ? identity.dev64 : identity.dev32,
+        devMode === "serial64" && identity.dev64 !== null ? identity.dev64 : identity.dev32,
         identity,
         times,
-        E.allocationSize,
+        info.allocationSize,
       ),
   };
 }
 //@ chunk-tb11za84.js:4669-4744 placement
-function isReparseNameSurrogate(attributesAndTag) {
+function isReparseNameSurrogate(directoryEntry) {
   return (
-    (attributesAndTag.attributes & ATTRIBUTE.REPARSE_POINT) !== 0 &&
-    isReparseTagNameSurrogate(attributesAndTag.reparseTag)
+    (directoryEntry.attributes & ATTRIBUTE.REPARSE_POINT) !== 0 &&
+    isReparseTagNameSurrogate(directoryEntry.reparseTag)
   );
 }
 //@ chunk-tb11za84.js:4744-4869 placement
-function queryAttributesAndTag(i, e) {
-  let E = i.queryAttributes(e);
-  return (E & ATTRIBUTE.REPARSE_POINT) !== 0
-    ? i.queryAttributeTag(e)
+function queryAttributesAndTag(nt, handle) {
+  let attributes = nt.queryAttributes(handle);
+  return (attributes & ATTRIBUTE.REPARSE_POINT) !== 0
+    ? nt.queryAttributeTag(handle)
     : {
-        attributes: E,
+        attributes,
         reparseTag: 0,
       };
 }
 //@ chunk-tb11za84.js:4869-5160 placement
-function matchIdentityBridge(i, e) {
-  let E = (R) => R !== null && e.ino !== 0n && e.dev === R && sameTimestamp(e.ino, i.ino);
-  let T = E(i.dev32) ? "serial32" : E(i.dev64) ? "serial64" : null;
+function matchIdentityBridge(fileInfo, pathStats) {
+  let matchesSerial = (serial) =>
+    serial !== null &&
+    pathStats.ino !== 0n &&
+    pathStats.dev === serial &&
+    sameTimestamp(pathStats.ino, fileInfo.ino);
+  let bridgeKind = matchesSerial(fileInfo.dev32)
+    ? "serial32"
+    : matchesSerial(fileInfo.dev64)
+      ? "serial64"
+      : null;
   logForDebugging(
-    `anchor (win32): identity bridge ${T ?? "none"} \u2014 bun dev=${e.dev} ino=${e.ino}; nt serial32=${i.dev32} serial64=${i.dev64 ?? "n/a"} index=${i.ino}`,
+    `anchor (win32): identity bridge ${bridgeKind ?? "none"} \u2014 bun dev=${pathStats.dev} ino=${pathStats.ino}; nt serial32=${fileInfo.dev32} serial64=${fileInfo.dev64 ?? "n/a"} index=${fileInfo.ino}`,
   );
-  return T;
+  return bridgeKind;
 }
 //@ chunk-tb11za84.js:5281-13060 placement
 /**
  * Windows 下为根目录建立锚定文件句柄（网络共享等情况降级为不锚定）。
  */
-async function openWin32Anchor(i, e, E) {
-  let { fs } = i;
-  let { realRoot } = E;
+async function openWin32Anchor(host, nt, options) {
+  let { fs } = host;
+  let { realRoot } = options;
   if (isUncPath(realRoot)) {
     logForDebugging("anchor (win32): the root is on a network share: no anchored backend here");
     return {
       unanchored: "remote_volume",
     };
   }
-  let O = 0;
-  let _;
+  let rootHandle = 0;
+  let devMode;
   try {
-    O = e.open(0, toNtPath(realRoot), {
+    rootHandle = nt.open(0, toNtPath(realRoot), {
       access: DIR_LIST_ACCESS,
       disposition: DISPOSITION.FILE_OPEN,
       options: OPEN_DIR_OPTIONS,
     });
-    if ((e.queryDevice(O).characteristics & FILE_REMOTE_DEVICE) !== 0) {
-      e.close(O);
+    if ((nt.queryDevice(rootHandle).characteristics & FILE_REMOTE_DEVICE) !== 0) {
+      nt.close(rootHandle);
       logForDebugging("anchor (win32): the root is on a remote volume: no anchored backend here");
       return {
         unanchored: "remote_volume",
       };
     }
-    let n = queryWin32FileInfo(e, O);
-    if (isReparseNameSurrogate(n)) throw win32AnchorErrorWithCode("ELOOP");
-    if ((await resolvedRoot(i, E)) !== realRoot) throw win32AnchorErrorWithCode("WORKING_ROOT_NOT_CANONICAL");
-    let r = matchIdentityBridge(
-      n,
+    let rootInfo = queryWin32FileInfo(nt, rootHandle);
+    if (isReparseNameSurrogate(rootInfo)) throw win32AnchorErrorWithCode("ELOOP");
+    if ((await resolvedRoot(host, options)) !== realRoot)
+      throw win32AnchorErrorWithCode("WORKING_ROOT_NOT_CANONICAL");
+    let matchedDevMode = matchIdentityBridge(
+      rootInfo,
       await fs.lstat(realRoot, {
         bigint: true,
       }),
     );
-    if (r === null) {
-      e.close(O);
+    if (matchedDevMode === null) {
+      nt.close(rootHandle);
       return {
         unanchored: "unstable_identity",
       };
     }
-    _ = r;
+    devMode = matchedDevMode;
   } catch (error) {
-    if (O !== 0) e.close(O);
+    if (rootHandle !== 0) nt.close(rootHandle);
     let errnoCode = getErrnoCode(error);
     if (
       errnoCode === "ENOENT" ||
@@ -336,60 +345,62 @@ async function openWin32Anchor(i, e, E) {
       unanchored: "bring_up_failed",
     };
   }
-  let b = (n, r, access, options, a = false) =>
-    e.open(n, assertPlainWin32Name(r, a), {
+  let openNamed = (dirHandle, name, access, options, allowShortName = false) =>
+    nt.open(dirHandle, assertPlainWin32Name(name, allowShortName), {
       access,
       disposition: DISPOSITION.FILE_OPEN,
       options,
     });
-  let h = async (n, r, access, options, a) => {
-    let u = b(n, r, access, options);
+  let withOpenHandle = async (dirHandle, name, access, options, fn) => {
+    let handle = openNamed(dirHandle, name, access, options);
     try {
-      return await a(u);
+      return await fn(handle);
     } finally {
-      e.close(u);
+      nt.close(handle);
     }
   };
-  let L = (dir, r) =>
-    h(dir, r, READ_ATTR_ACCESS, OPEN_REPARSE_OPTIONS, (s) => queryWin32FileInfo(e, s).stats(_));
-  let y = async (n, r, s) => {
-    if ((s & ~NOFOLLOW_NONBLOCK_FLAGS & WRITE_OPEN_FLAGS) !== 0)
+  let lstatIn = (dir, name) =>
+    withOpenHandle(dir, name, READ_ATTR_ACCESS, OPEN_REPARSE_OPTIONS, (handle) =>
+      queryWin32FileInfo(nt, handle).stats(devMode),
+    );
+  let openInChecked = async (dirHandle, name, flags) => {
+    if ((flags & ~NOFOLLOW_NONBLOCK_FLAGS & WRITE_OPEN_FLAGS) !== 0)
       throw Error("anchored open never writes on this backend");
-    let o = K(n, r, OPEN_REPARSE_OPTIONS, false);
+    let handle = openForAttrs(dirHandle, name, OPEN_REPARSE_OPTIONS, false);
     try {
-      let attributesAndTag = queryAttributesAndTag(e, o);
+      let attributesAndTag = queryAttributesAndTag(nt, handle);
       if (isReparseNameSurrogate(attributesAndTag)) throw win32AnchorErrorWithCode("ELOOP");
       if ((attributesAndTag.attributes & ATTRIBUTE.DIRECTORY) !== 0) throw win32AnchorErrorWithCode("EISDIR");
       if (hasOfflineAttributeFlags(attributesAndTag.attributes))
         throw win32AnchorErrorWithCode("WORKING_FILE_OFFLINE");
-      if ((attributesAndTag.attributes & ATTRIBUTE.REPARSE_POINT) === 0) return V(o);
+      if ((attributesAndTag.attributes & ATTRIBUTE.REPARSE_POINT) === 0) return wrapFileHandle(handle);
     } catch (error) {
-      e.close(o);
+      nt.close(handle);
       throw error;
     }
-    return V(ie(n, r, o));
+    return wrapFileHandle(reopenFilterServedFile(dirHandle, name, handle));
   };
-  let K = (n, r, options, dontReparse) => {
-    let a = (access) =>
-      e.open(n, assertPlainWin32Name(r), {
+  let openForAttrs = (dirHandle, name, options, dontReparse) => {
+    let openWithAccess = (access) =>
+      nt.open(dirHandle, assertPlainWin32Name(name), {
         access,
         disposition: DISPOSITION.FILE_OPEN,
         options,
         dontReparse,
       });
     try {
-      return a(FILE_GENERIC_READ | ACCESS.FILE_WRITE_ATTRIBUTES);
+      return openWithAccess(FILE_GENERIC_READ | ACCESS.FILE_WRITE_ATTRIBUTES);
     } catch (error) {
       let errnoCode = getErrnoCode(error);
       if (errnoCode !== "EPERM" && errnoCode !== "EROFS") throw error;
-      return a(FILE_GENERIC_READ);
+      return openWithAccess(FILE_GENERIC_READ);
     }
   };
-  let ie = (n, r, s) => {
+  let reopenFilterServedFile = (dirHandle, name, firstHandle) => {
     try {
-      let o;
+      let secondHandle;
       try {
-        o = K(n, r, OPTIONS.FILE_SYNCHRONOUS_IO_NONALERT, true);
+        secondHandle = openForAttrs(dirHandle, name, OPTIONS.FILE_SYNCHRONOUS_IO_NONALERT, true);
       } catch (error) {
         if (FILE_NOT_SERVED_STATUSES.has(statusOf(error) ?? 0)) {
           logForDebugging(
@@ -403,79 +414,86 @@ async function openWin32Anchor(i, e, E) {
         throw win32AnchorErrorWithCode("WORKING_FILE_NOT_SERVED");
       }
       try {
-        let a = e.queryInformation(o);
-        if (hasOfflineAttributeFlags(a.attributes)) throw win32AnchorErrorWithCode("WORKING_FILE_OFFLINE");
+        let secondInfo = nt.queryInformation(secondHandle);
+        if (hasOfflineAttributeFlags(secondInfo.attributes))
+          throw win32AnchorErrorWithCode("WORKING_FILE_OFFLINE");
         if (
-          a.indexNumber !== e.queryInformation(s).indexNumber ||
-          e.queryVolume(o).serialNumber !== e.queryVolume(s).serialNumber
+          secondInfo.indexNumber !== nt.queryInformation(firstHandle).indexNumber ||
+          nt.queryVolume(secondHandle).serialNumber !== nt.queryVolume(firstHandle).serialNumber
         ) {
           logForDebugging(
             "anchor (win32): a filter-served file reopened as another file; unreadable this round",
           );
           throw win32AnchorErrorWithCode("WORKING_FILE_NOT_SERVED");
         }
-        return o;
+        return secondHandle;
       } catch (error) {
-        e.close(o);
+        nt.close(secondHandle);
         throw error;
       }
     } finally {
-      e.close(s);
+      nt.close(firstHandle);
     }
   };
-  let V = (n) => {
-    let r = false;
-    let s = () => {
-      if (r) throw win32AnchorErrorWithCode("EBADF");
-      return n;
+  let wrapFileHandle = (rawHandle) => {
+    let isClosed = false;
+    let assertOpenHandle = () => {
+      if (isClosed) throw win32AnchorErrorWithCode("EBADF");
+      return rawHandle;
     };
-    let o = () => queryWin32FileInfo(e, s()).stats(_);
-    async function a(d) {
-      return d?.bigint === true ? o() : toNumberStats(o());
+    let queryStats = () => queryWin32FileInfo(nt, assertOpenHandle()).stats(devMode);
+    async function stat(statOptions) {
+      return statOptions?.bigint === true ? queryStats() : toNumberStats(queryStats());
     }
-    let u = (d, c) => e.read(s(), d, BigInt(c));
-    async function* I() {
-      for (let d = 0; ;) {
-        let c = Buffer.allocUnsafe(READ_CHUNK_BYTES);
-        let N = u(c, d);
-        if (N === 0) return;
-        d += N;
-        yield c.subarray(0, N);
+    let readAt = (buffer, position) => nt.read(assertOpenHandle(), buffer, BigInt(position));
+    async function* readChunks() {
+      for (let offset = 0; ;) {
+        let chunkBuffer = Buffer.allocUnsafe(READ_CHUNK_BYTES);
+        let bytesRead = readAt(chunkBuffer, offset);
+        if (bytesRead === 0) return;
+        offset += bytesRead;
+        yield chunkBuffer.subarray(0, bytesRead);
         await new Promise((resolve) => setImmediate(resolve));
       }
     }
     return {
-      stat: a,
-      read: async (d, c, N, f) => {
-        let bytesRead = u(d.subarray(c, c + Math.min(N, READ_CHUNK_BYTES)), f);
+      stat,
+      read: async (buffer, offset, length, position) => {
+        let bytesRead = readAt(
+          buffer.subarray(offset, offset + Math.min(length, READ_CHUNK_BYTES)),
+          position,
+        );
         await new Promise((resolve) => setImmediate(resolve));
         return {
           bytesRead,
         };
       },
       readFile: async () => {
-        let d = [];
-        for await (let c of I()) d.push(c);
-        return Buffer.concat(d);
+        let chunks = [];
+        for await (let chunk of readChunks()) chunks.push(chunk);
+        return Buffer.concat(chunks);
       },
-      createReadStream: () => I(),
-      chmod: async (d) => {
-        let c = e.queryAttributes(s());
-        let N = (d & 128) === 0 ? c | ATTRIBUTE.READONLY : c & ~ATTRIBUTE.READONLY;
-        if (N !== c) e.setAttributes(s(), N === 0 ? ATTRIBUTE.NORMAL : N);
+      createReadStream: () => readChunks(),
+      chmod: async (mode) => {
+        let attributes = nt.queryAttributes(assertOpenHandle());
+        let nextAttributes =
+          (mode & 128) === 0 ? attributes | ATTRIBUTE.READONLY : attributes & ~ATTRIBUTE.READONLY;
+        if (nextAttributes !== attributes)
+          nt.setAttributes(assertOpenHandle(), nextAttributes === 0 ? ATTRIBUTE.NORMAL : nextAttributes);
       },
-      utimes: async (d, c) => e.setTimes(s(), unixMsToFiletime(d), unixMsToFiletime(c)),
+      utimes: async (atimeMs, mtimeMs) =>
+        nt.setTimes(assertOpenHandle(), unixMsToFiletime(atimeMs), unixMsToFiletime(mtimeMs)),
       close: async () => {
-        if (!r) {
-          r = true;
-          e.close(n);
+        if (!isClosed) {
+          isClosed = true;
+          nt.close(rawHandle);
         }
       },
     };
   };
-  let q = async (n) => {
+  let runWithBusyMapping = async (fn) => {
     try {
-      await n();
+      await fn();
     } catch (error) {
       throw getErrnoCode(error) === "EBUSY"
         ? Object.assign(win32AnchorErrorWithCode("WORKING_FILE_HELD"), {
@@ -484,14 +502,14 @@ async function openWin32Anchor(i, e, E) {
         : error;
     }
   };
-  let G = (n) =>
-    q(async () => {
-      await retryTransient(n);
+  let runWithRetry = (fn) =>
+    runWithBusyMapping(async () => {
+      await retryTransient(fn);
     });
-  let Y = ACCESS.DELETE | ACCESS.FILE_WRITE_ATTRIBUTES | READ_ATTR_ACCESS;
-  let z = (n) => {
+  let deleteAccessFlags = ACCESS.DELETE | ACCESS.FILE_WRITE_ATTRIBUTES | READ_ATTR_ACCESS;
+  let createdStats = (handle) => {
     try {
-      return queryWin32FileInfo(e, n).stats(_);
+      return queryWin32FileInfo(nt, handle).stats(devMode);
     } catch (error) {
       logWin32AnchorFailure(
         "a new file's stat could not be read through its handle, so the folder check goes on without it",
@@ -500,54 +518,67 @@ async function openWin32Anchor(i, e, E) {
       return null;
     }
   };
-  let P = (n, r, s, o, a, u) =>
-    (a ? q : G)(() =>
-      h(n, r, u === undefined ? ACCESS.DELETE | READ_ATTR_ACCESS : Y, OPEN_REPARSE_OPTIONS, async (I) => {
-        e.renameByHandle(I, s, assertPlainWin32Name(o), a);
-        try {
-          if ((await u?.(z(I))) === true) e.deleteByHandle(I);
-        } catch (error) {
-          logWin32AnchorFailure(
-            "a renamed file could not be removed through its handle after its folder failed the check, so it stays at its new name",
-            error,
-          );
-        }
-      }),
-    );
-  let Z = (dir, r, s, o) =>
-    G(() =>
-      h(dir, r, ACCESS.FILE_WRITE_ATTRIBUTES | ACCESS.SYNCHRONIZE, OPEN_REPARSE_OPTIONS, (a) =>
-        e.linkByHandle(a, s, assertPlainWin32Name(o)),
+  let placeByHandle = (dirHandle, fromName, toDir, toName, replaceExisting, afterPlace) =>
+    (replaceExisting ? runWithBusyMapping : runWithRetry)(() =>
+      withOpenHandle(
+        dirHandle,
+        fromName,
+        afterPlace === undefined ? ACCESS.DELETE | READ_ATTR_ACCESS : deleteAccessFlags,
+        OPEN_REPARSE_OPTIONS,
+        async (handle) => {
+          nt.renameByHandle(handle, toDir, assertPlainWin32Name(toName), replaceExisting);
+          try {
+            if ((await afterPlace?.(createdStats(handle))) === true) nt.deleteByHandle(handle);
+          } catch (error) {
+            logWin32AnchorFailure(
+              "a renamed file could not be removed through its handle after its folder failed the check, so it stays at its new name",
+              error,
+            );
+          }
+        },
       ),
     );
-  let X = (dir, r) =>
-    G(() =>
-      h(dir, r, Y, OPEN_REPARSE_OPTIONS, (s) => {
-        let attributesAndTag = queryAttributesAndTag(e, s);
+  let linkByHandleAt = (dir, fromName, toDir, toName) =>
+    runWithRetry(() =>
+      withOpenHandle(
+        dir,
+        fromName,
+        ACCESS.FILE_WRITE_ATTRIBUTES | ACCESS.SYNCHRONIZE,
+        OPEN_REPARSE_OPTIONS,
+        (handle) => nt.linkByHandle(handle, toDir, assertPlainWin32Name(toName)),
+      ),
+    );
+  let unlinkByHandleAt = (dir, name) =>
+    runWithRetry(() =>
+      withOpenHandle(dir, name, deleteAccessFlags, OPEN_REPARSE_OPTIONS, (handle) => {
+        let attributesAndTag = queryAttributesAndTag(nt, handle);
         if (
           (attributesAndTag.attributes & ATTRIBUTE.DIRECTORY) !== 0 &&
           !isReparseNameSurrogate(attributesAndTag)
         )
           throw win32AnchorErrorWithCode("EISDIR");
-        e.deleteByHandle(s);
+        nt.deleteByHandle(handle);
       }),
     );
-  let j = (n, r, access, o = false) => {
-    let a = b(n, r, access, OPEN_DIR_OPTIONS, o);
+  let openDirNamed = (dirHandle, name, access, allowShortName = false) => {
+    let handle = openNamed(dirHandle, name, access, OPEN_DIR_OPTIONS, allowShortName);
     try {
-      if (isReparseNameSurrogate(queryAttributesAndTag(e, a))) throw win32AnchorErrorWithCode("ENOTDIR");
-      return a;
+      if (isReparseNameSurrogate(queryAttributesAndTag(nt, handle)))
+        throw win32AnchorErrorWithCode("ENOTDIR");
+      return handle;
     } catch (error) {
-      e.close(a);
+      nt.close(handle);
       throw error;
     }
   };
-  let J = {
-    openDir: async (n, r, s) => j(n, r, DIR_LIST_ACCESS, s),
-    openDirToPass: async (n, r, s) => j(n, r, DIR_TRAVERSE_ACCESS, s),
-    mkdir: async (n, r) => {
-      e.close(
-        e.open(n, assertPlainWin32Name(r), {
+  let ops = {
+    openDir: async (dirHandle, name, allowShortName) =>
+      openDirNamed(dirHandle, name, DIR_LIST_ACCESS, allowShortName),
+    openDirToPass: async (dirHandle, name, allowShortName) =>
+      openDirNamed(dirHandle, name, DIR_TRAVERSE_ACCESS, allowShortName),
+    mkdir: async (dirHandle, name) => {
+      nt.close(
+        nt.open(dirHandle, assertPlainWin32Name(name), {
           access: READ_ATTR_ACCESS,
           disposition: DISPOSITION.FILE_CREATE,
           options: OPEN_DIR_OPTIONS,
@@ -555,35 +586,36 @@ async function openWin32Anchor(i, e, E) {
         }),
       );
     },
-    closeDir: async (n) => e.close(n),
-    create: async (n, r, s, o, a, u, I, d) => {
-      let c = e.open(n, assertPlainWin32Name(r), {
+    closeDir: async (dirHandle) => nt.close(dirHandle),
+    create: async (dirHandle, name, dirs, data, mode, shouldSync, forcedMode, afterWrite) => {
+      let handle = nt.open(dirHandle, assertPlainWin32Name(name), {
         access: FILE_GENERIC_WRITE | ACCESS.FILE_READ_ATTRIBUTES | ACCESS.DELETE,
         disposition: DISPOSITION.FILE_CREATE,
         options:
           OPTIONS.FILE_NON_DIRECTORY_FILE |
           OPTIONS.FILE_OPEN_REPARSE_POINT |
           OPTIONS.FILE_SYNCHRONOUS_IO_NONALERT |
-          (u ? OPTIONS.FILE_WRITE_THROUGH : 0),
-        attributes: (a & 128) === 0 ? ATTRIBUTE.READONLY : ATTRIBUTE.NORMAL,
+          (shouldSync ? OPTIONS.FILE_WRITE_THROUGH : 0),
+        attributes: (mode & 128) === 0 ? ATTRIBUTE.READONLY : ATTRIBUTE.NORMAL,
       });
       try {
-        for (let N = 0; N < o.length; N += MAX_DIR_READ_BYTES) {
-          e.write(c, o.subarray(N, N + MAX_DIR_READ_BYTES), BigInt(N));
-          if (N + MAX_DIR_READ_BYTES < o.length) await new Promise((resolve) => setImmediate(resolve));
+        for (let offset = 0; offset < data.length; offset += MAX_DIR_READ_BYTES) {
+          nt.write(handle, data.subarray(offset, offset + MAX_DIR_READ_BYTES), BigInt(offset));
+          if (offset + MAX_DIR_READ_BYTES < data.length)
+            await new Promise((resolve) => setImmediate(resolve));
         }
-        await d?.(z(c));
+        await afterWrite?.(createdStats(handle));
       } catch (error) {
         try {
-          e.deleteByHandle(c);
+          nt.deleteByHandle(handle);
         } catch {}
-        e.close(c);
+        nt.close(handle);
         throw error;
       }
-      e.close(c);
+      nt.close(handle);
     },
-    createAndOpen: async (n, r, s, o) => {
-      let a = e.open(n, assertPlainWin32Name(r), {
+    createAndOpen: async (dirHandle, name, dirs, mode) => {
+      let handle = nt.open(dirHandle, assertPlainWin32Name(name), {
         access: FILE_GENERIC_WRITE | ACCESS.FILE_READ_ATTRIBUTES,
         disposition: DISPOSITION.FILE_CREATE,
         options:
@@ -591,49 +623,54 @@ async function openWin32Anchor(i, e, E) {
           OPTIONS.FILE_OPEN_REPARSE_POINT |
           OPTIONS.FILE_SYNCHRONOUS_IO_NONALERT |
           OPTIONS.FILE_WRITE_THROUGH,
-        attributes: (o & 128) === 0 ? ATTRIBUTE.READONLY : ATTRIBUTE.NORMAL,
+        attributes: (mode & 128) === 0 ? ATTRIBUTE.READONLY : ATTRIBUTE.NORMAL,
       });
-      let u = false;
-      let I = () => {
-        if (u) throw win32AnchorErrorWithCode("EBADF");
-        return a;
+      let isClosed = false;
+      let assertOpenHandle = () => {
+        if (isClosed) throw win32AnchorErrorWithCode("EBADF");
+        return handle;
       };
       return {
-        stat: async () => queryWin32FileInfo(e, I()).stats(_),
-        writeFile: async (d) => {
-          for (let c = 0; c < d.length; c += MAX_DIR_READ_BYTES) {
-            e.write(I(), d.subarray(c, c + MAX_DIR_READ_BYTES), BigInt(c));
+        stat: async () => queryWin32FileInfo(nt, assertOpenHandle()).stats(devMode),
+        writeFile: async (data) => {
+          for (let offset = 0; offset < data.length; offset += MAX_DIR_READ_BYTES) {
+            nt.write(assertOpenHandle(), data.subarray(offset, offset + MAX_DIR_READ_BYTES), BigInt(offset));
             await new Promise((resolve) => setImmediate(resolve));
           }
         },
-        write: async (d, c, N, f) => {
-          if (![c, N, f].every((p) => Number.isSafeInteger(p) && p >= 0) || c + N > d.length)
+        write: async (buffer, offset, length, position) => {
+          if (
+            ![offset, length, position].every((value) => Number.isSafeInteger(value) && value >= 0) ||
+            offset + length > buffer.length
+          )
             throw win32AnchorErrorWithCode("EINVAL");
-          let chunk = d.subarray(c, c + Math.min(N, MAX_DIR_READ_BYTES));
-          e.write(I(), chunk, BigInt(f));
+          let chunk = buffer.subarray(offset, offset + Math.min(length, MAX_DIR_READ_BYTES));
+          nt.write(assertOpenHandle(), chunk, BigInt(position));
           await new Promise((resolve) => setImmediate(resolve));
           return {
             bytesWritten: chunk.length,
           };
         },
-        utimes: async (d, c) => e.setTimes(I(), unixMsToFiletime(d), unixMsToFiletime(c)),
+        utimes: async (atimeMs, mtimeMs) =>
+          nt.setTimes(assertOpenHandle(), unixMsToFiletime(atimeMs), unixMsToFiletime(mtimeMs)),
         sync: async () => {},
         close: async () => {
-          if (!u) {
-            u = true;
-            e.close(a);
+          if (!isClosed) {
+            isClosed = true;
+            nt.close(handle);
           }
         },
       };
     },
-    link: Z,
-    rename: (n, r, s, o) => P(n, r, s, o, true),
-    renameNoReplace: (n, r, s, o, a) => P(n, r, s, o, false, a),
-    symlink: async (n, r, s) => {
-      encodeSymlinkReparseData(n);
-      let o;
+    link: linkByHandleAt,
+    rename: (fromDir, fromName, toDir, toName) => placeByHandle(fromDir, fromName, toDir, toName, true),
+    renameNoReplace: (fromDir, fromName, toDir, toName, location) =>
+      placeByHandle(fromDir, fromName, toDir, toName, false, location),
+    symlink: async (target, dirHandle, name) => {
+      encodeSymlinkReparseData(target);
+      let handle;
       try {
-        o = e.open(r, assertPlainWin32Name(s), {
+        handle = nt.open(dirHandle, assertPlainWin32Name(name), {
           access: FILE_GENERIC_WRITE | ACCESS.FILE_READ_ATTRIBUTES | ACCESS.DELETE,
           disposition: DISPOSITION.FILE_CREATE,
           options:
@@ -646,33 +683,37 @@ async function openWin32Anchor(i, e, E) {
         throw getErrnoCode(error) === "EISDIR" ? win32AnchorErrorWithCode("EEXIST") : error;
       }
       try {
-        e.setSymlink(o, n);
+        nt.setSymlink(handle, target);
       } catch (error) {
         try {
-          e.deleteByHandle(o);
+          nt.deleteByHandle(handle);
         } catch {}
-        e.close(o);
+        nt.close(handle);
         throw error;
       }
-      e.close(o);
+      nt.close(handle);
     },
-    readlink: (n, r) => h(n, r, READ_ATTR_ACCESS, OPEN_REPARSE_OPTIONS, (s) => e.readSymlink(s)),
-    unlink: X,
-    rmdir: (n, r) =>
-      h(n, r, Y, OPEN_DIR_OPTIONS, (s) => {
-        if (isReparseNameSurrogate(queryAttributesAndTag(e, s))) throw win32AnchorErrorWithCode("ENOTDIR");
-        e.deleteByHandle(s);
+    readlink: (dirHandle, name) =>
+      withOpenHandle(dirHandle, name, READ_ATTR_ACCESS, OPEN_REPARSE_OPTIONS, (handle) =>
+        nt.readSymlink(handle),
+      ),
+    unlink: unlinkByHandleAt,
+    rmdir: (dirHandle, name) =>
+      withOpenHandle(dirHandle, name, deleteAccessFlags, OPEN_DIR_OPTIONS, (handle) => {
+        if (isReparseNameSurrogate(queryAttributesAndTag(nt, handle)))
+          throw win32AnchorErrorWithCode("ENOTDIR");
+        nt.deleteByHandle(handle);
       }),
-    list: async (n, r) => e.listDirectory(n, r),
-    lstat: L,
-    open: (n, r, s, o) => y(n, r, o),
-    hold: async (n) => {
-      let r = await fs.realpath(n).catch(() => null);
-      let path = r !== null && /^[a-zA-Z]:$/.test(r) ? `${r}\\` : r;
+    list: async (dirHandle, maxNames) => nt.listDirectory(dirHandle, maxNames),
+    lstat: lstatIn,
+    open: (dirHandle, name, dirs, flags) => openInChecked(dirHandle, name, flags),
+    hold: async (rootPath) => {
+      let realPath = await fs.realpath(rootPath).catch(() => null);
+      let path = realPath !== null && /^[a-zA-Z]:$/.test(realPath) ? `${realPath}\\` : realPath;
       if (path === null || isUncPath(path)) return null;
-      let o;
+      let handle;
       try {
-        o = e.open(0, toNtPath(path), {
+        handle = nt.open(0, toNtPath(path), {
           access: DIR_LIST_ACCESS,
           disposition: DISPOSITION.FILE_OPEN,
           options: OPEN_DIR_OPTIONS,
@@ -681,83 +722,90 @@ async function openWin32Anchor(i, e, E) {
         return null;
       }
       try {
-        if ((e.queryDevice(o).characteristics & FILE_REMOTE_DEVICE) !== 0) {
-          e.close(o);
+        if ((nt.queryDevice(handle).characteristics & FILE_REMOTE_DEVICE) !== 0) {
+          nt.close(handle);
           return null;
         }
-        let [a, u] = await Promise.all([
-          queryWin32FileInfo(e, o),
+        let [info, pathStats] = await Promise.all([
+          queryWin32FileInfo(nt, handle),
           fs.lstat(path, {
             bigint: true,
           }),
         ]);
-        let I = a.stats(_);
+        let handleStats = info.stats(devMode);
         if (
-          isReparseNameSurrogate(a) ||
-          !I.isDirectory() ||
-          !u.isDirectory() ||
-          I.ino === 0n ||
-          I.dev !== u.dev ||
-          !sameTimestamp(I.ino, u.ino)
+          isReparseNameSurrogate(info) ||
+          !handleStats.isDirectory() ||
+          !pathStats.isDirectory() ||
+          handleStats.ino === 0n ||
+          handleStats.dev !== pathStats.dev ||
+          !sameTimestamp(handleStats.ino, pathStats.ino)
         ) {
-          e.close(o);
+          nt.close(handle);
           return null;
         }
       } catch {
-        e.close(o);
+        nt.close(handle);
         return null;
       }
-      return J.holdOpenedDir(o, path);
+      return ops.holdOpenedDir(handle, path);
     },
-    getHeldDir: (n) => n.dir,
-    holdOpenedDir: (n, realPath) => {
-      let s = false;
+    getHeldDir: (rootDirHandle) => rootDirHandle.dir,
+    holdOpenedDir: (handle, realPath) => {
+      let isClosed = false;
       return {
         realPath,
-        dir: n,
-        stat: async () => queryWin32FileInfo(e, n).stats(_),
+        dir: handle,
+        stat: async () => queryWin32FileInfo(nt, handle).stats(devMode),
         close: async () => {
-          if (!s) {
-            s = true;
-            e.close(n);
+          if (!isClosed) {
+            isClosed = true;
+            nt.close(handle);
           }
         },
       };
     },
-    renameOut: (n, r, s, o) => P(n, r, s.dir, o, true),
-    renameIn: (n, r, s, o) => P(n.dir, r, s, o, true),
-    linkIn: (n, r, s, o) => Z(n.dir, r, s, o),
-    renameInNoReplace: (n, r, s, o, a) => P(n.dir, r, s, o, false, a),
-    statIn: (n, r) => L(n.dir, r),
-    openIn: (n, r, s) => y(n.dir, r, s),
-    unlinkIn: (n, r) => X(n.dir, r),
+    renameOut: (fromDir, fromName, toHeldDir, toName) =>
+      placeByHandle(fromDir, fromName, toHeldDir.dir, toName, true),
+    renameIn: (fromHeldDir, fromName, toDir, toName) =>
+      placeByHandle(fromHeldDir.dir, fromName, toDir, toName, true),
+    linkIn: (fromHeldDir, fromName, toDir, toName) =>
+      linkByHandleAt(fromHeldDir.dir, fromName, toDir, toName),
+    renameInNoReplace: (fromHeldDir, fromName, toDir, toName, location) =>
+      placeByHandle(fromHeldDir.dir, fromName, toDir, toName, false, location),
+    statIn: (heldDir, name) => lstatIn(heldDir.dir, name),
+    openIn: (heldDir, name, flags) => openInChecked(heldDir.dir, name, flags),
+    unlinkIn: (heldDir, name) => unlinkByHandleAt(heldDir.dir, name),
   };
-  let M = false;
+  let isClosed = false;
   let root = {
     stat: async () => {
-      if (M) throw win32AnchorErrorWithCode("EBADF");
-      return queryWin32FileInfo(e, O).stats(_);
+      if (isClosed) throw win32AnchorErrorWithCode("EBADF");
+      return queryWin32FileInfo(nt, rootHandle).stats(devMode);
     },
     close: async () => {
-      if (!M) {
-        M = true;
-        e.close(O);
+      if (!isClosed) {
+        isClosed = true;
+        nt.close(rootHandle);
       }
     },
   };
   logForDebugging("anchor (win32): held-handle backend up");
   return {
     root,
-    held: O,
-    ops: J,
+    held: rootHandle,
+    ops,
   };
 }
 //@ chunk-tb11za84.js:13060-13192 placement
-function logWin32AnchorFailure(i, error) {
-  let E = statusOf(error);
-  if (E === undefined) {
+function logWin32AnchorFailure(message, error) {
+  let status = statusOf(error);
+  if (status === undefined) {
     logError(error);
     return;
   }
-  logForDebugging(`anchor (win32): ${i} (${getErrnoCode(error) ?? "no code"}, status 0x${E.toString(16)})`);
+  logForDebugging(
+    `anchor (win32): ${message} (${getErrnoCode(error) ?? "no code"}, status 0x${status.toString(16)})`,
+  );
 }
+export { openWin32Anchor };

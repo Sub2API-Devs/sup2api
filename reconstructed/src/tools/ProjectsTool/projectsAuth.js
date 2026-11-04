@@ -56,7 +56,7 @@ class ProjectsPreconditionError extends Error {
 async function ensureProjectsScope(credentials) {
   let projectsAccessToken = await ensureProjectsAccessToken(credentials);
   if (!projectsAccessToken.ok) {
-    let r =
+    let loginNote =
       projectsAccessToken.reason === "wrong_provider" ||
       projectsAccessToken.reason === "essential_traffic_only" ||
       projectsAccessToken.reason === "policy_disabled" ||
@@ -65,8 +65,10 @@ async function ensureProjectsScope(credentials) {
       projectsAccessToken.reason === "save_failed"
         ? ""
         : "Projects needs a claude.ai login. ";
-    let s = projectsAccessToken.detail ? ` (${projectsAccessToken.detail})` : "";
-    throw new ProjectsPreconditionError(`${r}${scopeUpgradeRefusalText(projectsAccessToken.reason)}${s}`);
+    let detailSuffix = projectsAccessToken.detail ? ` (${projectsAccessToken.detail})` : "";
+    throw new ProjectsPreconditionError(
+      `${loginNote}${scopeUpgradeRefusalText(projectsAccessToken.reason)}${detailSuffix}`,
+    );
   }
   return {
     accessToken: projectsAccessToken.accessToken,

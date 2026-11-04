@@ -42,42 +42,42 @@ import { describeRepoFact } from "./disclosure.js";
 /**
  * 安全读取小型普通文件：不跟随链接、只读单链接普通文件且不超过大小上限，否则返回 null。
  */
-async function readSmallRegularFile(e, n) {
-  let s;
-  let r = null;
+async function readSmallRegularFile(filePath, maxBytes) {
+  let handle;
+  let preStat = null;
   try {
     if (NOFOLLOW_NONBLOCK_FLAGS === 0) {
-      let a = await lstat(e, {
+      let preLstat = await lstat(filePath, {
         bigint: true,
       });
-      if (!a.isFile()) return null;
-      r = {
-        ino: a.ino,
-        dev: a.dev,
+      if (!preLstat.isFile()) return null;
+      preStat = {
+        ino: preLstat.ino,
+        dev: preLstat.dev,
       };
     }
-    s = await open(e, constants.O_RDONLY | NOFOLLOW_NONBLOCK_FLAGS);
+    handle = await open(filePath, constants.O_RDONLY | NOFOLLOW_NONBLOCK_FLAGS);
   } catch (error) {
     let errnoCode = getErrnoCode(error);
     if (errnoCode === "ELOOP" || errnoCode === "EISDIR" || isFsInaccessible(error)) return null;
     throw error;
   }
   try {
-    let stats = await s.stat({
+    let stats = await handle.stat({
       bigint: true,
     });
     if (
       !stats.isFile() ||
       stats.nlink > 1n ||
-      stats.size > BigInt(n) ||
-      (r !== null && (stats.ino !== r.ino || stats.dev !== r.dev))
+      stats.size > BigInt(maxBytes) ||
+      (preStat !== null && (stats.ino !== preStat.ino || stats.dev !== preStat.dev))
     )
       return null;
-    return await s.readFile({
+    return await handle.readFile({
       encoding: "utf8",
     });
   } finally {
-    await s.close();
+    await handle.close();
   }
 }
 //@ chunk-dz3q485w.js:26683-26976 placement
@@ -107,7 +107,7 @@ async function recentFolderCommits(context) {
 `,
     )
     .map((line) => truncateToLength(stripAnsiAndControls(line).trim(), DOC_NAME_CHARS))
-    .filter((r) => r !== "");
+    .filter((line) => line !== "");
 }
 //@ chunk-dz3q485w.js:26976-27613 placement
 /**
@@ -120,20 +120,21 @@ async function readDocExcerpts(context) {
     if (excerpts.length >= MAX_DOC_EXCERPTS) break;
     try {
       if (doc.endsWith("/")) {
-        let a = join(cwd, doc.slice(0, -1));
-        let l = await lstat(a, {
+        let dirPath = join(cwd, doc.slice(0, -1));
+        let beforeStat = await lstat(dirPath, {
           bigint: true,
         });
-        if (!l.isDirectory()) continue;
-        let c = await readdir(join(cwd, doc));
-        let h = await lstat(a, {
+        if (!beforeStat.isDirectory()) continue;
+        let entries = await readdir(join(cwd, doc));
+        let afterStat = await lstat(dirPath, {
           bigint: true,
         });
-        if (!h.isDirectory() || h.ino !== l.ino || h.dev !== l.dev) continue;
-        let sliced = c
-          .filter((w) => !w.startsWith("."))
-          .map((w) => truncateToLength(stripAnsiAndControls(w), 80))
-          .sort((w, y) => w.localeCompare(y))
+        if (!afterStat.isDirectory() || afterStat.ino !== beforeStat.ino || afterStat.dev !== beforeStat.dev)
+          continue;
+        let sliced = entries
+          .filter((entryName) => !entryName.startsWith("."))
+          .map((entryName) => truncateToLength(stripAnsiAndControls(entryName), 80))
+          .sort((a, b) => a.localeCompare(b))
           .slice(0, MAX_DIR_ENTRIES);
         excerpts.push({
           path: doc,
@@ -210,12 +211,12 @@ async function gatherFolderBrief(context, sessionOptions, signal, opts = {}) {
 /**
  * 仅统计当前对话中的 MCP 工具调用并汇总（没有当前消息时返回 null）。
  */
-function currentConversationTools(e) {
-  return e.currentMessages === undefined
+function currentConversationTools(conversationState) {
+  return conversationState.currentMessages === undefined
     ? null
     : summarizeToolsUsed({
-        counts: countMcpCallsByServer(e.currentMessages),
-        clients: e.mcpClients ?? [],
+        counts: countMcpCallsByServer(conversationState.currentMessages),
+        clients: conversationState.mcpClients ?? [],
         sessionsScanned: 0,
         includesCurrentConversation: true,
       });
@@ -225,7 +226,7 @@ function currentConversationTools(e) {
  * 说明 MCP 调用统计来自哪些会话转录（最近若干个与/或当前对话），以及 claude.ai 连接器与本机服务器的区别。
  */
 function mcpCallsCountedIn(tools) {
-  return `MCP tool calls by server, counted in ${[tools.sessionsScanned > 0 ? `the ${tools.sessionsScanned === 1 ? "most recent session transcript" : `${tools.sessionsScanned} most recent session transcripts`} (read whole, not just the condensed text below)` : null, tools.includesCurrentConversation ? "the conversation above" : null].filter((s) => s !== null).join(" and ")}. A claude.ai connector lives in the cloud; a local server is configured on this computer only and does not carry over to the project.`;
+  return `MCP tool calls by server, counted in ${[tools.sessionsScanned > 0 ? `the ${tools.sessionsScanned === 1 ? "most recent session transcript" : `${tools.sessionsScanned} most recent session transcripts`} (read whole, not just the condensed text below)` : null, tools.includesCurrentConversation ? "the conversation above" : null].filter((part) => part !== null).join(" and ")}. A claude.ai connector lives in the cloud; a local server is configured on this computer only and does not carry over to the project.`;
 }
 //@ chunk-dz3q485w.js:29018-30880 placement
 /**
@@ -263,13 +264,13 @@ ${
     lines.push(`### ${doc.path}
 ${doc.excerpt}`);
   if (brief.tools !== null) {
-    let b = toolsUsedLines(brief.tools, "this computer");
-    let w = unusedConnectorsLine(brief.tools);
+    let toolLines = toolsUsedLines(brief.tools, "this computer");
+    let connectorsLine = unusedConnectorsLine(brief.tools);
     lines.push("");
     lines.push(`## ${TOOLS_USED_HEADING}`);
     lines.push(mcpCallsCountedIn(brief.tools));
-    lines.push(...(b.length > 0 ? b : ["- (no MCP tool calls in these sessions)"]));
-    if (w !== null) lines.push(w);
+    lines.push(...(toolLines.length > 0 ? toolLines : ["- (no MCP tool calls in these sessions)"]));
+    if (connectorsLine !== null) lines.push(connectorsLine);
   }
   if (brief.sessionsSkipped) {
     lines.splice(sessionsLineIndex, 2);
@@ -285,8 +286,8 @@ ${doc.excerpt}`);
   lines.push("");
   lines.push("## Recent local sessions (newest first)");
   if (brief.sessions.length === 0) lines.push("(none)");
-  let sessionsLine = (b) =>
-    `Local Claude Code sessions in this folder: ${b === 0 ? "none was read." : `the ${b === 1 ? "most recent one read is" : `${b} most recent read are`} condensed below.`}`;
+  let sessionsLine = (readCount) =>
+    `Local Claude Code sessions in this folder: ${readCount === 0 ? "none was read." : `the ${readCount === 1 ? "most recent one read is" : `${readCount} most recent read are`} condensed below.`}`;
   lines[sessionsLineIndex] = sessionsLine(brief.sessions.length);
   let text = truncateToLength(
     lines.join(`
@@ -294,12 +295,12 @@ ${doc.excerpt}`);
     MAX_BRIEF_CHARS,
   );
   let included = 0;
-  for (let [b, w] of brief.sessions.entries()) {
-    let y = `
-### Session ${b + 1}: ${w.title} \u2014 ${w.date}${w.branch !== null ? ` \u2014 branch ${w.branch}` : ""}
-${w.transcript}`;
-    if (text.length + y.length > MAX_BRIEF_CHARS) break;
-    text += y;
+  for (let [sessionIndex, session] of brief.sessions.entries()) {
+    let sessionBlock = `
+### Session ${sessionIndex + 1}: ${session.title} \u2014 ${session.date}${session.branch !== null ? ` \u2014 branch ${session.branch}` : ""}
+${session.transcript}`;
+    if (text.length + sessionBlock.length > MAX_BRIEF_CHARS) break;
+    text += sessionBlock;
     included++;
   }
   let omitted = brief.sessions.length - included;

@@ -5,18 +5,18 @@
  * pieces: chunk-41w44bgm.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../runtime/bun-runtime.js";
 
 //@ chunk-41w44bgm.js:4112-12186 cjs-fingerprint
-var require_walk = x(function (cjsExports, cjsModule) {
-  (function (e, factory) {
+var require_walk = __commonJS(function (cjsExports, cjsModule) {
+  (function (root, factory) {
     if (typeof cjsExports === "object" && typeof cjsModule !== "undefined") factory(cjsExports);
     else if (typeof define === "function" && define.amd) define(["exports"], factory);
     else {
-      e = typeof globalThis !== "undefined" ? globalThis : e || self;
-      factory(((e.acorn = e.acorn || {}), (e.acorn.walk = {})));
+      root = typeof globalThis !== "undefined" ? globalThis : root || self;
+      factory(((root.acorn = root.acorn || {}), (root.acorn.walk = {})));
     }
-  })(cjsExports, function (e) {
+  })(cjsExports, function (walkExports) {
     function simple(node, visitors, baseVisitor, state, override) {
       if (!baseVisitor) baseVisitor = base;
       (function c(node, st, override) {
@@ -425,17 +425,17 @@ var require_walk = x(function (cjsExports, cjsModule) {
           if (node.computed) c(node.key, st, "Expression");
           if (node.value) c(node.value, st, "Expression");
         };
-    e.ancestor = ancestor;
-    e.base = base;
-    e.findNodeAfter = findNodeAfter;
-    e.findNodeAround = findNodeAround;
-    e.findNodeAt = findNodeAt;
-    e.findNodeBefore = findNodeBefore;
-    e.full = full;
-    e.fullAncestor = fullAncestor;
-    e.make = make;
-    e.recursive = recursive;
-    e.simple = simple;
+    walkExports.ancestor = ancestor;
+    walkExports.base = base;
+    walkExports.findNodeAfter = findNodeAfter;
+    walkExports.findNodeAround = findNodeAround;
+    walkExports.findNodeAt = findNodeAt;
+    walkExports.findNodeBefore = findNodeBefore;
+    walkExports.full = full;
+    walkExports.fullAncestor = fullAncestor;
+    walkExports.make = make;
+    walkExports.recursive = recursive;
+    walkExports.simple = simple;
   });
 });
 export { require_walk };

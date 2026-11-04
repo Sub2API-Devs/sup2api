@@ -40,14 +40,14 @@ function isSiloId(selection) {
 /**
  * 判断 id 是否为分组（sgrp_ 前缀）。
  */
-function isGroupingId(e) {
-  return e.startsWith("sgrp_");
+function isGroupingId(value) {
+  return value.startsWith("sgrp_");
 }
 //@ chunk-82kqcve8.js:38424-38528 placement
-function classifySelectionKind(e) {
-  if (e === null) return "none";
-  if (isPublicProjects(e)) return "public_projects";
-  return isSiloId(e) ? "silo" : "project";
+function classifySelectionKind(selection) {
+  if (selection === null) return "none";
+  if (isPublicProjects(selection)) return "public_projects";
+  return isSiloId(selection) ? "silo" : "project";
 }
 //@ chunk-82kqcve8.js:38528-38576 placement
 /**
@@ -59,15 +59,15 @@ var EXPLICIT_OFF_SELECTION = "__explicit_off__";
 /**
  * 判断选择是否被显式关闭。
  */
-function isExplicitOff(e) {
-  return e === EXPLICIT_OFF_SELECTION;
+function isExplicitOff(selection) {
+  return selection === EXPLICIT_OFF_SELECTION;
 }
 //@ chunk-82kqcve8.js:38606-38636 placement
 /**
  * 判断选择是否为公共项目。
  */
-function isPublicProjects(e) {
-  return e === PUBLIC_PROJECTS;
+function isPublicProjects(selection) {
+  return selection === PUBLIC_PROJECTS;
 }
 //@ chunk-82kqcve8.js:38636-38668 placement
 /**
@@ -93,60 +93,72 @@ function readSavedSelection() {
  * 取生效的组织记忆选择：已失效的返回 null，可用的直接返回，否则视条件返回保存值或 null。
  */
 function getEffectiveSelection() {
-  let savedSelection = readSavedSelection();
-  if (savedSelection !== null && isExplicitOff(savedSelection)) return null;
-  if (savedSelection !== null && isPublicProjects(savedSelection)) return savedSelection;
-  return isOrgMemoryDiscoveryEnabled() ? savedSelection : null;
+  let selection = readSavedSelection();
+  if (selection !== null && isExplicitOff(selection)) return null;
+  if (selection !== null && isPublicProjects(selection)) return selection;
+  return isOrgMemoryDiscoveryEnabled() ? selection : null;
 }
 //@ chunk-82kqcve8.js:38957-39605 placement
-function saveOrgMemorySelection(e, storageV5) {
-  let r = selectionAccountKey();
-  if (e !== null && r === null) return "refused";
-  if (e !== null && !isExplicitOff(e) && isOrgMemoryWritesEnabledForAccount() && !isEligibleDecisionSurface())
+function saveOrgMemorySelection(selection, storageV5) {
+  let accountKey = selectionAccountKey();
+  if (selection !== null && accountKey === null) return "refused";
+  if (
+    selection !== null &&
+    !isExplicitOff(selection) &&
+    isOrgMemoryWritesEnabledForAccount() &&
+    !isEligibleDecisionSurface()
+  )
     return "refused_arms_writes";
-  if (e === null) {
+  if (selection === null) {
     let currentProjectConfig = getCurrentProjectConfig();
     if (currentProjectConfig.orgMemorySelection === undefined) return "noop";
-    if (currentProjectConfig.orgMemorySelectionAccount !== r) return "noop";
+    if (currentProjectConfig.orgMemorySelectionAccount !== accountKey) return "noop";
   } else {
     let currentProjectConfig = getCurrentProjectConfig();
-    if (currentProjectConfig.orgMemorySelection === e && currentProjectConfig.orgMemorySelectionAccount === r)
+    if (
+      currentProjectConfig.orgMemorySelection === selection &&
+      currentProjectConfig.orgMemorySelectionAccount === accountKey
+    )
       return "noop";
   }
-  saveCurrentProjectConfig((s) => {
+  saveCurrentProjectConfig((config) => {
     if (
-      (s.orgMemorySelection ?? null) === e &&
-      (s.orgMemorySelectionAccount ?? undefined) === (e !== null ? (r ?? undefined) : undefined)
+      (config.orgMemorySelection ?? null) === selection &&
+      (config.orgMemorySelectionAccount ?? undefined) ===
+        (selection !== null ? (accountKey ?? undefined) : undefined)
     )
-      return s;
-    if (e === null && s.orgMemorySelectionAccount !== r) return s;
+      return config;
+    if (selection === null && config.orgMemorySelectionAccount !== accountKey) return config;
     return {
-      ...s,
-      orgMemorySelection: e ?? undefined,
-      orgMemorySelectionAccount: e !== null ? (r ?? undefined) : undefined,
+      ...config,
+      orgMemorySelection: selection ?? undefined,
+      orgMemorySelectionAccount: selection !== null ? (accountKey ?? undefined) : undefined,
     };
   }, storageV5);
-  return e !== null ? "saved" : "cleared";
+  return selection !== null ? "saved" : "cleared";
 }
 //@ chunk-82kqcve8.js:39605-39889 placement
 /**
  * 当保存的组织记忆选择仍对应当前账号时清除它，并记 org_memory_picker selection_dropped。
  */
-function dropSavedSelection(e, storageV5) {
-  let r = selectionAccountKey();
+function dropSavedSelection(selection, storageV5) {
+  let accountKey = selectionAccountKey();
   let currentProjectConfig = getCurrentProjectConfig();
-  if (currentProjectConfig.orgMemorySelection !== e || currentProjectConfig.orgMemorySelectionAccount !== r)
+  if (
+    currentProjectConfig.orgMemorySelection !== selection ||
+    currentProjectConfig.orgMemorySelectionAccount !== accountKey
+  )
     return;
   logFeatureSad("org_memory_picker", "selection_dropped");
   saveCurrentProjectConfig(
-    (h) =>
-      h.orgMemorySelection === e && h.orgMemorySelectionAccount === r
+    (config) =>
+      config.orgMemorySelection === selection && config.orgMemorySelectionAccount === accountKey
         ? {
-            ...h,
+            ...config,
             orgMemorySelection: undefined,
             orgMemorySelectionAccount: undefined,
           }
-        : h,
+        : config,
     storageV5,
   );
 }

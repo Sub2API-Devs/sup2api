@@ -17,7 +17,7 @@ var radioCommandDefinition = {
   name: "radio",
   description: "Listen to Claude FM lo-fi radio",
   supportsNonInteractive: false,
-  load: () => import("./chunk-03rvwpge.js"),
+  load: () => import("./call.lazy.js"),
 };
 var radioCommand = radioCommandDefinition;
 export { radioCommand };

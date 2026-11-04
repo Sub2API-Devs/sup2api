@@ -13,6 +13,7 @@ import { isColorCommandForceHidden } from "../commands/color/index.js";
 import { getRootSession } from "../bootstrap/state.js";
 import { EXIT_COMMAND_WORDS } from "./handlePromptSubmit.js";
 import { findCommand, splitSlashCommandInput } from "../commands.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:1729936-1730105 placement
 class RemoteSessionScreenState {
@@ -31,15 +32,18 @@ class RemoteSessionScreenState {
   closed = new Set();
 }
 //@ chunk-e6aww6q8.js:1730105-1730132 placement
-var remoteSessionScreenSlot = new HostScoped(() => new RemoteSessionScreenState());
+var remoteSessionScreenSlot; // deferred: uses RemoteSessionScreenState of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:1730105", () => {
+  remoteSessionScreenSlot = new HostScoped(() => new RemoteSessionScreenState());
+});
 //@ chunk-e6aww6q8.js:1730132-1730248 placement
 /**
  * 退出方式提示。
  */
-function exitHint(e) {
+function exitHint(capitalize) {
   if (isColorCommandForceHidden() && neverTrueRemote())
-    return e ? "Press Ctrl+C twice" : "press Ctrl+C twice";
-  return e ? "Run /exit" : "run /exit";
+    return capitalize ? "Press Ctrl+C twice" : "press Ctrl+C twice";
+  return capitalize ? "Run /exit" : "run /exit";
 }
 //@ chunk-e6aww6q8.js:1730248-1730272 placement
 function neverTrueRemote() {
@@ -56,12 +60,17 @@ function noRemoteSessionCommands() {
 /**
  * 无云会话时可运行的命令与提示。
  */
-var LOCAL_REMOTE_COMMANDS = new Set(["login", "exit", "help"]);
-var NO_CLOUD_SESSION_MESSAGE =
-  "Nothing was sent or run: no cloud session is running here. Run /login to sign in, then press \u2191 to bring back what you typed.";
-var awaitState = new HostScoped(() => ({
-  awaits: false,
-}));
+var LOCAL_REMOTE_COMMANDS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var NO_CLOUD_SESSION_MESSAGE;
+var awaitState;
+deferInit("chunk-e6aww6q8.js:1730294", () => {
+  LOCAL_REMOTE_COMMANDS = new Set(["login", "exit", "help"]);
+  NO_CLOUD_SESSION_MESSAGE =
+    "Nothing was sent or run: no cloud session is running here. Run /login to sign in, then press \u2191 to bring back what you typed.";
+  awaitState = new HostScoped(() => ({
+    awaits: false,
+  }));
+});
 //@ chunk-e6aww6q8.js:1730500-1730546 placement
 /**
  * remoteSessionAwaits：远程会话等待项。
@@ -80,17 +89,17 @@ function setRemoteSessionAwaits(awaits) {
 /**
  * isLocalRemoteCommand：本地远程命令。
  */
-function isLocalRemoteCommand(e) {
-  return LOCAL_REMOTE_COMMANDS.has(e.name);
+function isLocalRemoteCommand(command) {
+  return LOCAL_REMOTE_COMMANDS.has(command.name);
 }
 //@ chunk-e6aww6q8.js:1730627-1730772 placement = prependModeCharacterToInput (1)
-function prependModeCharacterToInput_2(e, inputMode, commands) {
-  let trimmed = e.trim();
+function prependModeCharacterToInput_2(input, inputMode, commands) {
+  let trimmed = input.trim();
   if (trimmed === "") return true;
   if (inputMode === "bash") return false;
   return (
     EXIT_COMMAND_WORDS.includes(trimmed) ||
-    (e.startsWith("/") && findCommand(splitSlashCommandInput(trimmed).name, commands) !== undefined)
+    (input.startsWith("/") && findCommand(splitSlashCommandInput(trimmed).name, commands) !== undefined)
   );
 }
 export {

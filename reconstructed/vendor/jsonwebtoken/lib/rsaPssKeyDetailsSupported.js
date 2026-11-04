@@ -5,11 +5,11 @@
  * pieces: chunk-mrx6y2r5.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../runtime/bun-runtime.js";
 import { require_semver_3 } from "../../semver/index.js";
 
 //@ chunk-mrx6y2r5.js:4860-4951 cjs-fingerprint
-var require_rsaPssKeyDetailsSupported = x(function (cjsExports, cjsModule) {
+var require_rsaPssKeyDetailsSupported = __commonJS(function (cjsExports, cjsModule) {
   var semver = require_semver_3();
   cjsModule.exports = semver.satisfies(process.version, ">=16.9.0");
 });

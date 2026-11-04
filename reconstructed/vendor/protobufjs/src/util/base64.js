@@ -5,10 +5,10 @@
  * pieces: chunk-798ashq9.js (1)
  * attribution: cjs-require-graph 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-798ashq9.js:6693-7914 cjs-require-graph
-var require_base64 = x(function (cjsExports) {
+var require_base64 = __commonJS(function (cjsExports) {
   var base64 = cjsExports;
   base64.length = function (string) {
     var p = string.length;

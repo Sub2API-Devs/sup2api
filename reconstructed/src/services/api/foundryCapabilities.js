@@ -14,57 +14,58 @@ import { logForDebugging } from "../../utils/debug.js";
 import { getAPIProvider } from "../../utils/model/providers.js";
 import { APIError } from "../../../vendor/@anthropic-ai/sdk/core/error.mjs";
 import { DEFERREDTOOLPLACEHOLDER, DEFERRED_PLACEHOLDER_NOTE } from "../../tools/ToolSearchTool/prompt.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-hwmsct5x.js:248450-248718 placement
 /**
  * 记录某 Azure Foundry 部署不支持的能力（如 tool_search/structured_outputs），供后续请求剥离。
  */
-function recordFoundryUnsupportedCapabilities(e, foundryUnsupportedCapabilities) {
-  if (foundryUnsupportedCapabilities.length === 0) return;
-  let r = foundryModelKey(e);
+function recordFoundryUnsupportedCapabilities(model, capabilities) {
+  if (capabilities.length === 0) return;
+  let key = foundryModelKey(model);
   let foundryDeploymentCapabilities = getFoundryDeploymentCapabilities();
-  let h = foundryDeploymentCapabilities.get(r);
-  if (h && foundryUnsupportedCapabilities.every((w) => h.has(w))) return;
-  let y = h ? new Set(h) : new Set();
-  for (let w of foundryUnsupportedCapabilities) y.add(w);
-  foundryDeploymentCapabilities.set(r, y);
-  logForDebugging(`[foundry-capabilities] deployment ${r} does not support: ${[...y].join(", ")}`, {
+  let known = foundryDeploymentCapabilities.get(key);
+  if (known && capabilities.every((capability) => known.has(capability))) return;
+  let merged = known ? new Set(known) : new Set();
+  for (let capability of capabilities) merged.add(capability);
+  foundryDeploymentCapabilities.set(key, merged);
+  logForDebugging(`[foundry-capabilities] deployment ${key} does not support: ${[...merged].join(", ")}`, {
     level: "warn",
   });
 }
 //@ chunk-hwmsct5x.js:248718-248799 placement
-function foundrySupportsCapability(e, n) {
+function foundrySupportsCapability(model, capability) {
   let foundryDeploymentCapabilities = getFoundryDeploymentCapabilities();
   if (foundryDeploymentCapabilities.size === 0) return true;
-  return !foundryDeploymentCapabilities.get(foundryModelKey(e))?.has(n);
+  return !foundryDeploymentCapabilities.get(foundryModelKey(model))?.has(capability);
 }
 //@ chunk-hwmsct5x.js:248799-249081 placement
-function parseFoundryUnsupportedCapabilities(e) {
+function parseFoundryUnsupportedCapabilities(error) {
   if (getAPIProvider() !== "foundry") return null;
-  if (!(e instanceof APIError) || e.status !== 400) return null;
-  let error = e.error;
-  if (error && typeof error === "object" && "error" in error) {
-    let error_2 = error.error;
-    if (error_2 && typeof error_2 === "object" && "message" in error_2 && typeof error_2.message === "string")
-      return makeToolSchema(error_2.message);
+  if (!(error instanceof APIError) || error.status !== 400) return null;
+  let error_2 = error.error;
+  if (error_2 && typeof error_2 === "object" && "error" in error_2) {
+    let error = error_2.error;
+    if (error && typeof error === "object" && "message" in error && typeof error.message === "string")
+      return makeToolSchema(error.message);
   }
-  return makeToolSchema(e.message ?? "");
+  return makeToolSchema(error.message ?? "");
 }
 //@ chunk-hwmsct5x.js:249081-249190 placement
-var FOUNDRY_STRIPPABLE_CAPABILITIES = new Set(["tool_search_server", "tool_search", "structured_outputs"]);
-var FAIL_FOUNDRY_PURPOSE_REQUEST = "fail:foundry-purpose-request";
+var FOUNDRY_STRIPPABLE_CAPABILITIES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var FAIL_FOUNDRY_PURPOSE_REQUEST;
+deferInit("chunk-hwmsct5x.js:249081", () => {
+  FOUNDRY_STRIPPABLE_CAPABILITIES = new Set(["tool_search_server", "tool_search", "structured_outputs"]);
+  FAIL_FOUNDRY_PURPOSE_REQUEST = "fail:foundry-purpose-request";
+});
 //@ chunk-hwmsct5x.js:249190-249378 placement
-function getFoundryRetryDirective(e, model, querySource) {
-  let foundryUnsupportedCapabilities = parseFoundryUnsupportedCapabilities(e);
-  if (!foundryUnsupportedCapabilities) return null;
-  recordFoundryUnsupportedCapabilities(model, foundryUnsupportedCapabilities);
+function getFoundryRetryDirective(error, model, querySource) {
+  let capabilities = parseFoundryUnsupportedCapabilities(error);
+  if (!capabilities) return null;
+  recordFoundryUnsupportedCapabilities(model, capabilities);
   if (querySource === "web_search_tool") return FAIL_FOUNDRY_PURPOSE_REQUEST;
-  if (
-    foundryUnsupportedCapabilities.some((foundryUnsupportedCapability) =>
-      FOUNDRY_STRIPPABLE_CAPABILITIES.has(foundryUnsupportedCapability),
-    )
-  )
-    return `retry:foundry-capability-strip:${foundryUnsupportedCapabilities.join(",")}`;
+  if (capabilities.some((capability) => FOUNDRY_STRIPPABLE_CAPABILITIES.has(capability)))
+    return `retry:foundry-capability-strip:${capabilities.join(",")}`;
   return null;
 }
 //@ chunk-hwmsct5x.js:249378-249859 placement
@@ -75,33 +76,37 @@ function stripUnsupportedFoundryCapabilities(allTools, model) {
   if (getAPIProvider() !== "foundry") return allTools;
   let foundryDeploymentCapabilities = getFoundryDeploymentCapabilities();
   if (foundryDeploymentCapabilities.size === 0) return allTools;
-  let s = foundryDeploymentCapabilities.get(foundryModelKey(model));
-  if (!s || s.size === 0) return allTools;
-  let h = s.has("tool_search_server") || s.has("tool_search");
-  let y = s.has("structured_outputs");
-  if (!h && !y) return allTools;
-  let w = false;
-  let S = [];
-  for (let E of allTools) {
-    let deferLoading = h && E.defer_loading;
-    if (deferLoading && E.name === DEFERREDTOOLPLACEHOLDER && E.description === DEFERRED_PLACEHOLDER_NOTE) {
-      w = true;
+  let caps = foundryDeploymentCapabilities.get(foundryModelKey(model));
+  if (!caps || caps.size === 0) return allTools;
+  let stripsToolSearch = caps.has("tool_search_server") || caps.has("tool_search");
+  let stripsStrict = caps.has("structured_outputs");
+  if (!stripsToolSearch && !stripsStrict) return allTools;
+  let changed = false;
+  let out = [];
+  for (let tool of allTools) {
+    let deferLoading = stripsToolSearch && tool.defer_loading;
+    if (
+      deferLoading &&
+      tool.name === DEFERREDTOOLPLACEHOLDER &&
+      tool.description === DEFERRED_PLACEHOLDER_NOTE
+    ) {
+      changed = true;
       continue;
     }
-    let strict = y && E.strict;
+    let strict = stripsStrict && tool.strict;
     if (!deferLoading && !strict) {
-      S.push(E);
+      out.push(tool);
       continue;
     }
-    w = true;
-    let O = {
-      ...E,
+    changed = true;
+    let copy = {
+      ...tool,
     };
-    if (deferLoading) delete O.defer_loading;
-    if (strict) delete O.strict;
-    S.push(O);
+    if (deferLoading) delete copy.defer_loading;
+    if (strict) delete copy.strict;
+    out.push(copy);
   }
-  return w ? S : allTools;
+  return changed ? out : allTools;
 }
 //@ chunk-hwmsct5x.js:249859-249931 placement
 class FoundryCapabilityError extends Error {

@@ -5,13 +5,71 @@
  * pieces: chunk-n332mrkv.js (26), chunk-r1g76qsy.js (2)
  * attribution: esm-layout 8, esm-fingerprint 9, layout 7, affinity 4
  */
+import { Ajv2020, formatsPlugin, DRAFT_2020_12_URIS, ajvModule } from "../../../ajv-formats/dist/formats.js";
 import { require_equal } from "../../../ajv/dist/runtime/equal.js";
-import { b } from "./cfWorkerProvider-l7BFVI5n.mjs";
-import { $d, Td, DRAFT_2020_12_URIS, wd } from "../../../ajv-formats/dist/formats.js";
+import { validateValidationSchema } from "./cfWorkerProvider-l7BFVI5n.mjs";
+import { deferInit, beginDeferredInits, runDeferredInits } from "../../../../runtime/deferred-init.js";
 
+// This module is the first evaluated of an import cycle of 2 modules closed by ./cfWorkerProvider-l7BFVI5n.mjs;
+// the load-time work of the cycle's statements marked "deferred" waits until the cycle is complete (runtime/deferred-init.js).
+beginDeferredInits("vendor/@modelcontextprotocol/client/dist/cfWorkerProvider-l7BFVI5n.mjs");
+//@ chunk-r1g76qsy.js:255842-255955 esm-fingerprint
+function createAjv2020() {
+  let ajv = new Ajv2020.Ajv2020({
+    strict: false,
+    validateFormats: true,
+    validateSchema: false,
+    allErrors: true,
+  });
+  formatsPlugin(ajv);
+  return ajv;
+}
+//@ chunk-r1g76qsy.js:255955-256668 esm-fingerprint
+var AjvJsonSchemaValidator = class {
+  _ajv;
+  _userAjv;
+  constructor(ajvInstance) {
+    this._userAjv = ajvInstance !== undefined;
+    this._ajv = ajvInstance;
+  }
+  get ajv() {
+    return (this._ajv ??= createAjv2020());
+  }
+  getValidator(schema) {
+    if (
+      !this._userAjv &&
+      "$schema" in schema &&
+      typeof schema.$schema === "string" &&
+      !DRAFT_2020_12_URIS.has(schema.$schema.replace(/#$/, ""))
+    ) {
+      let sliced = schema.$schema.slice(0, 200);
+      throw Error(
+        `JSON Schema declares an unsupported dialect ("$schema": "${sliced}"). The default validator supports JSON Schema 2020-12 only; pass a pre-configured Ajv instance to AjvJsonSchemaValidator(ajv) to validate other dialects.`,
+      );
+    }
+    let engine = this.ajv;
+    let ajvValidator =
+      "$id" in schema && typeof schema.$id === "string"
+        ? (engine.getSchema(schema.$id) ?? engine.compile(schema))
+        : engine.compile(schema);
+    return (input) =>
+      ajvValidator(input)
+        ? {
+            valid: true,
+            data: input,
+            errorMessage: undefined,
+          }
+        : {
+            valid: false,
+            data: undefined,
+            errorMessage: engine.errorsText(ajvValidator.errors),
+          };
+  }
+};
+var Ajv = ajvModule.Ajv;
 //@ chunk-n332mrkv.js:228-1961 esm-layout
-var qe = D;
-var je = {
+var metaSchemaCheck = validateMetaSchema;
+var metaSchema2020 = {
   $schema: "https://json-schema.org/draft/2020-12/schema",
   $id: "https://json-schema.org/draft/2020-12/schema",
   $vocabulary: {
@@ -91,7 +149,7 @@ var je = {
   },
 };
 //@ chunk-n332mrkv.js:1961-2923 esm-fingerprint
-var ke = {
+var coreMetaSchema = {
   $schema: "https://json-schema.org/draft/2020-12/schema",
   $id: "https://json-schema.org/draft/2020-12/meta/core",
   $vocabulary: {
@@ -159,48 +217,42 @@ var ke = {
 var regExp = new RegExp("^[^#]*#?$", "u");
 var regExp_2 = new RegExp("^[A-Za-z_][-A-Za-z0-9._]*$", "u");
 //@ chunk-n332mrkv.js:3006-8156 layout
-function x(
-  t,
-  {
-    instancePath: s = "",
-    parentData: z,
-    parentDataProperty: E,
-    rootData: c = t,
-    dynamicAnchors: i = {},
-  } = {},
+function validateCoreSchema(
+  data,
+  { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {},
 ) {
-  let r = null;
-  let e = 0;
-  let evaluated = x.evaluated;
+  let vErrors = null;
+  let errorsCount = 0;
+  let evaluated = validateCoreSchema.evaluated;
   if (evaluated.dynamicProps) evaluated.props = undefined;
   if (evaluated.dynamicItems) evaluated.items = undefined;
-  if (!(t && typeof t == "object" && !Array.isArray(t)) && typeof t !== "boolean") {
-    x.errors = [
+  if (!(data && typeof data == "object" && !Array.isArray(data)) && typeof data !== "boolean") {
+    validateCoreSchema.errors = [
       {
-        instancePath: s,
+        instancePath,
         schemaPath: "#/type",
         keyword: "type",
         params: {
-          type: ke.type,
+          type: coreMetaSchema.type,
         },
         message: "must be object,boolean",
       },
     ];
     return false;
   }
-  if (!i.meta) i.meta = x;
-  if (e === 0) {
-    if (t && typeof t == "object" && !Array.isArray(t)) {
-      if (t.$id !== undefined) {
-        let $id = t.$id;
-        let m = e;
-        let N = e;
-        if (e === N) {
-          if (e === N) {
-            if (typeof $id !== "string") {
-              x.errors = [
+  if (!dynamicAnchors.meta) dynamicAnchors.meta = validateCoreSchema;
+  if (errorsCount === 0) {
+    if (data && typeof data == "object" && !Array.isArray(data)) {
+      if (data.$id !== undefined) {
+        let schemaId = data.$id;
+        let errsBeforeId = errorsCount;
+        let errsAfterId = errorsCount;
+        if (errorsCount === errsAfterId) {
+          if (errorsCount === errsAfterId) {
+            if (typeof schemaId !== "string") {
+              validateCoreSchema.errors = [
                 {
-                  instancePath: s + "/$id",
+                  instancePath: instancePath + "/$id",
                   schemaPath: "#/$defs/uriReferenceString/type",
                   keyword: "type",
                   params: {
@@ -213,12 +265,12 @@ function x(
             }
           }
         }
-        if (e === m) {
-          if (typeof $id === "string") {
-            if (!regExp.test($id)) {
-              x.errors = [
+        if (errorsCount === errsBeforeId) {
+          if (typeof schemaId === "string") {
+            if (!regExp.test(schemaId)) {
+              validateCoreSchema.errors = [
                 {
-                  instancePath: s + "/$id",
+                  instancePath: instancePath + "/$id",
                   schemaPath: "#/properties/%24id/pattern",
                   keyword: "pattern",
                   params: {
@@ -231,18 +283,18 @@ function x(
             }
           }
         }
-        var n = m === e;
-      } else var n = true;
-      if (n) {
-        if (t.$schema !== undefined) {
-          let u = e;
-          let m = e;
-          if (e === m) {
-            if (e === m) {
-              if (typeof t.$schema !== "string") {
-                x.errors = [
+        var isPropertyValid = errsBeforeId === errorsCount;
+      } else var isPropertyValid = true;
+      if (isPropertyValid) {
+        if (data.$schema !== undefined) {
+          let errsBeforeSchema = errorsCount;
+          let errsAfterSchema = errorsCount;
+          if (errorsCount === errsAfterSchema) {
+            if (errorsCount === errsAfterSchema) {
+              if (typeof data.$schema !== "string") {
+                validateCoreSchema.errors = [
                   {
-                    instancePath: s + "/$schema",
+                    instancePath: instancePath + "/$schema",
                     schemaPath: "#/$defs/uriString/type",
                     keyword: "type",
                     params: {
@@ -255,18 +307,18 @@ function x(
               }
             }
           }
-          var n = u === e;
-        } else var n = true;
-        if (n) {
-          if (t.$ref !== undefined) {
-            let u = e;
-            let m = e;
-            if (e === m) {
-              if (e === m) {
-                if (typeof t.$ref !== "string") {
-                  x.errors = [
+          var isPropertyValid = errsBeforeSchema === errorsCount;
+        } else var isPropertyValid = true;
+        if (isPropertyValid) {
+          if (data.$ref !== undefined) {
+            let errsBeforeRef = errorsCount;
+            let errsAfterRef = errorsCount;
+            if (errorsCount === errsAfterRef) {
+              if (errorsCount === errsAfterRef) {
+                if (typeof data.$ref !== "string") {
+                  validateCoreSchema.errors = [
                     {
-                      instancePath: s + "/$ref",
+                      instancePath: instancePath + "/$ref",
                       schemaPath: "#/$defs/uriReferenceString/type",
                       keyword: "type",
                       params: {
@@ -279,18 +331,18 @@ function x(
                 }
               }
             }
-            var n = u === e;
-          } else var n = true;
-          if (n) {
-            if (t.$anchor !== undefined) {
-              let $anchor = t.$anchor;
-              let m = e;
-              if (e === e)
+            var isPropertyValid = errsBeforeRef === errorsCount;
+          } else var isPropertyValid = true;
+          if (isPropertyValid) {
+            if (data.$anchor !== undefined) {
+              let $anchor = data.$anchor;
+              let errsBeforeAnchor = errorsCount;
+              if (errorsCount === errorsCount)
                 if (typeof $anchor === "string") {
                   if (!regExp_2.test($anchor)) {
-                    x.errors = [
+                    validateCoreSchema.errors = [
                       {
-                        instancePath: s + "/$anchor",
+                        instancePath: instancePath + "/$anchor",
                         schemaPath: "#/$defs/anchorString/pattern",
                         keyword: "pattern",
                         params: {
@@ -302,9 +354,9 @@ function x(
                     return false;
                   }
                 } else {
-                  x.errors = [
+                  validateCoreSchema.errors = [
                     {
-                      instancePath: s + "/$anchor",
+                      instancePath: instancePath + "/$anchor",
                       schemaPath: "#/$defs/anchorString/type",
                       keyword: "type",
                       params: {
@@ -315,18 +367,18 @@ function x(
                   ];
                   return false;
                 }
-              var n = m === e;
-            } else var n = true;
-            if (n) {
-              if (t.$dynamicRef !== undefined) {
-                let u = e;
-                let m = e;
-                if (e === m) {
-                  if (e === m) {
-                    if (typeof t.$dynamicRef !== "string") {
-                      x.errors = [
+              var isPropertyValid = errsBeforeAnchor === errorsCount;
+            } else var isPropertyValid = true;
+            if (isPropertyValid) {
+              if (data.$dynamicRef !== undefined) {
+                let errsBeforeDynamicRef = errorsCount;
+                let errsAfterDynamicRef = errorsCount;
+                if (errorsCount === errsAfterDynamicRef) {
+                  if (errorsCount === errsAfterDynamicRef) {
+                    if (typeof data.$dynamicRef !== "string") {
+                      validateCoreSchema.errors = [
                         {
-                          instancePath: s + "/$dynamicRef",
+                          instancePath: instancePath + "/$dynamicRef",
                           schemaPath: "#/$defs/uriReferenceString/type",
                           keyword: "type",
                           params: {
@@ -339,18 +391,18 @@ function x(
                     }
                   }
                 }
-                var n = u === e;
-              } else var n = true;
-              if (n) {
-                if (t.$dynamicAnchor !== undefined) {
-                  let $dynamicAnchor = t.$dynamicAnchor;
-                  let m = e;
-                  if (e === e)
+                var isPropertyValid = errsBeforeDynamicRef === errorsCount;
+              } else var isPropertyValid = true;
+              if (isPropertyValid) {
+                if (data.$dynamicAnchor !== undefined) {
+                  let $dynamicAnchor = data.$dynamicAnchor;
+                  let errsBeforeDynamicAnchor = errorsCount;
+                  if (errorsCount === errorsCount)
                     if (typeof $dynamicAnchor === "string") {
                       if (!regExp_2.test($dynamicAnchor)) {
-                        x.errors = [
+                        validateCoreSchema.errors = [
                           {
-                            instancePath: s + "/$dynamicAnchor",
+                            instancePath: instancePath + "/$dynamicAnchor",
                             schemaPath: "#/$defs/anchorString/pattern",
                             keyword: "pattern",
                             params: {
@@ -362,9 +414,9 @@ function x(
                         return false;
                       }
                     } else {
-                      x.errors = [
+                      validateCoreSchema.errors = [
                         {
-                          instancePath: s + "/$dynamicAnchor",
+                          instancePath: instancePath + "/$dynamicAnchor",
                           schemaPath: "#/$defs/anchorString/type",
                           keyword: "type",
                           params: {
@@ -375,22 +427,22 @@ function x(
                       ];
                       return false;
                     }
-                  var n = m === e;
-                } else var n = true;
-                if (n) {
-                  if (t.$vocabulary !== undefined) {
-                    let $vocabulary = t.$vocabulary;
-                    let m = e;
-                    if (e === m)
+                  var isPropertyValid = errsBeforeDynamicAnchor === errorsCount;
+                } else var isPropertyValid = true;
+                if (isPropertyValid) {
+                  if (data.$vocabulary !== undefined) {
+                    let $vocabulary = data.$vocabulary;
+                    let errsBeforeVocabulary = errorsCount;
+                    if (errorsCount === errsBeforeVocabulary)
                       if ($vocabulary && typeof $vocabulary == "object" && !Array.isArray($vocabulary)) {
                         for (let key in $vocabulary) {
-                          let _ = e;
-                          let j = e;
-                          if (e === j) {
-                            if (e === j) {
+                          let errsBeforeVocabProp = errorsCount;
+                          let errsAfterVocabProp = errorsCount;
+                          if (errorsCount === errsAfterVocabProp) {
+                            if (errorsCount === errsAfterVocabProp) {
                               if (typeof key !== "string") {
-                                let g = {
-                                  instancePath: s + "/$vocabulary",
+                                let vocabPropNameError = {
+                                  instancePath: instancePath + "/$vocabulary",
                                   schemaPath: "#/$defs/uriString/type",
                                   keyword: "type",
                                   params: {
@@ -399,16 +451,16 @@ function x(
                                   message: "must be string",
                                   propertyName: key,
                                 };
-                                if (r === null) r = [g];
-                                else r.push(g);
-                                e++;
+                                if (vErrors === null) vErrors = [vocabPropNameError];
+                                else vErrors.push(vocabPropNameError);
+                                errorsCount++;
                               }
                             }
                           }
-                          var d = _ === e;
-                          if (!d) {
-                            let g = {
-                              instancePath: s + "/$vocabulary",
+                          var isVocabPropNameValid = errsBeforeVocabProp === errorsCount;
+                          if (!isVocabPropNameValid) {
+                            let vocabPropError = {
+                              instancePath: instancePath + "/$vocabulary",
                               schemaPath: "#/properties/%24vocabulary/propertyNames",
                               keyword: "propertyNames",
                               params: {
@@ -416,22 +468,24 @@ function x(
                               },
                               message: "property name must be valid",
                             };
-                            if (r === null) r = [g];
-                            else r.push(g);
-                            e++;
-                            x.errors = r;
+                            if (vErrors === null) vErrors = [vocabPropError];
+                            else vErrors.push(vocabPropError);
+                            errorsCount++;
+                            validateCoreSchema.errors = vErrors;
                             return false;
                             break;
                           }
                         }
-                        if (d)
+                        if (isVocabPropNameValid)
                           for (let key in $vocabulary) {
-                            let _ = e;
+                            let errsBeforeVocabValue = errorsCount;
                             if (typeof $vocabulary[key] !== "boolean") {
-                              x.errors = [
+                              validateCoreSchema.errors = [
                                 {
                                   instancePath:
-                                    s + "/$vocabulary/" + key.replace(/~/g, "~0").replace(/\//g, "~1"),
+                                    instancePath +
+                                    "/$vocabulary/" +
+                                    key.replace(/~/g, "~0").replace(/\//g, "~1"),
                                   schemaPath: "#/properties/%24vocabulary/additionalProperties/type",
                                   keyword: "type",
                                   params: {
@@ -442,13 +496,13 @@ function x(
                               ];
                               return false;
                             }
-                            var o = _ === e;
-                            if (!o) break;
+                            var isVocabValueValid = errsBeforeVocabValue === errorsCount;
+                            if (!isVocabValueValid) break;
                           }
                       } else {
-                        x.errors = [
+                        validateCoreSchema.errors = [
                           {
-                            instancePath: s + "/$vocabulary",
+                            instancePath: instancePath + "/$vocabulary",
                             schemaPath: "#/properties/%24vocabulary/type",
                             keyword: "type",
                             params: {
@@ -459,15 +513,15 @@ function x(
                         ];
                         return false;
                       }
-                    var n = m === e;
-                  } else var n = true;
-                  if (n) {
-                    if (t.$comment !== undefined) {
-                      let u = e;
-                      if (typeof t.$comment !== "string") {
-                        x.errors = [
+                    var isPropertyValid = errsBeforeVocabulary === errorsCount;
+                  } else var isPropertyValid = true;
+                  if (isPropertyValid) {
+                    if (data.$comment !== undefined) {
+                      let errsBeforeComment = errorsCount;
+                      if (typeof data.$comment !== "string") {
+                        validateCoreSchema.errors = [
                           {
-                            instancePath: s + "/$comment",
+                            instancePath: instancePath + "/$comment",
                             schemaPath: "#/properties/%24comment/type",
                             keyword: "type",
                             params: {
@@ -478,65 +532,69 @@ function x(
                         ];
                         return false;
                       }
-                      var n = u === e;
-                    } else var n = true;
-                    if (n)
-                      if (t.$defs !== undefined) {
-                        let $defs = t.$defs;
-                        let m = e;
-                        if (e === m)
+                      var isPropertyValid = errsBeforeComment === errorsCount;
+                    } else var isPropertyValid = true;
+                    if (isPropertyValid)
+                      if (data.$defs !== undefined) {
+                        let $defs = data.$defs;
+                        let errsBeforeDefs = errorsCount;
+                        if (errorsCount === errsBeforeDefs)
                           if ($defs && typeof $defs == "object" && !Array.isArray($defs))
                             for (let key in $defs) {
-                              let _ = $defs[key];
-                              let j = e;
-                              let meta = i.meta;
+                              let defSchema = $defs[key];
+                              let errsAfterDefs = errorsCount;
+                              let meta = dynamicAnchors.meta;
                               if (meta) {
                                 if (
-                                  !meta(_, {
+                                  !meta(defSchema, {
                                     instancePath:
-                                      s + "/$defs/" + key.replace(/~/g, "~0").replace(/\//g, "~1"),
+                                      instancePath + "/$defs/" + key.replace(/~/g, "~0").replace(/\//g, "~1"),
                                     parentData: $defs,
                                     parentDataProperty: key,
-                                    rootData: c,
-                                    dynamicAnchors: i,
+                                    rootData,
+                                    dynamicAnchors,
                                   })
                                 ) {
-                                  r = r === null ? meta.errors : r.concat(meta.errors);
-                                  e = r.length;
+                                  vErrors = vErrors === null ? meta.errors : vErrors.concat(meta.errors);
+                                  errorsCount = vErrors.length;
                                 } else {
                                   var props = meta.evaluated.props;
                                   var items = meta.evaluated.items;
                                 }
                               } else if (
-                                !x(_, {
-                                  instancePath: s + "/$defs/" + key.replace(/~/g, "~0").replace(/\//g, "~1"),
+                                !validateCoreSchema(defSchema, {
+                                  instancePath:
+                                    instancePath + "/$defs/" + key.replace(/~/g, "~0").replace(/\//g, "~1"),
                                   parentData: $defs,
                                   parentDataProperty: key,
-                                  rootData: c,
-                                  dynamicAnchors: i,
+                                  rootData,
+                                  dynamicAnchors,
                                 })
                               ) {
-                                r = r === null ? x.errors : r.concat(x.errors);
-                                e = r.length;
+                                vErrors =
+                                  vErrors === null
+                                    ? validateCoreSchema.errors
+                                    : vErrors.concat(validateCoreSchema.errors);
+                                errorsCount = vErrors.length;
                               } else {
-                                var props_2 = x.evaluated.props;
+                                var props_2 = validateCoreSchema.evaluated.props;
                                 if (props !== true && props_2 !== undefined)
                                   if (props_2 === true) props = true;
                                   else {
                                     props = props || {};
                                     Object.assign(props, props_2);
                                   }
-                                var items_2 = x.evaluated.items;
+                                var items_2 = validateCoreSchema.evaluated.items;
                                 if (items !== true && items_2 !== undefined)
                                   items = items_2 === true ? true : items > items_2 ? items : items_2;
                               }
-                              var f = j === e;
-                              if (!f) break;
+                              var isDefValid = errsAfterDefs === errorsCount;
+                              if (!isDefValid) break;
                             }
                           else {
-                            x.errors = [
+                            validateCoreSchema.errors = [
                               {
-                                instancePath: s + "/$defs",
+                                instancePath: instancePath + "/$defs",
                                 schemaPath: "#/properties/%24defs/type",
                                 keyword: "type",
                                 params: {
@@ -547,8 +605,8 @@ function x(
                             ];
                             return false;
                           }
-                        var n = m === e;
-                      } else var n = true;
+                        var isPropertyValid = errsBeforeDefs === errorsCount;
+                      } else var isPropertyValid = true;
                   }
                 }
               }
@@ -558,27 +616,30 @@ function x(
       }
     }
   }
-  x.errors = r;
-  return e === 0;
+  validateCoreSchema.errors = vErrors;
+  return errorsCount === 0;
 }
 //@ chunk-n332mrkv.js:8156-8316 layout
-x.evaluated = {
-  props: {
-    $id: true,
-    $schema: true,
-    $ref: true,
-    $anchor: true,
-    $dynamicRef: true,
-    $dynamicAnchor: true,
-    $vocabulary: true,
-    $comment: true,
-    $defs: true,
-  },
-  dynamicProps: false,
-  dynamicItems: false,
-};
+// deferred: uses validateCoreSchema of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-n332mrkv.js:8156", () => {
+  validateCoreSchema.evaluated = {
+    props: {
+      $id: true,
+      $schema: true,
+      $ref: true,
+      $anchor: true,
+      $dynamicRef: true,
+      $dynamicAnchor: true,
+      $vocabulary: true,
+      $comment: true,
+      $defs: true,
+    },
+    dynamicProps: false,
+    dynamicItems: false,
+  };
+});
 //@ chunk-n332mrkv.js:8316-9367 esm-fingerprint
-var Ie = {
+var applicatorMetaSchema = {
   $schema: "https://json-schema.org/draft/2020-12/schema",
   $id: "https://json-schema.org/draft/2020-12/meta/applicator",
   $vocabulary: {
@@ -660,27 +721,21 @@ var Ie = {
   },
 };
 //@ chunk-n332mrkv.js:9367-10508 layout
-function R(
-  t,
-  {
-    instancePath: s = "",
-    parentData: z,
-    parentDataProperty: E,
-    rootData: c = t,
-    dynamicAnchors: i = {},
-  } = {},
+function validateSchemaArray(
+  data,
+  { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {},
 ) {
-  let r = null;
-  let e = 0;
-  let evaluated = R.evaluated;
+  let vErrors = null;
+  let errorsCount = 0;
+  let evaluated = validateSchemaArray.evaluated;
   if (evaluated.dynamicProps) evaluated.props = undefined;
   if (evaluated.dynamicItems) evaluated.items = undefined;
-  if (e === 0)
-    if (Array.isArray(t)) {
-      if (t.length < 1) {
-        R.errors = [
+  if (errorsCount === 0)
+    if (Array.isArray(data)) {
+      if (data.length < 1) {
+        validateSchemaArray.errors = [
           {
-            instancePath: s,
+            instancePath,
             schemaPath: "#/minItems",
             keyword: "minItems",
             params: {
@@ -691,59 +746,60 @@ function R(
         ];
         return false;
       } else {
-        var n = true;
-        let I = t.length;
-        for (let j = 0; j < I; j++) {
-          let f = t[j];
-          let u = e;
-          let meta = i.meta;
+        var isItemValid = true;
+        let itemCount = data.length;
+        for (let j = 0; j < itemCount; j++) {
+          let item = data[j];
+          let errsBeforeItem = errorsCount;
+          let meta = dynamicAnchors.meta;
           if (meta) {
             if (
-              !meta(f, {
-                instancePath: s + "/" + j,
-                parentData: t,
+              !meta(item, {
+                instancePath: instancePath + "/" + j,
+                parentData: data,
                 parentDataProperty: j,
-                rootData: c,
-                dynamicAnchors: i,
+                rootData,
+                dynamicAnchors,
               })
             ) {
-              r = r === null ? meta.errors : r.concat(meta.errors);
-              e = r.length;
+              vErrors = vErrors === null ? meta.errors : vErrors.concat(meta.errors);
+              errorsCount = vErrors.length;
             } else {
               var props = meta.evaluated.props;
               var items = meta.evaluated.items;
             }
           } else if (
-            !R(f, {
-              instancePath: s + "/" + j,
-              parentData: t,
+            !validateSchemaArray(item, {
+              instancePath: instancePath + "/" + j,
+              parentData: data,
               parentDataProperty: j,
-              rootData: c,
-              dynamicAnchors: i,
+              rootData,
+              dynamicAnchors,
             })
           ) {
-            r = r === null ? R.errors : r.concat(R.errors);
-            e = r.length;
+            vErrors =
+              vErrors === null ? validateSchemaArray.errors : vErrors.concat(validateSchemaArray.errors);
+            errorsCount = vErrors.length;
           } else {
-            var props_2 = R.evaluated.props;
+            var props_2 = validateSchemaArray.evaluated.props;
             if (props !== true && props_2 !== undefined)
               if (props_2 === true) props = true;
               else {
                 props = props || {};
                 Object.assign(props, props_2);
               }
-            var items_2 = R.evaluated.items;
+            var items_2 = validateSchemaArray.evaluated.items;
             if (items !== true && items_2 !== undefined)
               items = items_2 === true ? true : items > items_2 ? items : items_2;
           }
-          var n = u === e;
-          if (!n) break;
+          var isItemValid = errsBeforeItem === errorsCount;
+          if (!isItemValid) break;
         }
       }
     } else {
-      R.errors = [
+      validateSchemaArray.errors = [
         {
-          instancePath: s,
+          instancePath,
           schemaPath: "#/type",
           keyword: "type",
           params: {
@@ -754,258 +810,270 @@ function R(
       ];
       return false;
     }
-  R.errors = r;
-  return e === 0;
+  validateSchemaArray.errors = vErrors;
+  return errorsCount === 0;
 }
 //@ chunk-n332mrkv.js:10508-10563 layout
-R.evaluated = {
-  items: true,
-  dynamicProps: false,
-  dynamicItems: false,
-};
+// deferred: uses validateSchemaArray of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-n332mrkv.js:10508", () => {
+  validateSchemaArray.evaluated = {
+    items: true,
+    dynamicProps: false,
+    dynamicItems: false,
+  };
+});
 //@ chunk-n332mrkv.js:10563-20346 layout
-function l(
-  t,
-  {
-    instancePath: s = "",
-    parentData: z,
-    parentDataProperty: E,
-    rootData: c = t,
-    dynamicAnchors: i = {},
-  } = {},
+function validateApplicatorSchema(
+  data,
+  { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {},
 ) {
-  let r = null;
-  let e = 0;
-  let evaluated = l.evaluated;
+  let vErrors = null;
+  let errorsCount = 0;
+  let evaluated = validateApplicatorSchema.evaluated;
   if (evaluated.dynamicProps) evaluated.props = undefined;
   if (evaluated.dynamicItems) evaluated.items = undefined;
-  if (!(t && typeof t == "object" && !Array.isArray(t)) && typeof t !== "boolean") {
-    l.errors = [
+  if (!(data && typeof data == "object" && !Array.isArray(data)) && typeof data !== "boolean") {
+    validateApplicatorSchema.errors = [
       {
-        instancePath: s,
+        instancePath,
         schemaPath: "#/type",
         keyword: "type",
         params: {
-          type: Ie.type,
+          type: applicatorMetaSchema.type,
         },
         message: "must be object,boolean",
       },
     ];
     return false;
   }
-  if (!i.meta) i.meta = l;
-  if (e === 0) {
-    if (t && typeof t == "object" && !Array.isArray(t)) {
-      if (t.prefixItems !== undefined) {
-        let p = e;
+  if (!dynamicAnchors.meta) dynamicAnchors.meta = validateApplicatorSchema;
+  if (errorsCount === 0) {
+    if (data && typeof data == "object" && !Array.isArray(data)) {
+      if (data.prefixItems !== undefined) {
+        let errsBeforePrefixItems = errorsCount;
         if (
-          !R(t.prefixItems, {
-            instancePath: s + "/prefixItems",
-            parentData: t,
+          !validateSchemaArray(data.prefixItems, {
+            instancePath: instancePath + "/prefixItems",
+            parentData: data,
             parentDataProperty: "prefixItems",
-            rootData: c,
-            dynamicAnchors: i,
+            rootData,
+            dynamicAnchors,
           })
         ) {
-          r = r === null ? R.errors : r.concat(R.errors);
-          e = r.length;
+          vErrors =
+            vErrors === null ? validateSchemaArray.errors : vErrors.concat(validateSchemaArray.errors);
+          errorsCount = vErrors.length;
         }
-        var n = p === e;
-      } else var n = true;
-      if (n) {
-        if (t.items !== undefined) {
-          let items = t.items;
-          let O = e;
-          let meta = i.meta;
+        var isKeywordValid = errsBeforePrefixItems === errorsCount;
+      } else var isKeywordValid = true;
+      if (isKeywordValid) {
+        if (data.items !== undefined) {
+          let items = data.items;
+          let errsBeforeItems = errorsCount;
+          let meta = dynamicAnchors.meta;
           if (meta) {
             if (
               !meta(items, {
-                instancePath: s + "/items",
-                parentData: t,
+                instancePath: instancePath + "/items",
+                parentData: data,
                 parentDataProperty: "items",
-                rootData: c,
-                dynamicAnchors: i,
+                rootData,
+                dynamicAnchors,
               })
             ) {
-              r = r === null ? meta.errors : r.concat(meta.errors);
-              e = r.length;
+              vErrors = vErrors === null ? meta.errors : vErrors.concat(meta.errors);
+              errorsCount = vErrors.length;
             } else {
               var props = meta.evaluated.props;
               var items_2 = meta.evaluated.items;
             }
           } else if (
-            !l(items, {
-              instancePath: s + "/items",
-              parentData: t,
+            !validateApplicatorSchema(items, {
+              instancePath: instancePath + "/items",
+              parentData: data,
               parentDataProperty: "items",
-              rootData: c,
-              dynamicAnchors: i,
+              rootData,
+              dynamicAnchors,
             })
           ) {
-            r = r === null ? l.errors : r.concat(l.errors);
-            e = r.length;
+            vErrors =
+              vErrors === null
+                ? validateApplicatorSchema.errors
+                : vErrors.concat(validateApplicatorSchema.errors);
+            errorsCount = vErrors.length;
           } else {
-            var props_2 = l.evaluated.props;
+            var props_2 = validateApplicatorSchema.evaluated.props;
             if (props !== true && props_2 !== undefined)
               if (props_2 === true) props = true;
               else {
                 props = props || {};
                 Object.assign(props, props_2);
               }
-            var items_3 = l.evaluated.items;
+            var items_3 = validateApplicatorSchema.evaluated.items;
             if (items_2 !== true && items_3 !== undefined)
               items_2 = items_3 === true ? true : items_2 > items_3 ? items_2 : items_3;
           }
-          var n = O === e;
-        } else var n = true;
-        if (n) {
-          if (t.contains !== undefined) {
-            let contains = t.contains;
-            let O = e;
-            let meta = i.meta;
+          var isKeywordValid = errsBeforeItems === errorsCount;
+        } else var isKeywordValid = true;
+        if (isKeywordValid) {
+          if (data.contains !== undefined) {
+            let contains = data.contains;
+            let errsBeforeContains = errorsCount;
+            let meta = dynamicAnchors.meta;
             if (meta) {
               if (
                 !meta(contains, {
-                  instancePath: s + "/contains",
-                  parentData: t,
+                  instancePath: instancePath + "/contains",
+                  parentData: data,
                   parentDataProperty: "contains",
-                  rootData: c,
-                  dynamicAnchors: i,
+                  rootData,
+                  dynamicAnchors,
                 })
               ) {
-                r = r === null ? meta.errors : r.concat(meta.errors);
-                e = r.length;
+                vErrors = vErrors === null ? meta.errors : vErrors.concat(meta.errors);
+                errorsCount = vErrors.length;
               } else {
                 var props_3 = meta.evaluated.props;
                 var items_4 = meta.evaluated.items;
               }
             } else if (
-              !l(contains, {
-                instancePath: s + "/contains",
-                parentData: t,
+              !validateApplicatorSchema(contains, {
+                instancePath: instancePath + "/contains",
+                parentData: data,
                 parentDataProperty: "contains",
-                rootData: c,
-                dynamicAnchors: i,
+                rootData,
+                dynamicAnchors,
               })
             ) {
-              r = r === null ? l.errors : r.concat(l.errors);
-              e = r.length;
+              vErrors =
+                vErrors === null
+                  ? validateApplicatorSchema.errors
+                  : vErrors.concat(validateApplicatorSchema.errors);
+              errorsCount = vErrors.length;
             } else {
-              var props_4 = l.evaluated.props;
+              var props_4 = validateApplicatorSchema.evaluated.props;
               if (props_3 !== true && props_4 !== undefined)
                 if (props_4 === true) props_3 = true;
                 else {
                   props_3 = props_3 || {};
                   Object.assign(props_3, props_4);
                 }
-              var items_5 = l.evaluated.items;
+              var items_5 = validateApplicatorSchema.evaluated.items;
               if (items_4 !== true && items_5 !== undefined)
                 items_4 = items_5 === true ? true : items_4 > items_5 ? items_4 : items_5;
             }
-            var n = O === e;
-          } else var n = true;
-          if (n) {
-            if (t.additionalProperties !== undefined) {
-              let additionalProperties = t.additionalProperties;
-              let O = e;
-              let meta = i.meta;
+            var isKeywordValid = errsBeforeContains === errorsCount;
+          } else var isKeywordValid = true;
+          if (isKeywordValid) {
+            if (data.additionalProperties !== undefined) {
+              let additionalProperties = data.additionalProperties;
+              let errsBeforeAdditionalProperties = errorsCount;
+              let meta = dynamicAnchors.meta;
               if (meta) {
                 if (
                   !meta(additionalProperties, {
-                    instancePath: s + "/additionalProperties",
-                    parentData: t,
+                    instancePath: instancePath + "/additionalProperties",
+                    parentData: data,
                     parentDataProperty: "additionalProperties",
-                    rootData: c,
-                    dynamicAnchors: i,
+                    rootData,
+                    dynamicAnchors,
                   })
                 ) {
-                  r = r === null ? meta.errors : r.concat(meta.errors);
-                  e = r.length;
+                  vErrors = vErrors === null ? meta.errors : vErrors.concat(meta.errors);
+                  errorsCount = vErrors.length;
                 } else {
                   var props_5 = meta.evaluated.props;
                   var items_6 = meta.evaluated.items;
                 }
               } else if (
-                !l(additionalProperties, {
-                  instancePath: s + "/additionalProperties",
-                  parentData: t,
+                !validateApplicatorSchema(additionalProperties, {
+                  instancePath: instancePath + "/additionalProperties",
+                  parentData: data,
                   parentDataProperty: "additionalProperties",
-                  rootData: c,
-                  dynamicAnchors: i,
+                  rootData,
+                  dynamicAnchors,
                 })
               ) {
-                r = r === null ? l.errors : r.concat(l.errors);
-                e = r.length;
+                vErrors =
+                  vErrors === null
+                    ? validateApplicatorSchema.errors
+                    : vErrors.concat(validateApplicatorSchema.errors);
+                errorsCount = vErrors.length;
               } else {
-                var props_6 = l.evaluated.props;
+                var props_6 = validateApplicatorSchema.evaluated.props;
                 if (props_5 !== true && props_6 !== undefined)
                   if (props_6 === true) props_5 = true;
                   else {
                     props_5 = props_5 || {};
                     Object.assign(props_5, props_6);
                   }
-                var items_7 = l.evaluated.items;
+                var items_7 = validateApplicatorSchema.evaluated.items;
                 if (items_6 !== true && items_7 !== undefined)
                   items_6 = items_7 === true ? true : items_6 > items_7 ? items_6 : items_7;
               }
-              var n = O === e;
-            } else var n = true;
-            if (n) {
-              if (t.properties !== undefined) {
-                let properties = t.properties;
-                let O = e;
-                if (e === O)
+              var isKeywordValid = errsBeforeAdditionalProperties === errorsCount;
+            } else var isKeywordValid = true;
+            if (isKeywordValid) {
+              if (data.properties !== undefined) {
+                let properties = data.properties;
+                let errsBeforeProperties = errorsCount;
+                if (errorsCount === errsBeforeProperties)
                   if (properties && typeof properties == "object" && !Array.isArray(properties))
                     for (let key in properties) {
-                      let W = properties[key];
-                      let re = e;
-                      let meta = i.meta;
+                      let propSchema = properties[key];
+                      let errsBeforeProp = errorsCount;
+                      let meta = dynamicAnchors.meta;
                       if (meta) {
                         if (
-                          !meta(W, {
-                            instancePath: s + "/properties/" + key.replace(/~/g, "~0").replace(/\//g, "~1"),
+                          !meta(propSchema, {
+                            instancePath:
+                              instancePath + "/properties/" + key.replace(/~/g, "~0").replace(/\//g, "~1"),
                             parentData: properties,
                             parentDataProperty: key,
-                            rootData: c,
-                            dynamicAnchors: i,
+                            rootData,
+                            dynamicAnchors,
                           })
                         ) {
-                          r = r === null ? meta.errors : r.concat(meta.errors);
-                          e = r.length;
+                          vErrors = vErrors === null ? meta.errors : vErrors.concat(meta.errors);
+                          errorsCount = vErrors.length;
                         } else {
                           var props_7 = meta.evaluated.props;
                           var items_8 = meta.evaluated.items;
                         }
                       } else if (
-                        !l(W, {
-                          instancePath: s + "/properties/" + key.replace(/~/g, "~0").replace(/\//g, "~1"),
+                        !validateApplicatorSchema(propSchema, {
+                          instancePath:
+                            instancePath + "/properties/" + key.replace(/~/g, "~0").replace(/\//g, "~1"),
                           parentData: properties,
                           parentDataProperty: key,
-                          rootData: c,
-                          dynamicAnchors: i,
+                          rootData,
+                          dynamicAnchors,
                         })
                       ) {
-                        r = r === null ? l.errors : r.concat(l.errors);
-                        e = r.length;
+                        vErrors =
+                          vErrors === null
+                            ? validateApplicatorSchema.errors
+                            : vErrors.concat(validateApplicatorSchema.errors);
+                        errorsCount = vErrors.length;
                       } else {
-                        var props_8 = l.evaluated.props;
+                        var props_8 = validateApplicatorSchema.evaluated.props;
                         if (props_7 !== true && props_8 !== undefined)
                           if (props_8 === true) props_7 = true;
                           else {
                             props_7 = props_7 || {};
                             Object.assign(props_7, props_8);
                           }
-                        var items_9 = l.evaluated.items;
+                        var items_9 = validateApplicatorSchema.evaluated.items;
                         if (items_8 !== true && items_9 !== undefined)
                           items_8 = items_9 === true ? true : items_8 > items_9 ? items_8 : items_9;
                       }
-                      var M = re === e;
-                      if (!M) break;
+                      var isPropValid = errsBeforeProp === errorsCount;
+                      if (!isPropValid) break;
                     }
                   else {
-                    l.errors = [
+                    validateApplicatorSchema.errors = [
                       {
-                        instancePath: s + "/properties",
+                        instancePath: instancePath + "/properties",
                         schemaPath: "#/properties/properties/type",
                         keyword: "type",
                         params: {
@@ -1016,23 +1084,23 @@ function l(
                     ];
                     return false;
                   }
-                var n = O === e;
-              } else var n = true;
-              if (n) {
-                if (t.patternProperties !== undefined) {
-                  let patternProperties = t.patternProperties;
-                  let O = e;
-                  if (e === O)
+                var isKeywordValid = errsBeforeProperties === errorsCount;
+              } else var isKeywordValid = true;
+              if (isKeywordValid) {
+                if (data.patternProperties !== undefined) {
+                  let patternProperties = data.patternProperties;
+                  let errsBeforePatternProperties = errorsCount;
+                  if (errorsCount === errsBeforePatternProperties)
                     if (
                       patternProperties &&
                       typeof patternProperties == "object" &&
                       !Array.isArray(patternProperties)
                     ) {
                       for (let propertyName in patternProperties) {
-                        var Z = e === e;
-                        if (!Z) {
-                          let re = {
-                            instancePath: s + "/patternProperties",
+                        var isPatternKeyValid = errorsCount === errorsCount;
+                        if (!isPatternKeyValid) {
+                          let patternKeyError = {
+                            instancePath: instancePath + "/patternProperties",
                             schemaPath: "#/properties/patternProperties/propertyNames",
                             keyword: "propertyNames",
                             params: {
@@ -1040,67 +1108,74 @@ function l(
                             },
                             message: "property name must be valid",
                           };
-                          if (r === null) r = [re];
-                          else r.push(re);
-                          e++;
-                          l.errors = r;
+                          if (vErrors === null) vErrors = [patternKeyError];
+                          else vErrors.push(patternKeyError);
+                          errorsCount++;
+                          validateApplicatorSchema.errors = vErrors;
                           return false;
                           break;
                         }
                       }
-                      if (Z)
+                      if (isPatternKeyValid)
                         for (let key in patternProperties) {
-                          let W = patternProperties[key];
-                          let re = e;
-                          let meta = i.meta;
+                          let patternSchema = patternProperties[key];
+                          let errsBeforePattern = errorsCount;
+                          let meta = dynamicAnchors.meta;
                           if (meta) {
                             if (
-                              !meta(W, {
+                              !meta(patternSchema, {
                                 instancePath:
-                                  s + "/patternProperties/" + key.replace(/~/g, "~0").replace(/\//g, "~1"),
+                                  instancePath +
+                                  "/patternProperties/" +
+                                  key.replace(/~/g, "~0").replace(/\//g, "~1"),
                                 parentData: patternProperties,
                                 parentDataProperty: key,
-                                rootData: c,
-                                dynamicAnchors: i,
+                                rootData,
+                                dynamicAnchors,
                               })
                             ) {
-                              r = r === null ? meta.errors : r.concat(meta.errors);
-                              e = r.length;
+                              vErrors = vErrors === null ? meta.errors : vErrors.concat(meta.errors);
+                              errorsCount = vErrors.length;
                             } else {
                               var props_9 = meta.evaluated.props;
                               var items_10 = meta.evaluated.items;
                             }
                           } else if (
-                            !l(W, {
+                            !validateApplicatorSchema(patternSchema, {
                               instancePath:
-                                s + "/patternProperties/" + key.replace(/~/g, "~0").replace(/\//g, "~1"),
+                                instancePath +
+                                "/patternProperties/" +
+                                key.replace(/~/g, "~0").replace(/\//g, "~1"),
                               parentData: patternProperties,
                               parentDataProperty: key,
-                              rootData: c,
-                              dynamicAnchors: i,
+                              rootData,
+                              dynamicAnchors,
                             })
                           ) {
-                            r = r === null ? l.errors : r.concat(l.errors);
-                            e = r.length;
+                            vErrors =
+                              vErrors === null
+                                ? validateApplicatorSchema.errors
+                                : vErrors.concat(validateApplicatorSchema.errors);
+                            errorsCount = vErrors.length;
                           } else {
-                            var props_10 = l.evaluated.props;
+                            var props_10 = validateApplicatorSchema.evaluated.props;
                             if (props_9 !== true && props_10 !== undefined)
                               if (props_10 === true) props_9 = true;
                               else {
                                 props_9 = props_9 || {};
                                 Object.assign(props_9, props_10);
                               }
-                            var items_11 = l.evaluated.items;
+                            var items_11 = validateApplicatorSchema.evaluated.items;
                             if (items_10 !== true && items_11 !== undefined)
                               items_10 = items_11 === true ? true : items_10 > items_11 ? items_10 : items_11;
                           }
-                          var ae = re === e;
-                          if (!ae) break;
+                          var isPatternValid = errsBeforePattern === errorsCount;
+                          if (!isPatternValid) break;
                         }
                     } else {
-                      l.errors = [
+                      validateApplicatorSchema.errors = [
                         {
-                          instancePath: s + "/patternProperties",
+                          instancePath: instancePath + "/patternProperties",
                           schemaPath: "#/properties/patternProperties/type",
                           keyword: "type",
                           params: {
@@ -1111,70 +1186,77 @@ function l(
                       ];
                       return false;
                     }
-                  var n = O === e;
-                } else var n = true;
-                if (n) {
-                  if (t.dependentSchemas !== undefined) {
-                    let dependentSchemas = t.dependentSchemas;
-                    let O = e;
-                    if (e === O)
+                  var isKeywordValid = errsBeforePatternProperties === errorsCount;
+                } else var isKeywordValid = true;
+                if (isKeywordValid) {
+                  if (data.dependentSchemas !== undefined) {
+                    let dependentSchemas = data.dependentSchemas;
+                    let errsBeforeDependentSchemas = errorsCount;
+                    if (errorsCount === errsBeforeDependentSchemas)
                       if (
                         dependentSchemas &&
                         typeof dependentSchemas == "object" &&
                         !Array.isArray(dependentSchemas)
                       )
                         for (let key in dependentSchemas) {
-                          let W = dependentSchemas[key];
-                          let re = e;
-                          let meta = i.meta;
+                          let dependentSchema = dependentSchemas[key];
+                          let errsBeforeDependent = errorsCount;
+                          let meta = dynamicAnchors.meta;
                           if (meta) {
                             if (
-                              !meta(W, {
+                              !meta(dependentSchema, {
                                 instancePath:
-                                  s + "/dependentSchemas/" + key.replace(/~/g, "~0").replace(/\//g, "~1"),
+                                  instancePath +
+                                  "/dependentSchemas/" +
+                                  key.replace(/~/g, "~0").replace(/\//g, "~1"),
                                 parentData: dependentSchemas,
                                 parentDataProperty: key,
-                                rootData: c,
-                                dynamicAnchors: i,
+                                rootData,
+                                dynamicAnchors,
                               })
                             ) {
-                              r = r === null ? meta.errors : r.concat(meta.errors);
-                              e = r.length;
+                              vErrors = vErrors === null ? meta.errors : vErrors.concat(meta.errors);
+                              errorsCount = vErrors.length;
                             } else {
                               var props_11 = meta.evaluated.props;
                               var items_12 = meta.evaluated.items;
                             }
                           } else if (
-                            !l(W, {
+                            !validateApplicatorSchema(dependentSchema, {
                               instancePath:
-                                s + "/dependentSchemas/" + key.replace(/~/g, "~0").replace(/\//g, "~1"),
+                                instancePath +
+                                "/dependentSchemas/" +
+                                key.replace(/~/g, "~0").replace(/\//g, "~1"),
                               parentData: dependentSchemas,
                               parentDataProperty: key,
-                              rootData: c,
-                              dynamicAnchors: i,
+                              rootData,
+                              dynamicAnchors,
                             })
                           ) {
-                            r = r === null ? l.errors : r.concat(l.errors);
-                            e = r.length;
+                            vErrors =
+                              vErrors === null
+                                ? validateApplicatorSchema.errors
+                                : vErrors.concat(validateApplicatorSchema.errors);
+                            errorsCount = vErrors.length;
                           } else {
-                            var props_12 = l.evaluated.props;
+                            var props_12 = validateApplicatorSchema.evaluated.props;
                             if (props_11 !== true && props_12 !== undefined)
                               if (props_12 === true) props_11 = true;
                               else {
                                 props_11 = props_11 || {};
                                 Object.assign(props_11, props_12);
                               }
-                            var items_13 = l.evaluated.items;
+                            var items_13 = validateApplicatorSchema.evaluated.items;
                             if (items_12 !== true && items_13 !== undefined)
                               items_12 = items_13 === true ? true : items_12 > items_13 ? items_12 : items_13;
                           }
-                          var U = re === e;
-                          if (!U) break;
+                          var isDependentValid = errsBeforeDependent === errorsCount;
+                          if (!isDependentValid) break;
                         }
                       else {
-                        l.errors = [
+                        validateApplicatorSchema.errors = [
                           {
-                            instancePath: s + "/dependentSchemas",
+                            instancePath: instancePath + "/dependentSchemas",
                             schemaPath: "#/properties/dependentSchemas/type",
                             keyword: "type",
                             params: {
@@ -1185,285 +1267,310 @@ function l(
                         ];
                         return false;
                       }
-                    var n = O === e;
-                  } else var n = true;
-                  if (n) {
-                    if (t.propertyNames !== undefined) {
-                      let propertyNames = t.propertyNames;
-                      let O = e;
-                      let meta = i.meta;
+                    var isKeywordValid = errsBeforeDependentSchemas === errorsCount;
+                  } else var isKeywordValid = true;
+                  if (isKeywordValid) {
+                    if (data.propertyNames !== undefined) {
+                      let propertyNames = data.propertyNames;
+                      let errsBeforePropertyNames = errorsCount;
+                      let meta = dynamicAnchors.meta;
                       if (meta) {
                         if (
                           !meta(propertyNames, {
-                            instancePath: s + "/propertyNames",
-                            parentData: t,
+                            instancePath: instancePath + "/propertyNames",
+                            parentData: data,
                             parentDataProperty: "propertyNames",
-                            rootData: c,
-                            dynamicAnchors: i,
+                            rootData,
+                            dynamicAnchors,
                           })
                         ) {
-                          r = r === null ? meta.errors : r.concat(meta.errors);
-                          e = r.length;
+                          vErrors = vErrors === null ? meta.errors : vErrors.concat(meta.errors);
+                          errorsCount = vErrors.length;
                         } else {
                           var props_13 = meta.evaluated.props;
                           var items_14 = meta.evaluated.items;
                         }
                       } else if (
-                        !l(propertyNames, {
-                          instancePath: s + "/propertyNames",
-                          parentData: t,
+                        !validateApplicatorSchema(propertyNames, {
+                          instancePath: instancePath + "/propertyNames",
+                          parentData: data,
                           parentDataProperty: "propertyNames",
-                          rootData: c,
-                          dynamicAnchors: i,
+                          rootData,
+                          dynamicAnchors,
                         })
                       ) {
-                        r = r === null ? l.errors : r.concat(l.errors);
-                        e = r.length;
+                        vErrors =
+                          vErrors === null
+                            ? validateApplicatorSchema.errors
+                            : vErrors.concat(validateApplicatorSchema.errors);
+                        errorsCount = vErrors.length;
                       } else {
-                        var props_14 = l.evaluated.props;
+                        var props_14 = validateApplicatorSchema.evaluated.props;
                         if (props_13 !== true && props_14 !== undefined)
                           if (props_14 === true) props_13 = true;
                           else {
                             props_13 = props_13 || {};
                             Object.assign(props_13, props_14);
                           }
-                        var items_15 = l.evaluated.items;
+                        var items_15 = validateApplicatorSchema.evaluated.items;
                         if (items_14 !== true && items_15 !== undefined)
                           items_14 = items_15 === true ? true : items_14 > items_15 ? items_14 : items_15;
                       }
-                      var n = O === e;
-                    } else var n = true;
-                    if (n) {
-                      if (t.if !== undefined) {
-                        let p = t.if;
-                        let O = e;
-                        let meta = i.meta;
+                      var isKeywordValid = errsBeforePropertyNames === errorsCount;
+                    } else var isKeywordValid = true;
+                    if (isKeywordValid) {
+                      if (data.if !== undefined) {
+                        let ifSchema = data.if;
+                        let errsBeforeIf = errorsCount;
+                        let meta = dynamicAnchors.meta;
                         if (meta) {
                           if (
-                            !meta(p, {
-                              instancePath: s + "/if",
-                              parentData: t,
+                            !meta(ifSchema, {
+                              instancePath: instancePath + "/if",
+                              parentData: data,
                               parentDataProperty: "if",
-                              rootData: c,
-                              dynamicAnchors: i,
+                              rootData,
+                              dynamicAnchors,
                             })
                           ) {
-                            r = r === null ? meta.errors : r.concat(meta.errors);
-                            e = r.length;
+                            vErrors = vErrors === null ? meta.errors : vErrors.concat(meta.errors);
+                            errorsCount = vErrors.length;
                           } else {
                             var props_15 = meta.evaluated.props;
                             var items_16 = meta.evaluated.items;
                           }
                         } else if (
-                          !l(p, {
-                            instancePath: s + "/if",
-                            parentData: t,
+                          !validateApplicatorSchema(ifSchema, {
+                            instancePath: instancePath + "/if",
+                            parentData: data,
                             parentDataProperty: "if",
-                            rootData: c,
-                            dynamicAnchors: i,
+                            rootData,
+                            dynamicAnchors,
                           })
                         ) {
-                          r = r === null ? l.errors : r.concat(l.errors);
-                          e = r.length;
+                          vErrors =
+                            vErrors === null
+                              ? validateApplicatorSchema.errors
+                              : vErrors.concat(validateApplicatorSchema.errors);
+                          errorsCount = vErrors.length;
                         } else {
-                          var props_16 = l.evaluated.props;
+                          var props_16 = validateApplicatorSchema.evaluated.props;
                           if (props_15 !== true && props_16 !== undefined)
                             if (props_16 === true) props_15 = true;
                             else {
                               props_15 = props_15 || {};
                               Object.assign(props_15, props_16);
                             }
-                          var items_17 = l.evaluated.items;
+                          var items_17 = validateApplicatorSchema.evaluated.items;
                           if (items_16 !== true && items_17 !== undefined)
                             items_16 = items_17 === true ? true : items_16 > items_17 ? items_16 : items_17;
                         }
-                        var n = O === e;
-                      } else var n = true;
-                      if (n) {
-                        if (t.then !== undefined) {
-                          let p = t.then;
-                          let O = e;
-                          let meta = i.meta;
+                        var isKeywordValid = errsBeforeIf === errorsCount;
+                      } else var isKeywordValid = true;
+                      if (isKeywordValid) {
+                        if (data.then !== undefined) {
+                          let thenSchema = data.then;
+                          let errsBeforeThen = errorsCount;
+                          let meta = dynamicAnchors.meta;
                           if (meta) {
                             if (
-                              !meta(p, {
-                                instancePath: s + "/then",
-                                parentData: t,
+                              !meta(thenSchema, {
+                                instancePath: instancePath + "/then",
+                                parentData: data,
                                 parentDataProperty: "then",
-                                rootData: c,
-                                dynamicAnchors: i,
+                                rootData,
+                                dynamicAnchors,
                               })
                             ) {
-                              r = r === null ? meta.errors : r.concat(meta.errors);
-                              e = r.length;
+                              vErrors = vErrors === null ? meta.errors : vErrors.concat(meta.errors);
+                              errorsCount = vErrors.length;
                             } else {
                               var props_17 = meta.evaluated.props;
                               var items_18 = meta.evaluated.items;
                             }
                           } else if (
-                            !l(p, {
-                              instancePath: s + "/then",
-                              parentData: t,
+                            !validateApplicatorSchema(thenSchema, {
+                              instancePath: instancePath + "/then",
+                              parentData: data,
                               parentDataProperty: "then",
-                              rootData: c,
-                              dynamicAnchors: i,
+                              rootData,
+                              dynamicAnchors,
                             })
                           ) {
-                            r = r === null ? l.errors : r.concat(l.errors);
-                            e = r.length;
+                            vErrors =
+                              vErrors === null
+                                ? validateApplicatorSchema.errors
+                                : vErrors.concat(validateApplicatorSchema.errors);
+                            errorsCount = vErrors.length;
                           } else {
-                            var props_18 = l.evaluated.props;
+                            var props_18 = validateApplicatorSchema.evaluated.props;
                             if (props_17 !== true && props_18 !== undefined)
                               if (props_18 === true) props_17 = true;
                               else {
                                 props_17 = props_17 || {};
                                 Object.assign(props_17, props_18);
                               }
-                            var items_19 = l.evaluated.items;
+                            var items_19 = validateApplicatorSchema.evaluated.items;
                             if (items_18 !== true && items_19 !== undefined)
                               items_18 = items_19 === true ? true : items_18 > items_19 ? items_18 : items_19;
                           }
-                          var n = O === e;
-                        } else var n = true;
-                        if (n) {
-                          if (t.else !== undefined) {
-                            let p = t.else;
-                            let O = e;
-                            let meta = i.meta;
+                          var isKeywordValid = errsBeforeThen === errorsCount;
+                        } else var isKeywordValid = true;
+                        if (isKeywordValid) {
+                          if (data.else !== undefined) {
+                            let elseSchema = data.else;
+                            let errsBeforeElse = errorsCount;
+                            let meta = dynamicAnchors.meta;
                             if (meta) {
                               if (
-                                !meta(p, {
-                                  instancePath: s + "/else",
-                                  parentData: t,
+                                !meta(elseSchema, {
+                                  instancePath: instancePath + "/else",
+                                  parentData: data,
                                   parentDataProperty: "else",
-                                  rootData: c,
-                                  dynamicAnchors: i,
+                                  rootData,
+                                  dynamicAnchors,
                                 })
                               ) {
-                                r = r === null ? meta.errors : r.concat(meta.errors);
-                                e = r.length;
+                                vErrors = vErrors === null ? meta.errors : vErrors.concat(meta.errors);
+                                errorsCount = vErrors.length;
                               } else {
                                 var props_19 = meta.evaluated.props;
                                 var items_20 = meta.evaluated.items;
                               }
                             } else if (
-                              !l(p, {
-                                instancePath: s + "/else",
-                                parentData: t,
+                              !validateApplicatorSchema(elseSchema, {
+                                instancePath: instancePath + "/else",
+                                parentData: data,
                                 parentDataProperty: "else",
-                                rootData: c,
-                                dynamicAnchors: i,
+                                rootData,
+                                dynamicAnchors,
                               })
                             ) {
-                              r = r === null ? l.errors : r.concat(l.errors);
-                              e = r.length;
+                              vErrors =
+                                vErrors === null
+                                  ? validateApplicatorSchema.errors
+                                  : vErrors.concat(validateApplicatorSchema.errors);
+                              errorsCount = vErrors.length;
                             } else {
-                              var props_20 = l.evaluated.props;
+                              var props_20 = validateApplicatorSchema.evaluated.props;
                               if (props_19 !== true && props_20 !== undefined)
                                 if (props_20 === true) props_19 = true;
                                 else {
                                   props_19 = props_19 || {};
                                   Object.assign(props_19, props_20);
                                 }
-                              var items_21 = l.evaluated.items;
+                              var items_21 = validateApplicatorSchema.evaluated.items;
                               if (items_20 !== true && items_21 !== undefined)
                                 items_20 =
                                   items_21 === true ? true : items_20 > items_21 ? items_20 : items_21;
                             }
-                            var n = O === e;
-                          } else var n = true;
-                          if (n) {
-                            if (t.allOf !== undefined) {
-                              let p = e;
+                            var isKeywordValid = errsBeforeElse === errorsCount;
+                          } else var isKeywordValid = true;
+                          if (isKeywordValid) {
+                            if (data.allOf !== undefined) {
+                              let errsBeforeAllOf = errorsCount;
                               if (
-                                !R(t.allOf, {
-                                  instancePath: s + "/allOf",
-                                  parentData: t,
+                                !validateSchemaArray(data.allOf, {
+                                  instancePath: instancePath + "/allOf",
+                                  parentData: data,
                                   parentDataProperty: "allOf",
-                                  rootData: c,
-                                  dynamicAnchors: i,
+                                  rootData,
+                                  dynamicAnchors,
                                 })
                               ) {
-                                r = r === null ? R.errors : r.concat(R.errors);
-                                e = r.length;
+                                vErrors =
+                                  vErrors === null
+                                    ? validateSchemaArray.errors
+                                    : vErrors.concat(validateSchemaArray.errors);
+                                errorsCount = vErrors.length;
                               }
-                              var n = p === e;
-                            } else var n = true;
-                            if (n) {
-                              if (t.anyOf !== undefined) {
-                                let p = e;
+                              var isKeywordValid = errsBeforeAllOf === errorsCount;
+                            } else var isKeywordValid = true;
+                            if (isKeywordValid) {
+                              if (data.anyOf !== undefined) {
+                                let errsBeforeAnyOf = errorsCount;
                                 if (
-                                  !R(t.anyOf, {
-                                    instancePath: s + "/anyOf",
-                                    parentData: t,
+                                  !validateSchemaArray(data.anyOf, {
+                                    instancePath: instancePath + "/anyOf",
+                                    parentData: data,
                                     parentDataProperty: "anyOf",
-                                    rootData: c,
-                                    dynamicAnchors: i,
+                                    rootData,
+                                    dynamicAnchors,
                                   })
                                 ) {
-                                  r = r === null ? R.errors : r.concat(R.errors);
-                                  e = r.length;
+                                  vErrors =
+                                    vErrors === null
+                                      ? validateSchemaArray.errors
+                                      : vErrors.concat(validateSchemaArray.errors);
+                                  errorsCount = vErrors.length;
                                 }
-                                var n = p === e;
-                              } else var n = true;
-                              if (n) {
-                                if (t.oneOf !== undefined) {
-                                  let p = e;
+                                var isKeywordValid = errsBeforeAnyOf === errorsCount;
+                              } else var isKeywordValid = true;
+                              if (isKeywordValid) {
+                                if (data.oneOf !== undefined) {
+                                  let errsBeforeOneOf = errorsCount;
                                   if (
-                                    !R(t.oneOf, {
-                                      instancePath: s + "/oneOf",
-                                      parentData: t,
+                                    !validateSchemaArray(data.oneOf, {
+                                      instancePath: instancePath + "/oneOf",
+                                      parentData: data,
                                       parentDataProperty: "oneOf",
-                                      rootData: c,
-                                      dynamicAnchors: i,
+                                      rootData,
+                                      dynamicAnchors,
                                     })
                                   ) {
-                                    r = r === null ? R.errors : r.concat(R.errors);
-                                    e = r.length;
+                                    vErrors =
+                                      vErrors === null
+                                        ? validateSchemaArray.errors
+                                        : vErrors.concat(validateSchemaArray.errors);
+                                    errorsCount = vErrors.length;
                                   }
-                                  var n = p === e;
-                                } else var n = true;
-                                if (n)
-                                  if (t.not !== undefined) {
-                                    let not = t.not;
-                                    let O = e;
-                                    let meta = i.meta;
+                                  var isKeywordValid = errsBeforeOneOf === errorsCount;
+                                } else var isKeywordValid = true;
+                                if (isKeywordValid)
+                                  if (data.not !== undefined) {
+                                    let not = data.not;
+                                    let errsBeforeNot = errorsCount;
+                                    let meta = dynamicAnchors.meta;
                                     if (meta) {
                                       if (
                                         !meta(not, {
-                                          instancePath: s + "/not",
-                                          parentData: t,
+                                          instancePath: instancePath + "/not",
+                                          parentData: data,
                                           parentDataProperty: "not",
-                                          rootData: c,
-                                          dynamicAnchors: i,
+                                          rootData,
+                                          dynamicAnchors,
                                         })
                                       ) {
-                                        r = r === null ? meta.errors : r.concat(meta.errors);
-                                        e = r.length;
+                                        vErrors =
+                                          vErrors === null ? meta.errors : vErrors.concat(meta.errors);
+                                        errorsCount = vErrors.length;
                                       } else {
                                         var props_21 = meta.evaluated.props;
                                         var items_22 = meta.evaluated.items;
                                       }
                                     } else if (
-                                      !l(not, {
-                                        instancePath: s + "/not",
-                                        parentData: t,
+                                      !validateApplicatorSchema(not, {
+                                        instancePath: instancePath + "/not",
+                                        parentData: data,
                                         parentDataProperty: "not",
-                                        rootData: c,
-                                        dynamicAnchors: i,
+                                        rootData,
+                                        dynamicAnchors,
                                       })
                                     ) {
-                                      r = r === null ? l.errors : r.concat(l.errors);
-                                      e = r.length;
+                                      vErrors =
+                                        vErrors === null
+                                          ? validateApplicatorSchema.errors
+                                          : vErrors.concat(validateApplicatorSchema.errors);
+                                      errorsCount = vErrors.length;
                                     } else {
-                                      var props_22 = l.evaluated.props;
+                                      var props_22 = validateApplicatorSchema.evaluated.props;
                                       if (props_21 !== true && props_22 !== undefined)
                                         if (props_22 === true) props_21 = true;
                                         else {
                                           props_21 = props_21 || {};
                                           Object.assign(props_21, props_22);
                                         }
-                                      var items_23 = l.evaluated.items;
+                                      var items_23 = validateApplicatorSchema.evaluated.items;
                                       if (items_22 !== true && items_23 !== undefined)
                                         items_22 =
                                           items_23 === true
@@ -1472,8 +1579,8 @@ function l(
                                               ? items_22
                                               : items_23;
                                     }
-                                    var n = O === e;
-                                  } else var n = true;
+                                    var isKeywordValid = errsBeforeNot === errorsCount;
+                                  } else var isKeywordValid = true;
                               }
                             }
                           }
@@ -1489,33 +1596,36 @@ function l(
       }
     }
   }
-  l.errors = r;
-  return e === 0;
+  validateApplicatorSchema.errors = vErrors;
+  return errorsCount === 0;
 }
 //@ chunk-n332mrkv.js:20346-20588 layout
-l.evaluated = {
-  props: {
-    prefixItems: true,
-    items: true,
-    contains: true,
-    additionalProperties: true,
-    properties: true,
-    patternProperties: true,
-    dependentSchemas: true,
-    propertyNames: true,
-    if: true,
-    then: true,
-    else: true,
-    allOf: true,
-    anyOf: true,
-    oneOf: true,
-    not: true,
-  },
-  dynamicProps: false,
-  dynamicItems: false,
-};
+// deferred: uses validateApplicatorSchema of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-n332mrkv.js:20346", () => {
+  validateApplicatorSchema.evaluated = {
+    props: {
+      prefixItems: true,
+      items: true,
+      contains: true,
+      additionalProperties: true,
+      properties: true,
+      patternProperties: true,
+      dependentSchemas: true,
+      propertyNames: true,
+      if: true,
+      then: true,
+      else: true,
+      allOf: true,
+      anyOf: true,
+      oneOf: true,
+      not: true,
+    },
+    dynamicProps: false,
+    dynamicItems: false,
+  };
+});
 //@ chunk-n332mrkv.js:20588-20986 esm-fingerprint
-var Ne = {
+var unevaluatedMetaSchema = {
   $schema: "https://json-schema.org/draft/2020-12/schema",
   $id: "https://json-schema.org/draft/2020-12/meta/unevaluated",
   $vocabulary: {
@@ -1534,145 +1644,148 @@ var Ne = {
   },
 };
 //@ chunk-n332mrkv.js:20986-22855 esm-layout
-function F(
-  t,
-  {
-    instancePath: s = "",
-    parentData: z,
-    parentDataProperty: E,
-    rootData: c = t,
-    dynamicAnchors: i = {},
-  } = {},
+function validateUnevaluatedSchema(
+  data,
+  { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {},
 ) {
-  let r = null;
-  let e = 0;
-  let evaluated = F.evaluated;
+  let vErrors = null;
+  let errorsCount = 0;
+  let evaluated = validateUnevaluatedSchema.evaluated;
   if (evaluated.dynamicProps) evaluated.props = undefined;
   if (evaluated.dynamicItems) evaluated.items = undefined;
-  if (!(t && typeof t == "object" && !Array.isArray(t)) && typeof t !== "boolean") {
-    F.errors = [
+  if (!(data && typeof data == "object" && !Array.isArray(data)) && typeof data !== "boolean") {
+    validateUnevaluatedSchema.errors = [
       {
-        instancePath: s,
+        instancePath,
         schemaPath: "#/type",
         keyword: "type",
         params: {
-          type: Ne.type,
+          type: unevaluatedMetaSchema.type,
         },
         message: "must be object,boolean",
       },
     ];
     return false;
   }
-  if (!i.meta) i.meta = F;
-  if (e === 0) {
-    if (t && typeof t == "object" && !Array.isArray(t)) {
-      if (t.unevaluatedItems !== undefined) {
-        let unevaluatedItems = t.unevaluatedItems;
-        let N = e;
-        let meta = i.meta;
+  if (!dynamicAnchors.meta) dynamicAnchors.meta = validateUnevaluatedSchema;
+  if (errorsCount === 0) {
+    if (data && typeof data == "object" && !Array.isArray(data)) {
+      if (data.unevaluatedItems !== undefined) {
+        let unevaluatedItems = data.unevaluatedItems;
+        let errsBeforeUnevaluatedItems = errorsCount;
+        let meta = dynamicAnchors.meta;
         if (meta) {
           if (
             !meta(unevaluatedItems, {
-              instancePath: s + "/unevaluatedItems",
-              parentData: t,
+              instancePath: instancePath + "/unevaluatedItems",
+              parentData: data,
               parentDataProperty: "unevaluatedItems",
-              rootData: c,
-              dynamicAnchors: i,
+              rootData,
+              dynamicAnchors,
             })
           ) {
-            r = r === null ? meta.errors : r.concat(meta.errors);
-            e = r.length;
+            vErrors = vErrors === null ? meta.errors : vErrors.concat(meta.errors);
+            errorsCount = vErrors.length;
           } else {
             var props = meta.evaluated.props;
             var items = meta.evaluated.items;
           }
         } else if (
-          !F(unevaluatedItems, {
-            instancePath: s + "/unevaluatedItems",
-            parentData: t,
+          !validateUnevaluatedSchema(unevaluatedItems, {
+            instancePath: instancePath + "/unevaluatedItems",
+            parentData: data,
             parentDataProperty: "unevaluatedItems",
-            rootData: c,
-            dynamicAnchors: i,
+            rootData,
+            dynamicAnchors,
           })
         ) {
-          r = r === null ? F.errors : r.concat(F.errors);
-          e = r.length;
+          vErrors =
+            vErrors === null
+              ? validateUnevaluatedSchema.errors
+              : vErrors.concat(validateUnevaluatedSchema.errors);
+          errorsCount = vErrors.length;
         } else {
-          var props_2 = F.evaluated.props;
+          var props_2 = validateUnevaluatedSchema.evaluated.props;
           if (props !== true && props_2 !== undefined)
             if (props_2 === true) props = true;
             else {
               props = props || {};
               Object.assign(props, props_2);
             }
-          var items_2 = F.evaluated.items;
+          var items_2 = validateUnevaluatedSchema.evaluated.items;
           if (items !== true && items_2 !== undefined)
             items = items_2 === true ? true : items > items_2 ? items : items_2;
         }
-        var k = N === e;
-      } else var k = true;
-      if (k)
-        if (t.unevaluatedProperties !== undefined) {
-          let unevaluatedProperties = t.unevaluatedProperties;
-          let N = e;
-          let meta = i.meta;
+        var errsBeforeItems = errsBeforeUnevaluatedItems === errorsCount;
+      } else var errsBeforeItems = true;
+      if (errsBeforeItems)
+        if (data.unevaluatedProperties !== undefined) {
+          let unevaluatedProperties = data.unevaluatedProperties;
+          let errsBeforeUnevaluatedProperties = errorsCount;
+          let meta = dynamicAnchors.meta;
           if (meta) {
             if (
               !meta(unevaluatedProperties, {
-                instancePath: s + "/unevaluatedProperties",
-                parentData: t,
+                instancePath: instancePath + "/unevaluatedProperties",
+                parentData: data,
                 parentDataProperty: "unevaluatedProperties",
-                rootData: c,
-                dynamicAnchors: i,
+                rootData,
+                dynamicAnchors,
               })
             ) {
-              r = r === null ? meta.errors : r.concat(meta.errors);
-              e = r.length;
+              vErrors = vErrors === null ? meta.errors : vErrors.concat(meta.errors);
+              errorsCount = vErrors.length;
             } else {
               var props_3 = meta.evaluated.props;
               var items_3 = meta.evaluated.items;
             }
           } else if (
-            !F(unevaluatedProperties, {
-              instancePath: s + "/unevaluatedProperties",
-              parentData: t,
+            !validateUnevaluatedSchema(unevaluatedProperties, {
+              instancePath: instancePath + "/unevaluatedProperties",
+              parentData: data,
               parentDataProperty: "unevaluatedProperties",
-              rootData: c,
-              dynamicAnchors: i,
+              rootData,
+              dynamicAnchors,
             })
           ) {
-            r = r === null ? F.errors : r.concat(F.errors);
-            e = r.length;
+            vErrors =
+              vErrors === null
+                ? validateUnevaluatedSchema.errors
+                : vErrors.concat(validateUnevaluatedSchema.errors);
+            errorsCount = vErrors.length;
           } else {
-            var props_4 = F.evaluated.props;
+            var props_4 = validateUnevaluatedSchema.evaluated.props;
             if (props_3 !== true && props_4 !== undefined)
               if (props_4 === true) props_3 = true;
               else {
                 props_3 = props_3 || {};
                 Object.assign(props_3, props_4);
               }
-            var items_4 = F.evaluated.items;
+            var items_4 = validateUnevaluatedSchema.evaluated.items;
             if (items_3 !== true && items_4 !== undefined)
               items_3 = items_4 === true ? true : items_3 > items_4 ? items_3 : items_4;
           }
-          var k = N === e;
-        } else var k = true;
+          var errsBeforeItems = errsBeforeUnevaluatedProperties === errorsCount;
+        } else var errsBeforeItems = true;
     }
   }
-  F.errors = r;
-  return e === 0;
+  validateUnevaluatedSchema.errors = vErrors;
+  return errorsCount === 0;
 }
 //@ chunk-n332mrkv.js:22855-22954 esm-layout
-F.evaluated = {
-  props: {
-    unevaluatedItems: true,
-    unevaluatedProperties: true,
-  },
-  dynamicProps: false,
-  dynamicItems: false,
-};
+// deferred: uses validateUnevaluatedSchema of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-n332mrkv.js:22855", () => {
+  validateUnevaluatedSchema.evaluated = {
+    props: {
+      unevaluatedItems: true,
+      unevaluatedProperties: true,
+    },
+    dynamicProps: false,
+    dynamicItems: false,
+  };
+});
 //@ chunk-n332mrkv.js:22954-24545 esm-fingerprint
-var xe = {
+var validationMetaSchema = {
   $schema: "https://json-schema.org/draft/2020-12/schema",
   $id: "https://json-schema.org/draft/2020-12/meta/validation",
   $vocabulary: {
@@ -1783,13 +1896,16 @@ var xe = {
     },
   },
 };
-var _e = {
+var simpleTypes = {
   enum: ["array", "boolean", "integer", "null", "number", "object", "string"],
 };
 //@ chunk-n332mrkv.js:24545-24566 esm-layout
-var require_ajv = require_equal().default;
+var require_ajv; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-n332mrkv.js:24545", () => {
+  require_ajv = require_equal().default;
+});
 //@ chunk-n332mrkv.js:36244-36750 esm-fingerprint
-var De = {
+var metaDataMetaSchema = {
   $schema: "https://json-schema.org/draft/2020-12/schema",
   $id: "https://json-schema.org/draft/2020-12/meta/meta-data",
   $vocabulary: {
@@ -1825,44 +1941,38 @@ var De = {
   },
 };
 //@ chunk-n332mrkv.js:36750-38764 esm-layout
-function L(
-  t,
-  {
-    instancePath: s = "",
-    parentData: z,
-    parentDataProperty: E,
-    rootData: c = t,
-    dynamicAnchors: i = {},
-  } = {},
+function validateMetaDataSchema(
+  data,
+  { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {},
 ) {
   let errors = null;
-  let e = 0;
-  let evaluated = L.evaluated;
+  let errorsCount = 0;
+  let evaluated = validateMetaDataSchema.evaluated;
   if (evaluated.dynamicProps) evaluated.props = undefined;
   if (evaluated.dynamicItems) evaluated.items = undefined;
-  if (!(t && typeof t == "object" && !Array.isArray(t)) && typeof t !== "boolean") {
-    L.errors = [
+  if (!(data && typeof data == "object" && !Array.isArray(data)) && typeof data !== "boolean") {
+    validateMetaDataSchema.errors = [
       {
-        instancePath: s,
+        instancePath,
         schemaPath: "#/type",
         keyword: "type",
         params: {
-          type: De.type,
+          type: metaDataMetaSchema.type,
         },
         message: "must be object,boolean",
       },
     ];
     return false;
   }
-  if (!i.meta) i.meta = L;
-  if (e === 0) {
-    if (t && typeof t == "object" && !Array.isArray(t)) {
-      if (t.title !== undefined) {
-        let d = e;
-        if (typeof t.title !== "string") {
-          L.errors = [
+  if (!dynamicAnchors.meta) dynamicAnchors.meta = validateMetaDataSchema;
+  if (errorsCount === 0) {
+    if (data && typeof data == "object" && !Array.isArray(data)) {
+      if (data.title !== undefined) {
+        let errsBeforeTitle = errorsCount;
+        if (typeof data.title !== "string") {
+          validateMetaDataSchema.errors = [
             {
-              instancePath: s + "/title",
+              instancePath: instancePath + "/title",
               schemaPath: "#/properties/title/type",
               keyword: "type",
               params: {
@@ -1873,15 +1983,15 @@ function L(
           ];
           return false;
         }
-        var n = d === e;
-      } else var n = true;
-      if (n) {
-        if (t.description !== undefined) {
-          let d = e;
-          if (typeof t.description !== "string") {
-            L.errors = [
+        var isKeywordValid = errsBeforeTitle === errorsCount;
+      } else var isKeywordValid = true;
+      if (isKeywordValid) {
+        if (data.description !== undefined) {
+          let errsBeforeDescription = errorsCount;
+          if (typeof data.description !== "string") {
+            validateMetaDataSchema.errors = [
               {
-                instancePath: s + "/description",
+                instancePath: instancePath + "/description",
                 schemaPath: "#/properties/description/type",
                 keyword: "type",
                 params: {
@@ -1892,15 +2002,15 @@ function L(
             ];
             return false;
           }
-          var n = d === e;
-        } else var n = true;
-        if (n) {
-          if (t.deprecated !== undefined) {
-            let d = e;
-            if (typeof t.deprecated !== "boolean") {
-              L.errors = [
+          var isKeywordValid = errsBeforeDescription === errorsCount;
+        } else var isKeywordValid = true;
+        if (isKeywordValid) {
+          if (data.deprecated !== undefined) {
+            let errsBeforeDeprecated = errorsCount;
+            if (typeof data.deprecated !== "boolean") {
+              validateMetaDataSchema.errors = [
                 {
-                  instancePath: s + "/deprecated",
+                  instancePath: instancePath + "/deprecated",
                   schemaPath: "#/properties/deprecated/type",
                   keyword: "type",
                   params: {
@@ -1911,15 +2021,15 @@ function L(
               ];
               return false;
             }
-            var n = d === e;
-          } else var n = true;
-          if (n) {
-            if (t.readOnly !== undefined) {
-              let d = e;
-              if (typeof t.readOnly !== "boolean") {
-                L.errors = [
+            var isKeywordValid = errsBeforeDeprecated === errorsCount;
+          } else var isKeywordValid = true;
+          if (isKeywordValid) {
+            if (data.readOnly !== undefined) {
+              let errsBeforeReadOnly = errorsCount;
+              if (typeof data.readOnly !== "boolean") {
+                validateMetaDataSchema.errors = [
                   {
-                    instancePath: s + "/readOnly",
+                    instancePath: instancePath + "/readOnly",
                     schemaPath: "#/properties/readOnly/type",
                     keyword: "type",
                     params: {
@@ -1930,15 +2040,15 @@ function L(
                 ];
                 return false;
               }
-              var n = d === e;
-            } else var n = true;
-            if (n) {
-              if (t.writeOnly !== undefined) {
-                let d = e;
-                if (typeof t.writeOnly !== "boolean") {
-                  L.errors = [
+              var isKeywordValid = errsBeforeReadOnly === errorsCount;
+            } else var isKeywordValid = true;
+            if (isKeywordValid) {
+              if (data.writeOnly !== undefined) {
+                let errsBeforeWriteOnly = errorsCount;
+                if (typeof data.writeOnly !== "boolean") {
+                  validateMetaDataSchema.errors = [
                     {
-                      instancePath: s + "/writeOnly",
+                      instancePath: instancePath + "/writeOnly",
                       schemaPath: "#/properties/writeOnly/type",
                       keyword: "type",
                       params: {
@@ -1949,16 +2059,16 @@ function L(
                   ];
                   return false;
                 }
-                var n = d === e;
-              } else var n = true;
-              if (n)
-                if (t.examples !== undefined) {
-                  let d = e;
-                  if (e === d) {
-                    if (!Array.isArray(t.examples)) {
-                      L.errors = [
+                var isKeywordValid = errsBeforeWriteOnly === errorsCount;
+              } else var isKeywordValid = true;
+              if (isKeywordValid)
+                if (data.examples !== undefined) {
+                  let errsBeforeExamples = errorsCount;
+                  if (errorsCount === errsBeforeExamples) {
+                    if (!Array.isArray(data.examples)) {
+                      validateMetaDataSchema.errors = [
                         {
-                          instancePath: s + "/examples",
+                          instancePath: instancePath + "/examples",
                           schemaPath: "#/properties/examples/type",
                           keyword: "type",
                           params: {
@@ -1970,33 +2080,36 @@ function L(
                       return false;
                     }
                   }
-                  var n = d === e;
-                } else var n = true;
+                  var isKeywordValid = errsBeforeExamples === errorsCount;
+                } else var isKeywordValid = true;
             }
           }
         }
       }
     }
   }
-  L.errors = errors;
-  return e === 0;
+  validateMetaDataSchema.errors = errors;
+  return errorsCount === 0;
 }
 //@ chunk-n332mrkv.js:38764-38904 esm-layout
-L.evaluated = {
-  props: {
-    title: true,
-    description: true,
-    default: true,
-    deprecated: true,
-    readOnly: true,
-    writeOnly: true,
-    examples: true,
-  },
-  dynamicProps: false,
-  dynamicItems: false,
-};
+// deferred: uses validateMetaDataSchema of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-n332mrkv.js:38764", () => {
+  validateMetaDataSchema.evaluated = {
+    props: {
+      title: true,
+      description: true,
+      default: true,
+      deprecated: true,
+      readOnly: true,
+      writeOnly: true,
+      examples: true,
+    },
+    dynamicProps: false,
+    dynamicItems: false,
+  };
+});
 //@ chunk-n332mrkv.js:38904-39261 esm-fingerprint
-var Re = {
+var formatAnnotationMetaSchema = {
   $schema: "https://json-schema.org/draft/2020-12/schema",
   $id: "https://json-schema.org/draft/2020-12/meta/format-annotation",
   $vocabulary: {
@@ -2012,43 +2125,37 @@ var Re = {
   },
 };
 //@ chunk-n332mrkv.js:39261-39959 esm-layout
-function X(
-  t,
-  {
-    instancePath: s = "",
-    parentData: z,
-    parentDataProperty: E,
-    rootData: c = t,
-    dynamicAnchors: i = {},
-  } = {},
+function validateFormatAnnotationSchema(
+  data,
+  { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {},
 ) {
   let errors = null;
-  let e = 0;
-  let evaluated = X.evaluated;
+  let errorsCount = 0;
+  let evaluated = validateFormatAnnotationSchema.evaluated;
   if (evaluated.dynamicProps) evaluated.props = undefined;
   if (evaluated.dynamicItems) evaluated.items = undefined;
-  if (!(t && typeof t == "object" && !Array.isArray(t)) && typeof t !== "boolean") {
-    X.errors = [
+  if (!(data && typeof data == "object" && !Array.isArray(data)) && typeof data !== "boolean") {
+    validateFormatAnnotationSchema.errors = [
       {
-        instancePath: s,
+        instancePath,
         schemaPath: "#/type",
         keyword: "type",
         params: {
-          type: Re.type,
+          type: formatAnnotationMetaSchema.type,
         },
         message: "must be object,boolean",
       },
     ];
     return false;
   }
-  if (!i.meta) i.meta = X;
-  if (e === 0) {
-    if (t && typeof t == "object" && !Array.isArray(t)) {
-      if (t.format !== undefined) {
-        if (typeof t.format !== "string") {
-          X.errors = [
+  if (!dynamicAnchors.meta) dynamicAnchors.meta = validateFormatAnnotationSchema;
+  if (errorsCount === 0) {
+    if (data && typeof data == "object" && !Array.isArray(data)) {
+      if (data.format !== undefined) {
+        if (typeof data.format !== "string") {
+          validateFormatAnnotationSchema.errors = [
             {
-              instancePath: s + "/format",
+              instancePath: instancePath + "/format",
               schemaPath: "#/properties/format/type",
               keyword: "type",
               params: {
@@ -2062,19 +2169,22 @@ function X(
       }
     }
   }
-  X.errors = errors;
-  return e === 0;
+  validateFormatAnnotationSchema.errors = errors;
+  return errorsCount === 0;
 }
 //@ chunk-n332mrkv.js:39959-40023 esm-layout
-X.evaluated = {
-  props: {
-    format: true,
-  },
-  dynamicProps: false,
-  dynamicItems: false,
-};
+// deferred: uses validateFormatAnnotationSchema of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-n332mrkv.js:39959", () => {
+  validateFormatAnnotationSchema.evaluated = {
+    props: {
+      format: true,
+    },
+    dynamicProps: false,
+    dynamicItems: false,
+  };
+});
 //@ chunk-n332mrkv.js:40023-40416 esm-fingerprint
-var Ae = {
+var contentMetaSchema = {
   $schema: "https://json-schema.org/draft/2020-12/schema",
   $id: "https://json-schema.org/draft/2020-12/meta/content",
   $vocabulary: {
@@ -2096,44 +2206,38 @@ var Ae = {
   },
 };
 //@ chunk-n332mrkv.js:40416-42121 affinity
-function C(
-  t,
-  {
-    instancePath: s = "",
-    parentData: z,
-    parentDataProperty: E,
-    rootData: c = t,
-    dynamicAnchors: i = {},
-  } = {},
+function validateContentSchema(
+  data,
+  { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {},
 ) {
-  let r = null;
-  let e = 0;
-  let evaluated = C.evaluated;
+  let vErrors = null;
+  let errorsCount = 0;
+  let evaluated = validateContentSchema.evaluated;
   if (evaluated.dynamicProps) evaluated.props = undefined;
   if (evaluated.dynamicItems) evaluated.items = undefined;
-  if (!(t && typeof t == "object" && !Array.isArray(t)) && typeof t !== "boolean") {
-    C.errors = [
+  if (!(data && typeof data == "object" && !Array.isArray(data)) && typeof data !== "boolean") {
+    validateContentSchema.errors = [
       {
-        instancePath: s,
+        instancePath,
         schemaPath: "#/type",
         keyword: "type",
         params: {
-          type: Ae.type,
+          type: contentMetaSchema.type,
         },
         message: "must be object,boolean",
       },
     ];
     return false;
   }
-  if (!i.meta) i.meta = C;
-  if (e === 0) {
-    if (t && typeof t == "object" && !Array.isArray(t)) {
-      if (t.contentEncoding !== undefined) {
-        let I = e;
-        if (typeof t.contentEncoding !== "string") {
-          C.errors = [
+  if (!dynamicAnchors.meta) dynamicAnchors.meta = validateContentSchema;
+  if (errorsCount === 0) {
+    if (data && typeof data == "object" && !Array.isArray(data)) {
+      if (data.contentEncoding !== undefined) {
+        let errsBeforeContentEncoding = errorsCount;
+        if (typeof data.contentEncoding !== "string") {
+          validateContentSchema.errors = [
             {
-              instancePath: s + "/contentEncoding",
+              instancePath: instancePath + "/contentEncoding",
               schemaPath: "#/properties/contentEncoding/type",
               keyword: "type",
               params: {
@@ -2144,15 +2248,15 @@ function C(
           ];
           return false;
         }
-        var n = I === e;
-      } else var n = true;
-      if (n) {
-        if (t.contentMediaType !== undefined) {
-          let I = e;
-          if (typeof t.contentMediaType !== "string") {
-            C.errors = [
+        var isKeywordValid = errsBeforeContentEncoding === errorsCount;
+      } else var isKeywordValid = true;
+      if (isKeywordValid) {
+        if (data.contentMediaType !== undefined) {
+          let errsBeforeContentMediaType = errorsCount;
+          if (typeof data.contentMediaType !== "string") {
+            validateContentSchema.errors = [
               {
-                instancePath: s + "/contentMediaType",
+                instancePath: instancePath + "/contentMediaType",
                 schemaPath: "#/properties/contentMediaType/type",
                 keyword: "type",
                 params: {
@@ -2163,268 +2267,286 @@ function C(
             ];
             return false;
           }
-          var n = I === e;
-        } else var n = true;
-        if (n)
-          if (t.contentSchema !== undefined) {
-            let contentSchema = t.contentSchema;
-            let a = e;
-            let meta = i.meta;
+          var isKeywordValid = errsBeforeContentMediaType === errorsCount;
+        } else var isKeywordValid = true;
+        if (isKeywordValid)
+          if (data.contentSchema !== undefined) {
+            let contentSchema = data.contentSchema;
+            let errsBeforeContentSchema = errorsCount;
+            let meta = dynamicAnchors.meta;
             if (meta) {
               if (
                 !meta(contentSchema, {
-                  instancePath: s + "/contentSchema",
-                  parentData: t,
+                  instancePath: instancePath + "/contentSchema",
+                  parentData: data,
                   parentDataProperty: "contentSchema",
-                  rootData: c,
-                  dynamicAnchors: i,
+                  rootData,
+                  dynamicAnchors,
                 })
               ) {
-                r = r === null ? meta.errors : r.concat(meta.errors);
-                e = r.length;
+                vErrors = vErrors === null ? meta.errors : vErrors.concat(meta.errors);
+                errorsCount = vErrors.length;
               } else {
                 var props = meta.evaluated.props;
                 var items = meta.evaluated.items;
               }
             } else if (
-              !C(contentSchema, {
-                instancePath: s + "/contentSchema",
-                parentData: t,
+              !validateContentSchema(contentSchema, {
+                instancePath: instancePath + "/contentSchema",
+                parentData: data,
                 parentDataProperty: "contentSchema",
-                rootData: c,
-                dynamicAnchors: i,
+                rootData,
+                dynamicAnchors,
               })
             ) {
-              r = r === null ? C.errors : r.concat(C.errors);
-              e = r.length;
+              vErrors =
+                vErrors === null
+                  ? validateContentSchema.errors
+                  : vErrors.concat(validateContentSchema.errors);
+              errorsCount = vErrors.length;
             } else {
-              var props_2 = C.evaluated.props;
+              var props_2 = validateContentSchema.evaluated.props;
               if (props !== true && props_2 !== undefined)
                 if (props_2 === true) props = true;
                 else {
                   props = props || {};
                   Object.assign(props, props_2);
                 }
-              var items_2 = C.evaluated.items;
+              var items_2 = validateContentSchema.evaluated.items;
               if (items !== true && items_2 !== undefined)
                 items = items_2 === true ? true : items > items_2 ? items : items_2;
             }
-            var n = a === e;
-          } else var n = true;
+            var isKeywordValid = errsBeforeContentSchema === errorsCount;
+          } else var isKeywordValid = true;
       }
     }
   }
-  C.errors = r;
-  return e === 0;
+  validateContentSchema.errors = vErrors;
+  return errorsCount === 0;
 }
 //@ chunk-n332mrkv.js:42121-42231 affinity
-C.evaluated = {
-  props: {
-    contentEncoding: true,
-    contentMediaType: true,
-    contentSchema: true,
-  },
-  dynamicProps: false,
-  dynamicItems: false,
-};
+// deferred: uses validateContentSchema of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-n332mrkv.js:42121", () => {
+  validateContentSchema.evaluated = {
+    props: {
+      contentEncoding: true,
+      contentMediaType: true,
+      contentSchema: true,
+    },
+    dynamicProps: false,
+    dynamicItems: false,
+  };
+});
 //@ chunk-n332mrkv.js:42231-48153 affinity
-function D(
-  t,
-  {
-    instancePath: s = "",
-    parentData: z,
-    parentDataProperty: E,
-    rootData: c = t,
-    dynamicAnchors: i = {},
-  } = {},
+function validateMetaSchema(
+  data,
+  { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {},
 ) {
-  let r = null;
-  let e = 0;
-  let evaluated = D.evaluated;
+  let vErrors = null;
+  let errorsCount = 0;
+  let evaluated = validateMetaSchema.evaluated;
   if (evaluated.dynamicProps) evaluated.props = undefined;
   if (evaluated.dynamicItems) evaluated.items = undefined;
-  if (!(t && typeof t == "object" && !Array.isArray(t)) && typeof t !== "boolean") {
-    D.errors = [
+  if (!(data && typeof data == "object" && !Array.isArray(data)) && typeof data !== "boolean") {
+    validateMetaSchema.errors = [
       {
-        instancePath: s,
+        instancePath,
         schemaPath: "#/type",
         keyword: "type",
         params: {
-          type: je.type,
+          type: metaSchema2020.type,
         },
         message: "must be object,boolean",
       },
     ];
     return false;
   }
-  if (!i.meta) i.meta = D;
-  let n = e;
+  if (!dynamicAnchors.meta) dynamicAnchors.meta = validateMetaSchema;
+  let errsBeforeCore = errorsCount;
   if (
-    !x(t, {
-      instancePath: s,
-      parentData: z,
-      parentDataProperty: E,
-      rootData: c,
-      dynamicAnchors: i,
+    !validateCoreSchema(data, {
+      instancePath,
+      parentData,
+      parentDataProperty,
+      rootData,
+      dynamicAnchors,
     })
   ) {
-    r = r === null ? x.errors : r.concat(x.errors);
-    e = r.length;
+    vErrors = vErrors === null ? validateCoreSchema.errors : vErrors.concat(validateCoreSchema.errors);
+    errorsCount = vErrors.length;
   }
-  var d = n === e;
-  if (d) {
-    let P = e;
+  var isSubSchemaValid = errsBeforeCore === errorsCount;
+  if (isSubSchemaValid) {
+    let errsBeforeApplicator = errorsCount;
     if (
-      !l(t, {
-        instancePath: s,
-        parentData: z,
-        parentDataProperty: E,
-        rootData: c,
-        dynamicAnchors: i,
+      !validateApplicatorSchema(data, {
+        instancePath,
+        parentData,
+        parentDataProperty,
+        rootData,
+        dynamicAnchors,
       })
     ) {
-      r = r === null ? l.errors : r.concat(l.errors);
-      e = r.length;
+      vErrors =
+        vErrors === null ? validateApplicatorSchema.errors : vErrors.concat(validateApplicatorSchema.errors);
+      errorsCount = vErrors.length;
     }
-    var d = P === e;
-    if (d) {
-      let M = e;
+    var isSubSchemaValid = errsBeforeApplicator === errorsCount;
+    if (isSubSchemaValid) {
+      let errsBeforeUnevaluated = errorsCount;
       if (
-        !F(t, {
-          instancePath: s,
-          parentData: z,
-          parentDataProperty: E,
-          rootData: c,
-          dynamicAnchors: i,
+        !validateUnevaluatedSchema(data, {
+          instancePath,
+          parentData,
+          parentDataProperty,
+          rootData,
+          dynamicAnchors,
         })
       ) {
-        r = r === null ? F.errors : r.concat(F.errors);
-        e = r.length;
+        vErrors =
+          vErrors === null
+            ? validateUnevaluatedSchema.errors
+            : vErrors.concat(validateUnevaluatedSchema.errors);
+        errorsCount = vErrors.length;
       }
-      var d = M === e;
-      if (d) {
-        let T = e;
+      var isSubSchemaValid = errsBeforeUnevaluated === errorsCount;
+      if (isSubSchemaValid) {
+        let errsBeforeValidation = errorsCount;
         if (
-          !b(t, {
-            instancePath: s,
-            parentData: z,
-            parentDataProperty: E,
-            rootData: c,
-            dynamicAnchors: i,
+          !validateValidationSchema(data, {
+            instancePath,
+            parentData,
+            parentDataProperty,
+            rootData,
+            dynamicAnchors,
           })
         ) {
-          r = r === null ? b.errors : r.concat(b.errors);
-          e = r.length;
+          vErrors =
+            vErrors === null
+              ? validateValidationSchema.errors
+              : vErrors.concat(validateValidationSchema.errors);
+          errorsCount = vErrors.length;
         }
-        var d = T === e;
-        if (d) {
-          let Q = e;
+        var isSubSchemaValid = errsBeforeValidation === errorsCount;
+        if (isSubSchemaValid) {
+          let errsBeforeMetaData = errorsCount;
           if (
-            !L(t, {
-              instancePath: s,
-              parentData: z,
-              parentDataProperty: E,
-              rootData: c,
-              dynamicAnchors: i,
+            !validateMetaDataSchema(data, {
+              instancePath,
+              parentData,
+              parentDataProperty,
+              rootData,
+              dynamicAnchors,
             })
           ) {
-            r = r === null ? L.errors : r.concat(L.errors);
-            e = r.length;
+            vErrors =
+              vErrors === null
+                ? validateMetaDataSchema.errors
+                : vErrors.concat(validateMetaDataSchema.errors);
+            errorsCount = vErrors.length;
           }
-          var d = Q === e;
-          if (d) {
-            let ae = e;
+          var isSubSchemaValid = errsBeforeMetaData === errorsCount;
+          if (isSubSchemaValid) {
+            let errsBeforeFormatAnnotation = errorsCount;
             if (
-              !X(t, {
-                instancePath: s,
-                parentData: z,
-                parentDataProperty: E,
-                rootData: c,
-                dynamicAnchors: i,
+              !validateFormatAnnotationSchema(data, {
+                instancePath,
+                parentData,
+                parentDataProperty,
+                rootData,
+                dynamicAnchors,
               })
             ) {
-              r = r === null ? X.errors : r.concat(X.errors);
-              e = r.length;
+              vErrors =
+                vErrors === null
+                  ? validateFormatAnnotationSchema.errors
+                  : vErrors.concat(validateFormatAnnotationSchema.errors);
+              errorsCount = vErrors.length;
             }
-            var d = ae === e;
-            if (d) {
-              let Y = e;
+            var isSubSchemaValid = errsBeforeFormatAnnotation === errorsCount;
+            if (isSubSchemaValid) {
+              let errsBeforeContent = errorsCount;
               if (
-                !C(t, {
-                  instancePath: s,
-                  parentData: z,
-                  parentDataProperty: E,
-                  rootData: c,
-                  dynamicAnchors: i,
+                !validateContentSchema(data, {
+                  instancePath,
+                  parentData,
+                  parentDataProperty,
+                  rootData,
+                  dynamicAnchors,
                 })
               ) {
-                r = r === null ? C.errors : r.concat(C.errors);
-                e = r.length;
+                vErrors =
+                  vErrors === null
+                    ? validateContentSchema.errors
+                    : vErrors.concat(validateContentSchema.errors);
+                errorsCount = vErrors.length;
               }
-              var d = Y === e;
+              var isSubSchemaValid = errsBeforeContent === errorsCount;
             }
           }
         }
       }
     }
   }
-  if (e === 0) {
-    if (t && typeof t == "object" && !Array.isArray(t)) {
-      if (t.definitions !== undefined) {
-        let definitions = t.definitions;
-        let S = e;
-        if (e === S)
+  if (errorsCount === 0) {
+    if (data && typeof data == "object" && !Array.isArray(data)) {
+      if (data.definitions !== undefined) {
+        let definitions = data.definitions;
+        let errsBeforeDefinitions = errorsCount;
+        if (errorsCount === errsBeforeDefinitions)
           if (definitions && typeof definitions == "object" && !Array.isArray(definitions))
             for (let key in definitions) {
-              let Z = definitions[key];
-              let T = e;
-              let meta = i.meta;
+              let definitionSchema = definitions[key];
+              let errsBeforeDefinition = errorsCount;
+              let meta = dynamicAnchors.meta;
               if (meta) {
                 if (
-                  !meta(Z, {
-                    instancePath: s + "/definitions/" + key.replace(/~/g, "~0").replace(/\//g, "~1"),
+                  !meta(definitionSchema, {
+                    instancePath:
+                      instancePath + "/definitions/" + key.replace(/~/g, "~0").replace(/\//g, "~1"),
                     parentData: definitions,
                     parentDataProperty: key,
-                    rootData: c,
-                    dynamicAnchors: i,
+                    rootData,
+                    dynamicAnchors,
                   })
                 ) {
-                  r = r === null ? meta.errors : r.concat(meta.errors);
-                  e = r.length;
+                  vErrors = vErrors === null ? meta.errors : vErrors.concat(meta.errors);
+                  errorsCount = vErrors.length;
                 } else {
                   var props = meta.evaluated.props;
                   var items = meta.evaluated.items;
                 }
               } else if (
-                !D(Z, {
-                  instancePath: s + "/definitions/" + key.replace(/~/g, "~0").replace(/\//g, "~1"),
+                !validateMetaSchema(definitionSchema, {
+                  instancePath: instancePath + "/definitions/" + key.replace(/~/g, "~0").replace(/\//g, "~1"),
                   parentData: definitions,
                   parentDataProperty: key,
-                  rootData: c,
-                  dynamicAnchors: i,
+                  rootData,
+                  dynamicAnchors,
                 })
               ) {
-                r = r === null ? D.errors : r.concat(D.errors);
-                e = r.length;
+                vErrors =
+                  vErrors === null ? validateMetaSchema.errors : vErrors.concat(validateMetaSchema.errors);
+                errorsCount = vErrors.length;
               } else {
-                var props_2 = D.evaluated.props;
+                var props_2 = validateMetaSchema.evaluated.props;
                 if (props !== true && props_2 !== undefined)
                   if (props_2 === true) props = true;
                   else {
                     props = props || {};
                     Object.assign(props, props_2);
                   }
-                var items_2 = D.evaluated.items;
+                var items_2 = validateMetaSchema.evaluated.items;
                 if (items !== true && items_2 !== undefined)
                   items = items_2 === true ? true : items > items_2 ? items : items_2;
               }
-              var a = T === e;
-              if (!a) break;
+              var isDefinitionValid = errsBeforeDefinition === errorsCount;
+              if (!isDefinitionValid) break;
             }
           else {
-            D.errors = [
+            validateMetaSchema.errors = [
               {
-                instancePath: s + "/definitions",
+                instancePath: instancePath + "/definitions",
                 schemaPath: "#/properties/definitions/type",
                 keyword: "type",
                 params: {
@@ -2435,73 +2557,80 @@ function D(
             ];
             return false;
           }
-        var f = S === e;
-      } else var f = true;
-      if (f) {
-        if (t.dependencies !== undefined) {
-          let dependencies = t.dependencies;
-          let S = e;
-          if (e === S)
+        var isKeywordValid = errsBeforeDefinitions === errorsCount;
+      } else var isKeywordValid = true;
+      if (isKeywordValid) {
+        if (data.dependencies !== undefined) {
+          let dependencies = data.dependencies;
+          let errsBeforeDependencies = errorsCount;
+          if (errorsCount === errsBeforeDependencies)
             if (dependencies && typeof dependencies == "object" && !Array.isArray(dependencies))
               for (let key in dependencies) {
-                let T = dependencies[key];
-                let V = e;
-                let Q = e;
-                let K = false;
-                let ae = e;
-                let meta = i.meta;
+                let dependencyValue = dependencies[key];
+                let errsBeforeDependency = errorsCount;
+                let errsBeforeDependencyAnyOf = errorsCount;
+                let isDependencyAnyOfValid = false;
+                let errsBeforeDependencySchema = errorsCount;
+                let meta = dynamicAnchors.meta;
                 if (meta) {
                   if (
-                    !meta(T, {
-                      instancePath: s + "/dependencies/" + key.replace(/~/g, "~0").replace(/\//g, "~1"),
+                    !meta(dependencyValue, {
+                      instancePath:
+                        instancePath + "/dependencies/" + key.replace(/~/g, "~0").replace(/\//g, "~1"),
                       parentData: dependencies,
                       parentDataProperty: key,
-                      rootData: c,
-                      dynamicAnchors: i,
+                      rootData,
+                      dynamicAnchors,
                     })
                   ) {
-                    r = r === null ? meta.errors : r.concat(meta.errors);
-                    e = r.length;
+                    vErrors = vErrors === null ? meta.errors : vErrors.concat(meta.errors);
+                    errorsCount = vErrors.length;
                   } else {
                     var props_3 = meta.evaluated.props;
                     var items_3 = meta.evaluated.items;
                   }
                 } else if (
-                  !D(T, {
-                    instancePath: s + "/dependencies/" + key.replace(/~/g, "~0").replace(/\//g, "~1"),
+                  !validateMetaSchema(dependencyValue, {
+                    instancePath:
+                      instancePath + "/dependencies/" + key.replace(/~/g, "~0").replace(/\//g, "~1"),
                     parentData: dependencies,
                     parentDataProperty: key,
-                    rootData: c,
-                    dynamicAnchors: i,
+                    rootData,
+                    dynamicAnchors,
                   })
                 ) {
-                  r = r === null ? D.errors : r.concat(D.errors);
-                  e = r.length;
+                  vErrors =
+                    vErrors === null ? validateMetaSchema.errors : vErrors.concat(validateMetaSchema.errors);
+                  errorsCount = vErrors.length;
                 } else {
-                  var props_4 = D.evaluated.props;
+                  var props_4 = validateMetaSchema.evaluated.props;
                   if (props_3 !== true && props_4 !== undefined)
                     if (props_4 === true) props_3 = true;
                     else {
                       props_3 = props_3 || {};
                       Object.assign(props_3, props_4);
                     }
-                  var items_4 = D.evaluated.items;
+                  var items_4 = validateMetaSchema.evaluated.items;
                   if (items_3 !== true && items_4 !== undefined)
                     items_3 = items_4 === true ? true : items_3 > items_4 ? items_3 : items_4;
                 }
-                var j = ae === e;
-                K = K || j;
-                let Y = e;
-                if (e === e)
-                  if (Array.isArray(T)) {
-                    var _ = true;
-                    let G = T.length;
-                    for (let idx = 0; idx < G; idx++) {
-                      let H = e;
-                      if (typeof T[idx] !== "string") {
-                        let J = {
+                var isDependencySchemaValid = errsBeforeDependencySchema === errorsCount;
+                isDependencyAnyOfValid = isDependencyAnyOfValid || isDependencySchemaValid;
+                let errsBeforeDependencyArray = errorsCount;
+                if (errorsCount === errorsCount)
+                  if (Array.isArray(dependencyValue)) {
+                    var isDependencyItemValid = true;
+                    let dependencyItemCount = dependencyValue.length;
+                    for (let idx = 0; idx < dependencyItemCount; idx++) {
+                      let errsBeforeDependencyItem = errorsCount;
+                      if (typeof dependencyValue[idx] !== "string") {
+                        let dependencyItemTypeError = {
                           instancePath:
-                            s + "/dependencies/" + key.replace(/~/g, "~0").replace(/\//g, "~1") + "/" + idx,
+                            instancePath +
+                            "/dependencies/" +
+                            key.replace(/~/g, "~0").replace(/\//g, "~1") +
+                            "/" +
+                            idx,
                           schemaPath: "meta/validation#/$defs/stringArray/items/type",
                           keyword: "type",
                           params: {
@@ -2509,51 +2638,54 @@ function D(
                           },
                           message: "must be string",
                         };
-                        if (r === null) r = [J];
-                        else r.push(J);
-                        e++;
+                        if (vErrors === null) vErrors = [dependencyItemTypeError];
+                        else vErrors.push(dependencyItemTypeError);
+                        errorsCount++;
                       }
-                      var _ = H === e;
-                      if (!_) break;
+                      var isDependencyItemValid = errsBeforeDependencyItem === errorsCount;
+                      if (!isDependencyItemValid) break;
                     }
-                    if (_) {
-                      let U = T.length;
-                      let H;
-                      if (U > 1) {
-                        let ee = {};
-                        for (; U--;) {
-                          let J = T[U];
-                          if (typeof J !== "string") continue;
-                          if (typeof ee[J] == "number") {
-                            H = ee[J];
-                            let te = {
+                    if (isDependencyItemValid) {
+                      let dependencyItemIndex = dependencyValue.length;
+                      let duplicateIndex;
+                      if (dependencyItemIndex > 1) {
+                        let seenItems = {};
+                        for (; dependencyItemIndex--;) {
+                          let dependencyItem = dependencyValue[dependencyItemIndex];
+                          if (typeof dependencyItem !== "string") continue;
+                          if (typeof seenItems[dependencyItem] == "number") {
+                            duplicateIndex = seenItems[dependencyItem];
+                            let duplicateItemError = {
                               instancePath:
-                                s + "/dependencies/" + key.replace(/~/g, "~0").replace(/\//g, "~1"),
+                                instancePath +
+                                "/dependencies/" +
+                                key.replace(/~/g, "~0").replace(/\//g, "~1"),
                               schemaPath: "meta/validation#/$defs/stringArray/uniqueItems",
                               keyword: "uniqueItems",
                               params: {
-                                i: U,
-                                j: H,
+                                i: dependencyItemIndex,
+                                j: duplicateIndex,
                               },
                               message:
                                 "must NOT have duplicate items (items ## " +
-                                H +
+                                duplicateIndex +
                                 " and " +
-                                U +
+                                dependencyItemIndex +
                                 " are identical)",
                             };
-                            if (r === null) r = [te];
-                            else r.push(te);
-                            e++;
+                            if (vErrors === null) vErrors = [duplicateItemError];
+                            else vErrors.push(duplicateItemError);
+                            errorsCount++;
                             break;
                           }
-                          ee[J] = U;
+                          seenItems[dependencyItem] = dependencyItemIndex;
                         }
                       }
                     }
                   } else {
-                    let G = {
-                      instancePath: s + "/dependencies/" + key.replace(/~/g, "~0").replace(/\//g, "~1"),
+                    let dependencyArrayTypeError = {
+                      instancePath:
+                        instancePath + "/dependencies/" + key.replace(/~/g, "~0").replace(/\//g, "~1"),
                       schemaPath: "meta/validation#/$defs/stringArray/type",
                       keyword: "type",
                       params: {
@@ -2561,41 +2693,42 @@ function D(
                       },
                       message: "must be array",
                     };
-                    if (r === null) r = [G];
-                    else r.push(G);
-                    e++;
+                    if (vErrors === null) vErrors = [dependencyArrayTypeError];
+                    else vErrors.push(dependencyArrayTypeError);
+                    errorsCount++;
                   }
-                var j = Y === e;
-                K = K || j;
-                if (j) {
+                var isDependencySchemaValid = errsBeforeDependencyArray === errorsCount;
+                isDependencyAnyOfValid = isDependencyAnyOfValid || isDependencySchemaValid;
+                if (isDependencySchemaValid) {
                   if (items_3 !== true) items_3 = true;
                 }
-                if (!K) {
-                  let G = {
-                    instancePath: s + "/dependencies/" + key.replace(/~/g, "~0").replace(/\//g, "~1"),
+                if (!isDependencyAnyOfValid) {
+                  let dependencyAnyOfError = {
+                    instancePath:
+                      instancePath + "/dependencies/" + key.replace(/~/g, "~0").replace(/\//g, "~1"),
                     schemaPath: "#/properties/dependencies/additionalProperties/anyOf",
                     keyword: "anyOf",
                     params: {},
                     message: "must match a schema in anyOf",
                   };
-                  if (r === null) r = [G];
-                  else r.push(G);
-                  e++;
-                  D.errors = r;
+                  if (vErrors === null) vErrors = [dependencyAnyOfError];
+                  else vErrors.push(dependencyAnyOfError);
+                  errorsCount++;
+                  validateMetaSchema.errors = vErrors;
                   return false;
                 } else {
-                  e = Q;
-                  if (r !== null)
-                    if (Q) r.length = Q;
-                    else r = null;
+                  errorsCount = errsBeforeDependencyAnyOf;
+                  if (vErrors !== null)
+                    if (errsBeforeDependencyAnyOf) vErrors.length = errsBeforeDependencyAnyOf;
+                    else vErrors = null;
                 }
-                var g = V === e;
-                if (!g) break;
+                var isDependencyEntryValid = errsBeforeDependency === errorsCount;
+                if (!isDependencyEntryValid) break;
               }
             else {
-              D.errors = [
+              validateMetaSchema.errors = [
                 {
-                  instancePath: s + "/dependencies",
+                  instancePath: instancePath + "/dependencies",
                   schemaPath: "#/properties/dependencies/type",
                   keyword: "type",
                   params: {
@@ -2606,18 +2739,18 @@ function D(
               ];
               return false;
             }
-          var f = S === e;
-        } else var f = true;
-        if (f) {
-          if (t.$recursiveAnchor !== undefined) {
-            let $recursiveAnchor = t.$recursiveAnchor;
-            let S = e;
-            if (e === e)
+          var isKeywordValid = errsBeforeDependencies === errorsCount;
+        } else var isKeywordValid = true;
+        if (isKeywordValid) {
+          if (data.$recursiveAnchor !== undefined) {
+            let $recursiveAnchor = data.$recursiveAnchor;
+            let errsBeforeRecursiveAnchor = errorsCount;
+            if (errorsCount === errorsCount)
               if (typeof $recursiveAnchor === "string") {
                 if (!regExp_2.test($recursiveAnchor)) {
-                  D.errors = [
+                  validateMetaSchema.errors = [
                     {
-                      instancePath: s + "/$recursiveAnchor",
+                      instancePath: instancePath + "/$recursiveAnchor",
                       schemaPath: "meta/core#/$defs/anchorString/pattern",
                       keyword: "pattern",
                       params: {
@@ -2629,9 +2762,9 @@ function D(
                   return false;
                 }
               } else {
-                D.errors = [
+                validateMetaSchema.errors = [
                   {
-                    instancePath: s + "/$recursiveAnchor",
+                    instancePath: instancePath + "/$recursiveAnchor",
                     schemaPath: "meta/core#/$defs/anchorString/type",
                     keyword: "type",
                     params: {
@@ -2642,18 +2775,18 @@ function D(
                 ];
                 return false;
               }
-            var f = S === e;
-          } else var f = true;
-          if (f)
-            if (t.$recursiveRef !== undefined) {
-              let P = e;
-              let S = e;
-              if (e === S) {
-                if (e === S) {
-                  if (typeof t.$recursiveRef !== "string") {
-                    D.errors = [
+            var isKeywordValid = errsBeforeRecursiveAnchor === errorsCount;
+          } else var isKeywordValid = true;
+          if (isKeywordValid)
+            if (data.$recursiveRef !== undefined) {
+              let errsBeforeRecursiveRef = errorsCount;
+              let errsAfterRecursiveRef = errorsCount;
+              if (errorsCount === errsAfterRecursiveRef) {
+                if (errorsCount === errsAfterRecursiveRef) {
+                  if (typeof data.$recursiveRef !== "string") {
+                    validateMetaSchema.errors = [
                       {
-                        instancePath: s + "/$recursiveRef",
+                        instancePath: instancePath + "/$recursiveRef",
                         schemaPath: "meta/core#/$defs/uriReferenceString/type",
                         keyword: "type",
                         params: {
@@ -2666,135 +2799,88 @@ function D(
                   }
                 }
               }
-              var f = P === e;
-            } else var f = true;
+              var isKeywordValid = errsBeforeRecursiveRef === errorsCount;
+            } else var isKeywordValid = true;
         }
       }
     }
   }
-  D.errors = r;
-  return e === 0;
+  validateMetaSchema.errors = vErrors;
+  return errorsCount === 0;
 }
 //@ chunk-n332mrkv.js:48153-49040 affinity
-D.evaluated = {
-  props: {
-    definitions: true,
-    dependencies: true,
-    $recursiveAnchor: true,
-    $recursiveRef: true,
-    contentEncoding: true,
-    contentMediaType: true,
-    contentSchema: true,
-    format: true,
-    title: true,
-    description: true,
-    default: true,
-    deprecated: true,
-    readOnly: true,
-    writeOnly: true,
-    examples: true,
-    type: true,
-    const: true,
-    enum: true,
-    multipleOf: true,
-    maximum: true,
-    exclusiveMaximum: true,
-    minimum: true,
-    exclusiveMinimum: true,
-    maxLength: true,
-    minLength: true,
-    pattern: true,
-    maxItems: true,
-    minItems: true,
-    uniqueItems: true,
-    maxContains: true,
-    minContains: true,
-    maxProperties: true,
-    minProperties: true,
-    required: true,
-    dependentRequired: true,
-    unevaluatedItems: true,
-    unevaluatedProperties: true,
-    prefixItems: true,
-    items: true,
-    contains: true,
-    additionalProperties: true,
-    properties: true,
-    patternProperties: true,
-    dependentSchemas: true,
-    propertyNames: true,
-    if: true,
-    then: true,
-    else: true,
-    allOf: true,
-    anyOf: true,
-    oneOf: true,
-    not: true,
-    $id: true,
-    $schema: true,
-    $ref: true,
-    $anchor: true,
-    $dynamicRef: true,
-    $dynamicAnchor: true,
-    $vocabulary: true,
-    $comment: true,
-    $defs: true,
-  },
-  dynamicProps: false,
-  dynamicItems: false,
-};
-//@ chunk-r1g76qsy.js:255842-255955 esm-fingerprint
-function Cd() {
-  let e = new $d.Ajv2020({
-    strict: false,
-    validateFormats: true,
-    validateSchema: false,
-    allErrors: true,
-  });
-  Td(e);
-  return e;
-}
-//@ chunk-r1g76qsy.js:255955-256668 esm-fingerprint
-var Udn = class {
-  _ajv;
-  _userAjv;
-  constructor(e) {
-    this._userAjv = e !== undefined;
-    this._ajv = e;
-  }
-  get ajv() {
-    return (this._ajv ??= Cd());
-  }
-  getValidator(e) {
-    if (
-      !this._userAjv &&
-      "$schema" in e &&
-      typeof e.$schema === "string" &&
-      !DRAFT_2020_12_URIS.has(e.$schema.replace(/#$/, ""))
-    ) {
-      let sliced = e.$schema.slice(0, 200);
-      throw Error(
-        `JSON Schema declares an unsupported dialect ("$schema": "${sliced}"). The default validator supports JSON Schema 2020-12 only; pass a pre-configured Ajv instance to AjvJsonSchemaValidator(ajv) to validate other dialects.`,
-      );
-    }
-    let engine = this.ajv;
-    let ajvValidator =
-      "$id" in e && typeof e.$id === "string"
-        ? (engine.getSchema(e.$id) ?? engine.compile(e))
-        : engine.compile(e);
-    return (input) =>
-      ajvValidator(input)
-        ? {
-            valid: true,
-            data: input,
-            errorMessage: undefined,
-          }
-        : {
-            valid: false,
-            data: undefined,
-            errorMessage: engine.errorsText(ajvValidator.errors),
-          };
-  }
-};
-var Ajv = wd.Ajv;
-export { Udn, xe, _e, require_ajv };
+// deferred: uses validateMetaSchema of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-n332mrkv.js:48153", () => {
+  validateMetaSchema.evaluated = {
+    props: {
+      definitions: true,
+      dependencies: true,
+      $recursiveAnchor: true,
+      $recursiveRef: true,
+      contentEncoding: true,
+      contentMediaType: true,
+      contentSchema: true,
+      format: true,
+      title: true,
+      description: true,
+      default: true,
+      deprecated: true,
+      readOnly: true,
+      writeOnly: true,
+      examples: true,
+      type: true,
+      const: true,
+      enum: true,
+      multipleOf: true,
+      maximum: true,
+      exclusiveMaximum: true,
+      minimum: true,
+      exclusiveMinimum: true,
+      maxLength: true,
+      minLength: true,
+      pattern: true,
+      maxItems: true,
+      minItems: true,
+      uniqueItems: true,
+      maxContains: true,
+      minContains: true,
+      maxProperties: true,
+      minProperties: true,
+      required: true,
+      dependentRequired: true,
+      unevaluatedItems: true,
+      unevaluatedProperties: true,
+      prefixItems: true,
+      items: true,
+      contains: true,
+      additionalProperties: true,
+      properties: true,
+      patternProperties: true,
+      dependentSchemas: true,
+      propertyNames: true,
+      if: true,
+      then: true,
+      else: true,
+      allOf: true,
+      anyOf: true,
+      oneOf: true,
+      not: true,
+      $id: true,
+      $schema: true,
+      $ref: true,
+      $anchor: true,
+      $dynamicRef: true,
+      $dynamicAnchor: true,
+      $vocabulary: true,
+      $comment: true,
+      $defs: true,
+    },
+    dynamicProps: false,
+    dynamicItems: false,
+  };
+});
+
+// The import cycle this module closes (2 modules) is complete: run the load-time work its statements
+// marked "deferred" waited for, in the official build's order (runtime/deferred-init.js).
+runDeferredInits("worker:vendor/@modelcontextprotocol/client/dist/ajvProvider-BIwGVY6G.mjs");
+export { AjvJsonSchemaValidator, validationMetaSchema, simpleTypes, require_ajv, metaSchemaCheck };

@@ -14,10 +14,11 @@ import { createAbortController } from "./abortController.js";
 import { runSideQuestion } from "./sideQuestion.js";
 
 //@ chunk-mret17z7.js:336-463 placement
-function isAwaitingReply(s, o = true) {
-  let last = s.at(-1);
-  let a = o && last?.type === "assistant" && last.message.stop_reason === null;
-  return messagesSinceCompactBoundary(a ? s.slice(0, -1) : [...s]);
+function isAwaitingReply(messages, includePlaceholder = true) {
+  let last = messages.at(-1);
+  let hasPendingAssistant =
+    includePlaceholder && last?.type === "assistant" && last.message.stop_reason === null;
+  return messagesSinceCompactBoundary(hasPendingAssistant ? messages.slice(0, -1) : [...messages]);
 }
 //@ chunk-mret17z7.js:463-1563 placement
 /**
@@ -32,9 +33,9 @@ async function runSideQuestionWithProgress({
   isTurnInProgress,
   buildFallbackParams,
 }) {
-  let u = isTurnInProgress?.() ?? true;
+  let turnInProgress = isTurnInProgress?.() ?? true;
   let lastCacheSafeParams = getLastCacheSafeParams();
-  let c = lastCacheSafeParams
+  let cacheSafeParams = lastCacheSafeParams
     ? {
         ...lastCacheSafeParams,
         toolUseContext: {
@@ -42,14 +43,14 @@ async function runSideQuestionWithProgress({
           abortController: createAbortController(),
         },
         ...(getLiveMessages && {
-          forkContextMessages: isAwaitingReply(getLiveMessages(), u),
+          forkContextMessages: isAwaitingReply(getLiveMessages(), turnInProgress),
           advisorModel: lastCacheSafeParams.toolUseContext.getAdvisorSetting(),
         }),
       }
     : buildFallbackParams
       ? await buildFallbackParams()
       : null;
-  if (c === null)
+  if (cacheSafeParams === null)
     return {
       cancelled: false,
       response: {
@@ -60,44 +61,44 @@ async function runSideQuestionWithProgress({
   onProgress({
     status: "started",
   });
-  let t = await runSideQuestion({
+  let result = await runSideQuestion({
     question,
-    cacheSafeParams: c,
+    cacheSafeParams,
     parentController,
-    onRetry: (e) =>
+    onRetry: (retryInfo) =>
       onProgress({
         status: "api_retry",
-        attempt: e.retryAttempt,
-        max_retries: e.maxRetries,
-        retry_delay_ms: e.retryInMs,
-        error_status: e.status ?? null,
+        attempt: retryInfo.retryAttempt,
+        max_retries: retryInfo.maxRetries,
+        retry_delay_ms: retryInfo.retryInMs,
+        error_status: retryInfo.status ?? null,
       }),
     threadHistory: false,
-    turnInProgress: u,
+    turnInProgress,
     ...(history?.length && {
-      history: history.map((e) => ({
-        question: e.question,
-        response: e.response,
-        ...(e.fallback_notice && {
-          fallbackNotice: e.fallback_notice,
+      history: history.map((entry) => ({
+        question: entry.question,
+        response: entry.response,
+        ...(entry.fallback_notice && {
+          fallbackNotice: entry.fallback_notice,
         }),
       })),
     }),
   });
-  if (t.aborted || parentController.signal.aborted)
+  if (result.aborted || parentController.signal.aborted)
     return {
       cancelled: true,
     };
   return {
     cancelled: false,
     response: {
-      response: t.response,
-      synthetic: t.synthetic,
-      ...(t.refusalFallback && {
+      response: result.response,
+      synthetic: result.synthetic,
+      ...(result.refusalFallback && {
         refusal_fallback: {
-          original_model: t.refusalFallback.originalModel,
-          fallback_model: t.refusalFallback.fallbackModel,
-          content: t.refusalFallback.content,
+          original_model: result.refusalFallback.originalModel,
+          fallback_model: result.refusalFallback.fallbackModel,
+          content: result.refusalFallback.content,
         },
       }),
     },

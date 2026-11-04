@@ -55,9 +55,9 @@ class TransportPermissionDispatcher {
   setInputs(inputs) {
     this.inputs = inputs;
   }
-  dispatch = (h, x = false) => {
-    if (h.request.subtype !== "can_use_tool") return false;
-    let requestId = h.request_id;
+  dispatch = (request, handedOver = false) => {
+    if (request.request.subtype !== "can_use_tool") return false;
+    let requestId = request.request_id;
     if (typeof requestId !== "string") {
       logForDebugging(
         "[TransportPermissionDispatcher] Dropping can_use_tool whose request_id is not a string \u2014 no response is possible",
@@ -67,59 +67,65 @@ class TransportPermissionDispatcher {
       );
       return false;
     }
-    if (!normalizeCanUseToolRequest(h.request)) {
-      logForDebugging(`[TransportPermissionDispatcher] Denying malformed can_use_tool ${h.request_id}`, {
-        level: "error",
-      });
-      this.inputs.sendResponse(h.request_id, parsePermissionRequest(h.request));
+    if (!normalizeCanUseToolRequest(request.request)) {
+      logForDebugging(
+        `[TransportPermissionDispatcher] Denying malformed can_use_tool ${request.request_id}`,
+        {
+          level: "error",
+        },
+      );
+      this.inputs.sendResponse(request.request_id, parsePermissionRequest(request.request));
       return false;
     }
-    let repositoryTrustQuestion = isConfirmRepositoryTrustTool(h.request.tool_name)
+    let repositoryTrustQuestion = isConfirmRepositoryTrustTool(request.request.tool_name)
       ? this.inputs.repositoryTrustQuestion
       : undefined;
-    let ee =
+    let folderPrompt =
       repositoryTrustQuestion === undefined &&
       this.inputs.computerFolderPrompt === true &&
-      isRequestComputerFolderTool(h.request.tool_name);
-    if (ee && !isComputerFolderTarget(h.request.input)) {
+      isRequestComputerFolderTool(request.request.tool_name);
+    if (folderPrompt && !isComputerFolderTarget(request.request.input)) {
       logForDebugging(
         "[TransportPermissionDispatcher] Denying a folder request whose input is not exactly its three string arguments",
         {
           level: "error",
         },
       );
-      this.inputs.sendResponse(requestId, parsePermissionRequest(h.request));
+      this.inputs.sendResponse(requestId, parsePermissionRequest(request.request));
       return false;
     }
-    let ke =
+    let normalized =
       repositoryTrustQuestion !== undefined
-        ? toCanUseToolRequest(h.request)
-        : ee
-          ? toServedPermissionRequest(h.request)
-          : h.request;
+        ? toCanUseToolRequest(request.request)
+        : folderPrompt
+          ? toServedPermissionRequest(request.request)
+          : request.request;
     let computerFolder =
-      ee &&
-      ke.computer_folder !== undefined &&
-      isSameLocalFolder(ke.computer_folder, ke.input) &&
-      [ke.computer_folder.path, ke.computer_folder.computer_name].every(
-        (bo) => hasVisibleText(bo) && !/[\r\n\u2028\u2029]/.test(bo) && toPrintablePermissionText(bo) === bo,
+      folderPrompt &&
+      normalized.computer_folder !== undefined &&
+      isSameLocalFolder(normalized.computer_folder, normalized.input) &&
+      [normalized.computer_folder.path, normalized.computer_folder.computer_name].every(
+        (value) =>
+          hasVisibleText(value) &&
+          !/[\r\n\u2028\u2029]/.test(value) &&
+          toPrintablePermissionText(value) === value,
       )
-        ? ke.computer_folder
+        ? normalized.computer_folder
         : undefined;
-    let requestId_2 = h.request_id;
-    let He =
+    let requestId_2 = request.request_id;
+    let proofState =
       repositoryTrustQuestion === undefined
         ? undefined
-        : deviceProofState(ke, repositoryTrustQuestion.answersProveDevice);
-    if (repositoryTrustQuestion !== undefined && He !== undefined) {
+        : deviceProofState(normalized, repositoryTrustQuestion.answersProveDevice);
+    if (repositoryTrustQuestion !== undefined && proofState !== undefined) {
       logForDebugging(
-        `[TransportPermissionDispatcher] Not showing a repository-trust question (${He}); left unanswered for the other devices`,
+        `[TransportPermissionDispatcher] Not showing a repository-trust question (${proofState}); left unanswered for the other devices`,
         {
           level: "warn",
         },
       );
       try {
-        repositoryTrustQuestion.onNotShown?.(He, requestId_2);
+        repositoryTrustQuestion.onNotShown?.(proofState, requestId_2);
       } catch (error) {
         logForDebugging(
           `[TransportPermissionDispatcher] the repository-trust not-shown hook threw: ${error instanceof Error ? error.message : String(error)}`,
@@ -141,9 +147,9 @@ class TransportPermissionDispatcher {
       return false;
     }
     let { toolRegistry, toolPermissionContext, theme } = this.inputs;
-    let tool = getStubToolForForwardedPermission(ke.tool_name, toolRegistry);
-    let At = ke.tool_kind === "mcp_skill" || ke.mcp_skill !== undefined;
-    if (At) {
+    let tool = getStubToolForForwardedPermission(normalized.tool_name, toolRegistry);
+    let isMcpSkill = normalized.tool_kind === "mcp_skill" || normalized.mcp_skill !== undefined;
+    if (isMcpSkill) {
       let sliced = toPrintablePermissionText(requestId_2).slice(0, 80);
       logForDebugging(
         `[TransportPermissionDispatcher] can_use_tool ${sliced}: not showing and not answering this permission request, because this version of Claude Code cannot answer a request of its kind. If it is still open, it stays open until another device of the session answers it, where the session has one, or the session drops it, which for most requests is the end of the turn.`,
@@ -152,7 +158,7 @@ class TransportPermissionDispatcher {
         },
       );
       try {
-        this.inputs.onAskNotShown?.(this.inputs.askedByBackgroundSubagent?.(ke) === true);
+        this.inputs.onAskNotShown?.(this.inputs.askedByBackgroundSubagent?.(normalized) === true);
       } catch (error) {
         logForDebugging(
           `[TransportPermissionDispatcher] can_use_tool ${sliced}: onAskNotShown or askedByBackgroundSubagent threw: ${error instanceof Error ? error.message : String(error)}`,
@@ -163,28 +169,34 @@ class TransportPermissionDispatcher {
       }
       return false;
     }
-    let It = ke.description === undefined ? undefined : toPrintablePermissionText(ke.description);
-    let Ot = ke.decision_reason === undefined ? undefined : toPrintablePermissionText(ke.decision_reason);
-    let Et =
-      It === undefined || Ot === undefined
+    let description =
+      normalized.description === undefined ? undefined : toPrintablePermissionText(normalized.description);
+    let decisionReason =
+      normalized.decision_reason === undefined
         ? undefined
-        : It === Ot
+        : toPrintablePermissionText(normalized.decision_reason);
+    let trimmedDescription =
+      description === undefined || decisionReason === undefined
+        ? undefined
+        : description === decisionReason
           ? ""
-          : It.endsWith(`
-${Ot}`)
-            ? It.slice(0, -(Ot.length + 1))
+          : description.endsWith(`
+${decisionReason}`)
+            ? description.slice(0, -(decisionReason.length + 1))
             : undefined;
-    let Dt =
-      Et === undefined
-        ? (ke.description ?? `${ke.tool_name} requires permission`)
-        : Et || `${ke.tool_name} requires permission`;
+    let message =
+      trimmedDescription === undefined
+        ? (normalized.description ?? `${normalized.tool_name} requires permission`)
+        : trimmedDescription || `${normalized.tool_name} requires permission`;
     let abortController = new AbortController();
     inFlight.set(requestId_2, abortController);
-    let oo = () => inFlight.get(requestId_2) === abortController;
-    let Xt = this.inputs.askedByBackgroundSubagent !== undefined && isSubagentToolRequest(ke);
-    let io = x || this.inputs.handedOverAtAttach?.some((bo) => bo.request_id === requestId_2);
-    let so = () => Xt && this.inputs.askedByBackgroundSubagent?.(ke) === true;
-    let po =
+    let isCurrent = () => inFlight.get(requestId_2) === abortController;
+    let fromSubagent =
+      this.inputs.askedByBackgroundSubagent !== undefined && isSubagentToolRequest(normalized);
+    let atAttach =
+      handedOver || this.inputs.handedOverAtAttach?.some((entry) => entry.request_id === requestId_2);
+    let inBackground = () => fromSubagent && this.inputs.askedByBackgroundSubagent?.(normalized) === true;
+    let servedCard =
       computerFolder === undefined
         ? undefined
         : {
@@ -199,65 +211,66 @@ ${Ot}`)
               values: [],
             },
           };
-    let ao = new CountedAsk();
-    let co = At
+    let countedAsk = new CountedAsk();
+    let mcpSkillInfo = isMcpSkill
       ? {
-          ...(ke.mcp_skill !== undefined && {
-            name: ke.mcp_skill.name,
-            ...(ke.mcp_skill.server_description !== undefined && {
-              description: stripNonPrintable(ke.mcp_skill.server_description),
+          ...(normalized.mcp_skill !== undefined && {
+            name: normalized.mcp_skill.name,
+            ...(normalized.mcp_skill.server_description !== undefined && {
+              description: stripNonPrintable(normalized.mcp_skill.server_description),
             }),
           }),
         }
       : undefined;
     buildForwardedPermissionDialog({
       tool,
-      input: ke.input,
-      description: Dt,
-      toolUseID: ke.tool_use_id,
-      ...(Xt && {
+      input: normalized.input,
+      description: message,
+      toolUseID: normalized.tool_use_id,
+      ...(fromSubagent && {
         requestSource: {
           type: "subagent",
         },
       }),
       permissionResult: {
         behavior: "ask",
-        message: Dt,
-        suggestions: ke.permission_suggestions,
-        blockedPath: ke.blocked_path,
-        suppressAlwaysAllowRule: ke.suppress_always_allow_rule,
-        defaultToNo: ke.default_to_no,
-        ...(ke.matched_ask_rule &&
-          isPermissionRuleSource(ke.matched_ask_rule.source) && {
+        message,
+        suggestions: normalized.permission_suggestions,
+        blockedPath: normalized.blocked_path,
+        suppressAlwaysAllowRule: normalized.suppress_always_allow_rule,
+        defaultToNo: normalized.default_to_no,
+        ...(normalized.matched_ask_rule &&
+          isPermissionRuleSource(normalized.matched_ask_rule.source) && {
             matchedAskRule: {
-              source: ke.matched_ask_rule.source,
+              source: normalized.matched_ask_rule.source,
               ruleBehavior: "ask",
               ruleValue: {
-                toolName: stripNonPrintable(stripAnsi(ke.matched_ask_rule.tool_name)),
-                ...(ke.matched_ask_rule.rule_content !== undefined && {
-                  ruleContent: stripNonPrintable(stripAnsi(ke.matched_ask_rule.rule_content)),
+                toolName: stripNonPrintable(stripAnsi(normalized.matched_ask_rule.tool_name)),
+                ...(normalized.matched_ask_rule.rule_content !== undefined && {
+                  ruleContent: stripNonPrintable(stripAnsi(normalized.matched_ask_rule.rule_content)),
                 }),
               },
             },
           }),
-        ...(ke.decision_reason !== undefined &&
-          ke.decision_reason_type !== "sandboxOverride" && {
+        ...(normalized.decision_reason !== undefined &&
+          normalized.decision_reason_type !== "sandboxOverride" && {
             decisionReason:
-              ke.decision_reason_type === "safetyCheck" || ke.decision_reason_type === "subcommandResults"
+              normalized.decision_reason_type === "safetyCheck" ||
+              normalized.decision_reason_type === "subcommandResults"
                 ? {
                     type: "safetyCheck",
-                    reason: stripNonPrintable(stripAnsi(ke.decision_reason)),
-                    classifierApprovable: ke.classifier_approvable ?? false,
+                    reason: stripNonPrintable(stripAnsi(normalized.decision_reason)),
+                    classifierApprovable: normalized.classifier_approvable ?? false,
                   }
                 : {
                     type: "other",
                     reason:
-                      ke.decision_reason_type === "hook"
-                        ? `A hook run for this remote session requires confirmation: ${stripNonPrintable(stripAnsi(ke.decision_reason))}`
-                        : ke.decision_reason_type === "classifier"
-                          ? `Auto mode needs your confirmation for this ${SHELL_TOOL_NAMES.includes(ke.tool_name) ? "command" : "tool"}.
-${ensureNoReasonProvided(stripNonPrintable(stripAnsi(ke.decision_reason)))}`
-                          : stripNonPrintable(stripAnsi(ke.decision_reason)),
+                      normalized.decision_reason_type === "hook"
+                        ? `A hook run for this remote session requires confirmation: ${stripNonPrintable(stripAnsi(normalized.decision_reason))}`
+                        : normalized.decision_reason_type === "classifier"
+                          ? `Auto mode needs your confirmation for this ${SHELL_TOOL_NAMES.includes(normalized.tool_name) ? "command" : "tool"}.
+${ensureNoReasonProvided(stripNonPrintable(stripAnsi(normalized.decision_reason)))}`
+                          : stripNonPrintable(stripAnsi(normalized.decision_reason)),
                   },
           }),
         ...(repositoryTrustQuestion !== undefined && {
@@ -275,9 +288,9 @@ ${REMOTE_TOOLS_CONSENT_TEXT["repository_trust.prompt.unbound"]}`,
         content: [
           {
             type: "tool_use",
-            id: ke.tool_use_id,
-            name: ke.tool_name,
-            input: ke.input,
+            id: normalized.tool_use_id,
+            name: normalized.tool_name,
+            input: normalized.input,
           },
         ],
       }),
@@ -288,49 +301,49 @@ ${REMOTE_TOOLS_CONSENT_TEXT["repository_trust.prompt.unbound"]}`,
       ...(repositoryTrustQuestion !== undefined && {
         roomyDescription: true,
       }),
-      ...(po !== undefined && {
-        servedCard: po,
+      ...(servedCard !== undefined && {
+        servedCard,
       }),
-      ...(co !== undefined && {
-        forwardedMcpSkill: co,
+      ...(mcpSkillInfo !== undefined && {
+        forwardedMcpSkill: mcpSkillInfo,
       }),
       signal: abortController.signal,
     })
       .then((forwardedPermissionDialog) =>
-        io ? sleep(0).then(() => forwardedPermissionDialog) : forwardedPermissionDialog,
+        atAttach ? sleep(0).then(() => forwardedPermissionDialog) : forwardedPermissionDialog,
       )
       .then(({ dialog, descriptor }) => {
-        if (!oo())
+        if (!isCurrent())
           return Promise.resolve({
             behavior: "cancelled",
           });
-        let Bo = this.inputs.requestDialog(dialog, descriptor, {
+        let answer = this.inputs.requestDialog(dialog, descriptor, {
           signal: abortController.signal,
           place: "under",
-          ...((so() || io) && {
+          ...((inBackground() || atAttach) && {
             armInputGrace: true,
           }),
           ...(isNotAskUserQuestionCard(dialog.kind) && {
-            countedAsk: ao,
+            countedAsk,
           }),
         });
-        ao.settleWhen(Bo);
-        return Bo;
+        countedAsk.settleWhen(answer);
+        return answer;
       })
-      .then((bo) => {
-        if (!oo()) return;
+      .then((answer) => {
+        if (!isCurrent()) return;
         inFlight.delete(requestId_2);
         let { sendResponse, canInterruptTurn } = this.inputs;
-        let Ro = so();
-        let Ho = (allowed, dismissed) => {
-          if (Xt)
+        let answeredInBackground = inBackground();
+        let logSubagentAnswer = (allowed, dismissed) => {
+          if (fromSubagent)
             logEvent("tengu_remote_subagent_permission_request_answered", {
               allowed,
               dismissed,
-              in_background: Ro,
+              in_background: answeredInBackground,
             });
         };
-        if (repositoryTrustQuestion !== undefined && bo.behavior !== "cancelled")
+        if (repositoryTrustQuestion !== undefined && answer.behavior !== "cancelled")
           try {
             repositoryTrustQuestion.onAnswered?.();
           } catch (error) {
@@ -341,72 +354,75 @@ ${REMOTE_TOOLS_CONSENT_TEXT["repository_trust.prompt.unbound"]}`,
               },
             );
           }
-        switch (bo.behavior) {
+        switch (answer.behavior) {
           case "allow":
             sendResponse(requestId_2, {
               behavior: "allow",
-              updatedInput: repositoryTrustQuestion === undefined && !ee ? bo.updatedInput : ke.input,
+              updatedInput:
+                repositoryTrustQuestion === undefined && !folderPrompt
+                  ? answer.updatedInput
+                  : normalized.input,
               ...(repositoryTrustQuestion === undefined &&
-                !ee &&
-                bo.permissionUpdates?.length && {
-                  updatedPermissions: [...(bo.permissionUpdates ?? [])],
+                !folderPrompt &&
+                answer.permissionUpdates?.length && {
+                  updatedPermissions: [...(answer.permissionUpdates ?? [])],
                 }),
-              toolUseID: ke.tool_use_id,
+              toolUseID: normalized.tool_use_id,
             });
-            Ho(true, false);
+            logSubagentAnswer(true, false);
             return;
           case "deny": {
-            let Io =
+            let queueOps =
               canInterruptTurn &&
               createPermissionQueueOps({
-                feedback: bo.feedback,
-                contentBlocks: bo.contentBlocks,
-                isSubagent: isSubagentToolRequest(ke),
+                feedback: answer.feedback,
+                contentBlocks: answer.contentBlocks,
+                isSubagent: isSubagentToolRequest(normalized),
               });
             sendResponse(requestId_2, {
               behavior: "deny",
-              message: bo.feedback ?? "User denied permission",
-              ...(Io && {
+              message: answer.feedback ?? "User denied permission",
+              ...(queueOps && {
                 interrupt: true,
               }),
-              toolUseID: ke.tool_use_id,
+              toolUseID: normalized.tool_use_id,
               ...(repositoryTrustQuestion !== undefined && {
                 decisionClassification: "user_reject",
               }),
             });
-            Ho(false, false);
+            logSubagentAnswer(false, false);
             return;
           }
           case "cancelled":
             sendResponse(requestId_2, {
               behavior: "deny",
-              message: Ro ? "User denied permission" : "User aborted",
+              message: answeredInBackground ? "User denied permission" : "User aborted",
               ...(canInterruptTurn &&
-                !Ro && {
+                !answeredInBackground && {
                   interrupt: true,
                 }),
-              toolUseID: ke.tool_use_id,
+              toolUseID: normalized.tool_use_id,
             });
-            Ho(false, true);
+            logSubagentAnswer(false, true);
             return;
         }
       })
       .catch((error) => {
-        if (!oo()) return;
+        if (!isCurrent()) return;
         inFlight.delete(requestId_2);
         this.inputs.sendResponse(requestId_2, {
           behavior: "deny",
           message: `Permission dialog failed: ${error instanceof Error ? error.message : String(error)}`,
-          toolUseID: ke.tool_use_id,
+          toolUseID: normalized.tool_use_id,
         });
       });
     return true;
   };
-  cancel = (h) => {
-    let x = this.inFlight.get(h);
-    if (!x) return;
-    this.inFlight.delete(h);
-    x.abort();
+  cancel = (requestId) => {
+    let controller = this.inFlight.get(requestId);
+    if (!controller) return;
+    this.inFlight.delete(requestId);
+    controller.abort();
   };
   countInFlight() {
     return this.inFlight.size;
@@ -415,13 +431,13 @@ ${REMOTE_TOOLS_CONSENT_TEXT["repository_trust.prompt.unbound"]}`,
     Array.from(this.inFlight.keys()).forEach(this.cancel);
   }
   drain() {
-    for (let [h, x] of this.inFlight) {
-      this.inFlight.delete(h);
-      this.inputs.sendResponse(h, {
+    for (let [requestId, controller] of this.inFlight) {
+      this.inFlight.delete(requestId);
+      this.inputs.sendResponse(requestId, {
         behavior: "deny",
         message: "Permission dispatcher unmounted",
       });
-      x.abort();
+      controller.abort();
     }
   }
 }

@@ -19,7 +19,15 @@ import {
 } from "../../utils/auth.js";
 import { env } from "../../utils/env.js";
 import { stripInvisibleChars } from "../../utils/sanitization.js";
-import { string, u, union, E, M, array, zJt } from "../../../vendor/zod/v4/classic/schemas.js";
+import {
+  stringSchema,
+  objectSchema,
+  union,
+  numberSchema,
+  booleanSchema,
+  array,
+  uuidSchema,
+} from "../../../vendor/zod/v4/classic/schemas.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
 import { logFeatureSad, logFeatureBad, logFeatureOk } from "../analytics/featureTelemetry.js";
 import { isEssentialTrafficOnly } from "../../utils/privacyLevel.js";
@@ -33,9 +41,13 @@ import {
 } from "../../utils/errors.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { getGlobalConfig, saveGlobalConfig } from "../../utils/config.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-18hwfzwa.js:1050360-1050364 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:1050360", () => {
+  init_react_production();
+});
 //@ chunk-18hwfzwa.js:1050364-1050414 placement
 /**
  * 是否可展示组织问卷（非 WIF、是 claude.ai 订阅者）。
@@ -45,10 +57,10 @@ function isSurveyEligible() {
   return isClaudeAISubscriber();
 }
 //@ chunk-18hwfzwa.js:1050414-1050625 placement
-async function orgSurveyCredentialSource(h, { acceptInjectedTokens }) {
+async function orgSurveyCredentialSource(credentials, { acceptInjectedTokens }) {
   let CLAUDE_CODE_ORGANIZATION_UUID = env.CLAUDE_CODE_ORGANIZATION_UUID;
   let organizationUuid = getOauthAccountInfo()?.organizationUuid;
-  let claudeAIOAuthTokenOrigin = await getClaudeAIOAuthTokenOriginAsync(h);
+  let claudeAIOAuthTokenOrigin = await getClaudeAIOAuthTokenOriginAsync(credentials);
   if (claudeAIOAuthTokenOrigin === "store")
     return !CLAUDE_CODE_ORGANIZATION_UUID || CLAUDE_CODE_ORGANIZATION_UUID === organizationUuid;
   if (claudeAIOAuthTokenOrigin === "env" || claudeAIOAuthTokenOrigin === "fd")
@@ -69,8 +81,8 @@ function defaultInviteMessage(orgName) {
   return `Take a few minutes to share thoughts with your ${orgName} admins.`;
 }
 //@ chunk-18hwfzwa.js:1050765-1050866 placement
-function normalizeSurveyText(h) {
-  let trimmed = stripInvisibleChars(h, " ", {
+function normalizeSurveyText(text) {
+  let trimmed = stripInvisibleChars(text, " ", {
     keepEmojiJoiners: true,
   })
     .replace(/\s+/g, " ")
@@ -92,43 +104,47 @@ var SURVEY_QUESTION_TYPES = {
 /**
  * 限制字符数的文本 schema 工厂。
  */
-function boundedTextSchema(h) {
-  return string().refine((x) => Array.from(x).length <= h);
+function boundedTextSchema(maxChars) {
+  return stringSchema().refine((value) => Array.from(value).length <= maxChars);
 }
 //@ chunk-18hwfzwa.js:1051169-1051515 placement
 /**
  * 组织问卷题目的 schema：id、类型、题干、是否必答、选项与说明文字。
  */
-var surveyQuestionSchema = DoctorLazy(() =>
-  u({
-    id: string().regex(/^[A-Za-z0-9_-]{1,16}$/),
-    type: union([string(), E()]),
-    text: boundedTextSchema(1000),
-    required: M().default(false),
-    options: array(boundedTextSchema(200)).max(8).default([]),
-    helperText: boundedTextSchema(500).default(""),
-  }),
-);
-var pendingSurveyResponseSchema = DoctorLazy(() =>
-  u({
-    pending: u({
-      surveyUuid: zJt(),
-      questions: array(surveyQuestionSchema()).min(1).max(7),
-      inviteHeadline: boundedTextSchema(1000).default(""),
-      inviteMessage: boundedTextSchema(2000).default(""),
-    }).optional(),
-  }),
-);
+var surveyQuestionSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var pendingSurveyResponseSchema;
+deferInit("chunk-18hwfzwa.js:1051169", () => {
+  surveyQuestionSchema = DoctorLazy(() =>
+    objectSchema({
+      id: stringSchema().regex(/^[A-Za-z0-9_-]{1,16}$/),
+      type: union([stringSchema(), numberSchema()]),
+      text: boundedTextSchema(1000),
+      required: booleanSchema().default(false),
+      options: array(boundedTextSchema(200)).max(8).default([]),
+      helperText: boundedTextSchema(500).default(""),
+    }),
+  );
+  pendingSurveyResponseSchema = DoctorLazy(() =>
+    objectSchema({
+      pending: objectSchema({
+        surveyUuid: uuidSchema(),
+        questions: array(surveyQuestionSchema()).min(1).max(7),
+        inviteHeadline: boundedTextSchema(1000).default(""),
+        inviteMessage: boundedTextSchema(2000).default(""),
+      }).optional(),
+    }),
+  );
+});
 //@ chunk-18hwfzwa.js:1051515-1052638 placement
-function parseOrgSurvey(h, x) {
-  let { orgName, ownerKey } = x;
-  let ee = pendingSurveyResponseSchema().safeParse(h);
-  if (!ee.success)
+function parseOrgSurvey(payload, context) {
+  let { orgName, ownerKey } = context;
+  let parsed = pendingSurveyResponseSchema().safeParse(payload);
+  if (!parsed.success)
     return {
       survey: null,
       reason: "parse_failed",
     };
-  let pending = ee.data.pending;
+  let pending = parsed.data.pending;
   if (pending === undefined)
     return {
       survey: null,
@@ -139,56 +155,56 @@ function parseOrgSurvey(h, x) {
       survey: null,
       reason: "duplicate_question_id",
     };
-  let Be = [];
+  let questions = [];
   for (let question of pending.questions) {
-    let We = Object.hasOwn(SURVEY_QUESTION_TYPES, question.type)
+    let questionType = Object.hasOwn(SURVEY_QUESTION_TYPES, question.type)
       ? SURVEY_QUESTION_TYPES[question.type]
       : undefined;
-    let ze = normalizeSurveyText(question.text);
-    if (We === undefined || ze === null)
+    let text = normalizeSurveyText(question.text);
+    if (questionType === undefined || text === null)
       return {
         survey: null,
         reason: "unrenderable_question",
       };
-    let Xe = {
+    let common = {
       id: question.id,
-      text: ze,
+      text,
       helperText: normalizeSurveyText(question.helperText),
       required: question.required,
     };
-    if (We === "text") {
-      Be.push({
-        ...Xe,
-        kind: We,
+    if (questionType === "text") {
+      questions.push({
+        ...common,
+        kind: questionType,
       });
       continue;
     }
-    let rt = [];
+    let options = [];
     for (let option of question.options) {
-      let At = normalizeSurveyText(option);
-      if (At === null)
+      let label = normalizeSurveyText(option);
+      if (label === null)
         return {
           survey: null,
           reason: "unrenderable_question",
         };
-      rt.push({
+      options.push({
         value: option,
-        label: At,
+        label,
       });
     }
     if (
-      rt.length === 0 ||
-      new Set(rt.map((kt) => kt.value)).size !== rt.length ||
-      new Set(rt.map((kt) => kt.label)).size !== rt.length
+      options.length === 0 ||
+      new Set(options.map((option) => option.value)).size !== options.length ||
+      new Set(options.map((option) => option.label)).size !== options.length
     )
       return {
         survey: null,
         reason: "unrenderable_question",
       };
-    Be.push({
-      ...Xe,
-      kind: We,
-      options: rt,
+    questions.push({
+      ...common,
+      kind: questionType,
+      options,
     });
   }
   return {
@@ -198,7 +214,7 @@ function parseOrgSurvey(h, x) {
       orgName,
       headline: normalizeSurveyText(pending.inviteHeadline) ?? DEFAULT_SURVEY_HEADLINE,
       message: normalizeSurveyText(pending.inviteMessage) ?? defaultInviteMessage(orgName),
-      questions: Be,
+      questions,
     },
   };
 }
@@ -227,7 +243,7 @@ function getOrgSurveyOwnerKey() {
     : null;
 }
 //@ chunk-18hwfzwa.js:1052927-1053414 placement
-async function orgSurveyEligibility(h) {
+async function orgSurveyEligibility(credentials) {
   if (env.CLAUDE_CODE_DISABLE_FEEDBACK_SURVEY) return null;
   if (isEssentialTrafficOnly()) return null;
   if (getAPIProvider() !== "firstParty") return null;
@@ -235,19 +251,19 @@ async function orgSurveyEligibility(h) {
   if (getSubscriptionType() !== "enterprise") return null;
   if (!isSurveyEligible()) return null;
   if (
-    !(await orgSurveyCredentialSource(h, {
+    !(await orgSurveyCredentialSource(credentials, {
       acceptInjectedTokens: false,
     }))
   )
     return null;
   let oauthAccountInfo = getOauthAccountInfo();
-  let D = normalizeSurveyText(oauthAccountInfo?.organizationName ?? "");
-  if (!oauthAccountInfo?.organizationUuid || D === null) {
+  let orgName = normalizeSurveyText(oauthAccountInfo?.organizationName ?? "");
+  if (!oauthAccountInfo?.organizationUuid || orgName === null) {
     logFeatureSad("cli_org_survey", "skip_no_org_name");
     return null;
   }
   return {
-    orgName: D,
+    orgName,
     orgUuid: oauthAccountInfo.organizationUuid,
     checkKey: `${oauthAccountInfo.accountUuid}:${oauthAccountInfo.organizationUuid}`,
   };
@@ -256,81 +272,91 @@ async function orgSurveyEligibility(h) {
 /**
  * 问卷消息的 schema。
  */
-var ORG_SURVEY_RPC = 3000;
-var ORG_SURVEY_RPC_PATH = "/claudeai-rpc/anthropic.loupe.api.v1alpha.OrgSurveyService";
-var ORG_SURVEY_REQUEST_OPTIONS = {
-  auth: "teleport-org",
-  isBackground: true,
-  timeout: 1e4,
-  headers: {
-    "Connect-Protocol-Version": "1",
-  },
-  validateStatus: (h) => h < 500,
-};
-var ORG_SURVEY_METHODS = {
-  GetPendingSurvey: "get_pending",
-  RecordSurveyMilestone: "record_milestone",
-  DismissSurvey: "dismiss",
-  SubmitSurveyResponse: "submit",
-};
-var surveyMessageSchema = DoctorLazy(() =>
-  u({
-    message: string(),
-  }),
-);
+var ORG_SURVEY_RPC; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var ORG_SURVEY_RPC_PATH;
+var ORG_SURVEY_REQUEST_OPTIONS;
+var ORG_SURVEY_METHODS;
+var surveyMessageSchema;
+deferInit("chunk-18hwfzwa.js:1053414", () => {
+  ORG_SURVEY_RPC = 3000;
+  ORG_SURVEY_RPC_PATH = "/claudeai-rpc/anthropic.loupe.api.v1alpha.OrgSurveyService";
+  ORG_SURVEY_REQUEST_OPTIONS = {
+    auth: "teleport-org",
+    isBackground: true,
+    timeout: 1e4,
+    headers: {
+      "Connect-Protocol-Version": "1",
+    },
+    validateStatus: (status) => status < 500,
+  };
+  ORG_SURVEY_METHODS = {
+    GetPendingSurvey: "get_pending",
+    RecordSurveyMilestone: "record_milestone",
+    DismissSurvey: "dismiss",
+    SubmitSurveyResponse: "submit",
+  };
+  surveyMessageSchema = DoctorLazy(() =>
+    objectSchema({
+      message: stringSchema(),
+    }),
+  );
+});
 //@ chunk-18hwfzwa.js:1053773-1053844 placement
 /**
  * 记录问卷请求失败（提交类用 bad，其他用 sad）。
  */
-function logSurveyFailure(h, x) {
-  (h === "SubmitSurveyResponse" ? logFeatureBad : logFeatureSad)("cli_org_survey", x);
+function logSurveyFailure(method, reason) {
+  (method === "SubmitSurveyResponse" ? logFeatureBad : logFeatureSad)("cli_org_survey", reason);
 }
 //@ chunk-18hwfzwa.js:1053844-1054658 placement
-async function callOrgSurveyRpc(h, x, D) {
-  let L = ORG_SURVEY_METHODS[h];
-  let ee;
+async function callOrgSurveyRpc(method, body, options) {
+  let telemetryName = ORG_SURVEY_METHODS[method];
+  let response;
   try {
-    ee = await apiClient.post(`${ORG_SURVEY_RPC_PATH}/${h}`, x, D);
+    response = await apiClient.post(`${ORG_SURVEY_RPC_PATH}/${method}`, body, options);
   } catch (error) {
     let { kind, status } = classifyAxiosError(error);
-    let ze =
+    let failureCode =
       status !== undefined
         ? `http_${status}`
         : kind === "http"
           ? (sanitizedConnectionCodeLowerForTelemetry(getErrnoCode(error)) ?? "no_response")
           : kind;
-    logSurveyFailure(h, `${L}_${ze}`);
-    logForDebugging(`org survey ${h} failed: ${ze}`, {
+    logSurveyFailure(method, `${telemetryName}_${failureCode}`);
+    logForDebugging(`org survey ${method} failed: ${failureCode}`, {
       level: "warn",
     });
     return {
       kind: "transient",
     };
   }
-  if (!ee.ok) {
-    logFeatureSad("cli_org_survey", `${L}_${ee.reason.replaceAll("-", "_")}`);
+  if (!response.ok) {
+    logFeatureSad("cli_org_survey", `${telemetryName}_${response.reason.replaceAll("-", "_")}`);
     return {
       kind: "skipped",
     };
   }
-  if ((ee.status >= 200 && ee.status < 300) || (h === "GetPendingSurvey" && ee.status === 404))
+  if (
+    (response.status >= 200 && response.status < 300) ||
+    (method === "GetPendingSurvey" && response.status === 404)
+  )
     logFeatureOk("cli_org_survey");
-  else logSurveyFailure(h, `${L}_http_${ee.status}`);
-  if (ee.status >= 200 && ee.status < 300)
+  else logSurveyFailure(method, `${telemetryName}_http_${response.status}`);
+  if (response.status >= 200 && response.status < 300)
     return {
       kind: "ok",
-      data: ee.data,
+      data: response.data,
     };
-  if (ee.status === 429)
+  if (response.status === 429)
     return {
       kind: "transient",
     };
-  let message = surveyMessageSchema().safeParse(ee.data).data?.message;
+  let message = surveyMessageSchema().safeParse(response.data).data?.message;
   let code = message !== undefined && /^[a-z_]{1,64}$/.test(message) ? message : undefined;
-  logForDebugging(`org survey ${h} refused: http_${ee.status}`);
+  logForDebugging(`org survey ${method} refused: http_${response.status}`);
   return {
     kind: "refused",
-    status: ee.status,
+    status: response.status,
     code,
   };
 }
@@ -338,28 +364,28 @@ async function callOrgSurveyRpc(h, x, D) {
 /**
  * 取当前问卷检查记录（键不匹配返回 undefined）。
  */
-function getSurveyCheck(h) {
+function getSurveyCheck(checkKey) {
   let orgSurveyCheck = getGlobalConfig().orgSurveyCheck;
-  return orgSurveyCheck?.key === h ? orgSurveyCheck : undefined;
+  return orgSurveyCheck?.key === checkKey ? orgSurveyCheck : undefined;
 }
 //@ chunk-18hwfzwa.js:1054727-1054804 placement
 /**
  * 判断现在是否到了下次检查时间。
  */
-function isSurveyCheckDue(checkKey, x) {
+function isSurveyCheckDue(checkKey, nowMs) {
   let nextCheckAt = getSurveyCheck(checkKey)?.nextCheckAt;
-  return typeof nextCheckAt !== "number" || x >= nextCheckAt;
+  return typeof nextCheckAt !== "number" || nowMs >= nextCheckAt;
 }
 //@ chunk-18hwfzwa.js:1054804-1055005 placement
-function saveOrgSurveyCheck(h, x, storageV5) {
-  saveGlobalConfig((L) => {
-    let orgSurveyCheck = L.orgSurveyCheck?.key === h ? L.orgSurveyCheck : {};
+function saveOrgSurveyCheck(key, fields, storageV5) {
+  saveGlobalConfig((config) => {
+    let orgSurveyCheck = config.orgSurveyCheck?.key === key ? config.orgSurveyCheck : {};
     return {
-      ...L,
+      ...config,
       orgSurveyCheck: {
         ...orgSurveyCheck,
-        ...x,
-        key: h,
+        ...fields,
+        key,
       },
     };
   }, storageV5).catch(() => {
@@ -370,47 +396,48 @@ function saveOrgSurveyCheck(h, x, storageV5) {
 }
 //@ chunk-18hwfzwa.js:1055005-1057797 placement
 function checkPendingOrgSurvey({ credentials, storageV5, now = Date.now }) {
-  let L = {
+  let requestOptions = {
     ...ORG_SURVEY_REQUEST_OPTIONS,
     credentials,
     storageV5,
   };
-  async function ee(Re) {
-    let Be = await checkOrgSurveyEligibilitySafe(credentials);
-    if (Be !== null && Be !== "error" && Be.checkKey !== Re.ownerKey) {
+  async function checkEligibility(survey) {
+    let eligibility = await checkOrgSurveyEligibilitySafe(credentials);
+    if (eligibility !== null && eligibility !== "error" && eligibility.checkKey !== survey.ownerKey) {
       logFeatureSad("cli_org_survey", "skip_login_changed");
       return null;
     }
-    return Be;
+    return eligibility;
   }
-  function ke(Re, surveyUuid) {
+  function dismiss(eligibility, surveyUuid) {
     return callOrgSurveyRpc(
       "DismissSurvey",
       {
-        organizationUuid: Re.orgUuid,
+        organizationUuid: eligibility.orgUuid,
         surveyUuid,
       },
-      L,
+      requestOptions,
     );
   }
   return {
     async getPendingSurvey() {
-      let Re = await checkOrgSurveyEligibilitySafe(credentials);
-      if (Re === null || Re === "error" || !isSurveyCheckDue(Re.checkKey, now())) return null;
-      let Be = await callOrgSurveyRpc(
+      let eligibility = await checkOrgSurveyEligibilitySafe(credentials);
+      if (eligibility === null || eligibility === "error" || !isSurveyCheckDue(eligibility.checkKey, now()))
+        return null;
+      let result = await callOrgSurveyRpc(
         "GetPendingSurvey",
         {
-          organizationUuid: Re.orgUuid,
+          organizationUuid: eligibility.orgUuid,
           surface: "SURVEY_SURFACE_CODE",
         },
-        L,
+        requestOptions,
       );
-      switch (Be.kind) {
+      switch (result.kind) {
         case "skipped":
           return null;
         case "transient":
           saveOrgSurveyCheck(
-            Re.checkKey,
+            eligibility.checkKey,
             {
               nextCheckAt: now() + RETRY_ERROR_MS,
             },
@@ -419,22 +446,22 @@ function checkPendingOrgSurvey({ credentials, storageV5, now = Date.now }) {
           return null;
         case "refused":
           saveOrgSurveyCheck(
-            Re.checkKey,
+            eligibility.checkKey,
             {
-              nextCheckAt: now() + (Be.status === 404 ? RETRY_404_MS : RETRY_DEFAULT_MS),
+              nextCheckAt: now() + (result.status === 404 ? RETRY_404_MS : RETRY_DEFAULT_MS),
             },
             storageV5,
           );
           return null;
         case "ok": {
-          let orgSurvey = parseOrgSurvey(Be.data, {
-            orgName: Re.orgName,
-            ownerKey: Re.checkKey,
+          let orgSurvey = parseOrgSurvey(result.data, {
+            orgName: eligibility.orgName,
+            ownerKey: eligibility.checkKey,
           });
           if (orgSurvey.survey === null) {
             if (orgSurvey.reason !== "none") logFeatureSad("cli_org_survey", `pending_${orgSurvey.reason}`);
             saveOrgSurveyCheck(
-              Re.checkKey,
+              eligibility.checkKey,
               {
                 nextCheckAt: now() + RETRY_404_MS,
               },
@@ -442,13 +469,13 @@ function checkPendingOrgSurvey({ credentials, storageV5, now = Date.now }) {
             );
             return null;
           }
-          if (getSurveyCheck(Re.checkKey)?.dismissedSurveyUuid === orgSurvey.survey.surveyUuid) {
-            let We = await ke(Re, orgSurvey.survey.surveyUuid);
+          if (getSurveyCheck(eligibility.checkKey)?.dismissedSurveyUuid === orgSurvey.survey.surveyUuid) {
+            let dismissResult = await dismiss(eligibility, orgSurvey.survey.surveyUuid);
             saveOrgSurveyCheck(
-              Re.checkKey,
+              eligibility.checkKey,
               {
                 nextCheckAt: now() + RETRY_404_MS,
-                ...(We.kind === "ok" && {
+                ...(dismissResult.kind === "ok" && {
                   dismissedSurveyUuid: undefined,
                 }),
               },
@@ -460,110 +487,114 @@ function checkPendingOrgSurvey({ credentials, storageV5, now = Date.now }) {
         }
       }
     },
-    async isStillPending(Re) {
-      let Be = await ee(Re);
-      if (Be === null) return false;
-      if (Be === "error") return true;
-      let He = await callOrgSurveyRpc(
+    async isStillPending(survey) {
+      let eligibility = await checkEligibility(survey);
+      if (eligibility === null) return false;
+      if (eligibility === "error") return true;
+      let result = await callOrgSurveyRpc(
         "GetPendingSurvey",
         {
-          organizationUuid: Be.orgUuid,
+          organizationUuid: eligibility.orgUuid,
           surface: "SURVEY_SURFACE_CODE",
         },
         {
-          ...L,
+          ...requestOptions,
           timeout: ORG_SURVEY_RPC,
         },
       );
-      if (He.kind === "refused") return ![401, 403, 404].includes(He.status);
-      if (He.kind !== "ok") return He.kind === "transient";
-      let We = pendingSurveyResponseSchema().safeParse(He.data);
-      return !We.success || We.data.pending?.surveyUuid === Re.surveyUuid;
+      if (result.kind === "refused") return ![401, 403, 404].includes(result.status);
+      if (result.kind !== "ok") return result.kind === "transient";
+      let parsed = pendingSurveyResponseSchema().safeParse(result.data);
+      return !parsed.success || parsed.data.pending?.surveyUuid === survey.surveyUuid;
     },
-    async recordMilestone(Re, Be) {
-      let He = await ee(Re);
-      if (He === null || He === "error") return false;
+    async recordMilestone(survey, milestone) {
+      let eligibility = await checkEligibility(survey);
+      if (eligibility === null || eligibility === "error") return false;
       return (
         (
           await callOrgSurveyRpc(
             "RecordSurveyMilestone",
             {
-              organizationUuid: He.orgUuid,
-              surveyUuid: Re.surveyUuid,
-              milestone: Be === "shown" ? "SURVEY_MILESTONE_SHOWN" : "SURVEY_MILESTONE_STARTED",
+              organizationUuid: eligibility.orgUuid,
+              surveyUuid: survey.surveyUuid,
+              milestone: milestone === "shown" ? "SURVEY_MILESTONE_SHOWN" : "SURVEY_MILESTONE_STARTED",
             },
-            L,
+            requestOptions,
           )
         ).kind === "ok"
       );
     },
-    async dismissSurvey(Re) {
-      if (getOrgSurveyOwnerKey() === Re.ownerKey)
+    async dismissSurvey(survey) {
+      if (getOrgSurveyOwnerKey() === survey.ownerKey)
         saveOrgSurveyCheck(
-          Re.ownerKey,
+          survey.ownerKey,
           {
             nextCheckAt: now() + RETRY_404_MS,
-            dismissedSurveyUuid: Re.surveyUuid,
+            dismissedSurveyUuid: survey.surveyUuid,
           },
           storageV5,
         );
-      let Be = await ee(Re);
-      if (Be === null || Be === "error") return false;
-      let He = (await ke(Be, Re.surveyUuid)).kind === "ok";
-      if (He)
+      let eligibility = await checkEligibility(survey);
+      if (eligibility === null || eligibility === "error") return false;
+      let dismissed = (await dismiss(eligibility, survey.surveyUuid)).kind === "ok";
+      if (dismissed)
         saveOrgSurveyCheck(
-          Re.ownerKey,
+          survey.ownerKey,
           {
             dismissedSurveyUuid: undefined,
           },
           storageV5,
         );
-      return He;
+      return dismissed;
     },
-    async submitSurvey(Re, Be) {
-      let He = await ee(Re);
-      if (He === null) return "closed";
-      if (He === "error") return "failed";
-      let We = await callOrgSurveyRpc(
+    async submitSurvey(survey, answers) {
+      let eligibility = await checkEligibility(survey);
+      if (eligibility === null) return "closed";
+      if (eligibility === "error") return "failed";
+      let result = await callOrgSurveyRpc(
         "SubmitSurveyResponse",
         {
-          organizationUuid: He.orgUuid,
-          surveyUuid: Re.surveyUuid,
+          organizationUuid: eligibility.orgUuid,
+          surveyUuid: survey.surveyUuid,
           surface: "SURVEY_SURFACE_CODE",
-          answers: Be.map((Xe) =>
-            "text" in Xe
+          answers: answers.map((answer) =>
+            "text" in answer
               ? {
-                  questionId: Xe.questionId,
-                  text: Xe.text,
+                  questionId: answer.questionId,
+                  text: answer.text,
                 }
               : {
-                  questionId: Xe.questionId,
+                  questionId: answer.questionId,
                   options: {
-                    selected: Xe.selected,
+                    selected: answer.selected,
                   },
                 },
           ),
         },
-        L,
+        requestOptions,
       );
-      let ze =
-        We.kind === "ok" || (We.kind === "refused" && We.code === "survey_already_answered")
+      let outcome =
+        result.kind === "ok" || (result.kind === "refused" && result.code === "survey_already_answered")
           ? "submitted"
-          : We.kind === "refused" && ([401, 403, 404].includes(We.status) || We.code === "survey_not_open")
+          : result.kind === "refused" &&
+              ([401, 403, 404].includes(result.status) || result.code === "survey_not_open")
             ? "closed"
             : "failed";
-      if (ze !== "failed")
+      if (outcome !== "failed")
         saveOrgSurveyCheck(
-          He.checkKey,
+          eligibility.checkKey,
           {
             nextCheckAt: now() + RETRY_404_MS,
           },
           storageV5,
         );
-      return ze;
+      return outcome;
     },
   };
 }
 //@ chunk-18hwfzwa.js:1057797-1057801 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:1057797", () => {
+  init_react_production();
+});
 export { DEFAULT_HEADLINE_DELAY_MS, checkPendingOrgSurvey, isSurveyEligible, orgSurveyCredentialSource };

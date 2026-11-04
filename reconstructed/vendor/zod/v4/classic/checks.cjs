@@ -5,11 +5,11 @@
  * pieces: chunk-1ny7cxrt.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 import { require_core_2 } from "../core/index.cjs";
 
 //@ chunk-1ny7cxrt.js:587814-591116 cjs-fingerprint
-var require_checks_2 = x(function (cjsExports) {
+var require_checks_2 = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });

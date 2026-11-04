@@ -26,6 +26,14 @@ import { MessageResponse } from "../../components/MessageResponse.js";
 import { Text, Box } from "../../ink/components/Text.js";
 import { HighlightedCode } from "../../components/HighlightedCode.js";
 
+//@ chunk-e6aww6q8.js:4664942-4665018 fingerprint = getToolUseSummary (1)
+/**
+ * NotebookEdit 工具使用摘要：显示 notebook 路径。
+ */
+function getToolUseSummary(input) {
+  if (!input?.notebook_path) return null;
+  return getDisplayPath(input.notebook_path);
+}
 //@ chunk-q466qetm.js:8643-9017 fingerprint = renderToolUseMessage (1)
 function renderToolUseMessage(
   { notebook_path, cell_id: cellId, new_source, cell_type, edit_mode },
@@ -33,16 +41,16 @@ function renderToolUseMessage(
 ) {
   if (!notebook_path || !new_source || !cell_type) return null;
   let displayPath = verbose ? notebook_path : getDisplayPath(notebook_path);
-  let l = markBrokenSequences(replaceLineBreaks(stripUnsafeChars(`${cellId}`)));
+  let cellIdLabel = markBrokenSequences(replaceLineBreaks(stripUnsafeChars(`${cellId}`)));
   if (verbose) {
-    let f = replaceLineBreaks(stripUnsafeChars(truncateToLength(new_source, 30)));
+    let sourcePreview = replaceLineBreaks(stripUnsafeChars(truncateToLength(new_source, 30)));
     return jsxProd_default_2(Fragment, {
       children: [
         jsxProd_default(FilePathLink, {
           filePath: notebook_path,
           children: displayPath,
         }),
-        `@${l}, content: ${f}\u2026, cell_type: ${cell_type}, edit_mode: ${edit_mode ?? "replace"}`,
+        `@${cellIdLabel}, content: ${sourcePreview}\u2026, cell_type: ${cell_type}, edit_mode: ${edit_mode ?? "replace"}`,
       ],
     });
   }
@@ -52,7 +60,7 @@ function renderToolUseMessage(
         filePath: notebook_path,
         children: displayPath,
       }),
-      `@${l}`,
+      `@${cellIdLabel}`,
     ],
   });
 }
@@ -102,12 +110,4 @@ function renderToolResultMessage({ cell_id, new_source: newSource, error }) {
     }),
   });
 }
-//@ chunk-e6aww6q8.js:4664942-4665018 fingerprint = getToolUseSummary (1)
-/**
- * NotebookEdit 工具使用摘要：显示 notebook 路径。
- */
-function getToolUseSummary(input) {
-  if (!input?.notebook_path) return null;
-  return getDisplayPath(input.notebook_path);
-}
-export { getToolUseSummary };
+export { getToolUseSummary, renderToolResultMessage, renderToolUseMessage, renderToolUseRejectedMessage };

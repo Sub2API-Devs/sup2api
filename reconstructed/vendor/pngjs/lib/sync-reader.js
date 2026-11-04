@@ -5,10 +5,10 @@
  * pieces: chunk-spjgqa4y.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../runtime/bun-runtime.js";
 
 //@ chunk-spjgqa4y.js:45541-46188 cjs-fingerprint
-var require_sync_reader = x(function (cjsExports, cjsModule) {
+var require_sync_reader = __commonJS(function (cjsExports, cjsModule) {
   var SyncReader = (cjsModule.exports = function (buffer) {
     this._buffer = buffer;
     this._reads = [];

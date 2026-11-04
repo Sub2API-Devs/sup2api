@@ -23,6 +23,7 @@ import {
 } from "fs";
 import { randomBytes } from "crypto";
 import { getFsImplementation, safeResolvePath } from "./fsOperations.js";
+import { BOM_SNIFF_BYTES, detectEncodingFromBom } from "./fileRead.js";
 import { createKeyedQueue } from "./promiseQueue.js";
 import {
   TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
@@ -57,9 +58,19 @@ import {
 } from "./atomicPublishWrite.js";
 import { ATOMIC_WRITE_ERRNOS, isInPlaceWriteDefault } from "./plugins/safeCopy.js";
 import { env } from "./env.js";
-import { BOM_SNIFF_BYTES, detectEncodingFromBom } from "./fileRead.js";
 import { platformNoFollowFlags } from "./platformTargets.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
+//@ chunk-7r5y3c3p.js:2166-2264 fingerprint = detectLineEndings (0.78)
+/**
+ * 读文件开头若干字节检测编码（utf8/utf16le 等）。
+ */
+function detectLineEndings(fd) {
+  let { buffer, bytesRead } = getFsImplementation().readSync(fd, {
+    length: BOM_SNIFF_BYTES,
+  });
+  return detectEncodingFromBom(buffer.subarray(0, bytesRead));
+}
 //@ chunk-847rdpmn.js:6208-6276 fingerprint = getFileModificationTime (1)
 /**
  * 同步取文件 mtime（毫秒取整）。
@@ -77,18 +88,21 @@ async function getFileModificationTimeAsync(filePath) {
   return Math.floor(stats.mtimeMs);
 }
 //@ chunk-847rdpmn.js:6642-6654 placement
-var fileWriteContextStorage = createKeyedQueue();
+var fileWriteContextStorage; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-847rdpmn.js:6642", () => {
+  fileWriteContextStorage = createKeyedQueue();
+});
 //@ chunk-847rdpmn.js:6654-6690 placement
-function runWithFileWriteContext(e, n) {
-  return fileWriteContextStorage.run(e, n);
+function runWithFileWriteContext(context, fn) {
+  return fileWriteContextStorage.run(context, fn);
 }
 //@ chunk-847rdpmn.js:6690-6785 placement = detectLineEndingsForString (1)
 /**
  * 行尾为 CRLF 时把内容统一转换为 CRLF。
  */
-function detectLineEndingsForString(e, n) {
-  if (n !== "CRLF") return e;
-  return e.replaceAll(
+function detectLineEndingsForString(text, lineEndings) {
+  if (lineEndings !== "CRLF") return text;
+  return text.replaceAll(
     `\r
 `,
     `
@@ -101,16 +115,16 @@ function detectLineEndingsForString(e, n) {
 /**
  * 写文本文件并核对：写入后比较磁盘大小与预期字节数，不一致抛 "Write verification failed"（网络盘/云同步截断），返回 mtime。
  */
-async function writeTextContentVerified(ioPath, content, encoding, s) {
-  let lineEndingsForString = detectLineEndingsForString(content, s);
+async function writeTextContentVerified(ioPath, content, encoding, lineEndings) {
+  let lineEndingsForString = detectLineEndingsForString(content, lineEndings);
   await writeFileAtomic(ioPath, lineEndingsForString, {
     encoding,
   });
-  let o = Buffer.byteLength(lineEndingsForString, encoding);
+  let expectedBytes = Buffer.byteLength(lineEndingsForString, encoding);
   let stats = await getFsImplementation().stat(ioPath);
-  if (stats.size !== o)
+  if (stats.size !== expectedBytes)
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `Write verification failed: ${ioPath} is ${stats.size} bytes on disk, expected ${o}. The filesystem may have silently truncated the write (network drive / cloud sync).`,
+      `Write verification failed: ${ioPath} is ${stats.size} bytes on disk, expected ${expectedBytes}. The filesystem may have silently truncated the write (network drive / cloud sync).`,
       "writeTextContent: on-disk size mismatch after write",
     );
   return Math.floor(stats.mtimeMs);
@@ -139,15 +153,15 @@ function detectFileEncoding(filePath) {
  */
 function convertLeadingTabsToSpaces(content) {
   if (!content.includes("\t")) return content;
-  return content.replace(/^\t+/gm, (n) => "  ".repeat(n.length));
+  return content.replace(/^\t+/gm, (tabRun) => "  ".repeat(tabRun.length));
 }
 //@ chunk-847rdpmn.js:7477-7616 fingerprint = getAbsoluteAndRelativePaths (1)
 function getAbsoluteAndRelativePaths(path) {
-  let n = path ? (getCwdOrNullSafe() ?? undefined) : undefined;
-  let r = path ? (expandPathOrNull(path, n) ?? undefined) : undefined;
-  let relativePath = r && n !== undefined ? relative(n, r) : undefined;
+  let cwd = path ? (getCwdOrNullSafe() ?? undefined) : undefined;
+  let absolutePath = path ? (expandPathOrNull(path, cwd) ?? undefined) : undefined;
+  let relativePath = absolutePath && cwd !== undefined ? relative(cwd, absolutePath) : undefined;
   return {
-    absolutePath: r,
+    absolutePath,
     relativePath,
   };
 }
@@ -173,10 +187,10 @@ function getDisplayPath(filePath) {
 /**
  * 把路径转为相对当前（或指定）工作目录的相对路径。
  */
-function toCloudRelativePath(e, notebookData) {
-  let r = notebookData === undefined ? getEffectiveCwd() : applyCloudCwd(notebookData);
-  let s = (notebookData !== undefined || !hasOutermostCallFrame()) && r === getCloudCwd();
-  return relative(r, s ? resolve(r, e) : e);
+function toCloudRelativePath(filePath, notebookData) {
+  let baseCwd = notebookData === undefined ? getEffectiveCwd() : applyCloudCwd(notebookData);
+  let shouldResolve = (notebookData !== undefined || !hasOutermostCallFrame()) && baseCwd === getCloudCwd();
+  return relative(baseCwd, shouldResolve ? resolve(baseCwd, filePath) : filePath);
 }
 //@ chunk-847rdpmn.js:7962-8003 layout
 var SHORT_EXTENSION_RE = /^(\.[\p{L}\p{N}_+~#-]{1,32})?$/u;
@@ -189,13 +203,13 @@ async function findSimilarFile(filePath) {
   try {
     let dir = dirname(filePath);
     let fileBaseName = basename(filePath, extname(filePath));
-    let a = (await fsImplementation.readdir(dir)).filter(
+    let match = (await fsImplementation.readdir(dir)).filter(
       (file) =>
         SHORT_EXTENSION_RE.test(extname(file.name).normalize("NFC")) &&
         basename(file.name, extname(file.name)) === fileBaseName &&
         join(dir, file.name) !== filePath,
     )[0];
-    if (a) return a.name;
+    if (match) return match.name;
     return;
   } catch (error) {
     if (!isENOENT(error))
@@ -217,16 +231,21 @@ var FILE_NOT_FOUND_CWD_NOTE = "Note: your current working directory is";
 async function normalizePathForComparison(requestedPath) {
   let cwd = getCwd();
   let cwdParent = dirname(cwd);
-  let s = requestedPath;
+  let normalizedPath = requestedPath;
   try {
     let resolvedDir = await realpath(dirname(requestedPath));
-    s = join(resolvedDir, basename(requestedPath));
+    normalizedPath = join(resolvedDir, basename(requestedPath));
   } catch {}
-  let u = cwdParent === sep ? sep : cwdParent + sep;
-  let a = getPlatform() === "windows" ? (S) => S.toLowerCase() : (S) => S;
-  let f = a(s);
-  if (!f.startsWith(a(u)) || f.startsWith(a(cwd + sep)) || f === a(cwd)) return;
-  let relFromParent = relative(cwdParent, s);
+  let parentPrefix = cwdParent === sep ? sep : cwdParent + sep;
+  let caseFold = getPlatform() === "windows" ? (path) => path.toLowerCase() : (path) => path;
+  let foldedPath = caseFold(normalizedPath);
+  if (
+    !foldedPath.startsWith(caseFold(parentPrefix)) ||
+    foldedPath.startsWith(caseFold(cwd + sep)) ||
+    foldedPath === caseFold(cwd)
+  )
+    return;
+  let relFromParent = relative(cwdParent, normalizedPath);
   let correctedPath = join(cwd, relFromParent);
   try {
     await stat(correctedPath);
@@ -241,38 +260,38 @@ async function normalizePathForComparison(requestedPath) {
  */
 function addLineNumbers({ content, startLine, tabAwareSeparator = false }) {
   if (!content) return "";
-  let s =
+  let windowLines =
     tabAwareSeparator &&
     (content.startsWith("\t") ||
       content.includes(`
 	`))
       ? ":"
       : "\t";
-  let u = [];
-  let o = startLine;
-  let a = 0;
+  let numberedLines = [];
+  let lineNumber = startLine;
+  let shownCount = 0;
   let index = content.indexOf(`
 `);
   while (index !== -1) {
-    u.push(formatNumberedLine(content.slice(a, index), o++, s));
-    a = index + 1;
+    numberedLines.push(formatNumberedLine(content.slice(shownCount, index), lineNumber++, windowLines));
+    shownCount = index + 1;
     index = content.indexOf(
       `
 `,
-      a,
+      shownCount,
     );
   }
-  u.push(formatNumberedLine(content.slice(a), o, s));
-  return u.join(`
+  numberedLines.push(formatNumberedLine(content.slice(shownCount), lineNumber, windowLines));
+  return numberedLines.join(`
 `);
 }
 //@ chunk-847rdpmn.js:8901-8981 layout
 /**
  * 单行格式化：行号 + 分隔符 + 去掉行尾 \r 的内容。
  */
-function formatNumberedLine(e, n, r) {
-  let s = e.endsWith("\r") ? e.slice(0, -1) : e;
-  return `${n}${r}${s}`;
+function formatNumberedLine(line, lineNumber, width) {
+  let text = line.endsWith("\r") ? line.slice(0, -1) : line;
+  return `${lineNumber}${width}${text}`;
 }
 //@ chunk-847rdpmn.js:8981-9047 file-local
 /**
@@ -298,8 +317,8 @@ function rethrowWithAtomicWriteCause(error, error_2) {
   throw error;
 }
 //@ chunk-847rdpmn.js:9287-9337 layout
-function preserveFileModeBits(e) {
-  return e === undefined ? undefined : (e & 511) | 128;
+function preserveFileModeBits(mode) {
+  return mode === undefined ? undefined : (mode & 511) | 128;
 }
 //@ chunk-847rdpmn.js:9337-12292 fingerprint = writeFileSyncAndFlush_DEPRECATED (0.593)
 /**
@@ -315,8 +334,8 @@ function writeFileSyncAndFlush_DEPRECATED(
   let fs = getFsImplementation();
   let O_NOFOLLOW = options.allowSymlink ? 0 : constants.O_NOFOLLOW;
   let targetPath = filePath;
-  let a;
-  let f = false;
+  let targetPath_2;
+  let targetExisted = false;
   if (options.allowSymlink)
     try {
       let linkTarget = fs.readlinkSync(filePath);
@@ -339,78 +358,79 @@ function writeFileSyncAndFlush_DEPRECATED(
           );
       }
     try {
-      let c = fs.lstatSync(filePath);
-      if (c.isSymbolicLink())
+      let stats = fs.lstatSync(filePath);
+      if (stats.isSymbolicLink())
         throw new SymlinkWriteRefusedError(
           `Refusing to write through symlink: ${filePath}. Resolve the symlink and pass the real target path explicitly.`,
         );
-      a = c.mode;
-      f = true;
+      targetPath_2 = stats.mode;
+      targetExisted = true;
     } catch (error) {
       if (!isENOENT(error)) throw error;
     }
   }
   let tempPath = `.tmp.${process.pid}.${randomBytes(6).toString("hex")}`;
-  let g = stagingPathFor(options.stagingDir, targetPath, tempPath, options.allowSymlink ?? false);
-  let S = false;
-  if (options.allowSymlink && !f)
+  let stagingPath = stagingPathFor(options.stagingDir, targetPath, tempPath, options.allowSymlink ?? false);
+  let renamed = false;
+  if (options.allowSymlink && !targetExisted)
     try {
-      a = fs.statSync(targetPath).mode;
-      f = true;
+      targetPath_2 = fs.statSync(targetPath).mode;
+      targetExisted = true;
     } catch (error) {
       if (!isENOENT(error)) throw error;
     }
-  if (f && a !== undefined) logForDebugging(`Preserving file permissions: ${a.toString(8)}`);
+  if (targetExisted && targetPath_2 !== undefined)
+    logForDebugging(`Preserving file permissions: ${targetPath_2.toString(8)}`);
   else if (options.mode !== undefined) {
-    a = options.mode;
-    logForDebugging(`Setting permissions for new file: ${a.toString(8)}`);
+    targetPath_2 = options.mode;
+    logForDebugging(`Setting permissions for new file: ${targetPath_2.toString(8)}`);
   }
   try {
-    logForDebugging(`Writing to temp file: ${g}`);
-    let c = openSync(
-      g,
+    logForDebugging(`Writing to temp file: ${stagingPath}`);
+    let fd = openSync(
+      stagingPath,
       constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | O_NOFOLLOW,
-      f ? preserveFileModeBits(a) : options.mode,
+      targetExisted ? preserveFileModeBits(targetPath_2) : options.mode,
     );
-    let E = false;
-    let _;
+    let committed = false;
+    let error;
     try {
-      if (dirname(g) !== dirname(targetPath)) verifyStagingDir(options.stagingDir);
-      writeFileSync(c, content, {
+      if (dirname(stagingPath) !== dirname(targetPath)) verifyStagingDir(options.stagingDir);
+      writeFileSync(fd, content, {
         encoding: options.encoding,
       });
-      if (f && a !== undefined)
+      if (targetExisted && targetPath_2 !== undefined)
         try {
-          fchmodSync(c, a);
+          fchmodSync(fd, targetPath_2);
           logForDebugging("Applied original permissions to temp file");
         } catch (error) {
           if (!isUnsupportedFlagError(error)) throw error;
           logForDebugging(`fchmod unsupported on this filesystem: ${error}`);
         }
       try {
-        fsyncSync(c);
+        fsyncSync(fd);
       } catch (error) {
         if (!isUnsupportedFlagError(error)) throw error;
         logForDebugging(`fsync unsupported on this filesystem: ${error}`);
       }
-      S = true;
-    } catch (error) {
-      E = true;
-      _ = error;
+      renamed = true;
+    } catch (error_2) {
+      committed = true;
+      error = error_2;
     }
     try {
-      closeSync(c);
+      closeSync(fd);
     } catch (error) {
-      if (!E) throw error;
+      if (!committed) throw error;
       logForDebugging(`closeSync also failed after temp write error: ${error}`, {
         level: "error",
       });
     }
-    if (E) throw _;
+    if (committed) throw error;
     logForDebugging(`Temp file written successfully, size: ${content.length} bytes`);
-    if (dirname(g) !== dirname(targetPath)) verifyStagingDir(options.stagingDir);
-    logForDebugging(`Renaming ${g} to ${targetPath}`);
-    retryFsOpSync(g, targetPath, (h, L) => fs.renameSync(h, L));
+    if (dirname(stagingPath) !== dirname(targetPath)) verifyStagingDir(options.stagingDir);
+    logForDebugging(`Renaming ${stagingPath} to ${targetPath}`);
+    retryFsOpSync(stagingPath, targetPath, (fromPath, toPath) => fs.renameSync(fromPath, toPath));
     logForDebugging(`File ${targetPath} written atomically`);
   } catch (error) {
     logForDebugging(`Failed to write file atomically: ${error}`, {
@@ -418,23 +438,23 @@ function writeFileSyncAndFlush_DEPRECATED(
     });
     let errnoCode = getErrnoCode(error);
     if (
-      (S && errnoCode !== undefined && ATOMIC_WRITE_ERRNOS.has(errnoCode)) ||
-      (!S && f && errnoCode === "EACCES")
+      (renamed && errnoCode !== undefined && ATOMIC_WRITE_ERRNOS.has(errnoCode)) ||
+      (!renamed && targetExisted && errnoCode === "EACCES")
     ) {
       let { flags, flagsIfMissing } = openWriteFlags(O_NOFOLLOW);
-      let mode = !f && options.mode !== undefined ? options.mode : undefined;
-      let b;
+      let mode = !targetExisted && options.mode !== undefined ? options.mode : undefined;
+      let fd;
       try {
         try {
-          b = openSync(targetPath, flags, mode);
+          fd = openSync(targetPath, flags, mode);
         } catch (error) {
           if (flagsIfMissing === undefined || !isENOENT(error)) throw error;
           assertPathSafeSync(targetPath);
-          b = openSync(targetPath, flagsIfMissing, mode);
+          fd = openSync(targetPath, flagsIfMissing, mode);
         }
       } catch (error_2) {
         try {
-          fs.unlinkSync(g);
+          fs.unlinkSync(stagingPath);
         } catch (error) {
           logForDebugging(`Failed to clean up temp file: ${error}`);
         }
@@ -443,34 +463,34 @@ function writeFileSyncAndFlush_DEPRECATED(
         throw error;
       }
       try {
-        let p = fstatSync(b);
-        if (p.nlink > 1 && (options.refuseHardLinkedInPlace ?? isInPlaceWriteDefault()))
-          throw new HardLinkWriteRefusedError(targetPath, p.nlink);
-        if (p.isFile()) ftruncateSync(b, 0);
+        let stats = fstatSync(fd);
+        if (stats.nlink > 1 && (options.refuseHardLinkedInPlace ?? isInPlaceWriteDefault()))
+          throw new HardLinkWriteRefusedError(targetPath, stats.nlink);
+        if (stats.isFile()) ftruncateSync(fd, 0);
       } catch (error_2) {
         try {
-          closeSync(b);
+          closeSync(fd);
         } catch {}
         try {
-          fs.unlinkSync(g);
+          fs.unlinkSync(stagingPath);
         } catch (error) {
           logForDebugging(`Failed to clean up temp file: ${error}`);
         }
         rethrowWithAtomicWriteCause(error_2, error);
       }
       try {
-        writeFileSync(b, content, {
+        writeFileSync(fd, content, {
           encoding: options.encoding,
         });
         try {
-          fsyncSync(b);
+          fsyncSync(fd);
         } catch (error) {
           if (!isUnsupportedFlagError(error)) throw error;
           logForDebugging(`fsync unsupported on this filesystem: ${error}`);
         }
-        closeSync(b);
+        closeSync(fd);
         try {
-          fs.unlinkSync(g);
+          fs.unlinkSync(stagingPath);
         } catch (atomicError) {
           logForDebugging(`Failed to clean up temp file: ${atomicError}`);
         }
@@ -478,21 +498,21 @@ function writeFileSyncAndFlush_DEPRECATED(
         return;
       } catch (cleanupError) {
         try {
-          closeSync(b);
+          closeSync(fd);
         } catch {}
         try {
           fs.unlinkSync(targetPath);
         } catch {}
-        if (S)
+        if (renamed)
           throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-            `Write to ${targetPath} failed (${getErrnoCode(cleanupError) ?? cleanupError}) after the target was truncated. The new content was preserved at ${g}.`,
+            `Write to ${targetPath} failed (${getErrnoCode(cleanupError) ?? cleanupError}) after the target was truncated. The new content was preserved at ${stagingPath}.`,
             "writeFileSyncAndFlush: in-place fallback write failed; content preserved at temp path",
           );
         rethrowWithAtomicWriteCause(cleanupError, error);
       }
     }
     try {
-      fs.unlinkSync(g);
+      fs.unlinkSync(stagingPath);
     } catch (fallbackError) {
       logForDebugging(`Failed to clean up temp file: ${fallbackError}`);
     }
@@ -504,187 +524,192 @@ function writeFileSyncAndFlush_DEPRECATED(
  * 异步原子写：临时文件 .tmp.<pid>.<rand>（可指定 stagingDir）+ fsync + rename，保留原权限；默认拒绝写穿符号链接，allowSymlink 时写到链接目标。
  */
 async function writeFileAtomic(
-  e,
-  n,
-  r = {
+  filePath,
+  content,
+  options = {
     encoding: "utf-8",
   },
 ) {
   let fsImplementation = getFsImplementation();
-  let O_NOFOLLOW = r.allowSymlink ? 0 : constants.O_NOFOLLOW;
-  let o = e;
-  let a;
-  let f = false;
-  if (r.allowSymlink)
+  let O_NOFOLLOW = options.allowSymlink ? 0 : constants.O_NOFOLLOW;
+  let targetPath = filePath;
+  let symlinkTarget;
+  let targetExisted = false;
+  if (options.allowSymlink)
     try {
-      let c = await readlink(e);
-      o = isAbsolute(c) ? c : resolve(await realpath(dirname(e)), c);
-      logForDebugging(`Writing through symlink: ${e} -> ${o}`);
+      let linkTarget = await readlink(filePath);
+      targetPath = isAbsolute(linkTarget)
+        ? linkTarget
+        : resolve(await realpath(dirname(filePath)), linkTarget);
+      logForDebugging(`Writing through symlink: ${filePath} -> ${targetPath}`);
     } catch {}
   else {
-    if (r.checkParentDir)
+    if (options.checkParentDir)
       try {
         await (
-          await open(dirname(e), constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW)
+          await open(dirname(filePath), constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW)
         ).close();
       } catch (error) {
         let errnoCode = getErrnoCode(error);
         if (errnoCode === "ELOOP" || errnoCode === "ENOTDIR")
-          throw new SymlinkWriteRefusedError(`Refusing to write into symlinked directory: ${dirname(e)}`);
+          throw new SymlinkWriteRefusedError(
+            `Refusing to write into symlinked directory: ${dirname(filePath)}`,
+          );
       }
     try {
-      let c = await lstat(e);
-      if (c.isSymbolicLink())
+      let stats = await lstat(filePath);
+      if (stats.isSymbolicLink())
         throw new SymlinkWriteRefusedError(
-          `Refusing to write through symlink: ${e}. Resolve the symlink and pass the real target path explicitly.`,
+          `Refusing to write through symlink: ${filePath}. Resolve the symlink and pass the real target path explicitly.`,
         );
-      a = c.mode;
-      f = true;
+      symlinkTarget = stats.mode;
+      targetExisted = true;
     } catch (error) {
       if (!isENOENT(error)) throw error;
     }
   }
-  let y = `.tmp.${process.pid}.${randomBytes(6).toString("hex")}`;
-  let g = stagingPathFor(r.stagingDir, o, y, r.allowSymlink ?? false);
-  let S = false;
-  if (r.allowSymlink && !f)
+  let tempSuffix = `.tmp.${process.pid}.${randomBytes(6).toString("hex")}`;
+  let stagingPath = stagingPathFor(options.stagingDir, targetPath, tempSuffix, options.allowSymlink ?? false);
+  let renamed = false;
+  if (options.allowSymlink && !targetExisted)
     try {
-      a = (await fsImplementation.stat(o)).mode;
-      f = true;
+      symlinkTarget = (await fsImplementation.stat(targetPath)).mode;
+      targetExisted = true;
     } catch (error) {
       if (!isENOENT(error)) throw error;
     }
-  if (f && a !== undefined) logForDebugging(`Preserving file permissions: ${a.toString(8)}`);
-  else if (r.mode !== undefined) {
-    a = r.mode;
-    logForDebugging(`Setting permissions for new file: ${a.toString(8)}`);
+  if (targetExisted && symlinkTarget !== undefined)
+    logForDebugging(`Preserving file permissions: ${symlinkTarget.toString(8)}`);
+  else if (options.mode !== undefined) {
+    symlinkTarget = options.mode;
+    logForDebugging(`Setting permissions for new file: ${symlinkTarget.toString(8)}`);
   }
   try {
-    logForDebugging(`Writing to temp file: ${g}`);
-    let c = await open(
-      g,
+    logForDebugging(`Writing to temp file: ${stagingPath}`);
+    let fd = await open(
+      stagingPath,
       constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | O_NOFOLLOW,
-      f ? preserveFileModeBits(a) : r.mode,
+      targetExisted ? preserveFileModeBits(symlinkTarget) : options.mode,
     );
-    let E = false;
-    let _;
+    let committed = false;
+    let error;
     try {
-      if (dirname(g) !== dirname(o)) verifyStagingDir(r.stagingDir);
-      await c.writeFile(n, {
-        encoding: r.encoding,
+      if (dirname(stagingPath) !== dirname(targetPath)) verifyStagingDir(options.stagingDir);
+      await fd.writeFile(content, {
+        encoding: options.encoding,
       });
-      if (f && a !== undefined)
+      if (targetExisted && symlinkTarget !== undefined)
         try {
-          await c.chmod(a);
+          await fd.chmod(symlinkTarget);
           logForDebugging("Applied original permissions to temp file");
         } catch (error) {
           if (!isUnsupportedFlagError(error)) throw error;
           logForDebugging(`fchmod unsupported on this filesystem: ${error}`);
         }
       try {
-        await c.sync();
+        await fd.sync();
       } catch (error) {
         if (!isUnsupportedFlagError(error)) throw error;
         logForDebugging(`fsync unsupported on this filesystem: ${error}`);
       }
-      S = true;
-    } catch (error) {
-      E = true;
-      _ = error;
+      renamed = true;
+    } catch (error_2) {
+      committed = true;
+      error = error_2;
     }
     try {
-      await c.close();
+      await fd.close();
     } catch (error) {
-      if (!E) throw error;
+      if (!committed) throw error;
       logForDebugging(`close also failed after temp write error: ${error}`, {
         level: "error",
       });
     }
-    if (E) throw _;
-    logForDebugging(`Temp file written successfully, size: ${n.length} bytes`);
-    if (dirname(g) !== dirname(o)) verifyStagingDir(r.stagingDir);
-    logForDebugging(`Renaming ${g} to ${o}`);
-    await retryFsOp(g, o, (h, L) => fsImplementation.rename(h, L));
-    logForDebugging(`File ${o} written atomically`);
+    if (committed) throw error;
+    logForDebugging(`Temp file written successfully, size: ${content.length} bytes`);
+    if (dirname(stagingPath) !== dirname(targetPath)) verifyStagingDir(options.stagingDir);
+    logForDebugging(`Renaming ${stagingPath} to ${targetPath}`);
+    await retryFsOp(stagingPath, targetPath, (fromPath, toPath) => fsImplementation.rename(fromPath, toPath));
+    logForDebugging(`File ${targetPath} written atomically`);
   } catch (error) {
     logForDebugging(`Failed to write file atomically: ${error}`, {
       level: "error",
     });
     let errnoCode = getErrnoCode(error);
     if (
-      (S && errnoCode !== undefined && ATOMIC_WRITE_ERRNOS.has(errnoCode)) ||
-      (!S && f && errnoCode === "EACCES")
+      (renamed && errnoCode !== undefined && ATOMIC_WRITE_ERRNOS.has(errnoCode)) ||
+      (!renamed && targetExisted && errnoCode === "EACCES")
     ) {
       let { flags, flagsIfMissing } = openWriteFlags(O_NOFOLLOW);
-      let mode = !f && r.mode !== undefined ? r.mode : undefined;
-      let b;
+      let mode = !targetExisted && options.mode !== undefined ? options.mode : undefined;
+      let fd;
       try {
         try {
-          b = await open(o, flags, mode);
+          fd = await open(targetPath, flags, mode);
         } catch (error) {
           if (flagsIfMissing === undefined || !isENOENT(error)) throw error;
-          await assertPathSafeAsync(o);
-          b = await open(o, flagsIfMissing, mode);
+          await assertPathSafeAsync(targetPath);
+          fd = await open(targetPath, flagsIfMissing, mode);
         }
       } catch (error_2) {
         try {
-          await fsImplementation.unlink(g);
+          await fsImplementation.unlink(stagingPath);
         } catch (error) {
           logForDebugging(`Failed to clean up temp file: ${error}`);
         }
         if (getErrnoCode(error_2) === "ELOOP")
-          throw new SymlinkWriteRefusedError(`Refusing to write through symlink: ${o} (O_NOFOLLOW)`);
+          throw new SymlinkWriteRefusedError(`Refusing to write through symlink: ${targetPath} (O_NOFOLLOW)`);
         throw error;
       }
       try {
-        let stats = await b.stat();
-        if (stats.nlink > 1 && (r.refuseHardLinkedInPlace ?? isInPlaceWriteDefault()))
-          throw new HardLinkWriteRefusedError(o, stats.nlink);
-        if (stats.isFile()) await b.truncate(0);
+        let stats = await fd.stat();
+        if (stats.nlink > 1 && (options.refuseHardLinkedInPlace ?? isInPlaceWriteDefault()))
+          throw new HardLinkWriteRefusedError(targetPath, stats.nlink);
+        if (stats.isFile()) await fd.truncate(0);
       } catch (error_2) {
-        await b.close().catch(() => {});
+        await fd.close().catch(() => {});
         try {
-          await fsImplementation.unlink(g);
+          await fsImplementation.unlink(stagingPath);
         } catch (error) {
           logForDebugging(`Failed to clean up temp file: ${error}`);
         }
         rethrowWithAtomicWriteCause(error_2, error);
       }
       try {
-        await b.writeFile(n, {
-          encoding: r.encoding,
+        await fd.writeFile(content, {
+          encoding: options.encoding,
         });
         try {
-          await b.sync();
+          await fd.sync();
         } catch (error) {
           if (!isUnsupportedFlagError(error)) throw error;
           logForDebugging(`fsync unsupported on this filesystem: ${error}`);
         }
-        await b.close();
+        await fd.close();
         try {
-          await fsImplementation.unlink(g);
+          await fsImplementation.unlink(stagingPath);
         } catch (error) {
           logForDebugging(`Failed to clean up temp file: ${error}`);
         }
-        logForDebugging(`File ${o} written via in-place fallback`);
+        logForDebugging(`File ${targetPath} written via in-place fallback`);
         return;
       } catch (error_2) {
         try {
-          await b.close();
+          await fd.close();
         } catch {}
         try {
-          await fsImplementation.unlink(o);
+          await fsImplementation.unlink(targetPath);
         } catch {}
-        if (S)
+        if (renamed)
           throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-            `Write to ${o} failed (${getErrnoCode(error_2) ?? error_2}) after the target was truncated. The new content was preserved at ${g}.`,
+            `Write to ${targetPath} failed (${getErrnoCode(error_2) ?? error_2}) after the target was truncated. The new content was preserved at ${stagingPath}.`,
             "writeFileAndFlush: in-place fallback write failed; content preserved at temp path",
           );
         rethrowWithAtomicWriteCause(error_2, error);
       }
     }
     try {
-      await fsImplementation.unlink(g);
+      await fsImplementation.unlink(stagingPath);
     } catch (error) {
       logForDebugging(`Failed to clean up temp file: ${error}`);
     }
@@ -692,7 +717,10 @@ async function writeFileAtomic(
   }
 }
 //@ chunk-847rdpmn.js:15406-15470 layout
-var WINDOWS_NON_USER_PROFILES = new Set(["Public", "Default", "Default User", "All Users"]);
+var WINDOWS_NON_USER_PROFILES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-847rdpmn.js:15406", () => {
+  WINDOWS_NON_USER_PROFILES = new Set(["Public", "Default", "Default User", "All Users"]);
+});
 //@ chunk-847rdpmn.js:15470-16009 fingerprint = getDesktopPath (0.627)
 /**
  * 取桌面目录（macOS ~/Desktop；Windows/WSL 按 USERPROFILE 推断；Linux 等回退）。
@@ -729,9 +757,9 @@ async function getDesktopPath() {
 /**
  * 判断文件大小是否不超过上限（stat 失败视为否）。
  */
-async function isFileWithinSizeBound(e, n = BOUNDED_READ_MAX) {
+async function isFileWithinSizeBound(filePath, maxBytes = BOUNDED_READ_MAX) {
   try {
-    return (await getFsImplementation().stat(e)).size <= n;
+    return (await getFsImplementation().stat(filePath)).size <= maxBytes;
   } catch {
     return false;
   }
@@ -740,45 +768,36 @@ async function isFileWithinSizeBound(e, n = BOUNDED_READ_MAX) {
 /**
  * 规范化路径用于比较（Windows 大小写与分隔符）。
  */
-function normalizePathForCompare(e) {
-  let n = getPlatform() === "windows";
-  let r = normalize(e);
-  let s = n ? /[\\/]+$/ : /\/+$/;
-  let u = r.length > parse(r).root.length ? r.replace(s, "") : r;
-  return n ? u.replaceAll("/", "\\").toLowerCase() : u;
+function normalizePathForCompare(path) {
+  let isWindows = getPlatform() === "windows";
+  let normalized = normalize(path);
+  let trailingSepRe = isWindows ? /[\\/]+$/ : /\/+$/;
+  let trimmed =
+    normalized.length > parse(normalized).root.length ? normalized.replace(trailingSepRe, "") : normalized;
+  return isWindows ? trimmed.replaceAll("/", "\\").toLowerCase() : trimmed;
 }
 //@ chunk-847rdpmn.js:16253-16291 placement
 /**
  * 两个路径是否相同。
  */
-function samePath(e, n) {
-  return normalizePathForCompare(e) === normalizePathForCompare(n);
-}
-//@ chunk-7r5y3c3p.js:2166-2264 fingerprint = detectLineEndings (0.78)
-/**
- * 读文件开头若干字节检测编码（utf8/utf16le 等）。
- */
-function detectLineEndings(n) {
-  let { buffer, bytesRead } = getFsImplementation().readSync(n, {
-    length: BOM_SNIFF_BYTES,
-  });
-  return detectEncodingFromBom(buffer.subarray(0, bytesRead));
+function samePath(leftPath, rightPath) {
+  return normalizePathForCompare(leftPath) === normalizePathForCompare(rightPath);
 }
 //@ chunk-awy329vy.js:43887-44083 fingerprint = readFileSyncCached (0.529)
 /**
  * 以只读打开文件，是普通文件且不超过 e 字节时返回内容，否则 undefined。
  */
-async function readFileSyncCached(n, e) {
-  let r;
+async function readFileSyncCached(filePath, options) {
+  let cached;
   try {
-    r = await open(n, constants.O_RDONLY | platformNoFollowFlags());
-    let stats = await r.stat();
-    if (!stats.isFile() || stats.size > e) return;
-    return await r.readFile();
+    cached = await open(filePath, constants.O_RDONLY | platformNoFollowFlags());
+    let stats = await cached.stat();
+    if (!stats.isFile() || stats.size > options) return;
+    return await cached.readFile();
   } catch {
     return;
   } finally {
-    await r?.close().catch(() => {});
+    await cached?.close().catch(() => {});
   }
 }
 export {

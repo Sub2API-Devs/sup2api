@@ -141,7 +141,14 @@ function renderToolUseErrorMessage(
 /**
  * 非图片时，stdout 或 stderr 超出终端行数则返回 true。
  */
-function isResultTruncated(o, { columns }) {
-  if (o.isImage) return false;
-  return exceedsLineLimit(o.stdout, columns) || exceedsLineLimit(o.stderr, columns);
+function isResultTruncated(result, { columns }) {
+  if (result.isImage) return false;
+  return exceedsLineLimit(result.stdout, columns) || exceedsLineLimit(result.stderr, columns);
 }
+export {
+  isResultTruncated,
+  renderToolResultMessage,
+  renderToolUseErrorMessage,
+  renderToolUseMessage,
+  renderToolUseQueuedMessage,
+};

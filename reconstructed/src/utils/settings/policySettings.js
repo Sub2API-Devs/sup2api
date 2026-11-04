@@ -26,7 +26,7 @@ import {
   isPolicyContentKey,
 } from "./managedFileSettings.js";
 import { restrictiveTopLevelSettings, isDeepEmptyObject } from "./types.js";
-import { Uo } from "../../../vendor/@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
+import { omitAlias } from "../../../vendor/@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
 import {
   adminTierComposesParent,
   shouldIncludeParentTier,
@@ -37,7 +37,11 @@ import {
   missingAwsPairs,
   getSettingsForSource_3,
 } from "./settingsSources.js";
-import { wS, En, xr } from "../../../vendor/lodash-es/_inlinedHelpers.js";
+import {
+  pickAlias,
+  import_sortedIndex_2,
+  import_mapValues,
+} from "../../../vendor/lodash-es/_inlinedHelpers.js";
 import { shouldAllowManagedMcpServersOnly } from "../../services/mcp/config.js";
 import {
   getAtPath,
@@ -49,10 +53,11 @@ import {
 import { uniq } from "../collections.js";
 import { getAllowedMcpServersFromTiers, unmanagedPolicyKeys } from "../../services/mcp/managedMcpPolicy.js";
 import { getPlatform } from "../platform.js";
-import { mergeWithAssigner_2 } from "./settingsSourceTrust.js";
+import { mergeWithAssigner_2 } from "../../../vendor/lodash-es/_mergeWithFamily.js";
 import { explainUnloadableGuardHooks } from "./validation.js";
 import { isPlainObject as isPlainObject_2 } from "../isPlainObject.js";
 import { refusedCopyForcesRefresh } from "../../services/remoteManagedSettings/remoteSettingsState.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-dcmhvw5a.js:485330-485500 placement
 function getHostPolicyLoginPins(settingsContext) {
@@ -65,47 +70,48 @@ function getHostPolicyLoginPins(settingsContext) {
 }
 //@ chunk-dcmhvw5a.js:485500-485824 placement
 function getPolicySettingsOrigin(settingsContext) {
-  let n = armedHelperOutput(settingsContext);
-  if (n.composes === "tier") return "helper";
+  let helper = armedHelperOutput(settingsContext);
+  if (helper.composes === "tier") return "helper";
   let policySettings = resolvePolicySettings(settingsContext);
-  if (n.composes === "remoteSlot" || policySettings.present.remote) return "remote";
+  if (helper.composes === "remoteSlot" || policySettings.present.remote) return "remote";
   if (policySettings.present.mdm) return getPolicySettingsOrigin_2();
   if (policySettings.present.file) return "file";
   if (policySettings.parentSlice || policySettings.hostModelOverlay) return "parent";
-  let s = settingsContext.hkcu?.();
-  return s && Object.keys(s.settings).length > 0 ? "hkcu" : null;
+  let hkcu = settingsContext.hkcu?.();
+  return hkcu && Object.keys(hkcu.settings).length > 0 ? "hkcu" : null;
 }
 //@ chunk-dcmhvw5a.js:485824-486235 placement
-function getShadowedManagedSources(settingsContext) {
-  let n = armedHelperOutput(settingsContext);
-  let mergedOver = n.composes === "none" ? null : n.mergedOver;
-  let policySettings = resolvePolicySettings(settingsContext);
-  let a = [];
-  if (n.composes === "tier") a.push("helper");
-  if (n.composes === "remoteSlot" || policySettings.present.remote) a.push("remote");
-  if (policySettings.present.mdm) a.push(getPolicySettingsOrigin_2());
-  if (policySettings.present.file) a.push("file");
-  let c = getMergedPolicySources(settingsContext) ?? [];
-  let [g, ...m] = a;
-  let filtered = m.filter((y) => y !== mergedOver && !c.includes(y));
-  let h = settingsContext.hkcu?.();
-  if (h && Object.keys(h.settings).length > 0 && (g || policySettings.parentSlice)) filtered.push("hkcu");
+function getShadowedManagedSources(context) {
+  let helper = armedHelperOutput(context);
+  let mergedOver = helper.composes === "none" ? null : helper.mergedOver;
+  let policySettings = resolvePolicySettings(context);
+  let sources = [];
+  if (helper.composes === "tier") sources.push("helper");
+  if (helper.composes === "remoteSlot" || policySettings.present.remote) sources.push("remote");
+  if (policySettings.present.mdm) sources.push(getPolicySettingsOrigin_2());
+  if (policySettings.present.file) sources.push("file");
+  let mergedSources = getMergedPolicySources(context) ?? [];
+  let [first, ...rest] = sources;
+  let filtered = rest.filter((source) => source !== mergedOver && !mergedSources.includes(source));
+  let hkcu = context.hkcu?.();
+  if (hkcu && Object.keys(hkcu.settings).length > 0 && (first || policySettings.parentSlice))
+    filtered.push("hkcu");
   return filtered;
 }
 //@ chunk-dcmhvw5a.js:486235-486587 placement
 function getManagedSourcesInEffect(settingsContext) {
   let policySettings = resolvePolicySettings(settingsContext);
-  let r = [];
-  if (policySettings.present.remote) r.push("remote");
-  if (policySettings.present.mdm) r.push(getPolicySettingsOrigin_2());
-  if (policySettings.present.file) r.push("file");
-  if (policySettings.parentSlice || policySettings.hostModelOverlay) r.push("parent");
+  let sources = [];
+  if (policySettings.present.remote) sources.push("remote");
+  if (policySettings.present.mdm) sources.push(getPolicySettingsOrigin_2());
+  if (policySettings.present.file) sources.push("file");
+  if (policySettings.parentSlice || policySettings.hostModelOverlay) sources.push("parent");
   if (!policySettings.admin && !policySettings.parentSlice) {
-    let s = settingsContext.hkcu?.();
-    if (s && Object.keys(s.settings).length > 0) r.push("hkcu");
+    let hkcu = settingsContext.hkcu?.();
+    if (hkcu && Object.keys(hkcu.settings).length > 0) sources.push("hkcu");
   }
   return {
-    sources: r,
+    sources,
     behavior: policySettings.mode === "merge" ? "merge" : "first-wins",
   };
 }
@@ -116,156 +122,165 @@ function isPolicySlotAdminOrParentComposed(settingsContext) {
   return admin !== null || parentSlice !== null;
 }
 //@ chunk-dcmhvw5a.js:486698-491649 placement
-function resolvePolicySettings(e) {
-  let n = [];
-  let remoteManagedSettings = parseRemoteManagedSettings(e);
+function resolvePolicySettings(context) {
+  let errors = [];
+  let remoteManagedSettings = parseRemoteManagedSettings(context);
   let { settings, servedSnapshot } = remoteManagedSettings;
-  n.push(...remoteManagedSettings.errors);
-  let c = armedHelperOutput(e);
-  let g = c.composes === "remoteSlot" ? c.helper : policyContentOrNull(settings);
-  let mdmSettings = readMdmSettings(e);
+  errors.push(...remoteManagedSettings.errors);
+  let helper = armedHelperOutput(context);
+  let remoteContent = helper.composes === "remoteSlot" ? helper.helper : policyContentOrNull(settings);
+  let mdmSettings = readMdmSettings(context);
   let settings_2 = mdmSettings.settings;
-  n.push(...mdmSettings.errors);
-  let h = policyContentOrNull(settings_2);
-  let y = e.file?.() ?? loadManagedFileSettings(e);
-  let settings_3 = y.settings;
-  n.push(...y.errors);
-  let S = policyContentOrNull(settings_3);
-  let C = authoredPolicyContent(mdmSettings);
-  let w = authoredPolicyContent(y);
-  let L = w && y.heldOnly === true;
-  let v = e.policyOnlyServerTier?.() === "unconfirmed" && ((C && e.mdm?.().userWritable !== true) || w);
-  let j = v && g ? restrictiveParentSlice(g) : g;
-  let x = !v && (c.composes === "remoteSlot" ? j !== null : authoredPolicyContent(remoteManagedSettings));
-  let K = policyRank(j, x);
-  let q = policyRank(h, C);
-  let ee = y.onlyHeldContent ? POLICY_RANK_NONE : policyRank(S, w);
-  let Z = !v && j !== null && K >= Math.max(q, ee);
-  let ae = h !== null && q >= ee;
-  let me = [
-    [v ? null : settings, Z],
-    [settings_2, ae],
-    [settings_3, S !== null],
+  errors.push(...mdmSettings.errors);
+  let mdmContent = policyContentOrNull(settings_2);
+  let fileTier = context.file?.() ?? loadManagedFileSettings(context);
+  let settings_3 = fileTier.settings;
+  errors.push(...fileTier.errors);
+  let fileContent = policyContentOrNull(settings_3);
+  let mdmAuthored = authoredPolicyContent(mdmSettings);
+  let fileAuthoredContent = authoredPolicyContent(fileTier);
+  let fileAuthored = fileAuthoredContent && fileTier.heldOnly === true;
+  let unconfirmedTier =
+    context.policyOnlyServerTier?.() === "unconfirmed" &&
+    ((mdmAuthored && context.mdm?.().userWritable !== true) || fileAuthoredContent);
+  let siteEight = unconfirmedTier && remoteContent ? restrictiveParentSlice(remoteContent) : remoteContent;
+  let remoteCounts =
+    !unconfirmedTier &&
+    (helper.composes === "remoteSlot" ? siteEight !== null : authoredPolicyContent(remoteManagedSettings));
+  let remoteRank = policyRank(siteEight, remoteCounts);
+  let mdmRank = policyRank(mdmContent, mdmAuthored);
+  let fileRank = fileTier.onlyHeldContent ? POLICY_RANK_NONE : policyRank(fileContent, fileAuthoredContent);
+  let remoteWins = !unconfirmedTier && siteEight !== null && remoteRank >= Math.max(mdmRank, fileRank);
+  let mdmWins = mdmContent !== null && mdmRank >= fileRank;
+  let candidates = [
+    [unconfirmedTier ? null : settings, remoteWins],
+    [settings_2, mdmWins],
+    [settings_3, fileContent !== null],
   ];
   let managedSourcesBehavior = (
-    c.composes === "remoteSlot"
-      ? c.helper
-      : me.find(
-          ([ce, we]) =>
-            ce !== null &&
-            (ce === settings && servedSnapshot ? we : ce.managedSourcesBehavior !== undefined || we),
+    helper.composes === "remoteSlot"
+      ? helper.helper
+      : candidates.find(
+          ([tier, counts]) =>
+            tier !== null &&
+            (tier === settings && servedSnapshot
+              ? counts
+              : tier.managedSourcesBehavior !== undefined || counts),
         )?.[0]
   )?.managedSourcesBehavior;
-  let P = v ? j : null;
-  let R = j !== null && !Z;
-  let N = R ? null : j;
-  let G = h !== null && !ae && N === null;
-  let Q = G ? null : h;
-  let se = [];
-  let ne = [
-    [R, "remote", j],
-    [G, getPolicySettingsOrigin_2(), h],
+  let remoteOnly = unconfirmedTier ? siteEight : null;
+  let remoteHeld = siteEight !== null && !remoteWins;
+  let kept = remoteHeld ? null : siteEight;
+  let mdmHeld = mdmContent !== null && !mdmWins && kept === null;
+  let mdmKept = mdmHeld ? null : mdmContent;
+  let notices = [];
+  let pairs = [
+    [remoteHeld, "remote", siteEight],
+    [mdmHeld, getPolicySettingsOrigin_2(), mdmContent],
   ];
-  for (let [ce, we, ve] of ne) {
-    if (!ce || ve === null) continue;
-    se.push([ve, we]);
-    if (!hasEffectivePolicyContent(ve) || ve === P) continue;
-    let ut = we === "remote" && C ? getPolicySettingsOrigin_2() : "file";
-    n.push({
-      file: MANAGED_SOURCE_NOTICE_LABELS[we],
-      path: Object.keys(ve).find((key) => !restrictiveTopLevelSettings.includes(key)) ?? "",
-      message: `${MANAGED_SOURCE_NOTICE_LABELS[we]} holds only values that could not be applied as written, so ${MANAGED_SOURCE_NOTICE_LABELS[ut]} supplies the managed settings while that fail-closed reading still binds beside it (the most restrictive value of each such key applies), until it is fixed.`,
+  for (let [flagged, label, tier] of pairs) {
+    if (!flagged || tier === null) continue;
+    notices.push([tier, label]);
+    if (!hasEffectivePolicyContent(tier) || tier === remoteOnly) continue;
+    let fallbackLabel = label === "remote" && mdmAuthored ? getPolicySettingsOrigin_2() : "file";
+    errors.push({
+      file: MANAGED_SOURCE_NOTICE_LABELS[label],
+      path: Object.keys(tier).find((key) => !restrictiveTopLevelSettings.includes(key)) ?? "",
+      message: `${MANAGED_SOURCE_NOTICE_LABELS[label]} holds only values that could not be applied as written, so ${MANAGED_SOURCE_NOTICE_LABELS[fallbackLabel]} supplies the managed settings while that fail-closed reading still binds beside it (the most restrictive value of each such key applies), until it is fixed.`,
       severity: "warning",
       statusOnly: true,
     });
   }
-  let { settings: settings_4, errors } = parseParentManagedSettings(e);
-  n.push(...errors);
-  let parentTierWithOrganization = parseParentTierWithOrganization(e);
-  n.push(...(parentTierWithOrganization?.errors ?? []));
+  let { settings: settings_4, errors: errors_2 } = parseParentManagedSettings(context);
+  errors.push(...errors_2);
+  let parentTierWithOrganization = parseParentTierWithOrganization(context);
+  errors.push(...(parentTierWithOrganization?.errors ?? []));
   let settings_5 = parentTierWithOrganization?.settings ?? settings_4;
-  let Ae = N !== null && servedSnapshot && c.composes !== "remoteSlot";
-  let Ye = !(N !== null && x && !Ae) && !(Q !== null && C);
-  let Je = Ye && (!w || L);
-  let Pe = Je && L;
-  let fe =
-    Pe && settings_5 && S
-      ? Uo(
-          S,
-          MERGEABLE_POLICY_KEYS.filter((ce) => settings_5[ce] !== undefined),
+  let snapshotFirst = kept !== null && servedSnapshot && helper.composes !== "remoteSlot";
+  let parentNeverShutOut =
+    !(kept !== null && remoteCounts && !snapshotFirst) && !(mdmKept !== null && mdmAuthored);
+  let parentIncluded = parentNeverShutOut && (!fileAuthoredContent || fileAuthored);
+  let keepsParent = parentIncluded && fileAuthored;
+  let fileTrimmed =
+    keepsParent && settings_5 && fileContent
+      ? omitAlias(
+          fileContent,
+          MERGEABLE_POLICY_KEYS.filter((key) => settings_5[key] !== undefined),
         )
-      : S;
-  let qe = (C ? Q : null) ?? (w ? S : null);
-  let Zg = settings_5 !== null && (qe === null || adminTierComposesParent(qe) || Pe);
+      : fileContent;
+  let restrictiveSource = (mdmAuthored ? mdmKept : null) ?? (fileAuthoredContent ? fileContent : null);
+  let parentComposes =
+    settings_5 !== null &&
+    (restrictiveSource === null || adminTierComposesParent(restrictiveSource) || keepsParent);
   let filtered = [
-    keepMergeablePolicyKeys(N, servedSnapshot && c.composes !== "remoteSlot", [
-      Q,
-      fe && Uo(fe, y.heldAllowLists ?? []),
-      ...(Zg ? [wS(settings_5, MERGEABLE_POLICY_KEYS)] : []),
+    keepMergeablePolicyKeys(kept, servedSnapshot && helper.composes !== "remoteSlot", [
+      mdmKept,
+      fileTrimmed && omitAlias(fileTrimmed, fileTier.heldAllowLists ?? []),
+      ...(parentComposes ? [pickAlias(settings_5, MERGEABLE_POLICY_KEYS)] : []),
     ]),
-    Q,
-    fe,
-    ...se.map(([ce]) => ce),
-  ].filter((ce) => ce !== null);
+    mdmKept,
+    fileTrimmed,
+    ...notices.map(([tier]) => tier),
+  ].filter((tier) => tier !== null);
   let tierSources = [
-    ...(N !== null ? ["remote"] : []),
-    ...(Q !== null ? [getPolicySettingsOrigin_2()] : []),
-    ...(S !== null ? ["file"] : []),
-    ...se.map(([, ce]) => ce),
+    ...(kept !== null ? ["remote"] : []),
+    ...(mdmKept !== null ? [getPolicySettingsOrigin_2()] : []),
+    ...(fileContent !== null ? ["file"] : []),
+    ...notices.map(([, source]) => source),
   ];
-  let Qs = (ce) => filtered.some((we) => we !== fe && we[ce] !== undefined);
-  let Ko =
-    fe !== null &&
-    y.onlyHeldContent === true &&
-    Ye &&
+  let otherTierHasKey = (key) => filtered.some((tier) => tier !== fileTrimmed && tier[key] !== undefined);
+  let heldFileExtra =
+    fileTrimmed !== null &&
+    fileTier.onlyHeldContent === true &&
+    parentNeverShutOut &&
     managedSourcesBehavior !== "merge" &&
-    filtered[0] !== fe;
-  let Fo = N !== null && e.policyOnlyServerTier?.() !== undefined;
+    filtered[0] !== fileTrimmed;
+  let policyOnlyTier = kept !== null && context.policyOnlyServerTier?.() !== undefined;
   let { admin, merged } = mergeAdminPolicies(
-    Ko ? filtered.filter((ce) => ce !== fe) : filtered,
+    heldFileExtra ? filtered.filter((tier) => tier !== fileTrimmed) : filtered,
     managedSourcesBehavior,
-    Ae,
-    Ko ? filtered.length - 2 : se.length,
-    Fo,
+    snapshotFirst,
+    heldFileExtra ? filtered.length - 2 : notices.length,
+    policyOnlyTier,
   );
-  let ei = (ce) =>
+  let mcpsOnly = (slot) =>
     shouldAllowManagedMcpServersOnly({
-      slot: ce,
+      slot,
       adminTiers: filtered,
     }) ||
-    (settings_5?.allowManagedMcpServersOnly === true && ce?.allowManagedMcpServersOnly !== false);
-  let ni = (ce, we) =>
+    (settings_5?.allowManagedMcpServersOnly === true && slot?.allowManagedMcpServersOnly !== false);
+  let keyAllowed = (key, tier) =>
     merged
-      ? Qs(ce)
-      : (filtered[0] !== fe && filtered[0]?.[ce] !== undefined) ||
-        (ce === "allowedMcpServers" && Qs(ce) && ei(we));
-  let Tt =
-    admin && fe && Ko
+      ? otherTierHasKey(key)
+      : (filtered[0] !== fileTrimmed && filtered[0]?.[key] !== undefined) ||
+        (key === "allowedMcpServers" && otherTierHasKey(key) && mcpsOnly(tier));
+  let adminMerged =
+    admin && fileTrimmed && heldFileExtra
       ? mergeAdminPolicies(
           [
             admin,
-            Uo(
-              fe,
-              MERGEABLE_POLICY_KEYS_2.filter((ce) => ni(ce, admin)),
+            omitAlias(
+              fileTrimmed,
+              MERGEABLE_POLICY_KEYS_2.filter((key) => keyAllowed(key, admin)),
             ),
           ],
           "merge",
           false,
           0,
         ).admin
-      : admin && P && !merged
-        ? mergeAdminPolicies([admin, P], "merge", false, 0).admin
+      : admin && remoteOnly && !merged
+        ? mergeAdminPolicies([admin, remoteOnly], "merge", false, 0).admin
         : admin;
-  if (Fo && Tt !== null) {
-    let { kept } = machineBeneathPolicyOnly(e);
-    for (let we of KEPT_FROM_MACHINE_UNDER_POLICY_ONLY_TIER) {
-      let atPath = getAtPath(kept, we);
-      let atPath_2 = getAtPath(Tt, we);
+  if (policyOnlyTier && adminMerged !== null) {
+    let { kept } = machineBeneathPolicyOnly(context);
+    for (let path of KEPT_FROM_MACHINE_UNDER_POLICY_ONLY_TIER) {
+      let atPath = getAtPath(kept, path);
+      let atPath_2 = getAtPath(adminMerged, path);
       if (atPath !== undefined)
         setAtPath(
-          Tt,
-          we,
-          ADDED_TO_A_POLICY_ONLY_TIER.includes(we.join(".")) &&
+          adminMerged,
+          path,
+          ADDED_TO_A_POLICY_ONLY_TIER.includes(path.join(".")) &&
             Array.isArray(atPath) &&
             Array.isArray(atPath_2)
             ? uniq([...atPath_2, ...atPath])
@@ -273,87 +288,89 @@ function resolvePolicySettings(e) {
         );
     }
   }
-  let qt = Tt === null ? [remoteManagedSettings, mdmSettings, y].find(isPolicyTier) : undefined;
-  let nt = Tt ?? (qt ? {} : null);
-  let jo = {
-    remote: N !== null || qt === remoteManagedSettings,
-    mdm: Q !== null || qt === mdmSettings,
-    file: S !== null || qt === y,
+  let heldTier =
+    adminMerged === null ? [remoteManagedSettings, mdmSettings, fileTier].find(isPolicyTier) : undefined;
+  let adminTier = adminMerged ?? (heldTier ? {} : null);
+  let present = {
+    remote: kept !== null || heldTier === remoteManagedSettings,
+    mdm: mdmKept !== null || heldTier === mdmSettings,
+    file: fileContent !== null || heldTier === fileTier,
   };
-  let ri = [];
+  let shadowed = [];
   if (merged) {
-    let ce = jo.remote ? "remote" : jo.mdm ? getPolicySettingsOrigin_2() : "file";
-    let we = [
-      [Q, getPolicySettingsOrigin_2()],
-      [fe, "file"],
+    let winnerLabel = present.remote ? "remote" : present.mdm ? getPolicySettingsOrigin_2() : "file";
+    let pairs = [
+      [mdmKept, getPolicySettingsOrigin_2()],
+      [fileTrimmed, "file"],
     ];
-    for (let [ve, ut] of we) {
-      if (ve === null || ve === filtered[0] || (Ae && ve === filtered[1])) continue;
-      let filtered_2 = POLICY_HELPER_CONFIG_KEYS.filter((Jo) =>
-        Object.values(ve[Jo] ?? {}).some((ai) => ai !== undefined && ai !== null),
+    for (let [tier, label] of pairs) {
+      if (tier === null || tier === filtered[0] || (snapshotFirst && tier === filtered[1])) continue;
+      let filtered_2 = POLICY_HELPER_CONFIG_KEYS.filter((key) =>
+        Object.values(tier[key] ?? {}).some((value) => value !== undefined && value !== null),
       );
-      let [ii] = filtered_2;
-      if (ii === undefined) continue;
-      ri.push(ut);
-      n.push({
-        file: MANAGED_SOURCE_NOTICE_LABELS[ut],
-        path: ii,
-        message: `${filtered_2.map((Jo) => `"${Jo}"`).join(" and ")} in ${MANAGED_SOURCE_NOTICE_LABELS[ut]} ignored: policy helper configuration is read from the highest managed settings source only (${MANAGED_SOURCE_NOTICE_LABELS[ce]} here), even with managedSourcesBehavior "merge". Configure the helper in that source instead.`,
+      let [first] = filtered_2;
+      if (first === undefined) continue;
+      shadowed.push(label);
+      errors.push({
+        file: MANAGED_SOURCE_NOTICE_LABELS[label],
+        path: first,
+        message: `${filtered_2.map((key) => `"${key}"`).join(" and ")} in ${MANAGED_SOURCE_NOTICE_LABELS[label]} ignored: policy helper configuration is read from the highest managed settings source only (${MANAGED_SOURCE_NOTICE_LABELS[winnerLabel]} here), even with managedSourcesBehavior "merge". Configure the helper in that source instead.`,
         severity: "warning",
         statusOnly: true,
       });
     }
   }
-  let Bo = (ce) =>
-    ce !== null && (ce === filtered[0] || Object.keys(Uo(ce, winnerOnlyUnderMerge())).length > 0);
+  let composes = (tier) =>
+    tier !== null &&
+    (tier === filtered[0] || Object.keys(omitAlias(tier, winnerOnlyUnderMerge())).length > 0);
   let composed = {
-    remote: Bo(N),
-    mdm: Bo(Q),
-    file: Bo(fe),
+    remote: composes(kept),
+    mdm: composes(mdmKept),
+    file: composes(fileTrimmed),
   };
-  let Zt = {
+  let composedFlags = {
     allowManagedPermissionRulesOnly:
-      filtered.some((ce) => ce.allowManagedPermissionRulesOnly === true) || undefined,
-    forceLoginOrgUUID: nt?.forceLoginOrgUUID,
-    ...wS(nt ?? {}, MERGEABLE_POLICY_KEYS),
-    hooks: nt?.hooks,
-    enabledPlugins: nt?.enabledPlugins,
-    allowedMcpServers: ei(nt)
+      filtered.some((tier) => tier.allowManagedPermissionRulesOnly === true) || undefined,
+    forceLoginOrgUUID: adminTier?.forceLoginOrgUUID,
+    ...pickAlias(adminTier ?? {}, MERGEABLE_POLICY_KEYS),
+    hooks: adminTier?.hooks,
+    enabledPlugins: adminTier?.enabledPlugins,
+    allowedMcpServers: mcpsOnly(adminTier)
       ? getAllowedMcpServersFromTiers({
-          slot: nt,
+          slot: adminTier,
           adminTiers: filtered,
         })
-      : nt?.allowedMcpServers,
+      : adminTier?.allowedMcpServers,
     sandbox: {
       network: {
         allowManagedDomainsOnly:
-          filtered.some((ce) => ce.sandbox?.network?.allowManagedDomainsOnly === true) || undefined,
+          filtered.some((tier) => tier.sandbox?.network?.allowManagedDomainsOnly === true) || undefined,
       },
       filesystem: {
         allowManagedReadPathsOnly:
-          filtered.some((ce) => ce.sandbox?.filesystem?.allowManagedReadPathsOnly === true) || undefined,
+          filtered.some((tier) => tier.sandbox?.filesystem?.allowManagedReadPathsOnly === true) || undefined,
       },
     },
   };
-  let Vo = shouldIncludeParentTier(Tt, Je);
-  let Tn = Pe && settings_5 ? fillMissingPolicyKeys(settings_5, Zt) : settings_5;
-  let si =
-    Vo && settings_5 && !Pe
+  let includeParent = shouldIncludeParentTier(adminMerged, parentIncluded);
+  let filled = keepsParent && settings_5 ? fillMissingPolicyKeys(settings_5, composedFlags) : settings_5;
+  let heldInPlace =
+    includeParent && settings_5 && !keepsParent
       ? MERGEABLE_POLICY_KEYS.filter(
-          (ce) =>
-            settings_5[ce] !== undefined &&
-            y.heldAllowLists?.includes(ce) === true &&
-            En(Zt[ce], S?.[ce]) &&
-            !ni(ce, nt),
+          (key) =>
+            settings_5[key] !== undefined &&
+            fileTier.heldAllowLists?.includes(key) === true &&
+            import_sortedIndex_2(composedFlags[key], fileContent?.[key]) &&
+            !keyAllowed(key, adminTier),
         )
       : [];
-  let Yo =
-    (Tn || isDisableAllHooksSet(e.parentManaged)) && Vo
-      ? Pe
+  let parentRestrictive =
+    (filled || isDisableAllHooksSet(context.parentManaged)) && includeParent
+      ? keepsParent
         ? keepRestrictiveFromParent(
-            Tn ?? {},
+            filled ?? {},
             {
-              ...Zt,
+              ...composedFlags,
               allowManagedPermissionRulesOnly: true,
               sandbox: {
                 network: {
@@ -364,86 +381,95 @@ function resolvePolicySettings(e) {
                 },
               },
             },
-            e.parentManaged,
-            e.parentOrganizationSettings?.own,
+            context.parentManaged,
+            context.parentOrganizationSettings?.own,
           )
-        : keepRestrictiveFromParent(Tn ?? {}, Uo(Zt, si), e.parentManaged, e.parentOrganizationSettings?.own)
+        : keepRestrictiveFromParent(
+            filled ?? {},
+            omitAlias(composedFlags, heldInPlace),
+            context.parentManaged,
+            context.parentOrganizationSettings?.own,
+          )
       : null;
-  let parentSlice = Yo && Object.keys(Yo).length > 0 ? Yo : null;
+  let parentSlice = parentRestrictive && Object.keys(parentRestrictive).length > 0 ? parentRestrictive : null;
   let hostModelOverlay = hostManagedModelOverlay(
-    settings_5 === settings_4 ? Tn : Pe && settings_4 ? fillMissingPolicyKeys(settings_4, Zt) : settings_4,
-    e.hostManagedProvider,
+    settings_5 === settings_4
+      ? filled
+      : keepsParent && settings_4
+        ? fillMissingPolicyKeys(settings_4, composedFlags)
+        : settings_4,
+    context.hostManagedProvider,
   );
   return {
     tiers: filtered,
     tierSources,
-    admin: nt,
+    admin: adminTier,
     parentSlice,
     hostModelOverlay,
-    errors: n,
-    present: jo,
+    errors,
+    present,
     mode: managedSourcesBehavior,
     merged,
     composed,
-    snapshotFirst: Ae,
-    parentNeverShutOut: Je,
-    shadowedHelperSources: ri,
-    parentIncluded: Vo,
-    heldEmpty: qt !== undefined,
-    fileNotHeld: y.settingsNotHeld,
-    heldInTheHostsPlace: si,
-    policyOnlyLeads: Fo,
+    snapshotFirst,
+    parentNeverShutOut: parentIncluded,
+    shadowedHelperSources: shadowed,
+    parentIncluded: includeParent,
+    heldEmpty: heldTier !== undefined,
+    fileNotHeld: fileTier.settingsNotHeld,
+    heldInTheHostsPlace: heldInPlace,
+    policyOnlyLeads: policyOnlyTier,
   };
 }
 //@ chunk-dcmhvw5a.js:491649-492327 placement
 /**
  * 合并管理员策略层。
  */
-function mergeAdminPolicies(e, managedSourcesBehavior, r, s, a = false) {
-  let c = e[0];
-  if (!c)
+function mergeAdminPolicies(tiers, managedSourcesBehavior, override, count, force = false) {
+  let first = tiers[0];
+  if (!first)
     return {
       admin: null,
       merged: false,
     };
-  let { managedSourcesBehavior: managedSourcesBehavior_2, ...m } = c;
-  let f = managedSourcesBehavior === "merge" && e.length >= 2;
-  if (!f && s === 0 && !a)
+  let { managedSourcesBehavior: managedSourcesBehavior_2, ...stripped } = first;
+  let mergeAll = managedSourcesBehavior === "merge" && tiers.length >= 2;
+  if (!mergeAll && count === 0 && !force)
     return {
-      admin: managedSourcesBehavior_2 === undefined ? c : m,
+      admin: managedSourcesBehavior_2 === undefined ? first : stripped,
       merged: false,
     };
-  let mapped = e.slice(f || a ? 1 : e.length - s).map((b, S) => {
-    let C = f && r && S === 0;
-    let w = C
+  let mapped = tiers.slice(mergeAll || force ? 1 : tiers.length - count).map((tier, index) => {
+    let isFirstOverride = mergeAll && override && index === 0;
+    let copy = isFirstOverride
       ? {
-          ...b,
+          ...tier,
         }
-      : Uo(b, winnerOnlyUnderMerge());
-    if (!C) {
-      for (let v of WINNER_ONLY_NESTED_UNDER_MERGE)
-        if (getAtPath(w, v) !== undefined) setAtPath(w, v, undefined);
+      : omitAlias(tier, winnerOnlyUnderMerge());
+    if (!isFirstOverride) {
+      for (let path of WINNER_ONLY_NESTED_UNDER_MERGE)
+        if (getAtPath(copy, path) !== undefined) setAtPath(copy, path, undefined);
     }
-    let atPath = getAtPath(w.sandbox, ["enabledPlatforms"]);
+    let atPath = getAtPath(copy.sandbox, ["enabledPlatforms"]);
     if (Array.isArray(atPath) && atPath.includes(getPlatform()))
-      setAtPath(w, ["sandbox", "enabledPlatforms"], undefined);
-    else if (atPath !== undefined) delete w.sandbox;
-    return w;
+      setAtPath(copy, ["sandbox", "enabledPlatforms"], undefined);
+    else if (atPath !== undefined) delete copy.sandbox;
+    return copy;
   });
-  if (!f) {
-    mostRestrictivePolicy(m, [c, ...mapped]);
+  if (!mergeAll) {
+    mostRestrictivePolicy(stripped, [first, ...mapped]);
     return {
-      admin: m,
+      admin: stripped,
       merged: false,
     };
   }
-  let y = {};
-  for (let b of [...mapped].reverse()) mergeWithAssigner_2(y, b, mergePolicyValue);
-  mergeWithAssigner_2(y, m, r ? applyPolicyKeyChange : mergePolicyValue);
-  mostRestrictivePolicy(y, [c, ...mapped]);
-  pickModelOverrides(y, [c, ...mapped], r);
+  let merged = {};
+  for (let tier of [...mapped].reverse()) mergeWithAssigner_2(merged, tier, mergePolicyValue);
+  mergeWithAssigner_2(merged, stripped, override ? applyPolicyKeyChange : mergePolicyValue);
+  mostRestrictivePolicy(merged, [first, ...mapped]);
+  pickModelOverrides(merged, [first, ...mapped], override);
   return {
-    admin: y,
+    admin: merged,
     merged: true,
   };
 }
@@ -456,12 +482,12 @@ var MANAGED_SOURCE_NOTICE_LABELS = {
   file: "managed-settings.json",
 };
 //@ chunk-dcmhvw5a.js:492501-492566 placement
-function hasPolicyContent(e) {
-  return Object.keys(e).some((key) => !restrictiveTopLevelSettings.includes(key));
+function hasPolicyContent(doc) {
+  return Object.keys(doc).some((key) => !restrictiveTopLevelSettings.includes(key));
 }
 //@ chunk-dcmhvw5a.js:492566-492646 placement
-function hasEffectivePolicyContent(e) {
-  return Object.entries(e).some(
+function hasEffectivePolicyContent(doc) {
+  return Object.entries(doc).some(
     ([key, value]) => !restrictiveTopLevelSettings.includes(key) && !isDeepEmptyObject(value),
   );
 }
@@ -470,67 +496,64 @@ function policyContentOrNull(settings) {
   return settings && hasPolicyContent(settings) ? settings : null;
 }
 //@ chunk-dcmhvw5a.js:492685-492763 placement
-function authoredPolicyContent(e) {
-  return e.settings !== null && hasEffectivePolicyContent(e.settings) && !e.onlySubstitutes;
+function authoredPolicyContent(tier) {
+  return tier.settings !== null && hasEffectivePolicyContent(tier.settings) && !tier.onlySubstitutes;
 }
 //@ chunk-dcmhvw5a.js:492763-492848 placement
 /**
  * explainedPolicyChange：说明策略变化。
  */
-function explainedPolicyChange(e, settings, r) {
+function explainedPolicyChange(issues, settings, issueList) {
   return authoredPolicyContent({
     settings,
-  }) && !r.some((s) => s.onlySubstitutes)
-    ? explainUnloadableGuardHooks(e)
-    : e;
+  }) && !issueList.some((issue) => issue.onlySubstitutes)
+    ? explainUnloadableGuardHooks(issues)
+    : issues;
 }
 //@ chunk-dcmhvw5a.js:492848-492857 placement
 var POLICY_RANK_NONE = 0;
 //@ chunk-dcmhvw5a.js:492857-492928 placement
-function policyRank(e, n) {
-  if (e === null) return -1;
-  if (n) return 2;
-  return hasEffectivePolicyContent(e) ? 1 : POLICY_RANK_NONE;
+function policyRank(content, authored) {
+  if (content === null) return -1;
+  if (authored) return 2;
+  return hasEffectivePolicyContent(content) ? 1 : POLICY_RANK_NONE;
 }
 //@ chunk-dcmhvw5a.js:492928-493040 placement
-function documentHasPolicyContent(e, n) {
+function documentHasPolicyContent(doc, parsed) {
   return (
-    Object.entries(e).some(
+    Object.entries(doc).some(
       ([key, value]) =>
         value !== null && !isPolicyContentKey(key, value) && !restrictiveTopLevelSettings.includes(key),
     ) ||
-    (n !== null && hasPolicyContent(n))
+    (parsed !== null && hasPolicyContent(parsed))
   );
 }
 //@ chunk-dcmhvw5a.js:493040-493128 placement
-function isPolicyTier(settingsFile) {
-  return (
-    settingsFile.documentHasPolicyContent ??
-    (settingsFile.settings !== null && hasPolicyContent(settingsFile.settings))
-  );
+function isPolicyTier(layer) {
+  return layer.documentHasPolicyContent ?? (layer.settings !== null && hasPolicyContent(layer.settings));
 }
 //@ chunk-dcmhvw5a.js:493128-493202 placement
-function loadStateOf(e) {
-  return e.loadState ?? (e.settings !== null ? "loaded" : "absent");
+function loadStateOf(tier) {
+  return tier.loadState ?? (tier.settings !== null ? "loaded" : "absent");
 }
 //@ chunk-dcmhvw5a.js:493202-493329 placement
-function combinedLoadState(e, n) {
-  if (e === "didNotLoad" || n === "didNotLoad") return "didNotLoad";
-  return e === "loaded" || n === "loaded" ? "loaded" : "absent";
+function combinedLoadState(a, b) {
+  if (a === "didNotLoad" || b === "didNotLoad") return "didNotLoad";
+  return a === "loaded" || b === "loaded" ? "loaded" : "absent";
 }
 //@ chunk-dcmhvw5a.js:493329-493410 placement
-function adminDocumentPresent(e) {
-  return e.userWritable !== true && (isPolicyTier(e) || e.loadState === "didNotLoad");
+function adminDocumentPresent(tier) {
+  return tier.userWritable !== true && (isPolicyTier(tier) || tier.loadState === "didNotLoad");
 }
 //@ chunk-dcmhvw5a.js:493410-493633 placement
-function pickModelOverrides(e, n, r) {
-  let index = n.findIndex((c) => c.availableModels !== undefined);
-  let index_2 = n.findIndex((c) => c.modelOverrides !== undefined);
-  if (index_2 !== -1 && (index === -1 || index_2 <= index || (r && index === 0)))
-    e.modelOverrides = {
-      ...n[index_2].modelOverrides,
+function pickModelOverrides(target, tiers, winnerOverrides) {
+  let index = tiers.findIndex((tier) => tier.availableModels !== undefined);
+  let index_2 = tiers.findIndex((tier) => tier.modelOverrides !== undefined);
+  if (index_2 !== -1 && (index === -1 || index_2 <= index || (winnerOverrides && index === 0)))
+    target.modelOverrides = {
+      ...tiers[index_2].modelOverrides,
     };
-  else delete e.modelOverrides;
+  else delete target.modelOverrides;
 }
 //@ chunk-dcmhvw5a.js:493633-493775 placement
 var WHOLE_VALUE_POLICY_KEYS = [
@@ -542,12 +565,14 @@ var WHOLE_VALUE_POLICY_KEYS = [
 ];
 var SANDBOX_REPLACE_KEYS = ["awsPairs", "ripgrep"];
 //@ chunk-dcmhvw5a.js:493775-493964 placement
-function replacePolicyValue(e, n, r) {
-  if (n === undefined) return e;
-  if (Array.isArray(n))
-    return r === "awsPairs" && Array.isArray(e) ? [...n, ...missingAwsPairs(e, n)] : [...n];
-  if (!isPlainObject_2(n)) return n;
-  return xr(n, (s) => (Array.isArray(s) ? [...s] : s));
+function replacePolicyValue(previous, next, key) {
+  if (next === undefined) return previous;
+  if (Array.isArray(next))
+    return key === "awsPairs" && Array.isArray(previous)
+      ? [...next, ...missingAwsPairs(previous, next)]
+      : [...next];
+  if (!isPlainObject_2(next)) return next;
+  return import_mapValues(next, (value) => (Array.isArray(value) ? [...value] : value));
 }
 //@ chunk-dcmhvw5a.js:493964-494338 placement
 /**
@@ -574,30 +599,35 @@ var mergeablePolicyKeys = [
   ["enforceAvailableModels", "availableModels"],
 ];
 //@ chunk-dcmhvw5a.js:494338-494430 placement
-function fillMissingPolicyKeys(settings, n) {
-  return Uo(
+function fillMissingPolicyKeys(settings, other) {
+  return omitAlias(
     settings,
-    mergeablePolicyKeys.filter(([, r]) => settings[r] === undefined && n[r] === undefined).map(([r]) => r),
+    mergeablePolicyKeys
+      .filter(([, key]) => settings[key] === undefined && other[key] === undefined)
+      .map(([alias]) => alias),
   );
 }
 //@ chunk-dcmhvw5a.js:494430-494721 placement
-var RESTRICTIVE_PARENT_KEYS = [
-  ...mergeablePolicyKeys.map(([e]) => e),
-  "allowManagedPermissionRulesOnly",
-  "allowManagedHooksOnly",
-  "disableAllHooks",
-  "allowedHttpHookUrls",
-  "httpHookAllowedEnvVars",
-  "strictPluginOnlyCustomization",
-  "sandbox.network.allowManagedDomainsOnly",
-  "sandbox.filesystem.allowManagedReadPathsOnly",
-  "sandbox.enabled",
-];
+var RESTRICTIVE_PARENT_KEYS; // deferred: uses MERGEABLE_POLICY_KEYS_2 of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-dcmhvw5a.js:494430", () => {
+  RESTRICTIVE_PARENT_KEYS = [
+    ...mergeablePolicyKeys.map(([alias]) => alias),
+    "allowManagedPermissionRulesOnly",
+    "allowManagedHooksOnly",
+    "disableAllHooks",
+    "allowedHttpHookUrls",
+    "httpHookAllowedEnvVars",
+    "strictPluginOnlyCustomization",
+    "sandbox.network.allowManagedDomainsOnly",
+    "sandbox.filesystem.allowManagedReadPathsOnly",
+    "sandbox.enabled",
+  ];
+});
 //@ chunk-dcmhvw5a.js:494721-494951 placement
-function restrictiveParentSlice(e) {
+function restrictiveParentSlice(settings) {
   return policyContentOrNull(
-    keepRestrictiveFromParent(Uo(e, RESTRICTIVE_PARENT_KEYS), {
-      ...Object.fromEntries(MERGEABLE_POLICY_KEYS.map((n) => [n, []])),
+    keepRestrictiveFromParent(omitAlias(settings, RESTRICTIVE_PARENT_KEYS), {
+      ...Object.fromEntries(MERGEABLE_POLICY_KEYS.map((key) => [key, []])),
       forceLoginOrgUUID: [],
       allowManagedPermissionRulesOnly: true,
       sandbox: {
@@ -612,111 +642,115 @@ function restrictiveParentSlice(e) {
   );
 }
 //@ chunk-dcmhvw5a.js:494951-495076 placement
-function keepMergeablePolicyKeys(e, n, r) {
-  if (e === null || !n) return e;
-  let filtered = MERGEABLE_POLICY_KEYS_2.filter((a) => r.some((c) => c?.[a] !== undefined));
-  return filtered.length === 0 ? e : Uo(e, filtered);
+function keepMergeablePolicyKeys(settings, enabled, tiers) {
+  if (settings === null || !enabled) return settings;
+  let filtered = MERGEABLE_POLICY_KEYS_2.filter((key) => tiers.some((tier) => tier?.[key] !== undefined));
+  return filtered.length === 0 ? settings : omitAlias(settings, filtered);
 }
 //@ chunk-dcmhvw5a.js:495076-495177 placement
-function mergePolicyValue(e, n, r) {
-  if (r !== undefined && (WHOLE_VALUE_POLICY_KEYS.includes(r) || SANDBOX_REPLACE_KEYS.includes(r)))
-    return replacePolicyValue(e, n, r);
-  return unionPolicyArrays(e, n, r);
+function mergePolicyValue(previous, next, key) {
+  if (key !== undefined && (WHOLE_VALUE_POLICY_KEYS.includes(key) || SANDBOX_REPLACE_KEYS.includes(key)))
+    return replacePolicyValue(previous, next, key);
+  return unionPolicyArrays(previous, next, key);
 }
 //@ chunk-dcmhvw5a.js:495177-495260 placement
-function applyPolicyKeyChange(e, n, r) {
-  if (r !== undefined && WHOLE_VALUE_POLICY_KEYS.includes(r)) return replacePolicyValue(e, n, r);
-  return unionPolicyArrays(e, n, r);
+function applyPolicyKeyChange(previous, next, key) {
+  if (key !== undefined && WHOLE_VALUE_POLICY_KEYS.includes(key))
+    return replacePolicyValue(previous, next, key);
+  return unionPolicyArrays(previous, next, key);
 }
 //@ chunk-dcmhvw5a.js:495260-495377 placement
-function unionPolicyArrays(e, n, r) {
-  if (Array.isArray(e) && Array.isArray(n) && r !== "fallbackModel") return uniq([...n, ...e]);
-  return settingsMergeCustomizer(e, n, r);
+function unionPolicyArrays(previous, next, key) {
+  if (Array.isArray(previous) && Array.isArray(next) && key !== "fallbackModel")
+    return uniq([...next, ...previous]);
+  return settingsMergeCustomizer(previous, next, key);
 }
 //@ chunk-dcmhvw5a.js:495377-495911 placement
 /**
  * 多个策略中取最严格的值。
  */
-function mostRestrictivePolicy(e, n) {
-  let r = n[0];
-  let s = e;
-  for (let a of MANAGED_RESTRICTION_KEYS()) {
-    let { path, restrictive } = a;
-    let m = asArray(restrictive);
-    let min = Math.min(...n.map((h) => m.indexOf(restrictionValue(a, h))).filter((h) => h !== -1));
-    if (Number.isFinite(min)) setAtPath(s, path, m[min]);
-    else if (getAtPath(r, path) === undefined && getAtPath(e, path) !== undefined)
-      setAtPath(s, path, undefined);
+function mostRestrictivePolicy(target, tiers) {
+  let first = tiers[0];
+  let result = target;
+  for (let def of MANAGED_RESTRICTION_KEYS()) {
+    let { path, restrictive } = def;
+    let options = asArray(restrictive);
+    let min = Math.min(
+      ...tiers.map((tier) => options.indexOf(restrictionValue(def, tier))).filter((index) => index !== -1),
+    );
+    if (Number.isFinite(min)) setAtPath(result, path, options[min]);
+    else if (getAtPath(first, path) === undefined && getAtPath(target, path) !== undefined)
+      setAtPath(result, path, undefined);
   }
-  if (e.strictPluginOnlyCustomization !== true) {
-    let a = uniq(
-      n.flatMap((c) =>
-        Array.isArray(c.strictPluginOnlyCustomization) ? c.strictPluginOnlyCustomization : [],
+  if (target.strictPluginOnlyCustomization !== true) {
+    let values = uniq(
+      tiers.flatMap((tier) =>
+        Array.isArray(tier.strictPluginOnlyCustomization) ? tier.strictPluginOnlyCustomization : [],
       ),
     );
-    if (a.length > 0) e.strictPluginOnlyCustomization = a;
-    else if (r?.strictPluginOnlyCustomization === undefined) delete e.strictPluginOnlyCustomization;
+    if (values.length > 0) target.strictPluginOnlyCustomization = values;
+    else if (first?.strictPluginOnlyCustomization === undefined) delete target.strictPluginOnlyCustomization;
   }
 }
 //@ chunk-dcmhvw5a.js:495911-496051 placement
-function getMergedPolicySources(e) {
-  let mergedSources = e.store.policy.mergedSources;
+function getMergedPolicySources(context) {
+  let mergedSources = context.store.policy.mergedSources;
   if (mergedSources !== undefined) return mergedSources.value;
-  let r = mergedPolicySourceNames(e);
-  e.store.policy.mergedSources = {
-    value: r,
+  let names = mergedPolicySourceNames(context);
+  context.store.policy.mergedSources = {
+    value: names,
   };
-  return r;
+  return names;
 }
 //@ chunk-dcmhvw5a.js:496051-496248 placement
-function mergedPolicySourceNames(e) {
-  if (armedHelperOutput(e).composes === "tier") return null;
-  let { merged, composed } = resolvePolicySettings(e);
+function mergedPolicySourceNames(context) {
+  if (armedHelperOutput(context).composes === "tier") return null;
+  let { merged, composed } = resolvePolicySettings(context);
   if (!merged) return null;
-  let s = [];
-  if (composed.remote) s.push("remote");
-  if (composed.mdm) s.push(getPolicySettingsOrigin_2());
-  if (composed.file) s.push("file");
-  return s;
+  let names = [];
+  if (composed.remote) names.push("remote");
+  if (composed.mdm) names.push(getPolicySettingsOrigin_2());
+  if (composed.file) names.push("file");
+  return names;
 }
 //@ chunk-dcmhvw5a.js:496248-496719 placement
-function armedHelperOutput(e) {
-  let n = e.helper?.() ?? null;
-  if (!n)
+function armedHelperOutput(context) {
+  let helper = context.helper?.() ?? null;
+  if (!helper)
     return {
       composes: "none",
     };
-  let r = e.helperArmedFromRemote?.() === false ? "tier" : "remoteSlot";
-  if (e.helperMergesOutput?.() !== true)
+  let composition = context.helperArmedFromRemote?.() === false ? "tier" : "remoteSlot";
+  if (context.helperMergesOutput?.() !== true)
     return {
-      composes: r,
-      helper: n,
+      composes: composition,
+      helper,
       mergedOver: null,
     };
-  if (!e.store.policy.mergedHelper) {
+  if (!context.store.policy.mergedHelper) {
     let { base, mergedOver } =
-      r === "remoteSlot"
+      composition === "remoteSlot"
         ? {
-            base: parseRemoteManagedSettings(e).settings,
+            base: parseRemoteManagedSettings(context).settings,
             mergedOver: "remote",
           }
-        : helperBaseSettings(e);
-    e.store.policy.mergedHelper = {
-      helper: mergeHelperOutputOverBase(base, n),
+        : helperBaseSettings(context);
+    context.store.policy.mergedHelper = {
+      helper: mergeHelperOutputOverBase(base, helper),
       mergedOver: Object.keys(pickPolicyHelperConfigKeys(base)).length > 0 ? mergedOver : null,
     };
   }
   return {
-    composes: r,
-    ...e.store.policy.mergedHelper,
+    composes: composition,
+    ...context.store.policy.mergedHelper,
   };
 }
 //@ chunk-dcmhvw5a.js:496719-496942 placement
-function helperBaseSettings(e) {
-  let mdmSettings = readMdmSettings(e);
+function helperBaseSettings(context) {
+  let mdmSettings = readMdmSettings(context);
   if (
     resolvePolicySettings({
-      ...e,
+      ...context,
       helper: undefined,
     }).present.mdm
   )
@@ -725,27 +759,27 @@ function helperBaseSettings(e) {
       mergedOver: getPolicySettingsOrigin_2(),
       errors: mdmSettings.errors,
     };
-  let r = e.file?.() ?? loadManagedFileSettings(e);
+  let file = context.file?.() ?? loadManagedFileSettings(context);
   return {
-    base: r.settings,
+    base: file.settings,
     mergedOver: "file",
-    errors: [...mdmSettings.errors, ...r.errors],
+    errors: [...mdmSettings.errors, ...file.errors],
   };
 }
 //@ chunk-dcmhvw5a.js:496942-496978 placement
-function pickPolicyHelperConfigKeys(e) {
-  return Uo(e ?? {}, POLICY_HELPER_CONFIG_KEYS);
+function pickPolicyHelperConfigKeys(settings) {
+  return omitAlias(settings ?? {}, POLICY_HELPER_CONFIG_KEYS);
 }
 //@ chunk-dcmhvw5a.js:496978-497188 placement
 function overlayEnvByUpperName(env, env_2) {
-  let r = new Map();
+  let upperMap = new Map();
   for (let [key, value] of Object.entries(env_2)) {
     let upper = key.toUpperCase();
-    if (!r.has(upper)) r.set(upper, value);
+    if (!upperMap.has(upper)) upperMap.set(upper, value);
   }
-  let s = {};
-  for (let [key, value] of Object.entries(env)) s[key] = r.get(key.toUpperCase()) ?? value;
-  return Object.assign(s, env_2);
+  let out = {};
+  for (let [key, value] of Object.entries(env)) out[key] = upperMap.get(key.toUpperCase()) ?? value;
+  return Object.assign(out, env_2);
 }
 //@ chunk-dcmhvw5a.js:497188-497302 placement
 var HELPER_WHOLE_VALUE_KEYS = [
@@ -756,26 +790,28 @@ var HELPER_WHOLE_VALUE_KEYS = [
   "allowRead",
 ];
 //@ chunk-dcmhvw5a.js:497302-497418 placement
-function mergeHelperValue(e, n, r) {
-  let s =
-    r !== undefined && n !== undefined && HELPER_WHOLE_VALUE_KEYS.includes(r) ? n : mergePolicyValue(e, n, r);
-  return s === n && Array.isArray(s) ? [...s] : s;
+function mergeHelperValue(previous, next, key) {
+  let value =
+    key !== undefined && next !== undefined && HELPER_WHOLE_VALUE_KEYS.includes(key)
+      ? next
+      : mergePolicyValue(previous, next, key);
+  return value === next && Array.isArray(value) ? [...value] : value;
 }
 //@ chunk-dcmhvw5a.js:497418-497511 placement
-function mergeHelperOutputOverBase(base, n) {
-  let r = pickPolicyHelperConfigKeys(base);
-  let s = mergeWithAssigner_2({}, r, n, mergeHelperValue);
-  if (r.env && n.env) s.env = overlayEnvByUpperName(r.env, n.env);
-  return s;
+function mergeHelperOutputOverBase(settings, helper) {
+  let baseKeys = pickPolicyHelperConfigKeys(settings);
+  let merged = mergeWithAssigner_2({}, baseKeys, helper, mergeHelperValue);
+  if (baseKeys.env && helper.env) merged.env = overlayEnvByUpperName(baseKeys.env, helper.env);
+  return merged;
 }
 //@ chunk-dcmhvw5a.js:497511-497829 placement
 function getMachineAdminTierSettings(settingsContext) {
-  let n = armedHelperOutput(settingsContext);
-  if (n.composes === "tier") return [n.helper];
+  let output = armedHelperOutput(settingsContext);
+  if (output.composes === "tier") return [output.helper];
   let { tiers, tierSources, present, merged, snapshotFirst, policyOnlyLeads } =
     resolvePolicySettings(settingsContext);
-  let filtered = tiers.filter((tier, y) =>
-    tierSources[y] === "file" ? present.file : tierSources[y] !== "remote" && present.mdm,
+  let filtered = tiers.filter((tier, index) =>
+    tierSources[index] === "file" ? present.file : tierSources[index] !== "remote" && present.mdm,
   );
   if (merged) return filtered;
   if (policyOnlyLeads) {
@@ -786,16 +822,16 @@ function getMachineAdminTierSettings(settingsContext) {
   return filtered.slice(0, 1);
 }
 //@ chunk-dcmhvw5a.js:497829-498043 placement
-function getEveryMachineAdminTierSettings(settingsContext) {
-  let mdmUserWritable = settingsContext.mdm?.().userWritable === true;
-  let r = armedHelperOutput(settingsContext);
-  if (r.composes === "tier" && !helperMayBeUserControlled(settingsContext)) return [r.helper];
-  let { tiers, tierSources } = resolvePolicySettings(settingsContext);
-  let c = {
+function getEveryMachineAdminTierSettings(context) {
+  let mdmUserWritable = context.mdm?.().userWritable === true;
+  let output = armedHelperOutput(context);
+  if (output.composes === "tier" && !helperMayBeUserControlled(context)) return [output.helper];
+  let { tiers, tierSources } = resolvePolicySettings(context);
+  let vouched = {
     remoteVerified: false,
     mdmUserWritable,
   };
-  return tiers.filter((tier, m) => isVouchedOrigin(tierSources[m], c));
+  return tiers.filter((tier, index) => isVouchedOrigin(tierSources[index], vouched));
 }
 //@ chunk-dcmhvw5a.js:498043-498178 placement
 function getMachineAdminDocumentLoadErrors(settingsContext) {
@@ -807,69 +843,69 @@ function getMachineAdminDocumentLoadErrors(settingsContext) {
   ];
 }
 //@ chunk-dcmhvw5a.js:498178-498510 placement
-function isMachineAdminDocumentUnreadable(e) {
-  let n = e.mdm?.().userWritable === true;
+function isMachineAdminDocumentUnreadable(context) {
+  let userWritable = context.mdm?.().userWritable === true;
   if (
-    armedHelperOutput(e).composes === "tier" &&
-    e.helperArmedFromUserWritableBase?.() === false &&
-    e.helperMergesOutput?.() !== true
+    armedHelperOutput(context).composes === "tier" &&
+    context.helperArmedFromUserWritableBase?.() === false &&
+    context.helperMergesOutput?.() !== true
   )
     return false;
-  let mdmSettings = readMdmSettings(e);
+  let mdmSettings = readMdmSettings(context);
   if (
-    (!n && mdmSettings.loadState === "didNotLoad") ||
+    (!userWritable && mdmSettings.loadState === "didNotLoad") ||
     mdmSettings.errors.some((error) => error.errorClass === "unreadable" && error.userWritable !== true)
   )
     return true;
-  return loadStateOf(e.file?.() ?? loadManagedFileSettings(e)) === "didNotLoad";
+  return loadStateOf(context.file?.() ?? loadManagedFileSettings(context)) === "didNotLoad";
 }
 //@ chunk-dcmhvw5a.js:498510-498630 placement
-function policyTierSettings(e) {
-  let n = armedHelperOutput(e);
-  if (n.composes === "tier") return [n.helper];
-  let { tiers, parentSlice } = resolvePolicySettings(e);
+function policyTierSettings(context) {
+  let output = armedHelperOutput(context);
+  if (output.composes === "tier") return [output.helper];
+  let { tiers, parentSlice } = resolvePolicySettings(context);
   return parentSlice ? [...tiers, parentSlice] : tiers;
 }
 //@ chunk-dcmhvw5a.js:498630-498795 placement
 function getAdminPolicyTierSettings(settingsContext) {
   let adminTiers = settingsContext.store.policy.adminTiers;
   if (adminTiers !== undefined) return adminTiers;
-  let r = armedHelperOutput(settingsContext);
-  let s = r.composes === "tier" ? [r.helper] : resolvePolicySettings(settingsContext).tiers;
-  settingsContext.store.policy.adminTiers = s;
-  return s;
+  let output = armedHelperOutput(settingsContext);
+  let tiers = output.composes === "tier" ? [output.helper] : resolvePolicySettings(settingsContext).tiers;
+  settingsContext.store.policy.adminTiers = tiers;
+  return tiers;
 }
 //@ chunk-dcmhvw5a.js:498795-499268 placement
 function getVouchedPolicyTierSettings(settingsContext, remoteVerified) {
-  let r = settingsContext.mdm?.().userWritable === true;
-  let s = armedHelperOutput(settingsContext);
-  if (s.composes === "tier")
+  let mdmUserWritable = settingsContext.mdm?.().userWritable === true;
+  let output = armedHelperOutput(settingsContext);
+  if (output.composes === "tier")
     return settingsContext.helperArmedFromUserWritableBase?.() !== false ||
-      (settingsContext.helperMergesOutput?.() === true && r)
+      (settingsContext.helperMergesOutput?.() === true && mdmUserWritable)
       ? []
-      : [s.helper];
+      : [output.helper];
   let { tiers, tierSources, parentSlice, parentNeverShutOut, merged, snapshotFirst, fileNotHeld } =
     resolvePolicySettings(settingsContext);
-  let b = {
+  let vouched = {
     remoteVerified,
-    mdmUserWritable: r,
+    mdmUserWritable,
   };
-  let flattened = tiers.flatMap((tier, w) => {
-    let L = tierSources[w];
-    if (!isVouchedOrigin(L, b)) return [];
-    return L === "file" && fileNotHeld !== undefined ? [fileNotHeld] : [tier];
+  let flattened = tiers.flatMap((tier, index) => {
+    let source = tierSources[index];
+    if (!isVouchedOrigin(source, vouched)) return [];
+    return source === "file" && fileNotHeld !== undefined ? [fileNotHeld] : [tier];
   });
   if (
     parentSlice !== null &&
     !parentNeverShutOut &&
-    isVouchedOrigin(tierSources[merged && snapshotFirst ? 1 : 0], b)
+    isVouchedOrigin(tierSources[merged && snapshotFirst ? 1 : 0], vouched)
   )
     flattened.push(parentSlice);
   return flattened;
 }
 //@ chunk-dcmhvw5a.js:499268-499426 placement
-function isVouchedOrigin(e, { remoteVerified, mdmUserWritable }) {
-  switch (e) {
+function isVouchedOrigin(source, { remoteVerified, mdmUserWritable }) {
+  switch (source) {
     case "remote":
       return remoteVerified;
     case "plist":
@@ -893,18 +929,18 @@ function getShadowedMcpPolicySources(settingsContext) {
 }
 //@ chunk-dcmhvw5a.js:499554-499702 placement
 function shadowedPolicyKeys(tiers, tierSources, slot) {
-  let s = {
+  let slotView = {
     slot,
     adminTiers: tiers,
   };
-  return tiers.flatMap((a, c) => {
-    let g = tierSources[c];
-    let m = unmanagedPolicyKeys(a, s);
-    return g !== undefined && m.length > 0
+  return tiers.flatMap((tier, index) => {
+    let source = tierSources[index];
+    let keys = unmanagedPolicyKeys(tier, slotView);
+    return source !== undefined && keys.length > 0
       ? [
           {
-            source: g,
-            keys: m,
+            source,
+            keys,
           },
         ]
       : [];
@@ -926,44 +962,44 @@ function isForceRemoteSettingsRefreshConfigured(settingsContext) {
   return !admin && !parentSlice && settingsContext.hkcu?.().settings.forceRemoteSettingsRefresh === true;
 }
 //@ chunk-dcmhvw5a.js:500012-500136 placement
-function getDurablePolicyTierSettings(settingsContext) {
-  let durableTiers = settingsContext.store.policy.durableTiers;
+function getDurablePolicyTierSettings(context) {
+  let durableTiers = context.store.policy.durableTiers;
   if (durableTiers !== undefined) return durableTiers;
-  let r = durablePolicyTiers(settingsContext);
-  settingsContext.store.policy.durableTiers = r;
-  return r;
+  let tiers = durablePolicyTiers(context);
+  context.store.policy.durableTiers = tiers;
+  return tiers;
 }
 //@ chunk-dcmhvw5a.js:500136-500321 placement
-function durablePolicyTiers(e) {
-  let n = armedHelperOutput(e);
-  if (n.composes === "tier") return [n.helper];
-  let { tiers, admin } = resolvePolicySettings(e);
+function durablePolicyTiers(context) {
+  let output = armedHelperOutput(context);
+  if (output.composes === "tier") return [output.helper];
+  let { tiers, admin } = resolvePolicySettings(context);
   if (!admin) {
-    let a = e.hkcu?.();
-    if (a && Object.keys(a.settings).length > 0) return [a.settings];
+    let hkcu = context.hkcu?.();
+    if (hkcu && Object.keys(hkcu.settings).length > 0) return [hkcu.settings];
   }
   return tiers;
 }
 //@ chunk-dcmhvw5a.js:500321-500461 placement
-function getAdminAuthoredPolicySettings(settingsContext) {
-  let adminAuthored = settingsContext.store.policy.adminAuthored;
+function getAdminAuthoredPolicySettings(context) {
+  let adminAuthored = context.store.policy.adminAuthored;
   if (adminAuthored !== undefined) return adminAuthored.value;
-  let r = adminAuthoredPolicy(settingsContext);
-  settingsContext.store.policy.adminAuthored = {
-    value: r,
+  let policy = adminAuthoredPolicy(context);
+  context.store.policy.adminAuthored = {
+    value: policy,
   };
-  return r;
+  return policy;
 }
 //@ chunk-dcmhvw5a.js:500461-500702 placement
-function adminAuthoredPolicy(e) {
-  let n = armedHelperOutput(e);
-  if (n.composes === "tier") return n.helper;
-  let { admin, parentSlice, snapshotFirst } = resolvePolicySettings(e);
-  if (snapshotFirst) return getMachineAdminPolicyTier(e);
+function adminAuthoredPolicy(context) {
+  let output = armedHelperOutput(context);
+  if (output.composes === "tier") return output.helper;
+  let { admin, parentSlice, snapshotFirst } = resolvePolicySettings(context);
+  if (snapshotFirst) return getMachineAdminPolicyTier(context);
   if (admin) return admin;
   if (parentSlice) return null;
-  let c = e.hkcu?.();
-  return c && Object.keys(c.settings).length > 0 ? c.settings : null;
+  let hkcu = context.hkcu?.();
+  return hkcu && Object.keys(hkcu.settings).length > 0 ? hkcu.settings : null;
 }
 export {
   POLICY_HELPER_CONFIG_KEYS,
@@ -1003,4 +1039,5 @@ export {
   documentHasPolicyContent,
   helperBaseSettings,
   shadowedPolicyKeys,
+  mergeHelperOutputOverBase,
 };

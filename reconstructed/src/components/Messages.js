@@ -10,29 +10,7 @@
  */
 import { randomUUID } from "crypto";
 import {
-  Rh,
-  fo,
-  init_react_production,
-  yt,
-  R,
-  P,
-  qt,
-  y,
-  zt,
-  Se,
-} from "../../vendor/react/cjs/react.production.js";
-import { w } from "../../vendor/react/compiler-runtime.js";
-import { useSessionOrUndefined, useHost } from "../context/session.js";
-import {
-  jsxProd_default,
-  jsxProd_default_2,
-} from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
-import { StartupUpdateSummary } from "./LogoV2/UpdateSummary.js";
-import { LogoV2 } from "./LogoV2/LogoV2.js";
-import { Box, Text } from "../ink/components/Text.js";
-import { FreezeWhenOffscreen } from "./FreezeWhenOffscreen.js";
-import { noticeImpressionEnabled } from "./LogoV2/CondensedLogo.js";
-import {
+  hasToolResultBlock,
   hasMultipleContentBlocks,
   normalizeMessages,
   isNotEmptyMessage,
@@ -54,13 +32,35 @@ import {
   UUID_PREFIX_LENGTH,
   isTeammateMessageTextInSwarm,
   isPositiveCountInSwarm,
-  hasToolResultBlock,
 } from "../utils/messages.js";
+import {
+  memo,
+  suspenseTypeExport,
+  init_react_production,
+  useSyncExternalStore,
+  useRef,
+  useEffect,
+  createContext,
+  useState,
+  useLayoutEffect,
+  useContext,
+} from "../../vendor/react/cjs/react.production.js";
+import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
+import { useSessionOrUndefined, useHost } from "../context/session.js";
+import {
+  jsxProd_default,
+  jsxProd_default_2,
+} from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import { StartupUpdateSummary } from "./LogoV2/UpdateSummary.js";
+import { LogoV2 } from "./LogoV2/LogoV2.js";
+import { Box, Text } from "../ink/components/Text.js";
+import { FreezeWhenOffscreen } from "./FreezeWhenOffscreen.js";
+import { noticeImpressionEnabled } from "./LogoV2/CondensedLogo.js";
 import { RetainedOutputChecker } from "../utils/messages/incrementalNormalizer.js";
 import { computeSearchText } from "../utils/transcriptSearch.js";
 import { isSubsetOf } from "../utils/fsWatchProbe.js";
 import { collectToolUseIds, isNavigableMessage } from "./messageActions.js";
-import { BLACK_CIRCLE } from "../utils/permissions/autoModeRulesPrompt.js";
+import { BLACK_CIRCLE } from "../constants/figures.js";
 import { StreamingMarkdown } from "./pluginUi/render/MarkdownBlock.js";
 import { useCommandQueueOrDefault } from "../context/QueuedMessageContext.js";
 import { resolveSetting } from "../utils/settings/userIntentSettings.js";
@@ -131,70 +131,97 @@ import { sequential } from "../utils/sequential.js";
 import { collapsedRowOf } from "../utils/queuedCommandDisplay.js";
 import { isTaggedPeerText } from "../utils/crossSessionMessages.js";
 import { crossSessionPreviewHidesBody } from "./messages/UserCrossSessionMessage.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
+//@ chunk-0sfjpx19.js:33717-34121 fingerprint = dropTextInBriefTurns (1)
+function dropTextInBriefTurns(snapshot) {
+  let briefByTurn = new Map();
+  let turnsWithBrief = new Set();
+  for (let j = snapshot.length - 1; j >= 0; j--) {
+    let message = snapshot[j];
+    if (message.type === "assistant") {
+      for (let block of message.message.content)
+        if (block.type === "tool_use") briefByTurn.set(block.id, block.name);
+      continue;
+    }
+    if (message.type !== "user") continue;
+    let content = message.message.content;
+    if (!hasToolResultBlock(content)) {
+      if (message.isMeta !== true) break;
+      continue;
+    }
+    for (let block of content)
+      if (typeof block !== "string" && block.type === "tool_result") turnsWithBrief.add(block.tool_use_id);
+  }
+  for (let toolUseId of turnsWithBrief) briefByTurn.delete(toolUseId);
+  return briefByTurn;
+}
 //@ chunk-ag5x7vhf.js:117168-117911 callgraph-fingerprint = LogoHeader (0.199)
-var LogoHeader = Rh(function (props) {
-  let $ = w(14);
-  let { latchAnnouncementSlot, hideWelcomeChrome, homeMessage, hideLogo } = props;
-  let I = latchAnnouncementSlot === undefined ? true : latchAnnouncementSlot;
-  let D = hideWelcomeChrome === undefined ? false : hideWelcomeChrome;
-  let A = homeMessage === undefined ? false : homeMessage;
-  let hideLogo_2 = hideLogo === undefined ? false : hideLogo;
-  let V = useSessionOrUndefined() !== undefined;
-  const flexGrow = A ? 1 : 0;
-  let K;
-  if ($[0] !== hideLogo_2 || $[1] !== D) {
-    K =
-      !D &&
-      jsxProd_default(StartupUpdateSummary, {
-        hideLogo: hideLogo_2,
+var LogoHeader; // deferred: uses useSessionOrUndefined (../context/session.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-ag5x7vhf.js:117168", () => {
+  LogoHeader = memo(function (props) {
+    let $ = useMemoCache(14);
+    let { latchAnnouncementSlot, hideWelcomeChrome, homeMessage, hideLogo } = props;
+    let latchAnnouncement = latchAnnouncementSlot === undefined ? true : latchAnnouncementSlot;
+    let hideWelcome = hideWelcomeChrome === undefined ? false : hideWelcomeChrome;
+    let homeMessageFlag = homeMessage === undefined ? false : homeMessage;
+    let hideLogo_2 = hideLogo === undefined ? false : hideLogo;
+    let hasSession = useSessionOrUndefined() !== undefined;
+    const flexGrow = homeMessageFlag ? 1 : 0;
+    let updateSummary;
+    if ($[0] !== hideLogo_2 || $[1] !== hideWelcome) {
+      updateSummary =
+        !hideWelcome &&
+        jsxProd_default(StartupUpdateSummary, {
+          hideLogo: hideLogo_2,
+        });
+      $[0] = hideLogo_2;
+      $[1] = hideWelcome;
+      $[2] = updateSummary;
+    } else updateSummary = $[2];
+    let logoElement;
+    if ($[3] !== hasSession || $[4] !== homeMessageFlag || $[5] !== latchAnnouncement) {
+      logoElement =
+        hasSession &&
+        jsxProd_default(suspenseTypeExport, {
+          fallback: null,
+          children: jsxProd_default(LogoV2, {
+            latchAnnouncementSlot: latchAnnouncement,
+            homeMessage: homeMessageFlag,
+          }),
+        });
+      $[3] = hasSession;
+      $[4] = homeMessageFlag;
+      $[5] = latchAnnouncement;
+      $[6] = logoElement;
+    } else logoElement = $[6];
+    let children;
+    if ($[7] !== flexGrow || $[8] !== updateSummary || $[9] !== logoElement) {
+      children = jsxProd_default_2(Box, {
+        flexDirection: "column",
+        gap: 1,
+        flexGrow,
+        children: [updateSummary, null, logoElement],
       });
-    $[0] = hideLogo_2;
-    $[1] = D;
-    $[2] = K;
-  } else K = $[2];
-  let q;
-  if ($[3] !== V || $[4] !== A || $[5] !== I) {
-    q =
-      V &&
-      jsxProd_default(fo, {
-        fallback: null,
-        children: jsxProd_default(LogoV2, {
-          latchAnnouncementSlot: I,
-          homeMessage: A,
+      $[7] = flexGrow;
+      $[8] = updateSummary;
+      $[9] = logoElement;
+      $[10] = children;
+    } else children = $[10];
+    let freezeWhenOffscreenElement;
+    if ($[11] !== latchAnnouncement || $[12] !== children) {
+      freezeWhenOffscreenElement = jsxProd_default(FreezeWhenOffscreen, {
+        children: jsxProd_default(noticeImpressionEnabled.Provider, {
+          value: latchAnnouncement,
+          children,
         }),
       });
-    $[3] = V;
-    $[4] = A;
-    $[5] = I;
-    $[6] = q;
-  } else q = $[6];
-  let children;
-  if ($[7] !== flexGrow || $[8] !== K || $[9] !== q) {
-    children = jsxProd_default_2(Box, {
-      flexDirection: "column",
-      gap: 1,
-      flexGrow,
-      children: [K, null, q],
-    });
-    $[7] = flexGrow;
-    $[8] = K;
-    $[9] = q;
-    $[10] = children;
-  } else children = $[10];
-  let pe;
-  if ($[11] !== I || $[12] !== children) {
-    pe = jsxProd_default(FreezeWhenOffscreen, {
-      children: jsxProd_default(noticeImpressionEnabled.Provider, {
-        value: I,
-        children,
-      }),
-    });
-    $[11] = I;
-    $[12] = children;
-    $[13] = pe;
-  } else pe = $[13];
-  return pe;
+      $[11] = latchAnnouncement;
+      $[12] = children;
+      $[13] = freezeWhenOffscreenElement;
+    } else freezeWhenOffscreenElement = $[13];
+    return freezeWhenOffscreenElement;
+  });
 });
 //@ chunk-ag5x7vhf.js:126968-127017 placement
 function createEmptySlice() {
@@ -205,15 +232,16 @@ function createEmptySlice() {
   };
 }
 //@ chunk-ag5x7vhf.js:127017-127168 placement
-function scanForMultiBlockMessage(messages, h, x) {
-  if (messages[0] !== x.head || h < x.upTo) {
-    x.head = messages[0];
-    x.upTo = 0;
-    x.seed = false;
+function scanForMultiBlockMessage(messages, count, cache) {
+  if (messages[0] !== cache.head || count < cache.upTo) {
+    cache.head = messages[0];
+    cache.upTo = 0;
+    cache.seed = false;
   }
-  for (let upTo = x.upTo; upTo < h && !x.seed; upTo++) x.seed = hasMultipleContentBlocks(messages[upTo]);
-  x.upTo = h;
-  return x.seed;
+  for (let upTo = cache.upTo; upTo < count && !cache.seed; upTo++)
+    cache.seed = hasMultipleContentBlocks(messages[upTo]);
+  cache.upTo = count;
+  return cache.seed;
 }
 //@ chunk-ag5x7vhf.js:127168-128928 sole-consumer
 /**
@@ -235,35 +263,39 @@ class IncrementalMessageNormalizer {
   constructor(cache) {
     this.cache = cache;
   }
-  normalize(m, h) {
+  normalize(messages, chainFlag) {
     let input = this.input;
-    let max = Math.max(0, m.length - IncrementalMessageNormalizer.RECENT);
-    let k = 0;
-    let _ = 0;
-    if (this.chainAt[0] === h) {
+    let max = Math.max(0, messages.length - IncrementalMessageNormalizer.RECENT);
+    let headMatches = 0;
+    let tailMatches = 0;
+    if (this.chainAt[0] === chainFlag) {
       let min = Math.min(input.length, max);
-      while (k < min && input[k] === m[k]) k++;
-      let min_2 = Math.min(input.length - k, max - k);
-      while (_ < min_2 && input[input.length - 1 - _] === m[m.length - 1 - _]) _++;
+      while (headMatches < min && input[headMatches] === messages[headMatches]) headMatches++;
+      let min_2 = Math.min(input.length - headMatches, max - headMatches);
+      while (
+        tailMatches < min_2 &&
+        input[input.length - 1 - tailMatches] === messages[messages.length - 1 - tailMatches]
+      )
+        tailMatches++;
     }
     if (input.length !== this.inputLength) {
-      k = 0;
-      _ = 0;
+      headMatches = 0;
+      tailMatches = 0;
     }
     if (
       !this.probe.intact(
         this.output,
         this.starts,
         this.chainAt,
-        k,
-        _,
+        headMatches,
+        tailMatches,
         this.inputLength,
-        m.length,
+        messages.length,
         "normalize",
       )
     ) {
-      k = 0;
-      _ = 0;
+      headMatches = 0;
+      tailMatches = 0;
       this.input = [];
       this.inputLength = 0;
       this.output = [];
@@ -271,77 +303,87 @@ class IncrementalMessageNormalizer {
       this.chainAt = [false];
       this.damageRebuilds++;
     }
-    let sliced = this.output.slice(0, this.starts[k]);
-    let sliced_2 = this.starts.slice(0, k + 1);
-    let sliced_3 = this.chainAt.slice(0, k + 1);
-    if (k === 0) sliced_3[0] = h;
-    let L = sliced_3[k];
-    let V = 0;
-    let W = (q, Y) => {
-      for (let pe = q; pe < Y; pe++) {
-        let xe = m[pe];
-        for (let ge of normalizeMessages([xe], L, this.cache)) if (isNotEmptyMessage(ge)) sliced.push(ge);
-        this.notePending(xe, L);
-        if (hasMultipleContentBlocks(xe)) L = true;
+    let sliced = this.output.slice(0, this.starts[headMatches]);
+    let sliced_2 = this.starts.slice(0, headMatches + 1);
+    let sliced_3 = this.chainAt.slice(0, headMatches + 1);
+    if (headMatches === 0) sliced_3[0] = chainFlag;
+    let chain = sliced_3[headMatches];
+    let walked = 0;
+    let walkRange = (from, to) => {
+      for (let index = from; index < to; index++) {
+        let message = messages[index];
+        for (let normalized of normalizeMessages([message], chain, this.cache))
+          if (isNotEmptyMessage(normalized)) sliced.push(normalized);
+        this.notePending(message, chain);
+        if (hasMultipleContentBlocks(message)) chain = true;
         sliced_2.push(sliced.length);
-        sliced_3.push(L);
-        V++;
+        sliced_3.push(chain);
+        walked++;
       }
     };
-    let z = m.length - _;
-    W(k, z);
-    let K = input.length - _;
-    if (_ > 0 && this.chainAt[K] === L) {
-      let q = sliced.length - this.starts[K];
-      for (let Y = this.starts[K]; Y < this.output.length; Y++) sliced.push(this.output[Y]);
-      for (let idx = K + 1; idx <= input.length; idx++) {
-        sliced_2.push(this.starts[idx] + q);
+    let tailStart = messages.length - tailMatches;
+    walkRange(headMatches, tailStart);
+    let tailIndex = input.length - tailMatches;
+    if (tailMatches > 0 && this.chainAt[tailIndex] === chain) {
+      let offset = sliced.length - this.starts[tailIndex];
+      for (let index = this.starts[tailIndex]; index < this.output.length; index++)
+        sliced.push(this.output[index]);
+      for (let idx = tailIndex + 1; idx <= input.length; idx++) {
+        sliced_2.push(this.starts[idx] + offset);
         sliced_3.push(this.chainAt[idx]);
       }
-    } else W(z, m.length);
-    this.refreshPending(m);
-    this.input = m;
-    this.inputLength = m.length;
+    } else walkRange(tailStart, messages.length);
+    this.refreshPending(messages);
+    this.input = messages;
+    this.inputLength = messages.length;
     this.output = sliced;
     this.starts = sliced_2;
     this.chainAt = sliced_3;
-    this.lastWalked = V;
+    this.lastWalked = walked;
     return sliced;
   }
-  notePending(m, h) {
-    if (m.type !== "assistant") return;
-    if (m.message.stop_reason === null) this.pending.set(m, h);
-    else this.pending.delete(m);
+  notePending(message, chain) {
+    if (message.type !== "assistant") return;
+    if (message.message.stop_reason === null) this.pending.set(message, chain);
+    else this.pending.delete(message);
   }
-  refreshPending(m) {
+  refreshPending(messages) {
     if (this.pending.size === 0) return;
-    let h = this.pending.size > IncrementalMessageNormalizer.PRUNE_PENDING_AT ? new Set(m) : null;
-    for (let [x, T] of this.pending) {
-      if (h !== null && !h.has(x)) {
-        this.pending.delete(x);
+    let liveSet =
+      this.pending.size > IncrementalMessageNormalizer.PRUNE_PENDING_AT ? new Set(messages) : null;
+    for (let [message, chain] of this.pending) {
+      if (liveSet !== null && !liveSet.has(message)) {
+        this.pending.delete(message);
         continue;
       }
-      normalizeMessages([x], T, this.cache);
-      this.notePending(x, T);
+      normalizeMessages([message], chain, this.cache);
+      this.notePending(message, chain);
     }
   }
 }
 //@ chunk-ag5x7vhf.js:136421-136460 placement
-var INTERRUPT_MESSAGE_TEXTS = new Set([INTERRUPT_MESSAGE, INTERRUPT_MESSAGE_FOR_TOOL_USE]);
-var weakMap_3 = new WeakMap();
+var INTERRUPT_MESSAGE_TEXTS; // deferred: uses INTERRUPT_MESSAGE (../utils/messages.js) of its import cycle while loading; runs once the cycle is complete
+var weakMap_3;
+deferInit("chunk-ag5x7vhf.js:136421", () => {
+  INTERRUPT_MESSAGE_TEXTS = new Set([INTERRUPT_MESSAGE, INTERRUPT_MESSAGE_FOR_TOOL_USE]);
+  weakMap_3 = new WeakMap();
+});
 //@ chunk-ag5x7vhf.js:136460-136561 placement
 /**
  * 取消息的小写搜索文本，按消息对象 WeakMap 缓存。
  */
 function getMessageSearchText(msg) {
-  let h = weakMap_3.get(msg);
-  if (h !== undefined) return h;
+  let searchText = weakMap_3.get(msg);
+  if (searchText !== undefined) return searchText;
   let lower = computeSearchText(msg).toLowerCase();
   weakMap_3.set(msg, lower);
   return lower;
 }
 //@ chunk-ag5x7vhf.js:138975-138979 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-ag5x7vhf.js:138975", () => {
+  init_react_production();
+});
 //@ chunk-ag5x7vhf.js:147372-148064 fingerprint = shouldRenderStatically (0.736)
 function shouldRenderStatically(
   message,
@@ -375,7 +417,8 @@ function shouldRenderStatically(
       });
     case "collapsed_read_search":
       return (
-        screen === "transcript" && collectToolUseIds(message).every((I) => lookups.resolvedToolUseIDs.has(I))
+        screen === "transcript" &&
+        collectToolUseIds(message).every((id) => lookups.resolvedToolUseIDs.has(id))
       );
     case "work_segment":
       return !message.isLive;
@@ -388,98 +431,108 @@ function shouldRenderStatically(
 /**
  * 说话人标签组件槽（初始 null）；同一声明里的 ql 是流式输出文本行组件。
  */
-var speakerLabelComponent = null;
-var StreamingTextRow = Rh(function (props) {
-  let D = w(14);
-  let { store, transcriptV2 } = props;
-  let { displayed, hideTrailingLine } = yt(store.subscribe, store.getDerived);
-  if (!displayed) {
-    return null;
-  }
-  const flexDirection = transcriptV2 === undefined ? "row" : "column";
-  let A;
-  if (D[0] !== transcriptV2) {
-    A =
-      transcriptV2 === "label" &&
-      speakerLabelComponent !== null &&
-      jsxProd_default(speakerLabelComponent, {
-        speaker: {
-          kind: "claude",
-        },
-      });
-    D[0] = transcriptV2;
-    D[1] = A;
-  } else A = D[1];
-  let L;
-  if (D[2] !== transcriptV2) {
-    L =
-      transcriptV2 === undefined &&
-      jsxProd_default(Box, {
-        minWidth: 2,
-        children: jsxProd_default(Text, {
-          "aria-label": "claude:",
-          color: "text",
-          children: BLACK_CIRCLE,
+var speakerLabelComponent; // deferred: uses Box (../ink/components/Text.js) of its import cycle while loading; runs once the cycle is complete
+var StreamingTextRow;
+deferInit("chunk-ag5x7vhf.js:148068", () => {
+  speakerLabelComponent = null;
+  StreamingTextRow = memo(function (props) {
+    let $ = useMemoCache(14);
+    let { store, transcriptV2 } = props;
+    let { displayed, hideTrailingLine } = useSyncExternalStore(store.subscribe, store.getDerived);
+    if (!displayed) {
+      return null;
+    }
+    const flexDirection = transcriptV2 === undefined ? "row" : "column";
+    let assistantLabel;
+    if ($[0] !== transcriptV2) {
+      assistantLabel =
+        transcriptV2 === "label" &&
+        speakerLabelComponent !== null &&
+        jsxProd_default(speakerLabelComponent, {
+          speaker: {
+            kind: "claude",
+          },
+        });
+      $[0] = transcriptV2;
+      $[1] = assistantLabel;
+    } else assistantLabel = $[1];
+    let claudeLabel;
+    if ($[2] !== transcriptV2) {
+      claudeLabel =
+        transcriptV2 === undefined &&
+        jsxProd_default(Box, {
+          minWidth: 2,
+          children: jsxProd_default(Text, {
+            "aria-label": "claude:",
+            color: "text",
+            children: BLACK_CIRCLE,
+          }),
+        });
+      $[2] = transcriptV2;
+      $[3] = claudeLabel;
+    } else claudeLabel = $[3];
+    let markdownElement;
+    if ($[4] !== displayed || $[5] !== hideTrailingLine) {
+      markdownElement = jsxProd_default(Box, {
+        flexDirection: "column",
+        children: jsxProd_default(StreamingMarkdown, {
+          hideTrailingLine,
+          children: displayed,
         }),
       });
-    D[2] = transcriptV2;
-    D[3] = L;
-  } else L = D[3];
-  let V;
-  if (D[4] !== displayed || D[5] !== hideTrailingLine) {
-    V = jsxProd_default(Box, {
-      flexDirection: "column",
-      children: jsxProd_default(StreamingMarkdown, {
-        hideTrailingLine,
-        children: displayed,
-      }),
-    });
-    D[4] = displayed;
-    D[5] = hideTrailingLine;
-    D[6] = V;
-  } else V = D[6];
-  let W;
-  if (D[7] !== L || D[8] !== V) {
-    W = jsxProd_default_2(Box, {
-      flexDirection: "row",
-      children: [L, V],
-    });
-    D[7] = L;
-    D[8] = V;
-    D[9] = W;
-  } else W = D[9];
-  let z;
-  if (D[10] !== flexDirection || D[11] !== A || D[12] !== W) {
-    z = jsxProd_default_2(Box, {
-      alignItems: "flex-start",
-      flexDirection,
-      marginTop: 1,
-      width: "100%",
-      children: [A, W],
-    });
-    D[10] = flexDirection;
-    D[11] = A;
-    D[12] = W;
-    D[13] = z;
-  } else z = D[13];
-  return z;
+      $[4] = displayed;
+      $[5] = hideTrailingLine;
+      $[6] = markdownElement;
+    } else markdownElement = $[6];
+    let labelRow;
+    if ($[7] !== claudeLabel || $[8] !== markdownElement) {
+      labelRow = jsxProd_default_2(Box, {
+        flexDirection: "row",
+        children: [claudeLabel, markdownElement],
+      });
+      $[7] = claudeLabel;
+      $[8] = markdownElement;
+      $[9] = labelRow;
+    } else labelRow = $[9];
+    let columnElement;
+    if ($[10] !== flexDirection || $[11] !== assistantLabel || $[12] !== labelRow) {
+      columnElement = jsxProd_default_2(Box, {
+        alignItems: "flex-start",
+        flexDirection,
+        marginTop: 1,
+        width: "100%",
+        children: [assistantLabel, labelRow],
+      });
+      $[10] = flexDirection;
+      $[11] = assistantLabel;
+      $[12] = labelRow;
+      $[13] = columnElement;
+    } else columnElement = $[13];
+    return columnElement;
+  });
 });
 //@ chunk-ag5x7vhf.js:148926-148930 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-ag5x7vhf.js:148926", () => {
+  init_react_production();
+});
 //@ chunk-ag5x7vhf.js:148930-148934 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-ag5x7vhf.js:148930", () => {
+  init_react_production();
+});
 //@ chunk-ag5x7vhf.js:148934-149008 placement
 function useCommandQueue() {
   let commandQueueOrDefault = useCommandQueueOrDefault();
-  return yt(commandQueueOrDefault.subscribe, commandQueueOrDefault.getCommandQueueSnapshot);
+  return useSyncExternalStore(commandQueueOrDefault.subscribe, commandQueueOrDefault.getCommandQueueSnapshot);
 }
 //@ chunk-ag5x7vhf.js:149162-149198 placement
-function selectIsLoading(ge) {
-  return ge.isLoading;
+function selectIsLoading(state) {
+  return state.isLoading;
 }
 //@ chunk-ag5x7vhf.js:149198-149230 placement
-function selectTasks(Re) {
-  return Re.tasks;
+function selectTasks(state) {
+  return state.tasks;
 }
 //@ chunk-ag5x7vhf.js:149230-149293 placement
 function terminalProgressEnabled() {
@@ -490,41 +543,41 @@ function terminalProgressEnabled() {
  * 根据加载状态、进行中的工具与后台 agent/工作流，计算任务进度并通过终端通知（OSC 进度）上报；卸载时清除。
  */
 function TerminalTaskProgress(props) {
-  let I = w(13);
+  let $ = useMemoCache(13);
   let { turn, hasToolsInProgress } = props;
   let storeSelector = useStoreSelector(turn, selectIsLoading);
   let tasks = useAppState(selectTasks);
   let queuedCommands = useCommandQueue();
-  let D;
-  if (I[0] !== queuedCommands || I[1] !== tasks) {
-    D = countPendingBackgroundWork({
+  let pendingWork;
+  if ($[0] !== queuedCommands || $[1] !== tasks) {
+    pendingWork = countPendingBackgroundWork({
       tasks,
       queuedCommands,
     });
-    I[0] = queuedCommands;
-    I[1] = tasks;
-    I[2] = D;
-  } else D = I[2];
-  let A = D;
-  let L = A.pendingAgents > 0 || A.pendingWorkflows > 0;
-  let V = renderWithForceUpdate(terminalProgressEnabled);
+    $[0] = queuedCommands;
+    $[1] = tasks;
+    $[2] = pendingWork;
+  } else pendingWork = $[2];
+  let pending = pendingWork;
+  let hasPending = pending.pendingAgents > 0 || pending.pendingWorkflows > 0;
+  let progressElement = renderWithForceUpdate(terminalProgressEnabled);
   let { progress } = useTerminalNotification();
-  let taskListWatcherRef = R(null);
-  let K;
-  let q;
+  let taskListWatcherRef = useRef(null);
+  let watchTaskList;
+  let watchTaskListDeps;
   if (
-    I[3] !== V ||
-    I[4] !== L ||
-    I[5] !== hasToolsInProgress ||
-    I[6] !== storeSelector ||
-    I[7] !== progress
+    $[3] !== progressElement ||
+    $[4] !== hasPending ||
+    $[5] !== hasToolsInProgress ||
+    $[6] !== storeSelector ||
+    $[7] !== progress
   ) {
-    K = () => {
+    watchTaskList = () => {
       let taskListWatcher = useTaskListWatcher({
-        enabled: V,
+        enabled: progressElement,
         isLoading: storeSelector,
         hasToolsInProgress,
-        hasPendingBackgroundWork: L,
+        hasPendingBackgroundWork: hasPending,
       });
       if (taskListWatcherRef.current === taskListWatcher) {
         return;
@@ -532,88 +585,109 @@ function TerminalTaskProgress(props) {
       taskListWatcherRef.current = taskListWatcher;
       progress(taskListWatcher);
     };
-    q = [progress, V, storeSelector, hasToolsInProgress, L];
-    I[3] = V;
-    I[4] = L;
-    I[5] = hasToolsInProgress;
-    I[6] = storeSelector;
-    I[7] = progress;
-    I[8] = K;
-    I[9] = q;
+    watchTaskListDeps = [progress, progressElement, storeSelector, hasToolsInProgress, hasPending];
+    $[3] = progressElement;
+    $[4] = hasPending;
+    $[5] = hasToolsInProgress;
+    $[6] = storeSelector;
+    $[7] = progress;
+    $[8] = watchTaskList;
+    $[9] = watchTaskListDeps;
   } else {
-    K = I[8];
-    q = I[9];
+    watchTaskList = $[8];
+    watchTaskListDeps = $[9];
   }
-  P(K, q);
-  let pe;
-  let xe;
-  if (I[10] !== progress) {
-    pe = () => () => {
+  useEffect(watchTaskList, watchTaskListDeps);
+  let cleanupProgress;
+  let cleanupProgressDeps;
+  if ($[10] !== progress) {
+    cleanupProgress = () => () => {
       if (taskListWatcherRef.current !== null) {
         taskListWatcherRef.current = null;
         progress(null);
       }
     };
-    xe = [progress];
-    I[10] = progress;
-    I[11] = pe;
-    I[12] = xe;
+    cleanupProgressDeps = [progress];
+    $[10] = progress;
+    $[11] = cleanupProgress;
+    $[12] = cleanupProgressDeps;
   } else {
-    pe = I[11];
-    xe = I[12];
+    cleanupProgress = $[11];
+    cleanupProgressDeps = $[12];
   }
-  P(pe, xe);
+  useEffect(cleanupProgress, cleanupProgressDeps);
   return null;
 }
 //@ chunk-ag5x7vhf.js:149989-149993 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-ag5x7vhf.js:149989", () => {
+  init_react_production();
+});
 //@ chunk-ag5x7vhf.js:149993-150071 placement
-function shrinkTerminalSize(m, h) {
-  return h === 0
-    ? m
+function shrinkTerminalSize(size, reservedColumns) {
+  return reservedColumns === 0
+    ? size
     : {
-        columns: Math.max(1, m.columns - h),
-        rows: m.rows,
+        columns: Math.max(1, size.columns - reservedColumns),
+        rows: size.rows,
       };
 }
 //@ chunk-ag5x7vhf.js:150628-150632 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-ag5x7vhf.js:150628", () => {
+  init_react_production();
+});
 //@ chunk-ag5x7vhf.js:150632-150636 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-ag5x7vhf.js:150632", () => {
+  init_react_production();
+});
 //@ chunk-ag5x7vhf.js:151691-151707 placement
-var SuggestionSlot = qt(null);
+var SuggestionSlot; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-ag5x7vhf.js:151691", () => {
+  SuggestionSlot = createContext(null);
+});
 //@ chunk-ag5x7vhf.js:151707-151711 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-ag5x7vhf.js:151707", () => {
+  init_react_production();
+});
 //@ chunk-ag5x7vhf.js:151711-151715 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-ag5x7vhf.js:151711", () => {
+  init_react_production();
+});
 //@ chunk-ag5x7vhf.js:158357-158361 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-ag5x7vhf.js:158357", () => {
+  init_react_production();
+});
 //@ chunk-ag5x7vhf.js:176529-176563 placement
-function selectVerbose_2(lO) {
-  return lO.verbose;
+function selectVerbose_2(state) {
+  return state.verbose;
 }
 //@ chunk-ag5x7vhf.js:176563-176605 placement
-function selectBriefTranscript(cO) {
-  return cO.briefTranscript;
+function selectBriefTranscript(state) {
+  return state.briefTranscript;
 }
 //@ chunk-ag5x7vhf.js:176605-176653 placement
-function selectHasRemoteReplyChannel(uO) {
-  return uO.hasRemoteReplyChannel;
+function selectHasRemoteReplyChannel(state) {
+  return state.hasRemoteReplyChannel;
 }
 //@ chunk-ag5x7vhf.js:176653-176709 placement
-function selectActiveAgents(dO) {
-  return dO.agentDefinitions.activeAgents;
+function selectActiveAgents(state) {
+  return state.agentDefinitions.activeAgents;
 }
 //@ chunk-ag5x7vhf.js:176709-176757 placement
-function selectShowMessageTimestamps(mO) {
-  return mO.showMessageTimestamps;
+function selectShowMessageTimestamps(state) {
+  return state.showMessageTimestamps;
 }
 //@ chunk-ag5x7vhf.js:176757-176803 placement
 function isSilkHingeEnabled() {
   return getFeatureValue_CACHED_MAY_BE_STALE("tengu_silk_hinge", false);
 }
 //@ chunk-ag5x7vhf.js:176803-176828 placement
-function returnFalse_2(yJ) {
+function returnFalse_2(state) {
   return false;
 }
 //@ chunk-ag5x7vhf.js:176828-176869 placement
@@ -657,24 +731,24 @@ function createWeakMap_3() {
   return new WeakMap();
 }
 //@ chunk-ag5x7vhf.js:177137-177167 placement
-function isVisibleMessage(pO) {
-  return !isInvisibleMessage(pO);
+function isVisibleMessage(message) {
+  return !isInvisibleMessage(message);
 }
 //@ chunk-ag5x7vhf.js:177167-177198 placement
-function messageUuid(fO) {
-  return fO.uuid;
+function messageUuid(message) {
+  return message.uuid;
 }
 //@ chunk-ag5x7vhf.js:177198-177261 placement
 function createSegmenter() {
   return transcriptPlugin === null ? null : new transcriptPlugin.TranscriptSegmenter();
 }
 //@ chunk-ag5x7vhf.js:177261-177351 placement
-function pendingToUserMessage(m, gO) {
-  let { text, origin } = m;
+function pendingToUserMessage(pending, imageId) {
+  let { text, origin } = pending;
   return createUserMessage({
     content: text,
     origin,
-    uuid: placeholderImageId(gO),
+    uuid: placeholderImageId(imageId),
   });
 }
 //@ chunk-ag5x7vhf.js:177351-177380 placement
@@ -686,96 +760,119 @@ function createWeakMap_4() {
   return new WeakMap();
 }
 //@ chunk-ag5x7vhf.js:177413-177460 placement
-function isToolResultContent(bO) {
-  return bO.type === "tool_result";
+function isToolResultContent(content) {
+  return content.type === "tool_result";
 }
 //@ chunk-ag5x7vhf.js:177460-177496 placement
-function selectLoading(et) {
-  return et.isLoading;
+function selectLoading(state) {
+  return state.isLoading;
 }
 //@ chunk-ag5x7vhf.js:177496-177540 placement
-function selectStreamingToolUses(Ke) {
-  return Ke.streamingToolUses;
+function selectStreamingToolUses(state) {
+  return state.streamingToolUses;
 }
 //@ chunk-ag5x7vhf.js:177540-177588 placement
-function selectUserInputOnProcessing(Ye) {
-  return Ye.userInputOnProcessing;
+function selectUserInputOnProcessing(state) {
+  return state.userInputOnProcessing;
 }
 //@ chunk-ag5x7vhf.js:177588-177632 placement
-function selectPlaceholderOrigin(je) {
-  return je.placeholderOrigin;
+function selectPlaceholderOrigin(state) {
+  return state.placeholderOrigin;
 }
 //@ chunk-ag5x7vhf.js:177632-177687 placement
-function selectFollowingPrompts(Xe) {
-  return Xe.followingPromptsOnProcessing;
+function selectFollowingPrompts(state) {
+  return state.followingPromptsOnProcessing;
 }
 //@ chunk-ag5x7vhf.js:177687-177738 placement
-function selectPlaceholderWaitedInQueue(Et) {
-  return Et.placeholderWaitedInQueue;
+function selectPlaceholderWaitedInQueue(state) {
+  return state.placeholderWaitedInQueue;
 }
 //@ chunk-ag5x7vhf.js:177738-177776 placement
-function selectIsBriefOnly(Ct) {
-  return Ct.isBriefOnly;
+function selectIsBriefOnly(state) {
+  return state.isBriefOnly;
 }
 //@ chunk-ag5x7vhf.js:177776-177810 placement
-function selectVerbose_2_2(bt) {
-  return bt.verbose;
+function selectVerbose_2_2(state) {
+  return state.verbose;
 }
 //@ chunk-ag5x7vhf.js:177810-177849 placement
-function selectSettledReply(_t) {
-  return _t.settledReply;
+function selectSettledReply(state) {
+  return state.settledReply;
 }
 //@ chunk-ag5x7vhf.js:177849-177880 placement
-function selectUuid(xt) {
-  return xt.uuid;
+function selectUuid(state) {
+  return state.uuid;
 }
 //@ chunk-ag5x7vhf.js:177880-178116 file-local
-var BRIEF_TOOL_NAME = require("./chunk-vswknp5v.js").BRIEF_TOOL_NAME;
-var SEND_USER_FILE_TOOL_NAME = require("./chunk-j52bj3xs.js").SEND_USER_FILE_TOOL_NAME;
-var isBriefEnabled = require("./chunk-cv3kgbt2.js").isBriefEnabled;
-var replyChannelProjectorModule = null;
-var isPewterOwlTool = require("./chunk-egdy92df.js").isPewterOwlTool;
-var transcriptPlugin = null;
-var replyPlugin = null;
+var BRIEF_TOOL_NAME; // deferred: loads other modules while loading; runs once its import cycle is complete
+var SEND_USER_FILE_TOOL_NAME;
+var isBriefEnabled;
+var replyChannelProjectorModule;
+var isPewterOwlTool;
+var transcriptPlugin;
+var replyPlugin;
+deferInit("chunk-ag5x7vhf.js:177880", () => {
+  BRIEF_TOOL_NAME = require("../tools/BriefTool/prompt.js").BRIEF_TOOL_NAME;
+  SEND_USER_FILE_TOOL_NAME = require("../tools/SendUserFileTool/prompt.js").SEND_USER_FILE_TOOL_NAME;
+  isBriefEnabled = require("../tools/BriefTool/BriefTool.js").isBriefEnabled;
+  replyChannelProjectorModule = null;
+  isPewterOwlTool = require("../tools/BriefTool/pewterOwl.js").isPewterOwlTool;
+  transcriptPlugin = null;
+  replyPlugin = null;
+});
 //@ chunk-ag5x7vhf.js:178116-179178 fingerprint = filterForBriefTool (0.892)
-function filterForBriefTool(m, briefToolNames, x) {
+function filterForBriefTool(messages, briefToolNames, briefOnlyToolNames) {
   let nameSet = new Set(briefToolNames);
-  let k = new Set(x);
+  let briefOnlyNames = new Set(briefOnlyToolNames);
   let briefToolUseIDs = new Set();
-  let I = [];
-  let D = 0;
-  for (let idx = 0; idx < m.length; idx++) {
-    let V = m[idx];
-    let W = V.message?.content[0];
-    if (V.type === "user" && W?.type !== "tool_result" && (!V.isMeta || isNonHumanInboundOrigin(V.origin)))
-      D++;
-    else if (
-      V.type === "attachment" &&
-      V.attachment?.type === "queued_command" &&
-      V.attachment.commandMode === "prompt" &&
-      (isNonHumanInboundOrigin(V.attachment.origin) ||
-        (!V.attachment.isMeta && isHumanOrAutoContinuation(V.attachment.origin)))
+  let briefToolUseIds = [];
+  let humanTurnIndex = 0;
+  for (let idx = 0; idx < messages.length; idx++) {
+    let message = messages[idx];
+    let firstBlock = message.message?.content[0];
+    if (
+      message.type === "user" &&
+      firstBlock?.type !== "tool_result" &&
+      (!message.isMeta || isNonHumanInboundOrigin(message.origin))
     )
-      D++;
-    else if (V.type === "assistant" && W?.type === "tool_use" && W.name && k.has(W.name))
-      briefToolUseIDs.add(D);
-    I[idx] = D;
+      humanTurnIndex++;
+    else if (
+      message.type === "attachment" &&
+      message.attachment?.type === "queued_command" &&
+      message.attachment.commandMode === "prompt" &&
+      (isNonHumanInboundOrigin(message.attachment.origin) ||
+        (!message.attachment.isMeta && isHumanOrAutoContinuation(message.attachment.origin)))
+    )
+      humanTurnIndex++;
+    else if (
+      message.type === "assistant" &&
+      firstBlock?.type === "tool_use" &&
+      firstBlock.name &&
+      briefOnlyNames.has(firstBlock.name)
+    )
+      briefToolUseIDs.add(humanTurnIndex);
+    briefToolUseIds[idx] = humanTurnIndex;
   }
-  let A = new Set();
-  return m.filter((msg, V) => {
+  let keptToolUseIds = new Set();
+  return messages.filter((msg, index) => {
     if (msg.type === "system") return true;
     let block = msg.message?.content[0];
     if (msg.type === "assistant") {
       if (msg.isApiErrorMessage) return true;
       if (block?.type === "tool_use" && block.name && nameSet.has(block.name)) {
-        if ("id" in block) A.add(block.id);
+        if ("id" in block) keptToolUseIds.add(block.id);
         return true;
       }
-      if ((block?.type === "text" || isSignedThinkingBlock(block)) && !briefToolUseIDs.has(I[V])) return true;
+      if (
+        (block?.type === "text" || isSignedThinkingBlock(block)) &&
+        !briefToolUseIDs.has(briefToolUseIds[index])
+      )
+        return true;
       return false;
     }
     if (msg.type === "user") {
-      if (block?.type === "tool_result") return block.tool_use_id !== undefined && A.has(block.tool_use_id);
+      if (block?.type === "tool_result")
+        return block.tool_use_id !== undefined && keptToolUseIds.has(block.tool_use_id);
       return !msg.isMeta || isNonHumanInboundOrigin(msg.origin);
     }
     if (msg.type === "attachment") {
@@ -791,34 +888,41 @@ function filterForBriefTool(m, briefToolNames, x) {
 }
 //@ chunk-ag5x7vhf.js:179178-179721 layout = hasSuccessfulToolCall (0.85)
 function hasSuccessfulToolCall(messages, toolName) {
-  let x = new Set(toolName);
-  let T = new Set();
-  let k = new Map();
-  let _ = [];
-  let I = 0;
+  let toolNameSet = new Set(toolName);
+  let successfulTurns = new Set();
+  let turnByToolUseId = new Map();
+  let turnByMessageIndex = [];
+  let humanTurnIndex = 0;
   for (let idx = 0; idx < messages.length; idx++) {
-    let A = messages[idx];
-    let L = A.message?.content[0];
-    if (A.type === "user" && L?.type !== "tool_result" && !A.isMeta) {
-      I++;
+    let message = messages[idx];
+    let firstBlock = message.message?.content[0];
+    if (message.type === "user" && firstBlock?.type !== "tool_result" && !message.isMeta) {
+      humanTurnIndex++;
       continue;
     }
-    if (A.type === "assistant") {
-      if (L?.type === "text" || isSignedThinkingBlock(L)) _[idx] = I;
-      else if (L?.type === "tool_use" && L.name && x.has(L.name) && L.id) k.set(L.id, I);
+    if (message.type === "assistant") {
+      if (firstBlock?.type === "text" || isSignedThinkingBlock(firstBlock))
+        turnByMessageIndex[idx] = humanTurnIndex;
+      else if (
+        firstBlock?.type === "tool_use" &&
+        firstBlock.name &&
+        toolNameSet.has(firstBlock.name) &&
+        firstBlock.id
+      )
+        turnByToolUseId.set(firstBlock.id, humanTurnIndex);
     } else if (
-      A.type === "user" &&
-      L?.type === "tool_result" &&
-      L.tool_use_id &&
-      k.has(L.tool_use_id) &&
-      !L.is_error
+      message.type === "user" &&
+      firstBlock?.type === "tool_result" &&
+      firstBlock.tool_use_id &&
+      turnByToolUseId.has(firstBlock.tool_use_id) &&
+      !firstBlock.is_error
     )
-      T.add(k.get(L.tool_use_id));
+      successfulTurns.add(turnByToolUseId.get(firstBlock.tool_use_id));
   }
-  if (T.size === 0) return messages;
-  return messages.filter((message, A) => {
-    let toolName = _[A];
-    return toolName === undefined || !T.has(toolName);
+  if (successfulTurns.size === 0) return messages;
+  return messages.filter((message, index) => {
+    let toolName = turnByMessageIndex[index];
+    return toolName === undefined || !successfulTurns.has(toolName);
   });
 }
 //@ chunk-ag5x7vhf.js:179721-179749 layout
@@ -829,15 +933,19 @@ var GUTTER_WIDTH = 2;
 //@ chunk-ag5x7vhf.js:179749-179897 layout
 function isSplitUserMessagePart(msg, prevType) {
   if (msg.type !== "user" || prevType?.type !== "user") return false;
-  let x = shortUuid(msg);
-  return x !== undefined && x === shortUuid(prevType) && prevType.message.content[0]?.type !== "tool_result";
+  let shortId = shortUuid(msg);
+  return (
+    shortId !== undefined &&
+    shortId === shortUuid(prevType) &&
+    prevType.message.content[0]?.type !== "tool_result"
+  );
 }
 //@ chunk-ag5x7vhf.js:179897-180008 layout
-function findSpeakerLabelAbove(m, h) {
-  let x = h;
-  while (x > 0 && isSplitUserMessagePart(m[x], m[x - 1])) x--;
-  let T = m[x - 1];
-  return T?.type === "speaker_label" ? T : undefined;
+function findSpeakerLabelAbove(messages, startIndex) {
+  let index = startIndex;
+  while (index > 0 && isSplitUserMessagePart(messages[index], messages[index - 1])) index--;
+  let candidate = messages[index - 1];
+  return candidate?.type === "speaker_label" ? candidate : undefined;
 }
 //@ chunk-ag5x7vhf.js:180008-180052 layout
 function streamingThinkingRows(rows, isFullscreen) {
@@ -862,14 +970,14 @@ class MessagesSliceCache {
     this.conversationId = conversationId;
     this.verbose = verbose;
   }
-  sync(m, h) {
-    if (this.conversationId !== m) {
-      this.conversationId = m;
+  sync(conversationId, isVerbose) {
+    if (this.conversationId !== conversationId) {
+      this.conversationId = conversationId;
       this.preCap.current = null;
       this.slice.current = null;
     }
-    if (this.verbose !== h) {
-      this.verbose = h;
+    if (this.verbose !== isVerbose) {
+      this.verbose = isVerbose;
       this.slice.current = null;
     }
   }
@@ -898,24 +1006,24 @@ function computeSliceStart(collapsed, anchorRef, cap, step = SLICE_STEP) {
   return start;
 }
 //@ chunk-ag5x7vhf.js:180761-181053 layout
-function adjustSliceStartForReplies(m, h, x = SLICE_STEP) {
-  if (transcriptPlugin === null) return h;
+function adjustSliceStartForReplies(messages, start, step = SLICE_STEP) {
+  if (transcriptPlugin === null) return start;
   let { isLabelledReply, replyRunRowAbove, sitsBetweenReplies } = transcriptPlugin;
-  let I = h;
-  while (I < m.length && sitsBetweenReplies(m[I])) I++;
-  if (isLabelledReply(m[I])) {
-    let D = replyRunRowAbove(m, I);
-    while (D >= 0 && isLabelledReply(m[D])) {
-      if (D < h - x) return h;
-      I = D;
-      D = replyRunRowAbove(m, I);
+  let index = start;
+  while (index < messages.length && sitsBetweenReplies(messages[index])) index++;
+  if (isLabelledReply(messages[index])) {
+    let aboveRow = replyRunRowAbove(messages, index);
+    while (aboveRow >= 0 && isLabelledReply(messages[aboveRow])) {
+      if (aboveRow < start - step) return start;
+      index = aboveRow;
+      aboveRow = replyRunRowAbove(messages, index);
     }
-  } else I = h;
-  return I > 0 && m[I - 1]?.type === "speaker_label" ? I - 1 : Math.min(I, h);
+  } else index = start;
+  return index > 0 && messages[index - 1]?.type === "speaker_label" ? index - 1 : Math.min(index, start);
 }
 //@ chunk-ag5x7vhf.js:181053-199016 fingerprint = MessagesImpl (0.526)
 function MessagesImpl(props) {
-  let $ = w(284);
+  let $ = useMemoCache(284);
   let {
     messages,
     tools,
@@ -939,146 +1047,154 @@ function MessagesImpl(props) {
     reveal,
     renderRange,
   } = props;
-  let Fe = pauseAnimation === undefined ? false : pauseAnimation;
+  let pauseAnimation_2 = pauseAnimation === undefined ? false : pauseAnimation;
   let isFullscreen = useIsFullscreen();
-  let me = screen === "transcript";
-  let verbose = useAppState(selectVerbose_2) || me;
-  let _e = history !== undefined;
-  let oe = history === "uncapped" || renderRange !== undefined;
-  let ve = renderWithForceUpdate(isBriefEnabled);
-  let Ee = isBriefOnly && ve;
-  let He = shouldShowNotice(verbose);
-  let Ue = transcriptPlugin !== null && He;
+  let isTranscriptScreen = screen === "transcript";
+  let isVerbose = useAppState(selectVerbose_2) || isTranscriptScreen;
+  let hasHistory = history !== undefined;
+  let isUncapped = history === "uncapped" || renderRange !== undefined;
+  let briefEnabled = renderWithForceUpdate(isBriefEnabled);
+  let briefMessagesOnly = isBriefOnly && briefEnabled;
+  let showNotice = shouldShowNotice(isVerbose);
+  let isTranscriptV2 = transcriptPlugin !== null && showNotice;
   let terminalSize = useTerminalSize();
-  let it = Ue ? SPINNER_COLUMN_MIN_WIDTH : 0;
-  let tt;
-  if ($[0] !== it || $[1] !== terminalSize) {
-    tt = shrinkTerminalSize(terminalSize, it);
-    $[0] = it;
+  let spinnerWidth = isTranscriptV2 ? SPINNER_COLUMN_MIN_WIDTH : 0;
+  let sizeLessSpinner;
+  if ($[0] !== spinnerWidth || $[1] !== terminalSize) {
+    sizeLessSpinner = shrinkTerminalSize(terminalSize, spinnerWidth);
+    $[0] = spinnerWidth;
     $[1] = terminalSize;
-    $[2] = tt;
-  } else tt = $[2];
-  let ct = tt;
-  let Je;
-  if ($[3] !== ct) {
-    Je = shrinkTerminalSize(ct, GUTTER_WIDTH);
-    $[3] = ct;
-    $[4] = Je;
-  } else Je = $[4];
-  let $e = Je;
-  let { columns, rows } = ct;
+    $[2] = sizeLessSpinner;
+  } else sizeLessSpinner = $[2];
+  let contentSize = sizeLessSpinner;
+  let sizeLessGutter;
+  if ($[3] !== contentSize) {
+    sizeLessGutter = shrinkTerminalSize(contentSize, GUTTER_WIDTH);
+    $[3] = contentSize;
+    $[4] = sizeLessGutter;
+  } else sizeLessGutter = $[4];
+  let gutterSize = sizeLessGutter;
+  let { columns, rows } = contentSize;
   let toggleShowAllShortcut = useShortcutDisplay("transcript:toggleShowAll", "Transcript", "Ctrl+E");
   let CLAUDE_CODE_DISABLE_VIRTUAL_SCROLL = env.CLAUDE_CODE_DISABLE_VIRTUAL_SCROLL;
   let briefTranscript = useAppState(selectBriefTranscript);
   let hasRemoteReplyChannel = useAppState(selectHasRemoteReplyChannel);
   let host = useHost();
-  let normalizedMessages = resolveTranscriptMode(verbose, me);
+  let normalizedMessages = resolveTranscriptMode(isVerbose, isTranscriptScreen);
   let activeAgents = useAppState(selectActiveAgents);
   let showMessageTimestamps = useAppState(selectShowMessageTimestamps);
-  let Ot = renderWithForceUpdate(isSilkHingeEnabled);
-  let showMessageTimestamps_2 = showMessageTimestamps && Ot;
+  let silkHingeEnabled = renderWithForceUpdate(isSilkHingeEnabled);
+  let showMessageTimestamps_2 = showMessageTimestamps && silkHingeEnabled;
   let appStoreDirect = useAppStoreDirect();
   let appState = useAppState(returnFalse_2);
-  let de = null;
-  let le = scrollViewport != null && !CLAUDE_CODE_DISABLE_VIRTUAL_SCROLL;
+  let unusedNull = null;
+  let isVirtualized = scrollViewport != null && !CLAUDE_CODE_DISABLE_VIRTUAL_SCROLL;
   let isStreamingThinkingVisible = streamingThinkingRows(rows, isFullscreen);
-  let st;
-  if ($[5] !== conversationId || $[6] !== verbose) {
-    st = () => new MessagesSliceCache(conversationId, verbose);
+  let createSliceCache;
+  if ($[5] !== conversationId || $[6] !== isVerbose) {
+    createSliceCache = () => new MessagesSliceCache(conversationId, isVerbose);
     $[5] = conversationId;
-    $[6] = verbose;
-    $[7] = st;
-  } else st = $[7];
-  let [Ge] = y(st);
-  Ge.sync(conversationId, verbose);
-  let Ve = !le && !oe ? computeSliceStart(messages, Ge.preCap, isStreamingThinkingVisible * 2) : 0;
-  let [ze] = y(createEmptySlice);
-  let At = scanForMultiBlockMessage(messages, Ve, ze);
-  let [ut] = y(createIncrementalNormalizer);
-  let [jt] = y(createProgressSplitter);
-  let [oo] = y(createToolUseTracker);
-  let [mo] = y(createLookupsBuilder);
-  let [Jt] = y(createIncrementalCollapser);
-  let [Gt] = y(createRowProjector);
-  let [Mo] = y(createWeakMap);
-  let [Vo] = y(createWeakMap_2);
-  let Po;
-  if ($[8] !== messages || $[9] !== Ve) {
-    Po = Ve > 0 ? messages.slice(Ve) : messages;
+    $[6] = isVerbose;
+    $[7] = createSliceCache;
+  } else createSliceCache = $[7];
+  let [sliceCache] = useState(createSliceCache);
+  sliceCache.sync(conversationId, isVerbose);
+  let sliceStart =
+    !isVirtualized && !isUncapped
+      ? computeSliceStart(messages, sliceCache.preCap, isStreamingThinkingVisible * 2)
+      : 0;
+  let [emptySlice] = useState(createEmptySlice);
+  let multiBlockScan = scanForMultiBlockMessage(messages, sliceStart, emptySlice);
+  let [normalizer] = useState(createIncrementalNormalizer);
+  let [progressSplitter] = useState(createProgressSplitter);
+  let [toolUseTracker] = useState(createToolUseTracker);
+  let [lookupsBuilder] = useState(createLookupsBuilder);
+  let [collapser] = useState(createIncrementalCollapser);
+  let [rowProjector] = useState(createRowProjector);
+  let [bashSplitCache] = useState(createWeakMap);
+  let [crossSessionBodies] = useState(createWeakMap_2);
+  let content;
+  if ($[8] !== messages || $[9] !== sliceStart) {
+    content = sliceStart > 0 ? messages.slice(sliceStart) : messages;
     $[8] = messages;
-    $[9] = Ve;
-    $[10] = Po;
-  } else Po = $[10];
-  let content = Po;
-  let Yt;
-  if ($[11] !== content || $[12] !== verbose) {
-    Yt = verbose ? content : filterFoldedScheduledTaskMessages(content);
-    $[11] = content;
-    $[12] = verbose;
-    $[13] = Yt;
-  } else Yt = $[13];
-  let Qt = Yt;
-  let ne;
-  if ($[14] !== ut || $[15] !== At || $[16] !== Qt) {
-    ne = ut.normalize(Qt, At);
-    $[14] = ut;
-    $[15] = At;
-    $[16] = Qt;
-    $[17] = ne;
-  } else ne = $[17];
-  let ee = ne;
-  let we;
-  if ($[18] !== ee || $[19] !== jt) {
-    we = jt.split(ee);
-    $[18] = ee;
-    $[19] = jt;
-    $[20] = we;
-  } else we = $[20];
-  let { transcript, progress } = we;
-  let Ke;
+    $[9] = sliceStart;
+    $[10] = content;
+  } else content = $[10];
+  let content_2 = content;
+  let filteredContent;
+  if ($[11] !== content_2 || $[12] !== isVerbose) {
+    filteredContent = isVerbose ? content_2 : filterFoldedScheduledTaskMessages(content_2);
+    $[11] = content_2;
+    $[12] = isVerbose;
+    $[13] = filteredContent;
+  } else filteredContent = $[13];
+  let visibleContent = filteredContent;
+  let normalized;
+  if ($[14] !== normalizer || $[15] !== multiBlockScan || $[16] !== visibleContent) {
+    normalized = normalizer.normalize(visibleContent, multiBlockScan);
+    $[14] = normalizer;
+    $[15] = multiBlockScan;
+    $[16] = visibleContent;
+    $[17] = normalized;
+  } else normalized = $[17];
+  let normalizedList = normalized;
+  let split;
+  if ($[18] !== normalizedList || $[19] !== progressSplitter) {
+    split = progressSplitter.split(normalizedList);
+    $[18] = normalizedList;
+    $[19] = progressSplitter;
+    $[20] = split;
+  } else split = $[20];
+  let { transcript, progress } = split;
+  let latestBashOutputUuid;
   if ($[21] !== transcript) {
     Ct: {
       for (let idx = transcript.length - 1; idx >= 0; idx--) {
-        let je = transcript[idx];
-        if (je?.type === "user") {
-          let content = je.message.content;
+        let candidate = transcript[idx];
+        if (candidate?.type === "user") {
+          let content = candidate.message.content;
           for (const block_0 of content) {
             if (block_0.type === "text" && isBashOutputText(block_0.text)) {
-              Ke = je.uuid;
+              latestBashOutputUuid = candidate.uuid;
               break Ct;
             }
           }
         }
       }
-      Ke = null;
+      latestBashOutputUuid = null;
     }
     $[21] = transcript;
-    $[22] = Ke;
-  } else Ke = $[22];
-  let bt = Ke;
-  let _t;
-  if ($[23] !== oo || $[24] !== transcript) {
-    _t = oo.next(transcript);
-    $[23] = oo;
+    $[22] = latestBashOutputUuid;
+  } else latestBashOutputUuid = $[22];
+  let latestBashOutputUuid_2 = latestBashOutputUuid;
+  let tracked;
+  if ($[23] !== toolUseTracker || $[24] !== transcript) {
+    tracked = toolUseTracker.next(transcript);
+    $[23] = toolUseTracker;
     $[24] = transcript;
-    $[25] = _t;
-  } else _t = $[25];
-  let xt = _t;
-  let [$t] = y(createDedupeState);
-  let cn;
-  if ($[26] !== inProgressToolUseIDs || $[27] !== xt || $[28] !== $t || $[29] !== streamingToolUses) {
-    cn = $t.next(streamingToolUses, inProgressToolUseIDs, xt);
+    $[25] = tracked;
+  } else tracked = $[25];
+  let toolUses = tracked;
+  let [dedupeState] = useState(createDedupeState);
+  let dedupedStreaming;
+  if (
+    $[26] !== inProgressToolUseIDs ||
+    $[27] !== toolUses ||
+    $[28] !== dedupeState ||
+    $[29] !== streamingToolUses
+  ) {
+    dedupedStreaming = dedupeState.next(streamingToolUses, inProgressToolUseIDs, toolUses);
     $[26] = inProgressToolUseIDs;
-    $[27] = xt;
-    $[28] = $t;
+    $[27] = toolUses;
+    $[28] = dedupeState;
     $[29] = streamingToolUses;
-    $[30] = cn;
-  } else cn = $[30];
-  let un = cn;
-  let [Yo] = y(createWeakMap_3);
-  let ks;
-  if ($[31] !== Yo) {
-    ks = (stu) => {
+    $[30] = dedupedStreaming;
+  } else dedupedStreaming = $[30];
+  let streamingRows = dedupedStreaming;
+  let [mintedIdCache] = useState(createWeakMap_3);
+  let mintId;
+  if ($[31] !== mintedIdCache) {
+    mintId = (stu) => {
       let id = stu.contentBlock.id;
       if (isNonEmptyString(id)) {
         return {
@@ -1086,30 +1202,30 @@ function MessagesImpl(props) {
           minted: false,
         };
       }
-      let Oi = Yo.get(stu);
-      if (Oi) {
+      let existingId = mintedIdCache.get(stu);
+      if (existingId) {
         return {
-          id: Oi,
+          id: existingId,
           minted: true,
         };
       }
-      let $c = randomUUID();
-      Yo.set(stu, $c);
+      let newId = randomUUID();
+      mintedIdCache.set(stu, newId);
       return {
-        id: $c,
+        id: newId,
         minted: true,
       };
     };
-    $[31] = Yo;
-    $[32] = ks;
-  } else ks = $[32];
-  let ko = ks;
-  let jn;
-  if ($[33] !== ko || $[34] !== un) {
-    let Gn;
-    if ($[36] !== ko) {
-      Gn = (streamingToolUse) => {
-        let { id, minted } = ko(streamingToolUse);
+    $[31] = mintedIdCache;
+    $[32] = mintId;
+  } else mintId = $[32];
+  let mintIdStable = mintId;
+  let syntheticMessages;
+  if ($[33] !== mintIdStable || $[34] !== streamingRows) {
+    let buildSyntheticMessage;
+    if ($[36] !== mintIdStable) {
+      buildSyntheticMessage = (streamingToolUse) => {
+        let { id, minted } = mintIdStable(streamingToolUse);
         let msg_1 = createAssistantMessage({
           content: [
             minted
@@ -1123,24 +1239,25 @@ function MessagesImpl(props) {
         msg_1.uuid = minted ? id : deriveUUID(id, 0);
         return normalizeMessages([msg_1]);
       };
-      $[36] = ko;
-      $[37] = Gn;
-    } else Gn = $[37];
-    jn = un.flatMap(Gn);
-    $[33] = ko;
-    $[34] = un;
-    $[35] = jn;
-  } else jn = $[35];
-  let syntheticStreamingToolUseMessages = jn;
-  let Xo = me && !_e && !le;
-  let Gn;
-  if ($[38] !== isFullscreen || $[39] !== transcript || $[40] !== verbose) {
-    Gn = verbose || isFullscreen ? transcript : messagesSinceCompactBoundary(transcript, undefined);
+      $[36] = mintIdStable;
+      $[37] = buildSyntheticMessage;
+    } else buildSyntheticMessage = $[37];
+    syntheticMessages = streamingRows.flatMap(buildSyntheticMessage);
+    $[33] = mintIdStable;
+    $[34] = streamingRows;
+    $[35] = syntheticMessages;
+  } else syntheticMessages = $[35];
+  let syntheticStreamingToolUseMessages = syntheticMessages;
+  let isWindowed = isTranscriptScreen && !hasHistory && !isVirtualized;
+  let baseTranscript;
+  if ($[38] !== isFullscreen || $[39] !== transcript || $[40] !== isVerbose) {
+    baseTranscript =
+      isVerbose || isFullscreen ? transcript : messagesSinceCompactBoundary(transcript, undefined);
     $[38] = isFullscreen;
     $[39] = transcript;
-    $[40] = verbose;
-    $[41] = Gn;
-  } else Gn = $[41];
+    $[40] = isVerbose;
+    $[41] = baseTranscript;
+  } else baseTranscript = $[41];
   let collapsedBase;
   let transcriptLookups;
   let hasTruncatedMessages;
@@ -1149,50 +1266,52 @@ function MessagesImpl(props) {
   if (
     $[42] !== activeAgents ||
     $[43] !== hasRemoteReplyChannel ||
-    $[44] !== Ee ||
-    $[45] !== me ||
-    $[46] !== Jt ||
-    $[47] !== Ue ||
-    $[48] !== Xo ||
+    $[44] !== briefMessagesOnly ||
+    $[45] !== isTranscriptScreen ||
+    $[46] !== collapser ||
+    $[47] !== isTranscriptV2 ||
+    $[48] !== isWindowed ||
     $[49] !== syntheticStreamingToolUseMessages ||
-    $[50] !== Gn ||
+    $[50] !== baseTranscript ||
     $[51] !== tools ||
-    $[52] !== mo ||
+    $[52] !== lookupsBuilder ||
     $[53] !== transcript ||
-    $[54] !== verbose ||
-    $[55] !== le
+    $[54] !== isVerbose ||
+    $[55] !== isVirtualized
   ) {
-    const briefToolNames = Gn.filter(isVisibleMessage);
-    let wn;
-    if ($[61] !== me) {
-      wn = (Ui) => shouldShowUserMessage(Ui, me);
-      $[61] = me;
-      $[62] = wn;
-    } else wn = $[62];
-    let dropTextToolNames = briefToolNames.filter(wn);
-    let Qn = reorderMessagesInUI(dropTextToolNames, syntheticStreamingToolUseMessages);
+    const briefToolNames = baseTranscript.filter(isVisibleMessage);
+    let showUserMessage;
+    if ($[61] !== isTranscriptScreen) {
+      showUserMessage = (candidate) => shouldShowUserMessage(candidate, isTranscriptScreen);
+      $[61] = isTranscriptScreen;
+      $[62] = showUserMessage;
+    } else showUserMessage = $[62];
+    let dropTextToolNames = briefToolNames.filter(showUserMessage);
+    let reordered = reorderMessagesInUI(dropTextToolNames, syntheticStreamingToolUseMessages);
     let messages =
       replyChannelProjectorModule !== null && hasRemoteReplyChannel
         ? replyChannelProjectorModule.projectReplyChannelToolUses(
-            me || verbose ? Qn : replyChannelProjectorModule.dropReplyChannelNarration(Qn),
+            isTranscriptScreen || isVerbose
+              ? reordered
+              : replyChannelProjectorModule.dropReplyChannelNarration(reordered),
             {
-              statusAsText: me || verbose,
+              statusAsText: isTranscriptScreen || isVerbose,
             },
           )
-        : Qn;
+        : reordered;
     let briefToolNames_2 = [BRIEF_TOOL_NAME, SEND_USER_FILE_TOOL_NAME];
-    let toolName = [BRIEF_TOOL_NAME];
-    let Is =
-      !me && (isBriefEnabled() || !isPewterOwlTool())
-        ? Ee
-          ? filterForBriefTool(messages, briefToolNames_2, toolName)
-          : hasSuccessfulToolCall(messages, toolName)
+    let briefOnlyToolNames = [BRIEF_TOOL_NAME];
+    let briefFiltered =
+      !isTranscriptScreen && (isBriefEnabled() || !isPewterOwlTool())
+        ? briefMessagesOnly
+          ? filterForBriefTool(messages, briefToolNames_2, briefOnlyToolNames)
+          : hasSuccessfulToolCall(messages, briefOnlyToolNames)
         : messages;
-    let Es = Is;
-    let Ds = Xo ? Es.slice(-MAX_RECENT_MESSAGES) : Es;
-    let Vi = Xo && Is.length > MAX_RECENT_MESSAGES;
-    let { messages: messages_2 } = countToolCallsSince_2(Ds, tools, verbose, activeAgents);
-    let ji = collapseBackgroundBashNotifications(
+    let briefFiltered_2 = briefFiltered;
+    let windowed = isWindowed ? briefFiltered_2.slice(-MAX_RECENT_MESSAGES) : briefFiltered_2;
+    let isTruncated = isWindowed && briefFiltered.length > MAX_RECENT_MESSAGES;
+    let { messages: messages_2 } = countToolCallsSince_2(windowed, tools, isVerbose, activeAgents);
+    let collapsed = collapseBackgroundBashNotifications(
       collapseHookSummaries(
         collapseHookAttachments(
           collapseTeammateShutdowns(
@@ -1200,38 +1319,38 @@ function MessagesImpl(props) {
               messages_2,
               tools,
               {
-                transcriptV2: Ue,
-                expandRows: me && le,
+                transcriptV2: isTranscriptV2,
+                expandRows: isTranscriptScreen && isVirtualized,
               },
-              Jt,
+              collapser,
             ),
           ),
         ),
       ),
-      verbose,
-      Ue,
+      isVerbose,
+      isTranscriptV2,
     );
-    let zi = mo.build(transcript, Ds);
-    let Gi = Qn.length - MAX_RECENT_MESSAGES;
-    collapsedBase = ji;
-    transcriptLookups = zi;
-    hasTruncatedMessages = Vi;
-    hiddenMessageCount = Gi;
-    shownWindowUuids = Vi ? Ds.map(messageUuid) : [];
+    let lookups = lookupsBuilder.build(transcript, windowed);
+    let hiddenCount = reordered.length - MAX_RECENT_MESSAGES;
+    collapsedBase = collapsed;
+    transcriptLookups = lookups;
+    hasTruncatedMessages = isTruncated;
+    hiddenMessageCount = hiddenCount;
+    shownWindowUuids = isTruncated ? windowed.map(messageUuid) : [];
     $[42] = activeAgents;
     $[43] = hasRemoteReplyChannel;
-    $[44] = Ee;
-    $[45] = me;
-    $[46] = Jt;
-    $[47] = Ue;
-    $[48] = Xo;
+    $[44] = briefMessagesOnly;
+    $[45] = isTranscriptScreen;
+    $[46] = collapser;
+    $[47] = isTranscriptV2;
+    $[48] = isWindowed;
     $[49] = syntheticStreamingToolUseMessages;
-    $[50] = Gn;
+    $[50] = baseTranscript;
     $[51] = tools;
-    $[52] = mo;
+    $[52] = lookupsBuilder;
     $[53] = transcript;
-    $[54] = verbose;
-    $[55] = le;
+    $[54] = isVerbose;
+    $[55] = isVirtualized;
     $[56] = collapsedBase;
     $[57] = transcriptLookups;
     $[58] = hasTruncatedMessages;
@@ -1244,7 +1363,7 @@ function MessagesImpl(props) {
     hiddenMessageCount = $[59];
     shownWindowUuids = $[60];
   }
-  let Jn;
+  let collapseResult;
   if (
     $[63] !== collapsedBase ||
     $[64] !== transcriptLookups ||
@@ -1252,7 +1371,7 @@ function MessagesImpl(props) {
     $[66] !== hiddenMessageCount ||
     $[67] !== shownWindowUuids
   ) {
-    Jn = {
+    collapseResult = {
       collapsedBase,
       transcriptLookups,
       hasTruncatedMessages,
@@ -1264,180 +1383,188 @@ function MessagesImpl(props) {
     $[65] = hasTruncatedMessages;
     $[66] = hiddenMessageCount;
     $[67] = shownWindowUuids;
-    $[68] = Jn;
-  } else Jn = $[68];
+    $[68] = collapseResult;
+  } else collapseResult = $[68];
   let {
     collapsedBase: collapsedBase_2,
     transcriptLookups: transcriptLookups_2,
     hasTruncatedMessages: hasTruncatedMessages_2,
     hiddenMessageCount: hiddenMessageCount_2,
     shownWindowUuids: shownWindowUuids_2,
-  } = Jn;
-  let wn;
+  } = collapseResult;
+  let progressLookups;
   if ($[69] !== progress) {
-    wn = buildProgressLookups(progress);
+    progressLookups = buildProgressLookups(progress);
     $[69] = progress;
-    $[70] = wn;
-  } else wn = $[70];
-  let Ns = wn;
-  let Ps;
-  if ($[71] !== Ns || $[72] !== transcriptLookups_2) {
-    Ps = {
+    $[70] = progressLookups;
+  } else progressLookups = $[70];
+  let progressLookups_2 = progressLookups;
+  let mergedLookups;
+  if ($[71] !== progressLookups_2 || $[72] !== transcriptLookups_2) {
+    mergedLookups = {
       ...transcriptLookups_2,
-      ...Ns,
+      ...progressLookups_2,
     };
-    $[71] = Ns;
+    $[71] = progressLookups_2;
     $[72] = transcriptLookups_2;
-    $[73] = Ps;
-  } else Ps = $[73];
-  let _o = Ps;
-  let Yc;
+    $[73] = mergedLookups;
+  } else mergedLookups = $[73];
+  let lookups_2 = mergedLookups;
+  let navigableBase;
   UL: {
-    let Ls = replyChannelProjectorModule !== null && hasRemoteReplyChannel && !me && !verbose;
-    if (!(isFullscreen && (briefTranscript || Ls) && !me)) {
-      Yc = collapsedBase_2;
+    let keepTextReplies =
+      replyChannelProjectorModule !== null && hasRemoteReplyChannel && !isTranscriptScreen && !isVerbose;
+    if (!(isFullscreen && (briefTranscript || keepTextReplies) && !isTranscriptScreen)) {
+      navigableBase = collapsedBase_2;
       break UL;
     }
-    let tr;
+    let getTaskStats;
     if ($[74] !== appStoreDirect) {
-      tr = ($i) => {
-        let Tv = appStoreDirect.getState().tasks[$i];
-        return Tv?.type === "local_agent" ? Tv.result?.toolStats : undefined;
+      getTaskStats = (taskId) => {
+        let task = appStoreDirect.getState().tasks[taskId];
+        return task?.type === "local_agent" ? task.result?.toolStats : undefined;
       };
       $[74] = appStoreDirect;
-      $[75] = tr;
-    } else tr = $[75];
-    let Ki;
+      $[75] = getTaskStats;
+    } else getTaskStats = $[75];
+    let navigable;
     if (
       $[76] !== collapsedBase_2 ||
       $[77] !== isLoading ||
-      $[78] !== Ls ||
-      $[79] !== Ue ||
-      $[80] !== tr ||
+      $[78] !== keepTextReplies ||
+      $[79] !== isTranscriptV2 ||
+      $[80] !== getTaskStats ||
       $[81] !== tools
     ) {
-      Ki = isNavigableMessage(collapsedBase_2, tools, tr, isLoading, {
-        keepAllText: Ls,
-        transcriptV2: Ue,
+      navigable = isNavigableMessage(collapsedBase_2, tools, getTaskStats, isLoading, {
+        keepAllText: keepTextReplies,
+        transcriptV2: isTranscriptV2,
       });
       $[76] = collapsedBase_2;
       $[77] = isLoading;
-      $[78] = Ls;
-      $[79] = Ue;
-      $[80] = tr;
+      $[78] = keepTextReplies;
+      $[79] = isTranscriptV2;
+      $[80] = getTaskStats;
       $[81] = tools;
-      $[82] = Ki;
-    } else Ki = $[82];
-    Yc = Ki;
+      $[82] = navigable;
+    } else navigable = $[82];
+    navigableBase = navigable;
   }
-  let eg = Yc;
+  let navigableBase_2 = navigableBase;
   let transcriptMode = useTranscriptMode();
-  let Jc = transcriptMode || verbose;
-  let tr;
-  if ($[83] !== eg || $[84] !== Jc) {
-    tr = dropDuplicateRemoteErrors(dropRepeatedTurnDurations(eg, Jc), Jc);
-    $[83] = eg;
-    $[84] = Jc;
-    $[85] = tr;
-  } else tr = $[85];
-  let Io = tr;
-  let Ki;
+  let shouldCollapseTurns = transcriptMode || isVerbose;
+  let deduped;
+  if ($[83] !== navigableBase_2 || $[84] !== shouldCollapseTurns) {
+    deduped = dropDuplicateRemoteErrors(
+      dropRepeatedTurnDurations(navigableBase_2, shouldCollapseTurns),
+      shouldCollapseTurns,
+    );
+    $[83] = navigableBase_2;
+    $[84] = shouldCollapseTurns;
+    $[85] = deduped;
+  } else deduped = $[85];
+  let transcriptMessages = deduped;
+  let compactBoundary;
   if ($[86] !== messages || $[87] !== transcriptMode) {
-    Ki = transcriptMode ? null : findLeadingCompactBoundary(messages);
+    compactBoundary = transcriptMode ? null : findLeadingCompactBoundary(messages);
     $[86] = messages;
     $[87] = transcriptMode;
-    $[88] = Ki;
-  } else Ki = $[88];
-  let tg = Ki;
-  let uuid = tg?.uuid;
-  let og = (tg?.summary ?? null) !== null;
-  let transcriptPath = tg?.summary?.transcriptPath;
-  let [ng, BL] = y(null);
-  if (ng?.uuid !== uuid || ng?.transcriptPath !== transcriptPath) {
-    let HL =
+    $[88] = compactBoundary;
+  } else compactBoundary = $[88];
+  let compactBoundary_2 = compactBoundary;
+  let uuid = compactBoundary_2?.uuid;
+  let hasSummary = (compactBoundary_2?.summary ?? null) !== null;
+  let transcriptPath = compactBoundary_2?.summary?.transcriptPath;
+  let [savedInfo, setSavedInfo] = useState(null);
+  if (savedInfo?.uuid !== uuid || savedInfo?.transcriptPath !== transcriptPath) {
+    let materializedPath =
       isDiskless() || isRemoteSessionAvailable() || env.CLAUDE_CODE_TRANSCRIPT_LOCAL_GC === true
         ? null
         : getMaterializedSessionFile();
-    BL({
+    setSavedInfo({
       uuid,
       transcriptPath,
-      savedIn: transcriptPath === HL ? transcriptPath : undefined,
+      savedIn: transcriptPath === materializedPath ? transcriptPath : undefined,
     });
   }
-  let savedIn = ng?.savedIn;
-  let Cv;
-  if ($[89] !== savedIn || $[90] !== og || $[91] !== uuid) {
-    Cv =
+  let savedIn = savedInfo?.savedIn;
+  let compactValue;
+  if ($[89] !== savedIn || $[90] !== hasSummary || $[91] !== uuid) {
+    compactValue =
       uuid === undefined
         ? null
         : {
             uuid,
-            summary: og
+            summary: hasSummary
               ? {
                   savedIn,
                 }
               : null,
           };
     $[89] = savedIn;
-    $[90] = og;
+    $[90] = hasSummary;
     $[91] = uuid;
-    $[92] = Cv;
-  } else Cv = $[92];
-  let value = Cv;
-  let [Zc] = y(createSegmenter);
-  let Mv;
+    $[92] = compactValue;
+  } else compactValue = $[92];
+  let value = compactValue;
+  let [segmenter] = useState(createSegmenter);
+  let pendingMessages;
   if ($[93] !== pendingPrompts) {
-    Mv = normalizeMessages(pendingPrompts.map(pendingToUserMessage));
+    pendingMessages = normalizeMessages(pendingPrompts.map(pendingToUserMessage));
     $[93] = pendingPrompts;
-    $[94] = Mv;
-  } else Mv = $[94];
-  let eu = Mv;
-  let kv;
-  if ($[95] !== Io || $[96] !== eu || $[97] !== Ue) {
-    kv = Ue && eu.length > 0 ? Io.concat(eu) : Io;
-    $[95] = Io;
-    $[96] = eu;
-    $[97] = Ue;
-    $[98] = kv;
-  } else kv = $[98];
-  let tu = kv;
-  let _v;
-  if ($[99] !== Io || $[100] !== Ue) {
-    _v = Ue && replyPlugin !== null ? replyPlugin.foldAgentMessages(Io) : null;
-    $[99] = Io;
-    $[100] = Ue;
-    $[101] = _v;
-  } else _v = $[101];
-  let Jo = _v;
-  let ig;
+    $[94] = pendingMessages;
+  } else pendingMessages = $[94];
+  let pendingUserMessages = pendingMessages;
+  let allMessages;
+  if ($[95] !== transcriptMessages || $[96] !== pendingUserMessages || $[97] !== isTranscriptV2) {
+    allMessages =
+      isTranscriptV2 && pendingUserMessages.length > 0
+        ? transcriptMessages.concat(pendingUserMessages)
+        : transcriptMessages;
+    $[95] = transcriptMessages;
+    $[96] = pendingUserMessages;
+    $[97] = isTranscriptV2;
+    $[98] = allMessages;
+  } else allMessages = $[98];
+  let withPending = allMessages;
+  let foldedAgents;
+  if ($[99] !== transcriptMessages || $[100] !== isTranscriptV2) {
+    foldedAgents =
+      isTranscriptV2 && replyPlugin !== null ? replyPlugin.foldAgentMessages(transcriptMessages) : null;
+    $[99] = transcriptMessages;
+    $[100] = isTranscriptV2;
+    $[101] = foldedAgents;
+  } else foldedAgents = $[101];
+  let foldedAgentMessages = foldedAgents;
+  let collapsedMessages;
   mJ: {
-    if (!Ue || Zc === null) {
-      ig = Io;
+    if (!isTranscriptV2 || segmenter === null) {
+      collapsedMessages = transcriptMessages;
       break mJ;
     }
-    let or;
+    let segmented;
     if (
       $[102] !== activeAgents ||
-      $[103] !== Jo?.folded ||
+      $[103] !== foldedAgentMessages?.folded ||
       $[104] !== columns ||
       $[105] !== isFullscreen ||
       $[106] !== hasStreamingText ||
       $[107] !== host ||
       $[108] !== isFocusedTurnLoading ||
-      $[109] !== _o.progressMessagesByToolUseID ||
+      $[109] !== lookups_2.progressMessagesByToolUseID ||
       $[110] !== uuid ||
-      $[111] !== tu ||
-      $[112] !== Zc ||
+      $[111] !== withPending ||
+      $[112] !== segmenter ||
       $[113] !== tools
     ) {
-      const progressMessagesByToolUseID = _o.progressMessagesByToolUseID;
-      let foldedAgentMessages;
-      if ($[115] !== Jo?.folded) {
-        foldedAgentMessages = Jo?.folded ?? new Set();
-        $[115] = Jo?.folded;
-        $[116] = foldedAgentMessages;
-      } else foldedAgentMessages = $[116];
-      or = Zc.segment(tu, {
+      const progressMessagesByToolUseID = lookups_2.progressMessagesByToolUseID;
+      let foldedAgentMessages_2;
+      if ($[115] !== foldedAgentMessages?.folded) {
+        foldedAgentMessages_2 = foldedAgentMessages?.folded ?? new Set();
+        $[115] = foldedAgentMessages?.folded;
+        $[116] = foldedAgentMessages_2;
+      } else foldedAgentMessages_2 = $[116];
+      segmented = segmenter.segment(withPending, {
         tools,
         activeAgents,
         host,
@@ -1447,224 +1574,236 @@ function MessagesImpl(props) {
         hasStreamingText,
         isFullscreen,
         compactionWithoutEarlierMessages: uuid,
-        foldedAgentMessages,
+        foldedAgentMessages: foldedAgentMessages_2,
       });
       $[102] = activeAgents;
-      $[103] = Jo?.folded;
+      $[103] = foldedAgentMessages?.folded;
       $[104] = columns;
       $[105] = isFullscreen;
       $[106] = hasStreamingText;
       $[107] = host;
       $[108] = isFocusedTurnLoading;
-      $[109] = _o.progressMessagesByToolUseID;
+      $[109] = lookups_2.progressMessagesByToolUseID;
       $[110] = uuid;
-      $[111] = tu;
-      $[112] = Zc;
+      $[111] = withPending;
+      $[112] = segmenter;
       $[113] = tools;
-      $[114] = or;
-    } else or = $[114];
-    ig = or;
+      $[114] = segmented;
+    } else segmented = $[114];
+    collapsedMessages = segmented;
   }
-  let collapsed = ig;
-  let nr = Ue && transcriptPlugin !== null && collapsed !== tu;
-  let or;
+  let messages_2 = collapsedMessages;
+  let hasFoldedAgents = isTranscriptV2 && transcriptPlugin !== null && messages_2 !== withPending;
+  let sliceResult;
   if (
-    $[117] !== oe ||
-    $[118] !== nr ||
+    $[117] !== isUncapped ||
+    $[118] !== hasFoldedAgents ||
     $[119] !== isStreamingThinkingVisible ||
     $[120] !== renderRange ||
-    $[121] !== collapsed ||
-    $[122] !== Ge.slice ||
-    $[123] !== le
+    $[121] !== messages_2 ||
+    $[122] !== sliceCache.slice ||
+    $[123] !== isVirtualized
   ) {
     pJ: {
-      let ag = !le && !oe ? computeSliceStart(collapsed, Ge.slice, isStreamingThinkingVisible) : 0;
+      let sliceStart =
+        !isVirtualized && !isUncapped
+          ? computeSliceStart(messages_2, sliceCache.slice, isStreamingThinkingVisible)
+          : 0;
       if (renderRange) {
         let renderableMessages;
-        if ($[125] !== renderRange[0] || $[126] !== renderRange[1] || $[127] !== collapsed) {
-          renderableMessages = collapsed.slice(renderRange[0], renderRange[1]);
+        if ($[125] !== renderRange[0] || $[126] !== renderRange[1] || $[127] !== messages_2) {
+          renderableMessages = messages_2.slice(renderRange[0], renderRange[1]);
           $[125] = renderRange[0];
           $[126] = renderRange[1];
-          $[127] = collapsed;
+          $[127] = messages_2;
           $[128] = renderableMessages;
         } else renderableMessages = $[128];
-        let Qo;
+        let sliceResult_2;
         if ($[129] !== renderRange[0] || $[130] !== renderableMessages) {
-          Qo = {
+          sliceResult_2 = {
             renderableMessages,
             renderOffset: renderRange[0],
           };
           $[129] = renderRange[0];
           $[130] = renderableMessages;
-          $[131] = Qo;
-        } else Qo = $[131];
-        or = Qo;
+          $[131] = sliceResult_2;
+        } else sliceResult_2 = $[131];
+        sliceResult = sliceResult_2;
         break pJ;
       }
-      if (ag > 0) {
-        let qi = nr ? adjustSliceStartForReplies(collapsed, ag) : ag;
-        const renderableMessages = qi > 0 ? collapsed.slice(qi) : collapsed;
-        let Qo;
-        if ($[132] !== qi || $[133] !== renderableMessages) {
-          Qo = {
+      if (sliceStart > 0) {
+        let adjustedStart = hasFoldedAgents ? adjustSliceStartForReplies(messages_2, sliceStart) : sliceStart;
+        const renderableMessages = adjustedStart > 0 ? messages_2.slice(adjustedStart) : messages_2;
+        let sliceResult_3;
+        if ($[132] !== adjustedStart || $[133] !== renderableMessages) {
+          sliceResult_3 = {
             renderableMessages,
-            renderOffset: qi,
+            renderOffset: adjustedStart,
           };
-          $[132] = qi;
+          $[132] = adjustedStart;
           $[133] = renderableMessages;
-          $[134] = Qo;
-        } else Qo = $[134];
-        or = Qo;
+          $[134] = sliceResult_3;
+        } else sliceResult_3 = $[134];
+        sliceResult = sliceResult_3;
         break pJ;
       }
-      let xo;
-      if ($[135] !== collapsed) {
-        xo = {
-          renderableMessages: collapsed,
+      let sliceResult_4;
+      if ($[135] !== messages_2) {
+        sliceResult_4 = {
+          renderableMessages: messages_2,
           renderOffset: 0,
         };
-        $[135] = collapsed;
-        $[136] = xo;
-      } else xo = $[136];
-      or = xo;
+        $[135] = messages_2;
+        $[136] = sliceResult_4;
+      } else sliceResult_4 = $[136];
+      sliceResult = sliceResult_4;
     }
-    $[117] = oe;
-    $[118] = nr;
+    $[117] = isUncapped;
+    $[118] = hasFoldedAgents;
     $[119] = isStreamingThinkingVisible;
     $[120] = renderRange;
-    $[121] = collapsed;
-    $[122] = Ge.slice;
-    $[123] = le;
-    $[124] = or;
-  } else or = $[124];
-  let { renderableMessages, renderOffset } = or;
-  let xo;
-  if ($[137] !== le) {
-    xo = !le && isScreenReaderMode();
-    $[137] = le;
-    $[138] = xo;
-  } else xo = $[138];
-  let Cn = xo;
-  let lg = R(null);
-  let Iv = R(0);
-  let shownWindowUuidsRef = R(shownWindowUuids_2);
-  let Dv = R(0);
-  let Qo;
+    $[121] = messages_2;
+    $[122] = sliceCache.slice;
+    $[123] = isVirtualized;
+    $[124] = sliceResult;
+  } else sliceResult = $[124];
+  let { renderableMessages, renderOffset } = sliceResult;
+  let screenReaderMode;
+  if ($[137] !== isVirtualized) {
+    screenReaderMode = !isVirtualized && isScreenReaderMode();
+    $[137] = isVirtualized;
+    $[138] = screenReaderMode;
+  } else screenReaderMode = $[138];
+  let screenReaderLayout = screenReaderMode;
+  let frontCutRef = useRef(null);
+  let advancesRef = useRef(0);
+  let shownWindowUuidsRef = useRef(shownWindowUuids_2);
+  let frontCutCounter = useRef(0);
+  let syncFrontCutEffect;
   if (
-    $[139] !== Cn ||
+    $[139] !== screenReaderLayout ||
     $[140] !== shownWindowUuids_2 ||
-    $[141] !== Ge.preCap.advances ||
-    $[142] !== Ge.slice.advances
+    $[141] !== sliceCache.preCap.advances ||
+    $[142] !== sliceCache.slice.advances
   ) {
-    Qo = () => {
-      let Av = shownWindowUuidsRef.current;
+    syncFrontCutEffect = () => {
+      let prevUuids = shownWindowUuidsRef.current;
       shownWindowUuidsRef.current = shownWindowUuids_2;
-      let Nv = Av[0];
-      let Pv = shownWindowUuids_2[0];
-      if (Nv !== undefined && Pv !== undefined && !shownWindowUuids_2.includes(Nv) && Av.includes(Pv))
-        Dv.current = Dv.current + 1;
-      let Lv = Ge.preCap.advances + Ge.slice.advances + Dv.current;
-      if (Lv === Iv.current) {
+      let prevFirst = prevUuids[0];
+      let nextFirst = shownWindowUuids_2[0];
+      if (
+        prevFirst !== undefined &&
+        nextFirst !== undefined &&
+        !shownWindowUuids_2.includes(prevFirst) &&
+        prevUuids.includes(nextFirst)
+      )
+        frontCutCounter.current = frontCutCounter.current + 1;
+      let totalAdvances = sliceCache.preCap.advances + sliceCache.slice.advances + frontCutCounter.current;
+      if (totalAdvances === advancesRef.current) {
         return;
       }
-      Iv.current = Lv;
-      if (Cn && lg.current !== null) setTranscriptFrontCut(lg.current);
+      advancesRef.current = totalAdvances;
+      if (screenReaderLayout && frontCutRef.current !== null) setTranscriptFrontCut(frontCutRef.current);
     };
-    $[139] = Cn;
+    $[139] = screenReaderLayout;
     $[140] = shownWindowUuids_2;
-    $[141] = Ge.preCap.advances;
-    $[142] = Ge.slice.advances;
-    $[143] = Qo;
-  } else Qo = $[143];
-  zt(Qo);
-  let Ov;
-  if ($[144] !== ko || $[145] !== streamingToolUses) {
-    let pn;
-    if ($[147] !== ko) {
-      pn = (FL) => ko(FL).id;
-      $[147] = ko;
-      $[148] = pn;
-    } else pn = $[148];
-    Ov = new Set(streamingToolUses.map(pn));
-    $[144] = ko;
+    $[141] = sliceCache.preCap.advances;
+    $[142] = sliceCache.slice.advances;
+    $[143] = syncFrontCutEffect;
+  } else syncFrontCutEffect = $[143];
+  useLayoutEffect(syncFrontCutEffect);
+  let streamingIds;
+  if ($[144] !== mintIdStable || $[145] !== streamingToolUses) {
+    let idOf;
+    if ($[147] !== mintIdStable) {
+      idOf = (row) => mintIdStable(row).id;
+      $[147] = mintIdStable;
+      $[148] = idOf;
+    } else idOf = $[148];
+    streamingIds = new Set(streamingToolUses.map(idOf));
+    $[144] = mintIdStable;
     $[145] = streamingToolUses;
-    $[146] = Ov;
-  } else Ov = $[146];
-  let ou = Ov;
-  let cg = hasContentAfterIndex(renderableMessages, tools, ou);
-  let pn;
+    $[146] = streamingIds;
+  } else streamingIds = $[146];
+  let streamingIds_2 = streamingIds;
+  let hasContentAfter = hasContentAfterIndex(renderableMessages, tools, streamingIds_2);
+  let unseenIndex;
   if (
-    $[149] !== Jo ||
-    $[150] !== Io ||
+    $[149] !== foldedAgentMessages ||
+    $[150] !== transcriptMessages ||
     $[151] !== renderableMessages ||
-    $[152] !== Ue ||
+    $[152] !== isTranscriptV2 ||
     $[153] !== unseenDivider
   ) {
     fJ: {
       if (!unseenDivider) {
-        pn = -1;
+        unseenIndex = -1;
         break fJ;
       }
-      let ug;
-      let Pr;
-      if ($[155] !== renderableMessages || $[156] !== Ue || $[157] !== unseenDivider.firstUnseenUuid) {
-        ug = unseenDivider.firstUnseenUuid.slice(0, UUID_PREFIX_LENGTH);
-        Pr = findMessageIndexByShortUuid(renderableMessages, Ue, ug);
+      let unseenUuidShort;
+      let foundIndex;
+      if (
+        $[155] !== renderableMessages ||
+        $[156] !== isTranscriptV2 ||
+        $[157] !== unseenDivider.firstUnseenUuid
+      ) {
+        unseenUuidShort = unseenDivider.firstUnseenUuid.slice(0, UUID_PREFIX_LENGTH);
+        foundIndex = findMessageIndexByShortUuid(renderableMessages, isTranscriptV2, unseenUuidShort);
         $[155] = renderableMessages;
-        $[156] = Ue;
+        $[156] = isTranscriptV2;
         $[157] = unseenDivider.firstUnseenUuid;
-        $[158] = ug;
-        $[159] = Pr;
+        $[158] = unseenUuidShort;
+        $[159] = foundIndex;
       } else {
-        ug = $[158];
-        Pr = $[159];
+        unseenUuidShort = $[158];
+        foundIndex = $[159];
       }
-      let Uv = Pr;
-      if (Uv !== -1 || Jo === null) {
-        pn = Uv;
+      let foundIndex_2 = foundIndex;
+      if (foundIndex_2 !== -1 || foldedAgentMessages === null) {
+        unseenIndex = foundIndex_2;
         break fJ;
       }
-      let index = Io.findIndex((VL) => shortUuid(VL) === ug);
-      let Bv = index === -1 ? undefined : Io[index];
-      if (Bv === undefined || !Jo.folded.has(Bv)) {
-        pn = -1;
+      let index = transcriptMessages.findIndex((message) => shortUuid(message) === unseenUuidShort);
+      let firstUnseen = index === -1 ? undefined : transcriptMessages[index];
+      if (firstUnseen === undefined || !foldedAgentMessages.folded.has(firstUnseen)) {
+        unseenIndex = -1;
         break fJ;
       }
-      let selectedIdx = buildShortUuidIndex(renderableMessages, Ue);
-      for (let idx = index + 1; idx < Io.length; idx++) {
-        let Hv = Io[idx];
-        if (Jo.folded.has(Hv)) {
+      let selectedIdx = buildShortUuidIndex(renderableMessages, isTranscriptV2);
+      for (let idx = index + 1; idx < transcriptMessages.length; idx++) {
+        let message = transcriptMessages[idx];
+        if (foldedAgentMessages.folded.has(message)) {
           continue;
         }
-        let Fv = shortUuid(Hv);
-        let Vv = Fv === undefined ? undefined : selectedIdx.get(Fv);
-        if (Vv !== undefined) {
-          pn = Vv;
+        let candidateShortUuid = shortUuid(message);
+        let index = candidateShortUuid === undefined ? undefined : selectedIdx.get(candidateShortUuid);
+        if (index !== undefined) {
+          unseenIndex = index;
           break fJ;
         }
       }
-      pn = -1;
+      unseenIndex = -1;
     }
-    $[149] = Jo;
-    $[150] = Io;
+    $[149] = foldedAgentMessages;
+    $[150] = transcriptMessages;
     $[151] = renderableMessages;
-    $[152] = Ue;
+    $[152] = isTranscriptV2;
     $[153] = unseenDivider;
-    $[154] = pn;
-  } else pn = $[154];
-  let rr = pn;
-  let Pr;
+    $[154] = unseenIndex;
+  } else unseenIndex = $[154];
+  let unseenIndex_2 = unseenIndex;
+  let replyHiddenRows;
   if (
-    $[160] !== rr ||
-    $[161] !== nr ||
+    $[160] !== unseenIndex_2 ||
+    $[161] !== hasFoldedAgents ||
     $[162] !== renderOffset ||
     $[163] !== renderableMessages ||
-    $[164] !== collapsed
+    $[164] !== messages_2
   ) {
     gJ: {
-      let nu = new Set();
-      if (!nr) {
-        Pr = nu;
+      let hiddenRows = new Set();
+      if (!hasFoldedAgents) {
+        replyHiddenRows = hiddenRows;
         break gJ;
       }
       let { isLabelledReply, replyRunRowAbove } = transcriptPlugin;
@@ -1672,129 +1811,134 @@ function MessagesImpl(props) {
         if (!isLabelledReply(renderableMessages[idx])) {
           continue;
         }
-        let GL = collapsed[renderOffset + idx - 1];
+        let prevMessage = messages_2[renderOffset + idx - 1];
         let onItemClick = replyRunRowAbove(renderableMessages, idx);
-        if (GL?.type === "speaker_label" || (nu.has(onItemClick) && !(rr > onItemClick && rr <= idx)))
-          nu.add(idx);
+        if (
+          prevMessage?.type === "speaker_label" ||
+          (hiddenRows.has(onItemClick) && !(unseenIndex_2 > onItemClick && unseenIndex_2 <= idx))
+        )
+          hiddenRows.add(idx);
       }
-      Pr = nu;
+      replyHiddenRows = hiddenRows;
     }
-    $[160] = rr;
-    $[161] = nr;
+    $[160] = unseenIndex_2;
+    $[161] = hasFoldedAgents;
     $[162] = renderOffset;
     $[163] = renderableMessages;
-    $[164] = collapsed;
-    $[165] = Pr;
-  } else Pr = $[165];
-  let ru = Pr;
-  let fg = nr ? transcriptPlugin.replyRunRowAbove(renderableMessages, renderableMessages.length) : -1;
-  let transcriptV2 = !nr
+    $[164] = messages_2;
+    $[165] = replyHiddenRows;
+  } else replyHiddenRows = $[165];
+  let replyHiddenRows_2 = replyHiddenRows;
+  let lastReplyRow = hasFoldedAgents
+    ? transcriptPlugin.replyRunRowAbove(renderableMessages, renderableMessages.length)
+    : -1;
+  let transcriptV2 = !hasFoldedAgents
     ? undefined
-    : !transcriptPlugin.isLabelledReply(renderableMessages[fg])
+    : !transcriptPlugin.isLabelledReply(renderableMessages[lastReplyRow])
       ? "label"
-      : ru.has(fg) && rr <= fg
+      : replyHiddenRows_2.has(lastReplyRow) && unseenIndex_2 <= lastReplyRow
         ? "continues"
         : undefined;
-  let [su, $L] = y(createIdSet);
-  let jv;
+  let [expandedKeys, setExpandedKeys] = useState(createIdSet);
+  let toggleExpanded;
   if ($[166] === MEMO_CACHE_SENTINEL) {
-    jv = (msg) => {
+    toggleExpanded = (msg) => {
       let k = expandKey(msg);
-      $L((prev) => {
+      setExpandedKeys((prev) => {
         let next = new Set(prev);
         if (next.has(k)) next.delete(k);
         else next.add(k);
         return next;
       });
     };
-    $[166] = jv;
-  } else jv = $[166];
-  let onItemClick = jv;
-  let zv;
-  if ($[167] !== su) {
-    zv = (msg_5) => su.size > 0 && su.has(expandKey(msg_5));
-    $[167] = su;
-    $[168] = zv;
-  } else zv = $[168];
-  let Os = zv;
-  let Gv;
-  let $v;
-  if ($[169] !== host || $[170] !== renderableMessages || $[171] !== screen || $[172] !== le) {
-    Gv = () => {
+    $[166] = toggleExpanded;
+  } else toggleExpanded = $[166];
+  let onItemClick = toggleExpanded;
+  let isExpanded;
+  if ($[167] !== expandedKeys) {
+    isExpanded = (msg_5) => expandedKeys.size > 0 && expandedKeys.has(expandKey(msg_5));
+    $[167] = expandedKeys;
+    $[168] = isExpanded;
+  } else isExpanded = $[168];
+  let isExpandedStable = isExpanded;
+  let reportMissingUuid;
+  let reportDeps;
+  if ($[169] !== host || $[170] !== renderableMessages || $[171] !== screen || $[172] !== isVirtualized) {
+    reportMissingUuid = () => {
       reportMessageWithoutUuid(host, renderableMessages, {
-        virtualized: le,
+        virtualized: isVirtualized,
         screen,
       });
     };
-    $v = [host, renderableMessages, le, screen];
+    reportDeps = [host, renderableMessages, isVirtualized, screen];
     $[169] = host;
     $[170] = renderableMessages;
     $[171] = screen;
-    $[172] = le;
-    $[173] = Gv;
-    $[174] = $v;
+    $[172] = isVirtualized;
+    $[173] = reportMissingUuid;
+    $[174] = reportDeps;
   } else {
-    Gv = $[173];
-    $v = $[174];
+    reportMissingUuid = $[173];
+    reportDeps = $[174];
   }
-  P(Gv, $v);
-  let au;
-  if ($[175] !== collapsed || $[176] !== Ue) {
+  useEffect(reportMissingUuid, reportDeps);
+  let inboundLabelRows;
+  if ($[175] !== messages_2 || $[176] !== isTranscriptV2) {
     hJ: {
-      let yg = new Set();
-      if (!Ue) {
-        au = yg;
+      let rows = new Set();
+      if (!isTranscriptV2) {
+        inboundLabelRows = rows;
         break hJ;
       }
-      au =
-        (collapsed.forEach((JL, Kv) => {
+      inboundLabelRows =
+        (messages_2.forEach((message, idx) => {
           if (
-            collapsed[Kv - 1]?.type === "speaker_label" ||
-            findSpeakerLabelAbove(collapsed, Kv)?.speaker.kind === "inbound"
+            messages_2[idx - 1]?.type === "speaker_label" ||
+            findSpeakerLabelAbove(messages_2, idx)?.speaker.kind === "inbound"
           )
-            yg.add(JL);
+            rows.add(message);
         }),
-        yg);
+        rows);
     }
-    $[175] = collapsed;
-    $[176] = Ue;
-    $[177] = au;
-  } else au = $[177];
-  let lu = au;
-  let qv;
+    $[175] = messages_2;
+    $[176] = isTranscriptV2;
+    $[177] = inboundLabelRows;
+  } else inboundLabelRows = $[177];
+  let inboundLabelRows_2 = inboundLabelRows;
+  let isItemClickableRaw;
   if (
-    $[178] !== Mo ||
+    $[178] !== bashSplitCache ||
     $[179] !== columns ||
-    $[180] !== Vo ||
+    $[180] !== crossSessionBodies ||
     $[181] !== host ||
-    $[182] !== me ||
-    $[183] !== $e ||
-    $[184] !== bt ||
-    $[185] !== _o ||
-    $[186] !== lu ||
+    $[182] !== isTranscriptScreen ||
+    $[183] !== gutterSize ||
+    $[184] !== latestBashOutputUuid_2 ||
+    $[185] !== lookups_2 ||
+    $[186] !== inboundLabelRows_2 ||
     $[187] !== tools ||
-    $[188] !== verbose
+    $[188] !== isVerbose
   ) {
-    qv = (msg_6) => {
+    isItemClickableRaw = (msg_6) => {
       if (msg_6.type === "collapsed_read_search") {
         return true;
       }
       if (msg_6.type === "attachment") {
-        if (verbose || me) {
+        if (isVerbose || isTranscriptScreen) {
           return false;
         }
         if (msg_6.attachment?.type === "queued_command") {
           let trimmed = joinTextContent(msg_6.attachment.prompt).trim();
-          if (lu.has(msg_6)) {
+          if (inboundLabelRows_2.has(msg_6)) {
             return (
               isPeerOrObserver(msg_6.attachment.origin) &&
-              agentMessageOverflows(msg_6, trimmed, msg_6.attachment.origin, $e.columns)
+              agentMessageOverflows(msg_6, trimmed, msg_6.attachment.origin, gutterSize.columns)
             );
           }
           return (
             isPeerOrObserver(msg_6.attachment.origin) ||
             isTeammateMessageTextInSwarm(trimmed) ||
-            isCrossSessionBodyHidden(Vo, msg_6, trimmed, msg_6.attachment.origin)
+            isCrossSessionBodyHidden(crossSessionBodies, msg_6, trimmed, msg_6.attachment.origin)
           );
         }
         if (msg_6.attachment?.type === "teammate_mailbox") {
@@ -1806,29 +1950,29 @@ function MessagesImpl(props) {
         return msg_6.attachment?.type === "goal_status" && !!msg_6.attachment.reason;
       }
       if (msg_6.type === "assistant") {
-        let Yi = msg_6.message.content[0];
-        if (verbose || me) {
+        let block = msg_6.message.content[0];
+        if (isVerbose || isTranscriptScreen) {
           return false;
         }
         return (
-          Yi != null &&
-          Yi.type === "advisor_tool_result" &&
-          Yi.content?.type === "advisor_result" &&
-          (!getErrorMessageIfRefusal(Yi) || getAdvisorRefusalText(Yi) !== undefined)
+          block != null &&
+          block.type === "advisor_tool_result" &&
+          block.content?.type === "advisor_result" &&
+          (!getErrorMessageIfRefusal(block) || getAdvisorRefusalText(block) !== undefined)
         );
       }
       if (msg_6.type !== "user") {
         return false;
       }
-      let Uo = msg_6.message.content[0];
-      if (Uo?.type === "text" && isBashOutputText(Uo.text)) {
-        if (verbose || me || msg_6.uuid === bt) {
+      let block = msg_6.message.content[0];
+      if (block?.type === "text" && isBashOutputText(block.text)) {
+        if (isVerbose || isTranscriptScreen || msg_6.uuid === latestBashOutputUuid_2) {
           return false;
         }
         return (
           mcpRenderOverrideFor(BashTool, "isResultTruncated")?.(
             {
-              ...splitBashOutputCached(Mo, Uo),
+              ...splitBashOutputCached(bashSplitCache, block),
               interrupted: false,
             },
             {
@@ -1837,159 +1981,161 @@ function MessagesImpl(props) {
           ) ?? false
         );
       }
-      if (Uo?.type === "text") {
-        if (verbose || me) {
+      if (block?.type === "text") {
+        if (isVerbose || isTranscriptScreen) {
           return false;
         }
-        if (lu.has(msg_6)) {
+        if (inboundLabelRows_2.has(msg_6)) {
           return (
             isPeerOrObserver(msg_6.origin) &&
-            typeof Uo.text === "string" &&
-            agentMessageOverflows(msg_6, Uo.text, msg_6.origin, $e.columns)
+            typeof block.text === "string" &&
+            agentMessageOverflows(msg_6, block.text, msg_6.origin, gutterSize.columns)
           );
         }
         return (
           isPeerOrObserver(msg_6.origin) ||
-          (typeof Uo.text === "string" &&
-            (isTeammateMessageTextInSwarm(Uo.text) ||
-              isCrossSessionBodyHidden(Vo, msg_6, Uo.text, msg_6.origin)))
+          (typeof block.text === "string" &&
+            (isTeammateMessageTextInSwarm(block.text) ||
+              isCrossSessionBodyHidden(crossSessionBodies, msg_6, block.text, msg_6.origin)))
         );
       }
-      if (Uo?.type !== "tool_result") {
+      if (block?.type !== "tool_result") {
         return false;
       }
-      if (Uo.is_error) {
-        return exceedsTenLines(Uo.content);
+      if (block.is_error) {
+        return exceedsTenLines(block.content);
       }
       if (!msg_6.toolUseResult) {
         return false;
       }
-      let name = _o.toolUseByToolUseID.get(Uo.tool_use_id)?.name;
-      let Yv = name ? (findToolByName(tools, name) ?? displayOnlyMcpTool(name, host)) : undefined;
+      let name = lookups_2.toolUseByToolUseID.get(block.tool_use_id)?.name;
+      let tool = name ? (findToolByName(tools, name) ?? displayOnlyMcpTool(name, host)) : undefined;
       let toolUseResult = msg_6.toolUseResult;
       return (
-        (Yv
-          ? mcpRenderOverrideFor(Yv, "isResultTruncated")?.(toolUseResult, {
+        (tool
+          ? mcpRenderOverrideFor(tool, "isResultTruncated")?.(toolUseResult, {
               columns,
             })
           : undefined) ?? false
       );
     };
-    $[178] = Mo;
+    $[178] = bashSplitCache;
     $[179] = columns;
-    $[180] = Vo;
+    $[180] = crossSessionBodies;
     $[181] = host;
-    $[182] = me;
-    $[183] = $e;
-    $[184] = bt;
-    $[185] = _o;
-    $[186] = lu;
+    $[182] = isTranscriptScreen;
+    $[183] = gutterSize;
+    $[184] = latestBashOutputUuid_2;
+    $[185] = lookups_2;
+    $[186] = inboundLabelRows_2;
     $[187] = tools;
-    $[188] = verbose;
-    $[189] = qv;
-  } else qv = $[189];
-  let isItemClickable = qv;
+    $[188] = isVerbose;
+    $[189] = isItemClickableRaw;
+  } else isItemClickableRaw = $[189];
+  let isItemClickable = isItemClickableRaw;
   let dialogOfKind = useDialogOfKind(LOCAL_JSX_DIALOG.kind);
-  let canAnimate = !Fe && !dialogOfKind;
-  let prevProgressState = Se(TerminalWriteContext);
-  let Xv;
-  let Jv;
+  let canAnimate = !pauseAnimation_2 && !dialogOfKind;
+  let prevProgressState = useContext(TerminalWriteContext);
+  let historyWriterEffect;
+  let historyWriterDeps;
   if ($[190] !== prevProgressState) {
-    Xv = () => {
+    historyWriterEffect = () => {
       if (!prevProgressState) {
         return;
       }
       setHistoryWriter(prevProgressState);
       return () => clearHistoryWriter(prevProgressState);
     };
-    Jv = [prevProgressState];
+    historyWriterDeps = [prevProgressState];
     $[190] = prevProgressState;
-    $[191] = Xv;
-    $[192] = Jv;
+    $[191] = historyWriterEffect;
+    $[192] = historyWriterDeps;
   } else {
-    Xv = $[191];
-    Jv = $[192];
+    historyWriterEffect = $[191];
+    historyWriterDeps = $[192];
   }
-  P(Xv, Jv);
-  let Qv;
+  useEffect(historyWriterEffect, historyWriterDeps);
+  let itemKey;
   if ($[193] !== conversationId) {
-    Qv = (msg_7) => `${msg_7.uuid}-${conversationId}`;
+    itemKey = (msg_7) => `${msg_7.uuid}-${conversationId}`;
     $[193] = conversationId;
-    $[194] = Qv;
-  } else Qv = $[194];
-  let Fs = Qv;
-  let Zv;
+    $[194] = itemKey;
+  } else itemKey = $[194];
+  let itemKey_2 = itemKey;
+  let renderItem;
   if (
     $[195] !== canAnimate ||
     $[196] !== columns ||
     $[197] !== commands ||
     $[198] !== conversationId ||
-    $[199] !== rr ||
+    $[199] !== unseenIndex_2 ||
     $[200] !== hasStreamingText ||
     $[201] !== inProgressToolUseIDs ||
-    $[202] !== Os ||
+    $[202] !== isExpandedStable ||
     $[203] !== isLoading ||
-    $[204] !== ru ||
-    $[205] !== $e ||
-    $[206] !== cg ||
-    $[207] !== bt ||
-    $[208] !== it ||
-    $[209] !== _o ||
-    $[210] !== Fs ||
+    $[204] !== replyHiddenRows_2 ||
+    $[205] !== gutterSize ||
+    $[206] !== hasContentAfter ||
+    $[207] !== latestBashOutputUuid_2 ||
+    $[208] !== spinnerWidth ||
+    $[209] !== lookups_2 ||
+    $[210] !== itemKey_2 ||
     $[211] !== renderOffset ||
     $[212] !== renderableMessages ||
-    $[213] !== Gt ||
+    $[213] !== rowProjector ||
     $[214] !== screen ||
-    $[215] !== collapsed ||
+    $[215] !== messages_2 ||
     $[216] !== showMessageTimestamps_2 ||
-    $[217] !== ou ||
+    $[217] !== streamingIds_2 ||
     $[218] !== tools ||
     $[219] !== turn?.armRateLimitAutoContinue ||
     $[220] !== turn?.openRateLimitOptions ||
     $[221] !== unseenDivider ||
-    $[222] !== verbose
+    $[222] !== isVerbose
   ) {
-    Zv = (msg, index) => {
+    renderItem = (msg, index) => {
       let prevType = index > 0 ? renderableMessages[index - 1] : undefined;
       let isUserContinuation = msg.type === "user" && prevType?.type === "user";
       let isSplitUserContinuation = isSplitUserMessagePart(msg, prevType);
-      let nO = collapsed[renderOffset + index - 1];
-      let tT = findSpeakerLabelAbove(collapsed, renderOffset + index)?.speaker.kind === "inbound";
-      let oT = nO?.type === "speaker_label";
-      let continuesLabelledReply = !oT && ru.has(index);
-      let hasContentAfter = msg.type === "collapsed_read_search" && (hasStreamingText || index < cg);
-      let vg = tT;
-      let k_0 = hasStringUuid(msg) ? Fs(msg) : `no-uuid:${index}-${conversationId}`;
-      let Tg = jsxProd_default(
+      let prevCollapsed = messages_2[renderOffset + index - 1];
+      let afterInboundLabel =
+        findSpeakerLabelAbove(messages_2, renderOffset + index)?.speaker.kind === "inbound";
+      let followsSpeakerLabel = prevCollapsed?.type === "speaker_label";
+      let continuesLabelledReply = !followsSpeakerLabel && replyHiddenRows_2.has(index);
+      let hasContentAfter_2 =
+        msg.type === "collapsed_read_search" && (hasStreamingText || index < hasContentAfter);
+      let afterInboundLabel_2 = afterInboundLabel;
+      let k_0 = hasStringUuid(msg) ? itemKey_2(msg) : `no-uuid:${index}-${conversationId}`;
+      let row = jsxProd_default(
         MessageRow,
         {
           message: msg,
           isUserContinuation,
           isSplitUserContinuation,
-          followsSpeakerLabel: oT,
+          followsSpeakerLabel,
           continuesLabelledReply,
-          followsInboundLabel: tT,
-          hasContentAfter,
+          followsInboundLabel: afterInboundLabel,
+          hasContentAfter: hasContentAfter_2,
           tools,
           commands,
-          verbose: verbose || Os(msg),
+          verbose: isVerbose || isExpandedStable(msg),
           showMessageTimestamps: showMessageTimestamps_2,
           inProgressToolUseIDs,
-          streamingToolUseIDs: ou,
+          streamingToolUseIDs: streamingIds_2,
           screen,
           canAnimate,
           onOpenRateLimitOptions: turn?.openRateLimitOptions,
           onRateLimitAutoQueueContinue: turn?.armRateLimitAutoContinue,
-          latestBashOutputUUID: bt,
-          columns: vg ? $e.columns : columns,
+          latestBashOutputUUID: latestBashOutputUuid_2,
+          columns: afterInboundLabel_2 ? gutterSize.columns : columns,
           isLoading,
-          lookups: Gt.forRow(msg, _o),
+          lookups: rowProjector.forRow(msg, lookups_2),
         },
         k_0,
       );
-      let wrapped = Tg;
-      let rT = it + (vg ? GUTTER_WIDTH : 0);
-      if (rT > 0)
+      let wrapped = row;
+      let gutterWidth = spinnerWidth + (afterInboundLabel_2 ? GUTTER_WIDTH : 0);
+      if (gutterWidth > 0)
         wrapped = jsxProd_default_2(
           Box,
           {
@@ -1997,25 +2143,25 @@ function MessagesImpl(props) {
             children: [
               jsxProd_default(NoSelect, {
                 fromLeftEdge: true,
-                minWidth: rT,
+                minWidth: gutterWidth,
               }),
-              vg
+              afterInboundLabel_2
                 ? jsxProd_default(TerminalSizeContext, {
-                    value: $e,
-                    children: Tg,
+                    value: gutterSize,
+                    children: row,
                   })
-                : Tg,
+                : row,
             ],
           },
           `li-${k_0}`,
         );
-      if (unseenDivider && index === rr) {
+      if (unseenDivider && index === unseenIndex_2) {
         return [
           jsxProd_default(
             Box,
             {
               marginTop: 1,
-              paddingLeft: it,
+              paddingLeft: spinnerWidth,
               children: jsxProd_default(Divider, {
                 title: `${unseenDivider.count} new ${plural(unseenDivider.count, "message")}`,
                 width: columns,
@@ -2033,114 +2179,120 @@ function MessagesImpl(props) {
     $[196] = columns;
     $[197] = commands;
     $[198] = conversationId;
-    $[199] = rr;
+    $[199] = unseenIndex_2;
     $[200] = hasStreamingText;
     $[201] = inProgressToolUseIDs;
-    $[202] = Os;
+    $[202] = isExpandedStable;
     $[203] = isLoading;
-    $[204] = ru;
-    $[205] = $e;
-    $[206] = cg;
-    $[207] = bt;
-    $[208] = it;
-    $[209] = _o;
-    $[210] = Fs;
+    $[204] = replyHiddenRows_2;
+    $[205] = gutterSize;
+    $[206] = hasContentAfter;
+    $[207] = latestBashOutputUuid_2;
+    $[208] = spinnerWidth;
+    $[209] = lookups_2;
+    $[210] = itemKey_2;
     $[211] = renderOffset;
     $[212] = renderableMessages;
-    $[213] = Gt;
+    $[213] = rowProjector;
     $[214] = screen;
-    $[215] = collapsed;
+    $[215] = messages_2;
     $[216] = showMessageTimestamps_2;
-    $[217] = ou;
+    $[217] = streamingIds_2;
     $[218] = tools;
     $[219] = turn?.armRateLimitAutoContinue;
     $[220] = turn?.openRateLimitOptions;
     $[221] = unseenDivider;
-    $[222] = verbose;
-    $[223] = Zv;
-  } else Zv = $[223];
-  let Xi = Zv;
-  let [uu] = y(createWeakMap_4);
-  let sT;
-  if ($[224] !== _o || $[225] !== uu || $[226] !== tools) {
-    sT = (msg) => {
-      let cached = uu.get(msg);
+    $[222] = isVerbose;
+    $[223] = renderItem;
+  } else renderItem = $[223];
+  let renderItemStable = renderItem;
+  let [searchTextCache] = useState(createWeakMap_4);
+  let extractSearchTextImpl;
+  if ($[224] !== lookups_2 || $[225] !== searchTextCache || $[226] !== tools) {
+    extractSearchTextImpl = (msg) => {
+      let cached = searchTextCache.get(msg);
       if (cached !== undefined) {
         return cached;
       }
       let text = getMessageSearchText(msg);
-      let lT = true;
+      let shouldCache = true;
       if (msg.type === "user" && msg.toolUseResult && Array.isArray(msg.message.content)) {
         let tr = msg.message.content.find(isToolResultContent);
         if (tr && "tool_use_id" in tr) {
-          let tu = _o.toolUseByToolUseID.get(tr.tool_use_id);
-          lT = tu !== undefined;
+          let tu = lookups_2.toolUseByToolUseID.get(tr.tool_use_id);
+          shouldCache = tu !== undefined;
           let tool = tu && findToolByName(tools, tu.name);
           let extracted = tool?.outputSchema?.safeParse(msg.toolUseResult);
-          let aO = extracted?.data ?? msg.toolUseResult;
-          let uT = extracted === undefined || extracted.success ? tool?.extractSearchText?.(aO) : undefined;
-          if (uT !== undefined) text = uT;
+          let parsed = extracted?.data ?? msg.toolUseResult;
+          let searchText =
+            extracted === undefined || extracted.success ? tool?.extractSearchText?.(parsed) : undefined;
+          if (searchText !== undefined) text = searchText;
         }
       }
       let lowered = text.toLowerCase();
-      if (lT) uu.set(msg, lowered);
+      if (shouldCache) searchTextCache.set(msg, lowered);
       return lowered;
     };
-    $[224] = _o;
-    $[225] = uu;
+    $[224] = lookups_2;
+    $[225] = searchTextCache;
     $[226] = tools;
-    $[227] = sT;
-  } else sT = $[227];
-  let extractSearchText = sT;
-  let mT;
-  if ($[228] !== hasStreamingText || $[229] !== Ee || $[230] !== transcriptV2 || $[231] !== turn) {
-    mT =
-      hasStreamingText && !Ee && turn
+    $[227] = extractSearchTextImpl;
+  } else extractSearchTextImpl = $[227];
+  let extractSearchText = extractSearchTextImpl;
+  let streamingTextRow;
+  if (
+    $[228] !== hasStreamingText ||
+    $[229] !== briefMessagesOnly ||
+    $[230] !== transcriptV2 ||
+    $[231] !== turn
+  ) {
+    streamingTextRow =
+      hasStreamingText && !briefMessagesOnly && turn
         ? jsxProd_default(StreamingTextRow, {
             store: turn.stream.previewStore,
             transcriptV2,
           })
         : null;
     $[228] = hasStreamingText;
-    $[229] = Ee;
+    $[229] = briefMessagesOnly;
     $[230] = transcriptV2;
     $[231] = turn;
-    $[232] = mT;
-  } else mT = $[232];
-  let Ji = mT;
-  let pT;
+    $[232] = streamingTextRow;
+  } else streamingTextRow = $[232];
+  let streamingTextRow_2 = streamingTextRow;
+  let children;
   if (
     $[233] !== columns ||
     $[234] !== extractSearchText ||
     $[235] !== isFullscreen ||
     $[236] !== isItemClickable ||
-    $[237] !== Os ||
-    $[238] !== me ||
-    $[239] !== Fs ||
-    $[240] !== Xi ||
+    $[237] !== isExpandedStable ||
+    $[238] !== isTranscriptScreen ||
+    $[239] !== itemKey_2 ||
+    $[240] !== renderItemStable ||
     $[241] !== renderableMessages ||
     $[242] !== reveal ||
-    $[243] !== Cn ||
+    $[243] !== screenReaderLayout ||
     $[244] !== scrollViewport ||
     $[245] !== search?.jumpRef ||
     $[246] !== search?.onSearchMatchesChange ||
     $[247] !== search?.scanElement ||
     $[248] !== search?.setPositions ||
-    $[249] !== le
+    $[249] !== isVirtualized
   ) {
-    pT = le
+    children = isVirtualized
       ? jsxProd_default(expandContextSignal.Provider, {
           value: true,
           children: jsxProd_default(VirtualMessageList, {
             messages: renderableMessages,
             scrollViewport,
             columns,
-            itemKey: Fs,
-            renderItem: Xi,
+            itemKey: itemKey_2,
+            renderItem: renderItemStable,
             onItemClick,
             isItemClickable,
-            isItemExpanded: Os,
-            trackStickyPrompt: !me && isFullscreen,
+            isItemExpanded: isExpandedStable,
+            trackStickyPrompt: !isTranscriptScreen && isFullscreen,
             jumpRef: search?.jumpRef,
             revealRef: reveal,
             onSearchMatchesChange: search?.onSearchMatchesChange,
@@ -2149,202 +2301,208 @@ function MessagesImpl(props) {
             extractSearchText,
           }),
         })
-      : Cn
+      : screenReaderLayout
         ? jsxProd_default(Box, {
             flexDirection: "column",
-            ref: lg,
-            children: renderableMessages.flatMap(Xi),
+            ref: frontCutRef,
+            children: renderableMessages.flatMap(renderItemStable),
           })
-        : renderableMessages.flatMap(Xi);
+        : renderableMessages.flatMap(renderItemStable);
     $[233] = columns;
     $[234] = extractSearchText;
     $[235] = isFullscreen;
     $[236] = isItemClickable;
-    $[237] = Os;
-    $[238] = me;
-    $[239] = Fs;
-    $[240] = Xi;
+    $[237] = isExpandedStable;
+    $[238] = isTranscriptScreen;
+    $[239] = itemKey_2;
+    $[240] = renderItemStable;
     $[241] = renderableMessages;
     $[242] = reveal;
-    $[243] = Cn;
+    $[243] = screenReaderLayout;
     $[244] = scrollViewport;
     $[245] = search?.jumpRef;
     $[246] = search?.onSearchMatchesChange;
     $[247] = search?.scanElement;
     $[248] = search?.setPositions;
-    $[249] = le;
-    $[250] = pT;
-  } else pT = $[250];
-  let children = pT;
-  const value_2 = Jo?.counts ?? monitorEventCache;
-  let children_2;
-  if ($[251] !== value || $[252] !== children) {
-    children_2 = jsxProd_default(CompactSummaryContext, {
+    $[249] = isVirtualized;
+    $[250] = children;
+  } else children = $[250];
+  let children_2 = children;
+  const value_2 = foldedAgentMessages?.counts ?? monitorEventCache;
+  let children_3;
+  if ($[251] !== value || $[252] !== children_2) {
+    children_3 = jsxProd_default(CompactSummaryContext, {
       value,
-      children,
-    });
-    $[251] = value;
-    $[252] = children;
-    $[253] = children_2;
-  } else children_2 = $[253];
-  let fT;
-  if ($[254] !== value_2 || $[255] !== children_2) {
-    fT = jsxProd_default(monitorEventCacheStore, {
-      value: value_2,
       children: children_2,
     });
+    $[251] = value;
+    $[252] = children_2;
+    $[253] = children_3;
+  } else children_3 = $[253];
+  let withMonitorCache;
+  if ($[254] !== value_2 || $[255] !== children_3) {
+    withMonitorCache = jsxProd_default(monitorEventCacheStore, {
+      value: value_2,
+      children: children_3,
+    });
     $[254] = value_2;
-    $[255] = children_2;
-    $[256] = fT;
-  } else fT = $[256];
-  let children_3 = fT;
-  let gT;
-  if ($[257] !== hiddenMessageCount_2 || $[258] !== Cn) {
-    gT = Cn ? "" : `${sequential.bold(hiddenMessageCount_2)} `;
+    $[255] = children_3;
+    $[256] = withMonitorCache;
+  } else withMonitorCache = $[256];
+  let children_4 = withMonitorCache;
+  let hiddenCountLabel;
+  if ($[257] !== hiddenMessageCount_2 || $[258] !== screenReaderLayout) {
+    hiddenCountLabel = screenReaderLayout ? "" : `${sequential.bold(hiddenMessageCount_2)} `;
     $[257] = hiddenMessageCount_2;
-    $[258] = Cn;
-    $[259] = gT;
-  } else gT = $[259];
-  let Ws = gT;
-  let mu;
+    $[258] = screenReaderLayout;
+    $[259] = hiddenCountLabel;
+  } else hiddenCountLabel = $[259];
+  let hiddenCountLabel_2 = hiddenCountLabel;
+  let showOlderDivider;
   if (
     $[260] !== columns ||
     $[261] !== hasTruncatedMessages_2 ||
-    $[262] !== Ws ||
+    $[262] !== hiddenCountLabel_2 ||
     $[263] !== toggleShowAllShortcut
   ) {
-    mu =
+    showOlderDivider =
       hasTruncatedMessages_2 &&
       jsxProd_default(Divider, {
-        title: `${toggleShowAllShortcut} to show ${Ws}previous messages`,
+        title: `${toggleShowAllShortcut} to show ${hiddenCountLabel_2}previous messages`,
         width: columns,
       });
     $[260] = columns;
     $[261] = hasTruncatedMessages_2;
-    $[262] = Ws;
+    $[262] = hiddenCountLabel_2;
     $[263] = toggleShowAllShortcut;
-    $[264] = mu;
-  } else mu = $[264];
-  let pu;
+    $[264] = showOlderDivider;
+  } else showOlderDivider = $[264];
+  let hideOlderDivider;
   if (
     $[265] !== columns ||
-    $[266] !== oe ||
-    $[267] !== Ws ||
+    $[266] !== isUncapped ||
+    $[267] !== hiddenCountLabel_2 ||
     $[268] !== hiddenMessageCount_2 ||
-    $[269] !== me ||
-    $[270] !== _e ||
+    $[269] !== isTranscriptScreen ||
+    $[270] !== hasHistory ||
     $[271] !== toggleShowAllShortcut
   ) {
-    pu =
-      me &&
-      _e &&
+    hideOlderDivider =
+      isTranscriptScreen &&
+      hasHistory &&
       hiddenMessageCount_2 > 0 &&
-      !oe &&
+      !isUncapped &&
       jsxProd_default(Divider, {
-        title: `${toggleShowAllShortcut} to hide ${Ws}previous messages`,
+        title: `${toggleShowAllShortcut} to hide ${hiddenCountLabel_2}previous messages`,
         width: columns,
       });
     $[265] = columns;
-    $[266] = oe;
-    $[267] = Ws;
+    $[266] = isUncapped;
+    $[267] = hiddenCountLabel_2;
     $[268] = hiddenMessageCount_2;
-    $[269] = me;
-    $[270] = _e;
+    $[269] = isTranscriptScreen;
+    $[270] = hasHistory;
     $[271] = toggleShowAllShortcut;
-    $[272] = pu;
-  } else pu = $[272];
-  let fu;
-  if ($[273] !== children_3) {
-    fu = jsxProd_default(SuggestionSlot, {
+    $[272] = hideOlderDivider;
+  } else hideOlderDivider = $[272];
+  let withSuggestionSlot;
+  if ($[273] !== children_4) {
+    withSuggestionSlot = jsxProd_default(SuggestionSlot, {
       value: null,
-      children: children_3,
+      children: children_4,
     });
-    $[273] = children_3;
-    $[274] = fu;
-  } else fu = $[274];
-  let gu;
-  if ($[275] !== it || $[276] !== Ji) {
-    gu =
-      Ji !== null && it > 0
+    $[273] = children_4;
+    $[274] = withSuggestionSlot;
+  } else withSuggestionSlot = $[274];
+  let withSpinnerGutter;
+  if ($[275] !== spinnerWidth || $[276] !== streamingTextRow_2) {
+    withSpinnerGutter =
+      streamingTextRow_2 !== null && spinnerWidth > 0
         ? jsxProd_default_2(Box, {
             flexDirection: "row",
             children: [
               jsxProd_default(NoSelect, {
                 fromLeftEdge: true,
-                minWidth: it,
+                minWidth: spinnerWidth,
               }),
-              Ji,
+              streamingTextRow_2,
             ],
           })
-        : Ji;
-    $[275] = it;
-    $[276] = Ji;
-    $[277] = gu;
-  } else gu = $[277];
-  let hT;
-  if ($[278] !== ct || $[279] !== mu || $[280] !== pu || $[281] !== fu || $[282] !== gu) {
-    hT = jsxProd_default_2(TerminalSizeContext, {
-      value: ct,
-      children: [mu, pu, fu, gu],
+        : streamingTextRow_2;
+    $[275] = spinnerWidth;
+    $[276] = streamingTextRow_2;
+    $[277] = withSpinnerGutter;
+  } else withSpinnerGutter = $[277];
+  let finalContent;
+  if (
+    $[278] !== contentSize ||
+    $[279] !== showOlderDivider ||
+    $[280] !== hideOlderDivider ||
+    $[281] !== withSuggestionSlot ||
+    $[282] !== withSpinnerGutter
+  ) {
+    finalContent = jsxProd_default_2(TerminalSizeContext, {
+      value: contentSize,
+      children: [showOlderDivider, hideOlderDivider, withSuggestionSlot, withSpinnerGutter],
     });
-    $[278] = ct;
-    $[279] = mu;
-    $[280] = pu;
-    $[281] = fu;
-    $[282] = gu;
-    $[283] = hT;
-  } else hT = $[283];
-  return hT;
+    $[278] = contentSize;
+    $[279] = showOlderDivider;
+    $[280] = hideOlderDivider;
+    $[281] = withSuggestionSlot;
+    $[282] = withSpinnerGutter;
+    $[283] = finalContent;
+  } else finalContent = $[283];
+  return finalContent;
 }
 //@ chunk-ag5x7vhf.js:199016-199223 layout
-function findMessageIndexByShortUuid(renderableMessages, h, x) {
+function findMessageIndexByShortUuid(renderableMessages, searchNested, shortId) {
   return renderableMessages.findIndex(
-    (T) =>
-      shortUuid(T) === x ||
-      (h &&
-        ((T.type === "work_segment" && T.messages.some((message) => shortUuid(message) === x)) ||
-          (T.type === "recap_fold" && T.notices.some((notice) => shortUuid(notice) === x)) ||
-          collapsedRowOf(T)?.some((k) => shortUuid(k) === x) === true)),
+    (row) =>
+      shortUuid(row) === shortId ||
+      (searchNested &&
+        ((row.type === "work_segment" && row.messages.some((message) => shortUuid(message) === shortId)) ||
+          (row.type === "recap_fold" && row.notices.some((notice) => shortUuid(notice) === shortId)) ||
+          collapsedRowOf(row)?.some((nested) => shortUuid(nested) === shortId) === true)),
   );
 }
 //@ chunk-ag5x7vhf.js:199223-199537 layout
 /**
  * 为渲染行建立 短 uuid → 行下标 的索引；展开时也收录 work_segment/recap_fold 等折叠组内的消息。
  */
-function buildShortUuidIndex(renderableMessages, h) {
-  let x = new Map();
+function buildShortUuidIndex(renderableMessages, includeNested) {
+  let indexById = new Map();
   for (let idx = 0; idx < renderableMessages.length; idx++) {
-    let k = renderableMessages[idx];
-    let _ = shortUuid(k);
-    if (_ !== undefined && !x.has(_)) x.set(_, idx);
-    if (!h) continue;
-    let I =
-      k.type === "work_segment"
-        ? k.messages
-        : k.type === "recap_fold"
-          ? k.notices
-          : (collapsedRowOf(k) ?? undefined);
-    if (I === undefined) continue;
-    for (let D of I) {
-      let A = shortUuid(D);
-      if (A !== undefined && !x.has(A)) x.set(A, idx);
+    let row = renderableMessages[idx];
+    let shortId = shortUuid(row);
+    if (shortId !== undefined && !indexById.has(shortId)) indexById.set(shortId, idx);
+    if (!includeNested) continue;
+    let nested =
+      row.type === "work_segment"
+        ? row.messages
+        : row.type === "recap_fold"
+          ? row.notices
+          : (collapsedRowOf(row) ?? undefined);
+    if (nested === undefined) continue;
+    for (let item of nested) {
+      let nestedShortId = shortUuid(item);
+      if (nestedShortId !== undefined && !indexById.has(nestedShortId)) indexById.set(nestedShortId, idx);
     }
   }
-  return x;
+  return indexById;
 }
 //@ chunk-ag5x7vhf.js:199537-199618 file-local
 function expandKey(msg) {
   return (msg.type === "assistant" || msg.type === "user" ? getToolUseID(msg) : null) ?? msg.uuid;
 }
 //@ chunk-ag5x7vhf.js:199618-199755 layout
-function isCrossSessionBodyHidden(m, h, x, origin) {
-  if (isTaggedPeerText(x)) {
-    let k = m.get(h);
-    if (k === undefined) {
-      k = crossSessionPreviewHidesBody(x, origin?.kind === "peer" && origin.hostInjected === true);
-      m.set(h, k);
+function isCrossSessionBodyHidden(cache, text, body, origin) {
+  if (isTaggedPeerText(body)) {
+    let isHidden = cache.get(text);
+    if (isHidden === undefined) {
+      isHidden = crossSessionPreviewHidesBody(body, origin?.kind === "peer" && origin.hostInjected === true);
+      cache.set(text, isHidden);
     }
-    return k;
+    return isHidden;
   }
   return false;
 }
@@ -2363,95 +2521,81 @@ function isNonEmptyString(id) {
 //@ chunk-ag5x7vhf.js:199910-200003 layout
 class StreamingToolUseDeduper {
   previous = EMPTY_TOOL_USE_LIST;
-  next(m, h, x) {
-    this.previous = dedupeStreamingToolUses(this.previous, m, h, x);
+  next(streamingToolUses, inProgressIds, resolvedIds) {
+    this.previous = dedupeStreamingToolUses(this.previous, streamingToolUses, inProgressIds, resolvedIds);
     return this.previous;
   }
 }
 //@ chunk-ag5x7vhf.js:200003-200250 layout
-function dedupeStreamingToolUses(previous, h, x, T) {
-  let k = new Set();
-  let _ = [];
-  for (let I of h) {
-    let id = I.contentBlock.id;
+function dedupeStreamingToolUses(previous, previousList, inProgressIds, resolvedIds) {
+  let seenIds = new Set();
+  let deduped = [];
+  for (let toolUse of previousList) {
+    let id = toolUse.contentBlock.id;
     if (id) {
-      let A = id;
-      if (x.has(A) || T.has(A) || k.has(A)) continue;
-      k.add(A);
+      let blockId = id;
+      if (inProgressIds.has(blockId) || resolvedIds.has(blockId) || seenIds.has(blockId)) continue;
+      seenIds.add(blockId);
     }
-    _.push(I);
+    deduped.push(toolUse);
   }
-  if (_.length === 0) return EMPTY_TOOL_USE_LIST;
-  if (_.length === previous.length && _.every((I, D) => I === previous[D])) return previous;
-  return _;
+  if (deduped.length === 0) return EMPTY_TOOL_USE_LIST;
+  if (deduped.length === previous.length && deduped.every((item, index) => item === previous[index]))
+    return previous;
+  return deduped;
 }
 //@ chunk-ag5x7vhf.js:200250-200295 layout
-function keepPreviousIfSame(m, messages, x) {
-  return x && m[0] === messages[0] ? m : messages;
+function keepPreviousIfSame(previous, messages, canReuse) {
+  return canReuse && previous[0] === messages[0] ? previous : messages;
 }
 //@ chunk-ag5x7vhf.js:200295-200980 fingerprint = Messages (0.801)
 /**
  * 消息列表组件：MessagesImpl 的 memo 版本，自定义比较忽略 scrollViewport/search/reveal，并对 streamingToolUses、inProgressToolUseIDs、unseenDivider、tools 做浅比较。
  */
-var Messages = Rh(MessagesImpl, (prev, next) => {
-  let keys = Object.keys(prev);
-  for (let key of keys) {
-    if (key === "scrollViewport" || key === "search" || key === "reveal") continue;
-    if (prev[key] !== next[key]) {
-      if (key === "streamingToolUses") {
-        let streamingToolUses = prev.streamingToolUses;
-        let n = next.streamingToolUses;
-        if (
-          streamingToolUses.length === n.length &&
-          streamingToolUses.every((item, i) => item.contentBlock === n[i]?.contentBlock)
-        )
-          continue;
+var Messages; // deferred: uses MessagesImpl of its import cycle while loading; runs once the cycle is complete
+var EMPTY_ID_SET;
+var EMPTY_ARRAY_A;
+var EMPTY_ARRAY_B;
+var EMPTY_ARRAY_C;
+deferInit("chunk-ag5x7vhf.js:200295", () => {
+  Messages = memo(MessagesImpl, (prev, next) => {
+    let keys = Object.keys(prev);
+    for (let key of keys) {
+      if (key === "scrollViewport" || key === "search" || key === "reveal") continue;
+      if (prev[key] !== next[key]) {
+        if (key === "streamingToolUses") {
+          let streamingToolUses = prev.streamingToolUses;
+          let n = next.streamingToolUses;
+          if (
+            streamingToolUses.length === n.length &&
+            streamingToolUses.every((item, i) => item.contentBlock === n[i]?.contentBlock)
+          )
+            continue;
+        }
+        if (key === "inProgressToolUseIDs") {
+          if (setsEqual(prev.inProgressToolUseIDs, next.inProgressToolUseIDs)) continue;
+        }
+        if (key === "unseenDivider") {
+          let unseenDivider = prev.unseenDivider;
+          let n = next.unseenDivider;
+          if (unseenDivider?.firstUnseenUuid === n?.firstUnseenUuid && unseenDivider?.count === n?.count)
+            continue;
+        }
+        if (key === "tools") {
+          let tools = prev.tools;
+          let n = next.tools;
+          if (tools.length === n.length && tools.every((tool, i) => tool.name === n[i]?.name)) continue;
+        }
+        return false;
       }
-      if (key === "inProgressToolUseIDs") {
-        if (setsEqual(prev.inProgressToolUseIDs, next.inProgressToolUseIDs)) continue;
-      }
-      if (key === "unseenDivider") {
-        let unseenDivider = prev.unseenDivider;
-        let n = next.unseenDivider;
-        if (unseenDivider?.firstUnseenUuid === n?.firstUnseenUuid && unseenDivider?.count === n?.count)
-          continue;
-      }
-      if (key === "tools") {
-        let tools = prev.tools;
-        let n = next.tools;
-        if (tools.length === n.length && tools.every((tool, i) => tool.name === n[i]?.name)) continue;
-      }
-      return false;
     }
-  }
-  return true;
+    return true;
+  });
+  EMPTY_ID_SET = new Set();
+  EMPTY_ARRAY_A = [];
+  EMPTY_ARRAY_B = [];
+  EMPTY_ARRAY_C = [];
 });
-var EMPTY_ID_SET = new Set();
-var EMPTY_ARRAY_A = [];
-var EMPTY_ARRAY_B = [];
-var EMPTY_ARRAY_C = [];
-//@ chunk-0sfjpx19.js:33717-34121 fingerprint = dropTextInBriefTurns (1)
-function dropTextInBriefTurns(snapshot) {
-  let n = new Map();
-  let turnsWithBrief = new Set();
-  for (let j = snapshot.length - 1; j >= 0; j--) {
-    let h = snapshot[j];
-    if (h.type === "assistant") {
-      for (let _ of h.message.content) if (_.type === "tool_use") n.set(_.id, _.name);
-      continue;
-    }
-    if (h.type !== "user") continue;
-    let content = h.message.content;
-    if (!hasToolResultBlock(content)) {
-      if (h.isMeta !== true) break;
-      continue;
-    }
-    for (let _ of content)
-      if (typeof _ !== "string" && _.type === "tool_result") turnsWithBrief.add(_.tool_use_id);
-  }
-  for (let s of turnsWithBrief) n.delete(s);
-  return n;
-}
 export {
   dropTextInBriefTurns,
   useCommandQueue,

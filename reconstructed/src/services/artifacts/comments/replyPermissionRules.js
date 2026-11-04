@@ -20,6 +20,7 @@ import {
 import { ARTIFACT_TOOL_NAME, ARTIFACT_COMMENTS_TOOL_NAME } from "../../../tools/ArtifactTool/constants.js";
 import { matchWildcard } from "../../../utils/permissions/permissionRuleParser.js";
 import { getServerUrl } from "../../../tools/ArtifactTool/permissions/ruleTarget.js";
+import { deferInit } from "../../../../runtime/deferred-init.js";
 
 //@ chunk-9tgt55am.js:11898-11956 placement
 /**
@@ -41,24 +42,28 @@ function isReplyRuleGateOn() {
 /**
  * 在 Artifact 工具的 allow 规则里找允许 reply 动作的规则（功能开启、非 plan 模式且没有 deny/ask 规则命中时）。
  */
-function findReplyAllowRule(toolPermissionContext, t, n) {
+function findReplyAllowRule(toolPermissionContext, request, replyActions) {
   if (
     !isReplyRuleGateOn() ||
     toolPermissionContext.mode === "plan" ||
-    t.parsed === null ||
+    request.parsed === null ||
     hasReplyDenyOrAsk(
       toolPermissionContext,
       {
-        ...t,
-        parsed: t.parsed,
+        ...request,
+        parsed: request.parsed,
       },
-      n,
+      replyActions,
     )
   )
     return null;
-  for (let [a, r] of getContentRulesMapForToolName(toolPermissionContext, ARTIFACT_TOOL_NAME, "allow")) {
-    let actionRuleContent = parseActionRuleContent(a);
-    if (actionRuleContent !== null && matchWildcard(actionRuleContent, "reply")) return r;
+  for (let [ruleContent, rule] of getContentRulesMapForToolName(
+    toolPermissionContext,
+    ARTIFACT_TOOL_NAME,
+    "allow",
+  )) {
+    let actionRuleContent = parseActionRuleContent(ruleContent);
+    if (actionRuleContent !== null && matchWildcard(actionRuleContent, "reply")) return rule;
   }
   return null;
 }
@@ -66,28 +71,36 @@ function findReplyAllowRule(toolPermissionContext, t, n) {
 /**
  * 判断是否有 deny 或 ask 规则命中本次评论回复（按动作通配或按 artifact URL 匹配）。
  */
-function hasReplyDenyOrAsk(e, t, n) {
-  let { parsed } = t;
-  let r = (s) => {
-    if (!ARTIFACT_TOOL_RULE_TARGETS.some((y) => toolMatchesRule(e, y, s))) return false;
-    let ruleContent = s.ruleValue.ruleContent;
+function hasReplyDenyOrAsk(toolPermissionContext, request, replyActions) {
+  let { parsed } = request;
+  let matchesDenyOrAsk = (rule) => {
+    if (!ARTIFACT_TOOL_RULE_TARGETS.some((target) => toolMatchesRule(toolPermissionContext, target, rule)))
+      return false;
+    let ruleContent = rule.ruleValue.ruleContent;
     if (ruleContent === undefined) return true;
     let actionRuleContent = parseActionRuleContent(ruleContent);
-    if (actionRuleContent !== null) return n.some((y) => matchWildcard(actionRuleContent, y));
-    return getServerUrl(new Map([[ruleContent, s]]), parsed, t.rawUrl) !== null;
+    if (actionRuleContent !== null)
+      return replyActions.some((action) => matchWildcard(actionRuleContent, action));
+    return getServerUrl(new Map([[ruleContent, rule]]), parsed, request.rawUrl) !== null;
   };
-  return getDenyRules(e).some(r) || getAskRules(e).some(r);
+  return (
+    getDenyRules(toolPermissionContext).some(matchesDenyOrAsk) ||
+    getAskRules(toolPermissionContext).some(matchesDenyOrAsk)
+  );
 }
 //@ chunk-9tgt55am.js:12499-12552 placement
-var ARTIFACT_TOOL_RULE_TARGETS = [
-  {
-    name: ARTIFACT_TOOL_NAME,
-  },
-  {
-    name: ARTIFACT_COMMENTS_TOOL_NAME,
-    familyParentToolName: ARTIFACT_TOOL_NAME,
-  },
-];
+var ARTIFACT_TOOL_RULE_TARGETS; // deferred: uses ARTIFACT_TOOL_NAME (../../../tools/ArtifactTool/constants.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-9tgt55am.js:12499", () => {
+  ARTIFACT_TOOL_RULE_TARGETS = [
+    {
+      name: ARTIFACT_TOOL_NAME,
+    },
+    {
+      name: ARTIFACT_COMMENTS_TOOL_NAME,
+      familyParentToolName: ARTIFACT_TOOL_NAME,
+    },
+  ];
+});
 //@ chunk-9tgt55am.js:12552-12691 placement
 function parseActionRuleContent(ruleContent) {
   let index = ruleContent.indexOf(":");

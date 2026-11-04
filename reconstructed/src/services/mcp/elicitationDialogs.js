@@ -10,23 +10,30 @@
  */
 import { withHideWhile } from "../../components/dialogs/dialogRequests.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { hu, _enum } from "../../../vendor/zod/v4/classic/schemas.js";
+import { custom, _enum } from "../../../vendor/zod/v4/classic/schemas.js";
 import { hasCacheKillSwitch, setCacheKillSwitch } from "./mcpAccountKey.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../analytics/growthbook.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-7dan15rc.js:374-584 placement
 /**
  * MCP URL elicitation 对话框类型定义（默认取消）。
  */
-var MCP_URL_ELICITATION_DIALOG = withHideWhile({
-  kind: "mcp_url_elicitation",
-  payload: DoctorLazy(() =>
-    hu((e) => typeof e === "object" && e !== null && "serverName" in e && "params" in e),
-  ),
-  result: DoctorLazy(() => hu((e) => typeof e === "object" && e !== null)),
-  default: {
-    action: "cancel",
-  },
+var MCP_URL_ELICITATION_DIALOG; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-7dan15rc.js:374", () => {
+  MCP_URL_ELICITATION_DIALOG = withHideWhile({
+    kind: "mcp_url_elicitation",
+    payload: DoctorLazy(() =>
+      custom(
+        (payload) =>
+          typeof payload === "object" && payload !== null && "serverName" in payload && "params" in payload,
+      ),
+    ),
+    result: DoctorLazy(() => custom((result) => typeof result === "object" && result !== null)),
+    default: {
+      action: "cancel",
+    },
+  });
 });
 //@ chunk-7dan15rc.js:584-710 placement
 /**
@@ -34,38 +41,49 @@ var MCP_URL_ELICITATION_DIALOG = withHideWhile({
  */
 function primeDiscoveryCacheFlag() {
   if (hasCacheKillSwitch()) return;
-  let e = false;
-  let t;
+  let read = false;
+  let killSwitchValue;
   setCacheKillSwitch(() => {
-    if (!e) {
-      e = true;
-      t = getFeatureValue_CACHED_MAY_BE_STALE("tengu_mcp_discovery_cache_enable", null) ?? undefined;
+    if (!read) {
+      read = true;
+      killSwitchValue =
+        getFeatureValue_CACHED_MAY_BE_STALE("tengu_mcp_discovery_cache_enable", null) ?? undefined;
     }
-    return t;
+    return killSwitchValue;
   });
 }
 //@ chunk-sahc08q8.js:300-726 placement
 /**
  * MCP elicitation 对话框与"等待 elicitation"对话框的类型定义。
  */
-var MCP_ELICITATION_DIALOG = withHideWhile({
-  kind: "mcp_elicitation",
-  payload: DoctorLazy(() =>
-    hu((t) => typeof t === "object" && t !== null && "serverName" in t && "params" in t),
-  ),
-  result: DoctorLazy(() => hu((t) => typeof t === "object" && t !== null)),
-  default: {
-    action: "cancel",
-  },
-  holdsTop: true,
-});
-var MCP_ELICITATION_WAITING_DIALOG = withHideWhile({
-  kind: "mcp_elicitation_waiting",
-  payload: DoctorLazy(() =>
-    hu((t) => typeof t === "object" && t !== null && "serverName" in t && "params" in t),
-  ),
-  result: DoctorLazy(() => _enum(["dismiss", "retry", "cancel", "cancelled"])),
-  default: "cancelled",
+var MCP_ELICITATION_DIALOG; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var MCP_ELICITATION_WAITING_DIALOG;
+deferInit("chunk-sahc08q8.js:300", () => {
+  MCP_ELICITATION_DIALOG = withHideWhile({
+    kind: "mcp_elicitation",
+    payload: DoctorLazy(() =>
+      custom(
+        (payload) =>
+          typeof payload === "object" && payload !== null && "serverName" in payload && "params" in payload,
+      ),
+    ),
+    result: DoctorLazy(() => custom((result) => typeof result === "object" && result !== null)),
+    default: {
+      action: "cancel",
+    },
+    holdsTop: true,
+  });
+  MCP_ELICITATION_WAITING_DIALOG = withHideWhile({
+    kind: "mcp_elicitation_waiting",
+    payload: DoctorLazy(() =>
+      custom(
+        (payload) =>
+          typeof payload === "object" && payload !== null && "serverName" in payload && "params" in payload,
+      ),
+    ),
+    result: DoctorLazy(() => _enum(["dismiss", "retry", "cancel", "cancelled"])),
+    default: "cancelled",
+  });
 });
 //@ chunk-sahc08q8.js:726-775 placement
 /**

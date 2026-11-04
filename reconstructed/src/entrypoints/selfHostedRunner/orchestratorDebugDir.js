@@ -22,52 +22,52 @@ var DEBUG_LOG_FLUSH_MS = 1000;
 var DEBUG_LOG_CHUNK_BYTES = 65536;
 var DEBUG_LOG_TTL_MS = 300000;
 //@ chunk-2cbdmxy9.js:4661-4855 placement
-async function writeWorkOrderFile(e, t) {
-  let r = join(tmpdir(), `${e}-${randomBytes(6).toString("hex")}`);
-  let n = await open(r, "wx", 384);
+async function writeWorkOrderFile(jti, content) {
+  let filePath = join(tmpdir(), `${jti}-${randomBytes(6).toString("hex")}`);
+  let handle = await open(filePath, "wx", 384);
   try {
-    await n.writeFile(t);
+    await handle.writeFile(content);
   } catch (error) {
-    await unlink(r).catch(() => {});
+    await unlink(filePath).catch(() => {});
     throw error;
   } finally {
-    await n.close();
+    await handle.close();
   }
-  return r;
+  return filePath;
 }
 //@ chunk-2cbdmxy9.js:4855-5417 placement
-async function writeDebugArtifacts(debugDir, claims, r, n, onDebug) {
-  let o = join(debugDir, claims.jti);
+async function writeDebugArtifacts(debugDir, claims, workOrder, stderrText, onDebug) {
+  let prefix = join(debugDir, claims.jti);
   try {
-    await writeFile(`${o}.jwt`, r, {
+    await writeFile(`${prefix}.jwt`, workOrder, {
       mode: 384,
     });
-    await writeFile(`${o}.json`, jsonStringify(claims, null, 2), {
+    await writeFile(`${prefix}.json`, jsonStringify(claims, null, 2), {
       mode: 384,
     });
-    await writeFile(`${o}.stderr`, n, {
+    await writeFile(`${prefix}.stderr`, stderrText, {
       mode: 384,
     });
   } catch (error) {
     onDebug(`[runner:orchestrator] debug-dir write failed: ${errorMessage(error)}`);
   }
   try {
-    let l = Date.now() - DEBUG_LOG_TTL_MS;
-    let g = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(jwt|json|stderr)$/;
-    for (let c of await readdir(debugDir)) {
-      if (!g.test(c)) continue;
-      let S = join(debugDir, c);
-      let s = await stat(S).catch(() => null);
-      if (s?.isFile() && s.mtimeMs < l) await unlink(S).catch(() => {});
+    let cutoff = Date.now() - DEBUG_LOG_TTL_MS;
+    let artifactRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(jwt|json|stderr)$/;
+    for (let name of await readdir(debugDir)) {
+      if (!artifactRegex.test(name)) continue;
+      let fullPath = join(debugDir, name);
+      let stats = await stat(fullPath).catch(() => null);
+      if (stats?.isFile() && stats.mtimeMs < cutoff) await unlink(fullPath).catch(() => {});
     }
   } catch (error) {
     onDebug(`[runner:orchestrator] debug-dir prune failed: ${errorMessage(error)}`);
   }
 }
 //@ chunk-2cbdmxy9.js:5417-5544 placement
-function hasControlChars(e) {
-  for (let j = 0; j < e.length; j++) {
-    let code = e.charCodeAt(j);
+function hasControlChars(text) {
+  for (let j = 0; j < text.length; j++) {
+    let code = text.charCodeAt(j);
     if (code < 32 || (code >= 127 && code <= 159) || code === 8232 || code === 8233) return true;
   }
   return false;

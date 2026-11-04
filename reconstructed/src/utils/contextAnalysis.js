@@ -100,8 +100,8 @@ function processBlock(block, message, stats, toolIds, readToolPaths, fileReads) 
       break;
     case "tool_use": {
       if ("name" in block && "id" in block) {
-        let L = block.name || "unknown";
-        let key = L.startsWith(SKILL_2) ? "skill_tool" : sanitizeToolNameForAnalytics(L);
+        let toolName = block.name || "unknown";
+        let key = toolName.startsWith(SKILL_2) ? "skill_tool" : sanitizeToolNameForAnalytics(toolName);
         increment(stats.toolRequests, key, tokens);
         toolIds.set(block.id, key);
         if (

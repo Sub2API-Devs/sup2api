@@ -10,9 +10,9 @@ import { deburr } from "./deburr.js";
 //@ chunk-8nhse09v.js:3103-3111 esm-layout
 var deburr_default = deburr;
 //@ chunk-8nhse09v.js:3111-3161 esm-fingerprint
-var K = /[^\x00-\x2f\x3a-\x40\x5b-\x60\x7b-\x7f]+/g;
+var reAsciiWord = /[^\x00-\x2f\x3a-\x40\x5b-\x60\x7b-\x7f]+/g;
 //@ chunk-8nhse09v.js:3161-3197 esm-layout
 function asciiWords(string) {
-  return string.match(K) || [];
+  return string.match(reAsciiWord) || [];
 }
 export { asciiWords, deburr_default };

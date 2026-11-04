@@ -6,10 +6,10 @@
  * attribution: esm-fingerprint 3
  */
 import { logger_3 } from "./log.js";
-import { Od, getRequestUrl } from "./urlHelpers.js";
-import { je } from "../../../core-rest-pipeline/dist/esm/policies/retryPolicy.js";
+import { getSerializer, getRequestUrl } from "./urlHelpers.js";
+import { isExponentialBackoff } from "../../../core-rest-pipeline/dist/esm/policies/retryPolicy.js";
 import { getOperationRequestInfo } from "./operationHelpers.js";
-import { kd, flattenResponse } from "../index.js";
+import { getStreamingResponseStatusCodes, flattenResponse } from "../index.js";
 import { createClientPipeline } from "./pipeline.js";
 
 //@ chunk-mrx6y2r5.js:79655-81677 esm-fingerprint
@@ -24,7 +24,7 @@ class ServiceClient {
         "The baseUri option for SDK Clients has been deprecated, please use endpoint instead.",
       );
     this._allowInsecureConnection = options.allowInsecureConnection;
-    this._httpClient = options.httpClient || Od();
+    this._httpClient = options.httpClient || getSerializer();
     this.pipeline = options.pipeline || createDefaultPipeline(options);
     if ((_b = options.additionalPolicies) === null || _b === undefined ? undefined : _b.length)
       for (let { policy, position } of options.additionalPolicies) {
@@ -44,7 +44,7 @@ class ServiceClient {
         "If operationSpec.baseUrl is not specified, then the ServiceClient must have a endpoint string property that contains the base URL to use.",
       );
     let url = getRequestUrl(endpoint, operationSpec, operationArguments, this);
-    let request = je({
+    let request = isExponentialBackoff({
       url,
     });
     request.method = operationSpec.httpMethod;
@@ -69,7 +69,7 @@ class ServiceClient {
     }
     if (this._allowInsecureConnection) request.allowInsecureConnection = true;
     if (request.streamResponseStatusCodes === undefined)
-      request.streamResponseStatusCodes = kd(operationSpec);
+      request.streamResponseStatusCodes = getStreamingResponseStatusCodes(operationSpec);
     try {
       let rawResponse = await this.sendRequest(request);
       let flatResponse = flattenResponse(rawResponse, operationSpec.responses[rawResponse.status]);

@@ -5,10 +5,11 @@
  *
  * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/attribution.ts
- * pieces: chunk-e6aww6q8.js (25), chunk-tyg7f3ek.js (1)
- * attribution: placement 9, layout 9, fingerprint 6, file-local 1, callgraph-fingerprint 1
+ * pieces: chunk-e6aww6q8.js (25), chunk-s61vbvea.js (2), chunk-tyg7f3ek.js (1)
+ * attribution: placement 11, layout 9, fingerprint 6, file-local 1, callgraph-fingerprint 1
  */
 import { realpath, stat } from "fs/promises";
+import { MAX_STRING_ARG_CHARS, CONTROL_CHARS_RE, GitListingError } from "./attributionFileClasses.js";
 import {
   HTTPS_CLAUDE_COM_CLAUDE_CODE,
   isRemoteSessionLocal,
@@ -27,7 +28,6 @@ import {
 } from "../bootstrap/state.js";
 import { isSafeBridgeId } from "../bridge/sessionIdCompat.js";
 import { getReplBridgeHandle } from "../bridge/replBridgeHandle.js";
-import { isBoundedCleanString, hasNoControlChars, GitListingError } from "./attributionFileClasses.js";
 import { getMainLoopModel, isFableFamilyOrPinnedModel } from "./model/model.js";
 import { applyAttributionTextHooks } from "../plugins/functionHooks/attributionHooks.js";
 import { logEvent } from "../services/analytics/index.js";
@@ -62,16 +62,31 @@ import { parseJSONL } from "./json.js";
 import { isPlainObject as isPlainObject_5 } from "./isPlainObject.js";
 import { isStorageV5Enabled } from "./hoverRest.js";
 import { isRealPromptAt } from "./transcript/deserialize.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
+//@ chunk-s61vbvea.js:200854-200911 placement
+/**
+ * 判断字符串长度合法且不含控制字符。
+ */
+function isBoundedCleanString(text) {
+  return text.length >= 1 && text.length <= MAX_STRING_ARG_CHARS && hasNoControlChars(text);
+}
+//@ chunk-s61vbvea.js:200911-200945 placement
+/**
+ * 判断字符串不含控制字符。
+ */
+function hasNoControlChars(text) {
+  return !CONTROL_CHARS_RE.test(text);
+}
 //@ chunk-e6aww6q8.js:1469310-1469474 placement
 /**
  * 生成 PR 页脚"🤖 Generated with Claude Code"，开关开启时附"via 入口名"。
  */
 function getGeneratedWithFooter() {
-  let e = `\uD83E\uDD16 Generated with [Claude Code](${HTTPS_CLAUDE_COM_CLAUDE_CODE})`;
-  if (!getFeatureValue_CACHED_MAY_BE_STALE("tengu_pr_footer_surface_suffix", false)) return e;
-  let n = entrypointSurfaceName();
-  return n ? `${e} via ${n}` : e;
+  let footer = `\uD83E\uDD16 Generated with [Claude Code](${HTTPS_CLAUDE_COM_CLAUDE_CODE})`;
+  if (!getFeatureValue_CACHED_MAY_BE_STALE("tengu_pr_footer_surface_suffix", false)) return footer;
+  let surfaceName = entrypointSurfaceName();
+  return surfaceName ? `${footer} via ${surfaceName}` : footer;
 }
 //@ chunk-e6aww6q8.js:1469474-1470058 placement
 /**
@@ -80,9 +95,9 @@ function getGeneratedWithFooter() {
 function getSessionAttribution({ includeOutboundOnly = false } = {}) {
   if (env.CLAUDE_CODE_SUPPRESS_SESSION_ATTRIBUTION) return null;
   if (getInitialSettings_2().attribution?.sessionUrl === false) return null;
-  let n = currentRemoteSessionId();
-  if (getClientType() === "remote" || n !== undefined) {
-    let sessionId = n ?? env.CLAUDE_CODE_REMOTE_SESSION_ID;
+  let remoteSessionId = currentRemoteSessionId();
+  if (getClientType() === "remote" || remoteSessionId !== undefined) {
+    let sessionId = remoteSessionId ?? env.CLAUDE_CODE_REMOTE_SESSION_ID;
     if (!sessionId || !isSafeBridgeId(sessionId)) return null;
     let SESSION_INGRESS_URL = env.SESSION_INGRESS_URL;
     if (isRemoteSessionLocal(sessionId, SESSION_INGRESS_URL)) return null;
@@ -110,15 +125,15 @@ function getSessionAttribution({ includeOutboundOnly = false } = {}) {
 /**
  * 占位实现，恒返回 null（无会话归属信息）。
  */
-function stubAttribution(e) {
+function stubAttribution(attribution) {
   return null;
 }
 //@ chunk-e6aww6q8.js:1470086-1470224 placement
-function getSessionTrailerParts(e) {
-  let url = e?.url ?? null;
+function getSessionTrailerParts(attribution) {
+  let url = attribution?.url ?? null;
   let url_2 = url !== null && isBoundedCleanString(`Claude-Session: ${url}`) ? url : null;
-  let s = stubAttribution(e);
-  let line = s !== null && hasNoControlChars(s) ? s : null;
+  let stub = stubAttribution(attribution);
+  let line = stub !== null && hasNoControlChars(stub) ? stub : null;
   return {
     url: url_2,
     line,
@@ -126,7 +141,7 @@ function getSessionTrailerParts(e) {
 }
 //@ chunk-e6aww6q8.js:1470224-1470363 placement
 function appendSessionTrailer(attributionTexts, url, line) {
-  let s = line ?? url;
+  let trailerLine = line ?? url;
   return {
     commit: attributionTexts.commit
       ? `${attributionTexts.commit}
@@ -135,16 +150,16 @@ Claude-Session: ${url}`
     pr: attributionTexts.pr
       ? `${attributionTexts.pr}
 
-${s}`
-      : s,
+${trailerLine}`
+      : trailerLine,
   };
 }
 //@ chunk-e6aww6q8.js:1470363-1470416 placement
 /**
  * 按当前会话归属与模型生成提交/PR 的归属文本。
  */
-async function buildSessionAttributionTexts({ model: e } = {}) {
-  return buildAttributionTexts(getSessionAttribution(), e);
+async function buildSessionAttributionTexts({ model } = {}) {
+  return buildAttributionTexts(getSessionAttribution(), model);
 }
 //@ chunk-e6aww6q8.js:1470416-1470454 placement
 /**
@@ -157,26 +172,26 @@ async function buildDefaultAttributionTexts() {
 /**
  * 生成提交与 PR 的归属文本：基础署名加上 Claude-Session 尾注（有会话链接时），并按设置模板渲染。
  */
-async function buildAttributionTexts(sessionAttribution, n) {
-  let attributionTexts = getAttributionTexts(n ?? getMainLoopModel());
-  let sessionTrailerParts = getSessionTrailerParts(sessionAttribution);
-  let h =
+async function buildAttributionTexts(attribution, model) {
+  let attributionTexts = getAttributionTexts(model ?? getMainLoopModel());
+  let sessionTrailerParts = getSessionTrailerParts(attribution);
+  let trailerTexts =
     sessionTrailerParts.url !== null
       ? appendSessionTrailer(attributionTexts, sessionTrailerParts.url, sessionTrailerParts.line)
       : attributionTexts;
   return {
-    commit: await applyAttributionTextHooks("commit", h.commit),
-    pr: await applyAttributionTextHooks("pr", h.pr),
+    commit: await applyAttributionTextHooks("commit", trailerTexts.commit),
+    pr: await applyAttributionTextHooks("pr", trailerTexts.pr),
   };
 }
 //@ chunk-e6aww6q8.js:1470611-1470793 placement
 class DeadProbeOnce {
   firedSites = new Set();
-  fire(e) {
-    if (this.firedSites.has(e)) return;
-    this.firedSites.add(e);
+  fire(site) {
+    if (this.firedSites.has(site)) return;
+    this.firedSites.add(site);
     logEvent("tengu_dead_probe_include_coauthored_by", {
-      site: fromEnum(e),
+      site: fromEnum(site),
     });
   }
   reset() {
@@ -184,7 +199,10 @@ class DeadProbeOnce {
   }
 }
 //@ chunk-e6aww6q8.js:1470793-1470820 layout
-var attributionDisabledSignalByHost = new HostScoped(() => new DeadProbeOnce());
+var attributionDisabledSignalByHost; // deferred: uses DeadProbeOnce of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:1470793", () => {
+  attributionDisabledSignalByHost = new HostScoped(() => new DeadProbeOnce());
+});
 //@ chunk-e6aww6q8.js:1470820-1470859 layout
 function getAttributionDisabledSignal() {
   return attributionDisabledSignalByHost.of(getRootSession().host);
@@ -193,15 +211,15 @@ function getAttributionDisabledSignal() {
 /**
  * commit/PR 署名文本：settings.attribution.commit/pr 优先；includeCoAuthoredBy=false 时为空；默认 commit 为 `Co-Authored-By: <模型名> <noreply@anthropic.com>`，PR 为默认链接文本。
  */
-function getAttributionTexts(e) {
-  let model = getGeneratedWithFooter();
-  let defaultAttribution = `Co-Authored-By: ${getAttributionModelName(e)} <noreply@anthropic.com>`;
+function getAttributionTexts(model) {
+  let model_2 = getGeneratedWithFooter();
+  let defaultAttribution = `Co-Authored-By: ${getAttributionModelName(model)} <noreply@anthropic.com>`;
   let settings = getInitialSettings_2();
   let attribution = settings.attribution;
   if (attribution !== undefined && getPromptContent_2(attribution))
     return {
       commit: attribution.commit ?? defaultAttribution,
-      pr: attribution.pr ?? model,
+      pr: attribution.pr ?? model_2,
     };
   if (settings.includeCoAuthoredBy === false) {
     getAttributionDisabledSignal().fire("attribution_texts");
@@ -212,7 +230,7 @@ function getAttributionTexts(e) {
   }
   return {
     commit: defaultAttribution,
-    pr: model,
+    pr: model_2,
   };
 }
 //@ chunk-e6aww6q8.js:1471133-1471240 layout
@@ -228,7 +246,7 @@ function getPolicyAttributionOverrides() {
  * 署名中显示的名字：可公开的模型名（如 Claude Opus 5.5），否则 Claude 或 Claude Code。
  */
 function getAttributionModelName(model) {
-  let n = isRecognizedModel(
+  let isRecognized = isRecognizedModel(
     model,
     getCanonicalName(model, {
       identity: true,
@@ -238,7 +256,7 @@ function getAttributionModelName(model) {
     isFableFamilyOrPinnedModel(model, {
       identity: true,
     }) &&
-    (!isFirstPartyProvider() || isFirstPartyAnthropicBaseUrl() || n)
+    (!isFirstPartyProvider() || isFirstPartyAnthropicBaseUrl() || isRecognized)
   ) {
     if (getPublicModelDisplayName(model) !== null) return getPublicModelName(model);
     return getCanonicalName(model, {
@@ -248,23 +266,23 @@ function getAttributionModelName(model) {
       : getPublicModelName(CLAUDE_FABLE_5_CONFIG.firstParty);
   }
   if (isRecognizedModelIdForAttribution(model)) return getPublicModelName(model);
-  return n ? "Claude" : "Claude Code";
+  return isRecognized ? "Claude" : "Claude Code";
 }
 //@ chunk-e6aww6q8.js:1471500-1471919 layout
 function isRecognizedModelIdForAttribution(modelId) {
   if (getPublicModelDisplayName(modelId) === null) return false;
-  let n = reverseModelOverride(modelId);
-  if (n !== modelId && Object.hasOwn(MODEL_KEY_BY_FIRST_PARTY_ID, n)) return true;
+  let overriddenId = reverseModelOverride(modelId);
+  if (overriddenId !== modelId && Object.hasOwn(MODEL_KEY_BY_FIRST_PARTY_ID, overriddenId)) return true;
   let canonicalName = getCanonicalName(modelId, {
     identity: true,
   });
   let lower = stripAnyVersatileSuffix(modelId).toLowerCase();
   let index = lower.indexOf(canonicalName);
-  let y = canonicalName.length;
+  let canonicalLength = canonicalName.length;
   if (index === -1 && canonicalName.endsWith("-0")) {
     let sliced = canonicalName.slice(0, -2);
     index = lower.indexOf(sliced);
-    y = sliced.length;
+    canonicalLength = sliced.length;
   }
   if (index === -1) {
     if (!modelId.includes("application-inference-profile")) return false;
@@ -274,8 +292,8 @@ function isRecognizedModelIdForAttribution(modelId) {
     return !!inferenceProfileBackingModel && isRecognizedModelIdForAttribution(inferenceProfileBackingModel);
   }
   let sliced = lower.slice(0, index);
-  let sliced_2 = lower.slice(index + y);
-  return (sliced === "" || /[./]$/.test(sliced)) && isStandardTrailer(sliced_2);
+  let trailer = lower.slice(index + canonicalLength);
+  return (sliced === "" || /[./]$/.test(sliced)) && isStandardTrailer(trailer);
 }
 //@ chunk-e6aww6q8.js:1471919-1471994 file-local
 function isTerminalOutput(content) {
@@ -318,25 +336,28 @@ function countHumanUserPrompts(entries) {
   return countUserPromptsInMessages(nonSidechain);
 }
 //@ chunk-e6aww6q8.js:1472571-1472618 layout
-var PR_ATTRIBUTION_STATS_UNKNOWN = Symbol("pr-attribution-stats-unknown");
+var PR_ATTRIBUTION_STATS_UNKNOWN; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:1472571", () => {
+  PR_ATTRIBUTION_STATS_UNKNOWN = Symbol("pr-attribution-stats-unknown");
+});
 //@ chunk-e6aww6q8.js:1472618-1473054 fingerprint = getPRAttributionData (0.624)
 /**
  * 从 AppState.attribution 计算 PR 级 Claude 贡献数据，未知时返回 PR_ATTRIBUTION_STATS_UNKNOWN。
  */
 async function getPRAttributionData(appState) {
   if (!appState.attribution) return null;
-  let n = cwdOrGitRoot();
-  if (findGitRoot(n) === null) return null;
-  let r = await realpath(n).catch(() => n);
-  let s =
+  let cwd = cwdOrGitRoot();
+  if (findGitRoot(cwd) === null) return null;
+  let rootPath = await realpath(cwd).catch(() => cwd);
+  let attributionState =
     appState.attribution.fileStates instanceof Map
-      ? trackFileDeletion(appState.attribution, r)
+      ? trackFileDeletion(appState.attribution, rootPath)
       : appState.attribution;
-  let fileStates = s.fileStates;
+  let fileStates = attributionState.fileStates;
   let trackedFiles = fileStates instanceof Map ? Array.from(fileStates.keys()) : Object.keys(fileStates);
   if (trackedFiles.length === 0) return null;
   try {
-    return await calculateCommitAttribution([s], trackedFiles);
+    return await calculateCommitAttribution([attributionState], trackedFiles);
   } catch (error) {
     if (error instanceof GitListingError) {
       logForDebugging(`PR Attribution: skipping stats - ${error.message}`);
@@ -347,13 +368,16 @@ async function getPRAttributionData(appState) {
   }
 }
 //@ chunk-e6aww6q8.js:1473054-1473088 layout
-var MEMORY_ACCESS_TOOL_NAMES = new Set([
-  FILE_READ_TOOL_NAME,
-  FILE_EDIT_TOOL_NAME,
-  FILE_WRITE_TOOL_NAME,
-  MEMORY_READ,
-  MEMORY_WRITE,
-]);
+var MEMORY_ACCESS_TOOL_NAMES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:1473054", () => {
+  MEMORY_ACCESS_TOOL_NAMES = new Set([
+    FILE_READ_TOOL_NAME,
+    FILE_EDIT_TOOL_NAME,
+    FILE_WRITE_TOOL_NAME,
+    MEMORY_READ,
+    MEMORY_WRITE,
+  ]);
+});
 //@ chunk-e6aww6q8.js:1473088-1473370 callgraph-fingerprint = countMemoryFileAccessFromEntries (0.661)
 function countMemoryFileAccessFromEntries(entries) {
   let count = 0;
@@ -373,22 +397,22 @@ function countMemoryFileAccessFromEntries(entries) {
 /**
  * 从当前转录统计用户提示数与记忆文件访问数（压缩边界后重新计数）。
  */
-async function getTranscriptStats(e) {
+async function getTranscriptStats(storageV5) {
   try {
     let filePath = getTranscriptPath();
-    let r = wrapStorageSource(getTranscriptStorageKey(filePath, e));
-    let s;
-    if (r !== undefined && r.hoverRestOn) {
-      let stats = await r.source.backend.stat(r.source.key);
+    let storageSource = wrapStorageSource(getTranscriptStorageKey(filePath, storageV5));
+    let fileSize;
+    if (storageSource !== undefined && storageSource.hoverRestOn) {
+      let stats = await storageSource.source.backend.stat(storageSource.source.key);
       if (!stats.ok)
         return {
           promptCount: 0,
           memoryAccessCount: 0,
         };
-      s = stats.value.size;
-    } else s = (await stat(filePath)).size;
-    let buf = (await readTranscriptForLoad(filePath, s, r)).postBoundaryBuf;
-    let entries = parseJSONL(buf).filter((G) => isPlainObject_5(G));
+      fileSize = stats.value.size;
+    } else fileSize = (await stat(filePath)).size;
+    let buf = (await readTranscriptForLoad(filePath, fileSize, storageSource)).postBoundaryBuf;
+    let entries = parseJSONL(buf).filter((entry) => isPlainObject_5(entry));
     let lastBoundaryIdx = entries.findLastIndex(
       (e) => e.type === "system" && "subtype" in e && e.subtype === "compact_boundary",
     );
@@ -406,28 +430,28 @@ async function getTranscriptStats(e) {
 }
 //@ chunk-e6aww6q8.js:1473876-1474044 layout
 async function buildPRAttributionTrailer(getAppState, storageV5) {
-  let sessionAttribution = getSessionAttribution({
+  let attribution = getSessionAttribution({
     includeOutboundOnly: true,
   });
-  let { url, line } = getSessionTrailerParts(sessionAttribution);
+  let { url, line } = getSessionTrailerParts(attribution);
   let enhancedPRAttribution = await getEnhancedPRAttribution(getAppState, url, line, storageV5);
-  let S = line ?? url;
-  let w =
-    !S || enhancedPRAttribution.includes(S)
+  let trailerLine = line ?? url;
+  let prText =
+    !trailerLine || enhancedPRAttribution.includes(trailerLine)
       ? enhancedPRAttribution
       : enhancedPRAttribution
         ? `${enhancedPRAttribution}
 
-${S}`
-        : S;
-  return applyAttributionTextHooks("pr", w);
+${trailerLine}`
+        : trailerLine;
+  return applyAttributionTextHooks("pr", prText);
 }
 //@ chunk-e6aww6q8.js:1474044-1475050 fingerprint = getEnhancedPRAttribution (0.815)
 /**
  * 增强版 PR 署名：在默认文本基础上附加 Claude 贡献比例、提示次数、记忆访问次数等统计；attribution.pr 或 includeCoAuthoredBy=false 时直接返回对应值。
  */
-async function getEnhancedPRAttribution(getAppState, url, line, s) {
-  let h = isStorageV5Enabled() ? s : undefined;
+async function getEnhancedPRAttribution(getAppState, url, line, storageV5) {
+  let storage = isStorageV5Enabled() ? storageV5 : undefined;
   let settings = getInitialSettings_2();
   if (settings.attribution?.pr !== undefined) return settings.attribution.pr;
   if (settings.includeCoAuthoredBy === false) {
@@ -439,12 +463,12 @@ async function getEnhancedPRAttribution(getAppState, url, line, s) {
   logForDebugging(`PR Attribution: appState.attribution exists: ${!!appState.attribution}`);
   if (appState.attribution) {
     let fileStates = appState.attribution.fileStates;
-    let ze = fileStates instanceof Map ? fileStates.size : Object.keys(fileStates).length;
-    logForDebugging(`PR Attribution: fileStates count: ${ze}`);
+    let fileStateCount = fileStates instanceof Map ? fileStates.size : Object.keys(fileStates).length;
+    logForDebugging(`PR Attribution: fileStates count: ${fileStateCount}`);
   }
   let [attributionData, { promptCount, memoryAccessCount }, isInternal] = await Promise.all([
     getPRAttributionData(appState),
-    getTranscriptStats(h),
+    getTranscriptStats(storage),
     isInternalModelRepo(cwdOrGitRoot()),
   ]);
   if (attributionData === PR_ATTRIBUTION_STATS_UNKNOWN) {
@@ -458,8 +482,8 @@ async function getEnhancedPRAttribution(getAppState, url, line, s) {
   let rawModelName = getCanonicalName(getMainLoopModel(), {
     identity: true,
   });
-  let we = isInternal ? rawModelName : getModelFamilyForAttribution(rawModelName);
-  let Ee = hasNoControlChars(we) ? we : "unknown";
+  let modelLabel = isInternal ? rawModelName : getModelFamilyForAttribution(rawModelName);
+  let safeModelLabel = hasNoControlChars(modelLabel) ? modelLabel : "unknown";
   if (claudePercent === 0 && promptCount === 0 && memoryAccessCount === 0) {
     logForDebugging("PR Attribution: returning default (no data)");
     return defaultAttribution;
@@ -468,14 +492,14 @@ async function getEnhancedPRAttribution(getAppState, url, line, s) {
     memoryAccessCount > 0
       ? `, ${memoryAccessCount} ${memoryAccessCount === 1 ? "memory" : "memories"} recalled`
       : "";
-  let summary = `${defaultAttribution} (${claudePercent}% ${promptCount}-shotted by ${Ee}${memSuffix})`;
+  let summary = `${defaultAttribution} (${claudePercent}% ${promptCount}-shotted by ${safeModelLabel}${memSuffix})`;
   logForDebugging(`PR Attribution: returning summary: ${summary}`);
   return summary;
 }
 //@ chunk-tyg7f3ek.js:47443-47530 fingerprint = countUserPromptsFromEntries (1)
-function countUserPromptsFromEntries(entries, n) {
-  let r = entries[n];
-  return !("isSidechain" in r && r.isSidechain === true) && isRealPromptAt(entries, n);
+function countUserPromptsFromEntries(entries, index) {
+  let entry = entries[index];
+  return !("isSidechain" in entry && entry.isSidechain === true) && isRealPromptAt(entries, index);
 }
 export {
   buildSessionAttributionTexts,

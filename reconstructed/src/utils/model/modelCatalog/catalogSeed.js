@@ -24,80 +24,82 @@ import { BEDROCK_REGION_PREFIXES } from "../bedrock.js";
 import { uniq } from "../../collections.js";
 import { isKnownModelName } from "../knownModelNames.js";
 import { parseModelId } from "../modelIds.js";
-import { Re } from "../../../../runtime/bun-runtime.js";
+import { __toESM } from "../../../../runtime/bun-runtime.js";
 import { require_semver_3 } from "../../../../vendor/semver/index.js";
+import { deferInit } from "../../../../runtime/deferred-init.js";
 
 //@ chunk-aepeg2w5.js:218511-219037 placement
 /**
  * 非 firstParty/gateway 提供商下，按模型目录把各行的线上模型 id（含 Bedrock 区域前缀变体）映射回目录行 id，带缓存。
  */
-function findCatalogRowIdByWireId(e, { provider, generation, wireIdOf }) {
+function findCatalogRowIdByWireId(wireId, { provider, generation, wireIdOf }) {
   if (isCatalogSurfaceBackend(provider)) return;
   let effectiveServedCatalog = getEffectiveServedCatalog();
   if (effectiveServedCatalog === null) return;
   let providerState = getProviderState();
-  let w = getCatalogState().modelKnowledge?.settingsGeneration();
+  let settingsGeneration = getCatalogState().modelKnowledge?.settingsGeneration();
   let publishedWireIds = providerState.publishedWireIds;
   if (
     publishedWireIds?.catalog !== effectiveServedCatalog ||
     publishedWireIds.generation !== generation ||
-    publishedWireIds.settingsGeneration !== w
+    publishedWireIds.settingsGeneration !== settingsGeneration
   ) {
-    let x = new Map();
+    let rowIdByWireId = new Map();
     publishedWireIds = {
       catalog: effectiveServedCatalog,
       generation,
-      settingsGeneration: w,
-      rowIdByWireId: x,
+      settingsGeneration,
+      rowIdByWireId,
     };
     providerState.publishedWireIds = publishedWireIds;
-    for (let P of catalogModels(effectiveServedCatalog)) {
-      if (entryModelKey(P.id) !== undefined) continue;
-      let F = wireIdOf(P);
-      if (F === undefined) continue;
-      for (let L of getProviderWireIdVariants(F, provider)) {
-        let G = normalizeModelId(L);
-        if (!x.has(G) && !isKnownCatalogModelId(L)) x.set(G, P.id);
+    for (let row of catalogModels(effectiveServedCatalog)) {
+      if (entryModelKey(row.id) !== undefined) continue;
+      let wireIdOfRow = wireIdOf(row);
+      if (wireIdOfRow === undefined) continue;
+      for (let variant of getProviderWireIdVariants(wireIdOfRow, provider)) {
+        let normalized = normalizeModelId(variant);
+        if (!rowIdByWireId.has(normalized) && !isKnownCatalogModelId(variant))
+          rowIdByWireId.set(normalized, row.id);
       }
     }
   }
-  return publishedWireIds.rowIdByWireId.get(normalizeModelId(e));
+  return publishedWireIds.rowIdByWireId.get(normalizeModelId(wireId));
 }
 //@ chunk-aepeg2w5.js:219085-219259 placement = isFoundationModel (1)
 /**
  * 去掉合法区域前缀得到 "anthropic.<…>"，非 Bedrock 形式返回 undefined。旧版名 isFoundationModel_2 为错配。
  */
 function toBedrockFoundationModelId(modelId) {
-  let [, n, r] = /^(?:([A-Za-z-]+)\.)?anthropic\.(.+)$/i.exec(modelId) ?? [];
-  if (r === undefined) return;
-  if (n !== undefined && !BEDROCK_REGION_PREFIXES.includes(n.toLowerCase())) return;
-  return `anthropic.${r}`;
+  let [, prefix, rest] = /^(?:([A-Za-z-]+)\.)?anthropic\.(.+)$/i.exec(modelId) ?? [];
+  if (rest === undefined) return;
+  if (prefix !== undefined && !BEDROCK_REGION_PREFIXES.includes(prefix.toLowerCase())) return;
+  return `anthropic.${rest}`;
 }
 //@ chunk-aepeg2w5.js:219259-219424 placement
 /**
  * 在候选 id 中找同一基础模型，优先给定前缀。
  */
-function pickProfileForFoundationModel(e, n, r) {
-  let lower = e.toLowerCase();
-  let h = `${r}.`;
-  let y;
-  for (let S of n) {
-    if (toBedrockFoundationModelId(S)?.toLowerCase() !== lower) continue;
-    if (S.toLowerCase().startsWith(h)) return S;
-    y ??= S;
+function pickProfileForFoundationModel(foundationModelId, profiles, regionPrefix) {
+  let lower = foundationModelId.toLowerCase();
+  let regionPrefixDot = `${regionPrefix}.`;
+  let fallback;
+  for (let profile of profiles) {
+    if (toBedrockFoundationModelId(profile)?.toLowerCase() !== lower) continue;
+    if (profile.toLowerCase().startsWith(regionPrefixDot)) return profile;
+    fallback ??= profile;
   }
-  return y;
+  return fallback;
 }
 //@ chunk-aepeg2w5.js:219424-219514 placement
 /**
  * 基础模型 id 及其全部区域前缀变体。
  */
-function expandBedrockModelIdVariants(e) {
-  let bedrockFoundationModelId = toBedrockFoundationModelId(e);
-  if (bedrockFoundationModelId === undefined) return [e];
+function expandBedrockModelIdVariants(modelId) {
+  let bedrockFoundationModelId = toBedrockFoundationModelId(modelId);
+  if (bedrockFoundationModelId === undefined) return [modelId];
   return [
     bedrockFoundationModelId,
-    ...BEDROCK_REGION_PREFIXES.map((r) => `${r}.${bedrockFoundationModelId}`),
+    ...BEDROCK_REGION_PREFIXES.map((prefix) => `${prefix}.${bedrockFoundationModelId}`),
   ];
 }
 //@ chunk-aepeg2w5.js:219514-219806 placement
@@ -108,55 +110,56 @@ function getPublishedRowNameGroups() {
   let effectiveServedCatalog = getEffectiveServedCatalog();
   let providerState = getProviderState();
   let publishedDenyDocuments = providerState.publishedDenyDocuments;
-  let s = effectiveServedCatalog ?? (publishedDenyDocuments.length > 0 ? publishedDenyDocuments : "seed");
-  if (providerState.publishedRowNames?.catalog === s) return providerState.publishedRowNames.groups;
-  let h = bundledCatalogDocument();
-  let y = mergeRowNameGroups(
+  let catalogKey =
+    effectiveServedCatalog ?? (publishedDenyDocuments.length > 0 ? publishedDenyDocuments : "seed");
+  if (providerState.publishedRowNames?.catalog === catalogKey) return providerState.publishedRowNames.groups;
+  let bundled = bundledCatalogDocument();
+  let groups = mergeRowNameGroups(
     buildRowNameGroups([
       ...(effectiveServedCatalog === null ? [] : catalogModels(effectiveServedCatalog)),
-      ...[...publishedDenyDocuments, ...(h === null ? [] : [h])].flatMap(listSurfaceModels),
+      ...[...publishedDenyDocuments, ...(bundled === null ? [] : [bundled])].flatMap(listSurfaceModels),
     ]),
   );
   providerState.publishedRowNames = {
-    catalog: s,
-    groups: y,
+    catalog: catalogKey,
+    groups,
   };
-  return y;
+  return groups;
 }
 //@ chunk-aepeg2w5.js:219806-220041 placement
 function mergeRowNameGroups(rowNameGroups) {
-  let n = new Map();
-  for (let r of rowNameGroups) {
-    let s = n.get(r.rowId);
-    if (s === undefined) {
-      n.set(r.rowId, r);
+  let byRowId = new Map();
+  for (let group of rowNameGroups) {
+    let existing = byRowId.get(group.rowId);
+    if (existing === undefined) {
+      byRowId.set(group.rowId, group);
       continue;
     }
-    n.set(r.rowId, {
-      rowId: r.rowId,
-      names: uniq([...s.names, ...r.names]),
-      families: uniq([...s.families, ...r.families]),
+    byRowId.set(group.rowId, {
+      rowId: group.rowId,
+      names: uniq([...existing.names, ...group.names]),
+      families: uniq([...existing.families, ...group.families]),
     });
   }
-  return [...n.values()];
+  return [...byRowId.values()];
 }
 //@ chunk-aepeg2w5.js:220041-220321 placement
-function buildRowNameGroups(e) {
-  return e
-    .filter((n) => entryModelKey(n.id) === undefined)
-    .map((n) => {
-      let r = [n.id];
-      for (let [key, value] of Object.entries(n.provider_ids ?? {})) {
-        let trimmed = value?.trim();
-        if (trimmed) {
-          let w = key === "bedrock" ? expandBedrockModelIdVariants(trimmed) : [trimmed];
-          if (!w.some(isKnownOrProfiledModel)) r.push(...w);
+function buildRowNameGroups(models) {
+  return models
+    .filter((model) => entryModelKey(model.id) === undefined)
+    .map((model) => {
+      let names = [model.id];
+      for (let [key, value] of Object.entries(model.provider_ids ?? {})) {
+        let modelId = value?.trim();
+        if (modelId) {
+          let variants = key === "bedrock" ? expandBedrockModelIdVariants(modelId) : [modelId];
+          if (!variants.some(isKnownOrProfiledModel)) names.push(...variants);
         }
       }
-      let rowFamily = getRowFamily(n);
+      let rowFamily = getRowFamily(model);
       return {
-        rowId: n.id,
-        names: r,
+        rowId: model.id,
+        names,
         families: rowFamily === undefined ? [] : [rowFamily],
       };
     });
@@ -165,43 +168,46 @@ function buildRowNameGroups(e) {
 /**
  * 判断该模型的任一传输形态 id 是否已知。
  */
-function anyWireVariantKnown(e, apiProvider) {
-  return getProviderWireIdVariants(e, apiProvider).some(isKnownCatalogModelId);
+function anyWireVariantKnown(modelId, provider) {
+  return getProviderWireIdVariants(modelId, provider).some(isKnownCatalogModelId);
 }
 //@ chunk-aepeg2w5.js:220362-220409 placement
-function isKnownOrProfiledModel(e) {
-  let n = normalizeModelId(e);
-  return isKnownModelName(n) || isKnownCatalogOrBase(n);
+function isKnownOrProfiledModel(modelId) {
+  let normalized = normalizeModelId(modelId);
+  return isKnownModelName(normalized) || isKnownCatalogOrBase(normalized);
 }
 //@ chunk-aepeg2w5.js:220409-220609 placement
 /**
  * 判断模型 id 是否为目录已知（内置、匹配模式、已知、覆盖值或设置映射）。
  */
-function isKnownCatalogModelId(e) {
-  let n = normalizeModelId(e);
-  if (isKnownOrProfiledModel(e) || INFERENCE_PROFILE_PATH_RE.test(n)) return true;
+function isKnownCatalogModelId(modelId) {
+  let normalized = normalizeModelId(modelId);
+  if (isKnownOrProfiledModel(modelId) || INFERENCE_PROFILE_PATH_RE.test(normalized)) return true;
   let modelKnowledge = getCatalogState().modelKnowledge;
   if (modelKnowledge === undefined) return false;
   return (
-    modelKnowledge.isKnown(e) ||
-    modelKnowledge.isKnown(n) ||
-    modelKnowledge.isModelOverrideValue(n) ||
-    modelKnowledge.settingsBehavesAs(n) !== undefined
+    modelKnowledge.isKnown(modelId) ||
+    modelKnowledge.isKnown(normalized) ||
+    modelKnowledge.isModelOverrideValue(normalized) ||
+    modelKnowledge.settingsBehavesAs(normalized) !== undefined
   );
 }
 //@ chunk-aepeg2w5.js:220609-220658 placement
 var INFERENCE_PROFILE_PATH_RE = /(^|[:/])application-inference-profile\//;
 //@ chunk-aepeg2w5.js:220658-220749 placement
-function isKnownCatalogOrBase(e) {
-  if (catalogIdForProviderModelId(e) !== undefined) return true;
-  let modelId = parseModelId(e);
-  return modelId !== null && catalogIdForProviderModelId(modelId.base) !== undefined;
+function isKnownCatalogOrBase(modelId) {
+  if (catalogIdForProviderModelId(modelId) !== undefined) return true;
+  let modelId_2 = parseModelId(modelId);
+  return modelId_2 !== null && catalogIdForProviderModelId(modelId_2.base) !== undefined;
 }
 //@ chunk-aepeg2w5.js:220749-220767 placement
 /**
  * 惰性加载的语义版本库（require 互操作）。
  */
-var legacyRequireInterop = Re(require_semver_3(), 1);
+var legacyRequireInterop; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-aepeg2w5.js:220749", () => {
+  legacyRequireInterop = __toESM(require_semver_3(), 1);
+});
 export {
   getPublishedRowNameGroups,
   expandBedrockModelIdVariants,

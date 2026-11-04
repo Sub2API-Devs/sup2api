@@ -19,14 +19,14 @@ import { shellQuoteArgs } from "../../utils/bash/bashPipeCommand.js";
 /**
  * 保留沙箱里 sealed 目录的路径。
  */
-function sealedDir(e) {
-  return path.join(e.root, "sealed");
+function sealedDir(tempDir) {
+  return path.join(tempDir.root, "sealed");
 }
 //@ chunk-qchp9vrd.js:115754-117767 placement
 /**
  * 保留运行目录时把被测插件写过的 home/ 与 tmp/ 设为 000 并使目录只读（Windows 与 root 下不可用）。
  */
-async function sealKeptSandbox(evalTempDir) {
+async function sealKeptSandbox(tempDir) {
   if (getPlatform() === "windows")
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
       "directory modes do not restrict access on Windows",
@@ -37,84 +37,105 @@ async function sealKeptSandbox(evalTempDir) {
       "the harness is running as root, which a directory mode does not bind",
       "eval kept-sandbox seal ineffective for root",
     );
-  let n = sealedDir(evalTempDir);
-  let r;
-  let a;
+  let sealedPath = sealedDir(tempDir);
+  let sealedHandle;
+  let rootHandle;
   try {
-    a = await open(evalTempDir.root, constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW);
-    let [s, h, w] = await Promise.all([
-      a.stat({
+    rootHandle = await open(tempDir.root, constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW);
+    let [rootStats, rootLstat, rootReal] = await Promise.all([
+      rootHandle.stat({
         bigint: true,
       }),
-      lstat(evalTempDir.root, {
+      lstat(tempDir.root, {
         bigint: true,
       }),
-      realpath(evalTempDir.root),
+      realpath(tempDir.root),
     ]);
-    if (w !== evalTempDir.root || !h.isDirectory() || h.ino !== s.ino || h.dev !== s.dev)
+    if (
+      rootReal !== tempDir.root ||
+      !rootLstat.isDirectory() ||
+      rootLstat.ino !== rootStats.ino ||
+      rootLstat.dev !== rootStats.dev
+    )
       throw Error("the kept directory is not the one the harness created");
-    let [b, y] = await Promise.all([
-      lstat(evalTempDir.home, {
+    let [homeStats, tmpStats] = await Promise.all([
+      lstat(tempDir.home, {
         bigint: true,
       }),
-      lstat(evalTempDir.tmpDir, {
+      lstat(tempDir.tmpDir, {
         bigint: true,
       }),
     ]);
-    if (!b.isDirectory() || b.isSymbolicLink() || !y.isDirectory() || y.isSymbolicLink())
+    if (
+      !homeStats.isDirectory() ||
+      homeStats.isSymbolicLink() ||
+      !tmpStats.isDirectory() ||
+      tmpStats.isSymbolicLink()
+    )
       throw Error("home/ or tmp/ is not a real directory");
-    await mkdir(n, {
+    await mkdir(sealedPath, {
       mode: 448,
     });
-    r = await open(n, constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW);
-    await rename(evalTempDir.home, path.join(n, "home"));
-    await rename(evalTempDir.tmpDir, path.join(n, "tmp"));
-    await r.chmod(64);
-    await a.chmod(320);
-    let R = (W, G) =>
-      lstat(W, {
+    sealedHandle = await open(sealedPath, constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW);
+    await rename(tempDir.home, path.join(sealedPath, "home"));
+    await rename(tempDir.tmpDir, path.join(sealedPath, "tmp"));
+    await sealedHandle.chmod(64);
+    await rootHandle.chmod(320);
+    let isSameDir = (dirPath, expectedStats) =>
+      lstat(dirPath, {
         bigint: true,
       }).then(
-        (J) => J.isDirectory() && !J.isSymbolicLink() && J.ino === G.ino && J.dev === G.dev,
+        (dirStats) =>
+          dirStats.isDirectory() &&
+          !dirStats.isSymbolicLink() &&
+          dirStats.ino === expectedStats.ino &&
+          dirStats.dev === expectedStats.dev,
         () => false,
       );
-    let [S, T, N, x, j, K] = await Promise.all([
-      a.stat().then((W) => W.mode & 511),
-      readdir(evalTempDir.root).then((W) => W.sort().join("\x00")),
-      R(path.join(n, "home"), b),
-      R(path.join(n, "tmp"), y),
-      lstat(evalTempDir.home).then(
+    let [rootMode, rootEntries, homeMoved, tmpMoved, homeReappeared, tmpReappeared] = await Promise.all([
+      rootHandle.stat().then((stats) => stats.mode & 511),
+      readdir(tempDir.root).then((names) => names.sort().join("\x00")),
+      isSameDir(path.join(sealedPath, "home"), homeStats),
+      isSameDir(path.join(sealedPath, "tmp"), tmpStats),
+      lstat(tempDir.home).then(
         () => true,
         () => false,
       ),
-      lstat(evalTempDir.tmpDir).then(
+      lstat(tempDir.tmpDir).then(
         () => true,
         () => false,
       ),
     ]);
-    let joined = [path.basename(evalTempDir.configDir), path.basename(evalTempDir.outDir), path.basename(n)]
+    let joined = [path.basename(tempDir.configDir), path.basename(tempDir.outDir), path.basename(sealedPath)]
       .sort()
       .join("\x00");
-    if (S !== 320 || T !== joined || !N || !x || j || K)
+    if (
+      rootMode !== 320 ||
+      rootEntries !== joined ||
+      !homeMoved ||
+      !tmpMoved ||
+      homeReappeared ||
+      tmpReappeared
+    )
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
         "the directory modes did not take, the sealed trees are not the ones that were moved, the kept directory holds an unexpected entry, or something reappeared at home/ or tmp/ before the directory locked",
         "eval kept-sandbox seal did not take",
       );
-    await r.chmod(0);
-    if (((await r.stat()).mode & 511) !== 0)
+    await sealedHandle.chmod(0);
+    if (((await sealedHandle.stat()).mode & 511) !== 0)
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
         "the sealed directory mode did not take",
         "eval kept-sandbox seal did not take",
       );
   } catch (error) {
-    await r?.chmod(0).catch(() => {});
-    await a?.chmod(320).catch(() => {});
+    await sealedHandle?.chmod(0).catch(() => {});
+    await rootHandle?.chmod(320).catch(() => {});
     throw error;
   } finally {
-    await r?.close().catch(() => {});
-    await a?.close().catch(() => {});
+    await sealedHandle?.close().catch(() => {});
+    await rootHandle?.close().catch(() => {});
   }
-  return n;
+  return sealedPath;
 }
 //@ chunk-qchp9vrd.js:117767-118119 placement
 function formatSealedKeptNotice(evalTempDir, sealed) {

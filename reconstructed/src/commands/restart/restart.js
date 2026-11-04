@@ -98,17 +98,17 @@ import { errorMessage } from "../../utils/errors.js";
 
 //@ chunk-qfpyehtk.js:1833-2044 placement
 async function resolveLauncher() {
-  let r = await whichAsync("claude");
-  let e = processWrapperArgv()[0];
-  let [n, p] = await Promise.all([
-    r ? realpath(r).catch(() => r) : null,
-    e ? realpath(e).catch(() => e) : null,
+  let claudePath = await whichAsync("claude");
+  let argv0 = processWrapperArgv()[0];
+  let [resolvedClaudePath, resolvedArgv0] = await Promise.all([
+    claudePath ? realpath(claudePath).catch(() => claudePath) : null,
+    argv0 ? realpath(argv0).catch(() => argv0) : null,
   ]);
-  if (r && (p === null || n !== p))
+  if (claudePath && (resolvedArgv0 === null || resolvedClaudePath !== resolvedArgv0))
     return withProcessWrapper({
-      cmd: r,
+      cmd: claudePath,
       prefixArgs: [],
-      target: r,
+      target: claudePath,
     });
   return getLaunchCommand();
 }
@@ -116,8 +116,8 @@ async function resolveLauncher() {
 /**
  * 升级/降级/同版本的结果文字
  */
-function describeVersionChange(r) {
-  switch (r.kind) {
+function describeVersionChange(change) {
+  switch (change.kind) {
     case "newer":
       return `Successfully updated from ${
         {
@@ -131,7 +131,7 @@ function describeVersionChange(r) {
           HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
           DD_SOURCEMAP_GROUP: "default",
         }.VERSION
-      } to version ${r.version}`;
+      } to version ${change.version}`;
     case "older":
       return `Successfully downgraded from ${
         {
@@ -145,7 +145,7 @@ function describeVersionChange(r) {
           HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
           DD_SOURCEMAP_GROUP: "default",
         }.VERSION
-      } to version ${r.version}`;
+      } to version ${change.version}`;
     case "same":
     case "unknown":
       return "Session resumed";
@@ -160,95 +160,96 @@ function restartRefusalReason(context) {
   return isFrozenMarker(submittedFromComposer) ? submittedFromComposer : "not_typed";
 }
 //@ chunk-qfpyehtk.js:3387-3513 placement
-function restartOrExplain(r, ...e) {
-  if (r !== REMOTE_CONTROL_STAFF_MARKER && !isFrozenMarker(r))
+function restartOrExplain(staffMarker, ...relaunchArgs) {
+  if (staffMarker !== REMOTE_CONTROL_STAFF_MARKER && !isFrozenMarker(staffMarker))
     throw Error("Can't restart automatically. Type /restart at the prompt.");
-  return relaunchOrExplain(...e);
+  return relaunchOrExplain(...relaunchArgs);
 }
 //@ chunk-qfpyehtk.js:3672-6618 placement
 /**
  * 判定能否重启并给出拒绝原因
  */
 function planRestart(messages, storageV5) {
-  let n = (o, u) => {
+  let refuse = (reason, message) => {
     logEvent("tengu_update_refused", {
-      foreground: fromEnum(o),
+      foreground: fromEnum(reason),
     });
-    return u;
+    return message;
   };
-  let p = "To use the installed version, exit and start Claude Code again";
+  let manualHint = "To use the installed version, exit and start Claude Code again";
   if (lastResumableMessage(messages) !== undefined) {
-    let u = isTranscriptPersistenceDisabled();
+    let persistenceDisabled = isTranscriptPersistenceDisabled();
     let materializedSessionFile = getMaterializedSessionFile();
-    if (u || materializedSessionFile === null)
-      return n(
-        u ? "saving_off" : "not_written",
+    if (persistenceDisabled || materializedSessionFile === null)
+      return refuse(
+        persistenceDisabled ? "saving_off" : "not_written",
         "Can't restart this session. It isn't saved to disk, so a restart would lose it. Nothing was changed. To use the installed version, exit and start Claude Code again. You may not be able to resume this session.",
       );
     if (getTranscriptWriteFailureSeq() !== 0)
-      return n(
+      return refuse(
         "write_failed",
         "Couldn't save this session to disk, so nothing was restarted. If you exit now, you may not be able to resume all of it.",
       );
     if (storageV5 === undefined) {
-      let f = sessionGoneStatusCache.get(materializedSessionFile);
-      if (f === undefined)
+      let goneStatus = sessionGoneStatusCache.get(materializedSessionFile);
+      if (goneStatus === undefined)
         try {
-          f = statSync(materializedSessionFile).size > 0 ? undefined : "empty";
+          goneStatus = statSync(materializedSessionFile).size > 0 ? undefined : "empty";
         } catch {
-          f = "missing";
+          goneStatus = "missing";
         }
-      if (f !== undefined) {
-        sessionGoneStatusCache.set(materializedSessionFile, f);
-        return n(
+      if (goneStatus !== undefined) {
+        sessionGoneStatusCache.set(materializedSessionFile, goneStatus);
+        return refuse(
           "gone",
-          f === "empty"
+          goneStatus === "empty"
             ? "Can't restart this session. It isn't saved to disk, so a restart would lose it. Nothing was changed. To use the installed version, exit and start Claude Code again. You may not be able to resume this session."
             : "Can't restart this session. Its saved file can't be found. It may have been moved or deleted. You can keep working here, or run /export to save a copy of the conversation before you exit.",
         );
       }
     }
   }
-  let v = projectRootForRelaunch();
-  if (!existsSync(v))
-    return n(
+  let projectRoot = projectRootForRelaunch();
+  if (!existsSync(projectRoot))
+    return refuse(
       "no_folder",
-      `Can't restart this session here. Its folder, ${truncatePathForDisplay(tildify(v))}, can't be found. Nothing was changed. To use the installed version, exit and start Claude Code in the folder you want to work in, then run /resume and press Ctrl+A to show all projects.`,
+      `Can't restart this session here. Its folder, ${truncatePathForDisplay(tildify(projectRoot))}, can't be found. Nothing was changed. To use the installed version, exit and start Claude Code in the folder you want to work in, then run /resume and press Ctrl+A to show all projects.`,
     );
-  let mapped = getReplConfigArgv().map((o) => o.trim());
-  let found = mapped.find((o, u) => {
-    let m = mapped[u - 1];
-    if ((m !== "--settings" && m !== "--mcp-config") || o === "" || o.startsWith("{")) return false;
+  let mapped = getReplConfigArgv().map((argv) => argv.trim());
+  let found = mapped.find((value, argvIndex) => {
+    let prevArg = mapped[argvIndex - 1];
+    if ((prevArg !== "--settings" && prevArg !== "--mcp-config") || value === "" || value.startsWith("{"))
+      return false;
     try {
-      let f =
-        m === "--settings" && !isInClaudeConfigHome(o)
-          ? vetRepoSettingsPath(getFsImplementation(), o).resolvedPath
-          : o;
-      return !statSync(f).isFile();
+      let settingsPath =
+        prevArg === "--settings" && !isInClaudeConfigHome(value)
+          ? vetRepoSettingsPath(getFsImplementation(), value).resolvedPath
+          : value;
+      return !statSync(settingsPath).isFile();
     } catch {
       return true;
     }
   });
   if (found !== undefined) {
     logEvent("tengu_update_refused_launch_file", {});
-    return n(
+    return refuse(
       "launch_file",
       `Can't restart this session. It was started with ${truncatePathForDisplay(tildify(found))}, which can't be read now. Nothing was changed. To use the installed version, exit and start Claude Code again, then run /resume.`,
     );
   }
   if (getReplBridgeHandle()?.bridgeSessionId)
-    return n(
+    return refuse(
       "remote_control",
       "Can't restart while Remote Control is connected. To use the installed version, exit and start Claude Code again, then run /resume.",
     );
   if (!existsSync(getLaunchCommand().target))
-    return n(
+    return refuse(
       "no_launcher",
       "Can't restart. The installed version wasn't found. To check your installs, run /doctor.",
     );
   let maxVersionConfig = resolveMaxVersionConfig(installedVersionName);
   if (maxVersionConfig !== undefined)
-    return n(
+    return refuse(
       "above_max_version",
       `Can't restart on the installed version. Version ${maxVersionConfig} is on hold, so this session is staying on ${
         {
@@ -273,8 +274,8 @@ var call = async (args, context) => {
       type: "text",
       value: "/restart isn't available in this environment.",
     };
-  let n = restartRefusalReason(context);
-  if (n === "not_owner") {
+  let refusalReason = restartRefusalReason(context);
+  if (refusalReason === "not_owner") {
     logEvent("tengu_update_refused", {
       not_owner: true,
     });
@@ -289,61 +290,66 @@ var call = async (args, context) => {
     logEvent("tengu_update_refused", {
       bg_session: true,
     });
-    let t = isDaemonBgWorker() ? null : getOwnJobShortId();
+    let jobShortId = isDaemonBgWorker() ? null : getOwnJobShortId();
     return {
       type: "text",
-      value: t
-        ? `This is a background session \u2014 press \u2190 to detach, then run \`claude respawn ${t}\` to restart it on the latest build.`
+      value: jobShortId
+        ? `This is a background session \u2014 press \u2190 to detach, then run \`claude respawn ${jobShortId}\` to restart it on the latest build.`
         : "This is a background session \u2014 press \u2190 to detach, then run `claude respawn <id>` to restart it on the latest build (the id is in the agents view).",
     };
   }
   if (!CLAUDE_JOB_DIR) {
     let materializedSessionFile = getMaterializedSessionFile();
-    let b = join(getProjectDir(projectRootForRelaunch()), `${getSessionId()}.jsonl`);
-    if (materializedSessionFile && materializedSessionFile !== b) {
+    let expectedTranscriptPath = join(getProjectDir(projectRootForRelaunch()), `${getSessionId()}.jsonl`);
+    if (materializedSessionFile && materializedSessionFile !== expectedTranscriptPath) {
       logEvent("tengu_update_refused", {
         transcript_path_drift: true,
       });
-      let y = truncatePathForDisplay(tildify(projectRootForRelaunch()));
-      let A = dirname(materializedSessionFile);
+      let displayRoot = truncatePathForDisplay(tildify(projectRootForRelaunch()));
+      let transcriptDir = dirname(materializedSessionFile);
       let sessionLite = await readSessionLite(materializedSessionFile);
-      let s =
+      let transcriptCwd =
         sessionLite &&
         (extractFieldFromLastEntryOfTypeStrict(sessionLite.tail, "relocated", "relocatedCwd") ??
           extractFieldFromFirstEntryStrict(sessionLite.head, "cwd"));
       return {
         type: "text",
-        value: `Cannot /update \u2014 ${s && getProjectDir(s) === A ? `this session belongs to ${truncatePathForDisplay(tildify(s))} but is running in ${y}` : `this session is running in ${y} but its transcript is in ${truncatePathForDisplay(tildify(A))}`}. Restart manually with --resume to continue on the latest version.`,
+        value: `Cannot /update \u2014 ${transcriptCwd && getProjectDir(transcriptCwd) === transcriptDir ? `this session belongs to ${truncatePathForDisplay(tildify(transcriptCwd))} but is running in ${displayRoot}` : `this session is running in ${displayRoot} but its transcript is in ${truncatePathForDisplay(tildify(transcriptDir))}`}. Restart manually with --resume to continue on the latest version.`,
       };
     }
   }
-  let v = (t) => {
+  let checkNoRunningTasks = (deferred) => {
     if (!hasRunningBackgroundTask(context.taskRegistry.all())) return;
     logEvent("tengu_update_refused", {
       active_tasks: true,
-      ...(t && {
-        deferred: t,
+      ...(deferred && {
+        deferred,
       }),
     });
     return "Can't restart while work is running in the background \u2014 wait for it to finish (or stop it via /tasks), then try again.";
   };
-  let w = (t) => {
-    let b = listUncarriedLaunchSettings(getToolPermissionContext(context), getForkRestrictedLaunchConfig());
-    if (b.length === 0) return v(t);
+  let checkCarriableSettings = (deferred) => {
+    let uncarriedSettings = listUncarriedLaunchSettings(
+      getToolPermissionContext(context),
+      getForkRestrictedLaunchConfig(),
+    );
+    if (uncarriedSettings.length === 0) return checkNoRunningTasks(deferred);
     logEvent("tengu_update_refused", {
       uncarriable: true,
     });
-    let y = isTranscriptPersistenceDisabled() ? "" : " (add --continue to return to this conversation)";
-    return `Can't switch to the new version from inside this session \u2014 it has restrictions a restart can't carry over (${b.join("; ")}). Nothing was changed; exit and start claude again for the new version${y}.`;
+    let continueHint = isTranscriptPersistenceDisabled()
+      ? ""
+      : " (add --continue to return to this conversation)";
+    return `Can't switch to the new version from inside this session \u2014 it has restrictions a restart can't carry over (${uncarriedSettings.join("; ")}). Nothing was changed; exit and start claude again for the new version${continueHint}.`;
   };
-  let S = CLAUDE_JOB_DIR ? v() : w();
-  if (S !== undefined)
+  let blockReason = CLAUDE_JOB_DIR ? checkNoRunningTasks() : checkCarriableSettings();
+  if (blockReason !== undefined)
     return {
       type: "text",
-      value: S,
+      value: blockReason,
     };
   if (CLAUDE_JOB_DIR) {
-    let t = basename(CLAUDE_JOB_DIR);
+    let jobShortId = basename(CLAUDE_JOB_DIR);
     await saveResumePoint(context.messages, context.storageV5);
     if (
       !(await withTimeout(flushSessionStorage(), 30000, "session flush").then(
@@ -361,37 +367,37 @@ var call = async (args, context) => {
       };
     }
     let launcher = await resolveLauncher();
-    let A = v(true);
-    if (A !== undefined)
+    let blockReason = checkNoRunningTasks(true);
+    if (blockReason !== undefined)
       return {
         type: "text",
-        value: A,
+        value: blockReason,
       };
-    let g = withLaunchValuesOfHybridConnection(
+    let env_2 = withLaunchValuesOfHybridConnection(
       withoutProtectedEnv({
         ...process.env,
       }),
     );
-    for (let s of BG_WORKER_IDENTITY_ENV_VARS) delete g[s];
-    delete g.CLAUDE_JOB_DIR;
-    for (let key of Object.keys(g)) if (key.startsWith("CLAUDE_BG_")) delete g[key];
+    for (let envKey of BG_WORKER_IDENTITY_ENV_VARS) delete env_2[envKey];
+    delete env_2.CLAUDE_JOB_DIR;
+    for (let key of Object.keys(env_2)) if (key.startsWith("CLAUDE_BG_")) delete env_2[key];
     logEvent("tengu_update_bg_respawn", {
       carried_comment_monitor:
         isBackgroundExitHandoffEnabled() && hasLiveOrBootingAutoReact(context.taskRegistry.all()),
     });
     try {
-      let s = spawn(launcher.cmd, [...launcher.prefixArgs, "respawn", t], {
+      let child = spawn(launcher.cmd, [...launcher.prefixArgs, "respawn", jobShortId], {
         detached: true,
         stdio: "ignore",
         windowsHide: true,
-        env: g,
+        env: env_2,
         cwd: homedir(),
       });
-      moveKeeperPid(s.pid);
-      s.on("error", (I) => {
-        logError(I);
+      moveKeeperPid(child.pid);
+      child.on("error", (spawnError) => {
+        logError(spawnError);
       });
-      s.unref();
+      child.unref();
     } catch (error) {
       logError(error);
       logEvent("tengu_update_refused", {
@@ -399,17 +405,17 @@ var call = async (args, context) => {
       });
       return {
         type: "text",
-        value: `Couldn't restart automatically \u2014 press \u2190 to detach, then run \`claude respawn ${t}\` to restart it on the latest build.`,
+        value: `Couldn't restart automatically \u2014 press \u2190 to detach, then run \`claude respawn ${jobShortId}\` to restart it on the latest build.`,
       };
     }
     return {
       type: "text",
-      value: `Restarting this session on the latest version\u2026 If it doesn't come back within a minute, run \`claude respawn ${t}\` from a terminal.`,
+      value: `Restarting this session on the latest version\u2026 If it doesn't come back within a minute, run \`claude respawn ${jobShortId}\` from a terminal.`,
     };
   }
-  if (n === "not_typed") {
+  if (refusalReason === "not_typed") {
     logEvent("tengu_update_refused", {
-      foreground: fromEnum(n),
+      foreground: fromEnum(refusalReason),
     });
     logEvent("tengu_update_refused_not_typed", {});
     return {
@@ -417,18 +423,18 @@ var call = async (args, context) => {
       value: "Can't restart automatically. Type /restart at the prompt.",
     };
   }
-  let C = planRestart(context.messages, context.storageV5);
-  if (C !== undefined)
+  let planReason = planRestart(context.messages, context.storageV5);
+  if (planReason !== undefined)
     return {
       type: "text",
-      value: C,
+      value: planReason,
     };
   await saveResumePoint(context.messages, context.storageV5);
-  let o = w(true);
-  if (o !== undefined)
+  let postSaveBlockReason = checkCarriableSettings(true);
+  if (postSaveBlockReason !== undefined)
     return {
       type: "text",
-      value: o,
+      value: postSaveBlockReason,
     };
   let toolPermissionContext = getToolPermissionContext(context);
   let extraArgs = [
@@ -437,11 +443,11 @@ var call = async (args, context) => {
   ];
   let teamName = isTeammate() ? undefined : context.getAppState().teamContext?.teamName;
   await ensureLauncherRunnable();
-  let O = w(true);
-  if (O !== undefined)
+  let postEnsureBlockReason = checkCarriableSettings(true);
+  if (postEnsureBlockReason !== undefined)
     return {
       type: "text",
-      value: O,
+      value: postEnsureBlockReason,
     };
   let replBridgeHandle = getReplBridgeHandle();
   let bridgeSessionId = replBridgeHandle?.bridgeSessionId;
@@ -449,11 +455,11 @@ var call = async (args, context) => {
   let outboundOnly = replBridgeHandle?.outboundOnly;
   let sessionGroupingId = replBridgeHandle?.sessionGroupingId;
   if (bridgeSessionId) {
-    context.setAppState((t) =>
-      t.replBridgeSkipNextArchive
-        ? t
+    context.setAppState((prevState) =>
+      prevState.replBridgeSkipNextArchive
+        ? prevState
         : {
-            ...t,
+            ...prevState,
             replBridgeSkipNextArchive: true,
           },
     );
@@ -484,9 +490,9 @@ var call = async (args, context) => {
     ) ?? {},
   );
   let launchCommand = getLaunchCommand();
-  let T = await confirmRelaunch(context.messages, "relaunch", {}, context.storageV5);
-  let R = lastResumableMessage(context.messages) !== undefined;
-  if (R && !T) {
+  let confirmed = await confirmRelaunch(context.messages, "relaunch", {}, context.storageV5);
+  let hasTranscript = lastResumableMessage(context.messages) !== undefined;
+  if (hasTranscript && !confirmed) {
     try {
       await recordTranscript(
         [
@@ -508,7 +514,7 @@ var call = async (args, context) => {
     }
     await saveResumePoint(context.messages, context.storageV5);
   }
-  logEvent(R ? "tengu_update_relaunch" : "tengu_update_relaunch_fresh", {
+  logEvent(hasTranscript ? "tengu_update_relaunch" : "tengu_update_relaunch_fresh", {
     from_version: sanitizeVersion(
       {
         ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
@@ -527,11 +533,11 @@ var call = async (args, context) => {
   });
   try {
     return await restartOrExplain(
-      n,
-      T,
+      refusalReason,
+      confirmed,
       {
         launcher: launchCommand,
-        freshIfNoTranscript: !R,
+        freshIfNoTranscript: !hasTranscript,
         extraArgs,
         proactivity: {
           proactivityLevel: context.getProactivityLevel(),
@@ -540,7 +546,7 @@ var call = async (args, context) => {
         env: Object.keys(_).length > 0 ? _ : undefined,
         preSpawn: () => {
           process.stdout.write(
-            R && getTranscriptWriteFailureSeq() !== 0
+            hasTranscript && getTranscriptWriteFailureSeq() !== 0
               ? sequential.dim(`
 Claude's last response couldn't be saved, so it may be missing.
 
@@ -553,7 +559,7 @@ Claude's last response couldn't be saved, so it may be missing.
       context.storageV5,
     );
   } catch (error) {
-    if (!T) throw error;
+    if (!confirmed) throw error;
     logError(error);
     return {
       type: "text",
@@ -566,4 +572,4 @@ Claude's last response couldn't be saved, so it may be missing.
     };
   }
 };
-export { resolveLauncher };
+export { resolveLauncher, call };

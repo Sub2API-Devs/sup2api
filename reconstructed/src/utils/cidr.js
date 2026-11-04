@@ -13,33 +13,33 @@
 /**
  * IP 是否在 CIDR 段内。
  */
-function ipInCidr(e, r) {
-  let index = r.lastIndexOf("/");
+function ipInCidr(ip, cidr) {
+  let index = cidr.lastIndexOf("/");
   if (index < 0) return false;
-  let sliced = r.slice(0, index);
-  let sliced_2 = r.slice(index + 1);
-  if (!/^\d+$/.test(sliced_2)) return false;
-  let c = parseInt(sliced_2, 10);
-  let ipAddress = parseIpAddress(sliced);
+  let address = cidr.slice(0, index);
+  let sliced = cidr.slice(index + 1);
+  if (!/^\d+$/.test(sliced)) return false;
+  let prefixLength = parseInt(sliced, 10);
+  let ipAddress = parseIpAddress(address);
   if (!ipAddress) return false;
   if (ipAddress.zone) return false;
-  let ipAddress_2 = parseIpAddress(e);
+  let ipAddress_2 = parseIpAddress(ip);
   if (!ipAddress_2) return false;
-  let l = unmapIpv4MappedIpv6(ipAddress_2.bytes);
+  let ipBytes = unmapIpv4MappedIpv6(ipAddress_2.bytes);
   let bytes = ipAddress.bytes;
-  if (l.length !== bytes.length) return false;
-  let E = bytes.length * 8;
-  if (c < 0 || c > E) return false;
-  return prefixBitsMatch(l, bytes, c);
+  if (ipBytes.length !== bytes.length) return false;
+  let maxBits = bytes.length * 8;
+  if (prefixLength < 0 || prefixLength > maxBits) return false;
+  return prefixBitsMatch(ipBytes, bytes, prefixLength);
 }
 //@ chunk-hq88884p.js:52478-52635 placement
-function prefixBitsMatch(e, bytes, n) {
-  let o = n >> 3;
-  for (let j = 0; j < o; j++) if (e[j] !== bytes[j]) return false;
-  let s = n & 7;
-  if (s === 0) return true;
-  let c = (255 << (8 - s)) & 255;
-  return ((e[o] ?? 0) & c) === ((bytes[o] ?? 0) & c);
+function prefixBitsMatch(ipBytes, bytes, prefixLength) {
+  let fullBytes = prefixLength >> 3;
+  for (let j = 0; j < fullBytes; j++) if (ipBytes[j] !== bytes[j]) return false;
+  let remainderBits = prefixLength & 7;
+  if (remainderBits === 0) return true;
+  let mask = (255 << (8 - remainderBits)) & 255;
+  return ((ipBytes[fullBytes] ?? 0) & mask) === ((bytes[fullBytes] ?? 0) & mask);
 }
 //@ chunk-hq88884p.js:52635-52774 placement
 function unmapIpv4MappedIpv6(bytes) {
@@ -49,26 +49,26 @@ function unmapIpv4MappedIpv6(bytes) {
   return bytes.slice(12);
 }
 //@ chunk-hq88884p.js:52774-53003 placement
-function parseIpAddress(e) {
-  if (e === "") return null;
-  let r = "";
-  let n = e;
-  let index = e.indexOf("%");
+function parseIpAddress(address) {
+  if (address === "") return null;
+  let zone = "";
+  let hostPart = address;
+  let index = address.indexOf("%");
   if (index >= 0) {
-    r = e.slice(index + 1);
-    n = e.slice(0, index);
+    zone = address.slice(index + 1);
+    hostPart = address.slice(0, index);
   }
-  if (n.includes(":")) {
-    let ipv6 = parseIpv6(n);
+  if (hostPart.includes(":")) {
+    let ipv6 = parseIpv6(hostPart);
     return ipv6
       ? {
           bytes: ipv6,
-          zone: r,
+          zone,
         }
       : null;
   }
-  if (r) return null;
-  let ipv4 = parseIpv4(n);
+  if (zone) return null;
+  let ipv4 = parseIpv4(hostPart);
   return ipv4
     ? {
         bytes: ipv4,
@@ -77,17 +77,17 @@ function parseIpAddress(e) {
     : null;
 }
 //@ chunk-hq88884p.js:53003-53280 placement
-function parseIpv4(e) {
-  let parts = e.split(".");
+function parseIpv4(text) {
+  let parts = text.split(".");
   if (parts.length !== 4) return null;
   let uint8Array = new Uint8Array(4);
   for (let j = 0; j < 4; j++) {
-    let s = parts[j];
-    if (s === undefined || s === "" || !/^\d{1,3}$/.test(s)) return null;
-    if (s.length > 1 && s.startsWith("0")) return null;
-    let c = parseInt(s, 10);
-    if (c > 255) return null;
-    uint8Array[j] = c;
+    let part = parts[j];
+    if (part === undefined || part === "" || !/^\d{1,3}$/.test(part)) return null;
+    if (part.length > 1 && part.startsWith("0")) return null;
+    let value = parseInt(part, 10);
+    if (value > 255) return null;
+    uint8Array[j] = value;
   }
   return uint8Array;
 }
@@ -95,63 +95,63 @@ function parseIpv4(e) {
 /**
  * 解析 IPv6 地址为字节。
  */
-function parseIpv6(e) {
-  let r = null;
-  let n = e;
-  let index = e.lastIndexOf(":");
-  if (index >= 0 && e.slice(index + 1).includes(".")) {
-    r = parseIpv4(e.slice(index + 1));
-    if (!r) return null;
-    n = e.slice(0, index + 1);
+function parseIpv6(text) {
+  let ipv4Tail = null;
+  let hostPart = text;
+  let index = text.lastIndexOf(":");
+  if (index >= 0 && text.slice(index + 1).includes(".")) {
+    ipv4Tail = parseIpv4(text.slice(index + 1));
+    if (!ipv4Tail) return null;
+    hostPart = text.slice(0, index + 1);
   }
-  let parts = n.split("::");
+  let parts = hostPart.split("::");
   if (parts.length > 2) return null;
-  let c = [];
-  let a = (l, b) => {
-    if (l === "") return [];
-    let parts = l.split(":");
-    let h = [];
+  let groups = [];
+  let parseGroups = (text, allowTrailingEmpty) => {
+    if (text === "") return [];
+    let parts = text.split(":");
+    let result = [];
     for (let j = 0; j < parts.length; j++) {
-      let p = parts[j];
-      if (p === "" && b && j === parts.length - 1) continue;
-      if (p === undefined || p === "" || !/^[0-9a-fA-F]{1,4}$/.test(p)) return null;
-      h.push(parseInt(p, 16));
+      let part = parts[j];
+      if (part === "" && allowTrailingEmpty && j === parts.length - 1) continue;
+      if (part === undefined || part === "" || !/^[0-9a-fA-F]{1,4}$/.test(part)) return null;
+      result.push(parseInt(part, 16));
     }
-    return h;
+    return result;
   };
   if (parts.length === 1) {
-    let l = parts[0] ?? "";
-    let b = a(l, r !== null);
-    if (!b) return null;
-    c.push(...b);
-    let E = r ? 6 : 8;
-    if (c.length !== E) return null;
+    let single = parts[0] ?? "";
+    let parsed = parseGroups(single, ipv4Tail !== null);
+    if (!parsed) return null;
+    groups.push(...parsed);
+    let expectedCount = ipv4Tail ? 6 : 8;
+    if (groups.length !== expectedCount) return null;
   } else {
-    let l = parts[0] ?? "";
-    let b = parts[1] ?? "";
-    let E = a(l, false);
-    let h = a(b, r !== null);
-    if (!E || !h) return null;
-    let P = r ? 2 : 0;
-    let p = 8 - E.length - h.length - P;
-    if (p < 1) return null;
-    c.push(...E);
-    for (let j = 0; j < p; j++) c.push(0);
-    c.push(...h);
-    if (c.length + P !== 8) return null;
+    let head = parts[0] ?? "";
+    let tail = parts[1] ?? "";
+    let headGroups = parseGroups(head, false);
+    let tailGroups = parseGroups(tail, ipv4Tail !== null);
+    if (!headGroups || !tailGroups) return null;
+    let reservedGroups = ipv4Tail ? 2 : 0;
+    let implicitCount = 8 - headGroups.length - tailGroups.length - reservedGroups;
+    if (implicitCount < 1) return null;
+    groups.push(...headGroups);
+    for (let j = 0; j < implicitCount; j++) groups.push(0);
+    groups.push(...tailGroups);
+    if (groups.length + reservedGroups !== 8) return null;
   }
   let uint8Array = new Uint8Array(16);
-  for (let j = 0; j < c.length; j++) {
-    let b = c[j];
-    if (b === undefined) return null;
-    uint8Array[j * 2] = (b >> 8) & 255;
-    uint8Array[j * 2 + 1] = b & 255;
+  for (let j = 0; j < groups.length; j++) {
+    let group = groups[j];
+    if (group === undefined) return null;
+    uint8Array[j * 2] = (group >> 8) & 255;
+    uint8Array[j * 2 + 1] = group & 255;
   }
-  if (r) {
-    uint8Array[12] = r[0] ?? 0;
-    uint8Array[13] = r[1] ?? 0;
-    uint8Array[14] = r[2] ?? 0;
-    uint8Array[15] = r[3] ?? 0;
+  if (ipv4Tail) {
+    uint8Array[12] = ipv4Tail[0] ?? 0;
+    uint8Array[13] = ipv4Tail[1] ?? 0;
+    uint8Array[14] = ipv4Tail[2] ?? 0;
+    uint8Array[15] = ipv4Tail[3] ?? 0;
   }
   return uint8Array;
 }

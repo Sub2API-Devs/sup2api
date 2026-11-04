@@ -23,7 +23,7 @@ import { outermostRepoAncestor } from "./sandboxReach.js";
 import { buildGitEnvForReach } from "./gitEnv.js";
 
 //@ chunk-s61vbvea.js:240144-241039 placement
-async function prepareSeedAdmin(e, n) {
+async function prepareSeedAdmin(treeInfo, gitEnvForReach) {
   let seedAdminRoot = await resolveSeedAdminRoot();
   if ("unusable" in seedAdminRoot)
     return {
@@ -34,8 +34,10 @@ async function prepareSeedAdmin(e, n) {
   let { configHome, root } = seedAdminRoot;
   if (
     [root, join(configHome, "seed-admin")].some(
-      (S) =>
-        isPathInside_2(e.workTree, S) || isPathInside_2(e.enclosingTree, S) || isPathInside_2(e.gitDir, S),
+      (candidateRoot) =>
+        isPathInside_2(treeInfo.workTree, candidateRoot) ||
+        isPathInside_2(treeInfo.enclosingTree, candidateRoot) ||
+        isPathInside_2(treeInfo.gitDir, candidateRoot),
     )
   )
     return {
@@ -44,13 +46,13 @@ async function prepareSeedAdmin(e, n) {
       detail: SEED_ADMIN_REFUSALS.inside_tree,
     };
   try {
-    let S = await lstat(root).catch(() => null);
+    let existing = await lstat(root).catch(() => null);
     if (
-      S !== null &&
-      S.isFile() &&
-      S.size === 0 &&
-      S.nlink === 1 &&
-      (getPlatform_2() === "windows" || S.uid === process.getuid?.())
+      existing !== null &&
+      existing.isFile() &&
+      existing.size === 0 &&
+      existing.nlink === 1 &&
+      (getPlatform_2() === "windows" || existing.uid === process.getuid?.())
     )
       await rm(root);
     await mkdir(root, {
@@ -65,11 +67,11 @@ async function prepareSeedAdmin(e, n) {
         home: configHome,
         detail: `${join(configHome, "seed-admin")} is not a plain directory of this user`,
       };
-    await stageSeedAdmin(root, fileIdentity, n);
+    await stageSeedAdmin(root, fileIdentity, gitEnvForReach);
     return {
       kind: "made",
       dir: await mkdtemp(
-        join(root, `claude-seed-admin-${process.pid}-${await procStartTag(process.pid, n)}-`),
+        join(root, `claude-seed-admin-${process.pid}-${await procStartTag(process.pid, gitEnvForReach)}-`),
       ),
       root,
       configHome,
@@ -106,60 +108,68 @@ async function resolveSeedAdminRoot() {
   };
 }
 //@ chunk-s61vbvea.js:241243-241358 placement
-function isPrivateOwnedDir(e) {
+function isPrivateOwnedDir(stats) {
   return (
-    e.isDirectory() &&
-    (getPlatform_2() === "windows" || ((e.uid === process.getuid?.() || e.uid === 0) && (e.mode & 18) === 0))
+    stats.isDirectory() &&
+    (getPlatform_2() === "windows" ||
+      ((stats.uid === process.getuid?.() || stats.uid === 0) && (stats.mode & 18) === 0))
   );
 }
 //@ chunk-s61vbvea.js:241358-242152 placement
 async function sweepSeedAdmin() {
-  let e = {
+  let totals = {
     removed: 0,
     errors: 0,
     held: 0,
     refused: "no",
   };
-  let n = (refused, w) => {
-    logForDebugging(`[builderGit] seed-admin is not swept: ${w}`, {
+  let refuse = (refused, reason) => {
+    logForDebugging(`[builderGit] seed-admin is not swept: ${reason}`, {
       level: "warn",
     });
     return {
-      ...e,
+      ...totals,
       refused,
     };
   };
   let seedAdminRoot = await resolveSeedAdminRoot();
   if ("unusable" in seedAdminRoot)
-    return n(seedAdminRoot.unusable, SEED_ADMIN_REFUSALS[seedAdminRoot.unusable]);
+    return refuse(seedAdminRoot.unusable, SEED_ADMIN_REFUSALS[seedAdminRoot.unusable]);
   let fileIdentity = await getFileIdentity_2(seedAdminRoot.root);
-  let h = await lstat(seedAdminRoot.root).catch((error) => ({
+  let rootStats = await lstat(seedAdminRoot.root).catch((error) => ({
     error,
   }));
-  if ("error" in h) {
-    let errnoCode = getErrnoCode(h.error);
-    if (errnoCode === "ENOENT" || errnoCode === "ENOTDIR") return e;
+  if ("error" in rootStats) {
+    let errnoCode = getErrnoCode(rootStats.error);
+    if (errnoCode === "ENOENT" || errnoCode === "ENOTDIR") return totals;
     logForDebugging(
-      `[builderGit] sweeping ${seedAdminRoot.root}: could not examine it (${errnoCode ?? errorMessage(h.error)})`,
+      `[builderGit] sweeping ${seedAdminRoot.root}: could not examine it (${errnoCode ?? errorMessage(rootStats.error)})`,
       {
         level: "warn",
       },
     );
     return {
-      ...e,
+      ...totals,
       errors: 1,
     };
   }
-  if (h.isFile()) return e;
-  let y = outermostRepoAncestor(join(seedAdminRoot.configHome, "seed-admin"), seedAdminRoot.configHome);
-  if (y !== null) return n("inside_tree", `a git checkout (${y}) holds ${seedAdminRoot.root}`);
-  return isPrivateOwnedDir(h)
+  if (rootStats.isFile()) return totals;
+  let repoAncestor = outermostRepoAncestor(
+    join(seedAdminRoot.configHome, "seed-admin"),
+    seedAdminRoot.configHome,
+  );
+  if (repoAncestor !== null)
+    return refuse("inside_tree", `a git checkout (${repoAncestor}) holds ${seedAdminRoot.root}`);
+  return isPrivateOwnedDir(rootStats)
     ? {
         ...(await stageSeedAdmin(seedAdminRoot.root, fileIdentity, () =>
           buildGitEnvForReach(undefined, undefined),
         )),
         refused: "no",
       }
-    : n("shared_directory", `${seedAdminRoot.root} is a link, or another user owns it or can write to it`);
+    : refuse(
+        "shared_directory",
+        `${seedAdminRoot.root} is a link, or another user owns it or can write to it`,
+      );
 }
 export { sweepSeedAdmin, prepareSeedAdmin, isPrivateOwnedDir };

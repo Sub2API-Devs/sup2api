@@ -16,16 +16,17 @@ import { getPlatform } from "./platform.js";
 import { GIT_NO_PROMPT_ENV } from "./plugins/marketplaceManager.js";
 import { shellQuoteArgs } from "./bash/bashPipeCommand.js";
 import { firstLineOf } from "./stringUtils.js";
-import { GIT_SAFE_GLOBAL_ARGS, FSr, GIT_LOCATION_ENV_VARS } from "./git/gitSafeEnv.js";
+import { GIT_SAFE_GLOBAL_ARGS, LFS_SKIP_ENV, GIT_LOCATION_ENV_VARS } from "./git/gitSafeEnv.js";
 import { TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS } from "./errors.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-sycgf9xs.js:4108-4321 placement
-function formatGitErrorFrames(e, n) {
+function formatGitErrorFrames(error, frames) {
   return [
-    `${e.name}: ${e.message}`,
-    ...n.map((r) => {
-      let o = `${r.file}${r.line ? `:${r.line}` : ""}${r.column ? `:${r.column}` : ""}`;
-      return r.function ? `    at ${r.function} (${o})` : `    at ${o}`;
+    `${error.name}: ${error.message}`,
+    ...frames.map((frame) => {
+      let location = `${frame.file}${frame.line ? `:${frame.line}` : ""}${frame.column ? `:${frame.column}` : ""}`;
+      return frame.function ? `    at ${frame.function} (${location})` : `    at ${location}`;
     }),
   ].join(`
 `);
@@ -33,8 +34,8 @@ function formatGitErrorFrames(e, n) {
 //@ chunk-sycgf9xs.js:4378-4612 placement
 class GitStartFolderError {
   #e;
-  constructor(e) {
-    this.#e = e;
+  constructor(path) {
+    this.#e = path;
   }
   get path() {
     return this.#e;
@@ -42,21 +43,21 @@ class GitStartFolderError {
   static filesystemRoot() {
     return new GitStartFolderError(parse(process.execPath).root || sep);
   }
-  static forTests(e) {
-    if (!isAbsolute(e)) throw Error("a test start folder must be absolute");
-    return new GitStartFolderError(e);
+  static forTests(path) {
+    if (!isAbsolute(path)) throw Error("a test start folder must be absolute");
+    return new GitStartFolderError(path);
   }
 }
 //@ chunk-sycgf9xs.js:4612-4758 placement
-function buildGitInvocation(gitStartsIn, cwd, r, env) {
-  let s = {
+function buildGitInvocation(gitStartsIn, cwd, args, env) {
+  let cleanedEnv = {
     ...env,
   };
-  for (let key of Object.keys(env)) if (/^(?:OLD)?PWD$/i.test(key)) delete s[key];
+  for (let key of Object.keys(env)) if (/^(?:OLD)?PWD$/i.test(key)) delete cleanedEnv[key];
   return {
     cwd: gitStartsIn.path,
-    args: ["-C", cwd, ...r],
-    env: s,
+    args: ["-C", cwd, ...args],
+    env: cleanedEnv,
   };
 }
 //@ chunk-sycgf9xs.js:4758-4801 placement
@@ -65,8 +66,8 @@ var CLAUDE_CODE_FOUND_REPOSITORY_GIT = "CLAUDE_CODE_FOUND_REPOSITORY_GIT";
 /**
  * 归一化一次环境读取结果（payload 显式给出默认主机时取反）。
  */
-function resolveEnvRead(e, n) {
-  return e.value === !n && e.source === "payload" && e.defaultHost ? !n : n;
+function resolveEnvRead(read, fallback) {
+  return read.value === !fallback && read.source === "payload" && read.defaultHost ? !fallback : fallback;
 }
 //@ chunk-sycgf9xs.js:4918-5076 placement
 class envReaderHolder {
@@ -76,13 +77,13 @@ class envReaderHolder {
     this.reader = reader;
     return reader_2;
   }
-  read(e, n) {
+  read(key, fallback) {
     let reader = this.reader;
-    if (!reader) return n;
+    if (!reader) return fallback;
     try {
-      return resolveEnvRead(reader(e, n), n);
+      return resolveEnvRead(reader(key, fallback), fallback);
     } catch {
-      return n;
+      return fallback;
     }
   }
 }
@@ -95,8 +96,8 @@ var ALTERNATE_REFS_COMMAND = `f() { git --git-dir="$1" for-each-ref --format='%(
 /**
  * 路径含路径分隔列表符时返回 null（拒绝）。
  */
-function rejectSeparatorPath(e) {
-  return e.includes(delimiter) ? null : e;
+function rejectSeparatorPath(path) {
+  return path.includes(delimiter) ? null : path;
 }
 //@ chunk-sycgf9xs.js:5355-5433 placement
 /**
@@ -131,46 +132,53 @@ function nullDevicePath() {
 /**
  * 空 hooksPath 配置匹配正则、git 钩子名清单与对应的 hook.<name>.enabled=false 覆盖，以及环境读取器单例。
  */
-var NULL_HOOKS_PATH_PATTERN = /^core\.hooksPath=(?:\/dev\/null|\\\\\.\\nul)$/i;
-var GIT_HOOK_NAMES = [
-  "applypatch-msg",
-  "pre-applypatch",
-  "post-applypatch",
-  "pre-commit",
-  "pre-merge-commit",
-  "prepare-commit-msg",
-  "commit-msg",
-  "post-commit",
-  "pre-rebase",
-  "post-checkout",
-  "post-merge",
-  "pre-push",
-  "pre-receive",
-  "update",
-  "proc-receive",
-  "post-receive",
-  "post-update",
-  "reference-transaction",
-  "push-to-checkout",
-  "pre-auto-gc",
-  "post-rewrite",
-  "sendemail-validate",
-  "fsmonitor-watchman",
-  "p4-changelist",
-  "p4-prepare-changelist",
-  "p4-post-changelist",
-  "p4-pre-submit",
-  "post-index-change",
-];
-var mapped = GIT_HOOK_NAMES.map((e) => [`hook.${e}.enabled`, "false"]);
-var TENGU_COZY_PARASOL = "tengu_cozy_parasol";
-var envReaderSingleton = new envReaderHolder();
+var NULL_HOOKS_PATH_PATTERN; // deferred: uses envReaderHolder of its import cycle while loading; runs once the cycle is complete
+var GIT_HOOK_NAMES;
+var mapped;
+var TENGU_COZY_PARASOL;
+var envReaderSingleton;
+deferInit("chunk-sycgf9xs.js:5736", () => {
+  NULL_HOOKS_PATH_PATTERN = /^core\.hooksPath=(?:\/dev\/null|\\\\\.\\nul)$/i;
+  GIT_HOOK_NAMES = [
+    "applypatch-msg",
+    "pre-applypatch",
+    "post-applypatch",
+    "pre-commit",
+    "pre-merge-commit",
+    "prepare-commit-msg",
+    "commit-msg",
+    "post-commit",
+    "pre-rebase",
+    "post-checkout",
+    "post-merge",
+    "pre-push",
+    "pre-receive",
+    "update",
+    "proc-receive",
+    "post-receive",
+    "post-update",
+    "reference-transaction",
+    "push-to-checkout",
+    "pre-auto-gc",
+    "post-rewrite",
+    "sendemail-validate",
+    "fsmonitor-watchman",
+    "p4-changelist",
+    "p4-prepare-changelist",
+    "p4-post-changelist",
+    "p4-pre-submit",
+    "post-index-change",
+  ];
+  mapped = GIT_HOOK_NAMES.map((hookName) => [`hook.${hookName}.enabled`, "false"]);
+  TENGU_COZY_PARASOL = "tengu_cozy_parasol";
+  envReaderSingleton = new envReaderHolder();
+});
 //@ chunk-sycgf9xs.js:6340-6378 placement
 /**
  * 注册环境读取器（返回旧值）。
  */
-function registerEnvReader(e) {
-  return envReaderSingleton.register(e);
+function registerEnvReader(reader) {
+  return envReaderSingleton.register(reader);
 }
 //@ chunk-sycgf9xs.js:6378-6414 placement
 function isAlternateRefsCommandEnabled() {
@@ -199,57 +207,57 @@ function getGitSafetyConfigPairs() {
  * 补齐禁止交互提示的 git 环境变量默认值（不覆盖已有值）。
  */
 function noPromptEnvDefaults(env) {
-  let n = {};
+  let missing = {};
   for (let [key, value] of Object.entries(GIT_NO_PROMPT_ENV))
-    if (getEnvVarCaseInsensitiveOnWindows(env, key) === undefined) n[key] = value;
-  return n;
+    if (getEnvVarCaseInsensitiveOnWindows(env, key) === undefined) missing[key] = value;
+  return missing;
 }
 //@ chunk-sycgf9xs.js:7984-8146 placement
-function withGitNoPromptEnv(e = process.env) {
+function withGitNoPromptEnv(env = process.env) {
   return {
-    ...e,
-    ...blankEnvKeys(e, (n, r) => Object.hasOwn(GIT_NO_PROMPT_ENV, n) && r !== n),
+    ...env,
+    ...blankEnvKeys(env, (upperKey, key) => Object.hasOwn(GIT_NO_PROMPT_ENV, upperKey) && key !== upperKey),
     ...GIT_NO_PROMPT_ENV,
     ...buildGitConfigEnv(
-      getEnvVarCaseInsensitiveOnWindows(e, "GIT_CONFIG_COUNT"),
+      getEnvVarCaseInsensitiveOnWindows(env, "GIT_CONFIG_COUNT"),
       [["credential.interactive", "false"]],
-      e,
+      env,
     ),
   };
 }
 //@ chunk-sycgf9xs.js:8146-8244 placement
-function blankEnvKeys(e, n) {
-  let r = {};
-  for (let key of Object.keys(e)) if (n(key.toUpperCase(), key)) r[key] = undefined;
-  return r;
+function blankEnvKeys(env, predicate) {
+  let cleared = {};
+  for (let key of Object.keys(env)) if (predicate(key.toUpperCase(), key)) cleared[key] = undefined;
+  return cleared;
 }
 //@ chunk-sycgf9xs.js:8244-8391 placement
-function getEnvVarCaseInsensitiveOnWindows(e, n) {
-  if (e[n] !== undefined || getPlatform() !== "windows") return e[n];
-  for (let [key, value] of Object.entries(e))
-    if (key.toUpperCase() === n && value !== undefined) return value;
+function getEnvVarCaseInsensitiveOnWindows(env, name) {
+  if (env[name] !== undefined || getPlatform() !== "windows") return env[name];
+  for (let [key, value] of Object.entries(env))
+    if (key.toUpperCase() === name && value !== undefined) return value;
   return;
 }
 //@ chunk-sycgf9xs.js:8391-8509 placement
-function hasEnvVar(e, n) {
-  if (Object.hasOwn(e, n)) return true;
-  return getPlatform() === "windows" && Object.keys(e).some((key) => key.toUpperCase() === n);
+function hasEnvVar(env, name) {
+  if (Object.hasOwn(env, name)) return true;
+  return getPlatform() === "windows" && Object.keys(env).some((key) => key.toUpperCase() === name);
 }
 //@ chunk-sycgf9xs.js:8509-8780 placement
-function buildGitConfigEnv(e, n, r = {}) {
-  let o = Number(e);
-  let s = Number.isInteger(o) && o > 0 ? o : 0;
-  let u = {
-    GIT_CONFIG_COUNT: String(s + n.length),
+function buildGitConfigEnv(count, pairs, env = {}) {
+  let baseCount = Number(count);
+  let existingCount = Number.isInteger(baseCount) && baseCount > 0 ? baseCount : 0;
+  let out = {
+    GIT_CONFIG_COUNT: String(existingCount + pairs.length),
   };
-  n.forEach(([d, g], f) => {
-    u[`GIT_CONFIG_KEY_${s + f}`] = d;
-    u[`GIT_CONFIG_VALUE_${s + f}`] = g;
+  pairs.forEach(([key, value], index) => {
+    out[`GIT_CONFIG_KEY_${existingCount + index}`] = key;
+    out[`GIT_CONFIG_VALUE_${existingCount + index}`] = value;
   });
-  let c = new Set(Object.keys(u));
+  let writtenKeys = new Set(Object.keys(out));
   return {
-    ...blankEnvKeys(r, (d, g) => c.has(d) && !c.has(g)),
-    ...u,
+    ...blankEnvKeys(env, (upperKey, key) => writtenKeys.has(upperKey) && !writtenKeys.has(key)),
+    ...out,
   };
 }
 //@ chunk-sycgf9xs.js:8780-8948 placement
@@ -258,10 +266,10 @@ var SSH_BATCH_STRICT_OPTIONS = "-o BatchMode=yes -o StrictHostKeyChecking=yes";
 var SSH_BATCH_OPTIONS = "-o BatchMode=yes";
 var PLINK_BATCH_OPTION = "-batch";
 //@ chunk-sycgf9xs.js:8948-9042 placement
-function sshBatchOptionsFor(e, n) {
-  switch (e) {
+function sshBatchOptionsFor(variant, strictHostKeys) {
+  switch (variant) {
     case "ssh":
-      return n ? SSH_BATCH_STRICT_OPTIONS : SSH_BATCH_OPTIONS;
+      return strictHostKeys ? SSH_BATCH_STRICT_OPTIONS : SSH_BATCH_OPTIONS;
     case "plink":
       return PLINK_BATCH_OPTION;
     case "other":
@@ -269,96 +277,100 @@ function sshBatchOptionsFor(e, n) {
   }
 }
 //@ chunk-sycgf9xs.js:9042-9174 placement
-function wrapWithCdCommand(e, command) {
-  let r = getPlatform() === "windows" ? e.replace(/\\/g, "/") : e;
-  return `CDPATH= cd -- ${shellQuoteArgs([r])} 2>/dev/null || cd / || exit 1; ${command}`;
+function wrapWithCdCommand(dir, command) {
+  let posixDir = getPlatform() === "windows" ? dir.replace(/\\/g, "/") : dir;
+  return `CDPATH= cd -- ${shellQuoteArgs([posixDir])} 2>/dev/null || cd / || exit 1; ${command}`;
 }
 //@ chunk-sycgf9xs.js:9174-9238 placement
 /**
  * 取主目录，取不到时返回 "/"。
  */
 function homeDirOrDefault() {
-  let e = "";
+  let home = "";
   try {
-    e = homedir();
+    home = homedir();
   } catch {}
-  return isAbsolute(e) ? e : resolve("/");
+  return isAbsolute(home) ? home : resolve("/");
 }
 //@ chunk-sycgf9xs.js:9238-9397 placement
-function resolveSshVariant(e, n) {
-  if (e !== undefined && e !== "auto") return e;
-  let replaced = quoteForShell(n)
+function resolveSshVariant(variant, command) {
+  if (variant !== undefined && variant !== "auto") return variant;
+  let replaced = quoteForShell(command)
     .toLowerCase()
     .replace(/\.exe$/, "");
   return ["ssh", "plink", "tortoiseplink"].includes(replaced) ? replaced : "auto";
 }
 //@ chunk-sycgf9xs.js:9397-9775 placement
-function quoteForShell(e) {
-  let n = "";
-  let r;
-  let o = true;
-  for (let idx = 0; idx < e.length; idx++) {
-    let c = e[idx];
-    let d;
-    if (r === undefined && /[ \t\n\r]/.test(c)) o = false;
-    else if (r === undefined && (c === "'" || c === '"')) r = c;
-    else if (c === r) r = undefined;
-    else if (c === "\\" && r !== "'") {
+function quoteForShell(command) {
+  let plain = "";
+  let quote;
+  let leading = true;
+  for (let idx = 0; idx < command.length; idx++) {
+    let char = command[idx];
+    let emitted;
+    if (quote === undefined && /[ \t\n\r]/.test(char)) leading = false;
+    else if (quote === undefined && (char === "'" || char === '"')) quote = char;
+    else if (char === quote) quote = undefined;
+    else if (char === "\\" && quote !== "'") {
       idx++;
-      if (idx >= e.length) return "";
-      d = e[idx];
-    } else d = c;
-    if (o && d !== undefined) n += d;
+      if (idx >= command.length) return "";
+      emitted = command[idx];
+    } else emitted = char;
+    if (leading && emitted !== undefined) plain += emitted;
   }
-  if (r !== undefined) return "";
-  let s = getPlatform() === "windows" ? /[\\/]/ : /\//;
+  if (quote !== undefined) return "";
+  let separatorRe = getPlatform() === "windows" ? /[\\/]/ : /\//;
   return (
-    n
-      .split(s)
-      .filter((u) => u !== "")
+    plain
+      .split(separatorRe)
+      .filter((segment) => segment !== "")
       .at(-1) ?? ""
   );
 }
 //@ chunk-sycgf9xs.js:9775-9888 placement
-function withGitSshCommand(e, n) {
+function withGitSshCommand(env, command) {
   return {
-    ...e,
-    ...blankEnvKeys(e, (r) => r === "GIT_SSH_COMMAND" || r === "GIT_SSH"),
+    ...env,
+    ...blankEnvKeys(env, (key) => key === "GIT_SSH_COMMAND" || key === "GIT_SSH"),
     GIT_SSH: undefined,
-    GIT_SSH_COMMAND: n,
+    GIT_SSH_COMMAND: command,
   };
 }
 //@ chunk-sycgf9xs.js:9888-10094 placement
 /**
  * 构造非交互的 git ssh 命令：从 GIT_SSH_COMMAND/GIT_SSH 或给定命令选出 ssh 程序，按变体（ssh/plink）追加 BatchMode（可选 StrictHostKeyChecking）或 -batch；已有 -batch 时不重复，返回命令与更新后的环境。
  */
-function buildBatchSshCommand(e, n, { strictHostKeys: r = true } = {}) {
-  let { chosen, named } = chooseSshCommand(e, n);
-  let u = sshBatchOptionsFor(named === undefined ? "ssh" : detectSshVariant(e, named), r);
-  if (u === undefined || (u === PLINK_BATCH_OPTION && hasPlinkBatchFlag(chosen)))
+function buildBatchSshCommand(env, command, { strictHostKeys = true } = {}) {
+  let { chosen, named } = chooseSshCommand(env, command);
+  let options = sshBatchOptionsFor(
+    named === undefined ? "ssh" : detectSshVariant(env, named),
+    strictHostKeys,
+  );
+  if (options === undefined || (options === PLINK_BATCH_OPTION && hasPlinkBatchFlag(chosen)))
     return {
       command: chosen,
-      env: e,
+      env,
     };
-  let c = `${chosen} ${u}`;
+  let withOptions = `${chosen} ${options}`;
   return {
-    command: c,
-    env: withGitSshCommand(e, c),
+    command: withOptions,
+    env: withGitSshCommand(env, withOptions),
   };
 }
 //@ chunk-sycgf9xs.js:10094-10228 placement
-function chooseSshCommand(e, n) {
-  let r = safeSshVariant(getEnvVarCaseInsensitiveOnWindows(e, "GIT_SSH_COMMAND")) ?? safeSshVariant(n);
-  let o = safeSshVariant(getEnvVarCaseInsensitiveOnWindows(e, "GIT_SSH"));
+function chooseSshCommand(env, configured) {
+  let command =
+    safeSshVariant(getEnvVarCaseInsensitiveOnWindows(env, "GIT_SSH_COMMAND")) ?? safeSshVariant(configured);
+  let program = safeSshVariant(getEnvVarCaseInsensitiveOnWindows(env, "GIT_SSH"));
   return {
-    chosen: r ?? shellQuoteArgs([o ?? "ssh"]),
-    named: r !== undefined ? firstShellWord(r) : o,
+    chosen: command ?? shellQuoteArgs([program ?? "ssh"]),
+    named: command !== undefined ? firstShellWord(command) : program,
   };
 }
 //@ chunk-sycgf9xs.js:10228-10404 placement
-function unknownSshCommandVariant(env, n) {
+function unknownSshCommandVariant(env, configured) {
   let envVarCaseInsensitiveOnWindows = getEnvVarCaseInsensitiveOnWindows(env, "GIT_SSH_VARIANT");
-  let { chosen, named } = chooseSshCommand(env, n);
+  let { chosen, named } = chooseSshCommand(env, configured);
   return (envVarCaseInsensitiveOnWindows === undefined || envVarCaseInsensitiveOnWindows === "auto") &&
     named !== undefined &&
     !["ssh", "plink", "tortoiseplink"].includes(normalizeSshProgramName(named))
@@ -366,54 +378,53 @@ function unknownSshCommandVariant(env, n) {
     : undefined;
 }
 //@ chunk-sycgf9xs.js:10404-10760 placement
-async function readSshCommandConfig(e, n) {
-  if (getPlatform() !== "windows") return e;
-  let envVarCaseInsensitiveOnWindows = getEnvVarCaseInsensitiveOnWindows(e, "GIT_SSH_COMMAND");
+async function readSshCommandConfig(env, runGit) {
+  if (getPlatform() !== "windows") return env;
+  let envVarCaseInsensitiveOnWindows = getEnvVarCaseInsensitiveOnWindows(env, "GIT_SSH_COMMAND");
   if (envVarCaseInsensitiveOnWindows !== undefined)
     return envVarCaseInsensitiveOnWindows.trim() === ""
-      ? e
-      : buildBatchSshCommand(e, undefined, {
+      ? env
+      : buildBatchSshCommand(env, undefined, {
           strictHostKeys: false,
         }).env;
-  let o = await n(["config", "--null", "--get", "core.sshCommand"]);
-  let s = o.exitCode === 0 && o.stdout.includes("\x00") ? firstLineOf(o.stdout, "\x00") : undefined;
-  if (s?.trim() === "") return e;
-  return buildBatchSshCommand(e, s, {
+  let result = await runGit(["config", "--null", "--get", "core.sshCommand"]);
+  let sshCommand =
+    result.exitCode === 0 && result.stdout.includes("\x00") ? firstLineOf(result.stdout, "\x00") : undefined;
+  if (sshCommand?.trim() === "") return env;
+  return buildBatchSshCommand(env, sshCommand, {
     strictHostKeys: false,
   }).env;
 }
 //@ chunk-sycgf9xs.js:10760-10816 placement
-function safeSshVariant(envVarCaseInsensitiveOnWindows) {
-  return envVarCaseInsensitiveOnWindows !== undefined && envVarCaseInsensitiveOnWindows.trim() !== ""
-    ? envVarCaseInsensitiveOnWindows
-    : undefined;
+function safeSshVariant(value) {
+  return value !== undefined && value.trim() !== "" ? value : undefined;
 }
 //@ chunk-sycgf9xs.js:10816-11029 placement
-function detectSshVariant(e, named) {
-  let envVarCaseInsensitiveOnWindows = getEnvVarCaseInsensitiveOnWindows(e, "GIT_SSH_VARIANT");
+function detectSshVariant(env, name) {
+  let envVarCaseInsensitiveOnWindows = getEnvVarCaseInsensitiveOnWindows(env, "GIT_SSH_VARIANT");
   if (envVarCaseInsensitiveOnWindows !== undefined && envVarCaseInsensitiveOnWindows !== "auto")
     return envVarCaseInsensitiveOnWindows === "plink"
       ? "plink"
       : ["putty", "tortoiseplink", "simple"].includes(envVarCaseInsensitiveOnWindows)
         ? "other"
         : "ssh";
-  let o = normalizeSshProgramName(named);
-  return o === "ssh" || o === "plink" ? o : "other";
+  let programName = normalizeSshProgramName(name);
+  return programName === "ssh" || programName === "plink" ? programName : "other";
 }
 //@ chunk-sycgf9xs.js:11029-11118 placement
-function normalizeSshProgramName(e) {
-  return basename(e.trim().replace(/\\/g, "/"))
+function normalizeSshProgramName(name) {
+  return basename(name.trim().replace(/\\/g, "/"))
     .toLowerCase()
     .replace(/\.exe$/, "");
 }
 //@ chunk-sycgf9xs.js:11118-11253 placement
 function hasPlinkBatchFlag(chosen) {
-  let n = chosen.trim().match(/^(?:"[^"]*"|'[^']*'|\S+)/)?.[0] ?? "";
-  return /(?:^|\s)-batch(?:\s|$)/.test(chosen.trim().slice(n.length));
+  let firstWord = chosen.trim().match(/^(?:"[^"]*"|'[^']*'|\S+)/)?.[0] ?? "";
+  return /(?:^|\s)-batch(?:\s|$)/.test(chosen.trim().slice(firstWord.length));
 }
 //@ chunk-sycgf9xs.js:11253-11357 placement
-function firstShellWord(e) {
-  let match = e.trim().match(/^(?:"([^"]*)"|'([^']*)'|(\S+))/);
+function firstShellWord(command) {
+  let match = command.trim().match(/^(?:"([^"]*)"|'([^']*)'|(\S+))/);
   return match?.[1] ?? match?.[2] ?? match?.[3] ?? "";
 }
 //@ chunk-sycgf9xs.js:11357-11526 placement
@@ -430,25 +441,25 @@ var DISABLED_GIT_PROTOCOL_ARGS = [
   "protocol.ftps.allow=never",
 ];
 //@ chunk-sycgf9xs.js:11526-11618 placement
-function withoutAllowProtocolEnv(e) {
+function withoutAllowProtocolEnv(env) {
   return {
-    ...e,
-    ...blankEnvKeys(e, (n) => n === "GIT_ALLOW_PROTOCOL"),
+    ...env,
+    ...blankEnvKeys(env, (key) => key === "GIT_ALLOW_PROTOCOL"),
     GIT_ALLOW_PROTOCOL: undefined,
   };
 }
 //@ chunk-sycgf9xs.js:11618-11825 placement
-function restrictGitProtocols(e) {
-  let envVarCaseInsensitiveOnWindows = getEnvVarCaseInsensitiveOnWindows(e, "GIT_ALLOW_PROTOCOL");
+function restrictGitProtocols(env) {
+  let envVarCaseInsensitiveOnWindows = getEnvVarCaseInsensitiveOnWindows(env, "GIT_ALLOW_PROTOCOL");
   if (envVarCaseInsensitiveOnWindows === undefined) return [];
-  let r = new Set(envVarCaseInsensitiveOnWindows.split(":"));
+  let allowed = new Set(envVarCaseInsensitiveOnWindows.split(":"));
   return ["https", "http", "ssh", "file"]
-    .filter((o) => !r.has(o))
-    .flatMap((o) => ["-c", `protocol.${o}.allow=never`]);
+    .filter((protocol) => !allowed.has(protocol))
+    .flatMap((protocol) => ["-c", `protocol.${protocol}.allow=never`]);
 }
 //@ chunk-sycgf9xs.js:11825-11863 placement
-function FILE_REF_BACKEND_ARGS(e) {
-  return [...DISABLED_GIT_PROTOCOL_ARGS, ...restrictGitProtocols(e)];
+function FILE_REF_BACKEND_ARGS(env) {
+  return [...DISABLED_GIT_PROTOCOL_ARGS, ...restrictGitProtocols(env)];
 }
 //@ chunk-sycgf9xs.js:11863-11943 placement
 var sameAsFileRefBackendArgs = ["-c", "init.defaultRefFormat=files"];
@@ -456,86 +467,92 @@ var FILE_REF_BACKEND_ENV = {
   GIT_DEFAULT_REF_FORMAT: "files",
 };
 //@ chunk-sycgf9xs.js:11943-12347 placement
-function buildSshCommand(e = withGitNoPromptEnv(scrubbedGitEnv()), n) {
-  let r = [...FILE_REF_BACKEND_ARGS(e), ...sameAsFileRefBackendArgs];
-  let envVarCaseInsensitiveOnWindows = getEnvVarCaseInsensitiveOnWindows(e, "GIT_SSH_VARIANT");
-  let s =
+function buildSshCommand(env = withGitNoPromptEnv(scrubbedGitEnv()), sshConfig) {
+  let pinArgs = [...FILE_REF_BACKEND_ARGS(env), ...sameAsFileRefBackendArgs];
+  let envVarCaseInsensitiveOnWindows = getEnvVarCaseInsensitiveOnWindows(env, "GIT_SSH_VARIANT");
+  let baseEnv =
     envVarCaseInsensitiveOnWindows === undefined || envVarCaseInsensitiveOnWindows === "auto"
       ? {
-          ...e,
-          ...blankEnvKeys(e, (u) => u === "GIT_SSH_VARIANT"),
-          GIT_SSH_VARIANT: resolveSshVariant(n.variant, chooseSshCommand(e, n.command).chosen),
+          ...env,
+          ...blankEnvKeys(env, (key) => key === "GIT_SSH_VARIANT"),
+          GIT_SSH_VARIANT: resolveSshVariant(
+            sshConfig.variant,
+            chooseSshCommand(env, sshConfig.command).chosen,
+          ),
         }
-      : e;
+      : env;
   return {
-    pinArgs: r,
-    inCheckoutArgs: [...GIT_SAFE_GLOBAL_ARGS, ...SSH_BATCH_CONFIG_ARGS, ...r],
+    pinArgs,
+    inCheckoutArgs: [...GIT_SAFE_GLOBAL_ARGS, ...SSH_BATCH_CONFIG_ARGS, ...pinArgs],
     env: {
       ...withGitSshCommand(
-        withoutAllowProtocolEnv(s),
-        wrapWithCdCommand(homeDirOrDefault(), buildBatchSshCommand(s, n.command).command),
+        withoutAllowProtocolEnv(baseEnv),
+        wrapWithCdCommand(homeDirOrDefault(), buildBatchSshCommand(baseEnv, sshConfig.command).command),
       ),
-      ...blankEnvKeys(e, (u, c) => Object.hasOwn(FSr, u) && c !== u),
-      ...FSr,
-      ...blankEnvKeys(e, (u, c) => Object.hasOwn(FILE_REF_BACKEND_ENV, u) && c !== u),
+      ...blankEnvKeys(env, (upperKey, key) => Object.hasOwn(LFS_SKIP_ENV, upperKey) && key !== upperKey),
+      ...LFS_SKIP_ENV,
+      ...blankEnvKeys(
+        env,
+        (upperKey, key) => Object.hasOwn(FILE_REF_BACKEND_ENV, upperKey) && key !== upperKey,
+      ),
       ...FILE_REF_BACKEND_ENV,
     },
   };
 }
 //@ chunk-sycgf9xs.js:12347-12480 placement
 function scrubbedGitEnv() {
-  let e = new Set(GIT_LOCATION_ENV_VARS);
+  let locationVars = new Set(GIT_LOCATION_ENV_VARS);
   let env = process.env;
   return {
     ...env,
-    ...blankEnvKeys(env, (r) => e.has(r)),
-    ...Object.fromEntries([...e].map((r) => [r, undefined])),
+    ...blankEnvKeys(env, (upperKey) => locationVars.has(upperKey)),
+    ...Object.fromEntries([...locationVars].map((key) => [key, undefined])),
   };
 }
 //@ chunk-sycgf9xs.js:12480-12578 placement
 /**
  * 运行 git 时附加 GIT_CEILING_DIRECTORIES 的版本。
  */
-function runGitWithCeilingDirs(e, gitSshConfig) {
+function runGitWithCeilingDirs(dirPath, gitSshConfig) {
   let sshCommand = buildSshCommand(undefined, gitSshConfig);
   return {
     ...sshCommand,
     env: {
       ...sshCommand.env,
-      GIT_CEILING_DIRECTORIES: checkGitCeilingPath(dirname(e)),
+      GIT_CEILING_DIRECTORIES: checkGitCeilingPath(dirname(dirPath)),
     },
   };
 }
 //@ chunk-sycgf9xs.js:12578-12705 placement
 function pickGitNoPromptEnv(env) {
-  let n = {};
-  for (let r of [...Object.keys(GIT_NO_PROMPT_ENV), "GIT_CEILING_DIRECTORIES"]) {
-    let o = env[r];
-    if (o !== undefined) n[r] = o;
+  let picked = {};
+  for (let key of [...Object.keys(GIT_NO_PROMPT_ENV), "GIT_CEILING_DIRECTORIES"]) {
+    let value = env[key];
+    if (value !== undefined) picked[key] = value;
   }
-  return n;
+  return picked;
 }
 //@ chunk-sycgf9xs.js:12705-13184 placement
-function checkGitCeilingPath(e) {
-  let n = rejectSeparatorPath(resolve(e));
-  if (n === null)
+function checkGitCeilingPath(path) {
+  let resolved = rejectSeparatorPath(resolve(path));
+  if (resolved === null)
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `Cannot run git under ${resolve(e)}: its path contains "${delimiter}", which git's discovery ceiling (a "${delimiter}"-separated list) cannot express. Use a location without "${delimiter}" for this directory (the plugins cache \u2014 CLAUDE_CODE_PLUGIN_CACHE_DIR \u2014 or the temporary directory \u2014 TMPDIR \u2014 whichever this path is under).`,
+      `Cannot run git under ${resolve(path)}: its path contains "${delimiter}", which git's discovery ceiling (a "${delimiter}"-separated list) cannot express. Use a location without "${delimiter}" for this directory (the plugins cache \u2014 CLAUDE_CODE_PLUGIN_CACHE_DIR \u2014 or the temporary directory \u2014 TMPDIR \u2014 whichever this path is under).`,
       "git working directory path contains the PATH delimiter; git discovery ceiling inexpressible",
     );
-  return n;
+  return resolved;
 }
 //@ chunk-sycgf9xs.js:13184-13305 placement
-async function prepareGitWorkDir(e, n) {
-  let r = dirname(e);
-  await mkdir(r, {
+async function prepareGitWorkDir(dirPath, env) {
+  let parentDir = dirname(dirPath);
+  await mkdir(parentDir, {
     recursive: true,
   });
   return {
-    cwd: r,
+    cwd: parentDir,
     env: {
-      ...n,
-      GIT_CEILING_DIRECTORIES: checkGitCeilingPath(dirname(r)),
+      ...env,
+      GIT_CEILING_DIRECTORIES: checkGitCeilingPath(dirname(parentDir)),
     },
   };
 }

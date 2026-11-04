@@ -12,8 +12,8 @@ import { foldName } from "../../utils/permissions/protectedDirNames.js";
 import { SYNCED_DIR } from "../../utils/plugins/syncedItems.js";
 
 //@ chunk-axmbhcjg.js:10353-10434 fingerprint = getThinkbackSkillDir (1)
-function getThinkbackSkillDir(e) {
-  let [n, r] = e.split("/");
-  return foldName(n ?? "") === "skills" && foldName(r ?? "") === SYNCED_DIR;
+function getThinkbackSkillDir(pathParts) {
+  let [firstSegment, secondSegment] = pathParts.split("/");
+  return foldName(firstSegment ?? "") === "skills" && foldName(secondSegment ?? "") === SYNCED_DIR;
 }
 export { getThinkbackSkillDir };

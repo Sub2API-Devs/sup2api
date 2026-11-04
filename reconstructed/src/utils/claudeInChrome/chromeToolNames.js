@@ -9,6 +9,7 @@
  * attribution: placement 8
  */
 import { CLAUDE_IN_CHROME_MCP_TOOLS } from "../../skills/bundled/claudeInChrome.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-20nqyqvq.js:191-289 placement
 /**
@@ -23,15 +24,19 @@ var BROWSER_PREVIEW_TOOL_PREFIXES = [
 /**
  * Chrome 工具名的各种 MCP 前缀（含 remote-devices 与 claude-device）。
  */
-var MCP_CLAUDE_DEVICE_CHROME = "mcp__claude-device__chrome_";
-var CHROME_TOOL_PREFIXES = [
-  "mcp__claude-in-chrome__",
-  "mcp__Claude_in_Chrome__",
-  "mcp__remote-devices__claude-in-chrome__",
-  "mcp__remote-devices__Claude_in_Chrome__",
-  "mcp__claude-device__chrome_",
-  ...BROWSER_PREVIEW_TOOL_PREFIXES,
-];
+var MCP_CLAUDE_DEVICE_CHROME; // deferred: uses BROWSER_PREVIEW_TOOL_PREFIXES of its import cycle while loading; runs once the cycle is complete
+var CHROME_TOOL_PREFIXES;
+deferInit("chunk-20nqyqvq.js:289", () => {
+  MCP_CLAUDE_DEVICE_CHROME = "mcp__claude-device__chrome_";
+  CHROME_TOOL_PREFIXES = [
+    "mcp__claude-in-chrome__",
+    "mcp__Claude_in_Chrome__",
+    "mcp__remote-devices__claude-in-chrome__",
+    "mcp__remote-devices__Claude_in_Chrome__",
+    "mcp__claude-device__chrome_",
+    ...BROWSER_PREVIEW_TOOL_PREFIXES,
+  ];
+});
 //@ chunk-20nqyqvq.js:506-656 placement
 /**
  * 取 claude-device chrome 工具后缀
@@ -45,12 +50,15 @@ function chromeToolSuffix(_) {
 /**
  * 把 “chrome_x” 形式的设备工具名归一回后缀。
  */
-function normalizeDeviceChromeToolName(toolName, e) {
-  let n = chromeToolSuffix(toolName);
-  return n !== null && e === "chrome_" + n ? n : e;
+function normalizeDeviceChromeToolName(toolName, toolName_2) {
+  let suffix = chromeToolSuffix(toolName);
+  return suffix !== null && toolName_2 === "chrome_" + suffix ? suffix : toolName_2;
 }
 //@ chunk-20nqyqvq.js:795-865 placement
-var regExp = new RegExp("(?<![\\w-])mcp__claude-device__chrome_[\\w-]*", "g");
+var regExp; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-20nqyqvq.js:795", () => {
+  regExp = new RegExp("(?<![\\w-])mcp__claude-device__chrome_[\\w-]*", "g");
+});
 //@ chunk-20nqyqvq.js:865-973 placement
 function rewriteDeviceChromeToolNames(rule) {
   return rule.replace(regExp, (tool) =>
@@ -58,15 +66,15 @@ function rewriteDeviceChromeToolNames(rule) {
   );
 }
 //@ chunk-20nqyqvq.js:973-1026 placement
-function isChromeToolName(toolNameForPermissionCheck) {
-  return CHROME_TOOL_PREFIXES.some((e) => toolNameForPermissionCheck.startsWith(e));
+function isChromeToolName(_) {
+  return CHROME_TOOL_PREFIXES.some((prefix) => _.startsWith(prefix));
 }
 //@ chunk-20nqyqvq.js:1026-1080 placement
 /**
  * 判断工具名是否属于浏览器预览类。
  */
-function isBrowserPreviewToolName(toolNameForPermissionCheck) {
-  return BROWSER_PREVIEW_TOOL_PREFIXES.some((e) => toolNameForPermissionCheck.startsWith(e));
+function isBrowserPreviewToolName(_) {
+  return BROWSER_PREVIEW_TOOL_PREFIXES.some((prefix) => _.startsWith(prefix));
 }
 export {
   isChromeToolName,

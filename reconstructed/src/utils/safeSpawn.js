@@ -23,96 +23,96 @@ import { TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS } from "./e
 /**
  * 安全执行命令（拒绝当前目录下的可执行文件，套工具 cgroup）。
  */
-async function safeExecFile(e, n = [], r = {}) {
+async function safeExecFile(command, args = [], options = {}) {
   assertProgramLaunchAllowed();
-  let { useToolMemoryCgroup, toolCgroupClass, ...u } = r;
-  let d = {
+  let { useToolMemoryCgroup, toolCgroupClass, ...rest } = options;
+  let spawnOptions = {
     ...helperCgroupSpawnOptions({
       useToolMemoryCgroup,
       toolCgroupClass,
     }),
-    ...u,
+    ...rest,
   };
   if (isToolMemoryCgroupDisabled()) {
-    let executable = resolveExecutableSafely(e);
+    let executable = resolveExecutableSafely(command);
     if (executable === null)
-      throw Error(`Command '${e}' not found or is in an unsafe location (current directory)`);
-    return execa(executable, n, d);
+      throw Error(`Command '${command}' not found or is in an unsafe location (current directory)`);
+    return execa(executable, args, spawnOptions);
   }
-  return execa(e, n, d);
+  return execa(command, args, spawnOptions);
 }
 //@ chunk-m4p5zn6n.js:41221-41720 placement
 /**
  * 安全 spawn（拒绝当前目录下的可执行文件，套工具 cgroup）。
  */
-function safeSpawn(e, n = [], r = {}) {
+function safeSpawn(command, args = [], options = {}) {
   assertProgramLaunchAllowed();
-  let { useToolMemoryCgroup, toolCgroupClass, ...u } = r;
-  let d = e;
+  let { useToolMemoryCgroup, toolCgroupClass, ...rest } = options;
+  let executable = command;
   if (isToolMemoryCgroupDisabled()) {
-    let executable = resolveExecutableSafely(e);
-    if (executable === null)
+    let executable_2 = resolveExecutableSafely(command);
+    if (executable_2 === null)
       throw Object.assign(
         new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-          `Command '${e}' not found or is in an unsafe location (current directory)`,
+          `Command '${command}' not found or is in an unsafe location (current directory)`,
           "safeSpawn: command not found or is in an unsafe location (current directory)",
         ),
         {
           code: "ENOENT",
         },
       );
-    d = executable;
+    executable = executable_2;
   }
-  let l = helperCgroupSpawnOptions({
+  let cgroupOptions = helperCgroupSpawnOptions({
     useToolMemoryCgroup,
     toolCgroupClass,
   });
-  let f = execa(d, n, {
-    ...l,
-    ...u,
+  let child = execa(executable, args, {
+    ...cgroupOptions,
+    ...rest,
     buffer: false,
     reject: false,
   });
-  if (useToolMemoryCgroup !== false && l.cgroup === undefined && isToolCgroupPending())
-    parkPendingPid(toolCgroupClass ?? "helper", f.pid);
-  f.catch(() => {});
-  return f;
+  if (useToolMemoryCgroup !== false && cgroupOptions.cgroup === undefined && isToolCgroupPending())
+    parkPendingPid(toolCgroupClass ?? "helper", child.pid);
+  child.catch(() => {});
+  return child;
 }
 //@ chunk-m4p5zn6n.js:41720-42013 placement
 /**
  * 同步安全执行命令。
  */
-function safeExecFileSync(e, n = [], r = {}) {
+function safeExecFileSync(command, args = [], options = {}) {
   assertProgramLaunchAllowed();
-  let { useToolMemoryCgroup, toolCgroupClass, ...u } = r;
-  let d = {
+  let { useToolMemoryCgroup, toolCgroupClass, ...rest } = options;
+  let spawnOptions = {
     ...helperCgroupSpawnOptions({
       useToolMemoryCgroup,
       toolCgroupClass,
     }),
-    ...u,
+    ...rest,
   };
   if (isToolMemoryCgroupDisabled()) {
-    let executable = resolveExecutableSafely(e);
+    let executable = resolveExecutableSafely(command);
     if (executable === null)
-      throw Error(`Command '${e}' not found or is in an unsafe location (current directory)`);
-    return execaSync(executable, n, d);
+      throw Error(`Command '${command}' not found or is in an unsafe location (current directory)`);
+    return execaSync(executable, args, spawnOptions);
   }
-  return execaSync(e, n, d);
+  return execaSync(command, args, spawnOptions);
 }
 //@ chunk-m4p5zn6n.js:42013-42174 placement
 /**
  * 以 shell 执行命令。
  */
-async function safeExecShell(e, n = {}) {
+async function safeExecShell(command, options = {}) {
   assertProgramLaunchAllowed();
-  let { useToolMemoryCgroup, toolCgroupClass, ...s } = n;
-  return execa(e, {
+  let { useToolMemoryCgroup, toolCgroupClass, ...rest } = options;
+  return execa(command, {
     ...helperCgroupSpawnOptions({
       useToolMemoryCgroup,
       toolCgroupClass,
     }),
-    ...s,
+    ...rest,
     shell: true,
   });
 }
@@ -120,15 +120,15 @@ async function safeExecShell(e, n = {}) {
 /**
  * 同步以 shell 执行命令。
  */
-function safeExecShellSync(command, n = {}) {
+function safeExecShellSync(command, options = {}) {
   assertProgramLaunchAllowed();
-  let { useToolMemoryCgroup, toolCgroupClass, ...s } = n;
+  let { useToolMemoryCgroup, toolCgroupClass, ...rest } = options;
   return execaSync(command, {
     ...helperCgroupSpawnOptions({
       useToolMemoryCgroup,
       toolCgroupClass,
     }),
-    ...s,
+    ...rest,
     shell: true,
   });
 }

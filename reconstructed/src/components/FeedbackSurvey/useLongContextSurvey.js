@@ -8,10 +8,15 @@
  * pieces: chunk-18hwfzwa.js (7)
  * attribution: placement 7
  */
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { useStoreSelector } from "../../hooks/useStoreSelector.js";
 import { selectIsLoading3, selectSubmitCount2, useSurveyState } from "./useSurveyState.js";
-import { y, R, P, init_react_production } from "../../../vendor/react/cjs/react.production.js";
+import {
+  useState,
+  useRef,
+  useEffect,
+  init_react_production,
+} from "../../../vendor/react/cjs/react.production.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { logEvent } from "../../services/analytics/index.js";
 import { lit as lit_2, fromEnum } from "../../services/analytics/safeMetadata.js";
@@ -24,9 +29,10 @@ import { env } from "../../utils/env.js";
 import { getMaxCumulativeDroppedTokens } from "../../utils/tokens.js";
 import { estimateTokensWithAnchor } from "../../services/compact/autoCompact.js";
 import { getLastAssistantMessage } from "../../utils/messages.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-18hwfzwa.js:1034794-1035136 placement
-var LONG_CONTEXT_SURVEY_FLAGS = 5000;
+var SURVEY_HIDE_THANKS_AFTER_MS = 5000;
 var TENGU_LONG_CONTEXT_SURVEY_THRESHOLD = "tengu_long_context_survey_threshold";
 var TENGU_LONG_CONTEXT_SURVEY_QUESTION_VARIANT = "tengu_long_context_survey_question_variant";
 var TENGU_LONG_CONTEXT_SURVEY_TRIGGER_MODE = "tengu_long_context_survey_trigger_mode";
@@ -47,178 +53,183 @@ function normalizeTriggerMode(featureValue_CACHED_MAY_BE_STALE) {
 }
 //@ chunk-18hwfzwa.js:1035297-1035404 placement
 function parseProbability(featureValue_CACHED_MAY_BE_STALE) {
-  let x = Number(featureValue_CACHED_MAY_BE_STALE);
-  if (featureValue_CACHED_MAY_BE_STALE === "" || !Number.isFinite(x)) return DEFAULT_SURVEY_PROBABILITY;
-  return Math.min(1, Math.max(0, x));
+  let value = Number(featureValue_CACHED_MAY_BE_STALE);
+  if (featureValue_CACHED_MAY_BE_STALE === "" || !Number.isFinite(value)) return DEFAULT_SURVEY_PROBABILITY;
+  return Math.min(1, Math.max(0, value));
 }
 //@ chunk-18hwfzwa.js:1035404-1035488 placement
 function parsePositiveInt(featureValue_CACHED_MAY_BE_STALE) {
   if (!/^\d+$/.test(featureValue_CACHED_MAY_BE_STALE)) return;
-  let x = parseInt(featureValue_CACHED_MAY_BE_STALE, 10);
-  return x > 0 ? x : undefined;
+  let value = parseInt(featureValue_CACHED_MAY_BE_STALE, 10);
+  return value > 0 ? value : undefined;
 }
 //@ chunk-18hwfzwa.js:1035488-1039263 placement
 /**
  * useLongContextSurvey：长上下文使用后触发体验调查的 hook。
  */
 function useLongContextSurvey(props) {
-  let $ = w(31);
+  let $ = useMemoCache(31);
   let { cumulativeSessionTokens, turn, transcript, hasActivePrompt, enabled, otherSurveyActive } = props;
-  let Be = hasActivePrompt === undefined ? false : hasActivePrompt;
-  let He = enabled === undefined ? true : enabled;
-  let We = otherSurveyActive === undefined ? false : otherSurveyActive;
+  let hasActivePromptFlag = hasActivePrompt === undefined ? false : hasActivePrompt;
+  let isEnabled = enabled === undefined ? true : enabled;
+  let otherSurveyActiveFlag = otherSurveyActive === undefined ? false : otherSurveyActive;
   let storeSelector = useStoreSelector(turn, selectIsLoading3);
   let storeSelector_2 = useStoreSelector(turn, selectSubmitCount2);
-  let storeSelector_3 = useStoreSelector(transcript);
-  let [kt, At] = y(undefined);
-  let [It, Ot] = y("generic");
-  let [Et, Dt] = y("cumulative");
-  let [Lt, oo] = y(DEFAULT_SURVEY_PROBABILITY);
-  let Xt = R(false);
-  let storeSelectorRef = R(storeSelector_2);
-  let so = R(null);
-  let ao;
+  let messages = useStoreSelector(transcript);
+  let [threshold, setThreshold] = useState(undefined);
+  let [questionVariant, setQuestionVariant] = useState("generic");
+  let [triggerMode, setTriggerMode] = useState("cumulative");
+  let [surveyProbability, setSurveyProbability] = useState(DEFAULT_SURVEY_PROBABILITY);
+  let triggeredRef = useRef(false);
+  let storeSelectorRef = useRef(storeSelector_2);
+  let lastTriggerRef = useRef(null);
+  let onOpen;
   if ($[0] === MEMO_CACHE_SENTINEL) {
-    ao = (co) => {
-      let bo = so.current;
+    onOpen = (appearanceId) => {
+      let triggerInfo = lastTriggerRef.current;
       logEvent("tengu_long_context_survey_event", {
         event_type: lit_2("appeared"),
-        question_variant: fromEnum(bo?.variant ?? "generic"),
-        trigger_mode: fromEnum(bo?.triggerMode ?? "cumulative"),
-        appearance_id: sanitizeMarkName(co),
-        threshold: bo?.threshold,
-        token_count_at_trigger: bo?.tokenCount,
-        cumulative_tokens: bo?.cumulativeTokens,
-        virtual_context_tokens: bo?.virtualContextTokens,
-        survey_probability: bo?.surveyProbability,
-        last_assistant_message_id: sanitizeMarkName(bo?.lastAssistantId),
+        question_variant: fromEnum(triggerInfo?.variant ?? "generic"),
+        trigger_mode: fromEnum(triggerInfo?.triggerMode ?? "cumulative"),
+        appearance_id: sanitizeMarkName(appearanceId),
+        threshold: triggerInfo?.threshold,
+        token_count_at_trigger: triggerInfo?.tokenCount,
+        cumulative_tokens: triggerInfo?.cumulativeTokens,
+        virtual_context_tokens: triggerInfo?.virtualContextTokens,
+        survey_probability: triggerInfo?.surveyProbability,
+        last_assistant_message_id: sanitizeMarkName(triggerInfo?.lastAssistantId),
       });
       logOTelEvent("feedback_survey", {
         event_type: "appeared",
-        appearance_id: co,
+        appearance_id: appearanceId,
         survey_type: "long_context",
       });
     };
-    $[0] = ao;
-  } else ao = $[0];
-  let onOpen = ao;
-  let Bo;
+    $[0] = onOpen;
+  } else onOpen = $[0];
+  let onOpen_2 = onOpen;
+  let onSelect;
   if ($[1] === MEMO_CACHE_SENTINEL) {
-    Bo = (Ro, Ho) => {
-      let Io = so.current;
+    onSelect = (appearanceId, response) => {
+      let triggerInfo = lastTriggerRef.current;
       logEvent("tengu_long_context_survey_event", {
         event_type: lit_2("responded"),
-        question_variant: fromEnum(Io?.variant ?? "generic"),
-        trigger_mode: fromEnum(Io?.triggerMode ?? "cumulative"),
-        appearance_id: sanitizeMarkName(Ro),
-        response: fromEnum(Ho),
-        threshold: Io?.threshold,
-        token_count_at_trigger: Io?.tokenCount,
-        cumulative_tokens: Io?.cumulativeTokens,
-        virtual_context_tokens: Io?.virtualContextTokens,
-        survey_probability: Io?.surveyProbability,
-        last_assistant_message_id: sanitizeMarkName(Io?.lastAssistantId),
+        question_variant: fromEnum(triggerInfo?.variant ?? "generic"),
+        trigger_mode: fromEnum(triggerInfo?.triggerMode ?? "cumulative"),
+        appearance_id: sanitizeMarkName(appearanceId),
+        response: fromEnum(response),
+        threshold: triggerInfo?.threshold,
+        token_count_at_trigger: triggerInfo?.tokenCount,
+        cumulative_tokens: triggerInfo?.cumulativeTokens,
+        virtual_context_tokens: triggerInfo?.virtualContextTokens,
+        survey_probability: triggerInfo?.surveyProbability,
+        last_assistant_message_id: sanitizeMarkName(triggerInfo?.lastAssistantId),
       });
       logOTelEvent("feedback_survey", {
         event_type: "responded",
-        appearance_id: Ro,
-        response: Ho,
+        appearance_id: appearanceId,
+        response,
         survey_type: "long_context",
       });
     };
-    $[1] = Bo;
-  } else Bo = $[1];
-  let onSelect = Bo;
-  let mn;
+    $[1] = onSelect;
+  } else onSelect = $[1];
+  let onSelect_2 = onSelect;
+  let onAbandon;
   if ($[2] === MEMO_CACHE_SENTINEL) {
-    mn = (Cn) => {
-      let No = so.current;
+    onAbandon = (appearanceId) => {
+      let triggerInfo = lastTriggerRef.current;
       logEvent("tengu_long_context_survey_event", {
         event_type: lit_2("abandoned"),
-        question_variant: fromEnum(No?.variant ?? "generic"),
-        trigger_mode: fromEnum(No?.triggerMode ?? "cumulative"),
-        appearance_id: sanitizeMarkName(Cn),
-        threshold: No?.threshold,
-        token_count_at_trigger: No?.tokenCount,
-        cumulative_tokens: No?.cumulativeTokens,
-        virtual_context_tokens: No?.virtualContextTokens,
-        survey_probability: No?.surveyProbability,
-        last_assistant_message_id: sanitizeMarkName(No?.lastAssistantId),
+        question_variant: fromEnum(triggerInfo?.variant ?? "generic"),
+        trigger_mode: fromEnum(triggerInfo?.triggerMode ?? "cumulative"),
+        appearance_id: sanitizeMarkName(appearanceId),
+        threshold: triggerInfo?.threshold,
+        token_count_at_trigger: triggerInfo?.tokenCount,
+        cumulative_tokens: triggerInfo?.cumulativeTokens,
+        virtual_context_tokens: triggerInfo?.virtualContextTokens,
+        survey_probability: triggerInfo?.surveyProbability,
+        last_assistant_message_id: sanitizeMarkName(triggerInfo?.lastAssistantId),
       });
       logOTelEvent("feedback_survey", {
         event_type: "abandoned",
-        appearance_id: Cn,
+        appearance_id: appearanceId,
         survey_type: "long_context",
       });
     };
-    $[2] = mn;
-  } else mn = $[2];
-  let onAbandon = mn;
-  let Yo;
-  if ($[3] !== We) {
-    Yo = {
-      hideThanksAfterMs: LONG_CONTEXT_SURVEY_FLAGS,
-      otherSurveyActive: We,
-      onOpen,
-      onSelect,
-      onAbandon,
+    $[2] = onAbandon;
+  } else onAbandon = $[2];
+  let onAbandon_2 = onAbandon;
+  let stateOptions;
+  if ($[3] !== otherSurveyActiveFlag) {
+    stateOptions = {
+      hideThanksAfterMs: SURVEY_HIDE_THANKS_AFTER_MS,
+      otherSurveyActive: otherSurveyActiveFlag,
+      onOpen: onOpen_2,
+      onSelect: onSelect_2,
+      onAbandon: onAbandon_2,
     };
-    $[3] = We;
-    $[4] = Yo;
-  } else Yo = $[4];
-  let { state, lastResponse, appearanceId, open, abandon, handleSelect, handleUndo } = useSurveyState(Yo);
-  let Sn;
-  let $n;
-  if ($[5] !== He) {
-    Sn = () => {
-      if (!He) {
+    $[3] = otherSurveyActiveFlag;
+    $[4] = stateOptions;
+  } else stateOptions = $[4];
+  let { state, lastResponse, appearanceId, open, abandon, handleSelect, handleUndo } =
+    useSurveyState(stateOptions);
+  let loadConfigEffect;
+  let loadConfigDeps;
+  if ($[5] !== isEnabled) {
+    loadConfigEffect = () => {
+      if (!isEnabled) {
         return;
       }
-      At(parsePositiveInt(getFeatureValue_CACHED_MAY_BE_STALE(TENGU_LONG_CONTEXT_SURVEY_THRESHOLD, "")));
-      Ot(
+      setThreshold(
+        parsePositiveInt(getFeatureValue_CACHED_MAY_BE_STALE(TENGU_LONG_CONTEXT_SURVEY_THRESHOLD, "")),
+      );
+      setQuestionVariant(
         normalizeQuestionVariant(
           getFeatureValue_CACHED_MAY_BE_STALE(TENGU_LONG_CONTEXT_SURVEY_QUESTION_VARIANT, ""),
         ),
       );
-      Dt(
+      setTriggerMode(
         normalizeTriggerMode(getFeatureValue_CACHED_MAY_BE_STALE(TENGU_LONG_CONTEXT_SURVEY_TRIGGER_MODE, "")),
       );
-      oo(parseProbability(getFeatureValue_CACHED_MAY_BE_STALE(TENGU_LONG_CONTEXT_SURVEY_PROBABILITY, "")));
+      setSurveyProbability(
+        parseProbability(getFeatureValue_CACHED_MAY_BE_STALE(TENGU_LONG_CONTEXT_SURVEY_PROBABILITY, "")),
+      );
     };
-    $n = [He];
-    $[5] = He;
-    $[6] = Sn;
-    $[7] = $n;
+    loadConfigDeps = [isEnabled];
+    $[5] = isEnabled;
+    $[6] = loadConfigEffect;
+    $[7] = loadConfigDeps;
   } else {
-    Sn = $[6];
-    $n = $[7];
+    loadConfigEffect = $[6];
+    loadConfigDeps = $[7];
   }
-  P(Sn, $n);
-  let on;
-  let _o;
+  useEffect(loadConfigEffect, loadConfigDeps);
+  let maybeTriggerEffect;
+  let maybeTriggerDeps;
   if (
     $[8] !== cumulativeSessionTokens ||
-    $[9] !== He ||
-    $[10] !== Be ||
+    $[9] !== isEnabled ||
+    $[10] !== hasActivePromptFlag ||
     $[11] !== storeSelector ||
-    $[12] !== storeSelector_3 ||
+    $[12] !== messages ||
     $[13] !== open ||
-    $[14] !== We ||
+    $[14] !== otherSurveyActiveFlag ||
     $[15] !== state ||
     $[16] !== storeSelector_2 ||
-    $[17] !== Lt ||
-    $[18] !== kt ||
-    $[19] !== Et ||
-    $[20] !== It
+    $[17] !== surveyProbability ||
+    $[18] !== threshold ||
+    $[19] !== triggerMode ||
+    $[20] !== questionVariant
   ) {
-    on = () => {
-      if (!He || Xt.current) {
+    maybeTriggerEffect = () => {
+      if (!isEnabled || triggeredRef.current) {
         return;
       }
-      if (state !== "closed" || storeSelector || Be) {
+      if (state !== "closed" || storeSelector || hasActivePromptFlag) {
         return;
       }
-      if (kt === undefined) {
+      if (threshold === undefined) {
         return;
       }
       if (shouldSkipFeedbackSurvey()) {
@@ -233,64 +244,64 @@ function useLongContextSurvey(props) {
       if (storeSelector_2 <= storeSelectorRef.current) {
         return;
       }
-      let cn = getMaxCumulativeDroppedTokens(storeSelector_3) + estimateTokensWithAnchor(storeSelector_3);
-      let Dn = Et === "virtual_context" ? cn : cumulativeSessionTokens;
-      if (Dn < kt) {
+      let virtualContextTokens = getMaxCumulativeDroppedTokens(messages) + estimateTokensWithAnchor(messages);
+      let triggerTokens = triggerMode === "virtual_context" ? virtualContextTokens : cumulativeSessionTokens;
+      if (triggerTokens < threshold) {
         return;
       }
-      if (We) {
+      if (otherSurveyActiveFlag) {
         return;
       }
-      Xt.current = true;
-      so.current = {
-        threshold: kt,
-        tokenCount: Dn,
-        triggerMode: Et,
+      triggeredRef.current = true;
+      lastTriggerRef.current = {
+        threshold,
+        tokenCount: triggerTokens,
+        triggerMode,
         cumulativeTokens: cumulativeSessionTokens,
-        virtualContextTokens: cn,
-        surveyProbability: Lt,
-        variant: It,
-        lastAssistantId: getLastAssistantMessage(storeSelector_3)?.message?.id,
+        virtualContextTokens,
+        surveyProbability,
+        variant: questionVariant,
+        lastAssistantId: getLastAssistantMessage(messages)?.message?.id,
       };
-      if (Math.random() < Lt) open();
+      if (Math.random() < surveyProbability) open();
     };
-    _o = [
-      He,
+    maybeTriggerDeps = [
+      isEnabled,
       state,
       storeSelector,
       storeSelector_2,
-      Be,
-      We,
-      kt,
-      It,
-      Et,
-      Lt,
+      hasActivePromptFlag,
+      otherSurveyActiveFlag,
+      threshold,
+      questionVariant,
+      triggerMode,
+      surveyProbability,
       cumulativeSessionTokens,
-      storeSelector_3,
+      messages,
       open,
     ];
     $[8] = cumulativeSessionTokens;
-    $[9] = He;
-    $[10] = Be;
+    $[9] = isEnabled;
+    $[10] = hasActivePromptFlag;
     $[11] = storeSelector;
-    $[12] = storeSelector_3;
+    $[12] = messages;
     $[13] = open;
-    $[14] = We;
+    $[14] = otherSurveyActiveFlag;
     $[15] = state;
     $[16] = storeSelector_2;
-    $[17] = Lt;
-    $[18] = kt;
-    $[19] = Et;
-    $[20] = It;
-    $[21] = on;
-    $[22] = _o;
+    $[17] = surveyProbability;
+    $[18] = threshold;
+    $[19] = triggerMode;
+    $[20] = questionVariant;
+    $[21] = maybeTriggerEffect;
+    $[22] = maybeTriggerDeps;
   } else {
-    on = $[21];
-    _o = $[22];
+    maybeTriggerEffect = $[21];
+    maybeTriggerDeps = $[22];
   }
-  P(on, _o);
-  const question = SURVEY_QUESTION_TEXT[It];
-  let mr;
+  useEffect(maybeTriggerEffect, maybeTriggerDeps);
+  const question = SURVEY_QUESTION_TEXT[questionVariant];
+  let props_2;
   if (
     $[23] !== abandon ||
     $[24] !== appearanceId ||
@@ -300,7 +311,7 @@ function useLongContextSurvey(props) {
     $[28] !== state ||
     $[29] !== question
   ) {
-    mr = {
+    props_2 = {
       state,
       lastResponse,
       appearanceId,
@@ -316,10 +327,13 @@ function useLongContextSurvey(props) {
     $[27] = lastResponse;
     $[28] = state;
     $[29] = question;
-    $[30] = mr;
-  } else mr = $[30];
-  return mr;
+    $[30] = props_2;
+  } else props_2 = $[30];
+  return props_2;
 }
 //@ chunk-18hwfzwa.js:1039263-1039267 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:1039263", () => {
+  init_react_production();
+});
 export { useLongContextSurvey };

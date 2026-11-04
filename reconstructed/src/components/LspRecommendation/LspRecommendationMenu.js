@@ -8,7 +8,7 @@
  * pieces: chunk-18hwfzwa.js (1)
  * attribution: fingerprint 1
  */
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Text } from "../../ink/components/Text.js";
@@ -16,7 +16,7 @@ import { DesktopUpsellStartup } from "../DesktopUpsell/DesktopUpsellStartup.js";
 
 //@ chunk-18hwfzwa.js:1194526-1195547 fingerprint = LspRecommendationMenu (0.429)
 function LspRecommendationMenu(props) {
-  let $ = w(10);
+  let $ = useMemoCache(10);
   let { pluginName, pluginDescription, marketplaceName, fileExtension, onResponse } = props;
   let intro;
   if ($[0] === MEMO_CACHE_SENTINEL) {
@@ -63,7 +63,7 @@ function LspRecommendationMenu(props) {
     ];
     $[3] = options;
   } else options = $[3];
-  let ze;
+  let menu;
   if (
     $[4] !== marketplaceName ||
     $[5] !== onResponse ||
@@ -71,7 +71,7 @@ function LspRecommendationMenu(props) {
     $[7] !== pluginName ||
     $[8] !== extraIdentityRow
   ) {
-    ze = jsxProd_default(DesktopUpsellStartup, {
+    menu = jsxProd_default(DesktopUpsellStartup, {
       title: "LSP plugin recommendation",
       intro,
       pluginName,
@@ -88,8 +88,8 @@ function LspRecommendationMenu(props) {
     $[6] = pluginDescription;
     $[7] = pluginName;
     $[8] = extraIdentityRow;
-    $[9] = ze;
-  } else ze = $[9];
-  return ze;
+    $[9] = menu;
+  } else menu = $[9];
+  return menu;
 }
 export { LspRecommendationMenu };

@@ -9,29 +9,32 @@ import { ChildProcess } from "child_process";
 import { createWriteStream } from "fs";
 
 //@ chunk-m4p5zn6n.js:20393-20473 esm-layout
-function ae(e) {
-  return e !== null && typeof e === "object" && typeof e.pipe === "function";
+function isStream(stream) {
+  return stream !== null && typeof stream === "object" && typeof stream.pipe === "function";
 }
 //@ chunk-m4p5zn6n.js:20473-20584 esm-layout
-function Ae(e) {
+function isWritableStream(stream) {
   return (
-    ae(e) && e.writable !== false && typeof e._write === "function" && typeof e._writableState === "object"
+    isStream(stream) &&
+    stream.writable !== false &&
+    typeof stream._write === "function" &&
+    typeof stream._writableState === "object"
   );
 }
 //@ chunk-m4p5zn6n.js:20584-21132 esm-fingerprint
-var Jr = (target) => target instanceof ChildProcess && typeof target.then === "function";
+var isChildProcessPromise = (target) => target instanceof ChildProcess && typeof target.then === "function";
 var pipeToTarget = (spawned, streamName, target) => {
   if (typeof target === "string") {
     spawned[streamName].pipe(createWriteStream(target));
     return spawned;
   }
-  if (Ae(target)) {
+  if (isWritableStream(target)) {
     spawned[streamName].pipe(target);
     return spawned;
   }
-  if (!Jr(target))
+  if (!isChildProcessPromise(target))
     throw TypeError("The second argument must be a string, a stream or an Execa child process.");
-  if (!Ae(target.stdin)) throw TypeError("The target child process's stdin must be available.");
+  if (!isWritableStream(target.stdin)) throw TypeError("The target child process's stdin must be available.");
   spawned[streamName].pipe(target.stdin);
   return target;
 };
@@ -40,4 +43,4 @@ var addPipeMethods = (spawned) => {
   if (spawned.stderr !== null) spawned.pipeStderr = pipeToTarget.bind(undefined, spawned, "stderr");
   if (spawned.all !== undefined) spawned.pipeAll = pipeToTarget.bind(undefined, spawned, "all");
 };
-export { addPipeMethods, ae };
+export { addPipeMethods, isStream };

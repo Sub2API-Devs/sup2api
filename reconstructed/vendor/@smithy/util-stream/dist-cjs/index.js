@@ -5,7 +5,7 @@
  * pieces: chunk-wjd9n4jx.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 import { base64Module } from "../../../@aws-sdk/credential-provider-web-identity/dist-cjs/index.js";
 import { require_util_utf8 } from "../../util-utf8/dist-cjs/index.js";
 import { require_ChecksumStream } from "./checksum/ChecksumStream.js";
@@ -18,7 +18,7 @@ import { require_splitStream } from "./splitStream.js";
 import { require_stream_type_check } from "./stream-type-check.js";
 
 //@ chunk-wjd9n4jx.js:10678-12581 cjs-fingerprint
-var require_util_stream = x(function (cjsExports) {
+var require_util_stream = __commonJS(function (cjsExports) {
   var utilBase64 = base64Module();
   var utilUtf8 = require_util_utf8();
   var ChecksumStream = require_ChecksumStream();

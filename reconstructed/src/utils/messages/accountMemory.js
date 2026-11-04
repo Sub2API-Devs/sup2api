@@ -17,32 +17,35 @@ import { isPlainObject } from "../objectUtils.js";
 import { isUntrustedObject } from "../untrustedValues.js";
 import { readUntrustedArray, UNREADABLE_ARRAY } from "../untrustedArray.js";
 import { jsonStringify } from "../slowOperations.js";
-import { wi } from "../../../vendor/lodash-es/_inlinedHelpers.js";
+import { import_reject } from "../../../vendor/lodash-es/_inlinedHelpers.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-f25sswmp.js:2441-2871 placement = isToolResultBlockWithContent (0.805)
 /**
  * 逐条检查 user 消息与工具结果里的图片，尺寸/大小超限时抛 ImageSizeError（发请求前）。
  */
-function validateImagesInMessages(e, maxSize) {
-  let oversizedImages = [];
-  let s = 0;
-  for (let i of e) {
-    if (typeof i !== "object" || i === null) continue;
-    if (!("type" in i) || i.type !== "user") continue;
-    if (!("message" in i) || typeof i.message !== "object" || i.message === null) continue;
-    let message = i.message;
-    if (!("content" in message) || !Array.isArray(message.content)) continue;
-    for (let h of message.content) {
-      if (hasImageBlock(h)) {
-        validateImagesForAPI(h, ++s, maxSize, oversizedImages);
+function validateImagesInMessages(messages, enforceLimits) {
+  let violations = [];
+  let imageCount = 0;
+  for (let message of messages) {
+    if (typeof message !== "object" || message === null) continue;
+    if (!("type" in message) || message.type !== "user") continue;
+    if (!("message" in message) || typeof message.message !== "object" || message.message === null) continue;
+    let message_2 = message.message;
+    if (!("content" in message_2) || !Array.isArray(message_2.content)) continue;
+    for (let block of message_2.content) {
+      if (hasImageBlock(block)) {
+        validateImagesForAPI(block, ++imageCount, enforceLimits, violations);
         continue;
       }
-      if (isToolResultWithArrayContent(h)) {
-        for (let E of h.content) if (hasImageBlock(E)) validateImagesForAPI(E, ++s, maxSize, oversizedImages);
+      if (isToolResultWithArrayContent(block)) {
+        for (let innerBlock of block.content)
+          if (hasImageBlock(innerBlock))
+            validateImagesForAPI(innerBlock, ++imageCount, enforceLimits, violations);
       }
     }
   }
-  if (oversizedImages.length > 0) throw new ImageSizeError(oversizedImages, maxSize);
+  if (violations.length > 0) throw new ImageSizeError(violations, enforceLimits);
 }
 //@ chunk-f25sswmp.js:2901-2914 placement
 var accountMemoryRedactionEnabler = () => false;
@@ -76,153 +79,171 @@ function accountMemoryRedactionActive() {
 /**
  * 账户记忆脱敏的占位文本，以及"可原样保留的字段"与"需要替换的文本字段"分类表。
  */
-var ACCOUNT_MEMORY_REMOVED = "[account memory text removed from this conversation]";
-var MEMORY_TOOL_FIELD_CLASSES = {
-  top: {
-    plain: new Set(["path", "path_prefix", "cursor", "include_preview", "if_version", "source_item", "name"]),
-    text: new Set(["old_str", "new_str", "content", "instruction", "query"]),
-  },
-  op: {
-    plain: new Set(["op", "path", "if_version"]),
-    text: new Set(["old_str", "new_str", "content"]),
-  },
-};
-var PLAIN_MEMORY_FIELDS = new Set(["path", "path_prefix", "cursor", "source_item", "name"]);
+var ACCOUNT_MEMORY_REMOVED; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var MEMORY_TOOL_FIELD_CLASSES;
+var PLAIN_MEMORY_FIELDS;
+deferInit("chunk-f25sswmp.js:3015", () => {
+  ACCOUNT_MEMORY_REMOVED = "[account memory text removed from this conversation]";
+  MEMORY_TOOL_FIELD_CLASSES = {
+    top: {
+      plain: new Set([
+        "path",
+        "path_prefix",
+        "cursor",
+        "include_preview",
+        "if_version",
+        "source_item",
+        "name",
+      ]),
+      text: new Set(["old_str", "new_str", "content", "instruction", "query"]),
+    },
+    op: {
+      plain: new Set(["op", "path", "if_version"]),
+      text: new Set(["old_str", "new_str", "content"]),
+    },
+  };
+  PLAIN_MEMORY_FIELDS = new Set(["path", "path_prefix", "cursor", "source_item", "name"]);
+});
 //@ chunk-f25sswmp.js:3412-3454 placement
-function isMemoryToolCall(name, sinceUuid) {
-  return isTrustedMemoryTool(name, sinceUuid, "history");
+function isMemoryToolCall(name, placementOf) {
+  return isTrustedMemoryTool(name, placementOf, "history");
 }
 //@ chunk-f25sswmp.js:3454-3473 placement
-var weakMap = new WeakMap();
+var weakMap; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-f25sswmp.js:3454", () => {
+  weakMap = new WeakMap();
+});
 //@ chunk-f25sswmp.js:3473-3618 placement
-function isAccountMemoryAttachment(e) {
+function isAccountMemoryAttachment(message) {
   return (
-    e.type === "attachment" &&
-    e.attachment.type === "cowork_memory_context" &&
-    e.attachment.content === null &&
-    e.attachment.anchor !== true
+    message.type === "attachment" &&
+    message.attachment.type === "cowork_memory_context" &&
+    message.attachment.content === null &&
+    message.attachment.anchor !== true
   );
 }
 //@ chunk-f25sswmp.js:3618-4919 placement
 /**
  * 在发给模型的消息里清掉账户记忆（cowork_memory_context / account_memory_recall 工具结果）文本，替换为占位说明。
  */
-function redactAccountMemory(e, n = isAccountMemoryRedactionOn(), r) {
-  let lastIndex = e.findLastIndex(isAccountMemoryAttachment);
-  let i = n ? e.length : lastIndex;
-  if (i < 0)
+function redactAccountMemory(messages, redactAll = isAccountMemoryRedactionOn(), toolRecognizer) {
+  let lastIndex = messages.findLastIndex(isAccountMemoryAttachment);
+  let cutoffIndex = redactAll ? messages.length : lastIndex;
+  if (cutoffIndex < 0)
     return {
-      messages: e,
+      messages,
       epoch: undefined,
     };
-  let memoryPausedToolUseIds = collectMemoryPausedToolUseIds(e);
-  let h = new Set();
-  let E = new Set();
-  let I = [];
-  let w = 0;
-  let R;
-  let T = (S) => {
-    w++;
-    R = S.uuid;
+  let memoryPausedToolUseIds = collectMemoryPausedToolUseIds(messages);
+  let blankedIds = new Set();
+  let redactedIds = new Set();
+  let result = [];
+  let redactedCount = 0;
+  let lastRedactedUuid;
+  let markRedacted = (redactedMessage) => {
+    redactedCount++;
+    lastRedactedUuid = redactedMessage.uuid;
   };
-  e.forEach((S, v) => {
-    if (v >= i || v === lastIndex) {
-      I.push(S);
+  messages.forEach((message, index) => {
+    if (index >= cutoffIndex || index === lastIndex) {
+      result.push(message);
       return;
     }
     if (
-      S.type === "attachment" &&
-      ((S.attachment.type === "cowork_memory_context" && S.attachment.anchor !== true) ||
-        S.attachment.type === "account_memory_recall")
+      message.type === "attachment" &&
+      ((message.attachment.type === "cowork_memory_context" && message.attachment.anchor !== true) ||
+        message.attachment.type === "account_memory_recall")
     ) {
-      T(S);
+      markRedacted(message);
       return;
     }
-    if (S.type === "assistant" && Array.isArray(S.message.content)) {
-      let b = new Map();
-      for (let x of S.message.content) {
-        if (x.type !== "tool_use" || !isMemoryToolCall(x.name, r)) continue;
-        let k = redactAccountMemoryInput(x.input);
-        let j = memoryPausedToolUseIds.has(x.id);
-        if (j && k === x.input) continue;
-        b.set(x.id, {
-          input: k,
-          blankResult: !j,
+    if (message.type === "assistant" && Array.isArray(message.message.content)) {
+      let redactionsById = new Map();
+      for (let block of message.message.content) {
+        if (block.type !== "tool_use" || !isMemoryToolCall(block.name, toolRecognizer)) continue;
+        let redactedInput = redactAccountMemoryInput(block.input);
+        let isPaused = memoryPausedToolUseIds.has(block.id);
+        if (isPaused && redactedInput === block.input) continue;
+        redactionsById.set(block.id, {
+          input: redactedInput,
+          blankResult: !isPaused,
         });
       }
-      if (b.size === 0) {
-        I.push(S);
+      if (redactionsById.size === 0) {
+        result.push(message);
         return;
       }
-      for (let [x, { blankResult: k }] of b) {
-        E.add(x);
-        if (k) h.add(x);
+      for (let [toolUseId, { blankResult: shouldBlank }] of redactionsById) {
+        redactedIds.add(toolUseId);
+        if (shouldBlank) blankedIds.add(toolUseId);
       }
-      T(S);
-      I.push({
-        ...S,
-        ...(isPlainObject(S.wireToolInputs) && {
-          wireToolInputs: pickKnownKeys(S.wireToolInputs, E),
+      markRedacted(message);
+      result.push({
+        ...message,
+        ...(isPlainObject(message.wireToolInputs) && {
+          wireToolInputs: pickKnownKeys(message.wireToolInputs, redactedIds),
         }),
         message: {
-          ...S.message,
-          content: S.message.content.map((x) =>
-            x.type === "tool_use" && b.has(x.id)
+          ...message.message,
+          content: message.message.content.map((contentBlock) =>
+            contentBlock.type === "tool_use" && redactionsById.has(contentBlock.id)
               ? {
-                  ...x,
-                  input: b.get(x.id).input,
+                  ...contentBlock,
+                  input: redactionsById.get(contentBlock.id).input,
                 }
-              : x,
+              : contentBlock,
           ),
         },
       });
       return;
     }
     if (
-      S.type === "user" &&
-      h.size > 0 &&
-      Array.isArray(S.message.content) &&
-      S.message.content.some((b) => b.type === "tool_result" && h.has(b.tool_use_id))
+      message.type === "user" &&
+      blankedIds.size > 0 &&
+      Array.isArray(message.message.content) &&
+      message.message.content.some(
+        (contentBlock) => contentBlock.type === "tool_result" && blankedIds.has(contentBlock.tool_use_id),
+      )
     ) {
-      T(S);
-      I.push({
-        ...S,
+      markRedacted(message);
+      result.push({
+        ...message,
         message: {
-          ...S.message,
-          content: S.message.content.map((b) =>
-            b.type === "tool_result" && h.has(b.tool_use_id)
+          ...message.message,
+          content: message.message.content.map((resultBlock) =>
+            resultBlock.type === "tool_result" && blankedIds.has(resultBlock.tool_use_id)
               ? {
-                  ...b,
+                  ...resultBlock,
                   content: ACCOUNT_MEMORY_REMOVED,
                 }
-              : b,
+              : resultBlock,
           ),
         },
       });
       return;
     }
-    I.push(S);
+    result.push(message);
   });
-  return w === 0
+  return redactedCount === 0
     ? {
-        messages: e,
+        messages,
         epoch: undefined,
       }
     : {
-        messages: I,
-        epoch: `${w}:${R}`,
+        messages: result,
+        epoch: `${redactedCount}:${lastRedactedUuid}`,
       };
 }
 //@ chunk-f25sswmp.js:4919-5189 placement = countToolCallsSince (1)
 function countToolCallsSince(messages, sinceUuid) {
   let memoryPausedToolUseIds = collectMemoryPausedToolUseIds(messages);
   for (let j = messages.length - 1; j >= 0; j--) {
-    let i = messages[j];
-    if (isAccountMemoryAttachment(i)) return false;
+    let message = messages[j];
+    if (isAccountMemoryAttachment(message)) return false;
     if (
-      i.type === "assistant" &&
-      Array.isArray(i.message.content) &&
-      i.message.content.some(
+      message.type === "assistant" &&
+      Array.isArray(message.message.content) &&
+      message.message.content.some(
         (block) =>
           block.type === "tool_use" &&
           isMemoryToolCall(block.name, sinceUuid) &&
@@ -237,67 +258,73 @@ function countToolCallsSince(messages, sinceUuid) {
 /**
  * 从账号记忆工具输入里收集需遮盖的正文字符串（顶层与 ops 里各操作的文本字段）。
  */
-function collectMemoryTextFields(e) {
-  let n = [];
-  let r = (s, i) => {
-    if (typeof s !== "object" || s === null || isUntrustedObject(s)) return;
-    for (let [key, value] of Object.entries(s))
-      if (MEMORY_TOOL_FIELD_CLASSES[i].text.has(key) && typeof value === "string") n.push(value);
-      else if (i === "top" && key === "ops" && Array.isArray(value)) for (let E of value) r(E, "op");
+function collectMemoryTextFields(input) {
+  let texts = [];
+  let walk = (value, level) => {
+    if (typeof value !== "object" || value === null || isUntrustedObject(value)) return;
+    for (let [key, value_2] of Object.entries(value))
+      if (MEMORY_TOOL_FIELD_CLASSES[level].text.has(key) && typeof value_2 === "string") texts.push(value_2);
+      else if (level === "top" && key === "ops" && Array.isArray(value_2))
+        for (let op of value_2) walk(op, "op");
   };
-  r(e, "top");
-  return n;
+  walk(input, "top");
+  return texts;
 }
 //@ chunk-f25sswmp.js:5449-5971 placement = countToolCallsSince (1)
 function countToolCallsSince_2(messages, sinceUuid) {
-  let r = [];
-  let s = new Set();
+  let texts = [];
+  let memoryToolIds = new Set();
   for (let message of messages)
     if (message.type === "assistant" && Array.isArray(message.message.content)) {
-      for (let y of message.message.content)
-        if (y.type === "tool_use" && isMemoryToolCall(y.name, sinceUuid)) {
-          s.add(y.id);
-          r.push(...collectMemoryTextFields(y.input));
+      for (let block of message.message.content)
+        if (block.type === "tool_use" && isMemoryToolCall(block.name, sinceUuid)) {
+          memoryToolIds.add(block.id);
+          texts.push(...collectMemoryTextFields(block.input));
         }
-    } else if (message.type === "user" && s.size > 0 && Array.isArray(message.message.content))
-      for (let y of message.message.content) {
-        if (y.type !== "tool_result" || !s.has(y.tool_use_id)) continue;
-        if (typeof y.content === "string") r.push(y.content);
-        else if (Array.isArray(y.content)) {
-          for (let h of y.content) if (h.type === "text") r.push(h.text);
+    } else if (message.type === "user" && memoryToolIds.size > 0 && Array.isArray(message.message.content))
+      for (let resultBlock of message.message.content) {
+        if (resultBlock.type !== "tool_result" || !memoryToolIds.has(resultBlock.tool_use_id)) continue;
+        if (typeof resultBlock.content === "string") texts.push(resultBlock.content);
+        else if (Array.isArray(resultBlock.content)) {
+          for (let textBlock of resultBlock.content)
+            if (textBlock.type === "text") texts.push(textBlock.text);
         }
       }
-  return r;
+  return texts;
 }
 //@ chunk-f25sswmp.js:5971-6259 placement
-function collectMemoryPausedToolUseIds(e) {
-  let n = new Set();
-  for (let r of e) {
+function collectMemoryPausedToolUseIds(messages) {
+  let pausedIds = new Set();
+  for (let message of messages) {
     if (
-      r.type !== "user" ||
-      r.toolDenialKind === undefined ||
-      r.toolResultRemedy?.kind !== "memory_paused" ||
-      !Array.isArray(r.message.content)
+      message.type !== "user" ||
+      message.toolDenialKind === undefined ||
+      message.toolResultRemedy?.kind !== "memory_paused" ||
+      !Array.isArray(message.message.content)
     )
       continue;
-    let filtered = r.message.content.filter((i) => i.type === "tool_result");
-    if (filtered.length === 1) n.add(filtered[0].tool_use_id);
+    let filtered = message.message.content.filter((block) => block.type === "tool_result");
+    if (filtered.length === 1) pausedIds.add(filtered[0].tool_use_id);
   }
-  return n;
+  return pausedIds;
 }
 //@ chunk-f25sswmp.js:6259-6306 placement
-function messagesWithoutAccountMemory(messages, n, r) {
-  return redactAccountMemory(messages, n, r).messages;
+function messagesWithoutAccountMemory(messages, knownKeys, redactPaths) {
+  return redactAccountMemory(messages, knownKeys, redactPaths).messages;
 }
 //@ chunk-f25sswmp.js:6306-6346 placement
-var MAX_MEMORY_INPUT_KEYS = 32;
-var Ye = Object.freeze({
-  content: ACCOUNT_MEMORY_REMOVED,
+var MAX_MEMORY_INPUT_KEYS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var REMOVED_MEMORY_STATE;
+deferInit("chunk-f25sswmp.js:6306", () => {
+  MAX_MEMORY_INPUT_KEYS = 32;
+  REMOVED_MEMORY_STATE = Object.freeze({
+    content: ACCOUNT_MEMORY_REMOVED,
+  });
 });
 //@ chunk-f25sswmp.js:6346-6403 placement
 function placeholderBlock(placeholder) {
   return placeholder === ACCOUNT_MEMORY_REMOVED
-    ? Ye
+    ? REMOVED_MEMORY_STATE
     : Object.freeze({
         content: placeholder,
       });
@@ -344,18 +371,25 @@ function redactAccountMemoryInput(
       changed = true;
       continue;
     }
-    let b = redactMemoryField(level, key, ownPropertyDescriptor.value, depth, placeholder, redactPaths);
-    if (b === DROPPED_SYMBOL) {
+    let fieldValue = redactMemoryField(
+      level,
+      key,
+      ownPropertyDescriptor.value,
+      depth,
+      placeholder,
+      redactPaths,
+    );
+    if (fieldValue === DROPPED_SYMBOL) {
       changed = true;
       continue;
     }
-    if (b instanceof PreservedStrings) {
-      changed ||= !b.pristine;
-      entries.push([key, b.strings]);
+    if (fieldValue instanceof PreservedStrings) {
+      changed ||= !fieldValue.pristine;
+      entries.push([key, fieldValue.strings]);
       continue;
     }
-    changed ||= b !== ownPropertyDescriptor.value;
-    entries.push([key, b]);
+    changed ||= fieldValue !== ownPropertyDescriptor.value;
+    entries.push([key, fieldValue]);
   }
   let prototypeOf = Object.getPrototypeOf(value);
   if (
@@ -368,9 +402,9 @@ function redactAccountMemoryInput(
   )
     return value;
   let result = {};
-  for (let [S, v] of entries)
-    Object.defineProperty(result, S, {
-      value: v,
+  for (let [key, value] of entries)
+    Object.defineProperty(result, key, {
+      value,
       enumerable: true,
       writable: true,
       configurable: true,
@@ -378,8 +412,12 @@ function redactAccountMemoryInput(
   return result;
 }
 //@ chunk-f25sswmp.js:7462-7533 placement
-var MEMORY_OPS = new Set(["append", "str_replace", "delete"]);
-var DROPPED_SYMBOL = Symbol("dropped");
+var MEMORY_OPS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var DROPPED_SYMBOL;
+deferInit("chunk-f25sswmp.js:7462", () => {
+  MEMORY_OPS = new Set(["append", "str_replace", "delete"]);
+  DROPPED_SYMBOL = Symbol("dropped");
+});
 //@ chunk-f25sswmp.js:7533-7608 placement
 class PreservedStrings {
   strings;
@@ -393,26 +431,26 @@ class PreservedStrings {
 /**
  * 对账号记忆工具输入的单个字段做脱敏：允许原样保留的标量（op 只保留已知值）保留，可选敏感字段替换为占位；顶层 path 数组逐项处理；其他替换为占位。
  */
-function redactMemoryField(level, key, r, depth, placeholder, redactPaths) {
-  let h = MEMORY_TOOL_FIELD_CLASSES[level];
-  if (h.plain.has(key)) {
-    let E = redactPaths && PLAIN_MEMORY_FIELDS.has(key);
+function redactMemoryField(level, key, value, depth, placeholder, redactPaths) {
+  let classes = MEMORY_TOOL_FIELD_CLASSES[level];
+  if (classes.plain.has(key)) {
+    let shouldRedact = redactPaths && PLAIN_MEMORY_FIELDS.has(key);
     if (
       key === "op"
-        ? typeof r === "string" && MEMORY_OPS.has(r)
-        : r === null ||
-          typeof r === "boolean" ||
-          (key !== "include_preview" && (typeof r === "string" || typeof r === "number"))
+        ? typeof value === "string" && MEMORY_OPS.has(value)
+        : value === null ||
+          typeof value === "boolean" ||
+          (key !== "include_preview" && (typeof value === "string" || typeof value === "number"))
     )
-      return E && (typeof r === "string" || typeof r === "number") ? placeholder : r;
-    if (level === "top" && key === "path" && typeof r === "object" && r !== null)
-      return redactPathArray(r, placeholder, E);
+      return shouldRedact && (typeof value === "string" || typeof value === "number") ? placeholder : value;
+    if (level === "top" && key === "path" && typeof value === "object" && value !== null)
+      return redactPathArray(value, placeholder, shouldRedact);
     return placeholder;
   }
-  if (h.text.has(key)) return placeholder;
+  if (classes.text.has(key)) return placeholder;
   if (level === "top" && key === "ops")
-    return !isUntrustedObject(r) && Array.isArray(r)
-      ? redactAccountMemoryInput(r, depth + 1, placeholder, redactPaths)
+    return !isUntrustedObject(value) && Array.isArray(value)
+      ? redactAccountMemoryInput(value, depth + 1, placeholder, redactPaths)
       : placeholder;
   return DROPPED_SYMBOL;
 }
@@ -420,51 +458,51 @@ function redactMemoryField(level, key, r, depth, placeholder, redactPaths) {
 /**
  * 对路径数组做脱敏：只有严格的普通数组（无额外属性、符号或访问器）才逐项处理，否则整体替换为占位。
  */
-function redactPathArray(e, n, r) {
-  if (isUntrustedObject(e)) return n;
-  let ownPropertyNames = Object.getOwnPropertyNames(e);
-  let i =
-    Object.getPrototypeOf(e) === Array.prototype &&
-    Object.getOwnPropertySymbols(e).length === 0 &&
-    Array.isArray(e) &&
-    ownPropertyNames.length === e.length + 1 &&
-    ownPropertyNames.every((E) => {
-      if (E === "length") return true;
-      let ownPropertyDescriptor = Object.getOwnPropertyDescriptor(e, E);
+function redactPathArray(paths, placeholder, redactPaths) {
+  if (isUntrustedObject(paths)) return placeholder;
+  let ownPropertyNames = Object.getOwnPropertyNames(paths);
+  let isPristineArray =
+    Object.getPrototypeOf(paths) === Array.prototype &&
+    Object.getOwnPropertySymbols(paths).length === 0 &&
+    Array.isArray(paths) &&
+    ownPropertyNames.length === paths.length + 1 &&
+    ownPropertyNames.every((key) => {
+      if (key === "length") return true;
+      let ownPropertyDescriptor = Object.getOwnPropertyDescriptor(paths, key);
       return (
-        /^(?:0|[1-9]\d*)$/u.test(E) &&
-        Number(E) < e.length &&
+        /^(?:0|[1-9]\d*)$/u.test(key) &&
+        Number(key) < paths.length &&
         ownPropertyDescriptor !== undefined &&
         "value" in ownPropertyDescriptor
       );
     });
-  let untrustedArray = readUntrustedArray(e);
-  if (!Array.isArray(untrustedArray)) return n;
+  let untrustedArray = readUntrustedArray(paths);
+  if (!Array.isArray(untrustedArray)) return placeholder;
   let strings = [];
   for (let untrusted of untrustedArray) {
-    if (typeof untrusted !== "string") return n;
-    strings.push(r ? n : untrusted);
+    if (typeof untrusted !== "string") return placeholder;
+    strings.push(redactPaths ? placeholder : untrusted);
   }
-  return new PreservedStrings(strings, i && !r);
+  return new PreservedStrings(strings, isPristineArray && !redactPaths);
 }
 //@ chunk-f25sswmp.js:8570-8761 placement
-function pickKnownKeys(wireToolInputs, n) {
-  let r = jsonStringify(
+function pickKnownKeys(wireToolInputs, knownKeys) {
+  let cacheKey = jsonStringify(
     Object.keys(wireToolInputs)
-      .filter((key) => n.has(key))
+      .filter((key) => knownKeys.has(key))
       .sort(),
   );
-  let s = weakMap.get(wireToolInputs);
-  if (s === undefined) {
-    s = new Map();
-    weakMap.set(wireToolInputs, s);
+  let cache = weakMap.get(wireToolInputs);
+  if (cache === undefined) {
+    cache = new Map();
+    weakMap.set(wireToolInputs, cache);
   }
-  let i = s.get(r);
-  if (i === undefined) {
-    i = wi(wireToolInputs, (y, h) => n.has(h));
-    s.set(r, i);
+  let picked = cache.get(cacheKey);
+  if (picked === undefined) {
+    picked = import_reject(wireToolInputs, (value, key) => knownKeys.has(key));
+    cache.set(cacheKey, picked);
   }
-  return i;
+  return picked;
 }
 //@ chunk-f25sswmp.js:8761-8771 placement
 /**

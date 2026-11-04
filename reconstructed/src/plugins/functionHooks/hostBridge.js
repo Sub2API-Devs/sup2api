@@ -9,7 +9,8 @@
  * attribution: placement 47
  */
 import { AsyncLocalStorage } from "async_hooks";
-import { xr } from "../../../vendor/lodash-es/_inlinedHelpers.js";
+import { KEY_SEPARATOR } from "./ui/raster.js";
+import { import_mapValues } from "../../../vendor/lodash-es/_inlinedHelpers.js";
 import {
   UI_ELEMENT_TYPES,
   elementBuildersFor,
@@ -64,19 +65,25 @@ import {
   makeHookCall,
   hookCallContext,
   forwardNext,
-  Y6t,
+  NO_FLOORS,
 } from "./dispatch/chain.js";
 import { isClockMethod } from "./api/operations.js";
 import { outsideBudget, budgetPauseStorage } from "./dispatch/valueSizing.js";
 import { viewportInfo } from "./surfaceBinding.js";
 import { buildPluginAppendRow } from "./api/sessionAppend.js";
-import { Vme } from "./ui/raster.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
+//@ chunk-4121qate.js:180389-180428 placement = withModifiers (1)
+/**
+ * （误归 computerUse）按 "press"+两个参数用分隔符拼键。
+ */
+var withModifiers = (plugin, handle) => ["press", plugin, handle].join(KEY_SEPARATOR);
 //@ chunk-pwe88xvs.js:688-720 placement
 /**
  * 各 UI 元素构造器
  */
-var UI_ELEMENT_BUILDERS = () => xr(UI_ELEMENT_TYPES, (e, t) => elementBuildersFor(t));
+var UI_ELEMENT_BUILDERS = () =>
+  import_mapValues(UI_ELEMENT_TYPES, (type, builders) => elementBuildersFor(builders));
 //@ chunk-pwe88xvs.js:720-748 placement
 var CLASSIC_POSTTOOLUSE = "classic.PostToolUse";
 //@ chunk-pwe88xvs.js:748-825 placement
@@ -91,8 +98,8 @@ var HOOK_NOT_GIVEN_TEXT = "this could not be given to a hook that checks it, so 
 var TOOL_INPUT_NOT_GIVEN =
   "this tool input could not be given to a hook that checks it, so the tool was not run";
 //@ chunk-pwe88xvs.js:918-1199 placement
-function buildClassicDenyResult(e, t) {
-  let o = {
+function buildClassicDenyResult(hookEvent, input) {
+  let denyByEvent = {
     "classic.PreToolUse": {
       deny: TOOL_INPUT_NOT_GIVEN,
     },
@@ -103,12 +110,15 @@ function buildClassicDenyResult(e, t) {
       },
     },
   };
-  let s = e === "tool.call" || e === "tool.check";
-  let f =
-    e === "session.compact" || (((p) => e === "session.append")(t) && !isPluginNoteRefusal(t))
+  let secondHookEvent = hookEvent === "tool.call" || hookEvent === "tool.check";
+  let secondInput =
+    hookEvent === "session.compact" ||
+    (((reason) => hookEvent === "session.append")(input) && !isPluginNoteRefusal(input))
       ? undefined
-      : TOOL_SITE_BY_EVENT[e];
-  return Object.hasOwn(TOOL_SITE_BY_EVENT, e) ? f?.(s ? TOOL_INPUT_NOT_GIVEN : HOOK_NOT_GIVEN_TEXT) : o[e];
+      : TOOL_SITE_BY_EVENT[hookEvent];
+  return Object.hasOwn(TOOL_SITE_BY_EVENT, hookEvent)
+    ? secondInput?.(secondHookEvent ? TOOL_INPUT_NOT_GIVEN : HOOK_NOT_GIVEN_TEXT)
+    : denyByEvent[hookEvent];
 }
 //@ chunk-pwe88xvs.js:1199-1271 placement
 /**
@@ -116,30 +126,33 @@ function buildClassicDenyResult(e, t) {
  */
 var CHECKER_NO_ANSWER = "a hook that checks this result could not hand back its answer";
 //@ chunk-pwe88xvs.js:1271-1383 placement
-var ALWAYS_WITHHELD_EVENTS = new Set([
-  "tool.check",
-  "agent.offer",
-  "plugin.register",
-  "classic.PreToolUse",
-  "classic.PermissionRequest",
-]);
+var ALWAYS_WITHHELD_EVENTS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-pwe88xvs.js:1271", () => {
+  ALWAYS_WITHHELD_EVENTS = new Set([
+    "tool.check",
+    "agent.offer",
+    "plugin.register",
+    "classic.PreToolUse",
+    "classic.PermissionRequest",
+  ]);
+});
 //@ chunk-pwe88xvs.js:1383-1589 placement
 /**
  * 无法交给检查钩子时的扣留策略：PostToolUse 只记录；检查类事件以拒绝作答；tool.call 拒绝并扣留结果。
  */
-function classicWithholding(e, t) {
-  if (e === CLASSIC_POSTTOOLUSE)
+function classicWithholding(hookEvent, input) {
+  if (hookEvent === CLASSIC_POSTTOOLUSE)
     return {
       isNoted: true,
     };
-  let classicDenyResult = buildClassicDenyResult(e, t);
+  let classicDenyResult = buildClassicDenyResult(hookEvent, input);
   if (classicDenyResult === undefined) return;
-  if (ALWAYS_WITHHELD_EVENTS.has(e))
+  if (ALWAYS_WITHHELD_EVENTS.has(hookEvent))
     return {
       answer: classicDenyResult,
       afterNext: classicDenyResult,
     };
-  return e === "tool.call"
+  return hookEvent === "tool.call"
     ? {
         answer: classicDenyResult,
         afterNext: {
@@ -155,117 +168,117 @@ function classicWithholding(e, t) {
 /**
  * ui.input/select/press
  */
-function uiEventKind(e) {
-  let t = "kind" in e;
-  let o = "value" in e;
-  return t ? "ui.input" : o ? "ui.select" : "ui.press";
+function uiEventKind(event) {
+  let hasKind = "kind" in event;
+  let hasValue = "value" in event;
+  return hasKind ? "ui.input" : hasValue ? "ui.select" : "ui.press";
 }
 //@ chunk-pwe88xvs.js:1680-1846 placement
-function answeringEventFor(e, t) {
-  let o = e.answering.getStore();
-  return o !== undefined &&
-    o.isLive &&
-    Date.now() < o.answersUntil &&
-    (o.event === "session.start" || o.environmentId === t)
-    ? o.event
+function answeringEventFor(bridgeState, environmentId) {
+  let live = bridgeState.answering.getStore();
+  return live !== undefined &&
+    live.isLive &&
+    Date.now() < live.answersUntil &&
+    (live.event === "session.start" || live.environmentId === environmentId)
+    ? live.event
     : undefined;
 }
 //@ chunk-pwe88xvs.js:1846-1939 placement
 /**
  * 实时事件信封
  */
-var liveEventEnvelope = (sent, environmentId, o) => ({
-  event: uiEventKind(o),
+var liveEventEnvelope = (sent, environmentId, secondSent) => ({
+  event: uiEventKind(secondSent),
   isLive: true,
   answersUntil: Date.now() + DEFAULT_HOOK_TIMEOUT_MS,
   environmentId,
   sent,
 });
 //@ chunk-pwe88xvs.js:1939-2607 placement
-function cloneAnswer(bridgeState, t) {
+function cloneAnswer(bridgeState, environmentId) {
   let weakMap = new WeakMap();
   let weakSet = new WeakSet();
-  return (i) => {
+  return (value) => {
     let { stamp, environments } = bridgeState;
-    if (stamp === undefined) return probeHookCallback(i);
-    let p = stamp;
-    let l = Atomics.load(p, STAMP_ENVIRONMENT_SLOT);
-    let c = new Map();
-    let S = (a) => Atomics.store(p, STAMP_ENVIRONMENT_SLOT, a ?? l);
-    function y(a, T) {
-      S(a);
-      let R = T();
-      let b = a !== undefined && typeof R === "object" && R !== null;
-      if (b)
+    if (stamp === undefined) return probeHookCallback(value);
+    let isArray = stamp;
+    let len = Atomics.load(isArray, STAMP_ENVIRONMENT_SLOT);
+    let copies = new Map();
+    let index = (copied) => Atomics.store(isArray, STAMP_ENVIRONMENT_SLOT, copied ?? len);
+    function key(key, secondIndex) {
+      index(key);
+      let keys = secondIndex();
+      let next = key !== undefined && typeof keys === "object" && keys !== null;
+      if (next)
         deepFreeze(
-          R,
+          keys,
           new Set(
-            (isPlainDataObject(R) ? Object.values(R) : []).filter(
-              (r) => isPlainDataObject(r) && weakMap.has(r),
+            (isPlainDataObject(keys) ? Object.values(keys) : []).filter(
+              (element) => isPlainDataObject(element) && weakMap.has(element),
             ),
           ),
         );
-      if (b && Object.isFrozen(R)) weakMap.set(R, a);
-      return R;
+      if (next && Object.isFrozen(keys)) weakMap.set(keys, key);
+      return keys;
     }
-    function h(a, T) {
-      if (!c.has(a)) {
-        let filtered = [...environments].filter(([, b]) => b.name === a);
-        c.set(a, filtered.length === 1 ? filtered[0]?.[0] : undefined);
+    function secondKey(index, thirdIndex) {
+      if (!copies.has(index)) {
+        let filtered = [...environments].filter(([, secondNext]) => secondNext.name === index);
+        copies.set(index, filtered.length === 1 ? filtered[0]?.[0] : undefined);
       }
-      return y(c.get(a), T);
+      return key(copies.get(index), thirdIndex);
     }
     try {
-      return i(
-        (a) => {
-          S(a ? weakMap.get(a) : undefined);
-          return a !== undefined && weakSet.has(a);
+      return value(
+        (key) => {
+          index(key ? weakMap.get(key) : undefined);
+          return key !== undefined && weakSet.has(key);
         },
-        h,
-        (a) => {
-          let T = y(t, a);
-          if (weakMap.has(T)) weakSet.add(T);
-          return T;
+        secondKey,
+        (secondValue) => {
+          let thirdNext = key(environmentId, secondValue);
+          if (weakMap.has(thirdNext)) weakSet.add(thirdNext);
+          return thirdNext;
         },
       );
     } finally {
-      Atomics.store(p, STAMP_ENVIRONMENT_SLOT, l);
+      Atomics.store(isArray, STAMP_ENVIRONMENT_SLOT, len);
     }
   };
 }
 //@ chunk-pwe88xvs.js:2607-2708 placement
-function servingCallers(e) {
-  let t = e.serving.getStore();
-  return t !== undefined && e.servingLive.has(t.callId) ? t.callers : [];
+function servingCallers(bridgeState) {
+  let serving = bridgeState.serving.getStore();
+  return serving !== undefined && bridgeState.servingLive.has(serving.callId) ? serving.callers : [];
 }
 //@ chunk-pwe88xvs.js:2708-3246 placement
-function checkResolveAnswer(e, environment, o) {
-  let { result: s, resolver } = o;
-  if (isUntrustedObject(s))
+function checkResolveAnswer(bridgeState, environment, answer) {
+  let { result, resolver } = answer;
+  if (isUntrustedObject(result))
     throw new HooksError(
       "the ui.resolve answer is a Proxy or a vm context; a table of elements is a plain object",
     );
-  if (!isPlainObject(s)) return s;
-  let n = Object.create(null);
-  for (let f of Reflect.ownKeys(s)) {
-    if (typeof f !== "string" || f === "then" || f === "__proto__") continue;
-    let ownPropertyDescriptor = Reflect.getOwnPropertyDescriptor(s, f);
+  if (!isPlainObject(result)) return result;
+  let copies = Object.create(null);
+  for (let seen of Reflect.ownKeys(result)) {
+    if (typeof seen !== "string" || seen === "then" || seen === "__proto__") continue;
+    let ownPropertyDescriptor = Reflect.getOwnPropertyDescriptor(result, seen);
     if (ownPropertyDescriptor?.enumerable !== true) continue;
-    let l = ownPropertyDescriptor.value;
-    let c = !isUntrustedObject(l) && typeof l === "function";
-    let S = c && functionNameMarks.nameOf(l) === f;
-    n[f] = !c
+    let len = ownPropertyDescriptor.value;
+    let secondSeen = !isUntrustedObject(len) && typeof len === "function";
+    let index = secondSeen && functionNameMarks.nameOf(len) === seen;
+    copies[seen] = !secondSeen
       ? undefined
-      : S
-        ? l
-        : (y) =>
-            runPreservingStamp(e.stamp, () =>
-              runWithStackStamps(e.stamp, [...servingCallers(e), resolver], () =>
-                environment.invokeSync(l, y),
+      : index
+        ? len
+        : (value) =>
+            runPreservingStamp(bridgeState.stamp, () =>
+              runWithStackStamps(bridgeState.stamp, [...servingCallers(bridgeState), resolver], () =>
+                environment.invokeSync(len, value),
               ),
             );
   }
-  return n;
+  return copies;
 }
 //@ chunk-pwe88xvs.js:3294-3516 placement
 var createBridgeState = (hostOps, hostStreamOps, stamp) => ({
@@ -284,12 +297,12 @@ var createBridgeState = (hostOps, hostStreamOps, stamp) => ({
   stamp,
 });
 //@ chunk-pwe88xvs.js:3516-3675 placement
-function argumentForEnvironment({ environment, name: t, event, e: s }) {
+function argumentForEnvironment({ environment, name, event, e }) {
   try {
-    return environment.argumentFor(s);
+    return environment.argumentFor(e);
   } catch (error) {
     throw addWeakSetTag(
-      new HooksError(`${t}: ${event}: could not be given its argument: ${errorMessage(error)}`),
+      new HooksError(`${name}: ${event}: could not be given its argument: ${errorMessage(error)}`),
     );
   }
 }
@@ -297,75 +310,76 @@ function argumentForEnvironment({ environment, name: t, event, e: s }) {
 /**
  * 按对象缓存参数
  */
-function memoizedArgument(e) {
+function memoizedArgument(options) {
   let weakMap = new WeakMap();
-  return (o) => {
-    let s =
-      weakMap.get(o) ??
+  return (e) => {
+    let cached =
+      weakMap.get(e) ??
       argumentForEnvironment({
-        ...e,
-        e: o,
+        ...options,
+        e,
       });
-    weakMap.set(o, s);
-    return s;
+    weakMap.set(e, cached);
+    return cached;
   };
 }
 //@ chunk-pwe88xvs.js:3770-3798 placement
 /**
  * e\0t 组合键
  */
-var keyOfPair = (e, t) => `${e}\x00${t}`;
+var keyOfPair = (a, b) => `${a}\x00${b}`;
 //@ chunk-pwe88xvs.js:3798-4035 placement
 /**
  * 一次渲染后，删除不再出现在新元素树中的按键句柄。
  */
-function dropStalePresses(bridgeState, t, o) {
-  let s = bridgeState.taking.get(t);
-  bridgeState.taking.delete(t);
-  if (s === undefined) return;
-  let i = new Set();
-  for (let { plugin, handle } of checkElementProps(o))
-    for (let [p, l] of bridgeState.environments) if (l.name === plugin) i.add(keyOfPair(p, handle));
-  for (let n of s) if (!i.has(n)) bridgeState.presses.delete(n);
+function dropStalePresses(bridgeState, environmentId, handles) {
+  let taking = bridgeState.taking.get(environmentId);
+  bridgeState.taking.delete(environmentId);
+  if (taking === undefined) return;
+  let kept = new Set();
+  for (let { plugin, handle } of checkElementProps(handles))
+    for (let [secondHandle, secondSecondHandle] of bridgeState.environments)
+      if (secondSecondHandle.name === plugin) kept.add(keyOfPair(secondHandle, handle));
+  for (let secondKept of taking) if (!kept.has(secondKept)) bridgeState.presses.delete(secondKept);
 }
 //@ chunk-pwe88xvs.js:4035-4149 placement
-function requireEnvironment(e, environmentId) {
-  let o = e.environments.get(environmentId);
-  if (o === undefined) throw new HooksError(`environment ${environmentId} is not loaded`);
-  return o;
+function requireEnvironment(bridgeState, environmentId) {
+  let entry = bridgeState.environments.get(environmentId);
+  if (entry === undefined) throw new HooksError(`environment ${environmentId} is not loaded`);
+  return entry;
 }
 //@ chunk-pwe88xvs.js:4149-4243 placement
 /**
  * 取环境的分发注册
  */
-function registrationForEnv(e, t) {
-  let o = e.framing.getStore();
-  return o?.environmentId === t ? o.registration : undefined;
+function registrationForEnv(bridgeState, environmentId) {
+  let frame = bridgeState.framing.getStore();
+  return frame?.environmentId === environmentId ? frame.registration : undefined;
 }
 //@ chunk-pwe88xvs.js:4243-4323 placement
 /**
  * 转发 generator
  */
-var forwardedGenerator = (e, t) =>
+var forwardedGenerator = (generator, run) =>
   forwardGenerator({
-    next: () => t(() => e.next()),
-    return: () => t(() => e.return(undefined)),
+    next: () => run(() => generator.next()),
+    return: () => run(() => generator.return(undefined)),
   });
 //@ chunk-pwe88xvs.js:4323-4857 placement
-function checkNextToTarget(e, t, { event, raised, leftOut }) {
-  let { environment, name: f, nextTo, scan } = e;
-  for (let c of t) {
-    if (isAbovePrepend(c) && !nextTo.has(c))
+function checkNextToTarget(handle, to, { event, raised, leftOut }) {
+  let { environment, name, nextTo, scan } = handle;
+  for (let tier of to) {
+    if (isAbovePrepend(tier) && !nextTo.has(tier))
       throw new HooksError(
-        `${f}: next.to("${c}") refused: its hooks module does not spell ${nextToLabel(c)} in a literal the scan reads (host rule)`,
+        `${name}: next.to("${tier}") refused: its hooks module does not spell ${nextToLabel(tier)} in a literal the scan reads (host rule)`,
       );
     if (
-      c === "user" &&
+      tier === "user" &&
       !(raised === undefined
         ? routesToUser(scan, event)
         : isNextToUserTarget({
             clauses: environment.activation.registrations.registered.filter(
-              (h, a) => leftOut?.includes(a) !== true,
+              (last, secondLast) => leftOut?.includes(secondLast) !== true,
             ),
             scan,
             event,
@@ -373,55 +387,52 @@ function checkNextToTarget(e, t, { event, raised, leftOut }) {
           }))
     )
       throw new HooksError(
-        `${f}: next.to("user") refused: no hook of its module that spells it stands on this dispatch of ${event} (host rule)`,
+        `${name}: next.to("user") refused: no hook of its module that spells it stands on this dispatch of ${event} (host rule)`,
       );
   }
 }
 //@ chunk-pwe88xvs.js:4857-5120 placement
-function collectUiTree(e, t, o) {
-  let { environmentId, name: i } = t;
-  let n = checkElementList(t.result, i);
-  return isPlainElement(n)
+function collectUiTree(bridgeState, request, collector) {
+  let { environmentId, name } = request;
+  let list = checkElementList(request.result, name);
+  return isPlainElement(list)
     ? validateAndStampElement({
-        tree: n,
-        plugin: i,
-        seen: o.seen,
-        groups: o.groups,
-        parts: o.parts,
-        take: (f, p) => {
-          let l = keyOfPair(environmentId, f);
-          e.presses.set(l, p);
-          let c = e.dispatching.getStore();
-          if (c !== undefined) e.taking.get(c)?.add(l);
+        tree: list,
+        plugin: name,
+        seen: collector.seen,
+        groups: collector.groups,
+        parts: collector.parts,
+        take: (element, secondElement) => {
+          let key = keyOfPair(environmentId, element);
+          bridgeState.presses.set(key, secondElement);
+          let thirdElement = bridgeState.dispatching.getStore();
+          if (thirdElement !== undefined) bridgeState.taking.get(thirdElement)?.add(key);
         },
       })
-    : n;
+    : list;
 }
 //@ chunk-pwe88xvs.js:5120-5197 placement
 /**
  * 附上经典钩子的扣留标记
  */
-function withClassicWithholding(event, t, error) {
-  let s = hasWeakSetTag(error) ? classicWithholding(event, t) : undefined;
-  return s === undefined ? error : tagWeak(error, s);
+function withClassicWithholding(hookEvent, input, error) {
+  let withholding = hasWeakSetTag(error) ? classicWithholding(hookEvent, input) : undefined;
+  return withholding === undefined ? error : tagWeak(error, withholding);
 }
 //@ chunk-pwe88xvs.js:5197-6796 placement
-function dispatchUiHandler(bridgeState, t, hook) {
-  let { environmentId, event, resolver, leftOut, ended, caughtAnswered, endedReached, withheld } = t;
-  let {
-    environment,
-    name: h,
-    tier,
-    isPersons,
-    answersForEngine,
-  } = requireEnvironment(bridgeState, environmentId);
-  let b = hook ?? environment.activation.registrations.get(event, leftOut);
-  if (!b) throw new HooksError(`${h}: no ${event} handler`);
-  let { run, catch: r } = b;
-  function m(u, collectorState) {
+function dispatchUiHandler(bridgeState, params, hook) {
+  let { environmentId, event, resolver, leftOut, ended, caughtAnswered, endedReached, withheld } = params;
+  let { environment, name, tier, isPersons, answersForEngine } = requireEnvironment(
+    bridgeState,
+    environmentId,
+  );
+  let handler = hook ?? environment.activation.registrations.get(event, leftOut);
+  if (!handler) throw new HooksError(`${name}: no ${event} handler`);
+  let { run, catch: catchHook } = handler;
+  function settleResult(value, collector) {
     return resolver !== undefined
       ? checkResolveAnswer(bridgeState, environment, {
-          result: u,
+          result: value,
           resolver,
         })
       : event === "ui.render"
@@ -429,75 +440,76 @@ function dispatchUiHandler(bridgeState, t, hook) {
             bridgeState,
             {
               environmentId,
-              name: h,
-              result: u,
+              name,
+              result: value,
             },
-            collectorState,
+            collector,
           )
-        : environment.leaving(u, event);
+        : environment.leaving(value, event);
   }
-  function v(u, { seen, groups, parts, counted }) {
-    function j(w) {
-      if (event === "ui.render" && isPlainElement(w) && !counted.has(w)) {
-        counted.add(w);
-        for (let O of checkElementProps(w)) seen.add(withModifiers(O.plugin, O.handle));
-        for (let O of collectClientElements(w)) seen.add(clientKeyOf(O));
-        for (let O of collectRasterElements(w)) seen.add(rasterKeyOf(O));
-        for (let O of collectImageElements(w)) seen.add(imageKeyOf(O));
-        for (let O of collectMarkdownParts(w)) seen.add(O);
-        for (let O of collectHoverScopes(w)) {
-          let Q = hoverScopeKey(O);
-          groups.set(Q, (groups.get(Q) ?? 0) + 1);
+  function runWithTrace(next, { seen, groups, parts, counted }) {
+    function traceElement(element) {
+      if (event === "ui.render" && isPlainElement(element) && !counted.has(element)) {
+        counted.add(element);
+        for (let prop of checkElementProps(element)) seen.add(withModifiers(prop.plugin, prop.handle));
+        for (let fourthElement of collectClientElements(element)) seen.add(clientKeyOf(fourthElement));
+        for (let fifthElement of collectRasterElements(element)) seen.add(rasterKeyOf(fifthElement));
+        for (let n6Element of collectImageElements(element)) seen.add(imageKeyOf(n6Element));
+        for (let part of collectMarkdownParts(element)) seen.add(part);
+        for (let scope of collectHoverScopes(element)) {
+          let key = hoverScopeKey(scope);
+          groups.set(key, (groups.get(key) ?? 0) + 1);
         }
-        for (let O of collectTextParts(w)) parts.set(O, (parts.get(O) ?? 0) + 1);
+        for (let secondPart of collectTextParts(element))
+          parts.set(secondPart, (parts.get(secondPart) ?? 0) + 1);
       }
-      return w;
+      return element;
     }
     return environment.nextFor(
       freezeHookCall({
-        call: async (w) => {
-          environment.freezeForNext(requireEventArgument(w, h));
-          return j(await u(w));
+        call: async (value) => {
+          environment.freezeForNext(requireEventArgument(value, name));
+          return traceElement(await next(value));
         },
-        to: async (w, ...V) => {
-          environment.freezeForNext(requireEventArgument(w, h));
-          checkNextToTarget(requireEnvironment(bridgeState, environmentId), V, t);
-          return j(await callNextWith(w, u, V));
+        to: async (value, ...rest) => {
+          environment.freezeForNext(requireEventArgument(value, name));
+          checkNextToTarget(requireEnvironment(bridgeState, environmentId), rest, params);
+          return traceElement(await callNextWith(value, next, rest));
         },
-        signal: u.signal,
-        is: u.is,
-        event: u.event,
-        origin: u.origin,
-        trace: () => u.trace,
-        budget: () => u.budget,
-        caught: pickErrorState(u),
+        signal: next.signal,
+        is: next.is,
+        event: next.event,
+        origin: next.origin,
+        trace: () => next.trace,
+        budget: () => next.budget,
+        caught: pickErrorState(next),
       }),
       event,
     );
   }
-  let k = memoizedArgument({
+  let argument = memoizedArgument({
     environment,
-    name: h,
+    name,
     event,
   });
-  async function g(u, x, F) {
+  async function runHandler(impl, e, ctx) {
     let collectorState = newCollectorState();
     try {
-      return m(await u(k(x), v(F, collectorState)), collectorState);
+      return settleResult(await impl(argument(e), runWithTrace(ctx, collectorState)), collectorState);
     } catch (error) {
-      throw withClassicWithholding(event, x, error);
+      throw withClassicWithholding(event, e, error);
     }
   }
-  async function H(ended, x, F) {
-    endedReached?.(environmentId, x);
+  async function runAfterEnded(ended, e, next) {
+    endedReached?.(environmentId, e);
     if (ended.called)
-      await F(x).then(undefined, () => {
+      await next(e).then(undefined, () => {
         return;
       });
     throw new HooksError(ended.reason);
   }
   return {
-    name: h,
+    name,
     environmentId,
     tier,
     ...(isPersons === false && {
@@ -507,110 +519,111 @@ function dispatchUiHandler(bridgeState, t, hook) {
       answersForEngine,
     }),
     applied: environment.applyIn,
-    ...(r && {
-      catch: async (u, x) => {
-        let F = await g(r, u, x);
-        if (F !== undefined) caughtAnswered?.(environmentId);
-        return F;
+    ...(catchHook && {
+      catch: async (e, ctx) => {
+        let result = await runHandler(catchHook, e, ctx);
+        if (result !== undefined) caughtAnswered?.(environmentId);
+        return result;
       },
     }),
     ...(withheld && {
       withheld,
     }),
-    run: (u, x) => (ended === undefined ? g(run, u, x) : H(ended, u, x)),
+    run: (e, ctx) => (ended === undefined ? runHandler(run, e, ctx) : runAfterEnded(ended, e, ctx)),
   };
 }
 //@ chunk-pwe88xvs.js:6796-6906 placement
-function pressSentFor(e, t) {
-  let o = e.answering.getStore();
-  return o?.event === "ui.press" && o.environmentId === t ? o.sent : undefined;
+function pressSentFor(bridgeState, environmentId) {
+  let live = bridgeState.answering.getStore();
+  return live?.event === "ui.press" && live.environmentId === environmentId ? live.sent : undefined;
 }
 //@ chunk-pwe88xvs.js:6906-7011 placement
-function servingCallId(e) {
-  let t = e.serving.getStore();
-  return t !== undefined && e.servingLive.has(t.callId) ? t.callId : undefined;
+function servingCallId(bridgeState) {
+  let serving = bridgeState.serving.getStore();
+  return serving !== undefined && bridgeState.servingLive.has(serving.callId) ? serving.callId : undefined;
 }
 //@ chunk-pwe88xvs.js:7011-7150 placement
 /**
  * 构造环境发起宿主操作时的帧：环境 id、分发 id、注册序号、服务中的调用、根事件与按键。
  */
-var opFrameFor = (e, t) => ({
-  environmentId: t,
-  dispatchId: e.dispatching.getStore(),
-  registration: registrationForEnv(e, t),
-  serving: servingCallId(e),
-  rootEvent: answeringEventFor(e, t),
-  pressing: pressSentFor(e, t),
+var opFrameFor = (bridgeState, environmentId) => ({
+  environmentId,
+  dispatchId: bridgeState.dispatching.getStore(),
+  registration: registrationForEnv(bridgeState, environmentId),
+  serving: servingCallId(bridgeState),
+  rootEvent: answeringEventFor(bridgeState, environmentId),
+  pressing: pressSentFor(bridgeState, environmentId),
 });
 //@ chunk-pwe88xvs.js:7150-7254 placement
 /**
  * 为某环境生成宿主操作调用函数（非时钟类操作在预算外执行）。
  */
-var createHostOpCaller = (bridgeState, t) => (o, args, signal) => {
-  let n = () =>
+var createHostOpCaller = (bridgeState, environmentId) => (op, args, signal) => {
+  let call = () =>
     bridgeState.hostOps({
-      ...opFrameFor(bridgeState, t),
-      op: o,
+      ...opFrameFor(bridgeState, environmentId),
+      op,
       args,
       signal,
     });
-  return isClockMethod(o) ? n() : outsideBudget(n);
+  return isClockMethod(op) ? call() : outsideBudget(call);
 };
 //@ chunk-pwe88xvs.js:7254-7568 placement
 /**
  * 为某环境生成流式宿主操作调用函数：可被放弃时中止，结束前不计入钩子预算。
  */
-var createHostStreamCaller = (bridgeState, t) => (o, args, i) => {
+var createHostStreamCaller = (bridgeState, environmentId) => (op, args, signal) => {
   let abortController = new AbortController();
-  let signal = i === undefined ? abortController.signal : AbortSignal.any([i, abortController.signal]);
-  let p = forwardedGenerator(
+  let signal_2 =
+    signal === undefined ? abortController.signal : AbortSignal.any([signal, abortController.signal]);
+  let generator = forwardedGenerator(
     bridgeState.hostStreamOps({
-      ...opFrameFor(bridgeState, t),
-      op: o,
+      ...opFrameFor(bridgeState, environmentId),
+      op,
       args,
-      signal,
+      signal: signal_2,
     }),
     outsideBudget,
   );
-  async function* l() {
+  async function* stream() {
     try {
-      return yield* p;
+      return yield* generator;
     } catch (error) {
       if (abortController.signal.aborted) return;
       throw error;
     }
   }
-  return onGeneratorReturn(teeGeneratorResult(l), () =>
-    abortController.abort(new HooksError(`${o}: the stream was let go`)),
+  return onGeneratorReturn(teeGeneratorResult(stream), () =>
+    abortController.abort(new HooksError(`${op}: the stream was let go`)),
   );
 };
 //@ chunk-pwe88xvs.js:7568-7774 placement
-function environmentCatches(bridgeState, { event, leftOut }, [s, i]) {
-  let { environment, name: f } = requireEnvironment(bridgeState, s);
+function environmentCatches(bridgeState, { event, leftOut }, [environmentId, registration]) {
+  let { environment, name } = requireEnvironment(bridgeState, environmentId);
   return environment.activation.registrations.catches(
     event,
     argumentForEnvironment({
       environment,
-      name: f,
+      name,
       event,
-      e: i,
+      e: registration,
     }),
-    leftOut?.find((p) => p.environmentId === s)?.registrations,
+    leftOut?.find((result) => result.environmentId === environmentId)?.registrations,
   );
 }
 //@ chunk-pwe88xvs.js:7774-8110 placement
 /**
  * 为一个 UI 组件运行 ui.resolve 钩子链（各环境依次），底部返回核心元素表。
  */
-function resolveUiTables(bridgeState, t) {
-  let { environmentId, request, core } = t;
-  let n = {
+function resolveUiTables(bridgeState, options) {
+  let { environmentId, request, core } = options;
+  let site = {
     surface: request.surface,
     component: request.component,
   };
-  let f = requireEnvironment(bridgeState, environmentId);
+  let entry = requireEnvironment(bridgeState, environmentId);
   return reportChainFailure({
-    e: n,
+    e: site,
     handlers: request.environments
       .filter((environment) => bridgeState.environments.has(environment))
       .map((environmentId_2) =>
@@ -623,8 +636,8 @@ function resolveUiTables(bridgeState, t) {
     site: UI_ENV_SITE_RULES["ui.resolve"],
     bottom: () => Promise.resolve(core),
     origin: {
-      plugin: f.name,
-      tier: f.tier,
+      plugin: entry.name,
+      tier: entry.tier,
     },
   });
 }
@@ -632,8 +645,8 @@ function resolveUiTables(bridgeState, t) {
 /**
  * 删除键
  */
-var deleteFromMap = (e, t) => {
-  e.delete(t);
+var deleteFromMap = (map, key) => {
+  map.delete(key);
 };
 //@ chunk-pwe88xvs.js:8138-8223 placement
 /**
@@ -645,53 +658,55 @@ var SESSION_START_EVENT = () => ({
   answersUntil: Number.POSITIVE_INFINITY,
 });
 //@ chunk-pwe88xvs.js:8223-8864 placement
-function readValueField(e, t) {
-  let { environmentId, event, leftOut } = t;
-  let { environment, name: f, tier } = requireEnvironment(e, environmentId);
-  let l = memoizedArgument({
+function readValueField(bridgeState, params) {
+  let { environmentId, event, leftOut } = params;
+  let { environment, name, tier } = requireEnvironment(bridgeState, environmentId);
+  let memoized = memoizedArgument({
     environment,
-    name: f,
+    name,
     event,
   });
-  function c(y) {
-    let h = y;
+  function isEnded(endsAt) {
+    let ended = endsAt;
     return environment.streamNextFor(
       makeHookCall({
-        ...hookCallContext(y),
-        call: (a) => {
-          environment.freezeForNext(requireEventArgument(a, f));
-          return h(a);
+        ...hookCallContext(endsAt),
+        call: (value) => {
+          environment.freezeForNext(requireEventArgument(value, name));
+          return ended(value);
         },
-        to: (a, ...T) => {
-          environment.freezeForNext(requireEventArgument(a, f));
-          checkNextToTarget(requireEnvironment(e, environmentId), T, t);
-          return forwardNext(a, h, T);
+        to: (thirdValue, ...secondTier) => {
+          environment.freezeForNext(requireEventArgument(thirdValue, name));
+          checkNextToTarget(requireEnvironment(bridgeState, environmentId), secondTier, params);
+          return forwardNext(thirdValue, ended, secondTier);
         },
       }),
     );
   }
-  let S = (registration, h) =>
-    forwardedGenerator(h, (a) =>
-      e.framing.run(
+  let handler = (registration, result) =>
+    forwardedGenerator(result, (secondResult) =>
+      bridgeState.framing.run(
         {
           environmentId,
           registration,
         },
-        a,
+        secondResult,
       ),
     );
-  return environment.activation.registrations.streamClauses(event, leftOut).map((y) => {
-    if (y.kind === "value") return createStreamOperators(dispatchUiHandler(e, t, y.hook));
-    let { registration } = y;
-    let a = (R) => async (b, _) => S(registration, await R(l(b), c(_)));
-    let T = y.catch;
+  return environment.activation.registrations.streamClauses(event, leftOut).map((fourthValue) => {
+    if (fourthValue.kind === "value")
+      return createStreamOperators(dispatchUiHandler(bridgeState, params, fourthValue.hook));
+    let { registration } = fourthValue;
+    let fifthValue = (thirdResult) => async (fourthResult, fifthResult) =>
+      handler(registration, await thirdResult(memoized(fourthResult), isEnded(fifthResult)));
+    let n6Result = fourthValue.catch;
     return {
-      name: f,
+      name,
       environmentId,
       tier,
-      run: a(y.open),
-      ...(T !== undefined && {
-        catch: a(T),
+      run: fifthValue(fourthValue.open),
+      ...(n6Result !== undefined && {
+        catch: fifthValue(n6Result),
       }),
     };
   });
@@ -707,10 +722,11 @@ function buildHopChainArgs(bridgeState, { request, hostNext, signal }) {
       environmentId: environment,
       event,
       raised: request.payload,
-      leftOut: leftOut?.find((S) => S.environmentId === environment)?.registrations,
+      leftOut: leftOut?.find((handler) => handler.environmentId === environment)?.registrations,
     }),
   );
-  let bottom = (c, S, y = Y6t) => hostNext(c, S, y);
+  let bottom = (secondHandler, thirdHandler, fourthHandler = NO_FLOORS) =>
+    hostNext(secondHandler, thirdHandler, fourthHandler);
   return {
     e: request.payload,
     handlers,
@@ -734,227 +750,238 @@ function createHookHostBridge({
   servedBudgetMs = DEFAULT_HOOK_TIMEOUT_MS,
 }) {
   let bridgeState = createBridgeState(hostOps, hostStreamOps, stamp);
-  let f = createEnvironment ?? createHooksEnvironment;
+  let secondCreateEnvironment = createEnvironment ?? createHooksEnvironment;
   let { environments, loading, dispatching, framing, serving, answering, presses } = bridgeState;
-  async function T(id, event, v) {
-    if (event === "ui.render") bridgeState.taking.set(id, new Set());
-    let k;
-    let H = event === "session.start" ? SESSION_START_EVENT() : undefined;
+  async function within(environmentId, event, fn) {
+    if (event === "ui.render") bridgeState.taking.set(environmentId, new Set());
+    let result;
+    let sessionStart = event === "session.start" ? SESSION_START_EVENT() : undefined;
     try {
-      k = await dispatching.run(id, () => answering.run(H, v));
-      return k;
+      result = await dispatching.run(environmentId, () => answering.run(sessionStart, fn));
+      return result;
     } finally {
-      if (H !== undefined) H.isLive = false;
-      dropStalePresses(bridgeState, id, k);
+      if (sessionStart !== undefined) sessionStart.isLive = false;
+      dropStalePresses(bridgeState, environmentId, result);
     }
   }
-  async function R(r, m, signal) {
-    let k = new Set();
-    let g =
-      r.event === CLASSIC_POSTTOOLUSE
+  async function dispatch(request, next, signal) {
+    let answered = new Set();
+    let given =
+      request.event === CLASSIC_POSTTOOLUSE
         ? {
             isGiven: false,
           }
         : undefined;
-    let H = new Map();
+    let reached = new Map();
     let result;
     try {
-      result = await T(r.id, r.event, () =>
+      result = await within(request.id, request.event, () =>
         reportChainFailure({
-          e: r.payload,
-          handlers: r.environments.map((environment) =>
+          e: request.payload,
+          handlers: request.environments.map((environment) =>
             dispatchUiHandler(bridgeState, {
               environmentId: environment,
-              event: r.event,
-              raised: r.payload,
-              leftOut: r.leftOut?.find((N) => N.environmentId === environment)?.registrations,
-              ended: r.ended,
-              caughtAnswered: (N) => k.add(N),
-              ...(g && {
+              event: request.event,
+              raised: request.payload,
+              leftOut: request.leftOut?.find((leftOutEntry) => leftOutEntry.environmentId === environment)
+                ?.registrations,
+              ended: request.ended,
+              caughtAnswered: (secondEnvironmentId) => answered.add(secondEnvironmentId),
+              ...(given && {
                 withheld: () => {
-                  g.isGiven = true;
+                  given.isGiven = true;
                 },
               }),
-              endedReached: (N, j) => H.set(N, j),
+              endedReached: (thirdEnvironmentId, fourthNext) => reached.set(thirdEnvironmentId, fourthNext),
             }),
           ),
-          site: envSiteRuleFor(r.event, r.raise),
+          site: envSiteRuleFor(request.event, request.raise),
           signal,
           isHopFold: true,
-          bottom: (E, N, j = Y6t) => m(E, N, j),
-          origin: r.origin,
-          floors: r.floors,
-          cutAt: r.cutAt,
+          bottom: (e, ctx, floors = NO_FLOORS) => next(e, ctx, floors),
+          origin: request.origin,
+          floors: request.floors,
+          cutAt: request.cutAt,
         }),
       );
     } catch (error) {
-      throw g?.isGiven === true
+      throw given?.isGiven === true
         ? tagWeak(error, {
             isNoted: true,
           })
         : error;
     }
-    let found = [...H].find(([E]) => E === r.ended?.kept);
-    let F = found !== undefined && !k.has(found[0]) && !environmentCatches(bridgeState, r, found);
+    let found = [...reached].find(([keptId]) => keptId === request.ended?.kept);
+    let unmatched =
+      found !== undefined && !answered.has(found[0]) && !environmentCatches(bridgeState, request, found);
     return {
       result,
-      ...(r.ended !== undefined && {
-        answered: [...k],
+      ...(request.ended !== undefined && {
+        answered: [...answered],
       }),
-      ...(F && {
+      ...(unmatched && {
         unmatched: true,
       }),
-      ...(g?.isGiven === true && {
+      ...(given?.isGiven === true && {
         withheld: true,
       }),
     };
   }
-  let b = (id, m) => forwardedGenerator(m, (v) => dispatching.run(id, () => answering.run(undefined, v)));
+  let withinSteps = (id, generator) =>
+    forwardedGenerator(generator, (fn) => dispatching.run(id, () => answering.run(undefined, fn)));
   return {
     currentDispatch: () => dispatching.getStore(),
-    opFailureOf: (r) =>
-      Array.from(environments.values(), (m) => m.environment.opFailureOf(r)).find((m) => m !== undefined),
-    ownsValue: (r) => Array.from(environments.values()).some((m) => m.environment.ownsValue(r)),
-    has: (r) => environments.has(r),
-    async load(r, m) {
+    opFailureOf: (value) =>
+      Array.from(environments.values(), (entry) => entry.environment.opFailureOf(value)).find(
+        (failure) => failure !== undefined,
+      ),
+    ownsValue: (value) =>
+      Array.from(environments.values()).some((entry) => entry.environment.ownsValue(value)),
+    has: (id) => environments.has(id),
+    async load(id, args) {
       let abortController = new AbortController();
-      loading.set(r, abortController);
-      let k;
+      loading.set(id, abortController);
+      let environment;
       try {
-        k = await f(createHostOpCaller(bridgeState, r), m, {
+        environment = await secondCreateEnvironment(createHostOpCaller(bridgeState, id), args, {
           stamp: stamp
             ? {
                 view: stamp,
-                environmentId: r,
+                environmentId: id,
               }
             : undefined,
           signal: abortController.signal,
-          hostStream: createHostStreamCaller(bridgeState, r),
-          framed: (registration, H) =>
+          hostStream: createHostStreamCaller(bridgeState, id),
+          framed: (registration, fn) =>
             framing.run(
               {
-                environmentId: r,
+                environmentId: id,
                 registration,
               },
-              H,
+              fn,
             ),
           blamedFor: () => servingCallers(bridgeState)[0],
-          blamedWalk: cloneAnswer(bridgeState, r),
+          blamedWalk: cloneAnswer(bridgeState, id),
         });
       } finally {
-        loading.delete(r);
+        loading.delete(id);
       }
-      environments.set(r, {
-        environment: k,
-        name: m.pluginName,
-        tier: m.tier,
-        isPersons: m.isPersons,
-        nextTo: new Set(m.scan.nextTo ?? []),
-        scan: m.scan,
-        answersForEngine: hasRegisteredEnv(m.modulePath),
+      environments.set(id, {
+        environment,
+        name: args.pluginName,
+        tier: args.tier,
+        isPersons: args.isPersons,
+        nextTo: new Set(args.scan.nextTo ?? []),
+        scan: args.scan,
+        answersForEngine: hasRegisteredEnv(args.modulePath),
       });
       return {
-        registered: k.activation.registrations.registered,
+        registered: environment.activation.registrations.registered,
       };
     },
-    unload(r) {
-      loading.get(r)?.abort();
-      loading.delete(r);
-      let m = environments.get(r);
-      if (m) {
-        environments.delete(r);
-        bridgeState.resolving.delete(r);
-        m.environment.dispose();
+    unload(id) {
+      loading.get(id)?.abort();
+      loading.delete(id);
+      let entry = environments.get(id);
+      if (entry) {
+        environments.delete(id);
+        bridgeState.resolving.delete(id);
+        entry.environment.dispose();
       }
-      for (let key of presses.keys()) if (key.startsWith(keyOfPair(r, 0).slice(0, -1))) presses.delete(key);
+      for (let key of presses.keys()) if (key.startsWith(keyOfPair(id, 0).slice(0, -1))) presses.delete(key);
     },
-    dispatch: R,
-    dispatchStream: (r, hostNext, signal) =>
+    dispatch,
+    dispatchStream: (id, hostNext, signal) =>
       teeGeneratorResult(
-        b(
-          r.id,
+        withinSteps(
+          id.id,
           reportStreamChainFailure(
             buildHopChainArgs(bridgeState, {
-              request: r,
+              request: id,
               hostNext,
               signal,
             }),
           ),
         ),
       ),
-    link: (r) => dispatchUiHandler(bridgeState, r),
-    linkStreams: (r) => readValueField(bridgeState, r),
-    within: T,
-    withinSteps: b,
-    async resolveTables(r, m) {
-      let { environment } = requireEnvironment(bridgeState, r);
-      let k = (bridgeState.resolving.get(r) ?? 0) + 1;
-      bridgeState.resolving.set(r, k);
-      let g = UI_ELEMENT_BUILDERS();
+    link: (params) => dispatchUiHandler(bridgeState, params),
+    linkStreams: (params) => readValueField(bridgeState, params),
+    within,
+    withinSteps,
+    async resolveTables(environmentId, requests) {
+      let { environment } = requireEnvironment(bridgeState, environmentId);
+      let generation = (bridgeState.resolving.get(environmentId) ?? 0) + 1;
+      bridgeState.resolving.set(environmentId, generation);
+      let builders = UI_ELEMENT_BUILDERS();
       let results = await Promise.all(
-        m.map(async (x) => ({
-          surface: x.surface,
-          component: x.component,
+        requests.map(async (request) => ({
+          surface: request.surface,
+          component: request.component,
           answer: await resolveUiTables(bridgeState, {
-            environmentId: r,
-            request: x,
-            core: g[x.surface],
+            environmentId,
+            request,
+            core: builders[request.surface],
           }),
         })),
       );
-      if (environments.get(r)?.environment === environment && bridgeState.resolving.get(r) === k)
+      if (
+        environments.get(environmentId)?.environment === environment &&
+        bridgeState.resolving.get(environmentId) === generation
+      )
         environment.storeResolved(results);
     },
-    build: (r, m, v) => {
-      requireEnvironment(bridgeState, r).environment.activation.finalize(m, v);
+    build: (environmentId, owned, beneath) => {
+      requireEnvironment(bridgeState, environmentId).environment.activation.finalize(owned, beneath);
     },
-    callInterface(r, { name: m, method, args }, g) {
-      let { environment } = requireEnvironment(bridgeState, r);
-      if (g) bridgeState.servingLive.add(g.callId);
-      let x =
-        g !== undefined && servedBudgetMs !== Number.POSITIVE_INFINITY
-          ? setTimeout(deleteFromMap, servedBudgetMs, bridgeState.servingLive, g.callId)
+    callInterface(environmentId, { name, method, args }, secondServing) {
+      let { environment } = requireEnvironment(bridgeState, environmentId);
+      if (secondServing) bridgeState.servingLive.add(secondServing.callId);
+      let timer =
+        secondServing !== undefined && servedBudgetMs !== Number.POSITIVE_INFINITY
+          ? setTimeout(deleteFromMap, servedBudgetMs, bridgeState.servingLive, secondServing.callId)
           : undefined;
-      function F() {
-        clearTimeout(x);
-        if (g) bridgeState.servingLive.delete(g.callId);
+      function clear() {
+        clearTimeout(timer);
+        if (secondServing) bridgeState.servingLive.delete(secondServing.callId);
       }
-      let E = () =>
-        runWithStackStamps(stamp, g?.callers ?? [], () =>
-          environment.activation.callInterface(m, method, environment.cloneIn(args)),
+      let call = () =>
+        runWithStackStamps(stamp, secondServing?.callers ?? [], () =>
+          environment.activation.callInterface(name, method, environment.cloneIn(args)),
         ).then(environment.leaving);
       try {
         return budgetPauseStorage
-          .exit(() => framing.run(undefined, () => answering.run(undefined, () => serving.run(g, E))))
-          .finally(F);
+          .exit(() =>
+            framing.run(undefined, () => answering.run(undefined, () => serving.run(secondServing, call))),
+          )
+          .finally(clear);
       } catch (error) {
-        F();
+        clear();
         throw error;
       }
     },
-    press(environmentId, { handle, sent }, k) {
+    press(environmentId, { handle, sent }, args) {
       let { environment } = requireEnvironment(bridgeState, environmentId);
-      let H = presses.get(keyOfPair(environmentId, handle));
-      if (H === undefined)
+      let handler = presses.get(keyOfPair(environmentId, handle));
+      if (handler === undefined)
         return Promise.reject(
           new HooksError(`ui.press/ui.input/ui.select: no handler is held under handle ${handle}`),
         );
-      let u = liveEventEnvelope(sent, environmentId, k);
+      let envelope = liveEventEnvelope(sent, environmentId, args);
       return framing.run(undefined, () =>
-        answering.run(u, () =>
+        answering.run(envelope, () =>
           environment
-            .invoke(H, [environment.cloneIn(k)])
+            .invoke(handler, [environment.cloneIn(args)])
             .then(() => {
               return;
             })
             .finally(() => {
-              u.isLive = false;
+              envelope.isLive = false;
             }),
         ),
       );
     },
-    releasePresses: (r, m) => {
-      for (let v of m) presses.delete(keyOfPair(r, v));
+    releasePresses: (environmentId, handles) => {
+      for (let handle of handles) presses.delete(keyOfPair(environmentId, handle));
     },
   };
 }
@@ -962,18 +989,18 @@ function createHookHostBridge({
 /**
  * 拒绝全部挂起
  */
-function rejectAllPending(e, t) {
-  for (let o of e.values()) o.reject(new HooksError(t));
-  e.clear();
+function rejectAllPending(map, reason) {
+  for (let pending of map.values()) pending.reject(new HooksError(reason));
+  map.clear();
 }
 //@ chunk-pwe88xvs.js:12794-12847 placement
 /**
  * 取出并删除挂起项
  */
-function takePending(e, t) {
-  let o = e.get(t);
-  e.delete(t);
-  return o;
+function takePending(map, key) {
+  let value = map.get(key);
+  map.delete(key);
+  return value;
 }
 //@ chunk-pwe88xvs.js:12847-12857 placement
 /**
@@ -1014,36 +1041,36 @@ function normalizePluginHostAction(payload, pluginName, handler) {
   };
   switch (handler) {
     case "command.run": {
-      let m = payload;
+      let secondPayload = payload;
       return {
-        ...m,
-        args: m.args ?? "",
-        origin: m.origin ?? origin,
-        presentation: m.presentation ?? viewportInfo(undefined),
+        ...secondPayload,
+        args: secondPayload.args ?? "",
+        origin: secondPayload.origin ?? origin,
+        presentation: secondPayload.presentation ?? viewportInfo(undefined),
       };
     }
     case "prompt.fill": {
-      let m = payload;
+      let thirdPayload = payload;
       return {
-        ...m,
-        mode: m.mode ?? "replace",
-        origin: m.origin ?? origin,
+        ...thirdPayload,
+        mode: thirdPayload.mode ?? "replace",
+        origin: thirdPayload.origin ?? origin,
       };
     }
     case "prompt.suggest": {
-      let m = payload;
+      let fourthPayload = payload;
       return {
-        ...m,
-        origin: m.origin ?? origin,
+        ...fourthPayload,
+        origin: fourthPayload.origin ?? origin,
       };
     }
     case "prompt.submit": {
-      let { asUser, ...f } = payload;
+      let { asUser, ...command } = payload;
       return {
-        ...f,
-        wait: f.wait ?? false,
+        ...command,
+        wait: command.wait ?? false,
         origin:
-          f.origin ??
+          command.origin ??
           (asUser === true
             ? {
                 ...origin,
@@ -1053,11 +1080,11 @@ function normalizePluginHostAction(payload, pluginName, handler) {
       };
     }
     case "session.send": {
-      let m = payload;
+      let fifthPayload = payload;
       return {
-        ...m,
-        to: sessionTargetId(m.to),
-        origin: m.origin ?? origin,
+        ...fifthPayload,
+        to: sessionTargetId(fifthPayload.to),
+        origin: fifthPayload.origin ?? origin,
       };
     }
     case "session.append":
@@ -1066,11 +1093,6 @@ function normalizePluginHostAction(payload, pluginName, handler) {
       return payload;
   }
 }
-//@ chunk-4121qate.js:180389-180428 placement = withModifiers (1)
-/**
- * （误归 computerUse）按 "press"+两个参数用分隔符拼键。
- */
-var withModifiers = (plugin, handle) => ["press", plugin, handle].join(Vme);
 export {
   normalizePluginHostAction,
   withModifiers,

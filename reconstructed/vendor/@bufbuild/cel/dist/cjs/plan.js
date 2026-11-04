@@ -5,7 +5,7 @@
  * pieces: chunk-fq0cr76a.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../../runtime/bun-runtime.js";
 import { require_checked_pb } from "../../../cel-spec/dist/cjs/gen/cel/expr/checked_pb.js";
 import { require_syntax_pb } from "../../../cel-spec/dist/cjs/gen/cel/expr/syntax_pb.js";
 import { require_planner } from "./planner.js";
@@ -16,7 +16,7 @@ import { require_value } from "./value.js";
 import { require_activation } from "./activation.js";
 
 //@ chunk-fq0cr76a.js:628168-628855 cjs-fingerprint
-var require_plan = x(function (cjsExports) {
+var require_plan = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });

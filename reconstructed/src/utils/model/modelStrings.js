@@ -35,25 +35,30 @@ import {
 import { hasDescribableCatalogModel } from "./modelCatalog/catalogCapabilities.js";
 import { toBedrockFoundationModelId, anyWireVariantKnown } from "./modelCatalog/catalogSeed.js";
 import { resolveWireModelId } from "../../services/gateway/hostCheck.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-aepeg2w5.js:229259-229282 file-local
 /**
  * 所有 catalog 模型键。
  */
-var MODEL_KEYS = Object.keys(catalogEntriesByFirstPartyId);
+var MODEL_KEYS; // deferred: uses catalogEntriesByFirstPartyId (./modelCatalog.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-aepeg2w5.js:229259", () => {
+  MODEL_KEYS = Object.keys(catalogEntriesByFirstPartyId);
+});
 //@ chunk-aepeg2w5.js:229282-229471 fingerprint = getBedrockModelStrings (1)
 /**
  * 某提供商的模型字符串表（旧版名 getBedrockModelStrings 只覆盖 Bedrock，316 对所有提供商通用）：该提供商没有该模型时借用最先有值模型的同提供商 id 或第一方 id；Bedrock 加区域前缀（ANTHROPIC_BEDROCK_REGION_PREFIX 或按 AWS 区域推断）。
  */
 function getModelStringsForProvider(provider, awsRegion) {
-  let found = MODEL_KEYS.find((y) => catalogEntriesByFirstPartyId[y][provider] !== null);
-  let s = provider === "bedrock" ? getBedrockRegionPrefix(awsRegion ?? getAwsRegionSync()) : undefined;
+  let found = MODEL_KEYS.find((key) => catalogEntriesByFirstPartyId[key][provider] !== null);
+  let regionPrefix =
+    provider === "bedrock" ? getBedrockRegionPrefix(awsRegion ?? getAwsRegionSync()) : undefined;
   let out = {};
   for (let key of MODEL_KEYS) {
-    let S =
+    let modelId =
       catalogEntriesByFirstPartyId[key][provider] ??
       (found ? catalogEntriesByFirstPartyId[found][provider] : catalogEntriesByFirstPartyId[key].firstParty);
-    out[key] = identityModelId(s ? withBedrockRegionPrefix(S, s) : S);
+    out[key] = identityModelId(regionPrefix ? withBedrockRegionPrefix(modelId, regionPrefix) : modelId);
   }
   return out;
 }
@@ -64,20 +69,20 @@ function getModelStringsForProvider(provider, awsRegion) {
 async function getBedrockModelStringsFromProfiles() {
   let awsRegion = await resolveAwsRegion();
   let bedrockRegionPrefix = getBedrockRegionPrefix(awsRegion);
-  let r = bedrockRegionGroup(awsRegion);
+  let regionGroup = bedrockRegionGroup(awsRegion);
   let modelStringsForProvider = getModelStringsForProvider("bedrock", awsRegion);
-  let h = () => {
-    if (bedrockRegionPrefix !== r)
+  let warnAboutUncheckedPrefix = () => {
+    if (bedrockRegionPrefix !== regionGroup)
       logForDebugging(
-        `ANTHROPIC_BEDROCK_REGION_PREFIX=${bedrockRegionPrefix} is being applied without an availability check (inference-profile discovery is unavailable). If requests 400, ensure ${bedrockRegionPrefix}.* cross-region inference profiles are enabled in this account, or unset the variable to fall back to ${r}.*.`,
+        `ANTHROPIC_BEDROCK_REGION_PREFIX=${bedrockRegionPrefix} is being applied without an availability check (inference-profile discovery is unavailable). If requests 400, ensure ${bedrockRegionPrefix}.* cross-region inference profiles are enabled in this account, or unset the variable to fall back to ${regionGroup}.*.`,
         {
           level: "warn",
         },
       );
   };
-  let y;
+  let profiles;
   try {
-    y = await getBedrockInferenceProfiles();
+    profiles = await getBedrockInferenceProfiles();
   } catch (error) {
     logForDebugging(
       `Failed to list Bedrock inference profiles, falling back to hardcoded models: ${error instanceof Error ? error.message : String(error)}`,
@@ -85,29 +90,30 @@ async function getBedrockModelStringsFromProfiles() {
         level: "error",
       },
     );
-    h();
+    warnAboutUncheckedPrefix();
     return modelStringsForProvider;
   }
-  if (!y?.length) {
-    h();
+  if (!profiles?.length) {
+    warnAboutUncheckedPrefix();
     return modelStringsForProvider;
   }
-  let S = {};
-  let w = [];
-  for (let R of MODEL_KEYS) {
-    let firstParty = catalogEntriesByFirstPartyId[R].firstParty;
-    let P = findFirstMatch(y, firstParty, bedrockRegionPrefix) || modelStringsForProvider[R];
-    S[R] = identityModelId(P);
-    if (bedrockRegionPrefix !== r && !P.startsWith(`${bedrockRegionPrefix}.`)) w.push(firstParty);
+  let out = {};
+  let mismatched = [];
+  for (let key of MODEL_KEYS) {
+    let firstParty = catalogEntriesByFirstPartyId[key].firstParty;
+    let modelId = findFirstMatch(profiles, firstParty, bedrockRegionPrefix) || modelStringsForProvider[key];
+    out[key] = identityModelId(modelId);
+    if (bedrockRegionPrefix !== regionGroup && !modelId.startsWith(`${bedrockRegionPrefix}.`))
+      mismatched.push(firstParty);
   }
-  if (w.length > 0)
+  if (mismatched.length > 0)
     logForDebugging(
-      `ANTHROPIC_BEDROCK_REGION_PREFIX=${bedrockRegionPrefix}: ${w.length} model(s) resolved to a different prefix (no ${bedrockRegionPrefix}.* profile in this account): ${w.join(", ")}. This is a preference, not a residency guarantee.`,
+      `ANTHROPIC_BEDROCK_REGION_PREFIX=${bedrockRegionPrefix}: ${mismatched.length} model(s) resolved to a different prefix (no ${bedrockRegionPrefix}.* profile in this account): ${mismatched.join(", ")}. This is a preference, not a residency guarantee.`,
       {
         level: "warn",
       },
     );
-  return S;
+  return out;
 }
 //@ chunk-aepeg2w5.js:230421-230564 fingerprint = applyModelOverrides (1)
 /**
@@ -145,15 +151,18 @@ function reverseModelOverride(modelId) {
 /**
  * 惰性执行一次：模型字符串缓存为空时取 Bedrock 推理配置文件并写回缓存（仅 bedrock）。
  */
-var refreshBedrockModelStrings = serializeCalls(async () => {
-  if (getModelStrings_2() !== null) return;
-  try {
-    let modelBetas = await getBedrockModelStringsFromProfiles();
-    if (getAPIProvider() !== "bedrock") return;
-    setModelStrings(modelBetas);
-  } catch (error) {
-    logError(error);
-  }
+var refreshBedrockModelStrings; // deferred: uses getModelStrings (../../bootstrap/state.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-aepeg2w5.js:230704", () => {
+  refreshBedrockModelStrings = serializeCalls(async () => {
+    if (getModelStrings_2() !== null) return;
+    try {
+      let modelBetas = await getBedrockModelStringsFromProfiles();
+      if (getAPIProvider() !== "bedrock") return;
+      setModelStrings(modelBetas);
+    } catch (error) {
+      logError(error);
+    }
+  });
 });
 //@ chunk-aepeg2w5.js:230819-230903 callgraph-fingerprint = initModelStrings (1)
 /**
@@ -195,13 +204,13 @@ function getRawModelStrings() {
 /**
  * 确保模型字符串已初始化（Bedrock 等待 profile 发现；宿主托管提供商时只取区域）。
  */
-async function ensureModelStringsInitialized(e) {
+async function ensureModelStringsInitialized(options) {
   if (getModelStrings_2() !== null) return;
   if (getAPIProvider() !== "bedrock") {
     setModelStrings(getModelStringsForProvider(getAPIProvider()));
     return;
   }
-  if (env.CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST && e?.sessionModelIsProviderId) {
+  if (env.CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST && options?.sessionModelIsProviderId) {
     await resolveAwsRegion();
     initModelStrings();
     return;
@@ -213,31 +222,35 @@ async function ensureModelStringsInitialized(e) {
  * 该模型在提供商下有 id，或 modelOverrides 为其第一方 id 配置了覆盖。auto 名 resolveOverriddenModel 不准确。
  */
 function isModelAvailableOnProvider(key, apiProvider = getAPIProvider()) {
-  let r = catalogEntriesByFirstPartyId[key];
-  if (r[apiProvider] !== null) return true;
-  return Boolean(getInitialSettings_2().modelOverrides?.[r.firstParty]);
+  let entry = catalogEntriesByFirstPartyId[key];
+  if (entry[apiProvider] !== null) return true;
+  return Boolean(getInitialSettings_2().modelOverrides?.[entry.firstParty]);
 }
 //@ chunk-aepeg2w5.js:231351-231570 layout = applyModelOverrides (1)
 /**
  * 把目录条目解析成当前提供商的模型 id：第一方/网关用 id；已知键看可用性；否则 modelOverrides 或目录提供商 id。旧版名 applyModelOverrides_3 为错配。
  */
-function resolveProviderModelId(e, n) {
-  let apiProvider = getAPIProvider();
-  if (isCatalogSurfaceBackend(apiProvider)) return e.id;
-  let s = entryModelKey(e.id);
-  if (s !== undefined) return isModelAvailableOnProvider(s, apiProvider) ? getModelStrings()[s] : undefined;
+function resolveProviderModelId(entry, preferOverride) {
+  let provider = getAPIProvider();
+  if (isCatalogSurfaceBackend(provider)) return entry.id;
+  let key = entryModelKey(entry.id);
+  if (key !== undefined)
+    return isModelAvailableOnProvider(key, provider) ? getModelStrings()[key] : undefined;
   let overrides = getInitialSettings_2().modelOverrides;
-  let y = overrides !== undefined && Object.hasOwn(overrides, e.id) ? overrides[e.id] : undefined;
-  return y && (n ?? hasDescribableCatalogModel(e.id)) ? y : gatewayModelIdFor(e);
+  let override =
+    overrides !== undefined && Object.hasOwn(overrides, entry.id) ? overrides[entry.id] : undefined;
+  return override && (preferOverride ?? hasDescribableCatalogModel(entry.id))
+    ? override
+    : gatewayModelIdFor(entry);
 }
 //@ chunk-aepeg2w5.js:231570-231706 placement
-function gatewayModelIdFor(e) {
-  let apiProvider = getAPIProvider();
-  let providerModelIdForEntry = getProviderModelIdForEntry(e, apiProvider);
+function gatewayModelIdFor(entry) {
+  let provider = getAPIProvider();
+  let providerModelIdForEntry = getProviderModelIdForEntry(entry, provider);
   if (providerModelIdForEntry === undefined) return;
-  let s = apiProvider === "bedrock" ? toBedrockFoundationModelId(providerModelIdForEntry) : undefined;
-  let h = s !== undefined ? resolveWireModelId(s) : providerModelIdForEntry;
-  return anyWireVariantKnown(h, apiProvider) ? undefined : h;
+  let foundationId = provider === "bedrock" ? toBedrockFoundationModelId(providerModelIdForEntry) : undefined;
+  let wireId = foundationId !== undefined ? resolveWireModelId(foundationId) : providerModelIdForEntry;
+  return anyWireVariantKnown(wireId, provider) ? undefined : wireId;
 }
 export {
   getModelStrings,

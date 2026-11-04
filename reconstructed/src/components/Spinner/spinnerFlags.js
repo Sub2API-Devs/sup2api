@@ -24,6 +24,6 @@ function isReducedMotion(prefersReducedMotion) {
 var SPINNER_FLAG_PRIORITY = -100;
 //@ chunk-9rmf152v.js:379-445 placement
 function usePrefersReducedMotion() {
-  return isReducedMotion(useAppStateSlice((e) => e.settings.prefersReducedMotion));
+  return isReducedMotion(useAppStateSlice((state) => state.settings.prefersReducedMotion));
 }
 export { isReducedMotion, usePrefersReducedMotion, SPINNER_FLAG_PRIORITY };

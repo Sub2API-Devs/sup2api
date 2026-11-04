@@ -11,6 +11,7 @@
 import { homedir, platform, userInfo } from "os";
 import { join } from "path";
 import { stat, readdir } from "fs/promises";
+import { normalizeNameForMCP } from "../../services/mcp/normalization.js";
 import { getPlatform } from "../platform.js";
 import { logForDebugging } from "../debug.js";
 import { isFsInaccessible } from "../errors.js";
@@ -21,8 +22,85 @@ import { logFeatureBad, logFeatureOk } from "../../services/analytics/featureTel
 import { execFileNoThrow, execFileNoThrowWithCwd } from "../execFileNoThrow.js";
 import { resolveAppPathFromRegistry, launchDetached, systemRootDir } from "./windowsAppPaths.js";
 import { env } from "../env.js";
-import { normalizeNameForMCP } from "../../services/mcp/normalization.js";
 
+//@ chunk-srrcw01s.js:227-275 facade-exports = CLAUDE_IN_CHROME_MCP_SERVER_NAME (0.656)
+/**
+ * 内置 Chrome MCP 服务器名 "claude-in-chrome" 与 javascript_tool 工具名。
+ */
+var CLAUDE_IN_CHROME_MCP_SERVER_NAME = "claude-in-chrome";
+var CHROME_JAVASCRIPT_TOOL = "javascript_tool";
+//@ chunk-srrcw01s.js:275-308 facade-exports
+/**
+ * 按规范化后的 MCP 服务器名判断是否是 claude-in-chrome。
+ */
+function isClaudeInChromeMCPServer(serverName) {
+  return normalizeNameForMCP(serverName) === CLAUDE_IN_CHROME_MCP_SERVER_NAME;
+}
+//@ chunk-srrcw01s.js:308-339 layout
+/**
+ * 内置 Chrome MCP 服务器的启动参数 --claude-in-chrome-mcp（以当前可执行文件 + 此参数作 stdio 服务器）。
+ */
+var CLAUDE_IN_CHROME_MCP_FLAG = "--claude-in-chrome-mcp";
+//@ chunk-srrcw01s.js:339-476 facade-exports = getServerCommandArray (1)
+/**
+ * 判断一个 stdio MCP 配置的 command/args 是否带 --claude-in-chrome-mcp（即在启动内置 Chrome 服务器）。
+ */
+function isClaudeInChromeMcpLaunch(config) {
+  if (config.type !== undefined && config.type !== "stdio") return false;
+  return (
+    (config.command?.includes(CLAUDE_IN_CHROME_MCP_FLAG) ?? false) ||
+    (config.args?.some((arg) => arg.includes(CLAUDE_IN_CHROME_MCP_FLAG)) ?? false)
+  );
+}
+//@ chunk-srrcw01s.js:476-1586 placement
+/**
+ * Claude in Chrome 工具名清单与不可用说明：file_upload 不可用、上传无人批准、batch 内不能上传、browser_batch 不可用。
+ */
+var BATCH_RESTRICTED_TOOLS = ["file_upload", "browser_batch"];
+var CHROME_TOOL_NAMES = [
+  CHROME_JAVASCRIPT_TOOL,
+  "read_page",
+  "find",
+  "form_input",
+  "computer",
+  "browser_batch",
+  "navigate",
+  "resize_window",
+  "gif_creator",
+  "upload_image",
+  "get_page_text",
+  "tabs_context_mcp",
+  "tabs_create_mcp",
+  "tabs_close_mcp",
+  "read_console_messages",
+  "read_network_requests",
+  "shortcuts_list",
+  "shortcuts_execute",
+  "file_upload",
+  "switch_browser",
+  "list_connected_browsers",
+  "select_browser",
+];
+var FILE_UPLOAD_UNAVAILABLE =
+  "file_upload is not available in this session, alone or inside browser_batch, and nothing in this call ran. Ask the user to choose the file in their browser themselves.";
+var UPLOAD_NEEDS_APPROVAL =
+  "Nothing was uploaded, and nothing else in this call ran. An upload may not run without a person's approval, and uploads can't be approved here yet. Repeating the call won't help. Ask the user to choose the file in their browser themselves.";
+var UPLOAD_IN_BATCH_UNAVAILABLE =
+  "file_upload cannot run inside browser_batch in this session, and nothing in this call ran. If file_upload is among your tools, call it on its own.";
+var BROWSER_BATCH_UNAVAILABLE =
+  "browser_batch isn't available right now, and nothing in this call ran. Make each action its own call instead. Don't retry it as a batch.";
+//@ chunk-srrcw01s.js:1586-1672 placement = setupComputerUseMCP (0.631)
+/**
+ * 内置 Chrome MCP 服务器的 stdio 配置：以当前可执行文件 + --claude-in-chrome-mcp 启动，scope dynamic。旧版同位置是 setupComputerUseMCP，316 中只用于 Claude in Chrome（setupClaudeInChrome、MCP 配置合并、Chrome 策略拒绝判断）。
+ */
+function getClaudeInChromeStdioServerConfig() {
+  return {
+    type: "stdio",
+    command: process.execPath,
+    args: [CLAUDE_IN_CHROME_MCP_FLAG],
+    scope: "dynamic",
+  };
+}
 //@ chunk-axj4swpp.js:697-3570 facade-exports = CHROMIUM_BROWSERS (0.905)
 /**
  * Claude in Chrome 公共常量：工具名前缀 mcp__claude-in-chrome__、域规则工具名、各 Chromium 系浏览器（Chrome/Brave/Arc/Chromium/Edge/Vivaldi/Opera）在 macOS/Linux/Windows 的 NativeMessagingHosts 路径、注册表键、可执行名，以及检测顺序。
@@ -425,84 +503,6 @@ function getUsername() {
     return env.USER || env.USERNAME || "default";
   }
 }
-//@ chunk-srrcw01s.js:227-275 facade-exports = CLAUDE_IN_CHROME_MCP_SERVER_NAME (0.656)
-/**
- * 内置 Chrome MCP 服务器名 "claude-in-chrome" 与 javascript_tool 工具名。
- */
-var CLAUDE_IN_CHROME_MCP_SERVER_NAME = "claude-in-chrome";
-var CHROME_JAVASCRIPT_TOOL = "javascript_tool";
-//@ chunk-srrcw01s.js:275-308 facade-exports
-/**
- * 按规范化后的 MCP 服务器名判断是否是 claude-in-chrome。
- */
-function isClaudeInChromeMCPServer(e) {
-  return normalizeNameForMCP(e) === CLAUDE_IN_CHROME_MCP_SERVER_NAME;
-}
-//@ chunk-srrcw01s.js:308-339 layout
-/**
- * 内置 Chrome MCP 服务器的启动参数 --claude-in-chrome-mcp（以当前可执行文件 + 此参数作 stdio 服务器）。
- */
-var CLAUDE_IN_CHROME_MCP_FLAG = "--claude-in-chrome-mcp";
-//@ chunk-srrcw01s.js:339-476 facade-exports = getServerCommandArray (1)
-/**
- * 判断一个 stdio MCP 配置的 command/args 是否带 --claude-in-chrome-mcp（即在启动内置 Chrome 服务器）。
- */
-function isClaudeInChromeMcpLaunch(config) {
-  if (config.type !== undefined && config.type !== "stdio") return false;
-  return (
-    (config.command?.includes(CLAUDE_IN_CHROME_MCP_FLAG) ?? false) ||
-    (config.args?.some((arg) => arg.includes(CLAUDE_IN_CHROME_MCP_FLAG)) ?? false)
-  );
-}
-//@ chunk-srrcw01s.js:476-1586 placement
-/**
- * Claude in Chrome 工具名清单与不可用说明：file_upload 不可用、上传无人批准、batch 内不能上传、browser_batch 不可用。
- */
-var BATCH_RESTRICTED_TOOLS = ["file_upload", "browser_batch"];
-var CHROME_TOOL_NAMES = [
-  CHROME_JAVASCRIPT_TOOL,
-  "read_page",
-  "find",
-  "form_input",
-  "computer",
-  "browser_batch",
-  "navigate",
-  "resize_window",
-  "gif_creator",
-  "upload_image",
-  "get_page_text",
-  "tabs_context_mcp",
-  "tabs_create_mcp",
-  "tabs_close_mcp",
-  "read_console_messages",
-  "read_network_requests",
-  "shortcuts_list",
-  "shortcuts_execute",
-  "file_upload",
-  "switch_browser",
-  "list_connected_browsers",
-  "select_browser",
-];
-var FILE_UPLOAD_UNAVAILABLE =
-  "file_upload is not available in this session, alone or inside browser_batch, and nothing in this call ran. Ask the user to choose the file in their browser themselves.";
-var UPLOAD_NEEDS_APPROVAL =
-  "Nothing was uploaded, and nothing else in this call ran. An upload may not run without a person's approval, and uploads can't be approved here yet. Repeating the call won't help. Ask the user to choose the file in their browser themselves.";
-var UPLOAD_IN_BATCH_UNAVAILABLE =
-  "file_upload cannot run inside browser_batch in this session, and nothing in this call ran. If file_upload is among your tools, call it on its own.";
-var BROWSER_BATCH_UNAVAILABLE =
-  "browser_batch isn't available right now, and nothing in this call ran. Make each action its own call instead. Don't retry it as a batch.";
-//@ chunk-srrcw01s.js:1586-1672 placement = setupComputerUseMCP (0.631)
-/**
- * 内置 Chrome MCP 服务器的 stdio 配置：以当前可执行文件 + --claude-in-chrome-mcp 启动，scope dynamic。旧版同位置是 setupComputerUseMCP，316 中只用于 Claude in Chrome（setupClaudeInChrome、MCP 配置合并、Chrome 策略拒绝判断）。
- */
-function getClaudeInChromeStdioServerConfig() {
-  return {
-    type: "stdio",
-    command: process.execPath,
-    args: [CLAUDE_IN_CHROME_MCP_FLAG],
-    scope: "dynamic",
-  };
-}
 export {
   CLAUDE_IN_CHROME_DOMAIN_RULE_TOOL,
   isClaudeInChromeMCPServer,
@@ -525,4 +525,5 @@ export {
   getAllNativeMessagingHostsDirs,
   getAllWindowsRegistryKeys,
   getAllSocketPaths,
+  isTrackedClaudeInChromeTabId,
 };

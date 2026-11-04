@@ -8,8 +8,8 @@
  * pieces: chunk-3q9d50y1.js (2)
  * attribution: placement 2
  */
-import { init_react_production, R } from "../../vendor/react/cjs/react.production.js";
-import { w } from "../../vendor/react/compiler-runtime.js";
+import { init_react_production, useRef } from "../../vendor/react/cjs/react.production.js";
+import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import {
   useInputRefusalWindow,
   useRefusalTracker,
@@ -31,38 +31,38 @@ init_react_production();
  * teleport 时无法确认 git 远端主机的确认对话框。
  */
 function TeleportRemoteHostDialog(props) {
-  let o = w(56);
+  let $ = useMemoCache(56);
   let { sessionRepo, rawRemoteUrl, onConfirm, onCancel } = props;
   let inputRefusalWindow = useInputRefusalWindow();
   let { refusedWithin, noteRefused, epoch } = useRefusalTracker();
-  let V;
-  if (o[0] !== inputRefusalWindow || o[1] !== noteRefused || o[2] !== refusedWithin) {
-    V = function p() {
+  let isInputRefused;
+  if ($[0] !== inputRefusalWindow || $[1] !== noteRefused || $[2] !== refusedWithin) {
+    isInputRefused = function isInputRefused_() {
       if (inputRefusalWindow() || refusedWithin()) {
         noteRefused();
         return true;
       }
       return false;
     };
-    o[0] = inputRefusalWindow;
-    o[1] = noteRefused;
-    o[2] = refusedWithin;
-    o[3] = V;
-  } else V = o[3];
-  let p = V;
+    $[0] = inputRefusalWindow;
+    $[1] = noteRefused;
+    $[2] = refusedWithin;
+    $[3] = isInputRefused;
+  } else isInputRefused = $[3];
+  let refuseInput = isInputRefused;
   let mountTime = useMountTime();
-  let K = settleKey(epoch);
-  let _ = R(false);
-  let m;
-  let g;
+  let remount = settleKey(epoch);
+  let hasAnsweredRef = useRef(false);
+  let ConfirmSelectComponent;
+  let DialogComponent;
   let onCancel_2;
   let title;
   let onCancel_3;
   let exitOnCtrlCD;
   let color;
-  let l;
-  let k;
-  let refuseInput;
+  let bodyElement;
+  let remountKey;
+  let refuseInput_2;
   let openedAt;
   let hideIndexes;
   let disablePrintableKeybindings;
@@ -70,38 +70,38 @@ function TeleportRemoteHostDialog(props) {
   let focus;
   let onConfirm_2;
   if (
-    o[4] !== inputRefusalWindow ||
-    o[5] !== K.remountKey ||
-    o[6] !== noteRefused ||
-    o[7] !== onCancel ||
-    o[8] !== onConfirm ||
-    o[9] !== rawRemoteUrl ||
-    o[10] !== p ||
-    o[11] !== refusedWithin ||
-    o[12] !== sessionRepo ||
-    o[13] !== mountTime
+    $[4] !== inputRefusalWindow ||
+    $[5] !== remount.remountKey ||
+    $[6] !== noteRefused ||
+    $[7] !== onCancel ||
+    $[8] !== onConfirm ||
+    $[9] !== rawRemoteUrl ||
+    $[10] !== refuseInput ||
+    $[11] !== refusedWithin ||
+    $[12] !== sessionRepo ||
+    $[13] !== mountTime
   ) {
-    let T = function T(ne) {
+    let answerOnce = function answerOnce_(callback) {
       return () => {
         if (inputRefusalWindow() || refusedWithin()) {
           noteRefused();
           return;
         }
-        if (_.current) {
+        if (hasAnsweredRef.current) {
           return;
         }
-        _.current = true;
-        ne();
+        hasAnsweredRef.current = true;
+        callback();
       };
     };
-    g = Dialog;
+    DialogComponent = Dialog;
     title = "Teleport";
-    onCancel_3 = T(onCancel);
+    onCancel_3 = answerOnce(onCancel);
     exitOnCtrlCD = true;
     color = "background";
-    let t;
-    if (o[30] !== rawRemoteUrl) {
-      t = jsxProd_default_2(Text, {
+    let remoteUrlElement;
+    if ($[30] !== rawRemoteUrl) {
+      remoteUrlElement = jsxProd_default_2(Text, {
         children: [
           "Couldn't verify your git remote host (remote is",
           " ",
@@ -112,12 +112,12 @@ function TeleportRemoteHostDialog(props) {
           ").",
         ],
       });
-      o[30] = rawRemoteUrl;
-      o[31] = t;
-    } else t = o[31];
-    let i;
-    if (o[32] !== sessionRepo) {
-      i = jsxProd_default_2(Text, {
+      $[30] = rawRemoteUrl;
+      $[31] = remoteUrlElement;
+    } else remoteUrlElement = $[31];
+    let repoElement;
+    if ($[32] !== sessionRepo) {
+      repoElement = jsxProd_default_2(Text, {
         children: [
           "Proceed against ",
           jsxProd_default(Text, {
@@ -127,90 +127,90 @@ function TeleportRemoteHostDialog(props) {
           "?",
         ],
       });
-      o[32] = sessionRepo;
-      o[33] = i;
-    } else i = o[33];
-    if (o[34] !== t || o[35] !== i) {
-      l = jsxProd_default_2(Box, {
+      $[32] = sessionRepo;
+      $[33] = repoElement;
+    } else repoElement = $[33];
+    if ($[34] !== remoteUrlElement || $[35] !== repoElement) {
+      bodyElement = jsxProd_default_2(Box, {
         flexDirection: "column",
         gap: 1,
-        children: [t, i],
+        children: [remoteUrlElement, repoElement],
       });
-      o[34] = t;
-      o[35] = i;
-      o[36] = l;
-    } else l = o[36];
-    m = ConfirmSelect;
-    k = K.remountKey;
-    refuseInput = p;
+      $[34] = remoteUrlElement;
+      $[35] = repoElement;
+      $[36] = bodyElement;
+    } else bodyElement = $[36];
+    ConfirmSelectComponent = ConfirmSelect;
+    remountKey = remount.remountKey;
+    refuseInput_2 = refuseInput;
     openedAt = mountTime;
     hideIndexes = true;
     disablePrintableKeybindings = true;
     cancelFirst = true;
     focus = "cancel";
-    onConfirm_2 = T(onConfirm);
-    onCancel_2 = T(onCancel);
-    o[4] = inputRefusalWindow;
-    o[5] = K.remountKey;
-    o[6] = noteRefused;
-    o[7] = onCancel;
-    o[8] = onConfirm;
-    o[9] = rawRemoteUrl;
-    o[10] = p;
-    o[11] = refusedWithin;
-    o[12] = sessionRepo;
-    o[13] = mountTime;
-    o[14] = m;
-    o[15] = g;
-    o[16] = onCancel_2;
-    o[17] = title;
-    o[18] = onCancel_3;
-    o[19] = exitOnCtrlCD;
-    o[20] = color;
-    o[21] = l;
-    o[22] = k;
-    o[23] = refuseInput;
-    o[24] = openedAt;
-    o[25] = hideIndexes;
-    o[26] = disablePrintableKeybindings;
-    o[27] = cancelFirst;
-    o[28] = focus;
-    o[29] = onConfirm_2;
+    onConfirm_2 = answerOnce(onConfirm);
+    onCancel_2 = answerOnce(onCancel);
+    $[4] = inputRefusalWindow;
+    $[5] = remount.remountKey;
+    $[6] = noteRefused;
+    $[7] = onCancel;
+    $[8] = onConfirm;
+    $[9] = rawRemoteUrl;
+    $[10] = refuseInput;
+    $[11] = refusedWithin;
+    $[12] = sessionRepo;
+    $[13] = mountTime;
+    $[14] = ConfirmSelectComponent;
+    $[15] = DialogComponent;
+    $[16] = onCancel_2;
+    $[17] = title;
+    $[18] = onCancel_3;
+    $[19] = exitOnCtrlCD;
+    $[20] = color;
+    $[21] = bodyElement;
+    $[22] = remountKey;
+    $[23] = refuseInput_2;
+    $[24] = openedAt;
+    $[25] = hideIndexes;
+    $[26] = disablePrintableKeybindings;
+    $[27] = cancelFirst;
+    $[28] = focus;
+    $[29] = onConfirm_2;
   } else {
-    m = o[14];
-    g = o[15];
-    onCancel_2 = o[16];
-    title = o[17];
-    onCancel_3 = o[18];
-    exitOnCtrlCD = o[19];
-    color = o[20];
-    l = o[21];
-    k = o[22];
-    refuseInput = o[23];
-    openedAt = o[24];
-    hideIndexes = o[25];
-    disablePrintableKeybindings = o[26];
-    cancelFirst = o[27];
-    focus = o[28];
-    onConfirm_2 = o[29];
+    ConfirmSelectComponent = $[14];
+    DialogComponent = $[15];
+    onCancel_2 = $[16];
+    title = $[17];
+    onCancel_3 = $[18];
+    exitOnCtrlCD = $[19];
+    color = $[20];
+    bodyElement = $[21];
+    remountKey = $[22];
+    refuseInput_2 = $[23];
+    openedAt = $[24];
+    hideIndexes = $[25];
+    disablePrintableKeybindings = $[26];
+    cancelFirst = $[27];
+    focus = $[28];
+    onConfirm_2 = $[29];
   }
-  let t;
+  let selectElement;
   if (
-    o[37] !== m ||
-    o[38] !== onCancel_2 ||
-    o[39] !== k ||
-    o[40] !== refuseInput ||
-    o[41] !== openedAt ||
-    o[42] !== hideIndexes ||
-    o[43] !== disablePrintableKeybindings ||
-    o[44] !== cancelFirst ||
-    o[45] !== focus ||
-    o[46] !== onConfirm_2
+    $[37] !== ConfirmSelectComponent ||
+    $[38] !== onCancel_2 ||
+    $[39] !== remountKey ||
+    $[40] !== refuseInput_2 ||
+    $[41] !== openedAt ||
+    $[42] !== hideIndexes ||
+    $[43] !== disablePrintableKeybindings ||
+    $[44] !== cancelFirst ||
+    $[45] !== focus ||
+    $[46] !== onConfirm_2
   ) {
-    t = jsxProd_default(
-      m,
+    selectElement = jsxProd_default(
+      ConfirmSelectComponent,
       {
-        refuseInput,
+        refuseInput: refuseInput_2,
         openedAt,
         hideIndexes,
         disablePrintableKeybindings,
@@ -219,45 +219,46 @@ function TeleportRemoteHostDialog(props) {
         onConfirm: onConfirm_2,
         onCancel: onCancel_2,
       },
-      k,
+      remountKey,
     );
-    o[37] = m;
-    o[38] = onCancel_2;
-    o[39] = k;
-    o[40] = refuseInput;
-    o[41] = openedAt;
-    o[42] = hideIndexes;
-    o[43] = disablePrintableKeybindings;
-    o[44] = cancelFirst;
-    o[45] = focus;
-    o[46] = onConfirm_2;
-    o[47] = t;
-  } else t = o[47];
-  let i;
+    $[37] = ConfirmSelectComponent;
+    $[38] = onCancel_2;
+    $[39] = remountKey;
+    $[40] = refuseInput_2;
+    $[41] = openedAt;
+    $[42] = hideIndexes;
+    $[43] = disablePrintableKeybindings;
+    $[44] = cancelFirst;
+    $[45] = focus;
+    $[46] = onConfirm_2;
+    $[47] = selectElement;
+  } else selectElement = $[47];
+  let dialogElement;
   if (
-    o[48] !== g ||
-    o[49] !== title ||
-    o[50] !== onCancel_3 ||
-    o[51] !== exitOnCtrlCD ||
-    o[52] !== color ||
-    o[53] !== l ||
-    o[54] !== t
+    $[48] !== DialogComponent ||
+    $[49] !== title ||
+    $[50] !== onCancel_3 ||
+    $[51] !== exitOnCtrlCD ||
+    $[52] !== color ||
+    $[53] !== bodyElement ||
+    $[54] !== selectElement
   ) {
-    i = jsxProd_default_2(g, {
+    dialogElement = jsxProd_default_2(DialogComponent, {
       title,
       onCancel: onCancel_3,
       exitOnCtrlCD,
       color,
-      children: [l, t],
+      children: [bodyElement, selectElement],
     });
-    o[48] = g;
-    o[49] = title;
-    o[50] = onCancel_3;
-    o[51] = exitOnCtrlCD;
-    o[52] = color;
-    o[53] = l;
-    o[54] = t;
-    o[55] = i;
-  } else i = o[55];
-  return i;
+    $[48] = DialogComponent;
+    $[49] = title;
+    $[50] = onCancel_3;
+    $[51] = exitOnCtrlCD;
+    $[52] = color;
+    $[53] = bodyElement;
+    $[54] = selectElement;
+    $[55] = dialogElement;
+  } else dialogElement = $[55];
+  return dialogElement;
 }
+export { TeleportRemoteHostDialog };

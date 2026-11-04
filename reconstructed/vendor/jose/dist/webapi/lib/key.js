@@ -20,5 +20,5 @@ var isCryptoKey = (key) => {
   }
 };
 var isKeyObject = (key) => key?.[Symbol.toStringTag] === "KeyObject";
-var We = (key) => isCryptoKey(key) || isKeyObject(key);
-export { isCryptoKey, tag, isKeyObject, We };
+var isKeyLike = (key) => isCryptoKey(key) || isKeyObject(key);
+export { isCryptoKey, tag, isKeyObject, isKeyLike };

@@ -15,8 +15,8 @@ import { uniq } from "../../utils/collections.js";
 /**
  * 写团队/共享记忆前检查密钥，命中则拒绝（reason=secret），提示记忆存储不是放凭证的地方。
  */
-function checkTeamMemSecrets(e) {
-  let matches = scanSecretsInVariants(e);
+function checkTeamMemSecrets(content) {
+  let matches = scanSecretsInVariants(content);
   if (matches.length === 0) return null;
   return {
     outcome: "refused",

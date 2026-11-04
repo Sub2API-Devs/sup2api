@@ -29,33 +29,33 @@ import { uniq } from "../../utils/collections.js";
 import { normalizeNameForMCP } from "../../services/mcp/normalization.js";
 
 //@ chunk-7s2ajdvd.js:690-749 placement
-function padEndToWidth(n, s) {
-  return n + " ".repeat(Math.max(0, s - bunStringWidth(n)));
+function padEndToWidth(text, width) {
+  return text + " ".repeat(Math.max(0, width - bunStringWidth(text)));
 }
 //@ chunk-7s2ajdvd.js:749-806 placement
-function padStartToWidth(n, s) {
-  return " ".repeat(Math.max(0, s - bunStringWidth(n))) + n;
+function padStartToWidth(text, width) {
+  return " ".repeat(Math.max(0, width - bunStringWidth(text))) + text;
 }
 //@ chunk-7s2ajdvd.js:806-1322 placement
-function formatSkillUsageTable(n) {
-  let mapped = n.map((o) => ({
-    context: o.listingTokens === null ? "-" : formatTokenEstimate(o.listingTokens),
-    week: o.weekTokens === null ? "-" : formatTokens(o.weekTokens),
+function formatSkillUsageTable(rows) {
+  let mapped = rows.map((row) => ({
+    context: row.listingTokens === null ? "-" : formatTokenEstimate(row.listingTokens),
+    week: row.weekTokens === null ? "-" : formatTokens(row.weekTokens),
     lastUsed:
-      o.daysSinceUse === null
+      row.daysSinceUse === null
         ? "never"
-        : o.daysSinceUse === 0
+        : row.daysSinceUse === 0
           ? "today"
-          : `${o.daysSinceUse} ${plural(o.daysSinceUse, "day")}`,
+          : `${row.daysSinceUse} ${plural(row.daysSinceUse, "day")}`,
   }));
   return {
     cells: mapped,
     widths: {
-      name: Math.max(5, ...n.map((o) => bunStringWidth(o.name))),
-      source: Math.max(6, ...n.map((o) => bunStringWidth(o.source))),
-      context: Math.max(7, ...mapped.map((o) => bunStringWidth(o.context))),
-      week: Math.max(9, ...mapped.map((o) => bunStringWidth(o.week))),
-      uses: Math.max(4, ...n.map((o) => bunStringWidth(String(o.usageCount)))),
+      name: Math.max(5, ...rows.map((row) => bunStringWidth(row.name))),
+      source: Math.max(6, ...rows.map((row) => bunStringWidth(row.source))),
+      context: Math.max(7, ...mapped.map((cell) => bunStringWidth(cell.context))),
+      week: Math.max(9, ...mapped.map((cell) => bunStringWidth(cell.week))),
+      uses: Math.max(4, ...rows.map((row) => bunStringWidth(String(row.usageCount)))),
     },
   };
 }
@@ -85,110 +85,128 @@ function buildSkillDoctorContext(context) {
 /**
  * /skill-doctor：扫描已装技能的上下文占用、近一周使用量与最后使用时间，生成整理建议。
  */
-async function runSkillDoctor(n) {
+async function runSkillDoctor(options) {
   let disusedPlugins = computeDisusedPlugins();
   disusedPlugins.catch(() => {});
-  let o = isSkillDoctorScanAllowed();
-  let c = o.allowed
-    ? aggregateRecentUsage(n.storageV5).catch((error) => {
+  let scanAllowed = isSkillDoctorScanAllowed();
+  let recentUsage = scanAllowed.allowed
+    ? aggregateRecentUsage(options.storageV5).catch((error) => {
         throw new SkillDoctorStageError("scan_failed", error);
       })
     : Promise.resolve(new Map());
-  c.catch(() => {});
-  let { included } = await mergedSkillListing(n.mcpCommands, n.agentId, n.storageV5).catch((error) => {
-    throw new SkillDoctorStageError("skill_set_failed", error);
+  recentUsage.catch(() => {});
+  let { included } = await mergedSkillListing(options.mcpCommands, options.agentId, options.storageV5).catch(
+    (error) => {
+      throw new SkillDoctorStageError("skill_set_failed", error);
+    },
+  );
+  let countModel = getRuntimeMainLoopModel({
+    permissionMode: options.permissionMode,
+    mainLoopModel: options.mainLoopModel,
   });
-  let runtimeMainLoopModel = getRuntimeMainLoopModel({
-    permissionMode: n.permissionMode,
-    mainLoopModel: n.mainLoopModel,
-  });
-  let y = skillListingTokenCounts(included, runtimeMainLoopModel, n.mainLoopModel);
-  let p = await c;
-  let r = [];
-  let l = dropShadowedFallbackSkills([...n.commands]);
-  let w = new Set(l.map((e) => e.name));
-  let M = new Set(
-    n.commands
-      .filter((command) => isFallbackSkill(command) && !w.has(command.name))
+  let listingTokens = skillListingTokenCounts(included, countModel, options.mainLoopModel);
+  let usageBySkill = await recentUsage;
+  let rows = [];
+  let commands = dropShadowedFallbackSkills([...options.commands]);
+  let commandNames = new Set(commands.map((command) => command.name));
+  let fallbackOnlyNames = new Set(
+    options.commands
+      .filter((command) => isFallbackSkill(command) && !commandNames.has(command.name))
       .map((command) => command.name),
   );
-  let m = new Map();
-  for (let e of l) {
-    let t = e.type === "prompt" && e.loadedFrom !== "syncedSkills" ? e.name.lastIndexOf(":") : -1;
-    if (t > 0) {
-      let sliced = e.name.slice(t + 1);
-      m.set(sliced, (m.get(sliced) ?? 0) + 1);
+  let pluginPrefixCounts = new Map();
+  for (let command of commands) {
+    let colonIndex =
+      command.type === "prompt" && command.loadedFrom !== "syncedSkills" ? command.name.lastIndexOf(":") : -1;
+    if (colonIndex > 0) {
+      let sliced = command.name.slice(colonIndex + 1);
+      pluginPrefixCounts.set(sliced, (pluginPrefixCounts.get(sliced) ?? 0) + 1);
     }
   }
-  for (let e of l) {
-    if (e.type !== "prompt") continue;
-    if (e.source === "bundled" || e.source === "builtin" || e.source === "policySettings") continue;
-    if (e.source === "mcp" && e.loadedFrom !== "mcp") continue;
-    let index = e.name.lastIndexOf(":");
-    let i = index > 0 ? e.name.slice(index + 1) : undefined;
-    let u = i !== undefined && e.loadedFrom !== "syncedSkills" && M.has(i) && m.get(i) === 1 ? i : undefined;
-    let f = recordSkillUsage(e.name, u ?? bareSkillName(e));
-    r.push({
-      name: e.pluginInfo ? printablePluginName(e.name) : e.name,
-      source: e.pluginInfo
-        ? isSyncedMarketplacePlugin(e.pluginInfo.repository)
+  for (let command of commands) {
+    if (command.type !== "prompt") continue;
+    if (command.source === "bundled" || command.source === "builtin" || command.source === "policySettings")
+      continue;
+    if (command.source === "mcp" && command.loadedFrom !== "mcp") continue;
+    let index = command.name.lastIndexOf(":");
+    let bareName = index > 0 ? command.name.slice(index + 1) : undefined;
+    let basenameToRecord =
+      bareName !== undefined &&
+      command.loadedFrom !== "syncedSkills" &&
+      fallbackOnlyNames.has(bareName) &&
+      pluginPrefixCounts.get(bareName) === 1
+        ? bareName
+        : undefined;
+    let usageRecord = recordSkillUsage(command.name, basenameToRecord ?? bareSkillName(command));
+    rows.push({
+      name: command.pluginInfo ? printablePluginName(command.name) : command.name,
+      source: command.pluginInfo
+        ? isSyncedMarketplacePlugin(command.pluginInfo.repository)
           ? CLAUDE_AI_SYNC_LABEL
-          : printablePluginName(e.pluginInfo.pluginManifest.name)
-        : e.loadedFrom === "syncedSkills"
+          : printablePluginName(command.pluginInfo.pluginManifest.name)
+        : command.loadedFrom === "syncedSkills"
           ? CLAUDE_AI_SYNC_LABEL
-          : e.source,
+          : command.source,
       owner:
-        e.source === "plugin"
+        command.source === "plugin"
           ? "plugin"
-          : e.source === "mcp"
+          : command.source === "mcp"
             ? "mcp"
-            : e.loadedFrom === "syncedSkills"
+            : command.loadedFrom === "syncedSkills"
               ? "synced"
               : "settings",
-      pluginKey: e.pluginInfo?.pluginManifest.name,
-      usageCount: f?.usageCount ?? 0,
-      daysSinceUse: f?.daysSinceUse ?? null,
-      listingTokens: y.get(e.name) ?? null,
-      weekTokens: p.get(getBareCommandName(e)) ?? (u ? p.get(u) : undefined) ?? null,
+      pluginKey: command.pluginInfo?.pluginManifest.name,
+      usageCount: usageRecord?.usageCount ?? 0,
+      daysSinceUse: usageRecord?.daysSinceUse ?? null,
+      listingTokens: listingTokens.get(command.name) ?? null,
+      weekTokens:
+        usageBySkill.get(getBareCommandName(command)) ??
+        (basenameToRecord ? usageBySkill.get(basenameToRecord) : undefined) ??
+        null,
     });
   }
-  r.sort((e, t) => (t.daysSinceUse ?? 1 / 0) - (e.daysSinceUse ?? 1 / 0));
-  let filtered = r.filter((e) => e.usageCount === 0 && e.listingTokens !== null);
-  let unusedOwned = filtered.filter((e) => e.owner === "settings");
-  let unusedSynced = filtered.filter((e) => e.owner === "synced");
-  let x = new Set(r.filter((e) => e.usageCount > 0 && e.pluginKey !== undefined).map((e) => e.pluginKey));
+  rows.sort((leftRow, rightRow) => (rightRow.daysSinceUse ?? 1 / 0) - (leftRow.daysSinceUse ?? 1 / 0));
+  let filtered = rows.filter((row) => row.usageCount === 0 && row.listingTokens !== null);
+  let unusedOwned = filtered.filter((row) => row.owner === "settings");
+  let unusedSynced = filtered.filter((row) => row.owner === "synced");
+  let usedPluginKeys = new Set(
+    rows.filter((row) => row.usageCount > 0 && row.pluginKey !== undefined).map((row) => row.pluginKey),
+  );
   let unusedFromPlugins = filtered.filter(
-    (e) => e.owner === "plugin" && (e.pluginKey === undefined || !x.has(e.pluginKey)),
+    (row) => row.owner === "plugin" && (row.pluginKey === undefined || !usedPluginKeys.has(row.pluginKey)),
   );
-  let d = (e) => {
-    let index = e.name.indexOf(":");
-    return index > 0 ? e.name.slice(0, index) : undefined;
+  let mcpServerNameOf = (row) => {
+    let index = row.name.indexOf(":");
+    return index > 0 ? row.name.slice(0, index) : undefined;
   };
-  let I = new Set(
-    r
-      .filter((e) => e.owner === "mcp" && e.usageCount > 0)
-      .map(d)
-      .filter((e) => e !== undefined),
+  let usedMcpServers = new Set(
+    rows
+      .filter((row) => row.owner === "mcp" && row.usageCount > 0)
+      .map(mcpServerNameOf)
+      .filter((serverName) => serverName !== undefined),
   );
-  let filtered_2 = filtered.filter((e) => {
-    if (e.owner !== "mcp") return false;
-    let t = d(e);
-    return t === undefined || !I.has(t);
+  let filtered_2 = filtered.filter((row) => {
+    if (row.owner !== "mcp") return false;
+    let serverName = mcpServerNameOf(row);
+    return serverName === undefined || !usedMcpServers.has(serverName);
   });
-  let unusedMcpServers = uniq(filtered_2.map(d).filter((e) => e !== undefined)).map((e) =>
+  let unusedMcpServers = uniq(
+    filtered_2.map(mcpServerNameOf).filter((serverName) => serverName !== undefined),
+  ).map((serverName) =>
     printablePluginName(
-      n.mcpClients.find((mcpClient) => normalizeNameForMCP(mcpClient.name) === e)?.name ?? e,
+      options.mcpClients.find((mcpClient) => normalizeNameForMCP(mcpClient.name) === serverName)?.name ??
+        serverName,
     ),
   );
   return {
-    rows: r,
+    rows,
     unusedOwned,
     unusedFromPlugins,
     unusedFromMcp: filtered_2,
     unusedSynced,
     unusedMcpServers,
     disusedPlugins: await disusedPlugins,
-    weekTokensNote: o.allowed ? null : o.reason,
+    weekTokensNote: scanAllowed.allowed ? null : scanAllowed.reason,
   };
 }
 export {

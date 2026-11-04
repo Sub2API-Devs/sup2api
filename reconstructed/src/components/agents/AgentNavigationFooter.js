@@ -8,18 +8,18 @@
  * pieces: chunk-8jawqfvg.js (1)
  * attribution: fingerprint 1
  */
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { useGlobalExitKeybindings } from "../../keybindings/useKeybinding.js";
 import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Text } from "../../ink/components/Text.js";
 
 //@ chunk-8jawqfvg.js:332-632 fingerprint = AgentNavigationFooter (0.695)
 function AgentNavigationFooter(props) {
-  let $ = w(3);
+  let $ = useMemoCache(3);
   let { children, exitActive, onInterrupt, italic } = props;
-  let R = exitActive === undefined ? true : exitActive;
+  let exitActiveDefault = exitActive === undefined ? true : exitActive;
   let italic_2 = italic === undefined ? false : italic;
-  let { pending, keyName } = useGlobalExitKeybindings(undefined, onInterrupt, R);
+  let { pending, keyName } = useGlobalExitKeybindings(undefined, onInterrupt, exitActiveDefault);
   const children_2 = pending ? `Press ${keyName} again to exit` : children;
   let t3;
   if ($[0] !== italic_2 || $[1] !== children_2) {

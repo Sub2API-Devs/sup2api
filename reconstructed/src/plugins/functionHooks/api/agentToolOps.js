@@ -43,6 +43,7 @@ import { checkRenderArgument } from "../ui/renderSites.js";
 import { normalizeFullWidthSpace, truncateToLength } from "../../../utils/stringUtils.js";
 import { flagValueApi, coreNotAnOperation } from "./interfaces.js";
 import { CORE_ORIGIN } from "../eventPatterns.js";
+import { deferInit } from "../../../../runtime/deferred-init.js";
 
 //@ chunk-4121qate.js:289524-289533 placement
 /**
@@ -50,22 +51,22 @@ import { CORE_ORIGIN } from "../eventPatterns.js";
  */
 var MAX_QUESTION_OPTIONS = 5;
 //@ chunk-4121qate.js:289533-289814 placement
-var buildAgentToolInput = (e, prompt) => ({
+var buildAgentToolInput = (args, prompt) => ({
   tool: AGENT_TOOL_NAME,
   prompt,
-  description: e.description ?? prompt.split(/\s+/).slice(0, MAX_QUESTION_OPTIONS).join(" "),
+  description: args.description ?? prompt.split(/\s+/).slice(0, MAX_QUESTION_OPTIONS).join(" "),
   run_in_background: true,
-  ...(e.model !== undefined && {
-    model: e.model,
+  ...(args.model !== undefined && {
+    model: args.model,
   }),
-  ...(e.subagentType !== undefined && {
-    subagent_type: e.subagentType,
+  ...(args.subagentType !== undefined && {
+    subagent_type: args.subagentType,
   }),
-  ...(e.name !== undefined && {
-    name: e.name,
+  ...(args.name !== undefined && {
+    name: args.name,
   }),
-  ...(e.cwd !== undefined && {
-    cwd: e.cwd,
+  ...(args.cwd !== undefined && {
+    cwd: args.cwd,
   }),
 });
 //@ chunk-4121qate.js:289814-290039 placement
@@ -90,13 +91,13 @@ var PLUGIN_AGENT_FIELDS = [
   "isolation",
 ];
 //@ chunk-4121qate.js:290039-290178 placement
-var pickAgentDefinitionFields = (e) =>
-  isPlainObject(e)
+var pickAgentDefinitionFields = (value) =>
+  isPlainObject(value)
     ? Object.fromEntries(
-        PLUGIN_AGENT_FIELDS.flatMap((o) => {
-          let r = e[o];
-          if (r === undefined) return [];
-          return [[o, Array.isArray(r) ? [...denseListCopy(r)] : r]];
+        PLUGIN_AGENT_FIELDS.flatMap((field) => {
+          let fieldValue = value[field];
+          if (fieldValue === undefined) return [];
+          return [[field, Array.isArray(fieldValue) ? [...denseListCopy(fieldValue)] : fieldValue]];
         }),
       )
     : undefined;
@@ -104,8 +105,8 @@ var pickAgentDefinitionFields = (e) =>
 /**
  * 取 resolvedModel 字符串
  */
-function resolvedModelOf(e) {
-  let resolvedModel = isPlainObject(e) ? e.resolvedModel : undefined;
+function resolvedModelOf(value) {
+  let resolvedModel = isPlainObject(value) ? value.resolvedModel : undefined;
   return typeof resolvedModel === "string" ? resolvedModel : undefined;
 }
 //@ chunk-4121qate.js:290264-290347 placement
@@ -120,38 +121,40 @@ function teammateIdOf(result) {
 var AGENT_OPS = (pluginName, host) =>
   freezeApiObject({
     list: () => host("agent.list", {}),
-    register: (r) => {
-      let n = pickAgentDefinitionFields(r);
-      return n !== undefined && typeof n.name === "string" && MCP_SERVER_NAME_RE.test(n.name)
-        ? host("agent.register", n)
+    register: (args) => {
+      let definition = pickAgentDefinitionFields(args);
+      return definition !== undefined &&
+        typeof definition.name === "string" &&
+        MCP_SERVER_NAME_RE.test(definition.name)
+        ? host("agent.register", definition)
         : Promise.reject(
             new HooksError(
               `${pluginName}: $.agent.register takes { name, description, prompt, ... }; name is letters, digits, _ or - (up to 64)`,
             ),
           );
     },
-    spawn: async (r) => {
-      let prompt = r?.prompt;
-      if (r === undefined || typeof prompt !== "string" || prompt.trim() === "")
+    spawn: async (args) => {
+      let prompt = args?.prompt;
+      if (args === undefined || typeof prompt !== "string" || prompt.trim() === "")
         throw new HooksError(`${pluginName}: $.agent.spawn takes { prompt, ... } (a non-empty prompt)`);
-      let i = await host("agent.spawn", buildAgentToolInput(r, prompt));
-      let p = i.deny ?? (i.isError === true ? i.text : undefined);
-      let f = agentIdFromArg(i.result);
-      let a = teammateIdOf(i.result);
-      let m = p === undefined;
+      let result = await host("agent.spawn", buildAgentToolInput(args, prompt));
+      let denyReason = result.deny ?? (result.isError === true ? result.text : undefined);
+      let agentId = agentIdFromArg(result.result);
+      let teammateId = teammateIdOf(result.result);
+      let ok = denyReason === undefined;
       return freezeApiObject(
-        m
+        ok
           ? {
-              model: resolvedModelOf(i.result) ?? r.model ?? "inherit",
-              ...(f !== undefined && {
-                agentId: f,
+              model: resolvedModelOf(result.result) ?? args.model ?? "inherit",
+              ...(agentId !== undefined && {
+                agentId,
               }),
-              ...(a !== undefined && {
-                teammateId: a,
+              ...(teammateId !== undefined && {
+                teammateId,
               }),
             }
           : {
-              deny: p,
+              deny: denyReason,
             },
       );
     },
@@ -162,56 +165,65 @@ var AGENT_OPS = (pluginName, host) =>
  */
 var TOOL_REGISTER_OP = (pluginName, host) =>
   freezeApiObject({
-    register: (r) => {
-      if (!isPlainObject(r) || typeof r.name !== "string" || !MCP_SERVER_NAME_RE.test(r.name))
+    register: (definition) => {
+      if (
+        !isPlainObject(definition) ||
+        typeof definition.name !== "string" ||
+        !MCP_SERVER_NAME_RE.test(definition.name)
+      )
         return Promise.reject(
           new HooksError(
             `${pluginName}: $.tool.register takes { name, description, inputSchema?, isDeferred? }; name is letters, digits, _ or - (up to 64)`,
           ),
         );
-      if (typeof r.description !== "string" || r.description.trim() === "")
+      if (typeof definition.description !== "string" || definition.description.trim() === "")
         return Promise.reject(
           new HooksError(
-            `${pluginName}: $.tool.register: ${r.name} needs a description (what the model reads)`,
+            `${pluginName}: $.tool.register: ${definition.name} needs a description (what the model reads)`,
           ),
         );
-      if (r.isDeferred !== undefined && typeof r.isDeferred !== "boolean")
+      if (definition.isDeferred !== undefined && typeof definition.isDeferred !== "boolean")
         return Promise.reject(
-          new HooksError(`${pluginName}: $.tool.register: ${r.name}'s isDeferred must be true or false`),
+          new HooksError(
+            `${pluginName}: $.tool.register: ${definition.name}'s isDeferred must be true or false`,
+          ),
         );
-      let p = r.inputSchema ?? {
+      let name = definition.inputSchema ?? {
         type: "object",
       };
-      return isPlainObject(p)
+      return isPlainObject(name)
         ? host("tool.register", {
-            name: r.name,
-            description: r.description,
+            name: definition.name,
+            description: definition.description,
             inputSchema: {
               type: "object",
-              ...p,
+              ...name,
             },
-            ...(r.isDeferred !== undefined && {
-              isDeferred: r.isDeferred,
+            ...(definition.isDeferred !== undefined && {
+              isDeferred: definition.isDeferred,
             }),
           })
         : Promise.reject(
             new HooksError(
-              `${pluginName}: $.tool.register: ${r.name}'s inputSchema must be a JSON schema object`,
+              `${pluginName}: $.tool.register: ${definition.name}'s inputSchema must be a JSON schema object`,
             ),
           );
     },
     list: () => host("tool.list", {}),
-    call: async (r) => {
-      if (!isPlainObject(r)) throw new HooksError(`${pluginName}: $.tool.call: input must be an object`);
-      if (typeof r.tool !== "string" || r.tool.length === 0)
+    call: async (name) => {
+      if (!isPlainObject(name)) throw new HooksError(`${pluginName}: $.tool.call: input must be an object`);
+      if (typeof name.tool !== "string" || name.tool.length === 0)
         throw new HooksError(`${pluginName}: $.tool.call takes the event's input: { tool, ...args }`);
-      return host("tool.call", r);
+      return host("tool.call", name);
     },
-    check: (r) =>
-      isPlainObject(r) && typeof r.tool === "string" && r.tool.length > 0 && isPlainObject(r.input)
+    check: (name) =>
+      isPlainObject(name) &&
+      typeof name.tool === "string" &&
+      name.tool.length > 0 &&
+      isPlainObject(name.input)
         ? host("tool.check", {
-            tool: r.tool,
-            input: r.input,
+            tool: name.tool,
+            input: name.input,
           })
         : Promise.reject(
             new HooksError(
@@ -222,8 +234,8 @@ var TOOL_REGISTER_OP = (pluginName, host) =>
 //@ chunk-4121qate.js:292403-292615 placement
 var TURN_OPS = (pluginName, host) =>
   freezeApiObject({
-    abort: (r) => {
-      let turnId = isPlainObject(r) ? r.turnId : undefined;
+    abort: (args) => {
+      let turnId = isPlainObject(args) ? args.turnId : undefined;
       return typeof turnId !== "string" || turnId === ""
         ? Promise.reject(
             new HooksError(`${pluginName}: $.turn.abort takes { turnId } (the id turn.start carried)`),
@@ -267,59 +279,65 @@ var ASK_USER_QUESTION_TOOL_NAME = "AskUserQuestion";
 /**
  * 校验 $.ui.ask 的选项列表（最多 4 个），转成字符串数组并保留稀疏位。
  */
-function normalizeAskOptions(e, options) {
-  let r = options ?? [];
-  let n = Array.isArray(r) ? Number(r.length) : Number.NaN;
-  let s = Number.isSafeInteger(n) && n >= 0;
-  if (!Array.isArray(r) || !s) throw new HooksError(`${e}: $.ui.ask takes its options as a list`);
-  if (n > MAX_UI_ROWS) throw new HooksError(`${e}: $.ui.ask takes at most ${MAX_UI_ROWS} options (got ${n})`);
-  let i = [];
-  i.length = n;
-  for (let p = 0; p < n; p += 1) if (p in r) i[p] = String(r[p]);
-  return i;
+function normalizeAskOptions(pluginName, options) {
+  let rawOptions = options ?? [];
+  let count = Array.isArray(rawOptions) ? Number(rawOptions.length) : Number.NaN;
+  let isValidCount = Number.isSafeInteger(count) && count >= 0;
+  if (!Array.isArray(rawOptions) || !isValidCount)
+    throw new HooksError(`${pluginName}: $.ui.ask takes its options as a list`);
+  if (count > MAX_UI_ROWS)
+    throw new HooksError(`${pluginName}: $.ui.ask takes at most ${MAX_UI_ROWS} options (got ${count})`);
+  let secondOptions = [];
+  secondOptions.length = count;
+  for (let index = 0; index < count; index += 1)
+    if (index in rawOptions) secondOptions[index] = String(rawOptions[index]);
+  return secondOptions;
 }
 //@ chunk-4121qate.js:293047-293146 placement
 /**
  * 不足则补 Yes/No
  */
-function ensureQuestions(e) {
-  return e.length >= MAX_OPTIONS
-    ? e
-    : [...e, ...DEFAULT_YES_NO.filter((r) => !e.includes(r)).slice(0, MAX_OPTIONS - e.length)];
+function ensureQuestions(labels) {
+  return labels.length >= MAX_OPTIONS
+    ? labels
+    : [
+        ...labels,
+        ...DEFAULT_YES_NO.filter((label) => !labels.includes(label)).slice(0, MAX_OPTIONS - labels.length),
+      ];
 }
 //@ chunk-4121qate.js:293146-293219 placement
 /**
  * 带 cells 字符串的表格
  */
-function isCellsStringTable(e) {
-  return isPlainObject(e) && typeof e.cells === "string" && e.source === undefined;
+function isCellsStringTable(value) {
+  return isPlainObject(value) && typeof value.cells === "string" && value.source === undefined;
 }
 //@ chunk-4121qate.js:293219-293483 placement
-function normalizeRenderRequest(e) {
-  let o = {
-    ...(e?.columns !== undefined && {
-      columns: e.columns,
+function normalizeRenderRequest(request) {
+  let extra = {
+    ...(request?.columns !== undefined && {
+      columns: request.columns,
     }),
-    ...(e?.rows !== undefined && {
-      rows: e.rows,
+    ...(request?.rows !== undefined && {
+      rows: request.rows,
     }),
   };
-  return isCellsStringTable(e)
+  return isCellsStringTable(request)
     ? {
-        requestId: e.requestId,
-        key: e.key,
-        cells: e.cells,
-        ...o,
+        requestId: request.requestId,
+        key: request.key,
+        cells: request.cells,
+        ...extra,
       }
     : {
-        requestId: e?.requestId,
-        key: e?.key,
-        source: e?.source,
-        ...(isPlainObject(e) &&
-          "cells" in e && {
-            cells: e.cells,
+        requestId: request?.requestId,
+        key: request?.key,
+        source: request?.source,
+        ...(isPlainObject(request) &&
+          "cells" in request && {
+            cells: request.cells,
           }),
-        ...o,
+        ...extra,
       };
 }
 //@ chunk-4121qate.js:293483-293552 placement
@@ -331,16 +349,16 @@ var UI_EVENT_NAMES = ["ui.log", "ui.notice", "ui.invalidate", "ui.toast", "ui.st
 /**
  * 是否 ui.* 事件
  */
-var isUiEventName = (e) => UI_EVENT_NAMES.includes(e);
+var isUiEventName = (name) => UI_EVENT_NAMES.includes(name);
 //@ chunk-4121qate.js:293580-293797 placement
-function normalizeAgentIdArg(e) {
-  let o =
-    isPlainObject(e) &&
-    Object.prototype.toString.call(e) === "[object Object]" &&
-    Reflect.ownKeys(e).every((s) => s === "agentId");
-  let r = o && !("agentId" in e);
-  let agentId = o ? e.agentId : undefined;
-  return r
+function normalizeAgentIdArg(args) {
+  let isAgentIdOnly =
+    isPlainObject(args) &&
+    Object.prototype.toString.call(args) === "[object Object]" &&
+    Reflect.ownKeys(args).every((key) => key === "agentId");
+  let isEmptyObject = isAgentIdOnly && !("agentId" in args);
+  let agentId = isAgentIdOnly ? args.agentId : undefined;
+  return isEmptyObject
     ? {}
     : {
         agentId: typeof agentId === "string" ? agentId : "",
@@ -348,151 +366,152 @@ function normalizeAgentIdArg(e) {
 }
 //@ chunk-4121qate.js:293797-295915 placement
 function UI_LOG_OP(pluginName, host, resolvedTable) {
-  let n = (a, m) => {
-    host(a, m).catch((error) =>
-      matcherLog().log(`[${pluginName}] $.${a} dropped: ${errorMessage(error)}`, "warn"),
+  let send = (op, payload) => {
+    host(op, payload).catch((error) =>
+      matcherLog().log(`[${pluginName}] $.${op} dropped: ${errorMessage(error)}`, "warn"),
     );
   };
-  let log = (a, m = {}) =>
-    n("ui.log", {
-      text: String(a),
-      to: m?.to ?? "transcript",
+  let log = (text, opts = {}) =>
+    send("ui.log", {
+      text: String(text),
+      to: opts?.to ?? "transcript",
     });
-  let toast = (a, m = {}) => {
-    n("ui.toast", {
-      text: String(a),
-      ...(typeof m.timeoutMs === "number" && {
-        timeoutMs: m.timeoutMs,
+  let toast = (text, opts = {}) => {
+    send("ui.toast", {
+      text: String(text),
+      ...(typeof opts.timeoutMs === "number" && {
+        timeoutMs: opts.timeoutMs,
       }),
     });
   };
-  let status = (a) => {
-    n("ui.status", {
-      text: a === undefined || a === null ? undefined : String(a),
+  let status = (text) => {
+    send("ui.status", {
+      text: text === undefined || text === null ? undefined : String(text),
     });
   };
-  function f(a) {
-    let m = checkRenderArgument(a);
-    if (m !== undefined) throw new HooksError(`${pluginName}: $.ui.resolve ${m}`);
-    return resolvedTable(a);
+  function resolve(request) {
+    let problem = checkRenderArgument(request);
+    if (problem !== undefined) throw new HooksError(`${pluginName}: $.ui.resolve ${problem}`);
+    return resolvedTable(request);
   }
   return freezeApiObject({
     notice: (toolUseId, text) =>
-      n("ui.notice", {
+      send("ui.notice", {
         tool_use_id: toolUseId,
         text,
       }),
     invalidate: (event) =>
-      n("ui.invalidate", {
+      send("ui.invalidate", {
         event,
       }),
-    blit: (a) => host("ui.blit", normalizeRenderRequest(a)),
-    resolve: f,
+    blit: (request) => host("ui.blit", normalizeRenderRequest(request)),
+    resolve,
     log,
     status,
-    ask: async (a, m) => {
-      if (typeof a !== "string" || a.trim() === "")
+    ask: async (question, options) => {
+      if (typeof question !== "string" || question.trim() === "")
         throw new HooksError(`${pluginName}: $.ui.ask takes the question first`);
-      let c = Array.isArray(m)
+      let askOptions = Array.isArray(options)
         ? {
-            options: m,
+            options,
           }
-        : (m ?? {});
-      let u = normalizeAskOptions(pluginName, c.options);
-      let l = normalizeFullWidthSpace(a);
-      let questions = ensureQuestions(u.map(normalizeFullWidthSpace));
-      let header = truncateToLength(c.header ?? "Plugin", MAX_ROW_CELLS);
-      let x = await host("ui.ask", {
+        : (options ?? {});
+      let optionLabels = normalizeAskOptions(pluginName, askOptions.options);
+      let questionText = normalizeFullWidthSpace(question);
+      let questions = ensureQuestions(optionLabels.map(normalizeFullWidthSpace));
+      let header = truncateToLength(askOptions.header ?? "Plugin", MAX_ROW_CELLS);
+      let answer = await host("ui.ask", {
         tool: ASK_USER_QUESTION_TOOL_NAME,
         questions: [
           {
-            question: l,
+            question: questionText,
             header,
             options: questions.map((label) => ({
               label,
               description: "",
             })),
-            multiSelect: c.multiSelect === true,
+            multiSelect: askOptions.multiSelect === true,
           },
         ],
       });
-      let T = x.result?.answers?.[l];
-      let h = (v) => u.find((R) => normalizeFullWidthSpace(R) === v) ?? v;
-      if (typeof T === "string") return h(T);
-      if (Array.isArray(T)) return T.map((v) => h(String(v))).join(", ");
+      let picked = answer.result?.answers?.[questionText];
+      let toOriginal = (normalized) =>
+        optionLabels.find((option) => normalizeFullWidthSpace(option) === normalized) ?? normalized;
+      if (typeof picked === "string") return toOriginal(picked);
+      if (Array.isArray(picked)) return picked.map((part) => toOriginal(String(part))).join(", ");
       throw new HooksError(
-        `${pluginName}: $.ui.ask: no answer (${truncateToLength(x.deny ?? x.text ?? "", MAX_WAIT_SECONDS) || "the dialog was dismissed"})`,
+        `${pluginName}: $.ui.ask: no answer (${truncateToLength(answer.deny ?? answer.text ?? "", MAX_WAIT_SECONDS) || "the dialog was dismissed"})`,
       );
     },
     toast,
-    notify: (text, m = {}) =>
+    notify: (text, opts = {}) =>
       host("ui.notify", {
         text,
-        ...(m?.title !== undefined && {
-          title: m.title,
+        ...(opts?.title !== undefined && {
+          title: opts.title,
         }),
       }),
-    open: (a) =>
+    open: (request) =>
       host("ui.open", {
-        id: a?.id,
-        ...(a?.title !== undefined && {
-          title: String(a.title),
+        id: request?.id,
+        ...(request?.title !== undefined && {
+          title: String(request.title),
         }),
-        ...(a?.focus !== undefined && {
-          focus: a.focus,
+        ...(request?.focus !== undefined && {
+          focus: request.focus,
         }),
-        ...(a?.closeOnEscape !== undefined && {
-          closeOnEscape: a.closeOnEscape,
+        ...(request?.closeOnEscape !== undefined && {
+          closeOnEscape: request.closeOnEscape,
         }),
-        ...(a?.holdToasts !== undefined && {
-          holdToasts: a.holdToasts,
+        ...(request?.holdToasts !== undefined && {
+          holdToasts: request.holdToasts,
         }),
-        ...(a?.backgroundColor !== undefined && {
-          backgroundColor: a.backgroundColor,
+        ...(request?.backgroundColor !== undefined && {
+          backgroundColor: request.backgroundColor,
         }),
-        ...(a?.rows !== undefined && {
-          rows: a.rows,
+        ...(request?.rows !== undefined && {
+          rows: request.rows,
         }),
-        ...(a?.columns !== undefined && {
-          columns: a.columns,
+        ...(request?.columns !== undefined && {
+          columns: request.columns,
         }),
       }),
-    close: (a) =>
+    close: (request) =>
       host("ui.close", {
-        id: a?.id,
+        id: request?.id,
         origin: {
           kind: "plugin",
         },
       }),
     panes: () => host("ui.panes", {}),
-    place: (a) =>
+    place: (request) =>
       host("ui.place", {
-        id: a?.id,
+        id: request?.id,
       }),
     selection: () => host("ui.selection", {}),
-    scroll: (a) =>
+    scroll: (request) =>
       host("ui.scroll", {
-        to: a?.to,
-        ...(a?.in !== undefined && {
-          in: a.in,
+        to: request?.to,
+        ...(request?.in !== undefined && {
+          in: request.in,
         }),
-        ...(a?.block !== undefined && {
-          block: a.block,
+        ...(request?.block !== undefined && {
+          block: request.block,
         }),
       }),
-    focus: (a) =>
+    focus: (request) =>
       host("ui.focus", {
-        requestId: a?.requestId,
-        key: a?.key,
+        requestId: request?.requestId,
+        key: request?.key,
       }),
-    copy: (a) =>
+    copy: (request) =>
       host("ui.copy", {
-        text: a?.text,
-        ...(a?.surface !== undefined && {
-          surface: a.surface,
+        text: request?.text,
+        ...(request?.surface !== undefined && {
+          surface: request.surface,
         }),
       }),
-    view: (a) => host("ui.view", normalizeAgentIdArg(a)),
+    view: (request) => host("ui.view", normalizeAgentIdArg(request)),
   });
 }
 //@ chunk-4121qate.js:295915-296540 placement
@@ -508,30 +527,30 @@ function MCP_OPS({
   signalFrom,
   makeSignal,
 }) {
-  let c = (u) => wrapNamespaceMethods(u, wrapMethod);
+  let wrapNs = (methods) => wrapNamespaceMethods(methods, wrapMethod);
   return {
-    ui: c(UI_LOG_OP(pluginName, host, resolvedTable)),
-    model: c(MODEL_OPS(host)),
-    audio: c(AUDIO_OPS(pluginName, host)),
-    mcp: c(
+    ui: wrapNs(UI_LOG_OP(pluginName, host, resolvedTable)),
+    model: wrapNs(MODEL_OPS(host)),
+    audio: wrapNs(AUDIO_OPS(pluginName, host)),
+    mcp: wrapNs(
       mcpApi(
         pluginName,
-        (u) => host("mcp.call", u),
-        (u) => host("mcp.connect", u),
+        (request) => host("mcp.call", request),
+        (request) => host("mcp.connect", request),
       ),
     ),
-    session: c(SESSION_OPS(pluginName, host)),
-    prompt: c(PROMPT_SUBMIT_OP(pluginName, host)),
-    turn: c(TURN_OPS(pluginName, host)),
-    tool: c(TOOL_REGISTER_OP(pluginName, host)),
-    command: c(COMMAND_OPS(pluginName, host)),
-    config: c(CONFIG_OPS(pluginName, host)),
-    telemetry: c(TELEMETRY_OPS(pluginName, host)),
-    agent: c(AGENT_OPS(pluginName, host)),
-    fs: c(FS_OPS(host)),
-    store: c(STORE_OPS(pluginName, host)),
-    state: c(STATE_OPS(pluginName, host)),
-    clock: c(
+    session: wrapNs(SESSION_OPS(pluginName, host)),
+    prompt: wrapNs(PROMPT_SUBMIT_OP(pluginName, host)),
+    turn: wrapNs(TURN_OPS(pluginName, host)),
+    tool: wrapNs(TOOL_REGISTER_OP(pluginName, host)),
+    command: wrapNs(COMMAND_OPS(pluginName, host)),
+    config: wrapNs(CONFIG_OPS(pluginName, host)),
+    telemetry: wrapNs(TELEMETRY_OPS(pluginName, host)),
+    agent: wrapNs(AGENT_OPS(pluginName, host)),
+    fs: wrapNs(FS_OPS(host)),
+    store: wrapNs(STORE_OPS(pluginName, host)),
+    state: wrapNs(STATE_OPS(pluginName, host)),
+    clock: wrapNs(
       CLOCK_OPS({
         pluginName,
         host,
@@ -542,17 +561,17 @@ function MCP_OPS({
         makeSignal,
       }),
     ),
-    http: c(HTTP_FETCH_OP(pluginName, host)),
-    process: c(PROCESS_OPS(host, hostStream)),
-    settings: c(SETTINGS_OPS(pluginName, host)),
-    env: c(ENV_OPS(host)),
-    flag: c(flagValueApi(host)),
+    http: wrapNs(HTTP_FETCH_OP(pluginName, host)),
+    process: wrapNs(PROCESS_OPS(host, hostStream)),
+    settings: wrapNs(SETTINGS_OPS(pluginName, host)),
+    env: wrapNs(ENV_OPS(host)),
+    flag: wrapNs(flagValueApi(host)),
   };
 }
 //@ chunk-4121qate.js:296540-296803 placement
 function buildCoreMethodTable() {
-  let e = {};
-  let o = MCP_OPS({
+  let table = {};
+  let ops = MCP_OPS({
     pluginName: "core",
     host: coreNotAnOperation,
     hostStream: coreNotAnOperation,
@@ -560,30 +579,33 @@ function buildCoreMethodTable() {
     timers: new Set(),
     unloaded: coreNotAnOperation,
     invoke: coreNotAnOperation,
-    wrapMethod: (r) => r,
+    wrapMethod: (method) => method,
     signalFrom: coreNotAnOperation,
     makeSignal: coreNotAnOperation,
   });
-  for (let [key, value] of Object.entries(o)) e[key] = Object.freeze(Object.keys(value));
-  return Object.freeze(e);
+  for (let [key, value] of Object.entries(ops)) table[key] = Object.freeze(Object.keys(value));
+  return Object.freeze(table);
 }
 //@ chunk-4121qate.js:296803-296815 placement
 /**
  * 核心方法表
  */
-var coreInterfaceTable = buildCoreMethodTable();
+var coreInterfaceTable; // deferred: uses buildCoreMethodTable of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-4121qate.js:296803", () => {
+  coreInterfaceTable = buildCoreMethodTable();
+});
 //@ chunk-4121qate.js:296815-296923 placement
 /**
  * 把核心方法表转换为接口表（owner=core、方法名列表），只包含允许的命名空间。
  */
 function coreInterfaceTable_2() {
-  let e = {};
+  let table = {};
   for (let [key, value] of Object.entries(coreInterfaceTable))
     if (isOutsideAllowedScope(key))
-      e[key] = {
+      table[key] = {
         owner: CORE_ORIGIN,
         methods: [...value],
       };
-  return e;
+  return table;
 }
 export { MCP_OPS, resolvedModelOf, isUiEventName, coreInterfaceTable_2 };

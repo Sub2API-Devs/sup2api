@@ -9,39 +9,47 @@
  * attribution: placement 7
  */
 import { isEnvTruthy, isEnvDefinedFalsy, parseLooseInteger, parseIntLoose } from "./envUtils.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-fq90vph4.js:270-311 placement
 function parserFrom(trimmedOrUndefined) {
   return {
-    parse: (e) => trimmedOrUndefined(toEnvString(e)),
+    parse: (value) => trimmedOrUndefined(toEnvString(value)),
   };
 }
 //@ chunk-fq90vph4.js:311-359 placement
-function trimmedOrUndefined(n) {
-  let trimmed = n?.trim();
+function trimmedOrUndefined(value) {
+  let trimmed = value?.trim();
   return trimmed ? trimmed : undefined;
 }
 //@ chunk-fq90vph4.js:359-408 placement
-function toEnvString(n) {
-  return n === undefined ? undefined : String(n);
+function toEnvString(value) {
+  return value === undefined ? undefined : String(value);
 }
 //@ chunk-fq90vph4.js:408-508 placement
-var strParser = parserFrom(trimmedOrUndefined);
-var rawStrParser = parserFrom((n) => n);
-var boolParser = parserFrom((n) => isEnvTruthy(n));
-var triBoolParser = parserFrom((n) => {
-  if (isEnvTruthy(n)) return true;
-  if (isEnvDefinedFalsy(n)) return false;
-  return;
+var strParser; // deferred: uses parserFrom of its import cycle while loading; runs once the cycle is complete
+var rawStrParser;
+var boolParser;
+var triBoolParser;
+var defaultIntParser;
+deferInit("chunk-fq90vph4.js:408", () => {
+  strParser = parserFrom(trimmedOrUndefined);
+  rawStrParser = parserFrom((value) => value);
+  boolParser = parserFrom((value) => isEnvTruthy(value));
+  triBoolParser = parserFrom((value) => {
+    if (isEnvTruthy(value)) return true;
+    if (isEnvDefinedFalsy(value)) return false;
+    return;
+  });
+  defaultIntParser = intParser();
 });
-var defaultIntParser = intParser();
 //@ chunk-fq90vph4.js:508-582 placement
 /**
  * 把环境变量值序列化：布尔转 "1"/"0"，其余转字符串。
  */
-function boolToEnvString(n) {
-  if (typeof n === "boolean") return n ? "1" : "0";
-  return String(n);
+function boolToEnvString(value) {
+  if (typeof value === "boolean") return value ? "1" : "0";
+  return String(value);
 }
 //@ chunk-fq90vph4.js:582-893 placement
 /**
@@ -52,32 +60,34 @@ var ENV_PARSERS = {
   rawStr: () => rawStrParser,
   bool: () => boolParser,
   triBool: () => triBoolParser,
-  int: (n) => (n ? intParser(n) : defaultIntParser),
-  names: (n) =>
-    parserFrom((e) => {
-      let i = new Set();
-      for (let u of e?.split(",") ?? []) {
-        let trimmed = u.trim();
-        if (trimmed.length > 0) i.add(trimmed);
-        if (i.size === n) break;
+  int: (min) => (min ? intParser(min) : defaultIntParser),
+  names: (allowed) =>
+    parserFrom((value) => {
+      let names = new Set();
+      for (let name of value?.split(",") ?? []) {
+        let trimmed = name.trim();
+        if (trimmed.length > 0) names.add(trimmed);
+        if (names.size === allowed) break;
       }
-      return i.size > 0 ? Object.freeze([...i]) : undefined;
+      return names.size > 0 ? Object.freeze([...names]) : undefined;
     }),
-  enum: (n) => parserFrom((e) => (e !== undefined && n.includes(e.trim()) ? e.trim() : undefined)),
+  enum: (allowed) =>
+    parserFrom((value) => (value !== undefined && allowed.includes(value.trim()) ? value.trim() : undefined)),
 };
 //@ chunk-fq90vph4.js:893-1198 placement
 /**
  * 整数解析器（只数字、整值、上下限）。
  */
-function intParser(n) {
-  return parserFrom((e) => {
-    if (e === undefined) return;
-    if (n?.digitsOnly && !/^[+-]?\d+$/.test(e.trim())) return;
-    if (n?.wholeValue && !/^[+-]?\d+$/.test(e.trim()) && parseLooseInteger(e.trim()) === undefined) return;
-    let intLoose = parseIntLoose(e);
+function intParser(min) {
+  return parserFrom((value) => {
+    if (value === undefined) return;
+    if (min?.digitsOnly && !/^[+-]?\d+$/.test(value.trim())) return;
+    if (min?.wholeValue && !/^[+-]?\d+$/.test(value.trim()) && parseLooseInteger(value.trim()) === undefined)
+      return;
+    let intLoose = parseIntLoose(value);
     if (!Number.isFinite(intLoose)) return;
-    if (n?.min !== undefined && intLoose < n.min) return;
-    if (n?.max !== undefined && intLoose > n.max) return;
+    if (min?.min !== undefined && intLoose < min.min) return;
+    if (min?.max !== undefined && intLoose > min.max) return;
     return intLoose;
   });
 }

@@ -33,16 +33,16 @@ import { isENOENT, getErrnoCode, errorMessage } from "../../../utils/errors.js";
 import { truncateToLength } from "../../../utils/stringUtils.js";
 
 //@ chunk-vzw8h259.js:10847-11407 placement
-async function runEvalMockServer(path, t) {
+async function runEvalMockServer(path, expectedHash) {
   if (!path) throw Error("missing spec path");
   let mockSpecFile = await readMockSpecFile(path);
-  if (t !== undefined && createHash("sha256").update(mockSpecFile).digest("hex") !== t)
+  if (expectedHash !== undefined && createHash("sha256").update(mockSpecFile).digest("hex") !== expectedHash)
     throw Error(
       "spec file does not match the hash the harness launched this stand-in with \u2014 refusing to serve it",
     );
   let mockSpec = parseMockSpec(mockSpecFile);
-  let n = respondToMockCall(mockSpec);
-  let s = new BufferedStdioServerTransport();
+  let server = respondToMockCall(mockSpec);
+  let transport = new BufferedStdioServerTransport();
   if (
     !(await appendLineToFile(
       mockSpec.callLogPath,
@@ -55,19 +55,19 @@ async function runEvalMockServer(path, t) {
     throw Error(
       "could not write the identity line to the run call log \u2014 refusing to serve unidentified",
     );
-  await n.connect(s);
-  process.stdin.on("end", () => void n.close());
-  process.stdin.on("error", () => void n.close());
+  await server.connect(transport);
+  process.stdin.on("end", () => void server.close());
+  process.stdin.on("error", () => void server.close());
 }
 //@ chunk-vzw8h259.js:11407-12648 placement
 function respondToMockCall(mockSpec) {
-  let t = 0;
+  let sequence = 0;
   let abortController = new AbortController();
   let relay = {
     spec: mockSpec,
     signal: abortController.signal,
   };
-  let n = new Server(
+  let server = new Server(
     {
       name: `eval-mock/${mockSpec.server}`,
       version: "1",
@@ -78,8 +78,8 @@ function respondToMockCall(mockSpec) {
       },
     },
   );
-  n.onclose = () => abortController.abort();
-  n.setRequestHandler(ListToolsRequestSchema, async () => ({
+  server.onclose = () => abortController.abort();
+  server.setRequestHandler(ListToolsRequestSchema, async () => ({
     tools: mockSpec.tools.map((tool) => ({
       name: tool.name,
       description: tool.description,
@@ -90,47 +90,47 @@ function respondToMockCall(mockSpec) {
     })),
   }));
   let resolved = Promise.resolve();
-  n.setRequestHandler(CallToolRequestSchema, (c) => {
-    let m = resolved.then(() => a(c.params));
-    resolved = m.catch(() => {});
-    return m;
+  server.setRequestHandler(CallToolRequestSchema, (request) => {
+    let answer = resolved.then(() => handleCall(request.params));
+    resolved = answer.catch(() => {});
+    return answer;
   });
-  async function a(params) {
+  async function handleCall(params) {
     let toolName = params.name;
-    let y = params.arguments ?? {};
+    let args = params.arguments ?? {};
     let now = Date.now();
     let responder = Object.hasOwn(mockSpec.responders, toolName) ? mockSpec.responders[toolName] : undefined;
-    let f =
+    let result =
       responder === undefined
         ? {
             verdict: "tool_error",
             text: `no mock for ${mockSpec.server}/${toolName}`,
           }
-        : await answerMockResponder(responder, y, relay, toolName);
-    let b = {
+        : await answerMockResponder(responder, args, relay, toolName);
+    let entry = {
       nonce: mockSpec.nonce,
-      seq: t++,
+      seq: sequence++,
       server: mockSpec.server,
       tool: toolName,
       responder: responder?.kind ?? "fixed",
-      input: stringifyForTelemetry(y),
-      verdict: f.verdict,
-      output: extractToolInputForTelemetry(f.text),
+      input: stringifyForTelemetry(args),
+      verdict: result.verdict,
+      output: extractToolInputForTelemetry(result.text),
       ms: Date.now() - now,
-      ...(f.replay && {
-        replay: f.replay,
+      ...(result.replay && {
+        replay: result.replay,
       }),
     };
-    if (!(await appendLineToFile(mockSpec.callLogPath, jsonStringify(b))) && f.verdict === "abort")
+    if (!(await appendLineToFile(mockSpec.callLogPath, jsonStringify(entry))) && result.verdict === "abort")
       process.stderr.write(`eval mock stand-in: could not write the abort record to the call log
 `);
-    switch (f.verdict) {
+    switch (result.verdict) {
       case "ok":
         return {
           content: [
             {
               type: "text",
-              text: unforgeable(f.text),
+              text: unforgeable(result.text),
             },
           ],
         };
@@ -139,7 +139,7 @@ function respondToMockCall(mockSpec) {
           content: [
             {
               type: "text",
-              text: unforgeable(f.text),
+              text: unforgeable(result.text),
             },
           ],
           isError: true,
@@ -149,14 +149,14 @@ function respondToMockCall(mockSpec) {
           content: [
             {
               type: "text",
-              text: `${EVAL_ABORTED_BY_MOCK} ${mockSpec.nonce}: ${mockSpec.server}/${toolName} \u2014 ${f.text}`,
+              text: `${EVAL_ABORTED_BY_MOCK} ${mockSpec.nonce}: ${mockSpec.server}/${toolName} \u2014 ${result.text}`,
             },
           ],
           isError: true,
         };
     }
   }
-  return n;
+  return server;
 }
 //@ chunk-vzw8h259.js:12648-13183 placement
 /**
@@ -164,11 +164,11 @@ function respondToMockCall(mockSpec) {
  */
 async function answerMockResponder(responder, input, relay, toolName = "") {
   if (responder.expect !== null) {
-    let n = checkExpectGuards(input, responder.expect);
-    if (n !== null)
+    let problem = checkExpectGuards(input, responder.expect);
+    if (problem !== null)
       return {
         verdict: "abort",
-        text: `input violates expect: ${n}`,
+        text: `input violates expect: ${problem}`,
       };
   }
   switch (responder.kind) {
@@ -189,24 +189,27 @@ async function answerMockResponder(responder, input, relay, toolName = "") {
       );
     }
     case "fixed": {
-      let n = await substituteAgentInput(responder.body, input, responder.baseDir, readFixture);
-      if (!n.ok)
+      let substituted = await substituteAgentInput(responder.body, input, responder.baseDir, readFixture);
+      if (!substituted.ok)
         return {
           verdict: "tool_error",
-          text: n.reason,
+          text: substituted.reason,
         };
       return {
         verdict: responder.isError ? "tool_error" : "ok",
-        text: n.text,
+        text: substituted.text,
       };
     }
   }
 }
 //@ chunk-vzw8h259.js:13183-13638 placement
-async function readFixture(e) {
+async function readFixture(fixturePath) {
   try {
-    await checkRepoAuthoredPath(path.dirname(e), path.basename(e), "mock fixture");
-    let handle = await open(e, constants.O_RDONLY | (getPlatform() === "windows" ? 0 : constants.O_NONBLOCK));
+    await checkRepoAuthoredPath(path.dirname(fixturePath), path.basename(fixturePath), "mock fixture");
+    let handle = await open(
+      fixturePath,
+      constants.O_RDONLY | (getPlatform() === "windows" ? 0 : constants.O_NONBLOCK),
+    );
     try {
       let stats = await handle.stat();
       if (!stats.isFile())
@@ -239,9 +242,9 @@ function extractToolInputForTelemetry(input) {
     : input;
 }
 //@ chunk-vzw8h259.js:13724-13779 placement
-function stringifyForTelemetry(e) {
-  let t = jsonStringify(e) ?? "";
-  return t.length > MAX_AGENT_INPUT_CHARS ? extractToolInputForTelemetry(t) : e;
+function stringifyForTelemetry(input) {
+  let json = jsonStringify(input) ?? "";
+  return json.length > MAX_AGENT_INPUT_CHARS ? extractToolInputForTelemetry(json) : input;
 }
 //@ chunk-vzw8h259.js:13779-14105 placement
 /**
@@ -249,28 +252,28 @@ function stringifyForTelemetry(e) {
  */
 async function appendLineToFile(path, line) {
   try {
-    let r =
+    let openFlags =
       constants.O_WRONLY |
       constants.O_APPEND |
       constants.O_CREAT |
       (getPlatform() === "windows" ? 0 : constants.O_NONBLOCK);
-    let i = await open(path, r, 384);
+    let handle = await open(path, openFlags, 384);
     try {
-      if (!(await i.stat()).isFile()) return false;
+      if (!(await handle.stat()).isFile()) return false;
       let buffer = Buffer.from(
         `${line}
 `,
         "utf8",
       );
-      let s = 0;
-      while (s < buffer.length) {
-        let { bytesWritten } = await i.write(buffer, s);
+      let written = 0;
+      while (written < buffer.length) {
+        let { bytesWritten } = await handle.write(buffer, written);
         if (bytesWritten <= 0) return false;
-        s += bytesWritten;
+        written += bytesWritten;
       }
       return true;
     } finally {
-      await i.close();
+      await handle.close();
     }
   } catch {
     return false;
@@ -278,18 +281,18 @@ async function appendLineToFile(path, line) {
 }
 //@ chunk-vzw8h259.js:14105-14268 placement
 async function readExactly(handle, size) {
-  let r = Buffer.alloc(size);
-  let i = 0;
-  while (i < size) {
+  let buffer = Buffer.alloc(size);
+  let filled = 0;
+  while (filled < size) {
     let { bytesRead } = await handle.read({
-      buffer: r,
-      offset: i,
-      position: i,
+      buffer,
+      offset: filled,
+      position: filled,
     });
     if (bytesRead <= 0) break;
-    i += bytesRead;
+    filled += bytesRead;
   }
-  return r.subarray(0, i);
+  return buffer.subarray(0, filled);
 }
 //@ chunk-vzw8h259.js:14268-14340 placement
 function unforgeable(text) {
@@ -326,4 +329,4 @@ async function readMockSpecFile(path_2) {
     await handle.close();
   }
 }
-export { unforgeable, readFixture, MAX_AGENT_INPUT_SUBSTITUTION_CHARS };
+export { unforgeable, readFixture, MAX_AGENT_INPUT_SUBSTITUTION_CHARS, runEvalMockServer };

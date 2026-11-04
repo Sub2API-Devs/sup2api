@@ -10,45 +10,46 @@
  */
 
 //@ chunk-63641kq7.js:7195-7403 placement
-function getQueuedCommandField(e, n) {
-  let attachment = e.type === "attachment" ? e.attachment : undefined;
+function getQueuedCommandField(attachment, field) {
+  let attachment_2 = attachment.type === "attachment" ? attachment.attachment : undefined;
   if (
-    typeof attachment !== "object" ||
-    attachment === null ||
-    !("type" in attachment) ||
-    attachment.type !== "queued_command"
+    typeof attachment_2 !== "object" ||
+    attachment_2 === null ||
+    !("type" in attachment_2) ||
+    attachment_2.type !== "queued_command"
   )
     return;
-  let t = Reflect.get(attachment, n);
-  return typeof t === "string" && t ? t : undefined;
+  let value = Reflect.get(attachment_2, field);
+  return typeof value === "string" && value ? value : undefined;
 }
 //@ chunk-63641kq7.js:7403-7445 placement
-function getSourceUuid(e) {
-  return getQueuedCommandField(e, "source_uuid");
+function getSourceUuid(message) {
+  return getQueuedCommandField(message, "source_uuid");
 }
 //@ chunk-63641kq7.js:7445-7487 placement
-function getDeliveryId(e) {
-  return getQueuedCommandField(e, "delivery_id");
+function getDeliveryId(message) {
+  return getQueuedCommandField(message, "delivery_id");
 }
 //@ chunk-63641kq7.js:7487-7612 placement
-function getMessageIdentityUuids(e) {
-  let { submitUuid } = e;
-  let r =
-    getSourceUuid(e) ?? (e.type === "system" && typeof submitUuid === "string" ? submitUuid : undefined);
-  return r ? [e.uuid, r] : [e.uuid];
+function getMessageIdentityUuids(message) {
+  let { submitUuid } = message;
+  let uuids =
+    getSourceUuid(message) ??
+    (message.type === "system" && typeof submitUuid === "string" ? submitUuid : undefined);
+  return uuids ? [message.uuid, uuids] : [message.uuid];
 }
 //@ chunk-63641kq7.js:7612-7680 placement
-function getDroppedPromptUuids(e) {
-  return e.type === "user" ? filterUuidList(e.droppedPromptUuids) : [];
+function getDroppedPromptUuids(message) {
+  return message.type === "user" ? filterUuidList(message.droppedPromptUuids) : [];
 }
 //@ chunk-63641kq7.js:7680-7766 placement
-function filterUuidList(e) {
-  return Array.isArray(e) ? e.filter((n) => typeof n === "string" && n !== "") : [];
+function filterUuidList(list) {
+  return Array.isArray(list) ? list.filter((uuid) => typeof uuid === "string" && uuid !== "") : [];
 }
 //@ chunk-63641kq7.js:7766-7864 placement
-function findMessageIndexByUuid(e, uuid) {
-  let index = e.findIndex((t) => t.uuid === uuid);
-  return index !== -1 ? index : e.findIndex((t) => getSourceUuid(t) === uuid);
+function findMessageIndexByUuid(messages, uuid) {
+  let index = messages.findIndex((message) => message.uuid === uuid);
+  return index !== -1 ? index : messages.findIndex((message) => getSourceUuid(message) === uuid);
 }
 export {
   getMessageIdentityUuids,

@@ -5,11 +5,11 @@
  * pieces: chunk-vwj6ccer.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 import { require_Node } from "./Node.js";
 
 //@ chunk-vwj6ccer.js:44212-44606 cjs-fingerprint
-var require_NonDocumentTypeChildNode = x(function (cjsExports, cjsModule) {
+var require_NonDocumentTypeChildNode = __commonJS(function (cjsExports, cjsModule) {
   var Node = require_Node();
   var NonDocumentTypeChildNode = {
     nextElementSibling: {

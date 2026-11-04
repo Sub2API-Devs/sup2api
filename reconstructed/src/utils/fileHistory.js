@@ -42,7 +42,7 @@ import { plural } from "./stringUtils.js";
 import { pathExists } from "./fsSafety/atomicWriteStaging.js";
 import { isNonWslUncPath, isNetworkOrSpecialPath } from "./networkPaths.js";
 import { yieldToEventLoop } from "../native-ts/file-index/index.js";
-import { Y5e } from "../../vendor/diff/libesm/diff/line.js";
+import { diffLines } from "../../vendor/diff/libesm/diff/line.js";
 import { resetPlanFileCacheToUnknown } from "./plans.js";
 import { isSafeIdSegment_2 } from "./agentId.js";
 import { getClaudeConfigDir } from "./envUtils.js";
@@ -58,38 +58,39 @@ import { concatSafe, lit as lit_2, fromNumber, joinSafe } from "../services/anal
 import { pMap } from "../../vendor/p-map/index.js";
 import { lintMemoryWrite } from "../memdir/memoryWriteLint.js";
 import { cleanupOldFilesInDirectory } from "./cleanup.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:1372980-1374895 facade-exports = fileHistoryMakeSnapshot (0.556)
 /**
  * fileHistory 状态归约：track（把首个备份记入最近快照并记 delta）、snapshot（追加快照，超过上限淘汰旧快照并删除不再引用的备份、记录到会话日志、通知 VS Code）、touch（只增序号）。
  */
-function reduceFileHistoryState(fileHistory, n, storageV5) {
-  switch (n.kind) {
+function reduceFileHistoryState(fileHistory, action, storageV5) {
+  switch (action.kind) {
     case "track":
       try {
         let mostRecentSnapshot = fileHistory.snapshots.at(-1);
         if (!mostRecentSnapshot) return fileHistory;
         let trackSequence = (fileHistory.trackSequence ?? 0) + 1;
-        if (getOwn(mostRecentSnapshot.trackedFileBackups, n.trackingPath))
+        if (getOwn(mostRecentSnapshot.trackedFileBackups, action.trackingPath))
           return {
             ...fileHistory,
             trackSequence,
           };
-        let trackedFiles = fileHistory.trackedFiles.has(n.trackingPath)
+        let trackedFiles = fileHistory.trackedFiles.has(action.trackingPath)
           ? fileHistory.trackedFiles
-          : new Set(fileHistory.trackedFiles).add(n.trackingPath);
-        let S = {
+          : new Set(fileHistory.trackedFiles).add(action.trackingPath);
+        let nextState = {
           ...mostRecentSnapshot,
           trackedFileBackups: {
             ...mostRecentSnapshot.trackedFileBackups,
-            [n.trackingPath]: n.backup,
+            [action.trackingPath]: action.backup,
           },
         };
         let state = {
           ...fileHistory,
           snapshots: (() => {
             let copy = fileHistory.snapshots.slice();
-            copy[copy.length - 1] = S;
+            copy[copy.length - 1] = nextState;
             return copy;
           })(),
           trackedFiles,
@@ -97,19 +98,19 @@ function reduceFileHistoryState(fileHistory, n, storageV5) {
         };
         maybeDumpStateForDebug(state);
         recordFileHistoryDelta(
-          n.messageId,
+          action.messageId,
           mostRecentSnapshot.messageId,
-          n.trackingPath,
-          n.backup,
+          action.trackingPath,
+          action.backup,
           storageV5,
         ).catch((trackingPath) => {
           logError(Error(`FileHistory: Failed to record delta: ${trackingPath}`));
         });
         logEvent("tengu_file_history_track_edit_success", {
-          isNewFile: n.isAddingFile,
-          version: n.backup.version,
+          isNewFile: action.isAddingFile,
+          version: action.backup.version,
         });
-        logForDebugging(`FileHistory: Tracked file modification for ${n.filePath}`);
+        logForDebugging(`FileHistory: Tracked file modification for ${action.filePath}`);
         return state;
       } catch (error) {
         logError(error);
@@ -118,54 +119,56 @@ function reduceFileHistoryState(fileHistory, n, storageV5) {
       }
     case "snapshot":
       try {
-        let s = {
-          ...n.trackedFileBackups,
+        let backups = {
+          ...action.trackedFileBackups,
         };
         let lastSnapshot = fileHistory.snapshots.at(-1);
         if (lastSnapshot)
           for (let trackingPath of fileHistory.trackedFiles) {
-            if (Object.hasOwn(s, trackingPath)) continue;
+            if (Object.hasOwn(backups, trackingPath)) continue;
             let inherited = getOwn(lastSnapshot.trackedFileBackups, trackingPath);
-            if (inherited) defineOwnProperty(s, trackingPath, inherited);
+            if (inherited) defineOwnProperty(backups, trackingPath, inherited);
           }
         let now = new Date();
-        let S = {
-          messageId: n.messageId,
-          trackedFileBackups: s,
+        let snapshot = {
+          messageId: action.messageId,
+          trackedFileBackups: backups,
           timestamp: now,
-          ...(n.preCheckpoint && {
+          ...(action.preCheckpoint && {
             preCheckpoint: true,
           }),
         };
         let allSnapshots = [
-          ...(n.preCheckpoint
+          ...(action.preCheckpoint
             ? fileHistory.snapshots.map((snapshot) => {
-                if (snapshot.messageId !== n.messageId || !snapshot.preCheckpoint) return snapshot;
-                let { preCheckpoint, ...ke } = snapshot;
-                return ke;
+                if (snapshot.messageId !== action.messageId || !snapshot.preCheckpoint) return snapshot;
+                let { preCheckpoint, ...restSnapshot } = snapshot;
+                return restSnapshot;
               })
             : fileHistory.snapshots),
-          S,
+          snapshot,
         ];
-        let G = allSnapshots;
+        let allSnapshots_2 = allSnapshots;
         if (allSnapshots.length > MAX_LOGS) {
-          G = allSnapshots.slice(-MAX_LOGS);
-          deleteEvictedBackups(allSnapshots.slice(0, allSnapshots.length - MAX_LOGS), G, storageV5).catch(
-            logError,
-          );
+          allSnapshots_2 = allSnapshots.slice(-MAX_LOGS);
+          deleteEvictedBackups(
+            allSnapshots.slice(0, allSnapshots.length - MAX_LOGS),
+            allSnapshots_2,
+            storageV5,
+          ).catch(logError);
         }
         let updatedState = {
           ...fileHistory,
-          snapshots: G,
+          snapshots: allSnapshots_2,
           snapshotSequence: (fileHistory.snapshotSequence ?? 0) + 1,
         };
         maybeDumpStateForDebug(updatedState);
         notifyVscodeSnapshotFilesUpdated(fileHistory, updatedState).catch(logError);
-        recordFileHistorySnapshot(n.messageId, S, false, storageV5).catch((error) => {
+        recordFileHistorySnapshot(action.messageId, snapshot, false, storageV5).catch((error) => {
           logError(Error(`FileHistory: Failed to record snapshot: ${error}`));
         });
         logForDebugging(
-          `FileHistory: Added snapshot for ${n.messageId}, tracking ${fileHistory.trackedFiles.size} files`,
+          `FileHistory: Added snapshot for ${action.messageId}, tracking ${fileHistory.trackedFiles.size} files`,
         );
         logEvent("tengu_file_history_snapshot_success", {
           trackedFilesCount: fileHistory.trackedFiles.size,
@@ -188,34 +191,34 @@ function reduceFileHistoryState(fileHistory, n, storageV5) {
 /**
  * 删除被淘汰快照中不再被保留快照引用的备份文件（v1 首备份不删）。
  */
-async function deleteEvictedBackups(e, n, r) {
+async function deleteEvictedBackups(firstList, secondList, storageV5) {
   let sessionId = getSessionId();
-  let h = new Set();
-  for (let S of n)
-    for (let trackedFileBackup of Object.values(S.trackedFileBackups))
-      if (trackedFileBackup.backupFileName !== null) h.add(trackedFileBackup.backupFileName);
-  let y = new Set();
-  for (let S of e)
-    for (let trackedFileBackup of Object.values(S.trackedFileBackups))
+  let kept = new Set();
+  for (let entry of secondList)
+    for (let trackedFileBackup of Object.values(entry.trackedFileBackups))
+      if (trackedFileBackup.backupFileName !== null) kept.add(trackedFileBackup.backupFileName);
+  let evicted = new Set();
+  for (let entry of firstList)
+    for (let trackedFileBackup of Object.values(entry.trackedFileBackups))
       if (
         trackedFileBackup.backupFileName !== null &&
-        !h.has(trackedFileBackup.backupFileName) &&
+        !kept.has(trackedFileBackup.backupFileName) &&
         trackedFileBackup.version !== 1 &&
         BACKUP_FILE_NAME_RE.test(trackedFileBackup.backupFileName)
       )
-        y.add(trackedFileBackup.backupFileName);
-  for (let S of y)
+        evicted.add(trackedFileBackup.backupFileName);
+  for (let key of evicted)
     try {
-      if (r) {
-        let w = await r.delete(resolveBackupStorageKey(S, sessionId));
-        if (!w.ok)
-          logForDebugging(`FileHistory: failed to delete evicted backup ${S}: ${w.error.code}`, {
+      if (storageV5) {
+        let deleteResult = await storageV5.delete(resolveBackupStorageKey(key, sessionId));
+        if (!deleteResult.ok)
+          logForDebugging(`FileHistory: failed to delete evicted backup ${key}: ${deleteResult.error.code}`, {
             level: "error",
           });
-      } else await unlink(resolveBackupPath_2(S, sessionId));
+      } else await unlink(resolveBackupPath_2(key, sessionId));
     } catch (error) {
       if (!isENOENT(error))
-        logForDebugging(`FileHistory: failed to delete evicted backup ${S}: ${error}`, {
+        logForDebugging(`FileHistory: failed to delete evicted backup ${key}: ${error}`, {
           level: "error",
         });
     }
@@ -251,14 +254,14 @@ async function fileHistoryTrackEdit(getFileHistoryState, applyFileHistoryOp, fil
     return;
   }
   let trackingPath = maybeShortenFilePath(filePath);
-  let y = getFileHistoryState();
-  if (!y) {
+  let state = getFileHistoryState();
+  if (!state) {
     applyFileHistoryOp({
       kind: "touch",
     });
     return;
   }
-  let mostRecent = y.snapshots.at(-1);
+  let mostRecent = state.snapshots.at(-1);
   if (!mostRecent) {
     logForDebugging("FileHistory: Missing most recent snapshot", {
       level: "error",
@@ -275,16 +278,16 @@ async function fileHistoryTrackEdit(getFileHistoryState, applyFileHistoryOp, fil
     });
     return;
   }
-  for (let snapshot of y.snapshots)
+  for (let snapshot of state.snapshots)
     if (getOwn(snapshot.trackedFileBackups, trackingPath)) {
       applyFileHistoryOp({
         kind: "touch",
       });
       return;
     }
-  let w;
+  let snapshot;
   try {
-    w = await createBackup(filePath, 1);
+    snapshot = await createBackup(filePath, 1);
   } catch (error) {
     logForDebugging(
       `FileHistory: failed to back up ${filePath}: ${error instanceof Error ? error.message : String(error)}`,
@@ -298,12 +301,12 @@ async function fileHistoryTrackEdit(getFileHistoryState, applyFileHistoryOp, fil
     });
     return;
   }
-  let isAddingFile = w.backupFileName === null;
+  let isAddingFile = snapshot.backupFileName === null;
   applyFileHistoryOp({
     kind: "track",
     trackingPath,
     filePath,
-    backup: w,
+    backup: snapshot,
     messageId,
     isAddingFile,
   });
@@ -312,79 +315,86 @@ async function fileHistoryTrackEdit(getFileHistoryState, applyFileHistoryOp, fil
 /**
  * 为一条消息生成快照：对每个已跟踪文件，未变则复用上个备份，删除则记 null，否则创建新版本备份；最后派发 snapshot 操作（支持 preCheckpoint）。
  */
-async function fileHistoryMakeSnapshot(e, n, r, s) {
+async function fileHistoryMakeSnapshot(getState, sessionId, messageId, options) {
   if (!fileHistoryEnabled()) return;
-  let h = e();
-  if (!h) return;
-  if (!s?.preCheckpoint && h.snapshots.some((snapshot) => snapshot.messageId === r && snapshot.preCheckpoint))
+  let state = getState();
+  if (!state) return;
+  if (
+    !options?.preCheckpoint &&
+    state.snapshots.some((snapshot) => snapshot.messageId === messageId && snapshot.preCheckpoint)
+  )
     return;
-  let y = {};
-  let last = h.snapshots.at(-1);
+  let backups = {};
+  let last = state.snapshots.at(-1);
   if (last) {
-    logForDebugging(`FileHistory: Making snapshot for message ${r}`);
+    logForDebugging(`FileHistory: Making snapshot for message ${messageId}`);
     await Promise.all(
-      Array.from(h.trackedFiles, async (w) => {
+      Array.from(state.trackedFiles, async (trackingPath) => {
         try {
-          let L = expandTrackingPath(w);
-          let G = getOwn(last.trackedFileBackups, w);
-          let backupVersion = parseBackupVersion(G?.backupFileName);
-          let Z = 0;
-          for (let snapshot of h.snapshots) {
-            let Ae = getOwn(snapshot.trackedFileBackups, w);
-            if (Ae && isUsableBackupVersion(Ae.version)) Z = Math.max(Z, Ae.version);
-            let backupVersion = parseBackupVersion(Ae?.backupFileName);
-            if (backupVersion !== undefined) Z = Math.max(Z, backupVersion);
+          let expandedPath = expandTrackingPath(trackingPath);
+          let prevBackup = getOwn(last.trackedFileBackups, trackingPath);
+          let backupVersion = parseBackupVersion(prevBackup?.backupFileName);
+          let maxVersion = 0;
+          for (let snapshot of state.snapshots) {
+            let oldBackup = getOwn(snapshot.trackedFileBackups, trackingPath);
+            if (oldBackup && isUsableBackupVersion(oldBackup.version))
+              maxVersion = Math.max(maxVersion, oldBackup.version);
+            let backupVersion = parseBackupVersion(oldBackup?.backupFileName);
+            if (backupVersion !== undefined) maxVersion = Math.max(maxVersion, backupVersion);
           }
-          let version = Z + 1;
+          let version = maxVersion + 1;
           if (!isUsableBackupVersion(version)) throw Error("FileHistory: no usable next version");
           let originalStatsHint;
           try {
-            originalStatsHint = await stat(L);
+            originalStatsHint = await stat(expandedPath);
           } catch (error) {
             if (!isENOENT(error)) throw error;
           }
           if (!originalStatsHint) {
-            defineOwnProperty(y, w, {
+            defineOwnProperty(backups, trackingPath, {
               backupFileName: null,
               version,
               backupTime: new Date(),
-              realParentDir: await isENOENT_2(L),
+              realParentDir: await isENOENT_2(expandedPath),
             });
             logEvent("tengu_file_history_backup_deleted_file", {
               version,
             });
-            logForDebugging(`FileHistory: Missing tracked file: ${w}`);
+            logForDebugging(`FileHistory: Missing tracked file: ${trackingPath}`);
             return;
           }
-          let we =
+          let reusedVersion =
             backupVersion !== undefined
               ? backupVersion
-              : G && isUsableBackupVersion(G.version)
-                ? G.version
+              : prevBackup && isUsableBackupVersion(prevBackup.version)
+                ? prevBackup.version
                 : undefined;
           if (
-            G &&
-            typeof G.backupFileName === "string" &&
-            BACKUP_FILE_NAME_PATTERN_WITH_LEGACY.test(G.backupFileName) &&
-            we !== undefined &&
-            !(await hasFileChangedSinceBackup(L, G.backupFileName, originalStatsHint))
+            prevBackup &&
+            typeof prevBackup.backupFileName === "string" &&
+            BACKUP_FILE_NAME_PATTERN_WITH_LEGACY.test(prevBackup.backupFileName) &&
+            reusedVersion !== undefined &&
+            !(await hasFileChangedSinceBackup(expandedPath, prevBackup.backupFileName, originalStatsHint))
           ) {
             defineOwnProperty(
-              y,
-              w,
-              G.realParentDir !== undefined && we === G.version
-                ? G
+              backups,
+              trackingPath,
+              prevBackup.realParentDir !== undefined && reusedVersion === prevBackup.version
+                ? prevBackup
                 : {
-                    ...G,
-                    version: we,
-                    realParentDir: G.realParentDir !== undefined ? G.realParentDir : await isENOENT_2(L),
+                    ...prevBackup,
+                    version: reusedVersion,
+                    realParentDir:
+                      prevBackup.realParentDir !== undefined
+                        ? prevBackup.realParentDir
+                        : await isENOENT_2(expandedPath),
                   },
             );
             return;
           }
-          defineOwnProperty(y, w, await createBackup(L, version));
+          defineOwnProperty(backups, trackingPath, await createBackup(expandedPath, version));
         } catch (error) {
-          logForDebugging(`FileHistory: Failed to back up ${w}: ${error}`, {
+          logForDebugging(`FileHistory: Failed to back up ${trackingPath}: ${error}`, {
             level: "error",
           });
           logEvent("tengu_file_history_backup_file_failed", {});
@@ -392,11 +402,11 @@ async function fileHistoryMakeSnapshot(e, n, r, s) {
       }),
     );
   }
-  n({
+  sessionId({
     kind: "snapshot",
-    messageId: r,
-    trackedFileBackups: y,
-    ...(s?.preCheckpoint && {
+    messageId,
+    trackedFileBackups: backups,
+    ...(options?.preCheckpoint && {
       preCheckpoint: true,
     }),
   });
@@ -405,7 +415,12 @@ async function fileHistoryMakeSnapshot(e, n, r, s) {
 /**
  * rewind 时所有有差异的文件都恢复失败抛出的错误类型。
  */
-class RewindNoFilesRestoredError extends TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS {}
+let RewindNoFilesRestoredError; // deferred: uses TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS (./errors.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:1377957", () => {
+  RewindNoFilesRestoredError = class RewindNoFilesRestoredError extends (
+    TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
+  ) {};
+});
 //@ chunk-e6aww6q8.js:1377978-1379208 facade-exports = fileHistoryRewind (0.674)
 /**
  * 回退到某消息的快照：applySnapshot 恢复所有已跟踪文件；全部失败时抛 NoFilesRestoredError；返回跳过的链接数。
@@ -423,12 +438,16 @@ async function fileHistoryRewind(updateFileHistoryState, messageId) {
     });
     throw Error("The selected snapshot was not found");
   }
-  let h;
-  let y;
-  let S;
+  let before;
+  let after;
+  let counts;
   try {
     logForDebugging(`FileHistory: [Rewind] Rewinding to snapshot for ${messageId}`);
-    ({ filesChanged: h, filesFailed: y, skippedLinks: S } = await applySnapshot(captured, targetSnapshot));
+    ({
+      filesChanged: before,
+      filesFailed: after,
+      skippedLinks: counts,
+    } = await applySnapshot(captured, targetSnapshot));
   } catch (error) {
     logError(error);
     logEvent("tengu_file_history_rewind_failed", {
@@ -437,27 +456,27 @@ async function fileHistoryRewind(updateFileHistoryState, messageId) {
     });
     throw error;
   }
-  if (y.length > 0 && h.length === 0) {
+  if (after.length > 0 && before.length === 0) {
     logEvent("tengu_file_history_rewind_failed", {
       trackedFilesCount: captured.trackedFiles.size,
       snapshotFound: true,
-      filesFailedCount: y.length,
-      skippedLinksCount: S,
+      filesFailedCount: after.length,
+      skippedLinksCount: counts,
     });
     throw new RewindNoFilesRestoredError(
-      `No files were restored: ${y.length} ${plural(y.length, "file")} failed (backup missing, or the file could not be updated)${S > 0 ? `, and ${S} ${plural(S, "path was", "paths were")} skipped for link safety` : ""}`,
+      `No files were restored: ${after.length} ${plural(after.length, "file")} failed (backup missing, or the file could not be updated)${counts > 0 ? `, and ${counts} ${plural(counts, "path was", "paths were")} skipped for link safety` : ""}`,
       "No files were restored: all differing files failed",
     );
   }
   logForDebugging(`FileHistory: [Rewind] Finished rewinding to ${messageId}`);
   logEvent("tengu_file_history_rewind_success", {
     trackedFilesCount: captured.trackedFiles.size,
-    filesChangedCount: h.length,
-    filesFailedCount: y.length,
-    skippedLinksCount: S,
+    filesChangedCount: before.length,
+    filesFailedCount: after.length,
+    skippedLinksCount: counts,
   });
   return {
-    skippedLinks: S,
+    skippedLinks: counts,
   };
 }
 //@ chunk-e6aww6q8.js:1379208-1379290 facade-exports = fileHistoryCanRestore (1)
@@ -544,33 +563,35 @@ var RECENT_MTIME_WINDOW_MS = 2000;
 /**
  * 统计两个快照之间（或快照到当前磁盘）每个文件的增删行，用于消息选择器显示每轮改动。
  */
-async function fileHistoryGetTurnDiffStats(fileHistory, uuid, r, s) {
+async function fileHistoryGetTurnDiffStats(fileHistory, uuid, previousMessageId, options) {
   if (!fileHistoryEnabled()) return;
   let targetSnapshot = fileHistory.snapshots.findLast((snapshot) => snapshot.messageId === uuid);
   if (!targetSnapshot) return;
-  let y =
-    r === undefined ? undefined : fileHistory.snapshots.findLast((snapshot) => snapshot.messageId === r);
-  let S = [];
+  let previousSnapshot =
+    previousMessageId === undefined
+      ? undefined
+      : fileHistory.snapshots.findLast((snapshot) => snapshot.messageId === previousMessageId);
+  let files = [];
   for (let trackingPath of fileHistory.trackedFiles)
     try {
-      let Se = getOwn(targetSnapshot.trackedFileBackups, trackingPath);
-      let ke = y && getOwn(y.trackedFileBackups, trackingPath);
-      if (y && !Se && !ke) continue;
-      let we = Se ?? getBackupFileNameFirstVersion(trackingPath, fileHistory);
-      let backupFileName = we?.backupFileName;
-      let backupFileName_2 = y
-        ? (ke ?? getBackupFileNameFirstVersion(trackingPath, fileHistory))?.backupFileName
+      let afterBackup = getOwn(targetSnapshot.trackedFileBackups, trackingPath);
+      let beforeBackup = previousSnapshot && getOwn(previousSnapshot.trackedFileBackups, trackingPath);
+      if (previousSnapshot && !afterBackup && !beforeBackup) continue;
+      let afterRef = afterBackup ?? getBackupFileNameFirstVersion(trackingPath, fileHistory);
+      let backupFileName = afterRef?.backupFileName;
+      let backupFileName_2 = previousSnapshot
+        ? (beforeBackup ?? getBackupFileNameFirstVersion(trackingPath, fileHistory))?.backupFileName
         : undefined;
       if (
         backupFileName === undefined ||
-        (y && (backupFileName_2 === undefined || backupFileName_2 === backupFileName))
+        (previousSnapshot && (backupFileName_2 === undefined || backupFileName_2 === backupFileName))
       )
         continue;
-      S.push({
+      files.push({
         trackingPath,
         before: backupFileName,
-        beforeTakenAt: new Date(we?.backupTime ?? Number.NaN).getTime(),
-        beforeRealParentDir: we?.realParentDir,
+        beforeTakenAt: new Date(afterRef?.backupTime ?? Number.NaN).getTime(),
+        beforeRealParentDir: afterRef?.realParentDir,
         after: backupFileName_2,
       });
     } catch (error) {
@@ -578,66 +599,68 @@ async function fileHistoryGetTurnDiffStats(fileHistory, uuid, r, s) {
         level: "error",
       });
     }
-  let w = [];
+  let changedFiles = [];
   let insertions = 0;
   let deletions = 0;
-  let q = true;
-  for (let { trackingPath, before, beforeTakenAt, beforeRealParentDir, after } of S) {
-    if (s.signal.aborted) return;
+  let isComplete = true;
+  for (let { trackingPath, before, beforeTakenAt, beforeRealParentDir, after } of files) {
+    if (options.signal.aborted) return;
     try {
       let filePath = expandTrackingPath(trackingPath);
-      let Ie = performance.now() >= s.countUntil;
-      let Me;
+      let pastDeadline = performance.now() >= options.countUntil;
+      let lineCounts;
       if (
         after === undefined &&
-        ([trackingPath, filePath].some((ze) => isNonWslUncPath(ze) || isNetworkOrSpecialPath(ze)) ||
+        ([trackingPath, filePath].some((path) => isNonWslUncPath(path) || isNetworkOrSpecialPath(path)) ||
           (await checkRestoreDestination(filePath, beforeRealParentDir).then(
-            (ze) => ze.verdict === "refused",
+            (verdict) => verdict.verdict === "refused",
             () => true,
           )))
       )
-        Me = null;
+        lineCounts = null;
       else if (after === undefined) {
-        let maxBytes = Ie ? -1 : TURN_DIFF_MAX_BYTES;
-        let [backupForDiff, Je] = await Promise.all([
+        let maxBytes = pastDeadline ? -1 : TURN_DIFF_MAX_BYTES;
+        let [backupForDiff, beforeDiff] = await Promise.all([
           readBackupForDiff(before, maxBytes),
           checkOriginFileChanged(filePath, {
             noFollow: true,
             maxBytes,
           }),
         ]);
-        if (hasTextOrAbsent(backupForDiff) && hasTextOrAbsent(Je))
-          Me = countLineChanges(backupForDiff.text, Je.text);
-        else if (backupForDiff.stats === undefined || Je.stats === undefined) Me = null;
+        if (hasTextOrAbsent(backupForDiff) && hasTextOrAbsent(beforeDiff))
+          lineCounts = countLineChanges(backupForDiff.text, beforeDiff.text);
+        else if (backupForDiff.stats === undefined || beforeDiff.stats === undefined) lineCounts = null;
         else {
           let mtimeMs = backupForDiff.stats?.mtimeMs ?? 0;
-          let pt = Je.stats?.mtimeMs !== mtimeMs || beforeTakenAt - mtimeMs <= RECENT_MTIME_WINDOW_MS;
-          if (compareStatsAndContent(Je.stats, backupForDiff.stats, () => pt)) Me = null;
+          let recentBefore =
+            beforeDiff.stats?.mtimeMs !== mtimeMs || beforeTakenAt - mtimeMs <= RECENT_MTIME_WINDOW_MS;
+          if (compareStatsAndContent(beforeDiff.stats, backupForDiff.stats, () => recentBefore))
+            lineCounts = null;
         }
       } else {
-        let ze = `${before}:${after}`;
-        Me = s.pairCounts.get(ze);
-        if (!Me && Ie) Me = null;
-        else if (!Me) {
+        let pairKey = `${before}:${after}`;
+        lineCounts = options.pairCounts.get(pairKey);
+        if (!lineCounts && pastDeadline) lineCounts = null;
+        else if (!lineCounts) {
           let [backupForDiff, backupForDiff_2] = await Promise.all([
             readBackupForDiff(before, TURN_DIFF_MAX_BYTES),
             readBackupForDiff(after, TURN_DIFF_MAX_BYTES),
           ]);
-          Me =
+          lineCounts =
             hasTextOrAbsent(backupForDiff) && hasTextOrAbsent(backupForDiff_2)
               ? countLineChanges(backupForDiff.text, backupForDiff_2.text)
               : null;
-          if (Me) s.pairCounts.set(ze, Me);
+          if (lineCounts) options.pairCounts.set(pairKey, lineCounts);
         }
       }
-      if (Me === undefined) continue;
-      w.push(filePath);
-      if (Me === null) {
-        q = false;
+      if (lineCounts === undefined) continue;
+      changedFiles.push(filePath);
+      if (lineCounts === null) {
+        isComplete = false;
         continue;
       }
-      insertions += Me.insertions;
-      deletions += Me.deletions;
+      insertions += lineCounts.insertions;
+      deletions += lineCounts.deletions;
       await yieldToEventLoop();
     } catch (error) {
       logForDebugging(`FileHistory: skipping turn diff stats for ${trackingPath}: ${errorMessage(error)}`, {
@@ -645,33 +668,33 @@ async function fileHistoryGetTurnDiffStats(fileHistory, uuid, r, s) {
       });
     }
   }
-  return q
+  return isComplete
     ? {
-        filesChanged: w,
+        filesChanged: changedFiles,
         insertions,
         deletions,
       }
     : {
-        filesChanged: w,
+        filesChanged: changedFiles,
         insertions: 0,
         deletions: 0,
       };
 }
 //@ chunk-e6aww6q8.js:1381968-1382110 layout
-async function readBackupForDiff(e, maxBytes) {
-  if (e === null)
+async function readBackupForDiff(backupKey, maxBytes) {
+  if (backupKey === null)
     return {
       stats: null,
     };
-  let r = await checkOriginFileChanged(resolveBackupPath_2(e), {
+  let originState = await checkOriginFileChanged(resolveBackupPath_2(backupKey), {
     noFollow: true,
     maxBytes,
   });
-  return r.stats === null
+  return originState.stats === null
     ? {
         stats: undefined,
       }
-    : r;
+    : originState;
 }
 //@ chunk-e6aww6q8.js:1382110-1382165 layout
 function hasTextOrAbsent(backupForDiff) {
@@ -680,45 +703,45 @@ function hasTextOrAbsent(backupForDiff) {
 //@ chunk-e6aww6q8.js:1382165-1382637 layout
 function countLineChanges(text, text_2) {
   if (text === text_2) return;
-  let r = text ?? "";
-  let s = text_2 ?? "";
-  if (r === "" || s === "")
+  let beforeText = text ?? "";
+  let afterText = text_2 ?? "";
+  if (beforeText === "" || afterText === "")
     return {
-      insertions: splitLinesDroppingTrailing(s).length,
-      deletions: splitLinesDroppingTrailing(r).length,
+      insertions: splitLinesDroppingTrailing(afterText).length,
+      deletions: splitLinesDroppingTrailing(beforeText).length,
     };
-  let h = Y5e(r, s, {
+  let changes = diffLines(beforeText, afterText, {
     maxEditLength: DIFF_MAX_EDIT_LENGTH,
   });
-  if (h) {
+  if (changes) {
     let insertions = 0;
     let deletions = 0;
-    for (let Z of h)
-      if (Z.added) insertions += Z.count;
-      else if (Z.removed) deletions += Z.count;
+    for (let change of changes)
+      if (change.added) insertions += change.count;
+      else if (change.removed) deletions += change.count;
     return {
       insertions,
       deletions,
     };
   }
-  let y = splitLinesDroppingTrailing(r);
-  let S = splitLinesDroppingTrailing(s);
-  let w = new Map();
-  for (let G of y) w.set(G, (w.get(G) ?? 0) + 1);
-  let L = 0;
-  for (let G of S) {
-    let q = w.get(G);
-    if (q) w.set(G, q - 1);
-    else L++;
+  let beforeLines = splitLinesDroppingTrailing(beforeText);
+  let afterLines = splitLinesDroppingTrailing(afterText);
+  let beforeCounts = new Map();
+  for (let line of beforeLines) beforeCounts.set(line, (beforeCounts.get(line) ?? 0) + 1);
+  let insertions = 0;
+  for (let line of afterLines) {
+    let remaining = beforeCounts.get(line);
+    if (remaining) beforeCounts.set(line, remaining - 1);
+    else insertions++;
   }
   return {
-    insertions: L,
-    deletions: y.length - (S.length - L),
+    insertions,
+    deletions: beforeLines.length - (afterLines.length - insertions),
   };
 }
 //@ chunk-e6aww6q8.js:1382637-1382706 layout
-function splitLinesDroppingTrailing(e) {
-  let lines = e.split(`
+function splitLinesDroppingTrailing(text) {
+  let lines = text.split(`
 `);
   if (lines.at(-1) === "") lines.pop();
   return lines;
@@ -728,16 +751,16 @@ function splitLinesDroppingTrailing(e) {
  * 把所有已跟踪文件恢复到目标快照的版本：备份为 null 则删除文件，否则校验目标安全后从备份恢复；返回改动/失败列表与跳过的链接数。
  */
 async function applySnapshot(state, targetSnapshot) {
-  let r = [];
-  let s = [];
-  let h = 0;
+  let changedFiles = [];
+  let failedFiles = [];
+  let skippedLinks = 0;
   for (let trackingPath of state.trackedFiles) {
     let filePath = expandTrackingPath(trackingPath);
     try {
-      let w =
+      let backup =
         getOwn(targetSnapshot.trackedFileBackups, trackingPath) ??
         getBackupFileNameFirstVersion(trackingPath, state);
-      let backupFileName = w?.backupFileName;
+      let backupFileName = backup?.backupFileName;
       if (backupFileName === undefined) {
         logForDebugging("FileHistory: Error finding the backup file to apply", {
           level: "error",
@@ -747,27 +770,27 @@ async function applySnapshot(state, targetSnapshot) {
         });
         continue;
       }
-      let G = await checkRestoreDestination(filePath, w?.realParentDir);
-      if (G.verdict === "refused") {
-        h++;
+      let destCheck = await checkRestoreDestination(filePath, backup?.realParentDir);
+      if (destCheck.verdict === "refused") {
+        skippedLinks++;
         logEvent("tengu_file_history_rewind_restore_file_failed", {
           dryRun: false,
         });
-        logForDebugging(`FileHistory: [Rewind] Refusing to touch ${filePath}: ${G.detail}`, {
+        logForDebugging(`FileHistory: [Rewind] Refusing to touch ${filePath}: ${destCheck.detail}`, {
           level: "error",
         });
         continue;
       }
       if (backupFileName === null) {
         try {
-          let q = await checkRestoreParentDir(filePath, w?.realParentDir);
-          switch (q.verdict) {
+          let parentCheck = await checkRestoreParentDir(filePath, backup?.realParentDir);
+          switch (parentCheck.verdict) {
             case "refused":
-              h++;
+              skippedLinks++;
               logEvent("tengu_file_history_rewind_restore_file_failed", {
                 dryRun: false,
               });
-              logForDebugging(`FileHistory: [Rewind] Refusing to delete ${filePath}: ${q.detail}`, {
+              logForDebugging(`FileHistory: [Rewind] Refusing to delete ${filePath}: ${parentCheck.detail}`, {
                 level: "error",
               });
               continue;
@@ -780,11 +803,11 @@ async function applySnapshot(state, targetSnapshot) {
               break;
           }
           logForDebugging(`FileHistory: [Rewind] Deleted ${filePath}`);
-          r.push(filePath);
+          changedFiles.push(filePath);
         } catch (error) {
           let errnoCode = getErrnoCode(error);
           if (errnoCode === "ENOTDIR" || errnoCode === "ELOOP" || errnoCode === "EISDIR") {
-            h++;
+            skippedLinks++;
             logEvent("tengu_file_history_rewind_restore_file_failed", {
               dryRun: false,
             });
@@ -797,11 +820,11 @@ async function applySnapshot(state, targetSnapshot) {
             continue;
           }
           if (errnoCode === "EPERM") {
-            let Se = await lstat(filePath).catch(() => {
+            let stats = await lstat(filePath).catch(() => {
               return;
             });
-            if (Se !== undefined && !Se.isFile()) {
-              h++;
+            if (stats !== undefined && !stats.isFile()) {
+              skippedLinks++;
               logEvent("tengu_file_history_rewind_restore_file_failed", {
                 dryRun: false,
               });
@@ -819,12 +842,12 @@ async function applySnapshot(state, targetSnapshot) {
         continue;
       }
       if (await hasFileChangedSinceBackup(filePath, backupFileName)) {
-        let q = await restoreBackup(filePath, backupFileName, w?.realParentDir);
-        if (q === "restored") {
+        let outcome = await restoreBackup(filePath, backupFileName, backup?.realParentDir);
+        if (outcome === "restored") {
           logForDebugging(`FileHistory: [Rewind] Restored ${filePath} from ${backupFileName}`);
-          r.push(filePath);
-        } else if (q === "refused") h++;
-        else s.push(filePath);
+          changedFiles.push(filePath);
+        } else if (outcome === "refused") skippedLinks++;
+        else failedFiles.push(filePath);
       }
     } catch (error) {
       logForDebugging(
@@ -836,14 +859,14 @@ async function applySnapshot(state, targetSnapshot) {
       logEvent("tengu_file_history_rewind_restore_file_failed", {
         dryRun: false,
       });
-      s.push(filePath);
+      failedFiles.push(filePath);
     }
   }
   resetPlanFileCacheToUnknown();
   return {
-    filesChanged: r,
-    filesFailed: s,
-    skippedLinks: h,
+    filesChanged: changedFiles,
+    filesFailed: failedFiles,
+    skippedLinks,
   };
 }
 //@ chunk-e6aww6q8.js:1384588-1384870 layout
@@ -904,9 +927,9 @@ async function computeDiffStatsForFile(originalFile, backupFileName) {
         deletions,
       };
     filesChanged.push(originalFile);
-    Y5e(originalContent ?? "", backupContent ?? "").forEach((G) => {
-      if (G.added) insertions += G.count || 0;
-      if (G.removed) deletions += G.count || 0;
+    diffLines(originalContent ?? "", backupContent ?? "").forEach((change) => {
+      if (change.added) insertions += change.count || 0;
+      if (change.removed) deletions += change.count || 0;
     });
   } catch (error) {
     logError(Error(`FileHistory: Error generating diffStats: ${error}`));
@@ -927,8 +950,8 @@ function getBackupFileName(filePath, version) {
 //@ chunk-e6aww6q8.js:1385571-1385601 affinity
 var BACKUP_FILE_NAME_RE = /^[0-9a-f]{16}@v\d+$/;
 //@ chunk-e6aww6q8.js:1385601-1385675 sole-consumer
-function isPositiveSafeInteger(e) {
-  return typeof e === "number" && Number.isSafeInteger(e) && e >= 1;
+function isPositiveSafeInteger(value) {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 1;
 }
 //@ chunk-e6aww6q8.js:1385675-1385715 sole-consumer
 function isUsableBackupVersion(version) {
@@ -938,14 +961,14 @@ function isUsableBackupVersion(version) {
 function parseBackupVersion(backupFileName) {
   if (typeof backupFileName !== "string") return;
   let match = backupFileName.match(/@v(\d+)$/);
-  let r = match ? Number(match[1]) : undefined;
-  return r !== undefined && isUsableBackupVersion(r) ? r : undefined;
+  let version = match ? Number(match[1]) : undefined;
+  return version !== undefined && isUsableBackupVersion(version) ? version : undefined;
 }
 //@ chunk-e6aww6q8.js:1385846-1386014 sole-consumer
-function assertValidBackupFileNameAndSession(e, n) {
-  if (typeof e !== "string" || !BACKUP_FILE_NAME_PATTERN_WITH_LEGACY.test(e))
+function assertValidBackupFileNameAndSession(backupFileName, sessionId) {
+  if (typeof backupFileName !== "string" || !BACKUP_FILE_NAME_PATTERN_WITH_LEGACY.test(backupFileName))
     throw Error("FileHistory: invalid backup file name");
-  if (n && !isSafeIdSegment_2(n)) throw Error("FileHistory: invalid session id");
+  if (sessionId && !isSafeIdSegment_2(sessionId)) throw Error("FileHistory: invalid session id");
 }
 //@ chunk-e6aww6q8.js:1386014-1386088 sole-consumer = resolveBackupPath (1)
 /**
@@ -957,9 +980,9 @@ function resolveBackupPath_2(backupFileName, sessionId) {
   return join(configDir, "file-history", sessionId || getSessionId(), backupFileName);
 }
 //@ chunk-e6aww6q8.js:1386088-1386147 sole-consumer
-function resolveBackupStorageKey(e, sessionId) {
-  assertValidBackupFileNameAndSession(e, sessionId);
-  return STORAGE_SPACES.fileHistory(sessionId || getSessionId(), e);
+function resolveBackupStorageKey(backupName, sessionId) {
+  assertValidBackupFileNameAndSession(backupName, sessionId);
+  return STORAGE_SPACES.fileHistory(sessionId || getSessionId(), backupName);
 }
 //@ chunk-e6aww6q8.js:1386405-1386976 fingerprint = createBackup (0.778)
 /**
@@ -1008,50 +1031,51 @@ async function createBackup(filePath, version) {
   };
 }
 //@ chunk-e6aww6q8.js:1386976-1388046 layout
-async function checkRestoreDestination(filePath, n) {
-  let r = (detail) => ({
+async function checkRestoreDestination(filePath, realParentDir) {
+  let refuse = (detail) => ({
     verdict: "refused",
     detail,
   });
   try {
-    let s = await lstat(filePath);
-    if (s.isSymbolicLink()) return r("destination is a symlink");
-    if (!s.isFile()) return r("destination is not a regular file");
-    if (s.nlink > 1) return r(`destination is hard-linked (nlink=${s.nlink})`);
+    let stats = await lstat(filePath);
+    if (stats.isSymbolicLink()) return refuse("destination is a symlink");
+    if (!stats.isFile()) return refuse("destination is not a regular file");
+    if (stats.nlink > 1) return refuse(`destination is hard-linked (nlink=${stats.nlink})`);
   } catch (error) {
     let errnoCode = getErrnoCode(error);
     if (errnoCode === "ELOOP" || errnoCode === "ENOTDIR")
-      return r(`destination path does not resolve (${errnoCode})`);
+      return refuse(`destination path does not resolve (${errnoCode})`);
     if (!isENOENT(error)) throw error;
   }
-  if (n !== undefined) {
-    let s = dirname(filePath);
-    let h;
+  if (realParentDir !== undefined) {
+    let parentDir = dirname(filePath);
+    let resolvedParent;
     try {
-      h = await realpath(s);
+      resolvedParent = await realpath(parentDir);
     } catch (error) {
       let errnoCode = getErrnoCode(error);
       if (errnoCode === "ELOOP" || errnoCode === "ENOTDIR")
-        return r(`parent path does not resolve (${errnoCode})`);
+        return refuse(`parent path does not resolve (${errnoCode})`);
       if (!isENOENT(error)) throw error;
       try {
-        if ((await lstat(s)).isSymbolicLink()) return r("parent directory is a dangling symlink");
+        if ((await lstat(parentDir)).isSymbolicLink())
+          return refuse("parent directory is a dangling symlink");
       } catch (error) {
         if (!isENOENT(error)) throw error;
       }
-      let L = s;
+      let currentDir = parentDir;
       for (;;) {
-        let G = dirname(L);
-        if (G === L) break;
-        L = G;
+        let parentOfCurrent = dirname(currentDir);
+        if (parentOfCurrent === currentDir) break;
+        currentDir = parentOfCurrent;
         try {
-          await lstat(L);
+          await lstat(currentDir);
         } catch (error) {
           if (!isENOENT(error)) throw error;
           continue;
         }
-        h = await realpath(L)
-          .then((q) => join(q, relative(L, s)))
+        resolvedParent = await realpath(currentDir)
+          .then((resolvedDir) => join(resolvedDir, relative(currentDir, parentDir)))
           .catch((error) => {
             if (isENOENT(error)) return;
             throw error;
@@ -1059,12 +1083,14 @@ async function checkRestoreDestination(filePath, n) {
         break;
       }
     }
-    if (h !== n) return r(`parent directory moved (${h} != ${n})`);
-    let y = await stat(s).catch((error) => {
+    if (resolvedParent !== realParentDir)
+      return refuse(`parent directory moved (${resolvedParent} != ${realParentDir})`);
+    let parentStats = await stat(parentDir).catch((error) => {
       if (isENOENT(error)) return;
       throw error;
     });
-    if (y !== undefined && !y.isDirectory()) return r("parent path is not a directory");
+    if (parentStats !== undefined && !parentStats.isDirectory())
+      return refuse("parent path is not a directory");
   }
   return {
     verdict: "safe",
@@ -1081,12 +1107,12 @@ async function checkRestoreParentDir(filePath, realParentDir) {
     return {
       verdict: "unbound",
     };
-  let r = basename(filePath);
+  let fileName = basename(filePath);
   let platform = getPlatform();
   if (platform === "linux" || platform === "wsl") {
-    let h;
+    let dirHandle;
     try {
-      h = await open(
+      dirHandle = await open(
         realParentDir,
         O_NOFOLLOW_ANY | constants.O_DIRECTORY | constants.O_NOFOLLOW | READ_LIMITS,
       );
@@ -1094,30 +1120,30 @@ async function checkRestoreParentDir(filePath, realParentDir) {
       return parentDirOpenErrorVerdict(error);
     }
     try {
-      let y = await readlink(`/proc/self/fd/${h.fd}`).catch((error) => {
+      let resolvedDir = await readlink(`/proc/self/fd/${dirHandle.fd}`).catch((error) => {
         if (isENOENT(error)) return null;
         throw error;
       });
-      if (y === null)
+      if (resolvedDir === null)
         return {
           verdict: "unbound",
         };
-      if (y !== realParentDir) {
-        if (y.endsWith(" (deleted)"))
+      if (resolvedDir !== realParentDir) {
+        if (resolvedDir.endsWith(" (deleted)"))
           return {
             verdict: "absent",
           };
         return {
           verdict: "refused",
-          detail: `its directory moved since the checkpoint (now ${y}, was ${realParentDir})`,
+          detail: `its directory moved since the checkpoint (now ${resolvedDir}, was ${realParentDir})`,
         };
       }
-      await unlink(`/proc/self/fd/${h.fd}/${r}`);
+      await unlink(`/proc/self/fd/${dirHandle.fd}/${fileName}`);
       return {
         verdict: "deleted",
       };
     } finally {
-      await h.close();
+      await dirHandle.close();
     }
   }
   return {
@@ -1144,18 +1170,18 @@ function parentDirOpenErrorVerdict(error) {
  */
 async function restoreBackup(filePath, backupFileName, realParentDir) {
   let backupPath = resolveBackupPath_2(backupFileName);
-  let h = (G) => {
+  let refuse = (detail) => {
     logEvent("tengu_file_history_rewind_restore_file_failed", {
       dryRun: false,
     });
-    logForDebugging(`FileHistory: [Rewind] Refusing to restore ${filePath}: ${G}`, {
+    logForDebugging(`FileHistory: [Rewind] Refusing to restore ${filePath}: ${detail}`, {
       level: "error",
     });
     return "refused";
   };
-  let y;
+  let backupStats;
   try {
-    y = await stat(backupPath);
+    backupStats = await stat(backupPath);
   } catch (error) {
     if (isENOENT(error)) {
       logEvent("tengu_file_history_rewind_restore_file_failed", {
@@ -1168,40 +1194,41 @@ async function restoreBackup(filePath, backupFileName, realParentDir) {
     }
     throw error;
   }
-  if (!y.isFile()) return h("backup source is not a regular file");
+  if (!backupStats.isFile()) return refuse("backup source is not a regular file");
   let O_NONBLOCK = constants.O_NONBLOCK ?? 0;
   let O_NOFOLLOW = constants.O_NOFOLLOW ?? 0;
-  let L;
+  let sourceHandle;
   try {
-    L = await open(backupPath, constants.O_RDONLY | O_NONBLOCK | O_NOFOLLOW);
+    sourceHandle = await open(backupPath, constants.O_RDONLY | O_NONBLOCK | O_NOFOLLOW);
   } catch (error) {
     let errnoCode = getErrnoCode(error);
     if (errnoCode === "ELOOP" || errnoCode === "EMLINK")
-      return h("backup source became a symlink (O_NOFOLLOW)");
+      return refuse("backup source became a symlink (O_NOFOLLOW)");
     throw error;
   }
   try {
-    if (!(await L.stat()).isFile()) return h("backup source is not a regular file");
+    if (!(await sourceHandle.stat()).isFile()) return refuse("backup source is not a regular file");
     let O_NOFOLLOW = constants.O_NOFOLLOW ?? 0;
     let O_NONBLOCK = constants.O_NONBLOCK ?? 0;
-    let Se = constants.O_WRONLY | constants.O_CREAT | O_NOFOLLOW | O_NONBLOCK;
-    let ke = (error) => {
+    let openFlags = constants.O_WRONLY | constants.O_CREAT | O_NOFOLLOW | O_NONBLOCK;
+    let isSymlinkError = (error) => {
       let errnoCode = getErrnoCode(error);
       return errnoCode === "ELOOP" || errnoCode === "EMLINK";
     };
-    let we = (error) => getErrnoCode(error) === "ENXIO";
-    let Ee = (error) => {
+    let isFifoError = (error) => getErrnoCode(error) === "ENXIO";
+    let isPathChangedError = (error) => {
       let errnoCode = getErrnoCode(error);
       return errnoCode === "EISDIR" || errnoCode === "ENOTDIR";
     };
-    let Ae = y.mode & 511;
-    let Ie;
+    let mode = backupStats.mode & 511;
+    let destHandle;
     try {
-      Ie = await open(filePath, Se, Ae);
+      destHandle = await open(filePath, openFlags, mode);
     } catch (error) {
-      if (ke(error)) return h("destination became a symlink (O_NOFOLLOW)");
-      if (we(error)) return h("destination became a FIFO (ENXIO)");
-      if (Ee(error)) return h(`destination path was changed during restore (${getErrnoCode(error)})`);
+      if (isSymlinkError(error)) return refuse("destination became a symlink (O_NOFOLLOW)");
+      if (isFifoError(error)) return refuse("destination became a FIFO (ENXIO)");
+      if (isPathChangedError(error))
+        return refuse(`destination path was changed during restore (${getErrnoCode(error)})`);
       if (!isENOENT(error)) throw error;
       if (realParentDir !== undefined) {
         if (
@@ -1209,71 +1236,72 @@ async function restoreBackup(filePath, backupFileName, realParentDir) {
             return;
           })) !== realParentDir
         )
-          return h("parent chain changed before directory creation");
+          return refuse("parent chain changed before directory creation");
       }
       try {
         await mkdir(dirname(filePath), {
           recursive: true,
         });
       } catch (error) {
-        if (Ee(error) || getErrnoCode(error) === "EEXIST")
-          return h(`destination path was changed during restore (${getErrnoCode(error)})`);
+        if (isPathChangedError(error) || getErrnoCode(error) === "EEXIST")
+          return refuse(`destination path was changed during restore (${getErrnoCode(error)})`);
         throw error;
       }
       try {
-        Ie = await open(filePath, Se, Ae);
+        destHandle = await open(filePath, openFlags, mode);
       } catch (error) {
-        if (ke(error)) return h("destination became a symlink (O_NOFOLLOW)");
-        if (we(error)) return h("destination became a FIFO (ENXIO)");
-        if (Ee(error)) return h(`destination path was changed during restore (${getErrnoCode(error)})`);
+        if (isSymlinkError(error)) return refuse("destination became a symlink (O_NOFOLLOW)");
+        if (isFifoError(error)) return refuse("destination became a FIFO (ENXIO)");
+        if (isPathChangedError(error))
+          return refuse(`destination path was changed during restore (${getErrnoCode(error)})`);
         throw error;
       }
     }
     try {
-      let stats = await Ie.stat({
+      let stats = await destHandle.stat({
         bigint: true,
       });
-      if (!stats.isFile()) return h("destination is not a regular file");
-      if (stats.nlink > 1) return h(`destination is hard-linked (nlink=${stats.nlink})`);
+      if (!stats.isFile()) return refuse("destination is not a regular file");
+      if (stats.nlink > 1) return refuse(`destination is hard-linked (nlink=${stats.nlink})`);
       if (realParentDir !== undefined) {
         if (
           (await realpath(dirname(filePath)).catch(() => {
             return;
           })) !== realParentDir
         )
-          return h("parent directory changed during restore");
+          return refuse("parent directory changed during restore");
       }
       if (realParentDir !== undefined) {
-        let lt = await realpath(`/proc/self/fd/${Ie.fd}`).catch(() => null);
-        if (lt !== null && dirname(lt) !== realParentDir)
-          return h("destination moved during restore (fd path re-check)");
+        let resolvedDest = await realpath(`/proc/self/fd/${destHandle.fd}`).catch(() => null);
+        if (resolvedDest !== null && dirname(resolvedDest) !== realParentDir)
+          return refuse("destination moved during restore (fd path re-check)");
       }
-      let We = await lstat(filePath, {
+      let pathStats = await lstat(filePath, {
         bigint: true,
       }).catch(() => {
         return;
       });
       if (
-        We === undefined ||
-        !We.isFile() ||
-        We.dev !== stats.dev ||
-        (stats.ino !== 0n && We.ino !== stats.ino)
+        pathStats === undefined ||
+        !pathStats.isFile() ||
+        pathStats.dev !== stats.dev ||
+        (stats.ino !== 0n && pathStats.ino !== stats.ino)
       )
-        return h("destination changed identity during restore (fd/path mismatch)");
-      await Ie.truncate(0);
-      let ze = Buffer.allocUnsafe(65536);
+        return refuse("destination changed identity during restore (fd/path mismatch)");
+      await destHandle.truncate(0);
+      let buffer = Buffer.allocUnsafe(65536);
       for (;;) {
-        let { bytesRead } = await L.read(ze, 0, ze.length, null);
+        let { bytesRead } = await sourceHandle.read(buffer, 0, buffer.length, null);
         if (bytesRead === 0) break;
-        let Je = 0;
-        while (Je < bytesRead) {
-          let { bytesWritten } = await Ie.write(ze, Je, bytesRead - Je);
+        let writtenOffset = 0;
+        while (writtenOffset < bytesRead) {
+          let { bytesWritten } = await destHandle.write(buffer, writtenOffset, bytesRead - writtenOffset);
           if (bytesWritten === 0) throw Error("write returned 0 bytes with data remaining");
-          Je += bytesWritten;
+          writtenOffset += bytesWritten;
         }
       }
       try {
-        await Ie.chmod(y.mode);
+        await destHandle.chmod(backupStats.mode);
       } catch (error) {
         logForDebugging(
           `FileHistory: [Rewind] chmod failed after content restore of ${filePath}: ${errorMessage(error)}`,
@@ -1283,11 +1311,11 @@ async function restoreBackup(filePath, backupFileName, realParentDir) {
         );
       }
     } finally {
-      await Ie.close();
+      await destHandle.close();
     }
   } finally {
     try {
-      await L.close();
+      await sourceHandle.close();
     } catch (error) {
       logForDebugging(
         `FileHistory: [Rewind] backup handle close failed after restore of ${filePath}: ${errorMessage(error)}`,
@@ -1354,15 +1382,16 @@ function fileHistoryRestoreStateFromLog(fileHistorySnapshots, onUpdateState) {
 //@ chunk-e6aww6q8.js:1392391-1392417 layout
 var RENAME_RETRY_DELAYS_MS = [100, 200, 400, 800];
 //@ chunk-e6aww6q8.js:1392417-1392571 layout
-async function renameWithRetry(e, n, r = RENAME_RETRY_DELAYS_MS) {
+async function renameWithRetry(fromPath, toPath, delays = RENAME_RETRY_DELAYS_MS) {
   try {
-    await retryFsOp(e, n);
+    await retryFsOp(fromPath, toPath);
   } catch (error) {
-    let [h, ...y] = r;
+    let [delayMs, ...restDelays] = delays;
     let errnoCode = getErrnoCode(error);
-    if (h === undefined || errnoCode === undefined || !TRANSIENT_FS_ERRORS_2.has(errnoCode)) throw error;
-    await sleep(h);
-    return renameWithRetry(e, n, y);
+    if (delayMs === undefined || errnoCode === undefined || !TRANSIENT_FS_ERRORS_2.has(errnoCode))
+      throw error;
+    await sleep(delayMs);
+    return renameWithRetry(fromPath, toPath, restDelays);
   }
 }
 //@ chunk-e6aww6q8.js:1392571-1392582 layout
@@ -1372,10 +1401,10 @@ class IncompleteBackupCopyError extends Error {
   name = "IncompleteBackupCopyError";
 }
 //@ chunk-e6aww6q8.js:1392639-1394533 layout
-async function migrateBackupForResume(e, previousSessionId, newBackupDir, s) {
-  let h;
+async function migrateBackupForResume(backupName, previousSessionId, newBackupDir, newSessionId) {
+  let sourcePath;
   try {
-    h = resolveBackupPath_2(e, previousSessionId);
+    sourcePath = resolveBackupPath_2(backupName, previousSessionId);
   } catch (error) {
     return {
       outcome: "failed",
@@ -1383,15 +1412,15 @@ async function migrateBackupForResume(e, previousSessionId, newBackupDir, s) {
       error,
     };
   }
-  let y = join(newBackupDir, e);
-  let S;
+  let targetPath = join(newBackupDir, backupName);
+  let sourceStats;
   try {
-    S = await lstat(h);
+    sourceStats = await lstat(sourcePath);
   } catch (error) {
     logForDebugging(
       isENOENT(error)
-        ? `FileHistory: Failed to copy backup ${e} on restore (backup file does not exist in ${previousSessionId})`
-        : `FileHistory: cannot read backup ${e} in ${previousSessionId}: ${errorMessage(error)}`,
+        ? `FileHistory: Failed to copy backup ${backupName} on restore (backup file does not exist in ${previousSessionId})`
+        : `FileHistory: cannot read backup ${backupName} in ${previousSessionId}: ${errorMessage(error)}`,
       {
         level: "error",
       },
@@ -1402,14 +1431,14 @@ async function migrateBackupForResume(e, previousSessionId, newBackupDir, s) {
       error,
     };
   }
-  if (!S.isFile())
+  if (!sourceStats.isFile())
     return {
       outcome: "failed",
       stage: "refused",
       error: Error("FileHistory: backup source is not a regular file"),
     };
   try {
-    await link(h, y);
+    await link(sourcePath, targetPath);
   } catch (error) {
     let errnoCode = getErrnoCode(error);
     if (errnoCode === "EEXIST")
@@ -1418,7 +1447,7 @@ async function migrateBackupForResume(e, previousSessionId, newBackupDir, s) {
       };
     if (errnoCode === "ENOENT") {
       logForDebugging(
-        `FileHistory: Failed to copy backup ${e} on restore (backup file does not exist in ${previousSessionId})`,
+        `FileHistory: Failed to copy backup ${backupName} on restore (backup file does not exist in ${previousSessionId})`,
         {
           level: "error",
         },
@@ -1430,21 +1459,22 @@ async function migrateBackupForResume(e, previousSessionId, newBackupDir, s) {
       };
     }
     logForDebugging(
-      `FileHistory: hard link failed (${errnoCode ?? errorMessage(error)}), falling back to copy: ${h} -> ${y}`,
+      `FileHistory: hard link failed (${errnoCode ?? errorMessage(error)}), falling back to copy: ${sourcePath} -> ${targetPath}`,
       {
         level: "error",
       },
     );
-    let tempSiblingPath = makeTempSiblingPath(y);
+    let fromPath = makeTempSiblingPath(targetPath);
     try {
       try {
-        await assertPathSafeAsync(tempSiblingPath);
-        await copyFile(h, tempSiblingPath, constants.COPYFILE_EXCL);
-        let { size } = await lstat(tempSiblingPath);
-        if (size !== S.size) throw new IncompleteBackupCopyError("FileHistory: backup copy is incomplete");
+        await assertPathSafeAsync(fromPath);
+        await copyFile(sourcePath, fromPath, constants.COPYFILE_EXCL);
+        let { size } = await lstat(fromPath);
+        if (size !== sourceStats.size)
+          throw new IncompleteBackupCopyError("FileHistory: backup copy is incomplete");
       } catch (error_2) {
         logForDebugging(
-          `FileHistory: copying backup ${e} failed: ${errorMessage(error_2)}; backup not migrated, a rewind to this checkpoint will report it missing`,
+          `FileHistory: copying backup ${backupName} failed: ${errorMessage(error_2)}; backup not migrated, a rewind to this checkpoint will report it missing`,
           {
             level: "error",
           },
@@ -1457,7 +1487,7 @@ async function migrateBackupForResume(e, previousSessionId, newBackupDir, s) {
         };
       }
       try {
-        await renameWithRetry(tempSiblingPath, y);
+        await renameWithRetry(fromPath, targetPath);
       } catch (error_2) {
         let errnoCode = getErrnoCode(error_2);
         if (errnoCode === "EEXIST")
@@ -1465,7 +1495,7 @@ async function migrateBackupForResume(e, previousSessionId, newBackupDir, s) {
             outcome: "already_present",
           };
         logForDebugging(
-          `FileHistory: could not move the copied backup ${e} into place \u2014 ${errnoCode !== undefined && TRANSIENT_FS_ERRORS_2.has(errnoCode) ? `rename still refused (${errnoCode}) after its retries (usually a scanner or sync tool still holding the just-written copy, or a mount that allows creating files but not renaming them)` : `rename failed: ${errorMessage(error_2)}`}; backup not migrated, a rewind to this checkpoint will report it missing`,
+          `FileHistory: could not move the copied backup ${backupName} into place \u2014 ${errnoCode !== undefined && TRANSIENT_FS_ERRORS_2.has(errnoCode) ? `rename still refused (${errnoCode}) after its retries (usually a scanner or sync tool still holding the just-written copy, or a mount that allows creating files but not renaming them)` : `rename failed: ${errorMessage(error_2)}`}; backup not migrated, a rewind to this checkpoint will report it missing`,
           {
             level: "error",
           },
@@ -1478,20 +1508,24 @@ async function migrateBackupForResume(e, previousSessionId, newBackupDir, s) {
         };
       }
     } finally {
-      await retryTransient(() => unlink(tempSiblingPath)).catch(() => {});
+      await retryTransient(() => unlink(fromPath)).catch(() => {});
     }
   }
-  logForDebugging(`FileHistory: Copied backup ${e} from session ${previousSessionId} to ${s}`);
+  logForDebugging(
+    `FileHistory: Copied backup ${backupName} from session ${previousSessionId} to ${newSessionId}`,
+  );
   return {
     outcome: "migrated",
   };
 }
 //@ chunk-e6aww6q8.js:1394533-1395790 layout
-function summarizeBackupMigrationFailures(e, n) {
-  let flattened = e.flatMap((L) => (L.stage === "copy" || L.stage === "rename" ? [L] : []));
+function summarizeBackupMigrationFailures(failures, totalBackups) {
+  let flattened = failures.flatMap((failure) =>
+    failure.stage === "copy" || failure.stage === "rename" ? [failure] : [],
+  );
   let filtered = flattened.filter(({ stage }) => stage === "copy");
   let filtered_2 = flattened.filter(({ stage }) => stage === "rename");
-  let filtered_3 = e.filter(
+  let filtered_3 = failures.filter(
     ({ stage, error }) =>
       stage === "escaped" ||
       (stage !== "refused" &&
@@ -1499,16 +1533,16 @@ function summarizeBackupMigrationFailures(e, n) {
         !isEnvFsErrno(error) &&
         !TRANSIENT_FS_ERRORS_2.has(getErrnoCode(error) ?? "")),
   );
-  let S = count(e, ({ stage }) => stage === "refused");
-  let w = [
-    ...(S > 0 ? [concatSafe(lit_2("refused as unsafe: "), fromNumber(S))] : []),
+  let refusedCount = count(failures, ({ stage }) => stage === "refused");
+  let parts = [
+    ...(refusedCount > 0 ? [concatSafe(lit_2("refused as unsafe: "), fromNumber(refusedCount))] : []),
     ...formatGroupedCounts(
       lit_2("source backup unreadable: "),
-      e.filter(({ stage }) => stage === "source").map(({ error }) => classifyErrnoForTelemetry(error)),
+      failures.filter(({ stage }) => stage === "source").map(({ error }) => classifyErrnoForTelemetry(error)),
     ),
     ...formatGroupedCounts(
       lit_2("hard link failed: "),
-      e.filter(({ stage }) => stage === "link").map(({ error }) => classifyErrnoForTelemetry(error)),
+      failures.filter(({ stage }) => stage === "link").map(({ error }) => classifyErrnoForTelemetry(error)),
     ),
     ...formatGroupedCounts(
       lit_2("copy fallback (link errno->copy errno): "),
@@ -1524,23 +1558,25 @@ function summarizeBackupMigrationFailures(e, n) {
     ),
     ...formatGroupedCounts(
       lit_2("threw outside the fs calls: "),
-      e.filter(({ stage }) => stage === "escaped").map(({ error }) => classifyErrnoForTelemetry(error)),
+      failures
+        .filter(({ stage }) => stage === "escaped")
+        .map(({ error }) => classifyErrnoForTelemetry(error)),
     ),
   ];
   return {
     message: concatSafe(
       lit_2("FileHistory: backup migration on resume left "),
-      fromNumber(e.length),
+      fromNumber(failures.length),
       lit_2(" of "),
-      fromNumber(n),
+      fromNumber(totalBackups),
       lit_2(" backups unmigrated; "),
-      joinSafe(w, "; "),
+      joinSafe(parts, "; "),
     ),
     hasUnexpectedFailure: filtered_3.length > 0,
     unexpectedErrnoCode: mostCommon(
       filtered_3.flatMap(({ error }) => {
-        let G = sanitizeErrnoForTelemetry(error);
-        return G === undefined ? [] : [G];
+        let errno = sanitizeErrnoForTelemetry(error);
+        return errno === undefined ? [] : [errno];
       }),
     ),
     linkErrno: mostCommon(flattened.map(({ linkError }) => sanitizedErrnoLowerForTelemetry(linkError))),
@@ -1549,21 +1585,21 @@ function summarizeBackupMigrationFailures(e, n) {
   };
 }
 //@ chunk-e6aww6q8.js:1395790-1395891 layout
-function classifyErrnoForTelemetry(e) {
-  return getErrnoCode(e)?.startsWith("Unknown system error")
+function classifyErrnoForTelemetry(error) {
+  return getErrnoCode(error)?.startsWith("Unknown system error")
     ? lit_2("UNKNOWN")
-    : (sanitizedErrCodeForTelemetry(e) ?? lit_2("unclassified"));
+    : (sanitizedErrCodeForTelemetry(error) ?? lit_2("unclassified"));
 }
 //@ chunk-e6aww6q8.js:1395891-1395995 layout
-function formatGroupedCounts(e, n) {
-  return n.length === 0
+function formatGroupedCounts(values, items) {
+  return items.length === 0
     ? []
     : [
         concatSafe(
-          e,
+          values,
           joinSafe(
-            countOccurrencesSorted(n).map(([r, s]) =>
-              s > 1 ? concatSafe(r, lit_2(" x"), fromNumber(s)) : r,
+            countOccurrencesSorted(items).map(([value, count]) =>
+              count > 1 ? concatSafe(value, lit_2(" x"), fromNumber(count)) : value,
             ),
             ", ",
           ),
@@ -1571,20 +1607,20 @@ function formatGroupedCounts(e, n) {
       ];
 }
 //@ chunk-e6aww6q8.js:1395995-1396033 layout
-function mostCommon(e) {
-  return countOccurrencesSorted(e)[0]?.[0];
+function mostCommon(items) {
+  return countOccurrencesSorted(items)[0]?.[0];
 }
 //@ chunk-e6aww6q8.js:1396033-1396146 layout
-function countOccurrencesSorted(e) {
-  return [...Map.groupBy(e, (n) => n)]
-    .map(([n, r]) => [n, r.length])
-    .sort(([n, r], [s, h]) => h - r || (n < s ? -1 : 1));
+function countOccurrencesSorted(items) {
+  return [...Map.groupBy(items, (item) => item)]
+    .map(([value, group]) => [value, group.length])
+    .sort(([valueA, countA], [valueB, countB]) => countB - countA || (valueA < valueB ? -1 : 1));
 }
 //@ chunk-e6aww6q8.js:1396146-1398175 facade-exports = copyFileHistoryForResume (0.453)
 /**
  * resume 时把旧会话的备份迁移到新会话目录（硬链接，失败则复制再 rename，并发 16），汇总失败原因记日志。
  */
-async function copyFileHistoryForResume(log, n, storageV5) {
+async function copyFileHistoryForResume(log, newSessionId, storageV5) {
   if (!fileHistoryEnabled()) return;
   let fileHistorySnapshots = log.fileHistorySnapshots;
   if (!fileHistorySnapshots || log.messages.length === 0) return;
@@ -1593,19 +1629,21 @@ async function copyFileHistoryForResume(log, n, storageV5) {
     logError(Error("FileHistory: Failed to copy backups on restore (no previous session id)"));
     return;
   }
-  let S = n ?? getSessionId();
-  if (previousSessionId === S) {
-    logForDebugging(`FileHistory: No need to copy file history for resuming with same session id: ${S}`);
+  let targetSessionId = newSessionId ?? getSessionId();
+  if (previousSessionId === targetSessionId) {
+    logForDebugging(
+      `FileHistory: No need to copy file history for resuming with same session id: ${targetSessionId}`,
+    );
     return;
   }
-  if (!isSafeIdSegment_2(S)) {
+  if (!isSafeIdSegment_2(targetSessionId)) {
     logForDebugging("FileHistory: refusing to copy backups on restore (invalid target session id)", {
       level: "warn",
     });
     return;
   }
   try {
-    let newBackupDir = join(getClaudeConfigDir(), "file-history", S);
+    let newBackupDir = join(getClaudeConfigDir(), "file-history", targetSessionId);
     await mkdir(newBackupDir, {
       recursive: true,
     });
@@ -1624,27 +1662,29 @@ async function copyFileHistoryForResume(log, n, storageV5) {
         snapshot: fileHistorySnapshot,
         backupFileNames: Object.values(fileHistorySnapshot.trackedFileBackups)
           .map((trackedFileBackup) => trackedFileBackup.backupFileName)
-          .filter((we) => we !== null),
+          .filter((entry) => entry !== null),
       }));
-    let G = uniq(mapped.flatMap(({ backupFileNames }) => backupFileNames));
-    let q = new Map(
+    let backupFileNames = uniq(mapped.flatMap(({ backupFileNames }) => backupFileNames));
+    let byName = new Map(
       await pMap(
-        G,
-        async (ke) => [
-          ke,
-          await migrateBackupForResume(ke, previousSessionId, newBackupDir, S).catch((snapshot) => {
-            logForDebugging(
-              `FileHistory: unexpected error while migrating backup ${ke}: ${errorMessage(snapshot)}; backup not migrated`,
-              {
-                level: "error",
-              },
-            );
-            return {
-              outcome: "failed",
-              stage: "escaped",
-              error: snapshot,
-            };
-          }),
+        backupFileNames,
+        async (result) => [
+          result,
+          await migrateBackupForResume(result, previousSessionId, newBackupDir, targetSessionId).catch(
+            (snapshot) => {
+              logForDebugging(
+                `FileHistory: unexpected error while migrating backup ${result}: ${errorMessage(snapshot)}; backup not migrated`,
+                {
+                  level: "error",
+                },
+              );
+              return {
+                outcome: "failed",
+                stage: "escaped",
+                error: snapshot,
+              };
+            },
+          ),
         ],
         {
           concurrency: BACKUP_MIGRATION_CONCURRENCY,
@@ -1653,7 +1693,7 @@ async function copyFileHistoryForResume(log, n, storageV5) {
     );
     let backupEntries = mapped.filter(({ backupFileNames }) =>
       backupFileNames.every((backup) => {
-        let outcome = q.get(backup)?.outcome;
+        let outcome = byName.get(backup)?.outcome;
         return outcome === "migrated" || outcome === "already_present";
       }),
     );
@@ -1662,34 +1702,34 @@ async function copyFileHistoryForResume(log, n, storageV5) {
         logError(Error("FileHistory: Failed to record copy backup snapshot"));
       });
     });
-    let Se = mapped.length - backupEntries.length;
-    if (Se > 0) {
-      let filtered = [...q.values()].filter((Ee) => Ee.outcome === "failed");
-      let we = summarizeBackupMigrationFailures(filtered, G.length);
-      if (we.hasUnexpectedFailure)
+    let skippedCount = mapped.length - backupEntries.length;
+    if (skippedCount > 0) {
+      let failures = [...byName.values()].filter((failed) => failed.outcome === "failed");
+      let summary = summarizeBackupMigrationFailures(failures, backupFileNames.length);
+      if (summary.hasUnexpectedFailure)
         logError(
-          withTelemetryFacts(Error(we.message), {
-            telemetryMessage: we.message,
-            code: we.unexpectedErrnoCode,
+          withTelemetryFacts(Error(summary.message), {
+            telemetryMessage: summary.message,
+            code: summary.unexpectedErrnoCode,
           }),
         );
       else
-        logForDebugging(`${we.message}; session ${S}`, {
+        logForDebugging(`${summary.message}; session ${targetSessionId}`, {
           level: "error",
         });
       logEvent("tengu_file_history_resume_copy_failed", {
         numSnapshots: fileHistorySnapshots.length,
-        failedSnapshots: Se,
-        numBackups: G.length,
-        failedBackups: filtered.length,
-        linkErrno: we.linkErrno,
-        copyErrno: we.copyErrno,
-        renameErrno: we.renameErrno,
+        failedSnapshots: skippedCount,
+        numBackups: backupFileNames.length,
+        failedBackups: failures.length,
+        linkErrno: summary.linkErrno,
+        copyErrno: summary.copyErrno,
+        renameErrno: summary.renameErrno,
       });
     }
   } catch (error) {
     if (isSadFsErrno(error) || isEnvFsErrno(error)) {
-      logForDebugging(`FileHistory: backup-dir mkdir failed for session ${S}: ${error}`, {
+      logForDebugging(`FileHistory: backup-dir mkdir failed for session ${targetSessionId}: ${error}`, {
         level: "error",
       });
       return;
@@ -1739,48 +1779,48 @@ async function notifyVscodeSnapshotFilesUpdated(oldState, newState) {
     }
 }
 //@ chunk-e6aww6q8.js:1398816-1398873 layout
-async function readFileTextNoFollow(e, n) {
-  return (await checkOriginFileChanged(e, n)).text ?? null;
+async function readFileTextNoFollow(filePath, options) {
+  return (await checkOriginFileChanged(filePath, options)).text ?? null;
 }
 //@ chunk-e6aww6q8.js:1398873-1399423 callgraph-fingerprint = checkOriginFileChanged (0.222)
 /**
  * 以 O_NONBLOCK（可选 O_NOFOLLOW）打开并读取文件文本与 stats，可限制最大字节；用于比较备份与当前文件。
  */
-async function checkOriginFileChanged(e, n) {
+async function checkOriginFileChanged(filePath, options) {
   try {
     let originalStats = constants.O_NONBLOCK ?? 0;
-    let s = n?.noFollow ? (constants.O_NOFOLLOW ?? 0) : 0;
-    let h = await open(e, constants.O_RDONLY | originalStats | s);
+    let extraFlags = options?.noFollow ? (constants.O_NOFOLLOW ?? 0) : 0;
+    let handle = await open(filePath, constants.O_RDONLY | originalStats | extraFlags);
     try {
-      let stats = await h.stat();
-      if (!stats.isFile() || (n?.maxBytes !== undefined && stats.size > n.maxBytes))
+      let stats = await handle.stat();
+      if (!stats.isFile() || (options?.maxBytes !== undefined && stats.size > options.maxBytes))
         return {
           stats,
         };
-      if (n?.maxBytes === undefined)
+      if (options?.maxBytes === undefined)
         return {
           stats,
-          text: await h.readFile({
+          text: await handle.readFile({
             encoding: "utf-8",
           }),
         };
-      let S = Buffer.allocUnsafe(stats.size + 1);
-      let w = 0;
-      while (w < S.length) {
-        let { bytesRead } = await h.read(S, w, S.length - w, w);
+      let buffer = Buffer.allocUnsafe(stats.size + 1);
+      let totalRead = 0;
+      while (totalRead < buffer.length) {
+        let { bytesRead } = await handle.read(buffer, totalRead, buffer.length - totalRead, totalRead);
         if (bytesRead === 0) break;
-        w += bytesRead;
+        totalRead += bytesRead;
       }
-      return w > stats.size
+      return totalRead > stats.size
         ? {
             stats,
           }
         : {
             stats,
-            text: S.toString("utf-8", 0, w),
+            text: buffer.toString("utf-8", 0, totalRead),
           };
     } finally {
-      await h.close();
+      await handle.close();
     }
   } catch (error) {
     return {

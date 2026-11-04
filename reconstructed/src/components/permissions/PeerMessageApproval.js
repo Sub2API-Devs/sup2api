@@ -8,7 +8,7 @@
  * pieces: chunk-18hwfzwa.js (4)
  * attribution: placement 4
  */
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { useInputRefusalWindow, useRefusalTracker, settleKey } from "../CustomSelect/selectTypeahead.js";
 import {
@@ -23,6 +23,7 @@ import { ModelSelector } from "../agents/ModelSelector.js";
 import { NO_COMMITTED_ROW } from "../CustomSelect/select.js";
 import { PermissionDialog_2 } from "./PermissionDialog.js";
 import { init_react_production } from "../../../vendor/react/cjs/react.production.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-18hwfzwa.js:1337116-1337131 placement
 var DENY = "deny";
@@ -49,11 +50,11 @@ function peerHoldExplanation(holdCause) {
 }
 //@ chunk-18hwfzwa.js:1338071-1340420 placement
 function PeerMessageApproval(props) {
-  let $ = w(37);
+  let $ = useMemoCache(37);
   let { payload, answer } = props;
-  let ee;
+  let options;
   if ($[0] === MEMO_CACHE_SENTINEL) {
-    ee = [
+    options = [
       {
         value: "deny",
         label: "Deny \u2014 drop it and tell the sender it was declined",
@@ -63,15 +64,15 @@ function PeerMessageApproval(props) {
         label: "Deliver this message to Claude",
       },
     ];
-    $[0] = ee;
-  } else ee = $[0];
-  let options = ee;
+    $[0] = options;
+  } else options = $[0];
+  let options_2 = options;
   let inputRefusalWindow = useInputRefusalWindow();
   let { refusedWithin, noteRefused, epoch } = useRefusalTracker();
-  let ze = settleKey(epoch);
-  let Xe;
+  let remountKey = settleKey(epoch);
+  let refuseInput;
   if ($[1] !== inputRefusalWindow || $[2] !== noteRefused || $[3] !== refusedWithin) {
-    Xe = function rt() {
+    refuseInput = function shouldRefuseInput() {
       if (inputRefusalWindow() || refusedWithin()) {
         noteRefused();
         return true;
@@ -81,31 +82,37 @@ function PeerMessageApproval(props) {
     $[1] = inputRefusalWindow;
     $[2] = noteRefused;
     $[3] = refusedWithin;
-    $[4] = Xe;
-  } else Xe = $[4];
-  let rt = Xe;
+    $[4] = refuseInput;
+  } else refuseInput = $[4];
+  let refuseInputMemo = refuseInput;
   let fromAddress = payload.fromAddress ?? "an unidentified session";
-  let At = payload.verifiedPeerPid !== undefined ? ` [verified pid ${payload.verifiedPeerPid}]` : "";
-  let It = payload.claimedName ? ` (peer claims name: ${payload.claimedName})` : "";
-  let Ot;
-  if ($[5] !== It || $[6] !== fromAddress || $[7] !== At) {
-    Ot = jsxProd_default_2(Text, {
-      children: ["Another Claude session sent a message: from ", fromAddress, At, It],
+  let verifiedPidSuffix =
+    payload.verifiedPeerPid !== undefined ? ` [verified pid ${payload.verifiedPeerPid}]` : "";
+  let claimedNameSuffix = payload.claimedName ? ` (peer claims name: ${payload.claimedName})` : "";
+  let senderLine;
+  if ($[5] !== claimedNameSuffix || $[6] !== fromAddress || $[7] !== verifiedPidSuffix) {
+    senderLine = jsxProd_default_2(Text, {
+      children: [
+        "Another Claude session sent a message: from ",
+        fromAddress,
+        verifiedPidSuffix,
+        claimedNameSuffix,
+      ],
     });
-    $[5] = It;
+    $[5] = claimedNameSuffix;
     $[6] = fromAddress;
-    $[7] = At;
-    $[8] = Ot;
-  } else Ot = $[8];
+    $[7] = verifiedPidSuffix;
+    $[8] = senderLine;
+  } else senderLine = $[8];
   let children;
   if ($[9] !== payload.holdCause) {
     children = peerHoldExplanation(payload.holdCause);
     $[9] = payload.holdCause;
     $[10] = children;
   } else children = $[10];
-  let Dt;
+  let messageBox;
   if ($[11] !== children) {
-    Dt = jsxProd_default(Box, {
+    messageBox = jsxProd_default(Box, {
       marginTop: 1,
       children: jsxProd_default(Text, {
         color: "inactive",
@@ -113,11 +120,11 @@ function PeerMessageApproval(props) {
       }),
     });
     $[11] = children;
-    $[12] = Dt;
-  } else Dt = $[12];
-  let Lt;
+    $[12] = messageBox;
+  } else messageBox = $[12];
+  let previewElement;
   if ($[13] !== payload.preview) {
-    Lt =
+    previewElement =
       payload.preview !== "" &&
       jsxProd_default(Box, {
         marginTop: 1,
@@ -127,24 +134,24 @@ function PeerMessageApproval(props) {
         }),
       });
     $[13] = payload.preview;
-    $[14] = Lt;
-  } else Lt = $[14];
-  let oo;
-  if ($[15] !== Ot || $[16] !== Dt || $[17] !== Lt) {
-    oo = jsxProd_default_2(Box, {
+    $[14] = previewElement;
+  } else previewElement = $[14];
+  let headerSection;
+  if ($[15] !== senderLine || $[16] !== messageBox || $[17] !== previewElement) {
+    headerSection = jsxProd_default_2(Box, {
       flexDirection: "column",
       marginTop: 1,
       paddingX: 1,
-      children: [Ot, Dt, Lt],
+      children: [senderLine, messageBox, previewElement],
     });
-    $[15] = Ot;
-    $[16] = Dt;
-    $[17] = Lt;
-    $[18] = oo;
-  } else oo = $[18];
-  let Xt;
+    $[15] = senderLine;
+    $[16] = messageBox;
+    $[17] = previewElement;
+    $[18] = headerSection;
+  } else headerSection = $[18];
+  let previewSection;
   if ($[19] !== payload.preview) {
-    Xt =
+    previewSection =
       payload.preview !== "" &&
       jsxProd_default(DiffFrame, {
         children: jsxProd_default(Blockquote, {
@@ -155,14 +162,14 @@ function PeerMessageApproval(props) {
         }),
       });
     $[19] = payload.preview;
-    $[20] = Xt;
-  } else Xt = $[20];
+    $[20] = previewSection;
+  } else previewSection = $[20];
   const marginTop = payload.preview !== "" ? 0 : 1;
   let onChange;
   let onCancel;
-  if ($[21] !== answer || $[22] !== rt) {
+  if ($[21] !== answer || $[22] !== refuseInputMemo) {
     onChange = (behavior) => {
-      if (rt()) {
+      if (refuseInputMemo()) {
         return;
       }
       answer({
@@ -170,7 +177,7 @@ function PeerMessageApproval(props) {
       });
     };
     onCancel = () => {
-      if (rt()) {
+      if (refuseInputMemo()) {
         return;
       }
       answer({
@@ -178,7 +185,7 @@ function PeerMessageApproval(props) {
       });
     };
     $[21] = answer;
-    $[22] = rt;
+    $[22] = refuseInputMemo;
     $[23] = onChange;
     $[24] = onCancel;
   } else {
@@ -186,52 +193,60 @@ function PeerMessageApproval(props) {
     onCancel = $[24];
   }
   let children_2;
-  if ($[25] !== ze.remountKey || $[26] !== rt || $[27] !== onChange || $[28] !== onCancel) {
+  if (
+    $[25] !== remountKey.remountKey ||
+    $[26] !== refuseInputMemo ||
+    $[27] !== onChange ||
+    $[28] !== onCancel
+  ) {
     children_2 = jsxProd_default(
       ModelSelector,
       {
         selectedValue: NO_COMMITTED_ROW,
-        options,
+        options: options_2,
         defaultFocusValue: DENY,
         hideIndexes: true,
-        refuseInput: rt,
+        refuseInput: refuseInputMemo,
         onChange,
         onCancel,
       },
-      ze.remountKey,
+      remountKey.remountKey,
     );
-    $[25] = ze.remountKey;
-    $[26] = rt;
+    $[25] = remountKey.remountKey;
+    $[26] = refuseInputMemo;
     $[27] = onChange;
     $[28] = onCancel;
     $[29] = children_2;
   } else children_2 = $[29];
-  let bo;
+  let selectorBox;
   if ($[30] !== children_2 || $[31] !== marginTop) {
-    bo = jsxProd_default(Box, {
+    selectorBox = jsxProd_default(Box, {
       paddingX: 1,
       marginTop,
       children: children_2,
     });
     $[30] = children_2;
     $[31] = marginTop;
-    $[32] = bo;
-  } else bo = $[32];
-  let Ao;
-  if ($[33] !== bo || $[34] !== oo || $[35] !== Xt) {
-    Ao = jsxProd_default_2(PermissionDialog_2, {
+    $[32] = selectorBox;
+  } else selectorBox = $[32];
+  let dialogElement;
+  if ($[33] !== selectorBox || $[34] !== headerSection || $[35] !== previewSection) {
+    dialogElement = jsxProd_default_2(PermissionDialog_2, {
       color: "warning",
       title: "Held message from another session",
       innerPaddingX: 0,
-      children: [oo, Xt, bo],
+      children: [headerSection, previewSection, selectorBox],
     });
-    $[33] = bo;
-    $[34] = oo;
-    $[35] = Xt;
-    $[36] = Ao;
-  } else Ao = $[36];
-  return Ao;
+    $[33] = selectorBox;
+    $[34] = headerSection;
+    $[35] = previewSection;
+    $[36] = dialogElement;
+  } else dialogElement = $[36];
+  return dialogElement;
 }
 //@ chunk-18hwfzwa.js:1340420-1340424 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:1340420", () => {
+  init_react_production();
+});
 export { PeerMessageApproval };

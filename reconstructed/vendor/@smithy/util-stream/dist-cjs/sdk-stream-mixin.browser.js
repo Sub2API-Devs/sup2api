@@ -5,7 +5,7 @@
  * pieces: chunk-wjd9n4jx.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 import { require_fetch_http_handler } from "../../fetch-http-handler/dist-cjs/index.js";
 import { base64Module } from "../../../@aws-sdk/credential-provider-web-identity/dist-cjs/index.js";
 import { require_util_hex_encoding } from "../../util-hex-encoding/dist-cjs/index.js";
@@ -13,7 +13,7 @@ import { require_util_utf8 } from "../../util-utf8/dist-cjs/index.js";
 import { require_stream_type_check } from "./stream-type-check.js";
 
 //@ chunk-wjd9n4jx.js:7747-9158 cjs-fingerprint
-var require_sdk_stream_mixin_browser = x(function (cjsExports) {
+var require_sdk_stream_mixin_browser = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });

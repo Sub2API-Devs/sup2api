@@ -43,8 +43,11 @@ import { REMOTE_TOOL_PROTOCOL_VERSION } from "../protocolConstants.js";
 //@ chunk-tr0s0d0k.js:2841-3024 placement
 function readServedBackgroundOverride() {
   try {
-    let { value: e, source } = getFeatureValueWithSource_CACHED_MAY_BE_STALE("tengu_ticklish_pnueli", false);
-    return e === true && source !== "override";
+    let { value: flagValue, source } = getFeatureValueWithSource_CACHED_MAY_BE_STALE(
+      "tengu_ticklish_pnueli",
+      false,
+    );
+    return flagValue === true && source !== "override";
   } catch (error) {
     logError(
       Error("tengu_ticklish_pnueli could not be read", {
@@ -99,23 +102,23 @@ class ServedBackgroundCommands {
   get running() {
     return this.#e.size;
   }
-  stopAll(e) {
+  stopAll(reason) {
     this.#o++;
-    for (let n of [...this.#e.values()]) n(e);
+    for (let stopper of [...this.#e.values()]) stopper(reason);
   }
-  holds(e) {
-    return this.#e.has(e);
+  holds(callId) {
+    return this.#e.has(callId);
   }
-  stop(e) {
-    let n = this.#e.get(e);
-    n?.("caller_stopped");
-    return n !== undefined;
+  stop(callId) {
+    let stopper = this.#e.get(callId);
+    stopper?.("caller_stopped");
+    return stopper !== undefined;
   }
-  async statusOf(e) {
-    let n = this.#n.get(e);
-    if (n === undefined) return;
+  async statusOf(callId) {
+    let record = this.#n.get(callId);
+    if (record === undefined) return;
     let outputTail = await getVerifiedTaskOutputTail(
-      n.started.shellId,
+      record.started.shellId,
       MAX_BACKGROUND_OUTPUT_TAIL_BYTES,
     ).then(
       (verifiedTaskOutputTail) => verifiedTaskOutputTail.content,
@@ -125,173 +128,175 @@ class ServedBackgroundCommands {
     );
     return {
       command: {
-        ...n,
+        ...record,
       },
       outputTail,
     };
   }
-  starterFor(e) {
-    let n = this.#o;
-    let o = false;
-    let r;
-    let s = () => {
-      if (o) {
-        o = false;
+  starterFor(serveOptions) {
+    let epoch = this.#o;
+    let reserved = false;
+    let started;
+    let releaseReservation = () => {
+      if (reserved) {
+        reserved = false;
         this.#t--;
       }
     };
-    let d = () =>
-      e.lifetime.aborted || n !== this.#o || !e.enabled()
+    let unavailableReason = () =>
+      serveOptions.lifetime.aborted || epoch !== this.#o || !serveOptions.enabled()
         ? "unavailable"
         : SandboxManager.getSandboxUnavailableReason() !== undefined ||
             (SandboxManager.passesCheapSandboxGates() && !SandboxManager.isSandboxingEnabled())
           ? "sandbox_down"
           : undefined;
-    let u = () => {
-      let p = d() ?? (!o && this.#e.size + this.#t >= e.max ? "full" : undefined);
-      if (p === undefined) return;
-      logFeatureSad("remote_tool_serve_background", p);
-      return backgroundRefusalMessage(p, e);
+    let refusalMessage = () => {
+      let reason =
+        unavailableReason() ?? (!reserved && this.#e.size + this.#t >= serveOptions.max ? "full" : undefined);
+      if (reason === undefined) return;
+      logFeatureSad("remote_tool_serve_background", reason);
+      return backgroundRefusalMessage(reason, serveOptions);
     };
     return {
-      started: () => r,
-      settle: (p) => {
-        s();
-        if (p && r !== undefined) this.#e.get(r.shellId)?.("call_stopped");
+      started: () => started,
+      settle: (completed) => {
+        releaseReservation();
+        if (completed && started !== undefined) this.#e.get(started.shellId)?.("call_stopped");
       },
       starter: {
         reserve: () => {
-          let p = u();
-          if (p === undefined && !o) {
-            o = true;
+          let refusal = refusalMessage();
+          if (refusal === undefined && !reserved) {
+            reserved = true;
             this.#t++;
           }
-          return p;
+          return refusal;
         },
-        adopt: (p, h, _) => {
-          let S = o ? d() : "unavailable";
-          s();
+        adopt: (proc, command, record) => {
+          let refusal = reserved ? unavailableReason() : "unavailable";
+          releaseReservation();
           try {
-            if (S !== undefined)
+            if (refusal !== undefined)
               throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-                backgroundRefusalMessage("unavailable", e),
+                backgroundRefusalMessage("unavailable", serveOptions),
                 "served background command could not be owned",
               );
-            r = this.#r(p, h, _, e);
+            started = this.#r(proc, command, record, serveOptions);
             logFeatureOk("remote_tool_serve_background");
-            return r.shellId;
+            return started.shellId;
           } catch (error) {
             logFeatureBad("remote_tool_serve_background", "not_owned");
-            p.kill();
-            p.cleanup();
+            proc.kill();
+            proc.cleanup();
             throw error;
           }
         },
       },
     };
   }
-  #r(e, n, command, r) {
-    let taskId = e.taskOutput.taskId;
+  #r(proc, timeoutMs, command, record) {
+    let taskId = proc.taskOutput.taskId;
     let outputPath = getTaskOutputPath(taskId);
     if (
-      !e.background(taskId, {
+      !proc.background(taskId, {
         atExit: "kill",
       })
     )
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        backgroundRefusalMessage("unavailable", r),
+        backgroundRefusalMessage("unavailable", record),
         "served background command had already ended",
       );
-    let backgroundTimeoutForDisplay = getBackgroundTimeoutForDisplay(n);
-    let p = {
+    let backgroundTimeoutForDisplay = getBackgroundTimeoutForDisplay(timeoutMs);
+    let startedInfo = {
       shellId: taskId,
       outputPath,
       limitMs: backgroundTimeoutForDisplay,
     };
-    let h = {
-      started: p,
+    let entry = {
+      started: startedInfo,
       startedAt: Date.now(),
     };
-    this.#n.set(r.callId, h);
-    let _ = false;
-    let S = (O, code) => {
-      if (_) return;
-      _ = true;
-      clearTimeout(B);
-      clearInterval(V);
-      r.lifetime.removeEventListener("abort", R);
+    this.#n.set(record.callId, entry);
+    let finished = false;
+    let finish = (how, code) => {
+      if (finished) return;
+      finished = true;
+      clearTimeout(timeoutTimer);
+      clearInterval(pollTimer);
+      record.lifetime.removeEventListener("abort", onLifetimeAbort);
       this.#e.delete(taskId);
-      h.ended = {
-        how: O,
+      entry.ended = {
+        how,
         exitCode: code,
         at: Date.now(),
       };
-      this.#n.delete(r.callId);
-      if (O !== "call_stopped") {
-        this.#n.set(r.callId, h);
-        let filtered = [...this.#n].filter(([, j]) => j.ended);
-        for (let [j] of filtered.slice(0, -MAX_TRACKED_BACKGROUND_COMMANDS)) this.#n.delete(j);
+      this.#n.delete(record.callId);
+      if (how !== "call_stopped") {
+        this.#n.set(record.callId, entry);
+        let filtered = [...this.#n].filter(([, kept]) => kept.ended);
+        for (let [callId] of filtered.slice(0, -MAX_TRACKED_BACKGROUND_COMMANDS)) this.#n.delete(callId);
       }
       try {
-        r.onEvent(taskId, O);
+        record.onEvent(taskId, how);
       } catch (error) {
         logError(toError(error));
       }
-      let J;
+      let killResult;
       try {
-        if (O !== "exited") J = e.kill();
-        e.cleanup();
+        if (how !== "exited") killResult = proc.kill();
+        proc.cleanup();
         appendTaskOutput(
           taskId,
-          O === "exited"
+          how === "exited"
             ? `
 [exited with code ${code}]
 `
             : `
-[stopped ${backgroundStopReasonText(O, r.targetName)}]
+[stopped ${backgroundStopReasonText(how, record.targetName)}]
 `,
         );
         evictTaskOutput(taskId);
       } catch (error) {
         logError(toError(error));
       }
-      L = L.then(() => J)
+      filingPromise = filingPromise
+        .then(() => killResult)
         .then(() => retireServedBackgroundShell(taskId))
         .catch((error) => logError(toError(error)))
-        .finally(A);
+        .finally(unregisterCleanup);
     };
-    let R = () => S("serving_ended");
-    let B = setTimeout(S, backgroundTimeoutForDisplay, "time_limit").unref();
-    let L = fileServedBackgroundShell({
+    let onLifetimeAbort = () => finish("serving_ended");
+    let timeoutTimer = setTimeout(finish, backgroundTimeoutForDisplay, "time_limit").unref();
+    let filingPromise = fileServedBackgroundShell({
       id: taskId,
-      pid: e.pid,
+      pid: proc.pid,
       command,
-      caller: r.caller,
-      folder: r.folder,
+      caller: record.caller,
+      folder: record.folder,
     });
-    let V = setInterval(pollServedBackgroundStop, BACKGROUND_STOP_POLL_MS, taskId, S).unref();
-    r.lifetime.addEventListener("abort", R, {
+    let pollTimer = setInterval(pollServedBackgroundStop, BACKGROUND_STOP_POLL_MS, taskId, finish).unref();
+    record.lifetime.addEventListener("abort", onLifetimeAbort, {
       once: true,
     });
-    let A = registerCleanup(() => {
-      R();
-      return L;
+    let unregisterCleanup = registerCleanup(() => {
+      onLifetimeAbort();
+      return filingPromise;
     });
-    this.#e.set(taskId, S);
-    e.result
-      .then(async (O) => {
-        await e.taskOutput.flush();
-        S("exited", O.code);
+    this.#e.set(taskId, finish);
+    proc.result
+      .then(async (result) => {
+        await proc.taskOutput.flush();
+        finish("exited", result.code);
       })
       .catch((error) => logError(toError(error)));
-    r.onEvent(taskId, "started");
-    return p;
+    record.onEvent(taskId, "started");
+    return startedInfo;
   }
 }
 //@ chunk-tr0s0d0k.js:5826-5891 placement
-function pollServedBackgroundStop(e, n) {
-  takeServedBackgroundStopRequest(e).then((o) => {
-    if (o) n("stopped_by_person");
+function pollServedBackgroundStop(taskId, onStop) {
+  takeServedBackgroundStopRequest(taskId).then((requested) => {
+    if (requested) onStop("stopped_by_person");
   });
 }
 //@ chunk-tr0s0d0k.js:5891-5986 placement
@@ -300,17 +305,17 @@ function sessionModeFromStamp(facts) {
 }
 //@ chunk-tr0s0d0k.js:5986-6083 placement
 function createNoteSet() {
-  let e = new Map();
+  let notes = new Map();
   return {
-    add(n, o) {
-      if (!e.has(n)) e.set(n, o);
+    add(key, note) {
+      if (!notes.has(key)) notes.set(key, note);
     },
-    lines: () => [...e.values()],
+    lines: () => [...notes.values()],
   };
 }
 //@ chunk-tr0s0d0k.js:6083-6396 placement
-function refusedEnvelope(target, facts, code, r, s = {}) {
-  let d = clipText(r);
+function refusedEnvelope(target, facts, code, message, options = {}) {
+  let clippedMessage = clipText(message);
   return {
     envelope: {
       v: REMOTE_TOOL_PROTOCOL_VERSION,
@@ -320,22 +325,22 @@ function refusedEnvelope(target, facts, code, r, s = {}) {
       }),
       target,
       code,
-      ...(s.reason !== undefined && {
-        reason: s.reason,
+      ...(options.reason !== undefined && {
+        reason: options.reason,
       }),
-      ...(s.limit !== undefined && {
-        limit: s.limit,
+      ...(options.limit !== undefined && {
+        limit: options.limit,
       }),
-      message: d,
-      ...(s.notes !== undefined &&
-        s.notes.length > 0 && {
-          notes: s.notes,
+      message: clippedMessage,
+      ...(options.notes !== undefined &&
+        options.notes.length > 0 && {
+          notes: options.notes,
         }),
     },
     content: [
       {
         type: "text",
-        text: d,
+        text: clippedMessage,
       },
     ],
   };

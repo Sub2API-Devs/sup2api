@@ -5,24 +5,30 @@
  * pieces: chunk-t7zrjgp6.js (9)
  * attribution: esm-layout 3, esm-fingerprint 6
  */
-import { CONSTANT_CATCH, C } from "./util.js";
+import { CONSTANT_CATCH, members } from "./util.js";
+import { deferInit, runDeferredInits } from "../../../../runtime/deferred-init.js";
 
 //@ chunk-t7zrjgp6.js:9655-9700 esm-layout
-function MIi(e) {
-  let t = () => e;
-  t[CONSTANT_CATCH] = true;
-  return t;
+function constantCatch(fn) {
+  let wrapped = () => fn;
+  wrapped[CONSTANT_CATCH] = true;
+  return wrapped;
 }
 //@ chunk-t7zrjgp6.js:9700-9815 esm-layout
-var _a;
-var bY = Object.freeze({
-  status: "aborted",
+var _a; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var INVALID;
+var _zodDesc;
+var _E;
+deferInit("chunk-t7zrjgp6.js:9700", () => {
+  INVALID = Object.freeze({
+    status: "aborted",
+  });
+  _zodDesc = {
+    value: undefined,
+    enumerable: false,
+  };
+  _E = "captureStackTrace" in Error ? Error : null;
 });
-var _zodDesc = {
-  value: undefined,
-  enumerable: false,
-};
-var _E = "captureStackTrace" in Error ? Error : null;
 //@ chunk-t7zrjgp6.js:9815-10001 esm-fingerprint
 function newError(Definition) {
   let E = _E;
@@ -45,7 +51,7 @@ function newError(Definition) {
   return new Definition();
 }
 //@ chunk-t7zrjgp6.js:10001-11065 esm-fingerprint
-function Fr(name, initializer, proto, params) {
+function $constructor(name, initializer, proto, params) {
   let zodProto = {};
   function Internals(def) {
     this.def = def;
@@ -75,7 +81,7 @@ function Fr(name, initializer, proto, params) {
       let target = up ?? own;
       if (!initialized.has(target)) {
         initialized.add(target);
-        C(target, protoMembers);
+        members(target, protoMembers);
       }
     }
     let proto = _.prototype;
@@ -129,12 +135,23 @@ class $ZodEncodeError extends Error {
   }
 }
 //@ chunk-t7zrjgp6.js:11319-11380 esm-fingerprint
-(_a = globalThis).__zod_globalConfig ?? (_a.__zod_globalConfig = {});
+// deferred: uses _a of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-t7zrjgp6.js:11319", () => {
+  (_a = globalThis).__zod_globalConfig ?? (_a.__zod_globalConfig = {});
+});
 //@ chunk-t7zrjgp6.js:11380-11418 esm-fingerprint
-var globalConfig = globalThis.__zod_globalConfig;
+var globalConfig; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-t7zrjgp6.js:11380", () => {
+  globalConfig = globalThis.__zod_globalConfig;
+});
 //@ chunk-t7zrjgp6.js:11418-11471 esm-layout
 function config(newConfig) {
   if (newConfig) Object.assign(globalConfig, newConfig);
   return globalConfig;
 }
-export { bY, globalConfig, config, Fr, $ZodAsyncError, $ZodEncodeError, MIi };
+
+// The import cycle this module closes (2 modules) is complete: run the load-time work its statements
+// marked "deferred" waited for, in the official build's order (runtime/deferred-init.js).
+runDeferredInits("vendor/zod/v4/core/core.js");
+runDeferredInits("worker:vendor/zod/v4/core/core.js");
+export { INVALID, globalConfig, config, $constructor, $ZodAsyncError, $ZodEncodeError, constantCatch };

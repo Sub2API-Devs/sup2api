@@ -11,10 +11,10 @@ import {
   getAuthority,
   getAuthorityHost,
   getKnownAuthorities,
-  Is,
+  getAuthCapabilities,
   getMSALLogLevel,
   publicToMsal,
-  Ur,
+  handleMsalError,
   ensureValidMsalToken,
   msalToPublic,
 } from "../utils.js";
@@ -59,7 +59,9 @@ function generateMsalConfiguration(clientId, tenantId, msalClientOptions = {}) {
     system: {
       networkClient: httpClient,
       loggerOptions: {
-        loggerCallback: Is((_b = msalClientOptions.logger) !== null && _b !== undefined ? _b : msalLogger),
+        loggerCallback: getAuthCapabilities(
+          (_b = msalClientOptions.logger) !== null && _b !== undefined ? _b : msalLogger,
+        ),
         logLevel: getMSALLogLevel(getLogLevel()),
         piiLoggingEnabled:
           (_c = msalClientOptions.loggingOptions) === null || _c === undefined
@@ -164,7 +166,7 @@ function createMsalClient(clientId, tenantId, createMsalClientOptions = {}) {
     try {
       return await app.acquireTokenSilent(silentRequest);
     } catch (err) {
-      throw Ur(scopes, err, options);
+      throw handleMsalError(scopes, err, options);
     }
   }
   function calculateRequestAuthority(options) {
@@ -191,7 +193,7 @@ function createMsalClient(clientId, tenantId, createMsalClientOptions = {}) {
       try {
         response = await onAuthenticationRequired();
       } catch (err) {
-        throw Ur(scopes, err, options);
+        throw handleMsalError(scopes, err, options);
       }
     ensureValidMsalToken(scopes, response, options);
     state.cachedAccount =
@@ -230,7 +232,7 @@ function createMsalClient(clientId, tenantId, createMsalClientOptions = {}) {
         tokenType: response.tokenType,
       };
     } catch (err) {
-      throw Ur(scopes, err, options);
+      throw handleMsalError(scopes, err, options);
     }
   }
   async function getTokenByClientAssertion(scopes, clientAssertion, options = {}) {
@@ -256,7 +258,7 @@ function createMsalClient(clientId, tenantId, createMsalClientOptions = {}) {
         tokenType: response.tokenType,
       };
     } catch (err) {
-      throw Ur(scopes, err, options);
+      throw handleMsalError(scopes, err, options);
     }
   }
   async function getTokenByClientCertificate(scopes, certificate, options = {}) {
@@ -281,7 +283,7 @@ function createMsalClient(clientId, tenantId, createMsalClientOptions = {}) {
         tokenType: response.tokenType,
       };
     } catch (err) {
-      throw Ur(scopes, err, options);
+      throw handleMsalError(scopes, err, options);
     }
   }
   async function getTokenByDeviceCode(scopes, deviceCodeCallback, options = {}) {
@@ -384,7 +386,7 @@ function createMsalClient(clientId, tenantId, createMsalClientOptions = {}) {
         tokenType: response.tokenType,
       };
     } catch (err) {
-      throw Ur(scopes, err, options);
+      throw handleMsalError(scopes, err, options);
     }
   }
   async function getTokenByInteractiveRequest(scopes, options = {}) {
@@ -428,7 +430,7 @@ function createMsalClient(clientId, tenantId, createMsalClientOptions = {}) {
       var _b;
       return {
         openBrowser: async (url) => {
-          let open = await import("./chunk-20ppca50.js");
+          let open = await import("../../../../../../open/default.lazy.js");
           await open.default(url, {
             wait: true,
             newInstance: true,

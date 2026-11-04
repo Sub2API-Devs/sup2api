@@ -10,7 +10,11 @@
  */
 
 //@ chunk-e6aww6q8.js:100853-100948 fingerprint = maybeRemoveApiKeyFromMacOSKeychainThrows (0.434)
-function maybeRemoveApiKeyFromMacOSKeychainThrows(latest, n) {
-  return latest.platform === n.platform && latest.shell === n.shell && latest.osVersion === n.osVersion;
+function maybeRemoveApiKeyFromMacOSKeychainThrows(latest, previous) {
+  return (
+    latest.platform === previous.platform &&
+    latest.shell === previous.shell &&
+    latest.osVersion === previous.osVersion
+  );
 }
 export { maybeRemoveApiKeyFromMacOSKeychainThrows };

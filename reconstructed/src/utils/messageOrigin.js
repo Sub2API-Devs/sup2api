@@ -18,10 +18,10 @@ var isKnownSubmissionSubkind = (subkind) => SUBMISSION_SUBKINDS.has(subkind);
 /**
  * 把提交来源描述转成消息来源：human 区分桥接与输入框，plugin/channel/task-notification 保留细节，其余只保留 kind。
  */
-function originFromSubmission(e, n) {
-  switch (e.kind) {
+function originFromSubmission(submission, fromBridge) {
+  switch (submission.kind) {
     case "human":
-      return n === true
+      return fromBridge === true
         ? {
             kind: "bridge",
           }
@@ -29,23 +29,23 @@ function originFromSubmission(e, n) {
             kind: "composer",
           };
     case "plugin":
-      return e.asUser === true
+      return submission.asUser === true
         ? {
             kind: "plugin",
-            name: e.name,
+            name: submission.name,
             asUser: true,
           }
         : {
             kind: "plugin",
-            name: e.name,
+            name: submission.name,
           };
     case "channel":
       return {
         kind: "channel",
-        server: e.server,
+        server: submission.server,
       };
     case "task-notification": {
-      let { subkind } = e;
+      let { subkind } = submission;
       return subkind !== undefined && isKnownSubmissionSubkind(subkind)
         ? {
             kind: subkind,
@@ -62,7 +62,7 @@ function originFromSubmission(e, n) {
     case "observer-activity":
     case "slack-ping":
       return {
-        kind: e.kind,
+        kind: submission.kind,
       };
   }
 }
@@ -70,13 +70,13 @@ function originFromSubmission(e, n) {
 /**
  * 把未知来源对象解析成消息来源，无法识别时归为 unclassified。
  */
-function originFromUnknown(e) {
-  if (!isPlainObject_5(e))
+function originFromUnknown(unknown) {
+  if (!isPlainObject_5(unknown))
     return {
       kind: "unclassified",
     };
   return (
-    originFromSubmission(e, undefined) ?? {
+    originFromSubmission(unknown, undefined) ?? {
       kind: "unclassified",
     }
   );
@@ -116,12 +116,12 @@ function resolveMessageOrigin({ origin, bridgeOrigin, wakeupSource, mode, prompt
 /**
  * 由桥接消息的元数据推断来源：human→bridge、任务通知子类、peer/coordinator（带插件）、slack-ping，其余 unclassified。
  */
-function originFromBridgeMetadata(e) {
-  if (!e)
+function originFromBridgeMetadata(metadata) {
+  if (!metadata)
     return {
       kind: "unclassified",
     };
-  let { kind, subkind } = e;
+  let { kind, subkind } = metadata;
   switch (kind) {
     case "human":
       return {
@@ -133,7 +133,7 @@ function originFromBridgeMetadata(e) {
       };
     case "peer":
     case "coordinator": {
-      let { plugin } = e;
+      let { plugin } = metadata;
       return {
         kind,
         ...(plugin !== undefined && {

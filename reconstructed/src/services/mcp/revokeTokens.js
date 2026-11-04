@@ -16,35 +16,36 @@ import { getServerKey } from "./auth.js";
 /**
  * 吊销存储的 MCP 令牌。
  */
-async function revokeStoredMcpTokens(n, i) {
+async function revokeStoredMcpTokens(serverName, configs) {
   if ((await readSecureStorageForMcp()) === READ_FAILED)
     return {
       cleared: false,
       reason: "credential_store_failed",
     };
-  let c = require("./chunk-asne9cp8.js").mcpAuthModule();
-  let t = new Set();
-  let e = {
+  let authModule = require("./emitTripwireEvent.lazy.js").mcpAuthModule();
+  let seen = new Set();
+  let outcome = {
     cleared: true,
   };
-  for (let r of i) {
-    if (r.type !== "http" && r.type !== "sse") continue;
-    let serverKey = getServerKey(n, r);
-    if (t.has(serverKey)) continue;
-    t.add(serverKey);
-    let o = await c.revokeServerTokens(n, r);
-    if (!o.cleared && (e.cleared || o.reason === "credential_store_failed")) e = o;
+  for (let config of configs) {
+    if (config.type !== "http" && config.type !== "sse") continue;
+    let serverKey = getServerKey(serverName, config);
+    if (seen.has(serverKey)) continue;
+    seen.add(serverKey);
+    let revokeResult = await authModule.revokeServerTokens(serverName, config);
+    if (!revokeResult.cleared && (outcome.cleared || revokeResult.reason === "credential_store_failed"))
+      outcome = revokeResult;
   }
-  if (!e.cleared && e.reason === "credential_store_failed") return e;
+  if (!outcome.cleared && outcome.reason === "credential_store_failed") return outcome;
   let secureStorageForMcp = await readSecureStorageForMcp();
   if (
     secureStorageForMcp === READ_FAILED ||
-    [...t].some((r) => secureStorageForMcp?.mcpOAuth?.[r] !== undefined)
+    [...seen].some((serverKey) => secureStorageForMcp?.mcpOAuth?.[serverKey] !== undefined)
   )
     return {
       cleared: false,
       reason: "credential_store_failed",
     };
-  return e;
+  return outcome;
 }
 export { revokeStoredMcpTokens };

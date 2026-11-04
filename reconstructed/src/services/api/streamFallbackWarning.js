@@ -10,37 +10,39 @@
  */
 import { LRUCache } from "../../../vendor/lru-cache/dist/esm/index.min.js";
 import { createKeyedQueue } from "../../utils/promiseQueue.js";
-import { newWeakMap, N, clearGzipBlockStore } from "./gzipRequestBody.js";
+import { newWeakMap, createBlockCache, clearGzipBlockStore } from "./gzipRequestBody.js";
 import { SessionRootSlot } from "../../bootstrap/sessionSlices.js";
 import { getRootSession, onSessionSwitch } from "../../bootstrap/state.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-rbe666af.js:6373-7138 placement
-function decideStreamFallbackWarning(cacheCoverage, conversation, n) {
-  let r = cacheCoverage.get(conversation);
-  if (r?.fired)
+function decideStreamFallbackWarning(cacheCoverage, conversation, coverage) {
+  let entry = cacheCoverage.get(conversation);
+  if (entry?.fired)
     return {
       kind: "already_fired",
     };
-  let inputTokens = n?.input_tokens ?? 0;
-  let cacheReadInputTokens = n?.cache_read_input_tokens ?? 0;
-  let cacheCreationInputTokens = n?.cache_creation_input_tokens ?? 0;
-  let a =
-    (n?.cache_creation?.ephemeral_5m_input_tokens ?? 0) + (n?.cache_creation?.ephemeral_1h_input_tokens ?? 0);
-  let d = cacheCreationInputTokens > 0 ? cacheCreationInputTokens : a;
-  if (inputTokens + cacheReadInputTokens + d <= 0)
+  let inputTokens = coverage?.input_tokens ?? 0;
+  let cacheReadInputTokens = coverage?.cache_read_input_tokens ?? 0;
+  let cacheCreationInputTokens = coverage?.cache_creation_input_tokens ?? 0;
+  let cacheCreateFallback =
+    (coverage?.cache_creation?.ephemeral_5m_input_tokens ?? 0) +
+    (coverage?.cache_creation?.ephemeral_1h_input_tokens ?? 0);
+  let cacheCreation = cacheCreationInputTokens > 0 ? cacheCreationInputTokens : cacheCreateFallback;
+  if (inputTokens + cacheReadInputTokens + cacheCreation <= 0)
     return {
       kind: "no_usage",
     };
-  if (inputTokens < 20000 || d >= 0.1 * inputTokens) {
-    let u = r ?? {
+  if (inputTokens < 20000 || cacheCreation >= 0.1 * inputTokens) {
+    let state = entry ?? {
       consecutive: 0,
       fired: false,
       okEmitted: false,
     };
-    if (!r) cacheCoverage.set(conversation, u);
-    u.consecutive = 0;
-    if (!u.okEmitted && cacheReadInputTokens + d > 0) {
-      u.okEmitted = true;
+    if (!entry) cacheCoverage.set(conversation, state);
+    state.consecutive = 0;
+    if (!state.okEmitted && cacheReadInputTokens + cacheCreation > 0) {
+      state.okEmitted = true;
       return {
         kind: "confirm",
       };
@@ -49,26 +51,26 @@ function decideStreamFallbackWarning(cacheCoverage, conversation, n) {
       kind: "healthy",
     };
   }
-  let c = r ?? {
+  let state = entry ?? {
     consecutive: 0,
     fired: false,
     okEmitted: false,
   };
-  if (!r) cacheCoverage.set(conversation, c);
-  c.consecutive++;
-  if (c.consecutive >= 3) {
-    c.fired = true;
+  if (!entry) cacheCoverage.set(conversation, state);
+  state.consecutive++;
+  if (state.consecutive >= 3) {
+    state.fired = true;
     return {
       kind: "fire",
-      consecutive: c.consecutive,
+      consecutive: state.consecutive,
       inputTokens,
       cacheReadTokens: cacheReadInputTokens,
-      cacheCreationTokens: d,
+      cacheCreationTokens: cacheCreation,
     };
   }
   return {
     kind: "counted",
-    consecutive: c.consecutive,
+    consecutive: state.consecutive,
   };
 }
 //@ chunk-rbe666af.js:7138-7153 placement
@@ -143,7 +145,7 @@ class StreamFallbackWarning {
       max: MAX_TELEMETRY_ENTRIES,
     }),
     ccrWorkerSkipReasonsLogged: new Set(),
-    blockStore: N(),
+    blockStore: createBlockCache(),
     blocksSwitchedOff: false,
     bodyBytesSwitchedOff: false,
     reusingBodiesChecked: 0,
@@ -180,15 +182,15 @@ class StreamFallbackWarning {
   skillHealthMap = undefined;
   headerMemberDropsNoted = new Set();
   firedOnceKeys = new Set();
-  hasFired(e) {
-    return this.firedOnceKeys.has(e);
+  hasFired(key) {
+    return this.firedOnceKeys.has(key);
   }
-  markFired(e) {
-    this.firedOnceKeys.add(e);
+  markFired(key) {
+    this.firedOnceKeys.add(key);
   }
-  once(e) {
-    if (this.firedOnceKeys.has(e)) return false;
-    this.firedOnceKeys.add(e);
+  once(key) {
+    if (this.firedOnceKeys.has(key)) return false;
+    this.firedOnceKeys.add(key);
     return true;
   }
   resetStreamNoEventsWarningLatch() {
@@ -196,7 +198,10 @@ class StreamFallbackWarning {
   }
 }
 //@ chunk-rbe666af.js:9155-9180 placement
-var streamFallbackWarningSlot = new SessionRootSlot(() => new StreamFallbackWarning());
+var streamFallbackWarningSlot; // deferred: uses SessionRootSlot (../../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-rbe666af.js:9155", () => {
+  streamFallbackWarningSlot = new SessionRootSlot(() => new StreamFallbackWarning());
+});
 //@ chunk-rbe666af.js:9180-9212 placement
 /**
  * 导出函数 `streamFallbackWarning`：返回 de.of(getRootSession())。
@@ -208,20 +213,23 @@ function streamFallbackWarning() {
 /**
  * 导出常量或表 `CONVERSATION_RESET_KINDS`：值为 new Set(["clear", "resume", "spare_claim", "remote_attach"])。
  */
-var CONVERSATION_RESET_KINDS = new Set(["clear", "resume", "spare_claim", "remote_attach"]);
+var CONVERSATION_RESET_KINDS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-rbe666af.js:9212", () => {
+  CONVERSATION_RESET_KINDS = new Set(["clear", "resume", "spare_claim", "remote_attach"]);
+});
 //@ chunk-rbe666af.js:9278-9648 placement
 /**
  * 注册会话切换监听：每次切换（cd/hydrate 除外）重置"流无事件"警告锁存；开始新对话时清掉根线程的续接状态与 gzip 分块缓存，并解除"到下一次对话前"的分块关闭。
  */
 function registerConversationResetHook() {
-  return onSessionSwitch((e, t) => {
-    if (t === "cd" || t === "hydrate") return;
-    let n = streamFallbackWarning();
-    n.resetStreamNoEventsWarningLatch();
-    if (CONVERSATION_RESET_KINDS.has(t)) {
-      n.threadDropRecreate.delete(ROOT);
-      n.threadRequestEnds.delete(ROOT);
-      let gzipRequestBody = n.gzipRequestBody;
+  return onSessionSwitch((sessionId, kind) => {
+    if (kind === "cd" || kind === "hydrate") return;
+    let state = streamFallbackWarning();
+    state.resetStreamNoEventsWarningLatch();
+    if (CONVERSATION_RESET_KINDS.has(kind)) {
+      state.threadDropRecreate.delete(ROOT);
+      state.threadRequestEnds.delete(ROOT);
+      let gzipRequestBody = state.gzipRequestBody;
       clearGzipBlockStore(gzipRequestBody.blockStore);
       gzipRequestBody.reusingBodiesChecked = 0;
       gzipRequestBody.firstReusingBodiesDraw = undefined;

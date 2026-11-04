@@ -5,12 +5,12 @@
  * pieces: chunk-798ashq9.js (1)
  * attribution: cjs-require-graph 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-798ashq9.js:8495-12915 cjs-require-graph
-var require_float = x(function (cjsExports, cjsModule) {
+var require_float = __commonJS(function (cjsExports, cjsModule) {
   cjsModule.exports = factory(factory);
-  function factory(l) {
+  function factory(util) {
     if (typeof Float32Array !== "undefined")
       (function () {
         var f32 = new Float32Array([-0]);
@@ -30,8 +30,8 @@ var require_float = x(function (cjsExports, cjsModule) {
           buf[pos + 2] = f8b[1];
           buf[pos + 3] = f8b[0];
         }
-        l.writeFloatLE = le ? writeFloat_f32_cpy : writeFloat_f32_rev;
-        l.writeFloatBE = le ? writeFloat_f32_rev : writeFloat_f32_cpy;
+        util.writeFloatLE = le ? writeFloat_f32_cpy : writeFloat_f32_rev;
+        util.writeFloatBE = le ? writeFloat_f32_rev : writeFloat_f32_cpy;
         function readFloat_f32_cpy(buf, pos) {
           f8b[0] = buf[pos];
           f8b[1] = buf[pos + 1];
@@ -46,8 +46,8 @@ var require_float = x(function (cjsExports, cjsModule) {
           f8b[0] = buf[pos + 3];
           return f32[0];
         }
-        l.readFloatLE = le ? readFloat_f32_cpy : readFloat_f32_rev;
-        l.readFloatBE = le ? readFloat_f32_rev : readFloat_f32_cpy;
+        util.readFloatLE = le ? readFloat_f32_cpy : readFloat_f32_rev;
+        util.readFloatBE = le ? readFloat_f32_rev : readFloat_f32_cpy;
       })();
     else
       (function () {
@@ -72,8 +72,8 @@ var require_float = x(function (cjsExports, cjsModule) {
             writeUint(((sign << 31) | ((exponent + 127) << 23) | mantissa) >>> 0, buf, pos);
           }
         }
-        l.writeFloatLE = writeFloat_ieee754.bind(null, writeUintLE);
-        l.writeFloatBE = writeFloat_ieee754.bind(null, writeUintBE);
+        util.writeFloatLE = writeFloat_ieee754.bind(null, writeUintLE);
+        util.writeFloatBE = writeFloat_ieee754.bind(null, writeUintBE);
         function readFloat_ieee754(readUint, buf, pos) {
           var uint = readUint(buf, pos);
           var sign = (uint >> 31) * 2 + 1;
@@ -87,8 +87,8 @@ var require_float = x(function (cjsExports, cjsModule) {
               ? sign * 0.000000000000000000000000000000000000000000001401298464324817 * mantissa
               : sign * Math.pow(2, exponent - 150) * (mantissa + 8388608);
         }
-        l.readFloatLE = readFloat_ieee754.bind(null, readUintLE);
-        l.readFloatBE = readFloat_ieee754.bind(null, readUintBE);
+        util.readFloatLE = readFloat_ieee754.bind(null, readUintLE);
+        util.readFloatBE = readFloat_ieee754.bind(null, readUintBE);
       })();
     if (typeof Float64Array !== "undefined")
       (function () {
@@ -117,8 +117,8 @@ var require_float = x(function (cjsExports, cjsModule) {
           buf[pos + 6] = f8b[1];
           buf[pos + 7] = f8b[0];
         }
-        l.writeDoubleLE = le ? writeDouble_f64_cpy : writeDouble_f64_rev;
-        l.writeDoubleBE = le ? writeDouble_f64_rev : writeDouble_f64_cpy;
+        util.writeDoubleLE = le ? writeDouble_f64_cpy : writeDouble_f64_rev;
+        util.writeDoubleBE = le ? writeDouble_f64_rev : writeDouble_f64_cpy;
         function readDouble_f64_cpy(buf, pos) {
           f8b[0] = buf[pos];
           f8b[1] = buf[pos + 1];
@@ -141,8 +141,8 @@ var require_float = x(function (cjsExports, cjsModule) {
           f8b[0] = buf[pos + 7];
           return f64[0];
         }
-        l.readDoubleLE = le ? readDouble_f64_cpy : readDouble_f64_rev;
-        l.readDoubleBE = le ? readDouble_f64_rev : readDouble_f64_cpy;
+        util.readDoubleLE = le ? readDouble_f64_cpy : readDouble_f64_rev;
+        util.readDoubleBE = le ? readDouble_f64_rev : readDouble_f64_cpy;
       })();
     else
       (function () {
@@ -185,8 +185,8 @@ var require_float = x(function (cjsExports, cjsModule) {
             }
           }
         }
-        l.writeDoubleLE = writeDouble_ieee754.bind(null, writeUintLE, 0, 4);
-        l.writeDoubleBE = writeDouble_ieee754.bind(null, writeUintBE, 4, 0);
+        util.writeDoubleLE = writeDouble_ieee754.bind(null, writeUintLE, 0, 4);
+        util.writeDoubleBE = writeDouble_ieee754.bind(null, writeUintBE, 4, 0);
         function readDouble_ieee754(readUint, off0, off1, buf, pos) {
           var lo = readUint(buf, pos + off0);
           var hi = readUint(buf, pos + off1);
@@ -203,10 +203,10 @@ var require_float = x(function (cjsExports, cjsModule) {
                 mantissa
               : sign * Math.pow(2, exponent - 1075) * (mantissa + 4503599627370496);
         }
-        l.readDoubleLE = readDouble_ieee754.bind(null, readUintLE, 0, 4);
-        l.readDoubleBE = readDouble_ieee754.bind(null, readUintBE, 4, 0);
+        util.readDoubleLE = readDouble_ieee754.bind(null, readUintLE, 0, 4);
+        util.readDoubleBE = readDouble_ieee754.bind(null, readUintBE, 4, 0);
       })();
-    return l;
+    return util;
   }
   function writeUintLE(val, buf, pos) {
     buf[pos] = val & 255;

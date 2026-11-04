@@ -22,16 +22,16 @@ var TENGU_MISTY_CROWN = "tengu_misty_crown";
  * 取所有语句里 elementType 为 CommandAst 的命令。
  */
 function getCompoundCommandPrefixesStatic(parsed) {
-  let x = [];
+  let commands = [];
   for (let statement of parsed.statements)
-    for (let command of statement.commands) if (command.elementType === "CommandAst") x.push(command);
-  return x;
+    for (let command of statement.commands) if (command.elementType === "CommandAst") commands.push(command);
+  return commands;
 }
 //@ chunk-18hwfzwa.js:1396672-1397730 fingerprint = extractPrefixFromElement (0.897)
 /**
  * 从单个 PowerShell 命令元素提取规则前缀：application 类、危险名（NEVER_SUGGEST）不建议；cmdlet 直接用名；外部命令要求参数全为常量/参数并经 buildPrefix 对齐；tengu_misty_crown 下拒绝带 isCommand 参数的命令。
  */
-async function extractPrefixFromElement(h, cmd) {
+async function extractPrefixFromElement(specCache, cmd) {
   if (cmd.nameType === "application") return null;
   let name = cmd.name;
   if (!name) return null;
@@ -44,9 +44,9 @@ async function extractPrefixFromElement(h, cmd) {
     if (t !== "StringConstant" && t !== "Parameter") return null;
   }
   let nameLower = name.toLowerCase();
-  let spec = await h.get(nameLower);
+  let spec = await specCache.get(nameLower);
   if (
-    (startsWithBareShell(nameLower) || [spec?.args].flat().some((Be) => Be?.isCommand)) &&
+    (startsWithBareShell(nameLower) || [spec?.args].flat().some((entry) => entry?.isCommand)) &&
     readFlagWithOverride(TENGU_MISTY_CROWN, {
       safe: true,
     })
@@ -57,9 +57,9 @@ async function extractPrefixFromElement(h, cmd) {
   for (let word of prefix.split(" ").slice(1)) {
     if (word.includes("\\")) return null;
     while (argIdx < cmd.args.length) {
-      let He = cmd.args[argIdx];
-      if (He === word) break;
-      if (He.startsWith("-")) {
+      let arg = cmd.args[argIdx];
+      if (arg === word) break;
+      if (arg.startsWith("-")) {
         argIdx++;
         if (
           spec?.options &&
@@ -67,7 +67,7 @@ async function extractPrefixFromElement(h, cmd) {
           cmd.args[argIdx] !== word &&
           !cmd.args[argIdx].startsWith("-")
         ) {
-          let flagLower = He.toLowerCase();
+          let flagLower = arg.toLowerCase();
           if (
             spec.options.find((option) =>
               Array.isArray(option.name) ? option.name.includes(flagLower) : option.name === flagLower,
@@ -90,18 +90,18 @@ async function extractPrefixFromElement(h, cmd) {
 /**
  * 复合 PowerShell 命令的静态前缀：逐命令取前缀，按首词分组求词对齐公共前缀；只剩一个词且该命令有子命令/深度规则时丢弃。
  */
-async function getCommandPrefixStatic(h, command, D) {
+async function getCommandPrefixStatic(specCache, command, skip) {
   let parsed = await parsePowerShellCommand(command);
   if (!parsed.valid) return [];
   let commands = getCompoundCommandPrefixesStatic(parsed);
   if (commands.length <= 1) {
-    let prefix = commands[0] ? await extractPrefixFromElement(h, commands[0]) : null;
+    let prefix = commands[0] ? await extractPrefixFromElement(specCache, commands[0]) : null;
     return prefix ? [prefix] : [];
   }
   let prefixes = [];
   for (let command of commands) {
-    if (D?.(command)) continue;
-    let prefix = await extractPrefixFromElement(h, command);
+    if (skip?.(command)) continue;
+    let prefix = await extractPrefixFromElement(specCache, command);
     if (prefix) prefixes.push(prefix);
   }
   if (prefixes.length === 0) return [];
@@ -116,7 +116,8 @@ async function getCommandPrefixStatic(h, command, D) {
   for (let [rootLower, group] of groups) {
     let lcp = wordAlignedLCP(group);
     if ((lcp === "" ? 0 : countCharInString(lcp, " ") + 1) <= 1) {
-      if ((await h.get(rootLower))?.subcommands?.length || Object.hasOwn(DEPTH_RULES, rootLower)) continue;
+      if ((await specCache.get(rootLower))?.subcommands?.length || Object.hasOwn(DEPTH_RULES, rootLower))
+        continue;
     }
     collapsed.push(lcp);
   }

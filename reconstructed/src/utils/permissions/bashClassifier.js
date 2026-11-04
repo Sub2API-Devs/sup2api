@@ -19,15 +19,15 @@ function collectDenyRuleStringsForClassifier(context) {
   let ruleStrings = new Set();
   for (let [key, value] of Object.entries(context.alwaysDenyRules)) {
     if (key === "toolsNarrowing" || key === "command") continue;
-    for (let h of value ?? []) {
-      if (permissionRuleValueFromString(h).ruleContent?.startsWith("prompt:")) continue;
-      ruleStrings.add(h);
+    for (let ruleString of value ?? []) {
+      if (permissionRuleValueFromString(ruleString).ruleContent?.startsWith("prompt:")) continue;
+      ruleStrings.add(ruleString);
     }
   }
   return [...ruleStrings];
 }
 //@ chunk-s4bxxzsw.js:45959-46009 fingerprint = classifyBashCommand (0.426)
 function classifyBashCommand(tool) {
-  return PERMISSION_CARD_REGISTRY.find((r) => r.matches(tool));
+  return PERMISSION_CARD_REGISTRY.find((card) => card.matches(tool));
 }
 export { classifyBashCommand, collectDenyRuleStringsForClassifier };

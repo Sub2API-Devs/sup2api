@@ -30,12 +30,12 @@ import { SessionRootSlot } from "../../bootstrap/sessionSlices.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
 import {
   zodStrictObject,
-  string,
+  stringSchema,
   union,
-  u,
+  objectSchema,
   literal,
-  E,
-  bIi,
+  numberSchema,
+  guidSchema,
 } from "../../../vendor/zod/v4/classic/schemas.js";
 import { MAX_FILE_PATH_CHARS } from "../mcp/inputSchemaCheck.js";
 import { FILE_ID_RE } from "../mcp/agentTaskFiles.js";
@@ -99,19 +99,19 @@ var taskFileUploadSessionSlot = new SessionRootSlot(() => ({
 }));
 var uploadInputSchema = DoctorLazy(() =>
   zodStrictObject({
-    path: string().min(1).max(MAX_FILE_PATH_CHARS),
+    path: stringSchema().min(1).max(MAX_FILE_PATH_CHARS),
   }),
 );
 var uploadOutputSchema = DoctorLazy(() =>
   union([
-    u({
+    objectSchema({
       ok: literal(true),
-      file_id: string(),
-      name: string(),
+      file_id: stringSchema(),
+      name: stringSchema(),
     }),
-    u({
+    objectSchema({
       ok: literal(false),
-      code: string().max(64),
+      code: stringSchema().max(64),
     }),
   ]),
 );
@@ -119,25 +119,25 @@ var uploadOutputSchema = DoctorLazy(() =>
 /**
  * 上传本地文件为任务文件；本模块还提供删除与下载。
  */
-async function uploadTaskFile(e, t, n, s, r) {
-  let { path } = uploadInputSchema().parse(e);
-  if (r === REPO_RULES_UNREAD)
+async function uploadTaskFile(input, signal, sessionCtx, host, repoRulesUnread) {
+  let { path } = uploadInputSchema().parse(input);
+  if (repoRulesUnread === REPO_RULES_UNREAD)
     return {
-      summary: `not uploaded: ${r}`,
+      summary: `not uploaded: ${repoRulesUnread}`,
       output: {
         ok: false,
-        code: r,
+        code: repoRulesUnread,
       },
     };
-  let a = taskFileUploadSessionSlot.of(n);
-  let c = () => uploadTaskFileUnchecked(path, t, n, s, r);
-  let f = a.last.then(c, c);
-  a.last = f;
-  let m = await f;
-  if (m.ok) a.uploaded.add(m.file_id);
+  let slot = taskFileUploadSessionSlot.of(sessionCtx);
+  let upload = () => uploadTaskFileUnchecked(path, signal, sessionCtx, host, repoRulesUnread);
+  let queued = slot.last.then(upload, upload);
+  slot.last = queued;
+  let result = await queued;
+  if (result.ok) slot.uploaded.add(result.file_id);
   return {
-    summary: m.ok ? "uploaded" : `not uploaded: ${m.code}`,
-    output: m,
+    summary: result.ok ? "uploaded" : `not uploaded: ${result.code}`,
+    output: result,
   };
 }
 //@ chunk-edh48dyx.js:1923-2031 placement
@@ -146,24 +146,24 @@ async function uploadTaskFile(e, t, n, s, r) {
  */
 var DELETE_INPUT_SCHEMA = DoctorLazy(() =>
   zodStrictObject({
-    file_id: string().min(1).max(256),
+    file_id: stringSchema().min(1).max(256),
   }),
 );
 var DELETE_OUTPUT_SCHEMA = DoctorLazy(() =>
   union([
-    u({
+    objectSchema({
       ok: literal(true),
     }),
-    u({
+    objectSchema({
       ok: literal(false),
-      code: string().max(64),
+      code: stringSchema().max(64),
     }),
   ]),
 );
 //@ chunk-edh48dyx.js:2031-2329 placement
-async function deleteTaskFile(e, t) {
-  let { file_id: fileId } = DELETE_INPUT_SCHEMA().parse(e);
-  if (!taskFileUploadSessionSlot.of(t).uploaded.delete(fileId))
+async function deleteTaskFile(input, sessionCtx) {
+  let { file_id: fileId } = DELETE_INPUT_SCHEMA().parse(input);
+  if (!taskFileUploadSessionSlot.of(sessionCtx).uploaded.delete(fileId))
     return {
       summary: "not deleted: not_uploaded_here",
       output: {
@@ -171,8 +171,8 @@ async function deleteTaskFile(e, t) {
         code: "not_uploaded_here",
       },
     };
-  let s = await deleteStartTaskFilesHere([fileId]);
-  return s === undefined
+  let failureKind = await deleteStartTaskFilesHere([fileId]);
+  return failureKind === undefined
     ? {
         summary: "deleted",
         output: {
@@ -180,10 +180,10 @@ async function deleteTaskFile(e, t) {
         },
       }
     : {
-        summary: `not deleted: ${s}`,
+        summary: `not deleted: ${failureKind}`,
         output: {
           ok: false,
-          code: s,
+          code: failureKind,
         },
       };
 }
@@ -193,37 +193,37 @@ async function deleteTaskFile(e, t) {
  */
 var taskFileDownloadSchemas = DoctorLazy(() =>
   zodStrictObject({
-    file_id: string().regex(FILE_ID_RE),
-    save_as: string().min(1).max(255),
-    bytes: E().int().min(0).max(FILES_API_MAX_FILE_BYTES),
-    session_folder: bIi(),
+    file_id: stringSchema().regex(FILE_ID_RE),
+    save_as: stringSchema().min(1).max(255),
+    bytes: numberSchema().int().min(0).max(FILES_API_MAX_FILE_BYTES),
+    session_folder: guidSchema(),
   }),
 );
 var downloadOutputSchema = DoctorLazy(() =>
   union([
-    u({
+    objectSchema({
       ok: literal(true),
-      path: string().max(MAX_FILE_PATH_CHARS),
-      bytes: E().int().min(0),
+      path: stringSchema().max(MAX_FILE_PATH_CHARS),
+      bytes: numberSchema().int().min(0),
     }),
-    u({
+    objectSchema({
       ok: literal(false),
-      code: string().max(64),
-      status: E().int().min(100).max(599).optional(),
+      code: stringSchema().max(64),
+      status: numberSchema().int().min(100).max(599).optional(),
     }),
   ]),
 );
 //@ chunk-edh48dyx.js:2600-2775 placement
-async function downloadTaskFile(e, t, n, s) {
-  let r = taskFileDownloadSchemas().parse(e);
-  let d = taskFileUploadSessionSlot.of(n);
-  let a = () => downloadTaskFileUnchecked(r, t, s);
-  let c = d.last.then(a, a);
-  d.last = c;
-  let f = await c;
+async function downloadTaskFile(input, signal, sessionCtx, host) {
+  let parsed = taskFileDownloadSchemas().parse(input);
+  let slot = taskFileUploadSessionSlot.of(sessionCtx);
+  let download = () => downloadTaskFileUnchecked(parsed, signal, host);
+  let queued = slot.last.then(download, download);
+  slot.last = queued;
+  let result = await queued;
   return {
-    summary: f.ok ? "saved" : `not saved: ${f.code}`,
-    output: f,
+    summary: result.ok ? "saved" : `not saved: ${result.code}`,
+    output: result,
   };
 }
 //@ chunk-edh48dyx.js:2775-3765 placement
@@ -232,36 +232,36 @@ async function downloadTaskFile(e, t, n, s) {
  */
 async function downloadTaskFileUnchecked(
   { file_id: fileId, save_as: saveAs, bytes, session_folder: sessionFolder },
-  r,
-  d,
+  signal,
+  host,
 ) {
-  if (r.aborted)
+  if (signal.aborted)
     return {
       ok: false,
       code: "canceled",
     };
-  let a = {
+  let file = {
     fileId,
     name: saveAs,
     sizeBytes: bytes,
   };
-  let c = false;
-  let f;
+  let startedWriting = false;
+  let download;
   try {
     await settleStoredLoginRefusal({
       isFilesDial: true,
-      signal: r,
+      signal,
     });
-    if (r.aborted)
+    if (signal.aborted)
       return {
         ok: false,
         code: "canceled",
       };
-    let m = validateTaskFileEntry(a, r);
-    if (m !== undefined)
+    let validationRefusal = validateTaskFileEntry(file, signal);
+    if (validationRefusal !== undefined)
       return {
         ok: false,
-        code: m.code,
+        code: validationRefusal.code,
       };
     if (!getAccessTokenWithCcrFallback())
       return {
@@ -273,52 +273,52 @@ async function downloadTaskFileUnchecked(
         ok: false,
         code: "bad_name",
       };
-    c = true;
+    startedWriting = true;
     let joined = posix.join(TOOL_CONTAINER_RESULTS_ROOT, sessionFolder);
-    let joined_2 = posix.join(joined, TASK_FILE_CONSTANTS);
-    await d.makeFoldersAsWritten([TOOL_CONTAINER_RESULTS_ROOT, joined, joined_2]);
-    if (!(await hasFreeSpace(joined_2, bytes)))
+    let dir = posix.join(joined, TASK_FILE_CONSTANTS);
+    await host.makeFoldersAsWritten([TOOL_CONTAINER_RESULTS_ROOT, joined, dir]);
+    if (!(await hasFreeSpace(dir, bytes)))
       return {
         ok: false,
         code: "no_room",
       };
-    let _ = await streamDownload(a, undefined, r);
-    if (!_.ok)
-      return _.code === "refused"
+    let streamResult = await streamDownload(file, undefined, signal);
+    if (!streamResult.ok)
+      return streamResult.code === "refused"
         ? {
             ok: false,
             code: "refused",
-            status: _.status,
+            status: streamResult.status,
           }
         : {
             ok: false,
-            code: _.code,
+            code: streamResult.code,
           };
-    f = _;
+    download = streamResult;
     let list = Array.from(
       {
         length: MAX_DOWNLOAD_RETRIES,
       },
-      (W, L) => numberedName(saveAs, L + 1),
+      (unused, index) => numberedName(saveAs, index + 1),
     );
-    let A = await d.placeStreamedFile(joined_2, list, f.bytes, r);
-    return A === undefined
+    let savedPath = await host.placeStreamedFile(dir, list, download.bytes, signal);
+    return savedPath === undefined
       ? {
           ok: false,
           code: "name_taken",
         }
       : {
           ok: true,
-          path: A,
-          bytes: f.bytesRead(),
+          path: savedPath,
+          bytes: download.bytesRead(),
         };
   } catch (error) {
-    if (f !== undefined)
+    if (download !== undefined)
       return {
         ok: false,
-        code: f.codeOfFailure(error),
+        code: download.codeOfFailure(error),
       };
-    if (isAbortError(error) || r.aborted)
+    if (isAbortError(error) || signal.aborted)
       return {
         ok: false,
         code: "canceled",
@@ -326,17 +326,17 @@ async function downloadTaskFileUnchecked(
     logError(error);
     return {
       ok: false,
-      code: c ? "write_failed" : "unexpected",
+      code: startedWriting ? "write_failed" : "unexpected",
     };
   } finally {
-    f?.close();
+    download?.close();
   }
 }
 //@ chunk-edh48dyx.js:3765-4524 placement
 /**
  * 上传本地文件为任务文件
  */
-async function uploadTaskFileUnchecked(path, signal, n, s, r) {
+async function uploadTaskFileUnchecked(requestedPath, signal, sessionCtx, host, sandboxPaths) {
   if (signal.aborted)
     return {
       ok: false,
@@ -351,23 +351,23 @@ async function uploadTaskFileUnchecked(path, signal, n, s, r) {
       ok: false,
       code: "canceled",
     };
-  let d = isPolicyLimitsCacheMissing() ? "policy_pending" : filesApiUnavailableReason();
-  if (d !== undefined)
+  let unavailableReason = isPolicyLimitsCacheMissing() ? "policy_pending" : filesApiUnavailableReason();
+  if (unavailableReason !== undefined)
     return {
       ok: false,
-      code: d,
+      code: unavailableReason,
     };
   if (!getAccessTokenWithCcrFallback())
     return {
       ok: false,
       code: "no_token",
     };
-  let a = normalize(path);
-  let { realDirectory } = s;
+  let normalizedPath = normalize(requestedPath);
+  let { realDirectory } = host;
   try {
     if (
-      !isRemoteStagedPath(a) &&
-      (await classifyCredentialPath(a, a, {
+      !isRemoteStagedPath(normalizedPath) &&
+      (await classifyCredentialPath(normalizedPath, normalizedPath, {
         realDirectory,
       })) === "credential_name"
     )
@@ -381,23 +381,23 @@ async function uploadTaskFileUnchecked(path, signal, n, s, r) {
       code: "path_rejected",
     };
   }
-  let f = await attachableFileAt(path, n, s, r);
-  if (f === undefined)
+  let attachedPath = await attachableFileAt(requestedPath, sessionCtx, host, sandboxPaths);
+  if (attachedPath === undefined)
     return {
       ok: false,
       code: "path_rejected",
     };
-  let m = await classifyCredentialPath(a, f, {
-    attached: isRemoteStagedPath(a) && isRemoteStagedPath(f),
+  let credentialKind = await classifyCredentialPath(normalizedPath, attachedPath, {
+    attached: isRemoteStagedPath(normalizedPath) && isRemoteStagedPath(attachedPath),
     realDirectory,
   });
-  if (m !== undefined)
+  if (credentialKind !== undefined)
     return {
       ok: false,
-      code: m === "credential_name" ? m : "path_rejected",
+      code: credentialKind === "credential_name" ? credentialKind : "path_rejected",
     };
   try {
-    return await uploadStartTaskFileAt(f, undefined, signal);
+    return await uploadStartTaskFileAt(attachedPath, undefined, signal);
   } catch (error) {
     if (isAbortError(error))
       return {
@@ -415,97 +415,124 @@ async function uploadTaskFileUnchecked(path, signal, n, s, r) {
 /**
  * 远程会话下且位于默认暂存根下。
  */
-function isRemoteStagedPath(e) {
-  return Boolean(env.CLAUDE_CODE_REMOTE) && isWithinDir(e, DEFAULT_STAGE_FILE_ROOT);
+function isRemoteStagedPath(filePath) {
+  return Boolean(env.CLAUDE_CODE_REMOTE) && isWithinDir(filePath, DEFAULT_STAGE_FILE_ROOT);
 }
 //@ chunk-edh48dyx.js:4585-4810 placement
-async function attachableFileAt(e, t, n, s, r = []) {
-  let d;
+async function attachableFileAt(requestedPath, sessionCtx, host, permissionCtx, sandboxPaths = []) {
+  let realPath;
   try {
-    d = await n.localFileAt(e);
+    realPath = await host.localFileAt(requestedPath);
   } catch {
     return;
   }
-  let a = normalize(e);
-  let c =
-    s !== undefined &&
+  let normalizedPath = normalize(requestedPath);
+  let remoteSyncedPaths =
+    permissionCtx !== undefined &&
     isRemoteManagedEnvironment() &&
     env.CLAUDE_CODE_REMOTE_ENVIRONMENT_TYPE !== "self_hosted"
-      ? r
+      ? sandboxPaths
       : [];
-  return isUnderSandboxPath(d) || hasReadDenyRule(a, d, s) || !(await isOutsideProjectRoot(a, d, t, n, c))
+  return isUnderSandboxPath(realPath) ||
+    hasReadDenyRule(normalizedPath, realPath, permissionCtx) ||
+    !(await isOutsideProjectRoot(normalizedPath, realPath, sessionCtx, host, remoteSyncedPaths))
     ? undefined
-    : d;
+    : realPath;
 }
 //@ chunk-edh48dyx.js:4810-5039 placement
 /**
  * 路径是否在项目根之外
  */
-async function isOutsideProjectRoot(e, t, n, { realDirectory, home }, d) {
-  if (await isInClaudeConfigDir(t, realDirectory)) return false;
-  if (isRemoteSyncedPath(e, t, d)) return true;
-  let originalCwd = n.project?.originalCwd;
+async function isOutsideProjectRoot(
+  requestedPath,
+  realPath,
+  sessionCtx,
+  { realDirectory, home },
+  remoteSyncedPaths,
+) {
+  if (await isInClaudeConfigDir(realPath, realDirectory)) return false;
+  if (isRemoteSyncedPath(requestedPath, realPath, remoteSyncedPaths)) return true;
+  let originalCwd = sessionCtx.project?.originalCwd;
   if (originalCwd === undefined || originalCwd === "") return false;
-  let c = await realDirectory(home);
-  if (c === undefined) return false;
-  return c !== originalCwd && !isWithinDir(c, originalCwd) && isWithinDir(t, originalCwd);
+  let realHome = await realDirectory(home);
+  if (realHome === undefined) return false;
+  return (
+    realHome !== originalCwd && !isWithinDir(realHome, originalCwd) && isWithinDir(realPath, originalCwd)
+  );
 }
 //@ chunk-edh48dyx.js:5039-5296 placement
 /**
  * 路径是否命中 read 的 deny/ask 规则
  */
-function hasReadDenyRule(e, t, n) {
-  if (n === undefined) return false;
+function hasReadDenyRule(requestedPath, realPath, permissionCtx) {
+  if (permissionCtx === undefined) return false;
   if (
-    getDenyRuleForTool(n, READ_PATH_PROBE, filterRulesForRemoteSynced(getDenyRules(n), e, t)) ||
-    getAskRuleForTool(n, READ_PATH_PROBE, filterRulesForRemoteSynced(getAskRules(n), e, t))
+    getDenyRuleForTool(
+      permissionCtx,
+      READ_PATH_PROBE,
+      filterRulesForRemoteSynced(getDenyRules(permissionCtx), requestedPath, realPath),
+    ) ||
+    getAskRuleForTool(
+      permissionCtx,
+      READ_PATH_PROBE,
+      filterRulesForRemoteSynced(getAskRules(permissionCtx), requestedPath, realPath),
+    )
   )
     return true;
-  let s = [walkPermissionCheckPaths(e), walkPermissionCheckPaths(t)];
-  if (s.some((r) => r.unresolved)) return true;
-  return s.some((r) =>
-    r.spellings.some(
+  let probes = [walkPermissionCheckPaths(requestedPath), walkPermissionCheckPaths(realPath)];
+  if (probes.some((probe) => probe.unresolved)) return true;
+  return probes.some((probe) =>
+    probe.spellings.some(
       (spelling) =>
-        matchingRuleForInput(spelling, n, "read", "deny") !== null ||
-        matchingRuleForInput(spelling, n, "read", "ask") !== null,
+        matchingRuleForInput(spelling, permissionCtx, "read", "deny") !== null ||
+        matchingRuleForInput(spelling, permissionCtx, "read", "ask") !== null,
     ),
   );
 }
 //@ chunk-edh48dyx.js:5296-5352 placement
-function holdsWholeToolReadRule(e) {
-  return getDenyRuleForTool(e, READ_PATH_PROBE) !== null || getAskRuleForTool(e, READ_PATH_PROBE) !== null;
+function holdsWholeToolReadRule(permissionCtx) {
+  return (
+    getDenyRuleForTool(permissionCtx, READ_PATH_PROBE) !== null ||
+    getAskRuleForTool(permissionCtx, READ_PATH_PROBE) !== null
+  );
 }
 //@ chunk-edh48dyx.js:5352-5398 placement
 /**
  * 远程同步路径时过滤掉非用户/仓库来源的规则。
  */
-function filterRulesForRemoteSynced(e, t, n) {
-  return isRemoteSyncedPath(t, n) ? e.filter(isUserOrRepoSource) : e;
+function filterRulesForRemoteSynced(rules, requestedPath, realPath) {
+  return isRemoteSyncedPath(requestedPath, realPath) ? rules.filter(isUserOrRepoSource) : rules;
 }
 //@ chunk-edh48dyx.js:5398-5469 placement = _temp5 (1)
 /**
  * 规则来源不是用户设置也不是仓库目录来源。
  */
 function isUserOrRepoSource({ source }) {
-  return source !== "userSettings" && !REPO_DIR_SETTING_SOURCE_LIST.some((t) => t === source);
+  return (
+    source !== "userSettings" && !REPO_DIR_SETTING_SOURCE_LIST.some((repoSource) => repoSource === source)
+  );
 }
 //@ chunk-edh48dyx.js:5469-5645 placement
 /**
  * 远程会话下路径是否在同步根
  */
-function isRemoteSyncedPath(e, t, n = []) {
+function isRemoteSyncedPath(requestedPath, realPath, syncedPaths = []) {
   if (!env.CLAUDE_CODE_REMOTE) return false;
-  let s = defaultOutputRoots();
+  let outputRoot = defaultOutputRoots();
   return (
-    [...FIXED_USER_DATA_ROOTS, ...n.map((r) => r.product)].some((r) => isWithinDir(t, r)) ||
-    [...(s === undefined ? [] : [s]), ...n].some((r) => isSyncedAttachPath(e, t, r))
+    [...FIXED_USER_DATA_ROOTS, ...syncedPaths.map((syncedPath) => syncedPath.product)].some((root) =>
+      isWithinDir(realPath, root),
+    ) ||
+    [...(outputRoot === undefined ? [] : [outputRoot]), ...syncedPaths].some((syncedPath) =>
+      isSyncedAttachPath(requestedPath, realPath, syncedPath),
+    )
   );
 }
 //@ chunk-edh48dyx.js:5645-5686 placement
 /**
  * 路径是否位于指定目录之下。
  */
-function isWithinDir(e, originalCwd) {
-  return e.startsWith(originalCwd + sep);
+function isWithinDir(childPath, parentDir) {
+  return childPath.startsWith(parentDir + sep);
 }
-export { attachableFileAt, holdsWholeToolReadRule };
+export { attachableFileAt, holdsWholeToolReadRule, deleteTaskFile, downloadTaskFile, uploadTaskFile };

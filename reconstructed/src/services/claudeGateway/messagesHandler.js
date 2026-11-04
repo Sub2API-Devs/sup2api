@@ -38,49 +38,49 @@ import { normalizeFullWidthSpace } from "../../utils/stringUtils.js";
  * 网关 /v1/messages 处理：读取并解析请求体、校验、按策略选择上游、计量与转发。
  */
 async function handleGatewayMessagesRequest(
-  e,
+  request,
   pathname,
-  n,
+  upstreams,
   models,
   autoIncludeBuiltinModels = true,
   role,
-  upstreamTtfbMs = 120000,
-  l,
-  c,
+  ttfbMs = 120000,
+  requestId,
+  requestContext,
 ) {
-  let u;
-  let f;
-  if (c?.body) {
-    u = c.body.buf;
-    f = c.body.parsed;
+  let rawBody;
+  let payload;
+  if (requestContext?.body) {
+    rawBody = requestContext.body.buf;
+    payload = requestContext.body.parsed;
   } else {
-    u = await e.arrayBuffer();
+    rawBody = await request.arrayBuffer();
     try {
-      f = jsonParse(Buffer.from(u).toString("utf8"));
+      payload = jsonParse(Buffer.from(rawBody).toString("utf8"));
     } catch {
-      return jsonErrorResponse(400, "invalid_request_error", "invalid JSON", l);
+      return jsonErrorResponse(400, "invalid_request_error", "invalid JSON", requestId);
     }
   }
-  if (typeof f !== "object" || f === null || Array.isArray(f))
-    return jsonErrorResponse(400, "invalid_request_error", "request body must be a JSON object", l);
-  if (!("model" in f) || f.model === "")
-    return jsonErrorResponse(400, "invalid_request_error", "model is required", l);
-  if (typeof f.model !== "string")
-    return jsonErrorResponse(400, "invalid_request_error", "model must be a string", l);
-  let model = f.model;
+  if (typeof payload !== "object" || payload === null || Array.isArray(payload))
+    return jsonErrorResponse(400, "invalid_request_error", "request body must be a JSON object", requestId);
+  if (!("model" in payload) || payload.model === "")
+    return jsonErrorResponse(400, "invalid_request_error", "model is required", requestId);
+  if (typeof payload.model !== "string")
+    return jsonErrorResponse(400, "invalid_request_error", "model must be a string", requestId);
+  let model = payload.model;
   let roleModelRestrictionMessage = getRoleModelRestrictionMessage(model, role, models);
   if (roleModelRestrictionMessage)
-    return jsonErrorResponse(400, "invalid_request_error", roleModelRestrictionMessage, l);
-  if (n.length === 0)
+    return jsonErrorResponse(400, "invalid_request_error", roleModelRestrictionMessage, requestId);
+  if (upstreams.length === 0)
     return jsonErrorResponse(
       400,
       "invalid_request_error",
       "you aren't in a group that can use this gateway. Ask your administrator to add you to one",
-      l,
+      requestId,
     );
   if (role?.availableModels || role?.deniedModels || !autoIncludeBuiltinModels) {
     let disallowedNestedModel = findDisallowedNestedModel(
-      f,
+      payload,
       (modelId) =>
         getRoleModelRestrictionMessage(modelId, role, models) ??
         (autoIncludeBuiltinModels || findModelEntryById(modelId, models)
@@ -92,243 +92,288 @@ async function handleGatewayMessagesRequest(
         400,
         "invalid_request_error",
         `${sanitizeModelIdForMessage(disallowedNestedModel.path)}: ${disallowedNestedModel.reason}`,
-        l,
+        requestId,
       );
   }
-  let y = [];
-  let b = false;
-  let w = [];
-  let S = () => {
-    let mapped = w.filter((ve) => !b || !ve.listSkip).map((ve) => ve.text);
+  let errors = [];
+  let anyAttempted = false;
+  let listErrors = [];
+  let logListErrors = () => {
+    let mapped = listErrors.filter((entry) => !anyAttempted || !entry.listSkip).map((entry) => entry.text);
     if (mapped.length === 0) return;
-    gatewayLog("warn", `inference: model resolution failed request_id=${l ?? "-"}: ${mapped.join("; ")}`);
+    gatewayLog(
+      "warn",
+      `inference: model resolution failed request_id=${requestId ?? "-"}: ${mapped.join("; ")}`,
+    );
   };
-  let j = null;
-  let M = null;
-  let N = null;
-  let Z = null;
-  let F = null;
-  let X = e.headers.get("anthropic-beta") ?? undefined;
-  let he = {};
-  e.headers.forEach((header, ve) => {
-    if (ve.toLowerCase().startsWith("x-stainless-")) he[ve] = header;
+  let notImplementedResponse = null;
+  let rateLimitedResponse = null;
+  let authFailedResponse = null;
+  let notFoundResponse = null;
+  let requestIdResponse = null;
+  let betaHeader = request.headers.get("anthropic-beta") ?? undefined;
+  let stainlessHeaders = {};
+  request.headers.forEach((header, headerName) => {
+    if (headerName.toLowerCase().startsWith("x-stainless-")) stainlessHeaders[headerName] = header;
   });
-  let Me = c?.criPrincipal === true;
-  let ce = c?.ttfbOnSdkLegs ? upstreamTtfbMs : undefined;
-  for (let be of n) {
-    if (e.signal.aborted) break;
-    let upstreamModel = resolveUpstreamModel(model, be, models, autoIncludeBuiltinModels, Me);
+  let isCri = requestContext?.criPrincipal === true;
+  let ttfbMs_2 = requestContext?.ttfbOnSdkLegs ? ttfbMs : undefined;
+  for (let upstream of upstreams) {
+    if (request.signal.aborted) break;
+    let upstreamModel = resolveUpstreamModel(model, upstream, models, autoIncludeBuiltinModels, isCri);
     if (!upstreamModel.ok) {
-      y.push(upstreamModel.error);
-      w.push({
-        text: `${be.name}: ${upstreamModel.error}`,
+      errors.push(upstreamModel.error);
+      listErrors.push({
+        text: `${upstream.name}: ${upstreamModel.error}`,
         listSkip: upstreamModel.listSkip === true,
       });
       continue;
     }
     let model_2 = upstreamModel.model;
-    let kt =
+    let upstreamPayload =
       model_2 === model
-        ? f
+        ? payload
         : {
-            ...f,
+            ...payload,
             model: model_2,
           };
-    b = true;
+    anyAttempted = true;
     try {
-      let je;
-      if (be.kind === "raw") {
-        let body = kt === f ? u : new TextEncoder().encode(jsonStringify(kt));
-        je = await forwardRawRequest(e, pathname, body, be, upstreamTtfbMs, c?.user);
-        if (je.status === 401 && be.invalidateAuth) {
-          be.invalidateAuth();
+      let response;
+      if (upstream.kind === "raw") {
+        let body =
+          upstreamPayload === payload ? rawBody : new TextEncoder().encode(jsonStringify(upstreamPayload));
+        response = await forwardRawRequest(request, pathname, body, upstream, ttfbMs, requestContext?.user);
+        if (response.status === 401 && upstream.invalidateAuth) {
+          upstream.invalidateAuth();
           gatewayLog(
             "warn",
-            `401 from ${be.name}; invalidated WIF bearer cache, retrying request_id=${l ?? "-"}`,
+            `401 from ${upstream.name}; invalidated WIF bearer cache, retrying request_id=${requestId ?? "-"}`,
           );
-          je.body?.cancel().catch(() => {});
-          je = await forwardRawRequest(e, pathname, body, be, upstreamTtfbMs, c?.user);
+          response.body?.cancel().catch(() => {});
+          response = await forwardRawRequest(request, pathname, body, upstream, ttfbMs, requestContext?.user);
         }
       } else {
-        let An =
-          (be.guardrail || be.guardrailTrace) && pathname === "/v1/messages"
-            ? Object.keys(f).find((key) => /^amazon-bedrock-/i.test(key))
+        let bedrockHeaderKey =
+          (upstream.guardrail || upstream.guardrailTrace) && pathname === "/v1/messages"
+            ? Object.keys(payload).find((key) => /^amazon-bedrock-/i.test(key))
             : undefined;
-        let xe = kt;
-        if (An === undefined && be.inputTagging && pathname === "/v1/messages")
+        let guardedPayload = upstreamPayload;
+        if (bedrockHeaderKey === undefined && upstream.inputTagging && pathname === "/v1/messages")
           try {
-            xe = applyBedrockGuardrails(kt, be.inputTagging);
+            guardedPayload = applyBedrockGuardrails(upstreamPayload, upstream.inputTagging);
           } catch (error) {
-            xe = undefined;
+            guardedPayload = undefined;
             gatewayLog(
               "warn",
-              `upstream '${be.name}': input_tagging failed, answered 400 request_id=${l ?? "-"}: ${errorMessage(error)}`,
+              `upstream '${upstream.name}': input_tagging failed, answered 400 request_id=${requestId ?? "-"}: ${errorMessage(error)}`,
             );
           }
-        if (An !== undefined || xe === undefined) {
-          for (let vr of [j, M, N, Z]) vr?.body?.cancel().catch(() => {});
-          S();
+        if (bedrockHeaderKey !== undefined || guardedPayload === undefined) {
+          for (let staleResponse of [
+            notImplementedResponse,
+            rateLimitedResponse,
+            authFailedResponse,
+            notFoundResponse,
+          ])
+            staleResponse?.body?.cancel().catch(() => {});
+          logListErrors();
           return jsonErrorResponse(
             400,
             "invalid_request_error",
-            An === undefined
-              ? Me
+            bedrockHeaderKey === undefined
+              ? isCri
                 ? "the request could not be processed on this upstream"
                 : "the request could not be prepared for the guardrail this gateway applies to Bedrock requests, so it was not sent"
-              : Me
-                ? `${An} is not permitted on this upstream`
-                : `${An} is not permitted: this gateway applies a guardrail to Bedrock requests`,
-            l,
+              : isCri
+                ? `${bedrockHeaderKey} is not permitted on this upstream`
+                : `${bedrockHeaderKey} is not permitted: this gateway applies a guardrail to Bedrock requests`,
+            requestId,
           );
         }
-        let rn = Me ? model : undefined;
-        let user = c?.user;
-        let Cs = be.guardrailTrace
+        let criModel = isCri ? model : undefined;
+        let user = requestContext?.user;
+        let traceContext = upstream.guardrailTrace
           ? {
-              request_id: l,
+              request_id: requestId,
               sub: user?.sub,
               email: user?.email,
-              upstream: be.name,
+              upstream: upstream.name,
             }
           : undefined;
-        let cr =
-          be.assumeRole && pathname !== "/v1/messages/count_tokens"
-            ? await be.assumeRole.clientFor(user)
+        let assumeRoleSession =
+          upstream.assumeRole && pathname !== "/v1/messages/count_tokens"
+            ? await upstream.assumeRole.clientFor(user)
             : undefined;
-        je = await forwardViaSdk(
+        response = await forwardViaSdk(
           pathname,
-          xe,
-          be.provider,
-          cr?.client ?? be.client,
-          X,
-          he,
-          e.signal,
-          ce,
-          l,
-          rn,
-          be.countTokens,
-          Cs,
+          guardedPayload,
+          upstream.provider,
+          assumeRoleSession?.client ?? upstream.client,
+          betaHeader,
+          stainlessHeaders,
+          request.signal,
+          ttfbMs_2,
+          requestId,
+          criModel,
+          upstream.countTokens,
+          traceContext,
         );
-        let Ua = weakMap.get(je);
-        let Qt =
-          je.status === 401 || je.status === 403 ? (cr ? cr.invalidate : be.invalidateAuth) : undefined;
-        let Vd = Ua !== undefined && isAwsCredentialError(Ua.errorType, Ua.message);
-        if (Qt && !Vd) Qt();
-        if (Qt && Vd) {
-          let vr = Qt();
+        let sdkError = weakMap.get(response);
+        let invalidateCredentials =
+          response.status === 401 || response.status === 403
+            ? assumeRoleSession
+              ? assumeRoleSession.invalidate
+              : upstream.invalidateAuth
+            : undefined;
+        let isCredentialError =
+          sdkError !== undefined && isAwsCredentialError(sdkError.errorType, sdkError.message);
+        if (invalidateCredentials && !isCredentialError) invalidateCredentials();
+        if (invalidateCredentials && isCredentialError) {
+          let invalidationResult = invalidateCredentials();
           gatewayLog(
             "warn",
-            `${je.status} from ${be.name}; ${vr ? "invalidated credential cache" : "credential invalidation debounced"}, retrying request_id=${l ?? "-"}`,
+            `${response.status} from ${upstream.name}; ${invalidationResult ? "invalidated credential cache" : "credential invalidation debounced"}, retrying request_id=${requestId ?? "-"}`,
           );
-          je.body?.cancel().catch(() => {});
-          if (cr && be.assumeRole) cr = await be.assumeRole.clientFor(user);
-          je = await forwardViaSdk(
+          response.body?.cancel().catch(() => {});
+          if (assumeRoleSession && upstream.assumeRole)
+            assumeRoleSession = await upstream.assumeRole.clientFor(user);
+          response = await forwardViaSdk(
             pathname,
-            xe,
-            be.provider,
-            cr?.client ?? be.client,
-            X,
-            he,
-            e.signal,
-            ce,
-            l,
-            rn,
-            be.countTokens,
-            Cs,
+            guardedPayload,
+            upstream.provider,
+            assumeRoleSession?.client ?? upstream.client,
+            betaHeader,
+            stainlessHeaders,
+            request.signal,
+            ttfbMs_2,
+            requestId,
+            criModel,
+            upstream.countTokens,
+            traceContext,
           );
         }
-        let Kr = weakMap.get(je);
-        let Bi = Kr?.message.startsWith(
+        let cachedSdkError = weakMap.get(response);
+        let needsInferenceProfile = cachedSdkError?.message.startsWith(
           `400 Invocation of model ID ${model_2} with on-demand throughput isn`,
         );
-        if (Kr && be.provider === "bedrock" && (Bi || Kr.message === INVALID_MODEL_ID_MESSAGE)) {
-          let vr = sanitizeModelIdForMessage(model);
+        if (
+          cachedSdkError &&
+          upstream.provider === "bedrock" &&
+          (needsInferenceProfile || cachedSdkError.message === INVALID_MODEL_ID_MESSAGE)
+        ) {
+          let safeModelId = sanitizeModelIdForMessage(model);
           gatewayLog(
             "warn",
-            `upstream '${be.name}': AWS says model id ${model_2} (sent for ${vr}) ${Bi ? "runs only through an inference profile here" : "is invalid"} request_id=${l ?? "-"}: under models:, map ${vr} to ${Bi ? "an inference profile this AWS account offers; AWS may then run it in any region that profile spans" : "a model id or inference profile this AWS account and region offer"}`,
+            `upstream '${upstream.name}': AWS says model id ${model_2} (sent for ${safeModelId}) ${needsInferenceProfile ? "runs only through an inference profile here" : "is invalid"} request_id=${requestId ?? "-"}: under models:, map ${safeModelId} to ${needsInferenceProfile ? "an inference profile this AWS account offers; AWS may then run it in any region that profile spans" : "a model id or inference profile this AWS account and region offer"}`,
           );
-          let qd = jsonErrorResponse(
+          let bedrockErrorResponse = jsonErrorResponse(
             400,
             "invalid_request_error",
-            `model ${vr} is not available on bedrock`,
-            l,
+            `model ${safeModelId} is not available on bedrock`,
+            requestId,
           );
-          copyDiagnosticHeaders(je.headers, qd.headers);
-          je = qd;
-          weakMap.set(je, Kr);
+          copyDiagnosticHeaders(response.headers, bedrockErrorResponse.headers);
+          response = bedrockErrorResponse;
+          weakMap.set(response, cachedSdkError);
         }
       }
-      je.headers.set("x-gateway-upstream", be.name);
-      je.headers.set("x-gateway-upstream-kind", "operator");
-      je.headers.set("x-gateway-model", model);
-      je.headers.set("x-gateway-upstream-model", model_2);
+      response.headers.set("x-gateway-upstream", upstream.name);
+      response.headers.set("x-gateway-upstream-kind", "operator");
+      response.headers.set("x-gateway-model", model);
+      response.headers.set("x-gateway-upstream-model", model_2);
       if (
         !(
-          je.status === 429 &&
-          be.kind === "raw" &&
-          be.forwardUserIdentity &&
-          encodeHeaderValue(c?.user?.email) !== undefined
+          response.status === 429 &&
+          upstream.kind === "raw" &&
+          upstream.forwardUserIdentity &&
+          encodeHeaderValue(requestContext?.user?.email) !== undefined
         ) &&
-        (je.status >= 500 || je.status === 429 || je.status === 401 || je.status === 403 || je.status === 404)
+        (response.status >= 500 ||
+          response.status === 429 ||
+          response.status === 401 ||
+          response.status === 403 ||
+          response.status === 404)
       ) {
-        y.push(`${je.status} ${je.statusText}`);
-        if (je.status === 501) {
-          if (j) j.body?.cancel().catch(() => {});
-          j = je;
-        } else if (je.status === 429) {
-          if (M) M.body?.cancel().catch(() => {});
-          M = je;
-        } else if (je.status === 401 || je.status === 403) {
-          if (N) N.body?.cancel().catch(() => {});
-          N = je;
-        } else if (je.status === 404) {
-          if (Z) Z.body?.cancel().catch(() => {});
-          Z = je;
+        errors.push(`${response.status} ${response.statusText}`);
+        if (response.status === 501) {
+          if (notImplementedResponse) notImplementedResponse.body?.cancel().catch(() => {});
+          notImplementedResponse = response;
+        } else if (response.status === 429) {
+          if (rateLimitedResponse) rateLimitedResponse.body?.cancel().catch(() => {});
+          rateLimitedResponse = response;
+        } else if (response.status === 401 || response.status === 403) {
+          if (authFailedResponse) authFailedResponse.body?.cancel().catch(() => {});
+          authFailedResponse = response;
+        } else if (response.status === 404) {
+          if (notFoundResponse) notFoundResponse.body?.cancel().catch(() => {});
+          notFoundResponse = response;
         } else {
-          je.body?.cancel().catch(() => {});
-          if (UPSTREAM_REQUEST_ID_HEADERS.some((An) => je.headers.has(An))) F = je;
+          response.body?.cancel().catch(() => {});
+          if (UPSTREAM_REQUEST_ID_HEADERS.some((headerName) => response.headers.has(headerName)))
+            requestIdResponse = response;
         }
         continue;
       }
-      for (let An of [j, M, N, Z]) An?.body?.cancel().catch(() => {});
-      if (je.status >= 300) S();
-      return je;
+      for (let staleResponse of [
+        notImplementedResponse,
+        rateLimitedResponse,
+        authFailedResponse,
+        notFoundResponse,
+      ])
+        staleResponse?.body?.cancel().catch(() => {});
+      if (response.status >= 300) logListErrors();
+      return response;
     } catch (error) {
-      let Ur = redactAwsSessionName(errorMessage(error));
-      y.push(Ur);
-      gatewayLog("warn", `upstream failed, trying next request_id=${l ?? "-"}: ${Ur}`);
+      let redactedMessage = redactAwsSessionName(errorMessage(error));
+      errors.push(redactedMessage);
+      gatewayLog("warn", `upstream failed, trying next request_id=${requestId ?? "-"}: ${redactedMessage}`);
     }
   }
-  if (e.signal.aborted) {
-    for (let be of [j, M, N, Z]) be?.body?.cancel().catch(() => {});
-    return jsonErrorResponse(499, "api_error", "client closed request", l, {
+  if (request.signal.aborted) {
+    for (let staleResponse of [
+      notImplementedResponse,
+      rateLimitedResponse,
+      authFailedResponse,
+      notFoundResponse,
+    ])
+      staleResponse?.body?.cancel().catch(() => {});
+    return jsonErrorResponse(499, "api_error", "client closed request", requestId, {
       "x-gateway-model": sanitizeModelIdForMessage(model),
     });
   }
-  S();
-  if (!b) return jsonErrorResponse(400, "invalid_request_error", y.join("; "), l);
-  if (M) {
-    for (let be of [j, N, Z]) be?.body?.cancel().catch(() => {});
-    return M;
+  logListErrors();
+  if (!anyAttempted) return jsonErrorResponse(400, "invalid_request_error", errors.join("; "), requestId);
+  if (rateLimitedResponse) {
+    for (let staleResponse of [notImplementedResponse, authFailedResponse, notFoundResponse])
+      staleResponse?.body?.cancel().catch(() => {});
+    return rateLimitedResponse;
   }
-  if (N) {
-    for (let be of [j, Z]) be?.body?.cancel().catch(() => {});
-    return N;
+  if (authFailedResponse) {
+    for (let staleResponse of [notImplementedResponse, notFoundResponse])
+      staleResponse?.body?.cancel().catch(() => {});
+    return authFailedResponse;
   }
-  if (Z) {
-    j?.body?.cancel().catch(() => {});
-    return Z;
+  if (notFoundResponse) {
+    notImplementedResponse?.body?.cancel().catch(() => {});
+    return notFoundResponse;
   }
-  if (j) return j;
-  gatewayLog("warn", `all upstreams failed request_id=${l ?? "-"}: ${y.join("; ")}`);
-  let Ne = jsonErrorResponse(502, "api_error", `all upstreams failed (${n.length} attempted)`, l, {
-    "x-gateway-model": sanitizeModelIdForMessage(model),
-  });
-  for (let be of UPSTREAM_REQUEST_ID_HEADERS) {
-    let ve = F?.headers.get(be);
-    if (ve) Ne.headers.set(be, ve);
+  if (notImplementedResponse) return notImplementedResponse;
+  gatewayLog("warn", `all upstreams failed request_id=${requestId ?? "-"}: ${errors.join("; ")}`);
+  let failureResponse = jsonErrorResponse(
+    502,
+    "api_error",
+    `all upstreams failed (${upstreams.length} attempted)`,
+    requestId,
+    {
+      "x-gateway-model": sanitizeModelIdForMessage(model),
+    },
+  );
+  for (let headerName of UPSTREAM_REQUEST_ID_HEADERS) {
+    let headerValue = requestIdResponse?.headers.get(headerName);
+    if (headerValue) failureResponse.headers.set(headerName, headerValue);
   }
-  return Ne;
+  return failureResponse;
 }
 //@ chunk-1ny7cxrt.js:1369477-1369593 placement
 /**
@@ -337,29 +382,29 @@ async function handleGatewayMessagesRequest(
 function encodeHeaderValue(email) {
   return email === undefined
     ? undefined
-    : normalizeFullWidthSpace(email.trim()).replace(/[^\x21-\x7e]|%/gu, (t) => encodeURIComponent(t)) ||
+    : normalizeFullWidthSpace(email.trim()).replace(/[^\x21-\x7e]|%/gu, (char) => encodeURIComponent(char)) ||
         undefined;
 }
 //@ chunk-1ny7cxrt.js:1369593-1369666 placement
 /**
  * 把来源对象的 headers 逐项 set 到目标 Headers 上。
  */
-function copyHeadersInto(headers, t) {
-  for (let [key, value] of Object.entries(t.headers ?? {})) headers.set(key, value);
+function copyHeadersInto(headers, source) {
+  for (let [key, value] of Object.entries(source.headers ?? {})) headers.set(key, value);
 }
 //@ chunk-1ny7cxrt.js:1369666-1369882 placement
 /**
  * 开启身份转发时设置 x-litellm-end-user-id、x-claude-gateway-user-id/email 头。
  */
-function setUserIdentityHeaders(headers, t, n) {
-  if (!t.forwardUserIdentity || !n) return;
-  let o = encodeHeaderValue(n.email);
-  let r = encodeHeaderValue(n.sub);
-  let s = [
-    ["x-litellm-end-user-id", o],
-    ["x-claude-gateway-user-id", r],
-    ["x-claude-gateway-user-email", o],
+function setUserIdentityHeaders(headers, options, identity) {
+  if (!options.forwardUserIdentity || !identity) return;
+  let email = encodeHeaderValue(identity.email);
+  let sub = encodeHeaderValue(identity.sub);
+  let pairs = [
+    ["x-litellm-end-user-id", email],
+    ["x-claude-gateway-user-id", sub],
+    ["x-claude-gateway-user-email", email],
   ];
-  for (let [a, l] of s) if (l) headers.set(a, l);
+  for (let [headerName, headerValue] of pairs) if (headerValue) headers.set(headerName, headerValue);
 }
 export { copyHeadersInto, setUserIdentityHeaders, handleGatewayMessagesRequest };

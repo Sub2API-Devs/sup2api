@@ -10,7 +10,7 @@ import {
   $ZodCheckLessThan,
   $ZodCheckGreaterThan,
   $ZodCheckMultipleOf,
-  Ur,
+  $ZodCheckMaxLength,
   $ZodCheckMinLength,
   $ZodCheckLengthEquals,
   $ZodCheckRegex,
@@ -19,10 +19,10 @@ import {
   $ZodCheckIncludes,
   $ZodCheckStartsWith,
   $ZodCheckEndsWith,
-  Xr,
+  $ZodCheckOverwrite,
 } from "./checks.js";
-import { Rs } from "../classic/schemas.js";
-import { Kp, Aw } from "./json-schema-processors.js";
+import { _check } from "../classic/schemas.js";
+import { plainFormatChecks, formatAliases } from "./json-schema-processors.js";
 import { zodChecksOf } from "../../../../src/utils/settings/schemaOutput.js";
 
 //@ chunk-7vp249v4.js:51186-51242 esm-layout
@@ -114,7 +114,7 @@ function _url(Class, params) {
   });
 }
 //@ chunk-7vp249v4.js:52055-52157 esm-fingerprint
-function _emoji_2(Class, params) {
+function _emojiFactory(Class, params) {
   return new Class({
     type: "string",
     format: "emoji",
@@ -204,7 +204,7 @@ function _ipv6(Class, params) {
   });
 }
 //@ chunk-7vp249v4.js:52968-53071 esm-fingerprint
-function _mac(Class, params) {
+function _cidrv4(Class, params) {
   return new Class({
     type: "string",
     format: "cidrv4",
@@ -254,7 +254,7 @@ function _e164(Class, params) {
   });
 }
 //@ chunk-7vp249v4.js:53484-53584 esm-fingerprint
-function _creditCard(Class, params) {
+function _jwt(Class, params) {
   return new Class({
     type: "string",
     format: "jwt",
@@ -339,7 +339,7 @@ function _int(Class, params) {
   });
 }
 //@ chunk-7vp249v4.js:54324-54426 esm-fingerprint
-function _float32(Class, params) {
+function _int32(Class, params) {
   return new Class({
     type: "number",
     check: "number_format",
@@ -349,7 +349,7 @@ function _float32(Class, params) {
   });
 }
 //@ chunk-7vp249v4.js:54426-54483 esm-layout
-function _uint32(Class, params) {
+function _boolean(Class, params) {
   return new Class({
     type: "boolean",
     ...normalizeParams(params),
@@ -364,7 +364,7 @@ function _coercedBoolean(Class, params) {
   });
 }
 //@ chunk-7vp249v4.js:54551-54610 esm-layout
-function _bigint(Class, params) {
+function _undefinedFactory(Class, params) {
   return new Class({
     type: "undefined",
     ...normalizeParams(params),
@@ -378,7 +378,7 @@ function _null_2(Class, params) {
   });
 }
 //@ chunk-7vp249v4.js:54664-54706 esm-fingerprint
-function qn(Class) {
+function _any(Class) {
   return new Class({
     type: "any",
   });
@@ -397,7 +397,7 @@ function _never(Class, params) {
   });
 }
 //@ chunk-7vp249v4.js:54807-54889 esm-fingerprint
-function ye(value, params) {
+function _lt(value, params) {
   return new $ZodCheckLessThan({
     check: "less_than",
     ...normalizeParams(params),
@@ -433,7 +433,7 @@ function _gte(value, params) {
   });
 }
 //@ chunk-7vp249v4.js:55139-55210 esm-fingerprint
-function ze(value, params) {
+function _multipleOf(value, params) {
   return new $ZodCheckMultipleOf({
     check: "multiple_of",
     ...normalizeParams(params),
@@ -442,7 +442,7 @@ function ze(value, params) {
 }
 //@ chunk-7vp249v4.js:55210-55283 esm-fingerprint
 function _maxSize(maximum, params) {
-  return new Ur({
+  return new $ZodCheckMaxLength({
     check: "max_length",
     ...normalizeParams(params),
     maximum,
@@ -518,7 +518,7 @@ function _endsWith(suffix, params) {
 }
 //@ chunk-7vp249v4.js:55964-56018 esm-fingerprint
 function _overwrite(tx) {
-  return new Xr({
+  return new $ZodCheckOverwrite({
     check: "overwrite",
     tx,
   });
@@ -528,7 +528,7 @@ function _normalize(form) {
   return _overwrite((input) => input.normalize(form));
 }
 //@ chunk-7vp249v4.js:56063-56101 esm-layout
-function ut() {
+function _trim() {
   return _overwrite((input) => input.trim());
 }
 //@ chunk-7vp249v4.js:56101-56146 esm-layout
@@ -540,7 +540,7 @@ function _toUpperCase() {
   return _overwrite((input) => input.toUpperCase());
 }
 //@ chunk-7vp249v4.js:56191-56227 esm-layout
-function pt() {
+function _slugify() {
   return _overwrite((input) => slugify(input));
 }
 //@ chunk-7vp249v4.js:56227-56294 esm-fingerprint
@@ -552,28 +552,28 @@ function _array(Class, element, params) {
   });
 }
 //@ chunk-7vp249v4.js:56294-56402 esm-fingerprint
-function Qn(e, fn, params) {
-  let n = normalizeParams(params);
-  n.abort ?? (n.abort = true);
-  return new e({
-    type: "custom",
-    check: "custom",
-    fn,
-    ...n,
-  });
-}
-//@ chunk-7vp249v4.js:56402-56480 esm-fingerprint
-function _refine(Class, fn, r) {
+function _custom(Class, fn, params) {
+  let normalizedParams = normalizeParams(params);
+  normalizedParams.abort ?? (normalizedParams.abort = true);
   return new Class({
     type: "custom",
     check: "custom",
     fn,
-    ...normalizeParams(r),
+    ...normalizedParams,
+  });
+}
+//@ chunk-7vp249v4.js:56402-56480 esm-fingerprint
+function _refine(Class, fn, params) {
+  return new Class({
+    type: "custom",
+    check: "custom",
+    fn,
+    ...normalizeParams(params),
   });
 }
 //@ chunk-7vp249v4.js:56480-56803 esm-fingerprint
-function _superRefine(fn, t) {
-  let ch = Rs((payload) => {
+function _superRefine(fn, params) {
+  let ch = _check((payload) => {
     payload.addIssue = (issue_2) => {
       if (typeof issue_2 === "string") payload.issues.push(issue(issue_2, payload.value, ch._zod.def));
       else {
@@ -587,18 +587,19 @@ function _superRefine(fn, t) {
       }
     };
     return fn(payload.value, payload);
-  }, t);
+  }, params);
   return ch;
 }
 //@ chunk-dcmhvw5a.js:431399-431646 esm-fingerprint
-function kw(jsonSchema, params) {
-  if (typeof jsonSchema.format !== "string" || !Kp.has(jsonSchema.format)) return;
-  let r;
-  for (let a of zodChecksOf(params))
-    if (a.check === "string_format" && a.format !== undefined && !Kp.has(a.format)) r = a.format;
-  let s = r === undefined ? "" : (Aw[r] ?? r);
-  if (s === "") delete jsonSchema.format;
-  else jsonSchema.format = s;
+function fixStringFormat(jsonSchema, params) {
+  if (typeof jsonSchema.format !== "string" || !plainFormatChecks.has(jsonSchema.format)) return;
+  let customFormat;
+  for (let check of zodChecksOf(params))
+    if (check.check === "string_format" && check.format !== undefined && !plainFormatChecks.has(check.format))
+      customFormat = check.format;
+  let formatName = customFormat === undefined ? "" : (formatAliases[customFormat] ?? customFormat);
+  if (formatName === "") delete jsonSchema.format;
+  else jsonSchema.format = formatName;
 }
 export {
   _coercedString,
@@ -614,15 +615,15 @@ export {
   _length,
   _lowercase,
   _uppercase,
-  ut,
+  _trim,
   _normalize,
   _toLowerCase,
   _toUpperCase,
-  pt,
+  _slugify,
   _email,
   _url,
-  _creditCard,
-  _emoji_2,
+  _jwt,
+  _emojiFactory,
   _guid,
   _uuid,
   _uuidv4,
@@ -638,7 +639,7 @@ export {
   _ksuid,
   _ipv4,
   _ipv6,
-  _mac,
+  _cidrv4,
   _cidrv6,
   _e164,
   _isoDateTime,
@@ -648,22 +649,22 @@ export {
   _string,
   _gt,
   _gte,
-  ye,
+  _lt,
   _lte,
-  ze,
+  _multipleOf,
   _number,
   _int,
-  _float32,
-  _uint32,
-  _bigint,
+  _int32,
+  _boolean,
+  _undefinedFactory,
   _null_2,
-  qn,
+  _any,
   _unknown,
   _never,
   _array,
-  Qn,
+  _custom,
   _refine,
   _superRefine,
-  kw,
+  fixStringFormat,
   TimePrecision,
 };

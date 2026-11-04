@@ -8,6 +8,11 @@
  * pieces: chunk-8wvtd8sr.js (13), chunk-q1yzx0r0.js (8)
  * attribution: placement 21
  */
+import { PUBLISH_EDITS_AFTER_EDITS_HINT, PUBLISH_EDITS_AFTER_PUBLISH_HINT } from "./publishEdits.js";
+import { FILE_EDIT_TOOL_NAME } from "../FileEditTool/constants.js";
+import { FILE_READ_TOOL_NAME } from "../FileReadTool/constants.js";
+import { ARTIFACT_TOOL_NAME } from "./constants.js";
+import { toolMatchesName } from "../../Tool.js";
 import { ARTIFACT_DESIGN, ARTIFACT_CAPABILITIES } from "../../skills/bundled/bundledSkillNames.js";
 import {
   QUICKSTART_CARRIES_DESIGN_SENTENCE,
@@ -36,12 +41,67 @@ import {
   CORE_NEVER_PUBLISH_PARAGRAPH,
 } from "./corePrompt.js";
 import { statefulPagesParagraph } from "./pagePrompt.js";
-import { PUBLISH_EDITS_AFTER_EDITS_HINT, PUBLISH_EDITS_AFTER_PUBLISH_HINT } from "./publishEdits.js";
-import { FILE_EDIT_TOOL_NAME } from "../FileEditTool/constants.js";
-import { FILE_READ_TOOL_NAME } from "../FileReadTool/constants.js";
-import { ARTIFACT_TOOL_NAME } from "./constants.js";
-import { toolMatchesName } from "../../Tool.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
+//@ chunk-q1yzx0r0.js:376-942 placement
+/**
+ * 同一响应里先 Edit 再发布的说明：小改动直接发 Edit 与同路径 publish（按顺序执行），Edit 未生效时修正后重新发布，文本不在对话中时先 Read。
+ */
+var SAME_RESPONSE_EDIT_PUBLISH_NOTE =
+  "The files you sent are still on disk. For a small, specific change to a file whose text is in this conversation, send the Edit call(s) and an Artifact publish of the same file_path together in one response, with no Read and no shell command that edits the file: these calls run one after another in the order given, so the publish sends the edited file. If an Edit reports that it did not apply, correct it and publish again. If the file's text is no longer in this conversation, or you cannot place the change exactly from the text you have, Read it first.";
+//@ chunk-q1yzx0r0.js:942-991 placement
+/**
+ * 按模式选择发布后小改动的提示文案。
+ */
+function editPublishHintForMode(publishEditsOn, afterEdits) {
+  if (publishEditsOn) return afterEdits ? PUBLISH_EDITS_AFTER_EDITS_HINT : PUBLISH_EDITS_AFTER_PUBLISH_HINT;
+  return SAME_RESPONSE_EDIT_PUBLISH_NOTE;
+}
+//@ chunk-q1yzx0r0.js:991-2410 placement
+/**
+ * Artifact 多文件发布的提示说明。
+ */
+var ARTIFACT_EDIT_GUIDANCE = ` For a small change to an artifact this conversation has already published, Claude makes it with ${FILE_EDIT_TOOL_NAME}, not a shell command, and publishes the artifact again with the same file path in the same response: the ${FILE_EDIT_TOOL_NAME} call(s) first, then the publish, with no ${FILE_READ_TOOL_NAME} and without waiting for the ${FILE_EDIT_TOOL_NAME} result. Only when the file's text is not in this conversation, or the change cannot be placed exactly from that text, does Claude read the file before editing it. The calls run in the order sent, so the publish carries the edited file. If one of those ${FILE_EDIT_TOOL_NAME} calls does not apply, the publish sent in the same response is refused and the artifact stays as it was, so Claude corrects the ${FILE_EDIT_TOOL_NAME} and publishes again.`;
+var MULTI_FILE_EDIT_GUIDANCE = ` For a change to several files at once, or a rewrite of most of a page, Claude makes the change with ${FILE_EDIT_TOOL_NAME}, not a shell command, and publishes the artifact again with the same file path in the same response: the ${FILE_EDIT_TOOL_NAME} call(s) first, then the publish, with no ${FILE_READ_TOOL_NAME} and without waiting for the ${FILE_EDIT_TOOL_NAME} result. The calls run in the order sent, so the publish carries the edited file. If one of those ${FILE_EDIT_TOOL_NAME} calls does not apply, the publish sent in the same response is refused and the artifact stays as it was, so Claude corrects the ${FILE_EDIT_TOOL_NAME} and publishes again. Either way, Claude reads the file first only when its text is not in this conversation or the change cannot be placed exactly from that text.`;
+//@ chunk-q1yzx0r0.js:2410-2439 placement
+/**
+ * 单文件时给单文件指引，否则给多文件指引。
+ */
+function editGuidanceFor(multiFileOn) {
+  return multiFileOn ? MULTI_FILE_EDIT_GUIDANCE : ARTIFACT_EDIT_GUIDANCE;
+}
+//@ chunk-q1yzx0r0.js:2439-4095 placement
+/**
+ * 对已发布 Artifact 做小改动的指引：旧版用 Edit 加同路径重新发布；新版优先在 publish 上带 edits（old_str/new_str），多文件或大改用 Edit 后重新发布，失败的 Edit 会让同响应的发布被拒。
+ */
+var EDIT_THEN_PUBLISH_GUIDANCE; // deferred: uses ARTIFACT_TOOL_NAME (./constants.js) of its import cycle while loading; runs once the cycle is complete
+var PUBLISH_EDITS_GUIDANCE;
+deferInit("chunk-q1yzx0r0.js:2439", () => {
+  EDIT_THEN_PUBLISH_GUIDANCE = `To make a small change to an artifact you already published with the ${ARTIFACT_TOOL_NAME} tool in this conversation, use ${FILE_EDIT_TOOL_NAME}, not a shell command, and publish the artifact again with the same file path in the same response: the ${FILE_EDIT_TOOL_NAME} call(s) first, then the ${ARTIFACT_TOOL_NAME} publish, with no ${FILE_READ_TOOL_NAME} and without waiting for the ${FILE_EDIT_TOOL_NAME} result. Only if the file's text is not in this conversation, or you can't place the change exactly from it, read the file before editing it. The calls run in the order sent, so the publish sends the edited file; a publish sent in the same response as a failed ${FILE_EDIT_TOOL_NAME} of that file is refused and leaves the artifact as it was, so correct the ${FILE_EDIT_TOOL_NAME} and publish again.`;
+  PUBLISH_EDITS_GUIDANCE = `To make a small change to a page you already published with the ${ARTIFACT_TOOL_NAME} tool in this conversation, send it as \`edits\` (old_str/new_str pairs copied exactly from the file as it now stands) on an ${ARTIFACT_TOOL_NAME} publish of the same \`file_path\`: that one call changes the file and the page together, with no ${FILE_READ_TOOL_NAME} and no ${FILE_EDIT_TOOL_NAME}. For a change to several files at once, or a rewrite of most of a page, use ${FILE_EDIT_TOOL_NAME} on the file(s), not a shell command, and publish the artifact again with the same \`file_path\` in the same response: the ${FILE_EDIT_TOOL_NAME} call(s) first, then the ${ARTIFACT_TOOL_NAME} publish, with no ${FILE_READ_TOOL_NAME} and without waiting for the ${FILE_EDIT_TOOL_NAME} result. The calls run in the order sent, so the publish carries the edited file; a publish sent in the same response as a failed ${FILE_EDIT_TOOL_NAME} of that file is refused and leaves the artifact as it was, so correct the ${FILE_EDIT_TOOL_NAME} and publish again. Either way, read the file first only if its text is not in this conversation or you can't place the change exactly from it.`;
+});
+//@ chunk-q1yzx0r0.js:4095-4139 placement
+/**
+ * 工具表里是否有该名字的工具。
+ */
+function hasToolNamed(tools, name) {
+  return tools.some((tool) => toolMatchesName(tool, name));
+}
+//@ chunk-q1yzx0r0.js:4139-4215 placement
+/**
+ * 懒加载「publish 上带 edits」的开关。
+ */
+function isPublishEditsOn() {
+  return require("../../services/artifacts/artifactToolSchema.js").artifactPublishEditsOn();
+}
+//@ chunk-q1yzx0r0.js:4215-4280 placement
+/**
+ * 同时具备 Artifact 与 Edit 工具时，按开关给出「带 edits 发布」或「Edit 后同响应发布」的指引。
+ */
+function editPublishGuidance(tools) {
+  if (!hasToolNamed(tools, ARTIFACT_TOOL_NAME) || !hasToolNamed(tools, FILE_EDIT_TOOL_NAME)) return null;
+  return isPublishEditsOn() ? PUBLISH_EDITS_GUIDANCE : EDIT_THEN_PUBLISH_GUIDANCE;
+}
 //@ chunk-8wvtd8sr.js:332624-332957 placement
 /**
  * Artifact 提示词"格式"段：页面写成 .html，只有技能明确要求时才发布 .md；用户给 Markdown 文档时据内容设计 HTML 页面。
@@ -61,12 +121,18 @@ function beforeWritingParagraph(quickstartCarriesDesign = false) {
 /**
  * Artifact 提示词"标题"段（<title> 取独特的 2–4 词名称、说明放 description、重新发布时保持标题稳定），以及 delete/open/pin 动作的要点。
  */
-var TITLE_PARAGRAPH =
-  "**Title**: Claude puts a `<title>` at the top of the HTML (only the first 8KB is scanned). It names the artifact in the tab and gallery, so it is a distinctive name, typically two to four words, not a summary, a generic label, or a name with an explainer after a dash or colon: when a natural title pairs a name with a generic word, the name is the half that survives, and a multi-word title that already reads as one specific name is not trimmed. The explanation goes in the one-sentence `description` parameter, the gallery card's subtitle. The `title` parameter only fills in when an HTML file has no `<title>` tag (Markdown pages keep their filename), and Claude keeps the title stable across redeploys.";
-var DELETE_CORE_BULLET =
-  "- **delete**: with `url` alone, permanently deletes a published artifact, which cannot be undone and stops the link working for everyone. Claude does this only when the person asks for that artifact to be deleted or unpublished, or says they did not want it published, never on its own initiative; the person confirms every delete, and afterwards Claude gives them the content the way they wanted it, for example as the local file.";
-var OPEN_BULLET = OPEN_CORE_BULLET;
-var PIN_BULLET = `${PIN_CORE_BULLET.slice(0, -1)}; pins are private to the person and change nothing about who can see the artifact.`;
+var TITLE_PARAGRAPH; // deferred: uses NOT_PINNED_PREFIX (./promptText.js) of its import cycle while loading; runs once the cycle is complete
+var DELETE_CORE_BULLET;
+var OPEN_BULLET;
+var PIN_BULLET;
+deferInit("chunk-8wvtd8sr.js:334366", () => {
+  TITLE_PARAGRAPH =
+    "**Title**: Claude puts a `<title>` at the top of the HTML (only the first 8KB is scanned). It names the artifact in the tab and gallery, so it is a distinctive name, typically two to four words, not a summary, a generic label, or a name with an explainer after a dash or colon: when a natural title pairs a name with a generic word, the name is the half that survives, and a multi-word title that already reads as one specific name is not trimmed. The explanation goes in the one-sentence `description` parameter, the gallery card's subtitle. The `title` parameter only fills in when an HTML file has no `<title>` tag (Markdown pages keep their filename), and Claude keeps the title stable across redeploys.";
+  DELETE_CORE_BULLET =
+    "- **delete**: with `url` alone, permanently deletes a published artifact, which cannot be undone and stops the link working for everyone. Claude does this only when the person asks for that artifact to be deleted or unpublished, or says they did not want it published, never on its own initiative; the person confirms every delete, and afterwards Claude gives them the content the way they wanted it, for example as the local file.";
+  OPEN_BULLET = OPEN_CORE_BULLET;
+  PIN_BULLET = `${PIN_CORE_BULLET.slice(0, -1)}; pins are private to the person and change nothing about who can see the artifact.`;
+});
 //@ chunk-8wvtd8sr.js:335634-337639 placement
 /**
  * 提示词 "Calls" 段：列出 publish/read/list 三个主要动作，按开关追加 delete/open/pin/share 条目。
@@ -89,12 +155,12 @@ var NEVER_CLAIM_WATCHING_SENTENCE =
   'Claude never says it is watching an artifact unless a watch result, `status` or a publish result confirmed it; a result\'s "arming" line is not yet a watch.';
 //@ chunk-8wvtd8sr.js:337805-340480 placement
 function buildWatchingPromptSection(commentsOn, watchRail) {
-  let s = commentsOn ? "" : COMMENTS_OFF_SENTENCE;
+  let commentsOff = commentsOn ? "" : COMMENTS_OFF_SENTENCE;
   if (watchRail === "none")
-    return `**Watching**: nothing notifies this session when an artifact is republished elsewhere${commentsOn ? " or a comment on one is sent to Claude" : ""}, and \`action: "watch"\` only reports that${noWatchRailCollabNote()}. If the person asks Claude to watch an artifact, Claude says plainly that it cannot, and never claims to be watching one. \`action: "status"\` lists this session's watches (or, given a \`url\`, just that one) and \`action: "unwatch"\` with \`url\` stops one.${s}`;
+    return `**Watching**: nothing notifies this session when an artifact is republished elsewhere${commentsOn ? " or a comment on one is sent to Claude" : ""}, and \`action: "watch"\` only reports that${noWatchRailCollabNote()}. If the person asks Claude to watch an artifact, Claude says plainly that it cannot, and never claims to be watching one. \`action: "status"\` lists this session's watches (or, given a \`url\`, just that one) and \`action: "unwatch"\` with \`url\` stops one.${commentsOff}`;
   if (watchRail === "durable")
-    return `**Watching**: in this remote session a watch is a durable wake subscription held by the artifact service, not a live connection: this session is woken with a new turn when a watched artifact is republished elsewhere${commentsOn ? ", or when a comment on it is sent to Claude" : ""}, and nothing streams in between, so on a wake Claude re-reads the artifact${commentsOn ? " (and its comments, on a comment wake)" : ""} before editing. Each publish result says whether that artifact's watch began registering; \`action: "watch"\` with a \`url\` watches an artifact Claude did not just publish, \`action: "status"\` lists the watches that registered and what wakes each (or, given a \`url\`, just that one), and \`action: "unwatch"\` with \`url\` stops one.${commentsOn ? ' Plain comments never wake this session; Claude reads them with `action: "comments"` when the person asks.' : s} ${NEVER_CLAIM_WATCHING_SENTENCE}`;
-  return `**Watching**: each publish result says whether this session began arming a watch on that artifact for republishes from elsewhere. Those start no turn and send no notification: some Artifact results open with one line saying a newer version was published, and when one does, Claude fetches the artifact's URL again with \`action: "read"\` (the artifact, not its local file) and merges its edits onto that version before publishing. When a publish is refused because the artifact changed, Claude follows the refusal, which usually hands it that version to merge. \`action: "watch"\` with a \`url\` watches an artifact Claude did not just publish or restarts a stopped watch, \`action: "status"\` lists this session's watches (or, given a \`url\`, just that one), and \`action: "unwatch"\` with \`url\` stops one; the person can also see and stop them in /tasks.${commentsOn ? ' A comment sent to Claude on a watched artifact wakes this session only while that artifact\'s `status` row says auto-replies armed. A publish arms that when comment auto-replies are on for this session; so does `action: "watch"` on an artifact the person can edit whose link they gave in their own message. Plain comments never notify this session; Claude reads them with `action: "comments"` when the person asks.' : s} ${NEVER_CLAIM_WATCHING_SENTENCE}`;
+    return `**Watching**: in this remote session a watch is a durable wake subscription held by the artifact service, not a live connection: this session is woken with a new turn when a watched artifact is republished elsewhere${commentsOn ? ", or when a comment on it is sent to Claude" : ""}, and nothing streams in between, so on a wake Claude re-reads the artifact${commentsOn ? " (and its comments, on a comment wake)" : ""} before editing. Each publish result says whether that artifact's watch began registering; \`action: "watch"\` with a \`url\` watches an artifact Claude did not just publish, \`action: "status"\` lists the watches that registered and what wakes each (or, given a \`url\`, just that one), and \`action: "unwatch"\` with \`url\` stops one.${commentsOn ? ' Plain comments never wake this session; Claude reads them with `action: "comments"` when the person asks.' : commentsOff} ${NEVER_CLAIM_WATCHING_SENTENCE}`;
+  return `**Watching**: each publish result says whether this session began arming a watch on that artifact for republishes from elsewhere. Those start no turn and send no notification: some Artifact results open with one line saying a newer version was published, and when one does, Claude fetches the artifact's URL again with \`action: "read"\` (the artifact, not its local file) and merges its edits onto that version before publishing. When a publish is refused because the artifact changed, Claude follows the refusal, which usually hands it that version to merge. \`action: "watch"\` with a \`url\` watches an artifact Claude did not just publish or restarts a stopped watch, \`action: "status"\` lists this session's watches (or, given a \`url\`, just that one), and \`action: "unwatch"\` with \`url\` stops one; the person can also see and stop them in /tasks.${commentsOn ? ' A comment sent to Claude on a watched artifact wakes this session only while that artifact\'s `status` row says auto-replies armed. A publish arms that when comment auto-replies are on for this session; so does `action: "watch"` on an artifact the person can edit whose link they gave in their own message. Plain comments never notify this session; Claude reads them with `action: "comments"` when the person asks.' : commentsOff} ${NEVER_CLAIM_WATCHING_SENTENCE}`;
 }
 //@ chunk-8wvtd8sr.js:340480-346224 placement
 /**
@@ -148,26 +214,29 @@ function commentsPromptParagraph(extraSentence) {
 /**
  * 按开关拼装 Artifact 工具提示词正文：头段、格式、交付物、能力、写前加载技能、标题、多文件、调用、更新、分享、监视、未读文件、外部资源、禁止发布等段落。
  */
-function buildArtifactCorePrompt(e) {
+function buildArtifactCorePrompt(gates) {
   return [
-    hostText(e.coworkHost, CORE_HEAD_PARAGRAPH, COWORK_HEAD_RESPELLINGS),
+    hostText(gates.coworkHost, CORE_HEAD_PARAGRAPH, COWORK_HEAD_RESPELLINGS),
     FORMAT_PARAGRAPH,
-    hostText(e.coworkHost, coreDeliverableParagraph(e.typeReach), COWORK_DELIVERABLE_RESPELLINGS),
-    ...(e.capabilitiesOn
-      ? [coreCapabilitiesParagraph(e.watchRail), ...(e.republishInlineOn ? [statefulPagesParagraph()] : [])]
+    hostText(gates.coworkHost, coreDeliverableParagraph(gates.typeReach), COWORK_DELIVERABLE_RESPELLINGS),
+    ...(gates.capabilitiesOn
+      ? [
+          coreCapabilitiesParagraph(gates.watchRail),
+          ...(gates.republishInlineOn ? [statefulPagesParagraph()] : []),
+        ]
       : []),
     hostText(
-      e.coworkHost,
-      beforeWritingParagraph(e.typeReach === "quickstart"),
+      gates.coworkHost,
+      beforeWritingParagraph(gates.typeReach === "quickstart"),
       COWORK_BEFORE_WRITING_RESPELLINGS,
     ),
-    `${TITLE_PARAGRAPH}${e.thumbnailParagraph}`,
-    ...(e.multiFileOn ? [CORE_FILES_PARAGRAPH] : []),
-    callsParagraph(e.verbs),
-    coreUpdateParagraphs(e.coworkHost, e.publishEditsOn),
-    ...(e.verbs.shareOn ? [SHARE_PROMPT_PARAGRAPH] : []),
-    ...(e.hotOn ? [HOT_DEADLINE_SENTENCE] : []),
-    buildWatchingPromptSection(e.commentsOn, e.watchRail),
+    `${TITLE_PARAGRAPH}${gates.thumbnailParagraph}`,
+    ...(gates.multiFileOn ? [CORE_FILES_PARAGRAPH] : []),
+    callsParagraph(gates.verbs),
+    coreUpdateParagraphs(gates.coworkHost, gates.publishEditsOn),
+    ...(gates.verbs.shareOn ? [SHARE_PROMPT_PARAGRAPH] : []),
+    ...(gates.hotOn ? [HOT_DEADLINE_SENTENCE] : []),
+    buildWatchingPromptSection(gates.commentsOn, gates.watchRail),
     CORE_UNREAD_FILES_PARAGRAPH,
     EXTERNAL_RESOURCES_PROMPT,
     CORE_NEVER_PUBLISH_PARAGRAPH,
@@ -177,61 +246,6 @@ function buildArtifactCorePrompt(e) {
 }
 //@ chunk-8wvtd8sr.js:352235-352268 placement
 var NOTHING_PUBLISHED_NOTE = " Nothing was published.";
-//@ chunk-q1yzx0r0.js:376-942 placement
-/**
- * 同一响应里先 Edit 再发布的说明：小改动直接发 Edit 与同路径 publish（按顺序执行），Edit 未生效时修正后重新发布，文本不在对话中时先 Read。
- */
-var SAME_RESPONSE_EDIT_PUBLISH_NOTE =
-  "The files you sent are still on disk. For a small, specific change to a file whose text is in this conversation, send the Edit call(s) and an Artifact publish of the same file_path together in one response, with no Read and no shell command that edits the file: these calls run one after another in the order given, so the publish sends the edited file. If an Edit reports that it did not apply, correct it and publish again. If the file's text is no longer in this conversation, or you cannot place the change exactly from the text you have, Read it first.";
-//@ chunk-q1yzx0r0.js:942-991 placement
-/**
- * 按模式选择发布后小改动的提示文案。
- */
-function editPublishHintForMode(e, t) {
-  if (e) return t ? PUBLISH_EDITS_AFTER_EDITS_HINT : PUBLISH_EDITS_AFTER_PUBLISH_HINT;
-  return SAME_RESPONSE_EDIT_PUBLISH_NOTE;
-}
-//@ chunk-q1yzx0r0.js:991-2410 placement
-/**
- * Artifact 多文件发布的提示说明。
- */
-var ARTIFACT_EDIT_GUIDANCE = ` For a small change to an artifact this conversation has already published, Claude makes it with ${FILE_EDIT_TOOL_NAME}, not a shell command, and publishes the artifact again with the same file path in the same response: the ${FILE_EDIT_TOOL_NAME} call(s) first, then the publish, with no ${FILE_READ_TOOL_NAME} and without waiting for the ${FILE_EDIT_TOOL_NAME} result. Only when the file's text is not in this conversation, or the change cannot be placed exactly from that text, does Claude read the file before editing it. The calls run in the order sent, so the publish carries the edited file. If one of those ${FILE_EDIT_TOOL_NAME} calls does not apply, the publish sent in the same response is refused and the artifact stays as it was, so Claude corrects the ${FILE_EDIT_TOOL_NAME} and publishes again.`;
-var MULTI_FILE_EDIT_GUIDANCE = ` For a change to several files at once, or a rewrite of most of a page, Claude makes the change with ${FILE_EDIT_TOOL_NAME}, not a shell command, and publishes the artifact again with the same file path in the same response: the ${FILE_EDIT_TOOL_NAME} call(s) first, then the publish, with no ${FILE_READ_TOOL_NAME} and without waiting for the ${FILE_EDIT_TOOL_NAME} result. The calls run in the order sent, so the publish carries the edited file. If one of those ${FILE_EDIT_TOOL_NAME} calls does not apply, the publish sent in the same response is refused and the artifact stays as it was, so Claude corrects the ${FILE_EDIT_TOOL_NAME} and publishes again. Either way, Claude reads the file first only when its text is not in this conversation or the change cannot be placed exactly from that text.`;
-//@ chunk-q1yzx0r0.js:2410-2439 placement
-/**
- * 单文件时给单文件指引，否则给多文件指引。
- */
-function editGuidanceFor(e) {
-  return e ? MULTI_FILE_EDIT_GUIDANCE : ARTIFACT_EDIT_GUIDANCE;
-}
-//@ chunk-q1yzx0r0.js:2439-4095 placement
-/**
- * 对已发布 Artifact 做小改动的指引：旧版用 Edit 加同路径重新发布；新版优先在 publish 上带 edits（old_str/new_str），多文件或大改用 Edit 后重新发布，失败的 Edit 会让同响应的发布被拒。
- */
-var EDIT_THEN_PUBLISH_GUIDANCE = `To make a small change to an artifact you already published with the ${ARTIFACT_TOOL_NAME} tool in this conversation, use ${FILE_EDIT_TOOL_NAME}, not a shell command, and publish the artifact again with the same file path in the same response: the ${FILE_EDIT_TOOL_NAME} call(s) first, then the ${ARTIFACT_TOOL_NAME} publish, with no ${FILE_READ_TOOL_NAME} and without waiting for the ${FILE_EDIT_TOOL_NAME} result. Only if the file's text is not in this conversation, or you can't place the change exactly from it, read the file before editing it. The calls run in the order sent, so the publish sends the edited file; a publish sent in the same response as a failed ${FILE_EDIT_TOOL_NAME} of that file is refused and leaves the artifact as it was, so correct the ${FILE_EDIT_TOOL_NAME} and publish again.`;
-var PUBLISH_EDITS_GUIDANCE = `To make a small change to a page you already published with the ${ARTIFACT_TOOL_NAME} tool in this conversation, send it as \`edits\` (old_str/new_str pairs copied exactly from the file as it now stands) on an ${ARTIFACT_TOOL_NAME} publish of the same \`file_path\`: that one call changes the file and the page together, with no ${FILE_READ_TOOL_NAME} and no ${FILE_EDIT_TOOL_NAME}. For a change to several files at once, or a rewrite of most of a page, use ${FILE_EDIT_TOOL_NAME} on the file(s), not a shell command, and publish the artifact again with the same \`file_path\` in the same response: the ${FILE_EDIT_TOOL_NAME} call(s) first, then the ${ARTIFACT_TOOL_NAME} publish, with no ${FILE_READ_TOOL_NAME} and without waiting for the ${FILE_EDIT_TOOL_NAME} result. The calls run in the order sent, so the publish carries the edited file; a publish sent in the same response as a failed ${FILE_EDIT_TOOL_NAME} of that file is refused and leaves the artifact as it was, so correct the ${FILE_EDIT_TOOL_NAME} and publish again. Either way, read the file first only if its text is not in this conversation or you can't place the change exactly from it.`;
-//@ chunk-q1yzx0r0.js:4095-4139 placement
-/**
- * 工具表里是否有该名字的工具。
- */
-function hasToolNamed(e, t) {
-  return e.some((i) => toolMatchesName(i, t));
-}
-//@ chunk-q1yzx0r0.js:4139-4215 placement
-/**
- * 懒加载「publish 上带 edits」的开关。
- */
-function isPublishEditsOn() {
-  return require("./chunk-8vtgtz3z.js").artifactPublishEditsOn();
-}
-//@ chunk-q1yzx0r0.js:4215-4280 placement
-/**
- * 同时具备 Artifact 与 Edit 工具时，按开关给出「带 edits 发布」或「Edit 后同响应发布」的指引。
- */
-function editPublishGuidance(tools) {
-  if (!hasToolNamed(tools, ARTIFACT_TOOL_NAME) || !hasToolNamed(tools, FILE_EDIT_TOOL_NAME)) return null;
-  return isPublishEditsOn() ? PUBLISH_EDITS_GUIDANCE : EDIT_THEN_PUBLISH_GUIDANCE;
-}
 export {
   NOTHING_PUBLISHED_NOTE,
   buildArtifactCorePrompt,

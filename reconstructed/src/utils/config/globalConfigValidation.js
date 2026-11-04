@@ -9,7 +9,7 @@
  * attribution: placement 15
  */
 import {
-  BI_KEY_UNAVAILABLE,
+  BI_KEY_PREFIX,
   MAX_TIMESTAMPED_ENTRIES,
   USAGE_SNAPSHOT_FUTURE_SKEW_MS,
   USAGE_SNAPSHOT_LOOKAHEAD_MS,
@@ -20,6 +20,7 @@ import { HostScoped } from "../hostScoped.js";
 import { getSettingsFieldSchema } from "../settings/types.js";
 import { onProcessRootHost } from "../../bootstrap/state.js";
 import { logForDebugging } from "../debug.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-aepeg2w5.js:64835-64934 placement = pluginDataDirPath (1)
 /**
@@ -38,33 +39,36 @@ function isTimestampedValue(pluginId) {
 /**
  * 在带时间戳的记录集中写入一项，并保留同前缀的最近若干项（按时间倒序，总数有上限）。
  */
-function withTimestampedEntry(clientDataCacheSlots, n, r) {
-  let s =
+function withTimestampedEntry(clientDataCacheSlots, cacheKey, entry) {
+  let keptEntries =
     typeof clientDataCacheSlots === "object" && clientDataCacheSlots !== null
       ? Object.entries(clientDataCacheSlots)
-          .filter((h) => h[0] !== n && h[0].startsWith(BI_KEY_UNAVAILABLE) && isTimestampedValue(h[1]))
-          .sort(([, h], [, y]) => y.at - h.at)
+          .filter(
+            (entry) =>
+              entry[0] !== cacheKey && entry[0].startsWith(BI_KEY_PREFIX) && isTimestampedValue(entry[1]),
+          )
+          .sort(([, leftEntry], [, rightEntry]) => rightEntry.at - leftEntry.at)
           .slice(0, MAX_TIMESTAMPED_ENTRIES - 1)
       : [];
-  return Object.fromEntries([[n, r], ...s]);
+  return Object.fromEntries([[cacheKey, entry], ...keptEntries]);
 }
 //@ chunk-aepeg2w5.js:65148-65192 placement
 /**
  * 读取带时间戳记录里的 data（不是时间戳值时返回 null）。
  */
-function readTimestampedData(clientDataCacheSlots, n) {
-  return readTimestampedEntry(clientDataCacheSlots, n)?.data ?? null;
+function readTimestampedData(clientDataCacheSlots, cacheKey) {
+  return readTimestampedEntry(clientDataCacheSlots, cacheKey)?.data ?? null;
 }
 //@ chunk-aepeg2w5.js:65192-65304 placement
 /**
  * 读取带时间戳记录集中的一项数据（不是时间戳值时返回 null）。
  */
-function readTimestampedEntry(clientDataCacheSlots, n) {
+function readTimestampedEntry(clientDataCacheSlots, cacheKey) {
   if (typeof clientDataCacheSlots !== "object" || clientDataCacheSlots === null) return null;
-  let r = clientDataCacheSlots[n];
-  return isTimestampedValue(r)
+  let value = clientDataCacheSlots[cacheKey];
+  return isTimestampedValue(value)
     ? {
-        data: r.data ?? null,
+        data: value.data ?? null,
       }
     : null;
 }
@@ -72,27 +76,27 @@ function readTimestampedEntry(clientDataCacheSlots, n) {
 /**
  * 在缓存记录中找到与入口、模型、组织匹配且未过期的一条。
  */
-function findMatchingUsageSnapshot(clientDataCacheSlots, n) {
+function findMatchingUsageSnapshot(clientDataCacheSlots, query) {
   if (typeof clientDataCacheSlots !== "object" || clientDataCacheSlots === null) return null;
   let now = Date.now();
-  let s = now - USAGE_SNAPSHOT_FUTURE_SKEW_MS;
-  let h = now + USAGE_SNAPSHOT_LOOKAHEAD_MS;
-  let y = null;
-  for (let S of Object.values(clientDataCacheSlots)) {
+  let earliestMs = now - USAGE_SNAPSHOT_FUTURE_SKEW_MS;
+  let latestMs = now + USAGE_SNAPSHOT_LOOKAHEAD_MS;
+  let bestMatch = null;
+  for (let entry of Object.values(clientDataCacheSlots)) {
     if (
-      !isTimestampedValue(S) ||
-      (S.entrypoint ?? null) !== n.entrypoint ||
-      S.model !== n.model ||
-      S.org !== n.org
+      !isTimestampedValue(entry) ||
+      (entry.entrypoint ?? null) !== query.entrypoint ||
+      entry.model !== query.model ||
+      entry.org !== query.org
     )
       continue;
-    if (!(S.at >= s && S.at <= h)) continue;
-    if (y === null || S.at > y.at) y = S;
+    if (!(entry.at >= earliestMs && entry.at <= latestMs)) continue;
+    if (bestMatch === null || entry.at > bestMatch.at) bestMatch = entry;
   }
-  return y === null
+  return bestMatch === null
     ? null
     : {
-        data: y.data ?? null,
+        data: bestMatch.data ?? null,
       };
 }
 //@ chunk-aepeg2w5.js:65626-71013 placement
@@ -161,15 +165,15 @@ class GlobalConfigStore {
     else this.cacheMisses++;
     return this.cache.config;
   }
-  installDiskRead(config, n) {
+  installDiskRead(config, stats) {
     this.cache = {
       config,
-      mtime: n?.mtimeMs ?? this.now(),
+      mtime: stats?.mtimeMs ?? this.now(),
     };
-    this.lastReadFileStats = n
+    this.lastReadFileStats = stats
       ? {
-          mtime: n.mtimeMs,
-          size: n.size,
+          mtime: stats.mtimeMs,
+          size: stats.size,
         }
       : null;
     this.installed.emit();
@@ -210,23 +214,23 @@ class GlobalConfigStore {
     this.lastReadFileStats = lastReadFileStats;
   }
   takeCacheStats() {
-    let e = {
+    let counters = {
       hits: this.cacheHits,
       misses: this.cacheMisses,
     };
     this.cacheHits = 0;
     this.cacheMisses = 0;
-    return e;
+    return counters;
   }
   allowReading() {
     this.readingAllowed = true;
   }
-  enable(e) {
+  enable(enableFn) {
     if (this.enableSettled) {
       if (this.enableError !== null) return Promise.reject(this.enableError);
       return Promise.resolve();
     }
-    if (!this.enablePromise) this.enablePromise = e();
+    if (!this.enablePromise) this.enablePromise = enableFn();
     return this.enablePromise;
   }
   recordEnableError(enableError) {
@@ -238,10 +242,10 @@ class GlobalConfigStore {
   oweReloadThroughStorage() {
     this.reloadThroughStorageOwed = true;
   }
-  reloadThroughStorageOnce(e) {
+  reloadThroughStorageOnce(reloadFn) {
     if (this.reloadThroughStorageOwed) {
       this.reloadThroughStorageOwed = false;
-      this.reloadThroughStoragePromise = e();
+      this.reloadThroughStoragePromise = reloadFn();
     }
     return this.reloadThroughStoragePromise ?? Promise.resolve();
   }
@@ -304,9 +308,9 @@ class GlobalConfigStore {
     this.lastGetConfigOutcome = lastGetConfigOutcome;
   }
   claimParseErrorLog() {
-    let e = !this.parseErrorLogged;
+    let wasFirst = !this.parseErrorLogged;
     this.parseErrorLogged = true;
-    return e;
+    return wasFirst;
   }
   setInsideParseErrorTelemetry(insideParseErrorTelemetry) {
     this.insideParseErrorTelemetry = insideParseErrorTelemetry;
@@ -317,9 +321,9 @@ class GlobalConfigStore {
   closeBootPhase() {
     this.bootPhaseOpen = false;
   }
-  bootPhaseStillOpen(e) {
+  bootPhaseStillOpen(windowMs) {
     if (!this.bootPhaseOpen) return false;
-    if (this.now() - this.bootAnchorMs >= e) {
+    if (this.now() - this.bootAnchorMs >= windowMs) {
       this.bootPhaseOpen = false;
       return false;
     }
@@ -349,8 +353,8 @@ class GlobalConfigStore {
   setGeneratedSummonSidKey(generatedSummonSidKey) {
     this.generatedSummonSidKey = generatedSummonSidKey;
   }
-  remoteControlMachineIdOnceFrom(e) {
-    this.remoteControlMachineIdOnce ??= e();
+  remoteControlMachineIdOnceFrom(computeId) {
+    this.remoteControlMachineIdOnce ??= computeId();
     return this.remoteControlMachineIdOnce;
   }
   clearRemoteControlMachineIdOnce() {
@@ -377,19 +381,22 @@ class GlobalConfigStore {
   setUseRealPipelineUnderTest(useRealPipelineUnderTest) {
     this.useRealPipelineUnderTest = useRealPipelineUnderTest;
   }
-  overwriteTestGlobalConfig(e) {
-    Object.assign(this.testGlobalConfig, e);
+  overwriteTestGlobalConfig(patch) {
+    Object.assign(this.testGlobalConfig, patch);
   }
-  overwriteTestProjectConfig(e) {
-    Object.assign(this.testProjectConfig, e);
+  overwriteTestProjectConfig(patch) {
+    Object.assign(this.testProjectConfig, patch);
   }
-  deleteTestProjectConfigFields(e) {
-    for (let n of e) delete this.testProjectConfig[n];
+  deleteTestProjectConfigFields(fields) {
+    for (let field of fields) delete this.testProjectConfig[field];
   }
 }
 //@ chunk-aepeg2w5.js:71013-71060 placement
-var textDecoder = new TextDecoder("utf-8", {
-  ignoreBOM: true,
+var textDecoder; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-aepeg2w5.js:71013", () => {
+  textDecoder = new TextDecoder("utf-8", {
+    ignoreBOM: true,
+  });
 });
 //@ chunk-aepeg2w5.js:71060-71115 placement
 /**
@@ -400,63 +407,66 @@ var AUTO_UPLOAD_FLAG_KEYS = ["remoteControlAtStartup", "autoUploadSessions"];
 /**
  * 判断键是否为自动上传相关开关。
  */
-function isAutoUploadFlagKey(e) {
-  return AUTO_UPLOAD_FLAG_KEYS.includes(e);
+function isAutoUploadFlagKey(key) {
+  return AUTO_UPLOAD_FLAG_KEYS.includes(key);
 }
 //@ chunk-aepeg2w5.js:71153-71179 placement
 /**
  * 已记录过“忽略无效配置值”的键集合。
  */
-var ignoredConfigKeysLogged = new HostScoped(() => new Set());
+var ignoredConfigKeysLogged; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-aepeg2w5.js:71153", () => {
+  ignoredConfigKeysLogged = new HostScoped(() => new Set());
+});
 //@ chunk-aepeg2w5.js:71179-71258 placement
 /**
  * 校验全局配置字段值，无效时记录忽略。
  */
-function validateConfigValue(e, n) {
-  if (n === undefined) return;
-  let configField = parseConfigField(e, n);
-  noteIgnoredGlobalConfigValue(e, configField !== undefined);
+function validateConfigValue(key, value) {
+  if (value === undefined) return;
+  let configField = parseConfigField(key, value);
+  noteIgnoredGlobalConfigValue(key, configField !== undefined);
   return configField;
 }
 //@ chunk-aepeg2w5.js:71258-71341 placement
 /**
  * 判断配置值对该字段是否有效（无效时记录一次）。
  */
-function isValidGlobalConfigValue(e, n) {
-  if (n === undefined) return;
-  let configField = parseConfigField(e, n);
-  noteIgnoredGlobalConfigValue(e, configField !== undefined);
+function isValidGlobalConfigValue(key, value) {
+  if (value === undefined) return;
+  let configField = parseConfigField(key, value);
+  noteIgnoredGlobalConfigValue(key, configField !== undefined);
   return configField ?? false;
 }
 //@ chunk-aepeg2w5.js:71341-71462 placement
 /**
  * 判断 ~/.claude.json 中某个设置的值对该设置是否无效。
  */
-function isInvalidGlobalConfigValue(e, n) {
-  if (n === undefined) return false;
-  let r = getSettingsFieldSchema(e).safeParse(n);
-  return !r.success || (r.data === undefined && typeof n !== "string");
+function isInvalidGlobalConfigValue(key, value) {
+  if (value === undefined) return false;
+  let parseResult = getSettingsFieldSchema(key).safeParse(value);
+  return !parseResult.success || (parseResult.data === undefined && typeof value !== "string");
 }
 //@ chunk-aepeg2w5.js:71462-71543 placement
 /**
  * 用对应的设置字段 schema 解析配置值。
  */
-function parseConfigField(e, n) {
-  let r = getSettingsFieldSchema(e).safeParse(n);
-  return r.success ? (r.data ?? undefined) : undefined;
+function parseConfigField(key, value) {
+  let parseResult = getSettingsFieldSchema(key).safeParse(value);
+  return parseResult.success ? (parseResult.data ?? undefined) : undefined;
 }
 //@ chunk-aepeg2w5.js:71543-71810 placement
-function noteIgnoredGlobalConfigValue(e, n) {
-  let r = onProcessRootHost(ignoredConfigKeysLogged);
-  if (n) {
-    r.delete(e);
+function noteIgnoredGlobalConfigValue(key, value) {
+  let seenKeys = onProcessRootHost(ignoredConfigKeysLogged);
+  if (value) {
+    seenKeys.delete(key);
     return;
   }
-  if (r.has(e)) return;
-  r.add(e);
-  let s = isAutoUploadFlagKey(e) ? "it counts as off" : "it counts as unset";
+  if (seenKeys.has(key)) return;
+  seenKeys.add(key);
+  let effect = isAutoUploadFlagKey(key) ? "it counts as off" : "it counts as unset";
   logForDebugging(
-    `Ignoring "${e}" in ~/.claude.json: its value is not valid for this setting, so ${s}. Set it with /config or in settings.json.`,
+    `Ignoring "${key}" in ~/.claude.json: its value is not valid for this setting, so ${effect}. Set it with /config or in settings.json.`,
   );
 }
 export {

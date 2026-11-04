@@ -47,12 +47,49 @@ import { sanitizeTelemetryString } from "../sanitization.js";
 import { formatAPIError } from "../../services/api/errorUtils.js";
 import { isAwsCredentialError } from "../aws.js";
 import { getConfiguredProxyAuthHelper } from "../proxy.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
+//@ chunk-aepeg2w5.js:407872-407902 placement
+/**
+ * 模型名允许的字符集。
+ */
+var MODEL_NAME_ALLOWED_CHARS = "A-Za-z0-9._:/@[\\]-";
+//@ chunk-aepeg2w5.js:407902-407945 placement
+/**
+ * 模型名最大长度与非法字符正则。
+ */
+var MAX_MODEL_NAME_CHARS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var regExp_28;
+deferInit("chunk-aepeg2w5.js:407902", () => {
+  MAX_MODEL_NAME_CHARS = 128;
+  regExp_28 = new RegExp(`[^${MODEL_NAME_ALLOWED_CHARS}]`, "g");
+});
+//@ chunk-aepeg2w5.js:407945-408081 placement
+/**
+ * 模型名的显示形式（去不可见字符、截断）。
+ */
+function displayModelName(modelName) {
+  let replaced = modelName.replace(regExp_28, "");
+  if (replaced.length === 0) return "(unrecognized model name)";
+  return replaced.length > MAX_MODEL_NAME_CHARS
+    ? `${replaced.slice(0, MAX_MODEL_NAME_CHARS)}\u2026`
+    : replaced;
+}
+//@ chunk-aepeg2w5.js:408081-408194 placement = ASK_USER_QUESTION_TOOL_PROMPT (0.444)
+/**
+ * 组织设置限制模型时的提示文案（实际与 AskUserQuestion 无关）。
+ */
+function formatModelRestrictedNotice(requestedModel, fallbackModel) {
+  return `Model "${displayModelName(requestedModel)}" is restricted by your organization's settings. Using ${displayModelName(fallbackModel)} instead.`;
+}
 //@ chunk-ewfzwa2f.js:839-907 sole-consumer
 /**
  * fetch_error、unknown、org_level_disabled_until（不据此判定需要额度）。
  */
-var NON_DEFINITIVE_EXTRA_USAGE_REASONS = new Set(["fetch_error", "unknown", "org_level_disabled_until"]);
+var NON_DEFINITIVE_EXTRA_USAGE_REASONS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-ewfzwa2f.js:839", () => {
+  NON_DEFINITIVE_EXTRA_USAGE_REASONS = new Set(["fetch_error", "unknown", "org_level_disabled_until"]);
+});
 //@ chunk-ewfzwa2f.js:907-962 sole-consumer
 /**
  * 本进程已探测通过的模型集合。
@@ -112,14 +149,14 @@ async function validateModel(model, options) {
   let ANTHROPIC_BASE_URL = env.ANTHROPIC_BASE_URL;
   let hostname =
     ANTHROPIC_BASE_URL && URL.canParse(ANTHROPIC_BASE_URL) ? new URL(ANTHROPIC_BASE_URL).hostname : undefined;
-  let m =
+  let isAnthropicHost =
     isFirstPartyAnthropicBaseUrl() ||
     (hostname !== undefined &&
       (hostname === "anthropic.com" ||
         hostname.endsWith(".anthropic.com") ||
-        ALLOWED_OAUTH_BASE_URLS.some((u) => new URL(u).hostname === hostname)));
+        ALLOWED_OAUTH_BASE_URLS.some((allowedUrl) => new URL(allowedUrl).hostname === hostname)));
   if (
-    !(apiProvider === "gateway" || (apiProvider === "firstParty" && !m)) &&
+    !(apiProvider === "gateway" || (apiProvider === "firstParty" && !isAnthropicHost)) &&
     /[\s\p{Cc}\p{Cf}]/u.test(normalizedModel)
   )
     return {
@@ -173,32 +210,32 @@ var MODEL_PROBE_TIMEOUT_MS = 15000;
 /**
  * 带截止时间的探测；超时中止并返回 probe=undefined；账号在探测期间变化时清掉缓存并标记 accountChanged。
  */
-async function probeModelWithDeadline(model, n) {
+async function probeModelWithDeadline(model, options) {
   let providerState = getProviderState();
   let generation = providerState.sessionModelDenyReprobe.generation;
   let abortController = new AbortController();
-  let o = await withDeadline(
+  let probe = await withDeadline(
     validateModel(model, {
-      forceServerProbe: n.forceServerProbe,
-      skipEntitlementDenyOverlay: n.skipEntitlementDenyOverlay,
-      credentials: n.credentials,
-      timeout: n.deadlineMs,
+      forceServerProbe: options.forceServerProbe,
+      skipEntitlementDenyOverlay: options.skipEntitlementDenyOverlay,
+      credentials: options.credentials,
+      timeout: options.deadlineMs,
       signal: abortController.signal,
     }),
-    n.deadlineMs,
+    options.deadlineMs,
   );
-  if (o === undefined) {
+  if (probe === undefined) {
     abortController.abort();
     return {
       probe: undefined,
       accountChanged: false,
     };
   }
-  let m = providerState.sessionModelDenyReprobe.generation !== generation;
-  if (m) providerState.providerCache.validatedModels.delete(model.trim());
+  let accountChanged = providerState.sessionModelDenyReprobe.generation !== generation;
+  if (accountChanged) providerState.providerCache.validatedModels.delete(model.trim());
   return {
-    probe: o,
-    accountChanged: m,
+    probe,
+    accountChanged,
   };
 }
 //@ chunk-ewfzwa2f.js:2660-2996 layout
@@ -212,10 +249,10 @@ async function validateModelWithDeadline(model, options, deadlineMs) {
     deadlineMs,
   });
   if (probe === undefined || accountChanged) {
-    let o = artifactPathPrefix("model");
+    let redoCommand = artifactPathPrefix("model");
     return {
       valid: false,
-      error: `Couldn't confirm model "${displayModelName(model)}" with the API. ${o ? `Try again, or run ${o} to see available models.` : "Try again."}`,
+      error: `Couldn't confirm model "${displayModelName(model)}" with the API. ${redoCommand ? `Try again, or run ${redoCommand} to see available models.` : "Try again."}`,
       retryable: true,
     };
   }
@@ -225,36 +262,38 @@ async function validateModelWithDeadline(model, options, deadlineMs) {
 /**
  * 是否别名（可带 [1m]）。
  */
-function isAliasSpelling(e) {
-  let trimmed = e.toLowerCase().trim();
+function isAliasSpelling(spelling) {
+  let trimmed = spelling.toLowerCase().trim();
   return isModelKeyAliasOrResolved(trimmed);
 }
 //@ chunk-ewfzwa2f.js:3055-3101 layout
 /**
  * 别名或已知简写时解析成具体模型，否则原样。
  */
-function resolveAliasForProbe(e) {
-  return isAliasSpelling(e) || isServedExpandedSpelling(e) ? parseUserSpecifiedModel(e) : e;
+function resolveAliasForProbe(spelling) {
+  return isAliasSpelling(spelling) || isServedExpandedSpelling(spelling)
+    ? parseUserSpecifiedModel(spelling)
+    : spelling;
 }
 //@ chunk-ewfzwa2f.js:3101-4240 layout
 /**
  * 复核“账号无权使用该模型”的缓存结论：策略拒绝、10 分钟内已确认拒绝直接返回；否则强制探测，成功则撤销拒绝并清理模型访问缓存（overturned），失败记录 denied_by_server。
  */
-async function reprobeEntitlementDeny(e, storageV5, credentials) {
+async function reprobeEntitlementDeny(model, storageV5, credentials) {
   try {
     if (
-      !isModelAllowed(e, {
+      !isModelAllowed(model, {
         skipEntitlementDenyOverlay: true,
       })
     )
       return "denied_by_policy";
-    let aliasForProbe = resolveAliasForProbe(e);
+    let aliasForProbe = resolveAliasForProbe(model);
     if (isAliasSpelling(aliasForProbe)) return "denied_by_policy";
     let providerState = getProviderState();
     let { confirmedEntitlementDenies, overturnedEntitlementDenies } = providerState.providerCache;
-    let p = normalizeForDenyMatch(aliasForProbe);
-    let u = confirmedEntitlementDenies.get(p);
-    if (u !== undefined && Date.now() - u < OVERTURNED_DENY_TTL_MS) return "denied_by_server";
+    let denyKey = normalizeForDenyMatch(aliasForProbe);
+    let deniedAt = confirmedEntitlementDenies.get(denyKey);
+    if (deniedAt !== undefined && Date.now() - deniedAt < OVERTURNED_DENY_TTL_MS) return "denied_by_server";
     let { probe, accountChanged } = await probeModelWithDeadline(aliasForProbe, {
       credentials,
       deadlineMs: MODEL_PROBE_TIMEOUT_MS,
@@ -276,18 +315,19 @@ async function reprobeEntitlementDeny(e, storageV5, credentials) {
     }
     if (!probe.valid) {
       let now = Date.now();
-      confirmedEntitlementDenies.set(p, now);
-      for (let v of getModelAccessCache())
-        if (denyEntryMatchesModel(v, e))
-          confirmedEntitlementDenies.set(normalizeForDenyMatch(v.apiName), now);
+      confirmedEntitlementDenies.set(denyKey, now);
+      for (let row of getModelAccessCache())
+        if (denyEntryMatchesModel(row, model))
+          confirmedEntitlementDenies.set(normalizeForDenyMatch(row.apiName), now);
       return "denied_by_server";
     }
-    confirmedEntitlementDenies.delete(p);
+    confirmedEntitlementDenies.delete(denyKey);
     let now = Date.now();
-    for (let f of getModelAccessCache())
-      if (denyEntryMatchesModel(f, e)) overturnedEntitlementDenies.set(normalizeForDenyMatch(f.apiName), now);
+    for (let row of getModelAccessCache())
+      if (denyEntryMatchesModel(row, model))
+        overturnedEntitlementDenies.set(normalizeForDenyMatch(row.apiName), now);
     try {
-      await evictModelAccessCacheEntry(e, storageV5);
+      await evictModelAccessCacheEntry(model, storageV5);
     } catch (error) {
       if (getErrnoCode(error) !== undefined)
         logForDebugging(`[model-access] stale-deny eviction failed: ${errorMessage(error)}`, {
@@ -306,27 +346,27 @@ async function reprobeEntitlementDeny(e, storageV5, credentials) {
 /**
  * 从全局配置 modelAccessCache 删掉该模型的条目。
  */
-async function evictModelAccessCacheEntry(e, n) {
-  await saveGlobalConfig((r) => {
-    let modelAccessCache = r.modelAccessCache;
-    if (!modelAccessCache?.length) return r;
-    let filtered = modelAccessCache.filter((o) => {
+async function evictModelAccessCacheEntry(model, storageV5) {
+  await saveGlobalConfig((config) => {
+    let modelAccessCache = config.modelAccessCache;
+    if (!modelAccessCache?.length) return config;
+    let filtered = modelAccessCache.filter((row) => {
       if (
-        o == null ||
-        typeof o !== "object" ||
-        typeof o.apiName !== "string" ||
-        typeof o.entitled !== "boolean"
+        row == null ||
+        typeof row !== "object" ||
+        typeof row.apiName !== "string" ||
+        typeof row.entitled !== "boolean"
       )
         return true;
-      return !denyEntryMatchesModel(o, e);
+      return !denyEntryMatchesModel(row, model);
     });
     return filtered.length === modelAccessCache.length
-      ? r
+      ? config
       : {
-          ...r,
+          ...config,
           modelAccessCache: filtered,
         };
-  }, n);
+  }, storageV5);
 }
 //@ chunk-ewfzwa2f.js:4524-6216 fingerprint = handleValidationError (0.657)
 /**
@@ -382,11 +422,11 @@ function handleValidationError(error, modelName) {
         serverRefusedModel: true,
       };
     let details = errorBody?.error?.details;
-    let s = error.status === 429 && details?.error_code === "credits_required";
-    let o = error.headers?.get?.(REPRESENTATIVE_CLAIM_HEADER);
-    let m =
-      s &&
-      !o &&
+    let isCreditsRequired = error.status === 429 && details?.error_code === "credits_required";
+    let representativeClaim = error.headers?.get?.(REPRESENTATIVE_CLAIM_HEADER);
+    let isServerRefusal =
+      isCreditsRequired &&
+      !representativeClaim &&
       !NON_DEFINITIVE_EXTRA_USAGE_REASONS.has(
         error.headers?.get?.(OVERAGE_DISABLED_REASON_HEADER) ?? details?.disabled_reason ?? "",
       );
@@ -404,7 +444,7 @@ function handleValidationError(error, modelName) {
         error: `API error: ${replaced} \xB7 model not changed`,
         authFailed: true,
       };
-    let u =
+    let isRetryable =
       isRetryableStatus(error.status) ||
       (error.status === 407 && Boolean(getConfiguredProxyAuthHelper())) ||
       (error.status === 403 &&
@@ -413,7 +453,7 @@ function handleValidationError(error, modelName) {
     return {
       valid: false,
       error: `API error: ${replaced} \xB7 model not changed`,
-      ...(u
+      ...(isRetryable
         ? {
             retryable: true,
           }
@@ -423,7 +463,7 @@ function handleValidationError(error, modelName) {
       ...(error.status === 429 && {
         rateLimited: true,
       }),
-      ...(s && {
+      ...(isCreditsRequired && {
         creditsRequired: true,
       }),
       ...(error.status === 400 &&
@@ -431,11 +471,11 @@ function handleValidationError(error, modelName) {
           sessionModeRefused: true,
         }),
       ...(error.status === 429 &&
-        !s &&
-        (o === "five_hour" || o === "seven_day") && {
+        !isCreditsRequired &&
+        (representativeClaim === "five_hour" || representativeClaim === "seven_day") && {
           sharedLimitReached: true,
         }),
-      ...(m && {
+      ...(isServerRefusal && {
         serverRefusedModel: true,
       }),
     };
@@ -452,35 +492,6 @@ function handleValidationError(error, modelName) {
  */
 function isRetryableStatus(status) {
   return status === undefined || status === 408 || status === 409 || status === 429 || status >= 500;
-}
-//@ chunk-aepeg2w5.js:407872-407902 placement
-/**
- * 模型名允许的字符集。
- */
-var MODEL_NAME_ALLOWED_CHARS = "A-Za-z0-9._:/@[\\]-";
-//@ chunk-aepeg2w5.js:407902-407945 placement
-/**
- * 模型名最大长度与非法字符正则。
- */
-var MAX_MODEL_NAME_CHARS = 128;
-var regExp_28 = new RegExp(`[^${MODEL_NAME_ALLOWED_CHARS}]`, "g");
-//@ chunk-aepeg2w5.js:407945-408081 placement
-/**
- * 模型名的显示形式（去不可见字符、截断）。
- */
-function displayModelName(e) {
-  let replaced = e.replace(regExp_28, "");
-  if (replaced.length === 0) return "(unrecognized model name)";
-  return replaced.length > MAX_MODEL_NAME_CHARS
-    ? `${replaced.slice(0, MAX_MODEL_NAME_CHARS)}\u2026`
-    : replaced;
-}
-//@ chunk-aepeg2w5.js:408081-408194 placement = ASK_USER_QUESTION_TOOL_PROMPT (0.444)
-/**
- * 组织设置限制模型时的提示文案（实际与 AskUserQuestion 无关）。
- */
-function formatModelRestrictedNotice(e, n) {
-  return `Model "${displayModelName(e)}" is restricted by your organization's settings. Using ${displayModelName(n)} instead.`;
 }
 export {
   reprobeEntitlementDeny,

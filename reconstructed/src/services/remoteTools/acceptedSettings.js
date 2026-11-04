@@ -15,7 +15,7 @@ import { randomBytes } from "crypto";
 import { MAX_SETTINGS_JSON_BYTES } from "../../utils/settings/settings.js";
 import { computeContentHash } from "../../utils/commitAttribution.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, literal, string, _enum } from "../../../vendor/zod/v4/classic/schemas.js";
+import { objectSchema, literal, stringSchema, _enum } from "../../../vendor/zod/v4/classic/schemas.js";
 import { getPlatform } from "../../utils/platform.js";
 import { normalizeCaseForComparison } from "../../utils/permissions/filesystem.js";
 import { servedCallsDir } from "../../remote/tools/servedCallLog.js";
@@ -44,47 +44,49 @@ var ACCEPTING_TEMP_INFIX = ".accepting-";
 /**
  * 计算设置内容哈希；内容为 null 时返回 null。
  */
-function hashOrNull(e) {
-  return e === null ? null : computeContentHash(e);
+function hashOrNull(settings) {
+  return settings === null ? null : computeContentHash(settings);
 }
 //@ chunk-cc8an1p1.js:1192-1479 placement
 var ACCEPTED_FILE_RECORD_SCHEMA = DoctorLazy(() =>
-  u({
+  objectSchema({
     v: literal(ACCEPTED_SETTINGS_VERSION),
     kind: literal("file"),
-    path: string(),
-    text: string().nullable(),
-    sha256: string()
+    path: stringSchema(),
+    text: stringSchema().nullable(),
+    sha256: stringSchema()
       .regex(/^[0-9a-f]{64}$/)
       .nullable(),
-    at: string(),
+    at: stringSchema(),
     by: _enum(["first_attach", "own_write", "person"]),
   }),
 );
 var ACCEPTED_FOLDER_RECORD_SCHEMA = DoctorLazy(() =>
-  u({
+  objectSchema({
     v: literal(ACCEPTED_SETTINGS_VERSION),
     kind: literal("folder"),
-    key: string(),
-    project: string().nullable(),
-    local: string().nullable(),
-    legacy: string().nullable(),
-    at: string(),
+    key: stringSchema(),
+    project: stringSchema().nullable(),
+    local: stringSchema().nullable(),
+    legacy: stringSchema().nullable(),
+    at: stringSchema(),
   }),
 );
 //@ chunk-cc8an1p1.js:1479-1536 placement
 /**
  * 比较两个路径是否相同（Windows 下忽略盘符大小写）。
  */
-function samePathCaseAware(e, i) {
-  return getPlatform() === "windows" ? normalizeDriveLetter(e) === normalizeDriveLetter(i) : e === i;
+function samePathCaseAware(left, right) {
+  return getPlatform() === "windows"
+    ? normalizeDriveLetter(left) === normalizeDriveLetter(right)
+    : left === right;
 }
 //@ chunk-cc8an1p1.js:1536-1603 placement
 /**
  * 把路径的盘符字母转成大写，供 Windows 路径比较。
  */
-function normalizeDriveLetter(e) {
-  return e.replace(/^[a-z](?=:)/, (i) => i.toUpperCase());
+function normalizeDriveLetter(path) {
+  return path.replace(/^[a-z](?=:)/, (letter) => letter.toUpperCase());
 }
 //@ chunk-cc8an1p1.js:1603-1647 placement = setCwdState (1)
 function nfcKey(cwd) {
@@ -94,35 +96,38 @@ function nfcKey(cwd) {
 /**
  * 按规范化路径算出的哈希拼出「已接受设置」记录文件路径。
  */
-function settingsRecordPath(e, dir = servedCallsDir()) {
+function settingsRecordPath(serverPath, dir = servedCallsDir()) {
   return join(
     dir,
-    `${ACCEPTED}settings-${computeContentHash(nfcKey(resolve(e))).slice(0, 32)}${SETTINGS_FILE_EXT}`,
+    `${ACCEPTED}settings-${computeContentHash(nfcKey(resolve(serverPath))).slice(0, 32)}${SETTINGS_FILE_EXT}`,
   );
 }
 //@ chunk-cc8an1p1.js:1726-1800 placement
 /**
  * 按文件夹名哈希拼出「已接受文件夹设置」记录路径。
  */
-function folderRecordPath(cwd, dir = servedCallsDir()) {
-  return join(dir, `${ACCEPTED}folder-${computeContentHash(nfcKey(cwd)).slice(0, 32)}${SETTINGS_FILE_EXT}`);
+function folderRecordPath(folderKey, dir = servedCallsDir()) {
+  return join(
+    dir,
+    `${ACCEPTED}folder-${computeContentHash(nfcKey(folderKey)).slice(0, 32)}${SETTINGS_FILE_EXT}`,
+  );
 }
 //@ chunk-cc8an1p1.js:1800-1851 placement
 /**
  * 把 .jsonl 记录路径换成 .seen 存在标记路径。
  */
-function seenMarkerPath(e) {
-  return `${e.slice(0, -SETTINGS_FILE_EXT.length)}${SEEN_MARKER_EXT}`;
+function seenMarkerPath(recordPath) {
+  return `${recordPath.slice(0, -SETTINGS_FILE_EXT.length)}${SEEN_MARKER_EXT}`;
 }
 //@ chunk-cc8an1p1.js:1851-1986 placement
-function readAcceptedRecord(e) {
+function readAcceptedRecord(recordPath) {
   try {
-    return readFileSync(e, MAX_ACCEPTED_SETTINGS_BYTES);
+    return readFileSync(recordPath, MAX_ACCEPTED_SETTINGS_BYTES);
   } catch (error) {
     if (!isENOENT(error)) throw error;
   }
   try {
-    lstatSync(seenMarkerPath(e));
+    lstatSync(seenMarkerPath(recordPath));
   } catch (error) {
     if (isENOENT(error)) return;
     throw error;
@@ -133,10 +138,10 @@ function readAcceptedRecord(e) {
 /**
  * 把文件的访问与修改时间更新为当前时间，用于保留标记（失败忽略）。
  */
-function touchFile(e) {
+function touchFile(path) {
   try {
     let date = new Date();
-    utimesSync(e, date, date);
+    utimesSync(path, date, date);
   } catch {}
 }
 //@ chunk-cc8an1p1.js:2036-3582 placement
@@ -144,43 +149,43 @@ function touchFile(e) {
  * 远程工具宿主"已接受设置"的记录存储：按路径记录文件文本与哈希、按文件夹记录项目/本地/旧版设置；读取时校验格式与哈希，不可读返回 "unreadable"；写入采用原子发布并维护存在标记。
  */
 function createAcceptedSettingsStore(dir = servedCallsDir()) {
-  let i = (r, n) => {
+  let writeRecord = (recordPath, record) => {
     mkdirSync(dir, {
       recursive: true,
       mode: 448,
     });
-    let t = seenMarkerPath(r);
-    let g = false;
+    let markerPath = seenMarkerPath(recordPath);
+    let createdMarker = false;
     try {
-      writeFileSync(t, "", {
+      writeFileSync(markerPath, "", {
         mode: 384,
         flag: "wx",
       });
-      g = true;
+      createdMarker = true;
     } catch (error) {
       if (getErrnoCode(error) !== "EEXIST") throw error;
     }
     try {
       writeAndPublishSync(
-        r,
-        `${jsonStringify(n)}
+        recordPath,
+        `${jsonStringify(record)}
 `,
         384,
       );
     } catch (error) {
-      let m;
+      let hasRecord;
       try {
-        m = lstatSync(r).isFile();
+        hasRecord = lstatSync(recordPath).isFile();
       } catch (error) {
-        m = !isENOENT(error);
+        hasRecord = !isENOENT(error);
       }
-      if (g && !m) {
+      if (createdMarker && !hasRecord) {
         try {
-          unlinkSync(t);
+          unlinkSync(markerPath);
         } catch {}
         try {
-          if (lstatSync(r).isFile())
-            writeFileSync(t, "", {
+          if (lstatSync(recordPath).isFile())
+            writeFileSync(markerPath, "", {
               mode: 384,
               flag: "wx",
             });
@@ -189,7 +194,7 @@ function createAcceptedSettingsStore(dir = servedCallsDir()) {
       throw error;
     }
     try {
-      writeFileSync(t, "", {
+      writeFileSync(markerPath, "", {
         mode: 384,
         flag: "wx",
       });
@@ -197,15 +202,15 @@ function createAcceptedSettingsStore(dir = servedCallsDir()) {
       if (getErrnoCode(error) !== "EEXIST") throw error;
     }
   };
-  let s = new Set();
-  let d = (r, n, acceptedRecord) => {
+  let reportedTails = new Set();
+  let firstLineOfRecord = (kind, key, acceptedRecord) => {
     let firstLine = getFirstLine(acceptedRecord);
-    if (acceptedRecord.length > firstLine.length + 1 && !s.has(n)) {
-      s.add(n);
+    if (acceptedRecord.length > firstLine.length + 1 && !reportedTails.has(key)) {
+      reportedTails.add(key);
       try {
         logEvent("tengu_remote_tool_serving", {
           event: lit("accepted_record_has_tail"),
-          record_kind: fromEnum(r),
+          record_kind: fromEnum(kind),
         });
       } catch (error) {
         logError(toError(error));
@@ -214,46 +219,50 @@ function createAcceptedSettingsStore(dir = servedCallsDir()) {
     return firstLine;
   };
   return {
-    file: (r) => {
+    file: (serverPath) => {
       try {
-        let acceptedRecord = readAcceptedRecord(settingsRecordPath(r, dir));
+        let acceptedRecord = readAcceptedRecord(settingsRecordPath(serverPath, dir));
         if (acceptedRecord === undefined) return "none";
-        let t = ACCEPTED_FILE_RECORD_SCHEMA().safeParse(jsonParse(d("file", r, acceptedRecord)));
+        let parsed = ACCEPTED_FILE_RECORD_SCHEMA().safeParse(
+          jsonParse(firstLineOfRecord("file", serverPath, acceptedRecord)),
+        );
         if (
-          !t.success ||
-          !samePathCaseAware(resolve(t.data.path), resolve(r)) ||
-          hashOrNull(t.data.text) !== t.data.sha256
+          !parsed.success ||
+          !samePathCaseAware(resolve(parsed.data.path), resolve(serverPath)) ||
+          hashOrNull(parsed.data.text) !== parsed.data.sha256
         )
           return "unreadable";
         return {
-          text: t.data.text,
-          sha256: t.data.sha256,
+          text: parsed.data.text,
+          sha256: parsed.data.sha256,
         };
       } catch {
         return "unreadable";
       }
     },
-    recordFile: (r, n, by) => {
-      if (n !== null && Buffer.byteLength(n) > MAX_SETTINGS_JSON_BYTES)
+    recordFile: (serverPath, text, by) => {
+      if (text !== null && Buffer.byteLength(text) > MAX_SETTINGS_JSON_BYTES)
         throw Error("accepted settings text exceeds the settings size limit");
-      i(settingsRecordPath(r, dir), {
+      writeRecord(settingsRecordPath(serverPath, dir), {
         v: ACCEPTED_SETTINGS_VERSION,
         kind: "file",
-        path: r,
-        text: n,
-        sha256: hashOrNull(n),
+        path: serverPath,
+        text,
+        sha256: hashOrNull(text),
         at: new Date().toISOString(),
         by,
       });
-      s.delete(r);
+      reportedTails.delete(serverPath);
     },
-    folder: (r) => {
+    folder: (folderKey) => {
       try {
-        let acceptedRecord = readAcceptedRecord(folderRecordPath(r, dir));
+        let acceptedRecord = readAcceptedRecord(folderRecordPath(folderKey, dir));
         if (acceptedRecord === undefined) return "none";
-        let t = ACCEPTED_FOLDER_RECORD_SCHEMA().safeParse(jsonParse(d("folder", r, acceptedRecord)));
-        if (!t.success || !samePathCaseAware(t.data.key, r)) return "unreadable";
-        let { project, local, legacy } = t.data;
+        let parsed = ACCEPTED_FOLDER_RECORD_SCHEMA().safeParse(
+          jsonParse(firstLineOfRecord("folder", folderKey, acceptedRecord)),
+        );
+        if (!parsed.success || !samePathCaseAware(parsed.data.key, folderKey)) return "unreadable";
+        let { project, local, legacy } = parsed.data;
         return {
           project,
           local,
@@ -263,34 +272,35 @@ function createAcceptedSettingsStore(dir = servedCallsDir()) {
         return "unreadable";
       }
     },
-    recordFolder: (r, n) => {
-      i(folderRecordPath(r, dir), {
+    recordFolder: (folderKey, record) => {
+      writeRecord(folderRecordPath(folderKey, dir), {
         v: ACCEPTED_SETTINGS_VERSION,
         kind: "folder",
-        key: r,
-        project: n.project,
-        local: n.local,
-        legacy: n.legacy,
+        key: folderKey,
+        project: record.project,
+        local: record.local,
+        legacy: record.legacy,
         at: new Date().toISOString(),
       });
-      s.delete(r);
+      reportedTails.delete(folderKey);
     },
-    noteServed: (r, n) => {
-      touchFile(folderRecordPath(r, dir));
-      for (let t of n) touchFile(settingsRecordPath(t, dir));
+    noteServed: (folderKey, serverPaths) => {
+      touchFile(folderRecordPath(folderKey, dir));
+      for (let serverPath of serverPaths) touchFile(settingsRecordPath(serverPath, dir));
     },
   };
 }
 //@ chunk-cc8an1p1.js:3582-3826 placement
-async function pruneStaleSettingsCopies(e) {
+async function pruneStaleSettingsCopies(dir) {
   try {
-    let i = Date.now() - STALE_SETTINGS_PRUNE_MS;
-    for (let s of await readdir(e)) {
-      let index = s.lastIndexOf(ACCEPTING_TEMP_INFIX);
-      if (index <= 0 || !/^[0-9a-f]{8}\.jsonl$/.test(s.slice(index + ACCEPTING_TEMP_INFIX.length))) continue;
-      let r = join(e, s);
-      if ((await lstat(r)).mtimeMs < i)
-        await rm(r, {
+    let cutoffMs = Date.now() - STALE_SETTINGS_PRUNE_MS;
+    for (let name of await readdir(dir)) {
+      let index = name.lastIndexOf(ACCEPTING_TEMP_INFIX);
+      if (index <= 0 || !/^[0-9a-f]{8}\.jsonl$/.test(name.slice(index + ACCEPTING_TEMP_INFIX.length)))
+        continue;
+      let path = join(dir, name);
+      if ((await lstat(path)).mtimeMs < cutoffMs)
+        await rm(path, {
           recursive: true,
           force: true,
         });
@@ -302,34 +312,34 @@ async function pruneStaleSettingsCopies(e) {
  * 把待审设置写成临时文件交给检查函数，检查后确认文件未被替换（inode、大小、内容一致），返回 allowed/blocked/tampered，最后删除临时文件。
  */
 async function checkSettingsCopy(settings, isBlocked) {
-  let s = settings.dir ?? servedCallsDir();
-  await mkdir(s, {
+  let dir = settings.dir ?? servedCallsDir();
+  await mkdir(dir, {
     recursive: true,
     mode: 448,
   });
-  await pruneStaleSettingsCopies(s);
-  let d = join(
-    s,
+  await pruneStaleSettingsCopies(dir);
+  let tempPath = join(
+    dir,
     `${basename(settings.name)}${ACCEPTING_TEMP_INFIX}${randomBytes(4).toString("hex")}${SETTINGS_FILE_EXT}`,
   );
-  await writeFile(d, settings.text, {
+  await writeFile(tempPath, settings.text, {
     mode: 384,
     flag: "wx",
   });
   try {
-    let r = await lstat(d);
-    if (await isBlocked(d)) return "blocked";
-    let n;
+    let written = await lstat(tempPath);
+    if (await isBlocked(tempPath)) return "blocked";
+    let handle;
     try {
-      if (getPlatform() === "windows" && (await lstat(d)).isSymbolicLink()) return "tampered";
-      n = await open(d, constants.O_RDONLY | NOFOLLOW_NONBLOCK_FLAGS);
-      let stats = await n.stat();
+      if (getPlatform() === "windows" && (await lstat(tempPath)).isSymbolicLink()) return "tampered";
+      handle = await open(tempPath, constants.O_RDONLY | NOFOLLOW_NONBLOCK_FLAGS);
+      let stats = await handle.stat();
       return stats.isFile() &&
         stats.nlink === 1 &&
-        stats.ino === r.ino &&
-        stats.dev === r.dev &&
-        stats.size === r.size &&
-        (await n.readFile({
+        stats.ino === written.ino &&
+        stats.dev === written.dev &&
+        stats.size === written.size &&
+        (await handle.readFile({
           encoding: "utf8",
         })) === settings.text
         ? "allowed"
@@ -338,10 +348,10 @@ async function checkSettingsCopy(settings, isBlocked) {
       if (isENOENT(error) || getErrnoCode(error) === "ELOOP") return "tampered";
       throw error;
     } finally {
-      await n?.close().catch(() => {});
+      await handle?.close().catch(() => {});
     }
   } finally {
-    await rm(d, {
+    await rm(tempPath, {
       recursive: true,
       force: true,
     }).catch(() => {});

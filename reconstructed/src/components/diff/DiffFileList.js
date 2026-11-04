@@ -8,15 +8,7 @@
  * pieces: chunk-18hwfzwa.js (1), chunk-mtx4csef.js (2)
  * attribution: callgraph-fingerprint 2, fingerprint 1
  */
-import { w } from "../../../vendor/react/compiler-runtime.js";
-import { isMenuOpen } from "../CustomSelect/select.js";
-import { diffLineToPlainText } from "./diffText.js";
-import {
-  jsxProd_default,
-  jsxProd_default_2,
-} from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
-import { Box, Text } from "../../ink/components/Text.js";
-import { DiffStatCounts } from "../PrBadge.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { displayField } from "../../utils/permissions/approvalPayloadSerialization.js";
 import { useTerminalSize } from "../../hooks/useTerminalSize.js";
 import {
@@ -25,23 +17,100 @@ import {
 } from "../permissions/ComputerUseApproval/ComputerUseApproval.js";
 import { wrapAnsi } from "../../ink/wrapAnsi.js";
 import { Blockquote } from "../Blockquote.js";
+import { Text, Box } from "../../ink/components/Text.js";
 import { plural } from "../../utils/stringUtils.js";
+import {
+  jsxProd_default_2,
+  jsxProd_default,
+} from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import { isMenuOpen } from "../CustomSelect/select.js";
+import { diffLineToPlainText } from "./diffText.js";
+import { DiffStatCounts } from "../PrBadge.js";
 
+//@ chunk-18hwfzwa.js:1239149-1239902 callgraph-fingerprint = DiffFileList (0.197)
+function DiffFileList(props) {
+  let $ = useMemoCache(12);
+  let { reason } = props;
+  let display = displayField(reason);
+  let { columns } = useTerminalSize();
+  let start = Math.max(20, columns - MAX_APP_LIST_ROWS);
+  let wrapLine;
+  if ($[0] !== start) {
+    wrapLine = function line(width) {
+      return wrapAnsi(width, start, {
+        trim: false,
+        hard: true,
+      }).split(`
+`);
+    };
+    $[0] = start;
+    $[1] = wrapLine;
+  } else wrapLine = $[1];
+  let wrapper = wrapLine;
+  let flattened = display.text
+    .split(
+      `
+`,
+    )
+    .flatMap(wrapper);
+  let shownLines =
+    flattened.length <= MIN_APP_LIST_ROWS ? flattened : flattened.slice(0, MIN_APP_LIST_ROWS - 1);
+  let hiddenCount = flattened.length - shownLines.length;
+  const QuoteBox = Blockquote;
+  const multiline = display.needsGutter;
+  const TextComponent = Text;
+  const dimColor = true;
+  const joined = shownLines.join(`
+`);
+  let moreText;
+  if ($[2] !== hiddenCount) {
+    moreText =
+      hiddenCount > 0
+        ? `
+\u2026 +${hiddenCount} more ${plural(hiddenCount, "row")} not shown.`
+        : "";
+    $[2] = hiddenCount;
+    $[3] = moreText;
+  } else moreText = $[3];
+  let children;
+  if ($[4] !== TextComponent || $[5] !== joined || $[6] !== moreText) {
+    children = jsxProd_default_2(TextComponent, {
+      dimColor,
+      children: [joined, moreText],
+    });
+    $[4] = TextComponent;
+    $[5] = joined;
+    $[6] = moreText;
+    $[7] = children;
+  } else children = $[7];
+  let quote;
+  if ($[8] !== QuoteBox || $[9] !== display || $[10] !== children) {
+    quote = jsxProd_default(QuoteBox, {
+      multiline,
+      children,
+    });
+    $[8] = QuoteBox;
+    $[9] = display;
+    $[10] = children;
+    $[11] = quote;
+  } else quote = $[11];
+  return quote;
+}
 //@ chunk-mtx4csef.js:17588-18112 callgraph-fingerprint = FileItem (0.322)
 function FileItem(props) {
-  let $ = w(11);
+  let $ = useMemoCache(11);
   let { file } = props;
-  let i = isMenuOpen();
-  const color = i ? "suggestion" : undefined;
+  let menuOpen = isMenuOpen();
+  const color = menuOpen ? "suggestion" : undefined;
   let children;
   if ($[0] !== file.path) {
     children = diffLineToPlainText(file.path);
     $[0] = file.path;
     $[1] = children;
   } else children = $[1];
-  let T;
+  let pathBox;
   if ($[2] !== color || $[3] !== children) {
-    T = jsxProd_default(Box, {
+    pathBox = jsxProd_default(Box, {
       flexBasis: 0,
       flexGrow: 1,
       marginRight: 1,
@@ -53,34 +122,34 @@ function FileItem(props) {
     });
     $[2] = color;
     $[3] = children;
-    $[4] = T;
-  } else T = $[4];
-  let m;
-  if ($[5] !== file || $[6] !== i) {
-    m = jsxProd_default(FileStats, {
+    $[4] = pathBox;
+  } else pathBox = $[4];
+  let stats;
+  if ($[5] !== file || $[6] !== menuOpen) {
+    stats = jsxProd_default(FileStats, {
       file,
-      isSelected: i,
+      isSelected: menuOpen,
     });
     $[5] = file;
-    $[6] = i;
-    $[7] = m;
-  } else m = $[7];
+    $[6] = menuOpen;
+    $[7] = stats;
+  } else stats = $[7];
   let t6;
-  if ($[8] !== T || $[9] !== m) {
+  if ($[8] !== pathBox || $[9] !== stats) {
     t6 = jsxProd_default_2(Box, {
       flexDirection: "row",
       flexGrow: 1,
-      children: [T, m],
+      children: [pathBox, stats],
     });
-    $[8] = T;
-    $[9] = m;
+    $[8] = pathBox;
+    $[9] = stats;
     $[10] = t6;
   } else t6 = $[10];
   return t6;
 }
 //@ chunk-mtx4csef.js:18112-19087 fingerprint = FileStats (0.494)
 function FileStats(props) {
-  let $ = w(16);
+  let $ = useMemoCache(16);
   let { file, isSelected } = props;
   if (file.isUntracked) {
     const dimColor = !isSelected;
@@ -127,9 +196,9 @@ function FileStats(props) {
     } else t2 = $[5];
     return t2;
   }
-  let t;
+  let counts;
   if ($[6] !== file.linesAdded || $[7] !== file.linesRemoved || $[8] !== isSelected) {
-    t = jsxProd_default(DiffStatCounts, {
+    counts = jsxProd_default(DiffStatCounts, {
       added: file.linesAdded,
       removed: file.linesRemoved,
       bold: isSelected,
@@ -137,11 +206,11 @@ function FileStats(props) {
     $[6] = file.linesAdded;
     $[7] = file.linesRemoved;
     $[8] = isSelected;
-    $[9] = t;
-  } else t = $[9];
-  let l;
+    $[9] = counts;
+  } else counts = $[9];
+  let truncatedNote;
   if ($[10] !== file.isTruncated || $[11] !== isSelected) {
-    l =
+    truncatedNote =
       file.isTruncated &&
       jsxProd_default(Text, {
         dimColor: !isSelected,
@@ -149,86 +218,18 @@ function FileStats(props) {
       });
     $[10] = file.isTruncated;
     $[11] = isSelected;
-    $[12] = l;
-  } else l = $[12];
-  let T;
-  if ($[13] !== t || $[14] !== l) {
-    T = jsxProd_default_2(Text, {
+    $[12] = truncatedNote;
+  } else truncatedNote = $[12];
+  let statsText;
+  if ($[13] !== counts || $[14] !== truncatedNote) {
+    statsText = jsxProd_default_2(Text, {
       wrap: "truncate-end",
-      children: [t, l],
+      children: [counts, truncatedNote],
     });
-    $[13] = t;
-    $[14] = l;
-    $[15] = T;
-  } else T = $[15];
-  return T;
-}
-//@ chunk-18hwfzwa.js:1239149-1239902 callgraph-fingerprint = DiffFileList (0.197)
-function DiffFileList(props) {
-  let $ = w(12);
-  let { reason } = props;
-  let D = displayField(reason);
-  let { columns } = useTerminalSize();
-  let start = Math.max(20, columns - MAX_APP_LIST_ROWS);
-  let Re;
-  if ($[0] !== start) {
-    Re = function He(Be) {
-      return wrapAnsi(Be, start, {
-        trim: false,
-        hard: true,
-      }).split(`
-`);
-    };
-    $[0] = start;
-    $[1] = Re;
-  } else Re = $[1];
-  let He = Re;
-  let flattened = D.text
-    .split(
-      `
-`,
-    )
-    .flatMap(He);
-  let ze = flattened.length <= MIN_APP_LIST_ROWS ? flattened : flattened.slice(0, MIN_APP_LIST_ROWS - 1);
-  let Xe = flattened.length - ze.length;
-  const rt = Blockquote;
-  const multiline = D.needsGutter;
-  const At = Text;
-  const dimColor = true;
-  const joined = ze.join(`
-`);
-  let Et;
-  if ($[2] !== Xe) {
-    Et =
-      Xe > 0
-        ? `
-\u2026 +${Xe} more ${plural(Xe, "row")} not shown.`
-        : "";
-    $[2] = Xe;
-    $[3] = Et;
-  } else Et = $[3];
-  let children;
-  if ($[4] !== At || $[5] !== joined || $[6] !== Et) {
-    children = jsxProd_default_2(At, {
-      dimColor,
-      children: [joined, Et],
-    });
-    $[4] = At;
-    $[5] = joined;
-    $[6] = Et;
-    $[7] = children;
-  } else children = $[7];
-  let Lt;
-  if ($[8] !== rt || $[9] !== D || $[10] !== children) {
-    Lt = jsxProd_default(rt, {
-      multiline,
-      children,
-    });
-    $[8] = rt;
-    $[9] = D;
-    $[10] = children;
-    $[11] = Lt;
-  } else Lt = $[11];
-  return Lt;
+    $[13] = counts;
+    $[14] = truncatedNote;
+    $[15] = statsText;
+  } else statsText = $[15];
+  return statsText;
 }
 export { DiffFileList, FileItem };

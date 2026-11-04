@@ -24,9 +24,9 @@ var FOLLOW_UP_REQUEST_NOTE = `${FOLLOW_UP_REQUEST_TEXT} before answering; this i
 /**
  * 把值规整为单行并转义反斜杠与双引号，非字符串返回空串。
  */
-function escapeDoubleQuoted(e) {
-  if (typeof e !== "string") return "";
-  return e
+function escapeDoubleQuoted(value) {
+  if (typeof value !== "string") return "";
+  return value
     .replace(/[\s\u0085]+/g, " ")
     .trim()
     .replace(/\\/g, "\\\\")
@@ -36,9 +36,9 @@ function escapeDoubleQuoted(e) {
 /**
  * 数字或布尔直接转字符串，其余交给 escapeDoubleQuoted 规整并转义，用于把预览规格值写进提示词。
  */
-function stringifyPromptScalar(e) {
-  if (typeof e === "number" || typeof e === "boolean") return String(e);
-  return escapeDoubleQuoted(e);
+function stringifyPromptScalar(value) {
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  return escapeDoubleQuoted(value);
 }
 //@ chunk-ft22tw4r.js:612-4471 callgraph-fingerprint = DESCRIPTION (0.26)
 /**
@@ -92,9 +92,10 @@ var STANDALONE_QUESTION_PROMPT = `
 The user may see only the question dialog: tool results and text you wrote earlier in this turn may not be on their screen while it is open. Make each question stand on its own: if it depends on something you found, say so briefly, and name the items you are asking about in the question itself.
 `;
 //@ chunk-9tgt55am.js:35231-35345 fingerprint = PREVIEW_FEATURE_PROMPT (0.335)
-async function PREVIEW_FEATURE_PROMPT(e) {
-  let anchorPageSource = await fetchAnchorPageSource(e);
-  return anchorPageSource === undefined || (e.quotedToAudience === true && !anchorPageSource.audienceSees)
+async function PREVIEW_FEATURE_PROMPT(request) {
+  let anchorPageSource = await fetchAnchorPageSource(request);
+  return anchorPageSource === undefined ||
+    (request.quotedToAudience === true && !anchorPageSource.audienceSees)
     ? undefined
     : anchorPageSource.html;
 }

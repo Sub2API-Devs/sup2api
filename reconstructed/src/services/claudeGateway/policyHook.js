@@ -41,100 +41,108 @@ function createPolicyWebhook(gatewayConfig) {
   if (!webhook) return null;
   let { url, timeout_ms: timeoutMs } = webhook;
   let failClosed = webhook.fail_closed !== false;
-  function blockedResponse(sub, l, cause, u, path, h, m, y) {
+  function blockedResponse(sub, requestId, cause, message, path, org, actor, ruleId) {
     gatewayJsonLog("policy.blocked", {
-      request_id: l,
+      request_id: requestId,
       sub,
       cause,
       path,
-      ...(h !== undefined && {
-        org: h,
+      ...(org !== undefined && {
+        org,
       }),
-      ...(m !== undefined && {
-        act: m,
+      ...(actor !== undefined && {
+        act: actor,
       }),
-      ...(y !== undefined && {
-        rule_id: y,
+      ...(ruleId !== undefined && {
+        rule_id: ruleId,
       }),
     });
-    return jsonErrorResponse(400, "policy_blocked", u, l, {
+    return jsonErrorResponse(400, "policy_blocked", message, requestId, {
       "x-should-retry": "false",
     });
   }
   return {
-    async precheck(a, body, c, u, f, h) {
-      let m;
-      let y = (cause) => {
+    async precheck(principal, body, requestId, requestTarget, org, actor) {
+      let decision;
+      let logSkipped = (cause) => {
         gatewayJsonLog("policy.skipped", {
-          request_id: c,
-          sub: a.sub,
+          request_id: requestId,
+          sub: principal.sub,
           cause,
-          path: u.path,
-          ...(f !== undefined && {
-            org: f,
+          path: requestTarget.path,
+          ...(org !== undefined && {
+            org,
           }),
-          ...(h !== undefined && {
-            act: h,
+          ...(actor !== undefined && {
+            act: actor,
           }),
         });
       };
       try {
-        let b = await fetchWithTimeout(
+        let response = await fetchWithTimeout(
           url,
           {
             method: "POST",
             headers: {
               "content-type": "application/json",
-              "x-request-id": c,
-              "x-principal-sub": a.sub.replace(/[^\x21-\x7e]/g, ""),
+              "x-request-id": requestId,
+              "x-principal-sub": principal.sub.replace(/[^\x21-\x7e]/g, ""),
             },
             body: jsonStringify({
-              path: u.path,
-              query: u.query,
-              headers: u.headers,
+              path: requestTarget.path,
+              query: requestTarget.query,
+              headers: requestTarget.headers,
               body,
             }),
           },
           timeoutMs,
           "policy webhook timed out",
         );
-        if (!b.ok) {
-          b.body?.cancel().catch(() => {});
-          gatewayLog("warn", `policy check failed: webhook returned ${b.status}`);
+        if (!response.ok) {
+          response.body?.cancel().catch(() => {});
+          gatewayLog("warn", `policy check failed: webhook returned ${response.status}`);
           throw Error("policy webhook returned a non-OK status");
         }
-        let body_2 = await b.json();
+        let body_2 = await response.json();
         if (typeof body_2 !== "object" || body_2 === null || Array.isArray(body_2))
           throw Error("policy webhook returned a non-object decision");
-        m = body_2;
-        if (typeof m.block !== "boolean") {
+        decision = body_2;
+        if (typeof decision.block !== "boolean") {
           if (failClosed) throw Error("policy webhook decision has no boolean block field");
           gatewayLog(
             "warn",
             "policy check: webhook decision has no boolean block field \u2014 allowing (fail-open)",
           );
-          y("decision_shape");
+          logSkipped("decision_shape");
           return null;
         }
       } catch (error) {
         gatewayLog("warn", `policy check failed: ${errorMessage(error)}`);
         if (failClosed)
-          return blockedResponse(a.sub, c, "engine_error", "policy check unavailable", u.path, f, h);
-        y("engine_error");
+          return blockedResponse(
+            principal.sub,
+            requestId,
+            "engine_error",
+            "policy check unavailable",
+            requestTarget.path,
+            org,
+            actor,
+          );
+        logSkipped("engine_error");
         return null;
       }
-      if (m.block !== true) return null;
+      if (decision.block !== true) return null;
       return blockedResponse(
-        a.sub,
-        c,
+        principal.sub,
+        requestId,
         "policy_hit",
-        typeof m.reason === "string" && m.reason.length > 0
-          ? sanitizePolicyReason(m.reason)
+        typeof decision.reason === "string" && decision.reason.length > 0
+          ? sanitizePolicyReason(decision.reason)
           : DEFAULT_POLICY_BLOCK_REASON,
-        u.path,
-        f,
-        h,
-        typeof m.rule_id === "string" ? m.rule_id : undefined,
+        requestTarget.path,
+        org,
+        actor,
+        typeof decision.rule_id === "string" ? decision.rule_id : undefined,
       );
     },
   };

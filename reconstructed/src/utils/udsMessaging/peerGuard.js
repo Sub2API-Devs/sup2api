@@ -17,7 +17,7 @@ import { logForDebugging } from "../debug.js";
 import { logFeatureSad } from "../../services/analytics/featureTelemetry.js";
 import { sleep } from "../sleep.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, E } from "../../../vendor/zod/v4/classic/schemas.js";
+import { objectSchema, numberSchema } from "../../../vendor/zod/v4/classic/schemas.js";
 import {
   getFeatureValue_CACHED_WITH_REFRESH,
   getFeatureValue_CACHED_MAY_BE_STALE,
@@ -30,38 +30,39 @@ import { isSaneEpochMs } from "../sessionRecords.js";
 import { MAX_FORMER_NAMES } from "../concurrentSessions.js";
 import { MAX_SEED_NAME_CHARS } from "../swarm/teammateIds.js";
 import { env } from "../env.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-66jn0ssz.js:1145-1219 placement
-function refillTokens(tokens, n, r, bucketCapacity, refillPerSecond) {
-  let m = Math.max(0, r - n) / 1000;
-  return Math.min(bucketCapacity, tokens + m * refillPerSecond);
+function refillTokens(tokens, lastRefillAt, now, bucketCapacity, refillPerSecond) {
+  let elapsedSeconds = Math.max(0, now - lastRefillAt) / 1000;
+  return Math.min(bucketCapacity, tokens + elapsedSeconds * refillPerSecond);
 }
 //@ chunk-66jn0ssz.js:1219-1245 placement
 function hasToken(tokens) {
   return tokens >= 1;
 }
 //@ chunk-66jn0ssz.js:1245-1494 placement
-function lruGetOrCreate(e, n, maxTrackedSenders, s, d = () => true) {
-  let m = e.get(n);
-  if (m !== undefined) {
-    e.delete(n);
-    e.set(n, m);
-    return m;
+function lruGetOrCreate(map, key, maxTrackedSenders, createEntry, isEvictable = () => true) {
+  let existing = map.get(key);
+  if (existing !== undefined) {
+    map.delete(key);
+    map.set(key, existing);
+    return existing;
   }
-  while (e.size >= Math.max(1, maxTrackedSenders)) {
-    let l;
-    for (let [a, o] of e)
-      if (d(o)) {
-        l = a;
+  while (map.size >= Math.max(1, maxTrackedSenders)) {
+    let evictKey;
+    for (let [candidateKey, candidateValue] of map)
+      if (isEvictable(candidateValue)) {
+        evictKey = candidateKey;
         break;
       }
-    l ??= e.keys().next().value;
-    if (l === undefined) break;
-    e.delete(l);
+    evictKey ??= map.keys().next().value;
+    if (evictKey === undefined) break;
+    map.delete(evictKey);
   }
-  let g = s();
-  e.set(n, g);
-  return g;
+  let entry = createEntry();
+  map.set(key, entry);
+  return entry;
 }
 //@ chunk-66jn0ssz.js:1494-1617 placement
 /**
@@ -76,81 +77,91 @@ var DEFAULT_PEER_GUARD_LIMITS_2 = {
   maxTrackedSenders: 256,
 };
 //@ chunk-66jn0ssz.js:1617-1709 placement
-function countSelfHops(e, n) {
-  if (!e || n.size === 0) return 0;
-  let r = 0;
-  for (let s of e) if (n.has(s)) r++;
-  return r;
+function countSelfHops(tokens, seen) {
+  if (!tokens || seen.size === 0) return 0;
+  let count = 0;
+  for (let token of tokens) if (seen.has(token)) count++;
+  return count;
 }
 //@ chunk-66jn0ssz.js:1709-2598 placement
 /**
  * 检测消息转发跳数失控、环路与重复，返回丢弃原因。
  */
-function createHopGuard(e = {}, getPeerGuardLimits) {
-  let r = {
+function createHopGuard(options = {}, getPeerGuardLimits) {
+  let baseLimits = {
     ...DEFAULT_PEER_GUARD_LIMITS_2,
     now: () => Date.now(),
-    ...e,
+    ...options,
   };
-  let s = () =>
+  let currentLimits = () =>
     getPeerGuardLimits
       ? {
-          ...r,
+          ...baseLimits,
           ...getPeerGuardLimits(),
         }
-      : r;
-  let d = new Map();
-  function m(senderKey, o) {
-    return lruGetOrCreate(d, senderKey, o.maxTrackedSenders, () => ({
-      tokens: o.bucketCapacity,
-      lastRefill: o.now(),
+      : baseLimits;
+  let senderStates = new Map();
+  function getSenderState(key, limits) {
+    return lruGetOrCreate(senderStates, key, limits.maxTrackedSenders, () => ({
+      tokens: limits.bucketCapacity,
+      lastRefill: limits.now(),
       lastBody: undefined,
       lastBodyAt: 0,
     }));
   }
-  function g(hopChain, ownTokens) {
-    let c = s();
-    if (hopChain !== undefined && hopChain.length > c.maxChainLength)
+  function checkHopChain(tokens, seen) {
+    let limits = currentLimits();
+    if (tokens !== undefined && tokens.length > limits.maxChainLength)
       return {
         admitted: false,
         reason: "hop-runaway",
       };
-    if (countSelfHops(hopChain, ownTokens) >= c.maxSelfHops)
+    if (countSelfHops(tokens, seen) >= limits.maxSelfHops)
       return {
         admitted: false,
         reason: "hop-loop",
       };
     return;
   }
-  function l(a) {
-    let o = s();
-    let c = o.now();
-    let R = g(a.hopChain, a.ownTokens);
-    if (R) return R;
-    let w = m(a.senderKey, o);
-    if (w.lastBody !== undefined && w.lastBody === a.body && c - w.lastBodyAt < o.dedupWindowMs)
+  function admit(request) {
+    let limits = currentLimits();
+    let now = limits.now();
+    let hopVerdict = checkHopChain(request.hopChain, request.ownTokens);
+    if (hopVerdict) return hopVerdict;
+    let senderState = getSenderState(request.senderKey, limits);
+    if (
+      senderState.lastBody !== undefined &&
+      senderState.lastBody === request.body &&
+      now - senderState.lastBodyAt < limits.dedupWindowMs
+    )
       return {
         admitted: false,
         reason: "duplicate",
       };
-    w.tokens = refillTokens(w.tokens, w.lastRefill, c, o.bucketCapacity, o.refillPerSecond);
-    w.lastRefill = c;
-    if (!hasToken(w.tokens))
+    senderState.tokens = refillTokens(
+      senderState.tokens,
+      senderState.lastRefill,
+      now,
+      limits.bucketCapacity,
+      limits.refillPerSecond,
+    );
+    senderState.lastRefill = now;
+    if (!hasToken(senderState.tokens))
       return {
         admitted: false,
         reason: "rate-limited",
       };
-    w.tokens -= 1;
-    w.lastBody = a.body;
-    w.lastBodyAt = c;
+    senderState.tokens -= 1;
+    senderState.lastBody = request.body;
+    senderState.lastBodyAt = now;
     return {
       admitted: true,
     };
   }
   return {
-    admit: l,
-    checkHopChain: g,
-    trackedSenderCount: () => d.size,
+    admit,
+    checkHopChain,
+    trackedSenderCount: () => senderStates.size,
   };
 }
 //@ chunk-66jn0ssz.js:2598-2685 placement
@@ -162,15 +173,15 @@ var PEER_DROP_REASONS = {
   "queue-full": true,
 };
 //@ chunk-66jn0ssz.js:2685-2748 placement
-function peerDropReasonOf(e) {
-  return typeof e === "string" && Object.hasOwn(PEER_DROP_REASONS, e);
+function peerDropReasonOf(reason) {
+  return typeof reason === "string" && Object.hasOwn(PEER_DROP_REASONS, reason);
 }
 //@ chunk-66jn0ssz.js:2748-2786 placement
 /**
  * 规范化丢弃原因，未知返回 undefined。
  */
-function normalizePeerDropReason(dropReason) {
-  return peerDropReasonOf(dropReason) ? dropReason : undefined;
+function normalizePeerDropReason(reason) {
+  return peerDropReasonOf(reason) ? reason : undefined;
 }
 //@ chunk-66jn0ssz.js:2786-2819 placement
 /**
@@ -184,8 +195,8 @@ var MAX_SUPPRESSED_DROPS = 20;
 /**
  * 设置本会话的 UDS 跳数令牌。
  */
-function setOwnUdsHopToken(e) {
-  swarmHostState().ingress.ownUdsHopToken = e === undefined ? undefined : hmacRandomId(e);
+function setOwnUdsHopToken(token) {
+  swarmHostState().ingress.ownUdsHopToken = token === undefined ? undefined : hmacRandomId(token);
 }
 //@ chunk-66jn0ssz.js:2888-2948 placement
 /**
@@ -200,13 +211,13 @@ function setOwnBridgePeerResolver(ownBridgePeerAddressResolver) {
  */
 function ownHopTokens() {
   let { ownUdsHopToken, ownBridgePeerAddressResolver } = swarmHostState().ingress;
-  let r = new Set();
-  if (ownUdsHopToken) r.add(ownUdsHopToken);
-  let s = ownBridgePeerAddressResolver?.();
-  if (s) r.add(hmacRandomId(s));
-  let d = ownRemoteSessionId();
-  if (d) r.add(hmacRandomId(bridgeAddressFromToken(d)));
-  return r;
+  let tokens = new Set();
+  if (ownUdsHopToken) tokens.add(ownUdsHopToken);
+  let bridgeAddress = ownBridgePeerAddressResolver?.();
+  if (bridgeAddress) tokens.add(hmacRandomId(bridgeAddress));
+  let remoteSessionId = ownRemoteSessionId();
+  if (remoteSessionId) tokens.add(hmacRandomId(bridgeAddressFromToken(remoteSessionId)));
+  return tokens;
 }
 //@ chunk-66jn0ssz.js:3129-3487 placement
 /**
@@ -224,166 +235,188 @@ var MAX_DROP_TRAIL = 500;
 var DEFAULT_DROP_TRAIL_MS = 5000;
 var MAX_IMMEDIATE_DROP_LOGS = 40;
 //@ chunk-66jn0ssz.js:3835-4028 placement
-function flushDropLog(e, n) {
-  if (e.timer !== undefined) {
-    clearTimeout(e.timer);
-    e.timer = undefined;
+function flushDropLog(state, canLog) {
+  if (state.timer !== undefined) {
+    clearTimeout(state.timer);
+    state.timer = undefined;
   }
-  let { pending, pendingIds, pendingSend } = e;
-  e.pending = 0;
-  e.pendingIds = [];
-  e.pendingSend = undefined;
-  if (pending > 0 && pendingSend && n()) return pendingSend(pendingIds);
+  let { pending, pendingIds, pendingSend } = state;
+  state.pending = 0;
+  state.pendingIds = [];
+  state.pendingSend = undefined;
+  if (pending > 0 && pendingSend && canLog()) return pendingSend(pendingIds);
 }
 //@ chunk-66jn0ssz.js:4028-5756 placement
 /**
  * 汇总并节流 [peer-guard] 丢弃日志。
  */
-function createPeerDropLogger({ trailMs: e = DEFAULT_DROP_TRAIL_MS } = {}) {
-  let n = new Map();
-  let r = 0;
-  let s = 0;
-  function d(S = Date.now()) {
-    if (S - r >= DROP_LOG_INTERVAL_MS) {
-      r = S;
-      s = 0;
+function createPeerDropLogger({ trailMs = DEFAULT_DROP_TRAIL_MS } = {}) {
+  let counts = new Map();
+  let windowStart = 0;
+  let windowCount = 0;
+  function canLogImmediate(now = Date.now()) {
+    if (now - windowStart >= DROP_LOG_INTERVAL_MS) {
+      windowStart = now;
+      windowCount = 0;
     }
-    if (s >= MAX_IMMEDIATE_DROP_LOGS) return false;
-    s++;
+    if (windowCount >= MAX_IMMEDIATE_DROP_LOGS) return false;
+    windowCount++;
     return true;
   }
-  function m(S, P, b, h = Date.now()) {
-    let y = n.get(S);
-    if (y === undefined)
-      y = {
+  function noteDropForReceipt(sourceKey, messageId, send, now = Date.now()) {
+    let entry = counts.get(sourceKey);
+    if (entry === undefined)
+      entry = {
         lastImmediateAt: Number.NEGATIVE_INFINITY,
         pendingIds: [],
         pending: 0,
         timer: undefined,
         pendingSend: undefined,
       };
-    n.delete(S);
-    n.set(S, y);
-    if (n.size > MAX_DROP_LOG_ENTRIES) {
-      let x = n.keys().next().value;
-      if (x !== undefined && x !== S) {
-        let A = n.get(x);
-        n.delete(x);
-        if (A !== undefined) flushDropLog(A, () => d(h));
+    counts.delete(sourceKey);
+    counts.set(sourceKey, entry);
+    if (counts.size > MAX_DROP_LOG_ENTRIES) {
+      let oldestKey = counts.keys().next().value;
+      if (oldestKey !== undefined && oldestKey !== sourceKey) {
+        let oldestEntry = counts.get(oldestKey);
+        counts.delete(oldestKey);
+        if (oldestEntry !== undefined) flushDropLog(oldestEntry, () => canLogImmediate(now));
       }
     }
-    if (h - y.lastImmediateAt >= DROP_LOG_INTERVAL_MS && y.pending === 0) {
-      y.lastImmediateAt = h;
-      if (d(h)) b([]);
+    if (now - entry.lastImmediateAt >= DROP_LOG_INTERVAL_MS && entry.pending === 0) {
+      entry.lastImmediateAt = now;
+      if (canLogImmediate(now)) send([]);
       return;
     }
-    y.pending++;
-    if (P !== undefined && y.pendingIds.length < MAX_PENDING_DROP_IDS) y.pendingIds.push(P);
-    y.pendingSend = b;
-    if (y.timer === undefined) {
-      y.timer = setTimeout(flushDropLog, e, y, d);
-      y.timer.unref?.();
+    entry.pending++;
+    if (messageId !== undefined && entry.pendingIds.length < MAX_PENDING_DROP_IDS)
+      entry.pendingIds.push(messageId);
+    entry.pendingSend = send;
+    if (entry.timer === undefined) {
+      entry.timer = setTimeout(flushDropLog, trailMs, entry, canLogImmediate);
+      entry.timer.unref?.();
     }
   }
-  let g = new Map();
-  let l = 0;
-  let a = 0;
-  let o = 0;
-  function c(commands, P = Date.now()) {
-    let b = commandListDisplay(commands);
-    logForDebugging(`[peer-guard] drop ${commands.reason} from ${b.from}${b.name ? ` (@${b.name})` : ""}`);
-    let h = `${commands.from}\x00${commands.reason}`;
-    let y = g.get(h);
-    if (y && P - y.lastReportAt < DROP_LOG_INTERVAL_MS) {
-      y.suppressed++;
+  let lastReportBySource = new Map();
+  let reportWindowStart = 0;
+  let reportWindowCount = 0;
+  let suppressedDrops = 0;
+  function report(commands, now = Date.now()) {
+    let display = commandListDisplay(commands);
+    logForDebugging(
+      `[peer-guard] drop ${commands.reason} from ${display.from}${display.name ? ` (@${display.name})` : ""}`,
+    );
+    let sourceKey = `${commands.from}\x00${commands.reason}`;
+    let lastReport = lastReportBySource.get(sourceKey);
+    if (lastReport && now - lastReport.lastReportAt < DROP_LOG_INTERVAL_MS) {
+      lastReport.suppressed++;
       return;
     }
-    if (P - l >= DROP_LOG_INTERVAL_MS) {
-      l = P;
-      a = 0;
+    if (now - reportWindowStart >= DROP_LOG_INTERVAL_MS) {
+      reportWindowStart = now;
+      reportWindowCount = 0;
     }
-    if (a >= MAX_SUPPRESSED_DROPS) {
-      o++;
+    if (reportWindowCount >= MAX_SUPPRESSED_DROPS) {
+      suppressedDrops++;
       return;
     }
-    a++;
-    let x = (y?.suppressed ?? 0) + o;
-    o = 0;
-    g.delete(h);
-    g.set(h, {
-      lastReportAt: P,
+    reportWindowCount++;
+    let suppressedCount = (lastReport?.suppressed ?? 0) + suppressedDrops;
+    suppressedDrops = 0;
+    lastReportBySource.delete(sourceKey);
+    lastReportBySource.set(sourceKey, {
+      lastReportAt: now,
       suppressed: 0,
     });
-    if (g.size > MAX_DROP_LOG_ENTRIES) {
-      let L = g.keys().next().value;
-      if (L !== undefined) g.delete(L);
+    if (lastReportBySource.size > MAX_DROP_LOG_ENTRIES) {
+      let oldestKey = lastReportBySource.keys().next().value;
+      if (oldestKey !== undefined) lastReportBySource.delete(oldestKey);
     }
-    let A = {
+    let event = {
       ...commands,
-      suppressed: x,
+      suppressed: suppressedCount,
     };
     logForDebugging(
-      `[peer-guard] Dropped peer message from ${b.from}${b.name ? ` (@${b.name})` : ""}: ${commands.reason}${x > 0 ? ` (+${x} suppressed)` : ""}`,
+      `[peer-guard] Dropped peer message from ${display.from}${display.name ? ` (@${display.name})` : ""}: ${commands.reason}${suppressedCount > 0 ? ` (+${suppressedCount} suppressed)` : ""}`,
       {
         level: "warn",
       },
     );
     logFeatureSad("peer_loop_guard", commands.reason);
-    swarmHostState().ingress.messageDropped.emit(A);
+    swarmHostState().ingress.messageDropped.emit(event);
   }
-  async function R(S = MAX_DROP_TRAIL) {
-    let P = [];
-    for (let b of n.values())
-      if (b.pending > 0) P.push(flushDropLog(b, d));
-      else if (b.timer !== undefined) {
-        clearTimeout(b.timer);
-        b.timer = undefined;
+  async function flushPendingReceipts(waitMs = MAX_DROP_TRAIL) {
+    let flushes = [];
+    for (let entry of counts.values())
+      if (entry.pending > 0) flushes.push(flushDropLog(entry, canLogImmediate));
+      else if (entry.timer !== undefined) {
+        clearTimeout(entry.timer);
+        entry.timer = undefined;
       }
-    if (P.length === 0) return;
+    if (flushes.length === 0) return;
     await Promise.race([
-      Promise.allSettled(P),
-      sleep(S, undefined, {
+      Promise.allSettled(flushes),
+      sleep(waitMs, undefined, {
         unref: true,
       }),
     ]);
   }
-  function w() {
-    for (let S of n.values()) if (S.timer !== undefined) clearTimeout(S.timer);
-    n.clear();
+  function dispose() {
+    for (let entry of counts.values()) if (entry.timer !== undefined) clearTimeout(entry.timer);
+    counts.clear();
   }
   return {
-    report: c,
-    noteDropForReceipt: m,
-    flushPendingReceipts: R,
-    dispose: w,
+    report,
+    noteDropForReceipt,
+    flushPendingReceipts,
+    dispose,
   };
 }
 //@ chunk-66jn0ssz.js:5756-6298 placement
 /**
  * 对等方消息丢弃日志上限与默认守卫限制、限制校验 schema 与刷新间隔。
  */
-var PEER_DROP_LOG_LIMIT = 50;
-var DEFAULT_PEER_GUARD_LIMITS = {
-  ...DEFAULT_PEER_GUARD_LIMITS_2,
-  maxQueuedPeerMessages: PEER_DROP_LOG_LIMIT,
-};
-var peerGuardLimitsFallback = DEFAULT_PEER_GUARD_LIMITS;
-var peerGuardLimitsSchema = DoctorLazy(() =>
-  u({
-    bucketCapacity: E().min(5).max(500).catch(peerGuardLimitsFallback.bucketCapacity),
-    refillPerSecond: E().min(0.05).max(50).catch(peerGuardLimitsFallback.refillPerSecond),
-    dedupWindowMs: E().int().min(0).max(600000).catch(peerGuardLimitsFallback.dedupWindowMs),
-    maxSelfHops: E().int().min(3).max(MAX_HOP_CHAIN_LENGTH).catch(peerGuardLimitsFallback.maxSelfHops),
-    maxChainLength: E()
-      .int()
-      .min(8)
-      .max(MAX_HOP_CHAIN_LENGTH - 1)
-      .catch(peerGuardLimitsFallback.maxChainLength),
-    maxTrackedSenders: E().int().min(16).max(1e5).catch(peerGuardLimitsFallback.maxTrackedSenders),
-    maxQueuedPeerMessages: E().int().min(10).max(5000).catch(peerGuardLimitsFallback.maxQueuedPeerMessages),
-  }),
-);
-var PEER_GUARD_LIMITS_REFRESH_MS = 300000;
+var PEER_DROP_LOG_LIMIT; // deferred: uses DEFAULT_PEER_GUARD_LIMITS_2 of its import cycle while loading; runs once the cycle is complete
+var DEFAULT_PEER_GUARD_LIMITS;
+var peerGuardLimitsFallback;
+var peerGuardLimitsSchema;
+var PEER_GUARD_LIMITS_REFRESH_MS;
+deferInit("chunk-66jn0ssz.js:5756", () => {
+  PEER_DROP_LOG_LIMIT = 50;
+  DEFAULT_PEER_GUARD_LIMITS = {
+    ...DEFAULT_PEER_GUARD_LIMITS_2,
+    maxQueuedPeerMessages: PEER_DROP_LOG_LIMIT,
+  };
+  peerGuardLimitsFallback = DEFAULT_PEER_GUARD_LIMITS;
+  peerGuardLimitsSchema = DoctorLazy(() =>
+    objectSchema({
+      bucketCapacity: numberSchema().min(5).max(500).catch(peerGuardLimitsFallback.bucketCapacity),
+      refillPerSecond: numberSchema().min(0.05).max(50).catch(peerGuardLimitsFallback.refillPerSecond),
+      dedupWindowMs: numberSchema().int().min(0).max(600000).catch(peerGuardLimitsFallback.dedupWindowMs),
+      maxSelfHops: numberSchema()
+        .int()
+        .min(3)
+        .max(MAX_HOP_CHAIN_LENGTH)
+        .catch(peerGuardLimitsFallback.maxSelfHops),
+      maxChainLength: numberSchema()
+        .int()
+        .min(8)
+        .max(MAX_HOP_CHAIN_LENGTH - 1)
+        .catch(peerGuardLimitsFallback.maxChainLength),
+      maxTrackedSenders: numberSchema()
+        .int()
+        .min(16)
+        .max(1e5)
+        .catch(peerGuardLimitsFallback.maxTrackedSenders),
+      maxQueuedPeerMessages: numberSchema()
+        .int()
+        .min(10)
+        .max(5000)
+        .catch(peerGuardLimitsFallback.maxQueuedPeerMessages),
+    }),
+  );
+  PEER_GUARD_LIMITS_REFRESH_MS = 300000;
+});
 //@ chunk-66jn0ssz.js:6298-6503 placement
 /**
  * tengu_harbor_kite_limits 防护限额（格式错误用默认）。
@@ -394,47 +427,47 @@ function getPeerGuardLimits() {
     DEFAULT_PEER_GUARD_LIMITS,
     PEER_GUARD_LIMITS_REFRESH_MS,
   );
-  let n = peerGuardLimitsSchema().safeParse(featureValue_CACHED_WITH_REFRESH);
-  if (!n.success) {
+  let featureValue = peerGuardLimitsSchema().safeParse(featureValue_CACHED_WITH_REFRESH);
+  if (!featureValue.success) {
     logForDebugging("[peer-guard] tengu_harbor_kite_limits is not an object; using defaults", {
       level: "warn",
     });
     return DEFAULT_PEER_GUARD_LIMITS;
   }
-  return n.data;
+  return featureValue.data;
 }
 //@ chunk-66jn0ssz.js:6503-6528 placement
 var LONG_HEX_RE = /[0-9a-f]{32,}/gi;
 //@ chunk-66jn0ssz.js:6528-6586 placement
-function redactLongHex(e) {
-  return e.replace(LONG_HEX_RE, (n) => `<hex:${shortHash(n)}>`);
+function redactLongHex(text) {
+  return text.replace(LONG_HEX_RE, (hex) => `<hex:${shortHash(hex)}>`);
 }
 //@ chunk-66jn0ssz.js:6586-6665 placement
 /**
  * 日志用片段：含 token 时整体扣留，否则脱敏截断。
  */
-function fragmentForLog(e, n = 120) {
-  if (/token/i.test(e)) return "(withheld)";
-  return truncateCodePoints(redactLongHex(e), n);
+function fragmentForLog(text, max = 120) {
+  if (/token/i.test(text)) return "(withheld)";
+  return truncateCodePoints(redactLongHex(text), max);
 }
 //@ chunk-66jn0ssz.js:6665-6774 placement
 /**
  * 日志用片段（含 token 时脱敏，截断 200）。
  */
-function redactFragmentForLog(e) {
-  if (/token/i.test(e)) return "(redacted: fragment may carry an auth token)";
-  return truncateCodePoints(redactLongHex(e), 200);
+function redactFragmentForLog(text) {
+  if (/token/i.test(text)) return "(redacted: fragment may carry an auth token)";
+  return truncateCodePoints(redactLongHex(text), 200);
 }
 //@ chunk-66jn0ssz.js:6774-7002 placement
 /**
  * 套接字对端 uid（Windows 或失败时 null）。
  */
-function getPeerUid(e) {
+function getPeerUid(socket) {
   if (getPlatform() === "windows") return null;
-  let n = socketFdOf(e);
-  if (n < 0) return null;
+  let fd = socketFdOf(socket);
+  if (fd < 0) return null;
   try {
-    return Bun.ant.getPeerUid(n);
+    return Bun.ant.getPeerUid(fd);
   } catch (error) {
     logForDebugging(
       `[daemon] peer uid lookup failed: ${error instanceof Error ? error.message : String(error)}`,
@@ -446,26 +479,26 @@ function getPeerUid(e) {
   }
 }
 //@ chunk-66jn0ssz.js:7002-7312 placement
-function describeUidMismatch(e, n = getPeerUid) {
-  let r = process.getuid?.();
-  if (r == null) return null;
-  let s = n(e);
-  if (s == null) return null;
-  if (s === r) return null;
-  let d = `permission denied: connecting uid ${s} != daemon uid ${r} (retry without sudo, or as the daemon owner)`;
-  logForDebugging(`[daemon] rejecting control connection: ${d}`, {
+function describeUidMismatch(socket, getPeerUid_2 = getPeerUid) {
+  let uid = process.getuid?.();
+  if (uid == null) return null;
+  let peerUid = getPeerUid_2(socket);
+  if (peerUid == null) return null;
+  if (peerUid === uid) return null;
+  let reason = `permission denied: connecting uid ${peerUid} != daemon uid ${uid} (retry without sudo, or as the daemon owner)`;
+  logForDebugging(`[daemon] rejecting control connection: ${reason}`, {
     level: "error",
   });
-  return d;
+  return reason;
 }
 //@ chunk-66jn0ssz.js:7312-7628 placement
-function getPeerPid(e) {
+function getPeerPid(socket) {
   if (getPlatform() === "windows") return;
-  let n = socketFdOf(e);
+  let fd = socketFdOf(socket);
   try {
-    let r = n < 0 ? null : Bun.ant.getPeerPid(n);
-    if (r !== null && r > 0) return r;
-    logForDebugging(`[peer-cred] peer pid unavailable (fd=${n}, got=${r})`, {
+    let pid = fd < 0 ? null : Bun.ant.getPeerPid(fd);
+    if (pid !== null && pid > 0) return pid;
+    logForDebugging(`[peer-cred] peer pid unavailable (fd=${fd}, got=${pid})`, {
       level: "warn",
     });
     return;
@@ -480,8 +513,8 @@ function getPeerPid(e) {
   }
 }
 //@ chunk-66jn0ssz.js:7628-7698 placement
-function socketFdOf(e) {
-  let _handle = e._handle;
+function socketFdOf(socket) {
+  let _handle = socket._handle;
   return typeof _handle?.fd === "number" ? _handle.fd : -1;
 }
 //@ chunk-66jn0ssz.js:7862-7878 placement
@@ -493,72 +526,73 @@ var MAX_PEER_MESSAGE_BYTES = 1048576;
 /**
  * 按目标收件箱的令牌桶限速。
  */
-function createInboxRateLimiter(getPeerGuardLimits, n = Date.now) {
-  let r = new Map();
-  function s(l, a) {
+function createInboxRateLimiter(getPeerGuardLimits, now = Date.now) {
+  let buckets = new Map();
+  function limiter(key, at) {
     let { bucketCapacity, refillPerSecond, maxTrackedSenders } = getPeerGuardLimits();
-    let w = false;
-    let S = lruGetOrCreate(
-      r,
-      l,
+    let isNew = false;
+    let bucket = lruGetOrCreate(
+      buckets,
+      key,
       maxTrackedSenders,
       () => {
-        w = true;
+        isNew = true;
         return {
           tokens: bucketCapacity,
-          updatedAt: a,
+          updatedAt: at,
           sentInBurst: 0,
-          burstStartedAt: a,
+          burstStartedAt: at,
         };
       },
-      (P) => refillTokens(P.tokens, P.updatedAt, a, bucketCapacity, refillPerSecond) >= bucketCapacity,
+      (bucket) =>
+        refillTokens(bucket.tokens, bucket.updatedAt, at, bucketCapacity, refillPerSecond) >= bucketCapacity,
     );
-    if (!w) {
-      S.tokens = refillTokens(S.tokens, S.updatedAt, a, bucketCapacity, refillPerSecond);
-      S.updatedAt = a;
-      let P = (bucketCapacity / Math.max(refillPerSecond, 0.000000001)) * 1000;
-      if (S.tokens >= bucketCapacity || a - S.burstStartedAt > P) {
-        S.sentInBurst = 0;
-        S.burstStartedAt = a;
+    if (!isNew) {
+      bucket.tokens = refillTokens(bucket.tokens, bucket.updatedAt, at, bucketCapacity, refillPerSecond);
+      bucket.updatedAt = at;
+      let burstWindowMs = (bucketCapacity / Math.max(refillPerSecond, 0.000000001)) * 1000;
+      if (bucket.tokens >= bucketCapacity || at - bucket.burstStartedAt > burstWindowMs) {
+        bucket.sentInBurst = 0;
+        bucket.burstStartedAt = at;
       }
     }
-    return S;
+    return bucket;
   }
-  function d(l) {
-    let a = s(l, n());
-    if (!hasToken(a.tokens))
+  function reserve(key) {
+    let bucket = limiter(key, now());
+    if (!hasToken(bucket.tokens))
       return {
         ok: false,
-        sentInBurst: a.sentInBurst,
+        sentInBurst: bucket.sentInBurst,
       };
-    a.tokens -= 1;
-    a.sentInBurst += 1;
-    let o = a;
-    let c = false;
+    bucket.tokens -= 1;
+    bucket.sentInBurst += 1;
+    let reservedBucket = bucket;
+    let refunded = false;
     return {
       ok: true,
       refund: () => {
-        if (c) return;
-        c = true;
-        o.tokens = Math.min(getPeerGuardLimits().bucketCapacity, o.tokens + 1);
-        o.sentInBurst = Math.max(0, o.sentInBurst - 1);
+        if (refunded) return;
+        refunded = true;
+        reservedBucket.tokens = Math.min(getPeerGuardLimits().bucketCapacity, reservedBucket.tokens + 1);
+        reservedBucket.sentInBurst = Math.max(0, reservedBucket.sentInBurst - 1);
       },
     };
   }
-  function m(l) {
-    let a = s(l, n());
-    a.tokens = Math.min(getPeerGuardLimits().bucketCapacity, a.tokens + 1);
-    a.sentInBurst = Math.max(0, a.sentInBurst - 1);
+  function credit(key) {
+    let bucket = limiter(key, now());
+    bucket.tokens = Math.min(getPeerGuardLimits().bucketCapacity, bucket.tokens + 1);
+    bucket.sentInBurst = Math.max(0, bucket.sentInBurst - 1);
   }
-  function g(l) {
-    let a = s(l, n());
-    a.tokens = Math.max(0, a.tokens - 1);
-    a.sentInBurst += 1;
+  function debit(key) {
+    let bucket = limiter(key, now());
+    bucket.tokens = Math.max(0, bucket.tokens - 1);
+    bucket.sentInBurst += 1;
   }
   return {
-    reserve: d,
-    credit: m,
-    debit: g,
+    reserve,
+    credit,
+    debit,
   };
 }
 //@ chunk-66jn0ssz.js:8790-8850 placement
@@ -566,9 +600,9 @@ var NO_LIVE_INBOX = "no_live_inbox";
 var ENOINBOX = "ENOINBOX";
 var MESSAGE_TOO_LARGE = "message_too_large";
 //@ chunk-66jn0ssz.js:8850-9241 placement
-function describeMessageTooLarge(e, n) {
+function describeMessageTooLarge(a, b) {
   return new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-    `Message too large for cross-session delivery: the serialized message is ${e.toLocaleString("en-US")} characters and the limit is ${n.toLocaleString("en-US")}. Shorten the message text \u2014 put bulk content in a file the recipient can read rather than in the message \u2014 or split it into smaller messages.`,
+    `Message too large for cross-session delivery: the serialized message is ${a.toLocaleString("en-US")} characters and the limit is ${b.toLocaleString("en-US")}. Shorten the message text \u2014 put bulk content in a file the recipient can read rather than in the message \u2014 or split it into smaller messages.`,
     "cross-session message exceeds the line cap",
     MESSAGE_TOO_LARGE,
   );
@@ -607,30 +641,35 @@ function isSenderPacedError(error) {
 /**
  * 收件箱已不存在（ENOENT/ECONNREFUSED/无存活收件箱）。
  */
-function isInboxGoneError(e) {
-  let errnoCode = getErrnoCode(e);
+function isInboxGoneError(error) {
+  let errnoCode = getErrnoCode(error);
   return (
     errnoCode === "ENOENT" ||
     errnoCode === "ECONNREFUSED" ||
-    (e instanceof TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS &&
-      e.errorClass === NO_LIVE_INBOX)
+    (error instanceof TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS &&
+      error.errorClass === NO_LIVE_INBOX)
   );
 }
 //@ chunk-66jn0ssz.js:9793-9934 placement
-class NoLiveInboxError extends TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS {
-  kind;
-  constructor(kind, n) {
-    super(n, "no live inbox registered for the target pipe", NO_LIVE_INBOX);
-    this.name = "NoLiveInboxError";
-    this.kind = kind;
-  }
-}
+let NoLiveInboxError; // deferred: uses TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS (../errors.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-66jn0ssz.js:9793", () => {
+  NoLiveInboxError = class NoLiveInboxError extends (
+    TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
+  ) {
+    kind;
+    constructor(kind, message) {
+      super(message, "no live inbox registered for the target pipe", NO_LIVE_INBOX);
+      this.name = "NoLiveInboxError";
+      this.kind = kind;
+    }
+  };
+});
 //@ chunk-66jn0ssz.js:9934-9993 placement
 /**
  * 是否是「收件箱不可用」错误。
  */
-function isUnusableInboxError(e) {
-  return e instanceof NoLiveInboxError && e.kind === "unusable";
+function isUnusableInboxError(error) {
+  return error instanceof NoLiveInboxError && error.kind === "unusable";
 }
 //@ chunk-66jn0ssz.js:9993-10114 placement
 /**
@@ -646,8 +685,8 @@ function classifyPeerSendError(error) {
 /**
  * 套接字路径过期的提示。
  */
-function staleSocketHint(e) {
-  return ` \u2014 the peer process may have restarted, so this socket path is stale. Call ${e} to get the current address.`;
+function staleSocketHint(text) {
+  return ` \u2014 the peer process may have restarted, so this socket path is stale. Call ${text} to get the current address.`;
 }
 //@ chunk-66jn0ssz.js:10251-10488 placement
 /**
@@ -667,8 +706,8 @@ function inboxFailureHint(error) {
 //@ chunk-66jn0ssz.js:10525-10631 placement
 class UdsSendRefusedError extends Error {
   refusal;
-  constructor(refusal, n) {
-    super(n);
+  constructor(refusal, message) {
+    super(message);
     this.name = "UdsSendRefusedError";
     this.refusal = refusal;
   }
@@ -689,11 +728,11 @@ function isExpectedSendError(error) {
   return errnoCode === "EBUSY" || errnoCode === "EAGAIN" || errnoCode === "EACCES";
 }
 //@ chunk-66jn0ssz.js:10757-10918 placement
-function isFormerNameEntry(e) {
-  if (typeof e !== "object" || e === null) return false;
-  let { name: n, until, sessionId } = e;
+function isFormerNameEntry(entry) {
+  if (typeof entry !== "object" || entry === null) return false;
+  let { name, until, sessionId } = entry;
   return (
-    typeof n === "string" &&
+    typeof name === "string" &&
     isSaneEpochMs(until) &&
     (sessionId === undefined || typeof sessionId === "string")
   );
@@ -704,8 +743,8 @@ function sanitizeFormerNames(formerNames) {
   return formerNames
     .filter(isFormerNameEntry)
     .slice(0, MAX_FORMER_NAMES)
-    .map(({ name: n, until, sessionId }) => ({
-      name: truncateToLength(n, MAX_SEED_NAME_CHARS),
+    .map(({ name, until, sessionId }) => ({
+      name: truncateToLength(name, MAX_SEED_NAME_CHARS),
       until,
       ...(sessionId !== undefined && {
         sessionId: truncateToLength(sessionId, MAX_SEED_NAME_CHARS),

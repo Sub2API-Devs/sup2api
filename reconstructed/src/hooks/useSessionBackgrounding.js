@@ -8,12 +8,12 @@
  * pieces: chunk-18hwfzwa.js (1)
  * attribution: fingerprint 1
  */
-import { ce } from "../../vendor/react/cjs/react.production.js";
+import { useCallback } from "../../vendor/react/cjs/react.production.js";
 
 //@ chunk-18hwfzwa.js:1709261-1709347 fingerprint = useSessionBackgrounding (0.344)
 function useSessionBackgrounding({ onBackgroundQuery }) {
   return {
-    handleBackgroundSession: ce(() => {
+    handleBackgroundSession: useCallback(() => {
       onBackgroundQuery();
     }, [onBackgroundQuery]),
   };

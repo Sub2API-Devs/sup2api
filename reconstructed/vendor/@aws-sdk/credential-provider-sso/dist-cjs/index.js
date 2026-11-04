@@ -5,15 +5,15 @@
  * pieces: chunk-rs2k9kxx.js (6)
  * attribution: esm-layout 4, esm-fingerprint 2
  */
-import { Re } from "../../../../runtime/bun-runtime.js";
+import { __toESM } from "../../../../runtime/bun-runtime.js";
 import { require_property_provider } from "../../../@smithy/property-provider/dist-cjs/index.js";
 import { require_shared_ini_file_loader } from "../../../@smithy/shared-ini-file-loader/dist-cjs/index.js";
 import { require_client } from "../../core/dist-cjs/submodules/client/index.js";
 import { fromSso } from "../../token-providers/dist-cjs/index.js";
 
 //@ chunk-rs2k9kxx.js:372-398 esm-layout
-var import_property_provider = Re(require_property_provider());
-var sharedIniFileLoader = Re(require_shared_ini_file_loader());
+var import_property_provider = __toESM(require_property_provider());
+var sharedIniFileLoader = __toESM(require_shared_ini_file_loader());
 //@ chunk-rs2k9kxx.js:398-584 esm-fingerprint
 var isSsoProfile = (arg) =>
   arg &&
@@ -23,10 +23,10 @@ var isSsoProfile = (arg) =>
     typeof arg.sso_region === "string" ||
     typeof arg.sso_role_name === "string");
 //@ chunk-rs2k9kxx.js:584-599 esm-layout
-var client = Re(require_client());
+var client = __toESM(require_client());
 //@ chunk-rs2k9kxx.js:599-2516 esm-layout
-var import_property_provider_2 = Re(require_property_provider());
-var import_shared_ini_file_loader = Re(require_shared_ini_file_loader());
+var import_property_provider_2 = __toESM(require_property_provider());
+var import_shared_ini_file_loader = __toESM(require_shared_ini_file_loader());
 var SHOULD_FAIL_CREDENTIAL_CHAIN = false;
 var resolveSSOCredentials = async ({
   ssoStartUrl,
@@ -84,7 +84,8 @@ var resolveSSOCredentials = async ({
       },
     );
   let { accessToken } = token;
-  let { SSOClient, GetRoleCredentialsCommand } = await import("./chunk-5hsv1dry.js");
+  let { SSOClient, GetRoleCredentialsCommand } =
+    await import("../../client-sso/dist-cjs/GetRoleCredentialsCommand_2.lazy.js");
   let sso =
     ssoClient ||
     new SSOClient(
@@ -144,7 +145,7 @@ var resolveSSOCredentials = async ({
   return credentials;
 };
 //@ chunk-rs2k9kxx.js:2516-2958 esm-layout
-var import_property_provider_3 = Re(require_property_provider());
+var import_property_provider_3 = __toESM(require_property_provider());
 var validateSsoProfile = (profile, logger) => {
   let { sso_start_url, sso_account_id, sso_region, sso_role_name } = profile;
   if (!sso_start_url || !sso_account_id || !sso_region || !sso_role_name)
@@ -247,3 +248,4 @@ var fromSSO =
         logger: init.logger,
       });
   };
+export { fromSSO };

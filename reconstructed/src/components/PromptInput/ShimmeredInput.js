@@ -8,7 +8,7 @@
  * pieces: chunk-81qqq1aq.js (3)
  * attribution: placement 1, fingerprint 2
  */
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Text, Box } from "../../ink/components/Text.js";
 import { segmentTextByHighlights } from "../../utils/textHighlighting.js";
@@ -18,7 +18,7 @@ import { Ansi } from "../../ink/components/AnsiText.js";
 
 //@ chunk-81qqq1aq.js:2338-2572 placement = ShimmerChar (1)
 function ShimmerChar(props) {
-  let $ = w(3);
+  let $ = useMemoCache(3);
   let { char, index, glimmerIndex, messageColor, shimmerColor } = props;
   let isHighlighted = index === glimmerIndex;
   let isNearHighlight = Math.abs(index - glimmerIndex) === 1;
@@ -41,7 +41,7 @@ function selectShimmerColor(h) {
 }
 //@ chunk-81qqq1aq.js:2609-4298 fingerprint = HighlightedInput (0.819)
 function HighlightedInput(props) {
-  let $ = w(21);
+  let $ = useMemoCache(21);
   let { text, highlights } = props;
   let lines;
   if ($[0] !== highlights || $[1] !== text) {
@@ -115,9 +115,11 @@ function HighlightedInput(props) {
   } else t2 = $[12];
   let { lines: lines_2, hasShimmer: hasShimmer_0, sweepStart: sweepStart_2, cycleLength: cycleLength_2 } = t2;
   let prefersReducedMotion = usePrefersReducedMotion();
-  let V = hasShimmer_0 && !prefersReducedMotion;
-  let [ref, time] = useAnimationFrame(V ? 50 : null);
-  let glimmerIndex = V ? sweepStart_2 + (Math.floor(time / 50) % cycleLength_2) : SPINNER_FLAG_PRIORITY;
+  let shouldShimmer = hasShimmer_0 && !prefersReducedMotion;
+  let [ref, time] = useAnimationFrame(shouldShimmer ? 50 : null);
+  let glimmerIndex = shouldShimmer
+    ? sweepStart_2 + (Math.floor(time / 50) % cycleLength_2)
+    : SPINNER_FLAG_PRIORITY;
   let children;
   if ($[13] !== glimmerIndex || $[14] !== lines_2) {
     let t4;

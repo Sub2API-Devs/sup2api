@@ -11,12 +11,12 @@
 import { killInProcessTeammate } from "../../utils/swarm/spawnInProcess.js";
 import { isInProcessTeammateTask } from "./types.js";
 import { isTerminalTaskStatus } from "../taskStatus.js";
-import { slugifySessionName } from "../../utils/sessionAddresses.js";
-import { isWaitingOnChildren } from "../LocalAgentTask/keepalive.js";
-import { similarNames } from "../../utils/settings/managedEnvKeys.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { createUserMessage } from "../../utils/messages.js";
 import { appendBounded } from "../taskKinds.js";
+import { slugifySessionName } from "../../utils/sessionAddresses.js";
+import { isWaitingOnChildren } from "../LocalAgentTask/keepalive.js";
+import { similarNames } from "../../utils/settings/managedEnvKeys.js";
 
 //@ chunk-v5mxhgy9.js:554-721 fingerprint = InProcessTeammateTask (0.789)
 /**
@@ -25,7 +25,7 @@ import { appendBounded } from "../taskKinds.js";
 var InProcessTeammateTask = {
   name: "InProcessTeammateTask",
   type: "in_process_teammate",
-  async kill(taskId, setAppState, setAppState_2, r, storage) {
+  async kill(taskId, setAppState, setAppState_2, storageV5, storage) {
     let { memberRemoval, osTeardown } = killInProcessTeammate(taskId, setAppState, setAppState_2, storage);
     await Promise.all([memberRemoval, osTeardown]);
   },
@@ -57,32 +57,33 @@ function resolveTeammateTask(idOrName, tasks) {
     };
   let filtered = Object.values(tasks)
     .filter(isInProcessTeammateTask)
-    .filter((n) => n.identity.resumableAgentId === idOrName);
-  let m = filtered.find((n) => n.status === "running") ?? filtered[0];
-  if (m)
+    .filter((task) => task.identity.resumableAgentId === idOrName);
+  let resumableMatch = filtered.find((task) => task.status === "running") ?? filtered[0];
+  if (resumableMatch)
     return {
       status: "found",
-      task: m,
+      task: resumableMatch,
     };
-  let l = new Map();
-  for (let n of Object.values(tasks)) {
-    if (!isInProcessTeammateTask(n) || n.identity.agentName !== idOrName) continue;
-    let c = l.get(n.identity.agentId);
-    if (!c || (c.status !== "running" && n.status === "running")) l.set(n.identity.agentId, n);
+  let byAgentId = new Map();
+  for (let task of Object.values(tasks)) {
+    if (!isInProcessTeammateTask(task) || task.identity.agentName !== idOrName) continue;
+    let existing = byAgentId.get(task.identity.agentId);
+    if (!existing || (existing.status !== "running" && task.status === "running"))
+      byAgentId.set(task.identity.agentId, task);
   }
-  let o = [...l.values()];
-  let filtered_2 = o.filter((n) => n.status === "running");
-  let u = filtered_2.length > 0 ? filtered_2 : o;
-  if (u.length === 1)
+  let named = [...byAgentId.values()];
+  let filtered_2 = named.filter((task) => task.status === "running");
+  let matches = filtered_2.length > 0 ? filtered_2 : named;
+  if (matches.length === 1)
     return {
       status: "found",
-      task: u[0],
+      task: matches[0],
     };
-  if (u.length > 1)
+  if (matches.length > 1)
     return {
       status: "ambiguous",
-      candidates: u.map((n) => n.identity.agentId),
-      anyLive: u.some((n) => !isTerminalTaskStatus(n.status)),
+      candidates: matches.map((task) => task.identity.agentId),
+      anyLive: matches.some((task) => !isTerminalTaskStatus(task.status)),
     };
   return {
     status: "not_found",
@@ -95,7 +96,7 @@ function resolveTeammateTask(idOrName, tasks) {
 function getRunningTeammateAgentIds(tasks) {
   return getAllInProcessTeammateTasks(tasks)
     .filter((t) => t.status === "running")
-    .map((s) => s.identity.agentId);
+    .map((task) => task.identity.agentId);
 }
 //@ chunk-v5mxhgy9.js:3099-3150 file-local
 /**
@@ -104,56 +105,14 @@ function getRunningTeammateAgentIds(tasks) {
 function getAllInProcessTeammateTasks(tasks) {
   return Object.values(tasks).filter(isInProcessTeammateTask);
 }
-//@ chunk-kxyd0g16.js:19632-19982 file-local
-/**
- * 按名字模糊匹配（取最接近的一个）运行中的 teammate 或本地命名代理，返回其 agentId。
- */
-function fuzzyResolveAgentByName(name, taskRegistry, getAppState) {
-  let s = new Map();
-  for (let y of getAllInProcessTeammateTasks(taskRegistry.all())) {
-    if (y.status !== "running") continue;
-    s.set(slugifySessionName(y.identity.agentName), y.identity.agentId);
-  }
-  let agentNameRegistry = getAppState?.().agentNameRegistry;
-  if (agentNameRegistry)
-    for (let [y, k] of agentNameRegistry) {
-      let w = taskRegistry.get(k);
-      if (w?.type === "local_agent" && (w.status === "running" || isWaitingOnChildren(w)))
-        s.set(slugifySessionName(y), y);
-    }
-  let h = similarNames(name, [...s.keys()], 1)[0];
-  return h === undefined ? undefined : s.get(h);
-}
-//@ chunk-kxyd0g16.js:19982-20267 fingerprint = getRunningTeammatesSorted (0.872)
-/**
- * 按规范化名字找 teammate 任务（每个 agentId 一条），有运行中的只返回运行中的。
- */
-function getRunningTeammatesSorted(normalizedName, tasks) {
-  let n = new Map();
-  for (let h of getAllInProcessTeammateTasks(tasks)) {
-    if (slugifySessionName(h.identity.agentName) !== normalizedName) continue;
-    let y = n.get(h.identity.agentId);
-    if (!y || (y.status !== "running" && h.status === "running")) n.set(h.identity.agentId, h);
-  }
-  let s = [...n.values()];
-  let filtered = s.filter((h) => h.status === "running");
-  return filtered.length > 0 ? filtered : s;
-}
-//@ chunk-18hwfzwa.js:729174-729220 fingerprint = requestTeammateShutdown (1)
-/**
- * 任务是否在运行（status==="running"）。
- */
-function isTaskRunning(task) {
-  return task.status === "running";
-}
 //@ chunk-phrnybk8.js:533-874 fingerprint = injectUserMessageToTeammate (0.809)
 /**
  * 向 teammate 注入一条用户消息：追加到 pendingUserMessages 并写入 transcript；任务已结束则丢弃。
  */
 function injectUserMessageToTeammate(taskId, text, taskRegistry, origin) {
-  let o = taskRegistry.get(taskId);
-  if (!o || isTerminalTaskStatus(o.status)) {
-    logForDebugging(`Dropping message for teammate task ${taskId}: task status is "${o?.status}"`);
+  let task = taskRegistry.get(taskId);
+  if (!task || isTerminalTaskStatus(task.status)) {
+    logForDebugging(`Dropping message for teammate task ${taskId}: task status is "${task?.status}"`);
     return;
   }
   let userMessage = createUserMessage({
@@ -171,10 +130,53 @@ function injectUserMessageToTeammate(taskId, text, taskRegistry, origin) {
       },
     ],
   }));
-  taskRegistry.updateTranscript(taskId, (r) => ({
-    ...r,
-    messages: appendBounded(r.messages, userMessage),
+  taskRegistry.updateTranscript(taskId, (transcript) => ({
+    ...transcript,
+    messages: appendBounded(transcript.messages, userMessage),
   }));
+}
+//@ chunk-kxyd0g16.js:19632-19982 file-local
+/**
+ * 按名字模糊匹配（取最接近的一个）运行中的 teammate 或本地命名代理，返回其 agentId。
+ */
+function fuzzyResolveAgentByName(name, taskRegistry, getAppState) {
+  let bySlug = new Map();
+  for (let task of getAllInProcessTeammateTasks(taskRegistry.all())) {
+    if (task.status !== "running") continue;
+    bySlug.set(slugifySessionName(task.identity.agentName), task.identity.agentId);
+  }
+  let agentNameRegistry = getAppState?.().agentNameRegistry;
+  if (agentNameRegistry)
+    for (let [registeredName, taskId] of agentNameRegistry) {
+      let task = taskRegistry.get(taskId);
+      if (task?.type === "local_agent" && (task.status === "running" || isWaitingOnChildren(task)))
+        bySlug.set(slugifySessionName(registeredName), registeredName);
+    }
+  let matchedName = similarNames(name, [...bySlug.keys()], 1)[0];
+  return matchedName === undefined ? undefined : bySlug.get(matchedName);
+}
+//@ chunk-kxyd0g16.js:19982-20267 fingerprint = getRunningTeammatesSorted (0.872)
+/**
+ * 按规范化名字找 teammate 任务（每个 agentId 一条），有运行中的只返回运行中的。
+ */
+function getRunningTeammatesSorted(normalizedName, tasks) {
+  let byAgentId = new Map();
+  for (let task of getAllInProcessTeammateTasks(tasks)) {
+    if (slugifySessionName(task.identity.agentName) !== normalizedName) continue;
+    let existing = byAgentId.get(task.identity.agentId);
+    if (!existing || (existing.status !== "running" && task.status === "running"))
+      byAgentId.set(task.identity.agentId, task);
+  }
+  let all = [...byAgentId.values()];
+  let filtered = all.filter((task) => task.status === "running");
+  return filtered.length > 0 ? filtered : all;
+}
+//@ chunk-18hwfzwa.js:729174-729220 fingerprint = requestTeammateShutdown (1)
+/**
+ * 任务是否在运行（status==="running"）。
+ */
+function isTaskRunning(task) {
+  return task.status === "running";
 }
 export {
   InProcessTeammateTask,

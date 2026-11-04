@@ -33,6 +33,7 @@ import { getShortcutDisplay } from "../../../keybindings/shortcutFormat.js";
 import { OUTSIDE_READ_ACTION_LABELS } from "../permissionCardKinds.js";
 import { extractDirectories } from "../PermissionDecisionDebugInfo.js";
 import { handleAcceptSession } from "./usePermissionHandler.js";
+import { deferInit } from "../../../../runtime/deferred-init.js";
 
 //@ chunk-18hwfzwa.js:1367026-1367159 fingerprint = isInClaudeFolder (1)
 function isInClaudeFolder(filePath) {
@@ -57,33 +58,39 @@ function isInGlobalClaudeFolder(filePath) {
   );
 }
 //@ chunk-18hwfzwa.js:1367291-1367413 placement
-var YES_ASK_AGAIN = "yes-ask-again";
-var ACCEPT_WITH_INSTRUCTIONS_PLACEHOLDER = "and tell Claude what to do next";
-var FILE_RULE_UPDATE_TYPES = new Set(["addRules"]);
-var FILE_FAMILY_TOOLTIP = "(file family: no shell tool)";
+var YES_ASK_AGAIN; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var ACCEPT_WITH_INSTRUCTIONS_PLACEHOLDER;
+var FILE_RULE_UPDATE_TYPES;
+var FILE_FAMILY_TOOLTIP;
+deferInit("chunk-18hwfzwa.js:1367291", () => {
+  YES_ASK_AGAIN = "yes-ask-again";
+  ACCEPT_WITH_INSTRUCTIONS_PLACEHOLDER = "and tell Claude what to do next";
+  FILE_RULE_UPDATE_TYPES = new Set(["addRules"]);
+  FILE_FAMILY_TOOLTIP = "(file family: no shell tool)";
+});
 //@ chunk-18hwfzwa.js:1367413-1367850 placement
 /**
  * 建议规则全是 Read 路径规则时生成 "Yes, allow reading from … during this session" 标签，过多或过长返回 null。
  */
-function buildReadRuleConsentLabel(h) {
-  let flattened = h.filter((ke) => ke.type === "addRules").flatMap((ke) => ke.rules);
+function buildReadRuleConsentLabel(updates) {
+  let flattened = updates.filter((update) => update.type === "addRules").flatMap((update) => update.rules);
   if (flattened.length === 0 || flattened.length > CONSENT_ROW_LIMITS) return null;
-  let D = [];
-  for (let ke of flattened) {
+  let paths = [];
+  for (let rule of flattened) {
     if (
-      ke.toolName !== FILE_READ_TOOL_NAME ||
-      ke.ruleContent === undefined ||
-      !normalizeRulePath(ke.ruleContent) ||
-      !fitsLabelLimit(ke.ruleContent)
+      rule.toolName !== FILE_READ_TOOL_NAME ||
+      rule.ruleContent === undefined ||
+      !normalizeRulePath(rule.ruleContent) ||
+      !fitsLabelLimit(rule.ruleContent)
     )
       return null;
-    D.push(ke.ruleContent);
+    paths.push(rule.ruleContent);
   }
-  let L = uniq(D);
-  let ee = disambiguateLabels(L, (ke) => consentRowLabel(normalizeRulePath(ke)));
-  if (bunStringWidth(ee.join(" and ")) > MAX_CONSENT_SUGGESTION_WIDTH) return null;
+  let uniquePaths = uniq(paths);
+  let displayLabels = disambiguateLabels(uniquePaths, (path) => consentRowLabel(normalizeRulePath(path)));
+  if (bunStringWidth(displayLabels.join(" and ")) > MAX_CONSENT_SUGGESTION_WIDTH) return null;
   return jsxProd_default_2(Text, {
-    children: ["Yes, allow reading from ", formatPathList(ee), " during this session"],
+    children: ["Yes, allow reading from ", formatPathList(displayLabels), " during this session"],
   });
 }
 //@ chunk-18hwfzwa.js:1369244-1370706 fingerprint = getFilePermissionOptions (0.687)
@@ -136,19 +143,19 @@ function getFilePermissionOptions({
         type: "block-outside-reads",
       },
     });
-  let Ot = offerBlockOutsideReads
+  let sessionRow = offerBlockOutsideReads
     ? null
     : standingRowVetoed
       ? directoryGrantOnly
         ? extractDirectories(filePath, operationType, toolPermissionContext)
         : null
       : handleAcceptSession(filePath, operationType, toolPermissionContext);
-  if (Ot !== null) {
+  if (sessionRow !== null) {
     let label =
-      Ot.value === "yes-session" && operationType !== "read"
+      sessionRow.value === "yes-session" && operationType !== "read"
         ? jsxProd_default_2(Text, {
             children: [
-              Ot.row.node,
+              sessionRow.row.node,
               " ",
               jsxProd_default_2(Text, {
                 bold: true,
@@ -156,13 +163,13 @@ function getFilePermissionOptions({
               }),
             ],
           })
-        : Ot.row.node;
+        : sessionRow.row.node;
     options.push({
       label,
-      value: Ot.value,
+      value: sessionRow.value,
       option: {
         type: "accept-session",
-        row: Ot.row,
+        row: sessionRow.row,
       },
     });
   }

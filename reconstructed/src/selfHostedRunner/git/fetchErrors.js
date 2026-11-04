@@ -14,6 +14,7 @@ import { redactToken, hoistFatalLines, FATAL_LINE_RE } from "./tokenRedact.js";
 import { TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS } from "../../utils/errors.js";
 import { EXIT_TEMPFAIL } from "../../utils/exitCodes.js";
 import { nullDevicePath } from "../../utils/gitSafeExec.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-t3sg9e26.js:5396-5442 placement
 /**
@@ -24,12 +25,12 @@ var DEFAULT_FETCH_REFSPEC = "+refs/heads/*:refs/remotes/origin/*";
 /**
  * 导出函数 `getUpstreamUrl`：参数 e，返回 e.upstreamUrl。
  */
-function getUpstreamUrl(e) {
-  return e.upstreamUrl;
+function getUpstreamUrl(config) {
+  return config.upstreamUrl;
 }
 //@ chunk-t3sg9e26.js:5479-5569 placement
-function fetchDepthArgs(e) {
-  if (e) return [];
+function fetchDepthArgs(full) {
+  if (full) return [];
   let { depth } = resolveFetchDepth();
   return depth === undefined ? [] : ["--depth", String(depth)];
 }
@@ -46,10 +47,10 @@ function resolveFetchDepth() {
       depth: undefined,
       invalid: undefined,
     };
-  let n = Number(CLAUDE_RUNNER_FETCH_DEPTH);
-  if (Number.isInteger(n) && n > 0)
+  let parsed = Number(CLAUDE_RUNNER_FETCH_DEPTH);
+  if (Number.isInteger(parsed) && parsed > 0)
     return {
-      depth: n,
+      depth: parsed,
       invalid: undefined,
     };
   return {
@@ -67,31 +68,31 @@ var MAX_SERVER_PROGRESS_CAP_MS = 1800000;
  * 解析 git fetch 服务端进度上限的环境变量：未设置用默认值，0/off 关闭，合法整数夹在上下限之间，非法值回退默认并记录。
  */
 function resolveServerProgressCap() {
-  let e = env.CLAUDE_RUNNER_FETCH_SERVER_PROGRESS_CAP_MS;
-  if (e === undefined)
+  let raw = env.CLAUDE_RUNNER_FETCH_SERVER_PROGRESS_CAP_MS;
+  if (raw === undefined)
     return {
       capMs: DEFAULT_SERVER_PROGRESS_CAP_MS,
       invalid: undefined,
       clamped: undefined,
     };
-  if (e === "0" || e.toLowerCase() === "off")
+  if (raw === "0" || raw.toLowerCase() === "off")
     return {
       capMs: 0,
       invalid: undefined,
       clamped: undefined,
     };
-  let n = Number(e);
-  if (Number.isInteger(n) && n > 0) {
-    let min = Math.min(Math.max(n, MIN_SERVER_PROGRESS_CAP_MS), MAX_SERVER_PROGRESS_CAP_MS);
+  let parsed = Number(raw);
+  if (Number.isInteger(parsed) && parsed > 0) {
+    let min = Math.min(Math.max(parsed, MIN_SERVER_PROGRESS_CAP_MS), MAX_SERVER_PROGRESS_CAP_MS);
     return {
       capMs: min,
       invalid: undefined,
-      clamped: min === n ? undefined : e,
+      clamped: min === parsed ? undefined : raw,
     };
   }
   return {
     capMs: DEFAULT_SERVER_PROGRESS_CAP_MS,
-    invalid: e,
+    invalid: raw,
     clamped: undefined,
   };
 }
@@ -99,20 +100,31 @@ function resolveServerProgressCap() {
 /**
  * git 进度解析与输出相关常量：进度日志间隔、进度行与对象枚举正则、单位换算、各类上限与超时，以及不报告进度的子命令。
  */
-var PROGRESS_LOG_INTERVAL_MS = 5000;
-var GIT_PROGRESS_REGEX =
-  /^(Counting objects|Compressing objects|Receiving objects|Resolving deltas|Updating files|Checking out files|Filtering content):\s+(\d+)%(?:\s+\((\d+)\/(\d+)\))?(?:, ([\d.]+) (KiB|MiB|GiB))?/;
-var ENUMERATING_OBJECTS_REGEX = /^(Enumerating objects): (\d{1,15})\b/;
-var RECEIVING_OBJECTS = "Receiving objects";
-var BYTE_UNITS = {
-  KiB: 1024,
-  MiB: 1048576,
-  GiB: 1073741824,
-};
-var NO_DATA_WARN_MS = 5000;
-var STDERR_TAIL_CHARS = 500;
-var GIT_WATCHDOG_MS = 600000;
-var SKIP_WATCHDOG_SUBCOMMANDS = new Set(["worktree"]);
+var PROGRESS_LOG_INTERVAL_MS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var GIT_PROGRESS_REGEX;
+var ENUMERATING_OBJECTS_REGEX;
+var RECEIVING_OBJECTS;
+var BYTE_UNITS;
+var NO_DATA_WARN_MS;
+var STDERR_TAIL_CHARS;
+var GIT_WATCHDOG_MS;
+var SKIP_WATCHDOG_SUBCOMMANDS;
+deferInit("chunk-t3sg9e26.js:6252", () => {
+  PROGRESS_LOG_INTERVAL_MS = 5000;
+  GIT_PROGRESS_REGEX =
+    /^(Counting objects|Compressing objects|Receiving objects|Resolving deltas|Updating files|Checking out files|Filtering content):\s+(\d+)%(?:\s+\((\d+)\/(\d+)\))?(?:, ([\d.]+) (KiB|MiB|GiB))?/;
+  ENUMERATING_OBJECTS_REGEX = /^(Enumerating objects): (\d{1,15})\b/;
+  RECEIVING_OBJECTS = "Receiving objects";
+  BYTE_UNITS = {
+    KiB: 1024,
+    MiB: 1048576,
+    GiB: 1073741824,
+  };
+  NO_DATA_WARN_MS = 5000;
+  STDERR_TAIL_CHARS = 500;
+  GIT_WATCHDOG_MS = 600000;
+  SKIP_WATCHDOG_SUBCOMMANDS = new Set(["worktree"]);
+});
 //@ chunk-t3sg9e26.js:6616-7288 placement
 /**
  * 解析 git 进度输出：识别各阶段百分比、对象数、已接收字节（含 remote: 前缀的服务端进度），分别给出最新的显示行、本地进度与服务端进度。
@@ -126,39 +138,42 @@ function parseGitProgress(chunk, skipFirstLine = false) {
   if (skipFirstLine) lines = lines.slice(1);
   for (let line of lines) {
     if (line.length === 0) continue;
-    let d = line.startsWith("remote: ");
-    if (d) remoteLineCount++;
-    let u = d ? line.slice(8) : line;
-    let match = GIT_PROGRESS_REGEX.exec(u);
+    let remoteLine = line.startsWith("remote: ");
+    if (remoteLine) remoteLineCount++;
+    let payload = remoteLine ? line.slice(8) : line;
+    let match = GIT_PROGRESS_REGEX.exec(payload);
     if (match === null) {
-      if (d) {
-        let match = ENUMERATING_OBJECTS_REGEX.exec(u);
+      if (remoteLine) {
+        let match = ENUMERATING_OBJECTS_REGEX.exec(payload);
         if (match !== null) {
-          let l = Number(match[2]);
+          let doneCount = Number(match[2]);
           server = {
-            sideband: d,
+            sideband: remoteLine,
             label: match[1],
             pct: 0,
-            done: l,
-            raw: `remote: ${match[1]}: ${l}`,
+            done: doneCount,
+            raw: `remote: ${match[1]}: ${doneCount}`,
           };
         }
       }
       continue;
     }
-    let [, y, f, R, b, P, v] = match;
-    let A = {
-      sideband: d,
-      label: y,
-      pct: Math.min(100, Number(f)),
-      done: R !== undefined ? Number(R) : undefined,
-      total: b !== undefined ? Number(b) : undefined,
-      bytes: P !== undefined && v !== undefined ? Math.round(Number(P) * BYTE_UNITS[v]) : undefined,
-      raw: `${d ? "remote: " : ""}${y}: ${f}%${R !== undefined ? ` (${R}/${b})` : ""}`,
+    let [, label, pct, done, total, sizeValue, sizeUnit] = match;
+    let progress = {
+      sideband: remoteLine,
+      label,
+      pct: Math.min(100, Number(pct)),
+      done: done !== undefined ? Number(done) : undefined,
+      total: total !== undefined ? Number(total) : undefined,
+      bytes:
+        sizeValue !== undefined && sizeUnit !== undefined
+          ? Math.round(Number(sizeValue) * BYTE_UNITS[sizeUnit])
+          : undefined,
+      raw: `${remoteLine ? "remote: " : ""}${label}: ${pct}%${done !== undefined ? ` (${done}/${total})` : ""}`,
     };
-    display = A;
-    if (d) server = A;
-    else client = A;
+    display = progress;
+    if (remoteLine) server = progress;
+    else client = progress;
   }
   return {
     display,
@@ -170,30 +185,30 @@ function parseGitProgress(chunk, skipFirstLine = false) {
 //@ chunk-t3sg9e26.js:7288-7300 placement
 var REMOTE_ACTIVE_AFTER_MS = 1000;
 //@ chunk-t3sg9e26.js:7300-7509 placement
-function noteServerProgress(e, gitProgress, t) {
-  if (e.active) return;
+function noteServerProgress(state, gitProgress, now) {
+  if (state.active) return;
   if (gitProgress.display?.sideband) {
-    e.active = true;
+    state.active = true;
     return;
   }
   if (gitProgress.remoteLines === 0) return;
-  if (e.firstRemoteLineAt === undefined) e.firstRemoteLineAt = t;
-  else if (t - e.firstRemoteLineAt >= REMOTE_ACTIVE_AFTER_MS) e.active = true;
+  if (state.firstRemoteLineAt === undefined) state.firstRemoteLineAt = now;
+  else if (now - state.firstRemoteLineAt >= REMOTE_ACTIVE_AFTER_MS) state.active = true;
 }
 //@ chunk-t3sg9e26.js:7509-7682 placement
-function isProgressAdvance(e, client) {
-  if (e === undefined) return true;
-  if (client.label !== e.label) return true;
-  if (client.done !== undefined && e.done !== undefined)
-    return client.done > e.done || (client.bytes ?? 0) > (e.bytes ?? 0);
-  return client.pct > e.pct;
+function isProgressAdvance(previous, client) {
+  if (previous === undefined) return true;
+  if (client.label !== previous.label) return true;
+  if (client.done !== undefined && previous.done !== undefined)
+    return client.done > previous.done || (client.bytes ?? 0) > (previous.bytes ?? 0);
+  return client.pct > previous.pct;
 }
 //@ chunk-t3sg9e26.js:7682-7880 placement
-function shouldLogProgress(e, n, server) {
-  if (e === undefined || server.label !== e.label) return !n.has(server.label);
-  if (server.done !== undefined && e.done !== undefined) return server.done > e.done;
-  if ((server.done === undefined) !== (e.done === undefined)) return false;
-  return server.pct > e.pct;
+function shouldLogProgress(previous, logged, server) {
+  if (previous === undefined || server.label !== previous.label) return !logged.has(server.label);
+  if (server.done !== undefined && previous.done !== undefined) return server.done > previous.done;
+  if ((server.done === undefined) !== (previous.done === undefined)) return false;
+  return server.pct > previous.pct;
 }
 //@ chunk-t3sg9e26.js:7880-7944 placement
 function isDeltasComplete(client) {
@@ -201,21 +216,23 @@ function isDeltasComplete(client) {
 }
 //@ chunk-t3sg9e26.js:7944-8040 placement
 function isGitProgressLine(line) {
-  let n = line.startsWith("remote: ");
-  let t = n ? line.slice(8) : line;
-  return GIT_PROGRESS_REGEX.test(t) || (n && ENUMERATING_OBJECTS_REGEX.test(t));
+  let remote = line.startsWith("remote: ");
+  let body = remote ? line.slice(8) : line;
+  return GIT_PROGRESS_REGEX.test(body) || (remote && ENUMERATING_OBJECTS_REGEX.test(body));
 }
 //@ chunk-t3sg9e26.js:8040-8052 placement
 var MAX_GIT_OUTPUT_TAIL_CHARS = 2000;
 //@ chunk-t3sg9e26.js:8052-8239 placement
-function gitStderrSummary(stderr, n, authURL, r) {
-  let s = n ? stderr.replace(/^[^\r\n]*[\r\n]?/, "") : stderr;
-  let joined = redactToken(s, authURL, r)
+function gitStderrSummary(stderr, skipFirst, authURL, authUrl) {
+  let trimmed = skipFirst ? stderr.replace(/^[^\r\n]*[\r\n]?/, "") : stderr;
+  let text = redactToken(trimmed, authURL, authUrl)
     .split(/\r|\n/)
     .filter((line) => line.length > 0 && !isGitProgressLine(line)).join(`
 `);
-  let a = hoistFatalLines(joined);
-  return FATAL_LINE_RE.test(a) ? a.slice(0, MAX_GIT_OUTPUT_TAIL_CHARS) : a.slice(-MAX_GIT_OUTPUT_TAIL_CHARS);
+  let summary = hoistFatalLines(text);
+  return FATAL_LINE_RE.test(summary)
+    ? summary.slice(0, MAX_GIT_OUTPUT_TAIL_CHARS)
+    : summary.slice(-MAX_GIT_OUTPUT_TAIL_CHARS);
 }
 //@ chunk-t3sg9e26.js:8239-8312 placement
 var FILESYSTEM_OP_TIMEOUT_MS = 1e4;
@@ -238,8 +255,8 @@ function isStallGiveUpEnabled() {
   return Boolean(antEnv.CLAUDE_RUNNER_STALL_GIVEUP);
 }
 //@ chunk-t3sg9e26.js:8435-8647 placement
-function isCurlTimeoutOnly(e) {
-  return e
+function isCurlTimeoutOnly(text) {
+  return text
     .split(
       `
 `,
@@ -261,26 +278,37 @@ var REF_NOT_FOUND_PATTERNS = ["couldn't find remote ref"];
 /**
  * 导出函数 `isFetchRefNotFound`：参数 e，返回 rt.some((t) => lower.includes(t))。
  */
-function isFetchRefNotFound(e) {
-  let lower = e.toLowerCase();
-  return REF_NOT_FOUND_PATTERNS.some((t) => lower.includes(t));
+function isFetchRefNotFound(text) {
+  let lower = text.toLowerCase();
+  return REF_NOT_FOUND_PATTERNS.some((pattern) => lower.includes(pattern));
 }
 //@ chunk-t3sg9e26.js:8805-8864 placement
-var regExp = new RegExp(REF_NOT_FOUND_PATTERNS[0].replaceAll("i", "[i\\u0130]"), "gi");
+var regExp; // deferred: uses REF_NOT_FOUND_PATTERNS of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-t3sg9e26.js:8805", () => {
+  regExp = new RegExp(REF_NOT_FOUND_PATTERNS[0].replaceAll("i", "[i\\u0130]"), "gi");
+});
 //@ chunk-t3sg9e26.js:8864-8931 placement
 /**
  * 导出函数 `rewriteContractionError`：参数 e，返回 e.replace(regExp, (n) => `could not${n.slice(8)}`)。
  */
-function rewriteContractionError(e) {
-  return e.replace(regExp, (n) => `could not${n.slice(8)}`);
+function rewriteContractionError(text) {
+  return text.replace(regExp, (verb) => `could not${verb.slice(8)}`);
 }
 //@ chunk-t3sg9e26.js:8931-9105 placement
-class FetchRefNotFoundError extends TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS {
-  constructor(e) {
-    super(`git fetch failed (permanent): ${e}`, "git fetch failed (permanent): ref not found on the remote");
-    this.name = "FetchRefNotFoundError";
-  }
-}
+let FetchRefNotFoundError; // deferred: uses TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS (../../utils/errors.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-t3sg9e26.js:8931", () => {
+  FetchRefNotFoundError = class FetchRefNotFoundError extends (
+    TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
+  ) {
+    constructor(detail) {
+      super(
+        `git fetch failed (permanent): ${detail}`,
+        "git fetch failed (permanent): ref not found on the remote",
+      );
+      this.name = "FetchRefNotFoundError";
+    }
+  };
+});
 //@ chunk-t3sg9e26.js:9105-9295 placement
 /**
  * git fetch 被拒原因的说明文案（git 包装器以 75 退出、HTTP 429）及 429 错误行正则。
@@ -294,58 +322,71 @@ var HTTP_429_LINE_REGEX = /^fatal: unable to access '.*': the requested url retu
 /**
  * 判断 git fetch 失败是否属于被拒：包装器退出码，或 HTTP(S) 远程的错误输出全部是 429 行。
  */
-function classifyFetchRefusal(e, n, gitURL) {
-  if (/^git \S+ failed \(watchdog:/.test(e)) return;
-  if (n === EXIT_TEMPFAIL) return "refused_by_git_wrapper";
+function classifyFetchRefusal(text, exitCode, gitURL) {
+  if (/^git \S+ failed \(watchdog:/.test(text)) return;
+  if (exitCode === EXIT_TEMPFAIL) return "refused_by_git_wrapper";
   if (!/^https?:/i.test(gitURL)) return;
-  let replaced = e.replace(/^git \S+ failed: /, "");
+  let replaced = text.replace(/^git \S+ failed: /, "");
   if (replaced.length >= MAX_GIT_OUTPUT_TAIL_CHARS) return;
   let filtered = replaced
     .toLowerCase()
     .split(/\r|\n/)
     .map((line) => line.trim())
-    .filter((o) => o !== "" && !o.startsWith("remote:"));
-  return filtered.length > 0 && filtered.every((o) => HTTP_429_LINE_REGEX.test(o)) ? "http_429" : undefined;
+    .filter((line) => line !== "" && !line.startsWith("remote:"));
+  return filtered.length > 0 && filtered.every((line) => HTTP_429_LINE_REGEX.test(line))
+    ? "http_429"
+    : undefined;
 }
 //@ chunk-t3sg9e26.js:9662-9816 placement
-class FetchThrottledError extends TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS {
-  throttle;
-  constructor(e, throttle) {
-    super(e, "git fetch failed: throttled on its last attempt");
-    this.name = "FetchThrottledError";
-    this.throttle = throttle;
-  }
-}
+let FetchThrottledError; // deferred: uses TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS (../../utils/errors.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-t3sg9e26.js:9662", () => {
+  FetchThrottledError = class FetchThrottledError extends (
+    TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
+  ) {
+    throttle;
+    constructor(detail, throttle) {
+      super(detail, "git fetch failed: throttled on its last attempt");
+      this.name = "FetchThrottledError";
+      this.throttle = throttle;
+    }
+  };
+});
 //@ chunk-t3sg9e26.js:9816-10294 placement
 /**
  * 安全 git 环境与参数：禁 hook、禁 fsmonitor、禁 askPass、关自动 gc 的 -c 参数，安全环境变量（含 GIT_ALLOW_PROTOCOL）以及完全锁定协议的子进程环境。
  */
-var SAFE_GIT_CONFIG_ARGS = [
-  "-c",
-  `core.hooksPath=${nullDevicePath()}`,
-  "-c",
-  "core.fsmonitor=",
-  "-c",
-  "core.askPass=",
-  "-c",
-  "gc.auto=0",
-  "-c",
-  "maintenance.auto=false",
-];
-var SAFE_GIT_ENV = {
-  SELF_HOSTED_RUNNER_POOL_SECRET: undefined,
-  SELF_HOSTED_RUNNER_ENVIRONMENT_SECRET: undefined,
-  GIT_ALLOW_PROTOCOL: "https:http:ssh",
-};
-var LOCKED_GIT_ENV = {
-  GIT_NO_LAZY_FETCH: "1",
-  GIT_ALLOW_PROTOCOL: "none",
-  GIT_SSH_COMMAND: "false",
-  GIT_NO_REPLACE_OBJECTS: "1",
-  GIT_TERMINAL_PROMPT: "0",
-  CLAUDE_CODE_SESSION_ACCESS_TOKEN: undefined,
-};
-var SAFE_GIT_EXTRA_ARGS = ["-c", "alias.remote-none=", "-c", "fetch.bundleURI="];
+var SAFE_GIT_CONFIG_ARGS; // deferred: uses nullDevicePath (../../utils/gitSafeExec.js) of its import cycle while loading; runs once the cycle is complete
+var SAFE_GIT_ENV;
+var LOCKED_GIT_ENV;
+var SAFE_GIT_EXTRA_ARGS;
+deferInit("chunk-t3sg9e26.js:9816", () => {
+  SAFE_GIT_CONFIG_ARGS = [
+    "-c",
+    `core.hooksPath=${nullDevicePath()}`,
+    "-c",
+    "core.fsmonitor=",
+    "-c",
+    "core.askPass=",
+    "-c",
+    "gc.auto=0",
+    "-c",
+    "maintenance.auto=false",
+  ];
+  SAFE_GIT_ENV = {
+    SELF_HOSTED_RUNNER_POOL_SECRET: undefined,
+    SELF_HOSTED_RUNNER_ENVIRONMENT_SECRET: undefined,
+    GIT_ALLOW_PROTOCOL: "https:http:ssh",
+  };
+  LOCKED_GIT_ENV = {
+    GIT_NO_LAZY_FETCH: "1",
+    GIT_ALLOW_PROTOCOL: "none",
+    GIT_SSH_COMMAND: "false",
+    GIT_NO_REPLACE_OBJECTS: "1",
+    GIT_TERMINAL_PROMPT: "0",
+    CLAUDE_CODE_SESSION_ACCESS_TOKEN: undefined,
+  };
+  SAFE_GIT_EXTRA_ARGS = ["-c", "alias.remote-none=", "-c", "fetch.bundleURI="];
+});
 export {
   SAFE_GIT_CONFIG_ARGS,
   getUpstreamUrl,

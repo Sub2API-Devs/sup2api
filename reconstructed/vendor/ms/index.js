@@ -5,10 +5,10 @@
  * pieces: chunk-h6b7mazd.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../runtime/bun-runtime.js";
+import { __commonJS } from "../../runtime/bun-runtime.js";
 
 //@ chunk-h6b7mazd.js:27156-28648 cjs-fingerprint
-var require_ms = x(function (cjsExports, cjsModule) {
+var require_ms = __commonJS(function (cjsExports, cjsModule) {
   var s = 1000;
   var m = s * 60;
   var h = m * 60;

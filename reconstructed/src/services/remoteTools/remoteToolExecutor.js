@@ -57,7 +57,7 @@ import {
   permissionPromptToolResultToPermissionDecision,
   permissionPromptResultSchemaRefusing,
 } from "../../utils/permissions/PermissionPromptToolResultSchema.js";
-import { Uo } from "../../../vendor/@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
+import { omitAlias } from "../../../vendor/@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
 import { isSameDecision, isCanUseToolFailureReason } from "../../utils/permissions/decisionIdentity.js";
 import { isPlanClassifierArmOn } from "./servingGates.js";
 import { isAutoClassifierActive } from "../../utils/permissions/autoModeState.js";
@@ -134,65 +134,65 @@ function createRemoteApprover({
   honourHostAllowRules,
   speculation,
 }) {
-  return async (h) => {
-    let w = new PromptScopedAbortController(toolUseContext.abortController);
-    w.signal.addEventListener(
+  return async (request) => {
+    let scopedAbort = new PromptScopedAbortController(toolUseContext.abortController);
+    scopedAbort.signal.addEventListener(
       "abort",
       () => {
-        if (!h.ended.aborted && !toolUseContext.abortController.signal.aborted)
-          toolUseContext.abortController.abort(w.signal.reason);
+        if (!request.ended.aborted && !toolUseContext.abortController.signal.aborted)
+          toolUseContext.abortController.abort(scopedAbort.signal.reason);
       },
       {
         once: true,
       },
     );
-    if (h.ended.aborted) return withdrawnAskDecision(h);
-    h.ended.addEventListener("abort", () => w.abort(h.ended.reason), {
+    if (request.ended.aborted) return withdrawnAskDecision(request);
+    request.ended.addEventListener("abort", () => scopedAbort.abort(request.ended.reason), {
       once: true,
     });
-    h.patience?.hold();
-    let k = await classifyRemoteCall({
+    request.patience?.hold();
+    let verdict = await classifyRemoteCall({
       tool,
       host,
-      request: h,
+      request,
       toolUseContext,
       toolUseId,
       messageId: parentMessage.message.id,
       honourHostAllowRules,
       speculation,
     });
-    if (k.kind === "allow")
+    if (verdict.kind === "allow")
       return {
         decision: "allow",
         decidedBy: "classifier",
       };
-    if (k.kind === "block")
+    if (verdict.kind === "block")
       return {
         decision: "deny",
         feedback: "blocked by the session's auto-mode classifier",
         insteadOfRejection: {
-          message: k.message,
-          denialKind: k.denialKind,
+          message: verdict.message,
+          denialKind: verdict.denialKind,
         },
       };
-    let S = `runs on ${h.host.name}`;
-    let A =
+    let whereText = `runs on ${request.host.name}`;
+    let askInput =
       tool.isMcp === true
         ? {
-            ...h.input,
+            ...request.input,
           }
         : {
-            ...h.input,
-            [HOST_TOOL_INPUT_FIELD]: h.host.name,
+            ...request.input,
+            [HOST_TOOL_INPUT_FIELD]: request.host.name,
           };
-    let R = `(${S}) ${truncateAtSentence(h.message)}`;
-    let hostAllowRules = buildHostAllowRules(tool, h);
-    let O = {
+    let askMessage = `(${whereText}) ${truncateAtSentence(request.message)}`;
+    let hostAllowRules = buildHostAllowRules(tool, request);
+    let forcedAsk = {
       behavior: "ask",
-      message: R,
+      message: askMessage,
       decisionReason: {
         type: "other",
-        reason: R,
+        reason: askMessage,
       },
       ...(hostAllowRules === undefined
         ? {
@@ -202,9 +202,9 @@ function createRemoteApprover({
             suggestions: [hostAllowRules],
           }),
       forcedByCaller: true,
-      askPatience: h.patience,
-      askEnded: h.askEnded,
-      ...(h.pendingBeforeRestart === true && {
+      askPatience: request.patience,
+      askEnded: request.askEnded,
+      ...(request.pendingBeforeRestart === true && {
         pendingBeforeRestart: true,
       }),
     };
@@ -216,66 +216,67 @@ function createRemoteApprover({
           message:
             toolPermissionContext.mode === "dontAsk"
               ? DONT_ASK_REJECT_MESSAGE(tool.name)
-              : `${h.host.name} asked for approval, and this context cannot show a permission prompt; the call did not run.`,
+              : `${request.host.name} asked for approval, and this context cannot show a permission prompt; the call did not run.`,
           denialKind: "permission-rule",
         },
       };
-    let M =
+    let toolForAsk =
       tool.isMcp === true
         ? {
             ...tool,
             suppressesAllPermissionUpdates: () => true,
           }
         : tool;
-    let E =
-      h.pendingBeforeRestart === true && !h.ended.aborted
+    let inherited =
+      request.pendingBeforeRestart === true && !request.ended.aborted
         ? await toolUseContext.toolState.get(ServedCallRegistry).takeInheritedAnswer(toolUseId)?.({
-            input: A,
+            input: askInput,
             planMode: () => getToolPermissionContext(toolUseContext).mode === "plan",
           })
         : undefined;
-    if (h.ended.aborted) return withdrawnAskDecision(h);
-    h.patience?.resume();
+    if (request.ended.aborted) return withdrawnAskDecision(request);
+    request.patience?.resume();
     let standingRow =
       hostAllowRules === undefined
         ? "withheld"
         : hostAllowRules.destination === "session"
           ? "offered_prefix"
           : "offered_exact";
-    h.noteCard({
+    request.noteCard({
       standingRow,
       chosen: false,
     });
-    let raisedInPlanMode = E === undefined && getToolPermissionContext(toolUseContext).mode === "plan";
-    let L = parkOnUser();
-    let y;
+    let raisedInPlanMode =
+      inherited === undefined && getToolPermissionContext(toolUseContext).mode === "plan";
+    let releasePark = parkOnUser();
+    let decision;
     try {
-      if (E === undefined)
-        y = await canUseTool(
-          M,
-          A,
+      if (inherited === undefined)
+        decision = await canUseTool(
+          toolForAsk,
+          askInput,
           {
             ...toolUseContext,
-            abortController: w,
+            abortController: scopedAbort,
           },
           parentMessage,
           toolUseId,
-          O,
+          forcedAsk,
         );
       else {
-        let F;
+        let hookOutcome;
         try {
-          F =
-            E.result.behavior === "deny"
+          hookOutcome =
+            inherited.result.behavior === "deny"
               ? undefined
               : await executePermissionRequestHooksForSDK(
-                  E.answers,
-                  M,
+                  inherited.answers,
+                  toolForAsk,
                   toolUseId,
-                  A,
+                  askInput,
                   {
                     ...toolUseContext,
-                    abortController: w,
+                    abortController: scopedAbort,
                   },
                   hostAllowRules === undefined ? undefined : [hostAllowRules],
                   {
@@ -284,7 +285,7 @@ function createRemoteApprover({
                   () => true,
                 );
         } catch (error) {
-          if (h.ended.aborted) return withdrawnAskDecision(h);
+          if (request.ended.aborted) return withdrawnAskDecision(request);
           if (toolUseContext.abortController.signal.aborted) throw error;
           logForDebugging(
             `PermissionRequest hooks failed before an inherited answer was applied: ${errorMessage(error)}`,
@@ -295,115 +296,120 @@ function createRemoteApprover({
           return {
             decision: "deny",
             insteadOfRejection: {
-              message: `A PermissionRequest hook failed before the approval given earlier could be applied; the ${tool.name} call did not run on ${h.host.name}.`,
+              message: `A PermissionRequest hook failed before the approval given earlier could be applied; the ${tool.name} call did not run on ${request.host.name}.`,
               denialKind: "permission-rule",
             },
           };
         }
-        if (F !== undefined && F.decision.behavior !== "allow") {
-          if (F.interrupt) turnAbortControllerOf(toolUseContext.abortController).abort();
-          y = F.decision;
+        if (hookOutcome !== undefined && hookOutcome.decision.behavior !== "allow") {
+          if (hookOutcome.interrupt) turnAbortControllerOf(toolUseContext.abortController).abort();
+          decision = hookOutcome.decision;
         } else
-          y = permissionPromptToolResultToPermissionDecision(
-            E.answers,
-            E.result,
-            M,
-            A,
+          decision = permissionPromptToolResultToPermissionDecision(
+            inherited.answers,
+            inherited.result,
+            toolForAsk,
+            askInput,
             {
               ...toolUseContext,
-              abortController: w,
+              abortController: scopedAbort,
             },
-            M,
+            toolForAsk,
             hostAllowRules === undefined,
             false,
           );
       }
     } finally {
-      L();
+      releasePark();
     }
-    if (y.behavior === "allow") {
-      let F =
-        y.decisionReason?.type === "permissionPromptTool"
-          ? permissionPromptResultSchemaRefusing().safeParse(y.decisionReason.toolResult).data
+    if (decision.behavior === "allow") {
+      let toolResult =
+        decision.decisionReason?.type === "permissionPromptTool"
+          ? permissionPromptResultSchemaRefusing().safeParse(decision.decisionReason.toolResult).data
           : undefined;
-      h.noteCard({
+      request.noteCard({
         standingRow,
         chosen:
           hostAllowRules !== undefined &&
-          F?.behavior === "allow" &&
-          F.updatedPermissions?.some(
+          toolResult?.behavior === "allow" &&
+          toolResult.updatedPermissions?.some(
             (updatedPermission) =>
               updatedPermission.type === "addRules" && updatedPermission.behavior === "allow",
           ) === true,
       });
-      let updatedInput = y.updatedInput ?? {};
-      if (inputChangedByApproval(updatedInput, h, tool))
+      let updatedInput = decision.updatedInput ?? {};
+      if (inputChangedByApproval(updatedInput, request, tool))
         return {
           decision: "deny",
-          feedback: `the approval edited the call in a way that cannot apply on ${h.host.name} \u2014 nothing ran`,
+          feedback: `the approval edited the call in a way that cannot apply on ${request.host.name} \u2014 nothing ran`,
           insteadOfRejection: {
-            message: `The approval given in this session edited the ${tool.name} call in a way ${h.host.name} cannot honour (it named a different machine, or newly set a privileged field this session does not pass on in an edit); nothing ran.`,
+            message: `The approval given in this session edited the ${tool.name} call in a way ${request.host.name} cannot honour (it named a different machine, or newly set a privileged field this session does not pass on in an edit); nothing ran.`,
             denialKind: "permission-rule",
           },
         };
-      let te = [HOST_TOOL_INPUT_FIELD, ...isRunInBackground(tool, host)];
-      let ee = Uo(updatedInput, te);
-      let se = Object.keys(ee).length > 0 && !isDeepStrictEqual(ee, Uo(h.input, te));
+      let excludedKeys = [HOST_TOOL_INPUT_FIELD, ...isRunInBackground(tool, host)];
+      let editedInput = omitAlias(updatedInput, excludedKeys);
+      let inputChanged =
+        Object.keys(editedInput).length > 0 &&
+        !isDeepStrictEqual(editedInput, omitAlias(request.input, excludedKeys));
       return {
         decision: "allow",
         decidedBy:
-          y.decisionReason?.type === "hook"
+          decision.decisionReason?.type === "hook"
             ? "hook"
-            : y.decisionReason?.type === "permissionPromptTool"
+            : decision.decisionReason?.type === "permissionPromptTool"
               ? "host_prompt"
               : "prompt",
         raisedInPlanMode,
-        ...(se && {
-          updatedInput: ee,
+        ...(inputChanged && {
+          updatedInput: editedInput,
         }),
-        ...(y.acceptFeedback !== undefined && {
-          feedback: y.acceptFeedback,
+        ...(decision.acceptFeedback !== undefined && {
+          feedback: decision.acceptFeedback,
         }),
       };
     }
-    if (y.behavior === "deny" && y.decisionReason?.type === "hook")
+    if (decision.behavior === "deny" && decision.decisionReason?.type === "hook")
       return {
         decision: "deny",
         insteadOfRejection: {
-          message: y.message,
+          message: decision.message,
           denialKind: "permission-rule",
         },
       };
-    if (isSameDecision(y, O))
+    if (isSameDecision(decision, forcedAsk))
       return {
         decision: "deny",
         insteadOfRejection: {
-          message: `${h.host.name} asked before running this call and this session had no way to put the question to anyone; the call was not run. Ask the user how to proceed rather than retrying.`,
+          message: `${request.host.name} asked before running this call and this session had no way to put the question to anyone; the call was not run. Ask the user how to proceed rather than retrying.`,
           denialKind: "permission-rule",
         },
       };
-    let I = y.behavior === "ask" ? trimmedOrUndefined(y.userFeedback) : usesPermissionPromptTool(y);
+    let feedback =
+      decision.behavior === "ask"
+        ? trimmedOrUndefined(decision.userFeedback)
+        : usesPermissionPromptTool(decision);
     if (
-      y.behavior === "deny" &&
-      y.decisionReason?.type === "other" &&
-      isCanUseToolFailureReason(y.decisionReason.reason)
+      decision.behavior === "deny" &&
+      decision.decisionReason?.type === "other" &&
+      isCanUseToolFailureReason(decision.decisionReason.reason)
     )
       return {
         decision: "unanswerable",
-        message: y.message,
+        message: decision.message,
       };
-    if (y.behavior === "deny" && I === undefined && y.decisionReason?.type === "other")
+    if (decision.behavior === "deny" && feedback === undefined && decision.decisionReason?.type === "other")
       return {
         decision: "deny",
         insteadOfRejection: {
-          message: y.message,
+          message: decision.message,
           denialKind: "permission-rule",
         },
       };
     return {
       decision: "deny",
-      ...(I !== undefined && {
-        feedback: I,
+      ...(feedback !== undefined && {
+        feedback,
       }),
     };
   };
@@ -412,24 +418,24 @@ function createRemoteApprover({
 /**
  * 判断该权限模式是否算「已授权」：自动分类器生效或 bypassPermissions（plan 需开关）。
  */
-function modeAllowsClassifierBypass(e) {
-  if (e === "plan" && !isPlanClassifierArmOn()) return false;
-  return isAutoClassifierActive(e) || e === "bypassPermissions";
+function modeAllowsClassifierBypass(mode) {
+  if (mode === "plan" && !isPlanClassifierArmOn()) return false;
+  return isAutoClassifierActive(mode) || mode === "bypassPermissions";
 }
 //@ chunk-dtv8x2hx.js:86119-86403 placement
-function hostRulesContext(e, n) {
-  let hostRules = e.hostRules;
+function hostRulesContext(request, honourAllow) {
+  let hostRules = request.hostRules;
   if (hostRules === undefined) return;
-  let r = {
-    host: e.host.name,
-    allow: n ? (hostRules.allow ?? []) : [],
+  let rules = {
+    host: request.host.name,
+    allow: honourAllow ? (hostRules.allow ?? []) : [],
     softDeny: hostRules.soft_deny ?? [],
     hardDeny: hostRules.hard_deny ?? [],
-    environment: n ? (hostRules.environment ?? []) : [],
+    environment: honourAllow ? (hostRules.environment ?? []) : [],
   };
-  return [r.allow, r.softDeny, r.hardDeny, r.environment].some((s) => s.length > 0)
+  return [rules.allow, rules.softDeny, rules.hardDeny, rules.environment].some((list) => list.length > 0)
     ? {
-        hostRules: r,
+        hostRules: rules,
       }
     : undefined;
 }
@@ -466,7 +472,7 @@ async function classifyRemoteCall({
       kind: "no_verdict",
     };
   }
-  let w = {
+  let askRequest = {
     host: request.host,
     spelledDirectory: displayWorkingDir(leaseOfMachine(host).working_dir),
     input: request.input,
@@ -475,122 +481,124 @@ async function classifyRemoteCall({
     hostRules: request.hostRules,
   };
   let now = Date.now();
-  let S = {
+  let ruleCounts = {
     host_rules_hard_deny: request.hostRules?.hard_deny?.length ?? 0,
     host_rules_soft_deny: request.hostRules?.soft_deny?.length ?? 0,
     host_rules_environment: request.hostRules?.environment?.length ?? 0,
     host_rules_allow: request.hostRules?.allow?.length ?? 0,
     host_rules_allow_honoured: honourHostAllowRules,
   };
-  let A;
-  let R = false;
-  let T = speculationFields(speculation !== undefined, undefined, undefined);
-  using O = new CommitTurnSlot();
+  let speculationState;
+  let usedSpeculation = false;
+  let speculationFlags = speculationFields(speculation !== undefined, undefined, undefined);
+  using turnSlot = new CommitTurnSlot();
   try {
-    A = speculation?.claim();
-    let x =
-      A === undefined ? undefined : describeAskChange(A, w, tool, toolUseContext, toolPermissionContext);
-    T = speculationFields(speculation !== undefined, A, x);
+    speculationState = speculation?.claim();
+    let discardReason =
+      speculationState === undefined
+        ? undefined
+        : describeAskChange(speculationState, askRequest, tool, toolUseContext, toolPermissionContext);
+    speculationFlags = speculationFields(speculation !== undefined, speculationState, discardReason);
     if (speculation !== undefined)
-      toolUseContext.toolState.get(RemoteAskMemory).remember(request.host.name, tool.name, w);
-    if (A !== undefined && x !== undefined) {
+      toolUseContext.toolState.get(RemoteAskMemory).remember(request.host.name, tool.name, askRequest);
+    if (speculationState !== undefined && discardReason !== undefined) {
       speculation?.discard();
-      A.run.leaveRecordToRerun();
+      speculationState.run.leaveRecordToRerun();
       forgetClassifierContext(toolUseId);
       logSpeculationUsage({
-        reason: x,
-        early: A,
+        reason: discardReason,
+        early: speculationState,
         stepReportsTheDrop: true,
         toolUseContext,
         toolUseId,
       });
     }
-    R = A !== undefined && x === undefined;
-    let M =
-      A !== undefined && x === undefined
-        ? A.run
+    usedSpeculation = speculationState !== undefined && discardReason === undefined;
+    let askRun =
+      speculationState !== undefined && discardReason === undefined
+        ? speculationState.run
         : formatRemoteAskReason({
             tool,
-            request: w,
+            request: askRequest,
             toolUseContext,
             toolUseId,
             honourHostAllowRules,
             signal: toolUseContext.abortController.signal,
-            commitTurn: O,
+            commitTurn: turnSlot,
             startedAhead: false,
-            rerunOfStoppedCall: A !== undefined,
+            rerunOfStoppedCall: speculationState !== undefined,
           });
-    if (R) resetClassifierCache(toolUseContext, w, honourHostAllowRules, O);
-    let classification = await M.result;
-    let D = M.queueStats();
+    if (usedSpeculation) resetClassifierCache(toolUseContext, askRequest, honourHostAllowRules, turnSlot);
+    let classifierResult = await askRun.result;
+    let queueStats = askRun.queueStats();
     let queueCommitWaitMs;
-    let L = isCountedClassifierBlock(classification) ? O.reached() : undefined;
-    if (L !== undefined) {
+    let commitWait = isCountedClassifierBlock(classifierResult) ? turnSlot.reached() : undefined;
+    if (commitWait !== undefined) {
       let now = Date.now();
-      await L;
+      await commitWait;
       queueCommitWaitMs = Date.now() - now;
     }
     let toolPermissionContext_2 = getToolPermissionContext(toolUseContext);
-    let I =
+    let modeLeft =
       !modeAllowsClassifierBypass(toolPermissionContext_2.mode) ||
       toolPermissionContext_2.mode !== toolPermissionContext.mode ||
       (toolPermissionContext_2.mode === "plan" && !isAutoModeCapableHost(host));
-    let F = isAskOnMutationTool(tool.name, toolUseContext.getProactivityLevel());
-    let Y =
-      I ||
-      F ||
-      classification.unavailable ||
-      classification.transcriptTooLong ||
-      classification.refusedBySafeguard ||
-      classification.failureMode !== undefined
+    let askLevelRaised = isAskOnMutationTool(tool.name, toolUseContext.getProactivityLevel());
+    let decision =
+      modeLeft ||
+      askLevelRaised ||
+      classifierResult.unavailable ||
+      classifierResult.transcriptTooLong ||
+      classifierResult.refusedBySafeguard ||
+      classifierResult.failureMode !== undefined
         ? "no_verdict"
-        : classification.shouldBlock
+        : classifierResult.shouldBlock
           ? "block"
           : isChainOnAllowActive()
             ? "no_verdict"
             : "allow";
-    let te = I
+    let cause = modeLeft
       ? "mode_left"
-      : F
+      : askLevelRaised
         ? "ask_level_raised"
-        : classification.transcriptTooLong
+        : classifierResult.transcriptTooLong
           ? "too_long"
-          : classification.refusedBySafeguard
+          : classifierResult.refusedBySafeguard
             ? "refused"
-            : classification.unavailable
+            : classifierResult.unavailable
               ? "unavailable"
-              : classification.failureMode !== undefined
+              : classifierResult.failureMode !== undefined
                 ? "unparseable"
-                : !classification.shouldBlock && isChainOnAllowActive()
+                : !classifierResult.shouldBlock && isChainOnAllowActive()
                   ? "chain_on_allow"
                   : "verdict";
     logEvent("tengu_remote_tool_classifier", {
-      decision: fromEnum(Y),
-      cause: fromEnum(te),
+      decision: fromEnum(decision),
+      cause: fromEnum(cause),
       headless: toolPermissionContext_2.shouldAvoidPermissionPrompts === true,
       duration_ms: Date.now() - now,
       tool_use_id: sanitizeMarkName(toolUseId),
-      ...S,
-      ...(D?.overlap !== undefined && {
-        queue_depth: D.queueDepth,
-        queue_wait_ms: D.queueWaitMs,
+      ...ruleCounts,
+      ...(queueStats?.overlap !== undefined && {
+        queue_depth: queueStats.queueDepth,
+        queue_wait_ms: queueStats.queueWaitMs,
         queue_overlap_enabled: true,
-        queue_in_flight_at_start: D.overlap.inFlightAtStart,
-        queue_overlapped: D.overlap.overlapped,
-        queue_released_by_escalation: D.overlap.releasedByEscalation,
+        queue_in_flight_at_start: queueStats.overlap.inFlightAtStart,
+        queue_overlapped: queueStats.overlap.overlapped,
+        queue_released_by_escalation: queueStats.overlap.releasedByEscalation,
         queue_commit_wait_ms: queueCommitWaitMs,
       }),
-      ...T,
-      ...classifierUsageFields(classification),
+      ...speculationFlags,
+      ...classifierUsageFields(classifierResult),
     });
     if (toolUseContext.abortController.signal.aborted) throw new AbortError();
-    if (Y === "allow") {
-      O.runInTurn(() => recordAutoModeSuccess(toolUseContext));
+    if (decision === "allow") {
+      turnSlot.runInTurn(() => recordAutoModeSuccess(toolUseContext));
       return {
         kind: "allow",
       };
     }
-    if (Y === "block") {
+    if (decision === "block") {
       if (
         enforceAutoModeDenialLimits(
           toolUseContext,
@@ -605,19 +613,19 @@ async function classifyRemoteCall({
         };
       return {
         kind: "block",
-        message: buildYoloRejectionMessage(classification.reason, {
+        message: buildYoloRejectionMessage(classifierResult.reason, {
           autoModeConsentFlow: isAutoModeConsentFlowEnabled(toolUseContext.agentId),
           blockedHelp: autoModeBlockedHelp(toolUseContext.agentId),
         }),
         denialKind: "automode-blocked",
       };
     }
-    if (I || F)
+    if (modeLeft || askLevelRaised)
       return {
         kind: "no_verdict",
       };
     let shouldAvoidPermissionPrompts = toolPermissionContext_2.shouldAvoidPermissionPrompts;
-    if (classification.transcriptTooLong) {
+    if (classifierResult.transcriptTooLong) {
       if (shouldAvoidPermissionPrompts)
         throw new AbortError(
           "Agent aborted: auto mode classifier transcript exceeded context window in headless mode",
@@ -626,32 +634,32 @@ async function classifyRemoteCall({
         kind: "no_verdict",
       };
     }
-    if (classification.refusedBySafeguard) {
+    if (classifierResult.refusedBySafeguard) {
       if (shouldAvoidPermissionPrompts)
         throw new AbortError(
           "Agent aborted: auto mode classifier request refused by the safety safeguard in headless mode",
         );
       return {
         kind: "block",
-        message: buildClassifierRefusedOrTransientGuidance(classification.reason, {
+        message: buildClassifierRefusedOrTransientGuidance(classifierResult.reason, {
           refused: true,
         }),
         denialKind: "automode-unavailable",
       };
     }
-    if (classification.unavailable)
+    if (classifierResult.unavailable)
       return {
         kind: "block",
         message: buildClassifierUnavailableMessage(
           tool.name,
-          classification.model,
-          classification.httpStatus,
-          classification.errorKind,
-          classification.retryAfterMs,
+          classifierResult.model,
+          classifierResult.httpStatus,
+          classifierResult.errorKind,
+          classifierResult.retryAfterMs,
         ),
         denialKind: "automode-unavailable",
       };
-    if (classification.failureMode !== undefined) {
+    if (classifierResult.failureMode !== undefined) {
       if (
         enforceAutoModeDenialLimits(
           toolUseContext,
@@ -666,7 +674,7 @@ async function classifyRemoteCall({
         };
       return {
         kind: "block",
-        message: buildClassifierRefusedOrTransientGuidance(classification.reason, {
+        message: buildClassifierRefusedOrTransientGuidance(classifierResult.reason, {
           refused: false,
         }),
         denialKind: "automode-parsing-error",
@@ -684,29 +692,29 @@ async function classifyRemoteCall({
       headless: getToolPermissionContext(toolUseContext).shouldAvoidPermissionPrompts === true,
       duration_ms: Date.now() - now,
       tool_use_id: sanitizeMarkName(toolUseId),
-      ...S,
-      ...T,
+      ...ruleCounts,
+      ...speculationFlags,
     });
     return {
       kind: "no_verdict",
     };
   } finally {
-    if (A !== undefined && !R) speculation?.discard();
+    if (speculationState !== undefined && !usedSpeculation) speculation?.discard();
   }
 }
 //@ chunk-dtv8x2hx.js:90201-90408 placement
-function speculationFields(e, n, o) {
-  if (!e) return {};
-  return n === undefined
+function speculationFields(speculated, speculationState, discardReason) {
+  if (!speculated) return {};
+  return speculationState === undefined
     ? {
         speculative: false,
       }
     : {
         speculative: true,
-        speculative_used: o === undefined,
-        speculative_discard_reason: fromEnumOpt(o),
-        speculative_lead_ms: n.leadMs,
-        speculative_ready_ms: n.readyMs,
+        speculative_used: discardReason === undefined,
+        speculative_discard_reason: fromEnumOpt(discardReason),
+        speculative_lead_ms: speculationState.leadMs,
+        speculative_ready_ms: speculationState.readyMs,
       };
 }
 //@ chunk-dtv8x2hx.js:90408-91083 placement
@@ -734,7 +742,7 @@ function classifierUsageFields(classification) {
 }
 //@ chunk-dtv8x2hx.js:91083-91477 placement
 function logSpeculationUsage({ reason, early, stepReportsTheDrop, toolUseContext, toolUseId }) {
-  let u = {
+  let context = {
     reason,
     early,
     toolUseContext,
@@ -744,35 +752,35 @@ function logSpeculationUsage({ reason, early, stepReportsTheDrop, toolUseContext
     early.run.result
       .then(
         (classification) =>
-          logRemoteToolClassifier(u, "speculation_unused", classifierUsageFields(classification)),
-        () => logRemoteToolClassifier(u, "speculation_unused", {}),
+          logRemoteToolClassifier(context, "speculation_unused", classifierUsageFields(classification)),
+        () => logRemoteToolClassifier(context, "speculation_unused", {}),
       )
       .catch(() => {});
     return;
   }
-  if (!stepReportsTheDrop) logRemoteToolClassifier(u, "speculation_unused", {});
+  if (!stepReportsTheDrop) logRemoteToolClassifier(context, "speculation_unused", {});
   early.run.result
     .then((classification) => {
       if (classification.usage !== undefined)
-        logRemoteToolClassifier(u, "speculation_usage", classifierUsageFields(classification));
+        logRemoteToolClassifier(context, "speculation_usage", classifierUsageFields(classification));
     })
     .catch(() => {});
 }
 //@ chunk-dtv8x2hx.js:91477-91889 placement
-function logRemoteToolClassifier({ reason, early, toolUseContext, toolUseId }, s, u) {
+function logRemoteToolClassifier({ reason, early, toolUseContext, toolUseId }, cause, extraFields) {
   logEvent("tengu_remote_tool_classifier", {
     decision: fromEnum("no_verdict"),
-    cause: fromEnum(s),
+    cause: fromEnum(cause),
     headless: getToolPermissionContext(toolUseContext).shouldAvoidPermissionPrompts === true,
     duration_ms: early.leadMs,
     tool_use_id: sanitizeMarkName(toolUseId),
     speculative: true,
     speculative_used: false,
     speculative_discard_reason: fromEnum(reason),
-    speculative_settled: s === "speculation_usage" || early.settled,
+    speculative_settled: cause === "speculation_usage" || early.settled,
     speculative_lead_ms: early.leadMs,
     speculative_ready_ms: early.readyMs,
-    ...u,
+    ...extraFields,
   });
 }
 //@ chunk-dtv8x2hx.js:91889-92009 placement
@@ -785,27 +793,31 @@ function shouldClassifyRemotely(tool, host, toolUseContext, mode) {
   );
 }
 //@ chunk-dtv8x2hx.js:92009-92294 placement
-function classifierTranscript(e, n) {
-  let o = isModelDrivenSession(n.agentId);
-  let r = prependInheritedVerifiedTurns(n.messages, n.inheritedVerifiedHumanTurns, o);
+function classifierTranscript(tool, toolUseContext) {
+  let isSubagentLoop = isModelDrivenSession(toolUseContext.agentId);
+  let prepared = prependInheritedVerifiedTurns(
+    toolUseContext.messages,
+    toolUseContext.inheritedVerifiedHumanTurns,
+    isSubagentLoop,
+  );
   return {
-    messages: [...r.messages, ...(n.sameTurnToolUses ?? [])],
-    isSubagentLoop: o,
-    inheritedPrefix: r.inheritedPrefix,
-    registry: n.options.tools.some((tool) => toolMatchesName(tool, e.name))
-      ? n.options.tools
-      : [...n.options.tools, e],
+    messages: [...prepared.messages, ...(toolUseContext.sameTurnToolUses ?? [])],
+    isSubagentLoop,
+    inheritedPrefix: prepared.inheritedPrefix,
+    registry: toolUseContext.options.tools.some((tool_2) => toolMatchesName(tool_2, tool.name))
+      ? toolUseContext.options.tools
+      : [...toolUseContext.options.tools, tool],
   };
 }
 //@ chunk-dtv8x2hx.js:92294-92399 placement
-function classifierCacheKey(e, n, o) {
-  let r = hostRulesContext(e, n);
+function classifierCacheKey(request, honourAllow, commitTurn) {
+  let hostCtx = hostRulesContext(request, honourAllow);
   return {
-    ...(o !== undefined && {
-      commitTurn: o,
+    ...(commitTurn !== undefined && {
+      commitTurn,
     }),
-    ...(r !== undefined && {
-      cachePrefix: jsonStringify(r),
+    ...(hostCtx !== undefined && {
+      cachePrefix: jsonStringify(hostCtx),
     }),
   };
 }
@@ -813,12 +825,12 @@ function classifierCacheKey(e, n, o) {
 /**
  * 以当前分类器缓存键重置分类器缓存（实际不等待任何工作）。
  */
-function resetClassifierCache(toolUseContext, n, honourHostAllowRules, r) {
+function resetClassifierCache(toolUseContext, request, honourAllow, commitTurn) {
   enqueueClassifierRequest(
     toolUseContext.agentId ?? "main",
     () => Promise.resolve(),
     undefined,
-    classifierCacheKey(n, honourHostAllowRules, r),
+    classifierCacheKey(request, honourAllow, commitTurn),
   );
 }
 //@ chunk-dtv8x2hx.js:92482-92495 placement
@@ -838,52 +850,52 @@ function formatRemoteAskReason({
   startedAhead,
   rerunOfStoppedCall,
 }) {
-  let w = truncateToLength(
+  let reasonText = truncateToLength(
     `${request.message}${request.decisionReason === undefined ? "" : ` [${request.decisionReason}]`}`,
     MAX_ASK_REASON_CHARS,
   );
-  let k = `runs on ${request.host.name} (another machine, not this one) in ${request.spelledDirectory}; that machine's Claude Code gave this reason for asking (its words, unverified): "${w}"`;
+  let hostReason = `runs on ${request.host.name} (another machine, not this one) in ${request.spelledDirectory}; that machine's Claude Code gave this reason for asking (its words, unverified): "${reasonText}"`;
   let command = request.input.command;
   let toolNameForPermissionCheck = getToolNameForPermissionCheck(tool);
-  let R = formatActionForClassifier(
+  let action = formatActionForClassifier(
     tool.name,
     rememberHostContext(
       {
         ...request.input,
         [HOST_TOOL_INPUT_FIELD]: request.host.name,
         ...(toolNameForPermissionCheck && {
-          [HOST_CONTEXT_META_FIELD]: k,
+          [HOST_CONTEXT_META_FIELD]: hostReason,
         }),
         ...(typeof command === "string" && {
-          command: `# ${k}
+          command: `# ${hostReason}
 ${command}`,
         }),
       },
-      k,
+      hostReason,
     ),
     toolUseId,
   );
   let { messages, registry, isSubagentLoop, inheritedPrefix } = classifierTranscript(tool, toolUseContext);
   let sessionId = pinSessionId(getSessionId());
-  let D;
-  let X;
-  let L = false;
+  let ranUnder;
+  let queueStats;
+  let keepRecord = false;
   return {
     messages,
     registry,
     enqueuedInMode: getToolPermissionContext(toolUseContext).mode,
-    ranUnder: () => D,
-    queueStats: () => X,
+    ranUnder: () => ranUnder,
+    queueStats: () => queueStats,
     leaveRecordToRerun: () => {
-      L = true;
+      keepRecord = true;
     },
     result: enqueueClassifierRequest(
       toolUseContext.agentId ?? "main",
       (queueProgress) => {
         if (startedAhead && signal.aborted) throw new AbortError();
         if (rerunOfStoppedCall) forgetClassifierContext(toolUseId);
-        D = getToolPermissionContext(toolUseContext);
-        let I = classifyYoloAction(messages, R, registry, D, signal, {
+        ranUnder = getToolPermissionContext(toolUseContext);
+        let classification = classifyYoloAction(messages, action, registry, ranUnder, signal, {
           localClassifierSite: "remoteDispatch",
           isSubagentLoop,
           inheritedPrefix,
@@ -897,13 +909,13 @@ ${command}`,
           ...hostRulesContext(request, honourHostAllowRules),
         });
         return startedAhead
-          ? I.finally(() => {
-              if (signal.aborted && !L) forgetClassifierContext(toolUseId);
+          ? classification.finally(() => {
+              if (signal.aborted && !keepRecord) forgetClassifierContext(toolUseId);
             })
-          : I;
+          : classification;
       },
-      (y) => {
-        X = y;
+      (stats) => {
+        queueStats = stats;
       },
       classifierCacheKey(request, honourHostAllowRules, commitTurn),
     ),
@@ -917,10 +929,10 @@ function createEarlyCheckRunner({ tool, host, toolUseContext, toolUseId, honourH
   return new EarlyCheckRunner({
     turn: toolUseContext.abortController,
     start: (call, signal) => {
-      let i = toolUseContext.toolState.get(RemoteAskMemory).recall(call.host.name, tool.name);
+      let recalled = toolUseContext.toolState.get(RemoteAskMemory).recall(call.host.name, tool.name);
       let runsInBackground = isRunInBackground(tool, host);
       if (
-        i === undefined ||
+        recalled === undefined ||
         !shouldClassifyRemotely(tool, host, toolUseContext, getToolPermissionContext(toolUseContext).mode) ||
         unsupportedFieldRefusal(call.input, runsInBackground, call.host.name) !== undefined
       )
@@ -929,7 +941,7 @@ function createEarlyCheckRunner({ tool, host, toolUseContext, toolUseId, honourH
         host: call.host,
         spelledDirectory: displayWorkingDir(leaseOfMachine(host).working_dir),
         input: withoutEditKeys(call.input, runsInBackground),
-        ...i,
+        ...recalled,
       };
       return {
         predicted,
@@ -959,45 +971,45 @@ function createEarlyCheckRunner({ tool, host, toolUseContext, toolUseId, honourH
   });
 }
 //@ chunk-dtv8x2hx.js:94325-94656 placement
-function describeAskChange(e, n, tool, toolUseContext, toolPermissionContext) {
-  if (!isDeepStrictEqual(e.predicted.input, n.input)) return "input_changed";
-  if (!isDeepStrictEqual(e.predicted, n)) return "ask_changed";
-  let u = e.run.ranUnder();
-  let p = classifierTranscript(tool, toolUseContext);
+function describeAskChange(speculation, askRequest, tool, toolUseContext, toolPermissionContext) {
+  if (!isDeepStrictEqual(speculation.predicted.input, askRequest.input)) return "input_changed";
+  if (!isDeepStrictEqual(speculation.predicted, askRequest)) return "ask_changed";
+  let ranUnder = speculation.run.ranUnder();
+  let transcript = classifierTranscript(tool, toolUseContext);
   if (
-    e.run.enqueuedInMode !== toolPermissionContext.mode ||
-    (u !== undefined && !isDeepStrictEqual(u, toolPermissionContext)) ||
-    !sameSequence(e.run.messages, p.messages) ||
-    !sameSequence(e.run.registry, p.registry)
+    speculation.run.enqueuedInMode !== toolPermissionContext.mode ||
+    (ranUnder !== undefined && !isDeepStrictEqual(ranUnder, toolPermissionContext)) ||
+    !sameSequence(speculation.run.messages, transcript.messages) ||
+    !sameSequence(speculation.run.registry, transcript.registry)
   )
     return "context_changed";
-  return e.leadMs > ASK_LEAD_STALE_MS ? "stale" : undefined;
+  return speculation.leadMs > ASK_LEAD_STALE_MS ? "stale" : undefined;
 }
 //@ chunk-dtv8x2hx.js:94656-94726 placement
 /**
  * 判断两个数组是否逐项相等（用于检测上下文是否变化）。
  */
-function sameSequence(e, n) {
-  return e.length === n.length && e.every((o, r) => o === n[r]);
+function sameSequence(left, right) {
+  return left.length === right.length && left.every((value, index) => value === right[index]);
 }
 //@ chunk-dtv8x2hx.js:94726-94737 placement
 var MAX_ASK_REASON_CHARS = 300;
 //@ chunk-dtv8x2hx.js:94737-94934 placement
-function usesPermissionPromptTool(e) {
-  let trimmed = e.message.trim();
-  for (let o of [REJECT_MESSAGE_WITH_REASON_PREFIX, SUBAGENT_REJECT_MESSAGE_WITH_REASON_PREFIX])
-    if (trimmed.startsWith(o.trim())) return trimmedOrUndefined(trimmed.slice(o.trim().length));
-  return e.decisionReason?.type === "permissionPromptTool" && trimmed !== USER_DENIED_PERMISSION_MESSAGE
-    ? trimmedOrUndefined(trimmed)
+function usesPermissionPromptTool(decision) {
+  let text = decision.message.trim();
+  for (let prefix of [REJECT_MESSAGE_WITH_REASON_PREFIX, SUBAGENT_REJECT_MESSAGE_WITH_REASON_PREFIX])
+    if (text.startsWith(prefix.trim())) return trimmedOrUndefined(text.slice(prefix.trim().length));
+  return decision.decisionReason?.type === "permissionPromptTool" && text !== USER_DENIED_PERMISSION_MESSAGE
+    ? trimmedOrUndefined(text)
     : undefined;
 }
 //@ chunk-dtv8x2hx.js:94934-94992 placement
 /**
  * 去掉字符串首尾空白，空串返回 undefined。
  */
-function trimmedOrUndefined(e) {
-  let n = e?.trim() ?? "";
-  return n === "" ? undefined : n;
+function trimmedOrUndefined(text) {
+  let trimmed = text?.trim() ?? "";
+  return trimmed === "" ? undefined : trimmed;
 }
 //@ chunk-dtv8x2hx.js:94992-95024 placement
 var USER_DENIED_PERMISSION_MESSAGE = "User denied permission";
@@ -1017,40 +1029,40 @@ async function* executeRemoteToolUse({
   if (route.kind === "error") {
     if (!toolUseContext.abortController.signal.aborted)
       logRemoteForward(tool, "executor", route.code, toolUse.id);
-    let i = toolUseContext.toolState.get(ServedCallRegistry);
-    let h = i.adopted(toolUse.id);
-    if (h !== undefined) {
-      i.takeAdopted(toolUse.id);
-      i.remove(toolUse.id);
+    let registry = toolUseContext.toolState.get(ServedCallRegistry);
+    let adopted = registry.adopted(toolUse.id);
+    if (adopted !== undefined) {
+      registry.takeAdopted(toolUse.id);
+      registry.remove(toolUse.id);
       logEvent("tengu_remote_tool_restart_adoption_unroutable", {
         where: lit("route_error"),
         route_code: fromEnum(route.code),
-        parked_at_restart: h.parkedAtRestart === true,
+        parked_at_restart: adopted.parkedAtRestart === true,
       });
     }
-    let w =
-      h === undefined
+    let message =
+      adopted === undefined
         ? route.message
         : restartNoticeFor(
             {
-              host: h.host,
+              host: adopted.host,
             },
-            h,
+            adopted,
           );
-    if (h !== undefined && !h.parkedAtRestart && !toolUseContext.abortController.signal.aborted)
+    if (adopted !== undefined && !adopted.parkedAtRestart && !toolUseContext.abortController.signal.aborted)
       try {
         let input = toolUse.input;
         toolUseContext.toolState.get(RemoteCallLedger).gaveUp({
           callId: toolUse.id,
           agentId: toolUseContext.agentId,
-          hostName: h.host,
+          hostName: adopted.host,
           toolName: tool.name,
           wireToolName: tool.mcpInfo?.toolName ?? tool.name,
           spelled: primaryInputPath(typeof input === "object" && input !== null ? input : {}),
           toldAs: "delivery_unknown",
           machineHadCall: false,
           transport: undefined,
-          dispatchEpoch: h.host_epoch,
+          dispatchEpoch: adopted.host_epoch,
           standing: false,
           givenUpAt: Date.now(),
         });
@@ -1073,8 +1085,8 @@ async function* executeRemoteToolUse({
             now,
           })
         : createUserMessage({
-            content: [toolUseErrorResult(w, toolUse.id)],
-            toolUseResult: `Error: ${w}`,
+            content: [toolUseErrorResult(message, toolUse.id)],
+            toolUseResult: `Error: ${message}`,
             sourceToolAssistantUUID: assistantMessage.uuid,
             now,
           }),
@@ -1090,27 +1102,27 @@ async function* executeRemoteToolUse({
     },
   };
   try {
-    let i = new Stream();
-    let h = toolUseContext.agentId
+    let events = new Stream();
+    let stopHeartbeat = toolUseContext.agentId
       ? () => {}
       : emitToolHeartbeat({
           toolName: tool.name,
           toolUseID: toolUse.id,
           abortSignal: toolUseContext.abortController.signal,
-          onProgress: (T) => {
-            if (T.type === "progress")
-              i.enqueue({
+          onProgress: (event) => {
+            if (event.type === "progress")
+              events.enqueue({
                 message: createProgressMessage({
-                  toolUseID: T.toolUseID,
-                  parentToolUseID: T.parentToolUseID ?? toolUse.id,
-                  data: T.data,
+                  toolUseID: event.toolUseID,
+                  parentToolUseID: event.parentToolUseID ?? toolUse.id,
+                  data: event.data,
                   now,
                 }),
               });
           },
         });
     startSessionActivity("tool_exec", REMOTE_TOOL_HOST);
-    let w = handleRemoteBackgroundCommand(
+    let call = handleRemoteBackgroundCommand(
       tool,
       route,
       "executor",
@@ -1122,7 +1134,7 @@ async function* executeRemoteToolUse({
       canUseTool,
       assistantMessage,
       (text, timeoutMs = STATUS_NOTIFICATION_TIMEOUT_MS) =>
-        i.enqueue({
+        events.enqueue({
           type: "notification",
           notification: {
             key: `remote-tool-status-${toolUse.id}`,
@@ -1132,7 +1144,7 @@ async function* executeRemoteToolUse({
           },
         }),
       (text) =>
-        i.enqueue({
+        events.enqueue({
           type: "notification",
           notification: {
             key: `remote-tool-notice-${toolUse.id}`,
@@ -1143,37 +1155,41 @@ async function* executeRemoteToolUse({
         }),
     ).finally(() => {
       endActivity("tool_exec", REMOTE_TOOL_HOST);
-      h();
-      i.done();
+      stopHeartbeat();
+      events.done();
     });
-    w.catch(() => {});
-    for await (let T of i) yield T;
-    let k = await w;
+    call.catch(() => {});
+    for await (let event of events) yield event;
+    let result = await call;
     yield {
       message: await buildRemoteToolResultMessage({
         tool,
-        origin: k.remoteOrigin,
+        origin: result.remoteOrigin,
         toolUseId: toolUse.id,
         assistantMessage,
         toolUseContext,
         now,
       }),
     };
-    let disposition = k.remoteOrigin.disposition;
-    let A = shellOutputShownAbove(tool, k.remoteOrigin);
-    let R = formatCompletedOnHost(tool, k.remoteOrigin);
+    let disposition = result.remoteOrigin.disposition;
+    let shellOutput = shellOutputShownAbove(tool, result.remoteOrigin);
+    let completedLine = formatCompletedOnHost(tool, result.remoteOrigin);
     yield {
       message: createAttachmentMessage({
         type: "tool_host_result_lines",
         toolUseID: toolUse.id,
-        host: machineLabelForMessage(k.remoteOrigin.host.name),
-        lines: [...(A ? [A] : []), ...(R ? [R] : []), ...formatTruncatedResult(tool, k.remoteOrigin)],
-        label: unverifiedAnswerWithOutput(tool, k.remoteOrigin),
-        ...(k.remoteOrigin.envelope !== "present" && {
+        host: machineLabelForMessage(result.remoteOrigin.host.name),
+        lines: [
+          ...(shellOutput ? [shellOutput] : []),
+          ...(completedLine ? [completedLine] : []),
+          ...formatTruncatedResult(tool, result.remoteOrigin),
+        ],
+        label: unverifiedAnswerWithOutput(tool, result.remoteOrigin),
+        ...(result.remoteOrigin.envelope !== "present" && {
           unverified: true,
         }),
-        ...(k.remoteOrigin.host.working_dir && {
-          workingDir: k.remoteOrigin.host.working_dir,
+        ...(result.remoteOrigin.host.working_dir && {
+          workingDir: result.remoteOrigin.host.working_dir,
         }),
         ...(disposition !== undefined && {
           disposition,
@@ -1216,25 +1232,25 @@ async function buildRemoteToolResultMessage({
   toolUseContext,
   now,
 }) {
-  let p = await processToolResultBlock(
+  let content = await processToolResultBlock(
     buildRemoteToolResultBlock(tool, origin, toolUseId),
     tool,
     getOriginalCwd(toolUseContext.session),
     toolUseContext.storageV5,
   );
-  let i = denialKindOf(origin.disposition);
+  let denialKind = denialKindOf(origin.disposition);
   return createUserMessage({
-    content: [p],
+    content: [content],
     toolUseResult:
       toolUseContext.agentId &&
       !toolUseContext.preserveToolUseResults &&
       !tool.preserveToolUseResultInSubagents
         ? undefined
         : (remoteStructuredOutput(tool, origin) ?? remoteResultTextOf(origin)),
-    ...(i && {
-      toolDenialKind: i,
+    ...(denialKind && {
+      toolDenialKind: denialKind,
     }),
-    toolDenialFromHost: i !== undefined ? true : undefined,
+    toolDenialFromHost: denialKind !== undefined ? true : undefined,
     sourceToolAssistantUUID: assistantMessage.uuid,
     now,
   });
@@ -1260,17 +1276,17 @@ function toolResultForCancel({ outcome, toolUseId, assistantMessage, signal, now
       });
     }
     case "interrupted": {
-      let u = abortReasonToToolMessage(signal);
+      let text = abortReasonToToolMessage(signal);
       return createUserMessage({
         content: [
           {
             type: "tool_result",
-            content: u,
+            content: text,
             is_error: true,
             tool_use_id: toolUseId,
           },
         ],
-        toolUseResult: u,
+        toolUseResult: text,
         toolDenialKind: "interrupted",
         interruptedByShutdown: shutdownInterruptStamp(signal),
         sourceToolAssistantUUID: assistantMessage.uuid,
@@ -1291,12 +1307,12 @@ function toolResultForCancel({ outcome, toolUseId, assistantMessage, signal, now
         now,
       });
     default: {
-      let u = denialKindOf_2(outcome);
+      let denialKind = denialKindOf_2(outcome);
       return createUserMessage({
         content: [toolUseErrorResult(outcome.message, toolUseId)],
         toolUseResult: `Error: ${outcome.message}`,
-        ...(u !== undefined && {
-          toolDenialKind: u,
+        ...(denialKind !== undefined && {
+          toolDenialKind: denialKind,
         }),
         sourceToolAssistantUUID: assistantMessage.uuid,
         now,
@@ -1396,17 +1412,17 @@ ${remoteResultText(remoteOrigin)}`,
 /**
  * 取远程结果的展示文本（对外导出的入口）。
  */
-function remoteResultTextOf(e) {
-  return remoteResultText(e);
+function remoteResultTextOf(origin) {
+  return remoteResultText(origin);
 }
 //@ chunk-dtv8x2hx.js:100273-100361 placement
 /**
  * 已运行且有信封时取内容文本，否则生成带说明的远程结果文本。
  */
-function remoteResultText(remoteOrigin) {
-  return isRanOutcome(remoteOrigin.disposition) && remoteOrigin.envelope === "present"
-    ? contentToText(remoteOrigin.content)
-    : remoteResultText_2(remoteOrigin, MAX_REMOTE_RESULT_CHARS);
+function remoteResultText(outcome) {
+  return isRanOutcome(outcome.disposition) && outcome.envelope === "present"
+    ? contentToText(outcome.content)
+    : remoteResultText_2(outcome, MAX_REMOTE_RESULT_CHARS);
 }
 //@ chunk-dtv8x2hx.js:100361-100373 placement
 var MAX_REMOTE_RESULT_CHARS = 2000;
@@ -1425,44 +1441,44 @@ function cancelMessage(outcome, signal) {
 /**
  * 把中断原因转成工具结果文案（回合中断或调用已结束）。
  */
-function abortReasonToToolMessage(e) {
-  return unwrapAbortReason(e.reason) === "turn-abort"
+function abortReasonToToolMessage(signal) {
+  return unwrapAbortReason(signal.reason) === "turn-abort"
     ? TOOL_CALL_ENDED_FOR_DELIVERY
     : INTERRUPT_MESSAGE_FOR_TOOL_USE;
 }
 //@ chunk-dtv8x2hx.js:100548-101255 placement
-function describeReconnectResult(e, remoteOrigin) {
-  let { name: o, working_dir: workingDir } = remoteOrigin.host;
-  let mapped = (remoteOrigin.notes ?? []).map((h) => sanitizeForPrompt(h, MAX_REMOTE_RESULT_CHARS));
-  let mapped_2 = (remoteOrigin.sessionNotes ?? []).map((h) => h.text);
-  let ranOn = workingDir === "" ? o : `${o}:${workingDir}`;
-  let i = {
-    ...(remoteOrigin.envelope === "present"
+function describeReconnectResult(result, outcome) {
+  let { name: hostName, working_dir: workingDir } = outcome.host;
+  let mapped = (outcome.notes ?? []).map((note) => sanitizeForPrompt(note, MAX_REMOTE_RESULT_CHARS));
+  let mapped_2 = (outcome.sessionNotes ?? []).map((note) => note.text);
+  let ranOn = workingDir === "" ? hostName : `${hostName}:${workingDir}`;
+  let fields = {
+    ...(outcome.envelope === "present"
       ? {
           ran_on: ranOn,
-          ...(remoteOrigin.permittedBy !== undefined && {
-            permitted_by: approvalSourcePhrase(remoteOrigin.permittedBy),
+          ...(outcome.permittedBy !== undefined && {
+            permitted_by: approvalSourcePhrase(outcome.permittedBy),
           }),
         }
       : {
-          answered_by: o,
+          answered_by: hostName,
           unverified: true,
         }),
-    ...(remoteOrigin.delivery !== "fresh" && {
+    ...(outcome.delivery !== "fresh" && {
       not_rerun: true,
     }),
-    ...(remoteOrigin.delivery === "after_reconnect" && {
+    ...(outcome.delivery === "after_reconnect" && {
       delivered_after_reconnect: true,
     }),
-    ...(remoteOrigin.truncated && {
+    ...(outcome.truncated && {
       truncated: true,
     }),
-    ...(remoteOrigin.spilled !== undefined && {
-      spilled_bytes: remoteOrigin.spilled.bytes,
+    ...(outcome.spilled !== undefined && {
+      spilled_bytes: outcome.spilled.bytes,
     }),
-    ...((remoteOrigin.cutHere === true ||
-      (!(isRanOutcome(remoteOrigin.disposition) && remoteOrigin.envelope === "present") &&
-        exceedsAnswerCharLimit(remoteOrigin))) && {
+    ...((outcome.cutHere === true ||
+      (!(isRanOutcome(outcome.disposition) && outcome.envelope === "present") &&
+        exceedsAnswerCharLimit(outcome))) && {
       cut_here: true,
     }),
     ...(mapped.length > 0 && {
@@ -1472,31 +1488,37 @@ function describeReconnectResult(e, remoteOrigin) {
       session_notes: mapped_2,
     }),
   };
-  return e !== null && typeof e === "object" && !Array.isArray(e)
+  return result !== null && typeof result === "object" && !Array.isArray(result)
     ? {
-        ...e,
-        ...i,
+        ...result,
+        ...fields,
       }
     : {
-        result: e,
-        ...i,
+        result,
+        ...fields,
       };
 }
 //@ chunk-dtv8x2hx.js:101255-101423 placement
-function inputChangedByApproval(updatedInput, n, tool) {
-  let r = updatedInput[HOST_TOOL_INPUT_FIELD];
-  let s = r !== undefined && r !== null && (typeof r !== "string" || r.trim() !== n.host.name);
+function inputChangedByApproval(updatedInput, request, tool) {
+  let target = updatedInput[HOST_TOOL_INPUT_FIELD];
+  let targetChanged =
+    target !== undefined &&
+    target !== null &&
+    (typeof target !== "string" || target.trim() !== request.host.name);
   let any = isRunInBackground(tool).some(
-    (p) => Boolean(updatedInput[p]) && !isDeepStrictEqual(updatedInput[p], n.input[p]),
+    (key) => Boolean(updatedInput[key]) && !isDeepStrictEqual(updatedInput[key], request.input[key]),
   );
-  return s || any;
+  return targetChanged || any;
 }
 //@ chunk-dtv8x2hx.js:101423-101593 placement
-function isRunInBackground(tool, host) {
+function isRunInBackground(tool, server) {
   let toolRemoteExecution = getToolRemoteExecution(tool);
-  let r = toolRemoteExecution.supported ? (toolRemoteExecution.refusedInputFields ?? []) : [];
-  let s = host !== undefined && tool.name === BASH_TOOL_NAME && supportsBackgroundShells(host);
-  return r.filter((u) => !SANDBOX_OVERRIDE_INPUT_KEYS.has(u) && !(s && u === "run_in_background"));
+  let refusedFields = toolRemoteExecution.supported ? (toolRemoteExecution.refusedInputFields ?? []) : [];
+  let backgroundSupported =
+    server !== undefined && tool.name === BASH_TOOL_NAME && supportsBackgroundShells(server);
+  return refusedFields.filter(
+    (key) => !SANDBOX_OVERRIDE_INPUT_KEYS.has(key) && !(backgroundSupported && key === "run_in_background"),
+  );
 }
 export {
   executeRemoteToolUse,

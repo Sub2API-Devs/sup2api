@@ -22,6 +22,7 @@ import { logEvent } from "../services/analytics/index.js";
 import { fromEnum } from "../services/analytics/safeMetadata.js";
 import { isRemoteControlHardDisabled } from "../bridge/bridgeEntitlement.js";
 import { REMOTE_CONTROL_DISABLED_BY_POLICY_MESSAGE } from "../bridge/remoteControlPolicy.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:2035684-2035730 placement
 /**
@@ -44,8 +45,11 @@ function isEnterpriseUpsellEnabled() {
   );
 }
 //@ chunk-e6aww6q8.js:2035804-2035841 placement
-registerC4EUpsellGate({
-  isC4EUpsellCommandEnabled: isEnterpriseUpsellEnabled,
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:2035804", () => {
+  registerC4EUpsellGate({
+    isC4EUpsellCommandEnabled: isEnterpriseUpsellEnabled,
+  });
 });
 //@ chunk-e6aww6q8.js:2035841-2035964 placement = hasAnthropicApiKeyAuth (1)
 /**
@@ -99,14 +103,14 @@ function createEnterpriseUpsellCommand(spec) {
     load: () =>
       Promise.resolve({
         call: async () => {
-          let { variant, value: r } = getEnterpriseUpsellMessage(spec);
+          let { variant, value: messageText } = getEnterpriseUpsellMessage(spec);
           logEvent("tengu_c4e_slash_upsell_shown", {
             command: fromEnum(spec.name),
             variant: fromEnum(variant),
           });
           return {
             type: "text",
-            value: r,
+            value: messageText,
           };
         },
       }),
@@ -123,39 +127,42 @@ function isSubscriber() {
 /**
  * ENTERPRISE_UPSELL_COMMANDS：ultraplan/ultrareview/teleport/remote-control/schedule/autofix-pr 的升级提示存根。
  */
-var ENTERPRISE_UPSELL_COMMANDS = [
-  createEnterpriseUpsellCommand({
-    name: "ultraplan",
-    description: "A cloud session drafts a plan you can edit and approve",
-  }),
-  createEnterpriseUpsellCommand({
-    name: "ultrareview",
-    description: "Find and verify bugs in your branch using a cloud session",
-  }),
-  createEnterpriseUpsellCommand({
-    name: "teleport",
-    aliases: ["tp"],
-    description: "Send this session to the cloud, or resume one from claude.ai",
-  }),
-  createEnterpriseUpsellCommand({
-    name: "remote-control",
-    aliases: ["rc"],
-    description: "Control this session from your phone or claude.ai/code",
-    managedDisabled: {
-      isDisabled: () => isRemoteControlHardDisabled(),
-      reason: REMOTE_CONTROL_DISABLED_BY_POLICY_MESSAGE,
-    },
-  }),
-  createEnterpriseUpsellCommand({
-    name: "schedule",
-    aliases: ["routines"],
-    description: "Create and manage scheduled remote Claude Code agents",
-  }),
-  createEnterpriseUpsellCommand({
-    name: "autofix-pr",
-    description: "Monitor and autofix any issues with the current PR",
-  }),
-];
+var ENTERPRISE_UPSELL_COMMANDS; // deferred: uses createEnterpriseUpsellCommand of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:2036753", () => {
+  ENTERPRISE_UPSELL_COMMANDS = [
+    createEnterpriseUpsellCommand({
+      name: "ultraplan",
+      description: "A cloud session drafts a plan you can edit and approve",
+    }),
+    createEnterpriseUpsellCommand({
+      name: "ultrareview",
+      description: "Find and verify bugs in your branch using a cloud session",
+    }),
+    createEnterpriseUpsellCommand({
+      name: "teleport",
+      aliases: ["tp"],
+      description: "Send this session to the cloud, or resume one from claude.ai",
+    }),
+    createEnterpriseUpsellCommand({
+      name: "remote-control",
+      aliases: ["rc"],
+      description: "Control this session from your phone or claude.ai/code",
+      managedDisabled: {
+        isDisabled: () => isRemoteControlHardDisabled(),
+        reason: REMOTE_CONTROL_DISABLED_BY_POLICY_MESSAGE,
+      },
+    }),
+    createEnterpriseUpsellCommand({
+      name: "schedule",
+      aliases: ["routines"],
+      description: "Create and manage scheduled remote Claude Code agents",
+    }),
+    createEnterpriseUpsellCommand({
+      name: "autofix-pr",
+      description: "Monitor and autofix any issues with the current PR",
+    }),
+  ];
+});
 //@ chunk-e6aww6q8.js:2037425-2037476 placement = default (1)
 var stubC4EUpsellCommand = {
   isEnabled: () => false,

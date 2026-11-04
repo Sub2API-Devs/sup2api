@@ -8,17 +8,21 @@
  * pieces: chunk-aepeg2w5.js (8)
  * attribution: placement 8
  */
-import { Re } from "../../../runtime/bun-runtime.js";
+import { __toESM } from "../../../runtime/bun-runtime.js";
 import { require_fetch_http_handler } from "../../../vendor/@smithy/fetch-http-handler/dist-cjs/index.js";
 import { credentialForEndpointHost, hostOfUrl } from "../analytics/telemetryCredentialGuard.js";
 import { getSettingsSyncEndpoint } from "../settingsSync/index.js";
 import { env } from "../../utils/env.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-aepeg2w5.js:129220-129239 placement
 /**
  * 懒加载的 @smithy/fetch-http-handler 模块。
  */
-var smithyFetchHttpHandlerModule = Re(require_fetch_http_handler(), 1);
+var smithyFetchHttpHandlerModule; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-aepeg2w5.js:129220", () => {
+  smithyFetchHttpHandlerModule = __toESM(require_fetch_http_handler(), 1);
+});
 //@ chunk-aepeg2w5.js:129452-129524 placement
 /**
  * 网关会话过期时提示重新 /login 的文案。
@@ -35,15 +39,18 @@ var API_ANTHROPIC_COM = "api.anthropic.com";
 /**
  * 地址是否同时属于网关 base URL 与设置同步端点的允许范围。
  */
-function isGatewayUrlForBaseAndSync(e) {
-  let n = currentBaseUrl();
-  return credentialForEndpointHost(n, e) && credentialForEndpointHost(settingsSyncEndpoint(n), e);
+function isGatewayUrlForBaseAndSync(baseUrl) {
+  let current = currentBaseUrl();
+  return (
+    credentialForEndpointHost(current, baseUrl) &&
+    credentialForEndpointHost(settingsSyncEndpoint(current), baseUrl)
+  );
 }
 //@ chunk-aepeg2w5.js:129618-129645 placement
 /**
  * 取设置同步端点。
  */
-function settingsSyncEndpoint(e) {
+function settingsSyncEndpoint(baseUrl) {
   return getSettingsSyncEndpoint();
 }
 //@ chunk-aepeg2w5.js:129645-129725 placement
@@ -58,8 +65,8 @@ function currentBaseUrl() {
 /**
  * 判断地址是否属于当前 base URL 范围。
  */
-function isGatewayUrlAllowed(e) {
-  return credentialForEndpointHost(currentBaseUrl(), e);
+function isGatewayUrlAllowed(url) {
+  return credentialForEndpointHost(currentBaseUrl(), url);
 }
 export {
   isGatewayUrlAllowed,

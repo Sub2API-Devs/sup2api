@@ -23,24 +23,29 @@ var OBSERVABLE_INPUT_FIELDS = ["type", "recipient", "recipient_kind", "content",
 /**
  * 判断 SendMessage 输入是否具备“收件人 + 消息或空闲订阅”的形状（用于剥离可观察字段）。
  */
-function hasSendMessageShape(e) {
-  return "to" in e && ("message" in e || "notify_when_idle" in e);
+function hasSendMessageShape(input) {
+  return "to" in input && ("message" in input || "notify_when_idle" in input);
 }
 //@ chunk-rvwp1taf.js:429-547 placement
 /**
  * 若 SendMessage 输入含可观察字段，返回去掉这些字段的副本。
  */
-function stripObservableFields(e) {
-  if (!isPlainObject(e) || !hasSendMessageShape(e) || !OBSERVABLE_INPUT_FIELDS.some((n) => n in e)) return;
-  let o = {
-    ...e,
+function stripObservableFields(value) {
+  if (
+    !isPlainObject(value) ||
+    !hasSendMessageShape(value) ||
+    !OBSERVABLE_INPUT_FIELDS.some((field) => field in value)
+  )
+    return;
+  let copy = {
+    ...value,
   };
-  for (let n of OBSERVABLE_INPUT_FIELDS) delete o[n];
-  return o;
+  for (let field of OBSERVABLE_INPUT_FIELDS) delete copy[field];
+  return copy;
 }
 //@ chunk-fj90tvf9.js:263-307 placement
 function hasSendMessageTool(tools) {
-  return tools.some((e) => toolMatchesName(e, SENDMESSAGE));
+  return tools.some((tool) => toolMatchesName(tool, SENDMESSAGE));
 }
 export {
   SENDMESSAGE,

@@ -8,9 +8,12 @@
  * pieces: chunk-0bntfk7p.js (4), chunk-sx9xc5ee.js (1)
  * attribution: fingerprint 4, sole-consumer 1
  */
+import { probeModelAccess } from "./ModelPinWizard.js";
+import { testBedrockRequest, isAwsTimeoutError } from "./providerSetup/bedrock/bedrockVerify.js";
+import { BEDROCK_VERIFY_TIMEOUT_TEXT } from "./providerSetup/bedrock/BedrockSaveStep.js";
 import { useScrollViewportSize } from "./ScrollViewportContext.js";
 import { useTerminalSize } from "../hooks/useTerminalSize.js";
-import { y, ce } from "../../vendor/react/cjs/react.production.js";
+import { useState, useCallback } from "../../vendor/react/cjs/react.production.js";
 import { useShortcutDisplay } from "../keybindings/useShortcutDisplay.js";
 import { detectCurrentRepository } from "../utils/detectRepository.js";
 import { logForDebugging } from "../utils/debug.js";
@@ -30,29 +33,45 @@ import { ModelSelector } from "./agents/ModelSelector.js";
 import { Byline } from "./design-system/Byline.js";
 import { KeyboardShortcutHint } from "./design-system/KeyboardShortcutHint.js";
 import { ConfigurableShortcutHint } from "./ConfigurableShortcutHint.js";
-import { probeModelAccess } from "./ModelPinWizard.js";
-import { testBedrockRequest, isAwsTimeoutError } from "./providerSetup/bedrock/bedrockVerify.js";
-import { BEDROCK_VERIFY_TIMEOUT_TEXT } from "./providerSetup/bedrock/BedrockSaveStep.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
+//@ chunk-sx9xc5ee.js:9790-9902 fingerprint = renderErrorSpecificGuidance (0.564)
+async function renderErrorSpecificGuidance(wizardData, modelId) {
+  return probeModelAccess(
+    () => testBedrockRequest(wizardData),
+    modelId,
+    (error) =>
+      error instanceof Error && (error.message === BEDROCK_VERIFY_TIMEOUT_TEXT || isAwsTimeoutError(error))
+        ? "network"
+        : "auth",
+  );
+}
 //@ chunk-0bntfk7p.js:1975-2064 fingerprint = UPDATED_STRING (0.486)
-var UPDATED = "Updated";
-var ORIGIN = "Origin";
-var REMOTE_CONTROL_LABEL = "Remote Control";
-var max = Math.max(ORIGIN.length, REMOTE_CONTROL_LABEL.length);
-var SPACE = "  ";
+var UPDATED; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var ORIGIN;
+var REMOTE_CONTROL_LABEL;
+var max;
+var SPACE;
+deferInit("chunk-0bntfk7p.js:1975", () => {
+  UPDATED = "Updated";
+  ORIGIN = "Origin";
+  REMOTE_CONTROL_LABEL = "Remote Control";
+  max = Math.max(ORIGIN.length, REMOTE_CONTROL_LABEL.length);
+  SPACE = "  ";
+});
 //@ chunk-0bntfk7p.js:2064-5609 fingerprint = ResumeTask (0.71)
 function ResumeTask({ onSelect, onCancel, isEmbedded = false, onSettingsReload }) {
   let { rows, columns } = useScrollViewportSize(useTerminalSize());
-  let [sessions, setSessions] = y([]);
-  let [currentRepo, setCurrentRepo] = y(null);
-  let [loading, setLoading] = y(true);
-  let [loadErrorType, setLoadErrorType] = y(null);
-  let [refusalMessage, G] = y(null);
-  let [retrying, setRetrying] = y(false);
-  let [hasCompletedTeleportErrorFlow, setHasCompletedTeleportErrorFlow] = y(false);
-  let [focusedIndex, setFocusedIndex] = y(1);
+  let [sessions, setSessions] = useState([]);
+  let [currentRepo, setCurrentRepo] = useState(null);
+  let [loading, setLoading] = useState(true);
+  let [loadErrorType, setLoadErrorType] = useState(null);
+  let [refusalMessage, props] = useState(null);
+  let [retrying, setRetrying] = useState(false);
+  let [hasCompletedTeleportErrorFlow, setHasCompletedTeleportErrorFlow] = useState(false);
+  let [focusedIndex, setFocusedIndex] = useState(1);
   let escKey = useShortcutDisplay("confirm:no", "Confirmation", "Esc");
-  let loadSessions = ce(async () => {
+  let loadSessions = useCallback(async () => {
     try {
       setLoading(true);
       setLoadErrorType(null);
@@ -70,16 +89,16 @@ function ResumeTask({ onSelect, onCancel, isEmbedded = false, onSettingsReload }
           `Filtered ${filteredSessions.length} sessions for repo ${detectedRepo} from ${codeSessions.length} total`,
         );
       }
-      let sortedSessions = [...filteredSessions].sort((I, se) => {
-        let dateA = new Date(I.updated_at);
-        return new Date(se.updated_at).getTime() - dateA.getTime();
+      let sortedSessions = [...filteredSessions].sort((a, b) => {
+        let dateA = new Date(a.updated_at);
+        return new Date(b.updated_at).getTime() - dateA.getTime();
       });
       setSessions(sortedSessions);
     } catch (err) {
       let errorMessage = err instanceof Error ? err.message : String(err);
       logForDebugging(`Error loading code sessions: ${errorMessage}`);
       if (err instanceof Error && err.name === "CloudSessionAccessError") {
-        G(err.message);
+        props(err.message);
         setLoadErrorType("refused");
       } else setLoadErrorType(determineErrorType(errorMessage));
     } finally {
@@ -94,7 +113,7 @@ function ResumeTask({ onSelect, onCancel, isEmbedded = false, onSettingsReload }
   useKeybinding("confirm:no", onCancel, {
     context: "Confirmation",
   });
-  function g(event) {
+  function handleKeyDown(event) {
     if (event.ctrl && event.key === "c") {
       event.preventDefault();
       onCancel();
@@ -111,7 +130,7 @@ function ResumeTask({ onSelect, onCancel, isEmbedded = false, onSettingsReload }
       return;
     }
   }
-  let handleErrorComplete = ce(() => {
+  let handleErrorComplete = useCallback(() => {
     setHasCompletedTeleportErrorFlow(true);
     loadSessions();
   }, [setHasCompletedTeleportErrorFlow, loadSessions]);
@@ -127,7 +146,7 @@ function ResumeTask({ onSelect, onCancel, isEmbedded = false, onSettingsReload }
       padding: 1,
       tabIndex: 0,
       autoFocus: true,
-      onKeyDown: g,
+      onKeyDown: handleKeyDown,
       children: jsxProd_default(WorkerBadge, {
         message: "Loading Claude Code sessions\u2026",
         bold: true,
@@ -140,7 +159,7 @@ function ResumeTask({ onSelect, onCancel, isEmbedded = false, onSettingsReload }
       padding: 1,
       tabIndex: 0,
       autoFocus: true,
-      onKeyDown: g,
+      onKeyDown: handleKeyDown,
       children: [
         jsxProd_default(Text, {
           bold: true,
@@ -173,7 +192,7 @@ function ResumeTask({ onSelect, onCancel, isEmbedded = false, onSettingsReload }
       padding: 1,
       tabIndex: 0,
       autoFocus: true,
-      onKeyDown: g,
+      onKeyDown: handleKeyDown,
       children: [
         jsxProd_default_2(Text, {
           bold: true,
@@ -210,9 +229,10 @@ function ResumeTask({ onSelect, onCancel, isEmbedded = false, onSettingsReload }
     ...sessionMetadata.map((meta) => meta.timeString.length),
   );
   let any = sessions.some((session) => session.environment_kind === "bridge");
-  let he = any ? max + SPACE.length : 0;
-  let pe = String(sessions.length).length + 2;
-  let Re = columns - 4 - pe - maxTimeStringLength - SPACE.length - he;
+  let bridgeColumnWidth = any ? max + SPACE.length : 0;
+  let countColumnWidth = String(sessions.length).length + 2;
+  let timeColumnWidth =
+    columns - 4 - countColumnWidth - maxTimeStringLength - SPACE.length - bridgeColumnWidth;
   let options = sessionMetadata.map(({ timeString, title, id, environment_kind: environmentKind }) => {
     let paddedTime = timeString.padEnd(maxTimeStringLength, " ");
     return {
@@ -230,7 +250,7 @@ function ResumeTask({ onSelect, onCancel, isEmbedded = false, onSettingsReload }
                 SPACE,
               ],
             }),
-          truncateToWidth(sanitizeSessionTitle(title).replace(/\s+/g, " ").trim(), Re),
+          truncateToWidth(sanitizeSessionTitle(title).replace(/\s+/g, " ").trim(), timeColumnWidth),
         ],
       }),
       value: id,
@@ -251,7 +271,7 @@ function ResumeTask({ onSelect, onCancel, isEmbedded = false, onSettingsReload }
     height: maxHeight,
     tabIndex: 0,
     autoFocus: true,
-    onKeyDown: g,
+    onKeyDown: handleKeyDown,
     children: [
       jsxProd_default_2(Text, {
         bold: true,
@@ -276,7 +296,7 @@ function ResumeTask({ onSelect, onCancel, isEmbedded = false, onSettingsReload }
         flexGrow: 1,
         children: [
           jsxProd_default(Box, {
-            marginLeft: 2 + pe,
+            marginLeft: 2 + countColumnWidth,
             children: jsxProd_default_2(Text, {
               bold: true,
               children: [
@@ -418,16 +438,5 @@ function renderLoadFailure(failureKind, refusalMessage) {
         }),
       });
   }
-}
-//@ chunk-sx9xc5ee.js:9790-9902 fingerprint = renderErrorSpecificGuidance (0.564)
-async function renderErrorSpecificGuidance(o, d) {
-  return probeModelAccess(
-    () => testBedrockRequest(o),
-    d,
-    (c) =>
-      c instanceof Error && (c.message === BEDROCK_VERIFY_TIMEOUT_TEXT || isAwsTimeoutError(c))
-        ? "network"
-        : "auth",
-  );
 }
 export { ResumeTask, renderErrorSpecificGuidance };

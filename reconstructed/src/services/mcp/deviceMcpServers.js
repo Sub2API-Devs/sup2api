@@ -11,7 +11,7 @@
 import { isMcpServerDenied, isMcpServerDisabled, emptyServerMap, getClaudeCodeMcpConfigs } from "./config.js";
 import { REMOTE_DEVICES } from "./firstPartyServerIds.js";
 import { awaitPolicyColdStartWaiter } from "../policyLimits/coldStartWaiter.js";
-import { ensureMdmLoaded } from "../../utils/settings/managedPluginTiers.js";
+import { ensureMdmLoaded } from "../../utils/settings/mdm/mdmLoader.js";
 import { shouldAskPerServer } from "../deviceBridge/deviceMcpConsent.js";
 import { pickByHelper } from "../../utils/git/gitSafeEnv.js";
 import { getStrictMcpConfig } from "../../bootstrap/state.js";
@@ -26,16 +26,16 @@ async function loadDeviceMcpSources() {
   await Promise.all([awaitPolicyColdStartWaiter(), ensureMdmLoaded()]);
 }
 //@ chunk-p0p8bkgp.js:572-618 placement
-function isDeviceScopeEnabled(e, r) {
-  return shouldAskPerServer(r.scope) && !isMcpServerDisabled(e);
+function isDeviceScopeEnabled(name, config) {
+  return shouldAskPerServer(config.scope) && !isMcpServerDisabled(name);
 }
 //@ chunk-p0p8bkgp.js:618-659 placement
-function isForwardableDeviceMcp(e, r) {
-  return isDeviceScopeEnabled(e, r) && !isFirstPartyDesignConfig(r);
+function isForwardableDeviceMcp(name, config) {
+  return isDeviceScopeEnabled(name, config) && !isFirstPartyDesignConfig(config);
 }
 //@ chunk-p0p8bkgp.js:659-763 placement
-function isFirstPartyDesignConfig(e) {
-  return require("./chunk-asne9cp8.js").mcpClientModule().isFirstPartyDesignServerConfig(e);
+function isFirstPartyDesignConfig(config) {
+  return require("./emitTripwireEvent.lazy.js").mcpClientModule().isFirstPartyDesignServerConfig(config);
 }
 //@ chunk-p0p8bkgp.js:763-925 placement = expandEnvVars (0.913)
 /**
@@ -67,7 +67,7 @@ function getDeviceBridgeMcpConfigs(servers) {
 /**
  * getDeviceBridgeMcpConfigs：为设备桥接（deviceBridge 目的）收集可转发的服务器配置。
  */
-async function getDeviceBridgeMcpConfigs_2({ storageV5: e } = {}) {
+async function getDeviceBridgeMcpConfigs_2({ storageV5 } = {}) {
   if (getStrictMcpConfig() || isBareMode())
     return {
       configs: emptyServerMap(),
@@ -78,7 +78,7 @@ async function getDeviceBridgeMcpConfigs_2({ storageV5: e } = {}) {
     {},
     {
       purpose: "deviceBridge",
-      storageV5: e,
+      storageV5,
     },
   );
   return {
@@ -87,8 +87,8 @@ async function getDeviceBridgeMcpConfigs_2({ storageV5: e } = {}) {
   };
 }
 //@ chunk-p0p8bkgp.js:1189-1277 placement
-async function getDeviceBridgeMcpServers(e = {}) {
-  let { configs, deniedBySettings } = await getDeviceBridgeMcpConfigs_2(e);
+async function getDeviceBridgeMcpServers(options = {}) {
+  let { configs, deniedBySettings } = await getDeviceBridgeMcpConfigs_2(options);
   return deniedBySettings ? emptyServerMap() : configs;
 }
 export {

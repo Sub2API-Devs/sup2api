@@ -13,12 +13,12 @@ import { basename } from "path";
 import { DoctorLazy } from "../../cli/handlers/util.js";
 import {
   zodStrictObject,
-  string,
+  stringSchema,
   preprocess,
   array,
-  u,
-  M,
-  E,
+  objectSchema,
+  booleanSchema,
+  numberSchema,
 } from "../../../vendor/zod/v4/classic/schemas.js";
 import { LISTAGENTS } from "../SendMessageTool/listAgents.js";
 import {
@@ -118,38 +118,38 @@ import { IMAGE_FILE_EXT_RE } from "../../utils/imagePaste.js";
  */
 var SendFileInputSchema = DoctorLazy(() =>
   zodStrictObject({
-    to: string().describe(
+    to: stringSchema().describe(
       `Recipient: a peer session name from ${LISTAGENTS}, or an explicit uds:<socket> / bridge:<session id> address`,
     ),
     files: preprocess(
-      (e) => (typeof e === "string" ? [e] : e),
-      array(string()).min(1).max(MAX_PEER_ATTACHMENTS),
+      (files) => (typeof files === "string" ? [files] : files),
+      array(stringSchema()).min(1).max(MAX_PEER_ATTACHMENTS),
     ).describe(
       "File paths (absolute or relative to cwd) to send. Always pass an array, even for a single file.",
     ),
-    message: string().optional().describe("Optional short message delivered alongside the files"),
+    message: stringSchema().optional().describe("Optional short message delivered alongside the files"),
   }),
 );
 var sendFileOutputSchema = DoctorLazy(() =>
-  u({
-    success: M(),
-    message: string(),
-    msg_id: string().optional(),
+  objectSchema({
+    success: booleanSchema(),
+    message: stringSchema(),
+    msg_id: stringSchema().optional(),
     files: array(
-      u({
-        path: string(),
-        size: E().optional(),
-        sha256: string().optional(),
-        file_uuid: string().optional(),
-        error: string().optional(),
+      objectSchema({
+        path: stringSchema(),
+        size: numberSchema().optional(),
+        sha256: stringSchema().optional(),
+        file_uuid: stringSchema().optional(),
+        error: stringSchema().optional(),
       }),
     ).describe("Per-file transfer outcome"),
   }),
 );
 var SEND_FILE_SESSION_REFUSAL = "Cross-session file transfer is not available in this session.";
 var MAX_PARALLEL_FILE_TRANSFERS = 4;
-var fileReadLimiter = limitConcurrency(MAX_PARALLEL_FILE_TRANSFERS, (e) => e());
-var fileSendLimiter = limitConcurrency(MAX_PARALLEL_FILE_TRANSFERS, (e) => e());
+var fileReadLimiter = limitConcurrency(MAX_PARALLEL_FILE_TRANSFERS, (task) => task());
+var fileSendLimiter = limitConcurrency(MAX_PARALLEL_FILE_TRANSFERS, (task) => task());
 var SEND_FILE_MACHINE_REFUSAL =
   "Cross-machine file transfer is unavailable: it uploads file contents through Anthropic servers, which this provider/privacy configuration does not allow. Same-machine (uds:) transfers still work.";
 //@ chunk-dq968kwq.js:13617-13749 placement
@@ -169,19 +169,19 @@ var SEND_FILE_REFUSAL_REASONS = {
 /**
  * 解析发送文件的接收方（uds、桥接、对等会话名）。
  */
-async function resolveFileRecipient(e, i, f) {
-  let address = parseAddress(e);
+async function resolveFileRecipient(addressText, resolverContext, toolContext) {
+  let address = parseAddress(addressText);
   if (address.scheme === "uds") {
     if (mayBeOwnSocket(address.target))
       return {
         kind: "refused",
         reason: "self",
-        message: ownAddressMessage(e),
+        message: ownAddressMessage(addressText),
       };
     return {
       kind: "uds",
       sock: address.target,
-      label: e,
+      label: addressText,
       byName: false,
     };
   }
@@ -190,28 +190,28 @@ async function resolveFileRecipient(e, i, f) {
       return {
         kind: "refused",
         reason: "self",
-        message: ownAddressMessage(e),
+        message: ownAddressMessage(addressText),
       };
-    let h = unreachableElevatedRefusal(f.session, address.target, e);
-    if (h)
+    let elevatedRefusal = unreachableElevatedRefusal(toolContext.session, address.target, addressText);
+    if (elevatedRefusal)
       return {
         kind: "refused",
         reason: "unreachable_elevated",
-        message: h,
+        message: elevatedRefusal,
       };
-    let N = cannotReceiveRefusal(f.session, address.target, e);
-    if (N)
+    let gateRefusal = cannotReceiveRefusal(toolContext.session, address.target, addressText);
+    if (gateRefusal)
       return {
         kind: "refused",
         reason: "recipient_gate_off",
-        message: N,
+        message: gateRefusal,
       };
     return {
       kind: "bridge",
       sessionId: address.target,
-      label: e,
+      label: addressText,
       byName: false,
-      ...(isInboundUnreported(f.session, address.target) && {
+      ...(isInboundUnreported(toolContext.session, address.target) && {
         identityNote: UNCONFIRMED_DELIVERY_NOTE,
       }),
     };
@@ -219,194 +219,209 @@ async function resolveFileRecipient(e, i, f) {
   if (address.scheme === "did")
     return {
       kind: "refused",
-      message: `DID peers accept text only \u2014 use ${SENDMESSAGE} to send to '${e}'.`,
+      message: `DID peers accept text only \u2014 use ${SENDMESSAGE} to send to '${addressText}'.`,
     };
-  let crossSessionAddress = await resolveCrossSessionAddress(
-    f.session,
-    e,
-    i,
-    f.resolverState(),
-    f.storageV5,
-    f.credentials,
+  let target = await resolveCrossSessionAddress(
+    toolContext.session,
+    addressText,
+    resolverContext,
+    toolContext.resolverState(),
+    toolContext.storageV5,
+    toolContext.credentials,
   );
-  switch (crossSessionAddress.kind) {
+  switch (target.kind) {
     case "local-session":
-      if (isOwnSocket(crossSessionAddress.sock))
+      if (isOwnSocket(target.sock))
         return {
           kind: "refused",
           reason: "self",
-          message: ownAddressMessage(e),
+          message: ownAddressMessage(addressText),
         };
-      if (isImpersonatedOwnRef(e, crossSessionAddress.sock))
+      if (isImpersonatedOwnRef(addressText, target.sock))
         return {
           kind: "refused",
           reason: "impersonation",
-          message: impersonatedSelfMessage(e),
+          message: impersonatedSelfMessage(addressText),
         };
-      if (mayBeOwnSocket(crossSessionAddress.sock))
+      if (mayBeOwnSocket(target.sock))
         return {
           kind: "refused",
           reason: "self",
-          message: ownAddressMessage(e),
+          message: ownAddressMessage(addressText),
         };
       return {
         kind: "uds",
-        sock: crossSessionAddress.sock,
-        label: crossSessionAddress.displayName,
+        sock: target.sock,
+        label: target.displayName,
         byName: true,
-        contestedNote: describeNameShare(crossSessionAddress.sameNamedSiblings),
-        identityNote: ` (${LOCAL_SESSION_LABEL}${describeLocalTargetCaveats(crossSessionAddress)})${
-          crossSessionAddress.previouslyPinned
+        contestedNote: describeNameShare(target.sameNamedSiblings),
+        identityNote: ` (${LOCAL_SESSION_LABEL}${describeLocalTargetCaveats(target)})${
+          target.previouslyPinned
             ? `
 ${PREVIOUSLY_PINNED_NOTE}`
-            : crossSessionAddress.restartedSincePin
+            : target.restartedSincePin
               ? `
 ${RESTARTED_SINCE_PIN_NOTE}`
-              : crossSessionAddress.identityContested
+              : target.identityContested
                 ? `
 ${IDENTITY_CONTESTED_NOTE}`
                 : ""
         }`,
         pin: {
-          displayName: crossSessionAddress.displayName,
+          displayName: target.displayName,
           kind: "session",
-          id: crossSessionAddress.pinId,
-          sock: crossSessionAddress.sock,
-          claimedSessionIds: crossSessionAddress.claimedSessionIds,
+          id: target.pinId,
+          sock: target.sock,
+          claimedSessionIds: target.claimedSessionIds,
         },
       };
     case "cloud-session": {
-      if (isOwnBridgeSession(crossSessionAddress.sessionId))
+      if (isOwnBridgeSession(target.sessionId))
         return {
           kind: "refused",
           reason: "self",
-          message: ownAddressMessage(e),
+          message: ownAddressMessage(addressText),
         };
       let {
         isRemoteControlPeerUnreachableFromHere,
         formatUnreachableElevatedRefusal,
-      } = require("./chunk-3kb57csj.js");
-      if (crossSessionAddress.via === "remote-control" && isRemoteControlPeerUnreachableFromHere())
+      } = require("../../bridge/trustedDevice.js");
+      if (target.via === "remote-control" && isRemoteControlPeerUnreachableFromHere())
         return {
           kind: "refused",
           reason: "unreachable_elevated",
-          message: formatUnreachableElevatedRefusal(crossSessionAddress.displayName),
+          message: formatUnreachableElevatedRefusal(target.displayName),
         };
-      let y = cannotReceiveRefusal(f.session, crossSessionAddress.sessionId, crossSessionAddress.displayName);
-      if (y)
+      let gateRefusal = cannotReceiveRefusal(toolContext.session, target.sessionId, target.displayName);
+      if (gateRefusal)
         return {
           kind: "refused",
           reason: "recipient_gate_off",
-          message: y,
+          message: gateRefusal,
         };
       return {
         kind: "bridge",
-        sessionId: crossSessionAddress.sessionId,
-        label: crossSessionAddress.displayName,
+        sessionId: target.sessionId,
+        label: target.displayName,
         byName: true,
-        via: crossSessionAddress.via,
-        contestedNote: describeNameShare(crossSessionAddress.sameNamedSiblings),
-        identityNote: ` (${describeRemoteSessionKind(crossSessionAddress.via)}${crossSessionAddress.via === "remote-control" && !crossSessionAddress.reportsInbound && !crossSessionAddress.inboundReportUnavailable ? UNCONFIRMED_DELIVERY_NOTE : ""}${describeRemoteTargetCaveats(crossSessionAddress)})${
-          crossSessionAddress.previouslyPinned
+        via: target.via,
+        contestedNote: describeNameShare(target.sameNamedSiblings),
+        identityNote: ` (${describeRemoteSessionKind(target.via)}${target.via === "remote-control" && !target.reportsInbound && !target.inboundReportUnavailable ? UNCONFIRMED_DELIVERY_NOTE : ""}${describeRemoteTargetCaveats(target)})${
+          target.previouslyPinned
             ? `
 ${PREVIOUSLY_PINNED_NOTE}`
             : ""
         }`,
         pin: {
-          displayName: crossSessionAddress.displayName,
-          kind: crossSessionAddress.refKind,
-          id: crossSessionAddress.sessionId,
+          displayName: target.displayName,
+          kind: target.refKind,
+          id: target.sessionId,
         },
       };
     }
     case "ambiguous": {
-      let h = classifySelfName(e);
-      if (
-        h === "categorical" &&
-        crossSessionAddress.matchedBy === "prefix" &&
-        isSearchComplete(crossSessionAddress)
-      )
+      let selfKind = classifySelfName(addressText);
+      if (selfKind === "categorical" && target.matchedBy === "prefix" && isSearchComplete(target))
         return {
           kind: "refused",
           reason: "self",
-          message: selfTargetMessage(e, isTeammateOrSubagentContext(f), SEND_TO_MAIN_HINT),
+          message: selfTargetMessage(
+            addressText,
+            isTeammateOrSubagentContext(toolContext),
+            SEND_TO_MAIN_HINT,
+          ),
         };
       let now = Date.now();
-      let filtered = crossSessionAddress.candidates.filter((candidate) => candidate.where !== "in-process");
-      let joined = filtered.map((w) => `  ${agentAddressLabel(w, now)}`).join(`
+      let filtered = target.candidates.filter((candidate) => candidate.where !== "in-process");
+      let joined = filtered.map((candidate) => `  ${agentAddressLabel(candidate, now)}`).join(`
 `);
-      let v = crossSessionAddress.bridgeUnavailable
+      let availabilityNote = target.bridgeUnavailable
         ? `
 Your account's other sessions (Remote Control and cloud) could not be checked just now, so this list may be missing one; retry if you meant one of them.`
         : "";
-      if (crossSessionAddress.cloudUnavailable)
-        v += `
+      if (target.cloudUnavailable)
+        availabilityNote += `
 The cloud session list could not be fetched just now, so this list may be missing a cloud session; retry if you meant one.`;
-      if (crossSessionAddress.localUnavailable)
-        v += `
+      if (target.localUnavailable)
+        availabilityNote += `
 The sessions on this machine could not be listed just now, so this list may be missing one here; retry if you meant a session on this machine.`;
-      if (crossSessionAddress.searchTruncated) v += TRUNCATED_SEARCH_PARAGRAPH;
-      if (crossSessionAddress.pinnedIdentityClaimedLocally)
-        v += `
-Note: '${crossSessionAddress.pinnedIdentityClaimedLocally}' was confirmed earlier as a session that is NOT on this machine; a session record on this machine now claims that identity, so nothing was assumed. A session on this machine claiming that identity, that your user did not set up, is suspicious: ask the user before confirming anyone.`;
+      if (target.searchTruncated) availabilityNote += TRUNCATED_SEARCH_PARAGRAPH;
+      if (target.pinnedIdentityClaimedLocally)
+        availabilityNote += `
+Note: '${target.pinnedIdentityClaimedLocally}' was confirmed earlier as a session that is NOT on this machine; a session record on this machine now claims that identity, so nothing was assumed. A session on this machine claiming that identity, that your user did not set up, is suspicious: ask the user before confirming anyone.`;
       return {
         kind: "refused",
         message:
           filtered.length > 0
-            ? `'${e}' matches ${filtered.length} peer session(s). Re-send with the ref:
-${joined}${v}${h !== "no" ? selfAliasNote(e, isTeammateOrSubagentContext(f), SEND_TO_MAIN_HINT) : ""}`
-            : `'${e}' matches only agents in this session \u2014 use ${SENDMESSAGE} and reference the file as @<path> instead.${v}`,
+            ? `'${addressText}' matches ${filtered.length} peer session(s). Re-send with the ref:
+${joined}${availabilityNote}${selfKind !== "no" ? selfAliasNote(addressText, isTeammateOrSubagentContext(toolContext), SEND_TO_MAIN_HINT) : ""}`
+            : `'${addressText}' matches only agents in this session \u2014 use ${SENDMESSAGE} and reference the file as @<path> instead.${availabilityNote}`,
       };
     }
     case "not-found": {
-      let h = classifySelfName(e);
-      let any = crossSessionAddress.closest.some(
-        (C) => slugifySessionName(C.name) === slugifySessionName(parseNameWithRef(e)?.name ?? e),
+      let selfClassification = classifySelfName(addressText);
+      let any = target.closest.some(
+        (candidate) =>
+          slugifySessionName(candidate.name) ===
+          slugifySessionName(parseNameWithRef(addressText)?.name ?? addressText),
       );
-      if (h === "categorical" && !any && isSearchComplete(crossSessionAddress))
+      if (selfClassification === "categorical" && !any && isSearchComplete(target))
         return {
           kind: "refused",
           reason: "self",
-          message: selfTargetMessage(e, isTeammateOrSubagentContext(f), SEND_TO_MAIN_HINT),
+          message: selfTargetMessage(
+            addressText,
+            isTeammateOrSubagentContext(toolContext),
+            SEND_TO_MAIN_HINT,
+          ),
         };
-      let any_2 = f.tools.some((tool) => toolMatchesName(tool, LISTAGENTS));
-      let filtered = crossSessionAddress.closest.filter((C) => C.where !== "in-process");
-      let v = filtered.length > 0 ? ` Did you mean: ${filtered.map((C) => C.name).join(", ")}?` : "";
-      let w = any_2 ? `Use ${LISTAGENTS} to see the sessions you can send files to.` : "Check the spelling.";
-      let z = crossSessionAddress.cloudUnavailable
+      let any_2 = toolContext.tools.some((tool) => toolMatchesName(tool, LISTAGENTS));
+      let filtered = target.closest.filter((candidate) => candidate.where !== "in-process");
+      let suggestionText =
+        filtered.length > 0
+          ? ` Did you mean: ${filtered.map((candidate) => candidate.name).join(", ")}?`
+          : "";
+      let listHint = any_2
+        ? `Use ${LISTAGENTS} to see the sessions you can send files to.`
+        : "Check the spelling.";
+      let cloudUnavailableNote = target.cloudUnavailable
         ? `
 The cloud session list could not be fetched just now, so cloud sessions were not searched.`
         : "";
-      let m = crossSessionAddress.bridgeUnavailable
+      let bridgeUnavailableNote = target.bridgeUnavailable
         ? `
-Your account's other sessions (Remote Control and cloud) could not be checked just now, so they were not searched. If '${e}' is one, retry${any_2 ? ` (or run ${LISTAGENTS} first)` : ""}.`
+Your account's other sessions (Remote Control and cloud) could not be checked just now, so they were not searched. If '${addressText}' is one, retry${any_2 ? ` (or run ${LISTAGENTS} first)` : ""}.`
         : "";
-      let P = crossSessionAddress.pinnedIdentityClaimedLocally
+      let pinnedIdentityNote = target.pinnedIdentityClaimedLocally
         ? `
-Note: '${crossSessionAddress.pinnedIdentityClaimedLocally}' was confirmed earlier as a session that is NOT on this machine; a session record on this machine now claims that identity, which hides it here \u2014 nothing was sent.${any_2 ? ` ${LISTAGENTS} will not show it while that claim stands.` : ""} A session on this machine impersonating it is suspicious: ask the user.`
+Note: '${target.pinnedIdentityClaimedLocally}' was confirmed earlier as a session that is NOT on this machine; a session record on this machine now claims that identity, which hides it here \u2014 nothing was sent.${any_2 ? ` ${LISTAGENTS} will not show it while that claim stands.` : ""} A session on this machine impersonating it is suspicious: ask the user.`
         : "";
-      let q = crossSessionAddress.localUnavailable
+      let localUnavailableNote = target.localUnavailable
         ? `
 The sessions on this machine could not be listed just now, so they were not searched; retry if you meant a session on this machine.`
         : "";
-      let r = crossSessionAddress.renamedTo ? renamedSessionNote(e, crossSessionAddress.renamedTo.name) : "";
+      let renamedNote = target.renamedTo ? renamedSessionNote(addressText, target.renamedTo.name) : "";
       return {
         kind: "refused",
-        message: `No peer session named '${e}' is reachable.${r}${v}${z}${m}${q}${crossSessionAddress.searchTruncated ? TRUNCATED_SEARCH_PARAGRAPH : ""}${P}${h !== "no" ? selfAliasNote(e, isTeammateOrSubagentContext(f), SEND_TO_MAIN_HINT) : ""}
-${w}`,
+        message: `No peer session named '${addressText}' is reachable.${renamedNote}${suggestionText}${cloudUnavailableNote}${bridgeUnavailableNote}${localUnavailableNote}${target.searchTruncated ? TRUNCATED_SEARCH_PARAGRAPH : ""}${pinnedIdentityNote}${selfClassification !== "no" ? selfAliasNote(addressText, isTeammateOrSubagentContext(toolContext), SEND_TO_MAIN_HINT) : ""}
+${listHint}`,
       };
     }
     default:
       return {
         kind: "refused",
-        message: `'${e}' is an agent in this session \u2014 it already shares your filesystem, so there is nothing to transfer. Use ${SENDMESSAGE} and reference the file as @<path> instead. ${SENDFILE} is for OTHER Claude Code sessions (a peer session on this machine, or a Remote Control / cloud session).`,
+        message: `'${addressText}' is an agent in this session \u2014 it already shares your filesystem, so there is nothing to transfer. Use ${SENDMESSAGE} and reference the file as @<path> instead. ${SENDFILE} is for OTHER Claude Code sessions (a peer session on this machine, or a Remote Control / cloud session).`,
       };
   }
 }
 //@ chunk-dq968kwq.js:19274-19411 placement
-function sendFileDedupeKey(e) {
-  let i = Array.isArray(e.files) ? e.files.toSorted() : typeof e.files === "string" ? [e.files] : e.files;
-  return [e.to, e.message ?? null, i];
+function sendFileDedupeKey(input) {
+  let filesList = Array.isArray(input.files)
+    ? input.files.toSorted()
+    : typeof input.files === "string"
+      ? [input.files]
+      : input.files;
+  return [input.to, input.message ?? null, filesList];
 }
 //@ chunk-dq968kwq.js:19411-19463 placement
 /**
@@ -419,13 +434,13 @@ function isObjectLike(checkedNoteForInput) {
 var REMOTE_TRANSFER_NOTE =
   "If the recipient is a Remote Control or cloud session, the file contents travel via Anthropic's servers to another machine.";
 //@ chunk-dq968kwq.js:19596-19818 placement
-function discloseRemoteTransfer(e, i, f) {
-  if (!hasIsolatePeerMachines() || e.behavior !== "ask") return e;
-  i.disclosed = true;
+function discloseRemoteTransfer(decision, callOptions, input) {
+  if (!hasIsolatePeerMachines() || decision.behavior !== "ask") return decision;
+  callOptions.disclosed = true;
   return {
-    ...e,
+    ...decision,
     message: stripNonPrintable(
-      `${e.message ?? `Send ${f.files.length} ${plural(f.files.length, "file")} to '${f.to}'?`} ${REMOTE_TRANSFER_NOTE} (isolatePeerMachines is enabled.)`,
+      `${decision.message ?? `Send ${input.files.length} ${plural(input.files.length, "file")} to '${input.to}'?`} ${REMOTE_TRANSFER_NOTE} (isolatePeerMachines is enabled.)`,
     ),
   };
 }
@@ -440,59 +455,60 @@ function isAskRuleDecision(decisionReason) {
 /**
  * 发送文件时使用的上下文代理。
  */
-function sendFileContext(e, i) {
+function sendFileContext(toolContext, callOptions) {
   return {
     get session() {
-      return e.session;
+      return toolContext.session;
     },
     get storageV5() {
-      return e.storageV5;
+      return toolContext.storageV5;
     },
     get credentials() {
-      return e.credentials;
+      return toolContext.credentials;
     },
     get agentContext() {
-      return e.agentContext;
+      return toolContext.agentContext;
     },
     get teammateContext() {
-      return e.teammateContext;
+      return toolContext.teammateContext;
     },
     get tools() {
-      return e.tools;
+      return toolContext.tools;
     },
     get toolState() {
-      return e.toolState;
+      return toolContext.toolState;
     },
     get messages() {
-      return e.messages;
+      return toolContext.messages;
     },
     get resolverState() {
-      return e.resolverState;
+      return toolContext.resolverState;
     },
     get setSendMessagePins() {
-      return e.setSendMessagePins;
+      return toolContext.setSendMessagePins;
     },
     get permissions() {
-      return e.permissions;
+      return toolContext.permissions;
     },
     get toolUseId() {
-      return i.toolUseId;
+      return callOptions.toolUseId;
     },
     get signal() {
-      return i.signal;
+      return callOptions.signal;
     },
     get permissionPhase() {
-      return i.permissionPhase;
+      return callOptions.permissionPhase;
     },
     get permissionRound() {
-      return i.permissionRound;
+      return callOptions.permissionRound;
     },
   };
 }
 //@ chunk-dq968kwq.js:20508-20629 placement
-function requireAsk(e) {
-  if (e.ask === undefined) throw Error("SendFile: dispatch needs the permission pipeline (call.ask)");
-  return e.ask;
+function requireAsk(callContext) {
+  if (callContext.ask === undefined)
+    throw Error("SendFile: dispatch needs the permission pipeline (call.ask)");
+  return callContext.ask;
 }
 //@ chunk-dq968kwq.js:20629-29348 placement
 /**
@@ -523,14 +539,17 @@ var SendFileTool = buildTool({
   isReadOnly() {
     return false;
   },
-  toAutoClassifierInput(e) {
-    let i = Array.isArray(e.files)
-      ? e.files.join(", ")
-      : typeof e.files === "string"
-        ? e.files
+  toAutoClassifierInput(input) {
+    let fileNames = Array.isArray(input.files)
+      ? input.files.join(", ")
+      : typeof input.files === "string"
+        ? input.files
         : "[no files]";
-    let f = typeof e.message === "string" && e.message.length > 0 ? ` \u2014 message: ${e.message}` : "";
-    return `to ${e.to}: ${i}${f}`;
+    let messageSuffix =
+      typeof input.message === "string" && input.message.length > 0
+        ? ` \u2014 message: ${input.message}`
+        : "";
+    return `to ${input.to}: ${fileNames}${messageSuffix}`;
   },
   async description() {
     return SEND_FILE_SHORT_DESCRIPTION;
@@ -538,14 +557,14 @@ var SendFileTool = buildTool({
   async prompt() {
     return sendFileToolPrompt(MAX_PEER_ATTACHMENTS, MAX_PEER_FILE_BYTES / 1048576);
   },
-  mapToolResultToToolResultBlockParam(e, toolUseId) {
-    let flattened = e.files.flatMap((file) =>
+  mapToolResultToToolResultBlockParam(result, toolUseId) {
+    let flattened = result.files.flatMap((file) =>
       file.error === undefined ? [] : [`  ${encodeControlChars(file.path)}: ${escapeForTag(file.error)}`],
     );
-    let l = [e.message];
-    if (e.msg_id !== undefined) l.push(`msg_id: ${e.msg_id}`);
+    let lines = [result.message];
+    if (result.msg_id !== undefined) lines.push(`msg_id: ${result.msg_id}`);
     if (flattened.length > 0)
-      l.push(
+      lines.push(
         `${flattened.length} ${plural(flattened.length, "file")} could NOT be sent:
 ` +
           flattened.join(`
@@ -554,22 +573,22 @@ var SendFileTool = buildTool({
     return {
       tool_use_id: toolUseId,
       type: "tool_result",
-      content: l.join(`
+      content: lines.join(`
 `),
     };
   },
-  renderToolUseMessage(e) {
-    if (typeof e.to !== "string") return null;
-    return `${Array.isArray(e.files) ? e.files.join(", ") : ""} \u2192 ${e.to}`;
+  renderToolUseMessage(input) {
+    if (typeof input.to !== "string") return null;
+    return `${Array.isArray(input.files) ? input.files.join(", ") : ""} \u2192 ${input.to}`;
   },
-  create(e) {
+  create(toolContext) {
     return {
-      async checkPermissions(i, f) {
-        let l = sendFileContext(e, f);
-        let s = l.permissions();
-        let h = {};
-        setPendingPermissionNote(l, i, h, SENDFILE);
-        let denyRuleForTool = getDenyRuleForTool(s, READ_PATH_PROBE);
+      async checkPermissions(input, callOptions) {
+        let context = sendFileContext(toolContext, callOptions);
+        let permissions = context.permissions();
+        let disclosureState = {};
+        setPendingPermissionNote(context, input, disclosureState, SENDFILE);
+        let denyRuleForTool = getDenyRuleForTool(permissions, READ_PATH_PROBE);
         if (denyRuleForTool)
           return {
             behavior: "deny",
@@ -579,41 +598,41 @@ var SendFileTool = buildTool({
               rule: denyRuleForTool,
             },
           };
-        let y;
-        let T;
-        let mapped = i.files.map((file) => readPermissionDecisionForPath(expandPath(file), s));
-        let found = mapped.find((m) => m.behavior === "deny");
+        let otherDecision;
+        let askDecision;
+        let mapped = input.files.map((file) => readPermissionDecisionForPath(expandPath(file), permissions));
+        let found = mapped.find((decision) => decision.behavior === "deny");
         if (found) return found;
-        for (let m of mapped)
-          if (m.behavior !== "allow") {
-            if (isAskRuleDecision(m.decisionReason)) {
-              T ??= m;
+        for (let decision of mapped)
+          if (decision.behavior !== "allow") {
+            if (isAskRuleDecision(decision.decisionReason)) {
+              askDecision ??= decision;
               continue;
             }
-            if (y === undefined) y = m;
+            if (otherDecision === undefined) otherDecision = decision;
           }
-        if (T !== undefined) return discloseRemoteTransfer(T, h, i);
-        let askRuleForTool = getAskRuleForTool(s, READ_PATH_PROBE);
+        if (askDecision !== undefined) return discloseRemoteTransfer(askDecision, disclosureState, input);
+        let askRuleForTool = getAskRuleForTool(permissions, READ_PATH_PROBE);
         if (askRuleForTool)
           return discloseRemoteTransfer(
             {
               behavior: "ask",
               message: stripNonPrintable(
-                `Send ${i.files.length} ${plural(i.files.length, "file")} to '${i.to}'? SendFile reads file contents.`,
+                `Send ${input.files.length} ${plural(input.files.length, "file")} to '${input.to}'? SendFile reads file contents.`,
               ),
               decisionReason: {
                 type: "rule",
                 rule: askRuleForTool,
               },
             },
-            h,
-            i,
+            disclosureState,
+            input,
           );
         if (hasIsolatePeerMachines()) {
-          let m;
+          let recipient;
           try {
-            m = await resolveFileRecipient(i.to, i.message ?? "", l);
-            if (m.kind !== "refused") h.transport = m;
+            recipient = await resolveFileRecipient(input.to, input.message ?? "", context);
+            if (recipient.kind !== "refused") disclosureState.transport = recipient;
           } catch (error) {
             logForDebugging(
               `[SendFile] up-front resolve failed (${stripAnsiAndControls(errorMessage(error))}) \u2014 asking as usual`,
@@ -622,27 +641,27 @@ var SendFileTool = buildTool({
               },
             );
           }
-          if (m?.kind === "refused" && m.reason !== undefined) {
-            if (!hasMintedReentry(l))
+          if (recipient?.kind === "refused" && recipient.reason !== undefined) {
+            if (!hasMintedReentry(context))
               logEvent("tengu_send_file", {
                 transport: lit("refused"),
-                file_count: i.files.length,
+                file_count: input.files.length,
                 delivered_count: 0,
                 success: false,
               });
             return {
               behavior: "deny",
-              message: stripNonPrintable(m.message),
+              message: stripNonPrintable(recipient.message),
               decisionReason: {
                 type: "other",
-                reason: SEND_FILE_REFUSAL_REASONS[m.reason],
+                reason: SEND_FILE_REFUSAL_REASONS[recipient.reason],
               },
             };
           }
           return {
             behavior: "ask",
             message: stripNonPrintable(
-              `Send ${i.files.length} ${plural(i.files.length, "file")} to '${i.to}'? ${REMOTE_TRANSFER_NOTE}`,
+              `Send ${input.files.length} ${plural(input.files.length, "file")} to '${input.to}'? ${REMOTE_TRANSFER_NOTE}`,
             ),
             decisionReason: {
               type: "safetyCheck",
@@ -653,8 +672,8 @@ var SendFileTool = buildTool({
             },
           };
         }
-        if (y !== undefined) return y;
-        if (s.mode === "plan")
+        if (otherDecision !== undefined) return otherDecision;
+        if (permissions.mode === "plan")
           return {
             behavior: "ask",
             message: `${SENDFILE} would send file contents to another session \u2014 approve the plan first.`,
@@ -663,14 +682,14 @@ var SendFileTool = buildTool({
               mode: "plan",
             },
           };
-        if (s.mode === "auto")
+        if (permissions.mode === "auto")
           return {
             behavior: "passthrough",
             message: "SendFile requires classifier review.",
           };
         return {
           behavior: "allow",
-          updatedInput: i,
+          updatedInput: input,
         };
       },
       async validateInput({ to, files }) {
@@ -705,44 +724,44 @@ var SendFileTool = buildTool({
             errorCode: 9,
           };
         for (let file of files) {
-          let N = checkAttachmentPathShape(file);
-          if (N !== undefined) return N;
+          let shapeRefusal = checkAttachmentPathShape(file);
+          if (shapeRefusal !== undefined) return shapeRefusal;
         }
         return {
           result: true,
         };
       },
-      async call(i, f) {
-        let l = sendFileContext(e, f);
-        let { to } = i;
-        let { message } = i;
-        let files = i.files;
-        let y = Array.isArray(files)
+      async call(input, callOptions) {
+        let context = sendFileContext(toolContext, callOptions);
+        let { to } = input;
+        let { message } = input;
+        let files = input.files;
+        let fileList = Array.isArray(files)
           ? files.filter((file) => typeof file === "string")
           : typeof files === "string"
             ? [files]
             : [];
-        let checkedNoteForInput = getCheckedNoteForInput(l, i, sendFileDedupeKey);
-        let v = isObjectLike(checkedNoteForInput) ? checkedNoteForInput : {};
-        let checkedResultForInput = getCheckedResultForInput(l, i, sendFileDedupeKey);
+        let checkedNoteForInput = getCheckedNoteForInput(context, input, sendFileDedupeKey);
+        let disclosedState = isObjectLike(checkedNoteForInput) ? checkedNoteForInput : {};
+        let checkedResultForInput = getCheckedResultForInput(context, input, sendFileDedupeKey);
         let alreadyApproved = wasAskedForSameInput(
-          l,
-          i,
+          context,
+          input,
           sendFileDedupeKey,
-          (n) =>
-            isIsolatePeerAsk(n) ||
-            (n.behavior === "ask" &&
-              v.disclosed === true &&
+          (priorDecision) =>
+            isIsolatePeerAsk(priorDecision) ||
+            (priorDecision.behavior === "ask" &&
+              disclosedState.disclosed === true &&
               checkedResultForInput?.behavior === "ask" &&
-              n.message === checkedResultForInput.message),
+              priorDecision.message === checkedResultForInput.message),
         );
-        let transport = v.transport;
-        let signal = l.signal;
-        let q = l.permissions();
+        let transport = disclosedState.transport;
+        let signal = context.signal;
+        let permissions = context.permissions();
         if (!isPeerSendFileEnabled()) {
           logEvent("tengu_send_file", {
             transport: lit("gated_off"),
-            file_count: y.length,
+            file_count: fileList.length,
             delivered_count: 0,
             success: false,
           });
@@ -754,58 +773,58 @@ var SendFileTool = buildTool({
             },
           };
         }
-        let r = transport ?? (await resolveFileRecipient(to, message ?? "", l));
+        let recipient = transport ?? (await resolveFileRecipient(to, message ?? "", context));
         if (transport?.kind === "bridge") {
           let {
             isRemoteControlPeerUnreachableFromHere,
             formatUnreachableElevatedRefusal,
-          } = require("./chunk-3kb57csj.js");
-          let _ =
-            unreachableElevatedRefusal(l.session, transport.sessionId, transport.label) ??
+          } = require("../../bridge/trustedDevice.js");
+          let unreachableRefusal =
+            unreachableElevatedRefusal(context.session, transport.sessionId, transport.label) ??
             (transport.via === "remote-control" && isRemoteControlPeerUnreachableFromHere()
               ? formatUnreachableElevatedRefusal(transport.label)
               : undefined);
-          if (_)
-            r = {
+          if (unreachableRefusal)
+            recipient = {
               kind: "refused",
               reason: "unreachable_elevated",
-              message: _,
+              message: unreachableRefusal,
             };
           else {
-            let I = cannotReceiveRefusal(l.session, transport.sessionId, transport.label);
-            if (I)
-              r = {
+            let gateRefusal = cannotReceiveRefusal(context.session, transport.sessionId, transport.label);
+            if (gateRefusal)
+              recipient = {
                 kind: "refused",
                 reason: "recipient_gate_off",
-                message: I,
+                message: gateRefusal,
               };
           }
         }
-        if (r.kind === "uds" && isOwnSocket(r.sock))
-          r = {
+        if (recipient.kind === "uds" && isOwnSocket(recipient.sock))
+          recipient = {
             kind: "refused",
             reason: "self",
             message: ownAddressMessage(to),
           };
-        else if (r.kind === "uds" && isImpersonatedOwnRef(to, r.sock))
-          r = {
+        else if (recipient.kind === "uds" && isImpersonatedOwnRef(to, recipient.sock))
+          recipient = {
             kind: "refused",
             reason: "impersonation",
             message: impersonatedSelfMessage(to),
           };
         else if (
-          (r.kind === "uds" && mayBeOwnSocket(r.sock)) ||
-          (r.kind === "bridge" && isOwnBridgeSession(r.sessionId))
+          (recipient.kind === "uds" && mayBeOwnSocket(recipient.sock)) ||
+          (recipient.kind === "bridge" && isOwnBridgeSession(recipient.sessionId))
         )
-          r = {
+          recipient = {
             kind: "refused",
             reason: "self",
             message: ownAddressMessage(to),
           };
-        let C = (message) => {
+        let refuseResult = (message) => {
           logEvent("tengu_send_file", {
             transport: lit("refused"),
-            file_count: y.length,
+            file_count: fileList.length,
             delivered_count: 0,
             success: false,
           });
@@ -817,20 +836,22 @@ var SendFileTool = buildTool({
             },
           };
         };
-        if (r.kind === "refused") return C(r.message);
-        let currentSessionPeerNameFor = getCurrentSessionPeerNameFor(r.kind);
-        let Z = (n) =>
-          message?.trim() ? message : `Sent you ${n.length} ${plural(n.length, "file")}: ${n.join(", ")}`;
-        let K = (success, deliveredCount) => {
+        if (recipient.kind === "refused") return refuseResult(recipient.message);
+        let currentSessionPeerNameFor = getCurrentSessionPeerNameFor(recipient.kind);
+        let defaultMessage = (fileNames) =>
+          message?.trim()
+            ? message
+            : `Sent you ${fileNames.length} ${plural(fileNames.length, "file")}: ${fileNames.join(", ")}`;
+        let logOutcome = (success, deliveredCount) => {
           logEvent("tengu_send_file", {
-            transport: fromEnum(r.kind),
-            file_count: y.length,
+            transport: fromEnum(recipient.kind),
+            file_count: fileList.length,
             delivered_count: deliveredCount,
             success,
           });
         };
-        let U = (message, files = []) => {
-          K(false, 0);
+        let failureResult = (message, files = []) => {
+          logOutcome(false, 0);
           return {
             data: {
               success: false,
@@ -839,50 +860,50 @@ var SendFileTool = buildTool({
             },
           };
         };
-        async function ee(n) {
-          let S;
+        async function checkReadable(filePath) {
+          let realPath;
           try {
-            S = await realpath(n);
+            realPath = await realpath(filePath);
           } catch {
             return true;
           }
-          if (S === n) return true;
-          if (readPermissionDecisionForPath(S, q).behavior === "allow") return true;
-          return `resolves to '${S}', which is not readable under this session's permissions`;
+          if (realPath === filePath) return true;
+          if (readPermissionDecisionForPath(realPath, permissions).behavior === "allow") return true;
+          return `resolves to '${realPath}', which is not readable under this session's permissions`;
         }
-        let mapped = y.map((n) => expandPath(n));
-        let mapped_2 = mapped.map((n) => basename(n));
-        if (r.kind === "uds") {
-          let n = Array(mapped.length);
+        let mapped = fileList.map((filePath) => expandPath(filePath));
+        let mapped_2 = mapped.map((fileName) => basename(fileName));
+        if (recipient.kind === "uds") {
+          let fileResults = Array(mapped.length);
           let results = await Promise.all(
-            mapped.map((g, D) =>
+            mapped.map((filePath, fileIndex) =>
               fileReadLimiter(async () => {
                 if (signal.aborted) {
-                  n[D] = {
-                    path: g,
+                  fileResults[fileIndex] = {
+                    path: filePath,
                     error: "aborted",
                   };
                   return;
                 }
-                let Y = await ee(g);
-                if (Y !== true) {
-                  n[D] = {
-                    path: g,
-                    error: Y,
+                let readabilityError = await checkReadable(filePath);
+                if (readabilityError !== true) {
+                  fileResults[fileIndex] = {
+                    path: filePath,
+                    error: readabilityError,
                   };
                   return;
                 }
                 try {
-                  let B = await stageLocalPeerFile(g);
-                  n[D] = {
-                    path: g,
-                    size: B.file_size,
-                    sha256: B.sha256,
+                  let stagedFile = await stageLocalPeerFile(filePath);
+                  fileResults[fileIndex] = {
+                    path: filePath,
+                    size: stagedFile.file_size,
+                    sha256: stagedFile.sha256,
                   };
-                  return B;
+                  return stagedFile;
                 } catch (error) {
-                  n[D] = {
-                    path: g,
+                  fileResults[fileIndex] = {
+                    path: filePath,
                     error: errorMessage(error),
                   };
                   return;
@@ -891,58 +912,60 @@ var SendFileTool = buildTool({
             ),
           );
           sweepStaleSpoolEntries();
-          let filtered = results.filter((g) => g !== undefined);
-          let I = () => {
-            for (let g of filtered) unlink(g.path).catch(() => {});
+          let filtered = results.filter((stagedFile) => stagedFile !== undefined);
+          let cleanupStaged = () => {
+            for (let stagedFile of filtered) unlink(stagedFile.path).catch(() => {});
           };
           if (signal.aborted) {
-            I();
+            cleanupStaged();
             throw new AbortError();
           }
-          if (filtered.length === 0) return U(`No files could be staged for transfer to ${r.label}.`, n);
-          let { sendToUdsSocket } = require("./chunk-ewxn4535.js");
+          if (filtered.length === 0)
+            return failureResult(`No files could be staged for transfer to ${recipient.label}.`, fileResults);
+          let { sendToUdsSocket } = require("../../utils/udsMessaging/SessionRecordsUnreadableError.lazy.js");
           try {
             let { msgId } = await sendToUdsSocket(
-              r.sock,
-              Z(filtered.map((D) => D.file_name)),
-              l.storageV5,
+              recipient.sock,
+              defaultMessage(filtered.map((stagedFile) => stagedFile.file_name)),
+              context.storageV5,
               currentSessionPeerNameFor,
               filtered,
-              lastPeerHopChain(l.messages()),
+              lastPeerHopChain(context.messages()),
               undefined,
               {
-                recipientName: r.byName ? r.label : undefined,
+                recipientName: recipient.byName ? recipient.label : undefined,
               },
             );
-            K(true, filtered.length);
-            if (r.pin) pinSendTarget(l.setSendMessagePins, r.pin.displayName, r.pin);
+            logOutcome(true, filtered.length);
+            if (recipient.pin)
+              pinSendTarget(context.setSendMessagePins, recipient.pin.displayName, recipient.pin);
             return {
               data: {
                 success: true,
-                message: `${filtered.length} ${plural(filtered.length, "file")} \u2192 ${r.label}${r.identityNote ?? ""}${r.contestedNote ?? ""}`,
+                message: `${filtered.length} ${plural(filtered.length, "file")} \u2192 ${recipient.label}${recipient.identityNote ?? ""}${recipient.contestedNote ?? ""}`,
                 msg_id: msgId,
-                files: n,
+                files: fileResults,
               },
             };
           } catch (error) {
             let errnoCode = getErrnoCode(error);
-            let Y = isInboxGoneError(error);
-            if (isExpectedSendError(error)) I();
-            let B = Y ? staleSocketHint(LISTAGENTS) : errnoCode === "EBUSY" ? PIPE_BUSY_HINT : "";
-            let _e =
+            let inboxGone = isInboxGoneError(error);
+            if (isExpectedSendError(error)) cleanupStaged();
+            let hint = inboxGone ? staleSocketHint(LISTAGENTS) : errnoCode === "EBUSY" ? PIPE_BUSY_HINT : "";
+            let detail =
               isSenderPacedError(error) || isMessageTooLargeError(error)
                 ? `: ${errorMessage(error)}`
-                : B || ".";
-            return U(
-              r.byName
-                ? `Failed to send to ${r.label}${errnoCode ? ` (${errnoCode})` : ""}${_e}`
-                : `Failed to send to ${r.label}: ${errorMessage(error)}${B}`,
-              n,
+                : hint || ".";
+            return failureResult(
+              recipient.byName
+                ? `Failed to send to ${recipient.label}${errnoCode ? ` (${errnoCode})` : ""}${detail}`
+                : `Failed to send to ${recipient.label}: ${errorMessage(error)}${hint}`,
+              fileResults,
             );
           }
         }
-        let via = r.via ?? "unknown";
-        function W() {
+        let via = recipient.via ?? "unknown";
+        function remoteBlockReason() {
           if (!isPolicyAllowed("allow_send_file")) return SEND_FILE_MACHINE_REFUSAL;
           let remoteSendBlock = getRemoteSendBlock(via);
           if (remoteSendBlock === null) return;
@@ -950,134 +973,144 @@ var SendFileTool = buildTool({
             ? SEND_FILE_MACHINE_REFUSAL
             : `Cross-machine file transfer is unavailable: ${remoteSendBlock.reason} Same-machine (uds:) transfers still work.`;
         }
-        let se = W();
-        if (se !== undefined) return U(se);
-        let F = await isolationDispatchGate({
+        let blockReason = remoteBlockReason();
+        if (blockReason !== undefined) return failureResult(blockReason);
+        let gateResult = await isolationDispatchGate({
           tool: SendFileTool,
           input: {
             to,
-            files: y,
+            files: fileList,
             message,
           },
-          ask: requireAsk(f),
-          permissionPhase: l.permissionPhase,
+          ask: requireAsk(callOptions),
+          permissionPhase: context.permissionPhase,
           alreadyApproved,
-          recipientLabel: `'${r.label}'`,
-          parse: (n) => SendFileInputSchema().safeParse(n),
+          recipientLabel: `'${recipient.label}'`,
+          parse: (rawInput) => SendFileInputSchema().safeParse(rawInput),
         });
-        if (!F.proceed) {
+        if (!gateResult.proceed) {
           let values = Object.values(SEND_FILE_REFUSAL_REASONS);
-          return F.decisionReason?.type === "other" && values.includes(F.decisionReason.reason)
-            ? C(F.message)
-            : U(F.message);
+          return gateResult.decisionReason?.type === "other" &&
+            values.includes(gateResult.decisionReason.reason)
+            ? refuseResult(gateResult.message)
+            : failureResult(gateResult.message);
         }
-        let ne = W();
-        if (ne !== undefined) return U(ne);
-        if (F.input.files !== y || F.input.message !== message) {
-          message = F.input.message;
-          y = F.input.files;
-          mapped = y.map((n) => expandPath(n));
-          mapped_2 = mapped.map((n) => basename(n));
+        let lateBlockReason = remoteBlockReason();
+        if (lateBlockReason !== undefined) return failureResult(lateBlockReason);
+        if (gateResult.input.files !== fileList || gateResult.input.message !== message) {
+          message = gateResult.input.message;
+          fileList = gateResult.input.files;
+          mapped = fileList.map((filePath) => expandPath(filePath));
+          mapped_2 = mapped.map((fileName) => basename(fileName));
         }
-        let { uploadBytesToBridgeStore } = await import("./chunk-7kpfrhzn.js");
-        let L = Array(mapped.length);
+        let { uploadBytesToBridgeStore } = await import("../BriefTool/uploadBriefAttachment.lazy.js");
+        let fileResults = Array(mapped.length);
         let results = await Promise.all(
-          mapped.map((n, S) =>
+          mapped.map((filePath, fileIndex) =>
             fileSendLimiter(async () => {
               if (signal.aborted) {
-                L[S] = {
-                  path: n,
+                fileResults[fileIndex] = {
+                  path: filePath,
                   error: "aborted",
                 };
                 return;
               }
-              let _ = await ee(n);
-              if (_ !== true) {
-                L[S] = {
-                  path: n,
-                  error: _,
+              let readabilityError = await checkReadable(filePath);
+              if (readabilityError !== true) {
+                fileResults[fileIndex] = {
+                  path: filePath,
+                  error: readabilityError,
                 };
                 return;
               }
-              let peerFileBounded = await readPeerFileBounded(n, MAX_PEER_FILE_BYTES);
+              let peerFileBounded = await readPeerFileBounded(filePath, MAX_PEER_FILE_BYTES);
               if (peerFileBounded === null) {
-                L[S] = {
-                  path: n,
+                fileResults[fileIndex] = {
+                  path: filePath,
                   error: PEER_FILE_UNREADABLE_TEXT,
                 };
                 return;
               }
               let sha256 = computeContentHash(peerFileBounded);
-              let g = await uploadBytesToBridgeStore(
+              let uploadId = await uploadBytesToBridgeStore(
                 peerFileBounded,
-                mapped_2[S],
+                mapped_2[fileIndex],
                 "application/octet-stream",
                 signal,
                 undefined,
-                l.credentials,
+                context.credentials,
               );
-              if (typeof g !== "string") {
-                L[S] = {
-                  path: n,
+              if (typeof uploadId !== "string") {
+                fileResults[fileIndex] = {
+                  path: filePath,
                   size: peerFileBounded.length,
-                  error: g.error,
+                  error: uploadId.error,
                 };
                 return;
               }
-              L[S] = {
-                path: n,
+              fileResults[fileIndex] = {
+                path: filePath,
                 size: peerFileBounded.length,
                 sha256,
-                file_uuid: g,
+                file_uuid: uploadId,
               };
               return {
-                file_uuid: g,
-                file_name: mapped_2[S],
-                is_image: IMAGE_FILE_EXT_RE.test(n),
+                file_uuid: uploadId,
+                file_name: mapped_2[fileIndex],
+                is_image: IMAGE_FILE_EXT_RE.test(filePath),
                 file_size: peerFileBounded.length,
                 sha256,
-                media_type: getAttachmentMimeType(mapped_2[S]),
+                media_type: getAttachmentMimeType(mapped_2[fileIndex]),
               };
             }),
           ),
         );
         if (signal.aborted) throw new AbortError();
-        let filtered = results.filter((n) => n !== undefined);
-        if (filtered.length === 0) return U(`No files could be uploaded for transfer to ${r.label}.`, L);
-        let { postInterClaudeMessage, isLikelyStaleBridgeError } = require("./chunk-ypjxapg8.js");
-        let te = W();
-        if (te !== undefined) return U(te, L);
-        let X = await postInterClaudeMessage(
-          r.sessionId,
-          Z(filtered.map((n) => n.file_name)),
+        let filtered = results.filter((uploadedFile) => uploadedFile !== undefined);
+        if (filtered.length === 0)
+          return failureResult(`No files could be uploaded for transfer to ${recipient.label}.`, fileResults);
+        let {
+          postInterClaudeMessage,
+          isLikelyStaleBridgeError,
+        } = require("../../bridge/classifyBridgeSendError.lazy.js");
+        let bridgeBlockReason = remoteBlockReason();
+        if (bridgeBlockReason !== undefined) return failureResult(bridgeBlockReason, fileResults);
+        let postResult = await postInterClaudeMessage(
+          recipient.sessionId,
+          defaultMessage(filtered.map((uploadedFile) => uploadedFile.file_name)),
           currentSessionPeerNameFor,
           filtered,
-          lastPeerHopChain(l.messages()),
+          lastPeerHopChain(context.messages()),
           undefined,
-          l.credentials,
+          context.credentials,
         );
-        if (!X.ok) {
-          let S = l.tools.some((tool) => toolMatchesName(tool, LISTAGENTS))
+        if (!postResult.ok) {
+          let listHint = context.tools.some((tool) => toolMatchesName(tool, LISTAGENTS))
             ? ` Call ${LISTAGENTS} to see who is reachable now.`
             : "";
-          let _ = isLikelyStaleBridgeError(X.error)
-            ? r.byName
-              ? ` \u2014 that session may have ended, been archived, or disconnected.${S}`
-              : ` \u2014 the peer session may have ended or restarted, so this bridge ID is stale.${S}`
+          let staleNote = isLikelyStaleBridgeError(postResult.error)
+            ? recipient.byName
+              ? ` \u2014 that session may have ended, been archived, or disconnected.${listHint}`
+              : ` \u2014 the peer session may have ended or restarted, so this bridge ID is stale.${listHint}`
             : "";
-          return U(`Failed to send to ${r.label}: ${X.error ?? "unknown"}${_}`, L);
+          return failureResult(
+            `Failed to send to ${recipient.label}: ${postResult.error ?? "unknown"}${staleNote}`,
+            fileResults,
+          );
         }
-        K(true, filtered.length);
-        if (r.pin) pinSendTarget(l.setSendMessagePins, r.pin.displayName, r.pin);
+        logOutcome(true, filtered.length);
+        if (recipient.pin)
+          pinSendTarget(context.setSendMessagePins, recipient.pin.displayName, recipient.pin);
         return {
           data: {
             success: true,
-            message: `${filtered.length} ${plural(filtered.length, "file")} \u2192 ${r.label}${r.identityNote ?? ""}${r.contestedNote ?? ""}`,
-            msg_id: X.msgId,
-            files: L,
+            message: `${filtered.length} ${plural(filtered.length, "file")} \u2192 ${recipient.label}${recipient.identityNote ?? ""}${recipient.contestedNote ?? ""}`,
+            msg_id: postResult.msgId,
+            files: fileResults,
           },
         };
       },
     };
   },
 });
+export { SendFileTool };

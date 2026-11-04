@@ -13,14 +13,19 @@ import { commitThroughConfigSet } from "../config/configShorthand.js";
 import { themeSettingRow } from "../config/configSettings.js";
 
 //@ chunk-zj72psg9.js:269-412 placement
-var themeWriter = (t) => (e) => {
-  if (!isSelectableThemeName(e))
+var themeWriter = (setTheme) => (themeSetting) => {
+  if (!isSelectableThemeName(themeSetting))
     return {
       error: Error("Theme takes the name of a theme"),
     };
-  t(e);
+  setTheme(themeSetting);
   return;
 };
-var commitTheme = (t, e, signal) =>
-  commitThroughConfigSet(themeSettingRow(e), t, themeWriter(e.setTheme), signal);
+var commitTheme = (themeSetting, isCustomTheme, signal) =>
+  commitThroughConfigSet(
+    themeSettingRow(isCustomTheme),
+    themeSetting,
+    themeWriter(isCustomTheme.setTheme),
+    signal,
+  );
 export { commitTheme, themeWriter };

@@ -17,13 +17,13 @@ import { resolveAvailablePermissionMode } from "../../tools/BashTool/bashPermiss
 import { setMemberMode } from "./teamHelpers.js";
 
 //@ chunk-fnhsh6ng.js:1184-1323 placement
-function setAwaitingPlanApproval(r, e, n) {
-  e.update(r, (s) => ({
-    ...s,
-    awaitingPlanApproval: n !== null,
-    pendingPlanApproval: n
+function setAwaitingPlanApproval(taskId, tasks, request) {
+  tasks.update(taskId, (task) => ({
+    ...task,
+    awaitingPlanApproval: request !== null,
+    pendingPlanApproval: request
       ? {
-          requestId: n.requestId,
+          requestId: request.requestId,
           answered: false,
         }
       : undefined,
@@ -61,8 +61,8 @@ function applyPlanApprovalResponse(taskId, response, tasks, storage) {
     return response;
   }
   let mode = resolveAvailablePermissionMode(response.permissionMode);
-  tasks.update(taskId, (m) => ({
-    ...m,
+  tasks.update(taskId, (task) => ({
+    ...task,
     awaitingPlanApproval: false,
     pendingPlanApproval: undefined,
     permissionMode: mode,

@@ -60,11 +60,12 @@ import { plural } from "../../utils/stringUtils.js";
 import { FILE_EDIT_TOOL_NAME } from "../../tools/FileEditTool/constants.js";
 import { FILE_WRITE_TOOL_NAME } from "../../tools/FileWriteTool/prompt.js";
 import { SHELL_TOOL_NAMES } from "../../utils/shell/shellToolUtils.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-rsht1tdj.js:7527-7722 sole-consumer
 function markDreamTaskFailed(taskId, taskRegistry) {
-  taskRegistry.update(taskId, (o) => ({
-    ...o,
+  taskRegistry.update(taskId, (task) => ({
+    ...task,
     status: "failed",
     endTime: Date.now(),
     notified: true,
@@ -80,13 +81,19 @@ function markDreamTaskFailed(taskId, taskRegistry) {
 /**
  * autoDream 默认阈值 minHours=24、minSessions=5，会话扫描节流 10 分钟。
  */
-var AUTO_DREAM_DEFAULTS = null;
-var SESSION_SCAN_THROTTLE_MS = 600000;
-var regExp = new RegExp(`^\\s*(?:${DELETE_COMMAND_NAMES})\\b`, "i");
-var DEFAULT_DREAM_THRESHOLDS = {
-  minHours: 24,
-  minSessions: 5,
-};
+var AUTO_DREAM_DEFAULTS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var SESSION_SCAN_THROTTLE_MS;
+var regExp;
+var DEFAULT_DREAM_THRESHOLDS;
+deferInit("chunk-rsht1tdj.js:7722", () => {
+  AUTO_DREAM_DEFAULTS = null;
+  SESSION_SCAN_THROTTLE_MS = 600000;
+  regExp = new RegExp(`^\\s*(?:${DELETE_COMMAND_NAMES})\\b`, "i");
+  DEFAULT_DREAM_THRESHOLDS = {
+    minHours: 24,
+    minSessions: 5,
+  };
+});
 //@ chunk-rsht1tdj.js:7814-8098 fingerprint = getConfig (1)
 /**
  * 读取 tengu_onyx_plover 中的 minHours/minSessions，非法值回落到 24/5。
@@ -123,11 +130,11 @@ function isAutoDreamForced() {
 /**
  * autoDream（后台记忆整理）：每回合检查——tengu_onyx_plover 配置存在且 isAutoDreamAllowed；距上次整理 ≥ minHours（默认 24h）；10 分钟扫描节流；自上次整理后改动过的其他会话 ≥ minSessions（默认 5）；拿到 .consolidate-lock 后派生 dream 子代理整理记忆，失败回滚锁时间。
  */
-function initAutoDream(host) {
+function initAutoDream(message) {
   let lastSessionScanAt = 0;
-  let o = false;
-  let y = new Set();
-  autoDreamHostState.of(host).runner = async function (context, appendSystemMessage) {
+  let hasShownNewerRecordNotice = false;
+  let notifiedUnreadableCauses = new Set();
+  autoDreamHostState.of(message).runner = async function (context, appendSystemMessage) {
     let cfg = getConfig();
     let force = isAutoDreamForced();
     if (!force && !isAutoDreamAllowed()) return;
@@ -168,54 +175,63 @@ function initAutoDream(host) {
       });
       return;
     }
-    let I = memoryWriteBlockingRule(
+    let memoryWriteBlockRule = memoryWriteBlockingRule(
       context.toolUseContext.getAppState().toolPermissionContext,
       getAutoMemEntrypoint(),
     );
-    if (I !== undefined) {
-      logForDebugging(`[autoDream] skip \u2014 ${describeRuleBlock(I)} would refuse memory writes`);
+    if (memoryWriteBlockRule !== undefined) {
+      logForDebugging(
+        `[autoDream] skip \u2014 ${describeRuleBlock(memoryWriteBlockRule)} would refuse memory writes`,
+      );
       logEvent("tengu_auto_dream_skipped", {
         reason: lit("permission_rule"),
       });
       if (appendSystemMessage !== undefined) {
-        let l = describeMemoryRuleBlock(host, I, getAutoMemPath());
-        if (l !== undefined) appendSystemMessage(createSystemMessage(l, "warning"));
+        let ruleBlockWarning = describeMemoryRuleBlock(message, memoryWriteBlockRule, getAutoMemPath());
+        if (ruleBlockWarning !== undefined)
+          appendSystemMessage(createSystemMessage(ruleBlockWarning, "warning"));
       }
       return;
     }
-    let D;
-    if (force) D = lastAt;
+    let priorLastConsolidatedAt;
+    if (force) priorLastConsolidatedAt = lastAt;
     else {
       try {
-        D = await tryAcquireConsolidationLockDefault(context.toolUseContext.storageV5);
+        priorLastConsolidatedAt = await tryAcquireConsolidationLockDefault(context.toolUseContext.storageV5);
       } catch (e) {
         logForDebugging(`[autoDream] lock acquire failed: ${errorMessage(e)}`);
         return;
       }
-      if (D === null) {
+      if (priorLastConsolidatedAt === null) {
         logEvent("tengu_auto_dream_skipped", {
           reason: lit("lock"),
         });
         return;
       }
     }
-    let autoMemPath = getAutoMemPath();
-    let M = undefined;
-    let h = M === "unplaced" || M === "capped" ? undefined : M;
-    if (h === "newer" || (h !== undefined && "unreadable" in h)) {
-      if (!force) await rollbackConsolidationLockDefault(D, context.toolUseContext.storageV5);
-      if (h !== "newer") {
+    let autoMemDir = getAutoMemPath();
+    let memoryItemsState = undefined;
+    let itemsSnapshot =
+      memoryItemsState === "unplaced" || memoryItemsState === "capped" ? undefined : memoryItemsState;
+    if (itemsSnapshot === "newer" || (itemsSnapshot !== undefined && "unreadable" in itemsSnapshot)) {
+      if (!force)
+        await rollbackConsolidationLockDefault(priorLastConsolidatedAt, context.toolUseContext.storageV5);
+      if (itemsSnapshot !== "newer") {
         logForDebugging(
-          `[autoDream] skipped: the memory items could not be read (cause: ${h.unreadable}); the warning above says why and what resumes consolidation`,
+          `[autoDream] skipped: the memory items could not be read (cause: ${itemsSnapshot.unreadable}); the warning above says why and what resumes consolidation`,
         );
         logEvent("tengu_auto_dream_skipped", {
           reason: lit("items_unreadable"),
         });
-        if (AUTO_DREAM_DEFAULTS !== null && appendSystemMessage !== undefined && !y.has(h.unreadable)) {
-          y.add(h.unreadable);
+        if (
+          AUTO_DREAM_DEFAULTS !== null &&
+          appendSystemMessage !== undefined &&
+          !notifiedUnreadableCauses.has(itemsSnapshot.unreadable)
+        ) {
+          notifiedUnreadableCauses.add(itemsSnapshot.unreadable);
           appendSystemMessage?.(
             createSystemMessage(
-              await AUTO_DREAM_DEFAULTS.unreadableItemsNotice(h.unreadable, autoMemPath),
+              await AUTO_DREAM_DEFAULTS.unreadableItemsNotice(itemsSnapshot.unreadable, autoMemDir),
               "warning",
             ),
           );
@@ -226,30 +242,30 @@ function initAutoDream(host) {
       logEvent("tengu_auto_dream_skipped", {
         reason: lit("record_newer"),
       });
-      if (AUTO_DREAM_DEFAULTS !== null && appendSystemMessage !== undefined && !o) {
-        o = true;
+      if (AUTO_DREAM_DEFAULTS !== null && appendSystemMessage !== undefined && !hasShownNewerRecordNotice) {
+        hasShownNewerRecordNotice = true;
         appendSystemMessage?.(createSystemMessage(AUTO_DREAM_DEFAULTS.NEWER_RECORD_NOTICE, "warning"));
       }
       return;
     }
-    let F = canUseTeamMemory();
+    let teamMemoryEnabled = canUseTeamMemory();
     logForDebugging(
       `[autoDream] firing \u2014 ${hoursSince.toFixed(1)}h since last, ${sessionIds.length} sessions to review`,
     );
     logEvent("tengu_auto_dream_fired", {
       hours_since: Math.round(hoursSince),
       sessions_since: sessionIds.length,
-      team_memory_enabled: F,
+      team_memory_enabled: teamMemoryEnabled,
     });
     let { taskRegistry } = context.toolUseContext;
     let abortController = new AbortController();
     let taskId = registerDreamTask(taskRegistry, {
       sessionsReviewing: sessionIds.length,
-      priorMtime: D,
+      priorMtime: priorLastConsolidatedAt,
       abortController,
       storageV5: context.toolUseContext.storageV5,
     });
-    let L = "fork";
+    let phase = "fork";
     try {
       let transcriptDir = getProjectDir(getOriginalCwd());
       let extra = `
@@ -259,21 +275,21 @@ function initAutoDream(host) {
 Sessions since last consolidation (${sessionIds.length}):
 ${sessionIds.map((id) => `- ${id}`).join(`
 `)}`;
-      let we = false;
+      let weUnusedFlag = false;
       let prompt = buildConsolidationPrompt(
-        autoMemPath,
+        autoMemDir,
         transcriptDir,
         extra,
-        F,
+        teamMemoryEnabled,
         isSharedMemoryServedViaTools(),
         false,
       );
-      let prompt_2 = makeDreamProgressWatcher(taskId, taskRegistry, autoMemPath);
-      let H = new Map();
-      let j = new Set();
-      let G = false;
-      let X = false;
-      let V = false;
+      let prompt_2 = makeDreamProgressWatcher(taskId, taskRegistry, autoMemDir);
+      let writtenPathsByToolUseId = new Map();
+      let erroredToolUseIds = new Set();
+      let hitApiError = false;
+      let forkReturned = false;
+      let forkSucceeded = false;
       let result;
       try {
         result = await runForkedAgent({
@@ -284,11 +300,11 @@ ${sessionIds.map((id) => `- ${id}`).join(`
           ],
           cacheSafeParams: createCacheSafeParams(context),
           canUseTool: createAutoMemCanUseTool(
-            autoMemPath,
-            h !== undefined ? AUTO_DREAM_DEFAULTS?.keptItemsOf(h) : undefined,
+            autoMemDir,
+            itemsSnapshot !== undefined ? AUTO_DREAM_DEFAULTS?.keptItemsOf(itemsSnapshot) : undefined,
             {
               fork: "dream",
-              onWriteAllowed: (_, U) => H.set(U, _),
+              onWriteAllowed: (writtenPath, toolUseId) => writtenPathsByToolUseId.set(toolUseId, writtenPath),
             },
           ),
           querySource: "auto_dream",
@@ -297,42 +313,50 @@ ${sessionIds.map((id) => `- ${id}`).join(`
           overrides: {
             abortController,
           },
-          onMessage: (_) => {
-            prompt_2(_);
-            collectErroredToolUseIds(_, j);
-            if (_.type === "assistant") G = _.isApiErrorMessage === true;
+          onMessage: (message) => {
+            prompt_2(message);
+            collectErroredToolUseIds(message, erroredToolUseIds);
+            if (message.type === "assistant") hitApiError = message.isApiErrorMessage === true;
           },
           skipCacheWrite: isBasaltSpurEnabled(),
         });
-        X = true;
-        V = !abortController.signal.aborted && !G;
+        forkReturned = true;
+        forkSucceeded = !abortController.signal.aborted && !hitApiError;
       } finally {
-        let dreamWrote = new Set([...H].filter(([k]) => !V || !j.has(k)).map(([, k]) => k));
-        let mayHaveWritten = new Set([...H].filter(([k]) => V && j.has(k)).map(([, k]) => k));
-        if (AUTO_DREAM_DEFAULTS !== null && M === "capped")
+        let dreamWrote = new Set(
+          [...writtenPathsByToolUseId]
+            .filter(([toolUseId]) => !forkSucceeded || !erroredToolUseIds.has(toolUseId))
+            .map(([, path]) => path),
+        );
+        let mayHaveWritten = new Set(
+          [...writtenPathsByToolUseId]
+            .filter(([toolUseId]) => forkSucceeded && erroredToolUseIds.has(toolUseId))
+            .map(([, path]) => path),
+        );
+        if (AUTO_DREAM_DEFAULTS !== null && memoryItemsState === "capped")
           await AUTO_DREAM_DEFAULTS.deferCappedRunWrites({
-            memoryDir: autoMemPath,
+            memoryDir: autoMemDir,
             dreamWrote,
             mayHaveWritten,
           });
-        if (AUTO_DREAM_DEFAULTS !== null && h !== undefined) {
-          let k = await AUTO_DREAM_DEFAULTS.settleDreamItems({
-            memoryDir: autoMemPath,
-            before: h,
+        if (AUTO_DREAM_DEFAULTS !== null && itemsSnapshot !== undefined) {
+          let settleResult = await AUTO_DREAM_DEFAULTS.settleDreamItems({
+            memoryDir: autoMemDir,
+            before: itemsSnapshot,
             dreamWrote,
             mayHaveWritten,
           });
           if (
-            (k.skipped || k.failed) &&
-            X &&
+            (settleResult.skipped || settleResult.failed) &&
+            forkReturned &&
             !abortController.signal.aborted &&
             !force &&
-            (await AUTO_DREAM_DEFAULTS.claimLockGiveBack(autoMemPath))
+            (await AUTO_DREAM_DEFAULTS.claimLockGiveBack(autoMemDir))
           )
-            await rollbackConsolidationLockDefault(D, context.toolUseContext.storageV5);
+            await rollbackConsolidationLockDefault(priorLastConsolidatedAt, context.toolUseContext.storageV5);
         }
       }
-      L = "completion";
+      phase = "completion";
       completeDreamTask(taskId, taskRegistry);
       let task = context.toolUseContext.taskRegistry.get(taskId);
       let filesTouchedCount = isDreamTask(task) ? task.filesTouched.length : 0;
@@ -356,7 +380,7 @@ ${sessionIds.map((id) => `- ${id}`).join(`
         output: result.totalUsage.output_tokens,
         sessions_reviewed: sessionIds.length,
         files_touched_count: filesTouchedCount,
-        team_memory_enabled: F,
+        team_memory_enabled: teamMemoryEnabled,
         account_memory_line_rendered: false,
       });
     } catch (e) {
@@ -364,14 +388,14 @@ ${sessionIds.map((id) => `- ${id}`).join(`
         logForDebugging("[autoDream] aborted by user");
         return;
       }
-      logForDebugging(`[autoDream] ${L} failed: ${errorMessage(e)}`);
+      logForDebugging(`[autoDream] ${phase} failed: ${errorMessage(e)}`);
       logEvent("tengu_auto_dream_failed", {
-        phase: fromEnum(L),
+        phase: fromEnum(phase),
         error_class: sanitizedErrorNameForTelemetry(toError(e)),
       });
-      if (L === "fork") {
+      if (phase === "fork") {
         markDreamTaskFailed(taskId, taskRegistry);
-        await rollbackConsolidationLockDefault(D, context.toolUseContext.storageV5);
+        await rollbackConsolidationLockDefault(priorLastConsolidatedAt, context.toolUseContext.storageV5);
       }
     }
   };
@@ -380,7 +404,7 @@ ${sessionIds.map((id) => `- ${id}`).join(`
 /**
  * 监视 dream 子代理输出，更新任务进度（touch 的文件、文本）。
  */
-function makeDreamProgressWatcher(taskId, setAppState, autoMemPath) {
+function makeDreamProgressWatcher(taskId, setAppState, autoMemDir) {
   return (msg) => {
     if (msg.type !== "assistant") return;
     let text = "";
@@ -396,8 +420,10 @@ function makeDreamProgressWatcher(taskId, setAppState, autoMemPath) {
         } else if (SHELL_TOOL_NAMES.includes(block.name)) {
           let input = block.input;
           if (typeof input.command === "string" && regExp.test(input.command))
-            for (let E of input.command.matchAll(/"[^"]*\.md"|'[^']*\.md'|(?:\/|[A-Za-z]:[\\/])\S*\.md\b/g))
-              touchedPaths.push(E[0].replace(/^["']|["']$/g, ""));
+            for (let mdPathMatch of input.command.matchAll(
+              /"[^"]*\.md"|'[^']*\.md'|(?:\/|[A-Za-z]:[\\/])\S*\.md\b/g,
+            ))
+              touchedPaths.push(mdPathMatch[0].replace(/^["']|["']$/g, ""));
         }
       }
     addDreamTurn(
@@ -406,7 +432,7 @@ function makeDreamProgressWatcher(taskId, setAppState, autoMemPath) {
         text: text.trim(),
         toolUseCount,
       },
-      touchedPaths.filter((touchedPath) => isAllowedAutoMemWritePath(touchedPath, autoMemPath)),
+      touchedPaths.filter((touchedPath) => isAllowedAutoMemWritePath(touchedPath, autoMemDir)),
       setAppState,
     );
   };
@@ -415,7 +441,7 @@ function makeDreamProgressWatcher(taskId, setAppState, autoMemPath) {
 /**
  * 在给定宿主的 autoDream 状态里取 runner 并执行一次整理（runner 未注册时什么都不做）。
  */
-async function runAutoDreamForHost(e, appendSystemMessage) {
-  await autoDreamHostState.of(e.toolUseContext.session.host).runner?.(e, appendSystemMessage);
+async function runAutoDreamForHost(context, appendSystemMessage) {
+  await autoDreamHostState.of(context.toolUseContext.session.host).runner?.(context, appendSystemMessage);
 }
 export { initAutoDream, runAutoDreamForHost };

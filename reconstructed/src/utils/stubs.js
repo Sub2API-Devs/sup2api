@@ -13,7 +13,7 @@
 /**
  * 空实现的重启桩。
  */
-function noopRelaunch(n, e) {}
+function noopRelaunch(childEnv, args) {}
 //@ chunk-2z9z57nd.js:210-234 placement
 /**
  * 恒 false 的准备桩。

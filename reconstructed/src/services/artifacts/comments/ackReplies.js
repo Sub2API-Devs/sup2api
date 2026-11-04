@@ -16,6 +16,7 @@ import {
 import { env } from "../../../utils/env.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../analytics/growthbook.js";
 import { evaluateAskingNoHost, checkRuleBasedPermissions } from "../../../utils/permissions/permissions.js";
+import { deferInit } from "../../../../runtime/deferred-init.js";
 
 //@ chunk-9tgt55am.js:52643-52718 placement
 var FIXED_ACK_TEXT = "I\u2019m on it. I\u2019ll reply here once I\u2019ve taken a look.";
@@ -34,46 +35,53 @@ function isFixedFastAckEnabled() {
 /**
  * 自动回复确认语的模板表（7 条，标出是否随改稿）与冷却时间 2 s、固定确认文案、两条模型系统提示。
  */
-var ACK_REPLY_TEMPLATES = Object.freeze(
-  [
-    {
-      text: FIXED_ACK_TEXT,
-      edit: false,
-    },
-    {
-      text: "I\u2019m making this change to the Artifact now. I\u2019ll reply here when it\u2019s done.",
-      edit: true,
-    },
-    {
-      text: "I\u2019m reading through the Artifact first, then I\u2019ll work on this change.",
-      edit: true,
-    },
-    {
-      text: "I\u2019m looking into this question and will answer here shortly.",
-      edit: false,
-    },
-    {
-      text: "Let me check the Artifact first. I\u2019ll reply here with what I find.",
-      edit: false,
-    },
-    {
-      text: "Thanks for the follow-up. I\u2019m taking another look and will reply here shortly.",
-      edit: false,
-    },
-    {
-      text: "Got it. I\u2019m revising the Artifact now and will reply here when it\u2019s done.",
-      edit: true,
-    },
-  ].map((e) => Object.freeze(e)),
-);
-var ACK_COOLDOWN_MS = 2000;
+var ACK_REPLY_TEMPLATES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var ACK_COOLDOWN_MS;
+deferInit("chunk-9tgt55am.js:52829", () => {
+  ACK_REPLY_TEMPLATES = Object.freeze(
+    [
+      {
+        text: FIXED_ACK_TEXT,
+        edit: false,
+      },
+      {
+        text: "I\u2019m making this change to the Artifact now. I\u2019ll reply here when it\u2019s done.",
+        edit: true,
+      },
+      {
+        text: "I\u2019m reading through the Artifact first, then I\u2019ll work on this change.",
+        edit: true,
+      },
+      {
+        text: "I\u2019m looking into this question and will answer here shortly.",
+        edit: false,
+      },
+      {
+        text: "Let me check the Artifact first. I\u2019ll reply here with what I find.",
+        edit: false,
+      },
+      {
+        text: "Thanks for the follow-up. I\u2019m taking another look and will reply here shortly.",
+        edit: false,
+      },
+      {
+        text: "Got it. I\u2019m revising the Artifact now and will reply here when it\u2019s done.",
+        edit: true,
+      },
+    ].map((verb) => Object.freeze(verb)),
+  );
+  ACK_COOLDOWN_MS = 2000;
+});
 //@ chunk-9tgt55am.js:54406-54458 placement
-var ACK_EDIT_KEYS = new Set(["action", "url", "thread_id", "text"]);
+var ACK_EDIT_KEYS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-9tgt55am.js:54406", () => {
+  ACK_EDIT_KEYS = new Set(["action", "url", "thread_id", "text"]);
+});
 //@ chunk-9tgt55am.js:54458-55194 placement
-function makeFixedAckPermissionProbe(verdictPremise, t, n) {
-  return async (a, r, s, d, h, y) => {
-    let C = () => {
-      let autoEditPermissionContext = getAutoEditPermissionContext(a, s);
+function makeFixedAckPermissionProbe(verdictPremise, profile, context) {
+  return async (tool, input, toolUseContext, canUseTool, assistantMessage, toolUseId) => {
+    let baseDecision = () => {
+      let autoEditPermissionContext = getAutoEditPermissionContext(tool, toolUseContext);
       return (
         canAutoEditWithoutPrompt(autoEditPermissionContext) &&
         autoEditPermissionContext.mode === verdictPremise.mode &&
@@ -83,35 +91,43 @@ function makeFixedAckPermissionProbe(verdictPremise, t, n) {
         autoEditPermissionContext.classifierDenyRules === verdictPremise.classifierDenyRules
       );
     };
-    let R =
-      a.name === t.tool.name &&
-      Object.keys(r).every((key) => ACK_EDIT_KEYS.has(key)) &&
-      r.action === "reply" &&
-      r.url === t.url &&
-      r.thread_id === t.threadId &&
-      r.text === t.text &&
-      ACK_REPLY_TEMPLATES.some((S) => S.text === r.text);
-    let b = () => evaluateAskingNoHost(a, r, s, d, h, y);
-    if (!R || y !== undefined || s.hookAskFloor === true || s.requireCanUseTool === true || !C()) return b();
+    let decision =
+      tool.name === profile.tool.name &&
+      Object.keys(input).every((key) => ACK_EDIT_KEYS.has(key)) &&
+      input.action === "reply" &&
+      input.url === profile.url &&
+      input.thread_id === profile.threadId &&
+      input.text === profile.text &&
+      ACK_REPLY_TEMPLATES.some((template) => template.text === input.text);
+    let runDefault = () =>
+      evaluateAskingNoHost(tool, input, toolUseContext, canUseTool, assistantMessage, toolUseId);
+    if (
+      !decision ||
+      toolUseId !== undefined ||
+      toolUseContext.hookAskFloor === true ||
+      toolUseContext.requireCanUseTool === true ||
+      !baseDecision()
+    )
+      return runDefault();
     if (
       (await checkRuleBasedPermissions(
-        a,
-        r,
+        tool,
+        input,
         {
-          ...s,
-          toolUseId: h,
+          ...toolUseContext,
+          toolUseId: assistantMessage,
         },
         {
           crashIsObjection: true,
         },
       )) !== null ||
-      !C()
+      !baseDecision()
     )
-      return b();
-    n.rode = true;
+      return runDefault();
+    context.rode = true;
     return {
       behavior: "allow",
-      updatedInput: r,
+      updatedInput: input,
       decisionReason: {
         type: "other",
         reason: "artifact_comment_fixed_ack_on_probe_verdict",

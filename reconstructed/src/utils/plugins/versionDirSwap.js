@@ -23,7 +23,7 @@ import {
   TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
   isPathAbsent,
 } from "../errors.js";
-import { mapped_4, BINARY_LOCKFILE_UNSUPPORTED_TEXT } from "./pluginDependencies.js";
+import { mapped_4, BINARY_LOCKFILE_MESSAGES } from "./pluginDependencies.js";
 import { getPlatform } from "../platform.js";
 import { isSupportedPlatform } from "../../commands/desktop/index.js";
 import {
@@ -44,47 +44,56 @@ import {
   removeDirectoryTreeNoFollow as removeDirectoryTreeNoFollow_2,
   removePathEntry,
 } from "../fsRemove.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:4414770-4414805 placement
 var COMPARE_TREE_BUDGET = 1e4;
 var COMPARE_TREE_BUDGET_BYTES = 419430400;
 var COMPARE_TREE_CHUNK_BYTES = 65536;
 //@ chunk-e6aww6q8.js:4414805-4415609 placement
-async function compareVersionTrees(e, n, r = {}) {
-  let s = r.budget ?? {
+async function compareVersionTrees(stagedRoot, installedRoot, options = {}) {
+  let budget = options.budget ?? {
     entries: COMPARE_TREE_BUDGET,
     bytes: COMPARE_TREE_BUDGET_BYTES,
   };
-  let h = await classifyCacheEntry(n);
-  if (h !== "other")
+  let kind = await classifyCacheEntry(installedRoot);
+  if (kind !== "other")
     return {
-      verdict: h === "absent" ? "absent" : "differs",
+      verdict: kind === "absent" ? "absent" : "differs",
       refresh: [],
     };
-  let y = new Map();
-  let S = await listTreeSignatures(
-    e,
-    (L, G, q) =>
-      (G === ".git" && q === "dir") || (L === `bin/${G}` && r.binariesHook?.declared.has(G) === true),
-    s,
+  let seenDirs = new Map();
+  let stagedSignatures = await listTreeSignatures(
+    stagedRoot,
+    (relPath, name, kind) =>
+      (name === ".git" && kind === "dir") ||
+      (relPath === `bin/${name}` && options.binariesHook?.declared.has(name) === true),
+    budget,
     undefined,
-    y,
+    seenDirs,
   ).catch((error) => {
     if (error instanceof CompareBudgetExceeded) return;
     throw error;
   });
-  if (S === undefined)
+  if (stagedSignatures === undefined)
     return {
       verdict: "differs",
       refresh: [],
     };
-  let w = new Set([...y.keys()].filter((key) => key.split("/").at(-1) === ".git"));
-  return compareVersionDirs(e, n, S, w, r.binariesHook, s).then(
-    (L) =>
-      L
+  let gitDirs = new Set([...seenDirs.keys()].filter((key) => key.split("/").at(-1) === ".git"));
+  return compareVersionDirs(
+    stagedRoot,
+    installedRoot,
+    stagedSignatures,
+    gitDirs,
+    options.binariesHook,
+    budget,
+  ).then(
+    (identical) =>
+      identical
         ? {
             verdict: "identical",
-            refresh: [...w].sort(),
+            refresh: [...gitDirs].sort(),
           }
         : {
             verdict: "differs",
@@ -93,7 +102,7 @@ async function compareVersionTrees(e, n, r = {}) {
     (error) => {
       if (error instanceof StagedReadError) throw error.reason;
       logForDebugging(
-        `versionDirSwap: could not compare ${n} with the staged tree (${getErrnoCode(error) ?? (error instanceof Error ? error.name : "unknown error")}); treating them as different`,
+        `versionDirSwap: could not compare ${installedRoot} with the staged tree (${getErrnoCode(error) ?? (error instanceof Error ? error.name : "unknown error")}); treating them as different`,
       );
       return {
         verdict: "differs",
@@ -113,230 +122,276 @@ class CompareBudgetExceeded extends Error {
 /**
  * 比较两个版本目录（package.json、.git、node_modules 等差异）。
  */
-async function compareVersionDirs(e, n, r, s, binariesHook, y) {
-  let S = new Set(await readdir(n));
-  let w = r.has("package.json") ? mapped_4.find((At) => r.has(At)) : undefined;
-  let L = w !== undefined;
-  let G = getPlatform() === "windows";
-  let q = await lstat(n, {
+async function compareVersionDirs(
+  stagedRoot,
+  installedRoot,
+  installedSignatures,
+  gitDirs,
+  binariesHook,
+  budget,
+) {
+  let installedNames = new Set(await readdir(installedRoot));
+  let lockfilePath = installedSignatures.has("package.json")
+    ? mapped_4.find((candidate) => installedSignatures.has(candidate))
+    : undefined;
+  let hasLockfile = lockfilePath !== undefined;
+  let isWindows = getPlatform() === "windows";
+  let installedStats = await lstat(installedRoot, {
     bigint: true,
   });
-  let Z = await lstat(e, {
+  let stagedStats = await lstat(stagedRoot, {
     bigint: true,
   }).catch((error) => {
     throw new StagedReadError(error);
   });
-  let Se = G ? 0 : Number(q.mode) & FILE_MODE_BITS_MASK;
-  let ke = G ? 0 : Number(Z.mode) & FILE_MODE_BITS_MASK;
-  let we = ownerKey(q);
-  if ((Se & ~ke) !== 0 || !isSameOwnerEntry(we, Se, ownerKey(Z))) return false;
-  let Ee = new Map([
+  let installedLoose = isWindows ? 0 : Number(installedStats.mode) & FILE_MODE_BITS_MASK;
+  let stagedLoose = isWindows ? 0 : Number(stagedStats.mode) & FILE_MODE_BITS_MASK;
+  let owner = ownerKey(installedStats);
+  if (
+    (installedLoose & ~stagedLoose) !== 0 ||
+    !isSameOwnerEntry(owner, installedLoose, ownerKey(stagedStats))
+  )
+    return false;
+  let directories = new Map([
     [
       "",
       {
-        dev: q.dev,
-        ino: q.ino,
-        owner: we,
-        loose: Se,
+        dev: installedStats.dev,
+        ino: installedStats.ino,
+        owner,
+        loose: installedLoose,
       },
     ],
   ]);
-  let Ae = new Set();
-  for (let At of S)
-    if (!r.has(At) && CACHE_CLEANABLE_NAMES.has(At) && (await isRootEntryUnchanged(n, At, Se, we)))
-      Ae.add(At);
-  let Ie = isSupportedPlatform();
-  let flattened = [...(binariesHook?.declared ?? [])].flatMap(([At, It]) => {
-    let Yt = Ie === undefined ? undefined : binaryBaseNameForTarget(At, Ie);
-    return Yt === undefined
+  let cleanableNames = new Set();
+  for (let name of installedNames)
+    if (
+      !installedSignatures.has(name) &&
+      CACHE_CLEANABLE_NAMES.has(name) &&
+      (await isRootEntryUnchanged(installedRoot, name, installedLoose, owner))
+    )
+      cleanableNames.add(name);
+  let target = isSupportedPlatform();
+  let flattened = [...(binariesHook?.declared ?? [])].flatMap(([declared, sha256]) => {
+    let baseName = target === undefined ? undefined : binaryBaseNameForTarget(declared, target);
+    return baseName === undefined
       ? []
       : [
           {
-            declared: At,
-            bare: Yt,
-            sha256: It,
+            declared,
+            bare: baseName,
+            sha256,
           },
         ];
   });
-  let We = new Set(flattened.map((At) => At.bare));
-  let ze = new Map();
-  let lt = await listTreeSignatures(
-    n,
-    (At, It, Yt, qt, Zt, rn) =>
-      (It === ".git" && Yt === "dir" && s.has(At) && (qt & ~Se) === 0 && isSameOwnerEntry(Zt, qt, we)) ||
-      (At === It &&
-        Ae.has(It) &&
-        (It === LINKS_MATERIALIZED_MARKER_2 ? Yt === "file" && rn === 1 : Yt === "dir") &&
-        (qt & ~Se) === 0 &&
-        isSameOwnerEntry(Zt, qt, we) &&
-        (It !== "node_modules" || L)),
-    y,
-    ze,
-    Ee,
-    q,
+  let bareNames = new Set(flattened.map((entry) => entry.bare));
+  let names = new Map();
+  let stagedSignatures = await listTreeSignatures(
+    installedRoot,
+    (relPath, name, kind, loose, dirEntryOwner, nlink) =>
+      (name === ".git" &&
+        kind === "dir" &&
+        gitDirs.has(relPath) &&
+        (loose & ~installedLoose) === 0 &&
+        isSameOwnerEntry(dirEntryOwner, loose, owner)) ||
+      (relPath === name &&
+        cleanableNames.has(name) &&
+        (name === LINKS_MATERIALIZED_MARKER_2 ? kind === "file" && nlink === 1 : kind === "dir") &&
+        (loose & ~installedLoose) === 0 &&
+        isSameOwnerEntry(dirEntryOwner, loose, owner) &&
+        (name !== "node_modules" || hasLockfile)),
+    budget,
+    names,
+    directories,
+    installedStats,
   );
-  let hookNames = new Set([...(binariesHook?.declared.keys() ?? []), ...We].map((At) => join(n, "bin", At)));
-  let nt = {
-    rootOwner: we,
-    names: ze,
+  let hookNames = new Set(
+    [...(binariesHook?.declared.keys() ?? []), ...bareNames].map((name) => join(installedRoot, "bin", name)),
+  );
+  let hookContext = {
+    rootOwner: owner,
+    names,
     hookNames,
-    directories: Ee,
+    directories,
   };
-  if (![...s].every((At) => Ee.has(At) && !lt.has(At))) return false;
-  let Et = (At) => {
-    let [It, Yt, qt] = (At ?? "").split(":");
-    return It === "dir" && qt === "0" && Yt !== undefined && isSameOwnerEntry(Yt, 0, we);
+  if (![...gitDirs].every((dirPath) => directories.has(dirPath) && !stagedSignatures.has(dirPath)))
+    return false;
+  let isPlainBinDir = (signature) => {
+    let [kind, parsedOwner, mode] = (signature ?? "").split(":");
+    return (
+      kind === "dir" && mode === "0" && parsedOwner !== undefined && isSameOwnerEntry(parsedOwner, 0, owner)
+    );
   };
-  let yt = (At) =>
+  let isAllowedHookEntry = (relPath) =>
     binariesHook !== undefined &&
-    ((At === "bin" && Et(lt.get("bin"))) ||
-      (At.startsWith("bin/") &&
-        (We.has(At.slice(4)) || binariesHook.declared.has(At.slice(4))) &&
-        lt.get(At)?.startsWith("file:") === true));
+    ((relPath === "bin" && isPlainBinDir(stagedSignatures.get("bin"))) ||
+      (relPath.startsWith("bin/") &&
+        (bareNames.has(relPath.slice(4)) || binariesHook.declared.has(relPath.slice(4))) &&
+        stagedSignatures.get(relPath)?.startsWith("file:") === true));
   if (!(
-    [...r].every(([At, It]) => isEntrySignatureCompatible(It, lt.get(At))) &&
-    [...lt.keys()].every((key) => r.has(key) || yt(key))
+    [...installedSignatures].every(([relPath, signature]) =>
+      isEntrySignatureCompatible(signature, stagedSignatures.get(relPath)),
+    ) && [...stagedSignatures.keys()].every((key) => installedSignatures.has(key) || isAllowedHookEntry(key))
   ))
     return false;
   if (
-    [...S].some((At) => isOrphanMarkerName(At)) ||
-    (w !== undefined &&
-      !r.has("node_modules") &&
-      (!Ae.has("node_modules") || !(await isHookFileStillPlain(n, w, Ee))))
+    [...installedNames].some((name) => isOrphanMarkerName(name)) ||
+    (lockfilePath !== undefined &&
+      !installedSignatures.has("node_modules") &&
+      (!cleanableNames.has("node_modules") ||
+        !(await isHookFileStillPlain(installedRoot, lockfilePath, directories))))
   )
     return false;
   if (binariesHook !== undefined && binariesHook.declared.size > 0) {
-    let At = lt.get("bin");
-    if (At !== undefined && (r.has("bin") ? !At.startsWith("dir:") : !Et(At))) return false;
-    let It = new Set(flattened.map((Yt) => Yt.declared));
-    for (let [Yt, qt] of binariesHook.declared) {
-      let Zt = lt.has(`bin/${Yt}`);
-      let rn = lt.has("bin") ? await compareBinaryDigest(n, Yt, qt, nt, y, !Zt) : "absent";
-      if (rn === "wrong" || (rn === "absent" && (It.has(Yt) || Zt))) return false;
+    let binSignature = stagedSignatures.get("bin");
+    if (
+      binSignature !== undefined &&
+      (installedSignatures.has("bin") ? !binSignature.startsWith("dir:") : !isPlainBinDir(binSignature))
+    )
+      return false;
+    let declaredNames = new Set(flattened.map((entry) => entry.declared));
+    for (let [declared, sha256] of binariesHook.declared) {
+      let present = stagedSignatures.has(`bin/${declared}`);
+      let digestVerdict = stagedSignatures.has("bin")
+        ? await compareBinaryDigest(installedRoot, declared, sha256, hookContext, budget, !present)
+        : "absent";
+      if (
+        digestVerdict === "wrong" ||
+        (digestVerdict === "absent" && (declaredNames.has(declared) || present))
+      )
+        return false;
     }
     for (let { bare, sha256 } of flattened) {
-      if (r.has(`bin/${bare}`)) continue;
-      let Zt = binariesHook.declared.get(bare) ?? sha256;
-      if (!lt.has("bin") || (await compareBinaryDigest(n, bare, Zt, nt, y, false)) !== "match") return false;
+      if (installedSignatures.has(`bin/${bare}`)) continue;
+      let expectedSha = binariesHook.declared.get(bare) ?? sha256;
+      if (
+        !stagedSignatures.has("bin") ||
+        (await compareBinaryDigest(installedRoot, bare, expectedSha, hookContext, budget, false)) !== "match"
+      )
+        return false;
     }
   }
-  for (let [At, It] of r)
+  for (let [relPath, signature] of installedSignatures)
     if (
-      It.startsWith("file:") &&
+      signature.startsWith("file:") &&
       !(await compareFileBytes(
-        e,
-        n,
-        At,
-        Number(It.split(":")[1]),
-        parseInt(It.split(":").at(-1) ?? "0", 8),
-        It.split(":")[2] === "x",
-        nt,
+        stagedRoot,
+        installedRoot,
+        relPath,
+        Number(signature.split(":")[1]),
+        parseInt(signature.split(":").at(-1) ?? "0", 8),
+        signature.split(":")[2] === "x",
+        hookContext,
       ))
     )
       return false;
   return true;
 }
 //@ chunk-e6aww6q8.js:4417984-4418018 placement
-function isOrphanMarkerName(e) {
-  return normalizePathSegment(e) === ORPHAN_MARKER_FILE;
+function isOrphanMarkerName(name) {
+  return normalizePathSegment(name) === ORPHAN_MARKER_FILE;
 }
 //@ chunk-e6aww6q8.js:4418018-4418030 placement
 var FILE_MODE_BITS_MASK = 3602;
 //@ chunk-e6aww6q8.js:4418030-4418094 placement
-function ownerKey(e) {
-  return getPlatform() === "windows" ? "-.-" : `${e.uid}.${e.gid}`;
+function ownerKey(stats) {
+  return getPlatform() === "windows" ? "-.-" : `${stats.uid}.${stats.gid}`;
 }
 //@ chunk-e6aww6q8.js:4418094-4418188 placement
-function isSameOwnerEntry(e, n, r) {
-  let [s, h] = e.split(".");
-  let [y, S] = r.split(".");
-  return s === y && ((n & 16) === 0 || h === S);
+function isSameOwnerEntry(leftOwnerKey, leftLoose, rightOwnerKey) {
+  let [leftUid, leftGid] = leftOwnerKey.split(".");
+  let [rightUid, rightGid] = rightOwnerKey.split(".");
+  return leftUid === rightUid && ((leftLoose & 16) === 0 || leftGid === rightGid);
 }
 //@ chunk-e6aww6q8.js:4418188-4418574 placement
 /**
  * 已安装条目签名与暂存签名是否兼容（链接目标、属主、权限不更宽）。
  */
-function isEntrySignatureCompatible(e, n) {
-  if (n === undefined) return false;
-  if (e.startsWith("link:")) {
-    let [L, G, ...q] = n.split(":");
-    let [Z, Se, ...ke] = e.split(":");
+function isEntrySignatureCompatible(installedSignature, stagedSignature) {
+  if (stagedSignature === undefined) return false;
+  if (installedSignature.startsWith("link:")) {
+    let [stagedKind, stagedOwner, ...stagedRest] = stagedSignature.split(":");
+    let [installedKind, installedOwner, ...installedRest] = installedSignature.split(":");
     return (
-      L === Z &&
-      q.join(":") === ke.join(":") &&
-      G !== undefined &&
-      Se !== undefined &&
-      isSameOwnerEntry(G, 0, Se)
+      stagedKind === installedKind &&
+      stagedRest.join(":") === installedRest.join(":") &&
+      stagedOwner !== undefined &&
+      installedOwner !== undefined &&
+      isSameOwnerEntry(stagedOwner, 0, installedOwner)
     );
   }
-  let parts = e.split(":");
-  let parts_2 = n.split(":");
-  let h = parseInt(parts.pop() ?? "0", 8);
-  let y = parseInt(parts_2.pop() ?? "0", 8);
-  let S = parts.pop();
-  let w = parts_2.pop();
+  let parts = installedSignature.split(":");
+  let parts_2 = stagedSignature.split(":");
+  let installedMode = parseInt(parts.pop() ?? "0", 8);
+  let stagedMode = parseInt(parts_2.pop() ?? "0", 8);
+  let installedOwnerPart = parts.pop();
+  let stagedOwnerPart = parts_2.pop();
   return (
     parts_2.join(":") === parts.join(":") &&
-    w !== undefined &&
-    S !== undefined &&
-    isSameOwnerEntry(w, y, S) &&
-    (y & ~h) === 0
+    stagedOwnerPart !== undefined &&
+    installedOwnerPart !== undefined &&
+    isSameOwnerEntry(stagedOwnerPart, stagedMode, installedOwnerPart) &&
+    (stagedMode & ~installedMode) === 0
   );
 }
 //@ chunk-e6aww6q8.js:4418574-4418715 placement
-async function isHookFileStillPlain(e, n, r) {
-  let s = BINARY_LOCKFILE_UNSUPPORTED_TEXT.get(n);
+async function isHookFileStillPlain(rootDir, lockfileName, directories) {
+  let lockfilePath = BINARY_LOCKFILE_MESSAGES.get(lockfileName);
   return (
-    s !== undefined &&
-    (await arePathDirsUnchanged(e, s, r)) &&
-    (await lstat(join(e, ...s.split("/"))).then(
-      (h) => h.isFile(),
+    lockfilePath !== undefined &&
+    (await arePathDirsUnchanged(rootDir, lockfilePath, directories)) &&
+    (await lstat(join(rootDir, ...lockfilePath.split("/"))).then(
+      (stats) => stats.isFile(),
       () => false,
     ))
   );
 }
 //@ chunk-e6aww6q8.js:4418715-4418755 placement
-var CACHE_CLEANABLE_NAMES = new Set(["node_modules", IN_USE_MARKER_FILE, LINKS_MATERIALIZED_MARKER_2]);
+var CACHE_CLEANABLE_NAMES; // deferred: uses ORPHAN_MARKER_FILE (./cacheUtils.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:4418715", () => {
+  CACHE_CLEANABLE_NAMES = new Set(["node_modules", IN_USE_MARKER_FILE, LINKS_MATERIALIZED_MARKER_2]);
+});
 //@ chunk-e6aww6q8.js:4418755-4418991 placement
-async function isRootEntryUnchanged(e, n, r, s) {
-  let h = await lstat(join(e, n), {
+async function isRootEntryUnchanged(rootDir, name, loose, owner) {
+  let stats = await lstat(join(rootDir, name), {
     bigint: true,
   });
-  let y = getPlatform() === "windows";
-  let S = y ? 0 : Number(h.mode) & FILE_MODE_BITS_MASK;
-  if ((S & ~r) !== 0 || !isSameOwnerEntry(ownerKey(h), S, s)) return false;
-  if (n === LINKS_MATERIALIZED_MARKER_2) return h.isFile() && (y || h.nlink === 1n);
-  return h.isDirectory() && (!y || (await isSameFilesystem(e, n)));
+  let isWindows = getPlatform() === "windows";
+  let mode = isWindows ? 0 : Number(stats.mode) & FILE_MODE_BITS_MASK;
+  if ((mode & ~loose) !== 0 || !isSameOwnerEntry(ownerKey(stats), mode, owner)) return false;
+  if (name === LINKS_MATERIALIZED_MARKER_2) return stats.isFile() && (isWindows || stats.nlink === 1n);
+  return stats.isDirectory() && (!isWindows || (await isSameFilesystem(rootDir, name)));
 }
 //@ chunk-e6aww6q8.js:4418991-4419509 placement
 /**
  * 路径上每级目录仍是列举时看到的那个普通目录。
  */
-async function arePathDirsUnchanged(e, n, directories) {
-  let s = e;
-  let h = "";
-  for (let y of ["", ...n.split("/").slice(0, -1)]) {
-    s = join(s, y);
-    h = y === "" ? h : h ? `${h}/${y}` : y;
-    let S = await classifyCacheEntry(s);
-    let w = directories.get(h);
+async function arePathDirsUnchanged(rootDir, relPath, directories) {
+  let currentDir = rootDir;
+  let currentRelPath = "";
+  for (let segment of ["", ...relPath.split("/").slice(0, -1)]) {
+    currentDir = join(currentDir, segment);
+    currentRelPath =
+      segment === "" ? currentRelPath : currentRelPath ? `${currentRelPath}/${segment}` : segment;
+    let kind = await classifyCacheEntry(currentDir);
+    let expected = directories.get(currentRelPath);
     if (!(
-      S === "other" &&
-      (w === undefined ||
-        (await lstat(s, {
+      kind === "other" &&
+      (expected === undefined ||
+        (await lstat(currentDir, {
           bigint: true,
-        }).then((G) => {
-          let q = getPlatform() === "windows" ? 0 : Number(G.mode) & FILE_MODE_BITS_MASK;
+        }).then((stats) => {
+          let mode = getPlatform() === "windows" ? 0 : Number(stats.mode) & FILE_MODE_BITS_MASK;
           return (
-            G.isDirectory() &&
-            getFileIdentity_8(w, G) &&
-            (q & ~w.loose) === 0 &&
-            isSameOwnerEntry(ownerKey(G), q, w.owner)
+            stats.isDirectory() &&
+            getFileIdentity_8(expected, stats) &&
+            (mode & ~expected.loose) === 0 &&
+            isSameOwnerEntry(ownerKey(stats), mode, expected.owner)
           );
         })))
     )) {
       logForDebugging(
-        `versionDirSwap: ${s} is no longer the plain directory the installed copy's listing saw (${S}); not opening ${n} through it and treating the trees as different`,
+        `versionDirSwap: ${currentDir} is no longer the plain directory the installed copy's listing saw (${kind}); not opening ${relPath} through it and treating the trees as different`,
       );
       return false;
     }
@@ -347,37 +402,38 @@ async function arePathDirsUnchanged(e, n, directories) {
 /**
  * bin 文件 sha256 与期望一致（match/wrong/absent）。
  */
-async function compareBinaryDigest(e, n, r, s, h, y) {
-  let S = `bin/${n}`;
-  if (!(await arePathDirsUnchanged(e, S, s.directories))) return "wrong";
-  let w = join(e, "bin", n);
+async function compareBinaryDigest(rootDir, name, expectedSha, context, budget, enforceBudget) {
+  let relPath = `bin/${name}`;
+  if (!(await arePathDirsUnchanged(rootDir, relPath, context.directories))) return "wrong";
+  let binPath = join(rootDir, "bin", name);
   if (getPlatform() === "windows")
-    return lstat(w).then(
+    return lstat(binPath).then(
       () => "wrong",
       (error) => (getErrnoCode(error) === "ENOENT" ? "absent" : "wrong"),
     );
-  let L = await openRegularFileChecked(w, {
+  let opened = await openRegularFileChecked(binPath, {
     occupant: {
-      owner: s.rootOwner,
-      names: s.names,
-      hookNames: s.hookNames,
+      owner: context.rootOwner,
+      names: context.names,
+      hookNames: context.hookNames,
     },
   }).catch((error) => (getErrnoCode(error) === "ENOENT" ? "absent" : "wrong"));
-  if (L === "absent" || L === "wrong") return L;
-  if (L === undefined) return "wrong";
-  let { handle, size, mode } = L;
+  if (opened === "absent" || opened === "wrong") return opened;
+  if (opened === undefined) return "wrong";
+  let { handle, size, mode } = opened;
   try {
     if (size > MAX_PLUGIN_BINARY_BYTES || (mode & 64) === 0 || (mode & FILE_MODE_BITS_MASK) !== 0)
       return "wrong";
-    if (y && ((h.entries -= 1) < 0 || (h.bytes -= size) < 0)) throw new CompareBudgetExceeded();
+    if (enforceBudget && ((budget.entries -= 1) < 0 || (budget.bytes -= size) < 0))
+      throw new CompareBudgetExceeded();
     let hash = createHash("sha256");
-    let ke = Buffer.allocUnsafe(COMPARE_TREE_CHUNK_BYTES);
-    for (let we = 0; ; we += COMPARE_TREE_CHUNK_BYTES) {
-      let fully = await readFully(handle, ke, we);
-      if (we + fully > size) return "wrong";
-      hash.update(ke.subarray(0, fully));
+    let buffer = Buffer.allocUnsafe(COMPARE_TREE_CHUNK_BYTES);
+    for (let offset = 0; ; offset += COMPARE_TREE_CHUNK_BYTES) {
+      let fully = await readFully(handle, buffer, offset);
+      if (offset + fully > size) return "wrong";
+      hash.update(buffer.subarray(0, fully));
       if (fully < COMPARE_TREE_CHUNK_BYTES)
-        return we + fully === size && hash.digest("hex") === r ? "match" : "wrong";
+        return offset + fully === size && hash.digest("hex") === expectedSha ? "match" : "wrong";
     }
   } catch (error) {
     if (error instanceof CompareBudgetExceeded) throw error;
@@ -392,56 +448,79 @@ async function compareBinaryDigest(e, n, r, s, h, y) {
 /**
  * 递归列出目录树条目签名（类型、属主、权限、大小），受预算限制。
  */
-async function listTreeSignatures(e, n, r, s, h, y, S = "", w = new Map()) {
-  let L = S === "" ? e : join(e, ...S.split("/"));
-  let G = await readdir(L);
-  let q = await lstat(L, {
+async function listTreeSignatures(
+  rootDir,
+  shouldSkip,
+  budget,
+  hardLinks,
+  directories,
+  expectedIdentity,
+  relPath = "",
+  signatures = new Map(),
+) {
+  let currentDir = relPath === "" ? rootDir : join(rootDir, ...relPath.split("/"));
+  let names = await readdir(currentDir);
+  let dirStats = await lstat(currentDir, {
     bigint: true,
   });
-  if (!q.isDirectory() || (s !== undefined && y !== undefined && !getFileIdentity_8(y, q)))
+  if (
+    !dirStats.isDirectory() ||
+    (hardLinks !== undefined &&
+      expectedIdentity !== undefined &&
+      !getFileIdentity_8(expectedIdentity, dirStats))
+  )
     throw RangeError("a directory moved while its names were being read");
-  for (let Z of G) {
-    let Se = S === "" ? Z : `${S}/${Z}`;
-    let ke = join(L, Z);
-    let we = await lstat(ke, {
+  for (let name of names) {
+    let childRelPath = relPath === "" ? name : `${relPath}/${name}`;
+    let childPath = join(currentDir, name);
+    let childStats = await lstat(childPath, {
       bigint: true,
     });
-    let Ee = we.isSymbolicLink()
+    let kind = childStats.isSymbolicLink()
       ? "link"
-      : we.isDirectory()
-        ? getPlatform() === "windows" && !(await isSameFilesystem(L, Z))
+      : childStats.isDirectory()
+        ? getPlatform() === "windows" && !(await isSameFilesystem(currentDir, name))
           ? "link"
           : "dir"
-        : we.isFile()
+        : childStats.isFile()
           ? "file"
           : "other";
-    let Ae = getPlatform() === "windows" ? 0 : Number(we.mode) & FILE_MODE_BITS_MASK;
-    let Ie = ownerKey(we);
-    let Me = getPlatform() === "windows" ? 1 : Number(we.nlink);
-    if (Ee === "file" && s !== undefined) {
-      let We = `${we.dev}:${we.ino}`;
-      s.set(We, [...(s.get(We) ?? []), ke]);
+    let loose = getPlatform() === "windows" ? 0 : Number(childStats.mode) & FILE_MODE_BITS_MASK;
+    let owner = ownerKey(childStats);
+    let nlink = getPlatform() === "windows" ? 1 : Number(childStats.nlink);
+    if (kind === "file" && hardLinks !== undefined) {
+      let identityKey = `${childStats.dev}:${childStats.ino}`;
+      hardLinks.set(identityKey, [...(hardLinks.get(identityKey) ?? []), childPath]);
     }
-    if (Ee === "dir")
-      h?.set(Se, {
-        dev: we.dev,
-        ino: we.ino,
-        owner: Ie,
-        loose: Ae,
+    if (kind === "dir")
+      directories?.set(childRelPath, {
+        dev: childStats.dev,
+        ino: childStats.ino,
+        owner,
+        loose,
       });
-    if (n(Se, Z, Ee, Ae, Ie, Me)) continue;
-    if ((r.entries -= 1) < 0) throw new CompareBudgetExceeded();
-    if (Ee === "link") w.set(Se, `link:${Ie}:${await readlink(ke)}`);
-    else if (Ee === "dir") {
-      w.set(Se, `dir:${Ie}:${Ae.toString(8)}`);
-      await listTreeSignatures(e, n, r, s, h, we, Se, w);
-    } else if (Ee === "file") {
-      if ((r.bytes -= Number(we.size)) < 0) throw new CompareBudgetExceeded();
-      let We = getPlatform() !== "windows" && (Number(we.mode) & 64) !== 0 ? "x" : "-";
-      w.set(Se, `file:${we.size}:${We}:${Ie}:${Ae.toString(8)}`);
+    if (shouldSkip(childRelPath, name, kind, loose, owner, nlink)) continue;
+    if ((budget.entries -= 1) < 0) throw new CompareBudgetExceeded();
+    if (kind === "link") signatures.set(childRelPath, `link:${owner}:${await readlink(childPath)}`);
+    else if (kind === "dir") {
+      signatures.set(childRelPath, `dir:${owner}:${loose.toString(8)}`);
+      await listTreeSignatures(
+        rootDir,
+        shouldSkip,
+        budget,
+        hardLinks,
+        directories,
+        childStats,
+        childRelPath,
+        signatures,
+      );
+    } else if (kind === "file") {
+      if ((budget.bytes -= Number(childStats.size)) < 0) throw new CompareBudgetExceeded();
+      let execFlag = getPlatform() !== "windows" && (Number(childStats.mode) & 64) !== 0 ? "x" : "-";
+      signatures.set(childRelPath, `file:${childStats.size}:${execFlag}:${owner}:${loose.toString(8)}`);
     } else throw RangeError("an entry that is no file, directory or symlink");
   }
-  return w;
+  return signatures;
 }
 //@ chunk-e6aww6q8.js:4421527-4421649 placement
 class StagedReadError extends Error {
@@ -455,82 +534,98 @@ class StagedReadError extends Error {
 /**
  * 打开普通文件并核对身份、权限、属主与硬链接名。
  */
-async function openRegularFileChecked(e, n) {
-  let r = await lstat(e, {
+async function openRegularFileChecked(filePath, options) {
+  let preStats = await lstat(filePath, {
     bigint: true,
   });
-  if (!r.isFile()) return;
-  let s = await open(e, readOnlyNoFollowFlags());
+  if (!preStats.isFile()) return;
+  let handle = await open(filePath, readOnlyNoFollowFlags());
   try {
-    let stats = await s.stat({
+    let stats = await handle.stat({
       bigint: true,
     });
-    let y = getPlatform() === "windows";
-    let S = y ? 0 : Number(stats.mode) & FILE_MODE_BITS_MASK;
+    let isWindows = getPlatform() === "windows";
+    let mode = isWindows ? 0 : Number(stats.mode) & FILE_MODE_BITS_MASK;
     if (
       stats.isFile() &&
-      (n.occupant === undefined ||
-        (isSameFileIdentity_2(e, r, stats) &&
-          (n.occupant.loose === undefined || (S & ~n.occupant.loose) === 0) &&
-          (n.occupant.exec === undefined || y || ((Number(stats.mode) & 64) !== 0) === n.occupant.exec) &&
-          isSameOwnerEntry(ownerKey(stats), S, n.occupant.owner) &&
-          (await areHardLinksAccounted(e, r, stats, n.occupant.names, n.occupant.hookNames))))
+      (options.occupant === undefined ||
+        (isSameFileIdentity_2(filePath, preStats, stats) &&
+          (options.occupant.loose === undefined || (mode & ~options.occupant.loose) === 0) &&
+          (options.occupant.exec === undefined ||
+            isWindows ||
+            ((Number(stats.mode) & 64) !== 0) === options.occupant.exec) &&
+          isSameOwnerEntry(ownerKey(stats), mode, options.occupant.owner) &&
+          (await areHardLinksAccounted(
+            filePath,
+            preStats,
+            stats,
+            options.occupant.names,
+            options.occupant.hookNames,
+          ))))
     )
       return {
-        handle: s,
+        handle,
         size: Number(stats.size),
         mode: Number(stats.mode),
         owner: ownerKey(stats),
       };
   } catch (error) {
-    await s.close().catch(() => {
+    await handle.close().catch(() => {
       return;
     });
     throw error;
   }
-  await s.close().catch(() => {
+  await handle.close().catch(() => {
     return;
   });
   return;
 }
 //@ chunk-e6aww6q8.js:4422257-4422540 placement
-function isSameFileIdentity_2(e, n, r) {
-  if (n.ino === 0n || r.ino === 0n) return true;
-  let s = n.ino === r.ino && (getPlatform() === "windows" || n.dev === r.dev);
-  if (!s)
+function isSameFileIdentity_2(filePath, preStats, stats) {
+  if (preStats.ino === 0n || stats.ino === 0n) return true;
+  let same = preStats.ino === stats.ino && (getPlatform() === "windows" || preStats.dev === stats.dev);
+  if (!same)
     logForDebugging(
-      `versionDirSwap: ${e} is no longer the file the pre-open check saw (its identity changed between that lstat and the open); treating the trees as different`,
+      `versionDirSwap: ${filePath} is no longer the file the pre-open check saw (its identity changed between that lstat and the open); treating the trees as different`,
     );
-  return s;
+  return same;
 }
 //@ chunk-e6aww6q8.js:4422540-4422637 placement = getFileIdentity (0.794)
-function getFileIdentity_8(e, n) {
+function getFileIdentity_8(seen, current) {
   return (
-    e.ino === 0n || n.ino === 0n || (n.ino === e.ino && (getPlatform() === "windows" || n.dev === e.dev))
+    seen.ino === 0n ||
+    current.ino === 0n ||
+    (current.ino === seen.ino && (getPlatform() === "windows" || current.dev === seen.dev))
   );
 }
 //@ chunk-e6aww6q8.js:4422637-4423234 placement
 /**
  * 文件的硬链接数都能由已安装列表解释。
  */
-async function areHardLinksAccounted(e, n, r, names, hookNames) {
+async function areHardLinksAccounted(filePath, preStats, stats, names, hookNames) {
   if (getPlatform() === "windows") return true;
-  let y = n.ino === 0n || r.ino === 0n ? [e] : (names.get(`${n.dev}:${n.ino}`) ?? []);
+  let linkedPaths =
+    preStats.ino === 0n || stats.ino === 0n
+      ? [filePath]
+      : (names.get(`${preStats.dev}:${preStats.ino}`) ?? []);
   if (
-    y.includes(e) &&
-    r.nlink === BigInt(y.length) &&
-    (hookNames === undefined ? y.length === 1 : y.every((w) => hookNames.has(w)))
+    linkedPaths.includes(filePath) &&
+    stats.nlink === BigInt(linkedPaths.length) &&
+    (hookNames === undefined
+      ? linkedPaths.length === 1
+      : linkedPaths.every((linkPath) => hookNames.has(linkPath)))
   ) {
     if (
       (
         await Promise.all(
-          y
-            .filter((L) => L !== e)
-            .map((L) =>
-              lstat(L, {
+          linkedPaths
+            .filter((linkPath) => linkPath !== filePath)
+            .map((linkPath) =>
+              lstat(linkPath, {
                 bigint: true,
               }).then(
-                (G) => G.isFile() && G.ino === r.ino && G.dev === r.dev,
+                (linkStats) =>
+                  linkStats.isFile() && linkStats.ino === stats.ino && linkStats.dev === stats.dev,
                 () => false,
               ),
             ),
@@ -540,7 +635,7 @@ async function areHardLinksAccounted(e, n, r, names, hookNames) {
       return true;
   }
   logForDebugging(
-    `versionDirSwap: ${e} has ${r.nlink} names and the installed copy's listing accounts for ${y.length} (a hard link elsewhere, a name moved since, or a name no install gives it); treating the trees as different`,
+    `versionDirSwap: ${filePath} has ${stats.nlink} names and the installed copy's listing accounts for ${linkedPaths.length} (a hard link elsewhere, a name moved since, or a name no install gives it); treating the trees as different`,
   );
   return false;
 }
@@ -548,19 +643,20 @@ async function areHardLinksAccounted(e, n, r, names, hookNames) {
 /**
  * 逐块比较暂存与已安装文件内容。
  */
-async function compareFileBytes(e, n, r, s, loose, exec, S) {
-  let w = join(e, ...r.split("/"));
-  let L = await openRegularFileChecked(w, {}).catch((error) => {
+async function compareFileBytes(stagedRoot, installedRoot, relPath, size, loose, exec, context) {
+  let stagedPath = join(stagedRoot, ...relPath.split("/"));
+  let stagedOpened = await openRegularFileChecked(stagedPath, {}).catch((error) => {
     throw new StagedReadError(error);
   });
-  if (L === undefined) throw new StagedReadError(RangeError("a staged entry stopped being a regular file"));
-  let handle = L.handle;
+  if (stagedOpened === undefined)
+    throw new StagedReadError(RangeError("a staged entry stopped being a regular file"));
+  let handle = stagedOpened.handle;
   try {
-    if (!(await arePathDirsUnchanged(n, r, S.directories))) return false;
-    let regularFileChecked = await openRegularFileChecked(join(n, ...r.split("/")), {
+    if (!(await arePathDirsUnchanged(installedRoot, relPath, context.directories))) return false;
+    let regularFileChecked = await openRegularFileChecked(join(installedRoot, ...relPath.split("/")), {
       occupant: {
-        owner: L.owner,
-        names: S.names,
+        owner: stagedOpened.owner,
+        names: context.names,
         loose,
         exec,
       },
@@ -568,18 +664,22 @@ async function compareFileBytes(e, n, r, s, loose, exec, S) {
     if (regularFileChecked === undefined) return false;
     let handle_2 = regularFileChecked.handle;
     try {
-      if (regularFileChecked.size !== s) return false;
-      let Se = Buffer.allocUnsafe(COMPARE_TREE_CHUNK_BYTES);
-      let ke = Buffer.allocUnsafe(COMPARE_TREE_CHUNK_BYTES);
-      for (let we = 0; we <= s; we += COMPARE_TREE_CHUNK_BYTES) {
-        let [Ee, fully] = await Promise.all([
-          readFully(handle, Se, we).catch((error) => {
+      if (regularFileChecked.size !== size) return false;
+      let stagedBuffer = Buffer.allocUnsafe(COMPARE_TREE_CHUNK_BYTES);
+      let installedBuffer = Buffer.allocUnsafe(COMPARE_TREE_CHUNK_BYTES);
+      for (let offset = 0; offset <= size; offset += COMPARE_TREE_CHUNK_BYTES) {
+        let [stagedRead, fully] = await Promise.all([
+          readFully(handle, stagedBuffer, offset).catch((error) => {
             throw new StagedReadError(error);
           }),
-          readFully(handle_2, ke, we),
+          readFully(handle_2, installedBuffer, offset),
         ]);
-        if (Ee !== fully || !Se.subarray(0, Ee).equals(ke.subarray(0, fully))) return false;
-        if (Ee < COMPARE_TREE_CHUNK_BYTES) return we + Ee === s;
+        if (
+          stagedRead !== fully ||
+          !stagedBuffer.subarray(0, stagedRead).equals(installedBuffer.subarray(0, fully))
+        )
+          return false;
+        if (stagedRead < COMPARE_TREE_CHUNK_BYTES) return offset + stagedRead === size;
       }
       return false;
     } finally {
@@ -594,42 +694,59 @@ async function compareFileBytes(e, n, r, s, loose, exec, S) {
   }
 }
 //@ chunk-e6aww6q8.js:4424015-4424150 placement
-async function readFully(handle, n, r, s = 0) {
-  if (s === n.length) return s;
-  let { bytesRead } = await handle.read(n, s, n.length - s, r + s);
-  return bytesRead === 0 ? s : readFully(handle, n, r, s + bytesRead);
+async function readFully(handle, buffer, position, offset = 0) {
+  if (offset === buffer.length) return offset;
+  let { bytesRead } = await handle.read(buffer, offset, buffer.length - offset, position + offset);
+  return bytesRead === 0 ? offset : readFully(handle, buffer, position, offset + bytesRead);
 }
 //@ chunk-e6aww6q8.js:4424150-4424264 placement
-var OCCUPIED_RETRY_DELAYS_MS = [100, 500, 2000];
-var MAX_WAIT_MS = 20000;
-var RETRY_BUDGET_MS = LONG_RETRY_DELAYS_MS.reduce((acc, n) => acc + n, 0) + OCCUPIED_RETRY_DELAYS_MS[0];
-var OCCUPIED_ERRORS = new Set(["ENOTEMPTY", "EEXIST", "EISDIR"]);
+var OCCUPIED_RETRY_DELAYS_MS; // deferred: uses RETRY_DELAYS (../atomicPublishWrite.js) of its import cycle while loading; runs once the cycle is complete
+var MAX_WAIT_MS;
+var RETRY_BUDGET_MS;
+var OCCUPIED_ERRORS;
+deferInit("chunk-e6aww6q8.js:4424150", () => {
+  OCCUPIED_RETRY_DELAYS_MS = [100, 500, 2000];
+  MAX_WAIT_MS = 20000;
+  RETRY_BUDGET_MS =
+    LONG_RETRY_DELAYS_MS.reduce((acc, delayMs) => acc + delayMs, 0) + OCCUPIED_RETRY_DELAYS_MS[0];
+  OCCUPIED_ERRORS = new Set(["ENOTEMPTY", "EEXIST", "EISDIR"]);
+});
 //@ chunk-e6aww6q8.js:4424264-4424559 placement
-class HeldOccupantError extends TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS {
-  code;
-  pluginCommandErrorCategory = "in-use";
-  constructor(e, code) {
-    super(
-      e,
-      "plugin install: the installed copy of this plugin version could not be set aside (held by another program, or not modifiable by this account) and was not replaced",
-    );
-    this.code = code;
-    this.name = "HeldOccupantError";
-  }
-}
+let HeldOccupantError; // deferred: uses TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS (../errors.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:4424264", () => {
+  HeldOccupantError = class HeldOccupantError extends (
+    TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
+  ) {
+    code;
+    pluginCommandErrorCategory = "in-use";
+    constructor(message, code) {
+      super(
+        message,
+        "plugin install: the installed copy of this plugin version could not be set aside (held by another program, or not modifiable by this account) and was not replaced",
+      );
+      this.code = code;
+      this.name = "HeldOccupantError";
+    }
+  };
+});
 //@ chunk-e6aww6q8.js:4424559-4424846 placement
-class BusyVersionDirError extends TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS {
-  code;
-  pluginCommandErrorCategory = "unknown";
-  constructor(e, code) {
-    super(
-      e,
-      "plugin install: the new copy of this plugin version could not be moved into its version folder (any installed copy had first been set aside or removed)",
-    );
-    this.code = code;
-    this.name = "BusyVersionDirError";
-  }
-}
+let BusyVersionDirError; // deferred: uses TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS (../errors.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:4424559", () => {
+  BusyVersionDirError = class BusyVersionDirError extends (
+    TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
+  ) {
+    code;
+    pluginCommandErrorCategory = "unknown";
+    constructor(message, code) {
+      super(
+        message,
+        "plugin install: the new copy of this plugin version could not be moved into its version folder (any installed copy had first been set aside or removed)",
+      );
+      this.code = code;
+      this.name = "BusyVersionDirError";
+    }
+  };
+});
 //@ chunk-e6aww6q8.js:4424846-4424971 placement
 class OccupiedDestination extends Error {
   refusal;
@@ -643,10 +760,10 @@ class OccupiedDestination extends Error {
 /**
  * 替换版本目录：除不可比对的部分外与暂存树一致时整目录替换。
  */
-async function swapVersionDir(e, n, r) {
-  let s = {
-    renameDirectory: r.renameDirectory ?? rename,
-    sleep: r.sleep ?? sleep,
+async function swapVersionDir(stagedPath, versionPath, options) {
+  let context = {
+    renameDirectory: options.renameDirectory ?? rename,
+    sleep: options.sleep ?? sleep,
     budget: {
       waitMs: MAX_WAIT_MS,
       reserveMs: RETRY_BUDGET_MS,
@@ -654,79 +771,80 @@ async function swapVersionDir(e, n, r) {
       bytes: COMPARE_TREE_BUDGET_BYTES,
     },
   };
-  let h = async () => {
-    if (!r.keepIdentical) return "differs";
-    let { verdict, refresh } = await compareVersionTrees(e, n, {
-      binariesHook: r.binariesHook,
-      budget: s.budget,
+  let compare = async () => {
+    if (!options.keepIdentical) return "differs";
+    let { verdict, refresh } = await compareVersionTrees(stagedPath, versionPath, {
+      binariesHook: options.binariesHook,
+      budget: context.budget,
     });
     if (verdict === "identical" && refresh.length > 0) {
       logForDebugging(
-        `versionDirSwap: ${n} matches the staged tree except for ${refresh.join(", ")}, which a compare cannot vouch for; replacing the whole copy`,
+        `versionDirSwap: ${versionPath} matches the staged tree except for ${refresh.join(", ")}, which a compare cannot vouch for; replacing the whole copy`,
       );
       return "differs";
     }
     return verdict;
   };
-  let y = async (Se, ke) => {
-    if (Se === "kept") await removeStagedCopy(e);
-    await Promise.all(ke.map(removeSetAsideCopy));
-    if ((await classifyCacheEntry(dirname(n))) === "other") await sweepStaleTempSiblings(n);
-    return Se;
+  let finish = async (verdict, setAsidePaths) => {
+    if (verdict === "kept") await removeStagedCopy(stagedPath);
+    await Promise.all(setAsidePaths.map(removeSetAsideCopy));
+    if ((await classifyCacheEntry(dirname(versionPath))) === "other")
+      await sweepStaleTempSiblings(versionPath);
+    return verdict;
   };
-  let S = await h().catch(async (error) => {
-    await removeStagedCopy(e);
+  let initialVerdict = await compare().catch(async (error) => {
+    await removeStagedCopy(stagedPath);
     throw error;
   });
-  if (S === "identical") {
-    logForDebugging(`versionDirSwap: ${n} already holds exactly the staged tree; kept it`);
-    return y("kept", []);
+  if (initialVerdict === "identical") {
+    logForDebugging(`versionDirSwap: ${versionPath} already holds exactly the staged tree; kept it`);
+    return finish("kept", []);
   }
-  let w =
-    S === "absent"
+  let asideResult =
+    initialVerdict === "absent"
       ? {
           kind: "absent",
         }
-      : await setInstalledCopyAside(n, s).catch(async (error) => {
-          await removeStagedCopy(e);
+      : await setInstalledCopyAside(versionPath, context).catch(async (error) => {
+          await removeStagedCopy(stagedPath);
           throw error;
         });
-  let path = w.kind === "aside" ? w.path : undefined;
-  let G = [];
-  let q = () => [...(path === undefined ? [] : [path]), ...G];
-  let Z;
+  let path = asideResult.kind === "aside" ? asideResult.path : undefined;
+  let setAsidePaths = [];
+  let allSetAsidePaths = () => [...(path === undefined ? [] : [path]), ...setAsidePaths];
+  let publishResult;
   try {
-    Z = await publishStagedTree(e, n, h, s, G);
+    publishResult = await publishStagedTree(stagedPath, versionPath, compare, context, setAsidePaths);
   } catch (error) {
-    s.budget.reserveMs = 0;
-    let ke = await restoreSetAsideCopy(n, w, G, h, s);
-    await removeStagedCopy(e);
-    if (ke === "kept") return y("kept", q());
-    if (ke === "restored")
+    context.budget.reserveMs = 0;
+    let restoreResult = await restoreSetAsideCopy(versionPath, asideResult, setAsidePaths, compare, context);
+    await removeStagedCopy(stagedPath);
+    if (restoreResult === "kept") return finish("kept", allSetAsidePaths());
+    if (restoreResult === "restored")
       await Promise.all(
-        G.map(async (we) =>
-          (await hasRealEntries(we, {
+        setAsidePaths.map(async (path) =>
+          (await hasRealEntries(path, {
             whenUnreadable: true,
           }))
             ? undefined
-            : removeSetAsideCopy(we),
+            : removeSetAsideCopy(path),
         ),
       );
-    throw await restoreVersionDir(error, n, ke, q());
+    throw await restoreVersionDir(error, versionPath, restoreResult, allSetAsidePaths());
   }
-  return y(Z, q());
+  return finish(publishResult, allSetAsidePaths());
 }
 //@ chunk-e6aww6q8.js:4426197-4427064 placement
-async function setInstalledCopyAside(e, n) {
-  let tempSiblingName = makeTempSiblingName(e);
+async function setInstalledCopyAside(versionPath, context) {
+  let dirPath = makeTempSiblingName(versionPath);
   try {
-    await touchVersionDir(e);
-    await renameDirectoryWithRetry(e, tempSiblingName, n);
-    await touchVersionDir(tempSiblingName);
-    logForDebugging(`versionDirSwap: set the installed copy aside: ${e} \u2192 ${tempSiblingName}`);
+    await touchVersionDir(versionPath);
+    await renameDirectoryWithRetry(versionPath, dirPath, context);
+    await touchVersionDir(dirPath);
+    logForDebugging(`versionDirSwap: set the installed copy aside: ${versionPath} \u2192 ${dirPath}`);
     return {
       kind: "aside",
-      path: tempSiblingName,
+      path: dirPath,
     };
   } catch (error) {
     if (isPathAbsent(error))
@@ -736,19 +854,19 @@ async function setInstalledCopyAside(e, n) {
     let errnoCode = getErrnoCode(error);
     if (errnoCode === "EXDEV") {
       logForDebugging(
-        `versionDirSwap: ${e} sits on a filesystem layer that refuses to rename it (EXDEV); removing it in place before the publish instead`,
+        `versionDirSwap: ${versionPath} sits on a filesystem layer that refuses to rename it (EXDEV); removing it in place before the publish instead`,
         {
           level: "warn",
         },
       );
-      await removeDirectoryTreeNoFollow_2(e);
+      await removeDirectoryTreeNoFollow_2(versionPath);
       return {
         kind: "removed",
       };
     }
     if (isTransientFsError(error))
       throw new HeldOccupantError(
-        `The installed copy of this plugin version at ${e} could not be replaced: it is in use by another program (for example a running Claude Code session, or an editor or terminal inside that folder), or this account is not allowed to modify it (${errnoCode}). It was not replaced and the new copy was discarded. Close what is using it, or check the folder's permissions, and run the install again.`,
+        `The installed copy of this plugin version at ${versionPath} could not be replaced: it is in use by another program (for example a running Claude Code session, or an editor or terminal inside that folder), or this account is not allowed to modify it (${errnoCode}). It was not replaced and the new copy was discarded. Close what is using it, or check the folder's permissions, and run the install again.`,
         errnoCode ?? "unknown",
       );
     throw error;
@@ -759,42 +877,44 @@ function isTransientFsError(error) {
   return getPlatform() === "windows" && TRANSIENT_FS_ERRORS_2.has(getErrnoCode(error) ?? "");
 }
 //@ chunk-e6aww6q8.js:4427121-4427240 placement
-async function sleepWithinBudget(e, n) {
-  if (n.budget.waitMs - e < n.budget.reserveMs) return false;
-  n.budget.waitMs -= e;
-  await n.sleep(e);
+async function sleepWithinBudget(delayMs, context) {
+  if (context.budget.waitMs - delayMs < context.budget.reserveMs) return false;
+  context.budget.waitMs -= delayMs;
+  await context.sleep(delayMs);
   return true;
 }
 //@ chunk-e6aww6q8.js:4427240-4427553 placement
 /**
  * 重命名目录，暂时失败按延迟表重试。
  */
-async function renameDirectoryWithRetry(e, n, r, s = false, h = 0) {
+async function renameDirectoryWithRetry(fromPath, toPath, context, refuseOccupied = false, attempt = 0) {
   try {
-    await r.renameDirectory(e, n);
+    await context.renameDirectory(fromPath, toPath);
   } catch (error) {
-    let S = isTransientFsError(error) ? LONG_RETRY_DELAYS_MS[h] : undefined;
-    if (S === undefined) throw error;
-    if (s && (await classifyCacheEntry(n)) !== "absent") throw new OccupiedDestination(error);
-    if (!(await sleepWithinBudget(S, r))) throw error;
+    let delayMs = isTransientFsError(error) ? LONG_RETRY_DELAYS_MS[attempt] : undefined;
+    if (delayMs === undefined) throw error;
+    if (refuseOccupied && (await classifyCacheEntry(toPath)) !== "absent")
+      throw new OccupiedDestination(error);
+    if (!(await sleepWithinBudget(delayMs, context))) throw error;
     logForDebugging(
-      `versionDirSwap: rename ${e} \u2192 ${n} failed (${errorCodeOrName(error)}); trying again after ${S}ms`,
+      `versionDirSwap: rename ${fromPath} \u2192 ${toPath} failed (${errorCodeOrName(error)}); trying again after ${delayMs}ms`,
     );
-    await renameDirectoryWithRetry(e, n, r, s, h + 1);
+    await renameDirectoryWithRetry(fromPath, toPath, context, refuseOccupied, attempt + 1);
   }
 }
 //@ chunk-e6aww6q8.js:4427553-4427733 placement
-async function classifyRenameFailure(error, n) {
+async function classifyRenameFailure(error, versionPath) {
   if (error instanceof OccupiedDestination)
     return {
       occupied: true,
       error: error.refusal,
     };
-  let r = getErrnoCode(error) ?? "";
+  let code = getErrnoCode(error) ?? "";
   return {
     occupied:
-      OCCUPIED_ERRORS.has(r) ||
-      ((r === "ENOTDIR" || isTransientFsError(error)) && (await classifyCacheEntry(n)) !== "absent"),
+      OCCUPIED_ERRORS.has(code) ||
+      ((code === "ENOTDIR" || isTransientFsError(error)) &&
+        (await classifyCacheEntry(versionPath)) !== "absent"),
     error,
   };
 }
@@ -802,83 +922,95 @@ async function classifyRenameFailure(error, n) {
 /**
  * 发布暂存树；目标被其他进程重建时比较并保留或挪开。
  */
-async function publishStagedTree(e, n, r, s, h, y = 0) {
+async function publishStagedTree(stagedPath, versionPath, compare, context, setAsidePaths, attempt = 0) {
   try {
-    await renameDirectoryWithRetry(e, n, s, true);
+    await renameDirectoryWithRetry(stagedPath, versionPath, context, true);
     return "published";
   } catch (error) {
-    let { occupied, error: error_2 } = await classifyRenameFailure(error, n);
-    let G = OCCUPIED_RETRY_DELAYS_MS[y];
-    if (G === undefined || !occupied || !(await sleepWithinBudget(G, s))) throw error_2;
+    let { occupied, error: error_2 } = await classifyRenameFailure(error, versionPath);
+    let delayMs = OCCUPIED_RETRY_DELAYS_MS[attempt];
+    if (delayMs === undefined || !occupied || !(await sleepWithinBudget(delayMs, context))) throw error_2;
     logForDebugging(
-      `versionDirSwap: ${n} was re-created by another process during the install (${errorCodeOrName(error_2)}); looked again after ${G}ms`,
+      `versionDirSwap: ${versionPath} was re-created by another process during the install (${errorCodeOrName(error_2)}); looked again after ${delayMs}ms`,
     );
-    if ((await compareAndSetAside(n, r, s, h)) === "identical") return "kept";
-    return publishStagedTree(e, n, r, s, h, y + 1);
+    if ((await compareAndSetAside(versionPath, compare, context, setAsidePaths)) === "identical")
+      return "kept";
+    return publishStagedTree(stagedPath, versionPath, compare, context, setAsidePaths, attempt + 1);
   }
 }
 //@ chunk-e6aww6q8.js:4428103-4428342 placement
-async function compareAndSetAside(e, n, r, s) {
-  let h = await n();
-  if (h === "identical")
-    logForDebugging(`versionDirSwap: another process published exactly the staged tree at ${e}; kept it`);
-  else if (h === "differs") {
-    let y = await setInstalledCopyAside(e, r);
-    if (y.kind === "aside") s.push(y.path);
+async function compareAndSetAside(versionPath, compare, context, setAsidePaths) {
+  let verdict = await compare();
+  if (verdict === "identical")
+    logForDebugging(
+      `versionDirSwap: another process published exactly the staged tree at ${versionPath}; kept it`,
+    );
+  else if (verdict === "differs") {
+    let asideResult = await setInstalledCopyAside(versionPath, context);
+    if (asideResult.kind === "aside") setAsidePaths.push(asideResult.path);
   }
-  return h;
+  return verdict;
 }
 //@ chunk-e6aww6q8.js:4428342-4428723 placement
 /**
  * 失败后把挪开的副本移回（无内容则不恢复）。
  */
-async function restoreSetAsideCopy(e, n, r, s, h) {
-  if (n.kind !== "aside") return n.kind === "removed" ? "removed" : "untouched";
+async function restoreSetAsideCopy(versionPath, asideResult, compare, context, setAsidePaths) {
+  if (asideResult.kind !== "aside") return asideResult.kind === "removed" ? "removed" : "untouched";
   if (
-    !(await hasRealEntries(n.path, {
+    !(await hasRealEntries(asideResult.path, {
       whenUnreadable: true,
     }))
   ) {
     logForDebugging(
-      `versionDirSwap: the folder that was at ${e} held no plugin payload (or is gone); it is not moved back and the version path is left free`,
+      `versionDirSwap: the folder that was at ${versionPath} held no plugin payload (or is gone); it is not moved back and the version path is left free`,
       {
         level: "warn",
       },
     );
     return "not-restored";
   }
-  let y = await moveInstalledCopyBack(n.path, e, s, h, r);
-  return y === "moved" ? "restored" : y;
+  let moveResult = await moveInstalledCopyBack(
+    asideResult.path,
+    versionPath,
+    context,
+    setAsidePaths,
+    compare,
+  );
+  return moveResult === "moved" ? "restored" : moveResult;
 }
 //@ chunk-e6aww6q8.js:4428723-4429258 placement
-async function moveInstalledCopyBack(e, n, r, s, h, y = false) {
+async function moveInstalledCopyBack(fromPath, toPath, compare, context, setAsidePaths, retried = false) {
   try {
-    await renameDirectoryWithRetry(e, n, s, true);
-    logForDebugging(`versionDirSwap: moved ${e} back to ${n}`, {
+    await renameDirectoryWithRetry(fromPath, toPath, context, true);
+    logForDebugging(`versionDirSwap: moved ${fromPath} back to ${toPath}`, {
       level: "warn",
     });
     return "moved";
   } catch (error) {
-    let { occupied, error: error_2 } = await classifyRenameFailure(error, n);
-    if (!y && occupied) {
-      let G = await compareAndSetAside(n, r, s, h).catch((error) => {
+    let { occupied, error: error_2 } = await classifyRenameFailure(error, toPath);
+    if (!retried && occupied) {
+      let verdict = await compareAndSetAside(toPath, compare, context, setAsidePaths).catch((error) => {
         logForDebugging(
-          `versionDirSwap: could not displace what now stands at ${n} (${errorCodeOrName(error)})`,
+          `versionDirSwap: could not displace what now stands at ${toPath} (${errorCodeOrName(error)})`,
           {
             level: "warn",
           },
         );
         return;
       });
-      if (G === "identical") return "kept";
-      if (G === "differs" || G === "absent") {
-        await sleepWithinBudget(OCCUPIED_RETRY_DELAYS_MS[0], s);
-        return moveInstalledCopyBack(e, n, r, s, h, true);
+      if (verdict === "identical") return "kept";
+      if (verdict === "differs" || verdict === "absent") {
+        await sleepWithinBudget(OCCUPIED_RETRY_DELAYS_MS[0], context);
+        return moveInstalledCopyBack(fromPath, toPath, compare, context, setAsidePaths, true);
       }
     }
-    logForDebugging(`versionDirSwap: could not move ${e} back to ${n} (${errorCodeOrName(error_2)})`, {
-      level: "warn",
-    });
+    logForDebugging(
+      `versionDirSwap: could not move ${fromPath} back to ${toPath} (${errorCodeOrName(error_2)})`,
+      {
+        level: "warn",
+      },
+    );
     return "stranded";
   }
 }
@@ -886,13 +1018,15 @@ async function moveInstalledCopyBack(e, n, r, s, h, y = false) {
 /**
  * 替换失败时恢复原版本目录，并说明恢复结果。
  */
-async function restoreVersionDir(error, n, r, s) {
+async function restoreVersionDir(error, versionPath, restoreState, setAsidePaths) {
   let code = getErrnoCode(error) ?? "unknown";
-  let y = error instanceof HeldOccupantError || isTransientFsError(error) || OCCUPIED_ERRORS.has(code);
-  let S = (
-    await Promise.all(s.map(async (Z) => ((await classifyCacheEntry(Z)) === "absent" ? [] : [Z])))
+  let isBusy = error instanceof HeldOccupantError || isTransientFsError(error) || OCCUPIED_ERRORS.has(code);
+  let remainingPaths = (
+    await Promise.all(
+      setAsidePaths.map(async (path) => ((await classifyCacheEntry(path)) === "absent" ? [] : [path])),
+    )
   ).flat();
-  let w = {
+  let stateNote = {
     untouched: "",
     removed:
       " The previously installed copy had to be removed first (this filesystem refuses to rename it), so this plugin version is not installed now.",
@@ -900,33 +1034,37 @@ async function restoreVersionDir(error, n, r, s) {
     "not-restored":
       " The folder that was there before held no plugin files (or was already gone) and was not moved back; install the plugin again to restore it.",
     stranded: " The previously installed copy could not be moved back.",
-  }[r];
-  let L =
-    S.length === 0
+  }[restoreState];
+  let leftoverNote =
+    remainingPaths.length === 0
       ? ""
-      : ` Left on disk (removed by a later install of this version, or the plugin cache cleanup): ${S.join(", ")}.`;
-  if (!y && (r === "untouched" || r === "restored") && S.length === 0) {
-    if (w !== "")
-      logForDebugging(`versionDirSwap:${w}`, {
+      : ` Left on disk (removed by a later install of this version, or the plugin cache cleanup): ${remainingPaths.join(", ")}.`;
+  if (
+    !isBusy &&
+    (restoreState === "untouched" || restoreState === "restored") &&
+    remainingPaths.length === 0
+  ) {
+    if (stateNote !== "")
+      logForDebugging(`versionDirSwap:${stateNote}`, {
         level: "warn",
       });
     return error;
   }
-  let G = y
+  let cause = isBusy
     ? `the new copy or the version folder stayed busy while the install ran (${code}) \u2014 usually a scanner still reading the freshly downloaded files, another program using that folder, or another process re-creating it`
     : `the move failed (${code})`;
   return new BusyVersionDirError(
-    `Could not move the new copy of this plugin version into ${n}: ${G}.${w}${L} ${y ? "Run the install again once other Claude Code sessions or programs using that folder have finished." : "Check the plugin cache folder's permissions and free disk space, then run the install again."}`,
+    `Could not move the new copy of this plugin version into ${versionPath}: ${cause}.${stateNote}${leftoverNote} ${isBusy ? "Run the install again once other Claude Code sessions or programs using that folder have finished." : "Check the plugin cache folder's permissions and free disk space, then run the install again."}`,
     code,
   );
 }
 //@ chunk-e6aww6q8.js:4430664-4430890 placement
-async function touchVersionDir(e) {
+async function touchVersionDir(dirPath) {
   let date = new Date();
-  await lutimes(e, date, date).catch((error) => {
+  await lutimes(dirPath, date, date).catch((error) => {
     if (isPathAbsent(error)) return;
     logForDebugging(
-      `versionDirSwap: could not refresh the timestamp of ${e} (${errorCodeOrName(error)}); a concurrent cleanup may treat it as older than it is`,
+      `versionDirSwap: could not refresh the timestamp of ${dirPath} (${errorCodeOrName(error)}); a concurrent cleanup may treat it as older than it is`,
       {
         level: "warn",
       },
@@ -941,26 +1079,26 @@ function errorCodeOrName(error) {
 /**
  * 删除挪开的旧副本，删不净记 warn。
  */
-async function removeSetAsideCopy(e) {
-  let n = await classifyCacheEntry(e);
-  if (n === "absent") return;
-  await (n === "other" ? removeDirectoryTreeNoFollow_2(e) : removePathEntry(e)).catch((error) => {
-    logForDebugging(`versionDirSwap: removing the set-aside copy ${e} failed (${errorCodeOrName(error)})`);
+async function removeSetAsideCopy(path) {
+  let kind = await classifyCacheEntry(path);
+  if (kind === "absent") return;
+  await (kind === "other" ? removeDirectoryTreeNoFollow_2(path) : removePathEntry(path)).catch((error) => {
+    logForDebugging(`versionDirSwap: removing the set-aside copy ${path} failed (${errorCodeOrName(error)})`);
   });
-  if ((await classifyCacheEntry(e)) !== "absent")
+  if ((await classifyCacheEntry(path)) !== "absent")
     logForDebugging(
-      `versionDirSwap: the set-aside copy ${e} could not be fully removed; a later install of this version or the plugin cache cleanup removes it`,
+      `versionDirSwap: the set-aside copy ${path} could not be fully removed; a later install of this version or the plugin cache cleanup removes it`,
       {
         level: "warn",
       },
     );
 }
 //@ chunk-e6aww6q8.js:4431327-4431505 placement
-async function removeStagedCopy(e) {
-  let n = await classifyCacheEntry(e);
-  if (n === "absent") return;
-  await (n === "other" ? removeDirectoryTreeNoFollow_2(e) : removePathEntry(e)).catch((error) => {
-    logForDebugging(`versionDirSwap: could not remove the staged copy ${e} (${errorCodeOrName(error)})`);
+async function removeStagedCopy(path) {
+  let kind = await classifyCacheEntry(path);
+  if (kind === "absent") return;
+  await (kind === "other" ? removeDirectoryTreeNoFollow_2(path) : removePathEntry(path)).catch((error) => {
+    logForDebugging(`versionDirSwap: could not remove the staged copy ${path} (${errorCodeOrName(error)})`);
   });
 }
 export { swapVersionDir };

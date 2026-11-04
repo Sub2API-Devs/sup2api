@@ -34,6 +34,7 @@ import {
 } from "fs";
 import { isIP } from "net";
 import { randomBytes } from "crypto";
+import { normalizeDomainKey, domainRuleMatches } from "../wildcardMapLookup.js";
 import {
   collectFromSandboxSettings,
   getSandboxSettingsSources,
@@ -51,9 +52,9 @@ import { celModule, ensurePrivateDir, bridgeSpawnDir, HOST_FUNCTION_CATEGORIES }
 import {
   removeTrailingGlobSuffix,
   containsGlobChars,
-  yM,
-  bM,
-  SM,
+  compileDenyGlob,
+  canonicalGlobSource,
+  directoryCoverRegex,
   expandWindowsEnvRefs,
   containsGlobCharsWin,
   stripExtendedPathPrefix,
@@ -105,7 +106,7 @@ import {
   SandboxProtectionNotRenewedError,
 } from "./sandboxErrors.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, string, _enum, array } from "../../../vendor/zod/v4/classic/schemas.js";
+import { objectSchema, stringSchema, _enum, array } from "../../../vendor/zod/v4/classic/schemas.js";
 import { readFlagWithOverride } from "../../services/analytics/flagOverrides.js";
 import { PLUGIN_TOOL_STAGING_GUARD_FLAG, PLUGIN_TOOL_STAGING_DIRNAME } from "../tempDir.js";
 import {
@@ -238,15 +239,15 @@ import { logEvent } from "../../services/analytics/index.js";
 import { repoResidentSettingSources } from "../permissions/permissionsLoader.js";
 import { FILE_EDIT_TOOL_NAME } from "../../tools/FileEditTool/constants.js";
 import { FILE_READ_TOOL_NAME } from "../../tools/FileReadTool/constants.js";
-import { En } from "../../../vendor/lodash-es/_inlinedHelpers.js";
+import { import_sortedIndex_2 } from "../../../vendor/lodash-es/_inlinedHelpers.js";
 import { isPathWithin, toComparablePath, hasWin32DevicePrefixSpelling } from "../fsJunctions.js";
 import { userSettingsHomes } from "../settings/settingsFileParsing.js";
 import {
-  credentialRuleExtractSchema,
+  AWS_CREDENTIAL_ENV_NAMES,
   credentialRuleRefine,
-  credentialRuleExtraSchema,
-  credentialRuleOnNoMatchSchema,
-  credentialRuleDecodeSchema,
+  MERGE_PAIR_SUPPRESSOR_SENTINEL,
+  SLOT_COLLISION_SENTINEL,
+  INVALID_PAIR_SENTINEL,
 } from "../settings/settingsSourceTrust.js";
 import { ripgrepCommand } from "../ripgrep.js";
 import {
@@ -256,7 +257,7 @@ import {
   linuxSandboxProbes,
 } from "./linuxSandboxExec.js";
 import { SandboxManager_2 } from "../../../vendor/@anthropic-ai/sandbox-runtime/dist/sandbox/sandbox-manager.js";
-import { io } from "../../../vendor/@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
+import { memoizeAlias } from "../../../vendor/@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
 import { createStore } from "../../state/store.js";
 import { fromEnum } from "../../services/analytics/safeMetadata.js";
 import { isSentinelInode, jsonStringify } from "../slowOperations.js";
@@ -271,11 +272,20 @@ import { BASH_TOOL_NAME } from "../../tools/BashTool/toolName.js";
 import { permissionRuleExtractPrefix } from "../permissions/shellRuleMatching.js";
 import { getPluginRegistry } from "../plugins/pluginLoadState.js";
 import { READ_LIMITS, O_NOFOLLOW_ANY } from "../fsBoundRead.js";
-import { normalizeDomainKey, domainRuleMatches } from "../wildcardMapLookup.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
+//@ chunk-czffketc.js:1080-1176 placement
+/**
+ * hostIdentityMatches：主机身份是否一致。
+ */
+function hostIdentityMatches(hostPattern, host) {
+  let patternKey = normalizeDomainKey(`domain:${hostPattern}`);
+  let hostKey = normalizeDomainKey(`domain:${host}`);
+  return patternKey.includes("*") ? domainRuleMatches(patternKey, hostKey) : patternKey === hostKey;
+}
 //@ chunk-fq0cr76a.js:853952-854002 fingerprint = getExcludedCommands (0.74)
 function getTrustedExcludedCommands() {
-  return collectFromSandboxSettings((e) => e.excludedCommands);
+  return collectFromSandboxSettings((settings) => settings.excludedCommands);
 }
 //@ chunk-fq0cr76a.js:904355-904448 placement
 /**
@@ -310,46 +320,46 @@ class SandboxPolicyRefusalError extends Error {
 /**
  * POSIX 路径前缀覆盖：相等、或根目录覆盖一切绝对路径、或以 e/ 开头。
  */
-function posixCovers(e, n) {
-  return n === e || (e === "/" ? n.startsWith("/") : n.startsWith(`${e}/`));
+function posixCovers(rulePath, path) {
+  return path === rulePath || (rulePath === "/" ? path.startsWith("/") : path.startsWith(`${rulePath}/`));
 }
 //@ chunk-fq0cr76a.js:904725-904873 placement
 /**
  * 用 picomatch 按 dot:true（可选大小写不敏感）匹配 glob，编译结果按模式缓存，编译失败视为不匹配。
  */
-function matchesGuardedGlob(e, n, r, s = false) {
-  let h = s ? `${n}\x00nocase` : n;
-  let y = r?.get(h);
-  if (!y) {
+function matchesGuardedGlob(path, pattern, cache, nocase = false) {
+  let cacheKey = nocase ? `${pattern}\x00nocase` : pattern;
+  let matcher = cache?.get(cacheKey);
+  if (!matcher) {
     try {
-      y = celModule.default(n, {
+      matcher = celModule.default(pattern, {
         dot: true,
-        nocase: s,
+        nocase,
       });
     } catch {
-      y = () => false;
+      matcher = () => false;
     }
-    r?.set(h, y);
+    cache?.set(cacheKey, matcher);
   }
-  return y(e);
+  return matcher(path);
 }
 //@ chunk-fq0cr76a.js:904873-905134 placement
 /**
  * 把含通配段的路径拆成若干“名字读法”：整串作字面名，以及每个通配段前的前缀目录 + 余下 glob，用于判断 glob 可能命中的文件夹名。
  */
-function nameReadingsOfGlobSpelling(e) {
-  let n = removeTrailingGlobSuffix(e);
-  let parts = n.split("/");
-  let flattened = parts.flatMap((h, y) => (containsGlobChars(h) ? [y] : []));
+function nameReadingsOfGlobSpelling(spelling) {
+  let baseName = removeTrailingGlobSuffix(spelling);
+  let parts = baseName.split("/");
+  let flattened = parts.flatMap((part, partIndex) => (containsGlobChars(part) ? [partIndex] : []));
   if (flattened.length === 0) return [];
   return [
     {
-      name: n.replace(/\/+$/, ""),
+      name: baseName.replace(/\/+$/, ""),
       pattern: null,
     },
-    ...flattened.slice(1).map((h) => ({
-      name: parts.slice(0, h).join("/"),
-      pattern: `/${parts.slice(h).join("/")}${e.slice(n.length)}`,
+    ...flattened.slice(1).map((partIndex) => ({
+      name: parts.slice(0, partIndex).join("/"),
+      pattern: `/${parts.slice(partIndex).join("/")}${spelling.slice(baseName.length)}`,
     })),
   ];
 }
@@ -357,24 +367,24 @@ function nameReadingsOfGlobSpelling(e) {
 /**
  * 路径是否匹配某个名字读法：字面名相等，或位于前缀目录下且余下部分匹配 glob。
  */
-function matchesNameReading(e, n, r, s = false) {
-  return n.some(({ name: h, pattern }) =>
+function matchesNameReading(path, readings, cache, nocase = false) {
+  return readings.some(({ name, pattern }) =>
     pattern === null
-      ? e === h
-      : e.startsWith(`${h}/`) && matchesGuardedGlob(e.slice(h.length), pattern, r, s),
+      ? path === name
+      : path.startsWith(`${name}/`) && matchesGuardedGlob(path.slice(name.length), pattern, cache, nocase),
   );
 }
 //@ chunk-fq0cr76a.js:905263-905425 placement = LayoutMeasureMode (0.654)
-function matchesRuntimeGlobBy(path, n, caseMode, s) {
+function matchesRuntimeGlobBy(path, pattern, caseMode, matchFn) {
   return (
-    s(n, path) ||
+    matchFn(pattern, path) ||
     (containsGlobChars(path) &&
-      nameReadingsOfGlobSpelling(n).some(({ name: h, pattern }) =>
+      nameReadingsOfGlobSpelling(pattern).some(({ name, pattern }) =>
         pattern === null
           ? caseMode === "exactly"
-            ? path === h
-            : posixCovers(h, path)
-          : path.startsWith(`${h}/`) && s(pattern, path.slice(h.length)),
+            ? path === name
+            : posixCovers(name, path)
+          : path.startsWith(`${name}/`) && matchFn(pattern, path.slice(name.length)),
       ))
   );
 }
@@ -390,24 +400,27 @@ function matchesDenyGlobAtRuntime(path, pattern, caseMode, coverage, cache) {
     let cacheKey = (readTranslation) => `${globPattern}\x00runtime ${readTranslation} ${coverage}`;
     let matcher = cache?.get(cacheKey(caseMode));
     if (!matcher) {
-      let R = yM(globPattern);
-      let writeTranslation = coverage === "unread" ? undefined : bM(globPattern);
+      let readTranslation = compileDenyGlob(globPattern);
+      let writeTranslation = coverage === "unread" ? undefined : canonicalGlobSource(globPattern);
       let translations = (
         coverage === "allBeneathItsDirectory"
-          ? R.kind !== "read" || writeTranslation?.kind !== "read"
+          ? readTranslation.kind !== "read" || writeTranslation?.kind !== "read"
           : coverage === "allBeneathIfUncompilable" &&
-            (R.kind === "unreadable" || writeTranslation?.kind === "unreadable")
+            (readTranslation.kind === "unreadable" || writeTranslation?.kind === "unreadable")
       )
-        ? [SM(getGlobBaseDirectory_2(globPattern))]
-        : [R, writeTranslation].flatMap((K) => (K?.kind === "read" ? [K.translation] : []));
-      let buildMatcher = (K) => {
-        let [primary, secondary] = translations.map((translation) => translation[K]);
+        ? [directoryCoverRegex(getGlobBaseDirectory_2(globPattern))]
+        : [readTranslation, writeTranslation].flatMap((translation) =>
+            translation?.kind === "read" ? [translation.translation] : [],
+          );
+      let buildMatcher = (caseMode) => {
+        let [primary, secondary] = translations.map((translation) => translation[caseMode]);
         if (!primary) return () => false;
         return !secondary || secondary.source === primary.source
-          ? (J) => primary.test(J)
-          : (J) => primary.test(J) || secondary.test(J);
+          ? (candidate) => primary.test(candidate)
+          : (candidate) => primary.test(candidate) || secondary.test(candidate);
       };
-      for (let K of ["anyCase", "ownCase", "exactly"]) cache?.set(cacheKey(K), buildMatcher(K));
+      for (let caseMode of ["anyCase", "ownCase", "exactly"])
+        cache?.set(cacheKey(caseMode), buildMatcher(caseMode));
       matcher = buildMatcher(caseMode);
     }
     return matcher(candidate);
@@ -417,95 +430,105 @@ function matchesDenyGlobAtRuntime(path, pattern, caseMode, coverage, cache) {
 /**
  * deny 条目是否覆盖目标路径：非 glob 用前缀覆盖；glob 则对目标及其各级父目录依次尝试 glob 与名字读法匹配。
  */
-function denyEntryCovers(e, n, r, s = false) {
-  if (!containsGlobChars(e)) return posixCovers(e, n);
-  let h = containsGlobChars(n) ? nameReadingsOfGlobSpelling(e) : [];
-  let y = n;
+function denyEntryCovers(denyPattern, path, cache, nocase = false) {
+  if (!containsGlobChars(denyPattern)) return posixCovers(denyPattern, path);
+  let readings = containsGlobChars(path) ? nameReadingsOfGlobSpelling(denyPattern) : [];
+  let candidate = path;
   for (;;) {
-    if (matchesGuardedGlob(y, e, r, s) || matchesNameReading(y, h, r, s)) return true;
-    let b = dirname(y);
-    if (b === y) return false;
-    y = b;
+    if (
+      matchesGuardedGlob(candidate, denyPattern, cache, nocase) ||
+      matchesNameReading(candidate, readings, cache, nocase)
+    )
+      return true;
+    let parent = dirname(candidate);
+    if (parent === candidate) return false;
+    candidate = parent;
   }
 }
 //@ chunk-fq0cr76a.js:906214-906325 placement
-function denyEntryCoversPath(e, n, r, s = false) {
-  if (!containsGlobChars(e)) return posixCovers(e, n);
+function denyEntryCoversPath(denyPattern, path, cache, nocase = false) {
+  if (!containsGlobChars(denyPattern)) return posixCovers(denyPattern, path);
   return (
-    matchesDenyGlobAtRuntime(n, e, s ? "anyCase" : "ownCase", "unread", r) || denyEntryCovers(e, n, r, s)
+    matchesDenyGlobAtRuntime(path, denyPattern, nocase ? "anyCase" : "ownCase", "unread", cache) ||
+    denyEntryCovers(denyPattern, path, cache, nocase)
   );
 }
 //@ chunk-fq0cr76a.js:906325-906578 placement
 /**
  * 判断沙箱路径模式是否覆盖某路径：无 glob 时按路径段前缀比较，有 glob 时大小写两种折叠都试并处理不可编译模式。
  */
-function denyEntryCoversFolded(e, n, r) {
-  let s = getPlatform() === "windows";
-  let h = s ? e.replaceAll("\\", "/") : e;
-  let y = s ? n.replaceAll("\\", "/") : n;
-  if (!containsGlobChars(h)) return isPathPrefixOf(h, y);
-  let b = "allBeneathIfUncompilable";
-  let S = foldPathCase(h);
-  let w = foldPathCase(y);
+function denyEntryCoversFolded(denyPattern, path, cache) {
+  let isWindows = getPlatform() === "windows";
+  let posixPattern = isWindows ? denyPattern.replaceAll("\\", "/") : denyPattern;
+  let posixPath = isWindows ? path.replaceAll("\\", "/") : path;
+  if (!containsGlobChars(posixPattern)) return isPathPrefixOf(posixPattern, posixPath);
+  let coverage = "allBeneathIfUncompilable";
+  let foldedPattern = foldPathCase(posixPattern);
+  let foldedPath = foldPathCase(posixPath);
   return (
-    matchesDenyGlobAtRuntime(y, h, "anyCase", b, r) ||
-    matchesDenyGlobAtRuntime(w, S, "ownCase", b, r) ||
-    denyEntryCovers(h, y, r, true) ||
-    denyEntryCovers(S, w, r)
+    matchesDenyGlobAtRuntime(posixPath, posixPattern, "anyCase", coverage, cache) ||
+    matchesDenyGlobAtRuntime(foldedPath, foldedPattern, "ownCase", coverage, cache) ||
+    denyEntryCovers(posixPattern, posixPath, cache, true) ||
+    denyEntryCovers(foldedPattern, foldedPath, cache)
   );
 }
 //@ chunk-fq0cr76a.js:906578-906746 placement
 /**
  * glob 模式第一个通配符之前的目录部分（Windows 用 win32.dirname）。
  */
-function getGlobBaseDirectory_2(e) {
-  let n = e.split(/[*?[\]]/)[0] ?? "";
-  if (getPlatform() === "windows") return win32.dirname(n.replace(/[/\\]+$/, "\\_"));
-  return n.endsWith("/") ? n.replace(/\/+$/, "") || "/" : dirname(n);
+function getGlobBaseDirectory_2(pattern) {
+  let literalPrefix = pattern.split(/[*?[\]]/)[0] ?? "";
+  if (getPlatform() === "windows") return win32.dirname(literalPrefix.replace(/[/\\]+$/, "\\_"));
+  return literalPrefix.endsWith("/") ? literalPrefix.replace(/\/+$/, "") || "/" : dirname(literalPrefix);
 }
 //@ chunk-fq0cr76a.js:906746-906971 placement = permissionRuleValueFromString (0.361)
 /**
  * 把规则串（如 `Read(//secret/**)`、`WebFetch(domain:x)`）解析成 {toolName, ruleContent}，Windows 上对反斜杠路径单独处理转义。
  */
 function parseRuleForSandbox(ruleString) {
-  let n = classifyRuleParens(ruleString);
-  if (n.kind !== "call" || !n.toolName || n.rawContent === "")
+  let parsed = classifyRuleParens(ruleString);
+  if (parsed.kind !== "call" || !parsed.toolName || parsed.rawContent === "")
     return {
       toolName: canonicalToolName(ruleString),
     };
-  let r = getPlatform() === "windows" && isWindowsAbsoluteRule(n.rawContent);
+  let isWindowsPath = getPlatform() === "windows" && isWindowsAbsoluteRule(parsed.rawContent);
   return {
-    toolName: canonicalToolName(n.toolName),
-    ruleContent: r ? unescapeParens(n.rawContent) : unescapeRuleContent(n.rawContent),
+    toolName: canonicalToolName(parsed.toolName),
+    ruleContent: isWindowsPath ? unescapeParens(parsed.rawContent) : unescapeRuleContent(parsed.rawContent),
   };
 }
 //@ chunk-fq0cr76a.js:906971-907311 placement
 /**
  * 去掉沙箱路径规则中的 glob 转义（\x→x，单字符类 [x]→x），保留真正的通配与字符类；Windows 上只在特定字符前视反斜杠为转义。
  */
-function unescapeGlobPattern(e) {
-  let n = getPlatform() === "windows";
-  let r = n && isWindowsAbsoluteRule(e);
-  let s = "";
-  for (let j = 0; j < e.length; j++) {
-    let y = e[j];
-    let b = e[j + 1];
-    if (y === "\\" && b !== undefined && !r && (!n || isEscapableRuleChar(b))) {
-      s += containsGlobChars(b) ? y + b : b;
+function unescapeGlobPattern(pattern) {
+  let isWindows = getPlatform() === "windows";
+  let keepBackslashes = isWindows && isWindowsAbsoluteRule(pattern);
+  let result = "";
+  for (let j = 0; j < pattern.length; j++) {
+    let char = pattern[j];
+    let nextChar = pattern[j + 1];
+    if (
+      char === "\\" &&
+      nextChar !== undefined &&
+      !keepBackslashes &&
+      (!isWindows || isEscapableRuleChar(nextChar))
+    ) {
+      result += containsGlobChars(nextChar) ? char + nextChar : nextChar;
       j++;
-    } else if (y === "[" && b !== undefined) {
-      if (e[j + 2] === "]" && !containsGlobChars(b) && !"\\/!^".includes(b)) {
-        s += b;
+    } else if (char === "[" && nextChar !== undefined) {
+      if (pattern[j + 2] === "]" && !containsGlobChars(nextChar) && !"\\/!^".includes(nextChar)) {
+        result += nextChar;
         j += 2;
       } else {
-        let index = e.indexOf("]", j + 2);
-        let w = index === -1 ? e.length : index + 1;
-        s += e.slice(j, w);
-        j = w - 1;
+        let index = pattern.indexOf("]", j + 2);
+        let classEnd = index === -1 ? pattern.length : index + 1;
+        result += pattern.slice(j, classEnd);
+        j = classEnd - 1;
       }
-    } else s += y;
+    } else result += char;
   }
-  return s;
+  return result;
 }
 //@ chunk-fq0cr76a.js:907311-907613 placement
 /**
@@ -516,16 +539,16 @@ function resolvePathPatternForSandboxAt(pattern, sourceRoot) {
   if (pattern.startsWith("//")) return stripTrailingSlash(unescapeGlobPattern(pattern.slice(1)));
   if (pattern.startsWith("/")) {
     let sliced = pattern.slice(1);
-    let y = !(getPlatform() === "windows" && /^(?:[A-Za-z]:[\\/]|\\\\)/.test(sliced));
-    return resolve(sourceRoot, (y ? "./" : "") + unescapeGlobPattern(sliced));
+    let relativeToRoot = !(getPlatform() === "windows" && /^(?:[A-Za-z]:[\\/]|\\\\)/.test(sliced));
+    return resolve(sourceRoot, (relativeToRoot ? "./" : "") + unescapeGlobPattern(sliced));
   }
-  let r = unescapeGlobPattern(pattern);
-  let s = /^(?:[\\/]|~[\\/]|~$|[A-Za-z]:)/.exec(r)?.[0] ?? "";
-  return stripTrailingSlash(pattern.startsWith(s) ? r : `./${r}`);
+  let unescaped = unescapeGlobPattern(pattern);
+  let anchor = /^(?:[\\/]|~[\\/]|~$|[A-Za-z]:)/.exec(unescaped)?.[0] ?? "";
+  return stripTrailingSlash(pattern.startsWith(anchor) ? unescaped : `./${unescaped}`);
 }
 //@ chunk-fq0cr76a.js:907613-907652 placement
-function resolvePathPatternForSandbox(pattern, n) {
-  return resolvePathPatternForSandboxAt(pattern, getRuleAnchorRootForSource(n));
+function resolvePathPatternForSandbox(pattern, source) {
+  return resolvePathPatternForSandboxAt(pattern, getRuleAnchorRootForSource(source));
 }
 //@ chunk-fq0cr76a.js:907652-907762 placement
 /**
@@ -542,46 +565,48 @@ function resolveSandboxFilesystemPathAt(pattern, source) {
 /**
  * 沙箱文件系统路径是否为相对路径（不是绝对路径也不是 ~/ 开头）；Windows 先展开 %USERPROFILE% 类变量。
  */
-function isSandboxFilesystemPathRelative(e) {
-  let trimmed = (getPlatform() === "windows" ? expandWindowsProfileVariables(e) : e).trim();
+function isSandboxFilesystemPathRelative(value) {
+  let trimmed = (getPlatform() === "windows" ? expandWindowsProfileVariables(value) : value).trim();
   return !isAbsolute(trimmed) && !/^~(?:\/|$)/.test(trimmed);
 }
 //@ chunk-fq0cr76a.js:907853-907920 placement
 /**
  * Windows 上含 profile 变量的路径在旧版本被当相对路径读，返回 ./ 前缀的旧读法用于提示；其他情况 null。
  */
-function sandboxFilesystemPathAsReadEarlier(e) {
-  return getPlatform() === "windows" && hasWindowsProfileVariable(e) ? `./${e.trim()}` : null;
+function sandboxFilesystemPathAsReadEarlier(value) {
+  return getPlatform() === "windows" && hasWindowsProfileVariable(value) ? `./${value.trim()}` : null;
 }
 //@ chunk-fq0cr76a.js:907920-908037 placement
-function hasWindowsProfileVariable(e) {
-  return /^\s*(?:~\\|%(?:USERPROFILE|APPDATA|LOCALAPPDATA)%)/i.test(e) && !/%HOME(?:DRIVE|PATH)%/i.test(e);
+function hasWindowsProfileVariable(value) {
+  return (
+    /^\s*(?:~\\|%(?:USERPROFILE|APPDATA|LOCALAPPDATA)%)/i.test(value) && !/%HOME(?:DRIVE|PATH)%/i.test(value)
+  );
 }
 //@ chunk-fq0cr76a.js:908037-908314 placement
-function expandWindowsProfileVariables(e) {
-  if (!hasWindowsProfileVariable(e)) return e;
-  let n = homedir();
+function expandWindowsProfileVariables(value) {
+  if (!hasWindowsProfileVariable(value)) return value;
+  let home = homedir();
   return expandWindowsEnvRefs(
-    e
+    value
       .replace(/%APPDATA%/gi, () =>
-        env.APPDATA && isAbsolute(env.APPDATA) ? env.APPDATA : join(n, "AppData", "Roaming"),
+        env.APPDATA && isAbsolute(env.APPDATA) ? env.APPDATA : join(home, "AppData", "Roaming"),
       )
       .replace(/%LOCALAPPDATA%/gi, () =>
-        env.LOCALAPPDATA && isAbsolute(env.LOCALAPPDATA) ? env.LOCALAPPDATA : join(n, "AppData", "Local"),
+        env.LOCALAPPDATA && isAbsolute(env.LOCALAPPDATA) ? env.LOCALAPPDATA : join(home, "AppData", "Local"),
       ),
   ).replace(/^\s*~\\/, "~/");
 }
 //@ chunk-fq0cr76a.js:908314-908454 placement
-function stripTrailingSlash(e, { evenAfterGlob: n = false } = {}) {
-  if (getPlatform() === "windows" || !e.endsWith("/")) return e;
-  if (!n && containsGlobChars(e)) return e;
-  return e.replace(/\/+$/, "") || "/";
+function stripTrailingSlash(path, { evenAfterGlob = false } = {}) {
+  if (getPlatform() === "windows" || !path.endsWith("/")) return path;
+  if (!evenAfterGlob && containsGlobChars(path)) return path;
+  return path.replace(/\/+$/, "") || "/";
 }
 //@ chunk-fq0cr76a.js:908454-908564 placement
-function normalizeDirectoryPattern(e) {
+function normalizeDirectoryPattern(pattern) {
   if (getPlatform() === "windows")
-    return containsGlobCharsWin(stripExtendedPathPrefix(e)) ? e.replace(/[\\/]+$/, "") : e;
-  return stripTrailingSlash(e, {
+    return containsGlobCharsWin(stripExtendedPathPrefix(pattern)) ? pattern.replace(/[\\/]+$/, "") : pattern;
+  return stripTrailingSlash(pattern, {
     evenAfterGlob: true,
   });
 }
@@ -594,47 +619,51 @@ function isDirectorySync(file) {
   }
 }
 //@ chunk-fq0cr76a.js:908627-908689 placement
-function isDirectoryNoFollow(e) {
+function isDirectoryNoFollow(path) {
   try {
-    return lstatSync(e).isDirectory();
+    return lstatSync(path).isDirectory();
   } catch {
     return false;
   }
 }
 //@ chunk-fq0cr76a.js:908689-908728 placement
-function resolveSandboxFilesystemPath(pattern, n) {
-  return resolveSandboxFilesystemPathAt(pattern, getRuleAnchorRootForSource(n));
+function resolveSandboxFilesystemPath(pattern, source) {
+  return resolveSandboxFilesystemPathAt(pattern, getRuleAnchorRootForSource(source));
 }
 //@ chunk-fq0cr76a.js:908728-908760 placement
-function isRepoSettingSource(e) {
-  return REPO_DIR_SETTING_SOURCES.has(e);
+function isRepoSettingSource(source) {
+  return REPO_DIR_SETTING_SOURCES.has(source);
 }
 //@ chunk-fq0cr76a.js:908760-908827 placement
-function isUserTierSource(e) {
-  return e === "userSettings" || (e === "flagSettings" && isNotBackgroundSession());
+function isUserTierSource(source) {
+  return source === "userSettings" || (source === "flagSettings" && isNotBackgroundSession());
 }
 //@ chunk-fq0cr76a.js:908827-908915 placement
-function isTrustedTierSource(e) {
-  return e === "policySettings"
+function isTrustedTierSource(source) {
+  return source === "policySettings"
     ? isPolicySlotAdminOrParentComposed()
-    : e === "userSettings" || e === "flagSettings";
+    : source === "userSettings" || source === "flagSettings";
 }
 //@ chunk-fq0cr76a.js:908915-908970 placement
 function isNotBackgroundSession() {
   return env.CLAUDE_CODE_SESSION_KIND !== "bg";
 }
 //@ chunk-fq0cr76a.js:908970-909065 placement
-function warnDroppedPathEntry(error, n) {
-  reportSandboxPathError(error, `Ignoring unresolvable sandbox path entry from ${n}`, "pathEntryDropped");
+function warnDroppedPathEntry(error, source) {
+  reportSandboxPathError(
+    error,
+    `Ignoring unresolvable sandbox path entry from ${source}`,
+    "pathEntryDropped",
+  );
 }
 //@ chunk-fq0cr76a.js:909065-909182 placement
-function reportSandboxPathError(e, n, r) {
-  let s = e instanceof SandboxPathEntryError ? e.cause : e;
-  if (s instanceof NullBytePathError)
-    logForDebugging(`${n}: ${errorMessage(s)}`, {
+function reportSandboxPathError(error, label, code) {
+  let cause = error instanceof SandboxPathEntryError ? error.cause : error;
+  if (cause instanceof NullBytePathError)
+    logForDebugging(`${label}: ${errorMessage(cause)}`, {
       level: "warn",
     });
-  else reportSandboxErrorUnderStandIn(s, r);
+  else reportSandboxErrorUnderStandIn(cause, code);
 }
 //@ chunk-fq0cr76a.js:909182-909288 placement
 class SandboxPathEntryError extends Error {
@@ -649,16 +678,16 @@ class SandboxPathEntryError extends Error {
 /**
  * 解析一条沙箱路径条目；失败时若沙箱为必需、或是可信层的 deny 条目则抛 SandboxPathEntryError（整个配置构建失败），否则告警丢弃。
  */
-function resolvePathEntry(e, n, r, s) {
+function resolvePathEntry(entry, source, kind, resolveFn) {
   try {
-    return s(e, n);
+    return resolveFn(entry, source);
   } catch (error) {
     if (
-      (isSettingSourceEnabled(n) && isSandboxRequired()) ||
-      (!(error instanceof NullBytePathError) && r === "deny" && !isRepoSettingSource(n))
+      (isSettingSourceEnabled(source) && isSandboxRequired()) ||
+      (!(error instanceof NullBytePathError) && kind === "deny" && !isRepoSettingSource(source))
     )
-      throw new SandboxPathEntryError(`${errorMessage(error)} (a sandbox path entry from ${n})`, error);
-    warnDroppedPathEntry(error, n);
+      throw new SandboxPathEntryError(`${errorMessage(error)} (a sandbox path entry from ${source})`, error);
+    warnDroppedPathEntry(error, source);
     return;
   }
 }
@@ -666,45 +695,48 @@ function resolvePathEntry(e, n, r, s) {
 /**
  * 批量解析路径条目（相对于来源根、展开 ~），丢弃解析失败的条目。
  */
-function resolvePathEntries(e, n, r, s) {
-  return (e ?? []).flatMap((h) => {
-    let pathEntry = resolvePathEntry(h, n, r, s);
+function resolvePathEntries(entries, source, kind, resolveFn) {
+  return (entries ?? []).flatMap((entry) => {
+    let pathEntry = resolvePathEntry(entry, source, kind, resolveFn);
     return pathEntry === undefined ? [] : [pathEntry];
   });
 }
 //@ chunk-fq0cr76a.js:909560-909600 placement
-function resolveSandboxPathPatterns(e, n, r) {
-  return resolvePathEntries(e, n, r, resolveSandboxFilesystemPath);
+function resolveSandboxPathPatterns(entries, source, kind) {
+  return resolvePathEntries(entries, source, kind, resolveSandboxFilesystemPath);
 }
 //@ chunk-fq0cr76a.js:909600-909749 placement
 /**
  * 把权限规则列表按工具名分组，只保留有 ruleContent 的（如取出所有 Read(...) 的路径）。
  */
-function groupRuleContentsByTool(e, n) {
-  let r = new Map(n.map((s) => [s, []]));
-  for (let s of e ?? []) {
-    let ruleForSandbox = parseRuleForSandbox(s);
-    if (ruleForSandbox.ruleContent) r.get(ruleForSandbox.toolName)?.push(ruleForSandbox.ruleContent);
+function groupRuleContentsByTool(ruleStrings, toolNames) {
+  let byTool = new Map(toolNames.map((toolName) => [toolName, []]));
+  for (let ruleString of ruleStrings ?? []) {
+    let ruleForSandbox = parseRuleForSandbox(ruleString);
+    if (ruleForSandbox.ruleContent) byTool.get(ruleForSandbox.toolName)?.push(ruleForSandbox.ruleContent);
   }
-  return r;
+  return byTool;
 }
 //@ chunk-fq0cr76a.js:909749-909789 placement
-function resolveSandboxDenyReadEntry(e, source) {
-  return normalizeDirPattern(e, resolveSandboxFilesystemPath(e, source));
+function resolveSandboxDenyReadEntry(entry, source) {
+  return normalizeDirPattern(entry, resolveSandboxFilesystemPath(entry, source));
 }
 //@ chunk-fq0cr76a.js:909789-909825 placement
-function normalizeDirPattern(e, n) {
-  return normalizeDirEntryPattern(e, normalizeDirectoryPattern(n));
+function normalizeDirPattern(entry, path) {
+  return normalizeDirEntryPattern(entry, normalizeDirectoryPattern(path));
 }
 //@ chunk-fq0cr76a.js:909825-909947 placement
-var NETWORK_HOST_RULE_SCHEMA = DoctorLazy(() =>
-  u({
-    host: string().min(1),
-    action: _enum(["allow", "deny"]).optional(),
-    methods: array(string()).optional(),
-    reason: string().optional(),
-  }),
-);
+var NETWORK_HOST_RULE_SCHEMA; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-fq0cr76a.js:909825", () => {
+  NETWORK_HOST_RULE_SCHEMA = DoctorLazy(() =>
+    objectSchema({
+      host: stringSchema().min(1),
+      action: _enum(["allow", "deny"]).optional(),
+      methods: array(stringSchema()).optional(),
+      reason: stringSchema().optional(),
+    }),
+  );
+});
 //@ chunk-fq0cr76a.js:909947-909974 placement
 function antSandboxConfig() {
   return null;
@@ -768,8 +800,8 @@ function relatchTenguSandboxGbConfig() {
 //@ chunk-fq0cr76a.js:910513-910605 placement
 function getTlsTerminateSetting() {
   return getSandboxSettingsSources()
-    .map((e) => e?.sandbox?.network?.tlsTerminate)
-    .find((e) => e !== undefined);
+    .map((settings) => settings?.sandbox?.network?.tlsTerminate)
+    .find((value) => value !== undefined);
 }
 //@ chunk-fq0cr76a.js:910605-910765 placement
 var MANDATE_IGNORED_NETWORK_KEYS = [
@@ -786,8 +818,8 @@ var PROXY_PORT_KEYS = ["httpProxyPort", "socksProxyPort"];
  * 计算 sandbox.network 的本地放行项（unix socket、本地绑定、mach lookup、代理端口）：无管理员强制且无可信网络限制时直接用合并设置；否则忽略 project/local 设置里的这些键（并记一次日志），代理端口在 allowManagedDomainsOnly 时只认托管设置。
  */
 function getNetworkAllowances(network) {
-  let n = isAdminSandboxMandate();
-  if (!n && !hasTrustedNetworkRestrictions())
+  let adminMandate = isAdminSandboxMandate();
+  if (!adminMandate && !hasTrustedNetworkRestrictions())
     return {
       allowUnixSockets: network?.allowUnixSockets,
       allowAllUnixSockets: network?.allowAllUnixSockets,
@@ -796,38 +828,40 @@ function getNetworkAllowances(network) {
       httpProxyPort: network?.httpProxyPort,
       socksProxyPort: network?.socksProxyPort,
     };
-  let r = shouldAllowManagedSandboxDomainsOnly();
+  let managedDomainsOnly = shouldAllowManagedSandboxDomainsOnly();
   let sandboxAdapterState = getSandboxAdapterState();
   if (!sandboxAdapterState.droppedRepoNetworkAllowancesLogged) {
     sandboxAdapterState.droppedRepoNetworkAllowancesLogged = true;
-    let mapped = ["projectSettings", "localSettings"].map((L) =>
-      isSettingSourceEnabled(L) ? getSettingsForSource(L) : null,
+    let mapped = ["projectSettings", "localSettings"].map((sourceName) =>
+      isSettingSourceEnabled(sourceName) ? getSettingsForSource(sourceName) : null,
     );
-    let filtered = (n ? MANDATE_IGNORED_NETWORK_KEYS : PROXY_PORT_KEYS).filter((L) =>
-      mapped.some((V) => {
-        let K = V?.sandbox?.network?.[L];
-        return K !== undefined && K !== false;
+    let filtered = (adminMandate ? MANDATE_IGNORED_NETWORK_KEYS : PROXY_PORT_KEYS).filter((key) =>
+      mapped.some((settings) => {
+        let value = settings?.sandbox?.network?.[key];
+        return value !== undefined && value !== false;
       }),
     );
     if (filtered.length > 0)
       logForDebugging(
-        n
+        adminMandate
           ? `[sandbox] admin sandbox mandate: ignoring sandbox.network.${filtered.join(", ")} from project/local settings`
           : `[sandbox] trusted network deny list or strict allowlist: ignoring sandbox.network.${filtered.join(", ")} from project/local settings (a project may not replace the filtering proxy)`,
       );
-    if (r) {
-      let L = sandboxSettingsChain();
-      let filtered = PROXY_PORT_KEYS.filter((K) => L.some((q) => q?.sandbox?.network?.[K] !== undefined));
+    if (managedDomainsOnly) {
+      let chain = sandboxSettingsChain();
+      let filtered = PROXY_PORT_KEYS.filter((key) =>
+        chain.some((settings) => settings?.sandbox?.network?.[key] !== undefined),
+      );
       if (filtered.length > 0)
         logForDebugging(
           `[sandbox] network.allowManagedDomainsOnly: ignoring sandbox.network.${filtered.join(", ")} from --settings/user settings; only managed settings may replace the filtering proxy`,
         );
     }
   }
-  let h = r ? policySandboxSetting : firstFromSandboxSettings;
-  let httpProxyPort = h((R) => R.network?.httpProxyPort);
-  let socksProxyPort = h((R) => R.network?.socksProxyPort);
-  if (!n)
+  let pickSetting = managedDomainsOnly ? policySandboxSetting : firstFromSandboxSettings;
+  let httpProxyPort = pickSetting((settings) => settings.network?.httpProxyPort);
+  let socksProxyPort = pickSetting((settings) => settings.network?.socksProxyPort);
+  if (!adminMandate)
     return {
       allowUnixSockets: network?.allowUnixSockets,
       allowAllUnixSockets: network?.allowAllUnixSockets,
@@ -836,26 +870,29 @@ function getNetworkAllowances(network) {
       httpProxyPort,
       socksProxyPort,
     };
-  let S = collectFromSandboxSettings((R) => R.network?.allowUnixSockets);
-  let w = collectFromSandboxSettings((R) => R.network?.allowMachLookup);
+  let unixSockets = collectFromSandboxSettings((settings) => settings.network?.allowUnixSockets);
+  let machLookups = collectFromSandboxSettings((settings) => settings.network?.allowMachLookup);
   return {
-    allowUnixSockets: S.length > 0 ? S : undefined,
+    allowUnixSockets: unixSockets.length > 0 ? unixSockets : undefined,
     allowAllUnixSockets: trustedBooleanUnlessFalse(
       network?.allowAllUnixSockets,
-      (R) => R.network?.allowAllUnixSockets,
+      (settings) => settings.network?.allowAllUnixSockets,
     ),
     allowLocalBinding:
       getPlatform() === "windows"
         ? getWindowsLoopbackSetting()
-        : trustedBooleanUnlessFalse(network?.allowLocalBinding, (R) => R.network?.allowLocalBinding),
-    allowMachLookup: w.length > 0 ? w : undefined,
+        : trustedBooleanUnlessFalse(
+            network?.allowLocalBinding,
+            (settings) => settings.network?.allowLocalBinding,
+          ),
+    allowMachLookup: machLookups.length > 0 ? machLookups : undefined,
     httpProxyPort,
     socksProxyPort,
   };
 }
 //@ chunk-fq0cr76a.js:912502-912566 placement
-function getAllowLocalBindingFor(e) {
-  return getPlatform() === "windows" ? getWindowsLoopbackSetting() : e?.allowLocalBinding;
+function getAllowLocalBindingFor(network) {
+  return getPlatform() === "windows" ? getWindowsLoopbackSetting() : network?.allowLocalBinding;
 }
 //@ chunk-fq0cr76a.js:912566-912640 placement
 /**
@@ -864,7 +901,7 @@ function getAllowLocalBindingFor(e) {
 function areWindowsLocalConnectionsOn() {
   return (
     (areSandboxSettingsLockedByPolicy() ? policySandboxSetting : firstFromSandboxSettings)(
-      (e) => e.network?.allowLocalBinding,
+      (settings) => settings.network?.allowLocalBinding,
     ) === true
   );
 }
@@ -893,8 +930,8 @@ function needsRestartForLocalConnections() {
   return windowsLoopbackAtStart !== undefined && windowsLoopbackAtStart !== areWindowsLocalConnectionsOn();
 }
 //@ chunk-fq0cr76a.js:912926-912966 placement
-function trustedBooleanUnlessFalse(e, n) {
-  return e === false ? false : firstFromSandboxSettings(n);
+function trustedBooleanUnlessFalse(network, pickSetting) {
+  return network === false ? false : firstFromSandboxSettings(pickSetting);
 }
 //@ chunk-fq0cr76a.js:912966-912998 placement
 var ALLOW_ALL_UNIX_SOCKETS = {
@@ -958,23 +995,23 @@ function willSandboxTlsTerminate() {
 function isInstalledWindowsTlsCaCurrent(caCertThumb) {
   let windowsTlsTerminateCaSource = resolveWindowsTlsTerminateCaSource();
   try {
-    let r =
+    let certPath =
       windowsTlsTerminateCaSource.source === "trustedPair"
         ? (windowsTlsTerminateCaSource.caCertPath ?? null)
         : windowsTlsTerminateCaSource.source === "managed"
           ? join(windowsStateDir(), "ca", "cert.pem")
           : null;
-    if (r === null) return true;
-    let s = openSync(r, "r");
+    if (certPath === null) return true;
+    let fd = openSync(certPath, "r");
     let certPem;
     try {
-      let y = fstatSync(s);
-      if (!y.isFile() || y.size > MAX_DENY_PATTERN_BYTES) return true;
-      let b = Buffer.alloc(y.size);
-      readSync(s, b, 0, b.length, 0);
-      certPem = b.toString("utf8");
+      let stats = fstatSync(fd);
+      if (!stats.isFile() || stats.size > MAX_DENY_PATTERN_BYTES) return true;
+      let buffer = Buffer.alloc(stats.size);
+      readSync(fd, buffer, 0, buffer.length, 0);
+      certPem = buffer.toString("utf8");
     } finally {
-      closeSync(s);
+      closeSync(fd);
     }
     return certThumbprint(certPem) === caCertThumb;
   } catch {
@@ -986,27 +1023,29 @@ var MAX_DENY_PATTERN_BYTES = 65536;
 //@ chunk-fq0cr76a.js:913871-914151 placement
 function getFilesystemDisabledSetting() {
   let allPolicyTierSettings = getAllPolicyTierSettings();
-  let n = booleanOrUndefined(readPolicySandboxSetting(["filesystem", "disabled"]));
-  if (n !== undefined) return n;
+  let policyDisabled = booleanOrUndefined(readPolicySandboxSetting(["filesystem", "disabled"]));
+  if (policyDisabled !== undefined) return policyDisabled;
   if (
     allPolicyTierSettings.some(
       (policyTierSetting) =>
         policyTierSetting.sandbox?.filesystem !== undefined ||
-        (policyTierSetting.sandbox?.credentials?.files ?? []).some((h) => h.mode === "deny"),
+        (policyTierSetting.sandbox?.credentials?.files ?? []).some(
+          (credentialFile) => credentialFile.mode === "deny",
+        ),
     )
   )
     return;
   return getSandboxSettingsSources()
-    .map((s) => s?.sandbox?.filesystem?.disabled)
-    .find((s) => s !== undefined);
+    .map((settings) => settings?.sandbox?.filesystem?.disabled)
+    .find((value) => value !== undefined);
 }
 //@ chunk-fq0cr76a.js:914151-914201 placement
 function isFilesystemIsolationDisabledBySetting() {
   return getFilesystemDisabledSetting() === true && getEffectiveFilesystemPolicy() === "relaxed";
 }
 //@ chunk-fq0cr76a.js:914201-914253 placement
-function booleanOrUndefined(e) {
-  return typeof e === "boolean" ? e : undefined;
+function booleanOrUndefined(value) {
+  return typeof value === "boolean" ? value : undefined;
 }
 //@ chunk-fq0cr76a.js:914253-914331 placement
 /**
@@ -1024,7 +1063,11 @@ function sandboxReadBlockApplies() {
  * 返回不添加读取拒绝的原因（只允许托管读取路径、原始工作目录含通配字符、Windows 需要管理员权限），否则 null。
  */
 function getReadDenySkipReason() {
-  if (getAllPolicyTierSettings().some((e) => e.sandbox?.filesystem?.allowManagedReadPathsOnly === true))
+  if (
+    getAllPolicyTierSettings().some(
+      (settings) => settings.sandbox?.filesystem?.allowManagedReadPathsOnly === true,
+    )
+  )
     return "allowManagedReadPathsOnly is set";
   if (containsGlobChars(getOriginalCwd())) return "the original working directory has glob characters";
   return getPlatform() === "windows"
@@ -1056,21 +1099,23 @@ function isSandboxEnabledInSettings() {
     isSettingSourceEnabled("userSettings") ? getSettingsForSource("userSettings") : null,
     isSettingSourceEnabled("projectSettings") ? getSettingsForSource("projectSettings") : null,
     isSettingSourceEnabled("localSettings") ? getSettingsForSource("localSettings") : null,
-  ].some((e) => e?.sandbox?.enabled === true);
+  ].some((settings) => settings?.sandbox?.enabled === true);
 }
 //@ chunk-fq0cr76a.js:915158-915245 placement = shouldAllowManagedSandboxDomainsOnly (0.821)
 /**
  * 任一托管/可信层设置了 sandbox.network.allowManagedDomainsOnly 时为真：网络白名单只认托管层。
  */
 function shouldAllowManagedSandboxDomainsOnly() {
-  return getAllPolicyTierSettings().some((e) => e.sandbox?.network?.allowManagedDomainsOnly === true);
+  return getAllPolicyTierSettings().some(
+    (settings) => settings.sandbox?.network?.allowManagedDomainsOnly === true,
+  );
 }
 //@ chunk-fq0cr76a.js:915245-915324 placement
 /**
  * 任一可信层设置了 sandbox.network.strictAllowlist 时为真。
  */
 function isStrictNetworkAllowlistConfigured() {
-  return getSandboxSettingsSources().some((e) => e?.sandbox?.network?.strictAllowlist === true);
+  return getSandboxSettingsSources().some((settings) => settings?.sandbox?.network?.strictAllowlist === true);
 }
 //@ chunk-fq0cr76a.js:915324-915396 placement
 /**
@@ -1110,102 +1155,102 @@ var TCP_PORT_PATTERN = /^[1-9][0-9]{0,4}$/;
 /**
  * 主机名规范化（IDNA 等）后与其小写形式不同；IPv6 不算。用于识别易误导的同意弹窗主机名。
  */
-function hostnameCanonicalFormDiffers(e) {
-  if (isIP(e) === 6) return false;
-  let n = canonicalizeHost(e);
-  return n !== undefined && n !== e.toLowerCase();
+function hostnameCanonicalFormDiffers(host) {
+  if (isIP(host) === 6) return false;
+  let canonical = canonicalizeHost(host);
+  return canonical !== undefined && canonical !== host.toLowerCase();
 }
 //@ chunk-fq0cr76a.js:915694-915815 placement
-function isValidSandboxHost(e, n) {
-  if (e.length === 0 || e.length > 255) return false;
-  if (n.includes("%")) return false;
-  if (isIP(n) !== 0) return true;
-  return isSrtHostNameCharset(n);
+function isValidSandboxHost(rawHost, host) {
+  if (rawHost.length === 0 || rawHost.length > 255) return false;
+  if (host.includes("%")) return false;
+  if (isIP(host) !== 0) return true;
+  return isSrtHostNameCharset(host);
 }
 //@ chunk-fq0cr76a.js:915815-915865 placement
-function isSrtHostNameCharset(e) {
-  return /^[A-Za-z0-9._-]+$/.test(e);
+function isSrtHostNameCharset(value) {
+  return /^[A-Za-z0-9._-]+$/.test(value);
 }
 //@ chunk-fq0cr76a.js:915865-915965 placement
 /**
  * 是否是严格端口后缀“:数字”且不超过 65535。
  */
-function isStrictPortSuffix(e) {
-  if (!e.startsWith(":")) return false;
-  let sliced = e.slice(1);
+function isStrictPortSuffix(text) {
+  if (!text.startsWith(":")) return false;
+  let sliced = text.slice(1);
   return TCP_PORT_PATTERN.test(sliced) && Number(sliced) <= 65535;
 }
 //@ chunk-fq0cr76a.js:915965-916115 placement
-function stripIpv6Brackets(e) {
-  if (!e.startsWith("[")) return e;
-  let index = e.indexOf("]");
+function stripIpv6Brackets(text) {
+  if (!text.startsWith("[")) return text;
+  let index = text.indexOf("]");
   if (index === -1) return;
-  let sliced = e.slice(index + 1);
-  if (sliced !== "" && !isStrictPortSuffix(sliced)) return;
-  return e.slice(1, index);
+  let text_2 = text.slice(index + 1);
+  if (text_2 !== "" && !isStrictPortSuffix(text_2)) return;
+  return text.slice(1, index);
 }
 //@ chunk-fq0cr76a.js:916115-916178 placement
-function hasWildcardAfterNormalize(e) {
-  let n = canonicalizeHost(e);
-  return n !== undefined && n.includes("*");
+function hasWildcardAfterNormalize(host) {
+  let canonical = canonicalizeHost(host);
+  return canonical !== undefined && canonical.includes("*");
 }
 //@ chunk-fq0cr76a.js:916178-916324 placement
 /**
  * 规范化会不会改变主机：无法规范化、规范结果与原串不一致、或是特殊形式时为真；IP 直接为假。
  */
-function canonicalizationChangesHost(e) {
-  let n = stripIpv6Brackets(e);
-  if (n === undefined) return true;
-  if (!isValidSandboxHost(e, n)) return true;
-  if (isIP(n) !== 0) return false;
-  if (hasWildcardAfterNormalize(n)) return true;
-  return hostnameCanonicalFormDiffers(n.replace(/\.$/, ""));
+function canonicalizationChangesHost(host) {
+  let stripped = stripIpv6Brackets(host);
+  if (stripped === undefined) return true;
+  if (!isValidSandboxHost(host, stripped)) return true;
+  if (isIP(stripped) !== 0) return false;
+  if (hasWildcardAfterNormalize(stripped)) return true;
+  return hostnameCanonicalFormDiffers(stripped.replace(/\.$/, ""));
 }
 //@ chunk-fq0cr76a.js:916324-916370 placement
-function isMisleadingConsentHost(e) {
-  return e.includes("*") || canonicalizationChangesHost(e);
+function isMisleadingConsentHost(host) {
+  return host.includes("*") || canonicalizationChangesHost(host);
 }
 //@ chunk-fq0cr76a.js:916370-916465 placement
 /**
  * 是否为不带方括号的 IPv6 字面量（至少两个冒号且不以 [ 开头）。
  */
-function isBareIpv6Literal(e) {
-  let index = e.indexOf(":");
-  return index !== -1 && e.indexOf(":", index + 1) !== -1 && !e.startsWith("[");
+function isBareIpv6Literal(text) {
+  let index = text.indexOf(":");
+  return index !== -1 && text.indexOf(":", index + 1) !== -1 && !text.startsWith("[");
 }
 //@ chunk-fq0cr76a.js:916672-916809 sole-consumer
-function expandIpv6Spellings(e) {
-  let n = [];
-  if (isIP(e) === 6) n.push(`[${e}]`);
-  let hostPort = parseHostPort(e);
-  if (hostPort !== undefined) n.push(`[${hostPort.host}]:${hostPort.port}`);
-  return n.length > 0 ? n : [e];
+function expandIpv6Spellings(host) {
+  let spellings = [];
+  if (isIP(host) === 6) spellings.push(`[${host}]`);
+  let hostPort = parseHostPort(host);
+  if (hostPort !== undefined) spellings.push(`[${hostPort.host}]:${hostPort.port}`);
+  return spellings.length > 0 ? spellings : [host];
 }
 //@ chunk-fq0cr76a.js:916809-916919 placement
-function expandBareIpv6Hosts(e) {
-  return e.flatMap((n) => {
-    if (!isBareIpv6Literal(n)) return [n];
-    if (n.includes("@") || hostnameCanonicalFormDiffers(n)) return [n];
-    return expandIpv6Spellings(n);
+function expandBareIpv6Hosts(hosts) {
+  return hosts.flatMap((host) => {
+    if (!isBareIpv6Literal(host)) return [host];
+    if (host.includes("@") || hostnameCanonicalFormDiffers(host)) return [host];
+    return expandIpv6Spellings(host);
   });
 }
 //@ chunk-fq0cr76a.js:916919-917165 placement
-function addTrailingDotFreeVariants(e) {
-  return e.flatMap((n) => {
-    if (n.startsWith("[")) return [n];
-    let { hostPattern, port } = splitDomainPatternPort(n);
+function addTrailingDotFreeVariants(patterns) {
+  return patterns.flatMap((pattern) => {
+    if (pattern.startsWith("[")) return [pattern];
+    let { hostPattern, port } = splitDomainPatternPort(pattern);
     let replaced = hostPattern.replace(/\.+$/, "");
-    if (replaced === hostPattern) return [n];
-    if (replaced === "" || replaced.endsWith("*")) return [n];
-    if (canonicalizeHost(replaced) === undefined) return [n];
-    return [n, port === undefined ? replaced : `${replaced}:${port}`];
+    if (replaced === hostPattern) return [pattern];
+    if (replaced === "" || replaced.endsWith("*")) return [pattern];
+    if (canonicalizeHost(replaced) === undefined) return [pattern];
+    return [pattern, port === undefined ? replaced : `${replaced}:${port}`];
   });
 }
 //@ chunk-fq0cr76a.js:917165-917386 placement
-function bracketIpv6WithPort(e) {
-  let index = e.lastIndexOf(":");
-  let sliced = e.slice(0, index);
-  let sliced_2 = e.slice(index + 1);
+function bracketIpv6WithPort(text) {
+  let index = text.lastIndexOf(":");
+  let sliced = text.slice(0, index);
+  let sliced_2 = text.slice(index + 1);
   let index_2 = sliced.indexOf(":");
   if (
     TCP_PORT_PATTERN.test(sliced_2) &&
@@ -1216,11 +1261,11 @@ function bracketIpv6WithPort(e) {
     sliced.indexOf(":", index_2 + 1) !== -1
   )
     return `[${sliced}]:${sliced_2}`;
-  return e;
+  return text;
 }
 //@ chunk-fq0cr76a.js:917386-917430 placement
-function formatIpLiteralHost(e) {
-  return isIP(e) === 6 ? `[${e}]` : e;
+function formatIpLiteralHost(host) {
+  return isIP(host) === 6 ? `[${host}]` : host;
 }
 //@ chunk-fq0cr76a.js:917430-917510 placement
 /**
@@ -1234,77 +1279,81 @@ function consentHostEntry(host) {
 /**
  * 规范化网络条目中的 IPv6 主机写法：丢弃含 @、规范形式不一致或无法规范化的条目，为带端口的裸 IPv6 加方括号。
  */
-function normalizeIpv6HostEntries(e) {
-  return e.flatMap((n) => {
-    if (n.includes("@")) return [];
-    if (n.startsWith("[")) {
-      let index = n.indexOf("]");
-      let h = index === -1 ? undefined : n.slice(1, index);
-      if (h !== undefined && hostnameCanonicalFormDiffers(h)) return [];
-      if (h !== undefined && h.includes("*") && canonicalizeHost(h) !== undefined) return [];
-      return [n];
+function normalizeIpv6HostEntries(hosts) {
+  return hosts.flatMap((host) => {
+    if (host.includes("@")) return [];
+    if (host.startsWith("[")) {
+      let index = host.indexOf("]");
+      let bracketed = index === -1 ? undefined : host.slice(1, index);
+      if (bracketed !== undefined && hostnameCanonicalFormDiffers(bracketed)) return [];
+      if (bracketed !== undefined && bracketed.includes("*") && canonicalizeHost(bracketed) !== undefined)
+        return [];
+      return [host];
     }
-    if (!isBareIpv6Literal(n)) return [n];
-    if (hostnameCanonicalFormDiffers(n)) return [];
-    let r = bracketIpv6WithPort(n);
-    if (r !== n) return [r];
-    if (isIP(n) === 6 && parseHostPort(n) !== undefined) return [];
-    return [n];
+    if (!isBareIpv6Literal(host)) return [host];
+    if (hostnameCanonicalFormDiffers(host)) return [];
+    let rewritten = bracketIpv6WithPort(host);
+    if (rewritten !== host) return [rewritten];
+    if (isIP(host) === 6 && parseHostPort(host) !== undefined) return [];
+    return [host];
   });
 }
 //@ chunk-fq0cr76a.js:917864-918156 placement
 /**
  * 从多层设置收集网络域名条目：sandbox.network.allowedDomains/deniedDomains，加上 WebFetch(domain:…) 的 allow/deny 规则。
  */
-function collectNetworkDomainEntries(e, n) {
-  let r = n === "allow" ? "allowedDomains" : "deniedDomains";
-  let s = [];
-  for (let h of e) {
-    for (let y of h.sandbox?.network?.[r] ?? []) s.push(y);
-    for (let y of h.permissions?.[n] ?? []) {
-      let ruleForSandbox = parseRuleForSandbox(y);
+function collectNetworkDomainEntries(sources, access) {
+  let key = access === "allow" ? "allowedDomains" : "deniedDomains";
+  let domains = [];
+  for (let settings of sources) {
+    for (let domain of settings.sandbox?.network?.[key] ?? []) domains.push(domain);
+    for (let rule of settings.permissions?.[access] ?? []) {
+      let ruleForSandbox = parseRuleForSandbox(rule);
       if (ruleForSandbox.toolName === WEBFETCH && ruleForSandbox.ruleContent?.startsWith("domain:"))
-        s.push(ruleForSandbox.ruleContent.substring(7));
+        domains.push(ruleForSandbox.ruleContent.substring(7));
     }
   }
-  return s;
+  return domains;
 }
 //@ chunk-fq0cr76a.js:918156-918291 placement
-function hostEntryMatches(e, n, r, s) {
-  let { hostPattern, port } = splitDomainPatternPort(e);
-  if (!hostIdentityMatches(hostPattern, n)) return false;
-  if (port === undefined) return true;
-  return r === undefined ? s === "match" : port === r;
+function hostEntryMatches(entry, host, port, missingPortMode) {
+  let { hostPattern, port: port_2 } = splitDomainPatternPort(entry);
+  if (!hostIdentityMatches(hostPattern, host)) return false;
+  if (port_2 === undefined) return true;
+  return port === undefined ? missingPortMode === "match" : port_2 === port;
 }
 //@ chunk-fq0cr76a.js:918291-918777 placement
 /**
  * 按沙箱网络策略判断主机是否允许：命中 deniedDomains（含 IP 反查名）则拒绝并给原因；allowManagedDomainsOnly 时只放行托管层白名单；否则放行。
  */
-function isHostAllowedBySandboxNetworkPolicy(e, n) {
-  let r = isIP(e) !== 0 ? (canonicalizeHost(e) ?? e) : e;
-  let allPolicyTierSettings = getAllPolicyTierSettings();
+function isHostAllowedBySandboxNetworkPolicy(host, port) {
+  let canonicalHost = isIP(host) !== 0 ? (canonicalizeHost(host) ?? host) : host;
+  let sources = getAllPolicyTierSettings();
   if (
     addTrailingDotFreeVariants(
       expandBareIpv6Hosts([
-        ...collectNetworkDomainEntries([getSettings_DEPRECATED(), ...allPolicyTierSettings], "deny"),
+        ...collectNetworkDomainEntries([getSettings_DEPRECATED(), ...sources], "deny"),
         ...[],
       ]),
-    ).some((b) => hostEntryMatches(b, r, n, "match") || hostEntryMatches(b, e, n, "match"))
+    ).some(
+      (entry) =>
+        hostEntryMatches(entry, canonicalHost, port, "match") || hostEntryMatches(entry, host, port, "match"),
+    )
   )
     return {
       allowed: false,
       reason:
-        r === e
-          ? `${e} is in sandbox.network.deniedDomains`
-          : `${e} (${r}) is in sandbox.network.deniedDomains`,
+        canonicalHost === host
+          ? `${host} is in sandbox.network.deniedDomains`
+          : `${host} (${canonicalHost}) is in sandbox.network.deniedDomains`,
     };
   if (!shouldAllowManagedSandboxDomainsOnly())
     return {
       allowed: true,
     };
   if (
-    normalizeIpv6HostEntries(collectNetworkDomainEntries(allPolicyTierSettings, "allow")).some((b) =>
-      hostEntryMatches(b, r, n, "no-match"),
+    normalizeIpv6HostEntries(collectNetworkDomainEntries(sources, "allow")).some((entry) =>
+      hostEntryMatches(entry, canonicalHost, port, "no-match"),
     )
   )
     return {
@@ -1312,14 +1361,14 @@ function isHostAllowedBySandboxNetworkPolicy(e, n) {
     };
   return {
     allowed: false,
-    reason: `sandbox.network.allowManagedDomainsOnly is set and ${e} is not in the policy allowlist`,
+    reason: `sandbox.network.allowManagedDomainsOnly is set and ${host} is not in the policy allowlist`,
   };
 }
 //@ chunk-fq0cr76a.js:918777-919011 placement
-function grantSessionHost(e) {
-  if (isMisleadingConsentHost(e)) {
+function grantSessionHost(host) {
+  if (isMisleadingConsentHost(host)) {
     logForDebugging(
-      `[SandboxManager] Refusing a session grant for a host srt would re-spell as ${canonicalizeHost(e) ?? "(uncanonicalizable)"}`,
+      `[SandboxManager] Refusing a session grant for a host srt would re-spell as ${canonicalizeHost(host) ?? "(uncanonicalizable)"}`,
       {
         level: "warn",
       },
@@ -1327,9 +1376,9 @@ function grantSessionHost(e) {
     return;
   }
   let { sessionAllowedHosts } = getSandboxAdapterState();
-  let r = consentHostEntry(e);
-  if (sessionAllowedHosts.has(r)) return;
-  sessionAllowedHosts.add(r);
+  let entry = consentHostEntry(host);
+  if (sessionAllowedHosts.has(entry)) return;
+  sessionAllowedHosts.add(entry);
   refreshConfig();
 }
 //@ chunk-fq0cr76a.js:919011-919470 placement
@@ -1418,39 +1467,39 @@ function collectGitConfigDenyPaths(xdgConfigHome, allowWriteRoots, getDenyRoots,
     let index = chain.findIndex((paths) => isPathPrefixOfAny([paths], getDenyRoots()));
     results.push(
       ...(index === -1 ? chain : chain.slice(0, index)).filter(
-        (Z) =>
-          allowWriteRoots.some((parse) => isPathPrefixOf(parse, Z)) &&
-          !allowWriteRoots.some((allowWriteRoot) => isPathPrefixOf(Z, allowWriteRoot)),
+        (path) =>
+          allowWriteRoots.some((parse) => isPathPrefixOf(parse, path)) &&
+          !allowWriteRoots.some((allowWriteRoot) => isPathPrefixOf(path, allowWriteRoot)),
       ),
     );
     let contents = parse && index === -1 ? readSmallTextFile(file) : null;
     if (contents === null) continue;
     let { includes, files } = parseGitConfigSections(contents);
-    for (let [Z, J] of [
+    for (let [paths, shouldParse] of [
       [includes, true],
       [files, false],
     ])
-      for (let ie of Z) {
-        let pathPatternForSandbox = resolvePathPatternForSandbox_2(ie, file, homeDir);
+      for (let includePath of paths) {
+        let pathPatternForSandbox = resolvePathPatternForSandbox_2(includePath, file, homeDir);
         if (pathPatternForSandbox !== null)
           queue.push({
             file: pathPatternForSandbox,
-            parse: J,
+            parse: shouldParse,
           });
       }
   }
   return uniq(results);
 }
 //@ chunk-fq0cr76a.js:920176-920300 placement
-function resolvePathPatternForSandbox_2(e, file, homeDir) {
-  if (e === "~" || e.startsWith("~/")) return resolve(homeDir, `./${e.slice(2)}`);
-  return e.startsWith("~") ? null : resolve(dirname(file), e);
+function resolvePathPatternForSandbox_2(value, file, homeDir) {
+  if (value === "~" || value.startsWith("~/")) return resolve(homeDir, `./${value.slice(2)}`);
+  return value.startsWith("~") ? null : resolve(dirname(file), value);
 }
 //@ chunk-fq0cr76a.js:920300-920446 placement
 function readSmallTextFile(file) {
   try {
-    let n = statSync(file);
-    if (!n.isFile() || n.size > 1048576) return null;
+    let fileStats = statSync(file);
+    if (!fileStats.isFile() || fileStats.size > 1048576) return null;
     let file_2 = readFileSync(file, "utf8");
     return file_2.includes("\x00") ? null : file_2;
   } catch {
@@ -1460,35 +1509,35 @@ function readSmallTextFile(file) {
 //@ chunk-fq0cr76a.js:920446-920633 placement
 function resolveSymlinkChain(file) {
   if (getPlatform() === "windows") return [file];
-  let n = [file];
-  let r = file;
+  let chain = [file];
+  let current = file;
   for (let j = 0; j < MAX_HOST_LABEL_COUNT; j++) {
-    let firstSymlink = resolveFirstSymlink(r);
+    let firstSymlink = resolveFirstSymlink(current);
     if (firstSymlink === null) return null;
-    if (firstSymlink === undefined) return uniq([...n, r]);
-    n.push(firstSymlink.link);
-    r = firstSymlink.next;
+    if (firstSymlink === undefined) return uniq([...chain, current]);
+    chain.push(firstSymlink.link);
+    current = firstSymlink.next;
   }
   return null;
 }
 //@ chunk-fq0cr76a.js:920633-920929 placement
-function resolveFirstSymlink(e) {
-  let filtered = e.split(sep).filter(Boolean);
+function resolveFirstSymlink(path) {
+  let filtered = path.split(sep).filter(Boolean);
   for (let j = 1; j <= filtered.length; j++) {
-    let s = sep + filtered.slice(0, j).join(sep);
-    let h;
+    let prefix = sep + filtered.slice(0, j).join(sep);
+    let linkText;
     try {
-      h = readlinkSync(s);
+      linkText = readlinkSync(prefix);
     } catch (error) {
       let errnoCode = getErrnoCode(error);
       if (errnoCode === "EINVAL") continue;
       return errnoCode === "ENOENT" || errnoCode === "ENOTDIR" ? undefined : null;
     }
-    let linkTarget = resolveLinkTarget(dirname(s), h);
+    let linkTarget = resolveLinkTarget(dirname(prefix), linkText);
     return linkTarget === null
       ? null
       : {
-          link: s,
+          link: prefix,
           next: join(linkTarget, ...filtered.slice(j)),
         };
   }
@@ -1505,55 +1554,58 @@ function resolveScrubParent(state, targetPath) {
       literalPhysical: null,
       inode: null,
     };
-  let resolveDir = (R) => {
-    let D = state.scrubParentMemo.get(R);
-    if (D === undefined) {
+  let resolveDir = (dir) => {
+    let info = state.scrubParentMemo.get(dir);
+    if (info === undefined) {
       try {
-        let real = identity(realpathSync(R));
+        let real = identity(realpathSync(dir));
         let inode = null;
         try {
-          let V = statSync(R, {
+          let stats = statSync(dir, {
             bigint: true,
           });
           inode = {
-            dev: V.dev,
-            ino: V.ino,
+            dev: stats.dev,
+            ino: stats.ino,
           };
         } catch {}
-        D = {
+        info = {
           real,
           inode,
         };
       } catch {
-        D = {
+        info = {
           real: null,
           inode: null,
         };
       }
-      state.scrubParentMemo.set(R, D);
+      state.scrubParentMemo.set(dir, info);
     }
-    return D;
+    return info;
   };
   let parentDir = dirname(targetPath);
   let { real: realPath, inode } = resolveDir(parentDir);
   let real = resolveDir(dirname(parentDir)).real;
-  let S = real === null ? null : identity(join(real, basename(parentDir)));
+  let literalPhysical = real === null ? null : identity(join(real, basename(parentDir)));
   let info = {
     real: realPath,
-    literalPhysical: S === realPath ? null : S,
+    literalPhysical: literalPhysical === realPath ? null : literalPhysical,
     inode,
   };
   if (realPath === null) {
-    let R = state.scrubParentLastKnown.get(parentDir);
-    if (R !== undefined) {
+    let previous = state.scrubParentLastKnown.get(parentDir);
+    if (previous !== undefined) {
       logForDebugging(
         `[Sandbox] scrub parent ${parentDir} did not resolve at this config build; keeping the spelling recorded earlier this session`,
       );
-      return resolveEntryWithoutInode(R);
+      return resolveEntryWithoutInode(previous);
     }
   } else {
-    let R = state.scrubParentLastKnown.get(parentDir);
-    if (R !== undefined && (R.real !== realPath || R.literalPhysical !== info.literalPhysical)) {
+    let previous = state.scrubParentLastKnown.get(parentDir);
+    if (
+      previous !== undefined &&
+      (previous.real !== realPath || previous.literalPhysical !== info.literalPhysical)
+    ) {
       logForDebugging(
         `[Sandbox] scrub parent ${parentDir} resolves elsewhere than at an earlier config build this session; keeping the spelling recorded then`,
         {
@@ -1561,38 +1613,38 @@ function resolveScrubParent(state, targetPath) {
         },
       );
       logFeatureSad("sandbox_exec", "scrub_parent_rebuild_relocated");
-      return resolveEntryWithoutInode(R);
+      return resolveEntryWithoutInode(previous);
     }
     state.scrubParentLastKnown.set(parentDir, info);
   }
   return info;
 }
 //@ chunk-fq0cr76a.js:921931-922011 placement
-function resolveEntryWithoutInode(e) {
+function resolveEntryWithoutInode(info) {
   return {
-    real: e.real,
-    literalPhysical: e.literalPhysical,
+    real: info.real,
+    literalPhysical: info.literalPhysical,
     inode: null,
   };
 }
 //@ chunk-fq0cr76a.js:922011-922050 placement
-function isENOENTError(e) {
-  return getErrnoCode(e) === "ENOENT";
+function isENOENTError(error) {
+  return getErrnoCode(error) === "ENOENT";
 }
 //@ chunk-fq0cr76a.js:922050-922513 placement
 /**
  * 登记需在命令后清理的裸仓库标记路径；无法确认其是否存在时警告（将来找到文件会移走而不是删除）。
  */
-function registerBareRepoScrubPath(state, targetPath, removal, s) {
-  let h = s === undefined || isENOENTError(s);
-  if (!h) {
-    let errnoCode = getErrnoCode(s);
-    let b =
+function registerBareRepoScrubPath(state, targetPath, removal, probeError) {
+  let unlinkable = probeError === undefined || isENOENTError(probeError);
+  if (!unlinkable) {
+    let errnoCode = getErrnoCode(probeError);
+    let reason =
       errnoCode === "EEXIST"
         ? `${targetPath} appeared while the sandbox configuration was being built`
-        : `could not check whether ${targetPath} exists (${errnoCode ?? s})`;
+        : `could not check whether ${targetPath} exists (${errnoCode ?? probeError})`;
     logForDebugging(
-      `[Sandbox] ${b}; if the cleanup after a sandboxed command finds a file there, it will move the file aside, not delete it`,
+      `[Sandbox] ${reason}; if the cleanup after a sandboxed command finds a file there, it will move the file aside, not delete it`,
       {
         level: "warn",
       },
@@ -1602,14 +1654,14 @@ function registerBareRepoScrubPath(state, targetPath, removal, s) {
   state.bareGitRepoScrubPaths.set(targetPath, {
     path: targetPath,
     parent: resolveScrubParent(state, targetPath),
-    unlinkable: h,
+    unlinkable,
     removal,
   });
 }
 //@ chunk-fq0cr76a.js:922513-922621 placement
-function checkPathAbsent(e) {
+function checkPathAbsent(path) {
   try {
-    statSync(e);
+    statSync(path);
     return Object.assign(Error("the path exists"), {
       code: "EEXIST",
     });
@@ -1625,11 +1677,11 @@ var MAX_OWNER_MODE_RESTORE_BYTES = 2097152;
  */
 function restoreOwnerDirMode(parentBase, label) {
   try {
-    let r = statSync(parentBase);
-    if ((r.mode & 448) !== 448 && r.uid === process.getuid?.()) {
-      chmodSync(parentBase, (r.mode & 4095) | 448);
+    let stats = statSync(parentBase);
+    if ((stats.mode & 448) !== 448 && stats.uid === process.getuid?.()) {
+      chmodSync(parentBase, (stats.mode & 4095) | 448);
       logSandboxDebug(
-        `${label}: restored owner rwx on a directory the sandboxed command had chmod'ed ${(r.mode & 4095).toString(8)}`,
+        `${label}: restored owner rwx on a directory the sandboxed command had chmod'ed ${(stats.mode & 4095).toString(8)}`,
       );
       logSandboxOutcome("scrub_restored_owner_rwx");
     }
@@ -1673,7 +1725,7 @@ function openVerifiedScrubParent(dirPath, label, expectedPath, altPath, recorded
   let sameInode = false;
   if (recordedInode !== null)
     try {
-      let V =
+      let stats =
         fd !== null
           ? fstatSync(fd, {
               bigint: true,
@@ -1681,7 +1733,7 @@ function openVerifiedScrubParent(dirPath, label, expectedPath, altPath, recorded
           : statSync(dirPath, {
               bigint: true,
             });
-      sameInode = V.dev === recordedInode.dev && V.ino === recordedInode.ino;
+      sameInode = stats.dev === recordedInode.dev && stats.ino === recordedInode.ino;
     } catch (error) {
       logSandboxDebug(
         `${label}: could not stat ${dirPath} (${getErrnoCode(error) ?? error}); treating it as not the recorded directory`,
@@ -1709,15 +1761,16 @@ function openVerifiedScrubParent(dirPath, label, expectedPath, altPath, recorded
         ? altPath
         : undefined;
   if (acceptedPath === undefined && sameInode) {
-    let V = hasProcPath;
+    let hasLivePath = hasProcPath;
     if (!hasProcPath && recordedInode !== null)
       try {
-        let K = lstatSync(expectedPath, {
+        let stats = lstatSync(expectedPath, {
           bigint: true,
         });
-        V = K.isDirectory() && K.dev === recordedInode.dev && K.ino === recordedInode.ino;
+        hasLivePath =
+          stats.isDirectory() && stats.dev === recordedInode.dev && stats.ino === recordedInode.ino;
       } catch {}
-    if (V) {
+    if (hasLivePath) {
       acceptedPath = expectedPath;
       logSandboxDebug(
         `${label}: ${dirPath} is spelled ${resolvedPath ?? "<unresolved>"} but is the directory recorded at the config build (same device and inode); accepting`,
@@ -1791,14 +1844,14 @@ function quarantinePlantedEntry(
       isDirectory = true;
     }
   for (let j = 0; j < 4; j++) {
-    let R = `${entryName}${QUARANTINE_PREFIX}${randomBytes(6).toString("hex")}`;
+    let quarantineName = `${entryName}${QUARANTINE_PREFIX}${randomBytes(6).toString("hex")}`;
     try {
-      renameSync(entryPath, join(parentDir, R));
+      renameSync(entryPath, join(parentDir, quarantineName));
       logSandboxDebug(
-        `${label}: moved the planted ${entryName} aside whole as ${R} rather than deleting it \u2014 it may be a pre-existing ${isDirectory ? "directory" : "file"} the command moved here, so inspect before deleting`,
+        `${label}: moved the planted ${entryName} aside whole as ${quarantineName} rather than deleting it \u2014 it may be a pre-existing ${isDirectory ? "directory" : "file"} the command moved here, so inspect before deleting`,
       );
       logSandboxOutcome(isDirectory ? "scrub_planted_dir_quarantined" : "scrub_planted_file_quarantined");
-      onQuarantined?.(R);
+      onQuarantined?.(quarantineName);
       return "quarantined";
     } catch (error) {
       let renameError = getErrnoCode(error);
@@ -1831,13 +1884,13 @@ function neutralizePlantedEntryInPlace(
   try {
     if (!includeDirectories && lstatSync(entryPath).isDirectory()) return "left";
   } catch {}
-  let report = (L, V) => {
-    reportSandboxErrorUnderStandIn(L, V);
+  let report = (error, code) => {
+    reportSandboxErrorUnderStandIn(error, code);
   };
-  let leaveInPlace = (L) => {
+  let leaveInPlace = (reason) => {
     report(
       new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        `[Sandbox] ${label}: the planted ${entryName} could not be moved aside or made unreadable (${L}); it stays in place, readable \u2014 remove it by hand`,
+        `[Sandbox] ${label}: the planted ${entryName} could not be moved aside or made unreadable (${reason}); it stays in place, readable \u2014 remove it by hand`,
         "sandbox: post-command scrub left a planted entry in place",
       ),
       "plantedEntryLeftInPlace",
@@ -1849,21 +1902,21 @@ function neutralizePlantedEntryInPlace(
   let parentNote = isRecordedParent
     ? ""
     : " \u2014 the parent is not the directory recorded at startup, so this may be your own entry";
-  let unlinkInstead = (L) => {
+  let unlinkInstead = (kind) => {
     try {
       unlinkSync(entryPath);
     } catch (error) {
       let errnoCode = getErrnoCode(error);
       return errnoCode === "ENOENT"
         ? "gone"
-        : leaveInPlace(`unlink of the ${L} failed: ${errnoCode ?? error}`);
+        : leaveInPlace(`unlink of the ${kind} failed: ${errnoCode ?? error}`);
     }
-    let V = `[Sandbox] ${label}: could not move the planted ${entryName} aside (the rename failed); unlinked the ${L} instead${parentNote}; recreate it if so`;
-    if (isRecordedParent) logForDebugging(V);
+    let message = `[Sandbox] ${label}: could not move the planted ${entryName} aside (the rename failed); unlinked the ${kind} instead${parentNote}; recreate it if so`;
+    if (isRecordedParent) logForDebugging(message);
     else
       report(
         new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-          V,
+          message,
           "sandbox: post-command scrub unlinked a planted entry after the move-aside failed",
         ),
         "plantedEntryUnlinked",
@@ -1885,14 +1938,14 @@ function neutralizePlantedEntryInPlace(
     return leaveInPlace(`open for chmod failed: ${errnoCode ?? error}`);
   }
   try {
-    let L = fstatSync(fd);
-    if (L.isDirectory() && !includeDirectories) return "left";
-    if (!L.isFile() && !L.isDirectory())
-      return unlinkInstead(L.isSymbolicLink() ? "symlink" : "non-regular entry");
-    if (L.isFile() && L.nlink > 1) return unlinkInstead("hard link");
-    let V = process.getuid?.();
-    if (V === 0) return leaveInPlace("mode bits do not bind root");
-    if (L.uid !== V) return leaveInPlace("not owned by this user; chmod would be EPERM");
+    let stats = fstatSync(fd);
+    if (stats.isDirectory() && !includeDirectories) return "left";
+    if (!stats.isFile() && !stats.isDirectory())
+      return unlinkInstead(stats.isSymbolicLink() ? "symlink" : "non-regular entry");
+    if (stats.isFile() && stats.nlink > 1) return unlinkInstead("hard link");
+    let uid = process.getuid?.();
+    if (uid === 0) return leaveInPlace("mode bits do not bind root");
+    if (stats.uid !== uid) return leaveInPlace("not owned by this user; chmod would be EPERM");
     if (MAX_OWNER_MODE_RESTORE_BYTES !== 0) chmodSync(`/proc/self/fd/${fd}`, 0);
     else fchmodSync(fd, 0);
   } catch (error) {
@@ -1968,37 +2021,37 @@ function collectSymlinkHopDirectories(startPath, resolvedPath, excludeLeaves = f
   return [...dirs];
 }
 //@ chunk-fq0cr76a.js:928143-928346 placement
-function resolveLinkTarget(e, n) {
-  let parts = n.split("/");
-  let index = parts.findIndex((y) => y !== ".." && y !== "." && y !== "");
-  let h = index !== -1 && parts.indexOf("..", index) !== -1;
-  if (isAbsolute(n)) return parts.includes("..") ? null : resolve(n);
-  if (h || e === undefined) return null;
-  return resolve(e, n);
+function resolveLinkTarget(baseDir, linkText) {
+  let parts = linkText.split("/");
+  let index = parts.findIndex((segment) => segment !== ".." && segment !== "." && segment !== "");
+  let hasDotDotAfter = index !== -1 && parts.indexOf("..", index) !== -1;
+  if (isAbsolute(linkText)) return parts.includes("..") ? null : resolve(linkText);
+  if (hasDotDotAfter || baseDir === undefined) return null;
+  return resolve(baseDir, linkText);
 }
 //@ chunk-fq0cr76a.js:928346-928577 placement
-function followDanglingLink(e, n, r = false) {
-  let s;
+function followDanglingLink(path, linkText, avoidForeignMounts = false) {
+  let parentReal;
   try {
-    s = realpathSync(dirname(e));
+    parentReal = realpathSync(dirname(path));
   } catch {
     return null;
   }
-  let linkTarget = resolveLinkTarget(s, n);
+  let linkTarget = resolveLinkTarget(parentReal, linkText);
   for (let j = 0; j < 8 && linkTarget !== null; j++) {
-    if (r && classifyForeignMountKind(linkTarget, s) !== undefined) return null;
-    let b;
+    if (avoidForeignMounts && classifyForeignMountKind(linkTarget, parentReal) !== undefined) return null;
+    let nextLinkText;
     try {
-      b = readlinkSync(linkTarget);
+      nextLinkText = readlinkSync(linkTarget);
     } catch {
       return linkTarget;
     }
     try {
-      s = realpathSync(dirname(linkTarget));
+      parentReal = realpathSync(dirname(linkTarget));
     } catch {
       return null;
     }
-    linkTarget = resolveLinkTarget(s, b);
+    linkTarget = resolveLinkTarget(parentReal, nextLinkText);
   }
   return null;
 }
@@ -2011,21 +2064,21 @@ function realpathOrNull(literal) {
   }
 }
 //@ chunk-fq0cr76a.js:928629-928693 placement
-function escapeBracketForGlob(e) {
-  return getPlatform() === "windows" ? e : e.replaceAll("[", "[[]");
+function escapeBracketForGlob(glob) {
+  return getPlatform() === "windows" ? glob : glob.replaceAll("[", "[[]");
 }
 //@ chunk-fq0cr76a.js:928693-928779 placement
 /**
  * 取 realpath；目标不存在时用父目录 realpath 拼上文件名；再失败原样返回。
  */
-function realpathOrParentRealpath(e) {
+function realpathOrParentRealpath(path) {
   try {
-    return realpathSync(e);
+    return realpathSync(path);
   } catch {
     try {
-      return resolve(realpathSync(dirname(e)), basename(e));
+      return resolve(realpathSync(dirname(path)), basename(path));
     } catch {
-      return e;
+      return path;
     }
   }
 }
@@ -2042,33 +2095,37 @@ function addRealPathDenyTwins(denyPaths, kind, realPathMemo, allowGlobBases) {
   let extraPaths = [];
   let scrubLiterals =
     kind === "write" ? getSandboxAdapterState().symlinkedDenyScrubPaths.map((index) => index.literal) : [];
-  for (let [D, entry] of [...denyPaths, ...scrubLiterals].entries()) {
+  for (let [index, entry] of [...denyPaths, ...scrubLiterals].entries()) {
     let escaped = kind === "read" ? entry.replaceAll("[[]", "\x00") : entry;
     let replaced = (
       escaped === "~" || escaped.startsWith("~/") ? join(homedir(), escaped.slice(1)) : escaped
     ).replaceAll("\x00", "[");
     let matches = /[*?[]/.test(escaped);
     let baseDir = matches ? getGlobBaseDirectory_2(replaced) : replaced;
-    if ((matches && (!allowGlobBases || D >= denyPaths.length)) || !isAbsolute(baseDir)) continue;
-    let sliced = replaced.slice(baseDir.length);
-    let ie = previous.get(replaced);
-    let twins = ie ?? new Set();
+    if ((matches && (!allowGlobBases || index >= denyPaths.length)) || !isAbsolute(baseDir)) continue;
+    let suffix = replaced.slice(baseDir.length);
+    let previousTwins = previous.get(replaced);
+    let twins = previousTwins ?? new Set();
     let parentReal;
     let failureCode;
     try {
-      let selfReal = D < denyPaths.length ? resolveRealPathForDeny(baseDir, realPathMemo, walkMemo) : baseDir;
+      let selfReal =
+        index < denyPaths.length ? resolveRealPathForDeny(baseDir, realPathMemo, walkMemo) : baseDir;
       let parentResolved =
-        selfReal === Vd ? Vd : resolveRealPathForDeny(dirname(baseDir), realPathMemo, walkMemo);
-      if (selfReal !== Vd && parentResolved !== Vd) {
-        let ft = typeof selfReal === "string" || twins.size > 0 ? baseDir : resolveThroughLinks(baseDir);
-        if (typeof selfReal !== "string" && ft === undefined) failureCode = selfReal.code;
+        selfReal === NOT_LOOKED_AT
+          ? NOT_LOOKED_AT
+          : resolveRealPathForDeny(dirname(baseDir), realPathMemo, walkMemo);
+      if (selfReal !== NOT_LOOKED_AT && parentResolved !== NOT_LOOKED_AT) {
+        let fallback =
+          typeof selfReal === "string" || twins.size > 0 ? baseDir : resolveThroughLinks(baseDir);
+        if (typeof selfReal !== "string" && fallback === undefined) failureCode = selfReal.code;
         parentReal = typeof parentResolved === "string" ? parentResolved : undefined;
         if (typeof selfReal === "string" || twins.size === 0)
           twins = new Set(
             [
-              typeof selfReal === "string" ? selfReal : typeof ft === "string" ? ft : baseDir,
+              typeof selfReal === "string" ? selfReal : typeof fallback === "string" ? fallback : baseDir,
               typeof parentResolved === "string" ? join(parentResolved, basename(baseDir)) : baseDir,
-            ].filter((rt) => rt !== baseDir || D >= denyPaths.length),
+            ].filter((twin) => twin !== baseDir || index >= denyPaths.length),
           );
       }
     } catch (error) {
@@ -2081,15 +2138,15 @@ function addRealPathDenyTwins(denyPaths, kind, realPathMemo, allowGlobBases) {
         level: "warn",
       });
     }
-    let me = `${kind} deny ${replaced}`;
-    let Ne = [dirname(baseDir), parentReal ?? dirname(baseDir)];
+    let label = `${kind} deny ${replaced}`;
+    let roots = [dirname(baseDir), parentReal ?? dirname(baseDir)];
     let finalTwins =
-      twins === ie && parentReal === undefined
+      twins === previousTwins && parentReal === undefined
         ? twins
-        : new Set([...twins].flatMap((twin) => toDenyTwinSpelling(twin, sliced, Ne, me) ?? []));
+        : new Set([...twins].flatMap((twin) => toDenyTwinSpelling(twin, suffix, roots, label) ?? []));
     resolvedByDeny.set(replaced, finalTwins);
     if (finalTwins.size > 0) getSandboxAdapterState().realPathTwins = "listed";
-    for (let finalTwin of finalTwins) extraPaths.push(finalTwin + sliced);
+    for (let finalTwin of finalTwins) extraPaths.push(finalTwin + suffix);
   }
   getSandboxAdapterState().realPathsOfDenies[kind] = resolvedByDeny;
   return extraPaths.length === 0 ? denyPaths : denyPaths.concat(extraPaths);
@@ -2101,9 +2158,9 @@ var MAX_TWIN_SPELLING_LENGTH = 900;
 /**
  * 把拒绝条目的真实路径改写为可用的"双胞胎"写法；会覆盖到拒绝之上、无法拼写或过长时保留原写法并警告。
  */
-function toDenyTwinSpelling(twin, n, r, s) {
+function toDenyTwinSpelling(twin, suffix, roots, label) {
   let replaced = twin.replace(GLOB_UNSAFE_CHARS_RE, "?");
-  let fullPattern = replaced + n;
+  let fullPattern = replaced + suffix;
   let probe = /[*?[]/.test(fullPattern)
     ? fullPattern
         .replace(/[.^$+{}()|[\]]/g, "...")
@@ -2111,15 +2168,15 @@ function toDenyTwinSpelling(twin, n, r, s) {
         .replace(/["\\\0-\x1f\x7f\ud800-\udfff]/g, "xxxxxx")
     : fullPattern;
   let sliced = replaced.slice(0, replaced.lastIndexOf(sep, replaced.indexOf("?")) + 1);
-  let skipReason = r.some((R) => join(R, sep).startsWith(join(twin, sep)))
+  let skipReason = roots.some((root) => join(root, sep).startsWith(join(twin, sep)))
     ? "above-the-deny"
-    : replaced.includes("?") && !r.some((R) => sliced.startsWith(join(R, sep)))
+    : replaced.includes("?") && !roots.some((root) => sliced.startsWith(join(root, sep)))
       ? "covered-above-the-deny"
       : /\ufffd|__GLOBSTAR/.test(twin)
         ? "unspellable"
         : Buffer.byteLength(probe) > MAX_TWIN_SPELLING_LENGTH && "too-long";
   if (skipReason) {
-    logForDebugging(`[sandbox] ${s} keeps its spelling (${skipReason})`, {
+    logForDebugging(`[sandbox] ${label} keeps its spelling (${skipReason})`, {
       level: "warn",
     });
     return;
@@ -2127,8 +2184,11 @@ function toDenyTwinSpelling(twin, n, r, s) {
   return replaced;
 }
 //@ chunk-fq0cr76a.js:930692-930737 placement
-var Vd = Object.freeze({
-  code: "not-looked-at",
+var NOT_LOOKED_AT; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-fq0cr76a.js:930692", () => {
+  NOT_LOOKED_AT = Object.freeze({
+    code: "not-looked-at",
+  });
 });
 //@ chunk-fq0cr76a.js:930737-931669 placement
 /**
@@ -2146,7 +2206,7 @@ function resolveRealPathForDeny(path, memo, walkMemo, depth = 0) {
   if (hostKind !== undefined) {
     let result =
       hostKind === "host"
-        ? Vd
+        ? NOT_LOOKED_AT
         : {
             code: hostKind,
           };
@@ -2156,35 +2216,35 @@ function resolveRealPathForDeny(path, memo, walkMemo, depth = 0) {
   let walk = rawPointerPathWalk(path, cwd, walkMemo);
   let stopKind = walk.unsafe ? (walk.stoppedAt?.kind ?? "link") : undefined;
   if (stopKind !== undefined && stopKind !== "special") {
-    let O = {
+    let result = {
       code: stopKind === "other" ? "unknown" : "not-vetted",
     };
     try {
       if (stopKind === "other") lstatSync(walk.stoppedAt?.path ?? path);
     } catch (errorCode) {
-      O.code = getErrnoCode(errorCode) ?? O.code;
+      result.code = getErrnoCode(errorCode) ?? result.code;
     }
-    memo.set(path, O);
-    return O;
+    memo.set(path, result);
+    return result;
   }
   let missingCount = walk.missingTail ?? 0;
   if (missingCount > 0) {
     let parts = path.split(sep);
-    let L = parts.slice(0, -missingCount).join(sep) || sep;
-    let parent = resolveRealPathForDeny(L, memo, walkMemo, depth + 1);
-    let K = typeof parent === "string" ? join(parent, ...parts.slice(-missingCount)) : parent;
-    memo.set(path, K);
-    return K;
+    let existingPart = parts.slice(0, -missingCount).join(sep) || sep;
+    let parent = resolveRealPathForDeny(existingPart, memo, walkMemo, depth + 1);
+    let next = typeof parent === "string" ? join(parent, ...parts.slice(-missingCount)) : parent;
+    memo.set(path, next);
+    return next;
   }
   let resolved;
   try {
     resolved = realpathPlaceable(path);
   } catch (error) {
-    let L = getErrnoCode(error) ?? "unknown";
-    let V = dirname(path);
-    if (!(L === "ENOENT" || L === "ENOTDIR") || V === path)
+    let errnoCode = getErrnoCode(error) ?? "unknown";
+    let parentPath = dirname(path);
+    if (!(errnoCode === "ENOENT" || errnoCode === "ENOTDIR") || parentPath === path)
       resolved = {
-        code: L,
+        code: errnoCode,
       };
     else {
       let linkTarget;
@@ -2196,7 +2256,7 @@ function resolveRealPathForDeny(path, memo, walkMemo, depth = 0) {
           linkError === "ENOENT" || linkError === "ENOTDIR" || linkError === "EINVAL" ? undefined : null;
       }
       if (linkTarget === undefined) {
-        let realPathForDeny = resolveRealPathForDeny(V, memo, walkMemo, depth + 1);
+        let realPathForDeny = resolveRealPathForDeny(parentPath, memo, walkMemo, depth + 1);
         resolved =
           typeof realPathForDeny === "string" ? join(realPathForDeny, basename(path)) : realPathForDeny;
       } else
@@ -2216,17 +2276,17 @@ function resolveRealPathForDeny(path, memo, walkMemo, depth = 0) {
  * 手工逐段跟随符号链接解析路径（限跳数）；遇到主机共享路径返回特殊标记，无法解析返回 undefined。
  */
 function resolveThroughLinks(baseDir) {
-  let filtered = baseDir.split(sep).filter((h) => h !== "" && h !== ".");
+  let filtered = baseDir.split(sep).filter((segment) => segment !== "" && segment !== ".");
   let current = sep;
   let sawLink = false;
-  for (let h = 0, y = 0; h < filtered.length;) {
-    let b = filtered[h] ?? "";
-    if (b === "..") {
+  for (let index = 0, linksSeen = 0; index < filtered.length;) {
+    let segment = filtered[index] ?? "";
+    if (segment === "..") {
       current = dirname(current);
-      h++;
+      index++;
       continue;
     }
-    let candidate = join(current, b);
+    let candidate = join(current, segment);
     let linkTarget;
     let errorCode;
     try {
@@ -2235,68 +2295,72 @@ function resolveThroughLinks(baseDir) {
     } catch (error) {
       errorCode = getErrnoCode(error) ?? "unknown";
     }
-    let D = linkTarget === undefined ? undefined : classifyForeignMountKind(linkTarget, current);
-    if (D !== undefined) return D === "host" ? Vd : undefined;
+    let kind = linkTarget === undefined ? undefined : classifyForeignMountKind(linkTarget, current);
+    if (kind !== undefined) return kind === "host" ? NOT_LOOKED_AT : undefined;
     if (errorCode === "ENOENT" || errorCode === "ENOTDIR")
-      return sawLink ? join(candidate, ...filtered.slice(h + 1)) : undefined;
+      return sawLink ? join(candidate, ...filtered.slice(index + 1)) : undefined;
     if (errorCode !== undefined && errorCode !== "EINVAL")
-      return sawLink && h === filtered.length - 1 ? candidate : undefined;
+      return sawLink && index === filtered.length - 1 ? candidate : undefined;
     if (linkTarget === undefined) {
       current = candidate;
-      h++;
-    } else if (++y > MAX_HOST_LABEL_COUNT) return;
+      index++;
+    } else if (++linksSeen > MAX_HOST_LABEL_COUNT) return;
     else {
       sawLink = true;
-      let O = isAbsolute(linkTarget);
-      filtered = [...linkTarget.split(sep).filter((L) => L !== "" && L !== "."), ...filtered.slice(h + 1)];
-      current = O ? sep : current;
-      h = 0;
+      let absolute = isAbsolute(linkTarget);
+      filtered = [
+        ...linkTarget.split(sep).filter((segment) => segment !== "" && segment !== "."),
+        ...filtered.slice(index + 1),
+      ];
+      current = absolute ? sep : current;
+      index = 0;
     }
   }
   return sawLink ? current : undefined;
 }
 //@ chunk-fq0cr76a.js:932276-932363 placement
-function classifyForeignMountKind(e, n) {
-  if (!isOnForeignMount(e, n)) return;
-  return isMacSpecialPath(e) || isMacSpecialPath(resolve(n, e)) ? "kernel-resolved" : "host";
+function classifyForeignMountKind(path, baseDir) {
+  if (!isOnForeignMount(path, baseDir)) return;
+  return isMacSpecialPath(path) || isMacSpecialPath(resolve(baseDir, path)) ? "kernel-resolved" : "host";
 }
 //@ chunk-fq0cr76a.js:932363-932382 placement
 var MAX_HOST_LABEL_COUNT = 32;
 var MAX_HOST_NAME_LENGTH = 1024;
 //@ chunk-fq0cr76a.js:932382-932594 placement
-function resolveExistingPrefix(e) {
-  let n = [];
-  for (let r = e; ; r = dirname(r))
+function resolveExistingPrefix(path) {
+  let missingParts = [];
+  for (let current = path; ; current = dirname(current))
     try {
-      let s = realpathPlaceable(r);
+      let real = realpathPlaceable(current);
       return {
-        path: n.length === 0 ? s : join(s, ...n),
-        exists: n.length === 0,
+        path: missingParts.length === 0 ? real : join(real, ...missingParts),
+        exists: missingParts.length === 0,
       };
     } catch (error) {
       let errnoCode = getErrnoCode(error);
-      if ((errnoCode !== "ENOENT" && errnoCode !== "ENOTDIR") || dirname(r) === r) return null;
-      n.unshift(basename(r));
+      if ((errnoCode !== "ENOENT" && errnoCode !== "ENOTDIR") || dirname(current) === current) return null;
+      missingParts.unshift(basename(current));
     }
 }
 //@ chunk-fq0cr76a.js:932594-932929 placement
 /**
  * 求路径的真实位置：普通文件/目录直接 realpath；特殊文件解析其父目录；指向特殊文件的链接逐跳跟随，超过上限抛 ELOOP。
  */
-function realpathPlaceable(e) {
-  let n = e;
+function realpathPlaceable(path) {
+  let current = path;
   for (let j = 0; ; j++) {
-    let s = lstatSync(n);
-    let h = s.isSymbolicLink() ? statSync(n) : s;
-    if (h.isFile() || h.isDirectory()) return realpathSync(n);
-    let y = dirname(n);
-    if (!s.isSymbolicLink()) return join(realpathPlaceable(y), basename(n));
-    let b = j < MAX_HOST_LABEL_COUNT ? resolveLinkTarget(realpathSync(y), readlinkSync(n)) : null;
-    if (b === null)
+    let stats = lstatSync(current);
+    let followed = stats.isSymbolicLink() ? statSync(current) : stats;
+    if (followed.isFile() || followed.isDirectory()) return realpathSync(current);
+    let parent = dirname(current);
+    if (!stats.isSymbolicLink()) return join(realpathPlaceable(parent), basename(current));
+    let next =
+      j < MAX_HOST_LABEL_COUNT ? resolveLinkTarget(realpathSync(parent), readlinkSync(current)) : null;
+    if (next === null)
       throw Object.assign(Error("ELOOP: a link chain onto a special file cannot be placed"), {
         code: "ELOOP",
       });
-    n = b;
+    current = next;
   }
 }
 //@ chunk-fq0cr76a.js:932929-932944 placement
@@ -2305,113 +2369,113 @@ var MAX_DENY_SCAN_BYTES = 8388608;
 /**
  * 为遮罩/禁止扫描求路径的规范形式：逐级向上找到可 realpath 的祖先再拼回缺失尾段；遇到禁区或不安全链接停止解析并返回原样；可选回填 settled/stoppedAt/throughLink 状态。
  */
-function canonicalizePathForMaskSweep(e, n, r) {
-  if (n) {
-    n.settled = false;
-    n.stoppedAt = undefined;
-    n.throughLink = false;
+function canonicalizePathForMaskSweep(path, memo, walkMemo) {
+  if (memo) {
+    memo.settled = false;
+    memo.stoppedAt = undefined;
+    memo.throughLink = false;
   }
-  let s = [];
+  let missingParts = [];
   let cwdState = getCwdState();
-  let y = e;
-  if (isOnForeignMount(y, cwdState)) return e;
-  let b = rawPointerPathWalk(y, cwdState, r);
-  if (n) {
-    n.stoppedAt = b.stoppedAt;
-    n.throughLink = b.throughLink;
+  let current = path;
+  if (isOnForeignMount(current, cwdState)) return path;
+  let walk = rawPointerPathWalk(current, cwdState, walkMemo);
+  if (memo) {
+    memo.stoppedAt = walk.stoppedAt;
+    memo.throughLink = walk.throughLink;
   }
-  if (b.unsafe) return e;
-  if (b.missingTail !== null) {
-    let w = e;
-    for (let j = 0; j < b.missingTail; j++) {
-      let D = dirname(w);
-      if (D === w) break;
-      s.push(basename(w));
-      w = D;
-      if (isOnForeignMount(w, cwdState)) return e;
+  if (walk.unsafe) return path;
+  if (walk.missingTail !== null) {
+    let trimmed = path;
+    for (let j = 0; j < walk.missingTail; j++) {
+      let parent = dirname(trimmed);
+      if (parent === trimmed) break;
+      missingParts.push(basename(trimmed));
+      trimmed = parent;
+      if (isOnForeignMount(trimmed, cwdState)) return path;
     }
     try {
-      let R = realpathSync(w);
-      if (n) n.settled = s.length === 0;
-      return s.length === 0 ? R : join(R, ...s.reverse());
+      let real = realpathSync(trimmed);
+      if (memo) memo.settled = missingParts.length === 0;
+      return missingParts.length === 0 ? real : join(real, ...missingParts.reverse());
     } catch {
-      s.length = 0;
-      if (n) n.stoppedAt = undefined;
+      missingParts.length = 0;
+      if (memo) memo.stoppedAt = undefined;
     }
   }
-  let S = b.missingTail === null;
+  let settled = walk.missingTail === null;
   for (;;) {
-    if (!S && (isOnForeignMount(y, cwdState) || rawPointerPathIsUnsafe(y, cwdState))) break;
-    S = false;
+    if (!settled && (isOnForeignMount(current, cwdState) || rawPointerPathIsUnsafe(current, cwdState))) break;
+    settled = false;
     try {
-      y = realpathSync(y);
+      current = realpathSync(current);
       break;
     } catch {
-      let w = dirname(y);
-      if (w === y) break;
-      s.push(basename(y));
-      y = w;
+      let parent = dirname(current);
+      if (parent === current) break;
+      missingParts.push(basename(current));
+      current = parent;
     }
   }
-  return s.length === 0 ? y : join(y, ...s.reverse());
+  return missingParts.length === 0 ? current : join(current, ...missingParts.reverse());
 }
 //@ chunk-fq0cr76a.js:933598-933629 placement
 var UNIX_DENY_PREFIX_ROOTS = ["/etc", "/tmp", "/var"];
 //@ chunk-fq0cr76a.js:933629-933844 placement
-function isOsLinkedRootAlias(e, n) {
+function isOsLinkedRootAlias(path, target) {
   let { osLinkedRootRealpaths } = getProcessSandboxState();
-  return UNIX_DENY_PREFIX_ROOTS.some((s) => {
-    if (e !== s && !e.startsWith(s + sep)) return false;
-    let h = osLinkedRootRealpaths.get(s);
-    if (h === undefined) {
+  return UNIX_DENY_PREFIX_ROOTS.some((root) => {
+    if (path !== root && !path.startsWith(root + sep)) return false;
+    let realRoot = osLinkedRootRealpaths.get(root);
+    if (realRoot === undefined) {
       try {
-        h = realpathSync(s);
+        realRoot = realpathSync(root);
       } catch {
-        h = s;
+        realRoot = root;
       }
-      osLinkedRootRealpaths.set(s, h);
+      osLinkedRootRealpaths.set(root, realRoot);
     }
-    return h !== s && n === h + e.slice(s.length);
+    return realRoot !== root && target === realRoot + path.slice(root.length);
   });
 }
 //@ chunk-fq0cr76a.js:933844-934061 placement
-function expandDenySymlink(e) {
-  let n;
+function expandDenySymlink(path) {
+  let linkText;
   try {
-    n = readlinkSync(e);
+    linkText = readlinkSync(path);
   } catch {
-    getSandboxAdapterState().denyLiteralSymlinkCandidates.push(e);
-    return [e];
+    getSandboxAdapterState().denyLiteralSymlinkCandidates.push(path);
+    return [path];
   }
-  let r;
+  let target;
   try {
-    r = realpathSync(e);
+    target = realpathSync(path);
   } catch {
-    r = followDanglingLink(e, n) ?? resolve(dirname(e), n);
+    target = followDanglingLink(path, linkText) ?? resolve(dirname(path), linkText);
     for (let j = 0; j < 8; j++) {
-      let h;
+      let nextText;
       try {
-        h = readlinkSync(r);
+        nextText = readlinkSync(target);
       } catch {
         break;
       }
-      r = resolve(dirname(r), h);
+      target = resolve(dirname(target), nextText);
     }
   }
-  return [r, e];
+  return [target, path];
 }
 //@ chunk-fq0cr76a.js:934061-934679 placement
 /**
  * 逐段遍历路径，记录途中经过的所有符号链接（是否仍有效），遇到无法读取或不存在的段时返回缺失信息与落点。
  */
-function traceSymlinkHops(e) {
+function traceSymlinkHops(path) {
   let links = [];
   let separatorPattern = getPlatform() === "windows" ? /[\\/]/ : "/";
-  let root = parse(e).root;
-  let parts = e.slice(root.length).split(sep);
-  let y = [];
-  while (y.length + parts.length > 0) {
-    let segment = y.shift() ?? parts.shift() ?? "";
+  let root = parse(path).root;
+  let parts = path.slice(root.length).split(sep);
+  let queue = [];
+  while (queue.length + parts.length > 0) {
+    let segment = queue.shift() ?? parts.shift() ?? "";
     if (segment === "..") root = dirname(root);
     else if (segment !== "" && segment !== ".") {
       let candidate = join(root, segment);
@@ -2421,7 +2485,7 @@ function traceSymlinkHops(e) {
       } catch (error) {
         let errorCode = getErrnoCode(error);
         if (errorCode !== "EINVAL") {
-          let landing = join(candidate, ...y, ...parts);
+          let landing = join(candidate, ...queue, ...parts);
           return {
             links,
             missing: {
@@ -2434,19 +2498,19 @@ function traceSymlinkHops(e) {
         root = candidate;
         continue;
       }
-      let R = resolveExistingPrefix(candidate)?.exists === true;
-      if ((!R && links.some((link) => link.path === candidate)) || links.length >= MAX_HOST_NAME_LENGTH)
+      let exists = resolveExistingPrefix(candidate)?.exists === true;
+      if ((!exists && links.some((link) => link.path === candidate)) || links.length >= MAX_HOST_NAME_LENGTH)
         return {
           links,
           missing: null,
         };
       links.push({
         path: candidate,
-        isLive: R,
+        isLive: exists,
       });
       let { root: root_2 } = parse(linkTarget);
       root = root_2 === "" ? root : root_2;
-      y.unshift(...linkTarget.slice(root_2.length).split(separatorPattern));
+      queue.unshift(...linkTarget.slice(root_2.length).split(separatorPattern));
     }
   }
   return {
@@ -2455,27 +2519,27 @@ function traceSymlinkHops(e) {
   };
 }
 //@ chunk-fq0cr76a.js:934679-934978 placement
-function normalizeWindowsDirPath(e) {
-  if (getPlatform() !== "windows") return e;
-  let replaced = e.replace(/[\\/]+$/, "");
-  let r = replaced;
+function normalizeWindowsDirPath(path) {
+  if (getPlatform() !== "windows") return path;
+  let replaced = path.replace(/[\\/]+$/, "");
+  let expanded = replaced;
   if (/^~(?:[\\/]|$)/.test(replaced))
     try {
-      r = expandPath(replaced.replace(/^~\\/, "~/"));
+      expanded = expandPath(replaced.replace(/^~\\/, "~/"));
     } catch {}
-  let s = stripExtendedPathPrefix(r);
-  if (replaced.length === 0 || /^[A-Za-z]:$/.test(s)) return e;
-  if (/^[\\/]{2}/.test(s) || isWindowsDevicePath(r)) return replaced;
+  let stripped = stripExtendedPathPrefix(expanded);
+  if (replaced.length === 0 || /^[A-Za-z]:$/.test(stripped)) return path;
+  if (/^[\\/]{2}/.test(stripped) || isWindowsDevicePath(expanded)) return replaced;
   try {
-    if (!statSync(r).isDirectory()) return replaced;
+    if (!statSync(expanded).isDirectory()) return replaced;
   } catch {}
   return replaced + sep;
 }
 //@ chunk-fq0cr76a.js:934978-935046 placement
-function normalizeDirEntryPattern(e, n) {
-  return /[\\/]$/.test(e.trim()) && !containsGlobCharsWin(stripExtendedPathPrefix(n))
-    ? normalizeWindowsDirPath(n)
-    : n;
+function normalizeDirEntryPattern(pattern, path) {
+  return /[\\/]$/.test(pattern.trim()) && !containsGlobCharsWin(stripExtendedPathPrefix(path))
+    ? normalizeWindowsDirPath(path)
+    : path;
 }
 //@ chunk-fq0cr76a.js:935046-935087 placement = isInGlobalClaudeFolder (1)
 function isInGlobalClaudeFolder(filePath) {
@@ -2483,29 +2547,29 @@ function isInGlobalClaudeFolder(filePath) {
 }
 //@ chunk-fq0cr76a.js:935087-935255 placement = _temp8 (1)
 function getAtomicWriteDirs(a_3 = true) {
-  let n = new Set();
-  n.add(isInGlobalClaudeFolder(getOriginalCwd()));
-  if (a_3) n.add(isInGlobalClaudeFolder(getCwdState()));
-  n.add(isInGlobalClaudeFolder(getProjectRoot()));
-  n.add(resolve(getClaudeConfigDir(), ATOMIC_WRITE_DIRNAME));
+  let dirs = new Set();
+  dirs.add(isInGlobalClaudeFolder(getOriginalCwd()));
+  if (a_3) dirs.add(isInGlobalClaudeFolder(getCwdState()));
+  dirs.add(isInGlobalClaudeFolder(getProjectRoot()));
+  dirs.add(resolve(getClaudeConfigDir(), ATOMIC_WRITE_DIRNAME));
   let settingsFilePathForSource = getSettingsFilePathForSource("localSettings");
-  if (settingsFilePathForSource) n.add(join(dirname(settingsFilePathForSource), ATOMIC_WRITE_DIRNAME));
-  return [...n];
+  if (settingsFilePathForSource) dirs.add(join(dirname(settingsFilePathForSource), ATOMIC_WRITE_DIRNAME));
+  return [...dirs];
 }
 //@ chunk-fq0cr76a.js:935255-935325 placement
-function scrubBareGitRepoFiles(e) {
-  mkdirSync(dirname(e), {
+function scrubBareGitRepoFiles(dir) {
+  mkdirSync(dirname(dir), {
     recursive: true,
   });
-  mkdirSync(e, {
+  mkdirSync(dir, {
     recursive: true,
     mode: 448,
   });
 }
 //@ chunk-fq0cr76a.js:935325-935464 placement
-function isParentDirReal(e) {
+function isParentDirReal(path) {
   try {
-    closeSync(openSync(dirname(e), constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW));
+    closeSync(openSync(dirname(path), constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW));
     return true;
   } catch (error) {
     let errnoCode = getErrnoCode(error);
@@ -2531,103 +2595,103 @@ async function ensureBridgeSpawnRootDir() {
  * 确保原子写暂存目录存在且是真实目录（文件或坏目录会被删掉重建），并记录其 dev/ino 身份防止被替换；首次还会把 .claude/<暂存目录>/ 加进全局 gitignore。
  */
 function ensureAtomicWriteStagingDirs() {
-  for (let n of getAtomicWriteDirs(!isRemoteSessionAvailable())) {
-    if (!isParentDirReal(n)) continue;
-    let r = false;
+  for (let dir of getAtomicWriteDirs(!isRemoteSessionAvailable())) {
+    if (!isParentDirReal(dir)) continue;
+    let created = false;
     try {
-      if (!lstatSync(n).isDirectory()) {
-        if (!isParentDirReal(n)) continue;
-        unlinkSync(n);
-        scrubBareGitRepoFiles(n);
-        r = true;
+      if (!lstatSync(dir).isDirectory()) {
+        if (!isParentDirReal(dir)) continue;
+        unlinkSync(dir);
+        scrubBareGitRepoFiles(dir);
+        created = true;
       } else
         try {
-          closeSync(openSync(n, constants.O_RDONLY | constants.O_DIRECTORY));
-          r = true;
+          closeSync(openSync(dir, constants.O_RDONLY | constants.O_DIRECTORY));
+          created = true;
         } catch {
           try {
-            if (!isParentDirReal(n)) continue;
-            rmdirSync(n);
-            scrubBareGitRepoFiles(n);
-            r = true;
+            if (!isParentDirReal(dir)) continue;
+            rmdirSync(dir);
+            scrubBareGitRepoFiles(dir);
+            created = true;
           } catch {}
         }
     } catch {
       try {
-        if (!isParentDirReal(n)) continue;
-        scrubBareGitRepoFiles(n);
-        r = true;
+        if (!isParentDirReal(dir)) continue;
+        scrubBareGitRepoFiles(dir);
+        created = true;
       } catch (error) {
-        logForDebugging(`ensureAtomicWriteStagingDirs: failed to create ${n}: ${error}`);
+        logForDebugging(`ensureAtomicWriteStagingDirs: failed to create ${dir}: ${error}`);
         logFeatureSad("sandbox_exec", "atomic_write_staging_dir_create_failed");
       }
     }
     try {
-      let s = openSync(n, constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW);
+      let fd = openSync(dir, constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW);
       try {
-        let h = fstatSync(s);
-        recordStagingDirIdentity(n, h.dev, h.ino, s);
+        let stats = fstatSync(fd);
+        recordStagingDirIdentity(dir, stats.dev, stats.ino, fd);
       } catch (error) {
-        closeSync(s);
+        closeSync(fd);
         throw error;
       }
     } catch (error) {
-      if (r)
+      if (created)
         throwStagingTampered(
-          `Staging dir ${n} was just established but identity-record open failed (${getErrnoCode(error) ?? error})`,
+          `Staging dir ${dir} was just established but identity-record open failed (${getErrnoCode(error) ?? error})`,
         );
     }
   }
   let processSandboxState = getProcessSandboxState();
   if (!processSandboxState.stagingDirGitignoreFired) {
     processSandboxState.stagingDirGitignoreFired = true;
-    addFileGlobRuleToGitignore(`.claude/${ATOMIC_WRITE_DIRNAME}/`, getOriginalCwd()).then((n) => {
-      if (!n.written) return;
-      if (n.effective) logFeatureOk("gitignore_global_rule");
-      else if (n.reason === "already_tracked") logFeatureSad("gitignore_global_rule", n.reason);
-      else logFeatureBad("gitignore_global_rule", n.reason ?? "write_ineffective");
+    addFileGlobRuleToGitignore(`.claude/${ATOMIC_WRITE_DIRNAME}/`, getOriginalCwd()).then((result) => {
+      if (!result.written) return;
+      if (result.effective) logFeatureOk("gitignore_global_rule");
+      else if (result.reason === "already_tracked") logFeatureSad("gitignore_global_rule", result.reason);
+      else logFeatureBad("gitignore_global_rule", result.reason ?? "write_ineffective");
     });
   }
 }
 //@ chunk-fq0cr76a.js:936553-936584 placement
 var TENGU_ENCHANTED_KITE = "tengu_enchanted_kite";
 //@ chunk-fq0cr76a.js:936584-936806 placement
-function classifyHeadEntry(e) {
+function classifyHeadEntry(path) {
   try {
-    let n = lstatSync(e);
-    if (n.isDirectory()) return "folder";
-    if (!n.isSymbolicLink()) return "file_or_special";
+    let stats = lstatSync(path);
+    if (stats.isDirectory()) return "folder";
+    if (!stats.isSymbolicLink()) return "file_or_special";
   } catch {
     return "absent";
   }
   try {
-    return /^refs[\\/]/.test(readlinkSync(e)) ? "link_to_refs" : "other_link";
+    return /^refs[\\/]/.test(readlinkSync(path)) ? "link_to_refs" : "other_link";
   } catch {
     return "other_link";
   }
 }
 //@ chunk-fq0cr76a.js:936806-937033 placement
-function classifyHeadState(e) {
-  let n = classifyHeadEntry(e);
-  switch (n) {
+function classifyHeadState(path) {
+  let entryKind = classifyHeadEntry(path);
+  switch (entryKind) {
     case "file_or_special":
       return "head";
     case "folder":
     case "absent":
-      return n;
+      return entryKind;
     case "link_to_refs":
     case "other_link":
       try {
-        statSync(e);
+        statSync(path);
         return "head";
       } catch {
-        return n === "link_to_refs" ? "dangling_head" : "absent";
+        return entryKind === "link_to_refs" ? "dangling_head" : "absent";
       }
   }
 }
 //@ chunk-fq0cr76a.js:937033-937135 placement
-function isHeadPresent(e) {
-  switch (e) {
+function isHeadPresent(state) {
+  switch (state) {
     case "head":
     case "dangling_head":
       return true;
@@ -2637,8 +2701,8 @@ function isHeadPresent(e) {
   }
 }
 //@ chunk-fq0cr76a.js:937135-937264 placement
-function isFileOrRefsLink(e) {
-  switch (e) {
+function isFileOrRefsLink(entryKind) {
+  switch (entryKind) {
     case "file_or_special":
     case "link_to_refs":
       return true;
@@ -2658,7 +2722,8 @@ function convertToSandboxRuntimeConfig(settings) {
   let permissionsSettings = settings.permissions || {};
   let managedSources = getAllPolicyTierSettings();
   let evalConfinedEnv = env.CLAUDE_CODE_EVAL_CONFINED;
-  let y = (j) => !evalConfinedEnv || (j === "userSettings" && isSettingSourceEnabled("userSettings"));
+  let isTierUsable = (source) =>
+    !evalConfinedEnv || (source === "userSettings" && isSettingSourceEnabled("userSettings"));
   let managedDomainsOnly = managedSources.some(
     (managedSource) => managedSource.sandbox?.network?.allowManagedDomainsOnly === true,
   );
@@ -2666,57 +2731,57 @@ function convertToSandboxRuntimeConfig(settings) {
     (managedSource) => managedSource.sandbox?.filesystem?.allowManagedReadPathsOnly === true,
   );
   let adminMandate = isAdminSandboxMandate();
-  let R = isStrictNetworkAllowlistConfigured();
-  let D = adminMandate || R;
-  let O = adminMandate || hasTrustedReadDenies();
-  let L = O ? getTrustedReadDenyRoots() : undefined;
-  let V;
-  let K;
-  let q = () => {
-    if (V === undefined)
-      if (L) {
-        let trustedReadDenyRoots = resolveTrustedReadDenyRoots(L);
-        V = trustedReadDenyRoots.roots;
-        K = trustedReadDenyRoots.resolution;
-      } else V = getBuiltinTrustedDenyRoots();
-    return V;
+  let strictAllowlist = isStrictNetworkAllowlistConfigured();
+  let restrictWidening = adminMandate || strictAllowlist;
+  let hasTrustedDenies = adminMandate || hasTrustedReadDenies();
+  let trustedDenyRoots = hasTrustedDenies ? getTrustedReadDenyRoots() : undefined;
+  let resolvedRoots;
+  let resolution;
+  let getDenyRoots = () => {
+    if (resolvedRoots === undefined)
+      if (trustedDenyRoots) {
+        let trustedReadDenyRoots = resolveTrustedReadDenyRoots(trustedDenyRoots);
+        resolvedRoots = trustedReadDenyRoots.roots;
+        resolution = trustedReadDenyRoots.resolution;
+      } else resolvedRoots = getBuiltinTrustedDenyRoots();
+    return resolvedRoots;
   };
   let allowedDomains = [];
   let deniedDomains = [];
   if (managedDomainsOnly && evalConfinedEnv);
   else if (evalConfinedEnv) {
     if (isSettingSourceEnabled("userSettings"))
-      for (let j of getSettingsForSource("userSettings")?.sandbox?.network?.allowedDomains ?? [])
-        allowedDomains.push(j);
+      for (let domain of getSettingsForSource("userSettings")?.sandbox?.network?.allowedDomains ?? [])
+        allowedDomains.push(domain);
   } else if (managedDomainsOnly)
     for (let managedSource of managedSources) {
-      for (let ce of managedSource.sandbox?.network?.allowedDomains || []) allowedDomains.push(ce);
-      for (let ce of managedSource.permissions?.allow || []) {
-        let ruleForSandbox = parseRuleForSandbox(ce);
+      for (let domain of managedSource.sandbox?.network?.allowedDomains || []) allowedDomains.push(domain);
+      for (let allowRule of managedSource.permissions?.allow || []) {
+        let ruleForSandbox = parseRuleForSandbox(allowRule);
         if (ruleForSandbox.toolName === WEBFETCH && ruleForSandbox.ruleContent?.startsWith("domain:"))
           allowedDomains.push(ruleForSandbox.ruleContent.substring(7));
       }
     }
   else {
-    for (let j of D
-      ? collectFromSandboxSettings((ce) => ce.network?.allowedDomains)
+    for (let domain of restrictWidening
+      ? collectFromSandboxSettings((settings) => settings.network?.allowedDomains)
       : settings.sandbox?.network?.allowedDomains || [])
-      allowedDomains.push(j);
-    for (let j of D ? collectAllowRules() : permissionsSettings.allow || []) {
-      let ruleForSandbox = parseRuleForSandbox(j);
+      allowedDomains.push(domain);
+    for (let allowRule of restrictWidening ? collectAllowRules() : permissionsSettings.allow || []) {
+      let ruleForSandbox = parseRuleForSandbox(allowRule);
       if (ruleForSandbox.toolName === WEBFETCH && ruleForSandbox.ruleContent?.startsWith("domain:"))
         allowedDomains.push(ruleForSandbox.ruleContent.substring(7));
     }
-    if (D && !adapterState.droppedRepoAllowedDomainsLogged) {
+    if (restrictWidening && !adapterState.droppedRepoAllowedDomainsLogged) {
       adapterState.droppedRepoAllowedDomainsLogged = true;
       let reduced = ["projectSettings", "localSettings"]
-        .map((ce) => (isSettingSourceEnabled(ce) ? getSettingsForSource(ce) : null))
+        .map((sourceName) => (isSettingSourceEnabled(sourceName) ? getSettingsForSource(sourceName) : null))
         .reduce(
-          (acc, Ee) =>
+          (acc, settings) =>
             acc +
-            (Ee?.sandbox?.network?.allowedDomains?.length ?? 0) +
-            count(Ee?.permissions?.allow ?? [], (We) => {
-              let ruleForSandbox = parseRuleForSandbox(We);
+            (settings?.sandbox?.network?.allowedDomains?.length ?? 0) +
+            count(settings?.permissions?.allow ?? [], (allowRule) => {
+              let ruleForSandbox = parseRuleForSandbox(allowRule);
               return (
                 ruleForSandbox.toolName === WEBFETCH &&
                 ruleForSandbox.ruleContent?.startsWith("domain:") === true
@@ -2731,41 +2796,43 @@ function convertToSandboxRuntimeConfig(settings) {
     }
     for (let sessionAllowedHost of adapterState.sessionAllowedHosts) allowedDomains.push(sessionAllowedHost);
   }
-  for (let j of settings.sandbox?.network?.deniedDomains || []) deniedDomains.push(j);
-  for (let j of permissionsSettings.deny || []) {
-    let ruleForSandbox = parseRuleForSandbox(j);
+  for (let domain of settings.sandbox?.network?.deniedDomains || []) deniedDomains.push(domain);
+  for (let denyRule of permissionsSettings.deny || []) {
+    let ruleForSandbox = parseRuleForSandbox(denyRule);
     if (ruleForSandbox.toolName === WEBFETCH && ruleForSandbox.ruleContent?.startsWith("domain:"))
       deniedDomains.push(ruleForSandbox.ruleContent.substring(7));
   }
-  let ie = {};
-  let ae;
-  for (let j = deniedDomains.length - 1; j >= 0; j--) {
-    let ce = deniedDomains[j];
-    if (ce === undefined) continue;
-    let Ee = addTrailingDotFreeVariants(expandBareIpv6Hosts([ce]));
-    if (Ee.length === 1 && Ee[0] === ce) continue;
-    deniedDomains.splice(j, 1, ...Ee);
-    let We = ie[ce];
-    if (We !== undefined) {
-      delete ie[ce];
-      for (let tt of Ee) ie[tt] = We;
+  let reasons = {};
+  let gbRules;
+  for (let index = deniedDomains.length - 1; index >= 0; index--) {
+    let domain = deniedDomains[index];
+    if (domain === undefined) continue;
+    let expanded = addTrailingDotFreeVariants(expandBareIpv6Hosts([domain]));
+    if (expanded.length === 1 && expanded[0] === domain) continue;
+    deniedDomains.splice(index, 1, ...expanded);
+    let reason = reasons[domain];
+    if (reason !== undefined) {
+      delete reasons[domain];
+      for (let spelling of expanded) reasons[spelling] = reason;
     }
   }
   allowedDomains.splice(0, allowedDomains.length, ...normalizeIpv6HostEntries(allowedDomains));
-  let Se = evalConfinedEnv ? [getClaudeTempDirRealpath()] : [".", getClaudeTempDirRealpath()];
+  let allowWrite = evalConfinedEnv ? [getClaudeTempDirRealpath()] : [".", getClaudeTempDirRealpath()];
   let childProcessTmpDirRealpath = getChildProcessTmpDirRealpath();
-  if (childProcessTmpDirRealpath !== getClaudeTempDirRealpath()) Se.push(childProcessTmpDirRealpath);
-  let me = [...Se];
+  if (childProcessTmpDirRealpath !== getClaudeTempDirRealpath()) allowWrite.push(childProcessTmpDirRealpath);
+  let extraAllowWrite = [...allowWrite];
   let denyPaths = [];
-  let Ce = (j, ce, Ee = false) => {
-    let We = ce ? [resolveDenySymlink(j)] : expandDenySymlink(j);
-    denyPaths.push(...(Ee ? We.map(normalizeWindowsDirPath) : We));
+  let addDeny = (path, useStrictResolve, normalizeWindows = false) => {
+    let spellings = useStrictResolve ? [resolveDenySymlink(path)] : expandDenySymlink(path);
+    denyPaths.push(...(normalizeWindows ? spellings.map(normalizeWindowsDirPath) : spellings));
   };
   let denyPaths_2 = [];
-  let he = [];
+  let denyRead = [];
   adapterState.symlinkedDenyScrubPaths.length = 0;
   adapterState.denyLiteralSymlinkCandidates.length = 0;
-  let filtered = SETTING_SOURCES.map((j) => getSettingsFilePathForSource(j)).filter((j) => j !== undefined);
+  let filtered = SETTING_SOURCES.map((sourceName) => getSettingsFilePathForSource(sourceName)).filter(
+    (filePath) => filePath !== undefined,
+  );
   let legacyLocalSettingsFilePath = getLegacyLocalSettingsFilePath();
   if (legacyLocalSettingsFilePath) filtered.push(legacyLocalSettingsFilePath);
   filtered.push(...getFlagAgentsFilePaths());
@@ -2776,32 +2843,32 @@ function convertToSandboxRuntimeConfig(settings) {
     denyPaths.push(join(WSL_MANAGED_SETTINGS_DIR, "managed-settings.json"));
     denyPaths.push(join(WSL_MANAGED_SETTINGS_DIR, "managed-settings.d"));
   }
-  let cwdState = getCwdState();
-  let originalCwd = getOriginalCwd();
-  let Ae = !isRemoteSessionAvailable();
-  if (!Ae) getSandboxAdapterState().builtAsThinClient = true;
-  if (cwdState !== originalCwd) {
-    denyPaths.push(resolveDenySymlink(resolve(cwdState, ".claude", "settings.json")));
-    denyPaths.push(resolveDenySymlink(resolve(cwdState, ".claude", "settings.local.json")));
+  let dir = getCwdState();
+  let dir_2 = getOriginalCwd();
+  let allowExtraPlaces = !isRemoteSessionAvailable();
+  if (!allowExtraPlaces) getSandboxAdapterState().builtAsThinClient = true;
+  if (dir !== dir_2) {
+    denyPaths.push(resolveDenySymlink(resolve(dir, ".claude", "settings.json")));
+    denyPaths.push(resolveDenySymlink(resolve(dir, ".claude", "settings.local.json")));
   }
-  Ce(resolve(originalCwd, ".claude", "skills"), true, true);
-  if (cwdState !== originalCwd) Ce(resolve(cwdState, ".claude", "skills"), true, true);
-  Ce(resolve(originalCwd, ".claude", "hooks"), true, true);
-  if (cwdState !== originalCwd) Ce(resolve(cwdState, ".claude", "hooks"), true, true);
+  addDeny(resolve(dir_2, ".claude", "skills"), true, true);
+  if (dir !== dir_2) addDeny(resolve(dir, ".claude", "skills"), true, true);
+  addDeny(resolve(dir_2, ".claude", "hooks"), true, true);
+  if (dir !== dir_2) addDeny(resolve(dir, ".claude", "hooks"), true, true);
   denyPaths.push(normalizeWindowsDirPath(resolve(getClaudeConfigDir(), "local")));
   denyPaths.push(...getAtomicWriteDirs().map(normalizeWindowsDirPath));
-  Ce(resolve(getClaudeConfigDir(), "jobs"), true, true);
-  let dt = resolve(getClaudeConfigDir(), "seed-admin");
+  addDeny(resolve(getClaudeConfigDir(), "jobs"), true, true);
+  let seedAdminDir = resolve(getClaudeConfigDir(), "seed-admin");
   try {
-    mkdirSync(dt, {
+    mkdirSync(seedAdminDir, {
       recursive: true,
       mode: 448,
     });
   } catch {}
-  Ce(dt, false, true);
-  denyPaths_2.push(normalizeWindowsDirPath(escapeBracketForGlob(realpathOrParentRealpath(dt))));
-  Ce(resolve(getClaudeConfigDir(), "daemon"), true, true);
-  Ce(bridgeSpawnDir(), true, true);
+  addDeny(seedAdminDir, false, true);
+  denyPaths_2.push(normalizeWindowsDirPath(escapeBracketForGlob(realpathOrParentRealpath(seedAdminDir))));
+  addDeny(resolve(getClaudeConfigDir(), "daemon"), true, true);
+  addDeny(bridgeSpawnDir(), true, true);
   denyPaths_2.push(normalizeWindowsDirPath(realpathOrParentRealpath(bridgeSpawnDir())));
   let bashEditDiffDir = getBashEditDiffDir();
   try {
@@ -2810,22 +2877,22 @@ function convertToSandboxRuntimeConfig(settings) {
       mode: 448,
     });
   } catch {}
-  Ce(bashEditDiffDir, false, true);
+  addDeny(bashEditDiffDir, false, true);
   denyPaths_2.push(normalizeWindowsDirPath(bashEditDiffDir));
-  let Ft = [
+  let policyLimitFiles = [
     signatureFileFor("policy-limits.json"),
     signatureIatFileFor("policy-limits.json"),
     stampPathFor("policy-limits.json"),
   ];
-  let xn = new Set([
+  let fileNames = new Set([
     "scheduled_tasks.json",
     "launch.json",
     "CLAUDE.md",
     "daemon.json",
     "policy-limits.json",
-    ...Ft,
+    ...policyLimitFiles,
   ]);
-  for (let j of [
+  for (let name of [
     "shell-snapshots",
     "session-env",
     "plugins",
@@ -2843,64 +2910,67 @@ function convertToSandboxRuntimeConfig(settings) {
     "projects",
     "daemon.json",
     "policy-limits.json",
-    ...Ft,
+    ...policyLimitFiles,
     "backups",
   ]) {
-    let denySymlink = resolveDenySymlink(resolve(getClaudeConfigDir(), j));
-    denyPaths.push(xn.has(j) ? denySymlink : normalizeWindowsDirPath(denySymlink));
+    let denySymlink = resolveDenySymlink(resolve(getClaudeConfigDir(), name));
+    denyPaths.push(fileNames.has(name) ? denySymlink : normalizeWindowsDirPath(denySymlink));
   }
-  Ce(resolve(getClaudeConfigDir(), "loop.md"), false);
-  let mt = resolve(getClaudeConfigDir(), "cowork_plugins");
-  Ce(mt, false, true);
-  let Mt = resolve(devModsDir());
-  let mn = resolve(getClaudeConfigDir());
-  let existingPrefix = resolveExistingPrefix(mn);
-  let Wt = existingPrefix?.path ?? realpathOrParentRealpath(mn);
-  let gt = join(Wt, basename(Mt));
-  let jt = adapterState.devModsRoots.get(mn);
-  if (jt === undefined) {
-    jt = {
+  addDeny(resolve(getClaudeConfigDir(), "loop.md"), false);
+  let coworkPluginsDir = resolve(getClaudeConfigDir(), "cowork_plugins");
+  addDeny(coworkPluginsDir, false, true);
+  let devModsDirPath = resolve(devModsDir());
+  let configDir = resolve(getClaudeConfigDir());
+  let existingPrefix = resolveExistingPrefix(configDir);
+  let configDirReal = existingPrefix?.path ?? realpathOrParentRealpath(configDir);
+  let devModsRoot = join(configDirReal, basename(devModsDirPath));
+  let record = adapterState.devModsRoots.get(configDir);
+  if (record === undefined) {
+    record = {
       made: null,
       denied: new Set(),
     };
-    adapterState.devModsRoots.set(mn, jt);
+    adapterState.devModsRoots.set(configDir, record);
   }
-  if ((jt.made === null || jt.made === gt) && ensurePrivateDirChain(Wt, gt, PERSON_ROOT_OPTIONS))
-    jt.made = gt;
-  else if (jt.made === null && existingPrefix?.exists === true)
+  if (
+    (record.made === null || record.made === devModsRoot) &&
+    ensurePrivateDirChain(configDirReal, devModsRoot, PERSON_ROOT_OPTIONS)
+  )
+    record.made = devModsRoot;
+  else if (record.made === null && existingPrefix?.exists === true)
     logForDebugging(
-      `[sandbox] the dev-mods root is not a plain directory under the config home; denied as it stands: ${Mt}`,
+      `[sandbox] the dev-mods root is not a plain directory under the config home; denied as it stands: ${devModsDirPath}`,
       {
         level: "warn",
       },
     );
-  jt.denied.add(gt);
-  let Xe = traceSymlinkHops(Mt);
-  let filtered_2 = Xe.links.filter((link) => !link.isLive);
-  for (let j of uniq([
-    ...jt.denied,
-    Mt,
-    ...filtered_2.map((ce) => ce.path),
-    ...(Xe.missing === null ? [] : [Xe.missing.name, Xe.missing.landing]),
+  record.denied.add(devModsRoot);
+  let hops = traceSymlinkHops(devModsDirPath);
+  let filtered_2 = hops.links.filter((link) => !link.isLive);
+  for (let path of uniq([
+    ...record.denied,
+    devModsDirPath,
+    ...filtered_2.map((link) => link.path),
+    ...(hops.missing === null ? [] : [hops.missing.name, hops.missing.landing]),
   ]))
-    Ce(j, false, true);
-  let Je = peekTaskOutputDir();
-  if (ensurePrivateDirChain(getClaudeTempDirRealpath(), Je)) {
-    Ce(Je, false, true);
-    taskOutputDirChainRoot = Je;
+    addDeny(path, false, true);
+  let taskOutputDir = peekTaskOutputDir();
+  if (ensurePrivateDirChain(getClaudeTempDirRealpath(), taskOutputDir)) {
+    addDeny(taskOutputDir, false, true);
+    taskOutputDirChainRoot = taskOutputDir;
   } else {
     taskOutputDirChainRoot = undefined;
     logForDebugging(
-      `[sandbox] task output dir chain is not plain directories; read-only deny skipped: ${Je}`,
+      `[sandbox] task output dir chain is not plain directories; read-only deny skipped: ${taskOutputDir}`,
       {
         level: "warn",
       },
     );
     logFeatureSad("sandbox_exec", "task_output_deny_skipped");
   }
-  let vt = isPluginToolStagingDenyEnabled();
+  let denyPluginToolStaging = isPluginToolStagingDenyEnabled();
   mcpCallTempRoot = undefined;
-  if (vt && getPlatform() !== "windows") {
+  if (denyPluginToolStaging && getPlatform() !== "windows") {
     mcpCallTempRoot = resolve(getClaudeTempDirRealpath(), PLUGIN_TOOL_STAGING_DIRNAME);
     if (!verifyStagedMcpCallDir()) {
       logForDebugging(
@@ -2911,83 +2981,91 @@ function convertToSandboxRuntimeConfig(settings) {
       );
       logFeatureSad("sandbox_exec", "plugin_tool_staging_dir_not_plain");
     }
-    Ce(mcpCallTempRoot, false, true);
+    addDeny(mcpCallTempRoot, false, true);
   }
-  let Lt = projectPluginsDir();
-  if (Lt !== resolve(getClaudeConfigDir(), "plugins") && Lt !== mt && !isWithinOriginalCwd(Lt))
-    Ce(Lt, false, true);
-  for (let j of getPluginSeedDirs()) {
-    let ce = resolve(getOriginalCwd(), j);
-    if (!isWithinOriginalCwd(ce)) Ce(ce, false, true);
+  let projectPlugins = projectPluginsDir();
+  if (
+    projectPlugins !== resolve(getClaudeConfigDir(), "plugins") &&
+    projectPlugins !== coworkPluginsDir &&
+    !isWithinOriginalCwd(projectPlugins)
+  )
+    addDeny(projectPlugins, false, true);
+  for (let seedDir of getPluginSeedDirs()) {
+    let resolvedSeedDir = resolve(getOriginalCwd(), seedDir);
+    if (!isWithinOriginalCwd(resolvedSeedDir)) addDeny(resolvedSeedDir, false, true);
   }
-  for (let j of updateDeniedProducerDirs(pluginRootDirs()))
-    if (isAbsolute(j) && !isWithinOriginalCwd(resolve(j))) Ce(resolve(j), false, true);
-  for (let j of commandProducerDirs()) if (!isWithinOriginalCwd(j)) Ce(j, false, true);
-  let ln = helperConfigPath();
-  let Zt = new Set(
+  for (let producerDir of updateDeniedProducerDirs(pluginRootDirs()))
+    if (isAbsolute(producerDir) && !isWithinOriginalCwd(resolve(producerDir)))
+      addDeny(resolve(producerDir), false, true);
+  for (let commandDir of commandProducerDirs())
+    if (!isWithinOriginalCwd(commandDir)) addDeny(commandDir, false, true);
+  let helperPath = helperConfigPath();
+  let helperPaths = new Set(
     [
       ...(isAdminPolicyOrigin(getBasePolicySettingsOrigin())
         ? policyHelperPaths(getBasePolicySettings())
         : []),
-      ...(ln === null ? [] : [ln]),
+      ...(helperPath === null ? [] : [helperPath]),
       ...retiredHelperPaths(),
     ]
-      .filter((j) => !isWindowsDevicePath(j) && !isNetworkOrMacSpecialPath(j))
-      .map((j) => resolve(j)),
+      .filter((path) => !isWindowsDevicePath(path) && !isNetworkOrMacSpecialPath(path))
+      .map((path) => resolve(path)),
   );
-  for (let j of Zt) {
-    if (isWithinOriginalCwd(j)) continue;
+  for (let path of helperPaths) {
+    if (isWithinOriginalCwd(path)) continue;
     if (getPlatform() === "windows")
       try {
-        lstatSync(j);
+        lstatSync(path);
       } catch (error) {
         if (isFsInaccessible(error)) continue;
       }
-    Ce(j, false);
+    addDeny(path, false);
   }
-  for (let j of ["mcp-skill-archives", "mcp-discovery-cache", "shares"])
-    Ce(resolve(getClaudeConfigDir(), j), false, true);
-  for (let j of HOST_FUNCTION_CATEGORIES) Ce(resolve(getClaudeConfigDir(), j), false, true);
-  for (let j of ["remote-settings-helper-consent", "remote-settings-consent.json"])
-    Ce(resolve(getClaudeConfigDir(), j), false);
+  for (let name of ["mcp-skill-archives", "mcp-discovery-cache", "shares"])
+    addDeny(resolve(getClaudeConfigDir(), name), false, true);
+  for (let category of HOST_FUNCTION_CATEGORIES)
+    addDeny(resolve(getClaudeConfigDir(), category), false, true);
+  for (let name of ["remote-settings-helper-consent", "remote-settings-consent.json"])
+    addDeny(resolve(getClaudeConfigDir(), name), false);
   let mockRemoteSettingsFixturePath = getMockRemoteSettingsFixturePath();
-  let zr = mockRemoteSettingsFixturePath !== undefined ? resolve(mockRemoteSettingsFixturePath) : undefined;
-  for (let j of new Set([
+  let fixturePath =
+    mockRemoteSettingsFixturePath !== undefined ? resolve(mockRemoteSettingsFixturePath) : undefined;
+  for (let path of new Set([
     resolve(getClaudeConfigDir(), "remote-settings.json"),
     resolve(getSettingsPath()),
-    ...(zr !== undefined ? [zr] : []),
+    ...(fixturePath !== undefined ? [fixturePath] : []),
   ])) {
-    let ce = false;
-    let Ee = false;
+    let isCharDevice = false;
+    let isLinkToCharDevice = false;
     try {
-      let We = lstatSync(j);
-      ce = We.isCharacterDevice();
-      Ee = We.isSymbolicLink() && statSync(j).isCharacterDevice();
+      let stats = lstatSync(path);
+      isCharDevice = stats.isCharacterDevice();
+      isLinkToCharDevice = stats.isSymbolicLink() && statSync(path).isCharacterDevice();
     } catch {}
-    if (Ee) denyPaths.push(j);
-    else if (!ce) Ce(j, false);
-    if (j !== zr) {
-      Ce(signatureFileFor(j), false);
-      Ce(signatureIatFileFor(j), false);
-      Ce(syncStampPath(j), false);
+    if (isLinkToCharDevice) denyPaths.push(path);
+    else if (!isCharDevice) addDeny(path, false);
+    if (path !== fixturePath) {
+      addDeny(signatureFileFor(path), false);
+      addDeny(signatureIatFileFor(path), false);
+      addDeny(syncStampPath(path), false);
     }
   }
-  Ce(resolve(getClaudeConfigDir(), "state"), false, true);
-  let Pa = resolve(homedir(), ".claude", "state");
-  if (Pa !== resolve(getClaudeConfigDir(), "state")) Ce(Pa, false, true);
-  let Uc = isSshStoreWriteDenyEnabled();
-  if (Uc) {
-    let j = resolve(homedir(), SHADOWED_SSH_DIR);
+  addDeny(resolve(getClaudeConfigDir(), "state"), false, true);
+  let stateDir = resolve(homedir(), ".claude", "state");
+  if (stateDir !== resolve(getClaudeConfigDir(), "state")) addDeny(stateDir, false, true);
+  let denySshStore = isSshStoreWriteDenyEnabled();
+  if (denySshStore) {
+    let sshDir = resolve(homedir(), SHADOWED_SSH_DIR);
     if (getPlatform() !== "windows")
       try {
-        mkdirSync(j, {
+        mkdirSync(sshDir, {
           recursive: true,
           mode: 448,
         });
       } catch {}
-    Ce(j, false, true);
+    addDeny(sshDir, false, true);
   }
-  for (let j of claudeStateFilePaths()) denyPaths.push(resolveDenySymlink(resolve(j)));
+  for (let stateFile of claudeStateFilePaths()) denyPaths.push(resolveDenySymlink(resolve(stateFile)));
   let wifProfileStoreDenyPaths = getWIFProfileStoreDenyPaths();
   if (wifProfileStoreDenyPaths !== null) {
     for (let dir of wifProfileStoreDenyPaths.dirs) {
@@ -2997,9 +3075,9 @@ function convertToSandboxRuntimeConfig(settings) {
           mode: 448,
         });
       } catch {}
-      Ce(dir, false, true);
+      addDeny(dir, false, true);
     }
-    for (let file of wifProfileStoreDenyPaths.files) Ce(file, false);
+    for (let file of wifProfileStoreDenyPaths.files) addDeny(file, false);
   }
   if (env.CLAUDE_CODE_HOST_CREDS_FILE)
     denyPaths.push(
@@ -3011,319 +3089,316 @@ function convertToSandboxRuntimeConfig(settings) {
       ),
     );
   {
-    let j = new Set();
-    for (let ce of getIdeLockfilesPaths()) {
-      let Ee = resolve(ce);
+    let seen = new Set();
+    for (let lockfile of getIdeLockfilesPaths()) {
+      let resolved = resolve(lockfile);
       try {
-        Ee = realpathSync(Ee);
+        resolved = realpathSync(resolved);
       } catch {}
-      if (j.has(Ee)) continue;
-      j.add(Ee);
-      denyPaths_2.push(normalizeWindowsDirPath(Ee));
-      denyPaths.push(normalizeWindowsDirPath(Ee));
+      if (seen.has(resolved)) continue;
+      seen.add(resolved);
+      denyPaths_2.push(normalizeWindowsDirPath(resolved));
+      denyPaths.push(normalizeWindowsDirPath(resolved));
     }
   }
-  let La = (j, ce = true) => {
-    Ce(resolve(j, ".claude", "launch.json"), ce);
-    Ce(resolve(j, ".claude", "workflows"), ce, true);
-    Ce(resolve(j, ".claude", "routines"), ce, true);
-    Ce(resolve(j, ".claude", "output-styles"), false, true);
-    Ce(resolve(j, ".claude", "scheduled_tasks.json"), ce);
-    Ce(resolve(j, ".claude", "loop.md"), false);
-    Ce(resolve(j, ".mcp.json"), false);
+  let denyProjectFiles = (dir, useStrictResolve = true) => {
+    addDeny(resolve(dir, ".claude", "launch.json"), useStrictResolve);
+    addDeny(resolve(dir, ".claude", "workflows"), useStrictResolve, true);
+    addDeny(resolve(dir, ".claude", "routines"), useStrictResolve, true);
+    addDeny(resolve(dir, ".claude", "output-styles"), false, true);
+    addDeny(resolve(dir, ".claude", "scheduled_tasks.json"), useStrictResolve);
+    addDeny(resolve(dir, ".claude", "loop.md"), false);
+    addDeny(resolve(dir, ".mcp.json"), false);
   };
-  La(originalCwd);
+  denyProjectFiles(dir_2);
   {
-    let j = resolve(homedir());
-    let ce = nativeRealpathLong(j) ?? j;
-    let Ee = ce;
-    let We =
-      normalizePathForCompare(ce) === normalizePathForCompare(j) &&
-      normalizePathForCompare(Ee) === normalizePathForCompare(resolve(homedir()).normalize("NFC"));
-    let tt = (Ct) => {
-      La(Ct, false);
-      Ce(resolve(Ct, ".claude", "skills"), false, true);
-      Ce(resolve(Ct, ".claude", "commands"), false, true);
-      Ce(resolve(Ct, ".claude", "agents"), false, true);
-      Ce(resolve(Ct, ".claude", "hooks"), false, true);
-      Ce(resolve(Ct, ".claude", "settings.json"), false);
-      Ce(resolve(Ct, ".claude", "settings.local.json"), false);
+    let home = resolve(homedir());
+    let homeReal = nativeRealpathLong(home) ?? home;
+    let homeTarget = homeReal;
+    let homeIsPlain =
+      normalizePathForCompare(homeReal) === normalizePathForCompare(home) &&
+      normalizePathForCompare(homeTarget) === normalizePathForCompare(resolve(homedir()).normalize("NFC"));
+    let denyDirFiles = (dir) => {
+      denyProjectFiles(dir, false);
+      addDeny(resolve(dir, ".claude", "skills"), false, true);
+      addDeny(resolve(dir, ".claude", "commands"), false, true);
+      addDeny(resolve(dir, ".claude", "agents"), false, true);
+      addDeny(resolve(dir, ".claude", "hooks"), false, true);
+      addDeny(resolve(dir, ".claude", "settings.json"), false);
+      addDeny(resolve(dir, ".claude", "settings.local.json"), false);
     };
-    let bt = [getProjectRoot()];
+    let roots = [getProjectRoot()];
     let projectConfigRoot = getProjectConfigRoot();
-    if (projectConfigRoot !== null) bt.push(projectConfigRoot);
-    let je = false;
-    for (let Ct of bt) {
-      let Qe = Ct;
+    if (projectConfigRoot !== null) roots.push(projectConfigRoot);
+    let reachedHome = false;
+    for (let root of roots) {
+      let current = root;
       for (;;) {
-        tt(Qe);
-        if (normalizePathForCompare(Qe) === normalizePathForCompare(Ee)) {
-          je = true;
-          if (We) break;
+        denyDirFiles(current);
+        if (normalizePathForCompare(current) === normalizePathForCompare(homeTarget)) {
+          reachedHome = true;
+          if (homeIsPlain) break;
         }
-        let Bt = dirname(Qe);
-        if (Bt === Qe) break;
-        Qe = Bt;
+        let parent = dirname(current);
+        if (parent === current) break;
+        current = parent;
       }
     }
-    let kt = (Ct) => {
-      let Qe = Ct;
+    let denyMcpJsonUpwards = (start) => {
+      let current = start;
       for (;;) {
-        Ce(resolve(Qe, ".mcp.json"), false);
-        let Bt = dirname(Qe);
-        if (Bt === Qe) break;
-        Qe = Bt;
+        addDeny(resolve(current, ".mcp.json"), false);
+        let parent = dirname(current);
+        if (parent === current) break;
+        current = parent;
       }
     };
-    for (let Ct of bt) kt(Ct);
-    if (!je) {
-      tt(Ee);
-      kt(Ee);
+    for (let root of roots) denyMcpJsonUpwards(root);
+    if (!reachedHome) {
+      denyDirFiles(homeTarget);
+      denyMcpJsonUpwards(homeTarget);
     }
     let gitRoot = findGitRoot(getProjectRoot());
-    let canonicalGitRoot = findCanonicalGitRoot(getProjectRoot());
-    if (
-      gitRoot &&
-      canonicalGitRoot &&
-      normalizePathForCompare(canonicalGitRoot) !== normalizePathForCompare(gitRoot)
-    )
-      tt(canonicalGitRoot);
+    let dir = findCanonicalGitRoot(getProjectRoot());
+    if (gitRoot && dir && normalizePathForCompare(dir) !== normalizePathForCompare(gitRoot))
+      denyDirFiles(dir);
   }
-  if (cwdState !== originalCwd) {
-    let j = originalCwd.endsWith(sep) ? originalCwd : originalCwd + sep;
-    let ce = cwdState;
-    while (ce !== originalCwd) {
-      La(ce);
-      let Ee = dirname(ce);
-      if (Ee === ce || !(Ee + sep).startsWith(j)) break;
-      ce = Ee;
+  if (dir !== dir_2) {
+    let originalWithSep = dir_2.endsWith(sep) ? dir_2 : dir_2 + sep;
+    let current = dir;
+    while (current !== dir_2) {
+      denyProjectFiles(current);
+      let parent = dirname(current);
+      if (parent === current || !(parent + sep).startsWith(originalWithSep)) break;
+      current = parent;
     }
   }
-  denyPaths.push(resolve(originalCwd, ".mcp.json"));
-  if (cwdState !== originalCwd) {
-    let j = originalCwd.endsWith(sep) ? originalCwd : originalCwd + sep;
-    let ce = cwdState;
-    while (ce !== originalCwd) {
-      denyPaths.push(resolve(ce, ".mcp.json"));
-      let Ee = dirname(ce);
-      if (Ee === ce || !(Ee + sep).startsWith(j)) break;
-      ce = Ee;
+  denyPaths.push(resolve(dir_2, ".mcp.json"));
+  if (dir !== dir_2) {
+    let originalWithSep = dir_2.endsWith(sep) ? dir_2 : dir_2 + sep;
+    let current = dir;
+    while (current !== dir_2) {
+      denyPaths.push(resolve(current, ".mcp.json"));
+      let parent = dirname(current);
+      if (parent === current || !(parent + sep).startsWith(originalWithSep)) break;
+      current = parent;
     }
   }
-  let worktreeGitCommonDir = detectWorktreeGitCommonDir(originalCwd);
-  let Fc = [join(findGitRoot(originalCwd) ?? originalCwd, ".git"), worktreeGitCommonDir];
+  let worktreeGitCommonDir = detectWorktreeGitCommonDir(dir_2);
+  let gitDirs = [join(findGitRoot(dir_2) ?? dir_2, ".git"), worktreeGitCommonDir];
   adapterState.bareGitRepoScrubPaths.clear();
-  let qi = Ae ? null : new Set();
-  adapterState.bareGitRepoScrubPathsVouchedLocally = qi;
-  let wi = (j, ce, removal, error) => {
-    registerBareRepoScrubPath(adapterState, j, removal, error);
-    if (!ce) qi?.add(j);
+  let vouchedLocally = allowExtraPlaces ? null : new Set();
+  adapterState.bareGitRepoScrubPathsVouchedLocally = vouchedLocally;
+  let registerScrub = (path, vouched, removal, probeError) => {
+    registerBareRepoScrubPath(adapterState, path, removal, probeError);
+    if (!vouched) vouchedLocally?.add(path);
   };
-  let ze = (j, ce, Ee, We) => wi(j, ce, Ee, We);
+  let registerScrubWithRemoval = (path, vouched, removal, probeError) =>
+    registerScrub(path, vouched, removal, probeError);
   let cwd = process.cwd();
-  let gn = /(?:\/\*\*|\/)+$/;
-  let vn = (j) => {
+  let trailingGlobRe = /(?:\/\*\*|\/)+$/;
+  let expandAdditionalDir = (dir) => {
     try {
-      return [expandPath(j, cwd).replace(gn, "") || sep];
+      return [expandPath(dir, cwd).replace(trailingGlobRe, "") || sep];
     } catch (error) {
       warnDroppedPathEntry(error, "additionalDirectories");
       return [];
     }
   };
-  let pr = new Set(
+  let additionalDirectories = new Set(
     [
       ...(evalConfinedEnv ? [] : settings.permissions?.additionalDirectories || []),
       ...getAdditionalDirectoriesForClaudeMd(),
-    ].flatMap(vn),
+    ].flatMap(expandAdditionalDir),
   );
-  let dr = ["objects", "refs"];
-  let Ti = ["hooks", "config"];
-  let $s = getPlatform() === "macos";
-  let Ba = isUnlistableWorktreesDenyEnabled();
-  let po = getPlatform() === "windows";
-  let jl = getPlatform() === "linux" || getPlatform() === "wsl";
-  let Mc =
-    jl &&
+  let gitObjectsNames = ["objects", "refs"];
+  let gitConfigNames = ["hooks", "config"];
+  let isMac = getPlatform() === "macos";
+  let denyUnlistableWorktrees = isUnlistableWorktreesDenyEnabled();
+  let isWindows = getPlatform() === "windows";
+  let isLinux = getPlatform() === "linux" || getPlatform() === "wsl";
+  let kiteFlag =
+    isLinux &&
     readFlagWithOverride(TENGU_ENCHANTED_KITE, {
       safe: true,
     });
-  let Ua = [];
-  let Fa = (...j) => {
-    if (!jl) return;
+  let deferredCreates = [];
+  let createFileDeferred = (...parts) => {
+    if (!isLinux) return;
     if (isRemoteSessionAvailable()) {
-      Ua.push(j);
+      deferredCreates.push(parts);
       return;
     }
-    createFileAtChain(...j);
+    createFileAtChain(...parts);
   };
-  let $c = new Set();
-  let ho = (j, ce) => {
-    if ($c.has(j)) return;
-    $c.add(j);
-    let Ee = ce && !Fc.includes(j);
-    let We = (je) => {
-      if (po && je.endsWith(".lock")) {
-        wi(je, Ee, "all");
+  let handledGitDirs = new Set();
+  let denyGitDir = (gitDir, vouched) => {
+    if (handledGitDirs.has(gitDir)) return;
+    handledGitDirs.add(gitDir);
+    let unlinkable = vouched && !gitDirs.includes(gitDir);
+    let denyOrScrubFile = (path) => {
+      if (isWindows && path.endsWith(".lock")) {
+        registerScrub(path, unlinkable, "all");
         return;
       }
       try {
-        statSync(je);
-        denyPaths.push(resolveDenySymlink(je));
+        statSync(path);
+        denyPaths.push(resolveDenySymlink(path));
       } catch (error) {
-        wi(je, Ee, "all", error);
-        if ($s) denyPaths.push(je);
+        registerScrub(path, unlinkable, "all", error);
+        if (isMac) denyPaths.push(path);
       }
     };
-    Ce(join(j, "hooks"), true, true);
-    denyPaths.push(resolveDenySymlink(join(j, "config")));
-    if (po) wi(join(j, "config.lock"), Ee, "all");
-    else denyPaths.push(resolveDenySymlink(join(j, "config.lock")));
-    let tt = join(j, "config.worktree");
-    Fa(j, "config.worktree");
-    denyPaths.push(resolveDenySymlink(tt));
-    We(join(j, "config.worktree.lock"));
-    We(join(j, "commondir"));
-    let bt =
-      Mc &&
-      isDirectoryNoFollow(j) &&
-      isDirectoryNoFollow(join(j, "objects")) &&
-      isDirectoryNoFollow(join(j, "objects", "info"));
-    for (let je of ["alternates", "http-alternates"]) {
-      let kt = join(j, "objects", "info", je);
-      if (je === "alternates" && bt) {
-        Fa(j, "objects", "info", je);
-        denyPaths.push(...expandDenySymlink(kt));
+    addDeny(join(gitDir, "hooks"), true, true);
+    denyPaths.push(resolveDenySymlink(join(gitDir, "config")));
+    if (isWindows) registerScrub(join(gitDir, "config.lock"), unlinkable, "all");
+    else denyPaths.push(resolveDenySymlink(join(gitDir, "config.lock")));
+    let worktreeConfig = join(gitDir, "config.worktree");
+    createFileDeferred(gitDir, "config.worktree");
+    denyPaths.push(resolveDenySymlink(worktreeConfig));
+    denyOrScrubFile(join(gitDir, "config.worktree.lock"));
+    denyOrScrubFile(join(gitDir, "commondir"));
+    let canUseKite =
+      kiteFlag &&
+      isDirectoryNoFollow(gitDir) &&
+      isDirectoryNoFollow(join(gitDir, "objects")) &&
+      isDirectoryNoFollow(join(gitDir, "objects", "info"));
+    for (let name of ["alternates", "http-alternates"]) {
+      let alternatesPath = join(gitDir, "objects", "info", name);
+      if (name === "alternates" && canUseKite) {
+        createFileDeferred(gitDir, "objects", "info", name);
+        denyPaths.push(...expandDenySymlink(alternatesPath));
         continue;
       }
       try {
-        lstatSync(kt);
-        denyPaths.push(...expandDenySymlink(kt));
+        lstatSync(alternatesPath);
+        denyPaths.push(...expandDenySymlink(alternatesPath));
       } catch (error) {
-        if ($s || getErrnoCode(error) !== "ENOENT") denyPaths.push(...expandDenySymlink(kt));
+        if (isMac || getErrnoCode(error) !== "ENOENT") denyPaths.push(...expandDenySymlink(alternatesPath));
       }
     }
-    let xt = join(j, "worktrees");
+    let worktreesDir = join(gitDir, "worktrees");
     try {
-      for (let je of readdirSync(xt, {
+      for (let dirent of readdirSync(worktreesDir, {
         withFileTypes: true,
       })) {
-        if (!je.isDirectory() && !je.isSymbolicLink()) continue;
-        let kt = join(xt, je.name, "config.worktree");
-        Fa(j, "worktrees", je.name, "config.worktree");
-        denyPaths.push(resolveDenySymlink(kt));
-        We(join(xt, je.name, "config.worktree.lock"));
-        denyPaths.push(resolveDenySymlink(join(xt, je.name, "commondir")));
+        if (!dirent.isDirectory() && !dirent.isSymbolicLink()) continue;
+        let worktreeConfig = join(worktreesDir, dirent.name, "config.worktree");
+        createFileDeferred(gitDir, "worktrees", dirent.name, "config.worktree");
+        denyPaths.push(resolveDenySymlink(worktreeConfig));
+        denyOrScrubFile(join(worktreesDir, dirent.name, "config.worktree.lock"));
+        denyPaths.push(resolveDenySymlink(join(worktreesDir, dirent.name, "commondir")));
       }
     } catch (error) {
       let errnoCode = getErrnoCode(error);
-      let Xt =
+      let missingOk =
         errnoCode === "ENOENT" ||
         errnoCode === "ENOTDIR" ||
         errnoCode === "ELOOP" ||
         errnoCode === "ENAMETOOLONG";
-      let Dt = !Xt && Ba && getPlatform() !== "windows";
-      if (Dt) Ce(xt, false, true);
+      let shouldDenyDir = !missingOk && denyUnlistableWorktrees && getPlatform() !== "windows";
+      if (shouldDenyDir) addDeny(worktreesDir, false, true);
       if (errnoCode === "ELOOP" || errnoCode === "ENAMETOOLONG")
         logForDebugging(
-          `[Sandbox] cannot list ${xt} (${errnoCode}: a link loop or a path too long); treated as no folder, so there are no linked worktrees under it to protect. If it is a link you did not create, remove it.`,
+          `[Sandbox] cannot list ${worktreesDir} (${errnoCode}: a link loop or a path too long); treated as no folder, so there are no linked worktrees under it to protect. If it is a link you did not create, remove it.`,
           {
             level: "warn",
           },
         );
-      else if (!Xt)
+      else if (!missingOk)
         logForDebugging(
-          `[Sandbox] cannot list ${xt} (${errnoCode ?? errorMessage(error)}); ${Dt ? "sandboxed commands cannot write under it until it can be listed again and the sandbox config is rebuilt (restarting Claude Code does this)" : `not write-denying it ${getPlatform() === "windows" ? "on Windows, where the deny would stay in the folder's permissions after the listing works again" : "because this protection is switched off"}. Until it can be listed again and the sandbox config is rebuilt (restarting Claude Code does this), sandboxed commands can change its linked worktrees' commondir and config.worktree files`}.`,
+          `[Sandbox] cannot list ${worktreesDir} (${errnoCode ?? errorMessage(error)}); ${shouldDenyDir ? "sandboxed commands cannot write under it until it can be listed again and the sandbox config is rebuilt (restarting Claude Code does this)" : `not write-denying it ${getPlatform() === "windows" ? "on Windows, where the deny would stay in the folder's permissions after the listing works again" : "because this protection is switched off"}. Until it can be listed again and the sandbox config is rebuilt (restarting Claude Code does this), sandboxed commands can change its linked worktrees' commondir and config.worktree files`}.`,
           {
             level: "warn",
           },
         );
     }
   };
-  let wn = (j) => {};
-  let In = new Set([originalCwd, cwdState]);
-  for (let j of [originalCwd, ...pr]) {
-    let ce = j.endsWith(sep) ? j : j + sep;
-    if ((cwdState + sep).startsWith(ce)) {
-      let Ee = cwdState;
+  let noopVisitor = (dir) => {};
+  let repoDirs = new Set([dir_2, dir]);
+  for (let dir_3 of [dir_2, ...additionalDirectories]) {
+    let dirWithSep = dir_3.endsWith(sep) ? dir_3 : dir_3 + sep;
+    if ((dir + sep).startsWith(dirWithSep)) {
+      let current = dir;
       for (;;) {
-        In.add(Ee);
-        if (Ee === j) break;
-        let We = dirname(Ee);
-        if (We === Ee || !(We + sep).startsWith(ce)) break;
-        Ee = We;
+        repoDirs.add(current);
+        if (current === dir_3) break;
+        let parent = dirname(current);
+        if (parent === current || !(parent + sep).startsWith(dirWithSep)) break;
+        current = parent;
       }
     }
   }
   let featureValue_CACHED_MAY_BE_STALE = getFeatureValue_CACHED_MAY_BE_STALE("tengu_mighty_thimble", true);
-  let sn = (j, ce) => {
-    let Ee;
+  let denyGitPath = (path, vouched) => {
+    let stats;
     try {
-      Ee = lstatSync(j);
+      stats = lstatSync(path);
     } catch (error) {
       return {
         present: false,
         probe: error,
       };
     }
-    if (Ee.isFile()) denyPaths.push(j);
-    else if (Ee.isDirectory()) ho(j, ce);
+    if (stats.isFile()) denyPaths.push(path);
+    else if (stats.isDirectory()) denyGitDir(path, vouched);
     else
       try {
-        if (statSync(j).isDirectory()) ho(j, ce);
+        if (statSync(path).isDirectory()) denyGitDir(path, vouched);
       } catch (error) {
         let errnoCode = getErrnoCode(error);
         if (errnoCode !== "ENOENT" && errnoCode !== "ENOTDIR" && featureValue_CACHED_MAY_BE_STALE)
-          denyPaths.push(j);
+          denyPaths.push(path);
       }
     return {
       present: true,
     };
   };
-  for (let j of In) {
-    let ce = j !== originalCwd;
-    let Ee = resolve(j, "HEAD");
-    let We = classifyHeadState(Ee);
-    let tt = isHeadPresent(We);
-    let bt = We === "head";
-    switch (We) {
+  for (let dir of repoDirs) {
+    let vouched = dir !== dir_2;
+    let headPath = resolve(dir, "HEAD");
+    let headState = classifyHeadState(headPath);
+    let headPresent = isHeadPresent(headState);
+    let headSurvives = headState === "head";
+    switch (headState) {
       case "head":
-        denyPaths.push(Ee);
+        denyPaths.push(headPath);
         break;
       case "folder":
-        ze(Ee, ce, "file");
-        denyPaths.push(Ee);
+        registerScrubWithRemoval(headPath, vouched, "file");
+        denyPaths.push(headPath);
         break;
       case "dangling_head":
       case "absent":
-        ze(Ee, ce, "file_or_empty_folder", checkPathAbsent(Ee));
-        if ($s) denyPaths.push(Ee);
+        registerScrubWithRemoval(headPath, vouched, "file_or_empty_folder", checkPathAbsent(headPath));
+        if (isMac) denyPaths.push(headPath);
         break;
       default:
     }
-    for (let kt of dr) {
-      let Xt = resolve(j, kt);
+    for (let name of gitObjectsNames) {
+      let path = resolve(dir, name);
       try {
-        statSync(Xt);
-        denyPaths.push(Xt);
+        statSync(path);
+        denyPaths.push(path);
       } catch (error) {
-        bt = false;
-        wi(Xt, ce, tt ? "all" : "all_if_a_head_survives", error);
-        if ($s) denyPaths.push(Xt);
+        headSurvives = false;
+        registerScrub(path, vouched, headPresent ? "all" : "all_if_a_head_survives", error);
+        if (isMac) denyPaths.push(path);
       }
     }
-    if (bt) ho(j, ce);
-    for (let kt of Ti) {
-      let Xt = resolve(j, kt);
+    if (headSurvives) denyGitDir(dir, vouched);
+    for (let name of gitConfigNames) {
+      let path = resolve(dir, name);
       try {
-        let Dt = statSync(Xt);
-        let Ct = kt === "config" && Dt.isFile();
-        if (!tt && !Ct) {
-          if (!lstatSync(Xt).isDirectory()) continue;
-          let Qe = join(Xt, ".git");
+        let stats = statSync(path);
+        let isConfigFile = name === "config" && stats.isFile();
+        if (!headPresent && !isConfigFile) {
+          if (!lstatSync(path).isDirectory()) continue;
+          let gitPath = join(path, ".git");
           try {
-            let Bt = lstatSync(Qe);
-            if (Bt.isFile() || Bt.isDirectory()) {
-              denyPaths.push(Qe);
+            let gitStats = lstatSync(gitPath);
+            if (gitStats.isFile() || gitStats.isDirectory()) {
+              denyPaths.push(gitPath);
               continue;
             }
           } catch (error) {
@@ -3331,162 +3406,170 @@ function convertToSandboxRuntimeConfig(settings) {
             if (errnoCode === "ENOENT" || errnoCode === "ENOTDIR") continue;
           }
         }
-        denyPaths.push(Xt);
-        if (Ct)
-          if (po) wi(resolve(j, "config.lock"), ce, "all");
-          else denyPaths.push(resolve(j, "config.lock"));
+        denyPaths.push(path);
+        if (isConfigFile)
+          if (isWindows) registerScrub(resolve(dir, "config.lock"), vouched, "all");
+          else denyPaths.push(resolve(dir, "config.lock"));
       } catch {}
     }
-    let xt = resolve(j, ".git");
-    let je = sn(xt, ce);
-    if (!je.present) {
-      ze(xt, ce, "file_or_empty_folder", je.probe);
-      if ($s) denyPaths.push(xt);
+    let gitPath = resolve(dir, ".git");
+    let probe = denyGitPath(gitPath, vouched);
+    if (!probe.present) {
+      registerScrubWithRemoval(gitPath, vouched, "file_or_empty_folder", probe.probe);
+      if (isMac) denyPaths.push(gitPath);
     }
-    wn(j);
+    noopVisitor(dir);
   }
-  let Kn = new Set([...In].map((j) => identity(resolve(j))));
-  for (let j of new Set([originalCwd, cwdState])) {
-    let gitRoot = findGitRoot(j);
-    if (gitRoot !== null && !Kn.has(gitRoot)) sn(join(gitRoot, ".git"), j !== originalCwd);
+  let repoDirsReal = new Set([...repoDirs].map((dir) => identity(resolve(dir))));
+  for (let dir_3 of new Set([dir_2, dir])) {
+    let gitRoot = findGitRoot(dir_3);
+    if (gitRoot !== null && !repoDirsReal.has(gitRoot)) denyGitPath(join(gitRoot, ".git"), dir_3 !== dir_2);
   }
-  let Cr = new Map();
-  let Rs = (j, ce = true, worktreeGitCommonDir = detectWorktreeGitCommonDir(j)) => {
-    if (worktreeGitCommonDir && worktreeGitCommonDir !== cwdState && !Se.includes(worktreeGitCommonDir)) {
-      if (ce) {
-        Se.push(worktreeGitCommonDir);
-        me.push(worktreeGitCommonDir);
-        Cr.set(j, worktreeGitCommonDir);
+  let grantedWorktrees = new Map();
+  let grantWorktreeCommon = (
+    dir_2,
+    vouched = true,
+    worktreeGitCommonDir = detectWorktreeGitCommonDir(dir_2),
+  ) => {
+    if (worktreeGitCommonDir && worktreeGitCommonDir !== dir && !allowWrite.includes(worktreeGitCommonDir)) {
+      if (vouched) {
+        allowWrite.push(worktreeGitCommonDir);
+        extraAllowWrite.push(worktreeGitCommonDir);
+        grantedWorktrees.set(dir_2, worktreeGitCommonDir);
       } else logEvent("tengu_sandbox_remote_cwd_grant_withheld", {});
-      ho(worktreeGitCommonDir, !ce);
+      denyGitDir(worktreeGitCommonDir, !vouched);
     }
   };
-  Rs(originalCwd, true, worktreeGitCommonDir);
-  if (cwdState !== originalCwd) Rs(cwdState, Ae);
-  let Ma;
+  grantWorktreeCommon(dir_2, true, worktreeGitCommonDir);
+  if (dir !== dir_2) grantWorktreeCommon(dir, allowExtraPlaces);
+  let denyNestedGitConfigLock;
   if (getPlatform() === "macos") {
-    Ma = isNestedGitConfigLockDenyEnabled();
-    if (Ma && !/[*?]/.test(cwd)) {
-      let j = join(escapeBracketForGlob(cwd), "**", ".[gG][iI][tT]");
-      for (let ce of ["[fF][iI]", "\uFB01", "[fF]\u0131"])
-        for (let Ee of ["[kK]", "\u212A"]) denyPaths.push(join(j, `[cC][oO][nN]${ce}[gG].[lL][oO][cC]${Ee}`));
+    denyNestedGitConfigLock = isNestedGitConfigLockDenyEnabled();
+    if (denyNestedGitConfigLock && !/[*?]/.test(cwd)) {
+      let gitPattern = join(escapeBracketForGlob(cwd), "**", ".[gG][iI][tT]");
+      for (let iVariant of ["[fF][iI]", "\uFB01", "[fF]\u0131"])
+        for (let kVariant of ["[kK]", "\u212A"])
+          denyPaths.push(join(gitPattern, `[cC][oO][nN]${iVariant}[gG].[lL][oO][cC]${kVariant}`));
     }
   }
-  Se.push(...pr);
-  for (let j of pr) wn(j);
-  for (let j of pr)
+  allowWrite.push(...additionalDirectories);
+  for (let dir of additionalDirectories) noopVisitor(dir);
+  for (let dir of additionalDirectories)
     try {
-      let ce = resolve(j, ".mcp.json");
+      let mcpJsonPath = resolve(dir, ".mcp.json");
       if (getPlatform() === "macos") {
-        Ce(ce, false);
+        addDeny(mcpJsonPath, false);
         try {
-          let tt = realpathSync(j);
-          if (tt !== j) Ce(resolve(tt, ".mcp.json"), false);
+          let realDir = realpathSync(dir);
+          if (realDir !== dir) addDeny(resolve(realDir, ".mcp.json"), false);
         } catch {}
         continue;
       }
-      if (realpathSync(j) !== j) continue;
-      let Ee = denyPaths.length;
-      Ce(ce, false);
-      let found = denyPaths.slice(0, Ee).find((tt) => posixCovers(tt, j));
-      if (found !== undefined && denyPaths.slice(Ee).every((tt) => posixCovers(found, tt)))
-        denyPaths.splice(denyPaths.indexOf(found), 0, ...denyPaths.splice(Ee));
+      if (realpathSync(dir) !== dir) continue;
+      let beforeCount = denyPaths.length;
+      addDeny(mcpJsonPath, false);
+      let found = denyPaths.slice(0, beforeCount).find((rulePath) => posixCovers(rulePath, dir));
+      if (found !== undefined && denyPaths.slice(beforeCount).every((newPath) => posixCovers(found, newPath)))
+        denyPaths.splice(denyPaths.indexOf(found), 0, ...denyPaths.splice(beforeCount));
     } catch {
       continue;
     }
-  let $a = [];
+  let writableCwds = [];
   for (let runtimeAllowWriteDirectory of adapterState.runtimeAllowWriteDirectories.values()) {
-    let ce = stripTrailingSlash(runtimeAllowWriteDirectory);
-    let Ee = isDirectoryNoFollow(ce);
-    if (Ee) {
-      $a.push(ce);
-      Se.push(ce);
-      me.push(ce);
+    let dir = stripTrailingSlash(runtimeAllowWriteDirectory);
+    let exists = isDirectoryNoFollow(dir);
+    if (exists) {
+      writableCwds.push(dir);
+      allowWrite.push(dir);
+      extraAllowWrite.push(dir);
     }
-    denyPaths.push(resolveDenySymlink(resolve(ce, ".claude", "settings.json")));
-    denyPaths.push(resolveDenySymlink(resolve(ce, ".claude", "settings.local.json")));
-    for (let tt of ["skills", "agents", "commands", "hooks"]) Ce(resolve(ce, ".claude", tt), true, true);
-    La(ce);
-    let We = resolve(ce, ".git");
-    if (!Ee) {
-      denyPaths.push(We);
+    denyPaths.push(resolveDenySymlink(resolve(dir, ".claude", "settings.json")));
+    denyPaths.push(resolveDenySymlink(resolve(dir, ".claude", "settings.local.json")));
+    for (let name of ["skills", "agents", "commands", "hooks"])
+      addDeny(resolve(dir, ".claude", name), true, true);
+    denyProjectFiles(dir);
+    let gitPath = resolve(dir, ".git");
+    if (!exists) {
+      denyPaths.push(gitPath);
       continue;
     }
     try {
-      let tt = lstatSync(We);
-      if (tt.isFile()) denyPaths.push(We);
-      else if (tt.isDirectory()) ho(We, false);
+      let gitStats = lstatSync(gitPath);
+      if (gitStats.isFile()) denyPaths.push(gitPath);
+      else if (gitStats.isDirectory()) denyGitDir(gitPath, false);
       else
         try {
-          if (statSync(We).isDirectory()) ho(We, false);
+          if (statSync(gitPath).isDirectory()) denyGitDir(gitPath, false);
         } catch (error) {
           let errnoCode = getErrnoCode(error);
           if (errnoCode !== "ENOENT" && errnoCode !== "ENOTDIR" && featureValue_CACHED_MAY_BE_STALE)
-            denyPaths.push(We);
+            denyPaths.push(gitPath);
         }
     } catch (error) {
       let errnoCode = getErrnoCode(error);
-      if (errnoCode !== "ENOENT" && errnoCode !== "ENOTDIR") denyPaths.push(We);
+      if (errnoCode !== "ENOENT" && errnoCode !== "ENOTDIR") denyPaths.push(gitPath);
     }
-    wn(ce);
-    Rs(ce);
+    noopVisitor(dir);
+    grantWorktreeCommon(dir);
   }
-  let qd = new Set();
-  let jd = new Set();
-  let Vc = false;
-  let sh = false;
-  let Yd = [];
-  let ih = [];
-  let ra = [];
-  let Wc = 0;
-  let Gc = 0;
-  let Hc = 0;
-  let oh = [];
-  let Va = new Set(getAdditionalDirectoriesForClaudeMd().flatMap(vn));
-  let Zd = new Set(isNotBackgroundSession() ? Va : []);
-  let Yl = new Set(Va);
-  let hb = repoResidentSettingSources();
-  let ah = [];
-  let lh = [];
-  for (let j of SETTING_SOURCES) {
-    let ce = isTrustedTierSource(j);
-    if (!isSettingSourceEnabled(j) || (!ce && O)) continue;
-    let Ee = ce ? ah : lh;
-    let settingsForSource = getSettingsForSource(j);
-    for (let tt of evalConfinedEnv ? [] : (settingsForSource?.permissions?.additionalDirectories ?? []))
+  let readDenyInRepoSources = new Set();
+  let configuredDenySpellings = new Set();
+  let blockReadsOutside = false;
+  let restrictRepoGrants = false;
+  let repoAllowRead = [];
+  let repoAllowWrite = [];
+  let repoGrants = [];
+  let droppedAdminWriteGrants = 0;
+  let droppedWriteUnderDeny = 0;
+  let droppedReadUnderDeny = 0;
+  let widenings = [];
+  let additionalDirs = new Set(getAdditionalDirectoriesForClaudeMd().flatMap(expandAdditionalDir));
+  let userTierAdditionalDirs = new Set(isNotBackgroundSession() ? additionalDirs : []);
+  let adminAdditionalDirs = new Set(additionalDirs);
+  let repoSources = repoResidentSettingSources();
+  let trustedGrants = [];
+  let repoGrantsList = [];
+  for (let sourceName of SETTING_SOURCES) {
+    let trustedTier = isTrustedTierSource(sourceName);
+    if (!isSettingSourceEnabled(sourceName) || (!trustedTier && hasTrustedDenies)) continue;
+    let targetList = trustedTier ? trustedGrants : repoGrantsList;
+    let settingsForSource = getSettingsForSource(sourceName);
+    for (let dir of evalConfinedEnv ? [] : (settingsForSource?.permissions?.additionalDirectories ?? []))
       try {
-        Ee.push(expandPath(tt, cwd));
+        targetList.push(expandPath(dir, cwd));
       } catch {}
-    for (let tt of [
-      ...(y(j) && !managedReadPathsOnly ? (settingsForSource?.sandbox?.filesystem?.allowRead ?? []) : []),
-      ...(y(j) ? (settingsForSource?.sandbox?.filesystem?.allowWrite ?? []) : []),
-      ...(j === "policySettings" && managedReadPathsOnly && !evalConfinedEnv
+    for (let path of [
+      ...(isTierUsable(sourceName) && !managedReadPathsOnly
+        ? (settingsForSource?.sandbox?.filesystem?.allowRead ?? [])
+        : []),
+      ...(isTierUsable(sourceName) ? (settingsForSource?.sandbox?.filesystem?.allowWrite ?? []) : []),
+      ...(sourceName === "policySettings" && managedReadPathsOnly && !evalConfinedEnv
         ? managedSources.flatMap((managedSource) => managedSource.sandbox?.filesystem?.allowRead ?? [])
         : []),
     ])
       try {
-        Ee.push(resolveSandboxFilesystemPath(tt, j));
+        targetList.push(resolveSandboxFilesystemPath(path, sourceName));
       } catch {}
-    for (let tt of evalConfinedEnv
+    for (let rule of evalConfinedEnv
       ? []
       : (groupRuleContentsByTool(settingsForSource?.permissions?.allow, [FILE_EDIT_TOOL_NAME]).get(
           FILE_EDIT_TOOL_NAME,
         ) ?? []))
       try {
-        Ee.push(resolvePathPatternForSandbox(tt, j));
+        targetList.push(resolvePathPatternForSandbox(rule, sourceName));
       } catch {}
   }
-  let mb = false;
-  let gb = new Set();
-  let yb = new Set();
+  let useGlobVouched = false;
+  let globAllowed = new Set();
+  let globRefused = new Set();
   let context = {
     sharesReach: getPlatform() === "windows",
     prepared: "no",
     automounter: "none",
     automountPoints: [],
-    ownPlaces: [getCwdState(), getOriginalCwd(), homedir(), ...Va],
-    grantedPlaces: ah,
-    repositoryGrantedPlaces: lh,
+    ownPlaces: [getCwdState(), getOriginalCwd(), homedir(), ...additionalDirs],
+    grantedPlaces: trustedGrants,
+    repositoryGrantedPlaces: repoGrantsList,
     placesOfVouched: [],
     grantsOfVouched: [],
     trustsWriter: false,
@@ -3495,89 +3578,92 @@ function convertToSandboxRuntimeConfig(settings) {
     dropped: new Set(),
     saidBefore: new Set(adapterState.deniesDroppedForAnotherHost),
   };
-  for (let j of SETTING_SOURCES) {
-    if (!isSettingSourceEnabled(j)) {
-      let settingsForSourceTightenOnly = getSettingsForSourceTightenOnly(j);
+  for (let sourceName of SETTING_SOURCES) {
+    if (!isSettingSourceEnabled(sourceName)) {
+      let settingsForSourceTightenOnly = getSettingsForSourceTightenOnly(sourceName);
       if (settingsForSourceTightenOnly?.permissions || settingsForSourceTightenOnly?.sandbox?.filesystem)
         logForDebugging(
-          `Sandbox: ignoring permission rules and sandbox.filesystem entries from disabled setting source ${j}`,
+          `Sandbox: ignoring permission rules and sandbox.filesystem entries from disabled setting source ${sourceName}`,
           {
             level: "info",
           },
         );
       continue;
     }
-    let settingsForSource = getSettingsForSource(j);
-    let Ee = isRepoSettingSource(j);
-    let included = hb.includes(j);
-    let tt = Ee || (j === "policySettings" && !isPolicySlotAdminOrParentComposed());
-    let bt = adminMandate && tt;
-    let xt = included || bt;
+    let settingsForSource = getSettingsForSource(sourceName);
+    let isRepoSettings = isRepoSettingSource(sourceName);
+    let included = repoSources.includes(sourceName);
+    let mayOverride =
+      isRepoSettings || (sourceName === "policySettings" && !isPolicySlotAdminOrParentComposed());
+    let adminRepoSettings = adminMandate && mayOverride;
+    let grantWidensWrite = included || adminRepoSettings;
     if (settingsForSource?.permissions) {
       if (settingsForSource.permissions.blockReadsOutsideWorkingDirectories === true) {
-        Vc = true;
-        sh ||= !included;
+        blockReadsOutside = true;
+        restrictRepoGrants ||= !included;
       }
       if (!included && !evalConfinedEnv)
-        for (let Bt of settingsForSource.permissions.additionalDirectories || [])
-          for (let qr of vn(Bt)) {
-            Va.add(qr);
-            if (!tt) Yl.add(qr);
-            if (isUserTierSource(j)) Zd.add(qr);
+        for (let dir of settingsForSource.permissions.additionalDirectories || [])
+          for (let additionalDir of expandAdditionalDir(dir)) {
+            additionalDirs.add(additionalDir);
+            if (!mayOverride) adminAdditionalDirs.add(additionalDir);
+            if (isUserTierSource(sourceName)) userTierAdditionalDirs.add(additionalDir);
           }
     }
     let filesystem = settingsForSource?.sandbox?.filesystem;
-    let kt = evalConfinedEnv
+    let editAllowRules = evalConfinedEnv
       ? []
       : (groupRuleContentsByTool(settingsForSource?.permissions?.allow, [FILE_EDIT_TOOL_NAME]).get(
           FILE_EDIT_TOOL_NAME,
         ) ?? []);
-    let allowWrite = y(j) ? filesystem?.allowWrite : undefined;
-    let Dt = managedReadPathsOnly || !y(j) ? [] : (filesystem?.allowRead ?? []);
-    if (bt) Wc += kt.length + (filesystem?.allowWrite?.length ?? 0);
+    let allowWrite_2 = isTierUsable(sourceName) ? filesystem?.allowWrite : undefined;
+    let allowReadPaths =
+      managedReadPathsOnly || !isTierUsable(sourceName) ? [] : (filesystem?.allowRead ?? []);
+    if (adminRepoSettings)
+      droppedAdminWriteGrants += editAllowRules.length + (filesystem?.allowWrite?.length ?? 0);
     else
-      for (let Bt of [
-        ...resolvePathEntries(kt, j, "widening", resolvePathPatternForSandbox),
-        ...resolveSandboxPathPatterns(allowWrite, j, "widening"),
+      for (let entry of [
+        ...resolvePathEntries(editAllowRules, sourceName, "widening", resolvePathPatternForSandbox),
+        ...resolveSandboxPathPatterns(allowWrite_2, sourceName, "widening"),
       ]) {
-        if (tt && pathsCoverPath(q(), Bt)) {
-          Hc++;
+        if (mayOverride && pathsCoverPath(getDenyRoots(), entry)) {
+          droppedReadUnderDeny++;
           continue;
         }
-        (xt ? ih : Se).push(Bt);
-        if (tt && !xt)
-          ra.push({
-            literal: Bt,
+        (grantWidensWrite ? repoAllowWrite : allowWrite).push(entry);
+        if (mayOverride && !grantWidensWrite)
+          repoGrants.push({
+            literal: entry,
             list: "allowWrite",
           });
-        oh.push(Bt);
-        if (isUserTierSource(j)) Zd.add(Bt);
+        widenings.push(entry);
+        if (isUserTierSource(sourceName)) userTierAdditionalDirs.add(entry);
       }
-    for (let Bt of resolveSandboxPathPatterns(Dt, j, "widening")) {
-      if (tt && pathsCoverPath(q(), Bt)) {
-        Gc++;
+    for (let entry of resolveSandboxPathPatterns(allowReadPaths, sourceName, "widening")) {
+      if (mayOverride && pathsCoverPath(getDenyRoots(), entry)) {
+        droppedWriteUnderDeny++;
         continue;
       }
-      (xt ? Yd : he).push(Bt);
-      if (tt && !xt)
-        ra.push({
-          literal: Bt,
+      (grantWidensWrite ? repoAllowRead : denyRead).push(entry);
+      if (mayOverride && !grantWidensWrite)
+        repoGrants.push({
+          literal: entry,
           list: "allowRead",
         });
     }
-    let Ct = groupRuleContentsByTool(settingsForSource?.permissions?.deny, [
+    let denyRulesByTool = groupRuleContentsByTool(settingsForSource?.permissions?.deny, [
       FILE_EDIT_TOOL_NAME,
       FILE_READ_TOOL_NAME,
     ]);
-    let Qe = [
+    let denyGroups = [
       {
-        rawSpellings: Ct.get(FILE_EDIT_TOOL_NAME) ?? [],
+        rawSpellings: denyRulesByTool.get(FILE_EDIT_TOOL_NAME) ?? [],
         resolveOne: resolvePathPatternForSandbox,
         access: "write",
         what: `${FILE_EDIT_TOOL_NAME} rule`,
       },
       {
-        rawSpellings: Ct.get(FILE_READ_TOOL_NAME) ?? [],
+        rawSpellings: denyRulesByTool.get(FILE_READ_TOOL_NAME) ?? [],
         resolveOne: resolvePathPatternForSandbox,
         access: "read",
         what: `${FILE_READ_TOOL_NAME} rule`,
@@ -3595,89 +3681,105 @@ function convertToSandboxRuntimeConfig(settings) {
         what: "read deny",
       },
     ];
-    for (let { rawSpellings, resolveOne, access, what } of Qe)
+    for (let { rawSpellings, resolveOne, access, what } of denyGroups)
       for (let rawSpelling of rawSpellings) {
-        let entryPath = resolvePathEntry(rawSpelling, j, "deny", resolveOne);
-        if (entryPath === undefined) continue;
+        let pathEntry = resolvePathEntry(rawSpelling, sourceName, "deny", resolveOne);
+        if (pathEntry === undefined) continue;
         if (
           shouldDropRemoteHostEntry(
             what,
-            entryPath,
-            j,
+            pathEntry,
+            sourceName,
             context,
-            (mb && !gb.has(`${what} ${rawSpelling}`)) || yb.has(`${what} ${rawSpelling}`),
+            (useGlobVouched && !globAllowed.has(`${what} ${rawSpelling}`)) ||
+              globRefused.has(`${what} ${rawSpelling}`),
           )
         )
           continue;
-        let Hr = normalizeDirPattern(rawSpelling, entryPath);
-        switch ((jd.add(Hr), access)) {
+        let denySpelling = normalizeDirPattern(rawSpelling, pathEntry);
+        switch ((configuredDenySpellings.add(denySpelling), access)) {
           case "write":
-            denyPaths.push(Hr);
+            denyPaths.push(denySpelling);
             break;
           case "read":
-            denyPaths_2.push(Hr);
-            if (!Ee) qd.add(Hr);
+            denyPaths_2.push(denySpelling);
+            if (!isRepoSettings) readDenyInRepoSources.add(denySpelling);
             break;
         }
       }
   }
-  if ((Wc > 0 || Gc > 0 || Hc > 0) && !adapterState.droppedRepoFilesystemGrantsLogged) {
+  if (
+    (droppedAdminWriteGrants > 0 || droppedWriteUnderDeny > 0 || droppedReadUnderDeny > 0) &&
+    !adapterState.droppedRepoFilesystemGrantsLogged
+  ) {
     adapterState.droppedRepoFilesystemGrantsLogged = true;
-    let j = adminMandate
+    let denyRootLabel = adminMandate
       ? "admin sandbox mandate"
-      : O
+      : hasTrustedDenies
         ? "managed or --settings read deny"
         : "Claude Code's own read-deny paths";
-    let ce = [];
-    if (Wc > 0)
-      ce.push(`${Wc} sandbox.filesystem.allowWrite / Edit allow-rule path(s) (admin sandbox mandate)`);
-    if (Hc > 0)
-      ce.push(
-        `${Hc} sandbox.filesystem.allowWrite / Edit allow-rule path(s) under a denied read path (${j})`,
+    let droppedDescriptions = [];
+    if (droppedAdminWriteGrants > 0)
+      droppedDescriptions.push(
+        `${droppedAdminWriteGrants} sandbox.filesystem.allowWrite / Edit allow-rule path(s) (admin sandbox mandate)`,
       );
-    if (Gc > 0) ce.push(`${Gc} sandbox.filesystem.allowRead path(s) inside a denied read path (${j})`);
+    if (droppedReadUnderDeny > 0)
+      droppedDescriptions.push(
+        `${droppedReadUnderDeny} sandbox.filesystem.allowWrite / Edit allow-rule path(s) under a denied read path (${denyRootLabel})`,
+      );
+    if (droppedWriteUnderDeny > 0)
+      droppedDescriptions.push(
+        `${droppedWriteUnderDeny} sandbox.filesystem.allowRead path(s) inside a denied read path (${denyRootLabel})`,
+      );
     logForDebugging(
-      `[sandbox] filesystem grants restricted to trusted settings tiers: ignoring ${ce.join(" and ")} from project/local (or HKCU-backfilled policy) settings`,
+      `[sandbox] filesystem grants restricted to trusted settings tiers: ignoring ${droppedDescriptions.join(" and ")} from project/local (or HKCU-backfilled policy) settings`,
     );
   }
   if (managedReadPathsOnly && !evalConfinedEnv)
     for (let managedSource of managedSources)
-      he.push(
+      denyRead.push(
         ...resolveSandboxPathPatterns(
           managedSource.sandbox?.filesystem?.allowRead,
           "policySettings",
           "widening",
         ),
       );
-  let flattened = SETTING_SOURCES.flatMap((j) => {
-    let ce = isRepoSettingSource(j);
-    if (ce && !isSettingSourceEnabled(j)) return [];
-    return (getSettingsForSourceTightenOnly(j)?.sandbox?.credentials?.files ?? []).flatMap((Ee) => {
-      if (Ee.mode === "mask" && ce) return [];
-      let entryPath = resolvePathEntry(Ee.path, j, "deny", resolveSandboxFilesystemPath);
-      if (
-        entryPath === undefined ||
-        ((Ee.mode !== "mask" || !isTrustedTierSource(j)) &&
-          shouldDropRemoteHostEntry("credential file", entryPath, j, context, false))
-      )
-        return [];
-      let denySpelling = normalizeDirPattern(Ee.path, entryPath);
-      return [
-        {
-          source: j,
-          file: Ee,
-          resolvedCredentialPath: entryPath,
-          denySpelling,
-        },
-      ];
-    });
+  let flattened = SETTING_SOURCES.flatMap((sourceName) => {
+    let isRepoSettings = isRepoSettingSource(sourceName);
+    if (isRepoSettings && !isSettingSourceEnabled(sourceName)) return [];
+    return (getSettingsForSourceTightenOnly(sourceName)?.sandbox?.credentials?.files ?? []).flatMap(
+      (credentialFile) => {
+        if (credentialFile.mode === "mask" && isRepoSettings) return [];
+        let pathEntry = resolvePathEntry(
+          credentialFile.path,
+          sourceName,
+          "deny",
+          resolveSandboxFilesystemPath,
+        );
+        if (
+          pathEntry === undefined ||
+          ((credentialFile.mode !== "mask" || !isTrustedTierSource(sourceName)) &&
+            shouldDropRemoteHostEntry("credential file", pathEntry, sourceName, context, false))
+        )
+          return [];
+        let denySpelling = normalizeDirPattern(credentialFile.path, pathEntry);
+        return [
+          {
+            source: sourceName,
+            file: credentialFile,
+            resolvedCredentialPath: pathEntry,
+            denySpelling,
+          },
+        ];
+      },
+    );
   });
-  let Kc = [...context.dropped];
-  if (!En(adapterState.deniesDroppedForAnotherHost, Kc)) {
-    adapterState.deniesDroppedForAnotherHost = Kc;
-    if (Kc.length > 0)
+  let dropped = [...context.dropped];
+  if (!import_sortedIndex_2(adapterState.deniesDroppedForAnotherHost, dropped)) {
+    adapterState.deniesDroppedForAnotherHost = dropped;
+    if (dropped.length > 0)
       logFeatureSad("sandbox_exec", "denies_on_another_host_dropped", {
-        dropped: Kc.length,
+        dropped: dropped.length,
       });
     try {
       sandboxErrorSignalLazy.emit();
@@ -3687,53 +3789,53 @@ function convertToSandboxRuntimeConfig(settings) {
   }
   let allowWriteRoots = [];
   let readDenySkipReason = getReadDenySkipReason();
-  if (Vc && readDenySkipReason === null) {
-    let j = [originalCwd, ...(adminMandate ? Yl : Va)];
-    let ce = new Set($a);
-    for (let Qe of [originalCwd, ...$a]) {
-      let Bt = Cr.get(Qe);
-      if (Bt !== undefined) ce.add(Bt);
+  if (blockReadsOutside && readDenySkipReason === null) {
+    let readRoots = [dir_2, ...(adminMandate ? adminAdditionalDirs : additionalDirs)];
+    let grantRoots = new Set(writableCwds);
+    for (let dir of [dir_2, ...writableCwds]) {
+      let commonDir = grantedWorktrees.get(dir);
+      if (commonDir !== undefined) grantRoots.add(commonDir);
     }
-    let filtered = [...j, ...ce].filter(containsGlobChars);
+    let filtered = [...readRoots, ...grantRoots].filter(containsGlobChars);
     if (filtered.length > 0)
       logForDebugging(
         `Sandbox: blockReadsOutsideWorkingDirectories: paths with glob characters are not re-opened: ${filtered.join(", ")}`,
       );
-    let filtered_2 = j.filter((Qe) => !containsGlobChars(Qe));
-    let mapped = denyPaths_2.map((Qe) => {
+    let filtered_2 = readRoots.filter((dir) => !containsGlobChars(dir));
+    let mapped = denyPaths_2.map((path) => {
       try {
-        return expandPath(Qe, cwd);
+        return expandPath(path, cwd);
       } catch {
-        return Qe;
+        return path;
       }
     });
-    let bt = new Map();
-    let xt = (Qe, Bt = getPlatform() !== "linux", qr = mapped) =>
-      qr.some((Es) => {
-        let Gr = removeTrailingGlobSuffix(Es);
-        if (!containsGlobChars(Gr))
+    let globCache = new Map();
+    let isCoveredByDeny = (path, foldCase = getPlatform() !== "linux", denySpellings = mapped) =>
+      denySpellings.some((denySpelling) => {
+        let trimmed = removeTrailingGlobSuffix(denySpelling);
+        if (!containsGlobChars(trimmed))
           return (
-            isPathPrefixOf(Gr, Qe, Bt) ||
-            isPathWithin(Gr, Qe, {
-              foldCase: Bt,
+            isPathPrefixOf(trimmed, path, foldCase) ||
+            isPathWithin(trimmed, path, {
+              foldCase,
             })
           );
-        let nr = getPlatform() === "windows" ? denyEntryCovers : denyEntryCoversPath;
-        let rr = [[Es, Qe, Bt]];
-        if (Bt) rr.push([foldPathCase(Es), foldPathCase(Qe), false]);
-        return rr.some(([Hr, xs, qa]) => {
+        let matcher = getPlatform() === "windows" ? denyEntryCovers : denyEntryCoversPath;
+        let pairs = [[denySpelling, path, foldCase]];
+        if (foldCase) pairs.push([foldPathCase(denySpelling), foldPathCase(path), false]);
+        return pairs.some(([pattern, path, nocase]) => {
           try {
-            celModule.default(Hr, {
+            celModule.default(pattern, {
               dot: true,
-              nocase: qa,
+              nocase,
             });
           } catch {
             return true;
           }
-          return nr(Hr, xs, bt, qa);
+          return matcher(pattern, path, globCache, nocase);
         });
       });
-    for (let Qe of [
+    for (let root of [
       "~/",
       "/home/",
       "/Users/",
@@ -3744,36 +3846,36 @@ function convertToSandboxRuntimeConfig(settings) {
       "/Volumes/",
       "/srv/",
     ]) {
-      let sandboxFilesystemPath = resolveSandboxFilesystemPath(Qe, "userSettings");
-      if (filtered_2.some((Es) => isPathWithin(Es, sandboxFilesystemPath))) continue;
-      let qr = normalizeDirectoryPattern(sandboxFilesystemPath);
-      denyPaths_2.push(qr);
-      jd.add(qr);
+      let sandboxFilesystemPath = resolveSandboxFilesystemPath(root, "userSettings");
+      if (filtered_2.some((path) => isPathWithin(path, sandboxFilesystemPath))) continue;
+      let spelling = normalizeDirectoryPattern(sandboxFilesystemPath);
+      denyPaths_2.push(spelling);
+      configuredDenySpellings.add(spelling);
       allowWriteRoots.push(sandboxFilesystemPath);
-      if (sh) qd.add(qr);
+      if (restrictRepoGrants) readDenyInRepoSources.add(spelling);
     }
     let claudeConfigDir = getClaudeConfigDir();
     let xdgConfigHome =
       env.XDG_CONFIG_HOME && isAbsolute(env.XDG_CONFIG_HOME)
         ? env.XDG_CONFIG_HOME
         : resolve(homedir(), ".config");
-    let Xt = [...mapped, ...flattened.map((Qe) => Qe.denySpelling)];
-    let Dt;
+    let denySpellings = [...mapped, ...flattened.map((credential) => credential.denySpelling)];
+    let denyRootsMemo;
     let gitConfigDenyPaths = collectGitConfigDenyPaths(
       xdgConfigHome,
       allowWriteRoots,
       () =>
-        (Dt ??= flattenWrapWriteRoots(
+        (denyRootsMemo ??= flattenWrapWriteRoots(
           splitBindableWriteRoots(
-            [...getDefaultWritePaths(), ...Se],
+            [...getDefaultWritePaths(), ...allowWrite],
             new Set([getOriginalCwd(), getCwdState()]),
           ),
         )),
-      (Qe) => xt(Qe, true, Xt),
+      (path) => isCoveredByDeny(path, true, denySpellings),
     );
-    for (let Qe of [
+    for (let path of [
       ...filtered_2,
-      ...[...ce].filter((Bt) => !containsGlobChars(Bt)),
+      ...[...grantRoots].filter((root) => !containsGlobChars(root)),
       ...gitConfigDenyPaths,
       getClaudeTempDirRealpath(),
       childProcessTmpDirRealpath,
@@ -3785,188 +3887,203 @@ function convertToSandboxRuntimeConfig(settings) {
       resolve(claudeConfigDir, "agents"),
       resolve(claudeConfigDir, "commands"),
     ]) {
-      if (xt(Qe)) {
+      if (isCoveredByDeny(path)) {
         logForDebugging(
-          `Sandbox: blockReadsOutsideWorkingDirectories: ${Qe} stays under an existing denyRead and is not re-opened`,
+          `Sandbox: blockReadsOutsideWorkingDirectories: ${path} stays under an existing denyRead and is not re-opened`,
         );
         continue;
       }
-      he.push(Qe);
+      denyRead.push(path);
     }
     if (getEffectiveFilesystemPolicy() === "relaxed")
       logForDebugging(
         "Sandbox: blockReadsOutsideWorkingDirectories: the relaxed filesystem policy drops every denyRead at wrap time, so the sandbox half of the block does not apply",
       );
-  } else if (Vc)
+  } else if (blockReadsOutside)
     logForDebugging(
       `Sandbox: blockReadsOutsideWorkingDirectories not applied to the sandbox: ${readDenySkipReason}${getPlatform() === "windows" ? " (grants from repository settings are still ignored)" : ""}`,
     );
-  let Jd = allowWriteRoots.length > 0 || (Vc && getPlatform() === "windows");
-  for (let j of Yd) {
-    if (Jd) {
+  let applyRepoFilter = allowWriteRoots.length > 0 || (blockReadsOutside && getPlatform() === "windows");
+  for (let path of repoAllowRead) {
+    if (applyRepoFilter) {
       logForDebugging(
-        `Sandbox: blockReadsOutsideWorkingDirectories: repo-committed allowRead ${j} does not count`,
+        `Sandbox: blockReadsOutsideWorkingDirectories: repo-committed allowRead ${path} does not count`,
       );
       continue;
     }
-    he.push(j);
-    ra.push({
-      literal: j,
+    denyRead.push(path);
+    repoGrants.push({
+      literal: path,
       list: "allowRead",
     });
   }
-  for (let j of ih) {
-    if (Jd) {
+  for (let path of repoAllowWrite) {
+    if (applyRepoFilter) {
       logForDebugging(
-        `Sandbox: blockReadsOutsideWorkingDirectories: repo-committed allowWrite ${j} does not count`,
+        `Sandbox: blockReadsOutsideWorkingDirectories: repo-committed allowWrite ${path} does not count`,
       );
       continue;
     }
-    Se.push(j);
-    ra.push({
-      literal: j,
+    allowWrite.push(path);
+    repoGrants.push({
+      literal: path,
       list: "allowWrite",
     });
   }
-  for (let j of oh) for (let ce of vn(j)) wn(ce);
-  let bb = adminMandate ? Yl : Va;
-  for (let j of pr)
-    if (((Jd || adminMandate) && !bb.has(j)) || (!Yl.has(j) && pathsCoverPath(q(), j))) {
-      let index = Se.indexOf(j);
-      if (index !== -1) Se.splice(index, 1);
-    } else if (!Yl.has(j))
-      ra.push({
-        literal: j,
+  for (let path of widenings) for (let dir of expandAdditionalDir(path)) noopVisitor(dir);
+  let grantSet = adminMandate ? adminAdditionalDirs : additionalDirs;
+  for (let dir of additionalDirectories)
+    if (
+      ((applyRepoFilter || adminMandate) && !grantSet.has(dir)) ||
+      (!adminAdditionalDirs.has(dir) && pathsCoverPath(getDenyRoots(), dir))
+    ) {
+      let index = allowWrite.indexOf(dir);
+      if (index !== -1) allowWrite.splice(index, 1);
+    } else if (!adminAdditionalDirs.has(dir))
+      repoGrants.push({
+        literal: dir,
         list: "allowWrite",
       });
-  let Qd = [];
-  let Wa = [];
-  let Sb;
-  let ef = () => (Sb ??= uniq([...q(), ...denyPaths_2.flatMap((j) => canonicalizeSandboxPath(j) ?? [])]));
-  let tf = {
-    allowRead: he,
-    allowWrite: Se,
+  let acceptedGrants = [];
+  let writeGrantsWithoutBase = [];
+  let denyRootSpellings;
+  let denyRootSpellingsLazy = () =>
+    (denyRootSpellings ??= uniq([
+      ...getDenyRoots(),
+      ...denyPaths_2.flatMap((path) => canonicalizeSandboxPath(path) ?? []),
+    ]));
+  let grantLists = {
+    allowRead: denyRead,
+    allowWrite,
   };
-  let sa = ({ list, literal }, Ee, We = false) => {
+  let withholdGrant = ({ list, literal }, reason, repeat = false) => {
     do {
-      let index = tf[list].indexOf(literal);
+      let index = grantLists[list].indexOf(literal);
       if (index === -1) break;
-      tf[list].splice(index, 1);
-    } while (We);
-    logForDebugging(`[sandbox] withheld ${list} ${literal}: ${Ee}`);
+      grantLists[list].splice(index, 1);
+    } while (repeat);
+    logForDebugging(`[sandbox] withheld ${list} ${literal}: ${reason}`);
   };
-  if (O)
-    for (let j of ra) {
-      let ce = canonicalizeSandboxPath(j.literal) ?? "";
-      if (containsGlobChars(ce))
-        sa(
-          j,
+  if (hasTrustedDenies)
+    for (let grant of repoGrants) {
+      let canonical = canonicalizeSandboxPath(grant.literal) ?? "";
+      if (containsGlobChars(canonical))
+        withholdGrant(
+          grant,
           "a repository glob grant is expanded anew at every wrap while a trusted tier denies reads (spell the directories instead)",
         );
-      else if (isNetworkSpelledGrantRoot(ce))
-        sa(
-          j,
+      else if (isNetworkSpelledGrantRoot(canonical))
+        withholdGrant(
+          grant,
           "a repository grant spelled as a network (UNC or automount) path cannot be compared with the paths a trusted tier denies reading",
         );
     }
-  let Eb = flattenWrapWriteRoots(
-    splitBindableWriteRoots([...getDefaultWritePaths(), ...Se], new Set([originalCwd, cwdState])),
+  let bindableRoots = flattenWrapWriteRoots(
+    splitBindableWriteRoots([...getDefaultWritePaths(), ...allowWrite], new Set([dir_2, dir])),
   );
-  let dh = new Map();
-  let nf = getPlatform() === "windows";
-  let ji = nf ? getGitHomeInfo(homedir(), userSettingsHomes()) : undefined;
-  let xb;
-  let _b = () =>
-    (xb ??=
-      ji !== undefined &&
+  let prefixCache = new Map();
+  let onWindows = getPlatform() === "windows";
+  let gitHome = onWindows ? getGitHomeInfo(homedir(), userSettingsHomes()) : undefined;
+  let nameReadingFlag;
+  let readNameReadingFlag = () =>
+    (nameReadingFlag ??=
+      gitHome !== undefined &&
       readFlagWithOverride(TENGU_CURRIED_WILLOW, {
         safe: true,
       }));
-  for (let j of ["allowRead", "allowWrite"])
-    e: for (let ce of uniq(tf[j])) {
-      let Ee = ji === undefined ? ce : normalizeUncTildePath(ce);
-      if (ji !== undefined && isDeviceNamespacePath(Ee.replace(/^[\\/]{3,}/, "\\\\"))) {
-        sa(
+  for (let listName of ["allowRead", "allowWrite"])
+    e: for (let literal of uniq(grantLists[listName])) {
+      let normalized = gitHome === undefined ? literal : normalizeUncTildePath(literal);
+      if (gitHome !== undefined && isDeviceNamespacePath(normalized.replace(/^[\\/]{3,}/, "\\\\"))) {
+        withholdGrant(
           {
-            list: j,
-            literal: ce,
+            list: listName,
+            literal,
           },
           "a device path cannot be compared with the home folder (spell it without the \\\\.\\ prefix)",
           true,
         );
         continue;
       }
-      let We = canonicalizeSandboxPath(Ee);
-      let tt =
-        We !== undefined &&
-        (ji === undefined
-          ? containsGlobChars(We)
-          : containsGlobCharsWin(We) || (containsGlobCharsWin(Ee) && containsGlobChars(We)));
-      if (ji !== undefined && We !== undefined && tt && !isForeignUnresolvedMount(We)) {
-        let globBaseDirectory = getGlobBaseDirectory_2(We);
-        let kt = cachedResolvedPrefix(globBaseDirectory, dh);
-        let Xt =
-          kt === null
+      let canonical = canonicalizeSandboxPath(normalized);
+      let hasGlob =
+        canonical !== undefined &&
+        (gitHome === undefined
+          ? containsGlobChars(canonical)
+          : containsGlobCharsWin(canonical) ||
+            (containsGlobCharsWin(normalized) && containsGlobChars(canonical)));
+      if (
+        gitHome !== undefined &&
+        canonical !== undefined &&
+        hasGlob &&
+        !isForeignUnresolvedMount(canonical)
+      ) {
+        let globBaseDirectory = getGlobBaseDirectory_2(canonical);
+        let prefix = cachedResolvedPrefix(globBaseDirectory, prefixCache);
+        let refusal =
+          prefix === null
             ? "has a link chain that cannot be followed safely"
-            : isUnderGitHome(kt.path, ji)
+            : isUnderGitHome(prefix.path, gitHome)
               ? "is or contains the home folder, or is a Claude Code config folder, which the Windows sandbox is not given (name the folders instead)"
               : isGrantCoveredByPattern(
-                    ef(),
+                    denyRootSpellingsLazy(),
                     {
                       path: globBaseDirectory,
                       patternBeneath: false,
                     },
-                    kt.path,
+                    prefix.path,
                   )
                 ? "resolves into a denied read path outside its own spelling"
                 : undefined;
-        if (Xt !== undefined) {
-          if (kt === null && j === "allowWrite") Wa.push(ce);
-          sa(
+        if (refusal !== undefined) {
+          if (prefix === null && listName === "allowWrite") writeGrantsWithoutBase.push(literal);
+          withholdGrant(
             {
-              list: j,
-              literal: ce,
+              list: listName,
+              literal,
             },
-            `the folder that it is confined to (${globBaseDirectory}) ${Xt}`,
+            `the folder that it is confined to (${globBaseDirectory}) ${refusal}`,
             true,
           );
           continue;
         }
       }
-      if (We === undefined || isForeignUnresolvedMount(We)) continue;
-      let bt = tt
+      if (canonical === undefined || isForeignUnresolvedMount(canonical)) continue;
+      let readings = hasGlob
         ? [
             {
-              path: getGlobBaseDirectory_2(We),
+              path: getGlobBaseDirectory_2(canonical),
               patternBeneath: true,
               nameReading: false,
             },
             ...nameReadingsOfGlobSpelling(
-              nf ? resolveAgainstProcessCwd(Ee).replaceAll("\\", "/") : resolveAgainstProcessCwd(Ee),
+              onWindows
+                ? resolveAgainstProcessCwd(normalized).replaceAll("\\", "/")
+                : resolveAgainstProcessCwd(normalized),
             )
-              .filter(({ name: je }) => !/[*?]/.test(je))
-              .map(({ name: je, pattern }) => ({
-                path: nf ? je.replaceAll("/", "\\") : je,
+              .filter(({ name }) => !/[*?]/.test(name))
+              .map(({ name, pattern }) => ({
+                path: onWindows ? name.replaceAll("/", "\\") : name,
                 patternBeneath: pattern !== null,
                 nameReading: true,
               })),
           ]
         : [
             {
-              path: We,
+              path: canonical,
               patternBeneath: false,
               nameReading: false,
             },
           ];
-      let xt = [];
-      for (let je of bt) {
-        let kt = cachedResolvedPrefix(je.path, dh);
-        if (kt === null) {
-          if (tt && j === "allowWrite") Wa.push(ce);
-          sa(
+      let keptReadings = [];
+      for (let reading of readings) {
+        let prefix = cachedResolvedPrefix(reading.path, prefixCache);
+        if (prefix === null) {
+          if (hasGlob && listName === "allowWrite") writeGrantsWithoutBase.push(literal);
+          withholdGrant(
             {
-              list: j,
-              literal: ce,
+              list: listName,
+              literal,
             },
             "its link chain cannot be followed safely (a loop, an unreadable hop); a later config build re-admits it once it resolves",
             true,
@@ -3974,308 +4091,333 @@ function convertToSandboxRuntimeConfig(settings) {
           continue e;
         }
         if (
-          ji !== undefined &&
-          (!tt || (je.nameReading && _b())) &&
-          isUnderGitHome(ensureTrailingBackslashForDriveRoot(je, kt.path), ji)
+          gitHome !== undefined &&
+          (!hasGlob || (reading.nameReading && readNameReadingFlag())) &&
+          isUnderGitHome(ensureTrailingBackslashForDriveRoot(reading, prefix.path), gitHome)
         ) {
-          sa(
+          withholdGrant(
             {
-              list: j,
-              literal: ce,
+              list: listName,
+              literal,
             },
-            je.nameReading
-              ? `the sandbox may also read ${je.path} as a folder name, and that folder is or leads to the home folder, a folder above the home folder, or a Claude Code config folder, which the Windows sandbox is not given (if it is a link, remove it; or name the real folders instead)`
+            reading.nameReading
+              ? `the sandbox may also read ${reading.path} as a folder name, and that folder is or leads to the home folder, a folder above the home folder, or a Claude Code config folder, which the Windows sandbox is not given (if it is a link, remove it; or name the real folders instead)`
               : "it is or contains the home folder, or is a Claude Code config folder, which the Windows sandbox is not given",
             true,
           );
           continue e;
         }
-        let symlinkHopDirectories = collectSymlinkHopDirectories(je.path, kt.exists ? kt.path : null, true);
-        if (!isPathPrefixOfAny(symlinkHopDirectories, Eb)) continue;
-        if (isGrantCoveredByPattern(ef(), je, kt.path)) {
-          sa(
+        let symlinkHopDirectories = collectSymlinkHopDirectories(
+          reading.path,
+          prefix.exists ? prefix.path : null,
+          true,
+        );
+        if (!isPathPrefixOfAny(symlinkHopDirectories, bindableRoots)) continue;
+        if (isGrantCoveredByPattern(denyRootSpellingsLazy(), reading, prefix.path)) {
+          withholdGrant(
             {
-              list: j,
-              literal: ce,
+              list: listName,
+              literal,
             },
-            je.patternBeneath
+            reading.patternBeneath
               ? "a directory in its spelling resolves outside that spelling, through a link a sandboxed command could have placed, to one that holds or lies inside a denied read path (spell the directory by its real path)"
               : "it resolves into a denied read path outside its own spelling through a link a sandboxed command could have placed (grant the denied path itself to carve it out)",
             true,
           );
           continue e;
         }
-        xt.push(je);
+        keptReadings.push(reading);
       }
-      if (xt.length > 0)
-        Qd.push({
-          literal: ce,
-          list: j,
-          roots: xt,
+      if (keptReadings.length > 0)
+        acceptedGrants.push({
+          literal,
+          list: listName,
+          roots: keptReadings,
         });
     }
-  let is = new Map();
-  let Zl = getEffectiveFilesystemPolicy() === "relaxed";
-  let Ga =
-    (getPlatform() === "linux" || getPlatform() === "wsl" || (getPlatform() === "macos" && Zl)) &&
+  let credentialFiles = new Map();
+  let relaxedPolicy = getEffectiveFilesystemPolicy() === "relaxed";
+  let hasMaskEntries =
+    (getPlatform() === "linux" || getPlatform() === "wsl" || (getPlatform() === "macos" && relaxedPolicy)) &&
     SETTING_SOURCES.some(
-      (j) =>
-        j !== "projectSettings" &&
-        j !== "localSettings" &&
-        (isSettingSourceEnabled(j) || Zl) &&
-        (getSettingsForSourceTightenOnly(j)?.sandbox?.credentials?.files ?? []).some(
-          (ce) => ce.mode === "mask",
+      (sourceName) =>
+        sourceName !== "projectSettings" &&
+        sourceName !== "localSettings" &&
+        (isSettingSourceEnabled(sourceName) || relaxedPolicy) &&
+        (getSettingsForSourceTightenOnly(sourceName)?.sandbox?.credentials?.files ?? []).some(
+          (credential) => credential.mode === "mask",
         ),
     );
-  let fh = [];
-  let ph = Ga ? createWalkMemo() : undefined;
-  let rf = (j, ce) => {
-    if (!ce) return canonicalizePathForMaskSweep(j, undefined, ph);
-    let maskPath = resolveMaskPath(j, ph);
-    if (maskPath.lookAgain !== undefined) fh.push(maskPath);
+  let maskSweepEntries = [];
+  let maskWalkMemo = hasMaskEntries ? createWalkMemo() : undefined;
+  let canonicalizeMaskPath = (path, trust) => {
+    if (!trust) return canonicalizePathForMaskSweep(path, undefined, maskWalkMemo);
+    let maskPath = resolveMaskPath(path, maskWalkMemo);
+    if (maskPath.lookAgain !== undefined) maskSweepEntries.push(maskPath);
     return maskPath.spellings[1];
   };
-  let Ai = Ga && Zl;
-  let Yi = getPlatform() === "windows" ? /(?<=.)[/\\]+$/ : /(?<=.)\/+$/;
-  let hh = expandMaskGlob;
-  let vb = Ga
-    ? he.flatMap((j) => {
-        let replaced = removeTrailingGlobSuffix(j).replace(Yi, "");
+  let maskInert = hasMaskEntries && relaxedPolicy;
+  let trailingSeparatorRe = getPlatform() === "windows" ? /(?<=.)[/\\]+$/ : /(?<=.)\/+$/;
+  let expandMaskGlob = expandMaskGlob_2;
+  let denyReadSweep = hasMaskEntries
+    ? denyRead.flatMap((denyPath) => {
+        let replaced = removeTrailingGlobSuffix(denyPath).replace(trailingSeparatorRe, "");
         return containsGlobChars(replaced)
-          ? [canonicalizePathForMaskSweep(replaced), ...hh(replaced).map((Ee) => Ee.canonical)]
+          ? [
+              canonicalizePathForMaskSweep(replaced),
+              ...expandMaskGlob(replaced).map((expansion) => expansion.canonical),
+            ]
           : [canonicalizePathForMaskSweep(replaced)];
       })
     : [];
-  let zl = posixCovers;
-  let oa = new Map();
-  let wb = (j, ce) => {
-    let Ee = foldPathCase(j);
-    let We = foldPathCase(ce);
-    let tt = "allBeneathItsDirectory";
+  let posixCoversFn = posixCovers;
+  let globCache1 = new Map();
+  let globMatches = (path, pattern) => {
+    let foldedPath = foldPathCase(path);
+    let foldedPattern = foldPathCase(pattern);
+    let coverage = "allBeneathItsDirectory";
     return (
-      matchesGuardedGlob(j, ce, oa, true) ||
-      matchesGuardedGlob(Ee, We, oa) ||
-      matchesDenyGlobAtRuntime(j, ce, "exactly", "allBeneathItsDirectory", oa) ||
-      matchesDenyGlobAtRuntime(Ee, We, "exactly", "allBeneathItsDirectory", oa) ||
-      (containsGlobChars(j) &&
-        (nameReadingsOfGlobSpelling(ce).some(({ name: bt }) => posixCovers(bt, j)) ||
-          nameReadingsOfGlobSpelling(We).some(({ name: bt }) => posixCovers(bt, Ee))))
+      matchesGuardedGlob(path, pattern, globCache1, true) ||
+      matchesGuardedGlob(foldedPath, foldedPattern, globCache1) ||
+      matchesDenyGlobAtRuntime(path, pattern, "exactly", "allBeneathItsDirectory", globCache1) ||
+      matchesDenyGlobAtRuntime(foldedPath, foldedPattern, "exactly", "allBeneathItsDirectory", globCache1) ||
+      (containsGlobChars(path) &&
+        (nameReadingsOfGlobSpelling(pattern).some(({ name }) => posixCovers(name, path)) ||
+          nameReadingsOfGlobSpelling(foldedPattern).some(({ name }) => posixCovers(name, foldedPath))))
     );
   };
-  let Tb = (j, ce, Ee) => {
-    let We = Ee;
+  let globAncestorCovered = (denyPath, denySpelling, current) => {
+    let ancestor = current;
     for (;;) {
-      if (wb(We, j) && denyEntryCoversFolded(ce, We, oa)) return true;
-      let tt = dirname(We);
-      if (tt === We) return false;
-      We = tt;
-      if (!containsGlobChars(ce) && !isPathPrefixOf(ce, We)) return false;
+      if (globMatches(ancestor, denyPath) && denyEntryCoversFolded(denySpelling, ancestor, globCache1))
+        return true;
+      let parent = dirname(ancestor);
+      if (parent === ancestor) return false;
+      ancestor = parent;
+      if (!containsGlobChars(denySpelling) && !isPathPrefixOf(denySpelling, ancestor)) return false;
     }
   };
-  let mo = (j, ce) =>
-    vb.some((Ee) =>
-      containsGlobChars(Ee) ? Tb(Ee, j, ce) : denyEntryCoversFolded(j, Ee, oa) && isPathPrefixOf(Ee, ce),
+  let isDenyCovered = (path, target) =>
+    denyReadSweep.some((denyPath) =>
+      containsGlobChars(denyPath)
+        ? globAncestorCovered(denyPath, path, target)
+        : denyEntryCoversFolded(path, denyPath, globCache1) && isPathPrefixOf(denyPath, target),
     );
-  let qc = (j, ce) => denyEntryCoversPath(j, ce, oa);
-  let aa = new Set();
-  let jc = new Set();
-  let Yc = new Map();
-  let Js = (j, ce, Ee) => {
-    let We = Yc.get(j);
-    if (We) {
-      We.lexicals.push(ce);
-      We.trusted ||= Ee;
+  let isDenyCoveredPath = (denySpelling, path) => denyEntryCoversPath(denySpelling, path, globCache1);
+  let downgradedDenies = new Set();
+  let sentinelMasks = new Set();
+  let denyLexicals = new Map();
+  let addDenyLexical = (key, lexical, trusted) => {
+    let existingEntry = denyLexicals.get(key);
+    if (existingEntry) {
+      existingEntry.lexicals.push(lexical);
+      existingEntry.trusted ||= trusted;
     } else
-      Yc.set(j, {
-        lexicals: [ce],
-        trusted: Ee,
+      denyLexicals.set(key, {
+        lexicals: [lexical],
+        trusted,
       });
   };
-  let sf = (j) => Yc.get(j)?.trusted === true;
-  let Ha = (j, ce) => {
-    let Ee = Yc.get(j);
+  let isTrustedDeny = (key) => denyLexicals.get(key)?.trusted === true;
+  let denyReachesLiteral = (key, literal) => {
+    let entry = denyLexicals.get(key);
     return (
-      Ee === undefined ||
-      Ee.lexicals.some((lexical) => lexical === j || (zl(lexical, ce) && isOsLinkedRootAlias(lexical, j)))
+      entry === undefined ||
+      entry.lexicals.some(
+        (lexical) =>
+          lexical === key || (posixCoversFn(lexical, literal) && isOsLinkedRootAlias(lexical, key)),
+      )
     );
   };
-  let mi = new Map();
-  let mh = false;
-  let of;
-  let Xl = new Map();
-  let gh = 0;
-  let yh = 0;
-  let la = credentialRuleExtractSchema;
-  let yo = (pair) => [
+  let envVars = new Map();
+  let hasCredentials = false;
+  let allowPlaintextInject;
+  let awsPairs = new Map();
+  let pairSeq = 0;
+  let synthSeq = 0;
+  let reservedVarNames = AWS_CREDENTIAL_ENV_NAMES;
+  let pairVarNames = (pair) => [
     pair.accessKeyIdVar,
     pair.secretAccessKeyVar,
     ...(pair.sessionTokenVar !== undefined ? [pair.sessionTokenVar] : []),
   ];
-  let Ab = (j) => credentialRuleRefine(j.accessKeyIdVar) || credentialRuleRefine(j.secretAccessKeyVar);
-  let af = (j, rank, Ee) => {
-    let We = new Set([...Xl.values()].flatMap((tt) => yo(tt.pair)));
-    for (let tt of j) {
-      if (!la.includes(tt) || We.has(tt)) continue;
-      yh += 1;
-      logForDebugging(Ee(tt), {
+  let isSyntheticPair = (pair) =>
+    credentialRuleRefine(pair.accessKeyIdVar) || credentialRuleRefine(pair.secretAccessKeyVar);
+  let addSuppressorPair = (varNames, rank, messageFor) => {
+    let claimedNames = new Set([...awsPairs.values()].flatMap((pairEntry) => pairVarNames(pairEntry.pair)));
+    for (let varName of varNames) {
+      if (!reservedVarNames.includes(varName) || claimedNames.has(varName)) continue;
+      synthSeq += 1;
+      logForDebugging(messageFor(varName), {
         level: "warn",
       });
-      Xl.set(tt, {
+      awsPairs.set(varName, {
         pair: {
-          accessKeyIdVar: tt,
-          secretAccessKeyVar: `${credentialRuleExtraSchema}${yh}_`,
+          accessKeyIdVar: varName,
+          secretAccessKeyVar: `${MERGE_PAIR_SUPPRESSOR_SENTINEL}${synthSeq}_`,
         },
         rank,
-        seq: gh++,
-        label: tt,
+        seq: pairSeq++,
+        label: varName,
         sessionLabel: undefined,
         synthetic: true,
       });
-      We.add(tt);
+      claimedNames.add(varName);
     }
   };
-  let lf;
-  for (let j of SETTING_SOURCES) {
-    let credentials = getSettingsForSourceTightenOnly(j)?.sandbox?.credentials;
+  let sigv4;
+  for (let sourceName of SETTING_SOURCES) {
+    let credentials = getSettingsForSourceTightenOnly(sourceName)?.sandbox?.credentials;
     if (!credentials) continue;
-    let Ee = isRepoSettingSource(j);
-    if (Ee && !isSettingSourceEnabled(j)) {
-      logForDebugging(`Sandbox: ignoring sandbox.credentials entries from disabled setting source ${j}`, {
-        level: "info",
-      });
+    let isRepoSettings = isRepoSettingSource(sourceName);
+    if (isRepoSettings && !isSettingSourceEnabled(sourceName)) {
+      logForDebugging(
+        `Sandbox: ignoring sandbox.credentials entries from disabled setting source ${sourceName}`,
+        {
+          level: "info",
+        },
+      );
       continue;
     }
-    mh = true;
-    let We = j === "userSettings" && !isSettingSourceEnabled("userSettings");
-    let tt = evalConfinedEnv && j !== "userSettings";
-    let bt = We || tt;
-    let xt = tt ? `eval-confined foreign tier ${j}` : "disabled userSettings";
-    for (let { file, resolvedCredentialPath, denySpelling } of flattened.filter((Dt) => Dt.source === j)) {
-      let Dt = file.mode === "deny" ? denySpelling : resolvedCredentialPath;
-      let replaced = removeTrailingGlobSuffix(denySpelling).replace(Yi, "");
-      let Qe = Ga ? rf(replaced, !Ee) : replaced;
-      if (file.mode === "deny") Js(Qe, replaced, !Ee);
-      let Bt = is.get(Qe);
-      if (Bt?.mode === "deny") {
-        let Gr = aa.has(Qe);
-        let nr = (rr) => rr === Qe || isOsLinkedRootAlias(rr, Qe);
-        if (file.mode === "deny" && Gr && !nr(replaced)) {
+    hasCredentials = true;
+    let plaintextInjectEnabled = sourceName === "userSettings" && !isSettingSourceEnabled("userSettings");
+    let evalConfinedForeign = evalConfinedEnv && sourceName !== "userSettings";
+    let injectWithheld = plaintextInjectEnabled || evalConfinedForeign;
+    let withheldLabel = evalConfinedForeign
+      ? `eval-confined foreign tier ${sourceName}`
+      : "disabled userSettings";
+    for (let { file, resolvedCredentialPath, denySpelling } of flattened.filter(
+      (credential) => credential.source === sourceName,
+    )) {
+      let targetPath = file.mode === "deny" ? denySpelling : resolvedCredentialPath;
+      let path = removeTrailingGlobSuffix(denySpelling).replace(trailingSeparatorRe, "");
+      let canonical = hasMaskEntries ? canonicalizeMaskPath(path, !isRepoSettings) : path;
+      if (file.mode === "deny") addDenyLexical(canonical, path, !isRepoSettings);
+      let incumbent = credentialFiles.get(canonical);
+      if (incumbent?.mode === "deny") {
+        let wasDowngraded = downgradedDenies.has(canonical);
+        let isSamePathSpelling = (lexical) =>
+          lexical === canonical || isOsLinkedRootAlias(lexical, canonical);
+        if (file.mode === "deny" && wasDowngraded && !isSamePathSpelling(path)) {
           logForDebugging(
-            `[sandbox] credential file deny for '${Dt}' supersedes the disabled-userSettings synthetic deny but is symlink-spelled \u2014 installed as a canonical deny on '${Qe}' so enforcement cannot be retargeted`,
+            `[sandbox] credential file deny for '${targetPath}' supersedes the disabled-userSettings synthetic deny but is symlink-spelled \u2014 installed as a canonical deny on '${canonical}' so enforcement cannot be retargeted`,
           );
-          is.set(Qe, {
-            path: Qe,
+          credentialFiles.set(canonical, {
+            path: canonical,
             mode: "deny",
           });
-          Js(Qe, Qe, !Ee);
-          aa.delete(Qe);
+          addDenyLexical(canonical, canonical, !isRepoSettings);
+          downgradedDenies.delete(canonical);
           continue;
         }
-        if (file.mode === "deny" && !Gr) {
-          let rr = nr(removeTrailingGlobSuffix(Bt.path).replace(Yi, ""));
-          if (!nr(replaced) || rr) {
-            if (!Ee && !nr(replaced) && !rr) {
+        if (file.mode === "deny" && !wasDowngraded) {
+          let incumbentCovers = isSamePathSpelling(
+            removeTrailingGlobSuffix(incumbent.path).replace(trailingSeparatorRe, ""),
+          );
+          if (!isSamePathSpelling(path) || incumbentCovers) {
+            if (!isRepoSettings && !isSamePathSpelling(path) && !incumbentCovers) {
               logForDebugging(
-                `[sandbox] credential file deny for '${Dt}' collides with the deny spelled '${Bt.path}' only through symlink resolution \u2014 installed as a canonical deny on '${Qe}' so the trusted tier's intent cannot be retargeted`,
+                `[sandbox] credential file deny for '${targetPath}' collides with the deny spelled '${incumbent.path}' only through symlink resolution \u2014 installed as a canonical deny on '${canonical}' so the trusted tier's intent cannot be retargeted`,
               );
-              is.set(Qe, {
-                path: Qe,
+              credentialFiles.set(canonical, {
+                path: canonical,
                 mode: "deny",
               });
-              Js(Qe, Qe, true);
+              addDenyLexical(canonical, canonical, true);
             }
             continue;
           }
           logForDebugging(
-            `[sandbox] credential file deny for '${Dt}' replaces the deny spelled '${Bt.path}': the incumbent reaches this file only through symlink resolution, the replacement is the canonical spelling`,
+            `[sandbox] credential file deny for '${targetPath}' replaces the deny spelled '${incumbent.path}': the incumbent reaches this file only through symlink resolution, the replacement is the canonical spelling`,
           );
-        } else if (file.mode === "mask" && !Gr) {
-          let rr = Ai || mo(Qe, Qe);
-          let Hr = !rr && !Ha(Qe, replaced);
-          if (!rr && !Hr) {
+        } else if (file.mode === "mask" && !wasDowngraded) {
+          let maskInertHere = maskInert || isDenyCovered(canonical, canonical);
+          let onlyViaSymlink = !maskInertHere && !denyReachesLiteral(canonical, path);
+          if (!maskInertHere && !onlyViaSymlink) {
             logForDebugging(
-              `[sandbox] credential file mask for '${Dt}' dropped: '${Bt.path}' denies the same file`,
+              `[sandbox] credential file mask for '${targetPath}' dropped: '${incumbent.path}' denies the same file`,
             );
             continue;
           }
-          if (Hr) {
-            if (sf(Qe)) {
+          if (onlyViaSymlink) {
+            if (isTrustedDeny(canonical)) {
               logForDebugging(
-                `[sandbox] credential file mask for '${Dt}' dropped: a trusted-tier deny ('${Bt.path}') names the same file through a symlink \u2014 installed as a canonical deny on '${Qe}' so enforcement cannot be retargeted`,
+                `[sandbox] credential file mask for '${targetPath}' dropped: a trusted-tier deny ('${incumbent.path}') names the same file through a symlink \u2014 installed as a canonical deny on '${canonical}' so enforcement cannot be retargeted`,
               );
-              is.set(Qe, {
-                path: Qe,
+              credentialFiles.set(canonical, {
+                path: canonical,
                 mode: "deny",
               });
-              Js(Qe, Qe, true);
+              addDenyLexical(canonical, canonical, true);
               continue;
             }
             logForDebugging(
-              `[sandbox] credential file deny '${Bt.path}' collides with mask '${Dt}' only after symlink resolution \u2014 a wrap-time re-resolve of the deny's spelling can diverge, so the mask is kept (sentinel bind on the real file) WITHOUT injection`,
+              `[sandbox] credential file deny '${incumbent.path}' collides with mask '${targetPath}' only after symlink resolution \u2014 a wrap-time re-resolve of the deny's spelling can diverge, so the mask is kept (sentinel bind on the real file) WITHOUT injection`,
             );
           }
-          if (!Ai) jc.add(Qe);
+          if (!maskInert) sentinelMasks.add(canonical);
         }
       }
-      if (file.mode === "mask" && bt)
-        if (Zl);
+      if (file.mode === "mask" && injectWithheld)
+        if (relaxedPolicy);
         else {
           logForDebugging(
-            `[sandbox] credential file mask for '${Dt}' from ${xt} degrades to deny (that source cannot grant proxy injection; its restrictive half still applies)`,
+            `[sandbox] credential file mask for '${targetPath}' from ${withheldLabel} degrades to deny (that source cannot grant proxy injection; its restrictive half still applies)`,
           );
-          is.set(Qe, {
+          credentialFiles.set(canonical, {
             path: denySpelling,
             mode: "deny",
           });
-          Js(Qe, replaced, !Ee);
-          aa.add(Qe);
+          addDenyLexical(canonical, path, !isRepoSettings);
+          downgradedDenies.add(canonical);
           continue;
         }
-      if (file.mode === "mask" && !Ai && (getPlatform() === "windows" || getPlatform() === "macos")) {
+      if (file.mode === "mask" && !maskInert && (getPlatform() === "windows" || getPlatform() === "macos")) {
         logForDebugging(
-          `[sandbox] credential file mask for '${Dt}' degrades to deny on ${getPlatform()} (file masking is not enforced by this platform's sandbox backend yet)`,
+          `[sandbox] credential file mask for '${targetPath}' degrades to deny on ${getPlatform()} (file masking is not enforced by this platform's sandbox backend yet)`,
         );
-        is.set(Qe, {
+        credentialFiles.set(canonical, {
           path: denySpelling,
           mode: "deny",
         });
-        Js(Qe, replaced, !Ee);
-        aa.delete(Qe);
+        addDenyLexical(canonical, path, !isRepoSettings);
+        downgradedDenies.delete(canonical);
         continue;
       }
       if (file.mode === "mask") {
-        if (containsGlobChars(Dt)) {
-          if (Bt?.mode === "mask" && (Ai || mo(Qe, Qe))) {
+        if (containsGlobChars(targetPath)) {
+          if (incumbent?.mode === "mask" && (maskInert || isDenyCovered(canonical, canonical))) {
             logForDebugging(
-              `[sandbox] glob-spelled credential file mask '${Dt}' dropped: '${Bt.path}' already masks this path and the degrade's deny would be runtime-inert here`,
+              `[sandbox] glob-spelled credential file mask '${targetPath}' dropped: '${incumbent.path}' already masks this path and the degrade's deny would be runtime-inert here`,
             );
             continue;
           }
           logForDebugging(
-            `[sandbox] credential file mask for '${Dt}' contains glob characters \u2014 degrading to deny (masking applies to a single file; use mode "deny" for glob patterns)`,
+            `[sandbox] credential file mask for '${targetPath}' contains glob characters \u2014 degrading to deny (masking applies to a single file; use mode "deny" for glob patterns)`,
           );
-          is.set(Qe, {
+          credentialFiles.set(canonical, {
             path: denySpelling,
             mode: "deny",
           });
-          Js(Qe, replaced, !Ee);
-          aa.delete(Qe);
+          addDenyLexical(canonical, path, !isRepoSettings);
+          downgradedDenies.delete(canonical);
           continue;
         }
-        let Gr = isOnForeignMount(Qe, getCwdState()) || rawPointerPathIsUnsafe(Qe, getCwdState());
-        let nr;
-        if (Gr)
-          nr =
+        let unsafePath =
+          isOnForeignMount(canonical, getCwdState()) || rawPointerPathIsUnsafe(canonical, getCwdState());
+        let refuseReason;
+        if (unsafePath)
+          refuseReason =
             "is flagged by host-side path vetting (cross-host pointer or non-regular path component) \u2014 the unsandboxed probe will not touch it and SRT cannot mask it";
         else {
-          let rr;
+          let fd;
           try {
             try {
-              rr = openSync(Qe, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+              fd = openSync(canonical, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
             } catch (error) {
               let errnoCode = getErrnoCode(error);
               if (errnoCode === "ELOOP")
-                nr =
+                refuseReason =
                   "became a symlink after canonicalization \u2014 the object was swapped mid-conversion, so the probe fails closed";
               else if (
                 errnoCode !== "ENOENT" &&
@@ -4283,295 +4425,310 @@ function convertToSandboxRuntimeConfig(settings) {
                 errnoCode !== "EPERM" &&
                 errnoCode !== "ENOTDIR"
               )
-                nr = `could not be probed (${errnoCode ?? "unknown error"}) \u2014 an unprobed mask may be silently skipped at wrap time, so the probe fails closed`;
+                refuseReason = `could not be probed (${errnoCode ?? "unknown error"}) \u2014 an unprobed mask may be silently skipped at wrap time, so the probe fails closed`;
             }
-            if (rr !== undefined) {
-              let Hr = fstatSync(rr);
-              if (Hr.isDirectory())
-                nr =
+            if (fd !== undefined) {
+              let stats = fstatSync(fd);
+              if (stats.isDirectory())
+                refuseReason =
                   'resolves to a directory \u2014 whole-file masking has no meaning for a directory; use mode "deny" for directories';
-              else if (!Hr.isFile())
-                nr =
+              else if (!stats.isFile())
+                refuseReason =
                   "resolves to a non-regular file (FIFO/device/socket) \u2014 only regular files can be masked; SRT would hang on or silently skip it at wrap time";
-              else if (Hr.size > MAX_DENY_SCAN_BYTES)
-                nr = `is larger than ${MAX_DENY_SCAN_BYTES} bytes \u2014 a file this size cannot be masked; SRT would skip it fail-open at wrap time`;
+              else if (stats.size > MAX_DENY_SCAN_BYTES)
+                refuseReason = `is larger than ${MAX_DENY_SCAN_BYTES} bytes \u2014 a file this size cannot be masked; SRT would skip it fail-open at wrap time`;
               else {
-                let size = Hr.size;
-                let qa = Buffer.allocUnsafe(size + 1);
-                let ca = 0;
-                let ec;
+                let size = stats.size;
+                let buffer = Buffer.allocUnsafe(size + 1);
+                let totalRead = 0;
+                let bytes;
                 try {
                   for (;;) {
-                    let Xc = readSync(rr, qa, ca, size + 1 - ca, null);
-                    if (Xc <= 0) break;
-                    ca += Xc;
-                    if (ca > size) break;
+                    let read = readSync(fd, buffer, totalRead, size + 1 - totalRead, null);
+                    if (read <= 0) break;
+                    totalRead += read;
+                    if (totalRead > size) break;
                   }
-                  ec = qa.subarray(0, ca);
+                  bytes = buffer.subarray(0, totalRead);
                 } catch (error) {
-                  nr = `failed mid-read (${getErrnoCode(error) ?? "unknown error"}) \u2014 the UTF-8 probe could not complete, so the probe fails closed`;
+                  refuseReason = `failed mid-read (${getErrnoCode(error) ?? "unknown error"}) \u2014 the UTF-8 probe could not complete, so the probe fails closed`;
                 }
-                if (ec !== undefined && ca > size) {
-                  nr =
+                if (bytes !== undefined && totalRead > size) {
+                  refuseReason =
                     "changed size between fstat and read \u2014 the object is being mutated mid-conversion, so the probe fails closed";
-                  ec = undefined;
+                  bytes = undefined;
                 }
-                if (ec !== undefined)
+                if (bytes !== undefined)
                   try {
                     new TextDecoder("utf-8", {
                       fatal: true,
-                    }).decode(ec);
+                    }).decode(bytes);
                   } catch {
-                    nr =
+                    refuseReason =
                       'has non-UTF-8 content \u2014 binary credential files cannot be masked; use mode "deny"';
                   }
               }
             }
           } finally {
-            if (rr !== undefined) closeSync(rr);
+            if (fd !== undefined) closeSync(fd);
           }
         }
-        if (nr !== undefined) {
-          logForDebugging(`[sandbox] credential file mask for '${Dt}' ${nr} \u2014 degrading to deny`);
-          is.set(Qe, {
+        if (refuseReason !== undefined) {
+          logForDebugging(
+            `[sandbox] credential file mask for '${targetPath}' ${refuseReason} \u2014 degrading to deny`,
+          );
+          credentialFiles.set(canonical, {
             path: denySpelling,
             mode: "deny",
           });
-          Js(Qe, replaced, !Ee);
-          aa.delete(Qe);
+          addDenyLexical(canonical, path, !isRepoSettings);
+          downgradedDenies.delete(canonical);
           continue;
         }
       }
-      if (file.mode === "deny" && Bt?.mode === "mask") {
-        if (Ai || mo(Qe, Qe)) {
+      if (file.mode === "deny" && incumbent?.mode === "mask") {
+        if (maskInert || isDenyCovered(canonical, canonical)) {
           logForDebugging(
-            `[sandbox] credential file deny for '${Dt}' not installed over the existing mask: the deny is runtime-inert here (relaxed filesystem policy or an exact allowRead re-opens the path), so the mask's sentinel bind is the effective protection`,
+            `[sandbox] credential file deny for '${targetPath}' not installed over the existing mask: the deny is runtime-inert here (relaxed filesystem policy or an exact allowRead re-opens the path), so the mask's sentinel bind is the effective protection`,
           );
-          if (!Ai) {
-            jc.add(Qe);
-            is.set(Qe, {
-              path: Bt.path,
+          if (!maskInert) {
+            sentinelMasks.add(canonical);
+            credentialFiles.set(canonical, {
+              path: incumbent.path,
               mode: "mask",
               injectHosts: [],
             });
           }
           continue;
         }
-        let replaced = removeTrailingGlobSuffix(Bt.path).replace(Yi, "");
-        if (!Ha(Qe, replaced)) {
-          if (!Ee) {
+        let replaced = removeTrailingGlobSuffix(incumbent.path).replace(trailingSeparatorRe, "");
+        if (!denyReachesLiteral(canonical, replaced)) {
+          if (!isRepoSettings) {
             logForDebugging(
-              `[sandbox] credential file mask for '${Bt.path}' dropped: trusted-tier deny '${Dt}' names the same file through a symlink \u2014 installed as a canonical deny on '${Qe}' so enforcement cannot be retargeted`,
+              `[sandbox] credential file mask for '${incumbent.path}' dropped: trusted-tier deny '${targetPath}' names the same file through a symlink \u2014 installed as a canonical deny on '${canonical}' so enforcement cannot be retargeted`,
             );
-            is.set(Qe, {
-              path: Qe,
+            credentialFiles.set(canonical, {
+              path: canonical,
               mode: "deny",
             });
-            Js(Qe, Qe, true);
+            addDenyLexical(canonical, canonical, true);
             continue;
           }
           logForDebugging(
-            `[sandbox] credential file deny for '${Dt}' collides with mask '${Bt.path}' only after symlink resolution \u2014 a wrap-time re-resolve of the deny's spelling can diverge, so the mask is kept (whole-file sentinel bind on the real file) WITHOUT injection or extract`,
+            `[sandbox] credential file deny for '${targetPath}' collides with mask '${incumbent.path}' only after symlink resolution \u2014 a wrap-time re-resolve of the deny's spelling can diverge, so the mask is kept (whole-file sentinel bind on the real file) WITHOUT injection or extract`,
           );
-          jc.add(Qe);
-          is.set(Qe, {
-            path: Bt.path,
+          sentinelMasks.add(canonical);
+          credentialFiles.set(canonical, {
+            path: incumbent.path,
             mode: "mask",
             injectHosts: [],
           });
           continue;
         }
         logForDebugging(
-          `[sandbox] credential file mask for '${Bt.path}' dropped: '${Dt}' denies the same file`,
+          `[sandbox] credential file mask for '${incumbent.path}' dropped: '${targetPath}' denies the same file`,
         );
       }
-      let qr = Ai || mo(Qe, Qe);
-      let Es =
+      let maskInert2 = maskInert || isDenyCovered(canonical, canonical);
+      let installed =
         file.mode === "deny"
           ? {
-              path: Dt,
+              path: targetPath,
               mode: "deny",
             }
-          : qr && file.onExtractNoMatch === "deny"
+          : maskInert2 && file.onExtractNoMatch === "deny"
             ? {
                 ...file,
-                path: Dt,
+                path: targetPath,
                 onExtractNoMatch: "error",
               }
             : {
                 ...file,
-                path: Dt,
+                path: targetPath,
               };
-      if (file.mode === "mask" && jc.has(Qe)) {
-        Es = {
-          path: Dt,
+      if (file.mode === "mask" && sentinelMasks.has(canonical)) {
+        installed = {
+          path: targetPath,
           mode: "mask",
           injectHosts: [],
         };
         logForDebugging(
-          `[sandbox] credential file mask for '${Dt}' kept over an allowRead-re-opened trusted deny WITHOUT injection or extract (whole-file sentinel): the sentinel protects the bytes, but the displaced deny's intent bars proxy substitution and fail-open extract semantics`,
+          `[sandbox] credential file mask for '${targetPath}' kept over an allowRead-re-opened trusted deny WITHOUT injection or extract (whole-file sentinel): the sentinel protects the bytes, but the displaced deny's intent bars proxy substitution and fail-open extract semantics`,
         );
-      } else if (file.mode === "mask" && bt) {
-        Es = {
-          path: Dt,
+      } else if (file.mode === "mask" && injectWithheld) {
+        installed = {
+          path: targetPath,
           mode: "mask",
           injectHosts: [],
         };
         logForDebugging(
-          `[sandbox] credential file mask for '${Dt}' from ${xt} forwards sentinel-only (whole-file sentinel: injectHosts forced empty, extract options dropped): a degraded deny would be dropped at wrap time under the relaxed filesystem policy, while the sentinel bind keeps the bytes protected \u2014 injection stays withheld (that source cannot grant it) and the source's fail-open extract semantics do not apply`,
+          `[sandbox] credential file mask for '${targetPath}' from ${withheldLabel} forwards sentinel-only (whole-file sentinel: injectHosts forced empty, extract options dropped): a degraded deny would be dropped at wrap time under the relaxed filesystem policy, while the sentinel bind keeps the bytes protected \u2014 injection stays withheld (that source cannot grant it) and the source's fail-open extract semantics do not apply`,
         );
       }
-      if (file.mode === "mask" && Es.onExtractNoMatch === "error" && file.onExtractNoMatch === "deny")
+      if (file.mode === "mask" && installed.onExtractNoMatch === "error" && file.onExtractNoMatch === "deny")
         logForDebugging(
-          `[sandbox] credential file mask for '${Dt}': onExtractNoMatch 'deny' rewritten to 'error' \u2014 the runtime's no-match read-deny would be inert here (relaxed filesystem policy or an exact allowRead re-opens the path), so 'deny' would fail open`,
+          `[sandbox] credential file mask for '${targetPath}': onExtractNoMatch 'deny' rewritten to 'error' \u2014 the runtime's no-match read-deny would be inert here (relaxed filesystem policy or an exact allowRead re-opens the path), so 'deny' would fail open`,
         );
       if (file.mode === "mask") {
-        let found = [getCwdState(), ...Se].find((nr) => {
-          let replaced_2 = removeTrailingGlobSuffix(resolve(getCwdState(), nr)).replace(Yi, "");
-          if (containsGlobChars(replaced_2)) return false;
-          let Hr = canonicalizePathForMaskSweep(replaced_2);
-          return zl(replaced_2, Qe) || zl(replaced_2, replaced) || zl(Hr, Qe) || zl(Hr, replaced);
+        let found = [getCwdState(), ...allowWrite].find((grantRoot) => {
+          let replaced = removeTrailingGlobSuffix(resolve(getCwdState(), grantRoot)).replace(
+            trailingSeparatorRe,
+            "",
+          );
+          if (containsGlobChars(replaced)) return false;
+          let canonicalDenyPath = canonicalizePathForMaskSweep(replaced);
+          return (
+            posixCoversFn(replaced, canonical) ||
+            posixCoversFn(replaced, path) ||
+            posixCoversFn(canonicalDenyPath, canonical) ||
+            posixCoversFn(canonicalDenyPath, path)
+          );
         });
         if (found !== undefined)
           logForDebugging(
-            `[sandbox] credential file mask for '${Dt}' resolves inside the sandbox write grant ('${found}') \u2014 a sandboxed command can replace the object between wraps and steer what the host reads (and injects) as the credential; prefer masking files outside writable roots`,
+            `[sandbox] credential file mask for '${targetPath}' resolves inside the sandbox write grant ('${found}') \u2014 a sandboxed command can replace the object between wraps and steer what the host reads (and injects) as the credential; prefer masking files outside writable roots`,
             {
               level: "warn",
             },
           );
       }
-      is.set(Qe, Es);
-      aa.delete(Qe);
+      credentialFiles.set(canonical, installed);
+      downgradedDenies.delete(canonical);
     }
-    for (let je of credentials.envVars ?? []) {
-      if (je.mode === "mask" && (Ee || We)) continue;
-      if (je.mode === "mask" && tt) {
-        mi.set(je.name, {
-          name: je.name,
+    for (let envVar of credentials.envVars ?? []) {
+      if (envVar.mode === "mask" && (isRepoSettings || plaintextInjectEnabled)) continue;
+      if (envVar.mode === "mask" && evalConfinedForeign) {
+        envVars.set(envVar.name, {
+          name: envVar.name,
           mode: "deny",
         });
         continue;
       }
-      if (je.mode === "mask" && credentialRuleRefine(je.name)) {
+      if (envVar.mode === "mask" && credentialRuleRefine(envVar.name)) {
         logForDebugging(
-          `[sandbox] credentials.envVars entry '${je.name}': its name uses a reserved CC-synthesized placeholder prefix, which must never be a masked env var \u2014 degrading the mask to a deny (the variable is unset in the sandbox instead of sentinel-masked)`,
+          `[sandbox] credentials.envVars entry '${envVar.name}': its name uses a reserved CC-synthesized placeholder prefix, which must never be a masked env var \u2014 degrading the mask to a deny (the variable is unset in the sandbox instead of sentinel-masked)`,
           {
             level: "warn",
           },
         );
-        mi.set(je.name, {
-          name: je.name,
+        envVars.set(envVar.name, {
+          name: envVar.name,
           mode: "deny",
         });
         continue;
       }
-      if (mi.get(je.name)?.mode === "deny") continue;
-      mi.set(
-        je.name,
-        je.mode === "deny"
+      if (envVars.get(envVar.name)?.mode === "deny") continue;
+      envVars.set(
+        envVar.name,
+        envVar.mode === "deny"
           ? {
-              name: je.name,
+              name: envVar.name,
               mode: "deny",
             }
-          : je,
+          : envVar,
       );
     }
-    if (!Ee && !bt && credentials.allowPlaintextInject !== undefined) of = credentials.allowPlaintextInject;
-    if (!Ee && !bt) {
-      for (let je of credentials.awsPairs ?? []) {
-        let kt = Xl.get(je.accessKeyIdVar);
-        let Xt = Ab(je);
-        let rank = SETTING_SOURCES.indexOf(j);
-        if (kt !== undefined) {
-          if (Xt && !kt.synthetic && rank <= kt.rank) {
+    if (!isRepoSettings && !injectWithheld && credentials.allowPlaintextInject !== undefined)
+      allowPlaintextInject = credentials.allowPlaintextInject;
+    if (!isRepoSettings && !injectWithheld) {
+      for (let pair of credentials.awsPairs ?? []) {
+        let incumbent = awsPairs.get(pair.accessKeyIdVar);
+        let synthetic = isSyntheticPair(pair);
+        let rank = SETTING_SOURCES.indexOf(sourceName);
+        if (incumbent !== undefined) {
+          if (synthetic && !incumbent.synthetic && rank <= incumbent.rank) {
             logForDebugging(
-              `[sandbox] credentials.awsPairs: ignoring same-or-lower-precedence inert suppressor pair for '${je.accessKeyIdVar}' \u2014 a real pair already claims that key id, so its suppression is provided by the incumbent and replacing it would disable re-signing`,
+              `[sandbox] credentials.awsPairs: ignoring same-or-lower-precedence inert suppressor pair for '${pair.accessKeyIdVar}' \u2014 a real pair already claims that key id, so its suppression is provided by the incumbent and replacing it would disable re-signing`,
             );
-            af(
-              yo(je),
+            addSuppressorPair(
+              pairVarNames(pair),
               rank,
-              (Ct) =>
-                `[sandbox] credentials.awsPairs: the ignored suppressor pair for '${je.accessKeyIdVar}' held a conventional claim on '${Ct}', which no remaining pair covers \u2014 forwarding an inert suppressor pair so implicit AWS auto-pairing stays suppressed`,
+              (varName) =>
+                `[sandbox] credentials.awsPairs: the ignored suppressor pair for '${pair.accessKeyIdVar}' held a conventional claim on '${varName}', which no remaining pair covers \u2014 forwarding an inert suppressor pair so implicit AWS auto-pairing stays suppressed`,
             );
             continue;
           }
-          if (!Xt && kt.synthetic && rank < kt.rank) {
+          if (!synthetic && incumbent.synthetic && rank < incumbent.rank) {
             logForDebugging(
-              `[sandbox] credentials.awsPairs: ignoring entry for '${je.accessKeyIdVar}' \u2014 a higher-precedence source claims that key id with an inert suppressor, deliberately keeping it non-re-signing`,
+              `[sandbox] credentials.awsPairs: ignoring entry for '${pair.accessKeyIdVar}' \u2014 a higher-precedence source claims that key id with an inert suppressor, deliberately keeping it non-re-signing`,
               {
                 level: "warn",
               },
             );
-            af(
-              yo(je),
+            addSuppressorPair(
+              pairVarNames(pair),
               rank,
-              (Ct) =>
-                `[sandbox] credentials.awsPairs: the ignored pair for '${je.accessKeyIdVar}' held a conventional claim on '${Ct}', which no remaining pair covers \u2014 forwarding an inert suppressor pair so implicit AWS auto-pairing stays suppressed`,
+              (varName) =>
+                `[sandbox] credentials.awsPairs: the ignored pair for '${pair.accessKeyIdVar}' held a conventional claim on '${varName}', which no remaining pair covers \u2014 forwarding an inert suppressor pair so implicit AWS auto-pairing stays suppressed`,
             );
             continue;
           }
           logForDebugging(
-            `[sandbox] credentials.awsPairs entry for '${je.accessKeyIdVar}' replaces an earlier pair for the same access key id (later-processed entry wins)`,
+            `[sandbox] credentials.awsPairs entry for '${pair.accessKeyIdVar}' replaces an earlier pair for the same access key id (later-processed entry wins)`,
             {
               level: "warn",
             },
           );
         }
-        Xl.set(je.accessKeyIdVar, {
-          pair: je,
+        awsPairs.set(pair.accessKeyIdVar, {
+          pair,
           rank,
-          seq: gh++,
-          label: je.accessKeyIdVar,
-          sessionLabel: je.sessionTokenVar,
-          synthetic: Xt,
+          seq: pairSeq++,
+          label: pair.accessKeyIdVar,
+          sessionLabel: pair.sessionTokenVar,
+          synthetic,
         });
-        if (kt !== undefined)
-          af(
-            yo(kt.pair),
-            kt.rank,
-            (Ct) =>
-              `[sandbox] credentials.awsPairs: replacing the '${je.accessKeyIdVar}' pair displaced its conventional claim on '${Ct}', which no remaining pair covers \u2014 forwarding an inert suppressor pair so implicit AWS auto-pairing stays suppressed`,
+        if (incumbent !== undefined)
+          addSuppressorPair(
+            pairVarNames(incumbent.pair),
+            incumbent.rank,
+            (varName) =>
+              `[sandbox] credentials.awsPairs: replacing the '${pair.accessKeyIdVar}' pair displaced its conventional claim on '${varName}', which no remaining pair covers \u2014 forwarding an inert suppressor pair so implicit AWS auto-pairing stays suppressed`,
           );
       }
-      if (credentials.sigv4 !== undefined) lf = credentials.sigv4;
+      if (credentials.sigv4 !== undefined) sigv4 = credentials.sigv4;
     }
   }
-  let gi = (j) => {
-    let ce = mi.get(j);
-    return ce?.mode === "mask" && ce.extract === undefined && ce.decode === undefined ? ce : undefined;
+  let getWholeValueMask = (varName) => {
+    let entry = envVars.get(varName);
+    return entry?.mode === "mask" && entry.extract === undefined && entry.decode === undefined
+      ? entry
+      : undefined;
   };
-  let bh = (j, accessKeyIdVar, Ee) => {
-    let injectHosts = mi.get(accessKeyIdVar)?.injectHosts;
-    for (let tt of Ee) {
-      let injectHosts_2 = mi.get(tt)?.injectHosts;
+  let warnNarrowerInjectHosts = (label, accessKeyIdVar, memberVars) => {
+    let injectHosts = envVars.get(accessKeyIdVar)?.injectHosts;
+    for (let member of memberVars) {
+      let injectHosts_2 = envVars.get(member)?.injectHosts;
       if (!(
         injectHosts_2 === undefined ||
         (injectHosts !== undefined &&
           injectHosts.every((injectHost) => isInjectHostCoveredByAllowedDomains(injectHost, injectHosts_2)))
       ))
         logForDebugging(
-          `[sandbox] ${j}: member '${tt}' has an injectHosts narrower than the access-key-id entry's \u2014 SigV4 re-signing is scoped by '${accessKeyIdVar}' alone, so the narrower member scope does not limit where re-signed requests carry the real secret`,
+          `[sandbox] ${label}: member '${member}' has an injectHosts narrower than the access-key-id entry's \u2014 SigV4 re-signing is scoped by '${accessKeyIdVar}' alone, so the narrower member scope does not limit where re-signed requests carry the real secret`,
           {
             level: "warn",
           },
         );
     }
   };
-  let Sh = (accessKeyIdVar, ce = "credentials.awsPairs") => {
-    if (mi.get(accessKeyIdVar)?.injectHosts === undefined)
+  let warnUnscopedInjectHosts = (accessKeyIdVar, label = "credentials.awsPairs") => {
+    if (envVars.get(accessKeyIdVar)?.injectHosts === undefined)
       logForDebugging(
-        `[sandbox] ${ce}: '${accessKeyIdVar}' has no injectHosts, so SigV4 re-signing with the real secret is in scope at EVERY host in network.allowedDomains \u2014 a list repo-committed settings can extend; set injectHosts on the '${accessKeyIdVar}' entry to pin the re-signing scope`,
+        `[sandbox] ${label}: '${accessKeyIdVar}' has no injectHosts, so SigV4 re-signing with the real secret is in scope at EVERY host in network.allowedDomains \u2014 a list repo-committed settings can extend; set injectHosts on the '${accessKeyIdVar}' entry to pin the re-signing scope`,
         {
           level: "warn",
         },
       );
   };
-  let flattened_2 = [...Xl.values()].flatMap((j) => {
-    let { pair } = j;
-    let filtered = [pair.accessKeyIdVar, pair.secretAccessKeyVar].filter((We) => gi(We) === undefined);
+  let flattened_2 = [...awsPairs.values()].flatMap((entry) => {
+    let { pair } = entry;
+    let filtered = [pair.accessKeyIdVar, pair.secretAccessKeyVar].filter(
+      (varName) => getWholeValueMask(varName) === undefined,
+    );
     if (filtered.length > 0) {
-      if (yo(pair).some((We) => la.includes(We))) {
-        if (j.synthetic)
+      if (pairVarNames(pair).some((varName) => reservedVarNames.includes(varName))) {
+        if (entry.synthetic)
           logForDebugging(
             `[sandbox] credentials.awsPairs entry '${pair.accessKeyIdVar}' is an inert suppressor pair (CC-synthesized placeholder members) \u2014 forwarded so its conventional claim keeps suppressing implicit auto-pairing; nothing can register or re-sign`,
           );
@@ -4584,107 +4741,111 @@ function convertToSandboxRuntimeConfig(settings) {
               level: "warn",
             },
           );
-        return [j];
+        return [entry];
       }
       logForDebugging(
         `[sandbox] dropping credentials.awsPairs entry '${pair.accessKeyIdVar}': referenced env var(s) ${filtered.join(", ")} are not forwarded as whole-value mask entries (dropped by trust filtering, deny-overridden, never declared, or using extract/decode)`,
       );
       return [];
     }
-    return [j];
+    return [entry];
   });
   {
-    let j = (pair) => gi(pair.accessKeyIdVar) !== undefined && gi(pair.secretAccessKeyVar) !== undefined;
+    let isFunctional = (pair) =>
+      getWholeValueMask(pair.accessKeyIdVar) !== undefined &&
+      getWholeValueMask(pair.secretAccessKeyVar) !== undefined;
     let sorted = flattened_2
-      .map((bt) => ({
-        entry: bt,
-        label: bt.label,
-        functional: j(bt.pair),
+      .map((entry) => ({
+        entry,
+        label: entry.label,
+        functional: isFunctional(entry.pair),
       }))
       .sort(
-        (bt, xt) =>
-          Number(xt.functional) - Number(bt.functional) ||
-          xt.entry.rank - bt.entry.rank ||
-          xt.entry.seq - bt.entry.seq,
+        (a, b) =>
+          Number(b.functional) - Number(a.functional) ||
+          b.entry.rank - a.entry.rank ||
+          b.entry.seq - a.entry.seq,
       );
-    let Ee = new Map();
-    let We = 0;
-    let tt = (entry, xt) => {
-      We += 1;
+    let slotOwner = new Map();
+    let placeholderSeq = 0;
+    let disableSlot = (entry, slot) => {
+      placeholderSeq += 1;
       entry.pair = {
         ...entry.pair,
-        [xt]: `${credentialRuleOnNoMatchSchema}${We}_`,
+        [slot]: `${SLOT_COLLISION_SENTINEL}${placeholderSeq}_`,
       };
     };
     for (let { entry, label } of sorted) {
       let pair = entry.pair;
-      let kt = [
+      let slots = [
         ["accessKeyIdVar", pair.accessKeyIdVar],
         ["secretAccessKeyVar", pair.secretAccessKeyVar],
         ...(pair.sessionTokenVar !== undefined ? [["sessionTokenVar", pair.sessionTokenVar]] : []),
       ];
-      for (let [Xt, Dt] of kt) {
-        let Ct = Ee.get(Dt);
-        if (Ct === undefined || Ct.entry === entry) {
-          Ee.set(Dt, {
+      for (let [slot, varName] of slots) {
+        let owner = slotOwner.get(varName);
+        if (owner === undefined || owner.entry === entry) {
+          slotOwner.set(varName, {
             entry,
-            slot: Xt,
+            slot,
             label,
           });
           continue;
         }
-        let Qe = j(Ct.entry.pair);
-        let Bt = j(entry.pair);
-        let included = la.includes(Dt);
-        let Es = included && Ct.entry.synthetic && !entry.synthetic && Ct.entry.rank > entry.rank;
-        let Gr = included && entry.synthetic && !Ct.entry.synthetic && entry.rank > Ct.entry.rank;
-        if (Es) {
+        let incumbentFunctional = isFunctional(owner.entry.pair);
+        let entryFunctional = isFunctional(entry.pair);
+        let included = reservedVarNames.includes(varName);
+        let incumbentSyntheticWins =
+          included && owner.entry.synthetic && !entry.synthetic && owner.entry.rank > entry.rank;
+        let entrySyntheticWins =
+          included && entry.synthetic && !owner.entry.synthetic && entry.rank > owner.entry.rank;
+        if (incumbentSyntheticWins) {
           logForDebugging(
-            `[sandbox] credentials.awsPairs: '${Dt}' is claimed by the higher-precedence inert '${Ct.label}' suppressor pair; the '${label}' pair's ${Xt} is disabled \u2014 re-signing is unaffected (the pair could not re-sign), and the name stays claimed so implicit auto-pairing stays suppressed`,
+            `[sandbox] credentials.awsPairs: '${varName}' is claimed by the higher-precedence inert '${owner.label}' suppressor pair; the '${label}' pair's ${slot} is disabled \u2014 re-signing is unaffected (the pair could not re-sign), and the name stays claimed so implicit auto-pairing stays suppressed`,
           );
-          tt(entry, Xt);
+          disableSlot(entry, slot);
           continue;
         }
-        if (Gr) {
+        if (entrySyntheticWins) {
           logForDebugging(
-            Qe
-              ? `[sandbox] credentials.awsPairs: the higher-precedence inert '${label}' suppressor pair takes '${Dt}' from the '${Ct.label}' pair \u2014 its ${Ct.slot} is disabled; SigV4 re-signing with it is deliberately suppressed by policy`
-              : `[sandbox] credentials.awsPairs: the higher-precedence inert '${label}' suppressor pair takes '${Dt}' from the '${Ct.label}' pair; its ${Ct.slot} is disabled \u2014 re-signing is unaffected (the pair could not re-sign), and the name stays claimed so implicit auto-pairing stays suppressed`,
-            Qe
+            incumbentFunctional
+              ? `[sandbox] credentials.awsPairs: the higher-precedence inert '${label}' suppressor pair takes '${varName}' from the '${owner.label}' pair \u2014 its ${owner.slot} is disabled; SigV4 re-signing with it is deliberately suppressed by policy`
+              : `[sandbox] credentials.awsPairs: the higher-precedence inert '${label}' suppressor pair takes '${varName}' from the '${owner.label}' pair; its ${owner.slot} is disabled \u2014 re-signing is unaffected (the pair could not re-sign), and the name stays claimed so implicit auto-pairing stays suppressed`,
+            incumbentFunctional
               ? {
                   level: "warn",
                 }
               : undefined,
           );
-          tt(Ct.entry, Ct.slot);
-          Ee.set(Dt, {
+          disableSlot(owner.entry, owner.slot);
+          slotOwner.set(varName, {
             entry,
-            slot: Xt,
+            slot,
             label,
           });
           continue;
         }
-        if (Bt && !Qe) {
+        if (entryFunctional && !incumbentFunctional) {
           logForDebugging(
-            Ct.entry.synthetic
-              ? `[sandbox] credentials.awsPairs: '${Dt}' also appears in the inert '${Ct.label}' suppressor pair; its ${Ct.slot} is disabled in favor of the '${label}' pair \u2014 re-signing is unaffected, and the name stays claimed so implicit auto-pairing stays suppressed`
-              : `[sandbox] credentials.awsPairs: '${Dt}' also appears in the '${Ct.label}' pair, which cannot re-sign (unusable member, or disabled earlier in collision resolution); its ${Ct.slot} is disabled in favor of the '${label}' pair \u2014 re-signing is unaffected, and the name stays claimed so implicit auto-pairing stays suppressed`,
+            owner.entry.synthetic
+              ? `[sandbox] credentials.awsPairs: '${varName}' also appears in the inert '${owner.label}' suppressor pair; its ${owner.slot} is disabled in favor of the '${label}' pair \u2014 re-signing is unaffected, and the name stays claimed so implicit auto-pairing stays suppressed`
+              : `[sandbox] credentials.awsPairs: '${varName}' also appears in the '${owner.label}' pair, which cannot re-sign (unusable member, or disabled earlier in collision resolution); its ${owner.slot} is disabled in favor of the '${label}' pair \u2014 re-signing is unaffected, and the name stays claimed so implicit auto-pairing stays suppressed`,
           );
-          tt(Ct.entry, Ct.slot);
-          Ee.set(Dt, {
+          disableSlot(owner.entry, owner.slot);
+          slotOwner.set(varName, {
             entry,
-            slot: Xt,
+            slot,
             label,
           });
           continue;
         }
-        if (Bt && Qe) {
-          let nr =
-            Xt === "sessionTokenVar"
+        if (entryFunctional && incumbentFunctional) {
+          let detail =
+            slot === "sessionTokenVar"
               ? `the '${label}' pair re-signs without a session token`
               : `the '${label}' pair can no longer re-sign, though its other claimed names still suppress implicit auto-pairing`;
           logForDebugging(
-            `[sandbox] credentials.awsPairs: '${Dt}' fills a slot in both the '${label}' and '${Ct.label}' pairs \u2014 each variable can fill exactly one slot, so the '${Ct.label}' pair (higher-precedence source, or later entry within one source) keeps it and the '${label}' pair's ${Xt} is disabled (${nr}); fix the config`,
+            `[sandbox] credentials.awsPairs: '${varName}' fills a slot in both the '${label}' and '${owner.label}' pairs \u2014 each variable can fill exactly one slot, so the '${owner.label}' pair (higher-precedence source, or later entry within one source) keeps it and the '${label}' pair's ${slot} is disabled (${detail}); fix the config`,
             {
               level: "warn",
             },
@@ -4692,69 +4853,72 @@ function convertToSandboxRuntimeConfig(settings) {
         } else
           logForDebugging(
             entry.synthetic
-              ? `[sandbox] credentials.awsPairs: '${Dt}' also appears in the inert '${label}' suppressor pair; its ${Xt} is disabled in favor of the '${Ct.label}' pair \u2014 re-signing is unaffected, and the name stays claimed so implicit auto-pairing stays suppressed`
-              : `[sandbox] credentials.awsPairs: '${Dt}' also appears in the '${label}' pair, which cannot re-sign (unusable member, or disabled earlier in collision resolution); its ${Xt} is disabled in favor of the '${Ct.label}' pair \u2014 re-signing is unaffected, and the name stays claimed so implicit auto-pairing stays suppressed`,
+              ? `[sandbox] credentials.awsPairs: '${varName}' also appears in the inert '${label}' suppressor pair; its ${slot} is disabled in favor of the '${owner.label}' pair \u2014 re-signing is unaffected, and the name stays claimed so implicit auto-pairing stays suppressed`
+              : `[sandbox] credentials.awsPairs: '${varName}' also appears in the '${label}' pair, which cannot re-sign (unusable member, or disabled earlier in collision resolution); its ${slot} is disabled in favor of the '${owner.label}' pair \u2014 re-signing is unaffected, and the name stays claimed so implicit auto-pairing stays suppressed`,
           );
-        tt(entry, Xt);
+        disableSlot(entry, slot);
       }
     }
     for (let idx = flattened_2.length - 1; idx >= 0; idx--) {
-      let xt = flattened_2[idx];
-      if (xt === undefined || j(xt.pair)) continue;
-      let pair = xt.pair;
-      if (yo(pair).some((kt) => la.includes(kt))) {
+      let entry = flattened_2[idx];
+      if (entry === undefined || isFunctional(entry.pair)) continue;
+      let pair = entry.pair;
+      if (pairVarNames(pair).some((varName) => reservedVarNames.includes(varName))) {
         if (
-          (pair.accessKeyIdVar.startsWith(credentialRuleOnNoMatchSchema) ||
-            pair.accessKeyIdVar.startsWith(credentialRuleDecodeSchema)) &&
-          gi(pair.secretAccessKeyVar) !== undefined &&
-          yo(pair).some((kt) => kt !== pair.secretAccessKeyVar && la.includes(kt))
+          (pair.accessKeyIdVar.startsWith(SLOT_COLLISION_SENTINEL) ||
+            pair.accessKeyIdVar.startsWith(INVALID_PAIR_SENTINEL)) &&
+          getWholeValueMask(pair.secretAccessKeyVar) !== undefined &&
+          pairVarNames(pair).some(
+            (varName) => varName !== pair.secretAccessKeyVar && reservedVarNames.includes(varName),
+          )
         ) {
           logForDebugging(
-            `[sandbox] credentials.awsPairs entry '${xt.label}': key-id slot holds a CC-synthesized placeholder but secret '${pair.secretAccessKeyVar}' is still whole-value masked; disabling the pair's secret slot too so sandbox-runtime skips the half-masked re-signing spec silently \u2014 the secret stays masked via its own env entry and the surviving conventional claim keeps implicit auto-pairing suppressed`,
+            `[sandbox] credentials.awsPairs entry '${entry.label}': key-id slot holds a CC-synthesized placeholder but secret '${pair.secretAccessKeyVar}' is still whole-value masked; disabling the pair's secret slot too so sandbox-runtime skips the half-masked re-signing spec silently \u2014 the secret stays masked via its own env entry and the surviving conventional claim keeps implicit auto-pairing suppressed`,
           );
-          tt(xt, "secretAccessKeyVar");
+          disableSlot(entry, "secretAccessKeyVar");
         }
         continue;
       }
       logForDebugging(
-        `[sandbox] dropping credentials.awsPairs entry '${xt.label}' after slot-collision resolution: its key id or secret slot was disabled and no conventional AWS claim survives, so it can neither re-sign nor suppress implicit auto-pairing`,
+        `[sandbox] dropping credentials.awsPairs entry '${entry.label}' after slot-collision resolution: its key id or secret slot was disabled and no conventional AWS claim survives, so it can neither re-sign nor suppress implicit auto-pairing`,
       );
       flattened_2.splice(idx, 1);
     }
-    for (let bt of flattened_2) {
-      let pair = bt.pair;
-      if (!j(pair)) continue;
-      let je = pair.sessionTokenVar !== undefined && gi(pair.sessionTokenVar) === undefined;
-      if (je)
+    for (let entry of flattened_2) {
+      let pair = entry.pair;
+      if (!isFunctional(pair)) continue;
+      let missingSessionToken =
+        pair.sessionTokenVar !== undefined && getWholeValueMask(pair.sessionTokenVar) === undefined;
+      if (missingSessionToken)
         logForDebugging(
-          `[sandbox] credentials.awsPairs entry '${pair.accessKeyIdVar}': session member '${bt.sessionLabel ?? pair.sessionTokenVar}' is not forwarded as a whole-value mask entry (trust-dropped, deny-overridden, never declared, ` +
+          `[sandbox] credentials.awsPairs entry '${pair.accessKeyIdVar}': session member '${entry.sessionLabel ?? pair.sessionTokenVar}' is not forwarded as a whole-value mask entry (trust-dropped, deny-overridden, never declared, ` +
             "using extract/decode, or disabled by slot-collision resolution) \u2014 " +
             "the pair still re-signs, WITHOUT an x-amz-security-token; temporary-credential requests will fail upstream until the entry is fixed",
           {
             level: "warn",
           },
         );
-      bh(`credentials.awsPairs entry '${pair.accessKeyIdVar}'`, pair.accessKeyIdVar, [
+      warnNarrowerInjectHosts(`credentials.awsPairs entry '${pair.accessKeyIdVar}'`, pair.accessKeyIdVar, [
         pair.secretAccessKeyVar,
-        ...(!je && pair.sessionTokenVar !== undefined ? [pair.sessionTokenVar] : []),
+        ...(!missingSessionToken && pair.sessionTokenVar !== undefined ? [pair.sessionTokenVar] : []),
       ]);
-      Sh(pair.accessKeyIdVar);
+      warnUnscopedInjectHosts(pair.accessKeyIdVar);
     }
   }
-  let mapped = flattened_2.map((j) => j.pair);
+  let mapped = flattened_2.map((entry) => entry.pair);
   {
-    let j = new Set(mapped.flatMap(yo));
+    let claimedVars = new Set(mapped.flatMap(pairVarNames));
     if (
-      !la.some((ce) => j.has(ce)) &&
-      gi("AWS_ACCESS_KEY_ID") !== undefined &&
-      gi("AWS_SECRET_ACCESS_KEY") !== undefined
+      !reservedVarNames.some((name) => claimedVars.has(name)) &&
+      getWholeValueMask("AWS_ACCESS_KEY_ID") !== undefined &&
+      getWholeValueMask("AWS_SECRET_ACCESS_KEY") !== undefined
     ) {
-      bh("implicit AWS credential pair", "AWS_ACCESS_KEY_ID", [
+      warnNarrowerInjectHosts("implicit AWS credential pair", "AWS_ACCESS_KEY_ID", [
         "AWS_SECRET_ACCESS_KEY",
-        ...(gi("AWS_SESSION_TOKEN") !== undefined ? ["AWS_SESSION_TOKEN"] : []),
+        ...(getWholeValueMask("AWS_SESSION_TOKEN") !== undefined ? ["AWS_SESSION_TOKEN"] : []),
       ]);
-      Sh("AWS_ACCESS_KEY_ID", "implicit AWS credential pair");
-      if (mi.has("AWS_SESSION_TOKEN") && gi("AWS_SESSION_TOKEN") === undefined)
+      warnUnscopedInjectHosts("AWS_ACCESS_KEY_ID", "implicit AWS credential pair");
+      if (envVars.has("AWS_SESSION_TOKEN") && getWholeValueMask("AWS_SESSION_TOKEN") === undefined)
         logForDebugging(
           "[sandbox] implicit AWS credential pair: 'AWS_SESSION_TOKEN' is declared but not forwarded as a whole-value mask entry " +
             "(deny-overridden or using extract/decode) \u2014 the auto-paired " +
@@ -4763,10 +4927,12 @@ function convertToSandboxRuntimeConfig(settings) {
             level: "warn",
           },
         );
-    } else if (!la.some((ce) => j.has(ce))) {
-      let ce = ["AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY"];
-      let filtered = ce.filter((tt) => gi(tt) !== undefined);
-      let filtered_2 = ce.filter((tt) => gi(tt) === undefined && mi.has(tt));
+    } else if (!reservedVarNames.some((name) => claimedVars.has(name))) {
+      let implicitVars = ["AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY"];
+      let filtered = implicitVars.filter((name) => getWholeValueMask(name) !== undefined);
+      let filtered_2 = implicitVars.filter(
+        (name) => getWholeValueMask(name) === undefined && envVars.has(name),
+      );
       if (filtered.length === 1 && filtered_2.length === 1)
         logForDebugging(
           `[sandbox] implicit AWS credential pair: '${filtered_2[0]}' is declared but not forwarded as a whole-value mask entry ` +
@@ -4778,24 +4944,24 @@ function convertToSandboxRuntimeConfig(settings) {
         );
     }
   }
-  let Eh = (j, ce) =>
-    containsGlobChars(j)
+  let sweepGlob = (path, trusted) =>
+    containsGlobChars(path)
       ? [
-          j,
-          ...hh(j).map((Ee) => {
-            Js(Ee.canonical, Ee.lexical, ce);
-            return Ee.canonical;
+          path,
+          ...expandMaskGlob(path).map((expansion) => {
+            addDenyLexical(expansion.canonical, expansion.lexical, trusted);
+            return expansion.canonical;
           }),
         ]
-      : [j];
-  let flattened_3 = [...is.entries()]
-    .filter(([, j]) => j.mode === "deny")
-    .flatMap(([j]) => (Ga ? Eh(j, sf(j)) : [j]));
-  if (Zl && flattened_3.length > 0)
+      : [path];
+  let flattened_3 = [...credentialFiles.entries()]
+    .filter(([, entry]) => entry.mode === "deny")
+    .flatMap(([path]) => (hasMaskEntries ? sweepGlob(path, isTrustedDeny(path)) : [path]));
+  if (relaxedPolicy && flattened_3.length > 0)
     logForDebugging(
-      `[sandbox] credential file deny entries (${[...is.values()]
-        .filter((j) => j.mode === "deny")
-        .map((j) => j.path)
+      `[sandbox] credential file deny entries (${[...credentialFiles.values()]
+        .filter((entry) => entry.mode === "deny")
+        .map((entry) => entry.path)
         .join(
           ", ",
         )}) provide no protection under the relaxed filesystem policy \u2014 read-denies are dropped at wrap time; set sandbox.filesystem.disabled: false in user or managed settings (ignored if managed settings pin the filesystem layer) to enforce them`,
@@ -4803,113 +4969,135 @@ function convertToSandboxRuntimeConfig(settings) {
         level: "warn",
       },
     );
-  let Jl = Ga
-    ? denyPaths_2.flatMap((j) => {
-        let replaced = removeTrailingGlobSuffix(j).replace(Yi, "");
-        let Ee = isAbsolute(replaced)
+  let readDenySweep = hasMaskEntries
+    ? denyPaths_2.flatMap((denyPath) => {
+        let replaced = removeTrailingGlobSuffix(denyPath).replace(trailingSeparatorRe, "");
+        let absolute = isAbsolute(replaced)
           ? replaced
           : replaced.startsWith("~")
             ? join(safeProcessCwd(), replaced)
             : resolveAgainstProcessCwd(replaced);
-        let We = qd.has(j);
+        let trusted = readDenyInRepoSources.has(denyPath);
         if (containsGlobChars(replaced)) {
-          let bt = rf(Ee, We);
-          Js(bt, bt, We);
-          return Eh(bt, We);
+          let canonical = canonicalizeMaskPath(absolute, trusted);
+          addDenyLexical(canonical, canonical, trusted);
+          return sweepGlob(canonical, trusted);
         }
-        let tt = rf(Ee, We);
-        Js(tt, replaced, We);
-        return [tt];
+        let canonical = canonicalizeMaskPath(absolute, trusted);
+        addDenyLexical(canonical, replaced, trusted);
+        return [canonical];
       })
     : [];
-  if (!Ai)
-    for (let [j, ce] of [...is.entries()]) {
-      if (ce.mode !== "mask") continue;
-      let replaced = removeTrailingGlobSuffix(ce.path).replace(Yi, "");
-      let found = [...flattened_3, ...Jl].find(
-        (tt) => qc(tt, j) && !mo(tt, j) && !Ha(tt, replaced) && sf(tt),
+  if (!maskInert)
+    for (let [key, entry] of [...credentialFiles.entries()]) {
+      if (entry.mode !== "mask") continue;
+      let replaced = removeTrailingGlobSuffix(entry.path).replace(trailingSeparatorRe, "");
+      let found = [...flattened_3, ...readDenySweep].find(
+        (denyPath) =>
+          isDenyCoveredPath(denyPath, key) &&
+          !isDenyCovered(denyPath, key) &&
+          !denyReachesLiteral(denyPath, replaced) &&
+          isTrustedDeny(denyPath),
       );
       if (found !== undefined) {
         logForDebugging(
-          `[sandbox] credential file mask for '${ce.path}' dropped: trusted-tier deny '${found}' covers it through a symlink or a relative spelling \u2014 installed as a canonical deny on '${j}' so enforcement cannot be retargeted`,
+          `[sandbox] credential file mask for '${entry.path}' dropped: trusted-tier deny '${found}' covers it through a symlink or a relative spelling \u2014 installed as a canonical deny on '${key}' so enforcement cannot be retargeted`,
         );
-        is.set(j, {
-          path: j,
+        credentialFiles.set(key, {
+          path: key,
           mode: "deny",
         });
       }
     }
-  let Cb = (j, ce) =>
-    Ai
+  let findShadowingDeny = (key, literal) =>
+    maskInert
       ? undefined
-      : (flattened_3.find((Ee) => !containsGlobChars(Ee) && qc(Ee, j) && !mo(Ee, j) && Ha(Ee, ce)) ??
-        Jl.find((Ee) => !containsGlobChars(Ee) && qc(Ee, j) && !mo(Ee, j) && Ha(Ee, ce)));
-  let xh = mh
+      : (flattened_3.find(
+          (denyPath) =>
+            !containsGlobChars(denyPath) &&
+            isDenyCoveredPath(denyPath, key) &&
+            !isDenyCovered(denyPath, key) &&
+            denyReachesLiteral(denyPath, literal),
+        ) ??
+        readDenySweep.find(
+          (denyPath) =>
+            !containsGlobChars(denyPath) &&
+            isDenyCoveredPath(denyPath, key) &&
+            !isDenyCovered(denyPath, key) &&
+            denyReachesLiteral(denyPath, literal),
+        ));
+  let credentials = hasCredentials
     ? {
-        files: [...is.entries()]
-          .filter(([j, ce]) => {
-            if (ce.mode !== "mask") return true;
-            let Ee = Cb(j, removeTrailingGlobSuffix(ce.path).replace(Yi, ""));
-            if (Ee === undefined) return true;
+        files: [...credentialFiles.entries()]
+          .filter(([key, entry]) => {
+            if (entry.mode !== "mask") return true;
+            let shadowing = findShadowingDeny(
+              key,
+              removeTrailingGlobSuffix(entry.path).replace(trailingSeparatorRe, ""),
+            );
+            if (shadowing === undefined) return true;
             logForDebugging(
-              `[sandbox] credential file mask for '${ce.path}' dropped: shadowed by deny on '${Ee}'`,
+              `[sandbox] credential file mask for '${entry.path}' dropped: shadowed by deny on '${shadowing}'`,
             );
             return false;
           })
-          .map(([j, ce]) => {
+          .map(([key, entry]) => {
             if (
-              ce.mode === "mask" &&
-              !Ai &&
-              [...flattened_3, ...Jl].some(
-                (Ee) =>
-                  qc(Ee, j) &&
-                  (mo(Ee, j) ||
-                    containsGlobChars(Ee) ||
-                    !Ha(Ee, removeTrailingGlobSuffix(ce.path).replace(Yi, ""))),
+              entry.mode === "mask" &&
+              !maskInert &&
+              [...flattened_3, ...readDenySweep].some(
+                (denyPath) =>
+                  isDenyCoveredPath(denyPath, key) &&
+                  (isDenyCovered(denyPath, key) ||
+                    containsGlobChars(denyPath) ||
+                    !denyReachesLiteral(
+                      denyPath,
+                      removeTrailingGlobSuffix(entry.path).replace(trailingSeparatorRe, ""),
+                    )),
               )
             ) {
               logForDebugging(
-                `[sandbox] credential file mask for '${ce.path}' kept over a covering deny it cannot be shadowed by (allowRead-re-opened or symlink-spelled) WITHOUT injection or extract (whole-file sentinel)`,
+                `[sandbox] credential file mask for '${entry.path}' kept over a covering deny it cannot be shadowed by (allowRead-re-opened or symlink-spelled) WITHOUT injection or extract (whole-file sentinel)`,
               );
               return {
-                path: ce.path,
+                path: entry.path,
                 mode: "mask",
                 injectHosts: [],
               };
             }
-            return ce;
+            return entry;
           }),
-        envVars: [...mi.values()],
-        ...(of !== undefined && {
-          allowPlaintextInject: of,
+        envVars: [...envVars.values()],
+        ...(allowPlaintextInject !== undefined && {
+          allowPlaintextInject,
         }),
         ...(mapped.length > 0 && {
           awsPairs: mapped,
         }),
-        ...(lf !== undefined && {
-          sigv4: lf,
+        ...(sigv4 !== undefined && {
+          sigv4,
         }),
       }
     : undefined;
   let lateSymlinkGrantDenyRoots =
-    Qd.length > 0
+    acceptedGrants.length > 0
       ? uniq([
-          ...ef(),
-          ...(xh?.files ?? [])
-            .flatMap((j) => canonicalizeSandboxPath(j.path) ?? [])
-            .flatMap((j) => resolveReadDenyRoot(j).spellings),
+          ...denyRootSpellingsLazy(),
+          ...(credentials?.files ?? [])
+            .flatMap((credential) => canonicalizeSandboxPath(credential.path) ?? [])
+            .flatMap((spelling) => resolveReadDenyRoot(spelling).spellings),
         ])
       : [];
   let { rgPath, rgArgs, argv0 } = ripgrepCommand();
   let ripgrep = getSandboxSettingsSources()
-    .map((j) => j?.sandbox?.ripgrep)
-    .find((j) => j !== undefined) ?? {
+    .map((settings) => settings?.sandbox?.ripgrep)
+    .find((value) => value !== undefined) ?? {
     command: rgPath,
     args: rgArgs,
     argv0,
   };
-  let _h = isScrubOnlySandboxMode();
-  let zc = _h
+  let scrubOnly = isScrubOnlySandboxMode();
+  let network = scrubOnly
     ? {
         allowedDomains: undefined,
         deniedDomains: [],
@@ -4918,18 +5106,18 @@ function convertToSandboxRuntimeConfig(settings) {
     : {
         allowedDomains,
         deniedDomains,
-        ...(Object.keys(ie).length > 0 && {
-          deniedDomainReasons: ie,
+        ...(Object.keys(reasons).length > 0 && {
+          deniedDomainReasons: reasons,
         }),
-        strictAllowlist: R || undefined,
+        strictAllowlist: strictAllowlist || undefined,
         ...(evalConfinedEnv ? {} : getNetworkAllowances(settings.sandbox?.network)),
       };
   let tlsTerminateSetting = getTlsTerminateSetting();
-  let Db = false;
-  if (!_h && zc.tlsTerminate === undefined && tlsTerminateSetting !== undefined)
+  let enforcesAllowlist = false;
+  if (!scrubOnly && network.tlsTerminate === undefined && tlsTerminateSetting !== undefined)
     if (getPlatform() === "windows") {
       let caCertPaths = getCaCertPaths(resolveWindowsTlsTerminateCaSource());
-      if (caCertPaths !== undefined) zc.tlsTerminate = caCertPaths;
+      if (caCertPaths !== undefined) network.tlsTerminate = caCertPaths;
       else
         logForDebugging(
           "[sandbox] settings tlsTerminate has no CA paths and the managed sandbox CA is gated off on Windows \u2014 ignoring tlsTerminate (an ephemeral CA cannot pass srt-win user trust-ca)",
@@ -4937,87 +5125,93 @@ function convertToSandboxRuntimeConfig(settings) {
             level: "warn",
           },
         );
-    } else zc.tlsTerminate = tlsTerminateSetting;
-  let Ob = flattenWrapWriteRoots(
-    splitBindableWriteRoots([...getDefaultWritePaths(), ...Se], new Set([originalCwd, cwdState])),
+    } else network.tlsTerminate = tlsTerminateSetting;
+  let allWriteRoots = flattenWrapWriteRoots(
+    splitBindableWriteRoots([...getDefaultWritePaths(), ...allowWrite], new Set([dir_2, dir])),
   );
-  let Pb = Xe.missing === null ? [] : [dirname(Xe.missing.name)];
-  let uf = new Set([originalCwd, cwdState]);
-  let wh = new Set(splitBindableWriteRoots([...Zd], uf).bindable);
-  let Th = splitBindableWriteRoots([...getDefaultWritePaths(), ...me], uf);
-  let filtered_3 = [...Se, ...Wa]
-    .map((j) => splitBindableWriteRoots([j], uf))
-    .filter((j) => !j.bindable.every((ce) => wh.has(ce)));
-  let combined = filtered_3.flatMap(flattenWrapWriteRoots).concat(flattenWrapWriteRoots(Th));
-  let any = filtered_3.some((j) => j.hasUndecidableEntry);
-  let filtered_4 = Xe.links.filter(
+  let extraMissingDirs = hops.missing === null ? [] : [dirname(hops.missing.name)];
+  let bindableBaseDirs = new Set([dir_2, dir]);
+  let userWriteRoots = new Set(
+    splitBindableWriteRoots([...userTierAdditionalDirs], bindableBaseDirs).bindable,
+  );
+  let adminWriteRoots = splitBindableWriteRoots(
+    [...getDefaultWritePaths(), ...extraAllowWrite],
+    bindableBaseDirs,
+  );
+  let filtered_3 = [...allowWrite, ...writeGrantsWithoutBase]
+    .map((path) => splitBindableWriteRoots([path], bindableBaseDirs))
+    .filter((split) => !split.bindable.every((root) => userWriteRoots.has(root)));
+  let combined = filtered_3.flatMap(flattenWrapWriteRoots).concat(flattenWrapWriteRoots(adminWriteRoots));
+  let any = filtered_3.some((hasUndecidable) => hasUndecidable.hasUndecidableEntry);
+  let filtered_4 = hops.links.filter(
     (link) =>
       any ||
-      (link.isLive ? combined : Ob).some((ce) =>
-        isPathWithin(ce, dirname(link.path), {
+      (link.isLive ? combined : allWriteRoots).some((root) =>
+        isPathWithin(root, dirname(link.path), {
           foldCase: true,
         }),
       ),
   );
-  let Fb = uniq([
-    ...filtered_4.map((j) => dirname(j.path)),
-    ...(Xe.missing?.isUnreadable === true ? Pb : []),
+  let lateDenyDirs = uniq([
+    ...filtered_4.map((link) => dirname(link.path)),
+    ...(hops.missing?.isUnreadable === true ? extraMissingDirs : []),
   ]);
-  let Mb = uniq([
-    originalCwd,
-    cwdState,
+  let neverDenyRoots = uniq([
+    dir_2,
+    dir,
     homedir(),
     resolveExistingPrefix(homedir())?.path ?? homedir(),
-    ...Th.bindable,
-    ...wh,
+    ...adminWriteRoots.bindable,
+    ...userWriteRoots,
   ]);
-  for (let j of Fb)
+  for (let dir of lateDenyDirs)
     if (!(
       (existingPrefix?.exists === true &&
-        isSameDirOrAbove(j, Wt, {
+        isSameDirOrAbove(dir, configDirReal, {
           orAbove: false,
         })) ||
-      Mb.some((Ee) =>
-        isSameDirOrAbove(j, Ee, {
+      neverDenyRoots.some((root) =>
+        isSameDirOrAbove(dir, root, {
           orAbove: true,
         }),
       )
     ))
-      Ce(j, false, true);
-  adapterState.lateSymlinkGrantCandidates = Qd;
+      addDeny(dir, false, true);
+  adapterState.lateSymlinkGrantCandidates = acceptedGrants;
   adapterState.lateSymlinkGrantDenyRoots = lateSymlinkGrantDenyRoots;
-  adapterState.lateSymlinkGrantProfile = ji;
+  adapterState.lateSymlinkGrantProfile = gitHome;
   let realPathMemo = new Map();
   let allowGlobBases = isPatternWriteDenyTwinsEnabled();
   let filesystem = {
     denyRead: uniq(addRealPathDenyTwins(denyPaths_2, "read", realPathMemo, false)),
-    allowRead: uniq(he),
-    allowWrite: uniq(Se),
+    allowRead: uniq(denyRead),
+    allowWrite: uniq(allowWrite),
     denyWrite: uniq(addRealPathDenyTwins(denyPaths, "write", realPathMemo, allowGlobBases)),
     ...(getEffectiveFilesystemPolicy() === "relaxed" && {
       disabled: true,
     }),
   };
-  let Ih = new Set();
-  for (let j of new Set(Ae ? [originalCwd, cwdState] : [originalCwd]))
-    for (let ce of [findGitRoot(j), findCanonicalGitRoot(j)]) if (ce !== null) Ih.add(ce);
-  let df = new Set();
-  for (let j of Ih)
+  let gitRoots = new Set();
+  for (let dir_3 of new Set(allowExtraPlaces ? [dir_2, dir] : [dir_2]))
+    for (let gitDir of [findGitRoot(dir_3), findCanonicalGitRoot(dir_3)])
+      if (gitDir !== null) gitRoots.add(gitDir);
+  let safeDirs = new Set();
+  for (let gitDir of gitRoots)
     try {
-      df.add(realpathSync(j));
+      safeDirs.add(realpathSync(gitDir));
     } catch {}
-  let Qs = {
-    network: zc,
+  let config = {
+    network,
     filesystem,
     ignoreViolations: adminMandate ? mergeIgnoreViolations() : settings.sandbox?.ignoreViolations,
-    credentials: xh,
+    credentials,
     enableWeakerNestedSandbox:
       isScrubEnabled() && isScrubSandboxAvailable()
         ? false
         : adminMandate
           ? trustedBooleanUnlessFalse(
               settings.sandbox?.enableWeakerNestedSandbox,
-              (j) => j.enableWeakerNestedSandbox,
+              (settings) => settings.enableWeakerNestedSandbox,
             )
           : settings.sandbox?.enableWeakerNestedSandbox,
     allowNestedUserNamespaces:
@@ -5025,18 +5219,18 @@ function convertToSandboxRuntimeConfig(settings) {
         ? false
         : trustedBooleanUnlessFalse(
             settings.sandbox?.allowNestedUserNamespaces,
-            (j) => j.allowNestedUserNamespaces,
+            (settings) => settings.allowNestedUserNamespaces,
           ),
     enableWeakerNetworkIsolation: adminMandate
       ? trustedBooleanUnlessFalse(
           settings.sandbox?.enableWeakerNetworkIsolation,
-          (j) => j.enableWeakerNetworkIsolation,
+          (settings) => settings.enableWeakerNetworkIsolation,
         )
       : settings.sandbox?.enableWeakerNetworkIsolation,
     allowAppleEvents: booleanOrUndefined(readSandboxSetting(["allowAppleEvents"])),
-    ...(df.size > 0 && {
+    ...(safeDirs.size > 0 && {
       git: {
-        safeDirectories: [...df],
+        safeDirectories: [...safeDirs],
       },
     }),
     ripgrep,
@@ -5052,104 +5246,110 @@ function convertToSandboxRuntimeConfig(settings) {
       },
     }),
   };
-  let Vb = {};
-  for (let j of Ua) if (!judgeFileActSafe("create", join(...j), true, Vb, Qs)) createFileAtChain(...j);
-  getSandboxAdapterState().builtConfigEnforcesAllowlist.set(Qs, Db);
-  getSandboxAdapterState().builtConfigConfiguredDenies.set(Qs, jd);
-  if (ae !== undefined) getSandboxAdapterState().builtConfigGbHostRules.set(Qs, ae);
-  getSandboxAdapterState().builtConfigSshStoreDenied.set(Qs, Uc);
-  getSandboxAdapterState().builtConfigPluginToolStagingDenied.set(Qs, vt);
-  getSandboxAdapterState().builtConfigPatternWriteDenyTwins.set(Qs, allowGlobBases);
-  getSandboxAdapterState().builtConfigUnlistableWorktreesDenied.set(Qs, Ba);
-  if (Ma !== undefined) getSandboxAdapterState().builtConfigNestedGitConfigLockDeny.set(Qs, Ma);
-  let any_2 = K?.resolved.some((j) => j.lookAgain !== undefined);
-  let ff = new Set(
-    (Qs.credentials?.files ?? []).flatMap((j) => {
-      if (j.mode !== "mask" || isSentinelOnlyMask(j)) return [];
-      let ce = canonicalizeSandboxPath(j.path);
-      return ce === undefined ? [j.path] : [j.path, ce];
+  let judgeMemo = {};
+  for (let parts of deferredCreates)
+    if (!judgeFileActSafe("create", join(...parts), true, judgeMemo, config)) createFileAtChain(...parts);
+  getSandboxAdapterState().builtConfigEnforcesAllowlist.set(config, enforcesAllowlist);
+  getSandboxAdapterState().builtConfigConfiguredDenies.set(config, configuredDenySpellings);
+  if (gbRules !== undefined) getSandboxAdapterState().builtConfigGbHostRules.set(config, gbRules);
+  getSandboxAdapterState().builtConfigSshStoreDenied.set(config, denySshStore);
+  getSandboxAdapterState().builtConfigPluginToolStagingDenied.set(config, denyPluginToolStaging);
+  getSandboxAdapterState().builtConfigPatternWriteDenyTwins.set(config, allowGlobBases);
+  getSandboxAdapterState().builtConfigUnlistableWorktreesDenied.set(config, denyUnlistableWorktrees);
+  if (denyNestedGitConfigLock !== undefined)
+    getSandboxAdapterState().builtConfigNestedGitConfigLockDeny.set(config, denyNestedGitConfigLock);
+  let any_2 = resolution?.resolved.some((entry) => entry.lookAgain !== undefined);
+  let maskPaths = new Set(
+    (config.credentials?.files ?? []).flatMap((credential) => {
+      if (credential.mode !== "mask" || isSentinelOnlyMask(credential)) return [];
+      let canonical = canonicalizeSandboxPath(credential.path);
+      return canonical === undefined ? [credential.path] : [credential.path, canonical];
     }),
   );
-  let kh = (j) => ff.has(j.root) || ff.has(canonicalizeSandboxPath(j.root) ?? j.root);
-  let Dh = (j) =>
-    j.map((ce) =>
-      kh(ce)
+  let isMaskRoot = (entry) =>
+    maskPaths.has(entry.root) || maskPaths.has(canonicalizeSandboxPath(entry.root) ?? entry.root);
+  let markMasks = (entries) =>
+    entries.map((entry) =>
+      isMaskRoot(entry)
         ? {
-            ...ce,
+            ...entry,
             isMask: true,
           }
-        : ce,
+        : entry,
     );
-  let pf = Dh(fh);
-  let any_3 = pf.some((j) => j.isMask);
+  let markedEntries = markMasks(maskSweepEntries);
+  let any_3 = markedEntries.some((entry) => entry.isMask);
   getSandboxAdapterState().builtConfigReadDenyRootResolution.set(
-    Qs,
-    any_2 || pf.length > 0
+    config,
+    any_2 || markedEntries.length > 0
       ? {
           resolution:
-            any_2 && K
+            any_2 && resolution
               ? {
-                  key: K.key,
-                  resolved: Dh(K.resolved),
+                  key: resolution.key,
+                  resolved: markMasks(resolution.resolved),
                 }
               : undefined,
-          forwardedUntrustedGrants: ra,
-          maskSweepEntries: pf,
+          forwardedUntrustedGrants: repoGrants,
+          maskSweepEntries: markedEntries,
           trustedDenyRoots: any_3
             ? [
-                ...(L ?? getTrustedReadDenyRoots()).filter((j) => !ff.has(j)),
-                ...(K?.resolved ?? []).flatMap((j) => (kh(j) ? [] : j.spellings)),
+                ...(trustedDenyRoots ?? getTrustedReadDenyRoots()).filter((root) => !maskPaths.has(root)),
+                ...(resolution?.resolved ?? []).flatMap((entry) =>
+                  isMaskRoot(entry) ? [] : entry.spellings,
+                ),
               ]
             : [],
         }
       : undefined,
   );
-  return Qs;
+  return config;
 }
 //@ chunk-fq0cr76a.js:987937-988982 placement
 /**
  * 把构建好的配置装入 sandbox-runtime（SandboxManager.updateConfig），同步记录该配置对应的 GrowthBook 规则/deny 开关/读禁止根解析等附加状态。
  */
-function installSandboxConfig(e) {
+function installSandboxConfig(config) {
   try {
-    SandboxManager_2.updateConfig(e);
+    SandboxManager_2.updateConfig(config);
   } catch (error) {
     throw describeUnreadableSandboxError(error, "configNotInstalled");
   }
-  if (getSandboxAdapterState().builtConfigConfiguredDenies.has(e))
+  if (getSandboxAdapterState().builtConfigConfiguredDenies.has(config))
     getSandboxAdapterState().storedDenyListsMayBeShort = false;
-  adoptReadDenyRootResolution(e);
-  recordWrapWriteRoots(e);
+  adoptReadDenyRootResolution(config);
+  recordWrapWriteRoots(config);
   let sandboxAdapterState = getSandboxAdapterState();
   sandboxAdapterState.gbHostRulesApplied =
-    sandboxAdapterState.builtConfigGbHostRules.get(e) ?? sandboxAdapterState.gbHostRulesApplied;
+    sandboxAdapterState.builtConfigGbHostRules.get(config) ?? sandboxAdapterState.gbHostRulesApplied;
   sandboxAdapterState.sshStoreDenyApplied =
-    sandboxAdapterState.builtConfigSshStoreDenied.get(e) ?? sandboxAdapterState.sshStoreDenyApplied;
+    sandboxAdapterState.builtConfigSshStoreDenied.get(config) ?? sandboxAdapterState.sshStoreDenyApplied;
   sandboxAdapterState.pluginToolStagingDenyApplied =
-    sandboxAdapterState.builtConfigPluginToolStagingDenied.get(e) ??
+    sandboxAdapterState.builtConfigPluginToolStagingDenied.get(config) ??
     sandboxAdapterState.pluginToolStagingDenyApplied;
   sandboxAdapterState.patternWriteDenyTwinsApplied =
-    sandboxAdapterState.builtConfigPatternWriteDenyTwins.get(e) ??
+    sandboxAdapterState.builtConfigPatternWriteDenyTwins.get(config) ??
     sandboxAdapterState.patternWriteDenyTwinsApplied;
   sandboxAdapterState.unlistableWorktreesDenyApplied =
-    sandboxAdapterState.builtConfigUnlistableWorktreesDenied.get(e) ??
+    sandboxAdapterState.builtConfigUnlistableWorktreesDenied.get(config) ??
     sandboxAdapterState.unlistableWorktreesDenyApplied;
   sandboxAdapterState.nestedGitConfigLockDenyApplied =
-    sandboxAdapterState.builtConfigNestedGitConfigLockDeny.get(e) ??
+    sandboxAdapterState.builtConfigNestedGitConfigLockDeny.get(config) ??
     sandboxAdapterState.nestedGitConfigLockDenyApplied;
   sandboxAdapterState.installedConfiguredDenies =
-    sandboxAdapterState.builtConfigConfiguredDenies.get(e) ?? sandboxAdapterState.installedConfiguredDenies;
-  let r = sandboxAdapterState.builtConfigEnforcesAllowlist.get(e) ?? false;
+    sandboxAdapterState.builtConfigConfiguredDenies.get(config) ??
+    sandboxAdapterState.installedConfiguredDenies;
+  let enforcesAllowlist = sandboxAdapterState.builtConfigEnforcesAllowlist.get(config) ?? false;
   if (sandboxAdapterState.initializationPromise === undefined)
-    sandboxAdapterState.installedFilterRequestEnforcesAllowlist = r;
-  else sandboxAdapterState.installsSinceInitializeStartedAllEnforce &&= r;
+    sandboxAdapterState.installedFilterRequestEnforcesAllowlist = enforcesAllowlist;
+  else sandboxAdapterState.installsSinceInitializeStartedAllEnforce &&= enforcesAllowlist;
 }
 //@ chunk-fq0cr76a.js:988982-989305 placement
-function adoptReadDenyRootResolution(e) {
+function adoptReadDenyRootResolution(config) {
   let sandboxAdapterState = getSandboxAdapterState();
-  if (sandboxAdapterState.builtConfigReadDenyRootResolution.has(e)) {
+  if (sandboxAdapterState.builtConfigReadDenyRootResolution.has(config)) {
     sandboxAdapterState.installedReadDenyRootResolution =
-      sandboxAdapterState.builtConfigReadDenyRootResolution.get(e);
+      sandboxAdapterState.builtConfigReadDenyRootResolution.get(config);
     sandboxAdapterState.pendingReadDenyFallback = undefined;
     sandboxAdapterState.readDenyRootLookCursor = 0;
     sandboxAdapterState.readDenyRootLookFinishedAt = undefined;
@@ -5176,7 +5376,7 @@ function cloneScrubParent(parent) {
  * 沙箱适配层的进程级状态（GrowthBook 配置、会话允许主机、deny 真实路径、嵌套 git 配置锁等）。
  */
 class SandboxAdapterState {
-  tenguSandboxGbConfig = io(getDefaultSandboxGbConfig);
+  tenguSandboxGbConfig = memoizeAlias(getDefaultSandboxGbConfig);
   sessionAllowedHosts = new Set();
   realPathsOfDenies = {
     read: new Map(),
@@ -5253,8 +5453,8 @@ class SandboxAdapterState {
   lateSymlinkGrantProfile = undefined;
   runtimeAllowWriteDirectories = new Map();
   dependencyProbeGeneration = 0;
-  checkDependenciesProbe = io(checkDependencies_2);
-  baseIsSupportedPlatform = io(() => SandboxManager_2.isSupportedPlatform());
+  checkDependenciesProbe = memoizeAlias(checkDependencies_2);
+  baseIsSupportedPlatform = memoizeAlias(() => SandboxManager_2.isSupportedPlatform());
 }
 //@ chunk-fq0cr76a.js:991903-991913 placement
 var sandboxAdapterState;
@@ -5280,29 +5480,29 @@ function getProcessSandboxState() {
 /**
  * 运行时把某目录加入沙箱可写列表（按 key 登记），变化时 refreshConfig。
  */
-function addSandboxAllowWriteDirectory(e, n) {
+function addSandboxAllowWriteDirectory(dir, sessionKey) {
   let { runtimeAllowWriteDirectories } = getSandboxAdapterState();
-  if (runtimeAllowWriteDirectories.get(n) === e) return;
-  runtimeAllowWriteDirectories.set(n, e);
+  if (runtimeAllowWriteDirectories.get(sessionKey) === dir) return;
+  runtimeAllowWriteDirectories.set(sessionKey, dir);
   refreshConfig();
 }
 //@ chunk-fq0cr76a.js:992169-992237 placement
 /**
  * 从运行时可写列表移除某 key 的目录，有变化时 refreshConfig。
  */
-function removeSandboxAllowWriteDirectory(e) {
-  if (getSandboxAdapterState().runtimeAllowWriteDirectories.delete(e)) refreshConfig();
+function removeSandboxAllowWriteDirectory(sessionKey) {
+  if (getSandboxAdapterState().runtimeAllowWriteDirectories.delete(sessionKey)) refreshConfig();
 }
 //@ chunk-fq0cr76a.js:992237-992281 placement
-function isEntryNewForSet(path, n) {
-  return n !== null && !n.has(path);
+function isEntryNewForSet(path, knownSet) {
+  return knownSet !== null && !knownSet.has(path);
 }
 //@ chunk-fq0cr76a.js:992281-992649 placement
 /**
  * 把删除策略名映射为具体选项（是否整目录、是否删除空目录、HEAD 残留时是否整目录）。
  */
-function getRemovalPolicy(e) {
-  switch (e) {
+function getRemovalPolicy(removal) {
+  switch (removal) {
     case "file":
       return {
         wholeFolder: false,
@@ -5330,9 +5530,9 @@ function getRemovalPolicy(e) {
   }
 }
 //@ chunk-fq0cr76a.js:992649-992748 placement
-function logSandboxDebug(outcome, level = "debug") {
+function logSandboxDebug(message, level = "debug") {
   try {
-    logForDebugging(`[Sandbox] ${outcome}`, {
+    logForDebugging(`[Sandbox] ${message}`, {
       level,
     });
   } catch (error) {
@@ -5340,28 +5540,31 @@ function logSandboxDebug(outcome, level = "debug") {
   }
 }
 //@ chunk-fq0cr76a.js:992748-992827 placement
-function logSandboxOutcome(e) {
+function logSandboxOutcome(outcome) {
   try {
-    logFeatureSad("sandbox_exec", e);
+    logFeatureSad("sandbox_exec", outcome);
   } catch (error) {
     reportSandboxErrorUnderStandIn(error, "scrubOutcomeNotLogged");
   }
 }
 //@ chunk-fq0cr76a.js:992827-993023 placement
-var SCRUB_NAME_LABELS = new Map([
-  ["HEAD", "head"],
-  [".git", "dot_git"],
-  ["objects", "objects"],
-  ["refs", "refs"],
-  ["commondir", "commondir"],
-  ["config.lock", "config_lock"],
-  ["config.worktree.lock", "config_worktree_lock"],
-]);
+var SCRUB_NAME_LABELS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-fq0cr76a.js:992827", () => {
+  SCRUB_NAME_LABELS = new Map([
+    ["HEAD", "head"],
+    [".git", "dot_git"],
+    ["objects", "objects"],
+    ["refs", "refs"],
+    ["commondir", "commondir"],
+    ["config.lock", "config_lock"],
+    ["config.worktree.lock", "config_worktree_lock"],
+  ]);
+});
 //@ chunk-fq0cr76a.js:993023-993139 placement
-function logBareRepoScrubRemoval(path, n) {
-  let r = SCRUB_NAME_LABELS.get(basename(path)) ?? "other_name";
-  let s = n === "plain" ? "" : `_${n}`;
-  logSandboxOutcome(`bare_repo_scrub_removed_${r}${s}`);
+function logBareRepoScrubRemoval(path, kind) {
+  let nameLabel = SCRUB_NAME_LABELS.get(basename(path)) ?? "other_name";
+  let kindSuffix = kind === "plain" ? "" : `_${kind}`;
+  logSandboxOutcome(`bare_repo_scrub_removed_${nameLabel}${kindSuffix}`);
 }
 //@ chunk-fq0cr76a.js:993139-994940 placement
 /**
@@ -5389,11 +5592,11 @@ function scrubPlantedBareRepoIndicators(
     let path = entry.path;
     let entryName = path.slice(path.lastIndexOf(sep) + 1);
     let removal = bareGitRepoScrubPaths.get(path)?.removal;
-    let L =
+    let vouched =
       (removal === undefined || isEntryNewForSet(path, state.bareGitRepoScrubPathsVouchedLocally)) &&
       (!extra.paths.some((path_2) => path_2.path === path) ||
         isEntryNewForSet(path, extra.pathsVouchedLocally));
-    if (judgeFileActSafe("delete", path, L, checked)) continue;
+    if (judgeFileActSafe("delete", path, vouched, checked)) continue;
     try {
       if (
         lstatSync(path, {
@@ -5431,34 +5634,40 @@ function scrubPlantedBareRepoIndicators(
         `scrub of planted ${entryName}`,
         isPosix,
         (parentDir, isRecordedParent, label) => {
-          let q = join(dirname(path), "HEAD");
+          let headPath = join(dirname(path), "HEAD");
           if (!isFileOrRefsLink(classifyHeadEntry(join(parentDir, "HEAD")))) {
             logSandboxDebug(outcome);
             return true;
           }
-          let Z = `${q} still stands, and with it git could take ${dirname(path)} for a repository`;
+          let headNote = `${headPath} still stands, and with it git could take ${dirname(path)} for a repository`;
           try {
             if (isPosix) restoreOwnerDirMode(parentDir, label);
-            let J;
-            let ie = quarantinePlantedEntry(parentDir, entryName, label, isRecordedParent, (ae) => {
-              J = ae;
-            });
-            if (!entry.unlinkable && ie === "quarantined")
-              reportUnclassifiedIndicatorMoved(label, entryName, J);
-            logSandboxDebug(
-              ie === "quarantined"
-                ? `scrub moved ${path} aside whole: ${Z}`
-                : ie === "removed"
-                  ? `scrub removed ${path}: ${Z}`
-                  : ie === "gone"
-                    ? `scrub found nothing at ${path} to move aside; ${q} still stands without it`
-                    : `${outcome}. Because ${q} still stands and git could take ${dirname(path)} for a repository, the scrub tried to move ${path} aside whole; that failed too, so ${path} ${ie === "neutralized" ? "was made unreadable in place" : "is left as it is"}`,
-              ie === "gone" ? "debug" : "warn",
+            let quarantineName;
+            let quarantineOutcome = quarantinePlantedEntry(
+              parentDir,
+              entryName,
+              label,
+              isRecordedParent,
+              (name) => {
+                quarantineName = name;
+              },
             );
-            if (ie === "removed") logBareRepoScrubRemoval(path, "beside_head");
+            if (!entry.unlinkable && quarantineOutcome === "quarantined")
+              reportUnclassifiedIndicatorMoved(label, entryName, quarantineName);
+            logSandboxDebug(
+              quarantineOutcome === "quarantined"
+                ? `scrub moved ${path} aside whole: ${headNote}`
+                : quarantineOutcome === "removed"
+                  ? `scrub removed ${path}: ${headNote}`
+                  : quarantineOutcome === "gone"
+                    ? `scrub found nothing at ${path} to move aside; ${headPath} still stands without it`
+                    : `${outcome}. Because ${headPath} still stands and git could take ${dirname(path)} for a repository, the scrub tried to move ${path} aside whole; that failed too, so ${path} ${quarantineOutcome === "neutralized" ? "was made unreadable in place" : "is left as it is"}`,
+              quarantineOutcome === "gone" ? "debug" : "warn",
+            );
+            if (quarantineOutcome === "removed") logBareRepoScrubRemoval(path, "beside_head");
           } catch (error) {
             logSandboxDebug(
-              `${outcome}. Because ${q} still stands and git could take ${dirname(path)} for a repository, the scrub tried to move ${path} aside whole; that failed too: ${getErrnoCode(error) ?? "no code"}`,
+              `${outcome}. Because ${headPath} still stands and git could take ${dirname(path)} for a repository, the scrub tried to move ${path} aside whole; that failed too: ${getErrnoCode(error) ?? "no code"}`,
               "warn",
             );
             logSandboxOutcome("bare_repo_scrub_remove_failed");
@@ -5474,10 +5683,10 @@ function scrubPlantedBareRepoIndicators(
 /**
  * 上报无法在构建配置时分类的标记文件被移到旁边（而非删除）。
  */
-function reportUnclassifiedIndicatorMoved(e, n, r) {
+function reportUnclassifiedIndicatorMoved(label, entryName, quarantineName) {
   reportSandboxErrorUnderStandIn(
     new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `[Sandbox] ${e}: ${n} could not be checked when the sandbox configuration was last built, so it was moved aside as ${r ?? `${n}${QUARANTINE_PREFIX}<hex>`} rather than removed; if it is yours, rename it back after this session ends; while the session runs, anything that reappears at that name is treated as planted.`,
+      `[Sandbox] ${label}: ${entryName} could not be checked when the sandbox configuration was last built, so it was moved aside as ${quarantineName ?? `${entryName}${QUARANTINE_PREFIX}<hex>`} rather than removed; if it is yours, rename it back after this session ends; while the session runs, anything that reappears at that name is treated as planted.`,
       "sandbox: post-command scrub moved aside an indicator it could not classify at config build",
     ),
     "unclassifiedIndicatorMovedAside",
@@ -5488,9 +5697,9 @@ function reportUnclassifiedIndicatorMoved(e, n, r) {
 /**
  * 在已验证的父目录下执行清理回调：非 POSIX 直接用父路径；父目录未解析或验证失败时拒绝并打点；成功后传入可用的基路径与是否可直接删除，结束时关闭目录句柄。
  */
-function withVerifiedScrubParent(entry, label, isPosix, s) {
+function withVerifiedScrubParent(entry, label, isPosix, runScrub) {
   let { path, parent, unlinkable } = entry;
-  if (!isPosix) return s(dirname(path), unlinkable, label);
+  if (!isPosix) return runScrub(dirname(path), unlinkable, label);
   if (parent.real === null) {
     logSandboxDebug(`${label}: parent of ${path} did not resolve at config build; refusing`, "error");
     logSandboxOutcome("bare_repo_scrub_refused_unresolved");
@@ -5512,7 +5721,7 @@ function withVerifiedScrubParent(entry, label, isPosix, s) {
     return;
   }
   try {
-    return s(opened.base, opened.recorded && unlinkable, label);
+    return runScrub(opened.base, opened.recorded && unlinkable, label);
   } finally {
     opened.close();
   }
@@ -5540,9 +5749,9 @@ function removeEmptyPlantedDir(path, entryPath, policy) {
     logBareRepoScrubRemoval(path, "empty_folder");
     return false;
   } catch (error) {
-    let h = `scrub did not remove ${path}: rmdirSync ${getErrnoCode(error) ?? "no code"}`;
-    if (policy.wholeIfAHeadSurvives) return h;
-    logSandboxDebug(h);
+    let message = `scrub did not remove ${path}: rmdirSync ${getErrnoCode(error) ?? "no code"}`;
+    if (policy.wholeIfAHeadSurvives) return message;
+    logSandboxDebug(message);
     return false;
   }
 }
@@ -5581,25 +5790,26 @@ function scrubBareRepoIndicator(entry, entryName, policy, parentBase, canUnlink,
         return removeEmptyPlantedDir(path, entryPath, policy);
       }
     else {
-      let D;
-      let O = quarantinePlantedEntry(
+      let quarantineName;
+      let outcome = quarantinePlantedEntry(
         parentBase,
         entryName,
         label,
         canUnlink,
-        (L) => {
-          D = L;
+        (name) => {
+          quarantineName = name;
         },
         policy.wholeFolder,
       );
-      if (O === false || O === "gone") return false;
-      if (O === "left") return removeEmptyPlantedDir(path, entryPath, policy);
-      if (!entry.unlinkable && O === "quarantined") reportUnclassifiedIndicatorMoved(label, entryName, D);
-      if (O === "quarantined") {
-        logSandboxDebug(`scrub moved planted ${path} aside as ${D ?? "a quarantine name"}`);
+      if (outcome === false || outcome === "gone") return false;
+      if (outcome === "left") return removeEmptyPlantedDir(path, entryPath, policy);
+      if (!entry.unlinkable && outcome === "quarantined")
+        reportUnclassifiedIndicatorMoved(label, entryName, quarantineName);
+      if (outcome === "quarantined") {
+        logSandboxDebug(`scrub moved planted ${path} aside as ${quarantineName ?? "a quarantine name"}`);
         return false;
       }
-      if (O === "neutralized") return false;
+      if (outcome === "neutralized") return false;
     }
     logSandboxDebug(`scrub removed planted ${path}`);
     logBareRepoScrubRemoval(path, "plain");
@@ -5616,7 +5826,7 @@ function scrubBareRepoIndicator(entry, entryName, policy, parentBase, canUnlink,
 /**
  * 命令结束后检查被拒绝的符号链接路径：仍指向原处的保留，被替换的删除；用户自己改向且不在任何写根内的放过并更新记录。
  */
-function scrubSymlinkedDenyPaths(e) {
+function scrubSymlinkedDenyPaths(deferredSnapshot) {
   let { symlinkedDenyScrubPaths } = getSandboxAdapterState();
   let spared = [];
   let memo = {};
@@ -5641,29 +5851,30 @@ function scrubSymlinkedDenyPaths(e) {
     }
   }
   if (spared.length > 0) spareUserRetargetedLinks(spared);
-  if (e !== undefined && e.length > 0) scrubDeferredSymlinkSnapshot(e);
+  if (deferredSnapshot !== undefined && deferredSnapshot.length > 0)
+    scrubDeferredSymlinkSnapshot(deferredSnapshot);
 }
 //@ chunk-fq0cr76a.js:997779-997924 placement
-function scrubDeferredSymlinkSnapshot(e) {
+function scrubDeferredSymlinkSnapshot(entries) {
   let memo = {};
-  for (let r of e) {
-    let verdict = classifySymlinkedDenyPath(r, memo);
+  for (let entry of entries) {
+    let verdict = classifySymlinkedDenyPath(entry, memo);
     if (verdict.kind === "delete")
-      scrubReplacedSymlinkDeny(r, verdict, "scrubbed replaced symlinked-deny path (deferred snapshot)");
+      scrubReplacedSymlinkDeny(entry, verdict, "scrubbed replaced symlinked-deny path (deferred snapshot)");
   }
 }
 //@ chunk-fq0cr76a.js:997924-998089 placement
-function getScrubWriteRoots(e, n = deriveScrubWriteRoots) {
-  if (e.roots === undefined)
+function getScrubWriteRoots(memo, derive = deriveScrubWriteRoots) {
+  if (memo.roots === undefined)
     try {
-      e.roots = n();
+      memo.roots = derive();
     } catch (error) {
       logForDebugging(`[Sandbox] scrub write-root derivation failed: ${error}`, {
         level: "warn",
       });
-      e.roots = null;
+      memo.roots = null;
     }
-  return e.roots;
+  return memo.roots;
 }
 //@ chunk-fq0cr76a.js:998089-998193 placement
 function judgeFileActSafe(action, path, force, rootsMemo, config) {
@@ -5692,7 +5903,7 @@ function judgeOwnFileAct(action, path, force, rootsMemo, config) {
   if (exists === (action === "create")) return false;
   let sandboxConfig = config ?? assertMarkedPathsResolved(SandboxManager_2.getConfig());
   if (sandboxConfig === undefined) return logFileActVerdict(action, path, true, "no_config");
-  let decide = (O, L) => logFileActVerdict(action, path, O, L, sandboxConfig);
+  let decide = (withhold, reason) => logFileActVerdict(action, path, withhold, reason, sandboxConfig);
   if (isRemoteSessionAvailable() && isWrapUnconfined(sandboxConfig))
     return decide(false, "not_confined_to_write_roots");
   let parentInfo = resolveExistingPrefix(dirname(path));
@@ -5706,15 +5917,15 @@ function judgeOwnFileAct(action, path, force, rootsMemo, config) {
 /**
  * 记录瘦客户端/云会话后 Claude Code 自己的创建或删除操作被放行或扣下的判定，并打点。
  */
-function logFileActVerdict(action, path, r, s, sandboxConfig) {
+function logFileActVerdict(action, path, withheld, why, sandboxConfig) {
   try {
     logForDebugging(
-      `[Sandbox] ${isRemoteSessionAvailable() ? "thin client" : "after a cloud session"}: Claude Code's own ${action} of ${path} ${r ? "is withheld" : "goes ahead"} (${s})`,
+      `[Sandbox] ${isRemoteSessionAvailable() ? "thin client" : "after a cloud session"}: Claude Code's own ${action} of ${path} ${withheld ? "is withheld" : "goes ahead"} (${why})`,
     );
     logEvent("tengu_sandbox_thin_client_file_act_judged", {
       kind: fromEnum(action),
-      withheld: r,
-      why: fromEnum(s),
+      withheld,
+      why: fromEnum(why),
       after_cloud_session: !isRemoteSessionAvailable(),
       live_list_built_as_thin_client: getSandboxAdapterState().bareGitRepoScrubPathsVouchedLocally !== null,
       ...(sandboxConfig && {
@@ -5724,7 +5935,7 @@ function logFileActVerdict(action, path, r, s, sandboxConfig) {
   } catch (error) {
     reportSandboxErrorUnderStandIn(error, "fileActVerdictNotLogged");
   }
-  return r;
+  return withheld;
 }
 //@ chunk-fq0cr76a.js:999201-999827 placement
 /**
@@ -5756,8 +5967,8 @@ function classifySymlinkedDenyPath({ literal, resolved, hopDirectories, dangling
     } catch {
       danglingTarget = null;
       try {
-        let D = readlinkSync(literal);
-        danglingTarget = followDanglingLink(literal, D);
+        let nextText = readlinkSync(literal);
+        danglingTarget = followDanglingLink(literal, nextText);
       } catch {}
       if (
         danglingBaseline &&
@@ -5836,9 +6047,9 @@ function scrubReplacedSymlinkDeny({ literal, resolved, parent }, verdict, messag
     close = opened.close;
     restoreOwnerDirMode(parentBase, label);
     try {
-      let q = lstatSync(entryPath);
-      observedStat = q;
-      stillSymlink = q.isSymbolicLink();
+      let stats = lstatSync(entryPath);
+      observedStat = stats;
+      stillSymlink = stats.isSymbolicLink();
     } catch (error) {
       if (getErrnoCode(error) === "ENOENT") {
         close();
@@ -5847,22 +6058,22 @@ function scrubReplacedSymlinkDeny({ literal, resolved, parent }, verdict, messag
       stillSymlink = false;
     }
     if (stillSymlink) {
-      let q = false;
+      let unchanged = false;
       try {
-        q = realpathSync(entryPath) === resolved;
+        unchanged = realpathSync(entryPath) === resolved;
       } catch {}
-      if (q) {
+      if (unchanged) {
         close();
         return;
       }
     }
   }
   try {
-    let K = quarantinePlantedEntry(parentBase, entryName, label, isRecorded);
-    if (K === false || K === "gone") return;
+    let outcome = quarantinePlantedEntry(parentBase, entryName, label, isRecorded);
+    if (outcome === false || outcome === "gone") return;
     logSandboxDebug(`${message}: ${literal}`);
-    if (!stillSymlink && K === "removed") {
-      let q =
+    if (!stillSymlink && outcome === "removed") {
+      let kind =
         observedStat === null
           ? "unknown"
           : observedStat.isDirectory()
@@ -5871,7 +6082,7 @@ function scrubReplacedSymlinkDeny({ literal, resolved, parent }, verdict, messag
               ? "file"
               : "other";
       logEvent("tengu_sandbox_scrub_removed_non_symlink", {
-        kind: fromEnum(q),
+        kind: fromEnum(kind),
       });
     }
   } catch (error) {
@@ -5886,46 +6097,46 @@ function scrubReplacedSymlinkDeny({ literal, resolved, parent }, verdict, messag
 }
 //@ chunk-fq0cr76a.js:1000880-1001171 placement
 function deriveScrubWriteRoots() {
-  let e = assertMarkedPathsResolved(SandboxManager_2.getConfig());
+  let config = assertMarkedPathsResolved(SandboxManager_2.getConfig());
   let sandboxAdapterState = getSandboxAdapterState();
-  if (!e || isWrapUnconfined(e) || sandboxAdapterState.undecidableWrapThisSession) return null;
-  let wrapWriteRoots = getWrapWriteRoots(e);
-  let s = isRemoteSessionAvailable();
-  if (wrapWriteRoots.hasUndecidableEntry && !s) return null;
+  if (!config || isWrapUnconfined(config) || sandboxAdapterState.undecidableWrapThisSession) return null;
+  let wrapWriteRoots = getWrapWriteRoots(config);
+  let remoteSession = isRemoteSessionAvailable();
+  if (wrapWriteRoots.hasUndecidableEntry && !remoteSession) return null;
   return uniq([
     ...sandboxAdapterState.wrapBindableWriteRootsThisSession,
     ...sandboxAdapterState.wrapOutOfTreeTargetsThisSession,
     ...wrapWriteRoots.bindable,
-    ...(s ? [] : wrapWriteRoots.outOfTreeTargets),
+    ...(remoteSession ? [] : wrapWriteRoots.outOfTreeTargets),
   ]);
 }
 //@ chunk-fq0cr76a.js:1001171-1001259 placement
-function allBindableWriteRoots(sandboxConfig) {
+function allBindableWriteRoots(config) {
   return uniq([
     ...getSandboxAdapterState().wrapBindableWriteRootsThisSession,
-    ...getWrapWriteRoots(sandboxConfig).bindable,
+    ...getWrapWriteRoots(config).bindable,
   ]);
 }
 //@ chunk-fq0cr76a.js:1001259-1001424 placement
-function getWrapWriteRoots(e) {
-  let n = new Set([
+function getWrapWriteRoots(config) {
+  let cwds = new Set([
     ...getSandboxAdapterState().wrapCwdsThisSession,
     ...(isRemoteSessionAvailable() ? [] : [getCwdState()]),
     getOriginalCwd(),
   ]);
   try {
-    n.add(process.cwd());
+    cwds.add(process.cwd());
   } catch {}
-  return splitBindableWriteRoots([...getDefaultWritePaths(), ...e.filesystem.allowWrite], n);
+  return splitBindableWriteRoots([...getDefaultWritePaths(), ...config.filesystem.allowWrite], cwds);
 }
 //@ chunk-fq0cr76a.js:1001424-1001517 placement
 /**
  * 这次包装是否没有真实隔离：平台不是 linux/wsl/macos、filesystem.disabled、本会话已降为无隔离包装或其他强制条件。strict 策略据此拒绝执行。
  */
-function isWrapUnconfined(e) {
+function isWrapUnconfined(config) {
   return (
     !supportsPosixSandbox() ||
-    e.filesystem.disabled === true ||
+    config.filesystem.disabled === true ||
     getSandboxAdapterState().unconfinedWrapThisSession ||
     scrubReady()
   );
@@ -5982,119 +6193,128 @@ function recordSessionWrapWriteRoots() {
 /**
  * 记录本会话沙箱包装命令的工作目录与可绑定写根、树外目标；未受约束或无法确定时打标记。
  */
-function recordWrapWriteRoots(e) {
+function recordWrapWriteRoots(config) {
   if (!supportsPosixSandbox()) return;
   let sandboxAdapterState = getSandboxAdapterState();
-  if (!e || e.filesystem.disabled || scrubReady()) {
+  if (!config || config.filesystem.disabled || scrubReady()) {
     sandboxAdapterState.unconfinedWrapThisSession = true;
     return;
   }
-  let r;
+  let cwd;
   try {
-    r = process.cwd();
+    cwd = process.cwd();
   } catch {
     sandboxAdapterState.unconfinedWrapThisSession = true;
     return;
   }
-  sandboxAdapterState.wrapCwdsThisSession.add(r);
+  sandboxAdapterState.wrapCwdsThisSession.add(cwd);
   let { bindable, outOfTreeTargets, hasUndecidableEntry } = splitBindableWriteRoots(
-    [...getDefaultWritePaths(), ...e.filesystem.allowWrite],
-    new Set([r]),
+    [...getDefaultWritePaths(), ...config.filesystem.allowWrite],
+    new Set([cwd]),
   );
-  for (let b of bindable) sandboxAdapterState.wrapBindableWriteRootsThisSession.add(b);
+  for (let root of bindable) sandboxAdapterState.wrapBindableWriteRootsThisSession.add(root);
   if (isRemoteSessionAvailable()) return;
   for (let outOfTreeTarget of outOfTreeTargets)
     sandboxAdapterState.wrapOutOfTreeTargetsThisSession.add(outOfTreeTarget);
   sandboxAdapterState.undecidableWrapThisSession ||= hasUndecidableEntry;
 }
 //@ chunk-fq0cr76a.js:1002551-1002640 placement
-function isPathPrefixOfAny(e, n) {
-  if (e === null || n === null) return true;
-  return e.some((r) => n.some((s) => isPathPrefixOf(s, r)));
+function isPathPrefixOfAny(left, right) {
+  if (left === null || right === null) return true;
+  return left.some((leftItem) => right.some((rightItem) => isPathPrefixOf(rightItem, leftItem)));
 }
 //@ chunk-fq0cr76a.js:1002640-1002931 placement
 function isInsideWriteRoots(action, path, writeRoots) {
   let filtered = path.split("/").filter(Boolean);
-  return writeRoots.some((h) => {
-    if (isPathPrefixOf(h, path, false)) return true;
-    if (!isPathPrefixOf(h, path)) return false;
-    let y = statInodeInfo(h);
-    if (y === null) return false;
-    let b = count(h.split("/"), Boolean);
-    let S = statInodeInfo(`/${filtered.slice(0, b).join("/")}`);
-    return S !== null && y.dev === S.dev && y.ino === S.ino && (action === "delete" || y.isTold);
+  return writeRoots.some((root) => {
+    if (isPathPrefixOf(root, path, false)) return true;
+    if (!isPathPrefixOf(root, path)) return false;
+    let rootInfo = statInodeInfo(root);
+    if (rootInfo === null) return false;
+    let rootDepth = count(root.split("/"), Boolean);
+    let candidateInfo = statInodeInfo(`/${filtered.slice(0, rootDepth).join("/")}`);
+    return (
+      candidateInfo !== null &&
+      rootInfo.dev === candidateInfo.dev &&
+      rootInfo.ino === candidateInfo.ino &&
+      (action === "delete" || rootInfo.isTold)
+    );
   });
 }
 //@ chunk-fq0cr76a.js:1002931-1003324 placement
 /**
  * 判断目录是否与给定路径相同（可选：或在其上方）：有可靠 inode 时按设备与 inode 比较，否则按规范化路径比较。
  */
-function isSameDirOrAbove(e, n, { orAbove }) {
-  let s = statInodeInfo(e);
-  if (s?.isTold !== true) {
-    let normalized = n.normalize("NFC");
+function isSameDirOrAbove(dir, ancestor, { orAbove }) {
+  let dirInfo = statInodeInfo(dir);
+  if (dirInfo?.isTold !== true) {
+    let normalized = ancestor.normalize("NFC");
     return [
-      e.normalize("NFC"),
-      toComparablePath(e, {
+      dir.normalize("NFC"),
+      toComparablePath(dir, {
         foldCase: false,
       }),
     ].some(
-      (y) =>
-        isPathWithin(y, normalized, {
+      (comparable) =>
+        isPathWithin(comparable, normalized, {
           alreadyComparable: true,
         }) &&
         (orAbove ||
-          isPathWithin(normalized, y, {
+          isPathWithin(normalized, comparable, {
             alreadyComparable: true,
           })),
     );
   }
-  for (let h = n; ; h = dirname(h)) {
-    let y = statInodeInfo(h);
-    if (y !== null && y.dev === s.dev && y.ino === s.ino) {
-      let b = dirname(h);
-      while (dirname(b) !== b && statInodeInfo(b)?.isLink === false) b = dirname(b);
-      if (dirname(b) === b) return true;
+  for (let current = ancestor; ; current = dirname(current)) {
+    let currentInfo = statInodeInfo(current);
+    if (currentInfo !== null && currentInfo.dev === dirInfo.dev && currentInfo.ino === dirInfo.ino) {
+      let top = dirname(current);
+      while (dirname(top) !== top && statInodeInfo(top)?.isLink === false) top = dirname(top);
+      if (dirname(top) === top) return true;
     }
-    if (!orAbove || dirname(h) === h) return false;
+    if (!orAbove || dirname(current) === current) return false;
   }
 }
 //@ chunk-fq0cr76a.js:1003324-1003470 placement
-function statInodeInfo(e) {
+function statInodeInfo(path) {
   try {
-    let n = lstatSync(e, {
+    let stats = lstatSync(path, {
       bigint: true,
     });
-    let { dev, ino } = n;
+    let { dev, ino } = stats;
     return {
       dev,
       ino,
       isTold: dev !== 0n && !isSentinelInode(ino),
-      isLink: n.isSymbolicLink(),
+      isLink: stats.isSymbolicLink(),
     };
   } catch {
     return null;
   }
 }
 //@ chunk-fq0cr76a.js:1003470-1003624 placement
-function isPathPrefixOf(e, n, r = true) {
-  let filtered = e.split("/").filter(Boolean);
-  let filtered_2 = n.split("/").filter(Boolean);
+function isPathPrefixOf(prefix, path, foldCase = true) {
+  let filtered = prefix.split("/").filter(Boolean);
+  let filtered_2 = path.split("/").filter(Boolean);
   return (
     filtered.length <= filtered_2.length &&
-    filtered.every((y, b) => (r ? isSamePathCaseFolded(y, filtered_2[b]) : y === filtered_2[b]))
+    filtered.every((segment, otherSegment) =>
+      foldCase
+        ? isSamePathCaseFolded(segment, filtered_2[otherSegment])
+        : segment === filtered_2[otherSegment],
+    )
   );
 }
 //@ chunk-fq0cr76a.js:1003624-1003726 placement
 /**
  * 路径大小写折叠：去掉特定字符后 NFD→小写→大写→NFC，用于在大小写不敏感文件系统上比较。
  */
-function foldPathCase(e) {
-  return e.replace(regExp, "").normalize("NFD").toLowerCase().toUpperCase().normalize("NFC");
+function foldPathCase(path) {
+  return path.replace(regExp, "").normalize("NFD").toLowerCase().toUpperCase().normalize("NFC");
 }
 //@ chunk-fq0cr76a.js:1003726-1003772 placement
-function isSamePathCaseFolded(e, n) {
-  return e === n || foldPathCase(e) === foldPathCase(n);
+function isSamePathCaseFolded(a, b) {
+  return a === b || foldPathCase(a) === foldPathCase(b);
 }
 //@ chunk-fq0cr76a.js:1003772-1003889 placement
 function sameStringSet(symlinkHopDirectories, hopDirectories) {
@@ -6104,8 +6324,8 @@ function sameStringSet(symlinkHopDirectories, hopDirectories) {
     symlinkHopDirectories.length !== hopDirectories.length
   )
     return false;
-  let r = new Set(symlinkHopDirectories);
-  return hopDirectories.every((s) => r.has(s));
+  let set = new Set(symlinkHopDirectories);
+  return hopDirectories.every((item) => set.has(item));
 }
 //@ chunk-fq0cr76a.js:1003889-1005016 placement
 /**
@@ -6161,82 +6381,82 @@ function spareUserRetargetedLinks(spared) {
  * 复查 denyWrite 中按字面登记、后来变成符号链接的候选：解析其最终目标（最多跟 8 层），把目标加进 denyWrite 并重新安装配置。
  */
 function rescreenDenyLiteralSymlinks() {
-  let e = assertMarkedPathsResolved(SandboxManager_2.getConfig());
-  if (!e) return;
+  let config = assertMarkedPathsResolved(SandboxManager_2.getConfig());
+  if (!config) return;
   let { denyLiteralSymlinkCandidates } = getSandboxAdapterState();
-  let r = new Map();
+  let resolved = new Map();
   for (let denyLiteralSymlinkCandidate of denyLiteralSymlinkCandidates) {
-    if (r.has(denyLiteralSymlinkCandidate)) continue;
-    let b;
+    if (resolved.has(denyLiteralSymlinkCandidate)) continue;
+    let linkText;
     try {
-      b = readlinkSync(denyLiteralSymlinkCandidate);
+      linkText = readlinkSync(denyLiteralSymlinkCandidate);
     } catch {
       continue;
     }
-    let S;
+    let resolvedTarget;
     try {
-      S = realpathSync(denyLiteralSymlinkCandidate);
+      resolvedTarget = realpathSync(denyLiteralSymlinkCandidate);
     } catch {
-      S =
-        followDanglingLink(denyLiteralSymlinkCandidate, b) ??
-        resolve(dirname(denyLiteralSymlinkCandidate), b);
+      resolvedTarget =
+        followDanglingLink(denyLiteralSymlinkCandidate, linkText) ??
+        resolve(dirname(denyLiteralSymlinkCandidate), linkText);
       for (let j = 0; j < 8; j++) {
-        let R;
+        let nextText;
         try {
-          R = readlinkSync(S);
+          nextText = readlinkSync(resolvedTarget);
         } catch {
           break;
         }
-        S = resolve(dirname(S), R);
+        resolvedTarget = resolve(dirname(resolvedTarget), nextText);
       }
     }
-    r.set(denyLiteralSymlinkCandidate, S);
+    resolved.set(denyLiteralSymlinkCandidate, resolvedTarget);
   }
-  if (r.size === 0) return;
+  if (resolved.size === 0) return;
   for (let j = denyLiteralSymlinkCandidates.length - 1; j >= 0; j--)
-    if (r.has(denyLiteralSymlinkCandidates[j])) denyLiteralSymlinkCandidates.splice(j, 1);
-  let s = {
-    ...e,
+    if (resolved.has(denyLiteralSymlinkCandidates[j])) denyLiteralSymlinkCandidates.splice(j, 1);
+  let nextConfig = {
+    ...config,
     filesystem: {
-      ...e.filesystem,
-      denyWrite: uniq([...r.values(), ...e.filesystem.denyWrite]),
+      ...config.filesystem,
+      denyWrite: uniq([...resolved.values(), ...config.filesystem.denyWrite]),
     },
   };
   let sandboxAdapterState = getSandboxAdapterState();
   sandboxAdapterState.builtConfigEnforcesAllowlist.set(
-    s,
+    nextConfig,
     sandboxAdapterState.installedFilterRequestEnforcesAllowlist,
   );
-  installSandboxConfig(s);
+  installSandboxConfig(nextConfig);
 }
 //@ chunk-fq0cr76a.js:1005584-1005671 placement
 function ensureTrailingBackslashForDriveRoot({ path, patternBeneath }, path_2) {
   return !patternBeneath && /^(?:[a-z]:)?$/i.test(path) ? `${path}\\` : path_2;
 }
 //@ chunk-fq0cr76a.js:1005671-1005759 placement
-function cachedResolvedPrefix(path, n) {
-  let r = n.get(path);
-  if (r !== undefined) return r;
+function cachedResolvedPrefix(path, cache) {
+  let cached = cache.get(path);
+  if (cached !== undefined) return cached;
   let existingPrefix = resolveExistingPrefixSafely(path);
-  n.set(path, existingPrefix);
+  cache.set(path, existingPrefix);
   return existingPrefix;
 }
 //@ chunk-fq0cr76a.js:1005759-1005822 placement
-function resolveExistingPrefixSafely(e) {
-  if (isForeignUnresolvedMount(e) || linkChainIsUnsafeToFollow(e, getCwdState())) return null;
-  return resolveExistingPrefix(e);
+function resolveExistingPrefixSafely(path) {
+  if (isForeignUnresolvedMount(path) || linkChainIsUnsafeToFollow(path, getCwdState())) return null;
+  return resolveExistingPrefix(path);
 }
 //@ chunk-fq0cr76a.js:1005822-1005858 placement
-function isNetworkSpelledGrantRoot(e) {
-  return isUntouchableSpelling(e) || isNetDir(e);
+function isNetworkSpelledGrantRoot(path) {
+  return isUntouchableSpelling(path) || isNetDir(path);
 }
 //@ chunk-fq0cr76a.js:1005858-1005899 placement
-function isForeignUnresolvedMount(e) {
-  return isOnForeignMount(e, getCwdState()) && !isLocalNetworkPath(e);
+function isForeignUnresolvedMount(path) {
+  return isOnForeignMount(path, getCwdState()) && !isLocalNetworkPath(path);
 }
 //@ chunk-fq0cr76a.js:1005899-1005953 placement
-function normalizeUncTildePath(e) {
-  return stripExtendedPathPrefix(expandWindowsEnvRefs(e)).replace(/^~\\/, "~/");
+function normalizeUncTildePath(path) {
+  return stripExtendedPathPrefix(expandWindowsEnvRefs(path)).replace(/^~\\/, "~/");
 }
 //@ chunk-fq0cr76a.js:1005953-1007224 placement
 /**
@@ -6247,54 +6467,62 @@ function isUnsafeNetworkPath(path, context, vouched) {
   let places = vouched ? context.placesOfVouched : context.ownPlaces;
   if (context.sharesReach && isWindowsDevicePath(path)) {
     let uncHost = uncHostOf(path);
-    let R = context.trustsWriter || uncHost?.endsWith(".") !== true;
-    let D = isDeviceNamespacePath(path);
-    let O = D || hasWin32DevicePrefixSpelling(path);
-    let L = hasDotSegment(D ? path.slice(3) : path);
-    let V = uncHost === null && O && !NT_NAMESPACE_PREFIX_RE.test(path.slice(3)) && !L;
-    let K = O && L;
-    let [q, Z, ...J] = path.replace(/^[\\/]{2}/, "").split(/[\\/]+/);
-    let ie =
-      !!q &&
-      !!Z &&
-      [q, Z].every((ue) => ue !== "." && ue !== "..") &&
-      [Z, ...J].every((ue) => ue === "." || ue === ".." || !/[. ]$/.test(ue));
-    let ae = 0;
-    for (let ue of J)
-      if (ue === "..") {
-        ae--;
-        ie &&= ae >= 0;
-      } else if (ue !== "." && ue !== "") ae++;
-    let replaced = hostname().replace(/[A-Z]/g, (ue) => ue.toLowerCase());
+    let trustsUnc = context.trustsWriter || uncHost?.endsWith(".") !== true;
+    let deviceNamespace = isDeviceNamespacePath(path);
+    let deviceLike = deviceNamespace || hasWin32DevicePrefixSpelling(path);
+    let hasDotPart = hasDotSegment(deviceNamespace ? path.slice(3) : path);
+    let straightUnc =
+      uncHost === null && deviceLike && !NT_NAMESPACE_PREFIX_RE.test(path.slice(3)) && !hasDotPart;
+    let deviceWithDotSegment = deviceLike && hasDotPart;
+    let [firstSegment, secondSegment, ...restSegments] = path.replace(/^[\\/]{2}/, "").split(/[\\/]+/);
+    let segmentsClean =
+      !!firstSegment &&
+      !!secondSegment &&
+      [firstSegment, secondSegment].every((segment) => segment !== "." && segment !== "..") &&
+      [secondSegment, ...restSegments].every(
+        (segment) => segment === "." || segment === ".." || !/[. ]$/.test(segment),
+      );
+    let depth = 0;
+    for (let segment of restSegments)
+      if (segment === "..") {
+        depth--;
+        segmentsClean &&= depth >= 0;
+      } else if (segment !== "." && segment !== "") depth++;
+    let replaced = hostname().replace(/[A-Z]/g, (char) => char.toLowerCase());
     return (
-      !V &&
-      !(R && isLocalNetworkPath(path)) &&
+      !straightUnc &&
+      !(trustsUnc && isLocalNetworkPath(path)) &&
       !(
-        R &&
+        trustsUnc &&
         uncHost !== null &&
-        !O &&
-        (vouched || ie) &&
+        !deviceLike &&
+        (vouched || segmentsClean) &&
         (isLocalHostName(uncHost) ||
           isLocalInterfaceAddress(uncHost, context) ||
           isShortNameOfHost(uncHost, replaced, context))
       ) &&
-      !(uncHost !== null && !D && !hasDotSegment(path) && isShortNameOfHost(uncHost, replaced, context)) &&
-      !(uncHost !== null && !K && WILDCARD_ONLY_RE.test(uncHost)) &&
       !(
-        !K &&
+        uncHost !== null &&
+        !deviceNamespace &&
+        !hasDotSegment(path) &&
+        isShortNameOfHost(uncHost, replaced, context)
+      ) &&
+      !(uncHost !== null && !deviceWithDotSegment && WILDCARD_ONLY_RE.test(uncHost)) &&
+      !(
+        !deviceWithDotSegment &&
         vouchedGrants.some((vouchedGrant) => hostPatternsMatch(uncHostOf(vouchedGrant), uncHost, context))
       ) &&
       places.every((place) => {
-        let me = uncHostOf(place);
+        let placeHost = uncHostOf(place);
         return (
           isForeignNetworkPath(path, place) &&
-          (K ||
-            (!hostPatternsMatch(uncHost, me, context) &&
+          (deviceWithDotSegment ||
+            (!hostPatternsMatch(uncHost, placeHost, context) &&
               !(
                 uncHost !== null &&
-                me !== null &&
-                (((vouched || ie) && hostNamesMatch(uncHost, me, context)) ||
-                  isShortNameOfHost(uncHost, me, context))
+                placeHost !== null &&
+                (((vouched || segmentsClean) && hostNamesMatch(uncHost, placeHost, context)) ||
+                  isShortNameOfHost(uncHost, placeHost, context))
               )))
         );
       })
@@ -6302,40 +6530,42 @@ function isUnsafeNetworkPath(path, context, vouched) {
   }
   if (!isAutomountPath(path, context)) return false;
   let autoHost = networkMountHost(path);
-  let b =
+  let localAutoHost =
     autoHost !== null &&
     !/\.ipv6-literal\.net\.?$/.test(autoHost) &&
     (((context.trustsWriter || !autoHost.endsWith(".")) && isLocalHostName(autoHost)) ||
       isLocalInterfaceAddress(autoHost, context) ||
       isShortNameOfHost(
         autoHost,
-        hostname().replace(/[A-Z]/g, (w) => w.toLowerCase()),
+        hostname().replace(/[A-Z]/g, (char) => char.toLowerCase()),
         context,
       ));
   return (
     (autoHost !== null
-      ? !WILDCARD_ONLY_RE.test(autoHost) && !b
-      : isMacSpecialPath(path) || count(path.split("/"), (w) => w !== "" && w !== ".") > 2) &&
+      ? !WILDCARD_ONLY_RE.test(autoHost) && !localAutoHost
+      : isMacSpecialPath(path) ||
+        count(path.split("/"), (segment) => segment !== "" && segment !== ".") > 2) &&
     !vouchedGrants.some((vouchedGrant) =>
       hostPatternsMatch(networkMountHost(vouchedGrant), autoHost, context),
     ) &&
     places.every((place) => {
-      let R = networkMountHost(place);
+      let placeHost = networkMountHost(place);
       return (
         isForeignMountPath(path, place) &&
-        !hostPatternsMatch(autoHost, R, context) &&
+        !hostPatternsMatch(autoHost, placeHost, context) &&
         !(
           autoHost !== null &&
-          R !== null &&
-          ((vouched && hostNamesMatch(autoHost, R, context)) || isShortNameOfHost(autoHost, R, context))
+          placeHost !== null &&
+          ((vouched && hostNamesMatch(autoHost, placeHost, context)) ||
+            isShortNameOfHost(autoHost, placeHost, context))
         )
       );
     })
   );
 }
 //@ chunk-fq0cr76a.js:1007224-1007315 placement
-function hostNamesMatch(e, n, context) {
-  return e === n || (context.trustsWriter && e.replace(/\.$/, "") === n.replace(/\.$/, ""));
+function hostNamesMatch(a, b, context) {
+  return a === b || (context.trustsWriter && a.replace(/\.$/, "") === b.replace(/\.$/, ""));
 }
 //@ chunk-fq0cr76a.js:1007315-1007524 placement
 var NT_NAMESPACE_PREFIX_RE =
@@ -6343,14 +6573,16 @@ var NT_NAMESPACE_PREFIX_RE =
 var NT_DEVICE_PREFIX_RE =
   /^[\\/](?:[a-z]:|Volume\{[0-9a-f-]+\}|HarddiskVolume\d+|PhysicalDrive\d+|CdRom\d+|pipe)(?:[\\/]|$)/i;
 //@ chunk-fq0cr76a.js:1007524-1007613 placement
-function isProcPath(e) {
-  return (getPlatform() === "linux" || getPlatform() === "wsl") && (e === "/proc" || e.startsWith("/proc/"));
+function isProcPath(path) {
+  return (
+    (getPlatform() === "linux" || getPlatform() === "wsl") && (path === "/proc" || path.startsWith("/proc/"))
+  );
 }
 //@ chunk-fq0cr76a.js:1007613-1007739 placement
-function isAutomountPath(e, context) {
+function isAutomountPath(path, context) {
   return context.automounter === "macos"
-    ? isNetworkMountPath(e) || neverOtherHostMount(e) || isMacSpecialPath(e)
-    : context.automounter === "linux" && networkMountRootCached(e)?.startsWith("/net/") === true;
+    ? isNetworkMountPath(path) || neverOtherHostMount(path) || isMacSpecialPath(path)
+    : context.automounter === "linux" && networkMountRootCached(path)?.startsWith("/net/") === true;
 }
 //@ chunk-fq0cr76a.js:1007739-1007756 placement
 var WILDCARD_ONLY_RE = /^[*?]+$/;
@@ -6397,32 +6629,32 @@ var MAX_PARENT_DIR_WALK = 40;
 /**
  * 判断目录是否是 root 所有、当前用户不可写的固定目录（带缓存，逐级向上）。
  */
-function isRootOwnedFixedFolder(e, n) {
-  let r = n.fixedFolders.get(e);
-  if (r !== undefined) return r;
-  let s = isProcPath(e);
-  let h = dirname(e);
-  let y = s || h === e || isRootOwnedFixedFolder(h, n);
-  if (y && !s) {
-    y = false;
-    let b = process.getuid?.();
+function isRootOwnedFixedFolder(path, context) {
+  let cached = context.fixedFolders.get(path);
+  if (cached !== undefined) return cached;
+  let isProc = isProcPath(path);
+  let parent = dirname(path);
+  let result = isProc || parent === path || isRootOwnedFixedFolder(parent, context);
+  if (result && !isProc) {
+    result = false;
+    let uid = process.getuid?.();
     try {
-      let { uid, mode } = statSync(e);
+      let { uid: uid_2, mode } = statSync(path);
       try {
-        accessSync(e, constants.W_OK);
+        accessSync(path, constants.W_OK);
       } catch (error) {
         let errnoCode = getErrnoCode(error);
-        y =
-          b !== undefined &&
-          b !== 0 &&
-          uid === 0 &&
+        result =
+          uid !== undefined &&
+          uid !== 0 &&
+          uid_2 === 0 &&
           (mode & 18) === 0 &&
           (errnoCode === "EACCES" || errnoCode === "EPERM" || errnoCode === "EROFS");
       }
     } catch {}
   }
-  n.fixedFolders.set(e, y);
-  return y;
+  context.fixedFolders.set(path, result);
+  return result;
 }
 //@ chunk-fq0cr76a.js:1008723-1009676 placement
 /**
@@ -6466,9 +6698,9 @@ function findRemoteMountPrefix(path, context, vouched, strict) {
       continue;
     }
     if (!context.linkTexts.has(candidate)) {
-      let L;
+      let linkText;
       try {
-        L = readlinkSync(candidate);
+        linkText = readlinkSync(candidate);
       } catch (error) {
         if (getErrnoCode(error) !== "EINVAL") {
           let path = [candidate, ...parts].join("/");
@@ -6478,7 +6710,7 @@ function findRemoteMountPrefix(path, context, vouched, strict) {
             : undefined;
         }
       }
-      context.linkTexts.set(candidate, L);
+      context.linkTexts.set(candidate, linkText);
     }
     let linkText = context.linkTexts.get(candidate);
     if (linkText === undefined) {
@@ -6514,10 +6746,10 @@ function shouldDropRemoteHostEntry(entryKind, entryPath, source, context, isMana
       return false;
     if (context.prepared === "no") {
       context.prepared = "failed";
-      let L = getPlatform() === "macos";
-      if (!context.sharesReach && (L ? readAutoMaster() : readAutofsMounts())) {
-        context.automounter = L ? "macos" : "linux";
-        if (!L) {
+      let isMac = getPlatform() === "macos";
+      if (!context.sharesReach && (isMac ? readAutoMaster() : readAutofsMounts())) {
+        context.automounter = isMac ? "macos" : "linux";
+        if (!isMac) {
           let autofsMountPoints = readAutofsMountPoints();
           if (autofsMountPoints === undefined) return false;
           context.automountPoints = autofsMountPoints;
@@ -6548,7 +6780,10 @@ function shouldDropRemoteHostEntry(entryKind, entryPath, source, context, isMana
       return false;
     let normalized = context.sharesReach ? normalizeUncTildePath(entryPath) : entryPath;
     let candidates = (context.sharesReach ? containsGlobCharsWin(normalized) : containsGlobChars(normalized))
-      ? [getGlobBaseDirectory_2(normalized), ...nameReadingsOfGlobSpelling(normalized).map((L) => L.name)]
+      ? [
+          getGlobBaseDirectory_2(normalized),
+          ...nameReadingsOfGlobSpelling(normalized).map((reading) => reading.name),
+        ]
       : [normalized];
     let mapped = uniq(
       candidates.flatMap((candidate) =>
@@ -6561,14 +6796,16 @@ function shouldDropRemoteHostEntry(entryKind, entryPath, source, context, isMana
         context.sharesReach &&
         !context.trustsWriter &&
         mapped.some(
-          (L) =>
-            (isDeviceNamespacePath(L) || hasWin32DevicePrefixSpelling(L)) &&
-            !NT_DEVICE_PREFIX_RE.test(L.slice(3)),
+          (candidate) =>
+            (isDeviceNamespacePath(candidate) || hasWin32DevicePrefixSpelling(candidate)) &&
+            !NT_DEVICE_PREFIX_RE.test(candidate.slice(3)),
         )
       ) &&
-      !mapped.some((L) => isUnsafeNetworkPath(L, context, isTrustedSource)) &&
+      !mapped.some((candidate) => isUnsafeNetworkPath(candidate, context, isTrustedSource)) &&
       (context.sharesReach ||
-        !mapped.some((L) => findRemoteMountPrefix(L, context, isTrustedSource, true) !== undefined))
+        !mapped.some(
+          (candidate) => findRemoteMountPrefix(candidate, context, isTrustedSource, true) !== undefined,
+        ))
     )
       return false;
     let dropKey = `${entryKind} ${jsonStringify(entryPath)} from ${source}`;
@@ -6593,73 +6830,75 @@ function droppedDeniesForHost() {
   return [...getSandboxAdapterState().deniesDroppedForAnotherHost];
 }
 //@ chunk-fq0cr76a.js:1011391-1011430 placement
-function subscribeSandboxEvents(e) {
-  return sandboxErrorSignalLazy.subscribe(e);
+function subscribeSandboxEvents(listener) {
+  return sandboxErrorSignalLazy.subscribe(listener);
 }
 //@ chunk-fq0cr76a.js:1011430-1011523 placement
-function isLocalNetworkPath(e) {
-  if (isWslUncPath(e)) return true;
-  if (isDeviceNamespacePath(e) || hasDotSegment(e)) return false;
-  let n = uncHostOf(e);
-  return n !== null && isLocalHostName(n);
+function isLocalNetworkPath(path) {
+  if (isWslUncPath(path)) return true;
+  if (isDeviceNamespacePath(path) || hasDotSegment(path)) return false;
+  let uncHost = uncHostOf(path);
+  return uncHost !== null && isLocalHostName(uncHost);
 }
 //@ chunk-fq0cr76a.js:1011523-1011654 placement
-function isLocalHostName(e) {
-  let replaced = e.replace(/\.$/, "");
+function isLocalHostName(name) {
+  let replaced = name.replace(/\.$/, "");
   return (
     isLoopbackHost(replaced) ||
     replaced === "--1.ipv6-literal.net" ||
-    replaced === hostname().replace(/[A-Z]/g, (r) => r.toLowerCase())
+    replaced === hostname().replace(/[A-Z]/g, (char) => char.toLowerCase())
   );
 }
 //@ chunk-fq0cr76a.js:1011654-1011681 placement
 var IPV6_LITERAL_SUFFIX = ".ipv6-literal.net";
 //@ chunk-fq0cr76a.js:1011681-1011841 placement
-function isLocalInterfaceAddress(e, context) {
-  let r = e.endsWith(IPV6_LITERAL_SUFFIX)
-    ? e.slice(0, -IPV6_LITERAL_SUFFIX.length).replaceAll("-", ":")
+function isLocalInterfaceAddress(host, context) {
+  let dottedIp = host.endsWith(IPV6_LITERAL_SUFFIX)
+    ? host.slice(0, -IPV6_LITERAL_SUFFIX.length).replaceAll("-", ":")
     : null;
   return (
     context.trustsWriter &&
-    (r === null ? isIP(e) !== 0 : isIP(r) === 6) &&
-    (getLocalInterfaceAddresses()?.has(e) ?? true)
+    (dottedIp === null ? isIP(host) !== 0 : isIP(dottedIp) === 6) &&
+    (getLocalInterfaceAddresses()?.has(host) ?? true)
   );
 }
 //@ chunk-fq0cr76a.js:1011841-1012144 placement
 /**
  * 判断一个主机名是另一个的短名（短名加本机搜索域等于全名）。
  */
-function isShortNameOfHost(e, n, context) {
-  let [s, h] = e.includes(".") ? [n, e.replace(/\.$/, "")] : [e, n.replace(/\.$/, "")];
-  if (s.includes(".") || !h.startsWith(`${s}.`)) return false;
+function isShortNameOfHost(name, fqdn, context) {
+  let [shortName, fullName] = name.includes(".")
+    ? [fqdn, name.replace(/\.$/, "")]
+    : [name, fqdn.replace(/\.$/, "")];
+  if (shortName.includes(".") || !fullName.startsWith(`${shortName}.`)) return false;
   let localSearchDomain = getLocalSearchDomain(context);
   return (
-    (typeof localSearchDomain === "string" && h === `${s}.${localSearchDomain}`) ||
+    (typeof localSearchDomain === "string" && fullName === `${shortName}.${localSearchDomain}`) ||
     (context.trustsWriter &&
       (localSearchDomain === null ||
         context.automounter === "macos" ||
-        (context.searchDomains ?? []).some((b) => h === `${s}.${b}`)))
+        (context.searchDomains ?? []).some((domain) => fullName === `${shortName}.${domain}`)))
   );
 }
 //@ chunk-fq0cr76a.js:1012144-1012405 placement
-function getLocalSearchDomain(e) {
-  if (e.sharesReach) return null;
-  if (e.searchDomains === undefined) e.searchDomains = readResolvSearchDomains() ?? null;
-  if (e.searchDomains === null) return null;
-  let replaced = hostname().replace(/[A-Z]/g, (s) => s.toLowerCase());
+function getLocalSearchDomain(context) {
+  if (context.sharesReach) return null;
+  if (context.searchDomains === undefined) context.searchDomains = readResolvSearchDomains() ?? null;
+  if (context.searchDomains === null) return null;
+  let replaced = hostname().replace(/[A-Z]/g, (char) => char.toLowerCase());
   let index = replaced.indexOf(".");
-  return e.searchDomains[0] ?? (index === -1 ? undefined : replaced.slice(index + 1));
+  return context.searchDomains[0] ?? (index === -1 ? undefined : replaced.slice(index + 1));
 }
 //@ chunk-fq0cr76a.js:1012405-1012579 placement
-function isGrantCoveredByPattern(e, { path, patternBeneath }, path_2) {
+function isGrantCoveredByPattern(denyRoots, { path, patternBeneath }, path_2) {
   let platform = getPlatform();
-  let y = platform === "windows";
+  let isWindows = platform === "windows";
   return (
     !isPathPrefixOf(
-      y ? path.replaceAll("\\", "/") : path,
-      y ? path_2.replaceAll("\\", "/") : path_2,
-      y || platform === "macos",
-    ) && (patternBeneath ? anyGlobPathCovers(e, [path_2]) : anyDenyEntryCovers(e, [path_2]))
+      isWindows ? path.replaceAll("\\", "/") : path,
+      isWindows ? path_2.replaceAll("\\", "/") : path_2,
+      isWindows || platform === "macos",
+    ) && (patternBeneath ? anyGlobPathCovers(denyRoots, [path_2]) : anyDenyEntryCovers(denyRoots, [path_2]))
   );
 }
 //@ chunk-fq0cr76a.js:1012579-1012609 placement
@@ -6673,91 +6912,94 @@ function rescreenLateSymlinkGrants() {
   let { lateSymlinkGrantCandidates, lateSymlinkGrantDenyRoots, lateSymlinkGrantProfile } =
     sandboxAdapterState;
   if (lateSymlinkGrantCandidates.length === 0) return;
-  let h = assertMarkedPathsResolved(SandboxManager_2.getConfig());
-  if (!h) return;
-  let y =
+  let config = assertMarkedPathsResolved(SandboxManager_2.getConfig());
+  if (!config) return;
+  let gitHome =
     lateSymlinkGrantProfile !== undefined &&
     readFlagWithOverride(TENGU_CURRIED_WILLOW, {
       safe: true,
     })
       ? lateSymlinkGrantProfile
       : undefined;
-  let b = {
+  let dropped = {
     allowRead: new Set(),
     allowWrite: new Set(),
   };
-  let S = new Map();
+  let cache = new Map();
   for (let j = lateSymlinkGrantCandidates.length - 1; j >= 0; j--) {
     let { literal, list, roots } = lateSymlinkGrantCandidates[j];
-    let V;
+    let reason;
     for (let root of roots) {
-      let q = cachedResolvedPrefix(root.path, S);
-      if (q === null) V = "it no longer resolves safely";
-      else if (y !== undefined && isUnderGitHome(ensureTrailingBackslashForDriveRoot(root, q.path), y))
-        V = root.nameReading
+      let prefix = cachedResolvedPrefix(root.path, cache);
+      if (prefix === null) reason = "it no longer resolves safely";
+      else if (
+        gitHome !== undefined &&
+        isUnderGitHome(ensureTrailingBackslashForDriveRoot(root, prefix.path), gitHome)
+      )
+        reason = root.nameReading
           ? `the sandbox may also read ${root.path} as a folder name, and that folder now leads to the home folder, a folder above the home folder, or a Claude Code config folder, which the Windows sandbox is not given`
           : root.patternBeneath
             ? `the folder that it is confined to (${root.path}) now leads to the home folder, a folder above the home folder, or a Claude Code config folder, which the Windows sandbox is not given`
             : "it now leads to the home folder, a folder above the home folder, or a Claude Code config folder, which the Windows sandbox is not given";
-      else if (isGrantCoveredByPattern(lateSymlinkGrantDenyRoots, root, q.path))
-        V = root.patternBeneath
+      else if (isGrantCoveredByPattern(lateSymlinkGrantDenyRoots, root, prefix.path))
+        reason = root.patternBeneath
           ? "a directory in its spelling now resolves outside that spelling to one that holds or lies inside a denied read path"
           : "it now resolves into a denied read path outside its own spelling";
-      if (V !== undefined) break;
+      if (reason !== undefined) break;
     }
-    if (V === undefined) continue;
+    if (reason === undefined) continue;
     lateSymlinkGrantCandidates.splice(j, 1);
-    b[list].add(literal);
+    dropped[list].add(literal);
     logForDebugging(
-      `[Sandbox] dropped ${list} ${literal}: ${V} (re-linked after the config build); withheld until the next config build re-screens it`,
+      `[Sandbox] dropped ${list} ${literal}: ${reason} (re-linked after the config build); withheld until the next config build re-screens it`,
     );
     logEvent("tengu_sandbox_late_symlink_grant_dropped", {
       list: fromEnum(list),
     });
   }
-  if (b.allowRead.size === 0 && b.allowWrite.size === 0) return;
-  let w = {
-    ...h,
+  if (dropped.allowRead.size === 0 && dropped.allowWrite.size === 0) return;
+  let nextConfig = {
+    ...config,
     filesystem: {
-      ...h.filesystem,
-      allowRead: (h.filesystem.allowRead ?? []).filter((R) => !b.allowRead.has(R)),
-      allowWrite: h.filesystem.allowWrite.filter((R) => !b.allowWrite.has(R)),
+      ...config.filesystem,
+      allowRead: (config.filesystem.allowRead ?? []).filter((path) => !dropped.allowRead.has(path)),
+      allowWrite: config.filesystem.allowWrite.filter((path) => !dropped.allowWrite.has(path)),
     },
   };
   sandboxAdapterState.builtConfigEnforcesAllowlist.set(
-    w,
+    nextConfig,
     sandboxAdapterState.installedFilterRequestEnforcesAllowlist,
   );
-  installSandboxConfig(w);
+  installSandboxConfig(nextConfig);
 }
 //@ chunk-fq0cr76a.js:1014423-1014945 placement
 /**
  * 检测 cwd 是否是 git worktree：读 .git 文件中的 gitdir，校验其位于 <主仓库>.git/worktrees/ 下且反向链接一致，返回主仓库 .git 目录供沙箱放行写入；任何异常返回 null。
  */
-function detectWorktreeGitCommonDir(e) {
-  let n = join(e, ".git");
+function detectWorktreeGitCommonDir(dir) {
+  let gitPath = join(dir, ".git");
   try {
-    if (pointerFileIsSuspect(n, e)) return null;
-    let match = readFileSync(n, {
+    if (pointerFileIsSuspect(gitPath, dir)) return null;
+    let match = readFileSync(gitPath, {
       encoding: "utf8",
     }).match(/^gitdir:\s*(.+)$/m);
     if (!match?.[1]) return null;
     let trimmed = match[1].trim();
-    if (isOnForeignMount(trimmed, e)) return null;
-    if (rawPointerPathIsUnsafe(trimmed, e)) return null;
-    let y = resolve(e, trimmed);
-    let b = dirname(y);
-    if (basename(b) !== "worktrees") return null;
-    let S = dirname(b);
-    if (!basename(S).endsWith(".git")) return null;
-    if (pointerFileIsSuspect(join(y, "gitdir"), y)) return null;
-    let trimmed_2 = readFileSync(join(y, "gitdir"), {
+    if (isOnForeignMount(trimmed, dir)) return null;
+    if (rawPointerPathIsUnsafe(trimmed, dir)) return null;
+    let worktreeGitDir = resolve(dir, trimmed);
+    let worktreesDir = dirname(worktreeGitDir);
+    if (basename(worktreesDir) !== "worktrees") return null;
+    let commonDir = dirname(worktreesDir);
+    if (!basename(commonDir).endsWith(".git")) return null;
+    if (pointerFileIsSuspect(join(worktreeGitDir, "gitdir"), worktreeGitDir)) return null;
+    let trimmed_2 = readFileSync(join(worktreeGitDir, "gitdir"), {
       encoding: "utf8",
     }).trim();
-    if (isOnForeignMount(trimmed_2, e)) return null;
-    if (rawPointerPathIsUnsafe(trimmed_2, y, e)) return null;
-    if (realpathSync(resolve(y, trimmed_2)) !== join(realpathSync(e), ".git")) return null;
-    return S;
+    if (isOnForeignMount(trimmed_2, dir)) return null;
+    if (rawPointerPathIsUnsafe(trimmed_2, worktreeGitDir, dir)) return null;
+    if (realpathSync(resolve(worktreeGitDir, trimmed_2)) !== join(realpathSync(dir), ".git")) return null;
+    return commonDir;
   } catch {
     return null;
   }
@@ -6778,9 +7020,9 @@ function checkSandboxDependencies() {
       warnings: [],
     };
   let { checkDependenciesProbe } = getSandboxAdapterState();
-  let n = checkDependenciesProbe();
-  if (n.errors.includes(SANDBOX_CONFIG_UNAVAILABLE_TEXT)) checkDependenciesProbe.cache.clear?.();
-  return n;
+  let result = checkDependenciesProbe();
+  if (result.errors.includes(SANDBOX_CONFIG_UNAVAILABLE_TEXT)) checkDependenciesProbe.cache.clear?.();
+  return result;
 }
 //@ chunk-fq0cr76a.js:1015221-1015289 placement
 function cachedDependencyProbe() {
@@ -6803,23 +7045,23 @@ async function checkSandboxDependenciesAsync() {
   if (sandboxRuntimeSeeded) return sandboxRuntimeSeeded;
   let dependencyProbeGeneration = sandboxAdapterState.dependencyProbeGeneration;
   let { rgPath, rgArgs } = ripgrepCommand();
-  let y = await SandboxManager_2.checkDependenciesAsync({
+  let result = await SandboxManager_2.checkDependenciesAsync({
     command: rgPath,
     args: rgArgs,
   });
-  let b = withWindowsSandboxRemedy(y);
+  let withRemedy = withWindowsSandboxRemedy(result);
   if (dependencyProbeGeneration === sandboxAdapterState.dependencyProbeGeneration)
-    sandboxAdapterState.checkDependenciesProbe.cache.set(undefined, b);
-  return b;
+    sandboxAdapterState.checkDependenciesProbe.cache.set(undefined, withRemedy);
+  return withRemedy;
 }
 //@ chunk-fq0cr76a.js:1015643-1015686 placement
 var SANDBOX_CONFIG_UNAVAILABLE_TEXT = "sandbox configuration unavailable";
 //@ chunk-fq0cr76a.js:1015686-1015782 placement
-function withWindowsSandboxRemedy(e) {
+function withWindowsSandboxRemedy(result) {
   return {
-    ...e,
-    errors: e.errors.map((error) => describeWindowsSandboxRemedy(error)),
-    warnings: e.warnings.map((warning) => describeWindowsSandboxRemedy(warning)),
+    ...result,
+    errors: result.errors.map((error) => describeWindowsSandboxRemedy(error)),
+    warnings: result.warnings.map((warning) => describeWindowsSandboxRemedy(warning)),
   };
 }
 //@ chunk-fq0cr76a.js:1015782-1016125 placement
@@ -6853,25 +7095,25 @@ function checkDependencies_2() {
   let sandboxRuntimeSeeded = ensureSandboxRuntimeSeeded();
   if (sandboxRuntimeSeeded) return sandboxRuntimeSeeded;
   let { rgPath, rgArgs } = ripgrepCommand();
-  let s = SandboxManager_2.checkDependencies({
+  let result = SandboxManager_2.checkDependencies({
     command: rgPath,
     args: rgArgs,
   });
-  let h = withWindowsSandboxRemedy(s);
+  let withRemedy = withWindowsSandboxRemedy(result);
   let platform = getPlatform();
   if (
     (platform === "linux" || platform === "wsl") &&
-    h.errors.length === 0 &&
+    withRemedy.errors.length === 0 &&
     !getSandboxAdapterState().runtimeInitialized
   ) {
-    let b = checkAppArmorUserNamespaces(linuxSandboxProbes(sandboxBinaryPath));
-    if (b !== undefined)
+    let appArmorError = checkAppArmorUserNamespaces(linuxSandboxProbes(sandboxBinaryPath));
+    if (appArmorError !== undefined)
       return {
-        ...h,
-        errors: [b],
+        ...withRemedy,
+        errors: [appArmorError],
       };
   }
-  return h;
+  return withRemedy;
 }
 //@ chunk-fq0cr76a.js:1016391-1016520 placement
 /**
@@ -6961,7 +7203,7 @@ function isUserFailIfUnavailableUnderMandate() {
 //@ chunk-fq0cr76a.js:1017371-1017454 layout = _temp9 (0.769)
 function hasTrustedSandboxSetting(a_4) {
   return [getPolicySettingsIfEnabled(), getSettingsForSource("flagSettings")].some(
-    (n) => n?.sandbox?.[a_4] !== undefined,
+    (settings) => settings?.sandbox?.[a_4] !== undefined,
   );
 }
 //@ chunk-fq0cr76a.js:1017454-1017705 callgraph-fingerprint = convertToSandboxRuntimeConfig (0.269)
@@ -6973,8 +7215,8 @@ function hasTrustedNetworkRestrictions() {
   return [getPolicySettingsIfEnabled(), getSettingsForSource("flagSettings")].some(
     (source) =>
       (source?.sandbox?.network?.deniedDomains?.length ?? 0) > 0 ||
-      (source?.permissions?.deny ?? []).some((n) => {
-        let sourceSettings = parseRuleForSandbox(n);
+      (source?.permissions?.deny ?? []).some((denyRule) => {
+        let sourceSettings = parseRuleForSandbox(denyRule);
         return (
           sourceSettings.toolName === WEBFETCH && sourceSettings.ruleContent?.startsWith("domain:") === true
         );
@@ -6987,11 +7229,11 @@ function hasTrustedNetworkRestrictions() {
  */
 function hasTrustedReadDenies() {
   return [getPolicySettingsIfEnabled(), getSettingsForSource("flagSettings")].some(
-    (e) =>
-      (e?.sandbox?.filesystem?.denyRead?.length ?? 0) > 0 ||
-      (e?.sandbox?.credentials?.files?.length ?? 0) > 0 ||
-      (e?.permissions?.deny ?? []).some((n) => {
-        let ruleForSandbox = parseRuleForSandbox(n);
+    (settings) =>
+      (settings?.sandbox?.filesystem?.denyRead?.length ?? 0) > 0 ||
+      (settings?.sandbox?.credentials?.files?.length ?? 0) > 0 ||
+      (settings?.permissions?.deny ?? []).some((denyRule) => {
+        let ruleForSandbox = parseRuleForSandbox(denyRule);
         return ruleForSandbox.toolName === FILE_READ_TOOL_NAME && ruleForSandbox.ruleContent !== undefined;
       }),
   );
@@ -7001,60 +7243,64 @@ function hasTrustedReadDenies() {
  * 收集非 project/local 层的读禁止根：sandbox.credentials.files、Read(...) deny 规则、sandbox.filesystem.denyRead，解析为规范路径。
  */
 function getTrustedReadDenyRoots() {
-  let e = [];
-  for (let n of SETTING_SOURCES) {
-    if (n === "projectSettings" || n === "localSettings") continue;
-    let settingsForSourceTightenOnly = getSettingsForSourceTightenOnly(n);
-    e.push(
+  let roots = [];
+  for (let sourceName of SETTING_SOURCES) {
+    if (sourceName === "projectSettings" || sourceName === "localSettings") continue;
+    let settingsForSourceTightenOnly = getSettingsForSourceTightenOnly(sourceName);
+    roots.push(
       ...resolveSandboxPathPatterns(
         settingsForSourceTightenOnly?.sandbox?.credentials?.files?.map((file) => file.path),
-        n,
+        sourceName,
         "deny",
       ),
     );
-    if (!isSettingSourceEnabled(n)) continue;
-    e.push(
+    if (!isSettingSourceEnabled(sourceName)) continue;
+    roots.push(
       ...resolvePathEntries(
         groupRuleContentsByTool(settingsForSourceTightenOnly?.permissions?.deny, [FILE_READ_TOOL_NAME]).get(
           FILE_READ_TOOL_NAME,
         ),
-        n,
+        sourceName,
         "deny",
         resolvePathPatternForSandbox,
       ),
-      ...resolveSandboxPathPatterns(settingsForSourceTightenOnly?.sandbox?.filesystem?.denyRead, n, "deny"),
+      ...resolveSandboxPathPatterns(
+        settingsForSourceTightenOnly?.sandbox?.filesystem?.denyRead,
+        sourceName,
+        "deny",
+      ),
     );
   }
-  return uniq(e.flatMap((n) => canonicalizeSandboxPath(n) ?? []));
+  return uniq(roots.flatMap((root) => canonicalizeSandboxPath(root) ?? []));
 }
 //@ chunk-fq0cr76a.js:1018308-1018513 layout
 /**
  * 解析读禁止根：以 (cwd, 条目) 为键缓存一个 tick 内的解析结果，返回内置可信禁止根加上每个条目的各种拼写（原样与经 realpath 的规范路径）。
  */
-function resolveTrustedReadDenyRoots(e) {
-  let n = jsonStringify([getCwdState(), e]);
+function resolveTrustedReadDenyRoots(roots) {
+  let cacheKey = jsonStringify([getCwdState(), roots]);
   let trustedReadDenyRootResolution = getSandboxAdapterState().trustedReadDenyRootResolution;
-  if (trustedReadDenyRootResolution?.key !== n)
+  if (trustedReadDenyRootResolution?.key !== cacheKey)
     trustedReadDenyRootResolution = setTrustedReadDenyResolutionForTick({
-      key: n,
-      resolved: e.map((s) => resolveReadDenyRoot(s)),
+      key: cacheKey,
+      resolved: roots.map((root) => resolveReadDenyRoot(root)),
     });
   return {
     roots: uniq([
       ...getBuiltinTrustedDenyRoots(),
-      ...trustedReadDenyRootResolution.resolved.flatMap((s) => s.spellings),
+      ...trustedReadDenyRootResolution.resolved.flatMap((resolved) => resolved.spellings),
     ]),
     resolution: trustedReadDenyRootResolution,
   };
 }
 //@ chunk-fq0cr76a.js:1018513-1018643 layout
-function setTrustedReadDenyResolutionForTick(e) {
+function setTrustedReadDenyResolutionForTick(resolution) {
   let sandboxAdapterState = getSandboxAdapterState();
-  sandboxAdapterState.trustedReadDenyRootResolution = e;
+  sandboxAdapterState.trustedReadDenyRootResolution = resolution;
   queueMicrotask(() => {
     sandboxAdapterState.trustedReadDenyRootResolution = undefined;
   });
-  return e;
+  return resolution;
 }
 //@ chunk-fq0cr76a.js:1018643-1018669 layout
 var READ_DENY_LOOK_BUDGET_MS = 15;
@@ -7064,33 +7310,36 @@ var READ_DENY_LOOK_THROTTLE_MS = 250;
 /**
  * 把凭据遮罩的 glob 展开成具体路径（{lexical, canonical}）；位于禁区、或通配符不在最后一段、或叶子是裸 ** 时不展开只按字面参与，避免 readdir 被引导穿过未审查目录。
  */
-function expandMaskGlob(globPath) {
+function expandMaskGlob_2(globPath) {
   if (isOnForeignMount(globPath, getCwdState()) || rawPointerPathIsUnsafe(globPath, getCwdState())) return [];
   let parts = globPath.split("/");
-  let r = parts.length - 1;
-  if (parts.some((s, h) => h !== r && containsGlobChars(s)) || parts[r] === "**") {
+  let lastIndex = parts.length - 1;
+  if (
+    parts.some((segment, index) => index !== lastIndex && containsGlobChars(segment)) ||
+    parts[lastIndex] === "**"
+  ) {
     logForDebugging(
       `[sandbox] glob pattern '${globPath}' not expanded for the mask sweep: wildcards outside the final path component (or a bare '**' leaf) could steer the readdir walk through unvetted directories \u2014 the pattern participates lexically only`,
     );
     return [];
   }
-  return expandGlobPattern(globPath).map((s) => ({
-    lexical: s,
-    canonical: canonicalizePathForMaskSweep(s),
+  return expandGlobPattern(globPath).map((path) => ({
+    lexical: path,
+    canonical: canonicalizePathForMaskSweep(path),
   }));
 }
 //@ chunk-fq0cr76a.js:1019098-1019166 layout
 /**
  * 把路径做大小写折叠并规整成以 / 开头、无空段的绝对形式，用于大小写不敏感比较。
  */
-function toFoldedAbsolutePath(e) {
-  return "/" + foldPathCase(e).split("/").filter(Boolean).join("/");
+function toFoldedAbsolutePath(path) {
+  return "/" + foldPathCase(path).split("/").filter(Boolean).join("/");
 }
 //@ chunk-fq0cr76a.js:1019166-1019881 layout
 function getReadDenyReach() {
   let sandboxAdapterState = getSandboxAdapterState();
-  let n = assertMarkedPathsResolved(SandboxManager_2.getConfig());
-  if (n === undefined || isWrapUnconfined(n))
+  let config = assertMarkedPathsResolved(SandboxManager_2.getConfig());
+  if (config === undefined || isWrapUnconfined(config))
     return {
       withinReach: () => false,
       bounded: false,
@@ -7098,71 +7347,74 @@ function getReadDenyReach() {
       writeRootCount: 0,
     };
   let complete = !sandboxAdapterState.undecidableWrapThisSession && !isRemoteSessionAvailable();
-  let s = [
+  let writeRoots = [
     ...sandboxAdapterState.wrapBindableWriteRootsThisSession,
     ...sandboxAdapterState.wrapOutOfTreeTargetsThisSession,
   ];
-  let h;
+  let foldedRoots;
   return {
-    withinReach: (b) => {
-      let path = b.lookAgain?.stoppedAt?.path;
-      let joined = [...b.spellings, path ?? ""].join("\x00");
-      let R = sandboxAdapterState.readDenyRootWithinSandboxReach.get(joined);
-      if (R !== undefined && R.writeRoots === s.length) return R.reachable;
-      h ??= s.map(toFoldedAbsolutePath);
-      let D = h;
+    withinReach: (entry) => {
+      let path = entry.lookAgain?.stoppedAt?.path;
+      let joined = [...entry.spellings, path ?? ""].join("\x00");
+      let cached = sandboxAdapterState.readDenyRootWithinSandboxReach.get(joined);
+      if (cached !== undefined && cached.writeRoots === writeRoots.length) return cached.reachable;
+      foldedRoots ??= writeRoots.map(toFoldedAbsolutePath);
+      let roots = foldedRoots;
       let any = [
-        ...b.spellings.map((spelling) =>
+        ...entry.spellings.map((spelling) =>
           containsGlobChars(spelling) ? getGlobBaseDirectory_2(spelling) : spelling,
         ),
         ...(path === undefined ? [] : [path]),
       ]
         .map(toFoldedAbsolutePath)
-        .some((L) => D.some((rule) => posixCovers(rule, L)));
+        .some((spelling) => roots.some((rule) => posixCovers(rule, spelling)));
       sandboxAdapterState.readDenyRootWithinSandboxReach.set(joined, {
-        writeRoots: s.length,
+        writeRoots: writeRoots.length,
         reachable: any,
       });
       return any;
     },
     bounded: true,
     complete,
-    writeRootCount: s.length,
+    writeRootCount: writeRoots.length,
   };
 }
 //@ chunk-fq0cr76a.js:1019881-1020095 layout
-function createReadDenyLookSelector(e, withinReach) {
+function createReadDenyLookSelector(startTime, withinReach) {
   let sandboxAdapterState = getSandboxAdapterState();
   let readDenyRootLookCursor = sandboxAdapterState.readDenyRootLookCursor;
-  let h = 0;
-  let y;
+  let lookCount = 0;
+  let exhaustedAt;
   return {
-    select: (b, S) => {
-      if (S >= readDenyRootLookCursor && y === undefined) {
-        if (h < READ_DENY_LOOK_MIN_ENTRIES || performance.now() - e < READ_DENY_LOOK_BUDGET_MS) {
-          h++;
+    select: (entry, index) => {
+      if (index >= readDenyRootLookCursor && exhaustedAt === undefined) {
+        if (
+          lookCount < READ_DENY_LOOK_MIN_ENTRIES ||
+          performance.now() - startTime < READ_DENY_LOOK_BUDGET_MS
+        ) {
+          lookCount++;
           return true;
         }
-        y = S;
+        exhaustedAt = index;
       }
-      return withinReach(b);
+      return withinReach(entry);
     },
     finish: () => {
-      sandboxAdapterState.readDenyRootLookCursor = y ?? 0;
+      sandboxAdapterState.readDenyRootLookCursor = exhaustedAt ?? 0;
     },
   };
 }
 //@ chunk-fq0cr76a.js:1020095-1020255 layout
-function markLookAgainEntries(e, resolved, r) {
-  return resolved.map((s, h) => {
-    if (s.lookAgain !== undefined || e[h]?.lookAgain === undefined) return s;
-    return r(s)
+function markLookAgainEntries(previous, resolved, shouldWatch) {
+  return resolved.map((entry, index) => {
+    if (entry.lookAgain !== undefined || previous[index]?.lookAgain === undefined) return entry;
+    return shouldWatch(entry)
       ? {
-          ...s,
+          ...entry,
           lookAgain: EMPTY_RESOLVE_STATUS,
         }
       : {
-          ...s,
+          ...entry,
           settledUnwatched: true,
         };
   });
@@ -7174,44 +7426,44 @@ var EMPTY_RESOLVE_STATUS = {
   settledInReach: true,
 };
 //@ chunk-fq0cr76a.js:1020314-1020421 layout
-function rewatchSettledEntries(e, n) {
-  return e.map((r) =>
-    r.settledUnwatched && n(r)
+function rewatchSettledEntries(entries, shouldRewatch) {
+  return entries.map((entry) =>
+    entry.settledUnwatched && shouldRewatch(entry)
       ? {
-          ...r,
+          ...entry,
           settledUnwatched: undefined,
           lookAgain: EMPTY_RESOLVE_STATUS,
         }
-      : r,
+      : entry,
   );
 }
 //@ chunk-fq0cr76a.js:1020421-1020730 layout
 /**
  * 解析一个读禁止条目的根：glob 取基目录，经 canonicalizePathForMaskSweep 求规范路径，返回 {root, spellings:[原样, 规范], lookAgain}；路径未稳定或经过符号链接时 lookAgain 记录停在何处，供运行中复查。
  */
-function resolveReadDenyRoot(e, n) {
-  let r = containsGlobChars(e) ? getGlobBaseDirectory_2(e) : e;
-  if (!e.startsWith(r))
+function resolveReadDenyRoot(path, walkMemo) {
+  let baseDir = containsGlobChars(path) ? getGlobBaseDirectory_2(path) : path;
+  if (!path.startsWith(baseDir))
     return {
-      root: e,
-      spellings: [e],
+      root: path,
+      spellings: [path],
       lookAgain: undefined,
     };
-  let s = {
+  let status = {
     settled: false,
     stoppedAt: undefined,
     throughLink: false,
   };
-  let h = canonicalizePathForMaskSweep(r, s, n);
+  let canonicalBase = canonicalizePathForMaskSweep(baseDir, status, walkMemo);
   return {
-    root: e,
-    spellings: [e, h + e.slice(r.length)],
+    root: path,
+    spellings: [path, canonicalBase + path.slice(baseDir.length)],
     lookAgain:
-      s.settled && !s.throughLink
+      status.settled && !status.throughLink
         ? undefined
         : {
-            stoppedAt: s.stoppedAt,
-            throughLink: s.throughLink,
+            stoppedAt: status.stoppedAt,
+            throughLink: status.throughLink,
           },
   };
 }
@@ -7219,110 +7471,110 @@ function resolveReadDenyRoot(e, n) {
 /**
  * 与 resolveReadDenyRoot 相同但用于非 glob 的凭据遮罩路径：返回原样与规范两种拼写及是否需要复查。
  */
-function resolveMaskPath(e, n) {
-  let r = {
+function resolveMaskPath(path, walkMemo) {
+  let status = {
     settled: false,
     stoppedAt: undefined,
     throughLink: false,
   };
-  let s = canonicalizePathForMaskSweep(e, r, n);
+  let canonical = canonicalizePathForMaskSweep(path, status, walkMemo);
   return {
-    root: e,
-    spellings: [e, s],
+    root: path,
+    spellings: [path, canonical],
     lookAgain:
-      r.settled && !r.throughLink
+      status.settled && !status.throughLink
         ? undefined
         : {
-            stoppedAt: r.stoppedAt,
-            throughLink: r.throughLink,
+            stoppedAt: status.stoppedAt,
+            throughLink: status.throughLink,
           },
   };
 }
 //@ chunk-fq0cr76a.js:1020935-1022055 layout
 function relookReadDenyRoots(
-  e,
-  n = true,
+  resolution,
+  writeBack = true,
   walkMemo = createWalkMemo(),
-  s = resolveReadDenyRoot,
-  h = () => true,
+  resolveOne = resolveReadDenyRoot,
+  shouldLook = () => true,
 ) {
   let cwdState = getCwdState();
-  let b = 0;
-  let S = 0;
-  let w = [];
-  let R = [];
-  let D = new Set();
-  let resolved = e.resolved.map((L, V) => {
-    let lookAgain = L.lookAgain;
-    if (lookAgain === undefined || !h(L, V)) return L;
-    b++;
+  let lookedAt = 0;
+  let movedCount = 0;
+  let movedSpellings = [];
+  let movedMaskPaths = [];
+  let changedStops = new Set();
+  let resolved = resolution.resolved.map((entry, index) => {
+    let lookAgain = entry.lookAgain;
+    if (lookAgain === undefined || !shouldLook(entry, index)) return entry;
+    lookedAt++;
     if (lookAgain.settledInReach) {
-      let Z = containsGlobChars(L.root) ? getGlobBaseDirectory_2(L.root) : L.root;
-      if (!isOnForeignMount(Z, cwdState)) {
-        let J = rawPointerPathWalk(Z, cwdState, walkMemo);
-        if (!J.unsafe && !J.throughLink && J.stoppedAt === undefined) return L;
+      let root = containsGlobChars(entry.root) ? getGlobBaseDirectory_2(entry.root) : entry.root;
+      if (!isOnForeignMount(root, cwdState)) {
+        let walk = rawPointerPathWalk(root, cwdState, walkMemo);
+        if (!walk.unsafe && !walk.throughLink && walk.stoppedAt === undefined) return entry;
       }
     } else if (
       !lookAgain.throughLink &&
       lookAgain.stoppedAt !== undefined &&
       !isOnForeignMount(lookAgain.stoppedAt.path, cwdState)
     ) {
-      let Z = rawPointerPathWalk(lookAgain.stoppedAt.path, cwdState, walkMemo);
+      let walk = rawPointerPathWalk(lookAgain.stoppedAt.path, cwdState, walkMemo);
       if (
-        !Z.throughLink &&
-        Z.stoppedAt?.path === lookAgain.stoppedAt.path &&
-        Z.stoppedAt.kind === lookAgain.stoppedAt.kind
+        !walk.throughLink &&
+        walk.stoppedAt?.path === lookAgain.stoppedAt.path &&
+        walk.stoppedAt.kind === lookAgain.stoppedAt.kind
       )
-        return L;
-      D.add(lookAgain.stoppedAt.path);
+        return entry;
+      changedStops.add(lookAgain.stoppedAt.path);
     }
-    let q = s(L.root, walkMemo);
+    let next = resolveOne(entry.root, walkMemo);
     if (
       lookAgain.stoppedAt !== undefined &&
-      (q.lookAgain?.stoppedAt?.path !== lookAgain.stoppedAt.path ||
-        q.lookAgain?.stoppedAt?.kind !== lookAgain.stoppedAt.kind)
+      (next.lookAgain?.stoppedAt?.path !== lookAgain.stoppedAt.path ||
+        next.lookAgain?.stoppedAt?.kind !== lookAgain.stoppedAt.kind)
     )
-      D.add(lookAgain.stoppedAt.path);
+      changedStops.add(lookAgain.stoppedAt.path);
     if (
-      q.spellings[1] !== L.spellings[1] ||
-      q.lookAgain?.stoppedAt?.path !== lookAgain.stoppedAt?.path ||
-      q.lookAgain?.stoppedAt?.kind !== lookAgain.stoppedAt?.kind ||
-      (q.lookAgain?.throughLink ?? false) !== lookAgain.throughLink
+      next.spellings[1] !== entry.spellings[1] ||
+      next.lookAgain?.stoppedAt?.path !== lookAgain.stoppedAt?.path ||
+      next.lookAgain?.stoppedAt?.kind !== lookAgain.stoppedAt?.kind ||
+      (next.lookAgain?.throughLink ?? false) !== lookAgain.throughLink
     ) {
-      S++;
-      if (L.isMask) R.push(L.root);
-      else w.push(...L.spellings, ...q.spellings);
+      movedCount++;
+      if (entry.isMask) movedMaskPaths.push(entry.root);
+      else movedSpellings.push(...entry.spellings, ...next.spellings);
     }
-    return L.isMask
+    return entry.isMask
       ? {
-          ...q,
+          ...next,
           isMask: true,
         }
-      : q;
+      : next;
   });
-  if (S > 0 && n)
+  if (movedCount > 0 && writeBack)
     setTrustedReadDenyResolutionForTick({
-      key: e.key,
+      key: resolution.key,
       resolved,
     });
   return {
-    lookedAt: b,
-    moved: S,
+    lookedAt,
+    moved: movedCount,
     resolved,
-    movedSpellings: w,
-    movedMaskPaths: R,
-    changedStops: D,
+    movedSpellings,
+    movedMaskPaths,
+    changedStops,
   };
 }
 //@ chunk-fq0cr76a.js:1022055-1022327 layout
-function mergeReadDenyLooks(e, n) {
+function mergeReadDenyLooks(first, second) {
   return {
-    lookedAt: e.lookedAt + n.lookedAt,
-    moved: e.moved + n.moved,
-    resolved: n.resolved,
-    movedSpellings: [...e.movedSpellings, ...n.movedSpellings],
-    movedMaskPaths: [...e.movedMaskPaths, ...n.movedMaskPaths],
-    changedStops: new Set([...e.changedStops, ...n.changedStops]),
+    lookedAt: first.lookedAt + second.lookedAt,
+    moved: first.moved + second.moved,
+    resolved: second.resolved,
+    movedSpellings: [...first.movedSpellings, ...second.movedSpellings],
+    movedMaskPaths: [...first.movedMaskPaths, ...second.movedMaskPaths],
+    changedStops: new Set([...first.changedStops, ...second.changedStops]),
   };
 }
 //@ chunk-fq0cr76a.js:1022327-1022831 layout
@@ -7337,16 +7589,16 @@ function recheckReadDenyRoots() {
   let installedReadDenyRootResolution = sandboxAdapterState.installedReadDenyRootResolution;
   if (installedReadDenyRootResolution === undefined) return;
   let startTime = performance.now();
-  let h =
+  let recentlyLooked =
     sandboxAdapterState.readDenyRootLookFinishedAt !== undefined &&
     startTime - sandboxAdapterState.readDenyRootLookFinishedAt < READ_DENY_LOOK_THROTTLE_MS;
-  let y =
+  let nothingToLook =
     installedReadDenyRootResolution.forwardedUntrustedGrants.length === 0 &&
     sandboxAdapterState.lateSymlinkGrantCandidates.length === 0 &&
     !(SandboxManager_2.getConfig()?.credentials?.files ?? []).some(
-      (b) => b.mode === "mask" && !isSentinelOnlyMask(b),
+      (credential) => credential.mode === "mask" && !isSentinelOnlyMask(credential),
     );
-  if (!readDenyRootFirstLookDue && (h || y)) return;
+  if (!readDenyRootFirstLookDue && (recentlyLooked || nothingToLook)) return;
   try {
     runReadDenyLook(installedReadDenyRootResolution, readDenyRootFirstLookDue);
   } finally {
@@ -7359,46 +7611,51 @@ function recheckReadDenyRoots() {
  */
 function runReadDenyLook(installedReadDenyRootResolution, readDenyRootFirstLookDue) {
   let sandboxAdapterState = getSandboxAdapterState();
-  let s;
-  let h;
-  let y = [];
-  let b = [];
-  let S = false;
+  let refreshed;
+  let movedSpellings;
+  let masksAtStake = [];
+  let masksPaths = [];
+  let failed = false;
   try {
     let walkMemo = createWalkMemo();
     let { withinReach, bounded, complete, writeRootCount } = getReadDenyReach();
-    let K = bounded && complete;
-    let q = K ? withinReach : () => true;
-    if (!K || writeRootCount > sandboxAdapterState.readDenyRootReachSeenAtLook)
+    let reachBounded = bounded && complete;
+    let isWithinReach = reachBounded ? withinReach : () => true;
+    if (!reachBounded || writeRootCount > sandboxAdapterState.readDenyRootReachSeenAtLook)
       installedReadDenyRootResolution = {
         resolution: installedReadDenyRootResolution.resolution && {
           key: installedReadDenyRootResolution.resolution.key,
-          resolved: rewatchSettledEntries(installedReadDenyRootResolution.resolution.resolved, q),
+          resolved: rewatchSettledEntries(installedReadDenyRootResolution.resolution.resolved, isWithinReach),
         },
         forwardedUntrustedGrants: installedReadDenyRootResolution.forwardedUntrustedGrants,
-        maskSweepEntries: rewatchSettledEntries(installedReadDenyRootResolution.maskSweepEntries, q),
+        maskSweepEntries: rewatchSettledEntries(
+          installedReadDenyRootResolution.maskSweepEntries,
+          isWithinReach,
+        ),
         trustedDenyRoots: installedReadDenyRootResolution.trustedDenyRoots,
       };
-    let Z = readDenyRootFirstLookDue ? undefined : createReadDenyLookSelector(performance.now(), withinReach);
-    let J = Z?.select ?? (() => true);
-    let ie = installedReadDenyRootResolution.resolution
+    let selector = readDenyRootFirstLookDue
+      ? undefined
+      : createReadDenyLookSelector(performance.now(), withinReach);
+    let select = selector?.select ?? (() => true);
+    let resolutionLook = installedReadDenyRootResolution.resolution
       ? relookReadDenyRoots(
           installedReadDenyRootResolution.resolution,
           readDenyRootFirstLookDue,
           walkMemo,
           resolveReadDenyRoot,
-          J,
+          select,
         )
       : undefined;
-    let ae = installedReadDenyRootResolution.resolution?.resolved.length ?? 0;
-    let Se = new Set(
+    let resolutionCount = installedReadDenyRootResolution.resolution?.resolved.length ?? 0;
+    let exclusionRoots = new Set(
       readDenyRootFirstLookDue
         ? installedReadDenyRootResolution.resolution?.resolved
-            .filter((Ie) => Ie.lookAgain !== undefined)
-            .map((Ie) => Ie.root)
+            .filter((entry) => entry.lookAgain !== undefined)
+            .map((entry) => entry.root)
         : [],
     );
-    let ue = relookReadDenyRoots(
+    let maskLook = relookReadDenyRoots(
       {
         key: "",
         resolved: installedReadDenyRootResolution.maskSweepEntries,
@@ -7406,99 +7663,102 @@ function runReadDenyLook(installedReadDenyRootResolution, readDenyRootFirstLookD
       false,
       walkMemo,
       resolveMaskPath,
-      (Ie, he) => !Se.has(Ie.root) && J(Ie, ae + he),
+      (entry, index) => !exclusionRoots.has(entry.root) && select(entry, resolutionCount + index),
     );
-    Z?.finish();
-    let me = new Set([...(ie?.changedStops ?? []), ...ue.changedStops]);
-    if (Z !== undefined && me.size > 0) {
-      let Ie = (he) => he.lookAgain?.stoppedAt !== undefined && me.has(he.lookAgain.stoppedAt.path);
-      if (ie !== undefined && installedReadDenyRootResolution.resolution !== undefined)
-        ie = mergeReadDenyLooks(
-          ie,
+    selector?.finish();
+    let changedStops = new Set([...(resolutionLook?.changedStops ?? []), ...maskLook.changedStops]);
+    if (selector !== undefined && changedStops.size > 0) {
+      let needsRelook = (entry) =>
+        entry.lookAgain?.stoppedAt !== undefined && changedStops.has(entry.lookAgain.stoppedAt.path);
+      if (resolutionLook !== undefined && installedReadDenyRootResolution.resolution !== undefined)
+        resolutionLook = mergeReadDenyLooks(
+          resolutionLook,
           relookReadDenyRoots(
             {
               key: installedReadDenyRootResolution.resolution.key,
-              resolved: ie.resolved,
+              resolved: resolutionLook.resolved,
             },
             false,
             walkMemo,
             resolveReadDenyRoot,
-            Ie,
+            needsRelook,
           ),
         );
-      ue = mergeReadDenyLooks(
-        ue,
+      maskLook = mergeReadDenyLooks(
+        maskLook,
         relookReadDenyRoots(
           {
             key: "",
-            resolved: ue.resolved,
+            resolved: maskLook.resolved,
           },
           false,
           walkMemo,
           resolveMaskPath,
-          Ie,
+          needsRelook,
         ),
       );
     }
     sandboxAdapterState.installedReadDenyRootResolution = {
       resolution:
-        installedReadDenyRootResolution.resolution && ie
+        installedReadDenyRootResolution.resolution && resolutionLook
           ? {
               key: installedReadDenyRootResolution.resolution.key,
               resolved: markLookAgainEntries(
                 installedReadDenyRootResolution.resolution.resolved,
-                ie.resolved,
-                q,
+                resolutionLook.resolved,
+                isWithinReach,
               ),
             }
           : undefined,
       forwardedUntrustedGrants: installedReadDenyRootResolution.forwardedUntrustedGrants,
       maskSweepEntries: markLookAgainEntries(
         installedReadDenyRootResolution.maskSweepEntries,
-        ue.resolved,
-        q,
+        maskLook.resolved,
+        isWithinReach,
       ),
       trustedDenyRoots: installedReadDenyRootResolution.trustedDenyRoots,
     };
     sandboxAdapterState.readDenyRootLookFailureReported = false;
     sandboxAdapterState.readDenyRootReachSeenAtLook = writeRootCount;
-    let Ne = (ie?.lookedAt ?? 0) + ue.lookedAt;
-    let Ce = (ie?.moved ?? 0) + ue.moved;
-    if (Ce === 0) {
+    let lookedAt = (resolutionLook?.lookedAt ?? 0) + maskLook.lookedAt;
+    let moved = (resolutionLook?.moved ?? 0) + maskLook.moved;
+    if (moved === 0) {
       if (readDenyRootFirstLookDue)
         logForDebugging(
-          `[sandbox] Re-checked ${Ne} trusted read-deny or credential-mask path(s) that were unresolved or spelled through a symlink when the configuration was built: none changed`,
+          `[sandbox] Re-checked ${lookedAt} trusted read-deny or credential-mask path(s) that were unresolved or spelled through a symlink when the configuration was built: none changed`,
         );
       return;
     }
     logForDebugging(
       readDenyRootFirstLookDue
-        ? `[sandbox] Re-checked ${Ne} trusted read-deny or credential-mask path(s) that were unresolved or spelled through a symlink when the configuration was built: ${Ce} resolve(s) differently now; rebuilding so repository grants and credential masks are re-checked`
-        : `[sandbox] Re-checked ${Ne} trusted read-deny or credential-mask path(s) left unresolved or spelled through a symlink: ${Ce} resolve(s) differently than at the last look; checking which repository grants now lie inside one and which credential masks it now covers, to narrow the running config without a rebuild (a sandboxed command may still be running against its lists)`,
+        ? `[sandbox] Re-checked ${lookedAt} trusted read-deny or credential-mask path(s) that were unresolved or spelled through a symlink when the configuration was built: ${moved} resolve(s) differently now; rebuilding so repository grants and credential masks are re-checked`
+        : `[sandbox] Re-checked ${lookedAt} trusted read-deny or credential-mask path(s) left unresolved or spelled through a symlink: ${moved} resolve(s) differently than at the last look; checking which repository grants now lie inside one and which credential masks it now covers, to narrow the running config without a rebuild (a sandboxed command may still be running against its lists)`,
     );
-    s = [...(ie?.resolved ?? []), ...ue.resolved];
-    h = [...(ie?.movedSpellings ?? []), ...ue.movedSpellings];
+    refreshed = [...(resolutionLook?.resolved ?? []), ...maskLook.resolved];
+    movedSpellings = [...(resolutionLook?.movedSpellings ?? []), ...maskLook.movedSpellings];
     if (!readDenyRootFirstLookDue) {
-      let Ie = [...(ie?.movedMaskPaths ?? []), ...ue.movedMaskPaths];
-      if (Ie.length > 0) {
-        let he = uniq([
+      let movedMasks = [...(resolutionLook?.movedMaskPaths ?? []), ...maskLook.movedMaskPaths];
+      if (movedMasks.length > 0) {
+        let roots = uniq([
           ...installedReadDenyRootResolution.trustedDenyRoots,
-          ...s.filter((rt) => !rt.isMask).flatMap((rt) => rt.spellings),
+          ...refreshed.filter((resolved) => !resolved.isMask).flatMap((resolved) => resolved.spellings),
         ]);
-        let flattened = he.flatMap((rt) =>
-          containsGlobChars(rt) ? expandMaskGlob(rt).map((ut) => ut.canonical) : [],
+        let flattened = roots.flatMap((root) =>
+          containsGlobChars(root) ? expandMaskGlob_2(root).map((expansion) => expansion.canonical) : [],
         );
-        y = Ie.filter((rt) => pathsCoverPath([...he, ...flattened], rt));
+        masksAtStake = movedMasks.filter((maskPath) => pathsCoverPath([...roots, ...flattened], maskPath));
       }
-      b = uniq([
-        ...uniq(h).flatMap((he) =>
-          containsGlobChars(he) ? [he, ...expandMaskGlob(he).map((ft) => ft.canonical)] : he,
+      masksPaths = uniq([
+        ...uniq(movedSpellings).flatMap((spelling) =>
+          containsGlobChars(spelling)
+            ? [spelling, ...expandMaskGlob_2(spelling).map((expansion) => expansion.canonical)]
+            : spelling,
         ),
-        ...y,
+        ...masksAtStake,
       ]);
     }
   } catch (error) {
-    S = true;
+    failed = true;
     if (!sandboxAdapterState.readDenyRootLookFailureReported) {
       sandboxAdapterState.readDenyRootLookFailureReported = true;
       reportSandboxErrorUnderStandIn(
@@ -7507,14 +7767,14 @@ function runReadDenyLook(installedReadDenyRootResolution, readDenyRootFirstLookD
       );
     }
   }
-  let w = S ? "look-failed" : "later-command";
+  let cause = failed ? "look-failed" : "later-command";
   if (readDenyRootFirstLookDue) {
-    let R = tryBuildSandboxConfig();
-    if (R !== undefined)
+    let config = tryBuildSandboxConfig();
+    if (config !== undefined)
       try {
-        installSandboxConfig(R);
+        installSandboxConfig(config);
         logForDebugging(
-          S
+          failed
             ? "Sandbox configuration rebuilt because trusted read-deny paths could not be re-checked"
             : "Sandbox configuration updated: a read-deny or credential-mask path now resolves somewhere other than where it did when the configuration was built",
         );
@@ -7522,13 +7782,13 @@ function runReadDenyLook(installedReadDenyRootResolution, readDenyRootFirstLookD
       } catch (error) {
         reportSandboxErrorUnderStandIn(error, "configNotInstalled");
       }
-    if (!S) w = "rebuild-failed";
+    if (!failed) cause = "rebuild-failed";
   }
   sandboxAdapterState.pendingReadDenyFallback = {
     look: installedReadDenyRootResolution,
-    refreshed: s,
-    cause: w,
-    masksAtStake: w === "later-command" ? b : undefined,
+    refreshed,
+    cause,
+    masksAtStake: cause === "later-command" ? masksPaths : undefined,
   };
   applyPendingReadDenyFallback();
 }
@@ -7539,16 +7799,16 @@ function applyPendingReadDenyFallback() {
   if (pendingReadDenyFallback === undefined) return;
   sandboxAdapterState.lateSymlinkGrantDenyRoots = uniq([
     ...sandboxAdapterState.lateSymlinkGrantDenyRoots,
-    ...(pendingReadDenyFallback.refreshed ?? []).flatMap((y) => y.spellings),
+    ...(pendingReadDenyFallback.refreshed ?? []).flatMap((refreshed) => refreshed.spellings),
   ]);
-  let r = dropForwardedUntrustedGrants(pendingReadDenyFallback.look, pendingReadDenyFallback.refreshed);
-  let derived = r?.derived;
-  let h = reduceMasksToPlaceholders(
+  let dropped = dropForwardedUntrustedGrants(pendingReadDenyFallback.look, pendingReadDenyFallback.refreshed);
+  let derived = dropped?.derived;
+  let reduced = reduceMasksToPlaceholders(
     derived ?? assertMarkedPathsResolved(SandboxManager_2.getConfig()),
     pendingReadDenyFallback.masksAtStake,
   );
-  if (h !== undefined) {
-    derived = h.derived;
+  if (reduced !== undefined) {
+    derived = reduced.derived;
     sandboxAdapterState.builtConfigEnforcesAllowlist.set(
       derived,
       sandboxAdapterState.installedFilterRequestEnforcesAllowlist,
@@ -7562,7 +7822,7 @@ function applyPendingReadDenyFallback() {
       throw error;
     }
     let installedReadDenyRootResolution = sandboxAdapterState.installedReadDenyRootResolution;
-    if (r !== undefined && installedReadDenyRootResolution !== undefined) {
+    if (dropped !== undefined && installedReadDenyRootResolution !== undefined) {
       let { allowRead = [], allowWrite } = derived.filesystem;
       sandboxAdapterState.installedReadDenyRootResolution = {
         ...installedReadDenyRootResolution,
@@ -7576,27 +7836,27 @@ function applyPendingReadDenyFallback() {
     }
     let { lead, eventCode } = READ_DENY_FALLBACK_LEADS[pendingReadDenyFallback.cause];
     logFeatureSad("sandbox_exec", eventCode, {
-      grants_dropped: r?.removed ?? 0,
-      masks_reduced: h?.reduced ?? 0,
+      grants_dropped: dropped?.removed ?? 0,
+      masks_reduced: reduced?.reduced ?? 0,
     });
-    if (r !== undefined)
+    if (dropped !== undefined)
       logForDebugging(
         pendingReadDenyFallback.refreshed
-          ? `[sandbox] ${lead}: ${r.removed} repository grant(s) now inside a trusted read-deny path are dropped from the running configuration until the next configuration build (a settings change or restart) decides afresh`
-          : `[sandbox] ${lead}: all ${r.removed} repository grant(s) are dropped from the running configuration until the next configuration build (a settings change or restart) decides afresh`,
+          ? `[sandbox] ${lead}: ${dropped.removed} repository grant(s) now inside a trusted read-deny path are dropped from the running configuration until the next configuration build (a settings change or restart) decides afresh`
+          : `[sandbox] ${lead}: all ${dropped.removed} repository grant(s) are dropped from the running configuration until the next configuration build (a settings change or restart) decides afresh`,
       );
-    if (h !== undefined)
+    if (reduced !== undefined)
       logForDebugging(
-        `[sandbox] ${lead}: ${h.reduced} credential mask(s) a moved path may now cover are reduced to a whole-file placeholder with no credential injection until the next configuration build (a settings change or restart)`,
+        `[sandbox] ${lead}: ${reduced.reduced} credential mask(s) a moved path may now cover are reduced to a whole-file placeholder with no credential injection until the next configuration build (a settings change or restart)`,
       );
   }
   sandboxAdapterState.pendingReadDenyFallback = undefined;
 }
 //@ chunk-fq0cr76a.js:1027770-1028075 layout
-function reduceMasksToPlaceholders(e, masksAtStake) {
-  let files = e?.credentials?.files;
-  if (e === undefined || files === undefined) return;
-  let s = 0;
+function reduceMasksToPlaceholders(config, masksAtStake) {
+  let files = config?.credentials?.files;
+  if (config === undefined || files === undefined) return;
+  let reduced = 0;
   let files_2 = files.map((file) => {
     if (
       file.mode !== "mask" ||
@@ -7604,23 +7864,23 @@ function reduceMasksToPlaceholders(e, masksAtStake) {
       (masksAtStake !== undefined && !pathsCoverPath(masksAtStake, file.path))
     )
       return file;
-    s++;
+    reduced++;
     return {
       path: file.path,
       mode: "mask",
       injectHosts: [],
     };
   });
-  if (s === 0) return;
+  if (reduced === 0) return;
   return {
     derived: {
-      ...e,
+      ...config,
       credentials: {
-        ...e.credentials,
+        ...config.credentials,
         files: files_2,
       },
     },
-    reduced: s,
+    reduced,
   };
 }
 //@ chunk-fq0cr76a.js:1028075-1028672 layout
@@ -7642,47 +7902,48 @@ var READ_DENY_FALLBACK_LEADS = {
 /**
  * 凭据遮罩条目是否只是占位：mode 为 mask、injectHosts 为空且没有其他字段。
  */
-function isSentinelOnlyMask(e) {
+function isSentinelOnlyMask(credential) {
   return (
-    e.mode === "mask" &&
-    e.injectHosts?.length === 0 &&
-    Object.keys(e).every((key) => key === "path" || key === "mode" || key === "injectHosts")
+    credential.mode === "mask" &&
+    credential.injectHosts?.length === 0 &&
+    Object.keys(credential).every((key) => key === "path" || key === "mode" || key === "injectHosts")
   );
 }
 //@ chunk-fq0cr76a.js:1028807-1029471 layout
 function dropForwardedUntrustedGrants(look, refreshed) {
-  let r = assertMarkedPathsResolved(SandboxManager_2.getConfig());
-  if (r === undefined) return;
-  let s = refreshed && uniq([...getBuiltinTrustedDenyRoots(), ...refreshed.flatMap((D) => D.spellings)]);
-  let h = {
+  let config = assertMarkedPathsResolved(SandboxManager_2.getConfig());
+  if (config === undefined) return;
+  let denyRoots =
+    refreshed && uniq([...getBuiltinTrustedDenyRoots(), ...refreshed.flatMap((entry) => entry.spellings)]);
+  let dropped = {
     allowRead: new Set(),
     allowWrite: new Set(),
   };
   for (let { literal, list } of look.forwardedUntrustedGrants)
-    if (s === undefined || pathsCoverPath(s, literal)) h[list].add(literal);
-  let filtered = (r.filesystem.allowRead ?? []).filter((D) => !h.allowRead.has(D));
-  let filtered_2 = r.filesystem.allowWrite.filter((D) => !h.allowWrite.has(D));
-  let S =
-    (r.filesystem.allowRead ?? []).length -
+    if (denyRoots === undefined || pathsCoverPath(denyRoots, literal)) dropped[list].add(literal);
+  let filtered = (config.filesystem.allowRead ?? []).filter((path) => !dropped.allowRead.has(path));
+  let filtered_2 = config.filesystem.allowWrite.filter((path) => !dropped.allowWrite.has(path));
+  let removed =
+    (config.filesystem.allowRead ?? []).length -
     filtered.length +
-    (r.filesystem.allowWrite.length - filtered_2.length);
-  if (S === 0) return;
-  let w = {
-    ...r,
+    (config.filesystem.allowWrite.length - filtered_2.length);
+  if (removed === 0) return;
+  let nextConfig = {
+    ...config,
     filesystem: {
-      ...r.filesystem,
+      ...config.filesystem,
       allowRead: filtered,
       allowWrite: filtered_2,
     },
   };
   let sandboxAdapterState = getSandboxAdapterState();
   sandboxAdapterState.builtConfigEnforcesAllowlist.set(
-    w,
+    nextConfig,
     sandboxAdapterState.installedFilterRequestEnforcesAllowlist,
   );
   return {
-    derived: w,
-    removed: S,
+    derived: nextConfig,
+    removed,
   };
 }
 //@ chunk-fq0cr76a.js:1029471-1029602 layout
@@ -7690,7 +7951,7 @@ function dropForwardedUntrustedGrants(look, refreshed) {
  * 内置的可信读禁止根（如 ~/.claude/seed-admin、IDE 锁文件目录等）的规范路径。
  */
 function getBuiltinTrustedDenyRoots() {
-  let e = [
+  let roots = [
     bridgeSpawnDir(),
     resolve(getClaudeConfigDir(), "seed-admin"),
     getBashEditDiffDir(),
@@ -7698,43 +7959,48 @@ function getBuiltinTrustedDenyRoots() {
     ...[],
   ];
   return uniq(
-    e.flatMap((n) => [n, realpathOrParentRealpath(n)]).flatMap((n) => canonicalizeSandboxPath(n) ?? []),
+    roots
+      .flatMap((root) => [root, realpathOrParentRealpath(root)])
+      .flatMap((root) => canonicalizeSandboxPath(root) ?? []),
   );
 }
 //@ chunk-fq0cr76a.js:1029602-1029744 layout
 /**
  * 判断一组路径（可含 glob）是否覆盖目标路径：目标先规范化，glob 目标取基目录；同时比较原样与 realpath 拼写。
  */
-function pathsCoverPath(e, n) {
-  let r = canonicalizeSandboxPath(n);
-  if (r === undefined || e.length === 0) return false;
-  if (containsGlobChars(r)) {
-    let globBaseDirectory = getGlobBaseDirectory_2(r);
-    return anyGlobPathCovers(e, uniq([globBaseDirectory, canonicalizePathForMaskSweep(globBaseDirectory)]));
+function pathsCoverPath(denyRoots, path) {
+  let canonical = canonicalizeSandboxPath(path);
+  if (canonical === undefined || denyRoots.length === 0) return false;
+  if (containsGlobChars(canonical)) {
+    let globBaseDirectory = getGlobBaseDirectory_2(canonical);
+    return anyGlobPathCovers(
+      denyRoots,
+      uniq([globBaseDirectory, canonicalizePathForMaskSweep(globBaseDirectory)]),
+    );
   }
-  return anyDenyEntryCovers(e, uniq([r, canonicalizePathForMaskSweep(r)]));
+  return anyDenyEntryCovers(denyRoots, uniq([canonical, canonicalizePathForMaskSweep(canonical)]));
 }
 //@ chunk-fq0cr76a.js:1029744-1029842 layout
 /**
  * pathsCoverPath 的 glob 分支：列表中任一条目（glob 取基目录）与目标任一拼写互相包含即为覆盖（大小写折叠比较）。
  */
-function anyGlobPathCovers(e, n) {
-  return e.some((r) => {
-    let s = containsGlobChars(r) ? getGlobBaseDirectory_2(r) : r;
-    return n.some((h) => denyEntryCoversFolded(s, h) || denyEntryCoversFolded(h, s));
+function anyGlobPathCovers(roots, paths) {
+  return roots.some((root) => {
+    let base = containsGlobChars(root) ? getGlobBaseDirectory_2(root) : root;
+    return paths.some((path) => denyEntryCoversFolded(base, path) || denyEntryCoversFolded(path, base));
   });
 }
 //@ chunk-fq0cr76a.js:1029842-1029901 layout
-function anyDenyEntryCovers(e, n) {
-  return e.some((r) => n.some((s) => denyEntryCoversFolded(r, s)));
+function anyDenyEntryCovers(roots, paths) {
+  return roots.some((root) => paths.some((path) => denyEntryCoversFolded(root, path)));
 }
 //@ chunk-fq0cr76a.js:1029901-1030007 layout
 /**
  * 按进程 cwd 把沙箱路径解析成绝对路径；Windows 去掉尾部 /**，其他平台规整；失败返回 undefined。
  */
-function canonicalizeSandboxPath(e) {
+function canonicalizeSandboxPath(path) {
   try {
-    let againstProcessCwd = resolveAgainstProcessCwd(e);
+    let againstProcessCwd = resolveAgainstProcessCwd(path);
     return getPlatform() === "windows"
       ? againstProcessCwd.replace(/(?:[/\\]\*\*)+$/, "")
       : removeTrailingGlobSuffix(againstProcessCwd);
@@ -7743,8 +8009,8 @@ function canonicalizeSandboxPath(e) {
   }
 }
 //@ chunk-fq0cr76a.js:1030007-1030040 layout
-function resolveAgainstProcessCwd(e) {
-  return expandPath(e, safeProcessCwd());
+function resolveAgainstProcessCwd(path) {
+  return expandPath(path, safeProcessCwd());
 }
 //@ chunk-fq0cr76a.js:1030040-1030098 layout
 function safeProcessCwd() {
@@ -7786,7 +8052,10 @@ function isUnsandboxedFallbackClosedByTrustedSource() {
   );
 }
 //@ chunk-fq0cr76a.js:1030390-1030432 layout
-setUserTempRoot(() => getSandboxGbConfig().requireSandboxedAttempt === true);
+// deferred: uses setUserTempRoot (./userTempRoot.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-fq0cr76a.js:1030390", () => {
+  setUserTempRoot(() => getSandboxGbConfig().requireSandboxedAttempt === true);
+});
 //@ chunk-fq0cr76a.js:1030432-1030521 fingerprint = isSandboxRequired (1)
 /**
  * 沙箱是否“必需”：设置开启、平台在 enabledPlatforms 内、且 sandbox.failIfUnavailable（或管理员强制下用户设置的 failIfUnavailable）。
@@ -7898,11 +8167,11 @@ function passesCheapSandboxGates() {
 /**
  * Windows 沙箱需要重新安装时给出 {why, how}：版本过新指向文档，否则提示运行 /sandbox install 或 claude sandbox install。
  */
-function describeWindowsSetupAgain(e) {
-  let why = describeWindowsSandboxRemedy(e, {
+function describeWindowsSetupAgain(message) {
+  let why = describeWindowsSandboxRemedy(message, {
     omitCcRemedy: true,
   }).replace(/\.$/, "");
-  if (/set up by a newer release/.test(e))
+  if (/set up by a newer release/.test(message))
     return {
       why,
       how: "see https://code.claude.com/docs/en/sandboxing",
@@ -7947,25 +8216,27 @@ function getSandboxRestartWarning() {
 //@ chunk-fq0cr76a.js:1032580-1032808 placement
 function getSandboxSetUpAgainWarning() {
   if (getPlatform() !== "windows" || !passesCheapSandboxGates()) return;
-  let e = checkSandboxDependencies();
-  let n = e.reinstallRequired ?? e.loopbackMismatch;
-  if (n === undefined) return;
-  let { why, how } = describeWindowsSetupAgain(n);
+  let deps = checkSandboxDependencies();
+  let reason = deps.reinstallRequired ?? deps.loopbackMismatch;
+  if (reason === undefined) return;
+  let { why, how } = describeWindowsSetupAgain(reason);
   return `Sandbox is off: ${why}. Commands run WITHOUT sandboxing until then \xB7 ${how}`;
 }
 //@ chunk-fq0cr76a.js:1032808-1033336 placement
 function getProfileReadSecurityWarnings() {
   if (getPlatform() !== "windows") return [];
   return SandboxManager_2.getWindowsProfileReadWarnings()
-    .filter((e) => e.code === "profile_exclusion_unprotected" || e.code === "profile_stale_allow")
+    .filter(
+      (warning) => warning.code === "profile_exclusion_unprotected" || warning.code === "profile_stale_allow",
+    )
     .map(
-      (e) =>
-        `Sandboxed commands can read ${e.paths.length} path(s) in your user profile that sandbox set-up ${e.code === "profile_stale_allow" ? "no longer means to open" : "excludes as credential stores"} and could not close: ${e.paths
+      (warning) =>
+        `Sandboxed commands can read ${warning.paths.length} path(s) in your user profile that sandbox set-up ${warning.code === "profile_stale_allow" ? "no longer means to open" : "excludes as credential stores"} and could not close: ${warning.paths
           .slice(0, 5)
           .map((path) => path.path)
           .join(
             ", ",
-          )}${e.paths.length > 5 ? ", \u2026" : ""}. Only their owner or an administrator can close them.`,
+          )}${warning.paths.length > 5 ? ", \u2026" : ""}. Only their owner or an administrator can close them.`,
     );
 }
 //@ chunk-fq0cr76a.js:1033336-1034966 callgraph-witnessed = getSandboxUnavailableReason (0.196)
@@ -7987,83 +8258,87 @@ function getSandboxUnavailableReason() {
   let platform = getLocalBindingRestartMode();
   if (platform !== undefined)
     return `sandbox is enabled but sandbox.network.allowLocalBinding changed after this session started, and the sandbox was set up again for the new value \xB7 ${platform === "refused" ? REFUSED_UNTIL_RESTART : WITHOUT_SANDBOX_UNTIL_RESTART}`;
-  let r = deps.reinstallRequired ?? deps.loopbackMismatch;
-  if (r !== undefined) {
-    let { why, how } = describeWindowsSetupAgain(r);
+  let reason = deps.reinstallRequired ?? deps.loopbackMismatch;
+  if (reason !== undefined) {
+    let { why, how } = describeWindowsSetupAgain(reason);
     return `sandbox is enabled but has to be set up again: ${why} \xB7 ${how}`;
   }
   if (deps.errors.length > 0) {
     let platform = getPlatform();
-    let h = getIsNonInteractiveSession()
+    let hint = getIsNonInteractiveSession()
       ? "see https://code.claude.com/docs/en/sandboxing"
       : "run /sandbox for details";
     let any = deps.errors.some((error) => / not (installed|found)\b/.test(error));
-    let b;
-    if (platform === "macos") b = h;
+    let remedy;
+    if (platform === "macos") remedy = hint;
     else if (platform === "windows")
-      b =
+      remedy =
         canRunSandboxInstallHere() && !deps.errors.some((error) => error.startsWith("srt-win"))
           ? areSandboxSettingsOverriddenByFlagOrPolicy()
             ? "run /sandbox install, more info at https://code.claude.com/docs/en/sandboxing"
-            : `run /sandbox install, or ${h}`
+            : `run /sandbox install, or ${hint}`
           : "ask your administrator to install the network filters, or see https://code.claude.com/docs/en/sandboxing";
-    else b = any ? `install missing tools (e.g. apt install bubblewrap socat) or ${h}` : h;
-    let S =
+    else remedy = any ? `install missing tools (e.g. apt install bubblewrap socat) or ${hint}` : hint;
+    let headline =
       any || platform === "windows"
         ? "sandbox is enabled but dependencies are missing"
         : "sandbox is enabled but cannot start here";
     let joined = deps.errors.map((error) => describeWindowsSandboxRemedy(error)).join(", ");
-    return b === h &&
+    return remedy === hint &&
       getIsNonInteractiveSession() &&
       joined.includes("https://code.claude.com/docs/en/sandboxing")
-      ? `${S}: ${joined}`
-      : `${S}: ${joined} \xB7 ${b}`;
+      ? `${headline}: ${joined}`
+      : `${headline}: ${joined} \xB7 ${remedy}`;
   }
   return;
 }
 //@ chunk-fq0cr76a.js:1034966-1037219 layout
-function buildMaskCredentialWarning(e) {
-  let files = e.credentials?.files ?? [];
+function buildMaskCredentialWarning(config) {
+  let files = config.credentials?.files ?? [];
   let mapped = files.filter((file) => file.mode === "mask").map((file) => file.path);
-  let s = new Set(
+  let sentinelPaths = new Set(
     files.filter((file) => file.mode === "mask" && file.injectHosts?.length === 0).map((file) => file.path),
   );
-  let h = getPlatform() === "macos" && e.filesystem.disabled ? mapped : [];
-  let y = new Set(h);
-  let b = [
-    ...(e.credentials?.envVars ?? [])
-      .filter((R) => R.mode === "mask" && R.injectHosts?.length === 0)
-      .map((R) => R.name),
-    ...[...s].filter((R) => !y.has(R)),
+  let degradedPaths = getPlatform() === "macos" && config.filesystem.disabled ? mapped : [];
+  let degradedSet = new Set(degradedPaths);
+  let sentinelOnly = [
+    ...(config.credentials?.envVars ?? [])
+      .filter((envVar) => envVar.mode === "mask" && envVar.injectHosts?.length === 0)
+      .map((envVar) => envVar.name),
+    ...[...sentinelPaths].filter((path) => !degradedSet.has(path)),
   ];
-  let S = [
-    ...(e.credentials?.envVars ?? [])
-      .filter((R) => R.mode === "mask" && R.injectHosts?.length !== 0)
-      .map((R) => R.name),
-    ...(h.length > 0 ? [] : mapped.filter((R) => !s.has(R))),
+  let needsTls = [
+    ...(config.credentials?.envVars ?? [])
+      .filter((envVar) => envVar.mode === "mask" && envVar.injectHosts?.length !== 0)
+      .map((envVar) => envVar.name),
+    ...(degradedPaths.length > 0 ? [] : mapped.filter((path) => !sentinelPaths.has(path))),
   ];
-  let w = [];
-  if (b.length > 0)
-    w.push(
-      `sandbox.credentials mask entries (${b.join(", ")}) have an ` +
+  let warnings = [];
+  if (sentinelOnly.length > 0)
+    warnings.push(
+      `sandbox.credentials mask entries (${sentinelOnly.join(", ")}) have an ` +
         "empty injectHosts \u2014 sandboxed commands see only a sentinel and the " +
         "proxy never substitutes the real credential, so tools needing these will fail to authenticate. If the adapter forced this (a filesystem.allowRead entry re-opened a denied credential path), remove the conflicting allowRead entry or the deny; if a parent/managed settings tier supplied this mask, sentinel-only is its intended posture (that channel cannot grant injection, so an injectHosts set there is stripped on load) and the entry can only be removed in the parent settings; otherwise set injectHosts or remove the entry",
     );
-  if (h.length > 0)
-    w.push(
-      `sandbox.credentials file mask entries (${h.join(", ")}) ` +
+  if (degradedPaths.length > 0)
+    warnings.push(
+      `sandbox.credentials file mask entries (${degradedPaths.join(", ")}) ` +
         "degrade to deny on macOS \u2014 the files are unreadable inside the " +
         'sandbox (no sentinel, no proxy injection), so tools reading them will fail. Note that switching them to mode "deny" would NOT keep that protection while the relaxed filesystem policy is active (denies ' +
         "are dropped there, exposing the real bytes) \u2014 set " +
         "sandbox.filesystem.disabled: false in user or managed settings (ignored if managed settings pin the filesystem layer), or remove the entries",
     );
-  if (S.length > 0 && e.network.tlsTerminate === undefined && !e.credentials?.allowPlaintextInject)
-    w.push(
-      `sandbox.credentials mask entries (${S.join(", ")}) are configured ` +
+  if (
+    needsTls.length > 0 &&
+    config.network.tlsTerminate === undefined &&
+    !config.credentials?.allowPlaintextInject
+  )
+    warnings.push(
+      `sandbox.credentials mask entries (${needsTls.join(", ")}) are configured ` +
         "but TLS termination is unavailable \u2014 sandboxed commands see only a " +
         "sentinel value and the proxy cannot substitute the real credential on egress, so tools needing these will fail to authenticate. Enable sandbox.network.tlsTerminate, or remove the mask entries",
     );
-  return w.length > 0 ? w.join(" \xB7 ") : undefined;
+  return warnings.length > 0 ? warnings.join(" \xB7 ") : undefined;
 }
 //@ chunk-fq0cr76a.js:1037219-1037384 layout
 /**
@@ -8072,9 +8347,9 @@ function buildMaskCredentialWarning(e) {
 function getMaskCredentialWarning() {
   try {
     if (!canMaskCredentialWarningFire()) return;
-    let e = assertMarkedPathsResolved(SandboxManager_2.getConfig());
-    if (e === undefined) return;
-    return buildMaskCredentialWarning(e);
+    let config = assertMarkedPathsResolved(SandboxManager_2.getConfig());
+    if (config === undefined) return;
+    return buildMaskCredentialWarning(config);
   } catch (error) {
     logForDebugging(`Failed to compute mask credential warning: ${error}`);
     return;
@@ -8082,8 +8357,8 @@ function getMaskCredentialWarning() {
 }
 //@ chunk-fq0cr76a.js:1037384-1037441 layout
 function canMaskCredentialWarningFire() {
-  let e = isScrubEnabled() && true && isScrubSandboxAvailable();
-  return (getSandboxEnabledSetting() || e) && isPlatformInEnabledList();
+  let scrubAvailable = isScrubEnabled() && true && isScrubSandboxAvailable();
+  return (getSandboxEnabledSetting() || scrubAvailable) && isPlatformInEnabledList();
 }
 //@ chunk-fq0cr76a.js:1037441-1037949 fingerprint = getLinuxGlobPatternWarnings (0.952)
 /**
@@ -8096,21 +8371,21 @@ function getLinuxGlobPatternWarnings_2() {
     if (!getSandboxEnabledSetting()) return [];
     let permissions = getSettings_DEPRECATED()?.permissions || {};
     let warnings = [];
-    let hasGlobs = (ruleContent, b) => {
-      let S = unescapeGlobPattern(ruleContent);
-      let w = ruleContent.startsWith("/") && !ruleContent.startsWith("//");
-      let replaced = (b || w ? S.replace(/\/+$/, "") : S).replace(/\/\*\*$/, "");
+    let hasGlobs = (ruleContent, isDeny) => {
+      let unescaped = unescapeGlobPattern(ruleContent);
+      let isRooted = ruleContent.startsWith("/") && !ruleContent.startsWith("//");
+      let replaced = (isDeny || isRooted ? unescaped.replace(/\/+$/, "") : unescaped).replace(/\/\*\*$/, "");
       return containsGlobChars(replaced);
     };
-    for (let [ruleString, b] of [
-      ...(permissions.allow || []).map((S) => [S, false]),
+    for (let [ruleString, isDeny] of [
+      ...(permissions.allow || []).map((ruleString) => [ruleString, false]),
       ...(permissions.deny || []).map((path) => [path, true]),
     ]) {
       let rule = parseRuleForSandbox(ruleString);
       if (
         (rule.toolName === FILE_EDIT_TOOL_NAME || rule.toolName === FILE_READ_TOOL_NAME) &&
         rule.ruleContent &&
-        hasGlobs(rule.ruleContent, b)
+        hasGlobs(rule.ruleContent, isDeny)
       )
         warnings.push(ruleString);
     }
@@ -8127,10 +8402,10 @@ function getLinuxGlobPatternWarnings_2() {
 function getInvalidIpv6DomainEntries() {
   try {
     let settings_DEPRECATED = getSettings_DEPRECATED();
-    let n = [...(settings_DEPRECATED ? [settings_DEPRECATED] : []), ...getAllPolicyTierSettings()];
+    let sources = [...(settings_DEPRECATED ? [settings_DEPRECATED] : []), ...getAllPolicyTierSettings()];
     let bad = new Set();
-    for (let s of ["allow", "deny"])
-      for (let entry of collectNetworkDomainEntries(n, s))
+    for (let access of ["allow", "deny"])
+      for (let entry of collectNetworkDomainEntries(sources, access))
         if (entry.includes("@")) bad.add(entry);
         else if (isBareIpv6Literal(entry)) bad.add(entry);
         else if (!entry.startsWith("[") && /\.{2,}$/.test(splitDomainPatternPort(entry).hostPattern))
@@ -8165,19 +8440,19 @@ function getInvalidIpv6DomainEntries() {
 function getInvalidInjectHostEntries() {
   try {
     let settings_DEPRECATED = getSettings_DEPRECATED();
-    let n = [...(settings_DEPRECATED ? [settings_DEPRECATED] : []), ...getAllPolicyTierSettings()];
-    let r = new Set();
-    for (let s of n) {
-      let credentials = s.sandbox?.credentials;
-      for (let y of [...(credentials?.envVars ?? []), ...(credentials?.files ?? [])])
-        for (let b of y.injectHosts ?? []) {
-          let index = b.indexOf(":");
-          if (index === -1 || b.indexOf(":", index + 1) === -1) continue;
-          if (isIP(b) === 6 && canonicalizeHost(b) === b.toLowerCase()) continue;
-          r.add(b);
+    let sources = [...(settings_DEPRECATED ? [settings_DEPRECATED] : []), ...getAllPolicyTierSettings()];
+    let bad = new Set();
+    for (let settings of sources) {
+      let credentials = settings.sandbox?.credentials;
+      for (let credential of [...(credentials?.envVars ?? []), ...(credentials?.files ?? [])])
+        for (let host of credential.injectHosts ?? []) {
+          let index = host.indexOf(":");
+          if (index === -1 || host.indexOf(":", index + 1) === -1) continue;
+          if (isIP(host) === 6 && canonicalizeHost(host) === host.toLowerCase()) continue;
+          bad.add(host);
         }
     }
-    return [...r];
+    return [...bad];
   } catch (error) {
     logForDebugging(`Failed to get injectHosts entry warnings: ${error}`);
     return [];
@@ -8187,8 +8462,10 @@ function getInvalidInjectHostEntries() {
 /**
  * flagSettings 或 policySettings 是否设置了指定的 sandbox 键。
  */
-function isSandboxSettingOverriddenByPolicy(e) {
-  return ["flagSettings", "policySettings"].some((n) => getSettingsForSource(n)?.sandbox?.[e] !== undefined);
+function isSandboxSettingOverriddenByPolicy(key) {
+  return ["flagSettings", "policySettings"].some(
+    (sourceName) => getSettingsForSource(sourceName)?.sandbox?.[key] !== undefined,
+  );
 }
 //@ chunk-fq0cr76a.js:1039022-1039124 placement
 /**
@@ -8206,24 +8483,24 @@ function areSandboxSettingsOverriddenByFlagOrPolicy() {
  * 把 sandbox.enabled/autoAllowBashIfSandboxed/allowUnsandboxedCommands 写入 localSettings（只写变化项）。
  */
 async function setSandboxSettings(options) {
-  let { error } = await updateSettingsForSourceWithTransform("localSettings", (r) => {
-    let s = {
+  let { error } = await updateSettingsForSourceWithTransform("localSettings", (settings) => {
+    let patch = {
       ...(options.enabled !== undefined &&
-        r?.sandbox?.enabled !== options.enabled && {
+        settings?.sandbox?.enabled !== options.enabled && {
           enabled: options.enabled,
         }),
       ...(options.autoAllowBashIfSandboxed !== undefined &&
-        r?.sandbox?.autoAllowBashIfSandboxed !== options.autoAllowBashIfSandboxed && {
+        settings?.sandbox?.autoAllowBashIfSandboxed !== options.autoAllowBashIfSandboxed && {
           autoAllowBashIfSandboxed: options.autoAllowBashIfSandboxed,
         }),
       ...(options.allowUnsandboxedCommands !== undefined &&
-        r?.sandbox?.allowUnsandboxedCommands !== options.allowUnsandboxedCommands && {
+        settings?.sandbox?.allowUnsandboxedCommands !== options.allowUnsandboxedCommands && {
           allowUnsandboxedCommands: options.allowUnsandboxedCommands,
         }),
     };
-    if (Object.keys(s).length === 0) return null;
+    if (Object.keys(patch).length === 0) return null;
     return {
-      sandbox: s,
+      sandbox: patch,
     };
   });
   if (error) logFeatureBad("sandbox_set_settings", "save_failed");
@@ -8243,11 +8520,11 @@ function getExcludedCommands() {
   let sandboxAdapterState = getSandboxAdapterState();
   if (!sandboxAdapterState.droppedRepoExcludedCommandsLogged) {
     sandboxAdapterState.droppedRepoExcludedCommandsLogged = true;
-    let s = new Set(trustedExcludedCommands);
-    let h = count(excludedCommands, (y) => !s.has(y));
-    if (h > 0)
+    let trustedSet = new Set(trustedExcludedCommands);
+    let droppedCount = count(excludedCommands, (command) => !trustedSet.has(command));
+    if (droppedCount > 0)
       logForDebugging(
-        `[sandbox] excludedCommands restricted to trusted settings tiers: ignoring ${h} sandbox.excludedCommands entr${h === 1 ? "y" : "ies"} not set by managed, --settings, or user settings`,
+        `[sandbox] excludedCommands restricted to trusted settings tiers: ignoring ${droppedCount} sandbox.excludedCommands entr${droppedCount === 1 ? "y" : "ies"} not set by managed, --settings, or user settings`,
       );
   }
   return trustedExcludedCommands;
@@ -8270,47 +8547,55 @@ function isAllowAllUnixSocketsConfigured() {
  * 汇总各设置来源的 sandbox.filesystem.allowWrite/allowRead：管理员强制时丢弃不可信来源的写授权；落在可信读禁止区内或含 glob 的不可信授权被过滤；allowManagedReadPathsOnly 时 allowRead 只取托管层。
  */
 function getConfiguredFilesystemGrants() {
-  let e = isAdminSandboxMandate();
-  let n = e || hasTrustedReadDenies();
-  let r;
-  let s = false;
-  if (n)
+  let adminMandate = isAdminSandboxMandate();
+  let hasTrustedDenies = adminMandate || hasTrustedReadDenies();
+  let denyRoots;
+  let rootsUnresolved = false;
+  if (hasTrustedDenies)
     try {
-      r = getTrustedReadDenyRoots();
+      denyRoots = getTrustedReadDenyRoots();
     } catch {
-      s = true;
+      rootsUnresolved = true;
     }
-  let h;
-  let y = () => (h ??= r ? resolveTrustedReadDenyRoots(r).roots : getBuiltinTrustedDenyRoots());
-  let b = (D, O) => {
-    if (!D.widensUntrusted) return false;
-    if (s) return true;
-    let L = y();
+  let resolvedRoots;
+  let getDenyRoots = () =>
+    (resolvedRoots ??= denyRoots
+      ? resolveTrustedReadDenyRoots(denyRoots).roots
+      : getBuiltinTrustedDenyRoots());
+  let isWidening = (sourceEntry, literal) => {
+    if (!sourceEntry.widensUntrusted) return false;
+    if (rootsUnresolved) return true;
+    let roots = getDenyRoots();
     try {
-      let sandboxFilesystemPath = resolveSandboxFilesystemPath(O, D.source);
-      let K = canonicalizeSandboxPath(sandboxFilesystemPath) ?? "";
+      let sandboxFilesystemPath = resolveSandboxFilesystemPath(literal, sourceEntry.source);
+      let canonical = canonicalizeSandboxPath(sandboxFilesystemPath) ?? "";
       return (
-        pathsCoverPath(L, sandboxFilesystemPath) ||
-        (n && (containsGlobChars(K) || isNetworkSpelledGrantRoot(K)))
+        pathsCoverPath(roots, sandboxFilesystemPath) ||
+        (hasTrustedDenies && (containsGlobChars(canonical) || isNetworkSpelledGrantRoot(canonical)))
       );
     } catch {
       return true;
     }
   };
-  let mapped = SETTING_SOURCES.filter((D) => isSettingSourceEnabled(D)).map((D) => ({
-    source: D,
-    widensUntrusted:
-      isRepoSettingSource(D) || (D === "policySettings" && !isPolicySlotAdminOrParentComposed()),
-    filesystem: getSettingsForSource(D)?.sandbox?.filesystem,
-  }));
+  let mapped = SETTING_SOURCES.filter((sourceName) => isSettingSourceEnabled(sourceName)).map(
+    (sourceName) => ({
+      source: sourceName,
+      widensUntrusted:
+        isRepoSettingSource(sourceName) ||
+        (sourceName === "policySettings" && !isPolicySlotAdminOrParentComposed()),
+      filesystem: getSettingsForSource(sourceName)?.sandbox?.filesystem,
+    }),
+  );
   let allPolicyTierSettings = getAllPolicyTierSettings();
   let any = allPolicyTierSettings.some(
     (policyTierSetting) => policyTierSetting.sandbox?.filesystem?.allowManagedReadPathsOnly === true,
   );
   return {
     allowWrite: uniq(
-      mapped.flatMap((D) =>
-        e && D.widensUntrusted ? [] : (D.filesystem?.allowWrite ?? []).filter((O) => !b(D, O)),
+      mapped.flatMap((sourceEntry) =>
+        adminMandate && sourceEntry.widensUntrusted
+          ? []
+          : (sourceEntry.filesystem?.allowWrite ?? []).filter((literal) => !isWidening(sourceEntry, literal)),
       ),
     ),
     allowRead: uniq(
@@ -8318,7 +8603,9 @@ function getConfiguredFilesystemGrants() {
         ? allPolicyTierSettings.flatMap(
             (policyTierSetting) => policyTierSetting.sandbox?.filesystem?.allowRead ?? [],
           )
-        : mapped.flatMap((D) => (D.filesystem?.allowRead ?? []).filter((O) => !b(D, O))),
+        : mapped.flatMap((sourceEntry) =>
+            (sourceEntry.filesystem?.allowRead ?? []).filter((literal) => !isWidening(sourceEntry, literal)),
+          ),
     ),
   };
 }
@@ -8357,18 +8644,18 @@ async function ensureInitializedForWrap() {
     if (!getSandboxAdapterState().initializationPromise) {
       logFeatureBad("sandbox_exec", "sandbox_exec_not_initialized");
       let { initFailureReason } = getSandboxAdapterState();
-      let h = initFailureReason ? `: ${initFailureReason}` : "";
+      let reasonSuffix = initFailureReason ? `: ${initFailureReason}` : "";
       if (getSandboxAdapterState().refusedOverWorkingFolder)
         throw new SandboxInitFailedError(
-          `Sandbox is enabled but failed to initialize${h}. Until the sandbox can start, commands that would run in it are refused.`,
+          `Sandbox is enabled but failed to initialize${reasonSuffix}. Until the sandbox can start, commands that would run in it are refused.`,
         );
       if (isSandboxRequired() || (isScrubEnabled() && isScrubSandboxAvailable()))
         throw new SandboxInitFailedError(
-          `Sandbox is required but failed to initialize${h}. ${getSandboxAdapterState().configBuildFailed ? "Fix the sandbox settings to retry (a --settings file is pinned for the process: restart)." : "Restart to retry."} Running it outside the sandbox (dangerouslyDisableSandbox) is not allowed either.`,
+          `Sandbox is required but failed to initialize${reasonSuffix}. ${getSandboxAdapterState().configBuildFailed ? "Fix the sandbox settings to retry (a --settings file is pinned for the process: restart)." : "Restart to retry."} Running it outside the sandbox (dangerouslyDisableSandbox) is not allowed either.`,
         );
       getSandboxAdapterState().sandboxDisabledThisSession = true;
       throw new SandboxInitFailedError(
-        `Sandbox is enabled but failed to initialize${h}. Sandboxing is disabled for the rest of this session; restart to retry.`,
+        `Sandbox is enabled but failed to initialize${reasonSuffix}. Sandboxing is disabled for the rest of this session; restart to retry.`,
       );
     }
     await ensureBridgeSpawnRootDir();
@@ -8384,10 +8671,10 @@ async function ensureInitializedForWrap() {
 /**
  * 把 Windows 沙箱“命令行过长 / CreateProcessW 限制”错误转成友好的 SandboxCommandTooLongError，其他错误原样返回。
  */
-function mapWindowsArgvTooLong(e) {
-  return e instanceof Error && /Windows sandbox argv is|CreateProcessW limit/i.test(e.message)
+function mapWindowsArgvTooLong(error) {
+  return error instanceof Error && /Windows sandbox argv is|CreateProcessW limit/i.test(error.message)
     ? windowsArgvTooLongError()
-    : e;
+    : error;
 }
 //@ chunk-fq0cr76a.js:1042958-1043751 placement
 /**
@@ -8408,17 +8695,17 @@ function windowsArgvTooLongError(tooLong = "command") {
 /**
  * 把 Windows 沙箱特定退出码（1 拒绝访问、19 loopback 模式变更、16 映射网络盘 cwd）换成给模型看的说明文字。
  */
-function classifyWindowsSandboxLaunchExit(code, stderr) {
-  if (code === 1 && isSeclogonAccessDenied(stderr)) {
+function classifyWindowsSandboxLaunchExit(code, stderrText) {
+  if (code === 1 && isSeclogonAccessDenied(stderrText)) {
     getSandboxAdapterState().selfExecGrantAttempt = undefined;
     return "Windows refused to start Claude Code as the sandbox account (access denied, 0x80070005), so the command most likely did not run. The Secondary Logon service is not the cause. Claude Code tries to set the permission on its program file again before the next command, so try the command once more. If it fails the same way, stop and tell the user.";
   }
-  if (code === 19 && parseWindowsSandboxError(stderr)?.code === "wfp_loopback_mismatch") {
+  if (code === 19 && parseWindowsSandboxError(stderrText)?.code === "wfp_loopback_mismatch") {
     logFeatureBad("sandbox_exec", "windows_loopback_mode_changed");
     return "The command did not run: the sandbox on this machine was set up again with the other setting for local connections (sandbox.network.allowLocalBinding) since this session started, and a session keeps the one it started with. Every sandboxed command is refused like this one until Claude Code is restarted: tell the user to restart Claude Code.";
   }
   if (code !== 16) return;
-  let windowsSandboxError = parseWindowsSandboxError(stderr);
+  let windowsSandboxError = parseWindowsSandboxError(stderrText);
   if (windowsSandboxError?.code !== "mapped_drive_cwd") return;
   logFeatureBad("sandbox_exec", "windows_mapped_drive_cwd");
   return `The sandbox can't run commands from a network drive${windowsSandboxError.drive ? ` (${windowsSandboxError.drive})` : ""}: mapped drives don't exist for the sandbox account. Use a workspace on a local drive.`;
@@ -8427,9 +8714,9 @@ function classifyWindowsSandboxLaunchExit(code, stderr) {
 function mapLinuxBridgeError(error) {
   if (error instanceof Error && /bridge socket does not exist/i.test(error.message)) {
     logFeatureSad("sandbox_exec", "sandbox_linux_bridge_dead");
-    let n = /SOCKS/i.test(error.message) ? "SOCKS" : "HTTP";
+    let bridge = /SOCKS/i.test(error.message) ? "SOCKS" : "HTTP";
     return new SandboxBridgeUnavailableError(
-      `Linux sandbox ${n} bridge socket is missing (socat may have died). Restart to retry.`,
+      `Linux sandbox ${bridge} bridge socket is missing (socat may have died). Restart to retry.`,
     );
   }
   return error;
@@ -8438,69 +8725,78 @@ function mapLinuxBridgeError(error) {
 /**
  * 把包装失败转成 commandNotWrapped 错误；若是本次 abort 的原因则原样返回。
  */
-function toCommandNotWrappedError(e, n) {
-  return n?.aborted && e === n.reason ? e : describeUnreadableSandboxError(e, "commandNotWrapped");
+function toCommandNotWrappedError(error, signal) {
+  return signal?.aborted && error === signal.reason
+    ? error
+    : describeUnreadableSandboxError(error, "commandNotWrapped");
 }
 //@ chunk-fq0cr76a.js:1045280-1045432 fingerprint = wrapWithSandbox (0.558)
 /**
  * 门面 wrapWithSandbox：ensureInitializedForWrap 后调用 sandbox-runtime 把命令串包成沙箱命令（macOS sandbox-exec 配置 / Linux bwrap+seccomp+socat 代理）。
  */
-async function wrapWithSandbox_2(e, n, r, s, h) {
+async function wrapWithSandbox_2(command, args, shell, signal, options) {
   await ensureInitializedForWrap();
   assertTaskOutputDirChainPlain();
   verifyStagedMcpCallDir();
   try {
-    let y = await SandboxManager_2.wrapWithSandbox(e, n, r, s, h);
+    let result = await SandboxManager_2.wrapWithSandbox(command, args, shell, signal, options);
     logFeatureOk("sandbox_exec");
-    return y;
+    return result;
   } catch (error) {
-    throw toCommandNotWrappedError(mapLinuxBridgeError(error), s);
+    throw toCommandNotWrappedError(mapLinuxBridgeError(error), signal);
   }
 }
 //@ chunk-fq0cr76a.js:1045432-1046064 placement
 /**
  * 门面 wrapWithSandboxArgv（Windows 唯一方式）：合并原生 deny 列表后调用 sandbox-runtime 得到 {argv, env}，再算出与当前环境的差异 env 与需 unset 的变量（含 credentials.envVars 的 deny 项）。
  */
-async function wrapWithSandboxArgv(e, n, r, s, h) {
+async function wrapWithSandboxArgv(command, argv, config, signal, options) {
   await ensureInitializedForWrap();
   assertTaskOutputDirChainPlain();
   verifyStagedMcpCallDir();
-  let y =
+  let effectiveConfig =
     getSandboxAdapterState().nativeDenies === undefined
-      ? r
-      : await raceAbortSignal(withRenewedNativeDenies(r), s);
-  let b;
+      ? config
+      : await raceAbortSignal(withRenewedNativeDenies(config), signal);
+  let wrapped;
   try {
-    b = await SandboxManager_2.wrapWithSandboxArgv(e, n, y, s, undefined, h);
+    wrapped = await SandboxManager_2.wrapWithSandboxArgv(
+      command,
+      argv,
+      effectiveConfig,
+      signal,
+      undefined,
+      options,
+    );
   } catch (error) {
     if (error instanceof Error && "code" in error && error.code === "wfp_loopback_mismatch")
       error.message = describeWindowsSandboxRemedy(error.message);
-    throw toCommandNotWrappedError(mapWindowsArgvTooLong(mapLinuxBridgeError(error)), s);
+    throw toCommandNotWrappedError(mapWindowsArgvTooLong(mapLinuxBridgeError(error)), signal);
   }
-  let S = new Set(Object.keys(b.env));
-  let w = {};
-  for (let [key, value] of Object.entries(b.env))
-    if (value !== undefined && process.env[key] !== value) w[key] = value;
-  let R = new Set();
-  for (let key of Object.keys(process.env)) if (!S.has(key)) R.add(key);
+  let wrappedEnvKeys = new Set(Object.keys(wrapped.env));
+  let envPatch = {};
+  for (let [key, value] of Object.entries(wrapped.env))
+    if (value !== undefined && process.env[key] !== value) envPatch[key] = value;
+  let unsetEnv = new Set();
+  for (let key of Object.keys(process.env)) if (!wrappedEnvKeys.has(key)) unsetEnv.add(key);
   let credentials = SandboxManager_2.getConfig()?.credentials;
-  for (let O of credentials?.envVars ?? []) if (O.mode === "deny") R.add(O.name);
+  for (let envVar of credentials?.envVars ?? []) if (envVar.mode === "deny") unsetEnv.add(envVar.name);
   logFeatureOk("sandbox_exec");
   return {
-    argv: b.argv,
-    env: w,
-    unsetEnv: [...R],
+    argv: wrapped.argv,
+    env: envPatch,
+    unsetEnv: [...unsetEnv],
   };
 }
 //@ chunk-fq0cr76a.js:1046064-1046071 placement
 var taskOutputDirChainRoot;
 //@ chunk-fq0cr76a.js:1046071-1046343 placement
 function assertTaskOutputDirChainPlain() {
-  let e = taskOutputDirChainRoot;
-  if (e === undefined) return;
-  if (!ensurePrivateDirChain(getClaudeTempDirRealpath(), e))
+  let dir = taskOutputDirChainRoot;
+  if (dir === undefined) return;
+  if (!ensurePrivateDirChain(getClaudeTempDirRealpath(), dir))
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `sandbox: the task output directory chain under the temp root is no longer plain directories (${e}); refusing to run sandboxed commands until it is restored`,
+      `sandbox: the task output directory chain under the temp root is no longer plain directories (${dir}); refusing to run sandboxed commands until it is restored`,
       "sandbox task output dir chain not plain",
     );
 }
@@ -8511,27 +8807,27 @@ var mcpCallTempRoot;
  * 包装命令前检查暂存的 mcp_call 目录在 temp 根下仍是普通目录（必要时清掉文件）；不是则沙箱命令被拒。
  */
 function verifyStagedMcpCallDir() {
-  let e = mcpCallTempRoot;
-  if (e === undefined) return true;
-  if (isParentDirReal(e))
+  let dir = mcpCallTempRoot;
+  if (dir === undefined) return true;
+  if (isParentDirReal(dir))
     try {
-      unlinkSync(e);
+      unlinkSync(dir);
     } catch {}
-  return ensurePrivateDirChain(getClaudeTempDirRealpath(), e);
+  return ensurePrivateDirChain(getClaudeTempDirRealpath(), dir);
 }
 //@ chunk-fq0cr76a.js:1046440-1051128 placement
 /**
  * 门面 initialize：构建配置 Q0(settings)（Windows 拒绝在家目录/配置目录下作工作目录）→ Windows 先确保自执行授权、原生 deny → SandboxManager.initialize；成功后订阅设置/插件目录/GrowthBook 变化以热更新配置（refreshConfig）；配置构建失败则等待设置变化再试。网络请求询问回调在 allowManagedDomainsOnly 时一律拒绝。
  */
-async function initializeSandbox(e) {
+async function initializeSandbox(askCallback) {
   let sandboxAdapterState = getSandboxAdapterState();
   sandboxAdapterState.askCallback =
-    e ?? (getPlatform() === "windows" ? sandboxAdapterState.askCallback : undefined);
+    askCallback ?? (getPlatform() === "windows" ? sandboxAdapterState.askCallback : undefined);
   if (sandboxAdapterState.initializationPromise) return sandboxAdapterState.initializationPromise;
   if (sandboxAdapterState.configBuildFailed) return;
   if (!isSandboxingEnabled()) return;
-  let { askCallback } = sandboxAdapterState;
-  let s = askCallback
+  let { askCallback: askCallback_2 } = sandboxAdapterState;
+  let guardedAsk = askCallback_2
     ? async (hostPattern) => {
         if (shouldAllowManagedSandboxDomainsOnly()) {
           logForDebugging(
@@ -8539,39 +8835,39 @@ async function initializeSandbox(e) {
           );
           return false;
         }
-        return askCallback(hostPattern);
+        return askCallback_2(hostPattern);
       }
     : undefined;
-  let h = false;
+  let failed = false;
   sandboxAdapterState.initializationPromise = (async () => {
-    let y;
+    let config;
     try {
       if (
         getPlatform() === "windows" &&
         isUnderGitHome(safeProcessCwd(), getGitHomeInfo(homedir(), userSettingsHomes()))
       )
         throw new WindowsSandboxError_2(HOME_AS_CWD_NOTE);
-      y = convertToSandboxRuntimeConfig(getSettings_DEPRECATED());
+      config = convertToSandboxRuntimeConfig(getSettings_DEPRECATED());
     } catch (error) {
-      h = true;
+      failed = true;
       recordSandboxInitFailure(error);
       if (!(error instanceof SandboxPathEntryError)) return;
       let sandboxAdapterState = getSandboxAdapterState();
       sandboxAdapterState.configBuildFailed = true;
       try {
         sandboxAdapterState.settingsSubscriptionCleanup?.();
-        let w = false;
-        let R = settingsChangeDetector.subscribe(() => {
-          if (w) return;
-          w = true;
-          R();
+        let fired = false;
+        let unsubscribe = settingsChangeDetector.subscribe(() => {
+          if (fired) return;
+          fired = true;
+          unsubscribe();
           let sandboxAdapterState = getSandboxAdapterState();
           sandboxAdapterState.configBuildFailed = false;
           sandboxAdapterState.realPathTwins = "unlisted";
-          if (sandboxAdapterState.settingsSubscriptionCleanup === R)
+          if (sandboxAdapterState.settingsSubscriptionCleanup === unsubscribe)
             sandboxAdapterState.settingsSubscriptionCleanup = undefined;
         });
-        sandboxAdapterState.settingsSubscriptionCleanup = R;
+        sandboxAdapterState.settingsSubscriptionCleanup = unsubscribe;
       } catch (error) {
         sandboxAdapterState.configBuildFailed = false;
         sandboxAdapterState.settingsSubscriptionCleanup = undefined;
@@ -8580,15 +8876,15 @@ async function initializeSandbox(e) {
       return;
     }
     try {
-      getSandboxAdapterState().initializedWithTlsTerminate = y.network?.tlsTerminate !== undefined;
+      getSandboxAdapterState().initializedWithTlsTerminate = config.network?.tlsTerminate !== undefined;
       getSandboxAdapterState().installsSinceInitializeStartedAllEnforce = true;
-      let b = false;
-      let S = () => {
-        b = true;
+      let changed = false;
+      let onChange = () => {
+        changed = true;
       };
-      let w = [
-        settingsChangeDetector.subscribe(S),
-        onProducerDirsChanged.subscribe(S),
+      let unsubscribers = [
+        settingsChangeDetector.subscribe(onChange),
+        onProducerDirsChanged.subscribe(onChange),
         beginSandboxBringUp(),
         ...[],
       ];
@@ -8600,11 +8896,12 @@ async function initializeSandbox(e) {
           }
           if (!process.listeners("exit").includes(announceWindowsPermissionRemoval)) {
             process.prependListener("exit", announceWindowsPermissionRemoval);
-            for (let Ne of EXIT_SIGNALS) process.prependListener(Ne, announceWindowsPermissionRemoval);
+            for (let signalName of EXIT_SIGNALS)
+              process.prependListener(signalName, announceWindowsPermissionRemoval);
           }
           ensureAtomicWriteStagingDirs();
           await ensureBridgeSpawnRootDir();
-          let getUserStatus = io(checkWindowsSandboxRuntime);
+          let getUserStatus = memoizeAlias(checkWindowsSandboxRuntime);
           await ensureSelfExecGrant(getUserStatus);
           await grantParentFoldersToSandboxGroup({
             project: getOriginalCwd(),
@@ -8614,127 +8911,127 @@ async function initializeSandbox(e) {
           });
         }
         let runtimeWasUp = getSandboxAdapterState().nativeDenies !== undefined;
-        let ue = getPlatform() === "windows" ? await installWindowsNativeDenies(y) : undefined;
-        adoptReadDenyRootResolution(y);
-        if (ue === undefined) {
-          if (getSandboxAdapterState().storedDenyListsMayBeShort) installSandboxConfig(y);
-          await initializeSandboxRuntime(y, s);
+        let standing = getPlatform() === "windows" ? await installWindowsNativeDenies(config) : undefined;
+        adoptReadDenyRootResolution(config);
+        if (standing === undefined) {
+          if (getSandboxAdapterState().storedDenyListsMayBeShort) installSandboxConfig(config);
+          await initializeSandboxRuntime(config, guardedAsk);
         } else
           await initializeWithStandingDenies({
-            runtimeConfig: y,
-            standing: ue,
-            callback: s,
+            runtimeConfig: config,
+            standing,
+            callback: guardedAsk,
             runtimeWasUp,
           });
       } finally {
-        for (let Se of w) Se();
+        for (let unsubscribe of unsubscribers) unsubscribe();
         getProcessSandboxState().windowsStartBeganAtMs.setState(() => null);
       }
       let sandboxAdapterState = getSandboxAdapterState();
       sandboxAdapterState.installedFilterRequestEnforcesAllowlist =
-        (sandboxAdapterState.builtConfigEnforcesAllowlist.get(y) ?? false) &&
+        (sandboxAdapterState.builtConfigEnforcesAllowlist.get(config) ?? false) &&
         sandboxAdapterState.installsSinceInitializeStartedAllEnforce;
       sandboxAdapterState.refusedOverWorkingFolder = false;
       sandboxAdapterState.initFailureReason = undefined;
       sandboxAdapterState.gbHostRulesApplied =
-        sandboxAdapterState.builtConfigGbHostRules.get(y) ?? sandboxAdapterState.gbHostRulesApplied;
+        sandboxAdapterState.builtConfigGbHostRules.get(config) ?? sandboxAdapterState.gbHostRulesApplied;
       sandboxAdapterState.sshStoreDenyApplied =
-        sandboxAdapterState.builtConfigSshStoreDenied.get(y) ?? sandboxAdapterState.sshStoreDenyApplied;
+        sandboxAdapterState.builtConfigSshStoreDenied.get(config) ?? sandboxAdapterState.sshStoreDenyApplied;
       sandboxAdapterState.pluginToolStagingDenyApplied =
-        sandboxAdapterState.builtConfigPluginToolStagingDenied.get(y) ??
+        sandboxAdapterState.builtConfigPluginToolStagingDenied.get(config) ??
         sandboxAdapterState.pluginToolStagingDenyApplied;
       sandboxAdapterState.patternWriteDenyTwinsApplied =
-        sandboxAdapterState.builtConfigPatternWriteDenyTwins.get(y) ??
+        sandboxAdapterState.builtConfigPatternWriteDenyTwins.get(config) ??
         sandboxAdapterState.patternWriteDenyTwinsApplied;
       sandboxAdapterState.unlistableWorktreesDenyApplied =
-        sandboxAdapterState.builtConfigUnlistableWorktreesDenied.get(y) ??
+        sandboxAdapterState.builtConfigUnlistableWorktreesDenied.get(config) ??
         sandboxAdapterState.unlistableWorktreesDenyApplied;
       sandboxAdapterState.nestedGitConfigLockDenyApplied =
-        sandboxAdapterState.builtConfigNestedGitConfigLockDeny.get(y) ??
+        sandboxAdapterState.builtConfigNestedGitConfigLockDeny.get(config) ??
         sandboxAdapterState.nestedGitConfigLockDenyApplied;
       sandboxAdapterState.startedOnce = true;
       if (getPlatform() === "windows") {
-        sandboxAdapterState.windowsLoopbackAtStart = y.network.allowLocalBinding === true;
+        sandboxAdapterState.windowsLoopbackAtStart = config.network.allowLocalBinding === true;
         logForDebugging(
           `[sandbox] Windows: the user profile is ${SandboxManager_2.getWindowsProfileRead() === "granted" ? "readable to sandboxed commands, minus credential stores (set-up granted it)" : "not readable to sandboxed commands (no profile read grant)"}`,
         );
-        for (let Se of SandboxManager_2.getWindowsProfileReadWarnings())
-          logForDebugging(`[sandbox] Windows profile read grant: ${Se.message}`, {
+        for (let warning of SandboxManager_2.getWindowsProfileReadWarnings())
+          logForDebugging(`[sandbox] Windows profile read grant: ${warning.message}`, {
             level: "warn",
           });
       }
       if (getPlatform() !== "windows") getSandboxAdapterState().checkDependenciesProbe.cache.clear?.();
       getSandboxAdapterState().settingsSubscriptionCleanup?.();
-      let D = (Se) => {
-        let ue = tryBuildSandboxConfig();
-        if (ue === undefined) return false;
-        installSandboxConfig(ue);
-        logForDebugging(`Sandbox configuration updated from ${Se}`);
+      let rebuild = (reason) => {
+        let config = tryBuildSandboxConfig();
+        if (config === undefined) return false;
+        installSandboxConfig(config);
+        logForDebugging(`Sandbox configuration updated from ${reason}`);
         return true;
       };
-      let O = settingsChangeDetector.subscribe(() => {
+      let unsubscribeSettings = settingsChangeDetector.subscribe(() => {
         getSandboxAdapterState().realPathTwins = "unlisted";
-        D("settings change");
+        rebuild("settings change");
       });
-      let L = onProducerDirsChanged.subscribe(() => {
-        D("a plugin producer directory");
+      let unsubscribeProducerDirs = onProducerDirsChanged.subscribe(() => {
+        rebuild("a plugin producer directory");
       });
-      let V = setDenyJoinedPluginRoot(() => {
+      let unsubscribeJoin = setDenyJoinedPluginRoot(() => {
         if (getPlatform() === "windows") {
           logFeatureSad("sandbox_exec", "plugin_dir_join_refused_windows");
           return "stamped_at_start";
         }
-        let Se = false;
+        let applied = false;
         try {
-          Se = D("a plugin folder joining the session");
+          applied = rebuild("a plugin folder joining the session");
         } catch (error) {
           reportSandboxErrorUnderStandIn(error, "configNotRebuiltForPluginFolder");
         }
-        if (!Se) {
+        if (!applied) {
           logFeatureSad("sandbox_exec", "plugin_dir_join_refused");
           return "rebuild_failed";
         }
         return "installed";
       });
-      let K = () => {};
-      let q = onGrowthBookRefresh(() => {
+      let noop = () => {};
+      let unsubscribeSsh = onGrowthBookRefresh(() => {
         if (isSshStoreWriteDenyEnabled() !== getSandboxAdapterState().sshStoreDenyApplied)
-          D("a GrowthBook change to the write block on claude ssh binaries");
+          rebuild("a GrowthBook change to the write block on claude ssh binaries");
       });
-      let Z = onGrowthBookRefresh(() => {
+      let unsubscribePluginStaging = onGrowthBookRefresh(() => {
         if (isPluginToolStagingDenyEnabled() !== getSandboxAdapterState().pluginToolStagingDenyApplied)
-          D("a feature-flag change to the write block on the staged mcp_call directory");
+          rebuild("a feature-flag change to the write block on the staged mcp_call directory");
       });
-      let J = onGrowthBookRefresh(() => {
+      let unsubscribePatternTwins = onGrowthBookRefresh(() => {
         if (isPatternWriteDenyTwinsEnabled() !== getSandboxAdapterState().patternWriteDenyTwinsApplied)
-          D("a GrowthBook change to the switch for write-deny patterns through symlinks");
+          rebuild("a GrowthBook change to the switch for write-deny patterns through symlinks");
       });
-      let ie = onGrowthBookRefresh(() => {
+      let unsubscribeWorktrees = onGrowthBookRefresh(() => {
         if (isUnlistableWorktreesDenyEnabled() !== getSandboxAdapterState().unlistableWorktreesDenyApplied)
-          D("a GrowthBook change to the write block on an unreadable .git/worktrees");
+          rebuild("a GrowthBook change to the write block on an unreadable .git/worktrees");
       });
-      let ae = onGrowthBookRefresh(() => {
+      let unsubscribeNestedLock = onGrowthBookRefresh(() => {
         let nestedGitConfigLockDenyApplied = getSandboxAdapterState().nestedGitConfigLockDenyApplied;
         if (
           nestedGitConfigLockDenyApplied !== undefined &&
           isNestedGitConfigLockDenyEnabled() !== nestedGitConfigLockDenyApplied
         )
-          D("a GrowthBook refresh of the nested .git/config.lock kill switch");
+          rebuild("a GrowthBook refresh of the nested .git/config.lock kill switch");
       });
       getSandboxAdapterState().settingsSubscriptionCleanup = () => {
-        O();
-        L();
-        V();
-        K();
-        q();
-        Z();
-        J();
-        ie();
-        ae();
+        unsubscribeSettings();
+        unsubscribeProducerDirs();
+        unsubscribeJoin();
+        noop();
+        unsubscribeSsh();
+        unsubscribePluginStaging();
+        unsubscribePatternTwins();
+        unsubscribeWorktrees();
+        unsubscribeNestedLock();
       };
-      if (b)
+      if (changed)
         try {
-          D("a change that arrived during sandbox startup");
+          rebuild("a change that arrived during sandbox startup");
         } catch (error) {
           reportSandboxErrorUnderStandIn(error, "configChangeAtStartNotApplied");
         }
@@ -8742,11 +9039,11 @@ async function initializeSandbox(e) {
       getSandboxAdapterState().readDenyRootFirstLookDue = true;
       logFeatureOk("sandbox_init");
     } catch (error) {
-      h = true;
+      failed = true;
       recordSandboxInitFailure(error);
     }
   })();
-  if (h) {
+  if (failed) {
     sandboxAdapterState.initializationPromise = undefined;
     return;
   }
@@ -8770,12 +9067,12 @@ function announceWindowsPermissionRemoval() {
   }
 }
 //@ chunk-fq0cr76a.js:1051522-1051588 placement
-function writeStderrNotice(e) {
+function writeStderrNotice(message) {
   try {
     if (process.stderr.isTTY)
       writeSync(
         2,
-        `${e}
+        `${message}
 `,
       );
   } catch {}
@@ -8790,64 +9087,67 @@ function checkWindowsSandboxRuntime() {
 async function ensureSelfExecGrant(getUserStatus = checkWindowsSandboxRuntime) {
   let sandboxAdapterState = getSandboxAdapterState();
   let { selfExecGrantAttempt, dependencyProbeGeneration } = sandboxAdapterState;
-  let h = await grantExecutableReadToSandboxGroup({
+  let attempt = await grantExecutableReadToSandboxGroup({
     exePath: process.execPath,
     previous: selfExecGrantAttempt,
     getUserStatus,
   });
   if (
-    h !== selfExecGrantAttempt &&
+    attempt !== selfExecGrantAttempt &&
     dependencyProbeGeneration === sandboxAdapterState.dependencyProbeGeneration
   )
-    sandboxAdapterState.selfExecGrantAttempt = h;
+    sandboxAdapterState.selfExecGrantAttempt = attempt;
 }
 //@ chunk-fq0cr76a.js:1051852-1051896 placement
-function denySinglePath(e) {
-  return expandWindowsFsPaths([e], {
+function denySinglePath(path) {
+  return expandWindowsFsPaths([path], {
     mode: "deny",
   });
 }
 //@ chunk-fq0cr76a.js:1051896-1052708 placement
-async function installWindowsNativeDenies(e) {
+async function installWindowsNativeDenies(config) {
   let nativeDenies = getSandboxAdapterState().nativeDenies;
   try {
     let sandboxUserStatus = getSandboxUserStatus();
-    let s = getSandboxAdapterState().builtConfigConfiguredDenies.get(e);
-    if (sandboxUserStatus === undefined || s === undefined) return;
+    let configuredDenies = getSandboxAdapterState().builtConfigConfiguredDenies.get(config);
+    if (sandboxUserStatus === undefined || configuredDenies === undefined) return;
     if (env.CLAUDE_CODE_SANDBOX_LEAVE_DENIES_TO_SRT_WIN) {
       logFeatureSad("sandbox_windows_native_denies", "switched_off", {
         at_start: true,
       });
       return;
     }
-    let h = {
+    let statuses = {
       write: sandboxUserStatus,
       user: await getWindowsSandboxUserStatusAsync({
         srtWin: rgRunner(),
       }),
-      grantRoots: expandWindowsFsPaths([...e.filesystem.allowWrite, ...(e.filesystem.allowRead ?? [])], {
-        mode: "grant",
-      }),
+      grantRoots: expandWindowsFsPaths(
+        [...config.filesystem.allowWrite, ...(config.filesystem.allowRead ?? [])],
+        {
+          mode: "grant",
+        },
+      ),
     };
-    let y = await writeWindowsDenyEntries({
-      ...h,
-      lists: e.filesystem,
-      configured: s,
+    let written = await writeWindowsDenyEntries({
+      ...statuses,
+      lists: config.filesystem,
+      configured: configuredDenies,
       atStart: true,
       expand: denySinglePath,
     });
     if (nativeDenies !== undefined)
       getSandboxAdapterState().nativeDenies = {
         ...nativeDenies,
-        now: mergeNativeDenyState(nativeDenies.now, y, e.filesystem),
+        now: mergeNativeDenyState(nativeDenies.now, written, config.filesystem),
       };
-    else if (hasAnyDeniedPath(y))
+    else if (hasAnyDeniedPath(written))
       getSandboxAdapterState().nativeDenies = {
-        ...h,
-        atStart: y,
-        now: y,
+        ...statuses,
+        atStart: written,
+        now: written,
       };
-    return hasAnyDeniedPath(y) ? y : undefined;
+    return hasAnyDeniedPath(written) ? written : undefined;
   } catch (error) {
     logForDebugging(
       `[sandbox] Windows: Bun's sub-command did not write the deny entries (${errorMessage(error)}); srt-win writes them all`,
@@ -8863,14 +9163,14 @@ async function installWindowsNativeDenies(e) {
 }
 //@ chunk-fq0cr76a.js:1052708-1053391 placement
 async function initializeWithStandingDenies({ runtimeConfig, standing, callback, runtimeWasUp }) {
-  let h = dropAppliedNativeDenies(runtimeConfig.filesystem, standing);
+  let droppedFilesystem = dropAppliedNativeDenies(runtimeConfig.filesystem, standing);
   try {
     installSandboxConfig(runtimeConfig);
     getSandboxAdapterState().storedDenyListsMayBeShort = true;
     let sandboxRuntime = initializeSandboxRuntime(
       {
         ...runtimeConfig,
-        filesystem: h,
+        filesystem: droppedFilesystem,
       },
       callback,
     );
@@ -8888,7 +9188,7 @@ async function initializeWithStandingDenies({ runtimeConfig, standing, callback,
   } catch (error) {
     if (!runtimeWasUp) getSandboxAdapterState().nativeDenies = undefined;
     try {
-      reinstallIfDenyListsShort(runtimeConfig, h);
+      reinstallIfDenyListsShort(runtimeConfig, droppedFilesystem);
     } catch (error) {
       logForDebugging(
         `[sandbox] Windows: sandbox-runtime did not take Claude Code's full deny lists after the sandbox's start failed (${errorMessage(error)}); until it does, permission checks allow no write on account of the sandbox write allowlist`,
@@ -8899,22 +9199,24 @@ async function initializeWithStandingDenies({ runtimeConfig, standing, callback,
     }
     throw error;
   }
-  reinstallIfDenyListsShort(runtimeConfig, h);
+  reinstallIfDenyListsShort(runtimeConfig, droppedFilesystem);
 }
 //@ chunk-fq0cr76a.js:1053391-1053466 placement
-async function initializeSandboxRuntime(e, n) {
-  await SandboxManager_2.initialize(e, n);
+async function initializeSandboxRuntime(config, callback) {
+  await SandboxManager_2.initialize(config, callback);
   getSandboxAdapterState().sandboxRuntimeIsUp = true;
 }
 //@ chunk-fq0cr76a.js:1053466-1053798 placement
 /**
  * Windows 原生拒绝列表可能不完整时（安装失败或已存的列表与新配置不一致）标记并打点，然后重新安装沙箱配置。
  */
-function reinstallIfDenyListsShort(runtimeConfig, n) {
+function reinstallIfDenyListsShort(runtimeConfig, droppedFilesystem) {
   let filesystem = SandboxManager_2.getConfig()?.filesystem;
   let storedDenyListsMayBeShort = getSandboxAdapterState().storedDenyListsMayBeShort;
-  let h = En(filesystem?.denyRead, n.denyRead) && En(filesystem?.denyWrite, n.denyWrite);
-  if (!storedDenyListsMayBeShort && !h) return;
+  let stillShort =
+    import_sortedIndex_2(filesystem?.denyRead, droppedFilesystem.denyRead) &&
+    import_sortedIndex_2(filesystem?.denyWrite, droppedFilesystem.denyWrite);
+  if (!storedDenyListsMayBeShort && !stillShort) return;
   getSandboxAdapterState().storedDenyListsMayBeShort = true;
   reportSandboxTelemetryError("denyListsMayBeShort");
   logFeatureSad(
@@ -8927,46 +9229,46 @@ function reinstallIfDenyListsShort(runtimeConfig, n) {
   installSandboxConfig(runtimeConfig);
 }
 //@ chunk-fq0cr76a.js:1053798-1053995 placement
-function raceAbortSignal(e, n) {
-  return n === undefined
-    ? e
+function raceAbortSignal(promise, signal) {
+  return signal === undefined
+    ? promise
     : new Promise((resolve, reject) => {
-        let h = () => reject(n.reason);
-        n.addEventListener("abort", h, {
+        let onAbort = () => reject(signal.reason);
+        signal.addEventListener("abort", onAbort, {
           once: true,
         });
-        if (n.aborted) h();
-        e.then(resolve, reject).finally(() => n.removeEventListener("abort", h));
+        if (signal.aborted) onAbort();
+        promise.then(resolve, reject).finally(() => signal.removeEventListener("abort", onAbort));
       });
 }
 //@ chunk-fq0cr76a.js:1053995-1054420 placement
-async function withRenewedNativeDenies(e) {
+async function withRenewedNativeDenies(config) {
   let nativeDenyRenewals = getSandboxAdapterState().nativeDenyRenewals;
-  let r = await (nativeDenyRenewals.queued ??
+  let renewed = await (nativeDenyRenewals.queued ??
     (nativeDenyRenewals.running === undefined
       ? renewNativeDeniesTracked()
       : (nativeDenyRenewals.queued = nativeDenyRenewals.running.then(renewNativeDenies, renewNativeDenies))));
   assertTaskOutputDirChainPlain();
   verifyStagedMcpCallDir();
-  if (r === undefined) return e;
-  let s = pendingDenies(r, "denyRead");
-  let h = pendingDenies(r, "denyWrite");
-  let filesystem = e?.filesystem;
-  if (filesystem === undefined && s.length + h.length === 0) return e;
-  let b = dropAppliedNativeDenies(
+  if (renewed === undefined) return config;
+  let pendingReads = pendingDenies(renewed, "denyRead");
+  let pendingWrites = pendingDenies(renewed, "denyWrite");
+  let filesystem = config?.filesystem;
+  if (filesystem === undefined && pendingReads.length + pendingWrites.length === 0) return config;
+  let droppedFilesystem = dropAppliedNativeDenies(
     filesystem ?? {
       denyRead: [],
       denyWrite: [],
       allowWrite: [],
     },
-    r.now,
+    renewed.now,
   );
   return {
-    ...e,
+    ...config,
     filesystem: {
-      ...b,
-      denyRead: uniq([...b.denyRead, ...s]),
-      denyWrite: uniq([...b.denyWrite, ...h]),
+      ...droppedFilesystem,
+      denyRead: uniq([...droppedFilesystem.denyRead, ...pendingReads]),
+      denyWrite: uniq([...droppedFilesystem.denyWrite, ...pendingWrites]),
     },
   };
 }
@@ -8984,20 +9286,22 @@ function renewNativeDenies() {
   return renewNativeDeniesTracked();
 }
 //@ chunk-fq0cr76a.js:1054593-1054680 placement
-function pendingDenies(e, n) {
-  return [...e.now[n]].filter(([r, s]) => s !== true && !wasDenyUnregistered(e, n, r)).map(([r]) => r);
+function pendingDenies(nativeDenies, list) {
+  return [...nativeDenies.now[list]]
+    .filter(([path, value]) => value !== true && !wasDenyUnregistered(nativeDenies, list, path))
+    .map(([path]) => path);
 }
 //@ chunk-fq0cr76a.js:1054680-1054746 placement
-function wasDenyUnregistered({ atStart }, n, r) {
-  return atStart[n].has(r) && atStart[n].get(r) !== true;
+function wasDenyUnregistered({ atStart }, list, path) {
+  return atStart[list].has(path) && atStart[list].get(path) !== true;
 }
 //@ chunk-fq0cr76a.js:1054746-1054955 placement
 function mergeDenyChanges(installedConfiguredDenies, atStart) {
-  let r = [...atStart.denyRead, ...atStart.denyWrite];
-  let s = new Set(r.filter(([, h]) => h).map(([h]) => h));
+  let entries = [...atStart.denyRead, ...atStart.denyWrite];
+  let dropped = new Set(entries.filter(([, value]) => value).map(([path]) => path));
   return new Set([
-    ...[...installedConfiguredDenies].filter((h) => !s.has(h)),
-    ...r.filter(([h, y]) => y === undefined && !s.has(h)).map(([h]) => h),
+    ...[...installedConfiguredDenies].filter((path) => !dropped.has(path)),
+    ...entries.filter(([path, value]) => value === undefined && !dropped.has(path)).map(([path]) => path),
   ]);
 }
 //@ chunk-fq0cr76a.js:1054955-1055378 placement
@@ -9012,26 +9316,28 @@ async function renewNativeDenies_2() {
     getSandboxAdapterState().storedDenyListsMayBeShort
   )
     return failWindowsDenyRenewal();
-  let s = {
+  let request = {
     ...nativeDenies,
     lists: filesystem,
     configured: mergeDenyChanges(installedConfiguredDenies, nativeDenies.atStart),
     atStart: false,
     expand: denySinglePath,
   };
-  let h = await writeWindowsDenyEntries(s);
-  let y = areAllNativeDeniesComplete(nativeDenies, h) ? h : await writeWindowsDenyEntries(s);
-  if (!areAllNativeDeniesComplete(nativeDenies, y)) return failWindowsDenyRenewal();
-  let b = {
+  let written = await writeWindowsDenyEntries(request);
+  let retried = areAllNativeDeniesComplete(nativeDenies, written)
+    ? written
+    : await writeWindowsDenyEntries(request);
+  if (!areAllNativeDeniesComplete(nativeDenies, retried)) return failWindowsDenyRenewal();
+  let next = {
     ...nativeDenies,
-    now: mergeNativeDenyState(nativeDenies.now, y, filesystem),
+    now: mergeNativeDenyState(nativeDenies.now, retried, filesystem),
   };
-  if (getSandboxAdapterState().nativeDenies === nativeDenies) getSandboxAdapterState().nativeDenies = b;
-  return b;
+  if (getSandboxAdapterState().nativeDenies === nativeDenies) getSandboxAdapterState().nativeDenies = next;
+  return next;
 }
 //@ chunk-fq0cr76a.js:1055378-1055425 placement
-function areAllNativeDeniesComplete(nativeDenies, n) {
-  return areNativeDeniesComplete(n, (r, s) => wasDenyUnregistered(nativeDenies, r, s));
+function areAllNativeDeniesComplete(nativeDenies, written) {
+  return areNativeDeniesComplete(written, (list, path) => wasDenyUnregistered(nativeDenies, list, path));
 }
 //@ chunk-fq0cr76a.js:1055425-1055499 placement
 function failWindowsDenyRenewal() {
@@ -9093,9 +9399,9 @@ function tryBuildSandboxConfig() {
 function refreshConfig() {
   if (getSandboxAdapterState().configBuildFailed) return false;
   if (!isSandboxingEnabled()) return true;
-  let e = tryBuildSandboxConfig();
-  if (e === undefined) return false;
-  installSandboxConfig(e);
+  let config = tryBuildSandboxConfig();
+  if (config === undefined) return false;
+  installSandboxConfig(config);
   return true;
 }
 //@ chunk-fq0cr76a.js:1056315-1056457 placement
@@ -9103,7 +9409,7 @@ async function resetSandbox() {
   sandboxAdapterState?.settingsSubscriptionCleanup?.();
   sandboxAdapterState = undefined;
   process.off("exit", announceWindowsPermissionRemoval);
-  for (let e of EXIT_SIGNALS) process.off(e, announceWindowsPermissionRemoval);
+  for (let signalName of EXIT_SIGNALS) process.off(signalName, announceWindowsPermissionRemoval);
   return SandboxManager_2.reset();
 }
 //@ chunk-fq0cr76a.js:1056457-1057166 placement = addToExcludedCommands (0.534)
@@ -9122,21 +9428,21 @@ function addToExcludedCommands(command, permissionUpdates) {
         commandPattern = permissionRuleExtractPrefix(firstBashRule.ruleContent) || firstBashRule.ruleContent;
     }
   }
-  let s = isAdminSandboxMandate();
-  if (s && !isSettingSourceEnabled("userSettings")) {
+  let adminMandate = isAdminSandboxMandate();
+  if (adminMandate && !isSettingSourceEnabled("userSettings")) {
     logFeatureBad("sandbox_exclude_command", "user_settings_disabled");
     return {
       outcome: "refused",
       commandPattern,
     };
   }
-  let h =
-    (s || (getPlatform() === "windows" && SandboxManager.isStrictSandboxModeConfigured())) &&
+  let sourceName =
+    (adminMandate || (getPlatform() === "windows" && SandboxManager.isStrictSandboxModeConfigured())) &&
     isSettingSourceEnabled("userSettings")
       ? "userSettings"
       : "localSettings";
-  updateSettingsForSourceWithTransform(h, (y) => {
-    let excludedCommands = y?.sandbox?.excludedCommands || [];
+  updateSettingsForSourceWithTransform(sourceName, (settings) => {
+    let excludedCommands = settings?.sandbox?.excludedCommands || [];
     if (excludedCommands.includes(commandPattern)) return null;
     return {
       sandbox: {
@@ -9148,40 +9454,42 @@ function addToExcludedCommands(command, permissionUpdates) {
   return {
     outcome: "added",
     commandPattern,
-    settingsSource: h,
+    settingsSource: sourceName,
   };
 }
 //@ chunk-fq0cr76a.js:1057166-1057777 placement
 /**
  * 沙箱命令结束后的清理：执行 scrub、复查标记，并在命令只写了自己的临时目录时决定是否推迟读禁止根复查。
  */
-function afterSandboxedCommand(extra, n, r) {
+function afterSandboxedCommand(extra, deferredSnapshot, options) {
   let sandboxAdapterState = getSandboxAdapterState();
   let readDenyRootLookFinishedAt = sandboxAdapterState.readDenyRootLookFinishedAt;
   sandboxAdapterState.readDenyRootLookFinishedAt = undefined;
-  if (!r?.skipsScrubs) {
+  if (!options?.skipsScrubs) {
     scrubPlantedBareRepoIndicators(extra);
-    scrubSymlinkedDenyPaths(n);
+    scrubSymlinkedDenyPaths(deferredSnapshot);
   }
   rescreenLateSymlinkGrants();
-  if (r?.wroteOnlyItsOwnScratch) {
+  if (options?.wroteOnlyItsOwnScratch) {
     let installedReadDenyRootResolution = sandboxAdapterState.installedReadDenyRootResolution;
     let filtered = [
       ...(installedReadDenyRootResolution?.resolution?.resolved ?? []),
       ...(installedReadDenyRootResolution?.maskSweepEntries ?? []),
-    ].filter((D) => D.lookAgain !== undefined || D.settledUnwatched);
+    ].filter((entry) => entry.lookAgain !== undefined || entry.settledUnwatched);
     if (filtered.length === 0) {
       sandboxAdapterState.readDenyRootLookFinishedAt = readDenyRootLookFinishedAt;
       return;
     }
-    let S = splitBindableWriteRoots(getDefaultWritePaths(), new Set([getCwdState()]));
-    let mapped = flattenWrapWriteRoots(S).map(toFoldedAbsolutePath);
+    let roots = splitBindableWriteRoots(getDefaultWritePaths(), new Set([getCwdState()]));
+    let mapped = flattenWrapWriteRoots(roots).map(toFoldedAbsolutePath);
     if (!(
-      S.hasUndecidableEntry ||
-      filtered.some((D) =>
-        [...D.spellings, D.lookAgain?.stoppedAt?.path ?? D.root]
-          .map((O) => toFoldedAbsolutePath(containsGlobChars(O) ? getGlobBaseDirectory_2(O) : O))
-          .some((O) => mapped.some((rule) => posixCovers(rule, O))),
+      roots.hasUndecidableEntry ||
+      filtered.some((entry) =>
+        [...entry.spellings, entry.lookAgain?.stoppedAt?.path ?? entry.root]
+          .map((spelling) =>
+            toFoldedAbsolutePath(containsGlobChars(spelling) ? getGlobBaseDirectory_2(spelling) : spelling),
+          )
+          .some((spelling) => mapped.some((rule) => posixCovers(rule, spelling))),
       )
     ))
       sandboxAdapterState.readDenyRootLookFinishedAt = readDenyRootLookFinishedAt;
@@ -9191,187 +9499,197 @@ function afterSandboxedCommand(extra, n, r) {
 /**
  * Claude Code 侧的 SandboxManager 门面对象：汇总初始化、启用/必需判断、托管锁定、排除命令、网络与文件系统授权、wrapWithSandbox/wrapWithSandboxArgv、依赖检查、refreshConfig/reset 等；getConfig/getFsReadConfig 转发 vendor 的运行中配置并做额外处理。
  */
-var SandboxManager = {
-  initialize: initializeSandbox,
-  isSandboxingEnabled,
-  isSandboxEnabledInSettings: getSandboxEnabledSetting,
-  isPlatformInEnabledList,
-  passesCheapSandboxGates,
-  needsRestartForTlsTerminate,
-  getSandboxUnavailableReason,
-  getSandboxSetUpAgainWarning,
-  needsRestartForLocalConnections,
-  getSandboxRestartWarning,
-  untilRestart: getLocalBindingRestartMode,
-  areSandboxSettingsLockedByManagedSettings: areSandboxSettingsLockedByPolicy,
-  getProfileReadSecurityWarnings,
-  getMaskCredentialWarning,
-  canMaskCredentialWarningFire,
-  isAutoAllowBashIfSandboxedEnabled,
-  isAutoAllowSupported,
-  areUnsandboxedCommandsAllowed,
-  isOnButNotRunning,
-  isStrictSandboxModeConfigured,
-  isSandboxRequired,
-  areSandboxSettingsLockedByPolicy: areSandboxSettingsOverriddenByFlagOrPolicy,
-  areUnsandboxedCommandsForbiddenByPolicy: isUnsandboxedForbiddenByGb,
-  isUnsandboxedFallbackClosedByTrustedTier,
-  isUnsandboxedFallbackClosedByTrustedSource,
-  isSandboxedAttemptGateEnabled: neverTempRoot,
-  setSandboxSettings,
-  getExcludedCommands,
-  getConfiguredNetworkAllowances,
-  isAllowAllUnixSocketsConfigured,
-  getConfiguredFilesystemGrants,
-  wrapWithSandbox: wrapWithSandbox_2,
-  wrapWithSandboxArgv,
-  invalidateDependencyCache: () => {
-    let sandboxAdapterState = getSandboxAdapterState();
-    sandboxAdapterState.dependencyProbeGeneration++;
-    sandboxAdapterState.checkDependenciesProbe.cache.clear?.();
-    sandboxAdapterState.sandboxDisabledThisSession = false;
-    sandboxAdapterState.initFailureReason = undefined;
-    sandboxAdapterState.configBuildFailed = false;
-    sandboxAdapterState.realPathTwins = "unlisted";
-    sandboxAdapterState.selfExecGrantAttempt = undefined;
-  },
-  refreshConfig,
-  addSessionAllowedHost: grantSessionHost,
-  reset: resetSandbox,
-  checkDependencies: checkSandboxDependencies,
-  rememberedDependencyCheck: cachedDependencyProbe,
-  checkDependenciesAsync: checkSandboxDependenciesAsync,
-  getConfig: () => assertMarkedPathsResolved(SandboxManager_2.getConfig()),
-  getFsReadConfig: () => {
-    let e = assertMarkedPathsResolved(SandboxManager_2.getConfig());
-    if (e?.filesystem.disabled)
-      return {
-        denyOnly: e.filesystem.denyRead.map(removeTrailingGlobSuffix),
-        allowWithinDeny: (e.filesystem.allowRead ?? []).map(removeTrailingGlobSuffix),
-      };
-    let sandboxAdapterState = getSandboxAdapterState();
-    if (sandboxAdapterState.fsReadConfigMemo !== undefined && sandboxAdapterState.fsReadConfigMemo.cfg === e)
-      return sandboxAdapterState.fsReadConfigMemo.result;
-    let platform = getPlatform();
-    let files = e?.credentials?.files ?? [];
-    let mapped = files.filter((file) => file.mode === "deny").map((file) => file.path);
-    if (
-      (platform === "linux" || platform === "wsl") &&
-      [...(e?.filesystem.denyRead ?? []), ...(e?.filesystem.allowRead ?? []), ...mapped].some((y) =>
-        containsGlobChars(removeTrailingGlobSuffix(y)),
+var SandboxManager; // deferred: uses SandboxManager_2 (../../../vendor/@anthropic-ai/sandbox-runtime/dist/sandbox/sandbox-manager.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-fq0cr76a.js:1057777", () => {
+  SandboxManager = {
+    initialize: initializeSandbox,
+    isSandboxingEnabled,
+    isSandboxEnabledInSettings: getSandboxEnabledSetting,
+    isPlatformInEnabledList,
+    passesCheapSandboxGates,
+    needsRestartForTlsTerminate,
+    getSandboxUnavailableReason,
+    getSandboxSetUpAgainWarning,
+    needsRestartForLocalConnections,
+    getSandboxRestartWarning,
+    untilRestart: getLocalBindingRestartMode,
+    areSandboxSettingsLockedByManagedSettings: areSandboxSettingsLockedByPolicy,
+    getProfileReadSecurityWarnings,
+    getMaskCredentialWarning,
+    canMaskCredentialWarningFire,
+    isAutoAllowBashIfSandboxedEnabled,
+    isAutoAllowSupported,
+    areUnsandboxedCommandsAllowed,
+    isOnButNotRunning,
+    isStrictSandboxModeConfigured,
+    isSandboxRequired,
+    areSandboxSettingsLockedByPolicy: areSandboxSettingsOverriddenByFlagOrPolicy,
+    areUnsandboxedCommandsForbiddenByPolicy: isUnsandboxedForbiddenByGb,
+    isUnsandboxedFallbackClosedByTrustedTier,
+    isUnsandboxedFallbackClosedByTrustedSource,
+    isSandboxedAttemptGateEnabled: neverTempRoot,
+    setSandboxSettings,
+    getExcludedCommands,
+    getConfiguredNetworkAllowances,
+    isAllowAllUnixSocketsConfigured,
+    getConfiguredFilesystemGrants,
+    wrapWithSandbox: wrapWithSandbox_2,
+    wrapWithSandboxArgv,
+    invalidateDependencyCache: () => {
+      let sandboxAdapterState = getSandboxAdapterState();
+      sandboxAdapterState.dependencyProbeGeneration++;
+      sandboxAdapterState.checkDependenciesProbe.cache.clear?.();
+      sandboxAdapterState.sandboxDisabledThisSession = false;
+      sandboxAdapterState.initFailureReason = undefined;
+      sandboxAdapterState.configBuildFailed = false;
+      sandboxAdapterState.realPathTwins = "unlisted";
+      sandboxAdapterState.selfExecGrantAttempt = undefined;
+    },
+    refreshConfig,
+    addSessionAllowedHost: grantSessionHost,
+    reset: resetSandbox,
+    checkDependencies: checkSandboxDependencies,
+    rememberedDependencyCheck: cachedDependencyProbe,
+    checkDependenciesAsync: checkSandboxDependenciesAsync,
+    getConfig: () => assertMarkedPathsResolved(SandboxManager_2.getConfig()),
+    getFsReadConfig: () => {
+      let config = assertMarkedPathsResolved(SandboxManager_2.getConfig());
+      if (config?.filesystem.disabled)
+        return {
+          denyOnly: config.filesystem.denyRead.map(removeTrailingGlobSuffix),
+          allowWithinDeny: (config.filesystem.allowRead ?? []).map(removeTrailingGlobSuffix),
+        };
+      let sandboxAdapterState = getSandboxAdapterState();
+      if (
+        sandboxAdapterState.fsReadConfigMemo !== undefined &&
+        sandboxAdapterState.fsReadConfigMemo.cfg === config
       )
-    ) {
-      let readDenyLists = buildReadDenyLists(e, mapped);
-      sandboxAdapterState.fsReadConfigMemo = {
-        cfg: e,
-        result: readDenyLists,
-      };
-      return readDenyLists;
-    }
-    try {
-      let fsReadConfig = SandboxManager_2.getFsReadConfig();
-      sandboxAdapterState.fsReadConfigMemo = {
-        cfg: e,
-        result: fsReadConfig,
-      };
-      return fsReadConfig;
-    } catch (error) {
-      logForDebugging(`[sandbox] getFsReadConfig threw; falling back to raw deny lists: ${error}`);
-      let readDenyLists = buildReadDenyLists(
-        e,
-        files.map((file) => file.path),
-      );
-      sandboxAdapterState.fsReadConfigMemo = {
-        cfg: e,
-        result: readDenyLists,
-      };
-      return readDenyLists;
-    }
-  },
-  storedDenyListsMayBeShort: () => getSandboxAdapterState().storedDenyListsMayBeShort,
-  getFsWriteConfig: () => {
-    let e = assertMarkedPathsResolved(SandboxManager_2.getConfig());
-    if (e?.filesystem.disabled)
+        return sandboxAdapterState.fsReadConfigMemo.result;
+      let platform = getPlatform();
+      let files = config?.credentials?.files ?? [];
+      let credentialPaths = files.filter((file) => file.mode === "deny").map((file) => file.path);
+      if (
+        (platform === "linux" || platform === "wsl") &&
+        [
+          ...(config?.filesystem.denyRead ?? []),
+          ...(config?.filesystem.allowRead ?? []),
+          ...credentialPaths,
+        ].some((path) => containsGlobChars(removeTrailingGlobSuffix(path)))
+      ) {
+        let readDenyLists = buildReadDenyLists(config, credentialPaths);
+        sandboxAdapterState.fsReadConfigMemo = {
+          cfg: config,
+          result: readDenyLists,
+        };
+        return readDenyLists;
+      }
+      try {
+        let fsReadConfig = SandboxManager_2.getFsReadConfig();
+        sandboxAdapterState.fsReadConfigMemo = {
+          cfg: config,
+          result: fsReadConfig,
+        };
+        return fsReadConfig;
+      } catch (error) {
+        logForDebugging(`[sandbox] getFsReadConfig threw; falling back to raw deny lists: ${error}`);
+        let readDenyLists = buildReadDenyLists(
+          config,
+          files.map((file) => file.path),
+        );
+        sandboxAdapterState.fsReadConfigMemo = {
+          cfg: config,
+          result: readDenyLists,
+        };
+        return readDenyLists;
+      }
+    },
+    storedDenyListsMayBeShort: () => getSandboxAdapterState().storedDenyListsMayBeShort,
+    getFsWriteConfig: () => {
+      let config = assertMarkedPathsResolved(SandboxManager_2.getConfig());
+      if (config?.filesystem.disabled)
+        return {
+          allowOnly: config.filesystem.allowWrite.map(removeTrailingGlobSuffix),
+          denyWithinAllow: config.filesystem.denyWrite.map(removeTrailingGlobSuffix),
+        };
+      return SandboxManager_2.getFsWriteConfig();
+    },
+    getNetworkRestrictionConfig: () => {
+      if (SandboxManager_2.getConfig()?.network?.allowedDomains === undefined) return {};
+      return SandboxManager_2.getNetworkRestrictionConfig();
+    },
+    getIgnoreViolations: SandboxManager_2.getIgnoreViolations,
+    getLinuxGlobPatternWarnings: getLinuxGlobPatternWarnings_2,
+    getDeniesDroppedForAnotherHost: droppedDeniesForHost,
+    onDeniesDroppedForAnotherHostChanged: subscribeSandboxEvents,
+    getUnbracketedIpv6DomainWarnings: getInvalidIpv6DomainEntries,
+    getUnbracketedIpv6InjectHostWarnings: getInvalidInjectHostEntries,
+    isSupportedPlatform,
+    getAllowUnixSockets: SandboxManager_2.getAllowUnixSockets,
+    getAllowLocalBinding: SandboxManager_2.getAllowLocalBinding,
+    getAllowMachLookup: SandboxManager_2.getAllowMachLookup,
+    getEnableWeakerNestedSandbox: SandboxManager_2.getEnableWeakerNestedSandbox,
+    getProxyPort: SandboxManager_2.getProxyPort,
+    getProxyAuthToken: SandboxManager_2.getProxyAuthToken,
+    getSocksProxyPort: SandboxManager_2.getSocksProxyPort,
+    getLinuxHttpSocketPath: SandboxManager_2.getLinuxHttpSocketPath,
+    getLinuxSocksSocketPath: SandboxManager_2.getLinuxSocksSocketPath,
+    waitForNetworkInitialization: SandboxManager_2.waitForNetworkInitialization,
+    ensureInitializedForWrap,
+    getSandboxViolationStore: SandboxManager_2.getSandboxViolationStore,
+    annotateStderrWithSandboxFailures: SandboxManager_2.annotateStderrWithSandboxFailures,
+    registerCommandNetworkLists: SandboxManager_2.registerCommandNetworkLists,
+    unregisterCommandNetworkLists: SandboxManager_2.unregisterCommandNetworkLists,
+    askCallbackDenyReason: SandboxManager_2.askCallbackDenyReason === true,
+    denyAllNetworkOption: SandboxManager_2.denyAllNetworkOption === true,
+    cleanupAfterCommand: (extra, deferredSnapshot, options) => {
+      SandboxManager_2.cleanupAfterCommand();
+      afterSandboxedCommand(extra, deferredSnapshot, {
+        wroteOnlyItsOwnScratch: options?.wroteOnlyItsOwnScratch,
+      });
+    },
+    scrubAfterCommand: () => {
+      afterSandboxedCommand();
+    },
+    cleanupAfterCommandWithoutScrubs: () => {
+      SandboxManager_2.cleanupAfterCommand();
+      afterSandboxedCommand(undefined, undefined, {
+        skipsScrubs: true,
+      });
+    },
+    snapshotBareGitRepoScrubPaths: () => {
+      let sandboxAdapterState = getSandboxAdapterState();
       return {
-        allowOnly: e.filesystem.allowWrite.map(removeTrailingGlobSuffix),
-        denyWithinAllow: e.filesystem.denyWrite.map(removeTrailingGlobSuffix),
+        paths: [...sandboxAdapterState.bareGitRepoScrubPaths.values()].map((bareGitRepoScrubPath) => ({
+          path: bareGitRepoScrubPath.path,
+          parent: cloneScrubParent(bareGitRepoScrubPath.parent),
+          unlinkable: bareGitRepoScrubPath.unlinkable,
+        })),
+        pathsVouchedLocally: sandboxAdapterState.bareGitRepoScrubPathsVouchedLocally,
       };
-    return SandboxManager_2.getFsWriteConfig();
-  },
-  getNetworkRestrictionConfig: () => {
-    if (SandboxManager_2.getConfig()?.network?.allowedDomains === undefined) return {};
-    return SandboxManager_2.getNetworkRestrictionConfig();
-  },
-  getIgnoreViolations: SandboxManager_2.getIgnoreViolations,
-  getLinuxGlobPatternWarnings: getLinuxGlobPatternWarnings_2,
-  getDeniesDroppedForAnotherHost: droppedDeniesForHost,
-  onDeniesDroppedForAnotherHostChanged: subscribeSandboxEvents,
-  getUnbracketedIpv6DomainWarnings: getInvalidIpv6DomainEntries,
-  getUnbracketedIpv6InjectHostWarnings: getInvalidInjectHostEntries,
-  isSupportedPlatform,
-  getAllowUnixSockets: SandboxManager_2.getAllowUnixSockets,
-  getAllowLocalBinding: SandboxManager_2.getAllowLocalBinding,
-  getAllowMachLookup: SandboxManager_2.getAllowMachLookup,
-  getEnableWeakerNestedSandbox: SandboxManager_2.getEnableWeakerNestedSandbox,
-  getProxyPort: SandboxManager_2.getProxyPort,
-  getProxyAuthToken: SandboxManager_2.getProxyAuthToken,
-  getSocksProxyPort: SandboxManager_2.getSocksProxyPort,
-  getLinuxHttpSocketPath: SandboxManager_2.getLinuxHttpSocketPath,
-  getLinuxSocksSocketPath: SandboxManager_2.getLinuxSocksSocketPath,
-  waitForNetworkInitialization: SandboxManager_2.waitForNetworkInitialization,
-  ensureInitializedForWrap,
-  getSandboxViolationStore: SandboxManager_2.getSandboxViolationStore,
-  annotateStderrWithSandboxFailures: SandboxManager_2.annotateStderrWithSandboxFailures,
-  registerCommandNetworkLists: SandboxManager_2.registerCommandNetworkLists,
-  unregisterCommandNetworkLists: SandboxManager_2.unregisterCommandNetworkLists,
-  askCallbackDenyReason: SandboxManager_2.askCallbackDenyReason === true,
-  denyAllNetworkOption: SandboxManager_2.denyAllNetworkOption === true,
-  cleanupAfterCommand: (e, n, r) => {
-    SandboxManager_2.cleanupAfterCommand();
-    afterSandboxedCommand(e, n, {
-      wroteOnlyItsOwnScratch: r?.wroteOnlyItsOwnScratch,
-    });
-  },
-  scrubAfterCommand: () => {
-    afterSandboxedCommand();
-  },
-  cleanupAfterCommandWithoutScrubs: () => {
-    SandboxManager_2.cleanupAfterCommand();
-    afterSandboxedCommand(undefined, undefined, {
-      skipsScrubs: true,
-    });
-  },
-  snapshotBareGitRepoScrubPaths: () => {
-    let sandboxAdapterState = getSandboxAdapterState();
-    return {
-      paths: [...sandboxAdapterState.bareGitRepoScrubPaths.values()].map((bareGitRepoScrubPath) => ({
-        path: bareGitRepoScrubPath.path,
-        parent: cloneScrubParent(bareGitRepoScrubPath.parent),
-        unlinkable: bareGitRepoScrubPath.unlinkable,
+    },
+    snapshotSymlinkedDenyScrubPaths: () =>
+      getSandboxAdapterState().symlinkedDenyScrubPaths.map((symlinkedDenyScrubPath) => ({
+        literal: symlinkedDenyScrubPath.literal,
+        resolved: symlinkedDenyScrubPath.resolved,
+        parent: cloneScrubParent(symlinkedDenyScrubPath.parent),
+        hopDirectories:
+          symlinkedDenyScrubPath.hopDirectories === null ? null : [...symlinkedDenyScrubPath.hopDirectories],
+        danglingBaseline: symlinkedDenyScrubPath.danglingBaseline,
       })),
-      pathsVouchedLocally: sandboxAdapterState.bareGitRepoScrubPathsVouchedLocally,
-    };
-  },
-  snapshotSymlinkedDenyScrubPaths: () =>
-    getSandboxAdapterState().symlinkedDenyScrubPaths.map((symlinkedDenyScrubPath) => ({
-      literal: symlinkedDenyScrubPath.literal,
-      resolved: symlinkedDenyScrubPath.resolved,
-      parent: cloneScrubParent(symlinkedDenyScrubPath.parent),
-      hopDirectories:
-        symlinkedDenyScrubPath.hopDirectories === null ? null : [...symlinkedDenyScrubPath.hopDirectories],
-      danglingBaseline: symlinkedDenyScrubPath.danglingBaseline,
-    })),
-};
+  };
+});
 //@ chunk-fq0cr76a.js:1062179-1062315 placement
-function buildReadDenyLists(e, n) {
+function buildReadDenyLists(config, credentialPaths) {
   return {
-    denyOnly: uniq([...(e?.filesystem.denyRead ?? []), ...n].map(removeTrailingGlobSuffix)),
-    allowWithinDeny: (e?.filesystem.allowRead ?? []).map(removeTrailingGlobSuffix),
+    denyOnly: uniq(
+      [...(config?.filesystem.denyRead ?? []), ...credentialPaths].map(removeTrailingGlobSuffix),
+    ),
+    allowWithinDeny: (config?.filesystem.allowRead ?? []).map(removeTrailingGlobSuffix),
   };
 }
 //@ chunk-fq0cr76a.js:1062315-1062348 placement
-function isWithinOriginalCwd(e) {
-  return isPathWithin(e, getOriginalCwd());
+function isWithinOriginalCwd(path) {
+  return isPathWithin(path, getOriginalCwd());
 }
 //@ chunk-fq0cr76a.js:1062348-1062386 placement
 var PERSON_ROOT_MIN_BYTES = 2097152;
@@ -9379,11 +9697,11 @@ var PERSON_ROOT_OPTIONS = {
   isPersonsRoot: true,
 };
 //@ chunk-fq0cr76a.js:1062386-1062511 placement
-function setDenyJoinedPluginRoot(e) {
+function setDenyJoinedPluginRoot(callback) {
   let pluginRegistry = getPluginRegistry();
-  pluginRegistry.denyJoinedPluginRoot = e;
+  pluginRegistry.denyJoinedPluginRoot = callback;
   return () => {
-    if (pluginRegistry.denyJoinedPluginRoot === e) pluginRegistry.denyJoinedPluginRoot = undefined;
+    if (pluginRegistry.denyJoinedPluginRoot === callback) pluginRegistry.denyJoinedPluginRoot = undefined;
   };
 }
 //@ chunk-fq0cr76a.js:1062511-1062667 placement
@@ -9397,20 +9715,20 @@ function beginSandboxBringUp() {
   };
 }
 //@ chunk-fq0cr76a.js:1062667-1062865 placement
-function createFileAtChain(e, ...n) {
-  let r = READ_LIMITS | O_NOFOLLOW_ANY | constants.O_DIRECTORY | constants.O_NOFOLLOW;
-  let s = [];
+function createFileAtChain(root, ...parts) {
+  let flags = READ_LIMITS | O_NOFOLLOW_ANY | constants.O_DIRECTORY | constants.O_NOFOLLOW;
+  let fds = [];
   try {
-    let h = e;
-    for (let y of n) {
-      let b = openSync(h, r);
-      s.push(b);
-      h = `/proc/self/fd/${b}/${y}`;
+    let current = root;
+    for (let name of parts) {
+      let fd = openSync(current, flags);
+      fds.push(fd);
+      current = `/proc/self/fd/${fd}/${name}`;
     }
-    closeSync(openSync(h, "wx"));
+    closeSync(openSync(current, "wx"));
   } catch {
   } finally {
-    for (let h of s) closeSync(h);
+    for (let fd of fds) closeSync(fd);
   }
 }
 //@ chunk-fq0cr76a.js:1062865-1064037 placement
@@ -9451,25 +9769,25 @@ function ensurePrivateDirChain(
       return false;
     }
     try {
-      for (let w of filtered) {
+      for (let name of filtered) {
         try {
-          mkdirSync(`/proc/self/fd/${fd}/${w}`, {
+          mkdirSync(`/proc/self/fd/${fd}/${name}`, {
             mode: 448,
           });
         } catch (error) {
           if (getErrnoCode(error) !== "EEXIST") return false;
         }
-        let R;
+        let nextFd;
         try {
-          R = openSync(
-            `/proc/self/fd/${fd}/${w}`,
+          nextFd = openSync(
+            `/proc/self/fd/${fd}/${name}`,
             PERSON_ROOT_MIN_BYTES | constants.O_DIRECTORY | constants.O_NOFOLLOW,
           );
         } catch {
           return false;
         }
         closeSync(fd);
-        fd = R;
+        fd = nextFd;
       }
       return readlinkSync(`/proc/self/fd/${fd}`) === target;
     } catch {
@@ -9484,21 +9802,21 @@ function ensurePrivateDirChain(
       recursive: true,
       mode: 448,
     });
-    let b = lstatSync(replaced);
+    let stats = lstatSync(replaced);
     if (
-      !b.isDirectory() ||
+      !stats.isDirectory() ||
       (!isPersonsRoot &&
         getPlatform() !== "windows" &&
         process.getuid !== undefined &&
-        b.uid !== process.getuid())
+        stats.uid !== process.getuid())
     )
       return false;
-    if (!isPersonsRoot && getPlatform() !== "windows" && (b.mode & 18) !== 0) chmodSync(replaced, 448);
+    if (!isPersonsRoot && getPlatform() !== "windows" && (stats.mode & 18) !== 0) chmodSync(replaced, 448);
   } catch {
     return false;
   }
-  for (let b of filtered) {
-    replaced = join(replaced, b);
+  for (let name of filtered) {
+    replaced = join(replaced, name);
     try {
       mkdirSync(replaced, {
         mode: 448,
@@ -9507,8 +9825,8 @@ function ensurePrivateDirChain(
       if (getErrnoCode(error) !== "EEXIST") return false;
     }
     try {
-      let S = lstatSync(replaced);
-      if (!S.isDirectory() || S.isSymbolicLink()) return false;
+      let stats = lstatSync(replaced);
+      if (!stats.isDirectory() || stats.isSymbolicLink()) return false;
     } catch {
       return false;
     }
@@ -9519,21 +9837,14 @@ function ensurePrivateDirChain(
     return false;
   }
 }
-//@ chunk-czffketc.js:1080-1176 placement
-/**
- * hostIdentityMatches：主机身份是否一致。
- */
-function hostIdentityMatches(hostPattern, e) {
-  let n = normalizeDomainKey(`domain:${hostPattern}`);
-  let i = normalizeDomainKey(`domain:${e}`);
-  return n.includes("*") ? domainRuleMatches(n, i) : n === i;
-}
 //@ chunk-e6aww6q8.js:1909100-1909192 fingerprint = shouldAllowManagedReadPathsOnly (0.819)
 /**
  * 任一托管/可信层设置了 sandbox.filesystem.allowManagedReadPathsOnly 时为真：allowRead 只认可信层。
  */
 function shouldAllowManagedReadPathsOnly() {
-  return getAllPolicyTierSettings().some((e) => e.sandbox?.filesystem?.allowManagedReadPathsOnly === true);
+  return getAllPolicyTierSettings().some(
+    (settings) => settings.sandbox?.filesystem?.allowManagedReadPathsOnly === true,
+  );
 }
 export {
   SandboxManager,
@@ -9591,4 +9902,6 @@ export {
   detectWorktreeGitCommonDir,
   isSandboxSettingOverriddenByPolicy,
   relatchTenguSandboxGbConfig,
+  antSandboxConfig,
+  matchesRuntimeGlobBy,
 };

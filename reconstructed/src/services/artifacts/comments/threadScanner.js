@@ -77,28 +77,28 @@ import { logError } from "../../../utils/log.js";
 /**
  * 重置某 artifact 的自动回复记录：台账条目清空线程，内存状态清掉线程与基线并更新账号，随后立即刷写台账。
  */
-function resetAutoReactForSlug(e) {
-  resetLedgerSlug(e);
-  let t = getLiveState().autoReact.artifacts.get(e);
-  if (!t) {
+function resetAutoReactForSlug(slug) {
+  resetLedgerSlug(slug);
+  let artifactState = getLiveState().autoReact.artifacts.get(slug);
+  if (!artifactState) {
     flushAutoreactLedger({
       flush: true,
     });
     return;
   }
-  clearArtifactThreads(t);
-  t.accountUuid = gatewayAccountUuidLower() ?? t.accountUuid;
+  clearArtifactThreads(artifactState);
+  artifactState.accountUuid = gatewayAccountUuidLower() ?? artifactState.accountUuid;
   flushAutoreactLedger({
     flush: true,
   });
 }
 //@ chunk-9tgt55am.js:64780-64891 placement
-function clearArtifactThreads(e) {
-  e.threads.clear();
-  e.baselined = false;
-  e.everBaselined = false;
-  e.stampHighWater = null;
-  e.lastReadDigest = null;
+function clearArtifactThreads(slug) {
+  slug.threads.clear();
+  slug.baselined = false;
+  slug.everBaselined = false;
+  slug.stampHighWater = null;
+  slug.lastReadDigest = null;
 }
 //@ chunk-9tgt55am.js:64891-65550 placement
 /**
@@ -111,15 +111,15 @@ function rehydrateFromLedger(state, ledgerEntry) {
   state.everHadThreads = ledgerEntry.everHadThreads;
   state.turnTimestamps = [...ledgerEntry.turnTimestamps];
   state.lastScanAt = ledgerEntry.savedAt;
-  for (let n of ledgerEntry.threads ?? [])
-    state.threads.set(n.id, {
+  for (let thread of ledgerEntry.threads ?? [])
+    state.threads.set(thread.id, {
       lastAutoReplyAt: null,
-      activatedAt: n.activatedAt,
-      activatedAtObserved: n.activatedAtObserved,
-      seen: new Set(n.seen),
-      sentToClaudeAt: new Map(n.sent),
-      ownReplyIds: new Set(n.ownReplyIds),
-      ...(n.ownReplyIdsIncomplete === true && {
+      activatedAt: thread.activatedAt,
+      activatedAtObserved: thread.activatedAtObserved,
+      seen: new Set(thread.seen),
+      sentToClaudeAt: new Map(thread.sent),
+      ownReplyIds: new Set(thread.ownReplyIds),
+      ...(thread.ownReplyIdsIncomplete === true && {
         ownReplyIdsIncomplete: true,
       }),
       consecutiveAuto: 0,
@@ -180,9 +180,9 @@ function getAutoReactArtifactState(slug) {
 /**
  * 清掉一小时前的自动回合时间戳，返回本小时自动回合数是否仍低于上限。
  */
-function withinHourlyTurnCap(artifactState, t) {
+function withinHourlyTurnCap(artifactState, now) {
   artifactState.turnTimestamps = artifactState.turnTimestamps.filter(
-    (turnTimestamp) => t - turnTimestamp < 3600000,
+    (turnTimestamp) => now - turnTimestamp < 3600000,
   );
   return artifactState.turnTimestamps.length < getMaxAutoTurns();
 }
@@ -191,23 +191,23 @@ function withinHourlyTurnCap(artifactState, t) {
  * 取 artifact 名字并做成带双引号的安全显示文本（内部引号与同形字换成单引号）；取不到时返回给定的默认值。
  */
 function quoteArtifactName(getTitle, url) {
-  let n = getTitle?.();
-  if (n === undefined || n === "") return url;
-  let a = sanitizeDisplayTitle(n);
-  if (a === null) return url;
-  return `"${foldFullwidthColon(a.replace(/"/g, "'").replace(QUOTE_HOMOGLYPHS, "'").replace(SINGLE_QUOTE_RUNS, "'"))}"`;
+  let title = getTitle?.();
+  if (title === undefined || title === "") return url;
+  let safeTitle = sanitizeDisplayTitle(title);
+  if (safeTitle === null) return url;
+  return `"${foldFullwidthColon(safeTitle.replace(/"/g, "'").replace(QUOTE_HOMOGLYPHS, "'").replace(SINGLE_QUOTE_RUNS, "'"))}"`;
 }
 //@ chunk-9tgt55am.js:66495-66712 placement
-function splitPublishMessages(e) {
-  let publishTranscript = e.publishTranscript;
-  let n = publishTranscript !== undefined ? getSyntheticToolMessages(publishTranscript) : [];
-  if (n.length === 0)
+function splitPublishMessages(transcript) {
+  let publishTranscript = transcript.publishTranscript;
+  let publishMessages = publishTranscript !== undefined ? getSyntheticToolMessages(publishTranscript) : [];
+  if (publishMessages.length === 0)
     return {
       publishMessages: [],
       publishTranscript,
     };
   return {
-    publishMessages: e.context.messages.at(-1) === n.at(-1) ? [] : n,
+    publishMessages: transcript.context.messages.at(-1) === publishMessages.at(-1) ? [] : publishMessages,
     publishTranscript: undefined,
   };
 }
@@ -220,14 +220,14 @@ function appendContextMessages(context, publishMessages) {
   };
 }
 //@ chunk-9tgt55am.js:66822-67009 placement
-function withPublishTranscript(e) {
-  if (e.publishTranscript === undefined) return e;
-  let { publishMessages, publishTranscript } = splitPublishMessages(e);
-  if (publishMessages.length === 0) return e;
+function withPublishTranscript(request) {
+  if (request.publishTranscript === undefined) return request;
+  let { publishMessages, publishTranscript } = splitPublishMessages(request);
+  if (publishMessages.length === 0) return request;
   return {
-    ...e,
+    ...request,
     publishTranscript,
-    context: appendContextMessages(e.context, publishMessages),
+    context: appendContextMessages(request.context, publishMessages),
   };
 }
 //@ chunk-9tgt55am.js:67009-69418 placement
@@ -237,7 +237,7 @@ function withPublishTranscript(e) {
 function scheduleThreadScan(wake) {
   if (!isAutoreactArmed()) return;
   if (isSlugYielded(wake.slug)) revertGoneTakersNow();
-  let t = armSummonState(wake.slug);
+  let suppressSummonStatus = armSummonState(wake.slug);
   let wiring = wake.getWiring?.();
   let context = wiring?.context ?? wake.context;
   let { publishMessages, publishTranscript } = splitPublishMessages({
@@ -246,8 +246,8 @@ function scheduleThreadScan(wake) {
   });
   let wakeArgs = {
     ...wake,
-    suppressSummonStatus: wake.suppressSummonStatus ?? t,
-    pickUpRecentSummons: wake.pickUpRecentSummons === true && wake.seed === true && !t,
+    suppressSummonStatus: wake.suppressSummonStatus ?? suppressSummonStatus,
+    pickUpRecentSummons: wake.pickUpRecentSummons === true && wake.seed === true && !suppressSummonStatus,
     publishTranscript,
     context: {
       ...(publishMessages.length > 0 ? appendContextMessages(context, publishMessages) : context),
@@ -277,7 +277,7 @@ function scheduleThreadScan(wake) {
     let pendingConfirm = wakeState.pendingConfirm;
     if (isKick && wakeState.coalesceTimer && pendingConfirm !== null) {
       let wake = pendingConfirm.wake;
-      let q = {
+      let mergedWakeArgs = {
         ...wakeArgs,
         confirm: true,
         ...(wake.confirmBase !== undefined && {
@@ -288,7 +288,7 @@ function scheduleThreadScan(wake) {
         }),
         suppressSummonStatus: wake.suppressSummonStatus !== false && wakeArgs.suppressSummonStatus,
       };
-      pendingConfirm.wake = q;
+      pendingConfirm.wake = mergedWakeArgs;
       let min = Math.min(startTime + getConfirmDwellMs(), pendingConfirm.armedAt + minGapMs);
       clearTimeout(wakeState.coalesceTimer);
       pendingConfirm.dueAt = Math.max(min, pendingConfirm.dueAt);
@@ -296,16 +296,19 @@ function scheduleThreadScan(wake) {
         runScheduledScan,
         ceilRetryDelay(pendingConfirm.dueAt - startTime),
         wakeState,
-        q,
+        mergedWakeArgs,
       );
     }
     let pendingSeed = wakeState.pendingSeed;
     if (wakeState.coalesceTimer && pendingSeed !== null && wakeArgs.confirm !== true) {
       let wake = pendingSeed.wake;
-      let q = wakeArgs.seed === true && wakeArgs.reentry !== true && (wakeArgs.deferMs ?? 0) > 0;
-      let x = wakeArgs.seed === true ? Math.max(minGapMs, q ? (wakeArgs.deferMs ?? 0) : 0) : confirmDelayMs;
-      let Y = isKick ? startTime + x : Math.min(pendingSeed.dueAt, startTime + x);
-      let z = {
+      let isDeferredSeed = wakeArgs.seed === true && wakeArgs.reentry !== true && (wakeArgs.deferMs ?? 0) > 0;
+      let delayMs =
+        wakeArgs.seed === true
+          ? Math.max(minGapMs, isDeferredSeed ? (wakeArgs.deferMs ?? 0) : 0)
+          : confirmDelayMs;
+      let dueAt = isKick ? startTime + delayMs : Math.min(pendingSeed.dueAt, startTime + delayMs);
+      let pending = {
         ...wakeArgs,
         seed: true,
         ...((wake.pickUpRecentSummons === true || wakeArgs.pickUpRecentSummons === true) && {
@@ -313,20 +316,25 @@ function scheduleThreadScan(wake) {
         }),
         suppressSummonStatus: wake.suppressSummonStatus !== false && wakeArgs.suppressSummonStatus,
       };
-      wakeState.pendingSeed = q
+      wakeState.pendingSeed = isDeferredSeed
         ? {
-            wake: z,
-            dueAt: Y,
+            wake: pending,
+            dueAt,
           }
         : null;
-      wakeState.lastScanScheduledAt = now + (Y - startTime);
+      wakeState.lastScanScheduledAt = now + (dueAt - startTime);
       clearTimeout(wakeState.coalesceTimer);
-      wakeState.coalesceTimer = setTimeout(runScheduledScan, ceilRetryDelay(Y - startTime), wakeState, z);
+      wakeState.coalesceTimer = setTimeout(
+        runScheduledScan,
+        ceilRetryDelay(dueAt - startTime),
+        wakeState,
+        pending,
+      );
     }
     wakeState.rescanWanted = artifactState.scanning;
     if (artifactState.scanning) {
       let rescanArgs = wakeState.rescanArgs;
-      let q =
+      let pendingSeed =
         rescanArgs?.seed === true && wakeArgs.seed !== true
           ? {
               ...wakeArgs,
@@ -337,21 +345,21 @@ function scheduleThreadScan(wake) {
       wakeState.rescanArgs =
         rescanArgs !== null && rescanArgs.suppressSummonStatus === false
           ? {
-              ...q,
+              ...pendingSeed,
               suppressSummonStatus: false,
             }
-          : q;
+          : pendingSeed;
     }
     return;
   }
-  let w = wakeState.lastScanScheduledAt !== 0 && now - wakeState.lastScanScheduledAt < minGapMs;
-  let L = wakeArgs.seed === true && wakeArgs.reentry !== true && (wakeArgs.deferMs ?? 0) > 0;
+  let withinMinGap = wakeState.lastScanScheduledAt !== 0 && now - wakeState.lastScanScheduledAt < minGapMs;
+  let isDeferredSeed = wakeArgs.seed === true && wakeArgs.reentry !== true && (wakeArgs.deferMs ?? 0) > 0;
   let delayMs =
     wakeArgs.confirm === true
       ? confirmDelayMs
-      : L
+      : isDeferredSeed
         ? Math.max(minGapMs, wakeArgs.deferMs ?? 0)
-        : wakeArgs.seed === true || w
+        : wakeArgs.seed === true || withinMinGap
           ? minGapMs
           : wakeArgs.reentry === true
             ? confirmDelayMs
@@ -365,7 +373,7 @@ function scheduleThreadScan(wake) {
           dueAt: startTime + delayMs,
         }
       : null;
-  wakeState.pendingSeed = L
+  wakeState.pendingSeed = isDeferredSeed
     ? {
         wake: wakeArgs,
         dueAt: startTime + delayMs,
@@ -374,69 +382,69 @@ function scheduleThreadScan(wake) {
   wakeState.coalesceTimer = setTimeout(runScheduledScan, ceilRetryDelay(delayMs), wakeState, wakeArgs);
 }
 //@ chunk-9tgt55am.js:69418-69646 placement
-function runScheduledScan(e, t) {
-  e.coalesceTimer = null;
-  e.pendingConfirm = null;
-  e.pendingSeed = null;
-  let n = scanArtifactThreads(withPublishTranscript(t))
+function runScheduledScan(wakeState, wake) {
+  wakeState.coalesceTimer = null;
+  wakeState.pendingConfirm = null;
+  wakeState.pendingSeed = null;
+  let pendingScan = scanArtifactThreads(withPublishTranscript(wake))
     .catch(() => {
       logFeatureSad("artifact_comments_autoreact", "scan_error");
     })
     .finally(() => {
-      if (e.inFlightScan === n) e.inFlightScan = null;
+      if (wakeState.inFlightScan === pendingScan) wakeState.inFlightScan = null;
     });
-  e.inFlightScan = n;
+  wakeState.inFlightScan = pendingScan;
 }
 //@ chunk-9tgt55am.js:69646-69885 placement
-function clearReadRetry(e, t) {
-  if (t && e.readRetryAttempts > 0)
+function clearReadRetry(wakeState, wake) {
+  if (wake && wakeState.readRetryAttempts > 0)
     logFeatureOk("artifact_comments_autoreact", {
       read_retry_cleared: true,
-      retry_attempts: e.readRetryAttempts,
+      retry_attempts: wakeState.readRetryAttempts,
     });
-  e.readRetryAttempts = 0;
-  if (e.readRetryTimer !== null) {
-    clearTimeout(e.readRetryTimer);
-    e.readRetryTimer = null;
+  wakeState.readRetryAttempts = 0;
+  if (wakeState.readRetryTimer !== null) {
+    clearTimeout(wakeState.readRetryTimer);
+    wakeState.readRetryTimer = null;
   }
 }
 //@ chunk-9tgt55am.js:69885-70216 placement
 /**
  * 评论读取失败后按退避安排重试扫描；超过最大次数时打点放弃并清零。
  */
-function scheduleReadRetry(summonWakeState, t, retryAfterMs) {
-  if (summonWakeState.readRetryTimer !== null) return;
-  let readRetryAttempts = summonWakeState.readRetryAttempts;
-  let r = effectiveReadRetryCount();
-  if (r === 0) {
-    summonWakeState.readRetryAttempts = 0;
+function scheduleReadRetry(scannerState, wake, retryDelayMs) {
+  if (scannerState.readRetryTimer !== null) return;
+  let readRetryAttempts = scannerState.readRetryAttempts;
+  let retryCount = effectiveReadRetryCount();
+  if (retryCount === 0) {
+    scannerState.readRetryAttempts = 0;
     return;
   }
-  if (readRetryAttempts >= r) {
+  if (readRetryAttempts >= retryCount) {
     logFeatureSad("artifact_comments_autoreact", "read_retry_gave_up", {
       retry_attempts: readRetryAttempts,
     });
-    summonWakeState.readRetryAttempts = 0;
+    scannerState.readRetryAttempts = 0;
     return;
   }
-  summonWakeState.readRetryAttempts = readRetryAttempts + 1;
-  summonWakeState.readRetryTimer = setTimeout(
+  scannerState.readRetryAttempts = readRetryAttempts + 1;
+  scannerState.readRetryTimer = setTimeout(
     runReadRetry,
-    computeAutoReactBackoff(readRetryAttempts, retryAfterMs),
-    summonWakeState,
-    t,
+    computeAutoReactBackoff(readRetryAttempts, retryDelayMs),
+    scannerState,
+    wake,
   );
-  summonWakeState.readRetryTimer.unref?.();
+  scannerState.readRetryTimer.unref?.();
 }
 //@ chunk-9tgt55am.js:70216-70416 placement
-function runReadRetry(e, t) {
-  e.readRetryTimer = null;
-  if (isSlugStoppedAnywhere(t.slug) || t.abort.signal.aborted) {
-    e.readRetryAttempts = 0;
+function runReadRetry(wakeState, wake) {
+  wakeState.readRetryTimer = null;
+  if (isSlugStoppedAnywhere(wake.slug) || wake.abort.signal.aborted) {
+    wakeState.readRetryAttempts = 0;
     return;
   }
   scheduleThreadScan({
-    ...t,
+    ...wake,
     confirm: undefined,
     confirmBase: undefined,
     confirmAfter: undefined,
@@ -509,26 +517,28 @@ function settleEmptyArtifact(slug, wakeSnapshot, readAt) {
 /**
  * 扫描单个 artifact 的评论线程，处理空闲补扫、忙碌跳过并派发新评论。
  */
-async function scanArtifactThreads(e) {
-  let summonWakeState = getSummonWakeState(e.slug);
+async function scanArtifactThreads(request) {
+  let summonWakeState = getSummonWakeState(request.slug);
   let idlePassOwed = summonWakeState.idlePassOwed;
   summonWakeState.idlePassOwed = null;
-  let a =
-    e.idlePass === "owed" || idlePassOwed === "owed" ? "owed" : (e.idlePass ?? idlePassOwed ?? undefined);
-  if (isSlugStoppedAnywhere(e.slug)) return;
-  let { slug, url, tool, context, notify } = e;
+  let idlePass =
+    request.idlePass === "owed" || idlePassOwed === "owed"
+      ? "owed"
+      : (request.idlePass ?? idlePassOwed ?? undefined);
+  if (isSlugStoppedAnywhere(request.slug)) return;
+  let { slug, url, tool, context, notify } = request;
   if (
     isCommentReadGated(
       context,
       {
         slug,
-        env: e.env,
+        env: request.env,
       },
       url,
     )
   ) {
     let autoReactArtifactState = getAutoReactArtifactState(slug);
-    if (e.seed === true) autoReactArtifactState.baselined = false;
+    if (request.seed === true) autoReactArtifactState.baselined = false;
     if (!autoReactArtifactState.ruleWithheldNoted) {
       autoReactArtifactState.ruleWithheldNoted = true;
       logFeatureSad("artifact_comments_autoreact", "rule_withheld");
@@ -540,49 +550,49 @@ async function scanArtifactThreads(e) {
     getAutoReactArtifactState(slug).ruleWithheldNoted = false;
     emitSummonArm(getLiveState().live, slug);
   }
-  let artifactName = quoteArtifactName(e.getTitle, url);
+  let artifactName = quoteArtifactName(request.getTitle, url);
   claimLedgerOwnership(context.storageV5);
   let scanState = getAutoReactArtifactState(slug);
   scanState.scanning = true;
-  let b = scanStamp(slug);
-  let actOnFirstSight = scanState.baselined && e.seed !== true;
+  let stamp = scanStamp(slug);
+  let actOnFirstSight = scanState.baselined && request.seed !== true;
   let { stampHighWater, emptyHintReadAt } = scanState;
-  if (e.seed === true) scanState.baselined = false;
+  if (request.seed === true) scanState.baselined = false;
   let { cancelGeneration, newestKickAt } = summonWakeState;
   let confirmDwellMs = getConfirmDwellMs();
-  let G = confirmDwellMs === 0 || performance.now() - newestKickAt >= confirmDwellMs;
-  let V = "unread";
+  let confirmDwellElapsed = confirmDwellMs === 0 || performance.now() - newestKickAt >= confirmDwellMs;
+  let baselineKind = "unread";
   let confirmBase;
-  let x = false;
-  let Y = false;
-  let z = null;
+  let sawError = false;
+  let partial = false;
+  let outcome = null;
   try {
-    let Q = censusGeneration(slug);
+    let generation = censusGeneration(slug);
     let [, artifactComments] = await Promise.all([
       refreshFastAckFlag(),
       readArtifactComments(
         {
           slug,
-          env: e.env,
+          env: request.env,
         },
         context.abortController.signal,
         context.credentials,
-        e.confirm === true ? "artifact_autoreact_confirm_read" : "artifact_autoreact_scan_read",
+        request.confirm === true ? "artifact_autoreact_confirm_read" : "artifact_autoreact_scan_read",
         {
           skipBootProbe: isFrameLiveTokenLeaseEnabled(),
         },
       ),
     ]);
-    let pickUpRecentSummons = e.pickUpRecentSummons === true;
+    let pickUpRecentSummons = request.pickUpRecentSummons === true;
     if (artifactComments.err !== null) {
       logFeatureSad("artifact_comments_autoreact", "read_failed", {
         retryable: artifactComments.retryable === true,
         retry_attempts: summonWakeState.readRetryAttempts,
       });
       scanState.lastReadDigest = null;
-      Y = a === "owed";
+      partial = idlePass === "owed";
       if (artifactComments.retryable === true)
-        z = {
+        outcome = {
           retryAfterMs: artifactComments.retryAfterMs,
         };
       else clearReadRetry(summonWakeState, false);
@@ -591,7 +601,7 @@ async function scanArtifactThreads(e) {
         artifactComments.status === 403 ||
         artifactComments.status === 404
       )
-        e.onReadRefused?.();
+        request.onReadRefused?.();
       return;
     }
     clearReadRetry(summonWakeState, true);
@@ -600,47 +610,52 @@ async function scanArtifactThreads(e) {
       scanState.everHadThreads = true;
       logFeatureSad("artifact_comments_autoreact", "read_degraded");
       scanState.lastReadDigest = null;
-      Y = a === "owed";
+      partial = idlePass === "owed";
       return;
     }
-    if (artifactComments.threadsDropped === true) Y = a === "owed";
-    if (scanStamp(slug) === b)
-      updateUnreadCounts(slug, artifactComments.threads, Q, artifactComments.threadsDropped === true);
-    let Z =
-      artifactComments.threadsDropped === true || scanStamp(slug) !== b
+    if (artifactComments.threadsDropped === true) partial = idlePass === "owed";
+    if (scanStamp(slug) === stamp)
+      updateUnreadCounts(
+        slug,
+        artifactComments.threads,
+        generation,
+        artifactComments.threadsDropped === true,
+      );
+    let newThreads =
+      artifactComments.threadsDropped === true || scanStamp(slug) !== stamp
         ? null
         : digestThreads(artifactComments.threads, scanState);
-    if (e.confirm === true) {
-      let confirmBase = e.confirmBase;
+    if (request.confirm === true) {
+      let confirmBase = request.confirmBase;
       logFeatureOk("artifact_comments_autoreact", {
         confirm_read: true,
-        rescued: Z !== null && confirmBase !== undefined && confirmBase !== Z,
-        noref: Z === null || confirmBase === undefined,
-        after: fromEnum(e.confirmAfter ?? "unread"),
+        rescued: newThreads !== null && confirmBase !== undefined && confirmBase !== newThreads,
+        noref: newThreads === null || confirmBase === undefined,
+        after: fromEnum(request.confirmAfter ?? "unread"),
       });
     }
-    if (Z === null) {
-      V = "noref";
+    if (newThreads === null) {
+      baselineKind = "noref";
       scanState.lastReadDigest = null;
     } else {
-      V =
+      baselineKind =
         scanState.lastReadDigest === null
           ? "noref"
-          : Z !== scanState.lastReadDigest
+          : newThreads !== scanState.lastReadDigest
             ? "changed"
             : "unchanged";
-      scanState.lastReadDigest = Z;
-      confirmBase = Z;
+      scanState.lastReadDigest = newThreads;
+      confirmBase = newThreads;
     }
     if (artifactComments.threads.length > 0 || artifactComments.threadsDropped === true)
       scanState.everHadThreads = true;
-    let ce = false;
+    let stopped = false;
     for (let thread of artifactComments.threads) {
-      if (scanStamp(slug) !== b) {
+      if (scanStamp(slug) !== stamp) {
         logFeatureSad("artifact_comments_autoreact", "scan_stopped_by_kill");
         return;
       }
-      let me = await processArtifactThread({
+      let processed = await processArtifactThread({
         slug,
         url,
         artifactName,
@@ -649,10 +664,10 @@ async function scanArtifactThreads(e) {
         context,
         notify,
         artifactState: scanState,
-        scanGen: b,
+        scanGen: stamp,
         actOnFirstSight,
         liveSightBoundary: stampHighWater,
-        suppressSummonStatus: e.suppressSummonStatus !== false,
+        suppressSummonStatus: request.suppressSummonStatus !== false,
         pickUpRecentSummons,
         threadsDropped: artifactComments.threadsDropped === true,
         readThreads: artifactComments.threads,
@@ -660,26 +675,26 @@ async function scanArtifactThreads(e) {
           emptyHintReadAt !== null &&
           (parseTimestamp(thread.createdAt) ?? 0) < emptyHintReadAt - EMPTY_THREAD_GRACE_MS,
       });
-      if (me === "deferred_first_sight") ce = true;
-      if (me === "deferred_busy") x = true;
+      if (processed === "deferred_first_sight") stopped = true;
+      if (processed === "deferred_busy") sawError = true;
     }
-    if (emptyHintReadAt !== null && !ce && artifactComments.threadsDropped !== true) {
+    if (emptyHintReadAt !== null && !stopped && artifactComments.threadsDropped !== true) {
       scanState.emptyHintReadAt = null;
-      let le = 1 / 0;
+      let earliestDueAt = 1 / 0;
       for (let thread of artifactComments.threads)
-        le = Math.min(le, parseTimestamp(thread.createdAt) ?? 1 / 0);
-      if (le < emptyHintReadAt)
+        earliestDueAt = Math.min(earliestDueAt, parseTimestamp(thread.createdAt) ?? 1 / 0);
+      if (earliestDueAt < emptyHintReadAt)
         logFeatureSad("artifact_live_subscribe", "comment_hint_stale", {
-          older_by_s: Math.round((emptyHintReadAt - le) / 1000),
+          older_by_s: Math.round((emptyHintReadAt - earliestDueAt) / 1000),
         });
     }
     if (
-      !ce &&
+      !stopped &&
       artifactComments.threadsDropped !== true &&
       !(artifactComments.threads.length === 0 && (scanState.threads.size > 0 || scanState.everHadThreads)) &&
       isAutoreactArmed() &&
       !isSlugStoppedAnywhere(slug) &&
-      scanStamp(slug) === b
+      scanStamp(slug) === stamp
     ) {
       scanState.baselined = true;
       scanState.everBaselined = true;
@@ -687,10 +702,11 @@ async function scanArtifactThreads(e) {
   } finally {
     scanState.scanning = false;
     flushAutoreactLedger();
-    if (G && summonWakeState.newestKickAt === newestKickAt) summonWakeState.kickSettled = true;
+    if (confirmDwellElapsed && summonWakeState.newestKickAt === newestKickAt)
+      summonWakeState.kickSettled = true;
     if (summonWakeState.rescanWanted) {
       summonWakeState.rescanWanted = false;
-      let rescanArgs = summonWakeState.rescanArgs ?? e;
+      let rescanArgs = summonWakeState.rescanArgs ?? request;
       summonWakeState.rescanArgs = null;
       scheduleThreadScan({
         ...rescanArgs,
@@ -699,58 +715,58 @@ async function scanArtifactThreads(e) {
     } else if (
       !summonWakeState.kickSettled &&
       summonWakeState.newestKickAt !== 0 &&
-      scanStamp(slug) === b &&
+      scanStamp(slug) === stamp &&
       !isSlugStoppedAnywhere(slug)
     )
       scheduleThreadScan({
-        ...e,
+        ...request,
         seed: undefined,
         reentry: undefined,
         idlePass: undefined,
         confirm: true,
         confirmBase,
-        confirmAfter: V,
+        confirmAfter: baselineKind,
       });
     if (
-      z !== null &&
-      scanStamp(slug) === b &&
+      outcome !== null &&
+      scanStamp(slug) === stamp &&
       summonWakeState.cancelGeneration === cancelGeneration &&
       !isSlugStoppedAnywhere(slug)
     )
-      scheduleReadRetry(summonWakeState, e, z.retryAfterMs);
+      scheduleReadRetry(summonWakeState, request, outcome.retryAfterMs);
     if (
-      (x || Y) &&
-      scanStamp(slug) === b &&
+      (sawError || partial) &&
+      scanStamp(slug) === stamp &&
       summonWakeState.cancelGeneration === cancelGeneration &&
       !isSlugStoppedAnywhere(slug)
     ) {
-      let Q =
-        e.suppressSummonStatus === false ||
+      let nextDueAt =
+        request.suppressSummonStatus === false ||
         (summonWakeState.idleRescanCancel !== null && summonWakeState.idleRescanUnmuted);
       summonWakeState.idleRescanCancel?.();
-      let I = runWhenForegroundIdle(
+      let idleTask = runWhenForegroundIdle(
         () => {
-          if (summonWakeState.idleRescanCancel === I) {
+          if (summonWakeState.idleRescanCancel === idleTask) {
             summonWakeState.idleRescanCancel = null;
             summonWakeState.idleRescanUnmuted = false;
           }
           if (!isSlugStoppedAnywhere(slug))
             scheduleThreadScan({
-              ...e,
-              ...(Q && {
+              ...request,
+              ...(nextDueAt && {
                 suppressSummonStatus: false,
               }),
               seed: undefined,
               confirm: undefined,
               reentry: true,
-              idlePass: x ? "owed" : "retry",
+              idlePass: sawError ? "owed" : "retry",
             });
         },
-        e.abort.signal,
+        request.abort.signal,
         getAutoReactRateLimit(),
       );
-      summonWakeState.idleRescanCancel = I;
-      summonWakeState.idleRescanUnmuted = Q;
+      summonWakeState.idleRescanCancel = idleTask;
+      summonWakeState.idleRescanUnmuted = nextDueAt;
     }
   }
 }
@@ -759,15 +775,15 @@ async function scanArtifactThreads(e) {
  * 计算线程列表的 sha256 摘要（线程 id、外部解决时间、激活时间、非自己回复的评论 id 与发送时间），用于判断是否有变化；遇到降级数据返回 null。
  */
 function digestThreads(threads, scanState) {
-  let compareById = (r, s) => (r.id < s.id ? -1 : 1);
+  let compareById = (a, b) => (a.id < b.id ? -1 : 1);
   let hash = createHash("sha256");
   for (let thread of [...threads].sort(compareById)) {
-    let s = scanState.threads.get(thread.id);
+    let scanThread = scanState.threads.get(thread.id);
     if (
       thread.commentsDegraded === true ||
       thread.resolvedDegraded === true ||
       thread.activatedAtDegraded === true ||
-      s?.ownReplyIdsIncomplete === true ||
+      scanThread?.ownReplyIdsIncomplete === true ||
       thread.comments.some((comment) => comment.toClaudeAtDegraded === true)
     )
       return null;
@@ -776,7 +792,8 @@ function digestThreads(threads, scanState) {
       `${thread.id}|${resolvedByOthers ? (thread.resolvedAt ?? "r") : ""}|${thread.activatedAt ?? ""}|`,
     );
     for (let comment of [...thread.comments].sort(compareById))
-      if (s?.ownReplyIds.has(comment.id) !== true) hash.update(`${comment.id}@${comment.toClaudeAt ?? ""}|`);
+      if (scanThread?.ownReplyIds.has(comment.id) !== true)
+        hash.update(`${comment.id}@${comment.toClaudeAt ?? ""}|`);
     hash.update(`
 `);
   }
@@ -786,23 +803,23 @@ function digestThreads(threads, scanState) {
 /**
  * 记录本会话自己发出的回复 id（账户纪元不符且不是自己发的回复时忽略）；缺少 id 时标记记录不完整。
  */
-function recordOwnReply(e, { commentId, epoch }) {
+function recordOwnReply(slug, { commentId, epoch }) {
   if (epoch !== getLiveState().accountEpoch && !(commentId !== undefined && isOwnPostedReply(commentId)))
     return;
   if (commentId !== undefined && commentId !== "") {
-    e.seen.add(commentId);
-    e.ownReplyIds.add(commentId);
-  } else e.ownReplyIdsIncomplete = true;
+    slug.seen.add(commentId);
+    slug.ownReplyIds.add(commentId);
+  } else slug.ownReplyIdsIncomplete = true;
 }
 //@ chunk-9tgt55am.js:75733-75834 placement
 /**
  * 返回自己回复的 id 集合与扫描行 id；记录不完整时返回 undefined。
  */
-function getOwnReplyInfo(e, scanRowIds) {
-  return e.ownReplyIdsIncomplete === true
+function getOwnReplyInfo(slug, scanRowIds) {
+  return slug.ownReplyIdsIncomplete === true
     ? undefined
     : {
-        ownReplyIds: e.ownReplyIds,
+        ownReplyIds: slug.ownReplyIds,
         scanRowIds,
       };
 }
@@ -810,8 +827,8 @@ function getOwnReplyInfo(e, scanRowIds) {
 /**
  * 把回复权限被拒的原因归类：规则拒绝、自动模式拒绝（含分类器不可用、无结论），其他为 blocked。
  */
-function describeReplyDenial(e) {
-  let decisionReason = e.decisionReason;
+function describeReplyDenial(denial) {
+  let decisionReason = denial.decisionReason;
   if (decisionReason.type === "rule")
     return {
       reason: "denied_by_rule",
@@ -855,34 +872,36 @@ function getAutoModeArbiterIssue(context) {
 /**
  * 判断线程最后一条代理回复之后是否没有新的召唤/人类评论/激活手势（即最后一条代理回复仍然是最新回应）。
  */
-function isLastAgentReplyCurrent(e) {
-  let { thread, threadState, trigger, summonsForOrdering } = e;
-  let lastIndex = thread.comments.findLastIndex((comment) => getCommentAuthorKind(comment) === "agent");
-  let d = thread.comments[lastIndex];
-  if (d === undefined) return false;
+function isLastAgentReplyCurrent(thread) {
+  let { thread: thread_2, threadState, trigger, summonsForOrdering } = thread;
+  let lastIndex = thread_2.comments.findLastIndex((comment) => getCommentAuthorKind(comment) === "agent");
+  let lastComment = thread_2.comments[lastIndex];
+  if (lastComment === undefined) return false;
   let any = summonsForOrdering.some(
-    (C) => thread.comments.findIndex((comment) => comment.id === C.id) > lastIndex,
+    (reply) => thread_2.comments.findIndex((comment) => comment.id === reply.id) > lastIndex,
   );
-  let y =
+  let laterReply =
     trigger === "activation" &&
-    e.activatedAt != null &&
-    (thread.comments.some((comment, R) => R > lastIndex && getCommentAuthorKind(comment) === "human") ||
+    thread.activatedAt != null &&
+    (thread_2.comments.some(
+      (comment, commentIndex) => commentIndex > lastIndex && getCommentAuthorKind(comment) === "human",
+    ) ||
       hasCommentSentAfter(
         [
           {
             id: "activation-gesture",
             account: "",
             text: "",
-            toClaudeAt: e.activatedAt,
+            toClaudeAt: thread.activatedAt,
           },
         ],
-        d,
+        lastComment,
       ));
   return (
-    (trigger === "activation" || !threadState.ownReplyIds.has(d.id)) &&
+    (trigger === "activation" || !threadState.ownReplyIds.has(lastComment.id)) &&
     !any &&
-    !y &&
-    !hasCommentSentAfter(summonsForOrdering, d)
+    !laterReply &&
+    !hasCommentSentAfter(summonsForOrdering, lastComment)
   );
 }
 //@ chunk-9tgt55am.js:76906-76942 placement
@@ -899,7 +918,7 @@ async function canForkThreadReply(options) {
   let { slug, url, thread, context, replyTool } = options;
   try {
     let pendingSummons = collectPendingSummons(thread, options.threadState);
-    let h =
+    let threadState =
       pendingSummons !== null &&
       pendingSummons.summons.some(
         (summon) =>
@@ -911,7 +930,7 @@ async function canForkThreadReply(options) {
     if (
       !thread.claudeActivated ||
       pendingSummons === null ||
-      h ||
+      threadState ||
       replyTool === undefined ||
       localSourcePathIfEditCapable(thread, slug, context.artifactRegistries.recordedPages) === undefined ||
       getPermissionPromptPerson() === null ||
@@ -937,9 +956,9 @@ async function canForkThreadReply(options) {
 /**
  * 安全地检查回复权限：出错时记日志打点（中断除外）并返回 false。
  */
-async function checkReplyPermissionSafe(e) {
+async function checkReplyPermissionSafe(request) {
   try {
-    return await checkReplyPermission(e);
+    return await checkReplyPermission(request);
   } catch (error) {
     if (!isAbortError(error)) {
       logError(error);

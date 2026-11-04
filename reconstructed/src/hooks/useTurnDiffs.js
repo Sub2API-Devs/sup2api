@@ -8,7 +8,7 @@
  * pieces: chunk-mtx4csef.js (8)
  * attribution: placement 2, fingerprint 5, file-local 1
  */
-import { init_react_production, R, Q } from "../../vendor/react/cjs/react.production.js";
+import { init_react_production, useRef, useMemo } from "../../vendor/react/cjs/react.production.js";
 
 //@ chunk-mtx4csef.js:14813-14817 placement
 init_react_production();
@@ -17,11 +17,11 @@ init_react_production();
 //@ chunk-mtx4csef.js:14821-15070 fingerprint = isFileEditResult (0.874)
 function isFileEditResult(result) {
   if (!result || typeof result !== "object") return false;
-  let o = result;
-  if (o.staged === true) return false;
-  let hasFilePath = typeof o.filePath === "string";
-  let hasStructuredPatch = Array.isArray(o.structuredPatch) && o.structuredPatch.length > 0;
-  let isNewFile = o.type === "create" && typeof o.content === "string";
+  let editResult = result;
+  if (editResult.staged === true) return false;
+  let hasFilePath = typeof editResult.filePath === "string";
+  let hasStructuredPatch = Array.isArray(editResult.structuredPatch) && editResult.structuredPatch.length > 0;
+  let isNewFile = editResult.type === "create" && typeof editResult.content === "string";
   return hasFilePath && (hasStructuredPatch || isNewFile);
 }
 //@ chunk-mtx4csef.js:15070-15142 fingerprint = isFileWriteOutput (1)
@@ -65,22 +65,22 @@ function computeTurnStats(turn) {
 }
 //@ chunk-mtx4csef.js:15590-17021 fingerprint = useTurnDiffs (1)
 function useTurnDiffs(messages) {
-  let cache = R({
+  let cache = useRef({
     completedTurns: [],
     currentTurn: null,
     lastProcessedIndex: 0,
     lastTurnIndex: 0,
   });
-  return Q(() => {
-    let i = cache.current;
-    if (messages.length < i.lastProcessedIndex) {
-      i.completedTurns = [];
-      i.currentTurn = null;
-      i.lastProcessedIndex = 0;
-      i.lastTurnIndex = 0;
+  return useMemo(() => {
+    let state = cache.current;
+    if (messages.length < state.lastProcessedIndex) {
+      state.completedTurns = [];
+      state.currentTurn = null;
+      state.lastProcessedIndex = 0;
+      state.lastTurnIndex = 0;
     }
-    for (let i_2 = i.lastProcessedIndex; i_2 < messages.length; i_2++) {
-      let message = messages[i_2];
+    for (let i = state.lastProcessedIndex; i < messages.length; i++) {
+      let message = messages[i];
       if (!message || message.type !== "user") continue;
       if (
         !(
@@ -89,13 +89,13 @@ function useTurnDiffs(messages) {
         ) &&
         !message.isMeta
       ) {
-        if (i.currentTurn && i.currentTurn.files.size > 0) {
-          computeTurnStats(i.currentTurn);
-          i.completedTurns.push(i.currentTurn);
+        if (state.currentTurn && state.currentTurn.files.size > 0) {
+          computeTurnStats(state.currentTurn);
+          state.completedTurns.push(state.currentTurn);
         }
-        i.lastTurnIndex++;
-        i.currentTurn = {
-          turnIndex: i.lastTurnIndex,
+        state.lastTurnIndex++;
+        state.currentTurn = {
+          turnIndex: state.lastTurnIndex,
           userPromptPreview: getUserPromptPreview(message),
           timestamp: message.timestamp,
           files: new Map(),
@@ -105,12 +105,12 @@ function useTurnDiffs(messages) {
             linesRemoved: 0,
           },
         };
-      } else if (i.currentTurn && message.toolUseResult) {
+      } else if (state.currentTurn && message.toolUseResult) {
         let result = message.toolUseResult;
         if (isFileEditResult(result)) {
           let { filePath, structuredPatch } = result;
           let isNewFile = "type" in result && result.type === "create";
-          let fileEntry = i.currentTurn.files.get(filePath);
+          let fileEntry = state.currentTurn.files.get(filePath);
           if (!fileEntry) {
             fileEntry = {
               filePath,
@@ -119,7 +119,7 @@ function useTurnDiffs(messages) {
               linesAdded: 0,
               linesRemoved: 0,
             };
-            i.currentTurn.files.set(filePath, fileEntry);
+            state.currentTurn.files.set(filePath, fileEntry);
           }
           if (isNewFile && structuredPatch.length === 0 && isFileWriteOutput(result)) {
             let lines = result.content.split(`
@@ -143,11 +143,11 @@ function useTurnDiffs(messages) {
         }
       }
     }
-    i.lastProcessedIndex = messages.length;
-    let result = [...i.completedTurns];
-    if (i.currentTurn && i.currentTurn.files.size > 0) {
-      computeTurnStats(i.currentTurn);
-      result.push(i.currentTurn);
+    state.lastProcessedIndex = messages.length;
+    let result = [...state.completedTurns];
+    if (state.currentTurn && state.currentTurn.files.size > 0) {
+      computeTurnStats(state.currentTurn);
+      result.push(state.currentTurn);
     }
     return result.reverse();
   }, [messages]);

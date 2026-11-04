@@ -9,7 +9,7 @@
  * attribution: placement 19
  */
 import { randomBytes } from "crypto";
-import { Re } from "../../../runtime/bun-runtime.js";
+import { __toESM } from "../../../runtime/bun-runtime.js";
 import { require_node_http_handler } from "../../../vendor/@smithy/node-http-handler/dist-cjs/index.js";
 import {
   isBaseModelKey,
@@ -24,13 +24,14 @@ import {
   parseDeniedModelEntry,
 } from "../../utils/model/deniedModels.js";
 import { deniedModelsEntryMatches } from "../../utils/model/modelAllowlist.js";
-import { vMe } from "../../../vendor/@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
-import { Ji } from "../../../vendor/lodash-es/uniqBy.js";
+import { getAlias } from "../../../vendor/@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
+import { uniqByExport } from "../../../vendor/lodash-es/uniqBy.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
 import { gatewayJsonLog } from "../gateway/gatewayBanner.js";
 import { isPlainObject as isPlainObject_2 } from "../../utils/objectUtils.js";
 import { pickByHelper } from "../../utils/git/gitSafeEnv.js";
-import { wS } from "../../../vendor/lodash-es/_inlinedHelpers.js";
+import { pickAlias } from "../../../vendor/lodash-es/_inlinedHelpers.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-1ny7cxrt.js:1337441-1337566 placement
 /**
@@ -47,8 +48,8 @@ var GUARDRAIL_INPUT_TAGGING_MODES = [
 /**
  * 判断值是否为普通对象（非 null、非数组）。
  */
-function isPlainObject(e) {
-  return typeof e === "object" && e !== null && !Array.isArray(e);
+function isPlainObject(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 //@ chunk-1ny7cxrt.js:1337637-1337687 placement
 /**
@@ -61,123 +62,131 @@ function isAssistantMessageBlock(message) {
 /**
  * 把文本包进 Bedrock guardContent 标签（带随机后缀），空文本不包。
  */
-function wrapGuardContent(e, t) {
-  if (t.trim() === "") return t;
-  e.used = true;
-  return `<${AMAZON_BEDROCK_GUARDRAILS_GUARDCONTENT}_${e.suffix}>${t}</${AMAZON_BEDROCK_GUARDRAILS_GUARDCONTENT}_${e.suffix}>`;
+function wrapGuardContent(counter, text) {
+  if (text.trim() === "") return text;
+  counter.used = true;
+  return `<${AMAZON_BEDROCK_GUARDRAILS_GUARDCONTENT}_${counter.suffix}>${text}</${AMAZON_BEDROCK_GUARDRAILS_GUARDCONTENT}_${counter.suffix}>`;
 }
 //@ chunk-1ny7cxrt.js:1337793-1337894 placement
 /**
  * 包裹消息内容（字符串或内容块数组）。
  */
-function wrapContent(e, content) {
-  if (typeof content === "string") return wrapGuardContent(e, content);
-  return Array.isArray(content) ? content.map((n) => wrapContentBlock(e, n)) : content;
+function wrapContent(counter, content) {
+  if (typeof content === "string") return wrapGuardContent(counter, content);
+  return Array.isArray(content) ? content.map((block) => wrapContentBlock(counter, block)) : content;
 }
 //@ chunk-1ny7cxrt.js:1337894-1337964 placement
 /**
  * 给消息的 content 套上 guardrail 标签（无 content 的消息原样返回）。
  */
-function wrapMessageContentBlocks(e, t) {
-  return "content" in t
+function wrapMessageContentBlocks(counter, block) {
+  return "content" in block
     ? {
-        ...t,
-        content: wrapContent(e, t.content),
+        ...block,
+        content: wrapContent(counter, block.content),
       }
-    : t;
+    : block;
 }
 //@ chunk-1ny7cxrt.js:1337964-1338371 placement
 /**
  * 包裹单个内容块：文本、文档（含上下文）、工具/搜索结果。
  */
-function wrapContentBlock(e, t) {
-  if (!isPlainObject(t)) return t;
-  if (t.type === "text" && typeof t.text === "string")
+function wrapContentBlock(counter, block) {
+  if (!isPlainObject(block)) return block;
+  if (block.type === "text" && typeof block.text === "string")
     return {
-      ...t,
-      text: wrapGuardContent(e, t.text),
+      ...block,
+      text: wrapGuardContent(counter, block.text),
     };
-  if (t.type === "document" && isPlainObject(t.source)) {
-    let { source, context } = t;
+  if (block.type === "document" && isPlainObject(block.source)) {
+    let { source, context } = block;
     return {
-      ...t,
+      ...block,
       ...(typeof context === "string" && {
-        context: wrapGuardContent(e, context),
+        context: wrapGuardContent(counter, context),
       }),
       source:
         source.type === "text" && typeof source.data === "string"
           ? {
               ...source,
-              data: wrapGuardContent(e, source.data),
+              data: wrapGuardContent(counter, source.data),
             }
-          : wrapMessageContentBlocks(e, source),
+          : wrapMessageContentBlocks(counter, source),
     };
   }
-  return t.type === "tool_result" || t.type === "search_result" || t.type === "mcp_tool_result"
-    ? wrapMessageContentBlocks(e, t)
-    : t;
+  return block.type === "tool_result" || block.type === "search_result" || block.type === "mcp_tool_result"
+    ? wrapMessageContentBlocks(counter, block)
+    : block;
 }
 //@ chunk-1ny7cxrt.js:1338371-1339013 placement
 /**
  * 按模式（最后一条/用户消息/全部/含 system）给请求加 guardContent 标签与 guardrailConfig；没有包裹任何内容时原样返回。
  */
-function applyBedrockGuardrails(e, inputTagging) {
-  if (!Array.isArray(e.messages)) return e;
-  let messages = e.messages;
-  let o = {
+function applyBedrockGuardrails(body, inputTagging) {
+  if (!Array.isArray(body.messages)) return body;
+  let messages = body.messages;
+  let counter = {
     suffix: randomBytes(10).toString("hex"),
     used: false,
   };
-  let r = messages.findLastIndex((message) => !isAssistantMessageBlock(message)) + 1;
-  let s = messages.slice(0, r).findLastIndex(isAssistantMessageBlock) + 1;
-  let a = {
-    ...e,
+  let lastAssistantEnd = messages.findLastIndex((message) => !isAssistantMessageBlock(message)) + 1;
+  let lastAssistantStart = messages.slice(0, lastAssistantEnd).findLastIndex(isAssistantMessageBlock) + 1;
+  let tagged = {
+    ...body,
     ...(inputTagging === "all_messages_and_system" &&
-      e.system !== undefined && {
-        system: wrapContent(o, e.system),
+      body.system !== undefined && {
+        system: wrapContent(counter, body.system),
       }),
-    messages: messages.map((message, c) =>
+    messages: messages.map((message, index) =>
       isPlainObject(message) &&
       (inputTagging === "all_messages_and_system" ||
         (message.role !== "system" &&
           (inputTagging === "all_messages" ||
-            (inputTagging === "user_messages" ? !isAssistantMessageBlock(message) : c >= s && c < r))))
+            (inputTagging === "user_messages"
+              ? !isAssistantMessageBlock(message)
+              : index >= lastAssistantStart && index < lastAssistantEnd))))
         ? {
             ...message,
-            content: wrapContent(o, message.content),
+            content: wrapContent(counter, message.content),
           }
         : message,
     ),
     "amazon-bedrock-guardrailConfig": {
-      tagSuffix: o.suffix,
+      tagSuffix: counter.suffix,
     },
   };
-  if (!o.used && inputTagging === "last_message")
-    a.messages = messages.map((message, c) =>
-      isPlainObject(message) && message.role === "system" && c >= s && c < r
+  if (!counter.used && inputTagging === "last_message")
+    tagged.messages = messages.map((message, index) =>
+      isPlainObject(message) &&
+      message.role === "system" &&
+      index >= lastAssistantStart &&
+      index < lastAssistantEnd
         ? {
             ...message,
-            content: wrapContent(o, message.content),
+            content: wrapContent(counter, message.content),
           }
         : message,
     );
-  return o.used ? a : e;
+  return counter.used ? tagged : body;
 }
 //@ chunk-1ny7cxrt.js:1339013-1339031 placement
 /**
  * 导入的转义正则工具模块；本文件未直接使用。
  */
-var escapeRegExpModule = Re(require_node_http_handler(), 1);
+var escapeRegExpModule; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-1ny7cxrt.js:1339013", () => {
+  escapeRegExpModule = __toESM(require_node_http_handler(), 1);
+});
 //@ chunk-1ny7cxrt.js:1339031-1339216 placement
 /**
  * 字符串中是否以完整词出现某片段。
  */
-function containsWholeWord(e, t) {
-  for (let index = e.indexOf(t); index !== -1; index = e.indexOf(t, index + 1)) {
-    let o = index === 0 || !/[a-z0-9]/i.test(e[index - 1]);
-    let r = index + t.length;
-    let s = r === e.length || !/[a-z0-9]/i.test(e[r]);
-    if (o && s) return true;
+function containsWholeWord(text, word) {
+  for (let index = text.indexOf(word); index !== -1; index = text.indexOf(word, index + 1)) {
+    let startsWord = index === 0 || !/[a-z0-9]/i.test(text[index - 1]);
+    let end = index + word.length;
+    let endsWord = end === text.length || !/[a-z0-9]/i.test(text[end]);
+    if (startsWord && endsWord) return true;
   }
   return false;
 }
@@ -185,21 +194,21 @@ function containsWholeWord(e, t) {
 /**
  * 判断列表里是否有以该名称开头、随后接 “-” 的更具体条目。
  */
-function hasMoreSpecificNameEntry(e, t) {
-  if (!e.startsWith(t)) return false;
-  return e.length === t.length || e[t.length] === "-";
+function hasMoreSpecificNameEntry(name, entry) {
+  if (!name.startsWith(entry)) return false;
+  return name.length === entry.length || name[entry.length] === "-";
 }
 //@ chunk-1ny7cxrt.js:1339308-1339460 placement
 /**
  * 列表中是否有以该名称加 “-” 开头的更具体条目。
  */
-function hasLongerVariant(e, t) {
-  for (let n of t) {
-    if (isBaseModelKey(n)) continue;
-    let index = n.indexOf(e);
+function hasLongerVariant(modelName, names) {
+  for (let candidate of names) {
+    if (isBaseModelKey(candidate)) continue;
+    let index = candidate.indexOf(modelName);
     if (index === -1) continue;
-    let r = index + e.length;
-    if (r === n.length || n[r] === "-") return true;
+    let endIndex = index + modelName.length;
+    if (endIndex === candidate.length || candidate[endIndex] === "-") return true;
   }
   return false;
 }
@@ -207,30 +216,31 @@ function hasLongerVariant(e, t) {
 /**
  * exact 匹配模式下模型条目是否匹配。
  */
-function matchesExactEntry(e, t) {
-  let n = classifyModelListEntry(t);
-  if (n.kind !== "model") return n.kind === "family";
-  let modelId = parseModelId(e);
-  return modelId !== null && modelEntryMatches(n, modelId, isLatestAlias(e, modelId));
+function matchesExactEntry(modelName, entry) {
+  let classified = classifyModelListEntry(entry);
+  if (classified.kind !== "model") return classified.kind === "family";
+  let modelId = parseModelId(modelName);
+  return modelId !== null && modelEntryMatches(classified, modelId, isLatestAlias(modelName, modelId));
 }
 //@ chunk-1ny7cxrt.js:1339582-1339954 placement
 /**
  * 模型是否在可用模型列表中（支持别名、家族、词边界、claude- 前缀）。
  */
-function isModelAvailable(e, availableModels, availableModelsMatch) {
+function isModelAvailable(model, availableModels, availableModelsMatch) {
   if (availableModels.length === 0) return false;
-  let mapped = availableModels.map((s) => strip1mSuffix(s.trim().toLowerCase()));
-  let r = strip1mSuffix(e.trim().toLowerCase());
-  if (mapped.includes(r)) {
-    if (!isBaseModelKey(r) || !hasLongerVariant(r, mapped)) return true;
+  let names = availableModels.map((entry) => strip1mSuffix(entry.trim().toLowerCase()));
+  let normalized = strip1mSuffix(model.trim().toLowerCase());
+  if (names.includes(normalized)) {
+    if (!isBaseModelKey(normalized) || !hasLongerVariant(normalized, names)) return true;
   }
-  for (let s of mapped)
-    if (isBaseModelKey(s) && !hasLongerVariant(s, mapped) && containsWholeWord(r, s)) return true;
-  for (let s of mapped) {
-    if (isBaseModelKey(s)) continue;
-    if (availableModelsMatch === "exact" && !matchesExactEntry(r, s)) continue;
-    if (hasMoreSpecificNameEntry(r, s)) return true;
-    if (!s.startsWith("claude-") && hasMoreSpecificNameEntry(r, `claude-${s}`)) return true;
+  for (let entry of names)
+    if (isBaseModelKey(entry) && !hasLongerVariant(entry, names) && containsWholeWord(normalized, entry))
+      return true;
+  for (let entry of names) {
+    if (isBaseModelKey(entry)) continue;
+    if (availableModelsMatch === "exact" && !matchesExactEntry(normalized, entry)) continue;
+    if (hasMoreSpecificNameEntry(normalized, entry)) return true;
+    if (!entry.startsWith("claude-") && hasMoreSpecificNameEntry(normalized, `claude-${entry}`)) return true;
   }
   return false;
 }
@@ -238,27 +248,31 @@ function isModelAvailable(e, availableModels, availableModelsMatch) {
 /**
  * 模型是否命中 deniedModels。
  */
-function isModelDenied(e, deniedModels) {
-  let lower = stripAnyVersatileSuffix(e.trim()).toLowerCase();
-  let modelId = parseModelId(lower);
-  return deniedModels.some((r) => {
-    let { entry } = parseDeniedModelEntry(r);
-    return entry !== null && deniedModelsEntryMatches(entry, lower, modelId);
+function isModelDenied(modelName, deniedModels) {
+  let lower = stripAnyVersatileSuffix(modelName.trim()).toLowerCase();
+  let parsed = parseModelId(lower);
+  return deniedModels.some((deniedEntry) => {
+    let { entry } = parseDeniedModelEntry(deniedEntry);
+    return entry !== null && deniedModelsEntryMatches(entry, lower, parsed);
   });
 }
 //@ chunk-1ny7cxrt.js:1340082-1340288 placement
 /**
  * 模型限制结果：denied / unlisted / null。
  */
-function modelRestriction(e, t, n) {
-  let deniedModels = t.deniedModels;
+function modelRestriction(modelName, policy, model) {
+  let deniedModels = policy.deniedModels;
   if (
     deniedModels &&
-    [e, ...Object.values(n?.upstream_model ?? {})].some((s) => isModelDenied(s, deniedModels))
+    [modelName, ...Object.values(model?.upstream_model ?? {})].some((candidate) =>
+      isModelDenied(candidate, deniedModels),
+    )
   )
     return "denied";
-  let availableModels = t.availableModels;
-  return availableModels && !isModelAvailable(e, availableModels, t.availableModelsMatch) ? "unlisted" : null;
+  let availableModels = policy.availableModels;
+  return availableModels && !isModelAvailable(modelName, availableModels, policy.availableModelsMatch)
+    ? "unlisted"
+    : null;
 }
 //@ chunk-1ny7cxrt.js:1340288-1340653 placement
 /**
@@ -277,46 +291,51 @@ var GUARDRAIL_POLICY_FIELDS = [
 /**
  * 从 Bedrock 响应中取出 guardrail trace（删除原字段），有命中或干预时上报 guardrail.trace。
  */
-function reportGuardrailTrace(e, t) {
-  let n = vMe(e, ["amazon-bedrock-trace"]);
-  let o = vMe(e, ["type"]);
-  if (n === undefined && o !== "message" && o !== "message_stop") return;
-  if ("amazon-bedrock-trace" in e) delete e["amazon-bedrock-trace"];
-  let r = vMe(e, ["amazon-bedrock-guardrailAction"]);
-  let s = vMe(n, ["guardrail", "outputs"]);
-  let a = Ji(
+function reportGuardrailTrace(event, logContext) {
+  let trace = getAlias(event, ["amazon-bedrock-trace"]);
+  let eventType = getAlias(event, ["type"]);
+  if (trace === undefined && eventType !== "message" && eventType !== "message_stop") return;
+  if ("amazon-bedrock-trace" in event) delete event["amazon-bedrock-trace"];
+  let guardrailAction = getAlias(event, ["amazon-bedrock-guardrailAction"]);
+  let outputs = getAlias(trace, ["guardrail", "outputs"]);
+  let filters = uniqByExport(
     [
-      ...collectGuardrailFilters("input", vMe(n, ["guardrail", "input"])),
-      ...(Array.isArray(s) ? s : []).flatMap((l) => collectGuardrailFilters("output", l)),
+      ...collectGuardrailFilters("input", getAlias(trace, ["guardrail", "input"])),
+      ...(Array.isArray(outputs) ? outputs : []).flatMap((outputEntry) =>
+        collectGuardrailFilters("output", outputEntry),
+      ),
     ],
     jsonStringify,
   );
-  if (a.length > 0 || r === "INTERVENED")
+  if (filters.length > 0 || guardrailAction === "INTERVENED")
     gatewayJsonLog("guardrail.trace", {
-      ...t,
-      action: typeof r === "string" ? r : undefined,
-      filters: a,
+      ...logContext,
+      action: typeof guardrailAction === "string" ? guardrailAction : undefined,
+      filters,
     });
 }
 //@ chunk-1ny7cxrt.js:1341143-1341439 placement
 /**
  * 收集 trace 中检测到的过滤项（方向、guardrail、策略、动作等）。
  */
-function collectGuardrailFilters(side, t) {
-  let n = [];
-  for (let [key, value] of Object.entries(isPlainObject_2(t) ? t : {}))
-    for (let [s, a, l] of GUARDRAIL_POLICY_FIELDS) {
-      let c = vMe(value, [s, a]);
-      for (let u of Array.isArray(c) ? c : [])
-        if (isPlainObject_2(u) && u.detected !== false)
-          n.push({
+function collectGuardrailFilters(side, guardrailOutput) {
+  let findings = [];
+  for (let [key, value] of Object.entries(isPlainObject_2(guardrailOutput) ? guardrailOutput : {}))
+    for (let [policyName, policyField, actionField] of GUARDRAIL_POLICY_FIELDS) {
+      let detections = getAlias(value, [policyName, policyField]);
+      for (let detection of Array.isArray(detections) ? detections : [])
+        if (isPlainObject_2(detection) && detection.detected !== false)
+          findings.push({
             side,
             guardrail: key,
-            policy: `${s}.${a}`,
-            ...pickByHelper(wS(u, "action", l), (f) => typeof f === "string" || typeof f === "number"),
+            policy: `${policyName}.${policyField}`,
+            ...pickByHelper(
+              pickAlias(detection, "action", actionField),
+              (fieldValue) => typeof fieldValue === "string" || typeof fieldValue === "number",
+            ),
           });
     }
-  return n;
+  return findings;
 }
 export {
   modelRestriction,

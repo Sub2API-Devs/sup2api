@@ -11,18 +11,19 @@
 import { GITHUB_HOST } from "../utils/git/githubUrl.js";
 
 //@ chunk-sn0v73kq.js:227-476 placement
-async function parseGitSourceRepository(s) {
-  let { isNestedGitLabProject, parseGitRemote, parseGitHubRepository } = await import("./chunk-zqrznfbt.js");
-  let gitRemote = parseGitRemote(s);
+async function parseGitSourceRepository(url) {
+  let { isNestedGitLabProject, parseGitRemote, parseGitHubRepository } =
+    await import("../utils/detectRepository.js");
+  let gitRemote = parseGitRemote(url);
   if (gitRemote) return isNestedGitLabProject(gitRemote) ? null : gitRemote;
-  let gitHubRepository = parseGitHubRepository(s);
+  let gitHubRepository = parseGitHubRepository(url);
   if (gitHubRepository) {
-    let [o, n] = gitHubRepository.split("/");
-    if (o && n)
+    let [owner, name] = gitHubRepository.split("/");
+    if (owner && name)
       return {
         host: GITHUB_HOST,
-        owner: o,
-        name: n,
+        owner,
+        name,
       };
   }
   return null;
@@ -31,28 +32,28 @@ async function parseGitSourceRepository(s) {
 /**
  * 构造会话的 git 上下文（来源仓库、分支）。
  */
-async function buildGitSessionContext(gitRepoUrl, branch, defaultBranch) {
+async function buildGitSessionContext(url, branch, defaultBranch) {
   let report = {
     revisionGuessUsed: false,
   };
-  if (!gitRepoUrl)
+  if (!url)
     return {
       sources: [],
       outcomes: [],
       report,
     };
-  let { getDefaultBranch } = await import("./chunk-rqvep8jc.js");
+  let { getDefaultBranch } = await import("../utils/git.js");
   if (branch === "HEAD") branch = "";
   let revisionGuessUsed = false;
-  let o = branch || defaultBranch || undefined;
-  if (!o) {
-    o = (await getDefaultBranch()) || undefined;
-    revisionGuessUsed = o !== undefined;
+  let revision = branch || defaultBranch || undefined;
+  if (!revision) {
+    revision = (await getDefaultBranch()) || undefined;
+    revisionGuessUsed = revision !== undefined;
   }
-  let n = branch && defaultBranch && branch !== defaultBranch ? [branch] : [];
+  let branches = branch && defaultBranch && branch !== defaultBranch ? [branch] : [];
   let branchDropped;
   let warnMessage;
-  if (branch && n.length === 0) {
+  if (branch && branches.length === 0) {
     branchDropped = defaultBranch ? "is_default" : "no_evidence";
     warnMessage = defaultBranch
       ? `[bridge] requested branch '${branch}' is the default branch \u2014 ` +
@@ -65,13 +66,13 @@ async function buildGitSessionContext(gitRepoUrl, branch, defaultBranch) {
     revisionGuessUsed,
     warnMessage,
   };
-  let l = (host, owner, name) => ({
+  let buildResult = (host, owner, name) => ({
     report: report_2,
     sources: [
       {
         type: "git_repository",
         url: `https://${host}/${owner}/${name}`,
-        revision: o,
+        revision,
       },
     ],
     outcomes: [
@@ -80,14 +81,14 @@ async function buildGitSessionContext(gitRepoUrl, branch, defaultBranch) {
         git_info: {
           type: "github",
           repo: `${owner}/${name}`,
-          branches: n,
+          branches,
         },
       },
     ],
   });
-  let gitSourceRepository = await parseGitSourceRepository(gitRepoUrl);
+  let gitSourceRepository = await parseGitSourceRepository(url);
   if (gitSourceRepository)
-    return l(gitSourceRepository.host, gitSourceRepository.owner, gitSourceRepository.name);
+    return buildResult(gitSourceRepository.host, gitSourceRepository.owner, gitSourceRepository.name);
   return {
     sources: [],
     outcomes: [],

@@ -9,9 +9,9 @@
  * attribution: placement 5
  */
 import { stat } from "fs/promises";
-import { union, array, u, string } from "../../vendor/zod/v4/classic/schemas.js";
+import { union, array, objectSchema, stringSchema } from "../../vendor/zod/v4/classic/schemas.js";
 import { DoctorLazy } from "../cli/handlers/util.js";
-import { xr } from "../../vendor/lodash-es/_inlinedHelpers.js";
+import { import_mapValues } from "../../vendor/lodash-es/_inlinedHelpers.js";
 import { WORKER_KINDS } from "../daemon/runDaemonWorker.js";
 import { isStorageV5Enabled } from "./hoverRest.js";
 import { daemonJsonPath } from "../services/daemon/paths.js";
@@ -21,17 +21,17 @@ import { getFileReader } from "./fileStore.js";
 import { safeParseJSON } from "./json.js";
 
 //@ chunk-g3mpnrhd.js:766-864 placement
-function schemaList(r) {
-  return union([r, array(r)])
+function schemaList(itemSchema) {
+  return union([itemSchema, array(itemSchema)])
     .optional()
-    .transform((n) => (n === undefined ? [] : Array.isArray(n) ? n : [n]));
+    .transform((value) => (value === undefined ? [] : Array.isArray(value) ? value : [value]));
 }
 //@ chunk-g3mpnrhd.js:864-952 placement
 var workerKindsConfigSchema = DoctorLazy(() => {
-  let r = xr(WORKER_KINDS, (n) => schemaList(n.schema()));
-  return u({
-    $schema: string().optional(),
-    ...r,
+  let workerKindSchemas = import_mapValues(WORKER_KINDS, (workerKind) => schemaList(workerKind.schema()));
+  return objectSchema({
+    $schema: stringSchema().optional(),
+    ...workerKindSchemas,
   });
 });
 //@ chunk-g3mpnrhd.js:952-988 placement
@@ -45,23 +45,23 @@ function defaultWorkerKindsConfig() {
 /**
  * 读取 JSON 配置文件（大小上限、非常规文件拒绝、schema 校验）。
  */
-async function readJsonConfigFile(jsonPath, storageV5) {
-  let i;
-  if (isStorageV5Enabled() && storageV5 !== undefined && jsonPath === daemonJsonPath()) {
-    let configFromStorage = await readConfigFromStorage(storageV5, jsonPath);
+async function readJsonConfigFile(jsonPath, storage) {
+  let rawText;
+  if (isStorageV5Enabled() && storage !== undefined && jsonPath === daemonJsonPath()) {
+    let configFromStorage = await readConfigFromStorage(storage, jsonPath);
     if (!configFromStorage.ok) return configFromStorage.result;
-    i = configFromStorage.raw;
+    rawText = configFromStorage.raw;
   } else
     try {
-      let e = await stat(jsonPath).catch((error) =>
+      let fileStats = await stat(jsonPath).catch((error) =>
         getErrnoCode(error) === "ENOENT" ? null : Promise.reject(error),
       );
-      if (e && (!e.isFile() || e.size > MAX_DAEMON_CONFIG_BYTES))
+      if (fileStats && (!fileStats.isFile() || fileStats.size > MAX_DAEMON_CONFIG_BYTES))
         return {
           ok: false,
           error: `${jsonPath} is not a regular file (or exceeds 1MiB)`,
         };
-      i = await getFileReader().read(jsonPath);
+      rawText = await getFileReader().read(jsonPath);
     } catch (error) {
       if (getErrnoCode(error) === "ENOENT")
         return {
@@ -74,23 +74,26 @@ async function readJsonConfigFile(jsonPath, storageV5) {
         error: `failed to read ${jsonPath}: ${errorMessage(error)}`,
       };
     }
-  let s = safeParseJSON(i, false);
-  if (s === null)
+  let parsed = safeParseJSON(rawText, false);
+  if (parsed === null)
     return {
       ok: false,
       error: `failed to parse ${jsonPath} as JSON`,
     };
-  let f = workerKindsConfigSchema().safeParse(s);
-  if (!f.success)
+  let validation = workerKindsConfigSchema().safeParse(parsed);
+  if (!validation.success)
     return {
       ok: false,
-      error: `config validation failed: ${f.error.message}`,
+      error: `config validation failed: ${validation.error.message}`,
     };
-  let a = new Set(Object.keys(workerKindsConfigSchema().shape));
-  let unknownKeys = typeof s === "object" && s !== null ? Object.keys(s).filter((key) => !a.has(key)) : [];
+  let knownKeys = new Set(Object.keys(workerKindsConfigSchema().shape));
+  let unknownKeys =
+    typeof parsed === "object" && parsed !== null
+      ? Object.keys(parsed).filter((key) => !knownKeys.has(key))
+      : [];
   return {
     ok: true,
-    config: f.data,
+    config: validation.data,
     unknownKeys,
   };
 }
@@ -98,8 +101,8 @@ async function readJsonConfigFile(jsonPath, storageV5) {
 /**
  * 从存储后端读取配置文本。
  */
-async function readConfigFromStorage(r, n) {
-  let daemonConfigFromStorage = await readDaemonConfigFromStorage(r);
+async function readConfigFromStorage(storage, jsonPath) {
+  let daemonConfigFromStorage = await readDaemonConfigFromStorage(storage);
   switch (daemonConfigFromStorage.kind) {
     case "text":
       return {
@@ -120,7 +123,7 @@ async function readConfigFromStorage(r, n) {
         ok: false,
         result: {
           ok: false,
-          error: `${n} is not a regular file (or exceeds 1MiB)`,
+          error: `${jsonPath} is not a regular file (or exceeds 1MiB)`,
         },
       };
     case "failed":
@@ -128,7 +131,7 @@ async function readConfigFromStorage(r, n) {
         ok: false,
         result: {
           ok: false,
-          error: `failed to read ${n}: ${daemonConfigFromStorage.error.code}`,
+          error: `failed to read ${jsonPath}: ${daemonConfigFromStorage.error.code}`,
         },
       };
     case "threw":
@@ -136,7 +139,7 @@ async function readConfigFromStorage(r, n) {
         ok: false,
         result: {
           ok: false,
-          error: `failed to read ${n}: ${errorMessage(daemonConfigFromStorage.error)}`,
+          error: `failed to read ${jsonPath}: ${errorMessage(daemonConfigFromStorage.error)}`,
         },
       };
   }

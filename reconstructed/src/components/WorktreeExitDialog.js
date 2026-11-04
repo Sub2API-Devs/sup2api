@@ -31,9 +31,9 @@ import {
 } from "../utils/worktree.js";
 import { logEvent } from "../services/analytics/index.js";
 import { env } from "../utils/env.js";
-import { w } from "../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import { useTheme_2 } from "./design-system/ThemeProvider.js";
-import { y, R, P } from "../../vendor/react/cjs/react.production.js";
+import { useState, useRef, useEffect } from "../../vendor/react/cjs/react.production.js";
 import { MEMO_CACHE_SENTINEL } from "../../runtime/bun-runtime.js";
 import { useSession } from "../context/session.js";
 import { withDeadline } from "../utils/sleep.js";
@@ -61,16 +61,16 @@ import { ModelSelector } from "./agents/ModelSelector.js";
 import { Dialog } from "./design-system/Dialog.js";
 
 //@ chunk-18hwfzwa.js:1693042-1693072 placement
-function selectId5(kr) {
-  return kr.id;
+function selectId5(session) {
+  return session.id;
 }
 //@ chunk-18hwfzwa.js:1693072-1693097 placement
 function placeholderChar() {
   return "?";
 }
 //@ chunk-18hwfzwa.js:1693097-1693136 placement
-function isNonEmptyLine(ls) {
-  return ls.trim() !== "";
+function isNonEmptyLine(line) {
+  return line.trim() !== "";
 }
 //@ chunk-18hwfzwa.js:1693136-1693156 placement
 var SUBMODULE_CHECK_TIMEOUT_MS = 5000;
@@ -79,7 +79,7 @@ var EMPTY_DIALOG_TITLE = "";
 var WORKTREE_STATUS_TIMEOUT_MS = 5000;
 //@ chunk-18hwfzwa.js:1693168-1693220 placement
 function worktreeRelocationModule() {
-  return require("./chunk-hs5khexj.js");
+  return require("../utils/sessionStorage.lazy.js");
 }
 //@ chunk-18hwfzwa.js:1693220-1693917 placement
 /**
@@ -94,9 +94,9 @@ async function restoreCwdAfterWorktreeExit(worktreeSession, storageV5) {
       setCwd(targetDir);
       break;
     } catch {
-      let Be = dirname(targetDir);
-      if (Be === targetDir) break;
-      targetDir = Be;
+      let parentDir = dirname(targetDir);
+      if (parentDir === targetDir) break;
+      targetDir = parentDir;
     }
   let fellBack = targetDir !== originalCwd;
   if (fellBack)
@@ -107,19 +107,19 @@ async function restoreCwdAfterWorktreeExit(worktreeSession, storageV5) {
       },
     );
   if (!fellBack) {
-    let Be = preEnterOriginalCwd ?? originalCwd;
+    let restoreDir = preEnterOriginalCwd ?? originalCwd;
     if (
       liveLaunchAnchor === undefined ||
-      isCoveredByWorktrees(Be, restoreRootsFor(liveLaunchAnchor, worktreeSession.worktreePath), {
+      isCoveredByWorktrees(restoreDir, restoreRootsFor(liveLaunchAnchor, worktreeSession.worktreePath), {
         requireCovered: true,
         coveredWitnesses: worktreeRootsFor(liveLaunchAnchor, worktreeSession.worktreePath),
         extraCoveredRoots: (() => {
-          let He = worktreeLocationOf(worktreeSession.worktreePath);
-          return He !== null ? [He.checkout] : [];
+          let location = worktreeLocationOf(worktreeSession.worktreePath);
+          return location !== null ? [location.checkout] : [];
         })(),
       })
     )
-      setOriginalCwd(Be);
+      setOriginalCwd(restoreDir);
     try {
       await worktreeRelocationModule().relocateSessionTranscript(storageV5);
     } catch (error) {
@@ -131,39 +131,43 @@ async function restoreCwdAfterWorktreeExit(worktreeSession, storageV5) {
   primePlanSlugCollisions(storageV5);
 }
 //@ chunk-18hwfzwa.js:1693917-1694107 placement
-function worktreeExitTelemetry(h, x) {
+function worktreeExitTelemetry(atStake, worktreesInside) {
   return {
-    commits: h.commits ?? -1,
-    ...(h.head !== "not_read" && {
-      head: fromEnum(h.head),
+    commits: atStake.commits ?? -1,
+    ...(atStake.head !== "not_read" && {
+      head: fromEnum(atStake.head),
     }),
-    ...("onKeptBranch" in h && {
-      commits_on_kept_branch: h.onKeptBranch ?? -1,
+    ...("onKeptBranch" in atStake && {
+      commits_on_kept_branch: atStake.onKeptBranch ?? -1,
     }),
-    ...(x !== 0 && {
-      worktrees_inside: x ?? -1,
+    ...(worktreesInside !== 0 && {
+      worktrees_inside: worktreesInside ?? -1,
     }),
   };
 }
 //@ chunk-18hwfzwa.js:1694107-1694906 placement
-function removeWorktreeOnExit(h, x, { killTmux, removedMessage, atStake, changedFiles, worktreesInside }) {
+function removeWorktreeOnExit(
+  session,
+  env_2,
+  { killTmux, removedMessage, atStake, changedFiles, worktreesInside },
+) {
   let run = async () => {
-    if (killTmux && h.tmuxSessionName) await killTmuxSession(h.tmuxSessionName);
-    let He = await inspectWorktreeChanges(h.worktreePath, worktreesInside);
-    if (getCurrentWorktreeSession() !== h)
-      return worktreeChangedMessage(h.worktreePath, killTmux && Boolean(h.tmuxSessionName));
-    let { storageV5, credentials } = x;
-    if (He !== null) {
+    if (killTmux && session.tmuxSessionName) await killTmuxSession(session.tmuxSessionName);
+    let changes = await inspectWorktreeChanges(session.worktreePath, worktreesInside);
+    if (getCurrentWorktreeSession() !== session)
+      return worktreeChangedMessage(session.worktreePath, killTmux && Boolean(session.tmuxSessionName));
+    let { storageV5, credentials } = env_2;
+    if (changes !== null) {
       logEvent("tengu_worktree_kept", {
         changed_files: changedFiles,
         kept_at_removal: true,
-        ...worktreeExitTelemetry(atStake, He.now),
+        ...worktreeExitTelemetry(atStake, changes.now),
       });
       await keepWorktree(storageV5);
-      return He.keptFor;
+      return changes.keptFor;
     }
     if (!(await cleanupWorktree(storageV5, credentials)))
-      return `Worktree could not be removed \u2014 kept at ${h.worktreePath}`;
+      return `Worktree could not be removed \u2014 kept at ${session.worktreePath}`;
     logEvent("tengu_worktree_removed", {
       source: lit_2("exit_dialog"),
       changed_files: changedFiles,
@@ -172,21 +176,22 @@ function removeWorktreeOnExit(h, x, { killTmux, removedMessage, atStake, changed
     return removedMessage();
   };
   return {
-    path: h.worktreePath,
+    path: session.worktreePath,
     run,
     ignoresHangup:
       killTmux &&
-      Boolean(h.tmuxSessionName) &&
+      Boolean(session.tmuxSessionName) &&
       Boolean(env.TMUX) &&
-      (env.CLAUDE_CODE_TMUX_SESSION === undefined || env.CLAUDE_CODE_TMUX_SESSION === h.tmuxSessionName),
+      (env.CLAUDE_CODE_TMUX_SESSION === undefined ||
+        env.CLAUDE_CODE_TMUX_SESSION === session.tmuxSessionName),
   };
 }
 //@ chunk-18hwfzwa.js:1694906-1695073 layout
-function worktreeChangedMessage(worktreePath, x) {
-  return `The exit didn't remove the worktree at ${worktreePath}: this session's worktree changed after Claude Code checked it.${x ? " Tmux session terminated." : ""}`;
+function worktreeChangedMessage(worktreePath, tmuxEnded) {
+  return `The exit didn't remove the worktree at ${worktreePath}: this session's worktree changed after Claude Code checked it.${tmuxEnded ? " Tmux session terminated." : ""}`;
 }
 //@ chunk-18hwfzwa.js:1695073-1695109 layout
-async function inspectWorktreeChanges(worktreePath, x) {
+async function inspectWorktreeChanges(worktreePath, worktreesInside) {
   return null;
 }
 //@ chunk-18hwfzwa.js:1695109-1706346 fingerprint = WorktreeExitDialog (0.483)
@@ -194,99 +199,106 @@ async function inspectWorktreeChanges(worktreePath, x) {
  * 退出 worktree 会话：检查未提交改动与 worktree 状态，选择保留或删除 worktree（必要时先确认丢弃改动），结束 tmux 会话并返回原目录。
  */
 function WorktreeExitDialog(props) {
-  let $ = w(57);
+  let $ = useMemoCache(57);
   let { onDone, onCancel } = props;
   let { storageV5, credentials } = useTheme_2();
-  let [ke, Re] = y("loading");
-  let He;
+  let [phase, setPhase] = useState("loading");
+  let emptyChanges;
   if ($[0] === MEMO_CACHE_SENTINEL) {
-    He = [];
-    $[0] = He;
-  } else He = $[0];
-  let [We, ze] = y(He);
-  let [Xe, rt] = y(null);
-  let [kt, At] = y(null);
-  let [It, Ot] = y(false);
-  let Et;
+    emptyChanges = [];
+    $[0] = emptyChanges;
+  } else emptyChanges = $[0];
+  let [changeLines, setChangeLines] = useState(emptyChanges);
+  let [submoduleNote, setSubmoduleNote] = useState(null);
+  let [submoduleError, setSubmoduleError] = useState(null);
+  let [changesUnverifiable, setChangesUnverifiable] = useState(false);
+  let initialAtStake;
   if ($[1] === MEMO_CACHE_SENTINEL) {
-    Et = {
+    initialAtStake = {
       head: "not_read",
       commits: 0,
     };
-    $[1] = Et;
-  } else Et = $[1];
-  let [Dt, Lt] = y(Et);
-  let [oo, Xt] = y(0);
-  let [, io] = y(null);
-  let [so, po] = y();
-  let ao = R(undefined);
-  let [co] = y(getCurrentWorktreeSession);
+    $[1] = initialAtStake;
+  } else initialAtStake = $[1];
+  let [atStake, setAtStake] = useState(initialAtStake);
+  let [worktreesInside, setWorktreesInside] = useState(0);
+  let [, setUnreadableReason] = useState(null);
+  let [resultMessage, setResultMessage] = useState();
+  let pendingRemovalRef = useRef(undefined);
+  let [session] = useState(getCurrentWorktreeSession);
   let id = useSession(selectId5);
-  let Ao;
+  let sessionTitle;
   if ($[2] !== id) {
-    Ao = worktreeRelocationModule().getCurrentSessionTitle(id);
+    sessionTitle = worktreeRelocationModule().getCurrentSessionTitle(id);
     $[2] = id;
-    $[3] = Ao;
-  } else Ao = $[3];
-  let Bo = Ao;
-  let Ro;
-  let Ho;
-  if ($[4] !== credentials || $[5] !== Bo || $[6] !== storageV5 || $[7] !== co) {
-    Ro = () => {
-      let wn = async function wn() {
-        if (co?.enteredExisting) {
+    $[3] = sessionTitle;
+  } else sessionTitle = $[3];
+  let sessionTitle_ = sessionTitle;
+  let inspectEffect;
+  let inspectEffectDeps;
+  if ($[4] !== credentials || $[5] !== sessionTitle_ || $[6] !== storageV5 || $[7] !== session) {
+    inspectEffect = () => {
+      let inspect = async function inspect_() {
+        if (session?.enteredExisting) {
           await keepWorktree(storageV5);
-          await restoreCwdAfterWorktreeExit(co, storageV5);
-          po(`Returned to ${co.originalCwd} (worktree at ${co.worktreePath} left in place)`);
-          Re("done");
+          await restoreCwdAfterWorktreeExit(session, storageV5);
+          setResultMessage(
+            `Returned to ${session.originalCwd} (worktree at ${session.worktreePath} left in place)`,
+          );
+          setPhase("done");
           return;
         }
         let resolved = Promise.resolve(0);
         let changeLines = [];
-        if (false && co) {
-          if (co.liveLaunchAnchor !== undefined) {
-            io("not-read");
-            Xt(await resolved);
-            Re("asking");
+        if (false && session) {
+          if (session.liveLaunchAnchor !== undefined) {
+            setUnreadableReason("not-read");
+            setWorktreesInside(await resolved);
+            setPhase("asking");
             return;
           }
-          Re("checking");
-          let mn = await withDeadline(
-            getWorkingCopyWorktreeChanges(co.worktreePath, co.originalChangeset, co.originalCwd, {
-              statusTimeoutMs: WORKTREE_STATUS_TIMEOUT_MS,
-            }),
+          setPhase("checking");
+          let changesetResult = await withDeadline(
+            getWorkingCopyWorktreeChanges(
+              session.worktreePath,
+              session.originalChangeset,
+              session.originalCwd,
+              {
+                statusTimeoutMs: WORKTREE_STATUS_TIMEOUT_MS,
+              },
+            ),
             WORKTREE_STATUS_TIMEOUT_MS,
           );
-          if (mn === undefined)
+          if (changesetResult === undefined)
             logForDebugging(
-              `hook worktree status check for ${co.worktreePath} outlasted ${WORKTREE_STATUS_TIMEOUT_MS} ms; asking instead`,
+              `hook worktree status check for ${session.worktreePath} outlasted ${WORKTREE_STATUS_TIMEOUT_MS} ms; asking instead`,
             );
-          let Cn = mn ?? null;
+          let changeset = changesetResult ?? null;
           changeLines = Array.from(
             {
-              length: Cn?.changedFiles ?? 0,
+              length: changeset?.changedFiles ?? 0,
             },
             placeholderChar,
           );
-          if (Cn === null || Cn.moved) {
-            if (changeLines.length > 0) ze(changeLines);
-            io(
-              Cn !== null && Cn.changeset !== null
+          if (changeset === null || changeset.moved) {
+            if (changeLines.length > 0) setChangeLines(changeLines);
+            setUnreadableReason(
+              changeset !== null && changeset.changeset !== null
                 ? {
-                    movedToChangeset: Cn.changeset,
+                    movedToChangeset: changeset.changeset,
                   }
                 : "unreadable",
             );
-            Xt(await resolved);
-            Re("asking");
+            setWorktreesInside(await resolved);
+            setPhase("asking");
             return;
           }
-          io({});
+          setUnreadableReason({});
         }
-        let No = co && true ? await buildFilterNeutralizingArgs(co.worktreePath) : undefined;
-        let vo = No !== undefined && !No.ok;
-        let Yo =
-          !co || false
+        let safeArgs = session && true ? await buildFilterNeutralizingArgs(session.worktreePath) : undefined;
+        let gitUnsafe = safeArgs !== undefined && !safeArgs.ok;
+        let gitResult =
+          !session || false
             ? {
                 stdout: "",
                 stderr: "",
@@ -295,99 +307,111 @@ function WorktreeExitDialog(props) {
               }
             : await execFileNoThrowWithCwd(
                 gitExe(),
-                vo
+                gitUnsafe
                   ? [...GIT_SAFE_GLOBAL_ARGS, "rev-parse", "--git-dir"]
-                  : [...(No?.ok ? No.args : []), ...GIT_SAFE_GLOBAL_ARGS, ...SAFE_GIT_ENV_CONSTANTS],
+                  : [
+                      ...(safeArgs?.ok ? safeArgs.args : []),
+                      ...GIT_SAFE_GLOBAL_ARGS,
+                      ...SAFE_GIT_ENV_CONSTANTS,
+                    ],
                 {
-                  cwd: co.worktreePath,
-                  env: buildGitEnvForRepo(co.worktreePath, undefined, {
+                  cwd: session.worktreePath,
+                  env: buildGitEnvForRepo(session.worktreePath, undefined, {
                     userLocale: true,
                   }),
                 },
               );
-        let kn = false;
-        if (co && Yo.code !== 0) {
+        let isWorktreeGone = false;
+        if (session && gitResult.code !== 0) {
           try {
-            await lstat(co.worktreePath);
+            await lstat(session.worktreePath);
           } catch (error) {
-            let bn = error;
-            kn = isENOENT(bn);
+            let error_2 = error;
+            isWorktreeGone = isENOENT(error_2);
           }
         }
-        let Go = false;
-        if (true && co?.hookBased && Yo.code !== 0 && !kn) {
+        let isNotInsideRepo = false;
+        if (true && session?.hookBased && gitResult.code !== 0 && !isWorktreeGone) {
           try {
-            Go = findGitRootUncached(await realpath(co.worktreePath)) === null;
+            isNotInsideRepo = findGitRootUncached(await realpath(session.worktreePath)) === null;
           } catch {
-            Go = false;
+            isNotInsideRepo = false;
           }
         }
-        let hn = (vo || Yo.code !== 0) && !kn && !Go;
-        if (co && !co.hookBased && Yo.code !== 0 && kn) {
+        let statusFailed = (gitUnsafe || gitResult.code !== 0) && !isWorktreeGone && !isNotInsideRepo;
+        if (session && !session.hookBased && gitResult.code !== 0 && isWorktreeGone) {
           persistWorktreeSession(null, storageV5);
           clearResumeHintWorktree();
-          await restoreCwdAfterWorktreeExit(co, storageV5);
-          let Mn = co.tmuxSessionName
-            ? `. Detached tmux session ${co.tmuxSessionName} may still be running \u2014 end it with: tmux kill-session -t ${co.tmuxSessionName}`
+          await restoreCwdAfterWorktreeExit(session, storageV5);
+          let tmuxHint = session.tmuxSessionName
+            ? `. Detached tmux session ${session.tmuxSessionName} may still be running \u2014 end it with: tmux kill-session -t ${session.tmuxSessionName}`
             : "";
-          po(`Worktree at ${co.worktreePath} is no longer accessible \u2014 exiting${Mn}`);
-          Re("done");
+          setResultMessage(
+            `Worktree at ${session.worktreePath} is no longer accessible \u2014 exiting${tmuxHint}`,
+          );
+          setPhase("done");
           return;
         }
-        if (hn) {
+        if (statusFailed) {
           changeLines = ["?"];
-          Ot(true);
-        } else if (!vo && Yo.stdout)
-          changeLines = Yo.stdout
+          setChangesUnverifiable(true);
+        } else if (!gitUnsafe && gitResult.stdout)
+          changeLines = gitResult.stdout
             .split(
               `
 `,
             )
             .filter(isNonEmptyLine);
-        let Xo = false;
-        if (co && Yo.code === 0 && !vo) {
-          let Sn = submoduleChanges(
-            await inspectSubmodules(co.worktreePath, {
+        let changesUnverifiable_ = false;
+        if (session && gitResult.code === 0 && !gitUnsafe) {
+          let submoduleInfo = submoduleChanges(
+            await inspectSubmodules(session.worktreePath, {
               deadlineMs: SUBMODULE_CHECK_TIMEOUT_MS,
             }),
           );
-          $n: switch (Sn?.kind) {
+          $n: switch (submoduleInfo?.kind) {
             case "changes": {
-              changeLines = [...changeLines, ...Sn.paths];
-              rt(describeSubmoduleChanges(Sn));
+              changeLines = [...changeLines, ...submoduleInfo.paths];
+              setSubmoduleNote(describeSubmoduleChanges(submoduleInfo));
               break $n;
             }
             case "unverifiable": {
-              Xo = true;
-              At(describeSubmoduleChanges(Sn));
+              changesUnverifiable_ = true;
+              setSubmoduleError(describeSubmoduleChanges(submoduleInfo));
               break $n;
             }
             case undefined:
           }
         }
-        if (changeLines.length > 0) ze(changeLines);
-        if (co) {
-          let on =
-            co.hookBased && !co.originalHeadCommit
+        if (changeLines.length > 0) setChangeLines(changeLines);
+        if (session) {
+          let commitInfo =
+            session.hookBased && !session.originalHeadCommit
               ? {
                   head: "not_read",
-                  commits: kn || Go ? 0 : null,
+                  commits: isWorktreeGone || isNotInsideRepo ? 0 : null,
                 }
-              : await countCommitsAtStake(co, isWorktreeCloudClaimEnabled());
-          Lt(on);
-          let _o = await resolved;
-          Xt(_o);
-          let cn = co.hookBased && on.commits === null;
-          if (changeLines.length === 0 && (on.commits === 0 || cn) && !("onKeptBranch" in on) && !Bo && !Xo) {
-            if (_o !== 0 || cn) {
-              Re("asking");
+              : await countCommitsAtStake(session, isWorktreeCloudClaimEnabled());
+          setAtStake(commitInfo);
+          let worktreesInside_ = await resolved;
+          setWorktreesInside(worktreesInside_);
+          let commitsUnknown = session.hookBased && commitInfo.commits === null;
+          if (
+            changeLines.length === 0 &&
+            (commitInfo.commits === 0 || commitsUnknown) &&
+            !("onKeptBranch" in commitInfo) &&
+            !sessionTitle_ &&
+            !changesUnverifiable_
+          ) {
+            if (worktreesInside_ !== 0 || commitsUnknown) {
+              setPhase("asking");
               return;
             }
-            Re("removing-clean");
-            if (!co.hookBased) {
-              await restoreCwdAfterWorktreeExit(co, storageV5);
-              ao.current = removeWorktreeOnExit(
-                co,
+            setPhase("removing-clean");
+            if (!session.hookBased) {
+              await restoreCwdAfterWorktreeExit(session, storageV5);
+              pendingRemovalRef.current = removeWorktreeOnExit(
+                session,
                 {
                   storageV5,
                   credentials,
@@ -395,240 +419,242 @@ function WorktreeExitDialog(props) {
                 {
                   killTmux: false,
                   removedMessage: () =>
-                    on.head !== "another_branch"
+                    commitInfo.head !== "another_branch"
                       ? "Worktree removed (no changes)"
-                      : `Worktree removed. ${hasUnsafePathGlyphsOrSurrogate(on.branch) ? "The branch that it was on" : `Branch ${on.branch}`} is kept.`,
-                  atStake: on,
+                      : `Worktree removed. ${hasUnsafePathGlyphsOrSurrogate(commitInfo.branch) ? "The branch that it was on" : `Branch ${commitInfo.branch}`} is kept.`,
+                  atStake: commitInfo,
                   changedFiles: 0,
-                  worktreesInside: _o,
+                  worktreesInside: worktreesInside_,
                 },
               );
-              Re("done");
+              setPhase("done");
               return;
             }
-            if (getCurrentWorktreeSession() !== co) {
-              await restoreCwdAfterWorktreeExit(co, storageV5);
-              po(worktreeChangedMessage(co.worktreePath, false));
-              Re("done");
+            if (getCurrentWorktreeSession() !== session) {
+              await restoreCwdAfterWorktreeExit(session, storageV5);
+              setResultMessage(worktreeChangedMessage(session.worktreePath, false));
+              setPhase("done");
               return;
             }
-            cleanupWorktree(storageV5, credentials).then(async (Dn) => {
-              await restoreCwdAfterWorktreeExit(co, storageV5);
-              if (Dn) {
+            cleanupWorktree(storageV5, credentials).then(async (removed) => {
+              await restoreCwdAfterWorktreeExit(session, storageV5);
+              if (removed) {
                 logEvent("tengu_worktree_removed", {
                   source: lit_2("exit_dialog"),
                   commits: 0,
                   changed_files: 0,
                 });
-                po("Worktree removed (no changes)");
-              } else po(`Worktree could not be removed \u2014 kept at ${co.worktreePath}`);
-              Re("done");
+                setResultMessage("Worktree removed (no changes)");
+              } else setResultMessage(`Worktree could not be removed \u2014 kept at ${session.worktreePath}`);
+              setPhase("done");
             });
             return;
-          } else Re("asking");
+          } else setPhase("asking");
         }
       };
-      wn();
+      inspect();
     };
-    Ho = [co, Bo, storageV5, credentials];
+    inspectEffectDeps = [session, sessionTitle_, storageV5, credentials];
     $[4] = credentials;
-    $[5] = Bo;
+    $[5] = sessionTitle_;
     $[6] = storageV5;
-    $[7] = co;
-    $[8] = Ro;
-    $[9] = Ho;
+    $[7] = session;
+    $[8] = inspectEffect;
+    $[9] = inspectEffectDeps;
   } else {
-    Ro = $[8];
-    Ho = $[9];
+    inspectEffect = $[8];
+    inspectEffectDeps = $[9];
   }
-  P(Ro, Ho);
-  let Fn;
-  let mr;
-  if ($[10] !== onDone || $[11] !== so || $[12] !== ke) {
-    Fn = () => {
-      if (ke === "done") {
-        if (ao.current)
-          onDone(so, {
-            removeWorktree: ao.current,
+  useEffect(inspectEffect, inspectEffectDeps);
+  let onDoneEffect;
+  let onDoneDeps;
+  if ($[10] !== onDone || $[11] !== resultMessage || $[12] !== phase) {
+    onDoneEffect = () => {
+      if (phase === "done") {
+        if (pendingRemovalRef.current)
+          onDone(resultMessage, {
+            removeWorktree: pendingRemovalRef.current,
           });
-        else onDone(so);
+        else onDone(resultMessage);
       }
     };
-    mr = [ke, onDone, so];
+    onDoneDeps = [phase, onDone, resultMessage];
     $[10] = onDone;
-    $[11] = so;
-    $[12] = ke;
-    $[13] = Fn;
-    $[14] = mr;
+    $[11] = resultMessage;
+    $[12] = phase;
+    $[13] = onDoneEffect;
+    $[14] = onDoneDeps;
   } else {
-    Fn = $[13];
-    mr = $[14];
+    onDoneEffect = $[13];
+    onDoneDeps = $[14];
   }
-  P(Fn, mr);
-  if (!co) {
+  useEffect(onDoneEffect, onDoneDeps);
+  if (!session) {
     onDone("No active worktree session found", {
       display: "system",
     });
     return null;
   }
-  if (ke === "loading" || ke === "done") {
+  if (phase === "loading" || phase === "done") {
     return null;
   }
-  if (ke === "checking") {
+  if (phase === "checking") {
     return null;
   }
-  let commits = Dt.commits;
-  let Wn = Dt.head === "another_branch" || Dt.head === "like_its_branch";
-  let Fr;
-  if ($[15] !== Dt.branch || $[16] !== Dt.head) {
-    Fr =
-      Dt.head !== "another_branch"
+  let commits = atStake.commits;
+  let isOnAnotherBranch = atStake.head === "another_branch" || atStake.head === "like_its_branch";
+  let currentBranchRef;
+  if ($[15] !== atStake.branch || $[16] !== atStake.head) {
+    currentBranchRef =
+      atStake.head !== "another_branch"
         ? null
-        : hasUnsafePathGlyphsOrSurrogate(Dt.branch)
+        : hasUnsafePathGlyphsOrSurrogate(atStake.branch)
           ? "another branch"
-          : `branch ${Dt.branch}`;
-    $[15] = Dt.branch;
-    $[16] = Dt.head;
-    $[17] = Fr;
-  } else Fr = $[17];
-  let Zn = Fr;
-  let Un;
+          : `branch ${atStake.branch}`;
+    $[15] = atStake.branch;
+    $[16] = atStake.head;
+    $[17] = currentBranchRef;
+  } else currentBranchRef = $[17];
+  let currentBranchRef_ = currentBranchRef;
+  let handleChoice;
   if (
-    $[18] !== Dt ||
-    $[19] !== We ||
+    $[18] !== atStake ||
+    $[19] !== changeLines ||
     $[20] !== commits ||
     $[21] !== credentials ||
-    $[22] !== Wn ||
-    $[23] !== Zn ||
+    $[22] !== isOnAnotherBranch ||
+    $[23] !== currentBranchRef_ ||
     $[24] !== storageV5 ||
-    $[25] !== co ||
-    $[26] !== oo
+    $[25] !== session ||
+    $[26] !== worktreesInside
   ) {
-    Un = async function Ur(error) {
-      if (!co) {
+    handleChoice = async function onChoice(error) {
+      if (!session) {
         return;
       }
-      let hasTmux = Boolean(co.tmuxSessionName);
-      let pr = !co.worktreeBranch
+      let hasTmux = Boolean(session.tmuxSessionName);
+      let branchSuffix = !session.worktreeBranch
         ? ""
-        : Dt.head === "detached"
+        : atStake.head === "detached"
           ? " with HEAD detached"
-          : ` on ${Zn ?? `branch ${co.worktreeBranch}`}`;
+          : ` on ${currentBranchRef_ ?? `branch ${session.worktreeBranch}`}`;
       if (error === "keep" || error === "keep-with-tmux") {
-        Re("keeping");
+        setPhase("keeping");
         logEvent("tengu_worktree_kept", {
-          changed_files: We.length,
-          ...worktreeExitTelemetry(Dt, oo),
+          changed_files: changeLines.length,
+          ...worktreeExitTelemetry(atStake, worktreesInside),
         });
         await keepWorktree(storageV5);
-        await restoreCwdAfterWorktreeExit(co, storageV5);
+        await restoreCwdAfterWorktreeExit(session, storageV5);
         if (hasTmux)
-          po(
-            `Worktree kept. Your work is saved at ${co.worktreePath}${pr}. Reattach to tmux session with: tmux attach -t ${co.tmuxSessionName}`,
+          setResultMessage(
+            `Worktree kept. Your work is saved at ${session.worktreePath}${branchSuffix}. Reattach to tmux session with: tmux attach -t ${session.tmuxSessionName}`,
           );
-        else po(`Worktree kept. Your work is saved at ${co.worktreePath}${pr}`);
-        Re("done");
+        else setResultMessage(`Worktree kept. Your work is saved at ${session.worktreePath}${branchSuffix}`);
+        setPhase("done");
       } else if (error === "keep-kill-tmux") {
-        Re("keeping");
+        setPhase("keeping");
         logEvent("tengu_worktree_kept", {
-          changed_files: We.length,
-          ...worktreeExitTelemetry(Dt, oo),
+          changed_files: changeLines.length,
+          ...worktreeExitTelemetry(atStake, worktreesInside),
         });
-        if (co.tmuxSessionName) await killTmuxSession(co.tmuxSessionName);
+        if (session.tmuxSessionName) await killTmuxSession(session.tmuxSessionName);
         await keepWorktree(storageV5);
-        await restoreCwdAfterWorktreeExit(co, storageV5);
-        po(`Worktree kept at ${co.worktreePath}${pr}. Tmux session terminated.`);
-        Re("done");
+        await restoreCwdAfterWorktreeExit(session, storageV5);
+        setResultMessage(`Worktree kept at ${session.worktreePath}${branchSuffix}. Tmux session terminated.`);
+        setPhase("done");
       } else if (error === "remove" || error === "remove-with-tmux") {
-        Re("removing");
-        let Qn = hasTmux ? " Tmux session terminated." : "";
-        let ur = We.length;
-        let Ir = "discarded.";
-        let Pr = () => {
+        setPhase("removing");
+        let tmuxTerminated = hasTmux ? " Tmux session terminated." : "";
+        let changeCount = changeLines.length;
+        let discardedText = "discarded.";
+        let removedMessage = () => {
           if (commits === null) {
-            return co.hookBased
-              ? `Worktree removed.${ur > 0 ? ` Uncommitted changes were ${Ir}` : ""}${Qn}`
-              : `Worktree and branch ${co.worktreeBranch} removed.${ur > 0 ? ` Uncommitted changes were ${Ir}` : ""}${Qn}`;
+            return session.hookBased
+              ? `Worktree removed.${changeCount > 0 ? ` Uncommitted changes were ${discardedText}` : ""}${tmuxTerminated}`
+              : `Worktree and branch ${session.worktreeBranch} removed.${changeCount > 0 ? ` Uncommitted changes were ${discardedText}` : ""}${tmuxTerminated}`;
           }
-          if (commits > 0 && ur > 0) {
-            return `Worktree removed. ${commits} ${commits === 1 ? "commit" : "commits"}${Wn ? ` on ${co.worktreeBranch}` : ""} and uncommitted changes were ${Ir}${Qn}`;
+          if (commits > 0 && changeCount > 0) {
+            return `Worktree removed. ${commits} ${commits === 1 ? "commit" : "commits"}${isOnAnotherBranch ? ` on ${session.worktreeBranch}` : ""} and uncommitted changes were ${discardedText}${tmuxTerminated}`;
           }
           if (commits > 0) {
-            return `Worktree removed. ${commits} ${commits === 1 ? "commit" : "commits"} ${Dt.head === "detached" ? "" : `on ${co.worktreeBranch} `}${commits === 1 ? "was" : "were"} ${Ir}${Qn}`;
+            return `Worktree removed. ${commits} ${commits === 1 ? "commit" : "commits"} ${atStake.head === "detached" ? "" : `on ${session.worktreeBranch} `}${commits === 1 ? "was" : "were"} ${discardedText}${tmuxTerminated}`;
           }
-          return ur > 0 ? `Worktree removed. Uncommitted changes were ${Ir}${Qn}` : `Worktree removed.${Qn}`;
+          return changeCount > 0
+            ? `Worktree removed. Uncommitted changes were ${discardedText}${tmuxTerminated}`
+            : `Worktree removed.${tmuxTerminated}`;
         };
-        if (!co.hookBased) {
-          await restoreCwdAfterWorktreeExit(co, storageV5);
-          ao.current = removeWorktreeOnExit(
-            co,
+        if (!session.hookBased) {
+          await restoreCwdAfterWorktreeExit(session, storageV5);
+          pendingRemovalRef.current = removeWorktreeOnExit(
+            session,
             {
               storageV5,
               credentials,
             },
             {
               killTmux: true,
-              removedMessage: Pr,
-              atStake: Dt,
-              changedFiles: ur,
-              worktreesInside: oo,
+              removedMessage,
+              atStake,
+              changedFiles: changeCount,
+              worktreesInside,
             },
           );
-          Re("done");
+          setPhase("done");
           return;
         }
-        if (co.tmuxSessionName) await killTmuxSession(co.tmuxSessionName);
-        let ts = await inspectWorktreeChanges(co.worktreePath, oo);
-        if (getCurrentWorktreeSession() !== co) {
-          await restoreCwdAfterWorktreeExit(co, storageV5);
-          po(worktreeChangedMessage(co.worktreePath, hasTmux));
-          Re("done");
+        if (session.tmuxSessionName) await killTmuxSession(session.tmuxSessionName);
+        let changes = await inspectWorktreeChanges(session.worktreePath, worktreesInside);
+        if (getCurrentWorktreeSession() !== session) {
+          await restoreCwdAfterWorktreeExit(session, storageV5);
+          setResultMessage(worktreeChangedMessage(session.worktreePath, hasTmux));
+          setPhase("done");
           return;
         }
-        if (ts !== null) {
+        if (changes !== null) {
           logEvent("tengu_worktree_kept", {
-            changed_files: ur,
+            changed_files: changeCount,
             kept_at_removal: true,
-            ...worktreeExitTelemetry(Dt, ts.now),
+            ...worktreeExitTelemetry(atStake, changes.now),
           });
           await keepWorktree(storageV5);
-          await restoreCwdAfterWorktreeExit(co, storageV5);
-          po(ts.keptFor);
-          Re("done");
+          await restoreCwdAfterWorktreeExit(session, storageV5);
+          setResultMessage(changes.keptFor);
+          setPhase("done");
           return;
         }
-        let Gn = await cleanupWorktree(storageV5, credentials);
-        await restoreCwdAfterWorktreeExit(co, storageV5);
-        if (!Gn) {
-          po(`Worktree could not be removed \u2014 kept at ${co.worktreePath}`);
-          Re("done");
+        let removed = await cleanupWorktree(storageV5, credentials);
+        await restoreCwdAfterWorktreeExit(session, storageV5);
+        if (!removed) {
+          setResultMessage(`Worktree could not be removed \u2014 kept at ${session.worktreePath}`);
+          setPhase("done");
           return;
         }
         logEvent("tengu_worktree_removed", {
           source: lit_2("exit_dialog"),
-          changed_files: ur,
-          ...worktreeExitTelemetry(Dt, oo),
+          changed_files: changeCount,
+          ...worktreeExitTelemetry(atStake, worktreesInside),
         });
-        po(Pr());
-        Re("done");
+        setResultMessage(removedMessage());
+        setPhase("done");
       }
     };
-    $[18] = Dt;
-    $[19] = We;
+    $[18] = atStake;
+    $[19] = changeLines;
     $[20] = commits;
     $[21] = credentials;
-    $[22] = Wn;
-    $[23] = Zn;
+    $[22] = isOnAnotherBranch;
+    $[23] = currentBranchRef_;
     $[24] = storageV5;
-    $[25] = co;
-    $[26] = oo;
-    $[27] = Un;
-  } else Un = $[27];
-  let Ur = Un;
-  if (ke === "keeping") {
-    let Zr;
+    $[25] = session;
+    $[26] = worktreesInside;
+    $[27] = handleChoice;
+  } else handleChoice = $[27];
+  let handleChoice_ = handleChoice;
+  if (phase === "keeping") {
+    let keepingElement;
     if ($[28] === MEMO_CACHE_SENTINEL) {
-      Zr = jsxProd_default_2(Box, {
+      keepingElement = jsxProd_default_2(Box, {
         flexDirection: "row",
         marginY: 1,
         children: [
@@ -638,114 +664,125 @@ function WorktreeExitDialog(props) {
           }),
         ],
       });
-      $[28] = Zr;
-    } else Zr = $[28];
-    return Zr;
+      $[28] = keepingElement;
+    } else keepingElement = $[28];
+    return keepingElement;
   }
-  if (ke === "removing-clean" || ke === "removing") {
-    let Zr;
+  if (phase === "removing-clean" || phase === "removing") {
+    let spinnerElement;
     if ($[29] === MEMO_CACHE_SENTINEL) {
-      Zr = jsxProd_default(Spinner, {});
-      $[29] = Zr;
-    } else Zr = $[29];
+      spinnerElement = jsxProd_default(Spinner, {});
+      $[29] = spinnerElement;
+    } else spinnerElement = $[29];
     const children =
-      ke === "removing-clean" ? "Cleaning up worktree (no pending changes)\u2026" : "Removing worktree\u2026";
-    let zr;
+      phase === "removing-clean"
+        ? "Cleaning up worktree (no pending changes)\u2026"
+        : "Removing worktree\u2026";
+    let removingElement;
     if ($[30] !== children) {
-      zr = jsxProd_default_2(Box, {
+      removingElement = jsxProd_default_2(Box, {
         flexDirection: "row",
         marginY: 1,
         children: [
-          Zr,
+          spinnerElement,
           jsxProd_default(Text, {
             children,
           }),
         ],
       });
       $[30] = children;
-      $[31] = zr;
-    } else zr = $[31];
-    return zr;
+      $[31] = removingElement;
+    } else removingElement = $[31];
+    return removingElement;
   }
-  let branchName = co.worktreeBranch;
-  const Zr = branchName ?? "the worktree branch";
-  const wr = Zn === null || Zn === "another branch" ? "the worktree's current branch" : Zn;
-  let zr;
-  if ($[32] !== Dt || $[33] !== Zr || $[34] !== wr) {
-    zr = describeWhereCommitsAre(Dt, Zr, wr);
-    $[32] = Dt;
-    $[33] = Zr;
-    $[34] = wr;
-    $[35] = zr;
-  } else zr = $[35];
-  let fr = zr;
-  let $r = We.length > 0;
-  let Yr = It
+  let branchName = session.worktreeBranch;
+  const branchLabel = branchName ?? "the worktree branch";
+  const branchRefLabel =
+    currentBranchRef_ === null || currentBranchRef_ === "another branch"
+      ? "the worktree's current branch"
+      : currentBranchRef_;
+  let whereCommitsText;
+  if ($[32] !== atStake || $[33] !== branchLabel || $[34] !== branchRefLabel) {
+    whereCommitsText = describeWhereCommitsAre(atStake, branchLabel, branchRefLabel);
+    $[32] = atStake;
+    $[33] = branchLabel;
+    $[34] = branchRefLabel;
+    $[35] = whereCommitsText;
+  } else whereCommitsText = $[35];
+  let whereCommitsText_ = whereCommitsText;
+  let hasUncommitted = changeLines.length > 0;
+  let changesLabel = changesUnverifiable
     ? "uncommitted files that could not be counted (git could not vet the worktree's config or read a checkout there)"
-    : `${We.length} uncommitted ${We.length === 1 ? "file" : "files"}${Xe ? ` (including ${Xe})` : ""}`;
-  let Er = commits === null || commits > 0;
-  let Vr = kt
-    ? ` The worktree's submodules could not be checked for uncommitted work (${kt}); anything uncommitted inside one is lost if you remove the worktree.`
+    : `${changeLines.length} uncommitted ${changeLines.length === 1 ? "file" : "files"}${submoduleNote ? ` (including ${submoduleNote})` : ""}`;
+  let mayLoseCommits = commits === null || commits > 0;
+  let submoduleWarning = submoduleError
+    ? ` The worktree's submodules could not be checked for uncommitted work (${submoduleError}); anything uncommitted inside one is lost if you remove the worktree.`
     : "";
-  let ms;
+  let subtitle;
   if (commits === null)
-    ms = co.hookBased
-      ? `${$r ? `You have ${Yr}. These will be lost${""} if you remove the worktree. ` : ""}A WorktreeCreate hook made this worktree, so Claude Code can't tell whether it has unpushed commits.${Bo ? ` This session was named "${Bo}". Keep the worktree to resume it later.` : ""}`
-      : `${$r ? `You have ${Yr}, and the ` : "The "}branch ${branchName}${Dt.head === "detached" ? " or the detached HEAD" : ""} may hold ${co.originalHeadCommit ? "commits that could not be counted" : "unpushed commits (commit baseline unavailable)"}. The branch will be deleted${""} if you remove.`;
-  else if ($r && Er)
-    ms = `You have ${Yr} and ${commits} ${commits === 1 ? "commit" : "commits"} ${fr}. All will be lost${""} if you remove.`;
-  else if ($r) ms = `You have ${Yr}. These will be lost${""} if you remove the worktree.`;
-  else if (Er)
-    ms = `You have ${commits} ${commits === 1 ? "commit" : "commits"} ${fr}. ${Dt.head === "detached" ? (commits === 1 ? "It may be lost" : "They may be lost") : `${Wn && branchName ? `Branch ${branchName}` : "The branch"} will be deleted`}${""} if you remove the worktree.`;
-  else if (Bo)
-    ms = `This session was named "${Bo}".${false ? "" : " Keep the worktree to resume it later, or remove it to clean up."}`;
-  else ms = "You are working in a worktree. Keep it to continue working there, or remove it to clean up.";
-  ms = ms + Vr;
-  if (Zn !== null) ms = ms + ` The worktree is now on ${Zn}, which is kept either way.`;
-  let Xs;
-  if ($[36] !== Ur || $[37] !== onCancel) {
-    Xs = function Ls() {
+    subtitle = session.hookBased
+      ? `${hasUncommitted ? `You have ${changesLabel}. These will be lost${""} if you remove the worktree. ` : ""}A WorktreeCreate hook made this worktree, so Claude Code can't tell whether it has unpushed commits.${sessionTitle_ ? ` This session was named "${sessionTitle_}". Keep the worktree to resume it later.` : ""}`
+      : `${hasUncommitted ? `You have ${changesLabel}, and the ` : "The "}branch ${branchName}${atStake.head === "detached" ? " or the detached HEAD" : ""} may hold ${session.originalHeadCommit ? "commits that could not be counted" : "unpushed commits (commit baseline unavailable)"}. The branch will be deleted${""} if you remove.`;
+  else if (hasUncommitted && mayLoseCommits)
+    subtitle = `You have ${changesLabel} and ${commits} ${commits === 1 ? "commit" : "commits"} ${whereCommitsText_}. All will be lost${""} if you remove.`;
+  else if (hasUncommitted)
+    subtitle = `You have ${changesLabel}. These will be lost${""} if you remove the worktree.`;
+  else if (mayLoseCommits)
+    subtitle = `You have ${commits} ${commits === 1 ? "commit" : "commits"} ${whereCommitsText_}. ${atStake.head === "detached" ? (commits === 1 ? "It may be lost" : "They may be lost") : `${isOnAnotherBranch && branchName ? `Branch ${branchName}` : "The branch"} will be deleted`}${""} if you remove the worktree.`;
+  else if (sessionTitle_)
+    subtitle = `This session was named "${sessionTitle_}".${false ? "" : " Keep the worktree to resume it later, or remove it to clean up."}`;
+  else
+    subtitle = "You are working in a worktree. Keep it to continue working there, or remove it to clean up.";
+  subtitle = subtitle + submoduleWarning;
+  if (currentBranchRef_ !== null)
+    subtitle = subtitle + ` The worktree is now on ${currentBranchRef_}, which is kept either way.`;
+  let handleCancel;
+  if ($[36] !== handleChoice_ || $[37] !== onCancel) {
+    handleCancel = function onCancel_() {
       if (onCancel) {
         onCancel();
         return;
       }
-      Ur("keep");
+      handleChoice_("keep");
     };
-    $[36] = Ur;
+    $[36] = handleChoice_;
     $[37] = onCancel;
-    $[38] = Xs;
-  } else Xs = $[38];
-  let onCancel_2 = Xs;
-  let is = co.hookBased && commits === null && !$r && kt === null;
+    $[38] = handleCancel;
+  } else handleCancel = $[38];
+  let onCancel_2 = handleCancel;
+  let onlyUnpushedCommits =
+    session.hookBased && commits === null && !hasUncommitted && submoduleError === null;
   let description =
-    $r || Er || kt !== null
-      ? Wn && !Er
+    hasUncommitted || mayLoseCommits || submoduleError !== null
+      ? isOnAnotherBranch && !mayLoseCommits
         ? "All uncommitted changes will be lost."
-        : is
+        : onlyUnpushedCommits
           ? "Any unpushed commits in the worktree may be lost."
-          : Wn
-            ? `${$r ? `Uncommitted changes and ${commits === null ? "any " : ""}commits` : commits === null ? "Any commits" : "Commits"} only on ${branchName} will be lost.`
+          : isOnAnotherBranch
+            ? `${hasUncommitted ? `Uncommitted changes and ${commits === null ? "any " : ""}commits` : commits === null ? "Any commits" : "Commits"} only on ${branchName} will be lost.`
             : "All changes and commits will be lost."
       : "Clean up the worktree directory.";
-  let hasTmuxSession = Boolean(co.tmuxSessionName);
-  let Oi;
+  let hasTmuxSession = Boolean(session.tmuxSessionName);
+  let options;
   if (
     $[39] !== hasTmuxSession ||
     $[40] !== description ||
-    $[41] !== co.tmuxSessionName ||
-    $[42] !== co.worktreePath
+    $[41] !== session.tmuxSessionName ||
+    $[42] !== session.worktreePath
   ) {
-    Oi = hasTmuxSession
+    options = hasTmuxSession
       ? [
           {
             label: "Keep worktree and tmux session",
             value: "keep-with-tmux",
-            description: `${false ? "" : `Stays at ${co.worktreePath}. `}Reattach with: tmux attach -t ${co.tmuxSessionName}`,
+            description: `${false ? "" : `Stays at ${session.worktreePath}. `}Reattach with: tmux attach -t ${session.tmuxSessionName}`,
           },
           {
             label: "Keep worktree, end tmux session",
             value: "keep-kill-tmux",
-            description: false ? undefined : `Keeps worktree at ${co.worktreePath}, terminates tmux session.`,
+            description: false
+              ? undefined
+              : `Keeps worktree at ${session.worktreePath}, terminates tmux session.`,
           },
           {
             label: "Remove worktree and tmux session",
@@ -757,7 +794,7 @@ function WorktreeExitDialog(props) {
           {
             label: "Keep worktree",
             value: "keep",
-            description: false ? undefined : `Stays at ${co.worktreePath}`,
+            description: false ? undefined : `Stays at ${session.worktreePath}`,
           },
           {
             label: "Remove worktree",
@@ -767,58 +804,58 @@ function WorktreeExitDialog(props) {
         ];
     $[39] = hasTmuxSession;
     $[40] = description;
-    $[41] = co.tmuxSessionName;
-    $[42] = co.worktreePath;
-    $[43] = Oi;
-  } else Oi = $[43];
-  let options = Oi;
+    $[41] = session.tmuxSessionName;
+    $[42] = session.worktreePath;
+    $[43] = options;
+  } else options = $[43];
+  let options_2 = options;
   let defaultFocusValue = hasTmuxSession ? "keep-with-tmux" : "keep";
-  let subtitle;
-  if ($[44] !== ms) {
-    subtitle = ms.trimStart();
-    $[44] = ms;
-    $[45] = subtitle;
-  } else subtitle = $[45];
-  let qn;
-  if ($[46] !== co.worktreePath) {
-    qn =
+  let subtitle_2;
+  if ($[44] !== subtitle) {
+    subtitle_2 = subtitle.trimStart();
+    $[44] = subtitle;
+    $[45] = subtitle_2;
+  } else subtitle_2 = $[45];
+  let pathElement;
+  if ($[46] !== session.worktreePath) {
+    pathElement =
       false &&
       jsxProd_default(Box, {
         paddingLeft: 2,
         children: jsxProd_default(Text, {
-          children: co.worktreePath,
+          children: session.worktreePath,
         }),
       });
-    $[46] = co.worktreePath;
-    $[47] = qn;
-  } else qn = $[47];
-  let ps;
-  if ($[48] !== defaultFocusValue || $[49] !== Ur || $[50] !== options) {
-    ps = jsxProd_default(ModelSelector, {
+    $[46] = session.worktreePath;
+    $[47] = pathElement;
+  } else pathElement = $[47];
+  let selectorElement;
+  if ($[48] !== defaultFocusValue || $[49] !== handleChoice_ || $[50] !== options_2) {
+    selectorElement = jsxProd_default(ModelSelector, {
       defaultFocusValue,
-      options,
-      onChange: Ur,
+      options: options_2,
+      onChange: handleChoice_,
     });
     $[48] = defaultFocusValue;
-    $[49] = Ur;
-    $[50] = options;
-    $[51] = ps;
-  } else ps = $[51];
-  let xs;
-  if ($[52] !== onCancel_2 || $[53] !== subtitle || $[54] !== qn || $[55] !== ps) {
-    xs = jsxProd_default_2(Dialog, {
+    $[49] = handleChoice_;
+    $[50] = options_2;
+    $[51] = selectorElement;
+  } else selectorElement = $[51];
+  let dialogElement;
+  if ($[52] !== onCancel_2 || $[53] !== subtitle_2 || $[54] !== pathElement || $[55] !== selectorElement) {
+    dialogElement = jsxProd_default_2(Dialog, {
       title: false ? EMPTY_DIALOG_TITLE : "Exiting worktree session",
-      subtitle,
+      subtitle: subtitle_2,
       onCancel: onCancel_2,
       exitOnCtrlCD: true,
-      children: [qn, ps],
+      children: [pathElement, selectorElement],
     });
     $[52] = onCancel_2;
-    $[53] = subtitle;
-    $[54] = qn;
-    $[55] = ps;
-    $[56] = xs;
-  } else xs = $[56];
-  return xs;
+    $[53] = subtitle_2;
+    $[54] = pathElement;
+    $[55] = selectorElement;
+    $[56] = dialogElement;
+  } else dialogElement = $[56];
+  return dialogElement;
 }
 export { WorktreeExitDialog };

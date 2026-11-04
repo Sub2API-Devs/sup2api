@@ -2,26 +2,21 @@
  * @anthropic-ai/vertex-sdk/client.js
  * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
  * third-party: @anthropic-ai/vertex-sdk@0.19.3..0.20.4
- * pieces: chunk-xa96axyz.js (2)
+ * pieces: chunk-xa96axyz.js (1)
  * attribution: esm-fingerprint 2
  */
 import { BaseAnthropic } from "../sdk/client.mjs";
 import { readEnv_4 } from "../bedrock-sdk/internal/utils/env.mjs";
-import { makeMessagesResource, makeBetaResource } from "./client.mjs";
+import {
+  _AnthropicVertex_instances,
+  makeMessagesResource,
+  makeBetaResource,
+  __classPrivateFieldGet,
+  _AnthropicVertex_adaptRequest,
+} from "./client.mjs";
 import { import_google_auth_library } from "../bedrock-sdk/internal/errors.mjs";
 import { VERSION } from "../sdk/version.mjs";
 
-//@ chunk-xa96axyz.js:2219-2594 esm-fingerprint
-var __classPrivateFieldGet = function (receiver, state, kind, f) {
-  if (kind === "a" && !f) throw TypeError("Private accessor was defined without a getter");
-  if (typeof state === "function" ? receiver !== state || !f : !state.has(receiver))
-    throw TypeError("Cannot read private member from an object whose class did not declare it");
-  return kind === "m" ? f : kind === "a" ? f.call(receiver) : f ? f.value : state.get(receiver);
-};
-var _AnthropicVertex_instances;
-var _AnthropicVertex_adaptRequest;
-var DEFAULT_VERSION = "vertex-2023-10-16";
-var MODEL_ENDPOINTS = new Set(["/v1/messages", "/v1/messages?beta=true"]);
 //@ chunk-xa96axyz.js:2594-3944 esm-fingerprint
 class AnthropicVertex extends BaseAnthropic {
   constructor({
@@ -96,4 +91,4 @@ class AnthropicVertex extends BaseAnthropic {
     ];
   }
 }
-export { _AnthropicVertex_instances, _AnthropicVertex_adaptRequest, DEFAULT_VERSION, MODEL_ENDPOINTS };
+export { AnthropicVertex };

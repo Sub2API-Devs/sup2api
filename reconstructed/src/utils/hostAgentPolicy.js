@@ -11,6 +11,7 @@
 import { AsyncLocalStorage } from "async_hooks";
 import { HostScoped } from "./hostScoped.js";
 import { getRootSession } from "../bootstrap/state.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-5xbkq5z7.js:309-2187 placement
 /**
@@ -76,8 +77,8 @@ class HostAgentPolicy {
   disableBackgroundTasks() {
     this.#e = true;
   }
-  setBackgroundShellsKeptElsewhere(e) {
-    this.#c = e;
+  setBackgroundShellsKeptElsewhere(enabled) {
+    this.#c = enabled;
   }
   disableBackgroundAgentLaunch() {
     this.#s = true;
@@ -85,18 +86,18 @@ class HostAgentPolicy {
   disableRemoteAgentIsolation() {
     this.#r = true;
   }
-  installBackgroundLaunchRule(e) {
+  installBackgroundLaunchRule(rule) {
     if (!this.#e) throw Error("A background launch rule needs background tasks disabled first");
-    if (typeof e.parameterDescription !== "string")
+    if (typeof rule.parameterDescription !== "string")
       throw Error("A background launch rule needs parameterDescription to be a string");
     if (this.#n !== undefined) throw Error("A background launch rule is already installed");
-    let n = e.admitsMoves === true;
-    if (n && typeof e.admitMove !== "function")
+    let admitsMoves = rule.admitsMoves === true;
+    if (admitsMoves && typeof rule.admitMove !== "function")
       throw Error("A background launch rule that admits moves needs admitMove to be a function");
-    let t = e.launchesByDefault === true;
-    this.#n = e;
-    this.#g = t;
-    this.#b = n;
+    let launchesByDefault = rule.launchesByDefault === true;
+    this.#n = rule;
+    this.#g = launchesByDefault;
+    this.#b = admitsMoves;
   }
   disableBackgroundDeadline() {
     this.#i = true;
@@ -113,20 +114,23 @@ class HostAgentPolicy {
   disableForkSubagent() {
     this.#l = true;
   }
-  installStoppedByPerson(e) {
+  installStoppedByPerson(question) {
     if (this.#o !== undefined) throw Error("A stoppedByPerson question is already installed");
-    this.#o = e;
+    this.#o = question;
   }
-  installSubagentSends(e) {
+  installSubagentSends(sends) {
     if (this.#t !== undefined) throw Error("SubagentSends is already installed");
-    this.#t = e;
+    this.#t = sends;
   }
 }
 //@ chunk-5xbkq5z7.js:2187-2212 placement
 /**
  * 按宿主缓存 HostAgentPolicy 实例。
  */
-var hostAgentPolicies = new HostScoped(() => new HostAgentPolicy());
+var hostAgentPolicies; // deferred: uses HostAgentPolicy of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-5xbkq5z7.js:2187", () => {
+  hostAgentPolicies = new HostScoped(() => new HostAgentPolicy());
+});
 //@ chunk-5xbkq5z7.js:2212-2262 placement = getAgentContext (1)
 /**
  * 取当前（ALS 覆盖的或宿主默认的）HostAgentPolicy。
@@ -135,7 +139,10 @@ function getHostAgentPolicy() {
   return hostAgentPolicyStorage.getStore() ?? hostAgentPolicies.of(getRootSession().host);
 }
 //@ chunk-5xbkq5z7.js:2262-2274 placement
-var hostAgentPolicyStorage = new AsyncLocalStorage();
+var hostAgentPolicyStorage; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-5xbkq5z7.js:2262", () => {
+  hostAgentPolicyStorage = new AsyncLocalStorage();
+});
 //@ chunk-5xbkq5z7.js:2274-2310 placement
 /**
  * 在指定的 HostAgentPolicy 下运行函数。

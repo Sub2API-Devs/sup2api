@@ -30,7 +30,7 @@ var FAST_MODE_OVERAGE_REJECTED = "fast-mode-overage-rejected";
 var FAST_MODE_FALLBACK_MODEL_REJECTED = "fast-mode-fallback-model-rejected";
 var fastModeOrgChangedNoticeSpec = {
   id: "fast-mode-org-changed",
-  deps: (h) => [h.addNotification, h.fastMode, h.store],
+  deps: (noticeState) => [noticeState.addNotification, noticeState.fastMode, noticeState.store],
   setup: () => onOrgFastModeChangeNotice,
 };
 //@ chunk-18hwfzwa.js:1759822-1760212 file-local
@@ -52,8 +52,8 @@ function onOrgFastModeChangeNotice({ addNotification, fastMode, store }) {
     else if (fastMode && isOrgFastModeDisabledByServer()) {
       let fastModeUnavailableMessage = getFastModeUnavailableMessage();
       if (fastModeUnavailableMessage === null) return;
-      store.setState((ke) => ({
-        ...ke,
+      store.setState((state) => ({
+        ...state,
         fastMode: false,
       }));
       addNotification({
@@ -69,7 +69,7 @@ function onOrgFastModeChangeNotice({ addNotification, fastMode, store }) {
 //@ chunk-18hwfzwa.js:1760212-1760306 fingerprint = OVERAGE_REJECTED_KEY (0.581)
 var OVERAGE_REJECTED_KEY = {
   id: "fast-mode-overage-rejected",
-  deps: (h) => [h.addNotification, h.store],
+  deps: (noticeState) => [noticeState.addNotification, noticeState.store],
   setup: () => onFastModeOverageRejectedNotice,
 };
 //@ chunk-18hwfzwa.js:1760306-1760507 file-local
@@ -77,8 +77,8 @@ function onFastModeOverageRejectedNotice({ addNotification, store }) {
   if (getIsRemoteMode()) return;
   if (!isFastModeEnabled()) return;
   return onFastModeOverageRejection((message) => {
-    store.setState((L) => ({
-      ...L,
+    store.setState((state) => ({
+      ...state,
       fastMode: false,
     }));
     addNotification({
@@ -93,27 +93,27 @@ function onFastModeOverageRejectedNotice({ addNotification, store }) {
 //@ chunk-18hwfzwa.js:1760507-1760600 layout
 var fastModeFallbackRejectedNoticeSpec = {
   id: "fast-mode-fallback-model-rejected",
-  deps: (h) => [h.addNotification],
+  deps: (noticeState) => [noticeState.addNotification],
   setup: () => onFallbackFastRejectedNotice,
 };
 //@ chunk-18hwfzwa.js:1760600-1760821 file-last-pair
 function onFallbackFastRejectedNotice({ addNotification }) {
   if (getIsRemoteMode()) return;
   if (!isFastModeEnabled()) return;
-  return onFallbackModelFastRejected((x) => {
+  return onFallbackModelFastRejected((model) => {
     addNotification({
       key: FAST_MODE_FALLBACK_MODEL_REJECTED,
       kind: "warning",
       color: "warning",
       priority: "immediate",
-      text: `Using standard speed on ${renderModelName(x)} \xB7 fast mode wasn't available`,
+      text: `Using standard speed on ${renderModelName(model)} \xB7 fast mode wasn't available`,
     });
   });
 }
 //@ chunk-18hwfzwa.js:1760821-1760910 layout
 var fastModeCooldownNoticeSpec = {
   id: "fast-mode-cooldown",
-  deps: (h) => [h.addNotification, h.fastMode],
+  deps: (noticeState) => [noticeState.addNotification, noticeState.fastMode],
   setup: () => useFastModeNotification,
 };
 //@ chunk-18hwfzwa.js:1760910-1761307 fingerprint = useFastModeNotification (0.722)

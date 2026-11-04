@@ -42,17 +42,20 @@ import { NO_CORE_AT_CHAIN_BOTTOM } from "./eventCatalog.js";
 import { wellFormedLeaves } from "./ui/validateTree.js";
 import { dropSyncedNameClashes } from "../../utils/commandPredicates.js";
 import { isLoneSecDefaultShortcut } from "./modAdmission.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:3696484-3696676 placement
-function describeCommandForPlugin(e) {
-  let n = e.type === "prompt";
-  let r = pluginCommandRegistry.ownerOf(e.name) ?? (n ? e.pluginInfo?.pluginManifest.name : undefined);
+function describeCommandForPlugin(command) {
+  let isPrompt = command.type === "prompt";
+  let owner =
+    pluginCommandRegistry.ownerOf(command.name) ??
+    (isPrompt ? command.pluginInfo?.pluginManifest.name : undefined);
   return {
-    name: getCommandName_2(e),
-    description: e.description,
-    source: getCommandOriginKind(e),
-    ...(r !== undefined && {
-      plugin: r,
+    name: getCommandName_2(command),
+    description: command.description,
+    source: getCommandOriginKind(command),
+    ...(owner !== undefined && {
+      plugin: owner,
     }),
   };
 }
@@ -83,41 +86,44 @@ function refreshCommands() {
 /**
  * 插件 $.command.register：注册斜杠命令，名字已被占用时拒绝。
  */
-async function commandRegisterForPlugin(e, plugin) {
-  let r = requireBoundSession(plugin, "$.command.register");
-  let s = loadedModuleArgs(plugin);
-  let h = s && classifyPluginOrigin(s);
-  let y = pluginCommandRegistry.holderOf(e.name);
-  if (y !== undefined && y !== plugin) {
-    logFeatureBad("plugin_function_hooks_register_command", "name_taken", h);
+async function commandRegisterForPlugin(spec, plugin) {
+  let ctx = requireBoundSession(plugin, "$.command.register");
+  let args = loadedModuleArgs(plugin);
+  let origin = args && classifyPluginOrigin(args);
+  let holder = pluginCommandRegistry.holderOf(spec.name);
+  if (holder !== undefined && holder !== plugin) {
+    logFeatureBad("plugin_function_hooks_register_command", "name_taken", origin);
     throw new HooksError(
-      `${plugin}: $.command.register: "/${e.name}" refused: the plugin ${y} registered it already`,
+      `${plugin}: $.command.register: "/${spec.name}" refused: the plugin ${holder} registered it already`,
     );
   }
-  if (y === plugin && stableStringifySafe(pluginCommandRegistry.specOf(e.name)) === stableStringifySafe(e)) {
-    logForDebugging(`$.command.register (${plugin}): /${e.name} unchanged; not re-registered`);
+  if (
+    holder === plugin &&
+    stableStringifySafe(pluginCommandRegistry.specOf(spec.name)) === stableStringifySafe(spec)
+  ) {
+    logForDebugging(`$.command.register (${plugin}): /${spec.name} unchanged; not re-registered`);
     return {
-      command: e.name,
+      command: spec.name,
     };
   }
-  let L = foldName_2(e.name);
-  let found = [...r.commands(), ...getBuiltinCommands()].find((q) => {
-    let Z = new Set();
-    addCommandSpellings(Z, q);
-    return Z.has(L) && !isPluginLocalCommand_2(q) && isCommandEnabled(q);
+  let folded = foldName_2(spec.name);
+  let command = [...ctx.commands(), ...getBuiltinCommands()].find((command) => {
+    let names = new Set();
+    addCommandSpellings(names, command);
+    return names.has(folded) && !isPluginLocalCommand_2(command) && isCommandEnabled(command);
   });
-  if (y === undefined && found !== undefined) {
-    logFeatureBad("plugin_function_hooks_register_command", "name_taken", h);
+  if (holder === undefined && command !== undefined) {
+    logFeatureBad("plugin_function_hooks_register_command", "name_taken", origin);
     throw new HooksError(
-      `${plugin}: $.command.register: "/${e.name}" refused: it is the ${COMMAND_SOURCE_LABELS[getCommandOriginKind(found)]} /${found.name}`,
+      `${plugin}: $.command.register: "/${spec.name}" refused: it is the ${COMMAND_SOURCE_LABELS[getCommandOriginKind(command)]} /${command.name}`,
     );
   }
-  pluginCommandRegistry.register(plugin, e);
-  logForDebugging(`$.command.register (${plugin}): /${e.name} listed`);
-  logFeatureOk("plugin_function_hooks_register_command", h);
+  pluginCommandRegistry.register(plugin, spec);
+  logForDebugging(`$.command.register (${plugin}): /${spec.name} listed`);
+  logFeatureOk("plugin_function_hooks_register_command", origin);
   refreshCommands();
   return {
-    command: e.name,
+    command: spec.name,
   };
 }
 //@ chunk-e6aww6q8.js:3697750-3698378 placement
@@ -127,73 +133,74 @@ async function commandRegisterForPlugin(e, plugin) {
 function commandRunForPlugin(
   { command, args = "" },
   plugin,
-  s = {
+  opts = {
     origin: [plugin],
   },
 ) {
-  let h = requireBoundSession(plugin, "$.command.run");
+  let engine = requireBoundSession(plugin, "$.command.run");
   if (!(
-    pluginCommandRegistry.ownerOf(command) !== undefined || findCommand(command, h.commands()) !== undefined
+    pluginCommandRegistry.ownerOf(command) !== undefined ||
+    findCommand(command, engine.commands()) !== undefined
   ))
     return Promise.reject(
       new HooksError(`${plugin}: $.command.run: no command named /${command} in this session`),
     );
-  let S = submitHoldRefusal(
+  let result = submitHoldRefusal(
     {
       plugin,
-      ...s,
+      ...opts,
     },
     "$.command.run",
   );
-  if (S !== undefined) return Promise.reject(new HooksError(`${plugin}: $.command.run: ${S}`));
-  let w = args === "" ? `/${command}` : `/${command} ${args}`;
-  logForDebugging(`$.command.run (${plugin}): ${w.length} chars queued`);
-  let L = randomUUID();
-  let G = waitForCommandSettle(L, s.origin);
-  markSubmit(L, s.rootEvent);
-  pruneAndMark(L, s.rootEvent, getCommandQueue());
+  if (result !== undefined) return Promise.reject(new HooksError(`${plugin}: $.command.run: ${result}`));
+  let text = args === "" ? `/${command}` : `/${command} ${args}`;
+  logForDebugging(`$.command.run (${plugin}): ${text.length} chars queued`);
+  let context = randomUUID();
+  let extra = waitForCommandSettle(context, opts.origin);
+  markSubmit(context, opts.rootEvent);
+  pruneAndMark(context, opts.rootEvent, getCommandQueue());
   enqueueCommand({
     agentId: mainAgentId(),
     mode: "prompt",
-    value: w,
-    uuid: L,
+    value: text,
+    uuid: context,
     priority: LATER,
     origin: {
       kind: "plugin",
       name: plugin,
     },
-    queuedUnder: s.origin,
+    queuedUnder: opts.origin,
   });
-  return G;
+  return extra;
 }
 //@ chunk-e6aww6q8.js:3698378-3698416 placement
 /**
  * 清掉缓存的描述
  */
-function forgetCachedDescribe(e) {
-  if (pluginCommandRegistry.forget(e)) refreshCommands();
+function forgetCachedDescribe(name) {
+  if (pluginCommandRegistry.forget(name)) refreshCommands();
 }
 //@ chunk-e6aww6q8.js:3698416-3698571 placement
 /**
  * 按参数内容缓存异步描述结果（失败时清除并回退到同步默认），可整体清空。
  */
-function createDescribeCache(e) {
-  let n = new Map();
+function createDescribeCache(version) {
+  let cache = new Map();
   return {
-    of: (r, s) => {
-      let h = n;
-      let y = stableStringifySafe(r);
-      let S =
-        h.get(y) ??
-        s().catch(() => {
-          h.delete(y);
-          return e(r);
+    of: (command, secondVersion) => {
+      let key = cache;
+      let cached = stableStringifySafe(command);
+      let value =
+        key.get(cached) ??
+        secondVersion().catch(() => {
+          key.delete(cached);
+          return version(command);
         });
-      h.set(y, S);
-      return S;
+      key.set(cached, value);
+      return value;
     },
     forget: () => {
-      n = new Map();
+      cache = new Map();
     },
   };
 }
@@ -206,61 +213,66 @@ var makeDescribeCache = () => createDescribeCache(defaultDescribe);
 /**
  * 命令描述缓存
  */
-var describeCache = makeDescribeCache();
+var describeCache; // deferred: uses makeDescribeCache of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:3698591", () => {
+  describeCache = makeDescribeCache();
+});
 //@ chunk-e6aww6q8.js:3698605-3698758 placement
-var toCommandDescribeItem = (e) => ({
-  command: getCommandName_2(e),
-  description: e.description,
-  argumentHint: e.argumentHint,
-  isHidden: e.isHidden === true,
-  immediate: e.immediate === true,
-  provider: commandProvider(e),
+var toCommandDescribeItem = (command) => ({
+  command: getCommandName_2(command),
+  description: command.description,
+  argumentHint: command.argumentHint,
+  isHidden: command.isHidden === true,
+  immediate: command.immediate === true,
+  provider: commandProvider(command),
 });
 //@ chunk-e6aww6q8.js:3698758-3698914 placement
-async function describeCommandWithHooks(e) {
-  let commandDescribeItem = toCommandDescribeItem(e);
+async function describeCommandWithHooks(command) {
+  let commandMeta = toCommandDescribeItem(command);
   if (
     !hasModuleHookingSite("command.describe", {
-      command: commandDescribeItem.command,
+      command: commandMeta.command,
     })
   )
-    return e;
+    return command;
   return applyCommandDescription(
-    e,
-    commandDescribeItem,
-    await describeCache.of(commandDescribeItem, () =>
-      NO_CORE_AT_CHAIN_BOTTOM("command.describe", {})(commandDescribeItem),
-    ),
+    command,
+    commandMeta,
+    await describeCache.of(commandMeta, () => NO_CORE_AT_CHAIN_BOTTOM("command.describe", {})(commandMeta)),
   );
 }
 //@ chunk-e6aww6q8.js:3698914-3699100 placement
-function describeCommandLocally(e) {
-  let n = {
-    description: e.description,
-    argumentHint: e.argumentHint,
+function describeCommandLocally(command) {
+  let fields = {
+    description: command.description,
+    argumentHint: command.argumentHint,
   };
-  if (wellFormedLeaves(n) === n) return e;
-  let commandDescribeItem = toCommandDescribeItem(e);
+  if (wellFormedLeaves(fields) === fields) return command;
+  let commandDescribeItem = toCommandDescribeItem(command);
   return hasModuleHookingSite("command.describe", {
     command: commandDescribeItem.command,
   })
-    ? applyCommandDescription(e, commandDescribeItem, wellFormedLeaves(defaultDescribe(commandDescribeItem)))
-    : e;
+    ? applyCommandDescription(
+        command,
+        commandDescribeItem,
+        wellFormedLeaves(defaultDescribe(commandDescribeItem)),
+      )
+    : command;
 }
 //@ chunk-e6aww6q8.js:3699100-3699357 placement
-function applyCommandDescription(e, commandDescribeItem, r) {
-  return r.description === commandDescribeItem.description &&
-    r.argumentHint === commandDescribeItem.argumentHint &&
-    r.isHidden === commandDescribeItem.isHidden
-    ? e
+function applyCommandDescription(command, commandMeta, described) {
+  return described.description === commandMeta.description &&
+    described.argumentHint === commandMeta.argumentHint &&
+    described.isHidden === commandMeta.isHidden
+    ? command
     : {
-        ...e,
-        description: r.description,
-        ...(r.description !== commandDescribeItem.description && {
+        ...command,
+        description: described.description,
+        ...(described.description !== commandMeta.description && {
           menuDescription: undefined,
         }),
-        argumentHint: r.argumentHint,
-        isHidden: r.isHidden,
+        argumentHint: described.argumentHint,
+        isHidden: described.isHidden,
       };
 }
 //@ chunk-e6aww6q8.js:3699357-3699389 placement
@@ -273,13 +285,14 @@ var hookedCommands = () => pluginCommandRegistry.list().map(pluginCommandToComma
  * 命令集钩子器：把插件注册的命令并入命令列表，并在有 command.describe 钩子时改写描述。
  */
 var COMMAND_SET_HOOKER = {
-  hooked: async (e) => {
-    let n = hookedCommands();
-    let r = n.length === 0 ? e : [...dropSyncedNameClashes(e, n), ...n];
-    if (!hasModuleHookingSite("command.describe")) return r;
-    if (!isLoneSecDefaultShortcut("command.describe")) return Promise.all(r.map(describeCommandWithHooks));
-    let mapped = r.map(describeCommandLocally);
-    return mapped.every((h, y) => h === r[y]) ? r : mapped;
+  hooked: async (args) => {
+    let hooked = hookedCommands();
+    let missing = hooked.length === 0 ? args : [...dropSyncedNameClashes(args, hooked), ...hooked];
+    if (!hasModuleHookingSite("command.describe")) return missing;
+    if (!isLoneSecDefaultShortcut("command.describe"))
+      return Promise.all(missing.map(describeCommandWithHooks));
+    let mapped = missing.map(describeCommandLocally);
+    return mapped.every((item, index) => item === missing[index]) ? missing : mapped;
   },
   isHooked: () => pluginCommandRegistry.list().length > 0 || hasModuleHookingSite("command.describe"),
 };
@@ -289,7 +302,10 @@ var COMMAND_SET_HOOKER = {
  */
 var installCommandSetHooker = () => setCommandSetHooker(COMMAND_SET_HOOKER);
 //@ chunk-e6aww6q8.js:3699692-3699698 placement
-installCommandSetHooker();
+// deferred: uses installCommandSetHooker of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:3699692", () => {
+  installCommandSetHooker();
+});
 //@ chunk-e6aww6q8.js:3699698-3699758 placement
 /**
  * 钩子释放时清缓存
@@ -302,12 +318,12 @@ function onHookReleased(turnHeld) {
 /**
  * 释放所有等待指定被调插件的调用（以 undefined 结算）。
  */
-var releaseWaitingCalls = (sentCalls, n) =>
+var releaseWaitingCalls = (sentCalls, callee) =>
   [...sentCalls]
-    .filter((r) => r.asked.callee === n)
-    .forEach((r) => {
-      sentCalls.delete(r);
-      r.waited.resolve(undefined);
+    .filter((call) => call.asked.callee === callee)
+    .forEach((call) => {
+      sentCalls.delete(call);
+      call.waited.resolve(undefined);
     });
 export {
   releaseWaitingCalls,

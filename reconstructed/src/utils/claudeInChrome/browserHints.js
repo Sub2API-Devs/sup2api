@@ -16,54 +16,54 @@ import { releaseBrowserSelection } from "./chromeMcpServer.js";
 /**
  * 记录 Claude in Chrome 桥给出的浏览器提示（首选设备、本机设备 id、主机平台），会话内已选的浏览器优先于重发的提示。
  */
-function setChromeBrowserHints(e) {
-  let r = claudeInChromeSession();
-  let lastSentPreferredDeviceId = r.lastSentPreferredDeviceId;
-  let i =
-    r.browserHints !== undefined &&
-    r.browserHints.preferredDeviceId === undefined &&
+function setChromeBrowserHints(hints) {
+  let session = claudeInChromeSession();
+  let lastSentPreferredDeviceId = session.lastSentPreferredDeviceId;
+  let isResend =
+    session.browserHints !== undefined &&
+    session.browserHints.preferredDeviceId === undefined &&
     lastSentPreferredDeviceId !== undefined &&
-    e.preferredDeviceId === lastSentPreferredDeviceId;
-  r.lastSentPreferredDeviceId = e.preferredDeviceId;
-  r.browserHints =
-    e.preferredDeviceId === undefined && e.localDeviceIds.length === 0
+    hints.preferredDeviceId === lastSentPreferredDeviceId;
+  session.lastSentPreferredDeviceId = hints.preferredDeviceId;
+  session.browserHints =
+    hints.preferredDeviceId === undefined && hints.localDeviceIds.length === 0
       ? undefined
-      : i
+      : isResend
         ? {
-            ...e,
+            ...hints,
             preferredDeviceId: undefined,
           }
-        : e;
+        : hints;
   logForDebugging(
-    `[Claude in Chrome] browser hints: preferred=${e.preferredDeviceId?.slice(0, 8) ?? "none"} local=${e.localDeviceIds.length}${i ? " (re-send; in-session pick stands)" : ""}`,
+    `[Claude in Chrome] browser hints: preferred=${hints.preferredDeviceId?.slice(0, 8) ?? "none"} local=${hints.localDeviceIds.length}${isResend ? " (re-send; in-session pick stands)" : ""}`,
   );
-  let bridgeBinding = r.bridgeBinding;
+  let bridgeBinding = session.bridgeBinding;
   if (
     bridgeBinding &&
-    e.preferredDeviceId !== undefined &&
-    e.preferredDeviceId !== lastSentPreferredDeviceId &&
-    bridgeBinding.socketClient.getSelectedDeviceId?.() !== e.preferredDeviceId
+    hints.preferredDeviceId !== undefined &&
+    hints.preferredDeviceId !== lastSentPreferredDeviceId &&
+    bridgeBinding.socketClient.getSelectedDeviceId?.() !== hints.preferredDeviceId
   )
     releaseBrowserSelection(bridgeBinding.socketClient);
 }
 //@ chunk-09jqgwgm.js:959-1118 placement
 function supersedeHintedPreferredDeviceId(deviceId) {
-  let r = claudeInChromeSession();
-  let browserHints = r.browserHints;
+  let session = claudeInChromeSession();
+  let browserHints = session.browserHints;
   if (
     !browserHints ||
     browserHints.preferredDeviceId === undefined ||
     browserHints.preferredDeviceId === deviceId
   )
     return;
-  r.browserHints = {
+  session.browserHints = {
     ...browserHints,
     preferredDeviceId: undefined,
   };
 }
 //@ chunk-09jqgwgm.js:1118-1183 placement
-function hintedPreferredDeviceId(e) {
-  return claudeInChromeSession().browserHints?.preferredDeviceId ?? e();
+function hintedPreferredDeviceId(fallbackDeviceId) {
+  return claudeInChromeSession().browserHints?.preferredDeviceId ?? fallbackDeviceId();
 }
 //@ chunk-09jqgwgm.js:1183-1289 placement
 function hintedLocalDeviceIds() {
@@ -80,4 +80,5 @@ export {
   hintedPreferredDeviceId,
   hintedLocalDeviceIds,
   hintedHostPlatform,
+  setChromeBrowserHints,
 };

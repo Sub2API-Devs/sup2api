@@ -8,8 +8,8 @@
  * pieces: chunk-18hwfzwa.js (1)
  * attribution: fingerprint 1
  */
-import { w } from "../../../vendor/react/compiler-runtime.js";
-import { y, R, P } from "../../../vendor/react/cjs/react.production.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
+import { useState, useRef, useEffect } from "../../../vendor/react/cjs/react.production.js";
 import { useClock } from "../../ink/components/ClockContext.js";
 import { useShortcutDisplay as useShortcutDisplay_2 } from "../../keybindings/useShortcutDisplay.js";
 import { SandboxManager } from "../../utils/sandbox/sandbox-adapter.js";
@@ -21,15 +21,15 @@ import { Box, Text } from "../../ink/components/Text.js";
 
 //@ chunk-18hwfzwa.js:786752-787614 fingerprint = SandboxPromptFooterHint (0.808)
 function SandboxPromptFooterHint() {
-  let $ = w(7);
-  let [recentViolationCount, setRecentViolationCount] = y(0);
-  let timerRef = R(null);
+  let $ = useMemoCache(7);
+  let [recentViolationCount, setRecentViolationCount] = useState(0);
+  let timerRef = useRef(null);
   let clock = useClock();
   let detailsShortcut = useShortcutDisplay_2("app:toggleTranscript", "Global", "ctrl+o");
-  let Re;
+  let checkViolationEffect;
   let t1;
   if ($[0] !== clock) {
-    Re = () => {
+    checkViolationEffect = () => {
       if (!SandboxManager.isSandboxingEnabled()) {
         return;
       }
@@ -52,13 +52,13 @@ function SandboxPromptFooterHint() {
     };
     t1 = [clock];
     $[0] = clock;
-    $[1] = Re;
+    $[1] = checkViolationEffect;
     $[2] = t1;
   } else {
-    Re = $[1];
+    checkViolationEffect = $[1];
     t1 = $[2];
   }
-  P(Re, t1);
+  useEffect(checkViolationEffect, t1);
   if (!SandboxManager.isSandboxingEnabled() || recentViolationCount === 0) {
     return null;
   }

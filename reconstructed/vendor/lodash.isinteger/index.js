@@ -5,10 +5,10 @@
  * pieces: chunk-mrx6y2r5.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../runtime/bun-runtime.js";
+import { __commonJS } from "../../runtime/bun-runtime.js";
 
 //@ chunk-mrx6y2r5.js:13495-14678 cjs-fingerprint
-var require_lodash_isinteger = x(function (cjsExports, cjsModule) {
+var require_lodash_isinteger = __commonJS(function (cjsExports, cjsModule) {
   var INFINITY = 1 / 0;
   var MAX_INTEGER = 179769313486231570000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000;
   var NAN = NaN;

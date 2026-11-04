@@ -23,65 +23,68 @@ import { validateAgentMetadata, describeStorageError } from "../../utils/agentMe
 import { logForDebugging } from "../../utils/debug.js";
 
 //@ chunk-z4g2ta8k.js:5081-6451 placement
-function orphanAgentRestoreNotice(e, n, r, s) {
-  let mapped = e.filter((O) => s?.has(O.task_id)).map((O) => O.task_id);
-  let mapped_2 = e
-    .filter((O) => !s?.has(O.task_id) && (getTaskOutputData(O) || r?.has(O.task_id)))
-    .map((O) => O.task_id);
-  let S = mapped_2.some((O) => r?.has(O))
+function orphanAgentRestoreNotice(recorded, hasTool, alsoResumable, autoResumed) {
+  let mapped = recorded.filter((task) => autoResumed?.has(task.task_id)).map((task) => task.task_id);
+  let mapped_2 = recorded
+    .filter(
+      (task) =>
+        !autoResumed?.has(task.task_id) && (getTaskOutputData(task) || alsoResumable?.has(task.task_id)),
+    )
+    .map((task) => task.task_id);
+  let tailText = mapped_2.some((task) => alsoResumable?.has(task))
     ? ", as the agent type it ran as (if that type is not available right now the resume is refused: try it again, or start the agent again)"
     : ", as a general-purpose agent with the same tools if its saved settings did not survive the restart";
-  let k = "Every other stopped task listed here is lost: do not send a message to its id.";
-  let P =
-    mapped_2.length > 0 && n(SENDMESSAGE)
-      ? `Only these stopped agents can be resumed: ${mapped_2.join(", ")}. To resume one, send a message to its agent id (agent names no longer resolve after a restart) with the ${SENDMESSAGE} tool instead of re-creating it: it continues from its saved transcript${S}. If no transcript is found the resume fails; re-create the agent then. Every other stopped task listed here is lost: do not send a message to its id.`
+  let lostText = "Every other stopped task listed here is lost: do not send a message to its id.";
+  let resumableText =
+    mapped_2.length > 0 && hasTool(SENDMESSAGE)
+      ? `Only these stopped agents can be resumed: ${mapped_2.join(", ")}. To resume one, send a message to its agent id (agent names no longer resolve after a restart) with the ${SENDMESSAGE} tool instead of re-creating it: it continues from its saved transcript${tailText}. If no transcript is found the resume fails; re-create the agent then. Every other stopped task listed here is lost: do not send a message to its id.`
       : "";
   return mapped.length === 0
-    ? P
-    : `These stopped agents are being resumed automatically from their saved transcripts: ${mapped.join(", ")}. Each goes on where it stopped and reports back to you in a notification when it is done, so you need not launch it again.${n(SENDMESSAGE) ? ` If one does not report back, send a message to its agent id with the ${SENDMESSAGE} tool to resume it.` : ""} ${P || "Every other stopped task listed here is lost: do not send a message to its id."}`;
+    ? resumableText
+    : `These stopped agents are being resumed automatically from their saved transcripts: ${mapped.join(", ")}. Each goes on where it stopped and reports back to you in a notification when it is done, so you need not launch it again.${hasTool(SENDMESSAGE) ? ` If one does not report back, send a message to its agent id with the ${SENDMESSAGE} tool to resume it.` : ""} ${resumableText || "Every other stopped task listed here is lost: do not send a message to its id."}`;
 }
 //@ chunk-z4g2ta8k.js:6451-6923 placement
 /**
  * 从任务列表中挑出不在已有列表里的任务，按 task_id 去重并规范化字段（类型、描述、状态、输出文件）。
  */
-function collectOrphanTasks(e, n) {
-  let r = new Map();
-  for (let s of e) {
+function collectOrphanTasks(recorded, live) {
+  let byId = new Map();
+  for (let task of recorded) {
     if (
-      typeof s?.task_id !== "string" ||
-      !s.task_id ||
-      r.has(s.task_id) ||
-      n.some((h) => h.task_id === s.task_id)
+      typeof task?.task_id !== "string" ||
+      !task.task_id ||
+      byId.has(task.task_id) ||
+      live.some((liveTask) => liveTask.task_id === task.task_id)
     )
       continue;
-    r.set(s.task_id, {
-      task_id: s.task_id,
-      task_type: typeof s.task_type === "string" ? s.task_type : "",
-      description: typeof s.description === "string" ? s.description : "",
-      status: (typeof s.status === "string" && s.status) || "unknown",
-      ...(typeof s.output_file === "string" &&
-        s.output_file && {
-          output_file: s.output_file,
+    byId.set(task.task_id, {
+      task_id: task.task_id,
+      task_type: typeof task.task_type === "string" ? task.task_type : "",
+      description: typeof task.description === "string" ? task.description : "",
+      status: (typeof task.status === "string" && task.status) || "unknown",
+      ...(typeof task.output_file === "string" &&
+        task.output_file && {
+          output_file: task.output_file,
         }),
     });
   }
-  return Array.from(r.values());
+  return Array.from(byId.values());
 }
 //@ chunk-z4g2ta8k.js:6923-7300 placement
 /**
  * 把被中断的任务归类为 agent / monitor / shell：本地代理与工作流算 agent；监控类任务由代理拥有时算 agent，环境或观察者所有的忽略；纯 bash 只在允许时算 shell。
  */
-function interruptedTaskKind(e, includeShells) {
-  switch (e.task_type) {
+function interruptedTaskKind(task, includeShells) {
+  switch (task.task_type) {
     case "local_agent":
     case "local_workflow":
       return "agent";
     case "monitor_mcp":
     case "monitor_ws":
     case "local_bash":
-      if (e.ambient === true || e.observer_owned === true) return;
-      if (typeof e.owner_agent_id === "string" && e.owner_agent_id !== "") return "agent";
-      if (e.task_type !== "local_bash" || e.shell_kind === "monitor") return "monitor";
+      if (task.ambient === true || task.observer_owned === true) return;
+      if (typeof task.owner_agent_id === "string" && task.owner_agent_id !== "") return "agent";
+      if (task.task_type !== "local_bash" || task.shell_kind === "monitor") return "monitor";
       return includeShells ? "shell" : undefined;
     default:
       return;
@@ -89,7 +92,7 @@ function interruptedTaskKind(e, includeShells) {
 }
 //@ chunk-z4g2ta8k.js:7300-9091 placement
 function describeInterruptedTasks(
-  e,
+  tasks,
   {
     interruptionKind,
     hasQueuedMainThreadCommand,
@@ -103,41 +106,41 @@ function describeInterruptedTasks(
     lostTimers,
   },
 ) {
-  let x = {
+  let counts = {
     agent: 0,
     monitor: 0,
     shell: 0,
   };
-  let filtered = e.filter((j) => {
-    let ae = interruptedTaskKind(j, includeShells);
-    if (ae === undefined || autoResumed?.has(j.task_id)) return false;
-    x[ae]++;
+  let recorded = tasks.filter((task) => {
+    let kind = interruptedTaskKind(task, includeShells);
+    if (kind === undefined || autoResumed?.has(task.task_id)) return false;
+    counts[kind]++;
     return true;
   });
-  let filtered_2 = e.filter((j) => autoResumed?.has(j.task_id));
+  let filtered = tasks.filter((task) => autoResumed?.has(task.task_id));
   if (
     !enabled ||
-    (filtered.length === 0 && lostTimers.length === 0 && filtered_2.length === 0) ||
+    (recorded.length === 0 && lostTimers.length === 0 && filtered.length === 0) ||
     interruptionKind !== "none" ||
-    (filtered_2.length === 0 && (hasQueuedMainThreadCommand || deferredResumePending)) ||
+    (filtered.length === 0 && (hasQueuedMainThreadCommand || deferredResumePending)) ||
     rescueSuppressed
   )
     return;
-  let joined = filtered
-    .map((j) => `"${escapeXml(j.description || "(no description)")}" (task ${escapeXml(j.task_id)})`)
+  let joined = recorded
+    .map((task) => `"${escapeXml(task.description || "(no description)")}" (task ${escapeXml(task.task_id)})`)
     .join(", ");
-  let q = orphanAgentRestoreNotice(filtered, hasTool, alsoResumable);
-  let z = q
-    ? `None of it will report back on its own. ${q} Re-create anything else`
+  let notice = orphanAgentRestoreNotice(recorded, hasTool, alsoResumable);
+  let lostLine = notice
+    ? `None of it will report back on its own. ${notice} Re-create anything else`
     : "That work is lost \u2014 no result or further notification will arrive for it. Re-create it";
   let joined_2 = lostTimers.map(escapeXml).join("; ");
-  let L = [
-    filtered_2.length > 0 &&
-      `The container running this session was restarted. These background agents are being resumed automatically and will report back: ${filtered_2.map((j) => `"${escapeXml(j.description || "(no description)")}" (task ${escapeXml(j.task_id)})`).join(", ")}.`,
+  let lines = [
     filtered.length > 0 &&
-      `The container running this session was restarted before background work reported back: ${joined}. ${z} if still needed (a long-running server or watcher that nothing is waiting on does not need restarting now), or tell the user what was lost.`,
+      `The container running this session was restarted. These background agents are being resumed automatically and will report back: ${filtered.map((task) => `"${escapeXml(task.description || "(no description)")}" (task ${escapeXml(task.task_id)})`).join(", ")}.`,
+    recorded.length > 0 &&
+      `The container running this session was restarted before background work reported back: ${joined}. ${lostLine} if still needed (a long-running server or watcher that nothing is waiting on does not need restarting now), or tell the user what was lost.`,
     lostTimers.length > 0 &&
-      `${filtered.length > 0 ? "Timers that were pending in that container will not fire either" : "The container running this session was restarted, so these pending timers will not fire"}: ${joined_2}. Schedule each again if still needed (do the work of an overdue one now)${filtered.length > 0 ? "" : ", or tell the user what was lost"}.`,
+      `${recorded.length > 0 ? "Timers that were pending in that container will not fire either" : "The container running this session was restarted, so these pending timers will not fire"}: ${joined_2}. Schedule each again if still needed (do the work of an overdue one now)${recorded.length > 0 ? "" : ", or tell the user what was lost"}.`,
   ];
   return {
     command: {
@@ -152,18 +155,18 @@ function describeInterruptedTasks(
       skipAttachments: true,
       value: formatTaskNotification({
         status: "stopped",
-        summary: L.filter(Boolean).join(" "),
+        summary: lines.filter(Boolean).join(" "),
       }),
     },
-    counts: x,
+    counts,
   };
 }
 //@ chunk-z4g2ta8k.js:9091-9101 placement
 var MAX_RESTORED_AGENTS_LISTED = 50;
 //@ chunk-z4g2ta8k.js:9101-10867 placement
 async function restoreOrphanAgents({ recorded, stopped, toldOfAnyway, readAgentMetadataEvents, storageV5 }) {
-  let y = new Set(stopped.filter(getTaskOutputData).map((S) => S.task_id));
-  rememberResumableAgents(y);
+  let resumable = new Set(stopped.filter(getTaskOutputData).map((task) => task.task_id));
+  rememberResumableAgents(resumable);
   if (!isTurnHandoffResumeEnabled())
     return {
       alsoResumable: new Set(),
@@ -171,45 +174,47 @@ async function restoreOrphanAgents({ recorded, stopped, toldOfAnyway, readAgentM
       toKeep: undefined,
     };
   try {
-    let S = new Map();
-    let k = new Set(toldOfAnyway.map((L) => L.task_id));
-    let P = Array.isArray(recorded) ? recorded : [];
-    for (let L of P.slice(-MAX_RESTORED_AGENTS_LISTED)) {
-      if (!isPlainObject(L) || typeof L.task_id !== "string") continue;
-      let j = normalizeAgentIdOrNull(L.task_id);
-      if (j !== null && !k.has(j)) S.set(j, L.told === true ? "told" : "untold");
+    let marks = new Map();
+    let told = new Set(toldOfAnyway.map((task) => task.task_id));
+    let recordedList = Array.isArray(recorded) ? recorded : [];
+    for (let entry of recordedList.slice(-MAX_RESTORED_AGENTS_LISTED)) {
+      if (!isPlainObject(entry) || typeof entry.task_id !== "string") continue;
+      let agentId = normalizeAgentIdOrNull(entry.task_id);
+      if (agentId !== null && !told.has(agentId)) marks.set(agentId, entry.told === true ? "told" : "untold");
     }
-    for (let L of stopped) {
-      let j = L.task_type === "local_agent" ? normalizeAgentIdOrNull(L.task_id) : null;
-      if (j !== null) S.set(j, "stopped");
+    for (let task of stopped) {
+      let agentId = task.task_type === "local_agent" ? normalizeAgentIdOrNull(task.task_id) : null;
+      if (agentId !== null) marks.set(agentId, "stopped");
     }
-    if (S.size === 0)
+    if (marks.size === 0)
       return {
         alsoResumable: new Set(),
         stillOffered: [],
         toKeep: [],
       };
-    let O = new Set(Array.from(S.keys()).filter((key) => !y.has(key)));
-    rememberStoppedAgents(O);
-    let results = await Promise.all(Array.from(S.keys(), (L) => readAgentMetadataSafe(L, storageV5)));
-    let filtered = Array.from(S.keys()).filter((key, j) => results[j] === null);
-    let U = filtered.length > 0 ? await readAgentMetadataEvents(filtered) : [];
-    if (U === null) logFeatureSad("subagent_sidecar_from_stream", "read_failed");
-    let M = new Map((U ?? []).map((L) => [L.session_agent_id, L.payload]));
+    let stoppedOnly = new Set(Array.from(marks.keys()).filter((key) => !resumable.has(key)));
+    rememberStoppedAgents(stoppedOnly);
+    let results = await Promise.all(
+      Array.from(marks.keys(), (agentId) => readAgentMetadataSafe(agentId, storageV5)),
+    );
+    let filtered = Array.from(marks.keys()).filter((key, index) => results[index] === null);
+    let events = filtered.length > 0 ? await readAgentMetadataEvents(filtered) : [];
+    if (events === null) logFeatureSad("subagent_sidecar_from_stream", "read_failed");
+    let byAgent = new Map((events ?? []).map((event) => [event.session_agent_id, event.payload]));
     let results_2 = await Promise.all(
-      Array.from(S, async ([L, j], ae) => {
-        let de = results[ae] === null ? M.get(L) : undefined;
-        let ne =
-          de === undefined
-            ? results[ae]
-            : (await restoreAgentSidecarFromStream(L, de, storageV5)) === "failed"
+      Array.from(marks, async ([agentId, mark], index) => {
+        let payload = results[index] === null ? byAgent.get(agentId) : undefined;
+        let sidecar =
+          payload === undefined
+            ? results[index]
+            : (await restoreAgentSidecarFromStream(agentId, payload, storageV5)) === "failed"
               ? undefined
-              : await readAgentMetadataSafe(L, storageV5);
-        let launch = ne ? validateAgentMetadata(ne) : undefined;
+              : await readAgentMetadataSafe(agentId, storageV5);
+        let launch = sidecar ? validateAgentMetadata(sidecar) : undefined;
         return {
-          agentId: L,
-          mark: j,
-          sidecar: ne,
+          agentId,
+          mark,
+          sidecar,
           launch,
         };
       }),
@@ -217,27 +222,27 @@ async function restoreOrphanAgents({ recorded, stopped, toldOfAnyway, readAgentM
     let filtered_2 = results_2.filter(
       ({ sidecar, launch }) => sidecar?.launchedWithDefaults === true && isRestorableOrphanAgent(launch),
     );
-    let z = new Set(filtered_2.map((L) => L.agentId));
+    let alsoResumable = new Set(filtered_2.map((entry) => entry.agentId));
     let filtered_3 = results_2.filter(
-      (L) =>
-        y.has(L.agentId) ||
-        z.has(L.agentId) ||
-        L.mark !== "stopped" ||
-        L.sidecar === undefined ||
-        (L.sidecar === null && U === null),
+      (entry) =>
+        resumable.has(entry.agentId) ||
+        alsoResumable.has(entry.agentId) ||
+        entry.mark !== "stopped" ||
+        entry.sidecar === undefined ||
+        (entry.sidecar === null && events === null),
     );
     return {
-      alsoResumable: z,
+      alsoResumable,
       stillOffered: results_2
-        .filter((L) => L.mark === "untold")
-        .map((L) => ({
-          task_id: L.agentId,
+        .filter((entry) => entry.mark === "untold")
+        .map((entry) => ({
+          task_id: entry.agentId,
           task_type: "local_agent",
-          description: L.launch?.description ?? "",
+          description: entry.launch?.description ?? "",
         })),
-      toKeep: filtered_3.slice(-MAX_RESTORED_AGENTS_LISTED).map((L) => ({
-        task_id: L.agentId,
-        ...(L.mark === "told" && {
+      toKeep: filtered_3.slice(-MAX_RESTORED_AGENTS_LISTED).map((entry) => ({
+        task_id: entry.agentId,
+        ...(entry.mark === "told" && {
           told: true,
         }),
       })),
@@ -257,24 +262,24 @@ async function restoreOrphanAgents({ recorded, stopped, toldOfAnyway, readAgentM
 /**
  * 判断子代理是否可被恢复：以默认参数启动且属于可恢复的孤儿代理。
  */
-function isRestorableDefaultLaunchedAgent(e) {
-  return e?.launchedWithDefaults === true && isRestorableOrphanAgent(e);
+function isRestorableDefaultLaunchedAgent(agent) {
+  return agent?.launchedWithDefaults === true && isRestorableOrphanAgent(agent);
 }
 //@ chunk-z4g2ta8k.js:10926-11070 placement
-function isRestorableOrphanAgent(e) {
+function isRestorableOrphanAgent(launch) {
   return (
-    e !== undefined &&
-    e.spawnDepth === 1 &&
-    e.parentAgentId === undefined &&
-    e.spawnedWithWorktree !== true &&
-    e.stoppedByUser !== true &&
-    e.finished !== true
+    launch !== undefined &&
+    launch.spawnDepth === 1 &&
+    launch.parentAgentId === undefined &&
+    launch.spawnedWithWorktree !== true &&
+    launch.stoppedByUser !== true &&
+    launch.finished !== true
   );
 }
 //@ chunk-z4g2ta8k.js:11070-11186 placement
-async function readAgentMetadataSafe(e, storageV5) {
+async function readAgentMetadataSafe(agentId, storageV5) {
   try {
-    return await readAgentMetadata(e, storageV5);
+    return await readAgentMetadata(agentId, storageV5);
   } catch (error) {
     logForDebugging(`[orphanAgentRestore] ${describeStorageError(error)}`, {
       level: "error",

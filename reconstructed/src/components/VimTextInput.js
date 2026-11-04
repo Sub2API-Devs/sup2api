@@ -8,7 +8,14 @@
  * pieces: chunk-ey2qag4x.js (2)
  * attribution: placement 1, fingerprint 1
  */
-import { init_react_production, Q, R, Oo, P, zt } from "../../vendor/react/cjs/react.production.js";
+import {
+  init_react_production,
+  useMemo,
+  useRef,
+  useEffectEvent,
+  useEffect,
+  useLayoutEffect,
+} from "../../vendor/react/cjs/react.production.js";
 import { useTheme } from "./design-system/ThemeProvider.js";
 import { useTerminalFocus } from "../ink/hooks/use-terminal-focus.js";
 import { isNativeCursorEnabled } from "../ink/nativeCursor.js";
@@ -20,17 +27,21 @@ import { color } from "./design-system/color.js";
 import { jsxProd_default } from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Box } from "../ink/components/Text.js";
 import { BaseTextInput } from "./BaseTextInput.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-ey2qag4x.js:23710-23714 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-ey2qag4x.js:23710", () => {
+  init_react_production();
+});
 //@ chunk-ey2qag4x.js:23714-25844 fingerprint = VimTextInput (0.629)
 /**
  * vim 模式输入框：在 TextInput 基础上显示当前 vim 模式（NORMAL/VISUAL/VISUAL LINE）。
  */
 function VimTextInput(props) {
-  let [o] = useTheme();
+  let [theme] = useTheme();
   let terminalFocus = useTerminalFocus();
-  let a = Q(isNativeCursorEnabled, []);
+  let nativeCursorEnabled = useMemo(isNativeCursorEnabled, []);
   let isTerminalFocused = useIsScreenReaderEnabled();
   useTextInputEffects({
     isTerminalFocused: terminalFocus,
@@ -54,11 +65,11 @@ function VimTextInput(props) {
     disableBackslashReturn: props.disableBackslashReturn,
     clearOnSubmit: props.clearOnSubmit,
     disableCtrlCClear: props.disableCtrlCClear,
-    cursorChar: props.showCursor && !a ? " " : "",
+    cursorChar: props.showCursor && !nativeCursorEnabled ? " " : "",
     preserveTrailingWhitespace: isTerminalFocused,
     highlightPastedText: props.highlightPastedText,
-    invert: terminalFocus ? inverseText : (T) => T,
-    themeText: color("text", o),
+    invert: terminalFocus ? inverseText : (text) => text,
+    themeText: color("text", theme),
     columns: props.columns,
     leadingPill: props.leadingPill,
     maxVisibleLines: props.maxVisibleLines,
@@ -79,20 +90,20 @@ function VimTextInput(props) {
     onToggleHelp: props.onToggleHelp,
   });
   let { mode, setMode, cancelPendingRemap, forgetColumn, isCommandPending } = vimInputState;
-  let V = R(false);
-  let x = Oo(setMode);
-  P(() => {
-    let T = !V.current;
-    V.current = true;
+  let didMountRef = useRef(false);
+  let applyMode = useEffectEvent(setMode);
+  useEffect(() => {
+    let isFirstRun = !didMountRef.current;
+    didMountRef.current = true;
     let initialMode =
-      T && (props.initialMode === "VISUAL" || props.initialMode === "VISUAL LINE")
+      isFirstRun && (props.initialMode === "VISUAL" || props.initialMode === "VISUAL LINE")
         ? "NORMAL"
         : props.initialMode;
-    if (initialMode && initialMode !== mode) x(initialMode);
+    if (initialMode && initialMode !== mode) applyMode(initialMode);
   }, [props.initialMode, mode]);
   let { recordInsertRef } = props;
   let { recordInsert } = vimInputState;
-  P(() => {
+  useEffect(() => {
     if (!recordInsertRef) return;
     recordInsertRef.current = recordInsert;
     return () => {
@@ -100,7 +111,7 @@ function VimTextInput(props) {
     };
   }, [recordInsertRef, recordInsert]);
   let { cancelRemapRef } = props;
-  P(() => {
+  useEffect(() => {
     if (!cancelRemapRef) return;
     cancelRemapRef.current = cancelPendingRemap;
     return () => {
@@ -108,7 +119,7 @@ function VimTextInput(props) {
     };
   }, [cancelRemapRef, cancelPendingRemap]);
   let { forgetColumnRef } = props;
-  P(() => {
+  useEffect(() => {
     if (!forgetColumnRef) return;
     forgetColumnRef.current = forgetColumn;
     return () => {
@@ -116,16 +127,16 @@ function VimTextInput(props) {
     };
   }, [forgetColumnRef, forgetColumn]);
   let { onEditingStateChange } = props;
-  let m = props.focus !== false;
-  let W = mode !== "NORMAL" || isCommandPending;
-  zt(() => {
-    if (!onEditingStateChange || !m) return;
+  let isFocused = props.focus !== false;
+  let takesEscape = mode !== "NORMAL" || isCommandPending;
+  useLayoutEffect(() => {
+    if (!onEditingStateChange || !isFocused) return;
     onEditingStateChange({
       mode,
-      takesEscape: W,
+      takesEscape,
     });
     return () => onEditingStateChange(null);
-  }, [onEditingStateChange, m, mode, W]);
+  }, [onEditingStateChange, isFocused, mode, takesEscape]);
   return jsxProd_default(Box, {
     flexDirection: "column",
     children: jsxProd_default(BaseTextInput, {

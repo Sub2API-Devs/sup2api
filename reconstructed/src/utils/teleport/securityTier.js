@@ -12,8 +12,9 @@ import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../services/analytics/gr
 import { isTrustedDeviceActiveForOrg } from "../../bridge/trustedDevice.js";
 import { trustedDeviceHeaders } from "./api.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, _enum, unknown, string } from "../../../vendor/zod/v4/classic/schemas.js";
+import { objectSchema, _enum, unknown, stringSchema } from "../../../vendor/zod/v4/classic/schemas.js";
 import { logFeatureOk, logFeatureSad } from "../../services/analytics/featureTelemetry.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-s61vbvea.js:474352-474421 placement
 /**
@@ -32,11 +33,11 @@ async function planTrustedDeviceProof() {
     return {
       kind: "off",
     };
-  let e = await trustedDeviceHeaders().catch(() => ({}));
-  return Object.keys(e).length > 0
+  let headers = await trustedDeviceHeaders().catch(() => ({}));
+  return Object.keys(headers).length > 0
     ? {
         kind: "ask",
-        proofHeaders: e,
+        proofHeaders: headers,
       }
     : {
         kind: "no_token",
@@ -50,37 +51,43 @@ function isTrustedDeviceProofActive(securityAsk) {
   return securityAsk.kind !== "off";
 }
 //@ chunk-s61vbvea.js:474627-474700 placement
-var securityTierResponseSchema = DoctorLazy(() =>
-  u({
-    session: u({
-      security_tier: _enum(["elevated", "standard"]),
+var securityTierResponseSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-s61vbvea.js:474627", () => {
+  securityTierResponseSchema = DoctorLazy(() =>
+    objectSchema({
+      session: objectSchema({
+        security_tier: _enum(["elevated", "standard"]),
+      }),
     }),
-  }),
-);
+  );
+});
 //@ chunk-s61vbvea.js:474700-474793 placement
 /**
  * 从响应里取 session.security_tier。
  */
-function securityTierOfResponse(e) {
-  let n = securityTierResponseSchema().safeParse(e);
-  return n.success ? n.data.session.security_tier : undefined;
+function securityTierOfResponse(body) {
+  let parsed = securityTierResponseSchema().safeParse(body);
+  return parsed.success ? parsed.data.session.security_tier : undefined;
 }
 //@ chunk-s61vbvea.js:474793-474962 placement
-var securityTierErrorSchema = DoctorLazy(() =>
-  u({
-    error: u({
-      message: unknown().optional(),
-      reason: string().optional().catch(undefined),
-      resource: string().optional().catch(undefined),
-      sub_reason: string().optional().catch(undefined),
+var securityTierErrorSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-s61vbvea.js:474793", () => {
+  securityTierErrorSchema = DoctorLazy(() =>
+    objectSchema({
+      error: objectSchema({
+        message: unknown().optional(),
+        reason: stringSchema().optional().catch(undefined),
+        resource: stringSchema().optional().catch(undefined),
+        sub_reason: stringSchema().optional().catch(undefined),
+      }),
     }),
-  }),
-);
+  );
+});
 //@ chunk-s61vbvea.js:474962-475328 placement
-function requestSecurityTier(e) {
-  let n = securityTierErrorSchema().safeParse(e);
-  if (!n.success) return "refused";
-  let { reason, resource, sub_reason: subReason } = n.data.error;
+function requestSecurityTier(body) {
+  let parsed = securityTierErrorSchema().safeParse(body);
+  if (!parsed.success) return "refused";
+  let { reason, resource, sub_reason: subReason } = parsed.data.error;
   if (reason === "security_tier_request_unsupported") return "unsupported";
   if (subReason !== "security_tier_request") return "refused";
   switch (resource) {
@@ -96,9 +103,9 @@ function requestSecurityTier(e) {
 /**
  * 记录安全等级请求结果。
  */
-function logSecurityTierOutcome(e) {
-  if (e === "honored") logFeatureOk("cloud_elevated_create");
-  else logFeatureSad("cloud_elevated_create", e);
+function logSecurityTierOutcome(outcome) {
+  if (outcome === "honored") logFeatureOk("cloud_elevated_create");
+  else logFeatureSad("cloud_elevated_create", outcome);
 }
 export {
   isSecurityTierEnabled,

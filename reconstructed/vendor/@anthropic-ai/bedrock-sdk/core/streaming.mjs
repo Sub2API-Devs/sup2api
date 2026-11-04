@@ -8,14 +8,14 @@
 import { de_ResponseStream } from "../AWS_restJson1.js";
 import { ReadableStreamToAsyncIterable, ReadableStreamFrom } from "../internal/shims.mjs";
 import { getMinimalSerdeContext, toUtf8, fromUtf8 } from "./streaming.js";
-import { R } from "../AWS_restJson1.mjs";
+import { tryParseJson } from "../AWS_restJson1.mjs";
 import { AnthropicError } from "../../sdk/core/error.mjs";
-import { A } from "../internal/qs/utils.js";
+import { is_buffer } from "../internal/qs/utils.js";
 import { BedrockRuntimeServiceException } from "../../../@aws-sdk/client-bedrock-runtime/dist-cjs/index.js";
 import { isAbortError } from "../internal/errors.mjs";
 
 //@ chunk-h87x8cg3.js:7144-7853 esm-fingerprint
-function G(response) {
+function eventStreamToSSEResponse(response) {
   let body = response.body;
   if (!body) return response;
   async function* sseFrames() {
@@ -24,10 +24,10 @@ function G(response) {
       for await (let event of eventStream)
         if (event.chunk && event.chunk.bytes) {
           let data = toUtf8(event.chunk.bytes);
-          let parsed = R(data);
+          let parsed = tryParseJson(data);
           if (parsed === undefined)
             throw new AnthropicError(`Could not parse a Bedrock chunk into JSON: ${data}`);
-          let eventName = A(parsed) && typeof parsed.type === "string" ? parsed.type : null;
+          let eventName = is_buffer(parsed) && typeof parsed.type === "string" ? parsed.type : null;
           if (eventName != null)
             yield fromUtf8(`event: ${eventName}
 data: ${JSON.stringify(parsed)}
@@ -78,4 +78,4 @@ function frameError(err) {
     };
   return;
 }
-export { G };
+export { eventStreamToSSEResponse };

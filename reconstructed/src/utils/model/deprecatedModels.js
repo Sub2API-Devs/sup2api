@@ -110,7 +110,9 @@ var DEPRECATED_MODEL_FAMILIES = [
     current: "OPUS_ID",
   },
 ];
-var MODEL_FAMILY_BY_ID = new Map(DEPRECATED_MODEL_FAMILIES.flatMap((e) => e.ids.map((id) => [id, e.family])));
+var MODEL_FAMILY_BY_ID = new Map(
+  DEPRECATED_MODEL_FAMILIES.flatMap((familyEntry) => familyEntry.ids.map((id) => [id, familyEntry.family])),
+);
 var FAMILY_LABELS = {
   OPUS_ID: "Opus",
   SONNET_ID: "Sonnet",
@@ -126,17 +128,20 @@ var DEPRECATION_DATE_FORMAT = new Intl.DateTimeFormat("en-US", {
 /**
  * 用 ripgrep 在项目中查找对弃用模型 id 的引用。
  */
-async function grepForDeprecatedModels(e, a, r, o = 1000) {
-  let [f, t] = await Promise.all([realpath(e).catch(() => e), realpath(homedir()).catch(() => homedir())]);
-  if (isSubpathOf(f, t, true))
+async function grepForDeprecatedModels(projectDir, readDenialContext, signal, timeoutMs = 1000) {
+  let [realProjectDir, realHome] = await Promise.all([
+    realpath(projectDir).catch(() => projectDir),
+    realpath(homedir()).catch(() => homedir()),
+  ]);
+  if (isSubpathOf(realProjectDir, realHome, true))
     return {
       families: [],
       timedOut: false,
       cancelled: false,
     };
-  let i = AbortSignal.timeout(o);
-  let s = AbortSignal.any([r, i]);
-  let h = ripGrep_2(
+  let timeoutSignal = AbortSignal.timeout(timeoutMs);
+  let combinedSignal = AbortSignal.any([signal, timeoutSignal]);
+  let scan = ripGrep_2(
     [
       "--no-config",
       "--line-buffered",
@@ -152,64 +157,70 @@ async function grepForDeprecatedModels(e, a, r, o = 1000) {
       "--max-depth",
       "8",
       ...["node_modules", "site-packages", "dist-packages", "vendor", "third_party", "*.lock"].flatMap(
-        (n) => ["-g", `!${n}`],
+        (exclusion) => ["-g", `!${exclusion}`],
       ),
       "-e",
       `[A-Za-z0-9._]*(?:${[...MODEL_FAMILY_BY_ID.keys()].map((key) => key.replaceAll(".", "\\.")).join("|")})[A-Za-z0-9@_-]*`,
     ],
-    e,
-    s,
+    projectDir,
+    combinedSignal,
     {
       rawLines: true,
     },
   );
-  h.catch(() => {});
-  let O =
-    (await withDeadline(h, o * 1.5).catch((error) => {
-      if (s.aborted) return [];
+  scan.catch(() => {});
+  let lines =
+    (await withDeadline(scan, timeoutMs * 1.5).catch((error) => {
+      if (combinedSignal.aborted) return [];
       throw error;
     })) ?? [];
-  let timedOut = i.aborted;
-  let cancelled = r.aborted;
-  let d = new Set();
-  let C = e.endsWith(sep) ? e : `${e}${sep}`;
-  let y = new Map();
-  let g = false;
-  for (let n of O) {
-    let index = n.indexOf("\x00");
-    let k = !g;
-    g = index === -1;
-    if (index === -1 || !k) continue;
-    let sliced = n.slice(0, index);
-    let m = MODEL_FAMILY_BY_ID.get(n.slice(index + 1));
-    if (!sliced.startsWith(C) || m === undefined || d.has(m)) continue;
-    let c = y.get(sliced);
-    if (c === undefined) {
-      c = isAttachmentReadDeniedOrThrown(sliced, a);
-      y.set(sliced, c);
+  let timedOut = timeoutSignal.aborted;
+  let cancelled = signal.aborted;
+  let foundFamilies = new Set();
+  let dirPrefix = projectDir.endsWith(sep) ? projectDir : `${projectDir}${sep}`;
+  let deniedByFile = new Map();
+  let previousIncomplete = false;
+  for (let line of lines) {
+    let index = line.indexOf("\x00");
+    let isNewFile = !previousIncomplete;
+    previousIncomplete = index === -1;
+    if (index === -1 || !isNewFile) continue;
+    let sliced = line.slice(0, index);
+    let family = MODEL_FAMILY_BY_ID.get(line.slice(index + 1));
+    if (!sliced.startsWith(dirPrefix) || family === undefined || foundFamilies.has(family)) continue;
+    let isDenied = deniedByFile.get(sliced);
+    if (isDenied === undefined) {
+      isDenied = isAttachmentReadDeniedOrThrown(sliced, readDenialContext);
+      deniedByFile.set(sliced, isDenied);
     }
-    if (!c) {
-      d.add(m);
-      if (d.size === DEPRECATED_MODEL_FAMILIES.length) break;
+    if (!isDenied) {
+      foundFamilies.add(family);
+      if (foundFamilies.size === DEPRECATED_MODEL_FAMILIES.length) break;
     }
   }
   return {
-    families: [...d].sort(),
+    families: [...foundFamilies].sort(),
     timedOut,
     cancelled,
   };
 }
 //@ chunk-1yv1s0pm.js:14902-16074 placement
-function formatDeprecatedModelsSection(e, a, r, o = new Date().toISOString().slice(0, 10)) {
+function formatDeprecatedModelsSection(
+  families,
+  modelStrings,
+  canMigrate,
+  today = new Date().toISOString().slice(0, 10),
+) {
   return `## Deprecated or Retired Models in This Project
 
 Files in this project name these Claude API models, which are deprecated or retired:
 
-${DEPRECATED_MODEL_FAMILIES.filter((t) => e.includes(t.family)).map((t) => {
-  let i = DEPRECATION_DATE_FORMAT.format(new Date(`${t.date}T00:00:00Z`));
-  return `- ${t.name} (${t.ids.map((id) => `\`${id}\``).join(", ")}): ${t.status === "deprecated" && o <= t.date ? `deprecated; it retires on ${i}` : `retired on ${i}, so Claude API requests to it fail`}. Current ${FAMILY_LABELS[t.current]} model: \`${a[t.current]}\`.`;
+${DEPRECATED_MODEL_FAMILIES.filter((entry) => families.includes(entry.family)).map((entry) => {
+  let retirementText = DEPRECATION_DATE_FORMAT.format(new Date(`${entry.date}T00:00:00Z`));
+  return `- ${entry.name} (${entry.ids.map((id) => `\`${id}\``).join(", ")}): ${entry.status === "deprecated" && today <= entry.date ? `deprecated; it retires on ${retirementText}` : `retired on ${retirementText}, so Claude API requests to it fail`}. Current ${FAMILY_LABELS[entry.current]} model: \`${modelStrings[entry.current]}\`.`;
 }).join(`
 `)}
 
-The first time you read, write, or run code that calls one of these models, tell the user once, briefly, in one short note that covers all of them: each model's status and date${r ? ", the current model, and that `/claude-api migrate` can make the switch" : " and the current model"}. Mentions only in docs, changelogs, tests, or third-party code are not worth raising. Leave model IDs already in the user's code as they are unless the user asks you to change them or to fix errors they cause; new code you write uses current models. These dates are the Claude API's; Amazon Bedrock and Google Cloud set their own schedules.`;
+The first time you read, write, or run code that calls one of these models, tell the user once, briefly, in one short note that covers all of them: each model's status and date${canMigrate ? ", the current model, and that `/claude-api migrate` can make the switch" : " and the current model"}. Mentions only in docs, changelogs, tests, or third-party code are not worth raising. Leave model IDs already in the user's code as they are unless the user asks you to change them or to fix errors they cause; new code you write uses current models. These dates are the Claude API's; Amazon Bedrock and Google Cloud set their own schedules.`;
 }
+export { DEPRECATED_MODEL_FAMILIES, grepForDeprecatedModels, formatDeprecatedModelsSection };

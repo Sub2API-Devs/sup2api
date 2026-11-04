@@ -5,10 +5,10 @@
  * pieces: chunk-edce4vxq.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../../../runtime/bun-runtime.js";
 import { require_cbor } from "../../../../../@smithy/core/dist-cjs/submodules/cbor/index.js";
 import { require_schema } from "../../../../../@smithy/core/dist-cjs/submodules/schema/index.js";
-import { require_client } from "../../../../../@smithy/core/dist-cjs/submodules/client/index.js";
+import { require_client as require_client_3 } from "../../../../../@smithy/core/dist-cjs/submodules/client/index.js";
 import { require_protocols as require_protocols_2 } from "../../../../../@smithy/core/dist-cjs/submodules/protocols/index.js";
 import { require_serde } from "../../../../../@smithy/core/dist-cjs/submodules/serde/index.js";
 import { base64Module } from "../../../../credential-provider-web-identity/dist-cjs/index.js";
@@ -16,10 +16,10 @@ import { require_util_utf8 } from "../../../../../@smithy/util-utf8/dist-cjs/ind
 import { require_xml_builder } from "../../../../xml-builder/dist-cjs/index.js";
 
 //@ chunk-edce4vxq.js:136783-166742 cjs-fingerprint
-var require_protocols = x(function (cjsExports) {
+var require_protocols = __commonJS(function (cjsExports) {
   var cbor = require_cbor();
   var schema = require_schema();
-  var smithyClient = require_client();
+  var smithyClient = require_client_3();
   var protocols = require_protocols_2();
   var serde = require_serde();
   var utilBase64 = base64Module();
@@ -109,14 +109,14 @@ var require_protocols = x(function (cjsExports) {
       if (output !== undefined && queryErrorHeader != null) {
         let [Code, Type] = queryErrorHeader.split(";");
         let entries = Object.entries(output);
-        let c = {
+        let errorShape = {
           Code,
           Type,
         };
-        Object.assign(output, c);
-        for (let [k, v] of entries) c[k] = v;
-        delete c.__type;
-        output.Error = c;
+        Object.assign(output, errorShape);
+        for (let [k, v] of entries) errorShape[k] = v;
+        delete errorShape.__type;
+        output.Error = errorShape;
       }
     }
     queryCompatOutput(queryCompatErrorData, errorData) {
@@ -152,14 +152,14 @@ var require_protocols = x(function (cjsExports) {
       );
       let ns = schema.NormalizedSchema.of(errorSchema);
       let message = dataObject.message ?? dataObject.Message ?? "Unknown";
-      let N = new (schema.TypeRegistry.for(errorSchema[1]).getErrorCtor(errorSchema) ?? Error)(message);
+      let error = new (schema.TypeRegistry.for(errorSchema[1]).getErrorCtor(errorSchema) ?? Error)(message);
       let output = {};
       for (let [name, member] of ns.structIterator())
         output[name] = this.deserializer.readValue(member, dataObject[name]);
       if (this.awsQueryCompatible) this.mixin.queryCompatOutput(dataObject, output);
       throw this.mixin.decorateServiceException(
         Object.assign(
-          N,
+          error,
           errorMetadata,
           {
             $fault: ns.getMergedTraits().error,
@@ -562,7 +562,7 @@ var require_protocols = x(function (cjsExports) {
       );
       let ns = schema.NormalizedSchema.of(errorSchema);
       let message = dataObject.message ?? dataObject.Message ?? "Unknown";
-      let N = new (schema.TypeRegistry.for(errorSchema[1]).getErrorCtor(errorSchema) ?? Error)(message);
+      let error = new (schema.TypeRegistry.for(errorSchema[1]).getErrorCtor(errorSchema) ?? Error)(message);
       let output = {};
       for (let [name, member] of ns.structIterator()) {
         let target = member.getMergedTraits().jsonName ?? name;
@@ -571,7 +571,7 @@ var require_protocols = x(function (cjsExports) {
       if (this.awsQueryCompatible) this.mixin.queryCompatOutput(dataObject, output);
       throw this.mixin.decorateServiceException(
         Object.assign(
-          N,
+          error,
           errorMetadata,
           {
             $fault: ns.getMergedTraits().error,
@@ -685,7 +685,7 @@ var require_protocols = x(function (cjsExports) {
       );
       let ns = schema.NormalizedSchema.of(errorSchema);
       let message = dataObject.message ?? dataObject.Message ?? "Unknown";
-      let N = new (schema.TypeRegistry.for(errorSchema[1]).getErrorCtor(errorSchema) ?? Error)(message);
+      let error = new (schema.TypeRegistry.for(errorSchema[1]).getErrorCtor(errorSchema) ?? Error)(message);
       await this.deserializeHttpMessage(errorSchema, context, response, dataObject);
       let output = {};
       for (let [name, member] of ns.structIterator()) {
@@ -694,7 +694,7 @@ var require_protocols = x(function (cjsExports) {
       }
       throw this.mixin.decorateServiceException(
         Object.assign(
-          N,
+          error,
           errorMetadata,
           {
             $fault: ns.getMergedTraits().error,
@@ -1048,7 +1048,7 @@ var require_protocols = x(function (cjsExports) {
         },
       );
       let ns = schema.NormalizedSchema.of(errorSchema);
-      let b = new (schema.TypeRegistry.for(errorSchema[1]).getErrorCtor(errorSchema) ?? Error)(message);
+      let error = new (schema.TypeRegistry.for(errorSchema[1]).getErrorCtor(errorSchema) ?? Error)(message);
       let output = {
         Error: errorData.Error,
       };
@@ -1059,7 +1059,7 @@ var require_protocols = x(function (cjsExports) {
       }
       throw this.mixin.decorateServiceException(
         Object.assign(
-          b,
+          error,
           errorMetadata,
           {
             $fault: ns.getMergedTraits().error,
@@ -1440,7 +1440,7 @@ var require_protocols = x(function (cjsExports) {
         dataObject.message ??
         dataObject.Message ??
         "Unknown";
-      let N = new (schema.TypeRegistry.for(errorSchema[1]).getErrorCtor(errorSchema) ?? Error)(message);
+      let error = new (schema.TypeRegistry.for(errorSchema[1]).getErrorCtor(errorSchema) ?? Error)(message);
       await this.deserializeHttpMessage(errorSchema, context, response, dataObject);
       let output = {};
       for (let [name, member] of ns.structIterator()) {
@@ -1450,7 +1450,7 @@ var require_protocols = x(function (cjsExports) {
       }
       throw this.mixin.decorateServiceException(
         Object.assign(
-          N,
+          error,
           errorMetadata,
           {
             $fault: ns.getMergedTraits().error,

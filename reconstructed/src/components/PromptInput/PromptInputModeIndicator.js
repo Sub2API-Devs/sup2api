@@ -11,7 +11,7 @@
 import { isAgentSwarmsEnabled } from "../../utils/agentSwarmsEnabled.js";
 import { getTeammateColor } from "../../utils/teammate.js";
 import { AGENT_COLOR_NAMES, AGENT_COLOR_TO_THEME_COLOR } from "../../tools/AgentTool/agentColorManager.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import {
   jsxProd_default,
   Fragment,
@@ -33,7 +33,7 @@ function getTeammateThemeColor() {
 }
 //@ chunk-h93cnm7e.js:888-1201 fingerprint = PromptChar (0.67)
 function PromptChar(props) {
-  let $ = w(6);
+  let $ = useMemoCache(6);
   let { isLoading, isScreenReader, themeColor } = props;
   let color = themeColor ?? undefined;
   let children;
@@ -48,9 +48,9 @@ function PromptChar(props) {
     $[0] = isScreenReader;
     $[1] = children;
   } else children = $[1];
-  let l;
+  let promptProps;
   if ($[2] !== color || $[3] !== isLoading || $[4] !== children) {
-    l = jsxProd_default(Text, {
+    promptProps = jsxProd_default(Text, {
       color,
       dimColor: isLoading,
       children,
@@ -58,16 +58,16 @@ function PromptChar(props) {
     $[2] = color;
     $[3] = isLoading;
     $[4] = children;
-    $[5] = l;
-  } else l = $[5];
-  return l;
+    $[5] = promptProps;
+  } else promptProps = $[5];
+  return promptProps;
 }
 //@ chunk-h93cnm7e.js:1201-1888 fingerprint = PromptInputModeIndicator (0.824)
 /**
  * 输入提示符：prompt 模式 ❯（读屏器下为 $），bash 模式 ! 并用 bashBorder 色；查看队友时用队友颜色并显示名字。
  */
 function PromptInputModeIndicator(props) {
-  let $ = w(10);
+  let $ = useMemoCache(10);
   let { mode, isLoading, viewingAgentName, viewingAgentColor } = props;
   let isScreenReaderEnabled = useIsScreenReaderEnabled();
   useForceRender();
@@ -80,7 +80,7 @@ function PromptInputModeIndicator(props) {
   let viewedTeammateThemeColor = viewingAgentColor
     ? AGENT_COLOR_TO_THEME_COLOR[viewingAgentColor]
     : undefined;
-  const h = !isScreenReaderEnabled || (!viewingAgentName && mode === "bash");
+  const modeValue = !isScreenReaderEnabled || (!viewingAgentName && mode === "bash");
   let children;
   if (
     $[1] !== isLoading ||
@@ -113,20 +113,20 @@ function PromptInputModeIndicator(props) {
     $[5] = viewingAgentName;
     $[6] = children;
   } else children = $[6];
-  let A;
-  if ($[7] !== h || $[8] !== children) {
-    A = jsxProd_default(Box, {
-      "aria-hidden": h,
+  let boxElement;
+  if ($[7] !== modeValue || $[8] !== children) {
+    boxElement = jsxProd_default(Box, {
+      "aria-hidden": modeValue,
       alignItems: "flex-start",
       alignSelf: "flex-start",
       flexWrap: "nowrap",
       justifyContent: "flex-start",
       children,
     });
-    $[7] = h;
+    $[7] = modeValue;
     $[8] = children;
-    $[9] = A;
-  } else A = $[9];
-  return A;
+    $[9] = boxElement;
+  } else boxElement = $[9];
+  return boxElement;
 }
 export { PromptInputModeIndicator };

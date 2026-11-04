@@ -12,12 +12,12 @@ import { join } from "path";
 import { homedir } from "os";
 import { spawn } from "child_process";
 import { readFile } from "fs/promises";
+import { getPlatform } from "../utils/platform.js";
 import { HostScoped } from "../utils/hostScoped.js";
 import { logForDebugging } from "../utils/debug.js";
 import { execFileNoThrow } from "../utils/execFileNoThrow.js";
 import { isAntBuild } from "../utils/envUtils.js";
 import { env } from "../utils/env.js";
-import { getPlatform } from "../utils/platform.js";
 import { cgroupSpawnOptions } from "../utils/toolCgroup.js";
 import { resetLocalSettingsGitTrackedCache, isLocalSettingsGitTracked } from "../utils/config.js";
 import { whichOnPath } from "../utils/which.js";
@@ -26,7 +26,20 @@ import { safeExecFileSync } from "../utils/safeSpawn.js";
 import { SETTINGS_FREEZE_MIN_REFRESH_MS } from "../remote/tools/serve/servedSettingsFreeze.js";
 import { logError } from "../utils/log.js";
 import { toError } from "../utils/errors.js";
+import { deferInit, beginDeferredInits, runDeferredInits } from "../../runtime/deferred-init.js";
 
+// This module is the first evaluated of an import cycle of 2 modules closed by ../remote/tools/serve/servedSettingsFreeze.js;
+// the load-time work of the cycle's statements marked "deferred" waits until the cycle is complete (runtime/deferred-init.js).
+beginDeferredInits("src/remote/tools/serve/servedSettingsFreeze.js");
+//@ chunk-jx4rgw65.js:7408-7501 fingerprint = stopRecording (0.781)
+function killChildWithSignal(signal, child, handle) {
+  if (signal === "SIGTERM" && getPlatform() === "windows") {
+    handle.close();
+    return true;
+  }
+  child.kill(signal);
+  return false;
+}
 //@ chunk-ga5txjrx.js:1161-1244 sole-consumer
 /**
  * 录音程序使用的本地端口与令牌文件路径。
@@ -48,7 +61,10 @@ class VoiceRecorderState {
   nativeRecordingActive = false;
 }
 //@ chunk-ga5txjrx.js:1431-1454 sole-consumer
-var voiceRecorderStates = new HostScoped(() => new VoiceRecorderState());
+var voiceRecorderStates; // deferred: uses VoiceRecorderState of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-ga5txjrx.js:1431", () => {
+  voiceRecorderStates = new HostScoped(() => new VoiceRecorderState());
+});
 //@ chunk-ga5txjrx.js:1454-1473 sole-consumer
 var RECORDING_STARTED = {
   started: true,
@@ -67,7 +83,7 @@ var RECORDING_NOT_STARTED = {
 function loadAudioNapi(napi) {
   napi.audioNapiPromise ??= (async () => {
     let now = Date.now();
-    let mod = await import("./chunk-vztqnp39.js");
+    let mod = await import("./voice/isNativeAudioAvailable.lazy.js");
     mod.isNativeAudioAvailable();
     napi.audioNapi = mod;
     logForDebugging(`[voice] audio-capture-napi loaded in ${Date.now() - now}ms`);
@@ -98,8 +114,8 @@ async function commandExists(cmd) {
 /**
  * 试跑 arecord 150ms 判断能否录音（结果缓存）。
  */
-function probeArecord(e) {
-  e.arecordProbe ??= new Promise((resolve) => {
+function probeArecord(state) {
+  state.arecordProbe ??= new Promise((resolve) => {
     let child = spawn(
       "arecord",
       ["-f", "S16_LE", "-r", String(SAMPLE_RATE), "-c", String(CHANNELS), "-t", "raw", "/dev/null"],
@@ -113,9 +129,9 @@ function probeArecord(e) {
       stderr += chunk.toString();
     });
     let timer = setTimeout(
-      (a, d) => {
-        a.kill("SIGTERM");
-        d({
+      (child, resolve) => {
+        child.kill("SIGTERM");
+        resolve({
           ok: true,
           stderr: "",
         });
@@ -139,7 +155,7 @@ function probeArecord(e) {
       });
     });
   });
-  return e.arecordProbe;
+  return state.arecordProbe;
 }
 //@ chunk-ga5txjrx.js:2376-2553 fingerprint = linuxHasAlsaCards (0.886)
 function linuxHasAlsaCards(napi) {
@@ -178,8 +194,8 @@ async function detectPackageManager() {
   return null;
 }
 //@ chunk-ga5txjrx.js:2931-3313 fingerprint = checkVoiceDependencies (0.721)
-async function checkVoiceDependencies(e) {
-  let napi = voiceRecorderStates.of(e);
+async function checkVoiceDependencies(host) {
+  let napi = voiceRecorderStates.of(host);
   if ((await loadAudioNapi(napi)).isNativeAudioAvailable() && (await linuxHasAlsaCards(napi)))
     return {
       available: true,
@@ -228,7 +244,7 @@ async function requestMicrophonePermission(host) {
 /**
  * 判断能否录音：远程/云环境不可用；原生 napi+ALSA、arecord、SoX rec 依次尝试；WSL 与缺 SoX 时给出具体安装说明。
  */
-async function checkRecordingAvailability(e, o = {}) {
+async function checkRecordingAvailability(host, options = {}) {
   if (isAntBuild() || env.CLAUDE_CODE_REMOTE)
     return {
       available: false,
@@ -236,7 +252,7 @@ async function checkRecordingAvailability(e, o = {}) {
 
 To use voice mode, run Claude Code locally instead.`,
     };
-  let napi = voiceRecorderStates.of(e);
+  let napi = voiceRecorderStates.of(host);
   if ((await loadAudioNapi(napi)).isNativeAudioAvailable() && (await linuxHasAlsaCards(napi)))
     return {
       available: true,
@@ -259,8 +275,8 @@ To use voice mode, run Claude Code locally instead.`,
       };
     logForDebugging(`[voice] arecord probe failed: ${probe.stderr}`);
   }
-  let a = await commandExists("sox");
-  if (a && (await commandExists("rec")))
+  let hasSox = await commandExists("sox");
+  if (hasSox && (await commandExists("rec")))
     return {
       available: true,
       reason: null,
@@ -270,7 +286,7 @@ To use voice mode, run Claude Code locally instead.`,
       available: false,
       reason: wslNoAudioReason,
     };
-  if (!a) {
+  if (!hasSox) {
     let napi = await detectPackageManager();
     return {
       available: false,
@@ -403,24 +419,24 @@ function startArecordRecording(state, onData, onEnd) {
  * 停止录音（原生或子进程 SIGTERM）。
  */
 function stopRecording(host) {
-  let o = voiceRecorderStates.of(host);
-  if (o.nativeRecordingActive && o.audioNapi) {
-    o.audioNapi.stopNativeRecording();
-    o.nativeRecordingActive = false;
+  let state = voiceRecorderStates.of(host);
+  if (state.nativeRecordingActive && state.audioNapi) {
+    state.audioNapi.stopNativeRecording();
+    state.nativeRecordingActive = false;
     return;
   }
-  if (o.activeRecorder) {
-    o.activeRecorder.kill("SIGTERM");
-    o.activeRecorder = null;
+  if (state.activeRecorder) {
+    state.activeRecorder.kill("SIGTERM");
+    state.activeRecorder = null;
   }
 }
 //@ chunk-g4k0hvs5.js:1135-1437 fingerprint = hasCommand (0.375)
 function hasCommand() {
   try {
     resetLocalSettingsGitTrackedCache();
-    let s = whichOnPath("git", env.PATH ?? "");
-    if (s === null || resolveExecutableSafely("git") === null) return false;
-    let result = safeExecFileSync(s, ["--version"], {
+    let gitPath = whichOnPath("git", env.PATH ?? "");
+    if (gitPath === null || resolveExecutableSafely("git") === null) return false;
+    let result = safeExecFileSync(gitPath, ["--version"], {
       reject: false,
       timeout: SETTINGS_FREEZE_MIN_REFRESH_MS,
       cwd: homedir(),
@@ -435,13 +451,16 @@ function hasCommand() {
     return false;
   }
 }
-//@ chunk-jx4rgw65.js:7408-7501 fingerprint = stopRecording (0.781)
-function killChildWithSignal(signal, child, handle) {
-  if (signal === "SIGTERM" && getPlatform() === "windows") {
-    handle.close();
-    return true;
-  }
-  child.kill(signal);
-  return false;
-}
-export { hasCommand, killChildWithSignal };
+
+// The import cycle this module closes (2 modules) is complete: run the load-time work its statements
+// marked "deferred" waited for, in the official build's order (runtime/deferred-init.js).
+runDeferredInits("src/services/voice.js");
+export {
+  hasCommand,
+  killChildWithSignal,
+  checkRecordingAvailability,
+  checkVoiceDependencies,
+  requestMicrophonePermission,
+  startRecording,
+  stopRecording,
+};

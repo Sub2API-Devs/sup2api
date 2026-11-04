@@ -10,32 +10,46 @@
  */
 import { join } from "path";
 import { DoctorLazy } from "../../../cli/handlers/util.js";
-import { u, literal, record, string, E } from "../../../../vendor/zod/v4/classic/schemas.js";
+import {
+  objectSchema,
+  literal,
+  record,
+  stringSchema,
+  numberSchema,
+} from "../../../../vendor/zod/v4/classic/schemas.js";
 import { modelCatalogCacheDir, maskStorage } from "./maskedIds.js";
 import { getProviderState } from "../providerCaches.js";
 import { isENOENT, getErrnoCode } from "../../errors.js";
 import { logForDebugging } from "../../debug.js";
 import { safeParseJSON } from "../../json.js";
 import { jsonStringify } from "../../slowOperations.js";
+import { deferInit } from "../../../../runtime/deferred-init.js";
 
 //@ chunk-0sn6pxb4.js:483-682 placement
-var PUBLISHED_FLOOR_JSON = "published-floor.json";
-var FLOOR_FILE_VERSION = 1;
-var MAX_FLOOR_ENTRIES = 32;
-var MAX_FLOOR_FILE_BYTES = 65536;
-var publishedFloorSchema = DoctorLazy(() =>
-  u({
-    version: literal(FLOOR_FILE_VERSION),
-    sources: record(
-      string().min(1).max(64),
-      u({
-        version: E().int().nonnegative(),
-        issuedAt: string().max(64),
-        recordedAt: E().int().nonnegative(),
-      }),
-    ),
-  }),
-);
+var PUBLISHED_FLOOR_JSON; // deferred: uses DoctorLazy (../../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var FLOOR_FILE_VERSION;
+var MAX_FLOOR_ENTRIES;
+var MAX_FLOOR_FILE_BYTES;
+var publishedFloorSchema;
+deferInit("chunk-0sn6pxb4.js:483", () => {
+  PUBLISHED_FLOOR_JSON = "published-floor.json";
+  FLOOR_FILE_VERSION = 1;
+  MAX_FLOOR_ENTRIES = 32;
+  MAX_FLOOR_FILE_BYTES = 65536;
+  publishedFloorSchema = DoctorLazy(() =>
+    objectSchema({
+      version: literal(FLOOR_FILE_VERSION),
+      sources: record(
+        stringSchema().min(1).max(64),
+        objectSchema({
+          version: numberSchema().int().nonnegative(),
+          issuedAt: stringSchema().max(64),
+          recordedAt: numberSchema().int().nonnegative(),
+        }),
+      ),
+    }),
+  );
+});
 //@ chunk-0sn6pxb4.js:682-714 placement
 function publishedFloorPath() {
   return join(modelCatalogCacheDir(), PUBLISHED_FLOOR_JSON);
@@ -56,13 +70,13 @@ async function publishedFloorVersion(cacheKey) {
 /**
  * 读入已持久化的版本下限后，若该来源的新版本更高则记录（版本、签发时间、记录时间）并排队写回文件。
  */
-async function recordPublishedCatalogFloor(cacheKey, r, recordedAt = Date.now()) {
+async function recordPublishedCatalogFloor(cacheKey, record, recordedAt = Date.now()) {
   await loadPublishedCatalogFloorOnce();
-  let n = publishedCatalogFloorMarks().get(cacheKey);
-  if (n !== undefined && n.version >= r.version) return;
+  let existing = publishedCatalogFloorMarks().get(cacheKey);
+  if (existing !== undefined && existing.version >= record.version) return;
   publishedCatalogFloorMarks().set(cacheKey, {
-    version: r.version,
-    issuedAt: (r.issued_at ?? "").slice(0, 64),
+    version: record.version,
+    issuedAt: (record.issued_at ?? "").slice(0, 64),
     recordedAt,
   });
   await writePublishedCatalogFloorQueued();
@@ -76,9 +90,10 @@ function loadPublishedCatalogFloorOnce() {
 //@ chunk-0sn6pxb4.js:1129-1248 placement
 function mergeCatalogFloors(publishedCatalogFloorFile) {
   if (publishedCatalogFloorFile === undefined) return;
-  for (let [r, i] of publishedCatalogFloorFile) {
-    let n = publishedCatalogFloorMarks().get(r);
-    if (n === undefined || i.version > n.version) publishedCatalogFloorMarks().set(r, i);
+  for (let [cacheKey, mark] of publishedCatalogFloorFile) {
+    let existing = publishedCatalogFloorMarks().get(cacheKey);
+    if (existing === undefined || mark.version > existing.version)
+      publishedCatalogFloorMarks().set(cacheKey, mark);
   }
 }
 //@ chunk-0sn6pxb4.js:1248-1691 placement
@@ -86,9 +101,9 @@ function mergeCatalogFloors(publishedCatalogFloorFile) {
  * 读版本下限文件（过大或无效时忽略并记日志）。
  */
 async function readPublishedCatalogFloorFile() {
-  let e;
+  let text;
   try {
-    e = await maskStorage().readRange(publishedFloorPath(), 0, MAX_FLOOR_FILE_BYTES + 1);
+    text = await maskStorage().readRange(publishedFloorPath(), 0, MAX_FLOOR_FILE_BYTES + 1);
   } catch (error) {
     if (!isENOENT(error))
       logForDebugging(
@@ -96,38 +111,38 @@ async function readPublishedCatalogFloorFile() {
       );
     return;
   }
-  let r =
-    e.length > MAX_FLOOR_FILE_BYTES
+  let parsed =
+    text.length > MAX_FLOOR_FILE_BYTES
       ? undefined
-      : publishedFloorSchema().safeParse(safeParseJSON(e.toString("utf8"), false));
-  if (!r?.success) {
+      : publishedFloorSchema().safeParse(safeParseJSON(text.toString("utf8"), false));
+  if (!parsed?.success) {
     logForDebugging(
-      `[publishedCatalog] floor file ${r === undefined ? "oversized" : "invalid"}; no persisted version marks this session`,
+      `[publishedCatalog] floor file ${parsed === undefined ? "oversized" : "invalid"}; no persisted version marks this session`,
     );
     return;
   }
-  return new Map(Object.entries(r.data.sources));
+  return new Map(Object.entries(parsed.data.sources));
 }
 //@ chunk-0sn6pxb4.js:1691-1817 placement
 function writePublishedCatalogFloorQueued() {
   let providerState = getProviderState();
-  let r = (providerState.publishedCatalogFloorWrite ?? Promise.resolve()).then(
+  let pending = (providerState.publishedCatalogFloorWrite ?? Promise.resolve()).then(
     writePublishedCatalogFloorFile,
     writePublishedCatalogFloorFile,
   );
-  providerState.publishedCatalogFloorWrite = r;
-  return r;
+  providerState.publishedCatalogFloorWrite = pending;
+  return pending;
 }
 //@ chunk-0sn6pxb4.js:1817-2113 placement
 async function writePublishedCatalogFloorFile() {
   try {
     mergeCatalogFloors(await readPublishedCatalogFloorFile());
     let sliced = [...publishedCatalogFloorMarks().entries()]
-      .sort(([, i], [, n]) => n.recordedAt - i.recordedAt)
+      .sort(([, markA], [, markB]) => markB.recordedAt - markA.recordedAt)
       .slice(0, MAX_FLOOR_ENTRIES);
-    let r = maskStorage();
-    await r.mkdir(modelCatalogCacheDir());
-    await r.atomicWrite(
+    let storage = maskStorage();
+    await storage.mkdir(modelCatalogCacheDir());
+    await storage.atomicWrite(
       publishedFloorPath(),
       jsonStringify({
         version: FLOOR_FILE_VERSION,

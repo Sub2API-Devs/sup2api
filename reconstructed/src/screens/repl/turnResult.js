@@ -20,50 +20,53 @@ import { filterDisplayableErrors } from "../../remote/sdkMessageAdapter.js";
 /**
  * 包装对话框请求：适合时转给 Remote Control 桥回答。
  */
-function routeDialogOverBridge(h, x) {
-  return async function (L, ee, ke) {
-    let dialog = x.bridge?.dialog;
+function routeDialogOverBridge(dialog, scope) {
+  return async function (descriptor, payload, options) {
+    let dialog_2 = scope.bridge?.dialog;
     if (
-      ke?.localOnly ||
-      dialog === undefined ||
-      !isSdkHostOrigin(L.kind, "remote_control") ||
-      !dialog.supportsKind(L.kind) ||
-      isAsyncIterable(ee) ||
-      !isPlainObject(ee)
+      options?.localOnly ||
+      dialog_2 === undefined ||
+      !isSdkHostOrigin(descriptor.kind, "remote_control") ||
+      !dialog_2.supportsKind(descriptor.kind) ||
+      isAsyncIterable(payload) ||
+      !isPlainObject(payload)
     )
-      return h(L, ee, ke);
-    let Be = await requestUserDialogRaced({
-      requestDialog: h,
-      dialog: L,
-      payload: ee,
-      signal: ke?.signal ?? new AbortController().signal,
-      bridge: dialog,
+      return dialog(descriptor, payload, options);
+    let answer = await requestUserDialogRaced({
+      requestDialog: dialog,
+      dialog: descriptor,
+      payload,
+      signal: options?.signal ?? new AbortController().signal,
+      bridge: dialog_2,
       parkTimeoutMs: 0,
-      localOpts: ke,
+      localOpts: options,
     });
-    if (Be.source === "bridge") ke?.onAnsweredOverBridge?.();
-    return Be.result;
+    if (answer.source === "bridge") options?.onAnsweredOverBridge?.();
+    return answer.result;
   };
 }
 //@ chunk-18hwfzwa.js:1468240-1468582 placement
 /**
  * 回合结束分类：stopped / completed / {failure, errorKind}。
  */
-function classifyTurnEnd({ result: h, messages, stopped, threw }) {
-  if (stopped || isAbortedTerminalReason(h?.terminal_reason)) return "stopped";
-  if (!(h === undefined ? threw : h.is_error || isErrorTerminalReason(h.terminal_reason))) return "completed";
-  let ke = trailingApiError(messages);
+function classifyTurnEnd({ result: terminal, messages, stopped, threw }) {
+  if (stopped || isAbortedTerminalReason(terminal?.terminal_reason)) return "stopped";
+  if (
+    !(terminal === undefined ? threw : terminal.is_error || isErrorTerminalReason(terminal.terminal_reason))
+  )
+    return "completed";
+  let trailing = trailingApiError(messages);
   return {
     failure:
-      [ke?.reason, ...resultErrorTexts(h)]
+      [trailing?.reason, ...resultErrorTexts(terminal)]
         .flatMap(
-          (Be) =>
-            Be?.split(`
+          (line) =>
+            line?.split(`
 `) ?? [],
         )
-        .map((Be) => Be.trim())
-        .find((Be) => Be.length > 0) ?? "Turn failed",
-    errorKind: ke?.errorKind,
+        .map((line) => line.trim())
+        .find((line) => line.length > 0) ?? "Turn failed",
+    errorKind: trailing?.errorKind,
   };
 }
 //@ chunk-18hwfzwa.js:1468582-1468707 placement
@@ -72,9 +75,9 @@ function classifyTurnEnd({ result: h, messages, stopped, threw }) {
  */
 function trailingApiError(messages) {
   for (let idx = messages.length - 1; idx >= 0; idx--) {
-    let D = messages[idx]?.type;
-    if (D === "user") return;
-    if (D === "assistant") return getTrailingApiErrorInfo(messages);
+    let type = messages[idx]?.type;
+    if (type === "user") return;
+    if (type === "assistant") return getTrailingApiErrorInfo(messages);
   }
   return;
 }
@@ -82,9 +85,12 @@ function trailingApiError(messages) {
 /**
  * 结果中的错误文本列表。
  */
-function resultErrorTexts(h) {
-  if (h === undefined) return [];
-  let x = h;
-  return [...(typeof x.result === "string" ? [x.result] : []), ...filterDisplayableErrors(x.errors)];
+function resultErrorTexts(result) {
+  if (result === undefined) return [];
+  let record = result;
+  return [
+    ...(typeof record.result === "string" ? [record.result] : []),
+    ...filterDisplayableErrors(record.errors),
+  ];
 }
 export { classifyTurnEnd, routeDialogOverBridge };

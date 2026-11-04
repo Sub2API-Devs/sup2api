@@ -8,7 +8,7 @@
  * pieces: chunk-mjyddqh1.js (2)
  * attribution: placement 1, fingerprint 1
  */
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { useResolvedTheme } from "../design-system/ThemeProvider.js";
 import {
   cosineEase,
@@ -40,33 +40,33 @@ var GLYPH_BASE_RGB = {
 };
 //@ chunk-mjyddqh1.js:485-2774 fingerprint = SpinnerGlyph (0.763)
 function SpinnerGlyph(props) {
-  let $ = w(35);
+  let $ = useMemoCache(35);
   let { frame, messageColor, stalledIntensity, thinkingIntensity, reducedMotion, time } = props;
-  let f = stalledIntensity === undefined ? 0 : stalledIntensity;
-  let i = thinkingIntensity === undefined ? 0 : thinkingIntensity;
-  let he = reducedMotion === undefined ? false : reducedMotion;
-  let de = time === undefined ? 0 : time;
+  let stalled = stalledIntensity === undefined ? 0 : stalledIntensity;
+  let thinking = thinkingIntensity === undefined ? 0 : thinkingIntensity;
+  let reduced = reducedMotion === undefined ? false : reducedMotion;
+  let timeMs = time === undefined ? 0 : time;
   let resolvedTheme = useResolvedTheme();
-  if (he) {
-    let C = 1 - cosineEase(de, GLYPH_ANIM_MS);
-    let u = i > 0 ? "warning" : messageColor;
-    let R = resolvedTheme[u];
-    let g;
-    if ($[0] !== R || $[1] !== C || $[2] !== i) {
-      g = EARLY_RETURN_SENTINEL;
+  if (reduced) {
+    let ease = 1 - cosineEase(timeMs, GLYPH_ANIM_MS);
+    let color = thinking > 0 ? "warning" : messageColor;
+    let rgb = resolvedTheme[color];
+    let earlyReturn;
+    if ($[0] !== rgb || $[1] !== ease || $[2] !== thinking) {
+      earlyReturn = EARLY_RETURN_SENTINEL;
       Re: {
-        let G = R ? interpolateColor(R) : null;
-        if (G) {
-          let ce = parseRGB(G, GLYPH_BASE_RGB, 0.5);
-          let me = parseRGB(ce, G, roundToStep(C));
+        let interpolated = rgb ? interpolateColor(rgb) : null;
+        if (interpolated) {
+          let baseRGB = parseRGB(interpolated, GLYPH_BASE_RGB, 0.5);
+          let mixedRGB = parseRGB(baseRGB, interpolated, roundToStep(ease));
           const children = jsxProd_default(Text, {
-            color: toRGBColor(me),
-            bold: i >= 0.5,
+            color: toRGBColor(mixedRGB),
+            bold: thinking >= 0.5,
             children: SPINNER_DOT,
           });
-          let t;
+          let box;
           if ($[4] !== children) {
-            t = jsxProd_default(Box, {
+            box = jsxProd_default(Box, {
               "aria-hidden": true,
               flexWrap: "wrap",
               height: 1,
@@ -74,64 +74,64 @@ function SpinnerGlyph(props) {
               children,
             });
             $[4] = children;
-            $[5] = t;
-          } else t = $[5];
-          g = t;
+            $[5] = box;
+          } else box = $[5];
+          earlyReturn = box;
           break Re;
         }
       }
-      $[0] = R;
-      $[1] = C;
-      $[2] = i;
-      $[3] = g;
-    } else g = $[3];
-    if (g !== EARLY_RETURN_SENTINEL) return g;
-    const dimColor = C < 0.5;
-    const bold = i >= 0.5;
-    let h;
-    if ($[6] !== u || $[7] !== dimColor || $[8] !== bold) {
-      h = jsxProd_default(Box, {
+      $[0] = rgb;
+      $[1] = ease;
+      $[2] = thinking;
+      $[3] = earlyReturn;
+    } else earlyReturn = $[3];
+    if (earlyReturn !== EARLY_RETURN_SENTINEL) return earlyReturn;
+    const dimColor = ease < 0.5;
+    const bold = thinking >= 0.5;
+    let box;
+    if ($[6] !== color || $[7] !== dimColor || $[8] !== bold) {
+      box = jsxProd_default(Box, {
         "aria-hidden": true,
         flexWrap: "wrap",
         height: 1,
         width: 2,
         children: jsxProd_default(Text, {
-          color: u,
+          color,
           dimColor,
           bold,
           children: SPINNER_DOT,
         }),
       });
-      $[6] = u;
+      $[6] = color;
       $[7] = dimColor;
       $[8] = bold;
-      $[9] = h;
-    } else h = $[9];
-    return h;
+      $[9] = box;
+    } else box = $[9];
+    return box;
   }
-  let g;
+  let frames;
   if ($[10] === MEMO_CACHE_SENTINEL) {
-    g = spinnerFramesForTerminal();
-    $[10] = g;
-  } else g = $[10];
-  let q = g;
-  let children = q[frame % q.length];
-  if (f > 0) {
-    let B = resolvedTheme[messageColor];
-    let r;
-    if ($[11] !== B || $[12] !== children || $[13] !== f) {
-      r = EARLY_RETURN_SENTINEL;
+    frames = spinnerFramesForTerminal();
+    $[10] = frames;
+  } else frames = $[10];
+  let frames_2 = frames;
+  let children = frames_2[frame % frames_2.length];
+  if (stalled > 0) {
+    let rgb = resolvedTheme[messageColor];
+    let earlyReturn;
+    if ($[11] !== rgb || $[12] !== children || $[13] !== stalled) {
+      earlyReturn = EARLY_RETURN_SENTINEL;
       Be: {
-        let z = B ? interpolateColor(B) : null;
-        if (z) {
-          let interpolated = parseRGB(z, GLYPH_ACCENT_RGB, roundToStep(f));
+        let interpolated = rgb ? interpolateColor(rgb) : null;
+        if (interpolated) {
+          let interpolated_2 = parseRGB(interpolated, GLYPH_ACCENT_RGB, roundToStep(stalled));
           const children_2 = jsxProd_default(Text, {
-            color: toRGBColor(interpolated),
+            color: toRGBColor(interpolated_2),
             children,
           });
-          let h;
+          let box;
           if ($[15] !== children_2) {
-            h = jsxProd_default(Box, {
+            box = jsxProd_default(Box, {
               "aria-hidden": true,
               flexWrap: "wrap",
               height: 1,
@@ -139,22 +139,22 @@ function SpinnerGlyph(props) {
               children: children_2,
             });
             $[15] = children_2;
-            $[16] = h;
-          } else h = $[16];
-          r = h;
+            $[16] = box;
+          } else box = $[16];
+          earlyReturn = box;
           break Be;
         }
       }
-      $[11] = B;
+      $[11] = rgb;
       $[12] = children;
-      $[13] = f;
-      $[14] = r;
-    } else r = $[14];
-    if (r !== EARLY_RETURN_SENTINEL) return r;
-    let color = f > 0.5 ? "error" : messageColor;
-    let t;
+      $[13] = stalled;
+      $[14] = earlyReturn;
+    } else earlyReturn = $[14];
+    if (earlyReturn !== EARLY_RETURN_SENTINEL) return earlyReturn;
+    let color = stalled > 0.5 ? "error" : messageColor;
+    let box;
     if ($[17] !== color || $[18] !== children) {
-      t = jsxProd_default(Box, {
+      box = jsxProd_default(Box, {
         "aria-hidden": true,
         flexWrap: "wrap",
         height: 1,
@@ -166,30 +166,30 @@ function SpinnerGlyph(props) {
       });
       $[17] = color;
       $[18] = children;
-      $[19] = t;
-    } else t = $[19];
-    return t;
+      $[19] = box;
+    } else box = $[19];
+    return box;
   }
-  if (i > 0) {
-    let I = resolvedTheme[messageColor];
+  if (thinking > 0) {
+    let rgb = resolvedTheme[messageColor];
     let bold;
-    let r;
-    if ($[20] !== I || $[21] !== children || $[22] !== resolvedTheme.warning || $[23] !== i) {
-      r = EARLY_RETURN_SENTINEL;
+    let earlyReturn;
+    if ($[20] !== rgb || $[21] !== children || $[22] !== resolvedTheme.warning || $[23] !== thinking) {
+      earlyReturn = EARLY_RETURN_SENTINEL;
       Ie: {
-        let E = I ? interpolateColor(I) : null;
-        let _ = interpolateColor(resolvedTheme.warning);
-        bold = i >= 0.5;
-        if (E && _) {
-          let be = parseRGB(E, _, roundToStep(i));
+        let interpolated = rgb ? interpolateColor(rgb) : null;
+        let warningRGB = interpolateColor(resolvedTheme.warning);
+        bold = thinking >= 0.5;
+        if (interpolated && warningRGB) {
+          let mixedRGB = parseRGB(interpolated, warningRGB, roundToStep(thinking));
           const children_2 = jsxProd_default(Text, {
             bold,
-            color: toRGBColor(be),
+            color: toRGBColor(mixedRGB),
             children,
           });
-          let h;
+          let glyphBox;
           if ($[26] !== children_2) {
-            h = jsxProd_default(Box, {
+            glyphBox = jsxProd_default(Box, {
               "aria-hidden": true,
               flexWrap: "wrap",
               height: 1,
@@ -197,27 +197,27 @@ function SpinnerGlyph(props) {
               children: children_2,
             });
             $[26] = children_2;
-            $[27] = h;
-          } else h = $[27];
-          r = h;
+            $[27] = glyphBox;
+          } else glyphBox = $[27];
+          earlyReturn = glyphBox;
           break Ie;
         }
       }
-      $[20] = I;
+      $[20] = rgb;
       $[21] = children;
       $[22] = resolvedTheme.warning;
-      $[23] = i;
+      $[23] = thinking;
       $[24] = bold;
-      $[25] = r;
+      $[25] = earlyReturn;
     } else {
       bold = $[24];
-      r = $[25];
+      earlyReturn = $[25];
     }
-    if (r !== EARLY_RETURN_SENTINEL) return r;
-    let color = i > 0.5 ? "warning" : messageColor;
-    let t;
+    if (earlyReturn !== EARLY_RETURN_SENTINEL) return earlyReturn;
+    let color = thinking > 0.5 ? "warning" : messageColor;
+    let box;
     if ($[28] !== bold || $[29] !== color || $[30] !== children) {
-      t = jsxProd_default(Box, {
+      box = jsxProd_default(Box, {
         "aria-hidden": true,
         flexWrap: "wrap",
         height: 1,
@@ -231,13 +231,13 @@ function SpinnerGlyph(props) {
       $[28] = bold;
       $[29] = color;
       $[30] = children;
-      $[31] = t;
-    } else t = $[31];
-    return t;
+      $[31] = box;
+    } else box = $[31];
+    return box;
   }
-  let r;
+  let box;
   if ($[32] !== messageColor || $[33] !== children) {
-    r = jsxProd_default(Box, {
+    box = jsxProd_default(Box, {
       "aria-hidden": true,
       flexWrap: "wrap",
       height: 1,
@@ -249,8 +249,8 @@ function SpinnerGlyph(props) {
     });
     $[32] = messageColor;
     $[33] = children;
-    $[34] = r;
-  } else r = $[34];
-  return r;
+    $[34] = box;
+  } else box = $[34];
+  return box;
 }
 export { SpinnerGlyph, SPINNER_DOT };

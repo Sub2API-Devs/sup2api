@@ -36,64 +36,64 @@ function authIdentity(identity) {
 /**
  * 把属性编码成 base64 JSON
  */
-var encodeProps = (e, rh) =>
+var encodeProps = (event, rh) =>
   btoa(
     JSON.stringify({
       rh,
-      ...e.fields.props,
+      ...event.fields.props,
     }),
   );
 //@ chunk-4m46mxx9.js:7012-7408 placement
 /**
  * 把插件遥测事件转换为 ClaudeCodeInternalEvent 字段。
  */
-var toInternalEvent = (e, t) => ({
-  eventId: e.eventId,
-  eventName: e.fields.name,
-  clientTimestamp: e.loggedAt,
-  deviceId: t.context.identity.deviceId,
-  email: t.context.identity.email,
-  auth: authIdentity(t.context.identity),
-  sessionId: t.sessionId,
-  model: t.model,
-  userType: t.userType,
-  isInteractive: t.isInteractive,
-  ...t.context.session,
+var toInternalEvent = (event, ctx) => ({
+  eventId: event.eventId,
+  eventName: event.fields.name,
+  clientTimestamp: event.loggedAt,
+  deviceId: ctx.context.identity.deviceId,
+  email: ctx.context.identity.email,
+  auth: authIdentity(ctx.context.identity),
+  sessionId: ctx.sessionId,
+  model: ctx.model,
+  userType: ctx.userType,
+  isInteractive: ctx.isInteractive,
+  ...ctx.context.session,
   env: {
-    ...t.context.environment,
-    isClaudeAiAuth: t.isClaudeAiAuth,
+    ...ctx.context.environment,
+    isClaudeAiAuth: ctx.isClaudeAiAuth,
   },
-  additionalMetadata: encodeProps(e, t.context.remoteHash),
+  additionalMetadata: encodeProps(event, ctx.context.remoteHash),
 });
 //@ chunk-4m46mxx9.js:7408-7468 placement
-var _ = (e) => typeof e === "object" && e !== null && !Array.isArray(e);
+var _ = (value) => typeof value === "object" && value !== null && !Array.isArray(value);
 //@ chunk-4m46mxx9.js:7468-7640 placement
 /**
  * 递归把对象键从 camelCase 转为 snake_case。
  */
-function toSnakeCaseKeys(e) {
-  let t = Array.isArray(e);
-  let r = _(e);
-  return t
-    ? e.map(toSnakeCaseKeys)
-    : r
+function toSnakeCaseKeys(value) {
+  let isArray = Array.isArray(value);
+  let isObject = _(value);
+  return isArray
+    ? value.map(toSnakeCaseKeys)
+    : isObject
       ? Object.fromEntries(
-          Object.entries(e).map(([key, value]) => [
-            key.replace(/[A-Z]/g, (a) => `_${a.toLowerCase()}`),
+          Object.entries(value).map(([key, value]) => [
+            key.replace(/[A-Z]/g, (char) => `_${char.toLowerCase()}`),
             toSnakeCaseKeys(value),
           ]),
         )
-      : e;
+      : value;
 }
 //@ chunk-4m46mxx9.js:7640-7753 placement
 /**
  * 序列化遥测事件批次（ClaudeCodeInternalEvent）。
  */
-var serializeEventBatch = (e, t) =>
+var serializeEventBatch = (events, ctx) =>
   JSON.stringify({
-    events: e.map((r) => ({
+    events: events.map((event) => ({
       event_type: "ClaudeCodeInternalEvent",
-      event_data: toSnakeCaseKeys(toInternalEvent(r, t)),
+      event_data: toSnakeCaseKeys(toInternalEvent(event, ctx)),
     })),
   });
 //@ chunk-4m46mxx9.js:7753-7788 placement
@@ -110,37 +110,40 @@ var MAX_PROPS = 32;
 /**
  * 遥测校验错误
  */
-var telemetryError = (e, t = "log") =>
-  Object.assign(Error(`$.telemetry.${t}: ${e}`), {
-    what: e,
+var telemetryError = (what, kind = "log") =>
+  Object.assign(Error(`$.telemetry.${kind}: ${what}`), {
+    what,
   });
 //@ chunk-4m46mxx9.js:7872-8539 placement
 /**
  * 校验遥测属性值（有限数字、布尔或 Choice，拒绝自由文本）。
  */
-function checkPropValue(e, t, r = "log") {
-  if (typeof t === "boolean") return t;
-  if (typeof t === "number") {
-    if (Number.isFinite(t)) return t;
-    throw telemetryError(`props.${e}: a number is finite`, r);
+function checkPropValue(key, value, kind = "log") {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "number") {
+    if (Number.isFinite(value)) return value;
+    throw telemetryError(`props.${key}: a number is finite`, kind);
   }
-  if (typeof t === "string")
-    throw telemetryError(`props.${e}: free text is refused; a string is a Choice, { value, of: [...] }`, r);
-  if (!_(t) || !Array.isArray(t.of))
+  if (typeof value === "string")
     throw telemetryError(
-      `props.${e}: a value is a finite number, a boolean, or a Choice, { value, of: [...] }`,
-      r,
+      `props.${key}: free text is refused; a string is a Choice, { value, of: [...] }`,
+      kind,
     );
-  let { of, value: n } = t;
+  if (!_(value) || !Array.isArray(value.of))
+    throw telemetryError(
+      `props.${key}: a value is a finite number, a boolean, or a Choice, { value, of: [...] }`,
+      kind,
+    );
+  let { of, value: choice } = value;
   if (!(
     of.length > 0 &&
     of.length <= MAX_PROPS &&
-    of.every((o) => typeof o === "string" && EVENT_NAME_RE.test(o))
+    of.every((member) => typeof member === "string" && EVENT_NAME_RE.test(member))
   ))
-    throw telemetryError(`props.${e}.of: a list of 1 to ${MAX_PROPS} lowercase tokens`, r);
-  if (typeof n !== "string" || !of.includes(n))
-    throw telemetryError(`props.${e}.value: one of the members of \`of\``, r);
-  return n;
+    throw telemetryError(`props.${key}.of: a list of 1 to ${MAX_PROPS} lowercase tokens`, kind);
+  if (typeof choice !== "string" || !of.includes(choice))
+    throw telemetryError(`props.${key}.value: one of the members of \`of\``, kind);
+  return choice;
 }
 //@ chunk-4m46mxx9.js:8539-8548 placement
 /**
@@ -156,17 +159,17 @@ var PROP_KEY_RE = /^[a-z][a-z0-9_]{0,63}$/;
 /**
  * 校验 props：对象、键数上限、键为 snake_case、值合法。
  */
-function validateProps(props, t) {
-  if (!_(props)) throw telemetryError("props: an object of properties by key", t);
+function validateProps(props, kind) {
+  if (!_(props)) throw telemetryError("props: an object of properties by key", kind);
   let entries = Object.entries(props);
   if (entries.length > MAX_PROP_LIST_ITEMS)
-    throw telemetryError(`props: at most ${MAX_PROP_LIST_ITEMS} properties`, t);
-  let i = {};
-  for (let [n, a] of entries) {
-    if (!PROP_KEY_RE.test(n)) throw telemetryError("props: every key is a snake_case token", t);
-    i[n] = checkPropValue(n, a, t);
+    throw telemetryError(`props: at most ${MAX_PROP_LIST_ITEMS} properties`, kind);
+  let out = {};
+  for (let [key, value] of entries) {
+    if (!PROP_KEY_RE.test(key)) throw telemetryError("props: every key is a snake_case token", kind);
+    out[key] = checkPropValue(key, value, kind);
   }
-  return i;
+  return out;
 }
 //@ chunk-4m46mxx9.js:8853-8868 placement
 var TENGU = "tengu_";
@@ -184,9 +187,9 @@ var withTenguPrefix = (event, props) => ({
 /**
  * 校验 telemetry.log 条目 {event, props}。
  */
-function validateLogEntry(e) {
-  if (!_(e)) throw telemetryError("takes one entry, { event, props? }");
-  let { event, props = {} } = e;
+function validateLogEntry(entry) {
+  if (!_(entry)) throw telemetryError("takes one entry, { event, props? }");
+  let { event, props = {} } = entry;
   if (typeof event !== "string" || !PROP_KEY_RE.test(event))
     throw telemetryError("takes an event name, a snake_case token");
   return withTenguPrefix(event, validateProps(props, "log"));
@@ -200,7 +203,7 @@ var DECISION_KINDS = ["ok", "sad", "bad"];
 /**
  * 是否合法决定
  */
-var isDecisionKind = (kind) => DECISION_KINDS.some((t) => t === kind);
+var isDecisionKind = (kind) => DECISION_KINDS.some((knownKind) => knownKind === kind);
 //@ chunk-4m46mxx9.js:9202-9225 placement
 var TENGU_FEATURE = "tengu_feature_";
 //@ chunk-4m46mxx9.js:9225-9357 placement
@@ -225,9 +228,9 @@ var markToEvent = ({ kind, feature, reason, props }) => ({
 /**
  * 校验 telemetry.mark 条目（feature、kind、reason、props）。
  */
-function validateMarkEntry(e) {
-  if (!_(e)) throw telemetryError("takes one entry, { feature, kind, reason?, props? }", "mark");
-  let { feature, kind, reason, props = {} } = e;
+function validateMarkEntry(entry) {
+  if (!_(entry)) throw telemetryError("takes one entry, { feature, kind, reason?, props? }", "mark");
+  let { feature, kind, reason, props = {} } = entry;
   if (typeof feature !== "string" || !PROP_KEY_RE.test(feature))
     throw telemetryError("takes a feature name, a snake_case token", "mark");
   if (!isDecisionKind(kind)) throw telemetryError("kind: 'ok', 'sad' or 'bad'", "mark");
@@ -263,8 +266,8 @@ var isTelemetryDenyError = (error) =>
 /**
  * 捕获拒绝错误转成 deny
  */
-var settleDeny = (e) =>
-  e.then(
+var settleDeny = (promise) =>
+  promise.then(
     () => ({
       value: undefined,
     }),
@@ -327,40 +330,47 @@ var ENTRYPOINT_ALIASES = {
   "claude-desktop": "claude-desktop",
 };
 //@ chunk-4m46mxx9.js:10463-10493 placement
-var isNonEmpty = (e) => e !== undefined && e !== "";
+var isNonEmpty = (value) => value !== undefined && value !== "";
 //@ chunk-4m46mxx9.js:10493-10567 placement = isEnvTruthy (1)
 var isEnvTruthy = (envVar) => ["1", "true", "yes", "on"].includes((envVar ?? "").trim().toLowerCase());
 //@ chunk-4m46mxx9.js:10567-10948 placement
 /**
  * 根据环境判断遥测是否关闭（测试、DISABLE_TELEMETRY、第三方提供商等）。
  */
-function isTelemetryDisabled(e, t) {
-  let r =
-    e.nodeEnv === "test" ||
-    isNonEmpty(e.disableTelemetry) ||
-    isNonEmpty(e.disableNonessentialTraffic) ||
-    isEnvTruthy(e.doNotTrack);
-  let i =
-    !isEnvTruthy(e.providerManagedByHost) &&
-    [e.useBedrock, e.useVertex, e.useFoundry, e.useAnthropicAws, e.useAnthropicGoogleCloud, e.useMantle].some(
-      isEnvTruthy,
-    );
-  let n =
-    isEnvTruthy(e.useGateway) || t.forceLoginMethod === "gateway" || t.forceLoginGatewayUrl !== undefined;
-  let a = isNonEmpty(e.customOauthUrl?.trim());
-  return r || i || n || a;
+function isTelemetryDisabled(env, config) {
+  let isDisabled =
+    env.nodeEnv === "test" ||
+    isNonEmpty(env.disableTelemetry) ||
+    isNonEmpty(env.disableNonessentialTraffic) ||
+    isEnvTruthy(env.doNotTrack);
+  let isThirdParty =
+    !isEnvTruthy(env.providerManagedByHost) &&
+    [
+      env.useBedrock,
+      env.useVertex,
+      env.useFoundry,
+      env.useAnthropicAws,
+      env.useAnthropicGoogleCloud,
+      env.useMantle,
+    ].some(isEnvTruthy);
+  let isGateway =
+    isEnvTruthy(env.useGateway) ||
+    config.forceLoginMethod === "gateway" ||
+    config.forceLoginGatewayUrl !== undefined;
+  let hasCustomOauth = isNonEmpty(env.customOauthUrl?.trim());
+  return isDisabled || isThirdParty || isGateway || hasCustomOauth;
 }
 //@ chunk-4m46mxx9.js:10948-11188 placement
-function resolveEntrypoint(e) {
-  let t =
-    e.entrypoint === "remote" ||
-    e.hasSessionAccessToken ||
-    e.hasSessionIngressTokenFile ||
-    e.hasWebsocketAuthFileDescriptor ||
-    isEnvTruthy(e.claudeCodeRemote);
-  return isEnvTruthy(e.githubActions)
+function resolveEntrypoint(env) {
+  let isRemote =
+    env.entrypoint === "remote" ||
+    env.hasSessionAccessToken ||
+    env.hasSessionIngressTokenFile ||
+    env.hasWebsocketAuthFileDescriptor ||
+    isEnvTruthy(env.claudeCodeRemote);
+  return isEnvTruthy(env.githubActions)
     ? "github-action"
-    : (ENTRYPOINT_ALIASES[e.entrypoint ?? ""] ?? (t ? "remote" : "cli"));
+    : (ENTRYPOINT_ALIASES[env.entrypoint ?? ""] ?? (isRemote ? "remote" : "cli"));
 }
 //@ chunk-4m46mxx9.js:11188-11276 placement
 /**
@@ -415,7 +425,9 @@ var CLOUD_DEV_ENVIRONMENTS = [
  * 已知云开发环境名或 unknown-N
  */
 var cloudEnvironmentName = (signals, platform) =>
-  CLOUD_DEV_ENVIRONMENTS.find((r) => signals.some(([i, n]) => n && i === r)) ?? `unknown-${platform}`;
+  CLOUD_DEV_ENVIRONMENTS.find((environment) =>
+    signals.some(([name, present]) => present && name === environment),
+  ) ?? `unknown-${platform}`;
 export {
   TELEMETRY_PLUGIN,
   MAX_BATCH_EVENTS,

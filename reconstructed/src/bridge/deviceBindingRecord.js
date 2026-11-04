@@ -47,11 +47,11 @@ function resolveDeviceBindingRecord({ storedAccountUuid, hostAccountUuid }) {
 /**
  * 读 CLAUDE_CODE_ACCOUNT_UUID（小写）；只有当 OAuth 令牌来自环境变量或 fd（宿主注入）时才返回，否则 undefined。
  */
-async function getHostAccountUuid(t) {
+async function getHostAccountUuid(credentials) {
   let lower = normalizeUuidOrNull(env.CLAUDE_CODE_ACCOUNT_UUID)?.toLowerCase();
   if (lower === undefined) return;
   try {
-    let claudeAIOAuthTokenOrigin = await getClaudeAIOAuthTokenOriginAsync(t);
+    let claudeAIOAuthTokenOrigin = await getClaudeAIOAuthTokenOriginAsync(credentials);
     return claudeAIOAuthTokenOrigin === "env" || claudeAIOAuthTokenOrigin === "fd" ? lower : undefined;
   } catch {
     return;
@@ -61,16 +61,16 @@ async function getHostAccountUuid(t) {
 /**
  * 解析当前设备绑定记录：取已存储的 OAuth 账号 uuid 与宿主账号 uuid，交给 resolveDeviceBindingRecord。被设备签名、设备注册、附着等多处使用。
  */
-async function resolveCurrentDeviceBinding(t) {
-  let e;
+async function resolveCurrentDeviceBinding(credentials) {
+  let storedAccountUuid;
   try {
-    e = getStoredOauthAccountInfo()?.accountUuid;
+    storedAccountUuid = getStoredOauthAccountInfo()?.accountUuid;
   } catch {
-    e = undefined;
+    storedAccountUuid = undefined;
   }
   return resolveDeviceBindingRecord({
-    storedAccountUuid: e,
-    hostAccountUuid: await getHostAccountUuid(t),
+    storedAccountUuid,
+    hostAccountUuid: await getHostAccountUuid(credentials),
   });
 }
 export { resolveCurrentDeviceBinding, resolveDeviceBindingRecord, getHostAccountUuid };

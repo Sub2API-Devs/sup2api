@@ -133,7 +133,7 @@ function fromJsonTimestamp_2(o) {
 /**
  * 判断值既不是 null 也不是 undefined（protobuf 生成代码用）。
  */
-function isPresent(e) {
-  return e !== null && e !== undefined;
+function isPresent(value) {
+  return value !== null && value !== undefined;
 }
 export { GrowthbookExperimentEvent };

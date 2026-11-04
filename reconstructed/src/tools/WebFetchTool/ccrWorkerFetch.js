@@ -31,6 +31,7 @@ import {
 import { sleep } from "../../utils/sleep.js";
 import { truncateToLength } from "../../utils/stringUtils.js";
 import { isAlreadyPrintable } from "../../utils/printableName.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:2150802-2150817 placement
 /**
@@ -59,23 +60,27 @@ function getWebFetchDeadlineMs() {
 /**
  * 云会话 worker 代抓网页的响应结构：url、最终地址、标题、正文、内容类型、抓取时间与错误。
  */
-var ISO_TIMESTAMP_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/;
-var WORKER_FETCH_RESPONSE_SCHEMA = DoctorLazy(() =>
-  create({
-    url: create_2().optional().default(""),
-    destination_url: create_2().nullable().optional(),
-    title: create_2().optional().default(""),
-    text: create_2().optional().default(""),
-    content_type: create_2().nullable().optional(),
-    retrieved_at: create_2().regex(ISO_TIMESTAMP_PATTERN).nullable().optional().catch(undefined),
-    error: create({
-      error_type: create_2(),
-      error_message: create_2(),
-    })
-      .nullable()
-      .optional(),
-  }),
-);
+var ISO_TIMESTAMP_PATTERN; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var WORKER_FETCH_RESPONSE_SCHEMA;
+deferInit("chunk-e6aww6q8.js:2151023", () => {
+  ISO_TIMESTAMP_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/;
+  WORKER_FETCH_RESPONSE_SCHEMA = DoctorLazy(() =>
+    create({
+      url: create_2().optional().default(""),
+      destination_url: create_2().nullable().optional(),
+      title: create_2().optional().default(""),
+      text: create_2().optional().default(""),
+      content_type: create_2().nullable().optional(),
+      retrieved_at: create_2().regex(ISO_TIMESTAMP_PATTERN).nullable().optional().catch(undefined),
+      error: create({
+        error_type: create_2(),
+        error_message: create_2(),
+      })
+        .nullable()
+        .optional(),
+    }),
+  );
+});
 //@ chunk-e6aww6q8.js:2151435-2151515 placement
 /**
  * 是否使用 CCR worker 代理抓取（首方 API 且设置了环境变量）。
@@ -107,15 +112,15 @@ function isRetryableFetchStatus(status) {
   return status === 429 || status >= 500;
 }
 //@ chunk-e6aww6q8.js:2151643-2151908 placement
-function logWorkerPost(e, toolName, attempt, s, h, y) {
+function logWorkerPost(outcome, toolName, attempt, startedAt, response, error) {
   logEvent("tengu_ccr_worker_post", {
     toolName: fromEnum(toolName),
-    outcome: fromEnum(e),
+    outcome: fromEnum(outcome),
     attempt,
-    httpDurationMs: Date.now() - s,
-    error_code: e === "deadline" ? lit_2("EDEADLINE") : sanitizeErrnoForTelemetry(y),
-    hasContentEncoding: h?.res?.rawHeaders?.some(
-      (rawHeader, w) => w % 2 === 0 && rawHeader.toLowerCase() === "content-encoding",
+    httpDurationMs: Date.now() - startedAt,
+    error_code: outcome === "deadline" ? lit_2("EDEADLINE") : sanitizeErrnoForTelemetry(error),
+    hasContentEncoding: response?.res?.rawHeaders?.some(
+      (rawHeader, headerIndex) => headerIndex % 2 === 0 && rawHeader.toLowerCase() === "content-encoding",
     ),
   });
 }
@@ -134,15 +139,15 @@ async function fetchViaCcrWorker({
   signal,
   retryPolicy,
 }) {
-  let G = {
+  let retrySettings = {
     maxAttempts: retryPolicy?.maxAttempts ?? CCR_FETCH_MAX_ATTEMPTS,
     baseDelayMs: retryPolicy?.baseDelayMs ?? CCR_FETCH_BASE_DELAY_MS,
     totalBudgetMs: retryPolicy?.totalBudgetMs ?? CCR_FETCH_TOTAL_BUDGET_MS,
   };
   let replaced = (env.ANTHROPIC_BASE_URL || "https://api.anthropic.com").replace(/\/+$/, "");
-  let Z = session.host.launchOptions.ccrSessionUrl();
-  let Se =
-    Z?.replace(/\/+$/, "") ??
+  let sessionUrl = session.host.launchOptions.ccrSessionUrl();
+  let workerUrl =
+    sessionUrl?.replace(/\/+$/, "") ??
     `${replaced}/v1/code/sessions/${encodeURIComponent(ccrSessionIdForRefs(session))}`;
   let now = Date.now();
   let webFetchDeadlineMs = getWebFetchDeadlineMs();
@@ -150,26 +155,26 @@ async function fetchViaCcrWorker({
     timeoutMs: webFetchDeadlineMs === 0 ? undefined : webFetchDeadlineMs,
     refTimer: true,
   });
-  using Ae = {
+  using disposable = {
     [Symbol.dispose]: combinedAbortSignal.cleanup,
   };
-  let Ie;
+  let response;
   let attempt = 0;
   for (;;) {
     attempt++;
-    let ze =
-      Z === undefined
+    let authHeaders =
+      sessionUrl === undefined
         ? getSessionIngressAuthHeaders()
         : configureApiKeyHeaders(env.CLAUDE_CODE_SESSION_ACCESS_TOKEN);
     let now_2 = Date.now();
     try {
-      Ie = await axios_default.post(`${Se}/worker/${route}`, body, {
+      response = await axios_default.post(`${workerUrl}/worker/${route}`, body, {
         signal: combinedAbortSignal.signal,
         timeout: CCR_FETCH_TIMEOUT_MS,
         maxContentLength: 12582912,
         headers: {
           "User-Agent": claudeCodeUserAgent(),
-          ...ze,
+          ...authHeaders,
           "Content-Type": "application/json",
           "anthropic-version": "2023-06-01",
         },
@@ -177,18 +182,18 @@ async function fetchViaCcrWorker({
         maxRedirects: 0,
       });
     } catch (error) {
-      let At = isCancel(error) && combinedAbortSignal.signal.aborted && !signal.aborted;
-      let It = isCancel(error) && !At;
+      let hitDeadline = isCancel(error) && combinedAbortSignal.signal.aborted && !signal.aborted;
+      let wasCanceled = isCancel(error) && !hitDeadline;
       logWorkerPost(
-        It ? "canceled" : At ? "deadline" : "error",
+        wasCanceled ? "canceled" : hitDeadline ? "deadline" : "error",
         toolName,
         attempt,
         now_2,
         isAxiosError(error) ? error.request : undefined,
-        It || At ? undefined : error,
+        wasCanceled || hitDeadline ? undefined : error,
       );
-      if (It) throw new AbortError_2();
-      if (At) {
+      if (wasCanceled) throw new AbortError_2();
+      if (hitDeadline) {
         logForDebugging(`ccr ${logLabel} hit the ${webFetchDeadlineMs / 1000}s deadline`, {
           level: "warn",
         });
@@ -200,8 +205,8 @@ async function fetchViaCcrWorker({
           errorMessage: `The ${toolName} proxy had not finished answering after ${webFetchDeadlineMs / 1000}s, so Claude Code stopped the request. This does not mean the ${toolName === "WebFetch" ? "page is unavailable" : "query was wrong"}. Trying again may work, but could take another ${webFetchDeadlineMs / 1000}s.`,
         };
       }
-      let Yt = error instanceof Error && "code" in error ? String(error.code) : undefined;
-      logForDebugging(`ccr ${logLabel} transport error: ${Yt}`, {
+      let errorCode = error instanceof Error && "code" in error ? String(error.code) : undefined;
+      logForDebugging(`ccr ${logLabel} transport error: ${errorCode}`, {
         level: "warn",
       });
       return {
@@ -209,21 +214,26 @@ async function fetchViaCcrWorker({
         source: "proxy",
         statusCode: 502,
         errorType: "PROXY_TRANSPORT",
-        errorMessage: `Request to the ${toolName} proxy failed (${Yt ?? "transport error"}).`,
+        errorMessage: `Request to the ${toolName} proxy failed (${errorCode ?? "transport error"}).`,
       };
     }
-    logWorkerPost("answered", toolName, attempt, now_2, Ie.request);
-    if (Ie.status === 200) break;
-    let Je = Ie.headers?.["retry-after"];
-    let retryAfterMs = parseRetryAfterMs_2(typeof Je === "string" ? Je : undefined);
-    if (isRetryableFetchStatus(Ie.status) && attempt < G.maxAttempts) {
-      let At = G.baseDelayMs * 2 ** (attempt - 1) * (0.5 + Math.random() * 0.5);
-      let max = Math.max(At, retryAfterMs ?? 0);
-      let Yt = Date.now() - now;
-      let qt = G.totalBudgetMs - Yt;
-      if (max + CCR_FETCH_TIMEOUT_MS <= qt && (webFetchDeadlineMs === 0 || max < webFetchDeadlineMs - Yt)) {
+    logWorkerPost("answered", toolName, attempt, now_2, response.request);
+    if (response.status === 200) break;
+    let retryAfterHeader = response.headers?.["retry-after"];
+    let retryAfterMs = parseRetryAfterMs_2(
+      typeof retryAfterHeader === "string" ? retryAfterHeader : undefined,
+    );
+    if (isRetryableFetchStatus(response.status) && attempt < retrySettings.maxAttempts) {
+      let backoffMs = retrySettings.baseDelayMs * 2 ** (attempt - 1) * (0.5 + Math.random() * 0.5);
+      let max = Math.max(backoffMs, retryAfterMs ?? 0);
+      let elapsedMs = Date.now() - now;
+      let budgetLeftMs = retrySettings.totalBudgetMs - elapsedMs;
+      if (
+        max + CCR_FETCH_TIMEOUT_MS <= budgetLeftMs &&
+        (webFetchDeadlineMs === 0 || max < webFetchDeadlineMs - elapsedMs)
+      ) {
         logForDebugging(
-          `ccr ${logLabel} returned HTTP ${Ie.status}; retrying in ${Math.round(max)}ms (attempt ${attempt} of ${G.maxAttempts})`,
+          `ccr ${logLabel} returned HTTP ${response.status}; retrying in ${Math.round(max)}ms (attempt ${attempt} of ${retrySettings.maxAttempts})`,
           {
             level: "warn",
           },
@@ -239,28 +249,31 @@ async function fetchViaCcrWorker({
         );
       }
     }
-    let pt = truncateToLength(extractPlainErrorDetail(Ie.data) ?? "", 200);
-    let Et = attempt > 1 ? ` after ${attempt} attempts with backoff` : "";
-    let yt =
-      Ie.status === 429 && retryAfterMs !== undefined
+    let errorDetail = truncateToLength(extractPlainErrorDetail(response.data) ?? "", 200);
+    let attemptsNote = attempt > 1 ? ` after ${attempt} attempts with backoff` : "";
+    let rateLimitNote =
+      response.status === 429 && retryAfterMs !== undefined
         ? `; rate limited \u2014 the server requests waiting ~${Math.ceil(retryAfterMs / 1000)}s before retrying`
         : "";
-    logForDebugging(`ccr ${logLabel} returned HTTP ${Ie.status}${Et}${yt}${pt ? `: ${pt}` : ""}`, {
-      level: "warn",
-    });
+    logForDebugging(
+      `ccr ${logLabel} returned HTTP ${response.status}${attemptsNote}${rateLimitNote}${errorDetail ? `: ${errorDetail}` : ""}`,
+      {
+        level: "warn",
+      },
+    );
     return {
       ok: false,
       source: "proxy",
-      statusCode: Ie.status,
+      statusCode: response.status,
       errorType: "PROXY_REJECTED",
-      errorMessage: [301, 302, 303, 307, 308].includes(Ie.status)
-        ? `The ${toolName} proxy itself answered with a redirect (HTTP ${Ie.status}), which is not followed. Asking again will not change that.`
-        : `The ${toolName} proxy rejected the request (HTTP ${Ie.status}${Et}${yt})${pt ? `: ${pt}` : "."}`,
+      errorMessage: [301, 302, 303, 307, 308].includes(response.status)
+        ? `The ${toolName} proxy itself answered with a redirect (HTTP ${response.status}), which is not followed. Asking again will not change that.`
+        : `The ${toolName} proxy rejected the request (HTTP ${response.status}${attemptsNote}${rateLimitNote})${errorDetail ? `: ${errorDetail}` : "."}`,
     };
   }
-  let We = schema.safeParse(Ie.data);
-  if (!We.success) {
-    logForDebugging(`ccr ${logLabel} returned unparseable body: ${We.error.message}`, {
+  let parsedBody = schema.safeParse(response.data);
+  if (!parsedBody.success) {
+    logForDebugging(`ccr ${logLabel} returned unparseable body: ${parsedBody.error.message}`, {
       level: "warn",
     });
     return {
@@ -271,20 +284,20 @@ async function fetchViaCcrWorker({
       errorMessage: `The ${toolName} proxy returned a malformed response.`,
     };
   }
-  if (We.data.error) {
-    let errorType = We.data.error.error_type || undefined;
-    let errorMessage = We.data.error.error_message || undefined;
-    let Je = errorType && /^\w{1,64}$/.test(errorType) ? errorType : undefined;
-    let nt = errorMessage && isAlreadyPrintable(errorMessage, 1024) ? errorMessage : undefined;
-    if (Je !== errorType || nt !== errorMessage)
+  if (parsedBody.data.error) {
+    let errorType = parsedBody.data.error.error_type || undefined;
+    let errorMessage = parsedBody.data.error.error_message || undefined;
+    let safeErrorType = errorType && /^\w{1,64}$/.test(errorType) ? errorType : undefined;
+    let safeErrorMessage = errorMessage && isAlreadyPrintable(errorMessage, 1024) ? errorMessage : undefined;
+    if (safeErrorType !== errorType || safeErrorMessage !== errorMessage)
       logEvent("tengu_ccr_proxy_target_error_left_out", {
-        type_left_out: Je !== errorType,
+        type_left_out: safeErrorType !== errorType,
         type_length: errorType?.length ?? 0,
-        message_left_out: nt !== errorMessage,
+        message_left_out: safeErrorMessage !== errorMessage,
         message_length: errorMessage?.length ?? 0,
       });
     logForDebugging(
-      `ccr ${logLabel} ${targetErrorLabel}: ${Je ?? `no type (${errorType?.length ?? 0} UTF-16 units left out)`}${nt !== errorMessage ? `, message left out (${errorMessage?.length})` : ""}`,
+      `ccr ${logLabel} ${targetErrorLabel}: ${safeErrorType ?? `no type (${errorType?.length ?? 0} UTF-16 units left out)`}${safeErrorMessage !== errorMessage ? `, message left out (${errorMessage?.length})` : ""}`,
       {
         level: "warn",
       },
@@ -293,13 +306,13 @@ async function fetchViaCcrWorker({
       ok: false,
       source: "target",
       statusCode: 502,
-      errorType: Je,
-      errorMessage: nt,
+      errorType: safeErrorType,
+      errorMessage: safeErrorMessage,
     };
   }
   return {
     ok: true,
-    data: We.data,
+    data: parsedBody.data,
   };
 }
 export {

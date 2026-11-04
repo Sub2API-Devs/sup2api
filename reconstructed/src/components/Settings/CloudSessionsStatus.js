@@ -14,16 +14,20 @@ import { isConsumerSubscriber } from "../../utils/auth.js";
 import { isWebSetupEnabled } from "../../services/cloudSessions/webSetup.js";
 import { GITHUB_CONNECTION_STATUS_CACHE } from "../../commands/remote-setup/api.js";
 import { getSessionProject } from "../../bootstrap/sessionSlices.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-6p6y0k3t.js:1500-1504 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-6p6y0k3t.js:1500", () => {
+  init_react_production();
+});
 //@ chunk-6p6y0k3t.js:1504-1636 placement
 function getCloudSessionsStatus(host, credentials, storageV5) {
   if (getAPIProvider() !== "firstParty" || !isConsumerSubscriber() || !isWebSetupEnabled()) return;
-  let l = GITHUB_CONNECTION_STATUS_CACHE.of(host);
+  let cache = GITHUB_CONNECTION_STATUS_CACHE.of(host);
   return {
-    current: () => l.peek(credentials, storageV5),
-    settled: l.read(credentials, storageV5),
+    current: () => cache.peek(credentials, storageV5),
+    settled: cache.read(credentials, storageV5),
   };
 }
 //@ chunk-6p6y0k3t.js:1636-1876 placement
@@ -52,32 +56,32 @@ function getCloudSessionsStatusRows(webSetupStatus) {
   }
 }
 //@ chunk-6p6y0k3t.js:1876-1914 placement
-function selectMainLoopModel(L) {
-  return L.mainLoopModel;
+function selectMainLoopModel(state) {
+  return state.mainLoopModel;
 }
 //@ chunk-6p6y0k3t.js:1914-1942 placement
-function selectMcp(W) {
-  return W.mcp;
+function selectMcp(state) {
+  return state.mcp;
 }
 //@ chunk-6p6y0k3t.js:1942-1993 placement
-function selectPermissionMode(V) {
-  return V.toolPermissionContext.mode;
+function selectPermissionMode(state) {
+  return state.toolPermissionContext.mode;
 }
 //@ chunk-6p6y0k3t.js:1993-2037 placement
-function selectRemoteSessionName(Je) {
-  return Je.remoteSessionName;
+function selectRemoteSessionName(state) {
+  return state.remoteSessionName;
 }
 //@ chunk-6p6y0k3t.js:2037-2066 placement
-function selectSessionId(Qe) {
-  return Qe.id;
+function selectSessionId(state) {
+  return state.id;
 }
 //@ chunk-6p6y0k3t.js:2066-2100 placement
-function selectCwd(Ze) {
-  return getSessionProject(Ze).cwd;
+function selectCwd(state) {
+  return getSessionProject(state).cwd;
 }
 //@ chunk-6p6y0k3t.js:2100-2135 placement
-function hasItems(et) {
-  return et.length > 0;
+function hasItems(items) {
+  return items.length > 0;
 }
 export {
   getCloudSessionsStatusRows,

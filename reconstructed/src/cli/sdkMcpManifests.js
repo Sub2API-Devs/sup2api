@@ -38,6 +38,7 @@ import { isHookRegistrationPending } from "../utils/plugins/loadPluginHooks.js";
 import { UI_SURFACE_V1, PROMPTS_SCREENED_V1, UI_HOOKED_V1 } from "../utils/messages/systemInit.js";
 import { RENDER_EVENT } from "../plugins/functionHooks/ui/renderSites.js";
 import { RenderElementKinds } from "../entrypoints/sdk/controlSchemas.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-ep26dgsk.js:947-1004 placement
 /**
@@ -50,14 +51,14 @@ function isVsCodeHooksSuppressed() {
 /**
  * VS Code 顶层会话下监听 GrowthBook 刷新，从开启变为关闭时触发回调。
  */
-function onVsCodeRefreshLogChange(e, r) {
+function onVsCodeRefreshLogChange(readLog, notify) {
   if (!isVsCodeTopSession()) return () => {};
-  let o = e();
+  let previousLog = readLog();
   return onGrowthBookRefresh(() => {
-    let t = e();
-    let n = o && !t;
-    o = t;
-    if (n) r();
+    let logText = readLog();
+    let isStale = previousLog && !logText;
+    previousLog = logText;
+    if (isStale) notify();
   });
 }
 //@ chunk-ep26dgsk.js:1102-1145 placement
@@ -87,16 +88,16 @@ function sdkMcpCapabilities(active) {
 /**
  * 把请求里的 sdkMcpServerManifests 内容替换为 {}（遥测脱敏）。
  */
-function redactSdkMcpManifests(e) {
-  return e.includes("sdkMcpServerManifests") ? replaceAtPath(e, 0) : undefined;
+function redactSdkMcpManifests(manifests) {
+  return manifests.includes("sdkMcpServerManifests") ? replaceAtPath(manifests, 0) : undefined;
 }
 //@ chunk-ep26dgsk.js:1466-1518 placement
 var MANIFEST_REDACT_PATH = ["payload", "request", "sdkMcpServerManifests"];
 //@ chunk-ep26dgsk.js:1518-1617 placement
-function replaceAtPath(e, r) {
-  return rewriteTopLevelValues(e, (o, t) => {
-    if (o !== MANIFEST_REDACT_PATH[r]) return t;
-    return r === MANIFEST_REDACT_PATH.length - 1 ? "{}" : (replaceAtPath(t, r + 1) ?? t);
+function replaceAtPath(value, path) {
+  return rewriteTopLevelValues(value, (key, field) => {
+    if (key !== MANIFEST_REDACT_PATH[path]) return field;
+    return path === MANIFEST_REDACT_PATH.length - 1 ? "{}" : (replaceAtPath(field, path + 1) ?? field);
   });
 }
 //@ chunk-ep26dgsk.js:1617-1645 placement
@@ -112,23 +113,23 @@ var MAX_MANIFEST_STATEMENT_AGE_MS = 300000;
 //@ chunk-ep26dgsk.js:1669-1912 placement
 function perSendOriginVerdict({ origin, frameCreatedAt, sessionWriters, now = Date.now() }) {
   if (origin !== "host_per_send") return "no_origin_marker";
-  let n = checkSessionWritersFreshness({
+  let verdict = checkSessionWritersFreshness({
     frameCreatedAt,
     sessionWriters,
     maxFrameAgeMs: MAX_MANIFEST_FRAME_AGE_MS,
     maxStatementAgeMs: MAX_MANIFEST_STATEMENT_AGE_MS,
     now,
   });
-  if (n !== undefined) return n;
+  if (verdict !== undefined) return verdict;
   return;
 }
 //@ chunk-ep26dgsk.js:1912-2059 placement
 /**
  * 清单不生效的原因（来源、开关未开或未定）。
  */
-async function manifestsDisabledReason(e) {
-  let r = perSendOriginVerdict(e);
-  if (r !== undefined) return r;
+async function manifestsDisabledReason(origin) {
+  let verdict = perSendOriginVerdict(origin);
+  if (verdict !== undefined) return verdict;
   if (isRemoteManifestsEnabled()) return;
   return (await withDeadline(
     initializeGrowthBook().catch(() => null),
@@ -142,25 +143,32 @@ var LEVEL_PLOVER_DEFAULT = false;
 //@ chunk-ep26dgsk.js:2068-2180 placement
 function isServedOnFacts() {
   let sessionFeatureValues = getSessionFeatureValues();
-  let r = getFeatureValueWithSource_CACHED_MAY_BE_STALE(TENGU_LEVEL_PLOVER, LEVEL_PLOVER_DEFAULT);
-  sessionFeatureValues.servedOnFacts ??= r.value === true && r.source === "payload";
+  let level = getFeatureValueWithSource_CACHED_MAY_BE_STALE(TENGU_LEVEL_PLOVER, LEVEL_PLOVER_DEFAULT);
+  sessionFeatureValues.servedOnFacts ??= level.value === true && level.source === "payload";
   return sessionFeatureValues.servedOnFacts;
 }
 //@ chunk-ep26dgsk.js:2180-2266 placement
-var UI = "ui_";
-var UI_DETACH = "ui_detach";
-var REMOTE_COWORK = "remote_cowork";
-var REMOTE_CALL_ENTRYPOINTS = new Set([REMOTE_COWORK, "remote_mobile"]);
-var VSCODE = "vscode";
+var UI; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var UI_DETACH;
+var REMOTE_COWORK;
+var REMOTE_CALL_ENTRYPOINTS;
+var VSCODE;
+deferInit("chunk-ep26dgsk.js:2180", () => {
+  UI = "ui_";
+  UI_DETACH = "ui_detach";
+  REMOTE_COWORK = "remote_cowork";
+  REMOTE_CALL_ENTRYPOINTS = new Set([REMOTE_COWORK, "remote_mobile"]);
+  VSCODE = "vscode";
+});
 //@ chunk-ep26dgsk.js:2266-2433 placement
 /**
  * 会话持久化是否可信（本地或受信远程入口）。
  */
-function isPersistenceTrusted(e) {
+function isPersistenceTrusted(host) {
   let sessionEntrypoint = getSessionEntrypoint();
   return (
-    !e.redactsWhatItPersists &&
-    (!e.isRemoteTransport ||
+    !host.redactsWhatItPersists &&
+    (!host.isRemoteTransport ||
       (isRemoteManagedEnvironment() &&
         Boolean(env.CLAUDE_CODE_REMOTE_SESSION_ID) &&
         (REMOTE_CALL_ENTRYPOINTS.has(sessionEntrypoint ?? "") ||
@@ -175,19 +183,19 @@ function areHooksUsableHere() {
 /**
  * 能否服务 manifests：hooks 可用、持久化可信，且非远程传输或写者为仅所有者。
  */
-function canServeManifests(e) {
+function canServeManifests(host) {
   return (
     areHooksUsableHere() &&
-    isPersistenceTrusted(e) &&
-    (!e.isRemoteTransport || isOwnerAccountOnlyWriters(e.sessionWriters))
+    isPersistenceTrusted(host) &&
+    (!host.isRemoteTransport || isOwnerAccountOnlyWriters(host.sessionWriters))
   );
 }
 //@ chunk-ep26dgsk.js:2548-2610 placement
 /**
  * 远程传输且非连接型时要能满足 manifests 服务条件。
  */
-function canServeManifestsForRemoteCall(e, r) {
-  return e.isRemoteTransport && !r && areHooksUsableHere() && isPersistenceTrusted(e);
+function canServeManifestsForRemoteCall(host, remoteCall) {
+  return host.isRemoteTransport && !remoteCall && areHooksUsableHere() && isPersistenceTrusted(host);
 }
 //@ chunk-ep26dgsk.js:2610-2658 placement
 /**
@@ -207,10 +215,10 @@ function isUiSurfaceName(subtype) {
 /**
  * 远程传输且低于下限。
  */
-function leavesBelowFloor(e) {
+function leavesBelowFloor(leaves) {
   try {
-    let r = e();
-    return r.isRemoteTransport && r.leavesBelowFloor;
+    let leafValues = leaves();
+    return leafValues.isRemoteTransport && leafValues.leavesBelowFloor;
   } catch (error) {
     logError(toError(error));
     return true;
@@ -220,10 +228,10 @@ function leavesBelowFloor(e) {
 /**
  * 帧与声明时效判定。
  */
-function frameAgeVerdict(e, now) {
+function frameAgeVerdict(frame, now) {
   return checkSessionWritersFreshness({
-    frameCreatedAt: e.createdAt,
-    sessionWriters: e.sessionWriters,
+    frameCreatedAt: frame.createdAt,
+    sessionWriters: frame.sessionWriters,
     maxFrameAgeMs: MAX_MANIFEST_FRAME_AGE_MS,
     maxStatementAgeMs: MAX_MANIFEST_STATEMENT_AGE_MS,
     now,
@@ -233,15 +241,16 @@ function frameAgeVerdict(e, now) {
 /**
  * UI 控制请求是否应被拒绝。
  */
-function shouldRejectUiControl(e, r, o = Date.now) {
-  if (!isUiSurfaceName(e)) return false;
+function shouldRejectUiControl(session, getState, now = Date.now) {
+  if (!isUiSurfaceName(session)) return false;
   try {
-    let t = r();
-    let n =
-      !t.isRemoteTransport ||
-      ((t.isAtFloor || (t.leavesBelowFloor && e === UI_DETACH)) && frameAgeVerdict(t, o()) === undefined);
-    let isAnySurfaceAttached = e === UI_DETACH && t.isAnySurfaceAttached;
-    return !(isPersistenceTrusted(t) && n && (isAnySurfaceAttached || areHooksUsableHere()));
+    let state = getState();
+    let verdict =
+      !state.isRemoteTransport ||
+      ((state.isAtFloor || (state.leavesBelowFloor && session === UI_DETACH)) &&
+        frameAgeVerdict(state, now()) === undefined);
+    let isAnySurfaceAttached = session === UI_DETACH && state.isAnySurfaceAttached;
+    return !(isPersistenceTrusted(state) && verdict && (isAnySurfaceAttached || areHooksUsableHere()));
   } catch (error) {
     logError(toError(error));
     return true;
@@ -251,8 +260,13 @@ function shouldRejectUiControl(e, r, o = Date.now) {
 /**
  * 远程传输、已连接、hooks 可用且写者不是仅所有者时是否可服务 manifests。
  */
-function canServeManifestsWithoutWriters(e, r) {
-  return e.isRemoteTransport && r && areHooksModulesAllowed() && !isOwnerAccountOnlyWriters(e.sessionWriters);
+function canServeManifestsWithoutWriters(host, writers) {
+  return (
+    host.isRemoteTransport &&
+    writers &&
+    areHooksModulesAllowed() &&
+    !isOwnerAccountOnlyWriters(host.sessionWriters)
+  );
 }
 //@ chunk-ep26dgsk.js:3274-3392 placement
 function hasPromptSubmitHooks() {
@@ -295,10 +309,10 @@ function areHooksSettled() {
 /**
  * UI 界面能力（含提示筛查）。
  */
-function uiSurfaceCapabilities(e) {
+function uiSurfaceCapabilities(surfaces) {
   try {
-    let r = e();
-    if (!(canServeManifests(r) && (!r.isRemoteTransport || getSessionEntrypoint() === REMOTE_COWORK)))
+    let caps = surfaces();
+    if (!(canServeManifests(caps) && (!caps.isRemoteTransport || getSessionEntrypoint() === REMOTE_COWORK)))
       return [];
     return needsPromptsScreened() ? [UI_SURFACE_V1, PROMPTS_SCREENED_V1] : [UI_SURFACE_V1];
   } catch (error) {
@@ -310,13 +324,13 @@ function uiSurfaceCapabilities(e) {
 /**
  * 某组件在某 surface 上是否注册了 render 钩子站点。
  */
-function hasRenderHookingSite(component, r) {
+function hasRenderHookingSite(component, site) {
   return hasModuleHookingSite(
     RENDER_EVENT,
-    r === VSCODE
+    site === VSCODE
       ? {
           component,
-          surface: r,
+          surface: site,
         }
       : {
           component,
@@ -334,9 +348,9 @@ function vscodeHookRegistrationInFlight(surface) {
 /**
  * VS Code 顶层会话的 UI 钩子能力。
  */
-function uiHookedCapabilities(e) {
+function uiHookedCapabilities(hooks) {
   try {
-    if (!isVsCodeTopSession() || !canServeManifests(e()) || !areHooksSettled()) return [];
+    if (!isVsCodeTopSession() || !canServeManifests(hooks()) || !areHooksSettled()) return [];
     return [
       UI_HOOKED_V1,
       ...RenderElementKinds()

@@ -5,7 +5,7 @@
  * pieces: chunk-vwj6ccer.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 import { require_DOMImplementation } from "./DOMImplementation.js";
 import { require_EventTarget } from "./EventTarget.js";
 import { require_Location } from "./Location.js";
@@ -15,19 +15,19 @@ import { require_WindowTimers } from "./WindowTimers.js";
 import { require_impl } from "./impl.js";
 
 //@ chunk-vwj6ccer.js:236322-237189 cjs-fingerprint
-var require_Window = x(function (cjsExports, cjsModule) {
+var require_Window = __commonJS(function (cjsExports, cjsModule) {
   var DOMImplementation = require_DOMImplementation();
-  var yf = require_EventTarget();
+  var EventTargetModule = require_EventTarget();
   var Location = require_Location();
   var utils = require_utils();
   cjsModule.exports = Window;
-  function Window(e) {
-    this.document = e || new DOMImplementation(null).createHTMLDocument("");
+  function Window(doc) {
+    this.document = doc || new DOMImplementation(null).createHTMLDocument("");
     this.document._scripting_enabled = true;
     this.document.defaultView = this;
     this.location = new Location(this, this.document._address || "about:blank");
   }
-  Window.prototype = Object.create(yf.prototype, {
+  Window.prototype = Object.create(EventTargetModule.prototype, {
     console: {
       value: console,
     },

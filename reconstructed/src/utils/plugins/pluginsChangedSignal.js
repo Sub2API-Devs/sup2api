@@ -10,10 +10,14 @@
  */
 import { createLazySignal } from "../signal.js";
 import { getHostState } from "../hostEnvironment.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:2077220-2077254 placement
 /**
  * skillsChangedSignal：技能变更的惰性信号。
  */
-var skillsChangedSignal = createLazySignal(() => getHostState().skillsChanged);
+var skillsChangedSignal; // deferred: uses getHostState (../hostEnvironment.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:2077220", () => {
+  skillsChangedSignal = createLazySignal(() => getHostState().skillsChanged);
+});
 export { skillsChangedSignal };

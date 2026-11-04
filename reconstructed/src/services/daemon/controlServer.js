@@ -5,8 +5,8 @@
  *
  * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
  * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-ksvdmrg0.js (23)
- * attribution: placement 22, sole-consumer 1
+ * pieces: chunk-ksvdmrg0.js (24)
+ * attribution: placement 23, sole-consumer 1
  */
 import { lstatSync, openSync, readSync, closeSync } from "fs";
 import { unlink } from "fs/promises";
@@ -31,7 +31,6 @@ import {
   MAX_DAEMON_STDERR_LINE_CHARS,
   MAX_WAIT_FOR_DAEMON_MS,
   MAX_DAEMON_WAIT_DETAIL_CHARS,
-  isMarkdownTooComplex,
   MAX_DAEMON_STDERR_CHARS,
   isNonPromptInput,
   isTerminalReplyOnly,
@@ -39,7 +38,7 @@ import {
 } from "./spawnLauncher.js";
 import { sequential } from "../../utils/sequential.js";
 import { truncateToWidth } from "../../utils/format.js";
-import { BLACK_CIRCLE, THEREFORE } from "../../utils/permissions/autoModeRulesPrompt.js";
+import { BLACK_CIRCLE, THEREFORE } from "../../constants/figures.js";
 import { color } from "../../components/design-system/color.js";
 import { HIDE_CURSOR, decset } from "../../ink/termio/dec.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../analytics/growthbook.js";
@@ -51,8 +50,12 @@ import { wrapStorageSource, getTranscriptStorageContext } from "../../utils/sess
 import { resolveJobTranscript, quarantineJobTranscript } from "../../utils/sessionStoragePortable.js";
 import { withReplyOnResume, withoutReplyOnResume } from "../../cli/forwardedFlags.js";
 import { logError } from "../../utils/log.js";
-import { daemonControlSocket, redactDaemonPipeKey } from "../../utils/sandbox/userNamespace.js";
-import { ensureDaemonRuntimeDir, getOrCreateDaemonToken } from "./paths.js";
+import {
+  daemonControlSocket,
+  ensureDaemonRuntimeDir,
+  getOrCreateDaemonToken,
+  redactDaemonPipeKey,
+} from "./paths.js";
 import { createSignal } from "../../utils/signal.js";
 import { logEvent } from "../analytics/index.js";
 import { lit, fromEnum, fromEnumOpt } from "../analytics/safeMetadata.js";
@@ -85,18 +88,48 @@ import { updateRoster } from "./roster.js";
 import { daemonSessionStateLabel } from "./sessionStatus.js";
 import { ERASE_SCREEN, CURSOR_HOME, ERASE_LINE } from "../../ink/termio/csi.js";
 import { getPlatform } from "../../utils/platform.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
+//@ chunk-ksvdmrg0.js:23828-24104 placement
+function isMarkdownTooComplex(text) {
+  let openBrackets = 0;
+  let setextRules = 0;
+  let quoteDepth = 0;
+  for (let line of text.split(`
+`)) {
+    let prefixLength = 0;
+    while (prefixLength < line.length && (line[prefixLength] === ">" || line[prefixLength] === " ")) {
+      if (line[prefixLength] === ">") quoteDepth++;
+      prefixLength++;
+    }
+    if (/^ {0,3}(?:=+|-+)\s*$/.test(line)) setextRules++;
+    for (let index = prefixLength; index < line.length; index++) {
+      let char = line[index];
+      if (char === "[") openBrackets++;
+      else if (char === "]" && openBrackets > 0) openBrackets--;
+    }
+  }
+  return openBrackets > 256 || setextRules > 64 || quoteDepth > 512;
+}
 //@ chunk-ksvdmrg0.js:24104-24255 placement = DIM (0.387)
 /**
  * 暗色文本的 ANSI 前缀 ESC[2m。
  */
-var DIM = "\x1B[2m";
-var RESET = "\x1B[0m";
-var INDENT = 2;
-var DARK = "dark";
-var pointer = figures_default.pointer;
-var SESSION_STARTING_NOTICE =
-  "  Session is starting \u2014 showing its transcript until it appears. Ctrl+Z to detach";
+var DIM; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var RESET;
+var INDENT;
+var DARK;
+var pointer;
+var SESSION_STARTING_NOTICE;
+deferInit("chunk-ksvdmrg0.js:24104", () => {
+  DIM = "\x1B[2m";
+  RESET = "\x1B[0m";
+  INDENT = 2;
+  DARK = "dark";
+  pointer = figures_default.pointer;
+  SESSION_STARTING_NOTICE =
+    "  Session is starting \u2014 showing its transcript until it appears. Ctrl+Z to detach";
+});
 //@ chunk-ksvdmrg0.js:24255-24395 placement
 function sanitizeControlChars(text) {
   if (!/[\x00-\x09\x0b-\x1f\x7f-\x9f]/.test(text)) return text;
@@ -106,62 +139,67 @@ function sanitizeControlChars(text) {
     .replace(/[\v\f\r]/g, "");
 }
 //@ chunk-ksvdmrg0.js:24395-24490 placement
-var regExp = new RegExp(`(${sgrPatternSource(";")})`);
-var regExp_2 = new RegExp(`^${sgrPatternSource(";")}$`);
-var regExp_3 = new RegExp(regExp.source, "g");
+var regExp; // deferred: uses sgrPatternSource (../../ink/wrapAnsi.js) of its import cycle while loading; runs once the cycle is complete
+var regExp_2;
+var regExp_3;
+deferInit("chunk-ksvdmrg0.js:24395", () => {
+  regExp = new RegExp(`(${sgrPatternSource(";")})`);
+  regExp_2 = new RegExp(`^${sgrPatternSource(";")}$`);
+  regExp_3 = new RegExp(regExp.source, "g");
+});
 //@ chunk-ksvdmrg0.js:24490-25056 placement
 /**
  * 去掉文本中除允许的 SGR 以外的 CSI 序列，以及 OSC/DCS/SOS/PM/APC 字符串和其他 ESC 序列。
  */
-function stripNonSgrEscapes(r) {
-  if (!r.includes("\x1B")) return r;
+function stripNonSgrEscapes(text) {
+  if (!text.includes("\x1B")) return text;
   let output = "";
   let pos = 0;
-  while (pos < r.length) {
-    let index = r.indexOf("\x1B", pos);
+  while (pos < text.length) {
+    let index = text.indexOf("\x1B", pos);
     if (index < 0) {
-      output += r.slice(pos);
+      output += text.slice(pos);
       break;
     }
-    output += r.slice(pos, index);
-    let h = r[index + 1];
-    if (h === "[") {
-      let w = index + 2;
-      while (w < r.length) {
-        let code = r.charCodeAt(w);
+    output += text.slice(pos, index);
+    let kind = text[index + 1];
+    if (kind === "[") {
+      let cursor = index + 2;
+      while (cursor < text.length) {
+        let code = text.charCodeAt(cursor);
         if (code >= 64 && code <= 126) {
-          let sliced = r.slice(index, w + 1);
+          let sliced = text.slice(index, cursor + 1);
           if (regExp_2.test(sliced)) output += sliced;
-          w++;
+          cursor++;
           break;
         }
         if (code < 32 || code > 63) break;
-        w++;
+        cursor++;
       }
-      pos = w;
-    } else if (h === "]" || h === "P" || h === "X" || h === "^" || h === "_") {
-      let w = index + 2;
-      let p = r.length;
-      while (w < r.length) {
-        if (h === "]" && r.charCodeAt(w) === 7) {
-          p = w + 1;
+      pos = cursor;
+    } else if (kind === "]" || kind === "P" || kind === "X" || kind === "^" || kind === "_") {
+      let cursor = index + 2;
+      let end = text.length;
+      while (cursor < text.length) {
+        if (kind === "]" && text.charCodeAt(cursor) === 7) {
+          end = cursor + 1;
           break;
         }
-        if (r.charCodeAt(w) === 27 && r[w + 1] === "\\") {
-          p = w + 2;
+        if (text.charCodeAt(cursor) === 27 && text[cursor + 1] === "\\") {
+          end = cursor + 2;
           break;
         }
-        w++;
+        cursor++;
       }
-      pos = p;
-    } else if (h === undefined) pos = r.length;
+      pos = end;
+    } else if (kind === undefined) pos = text.length;
     else pos = index + 2;
   }
   return output;
 }
 //@ chunk-ksvdmrg0.js:25498-25581 sole-consumer
-function wrapAnsiHard(r, width) {
-  return wrapAnsi(r, width, {
+function wrapAnsiHard(text, width) {
+  return wrapAnsi(text, width, {
     hard: false,
     trim: false,
   })
@@ -175,10 +213,10 @@ function wrapAnsiHard(r, width) {
 /**
  * 解析一行转录 JSONL 为预览项：只取主线的 user/assistant 消息，用户文本、助手文本、工具调用（工具名+首个字符串参数）与思考分别成项。
  */
-function parseTranscriptLineForPreview(r) {
+function parseTranscriptLineForPreview(line) {
   let parsed;
   try {
-    parsed = jsonParseRaw(r);
+    parsed = jsonParseRaw(line);
   } catch {
     return [];
   }
@@ -205,13 +243,13 @@ function parseTranscriptLineForPreview(r) {
   }
   if (!Array.isArray(content)) return [];
   if (entry.type === "user") {
-    let E = [];
-    for (let S of content) {
-      let R = S;
-      if (R?.type === "text" && typeof R.text === "string") E.push(R.text);
+    let textParts = [];
+    for (let part of content) {
+      let block = part;
+      if (block?.type === "text" && typeof block.text === "string") textParts.push(block.text);
     }
     return toUserPreviewItem(
-      E.join(`
+      textParts.join(`
 `),
     );
   }
@@ -231,28 +269,32 @@ function parseTranscriptLineForPreview(r) {
         text: trimmed,
       });
   };
-  for (let E of content) {
-    let S = E;
-    if (S?.type === "text" && typeof S.text === "string") pendingText.push(S.text);
-    else if (S?.type === "tool_use" && typeof S.name === "string") {
+  for (let block of content) {
+    let candidate = block;
+    if (candidate?.type === "text" && typeof candidate.text === "string") pendingText.push(candidate.text);
+    else if (candidate?.type === "tool_use" && typeof candidate.name === "string") {
       flushText();
-      let R = "";
-      if (typeof S.input === "object" && S.input !== null) {
-        for (let A of Object.values(S.input))
-          if (typeof A === "string" && A !== "") {
-            R = A;
+      let inputSummary = "";
+      if (typeof candidate.input === "object" && candidate.input !== null) {
+        for (let inputValue of Object.values(candidate.input))
+          if (typeof inputValue === "string" && inputValue !== "") {
+            inputSummary = inputValue;
             break;
           }
       }
       items.push({
         role: "tool",
-        text: `${identity(S.name)}(${R})`,
+        text: `${identity(candidate.name)}(${inputSummary})`,
       });
-    } else if (S?.type === "thinking" && typeof S.thinking === "string" && S.thinking.trim() !== "") {
+    } else if (
+      candidate?.type === "thinking" &&
+      typeof candidate.thinking === "string" &&
+      candidate.thinking.trim() !== ""
+    ) {
       flushText();
       items.push({
         role: "thinking",
-        text: S.thinking,
+        text: candidate.thinking,
       });
     }
   }
@@ -260,8 +302,8 @@ function parseTranscriptLineForPreview(r) {
   return items;
 }
 //@ chunk-ksvdmrg0.js:26658-26850 placement
-function toUserPreviewItem(r) {
-  let trimmed = flattenPastedBlocks(r).trim();
+function toUserPreviewItem(text) {
+  let trimmed = flattenPastedBlocks(text).trim();
   if (trimmed === "") return [];
   let match = /^<bash-input>([\s\S]*?)<\/bash-input>/.exec(trimmed);
   if (match) trimmed = `! ${match[1].trim()}`;
@@ -274,13 +316,13 @@ function toUserPreviewItem(r) {
   ];
 }
 //@ chunk-ksvdmrg0.js:26850-27017 placement
-function renderMarkdownForPreview(r, theme) {
+function renderMarkdownForPreview(markdown, theme) {
   configureMarked();
   return stripNonSgrEscapes(
     marked
-      .lexer(r)
-      .map((n) =>
-        formatTokenWindowed(n, theme, {
+      .lexer(markdown)
+      .map((token) =>
+        formatTokenWindowed(token, theme, {
           listDepth: 0,
           orderedListNumber: null,
           parent: null,
@@ -296,19 +338,19 @@ function renderMarkdownForPreview(r, theme) {
 /**
  * 渲染附着时显示的会话尾部预览：从转录末尾倒序取若干条（字符预算内），按角色着色、折行（助手消息尝试 Markdown 渲染），按终端行数从下往上裁剪，加分隔线与"会话启动中"提示。
  */
-function renderTranscriptTail(r, columns, rows, options) {
+function renderTranscriptTail(stderrText, columns, rows, options) {
   let max = Math.max(1, columns);
   let colorLevel = options?.colorLevel ?? INDENT;
   let theme = options?.theme ?? DARK;
-  let dim = (y) => (colorLevel > 0 && y !== "" ? DIM + y + RESET : y);
-  let rowsOf = (y) => Math.max(1, Math.ceil(bunStringWidth(y) / max));
-  let R = "\u2500".repeat(max);
-  let footer = ["", R, pointer, R, SESSION_STARTING_NOTICE];
-  let reduced = footer.reduce((acc, Y) => acc + rowsOf(Y), 0);
+  let dim = (dim) => (colorLevel > 0 && dim !== "" ? DIM + dim + RESET : dim);
+  let rowsOf = (rowCount) => Math.max(1, Math.ceil(bunStringWidth(rowCount) / max));
+  let rule = "\u2500".repeat(max);
+  let footer = ["", rule, pointer, rule, SESSION_STARTING_NOTICE];
+  let reduced = footer.reduce((acc, footerLine) => acc + rowsOf(footerLine), 0);
   let availableRows = rows - reduced;
   if (availableRows < 1) return null;
   let min = Math.min(Math.ceil((availableRows + 1) / 2), MAX_DAEMON_STDERR_LINES);
-  let lines = r.split(`
+  let lines = stderrText.split(`
 `);
   let items = [];
   let charBudget = MAX_DAEMON_STDERR_LINE_CHARS;
@@ -316,23 +358,23 @@ function renderTranscriptTail(r, columns, rows, options) {
     let transcriptLineForPreview = parseTranscriptLineForPreview(lines[idx]);
     for (let idx = transcriptLineForPreview.length - 1; idx >= 0; idx--) {
       if (items.length >= min) break e;
-      let Q = transcriptLineForPreview[idx];
-      if (Q.text.length > charBudget) {
+      let item = transcriptLineForPreview[idx];
+      if (item.text.length > charBudget) {
         if (items.length === 0) {
-          let oe = takeLastChars(Q.text, charBudget);
-          let index = oe.indexOf(`
+          let tailText = takeLastChars(item.text, charBudget);
+          let index = tailText.indexOf(`
 `);
-          if (index >= 0) oe = oe.slice(index + 1);
-          if (oe.trim() !== "")
+          if (index >= 0) tailText = tailText.slice(index + 1);
+          if (tailText.trim() !== "")
             items.unshift({
-              role: Q.role,
-              text: oe,
+              role: item.role,
+              text: tailText,
             });
         }
         break e;
       }
-      charBudget -= Q.text.length;
-      items.unshift(Q);
+      charBudget -= item.text.length;
+      items.unshift(item);
     }
   }
   if (items.length === 0) return null;
@@ -349,57 +391,57 @@ function renderTranscriptTail(r, columns, rows, options) {
           text: "",
           dim: false,
         });
-      let Y = sanitizeControlChars(item.text);
+      let text = sanitizeControlChars(item.text);
       switch (item.role) {
         case "tool": {
-          let text = truncateToWidth(`${BLACK_CIRCLE} ${Y.replace(/\n/g, " ")}`, max);
+          let text_2 = truncateToWidth(`${BLACK_CIRCLE} ${text.replace(/\n/g, " ")}`, max);
           rendered.push({
-            text,
+            text: text_2,
             dim: true,
           });
           break;
         }
         case "thinking": {
-          let trimmed = Y.replace(/\s+/g, " ").trim();
-          for (let [Q, oe] of wrapAnsiHard(trimmed, max_2).entries()) {
-            let le = gutter === 0 || oe === "" ? "" : Q === 0 ? `${THEREFORE} ` : "  ";
+          let text_2 = text.replace(/\s+/g, " ").trim();
+          for (let [lineIndex, lineText] of wrapAnsiHard(text_2, max_2).entries()) {
+            let prefix = gutter === 0 || lineText === "" ? "" : lineIndex === 0 ? `${THEREFORE} ` : "  ";
             rendered.push({
-              text: le + sequential.italic(oe),
+              text: prefix + sequential.italic(lineText),
               dim: true,
             });
           }
           break;
         }
         case "assistant": {
-          let q = Y;
+          let body = text;
           if (
-            Y.length <= MAX_WAIT_FOR_DAEMON_MS &&
+            text.length <= MAX_WAIT_FOR_DAEMON_MS &&
             performance.now() - startTime < MAX_DAEMON_WAIT_DETAIL_CHARS &&
-            !isMarkdownTooComplex(Y)
+            !isMarkdownTooComplex(text)
           )
             try {
-              q = renderMarkdownForPreview(Y, theme);
+              body = renderMarkdownForPreview(text, theme);
             } catch {
-              q = Y;
+              body = text;
             }
-          let Q = color("text", theme)(BLACK_CIRCLE);
-          for (let [oe, le] of wrapAnsiHard(q, max_2).entries()) {
-            let ce = gutter === 0 || le === "" ? "" : oe === 0 ? `${Q} ` : "  ";
+          let bullet = color("text", theme)(BLACK_CIRCLE);
+          for (let [lineIndex, lineText] of wrapAnsiHard(body, max_2).entries()) {
+            let prefix = gutter === 0 || lineText === "" ? "" : lineIndex === 0 ? `${bullet} ` : "  ";
             rendered.push({
-              text: ce + le,
+              text: prefix + lineText,
               dim: false,
             });
           }
           break;
         }
         case "user": {
-          let q = color("inactive", theme)(`${pointer} `);
-          let Q = color("text", theme);
-          let oe = color("userMessageBackground", theme, "background");
-          for (let [le, ce] of wrapAnsiHard(Y, max_2).entries()) {
-            let se = gutter === 0 ? "" : le === 0 ? q : "  ";
+          let pointerPrefix = color("inactive", theme)(`${pointer} `);
+          let styleText = color("text", theme);
+          let styleBackground = color("userMessageBackground", theme, "background");
+          for (let [lineIndex, lineText] of wrapAnsiHard(text, max_2).entries()) {
+            let prefix = gutter === 0 ? "" : lineIndex === 0 ? pointerPrefix : "  ";
             rendered.push({
-              text: oe(se + Q(ce)),
+              text: styleBackground(prefix + styleText(lineText)),
               dim: false,
             });
           }
@@ -415,18 +457,18 @@ function renderTranscriptTail(r, columns, rows, options) {
   let usedRows = 0;
   let visible = [];
   for (let idx = rendered.length - 1; idx >= 0; idx--) {
-    let Y = rendered[idx];
-    let q = rowsOf(Y.text);
-    if (usedRows + q > availableRows) break;
-    usedRows += q;
-    visible.unshift(Y.dim ? dim(Y.text) : Y.text);
+    let entry = rendered[idx];
+    let entryRows = rowsOf(entry.text);
+    if (usedRows + entryRows > availableRows) break;
+    usedRows += entryRows;
+    visible.unshift(entry.dim ? dim(entry.text) : entry.text);
   }
   if (visible.length === 0) return null;
   let padRows = rows - usedRows - reduced;
   let out = [];
   for (let idx = 0; idx < padRows; idx++) out.push("");
   out.push(...visible);
-  for (let y of footer) out.push(dim(y));
+  for (let footerLine of footer) out.push(dim(footerLine));
   let joined = out.join(`\r
 `);
   if (joined.length > 65536 + rows * max * 32) joined = joined.replace(regExp_3, "");
@@ -436,30 +478,30 @@ function renderTranscriptTail(r, columns, rows, options) {
 /**
  * 读取转录文件尾部（固定大小，从第一个完整行开始）并渲染预览。
  */
-function readTranscriptTailPreview(r, columns, rows, options) {
-  let h;
+function readTranscriptTailPreview(path, columns, rows, options) {
+  let fd;
   try {
-    let w = lstatSync(r);
-    if (!w.isFile() || w.size === 0) return null;
-    let size = w.size;
-    h = openSync(r, "r");
+    let stats = lstatSync(path);
+    if (!stats.isFile() || stats.size === 0) return null;
+    let size = stats.size;
+    fd = openSync(path, "r");
     let max = Math.max(0, size - MAX_DAEMON_STDERR_CHARS);
-    let S = Buffer.alloc(Math.min(size, MAX_DAEMON_STDERR_CHARS));
-    let R = readSync(h, S, 0, S.length, max);
-    let str = S.subarray(0, R).toString("utf8");
+    let buffer = Buffer.alloc(Math.min(size, MAX_DAEMON_STDERR_CHARS));
+    let bytesRead = readSync(fd, buffer, 0, buffer.length, max);
+    let stderrText = buffer.subarray(0, bytesRead).toString("utf8");
     if (max > 0) {
-      let index = str.indexOf(`
+      let index = stderrText.indexOf(`
 `);
       if (index < 0) return null;
-      str = str.slice(index + 1);
+      stderrText = stderrText.slice(index + 1);
     }
-    return renderTranscriptTail(str, columns, rows, options);
+    return renderTranscriptTail(stderrText, columns, rows, options);
   } catch {
     return null;
   } finally {
-    if (h !== undefined)
+    if (fd !== undefined)
       try {
-        closeSync(h);
+        closeSync(fd);
       } catch {}
   }
 }
@@ -481,8 +523,8 @@ function getAttachStallMs() {
     DEFAULT_ATTACH_STALL_MS,
   );
   if (featureValue_CACHED_MAY_BE_STALE === 0) return 0;
-  let e = processWrapperArgv().length > 0 ? LONG_ARGV_THRESHOLD_BYTES : 2000;
-  return Math.max(e, featureValue_CACHED_MAY_BE_STALE);
+  let floorMs = processWrapperArgv().length > 0 ? LONG_ARGV_THRESHOLD_BYTES : 2000;
+  return Math.max(floorMs, featureValue_CACHED_MAY_BE_STALE);
 }
 //@ chunk-ksvdmrg0.js:29435-30392 placement
 /**
@@ -492,24 +534,30 @@ function respawnStalledAttach(worker, socket, dispatch, isClosing, respawning, s
   let dispatch_2 = worker.dispatch;
   if (worker.getPhase().kind !== "running" || socket.destroyed || isClosing()) return;
   respawning.add(dispatch_2.short);
-  let E = readJobState(getJobDir(dispatch_2.short), storage).catch(() => null);
+  let statePromise = readJobState(getJobDir(dispatch_2.short), storage).catch(() => null);
   worker.kill("SIGTERM");
   (async () => {
-    let S = Date.now() + READY_TIMEOUT_MS;
-    while (Date.now() < S && !worker.record.outcome) await sleep(100);
+    let deadline = Date.now() + READY_TIMEOUT_MS;
+    while (Date.now() < deadline && !worker.record.outcome) await sleep(100);
     if (!respawning.has(dispatch_2.short)) return;
-    let R = await readJobState(getJobDir(dispatch_2.short), storage).catch(() => null);
-    let A = R === null ? await probeJobState(getJobDir(dispatch_2.short), storage) : undefined;
-    let x = R?.resumeSessionId ?? dispatch_2.sessionId;
-    let cwd = R?.cwd ?? dispatch_2.cwd;
-    let M = wrapStorageSource(getTranscriptStorageContext(storage));
-    let jobTranscript = await resolveJobTranscript(x, cwd, R?.linkScanPath, undefined, M);
+    let savedState = await readJobState(getJobDir(dispatch_2.short), storage).catch(() => null);
+    let probe = savedState === null ? await probeJobState(getJobDir(dispatch_2.short), storage) : undefined;
+    let sessionId = savedState?.resumeSessionId ?? dispatch_2.sessionId;
+    let cwd = savedState?.cwd ?? dispatch_2.cwd;
+    let storageSource = wrapStorageSource(getTranscriptStorageContext(storage));
+    let jobTranscript = await resolveJobTranscript(
+      sessionId,
+      cwd,
+      savedState?.linkScanPath,
+      undefined,
+      storageSource,
+    );
     let hasMessages = jobTranscript.hasMessages;
-    if (!hasMessages) await quarantineJobTranscript(jobTranscript.path, M);
+    if (!hasMessages) await quarantineJobTranscript(jobTranscript.path, storageSource);
     if (!respawning.has(dispatch_2.short)) return;
-    let respawnFlags = R?.respawnFlags ?? dispatch_2.respawnFlags;
-    let j = (await E)?.tempo === "active";
-    if (A) logRestartWithoutSavedState("attach_stall", A);
+    let respawnFlags = savedState?.respawnFlags ?? dispatch_2.respawnFlags;
+    let wasActive = (await statePromise)?.tempo === "active";
+    if (probe) logRestartWithoutSavedState("attach_stall", probe);
     await dispatch({
       ...dispatch_2,
       cwd,
@@ -519,15 +567,15 @@ function respawnStalledAttach(worker, socket, dispatch, isClosing, respawning, s
       launch: hasMessages
         ? {
             mode: "resume",
-            sessionId: x,
+            sessionId,
             transcriptPath: jobTranscript.path,
             fork: false,
-            flagArgs: j ? withReplyOnResume(respawnFlags) : withoutReplyOnResume(respawnFlags),
+            flagArgs: wasActive ? withReplyOnResume(respawnFlags) : withoutReplyOnResume(respawnFlags),
           }
-        : x !== dispatch_2.sessionId
+        : sessionId !== dispatch_2.sessionId
           ? {
               mode: "prompt",
-              args: ["--session-id", x, ...respawnFlags],
+              args: ["--session-id", sessionId, ...respawnFlags],
             }
           : dispatch_2.launch,
     });
@@ -552,16 +600,16 @@ async function handleDaemonLease(
   whenReady = new Promise(() => {}),
   storageV5,
 ) {
-  let S = daemonControlSocket();
+  let socketPath = daemonControlSocket();
   await ensureDaemonRuntimeDir();
   let controlKey = await getOrCreateDaemonToken();
-  await unlink(S).catch(() => {});
-  let A = new Set();
+  await unlink(socketPath).catch(() => {});
+  let connections = new Set();
   let stallRespawnPending = new Set();
-  let L = new Map();
-  let M = new Map();
+  let settledDispatches = new Map();
+  let leases = new Map();
   let signal = createSignal();
-  let j = {
+  let leaseHandles = {
     handles,
     onDispatch,
     onNudge,
@@ -569,71 +617,71 @@ async function handleDaemonLease(
     ready,
     whenReady,
     onYield,
-    addLease: (u, o) => {
-      if (M.has(u)) return;
-      M.set(u, o);
-      let label = daemonLeaseLabel(o?.label);
+    addLease: (socket, lease) => {
+      if (leases.has(socket)) return;
+      leases.set(socket, lease);
+      let label = daemonLeaseLabel(lease?.label);
       logEvent("tengu_daemon_lease", {
         op: lit("open"),
         label,
       });
-      u.once("close", () => {
-        M.delete(u);
+      socket.once("close", () => {
+        leases.delete(socket);
         logEvent("tengu_daemon_lease", {
           op: lit("close"),
           label,
         });
         signal.emit({
           op: "close",
-          client: o,
+          client: lease,
         });
       });
       signal.emit({
         op: "open",
-        client: o,
+        client: lease,
       });
     },
     listLeases: () => {
-      let u = [];
-      for (let o of M.values()) if (o) u.push(o);
-      return u;
+      let list = [];
+      for (let lease of leases.values()) if (lease) list.push(lease);
+      return list;
     },
     stallRespawnPending,
-    settledDispatches: L,
+    settledDispatches,
     controlKey,
     storageV5,
     legacyOpProbe: new FiredKeys(),
   };
-  let ee = false;
-  let server = createServer((u) => {
-    if (ee) {
-      u.destroy();
+  let closing = false;
+  let server = createServer((socket) => {
+    if (closing) {
+      socket.destroy();
       return;
     }
-    u.on("error", () => u.destroy());
-    u.setTimeout(30000, () => u.destroy());
-    A.add(u);
-    u.once("close", () => A.delete(u));
-    let o = describeUidMismatch(u);
-    if (o) {
+    socket.on("error", () => socket.destroy());
+    socket.setTimeout(30000, () => socket.destroy());
+    connections.add(socket);
+    socket.once("close", () => connections.delete(socket));
+    let uidMismatch = describeUidMismatch(socket);
+    if (uidMismatch) {
       logEvent("tengu_daemon_peer_uid_reject", {});
-      u.once("data", () =>
-        writeOut_2(u, {
+      socket.once("data", () =>
+        writeOut_2(socket, {
           ok: false,
           code: "EPEERUID",
-          error: o,
+          error: uidMismatch,
         }),
       );
       return;
     }
-    let P = Buffer.alloc(0);
-    let T = (G) => {
-      P = Buffer.concat([P, G]);
-      let index = P.indexOf(10);
+    let buffer = Buffer.alloc(0);
+    let onData = (data) => {
+      buffer = Buffer.concat([buffer, data]);
+      let index = buffer.indexOf(10);
       if (index < 0) {
-        if (P.length > MAX_REQUEST_BYTES) {
-          u.off("data", T);
-          writeOut_2(u, {
+        if (buffer.length > MAX_REQUEST_BYTES) {
+          socket.off("data", onData);
+          writeOut_2(socket, {
             ok: false,
             code: "ETOOLARGE",
             error: `request exceeds ${MAX_REQUEST_BYTES >> 20}MB \u2014 shorten the prompt or send in parts`,
@@ -641,72 +689,72 @@ async function handleDaemonLease(
         }
         return;
       }
-      u.off("data", T);
-      u.setTimeout(0);
-      let str = P.subarray(0, index).toString("utf8");
-      let chunk = P.subarray(index + 1);
-      DaemonControlServer(j, u, str, chunk).catch((error) => {
-        writeOut_2(u, {
+      socket.off("data", onData);
+      socket.setTimeout(0);
+      let str = buffer.subarray(0, index).toString("utf8");
+      let initialData = buffer.subarray(index + 1);
+      DaemonControlServer(leaseHandles, socket, str, initialData).catch((error) => {
+        writeOut_2(socket, {
           ok: false,
           error: errorMessage(error),
           code: "EUNKNOWN",
         });
       });
     };
-    u.on("data", T);
+    socket.on("data", onData);
   });
-  let Z = false;
-  server.on("error", (u) => {
-    if (Z) {
-      logForDebugging(`bg control server bind: ${redactDaemonPipeKey(errorMessage(u))}`, {
+  let binding = false;
+  server.on("error", (error) => {
+    if (binding) {
+      logForDebugging(`bg control server bind: ${redactDaemonPipeKey(errorMessage(error))}`, {
         level: "warn",
       });
       return;
     }
-    logError(u);
+    logError(error);
   });
-  let ae = Date.now() + SOCKET_READY_TIMEOUT_MS;
+  let deadline = Date.now() + SOCKET_READY_TIMEOUT_MS;
   for (;;)
     try {
       await new Promise((resolve, reject) => {
-        let P = (T) => {
-          Z = false;
-          reject(T);
+        let onListenError = (error) => {
+          binding = false;
+          reject(error);
         };
-        Z = true;
-        server.once("error", P);
-        server.listen(S, () => {
-          Z = false;
-          server.removeListener("error", P);
+        binding = true;
+        server.once("error", onListenError);
+        server.listen(socketPath, () => {
+          binding = false;
+          server.removeListener("error", onListenError);
           resolve();
         });
       });
       break;
     } catch (error) {
-      if (getErrnoCode(error) !== "EADDRINUSE" || Date.now() >= ae) throw error;
+      if (getErrnoCode(error) !== "EADDRINUSE" || Date.now() >= deadline) throw error;
       server.removeAllListeners("listening");
       await sleep(100);
     }
   return {
-    close: (u) =>
+    close: (options) =>
       new Promise((resolve) => {
-        for (let P of A) P.destroy();
-        if (u?.skipUnlink) {
-          ee = true;
+        for (let socket of connections) socket.destroy();
+        if (options?.skipUnlink) {
+          closing = true;
           server.unref();
           return void resolve();
         }
         server.close(() => {
-          if (!u?.skipUnlink) unlink(S).catch(() => {});
+          if (!options?.skipUnlink) unlink(socketPath).catch(() => {});
           resolve();
         });
       }),
-    leaseCount: () => M.size,
+    leaseCount: () => leases.size,
     onLeaseChange: signal,
     announceExit: (closing) => {
-      for (let [o, P] of M)
-        if (P?.label === CLOUD_SESSION_LEASE_LABEL)
-          o.write(
+      for (let [socket, lease] of leases)
+        if (lease?.label === CLOUD_SESSION_LEASE_LABEL)
+          socket.write(
             jsonStringify({
               op: "lease",
               closing,
@@ -715,32 +763,32 @@ async function handleDaemonLease(
 `,
           );
     },
-    noteSettledDispatch: (u, o, refusal) => {
-      L.set(u, {
-        nonce: o,
+    noteSettledDispatch: (dispatchId, nonce, refusal) => {
+      settledDispatches.set(dispatchId, {
+        nonce,
         refusal,
       });
       setTimeout(
-        (T, G, y) => {
-          if (T.get(G)?.nonce === y) T.delete(G);
+        (map, dispatchId, nonce) => {
+          if (map.get(dispatchId)?.nonce === nonce) map.delete(dispatchId);
         },
         DRAIN_TIMEOUT_MS,
-        L,
-        u,
-        o,
+        settledDispatches,
+        dispatchId,
+        nonce,
       ).unref();
     },
   };
 }
 //@ chunk-ksvdmrg0.js:32635-32735 placement
-function writeControlLine(r, e) {
-  if (r.destroyed) return;
-  if (r.writableLength > MAX_REQUEST_BYTES) {
-    r.destroy();
+function writeControlLine(stream, message) {
+  if (stream.destroyed) return;
+  if (stream.writableLength > MAX_REQUEST_BYTES) {
+    stream.destroy();
     return;
   }
-  r.write(
-    jsonStringify(e) +
+  stream.write(
+    jsonStringify(message) +
       `
 `,
   );
@@ -749,15 +797,15 @@ function writeControlLine(r, e) {
 /**
  * 判断 worker 是否干净可复用（没有结果、不在退役/杀死中）。
  */
-function isWorkerClean(r) {
-  return !r.record.outcome && !r.isRetiring && !r.isKilling;
+function isWorkerClean(supervisor) {
+  return !supervisor.record.outcome && !supervisor.isRetiring && !supervisor.isKilling;
 }
 //@ chunk-ksvdmrg0.js:32803-32865 placement
 /**
  * 等待 25 毫秒（有 worker 记录时带截止时间）。
  */
-function waitShort(r, outcome) {
-  return r !== undefined && outcome === undefined ? withDeadline(r, 25) : sleep(25);
+function waitShort(promise, outcome) {
+  return promise !== undefined && outcome === undefined ? withDeadline(promise, 25) : sleep(25);
 }
 //@ chunk-ksvdmrg0.js:32865-33942 placement
 /**
@@ -769,9 +817,9 @@ async function awaitDispatchAck(workers, coldRecords, socket, op, short, nonce, 
   let sawStale = false;
   let staleWorker;
   let outcome;
-  let M = pendingOutcome?.then(
-    (U) => {
-      outcome = U;
+  let pending = pendingOutcome?.then(
+    (outcomeValue) => {
+      outcome = outcomeValue;
     },
     (error) => {
       logError(error);
@@ -780,14 +828,16 @@ async function awaitDispatchAck(workers, coldRecords, socket, op, short, nonce, 
   );
   while (Date.now() < deadline) {
     if (socket.destroyed) return;
-    let U = outcome === "dup-live" || outcome === "dropped" || outcome === "refused" || outcome === "closed";
-    let O = workers.get(short);
-    let K = nonce !== undefined && O?.record.nonce !== nonce ? coldRecords.get(short) : undefined;
-    if (K !== undefined && K.nonce === nonce) {
-      if (K.refusal !== undefined)
+    let terminal =
+      outcome === "dup-live" || outcome === "dropped" || outcome === "refused" || outcome === "closed";
+    let worker = workers.get(short);
+    let coldRecord =
+      nonce !== undefined && worker?.record.nonce !== nonce ? coldRecords.get(short) : undefined;
+    if (coldRecord !== undefined && coldRecord.nonce === nonce) {
+      if (coldRecord.refusal !== undefined)
         return writeOut_2(socket, {
           ok: false,
-          error: K.refusal,
+          error: coldRecord.refusal,
           code: "ECWDGONE",
         });
       return writeOut_2(socket, {
@@ -799,30 +849,30 @@ async function awaitDispatchAck(workers, coldRecords, socket, op, short, nonce, 
         via: "cold",
       });
     }
-    if (O) {
-      if (nonce && O.record.nonce !== nonce) {
+    if (worker) {
+      if (nonce && worker.record.nonce !== nonce) {
         sawStale = true;
-        staleWorker = isWorkerClean(O) ? O : undefined;
-        if (U) break;
+        staleWorker = isWorkerClean(worker) ? worker : undefined;
+        if (terminal) break;
         if (!staleWorker && !extended) {
           extended = true;
           deadline += Math.min(timeoutMs, 30000);
         }
-        await waitShort(M, outcome);
+        await waitShort(pending, outcome);
         continue;
       }
       return writeOut_2(socket, {
         ok: true,
         op,
         short,
-        pid: O.record.pid,
-        messagingSock: O.record.messagingSock ?? "",
-        via: O.via,
+        pid: worker.record.pid,
+        messagingSock: worker.record.messagingSock ?? "",
+        via: worker.via,
       });
     }
     staleWorker = undefined;
-    if (U) break;
-    await waitShort(M, outcome);
+    if (terminal) break;
+    await waitShort(pending, outcome);
   }
   if (sawStale) {
     if (staleWorker && workers.get(short) === staleWorker && isWorkerClean(staleWorker))
@@ -852,9 +902,9 @@ async function awaitDispatchAck(workers, coldRecords, socket, op, short, nonce, 
  */
 class FiredKeys {
   fired = new Set();
-  markFired(r) {
-    if (this.fired.has(r)) return false;
-    this.fired.add(r);
+  markFired(key) {
+    if (this.fired.has(key)) return false;
+    this.fired.add(key);
     return true;
   }
 }
@@ -862,17 +912,17 @@ class FiredKeys {
 /**
  * 每类旧操作探针只上报一次埋点。
  */
-function logLegacyOpProbeOnce(legacyOpProbe, e) {
-  if (!legacyOpProbe.markFired(e)) return;
+function logLegacyOpProbeOnce(legacyOpProbe, op) {
+  if (!legacyOpProbe.markFired(op)) return;
   logEvent("tengu_dead_probe_bg_legacy_op", {
-    op: fromEnum(e),
+    op: fromEnum(op),
   });
 }
 //@ chunk-ksvdmrg0.js:34125-50327 placement
 /**
  * 后台守护进程控制服务：解析 JSON 请求、ping、会话租约
  */
-async function DaemonControlServer(r, socket, n, s) {
+async function DaemonControlServer(host, socket, data, initialData) {
   let {
     handles,
     onDispatch,
@@ -888,10 +938,10 @@ async function DaemonControlServer(r, socket, n, s) {
     controlKey,
     storageV5,
     legacyOpProbe,
-  } = r;
-  let ee;
+  } = host;
+  let request;
   try {
-    ee = jsonParse(n);
+    request = jsonParse(data);
   } catch {
     return writeOut_2(socket, {
       ok: false,
@@ -899,13 +949,13 @@ async function DaemonControlServer(r, socket, n, s) {
       code: "EUNKNOWN",
     });
   }
-  if (ee === null || typeof ee !== "object")
+  if (request === null || typeof request !== "object")
     return writeOut_2(socket, {
       ok: false,
       error: "bad json",
       code: "EUNKNOWN",
     });
-  let op = ee.op;
+  let op = request.op;
   if (op === "ping")
     return writeOut_2(socket, {
       ok: true,
@@ -925,12 +975,12 @@ async function DaemonControlServer(r, socket, n, s) {
       carriedPromptsFormat: MAX_CARRIED_PROMPTS_VARIANT,
     });
   if (op === "nudge") {
-    let o = await onNudge();
+    let nudgeResult = await onNudge();
     return writeOut_2(socket, {
       ok: true,
       op: "nudge",
-      restarting: o.restarting,
-      upgradePending: o.upgradePending,
+      restarting: nudgeResult.restarting,
+      upgradePending: nudgeResult.upgradePending,
       version: {
         ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
         PACKAGE_URL: "@anthropic-ai/claude-code",
@@ -952,13 +1002,13 @@ async function DaemonControlServer(r, socket, n, s) {
       yielding: onYield(),
     });
   if (op === "lease") {
-    let o = LeaseClientSchema().safeParse(ee.client).data;
+    let leaseClient = LeaseClientSchema().safeParse(request.client).data;
     addLease(
       socket,
-      o
+      leaseClient
         ? {
-            ...o,
-            pid: getPeerPid(socket) ?? o.pid,
+            ...leaseClient,
+            pid: getPeerPid(socket) ?? leaseClient.pid,
           }
         : null,
     );
@@ -979,8 +1029,8 @@ async function DaemonControlServer(r, socket, n, s) {
       clients: listLeases(),
     });
   if (op === "shutdown") {
-    let o = ee.reapWorkers !== false;
-    let reaped = onShutdown(o);
+    let reapWorkers = request.reapWorkers !== false;
+    let reaped = onShutdown(reapWorkers);
     return writeOut_2(socket, {
       ok: true,
       op: "shutdown",
@@ -1002,7 +1052,7 @@ async function DaemonControlServer(r, socket, n, s) {
       error: `${bgSupervisorNoun()} starting (adoption in progress)`,
       code: "ESTARTING",
     });
-  let proto = ee.proto;
+  let proto = request.proto;
   if (typeof proto !== "number" || !Number.isInteger(proto) || proto < BG_PROTO_MIN || proto > BG_PROTO) {
     logEvent("tengu_bg_proto_mismatch", {
       client_proto: typeof proto === "number" ? proto : -1,
@@ -1026,15 +1076,15 @@ async function DaemonControlServer(r, socket, n, s) {
       }.VERSION,
     });
   }
-  let ae = ControlRequestSchema().safeParse(ee);
-  if (!ae.success)
+  let parsed = ControlRequestSchema().safeParse(request);
+  if (!parsed.success)
     return writeOut_2(socket, {
       ok: false,
-      error: `malformed request: ${ae.error.issues[0]?.message ?? "invalid"}`,
+      error: `malformed request: ${parsed.error.issues[0]?.message ?? "invalid"}`,
       code: "EUNKNOWN",
     });
-  let u = ae.data;
-  switch (u.op) {
+  let msg = parsed.data;
+  switch (msg.op) {
     case "ping":
     case "nudge":
     case "yield":
@@ -1046,30 +1096,38 @@ async function DaemonControlServer(r, socket, n, s) {
       return writeOut_2(socket, {
         ok: true,
         op: "list",
-        jobs: Array.from(handles.values()).map((o) =>
-          o.isKilling || o.isRetiring
+        jobs: Array.from(handles.values()).map((handle) =>
+          handle.isKilling || handle.isRetiring
             ? {
-                ...o.record,
+                ...handle.record,
                 dying: true,
               }
-            : o.record,
+            : handle.record,
         ),
       });
     case "has": {
-      let o = handles.get(u.short);
-      let P = stallRespawnPending.has(u.short);
+      let handle = handles.get(msg.short);
+      let respawnPending = stallRespawnPending.has(msg.short);
       return writeOut_2(socket, {
         ok: true,
         op: "has",
-        alive: (o !== undefined && isWorkerClean(o)) || P,
-        present: o !== undefined || P,
-        ready: o !== undefined && !o.isBooting,
+        alive: (handle !== undefined && isWorkerClean(handle)) || respawnPending,
+        present: handle !== undefined || respawnPending,
+        ready: handle !== undefined && !handle.isBooting,
       });
     }
     case "await-ack":
-      return awaitDispatchAck(handles, settledDispatches, socket, "await-ack", u.short, u.nonce, u.timeoutMs);
+      return awaitDispatchAck(
+        handles,
+        settledDispatches,
+        socket,
+        "await-ack",
+        msg.short,
+        msg.nonce,
+        msg.timeoutMs,
+      );
     case "dispatch":
-      if (!timingSafeEqualStrings(u.auth, controlKey))
+      if (!timingSafeEqualStrings(msg.auth, controlKey))
         return writeOut_2(socket, {
           ok: false,
           error: "dispatch rejected: this client didn't present the daemon control key",
@@ -1085,43 +1143,43 @@ async function DaemonControlServer(r, socket, n, s) {
         settledDispatches,
         socket,
         "dispatch",
-        u.d.short,
-        u.d.nonce,
-        u.timeoutMs,
-        onDispatch(u.d),
+        msg.d.short,
+        msg.d.nonce,
+        msg.timeoutMs,
+        onDispatch(msg.d),
       );
     case "reply": {
-      if (!timingSafeEqualStrings(u.auth, controlKey))
+      if (!timingSafeEqualStrings(msg.auth, controlKey))
         return writeOut_2(socket, {
           ok: false,
           error:
-            u.auth === undefined
+            msg.auth === undefined
               ? "reply rejected: this window didn't present the daemon control key \u2014 it is likely running a Claude Code older than the daemon (left open across an update?); restart this window and retry, or stop driving the control socket directly"
               : "reply rejected: the presented daemon control key doesn't match \u2014 retry, and restart the Claude Code daemon if this persists",
           code: "EAUTH",
         });
-      let o = handles.get(u.short);
-      if (stallRespawnPending.has(u.short) && (!o || !isWorkerClean(o)))
+      let handle = handles.get(msg.short);
+      if (stallRespawnPending.has(msg.short) && (!handle || !isWorkerClean(handle)))
         return writeOut_2(socket, {
           ok: false,
           error: `worker ${RESPAWN_REASON_STALL} \u2014 restarting it; retry reply`,
           code: "ERESPAWNING",
         });
-      if (!o || o.isRetiring || o.isKilling || o.record.outcome)
+      if (!handle || handle.isRetiring || handle.isKilling || handle.record.outcome)
         return writeOut_2(socket, {
           ok: false,
           error: "job not found \u2014 it may have already exited",
           code: "ENOJOB",
         });
-      if (o.isUpgrading)
+      if (handle.isUpgrading)
         return writeOut_2(socket, {
           ok: false,
           error: `job is restarting on the ${RESPAWN_REASON_UPGRADE}; retry reply`,
           code: "ERESPAWNING",
         });
       if (
-        u.nextTurn === true &&
-        o.record.cliVersion !==
+        msg.nextTurn === true &&
+        handle.record.cliVersion !==
           {
             ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
             PACKAGE_URL: "@anthropic-ai/claude-code",
@@ -1140,28 +1198,28 @@ async function DaemonControlServer(r, socket, n, s) {
           code: "ESKEW",
         });
       if (
-        !(await o.reply(u.text, {
-          nextTurn: u.nextTurn === true,
+        !(await handle.reply(msg.text, {
+          nextTurn: msg.nextTurn === true,
         }))
       ) {
         if (
-          (o.isBooting || (o.isSpawnPending && o.isReplyQueueOnly)) &&
-          !o.isUnverified &&
-          !o.record.legacy
+          (handle.isBooting || (handle.isSpawnPending && handle.isReplyQueueOnly)) &&
+          !handle.isUnverified &&
+          !handle.record.legacy
         ) {
           let code = "ERESPAWNING";
-          if (!o.isBooting && u.nextTurn !== true) {
-            let jobDir = getJobDir(u.short);
+          if (!handle.isBooting && msg.nextTurn !== true) {
+            let jobDir = getJobDir(msg.short);
             if (
-              (isNonPromptInput(u.text, null) ||
+              (isNonPromptInput(msg.text, null) ||
                 (await readJobStateOrAbsent(jobDir, storageV5)
                   .then((jobStateOrAbsent) =>
                     jobStateOrAbsent === "absent"
-                      ? o.dispatch.source === "spare"
-                      : jobStateOrAbsent !== null && isNonPromptInput(u.text, jobStateOrAbsent),
+                      ? handle.dispatch.source === "spare"
+                      : jobStateOrAbsent !== null && isNonPromptInput(msg.text, jobStateOrAbsent),
                   )
                   .catch(() => false))) &&
-              !o.isBooting
+              !handle.isBooting
             )
               code = "ENOREPLY";
           }
@@ -1183,26 +1241,26 @@ async function DaemonControlServer(r, socket, n, s) {
       });
     }
     case "kill": {
-      stallRespawnPending.delete(u.short);
-      if (u.evict)
-        updateRoster((P) => {
-          delete P.workers[u.short];
+      stallRespawnPending.delete(msg.short);
+      if (msg.evict)
+        updateRoster((roster) => {
+          delete roster.workers[msg.short];
         }, storageV5).catch((error) => logError(error));
-      let o = handles.get(u.short);
-      if (!o)
+      let handle = handles.get(msg.short);
+      if (!handle)
         return writeOut_2(socket, {
           ok: false,
           error: "job not found \u2014 it may have already exited",
           code: "ENOJOB",
         });
-      if (o.dispatch.launch.mode === "exec" && o.record.outcome) {
-        handles.delete(u.short);
+      if (handle.dispatch.launch.mode === "exec" && handle.record.outcome) {
+        handles.delete(msg.short);
         return writeOut_2(socket, {
           ok: true,
           op: "kill",
         });
       }
-      o.kill(u.signal ?? "SIGTERM", u.handoff ? "handoff" : "killed");
+      handle.kill(msg.signal ?? "SIGTERM", msg.handoff ? "handoff" : "killed");
       return writeOut_2(socket, {
         ok: true,
         op: "kill",
@@ -1210,65 +1268,65 @@ async function DaemonControlServer(r, socket, n, s) {
     }
     case "respawn-stale": {
       logLegacyOpProbeOnce(legacyOpProbe, "respawn_stale");
-      let o = handles.get(u.short);
-      if (!o)
+      let handle = handles.get(msg.short);
+      if (!handle)
         return writeOut_2(socket, {
           ok: false,
           error: "job not found \u2014 it may have already exited",
           code: "ENOJOB",
         });
-      let P = await o.respawnIfIdleStale();
+      let result = await handle.respawnIfIdleStale();
       return writeOut_2(socket, {
         ok: true,
         op: "respawn-stale",
-        ...P,
+        ...result,
       });
     }
     case "resize": {
-      let o = handles.get(u.short);
-      if (!o)
+      let handle = handles.get(msg.short);
+      if (!handle)
         return writeOut_2(socket, {
           ok: false,
           error: "job not found \u2014 it may have already exited",
           code: "ENOJOB",
         });
-      if (u.attachId) {
-        let P = o.attachers.get(u.attachId);
-        if (!P)
+      if (msg.attachId) {
+        let attacher = handle.attachers.get(msg.attachId);
+        if (!attacher)
           return writeOut_2(socket, {
             ok: true,
             op: "resize",
           });
-        P.cols = u.cols;
-        P.rows = u.rows;
-        if (P.repaint) {
-          P.repaint();
+        attacher.cols = msg.cols;
+        attacher.rows = msg.rows;
+        if (attacher.repaint) {
+          attacher.repaint();
           return writeOut_2(socket, {
             ok: true,
             op: "resize",
           });
         }
       }
-      o.resize(u.cols, u.rows);
+      handle.resize(msg.cols, msg.rows);
       return writeOut_2(socket, {
         ok: true,
         op: "resize",
       });
     }
     case "attach": {
-      if (u.auth === undefined)
+      if (msg.auth === undefined)
         logForDebugging("[bg-attach] legacy client (no control key) \u2014 allowed via peerUid", {
           level: "warn",
         });
-      else if (!timingSafeEqualStrings(u.auth, controlKey))
+      else if (!timingSafeEqualStrings(msg.auth, controlKey))
         return writeOut_2(socket, {
           ok: false,
           error:
             "attach rejected: the presented daemon control key doesn't match \u2014 retry, and restart the Claude Code daemon if this persists",
           code: "EAUTH",
         });
-      let worker = handles.get(u.short);
-      if (stallRespawnPending.has(u.short) && (!worker || !isWorkerClean(worker)))
+      let worker = handles.get(msg.short);
+      if (stallRespawnPending.has(msg.short) && (!worker || !isWorkerClean(worker)))
         return writeOut_2(socket, {
           ok: false,
           error: `worker ${RESPAWN_REASON_STALL} \u2014 restarting it; retry attach`,
@@ -1295,18 +1353,24 @@ async function DaemonControlServer(r, socket, n, s) {
         });
       if (worker.record.legacy) {
         let dispatch = worker.dispatch;
-        let F = await readJobState(getJobDir(dispatch.short), storageV5).catch(() => null);
-        let ge =
-          F === null && dispatch.launch.mode !== "exec"
+        let savedState = await readJobState(getJobDir(dispatch.short), storageV5).catch(() => null);
+        let probeOutcome =
+          savedState === null && dispatch.launch.mode !== "exec"
             ? await probeJobState(getJobDir(dispatch.short), storageV5)
             : undefined;
-        let me = F?.resumeSessionId ?? dispatch.sessionId;
-        let cwd = F?.cwd ?? dispatch.cwd;
-        let $e = wrapStorageSource(getTranscriptStorageContext(storageV5));
-        let jobTranscript = await resolveJobTranscript(me, cwd, F?.linkScanPath, undefined, $e);
+        let sessionId = savedState?.resumeSessionId ?? dispatch.sessionId;
+        let cwd = savedState?.cwd ?? dispatch.cwd;
+        let storageSource = wrapStorageSource(getTranscriptStorageContext(storageV5));
+        let jobTranscript = await resolveJobTranscript(
+          sessionId,
+          cwd,
+          savedState?.linkScanPath,
+          undefined,
+          storageSource,
+        );
         let hasMessages = jobTranscript.hasMessages;
-        if (!hasMessages) await quarantineJobTranscript(jobTranscript.path, $e);
-        if (handles.get(u.short) !== worker || socket.destroyed)
+        if (!hasMessages) await quarantineJobTranscript(jobTranscript.path, storageSource);
+        if (handles.get(msg.short) !== worker || socket.destroyed)
           return writeOut_2(socket, {
             ok: false,
             error: "supervisor restarting",
@@ -1314,7 +1378,7 @@ async function DaemonControlServer(r, socket, n, s) {
           });
         if (!worker.isKilling) {
           logEvent("tengu_bg_attach_legacy_autorespawn", {});
-          if (ge) logRestartWithoutSavedState("legacy_attach", ge);
+          if (probeOutcome) logRestartWithoutSavedState("legacy_attach", probeOutcome);
           worker.kill("SIGTERM");
           onDispatch({
             ...dispatch,
@@ -1324,18 +1388,18 @@ async function DaemonControlServer(r, socket, n, s) {
             launch: hasMessages
               ? {
                   mode: "resume",
-                  sessionId: me,
+                  sessionId,
                   transcriptPath: jobTranscript.path,
                   fork: false,
                   flagArgs:
-                    F?.tempo === "active"
-                      ? withReplyOnResume(F?.respawnFlags ?? dispatch.respawnFlags)
-                      : withoutReplyOnResume(F?.respawnFlags ?? dispatch.respawnFlags),
+                    savedState?.tempo === "active"
+                      ? withReplyOnResume(savedState?.respawnFlags ?? dispatch.respawnFlags)
+                      : withoutReplyOnResume(savedState?.respawnFlags ?? dispatch.respawnFlags),
                 }
-              : me !== dispatch.sessionId
+              : sessionId !== dispatch.sessionId
                 ? {
                     mode: "prompt",
-                    args: ["--session-id", me, ...(F?.respawnFlags ?? dispatch.respawnFlags)],
+                    args: ["--session-id", sessionId, ...(savedState?.respawnFlags ?? dispatch.respawnFlags)],
                   }
                 : dispatch.launch,
           }).catch((error) => logError(error));
@@ -1360,14 +1424,14 @@ async function DaemonControlServer(r, socket, n, s) {
           code: "EHOSTDEAD",
         });
       if (socket.destroyed) return;
-      if (stallRespawnPending.has(u.short) && (handles.get(u.short) !== worker || !isWorkerClean(worker)))
+      if (stallRespawnPending.has(msg.short) && (handles.get(msg.short) !== worker || !isWorkerClean(worker)))
         return writeOut_2(socket, {
           ok: false,
           error: `worker ${RESPAWN_REASON_STALL} \u2014 restarting it; retry attach`,
           code: "ERESPAWNING",
         });
       if (
-        handles.get(u.short) !== worker ||
+        handles.get(msg.short) !== worker ||
         worker.isKilling ||
         (worker.record.outcome && worker.dispatch.launch.mode !== "exec")
       )
@@ -1376,17 +1440,17 @@ async function DaemonControlServer(r, socket, n, s) {
           error: "job not found \u2014 it may have already exited",
           code: "ENOJOB",
         });
-      let P =
+      let liveTranscriptPath =
         worker.liveTranscriptPath !== undefined
           ? worker.liveTranscriptPath
           : worker.dispatch.launch.mode === "resume"
             ? worker.dispatch.launch.transcriptPath
             : undefined;
-      let T =
-        u.holdingFrame !== true && worker.isBooting && P != null
-          ? readTranscriptTailPreview(P, u.cols, u.rows, {
-              colorLevel: u.caps?.colorLevel,
-              theme: u.caps?.systemTheme,
+      let preview =
+        msg.holdingFrame !== true && worker.isBooting && liveTranscriptPath != null
+          ? readTranscriptTailPreview(liveTranscriptPath, msg.cols, msg.rows, {
+              colorLevel: msg.caps?.colorLevel,
+              theme: msg.caps?.systemTheme,
             })
           : null;
       addLease(socket, null);
@@ -1401,7 +1465,7 @@ async function DaemonControlServer(r, socket, n, s) {
           booting: worker.bootingForAttachMetrics,
           tempo: worker.record.tempo,
           state: worker.record.state,
-          cached: T !== null,
+          cached: preview !== null,
           stale: Boolean(
             worker.record.cliVersion &&
             worker.record.cliVersion !==
@@ -1444,270 +1508,284 @@ async function DaemonControlServer(r, socket, n, s) {
             }.VERSION,
         ),
       });
-      if (T !== null) socket.write(ERASE_SCREEN + CURSOR_HOME + T);
-      let Y = CURSOR_HOME + ERASE_LINE;
-      let q = 6;
-      let Q = [];
-      let oe = 0;
-      let le = "";
-      let ce = () => {};
-      let se;
-      let Ae = 0;
-      let Ee = false;
+      if (preview !== null) socket.write(ERASE_SCREEN + CURSOR_HOME + preview);
+      let eraseLineSeq = CURSOR_HOME + ERASE_LINE;
+      let tailChars = 6;
+      let buffered = [];
+      let bufferedBytes = 0;
+      let tail = "";
+      let clearRepaint = () => {};
+      let statusTimer;
+      let statusTicks = 0;
+      let sawOutput = false;
       let attachStallMs = getAttachStallMs();
-      let xe =
+      let stallTicks =
         attachStallMs === 0 ? 0 : Math.max(1, Math.ceil((attachStallMs - STATUS_GRACE_MS) / STATUS_TICK_MS));
-      let De = (N) =>
+      let renderNotice = (message) =>
         wrapDaemonHint(
           ERASE_SCREEN +
             CURSOR_HOME +
             `
-  \x1B[2m${N}\x1B[0m
+  \x1B[2m${message}\x1B[0m
 `,
         );
-      let Se;
-      let H = false;
-      let X = () => {
-        if (!H) return;
-        H = false;
+      let stopRepaint;
+      let marksPending = false;
+      let replayMarks = () => {
+        if (!marksPending) return;
+        marksPending = false;
         if (typeof worker.replayInteractiveMarksTo === "function")
-          worker.replayInteractiveMarksTo(u.attachId ?? socket);
+          worker.replayInteractiveMarksTo(msg.attachId ?? socket);
       };
-      let pe = (N) => {
-        if (Q === null) return;
-        Se?.();
-        let F = Q;
-        Q = null;
+      let flushBuffer = (send) => {
+        if (buffered === null) return;
+        stopRepaint?.();
+        let pending = buffered;
+        buffered = null;
         clearTimeout(timer);
-        if (N && !socket.destroyed) for (let ge of F) socket.write(ge);
-        H = true;
-        if (N && F.length > 0) X();
+        if (send && !socket.destroyed) for (let chunk of pending) socket.write(chunk);
+        marksPending = true;
+        if (send && pending.length > 0) replayMarks();
       };
       let timer = setTimeout(() => {
-        let N = Q !== null && oe === 0;
-        let F = N && (u.holdingFrame === true || T !== null);
-        if (!F) pe(true);
-        if (N && !socket.destroyed) {
-          if (!F) {
+        let needsStatus = buffered !== null && bufferedBytes === 0;
+        let skipStatus = needsStatus && (msg.holdingFrame === true || preview !== null);
+        if (!skipStatus) flushBuffer(true);
+        if (needsStatus && !socket.destroyed) {
+          if (!skipStatus) {
             let state = worker.record.state;
-            let ye =
+            let noticeText =
               state === "starting" || state === "resuming" || state === "adopted" || state === "crashed"
                 ? "Session is starting \u2014 it will appear once ready. Ctrl+Z to detach"
                 : "Waiting for session to redraw\u2026 Ctrl+Z to detach";
-            socket.write(De(ye));
+            socket.write(renderNotice(noticeText));
           }
           let now = Date.now();
-          se = setInterval(() => {
+          statusTimer = setInterval(() => {
             let now_2 = Date.now();
-            let ye = now_2 - now;
+            let deltaMs = now_2 - now;
             now = now_2;
-            if (ye > STATUS_TICK_MS * 3) Ae = 0;
-            Ae++;
+            if (deltaMs > STATUS_TICK_MS * 3) statusTicks = 0;
+            statusTicks++;
             if (
-              xe > 0 &&
-              Ae >= xe &&
+              stallTicks > 0 &&
+              statusTicks >= stallTicks &&
               !worker.isKilling &&
               !worker.isRetiring &&
               !worker.isBooting &&
               worker.dispatch.launch.mode !== "exec"
             ) {
-              clearInterval(se);
-              se = undefined;
-              ce();
+              clearInterval(statusTimer);
+              statusTimer = undefined;
+              clearRepaint();
               let attachStallRespawns = worker.dispatch.attachStallRespawns ?? 0;
-              let Be = {
+              let fields = {
                 state: daemonSessionStateLabel(worker.record.state),
                 via: fromEnum(worker.via),
                 attempt: attachStallRespawns,
               };
               if (attachStallRespawns >= 2) {
-                logEvent("tengu_bg_attach_stall_gave_up", Be);
+                logEvent("tengu_bg_attach_stall_gave_up", fields);
                 socket.write(
-                  De("Session keeps stalling at startup.") +
+                  renderNotice("Session keeps stalling at startup.") +
                     daemonDetachApc(
                       streamDetachMessage(
                         "ESTALLED",
-                        u.caps?.sessionTabs,
-                        `Session ${u.short} keeps stalling at startup \u2014 check ${getJobDir(u.short)} for logs.`,
+                        msg.caps?.sessionTabs,
+                        `Session ${msg.short} keeps stalling at startup \u2014 check ${getJobDir(msg.short)} for logs.`,
                       ),
                     ),
                 );
                 if (!worker.isKilling) worker.kill("SIGKILL", "failed", "session keeps stalling at startup");
                 return;
               }
-              logEvent("tengu_bg_attach_stall_respawn", Be);
-              socket.write(De("Session not responding \u2014 restarting it\u2026"));
-              respawnStalledAttach(worker, socket, onDispatch, () => Ee, stallRespawnPending, storageV5);
+              logEvent("tengu_bg_attach_stall_respawn", fields);
+              socket.write(renderNotice("Session not responding \u2014 restarting it\u2026"));
+              respawnStalledAttach(
+                worker,
+                socket,
+                onDispatch,
+                () => sawOutput,
+                stallRespawnPending,
+                storageV5,
+              );
               if (!socket.destroyed)
                 socket.write(
                   daemonDetachApc(
                     streamDetachMessage(
                       RESPAWNING_ATTACH_CODE,
-                      u.caps?.sessionTabs,
+                      msg.caps?.sessionTabs,
                       `worker ${RESPAWN_REASON_STALL}, restarting`,
                     ),
                   ),
                 );
               return;
             }
-            let $e = worker.attachers.get(attachId);
-            ce();
-            ce = worker.resizeForRepaint($e?.cols ?? u.cols, $e?.rows ?? u.rows);
+            let attacher = worker.attachers.get(attachId);
+            clearRepaint();
+            clearRepaint = worker.resizeForRepaint(attacher?.cols ?? msg.cols, attacher?.rows ?? msg.rows);
           }, STATUS_TICK_MS);
-          se.unref();
+          statusTimer.unref();
         }
       }, STATUS_GRACE_MS);
-      let vt = () => {
-        if (se) {
-          clearInterval(se);
-          se = undefined;
+      let stopStatusTimer = () => {
+        if (statusTimer) {
+          clearInterval(statusTimer);
+          statusTimer = undefined;
         }
       };
-      let st = worker.onStream.subscribe((N) => {
+      let unsubscribeStream = worker.onStream.subscribe((chunk) => {
         if (socket.destroyed) return;
-        Ee = true;
-        if (Q !== null) {
-          let F = le + N;
-          if (F.includes(ERASE_SCREEN) || F.includes(Y)) {
-            vt();
-            let ge = N.includes(ERASE_SCREEN) || N.includes(Y) ? N : F;
-            ce();
-            pe(false);
+        sawOutput = true;
+        if (buffered !== null) {
+          let joined = tail + chunk;
+          if (joined.includes(ERASE_SCREEN) || joined.includes(eraseLineSeq)) {
+            stopStatusTimer();
+            let toWrite = chunk.includes(ERASE_SCREEN) || chunk.includes(eraseLineSeq) ? chunk : joined;
+            clearRepaint();
+            flushBuffer(false);
             if (socket.writableLength <= MAX_REQUEST_BYTES) {
-              socket.write(worker.decModeSnapshot().map(decset).join("") + ge);
-              X();
+              socket.write(worker.decModeSnapshot().map(decset).join("") + toWrite);
+              replayMarks();
             } else socket.destroy();
             return;
           }
-          Q.push(N);
-          oe += N.length;
-          le = F.slice(-q);
-          if (oe > 65536) pe(true);
+          buffered.push(chunk);
+          bufferedBytes += chunk.length;
+          tail = joined.slice(-tailChars);
+          if (bufferedBytes > 65536) flushBuffer(true);
           return;
         }
-        vt();
+        stopStatusTimer();
         if (socket.writableLength > MAX_REQUEST_BYTES) {
           socket.destroy();
           return;
         }
-        socket.write(N);
-        X();
+        socket.write(chunk);
+        replayMarks();
       });
-      let lt = worker.onRepaintDone.subscribe(() => {
-        ce();
-        pe(true);
+      let unsubscribeRepaintDone = worker.onRepaintDone.subscribe(() => {
+        clearRepaint();
+        flushBuffer(true);
       });
       if (getPlatform() === "windows") for (let attacher of worker.attachers.values()) attacher.kick();
-      let attachId = u.attachId ?? socket;
+      let attachId = msg.attachId ?? socket;
       worker.attachers.set(attachId, {
-        cols: u.cols,
-        rows: u.rows,
-        caps: u.caps,
+        cols: msg.cols,
+        rows: msg.rows,
+        caps: msg.caps,
         imarkNonce,
-        deliver: (N) => {
-          if (!socket.destroyed) socket.write(N);
+        deliver: (data) => {
+          if (!socket.destroyed) socket.write(data);
         },
         kick: () => {
           logEvent("tengu_bg_attach_kick", {});
-          if (se) {
-            clearInterval(se);
-            se = undefined;
+          if (statusTimer) {
+            clearInterval(statusTimer);
+            statusTimer = undefined;
           }
           clearTimeout(timer);
-          ce();
-          st();
-          lt();
+          clearRepaint();
+          unsubscribeStream();
+          unsubscribeRepaintDone();
           socket.removeAllListeners("data");
           if (!socket.destroyed) {
-            socket.write(daemonDetachApc(streamDetachMessage("EKICKED", u.caps?.sessionTabs, KICKED_NOTICE)));
+            socket.write(
+              daemonDetachApc(streamDetachMessage("EKICKED", msg.caps?.sessionTabs, KICKED_NOTICE)),
+            );
             socket.end();
           }
           worker.attachers.delete(attachId);
         },
       });
-      if (T !== null && P != null) {
-        let N = worker.attachers.get(attachId);
-        if (N) {
-          N.repaint = () => {
+      if (preview !== null && liveTranscriptPath != null) {
+        let attacher = worker.attachers.get(attachId);
+        if (attacher) {
+          attacher.repaint = () => {
             if (socket.destroyed) return;
-            worker.resize(N.cols, N.rows);
-            let transcriptTailPreview = readTranscriptTailPreview(P, N.cols, N.rows, {
-              colorLevel: u.caps?.colorLevel,
-              theme: u.caps?.systemTheme,
-            });
+            worker.resize(attacher.cols, attacher.rows);
+            let transcriptTailPreview = readTranscriptTailPreview(
+              liveTranscriptPath,
+              attacher.cols,
+              attacher.rows,
+              {
+                colorLevel: msg.caps?.colorLevel,
+                theme: msg.caps?.systemTheme,
+              },
+            );
             socket.write(ERASE_SCREEN + CURSOR_HOME + (transcriptTailPreview ?? ""));
           };
-          Se = () => {
-            N.repaint = undefined;
-            Se = undefined;
+          stopRepaint = () => {
+            attacher.repaint = undefined;
+            stopRepaint = undefined;
           };
         }
       }
       worker.noteActivity();
       worker.seedFocus(true);
-      worker.sendAttacherCaps(u.caps ?? null);
-      let Ke;
+      worker.sendAttacherCaps(msg.caps ?? null);
+      let showExecResult;
       if (worker.dispatch.launch.mode === "exec") {
-        let N = wrapDaemonHint(ERASE_SCREEN + CURSOR_HOME);
-        socket.write(N);
-        for (let F of worker.ringSnapshot()) socket.write(F);
-        pe(false);
-        Ke = () => {
-          let F = worker.attachers.get(attachId);
-          if (socket.destroyed || !F) return;
-          let ge =
+        let header = wrapDaemonHint(ERASE_SCREEN + CURSOR_HOME);
+        socket.write(header);
+        for (let chunk of worker.ringSnapshot()) socket.write(chunk);
+        flushBuffer(false);
+        showExecResult = () => {
+          let current = worker.attachers.get(attachId);
+          if (socket.destroyed || !current) return;
+          let outcomeLabel =
             worker.record.outcome === "done"
               ? "done"
               : worker.record.outcome === "killed"
                 ? "stopped"
                 : "failed";
-          let me = wrapDaemonHint(`\r
-\x1B[2m\u2014 ${ge} \xB7 Ctrl+Z to return \u2014\x1B[0m\r
+          let footer = wrapDaemonHint(`\r
+\x1B[2m\u2014 ${outcomeLabel} \xB7 Ctrl+Z to return \u2014\x1B[0m\r
 `);
-          socket.write(me);
-          F.repaint = () => {
+          socket.write(footer);
+          current.repaint = () => {
             if (socket.destroyed) return;
-            socket.write(N);
-            for (let ye of worker.ringSnapshot()) socket.write(ye);
-            socket.write(me);
+            socket.write(header);
+            for (let chunk of worker.ringSnapshot()) socket.write(chunk);
+            socket.write(footer);
           };
         };
         if (worker.record.outcome) {
-          Ke();
+          showExecResult();
           socket.once("close", () => {
             clearTimeout(timer);
-            st();
-            lt();
+            unsubscribeStream();
+            unsubscribeRepaintDone();
             worker.attachers.delete(attachId);
           });
           return;
         }
       }
-      ce = worker.resizeForRepaint(u.cols, u.rows);
-      let fr = worker.onSettle.subscribe(() => {
-        if (Ke && worker.record.outcome !== "killed") return Ke();
+      clearRepaint = worker.resizeForRepaint(msg.cols, msg.rows);
+      let unsubscribeSettle = worker.onSettle.subscribe(() => {
+        if (showExecResult && worker.record.outcome !== "killed") return showExecResult();
         socket.end();
       });
-      let At = new StringDecoder("utf8");
-      let pr = u.caps?.sessionTabs !== undefined;
-      let xt = (N) => {
-        let F = At.write(N);
-        if (F.length > 0 && (!isTerminalReplyOnly(F) || (pr && hasNonReportingMouseMode(F))))
+      let inputDecoder = new StringDecoder("utf8");
+      let hasTabs = msg.caps?.sessionTabs !== undefined;
+      let onInput = (data) => {
+        let text = inputDecoder.write(data);
+        if (text.length > 0 && (!isTerminalReplyOnly(text) || (hasTabs && hasNonReportingMouseMode(text))))
           worker.lastInputAttacher = attachId;
-        worker.write(F);
+        worker.write(text);
       };
-      if (s.length) xt(s);
-      socket.on("data", xt);
+      if (initialData.length) onInput(initialData);
+      socket.on("data", onInput);
       socket.once("close", () => {
-        if (se) clearInterval(se);
-        ce();
-        pe(false);
-        st();
-        fr();
-        lt();
+        if (statusTimer) clearInterval(statusTimer);
+        clearRepaint();
+        flushBuffer(false);
+        unsubscribeStream();
+        unsubscribeSettle();
+        unsubscribeRepaintDone();
         if (!worker.attachers.delete(attachId)) return;
-        let N = At.end();
-        if (N) worker.write(N);
+        let rest = inputDecoder.end();
+        if (rest) worker.write(rest);
         if (worker.attachers.size > 0) {
           let last = [...worker.attachers.values()].at(-1);
           worker.resizeForRepaint(last.cols, last.rows);
@@ -1733,7 +1811,7 @@ async function DaemonControlServer(r, socket, n, s) {
         op: "ensure-spare",
       });
     case "permission-response":
-      if (!timingSafeEqualStrings(u.auth, controlKey))
+      if (!timingSafeEqualStrings(msg.auth, controlKey))
         return writeOut_2(socket, {
           ok: false,
           error: "permission-response rejected: this client didn't present the daemon control key",
@@ -1744,8 +1822,8 @@ async function DaemonControlServer(r, socket, n, s) {
         op: "permission-response",
       });
     case "subscribe": {
-      let o = handles.get(u.short);
-      if (!o)
+      let handle = handles.get(msg.short);
+      if (!handle)
         return writeOut_2(socket, {
           ok: false,
           error: "job not found \u2014 it may have already exited",
@@ -1754,31 +1832,31 @@ async function DaemonControlServer(r, socket, n, s) {
       addLease(socket, null);
       writeControlLine(socket, {
         type: "snapshot",
-        record: o.record,
-        streamTail: o.tail(u.tail ?? 200),
+        record: handle.record,
+        streamTail: handle.tail(msg.tail ?? 200),
       });
-      if (o.record.outcome) {
+      if (handle.record.outcome) {
         writeControlLine(socket, {
           type: "settled",
-          outcome: o.record.outcome,
+          outcome: handle.record.outcome,
         });
         socket.end();
         return;
       }
-      let P = [
-        o.onStream.subscribe((line) =>
+      let unsubscribes = [
+        handle.onStream.subscribe((line) =>
           writeControlLine(socket, {
             type: "stream",
             line,
           }),
         ),
-        o.onState.subscribe((patch) =>
+        handle.onState.subscribe((patch) =>
           writeControlLine(socket, {
             type: "state",
             patch,
           }),
         ),
-        o.onSettle.subscribe((outcome) => {
+        handle.onSettle.subscribe((outcome) => {
           writeControlLine(socket, {
             type: "settled",
             outcome,
@@ -1787,14 +1865,14 @@ async function DaemonControlServer(r, socket, n, s) {
         }),
       ];
       socket.on("close", () => {
-        for (let T of P) T();
+        for (let unsubscribe of unsubscribes) unsubscribe();
       });
       return;
     }
     default:
       return writeOut_2(socket, {
         ok: false,
-        error: `unknown op: ${u.op}`,
+        error: `unknown op: ${msg.op}`,
         code: "EUNKNOWN",
       });
   }
@@ -1805,6 +1883,6 @@ async function DaemonControlServer(r, socket, n, s) {
  */
 function daemonLeaseLabel(label) {
   if (label === undefined) return;
-  return fromEnumOpt(DAEMON_LEASE_LABELS.find((e) => e === label)) ?? lit("other");
+  return fromEnumOpt(DAEMON_LEASE_LABELS.find((candidate) => candidate === label)) ?? lit("other");
 }
 export { regExp, RESET, SOCKET_READY_TIMEOUT_MS, handleDaemonLease };

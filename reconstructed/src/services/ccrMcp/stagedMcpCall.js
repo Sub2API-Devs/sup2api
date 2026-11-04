@@ -12,7 +12,7 @@ import { posix } from "path";
 import { mkdir, mkdtemp, rm, realpath, writeFile, open } from "fs/promises";
 import { constants } from "fs";
 import { isPlainObject } from "../../utils/isPlainObject.js";
-import { xr } from "../../../vendor/lodash-es/_inlinedHelpers.js";
+import { import_mapValues } from "../../../vendor/lodash-es/_inlinedHelpers.js";
 import {
   relUnderSyncDir,
   WORKING_FILESTORE_PREFIX,
@@ -50,105 +50,106 @@ var CANCELLED_BY_CLIENT_MESSAGE = "cancelled by client";
 /**
  * 构造暂存调用失败的返回值（staging + telemetryCode）。
  */
-function stagingErrorResult(errorCode, t, retryable, telemetryCode) {
+function stagingErrorResult(errorCode, detail, retryable, telemetryCode) {
   return {
-    staging: stagingError(errorCode, t, retryable),
+    staging: stagingError(errorCode, detail, retryable),
     telemetryCode,
   };
 }
 //@ chunk-km6145cp.js:4024-4189 placement
-function collectLanePathRefs(e, t) {
-  if (typeof e === "string") {
-    if (LANE_TEMPLATE_RE.test(e)) t.add(e);
+function collectLanePathRefs(value, refs) {
+  if (typeof value === "string") {
+    if (LANE_TEMPLATE_RE.test(value)) refs.add(value);
     return;
   }
-  if (Array.isArray(e)) {
-    for (let n of e) collectLanePathRefs(n, t);
+  if (Array.isArray(value)) {
+    for (let item of value) collectLanePathRefs(item, refs);
     return;
   }
-  if (isPlainObject(e)) for (let n of Object.values(e)) collectLanePathRefs(n, t);
+  if (isPlainObject(value))
+    for (let objectValue of Object.values(value)) collectLanePathRefs(objectValue, refs);
 }
 //@ chunk-km6145cp.js:4189-4359 placement
-function substituteLanePaths(e, t) {
-  if (typeof e === "string") {
-    if (LANE_TEMPLATE_RE.test(e)) return t.get(e) ?? e;
-    return e;
+function substituteLanePaths(value, tokens) {
+  if (typeof value === "string") {
+    if (LANE_TEMPLATE_RE.test(value)) return tokens.get(value) ?? value;
+    return value;
   }
-  if (Array.isArray(e)) return e.map((n) => substituteLanePaths(n, t));
-  if (isPlainObject(e)) return xr(e, (n) => substituteLanePaths(n, t));
-  return e;
+  if (Array.isArray(value)) return value.map((item) => substituteLanePaths(item, tokens));
+  if (isPlainObject(value)) return import_mapValues(value, (value) => substituteLanePaths(value, tokens));
+  return value;
 }
 //@ chunk-km6145cp.js:4359-4427 placement
 /**
  * 取安全的文件扩展名：只接受 1–8 位字母数字，否则空串。
  */
 function safeExtname(lanePath) {
-  let t = extname(lanePath);
-  return /^\.[A-Za-z0-9]{1,8}$/.test(t) ? t : "";
+  let ext = extname(lanePath);
+  return /^\.[A-Za-z0-9]{1,8}$/.test(ext) ? ext : "";
 }
 //@ chunk-km6145cp.js:4427-4675 placement
-function resolveLanePath(e, lanePath) {
-  let n;
+function resolveLanePath(kind, path) {
+  let relPath;
   try {
-    n = relUnderSyncDir(WORKING_FILESTORE_PREFIX, lanePath);
+    relPath = relUnderSyncDir(WORKING_FILESTORE_PREFIX, path);
   } catch (error) {
     return {
       refused: stagingErrorResult(
         "tool_error",
-        `invalid ${e} lane_path ${jsonStringify(lanePath)}: ${errorMessage(error)}`,
+        `invalid ${kind} lane_path ${jsonStringify(path)}: ${errorMessage(error)}`,
       ),
     };
   }
-  if (isSeedPath(n))
+  if (isSeedPath(relPath))
     return {
       refused: stagingErrorResult(
         "tool_error",
-        `invalid ${e} lane_path ${jsonStringify(lanePath)}: ${DIR_SYNC_LANE_RESERVED}`,
+        `invalid ${kind} lane_path ${jsonStringify(path)}: ${DIR_SYNC_LANE_RESERVED}`,
         undefined,
         "lane_path_reserved",
       ),
     };
   return {
-    rel: n,
+    rel: relPath,
   };
 }
 //@ chunk-km6145cp.js:4675-4993 placement
 /**
  * 执行 CCR 暂存的 MCP 调用并上报结果。
  */
-async function runStagedMcpCall(e, t) {
-  let n;
+async function runStagedMcpCall(request, options) {
+  let staging;
   let tool;
-  let b;
+  let telemetryCode;
   try {
-    let c = await stageMcpCall(e, t);
-    n = c.staging;
-    tool = c.tool;
-    b = c.telemetryCode;
+    let staged = await stageMcpCall(request, options);
+    staging = staged.staging;
+    tool = staged.tool;
+    telemetryCode = staged.telemetryCode;
   } catch (error) {
     let errnoCode = getErrnoCode(error);
-    n = stagingError("tool_error", `unexpected failure: ${errnoCode ?? errorMessage(error)}`);
+    staging = stagingError("tool_error", `unexpected failure: ${errnoCode ?? errorMessage(error)}`);
   }
-  if (t.signal?.aborted)
+  if (options.signal?.aborted)
     return {
-      staging: n,
+      staging,
       tool,
     };
-  if (n.ok) logFeatureOk("ccr_mcp_call_staged");
-  else logFeatureBad("ccr_mcp_call_staged", b ?? n.error_code);
+  if (staging.ok) logFeatureOk("ccr_mcp_call_staged");
+  else logFeatureBad("ccr_mcp_call_staged", telemetryCode ?? staging.error_code);
   return {
-    staging: n,
+    staging,
     tool,
   };
 }
 //@ chunk-km6145cp.js:4993-5120 placement
-function stagingError(errorCode, t, n) {
+function stagingError(errorCode, detail, retryable) {
   return {
     ok: false,
     error_code: errorCode,
-    detail: t.slice(0, MAX_ERROR_DETAIL_CHARS).replace(/[\uD800-\uDBFF]$/, ""),
-    ...(n !== undefined && {
-      retryable: n,
+    detail: detail.slice(0, MAX_ERROR_DETAIL_CHARS).replace(/[\uD800-\uDBFF]$/, ""),
+    ...(retryable !== undefined && {
+      retryable,
     }),
   };
 }
@@ -157,8 +158,10 @@ function contentToText(content) {
   if (typeof content === "string") return content;
   if (Array.isArray(content))
     return content
-      .map((t) =>
-        t !== null && typeof t === "object" && "text" in t && typeof t.text === "string" ? t.text : "",
+      .map((item) =>
+        item !== null && typeof item === "object" && "text" in item && typeof item.text === "string"
+          ? item.text
+          : "",
       )
       .filter(Boolean).join(`
 `);
@@ -168,107 +171,111 @@ function contentToText(content) {
 /**
  * 校验请求、准备输入输出文件路径后执行 MCP 调用（Windows 不支持）。
  */
-async function stageMcpCall(e, t) {
-  let n = SDKMcpCallMcpCallMessageSchema().safeParse(e);
-  if (!n.success) return stagingErrorResult("tool_error", `invalid request: ${n.error.message}`);
-  let a = n.data;
+async function stageMcpCall(request, options) {
+  let parseResult = SDKMcpCallMcpCallMessageSchema().safeParse(request);
+  if (!parseResult.success)
+    return stagingErrorResult("tool_error", `invalid request: ${parseResult.error.message}`);
+  let req = parseResult.data;
   if (getPlatform() === "windows")
     return stagingErrorResult("tool_error", "staged mcp_call is not supported on this platform");
-  if (a.output_files !== undefined && a.expires_at === undefined)
+  if (req.output_files !== undefined && req.expires_at === undefined)
     return stagingErrorResult(
       "tool_error",
       "invalid request: expires_at is required when output_files are declared",
     );
-  if (a.expires_at !== undefined) {
-    let isoTimestamp = parseIsoTimestamp(a.expires_at);
+  if (req.expires_at !== undefined) {
+    let isoTimestamp = parseIsoTimestamp(req.expires_at);
     if (Number.isNaN(isoTimestamp))
       return stagingErrorResult(
         "expired",
-        `expires_at is not an RFC3339 timestamp with a zone: ${a.expires_at}`,
+        `expires_at is not an RFC3339 timestamp with a zone: ${req.expires_at}`,
         undefined,
         "expires_at_unparseable",
       );
-    if (Date.now() > isoTimestamp) return stagingErrorResult("expired", `request expired at ${a.expires_at}`);
+    if (Date.now() > isoTimestamp)
+      return stagingErrorResult("expired", `request expired at ${req.expires_at}`);
   }
-  let b = [];
-  for (let i of a.input_files ?? []) {
-    let lanePath = resolveLanePath("input", i.lane_path);
+  let inputEntries = [];
+  for (let fileSpec of req.input_files ?? []) {
+    let lanePath = resolveLanePath("input", fileSpec.lane_path);
     if ("refused" in lanePath) return lanePath.refused;
-    b.push({
-      spec: i,
+    inputEntries.push({
+      spec: fileSpec,
       rel: lanePath.rel,
     });
   }
-  let c = [];
-  let x = new Map();
-  for (let i of a.output_files ?? []) {
-    let lanePath = resolveLanePath("output", i.lane_path);
+  let outputEntries = [];
+  let outputLaneOwner = new Map();
+  for (let fileSpec of req.output_files ?? []) {
+    let lanePath = resolveLanePath("output", fileSpec.lane_path);
     if ("refused" in lanePath) return lanePath.refused;
     let { rel } = lanePath;
-    let p = x.get(rel);
-    if (p !== undefined)
+    let firstLanePath = outputLaneOwner.get(rel);
+    if (firstLanePath !== undefined)
       return stagingErrorResult(
         "tool_error",
-        `duplicate output lane_path: ${i.lane_path} collides with ${p}`,
+        `duplicate output lane_path: ${fileSpec.lane_path} collides with ${firstLanePath}`,
       );
-    x.set(rel, i.lane_path);
-    c.push({
-      spec: i,
+    outputLaneOwner.set(rel, fileSpec.lane_path);
+    outputEntries.push({
+      spec: fileSpec,
       rel,
     });
   }
-  for (let [i, s] of [
-    ["input", a.input_files ?? []],
-    ["output", a.output_files ?? []],
+  for (let [kind, specs] of [
+    ["input", req.input_files ?? []],
+    ["output", req.output_files ?? []],
   ]) {
-    let f = new Set();
-    for (let { name: p } of s) {
-      if (f.has(p)) return stagingErrorResult("tool_error", `duplicate ${i} name: ${p}`);
-      f.add(p);
+    let seenNames = new Set();
+    for (let { name } of specs) {
+      if (seenNames.has(name)) return stagingErrorResult("tool_error", `duplicate ${kind} name: ${name}`);
+      seenNames.add(name);
     }
   }
-  let X = a.input_files !== undefined || a.output_files !== undefined;
-  if (X) {
-    let i = new Set([
-      ...b.map(({ spec }) => `{{in:${spec.name}}}`),
-      ...c.map(({ spec }) => `{{out:${spec.name}}}`),
+  let hasLanes = req.input_files !== undefined || req.output_files !== undefined;
+  if (hasLanes) {
+    let declaredTokens = new Set([
+      ...inputEntries.map(({ spec }) => `{{in:${spec.name}}}`),
+      ...outputEntries.map(({ spec }) => `{{out:${spec.name}}}`),
     ]);
-    let s = new Set();
-    collectLanePathRefs(a.arguments ?? {}, s);
-    let filtered = [...s].filter((l) => !i.has(l));
+    let referencedTokens = new Set();
+    collectLanePathRefs(req.arguments ?? {}, referencedTokens);
+    let filtered = [...referencedTokens].filter((token) => !declaredTokens.has(token));
     if (filtered.length > 0)
       return stagingErrorResult(
         "tool_error",
         `invalid request: args token names no declared file: ${filtered.join(", ")}`,
       );
-    let mapped = c.filter(({ spec }) => !s.has(`{{out:${spec.name}}}`)).map(({ spec }) => spec.name);
+    let mapped = outputEntries
+      .filter(({ spec }) => !referencedTokens.has(`{{out:${spec.name}}}`))
+      .map(({ spec }) => spec.name);
     if (mapped.length > 0)
       return stagingErrorResult(
         "tool_error",
         `invalid request: declared output not referenced by any {{out:NAME}} token in arguments: ${mapped.join(", ")}`,
       );
   }
-  let S;
+  let stageDir;
   try {
-    let i;
-    if (t.tempRoot === undefined) i = pluginToolStagingRoot();
+    let root;
+    if (options.tempRoot === undefined) root = pluginToolStagingRoot();
     else {
-      i = t.tempRoot;
-      await mkdir(i, {
+      root = options.tempRoot;
+      await mkdir(root, {
         recursive: true,
         mode: 448,
       });
     }
-    S = await mkdtemp(join(i, "plugin-tool-"));
-    await mkdir(join(S, "in"), {
+    stageDir = await mkdtemp(join(root, "plugin-tool-"));
+    await mkdir(join(stageDir, "in"), {
       mode: 448,
     });
-    await mkdir(join(S, "out"), {
+    await mkdir(join(stageDir, "out"), {
       mode: 448,
     });
   } catch (error) {
-    if (S !== undefined)
-      await rm(S, {
+    if (stageDir !== undefined)
+      await rm(stageDir, {
         recursive: true,
         force: true,
       }).catch(() => {});
@@ -278,100 +285,105 @@ async function stageMcpCall(e, t) {
     });
     return stagingErrorResult("tool_error", `staging unavailable: ${errnoCode ?? "temp_dir_refused"}`);
   }
-  let T = S;
+  let stagingRoot = stageDir;
   try {
-    let i = new Map();
-    let s = [];
-    for (let [o, { spec: h, rel: M }] of b.entries()) {
-      if (t.signal?.aborted) return stagingErrorResult("tool_error", CANCELLED_BY_CLIENT_MESSAGE);
-      let laneRowFromWorker = await readLaneRowFromWorker(M);
+    let pathTokens = new Map();
+    let inputsUsed = [];
+    for (let [index, { spec, rel: relPath }] of inputEntries.entries()) {
+      if (options.signal?.aborted) return stagingErrorResult("tool_error", CANCELLED_BY_CLIENT_MESSAGE);
+      let laneRowFromWorker = await readLaneRowFromWorker(relPath);
       if (laneRowFromWorker.kind === "not_found")
-        return stagingErrorResult("input_missing", `input not found: ${h.lane_path}`);
+        return stagingErrorResult("input_missing", `input not found: ${spec.lane_path}`);
       if (laneRowFromWorker.kind === "error")
         return stagingErrorResult(
           "tool_error",
-          `input fetch failed for ${h.lane_path}: ${laneRowFromWorker.message}`,
+          `input fetch failed for ${spec.lane_path}: ${laneRowFromWorker.message}`,
           laneRowFromWorker.retryable,
         );
-      let L = `${o}${safeExtname(h.lane_path)}`;
-      let R = join(T, "in", L);
+      let fileName = `${index}${safeExtname(spec.lane_path)}`;
+      let destPath = join(stagingRoot, "in", fileName);
       try {
         if (
           readFlagWithOverride(PLUGIN_TOOL_STAGING_GUARD_FLAG, {
             safe: true,
           })
         ) {
-          let w = dirname(dirname(dirname(T)));
-          await writeNewFileExclusive(join(await realpath(w), relative(w, R)), laneRowFromWorker.buf);
+          let pluginRoot = dirname(dirname(dirname(stagingRoot)));
+          await writeNewFileExclusive(
+            join(await realpath(pluginRoot), relative(pluginRoot, destPath)),
+            laneRowFromWorker.buf,
+          );
         } else
-          await writeFile(R, laneRowFromWorker.buf, {
+          await writeFile(destPath, laneRowFromWorker.buf, {
             mode: 384,
           });
       } catch (error) {
         return stagingErrorResult("tool_error", `input stage failed: ${getErrnoCode(error) ?? "unknown"}`);
       }
-      i.set(`{{in:${h.name}}}`, R);
-      s.push({
-        lane_path: h.lane_path,
+      pathTokens.set(`{{in:${spec.name}}}`, destPath);
+      inputsUsed.push({
+        lane_path: spec.lane_path,
         etag: laneRowFromWorker.content_sha256,
       });
     }
-    let mapped = c.map(({ spec, rel }, M) => {
-      let u = join(T, "out", `${M}${safeExtname(spec.lane_path)}`);
-      i.set(`{{out:${spec.name}}}`, u);
+    let mapped = outputEntries.map(({ spec, rel }, index) => {
+      let outPath = join(stagingRoot, "out", `${index}${safeExtname(spec.lane_path)}`);
+      pathTokens.set(`{{out:${spec.name}}}`, outPath);
       return {
         spec,
         rel,
-        path: u,
+        path: outPath,
       };
     });
-    let p = X ? xr(a.arguments ?? {}, (o) => substituteLanePaths(o, i)) : (a.arguments ?? {});
+    let args = hasLanes
+      ? import_mapValues(req.arguments ?? {}, (value) => substituteLanePaths(value, pathTokens))
+      : (req.arguments ?? {});
     let min = Math.min(
-      Math.max(a.timeout_ms ?? DEFAULT_STAGING_TIMEOUT_MS, MIN_STAGING_TIMEOUT_MS),
+      Math.max(req.timeout_ms ?? DEFAULT_STAGING_TIMEOUT_MS, MIN_STAGING_TIMEOUT_MS),
       MAX_STAGING_TIMEOUT_MS,
     );
     let abortController = createAbortController();
-    let q = false;
+    let timedOut = false;
     let timer = setTimeout(() => {
       if (abortController.signal.aborted) return;
-      q = true;
+      timedOut = true;
       abortController.abort(Error("staged mcp_call timed out"));
     }, min);
-    let P = () => abortController.abort(t.signal?.reason);
-    if (t.signal?.aborted) P();
+    let onClientAbort = () => abortController.abort(options.signal?.reason);
+    if (options.signal?.aborted) onClientAbort();
     else
-      t.signal?.addEventListener("abort", P, {
+      options.signal?.addEventListener("abort", onClientAbort, {
         once: true,
       });
-    let C;
+    let toolResult;
     try {
-      C = await t.call(p, abortController.signal);
+      toolResult = await options.call(args, abortController.signal);
     } catch (error) {
-      if (q)
+      if (timedOut)
         return stagingErrorResult(
           "timeout",
           `tool did not complete within ${min}ms (${errorMessage(error)})`,
         );
-      if (t.signal?.aborted)
+      if (options.signal?.aborted)
         return stagingErrorResult("tool_error", `${CANCELLED_BY_CLIENT_MESSAGE} (${errorMessage(error)})`);
       return stagingErrorResult("tool_error", `tool call failed: ${errorMessage(error)}`);
     } finally {
       clearTimeout(timer);
-      t.signal?.removeEventListener("abort", P);
+      options.signal?.removeEventListener("abort", onClientAbort);
     }
-    if (C.isError) {
-      if (q) return stagingErrorResult("timeout", `tool call exceeded ${min}ms`);
-      if (t.signal?.aborted) return stagingErrorResult("tool_error", CANCELLED_BY_CLIENT_MESSAGE);
-      let o = contentToText(C.content);
-      return stagingErrorResult("tool_error", o || "tool returned an error result");
+    if (toolResult.isError) {
+      if (timedOut) return stagingErrorResult("timeout", `tool call exceeded ${min}ms`);
+      if (options.signal?.aborted) return stagingErrorResult("tool_error", CANCELLED_BY_CLIENT_MESSAGE);
+      let errorText = contentToText(toolResult.content);
+      return stagingErrorResult("tool_error", errorText || "tool returned an error result");
     }
-    let ot = await realpath(T);
-    let j = [];
+    let stagingRealRoot = await realpath(stagingRoot);
+    let outputsUsed = [];
     for (let { spec, rel, path } of mapped) {
-      if (t.signal?.aborted) return stagingErrorResult("tool_error", CANCELLED_BY_CLIENT_MESSAGE);
-      let u;
+      if (options.signal?.aborted) return stagingErrorResult("tool_error", CANCELLED_BY_CLIENT_MESSAGE);
+      let realOutPath;
       try {
-        u = await realpath(path);
+        realOutPath = await realpath(path);
       } catch (error) {
         if (isENOENT(error))
           return stagingErrorResult("tool_error", `tool did not produce output: ${spec.name}`);
@@ -380,36 +392,39 @@ async function stageMcpCall(e, t) {
           `output read failed for ${spec.name}: ${getErrnoCode(error) ?? "unknown"}`,
         );
       }
-      if (!u.startsWith(ot + "/"))
+      if (!realOutPath.startsWith(stagingRealRoot + "/"))
         return stagingErrorResult("tool_error", `output path escapes the staging dir: ${spec.name}`);
-      let L = MAX_WORKING_FILE_BYTES;
-      let R;
+      let sizeCap = MAX_WORKING_FILE_BYTES;
+      let outputBuf;
       try {
-        let y = await open(u, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+        let handle = await open(
+          realOutPath,
+          constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK,
+        );
         try {
-          let stats = await y.stat();
+          let stats = await handle.stat();
           if (!stats.isFile())
             return stagingErrorResult("tool_error", `output is not a regular file: ${spec.name}`);
           if (stats.nlink > 1)
             return stagingErrorResult("tool_error", `output has multiple hard links: ${spec.name}`);
-          if (stats.size > L)
+          if (stats.size > sizeCap)
             return stagingErrorResult(
               "output_too_large",
-              `output ${spec.name} is ${stats.size} bytes (cap ${L})`,
+              `output ${spec.name} is ${stats.size} bytes (cap ${sizeCap})`,
             );
-          let G = Number(stats.size);
-          let Z = Buffer.allocUnsafe(G + 1);
-          let A = 0;
+          let expectedSize = Number(stats.size);
+          let readBuffer = Buffer.allocUnsafe(expectedSize + 1);
+          let offset = 0;
           for (;;) {
-            let { bytesRead } = await y.read(Z, A, G + 1 - A, A);
+            let { bytesRead } = await handle.read(readBuffer, offset, expectedSize + 1 - offset, offset);
             if (bytesRead === 0) break;
-            A += bytesRead;
+            offset += bytesRead;
           }
-          if (A !== G)
+          if (offset !== expectedSize)
             return stagingErrorResult("tool_error", `output changed during collection: ${spec.name}`);
-          R = Z.subarray(0, A);
+          outputBuf = readBuffer.subarray(0, offset);
         } finally {
-          await y.close();
+          await handle.close();
         }
       } catch (error) {
         if (isENOENT(error))
@@ -419,43 +434,49 @@ async function stageMcpCall(e, t) {
           `output read failed for ${spec.name}: ${getErrnoCode(error) ?? "unknown"}`,
         );
       }
-      let w = await writeLaneRowFromWorker(t.syncDir ?? SYNCED_FILE_ROOT, rel, R, spec.if_match);
-      if (!w.ok)
+      let writeResult = await writeLaneRowFromWorker(
+        options.syncDir ?? SYNCED_FILE_ROOT,
+        rel,
+        outputBuf,
+        spec.if_match,
+      );
+      if (!writeResult.ok)
         return stagingErrorResult(
-          w.reason === "too_large"
+          writeResult.reason === "too_large"
             ? "output_too_large"
-            : w.reason === "conflict"
+            : writeResult.reason === "conflict"
               ? "output_conflict"
               : "tool_error",
-          `output write failed for ${spec.lane_path}: ${w.error}`,
-          w.retryable,
+          `output write failed for ${spec.lane_path}: ${writeResult.error}`,
+          writeResult.retryable,
         );
-      j.push({
+      outputsUsed.push({
         lane_path: spec.lane_path,
-        etag: w.etag,
-        bytes: R.length,
+        etag: writeResult.etag,
+        bytes: outputBuf.length,
       });
     }
     logForDiagnosticsNoPII("info", "mcp_call_staged_ok", {
-      inputs: s.length,
-      outputs: j.length,
+      inputs: inputsUsed.length,
+      outputs: outputsUsed.length,
     });
     return {
       staging: {
         ok: true,
-        outputs: j,
-        inputs_used: s,
+        outputs: outputsUsed,
+        inputs_used: inputsUsed,
       },
       tool: {
-        content: C.content,
-        structuredContent: C.structuredContent,
-        _meta: C._meta,
+        content: toolResult.content,
+        structuredContent: toolResult.structuredContent,
+        _meta: toolResult._meta,
       },
     };
   } finally {
-    await rm(T, {
+    await rm(stagingRoot, {
       recursive: true,
       force: true,
     }).catch(() => {});
   }
 }
+export { runStagedMcpCall };

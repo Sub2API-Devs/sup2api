@@ -9,11 +9,16 @@
  * attribution: placement 5
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, E, string, M } from "../../../vendor/zod/v4/classic/schemas.js";
+import {
+  objectSchema,
+  numberSchema,
+  stringSchema,
+  booleanSchema,
+} from "../../../vendor/zod/v4/classic/schemas.js";
 import { jsonParse } from "../../utils/slowOperations.js";
 
 //@ chunk-rr1dnehg.js:563-598 placement
-var _ = 1;
+var RELAY_MARKER_MAX_SCHEMA_VERSION = 1;
 var UPGRADE_RELAY_MARKER = "upgrade_relay_marker";
 //@ chunk-rr1dnehg.js:598-627 placement
 /**
@@ -28,13 +33,13 @@ function isUpgradeRelayMarker(subtype) {
  */
 var UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 var RELAY_MARKER_SCHEMA = DoctorLazy(() =>
-  u({
-    schema_version: E().int(),
-    conversation_uuid: string().regex(UUID_RE),
-    anchor_line_uuid: string().regex(UUID_RE),
-    anthropic_version: string().regex(/^\d{4}-\d{2}-\d{2}$/),
-    model: string().min(1).optional(),
-    automation_tools: M().optional().catch(undefined),
+  objectSchema({
+    schema_version: numberSchema().int(),
+    conversation_uuid: stringSchema().regex(UUID_RE),
+    anchor_line_uuid: stringSchema().regex(UUID_RE),
+    anthropic_version: stringSchema().regex(/^\d{4}-\d{2}-\d{2}$/),
+    model: stringSchema().min(1).optional(),
+    automation_tools: booleanSchema().optional().catch(undefined),
   }),
 );
 var MAX_MARKER_BYTES = 16384;
@@ -42,50 +47,50 @@ var MAX_MARKER_BYTES = 16384;
 /**
  * 解析 teleport 中继标记（大小、JSON、schema_version 范围、字段校验）。
  */
-function parseRelayMarker(e) {
-  if (Buffer.byteLength(e, "utf8") > MAX_MARKER_BYTES)
+function parseRelayMarker(rawMarker) {
+  if (Buffer.byteLength(rawMarker, "utf8") > MAX_MARKER_BYTES)
     return {
       ok: false,
       reason: `marker exceeds the ${MAX_MARKER_BYTES}-byte cap`,
     };
-  let i;
+  let parsed;
   try {
-    i = jsonParse(e);
+    parsed = jsonParse(rawMarker);
   } catch {
     return {
       ok: false,
       reason: "marker is not valid JSON",
     };
   }
-  let a = u({
-    schema_version: E().int(),
+  let versionResult = objectSchema({
+    schema_version: numberSchema().int(),
   })
     .loose()
-    .safeParse(i);
-  if (!a.success)
+    .safeParse(parsed);
+  if (!versionResult.success)
     return {
       ok: false,
       reason: "marker has no integer schema_version",
     };
-  if (a.data.schema_version > _)
+  if (versionResult.data.schema_version > RELAY_MARKER_MAX_SCHEMA_VERSION)
     return {
       ok: false,
-      reason: `marker schema_version ${a.data.schema_version} exceeds this consumer's ceiling ${_}`,
+      reason: `marker schema_version ${versionResult.data.schema_version} exceeds this consumer's ceiling ${RELAY_MARKER_MAX_SCHEMA_VERSION}`,
     };
-  if (a.data.schema_version < 1)
+  if (versionResult.data.schema_version < 1)
     return {
       ok: false,
-      reason: `marker schema_version ${a.data.schema_version} is below the producer's floor of 1`,
+      reason: `marker schema_version ${versionResult.data.schema_version} is below the producer's floor of 1`,
     };
-  let s = RELAY_MARKER_SCHEMA().safeParse(i);
-  if (!s.success)
+  let schemaResult = RELAY_MARKER_SCHEMA().safeParse(parsed);
+  if (!schemaResult.success)
     return {
       ok: false,
-      reason: `marker shape invalid: ${s.error.issues[0]?.message ?? "unknown issue"}`,
+      reason: `marker shape invalid: ${schemaResult.error.issues[0]?.message ?? "unknown issue"}`,
     };
   return {
     ok: true,
-    marker: s.data,
+    marker: schemaResult.data,
   };
 }
 //@ chunk-rr1dnehg.js:1663-1854 placement
@@ -93,11 +98,11 @@ function parseRelayMarker(e) {
  * 种子 transcript 行的宽松 schema 与“未处于 inactive”拒绝结果。
  */
 var SEED_LINE_SCHEMA = DoctorLazy(() =>
-  u({
-    type: string().optional(),
-    subtype: string().optional(),
-    uuid: string().optional(),
-    content: string().optional(),
+  objectSchema({
+    type: stringSchema().optional(),
+    subtype: stringSchema().optional(),
+    uuid: stringSchema().optional(),
+    content: stringSchema().optional(),
   }).loose(),
 );
 var NOT_INACTIVE_RESULT = {

@@ -8,6 +8,13 @@
  * pieces: chunk-azz22fvc.js (1), chunk-e6aww6q8.js (2), chunk-kxyd0g16.js (14)
  * attribution: fingerprint 1, placement 5, layout 4, file-local 2, facade-exports 5
  */
+import { FileReadTool } from "./tools/FileReadTool/FileReadTool.js";
+import { FileWriteTool } from "./tools/FileWriteTool/FileWriteTool.js";
+import { FileEditTool } from "./tools/FileEditTool/FileEditTool.js";
+import { GlobTool } from "./tools/GlobTool/GlobTool.js";
+import { GrepTool } from "./tools/GrepTool/GrepTool.js";
+import { BashTool } from "./tools/BashTool/BashTool.js";
+import { NotebookEditTool } from "./tools/NotebookEditTool/NotebookEditTool.js";
 import {
   setWizardOperatorToolsEnabled,
   getWizardOperatorToolsEnabled,
@@ -17,15 +24,8 @@ import { isEssentialTrafficOnly } from "./utils/privacyLevel.js";
 import { isPowerShellToolEnabled, isBashAvailable } from "./utils/shell/shellToolUtils.js";
 import { lazyWritersSlot } from "./tools/ArtifactTool/actionNames.js";
 import { AgentTool } from "./tools/AgentTool/agentToolDefinition.js";
-import { BashTool } from "./tools/BashTool/BashTool.js";
-import { GlobTool } from "./tools/GlobTool/GlobTool.js";
-import { GrepTool } from "./tools/GrepTool/GrepTool.js";
 import { getShadowedSearchToolNames, hasEmbeddedSearchTools } from "./utils/embeddedTools.js";
 import { ExitPlanModeV2Tool } from "./tools/ExitPlanModeTool/ExitPlanModeV2Tool.js";
-import { FileReadTool } from "./tools/FileReadTool/FileReadTool.js";
-import { FileEditTool } from "./tools/FileEditTool/FileEditTool.js";
-import { FileWriteTool } from "./tools/FileWriteTool/FileWriteTool.js";
-import { NotebookEditTool } from "./tools/NotebookEditTool/NotebookEditTool.js";
 import { MEMORY_TOOLS } from "./services/feedback/feedbackDrafts.js";
 import { WebFetchTool } from "./tools/WebFetchTool/WebFetchTool.js";
 import { TodoWriteTool } from "./tools/TodoWriteTool/TodoWriteTool.js";
@@ -92,47 +92,75 @@ import {
 } from "./services/artifacts/artifactMcpSwap.js";
 import { uniqBy } from "./utils/collections.js";
 import { warnMcpToolNameTooLong } from "./services/mcp/toolNameLimits.js";
+import { deferInit } from "../runtime/deferred-init.js";
 
+//@ chunk-e6aww6q8.js:4672012-4672020 placement
+/**
+ * 文件与 shell 类工具表的缓存（只构建一次）。
+ */
+var fileAndShellToolsCache;
+//@ chunk-e6aww6q8.js:4672020-4672143 placement
+/**
+ * 返回文件与 shell 类工具列表（读、写、编辑、Glob、Grep、Bash、PowerShell 等），只构建一次。
+ */
+function getFileAndShellTools() {
+  if (fileAndShellToolsCache) return fileAndShellToolsCache;
+  let { PowerShellTool } = require("./tools/PowerShellTool/PowerShellTool.js");
+  return (fileAndShellToolsCache = [
+    FileReadTool,
+    FileWriteTool,
+    FileEditTool,
+    GlobTool,
+    GrepTool,
+    BashTool,
+    PowerShellTool,
+    NotebookEditTool,
+  ]);
+}
 //@ chunk-kxyd0g16.js:152943-153625 placement
 /**
  * 创建懒加载代理：自有键直接读，其余键第一次访问时才调用工厂生成真实对象。ArtifactTool 用它在工具列表里先放一个轻量"头"，用到时再加载完整实现。
  */
-function createLazyProxy(e, r) {
-  let n;
-  let s = () => (n ??= r());
-  let f = new Set(Reflect.ownKeys(e));
-  return new Proxy(e, {
-    get(h, y, k) {
-      if (f.has(y)) return Reflect.get(h, y, k);
-      return typeof y === "symbol" && n === undefined ? undefined : Reflect.get(s(), y, k);
+function createLazyProxy(head, loadTarget) {
+  let target;
+  let getTarget = () => (target ??= loadTarget());
+  let headKeys = new Set(Reflect.ownKeys(head));
+  return new Proxy(head, {
+    get(proxyTarget, key, receiver) {
+      if (headKeys.has(key)) return Reflect.get(proxyTarget, key, receiver);
+      return typeof key === "symbol" && target === undefined
+        ? undefined
+        : Reflect.get(getTarget(), key, receiver);
     },
-    has(h, y) {
-      if (f.has(y)) return true;
-      return typeof y === "symbol" && n === undefined ? false : y in s();
+    has(proxyTarget, key) {
+      if (headKeys.has(key)) return true;
+      return typeof key === "symbol" && target === undefined ? false : key in getTarget();
     },
     ownKeys() {
-      return Reflect.ownKeys(s());
+      return Reflect.ownKeys(getTarget());
     },
-    getOwnPropertyDescriptor(h, y) {
-      let k = f.has(y) ? Reflect.getOwnPropertyDescriptor(h, y) : Reflect.getOwnPropertyDescriptor(s(), y);
+    getOwnPropertyDescriptor(proxyTarget, key) {
+      let descriptor = headKeys.has(key)
+        ? Reflect.getOwnPropertyDescriptor(proxyTarget, key)
+        : Reflect.getOwnPropertyDescriptor(getTarget(), key);
       return (
-        k && {
-          ...k,
+        descriptor && {
+          ...descriptor,
           configurable: true,
         }
       );
     },
-    set(h, y, k) {
-      f.delete(y);
-      return Reflect.set(s(), y, k);
+    set(proxyTarget, key, value) {
+      headKeys.delete(key);
+      return Reflect.set(getTarget(), key, value);
     },
-    defineProperty(h, y, k) {
-      f.delete(y);
-      return Reflect.defineProperty(s(), y, k);
+    defineProperty(proxyTarget, key, descriptor) {
+      headKeys.delete(key);
+      return Reflect.defineProperty(getTarget(), key, descriptor);
     },
-    deleteProperty(h, y) {
-      f.delete(y);
-      return Reflect.deleteProperty(s(), y);
+    deleteProperty(proxyTarget, key) {
+      headKeys.delete(key);
+      return Reflect.deleteProperty(getTarget(), key);
     },
   });
 }
@@ -151,68 +179,116 @@ function areWizardOperatorToolsEnabled() {
 /**
  * tools.ts 的懒加载工具表（一条 var 语句）：Cron 三件套、SELF_HOSTED_RUNNER_TOOLS、RemoteTrigger、SearchMcpRegistry、SuggestConnectors、ListConnectors、PLUGIN_SKILL_TOOLS、Monitor、SendUserFile、ProposeSkills、ProposeGoal、PublishPlugin、PushNotification、DesignSync、ClaudeDesign（aa：isEssentialTrafficOnly 时 null）、Projects、FetchInboxMessage、EndConversation、SendMessage（Ft）、SendFile（da）、ContinueInProjects、ENABLE_STUB_TOOLS、Poll、ArtifactTool（懒代理）。每个都在自己的 chunk 里，require 时才加载。
  */
-var CRON_TOOLS = [
-  require("./chunk-kyk75gag.js").CronCreateTool,
-  require("./chunk-e1hwptaj.js").CronDeleteTool,
-  require("./chunk-8985aafb.js").CronListTool,
-];
-var SELF_HOSTED_RUNNER_TOOLS = require("./chunk-3yy90gv7.js").SELF_HOSTED_RUNNER_TOOLS;
-var RemoteTriggerTool = require("./chunk-y8ff1x9z.js").RemoteTriggerTool;
-var SearchMcpRegistryTool = require("./chunk-1kxhadxb.js").SearchMcpRegistryTool;
-var SuggestConnectorsTool = require("./chunk-24nc744j.js").SuggestConnectorsTool;
-var ListConnectorsTool = require("./chunk-ry7vktx8.js").ListConnectorsTool;
-var PLUGIN_SKILL_TOOLS = require("./chunk-zw5xhxkf.js").PLUGIN_SKILL_TOOLS;
-var MonitorTool = require("./chunk-v3rq5m6f.js").MonitorTool;
-var SendUserFileTool = require("./chunk-gy7w3kfr.js").SendUserFileTool;
-var ProposeSkillsTool = require("./chunk-2rkp9ne9.js").ProposeSkillsTool;
-var ProposeGoalTool = require("./chunk-1rwh0063.js").ProposeGoalTool;
-var PublishPluginTool = require("./chunk-j15rab2w.js").PublishPluginTool;
-var PushNotificationTool = require("./chunk-4rqaac63.js").PushNotificationTool;
-var DesignSyncTool = require("./chunk-98n6ge4d.js").DesignSyncTool;
-var getDesignTool = () => {
-  if (isEssentialTrafficOnly()) return null;
-  return require("./chunk-171dhyhe.js").DesignTool;
-};
-var ProjectsTool = require("./chunk-eg496hkq.js").ProjectsTool;
-var FetchInboxMessageTool = require("./chunk-psktkvhp.js").FetchInboxMessageTool;
-var EndConversationTool = require("./chunk-t1kwhq0j.js").EndConversationTool;
-var getSendMessageTool = () => require("./chunk-astf3mhy.js").SendMessageTool;
-var getSendFileTool = () => require("./chunk-dq968kwq.js").SendFileTool;
-var ContinueInProjectsTool = require("./chunk-hbtxm37k.js").ContinueInProjectsTool;
-var ContinueInProjectsContextTool = require("./chunk-hbtxm37k.js").ContinueInProjectsContextTool;
-var ENABLE_STUB_TOOLS = require("./chunk-tkqbtg0j.js").ENABLE_STUB_TOOLS;
-var PollTool = require("./chunk-b5fpmtr5.js").PollTool;
-var ArtifactTool = createLazyProxy(
-  require("./chunk-avwrs8f9.js").ARTIFACT_TOOL_HEAD,
-  () => require("./chunk-2rzz5p5d.js").ArtifactTool,
-);
+var CRON_TOOLS; // deferred: loads other modules while loading; runs once its import cycle is complete
+var SELF_HOSTED_RUNNER_TOOLS;
+var RemoteTriggerTool;
+var SearchMcpRegistryTool;
+var SuggestConnectorsTool;
+var ListConnectorsTool;
+var PLUGIN_SKILL_TOOLS;
+var MonitorTool;
+var SendUserFileTool;
+var ProposeSkillsTool;
+var ProposeGoalTool;
+var PublishPluginTool;
+var PushNotificationTool;
+var DesignSyncTool;
+var getDesignTool;
+var ProjectsTool;
+var FetchInboxMessageTool;
+var EndConversationTool;
+var getSendMessageTool;
+var getSendFileTool;
+var ContinueInProjectsTool;
+var ContinueInProjectsContextTool;
+var ENABLE_STUB_TOOLS;
+var PollTool;
+var ArtifactTool;
+deferInit("chunk-kxyd0g16.js:153675", () => {
+  CRON_TOOLS = [
+    require("./tools/ScheduleCronTool/CronCreateTool.js").CronCreateTool,
+    require("./tools/ScheduleCronTool/CronDeleteTool.js").CronDeleteTool,
+    require("./tools/ScheduleCronTool/CronListTool.js").CronListTool,
+  ];
+  SELF_HOSTED_RUNNER_TOOLS =
+    require("./tools/SelfHostedRunnerTool/selfHostedRunnerTools.js").SELF_HOSTED_RUNNER_TOOLS;
+  RemoteTriggerTool = require("./tools/RemoteTriggerTool/RemoteTriggerTool.js").RemoteTriggerTool;
+  SearchMcpRegistryTool =
+    require("./tools/SearchMcpRegistryTool/SearchMcpRegistryTool.lazy.js").SearchMcpRegistryTool;
+  SuggestConnectorsTool =
+    require("./tools/SuggestConnectorsTool/SuggestConnectorsTool.js").SuggestConnectorsTool;
+  ListConnectorsTool = require("./tools/ListConnectorsTool/ListConnectorsTool.js").ListConnectorsTool;
+  PLUGIN_SKILL_TOOLS = require("./tools/PluginSearchTool/PluginSearchTool.js").PLUGIN_SKILL_TOOLS;
+  MonitorTool = require("./tools/MonitorTool/MonitorTool.js").MonitorTool;
+  SendUserFileTool = require("./tools/SendUserFileTool/SendUserFileTool.js").SendUserFileTool;
+  ProposeSkillsTool = require("./tools/ProposeSkillsTool/ProposeSkillsTool.js").ProposeSkillsTool;
+  ProposeGoalTool = require("./tools/ProposeGoalTool/ProposeGoalTool.js").ProposeGoalTool;
+  PublishPluginTool = require("./tools/PublishPluginTool/PublishPluginTool.js").PublishPluginTool;
+  PushNotificationTool = require("./tools/PushNotificationTool/PushNotificationTool.js").PushNotificationTool;
+  DesignSyncTool = require("./services/design/syncTool.js").DesignSyncTool;
+  getDesignTool = () => {
+    if (isEssentialTrafficOnly()) return null;
+    return require("./tools/DesignTool/DesignTool.js").DesignTool;
+  };
+  ProjectsTool = require("./tools/ProjectsTool/ProjectsTool.js").ProjectsTool;
+  FetchInboxMessageTool =
+    require("./tools/FetchInboxMessageTool/FetchInboxMessageTool.lazy.js").FetchInboxMessageTool;
+  EndConversationTool = require("./tools/EndConversationTool/EndConversationTool.js").EndConversationTool;
+  getSendMessageTool = () => require("./tools/SendMessageTool/SendMessageTool.js").SendMessageTool;
+  getSendFileTool = () => require("./tools/SendFileTool/SendFileTool.js").SendFileTool;
+  ContinueInProjectsTool =
+    require("./tools/ContinueInProjectsTool/ContinueInProjectsTool.js").ContinueInProjectsTool;
+  ContinueInProjectsContextTool =
+    require("./tools/ContinueInProjectsTool/ContinueInProjectsTool.js").ContinueInProjectsContextTool;
+  ENABLE_STUB_TOOLS = require("./tools/stubTools/enableStubTools.js").ENABLE_STUB_TOOLS;
+  PollTool = require("./tools/PollEventsTool/PollEventsTool.js").PollTool;
+  ArtifactTool = createLazyProxy(
+    require("./tools/ArtifactTool/ArtifactTool.js").ARTIFACT_TOOL_HEAD,
+    () => require("./tools/ArtifactTool/ArtifactTool.js").ArtifactTool,
+  );
+});
 //@ chunk-kxyd0g16.js:155165-155210 layout
 function loadArtifactToolModule() {
-  require("./chunk-2rzz5p5d.js");
+  require("./tools/ArtifactTool/ArtifactTool.js");
 }
 //@ chunk-kxyd0g16.js:155210-155655 file-local
 /**
  * tools.ts 懒加载表第二段：ARTIFACT_ADDON_TOOLS（fa）、AppifactRepl、外部构建为 null/[] 的槽位（fn、ha、hn、gn、yn、ga、kn，对应内部构建专有工具）、coordinatorMode 模块（st）、ListAgents、Workflow（先 initBundledWorkflows）、PowerShell（Bt：isPowerShellToolEnabled() 才 require）。
  */
-var getArtifactAddonTools = () => require("./chunk-cqgek8qx.js").ARTIFACT_ADDON_TOOLS;
-var AppifactReplTool = require("./chunk-tmx5d02z.js").AppifactReplTool;
-var internalExtraToolSlot = null;
-var internalExtraToolList = [];
-var internalExtraToolSlotB = null;
-var WebBrowserTool = null;
-var coordinatorModeModule = require("./chunk-yxywkh50.js");
-var SnipTool = null;
-var getV2AliasTools = null;
-var internalToolFactorySlot = null;
-var ListAgentsTool = require("./chunk-kv9asrky.js").ListAgentsTool;
-var WorkflowTool = (() => {
-  require("./chunk-p9mapmve.js").initBundledWorkflows();
-  return require("./chunk-y1shfdfm.js").WorkflowTool;
-})();
-var getPowerShellToolIfEnabled = () => {
-  if (!isPowerShellToolEnabled()) return null;
-  return require("./chunk-v0yfsee9.js").PowerShellTool;
-};
+var getArtifactAddonTools; // deferred: loads other modules while loading; runs once its import cycle is complete
+var AppifactReplTool;
+var internalExtraToolSlot;
+var internalExtraToolList;
+var internalExtraToolSlotB;
+var WebBrowserTool;
+var coordinatorModeModule;
+var SnipTool;
+var getV2AliasTools;
+var internalToolFactorySlot;
+var ListAgentsTool;
+var WorkflowTool;
+var getPowerShellToolIfEnabled;
+deferInit("chunk-kxyd0g16.js:155210", () => {
+  getArtifactAddonTools = () => require("./services/artifacts/artifactAddonTools.js").ARTIFACT_ADDON_TOOLS;
+  AppifactReplTool = require("./tools/AppifactReplTool/AppifactReplTool.js").AppifactReplTool;
+  internalExtraToolSlot = null;
+  internalExtraToolList = [];
+  internalExtraToolSlotB = null;
+  WebBrowserTool = null;
+  coordinatorModeModule = require("./coordinator/coordinatorMode.js");
+  SnipTool = null;
+  getV2AliasTools = null;
+  internalToolFactorySlot = null;
+  ListAgentsTool = require("./tools/ListAgentsTool/ListAgentsTool.js").ListAgentsTool;
+  WorkflowTool = (() => {
+    require("./services/workflows/bundledWorkflows.js").initBundledWorkflows();
+    return require("./tools/WorkflowTool/WorkflowTool.js").WorkflowTool;
+  })();
+  getPowerShellToolIfEnabled = () => {
+    if (!isPowerShellToolEnabled()) return null;
+    return require("./tools/PowerShellTool/PowerShellTool.js").PowerShellTool;
+  };
+});
 //@ chunk-kxyd0g16.js:155655-155681 layout
 /**
  * REPL 工具槽：外部构建恒返回 null，getTools 的简单模式与 REPL 分支因此不生效。
@@ -231,12 +307,14 @@ function getAllBaseTools() {
   return [
     AgentTool,
     ...(isBashAvailable() ? [BashTool] : []),
-    ...[GlobTool, GrepTool].filter((n) => !getShadowedSearchToolNames().has(n.name)),
+    ...[GlobTool, GrepTool].filter((tool) => !getShadowedSearchToolNames().has(tool.name)),
     ExitPlanModeV2Tool,
     FileReadTool,
     FileEditTool,
     FileWriteTool,
-    ...(getV2AliasTools?.() ?? []).filter((n) => !getShadowedSearchToolNames().has(n.underlyingV1ToolName)),
+    ...(getV2AliasTools?.() ?? []).filter(
+      (aliasTool) => !getShadowedSearchToolNames().has(aliasTool.underlyingV1ToolName),
+    ),
     NotebookEditTool,
     ...MEMORY_TOOLS,
     WebFetchTool,
@@ -306,19 +384,23 @@ function getAllBaseTools() {
   ];
 }
 //@ chunk-kxyd0g16.js:156481-156489 layout
-registerAllBaseToolsProvider(getAllBaseTools);
+// deferred: uses registerAllBaseToolsProvider (./Tool.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-kxyd0g16.js:156481", () => {
+  registerAllBaseToolsProvider(getAllBaseTools);
+});
 //@ chunk-kxyd0g16.js:156489-156693 facade-exports
 /**
  * 在工具列表里补上 Poll 与 FetchInboxMessage：两者不在列表中、但 getTools(permissionContext) 结果里有（即已启用且未被拒绝）时追加。
  */
-function withLateEnabledToolsIfAdvertised(e, toolPermissionContext) {
-  let n = [];
-  if (PollTool !== null && !e.includes(PollTool)) n.push(PollTool);
-  if (FetchInboxMessageTool && !e.includes(FetchInboxMessageTool)) n.push(FetchInboxMessageTool);
-  if (n.length === 0) return e;
-  let tools = getTools(toolPermissionContext);
-  let filtered = n.filter((h) => tools.includes(h));
-  return filtered.length === 0 ? e : [...e, ...filtered];
+function withLateEnabledToolsIfAdvertised(tools, toolPermissionContext) {
+  let missingLateTools = [];
+  if (PollTool !== null && !tools.includes(PollTool)) missingLateTools.push(PollTool);
+  if (FetchInboxMessageTool && !tools.includes(FetchInboxMessageTool))
+    missingLateTools.push(FetchInboxMessageTool);
+  if (missingLateTools.length === 0) return tools;
+  let tools_2 = getTools(toolPermissionContext);
+  let filtered = missingLateTools.filter((tool) => tools_2.includes(tool));
+  return filtered.length === 0 ? tools : [...tools, ...filtered];
 }
 //@ chunk-kxyd0g16.js:156693-156759 file-local
 /**
@@ -331,83 +413,89 @@ function filterToolsByNames(tools, permissionContext) {
 /**
  * getTools(permissionContext, opts)：给定权限上下文下实际可用的内建工具。CLAUDE_CODE_SIMPLE 时只给 Bash/PowerShell/Read/Edit（协调者模式再加 Agent/TaskStop/SendMessage/Workflow）；否则从 getAllBaseTools 去掉 MCP 资源三件与 StructuredOutput，按拒绝规则过滤（Aee），去掉 REPL 内部原语与 WebFetch 子代理冲突的 WebFetch，按 onlyNames 过滤，再按 isEnabled 过滤；嵌入式搜索开启但 Bash 不可用时把 Glob/Grep 补回；工具搜索开启且有 MCP 时追加 WaitForMcpServers。
  */
-var getTools = (e, r) => {
-  if (env.CLAUDE_CODE_SIMPLE && !r?.skipSimpleModeFilter) {
+var getTools = (toolPermissionContext, options) => {
+  if (env.CLAUDE_CODE_SIMPLE && !options?.skipSimpleModeFilter) {
     let replTool = getReplTool();
-    if (replTool !== null && alwaysFalseFlag() && !r?.skipReplFilter) {
-      let x =
-        isWorkspaceRestricted() || (e.restricted === true && getDenyRuleForTool(e, replTool) !== null)
+    if (replTool !== null && alwaysFalseFlag() && !options?.skipReplFilter) {
+      let simpleModeTools =
+        isWorkspaceRestricted() ||
+        (toolPermissionContext.restricted === true &&
+          getDenyRuleForTool(toolPermissionContext, replTool) !== null)
           ? [FileReadTool, FileEditTool, FileWriteTool]
           : [replTool, FileEditTool, FileWriteTool];
-      if (PollTool !== null && isPollEventIngressActive()) x.push(PollTool);
+      if (PollTool !== null && isPollEventIngressActive()) simpleModeTools.push(PollTool);
       if (coordinatorModeModule.isCoordinatorMode())
-        x.push(
+        simpleModeTools.push(
           AgentTool,
           TaskStopTool,
           getSendMessageTool(),
           ...(isWorkflowsAvailable() ? [WorkflowTool] : []),
         );
-      return filterToolsByNames(filterToolsByDenyRules(x, e), r?.onlyNames);
+      return filterToolsByNames(
+        filterToolsByDenyRules(simpleModeTools, toolPermissionContext),
+        options?.onlyNames,
+      );
     }
     let powerShellToolIfEnabled = getPowerShellToolIfEnabled();
-    let I = [
+    let shellTools = [
       ...(isBashAvailable() ? [BashTool] : []),
       ...(powerShellToolIfEnabled ? [powerShellToolIfEnabled] : []),
       FileReadTool,
       FileEditTool,
     ];
     if (coordinatorModeModule.isCoordinatorMode())
-      I.push(
+      shellTools.push(
         AgentTool,
         TaskStopTool,
         getSendMessageTool(),
         ...(isWorkflowsAvailable() ? [WorkflowTool] : []),
       );
-    return filterToolsByNames(filterToolsByDenyRules(I, e), r?.onlyNames);
+    return filterToolsByNames(filterToolsByDenyRules(shellTools, toolPermissionContext), options?.onlyNames);
   }
-  let n = new Set([
+  let mcpResourceToolNames = new Set([
     ListMcpResourcesTool.name,
     ReadMcpResourceTool.name,
     listDirectoryResourceTool.name,
     STRUCTUREDOUTPUT,
   ]);
-  let filtered = getAllBaseTools().filter((S) => !n.has(S.name));
-  let f = filterToolsByDenyRules(filtered, e);
-  let h = f.some((S) => toolMatchesName(S, BASH_TOOL_NAME)) && BashTool.isEnabled();
-  let y = false;
-  if (alwaysFalseFlag() && !r?.skipReplFilter) {
-    if (f.some((R) => toolMatchesName(R, REPL_TOOL_NAME))) {
-      f = f.filter((R) => !toolMatchesAnyName(R, READ_ONLY_TOOL_NAMES));
-      y = true;
+  let filtered = getAllBaseTools().filter((tool) => !mcpResourceToolNames.has(tool.name));
+  let allowedTools = filterToolsByDenyRules(filtered, toolPermissionContext);
+  let hasBashTool =
+    allowedTools.some((tool) => toolMatchesName(tool, BASH_TOOL_NAME)) && BashTool.isEnabled();
+  let replReplacedReadOnly = false;
+  if (alwaysFalseFlag() && !options?.skipReplFilter) {
+    if (allowedTools.some((tool) => toolMatchesName(tool, REPL_TOOL_NAME))) {
+      allowedTools = allowedTools.filter((tool) => !toolMatchesAnyName(tool, READ_ONLY_TOOL_NAMES));
+      replReplacedReadOnly = true;
     }
   }
   if (
-    !r?.skipReplFilter &&
-    canUseWebFetchAgent(f, e, {
-      activeAgents: r?.activeAgents,
+    !options?.skipReplFilter &&
+    canUseWebFetchAgent(allowedTools, toolPermissionContext, {
+      activeAgents: options?.activeAgents,
     })
   )
-    f = f.filter((S) => !toolMatchesName(S, WEBFETCH));
-  f = filterToolsByNames(f, r?.onlyNames);
-  let mapped = f.map((S) => S.isEnabled());
-  let filtered_2 = f.filter((S, R) => mapped[R]);
-  if (hasEmbeddedSearchTools() && !h && !y) {
-    let S = filterToolsByDenyRules(
+    allowedTools = allowedTools.filter((tool) => !toolMatchesName(tool, WEBFETCH));
+  allowedTools = filterToolsByNames(allowedTools, options?.onlyNames);
+  let mapped = allowedTools.map((tool) => tool.isEnabled());
+  let filtered_2 = allowedTools.filter((tool, index) => mapped[index]);
+  if (hasEmbeddedSearchTools() && !hasBashTool && !replReplacedReadOnly) {
+    let searchTools = filterToolsByDenyRules(
       [GlobTool, GrepTool, ...enabledToolsForAliases([GrepTool.name, GlobTool.name])].filter(
-        (R) => !filtered_2.includes(R),
+        (tool) => !filtered_2.includes(tool),
       ),
-      e,
+      toolPermissionContext,
     );
-    filtered_2 = [...filtered_2, ...S];
+    filtered_2 = [...filtered_2, ...searchTools];
   }
   if (
     (hasPendingMcpClients() || isDeclared()) &&
     !alwaysFalseFeed(filtered_2) &&
-    !filtered_2.some((S) => toolMatchesName(S, TOOL_SEARCH_TOOL_NAME)) &&
-    !filtered_2.some((S) => toolMatchesName(S, WAITFORMCPSERVERS))
+    !filtered_2.some((tool) => toolMatchesName(tool, TOOL_SEARCH_TOOL_NAME)) &&
+    !filtered_2.some((tool) => toolMatchesName(tool, WAITFORMCPSERVERS))
   )
-    filtered_2 = [...filtered_2, ...filterToolsByDenyRules([WaitForMcpServersTool], e)];
-  return filterToolsByNames(filtered_2, r?.onlyNames);
+    filtered_2 = [...filtered_2, ...filterToolsByDenyRules([WaitForMcpServersTool], toolPermissionContext)];
+  return filterToolsByNames(filtered_2, options?.onlyNames);
 };
 var TOOL_POOL_MEMO_TTL_MS = 30000;
 //@ chunk-kxyd0g16.js:157842-158035 facade-exports = getRuleByContentsForTool (0)
@@ -417,15 +505,18 @@ var TOOL_POOL_MEMO_TTL_MS = 30000;
 function assembleToolPool(context, tool, behavior) {
   swapBackFromArtifactsMcp();
   let tools = getTools(context, behavior);
-  let f = uniqBy(warnMcpToolNameTooLong([...(behavior?.machineMcpTools ?? []), ...tool]), (k) => k.name);
-  let toolNameForPermissionCheck = getToolNameForPermissionCheck_4(
-    getToolNameForPermissionCheck(filterToolsByDenyRules(f, context), f),
-    f,
+  let machineTools = uniqBy(
+    warnMcpToolNameTooLong([...(behavior?.machineMcpTools ?? []), ...tool]),
+    (tool) => tool.name,
   );
-  let y = swapToArtifactsMcp(tools, toolNameForPermissionCheck);
+  let toolNameForPermissionCheck = getToolNameForPermissionCheck_4(
+    getToolNameForPermissionCheck(filterToolsByDenyRules(machineTools, context), machineTools),
+    machineTools,
+  );
+  let pooledTools = swapToArtifactsMcp(tools, toolNameForPermissionCheck);
   return uniqBy(
-    y.toSorted(compareToolsByName).concat(toolNameForPermissionCheck.sort(compareToolsByName)),
-    (k) => k.name,
+    pooledTools.toSorted(compareToolsByName).concat(toolNameForPermissionCheck.sort(compareToolsByName)),
+    (tool) => tool.name,
   );
 }
 //@ chunk-kxyd0g16.js:158035-158096 facade-exports
@@ -437,35 +528,12 @@ var TOOL_CATALOG = {
   getTools,
   assembleToolPool,
 };
-//@ chunk-e6aww6q8.js:4672012-4672020 placement
-/**
- * 文件与 shell 类工具表的缓存（只构建一次）。
- */
-var fileAndShellToolsCache;
-//@ chunk-e6aww6q8.js:4672020-4672143 placement
-/**
- * 返回文件与 shell 类工具列表（读、写、编辑、Glob、Grep、Bash、PowerShell 等），只构建一次。
- */
-function getFileAndShellTools() {
-  if (fileAndShellToolsCache) return fileAndShellToolsCache;
-  let { PowerShellTool } = require("./chunk-v0yfsee9.js");
-  return (fileAndShellToolsCache = [
-    FileReadTool,
-    FileWriteTool,
-    FileEditTool,
-    GlobTool,
-    GrepTool,
-    BashTool,
-    PowerShellTool,
-    NotebookEditTool,
-  ]);
-}
 //@ chunk-azz22fvc.js:4057-4123 fingerprint = getPowerShellTool (0.524)
 /**
  * require 并返回 PowerShellTool（不检查启用条件）。
  */
 function getPowerShellTool() {
-  return require("./chunk-v0yfsee9.js").PowerShellTool;
+  return require("./tools/PowerShellTool/PowerShellTool.js").PowerShellTool;
 }
 export {
   getAllBaseTools,

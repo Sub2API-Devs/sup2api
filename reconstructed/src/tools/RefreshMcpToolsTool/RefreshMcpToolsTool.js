@@ -19,6 +19,7 @@ import { POWERSHELL_TOOL_NAME } from "../PowerShellTool/toolName.js";
 import { NOTEBOOK_EDIT_TOOL_NAME } from "../NotebookEditTool/constants.js";
 import { FILE_WRITE_TOOL_NAME } from "../FileWriteTool/prompt.js";
 import { FILE_EDIT_TOOL_NAME } from "../FileEditTool/constants.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-22r83hv0.js:28949-28964 placement
 var MAIN = "main";
@@ -26,14 +27,17 @@ var MAIN = "main";
 /**
  * 记录 print 模式轮询接线是否已创建（当前无引用）。
  */
-var printPollWiringMadeState = identity(
-  {
-    made: false,
-  },
-  (e) => {
-    e.made = false;
-  },
-);
+var printPollWiringMadeState; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-22r83hv0.js:28964", () => {
+  printPollWiringMadeState = identity(
+    {
+      made: false,
+    },
+    (state) => {
+      state.made = false;
+    },
+  );
+});
 //@ chunk-22r83hv0.js:29002-29025 placement
 /**
  * 恒返回 false 的能力开关。
@@ -45,14 +49,17 @@ function alwaysFalseFlag() {
 /**
  * 记录 print 轮询接线是否已记录（当前无引用）。
  */
-var printPollWiringLoggedState = identity(
-  {
-    logged: false,
-  },
-  (e) => {
-    e.logged = false;
-  },
-);
+var printPollWiringLoggedState; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-22r83hv0.js:29025", () => {
+  printPollWiringLoggedState = identity(
+    {
+      logged: false,
+    },
+    (state) => {
+      state.logged = false;
+    },
+  );
+});
 //@ chunk-22r83hv0.js:29067-29114 placement
 /**
  * 取出当前会话里系统提示段的记录。
@@ -99,12 +106,12 @@ function alwaysFalsePrintMode(permissionMode) {
 /**
  * 标记 print 模式下的轮询事件接线配置（流式输入、sdkUrl、是否只要自己的事件）。
  */
-function markPrintPollEventWiring(e) {
+function markPrintPollEventWiring(options) {
   markPollEventWiringForRun({
     entrypoint: "print",
-    hasStreamingInput: e.hasStreamingInput,
-    sdkUrl: e.sdkUrl,
-    ownEventsRequested: alwaysFalsePrintMode(e.permissionMode),
+    hasStreamingInput: options.hasStreamingInput,
+    sdkUrl: options.sdkUrl,
+    ownEventsRequested: alwaysFalsePrintMode(options.permissionMode),
     ownEventsOnly: false,
   });
 }
@@ -126,50 +133,54 @@ function alwaysFalseDefer() {
 /**
  * 原样返回输入。
  */
-function identityValue(e) {
-  return e;
+function identityValue(value) {
+  return value;
 }
 //@ chunk-22r83hv0.js:29461-29485 placement
 /**
  * 恒返回 false 的能力开关。
  */
-function alwaysFalseFeed(tools) {
+function alwaysFalseFeed(e) {
   return false;
 }
 //@ chunk-22r83hv0.js:29485-29510 placement
 /**
  * 恒返回 false 的能力开关。
  */
-function alwaysFalseStream(e) {
+function alwaysFalseStream(unusedArg) {
   return false;
 }
 //@ chunk-22r83hv0.js:29510-29535 placement
 /**
  * 恒返回 false 的能力开关。
  */
-function alwaysFalseEvent(e) {
+function alwaysFalseEvent(unusedArg) {
   return false;
 }
 //@ chunk-22r83hv0.js:29535-29562 placement
 /**
  * 原样返回输入。
  */
-function identityTool(memoryPrompt, n) {
+function identityTool(memoryPrompt, unusedValue) {
   return memoryPrompt;
 }
 //@ chunk-22r83hv0.js:29562-29627 placement
 /**
  * 只读工具名集合（Read/Glob/Grep/Bash/PowerShell/NotebookEdit）。
  */
-var READ_ONLY_TOOL_NAMES = new Set([
-  FILE_READ_TOOL_NAME,
-  GLOB_TOOL_NAME,
-  GREP_TOOL_NAME,
-  BASH_TOOL_NAME,
-  POWERSHELL_TOOL_NAME,
-  NOTEBOOK_EDIT_TOOL_NAME,
-]);
-var FILE_MUTATING_TOOL_NAMES = new Set([...READ_ONLY_TOOL_NAMES, FILE_WRITE_TOOL_NAME, FILE_EDIT_TOOL_NAME]);
+var READ_ONLY_TOOL_NAMES; // deferred: uses GREP_TOOL_NAME (../GrepTool/prompt.js) of its import cycle while loading; runs once the cycle is complete
+var FILE_MUTATING_TOOL_NAMES;
+deferInit("chunk-22r83hv0.js:29562", () => {
+  READ_ONLY_TOOL_NAMES = new Set([
+    FILE_READ_TOOL_NAME,
+    GLOB_TOOL_NAME,
+    GREP_TOOL_NAME,
+    BASH_TOOL_NAME,
+    POWERSHELL_TOOL_NAME,
+    NOTEBOOK_EDIT_TOOL_NAME,
+  ]);
+  FILE_MUTATING_TOOL_NAMES = new Set([...READ_ONLY_TOOL_NAMES, FILE_WRITE_TOOL_NAME, FILE_EDIT_TOOL_NAME]);
+});
 //@ chunk-22r83hv0.js:29627-29641 placement
 /**
  * print 模式轮询的宽限时间（30 秒）。

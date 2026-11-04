@@ -13,14 +13,20 @@ import { lit as lit_2, fromEnum } from "../../services/analytics/safeMetadata.js
 import { sanitizeMarkName } from "../../utils/startupMarks.js";
 import { logOTelEvent } from "../../utils/telemetry/events.js";
 import { isCompactBoundaryMessage as isCompactBoundaryMessage_2 } from "../../services/projects/threadRows.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
-import { y, R, P, init_react_production } from "../../../vendor/react/cjs/react.production.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
+import {
+  useState,
+  useRef,
+  useEffect,
+  init_react_production,
+} from "../../../vendor/react/cjs/react.production.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { useSurveyState } from "./useSurveyState.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../services/analytics/growthbook.js";
 import { shouldSkipFeedbackSurvey } from "../../utils/hostEnvironment.js";
 import { isPolicyAllowed as isPolicyAllowed_2 } from "../../services/policyLimits/policyEvidence.js";
 import { env } from "../../utils/env.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-18hwfzwa.js:1081954-1082146 fingerprint = _temp (1)
 function logPostCompactSurveyAppeared(appearanceId) {
@@ -84,7 +90,7 @@ function hasMessageAfterBoundary(messages, boundaryUuid) {
 }
 //@ chunk-18hwfzwa.js:1082861-1084481 fingerprint = usePostCompactSurvey (0.665)
 function usePostCompactSurvey(messages, isLoading, t0, t1) {
-  let $ = w(26);
+  let $ = useMemoCache(26);
   let hasActivePrompt = t0 === undefined ? false : t0;
   let t2;
   if ($[0] !== t1) {
@@ -94,14 +100,14 @@ function usePostCompactSurvey(messages, isLoading, t0, t1) {
   } else t2 = $[1];
   let { enabled } = t2;
   let enabled_2 = enabled === undefined ? true : enabled;
-  let [gateEnabled, setGateEnabled] = y(null);
+  let [gateEnabled, setGateEnabled] = useState(null);
   let t4;
   if ($[2] === MEMO_CACHE_SENTINEL) {
     t4 = new Set();
     $[2] = t4;
   } else t4 = $[2];
-  let seenCompactBoundaries = R(t4);
-  let pendingCompactBoundaryUuid = R(null);
+  let seenCompactBoundaries = useRef(t4);
+  let pendingCompactBoundaryUuid = useRef(null);
   let onOpen = logPostCompactSurveyAppeared;
   let onSelect = logPostCompactSurveyResponded;
   let onAbandon = logPostCompactSurveyAbandoned;
@@ -133,7 +139,7 @@ function usePostCompactSurvey(messages, isLoading, t0, t1) {
     t6 = $[5];
     t7 = $[6];
   }
-  P(t6, t7);
+  useEffect(t6, t7);
   let t8;
   if ($[7] !== messages) {
     t8 = new Set(messages.filter(isCompactBoundaryMessage).map(messageUuidOf));
@@ -214,7 +220,7 @@ function usePostCompactSurvey(messages, isLoading, t0, t1) {
     t10 = $[17];
     t9 = $[18];
   }
-  P(t9, t10);
+  useEffect(t9, t10);
   let t11;
   if (
     $[19] !== abandon ||
@@ -243,7 +249,13 @@ function usePostCompactSurvey(messages, isLoading, t0, t1) {
   return t11;
 }
 //@ chunk-18hwfzwa.js:1084481-1084485 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:1084481", () => {
+  init_react_production();
+});
 //@ chunk-18hwfzwa.js:1084485-1084489 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:1084485", () => {
+  init_react_production();
+});
 export { usePostCompactSurvey };

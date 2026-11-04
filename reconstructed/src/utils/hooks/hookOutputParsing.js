@@ -18,6 +18,7 @@ import { isJsonNestingWithin, countJsonMembers } from "../jsonScan.js";
 import { jsonParse } from "../slowOperations.js";
 import { HostScoped } from "../hostScoped.js";
 import { getRootSession } from "../../bootstrap/state.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:937271-937320 placement
 /**
@@ -39,13 +40,14 @@ function consumeUserPromptSubmitEventsEnv() {
 /**
  * 校验钩子 JSON 输出的键，给出拼写建议。
  */
-function validateHookJsonOutput(e, n) {
-  if (!e || typeof e !== "object" || Array.isArray(e) || !n || typeof n !== "object") return;
-  let r = [];
-  let s = new Set(Object.keys(n));
-  for (let key of Object.keys(e)) if (!s.has(key)) r.push(key);
-  let hookSpecificOutput = e.hookSpecificOutput;
-  let hookSpecificOutput_2 = "hookSpecificOutput" in n ? n.hookSpecificOutput : undefined;
+function validateHookJsonOutput(output, schema) {
+  if (!output || typeof output !== "object" || Array.isArray(output) || !schema || typeof schema !== "object")
+    return;
+  let unknownKeys = [];
+  let allowedKeys = new Set(Object.keys(schema));
+  for (let key of Object.keys(output)) if (!allowedKeys.has(key)) unknownKeys.push(key);
+  let hookSpecificOutput = output.hookSpecificOutput;
+  let hookSpecificOutput_2 = "hookSpecificOutput" in schema ? schema.hookSpecificOutput : undefined;
   if (
     hookSpecificOutput &&
     typeof hookSpecificOutput === "object" &&
@@ -53,23 +55,24 @@ function validateHookJsonOutput(e, n) {
     hookSpecificOutput_2 &&
     typeof hookSpecificOutput_2 === "object"
   ) {
-    let w = new Set(Object.keys(hookSpecificOutput_2));
-    for (let key of Object.keys(hookSpecificOutput)) if (!w.has(key)) r.push(`hookSpecificOutput.${key}`);
+    let nestedAllowed = new Set(Object.keys(hookSpecificOutput_2));
+    for (let key of Object.keys(hookSpecificOutput))
+      if (!nestedAllowed.has(key)) unknownKeys.push(`hookSpecificOutput.${key}`);
   }
-  if (r.length === 0) return;
-  let S = r.includes("additionalContext")
+  if (unknownKeys.length === 0) return;
+  let hint = unknownKeys.includes("additionalContext")
     ? " Did you mean hookSpecificOutput.additionalContext (with a hookEventName)?"
     : "";
-  logForDebugging(`Hook JSON output had unrecognized keys (ignored): ${r.join(", ")}.${S}`);
+  logForDebugging(`Hook JSON output had unrecognized keys (ignored): ${unknownKeys.join(", ")}.${hint}`);
 }
 //@ chunk-e6aww6q8.js:938146-938387 placement
-function findSyncJsonAnswer(stdout, { objectIn: n } = createHookJsonReader()) {
+function findSyncJsonAnswer(stdout, { objectIn: reader } = createHookJsonReader()) {
   let lines = stdout.trim().split(`
 `);
-  let [s = ""] = lines;
-  let h = n(s.trim());
-  let y = [
-    (h !== undefined && "async" in h ? lines.slice(1) : lines)
+  let [firstLine = ""] = lines;
+  let parsed = reader(firstLine.trim());
+  let candidates = [
+    (parsed !== undefined && "async" in parsed ? lines.slice(1) : lines)
       .join(
         `
 `,
@@ -77,88 +80,88 @@ function findSyncJsonAnswer(stdout, { objectIn: n } = createHookJsonReader()) {
       .trim(),
     ...lines.map((line) => line.trim()),
   ];
-  for (let S of y) {
-    let w = n(S);
-    if (w !== undefined && !("async" in w)) return w;
+  for (let candidate of candidates) {
+    let json = reader(candidate);
+    if (json !== undefined && !("async" in json)) return json;
   }
   return;
 }
 //@ chunk-e6aww6q8.js:938387-938573 placement
-function hasUnparsedJsonLine(stdout, { objectIn: n, leftSomeUnparsed: r } = createHookJsonReader()) {
-  let s = (y) => "async" in (n(y) ?? {});
+function hasUnparsedJsonLine(stdout, { objectIn: reader, leftSomeUnparsed } = createHookJsonReader()) {
+  let isAsync = (text) => "async" in (reader(text) ?? {});
   return (
-    !s(stdout.trim()) &&
+    !isAsync(stdout.trim()) &&
     stdout
       .split(
         `
 `,
       )
       .some((line) => {
-        let trimmed = line.trim();
-        return trimmed.startsWith("{") && !s(trimmed);
+        let text = line.trim();
+        return text.startsWith("{") && !isAsync(text);
       }) &&
-    !r()
+    !leftSomeUnparsed()
   );
 }
 //@ chunk-e6aww6q8.js:938573-939819 placement
 /**
  * 解析异步钩子的 JSON 输出，校验 systemMessage 等字段。
  */
-function parseAsyncHookOutput(syncJsonAnswer, hookName) {
-  if (!isPlainObject_5(syncJsonAnswer)) {
+function parseAsyncHookOutput(output, hookName) {
+  if (!isPlainObject_5(output)) {
     logForDebugging(
-      `${hookName} async hook JSON output must be an object, got ${jsonTypeLabel(syncJsonAnswer)} \u2014 ignored`,
+      `${hookName} async hook JSON output must be an object, got ${jsonTypeLabel(output)} \u2014 ignored`,
       {
         level: "error",
       },
     );
     return {};
   }
-  let r = hookJSONOutputSchema().safeParse(syncJsonAnswer);
-  if (r.success && isSyncHookJSONOutput(r.data)) {
-    validateHookJsonOutput(syncJsonAnswer, r.data);
-    return r.data;
+  let parsed = hookJSONOutputSchema().safeParse(output);
+  if (parsed.success && isSyncHookJSONOutput(parsed.data)) {
+    validateHookJsonOutput(output, parsed.data);
+    return parsed.data;
   }
-  let s = [];
-  let h = {};
-  if ("systemMessage" in syncJsonAnswer)
-    if (typeof syncJsonAnswer.systemMessage === "string") h.systemMessage = syncJsonAnswer.systemMessage;
-    else s.push(`systemMessage (${jsonTypeLabel(syncJsonAnswer.systemMessage)})`);
-  if ("metrics" in syncJsonAnswer)
-    if (isPlainObject_5(syncJsonAnswer.metrics)) {
-      let filtered = Object.entries(syncJsonAnswer.metrics).filter(
-        (L) => typeof L[1] === "boolean" || typeof L[1] === "number",
+  let dropped = [];
+  let result = {};
+  if ("systemMessage" in output)
+    if (typeof output.systemMessage === "string") result.systemMessage = output.systemMessage;
+    else dropped.push(`systemMessage (${jsonTypeLabel(output.systemMessage)})`);
+  if ("metrics" in output)
+    if (isPlainObject_5(output.metrics)) {
+      let filtered = Object.entries(output.metrics).filter(
+        (entry) => typeof entry[1] === "boolean" || typeof entry[1] === "number",
       );
-      h.metrics = Object.fromEntries(filtered);
-    } else s.push(`metrics (${jsonTypeLabel(syncJsonAnswer.metrics)})`);
-  if ("hookSpecificOutput" in syncJsonAnswer)
-    if (isPlainObject_5(syncJsonAnswer.hookSpecificOutput)) {
-      let { additionalContext, ...L } = syncJsonAnswer.hookSpecificOutput;
-      let G = typeof additionalContext === "string";
-      if (!G && additionalContext !== undefined)
-        s.push(`hookSpecificOutput.additionalContext (${jsonTypeLabel(additionalContext)})`);
-      h.hookSpecificOutput = G ? syncJsonAnswer.hookSpecificOutput : L;
-    } else s.push(`hookSpecificOutput (${jsonTypeLabel(syncJsonAnswer.hookSpecificOutput)})`);
-  let y = r.success ? undefined : r.error.issues[0];
-  let S = y
-    ? `${y.path.join(".") || "(root)"}: ${y.message}`
+      result.metrics = Object.fromEntries(filtered);
+    } else dropped.push(`metrics (${jsonTypeLabel(output.metrics)})`);
+  if ("hookSpecificOutput" in output)
+    if (isPlainObject_5(output.hookSpecificOutput)) {
+      let { additionalContext, ...rest } = output.hookSpecificOutput;
+      let hasContext = typeof additionalContext === "string";
+      if (!hasContext && additionalContext !== undefined)
+        dropped.push(`hookSpecificOutput.additionalContext (${jsonTypeLabel(additionalContext)})`);
+      result.hookSpecificOutput = hasContext ? output.hookSpecificOutput : rest;
+    } else dropped.push(`hookSpecificOutput (${jsonTypeLabel(output.hookSpecificOutput)})`);
+  let issue = parsed.success ? undefined : parsed.error.issues[0];
+  let issueText = issue
+    ? `${issue.path.join(".") || "(root)"}: ${issue.message}`
     : "async-marker response where a sync response was expected";
   logForDebugging(
-    `${hookName} async hook JSON output failed schema validation (${S})` +
-      (s.length > 0
-        ? `; ignored malformed field(s): ${s.join(", ")}`
+    `${hookName} async hook JSON output failed schema validation (${issueText})` +
+      (dropped.length > 0
+        ? `; ignored malformed field(s): ${dropped.join(", ")}`
         : "; delivering recognized fields as-is"),
     {
-      level: s.length > 0 ? "error" : "debug",
+      level: dropped.length > 0 ? "error" : "debug",
     },
   );
-  return h;
+  return result;
 }
 //@ chunk-e6aww6q8.js:939819-939918 placement
-function jsonTypeLabel(e) {
-  if (e === null) return "null";
-  if (Array.isArray(e)) return "an array";
-  return `a ${typeof e}`;
+function jsonTypeLabel(value) {
+  if (value === null) return "null";
+  if (Array.isArray(value)) return "an array";
+  return `a ${typeof value}`;
 }
 //@ chunk-e6aww6q8.js:939918-939930 placement
 var MAX_JSON_KEYS_BUDGET = 256;
@@ -168,16 +171,19 @@ var MAX_JSON_KEYS_BUDGET = 256;
  */
 function createJsonParseBudget() {
   if (!hasMcpInboundDoor()) return () => true;
-  let e = MAX_JSON_KEYS_BUDGET;
-  let n = false;
-  return (r) => {
-    let s = e > 0 && isJsonNestingWithin(r, MAX_NESTING_PARSED) ? countJsonMembers(r, e, 0) : undefined;
-    if (s !== undefined) {
-      e -= Math.max(s.members, 1);
+  let budget = MAX_JSON_KEYS_BUDGET;
+  let noted = false;
+  return (text) => {
+    let usage =
+      budget > 0 && isJsonNestingWithin(text, MAX_NESTING_PARSED)
+        ? countJsonMembers(text, budget, 0)
+        : undefined;
+    if (usage !== undefined) {
+      budget -= Math.max(usage.members, 1);
       return true;
     }
-    if (!n) {
-      n = true;
+    if (!noted) {
+      noted = true;
       logForDebugging(
         `Hooks: part of a background hook's output was not read as JSON: reading it would parse more than ${MAX_JSON_KEYS_BUDGET} JSON keys in all, or it nests too deep. Print one answer with fewer keys.`,
         {
@@ -195,36 +201,36 @@ function createHookJsonReader() {
       objectIn: parseJsonObjectOrUndefined,
       leftSomeUnparsed: () => false,
     };
-  let e = {
+  let budgets = {
     aLine: createJsonParseBudget(),
     severalLines: createJsonParseBudget(),
   };
-  let n = new Map();
-  let r = false;
+  let cache = new Map();
+  let dropped = false;
   return {
-    objectIn: (s) => {
-      if (s.startsWith("{") && !n.has(s))
+    objectIn: (text) => {
+      if (text.startsWith("{") && !cache.has(text))
         if (
-          e[
-            s.includes(`
+          budgets[
+            text.includes(`
 `)
               ? "severalLines"
               : "aLine"
-          ](s)
+          ](text)
         )
-          n.set(s, parseJsonObjectOrUndefined(s));
-        else r = true;
-      return n.get(s);
+          cache.set(text, parseJsonObjectOrUndefined(text));
+        else dropped = true;
+      return cache.get(text);
     },
-    leftSomeUnparsed: () => r,
+    leftSomeUnparsed: () => dropped,
   };
 }
 //@ chunk-e6aww6q8.js:940597-940693 placement
-function parseJsonObjectOrUndefined(e) {
-  if (!e.startsWith("{")) return;
+function parseJsonObjectOrUndefined(text) {
+  if (!text.startsWith("{")) return;
   try {
-    let n = jsonParse(e);
-    return isPlainObject_5(n) ? n : undefined;
+    let parsed = jsonParse(text);
+    return isPlainObject_5(parsed) ? parsed : undefined;
   } catch {
     return;
   }
@@ -238,11 +244,11 @@ class AsyncHookRegistryState {
   undeliveredResponses = [];
   holdsAnswerForModel = false;
   isSessionEnvStale = false;
-  register(e) {
-    this.pendingHooks.set(e.processId, e);
+  register(hook) {
+    this.pendingHooks.set(hook.processId, hook);
   }
-  get(e) {
-    return this.pendingHooks.get(e);
+  get(processId) {
+    return this.pendingHooks.get(processId);
   }
   values() {
     return Array.from(this.pendingHooks.values());
@@ -250,17 +256,17 @@ class AsyncHookRegistryState {
   size() {
     return this.pendingHooks.size;
   }
-  remove(e) {
-    this.pendingHooks.delete(e);
+  remove(processId) {
+    this.pendingHooks.delete(processId);
   }
   removeAll() {
     this.pendingHooks.clear();
     this.takeUndeliveredResponses();
     this.isSessionEnvStale = false;
   }
-  holdResponse(e) {
-    this.undeliveredResponses.push(e);
-    this.holdsAnswerForModel ||= getHookMessageTexts(e.response).length > 0;
+  holdResponse(response) {
+    this.undeliveredResponses.push(response);
+    this.holdsAnswerForModel ||= getHookMessageTexts(response.response).length > 0;
   }
   takeUndeliveredResponses() {
     this.holdsAnswerForModel = false;
@@ -268,7 +274,10 @@ class AsyncHookRegistryState {
   }
 }
 //@ chunk-e6aww6q8.js:941306-941333 placement
-var asyncHookRegistryStateRegistry = new HostScoped(() => new AsyncHookRegistryState());
+var asyncHookRegistryStateRegistry; // deferred: uses AsyncHookRegistryState of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:941306", () => {
+  asyncHookRegistryStateRegistry = new HostScoped(() => new AsyncHookRegistryState());
+});
 //@ chunk-e6aww6q8.js:941333-941372 placement
 /**
  * 取当前宿主的异步钩子注册状态。
@@ -307,63 +316,63 @@ function scanHookOutputMarkers(state, marker) {
  * 从 hook 输出中剥离 started/result/exited 标记段并解析结果，记录冲突。
  */
 function stripHookOutputMarkers(state, stream, fromIndex, marker) {
-  let h = `
+  let startMarker = `
 ${marker} started
 `;
-  let index = state[stream].indexOf(h, fromIndex);
+  let index = state[stream].indexOf(startMarker, fromIndex);
   while (index !== -1) {
     state.started = true;
-    spliceOutputSegment(state, stream, index, index + h.length);
-    index = state[stream].indexOf(h, index);
+    spliceOutputSegment(state, stream, index, index + startMarker.length);
+    index = state[stream].indexOf(startMarker, index);
   }
-  let S = `
+  let resultMarker = `
 ${marker} result `;
-  index = state[stream].indexOf(S, fromIndex);
+  index = state[stream].indexOf(resultMarker, fromIndex);
   while (index !== -1) {
     let index_2 = state[stream].indexOf(
       `
 `,
-      index + S.length,
+      index + resultMarker.length,
     );
     if (index_2 === -1) break;
-    let sliced = state[stream].slice(index + S.length, index_2);
+    let sliced = state[stream].slice(index + resultMarker.length, index_2);
     spliceOutputSegment(state, stream, index, index_2 + 1);
-    let Se;
+    let parsed;
     try {
-      Se = jsonParse(sliced);
+      parsed = jsonParse(sliced);
     } catch {
       state.resultConflict = true;
-      index = state[stream].indexOf(S, index);
+      index = state[stream].indexOf(resultMarker, index);
       continue;
     }
-    let resultWasString = typeof Se === "string";
-    let we = typeof Se === "string" ? Se : sliced;
-    if (state.resultStdout !== undefined && state.resultStdout !== we) state.resultConflict = true;
-    state.resultStdout = we;
+    let resultWasString = typeof parsed === "string";
+    let stdout = typeof parsed === "string" ? parsed : sliced;
+    if (state.resultStdout !== undefined && state.resultStdout !== stdout) state.resultConflict = true;
+    state.resultStdout = stdout;
     state.resultWasString = resultWasString;
-    index = state[stream].indexOf(S, index);
+    index = state[stream].indexOf(resultMarker, index);
   }
-  let w = `
+  let exitMarker = `
 ${marker} exited `;
-  index = state[stream].indexOf(w, fromIndex);
+  index = state[stream].indexOf(exitMarker, fromIndex);
   while (index !== -1) {
     let index_2 = state[stream].indexOf(
       `
 `,
-      index + w.length,
+      index + exitMarker.length,
     );
     if (index_2 === -1) break;
-    let sliced = state[stream].slice(index + w.length, index_2);
+    let sliced = state[stream].slice(index + exitMarker.length, index_2);
     if (!/^\d{1,3}$/.test(sliced)) {
       spliceOutputSegment(state, stream, index, index_2 + 1);
       state.resultConflict = true;
-      index = state[stream].indexOf(w, index);
+      index = state[stream].indexOf(exitMarker, index);
       continue;
     }
-    let Se = Number(sliced);
+    let status = Number(sliced);
     spliceOutputSegment(state, stream, index, index_2 + 1);
-    state.exitStatus = state.exitStatus === 2 ? 2 : Se;
-    index = state[stream].indexOf(w, index);
+    state.exitStatus = state.exitStatus === 2 ? 2 : status;
+    index = state[stream].indexOf(exitMarker, index);
   }
   let index_2 = state[stream].indexOf(
     `
@@ -385,10 +394,10 @@ function strongerExitStatus(code, exitStatus) {
 /**
  * 从输出缓冲的某字段剪掉一段并在 output 中删除相同文本（与 bridge 无关）。
  */
-function spliceOutputSegment(state, stream, r, s) {
-  let h = state[stream];
-  let sliced = h.slice(r, s);
-  state[stream] = h.slice(0, r) + h.slice(s);
+function spliceOutputSegment(state, stream, from, to) {
+  let streamText = state[stream];
+  let sliced = streamText.slice(from, to);
+  state[stream] = streamText.slice(0, from) + streamText.slice(to);
   let index = state.output.lastIndexOf(sliced);
   if (index !== -1) state.output = state.output.slice(0, index) + state.output.slice(index + sliced.length);
 }

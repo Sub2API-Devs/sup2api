@@ -42,10 +42,10 @@ function isHookBlockingErrorAttachment(message) {
   return message.type === "attachment" && message.attachment.type === "hook_blocking_error";
 }
 //@ chunk-ha3km179.js:79692-79799 placement = call (0.504)
-function call(e) {
+function call(deps) {
   try {
-    if (postSamplingHookRegistry.of(e.toolUseContext.session.host).hooks.includes(rememberTurnParams))
-      noteMainRequestForFork(e, createCacheSafeParams(e));
+    if (postSamplingHookRegistry.of(deps.toolUseContext.session.host).hooks.includes(rememberTurnParams))
+      noteMainRequestForFork(deps, createCacheSafeParams(deps));
   } catch (error) {
     logError(error);
   }
@@ -82,38 +82,38 @@ async function* handleStopHooks(
   classifierJobState,
   endTurnSource,
 ) {
-  let Q = endTurnSource === "tool";
-  let D = [...messagesForQuery, ...assistantMessages, ...toolResults];
-  let L = replyGatePolicy();
+  let endTurnFromTool = endTurnSource === "tool";
+  let messages = [...messagesForQuery, ...assistantMessages, ...toolResults];
+  let replyGatePolicyValue = replyGatePolicy();
   if (
     getQueuedPeerMessageCount &&
     endTurnSource === "mcp_meta" &&
     querySource === "sdk" &&
     !toolUseContext.agentId &&
     !toolUseContext.abortController.signal.aborted &&
-    L !== undefined
+    replyGatePolicyValue !== undefined
   )
     runBookkeepingSafe(() => {
-      let V = getQueuedPeerMessageCount.evaluateProjectsReplyGate(
+      let gateDecision = getQueuedPeerMessageCount.evaluateProjectsReplyGate(
         messagesForQuery,
         [...assistantMessages, ...toolResults],
         {
           kind: "policy",
-          policy: L,
+          policy: replyGatePolicyValue,
         },
       );
-      switch (V.kind) {
+      switch (gateDecision.kind) {
         case "answered":
           logFeatureOk("projects_reply_gate_policy", {
-            person_opened_turn: V.personOpened,
-            no_reply_only: V.noReplyOnly,
+            person_opened_turn: gateDecision.personOpened,
+            no_reply_only: gateDecision.noReplyOnly,
             source: lit("mcp_meta"),
           });
           break;
         case "still_silent":
         case "bounce":
-          logReplyGatePolicy(REPLY_GATE_SILENT_REASONS[V.reason], {
-            person_opened_turn: V.personOpened,
+          logReplyGatePolicy(REPLY_GATE_SILENT_REASONS[gateDecision.reason], {
+            person_opened_turn: gateDecision.personOpened,
           });
           break;
         case "skip":
@@ -126,7 +126,7 @@ async function* handleStopHooks(
   )
     saveCacheSafeParams(
       createCacheSafeParams({
-        messages: D,
+        messages,
         systemPrompt,
         userContext,
         systemContext,
@@ -135,7 +135,7 @@ async function* handleStopHooks(
         stickyBetas,
       }),
     );
-  if (Q || (!isBgSession() && toolUseContext.sessionState))
+  if (endTurnFromTool || (!isBgSession() && toolUseContext.sessionState))
     yield* generatePostTurnSummary(
       classifierJobState,
       [...messagesForQuery, ...assistantMessages],
@@ -149,21 +149,21 @@ async function* handleStopHooks(
     } catch {}
   let hookStartTime = Date.now();
   let activeGoal = toolUseContext.agentId ? undefined : toolUseContext.getAppState().activeGoal;
-  let ee = false;
+  let reactionsRan = false;
   try {
-    let V = executeStopHooks(
+    let stopHookResults = executeStopHooks(
       getToolPermissionContext(toolUseContext).mode,
       toolUseContext.abortController.signal,
       undefined,
       stopHookActive,
       toolUseContext.agentId,
       toolUseContext,
-      D,
+      messages,
       toolUseContext.agentType,
       "loop_tick",
     );
-    let fe = [];
-    for await (let result of V) {
+    let hookErrors = [];
+    for await (let result of stopHookResults) {
       if (result.timedOut && activeGoal && result.hook?.prompt === activeGoal.condition)
         logFeatureSad("goal_met", "evaluator_timeout");
       if (result.message) {
@@ -175,8 +175,8 @@ async function* handleStopHooks(
             (attachment.hookEvent === "Stop" || attachment.hookEvent === "SubagentStop")
           ) {
             if (attachment.type === "hook_non_blocking_error")
-              fe.push(attachment.stderr || `Exit code ${attachment.exitCode}`);
-            else if (attachment.type === "hook_error_during_execution") fe.push(attachment.content);
+              hookErrors.push(attachment.stderr || `Exit code ${attachment.exitCode}`);
+            else if (attachment.type === "hook_error_during_execution") hookErrors.push(attachment.content);
           }
         }
       }
@@ -185,7 +185,7 @@ async function* handleStopHooks(
           `[end-turn] Stop hook block discarded (turn ended by ${endTurnSource === "tool" ? "tool result" : endTurnSource === "mcp_meta" ? "MCP end-turn" : "loop tick"}, no model re-invoke): ${result.blockingError?.blockingError ?? result.stopReason ?? "preventContinuation"}`,
         );
     }
-    if (fe.length > 0)
+    if (hookErrors.length > 0)
       yield {
         type: "notification",
         notification: {
@@ -195,8 +195,8 @@ async function* handleStopHooks(
         },
       };
     if (endTurnSource) {
-      ee = true;
-      yield* runTurnEndReactions(toolUseContext, D, {
+      reactionsRan = true;
+      yield* runTurnEndReactions(toolUseContext, messages, {
         stopHookActive,
       });
     }
@@ -206,9 +206,9 @@ async function* handleStopHooks(
       (toolUseContext.abortController.signal.aborted || error instanceof StreamClosedAbortError)
     ) {
       logForDebugging("Stop hook cancelled (abort or stream teardown)");
-      if (endTurnSource && !ee && !toolUseContext.abortController.signal.aborted)
+      if (endTurnSource && !reactionsRan && !toolUseContext.abortController.signal.aborted)
         try {
-          yield* runTurnEndReactions(toolUseContext, D, {
+          yield* runTurnEndReactions(toolUseContext, messages, {
             stopHookActive,
           });
         } catch (error) {
@@ -222,9 +222,9 @@ async function* handleStopHooks(
       queryDepth: toolUseContext.queryTracking?.depth,
     });
     yield createSystemMessage(`Stop hook failed: ${errorMessage(error)}`, "warning");
-    if (endTurnSource && !ee)
+    if (endTurnSource && !reactionsRan)
       try {
-        yield* runTurnEndReactions(toolUseContext, D, {
+        yield* runTurnEndReactions(toolUseContext, messages, {
           stopHookActive,
         });
       } catch (error) {

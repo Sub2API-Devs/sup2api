@@ -21,23 +21,25 @@ import { toError } from "../errors.js";
 import { withDeadline } from "../sleep.js";
 
 //@ chunk-pc1rmcr2.js:4806-4888 placement
-function isAutoModeTransitionDue(e, r) {
+function isAutoModeTransitionDue(context, fastMode) {
   return (
-    (e.isAutoModeAvailable === false || Boolean(r) || isAntInternalFastModelId(getMainLoopModel())) &&
+    (context.isAutoModeAvailable === false ||
+      Boolean(fastMode) ||
+      isAntInternalFastModelId(getMainLoopModel())) &&
     isAutoModeGateEnabled()
   );
 }
 //@ chunk-pc1rmcr2.js:4888-4931 placement
-function checkAutoModeTransition(e, r, o, d) {
-  return evaluateAutoModeGate(e, r, o, d, false);
+function checkAutoModeTransition(context, setAppState, fastMode, timeoutMs) {
+  return evaluateAutoModeGate(context, setAppState, fastMode, timeoutMs, false);
 }
 //@ chunk-pc1rmcr2.js:4931-4977 placement
-function checkAutoModeInUse(toolPermissionContext, r, fastMode) {
-  return evaluateAutoModeGate(toolPermissionContext, r, fastMode, undefined, true);
+function checkAutoModeInUse(toolPermissionContext, setAppState, fastMode) {
+  return evaluateAutoModeGate(toolPermissionContext, setAppState, fastMode, undefined, true);
 }
 //@ chunk-pc1rmcr2.js:4977-5258 placement
-async function applyAutoModeTransition(toolPermissionContext, r, fastMode, d) {
-  switch (await checkAutoModeTransition(toolPermissionContext, r, fastMode, d)) {
+async function applyAutoModeTransition(context, setAppState, fastMode, timeoutMs) {
+  switch (await checkAutoModeTransition(context, setAppState, fastMode, timeoutMs)) {
     case "not-due":
     case "allowed":
       return;
@@ -55,33 +57,34 @@ async function applyAutoModeTransition(toolPermissionContext, r, fastMode, d) {
 /**
  * 检查是否需要验证自动模式门控，并据此允许、拒绝或降级权限模式。
  */
-async function evaluateAutoModeGate(e, r, o, d, u) {
-  if (!isAutoModeTransitionDue(e, o) || (u && isAutoModeInUse(e))) return "not-due";
-  let c = verifyAutoModeGateAccess(e, o)
+async function evaluateAutoModeGate(context, setAppState, fastMode, timeoutMs, inUseOnly) {
+  if (!isAutoModeTransitionDue(context, fastMode) || (inUseOnly && isAutoModeInUse(context)))
+    return "not-due";
+  let verification = verifyAutoModeGateAccess(context, fastMode)
     .then(({ updateContext, canEnterAuto, refusedForSettingsAlone }) => {
-      let n = false;
+      let shouldReportUnanswered = false;
       if (!refusedForSettingsAlone)
-        r((s) => {
-          let toolPermissionContext = s.toolPermissionContext;
+        setAppState((state) => {
+          let toolPermissionContext = state.toolPermissionContext;
           if (!canEnterAuto) {
-            if (u && isAutoModeInUse(toolPermissionContext)) return s;
-            let h = updateContext(toolPermissionContext);
-            return h === toolPermissionContext
-              ? s
+            if (inUseOnly && isAutoModeInUse(toolPermissionContext)) return state;
+            let updatedContext = updateContext(toolPermissionContext);
+            return updatedContext === toolPermissionContext
+              ? state
               : {
-                  ...s,
-                  toolPermissionContext: h,
+                  ...state,
+                  toolPermissionContext: updatedContext,
                 };
           }
-          n = Boolean(s.fastMode) && !o;
+          shouldReportUnanswered = Boolean(state.fastMode) && !fastMode;
           if (
             toolPermissionContext.isAutoModeAvailable !== false ||
             !isAutoModeGateEnabled() ||
-            Boolean(s.fastMode) !== Boolean(o)
+            Boolean(state.fastMode) !== Boolean(fastMode)
           )
-            return s;
+            return state;
           return {
-            ...s,
+            ...state,
             toolPermissionContext: {
               ...toolPermissionContext,
               isAutoModeAvailable: canEnterAuto,
@@ -90,12 +93,14 @@ async function evaluateAutoModeGate(e, r, o, d, u) {
           };
         });
       if (!canEnterAuto) return "refused";
-      return n ? "unanswered" : "allowed";
+      return shouldReportUnanswered ? "unanswered" : "allowed";
     })
     .catch((error) => {
       logError(toError(error));
       return "unanswered";
     });
-  return (await (d === undefined ? c : withDeadline(c, d))) ?? "unanswered";
+  return (
+    (await (timeoutMs === undefined ? verification : withDeadline(verification, timeoutMs))) ?? "unanswered"
+  );
 }
 export { checkAutoModeTransition, isAutoModeTransitionDue, checkAutoModeInUse, applyAutoModeTransition };

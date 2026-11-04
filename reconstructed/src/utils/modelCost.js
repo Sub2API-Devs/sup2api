@@ -21,7 +21,7 @@ import { firstPartyNameToCanonical, getDefaultMainLoopModel } from "./model/mode
 import { CLAUDE_FABLE_5_CONFIG, CLAUDE_MYTHOS_5_CONFIG, CLAUDE_FABLE_5_1_CONFIG } from "./model/configs.js";
 import { sanitizeInt, telemetrySafeModelName } from "./model/telemetryModelName.js";
 import { DoctorLazy } from "../cli/handlers/util.js";
-import { E, u, record, string } from "../../vendor/zod/v4/classic/schemas.js";
+import { numberSchema, objectSchema, record, stringSchema } from "../../vendor/zod/v4/classic/schemas.js";
 import { usesFirstPartyPricing, getAPIProvider } from "./model/providers.js";
 import { getCachedClientData, getGlobalConfig } from "./config.js";
 import { getOwn } from "./objectSafety.js";
@@ -53,9 +53,10 @@ import { logFeatureOk, logFeatureSad, logFeatureBad } from "../services/analytic
 import { logForDebugging } from "./debug.js";
 import { BEDROCK_REGION_PREFIXES } from "./model/bedrock.js";
 import { formatTokens } from "./format.js";
+import { finiteNonNegative } from "../services/api/modelFallback.js";
 import { init_react_production } from "../../vendor/react/cjs/react.production.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../services/analytics/growthbook.js";
-import { finiteNonNegative } from "../services/api/modelFallback.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-aepeg2w5.js:367398-367966 fingerprint = COST_TIER_3_15 (0.897)
 /**
@@ -98,10 +99,10 @@ var DEFAULT_MODEL_COSTS = COST_TIER_5_25;
 /**
  * fast mode 价格：fast mode 未启用时用普通价；opus-5-5 → $8/$40，opus-4-8/opus-5 → $10/$50，其他（4.6/4.7）→ $30/$150。
  */
-function getFastModeCosts(canonicalName) {
-  if (!isFastModeEnabled()) return MODEL_COSTS[canonicalName] ?? DEFAULT_MODEL_COSTS;
-  if (canonicalName === "claude-opus-5-5") return COST_TIER_8_40;
-  if (canonicalName === "claude-opus-4-8" || canonicalName === "claude-opus-5") return COST_TIER_10_50;
+function getFastModeCosts(modelName) {
+  if (!isFastModeEnabled()) return MODEL_COSTS[modelName] ?? DEFAULT_MODEL_COSTS;
+  if (modelName === "claude-opus-5-5") return COST_TIER_8_40;
+  if (modelName === "claude-opus-4-8" || modelName === "claude-opus-5") return COST_TIER_10_50;
   return COST_TIER_30_150;
 }
 //@ chunk-aepeg2w5.js:368111-368234 layout
@@ -111,15 +112,15 @@ function getFastModeCosts(canonicalName) {
 function getModelPricingDisplay(model) {
   let promotionalModelCosts = getPromotionalModelCosts(model);
   if (promotionalModelCosts) return formatModelPricing(promotionalModelCosts);
-  let catalogEntry = getCatalogEntry(model);
-  let s = catalogEntry === undefined ? undefined : resolvePricing(catalogEntry);
-  return s === undefined ? undefined : formatModelPricing(toModelCosts(model, s));
+  let entry = getCatalogEntry(model);
+  let pricing = entry === undefined ? undefined : resolvePricing(entry);
+  return pricing === undefined ? undefined : formatModelPricing(toModelCosts(model, pricing));
 }
 //@ chunk-aepeg2w5.js:368234-368798 layout
 /**
  * catalog 的 pricing 对象（input/output/cache_write_5m/cache_write_1h/cache_read/web_search/long_prompt）转内部 ModelCosts；缺字段抛错。
  */
-function toModelCosts(e, pricing) {
+function toModelCosts(model, pricing) {
   let {
     input,
     output,
@@ -131,7 +132,7 @@ function toModelCosts(e, pricing) {
   } = pricing;
   if (cacheWrite5m === undefined || cacheRead === undefined || webSearch === undefined)
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `model catalog entry '${e}' has incomplete pricing \u2014 baked entries need the full ModelCosts shape`,
+      `model catalog entry '${model}' has incomplete pricing \u2014 baked entries need the full ModelCosts shape`,
       "model catalog entry has incomplete pricing",
     );
   return {
@@ -146,7 +147,7 @@ function toModelCosts(e, pricing) {
     ...(longPrompt !== undefined && {
       longPrompt: {
         abovePromptTokens: longPrompt.above_prompt_tokens,
-        ...toModelCosts(e, {
+        ...toModelCosts(model, {
           ...longPrompt,
           web_search: webSearch,
         }),
@@ -158,20 +159,23 @@ function toModelCosts(e, pricing) {
 /**
  * 所有 catalog 模型 id 的集合（CATALOG_MODEL_IDS）。
  */
-var CATALOG_MODEL_ID_SET = new Set(LEGACY_MODEL_IDS_2);
+var CATALOG_MODEL_ID_SET; // deferred: uses LEGACY_MODEL_IDS_2 (./model/modelIds.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-aepeg2w5.js:368798", () => {
+  CATALOG_MODEL_ID_SET = new Set(LEGACY_MODEL_IDS_2);
+});
 //@ chunk-aepeg2w5.js:368818-368850 layout
 /**
  * id 是否在内置 catalog 模型 id 列表里。
  */
-function isCatalogModelId(e) {
-  return CATALOG_MODEL_ID_SET.has(e);
+function isCatalogModelId(modelId) {
+  return CATALOG_MODEL_ID_SET.has(modelId);
 }
 //@ chunk-aepeg2w5.js:368850-369155 layout
 /**
  * 遍历 catalog models，按 pricing（档名或内联对象）生成 模型 id → ModelCosts。
  */
 function buildCatalogModelCosts() {
-  let e = {};
+  let costsById = {};
   for (let model of getModelCatalog().models) {
     let pricing = resolvePricing(model);
     if (pricing === undefined) continue;
@@ -180,33 +184,40 @@ function buildCatalogModelCosts() {
         `model catalog id '${model.id}' missing from CATALOG_MODEL_IDS \u2014 regenerate with 'bun run generate:model-catalog'`,
         "model catalog id missing from CATALOG_MODEL_IDS",
       );
-    e[model.id] = toModelCosts(model.id, pricing);
+    costsById[model.id] = toModelCosts(model.id, pricing);
   }
-  return e;
+  return costsById;
 }
 //@ chunk-aepeg2w5.js:369155-369256 layout = MODEL_COSTS (1)
 /**
  * 内置价格表：catalog 价格，外加 fable-5 与 mythos-5 显式为 $10/$50。覆盖错配旧名 MODEL_COSTS_2。
  */
-var MODEL_COSTS = Object.assign(Object.create(null), {
-  [firstPartyNameToCanonical(CLAUDE_FABLE_5_CONFIG.firstParty)]: COST_TIER_10_50,
-  [firstPartyNameToCanonical(CLAUDE_MYTHOS_5_CONFIG.firstParty)]: COST_TIER_10_50,
-  ...buildCatalogModelCosts(),
+var MODEL_COSTS; // deferred: uses firstPartyNameToCanonical (./model/modelFallback.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-aepeg2w5.js:369155", () => {
+  MODEL_COSTS = Object.assign(Object.create(null), {
+    [firstPartyNameToCanonical(CLAUDE_FABLE_5_CONFIG.firstParty)]: COST_TIER_10_50,
+    [firstPartyNameToCanonical(CLAUDE_MYTHOS_5_CONFIG.firstParty)]: COST_TIER_10_50,
+    ...buildCatalogModelCosts(),
+  });
 });
 //@ chunk-aepeg2w5.js:369256-369456 layout
 /**
  * 把 cache_creation_input_tokens 拆成 5 分钟与 1 小时两部分（以 cache_creation 细分为准并夹在总数内）。
  */
-function splitCacheCreationTokens(e) {
-  let cacheCreationInputTokens = e.cache_creation_input_tokens ?? 0;
-  let r = sanitizeInt(e.cache_creation?.ephemeral_1h_input_tokens ?? 0, 0, cacheCreationInputTokens);
+function splitCacheCreationTokens(usage) {
+  let cacheCreationInputTokens = usage.cache_creation_input_tokens ?? 0;
+  let oneHourTokens = sanitizeInt(
+    usage.cache_creation?.ephemeral_1h_input_tokens ?? 0,
+    0,
+    cacheCreationInputTokens,
+  );
   return {
     fiveMinute: sanitizeInt(
-      e.cache_creation?.ephemeral_5m_input_tokens ?? 0,
+      usage.cache_creation?.ephemeral_5m_input_tokens ?? 0,
       0,
-      cacheCreationInputTokens - r,
+      cacheCreationInputTokens - oneHourTokens,
     ),
-    oneHour: r,
+    oneHour: oneHourTokens,
   };
 }
 //@ chunk-aepeg2w5.js:369456-369666 layout
@@ -256,27 +267,27 @@ function selectLongPromptCosts(modelCosts, usage) {
  */
 function tokensToUSDCost(modelCosts, usage) {
   let longPromptCosts = selectLongPromptCosts(modelCosts, usage);
-  let s =
+  let tokenCost =
     (usage.input_tokens / 1e6) * longPromptCosts.inputTokens +
     (usage.output_tokens / 1e6) * longPromptCosts.outputTokens +
     ((usage.cache_read_input_tokens ?? 0) / 1e6) * longPromptCosts.promptCacheReadTokens +
     calculateCacheWriteCost(longPromptCosts, usage);
-  let h = (usage.server_tool_use?.web_search_requests ?? 0) * longPromptCosts.webSearchRequests;
-  return s * getInferenceGeoMultiplier(usage) + h;
+  let webSearchCost = (usage.server_tool_use?.web_search_requests ?? 0) * longPromptCosts.webSearchRequests;
+  return tokenCost * getInferenceGeoMultiplier(usage) + webSearchCost;
 }
 //@ chunk-aepeg2w5.js:370150-370214 layout
 /**
  * 对象自有属性取值（防原型污染）。
  */
-function getOwnProperty(e, n) {
-  return e != null && Object.hasOwn(e, n) ? e[n] : undefined;
+function getOwnProperty(object, key) {
+  return object != null && Object.hasOwn(object, key) ? object[key] : undefined;
 }
 //@ chunk-aepeg2w5.js:370214-370299 layout
 /**
  * 从附加价格缓存里取并按 ModelCosts schema 校验。
  */
-function getValidatedExtraModelCosts(additionalModelCostsCache, n) {
-  let ownProperty = getOwnProperty(additionalModelCostsCache, n);
+function getValidatedExtraModelCosts(additionalModelCostsCache, modelId) {
+  let ownProperty = getOwnProperty(additionalModelCostsCache, modelId);
   return ownProperty !== undefined && MODEL_COSTS_SCHEMA().safeParse(ownProperty).success
     ? ownProperty
     : undefined;
@@ -285,39 +296,46 @@ function getValidatedExtraModelCosts(additionalModelCostsCache, n) {
 /**
  * GrowthBook alder_ford：模型 → {as: 按哪个模型计价, ends_at: 截止秒}。
  */
-var MODEL_COSTS_SCHEMA = DoctorLazy(() => {
-  let e = E().nonnegative();
-  return u({
-    inputTokens: e,
-    outputTokens: e,
-    promptCacheWriteTokens: e,
-    promptCacheWrite1hTokens: e.optional(),
-    promptCacheReadTokens: e,
-    webSearchRequests: e,
+var MODEL_COSTS_SCHEMA; // deferred: uses DoctorLazy (../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var ALDER_FORD;
+var PRICING_PROMOTION_SCHEMA;
+deferInit("chunk-aepeg2w5.js:370299", () => {
+  MODEL_COSTS_SCHEMA = DoctorLazy(() => {
+    let nonNegativeNumber = numberSchema().nonnegative();
+    return objectSchema({
+      inputTokens: nonNegativeNumber,
+      outputTokens: nonNegativeNumber,
+      promptCacheWriteTokens: nonNegativeNumber,
+      promptCacheWrite1hTokens: nonNegativeNumber.optional(),
+      promptCacheReadTokens: nonNegativeNumber,
+      webSearchRequests: nonNegativeNumber,
+    });
   });
+  ALDER_FORD = "alder_ford";
+  PRICING_PROMOTION_SCHEMA = DoctorLazy(() =>
+    record(
+      stringSchema(),
+      objectSchema({
+        as: stringSchema(),
+        ends_at: numberSchema().positive().lt(100000000000),
+      })
+        .optional()
+        .catch(undefined),
+    ),
+  );
 });
-var ALDER_FORD = "alder_ford";
-var PRICING_PROMOTION_SCHEMA = DoctorLazy(() =>
-  record(
-    string(),
-    u({
-      as: string(),
-      ends_at: E().positive().lt(100000000000),
-    })
-      .optional()
-      .catch(undefined),
-  ),
-);
 //@ chunk-aepeg2w5.js:370598-370775 layout
 /**
  * 促销期内（GrowthBook alder_ford，ends_at 之前）返回该模型借用价格的模型 id。
  */
-function getPromotionalPricingModel(e) {
+function getPromotionalPricingModel(modelId) {
   if (!usesFirstPartyPricing()) return;
-  let n = PRICING_PROMOTION_SCHEMA().safeParse(getCachedClientData()?.[ALDER_FORD]);
-  let r = n.success ? getOwn(n.data, e) : undefined;
-  return r !== undefined && Date.now() < r.ends_at * 1000 && getOwnProperty(MODEL_COSTS, r.as) !== undefined
-    ? r.as
+  let parsed = PRICING_PROMOTION_SCHEMA().safeParse(getCachedClientData()?.[ALDER_FORD]);
+  let promotion = parsed.success ? getOwn(parsed.data, modelId) : undefined;
+  return promotion !== undefined &&
+    Date.now() < promotion.ends_at * 1000 &&
+    getOwnProperty(MODEL_COSTS, promotion.as) !== undefined
+    ? promotion.as
     : undefined;
 }
 //@ chunk-aepeg2w5.js:370775-370837 layout
@@ -325,10 +343,8 @@ function getPromotionalPricingModel(e) {
  * 促销期内按借用模型返回内置价格。
  */
 function getPromotionalModelCosts(model) {
-  let promotionalPricingModel = getPromotionalPricingModel(model);
-  return promotionalPricingModel === undefined
-    ? undefined
-    : getOwnProperty(MODEL_COSTS, promotionalPricingModel);
+  let key = getPromotionalPricingModel(model);
+  return key === undefined ? undefined : getOwnProperty(MODEL_COSTS, key);
 }
 //@ chunk-aepeg2w5.js:370837-370883 layout
 /**
@@ -357,11 +373,13 @@ function getCanonicalModelId(model) {
 /**
  * Bedrock/Vertex/Foundry/Mantle 时取 catalog runtime 里的 pricing（服务端下发的模型目录）。
  */
-function getProviderCatalogPricing(e) {
+function getProviderCatalogPricing(model) {
   if (!isThirdPartyBackend(getAPIProvider())) return;
-  let n = strippedCanonicalName(e);
-  let pricing = servedRuntime(n)?.pricing;
-  return pricing != null && anyModelDescribed(n) ? toModelCosts(n, pricing) : undefined;
+  let canonicalModel = strippedCanonicalName(model);
+  let pricing = servedRuntime(canonicalModel)?.pricing;
+  return pricing != null && anyModelDescribed(canonicalModel)
+    ? toModelCosts(canonicalModel, pricing)
+    : undefined;
 }
 //@ chunk-aepeg2w5.js:371077-371623 layout
 /**
@@ -378,25 +396,25 @@ function getModelCosts(model, usage) {
   });
   if (canonicalName !== shortName) {
     let additionalModelCostsCache = getGlobalConfig().additionalModelCostsCache;
-    let P =
+    let overrideCosts =
       getValidatedExtraModelCosts(additionalModelCostsCache, strip1mSuffix(model)) ??
       getValidatedExtraModelCosts(additionalModelCostsCache, strip1mSuffix(canonicalName));
-    if (P) return P;
+    if (overrideCosts) return overrideCosts;
   }
   if (usage.speed === "fast") {
     if (shortName === "claude-opus-5-5") return COST_TIER_8_40;
     if (shortName === "claude-opus-4-8" || shortName === "claude-opus-5") return COST_TIER_10_50;
     if (shortName === "claude-opus-4-6" || shortName === "claude-opus-4-7") return COST_TIER_30_150;
   }
-  let h = MODEL_COSTS[shortName];
-  if (h) return h;
+  let catalogCosts = MODEL_COSTS[shortName];
+  if (catalogCosts) return catalogCosts;
   let providerCatalogPricing = getProviderCatalogPricing(model);
   if (providerCatalogPricing) return providerCatalogPricing;
   let additionalModelCostsCache = getGlobalConfig().additionalModelCostsCache;
-  let w = additionalModelCostsCache
+  let extraCosts = additionalModelCostsCache
     ? (getOwn(additionalModelCostsCache, model) ?? getOwn(additionalModelCostsCache, shortName))
     : undefined;
-  if (w) return w;
+  if (extraCosts) return extraCosts;
   trackUnknownModelCost(model, shortName);
   let defaultMainLoopModel = getDefaultMainLoopModel();
   return (
@@ -421,39 +439,39 @@ function trackUnknownModelCost(model, shortName) {
  * 读托管设置 policySettings.modelPricing（只信任 helper/plist/hklm/file 或已验证的远程来源）编译成组织价格表，缓存在进程策略状态里。
  */
 function getOrgModelPricing() {
-  let e = false;
+  let didCompute = false;
   try {
     let orgPricing = commandSyncNameState().policy.orgPricing;
     if (orgPricing !== undefined) return orgPricing.value;
     let settingsForSource = getSettingsForSource("policySettings");
     let policy = commandSyncNameState().policy;
     if (policy.orgPricing === undefined) {
-      let h = {
+      let cacheEntry = {
         value: undefined,
       };
-      policy.orgPricing = h;
+      policy.orgPricing = cacheEntry;
       let policySettingsOrigin = getPolicySettingsOrigin();
-      let S =
+      let isTrustedOrigin =
         isAdminPolicyOrigin(policySettingsOrigin) ||
         (policySettingsOrigin === "remote" &&
           (isRemoteManagedSettingsVerified() || getRemoteSettingsPathOverride() !== undefined));
-      let modelPricing = S ? settingsForSource?.modelPricing : undefined;
-      let R = adminPolicyLoadFailureRefusesLaunch();
-      let x =
+      let modelPricing = isTrustedOrigin ? settingsForSource?.modelPricing : undefined;
+      let refusesLaunch = adminPolicyLoadFailureRefusesLaunch();
+      let pricingInput =
         settingsForSource?.modelPricing !== undefined
           ? modelPricing
-          : R
+          : refusesLaunch
             ? undefined
             : getHostManagedModelPricing();
-      e = true;
-      h.value = x && compileModelPricing(x, settingsForSource?.modelOverrides);
-      if (h.value)
+      didCompute = true;
+      cacheEntry.value = pricingInput && compileModelPricing(pricingInput, settingsForSource?.modelOverrides);
+      if (cacheEntry.value)
         logFeatureOk("settings_model_pricing", {
-          rows: h.value.exact.size,
-          multiplier: h.value.multiplier,
+          rows: cacheEntry.value.exact.size,
+          multiplier: cacheEntry.value.multiplier,
           host: settingsForSource?.modelPricing === undefined,
         });
-      else if (!S && settingsForSource?.modelPricing)
+      else if (!isTrustedOrigin && settingsForSource?.modelPricing)
         logFeatureSad(
           "settings_model_pricing",
           policySettingsOrigin === "remote" ? "unverified_remote_cache" : "untrusted_origin",
@@ -467,7 +485,7 @@ function getOrgModelPricing() {
         level: "error",
       },
     );
-    if (e) logFeatureBad("settings_model_pricing", "compile_threw");
+    if (didCompute) logFeatureBad("settings_model_pricing", "compile_threw");
     return;
   }
 }
@@ -475,19 +493,19 @@ function getOrgModelPricing() {
 /**
  * modelPricing.overrides（input/output/cacheRead/cacheWrite）编译成 exact 与 builtin 两张表，带 multiplier；空表且倍率 1 时返回 undefined。
  */
-function compileModelPricing(e, adminOverrides) {
-  let r = new Map();
-  let s = new Map();
-  for (let [key, value] of Object.entries(e.overrides ?? {})) {
-    let S = {
+function compileModelPricing(orgPricing, adminOverrides) {
+  let exact = new Map();
+  let builtin = new Map();
+  for (let [key, value] of Object.entries(orgPricing.overrides ?? {})) {
+    let costs = {
       inputTokens: value.input,
       outputTokens: value.output,
       promptCacheReadTokens: value.cacheRead,
       promptCacheWriteTokens: value.cacheWrite,
       webSearchRequests: DEFAULT_MODEL_COSTS.webSearchRequests,
     };
-    let lower = stripAnyVersatileSuffix(key).toLowerCase();
-    if (r.has(lower)) {
+    let key_2 = stripAnyVersatileSuffix(key).toLowerCase();
+    if (exact.has(key_2)) {
       logForDebugging(
         `modelPricing: override '${key}' repeats an earlier row's key; the earlier row is used`,
         {
@@ -496,10 +514,10 @@ function compileModelPricing(e, adminOverrides) {
       );
       continue;
     }
-    r.set(lower, S);
-    let builtinCatalogModelId = toBuiltinCatalogModelId(lower);
+    exact.set(key_2, costs);
+    let builtinCatalogModelId = toBuiltinCatalogModelId(key_2);
     if (builtinCatalogModelId === null) continue;
-    if (s.has(builtinCatalogModelId)) {
+    if (builtin.has(builtinCatalogModelId)) {
       logForDebugging(
         `modelPricing: override '${key}' spells the same built-in model as an earlier row; it prices only its exact spelling, other spellings use the earlier row`,
         {
@@ -508,13 +526,13 @@ function compileModelPricing(e, adminOverrides) {
       );
       continue;
     }
-    s.set(builtinCatalogModelId, S);
+    builtin.set(builtinCatalogModelId, costs);
   }
-  if (r.size === 0 && (e.multiplier ?? 1) === 1) return;
+  if (exact.size === 0 && (orgPricing.multiplier ?? 1) === 1) return;
   return {
-    multiplier: e.multiplier ?? 1,
-    exact: r,
-    builtin: s,
+    multiplier: orgPricing.multiplier ?? 1,
+    exact,
+    builtin,
     adminOverrides,
   };
 }
@@ -522,36 +540,45 @@ function compileModelPricing(e, adminOverrides) {
 /**
  * 把 Bedrock 区域前缀模型 id（eu./apac. 等）归一成 catalog id，找不到返回 null。
  */
-function toBuiltinCatalogModelId(e) {
-  if (isCatalogModelId(e)) return e;
-  let found = BEDROCK_REGION_PREFIXES.find((s) => s !== "us" && e.startsWith(`${s}.anthropic.`));
-  let r =
-    catalogIdForProviderModelId(found ? `us${e.slice(found.length)}` : e) ??
-    (e.startsWith("anthropic.") ? catalogIdForProviderModelId(`us.${e}`) : undefined);
-  return r !== undefined && isCatalogModelId(r) ? r : null;
+function toBuiltinCatalogModelId(key) {
+  if (isCatalogModelId(key)) return key;
+  let found = BEDROCK_REGION_PREFIXES.find(
+    (regionPrefix) => regionPrefix !== "us" && key.startsWith(`${regionPrefix}.anthropic.`),
+  );
+  let catalogId =
+    catalogIdForProviderModelId(found ? `us${key.slice(found.length)}` : key) ??
+    (key.startsWith("anthropic.") ? catalogIdForProviderModelId(`us.${key}`) : undefined);
+  return catalogId !== undefined && isCatalogModelId(catalogId) ? catalogId : null;
 }
 //@ chunk-aepeg2w5.js:373465-373890 layout
 /**
  * 在组织价格表里按精确拼写、内置 id、覆盖映射查模型价格。
  */
-function findOrgPricingForModel(orgModelPricing, n) {
+function findOrgPricingForModel(orgModelPricing, model) {
   if (orgModelPricing.exact.size === 0) return;
-  let r = orgModelPricing.exact.get(stripAnyVersatileSuffix(n).toLowerCase());
-  if (!isThirdPartyBackend(getAPIProvider()) && (r !== undefined || orgModelPricing.builtin.size === 0))
-    return r;
-  let canonicalName = getCanonicalName(n, {
+  let exactCosts = orgModelPricing.exact.get(stripAnyVersatileSuffix(model).toLowerCase());
+  if (
+    !isThirdPartyBackend(getAPIProvider()) &&
+    (exactCosts !== undefined || orgModelPricing.builtin.size === 0)
+  )
+    return exactCosts;
+  let canonicalName = getCanonicalName(model, {
     overridesMap: orgModelPricing.adminOverrides ?? getPairedPolicyModelOverrides() ?? {},
     identity: true,
   });
-  let h = strip1mSuffix(canonicalName);
-  if (isCatalogModelId(h) || !hasDescribableCatalogModel(h))
-    return r ?? orgModelPricing.builtin.get(canonicalName);
+  let baseModel = strip1mSuffix(canonicalName);
+  if (isCatalogModelId(baseModel) || !hasDescribableCatalogModel(baseModel))
+    return exactCosts ?? orgModelPricing.builtin.get(canonicalName);
   let values = Object.values(PROVIDER_MODEL_ID_PATTERNS);
-  let S = r ?? [...orgModelPricing.exact].find(([w]) => values.some((R) => matchesCatalogBase(w, h, R)))?.[1];
+  let matched =
+    exactCosts ??
+    [...orgModelPricing.exact].find(([pattern]) =>
+      values.some((modelPattern) => matchesCatalogBase(pattern, baseModel, modelPattern)),
+    )?.[1];
   return (
-    S && {
-      ...S,
-      webSearchRequests: servedRuntime(h)?.pricing?.web_search ?? S.webSearchRequests,
+    matched && {
+      ...matched,
+      webSearchRequests: servedRuntime(baseModel)?.pricing?.web_search ?? matched.webSearchRequests,
     }
   );
 }
@@ -566,27 +593,27 @@ function hasOrgModelPricing() {
 /**
  * 计算成本并返回来源：configured（组织价格/倍率）、catalog、default。
  */
-function calculateCostWithPricingSource(e, n) {
+function calculateCostWithPricingSource(model, usage) {
   let orgModelPricing = getOrgModelPricing();
   let multiplier = orgModelPricing?.multiplier ?? 1;
-  let h = orgModelPricing ? findOrgPricingForModel(orgModelPricing, e) : undefined;
-  if (h)
+  let orgCosts = orgModelPricing ? findOrgPricingForModel(orgModelPricing, model) : undefined;
+  if (orgCosts)
     return {
       usd:
-        tokensToUSDCost(h, {
-          ...n,
+        tokensToUSDCost(orgCosts, {
+          ...usage,
           inference_geo: null,
         }) * multiplier,
       pricing: "configured",
     };
-  let modelCosts = lookupModelCosts(e);
+  let modelCosts = lookupModelCosts(model);
   if (modelCosts)
     return {
-      usd: tokensToUSDCost(modelCosts, n) * multiplier,
+      usd: tokensToUSDCost(modelCosts, usage) * multiplier,
       pricing: multiplier !== 1 ? "configured" : "catalog",
     };
   return {
-    usd: tokensToUSDCost(DEFAULT_MODEL_COSTS, n) * multiplier,
+    usd: tokensToUSDCost(DEFAULT_MODEL_COSTS, usage) * multiplier,
     pricing: "default",
   };
 }
@@ -594,13 +621,13 @@ function calculateCostWithPricingSource(e, n) {
 /**
  * 内置表、提供商目录或附加价格缓存里有该模型价格。
  */
-function hasKnownModelCost(e) {
-  let canonicalName = getCanonicalName(e);
-  if (MODEL_COSTS[canonicalName] !== undefined || getProviderCatalogPricing(e) !== undefined) return true;
+function hasKnownModelCost(model) {
+  let canonicalName = getCanonicalName(model);
+  if (MODEL_COSTS[canonicalName] !== undefined || getProviderCatalogPricing(model) !== undefined) return true;
   let additionalModelCostsCache = getGlobalConfig().additionalModelCostsCache;
   return (
     !!additionalModelCostsCache &&
-    (getOwn(additionalModelCostsCache, e) !== undefined ||
+    (getOwn(additionalModelCostsCache, model) !== undefined ||
       getOwn(additionalModelCostsCache, canonicalName) !== undefined)
   );
 }
@@ -610,11 +637,11 @@ function hasKnownModelCost(e) {
  */
 function getCostBasis(model, usage) {
   let orgModelPricing = getOrgModelPricing();
-  let s = model.includes("application-inference-profile")
+  let pricedModel = model.includes("application-inference-profile")
     ? (getInferenceProfileBackingModelCached(stripAnyVersatileSuffix(model)) ?? model)
     : model;
-  if (orgModelPricing && findOrgPricingForModel(orgModelPricing, s) !== undefined) return "managed";
-  if (!hasKnownModelCost(s) && getPricingAliasModel(model, usage) === undefined) return "unknown";
+  if (orgModelPricing && findOrgPricingForModel(orgModelPricing, pricedModel) !== undefined) return "managed";
+  if (!hasKnownModelCost(pricedModel) && getPricingAliasModel(model, usage) === undefined) return "unknown";
   return orgModelPricing && orgModelPricing.multiplier !== 1 ? "managed" : "list";
 }
 //@ chunk-aepeg2w5.js:374562-374641 layout
@@ -650,20 +677,20 @@ function calculateUSDCost(model, usage) {
 /**
  * 用 camelCase 的 token 计数（inputTokens 等）构造 usage 再算成本。
  */
-function calculateCostFromTokenCounts(model, tokens, r) {
+function calculateCostFromTokenCounts(model, tokens, options) {
   let usage = {
     input_tokens: tokens.inputTokens,
     output_tokens: tokens.outputTokens,
     cache_read_input_tokens: tokens.cacheReadInputTokens,
     cache_creation_input_tokens: tokens.cacheCreationInputTokens,
-    ...(r?.speed !== undefined && {
-      speed: r.speed,
+    ...(options?.speed !== undefined && {
+      speed: options.speed,
     }),
-    ...(r?.inferenceGeo !== undefined && {
-      inference_geo: r.inferenceGeo,
+    ...(options?.inferenceGeo !== undefined && {
+      inference_geo: options.inferenceGeo,
     }),
-    ...(r?.serverToolUse !== undefined && {
-      server_tool_use: r.serverToolUse,
+    ...(options?.serverToolUse !== undefined && {
+      server_tool_use: options.serverToolUse,
     }),
   };
   return calculateUSDCost(model, usage);
@@ -681,10 +708,10 @@ function formatPriceUSD(price) {
  * 价格串 "$in/$out per Mtok"，有长提示词价时追加 "(… for prompts over N)"。
  */
 function formatModelPricing(costs) {
-  let n = `${formatPriceUSD(costs.inputTokens)}/${formatPriceUSD(costs.outputTokens)} per Mtok`;
+  let baseText = `${formatPriceUSD(costs.inputTokens)}/${formatPriceUSD(costs.outputTokens)} per Mtok`;
   let longPrompt = costs.longPrompt;
-  if (longPrompt === undefined) return n;
-  return `${n} (${formatPriceUSD(longPrompt.inputTokens)}/${formatPriceUSD(longPrompt.outputTokens)} for prompts over ${formatTokens(longPrompt.abovePromptTokens)})`;
+  if (longPrompt === undefined) return baseText;
+  return `${baseText} (${formatPriceUSD(longPrompt.inputTokens)}/${formatPriceUSD(longPrompt.outputTokens)} for prompts over ${formatTokens(longPrompt.abovePromptTokens)})`;
 }
 //@ chunk-aepeg2w5.js:375442-375506 placement
 /**
@@ -692,26 +719,64 @@ function formatModelPricing(costs) {
  */
 function getModelPricingString(model) {
   let canonicalName = getCanonicalName(model);
-  let r = MODEL_COSTS[canonicalName];
-  if (!r) return;
-  return formatModelPricing(r);
+  let costs = MODEL_COSTS[canonicalName];
+  if (!costs) return;
+  return formatModelPricing(costs);
 }
 //@ chunk-aepeg2w5.js:375866-376032 placement
-function lookupModelCosts(e) {
-  let promotionalModelCosts = getPromotionalModelCosts(getCanonicalPricingModel(e));
+function lookupModelCosts(model) {
+  let promotionalModelCosts = getPromotionalModelCosts(getCanonicalPricingModel(model));
   if (promotionalModelCosts) return promotionalModelCosts;
-  let canonicalName = getCanonicalName(e);
-  let s = MODEL_COSTS[canonicalName] ?? getProviderCatalogPricing(e);
-  if (s) return s;
+  let canonicalName = getCanonicalName(model);
+  let resolvedCosts = MODEL_COSTS[canonicalName] ?? getProviderCatalogPricing(model);
+  if (resolvedCosts) return resolvedCosts;
   let additionalModelCostsCache = getGlobalConfig().additionalModelCostsCache;
   return (
     (additionalModelCostsCache
-      ? (getOwn(additionalModelCostsCache, e) ?? getOwn(additionalModelCostsCache, canonicalName))
+      ? (getOwn(additionalModelCostsCache, model) ?? getOwn(additionalModelCostsCache, canonicalName))
       : undefined) || undefined
   );
 }
+//@ chunk-e6aww6q8.js:2400901-2401522 fingerprint = calculateCostFromTokens (0.755)
+/**
+ * 解析 usage.iterations：每项 {type, model, 各 token 数}，type=fallback_message 的 model 记为 servedFallbackModel。旧版名 calculateCostFromTokens 为错配。
+ */
+function parseUsageIterations(usage) {
+  let result = {
+    servedFallbackModel: undefined,
+    entries: [],
+  };
+  if (typeof usage !== "object" || usage === null) return result;
+  let iterations = usage.iterations;
+  if (!Array.isArray(iterations)) return result;
+  let entries = [];
+  let servedFallbackModel;
+  for (let iteration of iterations) {
+    if (typeof iteration !== "object" || iteration === null) continue;
+    let iterationEntry = iteration;
+    if (typeof iterationEntry.type !== "string") continue;
+    let entry = {
+      type: iterationEntry.type,
+      model: typeof iterationEntry.model === "string" ? iterationEntry.model : undefined,
+      inputTokens: finiteNonNegative(iterationEntry.input_tokens),
+      outputTokens: finiteNonNegative(iterationEntry.output_tokens),
+      cacheReadInputTokens: finiteNonNegative(iterationEntry.cache_read_input_tokens),
+      cacheCreationInputTokens: finiteNonNegative(iterationEntry.cache_creation_input_tokens),
+    };
+    entries.push(entry);
+    if (iterationEntry.type === "fallback_message" && entry.model !== undefined)
+      servedFallbackModel = entry.model;
+  }
+  return {
+    servedFallbackModel,
+    entries,
+  };
+}
 //@ chunk-18hwfzwa.js:1101521-1101525 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:1101521", () => {
+  init_react_production();
+});
 //@ chunk-18hwfzwa.js:1101525-1101574 placement
 function isEffortCostShown() {
   return getFeatureValue_CACHED_MAY_BE_STALE("tengu_marbled_teal", false);
@@ -722,40 +787,6 @@ function isEffortCostShown() {
  */
 function isFable51Model(mainLoopModel) {
   return strippedCanonicalName(mainLoopModel) === strippedCanonicalName(CLAUDE_FABLE_5_1_CONFIG.firstParty);
-}
-//@ chunk-e6aww6q8.js:2400901-2401522 fingerprint = calculateCostFromTokens (0.755)
-/**
- * 解析 usage.iterations：每项 {type, model, 各 token 数}，type=fallback_message 的 model 记为 servedFallbackModel。旧版名 calculateCostFromTokens 为错配。
- */
-function parseUsageIterations(usage) {
-  let n = {
-    servedFallbackModel: undefined,
-    entries: [],
-  };
-  if (typeof usage !== "object" || usage === null) return n;
-  let iterations = usage.iterations;
-  if (!Array.isArray(iterations)) return n;
-  let s = [];
-  let servedFallbackModel;
-  for (let iteration of iterations) {
-    if (typeof iteration !== "object" || iteration === null) continue;
-    let S = iteration;
-    if (typeof S.type !== "string") continue;
-    let w = {
-      type: S.type,
-      model: typeof S.model === "string" ? S.model : undefined,
-      inputTokens: finiteNonNegative(S.input_tokens),
-      outputTokens: finiteNonNegative(S.output_tokens),
-      cacheReadInputTokens: finiteNonNegative(S.cache_read_input_tokens),
-      cacheCreationInputTokens: finiteNonNegative(S.cache_creation_input_tokens),
-    };
-    s.push(w);
-    if (S.type === "fallback_message" && w.model !== undefined) servedFallbackModel = w.model;
-  }
-  return {
-    servedFallbackModel,
-    entries: s,
-  };
 }
 export {
   calculateCostFromTokenCounts,

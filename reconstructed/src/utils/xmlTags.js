@@ -23,7 +23,7 @@ var NEXT = "next";
 //@ chunk-gppkhxdv.js:450-579 placement
 var regExp = new RegExp(
   `^<${TASK_NOTIFICATION}>\\n<${TASK_ID}>([^<]+)</${TASK_ID}>` +
-    [TOOL_USE_ID, TASK_TYPE, OUTPUT_FILE].map((e) => `(?:\\n<${e}>[^<]*</${e}>)?`).join("") +
+    [TOOL_USE_ID, TASK_TYPE, OUTPUT_FILE].map((tag) => `(?:\\n<${tag}>[^<]*</${tag}>)?`).join("") +
     `\\n<${STATUS}>`,
 );
 //@ chunk-gppkhxdv.js:579-894 placement
@@ -40,7 +40,7 @@ function formatTaskNotification({
   body,
   trailing,
 }) {
-  let d = [
+  let fields = [
     [TASK_ID, taskId],
     [TOOL_USE_ID, toolUseId],
     [TASK_TYPE, taskType],
@@ -48,16 +48,16 @@ function formatTaskNotification({
     [STATUS, status],
     [SUMMARY, summary],
   ];
-  let o = `<${TASK_NOTIFICATION}>`;
-  for (let [a, T] of d)
-    if (T)
-      o += `
-<${a}>${T}</${a}>`;
+  let xml = `<${TASK_NOTIFICATION}>`;
+  for (let [tag, value] of fields)
+    if (value)
+      xml += `
+<${tag}>${value}</${tag}>`;
   let replaced = (trailing ?? "").replaceAll(
     new RegExp(`<(?=\\s*/\\s*${TASK_NOTIFICATION}\\b)`, "gi"),
     "&lt;",
   );
-  return `${o}${body ?? ""}
+  return `${xml}${body ?? ""}
 </${TASK_NOTIFICATION}>${replaced}`;
 }
 export { formatTaskNotification, regExp, NEXT };

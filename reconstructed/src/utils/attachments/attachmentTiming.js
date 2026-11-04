@@ -18,16 +18,16 @@ function getAttachmentTimingStore() {
 /**
  * 在附件计时上下文中计时一个异步附件生成函数。
  */
-function timeAttachment(e, n) {
-  let r = queryProfileStorage.getStore();
-  if (r === undefined) return n();
-  let s = r.begin(e);
+function timeAttachment(label, fn) {
+  let profile = queryProfileStorage.getStore();
+  if (profile === undefined) return fn();
+  let end = profile.begin(label);
   try {
-    let h = n();
-    h.then(s, s);
-    return h;
+    let result = fn();
+    result.then(end, end);
+    return result;
   } catch (error) {
-    s();
+    end();
     throw error;
   }
 }

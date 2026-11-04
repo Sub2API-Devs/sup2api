@@ -8,6 +8,7 @@
  * pieces: chunk-aepeg2w5.js (1), chunk-e6aww6q8.js (8)
  * attribution: fingerprint 2, placement 5, layout 2
  */
+import { LogsAPI } from "../../vendor/@opentelemetry/api-logs/build/esm/api/logs.js";
 import { ClaudeError, withTelemetryMessage, hasExactErrorMessage } from "../utils/errors.js";
 import { normalizePathForCompare, samePath } from "../utils/file.js";
 import { withTimeout as withTimeout_2 } from "../utils/sleep.js";
@@ -18,17 +19,25 @@ import { isSubsetOf } from "../utils/fsWatchProbe.js";
 import { jsonParse, jsonStringifyRaw } from "../utils/slowOperations.js";
 import { hasAccessToIDEExtensionDiffFeature as hasAccessToIDEExtensionDiffFeature_3 } from "./compact/idleToolResultClearing.js";
 import { SessionRootSlot } from "../bootstrap/sessionSlices.js";
-import { Ll } from "../../vendor/@opentelemetry/api-logs/build/esm/api/logs.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
+//@ chunk-aepeg2w5.js:650328-650353 fingerprint = diagnosticTracker (1)
+var diagnosticTracker; // deferred: uses LogsAPI (../../vendor/@opentelemetry/api-logs/build/esm/api/logs.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-aepeg2w5.js:650328", () => {
+  diagnosticTracker = LogsAPI.getInstance();
+});
 //@ chunk-e6aww6q8.js:585149-585220 placement
 function getMcpClientModule() {
-  return require("./chunk-asne9cp8.js").mcpClientModule();
+  return require("./mcp/emitTripwireEvent.lazy.js").mcpClientModule();
 }
 //@ chunk-e6aww6q8.js:585220-585243 placement
 /**
  * IDE 诊断文件路径不匹配时抛出的错误类型。
  */
-class DiagnosticsPathMismatchError extends ClaudeError {}
+let DiagnosticsPathMismatchError; // deferred: uses ClaudeError (../utils/errors.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:585220", () => {
+  DiagnosticsPathMismatchError = class DiagnosticsPathMismatchError extends ClaudeError {};
+});
 //@ chunk-e6aww6q8.js:585243-585529 layout
 /**
  * 从 URI 中提取盘符的正则。
@@ -43,22 +52,23 @@ var URI_PREFIXES = ["file://", "_claude_fs_right:", "_claude_fs_left:"];
 var WINDOWS_DRIVE_PATH_RE = /^[\\/][A-Za-z]:[\\/]/;
 var DRIVE_LETTER_IN_URI_RE = /(?:^|[\\/])([A-Za-z])(?::|%3[Aa])(?=[\\/]|%5[Cc]|%2[Ff])/;
 //@ chunk-e6aww6q8.js:585529-585941 layout
-function classifyDiagnosticUri(e) {
-  let lower = e.toLowerCase();
-  let r = lower.startsWith("file://")
+function classifyDiagnosticUri(uri) {
+  let lower = uri.toLowerCase();
+  let scheme = lower.startsWith("file://")
     ? "file-uri"
     : lower.startsWith("_claude_fs_right:")
       ? "fs-right"
       : lower.startsWith("_claude_fs_left:")
         ? "fs-left"
         : "bare";
-  let included = e.includes("\\");
-  let included_2 = e.includes("/");
-  let y = included && included_2 ? "mixed" : included ? "back" : included_2 ? "fwd" : "none";
-  let S = /%[0-9A-Fa-f]{2}/.test(e) ? "pct" : "plain";
-  let w = DRIVE_LETTER_IN_URI_RE.exec(e)?.[1];
-  let L = w === undefined ? "none" : w === w.toUpperCase() ? "upper" : "lower";
-  return `scheme=${r} sep=${y} enc=${S} drive=${L}`;
+  let included = uri.includes("\\");
+  let included_2 = uri.includes("/");
+  let separators = included && included_2 ? "mixed" : included ? "back" : included_2 ? "fwd" : "none";
+  let encoding = /%[0-9A-Fa-f]{2}/.test(uri) ? "pct" : "plain";
+  let driveLetter = DRIVE_LETTER_IN_URI_RE.exec(uri)?.[1];
+  let driveCase =
+    driveLetter === undefined ? "none" : driveLetter === driveLetter.toUpperCase() ? "upper" : "lower";
+  return `scheme=${scheme} sep=${separators} enc=${encoding} drive=${driveCase}`;
 }
 //@ chunk-e6aww6q8.js:585941-589557 fingerprint = DiagnosticTrackingService (0.559)
 class DiagnosticTrackingService {
@@ -88,11 +98,11 @@ class DiagnosticTrackingService {
     this.lastProcessedTimestamps.clear();
     this.workspaceFetchInFlight = undefined;
   }
-  normalizeFileUri(e) {
-    let found = URI_PREFIXES.find((h) => e.startsWith(h));
-    let r = found ? e.slice(found.length) : e;
-    let s = found !== undefined && WINDOWS_DRIVE_PATH_RE.test(r) ? r.slice(1) : r;
-    return normalizePathForCompare(s);
+  normalizeFileUri(uri) {
+    let found = URI_PREFIXES.find((prefix) => uri.startsWith(prefix));
+    let rest = found ? uri.slice(found.length) : uri;
+    let trimmed = found !== undefined && WINDOWS_DRIVE_PATH_RE.test(rest) ? rest.slice(1) : rest;
+    return normalizePathForCompare(trimmed);
   }
   async beforeFileEdited(filePath) {
     if (
@@ -144,15 +154,15 @@ class DiagnosticTrackingService {
         duration_ms: Date.now() - now,
       });
     } catch (error) {
-      let h = classifyDiagnosticsError(error, BASELINE_TIMEOUT_MESSAGE);
-      if (h === "timeout" && this.consecutiveBaselineTimeouts === consecutiveBaselineTimeouts) {
+      let failureKind = classifyDiagnosticsError(error, BASELINE_TIMEOUT_MESSAGE);
+      if (failureKind === "timeout" && this.consecutiveBaselineTimeouts === consecutiveBaselineTimeouts) {
         this.consecutiveBaselineTimeouts++;
         if (this.consecutiveBaselineTimeouts === MAX_BASELINE_TIMEOUTS)
           logForDebugging(
             `IDE diagnostics baselines disabled after ${MAX_BASELINE_TIMEOUTS} consecutive timeouts`,
           );
       }
-      logFeatureSad("ide_diagnostics_baseline", h, {
+      logFeatureSad("ide_diagnostics_baseline", failureKind, {
         duration_ms: Date.now() - now,
         consecutive_timeouts: this.consecutiveBaselineTimeouts,
       });
@@ -166,39 +176,41 @@ class DiagnosticTrackingService {
       return [];
     }
     let now = Date.now();
-    let n = [];
+    let files = [];
     try {
-      let y = getMcpClientModule().callIdeRpc("getDiagnostics", {}, this.mcpClient);
-      this.workspaceFetchInFlight = y;
-      y.finally(() => {
-        if (this.workspaceFetchInFlight === y) this.workspaceFetchInFlight = undefined;
-      }).catch(() => {});
-      let S = await withTimeout_2(y, IDE_DIAGNOSTICS_TIMEOUT_MS, FETCH_TIMEOUT_MESSAGE);
-      n = this.parseDiagnosticResult(S);
+      let fetchPromise = getMcpClientModule().callIdeRpc("getDiagnostics", {}, this.mcpClient);
+      this.workspaceFetchInFlight = fetchPromise;
+      fetchPromise
+        .finally(() => {
+          if (this.workspaceFetchInFlight === fetchPromise) this.workspaceFetchInFlight = undefined;
+        })
+        .catch(() => {});
+      let rawResult = await withTimeout_2(fetchPromise, IDE_DIAGNOSTICS_TIMEOUT_MS, FETCH_TIMEOUT_MESSAGE);
+      files = this.parseDiagnosticResult(rawResult);
     } catch (error) {
       logFeatureSad("ide_diagnostics_fetch", classifyDiagnosticsError(error, FETCH_TIMEOUT_MESSAGE), {
         duration_ms: Date.now() - now,
       });
       return [];
     }
-    let r = [];
-    let s = new Map();
-    for (let y of n) {
-      let S = y.uri.startsWith("file://");
-      if (!S && !y.uri.startsWith("_claude_fs_right:")) continue;
-      let w = this.normalizeFileUri(y.uri);
-      if (!this.baseline.has(w)) continue;
-      if (S)
-        r.push({
-          file: y,
-          normalizedPath: w,
+    let fileUris = [];
+    let rightFileByPath = new Map();
+    for (let file of files) {
+      let isFileUri = file.uri.startsWith("file://");
+      if (!isFileUri && !file.uri.startsWith("_claude_fs_right:")) continue;
+      let normalizedPath = this.normalizeFileUri(file.uri);
+      if (!this.baseline.has(normalizedPath)) continue;
+      if (isFileUri)
+        fileUris.push({
+          file,
+          normalizedPath,
         });
-      else s.set(w, y);
+      else rightFileByPath.set(normalizedPath, file);
     }
     let newDiagnosticFiles = [];
-    for (let { file, normalizedPath } of r) {
-      let w = this.baseline.get(normalizedPath) || [];
-      let claudeFsRightFile = s.get(normalizedPath);
+    for (let { file, normalizedPath } of fileUris) {
+      let previousDiagnostics = this.baseline.get(normalizedPath) || [];
+      let claudeFsRightFile = rightFileByPath.get(normalizedPath);
       let fileToUse = file;
       if (claudeFsRightFile) {
         let previousRightDiagnostics = this.rightFileDiagnosticsState.get(normalizedPath);
@@ -209,8 +221,10 @@ class DiagnosticTrackingService {
           fileToUse = claudeFsRightFile;
         this.rightFileDiagnosticsState.set(normalizedPath, claudeFsRightFile.diagnostics);
       }
-      let q = new Set(w.map(formatLocation));
-      let filtered = fileToUse.diagnostics.filter((Se) => !q.has(formatLocation(Se)));
+      let previousLocations = new Set(previousDiagnostics.map(formatLocation));
+      let filtered = fileToUse.diagnostics.filter(
+        (diagnostic) => !previousLocations.has(formatLocation(diagnostic)),
+      );
       if (filtered.length > 0)
         newDiagnosticFiles.push({
           uri: file.uri,
@@ -220,11 +234,11 @@ class DiagnosticTrackingService {
     }
     return newDiagnosticFiles;
   }
-  areDiagnosticArraysEqual(e, n) {
-    if (e.length !== n.length) return false;
-    let r = new Set(e.map(formatLocation));
-    let s = new Set(n.map(formatLocation));
-    return r.size === s.size && isSubsetOf(r, s);
+  areDiagnosticArraysEqual(left, right) {
+    if (left.length !== right.length) return false;
+    let leftLocations = new Set(left.map(formatLocation));
+    let rightLocations = new Set(right.map(formatLocation));
+    return leftLocations.size === rightLocations.size && isSubsetOf(leftLocations, rightLocations);
   }
   parseDiagnosticResult(result) {
     if (Array.isArray(result)) {
@@ -244,18 +258,21 @@ class DiagnosticTrackingService {
 /**
  * 按会话根保存的 IDE 诊断跟踪服务。
  */
-var diagnosticTrackingSlot = new SessionRootSlot(() => new DiagnosticTrackingService());
+var diagnosticTrackingSlot; // deferred: uses SessionRootSlot (../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:589557", () => {
+  diagnosticTrackingSlot = new SessionRootSlot(() => new DiagnosticTrackingService());
+});
 //@ chunk-e6aww6q8.js:589585-589731 placement = formatLocation (0.772)
 /**
  * 把诊断（message/severity/source/code/range）拼成去重键（误配名 formatLocation，属 LSP 诊断）。
  */
-function formatLocation(e) {
-  let range = e.range;
+function formatLocation(location) {
+  let range = location.range;
   return jsonStringifyRaw([
-    e.message,
-    e.severity,
-    e.source,
-    e.code,
+    location.message,
+    location.severity,
+    location.source,
+    location.code,
     range?.start?.line,
     range?.start?.character,
     range?.end?.line,
@@ -263,10 +280,8 @@ function formatLocation(e) {
   ]);
 }
 //@ chunk-e6aww6q8.js:589731-589831 placement
-function classifyDiagnosticsError(error, n) {
-  if (hasExactErrorMessage(error, n)) return "timeout";
+function classifyDiagnosticsError(error, timeoutMessage) {
+  if (hasExactErrorMessage(error, timeoutMessage)) return "timeout";
   return error instanceof SyntaxError ? "parse_failed" : "error";
 }
-//@ chunk-aepeg2w5.js:650328-650353 fingerprint = diagnosticTracker (1)
-var diagnosticTracker = Ll.getInstance();
 export { diagnosticTrackingSlot, diagnosticTracker };

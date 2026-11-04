@@ -66,9 +66,11 @@ function getFilePathFromInput(toolName, toolInput) {
     }
     case MEMORY_READ:
     case MEMORY_WRITE: {
-      let r = (toolName === MEMORY_READ ? MemoryReadTool : MemoryWriteTool).inputSchema.safeParse(toolInput);
-      return r.success && r.data.store === PERSONAL
-        ? autoMemFilePath(normalizePathPrefix(r.data.path))
+      let parsed = (toolName === MEMORY_READ ? MemoryReadTool : MemoryWriteTool).inputSchema.safeParse(
+        toolInput,
+      );
+      return parsed.success && parsed.data.store === PERSONAL
+        ? autoMemFilePath(normalizePathPrefix(parsed.data.path))
         : null;
     }
     default:
@@ -130,150 +132,151 @@ function isMemoryTopicFile(absolutePath) {
 /**
  * 记忆路径分类（topic/entrypoint/reserved/other）。
  */
-function classifyMemoryPath(e) {
-  if (isMemoryTopicFile(e)) return "topic";
-  let n = nfcLower_2(resolve_2(getPersonalMemoryDir()));
-  if (!nfcLower_2(resolve_2(e)).startsWith(n + sep)) return "other";
-  if (!isOutsideAllowedRoot(e)) return "reserved";
-  return basename(e) === MEMORY_INDEX_FILENAME && nfcLower_2(resolve_2(dirname(e))) === n
+function classifyMemoryPath(path) {
+  if (isMemoryTopicFile(path)) return "topic";
+  let memoryRoot = nfcLower_2(resolve_2(getPersonalMemoryDir()));
+  if (!nfcLower_2(resolve_2(path)).startsWith(memoryRoot + sep)) return "other";
+  if (!isOutsideAllowedRoot(path)) return "reserved";
+  return basename(path) === MEMORY_INDEX_FILENAME && nfcLower_2(resolve_2(dirname(path))) === memoryRoot
     ? "entrypoint"
     : "other";
 }
 //@ chunk-e6aww6q8.js:1466472-1466555 layout
-function queuedSessionFileAccessHook(e, absolutePath, r) {
+function queuedSessionFileAccessHook(toolName, absolutePath, extra) {
   if (!isMemoryTopicFile(absolutePath)) return;
   logEvent("tengu_memdir_pin_write", {
-    tool: fromEnum(e),
-    ...r,
+    tool: fromEnum(toolName),
+    ...extra,
   });
 }
 //@ chunk-e6aww6q8.js:1466555-1468907 fingerprint = handleSessionFileAccess (0.59)
 /**
  * PostToolUse 回调：模型读写会话转录或记忆目录时打 tengu_transcript_accessed / tengu_memdir_accessed。
  */
-async function handleSessionFileAccess(e, n, r, s, h) {
-  if (e.hook_event_name !== "PostToolUse" || h === undefined) return {};
-  let y = memoryWatchers.of(h.session.host);
-  let fileType = getSessionFileTypeFromInput(e.tool_name, e.tool_input);
+async function handleSessionFileAccess(hookInput, toolUseId, toolName, toolInput, context) {
+  if (hookInput.hook_event_name !== "PostToolUse" || context === undefined) return {};
+  let watchers = memoryWatchers.of(context.session.host);
+  let fileType = getSessionFileTypeFromInput(hookInput.tool_name, hookInput.tool_input);
   let agentContext = contextKeyStorage.getStore();
   let subagentName = agentContext ? getSubagentLogName(agentContext) : undefined;
-  let G = subagentName
+  let subagentFields = subagentName
     ? {
         subagent_name: subagentName,
       }
     : {};
   if (fileType === "session_transcript")
     logEvent("tengu_transcript_accessed", {
-      ...G,
+      ...subagentFields,
     });
-  let q = e.tool_name === MEMORY_WRITE ? personalMemoryReadResult(e.tool_response) : null;
-  let Z =
-    e.tool_name === MEMORY_WRITE
-      ? (q?.filePath ?? null)
-      : e.tool_name === MEMORY_READ
-        ? personalMemoryReadPath(e.tool_response)
-        : getFilePathFromInput(e.tool_name, e.tool_input);
-  let Se = e.tool_name === FILE_READ_TOOL_NAME || e.tool_name === MEMORY_READ;
-  let ke =
-    e.tool_name === FILE_EDIT_TOOL_NAME ||
-    e.tool_name === FILE_WRITE_TOOL_NAME ||
-    e.tool_name === MEMORY_WRITE;
-  let we =
-    Z && isAutoMemFilePath(Z)
-      ? e.tool_name === MEMORY_WRITE
-        ? truncateUntrustedFrontmatter(q?.content ?? "")
-        : e.tool_name === FILE_WRITE_TOOL_NAME
+  let writeResult =
+    hookInput.tool_name === MEMORY_WRITE ? personalMemoryReadResult(hookInput.tool_response) : null;
+  let filePath =
+    hookInput.tool_name === MEMORY_WRITE
+      ? (writeResult?.filePath ?? null)
+      : hookInput.tool_name === MEMORY_READ
+        ? personalMemoryReadPath(hookInput.tool_response)
+        : getFilePathFromInput(hookInput.tool_name, hookInput.tool_input);
+  let isRead = hookInput.tool_name === FILE_READ_TOOL_NAME || hookInput.tool_name === MEMORY_READ;
+  let isWrite =
+    hookInput.tool_name === FILE_EDIT_TOOL_NAME ||
+    hookInput.tool_name === FILE_WRITE_TOOL_NAME ||
+    hookInput.tool_name === MEMORY_WRITE;
+  let writtenContent =
+    filePath && isAutoMemFilePath(filePath)
+      ? hookInput.tool_name === MEMORY_WRITE
+        ? truncateUntrustedFrontmatter(writeResult?.content ?? "")
+        : hookInput.tool_name === FILE_WRITE_TOOL_NAME
           ? truncateUntrustedFrontmatter(
-              FileWriteTool.inputSchema.safeParse(e.tool_input).data?.content ?? "",
+              FileWriteTool.inputSchema.safeParse(hookInput.tool_input).data?.content ?? "",
             )
           : undefined
       : undefined;
-  if (Z && isAutoMemFilePath(Z)) {
-    let Ee = claudeMdAccessTrackerSlot.of(h.session);
-    let Ae = {
-      file_class: fromEnum(classifyMemoryPath(Z)),
-      prior_access: fromEnum(Ee.priorAccess(Z)),
-      injected: fromEnum(Ee.injection(Z)),
-      ...G,
+  if (filePath && isAutoMemFilePath(filePath)) {
+    let tracker = claudeMdAccessTrackerSlot.of(context.session);
+    let fields = {
+      file_class: fromEnum(classifyMemoryPath(filePath)),
+      prior_access: fromEnum(tracker.priorAccess(filePath)),
+      injected: fromEnum(tracker.injection(filePath)),
+      ...subagentFields,
     };
     switch (
       (logEvent("tengu_memdir_accessed", {
-        tool: sanitizeToolNameForAnalytics(e.tool_name),
-        ...Ae,
+        tool: sanitizeToolNameForAnalytics(hookInput.tool_name),
+        ...fields,
       }),
-      e.tool_name)
+      hookInput.tool_name)
     ) {
       case FILE_READ_TOOL_NAME:
       case MEMORY_READ:
-        logEvent("tengu_memdir_file_read", Ae);
-        Ee.recordAccess(Z, "read");
+        logEvent("tengu_memdir_file_read", fields);
+        tracker.recordAccess(filePath, "read");
         break;
       case FILE_EDIT_TOOL_NAME:
-        logEvent("tengu_memdir_file_edit", Ae);
-        queuedSessionFileAccessHook(FILE_EDIT_TOOL_NAME, Z, G);
-        Ee.recordAccess(Z, "write");
-        y.notifyWrite(Z);
+        logEvent("tengu_memdir_file_edit", fields);
+        queuedSessionFileAccessHook(FILE_EDIT_TOOL_NAME, filePath, subagentFields);
+        tracker.recordAccess(filePath, "write");
+        watchers.notifyWrite(filePath);
         break;
       case FILE_WRITE_TOOL_NAME:
       case MEMORY_WRITE:
-        logEvent("tengu_memdir_file_write", Ae);
-        queuedSessionFileAccessHook(e.tool_name, Z, G);
-        Ee.recordAccess(Z, "write");
-        y.notifyWrite(Z);
+        logEvent("tengu_memdir_file_write", fields);
+        queuedSessionFileAccessHook(hookInput.tool_name, filePath, subagentFields);
+        tracker.recordAccess(filePath, "write");
+        watchers.notifyWrite(filePath);
         break;
     }
   }
-  if (Z && isTeamMemoryPath(Z))
+  if (filePath && isTeamMemoryPath(filePath))
     switch (
       (logEvent("tengu_team_mem_accessed", {
-        tool: sanitizeToolNameForAnalytics(e.tool_name),
-        ...G,
+        tool: sanitizeToolNameForAnalytics(hookInput.tool_name),
+        ...subagentFields,
       }),
-      e.tool_name)
+      hookInput.tool_name)
     ) {
       case FILE_READ_TOOL_NAME:
         logEvent("tengu_team_mem_file_read", {
-          ...G,
+          ...subagentFields,
         });
         break;
       case FILE_EDIT_TOOL_NAME:
         logEvent("tengu_team_mem_file_edit", {
-          ...G,
+          ...subagentFields,
         });
         break;
       case FILE_WRITE_TOOL_NAME:
         logEvent("tengu_team_mem_file_write", {
-          ...G,
+          ...subagentFields,
         });
         break;
     }
-  if (Z && (Se || ke) && isAutoMemFilePath(Z)) {
+  if (filePath && (isRead || isWrite) && isAutoMemFilePath(filePath)) {
     let scope = Boolean(agentContext && isSubagentContext(agentContext));
-    let Ae = y.notices.take(
-      scope ? Z : undefined,
-      scope && Se
+    let notice = watchers.notices.take(
+      scope ? filePath : undefined,
+      scope && isRead
         ? {
             peek: true,
           }
         : undefined,
     );
-    if (Ae !== null) {
+    if (notice !== null) {
       logEvent("tengu_team_mem_conflict_notice_delivered", {
-        ...G,
+        ...subagentFields,
       });
       return {
         hookSpecificOutput: {
           hookEventName: "PostToolUse",
-          additionalContext: Ae,
+          additionalContext: notice,
         },
       };
     }
   }
-  if (Z && ke && isAutoMemFilePath(Z)) {
-    let persistenceWarning = await y.getPersistenceWarning(Z);
+  if (filePath && isWrite && isAutoMemFilePath(filePath)) {
+    let persistenceWarning = await watchers.getPersistenceWarning(filePath);
     if (persistenceWarning !== null) {
       logEvent("tengu_memory_sync_persistence_warning", {
-        ...G,
+        ...subagentFields,
       });
       return {
         hookSpecificOutput: {
@@ -283,29 +286,31 @@ async function handleSessionFileAccess(e, n, r, s, h) {
       };
     }
   }
-  if (Z && ke && isTeamMemoryPath(Z)) {
-    let Ee = await checkTeamMemoryIndexReadSize(Z, getMemoryDirNfc());
-    if (Ee !== null) return buildPostToolUseContextOutput("tengu_team_mem_prompt_index_near_cap", Ee, G);
+  if (filePath && isWrite && isTeamMemoryPath(filePath)) {
+    let warning = await checkTeamMemoryIndexReadSize(filePath, getMemoryDirNfc());
+    if (warning !== null)
+      return buildPostToolUseContextOutput("tengu_team_mem_prompt_index_near_cap", warning, subagentFields);
   }
-  if (Z && ke) {
-    let Ee = await checkMemoryIndexReadSize(Z);
-    if (Ee !== null) return buildPostToolUseContextOutput("tengu_memdir_entrypoint_near_cap", Ee, G);
+  if (filePath && isWrite) {
+    let warning = await checkMemoryIndexReadSize(filePath);
+    if (warning !== null)
+      return buildPostToolUseContextOutput("tengu_memdir_entrypoint_near_cap", warning, subagentFields);
   }
-  if (Z && ke && isAutoMemFilePath(Z)) {
-    let Ee = await checkMemoryRecallLimit(Z, we);
-    if (Ee !== null)
-      switch (Ee.kind) {
+  if (filePath && isWrite && isAutoMemFilePath(filePath)) {
+    let limit = await checkMemoryRecallLimit(filePath, writtenContent);
+    if (limit !== null)
+      switch (limit.kind) {
         case "size":
-          return buildPostToolUseContextOutput("tengu_memdir_file_near_cap", Ee, G);
+          return buildPostToolUseContextOutput("tengu_memdir_file_near_cap", limit, subagentFields);
         case "lint":
           logEvent("tengu_memdir_file_lint", {
-            kind: fromEnum(Ee.lint),
-            ...G,
+            kind: fromEnum(limit.lint),
+            ...subagentFields,
           });
           return {
             hookSpecificOutput: {
               hookEventName: "PostToolUse",
-              additionalContext: Ee.text,
+              additionalContext: limit.text,
             },
           };
       }
@@ -354,4 +359,4 @@ function registerSessionFileAccessHooks() {
     ],
   });
 }
-export { isMemoryFileAccess };
+export { isMemoryFileAccess, registerSessionFileAccessHooks };

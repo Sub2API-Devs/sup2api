@@ -9,7 +9,8 @@
  * attribution: placement 18, layout 8, fingerprint 5
  */
 import { parse } from "path";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { formatDuration, truncateToWidth } from "../../utils/format.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { themeColorOf } from "../../utils/spellcheck.js";
 import {
   permissionModeSymbol,
@@ -36,7 +37,16 @@ import {
 } from "../artifacts/artifactFrames.js";
 import { useShortcutDisplay as useShortcutDisplay_2 } from "../../keybindings/useShortcutDisplay.js";
 import { useSession } from "../../context/session.js";
-import { Q, init_react_production, yt, P, R, y, Kc, Rh } from "../../../vendor/react/cjs/react.production.js";
+import {
+  useMemo,
+  init_react_production,
+  useSyncExternalStore,
+  useEffect,
+  useRef,
+  useState,
+  fragmentTypeExport,
+  memo,
+} from "../../../vendor/react/cjs/react.production.js";
 import { countVisibleTasks } from "../../utils/claudeInChrome/toolRendering.js";
 import {
   useVisibleAgentTaskCount,
@@ -58,12 +68,7 @@ import {
   footerStatusStyle,
 } from "./PromptInputFooterStatus.js";
 import { statusIconSlotWidth, StatusIcon } from "../design-system/StatusIcon.js";
-import {
-  BOXED_DIAMOND_GLYPH,
-  WARNING_GLYPH,
-  DOWN_RIGHT_ARROW,
-} from "../../utils/permissions/autoModeRulesPrompt.js";
-import { truncateToWidth, formatDuration } from "../../utils/format.js";
+import { BOXED_DIAMOND_GLYPH, WARNING_GLYPH, DOWN_RIGHT_ARROW } from "../../constants/figures.js";
 import { formatShortcutHint, KeyboardShortcutHint } from "../design-system/KeyboardShortcutHint.js";
 import { plural } from "../../utils/stringUtils.js";
 import { uiSignals } from "../../state/uiSignals.js";
@@ -128,13 +133,20 @@ import {
 import { isXtermJs } from "../../ink/terminal.js";
 import { getPlatform } from "../../utils/platform.js";
 import { Byline } from "../design-system/Byline.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
+//@ chunk-5cp2fssw.js:14565-14629 fingerprint = ProactiveCountdown (0.737)
+function ProactiveCountdown(ms) {
+  return formatDuration(Math.max(0, ms), {
+    mostSignificantOnly: true,
+  });
+}
 //@ chunk-18hwfzwa.js:678423-678969 placement
 /**
  * 渲染带颜色的权限模式标签：模式符号 + 模式名 + " on"（bare 时不加）+ children。
  */
 function PermissionModeLabel(props) {
-  let $ = w(14);
+  let $ = useMemoCache(14);
   let { mode, bare, children } = props;
   let color;
   if ($[0] !== mode) {
@@ -142,42 +154,48 @@ function PermissionModeLabel(props) {
     $[0] = mode;
     $[1] = color;
   } else color = $[1];
-  let Re;
+  let modeColor;
   if ($[2] !== mode) {
-    Re = permissionModeSymbol(mode);
+    modeColor = permissionModeSymbol(mode);
     $[2] = mode;
-    $[3] = Re;
-  } else Re = $[3];
-  let Be;
-  if ($[4] !== Re) {
-    Be = jsxProd_default_2(Text, {
+    $[3] = modeColor;
+  } else modeColor = $[3];
+  let labelElement;
+  if ($[4] !== modeColor) {
+    labelElement = jsxProd_default_2(Text, {
       "aria-hidden": true,
-      children: [Re, " "],
+      children: [modeColor, " "],
     });
-    $[4] = Re;
-    $[5] = Be;
-  } else Be = $[5];
-  let He;
+    $[4] = modeColor;
+    $[5] = labelElement;
+  } else labelElement = $[5];
+  let indicator;
   if ($[6] !== mode) {
-    He = permissionModeIndicator(mode);
+    indicator = permissionModeIndicator(mode);
     $[6] = mode;
-    $[7] = He;
-  } else He = $[7];
-  const We = bare ? "" : " on";
-  let ze;
-  if ($[8] !== children || $[9] !== color || $[10] !== Be || $[11] !== He || $[12] !== We) {
-    ze = jsxProd_default_2(Text, {
+    $[7] = indicator;
+  } else indicator = $[7];
+  const onSuffix = bare ? "" : " on";
+  let labelText;
+  if (
+    $[8] !== children ||
+    $[9] !== color ||
+    $[10] !== labelElement ||
+    $[11] !== indicator ||
+    $[12] !== onSuffix
+  ) {
+    labelText = jsxProd_default_2(Text, {
       color,
-      children: [Be, He, We, children],
+      children: [labelElement, indicator, onSuffix, children],
     });
     $[8] = children;
     $[9] = color;
-    $[10] = Be;
-    $[11] = He;
-    $[12] = We;
-    $[13] = ze;
-  } else ze = $[13];
-  return ze;
+    $[10] = labelElement;
+    $[11] = indicator;
+    $[12] = onSuffix;
+    $[13] = labelText;
+  } else labelText = $[13];
+  return labelText;
 }
 //@ chunk-18hwfzwa.js:819599-819647 placement
 function cycleModeActionName() {
@@ -185,35 +203,35 @@ function cycleModeActionName() {
   return "chat:cycleMode";
 }
 //@ chunk-18hwfzwa.js:819647-819693 placement
-function permissionModeLabelLower(h) {
-  return permissionModeTitle(toExternalPermissionMode(h)).toLowerCase();
+function permissionModeLabelLower(mode) {
+  return permissionModeTitle(toExternalPermissionMode(mode)).toLowerCase();
 }
 //@ chunk-18hwfzwa.js:819693-819726 placement
-function permissionModeLabelWidth(h) {
-  return bunStringWidth(permissionModeLabelLower(h));
+function permissionModeLabelWidth(mode) {
+  return bunStringWidth(permissionModeLabelLower(mode));
 }
 //@ chunk-18hwfzwa.js:819726-820072 placement
 function PermissionModeLabel_2(props) {
-  let $ = w(8);
+  let $ = useMemoCache(8);
   let { mode } = props;
-  let L;
+  let externalMode;
   if ($[0] !== mode) {
-    L = toExternalPermissionMode(mode);
+    externalMode = toExternalPermissionMode(mode);
     $[0] = mode;
-    $[1] = L;
-  } else L = $[1];
-  let ee = L === "bypassPermissions";
-  const color = ee ? "error" : undefined;
-  const dimColor = !ee;
+    $[1] = externalMode;
+  } else externalMode = $[1];
+  let isBypass = externalMode === "bypassPermissions";
+  const color = isBypass ? "error" : undefined;
+  const dimColor = !isBypass;
   let children;
   if ($[2] !== mode) {
     children = permissionModeLabelLower(mode);
     $[2] = mode;
     $[3] = children;
   } else children = $[3];
-  let He;
+  let textElement;
   if ($[4] !== color || $[5] !== dimColor || $[6] !== children) {
-    He = jsxProd_default(Text, {
+    textElement = jsxProd_default(Text, {
       color,
       dimColor,
       children,
@@ -221,9 +239,9 @@ function PermissionModeLabel_2(props) {
     $[4] = color;
     $[5] = dimColor;
     $[6] = children;
-    $[7] = He;
-  } else He = $[7];
-  return He;
+    $[7] = textElement;
+  } else textElement = $[7];
+  return textElement;
 }
 //@ chunk-18hwfzwa.js:820072-820101 placement
 var backgroundTaskDotApi = null;
@@ -232,58 +250,62 @@ var ARTIFACT_FRAME_SEPARATOR = "  ";
 //@ chunk-18hwfzwa.js:820101-822055 placement
 function FooterLeftSide({ toolPermissionContext, rowWidth, showHint, isLoading, tasksSelected }) {
   let { columns } = useTerminalSize();
-  let Re = rowWidth === undefined ? columns : rowWidth < 0 ? 0 : rowWidth;
-  let Be = useAppState((Yo) => Yo.tasks);
-  let He = useAppState((Yo) => Yo.remoteBackgroundTasks);
-  let We = useAppState((Yo) => Yo.viewingAgentTaskId);
-  let ze = useAppState((Yo) => Yo.viewSelectionMode);
-  let Xe = useAppState(
-    (Yo) =>
-      (Yo.footerSelection === "tasks" && Yo.coordinatorTaskIndex >= 0) || Yo.footerSelection === "workflows",
+  let effectiveWidth = rowWidth === undefined ? columns : rowWidth < 0 ? 0 : rowWidth;
+  let tasks = useAppState((columns) => columns.tasks);
+  let remoteTasks = useAppState((effectiveWidth) => effectiveWidth.remoteBackgroundTasks);
+  let viewedTaskId = useAppState((viewedTaskId) => viewedTaskId.viewingAgentTaskId);
+  let selectionMode = useAppState((selectionMode) => selectionMode.viewSelectionMode);
+  let isTaskPanelSelected = useAppState(
+    (appState) =>
+      (appState.footerSelection === "tasks" && appState.coordinatorTaskIndex >= 0) ||
+      appState.footerSelection === "workflows",
   );
-  let rt = useAppState((Yo) => Yo.frameUrls);
+  let frameUrls = useAppState((frameUrls) => frameUrls.frameUrls);
   let frameOpenFailedUnseen = useFrameOpenFailure();
-  let At = useAppState((Yo) => Yo.footerSelection === "frame");
+  let isFrameSelected = useAppState((isFrameSelected) => isFrameSelected.footerSelection === "frame");
   let lower = useShortcutDisplay_2("chat:cancel", "Chat", "esc").toLowerCase();
   let shortcutDisplay = useShortcutDisplay_2(cycleModeActionName(), "Chat", "shift+tab");
   let host = useSession().host;
-  let Dt = Q(() => countVisibleTasks(Be, He), [Be, He]);
-  let Lt = useVisibleAgentTaskCount() > 0 || Dt > 0;
-  let needsYou = Q(
+  let visibleTaskCount = useMemo(() => countVisibleTasks(tasks, remoteTasks), [tasks, remoteTasks]);
+  let hasTasksOrAgents = useVisibleAgentTaskCount() > 0 || visibleTaskCount > 0;
+  let needsYou = useMemo(
     () =>
       backgroundTaskDotApi !== null &&
-      Object.values(Be).some(
-        (Yo) => shouldHideTasksFooter(Yo) && backgroundTaskDotApi.backgroundTaskDot(Yo) === "needsYou",
+      Object.values(tasks).some(
+        (task) => shouldHideTasksFooter(task) && backgroundTaskDotApi.backgroundTaskDot(task) === "needsYou",
       ),
-    [Be],
+    [tasks],
   );
   let colorless = sequential.level === 0;
-  let io = null;
-  if (Xe)
+  let unusedNull = null;
+  if (isTaskPanelSelected)
     return jsxProd_default(Box, {
       height: 1,
       overflow: "hidden",
       children: jsxProd_default(TaskPanelFooterHints, {}),
     });
   let remoteCaps = getRemoteCaps();
-  let po = remoteCaps
+  let canChangeMode = remoteCaps
     ? hasRemoteCap("setPermissionMode") && !remoteCaps.viewerOnly
     : !isRemoteSessionAvailable();
   let mode = toolPermissionContext.mode;
   let cycled = tabCycleState.of(host).cycled;
-  let bo = po ? buildModePill(mode) : null;
-  let Ao = visibleArtifactFrames(rt);
-  let Bo = Ao.length > 0 && isPublishToolEnabled() ? Ao[0] : undefined;
-  let Ro = Bo
-    ? normalizeIdeSelectionLabel(Bo.sourceFile !== undefined ? parse(Bo.sourceFile).name : Bo.title)
+  let modePill = canChangeMode ? buildModePill(mode) : null;
+  let frames = visibleArtifactFrames(frameUrls);
+  let activeFrame = frames.length > 0 && isPublishToolEnabled() ? frames[0] : undefined;
+  let activeFrameName = activeFrame
+    ? normalizeIdeSelectionLabel(
+        activeFrame.sourceFile !== undefined ? parse(activeFrame.sourceFile).name : activeFrame.title,
+      )
     : null;
-  let Ho = ze === "viewing-agent" && We !== undefined ? Be[We] : undefined;
-  let Io = Ho !== undefined && Ho.status !== "running";
-  let Wo = null;
+  let viewedTask =
+    selectionMode === "viewing-agent" && viewedTaskId !== undefined ? tasks[viewedTaskId] : undefined;
+  let isIdleTeammate = viewedTask !== undefined && viewedTask.status !== "running";
+  let hintSegment = null;
   if (showHint) {
-    if (Io) {
-      if (Ho.type === "in_process_teammate" && lower !== "")
-        Wo = footerHintSegment({
+    if (isIdleTeammate) {
+      if (viewedTask.type === "in_process_teammate" && lower !== "")
+        hintSegment = footerHintSegment({
           chord: lower,
           action: "return to team lead",
           format: {
@@ -292,15 +314,15 @@ function FooterLeftSide({ toolPermissionContext, rowWidth, showHint, isLoading, 
         });
     } else if (isLoading) {
       if (lower !== "")
-        Wo = footerHintSegment({
+        hintSegment = footerHintSegment({
           chord: lower,
           action: "interrupt",
           format: {
             keyCase: "lower",
           },
         });
-    } else if (bo && !cycled && shortcutDisplay !== "")
-      Wo = footerHintSegment({
+    } else if (modePill && !cycled && shortcutDisplay !== "")
+      hintSegment = footerHintSegment({
         chord: shortcutDisplay,
         action: "cycle",
         format: {
@@ -308,36 +330,36 @@ function FooterLeftSide({ toolPermissionContext, rowWidth, showHint, isLoading, 
         },
       });
   }
-  let mn = {
-    backgroundCount: Dt,
+  let pillState = {
+    backgroundCount: visibleTaskCount,
     needsYou,
-    frameCount: Ao.length,
-    activeFrameName: Ro,
+    frameCount: frames.length,
+    activeFrameName,
     frameOpenFailedUnseen,
     tasksSelected,
-    frameSelected: At,
+    frameSelected: isFrameSelected,
     colorless,
   };
-  let Cn = Lt || Ro !== null || false;
-  let No = chooseFooterLayout({
-    pill: bo,
+  let hasLeading = hasTasksOrAgents || activeFrameName !== null || false;
+  let layout = chooseFooterLayout({
+    pill: modePill,
     kept: [[]],
-    sparse: BackgroundTasksPill(false, mn),
-    dense: BackgroundTasksPill(true, mn),
-    hint: null?.selected === true ? null.keys : Wo,
+    sparse: BackgroundTasksPill(false, pillState),
+    dense: BackgroundTasksPill(true, pillState),
+    hint: null?.selected === true ? null.keys : hintSegment,
     keptSelected: null?.selected === true,
-    width: Cn ? Re - DOWN_ARROW_PREFIX_WIDTH : Re,
+    width: hasLeading ? effectiveWidth - DOWN_ARROW_PREFIX_WIDTH : effectiveWidth,
   });
-  let vo = tasksSelected || At ? No.filter((Yo) => Yo.key !== "hint") : No;
+  let shownItems = tasksSelected || isFrameSelected ? layout.filter((item) => item.key !== "hint") : layout;
   return jsxProd_default(FooterStatusRow, {
-    left: vo.map((Yo) => Yo.node),
-    width: Re,
-    leading: Cn,
-    leadingPressed: vo.some(
-      (Yo) =>
-        (Yo.key === "background" && tasksSelected) ||
-        (Yo.key === "artifacts" && At) ||
-        (Yo.key === "browser" && null?.selected === true),
+    left: shownItems.map((item) => item.node),
+    width: effectiveWidth,
+    leading: hasLeading,
+    leadingPressed: shownItems.some(
+      (item) =>
+        (item.key === "background" && tasksSelected) ||
+        (item.key === "artifacts" && isFrameSelected) ||
+        (item.key === "browser" && null?.selected === true),
     ),
   });
 }
@@ -346,30 +368,32 @@ function FooterLeftSide({ toolPermissionContext, rowWidth, showHint, isLoading, 
  * 在给定宽度下挑页脚左侧要显示的段：先尝试带提示的紧凑排列，再依次尝试稀疏/紧凑/去掉 artifacts/只留胶囊，取第一个放得下的。
  */
 function chooseFooterLayout({ pill, kept, sparse, dense, hint, keptSelected, width }) {
-  let Be = kept[0] ?? [];
-  let He = keptSelected ? (kept.at(-1) ?? []) : [];
+  let keptLines = kept[0] ?? [];
+  let selectedLine = keptSelected ? (kept.at(-1) ?? []) : [];
   if (hint !== null) {
     let found = kept
-      .map((Xe) => [...dense, pill, ...Xe, hint].filter(isPresent))
-      .find((Xe) => rowTotalWidth(Xe) <= width);
+      .map((line) => [...dense, pill, ...line, hint].filter(isPresent))
+      .find((line) => rowTotalWidth(line) <= width);
     if (found !== undefined) return found;
   }
   let mapped = [
-    [...sparse, pill, ...Be],
-    ...kept.map((ze) => [...dense, pill, ...ze]),
+    [...sparse, pill, ...keptLines],
+    ...kept.map((line) => [...dense, pill, ...line]),
     ...(pill === null
       ? []
       : [
-          [...dense, pill, ...He],
-          [...dense.filter((ze) => ze.key !== "artifacts"), pill, ...He],
-          [pill, ...He],
+          [...dense, pill, ...selectedLine],
+          [...dense.filter((item) => item.key !== "artifacts"), pill, ...selectedLine],
+          [pill, ...selectedLine],
         ]),
-  ].map((ze) => ze.filter(isPresent));
-  return mapped.find((ze) => rowTotalWidth(ze) <= width) ?? (pill === null ? mapped[0] : mapped.at(-1)) ?? [];
+  ].map((line) => line.filter(isPresent));
+  return (
+    mapped.find((line) => rowTotalWidth(line) <= width) ?? (pill === null ? mapped[0] : mapped.at(-1)) ?? []
+  );
 }
 //@ chunk-18hwfzwa.js:822523-822555 placement
-function isPresent(h) {
-  return h !== null;
+function isPresent(value) {
+  return value !== null;
 }
 //@ chunk-18hwfzwa.js:822555-822630 placement
 function buildModePill(mode) {
@@ -387,7 +411,7 @@ function buildModePill(mode) {
 }
 //@ chunk-18hwfzwa.js:822630-823262 placement
 function BackgroundTasksPill(
-  h,
+  props,
   {
     backgroundCount,
     needsYou,
@@ -399,12 +423,12 @@ function BackgroundTasksPill(
     colorless,
   },
 ) {
-  let We = [];
+  let segments = [];
   if (backgroundCount > 0) {
-    let ze = `${backgroundCount} bg`;
-    We.push({
+    let countLabel = `${backgroundCount} bg`;
+    segments.push({
       key: "background",
-      width: bunStringWidth(ze) + (needsYou ? statusIconSlotWidth() : 0),
+      width: bunStringWidth(countLabel) + (needsYou ? statusIconSlotWidth() : 0),
       node: jsxProd_default_2(
         Text,
         {
@@ -412,7 +436,7 @@ function BackgroundTasksPill(
             jsxProd_default(Text, {
               ...footerStatusStyle(tasksSelected, colorless, "background"),
               dimColor: !tasksSelected,
-              children: ze,
+              children: countLabel,
             }),
             needsYou &&
               jsxProd_default(StatusIcon, {
@@ -426,39 +450,39 @@ function BackgroundTasksPill(
     });
   }
   if (activeFrameName !== null) {
-    let ze = h
+    let frameLabel = props
       ? `${BOXED_DIAMOND_GLYPH}${ARTIFACT_FRAME_SEPARATOR}${frameCount}`
       : `${BOXED_DIAMOND_GLYPH}${ARTIFACT_FRAME_SEPARATOR}${frameCount}: ${truncateToWidth(activeFrameName, ARTIFACT_FRAME_NAME_MAX)}`;
-    let Xe = footerStatusStyle(frameSelected, colorless, frameOpenFailedUnseen ? "error" : "claude");
-    We.push({
+    let frameStyle = footerStatusStyle(frameSelected, colorless, frameOpenFailedUnseen ? "error" : "claude");
+    segments.push({
       key: "artifacts",
-      width: bunStringWidth(ze),
+      width: bunStringWidth(frameLabel),
       node: jsxProd_default(
         Text,
         {
-          ...Xe,
-          color: Xe.color ?? (frameOpenFailedUnseen ? "claude" : undefined),
+          ...frameStyle,
+          color: frameStyle.color ?? (frameOpenFailedUnseen ? "claude" : undefined),
           dimColor: !frameSelected && !frameOpenFailedUnseen,
-          children: ze,
+          children: frameLabel,
         },
         "artifacts",
       ),
     });
   }
-  return We;
+  return segments;
 }
 //@ chunk-18hwfzwa.js:823262-823375 placement
-function footerHintSegment(h) {
+function footerHintSegment(hint) {
   return {
     key: "hint",
-    width: bunStringWidth(formatShortcutHint(h)),
+    width: bunStringWidth(formatShortcutHint(hint)),
     node: jsxProd_default(
       Text,
       {
         dimColor: true,
         italic: true,
         children: jsxProd_default(KeyboardShortcutHint, {
-          ...h,
+          ...hint,
         }),
       },
       "hint",
@@ -467,76 +491,83 @@ function footerHintSegment(h) {
 }
 //@ chunk-18hwfzwa.js:823375-823700 placement
 function FeedbackDraftCount(props) {
-  let $ = w(7);
+  let $ = useMemoCache(7);
   let { count } = props;
   if (count <= 0) {
     return null;
   }
-  let L;
+  let countText;
   if ($[0] !== count) {
-    L = jsxProd_default(Text, {
+    countText = jsxProd_default(Text, {
       dimColor: false,
       children: count,
     });
     $[0] = count;
-    $[1] = L;
-  } else L = $[1];
-  let ee;
+    $[1] = countText;
+  } else countText = $[1];
+  let innerText;
   if ($[2] !== count) {
-    ee = plural(count, "feedback draft");
+    innerText = plural(count, "feedback draft");
     $[2] = count;
-    $[3] = ee;
-  } else ee = $[3];
-  let ke;
-  if ($[4] !== L || $[5] !== ee) {
-    ke = jsxProd_default_2(Text, {
+    $[3] = innerText;
+  } else innerText = $[3];
+  let textElement;
+  if ($[4] !== countText || $[5] !== innerText) {
+    textElement = jsxProd_default_2(Text, {
       dimColor: true,
-      children: [L, " ", ee],
+      children: [countText, " ", innerText],
     });
-    $[4] = L;
-    $[5] = ee;
-    $[6] = ke;
-  } else ke = $[6];
-  return ke;
+    $[4] = countText;
+    $[5] = innerText;
+    $[6] = textElement;
+  } else textElement = $[6];
+  return textElement;
 }
 //@ chunk-18hwfzwa.js:823700-823704 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:823700", () => {
+  init_react_production();
+});
 //@ chunk-18hwfzwa.js:823704-823791 placement
 function feedbackNoticeSignal() {
-  return yt(uiSignals.feedbackNotice.subscribe, () => uiSignals.feedbackNotice.getState());
+  return useSyncExternalStore(uiSignals.feedbackNotice.subscribe, () => uiSignals.feedbackNotice.getState());
 }
 //@ chunk-18hwfzwa.js:823791-823942 placement
 function useSessionDraftCount() {
-  let h = feedbackNoticeSignal();
+  let feedbackSignal = feedbackNoticeSignal();
   let { storageV5 } = useTheme_2();
-  P(() => {
+  useEffect(() => {
     if (!isFeedbackDraftsEnabled() || !tryStartDraftSeed()) return;
     countSessionQueuedDrafts(getSessionId(), storageV5)
       .then(seedSessionDraftCount)
       .catch(() => {});
   }, [storageV5]);
-  return isFeedbackDraftsEnabled() ? h.sessionDraftCount : 0;
+  return isFeedbackDraftsEnabled() ? feedbackSignal.sessionDraftCount : 0;
 }
 //@ chunk-18hwfzwa.js:823942-823993 layout
-function selectPrUrlTemplate(zr) {
-  return zr.settings?.prUrlTemplate;
+function selectPrUrlTemplate(state) {
+  return state.settings?.prUrlTemplate;
 }
 //@ chunk-18hwfzwa.js:823993-824084 layout
-function incrementVoiceFooterHintSeenCount(He) {
+function incrementVoiceFooterHintSeenCount(state) {
   return {
-    ...He,
-    voiceFooterHintSeenCount: (He.voiceFooterHintSeenCount ?? 0) + 1,
+    ...state,
+    voiceFooterHintSeenCount: (state.voiceFooterHintSeenCount ?? 0) + 1,
   };
 }
 //@ chunk-18hwfzwa.js:824084-824129 layout
-var coordinatorModeModule = require("./chunk-yxywkh50.js");
-var VOICE_HINT_MAX_IMPRESSIONS = 3;
+var coordinatorModeModule; // deferred: loads other modules while loading; runs once its import cycle is complete
+var VOICE_HINT_MAX_IMPRESSIONS;
+deferInit("chunk-18hwfzwa.js:824084", () => {
+  coordinatorModeModule = require("../../coordinator/coordinatorMode.js");
+  VOICE_HINT_MAX_IMPRESSIONS = 3;
+});
 //@ chunk-18hwfzwa.js:824129-829071 fingerprint = PromptInputFooterLeftSide (0.393)
 /**
  * 页脚左侧：显示权限模式（shift+tab 循环 default/acceptEdits/plan/auto/bypass）、"Press Ctrl-C again to exit"、后台任务计数（可点开）、PR 状态、语音提示、catchupReplay/detach 提示。
  */
 function PromptInputFooterLeftSide(props) {
-  let $ = w(65);
+  let $ = useMemoCache(65);
   let {
     exitMessage,
     row1Hint,
@@ -565,25 +596,26 @@ function PromptInputFooterLeftSide(props) {
     rowWidth,
     wrappedRowWidth,
   } = props;
-  let bo = row1Hint === undefined ? null : row1Hint;
-  let Ao = suppressHintExceptStatusline === undefined ? suppressHint : suppressHintExceptStatusline;
+  let row1HintValue = row1Hint === undefined ? null : row1Hint;
+  let suppressHintFat =
+    suppressHintExceptStatusline === undefined ? suppressHint : suppressHintExceptStatusline;
   let isExternalLoading_2 = isExternalLoading === undefined ? false : isExternalLoading;
   let betweenCalls_2 = betweenCalls === undefined ? true : betweenCalls;
   useSubagentStatusLineTick();
   let terminalFocusState = useTerminalFocusState();
-  let Wo;
+  let prEnabled;
   if ($[0] !== terminalFocusState) {
-    Wo = isPrStatusEnabled(terminalFocusState) && !isRemoteSessionAvailable();
+    prEnabled = isPrStatusEnabled(terminalFocusState) && !isRemoteSessionAvailable();
     $[0] = terminalFocusState;
-    $[1] = Wo;
-  } else Wo = $[1];
-  let mn = Wo;
-  let prStatus = usePrStatus(isLoading, mn);
+    $[1] = prEnabled;
+  } else prEnabled = $[1];
+  let prEnabled_2 = prEnabled;
+  let prStatus = usePrStatus(isLoading, prEnabled_2);
   let bgSessionPr = useBgSessionPr();
-  let vo;
-  if ($[2] !== bgSessionPr || $[3] !== prStatus.pr || $[4] !== mn) {
-    vo =
-      mn && prStatus.pr
+  let currentPr;
+  if ($[2] !== bgSessionPr || $[3] !== prStatus.pr || $[4] !== prEnabled_2) {
+    currentPr =
+      prEnabled_2 && prStatus.pr
         ? prStatus.pr
         : bgSessionPr
           ? {
@@ -595,61 +627,61 @@ function PromptInputFooterLeftSide(props) {
           : null;
     $[2] = bgSessionPr;
     $[3] = prStatus.pr;
-    $[4] = mn;
-    $[5] = vo;
-  } else vo = $[5];
-  let Yo = vo;
-  let needsAuth = !Yo && mn && prStatus.needsAuth;
+    $[4] = prEnabled_2;
+    $[5] = currentPr;
+  } else currentPr = $[5];
+  let prInfo = currentPr;
+  let needsAuth = !prInfo && prEnabled_2 && prStatus.needsAuth;
   let appState = useAppState(selectPrUrlTemplate);
-  let bn;
-  if ($[6] !== Yo || $[7] !== appState) {
-    bn = Yo ? expandPrUrlIfTemplate(Yo.url, appState) : undefined;
-    $[6] = Yo;
+  let expandedPrUrl;
+  if ($[6] !== prInfo || $[7] !== appState) {
+    expandedPrUrl = prInfo ? expandPrUrlIfTemplate(prInfo.url, appState) : undefined;
+    $[6] = prInfo;
     $[7] = appState;
-    $[8] = bn;
-  } else bn = $[8];
-  usePrActionEffect(bn, Yo?.url, Yo?.kind);
+    $[8] = expandedPrUrl;
+  } else expandedPrUrl = $[8];
+  usePrActionEffect(expandedPrUrl, prInfo?.url, prInfo?.kind);
   let setAppState = useSetAppState();
-  let number = Yo?.number;
-  let url = Yo?.url;
-  let reviewState = Yo?.reviewState;
-  let kind = Yo?.kind;
-  let $n;
+  let number = prInfo?.number;
+  let url = prInfo?.url;
+  let reviewState = prInfo?.reviewState;
+  let kind = prInfo?.kind;
+  let isPrStale;
   if ($[9] !== prStatus.lastUpdated) {
-    $n = prStatus.lastUpdated > 0 || currentPrStatusFetcher().pollerDisabled;
+    isPrStale = prStatus.lastUpdated > 0 || currentPrStatusFetcher().pollerDisabled;
     $[9] = prStatus.lastUpdated;
-    $[10] = $n;
-  } else $n = $[10];
-  let on = $n;
-  let _o;
-  let cn;
+    $[10] = isPrStale;
+  } else isPrStale = $[10];
+  let prStale = isPrStale;
+  let prSyncDeps;
+  let syncPrEffect;
   if (
     $[11] !== kind ||
     $[12] !== number ||
     $[13] !== reviewState ||
     $[14] !== url ||
-    $[15] !== on ||
+    $[15] !== prStale ||
     $[16] !== appState ||
     $[17] !== setAppState
   ) {
-    cn = () => {
-      setAppState((Dn) => {
-        let wn =
-          !on &&
-          Dn.prStatus !== null &&
+    syncPrEffect = () => {
+      setAppState((prev) => {
+        let keepExistingNumber =
+          !prStale &&
+          prev.prStatus !== null &&
           (number === undefined ||
-            (number === Dn.prStatus.number &&
-              Dn.prStatus.kind === kind &&
+            (number === prev.prStatus.number &&
+              prev.prStatus.kind === kind &&
               reviewState === undefined &&
-              Dn.prStatus.reviewState !== undefined));
-        let mr =
-          Dn.prStatus?.number === number &&
-          Dn.prStatus?.url === url &&
-          Dn.prStatus?.reviewState === reviewState &&
-          Dn.prStatus?.kind === kind;
-        let Kn =
-          wn || mr
-            ? Dn.prStatus
+              prev.prStatus.reviewState !== undefined));
+        let samePr =
+          prev.prStatus?.number === number &&
+          prev.prStatus?.url === url &&
+          prev.prStatus?.reviewState === reviewState &&
+          prev.prStatus?.kind === kind;
+        let nextPr =
+          keepExistingNumber || samePr
+            ? prev.prStatus
             : number !== undefined && url !== undefined
               ? {
                   number,
@@ -658,92 +690,97 @@ function PromptInputFooterLeftSide(props) {
                   kind,
                 }
               : null;
-        let Wn = setKeyedFooterLink(
-          Dn.footerLinks,
+        let nextLinks = setKeyedFooterLink(
+          prev.footerLinks,
           CURRENT_PR,
           INITIAL_STATE_2(
-            Kn,
-            Kn ? (Kn.kind !== undefined ? Kn.url : expandPrUrlIfTemplate(Kn.url, appState)) : undefined,
+            nextPr,
+            nextPr
+              ? nextPr.kind !== undefined
+                ? nextPr.url
+                : expandPrUrlIfTemplate(nextPr.url, appState)
+              : undefined,
           ),
         );
-        if (Kn === Dn.prStatus && Wn === Dn.footerLinks) {
-          return Dn;
+        if (nextPr === prev.prStatus && nextLinks === prev.footerLinks) {
+          return prev;
         }
         return {
-          ...Dn,
-          prStatus: Kn,
-          footerLinks: Wn,
+          ...prev,
+          prStatus: nextPr,
+          footerLinks: nextLinks,
         };
       });
     };
-    _o = [number, url, reviewState, kind, on, appState, setAppState];
+    prSyncDeps = [number, url, reviewState, kind, prStale, appState, setAppState];
     $[11] = kind;
     $[12] = number;
     $[13] = reviewState;
     $[14] = url;
-    $[15] = on;
+    $[15] = prStale;
     $[16] = appState;
     $[17] = setAppState;
-    $[18] = _o;
-    $[19] = cn;
+    $[18] = prSyncDeps;
+    $[19] = syncPrEffect;
   } else {
-    _o = $[18];
-    cn = $[19];
+    prSyncDeps = $[18];
+    syncPrEffect = $[19];
   }
-  P(cn, _o);
-  let Fr;
-  let Zn;
+  useEffect(syncPrEffect, prSyncDeps);
+  let syncNeedsAuthEffect;
+  let syncNeedsAuthDeps;
   if ($[20] !== needsAuth || $[21] !== setAppState) {
-    Fr = () => {
-      setAppState((Un) =>
-        Un.prNeedsAuth === needsAuth
-          ? Un
+    syncNeedsAuthEffect = () => {
+      setAppState((prev) =>
+        prev.prNeedsAuth === needsAuth
+          ? prev
           : {
-              ...Un,
+              ...prev,
               prNeedsAuth: needsAuth,
             },
       );
     };
-    Zn = [needsAuth, setAppState];
+    syncNeedsAuthDeps = [needsAuth, setAppState];
     $[20] = needsAuth;
     $[21] = setAppState;
-    $[22] = Fr;
-    $[23] = Zn;
+    $[22] = syncNeedsAuthEffect;
+    $[23] = syncNeedsAuthDeps;
   } else {
-    Fr = $[22];
-    Zn = $[23];
+    syncNeedsAuthEffect = $[22];
+    syncNeedsAuthDeps = $[23];
   }
-  P(Fr, Zn);
-  let dr = showSwarmFooterGate();
-  let or = R(null);
-  let pr;
+  useEffect(syncNeedsAuthEffect, syncNeedsAuthDeps);
+  let isSwarmFooterVisible = showSwarmFooterGate();
+  let searchBoxRef = useRef(null);
+  let measureSearch;
   if ($[24] === MEMO_CACHE_SENTINEL) {
-    pr = () => (or.current === null ? 0 : measureElement(or.current).width);
-    $[24] = pr;
-  } else pr = $[24];
-  let measured = useMeasured(pr);
-  if (!dr && exitMessage.show) {
+    measureSearch = () => (searchBoxRef.current === null ? 0 : measureElement(searchBoxRef.current).width);
+    $[24] = measureSearch;
+  } else measureSearch = $[24];
+  let measured = useMeasured(measureSearch);
+  if (!isSwarmFooterVisible && exitMessage.show) {
     const key = exitMessage.key;
-    const Ir = isBgSession() || hasRemoteCap("catchupReplay") ? "detach (session keeps running)" : "exit";
-    let Pr;
+    const exitAction =
+      isBgSession() || hasRemoteCap("catchupReplay") ? "detach (session keeps running)" : "exit";
+    let exitMessageElement;
     if ($[25] !== exitMessage.key) {
-      Pr = jsxProd_default_2(
+      exitMessageElement = jsxProd_default_2(
         Text,
         {
           dimColor: true,
-          children: ["Press ", key, " again to", " ", Ir],
+          children: ["Press ", key, " again to", " ", exitAction],
         },
         "exit-message",
       );
       $[25] = exitMessage.key;
-      $[26] = Pr;
-    } else Pr = $[26];
-    return Pr;
+      $[26] = exitMessageElement;
+    } else exitMessageElement = $[26];
+    return exitMessageElement;
   }
-  if (!dr && isPasting) {
-    let ur;
+  if (!isSwarmFooterVisible && isPasting) {
+    let pastingMessage;
     if ($[27] === MEMO_CACHE_SENTINEL) {
-      ur = jsxProd_default(
+      pastingMessage = jsxProd_default(
         Text,
         {
           dimColor: true,
@@ -751,14 +788,14 @@ function PromptInputFooterLeftSide(props) {
         },
         "pasting-message",
       );
-      $[27] = ur;
-    } else ur = $[27];
-    return ur;
+      $[27] = pastingMessage;
+    } else pastingMessage = $[27];
+    return pastingMessage;
   }
-  if (!dr && showExpandPasteHint && !isSearching) {
-    let ur;
+  if (!isSwarmFooterVisible && showExpandPasteHint && !isSearching) {
+    let expandPasteHint;
     if ($[28] === MEMO_CACHE_SENTINEL) {
-      ur = jsxProd_default(
+      expandPasteHint = jsxProd_default(
         Text,
         {
           dimColor: true,
@@ -766,27 +803,29 @@ function PromptInputFooterLeftSide(props) {
         },
         "expand-paste-hint",
       );
-      $[28] = ur;
-    } else ur = $[28];
-    return ur;
+      $[28] = expandPasteHint;
+    } else expandPasteHint = $[28];
+    return expandPasteHint;
   }
-  let ts = vimMode !== undefined && !hideVimModeIndicator && vimMode !== "NORMAL" && !isSearching;
-  let Gn = (ts ? bunStringWidth(`-- ${vimMode} --`) + 1 : 0) + (isSearching ? measured + 1 : 0);
-  let Ur = rowWidth === undefined ? undefined : rowWidth - Gn;
-  let Zr = wrappedRowWidth === undefined ? undefined : wrappedRowWidth - Gn;
-  let ur;
+  let showVimIndicator =
+    vimMode !== undefined && !hideVimModeIndicator && vimMode !== "NORMAL" && !isSearching;
+  let reservedWidth =
+    (showVimIndicator ? bunStringWidth(`-- ${vimMode} --`) + 1 : 0) + (isSearching ? measured + 1 : 0);
+  let contentWidth = rowWidth === undefined ? undefined : rowWidth - reservedWidth;
+  let wrappedContentWidth = wrappedRowWidth === undefined ? undefined : wrappedRowWidth - reservedWidth;
+  let searchBox;
   if (
     $[29] !== historyFailedMatch ||
     $[30] !== historyQuery ||
-    $[31] !== dr ||
+    $[31] !== isSwarmFooterVisible ||
     $[32] !== isSearching ||
     $[33] !== setHistoryQuery
   ) {
-    ur =
+    searchBox =
       isSearching &&
       jsxProd_default(Box, {
-        ref: or,
-        flexShrink: dr ? 0 : 1,
+        ref: searchBoxRef,
+        flexShrink: isSwarmFooterVisible ? 0 : 1,
         children: jsxProd_default(HistorySearchInputRef, {
           value: historyQuery,
           onChange: setHistoryQuery,
@@ -795,14 +834,14 @@ function PromptInputFooterLeftSide(props) {
       });
     $[29] = historyFailedMatch;
     $[30] = historyQuery;
-    $[31] = dr;
+    $[31] = isSwarmFooterVisible;
     $[32] = isSearching;
     $[33] = setHistoryQuery;
-    $[34] = ur;
-  } else ur = $[34];
-  let Ir;
-  if ($[35] !== ts || $[36] !== vimMode) {
-    Ir = ts
+    $[34] = searchBox;
+  } else searchBox = $[34];
+  let vimIndicator;
+  if ($[35] !== showVimIndicator || $[36] !== vimMode) {
+    vimIndicator = showVimIndicator
       ? jsxProd_default(
           Box,
           {
@@ -815,17 +854,17 @@ function PromptInputFooterLeftSide(props) {
           "vim-indicator",
         )
       : null;
-    $[35] = ts;
+    $[35] = showVimIndicator;
     $[36] = vimMode;
-    $[37] = Ir;
-  } else Ir = $[37];
-  let Pr;
+    $[37] = vimIndicator;
+  } else vimIndicator = $[37];
+  let indicatorRow;
   if (
     $[38] !== betweenCalls_2 ||
-    $[39] !== Ur ||
-    $[40] !== Zr ||
+    $[39] !== contentWidth ||
+    $[40] !== wrappedContentWidth ||
     $[41] !== isExternalLoading_2 ||
-    $[42] !== dr ||
+    $[42] !== isSwarmFooterVisible ||
     $[43] !== isInputEmpty ||
     $[44] !== isLoading ||
     $[45] !== isSearching ||
@@ -836,45 +875,45 @@ function PromptInputFooterLeftSide(props) {
     $[50] !== needsAuth ||
     $[51] !== proactivityLevelStepped ||
     $[52] !== proactivityPillCollapsed ||
-    $[53] !== bo ||
-    $[54] !== ts ||
+    $[53] !== row1HintValue ||
+    $[54] !== showVimIndicator ||
     $[55] !== suppressHint ||
-    $[56] !== Ao ||
+    $[56] !== suppressHintFat ||
     $[57] !== tasksSelected ||
     $[58] !== toolPermissionContext ||
     $[59] !== vimMode
   ) {
-    Pr = dr
-      ? bo !== null
+    indicatorRow = isSwarmFooterVisible
+      ? row1HintValue !== null
         ? jsxProd_default(
             Box,
             {
               height: 1,
-              width: Ur === undefined ? undefined : Math.max(0, Ur),
+              width: contentWidth === undefined ? undefined : Math.max(0, contentWidth),
               overflow: "hidden",
               children: jsxProd_default(Text, {
                 dimColor: true,
                 italic: true,
                 wrap: "truncate-end",
-                children: bo.text,
+                children: row1HintValue.text,
               }),
             },
-            bo.id,
+            row1HintValue.id,
           )
         : jsxProd_default(FooterLeftSide, {
             toolPermissionContext,
-            showHint: !Ao && !ts,
+            showHint: !suppressHintFat && !showVimIndicator,
             isLoading,
-            rowWidth: Ur,
+            rowWidth: contentWidth,
             tasksSelected,
           })
       : jsxProd_default(ModeIndicator, {
           mode,
           toolPermissionContext,
-          showHint: !suppressHint && !ts,
-          denseShowHint: !Ao && !ts,
-          denseVimOnlySuppression: !Ao && ts,
-          vimIndicatorShown: ts,
+          showHint: !suppressHint && !showVimIndicator,
+          denseShowHint: !suppressHintFat && !showVimIndicator,
+          denseVimOnlySuppression: !suppressHintFat && showVimIndicator,
+          vimIndicatorShown: showVimIndicator,
           vimBlocksGesture: vimMode === "VISUAL" || vimMode === "VISUAL LINE",
           isInputEmpty,
           isLoading,
@@ -887,15 +926,15 @@ function PromptInputFooterLeftSide(props) {
           prNeedsAuth: needsAuth,
           levelPillCollapsed: proactivityPillCollapsed,
           levelStepped: proactivityLevelStepped,
-          rowWidth: isSearching ? undefined : Ur,
-          wrappedRowWidth: isSearching ? undefined : Zr,
+          rowWidth: isSearching ? undefined : contentWidth,
+          wrappedRowWidth: isSearching ? undefined : wrappedContentWidth,
           isSearching,
         });
     $[38] = betweenCalls_2;
-    $[39] = Ur;
-    $[40] = Zr;
+    $[39] = contentWidth;
+    $[40] = wrappedContentWidth;
     $[41] = isExternalLoading_2;
-    $[42] = dr;
+    $[42] = isSwarmFooterVisible;
     $[43] = isInputEmpty;
     $[44] = isLoading;
     $[45] = isSearching;
@@ -906,28 +945,28 @@ function PromptInputFooterLeftSide(props) {
     $[50] = needsAuth;
     $[51] = proactivityLevelStepped;
     $[52] = proactivityPillCollapsed;
-    $[53] = bo;
-    $[54] = ts;
+    $[53] = row1HintValue;
+    $[54] = showVimIndicator;
     $[55] = suppressHint;
-    $[56] = Ao;
+    $[56] = suppressHintFat;
     $[57] = tasksSelected;
     $[58] = toolPermissionContext;
     $[59] = vimMode;
-    $[60] = Pr;
-  } else Pr = $[60];
-  let wr;
-  if ($[61] !== ur || $[62] !== Ir || $[63] !== Pr) {
-    wr = jsxProd_default_2(Box, {
+    $[60] = indicatorRow;
+  } else indicatorRow = $[60];
+  let row;
+  if ($[61] !== searchBox || $[62] !== vimIndicator || $[63] !== indicatorRow) {
+    row = jsxProd_default_2(Box, {
       justifyContent: "flex-start",
       gap: 1,
-      children: [ur, Ir, Pr],
+      children: [searchBox, vimIndicator, indicatorRow],
     });
-    $[61] = ur;
-    $[62] = Ir;
-    $[63] = Pr;
-    $[64] = wr;
-  } else wr = $[64];
-  return wr;
+    $[61] = searchBox;
+    $[62] = vimIndicator;
+    $[63] = indicatorRow;
+    $[64] = row;
+  } else row = $[64];
+  return row;
 }
 //@ chunk-18hwfzwa.js:829071-829099 layout
 function attentionBudgetSummary(attentionBudget) {
@@ -971,15 +1010,17 @@ function ModeIndicator({
   let isFullscreen = useIsFullscreen();
   let { columns } = useTerminalSize();
   let frameFooterState = useFrameFooterState();
-  let po = useAppState((yi) => yi.footerSelection === "frame");
-  let ao = isRemoteSessionAvailable();
-  let co = useAppState((yi) => (ao ? visibleArtifactFrames(yi.frameUrls).length : 0));
-  let action = ao && co === 1 ? "open in browser" : "view artifacts";
+  let isFrameSelected = useAppState((state) => state.footerSelection === "frame");
+  let isRemoteSession = isRemoteSessionAvailable();
+  let artifactFrameCount = useAppState((state) =>
+    isRemoteSession ? visibleArtifactFrames(state.frameUrls).length : 0,
+  );
+  let action = isRemoteSession && artifactFrameCount === 1 ? "open in browser" : "view artifacts";
   useForceRender();
   let featureValue_CACHED_MAY_BE_STALE = getFeatureValue_CACHED_MAY_BE_STALE("tengu_copper_thistle", false);
   let shortcutDisplay = useShortcutDisplay_2(cycleModeActionName(), "Chat", "shift+tab");
-  let tasks = useAppState((yi) => yi.tasks);
-  let tasks_2 = useAppState((yi) => yi.remoteBackgroundTasks);
+  let tasks = useAppState((state) => state.tasks);
+  let tasks_2 = useAppState((state) => state.remoteBackgroundTasks);
   let taskDecorations = useAppState((s_0) => s_0.taskDecorations);
   let store = subscribeCoordinatorPanel();
   let viewSelectionMode = useAppState(
@@ -989,56 +1030,56 @@ function ModeIndicator({
   );
   let viewingAgentTaskId = useAppState((s_2) => s_2.footerSelection !== null);
   let viewSelectionMode_2 = useAppState((s_3) => s_3.viewSelectionMode);
-  let viewingAgentTaskId_2 = useAppState((yi) => yi.viewingAgentTaskId);
-  let expandedView = useAppState((yi) => yi.expandedView);
+  let viewingAgentTaskId_2 = useAppState((state) => state.viewingAgentTaskId);
+  let expandedView = useAppState((state) => state.expandedView);
   let footerLinks = useFooterLinks({
     excludeKeyed: featureValue_CACHED_MAY_BE_STALE,
   });
-  let ref = R(null);
-  let ref_2 = R(null);
-  let ref_3 = R(null);
-  let ref_4 = R(null);
-  let Mn = null;
-  let Xo = 0;
-  let Sn = 0;
-  let $n = 0;
-  let on = null;
-  let attentionBudget = useAppState((yi) => yi.attentionBudget);
+  let ref = useRef(null);
+  let ref_2 = useRef(null);
+  let ref_3 = useRef(null);
+  let ref_4 = useRef(null);
+  let pillStart = null;
+  let pillWidth = 0;
+  let reserveStart = 0;
+  let reserveEnd = 0;
+  let extraPill = null;
+  let attentionBudget = useAppState((state) => state.attentionBudget);
   let proactivityLevel = useAppState((s_4) => s_4.proactivityLevel);
   let voiceAvailable = useVoiceAvailable();
-  let wn = useAppState_2((s_5) => s_5.voiceState);
-  let mr = useAppState_2((s_6) => s_6.voiceWarmingUp);
+  let voiceState = useAppState_2((s_5) => s_5.voiceState);
+  let isVoiceWarmingUp = useAppState_2((s_6) => s_6.voiceWarmingUp);
   let hasSelection = useHasSelection();
   let selGetState = useSelection().getState;
-  let Fr = coordinatorModeModule.isCoordinatorMode();
-  let runningTaskCount = Q(() => countVisibleTasks(tasks, tasks_2), [tasks, tasks_2, store]);
+  let isCoordinatorMode = coordinatorModeModule.isCoordinatorMode();
+  let runningTaskCount = useMemo(() => countVisibleTasks(tasks, tasks_2), [tasks, tasks_2, store]);
   let tasksV2 = useHasTaskSelection();
   let escShortcut = useShortcutDisplay_2("chat:cancel", "Chat", "esc").toLowerCase();
   let todosShortcut = useShortcutDisplay_2("app:toggleTodos", "Global", "ctrl+t");
   let shortcutDisplay_2 = useShortcutDisplay_2("voice:pushToTalk", "Chat", "space");
   let shortcutDisplay_3 = useShortcutDisplay("footer:openSelected", "Footer", "enter");
-  let [ur] = y(() => {
-    let yi = announcementState();
-    if (yi.voiceFooterHintUnderCap === undefined)
-      yi.voiceFooterHintUnderCap =
+  let [voiceHintUnderCap] = useState(() => {
+    let announcement = announcementState();
+    if (announcement.voiceFooterHintUnderCap === undefined)
+      announcement.voiceFooterHintUnderCap =
         (getGlobalConfig().voiceFooterHintSeenCount ?? 0) < VOICE_HINT_MAX_IMPRESSIONS;
-    return yi.voiceFooterHintUnderCap;
+    return announcement.voiceFooterHintUnderCap;
   });
   let isScreenReaderEnabled = useIsScreenReaderEnabled();
   let statusLineSuppressed = useStatusLineSuppressed();
-  let ts = AgentsPill({
+  let agentsPill = AgentsPill({
     available: leftArrowDetachAvailable && isInputEmpty && !viewingAgentTaskId && !vimBlocksGesture,
     restingHintExpired: useAppState((prev) => prev.agentsHintExpired === true),
   });
   let sessionDraftCount = useSessionDraftCount();
-  let Ur = yt(subscribeGlobalConfigInstalled, getFooterIndicatorConfig);
+  let footerIndicatorConfig = useSyncExternalStore(subscribeGlobalConfigInstalled, getFooterIndicatorConfig);
   let CLAUDE_CODE_FOOTER_INDICATOR = env.CLAUDE_CODE_FOOTER_INDICATOR;
   let mainLoopModel = useMainLoopModel_3();
-  let zr = Q(
-    () => resolveFooterIndicator(CLAUDE_CODE_FOOTER_INDICATOR, mainLoopModel, Ur),
-    [CLAUDE_CODE_FOOTER_INDICATOR, mainLoopModel, Ur],
+  let footerIndicator = useMemo(
+    () => resolveFooterIndicator(CLAUDE_CODE_FOOTER_INDICATOR, mainLoopModel, footerIndicatorConfig),
+    [CLAUDE_CODE_FOOTER_INDICATOR, mainLoopModel, footerIndicatorConfig],
   );
-  let _r = Q(() => isModelMissingFromClientData(mainLoopModel), [mainLoopModel]);
+  let isModelMissing = useMemo(() => isModelMissingFromClientData(mainLoopModel), [mainLoopModel]);
   let hasComplianceTaint = useHasComplianceTaint("zdr");
   let hasComplianceTaint_2 = useHasComplianceTaint("ldr");
   let isKillAgentsConfirmShowing = useStatusNoticeLines_2(mode === "bash");
@@ -1049,19 +1090,26 @@ function ModeIndicator({
     });
   let mode_2 = toolPermissionContext?.mode;
   let remoteCaps = getRemoteCaps();
-  let ms = !remoteCaps && !isRemoteSessionAvailable();
-  let Xs = ms ? attentionBudgetSummary(attentionBudget) : null;
-  let Ls = ms ? getZero(attentionBudget) : 0;
+  let canShowAttention = !remoteCaps && !isRemoteSessionAvailable();
+  let attentionSummary = canShowAttention ? attentionBudgetSummary(attentionBudget) : null;
+  let zeroBudget = canShowAttention ? getZero(attentionBudget) : 0;
   let hasActiveMode = !isDefaultMode(mode_2);
-  let ws = viewingAgentTaskId_2 ? tasks[viewingAgentTaskId_2] : undefined;
-  let Ci = viewSelectionMode_2 === "viewing-agent" && ws?.type === "in_process_teammate";
-  let oi = false;
-  let Oi = 0;
-  let Hi = oi && levelStepped && !levelPillCollapsed && !viewingAgentTaskId && !isLoading && !mr;
-  let Zi = Ci && ws != null && ws.status !== "running";
-  let da = runningTaskCount > 0;
-  let qn = (Fr || hasActiveMode ? 1 : 0) + (da ? 1 : 0);
-  let ps =
+  let viewedTask = viewingAgentTaskId_2 ? tasks[viewingAgentTaskId_2] : undefined;
+  let isInProcessTeammate =
+    viewSelectionMode_2 === "viewing-agent" && viewedTask?.type === "in_process_teammate";
+  let neverFlag = false;
+  let extraWidth = 0;
+  let showOnlyMode =
+    neverFlag &&
+    levelStepped &&
+    !levelPillCollapsed &&
+    !viewingAgentTaskId &&
+    !isLoading &&
+    !isVoiceWarmingUp;
+  let isTeammateIdle = isInProcessTeammate && viewedTask != null && viewedTask.status !== "running";
+  let hasRunningTasks = runningTaskCount > 0;
+  let leftSegmentCount = (isCoordinatorMode || hasActiveMode ? 1 : 0) + (hasRunningTasks ? 1 : 0);
+  let prHint =
     !featureValue_CACHED_MAY_BE_STALE &&
     prNeedsAuth &&
     !footerLinks.some((footerLink) => footerLink.key === CURRENT_PR)
@@ -1074,8 +1122,8 @@ function ModeIndicator({
           "pr-status",
         )
       : null;
-  let xs = null;
-  let kr = xs
+  let retentionText = null;
+  let retentionPill = retentionText
     ? jsxProd_default_2(
         Text,
         {
@@ -1085,13 +1133,13 @@ function ModeIndicator({
               "aria-hidden": true,
               children: [figures_default.lozenge, " "],
             }),
-            xs,
+            retentionText,
           ],
         },
         "retention",
       )
     : null;
-  let ls = _r
+  let modelWarning = isModelMissing
     ? jsxProd_default_2(
         Text,
         {
@@ -1106,7 +1154,7 @@ function ModeIndicator({
         },
         "footer-indicator",
       )
-    : zr
+    : footerIndicator
       ? jsxProd_default_2(
           Text,
           {
@@ -1116,24 +1164,31 @@ function ModeIndicator({
                 "aria-hidden": true,
                 children: [figures_default.lozenge, " "],
               }),
-              zr,
+              footerIndicator,
             ],
           },
           "footer-indicator",
         )
       : null;
-  let qs =
-    (_r ? bunStringWidth(`${WARNING_GLYPH} wrong model?`) + 3 : zr ? bunStringWidth(zr) + 5 : 0) + Ls + Oi;
-  let gs =
-    qn < 2 &&
-    !((ps || footerLinks.length > 0) && columns < 60 + (kr ? 8 : 0) + qs) &&
-    !(kr && columns < 56 + qs) &&
-    !(ls && columns < 48 + qs) &&
-    !(Xs && columns < 48 + Ls + Oi);
-  let es = remoteCaps
+  let indicatorWidth =
+    (isModelMissing
+      ? bunStringWidth(`${WARNING_GLYPH} wrong model?`) + 3
+      : footerIndicator
+        ? bunStringWidth(footerIndicator) + 5
+        : 0) +
+    zeroBudget +
+    extraWidth;
+  let canCycleHint =
+    leftSegmentCount < 2 &&
+    !((prHint || footerLinks.length > 0) && columns < 60 + (retentionPill ? 8 : 0) + indicatorWidth) &&
+    !(retentionPill && columns < 56 + indicatorWidth) &&
+    !(modelWarning && columns < 48 + indicatorWidth) &&
+    !(attentionSummary && columns < 48 + zeroBudget + extraWidth);
+  let canChangeMode = remoteCaps
     ? hasRemoteCap("setPermissionMode") && !remoteCaps.viewerOnly
     : !isRemoteSessionAvailable();
-  let ds = !isScreenReaderEnabled && hasEvictableIdleSubagent(tasks, viewingAgentTaskId_2);
+  let shouldShowSubagentHint =
+    !isScreenReaderEnabled && hasEvictableIdleSubagent(tasks, viewingAgentTaskId_2);
   if (viewSelectionMode)
     return jsxProd_default(Box, {
       height: 1,
@@ -1141,32 +1196,43 @@ function ModeIndicator({
       children: jsxProd_default(TaskPanelFooterHints, {}),
     });
   if (featureValue_CACHED_MAY_BE_STALE) {
-    let yi = runningTaskCount;
-    let Ws = yi >= 2;
-    let za = runningTaskCount >= 1;
-    let cl = !!mode_2 && es;
-    let Ol =
+    let runningCount = runningTaskCount;
+    let hasManyTasks = runningCount >= 2;
+    let hasTasks = runningTaskCount >= 1;
+    let showModeLabel = !!mode_2 && canChangeMode;
+    let hasVisibleTasks =
       getVisibleBackgroundTasks(tasks, taskDecorations, viewingAgentTaskId_2).length > 0 ||
       (!store && viewingAgentTaskId_2 !== undefined && isPanelOrTeammateTask(tasks[viewingAgentTaskId_2]));
-    let as = leftArrowDetachAvailable && !Ci && isInputEmpty && !viewingAgentTaskId && !vimBlocksGesture;
-    let pi = voiceAvailable && wn === "idle" && ur && showHint && shortcutDisplay_2 !== "";
-    let qa = "none";
-    if (voiceAvailable && mr) qa = "warmup";
-    else if (Zi) qa = "interrupt";
+    let canDetach =
+      leftArrowDetachAvailable &&
+      !isInProcessTeammate &&
+      isInputEmpty &&
+      !viewingAgentTaskId &&
+      !vimBlocksGesture;
+    let showVoiceHint =
+      voiceAvailable && voiceState === "idle" && voiceHintUnderCap && showHint && shortcutDisplay_2 !== "";
+    let hintKind = "none";
+    if (voiceAvailable && isVoiceWarmingUp) hintKind = "warmup";
+    else if (isTeammateIdle) hintKind = "interrupt";
     else if (!denseShowHint)
-      qa = denseVimOnlySuppression && as && ts !== null && !isScreenReaderEnabled ? "agents" : "none";
-    else if (isLoading) qa = as && ts !== null && !isScreenReaderEnabled ? "interrupt_agents" : "interrupt";
-    else if (po) qa = "artifacts";
-    else if (on?.selected) qa = "none";
-    else if ((za || Ol) && !viewSelectionMode) qa = "manage";
-    else if (tasksV2) qa = "ctrl_t";
-    else if (as && !isScreenReaderEnabled) qa = ts !== null ? "agents" : "none";
-    else if (ds) qa = "none";
-    else if (pi) qa = "voice";
-    else if (cl && (hasActiveMode || oi) && shortcutDisplay !== "") qa = "cycle";
-    else qa = showHint && !isScreenReaderEnabled ? "shortcuts" : "none";
-    let pd =
-      qa === "cycle" && !oi
+      hintKind =
+        denseVimOnlySuppression && canDetach && agentsPill !== null && !isScreenReaderEnabled
+          ? "agents"
+          : "none";
+    else if (isLoading)
+      hintKind =
+        canDetach && agentsPill !== null && !isScreenReaderEnabled ? "interrupt_agents" : "interrupt";
+    else if (isFrameSelected) hintKind = "artifacts";
+    else if (extraPill?.selected) hintKind = "none";
+    else if ((hasTasks || hasVisibleTasks) && !viewSelectionMode) hintKind = "manage";
+    else if (tasksV2) hintKind = "ctrl_t";
+    else if (canDetach && !isScreenReaderEnabled) hintKind = agentsPill !== null ? "agents" : "none";
+    else if (shouldShowSubagentHint) hintKind = "none";
+    else if (showVoiceHint) hintKind = "voice";
+    else if (showModeLabel && (hasActiveMode || neverFlag) && shortcutDisplay !== "") hintKind = "cycle";
+    else hintKind = showHint && !isScreenReaderEnabled ? "shortcuts" : "none";
+    let shortcutHint =
+      hintKind === "cycle" && !neverFlag
         ? formatShortcutHint({
             chord: shortcutDisplay,
             action: "cycle",
@@ -1175,7 +1241,7 @@ function ModeIndicator({
               keyCase: "lower",
             },
           })
-        : qa === "manage" && za && (!tasksSelected || shortcutDisplay_3)
+        : hintKind === "manage" && hasTasks && (!tasksSelected || shortcutDisplay_3)
           ? tasksSelected
             ? formatShortcutHint({
                 chord: shortcutDisplay_3,
@@ -1188,39 +1254,50 @@ function ModeIndicator({
                 parens: true,
               })
           : "";
-    let $l = pd === "" ? 0 : 1 + bunStringWidth(pd);
-    let Yi = on !== null && Mn !== null && Mn >= Sn;
-    let El = Mn === null ? null : Mn + (Yi ? 0 : (wrappedRowWidth ?? rowWidth ?? 0) - (rowWidth ?? 0));
-    let Ll = on !== null && El !== null && $l > 0 && El - $l < Sn;
-    if (Ll) qa = "none";
-    let _c = isSearching ? Sn : El === null ? undefined : Math.max(Sn, El - (Ll ? 0 : $l) - $n);
+    let shortcutWidth = shortcutHint === "" ? 0 : 1 + bunStringWidth(shortcutHint);
+    let isPillPlaced = extraPill !== null && pillStart !== null && pillStart >= reserveStart;
+    let pillRight =
+      pillStart === null
+        ? null
+        : pillStart + (isPillPlaced ? 0 : (wrappedRowWidth ?? rowWidth ?? 0) - (rowWidth ?? 0));
+    let isShortcutClipped =
+      extraPill !== null &&
+      pillRight !== null &&
+      shortcutWidth > 0 &&
+      pillRight - shortcutWidth < reserveStart;
+    if (isShortcutClipped) hintKind = "none";
+    let hintStart = isSearching
+      ? reserveStart
+      : pillRight === null
+        ? undefined
+        : Math.max(reserveStart, pillRight - (isShortcutClipped ? 0 : shortcutWidth) - reserveEnd);
     let children = null;
     let action_2 = expandedView === "tasks" ? "hide tasks" : "show tasks";
-    let cd =
-      qa === "cycle" && pd !== "" && mode_2
+    let cycleHintBox =
+      hintKind === "cycle" && shortcutHint !== "" && mode_2
         ? jsxProd_default(Box, {
             ref: ref_2,
             children: jsxProd_default_2(Text, {
               color: themeColorOf(mode_2),
               dimColor: true,
-              children: [" ", pd],
+              children: [" ", shortcutHint],
             }),
           })
         : null;
-    let Ka =
-      qa === "manage" && pd !== ""
+    let manageHintBox =
+      hintKind === "manage" && shortcutHint !== ""
         ? jsxProd_default(Box, {
             ref: ref_2,
             children: jsxProd_default_2(Text, {
               dimColor: true,
-              children: [" ", pd],
+              children: [" ", shortcutHint],
             }),
           })
         : null;
-    let pl = null;
-    if (qa === "warmup") pl = jsxProd_default(KeepHoldingHint, {}, "voice-warmup");
-    else if (qa === "manage" && !za && (!tasksSelected || shortcutDisplay_3))
-      pl = jsxProd_default(Text, {
+    let hintElement = null;
+    if (hintKind === "warmup") hintElement = jsxProd_default(KeepHoldingHint, {}, "voice-warmup");
+    else if (hintKind === "manage" && !hasTasks && (!tasksSelected || shortcutDisplay_3))
+      hintElement = jsxProd_default(Text, {
         dimColor: true,
         children: tasksSelected
           ? jsxProd_default(KeyboardShortcutHint, {
@@ -1232,35 +1309,35 @@ function ModeIndicator({
               action: "manage",
             }),
       });
-    else if (qa === "artifacts" && shortcutDisplay_3)
-      pl = jsxProd_default(Text, {
+    else if (hintKind === "artifacts" && shortcutDisplay_3)
+      hintElement = jsxProd_default(Text, {
         dimColor: true,
         children: jsxProd_default(KeyboardShortcutHint, {
           chord: shortcutDisplay_3,
           action,
         }),
       });
-    else if (qa === "interrupt" || qa === "interrupt_agents")
-      pl = jsxProd_default_2(Fragment, {
+    else if (hintKind === "interrupt" || hintKind === "interrupt_agents")
+      hintElement = jsxProd_default_2(Fragment, {
         children: [
           jsxProd_default_2(Text, {
             dimColor: true,
             children: [
               jsxProd_default(KeyboardShortcutHint, {
                 chord: escShortcut,
-                action: Zi ? "return to team lead" : "interrupt",
+                action: isTeammateIdle ? "return to team lead" : "interrupt",
                 format: {
                   keyCase: "lower",
                 },
               }),
-              qa === "interrupt_agents" && " \xB7 ",
+              hintKind === "interrupt_agents" && " \xB7 ",
             ],
           }),
-          qa === "interrupt_agents" && ts,
+          hintKind === "interrupt_agents" && agentsPill,
         ],
       });
-    else if (qa === "ctrl_t")
-      pl = jsxProd_default(Text, {
+    else if (hintKind === "ctrl_t")
+      hintElement = jsxProd_default(Text, {
         dimColor: true,
         children: jsxProd_default(KeyboardShortcutHint, {
           chord: todosShortcut,
@@ -1270,18 +1347,18 @@ function ModeIndicator({
           },
         }),
       });
-    else if (qa === "agents") pl = ts;
-    else if (qa === "voice")
-      pl = jsxProd_default(VoiceHoldToSpeakHint, {
+    else if (hintKind === "agents") hintElement = agentsPill;
+    else if (hintKind === "voice")
+      hintElement = jsxProd_default(VoiceHoldToSpeakHint, {
         keyDisplay: shortcutDisplay_2,
       });
-    else if (qa === "shortcuts")
-      pl = jsxProd_default(Text, {
+    else if (hintKind === "shortcuts")
+      hintElement = jsxProd_default(Text, {
         dimColor: true,
         children: "? for shortcuts",
       });
-    let Gl =
-      cl && mode_2
+    let modeBox =
+      showModeLabel && mode_2
         ? jsxProd_default_2(
             Box,
             {
@@ -1290,22 +1367,22 @@ function ModeIndicator({
                 jsxProd_default(PermissionModeLabel, {
                   mode: mode_2,
                 }),
-                cd,
+                cycleHintBox,
               ],
             },
             "mode",
           )
         : null;
-    if (Hi && Gl)
+    if (showOnlyMode && modeBox)
       return jsxProd_default(Box, {
         height: 1,
         overflow: "hidden",
-        children: Gl,
+        children: modeBox,
       });
-    let gd = za
-      ? Ws
+    let taskPill = hasTasks
+      ? hasManyTasks
         ? jsxProd_default(BackgroundTaskCountPill, {
-            count: yi,
+            count: runningCount,
             selected: tasksSelected,
             onClick: onOpenTasksDialog,
           })
@@ -1315,48 +1392,48 @@ function ModeIndicator({
           })
       : null;
     if (
-      !Gl &&
-      !Xs &&
-      !kr &&
-      !ls &&
-      !gd &&
+      !modeBox &&
+      !attentionSummary &&
+      !retentionPill &&
+      !modelWarning &&
+      !taskPill &&
       !frameFooterState &&
-      !on &&
+      !extraPill &&
       footerLinks.length === 0 &&
-      !pl &&
+      !hintElement &&
       sessionDraftCount === 0 &&
-      !ds
+      !shouldShowSubagentHint
     )
       return isFullscreen
         ? jsxProd_default(Text, {
             children: " ",
           })
         : null;
-    let hd = gd || frameFooterState || on || footerLinks.length > 0;
-    let bd = jsxProd_default(Text, {
+    let hasTailItems = taskPill || frameFooterState || extraPill || footerLinks.length > 0;
+    let separator = jsxProd_default(Text, {
       dimColor: true,
       children: " \xB7 ",
     });
-    let Od = !!(hd || Gl || Xs || kr || ls);
-    let pc = Od || ds;
-    let Kd = pc || !!pl;
-    let ec = jsxProd_default_2(Fragment, {
+    let hasHead = !!(hasTailItems || modeBox || attentionSummary || retentionPill || modelWarning);
+    let hasHeadOrSubagent = hasHead || shouldShowSubagentHint;
+    let hasAnyBeforeTail = hasHeadOrSubagent || !!hintElement;
+    let tailBox = jsxProd_default_2(Fragment, {
       children: [
-        ds &&
+        shouldShowSubagentHint &&
           jsxProd_default_2(Text, {
             wrap: "truncate",
-            children: [Od && bd, jsxProd_default(TasksForSubagentsHint, {})],
+            children: [hasHead && separator, jsxProd_default(TasksForSubagentsHint, {})],
           }),
-        pl &&
+        hintElement &&
           jsxProd_default_2(Text, {
             wrap: "truncate",
-            children: [pc && bd, pl],
+            children: [hasHeadOrSubagent && separator, hintElement],
           }),
         sessionDraftCount > 0 &&
           jsxProd_default_2(Text, {
             wrap: "truncate",
             children: [
-              Kd && bd,
+              hasAnyBeforeTail && separator,
               jsxProd_default(FeedbackDraftCount, {
                 count: sessionDraftCount,
               }),
@@ -1367,15 +1444,15 @@ function ModeIndicator({
     return jsxProd_default_2(Box, {
       height: 1,
       overflow: "hidden",
-      maxWidth: Yi ? Math.max(0, rowWidth ?? 0) : undefined,
+      maxWidth: isPillPlaced ? Math.max(0, rowWidth ?? 0) : undefined,
       children: [
         jsxProd_default_2(Box, {
           ref,
           flexShrink: 0,
           children: [
-            Gl,
-            Gl &&
-              (Xs || kr || ls || hd) &&
+            modeBox,
+            modeBox &&
+              (attentionSummary || retentionPill || modelWarning || hasTailItems) &&
               jsxProd_default(Box, {
                 flexShrink: 0,
                 children: jsxProd_default(Text, {
@@ -1383,49 +1460,49 @@ function ModeIndicator({
                   children: " \xB7 ",
                 }),
               }),
-            Xs &&
+            attentionSummary &&
               jsxProd_default_2(Box, {
                 flexShrink: 0,
                 children: [
-                  Xs,
-                  (kr || ls || hd) &&
+                  attentionSummary,
+                  (retentionPill || modelWarning || hasTailItems) &&
                     jsxProd_default(Text, {
                       dimColor: true,
                       children: " \xB7 ",
                     }),
                 ],
               }),
-            kr &&
+            retentionPill &&
               jsxProd_default_2(Box, {
                 flexShrink: 0,
                 children: [
-                  kr,
-                  (ls || hd) &&
+                  retentionPill,
+                  (modelWarning || hasTailItems) &&
                     jsxProd_default(Text, {
                       dimColor: true,
                       children: " \xB7 ",
                     }),
                 ],
               }),
-            ls &&
+            modelWarning &&
               jsxProd_default_2(Box, {
                 flexShrink: 0,
                 children: [
-                  ls,
-                  hd &&
+                  modelWarning,
+                  hasTailItems &&
                     jsxProd_default(Text, {
                       dimColor: true,
                       children: " \xB7 ",
                     }),
                 ],
               }),
-            gd &&
+            taskPill &&
               jsxProd_default_2(Box, {
                 flexShrink: 0,
                 children: [
-                  gd,
-                  Ka,
-                  (frameFooterState || on || footerLinks.length > 0) &&
+                  taskPill,
+                  manageHintBox,
+                  (frameFooterState || extraPill || footerLinks.length > 0) &&
                     jsxProd_default(Text, {
                       dimColor: true,
                       children: " \xB7 ",
@@ -1439,7 +1516,7 @@ function ModeIndicator({
                   jsxProd_default(ArtifactFramesPill, {
                     onOpen: onOpenArtifacts,
                   }),
-                  (on || footerLinks.length > 0) &&
+                  (extraPill || footerLinks.length > 0) &&
                     jsxProd_default(Text, {
                       dimColor: true,
                       children: " \xB7 ",
@@ -1448,7 +1525,7 @@ function ModeIndicator({
               }),
           ],
         }),
-        on &&
+        extraPill &&
           jsxProd_default_2(Box, {
             flexShrink: 0,
             children: [
@@ -1466,7 +1543,7 @@ function ModeIndicator({
           jsxProd_default(Box, {
             ref: ref_3,
             flexShrink: 0,
-            children: footerLinks.map((footerLink, Ku) =>
+            children: footerLinks.map((footerLink, index) =>
               jsxProd_default_2(
                 Box,
                 {
@@ -1475,7 +1552,7 @@ function ModeIndicator({
                     jsxProd_default(FooterLink, {
                       link: footerLink,
                     }),
-                    Ku < footerLinks.length - 1 &&
+                    index < footerLinks.length - 1 &&
                       jsxProd_default(Text, {
                         dimColor: true,
                         children: " \xB7 ",
@@ -1486,13 +1563,13 @@ function ModeIndicator({
               ),
             ),
           }),
-        on
+        extraPill
           ? jsxProd_default(Box, {
               ref: ref_4,
               flexShrink: 0,
-              children: ec,
+              children: tailBox,
             })
-          : ec,
+          : tailBox,
       ],
     });
   }
@@ -1505,11 +1582,13 @@ function ModeIndicator({
       t_2.key ?? t_2.url,
     ),
   );
-  let _s = [...(on ? [on.pill] : [])];
-  if (ds) _s.push(jsxProd_default(TasksForSubagentsHint, {}, "tasks-subagents"));
-  let fs = showHint ? getSpinnerHintParts(isLoading, escShortcut, todosShortcut, tasksV2, expandedView) : [];
-  if (Zi)
-    _s.push(
+  let lastItems = [...(extraPill ? [extraPill.pill] : [])];
+  if (shouldShowSubagentHint) lastItems.push(jsxProd_default(TasksForSubagentsHint, {}, "tasks-subagents"));
+  let spinnerHintParts = showHint
+    ? getSpinnerHintParts(isLoading, escShortcut, todosShortcut, tasksV2, expandedView)
+    : [];
+  if (isTeammateIdle)
+    lastItems.push(
       jsxProd_default(
         Text,
         {
@@ -1525,19 +1604,19 @@ function ModeIndicator({
         "esc-return",
       ),
     );
-  else if (showHint) _s.push(...fs);
-  let ii =
+  else if (showHint) lastItems.push(...spinnerHintParts);
+  let bgAgentsPill =
     (isBgSession() || getIsRemoteMode()) &&
     leftArrowDetachAvailable &&
     isInputEmpty &&
     !viewingAgentTaskId &&
     !vimBlocksGesture &&
     !isScreenReaderEnabled
-      ? ts
+      ? agentsPill
       : null;
-  let La =
+  let detachHint =
     !statusLineSuppressed &&
-    !Ci &&
+    !isInProcessTeammate &&
     isInputEmpty &&
     !viewingAgentTaskId &&
     !vimBlocksGesture &&
@@ -1555,35 +1634,35 @@ function ModeIndicator({
     ) &&
     getGlobalConfig().leftArrowOpensAgents !== false &&
     !isScreenReaderEnabled &&
-    ts !== null
+    agentsPill !== null
       ? jsxProd_default(
-          Kc,
+          fragmentTypeExport,
           {
-            children: ts,
+            children: agentsPill,
           },
           "fg-agents",
         )
       : null;
-  let Xa =
+  let hasVisibleRemoteTasks =
     getVisibleBackgroundTasks(tasks, taskDecorations, viewingAgentTaskId_2).length > 0 ||
     (!store && viewingAgentTaskId_2 !== undefined && isPanelOrTeammateTask(tasks[viewingAgentTaskId_2]));
-  let dl = da
+  let taskStatusPill = hasRunningTasks
     ? jsxProd_default(BackgroundTaskStatus, {
         tasksSelected,
         onOpenDialog: onOpenTasksDialog,
       })
     : null;
   if (
-    _s.length === 0 &&
-    !dl &&
-    !(mode_2 && es && hasActiveMode) &&
-    !ps &&
+    lastItems.length === 0 &&
+    !taskStatusPill &&
+    !(mode_2 && canChangeMode && hasActiveMode) &&
+    !prHint &&
     mapped.length === 0 &&
-    !ii &&
+    !bgAgentsPill &&
     showHint
   ) {
     if (!isScreenReaderEnabled)
-      _s.push(
+      lastItems.push(
         jsxProd_default(
           Text,
           {
@@ -1594,9 +1673,9 @@ function ModeIndicator({
         ),
       );
   }
-  if (La) _s.push(La);
+  if (detachHint) lastItems.push(detachHint);
   if (sessionDraftCount > 0)
-    _s.push(
+    lastItems.push(
       jsxProd_default(
         FeedbackDraftCount,
         {
@@ -1606,12 +1685,13 @@ function ModeIndicator({
       ),
     );
   let copyOnSelect = getGlobalConfig().copyOnSelect ?? true;
-  let Hd = hasSelection && (!copyOnSelect || isXtermJs());
-  if (voiceAvailable && mr) _s.push(jsxProd_default(KeepHoldingHint, {}, "voice-warmup"));
-  else if (isFullscreen && Hd) {
-    let yi = getPlatform() === "macos";
-    let Ws = yi && (selGetState()?.lastPressHadAlt ?? false);
-    _s.push(
+  let showSelectionHint = hasSelection && (!copyOnSelect || isXtermJs());
+  if (voiceAvailable && isVoiceWarmingUp)
+    lastItems.push(jsxProd_default(KeepHoldingHint, {}, "voice-warmup"));
+  else if (isFullscreen && showSelectionHint) {
+    let isMac = getPlatform() === "macos";
+    let lastPressHadAlt = isMac && (selGetState()?.lastPressHadAlt ?? false);
+    lastItems.push(
       jsxProd_default(
         Text,
         {
@@ -1624,12 +1704,12 @@ function ModeIndicator({
                   action: "copy",
                 }),
               isXtermJs() &&
-                (Ws
+                (lastPressHadAlt
                   ? jsxProd_default(Text, {
                       children: "set macOptionClickForcesSelection in VS Code settings",
                     })
                   : jsxProd_default_2(Text, {
-                      children: [yi ? "option+click" : "shift+click", " to native select"],
+                      children: [isMac ? "option+click" : "shift+click", " to native select"],
                     })),
             ],
           }),
@@ -1638,15 +1718,15 @@ function ModeIndicator({
       ),
     );
   } else if (
-    _s.length > 0 &&
+    lastItems.length > 0 &&
     showHint &&
     voiceAvailable &&
-    wn === "idle" &&
-    fs.length === 0 &&
-    ur &&
+    voiceState === "idle" &&
+    spinnerHintParts.length === 0 &&
+    voiceHintUnderCap &&
     shortcutDisplay_2 !== ""
   )
-    _s.push(
+    lastItems.push(
       jsxProd_default(
         VoiceHoldToSpeakHint,
         {
@@ -1655,8 +1735,14 @@ function ModeIndicator({
         "voice-hint",
       ),
     );
-  if ((dl || Xa) && showHint && !viewSelectionMode && !po && (!tasksSelected || shortcutDisplay_3))
-    _s.push(
+  if (
+    (taskStatusPill || hasVisibleRemoteTasks) &&
+    showHint &&
+    !viewSelectionMode &&
+    !isFrameSelected &&
+    (!tasksSelected || shortcutDisplay_3)
+  )
+    lastItems.push(
       jsxProd_default(
         Text,
         {
@@ -1674,8 +1760,8 @@ function ModeIndicator({
         "manage-tasks",
       ),
     );
-  if (po && showHint && shortcutDisplay_3)
-    _s.push(
+  if (isFrameSelected && showHint && shortcutDisplay_3)
+    lastItems.push(
       jsxProd_default(
         Text,
         {
@@ -1688,8 +1774,8 @@ function ModeIndicator({
         "view-artifacts",
       ),
     );
-  let Ss =
-    mode_2 && es
+  let permissionModePill =
+    mode_2 && canChangeMode
       ? jsxProd_default(
           Box,
           {
@@ -1698,7 +1784,7 @@ function ModeIndicator({
               mode: mode_2,
               children:
                 hasActiveMode &&
-                gs &&
+                canCycleHint &&
                 jsxProd_default_2(Text, {
                   dimColor: true,
                   children: [
@@ -1718,22 +1804,22 @@ function ModeIndicator({
           "mode",
         )
       : null;
-  if (Hi && Ss)
+  if (showOnlyMode && permissionModePill)
     return jsxProd_default(Box, {
       height: 1,
       overflow: "hidden",
-      children: Ss,
+      children: permissionModePill,
     });
   if (
-    _s.length === 0 &&
-    !dl &&
-    !Ss &&
-    !Xs &&
-    !kr &&
-    !ls &&
-    !ps &&
+    lastItems.length === 0 &&
+    !taskStatusPill &&
+    !permissionModePill &&
+    !attentionSummary &&
+    !retentionPill &&
+    !modelWarning &&
+    !prHint &&
     mapped.length === 0 &&
-    !ii &&
+    !bgAgentsPill &&
     !frameFooterState
   )
     return isFullscreen
@@ -1745,9 +1831,17 @@ function ModeIndicator({
     height: 1,
     overflow: "hidden",
     children: [
-      Ss,
-      Ss &&
-        (Xs || kr || ls || ii || ps || mapped.length > 0 || dl || frameFooterState || _s.length > 0) &&
+      permissionModePill,
+      permissionModePill &&
+        (attentionSummary ||
+          retentionPill ||
+          modelWarning ||
+          bgAgentsPill ||
+          prHint ||
+          mapped.length > 0 ||
+          taskStatusPill ||
+          frameFooterState ||
+          lastItems.length > 0) &&
         jsxProd_default(Box, {
           flexShrink: 0,
           children: jsxProd_default(Text, {
@@ -1755,60 +1849,78 @@ function ModeIndicator({
             children: " \xB7 ",
           }),
         }),
-      Xs &&
+      attentionSummary &&
         jsxProd_default_2(Box, {
           flexShrink: 0,
           children: [
-            Xs,
-            (kr || ls || ii || ps || mapped.length > 0 || dl || frameFooterState || _s.length > 0) &&
+            attentionSummary,
+            (retentionPill ||
+              modelWarning ||
+              bgAgentsPill ||
+              prHint ||
+              mapped.length > 0 ||
+              taskStatusPill ||
+              frameFooterState ||
+              lastItems.length > 0) &&
               jsxProd_default(Text, {
                 dimColor: true,
                 children: " \xB7 ",
               }),
           ],
         }),
-      kr &&
+      retentionPill &&
         jsxProd_default_2(Box, {
           flexShrink: 0,
           children: [
-            kr,
-            (ls || ii || ps || mapped.length > 0 || dl || frameFooterState || _s.length > 0) &&
+            retentionPill,
+            (modelWarning ||
+              bgAgentsPill ||
+              prHint ||
+              mapped.length > 0 ||
+              taskStatusPill ||
+              frameFooterState ||
+              lastItems.length > 0) &&
               jsxProd_default(Text, {
                 dimColor: true,
                 children: " \xB7 ",
               }),
           ],
         }),
-      ls &&
+      modelWarning &&
         jsxProd_default_2(Box, {
           flexShrink: 0,
           children: [
-            ls,
-            (ii || ps || mapped.length > 0 || dl || frameFooterState || _s.length > 0) &&
+            modelWarning,
+            (bgAgentsPill ||
+              prHint ||
+              mapped.length > 0 ||
+              taskStatusPill ||
+              frameFooterState ||
+              lastItems.length > 0) &&
               jsxProd_default(Text, {
                 dimColor: true,
                 children: " \xB7 ",
               }),
           ],
         }),
-      ii &&
+      bgAgentsPill &&
         jsxProd_default_2(Box, {
           flexShrink: 0,
           children: [
-            ii,
-            (ps || mapped.length > 0 || dl || frameFooterState || _s.length > 0) &&
+            bgAgentsPill,
+            (prHint || mapped.length > 0 || taskStatusPill || frameFooterState || lastItems.length > 0) &&
               jsxProd_default(Text, {
                 dimColor: true,
                 children: " \xB7 ",
               }),
           ],
         }),
-      ps &&
+      prHint &&
         jsxProd_default_2(Box, {
           flexShrink: 0,
           children: [
-            ps,
-            (mapped.length > 0 || dl || frameFooterState || _s.length > 0) &&
+            prHint,
+            (mapped.length > 0 || taskStatusPill || frameFooterState || lastItems.length > 0) &&
               jsxProd_default(Text, {
                 dimColor: true,
                 children: " \xB7 ",
@@ -1822,19 +1934,19 @@ function ModeIndicator({
             jsxProd_default(Byline, {
               children: mapped,
             }),
-            (dl || frameFooterState || _s.length > 0) &&
+            (taskStatusPill || frameFooterState || lastItems.length > 0) &&
               jsxProd_default(Text, {
                 dimColor: true,
                 children: " \xB7 ",
               }),
           ],
         }),
-      dl &&
+      taskStatusPill &&
         jsxProd_default_2(Box, {
           flexShrink: 0,
           children: [
-            dl,
-            (frameFooterState || _s.length > 0) &&
+            taskStatusPill,
+            (frameFooterState || lastItems.length > 0) &&
               jsxProd_default(Text, {
                 dimColor: true,
                 children: " \xB7 ",
@@ -1848,18 +1960,18 @@ function ModeIndicator({
             jsxProd_default(ArtifactFramesPill, {
               onOpen: onOpenArtifacts,
             }),
-            _s.length > 0 &&
+            lastItems.length > 0 &&
               jsxProd_default(Text, {
                 dimColor: true,
                 children: " \xB7 ",
               }),
           ],
         }),
-      _s.length > 0 &&
+      lastItems.length > 0 &&
         jsxProd_default(Text, {
           wrap: "truncate",
           children: jsxProd_default(Byline, {
-            children: _s,
+            children: lastItems,
           }),
         }),
     ],
@@ -1867,99 +1979,102 @@ function ModeIndicator({
 }
 //@ chunk-18hwfzwa.js:839108-839458 layout
 function VoiceHoldToSpeakHint(props) {
-  let $ = w(5);
+  let $ = useMemoCache(5);
   let { keyDisplay } = props;
   let { storageV5 } = useTheme_2();
-  let ee;
-  let ke;
+  let markSeenEffect;
+  let markSeenDeps;
   if ($[0] !== storageV5) {
-    ee = () => {
-      let Re = announcementState();
-      if (Re.voiceFooterHintCounted) {
+    markSeenEffect = () => {
+      let announcement = announcementState();
+      if (announcement.voiceFooterHintCounted) {
         return;
       }
-      Re.voiceFooterHintCounted = true;
+      announcement.voiceFooterHintCounted = true;
       saveGlobalConfig(incrementVoiceFooterHintSeenCount, storageV5);
     };
-    ke = [storageV5];
+    markSeenDeps = [storageV5];
     $[0] = storageV5;
-    $[1] = ee;
-    $[2] = ke;
+    $[1] = markSeenEffect;
+    $[2] = markSeenDeps;
   } else {
-    ee = $[1];
-    ke = $[2];
+    markSeenEffect = $[1];
+    markSeenDeps = $[2];
   }
-  P(ee, ke);
-  let Be;
+  useEffect(markSeenEffect, markSeenDeps);
+  let hintElement;
   if ($[3] !== keyDisplay) {
-    Be = jsxProd_default_2(Text, {
+    hintElement = jsxProd_default_2(Text, {
       dimColor: true,
       children: ["hold ", keyDisplay, " to speak"],
     });
     $[3] = keyDisplay;
-    $[4] = Be;
-  } else Be = $[4];
-  return Be;
+    $[4] = hintElement;
+  } else hintElement = $[4];
+  return hintElement;
 }
 //@ chunk-18hwfzwa.js:839458-840126 layout
-var BackgroundTaskCountPill = Rh(function (props) {
-  let $ = w(11);
-  let { count, selected, onClick } = props;
-  let [ke, Re] = y(false);
-  const inverse = selected || ke;
-  let We;
-  if ($[0] === MEMO_CACHE_SENTINEL) {
-    We = jsxProd_default_2(Text, {
-      "aria-hidden": true,
-      children: [DOWN_RIGHT_ARROW, " "],
-    });
-    $[0] = We;
-  } else We = $[0];
-  let ze;
-  if ($[1] !== count || $[2] !== inverse) {
-    ze = jsxProd_default_2(Text, {
-      color: "background",
-      inverse,
-      children: [We, count, " background"],
-    });
-    $[1] = count;
-    $[2] = inverse;
-    $[3] = ze;
-  } else ze = $[3];
-  let Xe = ze;
-  if (!onClick) {
-    return Xe;
-  }
-  let onClick_2;
-  if ($[4] !== onClick) {
-    onClick_2 = () => onClick();
-    $[4] = onClick;
-    $[5] = onClick_2;
-  } else onClick_2 = $[5];
-  let onMouseEnter;
-  let onMouseLeave;
-  if ($[6] === MEMO_CACHE_SENTINEL) {
-    onMouseEnter = () => Re(true);
-    onMouseLeave = () => Re(false);
-    $[6] = onMouseEnter;
-    $[7] = onMouseLeave;
-  } else {
-    onMouseEnter = $[6];
-    onMouseLeave = $[7];
-  }
-  let It;
-  if ($[8] !== Xe || $[9] !== onClick_2) {
-    It = jsxProd_default(Box, {
-      onClick: onClick_2,
-      onMouseEnter,
-      onMouseLeave,
-      children: Xe,
-    });
-    $[8] = Xe;
-    $[9] = onClick_2;
-    $[10] = It;
-  } else It = $[10];
-  return It;
+var BackgroundTaskCountPill; // deferred: uses Text (../../ink/components/Text.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-18hwfzwa.js:839458", () => {
+  BackgroundTaskCountPill = memo(function (props) {
+    let $ = useMemoCache(11);
+    let { count, selected, onClick } = props;
+    let [isHovered, setIsHovered] = useState(false);
+    const inverse = selected || isHovered;
+    let arrowPrefix;
+    if ($[0] === MEMO_CACHE_SENTINEL) {
+      arrowPrefix = jsxProd_default_2(Text, {
+        "aria-hidden": true,
+        children: [DOWN_RIGHT_ARROW, " "],
+      });
+      $[0] = arrowPrefix;
+    } else arrowPrefix = $[0];
+    let countElement;
+    if ($[1] !== count || $[2] !== inverse) {
+      countElement = jsxProd_default_2(Text, {
+        color: "background",
+        inverse,
+        children: [arrowPrefix, count, " background"],
+      });
+      $[1] = count;
+      $[2] = inverse;
+      $[3] = countElement;
+    } else countElement = $[3];
+    let content = countElement;
+    if (!onClick) {
+      return content;
+    }
+    let onClick_2;
+    if ($[4] !== onClick) {
+      onClick_2 = () => onClick();
+      $[4] = onClick;
+      $[5] = onClick_2;
+    } else onClick_2 = $[5];
+    let onMouseEnter;
+    let onMouseLeave;
+    if ($[6] === MEMO_CACHE_SENTINEL) {
+      onMouseEnter = () => setIsHovered(true);
+      onMouseLeave = () => setIsHovered(false);
+      $[6] = onMouseEnter;
+      $[7] = onMouseLeave;
+    } else {
+      onMouseEnter = $[6];
+      onMouseLeave = $[7];
+    }
+    let pillElement;
+    if ($[8] !== content || $[9] !== onClick_2) {
+      pillElement = jsxProd_default(Box, {
+        onClick: onClick_2,
+        onMouseEnter,
+        onMouseLeave,
+        children: content,
+      });
+      $[8] = content;
+      $[9] = onClick_2;
+      $[10] = pillElement;
+    } else pillElement = $[10];
+    return pillElement;
+  });
 });
 //@ chunk-18hwfzwa.js:840126-840417 fingerprint = getSpinnerHintParts (0.72)
 function getSpinnerHintParts(isLoading, chord, chord_2, tasksV2, expandedView) {
@@ -2011,25 +2126,22 @@ function isPrStatusEnabled(terminalFocusState) {
 }
 //@ chunk-18hwfzwa.js:840503-840627 placement
 function TasksForSubagentsHint() {
-  let $ = w(1);
-  let x;
+  let $ = useMemoCache(1);
+  let hintElement;
   if ($[0] === MEMO_CACHE_SENTINEL) {
-    x = jsxProd_default(Text, {
+    hintElement = jsxProd_default(Text, {
       dimColor: true,
       children: "/tasks to see subagents",
     });
-    $[0] = x;
-  } else x = $[0];
-  return x;
+    $[0] = hintElement;
+  } else hintElement = $[0];
+  return hintElement;
 }
 //@ chunk-18hwfzwa.js:840627-840631 placement
-init_react_production();
-//@ chunk-5cp2fssw.js:14565-14629 fingerprint = ProactiveCountdown (0.737)
-function ProactiveCountdown(e) {
-  return formatDuration(Math.max(0, e), {
-    mostSignificantOnly: true,
-  });
-}
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:840627", () => {
+  init_react_production();
+});
 export {
   permissionModeLabelLower,
   PermissionModeLabel,

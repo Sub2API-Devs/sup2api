@@ -8,36 +8,40 @@
  * pieces: chunk-7p2hc4jn.js (3)
  * attribution: placement 3
  */
-import { init_react_production, P } from "../../vendor/react/cjs/react.production.js";
+import { init_react_production, useEffect } from "../../vendor/react/cjs/react.production.js";
 import { getFocusManager } from "../ink/focus.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-7p2hc4jn.js:1920-1924 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-7p2hc4jn.js:1920", () => {
+  init_react_production();
+});
 //@ chunk-7p2hc4jn.js:1924-2265 placement
 /**
  * 激活时让元素获得焦点，并在焦点被移到别处（不是其子孙）时抢回；不激活且 blurWhenInactive 时失焦。
  */
 function useFocusOnMount(ref, active, blurWhenInactive = false) {
-  P(() => {
-    let s = ref.current;
-    if (!s) return;
-    let focusManager = getFocusManager(s);
+  useEffect(() => {
+    let element = ref.current;
+    if (!element) return;
+    let focusManager = getFocusManager(element);
     if (!active) {
-      if (blurWhenInactive && focusManager.activeElement === s) focusManager.blur();
+      if (blurWhenInactive && focusManager.activeElement === element) focusManager.blur();
       return;
     }
-    focusManager.focus(s);
+    focusManager.focus(element);
     return focusManager.subscribe(() => {
-      let u = ref.current;
-      if (!u || focusManager.activeElement === u) return;
+      let currentElement = ref.current;
+      if (!currentElement || focusManager.activeElement === currentElement) return;
       if (!focusManager.activeElement) {
-        focusManager.focus(u);
+        focusManager.focus(currentElement);
         return;
       }
-      let parentNode = u.parentNode;
+      let parentNode = currentElement.parentNode;
       while (parentNode) {
         if (parentNode === focusManager.activeElement) {
-          focusManager.focus(u);
+          focusManager.focus(currentElement);
           return;
         }
         parentNode = parentNode.parentNode;
@@ -46,5 +50,8 @@ function useFocusOnMount(ref, active, blurWhenInactive = false) {
   }, [active, ref, blurWhenInactive]);
 }
 //@ chunk-7p2hc4jn.js:2265-2269 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-7p2hc4jn.js:2265", () => {
+  init_react_production();
+});
 export { useFocusOnMount };

@@ -10,6 +10,7 @@
  */
 import { HostScoped } from "./hostScoped.js";
 import { getRootSession } from "../bootstrap/state.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-pqycqpxn.js:261-1563 placement
 /**
@@ -59,7 +60,10 @@ class SessionPathsCache {
   }
 }
 //@ chunk-pqycqpxn.js:1563-1586 placement
-var sessionPathsCacheSlot = new HostScoped(() => new SessionPathsCache());
+var sessionPathsCacheSlot; // deferred: uses SessionPathsCache of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-pqycqpxn.js:1563", () => {
+  sessionPathsCacheSlot = new HostScoped(() => new SessionPathsCache());
+});
 //@ chunk-pqycqpxn.js:1586-1622 placement
 /**
  * 取当前宿主的会话路径缓存。

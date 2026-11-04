@@ -19,7 +19,7 @@ import { NOTEBOOK_EDIT_TOOL_NAME } from "../../tools/NotebookEditTool/constants.
 import { POWERSHELL_TOOL_NAME } from "../../tools/PowerShellTool/toolName.js";
 import { SEND_USER_FILE_TOOL_NAME } from "../../tools/SendUserFileTool/prompt.js";
 import { REFUSED_INPUT_FIELDS_WHEN_SANDBOX_REQUIRED } from "../../tools/BashTool/BashTool.js";
-import { Uo } from "../../../vendor/@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
+import { omitAlias } from "../../../vendor/@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
 import { getTools } from "../../tools.js";
 import { getEmptyToolPermissionContext, toolMatchesName, getToolRemoteExecution } from "../../Tool.js";
 import { isMultiEntryAliasTool } from "../../services/tools/permissionCheckGuard.js";
@@ -35,6 +35,7 @@ import { AGENT } from "../../tools/AgentTool/constants.js";
 import { AGENT_TYPES_NOTE } from "../../constants/promptSections.js";
 import { HOST_TOOL_INPUT_FIELD } from "../../bridge/deviceRegistration.js";
 import { getHostAgentPolicy, runWithHostAgentPolicy, HostAgentPolicy } from "../../utils/hostAgentPolicy.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-387jwn0v.js:796-842 placement
 var serveModeDefaultAppState = () =>
@@ -45,67 +46,74 @@ var serveModeDefaultAppState = () =>
 /**
  * 导出值：同一声明里的多个绑定：SERVE_MODE_KEYS（标识 serve 模式的键集合）；SERVE_MODE_VALUE（serve 模式取值）。
  */
-var SERVE_MODE_CORE_TOOLS = new Set([
-  BASH_TOOL_NAME,
-  FILE_READ_TOOL_NAME,
-  FILE_EDIT_TOOL_NAME,
-  FILE_WRITE_TOOL_NAME,
-  GREP_TOOL_NAME,
-  GLOB_TOOL_NAME,
-  NOTEBOOK_EDIT_TOOL_NAME,
-  POWERSHELL_TOOL_NAME,
-]);
-var SERVE_MODE_KEYS = new Set([SEND_USER_FILE_TOOL_NAME]);
-var SERVE_MODE_VALUE = REFUSED_INPUT_FIELDS_WHEN_SANDBOX_REQUIRED;
+var SERVE_MODE_CORE_TOOLS; // deferred: uses GREP_TOOL_NAME (../../tools/GrepTool/prompt.js) of its import cycle while loading; runs once the cycle is complete
+var SERVE_MODE_KEYS;
+var SERVE_MODE_VALUE;
+deferInit("chunk-387jwn0v.js:842", () => {
+  SERVE_MODE_CORE_TOOLS = new Set([
+    BASH_TOOL_NAME,
+    FILE_READ_TOOL_NAME,
+    FILE_EDIT_TOOL_NAME,
+    FILE_WRITE_TOOL_NAME,
+    GREP_TOOL_NAME,
+    GLOB_TOOL_NAME,
+    NOTEBOOK_EDIT_TOOL_NAME,
+    POWERSHELL_TOOL_NAME,
+  ]);
+  SERVE_MODE_KEYS = new Set([SEND_USER_FILE_TOOL_NAME]);
+  SERVE_MODE_VALUE = REFUSED_INPUT_FIELDS_WHEN_SANDBOX_REQUIRED;
+});
 //@ chunk-387jwn0v.js:909-968 placement
-function coerceServedInput(e, o) {
-  return e.coerceInput?.(Uo(o, SERVE_MODE_VALUE))?.input;
+function coerceServedInput(tool, rawInput) {
+  return tool.coerceInput?.(omitAlias(rawInput, SERVE_MODE_VALUE))?.input;
 }
 //@ chunk-387jwn0v.js:968-1013 placement
-function serveModeInput(e, o) {
-  return coerceServedInput(e, o) ?? Uo(o, SERVE_MODE_VALUE);
+function serveModeInput(tool, rawInput) {
+  return coerceServedInput(tool, rawInput) ?? omitAlias(rawInput, SERVE_MODE_VALUE);
 }
 //@ chunk-387jwn0v.js:1013-1072 placement
-function parseServeModeInput(e, o) {
-  return e.inputSchema.safeParse(serveModeInput(e, o));
+function parseServeModeInput(tool, rawInput) {
+  return tool.inputSchema.safeParse(serveModeInput(tool, rawInput));
 }
 //@ chunk-387jwn0v.js:1072-1170 placement
-function strippedPrivilegeFieldsNote(e) {
-  return `[serve-mode] Stripped client-supplied privilege field(s): ${e.join(", ")}`;
+function strippedPrivilegeFieldsNote(fields) {
+  return `[serve-mode] Stripped client-supplied privilege field(s): ${fields.join(", ")}`;
 }
 //@ chunk-387jwn0v.js:1170-1404 placement
-function omitSchemaProperties(e, o) {
-  if (e.properties === undefined || o.length === 0) return e;
-  let s = {
-    ...e.properties,
+function omitSchemaProperties(schema, fields) {
+  if (schema.properties === undefined || fields.length === 0) return schema;
+  let properties = {
+    ...schema.properties,
   };
-  for (let i of o) delete s[i];
-  let required = Array.isArray(e.required) ? e.required.filter((i) => !o.includes(i)) : e.required;
+  for (let field of fields) delete properties[field];
+  let required = Array.isArray(schema.required)
+    ? schema.required.filter((field) => !fields.includes(field))
+    : schema.required;
   return {
-    ...e,
-    properties: s,
+    ...schema,
+    properties,
     required,
   };
 }
 //@ chunk-387jwn0v.js:1404-1727 placement
-function serveModeTools(e, { skipSearchToolRestore: o = false } = {}) {
+function serveModeTools(isHttp, { skipSearchToolRestore = false } = {}) {
   let filtered = getTools(getEmptyToolPermissionContext(), {
     skipReplFilter: true,
-    skipSimpleModeFilter: e,
-    ...(e && {
+    skipSimpleModeFilter: isHttp,
+    ...(isHttp && {
       onlyNames: SERVE_MODE_CORE_TOOLS,
     }),
-  }).filter((t) => !isMultiEntryAliasTool(t));
-  if (!e) return filtered;
-  let filtered_2 = filtered.filter((t) => SERVE_MODE_CORE_TOOLS.has(t.name));
-  if (o) return filtered_2;
+  }).filter((tool) => !isMultiEntryAliasTool(tool));
+  if (!isHttp) return filtered;
+  let filtered_2 = filtered.filter((tool) => SERVE_MODE_CORE_TOOLS.has(tool.name));
+  if (skipSearchToolRestore) return filtered_2;
   let shadowedSearchToolNames = getShadowedSearchToolNames();
   let filtered_3 = [GlobTool, GrepTool].filter(
-    (t) =>
-      shadowedSearchToolNames.has(t.name) &&
-      SERVE_MODE_CORE_TOOLS.has(t.name) &&
-      !filtered_2.includes(t) &&
-      t.isEnabled(),
+    (searchTool) =>
+      shadowedSearchToolNames.has(searchTool.name) &&
+      SERVE_MODE_CORE_TOOLS.has(searchTool.name) &&
+      !filtered_2.includes(searchTool) &&
+      searchTool.isEnabled(),
   );
   return [...filtered_2, ...filtered_3];
 }
@@ -113,61 +121,63 @@ function serveModeTools(e, { skipSearchToolRestore: o = false } = {}) {
 /**
  * 为 claude mcp serve 构建对外提供的工具集与 agent 定义（http 模式不含 agent 列表）。
  */
-async function buildServeModeToolset(e, o = {}, s) {
-  let r = e === "http";
+async function buildServeModeToolset(transportKind, options = {}, modelOptions) {
+  let isHttp = transportKind === "http";
   let emptyToolPermissionContext = getEmptyToolPermissionContext();
-  let p = serveModeTools(r, o);
-  let t = o.agentDefinitions ?? {
+  let tools = serveModeTools(isHttp, options);
+  let agentDefinitions = options.agentDefinitions ?? {
     activeAgents: [],
     allAgents: [],
   };
-  let d = r
+  let agents = isHttp
     ? []
     : await getDispatchableAgents(
-        filterAgentsByMcpRequirements(t.activeAgents, []),
-        t.allowedAgentTypes,
+        filterAgentsByMcpRequirements(agentDefinitions.activeAgents, []),
+        agentDefinitions.allowedAgentTypes,
         emptyToolPermissionContext,
       );
-  let u =
-    d.length > 0
+  let agentListText =
+    agents.length > 0
       ? `Available agent types:
-${d.map((n) => formatAgentLine(n, false)).join(`
+${agents.map((agent) => formatAgentLine(agent, false)).join(`
 `)}`
       : "";
   let fn = () =>
     Promise.all(
-      p.map(async (n) => {
-        let T = toolInputJsonSchema(n.inputSchema);
-        let { remoteExecution, outputSchemaAcrossProcesses, ...f } = n;
-        let l = await n.prompt({
+      tools.map(async (tool) => {
+        let inputJsonSchema = toolInputJsonSchema(tool.inputSchema);
+        let { remoteExecution, outputSchemaAcrossProcesses, ...toolRest } = tool;
+        let description = await tool.prompt({
           getToolPermissionContext: async () => emptyToolPermissionContext,
-          tools: p,
-          agents: t.activeAgents,
-          ...(s !== undefined && {
-            model: s.model,
-            leanPrompt: s.leanPrompt,
+          tools,
+          agents: agentDefinitions.activeAgents,
+          ...(modelOptions !== undefined && {
+            model: modelOptions.model,
+            leanPrompt: modelOptions.leanPrompt,
             bashFirstTrimmed: false,
           }),
         });
         return {
-          ...f,
-          description: toolMatchesName(n, WEBSEARCH)
-            ? fillMonthYear(l)
-            : toolMatchesName(n, AGENT)
-              ? l.replace(
-                  l.includes(AGENT_LIST_IN_REMINDER_NOTE) ? AGENT_LIST_IN_REMINDER_NOTE : AGENT_TYPES_NOTE,
-                  () => u,
+          ...toolRest,
+          description: toolMatchesName(tool, WEBSEARCH)
+            ? fillMonthYear(description)
+            : toolMatchesName(tool, AGENT)
+              ? description.replace(
+                  description.includes(AGENT_LIST_IN_REMINDER_NOTE)
+                    ? AGENT_LIST_IN_REMINDER_NOTE
+                    : AGENT_TYPES_NOTE,
+                  () => agentListText,
                 )
-              : l,
-          inputSchema: omitSchemaProperties(T, [
-            ...(r ? SERVE_MODE_VALUE : []),
-            ...(getToolRemoteExecution(n).supported ? [HOST_TOOL_INPUT_FIELD] : []),
+              : description,
+          inputSchema: omitSchemaProperties(inputJsonSchema, [
+            ...(isHttp ? SERVE_MODE_VALUE : []),
+            ...(getToolRemoteExecution(tool).supported ? [HOST_TOOL_INPUT_FIELD] : []),
           ]),
           outputSchema: undefined,
         };
       }),
     );
-  if (!r) return fn();
+  if (!isHttp) return fn();
   let hostAgentPolicy = getHostAgentPolicy();
   if (
     hostAgentPolicy.backgroundTasksDisabled &&
@@ -175,7 +185,7 @@ ${d.map((n) => formatAgentLine(n, false)).join(`
     !hostAgentPolicy.backgroundShellsKeptElsewhere
   )
     return fn();
-  for (let n of p) n.inputSchema;
+  for (let tool of tools) tool.inputSchema;
   return runWithHostAgentPolicy(restrictHostAgentPolicy(), fn);
 }
 //@ chunk-387jwn0v.js:2616-2707 placement

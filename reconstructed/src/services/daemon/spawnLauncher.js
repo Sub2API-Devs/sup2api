@@ -5,8 +5,8 @@
  *
  * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
  * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-ksvdmrg0.js (47)
- * attribution: placement 47
+ * pieces: chunk-ksvdmrg0.js (46)
+ * attribution: placement 46
  */
 import { stat, mkdtemp, open, access, realpath, readdir } from "fs/promises";
 import { join, dirname } from "path";
@@ -29,12 +29,12 @@ import {
 import {
   processWrapperError,
   isProcessWrapperUsable,
-  PROCESS_WRAPPER_ENV_2,
+  PROCESS_WRAPPER_ENV,
   processWrapperArgv,
   processWrapperState,
 } from "../../utils/processWrapper.js";
 import { logFeatureBad, logFeatureSad } from "../analytics/featureTelemetry.js";
-import { withHostOwnedEnv } from "../../utils/settings/managedSettingsFiles.js";
+import { withHostOwnedEnv } from "../../utils/settings/hostEnvWrites.js";
 import {
   getLaunchCommand,
   resolveClaudePath,
@@ -84,6 +84,7 @@ import { BG_PROTO } from "./leaseProtocol.js";
 import { procIdentityOf } from "../../utils/processIdentity.js";
 import { getModeFromInput } from "../../components/PromptInput/inputModes.js";
 import { writeStateAtomic, logJobWriteError } from "./jobState.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-ksvdmrg0.js:6521-6888 placement
 /**
@@ -111,7 +112,10 @@ class SpawnLauncherState {
 /**
  * 按宿主保存的启动器状态。
  */
-var spawnLauncherState = new HostScoped(() => new SpawnLauncherState());
+var spawnLauncherState; // deferred: uses SpawnLauncherState of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-ksvdmrg0.js:6888", () => {
+  spawnLauncherState = new HostScoped(() => new SpawnLauncherState());
+});
 //@ chunk-ksvdmrg0.js:6913-6950 placement
 /**
  * 取当前宿主的启动器状态。
@@ -130,11 +134,11 @@ var HOMEBREW_CASK_RE = /^(.+)\/Caskroom\/[^/]+\/[^/]+\/claude$/;
 var NPM_SCOPE_SEGMENT = "/node_modules/@anthropic-ai/";
 var FRESH_STUB_MS = 60000;
 //@ chunk-ksvdmrg0.js:7396-7613 placement
-async function classifyBinaryStub(r) {
+async function classifyBinaryStub(path) {
   try {
-    let e = await stat(r);
-    if (!e.isFile() || e.size >= MAX_BINARY_PROBE_BYTES) return "present";
-    return Date.now() - Math.max(e.mtimeMs, e.ctimeMs) < FRESH_STUB_MS ? "fresh_stub" : "stale_stub";
+    let stats = await stat(path);
+    if (!stats.isFile() || stats.size >= MAX_BINARY_PROBE_BYTES) return "present";
+    return Date.now() - Math.max(stats.mtimeMs, stats.ctimeMs) < FRESH_STUB_MS ? "fresh_stub" : "stale_stub";
   } catch (error) {
     return getErrnoCode(error) === "ENOENT" ? "missing" : "present";
   }
@@ -143,27 +147,30 @@ async function classifyBinaryStub(r) {
 /**
  * 启动失败时值得重试的错误码集合。
  */
-var SPAWN_FAILURE_CODES = new Set([
-  "ENOENT",
-  "EACCES",
-  "ENOEXEC",
-  "EFTYPE",
-  "ETXTBSY",
-  "EBUSY",
-  "EUNKNOWN",
-  "EPERM",
-]);
+var SPAWN_FAILURE_CODES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-ksvdmrg0.js:7613", () => {
+  SPAWN_FAILURE_CODES = new Set([
+    "ENOENT",
+    "EACCES",
+    "ENOEXEC",
+    "EFTYPE",
+    "ETXTBSY",
+    "EBUSY",
+    "EUNKNOWN",
+    "EPERM",
+  ]);
+});
 //@ chunk-ksvdmrg0.js:7705-11317 placement
 /**
  * 解析 CLAUDE_CODE_PROCESS_WRAPPER 等后台启动器配置
  */
-async function resolveAgentLauncher(r, e, { withoutOAuthTokenEnv: n = false } = {}) {
-  let s = processWrapperError();
-  if (s) {
+async function resolveAgentLauncher(args, storageV5, { withoutOAuthTokenEnv = false } = {}) {
+  let wrapperError = processWrapperError();
+  if (wrapperError) {
     logFeatureBad("agent_launcher", "invalid_config");
     return {
       err: new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        s,
+        wrapperError,
         "CLAUDE_CODE_PROCESS_WRAPPER is misconfigured",
       ),
     };
@@ -172,7 +179,7 @@ async function resolveAgentLauncher(r, e, { withoutOAuthTokenEnv: n = false } = 
     logFeatureBad("agent_launcher", "launcher_not_runnable");
     return {
       err: new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        `${PROCESS_WRAPPER_ENV_2}: launcher \`${processWrapperArgv()[0]}\` was deleted or is not executable \u2014 restore it (or fix the setting); background sessions are not started unwrapped`,
+        `${PROCESS_WRAPPER_ENV}: launcher \`${processWrapperArgv()[0]}\` was deleted or is not executable \u2014 restore it (or fix the setting); background sessions are not started unwrapped`,
         "CLAUDE_CODE_PROCESS_WRAPPER launcher is not runnable",
       ),
     };
@@ -182,192 +189,204 @@ async function resolveAgentLauncher(r, e, { withoutOAuthTokenEnv: n = false } = 
     invocation: getLaunchCommand(),
   }));
   let { cmd, prefixArgs, target } = invocation;
-  let R = [cmd, ...prefixArgs, ...r];
+  let fullArgv = [cmd, ...prefixArgs, ...args];
   let env = forwardedEnv({
-    dropShellOAuthToken: n || (await hasStoredRefreshToken(e)),
+    dropShellOAuthToken: withoutOAuthTokenEnv || (await hasStoredRefreshToken(storageV5)),
   });
   if (getPlatform() === "windows") {
     if (processWrapperState().platformIgnored) logFeatureSad("agent_launcher", "platform_unsupported");
-    let O = await spawnViaWin32ProcessCreate(R, env);
-    if (O.ok)
+    let wmiResult = await spawnViaWin32ProcessCreate(fullArgv, env);
+    if (wmiResult.ok)
       return {
         err: null,
       };
     logForDebugging(
-      `daemon: WMI spawn failed (${O.reason}); falling back to direct spawn \u2014 daemon will not survive SSH/terminal close`,
+      `daemon: WMI spawn failed (${wmiResult.reason}); falling back to direct spawn \u2014 daemon will not survive SSH/terminal close`,
       {
         level: "warn",
       },
     );
     logEvent("tengu_bg_daemon_wmi_fallback", {
-      timeout: O.reason === "timeout",
-      enoent: O.reason === "enoent",
-      no_powershell: O.reason === "no-powershell",
-      rc: O.rc,
+      timeout: wmiResult.reason === "timeout",
+      enoent: wmiResult.reason === "enoent",
+      no_powershell: wmiResult.reason === "no-powershell",
+      rc: wmiResult.rc,
     });
   }
-  let x = getPlatform() === "macos" ? await getMacosAquaSessionWrapper() : [];
-  let L = await mkdtemp(join(tmpdir(), "cc-daemon-")).catch(() => null);
-  let M = L ? join(L, "stderr.log") : undefined;
-  let U = M ? await open(M, "w").catch(() => null) : null;
+  let aquaWrapper = getPlatform() === "macos" ? await getMacosAquaSessionWrapper() : [];
+  let tempDir = await mkdtemp(join(tmpdir(), "cc-daemon-")).catch(() => null);
+  let stderrPath = tempDir ? join(tempDir, "stderr.log") : undefined;
+  let stderrFile = stderrPath ? await open(stderrPath, "w").catch(() => null) : null;
   try {
     if (wrapper.length > 0)
       return {
-        ...(await spawnDaemonProcess(r, env, x, U)),
-        stderrPath: M,
+        ...(await spawnDaemonProcess(args, env, aquaWrapper, stderrFile)),
+        stderrPath,
       };
-    let detachedWithHomeCwd = await spawnDetachedWithHomeCwd(await prependLauncherPrefix(x, R), env, U?.fd);
+    let detachedWithHomeCwd = await spawnDetachedWithHomeCwd(
+      await prependLauncherPrefix(aquaWrapper, fullArgv),
+      env,
+      stderrFile?.fd,
+    );
     let { err } = detachedWithHomeCwd;
     let errnoCode = getErrnoCode(err);
     let gaveUpOnNpmInstallInProgress = false;
-    let V;
+    let reinstallWaitedMs;
     if (errnoCode !== undefined && SPAWN_FAILURE_CODES.has(errnoCode) && isNpmScopePath(target)) {
-      let y = await waitForBinaryRecovery(target);
-      gaveUpOnNpmInstallInProgress = !y.recovered && y.installInProgressAtEnd;
-      V = y.waitedMs;
-      if (y.recovered) {
+      let recovery = await waitForBinaryRecovery(target);
+      gaveUpOnNpmInstallInProgress = !recovery.recovered && recovery.installInProgressAtEnd;
+      reinstallWaitedMs = recovery.waitedMs;
+      if (recovery.recovered) {
         if (getPlatform() === "windows")
-          detachedWithHomeCwd = (await spawnViaWin32ProcessCreate(R, env)).ok
+          detachedWithHomeCwd = (await spawnViaWin32ProcessCreate(fullArgv, env)).ok
             ? {
                 err: null,
               }
-            : await spawnDetachedWithHomeCwd(R, env, U?.fd);
+            : await spawnDetachedWithHomeCwd(fullArgv, env, stderrFile?.fd);
         else
-          detachedWithHomeCwd = await spawnDetachedWithHomeCwd(await prependLauncherPrefix(x, R), env, U?.fd);
+          detachedWithHomeCwd = await spawnDetachedWithHomeCwd(
+            await prependLauncherPrefix(aquaWrapper, fullArgv),
+            env,
+            stderrFile?.fd,
+          );
         errnoCode = getErrnoCode(detachedWithHomeCwd.err);
       }
       logEvent("tengu_bg_daemon_spawn_reinstall_wait", {
-        waited_ms: y.waitedMs,
-        recovered: y.recovered,
-        respawn_ok: y.recovered && detachedWithHomeCwd.err === null,
-        extended: y.extended,
-        install_in_progress: y.installInProgressAtEnd,
+        waited_ms: recovery.waitedMs,
+        recovered: recovery.recovered,
+        respawn_ok: recovery.recovered && detachedWithHomeCwd.err === null,
+        extended: recovery.extended,
+        install_in_progress: recovery.installInProgressAtEnd,
         errno: sanitizeErrnoForTelemetry(err) ?? lit("unknown"),
-        ...(y.recovered &&
+        ...(recovery.recovered &&
           detachedWithHomeCwd.err !== null && {
             respawn_errno: sanitizeErrnoForTelemetry(detachedWithHomeCwd.err) ?? lit("unknown"),
           }),
       });
-      if (y.recovered && detachedWithHomeCwd.err === null) {
+      if (recovery.recovered && detachedWithHomeCwd.err === null) {
         logForDebugging(
-          `daemon: ${target} was being reinstalled (exec ${getErrnoCode(err)}); started it after ${y.waitedMs}ms`,
+          `daemon: ${target} was being reinstalled (exec ${getErrnoCode(err)}); started it after ${recovery.waitedMs}ms`,
         );
         return {
           ...detachedWithHomeCwd,
-          stderrPath: M,
+          stderrPath,
           recoveredAfterReinstallWait: true,
-          reinstallWaitedMs: V,
+          reinstallWaitedMs,
         };
       }
       logForDebugging(
-        y.recovered
-          ? `daemon: ${target} came back after ${y.waitedMs}ms of an npm reinstall but starting it failed again (exec ${getErrnoCode(detachedWithHomeCwd.err)})`
-          : `daemon: ${target} not runnable after waiting ${y.waitedMs}ms for an npm reinstall (exec ${getErrnoCode(err)}; install ${y.installInProgressAtEnd ? "still in progress" : y.extended ? "ended" : "not seen"})`,
+        recovery.recovered
+          ? `daemon: ${target} came back after ${recovery.waitedMs}ms of an npm reinstall but starting it failed again (exec ${getErrnoCode(detachedWithHomeCwd.err)})`
+          : `daemon: ${target} not runnable after waiting ${recovery.waitedMs}ms for an npm reinstall (exec ${getErrnoCode(err)}; install ${recovery.installInProgressAtEnd ? "still in progress" : recovery.extended ? "ended" : "not seen"})`,
       );
     }
-    let Z = {
+    let recoveryInfo = {
       gaveUpOnNpmInstallInProgress,
-      reinstallWaitedMs: V,
+      reinstallWaitedMs,
     };
     if (errnoCode !== "ENOENT" && errnoCode !== "EACCES")
       return {
         ...detachedWithHomeCwd,
-        stderrPath: M,
-        ...Z,
+        stderrPath,
+        ...recoveryInfo,
       };
-    let ae = new Set([target]);
-    let u = withHostOwnedEnv(() =>
+    let triedTargets = new Set([target]);
+    let pinned = withHostOwnedEnv(() =>
       getLaunchCommand({
         pinToCurrentBinary: true,
       }),
     );
-    if (!ae.has(u.target)) {
-      ae.add(u.target);
+    if (!triedTargets.has(pinned.target)) {
+      triedTargets.add(pinned.target);
       logEvent("tengu_bg_daemon_spawn_execpath_fallback", {
         errno_enoent: errnoCode === "ENOENT",
         errno_eacces: errnoCode === "EACCES",
       });
       let detachedWithHomeCwd = await spawnDetachedWithHomeCwd(
-        await prependLauncherPrefix(x, [u.cmd, ...u.prefixArgs, ...r]),
+        await prependLauncherPrefix(aquaWrapper, [pinned.cmd, ...pinned.prefixArgs, ...args]),
         env,
-        U?.fd,
+        stderrFile?.fd,
       );
       if (getErrnoCode(detachedWithHomeCwd.err) !== "ENOENT")
         return {
           ...detachedWithHomeCwd,
-          stderrPath: M,
-          ...Z,
+          stderrPath,
+          ...recoveryInfo,
         };
     }
-    let { link, waitedMs } = await waitForHomebrewLink(u.target);
-    if (waitedMs > 0) Z.reinstallWaitedMs = (V ?? 0) + waitedMs;
-    if (link !== null && !ae.has(link)) {
-      ae.add(link);
+    let { link, waitedMs } = await waitForHomebrewLink(pinned.target);
+    if (waitedMs > 0) recoveryInfo.reinstallWaitedMs = (reinstallWaitedMs ?? 0) + waitedMs;
+    if (link !== null && !triedTargets.has(link)) {
+      triedTargets.add(link);
       logEvent("tengu_bg_daemon_spawn_homebrew_fallback", {
         errno_enoent: errnoCode === "ENOENT",
         errno_eacces: errnoCode === "EACCES",
         waited_ms: waitedMs,
       });
       let detachedWithHomeCwd = await spawnDetachedWithHomeCwd(
-        await prependLauncherPrefix(x, [link, ...r]),
+        await prependLauncherPrefix(aquaWrapper, [link, ...args]),
         env,
-        U?.fd,
+        stderrFile?.fd,
       );
       if (detachedWithHomeCwd.err === null)
         return {
           ...detachedWithHomeCwd,
-          stderrPath: M,
-          ...Z,
+          stderrPath,
+          ...recoveryInfo,
           recoveredAfterReinstallWait: waitedMs > 0,
         };
     }
     let claudePath = resolveClaudePath();
-    if (!ae.has(claudePath)) {
-      ae.add(claudePath);
+    if (!triedTargets.has(claudePath)) {
+      triedTargets.add(claudePath);
       logEvent("tengu_bg_daemon_spawn_launcher_fallback", {
         errno_enoent: errnoCode === "ENOENT",
         errno_eacces: errnoCode === "EACCES",
       });
       let detachedWithHomeCwd = await spawnDetachedWithHomeCwd(
-        await prependLauncherPrefix(x, [claudePath, ...r]),
+        await prependLauncherPrefix(aquaWrapper, [claudePath, ...args]),
         env,
-        U?.fd,
+        stderrFile?.fd,
       );
       if (getErrnoCode(detachedWithHomeCwd.err) !== "ENOENT")
         return {
           ...detachedWithHomeCwd,
-          stderrPath: M,
-          ...Z,
+          stderrPath,
+          ...recoveryInfo,
         };
     }
     let latestInstalledVersion = await findLatestInstalledVersion();
     logEvent("tengu_bg_daemon_spawn_versions_fallback", {
       found: latestInstalledVersion !== null,
     });
-    if (latestInstalledVersion !== null && !ae.has(latestInstalledVersion))
+    if (latestInstalledVersion !== null && !triedTargets.has(latestInstalledVersion))
       return {
         ...(await spawnDetachedWithHomeCwd(
-          await prependLauncherPrefix(x, [latestInstalledVersion, ...r]),
+          await prependLauncherPrefix(aquaWrapper, [latestInstalledVersion, ...args]),
           env,
-          U?.fd,
+          stderrFile?.fd,
         )),
-        stderrPath: M,
-        ...Z,
+        stderrPath,
+        ...recoveryInfo,
       };
     return {
       err,
-      stderrPath: M,
-      ...Z,
+      stderrPath,
+      ...recoveryInfo,
     };
   } finally {
-    await U?.close().catch(() => {});
+    await stderrFile?.close().catch(() => {});
   }
 }
 //@ chunk-ksvdmrg0.js:11317-12822 placement
-async function spawnDaemonProcess(r, e, n, s) {
-  let h = async (launchTarget) => {
-    let M = withHostOwnedEnv(() => withProcessWrapper(launchTarget));
-    return spawnDetachedWithHomeCwd(await prependLauncherPrefix(n, [M.cmd, ...M.prefixArgs, ...r]), e, s?.fd);
+async function spawnDaemonProcess(args, env, aquaWrapper, stderrFile) {
+  let spawnWith = async (target) => {
+    let invocation = withHostOwnedEnv(() => withProcessWrapper(target));
+    return spawnDetachedWithHomeCwd(
+      await prependLauncherPrefix(aquaWrapper, [invocation.cmd, ...invocation.prefixArgs, ...args]),
+      env,
+      stderrFile?.fd,
+    );
   };
   let launchTarget = resolveLaunchTarget();
   if (
@@ -375,27 +394,27 @@ async function spawnDaemonProcess(r, e, n, s) {
       rejectNpmStub: true,
     })
   )
-    return h(launchTarget);
+    return spawnWith(launchTarget);
   let gaveUpOnNpmInstallInProgress = false;
-  let E;
+  let reinstallWaitedMs;
   if (isNpmScopePath(launchTarget.cmd)) {
-    let L = await waitForBinaryRecovery(launchTarget.cmd);
-    E = L.waitedMs;
+    let recovery = await waitForBinaryRecovery(launchTarget.cmd);
+    reinstallWaitedMs = recovery.waitedMs;
     logEvent("tengu_bg_daemon_spawn_reinstall_wait", {
-      waited_ms: L.waitedMs,
-      recovered: L.recovered,
-      respawn_ok: L.recovered,
-      extended: L.extended,
-      install_in_progress: L.installInProgressAtEnd,
+      waited_ms: recovery.waitedMs,
+      recovered: recovery.recovered,
+      respawn_ok: recovery.recovered,
+      extended: recovery.extended,
+      install_in_progress: recovery.installInProgressAtEnd,
       probe: true,
     });
-    if (L.recovered)
+    if (recovery.recovered)
       return {
-        ...(await h(launchTarget)),
+        ...(await spawnWith(launchTarget)),
         recoveredAfterReinstallWait: true,
-        reinstallWaitedMs: E,
+        reinstallWaitedMs,
       };
-    gaveUpOnNpmInstallInProgress = L.installInProgressAtEnd;
+    gaveUpOnNpmInstallInProgress = recovery.installInProgressAtEnd;
   }
   let launchTarget_2 = resolveLaunchTarget({
     pinToCurrentBinary: true,
@@ -407,12 +426,12 @@ async function spawnDaemonProcess(r, e, n, s) {
       probe: true,
     });
     return {
-      ...(await h(launchTarget_2)),
-      reinstallWaitedMs: E,
+      ...(await spawnWith(launchTarget_2)),
+      reinstallWaitedMs,
     };
   }
   let { link, waitedMs } = await waitForHomebrewLink(launchTarget_2.cmd);
-  if (waitedMs > 0) E = (E ?? 0) + waitedMs;
+  if (waitedMs > 0) reinstallWaitedMs = (reinstallWaitedMs ?? 0) + waitedMs;
   if (link !== null && (await isExecutableBinary(link))) {
     logEvent("tengu_bg_daemon_spawn_homebrew_fallback", {
       errno_enoent: false,
@@ -421,13 +440,13 @@ async function spawnDaemonProcess(r, e, n, s) {
       waited_ms: waitedMs,
     });
     return {
-      ...(await h({
+      ...(await spawnWith({
         cmd: link,
         prefixArgs: [],
         target: link,
       })),
       recoveredAfterReinstallWait: waitedMs > 0,
-      reinstallWaitedMs: E,
+      reinstallWaitedMs,
     };
   }
   let latestInstalledVersion = await findLatestInstalledVersion();
@@ -441,12 +460,12 @@ async function spawnDaemonProcess(r, e, n, s) {
     (await isExecutableBinary(latestInstalledVersion))
   )
     return {
-      ...(await h({
+      ...(await spawnWith({
         cmd: latestInstalledVersion,
         prefixArgs: [],
         target: latestInstalledVersion,
       })),
-      reinstallWaitedMs: E,
+      reinstallWaitedMs,
     };
   logFeatureBad("agent_launcher", "no_runnable_target");
   return {
@@ -455,16 +474,16 @@ async function spawnDaemonProcess(r, e, n, s) {
       "no runnable claude binary for the configured launcher",
     ),
     gaveUpOnNpmInstallInProgress,
-    reinstallWaitedMs: E,
+    reinstallWaitedMs,
   };
 }
 //@ chunk-ksvdmrg0.js:12822-12980 placement
-async function isExecutableBinary(r, e = {}) {
+async function isExecutableBinary(path, options = {}) {
   try {
-    let n = await stat(r);
-    if (!n.isFile()) return false;
-    if (e.rejectNpmStub && n.size < MAX_BINARY_PROBE_BYTES) return false;
-    await access(r, constants.X_OK);
+    let stats = await stat(path);
+    if (!stats.isFile()) return false;
+    if (options.rejectNpmStub && stats.size < MAX_BINARY_PROBE_BYTES) return false;
+    await access(path, constants.X_OK);
     return true;
   } catch {
     return false;
@@ -474,40 +493,42 @@ async function isExecutableBinary(r, e = {}) {
 /**
  * 路径是否位于 npm 全局包的 scope 目录（npm stub 判断）。
  */
-function isNpmScopePath(r) {
-  return r.replace(/\\/g, "/").includes(NPM_SCOPE_SEGMENT);
+function isNpmScopePath(path) {
+  return path.replace(/\\/g, "/").includes(NPM_SCOPE_SEGMENT);
 }
 //@ chunk-ksvdmrg0.js:13036-13224 placement
-async function getHomebrewLink(r) {
-  let e = HOMEBREW_CASK_RE.exec(r)?.[1];
-  if (e === undefined) return null;
-  let n = join(e, "bin", "claude");
-  let s = await realpath(n).catch(() => null);
-  return s !== null && s !== r && s.startsWith(`${e}/Caskroom/`) ? n : null;
+async function getHomebrewLink(path) {
+  let caskPath = HOMEBREW_CASK_RE.exec(path)?.[1];
+  if (caskPath === undefined) return null;
+  let binPath = join(caskPath, "bin", "claude");
+  let resolved = await realpath(binPath).catch(() => null);
+  return resolved !== null && resolved !== path && resolved.startsWith(`${caskPath}/Caskroom/`)
+    ? binPath
+    : null;
 }
 //@ chunk-ksvdmrg0.js:13224-13534 placement
 /**
  * 等待 Homebrew cask 升级完成后出现可执行的 bin/claude 链接（有上限），放弃时记 tengu_bg_daemon_spawn_homebrew_wait_gave_up。
  */
-async function waitForHomebrewLink(r) {
-  for (let e = 0; ; e += POLL_MS) {
-    let n =
-      HOMEBREW_CASK_RE.test(r) &&
-      (await stat(`${dirname(r)}.upgrading`).then(
+async function waitForHomebrewLink(path) {
+  for (let waitedMs = 0; ; waitedMs += POLL_MS) {
+    let upgrading =
+      HOMEBREW_CASK_RE.test(path) &&
+      (await stat(`${dirname(path)}.upgrading`).then(
         () => true,
         () => false,
       ));
-    let homebrewLink = await getHomebrewLink(r);
-    if ((n || e > 0) && homebrewLink !== null && !(await isExecutableBinary(homebrewLink)))
+    let homebrewLink = await getHomebrewLink(path);
+    if ((upgrading || waitedMs > 0) && homebrewLink !== null && !(await isExecutableBinary(homebrewLink)))
       homebrewLink = null;
-    if (homebrewLink !== null || !n || e >= HOMEBREW_WAIT_MS) {
-      if (homebrewLink === null && e > 0)
+    if (homebrewLink !== null || !upgrading || waitedMs >= HOMEBREW_WAIT_MS) {
+      if (homebrewLink === null && waitedMs > 0)
         logEvent("tengu_bg_daemon_spawn_homebrew_wait_gave_up", {
-          waited_ms: e,
+          waited_ms: waitedMs,
         });
       return {
         link: homebrewLink,
-        waitedMs: e,
+        waitedMs,
       };
     }
     await sleep(POLL_MS);
@@ -517,26 +538,26 @@ async function waitForHomebrewLink(r) {
 /**
  * 判断 npm 是否正在安装 @anthropic-ai 包（包目录旁有近期创建的 .包名- 临时目录）。
  */
-async function isNpmInstallInProgress(r) {
-  let index = r.replace(/\\/g, "/").indexOf(NPM_SCOPE_SEGMENT);
+async function isNpmInstallInProgress(path) {
+  let index = path.replace(/\\/g, "/").indexOf(NPM_SCOPE_SEGMENT);
   if (index === -1) return false;
-  let sliced = r.slice(0, index + NPM_SCOPE_SEGMENT.length - 1);
-  let s = r.slice(index + NPM_SCOPE_SEGMENT.length).split(/[\\/]/)[0];
-  if (!s) return false;
-  let h = `.${s}-`;
-  let w;
+  let sliced = path.slice(0, index + NPM_SCOPE_SEGMENT.length - 1);
+  let scopeDir = path.slice(index + NPM_SCOPE_SEGMENT.length).split(/[\\/]/)[0];
+  if (!scopeDir) return false;
+  let pendingPrefix = `.${scopeDir}-`;
+  let entries;
   try {
-    w = await readdir(sliced, {
+    entries = await readdir(sliced, {
       withFileTypes: true,
     });
   } catch {
     return false;
   }
-  for (let p of w) {
-    if (!p.isDirectory() || !p.name.startsWith(h)) continue;
+  for (let entry of entries) {
+    if (!entry.isDirectory() || !entry.name.startsWith(pendingPrefix)) continue;
     try {
-      let E = await stat(join(sliced, p.name));
-      if (Date.now() - Math.max(E.ctimeMs, E.mtimeMs) < INSTALL_IN_PROGRESS_MS) return true;
+      let stats = await stat(join(sliced, entry.name));
+      if (Date.now() - Math.max(stats.ctimeMs, stats.mtimeMs) < INSTALL_IN_PROGRESS_MS) return true;
     } catch {}
   }
   return false;
@@ -545,13 +566,13 @@ async function isNpmInstallInProgress(r) {
 /**
  * 二进制暂时不可执行（npm 占位）时轮询等待恢复：先短等，若检测到安装进行中再延长等待。
  */
-async function waitForBinaryRecovery(r) {
+async function waitForBinaryRecovery(path) {
   let deadline = Date.now();
-  let n = deadline + STUB_WAIT_MS;
-  while (Date.now() < n) {
+  let softDeadline = deadline + STUB_WAIT_MS;
+  while (Date.now() < softDeadline) {
     await sleep(POLL_MS);
     if (
-      await isExecutableBinary(r, {
+      await isExecutableBinary(path, {
         rejectNpmStub: true,
       })
     )
@@ -562,7 +583,7 @@ async function waitForBinaryRecovery(r) {
         installInProgressAtEnd: false,
       };
   }
-  let installInProgress = await isNpmInstallInProgress(r);
+  let installInProgress = await isNpmInstallInProgress(path);
   if (!installInProgress)
     return {
       recovered: false,
@@ -574,7 +595,7 @@ async function waitForBinaryRecovery(r) {
   while (Date.now() < extendedDeadline) {
     await sleep(EXTENDED_POLL_MS);
     if (
-      await isExecutableBinary(r, {
+      await isExecutableBinary(path, {
         rejectNpmStub: true,
       })
     )
@@ -585,7 +606,7 @@ async function waitForBinaryRecovery(r) {
         installInProgressAtEnd: installInProgress,
       };
     if (!installInProgress) break;
-    installInProgress = await isNpmInstallInProgress(r);
+    installInProgress = await isNpmInstallInProgress(path);
   }
   return {
     recovered: false,
@@ -595,42 +616,42 @@ async function waitForBinaryRecovery(r) {
   };
 }
 //@ chunk-ksvdmrg0.js:14502-14637 placement
-async function spawnDetachedWithHomeCwd(r, env, n) {
-  let s;
+async function spawnDetachedWithHomeCwd(command, env, args) {
+  let homeDir;
   try {
-    s = homedir();
+    homeDir = homedir();
   } catch {
-    s = undefined;
+    homeDir = undefined;
   }
-  let detached = await spawnDetached(r, env, n, s);
-  if (s !== undefined && detached.err) return spawnDetached(r, env, n, undefined);
+  let detached = await spawnDetached(command, env, args, homeDir);
+  if (homeDir !== undefined && detached.err) return spawnDetached(command, env, args, undefined);
   return detached;
 }
 //@ chunk-ksvdmrg0.js:14637-15023 placement
 /**
  * 以分离模式启动进程（可指定 cwd），等一个事件循环检查启动错误，返回子进程 pid 与退出 Promise 或错误。
  */
-async function spawnDetached(r, env, n, s) {
-  let h = null;
+async function spawnDetached(argv, env, stderr, cwd) {
+  let spawnError = null;
   let child;
   try {
-    let p = spawn(r[0], r.slice(1), {
+    let child_2 = spawn(argv[0], argv.slice(1), {
       detached: true,
-      stdio: ["ignore", "ignore", n ?? "ignore"],
+      stdio: ["ignore", "ignore", stderr ?? "ignore"],
       windowsHide: true,
       env,
-      ...(s !== undefined && {
-        cwd: s,
+      ...(cwd !== undefined && {
+        cwd,
       }),
     });
-    moveKeeperPid(p.pid);
-    p.once("error", (E) => {
-      h = E;
+    moveKeeperPid(child_2.pid);
+    child_2.once("error", (error) => {
+      spawnError = error;
     });
     child = {
-      pid: p.pid,
+      pid: child_2.pid,
       exited: new Promise((resolve) => {
-        p.once("exit", (code, signal) =>
+        child_2.once("exit", (code, signal) =>
           resolve({
             code,
             signal,
@@ -638,14 +659,14 @@ async function spawnDetached(r, env, n, s) {
         );
       }),
     };
-    p.unref();
+    child_2.unref();
   } catch (error) {
-    h = error;
+    spawnError = error;
   }
   await new Promise((resolve) => setImmediate(resolve));
-  return h
+  return spawnError
     ? {
-        err: h,
+        err: spawnError,
       }
     : {
         err: null,
@@ -657,59 +678,59 @@ async function spawnDetached(r, env, n, s) {
  * macOS 后台守护进程用：试运行 /bin/launchctl asuser <uid> /usr/bin/true，成功则返回该前缀让子进程进入用户 GUI（Aqua）会话；打 tengu_bg_daemon_macos_aqua_wrap。
  */
 async function getMacosAquaSessionWrapper() {
-  let r = process.getuid?.();
-  if (r === undefined) return [];
+  let uid = process.getuid?.();
+  if (uid === undefined) return [];
   let promise = await new Promise((resolve) => {
-    let s = false;
-    let h;
-    let w = (E) => {
-      if (s) return;
-      s = true;
+    let settled = false;
+    let child;
+    let finish = (code) => {
+      if (settled) return;
+      settled = true;
       clearTimeout(timer);
-      resolve(E);
+      resolve(code);
     };
     let timer = setTimeout(() => {
-      h.kill();
-      w(false);
+      child.kill();
+      finish(false);
     }, 5000);
     timer.unref();
     try {
-      h = spawn("/bin/launchctl", ["asuser", String(r), "/usr/bin/true"], {
+      child = spawn("/bin/launchctl", ["asuser", String(uid), "/usr/bin/true"], {
         stdio: "ignore",
         windowsHide: true,
       });
     } catch {
-      w(false);
+      finish(false);
       return;
     }
-    h.once("error", () => w(false));
-    h.once("exit", (err) => w(err === 0));
+    child.once("error", () => finish(false));
+    child.once("exit", (err) => finish(err === 0));
   });
   logEvent("tengu_bg_daemon_macos_aqua_wrap", {
     has_gui: promise,
   });
-  return promise ? ["/bin/launchctl", "asuser", String(r)] : [];
+  return promise ? ["/bin/launchctl", "asuser", String(uid)] : [];
 }
 //@ chunk-ksvdmrg0.js:15500-15624 placement
-async function prependLauncherPrefix(r, e) {
-  if (r.length === 0) return e;
-  let n = e[0];
+async function prependLauncherPrefix(prefix, argv) {
+  if (prefix.length === 0) return argv;
+  let binary = argv[0];
   if (
-    !(await isExecutableBinary(n, {
-      rejectNpmStub: isNpmScopePath(n),
+    !(await isExecutableBinary(binary, {
+      rejectNpmStub: isNpmScopePath(binary),
     }))
   )
-    return e;
-  return [...r, ...e];
+    return argv;
+  return [...prefix, ...argv];
 }
 //@ chunk-ksvdmrg0.js:15624-16277 placement
 /**
  * Windows 上通过 PowerShell（EncodedCommand）调用 Win32_Process.Create 启动分离进程，5 秒超时；返回 ok 或失败原因。
  */
-async function spawnViaWin32ProcessCreate(r, env) {
+async function spawnViaWin32ProcessCreate(argv, env) {
   let script;
   try {
-    script = WINDOWS_DETACHED_SPAWN_SCRIPT(quoteWindowsArgs(r));
+    script = WINDOWS_DETACHED_SPAWN_SCRIPT(quoteWindowsArgs(argv));
   } catch (error) {
     return {
       ok: false,
@@ -724,59 +745,59 @@ async function spawnViaWin32ProcessCreate(r, env) {
     };
   let str = Buffer.from(script, "utf16le").toString("base64");
   return new Promise((resolve) => {
-    let p = false;
-    let E;
-    let S = (x) => {
-      if (p) return;
-      p = true;
+    let settled = false;
+    let child;
+    let finish = (value) => {
+      if (settled) return;
+      settled = true;
       clearTimeout(timer);
-      resolve(x);
+      resolve(value);
     };
-    let R = (error) =>
-      S({
+    let onError = (error) =>
+      finish({
         ok: false,
         reason: getErrnoCode(error) === "ENOENT" ? "enoent" : errorMessage(error),
       });
     let timer = setTimeout(() => {
-      E.kill();
-      S({
+      child.kill();
+      finish({
         ok: false,
         reason: "timeout",
       });
     }, 5000);
     timer.unref();
     try {
-      E = spawn(powershellPath, ["-NoProfile", "-NonInteractive", "-EncodedCommand", str], {
+      child = spawn(powershellPath, ["-NoProfile", "-NonInteractive", "-EncodedCommand", str], {
         stdio: "ignore",
         windowsHide: true,
         env,
       });
     } catch (error) {
-      R(error);
+      onError(error);
       return;
     }
-    E.once("error", R);
-    E.once("exit", (x) => {
-      if (x === 0)
-        S({
+    child.once("error", onError);
+    child.once("exit", (exitCode) => {
+      if (exitCode === 0)
+        finish({
           ok: true,
         });
       else
-        S({
+        finish({
           ok: false,
-          reason: `Win32_Process.Create rc=${x}`,
-          rc: x ?? undefined,
+          reason: `Win32_Process.Create rc=${exitCode}`,
+          rc: exitCode ?? undefined,
         });
     });
   });
 }
 //@ chunk-ksvdmrg0.js:16277-16783 placement
-function WINDOWS_DETACHED_SPAWN_SCRIPT(r) {
+function WINDOWS_DETACHED_SPAWN_SCRIPT(commandLine) {
   return [
     '$ErrorActionPreference = "Stop"',
     '$e = [string[]](Get-ChildItem Env: | ForEach-Object { "$($_.Name)=$($_.Value)" })',
     "$s = New-CimInstance -ClassName Win32_ProcessStartup -ClientOnly -Property @{ EnvironmentVariables = $e; ShowWindow = [uint16]0; CreateFlags = [uint32]8 }",
-    `$r = Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{ CommandLine = ${quotePowerShellString(r)}; CurrentDirectory = $env:USERPROFILE; ProcessStartupInformation = $s }`,
+    `$r = Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{ CommandLine = ${quotePowerShellString(commandLine)}; CurrentDirectory = $env:USERPROFILE; ProcessStartupInformation = $s }`,
     "exit $r.ReturnValue",
   ].join(`
 `);
@@ -785,87 +806,88 @@ function WINDOWS_DETACHED_SPAWN_SCRIPT(r) {
 /**
  * 按 Windows 规则把参数数组拼成命令行。
  */
-function quoteWindowsArgs(r) {
-  return r.map(quoteWindowsArg).join(" ");
+function quoteWindowsArgs(args) {
+  return args.map(quoteWindowsArg).join(" ");
 }
 //@ chunk-ksvdmrg0.js:16825-17077 placement
 /**
  * 按 Windows 命令行规则给参数加引号并转义反斜杠与双引号。
  */
-function quoteWindowsArg(r) {
-  if (r.length > 0 && !/[\s"]/.test(r)) return r;
-  let e = '"';
-  let n = 0;
-  while (n < r.length) {
-    let s = 0;
-    while (r[n] === "\\") {
-      s++;
-      n++;
+function quoteWindowsArg(arg) {
+  if (arg.length > 0 && !/[\s"]/.test(arg)) return arg;
+  let quoted = '"';
+  let index = 0;
+  while (index < arg.length) {
+    let backslashes = 0;
+    while (arg[index] === "\\") {
+      backslashes++;
+      index++;
     }
-    if (n === r.length) e += "\\".repeat(s * 2);
-    else if (r[n] === '"') {
-      e += "\\".repeat(s * 2 + 1) + '"';
-      n++;
+    if (index === arg.length) quoted += "\\".repeat(backslashes * 2);
+    else if (arg[index] === '"') {
+      quoted += "\\".repeat(backslashes * 2 + 1) + '"';
+      index++;
     } else {
-      e += "\\".repeat(s) + r[n];
-      n++;
+      quoted += "\\".repeat(backslashes) + arg[index];
+      index++;
     }
   }
-  return e + '"';
+  return quoted + '"';
 }
 //@ chunk-ksvdmrg0.js:17077-17232 placement
-function quotePowerShellString(r) {
-  if (/[\u2018\u2019\u201A\u201B]/.test(r)) throw Error("unsupported Unicode single-quote in command line");
-  return `'${r.replaceAll("'", "''")}'`;
+function quotePowerShellString(text) {
+  if (/[\u2018\u2019\u201A\u201B]/.test(text))
+    throw Error("unsupported Unicode single-quote in command line");
+  return `'${text.replaceAll("'", "''")}'`;
 }
 //@ chunk-ksvdmrg0.js:17232-17396 placement
-async function hasStoredRefreshToken(r) {
-  let e = withHostOwnedEnv(() => process.env.CLAUDE_CODE_OAUTH_TOKEN);
-  if (getPlatform() === "macos" || !e) return false;
-  return !!(await getSecureStorage().readAsync(r))?.claudeAiOauth?.refreshToken;
+async function hasStoredRefreshToken(accountKey) {
+  let envToken = withHostOwnedEnv(() => process.env.CLAUDE_CODE_OAUTH_TOKEN);
+  if (getPlatform() === "macos" || !envToken) return false;
+  return !!(await getSecureStorage().readAsync(accountKey))?.claudeAiOauth?.refreshToken;
 }
 //@ chunk-ksvdmrg0.js:17396-17432 placement
 /**
  * 计算后台进程要转发的环境变量并应用宿主自有环境。
  */
-function forwardedEnv(r) {
-  return withHostOwnedEnv(() => DAEMON_FORWARDED_ENV(r));
+function forwardedEnv(transition) {
+  return withHostOwnedEnv(() => DAEMON_FORWARDED_ENV(transition));
 }
 //@ chunk-ksvdmrg0.js:17432-19118 placement
-function DAEMON_FORWARDED_ENV(r) {
-  let preSettingsEnvHonoringLiveDeletions = getPreSettingsEnvHonoringLiveDeletions();
-  preSettingsEnvHonoringLiveDeletions.INVOCATION_ID = "";
-  let n = process.env[PROCESS_WRAPPER_ENV_2];
-  if (n) preSettingsEnvHonoringLiveDeletions[PROCESS_WRAPPER_ENV_2] = n;
-  else delete preSettingsEnvHonoringLiveDeletions[PROCESS_WRAPPER_ENV_2];
-  let s = new Set(
+function DAEMON_FORWARDED_ENV(options) {
+  let envSlice = getPreSettingsEnvHonoringLiveDeletions();
+  envSlice.INVOCATION_ID = "";
+  let wrapperValue = process.env[PROCESS_WRAPPER_ENV];
+  if (wrapperValue) envSlice[PROCESS_WRAPPER_ENV] = wrapperValue;
+  else delete envSlice[PROCESS_WRAPPER_ENV];
+  let hostAuthKeys = new Set(
     [
       "CLAUDE_CODE_OAUTH_TOKEN",
-      getHostAuthEnvVar(preSettingsEnvHonoringLiveDeletions),
+      getHostAuthEnvVar(envSlice),
       getHostAuthTokenRefreshCallback()
         ? getHostAuthEnvVar({
             CLAUDE_CODE_HOST_AUTH_ENV_VAR: hostAuthEnvVarName(),
           })
         : undefined,
-    ].flatMap((p) => (p === undefined ? [] : [p.toUpperCase()])),
+    ].flatMap((varName) => (varName === undefined ? [] : [varName.toUpperCase()])),
   );
-  for (let key of Object.keys(preSettingsEnvHonoringLiveDeletions)) {
-    if (!s.has(key.toUpperCase())) continue;
-    let E = process.env[key];
-    if (E === undefined) delete preSettingsEnvHonoringLiveDeletions[key];
-    else if (!isSettingsSourcedEnvValue(key, E)) preSettingsEnvHonoringLiveDeletions[key] = E;
+  for (let key of Object.keys(envSlice)) {
+    if (!hostAuthKeys.has(key.toUpperCase())) continue;
+    let value = process.env[key];
+    if (value === undefined) delete envSlice[key];
+    else if (!isSettingsSourcedEnvValue(key, value)) envSlice[key] = value;
   }
-  delete preSettingsEnvHonoringLiveDeletions.CLAUDECODE;
-  delete preSettingsEnvHonoringLiveDeletions.CLAUDE_CODE_SESSION_ID;
-  delete preSettingsEnvHonoringLiveDeletions.CLAUDE_CODE_CHILD_SESSION;
-  delete preSettingsEnvHonoringLiveDeletions.CLAUDE_CODE_SESSION_ATTENDED;
-  delete preSettingsEnvHonoringLiveDeletions.CLAUDE_CODE_CHROME_MCP_ORG_DENIED;
-  delete preSettingsEnvHonoringLiveDeletions.CLAUDE_CODE_EVAL_INTERVIEW_SESSION;
-  delete preSettingsEnvHonoringLiveDeletions.CLAUDE_CODE_BRIDGE_SESSION_ID;
-  delete preSettingsEnvHonoringLiveDeletions.CLAUDE_CODE_HOST_WORKTREE;
-  delete preSettingsEnvHonoringLiveDeletions.CLAUDE_CODE_HOST_WORKTREE_FENCE;
-  stripSafeModeEnvKeys(preSettingsEnvHonoringLiveDeletions);
-  for (let key of Object.keys(preSettingsEnvHonoringLiveDeletions)) {
+  delete envSlice.CLAUDECODE;
+  delete envSlice.CLAUDE_CODE_SESSION_ID;
+  delete envSlice.CLAUDE_CODE_CHILD_SESSION;
+  delete envSlice.CLAUDE_CODE_SESSION_ATTENDED;
+  delete envSlice.CLAUDE_CODE_CHROME_MCP_ORG_DENIED;
+  delete envSlice.CLAUDE_CODE_EVAL_INTERVIEW_SESSION;
+  delete envSlice.CLAUDE_CODE_BRIDGE_SESSION_ID;
+  delete envSlice.CLAUDE_CODE_HOST_WORKTREE;
+  delete envSlice.CLAUDE_CODE_HOST_WORKTREE_FENCE;
+  stripSafeModeEnvKeys(envSlice);
+  for (let key of Object.keys(envSlice)) {
     let upper = key.toUpperCase();
     if (
       upper === "CLAUDE_CODE_PLUGIN_DIRS" ||
@@ -873,34 +895,39 @@ function DAEMON_FORWARDED_ENV(r) {
       upper === "CLAUDE_CODE_SKIP_PLUGIN_LOCAL_MCP_SERVERS" ||
       upper === "CLAUDE_CODE_SKIP_PLUGIN_MCP_BUNDLES"
     )
-      delete preSettingsEnvHonoringLiveDeletions[key];
+      delete envSlice[key];
   }
-  stripCoworkHostEnvKeys(preSettingsEnvHonoringLiveDeletions);
-  stripBgScrubbedEnvKeys(preSettingsEnvHonoringLiveDeletions);
-  delete preSettingsEnvHonoringLiveDeletions.CLAUDE_BG_SESSION_PERMISSION_RULES;
-  delete preSettingsEnvHonoringLiveDeletions.CLAUDE_BG_MEMORY_TOGGLED_OFF;
-  delete preSettingsEnvHonoringLiveDeletions.CLAUDE_BG_AUTO_MEMORY_OFF;
-  delete preSettingsEnvHonoringLiveDeletions.CLAUDE_BG_GATEWAY_WITHHELD;
-  stripInternalEntrypoint(preSettingsEnvHonoringLiveDeletions);
-  let h = new Set(["CLAUDE_BG_AUTH_SNAPSHOT_PATH", ...TOKEN_FD_ENV_VARS].map((p) => p.toUpperCase()));
-  for (let key of Object.keys(preSettingsEnvHonoringLiveDeletions))
-    if (h.has(key.toUpperCase())) delete preSettingsEnvHonoringLiveDeletions[key];
-  let hostAuthEnvVar = getHostAuthEnvVar(preSettingsEnvHonoringLiveDeletions);
-  if (isEnvTruthy(preSettingsEnvHonoringLiveDeletions.CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST)) {
-    for (let p of [...PROVIDER_CREDENTIAL_ENV_VARS, ...BASE_URL_ENV_VARS, ...PROVIDER_SELECTION_ENV_VARS])
-      delete preSettingsEnvHonoringLiveDeletions[p];
-    stripHostManagedEnv(preSettingsEnvHonoringLiveDeletions);
-    delete preSettingsEnvHonoringLiveDeletions.ANTHROPIC_CUSTOM_HEADERS;
-    if (hostAuthEnvVar) delete preSettingsEnvHonoringLiveDeletions[hostAuthEnvVar];
-    delete preSettingsEnvHonoringLiveDeletions.CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST;
-    delete preSettingsEnvHonoringLiveDeletions.CLAUDE_CODE_HOST_AUTH_ENV_VAR;
-    delete preSettingsEnvHonoringLiveDeletions.CLAUDE_CODE_HOST_GATEWAY_LINEAGE;
+  stripCoworkHostEnvKeys(envSlice);
+  stripBgScrubbedEnvKeys(envSlice);
+  delete envSlice.CLAUDE_BG_SESSION_PERMISSION_RULES;
+  delete envSlice.CLAUDE_BG_MEMORY_TOGGLED_OFF;
+  delete envSlice.CLAUDE_BG_AUTO_MEMORY_OFF;
+  delete envSlice.CLAUDE_BG_GATEWAY_WITHHELD;
+  stripInternalEntrypoint(envSlice);
+  let strippedKeys = new Set(
+    ["CLAUDE_BG_AUTH_SNAPSHOT_PATH", ...TOKEN_FD_ENV_VARS].map((varName) => varName.toUpperCase()),
+  );
+  for (let key of Object.keys(envSlice)) if (strippedKeys.has(key.toUpperCase())) delete envSlice[key];
+  let hostAuthEnvVar = getHostAuthEnvVar(envSlice);
+  if (isEnvTruthy(envSlice.CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST)) {
+    for (let varName of [
+      ...PROVIDER_CREDENTIAL_ENV_VARS,
+      ...BASE_URL_ENV_VARS,
+      ...PROVIDER_SELECTION_ENV_VARS,
+    ])
+      delete envSlice[varName];
+    stripHostManagedEnv(envSlice);
+    delete envSlice.ANTHROPIC_CUSTOM_HEADERS;
+    if (hostAuthEnvVar) delete envSlice[hostAuthEnvVar];
+    delete envSlice.CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST;
+    delete envSlice.CLAUDE_CODE_HOST_AUTH_ENV_VAR;
+    delete envSlice.CLAUDE_CODE_HOST_GATEWAY_LINEAGE;
   }
-  if (r.dropShellOAuthToken || isLoginStashedInTokenSlot()) {
-    for (let key of Object.keys(preSettingsEnvHonoringLiveDeletions))
-      if (key.toUpperCase() === "CLAUDE_CODE_OAUTH_TOKEN") delete preSettingsEnvHonoringLiveDeletions[key];
+  if (options.dropShellOAuthToken || isLoginStashedInTokenSlot()) {
+    for (let key of Object.keys(envSlice))
+      if (key.toUpperCase() === "CLAUDE_CODE_OAUTH_TOKEN") delete envSlice[key];
   }
-  return preSettingsEnvHonoringLiveDeletions;
+  return envSlice;
 }
 //@ chunk-ksvdmrg0.js:19118-19148 placement
 /**
@@ -910,36 +937,36 @@ var EXTENDED_SPAWN_WAIT_MS = 120000;
 var LIVENESS_PROBE_INTERVAL_MS = 5000;
 var LOCK_STARTED_AT_SKEW_MS = 5000;
 //@ chunk-ksvdmrg0.js:19148-19375 placement
-function createSpawnAttempt(r) {
-  let e = {
-    ...r,
+function createSpawnAttempt(attempt) {
+  let state = {
+    ...attempt,
     childExit: null,
     childExitAt: null,
     stderr: null,
     budgetExtended: false,
-    nextLivenessProbeAt: r.spawnIssuedAt + LIVENESS_PROBE_INTERVAL_MS,
+    nextLivenessProbeAt: attempt.spawnIssuedAt + LIVENESS_PROBE_INTERVAL_MS,
     siblingHolderSeen: false,
   };
-  r.child?.exited.then((childExit) => {
-    e.childExit = childExit;
-    e.childExitAt = Date.now();
+  attempt.child?.exited.then((childExit) => {
+    state.childExit = childExit;
+    state.childExitAt = Date.now();
   });
-  return e;
+  return state;
 }
 //@ chunk-ksvdmrg0.js:19375-19646 placement
-async function isNpmStubSpawnFailure(spawnAttempt, launchTarget) {
-  let childExit = spawnAttempt.childExit;
-  if (!childExit || spawnAttempt.siblingHolderSeen) return false;
+async function isNpmStubSpawnFailure(attempt, path) {
+  let childExit = attempt.childExit;
+  if (!childExit || attempt.siblingHolderSeen) return false;
   if (childExit.code === 0 && childExit.signal === null) return false;
-  if (!isNpmScopePath(launchTarget)) return false;
-  switch (await classifyBinaryStub(launchTarget)) {
+  if (!isNpmScopePath(path)) return false;
+  switch (await classifyBinaryStub(path)) {
     case "missing":
     case "fresh_stub":
       return true;
     case "stale_stub":
       return false;
     case "present":
-      return (await readSpawnStderr(spawnAttempt)).includes(NATIVE_BINARY_MISSING_TEXT);
+      return (await readSpawnStderr(attempt)).includes(NATIVE_BINARY_MISSING_TEXT);
   }
 }
 //@ chunk-ksvdmrg0.js:19646-20241 placement
@@ -962,22 +989,24 @@ function classifyDaemonStderr(stderr) {
   return lit("other");
 }
 //@ chunk-ksvdmrg0.js:20241-20381 placement
-async function readSpawnStderr(r, e = false) {
-  if (r.stderr === null || e)
-    r.stderr = r.stderrPath ? ((await readSmallFileOrNull(r.stderrPath, 1048576)) ?? "").slice(0, 2000) : "";
-  return r.stderr;
+async function readSpawnStderr(attempt, force = false) {
+  if (attempt.stderr === null || force)
+    attempt.stderr = attempt.stderrPath
+      ? ((await readSmallFileOrNull(attempt.stderrPath, 1048576)) ?? "").slice(0, 2000)
+      : "";
+  return attempt.stderr;
 }
 //@ chunk-ksvdmrg0.js:20381-20661 placement
-async function shouldStopWaitingForDaemon(r) {
-  let childExit = r.childExit;
-  if (!childExit || r.siblingHolderSeen) return false;
-  if (!r.budgetExtended) {
-    if ((await readSpawnStderr(r)).trim().length === 0) return false;
-    if (r.wrapperConfigured && childExit.code === 0 && childExit.signal === null) return false;
+async function shouldStopWaitingForDaemon(attempt) {
+  let childExit = attempt.childExit;
+  if (!childExit || attempt.siblingHolderSeen) return false;
+  if (!attempt.budgetExtended) {
+    if ((await readSpawnStderr(attempt)).trim().length === 0) return false;
+    if (attempt.wrapperConfigured && childExit.code === 0 && childExit.signal === null) return false;
   }
-  let n = await hasFreshDaemonLock(r, LOCK_PROBE_LIMITS);
-  if (n !== false) {
-    r.siblingHolderSeen = n === true;
+  let lock = await hasFreshDaemonLock(attempt, LOCK_PROBE_LIMITS);
+  if (lock !== false) {
+    attempt.siblingHolderSeen = lock === true;
     return false;
   }
   return true;
@@ -986,11 +1015,11 @@ async function shouldStopWaitingForDaemon(r) {
 /**
  * 轮询守护进程控制 socket 直到 ping 成功或超时；子进程已失败则提前放弃；期间检测到同级锁持有者时延长期限。
  */
-async function waitForDaemonUp(spawnAttempt, e, n) {
-  let s = e;
+async function waitForDaemonUp(attempt, deadline, probeLiveness) {
+  let endTime = deadline;
   while (true) {
-    if (await shouldStopWaitingForDaemon(spawnAttempt)) return false;
-    if (Date.now() >= s) return false;
+    if (await shouldStopWaitingForDaemon(attempt)) return false;
+    if (Date.now() >= endTime) return false;
     if (
       (
         await controlRequest({
@@ -1000,35 +1029,37 @@ async function waitForDaemonUp(spawnAttempt, e, n) {
       ).ok
     )
       return true;
-    if (n && Date.now() >= spawnAttempt.nextLivenessProbeAt) {
-      spawnAttempt.nextLivenessProbeAt = Date.now() + LIVENESS_PROBE_INTERVAL_MS;
-      let p = await hasFreshDaemonLock(spawnAttempt, 1);
-      if (!spawnAttempt.budgetExtended && p === true) {
-        spawnAttempt.budgetExtended = true;
-        s = Math.max(s, spawnAttempt.spawnIssuedAt + EXTENDED_SPAWN_WAIT_MS);
-      } else if (spawnAttempt.budgetExtended && p === false && Date.now() >= e) return false;
+    if (probeLiveness && Date.now() >= attempt.nextLivenessProbeAt) {
+      attempt.nextLivenessProbeAt = Date.now() + LIVENESS_PROBE_INTERVAL_MS;
+      let hasLock = await hasFreshDaemonLock(attempt, 1);
+      if (!attempt.budgetExtended && hasLock === true) {
+        attempt.budgetExtended = true;
+        endTime = Math.max(endTime, attempt.spawnIssuedAt + EXTENDED_SPAWN_WAIT_MS);
+      } else if (attempt.budgetExtended && hasLock === false && Date.now() >= deadline) return false;
     }
     await Ve(100);
   }
 }
 //@ chunk-ksvdmrg0.js:21053-21194 placement
-async function hasFreshDaemonLock(r, e) {
-  let n;
+async function hasFreshDaemonLock(attempt, limits) {
+  let lock;
   try {
-    n = await readLiveServerLock(e, r.storageV5);
+    lock = await readLiveServerLock(limits, attempt.storageV5);
   } catch {
     return null;
   }
-  return n !== null && !n.bgDisabled && n.startedAt >= r.spawnIssuedAt - LOCK_STARTED_AT_SKEW_MS;
+  return (
+    lock !== null && !lock.bgDisabled && lock.startedAt >= attempt.spawnIssuedAt - LOCK_STARTED_AT_SKEW_MS
+  );
 }
 //@ chunk-ksvdmrg0.js:21194-22324 placement
 /**
  * 超时时描述守护进程锁的状态（不存在、不可读、自己的子进程、其他进程存活/已死/无权限）及持有者年龄与版本差异，用于遥测。
  */
-async function describeDaemonLockAtDeadline(spawnAttempt) {
+async function describeDaemonLockAtDeadline(spawnContext) {
   let lock;
   try {
-    lock = await readDaemonLock(spawnAttempt.storageV5);
+    lock = await readDaemonLock(spawnContext.storageV5);
   } catch {
     return {
       lock_at_deadline: lit("unreadable"),
@@ -1055,8 +1086,8 @@ async function describeDaemonLockAtDeadline(spawnAttempt) {
       }.VERSION,
   };
   if (
-    (spawnAttempt.child?.pid !== undefined && lock.pid === spawnAttempt.child.pid) ||
-    lock.startedAt >= spawnAttempt.spawnIssuedAt - LOCK_STARTED_AT_SKEW_MS
+    (spawnContext.child?.pid !== undefined && lock.pid === spawnContext.child.pid) ||
+    lock.startedAt >= spawnContext.spawnIssuedAt - LOCK_STARTED_AT_SKEW_MS
   )
     return {
       lock_at_deadline: lit("self_child"),
@@ -1086,54 +1117,56 @@ async function describeDaemonLockAtDeadline(spawnAttempt) {
 /**
  * 输入是否不按普通提示处理：非 prompt 模式、斜杠命令，或当前会话处于有问题待答的阻塞状态。
  */
-function isNonPromptInput(r, e) {
-  let n = r.trimStart();
+function isNonPromptInput(text, state) {
+  let trimmed = text.trimStart();
   return (
-    getModeFromInput(n) !== "prompt" ||
-    n.startsWith("/") ||
-    (e?.tempo === "blocked" && (e.block?.questions.length ?? 0) > 0)
+    getModeFromInput(trimmed) !== "prompt" ||
+    trimmed.startsWith("/") ||
+    (state?.tempo === "blocked" && (state.block?.questions.length ?? 0) > 0)
   );
 }
 //@ chunk-ksvdmrg0.js:22621-22716 placement
 /**
  * 取要写进作业状态的排队提示（非普通输入时丢弃）。
  */
-function queuedPromptOrUndefined(r) {
-  return r.queuedPrompt !== undefined && isNonPromptInput(r.queuedPrompt, null) ? undefined : r.queuedPrompt;
+function queuedPromptOrUndefined(state) {
+  return state.queuedPrompt !== undefined && isNonPromptInput(state.queuedPrompt, null)
+    ? undefined
+    : state.queuedPrompt;
 }
 //@ chunk-ksvdmrg0.js:22716-22769 placement
 /**
  * 判断新提示是否就是已排队的提示（允许前面有内容）。
  */
-function promptMatchesQueued(r, e) {
+function promptMatchesQueued(queued, prompt) {
   return (
-    r === e ||
-    r.endsWith(`
+    queued === prompt ||
+    queued.endsWith(`
 
-${e}`)
+${prompt}`)
   );
 }
 //@ chunk-ksvdmrg0.js:22769-22973 placement
 /**
  * 把输入作为排队提示写入作业状态（非普通提示时不写）；可与已有草稿合并。
  */
-async function queuePromptForJob(jobDir, e, initialPrompt, s, keepQueuedPrompt) {
-  if (isNonPromptInput(initialPrompt, null)) return false;
-  let w = keepQueuedPrompt ? queuedPromptOrUndefined(e) : undefined;
+async function queuePromptForJob(jobDir, state, prompt, storageV5, keepQueuedPrompt) {
+  if (isNonPromptInput(prompt, null)) return false;
+  let queued = keepQueuedPrompt ? queuedPromptOrUndefined(state) : undefined;
   return writeStateAtomic(
     jobDir,
     {
-      ...e,
-      queuedPrompt: !w
-        ? initialPrompt
-        : promptMatchesQueued(w, initialPrompt)
-          ? w
-          : `${w}
+      ...state,
+      queuedPrompt: !queued
+        ? prompt
+        : promptMatchesQueued(queued, prompt)
+          ? queued
+          : `${queued}
 
-${initialPrompt}`,
+${prompt}`,
       updatedAt: new Date().toISOString(),
     },
-    s,
+    storageV5,
   ).then(
     () => true,
     (error) => {
@@ -1149,9 +1182,9 @@ var TERMINAL_REPLY_RE =
 /**
  * 判断输出是否只包含终端按键回复（没有实际内容）。
  */
-function isTerminalReplyOnly(r) {
-  if (!r.includes("\x1B")) return false;
-  return r.replace(TERMINAL_REPLY_RE, "").length === 0;
+function isTerminalReplyOnly(reply) {
+  if (!reply.includes("\x1B")) return false;
+  return reply.replace(TERMINAL_REPLY_RE, "").length === 0;
 }
 //@ chunk-ksvdmrg0.js:23237-23283 placement
 /**
@@ -1161,13 +1194,13 @@ var MOUSE_PREFIX = "\x1B[<";
 var MOUSE_EVENT_RE = /^(\d+);\d+;\d+[Mm]/;
 var SCROLL_EVENT_BIT = 96;
 //@ chunk-ksvdmrg0.js:23283-23399 placement
-function hasNonReportingMouseMode(r) {
-  return r
+function hasNonReportingMouseMode(text) {
+  return text
     .split(MOUSE_PREFIX)
     .slice(1)
-    .some((e) => {
-      let n = MOUSE_EVENT_RE.exec(e)?.[1];
-      return n !== undefined && (Number(n) & SCROLL_EVENT_BIT) === 0;
+    .some((segment) => {
+      let mode = MOUSE_EVENT_RE.exec(segment)?.[1];
+      return mode !== undefined && (Number(mode) & SCROLL_EVENT_BIT) === 0;
     });
 }
 //@ chunk-ksvdmrg0.js:23399-23523 placement
@@ -1179,15 +1212,15 @@ var PARTIAL_ESCAPE_RE =
  * 返回判断一段输入是否只含终端应答序列（鼠标、光标位置、DA、DECRQM 等）的函数，跨块保留未完成的转义序列。
  */
 function createTerminalReplyFilter() {
-  let r = "";
-  return (e) => {
-    let n = r + e;
-    r = "";
-    if (!n.includes("\x1B")) return false;
-    let replaced = n.replace(TERMINAL_REPLY_RE, "");
+  let carry = "";
+  return (chunk) => {
+    let text = carry + chunk;
+    carry = "";
+    if (!text.includes("\x1B")) return false;
+    let replaced = text.replace(TERMINAL_REPLY_RE, "");
     if (replaced.length === 0) return true;
     if (replaced.length <= MAX_PARTIAL_ESCAPE && PARTIAL_ESCAPE_RE.test(replaced)) {
-      r = replaced;
+      carry = replaced;
       return true;
     }
     return false;
@@ -1202,27 +1235,6 @@ var MAX_DAEMON_STDERR_LINE_CHARS = 32768;
 var MAX_DAEMON_STDERR_LINES = 200;
 var MAX_WAIT_FOR_DAEMON_MS = 4096;
 var MAX_DAEMON_WAIT_DETAIL_CHARS = 50;
-//@ chunk-ksvdmrg0.js:23828-24104 placement
-function isMarkdownTooComplex(r) {
-  let e = 0;
-  let n = 0;
-  let s = 0;
-  for (let line of r.split(`
-`)) {
-    let w = 0;
-    while (w < line.length && (line[w] === ">" || line[w] === " ")) {
-      if (line[w] === ">") s++;
-      w++;
-    }
-    if (/^ {0,3}(?:=+|-+)\s*$/.test(line)) n++;
-    for (let p = w; p < line.length; p++) {
-      let E = line[p];
-      if (E === "[") e++;
-      else if (E === "]" && e > 0) e--;
-    }
-  }
-  return e > 256 || n > 64 || s > 512;
-}
 export {
   queuePromptForJob,
   isNonPromptInput,
@@ -1233,7 +1245,6 @@ export {
   MAX_DAEMON_STDERR_LINE_CHARS,
   MAX_WAIT_FOR_DAEMON_MS,
   MAX_DAEMON_WAIT_DETAIL_CHARS,
-  isMarkdownTooComplex,
   MAX_DAEMON_STDERR_CHARS,
   isTerminalReplyOnly,
   hasNonReportingMouseMode,

@@ -8,8 +8,8 @@
  * pieces: chunk-4v9zy7gn.js (3)
  * attribution: placement 1, layout 1, fingerprint 1
  */
-import { init_react_production, y } from "../../../vendor/react/cjs/react.production.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { init_react_production, useState } from "../../../vendor/react/cjs/react.production.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { useTerminalSize } from "../../hooks/useTerminalSize.js";
 import { useTheme } from "../../components/design-system/ThemeProvider.js";
 import { MessageActionsKeybindings } from "../../components/messageActions.js";
@@ -27,7 +27,7 @@ init_react_production();
 var API_KEY_OPTIONS = ["existing", "oauth", "new"];
 //@ chunk-4v9zy7gn.js:22885-25463 fingerprint = ApiKeyStep (0.787)
 function ApiKeyStep(props) {
-  let $ = w(52);
+  let $ = useMemoCache(52);
   let {
     existingApiKey,
     apiKeyOrOAuthToken,
@@ -46,59 +46,65 @@ function ApiKeyStep(props) {
           ? "oauth"
           : "new"
       : selectedOption;
-  let [cursorOffset, setCursorOffset] = y(0);
+  let [cursorOffset, setCursorOffset] = useState(0);
   let terminalSize = useTerminalSize();
   let [theme] = useTheme();
   const existing = !!existingApiKey;
   const oauth = !!onCreateOAuthToken;
-  let G;
+  let options;
   if ($[0] !== existing || $[1] !== oauth) {
-    let B = {
+    let available = {
       existing,
       oauth,
       new: true,
     };
-    G = API_KEY_OPTIONS.filter((V) => B[V]);
+    options = API_KEY_OPTIONS.filter((option) => available[option]);
     $[0] = existing;
     $[1] = oauth;
-    $[2] = G;
-  } else G = $[2];
-  let M = G;
-  let ie;
-  if ($[3] !== M || $[4] !== onSelectOption || $[5] !== onToggleUseExistingKey || $[6] !== selectedOption_2) {
-    ie = (F) => {
-      let U = M[M.indexOf(selectedOption_2) + F];
-      if (!U) {
+    $[2] = options;
+  } else options = $[2];
+  let list = options;
+  let move;
+  if (
+    $[3] !== list ||
+    $[4] !== onSelectOption ||
+    $[5] !== onToggleUseExistingKey ||
+    $[6] !== selectedOption_2
+  ) {
+    move = (delta) => {
+      let nextOption = list[list.indexOf(selectedOption_2) + delta];
+      if (!nextOption) {
         return;
       }
-      onSelectOption(U);
-      if ((U === "existing") !== (selectedOption_2 === "existing")) onToggleUseExistingKey(U === "existing");
+      onSelectOption(nextOption);
+      if ((nextOption === "existing") !== (selectedOption_2 === "existing"))
+        onToggleUseExistingKey(nextOption === "existing");
     };
-    $[3] = M;
+    $[3] = list;
     $[4] = onSelectOption;
     $[5] = onToggleUseExistingKey;
     $[6] = selectedOption_2;
-    $[7] = ie;
-  } else ie = $[7];
-  let D = ie;
-  let Y;
-  if ($[8] !== D) {
-    Y = () => D(-1);
-    $[8] = D;
-    $[9] = Y;
-  } else Y = $[9];
-  let handlePrevious = Y;
-  let pe;
-  if ($[10] !== D) {
-    pe = () => D(1);
-    $[10] = D;
-    $[11] = pe;
-  } else pe = $[11];
-  let handleNext = pe;
+    $[7] = move;
+  } else move = $[7];
+  let handleMove = move;
+  let body;
+  if ($[8] !== handleMove) {
+    body = () => handleMove(-1);
+    $[8] = handleMove;
+    $[9] = body;
+  } else body = $[9];
+  let handlePrevious = body;
+  let footer;
+  if ($[10] !== handleMove) {
+    footer = () => handleMove(1);
+    $[10] = handleMove;
+    $[11] = footer;
+  } else footer = $[11];
+  let handleNext = footer;
   let isTextInputVisible = selectedOption_2 === "new";
-  let _e;
+  let statusLine;
   if ($[12] !== onCreateOAuthToken || $[13] !== onSubmit || $[14] !== selectedOption_2) {
-    _e = () => {
+    statusLine = () => {
       if (selectedOption_2 === "oauth" && onCreateOAuthToken) {
         onCreateOAuthToken();
         return;
@@ -108,17 +114,17 @@ function ApiKeyStep(props) {
     $[12] = onCreateOAuthToken;
     $[13] = onSubmit;
     $[14] = selectedOption_2;
-    $[15] = _e;
-  } else _e = $[15];
-  let te = _e;
+    $[15] = statusLine;
+  } else statusLine = $[15];
+  let status = statusLine;
   let t5;
-  if ($[16] !== te || $[17] !== handleNext || $[18] !== handlePrevious) {
+  if ($[16] !== status || $[17] !== handleNext || $[18] !== handlePrevious) {
     t5 = {
       "confirm:previous": handlePrevious,
       "confirm:next": handleNext,
-      "confirm:yes": te,
+      "confirm:yes": status,
     };
-    $[16] = te;
+    $[16] = status;
     $[17] = handleNext;
     $[18] = handlePrevious;
     $[19] = t5;
@@ -134,16 +140,16 @@ function ApiKeyStep(props) {
     $[21] = t7;
   } else t7 = $[21];
   MessageActionsKeybindings(t5, t7);
-  let ge;
+  let hint;
   if ($[22] !== handleNext || $[23] !== handlePrevious) {
-    ge = {
+    hint = {
       "confirm:previous": handlePrevious,
       "confirm:next": handleNext,
     };
     $[22] = handleNext;
     $[23] = handlePrevious;
-    $[24] = ge;
-  } else ge = $[24];
+    $[24] = hint;
+  } else hint = $[24];
   let t9;
   if ($[25] !== isTextInputVisible) {
     t9 = {
@@ -153,7 +159,7 @@ function ApiKeyStep(props) {
     $[25] = isTextInputVisible;
     $[26] = t9;
   } else t9 = $[26];
-  MessageActionsKeybindings(ge, t9);
+  MessageActionsKeybindings(hint, t9);
   let t11;
   if ($[27] !== existingApiKey || $[28] !== selectedOption_2 || $[29] !== theme) {
     t11 =
@@ -209,7 +215,7 @@ function ApiKeyStep(props) {
   if (
     $[40] !== apiKeyOrOAuthToken ||
     $[41] !== cursorOffset ||
-    $[42] !== te ||
+    $[42] !== status ||
     $[43] !== onApiKeyChange ||
     $[44] !== selectedOption_2 ||
     $[45] !== terminalSize
@@ -219,7 +225,7 @@ function ApiKeyStep(props) {
       jsxProd_default(TextInput, {
         value: apiKeyOrOAuthToken,
         onChange: onApiKeyChange,
-        onSubmit: te,
+        onSubmit: status,
         onPaste: onApiKeyChange,
         focus: true,
         placeholder: "sk-ant\u2026 (Create a new key at https://platform.claude.com/settings/keys)",
@@ -231,15 +237,15 @@ function ApiKeyStep(props) {
       });
     $[40] = apiKeyOrOAuthToken;
     $[41] = cursorOffset;
-    $[42] = te;
+    $[42] = status;
     $[43] = onApiKeyChange;
     $[44] = selectedOption_2;
     $[45] = terminalSize;
     $[46] = t15;
   } else t15 = $[46];
-  let K;
+  let child;
   if ($[47] !== t11 || $[48] !== t12 || $[49] !== t14 || $[50] !== t15) {
-    K = jsxProd_default_2(Box, {
+    child = jsxProd_default_2(Box, {
       flexDirection: "column",
       gap: 1,
       children: [t11, t12, t14, t15],
@@ -248,8 +254,8 @@ function ApiKeyStep(props) {
     $[48] = t12;
     $[49] = t14;
     $[50] = t15;
-    $[51] = K;
-  } else K = $[51];
-  return K;
+    $[51] = child;
+  } else child = $[51];
+  return child;
 }
 export { ApiKeyStep };

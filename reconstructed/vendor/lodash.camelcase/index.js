@@ -5,7 +5,7 @@
  * pieces: chunk-pwh5dx3n.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../runtime/bun-runtime.js";
+import { __commonJS as x } from "../../runtime/bun-runtime.js";
 
 //@ chunk-pwh5dx3n.js:71132-76760 cjs-fingerprint
 var Qu = x(function (cjsExports, cjsModule) {
@@ -310,8 +310,8 @@ var Qu = x(function (cjsExports, cjsModule) {
   }
   var objectProto = Object.prototype;
   var objectToString = objectProto.toString;
-  var Iu = root.Symbol;
-  var symbolProto = Iu ? Iu.prototype : undefined;
+  var nativeSymbol = root.Symbol;
+  var symbolProto = nativeSymbol ? nativeSymbol.prototype : undefined;
   var symbolToString = symbolProto ? symbolProto.toString : undefined;
   function baseSlice(array, start, end) {
     var index = -1;

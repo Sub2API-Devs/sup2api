@@ -12,16 +12,16 @@ import { resolve } from "path";
 import { randomUUID } from "crypto";
 import {
   init_react_production,
-  y,
-  P,
-  Q,
-  Se,
-  zt,
-  R,
-  yt,
-  Kc,
+  useState,
+  useEffect,
+  useMemo,
+  useContext,
+  useLayoutEffect,
+  useRef,
+  useSyncExternalStore,
+  fragmentTypeExport,
 } from "../../vendor/react/cjs/react.production.js";
-import { w } from "../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import { useShortcutDisplay as useShortcutDisplay_2 } from "../keybindings/useShortcutDisplay.js";
 import {
   useHasOpenDialog as useHasOpenDialog_2,
@@ -72,7 +72,7 @@ import { getTerminalMultiplexer } from "../ink/terminal.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../services/analytics/growthbook.js";
 import { useInterval, useSelection } from "../ink/components/Input.js";
 import { useTerminalTitle, useTimeout } from "../ink/hooks/useTerminalHooks.js";
-import { string } from "../../vendor/zod/v4/classic/schemas.js";
+import { stringSchema } from "../../vendor/zod/v4/classic/schemas.js";
 import { orderedRowSource, appendRowsWithHooks } from "../utils/queryHelpers.js";
 import { applyMessageListAppend, applyMessageListEdit } from "../cli/print/turnStreaming.js";
 import { getSessionProject } from "../bootstrap/sessionSlices.js";
@@ -129,7 +129,7 @@ import { MessageActionsKeybindings } from "../components/messageActions.js";
 import { plural } from "../utils/stringUtils.js";
 import { DiffStatCounts } from "../components/PrBadge.js";
 import { ProgressBar } from "../components/design-system/ProgressBar.js";
-import { UP_ARROW, DOWN_ARROW } from "../utils/permissions/autoModeRulesPrompt.js";
+import { UP_ARROW, DOWN_ARROW, HEAVY_MULTIPLICATION_X } from "../constants/figures.js";
 import { WorkerBadge } from "../components/permissions/WorkerBadge.js";
 import { wrapText } from "../ink/wrap-text.js";
 import { ScrollBoxDefault } from "../ink/components/ScrollBox.js";
@@ -137,8 +137,7 @@ import { HintText } from "../components/design-system/HintText.js";
 import { Divider } from "../components/design-system/Divider.js";
 import { truncateStartToWidth } from "../utils/format.js";
 import { diffLineToPlainText } from "../components/diff/diffText.js";
-import { HEAVY_MULTIPLICATION_X } from "../constants/figures.js";
-import { BridgeChannelSlot, createColorAssigner } from "../services/artifacts/artifactReadConsent.js";
+import { BridgeChannelSlot } from "./repl/bridgeChannelSlot.js";
 import {
   setDialogHostUnmounted,
   setBlockingToolProgress,
@@ -164,6 +163,7 @@ import {
   useInformationalMessageSink,
   ReplBridgeConnector,
 } from "./repl/ReplBridgeConnector.js";
+import { createColorAssigner } from "../tools/AgentTool/agentColorManager.js";
 import { fieldAccessor } from "../state/sliceHelpers.js";
 import { useTerminalNotification } from "../ink/useTerminalNotification.js";
 import {
@@ -289,20 +289,24 @@ import { PendingTaskUpdatesNote } from "../components/SessionHeader.js";
 import { ExpandedTaskList } from "../components/TaskListV2.js";
 import { WorkerPendingPermissions } from "./repl/WorkerPendingPermissions.js";
 import { runExitInterstitial } from "./repl/exitFlow.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-18hwfzwa.js:136066-136070 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:136066", () => {
+  init_react_production();
+});
 //@ chunk-18hwfzwa.js:136342-136374 placement
-function isNonEmptyString(co) {
-  return co !== "";
+function isNonEmptyString(value) {
+  return value !== "";
 }
 //@ chunk-18hwfzwa.js:136374-136401 placement
-function negateBoolean(ls) {
-  return !ls;
+function negateBoolean(value) {
+  return !value;
 }
 //@ chunk-18hwfzwa.js:136401-136428 placement
-function notB(Ms) {
-  return !Ms;
+function notB(value) {
+  return !value;
 }
 //@ chunk-18hwfzwa.js:136428-136451 layout
 var VERBOSE_LABEL = "verbose ";
@@ -312,104 +316,104 @@ var FOOTER_PADDING = 2;
  * transcript 模式（ctrl+o）底部页脚：显示 "Showing detailed transcript"、切换快捷键、滚动/打开编辑器提示或搜索计数；宽度不足时退化为 "? for shortcuts"。
  */
 function TranscriptModeFooter(props) {
-  let $ = w(17);
+  let $ = useMemoCache(17);
   let { showAllInTranscript, virtualScroll, searchBadge, suppressShowAll, status } = props;
-  let Re = suppressShowAll === undefined ? false : suppressShowAll;
+  let suppressShowAllFlag = suppressShowAll === undefined ? false : suppressShowAll;
   let toggleShortcut = useShortcutDisplay_2("app:toggleTranscript", "Global", "ctrl+o");
   let showAllShortcut = useShortcutDisplay_2("transcript:toggleShowAll", "Transcript", "ctrl+e");
   let hasOpenDialog = useHasOpenDialog_2();
   let { columns } = useTerminalSize();
-  let rt;
+  let editorName;
   if ($[0] === MEMO_CACHE_SENTINEL) {
-    rt = getShortEditorName();
-    $[0] = rt;
-  } else rt = $[0];
-  let kt = rt;
-  let At = kt ? `open in ${kt}` : "open in editor";
-  let It = `${figures_default.arrowUp}${figures_default.arrowDown} scroll \xB7 v to ${At} \xB7 ? for shortcuts`;
-  let Et =
+    editorName = getShortEditorName();
+    $[0] = editorName;
+  } else editorName = $[0];
+  let editorLabel = editorName;
+  let openInEditorLabel = editorLabel ? `open in ${editorLabel}` : "open in editor";
+  let hintLine = `${figures_default.arrowUp}${figures_default.arrowDown} scroll \xB7 v to ${openInEditorLabel} \xB7 ? for shortcuts`;
+  let statusBadge =
     FOOTER_PADDING +
       bunStringWidth(
         [
           hasOpenDialog ? "dialog waiting" : "",
           "Showing detailed transcript",
           `${toggleShortcut} to toggle`,
-          It,
+          hintLine,
         ]
           .filter(isNonEmptyString)
           .join(" \xB7 "),
       ) +
       bunStringWidth(status ? `${status} ` : VERBOSE_LABEL) <
     columns
-      ? It
+      ? hintLine
       : "? for shortcuts";
-  let Dt;
+  let dialogWaiting;
   if ($[1] !== hasOpenDialog) {
-    Dt =
+    dialogWaiting =
       hasOpenDialog &&
       jsxProd_default(Text, {
         color: "permission",
         children: "dialog waiting",
       });
     $[1] = hasOpenDialog;
-    $[2] = Dt;
-  } else Dt = $[2];
-  let Lt;
+    $[2] = dialogWaiting;
+  } else dialogWaiting = $[2];
+  let detailedLabel;
   if ($[3] === MEMO_CACHE_SENTINEL) {
-    Lt = jsxProd_default(Fragment, {
+    detailedLabel = jsxProd_default(Fragment, {
       children: "Showing detailed transcript",
     });
-    $[3] = Lt;
-  } else Lt = $[3];
-  let oo;
+    $[3] = detailedLabel;
+  } else detailedLabel = $[3];
+  let toggleShortcutLabel;
   if ($[4] !== toggleShortcut) {
-    oo = jsxProd_default_2(Fragment, {
+    toggleShortcutLabel = jsxProd_default_2(Fragment, {
       children: [toggleShortcut, " to toggle"],
     });
     $[4] = toggleShortcut;
-    $[5] = oo;
-  } else oo = $[5];
-  const Xt = searchBadge
+    $[5] = toggleShortcutLabel;
+  } else toggleShortcutLabel = $[5];
+  const searchBadgeText = searchBadge
     ? "n/N to navigate"
     : virtualScroll
-      ? Et
-      : Re
-        ? `v to ${At}`
+      ? statusBadge
+      : suppressShowAllFlag
+        ? `v to ${openInEditorLabel}`
         : `${showAllShortcut} to ${showAllInTranscript ? "collapse" : "show all"}`;
-  let io;
-  if ($[6] !== Dt || $[7] !== oo || $[8] !== Xt) {
-    io = jsxProd_default(Text, {
+  let bylineRow;
+  if ($[6] !== dialogWaiting || $[7] !== toggleShortcutLabel || $[8] !== searchBadgeText) {
+    bylineRow = jsxProd_default(Text, {
       dimColor: true,
       wrap: "truncate-end",
       children: jsxProd_default_2(Byline, {
-        children: [Dt, Lt, oo, Xt],
+        children: [dialogWaiting, detailedLabel, toggleShortcutLabel, searchBadgeText],
       }),
     });
-    $[6] = Dt;
-    $[7] = oo;
-    $[8] = Xt;
-    $[9] = io;
-  } else io = $[9];
-  let so;
+    $[6] = dialogWaiting;
+    $[7] = toggleShortcutLabel;
+    $[8] = searchBadgeText;
+    $[9] = bylineRow;
+  } else bylineRow = $[9];
+  let spacerBox;
   if ($[10] === MEMO_CACHE_SENTINEL) {
-    so = jsxProd_default(Box, {
+    spacerBox = jsxProd_default(Box, {
       flexGrow: 1,
     });
-    $[10] = so;
-  } else so = $[10];
-  let po;
+    $[10] = spacerBox;
+  } else spacerBox = $[10];
+  let footerStatus;
   if ($[11] !== searchBadge || $[12] !== status) {
-    po = jsxProd_default(TranscriptFooterStatus, {
+    footerStatus = jsxProd_default(TranscriptFooterStatus, {
       status,
       searchBadge,
     });
     $[11] = searchBadge;
     $[12] = status;
-    $[13] = po;
-  } else po = $[13];
-  let ao;
-  if ($[14] !== io || $[15] !== po) {
-    ao = jsxProd_default_2(Box, {
+    $[13] = footerStatus;
+  } else footerStatus = $[13];
+  let footerRow;
+  if ($[14] !== bylineRow || $[15] !== footerStatus) {
+    footerRow = jsxProd_default_2(Box, {
       noSelect: true,
       alignItems: "center",
       alignSelf: "center",
@@ -421,54 +425,54 @@ function TranscriptModeFooter(props) {
       marginTop: 1,
       paddingLeft: FOOTER_PADDING,
       width: "100%",
-      children: [io, so, po],
+      children: [bylineRow, spacerBox, footerStatus],
     });
-    $[14] = io;
-    $[15] = po;
-    $[16] = ao;
-  } else ao = $[16];
-  return ao;
+    $[14] = bylineRow;
+    $[15] = footerStatus;
+    $[16] = footerRow;
+  } else footerRow = $[16];
+  return footerRow;
 }
 //@ chunk-18hwfzwa.js:138080-138476 layout
 function TranscriptFooterStatus(props) {
-  let $ = w(6);
+  let $ = useMemoCache(6);
   let { status, searchBadge } = props;
   if (status) {
-    let ee;
+    let statusText;
     if ($[0] !== status) {
-      ee = jsxProd_default_2(Text, {
+      statusText = jsxProd_default_2(Text, {
         children: [status, " "],
       });
       $[0] = status;
-      $[1] = ee;
-    } else ee = $[1];
-    return ee;
+      $[1] = statusText;
+    } else statusText = $[1];
+    return statusText;
   }
   if (searchBadge) {
-    let ee;
+    let searchBadgeText;
     if ($[2] !== searchBadge.count || $[3] !== searchBadge.current) {
-      ee = jsxProd_default_2(Text, {
+      searchBadgeText = jsxProd_default_2(Text, {
         dimColor: true,
         children: [searchBadge.current, "/", searchBadge.count, "  "],
       });
       $[2] = searchBadge.count;
       $[3] = searchBadge.current;
-      $[4] = ee;
-    } else ee = $[4];
-    return ee;
+      $[4] = searchBadgeText;
+    } else searchBadgeText = $[4];
+    return searchBadgeText;
   }
-  let ee;
+  let verboseLabel;
   if ($[5] === MEMO_CACHE_SENTINEL) {
-    ee = jsxProd_default(Text, {
+    verboseLabel = jsxProd_default(Text, {
       dimColor: true,
       children: VERBOSE_LABEL,
     });
-    $[5] = ee;
-  } else ee = $[5];
-  return ee;
+    $[5] = verboseLabel;
+  } else verboseLabel = $[5];
+  return verboseLabel;
 }
 //@ chunk-18hwfzwa.js:138476-138802 layout
-function SearchIndexStatus({ indexStatus, count, current: D, query }) {
+function SearchIndexStatus({ indexStatus, count, current, query }) {
   if (indexStatus === "building")
     return jsxProd_default(Text, {
       dimColor: true,
@@ -487,7 +491,7 @@ function SearchIndexStatus({ indexStatus, count, current: D, query }) {
   if (count > 0)
     return jsxProd_default_2(Text, {
       dimColor: true,
-      children: [D, "/", count, "  "],
+      children: [current, "/", count, "  "],
     });
   return null;
 }
@@ -496,150 +500,150 @@ function SearchIndexStatus({ indexStatus, count, current: D, query }) {
  * transcript 模式按 ? 显示的快捷键帮助页脚（滚动、搜索、打印到 scrollback、用编辑器打开、退出）。
  */
 function TranscriptHelpFooter() {
-  let $ = w(23);
+  let $ = useMemoCache(23);
   let shortcutDisplay = useShortcutDisplay_2("app:toggleTranscript", "Global", "ctrl+o");
   let shortcutDisplay_2 = useShortcutDisplay_2("transcript:exit", "Transcript", "q");
-  let L;
+  let editorName;
   if ($[0] === MEMO_CACHE_SENTINEL) {
-    L = getShortEditorName();
-    $[0] = L;
-  } else L = $[0];
-  let ee = L;
-  let ke;
+    editorName = getShortEditorName();
+    $[0] = editorName;
+  } else editorName = $[0];
+  let resolvedEditorName = editorName;
+  let hint;
   if ($[1] === MEMO_CACHE_SENTINEL) {
-    ke = jsxProd_default_2(Text, {
+    hint = jsxProd_default_2(Text, {
       dimColor: true,
       children: [`${figures_default.arrowUp}${figures_default.arrowDown} j/k`.padEnd(9), "scroll"],
     });
-    $[1] = ke;
-  } else ke = $[1];
-  let Re;
+    $[1] = hint;
+  } else hint = $[1];
+  let halfPageHint;
   if ($[2] === MEMO_CACHE_SENTINEL) {
-    Re = jsxProd_default_2(Text, {
+    halfPageHint = jsxProd_default_2(Text, {
       dimColor: true,
       children: ["ctrl+u/d".padEnd(9), "half page"],
     });
-    $[2] = Re;
-  } else Re = $[2];
-  let Be;
+    $[2] = halfPageHint;
+  } else halfPageHint = $[2];
+  let pageHint;
   if ($[3] === MEMO_CACHE_SENTINEL) {
-    Be = jsxProd_default_2(Text, {
+    pageHint = jsxProd_default_2(Text, {
       dimColor: true,
       children: ["space b".padEnd(9), "page"],
     });
-    $[3] = Be;
-  } else Be = $[3];
-  let He;
+    $[3] = pageHint;
+  } else pageHint = $[3];
+  let topBottomHint;
   if ($[4] === MEMO_CACHE_SENTINEL) {
-    He = jsxProd_default_2(Text, {
+    topBottomHint = jsxProd_default_2(Text, {
       dimColor: true,
       children: ["g/G".padEnd(9), "top/bottom"],
     });
-    $[4] = He;
-  } else He = $[4];
-  let We;
+    $[4] = topBottomHint;
+  } else topBottomHint = $[4];
+  let scrollColumn;
   if ($[5] === MEMO_CACHE_SENTINEL) {
-    We = jsxProd_default_2(Box, {
+    scrollColumn = jsxProd_default_2(Box, {
       flexDirection: "column",
       children: [
-        ke,
-        Re,
-        Be,
-        He,
+        hint,
+        halfPageHint,
+        pageHint,
+        topBottomHint,
         jsxProd_default_2(Text, {
           dimColor: true,
           children: ["{/}".padEnd(9), "prev/next prompt"],
         }),
       ],
     });
-    $[5] = We;
-  } else We = $[5];
-  let ze;
+    $[5] = scrollColumn;
+  } else scrollColumn = $[5];
+  let searchHint;
   if ($[6] === MEMO_CACHE_SENTINEL) {
-    ze = jsxProd_default_2(Text, {
+    searchHint = jsxProd_default_2(Text, {
       dimColor: true,
       children: ["/".padEnd(5), "search"],
     });
-    $[6] = ze;
-  } else ze = $[6];
-  let Xe;
+    $[6] = searchHint;
+  } else searchHint = $[6];
+  let matchHint;
   if ($[7] === MEMO_CACHE_SENTINEL) {
-    Xe = jsxProd_default_2(Text, {
+    matchHint = jsxProd_default_2(Text, {
       dimColor: true,
       children: ["n/N".padEnd(5), "next/prev match"],
     });
-    $[7] = Xe;
-  } else Xe = $[7];
-  let rt;
+    $[7] = matchHint;
+  } else matchHint = $[7];
+  let printHint;
   if ($[8] === MEMO_CACHE_SENTINEL) {
-    rt = jsxProd_default_2(Text, {
+    printHint = jsxProd_default_2(Text, {
       dimColor: true,
       children: ["[".padEnd(5), "print to scrollback"],
     });
-    $[8] = rt;
-  } else rt = $[8];
-  let kt;
+    $[8] = printHint;
+  } else printHint = $[8];
+  let openEditorKey;
   if ($[9] === MEMO_CACHE_SENTINEL) {
-    kt = "v".padEnd(5);
-    $[9] = kt;
-  } else kt = $[9];
-  let At;
+    openEditorKey = "v".padEnd(5);
+    $[9] = openEditorKey;
+  } else openEditorKey = $[9];
+  let searchColumn;
   if ($[10] === MEMO_CACHE_SENTINEL) {
-    At = jsxProd_default_2(Box, {
+    searchColumn = jsxProd_default_2(Box, {
       flexDirection: "column",
       children: [
-        ze,
-        Xe,
-        rt,
+        searchHint,
+        matchHint,
+        printHint,
         jsxProd_default_2(Text, {
           dimColor: true,
-          children: [kt, "open in ", ee ?? "editor"],
+          children: [openEditorKey, "open in ", resolvedEditorName ?? "editor"],
         }),
       ],
     });
-    $[10] = At;
-  } else At = $[10];
-  let It;
+    $[10] = searchColumn;
+  } else searchColumn = $[10];
+  let toggleKeyLabel;
   if ($[11] !== shortcutDisplay) {
-    It = shortcutDisplay.padEnd(7);
+    toggleKeyLabel = shortcutDisplay.padEnd(7);
     $[11] = shortcutDisplay;
-    $[12] = It;
-  } else It = $[12];
-  let Ot;
-  if ($[13] !== It) {
-    Ot = jsxProd_default_2(Text, {
+    $[12] = toggleKeyLabel;
+  } else toggleKeyLabel = $[12];
+  let toggleHint;
+  if ($[13] !== toggleKeyLabel) {
+    toggleHint = jsxProd_default_2(Text, {
       dimColor: true,
-      children: [It, "toggle transcript"],
+      children: [toggleKeyLabel, "toggle transcript"],
     });
-    $[13] = It;
-    $[14] = Ot;
-  } else Ot = $[14];
-  let Et;
+    $[13] = toggleKeyLabel;
+    $[14] = toggleHint;
+  } else toggleHint = $[14];
+  let exitKeyLabel;
   if ($[15] !== shortcutDisplay_2) {
-    Et = shortcutDisplay_2.padEnd(7);
+    exitKeyLabel = shortcutDisplay_2.padEnd(7);
     $[15] = shortcutDisplay_2;
-    $[16] = Et;
-  } else Et = $[16];
-  let Dt;
-  if ($[17] !== Et) {
-    Dt = jsxProd_default_2(Text, {
+    $[16] = exitKeyLabel;
+  } else exitKeyLabel = $[16];
+  let exitHint;
+  if ($[17] !== exitKeyLabel) {
+    exitHint = jsxProd_default_2(Text, {
       dimColor: true,
-      children: [Et, "exit"],
+      children: [exitKeyLabel, "exit"],
     });
-    $[17] = Et;
-    $[18] = Dt;
-  } else Dt = $[18];
-  let Lt;
+    $[17] = exitKeyLabel;
+    $[18] = exitHint;
+  } else exitHint = $[18];
+  let closeHint;
   if ($[19] === MEMO_CACHE_SENTINEL) {
-    Lt = jsxProd_default_2(Text, {
+    closeHint = jsxProd_default_2(Text, {
       dimColor: true,
       children: ["?".padEnd(7), "close help"],
     });
-    $[19] = Lt;
-  } else Lt = $[19];
-  let oo;
-  if ($[20] !== Ot || $[21] !== Dt) {
-    oo = jsxProd_default_2(Box, {
+    $[19] = closeHint;
+  } else closeHint = $[19];
+  let helpRow;
+  if ($[20] !== toggleHint || $[21] !== exitHint) {
+    helpRow = jsxProd_default_2(Box, {
       noSelect: true,
       borderTopDimColor: true,
       borderBottom: false,
@@ -652,25 +656,25 @@ function TranscriptHelpFooter() {
       flexDirection: "row",
       gap: 4,
       children: [
-        We,
-        At,
+        scrollColumn,
+        searchColumn,
         jsxProd_default_2(Box, {
           flexDirection: "column",
-          children: [Ot, Dt, Lt],
+          children: [toggleHint, exitHint, closeHint],
         }),
       ],
     });
-    $[20] = Ot;
-    $[21] = Dt;
-    $[22] = oo;
-  } else oo = $[22];
-  return oo;
+    $[20] = toggleHint;
+    $[21] = exitHint;
+    $[22] = helpRow;
+  } else helpRow = $[22];
+  return helpRow;
 }
 //@ chunk-18hwfzwa.js:140845-142030 fingerprint = TranscriptSearchBar (0.76)
 /**
  * transcript 搜索栏（/）：useSearchInput 读输入，首次打开时预热搜索索引（indexing… / indexed in Nms），查询变化后调用 jumpRef.setSearchQuery 并高亮。
  */
-function TranscriptSearchBar({ jumpRef, count, current: D, onClose, onCancel, setHighlight, initialQuery }) {
+function TranscriptSearchBar({ jumpRef, count, current, onClose, onCancel, setHighlight, initialQuery }) {
   let { query, cursorOffset, handleKeyDown, handlePaste } = useSearchInput({
     isActive: true,
     initialQuery,
@@ -678,8 +682,8 @@ function TranscriptSearchBar({ jumpRef, count, current: D, onClose, onCancel, se
     onCancel,
   });
   let clock = useClock();
-  let [indexStatus, setIndexStatus] = y("building");
-  P(() => {
+  let [indexStatus, setIndexStatus] = useState("building");
+  useEffect(() => {
     let alive = true;
     let warm = jumpRef.current?.warmSearchIndex;
     if (!warm) {
@@ -702,21 +706,21 @@ function TranscriptSearchBar({ jumpRef, count, current: D, onClose, onCancel, se
     };
   }, []);
   let warmDone = indexStatus !== "building";
-  P(() => {
+  useEffect(() => {
     if (!warmDone) return;
     jumpRef.current?.setSearchQuery(query);
     setHighlight(query);
   }, [query, warmDone]);
   let off = cursorOffset;
   let cursorChar = off < query.length ? query[off] : " ";
-  let Et = Q(isNativeCursorEnabled, []);
-  let Dt = env.CLAUDE_CODE_ALT_SCREEN_FULL_REPAINT && env.CLAUDE_CODE_SESSION_KIND !== "bg";
-  let inverse = !(Et && !Dt);
+  let isNativeCursorEnabled_2 = useMemo(isNativeCursorEnabled, []);
+  let needsFullRepaint = env.CLAUDE_CODE_ALT_SCREEN_FULL_REPAINT && env.CLAUDE_CODE_SESSION_KIND !== "bg";
+  let inverse = !(isNativeCursorEnabled_2 && !needsFullRepaint);
   let ref = useDeclaredCursor({
     line: 0,
     column: 0,
     active: true,
-    visible: !Dt,
+    visible: !needsFullRepaint,
   });
   return jsxProd_default_2(Box, {
     borderTopDimColor: true,
@@ -757,56 +761,64 @@ function TranscriptSearchBar({ jumpRef, count, current: D, onClose, onCancel, se
       SearchIndexStatus({
         indexStatus,
         count,
-        current: D,
+        current,
         query,
       }),
     ],
   });
 }
 //@ chunk-18hwfzwa.js:1087735-1087772 sole-consumer
-function selectTurnLoadingRepl(hn) {
-  return hn.isLoading;
+function selectTurnLoadingRepl(turn) {
+  return turn.isLoading;
 }
 //@ chunk-18hwfzwa.js:1087772-1087809 sole-consumer
-function selectTurnIsLoadingB(Bo) {
-  return Bo.isLoading;
+function selectTurnIsLoadingB(turn) {
+  return turn.isLoading;
 }
 //@ chunk-18hwfzwa.js:1087809-1087852 sole-consumer
-function selectInputOwnsEscapeReplB(Ro) {
-  return Ro.inputOwnsEscape;
+function selectInputOwnsEscapeReplB(repl) {
+  return repl.inputOwnsEscape;
 }
 //@ chunk-18hwfzwa.js:1087852-1087898 sole-consumer
-function selectInputRowReplaced(Ho) {
-  return Ho.isInputRowReplaced;
+function selectInputRowReplaced(state) {
+  return state.isInputRowReplaced;
 }
 //@ chunk-18hwfzwa.js:1087898-1088121 sole-consumer
-var CLOSED_FRUSTRATION_SURVEY = {
-  state: "closed",
-  transcriptBundlePath: null,
-  handleTranscriptSelect: () => {},
-};
-var useFrustrationSurveyStub = () => CLOSED_FRUSTRATION_SURVEY;
-var NullBand = () => null;
-var SURVEY_SLOT_KEYS = {
-  postCompact: true,
-  longContext: true,
-  plugin: true,
-  memory: true,
-  feedback: true,
-  orgSurvey: true,
-  frustration: true,
-};
-var SURVEY_KINDS = Object.keys(SURVEY_SLOT_KEYS);
+var CLOSED_FRUSTRATION_SURVEY; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var useFrustrationSurveyStub;
+var NullBand;
+var SURVEY_SLOT_KEYS;
+var SURVEY_KINDS;
+deferInit("chunk-18hwfzwa.js:1087898", () => {
+  CLOSED_FRUSTRATION_SURVEY = {
+    state: "closed",
+    transcriptBundlePath: null,
+    handleTranscriptSelect: () => {},
+  };
+  useFrustrationSurveyStub = () => CLOSED_FRUSTRATION_SURVEY;
+  NullBand = () => null;
+  SURVEY_SLOT_KEYS = {
+    postCompact: true,
+    longContext: true,
+    plugin: true,
+    memory: true,
+    feedback: true,
+    orgSurvey: true,
+    frustration: true,
+  };
+  SURVEY_KINDS = Object.keys(SURVEY_SLOT_KEYS);
+});
 //@ chunk-18hwfzwa.js:1088121-1088308 sole-consumer
 class SurveySlotStore {
   #e = createSignal();
   #t = null;
-  subscribe = (h) => this.#e.subscribe(h);
+  subscribe = (listener) => this.#e.subscribe(listener);
   getSnapshot = () => this.#t;
-  publish(h) {
-    let x = this.#t;
-    if (x !== null && SURVEY_KINDS.every((D) => shallowEqualObject(x[D], h[D]))) return;
-    this.#t = h;
+  publish(next) {
+    let previous = this.#t;
+    if (previous !== null && SURVEY_KINDS.every((kind) => shallowEqualObject(previous[kind], next[kind])))
+      return;
+    this.#t = next;
     this.#e.emit();
   }
 }
@@ -826,61 +838,61 @@ function hasActiveSurvey(storeSelector) {
   );
 }
 //@ chunk-18hwfzwa.js:1088547-1088662 sole-consumer
-function shallowEqualObject(h, x) {
-  let keys = Object.keys(h);
-  return keys.length === Object.keys(x).length && keys.every((L) => Object.is(h[L], x[L]));
+function shallowEqualObject(left, right) {
+  let keys = Object.keys(left);
+  return keys.length === Object.keys(right).length && keys.every((key) => Object.is(left[key], right[key]));
 }
 //@ chunk-18hwfzwa.js:1088662-1091274 sole-consumer
 /**
  * 在 REPL 中依次运行各问卷 hook（压缩后、长上下文、插件、记忆、反馈、组织、挫败检测），后者在前者打开时让位，并把全部状态发布到 SurveySlotStore。
  */
 function SurveyStatePublisher(props) {
-  let We = w(48);
+  let $ = useMemoCache(48);
   let { turn, transcript, isRemoteSession, slot, localJsx } = props;
   let messages = useStoreSelector(transcript);
   let isLoading = useStoreSelector(turn, selectTurnLoadingRepl);
   let hasActivePrompt = useHasAutoDialog();
-  let ze;
-  if (We[0] !== transcript) {
-    ze = () => new AssistantTokenCounter(transcript);
-    We[0] = transcript;
-    We[1] = ze;
-  } else ze = We[1];
-  let [Xe] = y(ze);
-  let cumulativeSessionTokens = useStoreSelector(Xe);
-  let kt;
-  let At;
-  if (We[2] !== Xe) {
-    kt = () => () => Xe.dispose();
-    At = [Xe];
-    We[2] = Xe;
-    We[3] = kt;
-    We[4] = At;
+  let surveyState;
+  if ($[0] !== transcript) {
+    surveyState = () => new AssistantTokenCounter(transcript);
+    $[0] = transcript;
+    $[1] = surveyState;
+  } else surveyState = $[1];
+  let [tokenCounter] = useState(surveyState);
+  let cumulativeSessionTokens = useStoreSelector(tokenCounter);
+  let disposeTokenCounter;
+  let disposeDeps;
+  if ($[2] !== tokenCounter) {
+    disposeTokenCounter = () => () => tokenCounter.dispose();
+    disposeDeps = [tokenCounter];
+    $[2] = tokenCounter;
+    $[3] = disposeTokenCounter;
+    $[4] = disposeDeps;
   } else {
-    kt = We[3];
-    At = We[4];
+    disposeTokenCounter = $[3];
+    disposeDeps = $[4];
   }
-  P(kt, At);
+  useEffect(disposeTokenCounter, disposeDeps);
   const enabled = !isRemoteSession;
-  let Ot;
-  if (We[5] !== enabled) {
-    Ot = {
+  let compactSurveyOptions;
+  if ($[5] !== enabled) {
+    compactSurveyOptions = {
       enabled,
     };
-    We[5] = enabled;
-    We[6] = Ot;
-  } else Ot = We[6];
-  let postCompactSurvey = usePostCompactSurvey(messages, isLoading, hasActivePrompt, Ot);
+    $[5] = enabled;
+    $[6] = compactSurveyOptions;
+  } else compactSurveyOptions = $[6];
+  let postCompactSurvey = usePostCompactSurvey(messages, isLoading, hasActivePrompt, compactSurveyOptions);
   const enabled_2 = !isRemoteSession;
   const otherSurveyActive = postCompactSurvey.state !== "closed";
   let props_2;
   if (
-    We[7] !== cumulativeSessionTokens ||
-    We[8] !== hasActivePrompt ||
-    We[9] !== enabled_2 ||
-    We[10] !== otherSurveyActive ||
-    We[11] !== transcript ||
-    We[12] !== turn
+    $[7] !== cumulativeSessionTokens ||
+    $[8] !== hasActivePrompt ||
+    $[9] !== enabled_2 ||
+    $[10] !== otherSurveyActive ||
+    $[11] !== transcript ||
+    $[12] !== turn
   ) {
     props_2 = {
       cumulativeSessionTokens,
@@ -890,71 +902,66 @@ function SurveyStatePublisher(props) {
       enabled: enabled_2,
       otherSurveyActive,
     };
-    We[7] = cumulativeSessionTokens;
-    We[8] = hasActivePrompt;
-    We[9] = enabled_2;
-    We[10] = otherSurveyActive;
-    We[11] = transcript;
-    We[12] = turn;
-    We[13] = props_2;
-  } else props_2 = We[13];
+    $[7] = cumulativeSessionTokens;
+    $[8] = hasActivePrompt;
+    $[9] = enabled_2;
+    $[10] = otherSurveyActive;
+    $[11] = transcript;
+    $[12] = turn;
+    $[13] = props_2;
+  } else props_2 = $[13];
   let longContextSurvey = useLongContextSurvey(props_2);
   const enabled_3 = !isRemoteSession;
   const otherSurveyActive_2 = postCompactSurvey.state !== "closed" || longContextSurvey.state !== "closed";
-  let po;
-  if (
-    We[14] !== hasActivePrompt ||
-    We[15] !== otherSurveyActive_2 ||
-    We[16] !== enabled_3 ||
-    We[17] !== turn
-  ) {
-    po = {
+  let pluginSurveyOptions;
+  if ($[14] !== hasActivePrompt || $[15] !== otherSurveyActive_2 || $[16] !== enabled_3 || $[17] !== turn) {
+    pluginSurveyOptions = {
       turn,
       hasActivePrompt,
       enabled: enabled_3,
       otherSurveyActive: otherSurveyActive_2,
     };
-    We[14] = hasActivePrompt;
-    We[15] = otherSurveyActive_2;
-    We[16] = enabled_3;
-    We[17] = turn;
-    We[18] = po;
-  } else po = We[18];
-  let pluginFeedbackSurvey = usePluginFeedbackSurvey(po);
+    $[14] = hasActivePrompt;
+    $[15] = otherSurveyActive_2;
+    $[16] = enabled_3;
+    $[17] = turn;
+    $[18] = pluginSurveyOptions;
+  } else pluginSurveyOptions = $[18];
+  let pluginFeedbackSurvey = usePluginFeedbackSurvey(pluginSurveyOptions);
   const enabled_4 = !isRemoteSession;
   const otherSurveyActive_3 =
     postCompactSurvey.state !== "closed" ||
     longContextSurvey.state !== "closed" ||
     pluginFeedbackSurvey.state !== "closed";
-  let Ao;
-  if (We[19] !== enabled_4 || We[20] !== otherSurveyActive_3) {
-    Ao = {
+  let memorySurveyOptions;
+  if ($[19] !== enabled_4 || $[20] !== otherSurveyActive_3) {
+    memorySurveyOptions = {
       enabled: enabled_4,
       otherSurveyActive: otherSurveyActive_3,
     };
-    We[19] = enabled_4;
-    We[20] = otherSurveyActive_3;
-    We[21] = Ao;
-  } else Ao = We[21];
-  let memorySurvey = useMemorySurvey(messages, isLoading, hasActivePrompt, Ao);
+    $[19] = enabled_4;
+    $[20] = otherSurveyActive_3;
+    $[21] = memorySurveyOptions;
+  } else memorySurveyOptions = $[21];
+  let memorySurvey = useMemorySurvey(messages, isLoading, hasActivePrompt, memorySurveyOptions);
   const otherSurveyActive_4 =
     postCompactSurvey.state !== "closed" ||
     longContextSurvey.state !== "closed" ||
     pluginFeedbackSurvey.state !== "closed" ||
     memorySurvey.state !== "closed";
-  let Ho;
-  if (We[22] !== otherSurveyActive_4 || We[23] !== transcript || We[24] !== turn) {
-    Ho = {
+  let feedbackSurveyOptions;
+  if ($[22] !== otherSurveyActive_4 || $[23] !== transcript || $[24] !== turn) {
+    feedbackSurveyOptions = {
       turn,
       transcript,
       otherSurveyActive: otherSurveyActive_4,
     };
-    We[22] = otherSurveyActive_4;
-    We[23] = transcript;
-    We[24] = turn;
-    We[25] = Ho;
-  } else Ho = We[25];
-  let feedbackSurvey = useFeedbackSurvey(Ho);
+    $[22] = otherSurveyActive_4;
+    $[23] = transcript;
+    $[24] = turn;
+    $[25] = feedbackSurveyOptions;
+  } else feedbackSurveyOptions = $[25];
+  let feedbackSurvey = useFeedbackSurvey(feedbackSurveyOptions);
   const enabled_5 = !isRemoteSession;
   const otherSurveyActive_5 =
     postCompactSurvey.state !== "closed" ||
@@ -964,12 +971,12 @@ function SurveyStatePublisher(props) {
     feedbackSurvey.state !== "closed";
   let props_3;
   if (
-    We[26] !== hasActivePrompt ||
-    We[27] !== localJsx ||
-    We[28] !== messages ||
-    We[29] !== enabled_5 ||
-    We[30] !== otherSurveyActive_5 ||
-    We[31] !== turn
+    $[26] !== hasActivePrompt ||
+    $[27] !== localJsx ||
+    $[28] !== messages ||
+    $[29] !== enabled_5 ||
+    $[30] !== otherSurveyActive_5 ||
+    $[31] !== turn
   ) {
     props_3 = {
       turn,
@@ -979,14 +986,14 @@ function SurveyStatePublisher(props) {
       enabled: enabled_5,
       otherSurveyActive: otherSurveyActive_5,
     };
-    We[26] = hasActivePrompt;
-    We[27] = localJsx;
-    We[28] = messages;
-    We[29] = enabled_5;
-    We[30] = otherSurveyActive_5;
-    We[31] = turn;
-    We[32] = props_3;
-  } else props_3 = We[32];
+    $[26] = hasActivePrompt;
+    $[27] = localJsx;
+    $[28] = messages;
+    $[29] = enabled_5;
+    $[30] = otherSurveyActive_5;
+    $[31] = turn;
+    $[32] = props_3;
+  } else props_3 = $[32];
   let orgSurvey = useOrgSurvey(props_3);
   const otherSurveyActive_6 =
     feedbackSurvey.state !== "closed" ||
@@ -995,41 +1002,36 @@ function SurveyStatePublisher(props) {
     pluginFeedbackSurvey.state !== "closed" ||
     memorySurvey.state !== "closed" ||
     orgSurvey.state !== "closed";
-  let Yo;
-  if (
-    We[33] !== hasActivePrompt ||
-    We[34] !== otherSurveyActive_6 ||
-    We[35] !== transcript ||
-    We[36] !== turn
-  ) {
-    Yo = {
+  let frustrationSurveyOptions;
+  if ($[33] !== hasActivePrompt || $[34] !== otherSurveyActive_6 || $[35] !== transcript || $[36] !== turn) {
+    frustrationSurveyOptions = {
       turn,
       transcript,
       hasActivePrompt,
       otherSurveyActive: otherSurveyActive_6,
     };
-    We[33] = hasActivePrompt;
-    We[34] = otherSurveyActive_6;
-    We[35] = transcript;
-    We[36] = turn;
-    We[37] = Yo;
-  } else Yo = We[37];
-  let frustration = useFrustrationSurveyStub(Yo);
-  let Fn = Se(SpinnerPaceContext);
-  let bn;
+    $[33] = hasActivePrompt;
+    $[34] = otherSurveyActive_6;
+    $[35] = transcript;
+    $[36] = turn;
+    $[37] = frustrationSurveyOptions;
+  } else frustrationSurveyOptions = $[37];
+  let frustration = useFrustrationSurveyStub(frustrationSurveyOptions);
+  let spinnerPace = useContext(SpinnerPaceContext);
+  let publishSurveyState;
   if (
-    We[38] !== feedbackSurvey ||
-    We[39] !== frustration ||
-    We[40] !== longContextSurvey ||
-    We[41] !== memorySurvey ||
-    We[42] !== Fn ||
-    We[43] !== orgSurvey ||
-    We[44] !== pluginFeedbackSurvey ||
-    We[45] !== postCompactSurvey ||
-    We[46] !== slot
+    $[38] !== feedbackSurvey ||
+    $[39] !== frustration ||
+    $[40] !== longContextSurvey ||
+    $[41] !== memorySurvey ||
+    $[42] !== spinnerPace ||
+    $[43] !== orgSurvey ||
+    $[44] !== pluginFeedbackSurvey ||
+    $[45] !== postCompactSurvey ||
+    $[46] !== slot
   ) {
-    bn = () => {
-      let Go = () =>
+    publishSurveyState = () => {
+      let doPublish = () =>
         slot.publish({
           postCompact: postCompactSurvey,
           longContext: longContextSurvey,
@@ -1039,21 +1041,21 @@ function SurveyStatePublisher(props) {
           orgSurvey,
           frustration,
         });
-      if (Fn) Fn.deferred(Go);
-      else Go();
+      if (spinnerPace) spinnerPace.deferred(doPublish);
+      else doPublish();
     };
-    We[38] = feedbackSurvey;
-    We[39] = frustration;
-    We[40] = longContextSurvey;
-    We[41] = memorySurvey;
-    We[42] = Fn;
-    We[43] = orgSurvey;
-    We[44] = pluginFeedbackSurvey;
-    We[45] = postCompactSurvey;
-    We[46] = slot;
-    We[47] = bn;
-  } else bn = We[47];
-  zt(bn);
+    $[38] = feedbackSurvey;
+    $[39] = frustration;
+    $[40] = longContextSurvey;
+    $[41] = memorySurvey;
+    $[42] = spinnerPace;
+    $[43] = orgSurvey;
+    $[44] = pluginFeedbackSurvey;
+    $[45] = postCompactSurvey;
+    $[46] = slot;
+    $[47] = publishSurveyState;
+  } else publishSurveyState = $[47];
+  useLayoutEffect(publishSurveyState);
   return null;
 }
 //@ chunk-18hwfzwa.js:1091274-1093560 sole-consumer
@@ -1061,33 +1063,33 @@ function SurveyStatePublisher(props) {
  * 输入框上方的提示带：有问卷时显示 SurveyHost，另有上方提示位、反馈草稿提示、web-setup 提示等，彼此通过 bandHeld 互斥。
  */
 function AbovePromptBands(props) {
-  let Ot = w(39);
+  let $ = useMemoCache(39);
   let { slot, turn, transcript, draft, submit } = props;
   let storeSelector = useStoreSelector(slot);
   let storeSelector_2 = useStoreSelector(turn, selectTurnIsLoadingB);
-  let [He, We] = y(false);
-  let [ze, Xe] = y(false);
-  let [rt, kt] = y(false);
+  let [flagA, setFlagA] = useState(false);
+  let [flagB, setFlagB] = useState(false);
+  let [flagC, setFlagC] = useState(false);
   let promptOwnsEscape = useStoreSelector(draft, selectInputOwnsEscapeReplB);
   let inputRowReplaced = useStoreSelector(draft, selectInputRowReplaced);
-  let Et;
-  if (Ot[0] !== storeSelector) {
-    Et = storeSelector !== null && hasActiveSurvey(storeSelector);
-    Ot[0] = storeSelector;
-    Ot[1] = Et;
-  } else Et = Ot[1];
-  let Dt = Et;
-  let Lt = Dt || He || ze;
-  let oo;
+  let hasSurvey;
+  if ($[0] !== storeSelector) {
+    hasSurvey = storeSelector !== null && hasActiveSurvey(storeSelector);
+    $[0] = storeSelector;
+    $[1] = hasSurvey;
+  } else hasSurvey = $[1];
+  let hasSurvey_2 = hasSurvey;
+  let surveyHoldsList = hasSurvey_2 || flagA || flagB;
+  let surveyHost;
   if (
-    Ot[2] !== draft.replaceValue ||
-    Ot[3] !== inputRowReplaced ||
-    Ot[4] !== submit.submitSurveyFollowUp ||
-    Ot[5] !== Dt ||
-    Ot[6] !== storeSelector
+    $[2] !== draft.replaceValue ||
+    $[3] !== inputRowReplaced ||
+    $[4] !== submit.submitSurveyFollowUp ||
+    $[5] !== hasSurvey_2 ||
+    $[6] !== storeSelector
   ) {
-    oo =
-      Dt &&
+    surveyHost =
+      hasSurvey_2 &&
       jsxProd_default(SurveyHost, {
         postCompactSurvey: storeSelector.postCompact,
         longContextSurvey: storeSelector.longContext,
@@ -1100,55 +1102,55 @@ function AbovePromptBands(props) {
         inputRowReplaced,
         handleSurveyRequestFeedback: submit.submitSurveyFollowUp,
       });
-    Ot[2] = draft.replaceValue;
-    Ot[3] = inputRowReplaced;
-    Ot[4] = submit.submitSurveyFollowUp;
-    Ot[5] = Dt;
-    Ot[6] = storeSelector;
-    Ot[7] = oo;
-  } else oo = Ot[7];
-  let Xt;
-  if (Ot[8] !== draft.replaceValue || Ot[9] !== storeSelector_2 || Ot[10] !== Dt) {
-    Xt = jsxProd_default(AbovePromptBandNamespace.AbovePromptSite, {
-      survey: Dt,
+    $[2] = draft.replaceValue;
+    $[3] = inputRowReplaced;
+    $[4] = submit.submitSurveyFollowUp;
+    $[5] = hasSurvey_2;
+    $[6] = storeSelector;
+    $[7] = surveyHost;
+  } else surveyHost = $[7];
+  let workingSite;
+  if ($[8] !== draft.replaceValue || $[9] !== storeSelector_2 || $[10] !== hasSurvey_2) {
+    workingSite = jsxProd_default(AbovePromptBandNamespace.AbovePromptSite, {
+      survey: hasSurvey_2,
       working: storeSelector_2,
       setInputValue: draft.replaceValue,
-      onHoldsBandChange: We,
+      onHoldsBandChange: setFlagA,
     });
-    Ot[8] = draft.replaceValue;
-    Ot[9] = storeSelector_2;
-    Ot[10] = Dt;
-    Ot[11] = Xt;
-  } else Xt = Ot[11];
+    $[8] = draft.replaceValue;
+    $[9] = storeSelector_2;
+    $[10] = hasSurvey_2;
+    $[11] = workingSite;
+  } else workingSite = $[11];
   let onOpenFeedback;
-  if (Ot[12] !== submit) {
+  if ($[12] !== submit) {
     onOpenFeedback = () => submit.submitSurveyFollowUp("/feedback");
-    Ot[12] = submit;
-    Ot[13] = onOpenFeedback;
-  } else onOpenFeedback = Ot[13];
-  let so;
+    $[12] = submit;
+    $[13] = onOpenFeedback;
+  } else onOpenFeedback = $[13];
+  let feedbackNotice;
   if (
-    Ot[14] !== draft.replaceValue ||
-    Ot[15] !== storeSelector_2 ||
-    Ot[16] !== Dt ||
-    Ot[17] !== onOpenFeedback
+    $[14] !== draft.replaceValue ||
+    $[15] !== storeSelector_2 ||
+    $[16] !== hasSurvey_2 ||
+    $[17] !== onOpenFeedback
   ) {
-    so = jsxProd_default(FeedbackDraftNotice, {
+    feedbackNotice = jsxProd_default(FeedbackDraftNotice, {
       isLoading: storeSelector_2,
-      surveyActive: Dt,
+      surveyActive: hasSurvey_2,
       setInputValue: draft.replaceValue,
       onOpenFeedback,
-      onHoldsBandChange: Xe,
+      onHoldsBandChange: setFlagB,
     });
-    Ot[14] = draft.replaceValue;
-    Ot[15] = storeSelector_2;
-    Ot[16] = Dt;
-    Ot[17] = onOpenFeedback;
-    Ot[18] = so;
-  } else so = Ot[18];
-  const bandHeld = Lt || rt;
+    $[14] = draft.replaceValue;
+    $[15] = storeSelector_2;
+    $[16] = hasSurvey_2;
+    $[17] = onOpenFeedback;
+    $[18] = feedbackNotice;
+  } else feedbackNotice = $[18];
+  const bandHeld = surveyHoldsList || flagC;
   let onRunWebSetup;
-  if (Ot[19] !== submit) {
+  if ($[19] !== submit) {
     onRunWebSetup = () => {
       submit
         .submit("/web-setup", NOOP_HELPERS, {
@@ -1157,86 +1159,92 @@ function AbovePromptBands(props) {
         })
         .catch(logError);
     };
-    Ot[19] = submit;
-    Ot[20] = onRunWebSetup;
-  } else onRunWebSetup = Ot[20];
-  let co;
+    $[19] = submit;
+    $[20] = onRunWebSetup;
+  } else onRunWebSetup = $[20];
+  let webSetupGate;
   if (
-    Ot[21] !== draft.replaceValue ||
-    Ot[22] !== storeSelector_2 ||
-    Ot[23] !== bandHeld ||
-    Ot[24] !== onRunWebSetup ||
-    Ot[25] !== transcript
+    $[21] !== draft.replaceValue ||
+    $[22] !== storeSelector_2 ||
+    $[23] !== bandHeld ||
+    $[24] !== onRunWebSetup ||
+    $[25] !== transcript
   ) {
-    co = jsxProd_default(WebSetupPromptGate, {
+    webSetupGate = jsxProd_default(WebSetupPromptGate, {
       isLoading: storeSelector_2,
       bandHeld,
       transcript,
       setInputValue: draft.replaceValue,
       onRunWebSetup,
     });
-    Ot[21] = draft.replaceValue;
-    Ot[22] = storeSelector_2;
-    Ot[23] = bandHeld;
-    Ot[24] = onRunWebSetup;
-    Ot[25] = transcript;
-    Ot[26] = co;
-  } else co = Ot[26];
-  let bo;
+    $[21] = draft.replaceValue;
+    $[22] = storeSelector_2;
+    $[23] = bandHeld;
+    $[24] = onRunWebSetup;
+    $[25] = transcript;
+    $[26] = webSetupGate;
+  } else webSetupGate = $[26];
+  let nullBand;
   if (
-    Ot[27] !== draft.replaceValue ||
-    Ot[28] !== Lt ||
-    Ot[29] !== promptOwnsEscape ||
-    Ot[30] !== transcript ||
-    Ot[31] !== turn
+    $[27] !== draft.replaceValue ||
+    $[28] !== surveyHoldsList ||
+    $[29] !== promptOwnsEscape ||
+    $[30] !== transcript ||
+    $[31] !== turn
   ) {
-    bo = jsxProd_default(NullBand, {
+    nullBand = jsxProd_default(NullBand, {
       turn,
       transcript,
-      bandHeld: Lt,
+      bandHeld: surveyHoldsList,
       promptOwnsEscape,
       setInputValue: draft.replaceValue,
-      onHoldsBandChange: kt,
+      onHoldsBandChange: setFlagC,
     });
-    Ot[27] = draft.replaceValue;
-    Ot[28] = Lt;
-    Ot[29] = promptOwnsEscape;
-    Ot[30] = transcript;
-    Ot[31] = turn;
-    Ot[32] = bo;
-  } else bo = Ot[32];
-  let Ao;
-  if (Ot[33] !== oo || Ot[34] !== Xt || Ot[35] !== so || Ot[36] !== co || Ot[37] !== bo) {
-    Ao = jsxProd_default_2(Fragment, {
-      children: [oo, Xt, so, co, bo],
+    $[27] = draft.replaceValue;
+    $[28] = surveyHoldsList;
+    $[29] = promptOwnsEscape;
+    $[30] = transcript;
+    $[31] = turn;
+    $[32] = nullBand;
+  } else nullBand = $[32];
+  let bandsFragment;
+  if (
+    $[33] !== surveyHost ||
+    $[34] !== workingSite ||
+    $[35] !== feedbackNotice ||
+    $[36] !== webSetupGate ||
+    $[37] !== nullBand
+  ) {
+    bandsFragment = jsxProd_default_2(Fragment, {
+      children: [surveyHost, workingSite, feedbackNotice, webSetupGate, nullBand],
     });
-    Ot[33] = oo;
-    Ot[34] = Xt;
-    Ot[35] = so;
-    Ot[36] = co;
-    Ot[37] = bo;
-    Ot[38] = Ao;
-  } else Ao = Ot[38];
-  return Ao;
+    $[33] = surveyHost;
+    $[34] = workingSite;
+    $[35] = feedbackNotice;
+    $[36] = webSetupGate;
+    $[37] = nullBand;
+    $[38] = bandsFragment;
+  } else bandsFragment = $[38];
+  return bandsFragment;
 }
 //@ chunk-18hwfzwa.js:1093560-1093597 sole-consumer
-function selectTurnIsLoadingC(rt) {
-  return rt.isLoading;
+function selectTurnIsLoadingC(turn) {
+  return turn.isLoading;
 }
 //@ chunk-18hwfzwa.js:1093597-1093640 sole-consumer
-function selectInputOwnsEscapeB(kt) {
-  return kt.inputOwnsEscape;
+function selectInputOwnsEscapeB(draft) {
+  return draft.inputOwnsEscape;
 }
 //@ chunk-18hwfzwa.js:1093640-1093677 sole-consumer
-function selectTurnIsLoadingD(At) {
-  return At.isLoading;
+function selectTurnIsLoadingD(turn) {
+  return turn.isLoading;
 }
 //@ chunk-18hwfzwa.js:1093677-1094188 sole-consumer
 /**
  * REPL 中内嵌面板与调查问卷区域的组件。
  */
 function InlinePanesAndBands(props) {
-  let $ = w(10);
+  let $ = useMemoCache(10);
   let { turn, transcript, draft, submitController, surveySlot, visible, panesDocked } = props;
   let isWorking = useStoreSelector(turn, selectTurnIsLoadingC);
   let promptOwnsEscape = useStoreSelector(draft, selectInputOwnsEscapeB);
@@ -1288,7 +1296,7 @@ function InlinePanesAndBands(props) {
  * REPL 提示区组件，附带后台会话提示。
  */
 function PromptAreaWithBackgroundHint(props) {
-  let $ = w(13);
+  let $ = useMemoCache(13);
   let { turn, transcript, scope, draft, chrome, gesture, submitController, visible, onBackgroundSession } =
     props;
   let isLoading = useStoreSelector(turn, selectTurnIsLoadingD);
@@ -1347,12 +1355,12 @@ function PromptAreaWithBackgroundHint(props) {
   return element;
 }
 //@ chunk-18hwfzwa.js:1425895-1425936 sole-consumer
-function selectTerminalTitle(kt) {
-  return kt.terminalTitle;
+function selectTerminalTitle(titles) {
+  return titles.terminalTitle;
 }
 //@ chunk-18hwfzwa.js:1425936-1425972 affinity
-function selectTitleDisabled(At) {
-  return At.disabled;
+function selectTitleDisabled(titles) {
+  return titles.disabled;
 }
 //@ chunk-18hwfzwa.js:1425972-1426012 file-local
 function nextTitleFrame(f) {
@@ -1367,25 +1375,26 @@ var TITLE_FRAME_INTERVAL_MS = 960;
  * 终端标题组件：从 titles 存储取标题，工作中且终端聚焦时以 960ms 交替 ◐/◑ 前缀，否则 ✳；在 tmux 等复用器下受 tengu_static_title_under_mux 控制改为静态。
  */
 function AnimatedTerminalTitle(props) {
-  let $ = w(1);
+  let $ = useMemoCache(1);
   let { titles, isAnimating, noPrefix } = props;
   let terminalTitle = useStoreSelector(titles, selectTerminalTitle);
   let disabled = useStoreSelector(titles, selectTitleDisabled);
   let terminalFocused = useTerminalFocus();
-  let Be =
+  let underMux =
     getTerminalMultiplexer() !== null &&
     getFeatureValue_CACHED_MAY_BE_STALE("tengu_static_title_under_mux", true);
-  let [frame, setFrame] = y(0);
-  let Xe;
+  let [frame, setFrame] = useState(0);
+  let onTick;
   if ($[0] === MEMO_CACHE_SENTINEL) {
-    Xe = () => setFrame(nextTitleFrame);
-    $[0] = Xe;
-  } else Xe = $[0];
+    onTick = () => setFrame(nextTitleFrame);
+    $[0] = onTick;
+  } else onTick = $[0];
   useInterval(
-    Xe,
-    disabled || noPrefix || Be || !isAnimating || !terminalFocused ? null : TITLE_FRAME_INTERVAL_MS,
+    onTick,
+    disabled || noPrefix || underMux || !isAnimating || !terminalFocused ? null : TITLE_FRAME_INTERVAL_MS,
   );
-  let prefix = isAnimating && !Be ? (TITLE_SPINNER_FRAMES[frame] ?? TITLE_IDLE_PREFIX) : TITLE_IDLE_PREFIX;
+  let prefix =
+    isAnimating && !underMux ? (TITLE_SPINNER_FRAMES[frame] ?? TITLE_IDLE_PREFIX) : TITLE_IDLE_PREFIX;
   useTerminalTitle(disabled ? null : noPrefix ? terminalTitle : `${prefix} ${terminalTitle}`);
   return null;
 }
@@ -1400,10 +1409,10 @@ class MessageListStore {
   #n;
   #s = createSignal();
   conversation = orderedRowSource({
-    keep: (h) =>
+    keep: (messages) =>
       this.keep({
         type: "append",
-        messages: [...h],
+        messages: [...messages],
       }),
     rows: () => this.#e,
     isHookable: true,
@@ -1413,30 +1422,30 @@ class MessageListStore {
     this.#n = project;
   }
   getSnapshot = () => this.#e;
-  subscribe = (h) => this.#s.subscribe(h);
-  replace = (h, x = false) => {
-    let D = this.#e;
-    this.#e = typeof h === "function" ? h(D) : h;
-    if (x) {
-      this.#t ??= D;
-      this.#o ||= x !== "held";
+  subscribe = (listener) => this.#s.subscribe(listener);
+  replace = (next, defer = false) => {
+    let previous = this.#e;
+    this.#e = typeof next === "function" ? next(previous) : next;
+    if (defer) {
+      this.#t ??= previous;
+      this.#o ||= defer !== "held";
       return;
     }
-    this.#r(this.#t ?? D);
+    this.#r(this.#t ?? previous);
   };
-  apply = (h, x = false) => {
-    let D = applyMessageListAppend(h, (ee) => this.keep(ee, x));
-    if (D === undefined) {
-      this.conversation.behindAppends(() => this.keep(h, x))?.catch(logError);
+  apply = (op, defer = false) => {
+    let batch = applyMessageListAppend(op, (row) => this.keep(row, defer));
+    if (batch === undefined) {
+      this.conversation.behindAppends(() => this.keep(op, defer))?.catch(logError);
       return;
     }
-    let L = appendRowsWithHooks(this.conversation, D.rows, {
-      keep: D.keep,
+    let appended = appendRowsWithHooks(this.conversation, batch.rows, {
+      keep: batch.keep,
     });
-    if (L instanceof Promise) L.catch(logError);
+    if (appended instanceof Promise) appended.catch(logError);
   };
-  keep = (h, x = false) => {
-    this.replace((D) => applyMessageListEdit(D, h), x);
+  keep = (op, defer = false) => {
+    this.replace((current) => applyMessageListEdit(current, op), defer);
   };
   settled = () => this.conversation.settled();
   cut = () => this.conversation.cut();
@@ -1444,119 +1453,125 @@ class MessageListStore {
   flush = () => {
     if (this.#t !== undefined && this.#o) this.#r(this.#t);
   };
-  #r(h) {
+  #r(next) {
     this.#t = undefined;
     this.#o = false;
-    let x = this.#e;
-    this.#n(x, h);
-    if (x !== h) this.#s.emit();
+    let previous = this.#e;
+    this.#n(previous, next);
+    if (previous !== next) this.#s.emit();
   }
 }
 //@ chunk-18hwfzwa.js:1667001-1667005 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:1667001", () => {
+  init_react_production();
+});
 //@ chunk-18hwfzwa.js:1667005-1667009 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:1667005", () => {
+  init_react_production();
+});
 //@ chunk-18hwfzwa.js:1822891-1822921 sole-consumer
-function selectSessionId(At) {
-  return At.id;
+function selectSessionId(state) {
+  return state.id;
 }
 //@ chunk-18hwfzwa.js:1822921-1822956 sole-consumer
-function selectReplTab(Ho) {
-  return Ho.replTab;
+function selectReplTab(state) {
+  return state.replTab;
 }
 //@ chunk-18hwfzwa.js:1822956-1823013 sole-consumer = _temp (1)
 function selectFileHistoryTrackedFilesSize(s) {
   return s.fileHistory.trackedFiles.size;
 }
 //@ chunk-18hwfzwa.js:1823013-1823084 sole-consumer
-function switchReplTabToDiff(Wo) {
-  return Wo.replTab === "convo"
+function switchReplTabToDiff(state) {
+  return state.replTab === "convo"
     ? {
-        ...Wo,
+        ...state,
         replTab: "diff",
       }
-    : Wo;
+    : state;
 }
 //@ chunk-18hwfzwa.js:1823084-1823114 sole-consumer
-function selectSessionIdB(mn) {
-  return mn.id;
+function selectSessionIdB(state) {
+  return state.id;
 }
 //@ chunk-18hwfzwa.js:1823114-1823149 sole-consumer
-function selectSessionCwd(qu) {
-  return getSessionProject(qu).cwd;
+function selectSessionCwd(session) {
+  return getSessionProject(session).cwd;
 }
 //@ chunk-18hwfzwa.js:1823149-1823205 sole-consumer
-function selectFileHistorySequence(Ku) {
-  return Ku.fileHistory.trackSequence ?? 0;
+function selectFileHistorySequence(state) {
+  return state.fileHistory.trackSequence ?? 0;
 }
 //@ chunk-18hwfzwa.js:1823205-1823244 sole-consumer
-function selectMainAgentTodos(iu) {
-  return iu.todos[mainAgentId()];
+function selectMainAgentTodos(state) {
+  return state.todos[mainAgentId()];
 }
 //@ chunk-18hwfzwa.js:1823244-1823293 sole-consumer
-function selectToolPermissionCtxRepl(Iu) {
-  return Iu.toolPermissionContext;
+function selectToolPermissionCtxRepl(state) {
+  return state.toolPermissionContext;
 }
 //@ chunk-18hwfzwa.js:1823293-1823368 sole-consumer
-function showDiffPanel(Am) {
-  return Am.diffPanelVisible
-    ? Am
+function showDiffPanel(state) {
+  return state.diffPanelVisible
+    ? state
     : {
-        ...Am,
+        ...state,
         diffPanelVisible: true,
       };
 }
 //@ chunk-18hwfzwa.js:1823368-1823443 sole-consumer
-function hideDiffPanel(Kp) {
-  return Kp.diffPanelVisible
+function hideDiffPanel(state) {
+  return state.diffPanelVisible
     ? {
-        ...Kp,
+        ...state,
         diffPanelVisible: false,
       }
-    : Kp;
+    : state;
 }
 //@ chunk-18hwfzwa.js:1823443-1823473 sole-consumer
 function createReplayHandleSlot() {
   return new ReplayHandleSlot();
 }
 //@ chunk-18hwfzwa.js:1823473-1823521 sole-consumer = _temp (1)
-function isCompletedStatus(nl) {
-  return nl.status === "completed";
+function isCompletedStatus(state) {
+  return state.status === "completed";
 }
 //@ chunk-18hwfzwa.js:1823521-1823548 sole-consumer
-function toggleFalse(ss) {
-  return !ss;
+function toggleFalse(value) {
+  return !value;
 }
 //@ chunk-18hwfzwa.js:1823548-1823589 sole-consumer
-function selectPanelFileViewRepl(Gs) {
-  return Gs.panelFileView;
+function selectPanelFileViewRepl(state) {
+  return state.panelFileView;
 }
 //@ chunk-18hwfzwa.js:1823589-1823616 sole-consumer
-function toggleFalseB(ma) {
-  return !ma;
+function toggleFalseB(value) {
+  return !value;
 }
 //@ chunk-18hwfzwa.js:1823616-1823643 sole-consumer
-function toggleFalseC($a) {
-  return !$a;
+function toggleFalseC(value) {
+  return !value;
 }
 //@ chunk-18hwfzwa.js:1823643-1823704 sole-consumer
-function renderDimText(children, Si) {
+function renderDimText(children, key) {
   return jsxProd_default(
     Text,
     {
       dimColor: true,
       children,
     },
-    Si,
+    key,
   );
 }
 //@ chunk-18hwfzwa.js:1823704-1823731 sole-consumer
-function toggleFalseD(na) {
-  return !na;
+function toggleFalseD(value) {
+  return !value;
 }
 //@ chunk-18hwfzwa.js:1823731-1823758 sole-consumer
-function toggleFalseE(js) {
-  return !js;
+function toggleFalseE(value) {
+  return !value;
 }
 //@ chunk-18hwfzwa.js:1823758-1823783 sole-consumer
 /**
@@ -1570,63 +1585,63 @@ var LOADING_HINT_DELAY_MS = 300;
  * 记录自动打开 diff 时的基线，关闭时切回对话标签。
  */
 function useDiffAutoOpenBaseline(enabled, trackedCount) {
-  let ke = w(8);
+  let $ = useMemoCache(8);
   let setAppState = useSetAppState();
   useForceRender();
   let session = useSession(selectSessionId);
   let host = useHost();
-  let Re;
-  if (ke[0] !== enabled || ke[1] !== session) {
-    Re = {
+  let baselineEntry;
+  if ($[0] !== enabled || $[1] !== session) {
+    baselineEntry = {
       enabled,
       sessionId: session,
       baseline: null,
     };
-    ke[0] = enabled;
-    ke[1] = session;
-    ke[2] = Re;
-  } else Re = ke[2];
-  let [Be, He] = y(Re);
-  let baseline = Be.baseline;
-  if (Be.enabled !== enabled) baseline = enabled ? trackedCount : null;
-  else if (baseline !== null && trackedCount !== baseline) baseline = null;
-  if (Be.sessionId !== session) baseline = null;
-  if (Be.enabled !== enabled || Be.sessionId !== session || Be.baseline !== baseline)
-    He({
+    $[0] = enabled;
+    $[1] = session;
+    $[2] = baselineEntry;
+  } else baselineEntry = $[2];
+  let [baseline, setBaseline] = useState(baselineEntry);
+  let baseline_2 = baseline.baseline;
+  if (baseline.enabled !== enabled) baseline_2 = enabled ? trackedCount : null;
+  else if (baseline_2 !== null && trackedCount !== baseline_2) baseline_2 = null;
+  if (baseline.sessionId !== session) baseline_2 = null;
+  if (baseline.enabled !== enabled || baseline.sessionId !== session || baseline.baseline !== baseline_2)
+    setBaseline({
       enabled,
       sessionId: session,
-      baseline,
+      baseline: baseline_2,
     });
-  let enabledRef = R(enabled);
-  let Xe;
-  let rt;
-  if (ke[3] !== enabled || ke[4] !== host || ke[5] !== setAppState) {
-    Xe = () => {
-      let kt = enabledRef.current;
+  let enabledRef = useRef(enabled);
+  let onEnabledChange;
+  let onEnabledChangeDeps;
+  if ($[3] !== enabled || $[4] !== host || $[5] !== setAppState) {
+    onEnabledChange = () => {
+      let prevEnabled = enabledRef.current;
       enabledRef.current = enabled;
-      if (kt && !enabled) switchToConversationTab(host, setAppState);
+      if (prevEnabled && !enabled) switchToConversationTab(host, setAppState);
     };
-    rt = [enabled, host, setAppState];
-    ke[3] = enabled;
-    ke[4] = host;
-    ke[5] = setAppState;
-    ke[6] = Xe;
-    ke[7] = rt;
+    onEnabledChangeDeps = [enabled, host, setAppState];
+    $[3] = enabled;
+    $[4] = host;
+    $[5] = setAppState;
+    $[6] = onEnabledChange;
+    $[7] = onEnabledChangeDeps;
   } else {
-    Xe = ke[6];
-    rt = ke[7];
+    onEnabledChange = $[6];
+    onEnabledChangeDeps = $[7];
   }
-  P(Xe, rt);
-  return baseline;
+  useEffect(onEnabledChange, onEnabledChangeDeps);
+  return baseline_2;
 }
 //@ chunk-18hwfzwa.js:1824383-1826508 sole-consumer
 /**
  * 全屏 REPL 的 diff 侧栏：会话有文件改动且终端够宽时预取工作区 diff 并标记自动打开；注册 app:toggleReplTab 快捷键切换；在 diff 标签页渲染 DiffSidebarPanel。
  */
 function DiffSidebar(props) {
-  let Ot = w(40);
+  let $ = useMemoCache(40);
   let { width, isThinClient, onAskAboutSelection, autoOpenBaseline } = props;
-  let ke = autoOpenBaseline === undefined ? null : autoOpenBaseline;
+  let baselineProp = autoOpenBaseline === undefined ? null : autoOpenBaseline;
   let appState = useAppState(selectReplTab);
   let setAppState = useSetAppState();
   let appStoreDirect = useAppStoreDirect();
@@ -1635,24 +1650,24 @@ function DiffSidebar(props) {
   let { columns } = useTerminalSize();
   let { addNotification } = useNotifications();
   let appState_2 = useAppState(selectFileHistoryTrackedFilesSize);
-  let It = Se(clockContext)?.setTimeout ?? defaultSetTimeout;
-  let Et;
+  let setTimeoutFn = useContext(clockContext)?.setTimeout ?? defaultSetTimeout;
+  let refreshDiffEffect;
   if (
-    Ot[0] !== ke ||
-    Ot[1] !== columns ||
-    Ot[2] !== host ||
-    Ot[3] !== isThinClient ||
-    Ot[4] !== appState ||
-    Ot[5] !== It ||
-    Ot[6] !== setAppState ||
-    Ot[7] !== appStoreDirect ||
-    Ot[8] !== appState_2
+    $[0] !== baselineProp ||
+    $[1] !== columns ||
+    $[2] !== host ||
+    $[3] !== isThinClient ||
+    $[4] !== appState ||
+    $[5] !== setTimeoutFn ||
+    $[6] !== setAppState ||
+    $[7] !== appStoreDirect ||
+    $[8] !== appState_2
   ) {
-    Et = () => {
+    refreshDiffEffect = () => {
       if (appState !== "convo" || appState_2 === 0) {
         return;
       }
-      if (ke !== null && appState_2 === ke) {
+      if (baselineProp !== null && appState_2 === baselineProp) {
         return;
       }
       if (!isFullscreenEnvEnabled() || isThinClient) {
@@ -1662,7 +1677,7 @@ function DiffSidebar(props) {
         return;
       }
       let abortController = new AbortController();
-      let Lt = It(() => {
+      let cancelTimer = setTimeoutFn(() => {
         prefetchWorkspaceDiff(
           host,
           getDiffBaseMode(),
@@ -1679,55 +1694,64 @@ function DiffSidebar(props) {
           .catch(logError);
       }, DIFF_MIN_REFRESH_MS);
       return () => {
-        Lt();
+        cancelTimer();
         abortController.abort();
       };
     };
-    Ot[0] = ke;
-    Ot[1] = columns;
-    Ot[2] = host;
-    Ot[3] = isThinClient;
-    Ot[4] = appState;
-    Ot[5] = It;
-    Ot[6] = setAppState;
-    Ot[7] = appStoreDirect;
-    Ot[8] = appState_2;
-    Ot[9] = Et;
-  } else Et = Ot[9];
-  let oo;
+    $[0] = baselineProp;
+    $[1] = columns;
+    $[2] = host;
+    $[3] = isThinClient;
+    $[4] = appState;
+    $[5] = setTimeoutFn;
+    $[6] = setAppState;
+    $[7] = appStoreDirect;
+    $[8] = appState_2;
+    $[9] = refreshDiffEffect;
+  } else refreshDiffEffect = $[9];
+  let refreshDeps;
   if (
-    Ot[10] !== ke ||
-    Ot[11] !== host ||
-    Ot[12] !== isThinClient ||
-    Ot[13] !== appState ||
-    Ot[14] !== It ||
-    Ot[15] !== setAppState ||
-    Ot[16] !== appStoreDirect ||
-    Ot[17] !== appState_2
+    $[10] !== baselineProp ||
+    $[11] !== host ||
+    $[12] !== isThinClient ||
+    $[13] !== appState ||
+    $[14] !== setTimeoutFn ||
+    $[15] !== setAppState ||
+    $[16] !== appStoreDirect ||
+    $[17] !== appState_2
   ) {
-    oo = [appState, appState_2, ke, isThinClient, setAppState, host, It, appStoreDirect];
-    Ot[10] = ke;
-    Ot[11] = host;
-    Ot[12] = isThinClient;
-    Ot[13] = appState;
-    Ot[14] = It;
-    Ot[15] = setAppState;
-    Ot[16] = appStoreDirect;
-    Ot[17] = appState_2;
-    Ot[18] = oo;
-  } else oo = Ot[18];
-  P(Et, oo);
-  let Xt;
+    refreshDeps = [
+      appState,
+      appState_2,
+      baselineProp,
+      isThinClient,
+      setAppState,
+      host,
+      setTimeoutFn,
+      appStoreDirect,
+    ];
+    $[10] = baselineProp;
+    $[11] = host;
+    $[12] = isThinClient;
+    $[13] = appState;
+    $[14] = setTimeoutFn;
+    $[15] = setAppState;
+    $[16] = appStoreDirect;
+    $[17] = appState_2;
+    $[18] = refreshDeps;
+  } else refreshDeps = $[18];
+  useEffect(refreshDiffEffect, refreshDeps);
+  let toggleCallback;
   if (
-    Ot[19] !== addNotification ||
-    Ot[20] !== columns ||
-    Ot[21] !== host ||
-    Ot[22] !== setAppState ||
-    Ot[23] !== storageV5 ||
-    Ot[24] !== appStoreDirect
+    $[19] !== addNotification ||
+    $[20] !== columns ||
+    $[21] !== host ||
+    $[22] !== setAppState ||
+    $[23] !== storageV5 ||
+    $[24] !== appStoreDirect
   ) {
-    Xt = () => {
-      let io = toggleDiffPanel({
+    toggleCallback = () => {
+      let toggleResult = toggleDiffPanel({
         host,
         getReplTab: () => appStoreDirect.getState().replTab,
         setAppState,
@@ -1735,379 +1759,382 @@ function DiffSidebar(props) {
         trackSequence: appStoreDirect.getState().fileHistory.trackSequence ?? 0,
         storageV5,
       });
-      if (io.status === "refused")
+      if (toggleResult.status === "refused")
         addNotification({
-          key: `diff-sidebar-${io.reason}`,
+          key: `diff-sidebar-${toggleResult.reason}`,
           kind: "feedback",
-          text: io.text,
+          text: toggleResult.text,
           priority: "immediate",
           timeoutMs: 3000,
         });
     };
-    Ot[19] = addNotification;
-    Ot[20] = columns;
-    Ot[21] = host;
-    Ot[22] = setAppState;
-    Ot[23] = storageV5;
-    Ot[24] = appStoreDirect;
-    Ot[25] = Xt;
-  } else Xt = Ot[25];
+    $[19] = addNotification;
+    $[20] = columns;
+    $[21] = host;
+    $[22] = setAppState;
+    $[23] = storageV5;
+    $[24] = appStoreDirect;
+    $[25] = toggleCallback;
+  } else toggleCallback = $[25];
   let isActive;
-  if (Ot[26] !== isThinClient) {
+  if ($[26] !== isThinClient) {
     isActive = isFullscreenEnvEnabled() && !isThinClient;
-    Ot[26] = isThinClient;
-    Ot[27] = isActive;
-  } else isActive = Ot[27];
-  let po;
-  if (Ot[28] !== isActive) {
-    po = {
+    $[26] = isThinClient;
+    $[27] = isActive;
+  } else isActive = $[27];
+  let keybindingContext;
+  if ($[28] !== isActive) {
+    keybindingContext = {
       context: "Global",
       isActive,
     };
-    Ot[28] = isActive;
-    Ot[29] = po;
-  } else po = Ot[29];
-  useKeybinding("app:toggleReplTab", Xt, po);
+    $[28] = isActive;
+    $[29] = keybindingContext;
+  } else keybindingContext = $[29];
+  useKeybinding("app:toggleReplTab", toggleCallback, keybindingContext);
   let session = useSession(selectSessionIdB);
-  let co = appState === "diff" && width > 0;
-  let bo;
-  let Ao;
-  if (Ot[30] !== columns || Ot[31] !== host || Ot[32] !== co || Ot[33] !== session) {
-    bo = () => {
-      if (co) logDiffPanelShown(host, session, columns);
+  let panelVisible = appState === "diff" && width > 0;
+  let logShownEffect;
+  let logShownDeps;
+  if ($[30] !== columns || $[31] !== host || $[32] !== panelVisible || $[33] !== session) {
+    logShownEffect = () => {
+      if (panelVisible) logDiffPanelShown(host, session, columns);
     };
-    Ao = [co, columns, session, host];
-    Ot[30] = columns;
-    Ot[31] = host;
-    Ot[32] = co;
-    Ot[33] = session;
-    Ot[34] = bo;
-    Ot[35] = Ao;
+    logShownDeps = [panelVisible, columns, session, host];
+    $[30] = columns;
+    $[31] = host;
+    $[32] = panelVisible;
+    $[33] = session;
+    $[34] = logShownEffect;
+    $[35] = logShownDeps;
   } else {
-    bo = Ot[34];
-    Ao = Ot[35];
+    logShownEffect = $[34];
+    logShownDeps = $[35];
   }
-  P(bo, Ao);
-  if (!co) {
+  useEffect(logShownEffect, logShownDeps);
+  if (!panelVisible) {
     return null;
   }
   const minCol = columns - width;
-  let Ro;
-  if (Ot[36] !== onAskAboutSelection || Ot[37] !== minCol || Ot[38] !== width) {
-    Ro = jsxProd_default(DiffSidebarPanel, {
+  let panel;
+  if ($[36] !== onAskAboutSelection || $[37] !== minCol || $[38] !== width) {
+    panel = jsxProd_default(DiffSidebarPanel, {
       width,
       minCol,
       onAskAboutSelection,
     });
-    Ot[36] = onAskAboutSelection;
-    Ot[37] = minCol;
-    Ot[38] = width;
-    Ot[39] = Ro;
-  } else Ro = Ot[39];
-  return Ro;
+    $[36] = onAskAboutSelection;
+    $[37] = minCol;
+    $[38] = width;
+    $[39] = panel;
+  } else panel = $[39];
+  return panel;
 }
 //@ chunk-18hwfzwa.js:1826508-1835163 sole-consumer
 /**
  * diff 侧栏面板：读取本地工作区 diff（可切换基线 session/uncommitted/branch），隐藏被 read deny 规则保护的文件，列出改动文件与行数、会话前已编辑文件、测试/生成文件折叠，支持拖动滚动与选中内容提问。
  */
 function DiffSidebarPanel(props) {
-  let Et = w(85);
+  let $ = useMemoCache(85);
   let { width, minCol, onAskAboutSelection } = props;
   let session = useSession(selectSessionCwd);
   let host = useHost();
   let { storageV5 } = useTheme_2();
   let appState = useAppState(selectFileHistorySequence);
-  let [He, We] = y(getDiffBaseMode);
+  let [diffBase, setDiffBase] = useState(getDiffBaseMode);
   let { stats, files, hunks, loading, source, baseMode, noCommits } = useLocalWorkspaceDiff(
     appState,
     true,
-    He,
+    diffBase,
   );
-  let Dt;
-  if (Et[0] !== He || Et[1] !== storageV5) {
-    Dt = () => We(cycleDiffBaseMode(He, storageV5));
-    Et[0] = He;
-    Et[1] = storageV5;
-    Et[2] = Dt;
-  } else Dt = Et[2];
-  let Lt;
-  if (Et[3] === MEMO_CACHE_SENTINEL) {
-    Lt = {
+  let cycleDiffBase;
+  if ($[0] !== diffBase || $[1] !== storageV5) {
+    cycleDiffBase = () => setDiffBase(cycleDiffBaseMode(diffBase, storageV5));
+    $[0] = diffBase;
+    $[1] = storageV5;
+    $[2] = cycleDiffBase;
+  } else cycleDiffBase = $[2];
+  let keybindingOptions;
+  if ($[3] === MEMO_CACHE_SENTINEL) {
+    keybindingOptions = {
       context: "DiffPanel",
     };
-    Et[3] = Lt;
-  } else Lt = Et[3];
-  useKeybinding("app:cycleDiffBase", Dt, Lt);
+    $[3] = keybindingOptions;
+  } else keybindingOptions = $[3];
+  useKeybinding("app:cycleDiffBase", cycleDiffBase, keybindingOptions);
   let appState_2 = useAppState(selectMainAgentTodos);
-  let Xt;
-  if (Et[4] !== appState_2) {
-    Xt = todoToolsEnabled() ? appState_2 : undefined;
-    Et[4] = appState_2;
-    Et[5] = Xt;
-  } else Xt = Et[5];
-  let io = Xt;
+  let todos;
+  if ($[4] !== appState_2) {
+    todos = todoToolsEnabled() ? appState_2 : undefined;
+    $[4] = appState_2;
+    $[5] = todos;
+  } else todos = $[5];
+  let visibleTodos = todos;
   let appState_3 = useAppState(selectToolPermissionCtxRepl);
   let setAppState = useSetAppState();
   let { processQueue } = useNotifications();
-  let co;
-  let bo;
-  if (Et[6] !== processQueue || Et[7] !== setAppState) {
-    co = () => {
+  let showPanelEffect;
+  let showPanelEffectDeps;
+  if ($[6] !== processQueue || $[7] !== setAppState) {
+    showPanelEffect = () => {
       setAppState(showDiffPanel);
       return () => {
         setAppState(hideDiffPanel);
         processQueue();
       };
     };
-    bo = [setAppState, processQueue];
-    Et[6] = processQueue;
-    Et[7] = setAppState;
-    Et[8] = co;
-    Et[9] = bo;
+    showPanelEffectDeps = [setAppState, processQueue];
+    $[6] = processQueue;
+    $[7] = setAppState;
+    $[8] = showPanelEffect;
+    $[9] = showPanelEffectDeps;
   } else {
-    co = Et[8];
-    bo = Et[9];
+    showPanelEffect = $[8];
+    showPanelEffectDeps = $[9];
   }
-  P(co, bo);
-  let [scrollRef] = y(createReplayHandleSlot);
+  useEffect(showPanelEffect, showPanelEffectDeps);
+  let [scrollRef] = useState(createReplayHandleSlot);
   let { attach } = scrollRef;
-  let Ro = R(null);
-  let Ho = R(null);
-  let Io;
-  if (Et[10] === MEMO_CACHE_SENTINEL) {
-    Io = new Map();
-    Et[10] = Io;
-  } else Io = Et[10];
-  let Wo = R(Io);
-  let mn = 0;
-  let Cn = 0;
-  let No = 0;
-  if (Et[11] !== files) {
+  let rootBoxRef = useRef(null);
+  let scrollBoxRef = useRef(null);
+  let initialFileRefMap;
+  if ($[10] === MEMO_CACHE_SENTINEL) {
+    initialFileRefMap = new Map();
+    $[10] = initialFileRefMap;
+  } else initialFileRefMap = $[10];
+  let fileRefMap = useRef(initialFileRefMap);
+  let preSessionFileCount = 0;
+  let preSessionLinesAdded = 0;
+  let preSessionLinesRemoved = 0;
+  if ($[11] !== files) {
     for (const file of files) {
       if (file.preSession) {
-        mn++;
-        Cn = Cn + file.linesAdded;
-        No = No + file.linesRemoved;
+        preSessionFileCount++;
+        preSessionLinesAdded = preSessionLinesAdded + file.linesAdded;
+        preSessionLinesRemoved = preSessionLinesRemoved + file.linesRemoved;
       }
     }
-    Et[11] = files;
-    Et[12] = mn;
-    Et[13] = Cn;
-    Et[14] = No;
+    $[11] = files;
+    $[12] = preSessionFileCount;
+    $[13] = preSessionLinesAdded;
+    $[14] = preSessionLinesRemoved;
   } else {
-    mn = Et[12];
-    Cn = Et[13];
-    No = Et[14];
+    preSessionFileCount = $[12];
+    preSessionLinesAdded = $[13];
+    preSessionLinesRemoved = $[14];
   }
-  let Yo;
-  if (Et[15] !== mn || Et[16] !== Cn || Et[17] !== No) {
-    Yo = {
-      filesCount: mn,
-      linesAdded: Cn,
-      linesRemoved: No,
+  let preSessionStats;
+  if ($[15] !== preSessionFileCount || $[16] !== preSessionLinesAdded || $[17] !== preSessionLinesRemoved) {
+    preSessionStats = {
+      filesCount: preSessionFileCount,
+      linesAdded: preSessionLinesAdded,
+      linesRemoved: preSessionLinesRemoved,
     };
-    Et[15] = mn;
-    Et[16] = Cn;
-    Et[17] = No;
-    Et[18] = Yo;
-  } else Yo = Et[18];
-  let kn = Yo;
-  let Fn;
-  if (Et[19] !== io) {
-    Fn = io ? count(io, isCompletedStatus) : 0;
-    Et[19] = io;
-    Et[20] = Fn;
-  } else Fn = Et[20];
-  let bn = Fn;
-  let Go = io?.length ?? 0;
+    $[15] = preSessionFileCount;
+    $[16] = preSessionLinesAdded;
+    $[17] = preSessionLinesRemoved;
+    $[18] = preSessionStats;
+  } else preSessionStats = $[18];
+  let baselineStats = preSessionStats;
+  let completedTodoCount;
+  if ($[19] !== visibleTodos) {
+    completedTodoCount = visibleTodos ? count(visibleTodos, isCompletedStatus) : 0;
+    $[19] = visibleTodos;
+    $[20] = completedTodoCount;
+  } else completedTodoCount = $[20];
+  let completedTodos = completedTodoCount;
+  let todoCount = visibleTodos?.length ?? 0;
   let max = Math.max(width - 2, 20);
   let thirdOverlayKeys = useThirdOverlayKeys();
   let feedIsWide = useFeedIsWide();
-  let Sn = thirdOverlayKeys || feedIsWide;
+  let isOverlayOpen = thirdOverlayKeys || feedIsWide;
   let selection = useSelection();
-  let on;
-  if (Et[21] === MEMO_CACHE_SENTINEL) {
-    on = {
+  let dragOptions;
+  if ($[21] === MEMO_CACHE_SENTINEL) {
+    dragOptions = {
       requireScope: true,
     };
-    Et[21] = on;
-  } else on = Et[21];
-  useDragToScroll(scrollRef, selection, !Sn, undefined, on);
+    $[21] = dragOptions;
+  } else dragOptions = $[21];
+  useDragToScroll(scrollRef, selection, !isOverlayOpen, undefined, dragOptions);
   let getMaxRow;
-  if (Et[22] === MEMO_CACHE_SENTINEL) {
+  if ($[22] === MEMO_CACHE_SENTINEL) {
     getMaxRow = () => {
-      let yogaNode = Ro.current?.yogaNode;
+      let yogaNode = rootBoxRef.current?.yogaNode;
       if (!yogaNode) {
         return null;
       }
-      let Dn = 0;
-      for (let wn = Ro.current ?? undefined; wn; wn = wn.parentNode)
-        Dn = Dn + (wn.yogaNode?.getComputedTop() ?? 0);
-      return Dn + yogaNode.getComputedHeight() - 1;
+      let offsetTop = 0;
+      for (let node = rootBoxRef.current ?? undefined; node; node = node.parentNode)
+        offsetTop = offsetTop + (node.yogaNode?.getComputedTop() ?? 0);
+      return offsetTop + yogaNode.getComputedHeight() - 1;
     };
-    Et[22] = getMaxRow;
-  } else getMaxRow = Et[22];
+    $[22] = getMaxRow;
+  } else getMaxRow = $[22];
   let filePathForRow;
-  if (Et[23] === MEMO_CACHE_SENTINEL) {
-    filePathForRow = (row) => findRowOwner(row, Ho.current, Wo.current);
-    Et[23] = filePathForRow;
-  } else filePathForRow = Et[23];
-  useDiffSelectionAttach(minCol, getMaxRow, Sn ? undefined : onAskAboutSelection, filePathForRow);
-  let [Wn, Fr] = y(false);
-  let Zn;
-  if (Et[24] === MEMO_CACHE_SENTINEL) {
-    Zn = getDiffRepoRoot();
-    Et[24] = Zn;
-  } else Zn = Et[24];
-  let Un = Zn;
-  let dr;
-  if (Et[25] !== session) {
-    dr = findGitRoot(session) ?? session;
-    Et[25] = session;
-    Et[26] = dr;
-  } else dr = Et[26];
-  let or = dr;
-  let pr;
-  if (Et[27] !== files || Et[28] !== or || Et[29] !== Wn || Et[30] !== appState_3) {
-    let Qn = or === Un ? [Un] : [Un, or];
-    let ur = 0;
-    let Ir = 0;
-    let Pr = [];
-    let ts = [];
+  if ($[23] === MEMO_CACHE_SENTINEL) {
+    filePathForRow = (row) => findRowOwner(row, scrollBoxRef.current, fileRefMap.current);
+    $[23] = filePathForRow;
+  } else filePathForRow = $[23];
+  useDiffSelectionAttach(minCol, getMaxRow, isOverlayOpen ? undefined : onAskAboutSelection, filePathForRow);
+  let [showGenerated, setShowGenerated] = useState(false);
+  let diffRepoRoot;
+  if ($[24] === MEMO_CACHE_SENTINEL) {
+    diffRepoRoot = getDiffRepoRoot();
+    $[24] = diffRepoRoot;
+  } else diffRepoRoot = $[24];
+  let repoRoot = diffRepoRoot;
+  let sessionRoot;
+  if ($[25] !== session) {
+    sessionRoot = findGitRoot(session) ?? session;
+    $[25] = session;
+    $[26] = sessionRoot;
+  } else sessionRoot = $[26];
+  let activeRoot = sessionRoot;
+  let filteredFiles;
+  if ($[27] !== files || $[28] !== activeRoot || $[29] !== showGenerated || $[30] !== appState_3) {
+    let roots = activeRoot === repoRoot ? [repoRoot] : [repoRoot, activeRoot];
+    let hiddenNoiseCount = 0;
+    let deniedCount = 0;
+    let keptFiles = [];
+    let keptPreSessionFiles = [];
     for (const file of files) {
       if (
-        Qn.some((Ur) => matchingRuleForInput(resolve(Ur, file.path), appState_3, "read", "deny") !== null)
+        roots.some(
+          (root) => matchingRuleForInput(resolve(root, file.path), appState_3, "read", "deny") !== null,
+        )
       ) {
-        Ir++;
+        deniedCount++;
         continue;
       }
       if (file.preSession) {
-        ts.push(file);
+        keptPreSessionFiles.push(file);
         continue;
       }
       if (isLockOrGeneratedFile(file.path) || isTestFile(file.path)) {
-        ur++;
-        if (!Wn) {
+        hiddenNoiseCount++;
+        if (!showGenerated) {
           continue;
         }
       }
-      Pr.push(file);
+      keptFiles.push(file);
     }
-    pr = {
-      files: Pr,
-      preSessionFiles: ts,
-      noiseCount: ur,
-      deniedHidden: Ir,
+    filteredFiles = {
+      files: keptFiles,
+      preSessionFiles: keptPreSessionFiles,
+      noiseCount: hiddenNoiseCount,
+      deniedHidden: deniedCount,
     };
-    Et[27] = files;
-    Et[28] = or;
-    Et[29] = Wn;
-    Et[30] = appState_3;
-    Et[31] = pr;
-  } else pr = Et[31];
-  let { files: files_2, preSessionFiles, noiseCount, deniedHidden } = pr;
-  let fr = files.length > 0 && kn.filesCount === files.length && noiseCount === 0 && deniedHidden === 0;
-  let $r = fr ? 0 : (stats?.linesAdded ?? 0) - kn.linesAdded;
-  let Yr = fr ? 0 : (stats?.linesRemoved ?? 0) - kn.linesRemoved;
-  let Er = fr ? 0 : (stats?.filesCount ?? files.length) - kn.filesCount;
-  let [Vr, ms] = y(0);
+    $[27] = files;
+    $[28] = activeRoot;
+    $[29] = showGenerated;
+    $[30] = appState_3;
+    $[31] = filteredFiles;
+  } else filteredFiles = $[31];
+  let { files: files_2, preSessionFiles, noiseCount, deniedHidden } = filteredFiles;
+  let isSessionOnly =
+    files.length > 0 && baselineStats.filesCount === files.length && noiseCount === 0 && deniedHidden === 0;
+  let unreportedLinesAdded = isSessionOnly ? 0 : (stats?.linesAdded ?? 0) - baselineStats.linesAdded;
+  let unreportedLinesRemoved = isSessionOnly ? 0 : (stats?.linesRemoved ?? 0) - baselineStats.linesRemoved;
+  let filesChangedCount = isSessionOnly ? 0 : (stats?.filesCount ?? files.length) - baselineStats.filesCount;
+  let [scrollOffset, setScrollOffset] = useState(0);
   let max_2 = Math.max(0, files_2.length - MAX_VISIBLE_FILE_DIFFS);
-  let min = Math.min(Vr, max_2);
+  let min = Math.min(scrollOffset, max_2);
   let sliced = files_2.slice(min, min + MAX_VISIBLE_FILE_DIFFS);
-  let ws = min;
-  let Ci = files_2.length - (min + sliced.length);
-  let max_3 = Math.max(0, Er - (files.length - kn.filesCount));
-  let Oi = Wn ? 0 : noiseCount;
-  let Hi = null;
-  let Zi = null;
+  let filesAbove = min;
+  let filesBelow = files_2.length - (min + sliced.length);
+  let max_3 = Math.max(0, filesChangedCount - (files.length - baselineStats.filesCount));
+  let visibleNoiseCount = showGenerated ? 0 : noiseCount;
+  let emptyHeadline = null;
+  let emptyHint = null;
   if (!loading) {
     if (stats === null) {
-      Hi = "Diff unavailable";
-      Zi = "Couldn't read the git diff \u2014 it will retry on the next change";
-    } else if (Er === 0) {
+      emptyHeadline = "Diff unavailable";
+      emptyHint = "Couldn't read the git diff \u2014 it will retry on the next change";
+    } else if (filesChangedCount === 0) {
       if (noCommits) {
-        Hi = "No commits yet";
-        Zi = "Nothing to diff against until the repo's first commit";
-      } else if (baseMode === "uncommitted") Hi = "No uncommitted changes";
+        emptyHeadline = "No commits yet";
+        emptyHint = "Nothing to diff against until the repo's first commit";
+      } else if (baseMode === "uncommitted") emptyHeadline = "No uncommitted changes";
       else if (baseMode === "branch") {
-        if (source.kind === "branch") Hi = `No changes vs ${source.baseBranch}`;
+        if (source.kind === "branch") emptyHeadline = `No changes vs ${source.baseBranch}`;
         else {
-          Hi = "No changes vs HEAD";
-          Zi = "No base branch to compare against \u2014 showing changes vs HEAD";
+          emptyHeadline = "No changes vs HEAD";
+          emptyHint = "No base branch to compare against \u2014 showing changes vs HEAD";
         }
-      } else Hi = "No changes this session";
+      } else emptyHeadline = "No changes this session";
     }
   }
-  let da;
-  if (Et[32] === MEMO_CACHE_SENTINEL) {
-    da = () => Fr(toggleFalse);
-    Et[32] = da;
-  } else da = Et[32];
+  let toggleNoise;
+  if ($[32] === MEMO_CACHE_SENTINEL) {
+    toggleNoise = () => setShowGenerated(toggleFalse);
+    $[32] = toggleNoise;
+  } else toggleNoise = $[32];
   const isActive = noiseCount > 0;
-  let ps;
-  if (Et[33] !== isActive) {
-    ps = {
+  let noiseKeybindingOptions;
+  if ($[33] !== isActive) {
+    noiseKeybindingOptions = {
       context: "Global",
       isActive,
     };
-    Et[33] = isActive;
-    Et[34] = ps;
-  } else ps = Et[34];
-  useKeybinding("app:toggleDiffNoiseFilter", da, ps);
+    $[33] = isActive;
+    $[34] = noiseKeybindingOptions;
+  } else noiseKeybindingOptions = $[34];
+  useKeybinding("app:toggleDiffNoiseFilter", toggleNoise, noiseKeybindingOptions);
   useAppState(selectPanelFileViewRepl);
-  let xs;
-  if (Et[35] !== max_2) {
-    xs = function Ms(kr) {
-      ms((ls) => clamp(Math.min(ls, max_2) + kr, 0, max_2));
+  let scrollFilesBy;
+  if ($[35] !== max_2) {
+    scrollFilesBy = function scrollFilesByImpl(delta) {
+      setScrollOffset((current) => clamp(Math.min(current, max_2) + delta, 0, max_2));
     };
-    Et[35] = max_2;
-    Et[36] = xs;
-  } else xs = Et[36];
-  let Ms = xs;
-  let qs;
-  if (Et[37] !== Ms) {
-    qs = {
-      "app:diffFileListUp": () => Ms(-1),
-      "app:diffFileListDown": () => Ms(1),
+    $[35] = max_2;
+    $[36] = scrollFilesBy;
+  } else scrollFilesBy = $[36];
+  let scrollFiles = scrollFilesBy;
+  let fileListKeybindings;
+  if ($[37] !== scrollFiles) {
+    fileListKeybindings = {
+      "app:diffFileListUp": () => scrollFiles(-1),
+      "app:diffFileListDown": () => scrollFiles(1),
     };
-    Et[37] = Ms;
-    Et[38] = qs;
-  } else qs = Et[38];
+    $[37] = scrollFiles;
+    $[38] = fileListKeybindings;
+  } else fileListKeybindings = $[38];
   const isActive_2 = max_2 > 0;
-  let es;
-  if (Et[39] !== isActive_2) {
-    es = {
+  let preSessionKeybindingOptions;
+  if ($[39] !== isActive_2) {
+    preSessionKeybindingOptions = {
       context: "Global",
       isActive: isActive_2,
     };
-    Et[39] = isActive_2;
-    Et[40] = es;
-  } else es = Et[40];
-  MessageActionsKeybindings(qs, es);
+    $[39] = isActive_2;
+    $[40] = preSessionKeybindingOptions;
+  } else preSessionKeybindingOptions = $[40];
+  MessageActionsKeybindings(fileListKeybindings, preSessionKeybindingOptions);
   let shortcutDisplay = useShortcutDisplay_2("app:diffFileListDown", "Global", "alt+down");
-  let [Hs, _s] = y(false);
-  let fs;
-  if (Et[41] === MEMO_CACHE_SENTINEL) {
-    fs = () => _s(toggleFalseB);
-    Et[41] = fs;
-  } else fs = Et[41];
+  let [showPreSession, setShowPreSession] = useState(false);
+  let togglePreSession;
+  if ($[41] === MEMO_CACHE_SENTINEL) {
+    togglePreSession = () => setShowPreSession(toggleFalseB);
+    $[41] = togglePreSession;
+  } else togglePreSession = $[41];
   const isActive_3 = preSessionFiles.length > 0;
-  let ua;
-  if (Et[42] !== isActive_3) {
-    ua = {
+  let preSessionSectionKeybindingOptions;
+  if ($[42] !== isActive_3) {
+    preSessionSectionKeybindingOptions = {
       context: "Global",
       isActive: isActive_3,
     };
-    Et[42] = isActive_3;
-    Et[43] = ua;
-  } else ua = Et[43];
-  useKeybinding("app:toggleDiffPreSession", fs, ua);
-  let La = loading
+    $[42] = isActive_3;
+    $[43] = preSessionSectionKeybindingOptions;
+  } else preSessionSectionKeybindingOptions = $[43];
+  useKeybinding("app:toggleDiffPreSession", togglePreSession, preSessionSectionKeybindingOptions);
+  let emptyState = loading
     ? null
-    : Hi !== null
+    : emptyHeadline !== null
       ? {
-          headline: Hi,
-          hint: Zi,
+          headline: emptyHeadline,
+          hint: emptyHint,
         }
       : files.length === 0
         ? {
@@ -2117,151 +2144,157 @@ function DiffSidebarPanel(props) {
         : files_2.length === 0
           ? {
               headline:
-                deniedHidden > 0 && Oi > 0
+                deniedHidden > 0 && visibleNoiseCount > 0
                   ? "Only hidden files changed"
                   : deniedHidden > 0
                     ? "Only read-denied files changed"
                     : "Only tests and generated files changed",
               hint:
-                deniedHidden > 0 && Oi > 0
+                deniedHidden > 0 && visibleNoiseCount > 0
                   ? "Read-denied, test, and generated files are hidden in this panel"
                   : deniedHidden > 0
                     ? "Read-denied files are hidden in this panel"
                     : 'Tests and generated files are hidden \xB7 click "show" above to view them',
             }
           : null;
-  let Xa = Hs && preSessionFiles.length > 0;
-  let dl = loading || (La !== null && !Xa);
+  let preSessionVisible = showPreSession && preSessionFiles.length > 0;
+  let showPlaceholder = loading || (emptyState !== null && !preSessionVisible);
   let timeout = useTimeout(loading ? LOADING_HINT_DELAY_MS : null);
-  let yi = function yi(path) {
-    let Ss = Wo.current.get(path);
-    if (Ss) scrollRef.handle?.scrollToElement(Ss);
+  let scrollToFile = function scrollToFileImpl(path) {
+    let fileRef = fileRefMap.current.get(path);
+    if (fileRef) scrollRef.handle?.scrollToElement(fileRef);
   };
-  const Ws = Box;
+  const OuterBox = Box;
   const flexDirection = "column";
   const height = "100%";
   let onWheel;
-  if (Et[44] !== scrollRef.handle) {
+  if ($[44] !== scrollRef.handle) {
     onWheel = (event) => {
       scrollRef.handle?.scrollBy(event.deltaY * 3);
       event.preventDefault();
       event.stopPropagation();
     };
-    Et[44] = scrollRef.handle;
-    Et[45] = onWheel;
-  } else onWheel = Et[45];
+    $[44] = scrollRef.handle;
+    $[45] = onWheel;
+  } else onWheel = $[45];
   const selectionScope = true;
-  let qa;
-  if (Et[46] !== Hi || Et[47] !== Er || Et[48] !== loading || Et[49] !== $r || Et[50] !== Yr) {
-    qa =
+  let headerSummary;
+  if (
+    $[46] !== emptyHeadline ||
+    $[47] !== filesChangedCount ||
+    $[48] !== loading ||
+    $[49] !== unreportedLinesAdded ||
+    $[50] !== unreportedLinesRemoved
+  ) {
+    headerSummary =
       !loading &&
-      Hi === null &&
+      emptyHeadline === null &&
       jsxProd_default_2(Text, {
         children: [
           jsxProd_default_2(Text, {
             bold: true,
-            children: [Er, " ", plural(Er, "file")],
+            children: [filesChangedCount, " ", plural(filesChangedCount, "file")],
           }),
           " ",
           "changed",
-          ($r > 0 || Yr > 0) && " ",
+          (unreportedLinesAdded > 0 || unreportedLinesRemoved > 0) && " ",
           jsxProd_default(DiffStatCounts, {
-            added: $r,
-            removed: Yr,
+            added: unreportedLinesAdded,
+            removed: unreportedLinesRemoved,
           }),
         ],
       });
-    Et[46] = Hi;
-    Et[47] = Er;
-    Et[48] = loading;
-    Et[49] = $r;
-    Et[50] = Yr;
-    Et[51] = qa;
-  } else qa = Et[51];
-  let pd;
-  if (Et[52] === MEMO_CACHE_SENTINEL) {
-    pd = jsxProd_default(Box, {
+    $[46] = emptyHeadline;
+    $[47] = filesChangedCount;
+    $[48] = loading;
+    $[49] = unreportedLinesAdded;
+    $[50] = unreportedLinesRemoved;
+    $[51] = headerSummary;
+  } else headerSummary = $[51];
+  let headerSpacer;
+  if ($[52] === MEMO_CACHE_SENTINEL) {
+    headerSpacer = jsxProd_default(Box, {
       flexGrow: 1,
     });
-    Et[52] = pd;
-  } else pd = Et[52];
-  let $l;
-  if (Et[53] !== host || Et[54] !== setAppState || Et[55] !== storageV5) {
-    $l = jsxProd_default(CloseButton, {
+    $[52] = headerSpacer;
+  } else headerSpacer = $[52];
+  let closeButton;
+  if ($[53] !== host || $[54] !== setAppState || $[55] !== storageV5) {
+    closeButton = jsxProd_default(CloseButton, {
       onClose: () => closeDiffSidebar(host, setAppState, storageV5),
     });
-    Et[53] = host;
-    Et[54] = setAppState;
-    Et[55] = storageV5;
-    Et[56] = $l;
-  } else $l = Et[56];
-  let Yi;
-  if (Et[57] !== qa || Et[58] !== $l) {
-    Yi = jsxProd_default_2(Box, {
+    $[53] = host;
+    $[54] = setAppState;
+    $[55] = storageV5;
+    $[56] = closeButton;
+  } else closeButton = $[56];
+  let headerRow;
+  if ($[57] !== headerSummary || $[58] !== closeButton) {
+    headerRow = jsxProd_default_2(Box, {
       flexDirection: "row",
-      children: [qa, pd, $l],
+      children: [headerSummary, headerSpacer, closeButton],
     });
-    Et[57] = qa;
-    Et[58] = $l;
-    Et[59] = Yi;
-  } else Yi = Et[59];
-  let El;
+    $[57] = headerSummary;
+    $[58] = closeButton;
+    $[59] = headerRow;
+  } else headerRow = $[59];
+  let baseLabel;
   if (
-    Et[60] !== He ||
-    Et[61] !== baseMode ||
-    Et[62] !== Er ||
-    Et[63] !== noCommits ||
-    Et[64] !== source ||
-    Et[65] !== stats
+    $[60] !== diffBase ||
+    $[61] !== baseMode ||
+    $[62] !== filesChangedCount ||
+    $[63] !== noCommits ||
+    $[64] !== source ||
+    $[65] !== stats
   ) {
-    El =
+    baseLabel =
       stats !== null &&
       (noCommits
-        ? Er > 0 &&
+        ? filesChangedCount > 0 &&
           jsxProd_default(Text, {
             dimColor: true,
             children: "no commits yet \u2014 showing staged and new files",
           })
-        : (He !== "session" || baseMode !== "session") &&
+        : (diffBase !== "session" || baseMode !== "session") &&
           jsxProd_default(Text, {
             dimColor: true,
-            children: diffBaseLabel(He, source, He !== baseMode),
+            children: diffBaseLabel(diffBase, source, diffBase !== baseMode),
           }));
-    Et[60] = He;
-    Et[61] = baseMode;
-    Et[62] = Er;
-    Et[63] = noCommits;
-    Et[64] = source;
-    Et[65] = stats;
-    Et[66] = El;
-  } else El = Et[66];
-  let Ll;
-  if (Et[67] !== max || Et[68] !== bn || Et[69] !== Go) {
-    Ll =
-      Go > 0 &&
+    $[60] = diffBase;
+    $[61] = baseMode;
+    $[62] = filesChangedCount;
+    $[63] = noCommits;
+    $[64] = source;
+    $[65] = stats;
+    $[66] = baseLabel;
+  } else baseLabel = $[66];
+  let todoProgress;
+  if ($[67] !== max || $[68] !== completedTodos || $[69] !== todoCount) {
+    todoProgress =
+      todoCount > 0 &&
       jsxProd_default_2(Box, {
         marginTop: 1,
         flexDirection: "row",
         gap: 1,
         children: [
           jsxProd_default(ProgressBar, {
-            ratio: bn / Go,
+            ratio: completedTodos / todoCount,
             width: Math.min(20, max - 12),
             fillColor: "success",
             emptyColor: "inactive",
           }),
           jsxProd_default_2(Text, {
             dimColor: true,
-            children: [bn, "/", Go],
+            children: [completedTodos, "/", todoCount],
           }),
         ],
       });
-    Et[67] = max;
-    Et[68] = bn;
-    Et[69] = Go;
-    Et[70] = Ll;
-  } else Ll = Et[70];
-  const Vd =
+    $[67] = max;
+    $[68] = completedTodos;
+    $[69] = todoCount;
+    $[70] = todoProgress;
+  } else todoProgress = $[70];
+  const fileListSection =
     (sliced.length > 0 || noiseCount > 0) &&
     jsxProd_default_2(Box, {
       flexDirection: "column",
@@ -2269,37 +2302,39 @@ function DiffSidebarPanel(props) {
       onWheel:
         max_2 > 0
           ? (event) => {
-              Ms(event.deltaY);
+              scrollFiles(event.deltaY);
               event.preventDefault();
               event.stopPropagation();
             }
           : undefined,
       children: [
-        ws > 0 &&
+        filesAbove > 0 &&
           jsxProd_default_2(Text, {
             dimColor: true,
-            children: [UP_ARROW, " ", ws, " more above"],
+            children: [UP_ARROW, " ", filesAbove, " more above"],
           }),
-        sliced.map((mc) =>
+        sliced.map((fileEntry) =>
           jsxProd_default(
             DiffFileRow,
             {
-              path: mc.path,
-              added: mc.linesAdded,
-              removed: mc.linesRemoved,
+              path: fileEntry.path,
+              added: fileEntry.linesAdded,
+              removed: fileEntry.linesRemoved,
               width: max,
-              onClick: () => yi(mc.path),
+              onClick: () => scrollToFile(fileEntry.path),
             },
-            mc.path,
+            fileEntry.path,
           ),
         ),
-        (Ci > 0 || deniedHidden > 0 || max_3 > 0) &&
+        (filesBelow > 0 || deniedHidden > 0 || max_3 > 0) &&
           jsxProd_default_2(Text, {
             dimColor: true,
             children: [
-              Ci > 0 ? `${DOWN_ARROW} ` : "\u2026 ",
+              filesBelow > 0 ? `${DOWN_ARROW} ` : "\u2026 ",
               [
-                Ci > 0 ? `${Ci} more below${shortcutDisplay ? ` (${shortcutDisplay} to scroll)` : ""}` : null,
+                filesBelow > 0
+                  ? `${filesBelow} more below${shortcutDisplay ? ` (${shortcutDisplay} to scroll)` : ""}`
+                  : null,
                 deniedHidden > 0 ? `${deniedHidden} read-denied` : null,
                 max_3 > 0 ? `${max_3} not shown` : null,
               ]
@@ -2310,31 +2345,31 @@ function DiffSidebarPanel(props) {
         noiseCount > 0 &&
           jsxProd_default(GeneratedFilesToggle, {
             count: noiseCount,
-            shown: Wn,
-            onToggle: () => Fr(toggleFalseC),
+            shown: showGenerated,
+            onToggle: () => setShowGenerated(toggleFalseC),
           }),
       ],
     });
-  let cd;
-  if (Et[71] !== Yi || Et[72] !== El || Et[73] !== Ll || Et[74] !== Vd) {
-    cd = jsxProd_default_2(Box, {
+  let headerSection;
+  if ($[71] !== headerRow || $[72] !== baseLabel || $[73] !== todoProgress || $[74] !== fileListSection) {
+    headerSection = jsxProd_default_2(Box, {
       flexDirection: "column",
       paddingX: 1,
       paddingY: 1,
       flexShrink: 0,
-      children: [Yi, El, Ll, Vd],
+      children: [headerRow, baseLabel, todoProgress, fileListSection],
     });
-    Et[71] = Yi;
-    Et[72] = El;
-    Et[73] = Ll;
-    Et[74] = Vd;
-    Et[75] = cd;
-  } else cd = Et[75];
-  const Ka = Box;
+    $[71] = headerRow;
+    $[72] = baseLabel;
+    $[73] = todoProgress;
+    $[74] = fileListSection;
+    $[75] = headerSection;
+  } else headerSection = $[75];
+  const ScrollContainer = Box;
   const flexGrow = 1;
   const flexDirection_2 = "column";
   const overflow = "hidden";
-  const children = dl
+  const children = showPlaceholder
     ? jsxProd_default_2(Fragment, {
         children: [
           jsxProd_default(Box, {
@@ -2349,12 +2384,12 @@ function DiffSidebarPanel(props) {
                   message: "Loading diff\u2026",
                   dimColor: true,
                 })
-              : La !== null &&
-                [La.headline, La.hint ?? ""]
-                  .flatMap((hd) =>
-                    hd === ""
+              : emptyState !== null &&
+                [emptyState.headline, emptyState.hint ?? ""]
+                  .flatMap((line) =>
+                    line === ""
                       ? []
-                      : wrapText(hd, max, "wrap").split(`
+                      : wrapText(line, max, "wrap").split(`
 `),
                   )
                   .map(renderDimText),
@@ -2368,8 +2403,8 @@ function DiffSidebarPanel(props) {
               children: jsxProd_default(PreSessionFilesSection, {
                 files: preSessionFiles,
                 hunks,
-                shown: Hs,
-                onToggle: () => _s(toggleFalseD),
+                shown: showPreSession,
+                onToggle: () => setShowPreSession(toggleFalseD),
                 width: max,
               }),
             }),
@@ -2385,10 +2420,10 @@ function DiffSidebarPanel(props) {
           flexDirection: "column",
           width: max,
           children: [
-            La !== null
+            emptyState !== null
               ? jsxProd_default(HintText, {
-                  hint: La.hint ?? undefined,
-                  children: La.headline,
+                  hint: emptyState.hint ?? undefined,
+                  children: emptyState.headline,
                 })
               : jsxProd_default(Box, {
                   flexDirection: "column",
@@ -2398,9 +2433,9 @@ function DiffSidebarPanel(props) {
                       Box,
                       {
                         flexDirection: "column",
-                        ref: (Od) => {
-                          if (Od) Wo.current.set(file.path, Od);
-                          else Wo.current.delete(file.path);
+                        ref: (element) => {
+                          if (element) fileRefMap.current.set(file.path, element);
+                          else fileRefMap.current.delete(file.path);
                         },
                         children: [
                           jsxProd_default(Divider, {
@@ -2426,121 +2461,133 @@ function DiffSidebarPanel(props) {
               jsxProd_default(PreSessionFilesSection, {
                 files: preSessionFiles,
                 hunks,
-                shown: Hs,
-                onToggle: () => _s(toggleFalseE),
+                shown: showPreSession,
+                onToggle: () => setShowPreSession(toggleFalseE),
                 width: max,
               }),
           ],
         }),
       });
-  let Kd;
-  if (Et[76] !== Ka || Et[77] !== children) {
-    Kd = jsxProd_default(Ka, {
-      ref: Ho,
+  let fileListScroll;
+  if ($[76] !== ScrollContainer || $[77] !== children) {
+    fileListScroll = jsxProd_default(ScrollContainer, {
+      ref: scrollBoxRef,
       flexGrow,
       flexDirection: flexDirection_2,
       overflow,
       children,
     });
-    Et[76] = Ka;
-    Et[77] = children;
-    Et[78] = Kd;
-  } else Kd = Et[78];
-  let ec;
-  if (Et[79] !== Ws || Et[80] !== onWheel || Et[81] !== cd || Et[82] !== Kd || Et[83] !== width) {
-    ec = jsxProd_default_2(Ws, {
-      ref: Ro,
+    $[76] = ScrollContainer;
+    $[77] = children;
+    $[78] = fileListScroll;
+  } else fileListScroll = $[78];
+  let rootElement;
+  if (
+    $[79] !== OuterBox ||
+    $[80] !== onWheel ||
+    $[81] !== headerSection ||
+    $[82] !== fileListScroll ||
+    $[83] !== width
+  ) {
+    rootElement = jsxProd_default_2(OuterBox, {
+      ref: rootBoxRef,
       flexDirection,
       width,
       height,
       onWheel,
       selectionScope,
-      children: [cd, Kd],
+      children: [headerSection, fileListScroll],
     });
-    Et[79] = Ws;
-    Et[80] = onWheel;
-    Et[81] = cd;
-    Et[82] = Kd;
-    Et[83] = width;
-    Et[84] = ec;
-  } else ec = Et[84];
-  return ec;
+    $[79] = OuterBox;
+    $[80] = onWheel;
+    $[81] = headerSection;
+    $[82] = fileListScroll;
+    $[83] = width;
+    $[84] = rootElement;
+  } else rootElement = $[84];
+  return rootElement;
 }
 //@ chunk-18hwfzwa.js:1835163-1835430 sole-consumer
-function diffBaseLabel(h, source, D) {
-  let L;
-  switch (h) {
+function diffBaseLabel(base, source, target) {
+  let label;
+  switch (base) {
     case "session":
-      L = "this session";
+      label = "this session";
       break;
     case "uncommitted":
-      L = "uncommitted (vs HEAD)";
+      label = "uncommitted (vs HEAD)";
       break;
     case "branch":
-      if (source.kind === "branch") L = `branch vs ${source.baseBranch}`;
-      else L = D ? "branch diff" : "vs HEAD (no base branch)";
+      if (source.kind === "branch") label = `branch vs ${source.baseBranch}`;
+      else label = target ? "branch diff" : "vs HEAD (no base branch)";
       break;
   }
-  return D ? `${L}\u2026` : L;
+  return target ? `${label}\u2026` : label;
 }
 //@ chunk-18hwfzwa.js:1835430-1837025 sole-consumer
 /**
  * diff 侧栏里"本次会话前已编辑的文件"折叠区：点击切换显示文件列表及各自 diff（文件过多时隐藏 diff）。
  */
 function PreSessionFilesSection(props) {
-  let He = w(21);
+  let $ = useMemoCache(21);
   let { files, hunks, shown, onToggle, width } = props;
-  let [Re, Be] = y(false);
+  let [hovered, setHovered] = useState(false);
   let onMouseEnter;
   let onMouseLeave;
-  if (He[0] === MEMO_CACHE_SENTINEL) {
-    onMouseEnter = () => Be(true);
-    onMouseLeave = () => Be(false);
-    He[0] = onMouseEnter;
-    He[1] = onMouseLeave;
+  if ($[0] === MEMO_CACHE_SENTINEL) {
+    onMouseEnter = () => setHovered(true);
+    onMouseLeave = () => setHovered(false);
+    $[0] = onMouseEnter;
+    $[1] = onMouseLeave;
   } else {
-    onMouseEnter = He[0];
-    onMouseLeave = He[1];
+    onMouseEnter = $[0];
+    onMouseLeave = $[1];
   }
-  const dimColor = !Re;
-  const rt = files.length;
-  let kt;
-  if (He[2] !== files.length) {
-    kt = plural(files.length, "file");
-    He[2] = files.length;
-    He[3] = kt;
-  } else kt = He[3];
-  const At = shown ? "hide" : "show";
+  const dimColor = !hovered;
+  const fileCount = files.length;
+  let fileNoun;
+  if ($[2] !== files.length) {
+    fileNoun = plural(files.length, "file");
+    $[2] = files.length;
+    $[3] = fileNoun;
+  } else fileNoun = $[3];
+  const toggleLabel = shown ? "hide" : "show";
   let children;
-  if (He[4] !== files.length || He[5] !== Re || He[6] !== dimColor || He[7] !== kt || He[8] !== At) {
+  if (
+    $[4] !== files.length ||
+    $[5] !== hovered ||
+    $[6] !== dimColor ||
+    $[7] !== fileNoun ||
+    $[8] !== toggleLabel
+  ) {
     children = jsxProd_default_2(Text, {
       dimColor,
-      underline: Re,
-      children: ["+", rt, " ", kt, " edited before this session (", At, ")"],
+      underline: hovered,
+      children: ["+", fileCount, " ", fileNoun, " edited before this session (", toggleLabel, ")"],
     });
-    He[4] = files.length;
-    He[5] = Re;
-    He[6] = dimColor;
-    He[7] = kt;
-    He[8] = At;
-    He[9] = children;
-  } else children = He[9];
-  let Ot;
-  if (He[10] !== onToggle || He[11] !== children) {
-    Ot = jsxProd_default(Box, {
+    $[4] = files.length;
+    $[5] = hovered;
+    $[6] = dimColor;
+    $[7] = fileNoun;
+    $[8] = toggleLabel;
+    $[9] = children;
+  } else children = $[9];
+  let summaryRow;
+  if ($[10] !== onToggle || $[11] !== children) {
+    summaryRow = jsxProd_default(Box, {
       flexDirection: "row",
       onClick: onToggle,
       onMouseEnter,
       onMouseLeave,
       children,
     });
-    He[10] = onToggle;
-    He[11] = children;
-    He[12] = Ot;
-  } else Ot = He[12];
-  let Et;
-  if (He[13] !== files || He[14] !== hunks || He[15] !== shown || He[16] !== width) {
-    Et =
+    $[10] = onToggle;
+    $[11] = children;
+    $[12] = summaryRow;
+  } else summaryRow = $[12];
+  let fileRows;
+  if ($[13] !== files || $[14] !== hunks || $[15] !== shown || $[16] !== width) {
+    fileRows =
       shown &&
       jsxProd_default_2(Fragment, {
         children: [
@@ -2601,78 +2648,78 @@ function PreSessionFilesSection(props) {
               ),
         ],
       });
-    He[13] = files;
-    He[14] = hunks;
-    He[15] = shown;
-    He[16] = width;
-    He[17] = Et;
-  } else Et = He[17];
-  let oo;
-  if (He[18] !== Ot || He[19] !== Et) {
-    oo = jsxProd_default_2(Box, {
+    $[13] = files;
+    $[14] = hunks;
+    $[15] = shown;
+    $[16] = width;
+    $[17] = fileRows;
+  } else fileRows = $[17];
+  let sectionBox;
+  if ($[18] !== summaryRow || $[19] !== fileRows) {
+    sectionBox = jsxProd_default_2(Box, {
       flexDirection: "column",
       marginTop: 1,
-      children: [Ot, Et],
+      children: [summaryRow, fileRows],
     });
-    He[18] = Ot;
-    He[19] = Et;
-    He[20] = oo;
-  } else oo = He[20];
-  return oo;
+    $[18] = summaryRow;
+    $[19] = fileRows;
+    $[20] = sectionBox;
+  } else sectionBox = $[20];
+  return sectionBox;
 }
 //@ chunk-18hwfzwa.js:1837025-1837437 sole-consumer
 /**
  * 关闭按钮组件（悬停加粗）。
  */
 function CloseButton(props) {
-  let ee = w(8);
+  let $ = useMemoCache(8);
   let { onClose } = props;
-  let [D, L] = y(false);
+  let [hovered, setHovered] = useState(false);
   let onMouseEnter;
   let onMouseLeave;
-  if (ee[0] === MEMO_CACHE_SENTINEL) {
-    onMouseEnter = () => L(true);
-    onMouseLeave = () => L(false);
-    ee[0] = onMouseEnter;
-    ee[1] = onMouseLeave;
+  if ($[0] === MEMO_CACHE_SENTINEL) {
+    onMouseEnter = () => setHovered(true);
+    onMouseLeave = () => setHovered(false);
+    $[0] = onMouseEnter;
+    $[1] = onMouseLeave;
   } else {
-    onMouseEnter = ee[0];
-    onMouseLeave = ee[1];
+    onMouseEnter = $[0];
+    onMouseLeave = $[1];
   }
-  const dimColor = !D;
+  const dimColor = !hovered;
   let children;
-  if (ee[2] !== D || ee[3] !== dimColor) {
+  if ($[2] !== hovered || $[3] !== dimColor) {
     children = jsxProd_default(Text, {
-      bold: D,
+      bold: hovered,
       dimColor,
       children: HEAVY_MULTIPLICATION_X,
     });
-    ee[2] = D;
-    ee[3] = dimColor;
-    ee[4] = children;
-  } else children = ee[4];
-  let We;
-  if (ee[5] !== onClose || ee[6] !== children) {
-    We = jsxProd_default(Box, {
+    $[2] = hovered;
+    $[3] = dimColor;
+    $[4] = children;
+  } else children = $[4];
+  let buttonBox;
+  if ($[5] !== onClose || $[6] !== children) {
+    buttonBox = jsxProd_default(Box, {
       onClick: onClose,
       onMouseEnter,
       onMouseLeave,
       children,
     });
-    ee[5] = onClose;
-    ee[6] = children;
-    ee[7] = We;
-  } else We = ee[7];
-  return We;
+    $[5] = onClose;
+    $[6] = children;
+    $[7] = buttonBox;
+  } else buttonBox = $[7];
+  return buttonBox;
 }
 //@ chunk-18hwfzwa.js:1837437-1838087 sole-consumer
 /**
  * 显示/隐藏生成测试文件数量的切换组件。
  */
 function GeneratedFilesToggle(props) {
-  let $ = w(13);
+  let $ = useMemoCache(13);
   let { count, shown, onToggle } = props;
-  let [hovered, setHovered] = y(false);
+  let [hovered, setHovered] = useState(false);
   let onEnter;
   let onLeave;
   if ($[0] === MEMO_CACHE_SENTINEL) {
@@ -2726,9 +2773,9 @@ function GeneratedFilesToggle(props) {
  * diff 面板中单个文件的行组件：截断显示路径、悬停下划线，并显示增删行数。
  */
 function DiffFileRow(props) {
-  let $ = w(17);
+  let $ = useMemoCache(17);
   let { path, added, removed, width, onClick } = props;
-  let [hovered, setHovered] = y(false);
+  let [hovered, setHovered] = useState(false);
   let truncatedPath;
   if ($[0] !== path || $[1] !== width) {
     truncatedPath = truncateStartToWidth(diffLineToPlainText(path), Math.max(width - 12, 8));
@@ -2795,21 +2842,24 @@ function DiffFileRow(props) {
   return element;
 }
 //@ chunk-18hwfzwa.js:1838906-1838910 sole-consumer
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:1838906", () => {
+  init_react_production();
+});
 //@ chunk-18hwfzwa.js:1838910-1839026 sole-consumer
 function useDiffSnapshot() {
-  let h = useAppState((L) => L.fileHistory.trackSequence ?? 0);
-  let x = useAppState((L) => L.replTab);
+  let trackSequence = useAppState((state) => state.fileHistory.trackSequence ?? 0);
+  let replTab = useAppState((state) => state.replTab);
   let diffCwd = getDiffCwd();
-  return Q(() => isDiffPanelAvailable(), [diffCwd, h, x]);
+  return useMemo(() => isDiffPanelAvailable(), [diffCwd, trackSequence, replTab]);
 }
 //@ chunk-18hwfzwa.js:1839026-1839053 sole-consumer
 function createNullStore() {
   return null;
 }
 //@ chunk-18hwfzwa.js:1839053-1839090 sole-consumer
-function selectReplTabB(cne) {
-  return cne.replTab;
+function selectReplTabB(state) {
+  return state.replTab;
 }
 //@ chunk-18hwfzwa.js:1839090-1839131 sole-consumer = _temp (1)
 function selectMcpClientsReplC(s) {
@@ -2820,36 +2870,36 @@ function selectPendingWorkerRequest_2(state) {
   return state.pendingWorkerRequest;
 }
 //@ chunk-18hwfzwa.js:1839179-1839218 sole-consumer
-function selectIsBriefOnlyReplC(J0) {
-  return J0.isBriefOnly;
+function selectIsBriefOnlyReplC(state) {
+  return state.isBriefOnly;
 }
 //@ chunk-18hwfzwa.js:1839218-1839263 sole-consumer
-function selectBriefTranscript(PAt) {
-  return PAt.briefTranscript;
+function selectBriefTranscript(state) {
+  return state.briefTranscript;
 }
 //@ chunk-18hwfzwa.js:1839263-1839303 sole-consumer
-function selectIdeSelectionReplB(X0) {
-  return X0.ideSelection;
+function selectIdeSelectionReplB(state) {
+  return state.ideSelection;
 }
 //@ chunk-18hwfzwa.js:1839303-1839333 sole-consumer
 function createBridgeChannelSlot() {
   return new BridgeChannelSlot();
 }
 //@ chunk-18hwfzwa.js:1839333-1839370 sole-consumer
-function selectTurnIsLoadingE(bw) {
-  return bw.isLoading;
+function selectTurnIsLoadingE(turn) {
+  return turn.isLoading;
 }
 //@ chunk-18hwfzwa.js:1839370-1839396 sole-consumer
-function alwaysFalseInRepl(uP) {
+function alwaysFalseInRepl(state) {
   return false;
 }
 //@ chunk-18hwfzwa.js:1839396-1839436 sole-consumer
-function selectToolProgress(YK) {
-  return YK.toolProgress;
+function selectToolProgress(stream) {
+  return stream.toolProgress;
 }
 //@ chunk-18hwfzwa.js:1839436-1839488 sole-consumer
-function selectUserInputOnProcessingReplB(ZOe) {
-  return !!ZOe.userInputOnProcessing;
+function selectUserInputOnProcessingReplB(stream) {
+  return !!stream.userInputOnProcessing;
 }
 //@ chunk-18hwfzwa.js:1839488-1839517 sole-consumer
 function setTranscriptScreen() {
@@ -2860,16 +2910,16 @@ function clearBlockingDialogNow() {
   return clearBlockingDialog();
 }
 //@ chunk-18hwfzwa.js:1839545-1839583 sole-consumer
-function hasBlockingDialog(QE) {
-  return topBlockingDialog(QE) !== null;
+function hasBlockingDialog(state) {
+  return topBlockingDialog(state) !== null;
 }
 //@ chunk-18hwfzwa.js:1839583-1839638 sole-consumer
 function selectIdleNotifThresholdMs() {
   return getGlobalConfig().messageIdleNotifThresholdMs;
 }
 //@ chunk-18hwfzwa.js:1839638-1839679 sole-consumer
-function selectHasBashesDialog(JK) {
-  return !!JK.bashesDialog;
+function selectHasBashesDialog(state) {
+  return !!state.bashesDialog;
 }
 //@ chunk-18hwfzwa.js:1839679-1839708 sole-consumer
 function createSurveySlotStore() {
@@ -2888,63 +2938,66 @@ function noop_6() {}
 //@ chunk-18hwfzwa.js:1839780-1839796 sole-consumer
 function noop_7() {}
 //@ chunk-18hwfzwa.js:1839796-1839860 sole-consumer
-function toggleScreen(Zk) {
-  return Zk === "transcript" ? "prompt" : "transcript";
+function toggleScreen(screen) {
+  return screen === "transcript" ? "prompt" : "transcript";
 }
 //@ chunk-18hwfzwa.js:1839860-1839991 sole-consumer
-function logDiffSidebarRenderError(Z0, ev) {
+function logDiffSidebarRenderError(error, info) {
   logFeatureBad(
     "repl_diff_read",
     "render_threw",
-    ev.componentStack
+    info.componentStack
       ? {
-          error_component_stack_hash: shortHash(ev.componentStack),
+          error_component_stack_hash: shortHash(info.componentStack),
         }
       : undefined,
   );
 }
 //@ chunk-18hwfzwa.js:1839991-1840048 fingerprint = useScheduledTasks (0.524)
-var useScheduledTasks = require("./chunk-4m1yk02k.js").useScheduledTasks;
+var useScheduledTasks; // deferred: loads other modules while loading; runs once its import cycle is complete
+deferInit("chunk-18hwfzwa.js:1839991", () => {
+  useScheduledTasks = require("../hooks/useScheduledTasks.js").useScheduledTasks;
+});
 //@ chunk-18hwfzwa.js:1840048-1840065 layout
 var NullComponent = () => null;
 //@ chunk-18hwfzwa.js:1840065-1840431 facade-exports
 /**
  * REPL 外壳：用 props.messageQueue（缺省取全局消息队列）建队列 Provider，并提供写入节流上下文后渲染 REPL。
  */
-function REPL(h) {
-  let $ = w(8);
+function REPL(props) {
+  let $ = useMemoCache(8);
   let commandQueueOrDefault = useCommandQueueOrDefault();
-  let [D] = y(createNullStore);
-  const queue = h.messageQueue ?? commandQueueOrDefault;
+  let [nullStore] = useState(createNullStore);
+  const queue = props.messageQueue ?? commandQueueOrDefault;
   let children;
-  if ($[0] !== h) {
+  if ($[0] !== props) {
     children = jsxProd_default(REPL_2, {
-      ...h,
+      ...props,
     });
-    $[0] = h;
+    $[0] = props;
     $[1] = children;
   } else children = $[1];
   let children_2;
-  if ($[2] !== D || $[3] !== children) {
+  if ($[2] !== nullStore || $[3] !== children) {
     children_2 = jsxProd_default(SpinnerPaceContext.Provider, {
-      value: D,
+      value: nullStore,
       children,
     });
-    $[2] = D;
+    $[2] = nullStore;
     $[3] = children;
     $[4] = children_2;
   } else children_2 = $[4];
-  let Be;
+  let queueWrapper;
   if ($[5] !== queue || $[6] !== children_2) {
-    Be = jsxProd_default(QueueProvider, {
+    queueWrapper = jsxProd_default(QueueProvider, {
       queue,
       children: children_2,
     });
     $[5] = queue;
     $[6] = children_2;
-    $[7] = Be;
-  } else Be = $[7];
-  return Be;
+    $[7] = queueWrapper;
+  } else queueWrapper = $[7];
+  return queueWrapper;
 }
 //@ chunk-18hwfzwa.js:1840431-1878241 callgraph-witnessed = REPL (0.129)
 /**
@@ -2953,7 +3006,7 @@ function REPL(h) {
  * 外层包 MCPConnectionManager、$A.Provider(tokenWarning)、LF、_F 屏幕框架。也挂 GlobalKeybindingHandlers、useQueueProcessor、useScheduledTasks、useMailboxBridge、useLogMessages 等副作用 hook。
  */
 function REPL_2(props) {
-  let $ = w(686);
+  let $ = useMemoCache(686);
   let {
     commands,
     debug,
@@ -3001,7 +3054,7 @@ function REPL_2(props) {
   let shouldHideLoginNotice = hideLoginNotice === undefined ? false : hideLoginNotice;
   let isQueryDisabled = disableQuery === undefined ? false : disableQuery;
   let presentation = useRenderMode();
-  let isInsidePanelHost = Se(rootSessionSlot) !== null;
+  let isInsidePanelHost = useContext(rootSessionSlot) !== null;
   if (showFooterHintGate()) {
     if (isEmbedded) isInsidePanelHost;
   }
@@ -3009,21 +3062,21 @@ function REPL_2(props) {
   let { storageV5, credentials } = useTheme_2();
   let fleetNudgeStore = useFleetNudgeStore();
   let messageQueue = useCommandQueueOrDefault();
-  let mr;
+  let isRemoteSession;
   if ($[0] !== remoteSessionConfig) {
-    mr = !!remoteSessionConfig || remoteSessionAwaits();
+    isRemoteSession = !!remoteSessionConfig || remoteSessionAwaits();
     $[0] = remoteSessionConfig;
-    $[1] = mr;
-  } else mr = $[1];
-  let isRemoteSession = mr;
-  let hasRemoteTransport = isRemoteSession || !!directConnectConfig || !!sshSession;
-  let Fr;
+    $[1] = isRemoteSession;
+  } else isRemoteSession = $[1];
+  let isRemoteSession_2 = isRemoteSession;
+  let hasRemoteTransport = isRemoteSession_2 || !!directConnectConfig || !!sshSession;
+  let isThinClient;
   if ($[2] !== hasRemoteTransport) {
-    Fr = getIsRemoteMode() || hasRemoteTransport;
+    isThinClient = getIsRemoteMode() || hasRemoteTransport;
     $[2] = hasRemoteTransport;
-    $[3] = Fr;
-  } else Fr = $[3];
-  let isThinClient = Fr;
+    $[3] = isThinClient;
+  } else isThinClient = $[3];
+  let isThinClient_2 = isThinClient;
   let clock = useClock();
   let CLAUDE_CODE_DISABLE_VIRTUAL_SCROLL = env.CLAUDE_CODE_DISABLE_VIRTUAL_SCROLL;
   let session = useSession();
@@ -3040,32 +3093,32 @@ function REPL_2(props) {
   let dialogStore = useDialogStore();
   let spinnerStore = useSpinnerStore();
   useBackgroundStatusSync();
-  let _r;
+  let getState;
   if ($[4] !== store) {
-    _r = () => store.getState();
+    getState = () => store.getState();
     $[4] = store;
-    $[5] = _r;
-  } else _r = $[5];
-  let fr;
-  if ($[6] !== setAppState || $[7] !== _r) {
-    fr = createTaskFramework(_r, setAppState, {
+    $[5] = getState;
+  } else getState = $[5];
+  let taskRegistry;
+  if ($[6] !== setAppState || $[7] !== getState) {
+    taskRegistry = createTaskFramework(getState, setAppState, {
       refillWebSearchBudgetByDefault: true,
     });
     $[6] = setAppState;
-    $[7] = _r;
-    $[8] = fr;
-  } else fr = $[8];
-  let taskRegistry = fr;
-  let Yr;
+    $[7] = getState;
+    $[8] = taskRegistry;
+  } else taskRegistry = $[8];
+  let taskRegistry_2 = taskRegistry;
+  let seedTranscript;
   if ($[9] !== initialMessages || $[10] !== store) {
-    Yr = () => {
-      let Er = mainAgentId();
+    seedTranscript = () => {
+      let agentId = mainAgentId();
       let messages = initialMessages ?? createEmptyList();
-      store.setState((ms) => ({
-        ...ms,
+      store.setState((state) => ({
+        ...state,
         transcripts: {
-          ...ms.transcripts,
-          [Er]: {
+          ...state.transcripts,
+          [agentId]: {
             messages,
             inProgressToolUseIDs: new Set(),
           },
@@ -3075,9 +3128,9 @@ function REPL_2(props) {
     };
     $[9] = initialMessages;
     $[10] = store;
-    $[11] = Yr;
-  } else Yr = $[11];
-  y(Yr);
+    $[11] = seedTranscript;
+  } else seedTranscript = $[11];
+  useState(seedTranscript);
   let teammateColors;
   if ($[12] !== setAppState || $[13] !== store.getState) {
     teammateColors = createColorAssigner(fieldAccessor(store.getState, setAppState, "teammateColors"));
@@ -3090,39 +3143,39 @@ function REPL_2(props) {
   let mainLoopModel = useMainLoopModel_3();
   let isBriefOnly = useAppState(selectIsBriefOnlyReplC);
   let briefTranscript = useAppState(selectBriefTranscript);
-  let [screen, setScreen] = y("prompt");
-  let [dumpMode, setDumpMode] = y(false);
-  let qn;
+  let [screen, setScreen] = useState("prompt");
+  let [dumpMode, setDumpMode] = useState(false);
+  let resetToPrompt;
   if ($[15] === MEMO_CACHE_SENTINEL) {
-    qn = () => {
+    resetToPrompt = () => {
       setScreen("prompt");
       setDumpMode(false);
     };
-    $[15] = qn;
-  } else qn = $[15];
-  let exitTranscript = qn;
+    $[15] = resetToPrompt;
+  } else resetToPrompt = $[15];
+  let exitTranscript = resetToPrompt;
   let { addNotification, removeNotification } = useNotifications();
   let mergedMcpClients = useMergedClients(mcpClients, replTab_2);
   runStartupNotificationSpecs();
   FeatureOfTheWeekClaim(addNotification, removeNotification);
   noopEffect_2(session, addNotification, removeNotification);
-  let Ms;
-  let qs;
+  let refreshCredits;
+  let deps;
   if ($[16] !== credentials || $[17] !== storageV5) {
-    Ms = () => {
+    refreshCredits = () => {
       refreshApiCreditLinkStatus(credentials, storageV5).catch(logError);
     };
-    qs = [credentials, storageV5];
+    deps = [credentials, storageV5];
     $[16] = credentials;
     $[17] = storageV5;
-    $[18] = Ms;
-    $[19] = qs;
+    $[18] = refreshCredits;
+    $[19] = deps;
   } else {
-    Ms = $[18];
-    qs = $[19];
+    refreshCredits = $[18];
+    deps = $[19];
   }
-  P(Ms, qs);
-  let gs;
+  useEffect(refreshCredits, deps);
+  let slashCommandEffect;
   if (
     $[20] !== credentials ||
     $[21] !== slashCommandsDisabled ||
@@ -3134,13 +3187,13 @@ function REPL_2(props) {
     $[27] !== mcpClients ||
     $[28] !== initialMessages ||
     $[29] !== initialTools ||
-    $[30] !== isThinClient ||
+    $[30] !== isThinClient_2 ||
     $[31] !== onCommandsChange ||
     $[32] !== session ||
     $[33] !== storageV5 ||
     $[34] !== store
   ) {
-    gs = () =>
+    slashCommandEffect = () =>
       new ReplSessionScope({
         store,
         initialMcpClients: mcpClients,
@@ -3154,7 +3207,7 @@ function REPL_2(props) {
         mainThreadAgentDefinition,
         disableSlashCommands: slashCommandsDisabled,
         filterCommands,
-        isThinClient,
+        isThinClient: isThinClient_2,
         session,
         refreshContext: () => invalidateUserContext(session, "hooks_invalidate"),
         onCommandsChange,
@@ -3169,21 +3222,21 @@ function REPL_2(props) {
     $[27] = mcpClients;
     $[28] = initialMessages;
     $[29] = initialTools;
-    $[30] = isThinClient;
+    $[30] = isThinClient_2;
     $[31] = onCommandsChange;
     $[32] = session;
     $[33] = storageV5;
     $[34] = store;
-    $[35] = gs;
-  } else gs = $[35];
-  let [scope] = y(gs);
+    $[35] = slashCommandEffect;
+  } else slashCommandEffect = $[35];
+  let [scope] = useState(slashCommandEffect);
   let {
     commands: commands_2,
     renderingTools,
     dynamicMcpConfig: dynamicMcpConfig_2,
   } = useStoreSelector(scope);
-  let writePacer = Se(SpinnerPaceContext);
-  let ii;
+  let writePacer = useContext(SpinnerPaceContext);
+  let controllersEffect;
   if (
     $[36] !== clock.setTimeout ||
     $[37] !== engine ||
@@ -3193,45 +3246,46 @@ function REPL_2(props) {
     $[41] !== remoteSessionConfig?.initialPromptUuid ||
     $[42] !== scope ||
     $[43] !== store ||
-    $[44] !== taskRegistry
+    $[44] !== taskRegistry_2
   ) {
-    ii = () => {
+    controllersEffect = () => {
       let ownsEngine = engine === undefined;
-      let Xa =
+      let engineImpl =
         engine ??
         runWithQueryParams({
           store,
           scope,
-          readPendingQueryParams: () => La.readPendingQueryParams(),
+          readPendingQueryParams: () => turnController.readPendingQueryParams(),
         });
-      let dl = isWindowsTerminal();
-      let La = new TurnController({
-        engine: Xa,
+      let isWindowsTerm = isWindowsTerminal();
+      let turnController = new TurnController({
+        engine: engineImpl,
         presentation,
         ownsEngine,
         initialExternalLoading: remoteSessionConfig?.initialPromptUuid !== undefined,
         initialHaikuTitleAttempted: (initialMessages?.length ?? 0) > 0,
-        onTimingChange: (value) => mergeTaskProgressIntoTranscript(taskRegistry, mainAgentId(), value),
+        onTimingChange: (value) => mergeTaskProgressIntoTranscript(taskRegistry_2, mainAgentId(), value),
         frameNotifier: writePacer ?? IMMEDIATE_PACER,
         stream: {
           scheduleTimeout: clock.setTimeout,
-          isStreamingTextVisible: () => isMotionAllowed(store.getState().settings.prefersReducedMotion, dl),
-          getTranscriptLength: () => Hd.getSnapshot().length,
+          isStreamingTextVisible: () =>
+            isMotionAllowed(store.getState().settings.prefersReducedMotion, isWindowsTerm),
+          getTranscriptLength: () => messageListStore.getSnapshot().length,
         },
       });
-      let Ss = mainAgentId();
-      let Hd = new MessageListStore({
-        initial: store.getState().transcripts[Ss]?.messages ?? [],
+      let agentId = mainAgentId();
+      let messageListStore = new MessageListStore({
+        initial: store.getState().transcripts[agentId]?.messages ?? [],
         project: (sticky, handle) => {
-          La.stream.trackTranscriptWrite(handle, sticky);
-          let rounded = Math.round(La.stream.responseLength / 4);
-          setTranscriptMessages(store, Ss, sticky, rounded);
+          turnController.stream.trackTranscriptWrite(handle, sticky);
+          let rounded = Math.round(turnController.stream.responseLength / 4);
+          setTranscriptMessages(store, agentId, sticky, rounded);
         },
       });
       return {
-        sessionEngine: Xa,
-        turn: La,
-        transcript: Hd,
+        sessionEngine: engineImpl,
+        turn: turnController,
+        transcript: messageListStore,
       };
     };
     $[36] = clock.setTimeout;
@@ -3242,51 +3296,51 @@ function REPL_2(props) {
     $[41] = remoteSessionConfig?.initialPromptUuid;
     $[42] = scope;
     $[43] = store;
-    $[44] = taskRegistry;
-    $[45] = ii;
-  } else ii = $[45];
-  let [controllers] = y(ii);
+    $[44] = taskRegistry_2;
+    $[45] = controllersEffect;
+  } else controllersEffect = $[45];
+  let [controllers] = useState(controllersEffect);
   let { sessionEngine, turn, transcript } = controllers;
   useTrustedDeviceEnrolledNotice(addNotification, transcript);
   useInformationalMessageSink(transcript);
-  let qa;
+  let queryParamsEffect;
   if ($[46] !== onQueryParamsChange || $[47] !== turn.readPendingQueryParams) {
-    qa = () => {
+    queryParamsEffect = () => {
       onQueryParamsChange?.(turn.readPendingQueryParams);
     };
     $[46] = onQueryParamsChange;
     $[47] = turn.readPendingQueryParams;
-    $[48] = qa;
-  } else qa = $[48];
-  let pd;
+    $[48] = queryParamsEffect;
+  } else queryParamsEffect = $[48];
+  let queryParamsDeps;
   if ($[49] !== onQueryParamsChange || $[50] !== turn) {
-    pd = [onQueryParamsChange, turn];
+    queryParamsDeps = [onQueryParamsChange, turn];
     $[49] = onQueryParamsChange;
     $[50] = turn;
-    $[51] = pd;
-  } else pd = $[51];
-  P(qa, pd);
-  let $l;
+    $[51] = queryParamsDeps;
+  } else queryParamsDeps = $[51];
+  useEffect(queryParamsEffect, queryParamsDeps);
+  let chromeControllersEffect;
   if (
     $[52] !== addNotification ||
     $[53] !== debug ||
     $[54] !== isEmbedded ||
     $[55] !== shouldHideLoginNotice ||
-    $[56] !== isRemoteSession ||
+    $[56] !== isRemoteSession_2 ||
     $[57] !== onDetachToCaller ||
     $[58] !== storageV5 ||
     $[59] !== store ||
     $[60] !== transcript ||
     $[61] !== turn.guard
   ) {
-    $l = () =>
+    chromeControllersEffect = () =>
       new ComposerChrome({
         debug,
         embedded: isEmbedded,
         onDetachToCaller,
         hasSuppressedDialogs: false,
         hideLoginNotice: shouldHideLoginNotice,
-        isRemoteSession,
+        isRemoteSession: isRemoteSession_2,
         addNotification,
         store,
         storageV5,
@@ -3300,35 +3354,35 @@ function REPL_2(props) {
     $[53] = debug;
     $[54] = isEmbedded;
     $[55] = shouldHideLoginNotice;
-    $[56] = isRemoteSession;
+    $[56] = isRemoteSession_2;
     $[57] = onDetachToCaller;
     $[58] = storageV5;
     $[59] = store;
     $[60] = transcript;
     $[61] = turn.guard;
-    $[62] = $l;
-  } else $l = $[62];
-  let [chrome] = y($l);
+    $[62] = chromeControllersEffect;
+  } else chromeControllersEffect = $[62];
+  let [chrome] = useState(chromeControllersEffect);
   let ideSelection = useStoreSelector(chrome, selectIdeSelectionReplB);
-  let Ll = transcript.apply;
+  let applyTranscript = transcript.apply;
   uiLogNamespace.useUiLog(transcript);
-  let _c;
-  if ($[63] !== Ll) {
-    _c = () =>
+  let turnEventTailEffect;
+  if ($[63] !== applyTranscript) {
+    turnEventTailEffect = () =>
       TURN_BOUNDARIES_MODULE_EXPORTS.createTurnEventTail((value) =>
-        Ll({
+        applyTranscript({
           type: "append",
           messages: value,
         }),
       );
-    $[63] = Ll;
-    $[64] = _c;
-  } else _c = $[64];
-  let [turnEventTail] = y(_c);
-  let [permissionRelays] = y(createBridgeChannelSlot);
-  let Ka;
+    $[63] = applyTranscript;
+    $[64] = turnEventTailEffect;
+  } else turnEventTailEffect = $[64];
+  let [turnEventTail] = useState(turnEventTailEffect);
+  let [permissionRelays] = useState(createBridgeChannelSlot);
+  let networkPromptsEffect;
   if ($[65] !== permissionRelays || $[66] !== scope.requestDialog || $[67] !== setAppState) {
-    Ka = () =>
+    networkPromptsEffect = () =>
       new SandboxNetworkPrompts({
         requestDialog: scope.requestDialog,
         getBridge: () => permissionRelays.bridge?.permission,
@@ -3344,13 +3398,13 @@ function REPL_2(props) {
     $[65] = permissionRelays;
     $[66] = scope.requestDialog;
     $[67] = setAppState;
-    $[68] = Ka;
-  } else Ka = $[68];
-  let [networkPrompts] = y(Ka);
-  let hd;
+    $[68] = networkPromptsEffect;
+  } else networkPromptsEffect = $[68];
+  let [networkPrompts] = useState(networkPromptsEffect);
+  let scrollPinEffect;
   if (
     $[69] !== credentials ||
-    $[70] !== isRemoteSession ||
+    $[70] !== isRemoteSession_2 ||
     $[71] !== networkPrompts ||
     $[72] !== scope ||
     $[73] !== setAppState ||
@@ -3358,7 +3412,7 @@ function REPL_2(props) {
     $[75] !== store ||
     $[76] !== transcript.getSnapshot
   ) {
-    hd = () =>
+    scrollPinEffect = () =>
       new SandboxStartup({
         store,
         setAppState,
@@ -3367,46 +3421,46 @@ function REPL_2(props) {
         scope,
         getMessages: transcript.getSnapshot,
         networkPrompts,
-        isRemoteSession,
+        isRemoteSession: isRemoteSession_2,
       });
     $[69] = credentials;
-    $[70] = isRemoteSession;
+    $[70] = isRemoteSession_2;
     $[71] = networkPrompts;
     $[72] = scope;
     $[73] = setAppState;
     $[74] = storageV5;
     $[75] = store;
     $[76] = transcript.getSnapshot;
-    $[77] = hd;
-  } else hd = $[77];
-  let [sandbox] = y(hd);
+    $[77] = scrollPinEffect;
+  } else scrollPinEffect = $[77];
+  let [sandbox] = useState(scrollPinEffect);
   let isLoading = useStoreSelector(turn, selectTurnIsLoadingE);
   useStoreSelector(turn, alwaysFalseInRepl);
   let toolProgress = useStoreSelector(turn.stream, selectToolProgress);
   let userInputOnProcessing = useStoreSelector(turn.stream, selectUserInputOnProcessingReplB);
   let hasToolProgress = toolProgress.size > 0;
-  let qu;
+  let pauseAnimation;
   if ($[78] !== toolProgress) {
-    qu = DATE_RANGE_ORDER(toolProgress);
+    pauseAnimation = DATE_RANGE_ORDER(toolProgress);
     $[78] = toolProgress;
-    $[79] = qu;
-  } else qu = $[79];
-  let pauseAnimation = qu;
+    $[79] = pauseAnimation;
+  } else pauseAnimation = $[79];
+  let pauseAnimation_2 = pauseAnimation;
   let { guard, buildToolUseContext } = turn;
-  let awaySummary = useAwaySummaryController(transcript, isLoading, !isRemoteSession);
-  let Kp;
+  let awaySummary = useAwaySummaryController(transcript, isLoading, !isRemoteSession_2);
+  let scrollPinDeps;
   if ($[80] !== awaySummary || $[81] !== transcript) {
-    Kp = () =>
+    scrollPinDeps = () =>
       new ScrollPin({
         transcript,
         awaySummary,
       });
     $[80] = awaySummary;
     $[81] = transcript;
-    $[82] = Kp;
-  } else Kp = $[82];
-  let [scrollPin] = y(Kp);
-  let ss;
+    $[82] = scrollPinDeps;
+  } else scrollPinDeps = $[82];
+  let [scrollPin] = useState(scrollPinDeps);
+  let draftControllerEffect;
   if (
     $[83] !== clock.setTimeout ||
     $[84] !== scrollPin ||
@@ -3415,7 +3469,7 @@ function REPL_2(props) {
     $[87] !== transcript ||
     $[88] !== turn
   ) {
-    ss = () => {
+    draftControllerEffect = () => {
       let safeYoloMessageShownRef = promptInputStoreFor(session);
       let isTypedAhead = hasEarlyInputField() && hasTypedEarlyInput();
       setPromptValue(safeYoloMessageShownRef, consumeEarlyInput());
@@ -3424,7 +3478,7 @@ function REPL_2(props) {
         scheduleTimeout: clock.setTimeout,
         isTypedAhead,
         watchText: raisePromptChange,
-        rewriteEdit: ($a, xl) => turn.rewriteInputOverAutoContinuePrefill($a, xl),
+        rewriteEdit: (ref, edit) => turn.rewriteInputOverAutoContinuePrefill(ref, edit),
         onEdit: (ref, setMessages) => {
           scrollPin.onPromptEdit(ref, setMessages);
           activityManager.recordUserActivity();
@@ -3446,40 +3500,40 @@ function REPL_2(props) {
     $[86] = store;
     $[87] = transcript;
     $[88] = turn;
-    $[89] = ss;
-  } else ss = $[89];
-  let [draft] = y(ss);
-  let Ya;
-  let tl;
+    $[89] = draftControllerEffect;
+  } else draftControllerEffect = $[89];
+  let [draft] = useState(draftControllerEffect);
+  let startDraft;
+  let draftDeps;
   if ($[90] !== draft) {
-    Ya = () => draft.start();
-    tl = [draft];
+    startDraft = () => draft.start();
+    draftDeps = [draft];
     $[90] = draft;
-    $[91] = Ya;
-    $[92] = tl;
+    $[91] = startDraft;
+    $[92] = draftDeps;
   } else {
-    Ya = $[91];
-    tl = $[92];
+    startDraft = $[91];
+    draftDeps = $[92];
   }
-  zt(Ya, tl);
-  let ol;
-  let ed;
+  useLayoutEffect(startDraft, draftDeps);
+  let disposeEffect;
+  let disposeDeps;
   if ($[93] !== draft || $[94] !== turn) {
-    ol = () => () => {
+    disposeEffect = () => () => {
       turn.dispose();
       draft.dispose();
     };
-    ed = [turn, draft];
+    disposeDeps = [turn, draft];
     $[93] = draft;
     $[94] = turn;
-    $[95] = ol;
-    $[96] = ed;
+    $[95] = disposeEffect;
+    $[96] = disposeDeps;
   } else {
-    ol = $[95];
-    ed = $[96];
+    disposeEffect = $[95];
+    disposeDeps = $[96];
   }
-  P(ol, ed);
-  let _d;
+  useEffect(disposeEffect, disposeDeps);
+  let chromeEffect;
   if (
     $[97] !== chrome ||
     $[98] !== clock ||
@@ -3504,12 +3558,12 @@ function REPL_2(props) {
     $[117] !== spinnerStore ||
     $[118] !== storageV5 ||
     $[119] !== store ||
-    $[120] !== taskRegistry ||
+    $[120] !== taskRegistry_2 ||
     $[121] !== transcript ||
     $[122] !== turnEventTail ||
     $[123] !== turn
   ) {
-    _d = () =>
+    chromeEffect = () =>
       new SessionController({
         session,
         presentation,
@@ -3523,7 +3577,7 @@ function REPL_2(props) {
         scope,
         engine: sessionEngine,
         dialogStore,
-        taskRegistry,
+        taskRegistry: taskRegistry_2,
         messageQueue,
         storageV5,
         credentials,
@@ -3563,54 +3617,54 @@ function REPL_2(props) {
     $[117] = spinnerStore;
     $[118] = storageV5;
     $[119] = store;
-    $[120] = taskRegistry;
+    $[120] = taskRegistry_2;
     $[121] = transcript;
     $[122] = turnEventTail;
     $[123] = turn;
-    $[124] = _d;
-  } else _d = $[124];
-  let [sessionController] = y(_d);
+    $[124] = chromeEffect;
+  } else chromeEffect = $[124];
+  let [sessionController] = useState(chromeEffect);
   let { conversationId, headHooksPending } = useStoreSelector(sessionController);
   let isDialogActive = useActive();
   useStartupNotice();
   useExternalDialogBridge(scope.dialogTransport);
-  let Wd;
-  let Rl;
+  let screenEffect;
+  let screenDeps;
   if ($[125] !== screen) {
-    Wd = () => {
+    screenEffect = () => {
       setDialogHostUnmounted(screen === "transcript");
       return setTranscriptScreen;
     };
-    Rl = [screen];
+    screenDeps = [screen];
     $[125] = screen;
-    $[126] = Wd;
-    $[127] = Rl;
+    $[126] = screenEffect;
+    $[127] = screenDeps;
   } else {
-    Wd = $[126];
-    Rl = $[127];
+    screenEffect = $[126];
+    screenDeps = $[127];
   }
-  zt(Wd, Rl);
+  useLayoutEffect(screenEffect, screenDeps);
   let blockingDialogKind = useAutoDialogKindAlt() ?? null;
-  let Pi;
-  let fa;
+  let dialogShownEffect;
+  let dialogDeps;
   if ($[128] !== blockingDialogKind) {
-    Pi = () => {
+    dialogShownEffect = () => {
       markBlockingDialogShown(blockingDialogKind);
       return clearBlockingDialogNow;
     };
-    fa = [blockingDialogKind];
+    dialogDeps = [blockingDialogKind];
     $[128] = blockingDialogKind;
-    $[129] = Pi;
-    $[130] = fa;
+    $[129] = dialogShownEffect;
+    $[130] = dialogDeps;
   } else {
-    Pi = $[129];
-    fa = $[130];
+    dialogShownEffect = $[129];
+    dialogDeps = $[130];
   }
-  zt(Pi, fa);
+  useLayoutEffect(dialogShownEffect, dialogDeps);
   let requestDialog = scope.requestDialog;
-  let td;
+  let dialogSurface;
   if ($[131] !== requestDialog || $[132] !== turn.loading || $[133] !== turn.tasks) {
-    td = {
+    dialogSurface = {
       requestDialog,
       turnActivity: turn.loading,
       tasks: turn.tasks,
@@ -3618,10 +3672,10 @@ function REPL_2(props) {
     $[131] = requestDialog;
     $[132] = turn.loading;
     $[133] = turn.tasks;
-    $[134] = td;
-  } else td = $[134];
-  let dialogSurface = td;
-  let Ad;
+    $[134] = dialogSurface;
+  } else dialogSurface = $[134];
+  let dialogSurface_2 = dialogSurface;
+  let tipsEffect;
   if (
     $[135] !== addNotification ||
     $[136] !== mainLoopModel ||
@@ -3635,7 +3689,7 @@ function REPL_2(props) {
     $[144] !== turn.guard ||
     $[145] !== turn.loading
   ) {
-    Ad = () =>
+    tipsEffect = () =>
       new StartupNudges({
         session,
         presentation,
@@ -3660,22 +3714,22 @@ function REPL_2(props) {
     $[143] = transcript.getSnapshot;
     $[144] = turn.guard;
     $[145] = turn.loading;
-    $[146] = Ad;
-  } else Ad = $[146];
-  let [contextualTips] = y(Ad);
-  let md;
-  let vp;
+    $[146] = tipsEffect;
+  } else tipsEffect = $[146];
+  let [contextualTips] = useState(tipsEffect);
+  let startTips;
+  let tipsDeps;
   if ($[147] !== contextualTips) {
-    md = () => contextualTips.start();
-    vp = [contextualTips];
+    startTips = () => contextualTips.start();
+    tipsDeps = [contextualTips];
     $[147] = contextualTips;
-    $[148] = md;
-    $[149] = vp;
+    $[148] = startTips;
+    $[149] = tipsDeps;
   } else {
-    md = $[148];
-    vp = $[149];
+    startTips = $[148];
+    tipsDeps = $[149];
   }
-  P(md, vp);
+  useEffect(startTips, tipsDeps);
   let recommendationGate = useSerialTaskRunner();
   useLspRecommendationWatcher(requestDialog, recommendationGate);
   useClaudeCodeHintRecommendation(requestDialog, recommendationGate);
@@ -3683,9 +3737,9 @@ function REPL_2(props) {
   let hasLocalJsxOverlay = useDialogOfKind(LOCAL_JSX_DIALOG.kind);
   let hasActiveLocalJsxUI = useDialogSelector(isLocalJsxHoldingQueue);
   let panelHidesPrompt = useHasOpenDialog();
-  let Hc;
+  let terminalTitleEffect;
   if ($[150] !== scope || $[151] !== session || $[152] !== sessionController || $[153] !== store) {
-    Hc = () =>
+    terminalTitleEffect = () =>
       new TerminalTitleController({
         session,
         store,
@@ -3697,47 +3751,47 @@ function REPL_2(props) {
     $[151] = session;
     $[152] = sessionController;
     $[153] = store;
-    $[154] = Hc;
-  } else Hc = $[154];
-  let [titles] = y(Hc);
+    $[154] = terminalTitleEffect;
+  } else terminalTitleEffect = $[154];
+  let [titles] = useState(terminalTitleEffect);
   let hasOpenDialog = useHasOpenDialog_2();
   let modalVisibility = LayoutOverflow();
   let readFileState = useDialogSelector(hasBlockingDialog);
-  let Eu;
-  let Rp;
+  let readRunning;
+  let subscribeRunning;
   if ($[155] !== guard.isRunning) {
-    Eu = () => guard.isRunning;
-    Rp = () => guard.isRunning;
+    readRunning = () => guard.isRunning;
+    subscribeRunning = () => guard.isRunning;
     $[155] = guard.isRunning;
-    $[156] = Eu;
-    $[157] = Rp;
+    $[156] = readRunning;
+    $[157] = subscribeRunning;
   } else {
-    Eu = $[156];
-    Rp = $[157];
+    readRunning = $[156];
+    subscribeRunning = $[157];
   }
-  let isResponseRunning = yt(guard.subscribe, Eu, Rp);
-  let cy = hasLocalJsxOverlay && !isResponseRunning;
+  let isResponseRunning = useSyncExternalStore(guard.subscribe, readRunning, subscribeRunning);
+  let localOverlayHoldsQueue = hasLocalJsxOverlay && !isResponseRunning;
   let panelHoldsQueue = hasActiveLocalJsxUI && !isResponseRunning;
   let dialogOverPanel = useHasBlockingDialog();
   let topAutoDialogKind = useTopAutoDialogKind();
   let isUltraplanChoiceShowing = blockingDialogKind === ULTRAPLAN_CHOICE_DIALOG_SPEC.kind;
-  let Fg;
+  let elicitationShowing;
   if ($[158] !== blockingDialogKind) {
-    Fg = isElicitationDialogKind_2(blockingDialogKind);
+    elicitationShowing = isElicitationDialogKind_2(blockingDialogKind);
     $[158] = blockingDialogKind;
-    $[159] = Fg;
-  } else Fg = $[159];
-  let elicitationShowing = Fg;
+    $[159] = elicitationShowing;
+  } else elicitationShowing = $[159];
+  let elicitationShowing_2 = elicitationShowing;
   let pinnedConsentShowing = isElicitationDialogKind(blockingDialogKind);
-  let Mi;
+  let agentId;
   if ($[160] === MEMO_CACHE_SENTINEL) {
-    Mi = mainAgentId();
-    $[160] = Mi;
-  } else Mi = $[160];
-  let { messages } = transcriptMessagesStore(Mi);
-  let Qa;
+    agentId = mainAgentId();
+    $[160] = agentId;
+  } else agentId = $[160];
+  let { messages } = transcriptMessagesStore(agentId);
+  let rewindEffect;
   if ($[161] !== localJsx || $[162] !== sessionController || $[163] !== turn) {
-    Qa = () => {
+    rewindEffect = () => {
       openRewindSelector({
         localJsx,
         turn,
@@ -3747,10 +3801,10 @@ function REPL_2(props) {
     $[161] = localJsx;
     $[162] = sessionController;
     $[163] = turn;
-    $[164] = Qa;
-  } else Qa = $[164];
-  let openMessageSelector = Qa;
-  let yl;
+    $[164] = rewindEffect;
+  } else rewindEffect = $[164];
+  let openMessageSelector = rewindEffect;
+  let idleNudgeEffect;
   if (
     $[165] !== addNotification ||
     $[166] !== clock ||
@@ -3764,7 +3818,7 @@ function REPL_2(props) {
     $[174] !== transcript.getSnapshot ||
     $[175] !== turn
   ) {
-    yl = () =>
+    idleNudgeEffect = () =>
       new IdleReturnHint({
         turn,
         getMessages: transcript.getSnapshot,
@@ -3807,55 +3861,55 @@ function REPL_2(props) {
     $[173] = terminal;
     $[174] = transcript.getSnapshot;
     $[175] = turn;
-    $[176] = yl;
-  } else yl = $[176];
-  let [idleNudge] = y(yl);
-  let Bh;
-  let Hh;
+    $[176] = idleNudgeEffect;
+  } else idleNudgeEffect = $[176];
+  let [idleNudge] = useState(idleNudgeEffect);
+  let overlayEffect;
+  let overlayDeps;
   if ($[177] !== hasLocalJsxOverlay || $[178] !== hasToolProgress || $[179] !== idleNudge) {
-    Bh = () => {
+    overlayEffect = () => {
       idleNudge.setLocalOverlayShowing(hasToolProgress || hasLocalJsxOverlay);
     };
-    Hh = [idleNudge, hasToolProgress, hasLocalJsxOverlay];
+    overlayDeps = [idleNudge, hasToolProgress, hasLocalJsxOverlay];
     $[177] = hasLocalJsxOverlay;
     $[178] = hasToolProgress;
     $[179] = idleNudge;
-    $[180] = Bh;
-    $[181] = Hh;
+    $[180] = overlayEffect;
+    $[181] = overlayDeps;
   } else {
-    Bh = $[180];
-    Hh = $[181];
+    overlayEffect = $[180];
+    overlayDeps = $[181];
   }
-  P(Bh, Hh);
-  let ES;
-  if ($[182] !== isThinClient || $[183] !== messageQueue || $[184] !== turn.guard) {
-    ES = () =>
-      isPollEventIngressActive() && !isThinClient
+  useEffect(overlayEffect, overlayDeps);
+  let pollEventEffect;
+  if ($[182] !== isThinClient_2 || $[183] !== messageQueue || $[184] !== turn.guard) {
+    pollEventEffect = () =>
+      isPollEventIngressActive() && !isThinClient_2
         ? new PollEventIdleDelivery({
             queue: messageQueue,
             guard: turn.guard,
           })
         : null;
-    $[182] = isThinClient;
+    $[182] = isThinClient_2;
     $[183] = messageQueue;
     $[184] = turn.guard;
-    $[185] = ES;
-  } else ES = $[185];
-  let [pollEventDelivery] = y(ES);
-  let dm;
+    $[185] = pollEventEffect;
+  } else pollEventEffect = $[185];
+  let [pollEventDelivery] = useState(pollEventEffect);
+  let turnEvents;
   if ($[186] !== turnEventTail.enqueue) {
-    dm = {
+    turnEvents = {
       begin: randomUUID,
       enqueue: turnEventTail.enqueue,
     };
     $[186] = turnEventTail.enqueue;
-    $[187] = dm;
-  } else dm = $[187];
-  let turnEvents = dm;
-  let uy;
-  let Wh;
+    $[187] = turnEvents;
+  } else turnEvents = $[187];
+  let turnEvents_2 = turnEvents;
+  let quotaResumeEffect;
+  let quotaResumeDeps;
   if ($[188] !== turn) {
-    uy = () => {
+    quotaResumeEffect = () => {
       let updated = onQuotaResumeEvent((prev) => {
         if (prev === "armed" || prev === "rearmed") turn.retractRateLimitAutoContinue();
       });
@@ -3865,8 +3919,8 @@ function REPL_2(props) {
       let removedNotifications = onResetFlowEvent((cmd) => {
         if (cmd.type === "reset") turn.retractRateLimitAutoContinue();
       });
-      let systemPrompt = onUsageCreditEvent((Dd) => {
-        if (Dd.type === "reset") turn.retractRateLimitAutoContinue();
+      let systemPrompt = onUsageCreditEvent((creditEvent) => {
+        if (creditEvent.type === "reset") turn.retractRateLimitAutoContinue();
       });
       return () => {
         updated();
@@ -3875,16 +3929,16 @@ function REPL_2(props) {
         systemPrompt();
       };
     };
-    Wh = [turn];
+    quotaResumeDeps = [turn];
     $[188] = turn;
-    $[189] = uy;
-    $[190] = Wh;
+    $[189] = quotaResumeEffect;
+    $[190] = quotaResumeDeps;
   } else {
-    uy = $[189];
-    Wh = $[190];
+    quotaResumeEffect = $[189];
+    quotaResumeDeps = $[190];
   }
-  P(uy, Wh);
-  let Mf;
+  useEffect(quotaResumeEffect, quotaResumeDeps);
+  let gestureEffect;
   if (
     $[191] !== clock ||
     $[192] !== credentials ||
@@ -3899,12 +3953,12 @@ function REPL_2(props) {
     $[201] !== setAppState ||
     $[202] !== storageV5 ||
     $[203] !== store ||
-    $[204] !== taskRegistry ||
+    $[204] !== taskRegistry_2 ||
     $[205] !== titles ||
     $[206] !== transcript ||
     $[207] !== turn
   ) {
-    Mf = () =>
+    gestureEffect = () =>
       new BackgroundGesture({
         store,
         setAppState,
@@ -3912,7 +3966,7 @@ function REPL_2(props) {
         turn,
         messageQueue,
         session,
-        taskRegistry,
+        taskRegistry: taskRegistry_2,
         storageV5,
         credentials,
         fleetNudgeStore,
@@ -3939,14 +3993,14 @@ function REPL_2(props) {
     $[201] = setAppState;
     $[202] = storageV5;
     $[203] = store;
-    $[204] = taskRegistry;
+    $[204] = taskRegistry_2;
     $[205] = titles;
     $[206] = transcript;
     $[207] = turn;
-    $[208] = Mf;
-  } else Mf = $[208];
-  let [gesture] = y(Mf);
-  let ig;
+    $[208] = gestureEffect;
+  } else gestureEffect = $[208];
+  let [gesture] = useState(gestureEffect);
+  let lowLatencyEffect;
   if (
     $[209] !== clock ||
     $[210] !== dialogStore ||
@@ -3954,18 +4008,18 @@ function REPL_2(props) {
     $[212] !== session ||
     $[213] !== spinnerStore ||
     $[214] !== store ||
-    $[215] !== taskRegistry ||
+    $[215] !== taskRegistry_2 ||
     $[216] !== transcript ||
     $[217] !== turn
   ) {
-    ig = () =>
+    lowLatencyEffect = () =>
       new QueuedSendNowController({
         turn,
         messageQueue,
         transcript,
         store,
         session,
-        taskRegistry,
+        taskRegistry: taskRegistry_2,
         spinnerStore,
         dialogStore,
         clock,
@@ -3976,25 +4030,25 @@ function REPL_2(props) {
     $[212] = session;
     $[213] = spinnerStore;
     $[214] = store;
-    $[215] = taskRegistry;
+    $[215] = taskRegistry_2;
     $[216] = transcript;
     $[217] = turn;
-    $[218] = ig;
-  } else ig = $[218];
-  let [lowLatency] = y(ig);
-  let Fx;
+    $[218] = lowLatencyEffect;
+  } else lowLatencyEffect = $[218];
+  let [lowLatency] = useState(lowLatencyEffect);
+  let resetEffect;
   if ($[219] !== sessionController || $[220] !== setAppState) {
-    Fx = (event) => {
+    resetEffect = (event) => {
       setAppState(resetTransientUiState);
       sessionController.applyConversationReset(event);
     };
     $[219] = sessionController;
     $[220] = setAppState;
-    $[221] = Fx;
-  } else Fx = $[221];
-  let applyLocalConversationReset = Fx;
+    $[221] = resetEffect;
+  } else resetEffect = $[221];
+  let applyLocalConversationReset = resetEffect;
   const adoptRateLimits = !isEmbedded;
-  let Fi;
+  let transportArgs;
   if (
     $[222] !== applyLocalConversationReset ||
     $[223] !== directConnectConfig ||
@@ -4008,7 +4062,7 @@ function REPL_2(props) {
     $[231] !== transcript ||
     $[232] !== turn
   ) {
-    Fi = {
+    transportArgs = {
       remoteSessionConfig,
       directConnectConfig,
       sshSession,
@@ -4032,10 +4086,10 @@ function REPL_2(props) {
     $[230] = adoptRateLimits;
     $[231] = transcript;
     $[232] = turn;
-    $[233] = Fi;
-  } else Fi = $[233];
-  let { transport, activeRemote, cancellableExternalLoading } = useRemoteTransport(Fi);
-  let dd;
+    $[233] = transportArgs;
+  } else transportArgs = $[233];
+  let { transport, activeRemote, cancellableExternalLoading } = useRemoteTransport(transportArgs);
+  let idleCacheQuotaEffect;
   if (
     $[234] !== clock ||
     $[235] !== dialogStore ||
@@ -4043,13 +4097,13 @@ function REPL_2(props) {
     $[237] !== isDisabled ||
     $[238] !== isEmbedded ||
     $[239] !== idleNudge ||
-    $[240] !== isThinClient ||
+    $[240] !== isThinClient_2 ||
     $[241] !== sessionController ||
     $[242] !== store ||
     $[243] !== transcript ||
     $[244] !== turn
   ) {
-    dd = () =>
+    idleCacheQuotaEffect = () =>
       new ColdCacheWatcher({
         turn,
         isTurnActive: () => turn.guard.isActive,
@@ -4061,7 +4115,7 @@ function REPL_2(props) {
             disabled: isDisabled,
             disableQuery: isQueryDisabled,
             embedded: isEmbedded,
-            isThinClient,
+            isThinClient: isThinClient_2,
           }),
         expectedMissAt: () => promptCacheExpiresAt(transcript.getSnapshot()),
         isDialogOnScreen: () => dialogStore.getState().open.length > 0,
@@ -4079,17 +4133,17 @@ function REPL_2(props) {
     $[237] = isDisabled;
     $[238] = isEmbedded;
     $[239] = idleNudge;
-    $[240] = isThinClient;
+    $[240] = isThinClient_2;
     $[241] = sessionController;
     $[242] = store;
     $[243] = transcript;
     $[244] = turn;
-    $[245] = dd;
-  } else dd = $[245];
-  let [idleCacheQuota] = y(dd);
-  let zp;
+    $[245] = idleCacheQuotaEffect;
+  } else idleCacheQuotaEffect = $[245];
+  let [idleCacheQuota] = useState(idleCacheQuotaEffect);
+  let viewedAgentArgs;
   if ($[246] !== messages || $[247] !== screen || $[248] !== turn) {
-    zp = {
+    viewedAgentArgs = {
       turn,
       messages,
       screen,
@@ -4097,59 +4151,59 @@ function REPL_2(props) {
     $[246] = messages;
     $[247] = screen;
     $[248] = turn;
-    $[249] = zp;
-  } else zp = $[249];
-  let { hasDisplayedStreamingText, tailBlank, focusFoldHoldsPreview } = TurnSpinnerRow(zp);
+    $[249] = viewedAgentArgs;
+  } else viewedAgentArgs = $[249];
+  let { hasDisplayedStreamingText, tailBlank, focusFoldHoldsPreview } = TurnSpinnerRow(viewedAgentArgs);
   let axBell = useScreenReaderBell();
   let isBashesDialogOpen = useStoreSelector(chrome, selectHasBashesDialog);
   let hasIdeOverlay = useDialogOfKind(ULTRAPLAN_CHOICE_DIALOG_SPEC.kind);
-  let Jl;
-  let Cu;
+  let ideOverlayEffect;
+  let ideOverlayDeps;
   if ($[250] !== isBashesDialogOpen || $[251] !== chrome || $[252] !== hasIdeOverlay) {
-    Jl = () => {
+    ideOverlayEffect = () => {
       if (hasIdeOverlay && isBashesDialogOpen) chrome.closeBashesDialog();
     };
-    Cu = [hasIdeOverlay, isBashesDialogOpen, chrome];
+    ideOverlayDeps = [hasIdeOverlay, isBashesDialogOpen, chrome];
     $[250] = isBashesDialogOpen;
     $[251] = chrome;
     $[252] = hasIdeOverlay;
-    $[253] = Jl;
-    $[254] = Cu;
+    $[253] = ideOverlayEffect;
+    $[254] = ideOverlayDeps;
   } else {
-    Jl = $[253];
-    Cu = $[254];
+    ideOverlayEffect = $[253];
+    ideOverlayDeps = $[254];
   }
-  P(Jl, Cu);
+  useEffect(ideOverlayEffect, ideOverlayDeps);
   let [theme] = useTheme();
   let mainIsBusy =
     userInputOnProcessing || turn.isMainLoopBusy || messageQueue.getMainThreadQueueLength() > 0;
-  let g_;
+  let viewedAgentKey;
   if ($[255] !== conversationId || $[256] !== mainIsBusy) {
-    g_ = {
+    viewedAgentKey = {
       mainConversationId: conversationId,
       mainIsBusy,
     };
     $[255] = conversationId;
     $[256] = mainIsBusy;
-    $[257] = g_;
-  } else g_ = $[257];
-  let focused = useViewedAgentTranscript(g_);
-  let Hx;
+    $[257] = viewedAgentKey;
+  } else viewedAgentKey = $[257];
+  let focused = useViewedAgentTranscript(viewedAgentKey);
+  let bridgeArgs;
   if (
     $[258] !== focusFoldHoldsPreview ||
     $[259] !== focused.isLoading ||
     $[260] !== readFileState ||
     $[261] !== hasDisplayedStreamingText ||
     $[262] !== isBriefOnly ||
-    $[263] !== cy ||
+    $[263] !== localOverlayHoldsQueue ||
     $[264] !== chromeClients ||
     $[265] !== tailBlank ||
     $[266] !== toolProgress
   ) {
-    Hx =
+    bridgeArgs =
       !hasVisibleProgress(toolProgress) &&
       !readFileState &&
-      !cy &&
+      !localOverlayHoldsQueue &&
       focused.isLoading &&
       true &&
       !chromeClients &&
@@ -4159,18 +4213,18 @@ function REPL_2(props) {
     $[260] = readFileState;
     $[261] = hasDisplayedStreamingText;
     $[262] = isBriefOnly;
-    $[263] = cy;
+    $[263] = localOverlayHoldsQueue;
     $[264] = chromeClients;
     $[265] = tailBlank;
     $[266] = toolProgress;
-    $[267] = Hx;
-  } else Hx = $[267];
-  let showSpinner = Hx;
+    $[267] = bridgeArgs;
+  } else bridgeArgs = $[267];
+  let showSpinner = bridgeArgs;
   useBackgroundAskEmitter();
   useBackgroundQuestionAnswer();
-  let tw;
+  let bridgeCommandsArgs;
   if ($[268] !== scope || $[269] !== store || $[270] !== transport || $[271] !== turn) {
-    tw = {
+    bridgeCommandsArgs = {
       turn,
       scope,
       store,
@@ -4180,11 +4234,11 @@ function REPL_2(props) {
     $[269] = store;
     $[270] = transport;
     $[271] = turn;
-    $[272] = tw;
-  } else tw = $[272];
-  useBridgeImmediateCommands(tw);
-  let Ux;
-  let ow;
+    $[272] = bridgeCommandsArgs;
+  } else bridgeCommandsArgs = $[272];
+  useBridgeImmediateCommands(bridgeCommandsArgs);
+  let bridgeDeps;
+  let bridgeDepsB;
   if (
     $[273] !== gesture ||
     $[274] !== idleCacheQuota ||
@@ -4194,7 +4248,7 @@ function REPL_2(props) {
     $[278] !== scrollPin ||
     $[279] !== titles
   ) {
-    Ux = () => {
+    bridgeDeps = () => {
       titles.connect();
       pollEventDelivery?.connect();
       return () => {
@@ -4207,7 +4261,7 @@ function REPL_2(props) {
         scrollPin.dispose();
       };
     };
-    ow = [idleNudge, idleCacheQuota, pollEventDelivery, gesture, lowLatency, titles, scrollPin];
+    bridgeDepsB = [idleNudge, idleCacheQuota, pollEventDelivery, gesture, lowLatency, titles, scrollPin];
     $[273] = gesture;
     $[274] = idleCacheQuota;
     $[275] = idleNudge;
@@ -4215,17 +4269,17 @@ function REPL_2(props) {
     $[277] = pollEventDelivery;
     $[278] = scrollPin;
     $[279] = titles;
-    $[280] = Ux;
-    $[281] = ow;
+    $[280] = bridgeDeps;
+    $[281] = bridgeDepsB;
   } else {
-    Ux = $[280];
-    ow = $[281];
+    bridgeDeps = $[280];
+    bridgeDepsB = $[281];
   }
-  P(Ux, ow);
-  let [surveySlot] = y(createSurveySlotStore);
-  let S_;
+  useEffect(bridgeDeps, bridgeDepsB);
+  let [surveySlot] = useState(createSurveySlotStore);
+  let ideArgs;
   if ($[282] !== autoConnectIdeFlag || $[283] !== requestDialog || $[284] !== scope.addAutoConnectedIde) {
-    S_ = {
+    ideArgs = {
       autoConnectIdeFlag,
       onAutoConnectIde: scope.addAutoConnectedIde,
       requestDialog,
@@ -4233,40 +4287,40 @@ function REPL_2(props) {
     $[282] = autoConnectIdeFlag;
     $[283] = requestDialog;
     $[284] = scope.addAutoConnectedIde;
-    $[285] = S_;
-  } else S_ = $[285];
-  let { installationStatus, installExtension } = useIDEIntegration(S_);
-  let $x;
+    $[285] = ideArgs;
+  } else ideArgs = $[285];
+  let { installationStatus, installExtension } = useIDEIntegration(ideArgs);
+  let onFileHistory;
   if ($[286] !== setAppState) {
-    $x = (fileHistoryState) =>
+    onFileHistory = (fileHistoryState) =>
       setAppState((prev) => ({
         ...prev,
         fileHistory: fileHistoryState,
       }));
     $[286] = setAppState;
-    $[287] = $x;
-  } else $x = $[287];
-  useAwaySummaryOnce(initialFileHistorySnapshots, $x);
-  let Vx;
-  let RE;
+    $[287] = onFileHistory;
+  } else onFileHistory = $[287];
+  useAwaySummaryOnce(initialFileHistorySnapshots, onFileHistory);
+  let sessionStartEffect;
+  let sessionStartDeps;
   if ($[288] !== sessionController) {
-    Vx = () => sessionController.start();
-    RE = [sessionController];
+    sessionStartEffect = () => sessionController.start();
+    sessionStartDeps = [sessionController];
     $[288] = sessionController;
-    $[289] = Vx;
-    $[290] = RE;
+    $[289] = sessionStartEffect;
+    $[290] = sessionStartDeps;
   } else {
-    Vx = $[289];
-    RE = $[290];
+    sessionStartEffect = $[289];
+    sessionStartDeps = $[290];
   }
-  P(Vx, RE);
+  useEffect(sessionStartEffect, sessionStartDeps);
   let exitState = useStoreSelector(chrome, isExiting);
   let hasTeamModal = useHasModalDialog();
   let isModalOpen = useHasModalUserDialog();
   let dialogSelector = useDialogSelector(hasAutoDialogWithoutMeta);
   let hasSuppressedDialogs = isDialogActive && dialogSelector;
-  let qk;
-  let PE;
+  let suppressedDialogsEffect;
+  let suppressedDeps;
   if (
     $[291] !== chrome ||
     $[292] !== debug ||
@@ -4275,7 +4329,7 @@ function REPL_2(props) {
     $[295] !== shouldHideLoginNotice ||
     $[296] !== onDetachToCaller
   ) {
-    qk = () => {
+    suppressedDialogsEffect = () => {
       chrome.setView({
         debug,
         embedded: isEmbedded,
@@ -4284,37 +4338,44 @@ function REPL_2(props) {
         hideLoginNotice: shouldHideLoginNotice,
       });
     };
-    PE = [chrome, debug, isEmbedded, onDetachToCaller, hasSuppressedDialogs, shouldHideLoginNotice];
+    suppressedDeps = [
+      chrome,
+      debug,
+      isEmbedded,
+      onDetachToCaller,
+      hasSuppressedDialogs,
+      shouldHideLoginNotice,
+    ];
     $[291] = chrome;
     $[292] = debug;
     $[293] = isEmbedded;
     $[294] = hasSuppressedDialogs;
     $[295] = shouldHideLoginNotice;
     $[296] = onDetachToCaller;
-    $[297] = qk;
-    $[298] = PE;
+    $[297] = suppressedDialogsEffect;
+    $[298] = suppressedDeps;
   } else {
-    qk = $[297];
-    PE = $[298];
+    suppressedDialogsEffect = $[297];
+    suppressedDeps = $[298];
   }
-  zt(qk, PE);
-  let b_;
-  let $k;
-  if ($[299] !== pauseAnimation) {
-    b_ = () => {
-      setBlockingToolProgress(pauseAnimation);
+  useLayoutEffect(suppressedDialogsEffect, suppressedDeps);
+  let pauseEffect;
+  let pauseDeps;
+  if ($[299] !== pauseAnimation_2) {
+    pauseEffect = () => {
+      setBlockingToolProgress(pauseAnimation_2);
       return setPauseAnimation;
     };
-    $k = [pauseAnimation];
-    $[299] = pauseAnimation;
-    $[300] = b_;
-    $[301] = $k;
+    pauseDeps = [pauseAnimation_2];
+    $[299] = pauseAnimation_2;
+    $[300] = pauseEffect;
+    $[301] = pauseDeps;
   } else {
-    b_ = $[300];
-    $k = $[301];
+    pauseEffect = $[300];
+    pauseDeps = $[301];
   }
-  zt(b_, $k);
-  let Gx;
+  useLayoutEffect(pauseEffect, pauseDeps);
+  let submitEffect;
   if (
     $[302] !== addNotification ||
     $[303] !== chrome ||
@@ -4332,12 +4393,12 @@ function REPL_2(props) {
     $[315] !== spinnerStore ||
     $[316] !== storageV5 ||
     $[317] !== store ||
-    $[318] !== taskRegistry ||
+    $[318] !== taskRegistry_2 ||
     $[319] !== transcript ||
     $[320] !== transport ||
     $[321] !== turn
   ) {
-    Gx = () =>
+    submitEffect = () =>
       new PromptSubmitController({
         store,
         presentation,
@@ -4347,7 +4408,7 @@ function REPL_2(props) {
         storageV5,
         dialogStore,
         spinnerStore,
-        taskRegistry,
+        taskRegistry: taskRegistry_2,
         transcript,
         turn,
         draft,
@@ -4376,34 +4437,34 @@ function REPL_2(props) {
     $[315] = spinnerStore;
     $[316] = storageV5;
     $[317] = store;
-    $[318] = taskRegistry;
+    $[318] = taskRegistry_2;
     $[319] = transcript;
     $[320] = transport;
     $[321] = turn;
-    $[322] = Gx;
-  } else Gx = $[322];
-  let [submitController] = y(Gx);
-  let AE;
+    $[322] = submitEffect;
+  } else submitEffect = $[322];
+  let [submitController] = useState(submitEffect);
+  let cancelEffect;
   if ($[323] !== cancelRef || $[324] !== submitController.cancelAndDrainPending) {
-    AE = () => {
+    cancelEffect = () => {
       if (cancelRef) cancelRef.current = submitController.cancelAndDrainPending;
     };
     $[323] = cancelRef;
     $[324] = submitController.cancelAndDrainPending;
-    $[325] = AE;
-  } else AE = $[325];
-  let If;
+    $[325] = cancelEffect;
+  } else cancelEffect = $[325];
+  let cancelDeps;
   if ($[326] !== cancelRef || $[327] !== submitController) {
-    If = [cancelRef, submitController];
+    cancelDeps = [cancelRef, submitController];
     $[326] = cancelRef;
     $[327] = submitController;
-    $[328] = If;
-  } else If = $[328];
-  P(AE, If);
+    $[328] = cancelDeps;
+  } else cancelDeps = $[328];
+  useEffect(cancelEffect, cancelDeps);
   const isColdResumeQuotaShowing = blockingDialogKind === COLD_RESUME_QUOTA;
-  let w_;
+  let idleReturnNode;
   if ($[329] !== dialogStore || $[330] !== draft || $[331] !== isColdResumeQuotaShowing) {
-    w_ = jsxProd_default(useIdleReturnTypeThrough, {
+    idleReturnNode = jsxProd_default(useIdleReturnTypeThrough, {
       onScreen: isColdResumeQuotaShowing,
       dialogStore,
       draft,
@@ -4411,9 +4472,9 @@ function REPL_2(props) {
     $[329] = dialogStore;
     $[330] = draft;
     $[331] = isColdResumeQuotaShowing;
-    $[332] = w_;
-  } else w_ = $[332];
-  let Vg;
+    $[332] = idleReturnNode;
+  } else idleReturnNode = $[332];
+  let remoteNode;
   if (
     $[333] !== activeRemote.isRemoteMode ||
     $[334] !== cancellableExternalLoading ||
@@ -4424,7 +4485,7 @@ function REPL_2(props) {
     $[339] !== transcript ||
     $[340] !== turn
   ) {
-    Vg = jsxProd_default(PromptArea, {
+    remoteNode = jsxProd_default(PromptArea, {
       turn,
       transcript,
       draft,
@@ -4443,49 +4504,49 @@ function REPL_2(props) {
     $[338] = submitController;
     $[339] = transcript;
     $[340] = turn;
-    $[341] = Vg;
-  } else Vg = $[341];
-  let k_;
-  if ($[342] !== w_ || $[343] !== Vg) {
-    k_ = jsxProd_default_2(Fragment, {
-      children: [w_, Vg],
+    $[341] = remoteNode;
+  } else remoteNode = $[341];
+  let topBarNode;
+  if ($[342] !== idleReturnNode || $[343] !== remoteNode) {
+    topBarNode = jsxProd_default_2(Fragment, {
+      children: [idleReturnNode, remoteNode],
     });
-    $[342] = w_;
-    $[343] = Vg;
-    $[344] = k_;
-  } else k_ = $[344];
-  let promptEffects = k_;
+    $[342] = idleReturnNode;
+    $[343] = remoteNode;
+    $[344] = topBarNode;
+  } else topBarNode = $[344];
+  let promptEffects = topBarNode;
   let canUseTool = useCanUseToolReexport();
-  let [mcpReconnectContext] = y(createNullContextStore);
-  let C_;
-  let Jp;
+  let [mcpReconnectContext] = useState(createNullContextStore);
+  let connectEffect;
+  let connectDeps;
   if ($[345] !== scope) {
-    C_ = () => {
+    connectEffect = () => {
       scope.connect();
       return () => scope.dispose();
     };
-    Jp = [scope];
+    connectDeps = [scope];
     $[345] = scope;
-    $[346] = C_;
-    $[347] = Jp;
+    $[346] = connectEffect;
+    $[347] = connectDeps;
   } else {
-    C_ = $[346];
-    Jp = $[347];
+    connectEffect = $[346];
+    connectDeps = $[347];
   }
-  zt(C_, Jp);
-  let T_;
+  useLayoutEffect(connectEffect, connectDeps);
+  let backgroundQueryArgs;
   if ($[348] !== gesture.backgroundQuery) {
-    T_ = {
+    backgroundQueryArgs = {
       onBackgroundQuery: gesture.backgroundQuery,
     };
     $[348] = gesture.backgroundQuery;
-    $[349] = T_;
-  } else T_ = $[349];
-  let { handleBackgroundSession } = useSessionBackgrounding(T_);
+    $[349] = backgroundQueryArgs;
+  } else backgroundQueryArgs = $[349];
+  let { handleBackgroundSession } = useSessionBackgrounding(backgroundQueryArgs);
   let { markTurnStart, markTurnDone } = useSemanticPromptMarks();
-  let lw;
+  let leftArrowArgs;
   if ($[350] !== gesture || $[351] !== onDetachToCaller || $[352] !== transcript || $[353] !== turn) {
-    lw = {
+    leftArrowArgs = {
       gesture,
       turn,
       transcript,
@@ -4495,12 +4556,12 @@ function REPL_2(props) {
     $[351] = onDetachToCaller;
     $[352] = transcript;
     $[353] = turn;
-    $[354] = lw;
-  } else lw = $[354];
-  useLeftArrowGesture(lw);
-  let WS;
+    $[354] = leftArrowArgs;
+  } else leftArrowArgs = $[354];
+  useLeftArrowGesture(leftArrowArgs);
+  let exitCostEffect;
   if ($[355] !== guard.isRunning || $[356] !== storageV5 || $[357] !== transcript) {
-    WS = () => {
+    exitCostEffect = () => {
       registerBeforeInteractiveShutdown(() =>
         relaunchForExit(
           transcript.getSnapshot(),
@@ -4514,21 +4575,21 @@ function REPL_2(props) {
     $[355] = guard.isRunning;
     $[356] = storageV5;
     $[357] = transcript;
-    $[358] = WS;
-  } else WS = $[358];
-  let ane;
+    $[358] = exitCostEffect;
+  } else exitCostEffect = $[358];
+  let exitCostDeps;
   if ($[359] !== guard || $[360] !== storageV5 || $[361] !== transcript) {
-    ane = [transcript, guard, storageV5];
+    exitCostDeps = [transcript, guard, storageV5];
     $[359] = guard;
     $[360] = storageV5;
     $[361] = transcript;
-    $[362] = ane;
-  } else ane = $[362];
-  P(WS, ane);
+    $[362] = exitCostDeps;
+  } else exitCostDeps = $[362];
+  useEffect(exitCostEffect, exitCostDeps);
   useExitCostReport(isTerminalInterested());
-  let Xp;
+  let contextualTipsEffect;
   if ($[363] !== writePacer || $[364] !== sessionController || $[365] !== transcript || $[366] !== turn) {
-    Xp = () =>
+    contextualTipsEffect = () =>
       writePacer
         ? {
             transcript,
@@ -4542,19 +4603,19 @@ function REPL_2(props) {
     $[364] = sessionController;
     $[365] = transcript;
     $[366] = turn;
-    $[367] = Xp;
-  } else Xp = $[367];
-  let [_0] = y(Xp);
-  let ME;
+    $[367] = contextualTipsEffect;
+  } else contextualTipsEffect = $[367];
+  let [restoredFlag] = useState(contextualTipsEffect);
+  let isRestored;
   if ($[368] !== messages || $[369] !== sessionController) {
-    ME = sessionController.isAsRestored(messages);
+    isRestored = sessionController.isAsRestored(messages);
     $[368] = messages;
     $[369] = sessionController;
-    $[370] = ME;
-  } else ME = $[370];
-  useLogMessages(messages, ME, isLoading, _0, headHooksPending);
+    $[370] = isRestored;
+  } else isRestored = $[370];
+  useLogMessages(messages, isRestored, isLoading, restoredFlag, headHooksPending);
   const spawnThinkingConfig = thinkingConfigExplicit ? thinkingConfig : undefined;
-  let IE;
+  let screenFrameEffect;
   if (
     $[371] !== appendSystemPrompt ||
     $[372] !== systemPrompt ||
@@ -4567,7 +4628,7 @@ function REPL_2(props) {
     $[379] !== transport ||
     $[380] !== turn
   ) {
-    IE = {
+    screenFrameEffect = {
       turn,
       transcript,
       scope,
@@ -4589,11 +4650,11 @@ function REPL_2(props) {
     $[378] = transcript;
     $[379] = transport;
     $[380] = turn;
-    $[381] = IE;
-  } else IE = $[381];
-  let { sendBridgeResult, stampBridgeReply } = ReplBridgeConnector(IE);
+    $[381] = screenFrameEffect;
+  } else screenFrameEffect = $[381];
+  let { sendBridgeResult, stampBridgeReply } = ReplBridgeConnector(screenFrameEffect);
   let { columns, rows } = useTerminalSize();
-  let EE;
+  let viewportEffect;
   if (
     $[382] !== activePlugins ||
     $[383] !== activeRemote ||
@@ -4611,7 +4672,7 @@ function REPL_2(props) {
     $[395] !== isQueryDisabled ||
     $[396] !== isDisabled ||
     $[397] !== draft ||
-    $[398] !== elicitationShowing ||
+    $[398] !== elicitationShowing_2 ||
     $[399] !== fallbackModel ||
     $[400] !== isFullscreen ||
     $[401] !== gesture ||
@@ -4620,7 +4681,7 @@ function REPL_2(props) {
     $[404] !== ideSelection ||
     $[405] !== installExtension ||
     $[406] !== isBriefOnly ||
-    $[407] !== isThinClient ||
+    $[407] !== isThinClient_2 ||
     $[408] !== mainLoopModel ||
     $[409] !== markTurnDone ||
     $[410] !== markTurnStart ||
@@ -4648,7 +4709,7 @@ function REPL_2(props) {
     $[432] !== store ||
     $[433] !== submitController ||
     $[434] !== systemPromptSnapshot ||
-    $[435] !== taskRegistry ||
+    $[435] !== taskRegistry_2 ||
     $[436] !== teammateColors_2 ||
     $[437] !== terminal ||
     $[438] !== columns ||
@@ -4658,10 +4719,10 @@ function REPL_2(props) {
     $[442] !== titles ||
     $[443] !== transcript ||
     $[444] !== transport ||
-    $[445] !== turnEvents ||
+    $[445] !== turnEvents_2 ||
     $[446] !== turn
   ) {
-    EE = () => {
+    viewportEffect = () => {
       transport.bindHost({
         mainLoopModel,
         addNotification,
@@ -4718,7 +4779,7 @@ function REPL_2(props) {
         storageV5,
         credentials,
         spinnerStore,
-        taskRegistry,
+        taskRegistry: taskRegistry_2,
         sessionHooks,
         teammateColors: teammateColors_2,
         messageQueue,
@@ -4756,13 +4817,13 @@ function REPL_2(props) {
         axBell,
         restoreMessageSync: sessionController.restoreMessageSync,
         draft,
-        isThinClient,
+        isThinClient: isThinClient_2,
         titles,
         setHaikuTitle: sessionController.setHaikuTitle,
         activeRemote,
-        elicitationShowing,
+        elicitationShowing: elicitationShowing_2,
         gesture,
-        turnEvents,
+        turnEvents: turnEvents_2,
         mainLoopModel,
         onBeforeQuery,
         disableQuery: isQueryDisabled,
@@ -4794,7 +4855,7 @@ function REPL_2(props) {
     $[395] = isQueryDisabled;
     $[396] = isDisabled;
     $[397] = draft;
-    $[398] = elicitationShowing;
+    $[398] = elicitationShowing_2;
     $[399] = fallbackModel;
     $[400] = isFullscreen;
     $[401] = gesture;
@@ -4803,7 +4864,7 @@ function REPL_2(props) {
     $[404] = ideSelection;
     $[405] = installExtension;
     $[406] = isBriefOnly;
-    $[407] = isThinClient;
+    $[407] = isThinClient_2;
     $[408] = mainLoopModel;
     $[409] = markTurnDone;
     $[410] = markTurnStart;
@@ -4831,7 +4892,7 @@ function REPL_2(props) {
     $[432] = store;
     $[433] = submitController;
     $[434] = systemPromptSnapshot;
-    $[435] = taskRegistry;
+    $[435] = taskRegistry_2;
     $[436] = teammateColors_2;
     $[437] = terminal;
     $[438] = columns;
@@ -4841,19 +4902,19 @@ function REPL_2(props) {
     $[442] = titles;
     $[443] = transcript;
     $[444] = transport;
-    $[445] = turnEvents;
+    $[445] = turnEvents_2;
     $[446] = turn;
-    $[447] = EE;
-  } else EE = $[447];
-  zt(EE);
-  let A_;
+    $[447] = viewportEffect;
+  } else viewportEffect = $[447];
+  useLayoutEffect(viewportEffect);
+  let commandsEffect;
   if (
     $[448] !== commands_2 ||
     $[449] !== gesture.handOverInFlight ||
     $[450] !== hasActiveLocalJsxUI ||
     $[451] !== turn
   ) {
-    A_ = {
+    commandsEffect = {
       turn,
       hasActiveLocalJsxUI,
       commands: commands_2,
@@ -4863,11 +4924,11 @@ function REPL_2(props) {
     $[449] = gesture.handOverInFlight;
     $[450] = hasActiveLocalJsxUI;
     $[451] = turn;
-    $[452] = A_;
-  } else A_ = $[452];
-  useQueueProcessor(A_);
+    $[452] = commandsEffect;
+  } else commandsEffect = $[452];
+  useQueueProcessor(commandsEffect);
   let blocksBtwReopen = hasOpenDialog || hasLocalJsxOverlay;
-  let WK;
+  let reopenEffect;
   if (
     $[453] !== blocksBtwReopen ||
     $[454] !== session.btwHistory ||
@@ -4875,7 +4936,7 @@ function REPL_2(props) {
     $[456] !== submitController ||
     $[457] !== turn
   ) {
-    WK = () => {
+    reopenEffect = () => {
       let btwHistory = session.btwHistory;
       btwHistory.setReopener(() => {
         if (store.getState().endedByModel) {
@@ -4903,9 +4964,9 @@ function REPL_2(props) {
     $[455] = store;
     $[456] = submitController;
     $[457] = turn;
-    $[458] = WK;
-  } else WK = $[458];
-  let DE;
+    $[458] = reopenEffect;
+  } else reopenEffect = $[458];
+  let reopenDeps;
   if (
     $[459] !== blocksBtwReopen ||
     $[460] !== session ||
@@ -4913,23 +4974,23 @@ function REPL_2(props) {
     $[462] !== submitController ||
     $[463] !== turn
   ) {
-    DE = [session, submitController, blocksBtwReopen, store, turn];
+    reopenDeps = [session, submitController, blocksBtwReopen, store, turn];
     $[459] = blocksBtwReopen;
     $[460] = session;
     $[461] = store;
     $[462] = submitController;
     $[463] = turn;
-    $[464] = DE;
-  } else DE = $[464];
-  P(WK, DE);
-  let OE;
+    $[464] = reopenDeps;
+  } else reopenDeps = $[464];
+  useEffect(reopenEffect, reopenDeps);
+  let scheduledArgs;
   if (
     $[465] !== dialogStore ||
     $[466] !== isDisabled ||
     $[467] !== dynamicMcpConfig_2 ||
     $[468] !== hasOpenDialog ||
     $[469] !== installationStatus ||
-    $[470] !== isRemoteSession ||
+    $[470] !== isRemoteSession_2 ||
     $[471] !== mainLoopModel ||
     $[472] !== mergedMcpClients ||
     $[473] !== requestDialog ||
@@ -4939,7 +5000,7 @@ function REPL_2(props) {
     $[477] !== transcript ||
     $[478] !== turn
   ) {
-    OE = {
+    scheduledArgs = {
       mainLoopModel,
       mcpClients: mergedMcpClients,
       ideInstallationStatus: installationStatus,
@@ -4952,7 +5013,7 @@ function REPL_2(props) {
       submitPrompt: submitController.submit,
       screen,
       disabled: isDisabled,
-      isRemoteSession,
+      isRemoteSession: isRemoteSession_2,
       isTranscriptAtBottom: scrollPin.isAtBottom,
     };
     $[465] = dialogStore;
@@ -4960,7 +5021,7 @@ function REPL_2(props) {
     $[467] = dynamicMcpConfig_2;
     $[468] = hasOpenDialog;
     $[469] = installationStatus;
-    $[470] = isRemoteSession;
+    $[470] = isRemoteSession_2;
     $[471] = mainLoopModel;
     $[472] = mergedMcpClients;
     $[473] = requestDialog;
@@ -4969,11 +5030,11 @@ function REPL_2(props) {
     $[476] = submitController.submit;
     $[477] = transcript;
     $[478] = turn;
-    $[479] = OE;
-  } else OE = $[479];
-  let idleThresholdMin = useStartupNotifications(OE);
+    $[479] = scheduledArgs;
+  } else scheduledArgs = $[479];
+  let idleThresholdMin = useStartupNotifications(scheduledArgs);
   useEffectSlots(STARTUP_NOTIFICATION_SPECS, idleThresholdMin);
-  const swarmEnabled = renderWithForceUpdate(isAgentSwarmsEnabled) && !isRemoteSession;
+  const swarmEnabled = renderWithForceUpdate(isAgentSwarmsEnabled) && !isRemoteSession_2;
   const visibleDialogKind = topAutoDialogKind ?? (hasActiveLocalJsxUI ? LOCAL_JSX_DIALOG.kind : undefined);
   let props_2;
   if (
@@ -5000,14 +5061,14 @@ function REPL_2(props) {
   useInboxPollerHook(props_2);
   useMailboxBridge(turn);
   let assistantMode = env.CLAUDE_CODE_PROACTIVE;
-  let jK;
+  let usageArgs;
   if (
     $[486] !== isLoading ||
     $[487] !== sessionController.runsNoModelTurn ||
     $[488] !== storageV5 ||
     $[489] !== transcript
   ) {
-    jK = {
+    usageArgs = {
       isLoading,
       assistantMode,
       transcript,
@@ -5018,38 +5079,38 @@ function REPL_2(props) {
     $[487] = sessionController.runsNoModelTurn;
     $[488] = storageV5;
     $[489] = transcript;
-    $[490] = jK;
-  } else jK = $[490];
-  useScheduledTasks(jK);
-  let zx;
+    $[490] = usageArgs;
+  } else usageArgs = $[490];
+  useScheduledTasks(usageArgs);
+  let usageDeps;
   if ($[491] !== isLoading || $[492] !== transcript) {
-    zx = {
+    usageDeps = {
       isLoading,
       transcript,
     };
     $[491] = isLoading;
     $[492] = transcript;
-    $[493] = zx;
-  } else zx = $[493];
-  let tokenWarningState = useUsageLimitNotices(zx);
-  let A0;
+    $[493] = usageDeps;
+  } else usageDeps = $[493];
+  let tokenWarningState = useUsageLimitNotices(usageDeps);
+  let usageDepsB;
   if ($[494] === MEMO_CACHE_SENTINEL) {
-    A0 = [];
-    $[494] = A0;
-  } else A0 = $[494];
-  P(noop_6, A0);
-  let Yx;
+    usageDepsB = [];
+    $[494] = usageDepsB;
+  } else usageDepsB = $[494];
+  useEffect(noop_6, usageDepsB);
+  let resumeDeps;
   if ($[495] === MEMO_CACHE_SENTINEL) {
-    Yx = [];
-    $[495] = Yx;
-  } else Yx = $[495];
-  P(noop_7, Yx);
+    resumeDeps = [];
+    $[495] = resumeDeps;
+  } else resumeDeps = $[495];
+  useEffect(noop_7, resumeDeps);
   let suspendKey = useSuspendResume();
   let virtualScrollActive = isFullscreen && !CLAUDE_CODE_DISABLE_VIRTUAL_SCROLL;
-  let GS = columns;
-  let I_;
+  let columnsProp = columns;
+  let screenFrameProps;
   if (
-    $[496] !== dialogSurface ||
+    $[496] !== dialogSurface_2 ||
     $[497] !== draft ||
     $[498] !== isEmbedded ||
     $[499] !== gesture ||
@@ -5060,19 +5121,19 @@ function REPL_2(props) {
     $[504] !== transcript ||
     $[505] !== turn
   ) {
-    I_ = {
+    screenFrameProps = {
       embedded: isEmbedded,
       screen,
       turn,
       transcript,
       titles,
       localJsx,
-      dialogSurface,
+      dialogSurface: dialogSurface_2,
       attachRequests: gesture,
       draft,
       scrollPin,
     };
-    $[496] = dialogSurface;
+    $[496] = dialogSurface_2;
     $[497] = draft;
     $[498] = isEmbedded;
     $[499] = gesture;
@@ -5082,66 +5143,66 @@ function REPL_2(props) {
     $[503] = titles;
     $[504] = transcript;
     $[505] = turn;
-    $[506] = I_;
-  } else I_ = $[506];
-  let screenFrameProps = I_;
-  let NE;
+    $[506] = screenFrameProps;
+  } else screenFrameProps = $[506];
+  let screenFrameProps_2 = screenFrameProps;
+  let frameNode;
   if (
-    $[507] !== isRemoteSession ||
+    $[507] !== isRemoteSession_2 ||
     $[508] !== localJsx ||
     $[509] !== surveySlot ||
     $[510] !== transcript ||
     $[511] !== turn
   ) {
-    NE = jsxProd_default(SurveyStatePublisher, {
+    frameNode = jsxProd_default(SurveyStatePublisher, {
       turn,
       transcript,
-      isRemoteSession,
+      isRemoteSession: isRemoteSession_2,
       slot: surveySlot,
       localJsx,
     });
-    $[507] = isRemoteSession;
+    $[507] = isRemoteSession_2;
     $[508] = localJsx;
     $[509] = surveySlot;
     $[510] = transcript;
     $[511] = turn;
-    $[512] = NE;
-  } else NE = $[512];
-  let qK = NE;
-  let Tc;
+    $[512] = frameNode;
+  } else frameNode = $[512];
+  let withChrome = frameNode;
+  let wrappedNode;
   if (
     $[513] !== chrome ||
     $[514] !== initialMessages ||
-    $[515] !== isRemoteSession ||
+    $[515] !== isRemoteSession_2 ||
     $[516] !== mergedMcpClients
   ) {
-    Tc = jsxProd_default(ReplEffects, {
+    wrappedNode = jsxProd_default(ReplEffects, {
       chrome,
       mcpClients: mergedMcpClients,
       initialMessages,
-      isRemoteSession,
+      isRemoteSession: isRemoteSession_2,
     });
     $[513] = chrome;
     $[514] = initialMessages;
-    $[515] = isRemoteSession;
+    $[515] = isRemoteSession_2;
     $[516] = mergedMcpClients;
-    $[517] = Tc;
-  } else Tc = $[517];
-  let $K = Tc;
-  let um;
+    $[517] = wrappedNode;
+  } else wrappedNode = $[517];
+  let providersNode = wrappedNode;
+  let withProviders;
   if (
-    $[518] !== $K ||
+    $[518] !== providersNode ||
     $[519] !== dynamicMcpConfig_2 ||
     $[520] !== permissionRelays ||
     $[521] !== requestDialog ||
     $[522] !== mcpReconnectContext ||
     $[523] !== isStrictMcpConfig ||
-    $[524] !== qK
+    $[524] !== withChrome
   ) {
-    um = function cw(children) {
+    withProviders = function wrapNode(children) {
       return jsxProd_default_2(Fragment, {
         children: [
-          qK,
+          withChrome,
           null,
           jsxProd_default(MCPConnectionManager, {
             dynamicMcpConfig: dynamicMcpConfig_2,
@@ -5153,75 +5214,75 @@ function REPL_2(props) {
               children,
             }),
           }),
-          $K,
+          providersNode,
           null,
         ],
       });
     };
-    $[518] = $K;
+    $[518] = providersNode;
     $[519] = dynamicMcpConfig_2;
     $[520] = permissionRelays;
     $[521] = requestDialog;
     $[522] = mcpReconnectContext;
     $[523] = isStrictMcpConfig;
-    $[524] = qK;
-    $[525] = um;
-  } else um = $[525];
-  let wrapWithProviders = um;
+    $[524] = withChrome;
+    $[525] = withProviders;
+  } else withProviders = $[525];
+  let wrapWithProviders = withProviders;
   getViewedTeammateTask_2();
   useAgentsHintExpiry();
   let diffSidebarEnabled = useDiffSidebarState();
-  let Yk = PaneDockNamespace.usePanesAtOnce(PaneDockNamespace.hasOpenPanes);
-  let Jx = PaneDockNamespace.useDockColumns(GS);
+  let hasOpenPanes = PaneDockNamespace.usePanesAtOnce(PaneDockNamespace.hasOpenPanes);
+  let dockColumns = PaneDockNamespace.useDockColumns(columnsProp);
   PaneDockNamespace.usePaneToastHold();
   PaneDockNamespace.useBarToasts();
-  let W0;
+  let sidebarWidth;
   if (
     $[526] !== diffSidebarEnabled ||
     $[527] !== hasGitRepo ||
     $[528] !== focused.isMain ||
     $[529] !== isFullscreen ||
-    $[530] !== isThinClient ||
+    $[530] !== isThinClient_2 ||
     $[531] !== replTab ||
-    $[532] !== GS
+    $[532] !== columnsProp
   ) {
-    W0 =
+    sidebarWidth =
       replTab === "diff" &&
       shouldShowDiffSidebar({
         enabled: diffSidebarEnabled,
         fullscreen: isFullscreen,
-        columns: GS,
-        isThinClient,
+        columns: columnsProp,
+        isThinClient: isThinClient_2,
         isMainFocused: focused.isMain,
         hasGitRepo,
       })
-        ? computeMaxDockColumns(GS)
+        ? computeMaxDockColumns(columnsProp)
         : 0;
     $[526] = diffSidebarEnabled;
     $[527] = hasGitRepo;
     $[528] = focused.isMain;
     $[529] = isFullscreen;
-    $[530] = isThinClient;
+    $[530] = isThinClient_2;
     $[531] = replTab;
-    $[532] = GS;
-    $[533] = W0;
-  } else W0 = $[533];
-  let sidebarWidth = W0;
-  let j0 = isFullscreen && sidebarWidth === 0 ? Jx : 0;
-  let dockWidth = toastRegionWidth(Yk, j0, GS);
-  let lne = screen === "transcript" ? 0 : sidebarWidth + dockWidth;
-  useTerminalViewportNamespace.useTerminalViewport(columns, rows, lne);
-  let Xx;
+    $[532] = columnsProp;
+    $[533] = sidebarWidth;
+  } else sidebarWidth = $[533];
+  let sidebarWidth_2 = sidebarWidth;
+  let toastWidth = isFullscreen && sidebarWidth_2 === 0 ? dockColumns : 0;
+  let dockWidth = toastRegionWidth(hasOpenPanes, toastWidth, columnsProp);
+  let reservedWidth = screen === "transcript" ? 0 : sidebarWidth_2 + dockWidth;
+  useTerminalViewportNamespace.useTerminalViewport(columns, rows, reservedWidth);
+  let trackedCountSelector;
   if ($[534] !== diffSidebarEnabled) {
-    Xx = (KK) => (diffSidebarEnabled ? KK.fileHistory.trackedFiles.size : 0);
+    trackedCountSelector = (state) => (diffSidebarEnabled ? state.fileHistory.trackedFiles.size : 0);
     $[534] = diffSidebarEnabled;
-    $[535] = Xx;
-  } else Xx = $[535];
-  let userMessage = useAppState(Xx);
+    $[535] = trackedCountSelector;
+  } else trackedCountSelector = $[535];
+  let userMessage = useAppState(trackedCountSelector);
   let autoOpenBaseline = useDiffAutoOpenBaseline(diffSidebarEnabled, userMessage);
-  let dne;
+  let baselineArgs;
   if ($[536] !== hasToolProgress || $[537] !== renderingTools || $[538] !== toolProgress) {
-    dne = hasToolProgress
+    baselineArgs = hasToolProgress
       ? jsxProd_default(InlineProgressList, {
           progress: toolProgress,
           tools: renderingTools,
@@ -5230,31 +5291,31 @@ function REPL_2(props) {
     $[536] = hasToolProgress;
     $[537] = renderingTools;
     $[538] = toolProgress;
-    $[539] = dne;
-  } else dne = $[539];
-  let Jk = dne;
-  let scrollViewport = isEmbedded || (virtualScrollActive && !dumpMode) ? scrollPin.viewport : undefined;
-  let UE = !isFullscreen && !isEmbedded && !isDecstbmRendererEnabled();
+    $[539] = baselineArgs;
+  } else baselineArgs = $[539];
+  let scrollViewport = baselineArgs;
+  let scrollViewport_2 = isEmbedded || (virtualScrollActive && !dumpMode) ? scrollPin.viewport : undefined;
+  let inlineRenderer = !isFullscreen && !isEmbedded && !isDecstbmRendererEnabled();
   let isTranscriptScreen = screen === "transcript";
-  let V0;
+  let promptAreaEffect;
   if (
     $[540] !== commands_2 ||
     $[541] !== dumpMode ||
     $[542] !== isEmbedded ||
     $[543] !== focused ||
     $[544] !== hideWelcomeChrome ||
-    $[545] !== isRemoteSession ||
+    $[545] !== isRemoteSession_2 ||
     $[546] !== renderingTools ||
     $[547] !== scrollPin.onUserScrollWithoutDivider ||
     $[548] !== scrollPin.revealRef ||
-    $[549] !== Jk ||
-    $[550] !== scrollViewport ||
+    $[549] !== scrollViewport ||
+    $[550] !== scrollViewport_2 ||
     $[551] !== isTranscriptScreen ||
     $[552] !== turn ||
     $[553] !== isUltraplanChoiceShowing ||
     $[554] !== virtualScrollActive
   ) {
-    V0 =
+    promptAreaEffect =
       isTranscriptScreen &&
       jsxProd_default(TranscriptView, {
         focused,
@@ -5262,14 +5323,14 @@ function REPL_2(props) {
         commands: commands_2,
         turn,
         hideWelcomeChrome: hideWelcomeChrome ?? isEmbedded,
-        toolProgress: Jk,
-        scrollViewport,
+        toolProgress: scrollViewport,
+        scrollViewport: scrollViewport_2,
         reveal: scrollPin.revealRef,
         onUserScroll: scrollPin.onUserScrollWithoutDivider,
         virtualScrollActive,
         embedded: isEmbedded,
         scrollKeysActive: !isUltraplanChoiceShowing,
-        showSandboxViolations: !isRemoteSession,
+        showSandboxViolations: !isRemoteSession_2,
         dumpMode,
         onDumpToScrollback: () => setDumpMode(true),
         onExit: exitTranscript,
@@ -5279,21 +5340,21 @@ function REPL_2(props) {
     $[542] = isEmbedded;
     $[543] = focused;
     $[544] = hideWelcomeChrome;
-    $[545] = isRemoteSession;
+    $[545] = isRemoteSession_2;
     $[546] = renderingTools;
     $[547] = scrollPin.onUserScrollWithoutDivider;
     $[548] = scrollPin.revealRef;
-    $[549] = Jk;
-    $[550] = scrollViewport;
+    $[549] = scrollViewport;
+    $[550] = scrollViewport_2;
     $[551] = isTranscriptScreen;
     $[552] = turn;
     $[553] = isUltraplanChoiceShowing;
     $[554] = virtualScrollActive;
-    $[555] = V0;
-  } else V0 = $[555];
-  let transcriptView = V0;
-  if (isTranscriptScreen && !UE) {
-    const fullscreen = scrollViewport !== undefined;
+    $[555] = promptAreaEffect;
+  } else promptAreaEffect = $[555];
+  let transcriptView = promptAreaEffect;
+  if (isTranscriptScreen && !inlineRenderer) {
+    const fullscreen = scrollViewport_2 !== undefined;
     let children;
     if ($[556] !== promptEffects || $[557] !== transcriptView) {
       children = jsxProd_default_2(KeybindingRoot, {
@@ -5324,26 +5385,26 @@ function REPL_2(props) {
       $[563] = children_2;
       $[564] = children_3;
     } else children_3 = $[564];
-    let mw;
-    if ($[565] !== screenFrameProps || $[566] !== fullscreen || $[567] !== children_3) {
-      mw = jsxProd_default(ReplScreenFrame, {
-        ...screenFrameProps,
+    let screenFrame;
+    if ($[565] !== screenFrameProps_2 || $[566] !== fullscreen || $[567] !== children_3) {
+      screenFrame = jsxProd_default(ReplScreenFrame, {
+        ...screenFrameProps_2,
         fullscreen,
         children: children_3,
       });
-      $[565] = screenFrameProps;
+      $[565] = screenFrameProps_2;
       $[566] = fullscreen;
       $[567] = children_3;
-      $[568] = mw;
-    } else mw = $[568];
-    let jc;
-    if ($[569] !== mw || $[570] !== wrapWithProviders) {
-      jc = wrapWithProviders(mw);
-      $[569] = mw;
+      $[568] = screenFrame;
+    } else screenFrame = $[568];
+    let wrappedScreen;
+    if ($[569] !== screenFrame || $[570] !== wrapWithProviders) {
+      wrappedScreen = wrapWithProviders(screenFrame);
+      $[569] = screenFrame;
       $[570] = wrapWithProviders;
-      $[571] = jc;
-    } else jc = $[571];
-    return jc;
+      $[571] = wrappedScreen;
+    } else wrappedScreen = $[571];
+    return wrappedScreen;
   }
   let modalSlotActive = isModalOpen && modalVisibility === "visible";
   let layoutSlots = resolveModalPlacement({
@@ -5354,7 +5415,7 @@ function REPL_2(props) {
     dialogOverPanel: hasLocalJsxOverlay && dialogOverPanel,
     fullscreen: isFullscreen,
   });
-  let QS;
+  let modalNode;
   if (
     $[572] !== modalVisibility ||
     $[573] !== isEmbedded ||
@@ -5362,7 +5423,7 @@ function REPL_2(props) {
     $[575] !== isModalOpen ||
     $[576] !== layoutSlots.inPane
   ) {
-    QS = hasTeamModal
+    modalNode = hasTeamModal
       ? {
           content: jsxProd_default(DialogHost, {
             variant: "modal",
@@ -5380,13 +5441,13 @@ function REPL_2(props) {
     $[574] = hasTeamModal;
     $[575] = isModalOpen;
     $[576] = layoutSlots.inPane;
-    $[577] = QS;
-  } else QS = $[577];
-  let O_ = QS;
+    $[577] = modalNode;
+  } else modalNode = $[577];
+  let modalNodeB = modalNode;
   let promptVisible = !dialogOverPanel && !exitState && !isDisabled;
-  let JS;
+  let focusedNode;
   if ($[578] !== focused.messages || $[579] !== screen || $[580] !== isTranscriptScreen) {
-    JS =
+    focusedNode =
       !isTranscriptScreen &&
       jsxProd_default(GlobalKeybindingHandlers, {
         screen,
@@ -5396,9 +5457,9 @@ function REPL_2(props) {
     $[578] = focused.messages;
     $[579] = screen;
     $[580] = isTranscriptScreen;
-    $[581] = JS;
-  } else JS = $[581];
-  let Sy;
+    $[581] = focusedNode;
+  } else focusedNode = $[581];
+  let focusedFrame;
   if (
     $[582] !== focused.isMain ||
     $[583] !== modalSlotActive ||
@@ -5406,7 +5467,7 @@ function REPL_2(props) {
     $[585] !== isTranscriptScreen ||
     $[586] !== isUltraplanChoiceShowing
   ) {
-    Sy =
+    focusedFrame =
       !isTranscriptScreen &&
       jsxProd_default(MessageScrollHandler, {
         scrollPin,
@@ -5419,25 +5480,25 @@ function REPL_2(props) {
     $[584] = scrollPin;
     $[585] = isTranscriptScreen;
     $[586] = isUltraplanChoiceShowing;
-    $[587] = Sy;
-  } else Sy = $[587];
-  const modal = isTranscriptScreen ? undefined : O_;
+    $[587] = focusedFrame;
+  } else focusedFrame = $[587];
+  const modal = isTranscriptScreen ? undefined : modalNodeB;
   const hidePill = !focused.isMain;
   let sidebar;
   if (
     $[588] !== chrome.setIdeSelection ||
     $[589] !== autoOpenBaseline ||
     $[590] !== diffSidebarEnabled ||
-    $[591] !== sidebarWidth ||
-    $[592] !== isThinClient ||
+    $[591] !== sidebarWidth_2 ||
+    $[592] !== isThinClient_2 ||
     $[593] !== modalSlotActive
   ) {
     sidebar = diffSidebarEnabled
       ? jsxProd_default(SentryErrorBoundary, {
           onError: logDiffSidebarRenderError,
           children: jsxProd_default(DiffSidebar, {
-            width: sidebarWidth,
-            isThinClient,
+            width: sidebarWidth_2,
+            isThinClient: isThinClient_2,
             onAskAboutSelection: modalSlotActive ? undefined : chrome.setIdeSelection,
             autoOpenBaseline,
           }),
@@ -5446,12 +5507,12 @@ function REPL_2(props) {
     $[588] = chrome.setIdeSelection;
     $[589] = autoOpenBaseline;
     $[590] = diffSidebarEnabled;
-    $[591] = sidebarWidth;
-    $[592] = isThinClient;
+    $[591] = sidebarWidth_2;
+    $[592] = isThinClient_2;
     $[593] = modalSlotActive;
     $[594] = sidebar;
   } else sidebar = $[594];
-  const isOffered = j0 > 0;
+  const isOffered = toastWidth > 0;
   let dock;
   if ($[595] !== draft || $[596] !== dockWidth || $[597] !== isOffered || $[598] !== turn) {
     dock = jsxProd_default(PromptDock, {
@@ -5477,17 +5538,17 @@ function REPL_2(props) {
     dockTail = $[600];
     transcriptOverlay = $[601];
   }
-  const toolProgress_2 = panelHidesPrompt ? null : Jk;
-  const stateRowYields = cy || !!chromeClients;
+  const toolProgress_2 = panelHidesPrompt ? null : scrollViewport;
+  const stateRowYields = localOverlayHoldsQueue || !!chromeClients;
   const hidePlaceholder = isDisabled || modalSlotActive;
   const hideWelcomeChrome_2 = hideWelcomeChrome ?? isEmbedded;
   let scrollable;
   if (
     $[602] !== commands_2 ||
     $[603] !== focused ||
-    $[604] !== isRemoteSession ||
+    $[604] !== isRemoteSession_2 ||
     $[605] !== panelHoldsQueue ||
-    $[606] !== pauseAnimation ||
+    $[606] !== pauseAnimation_2 ||
     $[607] !== promptVisible ||
     $[608] !== renderingTools ||
     $[609] !== scrollPin ||
@@ -5516,17 +5577,17 @@ function REPL_2(props) {
       remoteSendsNow: submitController.remoteSendsNow,
       waitingLines: transport.waitingLines,
       onRowsDrawn: transport.rowsDrawn,
-      isRemoteSession,
-      pauseAnimation,
+      isRemoteSession: isRemoteSession_2,
+      pauseAnimation: pauseAnimation_2,
       hidePlaceholder,
       hideWelcomeChrome: hideWelcomeChrome_2,
       historyHidden: isTranscriptScreen,
     });
     $[602] = commands_2;
     $[603] = focused;
-    $[604] = isRemoteSession;
+    $[604] = isRemoteSession_2;
     $[605] = panelHoldsQueue;
-    $[606] = pauseAnimation;
+    $[606] = pauseAnimation_2;
     $[607] = promptVisible;
     $[608] = renderingTools;
     $[609] = scrollPin;
@@ -5552,7 +5613,7 @@ function REPL_2(props) {
     $[626] !== hasActiveLocalJsxUI ||
     $[627] !== blockingDialogKind ||
     $[628] !== panelHoldsQueue ||
-    $[629] !== Jx ||
+    $[629] !== dockColumns ||
     $[630] !== pinnedConsentShowing ||
     $[631] !== promptVisible ||
     $[632] !== layoutSlots.abovePrompt ||
@@ -5597,7 +5658,7 @@ function REPL_2(props) {
             submitController,
             surveySlot,
             visible: promptVisible,
-            panesDocked: isFullscreen && Jx > 0,
+            panesDocked: isFullscreen && dockColumns > 0,
           }),
         ],
       });
@@ -5609,7 +5670,7 @@ function REPL_2(props) {
     $[626] = hasActiveLocalJsxUI;
     $[627] = blockingDialogKind;
     $[628] = panelHoldsQueue;
-    $[629] = Jx;
+    $[629] = dockColumns;
     $[630] = pinnedConsentShowing;
     $[631] = promptVisible;
     $[632] = layoutSlots.abovePrompt;
@@ -5670,7 +5731,7 @@ function REPL_2(props) {
   } else bottom = $[650];
   let layout;
   if (
-    $[651] !== sidebarWidth ||
+    $[651] !== sidebarWidth_2 ||
     $[652] !== focused.isTeammate ||
     $[653] !== dockWidth ||
     $[654] !== scrollPin ||
@@ -5692,7 +5753,7 @@ function REPL_2(props) {
       header: undefined,
       top: null,
       sidebar,
-      sidebarWidth,
+      sidebarWidth: sidebarWidth_2,
       dock,
       dockWidth,
       dockTail,
@@ -5701,7 +5762,7 @@ function REPL_2(props) {
       abovePrompt,
       bottom,
     });
-    $[651] = sidebarWidth;
+    $[651] = sidebarWidth_2;
     $[652] = focused.isTeammate;
     $[653] = dockWidth;
     $[654] = scrollPin;
@@ -5714,10 +5775,10 @@ function REPL_2(props) {
     $[661] = bottom;
     $[662] = layout;
   } else layout = $[662];
-  let $E;
+  let suspendNode;
   if ($[663] !== suspendKey || $[664] !== layout) {
-    $E = jsxProd_default(
-      Kc,
+    suspendNode = jsxProd_default(
+      fragmentTypeExport,
       {
         children: layout,
       },
@@ -5725,27 +5786,27 @@ function REPL_2(props) {
     );
     $[663] = suspendKey;
     $[664] = layout;
-    $[665] = $E;
-  } else $E = $[665];
-  let K0;
+    $[665] = suspendNode;
+  } else suspendNode = $[665];
+  let layoutNode;
   if (
     $[666] !== promptEffects ||
-    $[667] !== JS ||
-    $[668] !== Sy ||
-    $[669] !== $E ||
+    $[667] !== focusedNode ||
+    $[668] !== focusedFrame ||
+    $[669] !== suspendNode ||
     $[670] !== transcriptView
   ) {
-    K0 = jsxProd_default_2(KeybindingRoot, {
-      children: [JS, promptEffects, Sy, $E, transcriptView],
+    layoutNode = jsxProd_default_2(KeybindingRoot, {
+      children: [focusedNode, promptEffects, focusedFrame, suspendNode, transcriptView],
     });
     $[666] = promptEffects;
-    $[667] = JS;
-    $[668] = Sy;
-    $[669] = $E;
+    $[667] = focusedNode;
+    $[668] = focusedFrame;
+    $[669] = suspendNode;
     $[670] = transcriptView;
-    $[671] = K0;
-  } else K0 = $[671];
-  let children = K0;
+    $[671] = layoutNode;
+  } else layoutNode = $[671];
+  let children = layoutNode;
   let children_2;
   if ($[672] !== isEmbedded || $[673] !== children || $[674] !== layoutSlots.drawn) {
     children_2 = jsxProd_default(UnattendedNoticeProvider, {
@@ -5768,26 +5829,26 @@ function REPL_2(props) {
     $[677] = children_2;
     $[678] = children_3;
   } else children_3 = $[678];
-  let Xk;
-  if ($[679] !== screenFrameProps || $[680] !== isFullscreen || $[681] !== children_3) {
-    Xk = jsxProd_default(ReplScreenFrame, {
-      ...screenFrameProps,
+  let screenFrameFull;
+  if ($[679] !== screenFrameProps_2 || $[680] !== isFullscreen || $[681] !== children_3) {
+    screenFrameFull = jsxProd_default(ReplScreenFrame, {
+      ...screenFrameProps_2,
       fullscreen: isFullscreen,
       children: children_3,
     });
-    $[679] = screenFrameProps;
+    $[679] = screenFrameProps_2;
     $[680] = isFullscreen;
     $[681] = children_3;
-    $[682] = Xk;
-  } else Xk = $[682];
-  let GE;
-  if ($[683] !== Xk || $[684] !== wrapWithProviders) {
-    GE = wrapWithProviders(Xk);
-    $[683] = Xk;
+    $[682] = screenFrameFull;
+  } else screenFrameFull = $[682];
+  let wrappedScreenFull;
+  if ($[683] !== screenFrameFull || $[684] !== wrapWithProviders) {
+    wrappedScreenFull = wrapWithProviders(screenFrameFull);
+    $[683] = screenFrameFull;
     $[684] = wrapWithProviders;
-    $[685] = GE;
-  } else GE = $[685];
-  return GE;
+    $[685] = wrappedScreenFull;
+  } else wrappedScreenFull = $[685];
+  return wrappedScreenFull;
 }
 export {
   negateBoolean,

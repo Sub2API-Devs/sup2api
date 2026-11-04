@@ -14,11 +14,19 @@ import { getCcrSessionUrl } from "../../bootstrap/state.js";
 import { hasRemoteSdkUrl } from "../ccrAgentProxy/agentProxy.js";
 import { OAUTH_BETA_HEADER } from "../../constants/oauth.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, string, E, M, array, unknown } from "../../../vendor/zod/v4/classic/schemas.js";
+import {
+  objectSchema,
+  stringSchema,
+  numberSchema,
+  booleanSchema,
+  array,
+  unknown,
+} from "../../../vendor/zod/v4/classic/schemas.js";
 import { logFeatureSad, logFeatureOk } from "../analytics/featureTelemetry.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { jsonParse, jsonStringify } from "../../utils/slowOperations.js";
 import { extractErrorCode } from "../../bridge/debugUtils.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-j0nnxep0.js:534-582 placement
 var PROJECT_API_TIMEOUT_MS = 30000;
@@ -31,12 +39,12 @@ function isSessionJwtAuth() {
   return getSessionIngressAuthToken() !== null;
 }
 //@ chunk-j0nnxep0.js:615-887 placement
-async function postSessionProjectOp(op, n, r, signal, maxContentLength) {
-  let c = await apiClient.post(
+async function postSessionProjectOp(op, payload, action, signal, maxContentLength) {
+  let response = await apiClient.post(
     CHAT_PROJECT_PATH,
     {
       op,
-      ...n,
+      ...payload,
     },
     {
       host: getCcrSessionUrl() !== undefined && hasRemoteSdkUrl() ? "ccr-gateway" : "api",
@@ -47,9 +55,14 @@ async function postSessionProjectOp(op, n, r, signal, maxContentLength) {
       maxContentLength,
     },
   );
-  if (c.ok && c.status >= 300)
-    throw new ProjectsApiError(r, c.status, errorTextOf(c.data), errorCodeOf(c.data));
-  return checkProjectResponse(c, r);
+  if (response.ok && response.status >= 300)
+    throw new ProjectsApiError(
+      action,
+      response.status,
+      errorTextOf(response.data),
+      errorCodeOf(response.data),
+    );
+  return checkProjectResponse(response, action);
 }
 //@ chunk-j0nnxep0.js:887-965 placement
 /**
@@ -59,20 +72,26 @@ function isUnknownOpError(error) {
   return error instanceof ProjectsApiError && error.status === 400 && error.body === "unknown op";
 }
 //@ chunk-j0nnxep0.js:965-1105 placement
-function errorCodeOf(e) {
-  return e !== null &&
-    typeof e === "object" &&
-    "error_code" in e &&
-    typeof e.error_code === "string" &&
-    e.error_code !== ""
-    ? e.error_code
+function errorCodeOf(payload) {
+  return payload !== null &&
+    typeof payload === "object" &&
+    "error_code" in payload &&
+    typeof payload.error_code === "string" &&
+    payload.error_code !== ""
+    ? payload.error_code
     : undefined;
 }
 //@ chunk-j0nnxep0.js:1105-1261 placement
-function errorTextOf(e) {
-  if (e === null || typeof e !== "object" || !("error" in e) || typeof e.error !== "string") return e;
-  let n = errorCodeOf(e);
-  return n === undefined ? e.error : `${e.error} (${n})`;
+function errorTextOf(payload) {
+  if (
+    payload === null ||
+    typeof payload !== "object" ||
+    !("error" in payload) ||
+    typeof payload.error !== "string"
+  )
+    return payload;
+  let code = errorCodeOf(payload);
+  return code === undefined ? payload.error : `${payload.error} (${code})`;
 }
 //@ chunk-j0nnxep0.js:1261-1390 placement
 function projectRequestOptions(signal, credentials) {
@@ -88,23 +107,26 @@ function projectRequestOptions(signal, credentials) {
   };
 }
 //@ chunk-j0nnxep0.js:1390-1480 placement
-function projectApiPath(e, n) {
-  return `/api/organizations/:orgUUID/projects/${encodeURIComponent(e)}${n}`;
+function projectApiPath(projectUuid, suffix) {
+  return `/api/organizations/:orgUUID/projects/${encodeURIComponent(projectUuid)}${suffix}`;
 }
 //@ chunk-j0nnxep0.js:1480-1634 placement
 /**
  * 获取 Claude 项目详情。
  */
-async function getProjectDetail(e, n, r) {
-  if (isSessionJwtAuth()) return postSessionProjectOp("detail", {}, "get project detail", n);
-  let i = await apiClient.get(projectApiPath(e, "/detail"), projectRequestOptions(n, r));
-  return checkProjectResponse(i, "get project detail");
+async function getProjectDetail(projectUuid, signal, credentials) {
+  if (isSessionJwtAuth()) return postSessionProjectOp("detail", {}, "get project detail", signal);
+  let response = await apiClient.get(
+    projectApiPath(projectUuid, "/detail"),
+    projectRequestOptions(signal, credentials),
+  );
+  return checkProjectResponse(response, "get project detail");
 }
 //@ chunk-j0nnxep0.js:1634-1833 placement
 /**
  * 读取项目文档内容（会话 JWT 走 read-doc 操作，否则 GET /docs/:id）。
  */
-async function readProjectDoc(e, uuid, r, i, s) {
+async function readProjectDoc(projectUuid, uuid, signal, credentials, maxContentLength) {
   if (isSessionJwtAuth())
     return postSessionProjectOp(
       "read-doc",
@@ -112,43 +134,51 @@ async function readProjectDoc(e, uuid, r, i, s) {
         doc_uuid: uuid,
       },
       "read doc",
-      r,
-      s,
+      signal,
+      maxContentLength,
     );
-  let c = await apiClient.get(projectApiPath(e, `/docs/${encodeURIComponent(uuid)}`), {
-    ...projectRequestOptions(r, i),
-    maxContentLength: s,
+  let response = await apiClient.get(projectApiPath(projectUuid, `/docs/${encodeURIComponent(uuid)}`), {
+    ...projectRequestOptions(signal, credentials),
+    maxContentLength,
   });
-  return checkProjectResponse(c, "read doc");
+  return checkProjectResponse(response, "read doc");
 }
 //@ chunk-j0nnxep0.js:1833-2047 placement
 /**
  * 读取项目文件的提取文本（会话 JWT 走 read-file，否则 GET /files/:id/extracted）。
  */
-async function readProjectFileText(e, n, r, i, s) {
+async function readProjectFileText(projectUuid, fileUuid, signal, credentials, maxContentLength) {
   if (isSessionJwtAuth())
     return postSessionProjectOp(
       "read-file",
       {
-        file_uuid: n,
+        file_uuid: fileUuid,
       },
       "read file",
-      r,
-      s,
+      signal,
+      maxContentLength,
     );
-  let c = await apiClient.get(projectApiPath(e, `/files/${encodeURIComponent(n)}/extracted`), {
-    ...projectRequestOptions(r, i),
-    maxContentLength: s,
-  });
-  return checkProjectResponse(c, "read file");
+  let response = await apiClient.get(
+    projectApiPath(projectUuid, `/files/${encodeURIComponent(fileUuid)}/extracted`),
+    {
+      ...projectRequestOptions(signal, credentials),
+      maxContentLength,
+    },
+  );
+  return checkProjectResponse(response, "read file");
 }
 //@ chunk-j0nnxep0.js:2047-2102 placement
 /**
  * 项目记忆文件读写的大小上限（原文、分块与 base64）。
  */
-var MAX_PROJECT_FILE_BYTES = 20971520;
-var MAX_PROJECT_FILE_CHUNK_BYTES = 262144;
-var MAX_PROJECT_FILE_BASE64_BYTES = Math.ceil((MAX_PROJECT_FILE_BYTES * 4) / 3) + 65536;
+var MAX_PROJECT_FILE_BYTES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var MAX_PROJECT_FILE_CHUNK_BYTES;
+var MAX_PROJECT_FILE_BASE64_BYTES;
+deferInit("chunk-j0nnxep0.js:2047", () => {
+  MAX_PROJECT_FILE_BYTES = 20971520;
+  MAX_PROJECT_FILE_CHUNK_BYTES = 262144;
+  MAX_PROJECT_FILE_BASE64_BYTES = Math.ceil((MAX_PROJECT_FILE_BYTES * 4) / 3) + 65536;
+});
 //@ chunk-j0nnxep0.js:2102-2320 placement
 /**
  * 下载项目文件原始内容（会话 JWT 走 read-file-raw，否则 GET /files/:id/raw），有大小上限。
@@ -164,91 +194,100 @@ async function downloadProjectFile(projectUuid, fileUuid, signal, credentials) {
       signal,
       MAX_PROJECT_FILE_BASE64_BYTES,
     );
-  let s = await apiClient.get(projectApiPath(projectUuid, `/files/${encodeURIComponent(fileUuid)}/raw`), {
-    ...projectRequestOptions(signal, credentials),
-    maxContentLength: MAX_PROJECT_FILE_BASE64_BYTES,
-  });
-  return checkProjectResponse(s, "download file");
+  let response = await apiClient.get(
+    projectApiPath(projectUuid, `/files/${encodeURIComponent(fileUuid)}/raw`),
+    {
+      ...projectRequestOptions(signal, credentials),
+      maxContentLength: MAX_PROJECT_FILE_BASE64_BYTES,
+    },
+  );
+  return checkProjectResponse(response, "download file");
 }
 //@ chunk-j0nnxep0.js:2320-2334 placement
 var MAX_PROJECT_UPLOAD_BYTES = 4194304;
 //@ chunk-j0nnxep0.js:2334-2583 placement
-async function fetchProjectMemory(e, n, r) {
+async function fetchProjectMemory(projectUuid, signal, credentials) {
   if (isSessionJwtAuth())
     throw new ProjectsApiError("read project memory", 0, "no memory route over the CCR bridge");
-  let i = await apiClient.get(projectApiPath(e, "/detail?include=melange_memory"), {
-    ...projectRequestOptions(n, r),
+  let response = await apiClient.get(projectApiPath(projectUuid, "/detail?include=melange_memory"), {
+    ...projectRequestOptions(signal, credentials),
     maxContentLength: MAX_PROJECT_UPLOAD_BYTES,
   });
-  return parseProjectMemory(checkProjectResponse(i, "read project memory").melange_memory);
+  return parseProjectMemory(checkProjectResponse(response, "read project memory").melange_memory);
 }
 //@ chunk-j0nnxep0.js:2583-2878 placement
-var MAX_MEMORY_PATH_LENGTH = 255;
-var SINGLE_LINE_REGEX = /^[^\r\n\v\f\u0085\u2028\u2029]*$/;
-var memoryFileSchema = DoctorLazy(() =>
-  u({
-    path: string().max(MAX_MEMORY_PATH_LENGTH).regex(SINGLE_LINE_REGEX),
-    content: string(),
-    size_bytes: E().optional().catch(undefined),
-    updated_at: string().nullable().optional().catch(undefined),
-    truncated: M().optional().catch(undefined),
-  }),
-);
-var memoryResponseSchema = DoctorLazy(() =>
-  u({
-    files: array(unknown()),
-    truncated: M().optional().catch(undefined),
-  }),
-);
+var MAX_MEMORY_PATH_LENGTH; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var SINGLE_LINE_REGEX;
+var memoryFileSchema;
+var memoryResponseSchema;
+deferInit("chunk-j0nnxep0.js:2583", () => {
+  MAX_MEMORY_PATH_LENGTH = 255;
+  SINGLE_LINE_REGEX = /^[^\r\n\v\f\u0085\u2028\u2029]*$/;
+  memoryFileSchema = DoctorLazy(() =>
+    objectSchema({
+      path: stringSchema().max(MAX_MEMORY_PATH_LENGTH).regex(SINGLE_LINE_REGEX),
+      content: stringSchema(),
+      size_bytes: numberSchema().optional().catch(undefined),
+      updated_at: stringSchema().nullable().optional().catch(undefined),
+      truncated: booleanSchema().optional().catch(undefined),
+    }),
+  );
+  memoryResponseSchema = DoctorLazy(() =>
+    objectSchema({
+      files: array(unknown()),
+      truncated: booleanSchema().optional().catch(undefined),
+    }),
+  );
+});
 //@ chunk-j0nnxep0.js:2878-3553 placement
 /**
  * 解析项目记忆（melange_memory）。
  */
 function parseProjectMemory(melangeMemory) {
   if (melangeMemory === undefined || melangeMemory === null) return null;
-  let n = memoryResponseSchema().safeParse(melangeMemory);
-  if (!n.success) {
+  let parsed = memoryResponseSchema().safeParse(melangeMemory);
+  if (!parsed.success) {
     logFeatureSad("projects_tool_memory", "parse_failed");
     logForDebugging("project memory: melange_memory did not parse", {
       level: "warn",
     });
     return null;
   }
-  let r = [];
-  let i = 0;
-  for (let file of n.data.files) {
-    let c = memoryFileSchema().safeParse(file);
-    if (!c.success) {
-      i++;
+  let files = [];
+  let droppedCount = 0;
+  for (let file of parsed.data.files) {
+    let parsedFile = memoryFileSchema().safeParse(file);
+    if (!parsedFile.success) {
+      droppedCount++;
       continue;
     }
-    let d = c.data;
-    r.push({
-      path: d.path,
-      content: d.content,
-      size_bytes: d.size_bytes ?? Buffer.byteLength(d.content, "utf8"),
-      updated_at: d.updated_at ?? null,
-      truncated: d.truncated === true,
+    let file_2 = parsedFile.data;
+    files.push({
+      path: file_2.path,
+      content: file_2.content,
+      size_bytes: file_2.size_bytes ?? Buffer.byteLength(file_2.content, "utf8"),
+      updated_at: file_2.updated_at ?? null,
+      truncated: file_2.truncated === true,
     });
   }
-  if (i > 0) {
+  if (droppedCount > 0) {
     logFeatureSad("projects_tool_memory", "entries_dropped", {
-      dropped: i,
+      dropped: droppedCount,
     });
-    logForDebugging(`project memory: ${i} entries dropped at parse`, {
+    logForDebugging(`project memory: ${droppedCount} entries dropped at parse`, {
       level: "warn",
     });
   } else logFeatureOk("projects_tool_memory");
   return {
-    files: r,
-    truncated: n.data.truncated === true,
+    files,
+    truncated: parsed.data.truncated === true,
   };
 }
 //@ chunk-j0nnxep0.js:3553-3742 placement
 /**
  * 在项目里创建文档（文件名与内容）。
  */
-async function createProjectDoc(e, fileName, content, i, s) {
+async function createProjectDoc(projectUuid, fileName, content, signal, credentials) {
   if (isSessionJwtAuth())
     return postSessionProjectOp(
       "write-doc",
@@ -257,112 +296,120 @@ async function createProjectDoc(e, fileName, content, i, s) {
         content,
       },
       "create doc",
-      i,
+      signal,
     );
-  let c = await apiClient.post(
-    projectApiPath(e, "/docs"),
+  let response = await apiClient.post(
+    projectApiPath(projectUuid, "/docs"),
     {
       file_name: fileName,
       content,
     },
-    projectRequestOptions(i, s),
+    projectRequestOptions(signal, credentials),
   );
-  return checkProjectResponse(c, "create doc");
+  return checkProjectResponse(response, "create doc");
 }
 //@ chunk-j0nnxep0.js:3742-4037 placement
 /**
  * 更新项目文档内容，可带基准内容 sha256 与最大替换字节数作为前置条件。
  */
-async function updateProjectDoc(e, n, content, i, s, c, d) {
-  let b = {
+async function updateProjectDoc(
+  projectUuid,
+  docUuid,
+  content,
+  signal,
+  credentials,
+  baseContentSha256,
+  maxReplacedBytes,
+) {
+  let body = {
     content,
-    ...(c !== undefined && {
-      base_content_sha256: c,
+    ...(baseContentSha256 !== undefined && {
+      base_content_sha256: baseContentSha256,
     }),
-    ...(d !== undefined && {
-      max_replaced_content_bytes: d,
+    ...(maxReplacedBytes !== undefined && {
+      max_replaced_content_bytes: maxReplacedBytes,
     }),
   };
   if (isSessionJwtAuth())
     return postSessionProjectOp(
       "update-doc",
       {
-        doc_uuid: n,
-        ...b,
+        doc_uuid: docUuid,
+        ...body,
       },
       "update doc",
-      i,
+      signal,
     );
-  let k = await apiClient.patch(
-    projectApiPath(e, `/docs/${encodeURIComponent(n)}`),
-    b,
-    projectRequestOptions(i, s),
+  let response = await apiClient.patch(
+    projectApiPath(projectUuid, `/docs/${encodeURIComponent(docUuid)}`),
+    body,
+    projectRequestOptions(signal, credentials),
   );
-  return checkProjectResponse(k, "update doc");
+  return checkProjectResponse(response, "update doc");
 }
 //@ chunk-j0nnxep0.js:4037-4224 placement
 /**
  * 删除项目文档。
  */
-async function deleteProjectDoc(e, n, r, i) {
+async function deleteProjectDoc(projectUuid, docUuid, signal, credentials) {
   if (isSessionJwtAuth()) {
     await postSessionProjectOp(
       "delete-doc",
       {
-        doc_uuid: n,
+        doc_uuid: docUuid,
       },
       "delete doc",
-      r,
+      signal,
     );
     return;
   }
-  let s = await apiClient.delete(
-    projectApiPath(e, `/docs/${encodeURIComponent(n)}`),
+  let response = await apiClient.delete(
+    projectApiPath(projectUuid, `/docs/${encodeURIComponent(docUuid)}`),
     undefined,
-    projectRequestOptions(r, i),
+    projectRequestOptions(signal, credentials),
   );
-  checkProjectResponse(s, "delete doc");
+  checkProjectResponse(response, "delete doc");
 }
 //@ chunk-j0nnxep0.js:4224-4455 placement
 /**
  * 在项目知识库中搜索（query 与返回条数），返回解析后的结果。
  */
-async function searchProjectKnowledge(e, n, r, i, s) {
+async function searchProjectKnowledge(projectUuid, query, maxResults, signal, credentials) {
   if (isSessionJwtAuth())
     return parseMaybeJson(
       await postSessionProjectOp(
         "kb-search",
         {
-          query: n,
-          n: r,
+          query,
+          n: maxResults,
         },
         "search knowledge base",
-        i,
+        signal,
       ),
     );
-  let c = await apiClient.get(
-    projectApiPath(e, `/kb/search?query=${encodeURIComponent(n)}&n=${r}`),
-    projectRequestOptions(i, s),
+  let response = await apiClient.get(
+    projectApiPath(projectUuid, `/kb/search?query=${encodeURIComponent(query)}&n=${maxResults}`),
+    projectRequestOptions(signal, credentials),
   );
-  return parseMaybeJson(checkProjectResponse(c, "search knowledge base"));
+  return parseMaybeJson(checkProjectResponse(response, "search knowledge base"));
 }
 //@ chunk-j0nnxep0.js:4455-4533 placement
-function parseMaybeJson(e) {
-  if (typeof e === "string")
+function parseMaybeJson(value) {
+  if (typeof value === "string")
     try {
-      return jsonParse(e);
+      return jsonParse(value);
     } catch {
-      return e;
+      return value;
     }
-  return e;
+  return value;
 }
 //@ chunk-j0nnxep0.js:4533-4615 placement
 /**
  * 从文本里抹掉疑似令牌。
  */
-function redactTokenFromText(e, n) {
-  if (!n) return e;
-  return e.split(n).join("[redacted-oauth-token]");
+function redactTokenFromText(text, token) {
+  if (!token) return text;
+  return text.split(token).join("[redacted-oauth-token]");
 }
 //@ chunk-j0nnxep0.js:4615-4829 placement
 /**
@@ -373,44 +420,48 @@ class ProjectsApiError extends Error {
   status;
   body;
   errorCode;
-  constructor(e, status, r, errorCode) {
-    super(`Projects API: ${e} failed (HTTP ${status})${errorBodySuffix(r)}`);
-    this.action = e;
+  constructor(action, status, body, errorCode) {
+    super(`Projects API: ${action} failed (HTTP ${status})${errorBodySuffix(body)}`);
+    this.action = action;
     this.status = status;
-    this.body = r;
+    this.body = body;
     this.errorCode = errorCode;
     this.name = "ProjectsApiError";
   }
 }
 //@ chunk-j0nnxep0.js:4829-5000 placement
-function checkProjectResponse(e, n) {
-  if (!e.ok) throw new ProjectsApiError(n, 0, e.reason === "no-auth" ? e.detail : e.reason);
-  if (e.status < 200 || e.status >= 300)
-    throw new ProjectsApiError(n, e.status, e.data, extractErrorCode(e.data));
-  return e.data;
+function checkProjectResponse(result, action) {
+  if (!result.ok)
+    throw new ProjectsApiError(action, 0, result.reason === "no-auth" ? result.detail : result.reason);
+  if (result.status < 200 || result.status >= 300)
+    throw new ProjectsApiError(action, result.status, result.data, extractErrorCode(result.data));
+  return result.data;
 }
 //@ chunk-j0nnxep0.js:5000-5169 placement
-function errorBodySuffix(e) {
-  if (e == null) return "";
-  if (typeof e === "string") return e ? `: ${e.slice(0, 200)}` : "";
+function errorBodySuffix(body) {
+  if (body == null) return "";
+  if (typeof body === "string") return body ? `: ${body.slice(0, 200)}` : "";
   try {
-    return `: ${jsonStringify(e).slice(0, 200)}`;
+    return `: ${jsonStringify(body).slice(0, 200)}`;
   } catch {
-    return `: ${String(e).slice(0, 200)}`;
+    return `: ${String(body).slice(0, 200)}`;
   }
 }
 //@ chunk-j0nnxep0.js:5169-5183 placement
-var projectErrorCache = new Map();
+var projectErrorCache; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-j0nnxep0.js:5169", () => {
+  projectErrorCache = new Map();
+});
 //@ chunk-j0nnxep0.js:5183-5329 placement
-function getProjectMemory(e, n) {
-  let r = projectErrorCache.get(e);
-  if (r !== undefined) return r;
-  let i = fetchProjectMemory(e, undefined, n).catch((error) => {
-    if (projectErrorCache.get(e) === i) projectErrorCache.delete(e);
+function getProjectMemory(projectUuid, credentials) {
+  let cached = projectErrorCache.get(projectUuid);
+  if (cached !== undefined) return cached;
+  let promise = fetchProjectMemory(projectUuid, undefined, credentials).catch((error) => {
+    if (projectErrorCache.get(projectUuid) === promise) projectErrorCache.delete(projectUuid);
     throw error;
   });
-  projectErrorCache.set(e, i);
-  return i;
+  projectErrorCache.set(projectUuid, promise);
+  return promise;
 }
 //@ chunk-j0nnxep0.js:5329-5354 placement
 function clearProjectMemoryCache() {
@@ -432,4 +483,5 @@ export {
   readProjectDoc,
   searchProjectKnowledge,
   getProjectMemory,
+  clearProjectMemoryCache,
 };

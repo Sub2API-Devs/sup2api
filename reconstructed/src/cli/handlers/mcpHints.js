@@ -12,11 +12,11 @@ import { replaceControlChars } from "../../utils/resultError.js";
 import { suggestClosestName } from "../../utils/settings/managedEnvKeys.js";
 
 //@ chunk-sey2c4wh.js:264-735 placement
-function formatUnknownMcpServerHint(t, n) {
-  let e = replaceControlChars(t);
-  let sorted = n.map(replaceControlChars).sort();
-  let s = suggestClosestName(
-    e,
+function formatUnknownMcpServerHint(name, knownNames) {
+  let safeName = replaceControlChars(name);
+  let sorted = knownNames.map(replaceControlChars).sort();
+  let closest = suggestClosestName(
+    safeName,
     sorted.map((name) => ({
       name,
     })),
@@ -24,21 +24,24 @@ function formatUnknownMcpServerHint(t, n) {
       maxEditDistance: 2,
     },
   );
-  if (s) return `No MCP server named "${e}". Did you mean "${s}"? Run \`claude mcp list\` to see all.`;
-  if (sorted.length === 0) return `No MCP server named "${e}". Run \`claude mcp add\` to add one.`;
-  let o = 8;
-  let joined = sorted.slice(0, o).join(", ");
-  let i =
-    sorted.length > o ? ` (and ${sorted.length - o} more \u2014 run \`claude mcp list\` to see all)` : "";
-  return `No MCP server named "${e}". Configured servers: ${joined}${i}`;
+  if (closest)
+    return `No MCP server named "${safeName}". Did you mean "${closest}"? Run \`claude mcp list\` to see all.`;
+  if (sorted.length === 0) return `No MCP server named "${safeName}". Run \`claude mcp add\` to add one.`;
+  let maxListed = 8;
+  let joined = sorted.slice(0, maxListed).join(", ");
+  let moreSuffix =
+    sorted.length > maxListed
+      ? ` (and ${sorted.length - maxListed} more \u2014 run \`claude mcp list\` to see all)`
+      : "";
+  return `No MCP server named "${safeName}". Configured servers: ${joined}${moreSuffix}`;
 }
 //@ chunk-sey2c4wh.js:735-1040 placement
-function formatMcpServerNotFoundMessage(t, n, e) {
-  if (e && n.length === 0)
-    return `No MCP server named "${replaceControlChars(t)}". ${".mcp.json servers are awaiting approval \u2014 run `claude` in this directory to review them."}`;
+function formatMcpServerNotFoundMessage(name, knownNames, hasPendingApproval) {
+  if (hasPendingApproval && knownNames.length === 0)
+    return `No MCP server named "${replaceControlChars(name)}". ${".mcp.json servers are awaiting approval \u2014 run `claude` in this directory to review them."}`;
   return (
-    formatUnknownMcpServerHint(t, n) +
-    (e
+    formatUnknownMcpServerHint(name, knownNames) +
+    (hasPendingApproval
       ? ` (${".mcp.json servers are awaiting approval \u2014 run `claude` in this directory to review them."})`
       : "")
   );

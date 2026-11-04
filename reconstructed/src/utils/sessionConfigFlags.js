@@ -11,8 +11,8 @@
 import { isSafeMode, isRestrictedMode } from "./envUtils.js";
 
 //@ chunk-kqfm73k5.js:231-296 placement
-function foldRestricted(options, e) {
-  return e && !options.restricted
+function foldRestricted(options, restricted) {
+  return restricted && !options.restricted
     ? {
         ...options,
         restricted: true,
@@ -23,70 +23,70 @@ function foldRestricted(options, e) {
 /**
  * 命令行是否带会话级配置（自定义系统提示、工具白名单、受限设置），分叉时需拒绝。
  */
-function cliCarriesSessionConfig(n) {
+function cliCarriesSessionConfig(options) {
   return (
     isSafeMode() ||
     isRestrictedMode() ||
     [
-      n.permissionMode,
-      n.inheritPermissionMode,
-      n.model,
-      n.fallbackModel,
-      n.clientDataUrl,
-      n.allowOtherModels,
-      n.effort,
-      n.agent,
-      n.agents,
-      n.settings,
-      n.projectConfigRoot,
-      n.appendSystemPrompt,
-      n.appendSystemPromptFile,
-      n.systemPrompt,
-      n.systemPromptFile,
-      n.systemPromptSnapshot,
-      n.replyOnResume,
-      n.permissionPromptTool,
-      n.settingSources,
-      n.managedSettings,
-    ].some((e) => e !== undefined) ||
-    Boolean(n.disableSlashCommands) ||
-    Boolean(n.includeUnsupportedModels) ||
-    n.sessionPersistence === false ||
-    Boolean(n.dangerouslySkipPermissions) ||
-    Boolean(n.allowDangerouslySkipPermissions) ||
-    Boolean(n.allowBypass) ||
-    Boolean(n.restricted) ||
-    Boolean(n.ide) ||
-    Boolean(n.strictMcpConfig) ||
-    (n.allowedTools ?? []).length > 0 ||
-    (n.disallowedTools ?? []).length > 0 ||
-    (n.tools ?? []).length > 0 ||
-    (n.mcpConfig ?? []).length > 0 ||
-    (n.addDir ?? []).length > 0 ||
-    (n.pluginDir ?? []).length > 0 ||
-    (n.pluginDirNoMcp ?? []).length > 0
+      options.permissionMode,
+      options.inheritPermissionMode,
+      options.model,
+      options.fallbackModel,
+      options.clientDataUrl,
+      options.allowOtherModels,
+      options.effort,
+      options.agent,
+      options.agents,
+      options.settings,
+      options.projectConfigRoot,
+      options.appendSystemPrompt,
+      options.appendSystemPromptFile,
+      options.systemPrompt,
+      options.systemPromptFile,
+      options.systemPromptSnapshot,
+      options.replyOnResume,
+      options.permissionPromptTool,
+      options.settingSources,
+      options.managedSettings,
+    ].some((value) => value !== undefined) ||
+    Boolean(options.disableSlashCommands) ||
+    Boolean(options.includeUnsupportedModels) ||
+    options.sessionPersistence === false ||
+    Boolean(options.dangerouslySkipPermissions) ||
+    Boolean(options.allowDangerouslySkipPermissions) ||
+    Boolean(options.allowBypass) ||
+    Boolean(options.restricted) ||
+    Boolean(options.ide) ||
+    Boolean(options.strictMcpConfig) ||
+    (options.allowedTools ?? []).length > 0 ||
+    (options.disallowedTools ?? []).length > 0 ||
+    (options.tools ?? []).length > 0 ||
+    (options.mcpConfig ?? []).length > 0 ||
+    (options.addDir ?? []).length > 0 ||
+    (options.pluginDir ?? []).length > 0 ||
+    (options.pluginDirNoMcp ?? []).length > 0
   );
 }
 //@ chunk-kqfm73k5.js:1164-1387 placement
-function cliCarriesForkRestrictedConfig(n) {
+function cliCarriesForkRestrictedConfig(options) {
   return (
     [
-      n.systemPrompt,
-      n.systemPromptFile,
-      n.appendSystemPromptFile,
-      n.permissionPromptTool,
-      n.settingSources,
-      n.managedSettings,
-      n.projectConfigRoot,
-    ].some((e) => e !== undefined) || (n.tools ?? []).some((e) => e !== "default")
+      options.systemPrompt,
+      options.systemPromptFile,
+      options.appendSystemPromptFile,
+      options.permissionPromptTool,
+      options.settingSources,
+      options.managedSettings,
+      options.projectConfigRoot,
+    ].some((value) => value !== undefined) || (options.tools ?? []).some((toolName) => toolName !== "default")
   );
 }
 //@ chunk-kqfm73k5.js:1387-1462 placement
 var FORK_RESTRICTED_LAUNCH_FLAGS_DESCRIPTION =
   "a custom system prompt, a tool allowlist, or restricted settings";
 export {
-  cliCarriesSessionConfig,
   foldRestricted,
+  cliCarriesSessionConfig,
   cliCarriesForkRestrictedConfig,
   FORK_RESTRICTED_LAUNCH_FLAGS_DESCRIPTION,
 };

@@ -34,6 +34,7 @@ import { weakMap, createEnvAccessor, ALL_ENV_VARS } from "./env/envRegistry.js";
 import { logForDebugging } from "./debug.js";
 import { errorMessage } from "./errors.js";
 import { CREDENTIALS_FILE_NAME, DEVICE_KEYS_FILE_NAME } from "./auth.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-jhrww53q.js:49649-49673 placement
 /**
@@ -70,23 +71,23 @@ function readFileSafe() {
  */
 function resolveGlobalClaudeFile() {
   if (isDiskless()) return getDefaultGlobalClaudeFile();
-  let o = join(getClaudeConfigDir(), ".config.json");
+  let legacyConfigPath = join(getClaudeConfigDir(), ".config.json");
   let defaultGlobalClaudeFile = getDefaultGlobalClaudeFile();
   try {
-    let stats = getFsImplementation().statSync(o);
+    let stats = getFsImplementation().statSync(legacyConfigPath);
     if (
       stats.isFile() &&
       (stats.size > 0 ||
         ((stats.mode & 146) !== 0 && !getFsImplementation().existsSync(defaultGlobalClaudeFile)))
     )
-      return o;
+      return legacyConfigPath;
   } catch {}
   return defaultGlobalClaudeFile;
 }
 //@ chunk-jhrww53q.js:50152-50243 placement
 function getDefaultGlobalClaudeFile() {
-  let o = `.claude${fileSuffixForOauthConfig()}.json`;
-  return join(process.env.CLAUDE_CONFIG_DIR || homedir(), o);
+  let fileName = `.claude${fileSuffixForOauthConfig()}.json`;
+  return join(process.env.CLAUDE_CONFIG_DIR || homedir(), fileName);
 }
 //@ chunk-jhrww53q.js:50243-50290 facade-exports
 function getGlobalClaudeFile() {
@@ -176,9 +177,9 @@ var PATH_SCAN_TIMEOUT_MS = 1000;
 /**
  * 判断符号链接是否指向 App Installer（读不到视为否）。
  */
-async function isAppInstallerLink(o) {
+async function isAppInstallerLink(linkPath) {
   try {
-    return /appinstaller/i.test(await readlink(o));
+    return /appinstaller/i.test(await readlink(linkPath));
   } catch {
     return false;
   }
@@ -187,74 +188,76 @@ async function isAppInstallerLink(o) {
 /**
  * 判断该路径是否值得扫进 PATH 候选（跳过不安全与已有拼写的路径）。
  */
-async function isScanCandidate(o) {
-  if (o === "" || isNetworkishPath(o) || hasDotDotSegment(o)) return false;
-  return !(await hasUntouchableRecordSpellingStrictAsync(resolve(o)));
+async function isScanCandidate(dirPath) {
+  if (dirPath === "" || isNetworkishPath(dirPath) || hasDotDotSegment(dirPath)) return false;
+  return !(await hasUntouchableRecordSpellingStrictAsync(resolve(dirPath)));
 }
 //@ chunk-jhrww53q.js:51160-51943 layout
-async function scanPathForExecutables(o, t) {
-  let _ = getPlatform() === "windows";
-  let E = new Set(o);
-  let r = _ ? (process.env.PATHEXT ?? ".COM;.EXE;.BAT;.CMD").toLowerCase().split(";").filter(Boolean) : [];
-  let n = uniq(
+async function scanPathForExecutables(toolNames, found) {
+  let isWindows = getPlatform() === "windows";
+  let wanted = new Set(toolNames);
+  let executableExtensions = isWindows
+    ? (process.env.PATHEXT ?? ".COM;.EXE;.BAT;.CMD").toLowerCase().split(";").filter(Boolean)
+    : [];
+  let directories = uniq(
     (process.env.PATH ?? "")
       .split(delimiter)
-      .map((s) => s.replace(/^"|"$/g, ""))
+      .map((dir) => dir.replace(/^"|"$/g, ""))
       .filter(Boolean),
   );
   await Promise.all(
-    n.map(async (s) => {
-      if (!(await isScanCandidate(s))) return;
-      let e;
+    directories.map(async (dir) => {
+      if (!(await isScanCandidate(dir))) return;
+      let entries;
       try {
-        e = await readdir(s, {
+        entries = await readdir(dir, {
           withFileTypes: true,
         });
       } catch {
         return;
       }
-      let D = _ && /[\\/]microsoft[\\/]windowsapps[\\/]?$/i.test(s);
-      for (let C of e) {
-        if (C.isDirectory()) continue;
-        let S = C.name;
-        if (_) {
-          let lower = S.toLowerCase();
+      let isWindowsApps = isWindows && /[\\/]microsoft[\\/]windowsapps[\\/]?$/i.test(dir);
+      for (let entry of entries) {
+        if (entry.isDirectory()) continue;
+        let baseName = entry.name;
+        if (isWindows) {
+          let lower = baseName.toLowerCase();
           let index = lower.lastIndexOf(".");
-          if (index <= 0 || !r.includes(lower.slice(index))) continue;
-          S = lower.slice(0, index);
+          if (index <= 0 || !executableExtensions.includes(lower.slice(index))) continue;
+          baseName = lower.slice(0, index);
         }
-        if (!E.has(S) || t.has(S)) continue;
-        if (_) {
-          if (D && (await isAppInstallerLink(join(s, C.name)))) continue;
+        if (!wanted.has(baseName) || found.has(baseName)) continue;
+        if (isWindows) {
+          if (isWindowsApps && (await isAppInstallerLink(join(dir, entry.name)))) continue;
         } else {
-          let O = join(s, C.name);
+          let entryPath = join(dir, entry.name);
           if (
-            (C.isSymbolicLink() || safeResolvePath_2(C)) &&
-            (await hasUntouchableRecordSpellingStrictAsync(resolve(O)))
+            (entry.isSymbolicLink() || safeResolvePath_2(entry)) &&
+            (await hasUntouchableRecordSpellingStrictAsync(resolve(entryPath)))
           )
             continue;
           try {
-            await access(O, constants.X_OK);
+            await access(entryPath, constants.X_OK);
           } catch {
             continue;
           }
         }
-        t.add(S);
+        found.add(baseName);
       }
     }),
   );
 }
 //@ chunk-jhrww53q.js:51943-52078 layout
 async function detectBuildTools() {
-  let o = new Set();
+  let found = new Set();
   try {
     await withTimeout(
-      scanPathForExecutables(BUILD_TOOL_NAMES, o),
+      scanPathForExecutables(BUILD_TOOL_NAMES, found),
       PATH_SCAN_TIMEOUT_MS,
       "build tool PATH scan timed out",
     );
   } catch {}
-  return BUILD_TOOL_NAMES.filter((t) => o.has(t));
+  return BUILD_TOOL_NAMES.filter((toolName) => found.has(toolName));
 }
 //@ chunk-jhrww53q.js:52078-52128 layout
 /**
@@ -264,12 +267,12 @@ function detectedBuildTools() {
   return getEnvProbe().getDetectedBuildTools();
 }
 //@ chunk-jhrww53q.js:52128-52268 fingerprint = isNpmFromWindowsPath (0.798)
-function isNpmFromWindowsPath(o) {
+function isNpmFromWindowsPath(probe) {
   try {
-    if (!o.isWslEnvironment()) return false;
-    let t = bunWhichSync("npm");
-    if (t === null) return false;
-    return t.startsWith("/mnt/c/");
+    if (!probe.isWslEnvironment()) return false;
+    let npmPath = bunWhichSync("npm");
+    if (npmPath === null) return false;
+    return npmPath.startsWith("/mnt/c/");
   } catch (_error) {
     return false;
   }
@@ -301,8 +304,8 @@ var JETBRAINS_IDES = [
 /**
  * 应用路径是否 Windsurf/Devin。
  */
-function isWindsurfOrDevin(o) {
-  let lower = o.toLowerCase();
+function isWindsurfOrDevin(text) {
+  let lower = text.toLowerCase();
   return (
     lower.includes("windsurf") ||
     lower.includes("devin.app") ||
@@ -314,10 +317,10 @@ function isWindsurfOrDevin(o) {
 //@ chunk-jhrww53q.js:52730-54683 fingerprint = detectTerminal (0.976)
 function detectTerminal() {
   if (process.env.CURSOR_TRACE_ID) return "cursor";
-  let o = process.env.VSCODE_GIT_ASKPASS_MAIN?.toLowerCase() ?? "";
-  if (o.includes("cursor")) return "cursor";
-  if (isWindsurfOrDevin(o)) return "windsurf";
-  if (o.includes("antigravity")) return "antigravity";
+  let askpassPath = process.env.VSCODE_GIT_ASKPASS_MAIN?.toLowerCase() ?? "";
+  if (askpassPath.includes("cursor")) return "cursor";
+  if (isWindsurfOrDevin(askpassPath)) return "windsurf";
+  if (askpassPath.includes("antigravity")) return "antigravity";
   let bundleId = process.env.__CFBundleIdentifier?.toLowerCase();
   if (bundleId?.includes("vscodium")) return "codium";
   if (bundleId?.includes("windsurf") || bundleId?.includes("devin")) return "windsurf";
@@ -381,12 +384,12 @@ class EnvProbe {
   getGlobalClaudeFile() {
     return (this.globalClaudeFile ??= resolveGlobalClaudeFile());
   }
-  seedGlobalClaudeFile(o) {
+  seedGlobalClaudeFile(filePath) {
     if (this.globalClaudeFile === undefined) {
-      this.globalClaudeFile = o;
+      this.globalClaudeFile = filePath;
       return "seeded";
     }
-    return this.globalClaudeFile === o ? "unchanged" : "conflict";
+    return this.globalClaudeFile === filePath ? "unchanged" : "conflict";
   }
   getPackageManagers() {
     return (this.packageManagers ??= detectPackageManagers());
@@ -420,7 +423,7 @@ class EnvProbe {
   }
   async prime() {
     if (this.primedWslInteropExists !== undefined || isDisklessEnvProbe()) return;
-    let [o, t, _] = await Promise.all([
+    let [wslInteropExists, hypervisorUuid, dockerenvExists] = await Promise.all([
       access("/proc/sys/fs/binfmt_misc/WSLInterop").then(
         () => true,
         () => false,
@@ -438,9 +441,9 @@ class EnvProbe {
         () => false,
       ),
     ]);
-    this.primedWslInteropExists = o;
-    this.primedHypervisorUuid = t ?? "";
-    this.primedDockerenvExists = _;
+    this.primedWslInteropExists = wslInteropExists;
+    this.primedHypervisorUuid = hypervisorUuid ?? "";
+    this.primedDockerenvExists = dockerenvExists;
     this.wslEnvironment = undefined;
     this.npmFromWindowsPath = undefined;
     this.deploymentEnvironment = undefined;
@@ -450,14 +453,17 @@ class EnvProbe {
 /**
  * 按宿主隔离的环境探测器（WSL 互操作、hypervisor UUID、dockerenv）。
  */
-var envProbeByHost = new HostScoped(
-  () =>
-    new EnvProbe({
-      wslInteropExistsSync: isWslEnvironment,
-      readHypervisorUuidSync: readFileSafe,
-      dockerenvExistsSync: getIsDocker,
-    }),
-);
+var envProbeByHost; // deferred: uses EnvProbe of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-jhrww53q.js:56364", () => {
+  envProbeByHost = new HostScoped(
+    () =>
+      new EnvProbe({
+        wslInteropExistsSync: isWslEnvironment,
+        readHypervisorUuidSync: readFileSafe,
+        dockerenvExistsSync: getIsDocker,
+      }),
+  );
+});
 //@ chunk-jhrww53q.js:56461-56497 layout
 function getEnvProbe() {
   return envProbeByHost.of(getRootSession().host);
@@ -484,7 +490,7 @@ function detectDeploymentEnvironment() {
   return getEnvProbe().detectDeploymentEnvironment();
 }
 //@ chunk-jhrww53q.js:56632-58727 fingerprint = detectDeploymentEnvironment (0.881)
-function detectDeploymentEnvironment_2(o) {
+function detectDeploymentEnvironment_2(probe) {
   if (isEnvTruthy(process.env.CODESPACES)) return "codespaces";
   if (process.env.GITPOD_WORKSPACE_ID) return "gitpod";
   if (isEnvTruthy(process.env.CODER) || process.env.CODER_WORKSPACE_NAME) return "coder";
@@ -505,7 +511,7 @@ function detectDeploymentEnvironment_2(o) {
   if (process.env.AWS_LAMBDA_FUNCTION_NAME) return "aws-lambda";
   if (process.env.AWS_EXECUTION_ENV === "AWS_ECS_FARGATE") return "aws-fargate";
   if (process.env.AWS_EXECUTION_ENV === "AWS_ECS_EC2") return "aws-ecs";
-  if (o.hypervisorUuid().startsWith("ec2")) return "aws-ec2";
+  if (probe.hypervisorUuid().startsWith("ec2")) return "aws-ec2";
   if (process.env.K_SERVICE) return "gcp-cloud-run";
   if (process.env.GOOGLE_CLOUD_PROJECT) return "gcp";
   if (process.env.WEBSITE_SITE_NAME || process.env.WEBSITE_SKU) return "azure-app-service";
@@ -518,7 +524,7 @@ function detectDeploymentEnvironment_2(o) {
   if (process.env.BUILDKITE) return "buildkite";
   if (isEnvTruthy(false)) return "ci";
   if (process.env.KUBERNETES_SERVICE_HOST) return "kubernetes";
-  if (o.isDockerenvPresent()) return "docker";
+  if (probe.isDockerenvPresent()) return "docker";
   if (env_2.platform === "darwin") return "unknown-darwin";
   if (env_2.platform === "linux") return "unknown-linux";
   if (env_2.platform === "win32") return "unknown-win32";
@@ -540,30 +546,33 @@ function isSpawnedByServer() {
   );
 }
 //@ chunk-jhrww53q.js:58982-59422 fingerprint = env (0.871)
-var env_2 = {
-  probeInternalNetworkAccess,
-  isCI: isEnvTruthy(false),
-  platform: ["win32", "darwin"].includes("linux") ? "linux" : "linux",
-  arch: "x64",
-  nodeVersion: process.version,
-  terminal: detectTerminal(),
-  isSSH: isSSHSession_2,
-  getPackageManagers() {
-    return getEnvProbe().getPackageManagers();
-  },
-  getRuntimes() {
-    return getEnvProbe().getRuntimes();
-  },
-  isRunningWithBun: alwaysTrue,
-  isWslEnvironment() {
-    return getEnvProbe().isWslEnvironment();
-  },
-  isNpmFromWindowsPath() {
-    return getEnvProbe().isNpmFromWindowsPath();
-  },
-  isConductor,
-  detectDeploymentEnvironment,
-};
+var env_2; // deferred: uses isEnvTruthy (./envUtils.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-jhrww53q.js:58982", () => {
+  env_2 = {
+    probeInternalNetworkAccess,
+    isCI: isEnvTruthy(false),
+    platform: ["win32", "darwin"].includes("linux") ? "linux" : "linux",
+    arch: "x64",
+    nodeVersion: process.version,
+    terminal: detectTerminal(),
+    isSSH: isSSHSession_2,
+    getPackageManagers() {
+      return getEnvProbe().getPackageManagers();
+    },
+    getRuntimes() {
+      return getEnvProbe().getRuntimes();
+    },
+    isRunningWithBun: alwaysTrue,
+    isWslEnvironment() {
+      return getEnvProbe().isWslEnvironment();
+    },
+    isNpmFromWindowsPath() {
+      return getEnvProbe().isNpmFromWindowsPath();
+    },
+    isConductor,
+    detectDeploymentEnvironment,
+  };
+});
 //@ chunk-jhrww53q.js:59422-59550 facade-exports = getHostPlatformForAnalytics (1)
 function getHostPlatformForAnalytics() {
   let override = process.env.CLAUDE_CODE_HOST_PLATFORM;
@@ -571,25 +580,28 @@ function getHostPlatformForAnalytics() {
   return env_2.platform;
 }
 //@ chunk-jhrww53q.js:59550-59689 layout
-var SHELL_NAMES = new Set([
-  "zsh",
-  "bash",
-  "fish",
-  "sh",
-  "dash",
-  "ash",
-  "ksh",
-  "tcsh",
-  "csh",
-  "nu",
-  "nushell",
-  "pwsh",
-  "powershell",
-  "cmd",
-  "elvish",
-  "xonsh",
-  "ion",
-]);
+var SHELL_NAMES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-jhrww53q.js:59550", () => {
+  SHELL_NAMES = new Set([
+    "zsh",
+    "bash",
+    "fish",
+    "sh",
+    "dash",
+    "ash",
+    "ksh",
+    "tcsh",
+    "csh",
+    "nu",
+    "nushell",
+    "pwsh",
+    "powershell",
+    "cmd",
+    "elvish",
+    "xonsh",
+    "ion",
+  ]);
+});
 //@ chunk-jhrww53q.js:59689-59824 facade-exports
 function normalizeShellNameForAnalytics(shellPath) {
   if (!shellPath) return fromSanitizer_SANITIZER_OUTPUT_ONLY("none");
@@ -605,22 +617,63 @@ function getShellForAnalytics() {
   return normalizeShellNameForAnalytics(process.env.SHELL || process.env.COMSPEC || "");
 }
 //@ chunk-jhrww53q.js:75963-76138 facade-exports
-function declaredEnvVarNames(o) {
-  let t = weakMap.get(o);
-  if (t === undefined) return [];
-  if (t !== null) return Object.keys(t);
-  let prototypeOf = Object.getPrototypeOf(o);
-  return Object.keys(o).filter((key) => prototypeOf === null || !(key in prototypeOf));
+function declaredEnvVarNames(env) {
+  let declared = weakMap.get(env);
+  if (declared === undefined) return [];
+  if (declared !== null) return Object.keys(declared);
+  let prototypeOf = Object.getPrototypeOf(env);
+  return Object.keys(env).filter((key) => prototypeOf === null || !(key in prototypeOf));
 }
 //@ chunk-jhrww53q.js:76138-76237 facade-exports
 /**
  * antEnv 使用的空环境表（不声明任何变量）。
  */
-var env = createEnvAccessor(ALL_ENV_VARS, env_2);
-var EMPTY_ANT_ENV = {};
-var antEnv = createEnvAccessor(EMPTY_ANT_ENV, null);
-var udsInboxShape = require("./chunk-zya51bzb.js").udsInboxShape;
-var udsEnv = createEnvAccessor(udsInboxShape, null);
+var env; // deferred: loads other modules while loading; runs once its import cycle is complete
+var EMPTY_ANT_ENV;
+var antEnv;
+var udsInboxShape;
+var udsEnv;
+deferInit("chunk-jhrww53q.js:76138", () => {
+  env = createEnvAccessor(ALL_ENV_VARS, env_2);
+  EMPTY_ANT_ENV = {};
+  antEnv = createEnvAccessor(EMPTY_ANT_ENV, null);
+  udsInboxShape = require("./udsMessaging/udsInboxShape.lazy.js").udsInboxShape;
+  udsEnv = createEnvAccessor(udsInboxShape, null);
+});
+//@ chunk-aepeg2w5.js:751986-752249 fingerprint = hasInternetAccess (0.427)
+async function hasInternetAccess_2() {
+  try {
+    let { externalHttp } = await import("../services/http/externalHttp.lazy.js");
+    await externalHttp.head("http://1.1.1.1", {
+      signal: AbortSignal.timeout(1000),
+    });
+    return true;
+  } catch (error) {
+    logForDebugging(
+      `internet access probe failed (${errorMessage(error)}); treating outbound internet as unreachable`,
+    );
+    return false;
+  }
+}
+//@ chunk-cdz6g143.js:519-632 fingerprint = getGlobalClaudeFile (0.833)
+/**
+ * 带第一个 OAUTH 后缀的全局配置文件默认名（.claude<后缀>.json）。
+ */
+var LEGACY_CONFIG_JSON; // deferred: uses OAUTH_GLOBAL_FILE_SUFFIXES (../constants/oauth.js) of its import cycle while loading; runs once the cycle is complete
+var OAUTH_SUFFIXED_CONFIG_FILE_NAME;
+var mapped;
+var GLOBAL_CLAUDE_FILE_NAMES;
+deferInit("chunk-cdz6g143.js:519", () => {
+  LEGACY_CONFIG_JSON = ".config.json";
+  OAUTH_SUFFIXED_CONFIG_FILE_NAME = `.claude${OAUTH_GLOBAL_FILE_SUFFIXES[0]}.json`;
+  mapped = OAUTH_GLOBAL_FILE_SUFFIXES.map((suffix) => `.claude${suffix}.json`);
+  GLOBAL_CLAUDE_FILE_NAMES = [...mapped, LEGACY_CONFIG_JSON, CREDENTIALS_FILE_NAME, DEVICE_KEYS_FILE_NAME];
+});
+//@ chunk-cxdk9p3j.js:1606-1705 fingerprint = isSSHSession (1)
+function isSSHSession() {
+  if (getPlatform() !== "windows") return false;
+  return Boolean(env.SSH_CONNECTION || env.SSH_CLIENT || env.SSH_TTY);
+}
 //@ chunk-4m46mxx9.js:12064-12238 fingerprint = JETBRAINS_IDES (1)
 var JETBRAINS_IDES_2 = [
   "pycharm",
@@ -640,41 +693,13 @@ var JETBRAINS_IDES_2 = [
   "jetbrains",
   "androidstudio",
 ];
-//@ chunk-aepeg2w5.js:751986-752249 fingerprint = hasInternetAccess (0.427)
-async function hasInternetAccess_2() {
-  try {
-    let { externalHttp } = await import("./chunk-tkdf9y00.js");
-    await externalHttp.head("http://1.1.1.1", {
-      signal: AbortSignal.timeout(1000),
-    });
-    return true;
-  } catch (error) {
-    logForDebugging(
-      `internet access probe failed (${errorMessage(error)}); treating outbound internet as unreachable`,
-    );
-    return false;
-  }
-}
-//@ chunk-cdz6g143.js:519-632 fingerprint = getGlobalClaudeFile (0.833)
-/**
- * 带第一个 OAUTH 后缀的全局配置文件默认名（.claude<后缀>.json）。
- */
-var LEGACY_CONFIG_JSON = ".config.json";
-var OAUTH_SUFFIXED_CONFIG_FILE_NAME = `.claude${OAUTH_GLOBAL_FILE_SUFFIXES[0]}.json`;
-var mapped = OAUTH_GLOBAL_FILE_SUFFIXES.map((o) => `.claude${o}.json`);
-var GLOBAL_CLAUDE_FILE_NAMES = [...mapped, LEGACY_CONFIG_JSON, CREDENTIALS_FILE_NAME, DEVICE_KEYS_FILE_NAME];
-//@ chunk-cxdk9p3j.js:1606-1705 fingerprint = isSSHSession (1)
-function isSSHSession() {
-  if (getPlatform() !== "windows") return false;
-  return Boolean(env.SSH_CONNECTION || env.SSH_CLIENT || env.SSH_TTY);
-}
 export {
   env,
   antEnv,
   getGlobalClaudeFile,
   udsEnv,
-  declaredEnvVarNames,
   isSpawnedByServer,
+  declaredEnvVarNames,
   describeGlobalConfigFile,
   getHostPlatformForAnalytics,
   getShellForAnalytics,
@@ -683,12 +708,12 @@ export {
   BUILD_TOOL_NAMES,
   isScanCandidate,
   JETBRAINS_IDES_2,
+  isDisklessEnvProbe,
   hasInternetAccess_2,
   isDockerenvPresent,
-  isDisklessEnvProbe,
-  getDefaultGlobalClaudeFile,
   mapped,
   LEGACY_CONFIG_JSON,
+  getDefaultGlobalClaudeFile,
   primeEnvProbe,
   isSSHSession,
   normalizeShellNameForAnalytics,

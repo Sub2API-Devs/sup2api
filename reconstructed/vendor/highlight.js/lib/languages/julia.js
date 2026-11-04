@@ -5,10 +5,10 @@
  * pieces: chunk-egr0twnb.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:215237-219323 cjs-fingerprint
-var require_julia = x(function (cjsExports, cjsModule) {
+var require_julia = __commonJS(function (cjsExports, cjsModule) {
   function julia(hljs) {
     let KEYWORDS = {
       $pattern: "[A-Za-z_\\u00A1-\\uFFFF][A-Za-z_0-9\\u00A1-\\uFFFF]*",

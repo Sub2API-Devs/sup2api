@@ -16,7 +16,7 @@ import { truncateToLength, plural } from "../../utils/stringUtils.js";
 import { SessionRootSlot } from "../../bootstrap/sessionSlices.js";
 import { getEffortSettingsSources, getModelSettingsKey } from "../../utils/effort.js";
 import { getRootSession, getIsNonInteractiveSession, getSdkBetas } from "../../bootstrap/state.js";
-import { xr } from "../../../vendor/lodash-es/_inlinedHelpers.js";
+import { import_mapValues } from "../../../vendor/lodash-es/_inlinedHelpers.js";
 import { pickByHelper } from "../../utils/git/gitSafeEnv.js";
 import { isPlainObject as isPlainObject_4 } from "../../utils/objectUtils.js";
 import { logError } from "../../utils/log.js";
@@ -39,43 +39,45 @@ import { logEvent } from "../analytics/index.js";
 import { telemetrySafeModelName } from "../../utils/model/telemetryModelName.js";
 import { fromEnum } from "../analytics/safeMetadata.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../analytics/growthbook.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:1543002-1543413 placement
 /**
  * 解析窗口大小（支持 k/m 后缀，可把 100–1000 视为千），返回 in_range/below_minimum/above_maximum/unusable。
  */
-function parseWindowSize(e, { bareThousands }) {
-  let trimmed = e.trim();
+function parseWindowSize(raw, { bareThousands }) {
+  let trimmed = raw.trim();
   let lower = trimmed.slice(-1).toLowerCase();
-  let h = lower === "m" ? 1e6 : lower === "k" ? 1000 : undefined;
-  let y = h === undefined ? parseIntLoose(trimmed) : parseFloat(trimmed) * h;
-  let w = bareThousands && h === undefined && y >= 100 && y <= 1000 ? y * 1000 : y;
-  if (Number.isNaN(w) || w < 1)
+  let multiplier = lower === "m" ? 1e6 : lower === "k" ? 1000 : undefined;
+  let parsed = multiplier === undefined ? parseIntLoose(trimmed) : parseFloat(trimmed) * multiplier;
+  let tokens =
+    bareThousands && multiplier === undefined && parsed >= 100 && parsed <= 1000 ? parsed * 1000 : parsed;
+  if (Number.isNaN(tokens) || tokens < 1)
     return {
       kind: "unusable",
     };
-  if (w < TRANSPORT_LABELS)
+  if (tokens < TRANSPORT_LABELS)
     return {
       kind: "below_minimum",
-      tokens: Math.min(TRANSPORT_LABELS - 1, Math.round(w)),
+      tokens: Math.min(TRANSPORT_LABELS - 1, Math.round(tokens)),
     };
-  if (w > GLOBAL_CONFIG_FIELD_KINDS)
+  if (tokens > GLOBAL_CONFIG_FIELD_KINDS)
     return {
       kind: "above_maximum",
     };
   return {
     kind: "in_range",
-    tokens: Math.round(w),
-    suffixed: h !== undefined,
+    tokens: Math.round(tokens),
+    suffixed: multiplier !== undefined,
   };
 }
 //@ chunk-e6aww6q8.js:1543413-1543592 placement
 /**
  * CLAUDE_CODE_AUTO_COMPACT_WINDOW 的有效值（越界时夹到上下限）。
  */
-function envWindowTokens(e) {
-  if (e === undefined) return;
-  let windowSizeStrict = parseWindowSizeStrict(e);
+function envWindowTokens(raw) {
+  if (raw === undefined) return;
+  let windowSizeStrict = parseWindowSizeStrict(raw);
   switch (windowSizeStrict.kind) {
     case "in_range":
       return windowSizeStrict.tokens;
@@ -91,18 +93,20 @@ function envWindowTokens(e) {
 /**
  * 校验自动压缩窗口的环境变量取值，非法时返回说明。
  */
-function reportInvalidWindowEnv(e) {
-  if (e === undefined) return null;
-  let windowSizeStrict = parseWindowSizeStrict(e);
-  return windowSizeStrict.kind === "in_range" ? null : describeAutoCompactWindowEnvError(e, windowSizeStrict);
+function reportInvalidWindowEnv(raw) {
+  if (raw === undefined) return null;
+  let windowSizeStrict = parseWindowSizeStrict(raw);
+  return windowSizeStrict.kind === "in_range"
+    ? null
+    : describeAutoCompactWindowEnvError(raw, windowSizeStrict);
 }
 //@ chunk-e6aww6q8.js:1543688-1544178 placement
 /**
  * 校验并记录环境变量窗口设置，无效时警告（无头模式输出）。
  */
-function reportEnvWindow(e, n) {
-  if (e === undefined) return;
-  let windowSizeStrict = parseWindowSizeStrict(e);
+function reportEnvWindow(raw, mode) {
+  if (raw === undefined) return;
+  let windowSizeStrict = parseWindowSizeStrict(raw);
   switch (windowSizeStrict.kind) {
     case "in_range":
       logFeatureOk("compact_window_env", {
@@ -112,7 +116,7 @@ function reportEnvWindow(e, n) {
     case "below_minimum":
       logFeatureSad(
         "compact_window_env",
-        parseWindowSize(e, {
+        parseWindowSize(raw, {
           bareThousands: true,
         }).kind === "in_range"
           ? "below_minimum_flag_accepts"
@@ -126,21 +130,21 @@ function reportEnvWindow(e, n) {
       logFeatureBad("compact_window_env", "unusable");
       break;
   }
-  let s = describeAutoCompactWindowEnvError(e, windowSizeStrict);
-  if (n.interactive) {
-    logForDebugging(`[autocompact] ${s}`, {
+  let detail = describeAutoCompactWindowEnvError(raw, windowSizeStrict);
+  if (mode.interactive) {
+    logForDebugging(`[autocompact] ${detail}`, {
       level: "warn",
     });
     return;
   }
-  n.headless(s);
+  mode.headless(detail);
 }
 //@ chunk-e6aww6q8.js:1544178-1544227 placement
 /**
  * 严格解析窗口大小（不允许裸千位数写法）。
  */
-function parseWindowSizeStrict(e) {
-  return parseWindowSize(e, {
+function parseWindowSizeStrict(raw) {
+  return parseWindowSize(raw, {
     bareThousands: false,
   });
 }
@@ -153,18 +157,18 @@ var MAX_ECHOED_ENV_CHARS = 32;
 /**
  * CLAUDE_CODE_AUTO_COMPACT_WINDOW 取值无效时的说明。
  */
-function describeAutoCompactWindowEnvError(e, windowSizeStrict) {
-  let s = `CLAUDE_CODE_AUTO_COMPACT_WINDOW="${truncateToLength(e, MAX_ECHOED_ENV_CHARS).replace(/[^\w.,+ $%{}=;-]+/g, "?")}${e.length > MAX_ECHOED_ENV_CHARS ? "\u2026" : ""}"`;
-  let h = `${TRANSPORT_LABELS / 1000}k`;
-  let y = `${GLOBAL_CONFIG_FIELD_KINDS / 1e6}M`;
-  let S = `Set it to a size from ${h} to ${y}, such as 200k or 200000, or unset it.`;
+function describeAutoCompactWindowEnvError(rawValue, windowSizeStrict) {
+  let echoed = `CLAUDE_CODE_AUTO_COMPACT_WINDOW="${truncateToLength(rawValue, MAX_ECHOED_ENV_CHARS).replace(/[^\w.,+ $%{}=;-]+/g, "?")}${rawValue.length > MAX_ECHOED_ENV_CHARS ? "\u2026" : ""}"`;
+  let minLabel = `${TRANSPORT_LABELS / 1000}k`;
+  let maxLabel = `${GLOBAL_CONFIG_FIELD_KINDS / 1e6}M`;
+  let hint = `Set it to a size from ${minLabel} to ${maxLabel}, such as 200k or 200000, or unset it.`;
   switch (windowSizeStrict.kind) {
     case "below_minimum":
-      return `${s} reads as ${windowSizeStrict.tokens.toLocaleString("en-US")} ${plural(windowSizeStrict.tokens, "token")}, so Claude Code treats it as the ${h} minimum. ${S}`;
+      return `${echoed} reads as ${windowSizeStrict.tokens.toLocaleString("en-US")} ${plural(windowSizeStrict.tokens, "token")}, so Claude Code treats it as the ${minLabel} minimum. ${hint}`;
     case "above_maximum":
-      return `${s} is too large, so Claude Code treats it as the ${y} maximum. ${S}`;
+      return `${echoed} is too large, so Claude Code treats it as the ${maxLabel} maximum. ${hint}`;
     case "unusable":
-      return `${s} isn't a usable size, so Claude Code ignores it. ${S}`;
+      return `${echoed} isn't a usable size, so Claude Code ignores it. ${hint}`;
   }
 }
 //@ chunk-e6aww6q8.js:1544828-1544842 placement
@@ -182,23 +186,23 @@ var DEFAULT_PRECOMPUTE_FRACTION = 0.2;
 /**
  * 把值转成 0≤x<1 的比例，否则 null。
  */
-function ratioOrNull(e) {
-  return typeof e === "number" && Number.isFinite(e) && e >= 0 && e < 1 ? e : null;
+function ratioOrNull(value) {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0 && value < 1 ? value : null;
 }
 //@ chunk-e6aww6q8.js:1544944-1545086 placement
 /**
  * 解析 {repl, sdk} 比例对。
  */
-function parseFractionPair(e) {
-  if (typeof e !== "object" || e === null) return null;
-  let n = e;
-  let r = ratioOrNull(n.repl);
-  let s = ratioOrNull(n.sdk);
-  return r === null || s === null
+function parseFractionPair(value) {
+  if (typeof value !== "object" || value === null) return null;
+  let record = value;
+  let replRatio = ratioOrNull(record.repl);
+  let sdkRatio = ratioOrNull(record.sdk);
+  return replRatio === null || sdkRatio === null
     ? null
     : {
-        repl: r,
-        sdk: s,
+        repl: replRatio,
+        sdk: sdkRatio,
       };
 }
 //@ chunk-e6aww6q8.js:1545086-1545444 placement
@@ -212,34 +216,34 @@ function parsePrecomputeTable(featureValue_CACHED_MAY_BE_STALE) {
     Array.isArray(featureValue_CACHED_MAY_BE_STALE)
   )
     return null;
-  let n = [];
-  let r = null;
+  let entries = [];
+  let defaultEntry = null;
   for (let [key, value] of Object.entries(featureValue_CACHED_MAY_BE_STALE)) {
     let fractionPair = parseFractionPair(value);
     if (fractionPair === null) return null;
     if (key === "default") {
-      r = fractionPair;
+      defaultEntry = fractionPair;
       continue;
     }
-    let S = Number(key);
-    if (!Number.isSafeInteger(S) || S <= 0) return null;
-    n.push({
-      windowSize: S,
+    let windowSize = Number(key);
+    if (!Number.isSafeInteger(windowSize) || windowSize <= 0) return null;
+    entries.push({
+      windowSize,
       ...fractionPair,
     });
   }
-  if (n.length === 0 && r === null) return null;
+  if (entries.length === 0 && defaultEntry === null) return null;
   return {
-    entries: n,
-    defaultEntry: r,
+    entries,
+    defaultEntry,
   };
 }
 //@ chunk-e6aww6q8.js:1545444-1545621 placement
 /**
  * 在比例表中按窗口精确匹配或取默认项。
  */
-function lookupPrecomputeEntry(precomputeTable, n) {
-  let found = precomputeTable.entries.find((entry) => entry.windowSize === n);
+function lookupPrecomputeEntry(precomputeTable, windowSize) {
+  let found = precomputeTable.entries.find((entry) => entry.windowSize === windowSize);
   if (found !== undefined)
     return {
       kind: "exact",
@@ -256,53 +260,59 @@ function lookupPrecomputeEntry(precomputeTable, n) {
 /**
  * 自动压缩阈值：窗口减 13000（测试百分比覆盖时取更小值）。
  */
-function autocompactThreshold(e, n) {
-  let r = e - 13000;
-  let testPctOverride = n.testPctOverride;
+function autocompactThreshold(contextWindow, config) {
+  let margin = contextWindow - 13000;
+  let testPctOverride = config.testPctOverride;
   if (
     testPctOverride !== undefined &&
     !isNaN(testPctOverride) &&
     testPctOverride > 0 &&
     testPctOverride <= 100
   )
-    return Math.min(Math.floor(e * (testPctOverride / 100)), r);
-  return r;
+    return Math.min(Math.floor(contextWindow * (testPctOverride / 100)), margin);
+  return margin;
 }
 //@ chunk-e6aww6q8.js:1545760-1545846 placement
 /**
  * 预计算压缩的触发阈值（窗口减缓冲，且不超过自动压缩阈值）。
  */
-function precomputeTriggerThreshold(e, autoCompactThresholdConfig) {
+function precomputeTriggerThreshold(contextWindow, autoCompactThresholdConfig) {
   return Math.min(
-    e - Math.round(e * autoCompactThresholdConfig.precomputeBufferFraction),
-    autocompactThreshold(e, autoCompactThresholdConfig),
+    contextWindow - Math.round(contextWindow * autoCompactThresholdConfig.precomputeBufferFraction),
+    autocompactThreshold(contextWindow, autoCompactThresholdConfig),
   );
 }
 //@ chunk-e6aww6q8.js:1545846-1546169 placement
 /**
  * 按 token 数计算警告等级：blocked / compact / warn / ok 与剩余百分比。
  */
-function computeTokenWarning(e, n, r, effectiveContextWindow = n, threshold) {
-  let y = threshold ?? autocompactThreshold(n, r);
-  let S = r.enabled ? y : n;
-  let w = S - 20000;
-  let testBlockingOverride = r.testBlockingOverride;
-  let G =
+function computeTokenWarning(
+  contextTokens,
+  contextWindow,
+  config,
+  effectiveContextWindow = contextWindow,
+  threshold,
+) {
+  let effectiveThreshold = threshold ?? autocompactThreshold(contextWindow, config);
+  let warningLimit = config.enabled ? effectiveThreshold : contextWindow;
+  let warnThreshold = warningLimit - 20000;
+  let testBlockingOverride = config.testBlockingOverride;
+  let blockingLimit =
     testBlockingOverride !== undefined && !isNaN(testBlockingOverride) && testBlockingOverride > 0
       ? testBlockingOverride
       : effectiveContextWindow - 3000;
-  let pctLeft = Math.max(0, Math.round(((S - e) / S) * 100));
-  if (e >= G)
+  let pctLeft = Math.max(0, Math.round(((warningLimit - contextTokens) / warningLimit) * 100));
+  if (contextTokens >= blockingLimit)
     return {
       level: "blocked",
       pctLeft,
     };
-  if (r.enabled && e >= y)
+  if (config.enabled && contextTokens >= effectiveThreshold)
     return {
       level: "compact",
       pctLeft,
     };
-  if (e >= w)
+  if (contextTokens >= warnThreshold)
     return {
       level: "warn",
       pctLeft,
@@ -315,29 +325,32 @@ function computeTokenWarning(e, n, r, effectiveContextWindow = n, threshold) {
 /**
  * 判断窗口对象是否带 ceiling 字段。
  */
-function isWindowWithCeiling(e) {
-  return typeof e === "object" && "ceiling" in e;
+function isWindowWithCeiling(value) {
+  return typeof value === "object" && "ceiling" in value;
 }
 //@ chunk-e6aww6q8.js:1546227-1546274 placement
 /**
  * 按会话根保存的自动压缩窗口状态（各模型窗口 + sink）。
  */
-var sessionWindowState = new SessionRootSlot(() => ({
-  windows: {},
-  sink: undefined,
-}));
+var sessionWindowState; // deferred: uses SessionRootSlot (../../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:1546227", () => {
+  sessionWindowState = new SessionRootSlot(() => ({
+    windows: {},
+    sink: undefined,
+  }));
+});
 //@ chunk-e6aww6q8.js:1546274-1546488 placement
 /**
  * 设置来源列表，插入会话下发的按模型窗口。
  */
 function windowSettingSources() {
   let effortSettingsSources = getEffortSettingsSources();
-  let n = sessionWindowState.peek(getRootSession());
-  if (n === undefined) return effortSettingsSources;
+  let sessionWindows = sessionWindowState.peek(getRootSession());
+  if (sessionWindows === undefined) return effortSettingsSources;
   return effortSettingsSources.toSpliced(effortSettingsSources[0]?.source === "userSettings" ? 1 : 0, 0, {
     source: "userSettings",
     settings: {
-      modelSettings: xr(n.windows, (autoCompactWindow) => ({
+      modelSettings: import_mapValues(sessionWindows.windows, (autoCompactWindow) => ({
         autoCompactWindow,
       })),
     },
@@ -348,34 +361,34 @@ function windowSettingSources() {
  * 合并各来源的 autoCompactWindow（默认值与按模型）。
  */
 function readAutoCompactWindowSetting() {
-  let e = {
+  let settings = {
     default: undefined,
     byModel: {},
   };
-  for (let { settings } of windowSettingSources()) {
-    let r = {};
-    for (let [key, value] of Object.entries(settings.modelSettings ?? {})) {
+  for (let { settings: settings_2 } of windowSettingSources()) {
+    let perModel = {};
+    for (let [key, value] of Object.entries(settings_2.modelSettings ?? {})) {
       let autoCompactWindow = value?.autoCompactWindow;
       if (autoCompactWindow === undefined) continue;
       let modelSettingsKey = getModelSettingsKey(key);
-      if (key === modelSettingsKey || !Object.hasOwn(r, modelSettingsKey))
-        r[modelSettingsKey] = autoCompactWindow;
+      if (key === modelSettingsKey || !Object.hasOwn(perModel, modelSettingsKey))
+        perModel[modelSettingsKey] = autoCompactWindow;
     }
-    e =
-      settings.autoCompactWindow === undefined
+    settings =
+      settings_2.autoCompactWindow === undefined
         ? {
-            default: e.default,
+            default: settings.default,
             byModel: {
-              ...e.byModel,
-              ...r,
+              ...settings.byModel,
+              ...perModel,
             },
           }
         : {
-            default: settings.autoCompactWindow,
-            byModel: r,
+            default: settings_2.autoCompactWindow,
+            byModel: perModel,
           };
   }
-  return e;
+  return settings;
 }
 //@ chunk-e6aww6q8.js:1546854-1546924 placement
 /**
@@ -389,22 +402,22 @@ function resolveWindowArg(autocompact) {
 /**
  * 找某模型生效的窗口设置及其来源、是否按模型。
  */
-function findWindowSettingForModel(e) {
+function findWindowSettingForModel(settingsKey) {
   for (let { source, settings } of windowSettingSources().toReversed()) {
-    let s;
+    let modelWindow;
     for (let [key, value] of Object.entries(settings.modelSettings ?? {})) {
       let autoCompactWindow = value?.autoCompactWindow;
-      if (autoCompactWindow === undefined || getModelSettingsKey(key) !== e) continue;
-      if (key === e) {
-        s = autoCompactWindow;
+      if (autoCompactWindow === undefined || getModelSettingsKey(key) !== settingsKey) continue;
+      if (key === settingsKey) {
+        modelWindow = autoCompactWindow;
         break;
       }
-      s ??= autoCompactWindow;
+      modelWindow ??= autoCompactWindow;
     }
-    if (s !== undefined)
+    if (modelWindow !== undefined)
       return {
         source,
-        window: s,
+        window: modelWindow,
         perModel: true,
       };
     if (settings.autoCompactWindow !== undefined)
@@ -420,30 +433,30 @@ function findWindowSettingForModel(e) {
 /**
  * 采用会话内部元数据中的 auto_compact_windows。
  */
-function adoptInternalWindows(e, restoredWorkerState, sink, s) {
+function adoptInternalWindows(session, restoredWorkerState, sink, updateSettings) {
   if (restoredWorkerState === null || restoredWorkerState.readFailed === true) return;
   try {
-    let h = sessionWindowState.of(e);
-    h.sink = sink;
+    let windowState = sessionWindowState.of(session);
+    windowState.sink = sink;
     let autoCompactWindows = restoredWorkerState.internal?.auto_compact_windows;
-    h.windows = pickByHelper(
+    windowState.windows = pickByHelper(
       isPlainObject_4(autoCompactWindows) ? autoCompactWindows : {},
-      (S, w) =>
-        !Object.hasOwn(Object.prototype, w) &&
-        (S === "auto" ||
-          (typeof S === "number" &&
-            Number.isInteger(S) &&
-            S >= TRANSPORT_LABELS &&
-            S <= GLOBAL_CONFIG_FIELD_KINDS)),
+      (value, key) =>
+        !Object.hasOwn(Object.prototype, key) &&
+        (value === "auto" ||
+          (typeof value === "number" &&
+            Number.isInteger(value) &&
+            value >= TRANSPORT_LABELS &&
+            value <= GLOBAL_CONFIG_FIELD_KINDS)),
     );
-    if (Object.keys(h.windows).length === 0) return;
-    s((S) =>
-      typeof S.autoCompactWindow === "object"
+    if (Object.keys(windowState.windows).length === 0) return;
+    updateSettings((settings) =>
+      typeof settings.autoCompactWindow === "object"
         ? {
-            ...S,
+            ...settings,
             autoCompactWindow: readAutoCompactWindowSetting(),
           }
-        : S,
+        : settings,
     );
   } catch (error) {
     logError(toError(error));
@@ -453,16 +466,16 @@ function adoptInternalWindows(e, restoredWorkerState, sink, s) {
 /**
  * 把某模型的窗口设置写回会话内部元数据。
  */
-function persistSessionWindow(settingsKey, n) {
-  let r = sessionWindowState.peek(getRootSession());
-  if (r?.sink === undefined || Object.hasOwn(Object.prototype, settingsKey)) return;
+function persistSessionWindow(settingsKey, windowTokens) {
+  let state = sessionWindowState.peek(getRootSession());
+  if (state?.sink === undefined || Object.hasOwn(Object.prototype, settingsKey)) return;
   try {
-    r.windows = {
-      ...r.windows,
-      [settingsKey]: n,
+    state.windows = {
+      ...state.windows,
+      [settingsKey]: windowTokens,
     };
-    r.sink.notifyInternalMetadataChanged({
-      auto_compact_windows: r.windows,
+    state.sink.notifyInternalMetadataChanged({
+      auto_compact_windows: state.windows,
     });
   } catch (error) {
     logError(toError(error));
@@ -477,9 +490,9 @@ var MAX_OUTPUT_TOKENS_CAP = 20000;
 /**
  * 解析窗口参数（auto 或 token 数）。
  */
-function parseWindowArgument(e) {
-  if (e.trim().toLowerCase() === "auto") return "auto";
-  let windowSize = parseWindowSize(e, {
+function parseWindowArgument(raw) {
+  if (raw.trim().toLowerCase() === "auto") return "auto";
+  let windowSize = parseWindowSize(raw, {
     bareThousands: true,
   });
   return windowSize.kind === "in_range" ? windowSize.tokens : undefined;
@@ -492,35 +505,39 @@ function desktopOpusWindowOverride(canonical) {
   if (!isAutoCompactEnabled()) return;
   if (getIsNonInteractiveSession()) return;
   if (canonical !== CLAUDE_OPUS_4_8) return;
-  let anthropicApiFallbackModel = getAnthropicApiFallbackModel();
-  if (!anthropicApiFallbackModel) return;
-  let windowArgument = parseWindowArgument(anthropicApiFallbackModel);
+  let raw = getAnthropicApiFallbackModel();
+  if (!raw) return;
+  let windowArgument = parseWindowArgument(raw);
   return typeof windowArgument === "number" ? windowArgument : undefined;
 }
 //@ chunk-e6aww6q8.js:1548205-1548256 placement
 /**
  * Claude Desktop 入口参数到窗口大小的映射（600k/500k）。
  */
-var DESKTOP_WINDOW_BY_ARG = new Map([
-  ["600k", 600000],
-  ["500k", 500000],
-]);
+var DESKTOP_WINDOW_BY_ARG; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:1548205", () => {
+  DESKTOP_WINDOW_BY_ARG = new Map([
+    ["600k", 600000],
+    ["500k", 500000],
+  ]);
+});
 //@ chunk-e6aww6q8.js:1548256-1548431 placement
 /**
  * Claude Desktop 入口按界面取默认窗口。
  */
-function desktopSurfaceWindow(e) {
+function desktopSurfaceWindow(facts) {
   if (env.CLAUDE_CODE_ENTRYPOINT !== "claude-desktop") return;
   if (!isAutoCompactEnabled()) return;
-  if (e.longContextWindowWithoutOptIn < ONE_MILLION_TOKENS || e.contextWindow < ONE_MILLION_TOKENS) return;
+  if (facts.longContextWindowWithoutOptIn < ONE_MILLION_TOKENS || facts.contextWindow < ONE_MILLION_TOKENS)
+    return;
   return DESKTOP_WINDOW_BY_ARG.get(getAutoCompactDisabledByEnvModel());
 }
 //@ chunk-e6aww6q8.js:1548431-1548479 placement
 /**
  * 按模型与界面解析默认窗口（先看桌面版 Opus 覆盖）。
  */
-function resolveDesktopWindow(e) {
-  return desktopOpusWindowOverride(e.canonical) ?? desktopSurfaceWindow(e);
+function resolveDesktopWindow(modelInfo) {
+  return desktopOpusWindowOverride(modelInfo.canonical) ?? desktopSurfaceWindow(modelInfo);
 }
 //@ chunk-e6aww6q8.js:1548479-1548602 placement
 /**
@@ -553,57 +570,58 @@ function defaultSurfaceWindow(canonical) {
 /**
  * 解析自动压缩窗口大小，来源依次为客户端数据、实验、模型默认与用户设置。
  */
-function resolveAutoCompactWindow(e, n = getSdkBetas()) {
-  let { model, contextWindow, canonical } = e;
-  let y = isAutoCompactEnabled()
-    ? e.clientDataAutoCompactWindow
+function resolveAutoCompactWindow(modelInfo, betas = getSdkBetas()) {
+  let { model, contextWindow, canonical } = modelInfo;
+  let clientWindow = isAutoCompactEnabled()
+    ? modelInfo.clientDataAutoCompactWindow
     : {
         window: null,
         replacesDefault: false,
       };
-  if (y.window !== null)
+  if (clientWindow.window !== null)
     return {
-      window: Math.min(contextWindow, y.window),
-      configured: y.window,
+      window: Math.min(contextWindow, clientWindow.window),
+      configured: clientWindow.window,
       source: "clientdata",
     };
-  let desktopWindow = resolveDesktopWindow(e);
+  let desktopWindow = resolveDesktopWindow(modelInfo);
   if (desktopWindow !== undefined)
     return {
       window: Math.min(contextWindow, desktopWindow),
       configured: desktopWindow,
       source: "experiment",
     };
-  let w =
+  let modelDefault =
     is1mContextDisabled() &&
-    Math.max(e.apiContextWindowWithoutOptIn, e.servedWindow?.declared ?? 0) > DEFAULT_CONTEXT_WINDOW
+    Math.max(modelInfo.apiContextWindowWithoutOptIn, modelInfo.servedWindow?.declared ?? 0) >
+      DEFAULT_CONTEXT_WINDOW
       ? DEFAULT_CONTEXT_WINDOW
-      : isOver1mThreshold(model, n)
+      : isOver1mThreshold(model, betas)
         ? SECONDARY_CONTEXT_WINDOW
         : undefined;
-  if (w !== undefined && contextWindow < 1e6)
+  if (modelDefault !== undefined && contextWindow < 1e6)
     return {
-      window: Math.min(contextWindow, w),
-      configured: w,
+      window: Math.min(contextWindow, modelDefault),
+      configured: modelDefault,
       source: "model-default",
     };
-  let L = y.replacesDefault ? undefined : defaultSurfaceWindow(canonical);
-  if (L !== undefined)
+  let surfaceWindow = clientWindow.replacesDefault ? undefined : defaultSurfaceWindow(canonical);
+  if (surfaceWindow !== undefined)
     return {
-      window: Math.min(contextWindow, L),
-      configured: L,
+      window: Math.min(contextWindow, surfaceWindow),
+      configured: surfaceWindow,
       source: "model-default",
     };
-  if (contextWindow < e.apiContextWindowWithoutOptIn)
+  if (contextWindow < modelInfo.apiContextWindowWithoutOptIn)
     return {
       window: contextWindow,
       configured: contextWindow,
       source: "model-default",
     };
   if (
-    e.longContextWindowWithoutOptIn > 0 &&
-    contextWindow >= e.longContextWindowWithoutOptIn &&
-    !y.replacesDefault &&
+    modelInfo.longContextWindowWithoutOptIn > 0 &&
+    contextWindow >= modelInfo.longContextWindowWithoutOptIn &&
+    !clientWindow.replacesDefault &&
     isAutoCompactEnabled()
   )
     return {
@@ -614,7 +632,7 @@ function resolveAutoCompactWindow(e, n = getSdkBetas()) {
   if (
     isAutoCompactEnabled() &&
     !env.CLAUDE_CODE_DISABLE_UNKNOWN_MODEL_WINDOW_ENFORCEMENT &&
-    isUnrecognizedModelWindow(e)
+    isUnrecognizedModelWindow(modelInfo)
   )
     return {
       window: contextWindow,
@@ -631,12 +649,12 @@ function resolveAutoCompactWindow(e, n = getSdkBetas()) {
 /**
  * 模型未被识别（无 1M 授权、服务器声明窗口与本地不一致）时为真。
  */
-function isUnrecognizedModelWindow(e) {
+function isUnrecognizedModelWindow(info) {
   return (
-    !e.optIn1mHonored &&
-    !isUnresolvedInferenceProfile(e.model) &&
-    (e.servedWindow === undefined || e.servedWindow.believed !== e.servedWindow.declared) &&
-    !e.recognized
+    !info.optIn1mHonored &&
+    !isUnresolvedInferenceProfile(info.model) &&
+    (info.servedWindow === undefined || info.servedWindow.believed !== info.servedWindow.declared) &&
+    !info.recognized
   );
 }
 //@ chunk-e6aww6q8.js:1550615-1550664 placement
@@ -650,30 +668,31 @@ function isEnvOrSettingsSource(source) {
 /**
  * 自动压缩窗口是否使用了长上下文（实验或超过未开通窗口）。
  */
-function usesLongContextWindow(querySource, n, autoCompactWindow) {
+function usesLongContextWindow(querySource, modelInfo, autoCompactWindow) {
   if (!isSideQuerySource(querySource) || !canCompactInRemote()) return false;
-  let autoCompactWindow_2 = getAutoCompactWindow(n, autoCompactWindow);
+  let autoCompactWindow_2 = getAutoCompactWindow(modelInfo, autoCompactWindow);
   return (
     !isEnvOrSettingsSource(autoCompactWindow_2.source) &&
-    ((autoCompactWindow_2.source === "experiment" && desktopOpusWindowOverride(n.canonical) === undefined) ||
-      (n.longContextWindowWithoutOptIn > 0 &&
+    ((autoCompactWindow_2.source === "experiment" &&
+      desktopOpusWindowOverride(modelInfo.canonical) === undefined) ||
+      (modelInfo.longContextWindowWithoutOptIn > 0 &&
         autoCompactWindow_2.window >=
-          Math.max(n.longContextWindowWithoutOptIn, n.apiContextWindowWithoutOptIn)))
+          Math.max(modelInfo.longContextWindowWithoutOptIn, modelInfo.apiContextWindowWithoutOptIn)))
   );
 }
 //@ chunk-e6aww6q8.js:1550919-1550968 placement
 /**
  * 该模型是否使用了显式窗口（来源不是 auto）。
  */
-function hasExplicitWindow(e, autoCompactWindow) {
-  return getAutoCompactWindow(e, autoCompactWindow).source !== "auto";
+function hasExplicitWindow(modelInfo, autoCompactWindow) {
+  return getAutoCompactWindow(modelInfo, autoCompactWindow).source !== "auto";
 }
 //@ chunk-e6aww6q8.js:1550968-1551008 placement
 /**
  * 返回窗口来源（auto/env/settings/experiment 等）。
  */
-function windowSource(e, autoCompactWindow) {
-  return getAutoCompactWindow(e, autoCompactWindow).source;
+function windowSource(modelInfo, autoCompactWindow) {
+  return getAutoCompactWindow(modelInfo, autoCompactWindow).source;
 }
 //@ chunk-e6aww6q8.js:1551008-1551139 placement
 /**
@@ -691,30 +710,30 @@ var WINDOW_SOURCE_ORIGINS = {
 /**
  * 窗口大小及其来源（设置区分会话覆盖、agent 定义、按模型或顶层）。
  */
-function resolveWindowOrigin(e, autoCompactWindow) {
-  let { window: r, source } = getAutoCompactWindow(e, autoCompactWindow);
+function resolveWindowOrigin(modelInfo, autoCompactWindow) {
+  let { window: contextWindow, source } = getAutoCompactWindow(modelInfo, autoCompactWindow);
   if (source !== "settings")
     return {
-      window: r,
+      window: contextWindow,
       origin: WINDOW_SOURCE_ORIGINS[source],
     };
   if (isWindowWithCeiling(autoCompactWindow)) {
-    let windowOrigin = resolveWindowOrigin(e, autoCompactWindow.inner);
-    return windowOrigin.window === r
+    let windowOrigin = resolveWindowOrigin(modelInfo, autoCompactWindow.inner);
+    return windowOrigin.window === contextWindow
       ? windowOrigin
       : {
-          window: r,
+          window: contextWindow,
           origin: "agent_definition",
         };
   }
   if (typeof autoCompactWindow !== "object")
     return {
-      window: r,
+      window: contextWindow,
       origin: "session_override",
     };
   return {
-    window: r,
-    origin: Object.hasOwn(autoCompactWindow.byModel, e.settingsKey)
+    window: contextWindow,
+    origin: Object.hasOwn(autoCompactWindow.byModel, modelInfo.settingsKey)
       ? "settings_per_model"
       : "settings_top_level",
   };
@@ -723,31 +742,34 @@ function resolveWindowOrigin(e, autoCompactWindow) {
 /**
  * 生效窗口变化时记 tengu_auto_compact_window_in_force。
  */
-function logWindowInForce(session, n, autoCompactWindow) {
-  let s = windowSource(n, autoCompactWindow);
-  let { window: h, origin } = resolveWindowOrigin(n, autoCompactWindow);
+function logWindowInForce(session, modelInfo, autoCompactWindow) {
+  let source = windowSource(modelInfo, autoCompactWindow);
+  let { window: contextWindow, origin } = resolveWindowOrigin(modelInfo, autoCompactWindow);
   if (
     !claimOnceStore
       .of(session.host)
-      .claimIfChanged(`auto_compact_window_in_force:${session.id}`, `${n.settingsKey}|${h}|${origin}|${s}`)
+      .claimIfChanged(
+        `auto_compact_window_in_force:${session.id}`,
+        `${modelInfo.settingsKey}|${contextWindow}|${origin}|${source}`,
+      )
   )
     return;
   logEvent("tengu_auto_compact_window_in_force", {
-    window_model: telemetrySafeModelName(n.settingsKey),
-    window_tokens: h,
+    window_model: telemetrySafeModelName(modelInfo.settingsKey),
+    window_tokens: contextWindow,
     window_origin: fromEnum(origin),
-    threshold_source: fromEnum(s),
+    threshold_source: fromEnum(source),
   });
 }
 //@ chunk-e6aww6q8.js:1551807-1551908 placement
 /**
  * 有效上下文窗口：自动压缩窗口减去输出预留。
  */
-function effectiveContextWindow(e, n) {
-  let min = Math.min(e.maxOutputTokens, MAX_OUTPUT_TOKENS_CAP);
-  let s = isAutoCompactEnabled() ? n : undefined;
-  let { window: h } = getAutoCompactWindow(e, s);
-  return h - min;
+function effectiveContextWindow(modelInfo, autoCompactWindow) {
+  let min = Math.min(modelInfo.maxOutputTokens, MAX_OUTPUT_TOKENS_CAP);
+  let windowSetting = isAutoCompactEnabled() ? autoCompactWindow : undefined;
+  let { window: contextWindow } = getAutoCompactWindow(modelInfo, windowSetting);
+  return contextWindow - min;
 }
 //@ chunk-e6aww6q8.js:1551987-1552018 placement
 var TENGU_AMBER_MOLESKIN = "tengu_amber_moleskin";
@@ -781,7 +803,7 @@ function defaultPrecomputeFraction() {
 /**
  * 按窗口与界面从比例表取预计算缓冲比例。
  */
-function resolvePrecomputeFraction(e, n, r) {
+function resolvePrecomputeFraction(modelInfo, autoCompactWindow, surface) {
   let featureValue_CACHED_MAY_BE_STALE = getFeatureValue_CACHED_MAY_BE_STALE(TENGU_AMBER_MOLESKIN, null);
   if (featureValue_CACHED_MAY_BE_STALE === null || featureValue_CACHED_MAY_BE_STALE === undefined)
     return {
@@ -800,16 +822,16 @@ function resolvePrecomputeFraction(e, n, r) {
       source: "malformed",
     };
   }
-  let y = isAutoCompactEnabled() ? n : undefined;
-  let { window: S } = getAutoCompactWindow(e, y);
-  let precomputeEntry = lookupPrecomputeEntry(precomputeTable, S);
+  let windowSetting = isAutoCompactEnabled() ? autoCompactWindow : undefined;
+  let { window: contextWindow } = getAutoCompactWindow(modelInfo, windowSetting);
+  let precomputeEntry = lookupPrecomputeEntry(precomputeTable, contextWindow);
   if (precomputeEntry === null)
     return {
       fraction: defaultPrecomputeFraction(),
       source: "table_no_match",
     };
-  let L = r === "sdk" ? "sdk" : "repl";
-  let fraction = precomputeEntry.entry[L];
+  let column = surface === "sdk" ? "sdk" : "repl";
+  let fraction = precomputeEntry.entry[column];
   return precomputeEntry.kind === "exact"
     ? {
         fraction,

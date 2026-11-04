@@ -37,12 +37,12 @@ import { logEvent } from "../../services/analytics/index.js";
 /**
  * 串行化 headless 插件安装（排在上一轮之后）。
  */
-function installPluginsForHeadlessSerialized(n, storageV5, credentials) {
+function installPluginsForHeadlessSerialized(pluginIds, storageV5, credentials) {
   let pluginRegistry = getPluginRegistry();
-  let o = (pluginRegistry.headlessInstallPass ?? Promise.resolve()).then(() =>
-    installPluginsForHeadless(n, storageV5, credentials),
+  let pass = (pluginRegistry.headlessInstallPass ?? Promise.resolve()).then(() =>
+    installPluginsForHeadless(pluginIds, storageV5, credentials),
   );
-  pluginRegistry.headlessInstallPass = o.then(
+  pluginRegistry.headlessInstallPass = pass.then(
     () => {
       return;
     },
@@ -50,22 +50,23 @@ function installPluginsForHeadlessSerialized(n, storageV5, credentials) {
       return;
     },
   );
-  return o;
+  return pass;
 }
 //@ chunk-qna1q0cq.js:1665-3461 fingerprint = installPluginsForHeadless (0.914)
 /**
  * headless/SDK 模式下安装插件：同步种子市场、对账声明的市场（zip 缓存模式下同步到 zip 缓存），安装缺失的启用插件，最后刷新插件缓存；记 tengu_headless_plugin_install。
  */
-async function installPluginsForHeadless(n, e, s) {
+async function installPluginsForHeadless(onProgress, storageV5, credentials) {
   let zipCacheMode = isPluginZipCacheEnabled();
   logForDebugging(`installPluginsForHeadless: starting${zipCacheMode ? " (zip cache mode)" : ""}`);
   let seedChanged = await syncSeedMarketplaces();
-  let i;
-  let c = () => i !== undefined && getPluginRegistry().pluginLoadCacheOnly === i;
+  let loadCache;
+  let isCacheStillCurrent = () =>
+    loadCache !== undefined && getPluginRegistry().pluginLoadCacheOnly === loadCache;
   if (seedChanged) {
     updateMarketplaceStatus();
     clearPluginCache("headlessPluginInstall: seed marketplaces registered");
-    i = refillPluginLoadCacheOnly(e, "headlessPluginInstall");
+    loadCache = refillPluginLoadCacheOnly(storageV5, "headlessPluginInstall");
   }
   if (zipCacheMode) {
     await getFsImplementation().mkdir(getZipCacheMarketplacesDir());
@@ -89,13 +90,13 @@ async function installPluginsForHeadless(n, e, s) {
               : undefined,
             onProgress: (event) => {
               if (event.type === "installed") {
-                n?.({
+                onProgress?.({
                   status: "installed",
                   name: event.name,
                 });
                 logForDebugging(`installPluginsForHeadless: installed marketplace ${event.name}`);
               } else if (event.type === "failed") {
-                n?.({
+                onProgress?.({
                   status: "failed",
                   name: event.name,
                   error: event.error,
@@ -105,13 +106,13 @@ async function installPluginsForHeadless(n, e, s) {
                 );
               }
             },
-            storageV5: e,
+            storageV5,
           }),
-        (l) => ({
-          installed_count: l.installed.length,
-          updated_count: l.updated.length,
-          failed_count: l.failed.length,
-          skipped_count: l.skipped.length,
+        (result) => ({
+          installed_count: result.installed.length,
+          updated_count: result.updated.length,
+          failed_count: result.failed.length,
+          skipped_count: result.skipped.length,
         }),
       );
       if (reconcileResult.skipped.length > 0)
@@ -122,44 +123,44 @@ async function installPluginsForHeadless(n, e, s) {
       if (marketplacesChanged > 0) {
         updateMarketplaceStatus();
         clearPluginCache("headlessPluginInstall: marketplaces reconciled");
-        i = refillPluginLoadCacheOnly(e, "headlessPluginInstall");
+        loadCache = refillPluginLoadCacheOnly(storageV5, "headlessPluginInstall");
         pluginsChanged = true;
       }
       metrics.marketplaces_installed = marketplacesChanged;
     }
     if (zipCacheMode) {
-      i = undefined;
-      await syncMarketplacesToZipCache(e);
+      loadCache = undefined;
+      await syncMarketplacesToZipCache(storageV5);
     }
-    let newlyDelisted = await detectAndUninstallDelistedPlugins(e);
+    let newlyDelisted = await detectAndUninstallDelistedPlugins(storageV5);
     metrics.delisted_count = newlyDelisted.length;
     if (newlyDelisted.length > 0) {
       pluginsChanged = true;
-      i = undefined;
+      loadCache = undefined;
     }
-    if (pluginsChanged && !c()) {
+    if (pluginsChanged && !isCacheStillCurrent()) {
       clearPluginCache("headlessPluginInstall: plugins changed");
-      refillPluginLoadCacheOnly(e, "headlessPluginInstall");
+      refillPluginLoadCacheOnly(storageV5, "headlessPluginInstall");
     }
-    prefetchPluginsIfEnabled(e, s);
+    prefetchPluginsIfEnabled(storageV5, credentials);
     return pluginsChanged;
   } catch (error) {
     logForDebugging(`installPluginsForHeadless: failed: ${errorMessage(error)}`, {
       level: "error",
     });
-    if (pluginsChanged && !c()) {
-      if (isStorageV5Enabled() && e !== undefined)
+    if (pluginsChanged && !isCacheStillCurrent()) {
+      if (isStorageV5Enabled() && storageV5 !== undefined)
         clearPluginCache("headlessPluginInstall: pass failed after a change");
-      refillPluginLoadCacheOnly(e, "headlessPluginInstall");
+      refillPluginLoadCacheOnly(storageV5, "headlessPluginInstall");
     }
-    prefetchPluginsIfEnabled(e, s);
+    prefetchPluginsIfEnabled(storageV5, credentials);
     return false;
   } finally {
     logEvent("tengu_headless_plugin_install", metrics);
   }
 }
 //@ chunk-qna1q0cq.js:3461-3509 sole-consumer
-function prefetchPluginsIfEnabled(n, e) {
-  if (shouldFillPluginLoadWithStore(e)) loadAllPluginsCacheOnly(n, e).catch(() => {});
+function prefetchPluginsIfEnabled(pluginIds, storageV5) {
+  if (shouldFillPluginLoadWithStore(storageV5)) loadAllPluginsCacheOnly(pluginIds, storageV5).catch(() => {});
 }
 export { installPluginsForHeadlessSerialized };

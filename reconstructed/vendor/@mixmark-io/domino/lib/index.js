@@ -5,17 +5,17 @@
  * pieces: chunk-vwj6ccer.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 import { require_DOMImplementation } from "./DOMImplementation.js";
 import { require_HTMLParser } from "./HTMLParser.js";
 import { require_Window } from "./Window.js";
 import { require_impl } from "./impl.js";
 
 //@ chunk-vwj6ccer.js:237189-237838 cjs-fingerprint
-var require_domino = x(function (cjsExports) {
+var require_domino = __commonJS(function (cjsExports) {
   var DOMImplementation = require_DOMImplementation();
   var HTMLParser = require_HTMLParser();
-  var eh = require_Window();
+  var Window = require_Window();
   var impl = require_impl();
   cjsExports.createDOMImplementation = function () {
     return new DOMImplementation(null);
@@ -51,9 +51,9 @@ var require_domino = x(function (cjsExports) {
     };
   };
   cjsExports.createWindow = function (html, address) {
-    var r = cjsExports.createDocument(html);
-    if (address !== undefined) r._address = address;
-    return new impl.Window(r);
+    var doc = cjsExports.createDocument(html);
+    if (address !== undefined) doc._address = address;
+    return new impl.Window(doc);
   };
   cjsExports.impl = impl;
 });

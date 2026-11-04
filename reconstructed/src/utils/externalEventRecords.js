@@ -34,44 +34,48 @@ import { neutralizePeerTags } from "./sessionPeers.js";
 import { escapePluginTags } from "./messages/pluginTags.js";
 
 //@ chunk-xnxk5g3e.js:603-675 placement
-function externalEventRecordIfEnabled(r) {
-  return getFeatureValue_CACHED_MAY_BE_STALE("tengu_ccr_external_event_record", false) ? r : undefined;
+function externalEventRecordIfEnabled(record) {
+  return getFeatureValue_CACHED_MAY_BE_STALE("tengu_ccr_external_event_record", false) ? record : undefined;
 }
 //@ chunk-xnxk5g3e.js:675-1127 placement
-function recordPastedSpans(r, c, u) {
-  let s = c.flat();
-  let substringFinder = createSubstringFinder(r);
-  let historyCopySpans = findHistoryCopySpans(r, s, substringFinder);
-  let i = new Set(
-    historyCopySpans.map((historyCopySpan) => r.slice(historyCopySpan.from, historyCopySpan.to)),
+function recordPastedSpans(text, inlineGroups, sessionTag) {
+  let inlineTexts = inlineGroups.flat();
+  let substringFinder = createSubstringFinder(text);
+  let historyCopySpans = findHistoryCopySpans(text, inlineTexts, substringFinder);
+  let historyCopies = new Set(
+    historyCopySpans.map((historyCopySpan) => text.slice(historyCopySpan.from, historyCopySpan.to)),
   );
-  let l = (e) => {
-    let a = substringFinder(e);
-    let o = a(0);
+  let isCoveredByHistory = (candidate) => {
+    let findFrom = substringFinder(candidate);
+    let foundAt = findFrom(0);
     for (let historyCopySpan of historyCopySpans) {
-      if (o !== -1 && o < historyCopySpan.from) o = a(historyCopySpan.from);
-      if (o === -1) return false;
-      if (o + e.length <= historyCopySpan.to) return true;
+      if (foundAt !== -1 && foundAt < historyCopySpan.from) foundAt = findFrom(historyCopySpan.from);
+      if (foundAt === -1) return false;
+      if (foundAt + candidate.length <= historyCopySpan.to) return true;
     }
     return false;
   };
-  if (c.some((e) => !e.some((a) => i.has(a)) && !e.some(l)))
+  if (
+    inlineGroups.some(
+      (group) => !group.some((segment) => historyCopies.has(segment)) && !group.some(isCoveredByHistory),
+    )
+  )
     logFeatureSad("sdk_pasted_content", "inline_paste_not_found");
-  let _ = sessionTagSalt();
+  let salt = sessionTagSalt();
   return renderWithBlocks(
-    r,
+    text,
     mergeBlocks(
       historyCopySpans,
       findTaggedBlocks(
-        r,
-        mergeAdjacentSpans([...historyCopySpans, ...findPasteSpans(r, s, substringFinder)]),
-        u,
+        text,
+        mergeAdjacentSpans([...historyCopySpans, ...findPasteSpans(text, inlineTexts, substringFinder)]),
+        sessionTag,
       ),
     ),
-    (e) => ({
-      opener: pastedContentOpenTag(_),
-      body: escapePastedContentTag(e),
-      closer: pastedContentCloseTag(_),
+    (pastedText) => ({
+      opener: pastedContentOpenTag(salt),
+      body: escapePastedContentTag(pastedText),
+      closer: pastedContentCloseTag(salt),
     }),
     escapePastedContentTag,
   );
@@ -80,92 +84,92 @@ function recordPastedSpans(r, c, u) {
 /**
  * 构建外部事件（频道消息等）的记录：解析入站内容与内联粘贴，记录问题。
  */
-function buildExternalEventRecord(r, pastedContent, inlinePastes) {
-  let s = r ?? "";
+function buildExternalEventRecord(content, pastedContent, inlinePastes) {
+  let baseText = content ?? "";
   let { texts, problem } = parseInboundContent(pastedContent);
   let inlinePastes_2 = parseInlinePastes(inlinePastes);
   if (problem !== undefined) logFeatureSad("sdk_pasted_content", problem);
   if (inlinePastes_2.problem !== undefined) logFeatureSad("sdk_pasted_content", inlinePastes_2.problem);
-  if (texts.length === 0 && inlinePastes_2.texts.length === 0) return s;
-  let l = isVirtualPancakeEnabled();
+  if (texts.length === 0 && inlinePastes_2.texts.length === 0) return baseText;
+  let virtualPancake = isVirtualPancakeEnabled();
   if (problem === undefined && inlinePastes_2.problem === undefined)
     logFeatureOk("sdk_pasted_content", {
-      tagged: l,
+      tagged: virtualPancake,
       ...(inlinePastes_2.texts.length > 0 && {
         inline: true,
       }),
     });
-  if (texts.length === 0 && !l) return s;
-  let mapped = inlinePastes_2.texts
+  if (texts.length === 0 && !virtualPancake) return baseText;
+  let inlineGroups = inlinePastes_2.texts
     .map((text) => text.trim())
-    .filter((t) => t.length >= MIN_INLINE_TAG_CHARS)
-    .map((t) =>
+    .filter((text) => text.length >= MIN_INLINE_TAG_CHARS)
+    .map((inlineText) =>
       uniq(
         [
-          t,
-          stripSystemReminders(`x${t}`).slice(1).trim(),
-          stripSystemReminders(`${t}x`).slice(0, -1).trim(),
-          stripSystemReminders(t).trim(),
-        ].flatMap((n) => [n, neutralizePeerTags(n), escapePluginTags(n)]),
-      ).filter((n) => n.length >= MIN_INLINE_TAG_CHARS),
+          inlineText,
+          stripSystemReminders(`x${inlineText}`).slice(1).trim(),
+          stripSystemReminders(`${inlineText}x`).slice(0, -1).trim(),
+          stripSystemReminders(inlineText).trim(),
+        ].flatMap((variant) => [variant, neutralizePeerTags(variant), escapePluginTags(variant)]),
+      ).filter((tagged) => tagged.length >= MIN_INLINE_TAG_CHARS),
     );
-  let e = (t) =>
-    !l
-      ? t
+  let tagPastes = (value) =>
+    !virtualPancake
+      ? value
       : Array.isArray(inlinePastes)
         ? recordPastedSpans(
-            t,
-            mapped,
+            value,
+            inlineGroups,
             inlinePastes_2.texts
               .map((text) => text.trim())
-              .filter((n) => n !== "" && n.length < MIN_INLINE_TAG_CHARS),
+              .filter((shortText) => shortText !== "" && shortText.length < MIN_INLINE_TAG_CHARS),
           )
-        : escapePastedContentTag(t);
+        : escapePastedContentTag(value);
   let joined = texts
     .map((text) =>
-      l
+      virtualPancake
         ? wrapUserTurnContent(text)
         : `
 
 ${text}`,
     )
     .join("");
-  if (typeof s === "string") return escapePluginTags(e(s) + joined);
-  let lastIndex = s.findLastIndex((t) => t.type === "text");
-  let mapped_2 = s.map((t, n) =>
-    t.type !== "text"
-      ? t
-      : n === lastIndex
+  if (typeof baseText === "string") return escapePluginTags(tagPastes(baseText) + joined);
+  let lastIndex = baseText.findLastIndex((block) => block.type === "text");
+  let mapped = baseText.map((block, index) =>
+    block.type !== "text"
+      ? block
+      : index === lastIndex
         ? {
-            ...t,
-            text: e(t.text),
+            ...block,
+            text: tagPastes(block.text),
           }
-        : l
+        : virtualPancake
           ? {
-              ...t,
-              text: escapePastedContentTag(t.text),
+              ...block,
+              text: escapePastedContentTag(block.text),
             }
-          : t,
+          : block,
   );
-  let P = mapped_2[lastIndex];
+  let tailBlock = mapped[lastIndex];
   return escapePluginTags(
-    P?.type !== "text"
+    tailBlock?.type !== "text"
       ? joined === ""
-        ? mapped_2
+        ? mapped
         : [
-            ...mapped_2,
+            ...mapped,
             {
               type: "text",
               text: joined,
             },
           ]
       : [
-          ...mapped_2.slice(0, lastIndex),
+          ...mapped.slice(0, lastIndex),
           {
-            ...P,
-            text: P.text + joined,
+            ...tailBlock,
+            text: tailBlock.text + joined,
           },
-          ...mapped_2.slice(lastIndex + 1),
+          ...mapped.slice(lastIndex + 1),
         ],
   );
 }

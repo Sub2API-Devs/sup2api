@@ -10,14 +10,14 @@
  */
 import { getTeamName, getAgentId } from "../../utils/teammate.js";
 
-//@ chunk-18hwfzwa.js:879200-879241 fingerprint = _temp (1)
-function selectTeamContext(s) {
-  return s.teamContext;
-}
 //@ chunk-ay9hyszk.js:1490-1564 fingerprint = _temp2 (1)
 function isTeamLeadDefault(t) {
   if (!(t || getTeamName())) return false;
   let agentId = getAgentId();
   return !agentId || agentId === "team-lead";
+}
+//@ chunk-18hwfzwa.js:879200-879241 fingerprint = _temp (1)
+function selectTeamContext(s) {
+  return s.teamContext;
 }
 export { selectTeamContext, isTeamLeadDefault };

@@ -19,37 +19,39 @@ import { withUntrustedPreamble } from "../messages/untrustedArtifactContent.js";
 import { logError } from "../log.js";
 import { jsonParse } from "../slowOperations.js";
 import { SessionRootSlot } from "../../bootstrap/sessionSlices.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-s4bxxzsw.js:60333-61640 placement
 /**
  * 汇总队友（teammate）自上次唤醒以来的工作，生成空闲时交给 leader 的结果文本：取最后的点对点私信摘要、本轮 SendMessage 调用及其结果、最后的助手文本等。
  */
-function buildTeammateIdleResult(messages, r) {
+function buildTeammateIdleResult(messages, options) {
   let { live, notice } = dropRetractedOnResume(messages, {
     suppressDropTelemetry: true,
   });
   let summary = getLastPeerDmSummary(live);
-  let R = -1;
+  let wakeupIndex = -1;
   for (let j = live.length - 1; j >= 0; j--) {
     let message = live[j];
     if (message && isTeammateWakeupPrompt(message)) {
-      R = j;
+      wakeupIndex = j;
       break;
     }
   }
-  let C = new Set();
-  for (let j = R + 1; j < live.length; j++) {
-    let k = live[j];
-    if (!k || k.type !== "assistant") continue;
-    for (let T of k.message.content) if (T.type === "tool_use" && T.name === SENDMESSAGE) C.add(T.id);
+  let sendMessageIds = new Set();
+  for (let j = wakeupIndex + 1; j < live.length; j++) {
+    let message = live[j];
+    if (!message || message.type !== "assistant") continue;
+    for (let block of message.message.content)
+      if (block.type === "tool_use" && block.name === SENDMESSAGE) sendMessageIds.add(block.id);
   }
-  let D = new Map();
-  for (let j = R + 1; j < live.length; j++) {
-    let k = live[j];
-    if (!k || k.type !== "user" || typeof k.message.content === "string") continue;
-    for (let T of k.message.content)
-      if (T.type === "tool_result" && C.has(T.tool_use_id))
-        D.set(T.tool_use_id, T.is_error !== true && !collectTextParts(T.content));
+  let deliveryById = new Map();
+  for (let j = wakeupIndex + 1; j < live.length; j++) {
+    let message = live[j];
+    if (!message || message.type !== "user" || typeof message.message.content === "string") continue;
+    for (let block of message.message.content)
+      if (block.type === "tool_result" && sendMessageIds.has(block.tool_use_id))
+        deliveryById.set(block.tool_use_id, block.is_error !== true && !collectTextParts(block.content));
   }
   for (let j = live.length - 1; j >= 0; j--) {
     let message = live[j];
@@ -58,39 +60,39 @@ function buildTeammateIdleResult(messages, r) {
     if (message.type !== "assistant" || message.isApiErrorMessage) continue;
     if (
       message.message.content.some(
-        (w) =>
-          w.type === "tool_use" &&
-          w.name === SENDMESSAGE &&
-          typeof w.input === "object" &&
-          w.input !== null &&
-          "to" in w.input &&
-          typeof w.input.to === "string" &&
-          (w.input.to === TEAM_LEAD || w.input.to === MAIN) &&
-          D.get(w.id) === true,
+        (block) =>
+          block.type === "tool_use" &&
+          block.name === SENDMESSAGE &&
+          typeof block.input === "object" &&
+          block.input !== null &&
+          "to" in block.input &&
+          typeof block.input.to === "string" &&
+          (block.input.to === TEAM_LEAD || block.input.to === MAIN) &&
+          deliveryById.get(block.id) === true,
       )
     ) {
-      if (r?.emitTelemetry === true) logFeatureSad("swarm_idle_result_delivery", "suppressed_lead_dm");
+      if (options?.emitTelemetry === true) logFeatureSad("swarm_idle_result_delivery", "suppressed_lead_dm");
       return {
         result: undefined,
         summary,
       };
     }
     if (!hasNonEmptyText(message.message.content)) continue;
-    let joined = message.message.content.flatMap((w) =>
-      w.type === "text" && typeof w.text === "string" ? [w.text] : [],
+    let joined = message.message.content.flatMap((block) =>
+      block.type === "text" && typeof block.text === "string" ? [block.text] : [],
     ).join(`
 `);
     if (joined) {
       let sanitized = sanitizeSubagentOutput(joined).sanitized;
-      let B =
+      let preamble =
         withUntrustedPreamble(messages) +
         (notice
           ? `\u26A0 ${notice.content}
 `
           : "");
       return {
-        result: B
-          ? `${B}
+        result: preamble
+          ? `${preamble}
 ${sanitized}`
           : sanitized,
         summary,
@@ -113,9 +115,9 @@ function teammateIdleResultText(messages) {
 /**
  * 安全地构造队友空闲结果（失败返回空结果）。
  */
-function safeTeammateIdleResult(messages, r) {
+function safeTeammateIdleResult(messages, options) {
   try {
-    return buildTeammateIdleResult(messages, r);
+    return buildTeammateIdleResult(messages, options);
   } catch (error) {
     logError(error);
     return {
@@ -126,25 +128,26 @@ function safeTeammateIdleResult(messages, r) {
 }
 //@ chunk-s4bxxzsw.js:61766-62132 placement
 function collectTextParts(content) {
-  let r = [];
-  if (typeof content === "string") r.push(content);
+  let texts = [];
+  if (typeof content === "string") texts.push(content);
   else if (Array.isArray(content)) {
-    for (let n of content)
+    for (let block of content)
       if (
-        n !== null &&
-        typeof n === "object" &&
-        "type" in n &&
-        n.type === "text" &&
-        "text" in n &&
-        typeof n.text === "string"
+        block !== null &&
+        typeof block === "object" &&
+        "type" in block &&
+        block.type === "text" &&
+        "text" in block &&
+        typeof block.text === "string"
       )
-        r.push(n.text);
+        texts.push(block.text);
   }
-  for (let n of r) {
-    if (!n.startsWith("{")) continue;
+  for (let text of texts) {
+    if (!text.startsWith("{")) continue;
     try {
-      let s = jsonParse(n);
-      if (s !== null && typeof s === "object" && "success" in s && s.success === false) return true;
+      let parsed = jsonParse(text);
+      if (parsed !== null && typeof parsed === "object" && "success" in parsed && parsed.success === false)
+        return true;
     } catch {}
   }
   return false;
@@ -163,5 +166,8 @@ class TeammatePermissionContextSlot {
 /**
  * 按会话根缓存的队友权限上下文槽。
  */
-var teammatePermissionContextBySessionRoot = new SessionRootSlot(() => new TeammatePermissionContextSlot());
+var teammatePermissionContextBySessionRoot; // deferred: uses SessionRootSlot (../../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-s4bxxzsw.js:62273", () => {
+  teammatePermissionContextBySessionRoot = new SessionRootSlot(() => new TeammatePermissionContextSlot());
+});
 export { safeTeammateIdleResult, teammatePermissionContextBySessionRoot, teammateIdleResultText };

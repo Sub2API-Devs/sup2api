@@ -14,36 +14,36 @@ import { copyCcrMarks } from "../analytics/metadata.js";
 //@ chunk-zfhed5fp.js:269-533 placement
 function orgToolPermissions(tools) {
   if (!tools?.length) return;
-  let o = Object.create(null);
-  for (let r of tools) {
-    if (!r.org_max_permission || r.org_max_permission === "allow") continue;
-    let s = ToolPermissionValueSchema().safeParse(r.org_max_permission);
-    o[r.name] = s.success ? s.data : "blocked";
+  let permissions = Object.create(null);
+  for (let tool of tools) {
+    if (!tool.org_max_permission || tool.org_max_permission === "allow") continue;
+    let parsed = ToolPermissionValueSchema().safeParse(tool.org_max_permission);
+    permissions[tool.name] = parsed.success ? parsed.data : "blocked";
   }
-  return Object.keys(o).length > 0 ? o : undefined;
+  return Object.keys(permissions).length > 0 ? permissions : undefined;
 }
 //@ chunk-zfhed5fp.js:533-724 placement
 /**
  * 把 SDK 提供的服务器配置转换为动态作用域配置（http/sse 合并请求超时与工具权限），保留 CCR 标记。
  */
-function toDynamicServerConfig(e) {
-  let o;
-  if (e.type === "http" || e.type === "sse") {
-    let { tools, ...s } = e;
-    let i = foldRequestTimeout(s);
-    let n = orgToolPermissions(tools);
-    o = {
-      ...i,
-      ...(n && {
-        toolPermissions: n,
+function toDynamicServerConfig(config) {
+  let dynamicConfig;
+  if (config.type === "http" || config.type === "sse") {
+    let { tools, ...rest } = config;
+    let folded = foldRequestTimeout(rest);
+    let toolPermissions = orgToolPermissions(tools);
+    dynamicConfig = {
+      ...folded,
+      ...(toolPermissions && {
+        toolPermissions,
       }),
       scope: "dynamic",
     };
   } else
-    o = {
-      ...e,
+    dynamicConfig = {
+      ...config,
       scope: "dynamic",
     };
-  return copyCcrMarks(e, o);
+  return copyCcrMarks(config, dynamicConfig);
 }
 export { toDynamicServerConfig };

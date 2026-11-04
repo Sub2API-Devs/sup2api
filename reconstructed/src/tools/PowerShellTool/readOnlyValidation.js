@@ -50,103 +50,111 @@ import {
   DOCKER_BARE_READ_ONLY_COMMANDS,
   DOCKER_READ_ONLY_COMMANDS,
 } from "../../utils/shell/readOnlyCommandValidation.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-s67vc0kc.js:2386-2474 sole-consumer
 /**
  * 判断参数是否为 ActionPreference 通用参数的别名或缩写。
  */
-function isActionParamAlias(e) {
-  if (e.length < 2) return false;
-  return COMMON_ACTION_PARAM_ALIASES.includes(e) || COMMON_ACTION_PARAMS.some((t) => t.startsWith(e));
+function isActionParamAlias(paramName) {
+  if (paramName.length < 2) return false;
+  return (
+    COMMON_ACTION_PARAM_ALIASES.includes(paramName) ||
+    COMMON_ACTION_PARAMS.some((alias) => alias.startsWith(paramName))
+  );
 }
 //@ chunk-s67vc0kc.js:2474-2577 placement = checkTokenBudget (0.447)
 /**
  * ActionPreference 取值（silentlycontinue/stop/continue/ignore 及数字）。
  */
-var POWERSHELL_ACTION_PARAMS = new Set([...COMMON_ACTION_PARAMS, ...COMMON_ACTION_PARAM_ALIASES]);
-var POWERSHELL_ACTION_VALUES = new Set([
-  "silentlycontinue",
-  "0",
-  "stop",
-  "1",
-  "continue",
-  "2",
-  "ignore",
-  "4",
-]);
+var POWERSHELL_ACTION_PARAMS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var POWERSHELL_ACTION_VALUES;
+deferInit("chunk-s67vc0kc.js:2474", () => {
+  POWERSHELL_ACTION_PARAMS = new Set([...COMMON_ACTION_PARAMS, ...COMMON_ACTION_PARAM_ALIASES]);
+  POWERSHELL_ACTION_VALUES = new Set(["silentlycontinue", "0", "stop", "1", "continue", "2", "ignore", "4"]);
+});
 //@ chunk-s67vc0kc.js:2577-2665 placement
 /**
  * 判断参数是否为变量相关通用参数的别名或缩写。
  */
-function isVariableParamAlias(e) {
-  if (e.length < 2) return false;
-  return COMMON_VARIABLE_PARAM_ALIASES.includes(e) || COMMON_VARIABLE_PARAMS.some((t) => t.startsWith(e));
+function isVariableParamAlias(paramName) {
+  if (paramName.length < 2) return false;
+  return (
+    COMMON_VARIABLE_PARAM_ALIASES.includes(paramName) ||
+    COMMON_VARIABLE_PARAMS.some((param) => param.startsWith(paramName))
+  );
 }
 //@ chunk-s67vc0kc.js:2665-3583 placement
 /**
  * PowerShell 影响命令行为的偏好变量集合（ErrorActionPreference、VerbosePreference 等）。
  */
-var POWERSHELL_SCOPE_NAMES = new Set(["global", "script", "local", "private", "variable"]);
-var PS_PREFERENCE_VARIABLES = new Set([
-  "psdefaultparametervalues",
-  "confirmpreference",
-  "debugpreference",
-  "erroractionpreference",
-  "errorview",
-  "formatenumerationlimit",
-  "informationpreference",
-  "maximumhistorycount",
-  "ofs",
-  "outputencoding",
-  "progresspreference",
-  "psemailserver",
-  "psmoduleautoloadingpreference",
-  "psnativecommandargumentpassing",
-  "psnativecommanduseerroractionpreference",
-  "pssessionapplicationname",
-  "pssessionconfigurationname",
-  "pssessionoption",
-  "psstyle",
-  "transcript",
-  "verbosepreference",
-  "warningpreference",
-  "whatifpreference",
-  "logcommandhealthevent",
-  "logcommandlifecycleevent",
-  "logenginehealthevent",
-  "logenginelifecycleevent",
-  "logproviderhealthevent",
-  "logproviderlifecycleevent",
-  "maximumaliascount",
-  "maximumdrivecount",
-  "maximumerrorcount",
-  "maximumfunctioncount",
-  "maximumvariablecount",
-]);
-var DOCKER_DANGEROUS_LONG_FLAGS = [
-  ...COMMON_ACTION_PARAMS,
-  ...COMMON_VARIABLE_PARAMS,
-  "-outbuffer",
-  "-verbose",
-  "-debug",
-];
-var filtered = DOCKER_DANGEROUS_LONG_FLAGS.filter((e) => e !== "-progressaction");
+var POWERSHELL_SCOPE_NAMES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var PS_PREFERENCE_VARIABLES;
+var DOCKER_DANGEROUS_LONG_FLAGS;
+var filtered;
+deferInit("chunk-s67vc0kc.js:2665", () => {
+  POWERSHELL_SCOPE_NAMES = new Set(["global", "script", "local", "private", "variable"]);
+  PS_PREFERENCE_VARIABLES = new Set([
+    "psdefaultparametervalues",
+    "confirmpreference",
+    "debugpreference",
+    "erroractionpreference",
+    "errorview",
+    "formatenumerationlimit",
+    "informationpreference",
+    "maximumhistorycount",
+    "ofs",
+    "outputencoding",
+    "progresspreference",
+    "psemailserver",
+    "psmoduleautoloadingpreference",
+    "psnativecommandargumentpassing",
+    "psnativecommanduseerroractionpreference",
+    "pssessionapplicationname",
+    "pssessionconfigurationname",
+    "pssessionoption",
+    "psstyle",
+    "transcript",
+    "verbosepreference",
+    "warningpreference",
+    "whatifpreference",
+    "logcommandhealthevent",
+    "logcommandlifecycleevent",
+    "logenginehealthevent",
+    "logenginelifecycleevent",
+    "logproviderhealthevent",
+    "logproviderlifecycleevent",
+    "maximumaliascount",
+    "maximumdrivecount",
+    "maximumerrorcount",
+    "maximumfunctioncount",
+    "maximumvariablecount",
+  ]);
+  DOCKER_DANGEROUS_LONG_FLAGS = [
+    ...COMMON_ACTION_PARAMS,
+    ...COMMON_VARIABLE_PARAMS,
+    "-outbuffer",
+    "-verbose",
+    "-debug",
+  ];
+  filtered = DOCKER_DANGEROUS_LONG_FLAGS.filter((flag) => flag !== "-progressaction");
+});
 //@ chunk-s67vc0kc.js:3583-3683 placement
-function uniquePrefixMatch(e, t) {
-  let n = null;
-  for (let r of t)
-    if (r.startsWith(e)) {
-      if (n !== null) return null;
-      n = r;
+function uniquePrefixMatch(prefix, candidates) {
+  let match = null;
+  for (let candidate of candidates)
+    if (candidate.startsWith(prefix)) {
+      if (match !== null) return null;
+      match = candidate;
     }
-  return n;
+  return match;
 }
 //@ chunk-s67vc0kc.js:3683-3802 placement
-function matchesAbbreviatedParam(e, t) {
-  if (e.length < 2) return false;
-  for (let n of [DOCKER_DANGEROUS_LONG_FLAGS, filtered]) {
-    let r = uniquePrefixMatch(e, n);
-    if (r !== null && t.includes(r)) return true;
+function matchesAbbreviatedParam(paramName, flags) {
+  if (paramName.length < 2) return false;
+  for (let flagList of [DOCKER_DANGEROUS_LONG_FLAGS, filtered]) {
+    let flag = uniquePrefixMatch(paramName, flagList);
+    if (flag !== null && flags.includes(flag)) return true;
   }
   return false;
 }
@@ -154,158 +162,169 @@ function matchesAbbreviatedParam(e, t) {
 /**
  * 通用参数别名集合（含 -ea/-wa/-p），在这些参数上不允许缩写匹配。
  */
-var PS_COMMON_PARAM_ALIASES = new Set([...COMMON_VARIABLE_PARAM_ALIASES, "-ea", "-wa", "-p"]);
-var isAbbrevAllowed = false;
+var PS_COMMON_PARAM_ALIASES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var isAbbrevAllowed;
+deferInit("chunk-s67vc0kc.js:3802", () => {
+  PS_COMMON_PARAM_ALIASES = new Set([...COMMON_VARIABLE_PARAM_ALIASES, "-ea", "-wa", "-p"]);
+  isAbbrevAllowed = false;
+});
 //@ chunk-s67vc0kc.js:3848-3925 placement
 /**
  * 判断参数是否匹配给定通用参数别名或缩写前缀。
  */
-function matchesCommonParam(e, t, n, isAbbrevAllowed) {
-  if (!isAbbrevAllowed && PS_COMMON_PARAM_ALIASES.has(e)) return false;
-  return t.includes(e) || matchesAbbreviatedParam(e, n);
+function matchesCommonParam(paramName, aliases, params, isAbbrevAllowed) {
+  if (!isAbbrevAllowed && PS_COMMON_PARAM_ALIASES.has(paramName)) return false;
+  return aliases.includes(paramName) || matchesAbbreviatedParam(paramName, params);
 }
 //@ chunk-s67vc0kc.js:3925-3963 placement
 /**
  * 通用参数判定封装（带缩写开关）。
  */
-function isCommonParam(e, t, n) {
-  return matchesCommonParam(e, t, n, isAbbrevAllowed);
+function isCommonParam(paramName, aliases, params) {
+  return matchesCommonParam(paramName, aliases, params, isAbbrevAllowed);
 }
 //@ chunk-s67vc0kc.js:3963-3993 placement
 /**
  * 判断是否为变量相关通用参数。
  */
-function isVariableParam(e) {
-  return isCommonParam(e, COMMON_VARIABLE_PARAM_ALIASES, COMMON_VARIABLE_PARAMS);
+function isVariableParam(paramName) {
+  return isCommonParam(paramName, COMMON_VARIABLE_PARAM_ALIASES, COMMON_VARIABLE_PARAMS);
 }
 //@ chunk-s67vc0kc.js:3993-4023 placement
 /**
  * 判断是否为 ActionPreference 类通用参数。
  */
-function isActionParam(e) {
-  return isCommonParam(e, COMMON_ACTION_PARAM_ALIASES, COMMON_ACTION_PARAMS);
+function isActionParam(paramName) {
+  return isCommonParam(paramName, COMMON_ACTION_PARAM_ALIASES, COMMON_ACTION_PARAMS);
 }
 //@ chunk-s67vc0kc.js:4023-5032 placement
 /**
  * 安全动词前缀列表（get/set/copy/move 等）。
  */
-var SAFE_POWERSHELL_VERBS = new Set([
-  "add",
-  "clear",
-  "close",
-  "copy",
-  "enter",
-  "exit",
-  "find",
-  "format",
-  "get",
-  "hide",
-  "join",
-  "lock",
-  "move",
-  "new",
-  "open",
-  "optimize",
-  "pop",
-  "push",
-  "redo",
-  "remove",
-  "rename",
-  "reset",
-  "resize",
-  "resume",
-  "search",
-  "select",
-  "set",
-  "show",
-  "skip",
-  "split",
-  "step",
-  "switch",
-  "undo",
-  "unlock",
-  "watch",
-  "connect",
-  "disconnect",
-  "read",
-  "receive",
-  "send",
-  "write",
-  "backup",
-  "checkpoint",
-  "compare",
-  "compress",
-  "convert",
-  "convertfrom",
-  "convertto",
-  "dismount",
-  "edit",
-  "expand",
-  "export",
-  "group",
-  "import",
-  "initialize",
-  "limit",
-  "merge",
-  "mount",
-  "out",
-  "publish",
-  "restore",
-  "save",
-  "sync",
-  "unpublish",
-  "update",
-  "debug",
-  "measure",
-  "ping",
-  "repair",
-  "resolve",
-  "test",
-  "trace",
-  "approve",
-  "assert",
-  "build",
-  "complete",
-  "confirm",
-  "deny",
-  "deploy",
-  "disable",
-  "enable",
-  "install",
-  "invoke",
-  "register",
-  "request",
-  "restart",
-  "start",
-  "stop",
-  "submit",
-  "suspend",
-  "uninstall",
-  "unregister",
-  "wait",
-  "block",
-  "grant",
-  "protect",
-  "revoke",
-  "unblock",
-  "unprotect",
-  "use",
-  "sort",
-  "tee",
-  "where",
-  "foreach",
-]);
-var SAFE_VERB_PREFIXES = ["-variable", "-sessionvariable", "-responseheadersvariable", "-statuscodevariable"];
+var SAFE_POWERSHELL_VERBS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var SAFE_VERB_PREFIXES;
+deferInit("chunk-s67vc0kc.js:4023", () => {
+  SAFE_POWERSHELL_VERBS = new Set([
+    "add",
+    "clear",
+    "close",
+    "copy",
+    "enter",
+    "exit",
+    "find",
+    "format",
+    "get",
+    "hide",
+    "join",
+    "lock",
+    "move",
+    "new",
+    "open",
+    "optimize",
+    "pop",
+    "push",
+    "redo",
+    "remove",
+    "rename",
+    "reset",
+    "resize",
+    "resume",
+    "search",
+    "select",
+    "set",
+    "show",
+    "skip",
+    "split",
+    "step",
+    "switch",
+    "undo",
+    "unlock",
+    "watch",
+    "connect",
+    "disconnect",
+    "read",
+    "receive",
+    "send",
+    "write",
+    "backup",
+    "checkpoint",
+    "compare",
+    "compress",
+    "convert",
+    "convertfrom",
+    "convertto",
+    "dismount",
+    "edit",
+    "expand",
+    "export",
+    "group",
+    "import",
+    "initialize",
+    "limit",
+    "merge",
+    "mount",
+    "out",
+    "publish",
+    "restore",
+    "save",
+    "sync",
+    "unpublish",
+    "update",
+    "debug",
+    "measure",
+    "ping",
+    "repair",
+    "resolve",
+    "test",
+    "trace",
+    "approve",
+    "assert",
+    "build",
+    "complete",
+    "confirm",
+    "deny",
+    "deploy",
+    "disable",
+    "enable",
+    "install",
+    "invoke",
+    "register",
+    "request",
+    "restart",
+    "start",
+    "stop",
+    "submit",
+    "suspend",
+    "uninstall",
+    "unregister",
+    "wait",
+    "block",
+    "grant",
+    "protect",
+    "revoke",
+    "unblock",
+    "unprotect",
+    "use",
+    "sort",
+    "tee",
+    "where",
+    "foreach",
+  ]);
+  SAFE_VERB_PREFIXES = ["-variable", "-sessionvariable", "-responseheadersvariable", "-statuscodevariable"];
+});
 //@ chunk-s67vc0kc.js:5032-5106 layout
 /**
  * 判断动词缩写是否匹配安全动词（至少 3 个字母）。
  */
-function isSafeVerbAbbreviation(e) {
-  if (e.length < 3) return false;
-  return SAFE_VERB_PREFIXES.some((t) => t.startsWith(e));
+function isSafeVerbAbbreviation(prefix) {
+  if (prefix.length < 3) return false;
+  return SAFE_VERB_PREFIXES.some((safeVerb) => safeVerb.startsWith(prefix));
 }
 //@ chunk-s67vc0kc.js:5106-5156 fingerprint = DOTNET_READ_ONLY_FLAGS (0.7)
-var DOTNET_READ_ONLY_FLAGS = new Set(["--list-runtimes", "--list-sdks"]);
+var DOTNET_READ_ONLY_FLAGS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-s67vc0kc.js:5106", () => {
+  DOTNET_READ_ONLY_FLAGS = new Set(["--list-runtimes", "--list-sdks"]);
+});
 //@ chunk-s67vc0kc.js:5156-5548 fingerprint = argLeaksValue (1)
 /**
  * 参数是否可能泄露/展开值：非字符串常量参数含 $ ( @ { [，或参数绑定的子元素不是字符串常量，或冒号绑定值含表达式。
@@ -336,385 +355,403 @@ function argLeaksValue(_cmd, element) {
 /**
  * PowerShell 只读 cmdlet 白名单 CMDLET_ALLOWLIST（Get-ChildItem/Get-Content/Select-String/Get-Process/Test-Path/… 以及 git/gh/docker/dotnet 外部命令），每项列安全参数与额外危险回调；还有安全输出命令、管道尾部格式化命令、默认 PATHEXT 扩展名表。
  */
-var CMDLET_ALLOWLIST = Object.assign(Object.create(null), {
-  "get-childitem": {
-    safeFlags: [
-      "-Path",
-      "-LiteralPath",
-      "-Filter",
-      "-Include",
-      "-Exclude",
-      "-Recurse",
-      "-Depth",
-      "-Name",
-      "-Force",
-      "-Attributes",
-      "-Directory",
-      "-File",
-      "-Hidden",
-      "-ReadOnly",
-      "-System",
-    ],
-  },
-  "get-content": {
-    safeFlags: [
-      "-Path",
-      "-LiteralPath",
-      "-TotalCount",
-      "-Head",
-      "-Tail",
-      "-Raw",
-      "-Encoding",
-      "-Delimiter",
-      "-ReadCount",
-    ],
-  },
-  "get-item": {
-    safeFlags: ["-Path", "-LiteralPath", "-Force", "-Stream"],
-  },
-  "get-itemproperty": {
-    safeFlags: ["-Path", "-LiteralPath", "-Name"],
-  },
-  "test-path": {
-    safeFlags: [
-      "-Path",
-      "-LiteralPath",
-      "-PathType",
-      "-Filter",
-      "-Include",
-      "-Exclude",
-      "-IsValid",
-      "-NewerThan",
-      "-OlderThan",
-    ],
-  },
-  "resolve-path": {
-    safeFlags: ["-Path", "-LiteralPath", "-Relative"],
-  },
-  "get-filehash": {
-    safeFlags: ["-Path", "-LiteralPath", "-Algorithm", "-InputStream"],
-  },
-  "get-acl": {
-    safeFlags: ["-Path", "-LiteralPath", "-Audit", "-Filter", "-Include", "-Exclude"],
-  },
-  "set-location": {
-    safeFlags: ["-Path", "-LiteralPath", "-PassThru", "-StackName"],
-  },
-  "push-location": {
-    safeFlags: ["-Path", "-LiteralPath", "-PassThru", "-StackName"],
-  },
-  "pop-location": {
-    safeFlags: ["-PassThru", "-StackName"],
-  },
-  "select-string": {
-    safeFlags: [
-      "-Path",
-      "-LiteralPath",
-      "-Pattern",
-      "-InputObject",
-      "-SimpleMatch",
-      "-CaseSensitive",
-      "-Quiet",
-      "-List",
-      "-NotMatch",
-      "-AllMatches",
-      "-Encoding",
-      "-Context",
-      "-Raw",
-      "-NoEmphasis",
-    ],
-  },
-  "convertto-json": {
-    safeFlags: ["-InputObject", "-Depth", "-Compress", "-EnumsAsStrings", "-AsArray"],
-  },
-  "convertfrom-json": {
-    safeFlags: ["-InputObject", "-Depth", "-AsHashtable", "-NoEnumerate"],
-  },
-  "convertto-csv": {
-    safeFlags: ["-InputObject", "-Delimiter", "-NoTypeInformation", "-NoHeader", "-UseQuotes"],
-  },
-  "convertfrom-csv": {
-    safeFlags: ["-InputObject", "-Delimiter", "-Header", "-UseCulture"],
-  },
-  "convertto-xml": {
-    safeFlags: ["-InputObject", "-Depth", "-As", "-NoTypeInformation"],
-  },
-  "convertto-html": {
-    safeFlags: ["-InputObject", "-Property", "-Head", "-Title", "-Body", "-Pre", "-Post", "-As", "-Fragment"],
-  },
-  "format-hex": {
-    safeFlags: ["-Path", "-LiteralPath", "-InputObject", "-Encoding", "-Count", "-Offset"],
-  },
-  "get-member": {
-    safeFlags: ["-InputObject", "-MemberType", "-Name", "-Static", "-View", "-Force"],
-  },
-  "get-unique": {
-    safeFlags: ["-InputObject", "-AsString", "-CaseInsensitive", "-OnType"],
-  },
-  "compare-object": {
-    safeFlags: [
-      "-ReferenceObject",
-      "-DifferenceObject",
-      "-Property",
-      "-SyncWindow",
-      "-CaseSensitive",
-      "-Culture",
-      "-ExcludeDifferent",
-      "-IncludeEqual",
-      "-PassThru",
-    ],
-  },
-  "join-string": {
-    safeFlags: ["-InputObject", "-Property", "-Separator", "-SingleQuote", "-DoubleQuote", "-FormatString"],
-  },
-  "get-random": {
-    safeFlags: ["-InputObject", "-Minimum", "-Maximum", "-Count", "-SetSeed", "-Shuffle"],
-  },
-  "convert-path": {
-    safeFlags: ["-Path", "-LiteralPath"],
-  },
-  "join-path": {
-    safeFlags: ["-Path", "-ChildPath", "-AdditionalChildPath"],
-  },
-  "split-path": {
-    safeFlags: [
-      "-Path",
-      "-LiteralPath",
-      "-Qualifier",
-      "-NoQualifier",
-      "-Parent",
-      "-Leaf",
-      "-LeafBase",
-      "-Extension",
-      "-IsAbsolute",
-    ],
-  },
-  "get-itempropertyvalue": {
-    safeFlags: ["-Path", "-LiteralPath", "-Name"],
-  },
-  "get-psprovider": {
-    safeFlags: ["-PSProvider"],
-  },
-  "get-computerinfo": {
-    allowAllFlags: true,
-  },
-  "get-host": {
-    allowAllFlags: true,
-  },
-  "get-date": {
-    safeFlags: ["-Date", "-Format", "-UFormat", "-DisplayHint", "-AsUTC"],
-  },
-  "get-location": {
-    safeFlags: ["-PSProvider", "-PSDrive", "-Stack", "-StackName"],
-  },
-  "get-psdrive": {
-    safeFlags: ["-Name", "-PSProvider", "-Scope"],
-  },
-  "get-module": {
-    safeFlags: ["-Name", "-ListAvailable", "-All", "-FullyQualifiedName", "-PSEdition"],
-  },
-  "get-alias": {
-    safeFlags: ["-Name", "-Definition", "-Scope", "-Exclude"],
-  },
-  "get-history": {
-    safeFlags: ["-Id", "-Count"],
-  },
-  "get-culture": {
-    allowAllFlags: true,
-  },
-  "get-uiculture": {
-    allowAllFlags: true,
-  },
-  "get-timezone": {
-    safeFlags: ["-Name", "-Id", "-ListAvailable"],
-  },
-  "get-uptime": {
-    allowAllFlags: true,
-  },
-  "write-output": {
-    safeFlags: ["-InputObject", "-NoEnumerate"],
-    additionalCommandIsDangerousCallback: argLeaksValue,
-  },
-  "write-host": {
-    safeFlags: ["-Object", "-NoNewline", "-Separator", "-ForegroundColor", "-BackgroundColor"],
-    additionalCommandIsDangerousCallback: argLeaksValue,
-  },
-  "start-sleep": {
-    safeFlags: ["-Seconds", "-Milliseconds", "-Duration"],
-    additionalCommandIsDangerousCallback: argLeaksValue,
-  },
-  "format-table": {
-    allowAllFlags: true,
-    additionalCommandIsDangerousCallback: argLeaksValue,
-  },
-  "format-list": {
-    allowAllFlags: true,
-    additionalCommandIsDangerousCallback: argLeaksValue,
-  },
-  "format-wide": {
-    allowAllFlags: true,
-    additionalCommandIsDangerousCallback: argLeaksValue,
-  },
-  "format-custom": {
-    allowAllFlags: true,
-    additionalCommandIsDangerousCallback: argLeaksValue,
-  },
-  "measure-object": {
-    allowAllFlags: true,
-    additionalCommandIsDangerousCallback: argLeaksValue,
-  },
-  "select-object": {
-    allowAllFlags: true,
-    additionalCommandIsDangerousCallback: argLeaksValue,
-  },
-  "sort-object": {
-    allowAllFlags: true,
-    additionalCommandIsDangerousCallback: argLeaksValue,
-  },
-  "group-object": {
-    allowAllFlags: true,
-    additionalCommandIsDangerousCallback: argLeaksValue,
-  },
-  "where-object": {
-    allowAllFlags: true,
-    additionalCommandIsDangerousCallback: argLeaksValue,
-  },
-  "out-string": {
-    allowAllFlags: true,
-    additionalCommandIsDangerousCallback: argLeaksValue,
-  },
-  "out-host": {
-    allowAllFlags: true,
-    additionalCommandIsDangerousCallback: argLeaksValue,
-  },
-  "get-netadapter": {
-    safeFlags: ["-Name", "-InterfaceDescription", "-InterfaceIndex", "-Physical"],
-  },
-  "get-netipaddress": {
-    safeFlags: ["-InterfaceIndex", "-InterfaceAlias", "-AddressFamily", "-Type"],
-  },
-  "get-netroute": {
-    safeFlags: ["-InterfaceIndex", "-InterfaceAlias", "-AddressFamily", "-DestinationPrefix"],
-  },
-  "get-dnsclient": {
-    safeFlags: ["-InterfaceIndex", "-InterfaceAlias"],
-  },
-  "get-winevent": {
-    safeFlags: [
-      "-LogName",
-      "-ListLog",
-      "-ListProvider",
-      "-ProviderName",
-      "-Path",
-      "-MaxEvents",
-      "-FilterXPath",
-      "-Force",
-      "-Oldest",
-    ],
-  },
-  git: {},
-  gh: {},
-  docker: {},
-  ipconfig: {
-    safeFlags: ["/all", "/allcompartments"],
-    additionalCommandIsDangerousCallback: (_cmd, element) =>
-      (element?.args ?? []).some((n) => !n.startsWith("/") && !n.startsWith("-")),
-  },
-  netstat: {
-    safeFlags: ["-a", "-b", "-e", "-f", "-n", "-o", "-p", "-q", "-r", "-s", "-t", "-x", "-y"],
-  },
-  systeminfo: {
-    safeFlags: ["/FO", "/NH"],
-  },
-  tasklist: {
-    safeFlags: ["/M", "/SVC", "/V", "/FI", "/FO", "/NH"],
-  },
-  "where.exe": {
-    allowAllFlags: true,
-  },
-  hostname: {
-    safeFlags: ["-a", "-d", "-f", "-i", "-I", "-s", "-y", "-A"],
-    additionalCommandIsDangerousCallback: (_cmd, element) =>
-      (element?.args ?? []).some((n) => !n.startsWith("-")),
-  },
-  whoami: {
-    safeFlags: ["/user", "/groups", "/claims", "/priv", "/logonid", "/all", "/fo", "/nh"],
-  },
-  ver: {
-    allowAllFlags: true,
-  },
-  arp: {
-    safeFlags: ["-a", "-g", "-v", "-n"],
-    additionalCommandIsDangerousCallback: (_cmd, element) =>
-      (element?.args ?? []).some((n) => !n.startsWith("-")),
-  },
-  route: {
-    safeFlags: ["print", "PRINT", "-4", "-6"],
-    additionalCommandIsDangerousCallback: (_cmd, element) => {
-      if (!element) return true;
-      return element.args.find((arg) => !arg.startsWith("-"))?.toLowerCase() !== "print";
+var CMDLET_ALLOWLIST; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var SAFE_OUTPUT_CMDLETS;
+var PIPELINE_TAIL_CMDLETS;
+var SAFE_EXTERNAL_EXES;
+var EXTERNAL_READONLY_COMMANDS;
+var DEFAULT_PATHEXT_EXTENSIONS;
+deferInit("chunk-s67vc0kc.js:5548", () => {
+  CMDLET_ALLOWLIST = Object.assign(Object.create(null), {
+    "get-childitem": {
+      safeFlags: [
+        "-Path",
+        "-LiteralPath",
+        "-Filter",
+        "-Include",
+        "-Exclude",
+        "-Recurse",
+        "-Depth",
+        "-Name",
+        "-Force",
+        "-Attributes",
+        "-Directory",
+        "-File",
+        "-Hidden",
+        "-ReadOnly",
+        "-System",
+      ],
     },
-  },
-  getmac: {
-    safeFlags: ["/FO", "/NH", "/V"],
-  },
-  tree: {
-    safeFlags: ["/F", "/A", "/Q", "/L"],
-  },
-  findstr: {
-    safeFlags: [
-      "/B",
-      "/E",
-      "/L",
-      "/R",
-      "/S",
-      "/I",
-      "/X",
-      "/V",
-      "/N",
-      "/M",
-      "/O",
-      "/P",
-      "/C",
-      "/G",
-      "/D",
-      "/A",
-    ],
-  },
-  dotnet: {},
+    "get-content": {
+      safeFlags: [
+        "-Path",
+        "-LiteralPath",
+        "-TotalCount",
+        "-Head",
+        "-Tail",
+        "-Raw",
+        "-Encoding",
+        "-Delimiter",
+        "-ReadCount",
+      ],
+    },
+    "get-item": {
+      safeFlags: ["-Path", "-LiteralPath", "-Force", "-Stream"],
+    },
+    "get-itemproperty": {
+      safeFlags: ["-Path", "-LiteralPath", "-Name"],
+    },
+    "test-path": {
+      safeFlags: [
+        "-Path",
+        "-LiteralPath",
+        "-PathType",
+        "-Filter",
+        "-Include",
+        "-Exclude",
+        "-IsValid",
+        "-NewerThan",
+        "-OlderThan",
+      ],
+    },
+    "resolve-path": {
+      safeFlags: ["-Path", "-LiteralPath", "-Relative"],
+    },
+    "get-filehash": {
+      safeFlags: ["-Path", "-LiteralPath", "-Algorithm", "-InputStream"],
+    },
+    "get-acl": {
+      safeFlags: ["-Path", "-LiteralPath", "-Audit", "-Filter", "-Include", "-Exclude"],
+    },
+    "set-location": {
+      safeFlags: ["-Path", "-LiteralPath", "-PassThru", "-StackName"],
+    },
+    "push-location": {
+      safeFlags: ["-Path", "-LiteralPath", "-PassThru", "-StackName"],
+    },
+    "pop-location": {
+      safeFlags: ["-PassThru", "-StackName"],
+    },
+    "select-string": {
+      safeFlags: [
+        "-Path",
+        "-LiteralPath",
+        "-Pattern",
+        "-InputObject",
+        "-SimpleMatch",
+        "-CaseSensitive",
+        "-Quiet",
+        "-List",
+        "-NotMatch",
+        "-AllMatches",
+        "-Encoding",
+        "-Context",
+        "-Raw",
+        "-NoEmphasis",
+      ],
+    },
+    "convertto-json": {
+      safeFlags: ["-InputObject", "-Depth", "-Compress", "-EnumsAsStrings", "-AsArray"],
+    },
+    "convertfrom-json": {
+      safeFlags: ["-InputObject", "-Depth", "-AsHashtable", "-NoEnumerate"],
+    },
+    "convertto-csv": {
+      safeFlags: ["-InputObject", "-Delimiter", "-NoTypeInformation", "-NoHeader", "-UseQuotes"],
+    },
+    "convertfrom-csv": {
+      safeFlags: ["-InputObject", "-Delimiter", "-Header", "-UseCulture"],
+    },
+    "convertto-xml": {
+      safeFlags: ["-InputObject", "-Depth", "-As", "-NoTypeInformation"],
+    },
+    "convertto-html": {
+      safeFlags: [
+        "-InputObject",
+        "-Property",
+        "-Head",
+        "-Title",
+        "-Body",
+        "-Pre",
+        "-Post",
+        "-As",
+        "-Fragment",
+      ],
+    },
+    "format-hex": {
+      safeFlags: ["-Path", "-LiteralPath", "-InputObject", "-Encoding", "-Count", "-Offset"],
+    },
+    "get-member": {
+      safeFlags: ["-InputObject", "-MemberType", "-Name", "-Static", "-View", "-Force"],
+    },
+    "get-unique": {
+      safeFlags: ["-InputObject", "-AsString", "-CaseInsensitive", "-OnType"],
+    },
+    "compare-object": {
+      safeFlags: [
+        "-ReferenceObject",
+        "-DifferenceObject",
+        "-Property",
+        "-SyncWindow",
+        "-CaseSensitive",
+        "-Culture",
+        "-ExcludeDifferent",
+        "-IncludeEqual",
+        "-PassThru",
+      ],
+    },
+    "join-string": {
+      safeFlags: ["-InputObject", "-Property", "-Separator", "-SingleQuote", "-DoubleQuote", "-FormatString"],
+    },
+    "get-random": {
+      safeFlags: ["-InputObject", "-Minimum", "-Maximum", "-Count", "-SetSeed", "-Shuffle"],
+    },
+    "convert-path": {
+      safeFlags: ["-Path", "-LiteralPath"],
+    },
+    "join-path": {
+      safeFlags: ["-Path", "-ChildPath", "-AdditionalChildPath"],
+    },
+    "split-path": {
+      safeFlags: [
+        "-Path",
+        "-LiteralPath",
+        "-Qualifier",
+        "-NoQualifier",
+        "-Parent",
+        "-Leaf",
+        "-LeafBase",
+        "-Extension",
+        "-IsAbsolute",
+      ],
+    },
+    "get-itempropertyvalue": {
+      safeFlags: ["-Path", "-LiteralPath", "-Name"],
+    },
+    "get-psprovider": {
+      safeFlags: ["-PSProvider"],
+    },
+    "get-computerinfo": {
+      allowAllFlags: true,
+    },
+    "get-host": {
+      allowAllFlags: true,
+    },
+    "get-date": {
+      safeFlags: ["-Date", "-Format", "-UFormat", "-DisplayHint", "-AsUTC"],
+    },
+    "get-location": {
+      safeFlags: ["-PSProvider", "-PSDrive", "-Stack", "-StackName"],
+    },
+    "get-psdrive": {
+      safeFlags: ["-Name", "-PSProvider", "-Scope"],
+    },
+    "get-module": {
+      safeFlags: ["-Name", "-ListAvailable", "-All", "-FullyQualifiedName", "-PSEdition"],
+    },
+    "get-alias": {
+      safeFlags: ["-Name", "-Definition", "-Scope", "-Exclude"],
+    },
+    "get-history": {
+      safeFlags: ["-Id", "-Count"],
+    },
+    "get-culture": {
+      allowAllFlags: true,
+    },
+    "get-uiculture": {
+      allowAllFlags: true,
+    },
+    "get-timezone": {
+      safeFlags: ["-Name", "-Id", "-ListAvailable"],
+    },
+    "get-uptime": {
+      allowAllFlags: true,
+    },
+    "write-output": {
+      safeFlags: ["-InputObject", "-NoEnumerate"],
+      additionalCommandIsDangerousCallback: argLeaksValue,
+    },
+    "write-host": {
+      safeFlags: ["-Object", "-NoNewline", "-Separator", "-ForegroundColor", "-BackgroundColor"],
+      additionalCommandIsDangerousCallback: argLeaksValue,
+    },
+    "start-sleep": {
+      safeFlags: ["-Seconds", "-Milliseconds", "-Duration"],
+      additionalCommandIsDangerousCallback: argLeaksValue,
+    },
+    "format-table": {
+      allowAllFlags: true,
+      additionalCommandIsDangerousCallback: argLeaksValue,
+    },
+    "format-list": {
+      allowAllFlags: true,
+      additionalCommandIsDangerousCallback: argLeaksValue,
+    },
+    "format-wide": {
+      allowAllFlags: true,
+      additionalCommandIsDangerousCallback: argLeaksValue,
+    },
+    "format-custom": {
+      allowAllFlags: true,
+      additionalCommandIsDangerousCallback: argLeaksValue,
+    },
+    "measure-object": {
+      allowAllFlags: true,
+      additionalCommandIsDangerousCallback: argLeaksValue,
+    },
+    "select-object": {
+      allowAllFlags: true,
+      additionalCommandIsDangerousCallback: argLeaksValue,
+    },
+    "sort-object": {
+      allowAllFlags: true,
+      additionalCommandIsDangerousCallback: argLeaksValue,
+    },
+    "group-object": {
+      allowAllFlags: true,
+      additionalCommandIsDangerousCallback: argLeaksValue,
+    },
+    "where-object": {
+      allowAllFlags: true,
+      additionalCommandIsDangerousCallback: argLeaksValue,
+    },
+    "out-string": {
+      allowAllFlags: true,
+      additionalCommandIsDangerousCallback: argLeaksValue,
+    },
+    "out-host": {
+      allowAllFlags: true,
+      additionalCommandIsDangerousCallback: argLeaksValue,
+    },
+    "get-netadapter": {
+      safeFlags: ["-Name", "-InterfaceDescription", "-InterfaceIndex", "-Physical"],
+    },
+    "get-netipaddress": {
+      safeFlags: ["-InterfaceIndex", "-InterfaceAlias", "-AddressFamily", "-Type"],
+    },
+    "get-netroute": {
+      safeFlags: ["-InterfaceIndex", "-InterfaceAlias", "-AddressFamily", "-DestinationPrefix"],
+    },
+    "get-dnsclient": {
+      safeFlags: ["-InterfaceIndex", "-InterfaceAlias"],
+    },
+    "get-winevent": {
+      safeFlags: [
+        "-LogName",
+        "-ListLog",
+        "-ListProvider",
+        "-ProviderName",
+        "-Path",
+        "-MaxEvents",
+        "-FilterXPath",
+        "-Force",
+        "-Oldest",
+      ],
+    },
+    git: {},
+    gh: {},
+    docker: {},
+    ipconfig: {
+      safeFlags: ["/all", "/allcompartments"],
+      additionalCommandIsDangerousCallback: (_cmd, element) =>
+        (element?.args ?? []).some((arg) => !arg.startsWith("/") && !arg.startsWith("-")),
+    },
+    netstat: {
+      safeFlags: ["-a", "-b", "-e", "-f", "-n", "-o", "-p", "-q", "-r", "-s", "-t", "-x", "-y"],
+    },
+    systeminfo: {
+      safeFlags: ["/FO", "/NH"],
+    },
+    tasklist: {
+      safeFlags: ["/M", "/SVC", "/V", "/FI", "/FO", "/NH"],
+    },
+    "where.exe": {
+      allowAllFlags: true,
+    },
+    hostname: {
+      safeFlags: ["-a", "-d", "-f", "-i", "-I", "-s", "-y", "-A"],
+      additionalCommandIsDangerousCallback: (_cmd, element) =>
+        (element?.args ?? []).some((arg) => !arg.startsWith("-")),
+    },
+    whoami: {
+      safeFlags: ["/user", "/groups", "/claims", "/priv", "/logonid", "/all", "/fo", "/nh"],
+    },
+    ver: {
+      allowAllFlags: true,
+    },
+    arp: {
+      safeFlags: ["-a", "-g", "-v", "-n"],
+      additionalCommandIsDangerousCallback: (_cmd, element) =>
+        (element?.args ?? []).some((arg) => !arg.startsWith("-")),
+    },
+    route: {
+      safeFlags: ["print", "PRINT", "-4", "-6"],
+      additionalCommandIsDangerousCallback: (_cmd, element) => {
+        if (!element) return true;
+        return element.args.find((arg) => !arg.startsWith("-"))?.toLowerCase() !== "print";
+      },
+    },
+    getmac: {
+      safeFlags: ["/FO", "/NH", "/V"],
+    },
+    tree: {
+      safeFlags: ["/F", "/A", "/Q", "/L"],
+    },
+    findstr: {
+      safeFlags: [
+        "/B",
+        "/E",
+        "/L",
+        "/R",
+        "/S",
+        "/I",
+        "/X",
+        "/V",
+        "/N",
+        "/M",
+        "/O",
+        "/P",
+        "/C",
+        "/G",
+        "/D",
+        "/A",
+      ],
+    },
+    dotnet: {},
+  });
+  SAFE_OUTPUT_CMDLETS = new Set(["out-null"]);
+  PIPELINE_TAIL_CMDLETS = new Set([
+    "format-table",
+    "format-list",
+    "format-wide",
+    "format-custom",
+    "measure-object",
+    "select-object",
+    "sort-object",
+    "group-object",
+    "where-object",
+    "out-string",
+    "out-host",
+  ]);
+  SAFE_EXTERNAL_EXES = new Set(["where.exe"]);
+  EXTERNAL_READONLY_COMMANDS = new Set(["git", "gh", "docker", "dotnet"]);
+  DEFAULT_PATHEXT_EXTENSIONS = [
+    "",
+    ".exe",
+    ".bat",
+    ".cmd",
+    ".com",
+    ".ps1",
+    ".vbs",
+    ".js",
+    ".wsf",
+    ".vbe",
+    ".jse",
+    ".wsh",
+    ".msc",
+    ".cpl",
+  ];
 });
-var SAFE_OUTPUT_CMDLETS = new Set(["out-null"]);
-var PIPELINE_TAIL_CMDLETS = new Set([
-  "format-table",
-  "format-list",
-  "format-wide",
-  "format-custom",
-  "measure-object",
-  "select-object",
-  "sort-object",
-  "group-object",
-  "where-object",
-  "out-string",
-  "out-host",
-]);
-var SAFE_EXTERNAL_EXES = new Set(["where.exe"]);
-var EXTERNAL_READONLY_COMMANDS = new Set(["git", "gh", "docker", "dotnet"]);
-var DEFAULT_PATHEXT_EXTENSIONS = [
-  "",
-  ".exe",
-  ".bat",
-  ".cmd",
-  ".com",
-  ".ps1",
-  ".vbs",
-  ".js",
-  ".wsf",
-  ".vbe",
-  ".jse",
-  ".wsh",
-  ".msc",
-  ".cpl",
-];
 //@ chunk-s67vc0kc.js:12203-12717 layout
 /**
  * 按当前 PATHEXT 缓存可执行扩展名列表与匹配正则（最多 64 项，扩展名≤16 字符）。
@@ -724,33 +761,36 @@ class PathextCache {
   regexByPathext = new Map();
   list() {
     let PATHEXT = env.PATHEXT ?? "";
-    let t = this.listByPathext.get(PATHEXT);
-    if (t === undefined) {
-      let n = new Set(DEFAULT_PATHEXT_EXTENSIONS);
-      for (let r of PATHEXT.split(";").slice(0, 64)) {
-        let lower = r.trim().toLowerCase();
-        if (lower.startsWith(".") && lower.length <= 16) n.add(lower);
+    let extensions = this.listByPathext.get(PATHEXT);
+    if (extensions === undefined) {
+      let extensionsList = new Set(DEFAULT_PATHEXT_EXTENSIONS);
+      for (let part of PATHEXT.split(";").slice(0, 64)) {
+        let lower = part.trim().toLowerCase();
+        if (lower.startsWith(".") && lower.length <= 16) extensionsList.add(lower);
       }
-      t = [...n];
-      this.listByPathext.set(PATHEXT, t);
+      extensions = [...extensionsList];
+      this.listByPathext.set(PATHEXT, extensions);
     }
-    return t;
+    return extensions;
   }
   regex() {
     let PATHEXT = env.PATHEXT ?? "";
-    let t = this.regexByPathext.get(PATHEXT);
-    if (t === undefined) {
+    let regex = this.regexByPathext.get(PATHEXT);
+    if (regex === undefined) {
       let mapped = this.list()
-        .filter((r) => r !== "")
-        .map((r) => urlPatternToRegex(r.slice(1)));
-      t = new RegExp(`\\.(${mapped.join("|")})$`, "i");
-      this.regexByPathext.set(PATHEXT, t);
+        .filter((extension) => extension !== "")
+        .map((extension) => urlPatternToRegex(extension.slice(1)));
+      regex = new RegExp(`\\.(${mapped.join("|")})$`, "i");
+      this.regexByPathext.set(PATHEXT, regex);
     }
-    return t;
+    return regex;
   }
 }
 //@ chunk-s67vc0kc.js:12717-12729 layout
-var pathextCache = new PathextCache();
+var pathextCache; // deferred: uses PathextCache of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-s67vc0kc.js:12717", () => {
+  pathextCache = new PathextCache();
+});
 //@ chunk-s67vc0kc.js:12729-12759 layout
 function getPathextList() {
   return pathextCache.list();
@@ -763,67 +803,67 @@ function getPathextRegex() {
 /**
  * 输出重定向/写入目标的主名集合，用于检测"先写 ./git.exe 再运行 git"的 cwd 优先解析遮蔽。
  */
-function baseStems(target) {
-  let t = new Set(commandBaseVariants(target).map((n) => n.stem));
-  t.delete("");
-  return Array.from(t);
+function baseStems(command) {
+  let stems = new Set(commandBaseVariants(command).map((variant) => variant.stem));
+  stems.delete("");
+  return Array.from(stems);
 }
 //@ chunk-s67vc0kc.js:12879-13044 layout
 /**
  * 对路径的多种规范拼写求末段名（base）及去掉可执行扩展名后的主名（stem）。
  */
-function commandBaseVariants(e) {
+function commandBaseVariants(command) {
   let pathextRegex = getPathextRegex();
-  let n = new Set();
-  let r = [];
-  for (let a of [
-    (s) => s,
+  let seen = new Set();
+  let variants = [];
+  for (let normalize of [
+    (text) => text,
     stripPsParameterPrefix,
     stripFileSystemProviderPrefix,
     createSingleEditDiffConfig,
   ]) {
-    let s = commandBaseName(e, a);
-    if (n.has(s)) continue;
-    n.add(s);
-    r.push({
-      base: s,
-      stem: s.replace(pathextRegex, ""),
+    let base = commandBaseName(command, normalize);
+    if (seen.has(base)) continue;
+    seen.add(base);
+    variants.push({
+      base,
+      stem: base.replace(pathextRegex, ""),
     });
   }
-  return r;
+  return variants;
 }
 //@ chunk-s67vc0kc.js:13044-13326 layout
-function commandBaseName(e, t) {
-  let replaced = t(e).replace(/^[A-Za-z]:(?![\\/])/, "");
-  let a = [];
-  for (let s of replaced.split(/[\\/]+/)) {
-    let c = stripTrailingDotsSpaces(s.replace(/:.*$/, ""));
-    if (c === "." || c === "") continue;
-    if (c === "..") {
-      if (a.length > 0 && a.at(-1) !== "..") a.pop();
-      else a.push("..");
+function commandBaseName(command, normalize) {
+  let replaced = normalize(command).replace(/^[A-Za-z]:(?![\\/])/, "");
+  let segments = [];
+  for (let part of replaced.split(/[\\/]+/)) {
+    let segment = stripTrailingDotsSpaces(part.replace(/:.*$/, ""));
+    if (segment === "." || segment === "") continue;
+    if (segment === "..") {
+      if (segments.length > 0 && segments.at(-1) !== "..") segments.pop();
+      else segments.push("..");
       continue;
     }
-    a.push(c);
+    segments.push(segment);
   }
-  return (a.at(-1) ?? "").toLowerCase();
+  return (segments.at(-1) ?? "").toLowerCase();
 }
 //@ chunk-s67vc0kc.js:13326-13582 layout
 /**
  * Windows 上当前目录中是否有与命令同名（含 PATHEXT 扩展）的文件，返回文件名。
  */
-function findCwdShadowingExecutable(name) {
+function findCwdShadowingExecutable(command) {
   if (getPlatform() !== "windows") return null;
   let cwd = getCwd();
-  let n = new Set();
-  for (let { base, stem } of commandBaseVariants(name))
-    for (let s of base === stem ? [stem] : [stem, base]) {
-      if (s === "" || n.has(s)) continue;
-      n.add(s);
-      for (let c of getPathextList()) {
-        let o = join(cwd, s + c);
+  let seen = new Set();
+  for (let { base, stem } of commandBaseVariants(command))
+    for (let nameStem of base === stem ? [stem] : [stem, base]) {
+      if (nameStem === "" || seen.has(nameStem)) continue;
+      seen.add(nameStem);
+      for (let extension of getPathextList()) {
+        let candidatePath = join(cwd, nameStem + extension);
         try {
-          if (statSync(o).isFile()) return s + c;
+          if (statSync(candidatePath).isFile()) return nameStem + extension;
         } catch {}
       }
     }
@@ -965,38 +1005,47 @@ function isReadOnlyCommand(command, parsed) {
 /**
  * 去掉参数名里的 - 与引号（保留首个短选项写法）。
  */
-var stripDashQuotes = (e, t = false) => (t && e.length > 1 && e[1] === "-" ? e : e.replace(/(?!^)[-']/g, ""));
+var stripDashQuotes = (text, exact = false) =>
+  exact && text.length > 1 && text[1] === "-" ? text : text.replace(/(?!^)[-']/g, "");
 //@ chunk-s67vc0kc.js:15581-16263 layout
 /**
  * 参数里是否有 -ErrorAction/-WarningAction 等取值不在安全集合（如 Ignore/SilentlyContinue 之外的危险值）的情况，支持缩写与冒号绑定。
  */
-function hasNonDefaultActionPreference(e, elementTypes, n = "full") {
-  let r = n === "full" ? isActionParamAlias : isActionParam;
-  for (let idx = 0; idx < e.length; idx++) {
-    let s = e[idx];
-    if (!PS_TOKENIZER_DASH_CHARS.has(s[0])) continue;
+function hasNonDefaultActionPreference(args, elementTypes, mode = "full") {
+  let isActionName = mode === "full" ? isActionParamAlias : isActionParam;
+  for (let idx = 0; idx < args.length; idx++) {
+    let arg = args[idx];
+    if (!PS_TOKENIZER_DASH_CHARS.has(arg[0])) continue;
     if (
       elementTypes !== undefined &&
       elementTypes[idx + 1] !== undefined &&
       elementTypes[idx + 1] !== "Parameter"
     )
       continue;
-    let c = s[0] === "-" ? s : "-" + s.slice(1);
-    let index = c.indexOf(":");
-    let lower = (index > 0 ? c.slice(0, index) : c).toLowerCase();
-    let u = null;
-    if (!r(lower) && !r(stripDashQuotes(lower, n === "exact"))) {
+    let paramText = arg[0] === "-" ? arg : "-" + arg.slice(1);
+    let index = paramText.indexOf(":");
+    let lower = (index > 0 ? paramText.slice(0, index) : paramText).toLowerCase();
+    let deferredValue = null;
+    if (!isActionName(lower) && !isActionName(stripDashQuotes(lower, mode === "exact"))) {
       let lower_2 = unescapePsDoubleQuoted(lower.replace(/`[\r\n]+\s*/g, "")).toLowerCase();
       let index = lower_2.indexOf(":", 1);
-      let p = index > 0 ? lower_2.slice(0, index) : lower_2;
-      if (!r(p) && !r(stripDashQuotes(p, n === "exact")) && !/[^\x20-\x7e]/.test(lower_2)) continue;
+      let unescapedParam = index > 0 ? lower_2.slice(0, index) : lower_2;
+      if (
+        !isActionName(unescapedParam) &&
+        !isActionName(stripDashQuotes(unescapedParam, mode === "exact")) &&
+        !/[^\x20-\x7e]/.test(lower_2)
+      )
+        continue;
       if (index > 0) {
         let sliced = lower_2.slice(index + 1);
-        u = sliced.trim() !== "" ? sliced : (e[idx + 1] ?? "");
+        deferredValue = sliced.trim() !== "" ? sliced : (args[idx + 1] ?? "");
       }
     }
-    let f = index > 0 ? c.slice(index + 1) : null;
-    let trimmed = (u ?? (f !== null && f.trim() !== "" ? f : (e[idx + 1] ?? "")))
+    let inlineValue = index > 0 ? paramText.slice(index + 1) : null;
+    let trimmed = (
+      deferredValue ??
+      (inlineValue !== null && inlineValue.trim() !== "" ? inlineValue : (args[idx + 1] ?? ""))
+    )
       .toLowerCase()
       .replace(/^['"]|['"]$/g, "")
       .trim();
@@ -1008,67 +1057,78 @@ function hasNonDefaultActionPreference(e, elementTypes, n = "full") {
 /**
  * 参数里是否有写变量的通用参数（-OutVariable/-ErrorVariable/…-Variable），或其值含 $、反引号、here-string、作用域前缀不合法等。
  */
-function hasVariableWritingParam(e, elementTypes, n = "full") {
-  let r = n === "full" ? isVariableParamAlias : isVariableParam;
-  let a = (s) => r(s) || (n === "full" && (s.endsWith("variable") || isSafeVerbAbbreviation(s)));
-  for (let idx = 0; idx < e.length; idx++) {
-    let c = e[idx];
-    if (!PS_TOKENIZER_DASH_CHARS.has(c[0])) continue;
+function hasVariableWritingParam(args, elementTypes, mode = "full") {
+  let isVariableName = mode === "full" ? isVariableParamAlias : isVariableParam;
+  let isVariableish = (paramName) =>
+    isVariableName(paramName) ||
+    (mode === "full" && (paramName.endsWith("variable") || isSafeVerbAbbreviation(paramName)));
+  for (let idx = 0; idx < args.length; idx++) {
+    let arg = args[idx];
+    if (!PS_TOKENIZER_DASH_CHARS.has(arg[0])) continue;
     if (
       elementTypes !== undefined &&
       elementTypes[idx + 1] !== undefined &&
       elementTypes[idx + 1] !== "Parameter"
     )
       continue;
-    let o = c[0] === "-" ? c : "-" + c.slice(1);
-    let colonBoundParam = parseColonBoundParam(o);
-    let lower = (colonBoundParam !== null ? o.slice(0, colonBoundParam.colonIdx) : o).toLowerCase();
-    if (!a(lower) && !a(stripDashQuotes(lower, n === "exact"))) {
+    let dashedToken = arg[0] === "-" ? arg : "-" + arg.slice(1);
+    let colonBoundParam = parseColonBoundParam(dashedToken);
+    let lower = (
+      colonBoundParam !== null ? dashedToken.slice(0, colonBoundParam.colonIdx) : dashedToken
+    ).toLowerCase();
+    if (!isVariableish(lower) && !isVariableish(stripDashQuotes(lower, mode === "exact"))) {
       let lower_2 = unescapePsDoubleQuoted(lower.replace(/`[\r\n]+\s*/g, "")).toLowerCase();
-      if (lower_2 !== lower && (a(lower_2) || a(stripDashQuotes(lower_2, n === "exact")))) return true;
+      if (
+        lower_2 !== lower &&
+        (isVariableish(lower_2) || isVariableish(stripDashQuotes(lower_2, mode === "exact")))
+      )
+        return true;
       let index = lower_2.indexOf(":", 1);
-      if (index > 0 && a(stripDashQuotes(lower_2.slice(0, index), n === "exact"))) return true;
+      if (index > 0 && isVariableish(stripDashQuotes(lower_2.slice(0, index), mode === "exact"))) return true;
       if (/[^\x20-\x7e]/.test(lower_2)) return true;
       continue;
     }
-    let f;
+    let paramValue;
     if (colonBoundParam !== null) {
       if (colonBoundParam.isHereString) return true;
       if (colonBoundParam.post.includes("$") || colonBoundParam.post.includes("`")) return true;
-      f = colonBoundParam.postResolved !== "" ? colonBoundParam.postResolved : (e[idx + 1] ?? "");
-    } else f = e[idx + 1] ?? "";
-    if (f.includes("$") || f.includes("`")) return true;
-    let trimmed = stripPsParameterPrefix(skipLeadingWhitespaceAndComments(f)).toLowerCase().trim();
+      paramValue = colonBoundParam.postResolved !== "" ? colonBoundParam.postResolved : (args[idx + 1] ?? "");
+    } else paramValue = args[idx + 1] ?? "";
+    if (paramValue.includes("$") || paramValue.includes("`")) return true;
+    let trimmed = stripPsParameterPrefix(skipLeadingWhitespaceAndComments(paramValue)).toLowerCase().trim();
     if (trimmed.length === 0) continue;
-    let m = trimmed.startsWith("+") ? trimmed.slice(1) : trimmed;
-    let index = m.lastIndexOf(":");
-    let S = m;
+    let variableExpr = trimmed.startsWith("+") ? trimmed.slice(1) : trimmed;
+    let index = variableExpr.lastIndexOf(":");
+    let variableName = variableExpr;
     if (index >= 0) {
-      let sliced = m.slice(0, index);
+      let sliced = variableExpr.slice(0, index);
       if (!POWERSHELL_SCOPE_NAMES.has(sliced) && !/^[0-9]+$/.test(sliced)) return true;
-      S = m.slice(index + 1);
+      variableName = variableExpr.slice(index + 1);
     }
-    if (!/^[a-z0-9_]+$/.test(S)) return true;
-    if (PS_PREFERENCE_VARIABLES.has(S)) return true;
+    if (!/^[a-z0-9_]+$/.test(variableName)) return true;
+    if (PS_PREFERENCE_VARIABLES.has(variableName)) return true;
   }
   return false;
 }
 //@ chunk-s67vc0kc.js:17321-17426 layout
-function needsNativeQuoting(e) {
-  return e.includes('"') || (/[\s\u0085\u180e]/.test(e) && (e.match(/\\+$/)?.[0].length ?? 0) % 2 === 1);
+function needsNativeQuoting(text) {
+  return (
+    text.includes('"') || (/[\s\u0085\u180e]/.test(text) && (text.match(/\\+$/)?.[0].length ?? 0) % 2 === 1)
+  );
 }
 //@ chunk-s67vc0kc.js:17426-17717 layout
-function parseColonBoundParam(e) {
-  if (e.length === 0 || !(PS_TOKENIZER_DASH_CHARS.has(e[0]) || e[0] === "/")) return null;
-  let index = e.indexOf(":", 1);
+function parseColonBoundParam(paramText) {
+  if (paramText.length === 0 || !(PS_TOKENIZER_DASH_CHARS.has(paramText[0]) || paramText[0] === "/"))
+    return null;
+  let index = paramText.indexOf(":", 1);
   if (index <= 0) return null;
-  let n = skipLeadingWhitespaceAndComments(e.slice(index + 1));
-  let r = skipLeadingWhitespaceAndComments(n.replace(/`[\r\n]+\s*/g, ""));
-  let isHereString = /^@['"\u2018-\u201F]/.test(n) || /^@['"\u2018-\u201F]/.test(r);
+  let postText = skipLeadingWhitespaceAndComments(paramText.slice(index + 1));
+  let postResolved = skipLeadingWhitespaceAndComments(postText.replace(/`[\r\n]+\s*/g, ""));
+  let isHereString = /^@['"\u2018-\u201F]/.test(postText) || /^@['"\u2018-\u201F]/.test(postResolved);
   return {
     colonIdx: index,
-    post: n,
-    postResolved: r,
+    post: postText,
+    postResolved,
     isHereString,
   };
 }
@@ -1076,27 +1136,27 @@ function parseColonBoundParam(e) {
 /**
  * 判断参数是否存在原生程序引号传递隐患：原文或去掉续行后的文本命中检查，或冒号绑定参数（-Param:value）的值在各种解析/规范化形式下命中检查；here-string 一律视为有隐患。
  */
-function hasNativeQuotingHazard(e, t = true) {
-  let replaced = e.replace(/`[\r\n]+\s*/g, "");
-  if (needsNativeQuoting(e) || needsNativeQuoting(unescapePsSimpleEscapes(replaced))) return true;
-  if (t) {
-    let colonBoundParam = parseColonBoundParam(e);
+function hasNativeQuotingHazard(arg, checkColonBound = true) {
+  let replaced = arg.replace(/`[\r\n]+\s*/g, "");
+  if (needsNativeQuoting(arg) || needsNativeQuoting(unescapePsSimpleEscapes(replaced))) return true;
+  if (checkColonBound) {
+    let colonBoundParam = parseColonBoundParam(arg);
     if (colonBoundParam !== null) {
       let { post, postResolved } = colonBoundParam;
       if (colonBoundParam.isHereString) return true;
-      let c = stripPsParameterPrefix(postResolved);
-      let o = stripPsParameterPrefix(post);
-      let l = stripFileSystemProviderPrefix(postResolved);
-      let u = stripFileSystemProviderPrefix(post);
+      let strippedResolved = stripPsParameterPrefix(postResolved);
+      let strippedPost = stripPsParameterPrefix(post);
+      let providerResolved = stripFileSystemProviderPrefix(postResolved);
+      let providerPost = stripFileSystemProviderPrefix(post);
       let singleEditDiffConfig = createSingleEditDiffConfig(postResolved);
       let singleEditDiffConfig_2 = createSingleEditDiffConfig(post);
       if (
-        needsNativeQuoting(c) ||
-        needsNativeQuoting(o) ||
-        needsNativeQuoting(unescapePsSimpleEscapes(c)) ||
-        needsNativeQuoting(l) ||
-        needsNativeQuoting(u) ||
-        needsNativeQuoting(unescapePsSimpleEscapes(l)) ||
+        needsNativeQuoting(strippedResolved) ||
+        needsNativeQuoting(strippedPost) ||
+        needsNativeQuoting(unescapePsSimpleEscapes(strippedResolved)) ||
+        needsNativeQuoting(providerResolved) ||
+        needsNativeQuoting(providerPost) ||
+        needsNativeQuoting(unescapePsSimpleEscapes(providerResolved)) ||
         needsNativeQuoting(singleEditDiffConfig) ||
         needsNativeQuoting(singleEditDiffConfig_2) ||
         needsNativeQuoting(unescapePsSimpleEscapes(singleEditDiffConfig))
@@ -1123,9 +1183,9 @@ function isHazyPeachFlagOn() {
  */
 function isAllowlistedCommand(cmd, originalCommand) {
   if (cmd.nameType === "application") {
-    let o = isHazyPeachFlagOn() ? PS_LEADING_WHITESPACE_RE : /\s/;
-    let l = cmd.text.split(o, 1)[0]?.toLowerCase() ?? "";
-    if (!SAFE_EXTERNAL_EXES.has(l)) return false;
+    let splitter = isHazyPeachFlagOn() ? PS_LEADING_WHITESPACE_RE : /\s/;
+    let exeName = cmd.text.split(splitter, 1)[0]?.toLowerCase() ?? "";
+    if (!SAFE_EXTERNAL_EXES.has(exeName)) return false;
   }
   let config = lookupAllowlist(cmd.name);
   if (!config) return false;
@@ -1150,11 +1210,11 @@ function isAllowlistedCommand(cmd, originalCommand) {
     }
   }
   let canonical = resolveToCanonical(cmd.name);
-  let a = EXTERNAL_READONLY_COMMANDS.has(canonical);
+  let isExternalReadOnly = EXTERNAL_READONLY_COMMANDS.has(canonical);
   let isCmdlet = canonical.includes("-");
-  let c = cmd.nameType !== "cmdlet";
+  let isExternal = cmd.nameType !== "cmdlet";
   if (getPlatform() === "windows") {
-    if (c || a) {
+    if (isExternal || isExternalReadOnly) {
       for (let arg of cmd.args)
         if (hasNativeQuotingHazard(arg, !isCmdlet || cmd.nameType === "application")) return false;
     }
@@ -1162,29 +1222,30 @@ function isAllowlistedCommand(cmd, originalCommand) {
   }
   if (!isCmdlet || cmd.nameType === "application")
     for (let idx = 1; idx < cmd.elementTypes.length; idx++) {
-      let l = cmd.elementTypes[idx];
-      if (l !== "StringConstant" && l !== "Parameter") return false;
-      if (l === "Parameter" && !a && (cmd.args[idx - 1] ?? "").includes(":")) return false;
+      let elementType = cmd.elementTypes[idx];
+      if (elementType !== "StringConstant" && elementType !== "Parameter") return false;
+      if (elementType === "Parameter" && !isExternalReadOnly && (cmd.args[idx - 1] ?? "").includes(":"))
+        return false;
     }
-  if (a) {
-    let o = null;
+  if (isExternalReadOnly) {
+    let rebuiltArgs = null;
     for (let idx = 1; idx < cmd.elementTypes.length; idx++) {
-      let u = cmd.args[idx - 1] ?? "";
+      let arg = cmd.args[idx - 1] ?? "";
       if (cmd.elementTypes[idx] === "Parameter") {
-        let colonBoundParam = parseColonBoundParam(u);
+        let colonBoundParam = parseColonBoundParam(arg);
         if (colonBoundParam !== null) {
           if (colonBoundParam.isHereString) return false;
-          o ??= cmd.args.slice(0, idx - 1);
-          o.push(
-            u.slice(0, colonBoundParam.colonIdx),
+          rebuiltArgs ??= cmd.args.slice(0, idx - 1);
+          rebuiltArgs.push(
+            arg.slice(0, colonBoundParam.colonIdx),
             unescapePsDoubleQuoted(stripPsParameterPrefix(colonBoundParam.postResolved)),
           );
           continue;
         }
       }
-      o?.push(u);
+      rebuiltArgs?.push(arg);
     }
-    if (o !== null && !isExternalCommandSafe(canonical, o)) return false;
+    if (rebuiltArgs !== null && !isExternalCommandSafe(canonical, rebuiltArgs)) return false;
     return isExternalCommandSafe(canonical, cmd.args);
   }
   if (isCmdlet && hasNonDefaultActionPreference(cmd.args, cmd.elementTypes)) return false;
@@ -1236,46 +1297,57 @@ function isExternalCommandSafe(command, args) {
   }
 }
 //@ chunk-s67vc0kc.js:20256-20536 layout = GIT_GLOBAL_FLAGS_WITH_VALUES (0.832)
-var GIT_UNSAFE_GLOBAL_FLAGS = new Set([
-  "-c",
-  "-C",
-  "--exec-path",
-  "--config-env",
-  "--git-dir",
-  "--work-tree",
-  "--bare",
-  "--attr-source",
-  "--help",
-  "-h",
-  "--shallow-file",
-]);
-var GIT_GLOBAL_FLAGS_WITH_VALUE = new Set([
-  "-c",
-  "-C",
-  "--exec-path",
-  "--config-env",
-  "--git-dir",
-  "--work-tree",
-  "--namespace",
-  "--super-prefix",
-  "--shallow-file",
-]);
-var GIT_CONFIG_FLAGS = ["-c", "-C"];
+var GIT_UNSAFE_GLOBAL_FLAGS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var GIT_GLOBAL_FLAGS_WITH_VALUE;
+var GIT_CONFIG_FLAGS;
+deferInit("chunk-s67vc0kc.js:20256", () => {
+  GIT_UNSAFE_GLOBAL_FLAGS = new Set([
+    "-c",
+    "-C",
+    "--exec-path",
+    "--config-env",
+    "--git-dir",
+    "--work-tree",
+    "--bare",
+    "--attr-source",
+    "--help",
+    "-h",
+    "--shallow-file",
+  ]);
+  GIT_GLOBAL_FLAGS_WITH_VALUE = new Set([
+    "-c",
+    "-C",
+    "--exec-path",
+    "--config-env",
+    "--git-dir",
+    "--work-tree",
+    "--namespace",
+    "--super-prefix",
+    "--shallow-file",
+  ]);
+  GIT_CONFIG_FLAGS = ["-c", "-C"];
+});
 //@ chunk-s67vc0kc.js:20536-20583 layout
 /**
  * 判断是否为带值的 git 全局选项。
  */
-function isValueTakingGitFlag(e) {
-  return !e.includes("=") && GIT_GLOBAL_FLAGS_WITH_VALUE.has(e);
+function isValueTakingGitFlag(flag) {
+  return !flag.includes("=") && GIT_GLOBAL_FLAGS_WITH_VALUE.has(flag);
 }
 //@ chunk-s67vc0kc.js:20583-20807 layout
-function argsTokenShapeMatch(e, t) {
-  for (let idx = 0; idx < e.length; idx++) {
-    let r = e[idx] ?? "";
-    let a = t[idx] ?? "";
-    if (a.includes("\x00") || unescapePsNullEscape(r).includes("\x00")) return false;
-    if (isFlagToken(a) !== isFlagToken(r) || (a === "--") !== (r === "--")) return false;
-    if (isFlagToken(r) && r !== a && isValueTakingGitFlag(r) !== isValueTakingGitFlag(a)) return false;
+function argsTokenShapeMatch(rawArgs, normalizedArgs) {
+  for (let idx = 0; idx < rawArgs.length; idx++) {
+    let rawArg = rawArgs[idx] ?? "";
+    let normalizedArg = normalizedArgs[idx] ?? "";
+    if (normalizedArg.includes("\x00") || unescapePsNullEscape(rawArg).includes("\x00")) return false;
+    if (isFlagToken(normalizedArg) !== isFlagToken(rawArg) || (normalizedArg === "--") !== (rawArg === "--"))
+      return false;
+    if (
+      isFlagToken(rawArg) &&
+      rawArg !== normalizedArg &&
+      isValueTakingGitFlag(rawArg) !== isValueTakingGitFlag(normalizedArg)
+    )
+      return false;
   }
   return true;
 }
@@ -1283,14 +1355,14 @@ function argsTokenShapeMatch(e, t) {
 /**
  * 反转义参数并统一 Unicode 破折号，得到参数列表。
  */
-function normalizePsArgs(e) {
-  return e.map((t) => normalizeUnicodeDashes(unescapePsDoubleQuoted(t.replace(/`[\r\n]+\s*/g, ""))));
+function normalizePsArgs(args) {
+  return args.map((arg) => normalizeUnicodeDashes(unescapePsDoubleQuoted(arg.replace(/`[\r\n]+\s*/g, ""))));
 }
 //@ chunk-s67vc0kc.js:20878-20943 layout
-function isGitSafePS(e) {
-  let t = normalizePsArgs(e);
-  if (!argsTokenShapeMatch(e, t)) return false;
-  return isGitSafe(e) && isGitSafe(t);
+function isGitSafePS(args) {
+  let normalizedArgs = normalizePsArgs(args);
+  if (!argsTokenShapeMatch(args, normalizedArgs)) return false;
+  return isGitSafe(args) && isGitSafe(normalizedArgs);
 }
 //@ chunk-s67vc0kc.js:20943-21780 fingerprint = isGitSafe (0.873)
 /**
@@ -1333,13 +1405,13 @@ function isGitSafe(args) {
   if (!config) return false;
   let flagArgs = args.slice(idx + subcommandTokens);
   if (first === "ls-remote") {
-    let u = false;
+    let afterDoubleDash = false;
     for (let arg of flagArgs) {
-      if (!u && arg === "--") {
-        u = true;
+      if (!afterDoubleDash && arg === "--") {
+        afterDoubleDash = true;
         continue;
       }
-      if (u || arg === "-" || !arg.startsWith("-")) return false;
+      if (afterDoubleDash || arg === "-" || !arg.startsWith("-")) return false;
     }
   }
   if (
@@ -1355,49 +1427,57 @@ function isGitSafe(args) {
 /**
  * 判断两种拼写下的参数结构一致且没有安全顾虑。
  */
-function hasMismatchedArgs(e) {
-  let t = normalizePsArgs(e);
-  if (!argsTokenShapeMatch(e, t)) return false;
-  return alwaysSafe(e) && alwaysSafe(t);
+function hasMismatchedArgs(args) {
+  let normalizedArgs = normalizePsArgs(args);
+  if (!argsTokenShapeMatch(args, normalizedArgs)) return false;
+  return alwaysSafe(args) && alwaysSafe(normalizedArgs);
 }
 //@ chunk-s67vc0kc.js:21845-21868 layout
 /**
  * 恒为 true 的占位判断（保留扩展点）。
  */
-function alwaysSafe(e) {
+function alwaysSafe(args) {
   return false;
 }
 //@ chunk-s67vc0kc.js:21868-21985 layout
-var DOCKER_DANGEROUS_SHORT_FLAGS = new Set(
-  DOCKER_DANGEROUS_FLAGS.filter((e) => /^-[^-]$/.test(e)).map((e) => e[1]),
-);
-var DOCKER_DANGEROUS_LONG_FLAGS_2 = [...DOCKER_DANGEROUS_FLAGS.filter((e) => e.startsWith("--")), "--tls"];
+var DOCKER_DANGEROUS_SHORT_FLAGS; // deferred: uses GH_READ_ONLY_COMMANDS (../../utils/shell/readOnlyCommandValidation.js) of its import cycle while loading; runs once the cycle is complete
+var DOCKER_DANGEROUS_LONG_FLAGS_2;
+deferInit("chunk-s67vc0kc.js:21868", () => {
+  DOCKER_DANGEROUS_SHORT_FLAGS = new Set(
+    DOCKER_DANGEROUS_FLAGS.filter((flag) => /^-[^-]$/.test(flag)).map((flag) => flag[1]),
+  );
+  DOCKER_DANGEROUS_LONG_FLAGS_2 = [
+    ...DOCKER_DANGEROUS_FLAGS.filter((flag) => flag.startsWith("--")),
+    "--tls",
+  ];
+});
 //@ chunk-s67vc0kc.js:21985-22567 fingerprint = isDockerSafe (1)
 /**
  * docker 参数只读判定：无变量、无危险全局选项（-H/--host/--tls…），子命令在只读列表或配置内并校验选项。
  */
 function isDockerSafe(args) {
   if (args.length === 0) return true;
-  let t = normalizePsArgs(args);
+  let normalizedArgs = normalizePsArgs(args);
   if (getPlatform() === "windows") {
     for (let arg of args) if (hasNativeQuotingHazard(arg)) return false;
   }
-  for (let arg of t) if (arg.includes("$")) return false;
-  for (let s of t) {
-    if (s[0] === "-" && s[1] !== "-")
-      for (let idx = 1; idx < s.length; idx++) {
-        let l = s[idx];
-        if (DOCKER_DANGEROUS_SHORT_FLAGS.has(l)) return false;
-        if (l !== "h" && DOCKER_DANGEROUS_SHORT_FLAGS.has(l.toLowerCase())) return false;
+  for (let arg of normalizedArgs) if (arg.includes("$")) return false;
+  for (let arg of normalizedArgs) {
+    if (arg[0] === "-" && arg[1] !== "-")
+      for (let idx = 1; idx < arg.length; idx++) {
+        let shortFlagChar = arg[idx];
+        if (DOCKER_DANGEROUS_SHORT_FLAGS.has(shortFlagChar)) return false;
+        if (shortFlagChar !== "h" && DOCKER_DANGEROUS_SHORT_FLAGS.has(shortFlagChar.toLowerCase()))
+          return false;
       }
-    let lower = s.toLowerCase();
-    if (DOCKER_DANGEROUS_LONG_FLAGS_2.some((o) => lower.startsWith(o))) return false;
+    let lower = arg.toLowerCase();
+    if (DOCKER_DANGEROUS_LONG_FLAGS_2.some((longFlag) => lower.startsWith(longFlag))) return false;
   }
-  let oneWordKey = `docker ${t[0]?.toLowerCase()}`;
+  let oneWordKey = `docker ${normalizedArgs[0]?.toLowerCase()}`;
   if (DOCKER_BARE_READ_ONLY_COMMANDS.includes(oneWordKey)) return true;
   let config = DOCKER_READ_ONLY_COMMANDS[oneWordKey];
   if (!config) return false;
-  let flagArgs = t.slice(1);
+  let flagArgs = normalizedArgs.slice(1);
   if (
     config.additionalCommandIsDangerousCallback &&
     config.additionalCommandIsDangerousCallback("", flagArgs)

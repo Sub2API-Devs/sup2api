@@ -35,19 +35,19 @@ function createLSPServerManager(storageV5, credentials) {
   let documentVersions = new Map();
   let lastConfigLoadFailed = false;
   function nextDocumentVersion(fileUri) {
-    let nt = (documentVersions.get(fileUri) ?? 0) + 1;
-    documentVersions.set(fileUri, nt);
-    return nt;
+    let version = (documentVersions.get(fileUri) ?? 0) + 1;
+    documentVersions.set(fileUri, version);
+    return version;
   }
   function touchOpenedFile(fileUri, name) {
     openedFiles.delete(fileUri);
     openedFiles.set(fileUri, name);
   }
   function evictOpenedFiles() {
-    for (let [fileUri, nt] of openedFiles) {
+    for (let [fileUri, serverName] of openedFiles) {
       if (openedFiles.size <= MAX_OPEN_DOCUMENTS) return;
       openedFiles.delete(fileUri);
-      let server = servers.get(nt);
+      let server = servers.get(serverName);
       if (!server || server.state !== "running") continue;
       logForDebugging(`LSP: Sending didClose for evicted document ${fileUri}`);
       server
@@ -126,7 +126,7 @@ function createLSPServerManager(storageV5, credentials) {
   }
   async function shutdown() {
     let toStop = Array.from(servers.entries()).filter(
-      ([, Et]) => Et.state === "running" || Et.state === "error",
+      ([, server]) => server.state === "running" || server.state === "error",
     );
     let results = await Promise.allSettled(toStop.map(([, server]) => server.stop()));
     servers.clear();
@@ -160,7 +160,8 @@ function createLSPServerManager(storageV5, credentials) {
     if (server.state === "stopped" || server.state === "error")
       try {
         await server.start();
-        for (let [pt, Et] of openedFiles) if (Et === server.name) openedFiles.delete(pt);
+        for (let [fileUri, openServerName] of openedFiles)
+          if (openServerName === server.name) openedFiles.delete(fileUri);
       } catch (error) {
         logForDebugging(`Failed to start LSP server for file ${filePath}: ${error.message}`, {
           level: "error",
@@ -228,11 +229,11 @@ function createLSPServerManager(storageV5, credentials) {
     if (openedFiles.get(fileUri) !== server.name) return openFile(filePath, content);
     touchOpenedFile(fileUri, server.name);
     try {
-      let yt = nextDocumentVersion(fileUri);
+      let version = nextDocumentVersion(fileUri);
       await server.sendNotification("textDocument/didChange", {
         textDocument: {
           uri: fileUri,
-          version: yt,
+          version,
         },
         contentChanges: [
           {
@@ -240,7 +241,7 @@ function createLSPServerManager(storageV5, credentials) {
           },
         ],
       });
-      logForDebugging(`LSP: Sent didChange for ${filePath} (v${yt})`);
+      logForDebugging(`LSP: Sent didChange for ${filePath} (v${version})`);
     } catch (error) {
       let err = Error(`Failed to sync file change ${filePath}: ${errorMessage(error)}`);
       logForDebugging(`Failed to sync file change ${filePath}: ${errorMessage(error)}`, {
@@ -271,10 +272,10 @@ function createLSPServerManager(storageV5, credentials) {
   }
   function isFileOpen(filePath) {
     let fileUri = pathToFileURL(pathModule_2.resolve(filePath)).href;
-    let pt = openedFiles.get(fileUri);
-    if (pt === undefined) return false;
-    let Et = servers.get(pt);
-    return Et !== undefined && Et.state === "running";
+    let openServerName = openedFiles.get(fileUri);
+    if (openServerName === undefined) return false;
+    let server = servers.get(openServerName);
+    return server !== undefined && server.state === "running";
   }
   function getDocumentVersion(filePath) {
     return documentVersions.get(filePath);

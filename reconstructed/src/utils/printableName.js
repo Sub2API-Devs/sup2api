@@ -19,6 +19,7 @@ import {
 } from "./stringUtils.js";
 import { INVISIBLE_CHAR_CLASS_SOURCE } from "./sanitization.js";
 import { errorMessage } from "./errors.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-cbe70hjy.js:317-765 placement
 /**
@@ -31,8 +32,8 @@ var QUOTE_CHARS_PATTERN = /(?<![^\s\p{P}])\p{M}+/gu;
 /**
  * 去掉 ANSI 序列与控制字符并压缩空格。
  */
-function stripAnsiAndControls(n) {
-  return replaceControlChars(stripAnsiSequences(toWellFormedString(n)))
+function stripAnsiAndControls(value) {
+  return replaceControlChars(stripAnsiSequences(toWellFormedString(value)))
     .replace(/ {2,}/g, " ")
     .trim();
 }
@@ -44,75 +45,82 @@ var MAX_ANSI_STRIP_ROUNDS = 4;
  * 反复去掉 ANSI 转义序列。
  */
 function stripAnsiSequences(wellFormedString) {
-  let e = wellFormedString;
+  let stripped = wellFormedString;
   for (let i = 0; i < MAX_ANSI_STRIP_ROUNDS; i++) {
-    let replaced = e.replace(ANSI_ESCAPE_RE, "");
-    if (replaced === e) break;
-    e = replaced;
+    let replaced = stripped.replace(ANSI_ESCAPE_RE, "");
+    if (replaced === stripped) break;
+    stripped = replaced;
   }
-  return e;
+  return stripped;
 }
 //@ chunk-cbe70hjy.js:1021-1141 placement = setCwdState (1)
 /**
  * 生成可打印的名字（去控制字符、反引号替换、截断）。
  */
-function printableName(n, e = 160) {
+function printableName(value, maxLength = 160) {
   return truncateWithEllipsis(
-    stripAnsiAndControls(sliceSafely(n, e))
+    stripAnsiAndControls(sliceSafely(value, maxLength))
       .normalize("NFC")
       .replace(/[`\uff40\u02cb\u1fef\u2035]/g, "'")
       .replace(QUOTE_CHARS_PATTERN, ""),
-    e,
+    maxLength,
   );
 }
 //@ chunk-cbe70hjy.js:1141-1181 placement
-var regExp = new RegExp(`[^\\S ]|[${INVISIBLE_CHAR_CLASS_SOURCE}]`, "u");
+var regExp; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-cbe70hjy.js:1141", () => {
+  regExp = new RegExp(`[^\\S ]|[${INVISIBLE_CHAR_CLASS_SOURCE}]`, "u");
+});
 //@ chunk-cbe70hjy.js:1181-1263 placement
 /**
  * 名字是否已是可打印形式。
  */
-function isAlreadyPrintable(n, e) {
-  return n.length <= e && !regExp.test(n) && printableName(n, e) === n.replaceAll("`", "'");
+function isAlreadyPrintable(value, maxLength) {
+  return (
+    value.length <= maxLength &&
+    !regExp.test(value) &&
+    printableName(value, maxLength) === value.replaceAll("`", "'")
+  );
 }
 //@ chunk-cbe70hjy.js:1263-1342 placement
 /**
  * 可打印文本（长度上限 2000）。
  */
-function printableText(n, e = 2000) {
-  let t = stripAnsiAndControls(sliceSafely(n, e));
-  return t.length > e ? `${truncateToLength(t, e)}\u2026` : t;
+function printableText(text, maxLength = 2000) {
+  let stripped = stripAnsiAndControls(sliceSafely(text, maxLength));
+  return stripped.length > maxLength ? `${truncateToLength(stripped, maxLength)}\u2026` : stripped;
 }
 //@ chunk-cbe70hjy.js:1342-1403 placement
 /**
  * 超长时截断加省略号。
  */
-function truncateWithEllipsis(n, e = 2000) {
-  return n.length > e ? `${truncateToLength(n, e)}\u2026` : n;
+function truncateWithEllipsis(text, maxLength = 2000) {
+  return text.length > maxLength ? `${truncateToLength(text, maxLength)}\u2026` : text;
 }
 //@ chunk-cbe70hjy.js:1403-1553 placement
 /**
  * 单行化文本（去控制字符、压缩空白）。
  */
-function singleLineText(n, e = 160) {
-  let trimmed = toWellFormedString(n)
-    .replace(/[\p{Cc}\p{Cf}]/gu, (r) => (/\s/.test(r) ? r : ""))
+function singleLineText(value, maxLength = 160) {
+  let trimmed = toWellFormedString(value)
+    .replace(/[\p{Cc}\p{Cf}]/gu, (char) => (/\s/.test(char) ? char : ""))
     .replace(/\s+/g, " ")
     .trim();
-  return trimmed.length > e ? `${truncateToLength(trimmed, e)}\u2026` : trimmed;
+  return trimmed.length > maxLength ? `${truncateToLength(trimmed, maxLength)}\u2026` : trimmed;
 }
 //@ chunk-cbe70hjy.js:1553-1593 placement
 /**
  * 可打印名字（空值为空串）。
  */
-function printableOrEmpty(n, e = 300) {
-  return printableName(n ?? "", e);
+function printableOrEmpty(value, maxLength = 300) {
+  return printableName(value ?? "", maxLength);
 }
 //@ chunk-cbe70hjy.js:1593-1743 placement
 /**
  * 可打印名字（引号统一为弯引号）。
  */
-function quotedPrintable(n, e = 300) {
-  return printableName(n ?? "", e)
+function quotedPrintable(value, maxLength = 300) {
+  return printableName(value ?? "", maxLength)
     .replace(QUOTE_CHARS_PATTERN_2, "")
     .replace(/[\u02bb\u02bc]/g, "\u2019")
     .replace(/"/g, "\u201D")
@@ -123,37 +131,37 @@ function quotedPrintable(n, e = 300) {
 /**
  * 可打印标签（规范引号）。
  */
-function printableLabel(n, e) {
-  let trimmed = collapseWhitespace(printableText_2(toWellFormedString(n).replace(/\s+/g, " ")))
+function printableLabel(value, limits) {
+  let trimmed = collapseWhitespace(printableText_2(toWellFormedString(value).replace(/\s+/g, " ")))
     .normalize("NFC")
     .replace(QUOTE_CHARS_PATTERN_2, "'")
     .replace(/["\u02BB\u02BC]/g, "'")
     .replace(QUOTE_CHARS_PATTERN, "")
     .trim();
   if (!trimmed) return "";
-  return `\u201C${e ? truncateMiddle_2(trimmed, e.head, e.tail, () => "\u2026") : trimmed}\u201D`;
+  return `\u201C${limits ? truncateMiddle_2(trimmed, limits.head, limits.tail, () => "\u2026") : trimmed}\u201D`;
 }
 //@ chunk-cbe70hjy.js:1961-2139 placement
 /**
  * 可打印名字，为空时显示占位。
  */
-function printableNameOrPlaceholder(n) {
-  let replaced = printableLabel(n)
+function printableNameOrPlaceholder(value) {
+  let replaced = printableLabel(value)
     .replace(/[`\uff40\u02cb\u1fef\u2035]/g, "'")
     .replace(QUOTE_CHARS_PATTERN, "");
   return replaced === ""
     ? "(no printable name)"
-    : replaced === `\u201C${n}\u201D`
+    : replaced === `\u201C${value}\u201D`
       ? replaced
       : `${replaced} (not its exact spelling)`;
 }
 //@ chunk-cbe70hjy.js:2139-2230 placement = readHeadAndTail (0.802)
-function readHeadAndTail(n, e) {
-  let t = printableLabel(n) || "\u201C\u201D";
-  return t.length <= e
-    ? t
-    : printableLabel(n, {
-        head: e - 3,
+function readHeadAndTail(value, maxLength) {
+  let label = printableLabel(value) || "\u201C\u201D";
+  return label.length <= maxLength
+    ? label
+    : printableLabel(value, {
+        head: maxLength - 3,
         tail: 0,
       });
 }
@@ -161,41 +169,41 @@ function readHeadAndTail(n, e) {
 /**
  * 保留首尾截断中间（保持引号平衡）。
  */
-function truncateMiddle(n, { head, tail }) {
-  if (n.length <= head + tail) return n;
-  let r = head > 0 ? truncateToLength(n, head) : "";
-  let u = tail > 0 ? takeLastChars(n, tail) : "";
-  let i = (r.match(/\u201C/g)?.length ?? 0) > (r.match(/\u201D/g)?.length ?? 0);
-  let index = u.indexOf("\u201D");
-  let index_2 = u.indexOf("\u201C");
-  let g = index !== -1 && (index_2 === -1 || index < index_2);
-  return `${r}${i === g ? "\u2026" : i ? "\u2026\u201D\u2026" : "\u2026\u201C\u2026"}${u}`;
+function truncateMiddle(text, { head, tail }) {
+  if (text.length <= head + tail) return text;
+  let headText = head > 0 ? truncateToLength(text, head) : "";
+  let tailText = tail > 0 ? takeLastChars(text, tail) : "";
+  let opensQuote = (headText.match(/\u201C/g)?.length ?? 0) > (headText.match(/\u201D/g)?.length ?? 0);
+  let index = tailText.indexOf("\u201D");
+  let index_2 = tailText.indexOf("\u201C");
+  let tailClosesQuote = index !== -1 && (index_2 === -1 || index < index_2);
+  return `${headText}${opensQuote === tailClosesQuote ? "\u2026" : opensQuote ? "\u2026\u201D\u2026" : "\u2026\u201C\u2026"}${tailText}`;
 }
 //@ chunk-cbe70hjy.js:2538-2868 placement
 /**
  * 截取时避免切断转义序列。
  */
-function sliceSafely(n, e) {
-  let t = truncateToLength(n, e * 8);
-  if (t.length === n.length) return t;
-  let match = /\x1b(?:[\]PX^_][^\x1b\x07]*\x1b?|\[[\x30-\x3f]*[\x20-\x2f]*)$/.exec(t);
-  if (match === null) return t;
-  let sliced = n.slice(match.index);
+function sliceSafely(value, maxLength) {
+  let truncated = truncateToLength(value, maxLength * 8);
+  if (truncated.length === value.length) return truncated;
+  let match = /\x1b(?:[\]PX^_][^\x1b\x07]*\x1b?|\[[\x30-\x3f]*[\x20-\x2f]*)$/.exec(truncated);
+  if (match === null) return truncated;
+  let sliced = value.slice(match.index);
   return (
     sliced[1] === "["
       ? /^\x1b\[[\x30-\x3f]*[\x20-\x2f]*[\x40-\x7e]/.test(sliced)
       : /^\x1b[\]PX^_][^\x1b\x07]*(?:\x07|\x1b\\)/.test(sliced)
   )
-    ? t.slice(0, match.index)
-    : t;
+    ? truncated.slice(0, match.index)
+    : truncated;
 }
 //@ chunk-cbe70hjy.js:2868-2948 placement
 /**
  * 消息的可打印形式（组合文本更长）。
  */
-function printableMessage(n, { isComposed: e } = {}) {
-  let t = errorMessage(n);
-  return e?.(n) ? printableText(t, 2000) : printableName(t, 500);
+function printableMessage(error, { isComposed } = {}) {
+  let message = errorMessage(error);
+  return isComposed?.(error) ? printableText(message, 2000) : printableName(message, 500);
 }
 export {
   stripAnsiAndControls,

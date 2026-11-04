@@ -7,7 +7,7 @@
  */
 import { $ZodError, formatError, flattenError } from "../core/errors.js";
 import { jsonStringifyReplacer } from "../core/util.js";
-import { Fr } from "../core/core.js";
+import { $constructor } from "../core/core.js";
 
 //@ chunk-7vp249v4.js:78914-78969 esm-layout
 var _installedErrorProtos = new WeakSet([Object.prototype, Error.prototype]);
@@ -41,15 +41,15 @@ var initializer_2 = (inst, issues) => {
   let proto = Object.getPrototypeOf(inst);
   if (_installedErrorProtos.has(proto)) return;
   _installedErrorProtos.add(proto);
-  _lazyMethod(proto, "format", (n) => (mapper) => formatError(n, mapper));
-  _lazyMethod(proto, "flatten", (n) => (mapper) => flattenError(n, mapper));
-  _lazyMethod(proto, "addIssue", (n) => (issue) => {
-    n.issues.push(issue);
-    n.message = JSON.stringify(n.issues, jsonStringifyReplacer, 2);
+  _lazyMethod(proto, "format", (errorInstance) => (mapper) => formatError(errorInstance, mapper));
+  _lazyMethod(proto, "flatten", (errorInstance) => (mapper) => flattenError(errorInstance, mapper));
+  _lazyMethod(proto, "addIssue", (errorInstance) => (issue) => {
+    errorInstance.issues.push(issue);
+    errorInstance.message = JSON.stringify(errorInstance.issues, jsonStringifyReplacer, 2);
   });
-  _lazyMethod(proto, "addIssues", (n) => (issues) => {
-    n.issues.push(...issues);
-    n.message = JSON.stringify(n.issues, jsonStringifyReplacer, 2);
+  _lazyMethod(proto, "addIssues", (errorInstance) => (issues) => {
+    errorInstance.issues.push(...issues);
+    errorInstance.message = JSON.stringify(errorInstance.issues, jsonStringifyReplacer, 2);
   });
   Object.defineProperty(proto, "isEmpty", {
     configurable: true,
@@ -59,8 +59,8 @@ var initializer_2 = (inst, issues) => {
     },
   });
 };
-var ZodError = Fr("ZodError", initializer_2);
-var ZodRealError = Fr("ZodError", initializer_2, undefined, {
+var ZodError = $constructor("ZodError", initializer_2);
+var ZodRealError = $constructor("ZodError", initializer_2, undefined, {
   Parent: Error,
 });
 export { ZodError, ZodRealError };

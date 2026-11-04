@@ -59,10 +59,10 @@ function planRelayFromHandoff({
       arm: false,
     };
   }
-  let d = validateMarkerLine(relayMarker, carried, conversation);
-  if (!d.ok) {
+  let markerCheck = validateMarkerLine(relayMarker, carried, conversation);
+  if (!markerCheck.ok) {
     takeOpenRelayBootVerdict();
-    logRelayArmRefused(d.code, d.reason, turnKind);
+    logRelayArmRefused(markerCheck.code, markerCheck.reason, turnKind);
     return {
       arm: false,
     };
@@ -73,10 +73,10 @@ function planRelayFromHandoff({
     markerLine: {
       type: "system",
       subtype: UPGRADE_RELAY_MARKER,
-      content: d.content,
+      content: markerCheck.content,
       level: "info",
       timestamp: new Date().toISOString(),
-      uuid: d.uuid,
+      uuid: markerCheck.uuid,
     },
   };
 }
@@ -86,7 +86,7 @@ function beginMarkerLineWrite() {
   noteHandoffMarkerStep("write_begun");
 }
 //@ chunk-z6qazjbc.js:12658-13175 placement
-function armRelayFromStoredHandoff(r, liveMessages, handoffKind) {
+function armRelayFromStoredHandoff(marker, liveMessages, handoffKind) {
   let teleportRelayEnvConfig = getTeleportRelayEnvConfig();
   if (!teleportRelayEnvConfig || !isRelayBootVerdictOpen()) {
     noteHandoffMarkerStep("not_awaiting_handoff_at_arm");
@@ -96,11 +96,11 @@ function armRelayFromStoredHandoff(r, liveMessages, handoffKind) {
     return;
   }
   takeOpenRelayBootVerdict();
-  let a;
+  let armResult;
   try {
-    a = armRelayFromMarker({
-      markerLineUuid: r.uuid,
-      markerContent: r.content,
+    armResult = armRelayFromMarker({
+      markerLineUuid: marker.uuid,
+      markerContent: marker.content,
       liveMessages,
       ingressOrigin: teleportRelayEnvConfig.ingressOrigin,
       remoteSessionId: teleportRelayEnvConfig.remoteSessionId,
@@ -109,8 +109,8 @@ function armRelayFromStoredHandoff(r, liveMessages, handoffKind) {
     logRelayArmRefused("boot_failed", "the arm threw", handoffKind);
     throw error;
   }
-  if (!a.armed) {
-    logRelayArmRefused(a.code, a.reason, handoffKind);
+  if (!armResult.armed) {
+    logRelayArmRefused(armResult.code, armResult.reason, handoffKind);
     return;
   }
   logFeatureOk("upgrade_teleport_cache");
@@ -122,21 +122,21 @@ function armRelayFromStoredHandoff(r, liveMessages, handoffKind) {
 }
 //@ chunk-z6qazjbc.js:13175-13522 placement
 function noteHandoffMarkerFate(handoffKind, turnOutcome) {
-  let e = takeHandoffMarkerStep();
+  let step = takeHandoffMarkerStep();
   let { status } = getTeleportCacheState();
-  if (e === "verdict_logged" || e === "relay_on" || status === "active") return;
+  if (step === "verdict_logged" || step === "relay_on" || status === "active") return;
   logForDiagnosticsNoPII("warn", "cli_teleport_handoff_marker_unused", {
     handoff_kind: handoffKind,
     reason:
-      e === undefined
+      step === undefined
         ? "marker_not_checked"
-        : e === "checking"
+        : step === "checking"
           ? "check_threw"
-          : e === "planned"
+          : step === "planned"
             ? "checked_not_written"
-            : e === "write_begun"
+            : step === "write_begun"
               ? "write_begun_not_armed"
-              : e,
+              : step,
     relay_status: status,
     turn_outcome: turnOutcome,
   });
@@ -157,8 +157,12 @@ function logRelayArmRefused(code, reason, handoffKind) {
  * 校验交接标记行：必须有独立 uuid 且内容可解析。
  */
 function validateMarkerLine(marker, carried, conversation) {
-  let n = marker === "malformed" ? null : normalizeUuidOrNull(marker.uuid);
-  if (marker === "malformed" || n === null || [...carried, ...conversation].some((s) => s.uuid === n))
+  let markerUuid = marker === "malformed" ? null : normalizeUuidOrNull(marker.uuid);
+  if (
+    marker === "malformed" ||
+    markerUuid === null ||
+    [...carried, ...conversation].some((message) => message.uuid === markerUuid)
+  )
     return {
       ok: false,
       code: "marker_line_shape",
@@ -171,8 +175,8 @@ function validateMarkerLine(marker, carried, conversation) {
       code: "marker_refused",
       reason: relayMarker.reason,
     };
-  let i = carried[0];
-  if (i?.type !== "user" || i.uuid !== relayMarker.marker.anchor_line_uuid)
+  let firstCarried = carried[0];
+  if (firstCarried?.type !== "user" || firstCarried.uuid !== relayMarker.marker.anchor_line_uuid)
     return {
       ok: false,
       code: "anchor_not_in_view",
@@ -180,7 +184,8 @@ function validateMarkerLine(marker, carried, conversation) {
     };
   return {
     ok: true,
-    uuid: n,
+    uuid: markerUuid,
     content: marker.content,
   };
 }
+export { armRelayFromStoredHandoff, beginMarkerLineWrite, noteHandoffMarkerFate, planRelayFromHandoff };

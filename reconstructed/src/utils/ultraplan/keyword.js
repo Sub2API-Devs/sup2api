@@ -9,7 +9,7 @@
  * attribution: fingerprint 3, affinity 1, placement 5
  */
 import { buildLaunchMessage } from "../../commands/ultraplan.js";
-import { LIGHTNING } from "../permissions/autoModeRulesPrompt.js";
+import { LIGHTNING } from "../../constants/figures.js";
 
 //@ chunk-s61vbvea.js:32765-32830 fingerprint = OPEN_TO_CLOSE (1)
 var OPEN_TO_CLOSE = {
@@ -22,56 +22,56 @@ var OPEN_TO_CLOSE = {
   "'": "'",
 };
 //@ chunk-s61vbvea.js:32830-33608 affinity = findBtwTriggerPositions (1)
-function findBtwTriggerPositions(e, n) {
-  if (!new RegExp(n, "i").test(e)) return [];
-  if (e.startsWith("/")) return [];
-  let s = [];
-  let h = null;
-  let y = 0;
-  let S = (P) => !!P && /[\p{L}\p{N}_]/u.test(P);
-  for (let idx = 0; idx < e.length; idx++) {
-    let j = e[idx];
-    if (h) {
-      if (h === "[" && j === "[") {
-        y = idx;
+function findBtwTriggerPositions(text, keyword) {
+  if (!new RegExp(keyword, "i").test(text)) return [];
+  if (text.startsWith("/")) return [];
+  let codeSpans = [];
+  let openChar = null;
+  let spanStart = 0;
+  let isWordChar = (char) => !!char && /[\p{L}\p{N}_]/u.test(char);
+  for (let idx = 0; idx < text.length; idx++) {
+    let char = text[idx];
+    if (openChar) {
+      if (openChar === "[" && char === "[") {
+        spanStart = idx;
         continue;
       }
-      if (j !== OPEN_TO_CLOSE[h]) continue;
-      if (h === "'" && S(e[idx + 1])) continue;
-      s.push({
-        start: y,
+      if (char !== OPEN_TO_CLOSE[openChar]) continue;
+      if (openChar === "'" && isWordChar(text[idx + 1])) continue;
+      codeSpans.push({
+        start: spanStart,
         end: idx + 1,
       });
-      h = null;
+      openChar = null;
     } else if (
-      (j === "<" && idx + 1 < e.length && /[a-zA-Z/]/.test(e[idx + 1])) ||
-      (j === "'" && !S(e[idx - 1])) ||
-      (j !== "<" && j !== "'" && j in OPEN_TO_CLOSE)
+      (char === "<" && idx + 1 < text.length && /[a-zA-Z/]/.test(text[idx + 1])) ||
+      (char === "'" && !isWordChar(text[idx - 1])) ||
+      (char !== "<" && char !== "'" && char in OPEN_TO_CLOSE)
     ) {
-      h = j;
-      y = idx;
+      openChar = char;
+      spanStart = idx;
     }
   }
-  let w = [];
-  let regExp = new RegExp(`\\b${n}\\b`, "gi");
-  let matches = e.matchAll(regExp);
+  let hits = [];
+  let regExp = new RegExp(`\\b${keyword}\\b`, "gi");
+  let matches = text.matchAll(regExp);
   for (let match of matches) {
     if (match.index === undefined) continue;
     let index = match.index;
-    let G = index + match[0].length;
-    if (s.some((Q) => index >= Q.start && index < Q.end)) continue;
-    let L = e[index - 1];
-    let q = e[G];
-    if (L === "/" || L === "\\" || L === "-") continue;
-    if (q === "/" || q === "\\" || q === "-" || q === "?") continue;
-    if (q === "." && S(e[G + 1])) continue;
-    w.push({
+    let wordEnd = index + match[0].length;
+    if (codeSpans.some((span) => index >= span.start && index < span.end)) continue;
+    let before = text[index - 1];
+    let after = text[wordEnd];
+    if (before === "/" || before === "\\" || before === "-") continue;
+    if (after === "/" || after === "\\" || after === "-" || after === "?") continue;
+    if (after === "." && isWordChar(text[wordEnd + 1])) continue;
+    hits.push({
       word: match[0],
       start: index,
-      end: G,
+      end: wordEnd,
     });
   }
-  return w;
+  return hits;
 }
 //@ chunk-s61vbvea.js:33648-33691 fingerprint = findUltrareviewTriggerPositions (1)
 /**
@@ -81,12 +81,12 @@ function findUltrareviewTriggerPositions(text) {
   return findBtwTriggerPositions(text, "ultrareview");
 }
 //@ chunk-s61vbvea.js:33691-33733 placement
-function ULTRATHINK_KEYWORD(e) {
-  return findBtwTriggerPositions(e, "ultrathink");
+function ULTRATHINK_KEYWORD(text) {
+  return findBtwTriggerPositions(text, "ultrathink");
 }
 //@ chunk-s61vbvea.js:33733-33774 placement
-function ULTRACODE_KEYWORD(e) {
-  return findBtwTriggerPositions(e, "ultracode");
+function ULTRACODE_KEYWORD(text) {
+  return findBtwTriggerPositions(text, "ultracode");
 }
 //@ chunk-s61vbvea.js:33774-33813 placement
 function hasUltraplanKeyword(text) {
@@ -96,8 +96,8 @@ function hasUltraplanKeyword(text) {
 /**
  * 给 ultra 关键词加连字符（ultra-code 等）。
  */
-function hyphenateUltraKeyword(e) {
-  return e.replace(/(ultra)(code|plan|review|think)/gi, "$1-$2");
+function hyphenateUltraKeyword(text) {
+  return text.replace(/(ultra)(code|plan|review|think)/gi, "$1-$2");
 }
 //@ chunk-s61vbvea.js:33891-34066 placement
 function findKeywordTriggerPositions(text) {
@@ -119,7 +119,7 @@ function getModelBadgeParts(modelInfo) {
     modelInfo.effort,
     modelInfo.ultra ? "ultra" : undefined,
     modelInfo.fastMode ? LIGHTNING : undefined,
-  ].filter((x) => x !== undefined);
+  ].filter((part) => part !== undefined);
 }
 export {
   ULTRATHINK_KEYWORD,

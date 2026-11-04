@@ -13,10 +13,10 @@ import { pickByHelper } from "../git/gitSafeEnv.js";
 import { fromEnum } from "../../services/analytics/safeMetadata.js";
 
 //@ chunk-3wek6r2k.js:90632-90755 placement
-function managedKeyTelemetry(e, comparison, n) {
-  let r = catalogTelemetryFields(comparison, n);
-  if (e !== "managed_key") return r;
-  return pickByHelper(r, (u) => typeof u === "boolean" || typeof u === "number");
+function managedKeyTelemetry(kind, comparison, hourBand) {
+  let fields = catalogTelemetryFields(comparison, hourBand);
+  if (kind !== "managed_key") return fields;
+  return pickByHelper(fields, (value) => typeof value === "boolean" || typeof value === "number");
 }
 //@ chunk-3wek6r2k.js:90755-90843 placement
 function settingsSourceTag(outcome, catalog) {
@@ -72,18 +72,18 @@ var AGENT_FRONTMATTER_KEYS_2 = [
   "license",
   "keywords",
 ];
-var AGENT_FRONTMATTER_KEYS = (e) =>
-  e
+var AGENT_FRONTMATTER_KEYS = (name) =>
+  name
     .replaceAll("-", "_")
     .replace(/([a-z])([A-Z])/g, "$1_$2")
     .toLowerCase();
 //@ chunk-3wek6r2k.js:91454-91584 placement
 function frontmatterKeyFlags(declaredFields) {
-  let o = declaredFields && new Set(declaredFields.map(AGENT_FRONTMATTER_KEYS));
+  let declared = declaredFields && new Set(declaredFields.map(AGENT_FRONTMATTER_KEYS));
   return Object.fromEntries(
-    AGENT_FRONTMATTER_KEYS_2.map((n) => {
-      let r = AGENT_FRONTMATTER_KEYS(n);
-      return [`has_${r}`, o?.has(r) ?? false];
+    AGENT_FRONTMATTER_KEYS_2.map((field) => {
+      let key = AGENT_FRONTMATTER_KEYS(field);
+      return [`has_${key}`, declared?.has(key) ?? false];
     }),
   );
 }

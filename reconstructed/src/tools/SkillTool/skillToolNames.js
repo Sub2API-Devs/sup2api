@@ -13,26 +13,32 @@
 /**
  * 去掉不含冒号的拒绝匹配名。
  */
-function denyMatchNamesWithColon(e) {
-  return (e.denyMatchNames ?? []).filter((t) => t.includes(":"));
+function denyMatchNamesWithColon(command) {
+  return (command.denyMatchNames ?? []).filter((name) => name.includes(":"));
 }
 //@ chunk-pvce3whe.js:265-613 placement
 /**
  * 为 MCP 技能计算被其他命令占用的保留标签，标签不变时保持原对象。
  */
-function withReservedLabels(e, t) {
-  let a;
-  return e.map((n) => {
-    if (n.loadedFrom !== "mcp") return n;
-    let s = denyMatchNamesWithColon(n);
-    if (s.length === 0) return n;
-    a ??= new Set([...t.map((r) => r.name), ...e.map((r) => r.name)]);
-    let filtered = s.filter((r) => r !== n.name && a.has(r));
-    let reservedLabels = n.reservedLabels ?? [];
-    if (filtered.length === reservedLabels.length && filtered.every((r, d) => r === reservedLabels[d]))
-      return n;
+function withReservedLabels(mcpCommands, otherCommands) {
+  let knownNames;
+  return mcpCommands.map((command) => {
+    if (command.loadedFrom !== "mcp") return command;
+    let colonNames = denyMatchNamesWithColon(command);
+    if (colonNames.length === 0) return command;
+    knownNames ??= new Set([
+      ...otherCommands.map((command) => command.name),
+      ...mcpCommands.map((command) => command.name),
+    ]);
+    let filtered = colonNames.filter((name) => name !== command.name && knownNames.has(name));
+    let reservedLabels = command.reservedLabels ?? [];
+    if (
+      filtered.length === reservedLabels.length &&
+      filtered.every((name, index) => name === reservedLabels[index])
+    )
+      return command;
     return {
-      ...n,
+      ...command,
       reservedLabels: filtered.length === 0 ? undefined : filtered,
     };
   });
@@ -51,15 +57,15 @@ function normalizedSkillToolName(name) {
 /**
  * 列出技能的备用名称（别名、旧别名、未限定名、保留标签、目录名），统一规范化。
  */
-function skillAlternateNames(e) {
-  let t = [
-    ...(e.aliases ?? []),
-    ...(e.shedAliases ?? []),
-    ...(e.unqualifiedName != null ? [e.unqualifiedName] : []),
-    ...denyMatchNamesWithColon(e),
-    ...(e.directoryListingName !== undefined ? [e.directoryListingName] : []),
+function skillAlternateNames(command) {
+  let names = [
+    ...(command.aliases ?? []),
+    ...(command.shedAliases ?? []),
+    ...(command.unqualifiedName != null ? [command.unqualifiedName] : []),
+    ...denyMatchNamesWithColon(command),
+    ...(command.directoryListingName !== undefined ? [command.directoryListingName] : []),
   ];
-  return t.length ? t.map(normalizedSkillToolName) : undefined;
+  return names.length ? names.map(normalizedSkillToolName) : undefined;
 }
 export {
   SKILL,

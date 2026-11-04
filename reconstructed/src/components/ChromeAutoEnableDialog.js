@@ -8,9 +8,9 @@
  * pieces: chunk-p5jda2d9.js (3)
  * attribution: placement 3
  */
-import { init_react_production, P, R } from "../../vendor/react/cjs/react.production.js";
+import { init_react_production, useEffect, useRef } from "../../vendor/react/cjs/react.production.js";
 import { logEvent } from "../services/analytics/index.js";
-import { w } from "../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import { useTheme_2 } from "./design-system/ThemeProvider.js";
 import { MEMO_CACHE_SENTINEL } from "../../runtime/bun-runtime.js";
 import {
@@ -44,75 +44,75 @@ function logChromeAutoEnablePromptShown() {
  * 询问是否自动启用 Chrome 集成的对话框
  */
 function ChromeAutoEnableDialog(props) {
-  let o = w(29);
+  let $ = useMemoCache(29);
   let { onDone, isDontAskMode, isAutoMode } = props;
-  let se = isDontAskMode === undefined ? false : isDontAskMode;
-  let ie = isAutoMode === undefined ? false : isAutoMode;
+  let dontAskMode = isDontAskMode === undefined ? false : isDontAskMode;
+  let autoMode = isAutoMode === undefined ? false : isAutoMode;
   let { storageV5 } = useTheme_2();
-  let L;
-  if (o[0] === MEMO_CACHE_SENTINEL) {
-    L = [];
-    o[0] = L;
-  } else L = o[0];
-  P(logChromeAutoEnablePromptShown, L);
-  let N = R(false);
+  let showedLogDeps;
+  if ($[0] === MEMO_CACHE_SENTINEL) {
+    showedLogDeps = [];
+    $[0] = showedLogDeps;
+  } else showedLogDeps = $[0];
+  useEffect(logChromeAutoEnablePromptShown, showedLogDeps);
+  let answeredRef = useRef(false);
   let inputRefusalWindow = useInputRefusalWindow(RECENT_INPUT_GUARD_MS);
   let { refusedWithin, noteRefused, epoch } = useRefusalTracker();
-  let M;
-  if (o[1] !== inputRefusalWindow || o[2] !== noteRefused || o[3] !== refusedWithin) {
-    M = function i() {
+  let refuseInputCached;
+  if ($[1] !== inputRefusalWindow || $[2] !== noteRefused || $[3] !== refusedWithin) {
+    refuseInputCached = function shouldRefuseInput() {
       if (inputRefusalWindow() || refusedWithin(RECENT_INPUT_GUARD_MS)) {
         noteRefused();
         return true;
       }
       return false;
     };
-    o[1] = inputRefusalWindow;
-    o[2] = noteRefused;
-    o[3] = refusedWithin;
-    o[4] = M;
-  } else M = o[4];
-  let i = M;
+    $[1] = inputRefusalWindow;
+    $[2] = noteRefused;
+    $[3] = refusedWithin;
+    $[4] = refuseInputCached;
+  } else refuseInputCached = $[4];
+  let refuseInput = refuseInputCached;
   let openedAt = useMountTime();
-  let v = settleKey(epoch, RECENT_INPUT_GUARD_MS);
-  let T;
-  if (o[5] !== onDone || o[6] !== i || o[7] !== storageV5) {
-    T = function t(d) {
-      if (N.current) {
+  let settle = settleKey(epoch, RECENT_INPUT_GUARD_MS);
+  let answerCached;
+  if ($[5] !== onDone || $[6] !== refuseInput || $[7] !== storageV5) {
+    answerCached = function handleAnswer(enabled) {
+      if (answeredRef.current) {
         return;
       }
-      if (i()) {
+      if (refuseInput()) {
         return;
       }
-      N.current = true;
+      answeredRef.current = true;
       saveGlobalConfig(
-        (ce) => ({
-          ...ce,
-          claudeInChromeDefaultEnabled: d,
-          ...(d && {
+        (config) => ({
+          ...config,
+          claudeInChromeDefaultEnabled: enabled,
+          ...(enabled && {
             hasCompletedClaudeInChromeOnboarding: true,
           }),
         }),
         storageV5,
       );
-      if (d) logFeatureOk("chrome_auto_enable_prompt");
+      if (enabled) logFeatureOk("chrome_auto_enable_prompt");
       else logFeatureSad("chrome_auto_enable_prompt", "declined");
-      onDone(d);
+      onDone(enabled);
     };
-    o[5] = onDone;
-    o[6] = i;
-    o[7] = storageV5;
-    o[8] = T;
-  } else T = o[8];
-  let t = T;
+    $[5] = onDone;
+    $[6] = refuseInput;
+    $[7] = storageV5;
+    $[8] = answerCached;
+  } else answerCached = $[8];
+  let answer = answerCached;
   let onCancel;
-  if (o[9] !== t) {
-    onCancel = () => t(false);
-    o[9] = t;
-    o[10] = onCancel;
-  } else onCancel = o[10];
+  if ($[9] !== answer) {
+    onCancel = () => answer(false);
+    $[9] = answer;
+    $[10] = onCancel;
+  } else onCancel = $[10];
   let inputGuide;
-  if (o[11] === MEMO_CACHE_SENTINEL) {
+  if ($[11] === MEMO_CACHE_SENTINEL) {
     inputGuide = jsxProd_default_2(Byline, {
       children: [
         jsxProd_default(KeyboardShortcutHint, {
@@ -127,70 +127,77 @@ function ChromeAutoEnableDialog(props) {
         }),
       ],
     });
-    o[11] = inputGuide;
-  } else inputGuide = o[11];
-  let K;
-  if (o[12] === MEMO_CACHE_SENTINEL) {
-    K = jsxProd_default(Text, {
+    $[11] = inputGuide;
+  } else inputGuide = $[11];
+  let introElement;
+  if ($[12] === MEMO_CACHE_SENTINEL) {
+    introElement = jsxProd_default(Text, {
       children:
         "Claude will use your Chrome browser by default \u2014 navigating sites, filling forms, and capturing screenshots in your existing session.",
     });
-    o[12] = K;
-  } else K = o[12];
-  const I = se
+    $[12] = introElement;
+  } else introElement = $[12];
+  const modeNote = dontAskMode
     ? "This session is in Don't Ask mode, so browser actions that need approval are skipped rather than prompted."
-    : ie
+    : autoMode
       ? "This session is in Auto mode, which checks routine browser actions \u2014 you are only prompted when it is unsure."
       : "Browser actions still go through Claude's regular permission prompts before they run.";
-  let Y;
-  if (o[13] === MEMO_CACHE_SENTINEL) {
-    Y = jsxProd_default(Text, {
+  let slashChromeElement;
+  if ($[13] === MEMO_CACHE_SENTINEL) {
+    slashChromeElement = jsxProd_default(Text, {
       bold: true,
       color: "permission",
       children: "/chrome",
     });
-    o[13] = Y;
-  } else Y = o[13];
-  let l;
-  if (o[14] !== I) {
-    l = jsxProd_default_2(Box, {
+    $[13] = slashChromeElement;
+  } else slashChromeElement = $[13];
+  let bodyElement;
+  if ($[14] !== modeNote) {
+    bodyElement = jsxProd_default_2(Box, {
       flexDirection: "column",
       gap: 1,
       children: [
-        K,
+        introElement,
         jsxProd_default_2(Text, {
           dimColor: true,
-          children: [I, " ", "Turn browser tools off for future sessions with", " ", Y, "."],
+          children: [
+            modeNote,
+            " ",
+            "Turn browser tools off for future sessions with",
+            " ",
+            slashChromeElement,
+            ".",
+          ],
         }),
       ],
     });
-    o[14] = I;
-    o[15] = l;
-  } else l = o[15];
+    $[14] = modeNote;
+    $[15] = bodyElement;
+  } else bodyElement = $[15];
   let onConfirm;
   let onCancel_2;
-  if (o[16] !== t) {
-    onConfirm = () => t(true);
-    onCancel_2 = () => t(false);
-    o[16] = t;
-    o[17] = onConfirm;
-    o[18] = onCancel_2;
+  if ($[16] !== answer) {
+    onConfirm = () => answer(true);
+    onCancel_2 = () => answer(false);
+    $[16] = answer;
+    $[17] = onConfirm;
+    $[18] = onCancel_2;
   } else {
-    onConfirm = o[17];
-    onCancel_2 = o[18];
+    onConfirm = $[17];
+    onCancel_2 = $[18];
   }
-  let h;
+  let confirmElement;
   if (
-    o[19] !== v.remountKey ||
-    o[20] !== i ||
-    o[21] !== openedAt ||
-    o[22] !== onConfirm ||
-    o[23] !== onCancel_2
+    $[19] !== settle.remountKey ||
+    $[20] !== refuseInput ||
+    $[21] !== openedAt ||
+    $[22] !== onConfirm ||
+    $[23] !== onCancel_2
   ) {
-    h = jsxProd_default(
+    confirmElement = jsxProd_default(
       ConfirmSelect,
       {
-        refuseInput: i,
+        refuseInput,
         openedAt,
         hideIndexes: true,
         cancelFirst: true,
@@ -200,29 +207,30 @@ function ChromeAutoEnableDialog(props) {
         onConfirm,
         onCancel: onCancel_2,
       },
-      v.remountKey,
+      settle.remountKey,
     );
-    o[19] = v.remountKey;
-    o[20] = i;
-    o[21] = openedAt;
-    o[22] = onConfirm;
-    o[23] = onCancel_2;
-    o[24] = h;
-  } else h = o[24];
-  let z;
-  if (o[25] !== l || o[26] !== h || o[27] !== onCancel) {
-    z = jsxProd_default_2(Dialog, {
+    $[19] = settle.remountKey;
+    $[20] = refuseInput;
+    $[21] = openedAt;
+    $[22] = onConfirm;
+    $[23] = onCancel_2;
+    $[24] = confirmElement;
+  } else confirmElement = $[24];
+  let dialogElement;
+  if ($[25] !== bodyElement || $[26] !== confirmElement || $[27] !== onCancel) {
+    dialogElement = jsxProd_default_2(Dialog, {
       title: "Claude in Chrome extension detected",
       color: "permission",
       onCancel,
       exitOnCtrlCD: true,
       inputGuide,
-      children: [l, h],
+      children: [bodyElement, confirmElement],
     });
-    o[25] = l;
-    o[26] = h;
-    o[27] = onCancel;
-    o[28] = z;
-  } else z = o[28];
-  return z;
+    $[25] = bodyElement;
+    $[26] = confirmElement;
+    $[27] = onCancel;
+    $[28] = dialogElement;
+  } else dialogElement = $[28];
+  return dialogElement;
 }
+export { ChromeAutoEnableDialog };

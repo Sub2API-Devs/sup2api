@@ -34,13 +34,18 @@ import { bedrockRegionGroup, findFirstMatch } from "../../../utils/model/bedrock
 import { MODEL_PIN_FAMILIES, ModelPinStep } from "../../ModelPinWizard.js";
 import { TIER_LABELS } from "../../../utils/model/thirdPartyDefaultFallbacks.js";
 import { plural } from "../../../utils/stringUtils.js";
-import { w } from "../../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../../vendor/react/compiler-runtime.js";
 import { useWizard } from "../../wizard/useWizard.js";
 import {
   jsxProd_default,
   jsxProd_default_2,
 } from "../../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
-import { init_react_production, y, fo, P } from "../../../../vendor/react/cjs/react.production.js";
+import {
+  init_react_production,
+  useState,
+  suspenseTypeExport,
+  useEffect,
+} from "../../../../vendor/react/cjs/react.production.js";
 import { MEMO_CACHE_SENTINEL } from "../../../../runtime/bun-runtime.js";
 import { WizardDialogLayout } from "../../wizard/WizardDialogLayout.js";
 import { WorkerBadge } from "../../permissions/WorkerBadge.js";
@@ -49,23 +54,24 @@ import { StatusIcon } from "../../design-system/StatusIcon.js";
 import { Text, Box } from "../../../ink/components/Text.js";
 import { ModelSelector } from "../../agents/ModelSelector.js";
 import { ConfirmSelect } from "../../design-system/ConfirmSelect.js";
+import { deferInit } from "../../../../runtime/deferred-init.js";
 
 //@ chunk-sx9xc5ee.js:9902-10865 placement
-async function testBedrockRequest(o) {
-  let [{ AnthropicBedrock: d }, { getProxyFetchOptions: c }] = await Promise.all([
-    import("./chunk-h87x8cg3.js"),
-    import("./chunk-amdegp7s.js"),
+async function testBedrockRequest(wizardData) {
+  let [{ AnthropicBedrock }, { getProxyFetchOptions }] = await Promise.all([
+    import("../../../../vendor/@anthropic-ai/bedrock-sdk/AnthropicBedrock.lazy.js"),
+    import("../../../utils/proxy.js"),
   ]);
-  let l = {
-    awsRegion: o.region,
+  let clientOptions = {
+    awsRegion: wizardData.region,
     maxRetries: 0,
-    fetchOptions: c({
-      url: env.ANTHROPIC_BEDROCK_BASE_URL || `https://bedrock-runtime.${o.region}.amazonaws.com`,
+    fetchOptions: getProxyFetchOptions({
+      url: env.ANTHROPIC_BEDROCK_BASE_URL || `https://bedrock-runtime.${wizardData.region}.amazonaws.com`,
     }),
   };
-  let t = await bedrockSigningCredentials(o);
+  let credentials = await bedrockSigningCredentials(wizardData);
   let forwardableEnvHeaders = getForwardableEnvHeaders();
-  let g = {
+  let credentialOverride = {
     authToken: null,
     defaultHeaders: {
       ...forwardableEnvHeaders,
@@ -78,34 +84,34 @@ async function testBedrockRequest(o) {
     },
     ...CLOUD_AUTH_SLOT,
   };
-  switch (t.kind) {
+  switch (credentials.kind) {
     case "bearer":
-      return new d({
-        ...l,
-        apiKey: t.token,
+      return new AnthropicBedrock({
+        ...clientOptions,
+        apiKey: credentials.token,
         defaultHeaders: {
           ...forwardableEnvHeaders,
           ...clearAuthorizationHeaders(),
           ...filteredCustomBetaHeaders(),
-          Authorization: `Bearer ${t.token}`,
+          Authorization: `Bearer ${credentials.token}`,
           ...(!hasCustomApiKeyHeader() && {
             "X-Api-Key": null,
           }),
         },
       });
     case "sigv4":
-      return new d({
-        ...l,
-        ...g,
-        awsAccessKey: t.accessKeyId,
-        awsSecretKey: t.secretAccessKey,
-        awsSessionToken: t.sessionToken,
+      return new AnthropicBedrock({
+        ...clientOptions,
+        ...credentialOverride,
+        awsAccessKey: credentials.accessKeyId,
+        awsSecretKey: credentials.secretAccessKey,
+        awsSessionToken: credentials.sessionToken,
       });
     case "default": {
       let AWS_BEARER_TOKEN_BEDROCK = env.AWS_BEARER_TOKEN_BEDROCK;
       if (AWS_BEARER_TOKEN_BEDROCK)
-        return new d({
-          ...l,
+        return new AnthropicBedrock({
+          ...clientOptions,
           apiKey: AWS_BEARER_TOKEN_BEDROCK,
           defaultHeaders: {
             ...forwardableEnvHeaders,
@@ -117,46 +123,46 @@ async function testBedrockRequest(o) {
             }),
           },
         });
-      return new d({
-        ...l,
-        ...g,
-        providerChainResolver: () => profileCredentialProvider(o, undefined),
+      return new AnthropicBedrock({
+        ...clientOptions,
+        ...credentialOverride,
+        providerChainResolver: () => profileCredentialProvider(wizardData, undefined),
       });
     }
   }
 }
 //@ chunk-sx9xc5ee.js:10865-11127 placement
-async function bedrockSigningCredentials(o) {
-  if (o.authMethod === "bearer")
+async function bedrockSigningCredentials(wizardData) {
+  if (wizardData.authMethod === "bearer")
     return {
       kind: "bearer",
-      token: o.bearerToken,
+      token: wizardData.bearerToken,
     };
-  let d = await bedrockCredentialProvider(o);
-  if (!d)
+  let provider = await bedrockCredentialProvider(wizardData);
+  if (!provider)
     return {
       kind: "default",
     };
-  let c = await d();
+  let credentials = await provider();
   return {
     kind: "sigv4",
-    accessKeyId: c.accessKeyId,
-    secretAccessKey: c.secretAccessKey,
-    sessionToken: c.sessionToken,
+    accessKeyId: credentials.accessKeyId,
+    secretAccessKey: credentials.secretAccessKey,
+    sessionToken: credentials.sessionToken,
   };
 }
 //@ chunk-sx9xc5ee.js:11127-11982 placement
-async function bedrockApiKeyTestResult(o) {
-  let fallback = bedrockModelDefaults(o.region).haiku.fallback;
-  let c = await renderErrorSpecificGuidance(o, fallback);
-  if (c.ok)
+async function bedrockApiKeyTestResult(wizardData) {
+  let fallback = bedrockModelDefaults(wizardData.region).haiku.fallback;
+  let result = await renderErrorSpecificGuidance(wizardData, fallback);
+  if (result.ok)
     return {
       status: "ok",
       identity: "Bedrock API key",
       profiles: [],
       note: `Test request to ${fallback} succeeded.`,
     };
-  switch (c.reason) {
+  switch (result.reason) {
     case "auth":
       return {
         status: "error",
@@ -178,7 +184,7 @@ async function bedrockApiKeyTestResult(o) {
     case "network":
       return {
         status: "error",
-        error: `Could not reach Bedrock in region "${o.region}". Check the region name and your network.`,
+        error: `Could not reach Bedrock in region "${wizardData.region}". Check the region name and your network.`,
       };
     case "other":
       return {
@@ -191,16 +197,16 @@ async function bedrockApiKeyTestResult(o) {
 /**
  * 按 Bedrock 设置向导选择的认证方式返回凭据提供函数：profile 走 AWS 节点凭据链（带代理与超时），accessKey 直接返回密钥，environment 返回 undefined（用默认链）。
  */
-async function bedrockCredentialProvider(o) {
-  switch (o.authMethod) {
+async function bedrockCredentialProvider(wizardData) {
+  switch (wizardData.authMethod) {
     case "profile":
-      return profileCredentialProvider(o, o.awsProfile);
+      return profileCredentialProvider(wizardData, wizardData.awsProfile);
     case "accessKey":
       return async () => ({
-        accessKeyId: o.accessKeyId,
-        secretAccessKey: o.secretAccessKey,
-        ...(o.sessionToken && {
-          sessionToken: o.sessionToken,
+        accessKeyId: wizardData.accessKeyId,
+        secretAccessKey: wizardData.secretAccessKey,
+        ...(wizardData.sessionToken && {
+          sessionToken: wizardData.sessionToken,
         }),
       });
     case "environment":
@@ -213,11 +219,11 @@ async function bedrockCredentialProvider(o) {
 /**
  * 为指定 AWS profile 创建凭证提供者：动态加载 fromNodeProviderChain，配置经代理的 STS 请求处理器与超时，返回带解析超时的提供者函数。
  */
-async function profileCredentialProvider(o, profile) {
-  let [{ fromNodeProviderChain: c }, awsProxyRequestHandler] = await Promise.all([
-    import("./chunk-thwbpw6e.js"),
+async function profileCredentialProvider(wizardData, profile) {
+  let [{ fromNodeProviderChain: fromProviderChain }, awsProxyRequestHandler] = await Promise.all([
+    import("../../../../vendor/@aws-sdk/credential-providers/dist-cjs/createCredentialChain.lazy.js"),
     getAWSProxyRequestHandler({
-      url: resolveStsEndpointForProxyUrl(String(o.region)),
+      url: resolveStsEndpointForProxyUrl(String(wizardData.region)),
       requestTimeoutMs: AWS_CHAIN_RESOLVE_REQUEST_TIMEOUT_MS,
     }),
   ]);
@@ -226,94 +232,98 @@ async function profileCredentialProvider(o, profile) {
     new bedrockVerificationSignal.FetchHttpHandler({
       requestTimeout: AWS_CHAIN_RESOLVE_REQUEST_TIMEOUT_MS,
     });
-  let m = c({
+  let provider = fromProviderChain({
     profile,
     ignoreCache: true,
     parentClientConfig: {
-      region: o.region,
+      region: wizardData.region,
       requestHandler,
     },
     clientConfig: {
       requestHandler,
     },
   });
-  return (g) => withTimeout(m(g), getAwsChainResolveTimeoutMs(), BEDROCK_VERIFY_TIMEOUT_TEXT);
+  return (credentials) =>
+    withTimeout(provider(credentials), getAwsChainResolveTimeoutMs(), BEDROCK_VERIFY_TIMEOUT_TEXT);
 }
 //@ chunk-sx9xc5ee.js:12608-12738 placement
 /**
  * 判断 AWS 错误是否为超时（TimeoutError，或消息以 TimeoutError: 开头的凭证提供者错误）。
  */
-function isAwsTimeoutError(o) {
+function isAwsTimeoutError(error) {
   return (
-    o?.name === "TimeoutError" ||
-    (o?.name === "CredentialsProviderError" && (o.message ?? "").startsWith("TimeoutError:"))
+    error?.name === "TimeoutError" ||
+    (error?.name === "CredentialsProviderError" && (error.message ?? "").startsWith("TimeoutError:"))
   );
 }
 //@ chunk-sx9xc5ee.js:12738-14252 placement
-function describeAwsError(error, d, awsChainResolveTimeoutMs) {
-  let l = error;
-  let t = l?.name ?? "Error";
-  let m = l?.message ?? String(error);
-  if (m === BEDROCK_VERIFY_TIMEOUT_TEXT)
+function describeAwsError(error, fallbackModel, awsChainResolveTimeoutMs) {
+  let cause = error;
+  let errorName = cause?.name ?? "Error";
+  let message = cause?.message ?? String(error);
+  if (message === BEDROCK_VERIFY_TIMEOUT_TEXT)
     return {
       error: `Timed out after ${Math.ceil(awsChainResolveTimeoutMs / 1000)}s waiting for AWS. Check your network and proxy settings; if a credential helper needs longer to prompt you, raise CLAUDE_CODE_AWS_CHAIN_RESOLVE_TIMEOUT_MS.`,
     };
-  if (isAwsTimeoutError(l))
+  if (isAwsTimeoutError(cause))
     return {
       error: "A request to AWS timed out. Check your network and proxy settings, then try again.",
     };
-  let command = d.authMethod === "profile" ? `aws sso login --profile ${d.awsProfile}` : undefined;
-  switch (t) {
+  let command =
+    fallbackModel.authMethod === "profile"
+      ? `aws sso login --profile ${fallbackModel.awsProfile}`
+      : undefined;
+  switch (errorName) {
     case "CredentialsProviderError":
-      return d.authMethod === "profile"
+      return fallbackModel.authMethod === "profile"
         ? {
-            error: `Could not load credentials for profile "${d.awsProfile}". If this is an SSO profile, run:`,
+            error: `Could not load credentials for profile "${fallbackModel.awsProfile}". If this is an SSO profile, run:`,
             command,
           }
         : {
-            error: `No AWS credentials found. ${m}`,
+            error: `No AWS credentials found. ${message}`,
           };
     case "ExpiredTokenException":
     case "TokenRefreshRequired":
-      return d.authMethod === "profile"
+      return fallbackModel.authMethod === "profile"
         ? {
             error: "SSO session expired. Run:",
             command,
           }
         : {
-            error: `Credentials expired. ${m}`,
+            error: `Credentials expired. ${message}`,
           };
     case "ForbiddenException":
-      return d.authMethod === "profile"
+      return fallbackModel.authMethod === "profile"
         ? {
-            error: `SSO portal denied access to the role for profile "${d.awsProfile}". The permission set may have been revoked \u2014 check your AWS access portal.`,
+            error: `SSO portal denied access to the role for profile "${fallbackModel.awsProfile}". The permission set may have been revoked \u2014 check your AWS access portal.`,
           }
         : {
-            error: `Forbidden. ${m}`,
+            error: `Forbidden. ${message}`,
           };
     case "AccessDeniedException":
       return {
-        error: `Access denied. Your IAM role needs bedrock:ListInferenceProfiles permission. ${m}`,
+        error: `Access denied. Your IAM role needs bedrock:ListInferenceProfiles permission. ${message}`,
       };
     case "UnrecognizedClientException":
     case "InvalidSignatureException":
       return {
-        error: `Invalid credentials. ${m}`,
+        error: `Invalid credentials. ${message}`,
       };
     case "UnknownEndpoint":
     case "ENOTFOUND":
       return {
-        error: `Cannot reach AWS in region "${d.region}". Check the region name and your network.`,
+        error: `Cannot reach AWS in region "${fallbackModel.region}". Check the region name and your network.`,
       };
     default:
       return {
-        error: `${t}: ${m}`,
+        error: `${errorName}: ${message}`,
       };
   }
 }
 //@ chunk-sx9xc5ee.js:14252-14343 placement
-function filterProfiles(o, d) {
-  return (o.discoveredProfiles ?? []).filter((c) => c.toLowerCase().includes(d));
+function filterProfiles(discovery, query) {
+  return (discovery.discoveredProfiles ?? []).filter((state) => state.toLowerCase().includes(query));
 }
 //@ chunk-sx9xc5ee.js:14343-15228 placement
 var MODEL_CHECK_REASONS = {
@@ -326,72 +336,77 @@ var MODEL_CHECK_REASONS = {
   },
   intro:
     "Without pinning, Claude Code uses its built-in defaults. When a new model ships, your install will try to call it even if your account has not yet enabled it \u2014 Claude Code will fail to connect to Bedrock until you enable the model or pin to one you have.",
-  resolveTierDefaults: (o) => {
-    let d = bedrockModelDefaults(o.region);
-    let c = bedrockRegionGroup(o.region);
+  resolveTierDefaults: (wizardData) => {
+    let defaults = bedrockModelDefaults(wizardData.region);
+    let regionGroup = bedrockRegionGroup(wizardData.region);
     return Object.fromEntries(
-      MODEL_PIN_FAMILIES.map((l) => [
-        l,
+      MODEL_PIN_FAMILIES.map((family) => [
+        family,
         {
-          auto: findFirstMatch(o.discoveredProfiles ?? [], d[l].needle, c) ?? undefined,
-          fallback: d[l].fallback,
+          auto:
+            findFirstMatch(wizardData.discoveredProfiles ?? [], defaults[family].needle, regionGroup) ??
+            undefined,
+          fallback: defaults[family].fallback,
         },
       ]),
     );
   },
-  listTierCandidates: (o, d) => filterProfiles(d, o).sort().reverse(),
-  pickerSubtitle: (o, d) => {
-    let c = filterProfiles(d, o).length;
-    return c > 0
-      ? `${c} ${TIER_LABELS[o]} ${plural(c, "profile")} in your account \xB7 each tested with a one-token request.`
-      : `No ${TIER_LABELS[o]} profiles found in your account.`;
+  listTierCandidates: (tier, discovery) => filterProfiles(discovery, tier).sort().reverse(),
+  pickerSubtitle: (tier, discovery) => {
+    let profileCount = filterProfiles(discovery, tier).length;
+    return profileCount > 0
+      ? `${profileCount} ${TIER_LABELS[tier]} ${plural(profileCount, "profile")} in your account \xB7 each tested with a one-token request.`
+      : `No ${TIER_LABELS[tier]} profiles found in your account.`;
   },
-  probe: (o, d) => renderErrorSpecificGuidance(o, d),
+  probe: (wizardData, modelId) => renderErrorSpecificGuidance(wizardData, modelId),
 };
 //@ chunk-sx9xc5ee.js:15228-15360 placement
 /**
  * Bedrock 向导中的模型检查步骤，检查结果写回向导数据。
  */
 function BedrockModelCheckStep() {
-  let $ = w(2);
+  let $ = useMemoCache(2);
   let { updateWizardData } = useWizard();
-  let c;
+  let updatePins;
   if ($[0] !== updateWizardData) {
-    c = jsxProd_default(ModelPinStep, {
+    updatePins = jsxProd_default(ModelPinStep, {
       provider: MODEL_CHECK_REASONS,
       onPins: updateWizardData,
     });
     $[0] = updateWizardData;
-    $[1] = c;
-  } else c = $[1];
-  return c;
+    $[1] = updatePins;
+  } else updatePins = $[1];
+  return updatePins;
 }
 //@ chunk-sx9xc5ee.js:15360-15364 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-sx9xc5ee.js:15360", () => {
+  init_react_production();
+});
 //@ chunk-sx9xc5ee.js:15463-15790 placement
 /**
  * 列出本机 AWS profile：解析 ~/.aws/config 与 ~/.aws/credentials 的节名（忽略 sso-session），去重排序。
  */
 async function listAwsProfiles() {
-  let o = new Set();
-  let d = homedir();
+  let profiles = new Set();
+  let home = homedir();
   for (let { path, re } of [
     {
-      path: join(d, ".aws", "config"),
+      path: join(home, ".aws", "config"),
       re: /^\[(?:profile\s+)?([^\]]+)\]/gm,
     },
     {
-      path: join(d, ".aws", "credentials"),
+      path: join(home, ".aws", "credentials"),
       re: /^\[([^\]]+)\]/gm,
     },
   ])
     try {
-      for (let t of (await readFile(path, "utf8")).matchAll(re)) {
-        let trimmed = t[1]?.trim();
-        if (trimmed && !trimmed.startsWith("sso-session ")) o.add(trimmed);
+      for (let match of (await readFile(path, "utf8")).matchAll(re)) {
+        let trimmed = match[1]?.trim();
+        if (trimmed && !trimmed.startsWith("sso-session ")) profiles.add(trimmed);
       }
     } catch {}
-  return [...o].sort();
+  return [...profiles].sort();
 }
 //@ chunk-sx9xc5ee.js:15790-15813 placement
 function emptyProfiles() {
@@ -402,14 +417,17 @@ function loadProfilesOrEmpty() {
   return listAwsProfiles().catch(emptyProfiles);
 }
 //@ chunk-sx9xc5ee.js:15849-15909 placement
-function isBedrockRegion(Ko) {
-  return Ko.toLowerCase().includes("bedrock");
+/**
+ * 判断一个 AWS profile 名里是否含 "bedrock"（用来在 profile 过多时预填第一个 bedrock profile），与“区域”无关。
+ */
+function isBedrockProfileName(region) {
+  return region.toLowerCase().includes("bedrock");
 }
 //@ chunk-sx9xc5ee.js:15909-15951 placement
-function toProfileOption(gr) {
+function toProfileOption(profileName) {
   return {
-    label: gr,
-    value: gr,
+    label: profileName,
+    value: profileName,
   };
 }
 //@ chunk-sx9xc5ee.js:15951-15977 placement
@@ -420,8 +438,8 @@ var MAX_PROFILE_OPTIONS = 12;
  * Bedrock 向导中的 AWS profile 步骤：读取 ~/.aws/config 期间显示等待，完成后进入认证方式选择。
  */
 function BedrockProfileStep() {
-  let $ = w(3);
-  let [o] = y(loadProfilesOrEmpty);
+  let $ = useMemoCache(3);
+  let [profiles] = useState(loadProfilesOrEmpty);
   let fallback;
   if ($[0] === MEMO_CACHE_SENTINEL) {
     fallback = jsxProd_default(WizardDialogLayout, {
@@ -432,83 +450,89 @@ function BedrockProfileStep() {
     });
     $[0] = fallback;
   } else fallback = $[0];
-  let l;
-  if ($[1] !== o) {
-    l = jsxProd_default(fo, {
+  let profilesElement;
+  if ($[1] !== profiles) {
+    profilesElement = jsxProd_default(suspenseTypeExport, {
       fallback,
       children: jsxProd_default(MethodStep, {
-        profilesPromise: o,
+        profilesPromise: profiles,
       }),
     });
-    $[1] = o;
-    $[2] = l;
-  } else l = $[2];
-  return l;
+    $[1] = profiles;
+    $[2] = profilesElement;
+  } else profilesElement = $[2];
+  return profilesElement;
 }
 //@ chunk-sx9xc5ee.js:19292-19296 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-sx9xc5ee.js:19292", () => {
+  init_react_production();
+});
 //@ chunk-sx9xc5ee.js:20653-20657 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-sx9xc5ee.js:20653", () => {
+  init_react_production();
+});
 //@ chunk-sx9xc5ee.js:20657-23427 placement
 /**
  * Bedrock 配置向导的凭据验证步骤：调用 verifyBedrockAccess，显示进行中提示；成功时写入身份与发现的推理 profile 并显示结果，失败时给出错误与返回/重试选项。
  */
 function BedrockVerifyStep() {
-  let $ = w(39);
+  let $ = useMemoCache(39);
   let { goBack, goNext, updateWizardData, wizardData } = useWizard();
-  let m;
+  let initialState;
   if ($[0] === MEMO_CACHE_SENTINEL) {
-    m = {
+    initialState = {
       phase: "checking",
     };
-    $[0] = m;
-  } else m = $[0];
-  let [g, h] = y(m);
-  let u;
+    $[0] = initialState;
+  } else initialState = $[0];
+  let [state, setState] = useState(initialState);
+  let verifyEffect;
   if ($[1] !== updateWizardData || $[2] !== wizardData) {
-    u = () => {
-      let B = false;
-      verifyBedrockAccess(wizardData).then((p) => {
-        if (B) {
+    verifyEffect = () => {
+      let cancelled = false;
+      verifyBedrockAccess(wizardData).then((result) => {
+        if (cancelled) {
           return;
         }
-        if (p.status === "ok")
+        if (result.status === "ok")
           updateWizardData({
-            verifiedIdentity: p.identity,
-            discoveredProfiles: p.profiles,
+            verifiedIdentity: result.identity,
+            discoveredProfiles: result.profiles,
           });
         else
           updateWizardData({
             verifiedIdentity: undefined,
             discoveredProfiles: undefined,
           });
-        h({
+        setState({
           phase: "done",
-          result: p,
+          result,
         });
       });
       return () => {
-        B = true;
+        cancelled = true;
       };
     };
     $[1] = updateWizardData;
     $[2] = wizardData;
-    $[3] = u;
-  } else u = $[3];
-  let A;
+    $[3] = verifyEffect;
+  } else verifyEffect = $[3];
+  let deps;
   if ($[4] === MEMO_CACHE_SENTINEL) {
-    A = [];
-    $[4] = A;
-  } else A = $[4];
-  P(u, A);
-  if (g.phase === "checking") {
+    deps = [];
+    $[4] = deps;
+  } else deps = $[4];
+  useEffect(verifyEffect, deps);
+  if (state.phase === "checking") {
     const message =
       wizardData.authMethod === "bearer"
         ? "Sending a test request to Bedrock\u2026"
         : "Calling AWS STS and Bedrock\u2026";
-    let k;
+    let checkingDialog;
     if ($[5] !== message) {
-      k = jsxProd_default(WizardDialogLayout, {
+      checkingDialog = jsxProd_default(WizardDialogLayout, {
         subtitle: "Verifying credentials",
         children: jsxProd_default(WorkerBadge, {
           message,
@@ -516,56 +540,56 @@ function BedrockVerifyStep() {
         }),
       });
       $[5] = message;
-      $[6] = k;
-    } else k = $[6];
-    return k;
+      $[6] = checkingDialog;
+    } else checkingDialog = $[6];
+    return checkingDialog;
   }
-  let { result: f } = g;
-  switch (f.status) {
+  let { result } = state;
+  switch (result.status) {
     case "ok": {
-      let E;
+      let successIcon;
       if ($[7] === MEMO_CACHE_SENTINEL) {
-        E = jsxProd_default(StatusIcon, {
+        successIcon = jsxProd_default(StatusIcon, {
           status: "success",
           withSpace: true,
         });
-        $[7] = E;
-      } else E = $[7];
-      let k;
-      if ($[8] !== f.identity) {
-        k = jsxProd_default_2(Text, {
+        $[7] = successIcon;
+      } else successIcon = $[7];
+      let identityText;
+      if ($[8] !== result.identity) {
+        identityText = jsxProd_default_2(Text, {
           children: [
-            E,
+            successIcon,
             "Authenticated as ",
             jsxProd_default(Text, {
               bold: true,
-              children: f.identity,
+              children: result.identity,
             }),
           ],
         });
-        $[8] = f.identity;
-        $[9] = k;
-      } else k = $[9];
+        $[8] = result.identity;
+        $[9] = identityText;
+      } else identityText = $[9];
       let children;
-      if ($[10] !== f.note || $[11] !== f.profiles) {
+      if ($[10] !== result.note || $[11] !== result.profiles) {
         children =
-          f.note ??
-          (f.profiles.length > 0
-            ? `Found ${f.profiles.length} Anthropic inference ${plural(f.profiles.length, "profile")} in this region.`
+          result.note ??
+          (result.profiles.length > 0
+            ? `Found ${result.profiles.length} Anthropic inference ${plural(result.profiles.length, "profile")} in this region.`
             : "No Anthropic inference profiles found in this region. You may still proceed \u2014 model defaults will use the built-in IDs.");
-        $[10] = f.note;
-        $[11] = f.profiles;
+        $[10] = result.note;
+        $[11] = result.profiles;
         $[12] = children;
       } else children = $[12];
-      let v;
+      let noteText;
       if ($[13] !== children) {
-        v = jsxProd_default(Text, {
+        noteText = jsxProd_default(Text, {
           dimColor: true,
           children,
         });
         $[13] = children;
-        $[14] = v;
-      } else v = $[14];
+        $[14] = noteText;
+      } else noteText = $[14];
       let options;
       if ($[15] === MEMO_CACHE_SENTINEL) {
         options = [
@@ -582,76 +606,76 @@ function BedrockVerifyStep() {
         $[16] = goNext;
         $[17] = onChange;
       } else onChange = $[17];
-      let D;
+      let selector;
       if ($[18] !== goBack || $[19] !== onChange) {
-        D = jsxProd_default(ModelSelector, {
+        selector = jsxProd_default(ModelSelector, {
           options,
           onChange,
           onCancel: goBack,
         });
         $[18] = goBack;
         $[19] = onChange;
-        $[20] = D;
-      } else D = $[20];
-      let W;
-      if ($[21] !== k || $[22] !== v || $[23] !== D) {
-        W = jsxProd_default(WizardDialogLayout, {
+        $[20] = selector;
+      } else selector = $[20];
+      let successDialog;
+      if ($[21] !== identityText || $[22] !== noteText || $[23] !== selector) {
+        successDialog = jsxProd_default(WizardDialogLayout, {
           subtitle: "Verification",
           children: jsxProd_default_2(Box, {
             flexDirection: "column",
             gap: 1,
-            children: [k, v, D],
+            children: [identityText, noteText, selector],
           }),
         });
-        $[21] = k;
-        $[22] = v;
-        $[23] = D;
-        $[24] = W;
-      } else W = $[24];
-      return W;
+        $[21] = identityText;
+        $[22] = noteText;
+        $[23] = selector;
+        $[24] = successDialog;
+      } else successDialog = $[24];
+      return successDialog;
     }
     case "error": {
-      let E;
+      let errorIcon;
       if ($[25] === MEMO_CACHE_SENTINEL) {
-        E = jsxProd_default(StatusIcon, {
+        errorIcon = jsxProd_default(StatusIcon, {
           status: "error",
           withSpace: true,
         });
-        $[25] = E;
-      } else E = $[25];
-      let k;
-      if ($[26] !== f.error) {
-        k = jsxProd_default_2(Text, {
-          children: [E, f.error],
+        $[25] = errorIcon;
+      } else errorIcon = $[25];
+      let errorText;
+      if ($[26] !== result.error) {
+        errorText = jsxProd_default_2(Text, {
+          children: [errorIcon, result.error],
         });
-        $[26] = f.error;
-        $[27] = k;
-      } else k = $[27];
-      let C;
-      if ($[28] !== f.command) {
-        C =
-          f.command &&
+        $[26] = result.error;
+        $[27] = errorText;
+      } else errorText = $[27];
+      let commandText;
+      if ($[28] !== result.command) {
+        commandText =
+          result.command &&
           jsxProd_default_2(Text, {
             bold: true,
             color: "suggestion",
-            children: ["    ", f.command],
+            children: ["    ", result.command],
           });
-        $[28] = f.command;
-        $[29] = C;
-      } else C = $[29];
-      let v;
-      if ($[30] !== k || $[31] !== C) {
-        v = jsxProd_default_2(Box, {
+        $[28] = result.command;
+        $[29] = commandText;
+      } else commandText = $[29];
+      let errorBox;
+      if ($[30] !== errorText || $[31] !== commandText) {
+        errorBox = jsxProd_default_2(Box, {
           flexDirection: "column",
-          children: [k, C],
+          children: [errorText, commandText],
         });
-        $[30] = k;
-        $[31] = C;
-        $[32] = v;
-      } else v = $[32];
-      let T;
+        $[30] = errorText;
+        $[31] = commandText;
+        $[32] = errorBox;
+      } else errorBox = $[32];
+      let confirmSelect;
       if ($[33] !== goBack || $[34] !== goNext) {
-        T = jsxProd_default(ConfirmSelect, {
+        confirmSelect = jsxProd_default(ConfirmSelect, {
           hideIndexes: true,
           cancelFirst: true,
           focus: "cancel",
@@ -662,24 +686,24 @@ function BedrockVerifyStep() {
         });
         $[33] = goBack;
         $[34] = goNext;
-        $[35] = T;
-      } else T = $[35];
-      let _;
-      if ($[36] !== v || $[37] !== T) {
-        _ = jsxProd_default(WizardDialogLayout, {
+        $[35] = confirmSelect;
+      } else confirmSelect = $[35];
+      let errorDialog;
+      if ($[36] !== errorBox || $[37] !== confirmSelect) {
+        errorDialog = jsxProd_default(WizardDialogLayout, {
           subtitle: "Verification failed",
           color: "error",
           children: jsxProd_default_2(Box, {
             flexDirection: "column",
             gap: 1,
-            children: [v, T],
+            children: [errorBox, confirmSelect],
           }),
         });
-        $[36] = v;
-        $[37] = T;
-        $[38] = _;
-      } else _ = $[38];
-      return _;
+        $[36] = errorBox;
+        $[37] = confirmSelect;
+        $[38] = errorDialog;
+      } else errorDialog = $[38];
+      return errorDialog;
     }
   }
 }
@@ -690,7 +714,7 @@ export {
   bedrockCredentialProvider,
   describeAwsError,
   MAX_PROFILE_OPTIONS,
-  isBedrockRegion,
+  isBedrockProfileName,
   toProfileOption,
   MANUAL_PROFILE_VALUE,
   BedrockProfileStep,

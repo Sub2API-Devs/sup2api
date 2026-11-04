@@ -13,6 +13,7 @@ import { joined, regExp as regExp_3 } from "../render-border.js";
 import { hasExpandableControls, expandTabs } from "../wrapAnsi.js";
 import { useHasAutoDialog, useTopUserDialog } from "../../state/dialogQueue.js";
 import { getActiveBottomSurface } from "../../screens/repl/storeHooks.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-bzr73sfg.js:176949-176959 placement
 /**
@@ -20,36 +21,40 @@ import { getActiveBottomSurface } from "../../screens/repl/storeHooks.js";
  */
 var squashTextNodesAlias = squashTextNodes;
 //@ chunk-bzr73sfg.js:176959-177027 placement
-var regExp = new RegExp(`[${joined}]`, "u");
-var regExp_2 = new RegExp(`[\\t${joined}]`, "u");
+var regExp; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var regExp_2;
+deferInit("chunk-bzr73sfg.js:176959", () => {
+  regExp = new RegExp(`[${joined}]`, "u");
+  regExp_2 = new RegExp(`[\\t${joined}]`, "u");
+});
 //@ chunk-bzr73sfg.js:177027-177086 placement
 /**
  * 非法 UTF-16 代理项替换为替换字符
  */
-function replaceInvalidUtf16(n) {
-  return regExp.test(n) ? n.replace(regExp_3, "\uFFFD") : n;
+function replaceInvalidUtf16(text) {
+  return regExp.test(text) ? text.replace(regExp_3, "\uFFFD") : text;
 }
 //@ chunk-bzr73sfg.js:177086-177118 placement
 /**
  * 把单个文本节点压平成显示字符串（含制表符展开与代理对修复）。
  */
-function squashSingleText(n) {
-  return squashTextOf([n]);
+function squashSingleText(node) {
+  return squashTextOf([node]);
 }
 //@ chunk-bzr73sfg.js:177118-177160 placement
 /**
  * 用 squashTextNodesToSegments 把节点压平并用空串拼接成文本。
  */
-function squashTextOf(n) {
-  return (needsTextNormalization(n) ?? n).join("");
+function squashTextOf(texts) {
+  return (needsTextNormalization(texts) ?? texts).join("");
 }
 //@ chunk-bzr73sfg.js:177160-177245 placement
 /**
  * 判断文本节点是否需要归一化（含可展开控制字符或非法代理项）。
  */
-function needsTextNormalization(n) {
-  return n.some((u) => regExp_2.test(u)) || hasExpandableControls(n)
-    ? expandTabs(n.map((u) => replaceInvalidUtf16(u)))
+function needsTextNormalization(texts) {
+  return texts.some((text) => regExp_2.test(text)) || hasExpandableControls(texts)
+    ? expandTabs(texts.map((text) => replaceInvalidUtf16(text)))
     : undefined;
 }
 //@ chunk-bzr73sfg.js:177245-177286 fingerprint = LayoutPositionType (0.606)
@@ -127,9 +132,9 @@ function toYogaJustify(justify) {
 //@ chunk-18hwfzwa.js:329889-329999 fingerprint = LayoutOverflow (0.368)
 function LayoutOverflow() {
   let hasAutoDialog = useHasAutoDialog();
-  let x = useTopUserDialog() !== null;
+  let hasDialog = useTopUserDialog() !== null;
   let activeBottomSurface = getActiveBottomSurface();
-  if (x || (hasAutoDialog && activeBottomSurface === null)) return "visible";
+  if (hasDialog || (hasAutoDialog && activeBottomSurface === null)) return "visible";
   return hasAutoDialog ? "suppressed" : "none";
 }
 export {

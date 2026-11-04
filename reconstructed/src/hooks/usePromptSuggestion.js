@@ -8,7 +8,12 @@
  * pieces: chunk-18hwfzwa.js (4)
  * attribution: placement 3, fingerprint 1
  */
-import { init_react_production, yt, R, ce } from "../../vendor/react/cjs/react.production.js";
+import {
+  init_react_production,
+  useSyncExternalStore,
+  useRef,
+  useCallback,
+} from "../../vendor/react/cjs/react.production.js";
 import { onFastRejectedFallbackModelsChanged, isFastModeOnForModel } from "../utils/fastMode.js";
 import { useAppState, useSetAppState } from "../state/AppState.js";
 import { useTerminalFocus } from "../ink/hooks/use-terminal-focus.js";
@@ -19,35 +24,44 @@ import {
 import { logEvent } from "../services/analytics/index.js";
 import { lit as lit_2 } from "../services/analytics/safeMetadata.js";
 import { sanitizeMarkName } from "../utils/startupMarks.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-18hwfzwa.js:538827-538831 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:538827", () => {
+  init_react_production();
+});
 //@ chunk-18hwfzwa.js:538831-538877 placement
 /**
  * 函数 useFastModeOnForModel（订阅并计算某模型的 fast mode 状态）；位于「输入框预测建议（tengu_prompt_suggestion）：显示/接受/忽略的状态与统计」模块。
  */
-function useFastModeOnForModel(h, x) {
-  return yt(onFastRejectedFallbackModelsChanged, () => isFastModeOnForModel(h, x));
+function useFastModeOnForModel(model, fallbackModel) {
+  return useSyncExternalStore(onFastRejectedFallbackModelsChanged, () =>
+    isFastModeOnForModel(model, fallbackModel),
+  );
 }
 //@ chunk-18hwfzwa.js:538877-538881 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:538877", () => {
+  init_react_production();
+});
 //@ chunk-18hwfzwa.js:538881-540532 fingerprint = usePromptSuggestion (0.817)
 /**
  * 预测建议：tengu_prompt_suggestion 开启时显示模型生成的下一句建议，Tab/→ 接受，记录 shown/accepted/ignored。
  */
 function usePromptSuggestion({ hasInput: inputValue, isAssistantResponding }) {
-  let promptSuggestion = useAppState((Dt) => Dt.promptSuggestion);
+  let promptSuggestion = useAppState((state) => state.promptSuggestion);
   let setAppState = useSetAppState();
   let isTerminalFocused = useTerminalFocus();
   let isValidSuggestion = isShownOrAcceptedSuggestion(promptSuggestion);
-  let Re = suggestionTextOrNull(promptSuggestion);
+  let suggestionText = suggestionTextOrNull(promptSuggestion);
   let generationRequestId = promptSuggestion.status === "empty" ? null : promptSuggestion.generationRequestId;
   let shownAt = isValidSuggestion ? promptSuggestion.shownAt : 0;
   let acceptedAt = promptSuggestion.status === "accepted" ? promptSuggestion.acceptedAt : 0;
-  let suggestion = isAssistantResponding || inputValue ? null : Re;
-  let firstKeystrokeAt = R(0);
-  let wasFocusedWhenShown = R(true);
-  let prevShownAt = R(0);
+  let suggestion = isAssistantResponding || inputValue ? null : suggestionText;
+  let firstKeystrokeAt = useRef(0);
+  let wasFocusedWhenShown = useRef(true);
+  let prevShownAt = useRef(0);
   if (shownAt > 0 && shownAt !== prevShownAt.current) {
     prevShownAt.current = shownAt;
     wasFocusedWhenShown.current = isTerminalFocused;
@@ -55,7 +69,7 @@ function usePromptSuggestion({ hasInput: inputValue, isAssistantResponding }) {
   } else if (shownAt === 0) prevShownAt.current = 0;
   if (inputValue && firstKeystrokeAt.current === 0 && isValidSuggestion)
     firstKeystrokeAt.current = Date.now();
-  let resetSuggestion = ce(() => {
+  let resetSuggestion = useCallback(() => {
     setAppState((prev) => ({
       ...prev,
       promptSuggestion: {
@@ -63,7 +77,7 @@ function usePromptSuggestion({ hasInput: inputValue, isAssistantResponding }) {
       },
     }));
   }, [setAppState]);
-  let markAccepted = ce(() => {
+  let markAccepted = useCallback(() => {
     if (!isValidSuggestion) return;
     setAppState((prev) => {
       let promptSuggestion = prev.promptSuggestion;
@@ -86,7 +100,7 @@ function usePromptSuggestion({ hasInput: inputValue, isAssistantResponding }) {
       }
     });
   }, [isValidSuggestion, setAppState]);
-  let markShown = ce(() => {
+  let markShown = useCallback(() => {
     setAppState((prev) => {
       let promptSuggestion = prev.promptSuggestion;
       if (promptSuggestion.status !== "generated") return prev;
@@ -101,11 +115,11 @@ function usePromptSuggestion({ hasInput: inputValue, isAssistantResponding }) {
       };
     });
   }, [setAppState]);
-  let logOutcomeAtSubmission = ce(
+  let logOutcomeAtSubmission = useCallback(
     (finalInput, opts) => {
       if (!isValidSuggestion) return null;
       let tabWasPressed = acceptedAt > shownAt;
-      let wasAccepted = tabWasPressed || finalInput.toLowerCase() === Re?.toLowerCase();
+      let wasAccepted = tabWasPressed || finalInput.toLowerCase() === suggestionText?.toLowerCase();
       let timeMs = wasAccepted ? acceptedAt || Date.now() : Date.now();
       logEvent("tengu_prompt_suggestion", {
         source: lit_2("cli"),
@@ -127,12 +141,12 @@ function usePromptSuggestion({ hasInput: inputValue, isAssistantResponding }) {
           timeToFirstKeystrokeMs: firstKeystrokeAt.current - shownAt,
         }),
         wasFocusedWhenShown: wasFocusedWhenShown.current,
-        similarity: Math.round((finalInput.length / (Re?.length || 1)) * 100) / 100,
+        similarity: Math.round((finalInput.length / (suggestionText?.length || 1)) * 100) / 100,
       });
       if (!opts?.skipReset) resetSuggestion();
       return wasAccepted;
     },
-    [isValidSuggestion, acceptedAt, shownAt, Re, generationRequestId, resetSuggestion],
+    [isValidSuggestion, acceptedAt, shownAt, suggestionText, generationRequestId, resetSuggestion],
   );
   return {
     suggestion,

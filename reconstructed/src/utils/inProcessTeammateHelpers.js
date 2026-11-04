@@ -11,13 +11,15 @@
 import { isIdleNotification } from "./teammateMailbox.js";
 
 //@ chunk-6vnxsn99.js:22854-22948 placement
-function isTeammateWorking(e) {
-  return e.status === "running" && !e.isIdle && e.currentWorkAbortController !== undefined;
+function isTeammateWorking(teammate) {
+  return (
+    teammate.status === "running" && !teammate.isIdle && teammate.currentWorkAbortController !== undefined
+  );
 }
 //@ chunk-6vnxsn99.js:22948-23032 placement
-function interruptTeammateWork(e) {
-  if (!isTeammateWorking(e)) return false;
-  e.currentWorkAbortController?.abort();
+function interruptTeammateWork(teammate) {
+  if (!isTeammateWorking(teammate)) return false;
+  teammate.currentWorkAbortController?.abort();
   return true;
 }
 //@ chunk-6vnxsn99.js:23032-23110 fingerprint = setAwaitingPlanApproval (0.664)
@@ -32,31 +34,31 @@ function isTeammateAwaitingInput(task) {
  * leader 看到一批消息里有 shutdown 类请求时，清掉对应 teammate 的 idleNotificationOwedToLead 标记。
  */
 function clearOwedIdleNotificationsOnShutdown(messages, setAppState) {
-  let r = new Set();
-  for (let message of messages) if (isIdleNotification(message.text)) r.add(message.from);
-  if (r.size === 0) return;
-  setAppState((s) => {
-    let h;
-    for (let task of Object.values(s.tasks))
+  let notifiedSenders = new Set();
+  for (let message of messages) if (isIdleNotification(message.text)) notifiedSenders.add(message.from);
+  if (notifiedSenders.size === 0) return;
+  setAppState((prevState) => {
+    let nextTasks;
+    for (let task of Object.values(prevState.tasks))
       if (
         task.type === "in_process_teammate" &&
         task.idleNotificationOwedToLead &&
-        r.has(task.identity.agentName)
+        notifiedSenders.has(task.identity.agentName)
       ) {
-        h ??= {
-          ...s.tasks,
+        nextTasks ??= {
+          ...prevState.tasks,
         };
-        h[task.id] = {
+        nextTasks[task.id] = {
           ...task,
           idleNotificationOwedToLead: undefined,
         };
       }
-    return h
+    return nextTasks
       ? {
-          ...s,
-          tasks: h,
+          ...prevState,
+          tasks: nextTasks,
         }
-      : s;
+      : prevState;
   });
 }
 export {

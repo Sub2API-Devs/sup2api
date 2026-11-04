@@ -34,15 +34,15 @@ function hasActiveAgentTasks(tasks) {
  */
 function hasAwaitableAgentTasks(tasks) {
   return Object.values(tasks).some(
-    (t) =>
-      isActiveAgentTask(t) &&
-      t.status !== "paused" &&
-      !(t.type === "in_process_teammate" && t.identity?.resumableAgentId === undefined) &&
+    (task) =>
+      isActiveAgentTask(task) &&
+      task.status !== "paused" &&
+      !(task.type === "in_process_teammate" && task.identity?.resumableAgentId === undefined) &&
       !(
-        t.type === "remote_agent" &&
-        (t.ultraplanPhase === "needs_input" ||
-          t.ultraplanPhase === "plan_ready" ||
-          (t.isUltraplan && t.restoredOnResume))
+        task.type === "remote_agent" &&
+        (task.ultraplanPhase === "needs_input" ||
+          task.ultraplanPhase === "plan_ready" ||
+          (task.isUltraplan && task.restoredOnResume))
       ),
   );
 }

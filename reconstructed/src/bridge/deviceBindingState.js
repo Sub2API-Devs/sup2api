@@ -9,33 +9,37 @@
  * attribution: placement 3
  */
 import { DoctorLazy } from "../cli/handlers/util.js";
-import { union, u, literal, string } from "../../vendor/zod/v4/classic/schemas.js";
+import { union, objectSchema, literal, stringSchema } from "../../vendor/zod/v4/classic/schemas.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-xfkf9vr6.js:268-340 placement
-var deviceBindingStateSchema = DoctorLazy(() =>
-  union([
-    u({
-      v: literal(1),
-      state: string(),
-    }),
-    u({
-      v: literal(2),
-      engine: literal("bridge"),
-    }),
-  ]),
-);
+var deviceBindingStateSchema; // deferred: uses DoctorLazy (../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-xfkf9vr6.js:268", () => {
+  deviceBindingStateSchema = DoctorLazy(() =>
+    union([
+      objectSchema({
+        v: literal(1),
+        state: stringSchema(),
+      }),
+      objectSchema({
+        v: literal(2),
+        engine: literal("bridge"),
+      }),
+    ]),
+  );
+});
 //@ chunk-xfkf9vr6.js:340-641 placement
 function deviceBindingState(toolHostStatus, deviceBindPosture) {
   if (toolHostStatus === undefined || toolHostStatus === null)
     return typeof deviceBindPosture === "object" && deviceBindPosture !== null ? "none" : "unstated";
-  let t = deviceBindingStateSchema().safeParse(toolHostStatus);
-  if (!t.success) return "unreadable";
-  if (t.data.v === 2) return "bridge";
-  switch (t.data.state) {
+  let parsed = deviceBindingStateSchema().safeParse(toolHostStatus);
+  if (!parsed.success) return "unreadable";
+  if (parsed.data.v === 2) return "bridge";
+  switch (parsed.data.state) {
     case "connected":
     case "requested":
     case "detached":
-      return t.data.state;
+      return parsed.data.state;
     default:
       return "other_state";
   }

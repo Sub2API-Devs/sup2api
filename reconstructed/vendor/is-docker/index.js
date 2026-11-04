@@ -2,13 +2,11 @@
  * is-docker/index.js
  * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
  * third-party: is-docker@3.0.0
- * pieces: chunk-20ppca50.js (3)
+ * pieces: chunk-20ppca50.js (2)
  * attribution: esm-layout 1, esm-fingerprint 2
  */
 import fs from "fs";
 
-//@ chunk-20ppca50.js:572-578 esm-layout
-var h;
 //@ chunk-20ppca50.js:578-647 esm-fingerprint
 function hasDockerEnv() {
   try {
@@ -26,4 +24,4 @@ function hasDockerCGroup() {
     return false;
   }
 }
-export { h, hasDockerEnv, hasDockerCGroup };
+export { hasDockerEnv, hasDockerCGroup };

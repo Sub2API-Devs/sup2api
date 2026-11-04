@@ -11,12 +11,16 @@
 import { createLazySignal, createSignal } from "../../utils/signal.js";
 import { HostScoped } from "../../utils/hostScoped.js";
 import { getRootSession } from "../../bootstrap/state.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-6qtszw6g.js:300-330 placement
 /**
  * 按宿主懒创建的 rowStaged 信号。
  */
-var rowStagedSignal = createLazySignal(() => remoteIoFileStoreStateHandle().rowStaged);
+var rowStagedSignal; // deferred: uses remoteIoFileStoreStateHandle of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-6qtszw6g.js:300", () => {
+  rowStagedSignal = createLazySignal(() => remoteIoFileStoreStateHandle().rowStaged);
+});
 //@ chunk-6qtszw6g.js:330-377 placement
 function attestationEnforcementState() {
   return remoteIoFileStoreStateHandle().attestationEnforcement;
@@ -36,147 +40,150 @@ var ERROR_NAME_PATTERN = /^[A-Za-z_$][\w$.]{0,63}$/;
  */
 function safeErrorName(error) {
   try {
-    let t = error instanceof Error ? error.name : typeof error;
-    return typeof t === "string" && ERROR_NAME_PATTERN.test(t) ? t : "unnamed";
+    let kind = error instanceof Error ? error.name : typeof error;
+    return typeof kind === "string" && ERROR_NAME_PATTERN.test(kind) ? kind : "unnamed";
   } catch {
     return "unnamed";
   }
 }
 //@ chunk-6qtszw6g.js:587-717 placement
-function nextVerdictDelivery(verdict, t) {
+function nextVerdictDelivery(verdict, previous) {
   if (verdict === undefined) return "deliver";
-  if (t === verdict) return "repeat";
-  return verdict === "served" && t === "refused" ? "deliver" : "out_of_order";
+  if (previous === verdict) return "repeat";
+  return verdict === "served" && previous === "refused" ? "deliver" : "out_of_order";
 }
 //@ chunk-6qtszw6g.js:717-808 placement
-function isThenable(e) {
-  return typeof e === "object" && e !== null && "then" in e && typeof e.then === "function";
+function isThenable(value) {
+  return typeof value === "object" && value !== null && "then" in value && typeof value.then === "function";
 }
 //@ chunk-6qtszw6g.js:808-897 placement
-function ignoreRejectedPromise(e, t) {
-  if (!isThenable(e)) return;
-  Promise.resolve(e).catch((error) => {
+function ignoreRejectedPromise(promise, onRejected) {
+  if (!isThenable(promise)) return;
+  Promise.resolve(promise).catch((error) => {
     try {
-      t?.(safeErrorName(error));
+      onRejected?.(safeErrorName(error));
     } catch {}
   });
 }
 //@ chunk-6qtszw6g.js:897-1938 placement
 function deliverFileStoreVerdict() {
-  let e;
-  let t = [];
-  let s = false;
-  let c = [];
-  let f = (r) => () => {
-    t = t.filter((n) => n !== r);
+  let state;
+  let listeners = [];
+  let closed = false;
+  let queue = [];
+  let unsubscribe = (listener) => () => {
+    listeners = listeners.filter((entry) => entry !== listener);
   };
-  let h = (r, verdict, onRejected) => {
+  let flushOne = (listener, verdict, onRejected) => {
     try {
-      ignoreRejectedPromise(r.listener(verdict, f(r)), onRejected);
+      ignoreRejectedPromise(listener.listener(verdict, unsubscribe(listener)), onRejected);
       return null;
     } catch (error) {
       return safeErrorName(error);
     }
   };
-  let l = ({ verdict, onRejected }) => {
-    e = verdict;
-    let o = t;
-    let i = 0;
-    let d = [];
-    for (let u of o) {
-      if (!t.includes(u)) continue;
-      i++;
-      let S = h(u, verdict, onRejected);
-      if (S !== null) d.push(S);
+  let deliverOne = ({ verdict, onRejected }) => {
+    state = verdict;
+    let snapshot = listeners;
+    let index = 0;
+    let results = [];
+    for (let listener of snapshot) {
+      if (!listeners.includes(listener)) continue;
+      index++;
+      let delivery = flushOne(listener, verdict, onRejected);
+      if (delivery !== null) results.push(delivery);
     }
-    if (verdict !== "served") t = [];
+    if (verdict !== "served") listeners = [];
     return {
-      listeners: i,
-      threw: d,
+      listeners: index,
+      threw: results,
     };
   };
-  let p = () => {
-    let r = [];
-    while (c.length > 0) r.push(...l(c.shift()).threw);
-    return r;
+  let drainThrows = () => {
+    let removed = [];
+    while (queue.length > 0) removed.push(...deliverOne(queue.shift()).threw);
+    return removed;
   };
   return {
-    current: () => e,
-    subscribe: (r) => {
-      let n = {
-        listener: r,
+    current: () => state,
+    subscribe: (listener) => {
+      let entry = {
+        listener,
       };
-      let o = f(n);
-      if (e === undefined) {
-        t = [...t, n];
-        return o;
+      let remove = unsubscribe(entry);
+      if (state === undefined) {
+        listeners = [...listeners, entry];
+        return remove;
       }
-      let i = e;
-      if (i === "served") t = [...t, n];
-      let d = s;
-      s = true;
+      let current = state;
+      if (current === "served") listeners = [...listeners, entry];
+      let wasClosed = closed;
+      closed = true;
       try {
-        let u = r(i, o);
-        if (isThenable(u)) Promise.resolve(u).catch(() => {});
+        let cleanup = listener(current, remove);
+        if (isThenable(cleanup)) Promise.resolve(cleanup).catch(() => {});
       } catch (error) {
-        o();
+        remove();
         throw error;
       } finally {
-        if (!d) {
-          p();
-          s = false;
+        if (!wasClosed) {
+          drainThrows();
+          closed = false;
         }
       }
-      return o;
+      return remove;
     },
-    publish: (r, onRejected) => {
-      let verdict = c.at(-1)?.verdict ?? e;
-      let i = nextVerdictDelivery(verdict, r);
-      if (i === "repeat")
+    publish: (verdict, onRejected) => {
+      let verdict_2 = queue.at(-1)?.verdict ?? state;
+      let decision = nextVerdictDelivery(verdict_2, verdict);
+      if (decision === "repeat")
         return {
           kind: "repeat",
         };
-      if (i === "out_of_order")
+      if (decision === "out_of_order")
         return {
           kind: "out_of_order",
-          basis: verdict,
+          basis: verdict_2,
         };
-      c.push({
-        verdict: r,
+      queue.push({
+        verdict,
         onRejected,
       });
-      if (s)
+      if (closed)
         return {
           kind: "queued",
         };
-      s = true;
+      closed = true;
       try {
-        let d = l(c.shift());
+        let pending = deliverOne(queue.shift());
         return {
           kind: "delivered",
-          listeners: d.listeners,
-          threw: [...d.threw, ...p()],
+          listeners: pending.listeners,
+          threw: [...pending.threw, ...drainThrows()],
         };
       } finally {
-        c.length = 0;
-        s = false;
+        queue.length = 0;
+        closed = false;
       }
     },
     reset: () => {
-      e = undefined;
-      t = [];
-      s = false;
-      c.length = 0;
+      state = undefined;
+      listeners = [];
+      closed = false;
+      queue.length = 0;
     },
   };
 }
 //@ chunk-6qtszw6g.js:1938-2042 placement
-var remoteIOFileStoreState = new HostScoped(() => ({
-  rowStaged: createSignal(),
-  streamReconnected: createSignal(),
-  attestationEnforcement: "unknown",
-  verdict: deliverFileStoreVerdict(),
-}));
+var remoteIOFileStoreState; // deferred: uses deliverFileStoreVerdict of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-6qtszw6g.js:1938", () => {
+  remoteIOFileStoreState = new HostScoped(() => ({
+    rowStaged: createSignal(),
+    streamReconnected: createSignal(),
+    attestationEnforcement: "unknown",
+    verdict: deliverFileStoreVerdict(),
+  }));
+});
 //@ chunk-6qtszw6g.js:2042-2077 placement
 function remoteIoFileStoreStateHandle() {
   return remoteIOFileStoreState.of(getRootSession().host);
@@ -185,9 +192,20 @@ function remoteIoFileStoreStateHandle() {
 /**
  * 发布文件存储裁决（verdict）到宿主状态，供订阅方读取。
  */
-var RWs = Object.freeze({
-  current: () => remoteIoFileStoreStateHandle().verdict.current(),
-  subscribe: (e) => remoteIoFileStoreStateHandle().verdict.subscribe(e),
+var fileStoreVerdictChannel; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var publishFileStoreVerdict;
+deferInit("chunk-6qtszw6g.js:2077", () => {
+  fileStoreVerdictChannel = Object.freeze({
+    current: () => remoteIoFileStoreStateHandle().verdict.current(),
+    subscribe: (listener) => remoteIoFileStoreStateHandle().verdict.subscribe(listener),
+  });
+  publishFileStoreVerdict = (verdict, onRejected) =>
+    remoteIoFileStoreStateHandle().verdict.publish(verdict, onRejected);
 });
-var publishFileStoreVerdict = (e, t) => remoteIoFileStoreStateHandle().verdict.publish(e, t);
-export { safeErrorName, rowStagedSignal, RWs, isAttestationNotEnforced, publishFileStoreVerdict };
+export {
+  safeErrorName,
+  rowStagedSignal,
+  fileStoreVerdictChannel,
+  isAttestationNotEnforced,
+  publishFileStoreVerdict,
+};

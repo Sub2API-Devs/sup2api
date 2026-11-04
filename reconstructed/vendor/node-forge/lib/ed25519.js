@@ -5,7 +5,7 @@
  * pieces: chunk-fq0cr76a.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../runtime/bun-runtime.js";
 import { require_forge } from "./forge.js";
 import { require_jsbn } from "./jsbn.js";
 import { require_random } from "./random.js";
@@ -14,14 +14,14 @@ import { require_util } from "./util.js";
 import { require_asn1_validator } from "./asn1-validator.js";
 
 //@ chunk-fq0cr76a.js:260717-274277 cjs-fingerprint
-var require_ed25519 = x(function (cjsExports, cjsModule) {
+var require_ed25519 = __commonJS(function (cjsExports, cjsModule) {
   var forge = require_forge();
   require_jsbn();
   require_random();
   require_sha512();
   require_util();
-  var zA = require_asn1_validator();
-  var { publicKeyValidator, privateKeyValidator } = zA;
+  var asn1Validator = require_asn1_validator();
+  var { publicKeyValidator, privateKeyValidator } = asn1Validator;
   if (typeof BigInteger === "undefined") BigInteger = forge.jsbn.BigInteger;
   var BigInteger;
   var ByteBuffer = forge.util.ByteBuffer;
@@ -370,13 +370,13 @@ var require_ed25519 = x(function (cjsExports, cjsModule) {
     pack25519(r_2, ty);
     r_2[31] ^= par25519(tx) << 7;
   }
-  function pack25519(o, n) {
+  function pack25519(o, input) {
     var i;
     var j;
     var b_2;
     var m = gf();
     var t = gf();
-    for (i = 0; i < 16; ++i) t[i] = n[i];
+    for (i = 0; i < 16; ++i) t[i] = input[i];
     car25519(t);
     car25519(t);
     car25519(t);
@@ -430,9 +430,9 @@ var require_ed25519 = x(function (cjsExports, cjsModule) {
     M(r_2[3], r_2[0], r_2[1]);
     return 0;
   }
-  function unpack25519(o, n) {
+  function unpack25519(o, input) {
     var i;
-    for (i = 0; i < 16; ++i) o[i] = n[2 * i] + (n[2 * i + 1] << 8);
+    for (i = 0; i < 16; ++i) o[i] = input[2 * i] + (input[2 * i + 1] << 8);
     o[15] &= 32767;
   }
   function pow2523(o, i) {

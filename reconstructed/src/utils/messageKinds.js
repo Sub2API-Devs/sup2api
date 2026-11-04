@@ -42,8 +42,8 @@ var streamEventTypeSet = new Set(STREAM_EVENT_TYPES);
 /**
  * 是否为流事件类型。
  */
-function isStreamEvent(e) {
-  return streamEventTypeSet.has(e.type);
+function isStreamEvent(message) {
+  return streamEventTypeSet.has(message.type);
 }
 //@ chunk-aepeg2w5.js:600451-600991 placement
 /**
@@ -76,7 +76,7 @@ function isTransientMessage_2(message) {
     case "system":
       return false;
     default: {
-      let n = message;
+      let otherMessage = message;
       return false;
     }
   }

@@ -8,7 +8,7 @@
  * pieces: chunk-ah34pb7m.js (1)
  * attribution: fingerprint 1
  */
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import {
   jsxProd_default_2,
   jsxProd_default,
@@ -22,7 +22,7 @@ import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
  * hook 进度："Running <事件> hooks…"，完成后 "N <事件> hooks ran"。
  */
 function HookProgressMessage(props) {
-  let $ = w(22);
+  let $ = useMemoCache(22);
   let { hookEvent, lookups, toolUseID, isTranscriptMode } = props;
   let t1;
   if ($[0] !== hookEvent || $[1] !== lookups.inProgressHookCounts || $[2] !== toolUseID) {

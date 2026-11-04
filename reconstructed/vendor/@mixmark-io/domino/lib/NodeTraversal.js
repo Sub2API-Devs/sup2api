@@ -5,10 +5,10 @@
  * pieces: chunk-vwj6ccer.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-vwj6ccer.js:67604-68270 cjs-fingerprint
-var require_NodeTraversal = x(function (cjsExports, cjsModule) {
+var require_NodeTraversal = __commonJS(function (cjsExports, cjsModule) {
   var NodeTraversal = (cjsModule.exports = {
     nextSkippingChildren,
     nextAncestorSibling,

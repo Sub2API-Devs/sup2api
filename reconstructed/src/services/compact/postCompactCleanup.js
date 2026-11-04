@@ -37,7 +37,7 @@ import { consumeFailedTranscriptWrite, clearSessionMessagesCache } from "../../u
  * 惰性加载压缩后清理所需的辅助模块。
  */
 function loadCleanupHelpers() {
-  return require("./chunk-1cnesc1e.js");
+  return require("../teleport/relayState.js");
 }
 //@ chunk-e6aww6q8.js:2475720-2475764 placement
 /**
@@ -50,18 +50,18 @@ function isMainQueryCompaction(querySource, agentId) {
 /**
  * 压缩后的清理：预期缓存失效、重置 beta 锁存与 system prompt 段、丢弃预计算压缩、重置提示预算与 teleport 缓存、记录缓存未命中确认点、必要时清空消息缓存。
  */
-function cleanupAfterCompaction(session, n, setAppState, s, h, storageV5) {
-  let S = isMainQuerySource(n);
-  if (S && s === undefined) expectPromptCacheDrop(MAIN_2);
-  noopLedger(h ?? getStickyBetas(), "compaction");
-  clearAdvisorHeld(h ?? getStickyBetas());
-  discardPrecompute(session.precompute, s, "post_compact_cleanup", n, storageV5);
-  if (S) {
+function cleanupAfterCompaction(session, querySource, setAppState, agentId, stickyBetas, storageV5) {
+  let isMainThread = isMainQuerySource(querySource);
+  if (isMainThread && agentId === undefined) expectPromptCacheDrop(MAIN_2);
+  noopLedger(stickyBetas ?? getStickyBetas(), "compaction");
+  clearAdvisorHeld(stickyBetas ?? getStickyBetas());
+  discardPrecompute(session.precompute, agentId, "post_compact_cleanup", querySource, storageV5);
+  if (isMainThread) {
     invalidateUserContext(session, "compaction");
     nextEagerLoadReason("compact");
     resetNoticeBudgets();
     clearSystemPromptSectionState("compaction");
-    if (h === undefined) {
+    if (stickyBetas === undefined) {
       clearBetaHeaderLatches();
       if (!isFoamySpringEnabled_2()) {
         getStickyBetas().declaredTools = undefined;
@@ -71,23 +71,23 @@ function cleanupAfterCompaction(session, n, setAppState, s, h, storageV5) {
     clearBetaTracingState();
     resetClassifierApprovals(setAppState ? makeClassifierApprovalsSetter(setAppState) : undefined);
   }
-  if (S) {
+  if (isMainThread) {
     let cleanupHelpers = loadCleanupHelpers();
     if (cleanupHelpers?.getTeleportCacheState().status === "active")
       cleanupHelpers.revertTeleportCache("compaction", "main");
   }
-  if (S) session.autonomousLoopPreamble.reset();
-  if (S && setAppState) {
+  if (isMainThread) session.autonomousLoopPreamble.reset();
+  if (isMainThread && setAppState) {
     let totalOutputTokens = getTotalOutputTokens();
-    setAppState((L) => {
-      if (L.cacheMissAckedAtOutputTokens === totalOutputTokens) return L;
+    setAppState((state) => {
+      if (state.cacheMissAckedAtOutputTokens === totalOutputTokens) return state;
       return {
-        ...L,
+        ...state,
         cacheMissAckedAtOutputTokens: totalOutputTokens,
       };
     });
   }
-  if (getIsInteractive() ? !isFullscreenActive() : S && consumeFailedTranscriptWrite())
+  if (getIsInteractive() ? !isFullscreenActive() : isMainThread && consumeFailedTranscriptWrite())
     clearSessionMessagesCache();
 }
 export { cleanupAfterCompaction, isMainQueryCompaction, loadCleanupHelpers };

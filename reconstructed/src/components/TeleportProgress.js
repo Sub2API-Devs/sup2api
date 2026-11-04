@@ -10,8 +10,8 @@
  */
 import { stepDurationSuffix, setupHeadline } from "../services/cloudSessions/setupProgress.js";
 import { formatFileSize } from "../utils/format.js";
-import { init_react_production, y } from "../../vendor/react/cjs/react.production.js";
-import { w } from "../../vendor/react/compiler-runtime.js";
+import { init_react_production, useState } from "../../vendor/react/cjs/react.production.js";
+import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import { usePrefersReducedMotion } from "./Spinner/spinnerFlags.js";
 import { useIsScreenReaderEnabled } from "../ink/components/ErrorBoundary.js";
 import { useAnimationFrame } from "../ink/components/Input.js";
@@ -28,6 +28,7 @@ import {
   checkOutTeleportedSessionBranch,
   processMessagesForTeleportResume,
 } from "../utils/teleport.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-tcnhgpc6.js:268-436 placement
 /**
@@ -57,26 +58,26 @@ function initialUploadProgress(startedAt) {
 /**
  * 上传工作树到云会话时的进度状态转换（检查、打包、上传、创建会话）。
  */
-function reduceUploadProgress(e, a, startedAt) {
-  switch (a.kind) {
+function reduceUploadProgress(state, event, startedAt) {
+  switch (event.kind) {
     case "checking":
-      return a.folder === true && !e.folder
+      return event.folder === true && !state.folder
         ? {
-            ...e,
+            ...state,
             folder: true,
           }
-        : e;
+        : state;
     case "bundling": {
       if (
-        e.fallback !== null ||
-        e.steps.some((step) => step.id === "bundle") ||
-        !e.steps.some((step) => step.id === "create" && step.status === "pending")
+        state.fallback !== null ||
+        state.steps.some((step) => step.id === "bundle") ||
+        !state.steps.some((step) => step.id === "create" && step.status === "pending")
       )
-        return e;
-      let t = completeRunningStep(e, "check", "completed", startedAt);
+        return state;
+      let checkedState = completeRunningStep(state, "check", "completed", startedAt);
       return {
-        ...t,
-        steps: t.steps.flatMap((step) =>
+        ...checkedState,
+        steps: checkedState.steps.flatMap((step) =>
           step.id === "create"
             ? [
                 {
@@ -84,7 +85,7 @@ function reduceUploadProgress(e, a, startedAt) {
                   status: "running",
                   startedAt,
                 },
-                ...(a.uploadedBySync === true
+                ...(event.uploadedBySync === true
                   ? []
                   : [
                       {
@@ -96,38 +97,39 @@ function reduceUploadProgress(e, a, startedAt) {
               ]
             : [step],
         ),
-        rerouted: a.rerouted,
-        folder: a.folder === true,
+        rerouted: event.rerouted,
+        folder: event.folder === true,
       };
     }
     case "bundled": {
-      let t = completeRunningStep(e, "bundle", "completed", startedAt);
-      return t === e
-        ? e
+      let bundledState = completeRunningStep(state, "bundle", "completed", startedAt);
+      return bundledState === state
+        ? state
         : {
-            ...startPendingStep(t, "upload", startedAt),
+            ...startPendingStep(bundledState, "upload", startedAt),
             bundle: {
-              sizeBytes: a.sizeBytes,
-              scope: a.scope,
+              sizeBytes: event.sizeBytes,
+              scope: event.scope,
             },
           };
     }
     case "bundle_failed": {
-      let found = e.steps.find(
+      let found = state.steps.find(
         (step) => step.status === "running" && (step.id === "bundle" || step.id === "upload"),
       );
-      if (found === undefined && e.fallback !== null) return e;
-      let n = found === undefined ? e : completeRunningStep(e, found.id, "failed", startedAt);
+      if (found === undefined && state.fallback !== null) return state;
+      let failedState =
+        found === undefined ? state : completeRunningStep(state, found.id, "failed", startedAt);
       return {
-        ...n,
-        steps: n.steps.filter((step) => !(step.id === "upload" && step.status === "pending")),
-        fallback: a.fallback,
+        ...failedState,
+        steps: failedState.steps.filter((step) => !(step.id === "upload" && step.status === "pending")),
+        fallback: event.fallback,
       };
     }
     case "creating":
       return startPendingStep(
         completeRunningStep(
-          completeRunningStep(e, "check", "completed", startedAt),
+          completeRunningStep(state, "check", "completed", startedAt),
           "upload",
           "completed",
           startedAt,
@@ -136,25 +138,25 @@ function reduceUploadProgress(e, a, startedAt) {
         startedAt,
       );
     case "request_sent":
-      return e.requestSent
-        ? e
+      return state.requestSent
+        ? state
         : {
-            ...e,
+            ...state,
             requestSent: true,
           };
     case "session_exists":
-      return e;
+      return state;
     case "created":
-      return completeRunningStep(e, "create", "completed", startedAt);
+      return completeRunningStep(state, "create", "completed", startedAt);
   }
 }
 //@ chunk-tcnhgpc6.js:1570-1743 placement
-function completeRunningStep(e, a, status, completedAt) {
-  return e.steps.some((step) => step.id === a && step.status === "running")
+function completeRunningStep(state, stepId, status, completedAt) {
+  return state.steps.some((step) => step.id === stepId && step.status === "running")
     ? {
-        ...e,
-        steps: e.steps.map((step) =>
-          step.id === a && step.status === "running"
+        ...state,
+        steps: state.steps.map((step) =>
+          step.id === stepId && step.status === "running"
             ? {
                 ...step,
                 status,
@@ -163,15 +165,15 @@ function completeRunningStep(e, a, status, completedAt) {
             : step,
         ),
       }
-    : e;
+    : state;
 }
 //@ chunk-tcnhgpc6.js:1743-1920 placement
-function startPendingStep(e, a, startedAt) {
-  return e.steps.some((step) => step.id === a && step.status === "pending")
+function startPendingStep(state, stepId, startedAt) {
+  return state.steps.some((step) => step.id === stepId && step.status === "pending")
     ? {
-        ...e,
-        steps: e.steps.map((step) =>
-          step.id === a && step.status === "pending"
+        ...state,
+        steps: state.steps.map((step) =>
+          step.id === stepId && step.status === "pending"
             ? {
                 ...step,
                 status: "running",
@@ -180,14 +182,14 @@ function startPendingStep(e, a, startedAt) {
             : step,
         ),
       }
-    : e;
+    : state;
 }
 //@ chunk-tcnhgpc6.js:1920-2167 placement
 /**
  * 根据最后一个已开始的步骤得出云会话创建的阶段：检查、打包、上传、创建中或已创建。
  */
-function uploadProgressPhase(e) {
-  let last = e.steps.findLast((step) => step.status !== "pending");
+function uploadProgressPhase(state) {
+  let last = state.steps.findLast((step) => step.status !== "pending");
   switch (last?.id) {
     case undefined:
     case "check":
@@ -211,48 +213,48 @@ var BUNDLE_MODE_LABELS = {
 /**
  * 函数 teleportProgressRow（进度行（标签/标注/详情））；位于「teleport 进度（"Teleporting session…"，校验、检出分支）」模块。
  */
-function teleportProgressRow(step, state, now) {
+function teleportProgressRow(step, detail, now) {
   return {
-    label: formatCheckStep(step, state),
-    annotation: `${formatBundleStep(step, state)}${stepDurationSuffix(step, now)}`,
-    detail: noopDetail(step, state),
+    label: formatCheckStep(step, detail),
+    annotation: `${formatBundleStep(step, detail)}${stepDurationSuffix(step, now)}`,
+    detail: noopDetail(step, detail),
   };
 }
 //@ chunk-tcnhgpc6.js:2384-2407 placement
-function noopDetail(e, a) {
+function noopDetail(step, detail) {
   return;
 }
 //@ chunk-tcnhgpc6.js:2407-3039 placement
-function formatCheckStep(e, { rerouted, folder }) {
-  let t = e.status === "completed";
-  switch (e.id) {
+function formatCheckStep(step, { rerouted, folder }) {
+  let isDone = step.status === "completed";
+  switch (step.id) {
     case "check":
-      if (folder) return t ? "Checked this folder" : "Checking this folder";
-      return t ? "Checked this checkout" : "Checking this checkout";
+      if (folder) return isDone ? "Checked this folder" : "Checking this folder";
+      return isDone ? "Checked this checkout" : "Checking this checkout";
     case "bundle":
-      if (folder) return t ? "Packaged this folder" : "Packaging this folder";
-      if (rerouted) return t ? "Packaged local changes" : "Packaging local changes";
-      return t ? "Packaged this repository" : "Packaging this repository";
+      if (folder) return isDone ? "Packaged this folder" : "Packaging this folder";
+      if (rerouted) return isDone ? "Packaged local changes" : "Packaging local changes";
+      return isDone ? "Packaged this repository" : "Packaging this repository";
     case "upload":
-      if (rerouted) return t ? "Uploaded your working tree" : "Uploading your working tree";
-      return t ? "Uploaded this repository" : "Uploading this repository";
+      if (rerouted) return isDone ? "Uploaded your working tree" : "Uploading your working tree";
+      return isDone ? "Uploaded this repository" : "Uploading this repository";
     case "create":
-      return t ? "Created cloud session" : "Creating cloud session";
+      return isDone ? "Created cloud session" : "Creating cloud session";
   }
 }
 //@ chunk-tcnhgpc6.js:3039-3363 placement
-function formatBundleStep(e, { bundle, folder }) {
-  if (bundle === null || (e.status !== "running" && e.status !== "completed")) return "";
-  let t = formatFileSize(bundle.sizeBytes);
-  switch (e.id) {
+function formatBundleStep(step, { bundle, folder }) {
+  if (bundle === null || (step.status !== "running" && step.status !== "completed")) return "";
+  let sizeLabel = formatFileSize(bundle.sizeBytes);
+  switch (step.id) {
     case "bundle":
-      return e.status === "completed"
+      return step.status === "completed"
         ? folder
-          ? ` \xB7 ${t}`
-          : ` \xB7 ${t}, ${BUNDLE_MODE_LABELS[bundle.scope]}`
+          ? ` \xB7 ${sizeLabel}`
+          : ` \xB7 ${sizeLabel}, ${BUNDLE_MODE_LABELS[bundle.scope]}`
         : "";
     case "upload":
-      return e.status === "completed" ? ` \xB7 ${t}` : ` ${t}`;
+      return step.status === "completed" ? ` \xB7 ${sizeLabel}` : ` ${sizeLabel}`;
     case "check":
     case "create":
       return "";
@@ -263,20 +265,25 @@ function formatBundleStep(e, { bundle, folder }) {
  * 云会话创建清单的标题（完成后改为过去时）。
  */
 function cloudCreateTitle(state) {
-  let a = setupHeadline("new");
-  return uploadProgressPhase(state) === "created" ? a.replace(/^Setting up/, "Set up") : `${a}\u2026`;
+  let headline = setupHeadline("new");
+  return uploadProgressPhase(state) === "created"
+    ? headline.replace(/^Setting up/, "Set up")
+    : `${headline}\u2026`;
 }
 //@ chunk-tcnhgpc6.js:3469-3657 placement
 /**
  * 取消云会话创建时的提示：请求已发出时说明云会话可能仍已创建。
  */
-function cloudCreateCancelMessage(e) {
-  return e !== null && e.requestSent
+function cloudCreateCancelMessage(state) {
+  return state !== null && state.requestSent
     ? "Cancelled after the create request was sent, so a cloud session may still have been created"
     : "Cancelled before a cloud session was created";
 }
 //@ chunk-pfn09c5f.js:14252-14256 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-pfn09c5f.js:14252", () => {
+  init_react_production();
+});
 //@ chunk-pfn09c5f.js:14256-14503 fingerprint = STEPS (1)
 var TELEPORT_SPINNER_FRAMES = ["\u25D0", "\u25D3", "\u25D1", "\u25D2"];
 var TELEPORT_STEPS = [
@@ -299,7 +306,7 @@ var TELEPORT_STEPS = [
 ];
 //@ chunk-pfn09c5f.js:14503-15625 fingerprint = TeleportProgress (0.916)
 function TeleportProgress(props) {
-  let $ = w(16);
+  let $ = useMemoCache(16);
   let { currentStep, sessionId } = props;
   let prefersReducedMotion = usePrefersReducedMotion();
   let isScreenReaderEnabled = useIsScreenReaderEnabled();
@@ -307,7 +314,7 @@ function TeleportProgress(props) {
   let frame = Math.floor(time / 100) % TELEPORT_SPINNER_FRAMES.length;
   let t1;
   if ($[0] !== currentStep) {
-    t1 = (U) => U.key === currentStep;
+    t1 = (step) => step.key === currentStep;
     $[0] = currentStep;
     $[1] = t1;
   } else t1 = $[1];
@@ -416,7 +423,7 @@ function TeleportProgress(props) {
 async function teleportWithProgress(root, sessionId) {
   let setStep = () => {};
   function TeleportProgressWrapper() {
-    let [step, _setStep] = y("validating");
+    let [step, _setStep] = useState("validating");
     setStep = _setStep;
     return jsxProd_default(TeleportProgress, {
       currentStep: step,
@@ -445,4 +452,5 @@ export {
   initialUploadProgress,
   cloudCreateTitle,
   teleportProgressRow,
+  teleportWithProgress,
 };

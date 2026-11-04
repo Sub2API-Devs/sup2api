@@ -34,6 +34,7 @@ import { usableLauncherHostLoginToken } from "../../utils/auth/launcherHostLogin
 import { readFreshOauthAccountFromDisk, saveGlobalConfig, getGlobalConfig } from "../../utils/config.js";
 import { Feed } from "../../components/LogoV2/Feed.js";
 import { logError } from "../../utils/log.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-3n6ygrtf.js:665-741 placement
 /**
@@ -49,35 +50,37 @@ class MetricsCheckError extends Error {}
  * 调 metrics_enabled 接口（绕过仅必要流量限制、5 秒超时、不跟随重定向）查询组织是否允许指标日志；无可用凭证或响应缺字段时抛错。
  */
 async function fetchMetricsEnabled() {
-  let e = guardTelemetryCredentials(
+  let response = guardTelemetryCredentials(
     await getAuthHeadersAsync(),
     `${getOauthConfig().BASE_API_URL}${METRICS_ENABLED_PATH}`,
   );
-  if (e.error) throw new MetricsCheckError("Auth error: no credential usable for the metrics opt-out check");
-  let n = await apiClient.get(METRICS_ENABLED_PATH, {
+  if (response.error)
+    throw new MetricsCheckError("Auth error: no credential usable for the metrics opt-out check");
+  let metricsResponse = await apiClient.get(METRICS_ENABLED_PATH, {
     auth: "none",
-    headers: e.headers,
+    headers: response.headers,
     timeout: 5000,
     bypassEssentialTrafficOnly: true,
     maxRedirects: 0,
   });
-  if (!n.ok) throw new MetricsCheckError(`metrics_enabled unavailable: ${n.reason}`);
-  if (typeof n.data?.metrics_logging_enabled !== "boolean")
+  if (!metricsResponse.ok)
+    throw new MetricsCheckError(`metrics_enabled unavailable: ${metricsResponse.reason}`);
+  if (typeof metricsResponse.data?.metrics_logging_enabled !== "boolean")
     throw Error("metrics_enabled response missing metrics_logging_enabled");
-  return n.data;
+  return metricsResponse.data;
 }
 //@ chunk-3n6ygrtf.js:1238-1718 fingerprint = _checkMetricsEnabledAPI (0.713)
 /**
  * 调用指标开关接口，返回 {enabled, hasError}。
  */
-async function _checkMetricsEnabledAPI(e) {
+async function _checkMetricsEnabledAPI(credentials) {
   try {
     let data = await withOAuth401Retry(fetchMetricsEnabled, {
       also403Revoked: true,
       gateToSessionOAuthCredential: true,
-      oauthRefreshLatch: e,
+      oauthRefreshLatch: credentials,
     });
-    e.attempted = false;
+    credentials.attempted = false;
     logForDebugging(
       `${TELEMETRY_LOG_PREFIX} Metrics opt-out API response: enabled=${data.metrics_logging_enabled}`,
     );
@@ -103,18 +106,22 @@ async function _checkMetricsEnabledAPI(e) {
   }
 }
 //@ chunk-3n6ygrtf.js:1718-1840 placement
-var metricsMemoByHost = new HostScoped(() => {
-  let e = {
-    attempted: false,
-  };
-  return {
-    memo: memoizeWithTTL(() => _checkMetricsEnabledAPI(e), METRICS_CACHE_TTL_MS),
-    oauthRefreshLatch: e,
-  };
+var metricsMemoByHost; // deferred: uses memoizeWithTTL (../../utils/memoize.js) of its import cycle while loading; runs once the cycle is complete
+var metricsIdentityByHost;
+deferInit("chunk-3n6ygrtf.js:1718", () => {
+  metricsMemoByHost = new HostScoped(() => {
+    let state = {
+      attempted: false,
+    };
+    return {
+      memo: memoizeWithTTL(() => _checkMetricsEnabledAPI(state), METRICS_CACHE_TTL_MS),
+      oauthRefreshLatch: state,
+    };
+  });
+  metricsIdentityByHost = new HostScoped(() => ({
+    identity: undefined,
+  }));
 });
-var metricsIdentityByHost = new HostScoped(() => ({
-  identity: undefined,
-}));
 //@ chunk-3n6ygrtf.js:1840-2017 placement
 function apiKeyPrincipal() {
   let { key, source } = getAnthropicApiKeyWithSourceSafe();
@@ -168,15 +175,15 @@ function principalCacheKey() {
 //@ chunk-3n6ygrtf.js:2731-2907 placement
 function _clearMetricsEnabledCacheForTesting() {
   let host = getRootSession().host;
-  let n = metricsMemoByHost.of(host);
-  let r = metricsIdentityByHost.of(host);
-  let o = principalCacheKey();
-  if (r.identity !== undefined && r.identity !== o) {
-    n.memo.cache.clear();
-    n.oauthRefreshLatch.attempted = false;
+  let memo = metricsMemoByHost.of(host);
+  let identity = metricsIdentityByHost.of(host);
+  let cacheKey = principalCacheKey();
+  if (identity.identity !== undefined && identity.identity !== cacheKey) {
+    memo.memo.cache.clear();
+    memo.oauthRefreshLatch.attempted = false;
   }
-  r.identity = o;
-  return n.memo();
+  identity.identity = cacheKey;
+  return memo.memo();
 }
 //@ chunk-3n6ygrtf.js:2907-3025 placement
 /**
@@ -184,9 +191,9 @@ function _clearMetricsEnabledCacheForTesting() {
  */
 function clearMetricsEnabledCache() {
   let host = getRootSession().host;
-  let n = metricsMemoByHost.of(host);
-  n.memo.cache.clear();
-  n.oauthRefreshLatch.attempted = false;
+  let state = metricsMemoByHost.of(host);
+  state.memo.cache.clear();
+  state.oauthRefreshLatch.attempted = false;
   metricsIdentityByHost.of(host).identity = undefined;
 }
 //@ chunk-3n6ygrtf.js:3025-3392 placement
@@ -194,34 +201,42 @@ function clearMetricsEnabledCache() {
  * 刷新指标开关：查询期间若登录主体变了则判为失败；结果与缓存相同且未过期则不写，否则写入全局配置。
  */
 async function refreshMetricsStatusFor(storage) {
-  let n = currentMetricsPrincipal() === null ? null : await currentPrincipal(storage);
-  let r = await _clearMetricsEnabledCacheForTesting();
-  if (r.hasError) return r;
-  if (n === null) return r;
-  if ((await currentPrincipal(storage)) !== n) {
+  let principal = currentMetricsPrincipal() === null ? null : await currentPrincipal(storage);
+  let clearResult = await _clearMetricsEnabledCacheForTesting();
+  if (clearResult.hasError) return clearResult;
+  if (principal === null) return clearResult;
+  if ((await currentPrincipal(storage)) !== principal) {
     logFeatureBad("api_metrics_opt_out_check", "principal_changed_mid_flight");
     return {
       enabled: false,
       hasError: true,
     };
   }
-  if (currentMetricsPrincipal() !== n) return r;
-  let o = cachedMetricsStatus(n);
-  if (o !== undefined && o.enabled === r.enabled && Date.now() - o.timestamp < METRICS_STATUS_REFRESH_MS)
-    return r;
-  await saveGlobalConfig((C) => checkMetricsEnabled(C, n, r.enabled), storage);
-  return r;
+  if (currentMetricsPrincipal() !== principal) return clearResult;
+  let status = cachedMetricsStatus(principal);
+  if (
+    status !== undefined &&
+    status.enabled === clearResult.enabled &&
+    Date.now() - status.timestamp < METRICS_STATUS_REFRESH_MS
+  )
+    return clearResult;
+  await saveGlobalConfig((config) => checkMetricsEnabled(config, principal, clearResult.enabled), storage);
+  return clearResult;
 }
 //@ chunk-3n6ygrtf.js:3392-3624 file-local
-function checkMetricsEnabled(e, n, enabled) {
-  if (currentMetricsPrincipal() !== n || (n.startsWith("acct:") && e.oauthAccount === undefined)) return e;
+function checkMetricsEnabled(principal, enabled, enabled_2) {
+  if (
+    currentMetricsPrincipal() !== enabled ||
+    (enabled.startsWith("acct:") && principal.oauthAccount === undefined)
+  )
+    return principal;
   return {
-    ...e,
+    ...principal,
     metricsStatusCache: undefined,
     metricsStatusCacheByPrincipal: Feed({
-      ...e.metricsStatusCacheByPrincipal,
-      [n]: {
-        enabled,
+      ...principal.metricsStatusCacheByPrincipal,
+      [enabled]: {
+        enabled: enabled_2,
         timestamp: Date.now(),
       },
     }),
@@ -237,8 +252,8 @@ function isValidStatusCacheLine(line) {
   );
 }
 //@ chunk-3n6ygrtf.js:3880-3973 placement
-function cachedMetricsStatus(e) {
-  let line = getGlobalConfig().metricsStatusCacheByPrincipal?.[e];
+function cachedMetricsStatus(principal) {
+  let line = getGlobalConfig().metricsStatusCacheByPrincipal?.[principal];
   return line !== undefined && isValidStatusCacheLine(line) ? line : undefined;
 }
 //@ chunk-3n6ygrtf.js:3973-4181 fingerprint = refreshMetricsStatus (0.736)
@@ -251,13 +266,13 @@ async function refreshMetricsStatus(storage) {
       enabled: false,
       hasError: false,
     };
-  let n = currentMetricsPrincipal();
-  let r = n === null ? undefined : cachedMetricsStatus(n);
-  if (r !== undefined) {
-    if (Date.now() - r.timestamp > METRICS_STATUS_REFRESH_MS)
+  let principal = currentMetricsPrincipal();
+  let status = principal === null ? undefined : cachedMetricsStatus(principal);
+  if (status !== undefined) {
+    if (Date.now() - status.timestamp > METRICS_STATUS_REFRESH_MS)
       refreshMetricsStatusFor(storage).catch(logError);
     return {
-      enabled: r.enabled,
+      enabled: status.enabled,
       hasError: false,
     };
   }

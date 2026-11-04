@@ -57,8 +57,8 @@ function resolveValue(v, ownerSize) {
     case 1:
       return v.value;
     case 2: {
-      let f = (v.value * ownerSize) / 100;
-      return isInt32Finite(f) ? roundToInt(f) : NaN;
+      let percentValue = (v.value * ownerSize) / 100;
+      return isInt32Finite(percentValue) ? roundToInt(percentValue) : NaN;
     }
     default:
       return NaN;
@@ -144,13 +144,13 @@ function resolveEdge(edges, physicalEdge, ownerSize, allowAuto = false) {
  * 取物理边的原始 Value：左/右先看 Start/End，再看本边、Horizontal/Vertical、All。
  */
 function resolveEdgeRaw(edges, physicalEdge) {
-  let f = physicalEdge === EDGE_LEFT ? edges[4] : physicalEdge === EDGE_RIGHT ? edges[5] : UNDEFINED_VALUE;
-  if (f.unit === 0) f = edges[physicalEdge];
-  if (f.unit === 0)
-    if (physicalEdge === EDGE_LEFT || physicalEdge === EDGE_RIGHT) f = edges[6];
-    else f = edges[7];
-  if (f.unit === 0) f = edges[8];
-  return f;
+  let edge = physicalEdge === EDGE_LEFT ? edges[4] : physicalEdge === EDGE_RIGHT ? edges[5] : UNDEFINED_VALUE;
+  if (edge.unit === 0) edge = edges[physicalEdge];
+  if (edge.unit === 0)
+    if (physicalEdge === EDGE_LEFT || physicalEdge === EDGE_RIGHT) edge = edges[6];
+    else edge = edges[7];
+  if (edge.unit === 0) edge = edges[8];
+  return edge;
 }
 //@ chunk-bzr73sfg.js:146925-146966 callgraph-fingerprint = isMarginAuto (1)
 function isMarginAuto(edges, physicalEdge) {
@@ -188,28 +188,28 @@ function readsOwnerHeight(style) {
  * 一次解析四个物理边（左右顶底，含 Start/End、Horizontal/Vertical、All 回退）写进 out（Int32Array），百分比按父宽算并取整。
  */
 function resolveEdges4Into(edges, ownerWidth, out) {
-  let m = edges[6];
-  let p = edges[7];
-  let g = edges[8];
-  let E = edges[4];
-  let T = edges[5];
-  let value = E;
+  let edgeStart = edges[6];
+  let edgeEnd = edges[7];
+  let edgeAll = edges[8];
+  let edgeLeft = edges[4];
+  let edgeRight = edges[5];
+  let value = edgeLeft;
   if (value.unit === 0) value = edges[0];
-  if (value.unit === 0) value = m;
-  if (value.unit === 0) value = g;
+  if (value.unit === 0) value = edgeStart;
+  if (value.unit === 0) value = edgeAll;
   out[0] = resolveEdgeValueToInt(value, ownerWidth);
   value = edges[1];
-  if (value.unit === 0) value = p;
-  if (value.unit === 0) value = g;
+  if (value.unit === 0) value = edgeEnd;
+  if (value.unit === 0) value = edgeAll;
   out[1] = resolveEdgeValueToInt(value, ownerWidth);
-  value = T;
+  value = edgeRight;
   if (value.unit === 0) value = edges[2];
-  if (value.unit === 0) value = m;
-  if (value.unit === 0) value = g;
+  if (value.unit === 0) value = edgeStart;
+  if (value.unit === 0) value = edgeAll;
   out[2] = resolveEdgeValueToInt(value, ownerWidth);
   value = edges[3];
-  if (value.unit === 0) value = p;
-  if (value.unit === 0) value = g;
+  if (value.unit === 0) value = edgeEnd;
+  if (value.unit === 0) value = edgeAll;
   out[3] = resolveEdgeValueToInt(value, ownerWidth);
 }
 //@ chunk-bzr73sfg.js:147624-147738 file-local
@@ -217,8 +217,8 @@ function resolveEdgeValueToInt(value, ownerSize) {
   let unit = value.unit;
   if (unit === 1) return value.value;
   if (unit === 2) {
-    let m = (value.value * ownerSize) / 100;
-    return isInt32Finite(m) ? roundToInt(m) : 0;
+    let percentValue = (value.value * ownerSize) / 100;
+    return isInt32Finite(percentValue) ? roundToInt(percentValue) : 0;
   }
   return 0;
 }
@@ -280,9 +280,10 @@ function createConfig() {
       return false;
     },
     setExperimentalFeatureEnabled() {},
-    setPointScaleFactor(u) {
-      if (u !== 0 && u !== 1) throw Error("setPointScaleFactor: Int32 storage supports scale 0 or 1 only");
-      config.pointScaleFactor = u;
+    setPointScaleFactor(scaleFactor) {
+      if (scaleFactor !== 0 && scaleFactor !== 1)
+        throw Error("setPointScaleFactor: Int32 storage supports scale 0 or 1 only");
+      config.pointScaleFactor = scaleFactor;
     },
     getErrata() {
       return config.errata;
@@ -393,31 +394,32 @@ class Node {
   }
   freeRecursive() {
     let children = this.children;
-    for (let idx = 0, f = children.length; idx < f; idx++) children[idx].freeRecursive();
+    for (let idx = 0, childCount = children.length; idx < childCount; idx++) children[idx].freeRecursive();
     this.free();
   }
   clearLayoutCacheRecursive() {
-    let n = new Set();
-    let u = [this];
-    let f = (this.config.liveNodes | 0) * 4 + 1024;
-    while (u.length > 0 && --f >= 0) {
-      let m = u.pop();
-      if (!(m instanceof Node) || n.has(m)) continue;
-      n.add(m);
-      m.isDirty_ = true;
-      m._hasL = false;
-      m._hasM = false;
-      m._cN = 0;
-      m._cWr = 0;
-      m._cGen = -1;
-      m._mfN = 0;
-      m._mfWr = 0;
-      m._fbCrossMode = -1;
-      m._fbGen = -1;
-      m._mGen = -1;
-      let children = m.children;
+    let visited = new Set();
+    let stack = [this];
+    let budget = (this.config.liveNodes | 0) * 4 + 1024;
+    while (stack.length > 0 && --budget >= 0) {
+      let node = stack.pop();
+      if (!(node instanceof Node) || visited.has(node)) continue;
+      visited.add(node);
+      node.isDirty_ = true;
+      node._hasL = false;
+      node._hasM = false;
+      node._cN = 0;
+      node._cWr = 0;
+      node._cGen = -1;
+      node._mfN = 0;
+      node._mfWr = 0;
+      node._fbCrossMode = -1;
+      node._fbGen = -1;
+      node._mGen = -1;
+      let children = node.children;
       if (Array.isArray(children))
-        for (let idx = 0, E = children.length; idx < E && idx < f; idx++) u.push(children[idx]);
+        for (let idx = 0, childCount = children.length; idx < childCount && idx < budget; idx++)
+          stack.push(children[idx]);
     }
     try {
       this.markDirty();
@@ -511,15 +513,24 @@ class Node {
   getComputedMargin(edge) {
     return this.layout.margin[physicalEdge(edge)];
   }
-  getOfferedWidth(n, u) {
+  getOfferedWidth(ownerWidth, heightMode) {
     let _mfC = this._mfC;
-    let m = n;
-    for (let p = this._mfN * 6 - 6; p >= 0; p -= 6) {
-      if (!canUseCachedMeasurement(1, n, _mfC[p + 1], _mfC[p], _mfC[p + 4])) continue;
-      if (_mfC[p + 5] !== u) return n;
-      m = _mfC[p + 1] === 2 ? _mfC[p] : n;
+    let offeredWidth = ownerWidth;
+    for (let cacheOffset = this._mfN * 6 - 6; cacheOffset >= 0; cacheOffset -= 6) {
+      if (
+        !canUseCachedMeasurement(
+          1,
+          ownerWidth,
+          _mfC[cacheOffset + 1],
+          _mfC[cacheOffset],
+          _mfC[cacheOffset + 4],
+        )
+      )
+        continue;
+      if (_mfC[cacheOffset + 5] !== heightMode) return ownerWidth;
+      offeredWidth = _mfC[cacheOffset + 1] === 2 ? _mfC[cacheOffset] : ownerWidth;
     }
-    return m;
+    return offeredWidth;
   }
   setWidth(v) {
     this.style.width = parseDimension(v);
@@ -686,7 +697,7 @@ class Node {
     this.style.direction = direction;
     this.markDirty();
   }
-  setBoxSizing(n) {}
+  setBoxSizing(boxSizing) {}
   setMargin(edge, v) {
     let val = parseDimension(v);
     this.style.margin[edge] = val;
@@ -777,8 +788,8 @@ class Node {
   getDirection() {
     return this.style.direction;
   }
-  copyStyle(n) {}
-  setDirtiedFunc(n) {}
+  copyStyle(other) {}
+  setDirtiedFunc(fn) {}
   unsetDirtiedFunc() {}
   setIsReferenceBaseline(v) {
     this.isReferenceBaseline_ = v;
@@ -787,11 +798,11 @@ class Node {
   isReferenceBaseline() {
     return this.isReferenceBaseline_;
   }
-  setAspectRatio(n) {}
+  setAspectRatio(ratio) {}
   getAspectRatio() {
     return NaN;
   }
-  setAlwaysFormsContainingBlock(n) {}
+  setAlwaysFormsContainingBlock(value) {}
   calculateLayout(ownerWidth, ownerHeight, _direction) {
     let config = this.config;
     config.nodesVisited = 0;
@@ -799,12 +810,29 @@ class Node {
     config.measureCacheHits = 0;
     config.cacheHits = 0;
     config.generation++;
-    let p = isInt32Finite(ownerWidth) ? roundToInt(ownerWidth) : NaN;
-    let g = isInt32Finite(ownerHeight) ? roundToInt(ownerHeight) : NaN;
-    layoutNode(this, p, g, isDefined(p) ? 1 : 0, isDefined(g) ? 1 : 0, p, g, true, false, false);
+    let roundedWidth = isInt32Finite(ownerWidth) ? roundToInt(ownerWidth) : NaN;
+    let roundedHeight = isInt32Finite(ownerHeight) ? roundToInt(ownerHeight) : NaN;
+    layoutNode(
+      this,
+      roundedWidth,
+      roundedHeight,
+      isDefined(roundedWidth) ? 1 : 0,
+      isDefined(roundedHeight) ? 1 : 0,
+      roundedWidth,
+      roundedHeight,
+      true,
+      false,
+      false,
+    );
     let mar = this.layout.margin;
-    let posL = resolveValue(resolveEdgeRaw(this.style.position, EDGE_LEFT), isDefined(p) ? p : 0);
-    let posT = resolveValue(resolveEdgeRaw(this.style.position, EDGE_TOP), isDefined(g) ? g : 0);
+    let posL = resolveValue(
+      resolveEdgeRaw(this.style.position, EDGE_LEFT),
+      isDefined(roundedWidth) ? roundedWidth : 0,
+    );
+    let posT = resolveValue(
+      resolveEdgeRaw(this.style.position, EDGE_TOP),
+      isDefined(roundedHeight) ? roundedHeight : 0,
+    );
     this.layout.left = mar[EDGE_LEFT] + (isDefined(posL) ? posL : 0);
     this.layout.top = mar[EDGE_TOP] + (isDefined(posT) ? posT : 0);
     if (this.config.pointScaleFactor !== 0) roundLayout(this);
@@ -874,8 +902,8 @@ function commitSingleCacheResult(node, performLayout) {
 /**
  * 读最近一次 calculateLayout 的统计：访问节点数、测量调用、测量缓存命中、布局缓存命中、存活节点数。
  */
-function getYogaCounters(n) {
-  let config = n.config;
+function getYogaCounters(node) {
+  let config = node.config;
   return {
     visited: config.nodesVisited,
     measured: config.measureCalls,
@@ -928,22 +956,22 @@ function lookupLayoutCache(
     out.height = node._lc[5];
     return true;
   }
-  let _cN = node._cN;
-  if (_cN > 0 && !isMeasureOnly && (sameGenCached || !wasDirty)) {
+  let cachedMeasureCount = node._cN;
+  if (cachedMeasureCount > 0 && !isMeasureOnly && (sameGenCached || !wasDirty)) {
     let { _cIn, _cOut } = node;
-    let ee = forceWidth ? 1 : 0;
-    let ae = forceHeight ? 1 : 0;
-    for (let idx = 0; idx < _cN; idx++) {
-      let de = idx * 8;
+    let forceWidthFlag = forceWidth ? 1 : 0;
+    let forceHeightFlag = forceHeight ? 1 : 0;
+    for (let idx = 0; idx < cachedMeasureCount; idx++) {
+      let entryBase = idx * 8;
       if (
-        _cIn[de + 2] === widthMode &&
-        _cIn[de + 3] === heightMode &&
-        _cIn[de + 6] === ee &&
-        _cIn[de + 7] === ae &&
-        _cIn[de] === crossAx &&
-        _cIn[de + 1] === isMainRow &&
-        _cIn[de + 4] === mainLead &&
-        _cIn[de + 5] === mainTrail
+        _cIn[entryBase + 2] === widthMode &&
+        _cIn[entryBase + 3] === heightMode &&
+        _cIn[entryBase + 6] === forceWidthFlag &&
+        _cIn[entryBase + 7] === forceHeightFlag &&
+        _cIn[entryBase] === crossAx &&
+        _cIn[entryBase + 1] === isMainRow &&
+        _cIn[entryBase + 4] === mainLead &&
+        _cIn[entryBase + 5] === mainTrail
       ) {
         out.width = _cOut[idx * 2];
         out.height = _cOut[idx * 2 + 1];
@@ -1157,21 +1185,21 @@ function measureLeaf(
     return;
   }
   let innerW = widthMode === 0 ? NaN : Math.max(0, width - paddingBorderX);
-  let U = innerW >= 1 ? innerW | 0 : innerW;
-  let L = heightMode === 0 ? NaN : Math.max(0, height - paddingBorderY);
-  let innerH = L >= 1 ? L | 0 : L;
+  let innerWidth = innerW >= 1 ? innerW | 0 : innerW;
+  let innerHeightRaw = heightMode === 0 ? NaN : Math.max(0, height - paddingBorderY);
+  let innerH = innerHeightRaw >= 1 ? innerHeightRaw | 0 : innerHeightRaw;
   let config = node.config;
   config.measureCalls++;
-  let G = toInt32Key(U);
-  let X = toInt32Key(innerH);
+  let widthKey = toInt32Key(innerWidth);
+  let heightKey = toInt32Key(innerH);
   let _mfC = node._mfC;
   for (let idx = 0; idx < node._mfN; idx++) {
-    let ne = idx * 6;
-    let cachedResult = _mfC[ne + 4];
-    let cachedResult_2 = _mfC[ne + 5];
+    let slotBase = idx * 6;
+    let cachedResult = _mfC[slotBase + 4];
+    let cachedResult_2 = _mfC[slotBase + 5];
     if (
-      canUseCachedMeasurement(widthMode, G, _mfC[ne + 1], _mfC[ne], cachedResult) &&
-      canUseCachedMeasurement(heightMode, X, _mfC[ne + 3], _mfC[ne + 2], cachedResult_2)
+      canUseCachedMeasurement(widthMode, widthKey, _mfC[slotBase + 1], _mfC[slotBase], cachedResult) &&
+      canUseCachedMeasurement(heightMode, heightKey, _mfC[slotBase + 3], _mfC[slotBase + 2], cachedResult_2)
     ) {
       config.measureCacheHits++;
       layout.width =
@@ -1181,21 +1209,23 @@ function measureLeaf(
       return;
     }
   }
-  let q = node.measureFunc(U, widthMode, innerH, heightMode);
+  let measureResult = node.measureFunc(innerWidth, widthMode, innerH, heightMode);
   if (!_mfC) _mfC = node._mfC = new Int32Array(MEASURE_CACHE_SLOTS * 6);
-  let Y = node._mfWr++ % MEASURE_CACHE_SLOTS;
+  let slotIndex = node._mfWr++ % MEASURE_CACHE_SLOTS;
   if (node._mfN < MEASURE_CACHE_SLOTS) node._mfN++;
-  let J = Y * 6;
-  _mfC[J] = G;
-  _mfC[J + 1] = widthMode;
-  _mfC[J + 2] = X;
-  _mfC[J + 3] = heightMode;
-  let V = isInt32Finite(q.width) ? Math.ceil(q.width) : 0;
-  let ee = isInt32Finite(q.height) ? Math.ceil(q.height) : 0;
-  _mfC[J + 4] = V;
-  _mfC[J + 5] = ee;
-  layout.width = widthMode === 1 ? width : boundAxis(style, true, V + paddingBorderX, ownerW, ownerH);
-  layout.height = heightMode === 1 ? height : boundAxis(style, false, ee + paddingBorderY, ownerW, ownerH);
+  let slotOffset = slotIndex * 6;
+  _mfC[slotOffset] = widthKey;
+  _mfC[slotOffset + 1] = widthMode;
+  _mfC[slotOffset + 2] = heightKey;
+  _mfC[slotOffset + 3] = heightMode;
+  let measuredWidth = isInt32Finite(measureResult.width) ? Math.ceil(measureResult.width) : 0;
+  let measuredHeight = isInt32Finite(measureResult.height) ? Math.ceil(measureResult.height) : 0;
+  _mfC[slotOffset + 4] = measuredWidth;
+  _mfC[slotOffset + 5] = measuredHeight;
+  layout.width =
+    widthMode === 1 ? width : boundAxis(style, true, measuredWidth + paddingBorderX, ownerW, ownerH);
+  layout.height =
+    heightMode === 1 ? height : boundAxis(style, false, measuredHeight + paddingBorderY, ownerW, ownerH);
 }
 //@ chunk-bzr73sfg.js:160456-160592 layout
 /**
@@ -1231,12 +1261,12 @@ function layoutFlexContainer(
   let isMainRow = isRow(flexDirection);
   let mainSize = isMainRow ? width : height;
   let crossSize = isMainRow ? height : width;
-  let q = isMainRow ? widthMode : heightMode;
+  let mainMode = isMainRow ? widthMode : heightMode;
   let crossMode = isMainRow ? heightMode : widthMode;
   let paddingBorderMain = isMainRow ? paddingBorderX : paddingBorderY;
-  let V = isMainRow ? paddingBorderY : paddingBorderX;
+  let paddingBorderCross = isMainRow ? paddingBorderY : paddingBorderX;
   let availMain = isDefined(mainSize) ? Math.max(0, mainSize - paddingBorderMain) : NaN;
-  let availCross = isDefined(crossSize) ? Math.max(0, crossSize - V) : NaN;
+  let availCross = isDefined(crossSize) ? Math.max(0, crossSize - paddingBorderCross) : NaN;
   let mainGap = resolveGap(style, isMainRow ? 0 : 1, availMain);
   let flowChildren = [];
   let absChildren = [];
@@ -1245,8 +1275,8 @@ function layoutFlexContainer(
   let ownerH_2 = isMainRow ? availCross : availMain;
   let isWrap = style.flexWrap !== 0;
   let crossGap = resolveGap(style, isMainRow ? 1 : 0, availCross);
-  let Se = flowChildren.length;
-  for (let idx = 0; idx < Se; idx++) {
+  let childCount = flowChildren.length;
+  for (let idx = 0; idx < childCount; idx++) {
     let child = flowChildren[idx];
     child._sz[SZ_FLEX_BASIS] = cachedFlexBasis(
       child,
@@ -1259,8 +1289,8 @@ function layoutFlexContainer(
     );
   }
   let lines;
-  if (!isWrap || !isDefined(availMain) || Se === 0) {
-    for (let idx = 0; idx < Se; idx++) flowChildren[idx]._lineIndex = 0;
+  if (!isWrap || !isDefined(availMain) || childCount === 0) {
+    for (let idx = 0; idx < childCount; idx++) flowChildren[idx]._lineIndex = 0;
     lines = [flowChildren];
   } else
     lines = breakIntoLines(flowChildren, availMain, isMainRow, flexDirection, ownerW_2, ownerH_2, mainGap);
@@ -1270,8 +1300,8 @@ function layoutFlexContainer(
   let int32Array_2 = new Int32Array(lineCount);
   let baselines = isBaseline ? new Int32Array(lineCount) : EMPTY_INT32;
   let ownerMain = isMainRow ? ownerW : ownerH;
-  let Te = 0;
-  let Ae = 0;
+  let lineMainSizes = 0;
+  let lineCrossSizes = 0;
   for (let idx = 0; idx < lineCount; idx++) {
     let line = lines[idx];
     layoutFlexLine(
@@ -1293,57 +1323,74 @@ function layoutFlexContainer(
     );
     let lineCross = lineCrossSizeOut;
     if (isBaseline) lineCross = computeLineBaseline(node, line, ownerW_2, baselines, idx, lineCross);
-    let gt = lineMainSizeOut;
-    int32Array[idx] = gt;
+    let lineMainSize = lineMainSizeOut;
+    int32Array[idx] = lineMainSize;
     int32Array_2[idx] = lineCross;
-    Te = Math.max(Te, gt);
-    Ae += lineCross;
+    lineMainSizes = Math.max(lineMainSizes, lineMainSize);
+    lineCrossSizes += lineCross;
   }
-  let Pe = lineCount > 1 ? crossGap * (lineCount - 1) : 0;
-  Ae += Pe;
-  let Ze = style.overflow === 2;
-  let it = Te + paddingBorderMain;
-  let Pn =
-    q === 1
+  let totalCrossGap = lineCount > 1 ? crossGap * (lineCount - 1) : 0;
+  lineCrossSizes += totalCrossGap;
+  let isScrollOverflow = style.overflow === 2;
+  let mainContentSize = lineMainSizes + paddingBorderMain;
+  let containerMainSize =
+    mainMode === 1
       ? mainSize
-      : q === 2 && Ze
-        ? Math.max(Math.min(mainSize, it), paddingBorderMain)
-        : isWrap && lineCount > 1 && q === 2
+      : mainMode === 2 && isScrollOverflow
+        ? Math.max(Math.min(mainSize, mainContentSize), paddingBorderMain)
+        : isWrap && lineCount > 1 && mainMode === 2
           ? mainSize
-          : it;
-  let qn = Ae + V;
-  let Xt = crossMode === 1 ? crossSize : crossMode === 2 && Ze ? Math.max(Math.min(crossSize, qn), V) : qn;
-  let parentWidth = boundAxis(style, true, isMainRow ? Pn : Xt, ownerW, ownerH);
-  let parentHeight = boundAxis(style, false, isMainRow ? Xt : Pn, ownerW, ownerH);
+          : mainContentSize;
+  let crossContentSize = lineCrossSizes + paddingBorderCross;
+  let containerCrossSize =
+    crossMode === 1
+      ? crossSize
+      : crossMode === 2 && isScrollOverflow
+        ? Math.max(Math.min(crossSize, crossContentSize), paddingBorderCross)
+        : crossContentSize;
+  let parentWidth = boundAxis(
+    style,
+    true,
+    isMainRow ? containerMainSize : containerCrossSize,
+    ownerW,
+    ownerH,
+  );
+  let parentHeight = boundAxis(
+    style,
+    false,
+    isMainRow ? containerCrossSize : containerMainSize,
+    ownerW,
+    ownerH,
+  );
   layout.width = parentWidth;
   layout.height = parentHeight;
   if (!performLayout) return;
   let availMain_2 = (isMainRow ? parentWidth : parentHeight) - paddingBorderMain;
-  let Ot = (isMainRow ? parentHeight : parentWidth) - V;
-  let Ie = leadingEdge(flexDirection);
+  let availCrossInner = (isMainRow ? parentHeight : parentWidth) - paddingBorderCross;
+  let leadingMainEdge = leadingEdge(flexDirection);
   let crossLeadEdge = isMainRow ? EDGE_TOP : EDGE_LEFT;
   let crossTrailEdge = isMainRow ? EDGE_BOTTOM : EDGE_RIGHT;
   let isReverse_2 = isReverse(flexDirection);
   let containerMain = isMainRow ? parentWidth : parentHeight;
-  let ct = padding[crossLeadEdge] + border[crossLeadEdge];
-  let Sn = crossGap;
-  let remaining = Ot - Ae;
-  if (lineCount === 1 && !isWrap && !isBaseline) int32Array_2[0] = Ot;
+  let crossLeadOffset = padding[crossLeadEdge] + border[crossLeadEdge];
+  let effectiveCrossGap = crossGap;
+  let remaining = availCrossInner - lineCrossSizes;
+  if (lineCount === 1 && !isWrap && !isBaseline) int32Array_2[0] = availCrossInner;
   else {
     resolveAlignContent(style.alignContent, remaining, lineCount, int32Array_2);
-    ct += alignContentLeadOffset;
-    Sn += alignContentBetween;
+    crossLeadOffset += alignContentLeadOffset;
+    effectiveCrossGap += alignContentBetween;
   }
   let isWrapReverse = style.flexWrap === 2;
-  let Bn = isMainRow ? parentHeight : parentWidth;
-  let rn = isWrap || crossMode !== 1;
-  let leadingMain = padding[Ie] + border[Ie];
+  let wrapsCrossSize = isMainRow ? parentHeight : parentWidth;
+  let needsCrossStretch = isWrap || crossMode !== 1;
+  let leadingMain = padding[leadingMainEdge] + border[leadingMainEdge];
   let alignItems = style.alignItems;
-  let Qn = ct;
+  let lineCrossOffset = crossLeadOffset;
   for (let idx = 0; idx < lineCount; idx++) {
     let line = lines[idx];
     let lineCrossSize = int32Array_2[idx];
-    if (rn)
+    if (needsCrossStretch)
       stretchLineChildren(
         line,
         alignItems,
@@ -1362,7 +1409,7 @@ function layoutFlexContainer(
       flexDirection,
       isMainRow,
       lineCrossSize,
-      isWrapReverse ? Bn - Qn - lineCrossSize : Qn,
+      isWrapReverse ? wrapsCrossSize - lineCrossOffset - lineCrossSize : lineCrossOffset,
       int32Array[idx],
       availMain_2,
       leadingMain,
@@ -1375,9 +1422,9 @@ function layoutFlexContainer(
       isBaseline,
       isBaseline ? baselines[idx] : 0,
     );
-    Qn += lineCrossSize + Sn;
+    lineCrossOffset += lineCrossSize + effectiveCrossGap;
   }
-  for (let idx = 0, Ue = absChildren.length; idx < Ue; idx++)
+  for (let idx = 0, absCount = absChildren.length; idx < absCount; idx++)
     layoutAbsoluteChild(node, absChildren[idx], parentWidth, parentHeight, padding, border);
 }
 //@ chunk-bzr73sfg.js:162177-162222 layout
@@ -1407,13 +1454,13 @@ function layoutFlexLine(
   isWrap,
   performLayout,
 ) {
-  let z = line.length;
+  let lineCount = line.length;
   let alignItems = style.alignItems;
-  let X = z > 1 ? mainGap * (z - 1) : 0;
-  let totalBasis = X;
-  for (let idx = 0; idx < z; idx++) {
-    let ye = line[idx];
-    totalBasis += ye._sz[SZ_FLEX_BASIS] + childMarginForAxis(ye, flexDirection, ownerW);
+  let totalGap = lineCount > 1 ? mainGap * (lineCount - 1) : 0;
+  let totalBasis = totalGap;
+  for (let idx = 0; idx < lineCount; idx++) {
+    let child = line[idx];
+    totalBasis += child._sz[SZ_FLEX_BASIS] + childMarginForAxis(child, flexDirection, ownerW);
   }
   let availForFlex = availMain;
   if (availForFlex !== availForFlex) {
@@ -1425,62 +1472,62 @@ function layoutFlexLine(
       availForFlex = Math.max(0, value - paddingBorderMain);
   }
   resolveFlexibleLengths(line, availForFlex, totalBasis, isMainRow, ownerW, ownerH);
-  let Y = isMainRow ? EDGE_TOP : EDGE_LEFT;
-  let J = isMainRow ? EDGE_BOTTOM : EDGE_RIGHT;
-  let V = availCross === availCross;
-  let ee = 0;
-  for (let idx = 0; idx < z; idx++) {
-    let ye = line[idx];
-    let style = ye.style;
+  let crossLeadEdge = isMainRow ? EDGE_TOP : EDGE_LEFT;
+  let crossTrailEdge = isMainRow ? EDGE_BOTTOM : EDGE_RIGHT;
+  let hasCrossSize = availCross === availCross;
+  let maxCrossSize = 0;
+  for (let idx = 0; idx < lineCount; idx++) {
+    let child = line[idx];
+    let style = child.style;
     let alignSelf = style.alignSelf;
-    let pe = alignSelf === 0 ? alignItems : alignSelf;
-    let Se = childMarginForAxis(ye, crossDir, ownerW);
-    let xe = NaN;
-    let fe = 0;
+    let effectiveAlign = alignSelf === 0 ? alignItems : alignSelf;
+    let crossMargin = childMarginForAxis(child, crossDir, ownerW);
+    let crossSizeResolved = NaN;
+    let crossSizeMode = 0;
     let value = resolveValue(isMainRow ? style.height : style.width, isMainRow ? ownerH : ownerW);
-    let we = false;
-    if (ye._hasAutoMargin) {
+    let hasCrossAutoMargin = false;
+    if (child._hasAutoMargin) {
       let margin = style.margin;
-      we = isMarginAuto(margin, Y) || isMarginAuto(margin, J);
+      hasCrossAutoMargin = isMarginAuto(margin, crossLeadEdge) || isMarginAuto(margin, crossTrailEdge);
     }
     if (value === value) {
-      xe = value;
-      fe = 1;
-    } else if (pe === 4 && !we && !isWrap && V && crossMode === 1) {
-      xe = Math.max(0, availCross - Se);
-      fe = 1;
-    } else if (!isWrap && V) {
-      xe = Math.max(0, availCross - Se);
-      fe = 2;
+      crossSizeResolved = value;
+      crossSizeMode = 1;
+    } else if (effectiveAlign === 4 && !hasCrossAutoMargin && !isWrap && hasCrossSize && crossMode === 1) {
+      crossSizeResolved = Math.max(0, availCross - crossMargin);
+      crossSizeMode = 1;
+    } else if (!isWrap && hasCrossSize) {
+      crossSizeResolved = Math.max(0, availCross - crossMargin);
+      crossSizeMode = 2;
     }
-    let Fe = isMainRow ? ye._sz[SZ_MAIN] : xe;
-    let Ne = isMainRow ? xe : ye._sz[SZ_MAIN];
+    let mainSizeForLayout = isMainRow ? child._sz[SZ_MAIN] : crossSizeResolved;
+    let crossSizeForLayout = isMainRow ? crossSizeResolved : child._sz[SZ_MAIN];
     layoutNode(
-      ye,
-      Fe,
-      Ne,
-      isMainRow ? 1 : fe,
-      isMainRow ? fe : 1,
+      child,
+      mainSizeForLayout,
+      crossSizeForLayout,
+      isMainRow ? 1 : crossSizeMode,
+      isMainRow ? crossSizeMode : 1,
       ownerW,
       ownerH,
       performLayout,
       isMainRow,
       !isMainRow,
     );
-    let layout = ye.layout;
-    ye._sz[SZ_CROSS] = isMainRow ? layout.height : layout.width;
-    ee = Math.max(ee, ye._sz[SZ_CROSS] + Se);
+    let layout = child.layout;
+    child._sz[SZ_CROSS] = isMainRow ? layout.height : layout.width;
+    maxCrossSize = Math.max(maxCrossSize, child._sz[SZ_CROSS] + crossMargin);
   }
-  let ae = leadingEdge(flexDirection);
-  let ne = trailingEdge(flexDirection);
-  let de = X;
-  for (let idx = 0; idx < z; idx++) {
-    let ye = line[idx];
-    let margin = ye.layout.margin;
-    de += ye._sz[SZ_MAIN] + margin[ae] + margin[ne];
+  let leadEdge = leadingEdge(flexDirection);
+  let trailEdge = trailingEdge(flexDirection);
+  let lineMainSizeTotal = totalGap;
+  for (let idx = 0; idx < lineCount; idx++) {
+    let child = line[idx];
+    let margin = child.layout.margin;
+    lineMainSizeTotal += child._sz[SZ_MAIN] + margin[leadEdge] + margin[trailEdge];
   }
-  lineMainSizeOut = de;
-  lineCrossSizeOut = ee;
+  lineMainSizeOut = lineMainSizeTotal;
+  lineCrossSizeOut = maxCrossSize;
 }
 //@ chunk-bzr73sfg.js:163212-164533 layout
 /**
@@ -1505,118 +1552,118 @@ function positionLineChildren(
   isBaseline,
   lineBaseline,
 ) {
-  let X = line.length;
+  let lineCount = line.length;
   let alignItems = style.alignItems;
-  let q = leadingEdge(flexDirection);
-  let Y = trailingEdge(flexDirection);
-  let J = isMainRow ? EDGE_TOP : EDGE_LEFT;
-  let V = isMainRow ? EDGE_BOTTOM : EDGE_RIGHT;
-  let ee = leadingMain;
-  let ae = betweenMain;
+  let leadEdge = leadingEdge(flexDirection);
+  let trailEdge = trailingEdge(flexDirection);
+  let crossLeadEdge = isMainRow ? EDGE_TOP : EDGE_LEFT;
+  let crossTrailEdge = isMainRow ? EDGE_BOTTOM : EDGE_RIGHT;
+  let mainOffset = leadingMain;
+  let betweenMainOffset = betweenMain;
   let autoMarginCount = 0;
-  for (let idx = 0; idx < X; idx++) {
-    let pe = line[idx];
-    if (!pe._hasAutoMargin) continue;
-    let margin = pe.style.margin;
-    if (isMarginAuto(margin, q)) autoMarginCount++;
-    if (isMarginAuto(margin, Y)) autoMarginCount++;
+  for (let idx = 0; idx < lineCount; idx++) {
+    let child = line[idx];
+    if (!child._hasAutoMargin) continue;
+    let margin = child.style.margin;
+    if (isMarginAuto(margin, leadEdge)) autoMarginCount++;
+    if (isMarginAuto(margin, trailEdge)) autoMarginCount++;
   }
-  let de = availMain - lineMainSize;
-  let max = Math.max(0, de);
-  let ye = autoMarginCount > 0 && max > 0 ? max / autoMarginCount : 0;
+  let freeSpace = availMain - lineMainSize;
+  let max = Math.max(0, freeSpace);
+  let autoMarginShare = autoMarginCount > 0 && max > 0 ? max / autoMarginCount : 0;
   if (autoMarginCount === 0)
     switch (style.justifyContent) {
       case 0:
         break;
       case 1:
-        ee += de / 2;
+        mainOffset += freeSpace / 2;
         break;
       case 2:
-        ee += de;
+        mainOffset += freeSpace;
         break;
       case 3:
-        if (X > 1) ae += max / (X - 1);
+        if (lineCount > 1) betweenMainOffset += max / (lineCount - 1);
         break;
       case 4:
-        if (X > 0) {
-          ae += max / X;
-          ee += max / X / 2;
+        if (lineCount > 0) {
+          betweenMainOffset += max / lineCount;
+          mainOffset += max / lineCount / 2;
         }
         break;
       case 5:
-        if (X > 0) {
-          ae += max / (X + 1);
-          ee += max / (X + 1);
+        if (lineCount > 0) {
+          betweenMainOffset += max / (lineCount + 1);
+          mainOffset += max / (lineCount + 1);
         }
         break;
     }
-  let ue = ee;
-  for (let idx = 0; idx < X; idx++) {
+  let cursor = mainOffset;
+  for (let idx = 0; idx < lineCount; idx++) {
     let node = line[idx];
     let { style, layout } = node;
-    let fe = node._sz[SZ_MAIN];
+    let mainSize = node._sz[SZ_MAIN];
     let margin = style.margin;
     let margin_2 = layout.margin;
-    let Fe = false;
-    let Ne = false;
-    let Ce = false;
-    let Te = false;
-    let Ae;
-    let Pe;
-    let Ze;
-    let it;
+    let isLeadAuto = false;
+    let isTrailAuto = false;
+    let isCrossLeadAuto = false;
+    let isCrossTrailAuto = false;
+    let leadMargin;
+    let trailMargin;
+    let crossLeadMargin;
+    let crossTrailMargin;
     if (node._hasAutoMargin) {
-      Fe = isMarginAuto(margin, q);
-      Ne = isMarginAuto(margin, Y);
-      Ce = isMarginAuto(margin, J);
-      Te = isMarginAuto(margin, V);
-      Ae = Fe ? ye : margin_2[q];
-      Pe = Ne ? ye : margin_2[Y];
-      Ze = Ce ? 0 : margin_2[J];
-      it = Te ? 0 : margin_2[V];
+      isLeadAuto = isMarginAuto(margin, leadEdge);
+      isTrailAuto = isMarginAuto(margin, trailEdge);
+      isCrossLeadAuto = isMarginAuto(margin, crossLeadEdge);
+      isCrossTrailAuto = isMarginAuto(margin, crossTrailEdge);
+      leadMargin = isLeadAuto ? autoMarginShare : margin_2[leadEdge];
+      trailMargin = isTrailAuto ? autoMarginShare : margin_2[trailEdge];
+      crossLeadMargin = isCrossLeadAuto ? 0 : margin_2[crossLeadEdge];
+      crossTrailMargin = isCrossTrailAuto ? 0 : margin_2[crossTrailEdge];
     } else {
-      Ae = margin_2[q];
-      Pe = margin_2[Y];
-      Ze = margin_2[J];
-      it = margin_2[V];
+      leadMargin = margin_2[leadEdge];
+      trailMargin = margin_2[trailEdge];
+      crossLeadMargin = margin_2[crossLeadEdge];
+      crossTrailMargin = margin_2[crossTrailEdge];
     }
-    let Pn = isReverse ? containerMain - (ue + Ae) - fe : ue + Ae;
+    let mainPos = isReverse ? containerMain - (cursor + leadMargin) - mainSize : cursor + leadMargin;
     let alignSelf = style.alignSelf;
-    let Xt = alignSelf === 0 ? alignItems : alignSelf;
-    let st = crossOffset + Ze;
-    let At = lineCrossSize - node._sz[SZ_CROSS] - Ze - it;
-    if (Ce && Te) st += Math.max(0, At) / 2;
-    else if (Ce) st += Math.max(0, At);
-    else if (Te);
+    let align = alignSelf === 0 ? alignItems : alignSelf;
+    let crossPos = crossOffset + crossLeadMargin;
+    let crossRemaining = lineCrossSize - node._sz[SZ_CROSS] - crossLeadMargin - crossTrailMargin;
+    if (isCrossLeadAuto && isCrossTrailAuto) crossPos += Math.max(0, crossRemaining) / 2;
+    else if (isCrossLeadAuto) crossPos += Math.max(0, crossRemaining);
+    else if (isCrossTrailAuto);
     else
-      switch (Xt) {
+      switch (align) {
         case 1:
         case 4:
-          if (isWrapReverse) st += At;
+          if (isWrapReverse) crossPos += crossRemaining;
           break;
         case 2:
-          st += At / 2;
+          crossPos += crossRemaining / 2;
           break;
         case 3:
-          if (!isWrapReverse) st += At;
+          if (!isWrapReverse) crossPos += crossRemaining;
           break;
         case 5:
-          if (isBaseline) st = crossOffset + lineBaseline - calculateBaseline(node);
+          if (isBaseline) crossPos = crossOffset + lineBaseline - calculateBaseline(node);
           break;
         default:
           break;
       }
-    let bn = node.measureFunc !== null;
-    let Ot = isMainRow ? Pn : st;
-    let Ie = isMainRow ? st : Pn;
-    let Ht = bn ? Math.floor(Ot) : roundToInt(Ot);
-    let top = bn ? Math.floor(Ie) : roundToInt(Ie);
-    if (node._hasPosition) applyRelativePosition(node, ownerW, ownerH, layout, Ht, top);
+    let isTextNode = node.measureFunc !== null;
+    let mainPosFinal = isMainRow ? mainPos : crossPos;
+    let crossPosFinal = isMainRow ? crossPos : mainPos;
+    let roundedLeft = isTextNode ? Math.floor(mainPosFinal) : roundToInt(mainPosFinal);
+    let top = isTextNode ? Math.floor(crossPosFinal) : roundToInt(crossPosFinal);
+    if (node._hasPosition) applyRelativePosition(node, ownerW, ownerH, layout, roundedLeft, top);
     else {
-      layout.left = Ht;
+      layout.left = roundedLeft;
       layout.top = top;
     }
-    ue += fe + Ae + Pe + ae;
+    cursor += mainSize + leadMargin + trailMargin + betweenMainOffset;
   }
 }
 //@ chunk-bzr73sfg.js:164533-164793 layout
@@ -1625,20 +1672,20 @@ function positionLineChildren(
  */
 function breakIntoLines(children, availMain, isMainRow, flexDirection, ownerW, ownerH, gap) {
   let lines = [];
-  let A = children.length;
+  let childCount = children.length;
   let lineStart = 0;
   let lineLength = 0;
-  for (let idx = 0; idx < A; idx++) {
-    let U = children[idx];
-    let L = boundAxis(U.style, isMainRow, U._sz[SZ_FLEX_BASIS], ownerW, ownerH);
-    let P = Math.max(0, L) + childMarginForAxis(U, flexDirection, ownerW);
-    let z = idx > lineStart ? gap : 0;
-    if (idx > lineStart && lineLength + z + P > availMain) {
+  for (let idx = 0; idx < childCount; idx++) {
+    let child = children[idx];
+    let mainSize = boundAxis(child.style, isMainRow, child._sz[SZ_FLEX_BASIS], ownerW, ownerH);
+    let mainOuterSize = Math.max(0, mainSize) + childMarginForAxis(child, flexDirection, ownerW);
+    let gapSize = idx > lineStart ? gap : 0;
+    if (idx > lineStart && lineLength + gapSize + mainOuterSize > availMain) {
       lines.push(children.slice(lineStart, idx));
       lineStart = idx;
-      lineLength = P;
-    } else lineLength += z + P;
-    U._lineIndex = lines.length;
+      lineLength = mainOuterSize;
+    } else lineLength += gapSize + mainOuterSize;
+    child._lineIndex = lines.length;
   }
   lines.push(children.slice(lineStart));
   return lines;
@@ -1648,22 +1695,22 @@ function breakIntoLines(children, availMain, isMainRow, flexDirection, ownerW, o
  * baseline 对齐时计算一行的基线（最大上伸，写入 baselines[lineIndex]）与所需行高（上伸+下伸），返回不小于原行高的值。
  */
 function computeLineBaseline(node, line, ownerW, baselines, lineIndex, lineCross) {
-  let E = 0;
-  let T = 0;
-  for (let idx = 0, O = line.length; idx < O; idx++) {
-    let _ = line[idx];
-    if (resolveChildAlign(node, _) !== 5) continue;
-    let margin = _.style.margin;
+  let maxAscent = 0;
+  let maxDescent = 0;
+  for (let idx = 0, childCount = line.length; idx < childCount; idx++) {
+    let child = line[idx];
+    if (resolveChildAlign(node, child) !== 5) continue;
+    let margin = child.style.margin;
     let edge = resolveEdge(margin, EDGE_TOP, ownerW);
     let edge_2 = resolveEdge(margin, EDGE_BOTTOM, ownerW);
-    let z = calculateBaseline(_) + edge;
-    let G = _.layout.height + edge + edge_2 - z;
-    if (z > E) E = z;
-    if (G > T) T = G;
+    let ascent = calculateBaseline(child) + edge;
+    let descent = child.layout.height + edge + edge_2 - ascent;
+    if (ascent > maxAscent) maxAscent = ascent;
+    if (descent > maxDescent) maxDescent = descent;
   }
-  baselines[lineIndex] = E;
-  let A = E + T;
-  return A > lineCross ? A : lineCross;
+  baselines[lineIndex] = maxAscent;
+  let lineHeight = maxAscent + maxDescent;
+  return lineHeight > lineCross ? lineHeight : lineCross;
 }
 //@ chunk-bzr73sfg.js:165032-165355 layout
 /**
@@ -1682,13 +1729,13 @@ function resolveAlignContent(alignContent, remaining, lineCount, lineSizes) {
       break;
     case 4:
       if (lineCount > 0 && max > 0) {
-        let g = 0;
-        let E = 0;
+        let accum = 0;
+        let prevRounded = 0;
         for (let idx = 0; idx < lineCount; idx++) {
-          g += max / lineCount;
-          let A = roundToInt(g);
-          lineSizes[idx] += A - E;
-          E = A;
+          accum += max / lineCount;
+          let rounded = roundToInt(accum);
+          lineSizes[idx] += rounded - prevRounded;
+          prevRounded = rounded;
         }
       }
       break;
@@ -1727,25 +1774,25 @@ function stretchLineChildren(
   ownerH,
   performLayout,
 ) {
-  for (let idx = 0, _ = line.length; idx < _; idx++) {
-    let U = line[idx];
-    let style = U.style;
+  for (let idx = 0, count = line.length; idx < count; idx++) {
+    let child = line[idx];
+    let style = child.style;
     let alignSelf = style.alignSelf;
     if ((alignSelf === 0 ? alignItems : alignSelf) !== 4) continue;
     if (isDefined(resolveValue(isMainRow ? style.height : style.width, isMainRow ? ownerH : ownerW)))
       continue;
-    if (U._hasAutoMargin) {
+    if (child._hasAutoMargin) {
       let margin = style.margin;
       if (isMarginAuto(margin, crossLeadEdge) || isMarginAuto(margin, crossTrailEdge)) continue;
     }
-    let X = childMarginForAxis(U, crossDir, ownerW);
-    let max = Math.max(0, lineCrossSize - X);
-    if (U._sz[SZ_CROSS] !== max) {
-      let q = U._sz[SZ_MAIN];
+    let margin = childMarginForAxis(child, crossDir, ownerW);
+    let max = Math.max(0, lineCrossSize - margin);
+    if (child._sz[SZ_CROSS] !== max) {
+      let mainSize = child._sz[SZ_MAIN];
       layoutNode(
-        U,
-        isMainRow ? q : max,
-        isMainRow ? max : q,
+        child,
+        isMainRow ? mainSize : max,
+        isMainRow ? max : mainSize,
         1,
         1,
         ownerW,
@@ -1754,7 +1801,7 @@ function stretchLineChildren(
         isMainRow,
         !isMainRow,
       );
-      U._sz[SZ_CROSS] = max;
+      child._sz[SZ_CROSS] = max;
     }
   }
 }
@@ -1765,10 +1812,10 @@ function applyRelativePosition(node, ownerW, ownerH, layout, left, top) {
   let value_2 = resolveValue(resolveEdgeRaw(position, EDGE_RIGHT), ownerW);
   let value_3 = resolveValue(resolveEdgeRaw(position, EDGE_TOP), ownerH);
   let value_4 = resolveValue(resolveEdgeRaw(position, EDGE_BOTTOM), ownerH);
-  let _ = isDefined(value) ? value : isDefined(value_2) ? -value_2 : 0;
-  let U = isDefined(value_3) ? value_3 : isDefined(value_4) ? -value_4 : 0;
-  layout.left = left + _;
-  layout.top = top + U;
+  let leftOffset = isDefined(value) ? value : isDefined(value_2) ? -value_2 : 0;
+  let topOffset = isDefined(value_3) ? value_3 : isDefined(value_4) ? -value_4 : 0;
+  layout.left = left + leftOffset;
+  layout.top = top + topOffset;
 }
 //@ chunk-bzr73sfg.js:165887-166915 fingerprint = layoutAbsoluteChild (0.944)
 /**
@@ -1835,9 +1882,9 @@ function layoutAbsoluteChild(parent, child, parentWidth, parentHeight, pad, bor)
     let trail = parentHeight - pad[3] - bor[3];
     top = reversed ? trail - height - mB : justifyAbsolute(justifyContent, lead, trail, height) + mT;
   }
-  let we = child.measureFunc !== null;
-  layout.left = we ? Math.floor(left) : roundToInt(left);
-  layout.top = we ? Math.floor(top) : roundToInt(top);
+  let hasMeasure = child.measureFunc !== null;
+  layout.left = hasMeasure ? Math.floor(left) : roundToInt(left);
+  layout.top = hasMeasure ? Math.floor(top) : roundToInt(top);
 }
 //@ chunk-bzr73sfg.js:166915-167008 layout
 function justifyAbsolute(justify, start, end, size) {
@@ -1872,35 +1919,35 @@ var FB_AVAIL_H = 4;
  * 带缓存地计算子节点 flex basis（同一代或未脏且键相同则复用 _fb）。
  */
 function cachedFlexBasis(child, flexDirection, availW, availH, crossMode, ownerW, ownerH) {
-  let _fb = child._fb;
+  let flexBasisCache = child._fb;
   let generation = child.config.generation;
-  let D = child._readsOwnerWidth ? toInt32Key(ownerW) : INT32_NAN;
-  let O = child._readsOwnerHeight ? toInt32Key(ownerH) : INT32_NAN;
-  let _ = toInt32Key(availW);
-  let U = toInt32Key(availH);
+  let ownerWKey = child._readsOwnerWidth ? toInt32Key(ownerW) : INT32_NAN;
+  let ownerHKey = child._readsOwnerHeight ? toInt32Key(ownerH) : INT32_NAN;
+  let availWKey = toInt32Key(availW);
+  let availHKey = toInt32Key(availH);
   let isMainRow = isRow(flexDirection);
   if (
     (child._fbGen === generation || !child.isDirty_) &&
     child._fbCrossMode === crossMode &&
     child._fbIsRow === isMainRow &&
-    _fb[FB_OWNER_W] === D &&
-    _fb[FB_OWNER_H] === O &&
-    _fb[FB_AVAIL_W] === _ &&
-    _fb[FB_AVAIL_H] === U
+    flexBasisCache[FB_OWNER_W] === ownerWKey &&
+    flexBasisCache[FB_OWNER_H] === ownerHKey &&
+    flexBasisCache[FB_AVAIL_W] === availWKey &&
+    flexBasisCache[FB_AVAIL_H] === availHKey
   )
-    return _fb[FB_VALUE];
-  let P = isMainRow
+    return flexBasisCache[FB_VALUE];
+  let basis = isMainRow
     ? computeFlexBasis(child, availW, availH, crossMode, ownerW, ownerH)
     : computeColumnFlexBasis(child, availW, availH, crossMode, ownerW, ownerH);
-  _fb[FB_VALUE] = P;
-  _fb[FB_OWNER_W] = D;
-  _fb[FB_OWNER_H] = O;
-  _fb[FB_AVAIL_W] = _;
-  _fb[FB_AVAIL_H] = U;
+  flexBasisCache[FB_VALUE] = basis;
+  flexBasisCache[FB_OWNER_W] = ownerWKey;
+  flexBasisCache[FB_OWNER_H] = ownerHKey;
+  flexBasisCache[FB_AVAIL_W] = availWKey;
+  flexBasisCache[FB_AVAIL_H] = availHKey;
   child._fbCrossMode = crossMode;
   child._fbIsRow = isMainRow;
   child._fbGen = generation;
-  return P;
+  return basis;
 }
 //@ chunk-bzr73sfg.js:167542-167858 fingerprint = computeFlexBasis (0.65)
 /**
@@ -1913,19 +1960,30 @@ function computeFlexBasis(child, availW, availH, crossMode, ownerW, ownerH) {
   let resolved = resolveValue(cs.width, ownerW);
   if (resolved === resolved) return resolved > 0 ? resolved : 0;
   let crossConstraint = resolveValue(cs.height, ownerH);
-  let O;
-  if (crossConstraint === crossConstraint) O = 1;
+  let crossModeResolved;
+  if (crossConstraint === crossConstraint) crossModeResolved = 1;
   else if (availH === availH) {
     crossConstraint = availH - childMarginForAxis(child, 0, ownerW);
-    O = crossMode === 1 && isStretchAlign(child) ? 1 : 2;
-  } else O = 0;
+    crossModeResolved = crossMode === 1 && isStretchAlign(child) ? 1 : 2;
+  } else crossModeResolved = 0;
   let mainConstraint = NaN;
-  let U = 0;
+  let mainMode = 0;
   if (availW === availW && hasMeasureFuncInSubtree(child)) {
     mainConstraint = availW - childMarginForAxis(child, 2, ownerW);
-    U = 2;
+    mainMode = 2;
   }
-  layoutNode(child, mainConstraint, crossConstraint, U, O, ownerW, ownerH, false, false, false);
+  layoutNode(
+    child,
+    mainConstraint,
+    crossConstraint,
+    mainMode,
+    crossModeResolved,
+    ownerW,
+    ownerH,
+    false,
+    false,
+    false,
+  );
   return child.layout.width;
 }
 //@ chunk-bzr73sfg.js:167858-168129 layout
@@ -1939,13 +1997,13 @@ function computeColumnFlexBasis(child, availH, availW, crossMode, ownerW, ownerH
   let value_2 = resolveValue(style.height, ownerH);
   if (value_2 === value_2) return value_2 > 0 ? value_2 : 0;
   let value_3 = resolveValue(style.width, ownerW);
-  let O;
-  if (value_3 === value_3) O = 1;
+  let crossModeResolved;
+  if (value_3 === value_3) crossModeResolved = 1;
   else if (availW === availW) {
     value_3 = availW - childMarginForAxis(child, 2, ownerW);
-    O = crossMode === 1 && isStretchAlign(child) ? 1 : 2;
-  } else O = 0;
-  layoutNode(child, value_3, NaN, O, 0, ownerW, ownerH, false, false, false);
+    crossModeResolved = crossMode === 1 && isStretchAlign(child) ? 1 : 2;
+  } else crossModeResolved = 0;
+  layoutNode(child, value_3, NaN, crossModeResolved, 0, ownerW, ownerH, false, false, false);
   return child.layout.height;
 }
 //@ chunk-bzr73sfg.js:168129-168248 fingerprint = hasMeasureFuncInSubtree (1)
@@ -1955,7 +2013,7 @@ function computeColumnFlexBasis(child, availH, availW, crossMode, ownerW, ownerH
 function hasMeasureFuncInSubtree(node) {
   if (node.measureFunc) return true;
   let children = node.children;
-  for (let idx = 0, m = children.length; idx < m; idx++)
+  for (let idx = 0, count = children.length; idx < count; idx++)
     if (hasMeasureFuncInSubtree(children[idx])) return true;
   return false;
 }
@@ -1977,28 +2035,28 @@ function freeze(index) {
  */
 function resolveFlexibleLengths(children, availableInnerMain, totalFlexBasis, isMainRow, ownerW, ownerH) {
   let n = children.length;
-  let T = (n + 31) >>> 5;
-  if (T > frozenBits.length) frozenBits = new Int32Array(T * 2);
+  let wordCount = (n + 31) >>> 5;
+  if (wordCount > frozenBits.length) frozenBits = new Int32Array(wordCount * 2);
   if (n > unclampedSizes.length) {
     unclampedSizes = new Float64Array(n * 2);
     clampedSizes = new Float64Array(n * 2);
   }
   let unclamped = unclampedSizes;
-  let D = clampedSizes;
-  frozenBits.fill(0, 0, T);
+  let clamped = clampedSizes;
+  frozenBits.fill(0, 0, wordCount);
   let initialFree = isDefined(availableInnerMain) ? availableInnerMain - totalFlexBasis : 0;
   for (let i = 0; i < n; i++) {
-    let P = children[i];
-    let style = P.style;
-    let G = P._sz[SZ_FLEX_BASIS];
-    let clamped = boundAxis(style, isMainRow, G, ownerW, ownerH);
+    let child = children[i];
+    let style = child.style;
+    let basis = child._sz[SZ_FLEX_BASIS];
+    let clamped_2 = boundAxis(style, isMainRow, basis, ownerW, ownerH);
     if (
       !isDefined(availableInnerMain) ||
       (initialFree >= 0 ? style.flexGrow === 0 : style.flexShrink === 0)
     ) {
-      D[i] = Math.max(0, clamped);
+      clamped[i] = Math.max(0, clamped_2);
       freeze(i);
-    } else D[i] = G;
+    } else clamped[i] = basis;
   }
   for (let iter = 0; iter <= n; iter++) {
     let frozenDelta = 0;
@@ -2006,13 +2064,13 @@ function resolveFlexibleLengths(children, availableInnerMain, totalFlexBasis, is
     let totalShrinkScaled = 0;
     let unfrozenCount = 0;
     for (let i = 0; i < n; i++) {
-      let V = children[i];
-      let ee = V._sz[SZ_FLEX_BASIS];
-      if (isFrozen(i)) frozenDelta += D[i] - ee;
+      let child = children[i];
+      let basis = child._sz[SZ_FLEX_BASIS];
+      if (isFrozen(i)) frozenDelta += clamped[i] - basis;
       else {
-        let style = V.style;
+        let style = child.style;
         totalGrow += style.flexGrow;
-        totalShrinkScaled += style.flexShrink * ee;
+        totalShrinkScaled += style.flexShrink * basis;
         unfrozenCount++;
       }
     }
@@ -2032,23 +2090,23 @@ function resolveFlexibleLengths(children, availableInnerMain, totalFlexBasis, is
     let totalViolation = 0;
     for (let i = 0; i < n; i++) {
       if (isFrozen(i)) continue;
-      let V = children[i];
-      let style = V.style;
-      let ae = V._sz[SZ_FLEX_BASIS];
-      let t = ae;
+      let child = children[i];
+      let style = child.style;
+      let basis = child._sz[SZ_FLEX_BASIS];
+      let t = basis;
       if (remaining > 0 && totalGrow > 0) t += (remaining * style.flexGrow) / totalGrow;
       else if (remaining < 0 && totalShrinkScaled > 0)
-        t += (remaining * (style.flexShrink * ae)) / totalShrinkScaled;
+        t += (remaining * (style.flexShrink * basis)) / totalShrinkScaled;
       unclamped[i] = t;
-      let clamped = Math.max(0, boundAxis(style, isMainRow, t, ownerW, ownerH));
-      D[i] = clamped;
-      totalViolation += clamped - t;
+      let clamped_2 = Math.max(0, boundAxis(style, isMainRow, t, ownerW, ownerH));
+      clamped[i] = clamped_2;
+      totalViolation += clamped_2 - t;
     }
     if (totalViolation === 0) break;
     let anyFrozen = false;
     for (let i = 0; i < n; i++) {
       if (isFrozen(i)) continue;
-      let v = D[i] - unclamped[i];
+      let v = clamped[i] - unclamped[i];
       if ((totalViolation > 0 && v > 0) || (totalViolation < 0 && v < 0)) {
         freeze(i);
         anyFrozen = true;
@@ -2056,13 +2114,13 @@ function resolveFlexibleLengths(children, availableInnerMain, totalFlexBasis, is
     }
     if (!anyFrozen) break;
   }
-  let _ = 0;
-  let U = 0;
+  let running = 0;
+  let prevRounded = 0;
   for (let idx = 0; idx < n; idx++) {
-    _ += D[idx];
-    let P = (_ + 0.5) | 0;
-    children[idx]._sz[SZ_MAIN] = P - U;
-    U = P;
+    running += clamped[idx];
+    let rounded = (running + 0.5) | 0;
+    children[idx]._sz[SZ_MAIN] = rounded - prevRounded;
+    prevRounded = rounded;
   }
 }
 //@ chunk-bzr73sfg.js:169514-169622 fingerprint = isStretchAlign (1)
@@ -2089,22 +2147,22 @@ function resolveChildAlign(parent, child) {
  */
 function calculateBaseline(node) {
   let children = node.children;
-  let f = children.length;
-  let m = -1;
-  for (let idx = 0; idx < f; idx++) {
+  let count = children.length;
+  let baselineIndex = -1;
+  for (let idx = 0; idx < count; idx++) {
     let child = children[idx];
     if (child._lineIndex > 0) break;
     let style = child.style;
     if (style.positionType === 2) continue;
     if (style.display === 1) continue;
     if (resolveChildAlign(node, child) === 5 || child.isReferenceBaseline_) {
-      m = idx;
+      baselineIndex = idx;
       break;
     }
-    if (m === -1) m = idx;
+    if (baselineIndex === -1) baselineIndex = idx;
   }
-  if (m === -1) return node.layout.height;
-  let node_2 = children[m];
+  if (baselineIndex === -1) return node.layout.height;
+  let node_2 = children[baselineIndex];
   return calculateBaseline(node_2) + node_2.layout.top;
 }
 //@ chunk-bzr73sfg.js:170006-170176 fingerprint = isBaselineLayout (1)
@@ -2115,7 +2173,7 @@ function isBaselineLayout(node, flowChildren) {
   let style = node.style;
   if (!isRow(style.flexDirection)) return false;
   if (style.alignItems === 5) return true;
-  for (let idx = 0, p = flowChildren.length; idx < p; idx++)
+  for (let idx = 0, count = flowChildren.length; idx < count; idx++)
     if (flowChildren[idx].style.alignSelf === 5) return true;
   return false;
 }
@@ -2136,9 +2194,9 @@ function childMarginForAxis(child, axis, ownerWidth) {
  */
 function resolveGap(style, gutter, ownerSize) {
   let gap = style.gap;
-  let p = gap[gutter];
-  if (p.unit === 0) p = gap[2];
-  let value = resolveValue(p, ownerSize);
+  let gapValue = gap[gutter];
+  if (gapValue.unit === 0) gapValue = gap[2];
+  let value = resolveValue(gapValue, ownerSize);
   return isDefined(value) ? Math.max(0, value) : 0;
 }
 //@ chunk-bzr73sfg.js:170387-170592 fingerprint = boundAxis (1)
@@ -2192,7 +2250,7 @@ function zeroLayoutRecursive(node) {
 //@ chunk-bzr73sfg.js:170895-170983 layout
 function zeroChildrenLayout(node) {
   let children = node.children;
-  for (let idx = 0, m = children.length; idx < m; idx++) {
+  for (let idx = 0, count = children.length; idx < count; idx++) {
     let node = children[idx];
     zeroLayoutRecursive(node);
     zeroChildrenLayout(node);
@@ -2204,7 +2262,7 @@ function zeroChildrenLayout(node) {
  */
 function collectLayoutChildren(node, flow, abs) {
   let children = node.children;
-  for (let idx = 0, g = children.length; idx < g; idx++) {
+  for (let idx = 0, count = children.length; idx < count; idx++) {
     let node = children[idx];
     let style = node.style;
     let disp = style.display;
@@ -2222,14 +2280,14 @@ function collectLayoutChildren(node, flow, abs) {
 /**
  * 递归把布局结果截断为整数（|0）。
  */
-function roundLayout(n) {
-  let layout = n.layout;
+function roundLayout(node) {
+  let layout = node.layout;
   layout.left = layout.left | 0;
   layout.top = layout.top | 0;
   layout.width = layout.width | 0;
   layout.height = layout.height | 0;
-  let children = n.children;
-  for (let idx = 0, p = children.length; idx < p; idx++) roundLayout(children[idx]);
+  let children = node.children;
+  for (let idx = 0, count = children.length; idx < count; idx++) roundLayout(children[idx]);
 }
 //@ chunk-bzr73sfg.js:171357-171629 fingerprint = parseDimension (1)
 /**
@@ -2240,8 +2298,8 @@ function parseDimension(v) {
   if (v === "auto") return AUTO_VALUE;
   if (typeof v === "number") return Number.isFinite(v) ? pointValue(v) : UNDEFINED_VALUE;
   if (typeof v === "string" && v.endsWith("%")) {
-    let f = parseFloat(v);
-    return Number.isFinite(f) ? percentValue(f) : UNDEFINED_VALUE;
+    let number = parseFloat(v);
+    return Number.isFinite(number) ? percentValue(number) : UNDEFINED_VALUE;
   }
   let n = parseFloat(v);
   return Number.isFinite(n) ? pointValue(n) : UNDEFINED_VALUE;

@@ -18,12 +18,12 @@ import {
 import { DoctorLazy } from "../../../cli/handlers/util.js";
 import {
   looseObject,
-  string,
+  stringSchema,
   lazy,
   union,
-  E,
-  M,
-  zg,
+  numberSchema,
+  booleanSchema,
+  nullSchema,
   array,
   record,
 } from "../../../../vendor/zod/v4/classic/schemas.js";
@@ -31,32 +31,32 @@ import { truncateMiddle } from "../../../memdir/memoryTool.js";
 import { logForDebugging } from "../../../utils/debug.js";
 
 //@ chunk-y1shfdfm.js:13860-14329 placement
-function parseWorkflowArgs(e, { apply: r }) {
-  if (!isPlainObject(e)) return null;
-  let args = e.args;
+function parseWorkflowArgs(rawInput, { apply }) {
+  if (!isPlainObject(rawInput)) return null;
+  let args = rawInput.args;
   if (typeof args !== "string") return null;
-  let i = args.trimStart()[0];
-  if (i !== "{" && i !== "[") return null;
-  let w;
+  let firstChar = args.trimStart()[0];
+  if (firstChar !== "{" && firstChar !== "[") return null;
+  let parsedArgs;
   try {
-    w = stripProtoKeys(jsonParse(args)).stripped;
+    parsedArgs = stripProtoKeys(jsonParse(args)).stripped;
   } catch {
     return null;
   }
-  if (w === null || typeof w !== "object") return null;
-  let h = typeof e.name === "string" ? "_named" : "";
-  let k = Array.isArray(w) ? "args_json_string_to_array" : "args_json_string_to_object";
-  if (!r)
+  if (parsedArgs === null || typeof parsedArgs !== "object") return null;
+  let namedSuffix = typeof rawInput.name === "string" ? "_named" : "";
+  let shapeClass = Array.isArray(parsedArgs) ? "args_json_string_to_array" : "args_json_string_to_object";
+  if (!apply)
     return {
-      input: e,
-      shapeClass: `${k}${h}_detect_only`,
+      input: rawInput,
+      shapeClass: `${shapeClass}${namedSuffix}_detect_only`,
     };
   return {
     input: {
-      ...e,
-      args: w,
+      ...rawInput,
+      args: parsedArgs,
     },
-    shapeClass: `${k}${h}`,
+    shapeClass: `${shapeClass}${namedSuffix}`,
   };
 }
 //@ chunk-y1shfdfm.js:14329-14383 placement
@@ -67,27 +67,31 @@ var HOST_SCOPE = -1;
 /**
  * 判断对象是否为 {$var: name} 形式的模式变量。
  */
-function isPatternVariable(e) {
-  return e !== null && typeof e === "object" && !Array.isArray(e) && typeof e.$var === "string";
+function isPatternVariable(value) {
+  return (
+    value !== null && typeof value === "object" && !Array.isArray(value) && typeof value.$var === "string"
+  );
 }
 //@ chunk-y1shfdfm.js:14489-14590 placement
-function isAtLeastPattern(e) {
-  return e !== null && typeof e === "object" && !Array.isArray(e) && typeof e.$atleast === "number";
+function isAtLeastPattern(value) {
+  return (
+    value !== null && typeof value === "object" && !Array.isArray(value) && typeof value.$atleast === "number"
+  );
 }
 //@ chunk-y1shfdfm.js:14590-14795 placement
-function parsePattern(e) {
-  let r = worldFactSchema().safeParse(e);
-  if (!r.success || isAtLeastPattern(r.data))
+function parsePattern(pattern) {
+  let parsed = worldFactSchema().safeParse(pattern);
+  if (!parsed.success || isAtLeastPattern(parsed.data))
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
       'a pattern must be a JSON object (nested objects as subsets, arrays exact, v("x") binds)',
       "world: not a pattern",
     );
-  return r.data;
+  return parsed.data;
 }
 //@ chunk-y1shfdfm.js:14795-15012 placement
-function parseAtLeastPattern(e) {
-  if (isAtLeastPattern(e)) {
-    let $atleast = e.$atleast;
+function parseAtLeastPattern(pattern) {
+  if (isAtLeastPattern(pattern)) {
+    let $atleast = pattern.$atleast;
     if (!Number.isSafeInteger($atleast) || $atleast < 0)
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
         "atleast(N, pattern): N must be a non-negative integer",
@@ -95,10 +99,10 @@ function parseAtLeastPattern(e) {
       );
     return {
       $atleast,
-      of: parsePattern(e.of),
+      of: parsePattern(pattern.of),
     };
   }
-  return parsePattern(e);
+  return parsePattern(pattern);
 }
 //@ chunk-y1shfdfm.js:15012-15111 placement
 /**
@@ -113,103 +117,106 @@ var YIELD_EVERY_N = 32;
 /**
  * 是否为数组（模式解析时区分数组与对象）。
  */
-function isArrayValue(e) {
-  return Array.isArray(e);
+function isArrayValue(value) {
+  return Array.isArray(value);
 }
 //@ chunk-y1shfdfm.js:15150-15189 placement
 /**
  * 是否为数组（读取参数时把单值包成数组）。
  */
-function isArrayOrSingle(e) {
-  return Array.isArray(e);
+function isArrayOrSingle(value) {
+  return Array.isArray(value);
 }
 //@ chunk-y1shfdfm.js:15189-15241 placement
 /**
  * 判断两个值是否相等（原始值相等或 JSON 序列化后相同）。
  */
-function sameValue(e, r) {
-  return Object.is(e, r) || jsonStringify(e) === jsonStringify(r);
+function sameValue(left, right) {
+  return Object.is(left, right) || jsonStringify(left) === jsonStringify(right);
 }
 //@ chunk-y1shfdfm.js:15241-15766 placement
 /**
  * 把 world 模式（含 $atleast 等特殊项）与事实做结构匹配，返回绑定。
  */
-function matchPattern(e, r, n = {}) {
-  if (e === null || typeof e !== "object") return Object.is(e, r) ? n : undefined;
-  if (isPatternVariable(e)) {
-    if (r === undefined) return;
-    if (Object.hasOwn(n, e.$var)) return sameValue(n[e.$var], r) ? n : undefined;
+function matchPattern(pattern, value, bindings = {}) {
+  if (pattern === null || typeof pattern !== "object")
+    return Object.is(pattern, value) ? bindings : undefined;
+  if (isPatternVariable(pattern)) {
+    if (value === undefined) return;
+    if (Object.hasOwn(bindings, pattern.$var))
+      return sameValue(bindings[pattern.$var], value) ? bindings : undefined;
     return {
-      ...n,
-      [e.$var]: r,
+      ...bindings,
+      [pattern.$var]: value,
     };
   }
-  if (isArrayValue(e)) {
-    if (!Array.isArray(r) || r.length !== e.length) return;
-    let w = n;
-    for (let j = 0; j < e.length && w; j++) w = matchPattern(e[j], r[j], w);
-    return w;
+  if (isArrayValue(pattern)) {
+    if (!Array.isArray(value) || value.length !== pattern.length) return;
+    let nextBindings = bindings;
+    for (let j = 0; j < pattern.length && nextBindings; j++)
+      nextBindings = matchPattern(pattern[j], value[j], nextBindings);
+    return nextBindings;
   }
-  if (r === null || typeof r !== "object" || Array.isArray(r)) return;
-  let s = e;
-  let i = n;
-  for (let key of Object.keys(s)) {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return;
+  let patternObject = pattern;
+  let currentBindings = bindings;
+  for (let key of Object.keys(patternObject)) {
     if (key === "__proto__") continue;
-    let h = Object.hasOwn(r, key) ? r[key] : undefined;
-    i = matchPattern(s[key], h, i);
-    if (!i) return;
+    let childValue = Object.hasOwn(value, key) ? value[key] : undefined;
+    currentBindings = matchPattern(patternObject[key], childValue, currentBindings);
+    if (!currentBindings) return;
   }
-  return i;
+  return currentBindings;
 }
 //@ chunk-y1shfdfm.js:15766-15893 placement
-function rowToFact(e) {
+function rowToFact(row) {
   return {
-    ...e.fact,
-    addr: e.addr,
-    by: e.by,
-    in: e.in,
-    status: e.status,
-    ...(e.kind === "eval" && {
-      value: e.value,
-      error: e.error,
+    ...row.fact,
+    addr: row.addr,
+    by: row.by,
+    in: row.in,
+    status: row.status,
+    ...(row.kind === "eval" && {
+      value: row.value,
+      error: row.error,
     }),
   };
 }
 //@ chunk-y1shfdfm.js:15893-16028 placement
-function hasPatternVariable(e) {
-  if (e === null || typeof e !== "object") return false;
-  if (isPatternVariable(e)) return true;
-  if (isArrayValue(e)) return e.some(hasPatternVariable);
-  return Object.values(e).some(hasPatternVariable);
+function hasPatternVariable(value) {
+  if (value === null || typeof value !== "object") return false;
+  if (isPatternVariable(value)) return true;
+  if (isArrayValue(value)) return value.some(hasPatternVariable);
+  return Object.values(value).some(hasPatternVariable);
 }
 //@ chunk-y1shfdfm.js:16028-16073 placement
 /**
  * 判断行是否匹配给定模式。
  */
-function rowMatchesPattern(e, r) {
-  return matchPattern(e, rowToFact(r)) !== undefined;
+function rowMatchesPattern(pattern, row) {
+  return matchPattern(pattern, rowToFact(row)) !== undefined;
 }
 //@ chunk-y1shfdfm.js:16073-16144 placement
 /**
  * 判断对象是否有 status 自有属性。
  */
-function hasStatusField(e) {
-  return Object.prototype.hasOwnProperty.call(e, "status");
+function hasStatusField(pattern) {
+  return Object.prototype.hasOwnProperty.call(pattern, "status");
 }
 //@ chunk-y1shfdfm.js:16144-16185 placement
 /**
  * 行是否匹配模式（布尔形式）。
  */
-function rowMatches(e, r) {
-  return matchPatternOrUndefined(e, r) !== undefined;
+function rowMatches(pattern, row) {
+  return matchPatternOrUndefined(pattern, row) !== undefined;
 }
 //@ chunk-y1shfdfm.js:16185-16257 placement
 /**
  * 行匹配模式时返回绑定结果，否则 undefined。
  */
-function matchPatternOrUndefined(e, r) {
-  if (!hasStatusField(e) && !RULE_ROW_STATUSES.has(r.status)) return;
-  return matchPattern(e, rowToFact(r));
+function matchPatternOrUndefined(pattern, row) {
+  if (!hasStatusField(pattern) && !RULE_ROW_STATUSES.has(row.status)) return;
+  return matchPattern(pattern, rowToFact(row));
 }
 //@ chunk-y1shfdfm.js:16257-16473 placement
 /**
@@ -217,26 +224,35 @@ function matchPatternOrUndefined(e, r) {
  */
 var factSchema = DoctorLazy(() =>
   looseObject({
-    topic: string().min(1),
-  }).refine((e) => !Object.keys(e).some((key) => RESERVED_FACT_KEYS.has(key)), {
+    topic: stringSchema().min(1),
+  }).refine((fact) => !Object.keys(fact).some((key) => RESERVED_FACT_KEYS.has(key)), {
     message: "a fact may not carry a reserved key",
   }),
 );
 var worldFactSchema = DoctorLazy(() => {
-  let e = lazy(() => union([string(), E(), M(), zg(), array(e), record(string(), e)]));
-  return record(string(), e);
+  let worldValue = lazy(() =>
+    union([
+      stringSchema(),
+      numberSchema(),
+      booleanSchema(),
+      nullSchema(),
+      array(worldValue),
+      record(stringSchema(), worldValue),
+    ]),
+  );
+  return record(stringSchema(), worldValue);
 });
 //@ chunk-y1shfdfm.js:16473-16841 placement
-function parseFact(e) {
-  let r = factSchema().safeParse(e);
-  if (r.success) return r.data;
-  let n =
-    e !== null && typeof e === "object"
-      ? Object.keys(e).find((key) => RESERVED_FACT_KEYS.has(key))
+function parseFact(fact) {
+  let parsed = factSchema().safeParse(fact);
+  if (parsed.success) return parsed.data;
+  let reservedKey =
+    fact !== null && typeof fact === "object"
+      ? Object.keys(fact).find((key) => RESERVED_FACT_KEYS.has(key))
       : undefined;
-  if (n !== undefined)
+  if (reservedKey !== undefined)
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `a fact may not carry \`${n}\` \u2014 the host sets it on the row`,
+      `a fact may not carry \`${reservedKey}\` \u2014 the host sets it on the row`,
       "world: fact carries a reserved key",
     );
   throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
@@ -273,17 +289,17 @@ class WorldStore {
   maxRows;
   maxRowsPerScope;
   schedule;
-  constructor(e = {}) {
-    this.maxRows = e.maxRows ?? MAX_WORLD_ROWS;
-    this.maxRowsPerScope = e.maxRowsPerScope ?? MAX_ROWS_PER_SCOPE;
-    this.schedule = e.schedule ?? ((r) => this.yieldingSchedule(r));
+  constructor(options = {}) {
+    this.maxRows = options.maxRows ?? MAX_WORLD_ROWS;
+    this.maxRowsPerScope = options.maxRowsPerScope ?? MAX_ROWS_PER_SCOPE;
+    this.schedule = options.schedule ?? ((task) => this.yieldingSchedule(task));
   }
   sinceYield = 0;
   yieldWatch = false;
   backlog;
-  yieldingSchedule(e) {
+  yieldingSchedule(task) {
     if (this.backlog !== undefined) {
-      this.backlog.push(e);
+      this.backlog.push(task);
       return;
     }
     if (!this.yieldWatch) {
@@ -294,17 +310,17 @@ class WorldStore {
       });
     }
     if (++this.sinceYield < YIELD_EVERY_N) {
-      queueMicrotask(e);
+      queueMicrotask(task);
       return;
     }
-    this.backlog = [e];
+    this.backlog = [task];
     setImmediate(() => this.drainBacklog());
   }
   drainBacklog() {
     let backlog = this.backlog;
     if (backlog === undefined) return;
-    let r = backlog.splice(0, YIELD_EVERY_N);
-    this.sinceYield = r.length;
+    let batch = backlog.splice(0, YIELD_EVERY_N);
+    this.sinceYield = batch.length;
     if (!this.yieldWatch) {
       this.yieldWatch = true;
       setImmediate(() => {
@@ -314,453 +330,455 @@ class WorldStore {
     }
     if (backlog.length === 0) this.backlog = undefined;
     else setImmediate(() => this.drainBacklog());
-    for (let n of r) n();
+    for (let task of batch) task();
   }
-  subscribe(e) {
-    this.listeners.add(e);
+  subscribe(listener) {
+    this.listeners.add(listener);
     return () => {
-      this.listeners.delete(e);
+      this.listeners.delete(listener);
     };
   }
   get isFull() {
     return this.rows.length >= this.maxRows;
   }
-  pending(e = HOST_SCOPE) {
-    return this.pendingIn.get(e) ?? 0;
+  pending(scopeAddr = HOST_SCOPE) {
+    return this.pendingIn.get(scopeAddr) ?? 0;
   }
-  isIdle(e = HOST_SCOPE) {
-    return this.pending(e) === 0;
+  isIdle(scopeAddr = HOST_SCOPE) {
+    return this.pending(scopeAddr) === 0;
   }
-  within(e, r) {
-    if (r === HOST_SCOPE) return true;
-    let n = e;
-    while (n !== HOST_SCOPE) {
-      if (n === r) return true;
-      n = this.rows[n]?.in ?? HOST_SCOPE;
+  within(addr, scopeAddr) {
+    if (scopeAddr === HOST_SCOPE) return true;
+    let ancestor = addr;
+    while (ancestor !== HOST_SCOPE) {
+      if (ancestor === scopeAddr) return true;
+      ancestor = this.rows[ancestor]?.in ?? HOST_SCOPE;
     }
     return false;
   }
-  restore(e) {
+  restore(rows) {
     if (this.rows.length > 0)
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
         "restore() on a non-empty world",
         "world: restore on a non-empty world",
       );
-    for (let r of e) {
-      if (r.addr !== this.rows.length)
+    for (let row of rows) {
+      if (row.addr !== this.rows.length)
         throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-          `restore(): row ${r.addr} out of order`,
+          `restore(): row ${row.addr} out of order`,
           "world: restore out of order",
         );
-      this.rows.push(r);
-      this.topOf.push(r.in === HOST_SCOPE ? r.addr : this.topOf[r.in]);
-      let n = this.childrenOf.get(r.in);
-      if (n) n.push(r.addr);
-      else this.childrenOf.set(r.in, [r.addr]);
-      let s = this.topScopeOf(r.in);
-      if (s !== HOST_SCOPE) this.rowsUnder.set(s, (this.rowsUnder.get(s) ?? 0) + 1);
+      this.rows.push(row);
+      this.topOf.push(row.in === HOST_SCOPE ? row.addr : this.topOf[row.in]);
+      let children = this.childrenOf.get(row.in);
+      if (children) children.push(row.addr);
+      else this.childrenOf.set(row.in, [row.addr]);
+      let topScope = this.topScopeOf(row.in);
+      if (topScope !== HOST_SCOPE) this.rowsUnder.set(topScope, (this.rowsUnder.get(topScope) ?? 0) + 1);
     }
   }
-  put(e, r, n = {}) {
-    return this.append(e, r, "live", "put", this.writeScopeOf(n)).addr;
+  put(fact, by, placement = {}) {
+    return this.append(fact, by, "live", "put", this.writeScopeOf(placement)).addr;
   }
-  read(e, r = {}) {
-    let n = this.scopeOf(r);
-    return this.rows.filter((s) => this.within(s.addr, n) && rowMatches(e, s));
+  read(pattern, placement = {}) {
+    let scopeAddr = this.scopeOf(placement);
+    return this.rows.filter((row) => this.within(row.addr, scopeAddr) && rowMatches(pattern, row));
   }
-  on(e, fn, n, s = {}) {
-    let i = this.writeScopeOf(s);
-    let w = this.append(
+  on(pattern, fn, by, placement = {}) {
+    let scopeAddr = this.writeScopeOf(placement);
+    let ruleRow = this.append(
       {
         topic: "sub",
-        pattern: e,
+        pattern,
       },
-      n,
+      by,
       "live",
       "sub",
-      i,
+      scopeAddr,
     );
-    if (w.status === "retracted") return w.addr;
-    let h = {
-      addr: w.addr,
-      pattern: e,
-      in: i,
+    if (ruleRow.status === "retracted") return ruleRow.addr;
+    let rule = {
+      addr: ruleRow.addr,
+      pattern,
+      in: scopeAddr,
       fn,
     };
-    this.rules.set(w.addr, h);
-    if (isAtLeastPattern(e)) {
-      this.maybeFireThreshold(h, e);
-      return w.addr;
+    this.rules.set(ruleRow.addr, rule);
+    if (isAtLeastPattern(pattern)) {
+      this.maybeFireThreshold(rule, pattern);
+      return ruleRow.addr;
     }
-    let k = this.rows.length;
-    for (let j = 0; j < k; j++) {
-      if (!this.rules.has(h.addr)) break;
-      this.maybeFire(h, this.rows[j]);
+    let rowCount = this.rows.length;
+    for (let j = 0; j < rowCount; j++) {
+      if (!this.rules.has(rule.addr)) break;
+      this.maybeFire(rule, this.rows[j]);
     }
-    return w.addr;
+    return ruleRow.addr;
   }
-  retract(e) {
-    let r = this.rows[e];
-    if (!r || r.status === "retracted") return false;
-    let n = [];
-    let s = [];
-    let i = [
+  retract(addr) {
+    let row = this.rows[addr];
+    if (!row || row.status === "retracted") return false;
+    let retractedRows = [];
+    let wakeAddrs = [];
+    let stack = [
       {
-        at: e,
+        at: addr,
         underEval: false,
       },
     ];
-    while (i.length > 0) {
-      let { at, underEval } = i.pop();
-      let k = this.rows[at];
-      let y = underEval ? this.firingsInFlight.get(at) : undefined;
-      let R = false;
-      if (y) {
-        for (let G of y) {
-          if (G.heldAt !== undefined) {
-            let P = this.rows[G.heldAt];
-            if (P !== undefined && !this.isRetractedScope(P.in)) continue;
+    while (stack.length > 0) {
+      let { at, underEval } = stack.pop();
+      let node = this.rows[at];
+      let firings = underEval ? this.firingsInFlight.get(at) : undefined;
+      let releasedAny = false;
+      if (firings) {
+        for (let firing of firings) {
+          if (firing.heldAt !== undefined) {
+            let heldRow = this.rows[firing.heldAt];
+            if (heldRow !== undefined && !this.isRetractedScope(heldRow.in)) continue;
           }
-          G.released = true;
-          y.delete(G);
-          R = true;
+          firing.released = true;
+          firings.delete(firing);
+          releasedAny = true;
           this.adjustPending(at, -1);
         }
-        if (y.size === 0) this.firingsInFlight.delete(at);
+        if (firings.size === 0) this.firingsInFlight.delete(at);
       }
-      if (k.status === "retracted") {
+      if (node.status === "retracted") {
         if (underEval) {
-          if (R) s.push(at);
+          if (releasedAny) wakeAddrs.push(at);
           for (let at_2 of this.childrenOf.get(at) ?? [])
-            i.push({
+            stack.push({
               at: at_2,
               underEval: true,
             });
         }
         continue;
       }
-      k.status = "retracted";
+      node.status = "retracted";
       this.rules.delete(at);
-      let I = this.evalControllers.get(at);
-      let wasInFlight = I !== undefined;
-      if (I) {
+      let controller = this.evalControllers.get(at);
+      let wasInFlight = controller !== undefined;
+      if (controller) {
         this.evalControllers.delete(at);
-        I.abort();
+        controller.abort();
         this.adjustPending(at, -1);
       }
-      wasInFlight ||= R || (y?.size ?? 0) > 0;
-      n.push({
-        row: k,
+      wasInFlight ||= releasedAny || (firings?.size ?? 0) > 0;
+      retractedRows.push({
+        row: node,
         wasInFlight,
       });
-      let underEval_2 = underEval || k.kind === "eval";
+      let underEval_2 = underEval || node.kind === "eval";
       for (let at_2 of this.childrenOf.get(at) ?? [])
-        i.push({
+        stack.push({
           at: at_2,
           underEval: underEval_2,
         });
     }
-    for (let j = n.length - 1; j >= 0; j--) {
-      let { row, wasInFlight } = n[j];
+    for (let j = retractedRows.length - 1; j >= 0; j--) {
+      let { row, wasInFlight } = retractedRows[j];
       this.emit({
         kind: "retracted",
         row,
       });
       this.deliver(row);
-      if (wasInFlight) s.push(row.addr);
+      if (wasInFlight) wakeAddrs.push(row.addr);
     }
-    for (let w of s) this.wakeIdle(w);
+    for (let addr of wakeAddrs) this.wakeIdle(addr);
     return true;
   }
-  eval(e, r, n, s = {}) {
-    let i = this.append(e, n, "pending", "eval", this.writeScopeOf(s));
-    if (i.status !== "pending") return i.addr;
+  eval(fact, body, by, placement = {}) {
+    let row = this.append(fact, by, "pending", "eval", this.writeScopeOf(placement));
+    if (row.status !== "pending") return row.addr;
     let abortController = new AbortController();
-    this.evalControllers.set(i.addr, abortController);
-    this.adjustPending(i.addr, 1);
-    let h;
+    this.evalControllers.set(row.addr, abortController);
+    this.adjustPending(row.addr, 1);
+    let evaluation;
     try {
-      h = Promise.resolve(r(abortController.signal));
+      evaluation = Promise.resolve(body(abortController.signal));
     } catch (error) {
-      h = Promise.reject(error);
+      evaluation = Promise.reject(error);
     }
-    h.then(
+    evaluation.then(
       (value) =>
-        this.settle(i, {
+        this.settle(row, {
           value,
         }),
       (error) =>
-        this.settle(i, {
+        this.settle(row, {
           error: describeWorldError(error),
         }),
     );
-    return i.addr;
+    return row.addr;
   }
-  settled(e) {
-    let r = this.rows[e];
-    if (!r)
+  settled(addr) {
+    let row = this.rows[addr];
+    if (!row)
       return Promise.reject(
         new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-          `no row at ${e}`,
+          `no row at ${addr}`,
           "world: settled() on a missing row",
         ),
       );
-    if (r.status !== "pending") return Promise.resolve(r);
+    if (row.status !== "pending") return Promise.resolve(row);
     return new Promise((resolve) => {
-      let s = this.subscribe((i) => {
-        if ((i.kind === "settled" || i.kind === "retracted") && i.row.addr === e) {
-          s();
-          resolve(i.row);
+      let unsubscribe = this.subscribe((event) => {
+        if ((event.kind === "settled" || event.kind === "retracted") && event.row.addr === addr) {
+          unsubscribe();
+          resolve(event.row);
         }
       });
     });
   }
-  whenIdle(e = HOST_SCOPE) {
-    if (this.isIdle(e)) return Promise.resolve();
+  whenIdle(scopeAddr = HOST_SCOPE) {
+    if (this.isIdle(scopeAddr)) return Promise.resolve();
     return new Promise((resolve) => {
-      let n = this.idleWaiters.get(e);
-      if (n) n.push(resolve);
-      else this.idleWaiters.set(e, [resolve]);
+      let waiters = this.idleWaiters.get(scopeAddr);
+      if (waiters) waiters.push(resolve);
+      else this.idleWaiters.set(scopeAddr, [resolve]);
     });
   }
-  scopeOf(e) {
-    let r = e.in ?? HOST_SCOPE;
-    if (r !== HOST_SCOPE && !this.rows[r])
+  scopeOf(placement) {
+    let scopeAddr = placement.in ?? HOST_SCOPE;
+    if (scopeAddr !== HOST_SCOPE && !this.rows[scopeAddr])
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        `no row at ${r} to place in`,
+        `no row at ${scopeAddr} to place in`,
         "world: placement names a missing row",
       );
-    return r;
+    return scopeAddr;
   }
-  writeScopeOf(e) {
-    let r = this.scopeOf(e);
-    if (this.isRetractedScope(r))
+  writeScopeOf(placement) {
+    let scopeAddr = this.scopeOf(placement);
+    if (this.isRetractedScope(scopeAddr))
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        `row ${r} is retracted; nothing can be placed inside it`,
+        `row ${scopeAddr} is retracted; nothing can be placed inside it`,
         "world: placement inside a retracted scope",
       );
-    return r;
+    return scopeAddr;
   }
-  isRetractedScope(e) {
-    let r = e;
-    while (r !== HOST_SCOPE) {
-      let n = this.rows[r];
-      if (!n) return false;
-      if (n.status === "retracted") return true;
-      r = n.in;
+  isRetractedScope(addr) {
+    let cursor = addr;
+    while (cursor !== HOST_SCOPE) {
+      let row = this.rows[cursor];
+      if (!row) return false;
+      if (row.status === "retracted") return true;
+      cursor = row.in;
     }
     return false;
   }
-  append(fact, by, status, kind, i) {
+  append(fact, by, status, kind, scopeAddr) {
     if (this.rows.length >= this.maxRows)
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
         `world full (${this.maxRows} rows) \u2014 a rule is probably putting the fact it fires on`,
         "world: full",
       );
-    let w = {
+    let row = {
       addr: this.rows.length,
       kind,
       fact,
       by,
-      in: i,
+      in: scopeAddr,
       at: Date.now(),
       status,
     };
-    this.rows.push(w);
-    this.topOf.push(i === HOST_SCOPE ? w.addr : this.topOf[i]);
-    let h = this.childrenOf.get(i);
-    if (h) h.push(w.addr);
-    else this.childrenOf.set(i, [w.addr]);
+    this.rows.push(row);
+    this.topOf.push(scopeAddr === HOST_SCOPE ? row.addr : this.topOf[scopeAddr]);
+    let children = this.childrenOf.get(scopeAddr);
+    if (children) children.push(row.addr);
+    else this.childrenOf.set(scopeAddr, [row.addr]);
     this.emit({
       kind: "put",
-      row: w,
+      row,
     });
-    let k = this.topScopeOf(i);
-    if (k !== HOST_SCOPE) {
-      let y = (this.rowsUnder.get(k) ?? 0) + 1;
-      this.rowsUnder.set(k, y);
-      if (y > this.maxRowsPerScope) {
+    let topScope = this.topScopeOf(scopeAddr);
+    if (topScope !== HOST_SCOPE) {
+      let scopeRowCount = (this.rowsUnder.get(topScope) ?? 0) + 1;
+      this.rowsUnder.set(topScope, scopeRowCount);
+      if (scopeRowCount > this.maxRowsPerScope) {
         logForDebugging(
-          `world: scope ${k} exceeded ${this.maxRowsPerScope} rows \u2014 a rule is probably putting the fact it fires on; retracting it`,
+          `world: scope ${topScope} exceeded ${this.maxRowsPerScope} rows \u2014 a rule is probably putting the fact it fires on; retracting it`,
           {
             level: "warn",
           },
         );
         this.emit({
           kind: "runaway",
-          scope: k,
+          scope: topScope,
         });
-        if (this.rows[k].status !== "retracted") this.retract(k);
+        if (this.rows[topScope].status !== "retracted") this.retract(topScope);
       }
     }
-    this.deliver(w);
-    return w;
+    this.deliver(row);
+    return row;
   }
   topOf = [];
-  topScopeOf(e) {
-    return e === HOST_SCOPE ? HOST_SCOPE : this.topOf[e];
+  topScopeOf(scopeAddr) {
+    return scopeAddr === HOST_SCOPE ? HOST_SCOPE : this.topOf[scopeAddr];
   }
-  settle(e, r) {
-    if (e.status !== "pending") return;
-    this.evalControllers.delete(e.addr);
-    if ("error" in r) {
-      e.status = "failed";
-      e.error = r.error;
+  settle(row, outcome) {
+    if (row.status !== "pending") return;
+    this.evalControllers.delete(row.addr);
+    if ("error" in outcome) {
+      row.status = "failed";
+      row.error = outcome.error;
     } else {
-      e.status = "done";
-      e.value = r.value;
+      row.status = "done";
+      row.value = outcome.value;
     }
-    this.adjustPending(e.addr, -1);
+    this.adjustPending(row.addr, -1);
     this.emit({
       kind: "settled",
-      row: e,
+      row,
     });
-    this.deliver(e);
-    this.wakeIdle(e.addr);
+    this.deliver(row);
+    this.wakeIdle(row.addr);
   }
-  deliver(e) {
-    for (let rule of Array.from(this.rules.values())) if (this.rules.has(rule.addr)) this.maybeFire(rule, e);
+  deliver(row) {
+    for (let rule of Array.from(this.rules.values()))
+      if (this.rules.has(rule.addr)) this.maybeFire(rule, row);
   }
-  maybeFire(e, r) {
-    if (isAtLeastPattern(e.pattern)) {
-      if (this.within(r.addr, e.in) && rowMatchesPattern(e.pattern.of, r))
-        this.maybeFireThreshold(e, e.pattern);
+  maybeFire(rule, row) {
+    if (isAtLeastPattern(rule.pattern)) {
+      if (this.within(row.addr, rule.in) && rowMatchesPattern(rule.pattern.of, row))
+        this.maybeFireThreshold(rule, rule.pattern);
       return;
     }
-    if (!this.within(r.addr, e.in)) return;
-    let n = matchPatternOrUndefined(e.pattern, r);
-    if (!n) return;
-    let s = `${e.addr}:${r.addr}:${r.status}`;
-    if (this.fired.has(s)) return;
-    this.fired.add(s);
-    this.fire(e, r, n, r.addr);
+    if (!this.within(row.addr, rule.in)) return;
+    let bindings = matchPatternOrUndefined(rule.pattern, row);
+    if (!bindings) return;
+    let fireKey = `${rule.addr}:${row.addr}:${row.status}`;
+    if (this.fired.has(fireKey)) return;
+    this.fired.add(fireKey);
+    this.fire(rule, row, bindings, row.addr);
   }
-  maybeFireThreshold(e, r) {
-    let n = new Map();
-    for (let s of this.rows) {
-      if (!this.within(s.addr, e.in)) continue;
-      let i = matchPatternOrUndefined(r.of, s);
-      if (!i) continue;
-      let w = jsonStringify(i) ?? "";
-      let h = n.get(w);
-      if (h) h.rows.push(s);
+  maybeFireThreshold(rule, pattern) {
+    let groups = new Map();
+    for (let row of this.rows) {
+      if (!this.within(row.addr, rule.in)) continue;
+      let bindings = matchPatternOrUndefined(pattern.of, row);
+      if (!bindings) continue;
+      let groupKey = jsonStringify(bindings) ?? "";
+      let group = groups.get(groupKey);
+      if (group) group.rows.push(row);
       else
-        n.set(w, {
-          bindings: i,
-          rows: [s],
+        groups.set(groupKey, {
+          bindings,
+          rows: [row],
         });
     }
-    if (n.size === 0 && !hasPatternVariable(r.of))
-      n.set("{}", {
+    if (groups.size === 0 && !hasPatternVariable(pattern.of))
+      groups.set("{}", {
         bindings: {},
         rows: [],
       });
-    for (let [s, i] of n) {
-      if (i.rows.length < r.$atleast) continue;
-      let w = `${e.addr}:group:${s}`;
-      if (this.fired.has(w)) continue;
-      this.fired.add(w);
-      this.fire(e, i.rows, i.bindings, i.rows[0]?.addr ?? -1);
+    for (let [groupKey, group] of groups) {
+      if (group.rows.length < pattern.$atleast) continue;
+      let fireKey = `${rule.addr}:group:${groupKey}`;
+      if (this.fired.has(fireKey)) continue;
+      this.fired.add(fireKey);
+      this.fire(rule, group.rows, group.bindings, group.rows[0]?.addr ?? -1);
     }
   }
-  supportOf(e, r) {
-    let n = isArrayOrSingle(r) ? r : [r];
-    if (n.length === 0) return e.in;
-    let s = new Set();
-    for (let addr = n[0].addr; addr !== e.in && addr !== HOST_SCOPE; addr = this.rows[addr].in) s.add(addr);
-    s.add(e.in);
-    let addr = n[0].addr;
-    for (let j = 1; j < n.length; j++) {
-      let addr_2 = n[j].addr;
-      while (!s.has(addr_2)) addr_2 = this.rows[addr_2].in;
-      for (let y = addr; y !== addr_2; y = this.rows[y].in) s.delete(y);
+  supportOf(rule, matched) {
+    let rows = isArrayOrSingle(matched) ? matched : [matched];
+    if (rows.length === 0) return rule.in;
+    let ancestors = new Set();
+    for (let addr = rows[0].addr; addr !== rule.in && addr !== HOST_SCOPE; addr = this.rows[addr].in)
+      ancestors.add(addr);
+    ancestors.add(rule.in);
+    let addr = rows[0].addr;
+    for (let j = 1; j < rows.length; j++) {
+      let addr_2 = rows[j].addr;
+      while (!ancestors.has(addr_2)) addr_2 = this.rows[addr_2].in;
+      for (let cursor = addr; cursor !== addr_2; cursor = this.rows[cursor].in) ancestors.delete(cursor);
       addr = addr_2;
     }
-    let w = addr;
-    while (w !== e.in && this.rows[w].status === "retracted") w = this.rows[w].in;
-    return w;
+    let support = addr;
+    while (support !== rule.in && this.rows[support].status === "retracted") support = this.rows[support].in;
+    return support;
   }
-  fire(e, r, n, s) {
-    this.adjustPending(e.addr, 1);
-    let i = {
+  fire(rule, matched, bindings, triggerAddr) {
+    this.adjustPending(rule.addr, 1);
+    let firing = {
       released: false,
       heldAt: undefined,
     };
-    let w = {
+    let journalHandle = {
       keep: (heldAt) => {
-        i.heldAt = heldAt;
+        firing.heldAt = heldAt;
       },
     };
-    let h = this.firingsInFlight.get(e.addr);
-    if (h) h.add(i);
-    else this.firingsInFlight.set(e.addr, new Set([i]));
-    let k = isArrayOrSingle(r) ? undefined : r;
-    let status = k?.status;
+    let firings = this.firingsInFlight.get(rule.addr);
+    if (firings) firings.add(firing);
+    else this.firingsInFlight.set(rule.addr, new Set([firing]));
+    let stableRow = isArrayOrSingle(matched) ? undefined : matched;
+    let status = stableRow?.status;
     new Promise((resolve) => this.schedule(resolve))
       .then(() => {
-        if (k !== undefined && k.status !== status) return;
-        return e.fn(r, n, this.supportOf(e, r), w);
+        if (stableRow !== undefined && stableRow.status !== status) return;
+        return rule.fn(matched, bindings, this.supportOf(rule, matched), journalHandle);
       })
       .catch((error) => {
-        let I = describeWorldError(error);
-        logForDebugging(`world rule ${e.addr} threw on row ${s}: ${I}`, {
+        let errorText = describeWorldError(error);
+        logForDebugging(`world rule ${rule.addr} threw on row ${triggerAddr}: ${errorText}`, {
           level: "warn",
         });
-        if (!this.isRetractedScope(e.in))
+        if (!this.isRetractedScope(rule.in))
           try {
             this.append(
               {
                 topic: "error",
                 kind: "rule",
-                rule: e.addr,
-                on: s,
-                message: I,
+                rule: rule.addr,
+                on: triggerAddr,
+                message: errorText,
               },
               "host",
               "live",
               "put",
-              e.in,
+              rule.in,
             );
           } catch {}
       })
       .finally(() => {
-        if (i.released) return;
-        i.released = true;
-        let R = this.firingsInFlight.get(e.addr);
-        if (R) {
-          R.delete(i);
-          if (R.size === 0) this.firingsInFlight.delete(e.addr);
+        if (firing.released) return;
+        firing.released = true;
+        let firings = this.firingsInFlight.get(rule.addr);
+        if (firings) {
+          firings.delete(firing);
+          if (firings.size === 0) this.firingsInFlight.delete(rule.addr);
         }
-        this.adjustPending(e.addr, -1);
-        this.wakeIdle(e.addr);
+        this.adjustPending(rule.addr, -1);
+        this.wakeIdle(rule.addr);
       });
   }
-  adjustPending(e, r) {
-    let n = e;
+  adjustPending(addr, delta) {
+    let cursor = addr;
     for (;;) {
-      this.pendingIn.set(n, (this.pendingIn.get(n) ?? 0) + r);
-      if (n === HOST_SCOPE) return;
-      n = this.rows[n]?.in ?? HOST_SCOPE;
+      this.pendingIn.set(cursor, (this.pendingIn.get(cursor) ?? 0) + delta);
+      if (cursor === HOST_SCOPE) return;
+      cursor = this.rows[cursor]?.in ?? HOST_SCOPE;
     }
   }
-  wakeIdle(e) {
-    let r = e;
+  wakeIdle(addr) {
+    let cursor = addr;
     for (;;) {
-      if (this.isIdle(r)) {
-        let n = this.idleWaiters.get(r);
-        if (n) {
-          this.idleWaiters.delete(r);
-          for (let s of n) s();
+      if (this.isIdle(cursor)) {
+        let waiters = this.idleWaiters.get(cursor);
+        if (waiters) {
+          this.idleWaiters.delete(cursor);
+          for (let resolve of waiters) resolve();
         }
       }
-      if (r === HOST_SCOPE) return;
-      r = this.rows[r]?.in ?? HOST_SCOPE;
+      if (cursor === HOST_SCOPE) return;
+      cursor = this.rows[cursor]?.in ?? HOST_SCOPE;
     }
   }
-  emit(e) {
+  emit(event) {
     for (let listener of this.listeners)
       try {
-        listener(e);
+        listener(event);
       } catch (error) {
         logForDebugging(`world listener threw: ${errorMessage(error)}`, {
           level: "warn",

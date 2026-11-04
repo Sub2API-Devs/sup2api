@@ -31,6 +31,7 @@ import {
 } from "./gitBundleVerify.js";
 import { isNotPlainDirectory, lstatOrAbsent } from "./wipStash.js";
 import { getErrnoCode } from "../errors.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-gjx0rh1b.js:109556-110296 placement
 /**
@@ -46,7 +47,7 @@ var GIT_ROOT_REFUSALS = {
 };
 var GIT_PROBE_MAX_BUFFER = 268435456;
 //@ chunk-gjx0rh1b.js:110296-111116 placement
-async function checkGitRootLocation(cwd, signal, r) {
+async function checkGitRootLocation(cwd, signal, opts) {
   let gitRoot = findGitRoot(cwd ?? getCwd());
   if (!gitRoot)
     return {
@@ -57,15 +58,15 @@ async function checkGitRootLocation(cwd, signal, r) {
       gitlinks: [],
       unwrittenModes: [],
     };
-  let s = (w) =>
-    runGitForAudit([...GIT_SAFE_GLOBAL_ARGS, ...GIT_READ_CONFIG_ARGS, ...splitIndexOffArgs(r), ...w], {
+  let runGit = (args) =>
+    runGitForAudit([...GIT_SAFE_GLOBAL_ARGS, ...GIT_READ_CONFIG_ARGS, ...splitIndexOffArgs(opts), ...args], {
       cwd: gitRoot,
       abortSignal: signal,
       env: {
         ...getRemoteHostSessionCount(
           {
             ...GIT_LIST_ENV,
-            ...indexFileEnv(r),
+            ...indexFileEnv(opts),
           },
           {
             base: auditEnvironment(),
@@ -76,30 +77,30 @@ async function checkGitRootLocation(cwd, signal, r) {
       },
       maxBuffer: GIT_PROBE_MAX_BUFFER,
     });
-  let [l, h] = await Promise.all([
-    s(["rev-parse", "--verify", "--quiet", "HEAD^{commit}"]),
-    listUnusualIndexModes(gitRoot, signal, r),
+  let [headCommit, unusualModes] = await Promise.all([
+    runGit(["rev-parse", "--verify", "--quiet", "HEAD^{commit}"]),
+    listUnusualIndexModes(gitRoot, signal, opts),
   ]);
-  if (h === null) return null;
-  if (h.unwrittenModes.length > 0)
+  if (unusualModes === null) return null;
+  if (unusualModes.unwrittenModes.length > 0)
     return {
       gitRoot,
       paths: [],
       added: new Set(),
       deleted: [],
-      ...h,
+      ...unusualModes,
     };
-  if (l.exitCode === 1)
+  if (headCommit.exitCode === 1)
     return {
       gitRoot,
       paths: [],
       added: new Set(),
       deleted: [],
-      ...h,
+      ...unusualModes,
     };
-  let [u, p] = await Promise.all([
-    s(["diff", "--name-status", "-z", "--no-renames", IGNORE_SUBMODULES_DIRTY_FLAG, "HEAD", "--"]),
-    s([
+  let [worktreeDiff, cachedDiff] = await Promise.all([
+    runGit(["diff", "--name-status", "-z", "--no-renames", IGNORE_SUBMODULES_DIRTY_FLAG, "HEAD", "--"]),
+    runGit([
       "diff",
       "--cached",
       "--name-status",
@@ -110,24 +111,33 @@ async function checkGitRootLocation(cwd, signal, r) {
       "--",
     ]),
   ]);
-  if (l.code !== 0 || u.code !== 0 || p.code !== 0) return null;
+  if (headCommit.code !== 0 || worktreeDiff.code !== 0 || cachedDiff.code !== 0) return null;
   return {
-    ...summarizeStatusEntries(parseNameStatusZ(u.stdout), parseNameStatusZ(p.stdout), gitRoot),
-    ...h,
+    ...summarizeStatusEntries(
+      parseNameStatusZ(worktreeDiff.stdout),
+      parseNameStatusZ(cachedDiff.stdout),
+      gitRoot,
+    ),
+    ...unusualModes,
   };
 }
 //@ chunk-gjx0rh1b.js:111116-111410 placement
 function summarizeStatusEntries(nameStatusZ, nameStatusZ_2, gitRoot) {
-  let o = (h, u) => h.filter(({ status, path }) => u(status) && path !== "").map(({ path }) => path);
-  let s = uniq([...o(nameStatusZ, (h) => h !== "D"), ...o(nameStatusZ_2, (h) => h !== "D")]);
-  let l = new Set(s);
+  let pathsWhere = (entries, test) =>
+    entries.filter(({ status, path }) => test(status) && path !== "").map(({ path }) => path);
+  let allPaths = uniq([
+    ...pathsWhere(nameStatusZ, (status) => status !== "D"),
+    ...pathsWhere(nameStatusZ_2, (status) => status !== "D"),
+  ]);
+  let pathSet = new Set(allPaths);
   return {
     gitRoot,
-    paths: s,
-    added: new Set(o(nameStatusZ_2, (h) => h === "A")),
-    deleted: uniq([...o(nameStatusZ, (h) => h === "D"), ...o(nameStatusZ_2, (h) => h === "D")]).filter(
-      (h) => !l.has(h),
-    ),
+    paths: allPaths,
+    added: new Set(pathsWhere(nameStatusZ_2, (status) => status === "A")),
+    deleted: uniq([
+      ...pathsWhere(nameStatusZ, (status) => status === "D"),
+      ...pathsWhere(nameStatusZ_2, (status) => status === "D"),
+    ]).filter((path) => !pathSet.has(path)),
   };
 }
 //@ chunk-gjx0rh1b.js:111410-111537 placement
@@ -137,110 +147,124 @@ function parseNameStatusZ(stdout) {
     {
       length: Math.floor(parts.length / 2),
     },
-    (r, o) => ({
-      status: parts[2 * o],
-      path: parts[2 * o + 1],
+    (index, index_2) => ({
+      status: parts[2 * index_2],
+      path: parts[2 * index_2 + 1],
     }),
   );
 }
 //@ chunk-gjx0rh1b.js:111537-111597 placement
-var ORDINARY_FILE_MODE_SET = new Set([33188, 33261, 40960, 57344]);
-var INDEX_MODE_TYPE_MASK = 61440;
-var GITLINK_MODE = 57344;
+var ORDINARY_FILE_MODE_SET; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var INDEX_MODE_TYPE_MASK;
+var GITLINK_MODE;
+deferInit("chunk-gjx0rh1b.js:111537", () => {
+  ORDINARY_FILE_MODE_SET = new Set([33188, 33261, 40960, 57344]);
+  INDEX_MODE_TYPE_MASK = 61440;
+  GITLINK_MODE = 57344;
+});
 //@ chunk-gjx0rh1b.js:111597-111869 placement
-function classifyIndexMode(e) {
-  let match = /^([0-7]{1,11}) [0-9a-f]+ \d\t(.*)$/s.exec(e);
+function classifyIndexMode(line) {
+  let match = /^([0-7]{1,11}) [0-9a-f]+ \d\t(.*)$/s.exec(line);
   if (match === null)
     return {
       kind: "unwritten_mode",
-      path: e.slice(e.indexOf("\t") + 1),
+      path: line.slice(line.indexOf("\t") + 1),
     };
-  let r = Number.parseInt(match[1], 8);
+  let mode = Number.parseInt(match[1], 8);
   let path = match[2];
-  return (r & INDEX_MODE_TYPE_MASK) === GITLINK_MODE
+  return (mode & INDEX_MODE_TYPE_MASK) === GITLINK_MODE
     ? {
         kind: "gitlink",
         path,
       }
     : {
-        kind: ORDINARY_FILE_MODE_SET.has(r) ? "ordinary" : "unwritten_mode",
+        kind: ORDINARY_FILE_MODE_SET.has(mode) ? "ordinary" : "unwritten_mode",
         path,
       };
 }
 //@ chunk-gjx0rh1b.js:111869-112214 placement
-async function listUnusualIndexModes(e, signal, r) {
-  let o = await listGitRefs(e, [...GIT_READ_CONFIG_ARGS, ...splitIndexOffArgs(r), "ls-files", "-s", "-z"], {
-    hardened: false,
-    signal,
-    env: {
-      ...GIT_LIST_ENV,
-      ...indexFileEnv(r),
+async function listUnusualIndexModes(cwd, signal, opts) {
+  let result = await listGitRefs(
+    cwd,
+    [...GIT_READ_CONFIG_ARGS, ...splitIndexOffArgs(opts), "ls-files", "-s", "-z"],
+    {
+      hardened: false,
+      signal,
+      env: {
+        ...GIT_LIST_ENV,
+        ...indexFileEnv(opts),
+      },
+      maxBuffer: GIT_PROBE_MAX_BUFFER,
     },
-    maxBuffer: GIT_PROBE_MAX_BUFFER,
-  });
-  if (o.code !== 0) return null;
-  let mapped = o.stdout
+  );
+  if (result.code !== 0) return null;
+  let mapped = result.stdout
     .split("\x00")
-    .filter((h) => h !== "")
+    .filter((record) => record !== "")
     .map(classifyIndexMode);
-  let l = (h) => uniq(mapped.filter((u) => u.kind === h).map(({ path }) => path));
+  let pathsOfKind = (kind) => uniq(mapped.filter((entry) => entry.kind === kind).map(({ path }) => path));
   return {
-    gitlinks: l("gitlink"),
-    unwrittenModes: l("unwritten_mode"),
+    gitlinks: pathsOfKind("gitlink"),
+    unwrittenModes: pathsOfKind("unwritten_mode"),
   };
 }
 //@ chunk-gjx0rh1b.js:112214-112780 placement
-async function classifyPathIdentity(e, paths, added, o, deleted = []) {
-  let l = (w) => isSensitiveNameOrVariant(w) || o?.(w) === true;
-  let h = await isCaseFoldingFileSystem(e);
-  let u = async (w, _) => {
-    if (!isSafeRepoRelativePath(w, h))
+async function classifyPathIdentity(root, paths, added, extraSensitive, deleted = []) {
+  let isSensitive = (path) => isSensitiveNameOrVariant(path) || extraSensitive?.(path) === true;
+  let caseFold = await isCaseFoldingFileSystem(root);
+  let classify = async (path, mode) => {
+    if (!isSafeRepoRelativePath(path, caseFold))
       return {
-        path: w,
+        path,
         why: "forged",
       };
-    if (hasDosShortNameSegment(w))
+    if (hasDosShortNameSegment(path))
       return {
-        path: w,
+        path,
         why: "alias",
       };
-    let y = await describeUnexaminedPath(e, w);
-    if (y === "linked")
+    let examined = await describeUnexaminedPath(root, path);
+    if (examined === "linked")
       return {
-        path: w,
+        path,
         why: "hardlinked",
       };
-    if (l(w)) {
-      if (_ === "changed")
+    if (isSensitive(path)) {
+      if (mode === "changed")
         return {
-          path: w,
-          why: added.has(w) ? "added" : "changed",
+          path,
+          why: added.has(path) ? "added" : "changed",
         };
-      if (await isNotPlainDirectory(e, w))
+      if (await isNotPlainDirectory(root, path))
         return {
-          path: w,
+          path,
           why: "resurrected",
         };
     }
-    return y === "unexamined"
+    return examined === "unexamined"
       ? {
-          path: w,
+          path,
           why: "unexamined",
         }
       : null;
   };
-  return (await Promise.all([...deleted.map((w) => u(w, "deleted")), ...paths.map((w) => u(w, "changed"))]))
-    .filter((w) => w !== null)
-    .sort((w, _) => w.path.localeCompare(_.path));
+  return (
+    await Promise.all([
+      ...deleted.map((path) => classify(path, "deleted")),
+      ...paths.map((path) => classify(path, "changed")),
+    ])
+  )
+    .filter((finding) => finding !== null)
+    .sort((left, right) => left.path.localeCompare(right.path));
 }
 //@ chunk-gjx0rh1b.js:112780-113077 placement
-async function describeUnexaminedPath(e, n) {
-  if (n.includes("\uFFFD")) return "unexamined";
-  let r = await lstatOrAbsent(e, n);
-  if (r !== "clear") return r === "symlink" ? "single" : "unexamined";
+async function describeUnexaminedPath(root, path) {
+  if (path.includes("\uFFFD")) return "unexamined";
+  let stats = await lstatOrAbsent(root, path);
+  if (stats !== "clear") return stats === "symlink" ? "single" : "unexamined";
   try {
-    let o = await lstat(join(e, n));
-    return o.isFile() && o.nlink > 1 ? "linked" : "single";
+    let stats = await lstat(join(root, path));
+    return stats.isFile() && stats.nlink > 1 ? "linked" : "single";
   } catch (error) {
     let errnoCode = getErrnoCode(error);
     return errnoCode === "ENOENT" || errnoCode === "ENOTDIR" ? "single" : "unexamined";

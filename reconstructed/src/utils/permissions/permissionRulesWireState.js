@@ -31,20 +31,21 @@ function getRuleEditability(source) {
   }
 }
 //@ chunk-eecdvv5g.js:5031-5321 placement
-function toRuleListEntry(rule, r) {
-  let a = describeRuleShape(rule.ruleValue);
-  let l = r?.raw ?? formatPermissionRule(rule.ruleValue);
-  let o = r?.notInEffect ? "readonly" : getRuleEditability(rule.source);
-  if (o === "session" && formatPermissionRule(rule.ruleValue) !== l) o = "readonly";
+function toRuleListEntry(rule, stored) {
+  let description = describeRuleShape(rule.ruleValue);
+  let ruleText = stored?.raw ?? formatPermissionRule(rule.ruleValue);
+  let editability = stored?.notInEffect ? "readonly" : getRuleEditability(rule.source);
+  if (editability === "session" && formatPermissionRule(rule.ruleValue) !== ruleText)
+    editability = "readonly";
   return {
     behavior: rule.ruleBehavior,
     source: rule.source,
-    rule: l,
-    ...(a !== null && {
-      description: a,
+    rule: ruleText,
+    ...(description !== null && {
+      description,
     }),
-    editability: o,
-    ...(r?.notInEffect && {
+    editability,
+    ...(stored?.notInEffect && {
       notInEffect: true,
     }),
   };
@@ -53,42 +54,42 @@ function toRuleListEntry(rule, r) {
 /**
  * 把一组规则与上下文中某行为的规则逐一配对（按来源+规范化规则计数），返回 {rule, raw} 列表。
  */
-function matchStoredRulesToContext(context, r, a) {
-  let l = {
+function matchStoredRulesToContext(context, behavior, storedRules) {
+  let field = {
     allow: "alwaysAllowRules",
     deny: "alwaysDenyRules",
     ask: "alwaysAskRules",
-  }[r];
-  let o = new Map();
-  for (let n of a) {
-    let t = `${n.source}\x00${formatPermissionRule(n.ruleValue)}`;
-    o.set(t, (o.get(t) ?? 0) + 1);
+  }[behavior];
+  let remaining = new Map();
+  for (let storedRule of storedRules) {
+    let key = `${storedRule.source}\x00${formatPermissionRule(storedRule.ruleValue)}`;
+    remaining.set(key, (remaining.get(key) ?? 0) + 1);
   }
-  let u = [];
-  for (let n of PERMISSION_RULE_SOURCES)
-    for (let t of context[l][n] ?? []) {
-      let c = permissionRuleValueFromString(t);
-      let e = `${n}\x00${formatPermissionRule(c)}`;
-      let i = o.get(e) ?? 0;
-      if (i <= 0) continue;
-      o.set(e, i - 1);
-      u.push({
+  let matched = [];
+  for (let source of PERMISSION_RULE_SOURCES)
+    for (let rawRule of context[field][source] ?? []) {
+      let ruleValue = permissionRuleValueFromString(rawRule);
+      let key = `${source}\x00${formatPermissionRule(ruleValue)}`;
+      let count = remaining.get(key) ?? 0;
+      if (count <= 0) continue;
+      remaining.set(key, count - 1);
+      matched.push({
         rule: {
-          source: n,
-          ruleBehavior: r,
-          ruleValue: c,
+          source,
+          ruleBehavior: behavior,
+          ruleValue,
         },
-        raw: t,
+        raw: rawRule,
       });
     }
-  return u;
+  return matched;
 }
 //@ chunk-eecdvv5g.js:5709-6545 placement
-function summarizeWireRules(s) {
-  let { context, originalCwd } = s;
-  let l = shouldAllowManagedPermissionRulesOnly();
-  let sources = s.readSettingsWithSources().sources;
-  let mapped = s
+function summarizeWireRules(options) {
+  let { context, originalCwd } = options;
+  let managedOnly = shouldAllowManagedPermissionRulesOnly();
+  let sources = options.readSettingsWithSources().sources;
+  let mapped = options
     .readSettingsErrors()
     .errors.filter((error) => error.severity !== "warning")
     .map((error) => ({
@@ -96,13 +97,13 @@ function summarizeWireRules(s) {
       path: error.path,
       message: error.message,
     }));
-  let n = [];
-  let t = new Set();
-  let c = (ruleListEntry) => {
-    let i = `${ruleListEntry.behavior}\x00${ruleListEntry.source}\x00${ruleListEntry.rule}\x00${ruleListEntry.notInEffect ? 1 : 0}`;
-    if (!t.has(i)) {
-      t.add(i);
-      n.push(ruleListEntry);
+  let entries = [];
+  let seen = new Set();
+  let addEntry = (ruleListEntry) => {
+    let dedupeKey = `${ruleListEntry.behavior}\x00${ruleListEntry.source}\x00${ruleListEntry.rule}\x00${ruleListEntry.notInEffect ? 1 : 0}`;
+    if (!seen.has(dedupeKey)) {
+      seen.add(dedupeKey);
+      entries.push(ruleListEntry);
     }
   };
   for (let { rule, raw } of [
@@ -110,40 +111,41 @@ function summarizeWireRules(s) {
     ...matchStoredRulesToContext(context, "ask", getAskRules(context)),
     ...matchStoredRulesToContext(context, "deny", getDenyRules(context)),
   ])
-    c(
+    addEntry(
       toRuleListEntry(rule, {
         raw,
       }),
     );
-  if (l)
+  if (managedOnly)
     for (let { source, settings } of sources) {
       if (source === "policySettings" || !settings.permissions) continue;
-      for (let g of RULE_BEHAVIORS)
-        for (let f of settings.permissions[g] ?? [])
-          c(
+      for (let behavior of RULE_BEHAVIORS)
+        for (let rawRule of settings.permissions[behavior] ?? [])
+          addEntry(
             toRuleListEntry(
               {
                 source,
-                ruleBehavior: g,
-                ruleValue: permissionRuleValueFromString(f),
+                ruleBehavior: behavior,
+                ruleValue: permissionRuleValueFromString(rawRule),
               },
               {
-                raw: f,
+                raw: rawRule,
                 notInEffect: true,
               },
             ),
           );
     }
   return {
-    rules: n,
-    workspaceDirectories: Array.from(context.additionalWorkingDirectories.values(), (e) => ({
-      path: e.path,
-      source: e.source,
+    rules: entries,
+    workspaceDirectories: Array.from(context.additionalWorkingDirectories.values(), (entry) => ({
+      path: entry.path,
+      source: entry.source,
     })),
     originalCwd,
-    managedOnly: l,
+    managedOnly,
     ...(mapped.length > 0 && {
       errors: mapped,
     }),
   };
 }
+export { summarizeWireRules };

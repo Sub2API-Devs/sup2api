@@ -20,25 +20,25 @@ var BG_EXIT_CAUSE_SESSION_IN_USE = "session_in_use";
 var EXIT_DETAIL = "exit-detail";
 var MAX_EXIT_DETAIL_CHARS = 200;
 //@ chunk-j3nx1xyn.js:524-614 placement
-function setBgExitCause(e, t) {
-  let r = t ?? process.env.CLAUDE_JOB_DIR;
-  if (!r) return;
+function setBgExitCause(cause, jobDir) {
+  let dir = jobDir ?? process.env.CLAUDE_JOB_DIR;
+  if (!dir) return;
   try {
-    writeFileSync(join(r, EXIT_CAUSE), e);
+    writeFileSync(join(dir, EXIT_CAUSE), cause);
   } catch {}
 }
 //@ chunk-j3nx1xyn.js:614-743 placement
 /**
  * 记录后台进程退出原因/详情的旁路文件。
  */
-function setBgExitDetail(e, t, r) {
-  let n = r ?? process.env.CLAUDE_JOB_DIR;
-  let trimmed = t.trim();
-  if (!n || !trimmed) return;
+function setBgExitDetail(cause, detail, jobDir) {
+  let dir = jobDir ?? process.env.CLAUDE_JOB_DIR;
+  let trimmed = detail.trim();
+  if (!dir || !trimmed) return;
   try {
     writeFileSync(
-      join(n, EXIT_DETAIL),
-      `${e}
+      join(dir, EXIT_DETAIL),
+      `${cause}
 ${trimmed.slice(0, MAX_EXIT_DETAIL_CHARS)}`,
     );
   } catch {}
@@ -47,9 +47,9 @@ ${trimmed.slice(0, MAX_EXIT_DETAIL_CHARS)}`,
 /**
  * 删除退出原因/详情文件（名字配错，与插件无关）。
  */
-function discardBgExitSidecars(e) {
-  readAndDeleteSmallFile(join(e, EXIT_CAUSE));
-  readAndDeleteSmallFile(join(e, EXIT_DETAIL));
+function discardBgExitSidecars(jobDir) {
+  readAndDeleteSmallFile(join(jobDir, EXIT_CAUSE));
+  readAndDeleteSmallFile(join(jobDir, EXIT_DETAIL));
 }
 //@ chunk-j3nx1xyn.js:779-812 placement
 function readAndClearBgExitCause(jobDir) {
@@ -59,28 +59,28 @@ function readAndClearBgExitCause(jobDir) {
 /**
  * 读取匹配的退出详情（名字配错）。
  */
-function readAndClearBgExitDetail(jobDir, t) {
-  let r = readAndDeleteSmallFile(join(jobDir, EXIT_DETAIL));
-  if (!r) return;
-  let index = r.indexOf(`
+function readAndClearBgExitDetail(jobDir, expectedCause) {
+  let contents = readAndDeleteSmallFile(join(jobDir, EXIT_DETAIL));
+  if (!contents) return;
+  let index = contents.indexOf(`
 `);
-  return index !== -1 && r.slice(0, index) === t ? r.slice(index + 1) : undefined;
+  return index !== -1 && contents.slice(0, index) === expectedCause ? contents.slice(index + 1) : undefined;
 }
 //@ chunk-j3nx1xyn.js:932-1084 placement = convertDirectoryToZipInPlace (1)
-function readAndDeleteSmallFile(e) {
+function readAndDeleteSmallFile(path) {
   try {
-    let t = lstatSync(e);
-    if (!t.isFile() || t.size > 65536) {
+    let stats = lstatSync(path);
+    if (!stats.isFile() || stats.size > 65536) {
       try {
-        rmSync(e, {
+        rmSync(path, {
           recursive: true,
           force: true,
         });
       } catch {}
       return;
     }
-    let file = readFileSync(e, "utf8");
-    unlinkSync(e);
+    let file = readFileSync(path, "utf8");
+    unlinkSync(path);
     return file;
   } catch {
     return;
@@ -92,4 +92,5 @@ export {
   discardBgExitSidecars,
   readAndClearBgExitCause,
   readAndClearBgExitDetail,
+  setBgExitDetail,
 };

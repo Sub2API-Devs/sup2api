@@ -7,14 +7,18 @@
  */
 import Qt from "process";
 import { PassThrough } from "stream";
-import { Re } from "../../../../../../runtime/bun-runtime.js";
+import { __toESM } from "../../../../../../runtime/bun-runtime.js";
 import { require_cross_spawn } from "../../../../../cross-spawn/index.js";
 import { ReadBuffer, serializeMessage } from "../shared/stdio.js";
+import { deferInit } from "../../../../../../runtime/deferred-init.js";
 
 //@ chunk-z1n5m6nf.js:31818-31837 esm-layout
-var import_cross_spawn = Re(require_cross_spawn(), 1);
+var import_cross_spawn; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-z1n5m6nf.js:31818", () => {
+  import_cross_spawn = __toESM(require_cross_spawn(), 1);
+});
 //@ chunk-z1n5m6nf.js:31899-32132 esm-fingerprint
-var Ur =
+var DEFAULT_INHERITED_ENV_VARS =
   Qt.platform === "win32"
     ? [
         "APPDATA",
@@ -34,7 +38,7 @@ var Ur =
 //@ chunk-z1n5m6nf.js:32132-32258 esm-fingerprint
 function getDefaultEnvironment_2() {
   let env = {};
-  for (let key of Ur) {
+  for (let key of DEFAULT_INHERITED_ENV_VARS) {
     let value = Qt.env[key];
     if (value === undefined) continue;
     if (value.startsWith("()")) continue;

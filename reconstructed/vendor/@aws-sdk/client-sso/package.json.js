@@ -7,7 +7,7 @@
  */
 
 //@ chunk-kejz1rpb.js:1969-4847 placement
-var U = {
+var packageJson = {
   name: "@aws-sdk/client-sso",
   description: "AWS SDK for JavaScript Sso Client for Node.js, Browser and React Native",
   version: "3.936.0",
@@ -101,4 +101,4 @@ var U = {
     directory: "clients/client-sso",
   },
 };
-export { U };
+export { packageJson };

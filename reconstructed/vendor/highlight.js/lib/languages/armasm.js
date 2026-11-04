@@ -5,10 +5,10 @@
  * pieces: chunk-egr0twnb.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:26099-29456 cjs-fingerprint
-var require_armasm = x(function (cjsExports, cjsModule) {
+var require_armasm = __commonJS(function (cjsExports, cjsModule) {
   function armasm(hljs) {
     let COMMENT = {
       variants: [

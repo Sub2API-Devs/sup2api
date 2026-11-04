@@ -5,10 +5,10 @@
  * pieces: chunk-egr0twnb.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:206900-213926 cjs-fingerprint
-var require_javascript = x(function (cjsExports, cjsModule) {
+var require_javascript = __commonJS(function (cjsExports, cjsModule) {
   var KEYWORDS = [
     "as",
     "in",

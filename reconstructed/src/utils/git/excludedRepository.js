@@ -10,7 +10,7 @@
  */
 
 //@ chunk-jd7h5dfe.js:260-291 placement
-async function inExcludedRepository(o) {
+async function inExcludedRepository(cwd) {
   return false;
 }
 export { inExcludedRepository };

@@ -9,7 +9,7 @@
  * attribution: placement 5
  */
 import os_2 from "os";
-import path from "path";
+import { default as path_3 } from "path";
 import { realpath, lstat, readFile, writeFile } from "fs/promises";
 import { fileURLToPath } from "url";
 import { SHELL_TOOLS, hasToolRule } from "./runToolRules.js";
@@ -98,471 +98,547 @@ import { jsonStringify } from "../../utils/slowOperations.js";
 /**
  * 生成子会话沙箱设置：允许域、读写路径、凭据排除；无法保证时拒绝 shell 授权（约 18 KB）。
  */
-async function buildEvalSandboxSettings(sandbox, allowedTools, operatorAllowedTools, case_, s, h, w) {
-  if (!SHELL_TOOLS.some((L) => hasToolRule(allowedTools, L))) return;
-  let b = uniq(
-    operatorAllowedTools.flatMap((L) => {
-      let ee = permissionRuleValueFromString(L);
-      return ee.toolName === WEBFETCH && ee.ruleContent?.startsWith("domain:")
-        ? [ee.ruleContent.slice(7)]
+async function buildEvalSandboxSettings(
+  sandbox,
+  rules,
+  operatorAllowedTools,
+  evalCase,
+  envVars,
+  signal,
+  options,
+) {
+  if (!SHELL_TOOLS.some((toolName) => hasToolRule(rules, toolName))) return;
+  let networkDomains = uniq(
+    operatorAllowedTools.flatMap((ruleString) => {
+      let rule = permissionRuleValueFromString(ruleString);
+      return rule.toolName === WEBFETCH && rule.ruleContent?.startsWith("domain:")
+        ? [rule.ruleContent.slice(7)]
         : [];
     }),
   );
-  let flattened = [getSettingsForSource("policySettings"), ...getAllPolicyTierSettings()].flatMap((L) =>
-    L?.sandbox ? [L.sandbox] : [],
+  let flattened = [getSettingsForSource("policySettings"), ...getAllPolicyTierSettings()].flatMap(
+    (settings) => (settings?.sandbox ? [settings.sandbox] : []),
   );
-  let R = (L) => flattened.some(L);
-  let S =
+  let anySandboxSetting = (sandboxSetting) => flattened.some(sandboxSetting);
+  let policyProblem =
     !SandboxManager.isPlatformInEnabledList() ||
-    R((L) => Array.isArray(L.enabledPlatforms) && !L.enabledPlatforms.includes(getPlatform()))
+    anySandboxSetting(
+      (setting) =>
+        Array.isArray(setting.enabledPlatforms) && !setting.enabledPlatforms.includes(getPlatform()),
+    )
       ? `sandbox.enabledPlatforms excludes ${getPlatform()}`
-      : R((L) => L.enabled === false)
+      : anySandboxSetting((setting) => setting.enabled === false)
         ? "sandbox.enabled is false"
-        : R((L) => L.failIfUnavailable === false)
+        : anySandboxSetting((setting) => setting.failIfUnavailable === false)
           ? "sandbox.failIfUnavailable is false (a missing backend would run the shell unconfined)"
-          : R((L) => L.allowUnsandboxedCommands === true)
+          : anySandboxSetting((setting) => setting.allowUnsandboxedCommands === true)
             ? "sandbox.allowUnsandboxedCommands is true"
-            : R((L) => (L.excludedCommands?.length ?? 0) > 0)
+            : anySandboxSetting((setting) => (setting.excludedCommands?.length ?? 0) > 0)
               ? "sandbox.excludedCommands exempts commands"
-              : R((L) => L.autoAllowBashIfSandboxed === true)
+              : anySandboxSetting((setting) => setting.autoAllowBashIfSandboxed === true)
                 ? "sandbox.autoAllowBashIfSandboxed would run commands the operator never granted"
-                : R((L) => L.enableWeakerNestedSandbox === true)
+                : anySandboxSetting((setting) => setting.enableWeakerNestedSandbox === true)
                   ? "sandbox.enableWeakerNestedSandbox exposes the host /proc"
-                  : R((L) => L.enableWeakerNetworkIsolation === true)
+                  : anySandboxSetting((setting) => setting.enableWeakerNetworkIsolation === true)
                     ? "sandbox.enableWeakerNetworkIsolation loosens the egress lock"
-                    : R((L) => L.allowAppleEvents === true)
+                    : anySandboxSetting((setting) => setting.allowAppleEvents === true)
                       ? "sandbox.allowAppleEvents removes macOS automation isolation"
-                      : R((L) => L.filesystem?.disabled === true)
+                      : anySandboxSetting((setting) => setting.filesystem?.disabled === true)
                         ? "sandbox.filesystem.disabled turns filesystem confinement off"
-                        : R((L) => L.filesystem?.allowManagedReadPathsOnly === true)
+                        : anySandboxSetting(
+                              (setting) => setting.filesystem?.allowManagedReadPathsOnly === true,
+                            )
                           ? "sandbox.filesystem.allowManagedReadPathsOnly would drop the sandbox's own directories from the readable set"
-                          : b.length > 0 && R((L) => L.network?.allowManagedDomainsOnly === true)
+                          : networkDomains.length > 0 &&
+                              anySandboxSetting(
+                                (setting) => setting.network?.allowManagedDomainsOnly === true,
+                              )
                             ? "sandbox.network.allowManagedDomainsOnly means the WebFetch domains you granted cannot open the sandboxed shell's network on this machine"
-                            : R((L) => L.allowNestedUserNamespaces === true)
+                            : anySandboxSetting((setting) => setting.allowNestedUserNamespaces === true)
                               ? "sandbox.allowNestedUserNamespaces lets sandboxed commands get around file deny rules"
                               : null;
-  if (S !== null)
+  if (policyProblem !== null)
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `${SANDBOX_UNAVAILABLE_TEXT} (this machine's managed settings: ${S})`,
+      `${SANDBOX_UNAVAILABLE_TEXT} (this machine's managed settings: ${policyProblem})`,
       "eval shell grant refused: managed policy suppresses the sandbox",
     );
-  let T = (L) => s[L] ?? Object.entries(s).find(([key]) => key.toUpperCase() === L)?.[1];
-  let env_2 = case_.execution.env ?? {};
-  let x = T("PATH");
-  let j = os_2.homedir();
-  if (isRootDir(j))
+  let caseEnvVar = (name) =>
+    envVars[name] ?? Object.entries(envVars).find(([key]) => key.toUpperCase() === name)?.[1];
+  let env_2 = evalCase.execution.env ?? {};
+  let pathEnv = caseEnvVar("PATH");
+  let homeDir = os_2.homedir();
+  if (isRootDir(homeDir))
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
       "the operator's home directory is the filesystem root, so the Bash sandbox cannot exclude it \u2014 a Bash-granting evaluation cannot run here (set HOME to a real home directory)",
       "eval shell grant refused: home is the filesystem root",
     );
-  let K = getPlatform() === "wsl" ? await detectWslWindowsMounts(h) : [];
+  let wslMounts = getPlatform() === "wsl" ? await detectWslWindowsMounts(signal) : [];
   let filtered = uniq([
-    j,
-    withDirname(j),
-    ...K,
+    homeDir,
+    withDirname(homeDir),
+    ...wslMounts,
     sandbox.operatorConfigDir,
-    ...(await withPathDirectories(uniq([...case_.pluginDirsUnderTest, case_.caseDir]))).map(withDirname),
-    path.dirname(sandbox.root),
+    ...(await withPathDirectories(uniq([...evalCase.pluginDirsUnderTest, evalCase.caseDir]))).map(
+      withDirname,
+    ),
+    path_3.dirname(sandbox.root),
     ...getTempDirs(),
     os_2.tmpdir(),
-    T("XDG_RUNTIME_DIR") ?? process.env.XDG_RUNTIME_DIR ?? "",
-    T("CLAUDE_CODE_FEDERATION_CACHE_DIR") ?? "",
-    env.CLAUDE_CODE_TMPDIR ? path.join(env.CLAUDE_CODE_TMPDIR, `claude-${process.getuid?.() ?? ""}`) : "",
+    caseEnvVar("XDG_RUNTIME_DIR") ?? process.env.XDG_RUNTIME_DIR ?? "",
+    caseEnvVar("CLAUDE_CODE_FEDERATION_CACHE_DIR") ?? "",
+    env.CLAUDE_CODE_TMPDIR ? path_3.join(env.CLAUDE_CODE_TMPDIR, `claude-${process.getuid?.() ?? ""}`) : "",
     env.CLAUDE_CODE_TMPDIR ?? "",
     env.XDG_CONFIG_HOME ?? "",
     env.XDG_DATA_HOME ?? "",
     env.XDG_CACHE_HOME ?? "",
     env.XDG_STATE_HOME ?? "",
   ])
-    .filter((L) => L !== "" && path.isAbsolute(L))
-    .filter((L) => !isRootDir(L));
-  let W = await withPathDirectories(filtered);
-  if (W.some(hasGlobChars))
+    .filter((candidate) => candidate !== "" && path_3.isAbsolute(candidate))
+    .filter((candidate) => !isRootDir(candidate));
+  let denyRoots = await withPathDirectories(filtered);
+  if (denyRoots.some(hasGlobChars))
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
       "the home, Claude config, temp, plugin-parent or case-parent directory on this machine has a glob character (* ? [ ]) in its path (as written or where it really points), so the Bash sandbox cannot exclude it \u2014 a Bash-granting evaluation cannot run here",
       "eval shell grant refused: glob char in a sandbox deny root",
     );
-  let G = w?.addDirs ?? (await checkAddDirsInsideCase(case_));
-  let J = w?.readScope ?? (await buildEvalFence(case_, G));
-  let Z = uniq(J.denyPaths);
-  for (let L of Z) checkPathSegmentWhitespace(L, "eval deny path");
-  let se = await withPathDirectories([j, sandbox.operatorConfigDir]);
-  let Q = (L) => se.some((ee) => toEvalPathError(ee, L));
-  let Se = (L) => [...getTempDirs(), os_2.tmpdir()].some((ee) => toEvalPathError(ee, L));
+  let addDirs = options?.addDirs ?? (await checkAddDirsInsideCase(evalCase));
+  let readScope = options?.readScope ?? (await buildEvalFence(evalCase, addDirs));
+  let denyPaths = uniq(readScope.denyPaths);
+  for (let denyPath of denyPaths) checkPathSegmentWhitespace(denyPath, "eval deny path");
+  let privateDirs = await withPathDirectories([homeDir, sandbox.operatorConfigDir]);
+  let underPrivateDirs = (path) => privateDirs.some((dir) => toEvalPathError(dir, path));
+  let underTemp = (path) => [...getTempDirs(), os_2.tmpdir()].some((dir) => toEvalPathError(dir, path));
   let filtered_2 = (
     await probePathDirectories(
       Promise.all(
-        (x ?? "")
-          .split(path.delimiter)
-          .filter((L) => path.isAbsolute(L) && (!Se(L) || Q(L)))
-          .map((L) => realpath(L).catch(() => null)),
+        (pathEnv ?? "")
+          .split(path_3.delimiter)
+          .filter(
+            (pathEntry) =>
+              path_3.isAbsolute(pathEntry) && (!underTemp(pathEntry) || underPrivateDirs(pathEntry)),
+          )
+          .map((pathEntry) => realpath(pathEntry).catch(() => null)),
       ),
     )
   )
-    .filter((L) => L !== null)
+    .filter((realPath) => realPath !== null)
     .filter(
-      (L) =>
-        !hasGlobChars(L) &&
-        W.some((ee) => toEvalPathError(ee, L)) &&
-        !W.some((ee) => ee === L || toEvalPathError(L, ee)) &&
-        (!Se(L) || Q(L)) &&
-        !Z.some(
-          (ee) =>
-            nfcKeyIfEnabled(ee) === nfcKeyIfEnabled(L) ||
-            toEvalPathError(ee, L, nfcKeyIfEnabled) ||
-            toEvalPathError(L, ee, nfcKeyIfEnabled),
+      (realPath) =>
+        !hasGlobChars(realPath) &&
+        denyRoots.some((root) => toEvalPathError(root, realPath)) &&
+        !denyRoots.some((root) => root === realPath || toEvalPathError(realPath, root)) &&
+        (!underTemp(realPath) || underPrivateDirs(realPath)) &&
+        !denyPaths.some(
+          (denyPath) =>
+            nfcKeyIfEnabled(denyPath) === nfcKeyIfEnabled(realPath) ||
+            toEvalPathError(denyPath, realPath, nfcKeyIfEnabled) ||
+            toEvalPathError(realPath, denyPath, nfcKeyIfEnabled),
         ),
     )
-    .filter((L) => !K.some((ee) => ee === L || toEvalPathError(ee, L)));
-  let Be = [];
+    .filter((realPath) => !wslMounts.some((mount) => mount === realPath || toEvalPathError(mount, realPath)));
+  let readableBinDirs = [];
   await probePathDirectories(
     (async () => {
-      for (let L of filtered_2)
+      for (let dir of filtered_2)
         try {
-          if ((await lstat(L)).isDirectory()) Be.push(L);
+          if ((await lstat(dir)).isDirectory()) readableBinDirs.push(dir);
         } catch {}
     })(),
   );
-  let Je = uniq(
+  let caFiles = uniq(
     (
       await probePathDirectories(
         Promise.all(
           [...caCertEnvVars, "NODE_EXTRA_CA_CERTS"]
-            .map((L) => T(L)?.trim())
-            .filter((L) => !!L && path.isAbsolute(L) && (!Se(L) || Q(L)))
-            .map(async (L) =>
-              path.join(await realpath(path.dirname(L)).catch(() => path.dirname(L)), path.basename(L)),
+            .map((name) => caseEnvVar(name)?.trim())
+            .filter(
+              (value) =>
+                !!value && path_3.isAbsolute(value) && (!underTemp(value) || underPrivateDirs(value)),
+            )
+            .map(async (value) =>
+              path_3.join(
+                await realpath(path_3.dirname(value)).catch(() => path_3.dirname(value)),
+                path_3.basename(value),
+              ),
             ),
         ),
         "a CA-bundle pointer",
       )
     ).filter(
-      (L) =>
-        !hasGlobChars(L) &&
-        W.some((ee) => toEvalPathError(ee, L)) &&
-        !W.some((ee) => ee === L || toEvalPathError(L, ee)) &&
-        (!Se(L) || Q(L)),
+      (filePath) =>
+        !hasGlobChars(filePath) &&
+        denyRoots.some((root) => toEvalPathError(root, filePath)) &&
+        !denyRoots.some((root) => root === filePath || toEvalPathError(filePath, root)) &&
+        (!underTemp(filePath) || underPrivateDirs(filePath)),
     ),
   );
-  let Ee = [];
+  let readableCaFiles = [];
   await probePathDirectories(
     (async () => {
-      for (let L of Je)
+      for (let filePath of caFiles)
         try {
-          let ee = await lstat(L);
-          if (!ee.isFile() || ee.nlink !== 1 || ee.size > MAX_SCANNED_FILE_BYTES) continue;
+          let stats = await lstat(filePath);
+          if (!stats.isFile() || stats.nlink !== 1 || stats.size > MAX_SCANNED_FILE_BYTES) continue;
           if (
-            Z.some(
-              (We) => nfcKeyIfEnabled(We) === nfcKeyIfEnabled(L) || toEvalPathError(We, L, nfcKeyIfEnabled),
+            denyPaths.some(
+              (denyPath) =>
+                nfcKeyIfEnabled(denyPath) === nfcKeyIfEnabled(filePath) ||
+                toEvalPathError(denyPath, filePath, nfcKeyIfEnabled),
             )
           )
             continue;
-          let file = await readFile(L, "utf8");
-          if (file.includes("-----BEGIN CERTIFICATE-----") && !PRIVATE_KEY_PATTERN.test(file)) Ee.push(L);
+          let file = await readFile(filePath, "utf8");
+          if (file.includes("-----BEGIN CERTIFICATE-----") && !PRIVATE_KEY_PATTERN.test(file))
+            readableCaFiles.push(filePath);
         } catch {}
     })(),
     "a CA-bundle pointer",
   );
-  let Qe =
-    T("ANTHROPIC_CONFIG_DIR")?.trim() || process.env.ANTHROPIC_CONFIG_DIR?.trim() || resolveConfigDir() || "";
-  let joined = path.join(getXdgConfigHome(), "anthropic");
-  let je = uniq([joined, Qe].filter((L) => L && path.isAbsolute(L)));
-  let pt = (
+  let anthropicConfigDir =
+    caseEnvVar("ANTHROPIC_CONFIG_DIR")?.trim() ||
+    process.env.ANTHROPIC_CONFIG_DIR?.trim() ||
+    resolveConfigDir() ||
+    "";
+  let joined = path_3.join(getXdgConfigHome(), "anthropic");
+  let profileDirs = uniq([joined, anthropicConfigDir].filter((dir) => dir && path_3.isAbsolute(dir)));
+  let profileFiles = (
     await Promise.all(
-      je.map((L) => readAnthropicProfileConfigs(L, T("ANTHROPIC_PROFILE") ?? process.env.ANTHROPIC_PROFILE)),
+      profileDirs.map((dir) =>
+        readAnthropicProfileConfigs(dir, caseEnvVar("ANTHROPIC_PROFILE") ?? process.env.ANTHROPIC_PROFILE),
+      ),
     )
   ).flat();
-  let Pt = (L) => process.env[L];
-  let ce = (L) => s[L] ?? Pt(L);
-  let At = (L) =>
+  let processEnv = (name) => process.env[name];
+  let envValue = (name) => envVars[name] ?? processEnv(name);
+  let envValues = (name) =>
     uniq(
-      [...Object.entries(s), ...Object.entries(process.env)]
-        .filter(([ee]) => ee.toUpperCase() === L)
-        .map(([, ee]) => ee)
-        .filter((ee) => ee !== undefined)
-        .flatMap((ee) => (KUBECONFIG_ENV.has(L) ? ee.split(path.delimiter) : [ee]))
-        .filter((ee) => !(L === "GOENV" && ee.trim() === "off")),
+      [...Object.entries(envVars), ...Object.entries(process.env)]
+        .filter(([key]) => key.toUpperCase() === name)
+        .map(([, value]) => value)
+        .filter((value) => value !== undefined)
+        .flatMap((value) => (KUBECONFIG_ENV.has(name) ? value.split(path_3.delimiter) : [value]))
+        .filter((value) => !(name === "GOENV" && value.trim() === "off")),
     );
-  let B = os_2.homedir();
-  let ie = (L) => L.replace(/^~(?=[\\/]|$)/, B);
-  let mapped = CREDENTIAL_FILE_ENV_VARS.flatMap(At).map(ie);
-  if (mapped.some((L) => L && L.trim() !== "" && !path.isAbsolute(L.trim())))
+  let home = os_2.homedir();
+  let expandHome = (path) => path.replace(/^~(?=[\\/]|$)/, home);
+  let mapped = CREDENTIAL_FILE_ENV_VARS.flatMap(envValues).map(expandHome);
+  if (mapped.some((path) => path && path.trim() !== "" && !path_3.isAbsolute(path.trim())))
     throw describeUnreadableCredentialsPointer(
       "a credentials pointer variable (AWS_CONFIG_FILE, GOOGLE_APPLICATION_CREDENTIALS, ANTHROPIC_CONFIG_DIR and the like) holds a relative path",
     );
-  let Ae = (L) => !!L && path.isAbsolute(L);
-  let De = (L, ee) => {
-    let Le = ie(ce(L)?.trim() || ee);
-    if (!path.isAbsolute(Le)) throw describeUnreadableCredentialsPointer(`${L} holds a relative path`);
-    return Le;
+  let isAbsolutePath = (path) => !!path && path_3.isAbsolute(path);
+  let resolveConfigPath = (name, fallback) => {
+    let value = expandHome(envValue(name)?.trim() || fallback);
+    if (!path_3.isAbsolute(value))
+      throw describeUnreadableCredentialsPointer(`${name} holds a relative path`);
+    return value;
   };
-  let he = (L, ee) => uniq([ee, De(L, ee)].filter(Ae));
-  let xe = [
-    ...he("AWS_CONFIG_FILE", path.join(B, ".aws", "config")),
-    ...he("AWS_SHARED_CREDENTIALS_FILE", path.join(B, ".aws", "credentials")),
+  let pathsForEnv = (name, fallback) =>
+    uniq([fallback, resolveConfigPath(name, fallback)].filter(isAbsolutePath));
+  let awsConfigFiles = [
+    ...pathsForEnv("AWS_CONFIG_FILE", path_3.join(home, ".aws", "config")),
+    ...pathsForEnv("AWS_SHARED_CREDENTIALS_FILE", path_3.join(home, ".aws", "credentials")),
   ];
-  let Me = De("CLOUDSDK_CONFIG", path.join(B, ".config", "gcloud"));
-  let Ne = (L) => {
-    let trimmed = ce(L)?.trim();
-    if (!trimmed) return [];
-    let Le = ie(trimmed);
-    if (!path.isAbsolute(Le)) throw describeUnreadableCredentialsPointer(`${L} holds a relative path`);
-    return [Le];
+  let cloudsdkConfig = resolveConfigPath("CLOUDSDK_CONFIG", path_3.join(home, ".config", "gcloud"));
+  let absoluteEnvPaths = (name) => {
+    let path = envValue(name)?.trim();
+    if (!path) return [];
+    let path_2 = expandHome(path);
+    if (!path_3.isAbsolute(path_2))
+      throw describeUnreadableCredentialsPointer(`${name} holds a relative path`);
+    return [path_2];
   };
   let filtered_3 = [
-    ...Ne("GOOGLE_APPLICATION_CREDENTIALS"),
-    ...Ne("CLOUDSDK_AUTH_CREDENTIAL_FILE_OVERRIDE"),
-    ...he("CLOUDSDK_CONFIG", path.join(B, ".config", "gcloud")).map((L) =>
-      path.join(L, "application_default_credentials.json"),
+    ...absoluteEnvPaths("GOOGLE_APPLICATION_CREDENTIALS"),
+    ...absoluteEnvPaths("CLOUDSDK_AUTH_CREDENTIAL_FILE_OVERRIDE"),
+    ...pathsForEnv("CLOUDSDK_CONFIG", path_3.join(home, ".config", "gcloud")).map((dir) =>
+      path_3.join(dir, "application_default_credentials.json"),
     ),
-  ].filter(Ae);
-  let nt = De("AZURE_CONFIG_DIR", path.join(B, ".azure"));
-  let mt = Ne("CLOUDSDK_ROOT_DIR")[0];
+  ].filter(isAbsolutePath);
+  let azureConfigDir = resolveConfigPath("AZURE_CONFIG_DIR", path_3.join(home, ".azure"));
+  let cloudsdkRootDir = absoluteEnvPaths("CLOUDSDK_ROOT_DIR")[0];
   let xdgConfigHome = getXdgConfigHome();
-  let lt = uniq(
-    [...At("NPM_CONFIG_PREFIX"), ce("PREFIX")]
-      .map((L) => L?.trim())
-      .filter((L) => !!L)
-      .map(ie),
+  let npmPrefixes = uniq(
+    [...envValues("NPM_CONFIG_PREFIX"), envValue("PREFIX")]
+      .map((value) => value?.trim())
+      .filter((value) => !!value)
+      .map(expandHome),
   );
-  if (lt.some((L) => !path.isAbsolute(L)))
+  if (npmPrefixes.some((prefix) => !path_3.isAbsolute(prefix)))
     throw describeUnreadableCredentialsPointer("an npm prefix variable holds a relative path");
-  let Ge = [
-    ...Ne("PGSYSCONFDIR").map((L) => path.join(L, "pg_service.conf")),
+  let pgServiceConfs = [
+    ...absoluteEnvPaths("PGSYSCONFDIR").map((dir) => path_3.join(dir, "pg_service.conf")),
     "/etc/postgresql-common/pg_service.conf",
     "/etc/pg_service.conf",
     "/usr/local/etc/postgresql/pg_service.conf",
     "/opt/homebrew/etc/postgresql/pg_service.conf",
     "/opt/local/etc/postgresql/pg_service.conf",
   ];
-  let Lt = () => {
-    let trimmed = ce("COURSIER_CREDENTIALS")?.trim();
+  let coursierCredentialFiles = () => {
+    let trimmed = envValue("COURSIER_CREDENTIALS")?.trim();
     if (!trimmed || /[\r\n]|^[^/]*=/.test(trimmed)) return [];
-    let ee = trimmed;
+    let path = trimmed;
     if (/^file:/i.test(trimmed))
       try {
-        ee = fileURLToPath(trimmed);
+        path = fileURLToPath(trimmed);
       } catch {
         throw describeUnreadableCredentialsPointer(
           "COURSIER_CREDENTIALS holds a file: URL that is not a local path",
         );
       }
     else if (/^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed)) return [];
-    if (!path.isAbsolute(ee))
+    if (!path_3.isAbsolute(path))
       throw describeUnreadableCredentialsPointer("COURSIER_CREDENTIALS holds a relative path");
-    return [ee];
+    return [path];
   };
   let filtered_4 = [
-    ...he("DOCKER_CONFIG", path.join(B, ".docker")).flatMap((L) => [
-      path.join(L, "config.json"),
-      path.join(L, "contexts"),
-      path.join(L, "key.pem"),
+    ...pathsForEnv("DOCKER_CONFIG", path_3.join(home, ".docker")).flatMap((dir) => [
+      path_3.join(dir, "config.json"),
+      path_3.join(dir, "contexts"),
+      path_3.join(dir, "key.pem"),
     ]),
-    ...he("DOCKER_CERT_PATH", path.join(B, ".docker")).map((L) => path.join(L, "key.pem")),
-    ...uniq([path.join(B, ".config", "gh"), ...he("GH_CONFIG_DIR", path.join(xdgConfigHome, "gh"))]).map(
-      (L) => path.join(L, "hosts.yml"),
+    ...pathsForEnv("DOCKER_CERT_PATH", path_3.join(home, ".docker")).map((dir) =>
+      path_3.join(dir, "key.pem"),
     ),
-    ...he("NETRC", path.join(B, ".netrc")),
-    ...he("NPM_CONFIG_USERCONFIG", path.join(B, ".npmrc")),
-    ...he("NPM_CONFIG_GLOBALCONFIG", "/usr/local/etc/npmrc"),
+    ...uniq([
+      path_3.join(home, ".config", "gh"),
+      ...pathsForEnv("GH_CONFIG_DIR", path_3.join(xdgConfigHome, "gh")),
+    ]).map((dir) => path_3.join(dir, "hosts.yml")),
+    ...pathsForEnv("NETRC", path_3.join(home, ".netrc")),
+    ...pathsForEnv("NPM_CONFIG_USERCONFIG", path_3.join(home, ".npmrc")),
+    ...pathsForEnv("NPM_CONFIG_GLOBALCONFIG", "/usr/local/etc/npmrc"),
     "/opt/homebrew/etc/npmrc",
     "/usr/etc/npmrc",
     "/etc/npmrc",
-    ...lt.map((L) => path.join(L, "etc", "npmrc")),
-    path.join(B, ".vault-token"),
-    path.join(B, ".boto"),
+    ...npmPrefixes.map((prefix) => path_3.join(prefix, "etc", "npmrc")),
+    path_3.join(home, ".vault-token"),
+    path_3.join(home, ".boto"),
     "/etc/boto.cfg",
-    path.join(B, ".s3cfg"),
-    ...(ce("BOTO_PATH") ?? "")
-      .split(path.delimiter)
-      .map((L) => L.trim())
+    path_3.join(home, ".s3cfg"),
+    ...(envValue("BOTO_PATH") ?? "")
+      .split(path_3.delimiter)
+      .map((entry) => entry.trim())
       .filter(Boolean)
-      .map((L) => {
-        let ee = ie(L);
-        if (!path.isAbsolute(ee))
+      .map((entry) => {
+        let path = expandHome(entry);
+        if (!path_3.isAbsolute(path))
           throw describeUnreadableCredentialsPointer("BOTO_PATH names a relative path");
-        return ee;
+        return path;
       }),
-    path.join(xdgConfigHome, "sops", "age", "keys.txt"),
-    path.join(B, ".config", "sops", "age", "keys.txt"),
-    path.join(B, "Library", "Application Support", "sops", "age", "keys.txt"),
-    path.join(B, ".vault_pass.txt"),
-    ...(await parseAnsibleVaultSources(ce, B, getOriginalCwd())),
-    ...(await parseSshCommandIdentities(ce("GIT_SSH_COMMAND") ?? "", B)),
-    path.join(B, ".yarnrc.yml"),
-    path.join(B, ".yarnrc"),
-    path.join(B, ".bunfig.toml"),
-    path.join(xdgConfigHome, ".bunfig.toml"),
-    ...Ne("HF_HOME").flatMap((L) => [path.join(L, "token"), path.join(L, "stored_tokens")]),
-    path.join(xdgConfigHome, "containers", "auth.json"),
-    ...Ne("XDG_RUNTIME_DIR").map((L) => path.join(L, "containers", "auth.json")),
-    ...he("CARGO_HOME", path.join(B, ".cargo")).flatMap((L) => [
-      path.join(L, "credentials.toml"),
-      path.join(L, "credentials"),
+    path_3.join(xdgConfigHome, "sops", "age", "keys.txt"),
+    path_3.join(home, ".config", "sops", "age", "keys.txt"),
+    path_3.join(home, "Library", "Application Support", "sops", "age", "keys.txt"),
+    path_3.join(home, ".vault_pass.txt"),
+    ...(await parseAnsibleVaultSources(envValue, home, getOriginalCwd())),
+    ...(await parseSshCommandIdentities(envValue("GIT_SSH_COMMAND") ?? "", home)),
+    path_3.join(home, ".yarnrc.yml"),
+    path_3.join(home, ".yarnrc"),
+    path_3.join(home, ".bunfig.toml"),
+    path_3.join(xdgConfigHome, ".bunfig.toml"),
+    ...absoluteEnvPaths("HF_HOME").flatMap((dir) => [
+      path_3.join(dir, "token"),
+      path_3.join(dir, "stored_tokens"),
+    ]),
+    path_3.join(xdgConfigHome, "containers", "auth.json"),
+    ...absoluteEnvPaths("XDG_RUNTIME_DIR").map((dir) => path_3.join(dir, "containers", "auth.json")),
+    ...pathsForEnv("CARGO_HOME", path_3.join(home, ".cargo")).flatMap((dir) => [
+      path_3.join(dir, "credentials.toml"),
+      path_3.join(dir, "credentials"),
     ]),
     ...uniq([
-      path.join(xdgConfigHome, "composer"),
-      path.join(B, ".composer"),
-      ...he("COMPOSER_HOME", path.join(B, ".config", "composer")),
-    ]).map((L) => path.join(L, "auth.json")),
-    ...he("GRADLE_USER_HOME", path.join(B, ".gradle")).map((L) => path.join(L, "gradle.properties")),
-    path.join(B, ".m2", "settings.xml"),
-    path.join(B, ".m2", "settings-security.xml"),
-    ...parseJvmBuildToolCredentials(ce),
-    ...Ne("M2_HOME").map((L) => path.join(L, "conf", "settings.xml")),
-    ...Ne("MAVEN_HOME").map((L) => path.join(L, "conf", "settings.xml")),
-    ...(Ne("LEIN_HOME")[0] !== undefined ? Ne("LEIN_HOME") : [path.join(B, ".lein")]).flatMap((L) => [
-      path.join(L, "profiles.clj"),
-      path.join(L, "credentials.clj"),
-      path.join(L, "credentials.clj.gpg"),
+      path_3.join(xdgConfigHome, "composer"),
+      path_3.join(home, ".composer"),
+      ...pathsForEnv("COMPOSER_HOME", path_3.join(home, ".config", "composer")),
+    ]).map((dir) => path_3.join(dir, "auth.json")),
+    ...pathsForEnv("GRADLE_USER_HOME", path_3.join(home, ".gradle")).map((dir) =>
+      path_3.join(dir, "gradle.properties"),
+    ),
+    path_3.join(home, ".m2", "settings.xml"),
+    path_3.join(home, ".m2", "settings-security.xml"),
+    ...parseJvmBuildToolCredentials(envValue),
+    ...absoluteEnvPaths("M2_HOME").map((dir) => path_3.join(dir, "conf", "settings.xml")),
+    ...absoluteEnvPaths("MAVEN_HOME").map((dir) => path_3.join(dir, "conf", "settings.xml")),
+    ...(absoluteEnvPaths("LEIN_HOME")[0] !== undefined
+      ? absoluteEnvPaths("LEIN_HOME")
+      : [path_3.join(home, ".lein")]
+    ).flatMap((dir) => [
+      path_3.join(dir, "profiles.clj"),
+      path_3.join(dir, "credentials.clj"),
+      path_3.join(dir, "credentials.clj.gpg"),
     ]),
-    ...Ne("BUNDLE_CONFIG"),
-    ...Ne("BUNDLE_USER_CONFIG"),
-    ...Ne("BUNDLE_USER_HOME").map((L) => path.join(L, "config")),
-    path.join(B, ".bundle", "config"),
-    ...Ne("BUNDLE_APP_CONFIG").map((L) => path.join(L, "config")),
+    ...absoluteEnvPaths("BUNDLE_CONFIG"),
+    ...absoluteEnvPaths("BUNDLE_USER_CONFIG"),
+    ...absoluteEnvPaths("BUNDLE_USER_HOME").map((dir) => path_3.join(dir, "config")),
+    path_3.join(home, ".bundle", "config"),
+    ...absoluteEnvPaths("BUNDLE_APP_CONFIG").map((dir) => path_3.join(dir, "config")),
     "/usr/local/bundle/config",
-    path.join(B, ".gem", "credentials"),
-    path.join(B, ".local", "share", "gem", "credentials"),
+    path_3.join(home, ".gem", "credentials"),
+    path_3.join(home, ".local", "share", "gem", "credentials"),
     ...[
-      ...he("HELM_CONFIG_HOME", path.join(xdgConfigHome, "helm")),
-      path.join(B, "Library", "Preferences", "helm"),
-    ].flatMap((L) => [path.join(L, "registry", "config.json"), path.join(L, "repositories.yaml")]),
-    path.join(B, ".nuget", "NuGet", "NuGet.Config"),
-    path.join(B, ".config", "NuGet", "NuGet.Config"),
-    path.join(xdgConfigHome, "NuGet", "NuGet.Config"),
-    ...["KRB5CCNAME", "KRB5_KTNAME", "KRB5_CLIENT_KTNAME"].flatMap((L) => parseKerberosCacheName(ce(L))),
-    ...(await parseKrb5Config(ce("KRB5_CONFIG"))),
-    path.join(B, ".pypirc"),
-    path.join(xdgConfigHome, "pypoetry", "auth.toml"),
-    path.join(B, "Library", "Application Support", "pypoetry", "auth.toml"),
-    path.join(B, ".condarc"),
+      ...pathsForEnv("HELM_CONFIG_HOME", path_3.join(xdgConfigHome, "helm")),
+      path_3.join(home, "Library", "Preferences", "helm"),
+    ].flatMap((dir) => [path_3.join(dir, "registry", "config.json"), path_3.join(dir, "repositories.yaml")]),
+    path_3.join(home, ".nuget", "NuGet", "NuGet.Config"),
+    path_3.join(home, ".config", "NuGet", "NuGet.Config"),
+    path_3.join(xdgConfigHome, "NuGet", "NuGet.Config"),
+    ...["KRB5CCNAME", "KRB5_KTNAME", "KRB5_CLIENT_KTNAME"].flatMap((name) =>
+      parseKerberosCacheName(envValue(name)),
+    ),
+    ...(await parseKrb5Config(envValue("KRB5_CONFIG"))),
+    path_3.join(home, ".pypirc"),
+    path_3.join(xdgConfigHome, "pypoetry", "auth.toml"),
+    path_3.join(home, "Library", "Application Support", "pypoetry", "auth.toml"),
+    path_3.join(home, ".condarc"),
     ...[
       "/etc/conda",
       "/var/lib/conda",
-      path.join(xdgConfigHome, "conda"),
-      path.join(B, ".config", "conda"),
-      path.join(B, ".conda"),
-    ].flatMap((L) => [path.join(L, ".condarc"), path.join(L, "condarc"), path.join(L, "condarc.d")]),
-    ...Ne("CONDARC"),
-    ...Ne("POETRY_CONFIG_DIR").map((L) => path.join(L, "auth.toml")),
-    path.join(xdgConfigHome, "uv", "uv.toml"),
-    ...Ne("UV_CONFIG_FILE"),
-    path.join(B, ".sbt", ".credentials"),
-    ...Ne("SBT_CREDENTIALS"),
-    path.join(B, ".ivy2", ".credentials"),
-    path.join(xdgConfigHome, "coursier", "credentials.properties"),
-    path.join(B, "Library", "Preferences", "Coursier", "credentials.properties"),
-    ...Ne("COURSIER_CONFIG_DIR").map((L) => path.join(L, "credentials.properties")),
-    ...Lt(),
-    path.join(xdgConfigHome, "rclone", "rclone.conf"),
-    path.join(B, ".config", "rclone", "rclone.conf"),
-    path.join(B, ".rclone.conf"),
-    path.join(B, ".pgpass"),
-    path.join(B, ".pg_service.conf"),
-    ...(await parsePgServiceConf([path.join(B, ".pg_service.conf"), ...Ne("PGSERVICEFILE"), ...Ge])),
-    ...Ge,
-    ...Ne("SYSTEM_WGETRC"),
+      path_3.join(xdgConfigHome, "conda"),
+      path_3.join(home, ".config", "conda"),
+      path_3.join(home, ".conda"),
+    ].flatMap((dir) => [
+      path_3.join(dir, ".condarc"),
+      path_3.join(dir, "condarc"),
+      path_3.join(dir, "condarc.d"),
+    ]),
+    ...absoluteEnvPaths("CONDARC"),
+    ...absoluteEnvPaths("POETRY_CONFIG_DIR").map((dir) => path_3.join(dir, "auth.toml")),
+    path_3.join(xdgConfigHome, "uv", "uv.toml"),
+    ...absoluteEnvPaths("UV_CONFIG_FILE"),
+    path_3.join(home, ".sbt", ".credentials"),
+    ...absoluteEnvPaths("SBT_CREDENTIALS"),
+    path_3.join(home, ".ivy2", ".credentials"),
+    path_3.join(xdgConfigHome, "coursier", "credentials.properties"),
+    path_3.join(home, "Library", "Preferences", "Coursier", "credentials.properties"),
+    ...absoluteEnvPaths("COURSIER_CONFIG_DIR").map((dir) => path_3.join(dir, "credentials.properties")),
+    ...coursierCredentialFiles(),
+    path_3.join(xdgConfigHome, "rclone", "rclone.conf"),
+    path_3.join(home, ".config", "rclone", "rclone.conf"),
+    path_3.join(home, ".rclone.conf"),
+    path_3.join(home, ".pgpass"),
+    path_3.join(home, ".pg_service.conf"),
+    ...(await parsePgServiceConf([
+      path_3.join(home, ".pg_service.conf"),
+      ...absoluteEnvPaths("PGSERVICEFILE"),
+      ...pgServiceConfs,
+    ])),
+    ...pgServiceConfs,
+    ...absoluteEnvPaths("SYSTEM_WGETRC"),
     "/etc/wgetrc",
     "/usr/local/etc/wgetrc",
     "/opt/homebrew/etc/wgetrc",
     "/opt/local/etc/wgetrc",
-    path.join(B, ".postgresql", "postgresql.key"),
-    path.join(B, ".terraformrc"),
-    path.join(B, ".terraform.d", "credentials.tfrc.json"),
-    path.join(B, ".wgetrc"),
-    path.join(xdgConfigHome, "curlrc"),
-    path.join(xdgConfigHome, "pip", "pip.conf"),
-    path.join(B, ".pip", "pip.conf"),
-    path.join(B, "Library", "Application Support", "pip", "pip.conf"),
+    path_3.join(home, ".postgresql", "postgresql.key"),
+    path_3.join(home, ".terraformrc"),
+    path_3.join(home, ".terraform.d", "credentials.tfrc.json"),
+    path_3.join(home, ".wgetrc"),
+    path_3.join(xdgConfigHome, "curlrc"),
+    path_3.join(xdgConfigHome, "pip", "pip.conf"),
+    path_3.join(home, ".pip", "pip.conf"),
+    path_3.join(home, "Library", "Application Support", "pip", "pip.conf"),
     "/etc/pip.conf",
     "/etc/xdg/pip/pip.conf",
-    ...he("CURL_HOME", B).map((L) => path.join(L, ".curlrc")),
-    ...(mt && path.isAbsolute(mt) ? [path.join(mt, "properties")] : []),
-    path.join(B, ".git-credentials"),
-    path.join(B, ".config", "git", "credentials"),
-    path.join(xdgConfigHome, "git", "credentials"),
-    path.join(B, ".kube", "cache", "kubelogin"),
-    path.join(B, ".kube", "cache", "oidc-login"),
-  ].filter(Ae);
-  let filtered_5 = (T("PATH") ?? "").split(path.delimiter).filter((L) => path.isAbsolute(L));
-  let fn = await probePathDirectories(probeMacKeychain(filtered_5));
-  let yn = uniq(
-    [path.join(B, ".kube", "config"), ...(ce("KUBECONFIG") ?? "").split(path.delimiter)]
-      .map((L) => ie(L.trim()))
+    ...pathsForEnv("CURL_HOME", home).map((dir) => path_3.join(dir, ".curlrc")),
+    ...(cloudsdkRootDir && path_3.isAbsolute(cloudsdkRootDir)
+      ? [path_3.join(cloudsdkRootDir, "properties")]
+      : []),
+    path_3.join(home, ".git-credentials"),
+    path_3.join(home, ".config", "git", "credentials"),
+    path_3.join(xdgConfigHome, "git", "credentials"),
+    path_3.join(home, ".kube", "cache", "kubelogin"),
+    path_3.join(home, ".kube", "cache", "oidc-login"),
+  ].filter(isAbsolutePath);
+  let filtered_5 = (caseEnvVar("PATH") ?? "")
+    .split(path_3.delimiter)
+    .filter((entry) => path_3.isAbsolute(entry));
+  let keychainFiles = await probePathDirectories(probeMacKeychain(filtered_5));
+  let kubeconfigPaths = uniq(
+    [path_3.join(home, ".kube", "config"), ...(envValue("KUBECONFIG") ?? "").split(path_3.delimiter)]
+      .map((entry) => expandHome(entry.trim()))
       .filter(Boolean)
-      .map((L) => {
-        if (!path.isAbsolute(L))
+      .map((path) => {
+        if (!path_3.isAbsolute(path))
           throw describeUnreadableCredentialsPointer("KUBECONFIG names a relative path");
-        return L;
+        return path;
       }),
   );
-  let et = () => {
-    let L = Number(Pt("GIT_CONFIG_COUNT") ?? "0");
-    if (!Number.isInteger(L) || L < 0 || L > 256)
+  let gitConfigParameters = () => {
+    let configCount = Number(processEnv("GIT_CONFIG_COUNT") ?? "0");
+    if (!Number.isInteger(configCount) || configCount < 0 || configCount > 256)
       throw describeUnreadableCredentialsPointer("GIT_CONFIG_COUNT is not a count this can follow");
-    let ee = [];
-    let Le = String.raw`'([^']*(?:'\\[!'](?:'[^']*)?)*)'?`;
-    let We = ($t) => $t.replace(/'\\(['!])'?/g, "$1");
-    let wt = Pt("GIT_CONFIG_PARAMETERS") ?? "";
-    let regExp = new RegExp(`${Le}(?:=${Le})?`, "g");
-    if (wt.replace(regExp, "").trim() !== "")
+    let lines = [];
+    let quotedValue = String.raw`'([^']*(?:'\\[!'](?:'[^']*)?)*)'?`;
+    let unquote = (raw) => raw.replace(/'\\(['!])'?/g, "$1");
+    let parameters = processEnv("GIT_CONFIG_PARAMETERS") ?? "";
+    let regExp = new RegExp(`${quotedValue}(?:=${quotedValue})?`, "g");
+    if (parameters.replace(regExp, "").trim() !== "")
       throw describeUnreadableCredentialsPointer("GIT_CONFIG_PARAMETERS is not in a form this can follow");
-    for (let $t of wt.matchAll(regExp)) {
-      let Jt = We($t[1]);
-      let gt = $t[2] === undefined ? Jt.indexOf("=") : Jt.length;
-      let Wt = gt === -1 ? Jt : Jt.slice(0, gt);
-      let ur = $t[2] === undefined ? (gt === -1 ? "true" : Jt.slice(gt + 1)) : We($t[2]);
-      let index = Wt.lastIndexOf(".");
+    for (let match of parameters.matchAll(regExp)) {
+      let keyAndValue = unquote(match[1]);
+      let separatorIndex = match[2] === undefined ? keyAndValue.indexOf("=") : keyAndValue.length;
+      let key = separatorIndex === -1 ? keyAndValue : keyAndValue.slice(0, separatorIndex);
+      let value =
+        match[2] === undefined
+          ? separatorIndex === -1
+            ? "true"
+            : keyAndValue.slice(separatorIndex + 1)
+          : unquote(match[2]);
+      let index = key.lastIndexOf(".");
       if (index > 0)
-        ee.push(`[${Wt.slice(0, Wt.indexOf("."))}]`, `${Wt.slice(index + 1)} = ${JSON.stringify(ur)}`);
+        lines.push(
+          `[${key.slice(0, key.indexOf("."))}]`,
+          `${key.slice(index + 1)} = ${JSON.stringify(value)}`,
+        );
     }
-    for (let idx = 0; idx < L; idx++) {
-      let Jt = Pt(`GIT_CONFIG_KEY_${idx}`) ?? "";
-      let gt = Pt(`GIT_CONFIG_VALUE_${idx}`) ?? "";
-      let index = Jt.lastIndexOf(".");
+    for (let idx = 0; idx < configCount; idx++) {
+      let key = processEnv(`GIT_CONFIG_KEY_${idx}`) ?? "";
+      let value = processEnv(`GIT_CONFIG_VALUE_${idx}`) ?? "";
+      let index = key.lastIndexOf(".");
       if (index > 0)
-        ee.push(`[${Jt.slice(0, Jt.indexOf("."))}]`, `${Jt.slice(index + 1)} = ${JSON.stringify(gt)}`);
+        lines.push(
+          `[${key.slice(0, key.indexOf("."))}]`,
+          `${key.slice(index + 1)} = ${JSON.stringify(value)}`,
+        );
     }
-    return ee.join(`
+    return lines.join(`
 `);
   };
-  let Et = () =>
-    ["GIT_CONFIG_GLOBAL", "GIT_CONFIG_SYSTEM"].flatMap((L) => {
-      let trimmed = ce(L)?.trim();
+  let gitConfigFilePaths = () =>
+    ["GIT_CONFIG_GLOBAL", "GIT_CONFIG_SYSTEM"].flatMap((name) => {
+      let trimmed = envValue(name)?.trim();
       if (!trimmed) return [];
-      if (!path.isAbsolute(trimmed)) throw describeUnreadableCredentialsPointer(`${L} holds a relative path`);
+      if (!path_3.isAbsolute(trimmed))
+        throw describeUnreadableCredentialsPointer(`${name} holds a relative path`);
       return [trimmed];
     });
-  let Ht = [
-    ...(await parseSshConfigIdentities(path.join(j, ".ssh", "config"), j)),
-    ...(await parseSshConfigIdentities("/etc/ssh/ssh_config", j, 0, "/etc/ssh")),
+  let sshAndGitFiles = [
+    ...(await parseSshConfigIdentities(path_3.join(homeDir, ".ssh", "config"), homeDir)),
+    ...(await parseSshConfigIdentities("/etc/ssh/ssh_config", homeDir, 0, "/etc/ssh")),
     ...(
       await Promise.all(
         uniq([
-          path.join(j, ".gitconfig"),
-          path.join(xdgConfigHome, "git", "config"),
-          ...Et(),
+          path_3.join(homeDir, ".gitconfig"),
+          path_3.join(xdgConfigHome, "git", "config"),
+          ...gitConfigFilePaths(),
           ...SYSTEM_GITCONFIG_PATHS,
-        ]).map((L) => parseGitconfigIncludes(L, j)),
+        ]).map((filePath) => parseGitconfigIncludes(filePath, homeDir)),
       )
     ).flat(),
-    ...(await parseGitconfigIncludes(null, j, 0, et())),
+    ...(await parseGitconfigIncludes(null, homeDir, 0, gitConfigParameters())),
   ];
-  let goAuth = await parseGoAuth(ce("GOAUTH"), j, filtered_5);
-  let results = await Promise.all(yn.map(parseKubeconfigCredentials));
-  let Xr = new Set([...results.flatMap((L) => L.execFiles), ...goAuth.programs]);
-  let bn = [
-    ...results.flatMap((L) => [...L.files, ...L.execFiles]),
-    ...Ht,
+  let goAuth = await parseGoAuth(envValue("GOAUTH"), homeDir, filtered_5);
+  let results = await Promise.all(kubeconfigPaths.map(parseKubeconfigCredentials));
+  let execPrograms = new Set([...results.flatMap((result) => result.execFiles), ...goAuth.programs]);
+  let credentialFiles = [
+    ...results.flatMap((result) => [...result.files, ...result.execFiles]),
+    ...sshAndGitFiles,
     ...goAuth.stores,
     ...goAuth.programs,
-    ...(await Promise.all(xe.map(describeAwsCredentialProcess))).flat(),
+    ...(await Promise.all(awsConfigFiles.map(describeAwsCredentialProcess))).flat(),
     ...(await Promise.all(filtered_3.map(parseAwsSourceCredentials))).flat(),
     ...(
       await Promise.all(
-        he("CLOUDSDK_CONFIG", path.join(B, ".config", "gcloud")).map((L) =>
-          listGcloudConfigurations(L, mt).then(async ({ overrides, tokenFiles }) => [
+        pathsForEnv("CLOUDSDK_CONFIG", path_3.join(home, ".config", "gcloud")).map((dir) =>
+          listGcloudConfigurations(dir, cloudsdkRootDir).then(async ({ overrides, tokenFiles }) => [
             ...overrides,
             ...tokenFiles,
             ...(await Promise.all(overrides.map(parseAwsSourceCredentials))).flat(),
@@ -571,101 +647,126 @@ async function buildEvalSandboxSettings(sandbox, allowedTools, operatorAllowedTo
       )
     ).flat(),
     ...(
-      await Promise.all(he("AZURE_CONFIG_DIR", path.join(B, ".azure")).map(parseAzureServicePrincipals))
+      await Promise.all(
+        pathsForEnv("AZURE_CONFIG_DIR", path_3.join(home, ".azure")).map(parseAzureServicePrincipals),
+      )
     ).flat(),
   ];
-  let vn = uniq(
+  let credentialPaths = uniq(
     [
       ...mapped,
-      ...mapped.map((L) => L?.trim()),
-      ...je,
-      ...xe,
+      ...mapped.map((credentialPath) => credentialPath?.trim()),
+      ...profileDirs,
+      ...awsConfigFiles,
       ...filtered_3,
-      ...pt,
+      ...profileFiles,
       ...filtered_4,
-      ...fn,
-      ...yn,
-      ...bn,
+      ...keychainFiles,
+      ...kubeconfigPaths,
+      ...credentialFiles,
     ]
-      .filter((L) => !!L && path.isAbsolute(L))
-      .filter((L) => L !== NULL_DEVICE),
+      .filter((value) => !!value && path_3.isAbsolute(value))
+      .filter((value) => value !== NULL_DEVICE),
   );
-  let flattened_2 = CREDENTIAL_FILE_ENV_VARS.filter((L) => !CONFIG_DIR_ENV_VARS.has(L)).flatMap(At);
-  let V = new Set(
-    [...flattened_2, ...flattened_2.map((L) => L.trim()), ...pt, ...bn.filter((L) => !Xr.has(L))].filter(
-      (L) => !!L && path.isAbsolute(L),
-    ),
+  let flattened_2 = CREDENTIAL_FILE_ENV_VARS.filter((name) => !CONFIG_DIR_ENV_VARS.has(name)).flatMap(
+    envValues,
   );
-  let q = [];
-  let re = new Map();
-  let ue = [
-    [path.join(j, ".aws"), "AWS (~/.aws)", EMPTY_ENTRY_SET],
-    [path.join(B, ".config", "gcloud"), "gcloud (~/.config/gcloud)", CLOUD_CLI_SAFE_ENTRIES],
-    [Me, "gcloud (CLOUDSDK_CONFIG)", CLOUD_CLI_SAFE_ENTRIES],
-    [path.join(B, ".azure"), "Azure CLI (~/.azure)", CLOUD_CLI_SAFE_ENTRIES],
-    [nt, "Azure CLI (AZURE_CONFIG_DIR)", CLOUD_CLI_SAFE_ENTRIES],
+  let credentialFileSet = new Set(
+    [
+      ...flattened_2,
+      ...flattened_2.map((value) => value.trim()),
+      ...profileFiles,
+      ...credentialFiles.filter((value) => !execPrograms.has(value)),
+    ].filter((value) => !!value && path_3.isAbsolute(value)),
+  );
+  let unreadableStores = [];
+  let storesByDir = new Map();
+  let storeSpecs = [
+    [path_3.join(homeDir, ".aws"), "AWS (~/.aws)", EMPTY_ENTRY_SET],
+    [path_3.join(home, ".config", "gcloud"), "gcloud (~/.config/gcloud)", CLOUD_CLI_SAFE_ENTRIES],
+    [cloudsdkConfig, "gcloud (CLOUDSDK_CONFIG)", CLOUD_CLI_SAFE_ENTRIES],
+    [path_3.join(home, ".azure"), "Azure CLI (~/.azure)", CLOUD_CLI_SAFE_ENTRIES],
+    [azureConfigDir, "Azure CLI (AZURE_CONFIG_DIR)", CLOUD_CLI_SAFE_ENTRIES],
     [joined, "Anthropic profile (default)", CLOUD_CLI_SAFE_ENTRIES],
-    [path.join(j, ".ssh"), "SSH (~/.ssh)", SSH_CONFIG_ENTRIES],
-    ...he("GNUPGHOME", path.join(j, ".gnupg")).map((L) => [
-      L,
+    [path_3.join(homeDir, ".ssh"), "SSH (~/.ssh)", SSH_CONFIG_ENTRIES],
+    ...pathsForEnv("GNUPGHOME", path_3.join(homeDir, ".gnupg")).map((dir) => [
+      dir,
       "GnuPG (~/.gnupg, GNUPGHOME)",
       GNUPG_CONFIG_ENTRIES,
     ]),
-    ...he("DOCKER_CONFIG", path.join(B, ".docker")).map((L) => [
-      L,
+    ...pathsForEnv("DOCKER_CONFIG", path_3.join(home, ".docker")).map((dir) => [
+      dir,
       "Docker (~/.docker, DOCKER_CONFIG)",
       DOCKER_SAFE_ENTRIES,
       TOOL_BIN_ENTRIES,
     ]),
-    [path.join(B, ".kube"), "Kubernetes (~/.kube)", KUBE_CACHE_ENTRIES],
-    [Qe, "Anthropic profile (ANTHROPIC_CONFIG_DIR)", CLOUD_CLI_SAFE_ENTRIES],
+    [path_3.join(home, ".kube"), "Kubernetes (~/.kube)", KUBE_CACHE_ENTRIES],
+    [anthropicConfigDir, "Anthropic profile (ANTHROPIC_CONFIG_DIR)", CLOUD_CLI_SAFE_ENTRIES],
     [
-      ce("CLAUDE_CODE_FEDERATION_CACHE_DIR")?.trim() ?? "",
+      envValue("CLAUDE_CODE_FEDERATION_CACHE_DIR")?.trim() ?? "",
       "federation token cache (CLAUDE_CODE_FEDERATION_CACHE_DIR)",
       EMPTY_ENTRY_SET,
     ],
   ];
-  for (let [L, ee, Le, We = EMPTY_ENTRY_SET] of ue)
-    if (L && path.isAbsolute(L)) {
-      let wt = re.get(L);
-      re.set(L, {
-        label: wt?.label ?? ee,
-        skipped: wt ? new Set([...Le].filter((cn) => wt.skipped.has(cn))) : Le,
-        skippedAtRoot: wt
-          ? new Set([...Le, ...We].filter((cn) => wt.skipped.has(cn) || wt.skippedAtRoot.has(cn)))
-          : We,
+  for (let [dir, label, skippedEntries, rootSkippedEntries = EMPTY_ENTRY_SET] of storeSpecs)
+    if (dir && path_3.isAbsolute(dir)) {
+      let existing = storesByDir.get(dir);
+      storesByDir.set(dir, {
+        label: existing?.label ?? label,
+        skipped: existing
+          ? new Set([...skippedEntries].filter((entry) => existing.skipped.has(entry)))
+          : skippedEntries,
+        skippedAtRoot: existing
+          ? new Set(
+              [...skippedEntries, ...rootSkippedEntries].filter(
+                (entry) => existing.skipped.has(entry) || existing.skippedAtRoot.has(entry),
+              ),
+            )
+          : rootSkippedEntries,
       });
     }
-  for (let [L, { label: ee, skipped: Le, skippedAtRoot: We }] of re) {
-    let wt = await probePathDirectories(checkCredentialStoreLinks(L, ee, Le, We), "a credential store");
-    if (wt !== null) q.push(wt);
+  for (let [dir, { label, skipped: skippedEntries, skippedAtRoot: rootSkippedEntries }] of storesByDir) {
+    let badStore = await probePathDirectories(
+      checkCredentialStoreLinks(dir, label, skippedEntries, rootSkippedEntries),
+      "a credential store",
+    );
+    if (badStore !== null) unreadableStores.push(badStore);
   }
-  let ae = [...(await withPathDirectories([...re.keys()])), ...q];
-  let Ot = (L) => ae.some((ee) => ee === L || toEvalPathError(ee, L) || toEvalPathError(L, ee));
-  for (let L of [Be, Ee]) {
-    let filtered = L.filter((Le) => !Ot(Le));
-    L.length = 0;
-    L.push(...filtered);
+  let storeDirs = [...(await withPathDirectories([...storesByDir.keys()])), ...unreadableStores];
+  let insideStoreDir = (path) =>
+    storeDirs.some((dir) => dir === path || toEvalPathError(dir, path) || toEvalPathError(path, dir));
+  for (let list of [readableBinDirs, readableCaFiles]) {
+    let filtered = list.filter((path) => !insideStoreDir(path));
+    list.length = 0;
+    list.push(...filtered);
   }
-  let qe = [sandbox.home, sandbox.tmpDir, ...case_.pluginDirs, ...G, ...Be, ...Ee];
-  let results_2 = await Promise.all(qe.map((L) => realpath(L).catch(() => L)));
-  let Pe = [];
-  for (let L of vn) {
-    let ee =
-      filtered.some((We) => toEvalPathError(We, L)) && !qe.some((We) => We === L || toEvalPathError(We, L));
-    let linkTarget = await resolveLinkTarget(L);
+  let allowRoots = [
+    sandbox.home,
+    sandbox.tmpDir,
+    ...evalCase.pluginDirs,
+    ...addDirs,
+    ...readableBinDirs,
+    ...readableCaFiles,
+  ];
+  let results_2 = await Promise.all(allowRoots.map((root) => realpath(root).catch(() => root)));
+  let denyFiles = [];
+  for (let path of credentialPaths) {
+    let covered =
+      filtered.some((root) => toEvalPathError(root, path)) &&
+      !allowRoots.some((root) => root === path || toEvalPathError(root, path));
+    let linkTarget = await resolveLinkTarget(path);
     if (linkTarget === NULL_DEVICE) {
-      if (!ee) Pe.push(L, await realPathOf(L));
+      if (!covered) denyFiles.push(path, await realPathOf(path));
       continue;
     }
-    if (!ee) {
-      Pe.push(L);
-      if (linkTarget !== null && linkTarget !== "absent" && linkTarget !== L) Pe.push(linkTarget);
-      if (V.has(L)) {
-        for (let We of [L, linkTarget])
-          if (We !== null && We !== "absent") {
-            let dir = path.dirname(We);
-            if (path.dirname(dir) !== path.parse(dir).root) Pe.push(dir);
+    if (!covered) {
+      denyFiles.push(path);
+      if (linkTarget !== null && linkTarget !== "absent" && linkTarget !== path) denyFiles.push(linkTarget);
+      if (credentialFileSet.has(path)) {
+        for (let target of [path, linkTarget])
+          if (target !== null && target !== "absent") {
+            let dir = path_3.dirname(target);
+            if (path_3.dirname(dir) !== path_3.parse(dir).root) denyFiles.push(dir);
           }
       }
       continue;
@@ -673,62 +774,66 @@ async function buildEvalSandboxSettings(sandbox, allowedTools, operatorAllowedTo
     if (linkTarget === "absent") continue;
     if (
       linkTarget === null ||
-      !W.some((We) => toEvalPathError(We, linkTarget)) ||
-      results_2.some((We) => We === linkTarget || toEvalPathError(We, linkTarget))
+      !denyRoots.some((root) => toEvalPathError(root, linkTarget)) ||
+      results_2.some((allowRoot) => allowRoot === linkTarget || toEvalPathError(allowRoot, linkTarget))
     ) {
-      Pe.push(L);
-      if (linkTarget !== null && linkTarget !== L) {
-        Pe.push(linkTarget);
-        let dir = path.dirname(linkTarget);
+      denyFiles.push(path);
+      if (linkTarget !== null && linkTarget !== path) {
+        denyFiles.push(linkTarget);
+        let dir = path_3.dirname(linkTarget);
         if (
-          V.has(L) &&
-          path.dirname(dir) !== path.parse(dir).root &&
-          !W.some((wt) => toEvalPathError(wt, dir))
+          credentialFileSet.has(path) &&
+          path_3.dirname(dir) !== path_3.parse(dir).root &&
+          !denyRoots.some((root) => toEvalPathError(root, dir))
         )
-          Pe.push(dir);
+          denyFiles.push(dir);
       }
     }
   }
-  if ([...Pe, ...W, ...q].some(hasGlobChars))
+  if ([...denyFiles, ...denyRoots, ...unreadableStores].some(hasGlobChars))
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
       "a cloud credential file path in this environment (AWS_SHARED_CREDENTIALS_FILE, GOOGLE_APPLICATION_CREDENTIALS and the like) has a glob character (* ? [ ]) in it, so the Bash sandbox cannot exclude it \u2014 a Bash-granting evaluation cannot run here",
       "eval shell grant refused: glob char in a credential file path",
     );
   let tempDirs = getTempDirs();
-  let He = [];
+  let macTempDaemonDirs = [];
   if (getPlatform() === "macos") {
-    let dir = path.dirname(sandbox.root);
-    let ee = await probePathDirectories(
+    let dir = path_3.dirname(sandbox.root);
+    let tempDirInfos = await probePathDirectories(
       Promise.all(
-        getTempDirs().map(async (gt) => ({
-          dir: gt,
-          real: await realpath(gt).catch(() => gt),
+        getTempDirs().map(async (dir) => ({
+          dir,
+          real: await realpath(dir).catch(() => dir),
         })),
       ),
       "a directory",
     );
-    let Le = (gt) => gt.dir === dir || gt.real === dir;
-    tempDirs = ee.filter((gt) => !Le(gt)).map(({ dir }) => dir);
-    let filtered = ee.filter(Le);
-    let wt = process.getuid?.() ?? 0;
-    let cn = [`claude-${wt}`, `cc-daemon-${wt}`, "cc-socks", `cc-socks-${wt}`];
+    let isSandboxParent = (info) => info.dir === dir || info.real === dir;
+    tempDirs = tempDirInfos.filter((info) => !isSandboxParent(info)).map(({ dir }) => dir);
+    let filtered = tempDirInfos.filter(isSandboxParent);
+    let uid = process.getuid?.() ?? 0;
+    let daemonDirNames = [`claude-${uid}`, `cc-daemon-${uid}`, "cc-socks", `cc-socks-${uid}`];
     let CLAUDE_CODE_TMPDIR = env.CLAUDE_CODE_TMPDIR;
-    let Jt = CLAUDE_CODE_TMPDIR
+    let tmpDirChildPaths = CLAUDE_CODE_TMPDIR
       ? uniq([
           CLAUDE_CODE_TMPDIR,
           await probePathDirectories(resolveDirSymlink(CLAUDE_CODE_TMPDIR), "a directory"),
-        ]).flatMap((gt) => [`claude-${wt}`, "cc-socks"].map((Wt) => path.join(gt, Wt)))
+        ]).flatMap((tmpDir) =>
+          [`claude-${uid}`, "cc-socks"].map((childName) => path_3.join(tmpDir, childName)),
+        )
       : [];
-    He = uniq([
+    macTempDaemonDirs = uniq([
       ...filtered.flatMap(({ dir, real }) =>
-        uniq([dir, real]).flatMap((ur) => cn.map((Jr) => path.join(ur, Jr))),
+        uniq([dir, real]).flatMap((basePath) =>
+          daemonDirNames.map((childName) => path_3.join(basePath, childName)),
+        ),
       ),
-      ...Jt.filter((gt) =>
-        filtered.some(({ dir, real }) => toEvalPathError(dir, gt) || toEvalPathError(real, gt)),
+      ...tmpDirChildPaths.filter((childPath) =>
+        filtered.some(({ dir, real }) => toEvalPathError(dir, childPath) || toEvalPathError(real, childPath)),
       ),
     ]);
   }
-  let ln = {
+  let sandboxSettings = {
     sandbox: {
       enabled: true,
       failIfUnavailable: true,
@@ -738,77 +843,87 @@ async function buildEvalSandboxSettings(sandbox, allowedTools, operatorAllowedTo
         allowWrite: [sandbox.home, sandbox.tmpDir].map(toSandboxPathForPlatform),
         denyWrite: [
           ...tempDirs,
-          ...He,
+          ...macTempDaemonDirs,
           sandbox.configDir,
           sandbox.outDir,
-          ...(await withPathDirectories(uniq([...case_.pluginDirsUnderTest, case_.caseDir]))),
-          ...J.denyPaths,
-          path.join(sandbox.home, ".config", "git"),
-          path.join(sandbox.home, ".local", "lib"),
+          ...(await withPathDirectories(uniq([...evalCase.pluginDirsUnderTest, evalCase.caseDir]))),
+          ...readScope.denyPaths,
+          path_3.join(sandbox.home, ".config", "git"),
+          path_3.join(sandbox.home, ".local", "lib"),
           ...uniq(
-            AWS_CACHE_DIRS.flatMap((L) => [
-              path.join(sandbox.home, L),
-              path.join(sandbox.home, path.dirname(L)),
+            AWS_CACHE_DIRS.flatMap((cacheDir) => [
+              path_3.join(sandbox.home, cacheDir),
+              path_3.join(sandbox.home, path_3.dirname(cacheDir)),
             ]),
           ),
-          ...GIT_METADATA_ENTRIES.map((L) => path.join(sandbox.home, ".git", L)),
-          path.join(sandbox.cwd, EVAL_ARTIFACTS_DIR),
-          ...DANGEROUS_DIRECTORIES.filter((L) => L !== ".git").map((L) => path.join(sandbox.home, L)),
-          ...DANGEROUS_FILES.map((L) => path.join(sandbox.home, L)),
+          ...GIT_METADATA_ENTRIES.map((entry) => path_3.join(sandbox.home, ".git", entry)),
+          path_3.join(sandbox.cwd, EVAL_ARTIFACTS_DIR),
+          ...DANGEROUS_DIRECTORIES.filter((dirName) => dirName !== ".git").map((dirName) =>
+            path_3.join(sandbox.home, dirName),
+          ),
+          ...DANGEROUS_FILES.map((fileName) => path_3.join(sandbox.home, fileName)),
         ].map(toSandboxPathForPlatform),
         denyRead: [
-          ...W,
+          ...denyRoots,
           ...(await withPathDirectories([
             ...SECRET_MOUNT_DIRS,
             ...(process.getuid ? [`/run/user/${process.getuid()}`] : []),
           ])),
-          ...q,
+          ...unreadableStores,
           sandbox.configDir,
           sandbox.outDir,
-          ...AWS_CACHE_DIRS.map((L) => path.join(sandbox.home, L)),
-          ...Z,
+          ...AWS_CACHE_DIRS.map((cacheDir) => path_3.join(sandbox.home, cacheDir)),
+          ...denyPaths,
         ].map(toSandboxPathForPlatform),
         allowRead: uniq(
           [
             sandbox.home,
             sandbox.tmpDir,
-            ...(await withPathDirectories(case_.pluginDirs)).filter(
-              (L) =>
-                !Z.some(
-                  (ee) =>
-                    nfcKeyIfEnabled(ee) === nfcKeyIfEnabled(L) || toEvalPathError(ee, L, nfcKeyIfEnabled),
+            ...(await withPathDirectories(evalCase.pluginDirs)).filter(
+              (dir) =>
+                !denyPaths.some(
+                  (denyPath) =>
+                    nfcKeyIfEnabled(denyPath) === nfcKeyIfEnabled(dir) ||
+                    toEvalPathError(denyPath, dir, nfcKeyIfEnabled),
                 ),
             ),
-            ...G,
-            ...Be,
-            ...Ee,
+            ...addDirs,
+            ...readableBinDirs,
+            ...readableCaFiles,
           ].map(toSandboxPathForPlatform),
         ),
       },
       network: {
-        allowedDomains: b,
+        allowedDomains: networkDomains,
       },
       credentials: {
-        envVars: uniq([...secretEnvNameCandidates(s), ...PROXY_ENV_VARS_EXTRA, ...parseMavenArgs(s)])
-          .filter((L) => !(Object.hasOwn(env_2, L) && s[L] === env_2[L]))
-          .filter((L) => !(PLACEHOLDER_CREDENTIAL_KEYS.includes(L) && s[L] === PROXY_INJECTED_MARKER))
+        envVars: uniq([
+          ...secretEnvNameCandidates(envVars),
+          ...PROXY_ENV_VARS_EXTRA,
+          ...parseMavenArgs(envVars),
+        ])
+          .filter((name) => !(Object.hasOwn(env_2, name) && envVars[name] === env_2[name]))
+          .filter(
+            (name) =>
+              !(PLACEHOLDER_CREDENTIAL_KEYS.includes(name) && envVars[name] === PROXY_INJECTED_MARKER),
+          )
           .map((name) => ({
             name,
             mode: "deny",
           })),
-        files: Pe.map((L) => ({
-          path: toSandboxPathForPlatform(L),
+        files: denyFiles.map((filePath) => ({
+          path: toSandboxPathForPlatform(filePath),
           mode: "deny",
         })),
       },
     },
   };
   if (getPlatform() === "linux" || getPlatform() === "wsl") {
-    let filesystem = ln.sandbox.filesystem;
+    let filesystem = sandboxSettings.sandbox.filesystem;
     filesystem.denyWrite = await resolveSandboxPaths(filesystem.denyWrite);
     filesystem.denyRead = await resolveSandboxPaths(filesystem.denyRead);
     filesystem.allowRead = await resolveSandboxPaths(filesystem.allowRead);
-    let credentials = ln.sandbox.credentials;
+    let credentials = sandboxSettings.sandbox.credentials;
     credentials.files = (await resolveSandboxPaths(credentials.files.map((file) => file.path))).map(
       (path) => ({
         path,
@@ -816,57 +931,64 @@ async function buildEvalSandboxSettings(sandbox, allowedTools, operatorAllowedTo
       }),
     );
   }
-  await writeFile(path.join(sandbox.configDir, "settings.json"), jsonStringify(ln, null, 2), {
+  await writeFile(path_3.join(sandbox.configDir, "settings.json"), jsonStringify(sandboxSettings, null, 2), {
     flag: "wx",
   });
 }
 //@ chunk-qchp9vrd.js:147750-147924 placement
-async function resolveSandboxPaths(e) {
-  let n = [];
-  let r = new Set();
-  for (let a of e) {
-    let s = a.startsWith("//") ? a.slice(1) : a;
-    let h = a.startsWith("//") ? toSandboxRulePath(await resolveDirSymlink(s)) : a;
-    if (!r.has(h)) {
-      r.add(h);
-      n.push(h);
+async function resolveSandboxPaths(paths) {
+  let resolved = [];
+  let seen = new Set();
+  for (let path of paths) {
+    let unadjustedPath = path.startsWith("//") ? path.slice(1) : path;
+    let rulePath = path.startsWith("//") ? toSandboxRulePath(await resolveDirSymlink(unadjustedPath)) : path;
+    if (!seen.has(rulePath)) {
+      seen.add(rulePath);
+      resolved.push(rulePath);
     }
   }
-  return n;
+  return resolved;
 }
 //@ chunk-qchp9vrd.js:147924-148077 placement
-async function resolveDirSymlink(e) {
-  let n = await realpathOfExistingPrefix(e);
+async function resolveDirSymlink(path) {
+  let resolved = await realpathOfExistingPrefix(path);
   try {
-    if ((await lstat(n)).isSymbolicLink()) {
-      let r = await realpath(n);
-      if ((await lstat(r)).isDirectory()) return r;
+    if ((await lstat(resolved)).isSymbolicLink()) {
+      let target = await realpath(resolved);
+      if ((await lstat(target)).isDirectory()) return target;
     }
   } catch {}
-  return n;
+  return resolved;
 }
 //@ chunk-qchp9vrd.js:148077-148300 placement
-async function realpathOfExistingPrefix(e) {
-  let dir = path.dirname(e);
-  let r = [path.basename(e)];
+async function realpathOfExistingPrefix(targetPath) {
+  let dir = path_3.dirname(targetPath);
+  let missingParts = [path_3.basename(targetPath)];
   for (;;)
     try {
-      return path.join(await realpath(dir), ...r);
+      return path_3.join(await realpath(dir), ...missingParts);
     } catch (error) {
       let errnoCode = getErrnoCode(error);
-      if ((errnoCode !== "ENOENT" && errnoCode !== "ENOTDIR") || dir === path.parse(dir).root) return e;
-      r.unshift(path.basename(dir));
-      dir = path.dirname(dir);
+      if ((errnoCode !== "ENOENT" && errnoCode !== "ENOTDIR") || dir === path_3.parse(dir).root)
+        return targetPath;
+      missingParts.unshift(path_3.basename(dir));
+      dir = path_3.dirname(dir);
     }
 }
 //@ chunk-qchp9vrd.js:148300-148702 placement
-async function checkAddDirsInsideCase(e) {
-  let results = await Promise.all(e.context.add_dirs.map((addDir) => checkCaseInsideRoot(e, addDir)));
-  let suiteRealRoots = await getSuiteRealRoots(e);
-  for (let [a, s] of results.entries())
-    if (!suiteRealRoots.some((suiteRealRoot) => suiteRealRoot === s || toEvalPathError(suiteRealRoot, s)))
+async function checkAddDirsInsideCase(evalCase) {
+  let results = await Promise.all(
+    evalCase.context.add_dirs.map((addDir) => checkCaseInsideRoot(evalCase, addDir)),
+  );
+  let suiteRealRoots = await getSuiteRealRoots(evalCase);
+  for (let [addDirIndex, resolved] of results.entries())
+    if (
+      !suiteRealRoots.some(
+        (suiteRealRoot) => suiteRealRoot === resolved || toEvalPathError(suiteRealRoot, resolved),
+      )
+    )
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        `case "${e.name}": add_dirs entry "${e.context.add_dirs[a]}" resolves (through a link) outside the case directory and the plugin under test \u2014 it may only grant reads inside them`,
+        `case "${evalCase.name}": add_dirs entry "${evalCase.context.add_dirs[addDirIndex]}" resolves (through a link) outside the case directory and the plugin under test \u2014 it may only grant reads inside them`,
         "add_dirs resolves outside case/plugin",
       );
   return results;

@@ -17,7 +17,15 @@ import { logFeatureOk, logFeatureBad, logFeatureSad } from "../analytics/feature
 import { registerLSPNotificationHandlers } from "./passiveFeedback.js";
 import { logPluginScopedError } from "../../utils/plugins/pluginScopedWrite.js";
 import { errorMessage } from "../../utils/errors.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
+//@ chunk-aepeg2w5.js:288956-288982 placement
+/**
+ * LSP 管理器（外部构建为 null）。
+ */
+function getLspManager() {
+  return null;
+}
 //@ chunk-e6aww6q8.js:4641689-4641986 placement
 /**
  * 远程会话（CLAUDE_CODE_REMOTE / REMOTE_SESSION_ID / REMOTE_ENVIRONMENT_TYPE）且 GrowthBook tengu_moonlit_panda 为 true 时，延后 LSP 初始化。
@@ -29,11 +37,11 @@ function shouldDeferLspForRemoteSession() {
     Boolean(env.CLAUDE_CODE_REMOTE_ENVIRONMENT_TYPE)
   ))
     return false;
-  let n = getFeatureValueWithSource_CACHED_MAY_BE_STALE("tengu_moonlit_panda", false);
+  let remoteFlag = getFeatureValueWithSource_CACHED_MAY_BE_STALE("tengu_moonlit_panda", false);
   logForDebugging(
-    `[LSP MANAGER] Remote session: tengu_moonlit_panda=${String(n.value)} (source: ${n.source})`,
+    `[LSP MANAGER] Remote session: tengu_moonlit_panda=${String(remoteFlag.value)} (source: ${remoteFlag.source})`,
   );
-  return n.value === true;
+  return remoteFlag.value === true;
 }
 //@ chunk-e6aww6q8.js:4641986-4644165 fingerprint = initializeLspServerManager (0.49)
 /**
@@ -187,24 +195,28 @@ function createLspManagerSingleton() {
 /**
  * LSP 管理器单例，并解构导出 getLspServerManager/getInitializationStatus/isLspConnected/hasLspEverConnected/waitForLspInitialization/initializeLspServerManager/reinitializeLspServerManager/shutdownLspServerManager。
  */
-var lspManagerSingleton = createLspManagerSingleton();
-var {
-  get: getLspServerManager,
-  getStatus: getInitializationStatus,
-  isConnected: isLspConnected,
-  hasEverConnected: hasLspEverConnected,
-  waitForInitialization: waitForLspInitialization,
-  initialize: initializeLspServerManager,
-  reinitialize: reinitializeLspServerManager,
-  shutdown: shutdownLspServerManager,
-} = lspManagerSingleton;
-//@ chunk-aepeg2w5.js:288956-288982 placement
-/**
- * LSP 管理器（外部构建为 null）。
- */
-function getLspManager() {
-  return null;
-}
+var lspManagerSingleton; // deferred: uses createLspManagerSingleton of its import cycle while loading; runs once the cycle is complete
+var getLspServerManager;
+var getInitializationStatus;
+var isLspConnected;
+var hasLspEverConnected;
+var waitForLspInitialization;
+var initializeLspServerManager;
+var reinitializeLspServerManager;
+var shutdownLspServerManager;
+deferInit("chunk-e6aww6q8.js:4644165", () => {
+  lspManagerSingleton = createLspManagerSingleton();
+  ({
+    get: getLspServerManager,
+    getStatus: getInitializationStatus,
+    isConnected: isLspConnected,
+    hasEverConnected: hasLspEverConnected,
+    waitForInitialization: waitForLspInitialization,
+    initialize: initializeLspServerManager,
+    reinitialize: reinitializeLspServerManager,
+    shutdown: shutdownLspServerManager,
+  } = lspManagerSingleton);
+});
 export {
   getLspManager,
   reinitializeLspServerManager,

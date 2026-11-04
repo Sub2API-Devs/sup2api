@@ -18,7 +18,7 @@ var SAFE_IDENTIFIER_RE = /^[A-Za-z0-9_.:-]{1,128}$/;
 /**
  * safeIdentifierOrUndefined：安全标识符或 undefined。
  */
-function safeIdentifierOrUndefined(n) {
-  return typeof n === "string" && SAFE_IDENTIFIER_RE.test(n) ? n : undefined;
+function safeIdentifierOrUndefined(value) {
+  return typeof value === "string" && SAFE_IDENTIFIER_RE.test(value) ? value : undefined;
 }
 export { safeIdentifierOrUndefined, SAFE_IDENTIFIER_RE };

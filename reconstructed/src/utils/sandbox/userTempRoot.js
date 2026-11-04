@@ -20,8 +20,8 @@ var userTempRoot;
 /**
  * setUserTempRoot：设置用户临时根目录。
  */
-function setUserTempRoot(e) {
-  userTempRoot ??= e;
+function setUserTempRoot(root) {
+  userTempRoot ??= root;
 }
 //@ chunk-fq0cr76a.js:638782-638805 placement
 /**
@@ -31,8 +31,8 @@ function neverTempRoot() {
   return false;
 }
 //@ chunk-fq0cr76a.js:638805-638889 placement
-function wrapEvalOrTrue(e) {
-  return `'eval' '${e.replaceAll("'", "'\\''")}' 2>/dev/null || 'true'`;
+function wrapEvalOrTrue(command) {
+  return `'eval' '${command.replaceAll("'", "'\\''")}' 2>/dev/null || 'true'`;
 }
 //@ chunk-fq0cr76a.js:638889-638907 placement
 var SL_GATE = "sl-gate";
@@ -40,18 +40,18 @@ var SL_GATE = "sl-gate";
 /**
  * 检查目录存在且属于当前用户、权限私有，否则返回 null。
  */
-async function statOwnedPrivateDir(e) {
-  let n;
+async function statOwnedPrivateDir(path) {
+  let stats;
   try {
-    n = await lstat(e, {
+    stats = await lstat(path, {
       bigint: true,
     });
   } catch (error) {
     if (isENOENT(error)) return null;
     throw error;
   }
-  let r = process.getuid?.();
-  return n.isDirectory() && (r === undefined || n.uid === BigInt(r)) ? n : null;
+  let uid = process.getuid?.();
+  return stats.isDirectory() && (uid === undefined || stats.uid === BigInt(uid)) ? stats : null;
 }
 //@ chunk-fq0cr76a.js:639302-639362 placement
 var BASH_EDIT_DIFF = "bash-edit-diff";
@@ -67,18 +67,19 @@ async function ensurePrivateTempRoot() {
     recursive: true,
     mode: 448,
   });
-  let n = await lstat(bashEditDiffDir, {
+  let stats = await lstat(bashEditDiffDir, {
     bigint: true,
   });
-  let r = process.getuid?.();
-  return n.isDirectory() &&
-    !n.isSymbolicLink() &&
-    (getPlatform() === "windows" || ((r === undefined || n.uid === BigInt(r)) && (n.mode & 0o077n) === 0n))
+  let uid = process.getuid?.();
+  return stats.isDirectory() &&
+    !stats.isSymbolicLink() &&
+    (getPlatform() === "windows" ||
+      ((uid === undefined || stats.uid === BigInt(uid)) && (stats.mode & 0o077n) === 0n))
     ? {
         root: bashEditDiffDir,
         identity: {
-          dev: n.dev,
-          ino: n.ino,
+          dev: stats.dev,
+          ino: stats.ino,
         },
       }
     : null;
@@ -88,16 +89,16 @@ async function getPrivateTempRoot() {
   return (await ensurePrivateTempRoot())?.root ?? null;
 }
 //@ chunk-fq0cr76a.js:639733-639914 placement = getFileIdentity (0.794)
-async function getFileIdentity(e, n) {
+async function getFileIdentity(path, identity) {
   let bashEditDiffDir = getBashEditDiffDir();
-  let s = await statOwnedPrivateDir(bashEditDiffDir);
+  let rootStats = await statOwnedPrivateDir(bashEditDiffDir);
   return (
-    s?.ino === n.ino &&
-    s.dev === n.dev &&
-    dirname(e) === bashEditDiffDir &&
-    BASH_EDIT_DIFF_DIR_RE.test(basename(e)) &&
-    (await statOwnedPrivateDir(e)) !== null &&
-    (await realpath(e)) === join(await realpath(dirname(bashEditDiffDir)), BASH_EDIT_DIFF, basename(e))
+    rootStats?.ino === identity.ino &&
+    rootStats.dev === identity.dev &&
+    dirname(path) === bashEditDiffDir &&
+    BASH_EDIT_DIFF_DIR_RE.test(basename(path)) &&
+    (await statOwnedPrivateDir(path)) !== null &&
+    (await realpath(path)) === join(await realpath(dirname(bashEditDiffDir)), BASH_EDIT_DIFF, basename(path))
   );
 }
 export {

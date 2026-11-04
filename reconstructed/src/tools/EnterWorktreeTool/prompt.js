@@ -9,6 +9,7 @@
  * attribution: placement 2
  */
 import { SessionRootSlot } from "../../bootstrap/sessionSlices.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-kxyd0g16.js:117315-120631 placement
 /**
@@ -56,5 +57,8 @@ ${""}
 /**
  * 按会话根记录已展示过的 worktree 提示集合（当前无引用）。
  */
-var worktreePromptsShownByRoot = new SessionRootSlot(() => new Set());
+var worktreePromptsShownByRoot; // deferred: uses SessionRootSlot (../../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-kxyd0g16.js:120631", () => {
+  worktreePromptsShownByRoot = new SessionRootSlot(() => new Set());
+});
 export { enterWorktreePrompt };

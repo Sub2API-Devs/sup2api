@@ -5,7 +5,7 @@
  * pieces: chunk-798ashq9.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../runtime/bun-runtime.js";
 import { require_writer } from "./writer.js";
 import { require_writer_buffer } from "./writer_buffer.js";
 import { require_reader } from "./reader.js";
@@ -15,7 +15,7 @@ import { require_rpc } from "./rpc.js";
 import { require_roots } from "./roots.js";
 
 //@ chunk-798ashq9.js:40749-41036 cjs-fingerprint
-var require_index_minimal = x(function (cjsExports) {
+var require_index_minimal = __commonJS(function (cjsExports) {
   var protobuf = cjsExports;
   protobuf.build = "minimal";
   protobuf.Writer = require_writer();

@@ -21,23 +21,30 @@ import {
 } from "../constants/xml.js";
 import { ARTIFACT_CHANGED, ARTIFACT_CHANGED_TITLE } from "../tools/ArtifactTool/artifactNotices.js";
 import { getFirstLine, truncateToLength } from "./stringUtils.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:4673725-4673745 placement
-var weakMap_14 = new WeakMap();
+var weakMap_14; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:4673725", () => {
+  weakMap_14 = new WeakMap();
+});
 //@ chunk-e6aww6q8.js:4673745-4673820 placement = _temp (0.787)
 function completedCommandSummary(msg) {
   let userPromptText = getUserPromptText(msg);
   return userPromptText?.status === "completed" ? userPromptText.summary : null;
 }
 //@ chunk-e6aww6q8.js:4673820-4673840 placement
-var stickyTextCache = new WeakMap();
+var stickyTextCache; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:4673820", () => {
+  stickyTextCache = new WeakMap();
+});
 //@ chunk-e6aww6q8.js:4673840-4674254 placement = computeStickyPromptText (0.8)
 function getUserPromptText(msg) {
-  let n = stickyTextCache.get(msg);
-  if (n === undefined) {
-    n = null;
+  let summary = stickyTextCache.get(msg);
+  if (summary === undefined) {
+    summary = null;
     if (msg.type === "user" && msg.message.content[0]?.type === "text")
-      n = parseTaskNotification(msg.message.content[0].text, msg.origin);
+      summary = parseTaskNotification(msg.message.content[0].text, msg.origin);
     else if (
       msg.type === "attachment" &&
       msg.attachment.type === "queued_command" &&
@@ -45,39 +52,40 @@ function getUserPromptText(msg) {
       typeof msg.attachment.prompt === "string" &&
       !msg.attachment.imagePasteIds?.length
     )
-      n = parseTaskNotification(msg.attachment.prompt, msg.attachment.origin);
-    stickyTextCache.set(msg, n);
+      summary = parseTaskNotification(msg.attachment.prompt, msg.attachment.origin);
+    stickyTextCache.set(msg, summary);
   }
-  return n;
+  return summary;
 }
 //@ chunk-e6aww6q8.js:4674254-4674453 placement
 /**
  * 解析排队的任务通知：取出摘要（不含标签）、状态与任务类型。
  */
-function parseTaskNotification(e, origin) {
-  let r = processQueuedCommands_3(e, origin);
-  if (r === null) return null;
-  let tag = extractTag(r, SUMMARY);
+function parseTaskNotification(text, origin) {
+  let inner = processQueuedCommands_3(text, origin);
+  if (inner === null) return null;
+  let tag = extractTag(inner, SUMMARY);
   if (!tag || tag.includes("<")) return null;
-  let tag_2 = extractTag(r, TASK_TYPE);
+  let tag_2 = extractTag(inner, TASK_TYPE);
   return {
-    status: extractTag(r, STATUS),
+    status: extractTag(inner, STATUS),
     summary: tag,
     taskType: tag_2 !== null && !tag_2.includes("<") ? tag_2 : null,
   };
 }
 //@ chunk-e6aww6q8.js:4674453-4674532 placement = processQueuedCommands (1)
-function processQueuedCommands_3(e, n) {
-  if (n && n.kind !== "task-notification") return null;
-  return bareTaskNotification(e);
+function processQueuedCommands_3(text, origin) {
+  if (origin && origin.kind !== "task-notification") return null;
+  return bareTaskNotification(text);
 }
 //@ chunk-e6aww6q8.js:4674532-4674729 placement
-function isCollapsibleNotification(e) {
-  if (e.status !== null && e.status !== "completed") return false;
+function isCollapsibleNotification(summary) {
+  if (summary.status !== null && summary.status !== "completed") return false;
   return (
-    e.summary.startsWith(BACKGROUND_COMMAND_PREFIX) ||
-    (e.summary.startsWith(AGENT_NOTIFICATION_PREFIX) && e.summary.endsWith(AGENT_FINISHED_SUFFIX)) ||
-    (e.taskType === ARTIFACT_CHANGED && e.summary.startsWith(ARTIFACT_CHANGED_TITLE))
+    summary.summary.startsWith(BACKGROUND_COMMAND_PREFIX) ||
+    (summary.summary.startsWith(AGENT_NOTIFICATION_PREFIX) &&
+      summary.summary.endsWith(AGENT_FINISHED_SUFFIX)) ||
+    (summary.taskType === ARTIFACT_CHANGED && summary.summary.startsWith(ARTIFACT_CHANGED_TITLE))
   );
 }
 //@ chunk-e6aww6q8.js:4674729-4674741 placement
@@ -86,42 +94,42 @@ var MAX_COLLAPSED_NOTICE_WIDTH = 160;
 /**
  * 生成折叠后的任务通知：首行摘要截断后加"· +N more"。
  */
-function buildCollapsedNotification(e, n) {
-  let r = e.taskType === null ? "" : `<${TASK_TYPE}>${e.taskType}</${TASK_TYPE}>`;
-  let s = e.status === null ? "" : `<${STATUS}>${e.status}</${STATUS}>`;
-  let firstLine = getFirstLine(e.summary);
+function buildCollapsedNotification(summary, moreCount) {
+  let taskTypeTag = summary.taskType === null ? "" : `<${TASK_TYPE}>${summary.taskType}</${TASK_TYPE}>`;
+  let statusTag = summary.status === null ? "" : `<${STATUS}>${summary.status}</${STATUS}>`;
+  let firstLine = getFirstLine(summary.summary);
   let replaced = truncateToLength(firstLine, MAX_COLLAPSED_NOTICE_WIDTH).replace(/&[a-zA-Z#0-9]*$/, "");
-  let w =
-    replaced !== firstLine || e.summary.slice(firstLine.length).trim() !== ""
+  let summaryText =
+    replaced !== firstLine || summary.summary.slice(firstLine.length).trim() !== ""
       ? `${replaced}\u2026`
       : replaced;
-  return `<${TASK_NOTIFICATION}>${r}${s}<${SUMMARY}>${w} \xB7 +${n} more</${SUMMARY}></${TASK_NOTIFICATION}>`;
+  return `<${TASK_NOTIFICATION}>${taskTypeTag}${statusTag}<${SUMMARY}>${summaryText} \xB7 +${moreCount} more</${SUMMARY}></${TASK_NOTIFICATION}>`;
 }
 //@ chunk-e6aww6q8.js:4675054-4675188 placement
 function notificationKind(msg) {
-  let n = completedCommandSummary(msg);
-  if (n === null) return null;
-  if (n.startsWith(BACKGROUND_COMMAND_PREFIX)) return "bash";
-  if (n.startsWith(REMOTE_TASK_PREFIX)) return "remote";
+  let summary = completedCommandSummary(msg);
+  if (summary === null) return null;
+  if (summary.startsWith(BACKGROUND_COMMAND_PREFIX)) return "bash";
+  if (summary.startsWith(REMOTE_TASK_PREFIX)) return "remote";
   return null;
 }
 //@ chunk-e6aww6q8.js:4675188-4675449 placement
-function collapsedNotificationKind(e) {
-  let n = weakMap_14.get(e);
-  if (n !== undefined)
+function collapsedNotificationKind(message) {
+  let count = weakMap_14.get(message);
+  if (count !== undefined)
     return {
       kind: "bash",
-      count: n,
+      count,
     };
-  if (isWeakNotified(e)) return null;
-  let r = completedCommandSummary(e);
-  if (r === null) return null;
-  if (r.startsWith(BACKGROUND_COMMAND_PREFIX))
+  if (isWeakNotified(message)) return null;
+  let summary = completedCommandSummary(message);
+  if (summary === null) return null;
+  if (summary.startsWith(BACKGROUND_COMMAND_PREFIX))
     return {
       kind: "bash",
       count: 1,
     };
-  if (r.startsWith(AGENT_NOTIFICATION_PREFIX) && r.endsWith(AGENT_FINISHED_SUFFIX))
+  if (summary.startsWith(AGENT_NOTIFICATION_PREFIX) && summary.endsWith(AGENT_FINISHED_SUFFIX))
     return {
       kind: "agent",
       count: 1,
@@ -129,9 +137,14 @@ function collapsedNotificationKind(e) {
   return null;
 }
 //@ chunk-e6aww6q8.js:4675952-4676004 placement
-var weakMap_15 = new WeakMap();
-var weakSet_8 = new WeakSet();
-var weakMap_16 = new WeakMap();
+var weakMap_15; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var weakSet_8;
+var weakMap_16;
+deferInit("chunk-e6aww6q8.js:4675952", () => {
+  weakMap_15 = new WeakMap();
+  weakSet_8 = new WeakSet();
+  weakMap_16 = new WeakMap();
+});
 //@ chunk-e6aww6q8.js:4676004-4676038 placement
 /**
  * isWeakNotified：该消息是否在弱表里。
@@ -143,55 +156,57 @@ function isWeakNotified(message) {
 /**
  * collapsedRowOf：取折叠行。
  */
-function collapsedRowOf(e) {
-  return weakMap_16.get(e) ?? null;
+function collapsedRowOf(row) {
+  return weakMap_16.get(row) ?? null;
 }
 //@ chunk-e6aww6q8.js:4676078-4676356 placement
 /**
  * 把连续的可折叠通知（后台命令完成、代理完成、artifact 变更）合并成一行，其余原样保留。
  */
-function collapseNotificationRuns(e, n, r) {
-  let s = [];
-  let h = 0;
-  while (h < e.length) {
-    let y = e[h];
-    let S = n(y);
-    let w = h + 1;
-    if (S !== null && isCollapsibleNotification(S))
-      while (w < e.length) {
-        let G = n(e[w]);
-        if (G === null || !isCollapsibleNotification(G)) break;
-        w++;
+function collapseNotificationRuns(entries, summaryOf, collapseRun) {
+  let out = [];
+  let index = 0;
+  while (index < entries.length) {
+    let entry = entries[index];
+    let summary = summaryOf(entry);
+    let runEnd = index + 1;
+    if (summary !== null && isCollapsibleNotification(summary))
+      while (runEnd < entries.length) {
+        let nextSummary = summaryOf(entries[runEnd]);
+        if (nextSummary === null || !isCollapsibleNotification(nextSummary)) break;
+        runEnd++;
       }
-    let L = w - h === 1 || S === null ? null : r(e.slice(h, w), S);
-    if (L === null) for (let G = h; G < w; G++) s.push(e[G]);
-    else s.push(L);
-    h = w;
+    let collapsed =
+      runEnd - index === 1 || summary === null ? null : collapseRun(entries.slice(index, runEnd), summary);
+    if (collapsed === null)
+      for (let cursorIndex = index; cursorIndex < runEnd; cursorIndex++) out.push(entries[cursorIndex]);
+    else out.push(collapsed);
+    index = runEnd;
   }
-  return s;
+  return out;
 }
 //@ chunk-e6aww6q8.js:4676356-4676394 placement
 /**
  * collapseNotificationRunsIn：折叠连续通知。
  */
-function collapseNotificationRunsIn(messages) {
-  return collapseNotificationRuns(messages, getUserPromptText, collapsedNotificationRow);
+function collapseNotificationRunsIn(entries) {
+  return collapseNotificationRuns(entries, getUserPromptText, collapsedNotificationRow);
 }
 //@ chunk-e6aww6q8.js:4676394-4676849 placement
 /**
  * 生成折叠通知对应的消息行（用户消息或排队命令附件），并缓存折叠关系。
  */
-function collapsedNotificationRow(e, n) {
-  let r = e[0];
-  let s = e.length - 1;
-  let h = weakMap_15.get(r);
-  if (h?.more === s) return h.row;
-  let collapsedNotification = buildCollapsedNotification(n, s);
-  let S;
-  switch (r.type) {
+function collapsedNotificationRow(run, summary) {
+  let first = run[0];
+  let more = run.length - 1;
+  let cached = weakMap_15.get(first);
+  if (cached?.more === more) return cached.row;
+  let collapsedNotification = buildCollapsedNotification(summary, more);
+  let row;
+  switch (first.type) {
     case "user":
-      S = {
-        ...r,
+      row = {
+        ...first,
         message: {
           role: "user",
           content: [
@@ -204,11 +219,11 @@ function collapsedNotificationRow(e, n) {
       };
       break;
     case "attachment":
-      if (r.attachment.type !== "queued_command") return null;
-      S = {
-        ...r,
+      if (first.attachment.type !== "queued_command") return null;
+      row = {
+        ...first,
         attachment: {
-          ...r.attachment,
+          ...first.attachment,
           prompt: collapsedNotification,
         },
       };
@@ -216,25 +231,25 @@ function collapsedNotificationRow(e, n) {
     default:
       return null;
   }
-  if (e.every((w) => completedCommandSummary(w)?.startsWith(BACKGROUND_COMMAND_PREFIX)))
-    weakMap_14.set(S, e.length);
-  weakMap_15.set(r, {
-    more: s,
-    row: S,
+  if (run.every((entry) => completedCommandSummary(entry)?.startsWith(BACKGROUND_COMMAND_PREFIX)))
+    weakMap_14.set(row, run.length);
+  weakMap_15.set(first, {
+    more,
+    row,
   });
-  weakSet_8.add(S);
-  weakMap_16.set(S, e);
-  return S;
+  weakSet_8.add(row);
+  weakMap_16.set(row, run);
+  return row;
 }
 //@ chunk-e6aww6q8.js:4676849-4677066 placement
-function bareTaskNotification(e) {
-  let n = e.trimStart();
-  if (!n.startsWith(`<${TASK_NOTIFICATION}`)) return null;
-  let r = `</${TASK_NOTIFICATION}>`;
-  let index = n.indexOf(r);
+function bareTaskNotification(text) {
+  let trimmed = text.trimStart();
+  if (!trimmed.startsWith(`<${TASK_NOTIFICATION}`)) return null;
+  let closeTag = `</${TASK_NOTIFICATION}>`;
+  let index = trimmed.indexOf(closeTag);
   if (index === -1) return null;
-  let sliced = n.slice(0, index + r.length);
-  return n.slice(sliced.length).replace(regExp_3, "").trim() === "" ? sliced : null;
+  let sliced = trimmed.slice(0, index + closeTag.length);
+  return trimmed.slice(sliced.length).replace(regExp_3, "").trim() === "" ? sliced : null;
 }
 export {
   collapsedNotificationKind,

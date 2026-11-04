@@ -5,10 +5,10 @@
  * pieces: chunk-1ny7cxrt.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x, importMetaRequire } from "../../../runtime/bun-runtime.js";
+import { __commonJS, importMetaRequire } from "../../../runtime/bun-runtime.js";
 
 //@ chunk-1ny7cxrt.js:4634-5438 cjs-fingerprint
-var require_errors = x(function (cjsExports, cjsModule) {
+var require_errors = __commonJS(function (cjsExports, cjsModule) {
   var { format } = importMetaRequire("util");
   class OPError extends Error {
     constructor({ error_description, error, error_uri, session_state, state, scope }, response) {

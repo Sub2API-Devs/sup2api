@@ -39,7 +39,7 @@ import {
 import { truncateToLength } from "../../utils/stringUtils.js";
 import { withDeadline } from "../../utils/sleep.js";
 import { DoctorLazy } from "../handlers/util.js";
-import { u, array, string } from "../../../vendor/zod/v4/classic/schemas.js";
+import { objectSchema, array, stringSchema } from "../../../vendor/zod/v4/classic/schemas.js";
 import { isSleepNoticeOnCached } from "../../services/analytics/violinTipGate.js";
 import {
   controlErrorResponse,
@@ -117,6 +117,7 @@ import { REMOTE_TOOLS_CONSENT_TEXT } from "../../remote/tools/consentText.js";
 import { getRemoteSessionUrl } from "../../constants/product.js";
 import { parsePermissionMode } from "../../types/permissions.js";
 import { toExternalPermissionMode } from "../../utils/permissions/PermissionMode.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-fe6rs39h.js:61774-61809 placement
 var CLOUD_CLIENT_TIMEOUTS = 60000;
@@ -162,13 +163,13 @@ class BootstrapWatchdog {
     this.cancelStall = this.ports.clock.setTimeout(() => {
       this.cancelStall = null;
       if (this.workerReady || this.stopped) return;
-      let e = this.ports.queuedSendCount();
-      if (e === 0) {
+      let queued = this.ports.queuedSendCount();
+      if (queued === 0) {
         this.armStallWarning();
         return;
       }
       logEvent("tengu_remote_headless_client_bootstrap_stalled", {
-        queued: e,
+        queued,
       });
       this.line(
         "warning",
@@ -181,8 +182,8 @@ class BootstrapWatchdog {
     this.cancelStall?.();
     this.cancelStall = null;
   }
-  attachStatusFeeds(e, n) {
-    let s = ({ line, level, notice }) => {
+  attachStatusFeeds(feeds, onChanged) {
+    let handle = ({ line, level, notice }) => {
       switch (level) {
         case "debug":
         case "progress":
@@ -197,35 +198,35 @@ class BootstrapWatchdog {
         default:
       }
     };
-    for (let r of e) {
-      if (r === undefined) continue;
+    for (let feed of feeds) {
+      if (feed === undefined) continue;
       this.unsubscribeStatus = [
         ...this.unsubscribeStatus,
-        r.subscribe((h) => {
-          s(h);
-          n?.();
+        feed.subscribe((entry) => {
+          handle(entry);
+          onChanged?.();
         }),
       ];
-      r.takeBacklog().forEach(s);
+      feed.takeBacklog().forEach(handle);
     }
   }
-  noteProvisioning(e, n) {
-    let last = e.steps.findLast(
+  noteProvisioning(progress, previous) {
+    let last = progress.steps.findLast(
       (step) =>
         step.status === "running" &&
         isSetupStep(step.id) &&
-        n?.steps.find((step_2) => step_2.id === step.id)?.status !== "running",
+        previous?.steps.find((step_2) => step_2.id === step.id)?.status !== "running",
     );
     if (last !== undefined) {
-      let y = setupStepLabel(last, completedSetupMode(e));
-      if (y !== this.lastProvisioningLine) {
-        this.lastProvisioningLine = y;
-        this.line("notice", `${y}\u2026`);
+      let label = setupStepLabel(last, completedSetupMode(progress));
+      if (label !== this.lastProvisioningLine) {
+        this.lastProvisioningLine = label;
+        this.line("notice", `${label}\u2026`);
       }
     }
-    let any = e.steps.some((step) => step.status === "failed");
-    let h = n?.steps.some((step) => step.status === "failed") ?? false;
-    if (any && !h) {
+    let any = progress.steps.some((step) => step.status === "failed");
+    let hadFailure = previous?.steps.some((step) => step.status === "failed") ?? false;
+    if (any && !hadFailure) {
       if (!this.workerReady) {
         this.cancelStall?.();
         this.cancelStall = null;
@@ -233,29 +234,30 @@ class BootstrapWatchdog {
       }
       return;
     }
-    if (e.terminal && !(n?.terminal ?? false)) {
+    if (progress.terminal && !(previous?.terminal ?? false)) {
       this.lastProvisioningLine = "";
-      this.line("notice", setupReadySummary(e));
+      this.line("notice", setupReadySummary(progress));
     }
   }
-  noteDelivered(e) {
-    this.maybeTitle(e);
+  noteDelivered(content) {
+    this.maybeTitle(content);
   }
   noteSendOk({ afterStop }) {
     if (this.ports.controlOnly || !this.workerReady || this.stopped || !afterStop) return;
     this.armWatchdog();
   }
-  noteInbound(e) {
+  noteInbound(frame) {
     this.clearWatchdog();
-    if (e.type === "system" && e.subtype === "status") this.compacting = e.status === "compacting";
-    else if (e.type === "result" || (e.type === "system" && e.subtype === "compact_boundary"))
+    if (frame.type === "system" && frame.subtype === "status")
+      this.compacting = frame.status === "compacting";
+    else if (frame.type === "result" || (frame.type === "system" && frame.subtype === "compact_boundary"))
       this.compacting = false;
   }
-  notePermissionRequestOpened(e) {
-    this.watchdog.requestOpened(e);
+  notePermissionRequestOpened(requestId) {
+    this.watchdog.requestOpened(requestId);
   }
-  notePermissionRequestClosed(e) {
-    this.watchdog.requestClosed(e);
+  notePermissionRequestClosed(requestId) {
+    this.watchdog.requestClosed(requestId);
   }
   noteInterrupt() {
     this.clearWatchdog();
@@ -271,7 +273,7 @@ class BootstrapWatchdog {
     this.clearWatchdog();
     this.cancelStall?.();
     this.cancelStall = null;
-    this.unsubscribeStatus.forEach((h) => h());
+    this.unsubscribeStatus.forEach((unsubscribe) => unsubscribe());
     this.unsubscribeStatus = [];
     let { sessionId, api, essentialTrafficOnly, controlOnly } = this.ports;
     await Promise.allSettled([
@@ -293,7 +295,7 @@ class BootstrapWatchdog {
           this.line("warning", UNRESPONSIVE_NOTICE);
           this.ports.reconnect();
         },
-        (n) => this.ports.clock.setTimeout(n, responseTimeoutMs(this.compacting)),
+        (fn) => this.ports.clock.setTimeout(fn, responseTimeoutMs(this.compacting)),
       )
     )
       this.line("notice", WAITING_FOR_ANSWER_NOTICE);
@@ -301,75 +303,84 @@ class BootstrapWatchdog {
   clearWatchdog() {
     this.watchdog.clear();
   }
-  maybeTitle(e) {
+  maybeTitle(content) {
     if (this.stopped || !this.options.titleFromFirstMessage || this.title !== "none") return;
     if (this.ports.essentialTrafficOnly) {
       this.title = "skipped";
       return;
     }
-    let n =
-      typeof e === "string"
-        ? e
-        : e
-            .flatMap((r) =>
-              typeof r === "object" && r !== null && r.type === "text" && typeof r.text === "string"
-                ? [r.text]
+    let text =
+      typeof content === "string"
+        ? content
+        : content
+            .flatMap((block) =>
+              typeof block === "object" &&
+              block !== null &&
+              block.type === "text" &&
+              typeof block.text === "string"
+                ? [block.text]
                 : [],
             )
             .join(" ");
-    let s = truncateToWidth(
-      sanitizeCloudText(truncateToLength(n, STALL_LINE_MAX_CHARS)),
+    let title = truncateToWidth(
+      sanitizeCloudText(truncateToLength(text, STALL_LINE_MAX_CHARS)),
       STALL_LINE_MAX_WIDTH,
     );
-    if (s === "") {
+    if (title === "") {
       this.title = "skipped";
       return;
     }
     this.title = "set";
     this.titleSet = this.ports.api
-      .updateSessionTitle(this.ports.sessionId, s)
+      .updateSessionTitle(this.ports.sessionId, title)
       .catch(() => false)
-      .then((r) => {
-        if (!r) this.title = "failed";
+      .then((ok) => {
+        if (!ok) this.title = "failed";
       });
   }
-  line(e, n, s) {
+  line(level, text, notice) {
     if (this.stopped) return;
-    let r = sanitizeCloudText(n);
-    if (r === "") return;
-    let h = this.ports.clock.now();
+    let clean = sanitizeCloudText(text);
+    if (clean === "") return;
+    let now = this.ports.clock.now();
     if (
       this.lastLine !== null &&
-      this.lastLine.level === e &&
-      this.lastLine.text === r &&
-      h - this.lastLine.at < STALL_LINE_FRESHNESS_MS
+      this.lastLine.level === level &&
+      this.lastLine.text === clean &&
+      now - this.lastLine.at < STALL_LINE_FRESHNESS_MS
     ) {
       this.linesSuppressed += 1;
       return;
     }
     this.lastLine = {
-      level: e,
-      text: r,
-      at: h,
+      level,
+      text: clean,
+      at: now,
     };
     this.linesWritten += 1;
-    if (s !== undefined) this.linesTagged += 1;
-    this.ports.emit(cloudInformationalMessage(this.ports.stampedSessionId(), e, r, s));
+    if (notice !== undefined) this.linesTagged += 1;
+    this.ports.emit(cloudInformationalMessage(this.ports.stampedSessionId(), level, clean, notice));
   }
 }
 //@ chunk-fe6rs39h.js:66082-66141 placement
-function scheduleTimer(clock, n, s) {
-  return withDeadline(n, s, (r, h) => clock.setTimeout(r, h));
+function scheduleTimer(clock, promise, onTimeout) {
+  return withDeadline(promise, onTimeout, (resolve, timeoutMs) => clock.setTimeout(resolve, timeoutMs));
 }
 //@ chunk-fe6rs39h.js:66141-66240 placement
-var HOST_SLEEP_NOTICE = "host_sleep_notice";
-var RECEIPT_ORDER_TIMEOUT_MS = 3000;
-var MAX_CANCELLED_IDS_ECHOED = 256;
-var thinClientInterruptReplySchema = DoctorLazy(() =>
-  u({
-    cancelled: array(string()).optional().catch(undefined),
-  }),
-);
+var HOST_SLEEP_NOTICE; // deferred: uses DoctorLazy (../handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var RECEIPT_ORDER_TIMEOUT_MS;
+var MAX_CANCELLED_IDS_ECHOED;
+var thinClientInterruptReplySchema;
+deferInit("chunk-fe6rs39h.js:66141", () => {
+  HOST_SLEEP_NOTICE = "host_sleep_notice";
+  RECEIPT_ORDER_TIMEOUT_MS = 3000;
+  MAX_CANCELLED_IDS_ECHOED = 256;
+  thinClientInterruptReplySchema = DoctorLazy(() =>
+    objectSchema({
+      cancelled: array(stringSchema()).optional().catch(undefined),
+    }),
+  );
+});
 //@ chunk-fe6rs39h.js:66240-72711 placement
 /**
  * 转发宿主的 control_request 到云会话并回传响应；处理 interrupt、取消排队消息、收据顺序。
@@ -387,9 +398,9 @@ class ControlRequestRelay {
   get interruptIssued() {
     return this.issued;
   }
-  handleControlRequest(e) {
-    let requestId = "request_id" in e ? e.request_id : undefined;
-    let request = "request" in e ? e.request : undefined;
+  handleControlRequest(frame) {
+    let requestId = "request_id" in frame ? frame.request_id : undefined;
+    let request = "request" in frame ? frame.request : undefined;
     if (typeof requestId !== "string" || typeof request !== "object" || request === null) {
       logForDebugging("[headlessCloudClient] dropping control_request without request_id or request");
       return "dropped";
@@ -412,8 +423,8 @@ class ControlRequestRelay {
       );
       return "local";
     }
-    let h = request;
-    let { route, telemetrySubtype } = routeHostedControlRequest(h, {
+    let hostedRequest = request;
+    let { route, telemetrySubtype } = routeHostedControlRequest(hostedRequest, {
       strict: this.ports.initializePolicy === "strict",
     });
     switch (route.kind) {
@@ -422,48 +433,48 @@ class ControlRequestRelay {
         this.log(telemetrySubtype, "rejected");
         return "rejected";
       case "forward": {
-        let w = this.ports.outbound.submit({
+        let submitResult = this.ports.outbound.submit({
           kind: "control",
-          request: h,
+          request: hostedRequest,
           hostRequestId: requestId,
           holdsLaterSends: route.holdsLaterSends,
           telemetrySubtype,
         });
         this.ports.requestOpen(null);
-        return w === "refused" ? "rejected" : "forwarded";
+        return submitResult === "refused" ? "rejected" : "forwarded";
       }
       case "local":
         switch (route.handler) {
           case "initialize":
-            this.handleInitialize(requestId, h);
+            this.handleInitialize(requestId, hostedRequest);
             return "local";
           case "interrupt":
-            this.handleInterrupt(requestId, h);
+            this.handleInterrupt(requestId, hostedRequest);
             this.ports.requestOpen(null);
             return "local";
           case "end_session":
             this.ports.emit(controlSuccessResponse(requestId, {}));
             this.ports.end({
               reason: "end_session",
-              ...("reason" in h &&
-                h.reason === RELEASED && {
+              ...("reason" in hostedRequest &&
+                hostedRequest.reason === RELEASED && {
                   leftFor: "released",
                 }),
             });
             this.log("end_session", "local");
             return "local";
           case "cancel_async_message":
-            this.handleCancelAsyncMessage(requestId, h);
+            this.handleCancelAsyncMessage(requestId, hostedRequest);
             this.ports.requestOpen(null);
             return "local";
         }
     }
   }
-  handleCancelRequest(e) {
-    this.ports.outbound.cancelForward("request_id" in e ? e.request_id : undefined);
+  handleCancelRequest(frame) {
+    this.ports.outbound.cancelForward("request_id" in frame ? frame.request_id : undefined);
   }
-  handleInitialize(e, n) {
-    let s = !this.ports.openRequested();
+  handleInitialize(requestId, request) {
+    let isOpening = !this.ports.openRequested();
     let {
       hooks,
       sdkMcpServers,
@@ -471,18 +482,23 @@ class ControlRequestRelay {
       sdkMcpServerManifests,
       sdkMcpServerManifestsOrigin,
       workspaceTrust,
-      ...k
-    } = n;
-    let I = SDKInitializeInitializeMessageSchema().safeParse(k);
-    let O = lostSdkFeatures(
-      n,
+      ...rest
+    } = request;
+    let parsed = SDKInitializeInitializeMessageSchema().safeParse(rest);
+    let lossReport = lostSdkFeatures(
+      request,
       this.ports.initializePolicy,
-      s && I.success ? this.ports.openingInitializeHonours : undefined,
+      isOpening && parsed.success ? this.ports.openingInitializeHonours : undefined,
     );
-    if (O.outcome !== "reject" && s && !I.success && this.ports.initializePolicy === "strict") {
+    if (
+      lossReport.outcome !== "reject" &&
+      isOpening &&
+      !parsed.success &&
+      this.ports.initializePolicy === "strict"
+    ) {
       this.ports.emit(
         controlErrorResponse(
-          e,
+          requestId,
           "the initialize request could not be read (it does not match the control schema), so its options cannot be applied to a cloud session; nothing was started",
         ),
       );
@@ -494,52 +510,53 @@ class ControlRequestRelay {
       this.log("initialize", "rejected");
       return;
     }
-    if (O.outcome === "reject") {
-      this.ports.emit(controlErrorResponse(e, O.error));
-      if (s)
+    if (lossReport.outcome === "reject") {
+      this.ports.emit(controlErrorResponse(requestId, lossReport.error));
+      if (isOpening)
         this.ports.end({
           reason: "rejected_options",
-          message: O.error,
+          message: lossReport.error,
         });
       this.log("initialize", "rejected");
       return;
     }
     this.ports.emit(
-      controlSuccessResponse(e, {
+      controlSuccessResponse(requestId, {
         ...createEmptyInitializeResponse(this.ports.account()),
-        ...(O.ignored.includes("hooks") && {
+        ...(lossReport.ignored.includes("hooks") && {
           hooks_applied: false,
         }),
-        ...(O.ignored.includes("plugins") && {
+        ...(lossReport.ignored.includes("plugins") && {
           plugins_applied: false,
         }),
       }),
     );
-    if (!I.success)
+    if (!parsed.success)
       logForDebugging(
         "[headlessCloudClient] initialize did not match its schema; opening the session without host options",
       );
-    this.ports.requestOpen(I.success ? I.data : null);
+    this.ports.requestOpen(parsed.success ? parsed.data : null);
     logEvent("tengu_remote_headless_client_host_request", {
       subtype: fromEnum("initialize"),
       outcome: fromEnum("local"),
-      ignored_count: O.ignored.length + this.ports.ignoredOptionsCount,
+      ignored_count: lossReport.ignored.length + this.ports.ignoredOptionsCount,
     });
   }
-  handleInterrupt(e, n) {
-    let s = "cancel_queued" in n && n.cancel_queued === true;
-    let r = this.ports.pendingSeededPromptUuid();
-    let cancelled = s ? this.ports.outbound.withdrawQueuedSends() : [];
+  handleInterrupt(requestId, request) {
+    let isCancelQueued = "cancel_queued" in request && request.cancel_queued === true;
+    let seededUuid = this.ports.pendingSeededPromptUuid();
+    let cancelled = isCancelQueued ? this.ports.outbound.withdrawQueuedSends() : [];
     let stillQueued = [
-      ...(r === undefined ? [] : [r]),
+      ...(seededUuid === undefined ? [] : [seededUuid]),
       ...this.ports.outbound.sendUuidsInFlight(),
-      ...(s ? [] : this.ports.outbound.queuedSendUuids()),
+      ...(isCancelQueued ? [] : this.ports.outbound.queuedSendUuids()),
     ];
-    if (!(n.subtype === "interrupt" && isImmediateInterruptRequest(n))) this.ports.onInterrupt?.();
+    if (!(request.subtype === "interrupt" && isImmediateInterruptRequest(request)))
+      this.ports.onInterrupt?.();
     this.ports.emit(
       controlSuccessResponse(
-        e,
-        s
+        requestId,
+        isCancelQueued
           ? {
               still_queued: stillQueued,
               cancelled,
@@ -549,42 +566,42 @@ class ControlRequestRelay {
             },
       ),
     );
-    let S = n;
-    if (n.subtype === "interrupt") {
-      let { for_user_message_uuids: forUserMessageUuids, worker_epoch: workerEpoch, ...I } = n;
-      S =
-        typeof I.message_uuid === "string"
+    let forwarded = request;
+    if (request.subtype === "interrupt") {
+      let { for_user_message_uuids: forUserMessageUuids, worker_epoch: workerEpoch, ...rest } = request;
+      forwarded =
+        typeof rest.message_uuid === "string"
           ? {
-              ...I,
-              message_uuid: I.message_uuid.toLowerCase(),
+              ...rest,
+              message_uuid: rest.message_uuid.toLowerCase(),
             }
-          : I;
+          : rest;
     }
-    let w = this.ports.liveSession();
-    if (w === null) {
-      this.pendingInterrupt = normalizeInterruptRequest(this.pendingInterrupt, S);
+    let live = this.ports.liveSession();
+    if (live === null) {
+      this.pendingInterrupt = normalizeInterruptRequest(this.pendingInterrupt, forwarded);
       this.log("interrupt", "queued");
       return;
     }
-    this.dispatchInterrupt(w.manager, S);
+    this.dispatchInterrupt(live.manager, forwarded);
     this.log("interrupt", "forwarded");
   }
-  async sendPendingInterrupt(e) {
-    let n = this.takePendingInterrupt();
-    if (n === null) return;
-    this.dispatchInterrupt(e, n);
-    let s = scheduleTimer(
+  async sendPendingInterrupt(manager) {
+    let pending = this.takePendingInterrupt();
+    if (pending === null) return;
+    this.dispatchInterrupt(manager, pending);
+    let gate = scheduleTimer(
       this.ports.clock,
       this.lastReceiptAfterIssue().catch(noopCallback),
       RECEIPT_ORDER_TIMEOUT_MS,
     );
-    this.ports.outbound.holdLaterSendsBehind(s);
-    await s;
+    this.ports.outbound.holdLaterSendsBehind(gate);
+    await gate;
   }
-  async issuePendingInterrupt(e) {
-    let n = this.takePendingInterrupt();
-    if (n === null) return;
-    this.dispatchInterrupt(e, n);
+  async issuePendingInterrupt(manager) {
+    let pending = this.takePendingInterrupt();
+    if (pending === null) return;
+    this.dispatchInterrupt(manager, pending);
     await this.issued;
   }
   takePendingInterrupt() {
@@ -602,60 +619,60 @@ class ControlRequestRelay {
     await this.issued;
     await this.lastReceipt;
   }
-  dispatchInterrupt(e, n) {
-    let s = this.ports.clock.now();
-    let r = !("cancel_queued" in n && n.cancel_queued === true);
-    let h = n;
-    if (!r && n.subtype === "interrupt") {
-      let { send_now: sendNow, message_uuid: messageUuid, ...w } = n;
-      h = w;
+  dispatchInterrupt(manager, request) {
+    let startedAt = this.ports.clock.now();
+    let keepWithheld = !("cancel_queued" in request && request.cancel_queued === true);
+    let toSend = request;
+    if (!keepWithheld && request.subtype === "interrupt") {
+      let { send_now: sendNow, message_uuid: messageUuid, ...rest } = request;
+      toSend = rest;
     }
     this.issued = this.ports.track(
-      e
+      manager
         .releaseHeldSends(undefined, {
-          keepWithheld: r,
+          keepWithheld,
         })
         .then(
           () => {
-            this.lastReceipt = e.sendControlRequest(h).then(
-              (y) => {
-                this.logInterruptReceipt("ok", s, this.announceSweptByWorker(y));
+            this.lastReceipt = manager.sendControlRequest(toSend).then(
+              (reply) => {
+                this.logInterruptReceipt("ok", startedAt, this.announceSweptByWorker(reply));
               },
               (error) => {
-                let S = classifyControlRequestError(error) === "not_connected";
-                this.logInterruptReceipt(S ? "not_sent" : "error", s);
+                let isNotConnected = classifyControlRequestError(error) === "not_connected";
+                this.logInterruptReceipt(isNotConnected ? "not_sent" : "error", startedAt);
               },
             );
           },
           (error) => {
             logForDebugging(`[headlessCloudClient] interrupt not dispatched: ${errorMessage(error)}`);
-            this.logInterruptReceipt("not_sent", s);
+            this.logInterruptReceipt("not_sent", startedAt);
           },
         ),
     );
     this.ports.outbound.holdLaterSendsBehind(this.issued);
   }
-  logInterruptReceipt(e, n, s) {
+  logInterruptReceipt(outcome, startedAt, sweptCount) {
     logEvent("tengu_remote_headless_client_interrupt_receipt", {
-      outcome: fromEnum(e),
-      latency_ms: this.ports.clock.now() - n,
-      ...(s !== undefined && {
-        swept_announced: s,
+      outcome: fromEnum(outcome),
+      latency_ms: this.ports.clock.now() - startedAt,
+      ...(sweptCount !== undefined && {
+        swept_announced: sweptCount,
       }),
     });
   }
-  announceSweptByWorker(e) {
+  announceSweptByWorker(reply) {
     let cancelled =
-      parseThinClientReply("interrupt", thinClientInterruptReplySchema(), e ?? {})?.cancelled ?? [];
+      parseThinClientReply("interrupt", thinClientInterruptReplySchema(), reply ?? {})?.cancelled ?? [];
     let sliced = uniq(cancelled)
-      .filter((r) => normalizeUuidOrNull(r) !== null && !this.announcedCancelled.has(r))
+      .filter((uuid) => normalizeUuidOrNull(uuid) !== null && !this.announcedCancelled.has(uuid))
       .slice(0, MAX_CANCELLED_IDS_ECHOED);
-    sliced.forEach((r) => {
-      this.announcedCancelled.add(r);
+    sliced.forEach((uuid) => {
+      this.announcedCancelled.add(uuid);
       try {
         this.ports.emit({
           type: "command_lifecycle",
-          command_uuid: r,
+          command_uuid: uuid,
           state: "cancelled",
           uuid: randomUUID(),
           session_id: this.ports.stampedSessionId(),
@@ -666,18 +683,18 @@ class ControlRequestRelay {
     });
     return sliced.length;
   }
-  handleCancelAsyncMessage(e, n) {
-    let s =
-      n.subtype === "cancel_async_message" && typeof n.message_uuid === "string"
+  handleCancelAsyncMessage(requestId, request) {
+    let normalized =
+      request.subtype === "cancel_async_message" && typeof request.message_uuid === "string"
         ? {
-            ...n,
-            message_uuid: n.message_uuid.toLowerCase(),
+            ...request,
+            message_uuid: request.message_uuid.toLowerCase(),
           }
-        : n;
-    let messageUuid = "message_uuid" in s ? s.message_uuid : undefined;
+        : request;
+    let messageUuid = "message_uuid" in normalized ? normalized.message_uuid : undefined;
     if (this.ports.outbound.withdrawQueuedSend(messageUuid)) {
       this.ports.emit(
-        controlSuccessResponse(e, {
+        controlSuccessResponse(requestId, {
           cancelled: true,
         }),
       );
@@ -686,42 +703,42 @@ class ControlRequestRelay {
     }
     this.ports.outbound.submit({
       kind: "control",
-      request: s,
-      hostRequestId: e,
+      request: normalized,
+      hostRequestId: requestId,
       holdsLaterSends: false,
       telemetrySubtype: "cancel_async_message",
     });
   }
-  log(e, n) {
+  log(subtype, outcome) {
     logEvent("tengu_remote_headless_client_host_request", {
-      subtype: fromEnum(e),
-      outcome: fromEnum(n),
+      subtype: fromEnum(subtype),
+      outcome: fromEnum(outcome),
     });
   }
 }
 //@ chunk-fe6rs39h.js:72711-72726 placement
 function noopCallback() {}
 //@ chunk-fe6rs39h.js:72726-73036 placement
-function normalizeInterruptRequest(pendingInterrupt, n) {
-  if (n.subtype !== "interrupt") return n;
-  let s =
+function normalizeInterruptRequest(pendingInterrupt, request) {
+  if (request.subtype !== "interrupt") return request;
+  let isCancelQueued =
     pendingInterrupt !== null &&
     "cancel_queued" in pendingInterrupt &&
     pendingInterrupt.cancel_queued === true;
-  let r =
+  let isHeld =
     pendingInterrupt !== null && !("send_now" in pendingInterrupt && pendingInterrupt.send_now === true);
-  let { message_uuid: messageUuid, ...y } = n;
-  let { send_now: sendNow, ...w } = y;
-  let R =
+  let { message_uuid: messageUuid, ...withoutUuid } = request;
+  let { send_now: sendNow, ...withoutSendNow } = withoutUuid;
+  let isSameMessage =
     pendingInterrupt === null ||
     ("message_uuid" in pendingInterrupt ? pendingInterrupt.message_uuid : undefined) === messageUuid;
-  let k = r ? w : R ? n : y;
-  return s
+  let normalized = isHeld ? withoutSendNow : isSameMessage ? request : withoutUuid;
+  return isCancelQueued
     ? {
-        ...k,
+        ...normalized,
         cancel_queued: true,
       }
-    : k;
+    : normalized;
 }
 //@ chunk-fe6rs39h.js:73078-76477 placement
 /**
@@ -738,157 +755,157 @@ class OutboundMessageLedger {
   get size() {
     return this.entries.size;
   }
-  phaseOf(e) {
-    return this.entries.get(e)?.phase;
+  phaseOf(uuid) {
+    return this.entries.get(uuid)?.phase;
   }
-  wasTaken(e) {
-    let n = this.phaseOf(e);
-    return n === "queued" || n === "posting" || n === "delivered" || n === "seeded";
+  wasTaken(uuid) {
+    let phase = this.phaseOf(uuid);
+    return phase === "queued" || phase === "posting" || phase === "delivered" || phase === "seeded";
   }
-  seed(e, n, s) {
-    let r = this.entries.get(e);
-    let h =
-      r !== undefined && r.owed > 0 && r.content !== undefined
+  seed(uuid, content, shouldStore) {
+    let existing = this.entries.get(uuid);
+    let unsettled =
+      existing !== undefined && existing.owed > 0 && existing.content !== undefined
         ? [
             {
-              uuid: e,
-              content: r.content,
+              uuid,
+              content: existing.content,
             },
           ]
         : [];
-    let y = s && n !== undefined;
+    let willStore = shouldStore && content !== undefined;
     return [
-      ...this.set(e, {
+      ...this.set(uuid, {
         kind: "message",
         phase: "seeded",
-        content: n ?? r?.content,
-        stored: y ? n : undefined,
-        owed: this.replay && !y ? 1 : 0,
-        pendingEchoes: y ? 0 : 1,
+        content: content ?? existing?.content,
+        stored: willStore ? content : undefined,
+        owed: this.replay && !willStore ? 1 : 0,
+        pendingEchoes: willStore ? 0 : 1,
         delivered: true,
         echoMayBeLost: false,
         hadBefore: false,
       }),
-      ...h,
-      ...(y && this.replay
+      ...unsettled,
+      ...(willStore && this.replay
         ? [
             {
-              uuid: e,
-              content: n,
+              uuid,
+              content,
             },
           ]
         : []),
     ];
   }
-  accept(e, n, content) {
-    let r = this.entries.get(e);
-    let h = this.replay && n === "message" ? 1 : 0;
-    this.entries.delete(e);
-    return this.set(e, {
-      kind: n,
+  accept(uuid, kind, content) {
+    let existing = this.entries.get(uuid);
+    let owedDelta = this.replay && kind === "message" ? 1 : 0;
+    this.entries.delete(uuid);
+    return this.set(uuid, {
+      kind,
       phase: "queued",
       content,
       stored: undefined,
-      owed: (r?.owed ?? 0) + h,
-      pendingEchoes: r?.pendingEchoes ?? 0,
+      owed: (existing?.owed ?? 0) + owedDelta,
+      pendingEchoes: existing?.pendingEchoes ?? 0,
       delivered: false,
-      echoMayBeLost: r?.echoMayBeLost ?? false,
+      echoMayBeLost: existing?.echoMayBeLost ?? false,
       hadBefore: false,
     });
   }
-  withdraw(e) {
-    let n = this.entries.get(e);
-    if (n === undefined) return true;
-    if (n.phase === "posting") {
-      n.pendingEchoes = Math.max(0, n.pendingEchoes - 1);
-      if (n.delivered) {
-        n.phase = "delivered";
+  withdraw(uuid) {
+    let entry = this.entries.get(uuid);
+    if (entry === undefined) return true;
+    if (entry.phase === "posting") {
+      entry.pendingEchoes = Math.max(0, entry.pendingEchoes - 1);
+      if (entry.delivered) {
+        entry.phase = "delivered";
         return false;
       }
     }
-    n.phase = "withdrawn";
-    n.owed = Math.max(0, n.owed - 1);
+    entry.phase = "withdrawn";
+    entry.owed = Math.max(0, entry.owed - 1);
     return true;
   }
-  giveUp(e) {
-    let n = this.entries.get(e);
-    if (n === undefined)
+  giveUp(uuid) {
+    let entry = this.entries.get(uuid);
+    if (entry === undefined)
       return {
         echo: false,
       };
-    n.phase = "given_up";
+    entry.phase = "given_up";
     return {
-      echo: this.takeOwed(n),
+      echo: this.takeOwed(entry),
     };
   }
-  postStart(e) {
-    let n = this.entries.get(e);
-    if (n === undefined) return;
-    n.phase = "posting";
-    if (n.kind === "message") n.pendingEchoes += 1;
+  postStart(uuid) {
+    let entry = this.entries.get(uuid);
+    if (entry === undefined) return;
+    entry.phase = "posting";
+    if (entry.kind === "message") entry.pendingEchoes += 1;
   }
-  hadBefore(e) {
-    return this.entries.get(e)?.hadBefore ?? false;
+  hadBefore(uuid) {
+    return this.entries.get(uuid)?.hadBefore ?? false;
   }
-  postOk(e, n) {
-    let s = this.entries.get(e);
-    if (s === undefined)
+  postOk(uuid, outcome) {
+    let entry = this.entries.get(uuid);
+    if (entry === undefined)
       return {
         echo: false,
       };
-    s.phase = "delivered";
-    s.delivered = true;
-    if (n === "duplicate") s.hadBefore = true;
-    if (n === "never") s.pendingEchoes = 0;
-    if (n !== "streams") s.stored ??= s.content;
-    return n !== "streams" || s.echoMayBeLost
+    entry.phase = "delivered";
+    entry.delivered = true;
+    if (outcome === "duplicate") entry.hadBefore = true;
+    if (outcome === "never") entry.pendingEchoes = 0;
+    if (outcome !== "streams") entry.stored ??= entry.content;
+    return outcome !== "streams" || entry.echoMayBeLost
       ? {
-          echo: this.takeOwed(s),
+          echo: this.takeOwed(entry),
         }
       : {
           echo: false,
         };
   }
-  postFail(e, n) {
-    let s = this.entries.get(e);
-    if (s === undefined)
+  postFail(uuid, echoPending) {
+    let entry = this.entries.get(uuid);
+    if (entry === undefined)
       return {
         echo: false,
         error: true,
       };
-    if (s.delivered) {
-      s.phase = "delivered";
+    if (entry.delivered) {
+      entry.phase = "delivered";
       return {
         echo: false,
         error: false,
       };
     }
-    s.phase = "failed";
-    if (!n) s.pendingEchoes = Math.max(0, s.pendingEchoes - 1);
+    entry.phase = "failed";
+    if (!echoPending) entry.pendingEchoes = Math.max(0, entry.pendingEchoes - 1);
     return {
-      echo: this.takeOwed(s),
+      echo: this.takeOwed(entry),
       error: true,
     };
   }
-  streamEcho(e, n) {
-    let s = this.entries.get(e);
-    if (s === undefined || s.kind !== "message")
+  streamEcho(uuid, content) {
+    let entry = this.entries.get(uuid);
+    if (entry === undefined || entry.kind !== "message")
       return {
         verdict: "not_own",
         dequeue: false,
       };
-    if (s.pendingEchoes > 0) {
-      s.pendingEchoes = 0;
-      s.echoMayBeLost = false;
-      s.stored = n;
-      let dequeue = s.phase === "queued";
-      s.delivered = true;
-      if (s.phase !== "posting" && s.phase !== "seeded") s.phase = "delivered";
-      if (s.owed > 0) {
-        s.owed -= 1;
+    if (entry.pendingEchoes > 0) {
+      entry.pendingEchoes = 0;
+      entry.echoMayBeLost = false;
+      entry.stored = content;
+      let dequeue = entry.phase === "queued";
+      entry.delivered = true;
+      if (entry.phase !== "posting" && entry.phase !== "seeded") entry.phase = "delivered";
+      if (entry.owed > 0) {
+        entry.owed -= 1;
         return {
           verdict: "claim",
-          sent: s.content,
+          sent: entry.content,
           dequeue,
         };
       }
@@ -899,69 +916,76 @@ class OutboundMessageLedger {
     }
     return {
       verdict:
-        s.delivered && s.owed === 0 && s.stored !== undefined && isDeepStrictEqual(n, s.stored)
+        entry.delivered &&
+        entry.owed === 0 &&
+        entry.stored !== undefined &&
+        isDeepStrictEqual(content, entry.stored)
           ? "consume"
           : "peer",
       dequeue: false,
     };
   }
   settleOwed() {
-    return [...this.entries].flatMap(([e, n]) => {
-      if ((n.phase !== "delivered" && n.phase !== "seeded") || n.owed === 0 || n.content === undefined)
+    return [...this.entries].flatMap(([uuid, entry]) => {
+      if (
+        (entry.phase !== "delivered" && entry.phase !== "seeded") ||
+        entry.owed === 0 ||
+        entry.content === undefined
+      )
         return [];
-      n.owed -= 1;
+      entry.owed -= 1;
       return [
         {
-          uuid: e,
-          content: n.content,
+          uuid,
+          content: entry.content,
         },
       ];
     });
   }
   truncation() {
-    return [...this.entries].flatMap(([e, n]) => {
-      if (n.pendingEchoes === 0) return [];
-      n.echoMayBeLost = true;
-      if (n.owed === 0 || n.content === undefined) return [];
-      n.owed -= 1;
+    return [...this.entries].flatMap(([uuid, entry]) => {
+      if (entry.pendingEchoes === 0) return [];
+      entry.echoMayBeLost = true;
+      if (entry.owed === 0 || entry.content === undefined) return [];
+      entry.owed -= 1;
       return [
         {
-          uuid: e,
-          content: n.content,
+          uuid,
+          content: entry.content,
         },
       ];
     });
   }
-  takeOwed(e) {
-    if (e.owed === 0) return false;
-    e.owed -= 1;
+  takeOwed(entry) {
+    if (entry.owed === 0) return false;
+    entry.owed -= 1;
     return true;
   }
-  set(e, n) {
-    let s = !this.entries.has(e) && this.entries.size >= this.cap ? this.evictOne() : [];
-    this.entries.set(e, n);
-    return s;
+  set(uuid, entry) {
+    let evicted = !this.entries.has(uuid) && this.entries.size >= this.cap ? this.evictOne() : [];
+    this.entries.set(uuid, entry);
+    return evicted;
   }
   evictOne() {
-    let e = (w) => w.phase === "queued" || w.phase === "posting";
-    let n = (w) => !e(w) && w.owed === 0 && w.pendingEchoes === 0;
-    let s = (w) => !e(w) && w.owed === 0;
-    let r = (w) => !e(w);
-    let h = this.oldestWhere(n) ?? this.oldestWhere(s) ?? this.oldestWhere(r);
-    if (h === null) return [];
-    let [y, S] = h;
-    this.entries.delete(y);
-    return S.owed > 0 && S.content !== undefined
+    let isPending = (entry) => entry.phase === "queued" || entry.phase === "posting";
+    let isDisposable = (entry) => !isPending(entry) && entry.owed === 0 && entry.pendingEchoes === 0;
+    let isIdle = (entry) => !isPending(entry) && entry.owed === 0;
+    let isNotPending = (entry) => !isPending(entry);
+    let victim = this.oldestWhere(isDisposable) ?? this.oldestWhere(isIdle) ?? this.oldestWhere(isNotPending);
+    if (victim === null) return [];
+    let [uuid, entry] = victim;
+    this.entries.delete(uuid);
+    return entry.owed > 0 && entry.content !== undefined
       ? [
           {
-            uuid: y,
-            content: S.content,
+            uuid,
+            content: entry.content,
           },
         ]
       : [];
   }
-  oldestWhere(e) {
-    return [...this.entries].find(([, n]) => e(n)) ?? null;
+  oldestWhere(predicate) {
+    return [...this.entries].find(([, entry]) => predicate(entry)) ?? null;
   }
 }
 //@ chunk-fe6rs39h.js:76477-76749 placement
@@ -993,10 +1017,10 @@ class OutboundMessageQueue {
   sendCount = 0;
   forwardCount = 0;
   maxQueued = 0;
-  constructor(e, n) {
-    this.ports = e;
-    this.queueCap = n;
-    this.ledger = new OutboundMessageLedger(n * 4 + 8, e.replayUserMessages);
+  constructor(ports, queueCap) {
+    this.ports = ports;
+    this.queueCap = queueCap;
+    this.ledger = new OutboundMessageLedger(queueCap * 4 + 8, ports.replayUserMessages);
   }
   get queuedCount() {
     return this.queue.length + this.forwardsWaiting.size;
@@ -1011,142 +1035,148 @@ class OutboundMessageQueue {
       maxQueued: this.maxQueued,
     };
   }
-  noteOwnUuid(e, n) {
-    this.queue = this.queue.filter((s) => s.kind === "control" || s.uuid !== e);
+  noteOwnUuid(uuid, content) {
+    this.queue = this.queue.filter((item) => item.kind === "control" || item.uuid !== uuid);
     this.payOwed(
       this.ledger.seed(
-        e,
-        n,
-        n !== undefined &&
+        uuid,
+        content,
+        content !== undefined &&
           isControlShapedMessage({
             message: {
-              content: n,
+              content,
             },
           }),
       ),
     );
   }
-  streamEcho(e, n) {
-    let s = this.ledger.streamEcho(e, n);
-    if (s.dequeue) this.queue = this.queue.filter((r) => r.kind === "control" || r.uuid !== e);
-    return s.verdict === "claim"
+  streamEcho(uuid, content) {
+    let echo = this.ledger.streamEcho(uuid, content);
+    if (echo.dequeue) this.queue = this.queue.filter((item) => item.kind === "control" || item.uuid !== uuid);
+    return echo.verdict === "claim"
       ? {
           verdict: "claim",
-          sent: s.sent,
+          sent: echo.sent,
         }
       : {
-          verdict: s.verdict,
+          verdict: echo.verdict,
         };
   }
   settleOwedEchoes() {
     this.payOwed(this.ledger.settleOwed());
   }
-  payOwed(e) {
-    let n = this.ports.stampedSessionId();
-    e.forEach(({ uuid, content }) => this.contained(() => this.writeEcho(scopeKey(n, uuid, content))));
+  payOwed(owedEchoes) {
+    let sessionId = this.ports.stampedSessionId();
+    owedEchoes.forEach(({ uuid, content }) =>
+      this.contained(() => this.writeEcho(scopeKey(sessionId, uuid, content))),
+    );
   }
-  wasTaken(e) {
-    return this.ledger.wasTaken(e);
+  wasTaken(uuid) {
+    return this.ledger.wasTaken(uuid);
   }
   synthesizeMissedEchoes() {
-    let e = this.ledger.truncation();
-    this.payOwed(e);
-    return e.length;
+    let owedEchoes = this.ledger.truncation();
+    this.payOwed(owedEchoes);
+    return owedEchoes.length;
   }
-  writeEcho(e, duplicate = false) {
+  writeEcho(echoKey, duplicate = false) {
     if (this.ports.emitEcho) {
-      this.ports.emitEcho(e, {
+      this.ports.emitEcho(echoKey, {
         duplicate,
       });
       return;
     }
-    this.ports.emit(e);
+    this.ports.emit(echoKey);
   }
-  contained(e) {
+  contained(fn) {
     try {
-      e();
+      fn();
     } catch (error) {
       logError(error);
     }
   }
-  abandonPostsInFlight(e) {
-    let n = [...this.postsInFlight];
+  abandonPostsInFlight(reason) {
+    let inFlight = [...this.postsInFlight];
     this.postsInFlight.clear();
     this.renewalParked.clear();
-    n.forEach((s) =>
-      this.failItem(s, e, {
+    inFlight.forEach((item) =>
+      this.failItem(item, reason, {
         posted: true,
         unconfirmed: true,
       }),
     );
     this.settleOwedEchoes();
-    return n.length;
+    return inFlight.length;
   }
-  submit(e) {
-    if (e.kind !== "control") {
-      if (this.ledger.wasTaken(e.uuid)) {
-        if (e.kind === "message" && this.ports.replayUserMessages)
+  submit(item) {
+    if (item.kind !== "control") {
+      if (this.ledger.wasTaken(item.uuid)) {
+        if (item.kind === "message" && this.ports.replayUserMessages)
           this.writeEcho(
-            scopeKey(this.ports.stampedSessionId(), e.uuid, e.content),
-            this.ledger.hadBefore(e.uuid),
+            scopeKey(this.ports.stampedSessionId(), item.uuid, item.content),
+            this.ledger.hadBefore(item.uuid),
           );
         return "redelivered";
       }
-      this.payOwed(this.ledger.accept(e.uuid, e.kind, e.kind === "message" ? e.content : undefined));
+      this.payOwed(
+        this.ledger.accept(item.uuid, item.kind, item.kind === "message" ? item.content : undefined),
+      );
     }
     if (this.closedWhy !== null) {
-      this.failItem(e, this.closedWhy, {
+      this.failItem(item, this.closedWhy, {
         composedHere: this.closedCause === "open_failed",
       });
-      if (e.kind !== "control") this.logSend(e.kind, "closed");
+      if (item.kind !== "control") this.logSend(item.kind, "closed");
       return "refused";
     }
     if (
-      e.kind === "message" &&
+      item.kind === "message" &&
       hasNonTextContent({
         message: {
-          content: e.content,
+          content: item.content,
         },
       })
     ) {
-      this.failItem(e, MALFORMED_CONTENT_BLOCKS_TEXT);
-      this.logSend(e.kind, "malformed");
+      this.failItem(item, MALFORMED_CONTENT_BLOCKS_TEXT);
+      this.logSend(item.kind, "malformed");
       return "refused";
     }
-    if (e.kind === "control" && this.sendOutstanding && this.ports.liveSession() !== null) {
-      this.forwardOutOfBand(e);
+    if (item.kind === "control" && this.sendOutstanding && this.ports.liveSession() !== null) {
+      this.forwardOutOfBand(item);
       return "new";
     }
     if (this.queue.length >= this.queueCap) {
-      this.failItem(e, "too many messages are waiting for the cloud session", {
+      this.failItem(item, "too many messages are waiting for the cloud session", {
         outcome: "overflow",
       });
       logEvent("tengu_remote_headless_client_queue_overflow", {
-        kind: fromEnum(e.kind),
+        kind: fromEnum(item.kind),
       });
       return "refused";
     }
-    this.queue.push(e);
+    this.queue.push(item);
     this.maxQueued = Math.max(this.maxQueued, this.queue.length);
     if (this.ports.liveSession() !== null) this.ports.track(this.flush().catch(logError));
     return "new";
   }
   async untilNoHold() {
-    let e = null;
-    while (e !== this.laterSendsHold) {
-      e = this.laterSendsHold;
-      await e;
+    let observed = null;
+    while (observed !== this.laterSendsHold) {
+      observed = this.laterSendsHold;
+      await observed;
     }
   }
-  holdLaterSendsBehind(e) {
-    this.laterSendsHold = this.laterSendsHold.then(() => e.then(noopPromiseHandler, noopPromiseHandler));
+  holdLaterSendsBehind(promise) {
+    this.laterSendsHold = this.laterSendsHold.then(() =>
+      promise.then(noopPromiseHandler, noopPromiseHandler),
+    );
   }
-  close(closedWhy, n) {
+  close(closedWhy, cause) {
     if (this.closedWhy === null) {
       this.closedWhy = closedWhy;
-      this.closedCause = n;
+      this.closedCause = cause;
     }
-    this.failQueued(this.closedWhy, n);
+    this.failQueued(this.closedWhy, cause);
     this.settleOwedEchoes();
   }
   async flush() {
@@ -1154,28 +1184,28 @@ class OutboundMessageQueue {
     this.flushing = true;
     try {
       while (this.ports.liveSession() !== null) {
-        let e = this.queue[0];
-        if (e !== undefined && e.kind !== "control") {
+        let head = this.queue[0];
+        if (head !== undefined && head.kind !== "control") {
           await this.untilNoHold();
           if (this.ports.liveSession() === null) break;
         }
-        let n = this.queue.shift();
-        if (n === undefined) break;
+        let item = this.queue.shift();
+        if (item === undefined) break;
         try {
-          if (n.kind === "control") this.forwardOutOfBand(n);
+          if (item.kind === "control") this.forwardOutOfBand(item);
           else {
             this.sendOutstanding = true;
             try {
-              let s = this.post(n);
-              this.outstandingSend = s.then(noopPromiseHandler, noopPromiseHandler);
+              let sending = this.post(item);
+              this.outstandingSend = sending.then(noopPromiseHandler, noopPromiseHandler);
               this.contained(() => this.releaseQueuedForwards());
-              await s;
+              await sending;
             } finally {
               this.sendOutstanding = false;
             }
           }
         } catch (error) {
-          this.failAfterInternalError(n, error);
+          this.failAfterInternalError(item, error);
         }
       }
     } finally {
@@ -1183,162 +1213,165 @@ class OutboundMessageQueue {
     }
   }
   releaseQueuedForwards() {
-    let filtered = this.queue.filter((n) => n.kind === "control");
+    let filtered = this.queue.filter((item) => item.kind === "control");
     if (filtered.length === 0) return;
-    this.queue = this.queue.filter((n) => n.kind !== "control");
-    filtered.forEach((n) => this.forwardOutOfBand(n));
+    this.queue = this.queue.filter((item) => item.kind !== "control");
+    filtered.forEach((item) => this.forwardOutOfBand(item));
   }
-  forwardOutOfBand(e) {
+  forwardOutOfBand(item) {
     let abortController = new AbortController();
-    let s =
-      e.request.subtype === "cancel_async_message"
+    let gate =
+      item.request.subtype === "cancel_async_message"
         ? Promise.all([this.laterSendsHold, this.outstandingSend]).then(noopPromiseHandler)
         : this.laterSendsHold;
-    this.forwardsWaiting.set(abortController, e);
-    let r = this.ports.track(
-      s
+    this.forwardsWaiting.set(abortController, item);
+    let tracked = this.ports.track(
+      gate
         .then(() => {
           if (!this.forwardsWaiting.delete(abortController)) return;
-          return this.forward(e, abortController);
+          return this.forward(item, abortController);
         })
-        .catch((error) => this.failAfterInternalError(e, error, abortController)),
+        .catch((error) => this.failAfterInternalError(item, error, abortController)),
     );
-    if (e.holdsLaterSends) this.holdLaterSendsBehind(r);
+    if (item.holdsLaterSends) this.holdLaterSendsBehind(tracked);
   }
-  failQueued(e, n) {
-    let s = [...this.queue, ...this.forwardsWaiting.values()];
+  failQueued(reason, cause) {
+    let failed = [...this.queue, ...this.forwardsWaiting.values()];
     this.queue = [];
     this.forwardsWaiting.clear();
-    let composedHere = n === "open_failed";
-    s.forEach((h) =>
-      this.failItem(h, e, {
+    let composedHere = cause === "open_failed";
+    failed.forEach((item) =>
+      this.failItem(item, reason, {
         composedHere,
       }),
     );
-    if (s.length > 0)
+    if (failed.length > 0)
       logEvent("tengu_remote_headless_client_queue_dropped", {
-        count: s.length,
-        cause: fromEnum(n),
+        count: failed.length,
+        cause: fromEnum(cause),
       });
-    return s.length;
+    return failed.length;
   }
-  answerForwardsInFlight(e) {
-    let n = sanitizeCloudText(e);
+  answerForwardsInFlight(reason) {
+    let text = sanitizeCloudText(reason);
     for (let key of [...this.forwardsInFlight.keys()]) {
-      this.contained(() => this.ports.emit(controlErrorResponse(key, n)));
+      this.contained(() => this.ports.emit(controlErrorResponse(key, text)));
       this.forwardsInFlight.delete(key);
     }
   }
   queuedSendUuids() {
     return [
-      ...this.queue.flatMap((e) => (e.kind === "control" ? [] : [e.uuid])),
-      ...[...this.renewalParked].map((e) => e.uuid),
+      ...this.queue.flatMap((item) => (item.kind === "control" ? [] : [item.uuid])),
+      ...[...this.renewalParked].map((item) => item.uuid),
     ];
   }
   sendUuidsInFlight() {
-    return [...this.postsInFlight].flatMap((e) => (this.renewalParked.has(e) ? [] : [e.uuid]));
+    return [...this.postsInFlight].flatMap((item) => (this.renewalParked.has(item) ? [] : [item.uuid]));
   }
   heldMessages() {
-    let e = this.ports.liveSession();
-    if (e === null) return [];
-    let n = new Set(e.manager.heldSendUuids());
+    let liveSession = this.ports.liveSession();
+    if (liveSession === null) return [];
+    let heldUuids = new Set(liveSession.manager.heldSendUuids());
     return [...this.postsInFlight].filter(
-      (s) => s.kind === "message" && !this.renewalParked.has(s) && n.has(s.uuid),
+      (item) => item.kind === "message" && !this.renewalParked.has(item) && heldUuids.has(item.uuid),
     );
   }
   queuedMessages() {
-    return [...this.queue, ...this.renewalParked].filter((e) => e.kind === "message");
+    return [...this.queue, ...this.renewalParked].filter((item) => item.kind === "message");
   }
   withdrawQueuedSends() {
-    let e = this.withdrawHeldSends();
-    let n = [...this.queuedSendUuids(), ...e];
-    this.queue = this.queue.filter((r) => r.kind === "control");
-    this.renewalParked.forEach((r) => this.postsInFlight.delete(r));
+    let heldUuids = this.withdrawHeldSends();
+    let targets = [...this.queuedSendUuids(), ...heldUuids];
+    this.queue = this.queue.filter((item) => item.kind === "control");
+    this.renewalParked.forEach((item) => this.postsInFlight.delete(item));
     this.renewalParked.clear();
-    return n
-      .map((r) => [r, this.withdrawFromLedger(r, "interrupt")])
-      .filter(([, r]) => r)
-      .map(([r]) => r);
+    return targets
+      .map((uuid) => [uuid, this.withdrawFromLedger(uuid, "interrupt")])
+      .filter(([, withdrawn]) => withdrawn)
+      .map(([uuid]) => uuid);
   }
   withdrawHeldSends() {
-    let e = this.ports.liveSession();
-    if (e === null) return [];
-    return e.manager.heldSendUuids().filter((n) => this.withdrawHeld(n));
+    let liveSession = this.ports.liveSession();
+    if (liveSession === null) return [];
+    return liveSession.manager.heldSendUuids().filter((uuid) => this.withdrawHeld(uuid));
   }
-  withdrawHeld(e) {
-    let n = this.ports.liveSession();
-    let found = [...this.postsInFlight].find((r) => r.uuid === e && !this.renewalParked.has(r));
-    if (n === null || found === undefined) return false;
-    if (!n.manager.withdrawHeldSend(e)) return false;
+  withdrawHeld(uuid) {
+    let liveSession = this.ports.liveSession();
+    let found = [...this.postsInFlight].find((item) => item.uuid === uuid && !this.renewalParked.has(item));
+    if (liveSession === null || found === undefined) return false;
+    if (!liveSession.manager.withdrawHeldSend(uuid)) return false;
     this.postsInFlight.delete(found);
     return true;
   }
-  withdrawQueuedSend(e) {
-    if (typeof e !== "string") return false;
-    let index = this.queue.findIndex((r) => r.kind !== "control" && r.uuid === e);
-    let found = [...this.renewalParked].find((r) => r.uuid === e);
+  withdrawQueuedSend(uuid) {
+    if (typeof uuid !== "string") return false;
+    let index = this.queue.findIndex((item) => item.kind !== "control" && item.uuid === uuid);
+    let found = [...this.renewalParked].find((parked) => parked.uuid === uuid);
     if (index === -1 && found === undefined) {
-      if (!this.withdrawHeld(e)) return false;
-      return this.withdrawFromLedger(e, "cancel_async_message");
+      if (!this.withdrawHeld(uuid)) return false;
+      return this.withdrawFromLedger(uuid, "cancel_async_message");
     }
     if (index !== -1) this.queue.splice(index, 1);
     if (found !== undefined) {
       this.renewalParked.delete(found);
       this.postsInFlight.delete(found);
     }
-    return this.withdrawFromLedger(e, "cancel_async_message");
+    return this.withdrawFromLedger(uuid, "cancel_async_message");
   }
-  withdrawFromLedger(e, n) {
-    let s = this.ledger.withdraw(e);
-    if (!s)
+  withdrawFromLedger(uuid, subtype) {
+    let withdrawn = this.ledger.withdraw(uuid);
+    if (!withdrawn)
       this.contained(() =>
         logEvent("tengu_remote_headless_client_cancel_found_delivered", {
-          subtype: fromEnum(n),
+          subtype: fromEnum(subtype),
         }),
       );
-    return s;
+    return withdrawn;
   }
-  cancelForward(e) {
-    let n = (h) => h.kind === "control" && h.hostRequestId === e;
-    let filtered = [...this.forwardsWaiting].filter(([, h]) => n(h));
-    let r = [...this.queue.filter(n), ...filtered.map(([, h]) => h)];
-    this.queue = this.queue.filter((h) => !n(h));
-    filtered.forEach(([h]) => this.forwardsWaiting.delete(h));
-    if (typeof e === "string") this.forwardsInFlight.get(e)?.abort();
-    r.forEach((h) =>
+  cancelForward(hostRequestId) {
+    let matches = (item) => item.kind === "control" && item.hostRequestId === hostRequestId;
+    let filtered = [...this.forwardsWaiting].filter(([, item]) => matches(item));
+    let affected = [...this.queue.filter(matches), ...filtered.map(([, item]) => item)];
+    this.queue = this.queue.filter((item) => !matches(item));
+    filtered.forEach(([key]) => this.forwardsWaiting.delete(key));
+    if (typeof hostRequestId === "string") this.forwardsInFlight.get(hostRequestId)?.abort();
+    affected.forEach((item) =>
       logEvent("tengu_remote_headless_client_host_request", {
-        subtype: fromEnum(h.telemetrySubtype),
+        subtype: fromEnum(item.telemetrySubtype),
         outcome: fromEnum("cancelled"),
       }),
     );
   }
-  failAfterInternalError(e, n, s) {
-    logError(n);
-    let r = "an internal error occurred while sending it";
-    if (e.kind === "control") {
-      if (s !== undefined && this.forwardsInFlight.get(e.hostRequestId) === s) {
-        this.forwardsInFlight.delete(e.hostRequestId);
-        this.failItem(e, r, {
+  failAfterInternalError(item, error, abortController) {
+    logError(error);
+    let message = "an internal error occurred while sending it";
+    if (item.kind === "control") {
+      if (
+        abortController !== undefined &&
+        this.forwardsInFlight.get(item.hostRequestId) === abortController
+      ) {
+        this.forwardsInFlight.delete(item.hostRequestId);
+        this.failItem(item, message, {
           outcome: "error",
         });
       }
       return;
     }
-    if (this.postsInFlight.delete(e)) {
-      this.failItem(e, r, {
+    if (this.postsInFlight.delete(item)) {
+      this.failItem(item, message, {
         posted: true,
         unconfirmed: true,
       });
-      this.logSend(e.kind, "error");
+      this.logSend(item.kind, "error");
       return;
     }
-    switch (this.ledger.phaseOf(e.uuid)) {
+    switch (this.ledger.phaseOf(item.uuid)) {
       case "queued":
-        this.failItem(e, r);
-        this.logSend(e.kind, "error");
+        this.failItem(item, message);
+        this.logSend(item.kind, "error");
         return;
       case "posting":
-        this.failItem(e, r, {
+        this.failItem(item, message, {
           posted: true,
           unconfirmed: true,
         });
@@ -1348,236 +1381,247 @@ class OutboundMessageQueue {
     }
   }
   failItem(
-    e,
-    n,
-    { posted: s = false, unconfirmed: r = false, outcome: h = "closed", composedHere: y = false } = {},
+    item,
+    reason,
+    { posted = false, unconfirmed = false, outcome = "closed", composedHere = false } = {},
   ) {
-    let S = y ? clipCloudText(n) : sanitizeCloudText(n);
-    let w = this.ports.stampedSessionId();
-    switch (e.kind) {
+    let text = composedHere ? clipCloudText(reason) : sanitizeCloudText(reason);
+    let sessionId = this.ports.stampedSessionId();
+    switch (item.kind) {
       case "message": {
-        let { echo, error } = s
-          ? this.ledger.postFail(e.uuid, r)
+        let { echo, error } = posted
+          ? this.ledger.postFail(item.uuid, unconfirmed)
           : {
-              ...this.ledger.giveUp(e.uuid),
+              ...this.ledger.giveUp(item.uuid),
               error: true,
             };
         if (!error) {
           logForDebugging(
-            `[headlessCloudClient] POST for ${e.uuid} failed after its echo; treating it as delivered`,
+            `[headlessCloudClient] POST for ${item.uuid} failed after its echo; treating it as delivered`,
           );
           return;
         }
-        if (echo) this.contained(() => this.ports.emit(scopeKey(w, e.uuid, e.content)));
-        this.contained(() => this.ports.emit(emitLoadError(w, [`${NOT_DELIVERED_MESSAGE}: ${S}`], e.uuid)));
+        if (echo) this.contained(() => this.ports.emit(scopeKey(sessionId, item.uuid, item.content)));
+        this.contained(() =>
+          this.ports.emit(emitLoadError(sessionId, [`${NOT_DELIVERED_MESSAGE}: ${text}`], item.uuid)),
+        );
         return;
       }
       case "bash":
-        if (s) this.ledger.postFail(e.uuid, r);
-        else this.ledger.giveUp(e.uuid);
+        if (posted) this.ledger.postFail(item.uuid, unconfirmed);
+        else this.ledger.giveUp(item.uuid);
         this.contained(() =>
           this.ports.emit(
-            emitLoadError(w, [r ? `bash_command may not have run: ${S}` : `bash_command was not run: ${S}`]),
+            emitLoadError(sessionId, [
+              unconfirmed ? `bash_command may not have run: ${text}` : `bash_command was not run: ${text}`,
+            ]),
           ),
         );
         return;
       case "control":
         this.contained(() =>
-          this.ports.emit(controlErrorResponse(e.hostRequestId, `${e.request.subtype} was not sent: ${S}`)),
+          this.ports.emit(
+            controlErrorResponse(item.hostRequestId, `${item.request.subtype} was not sent: ${text}`),
+          ),
         );
         this.contained(() =>
           logEvent("tengu_remote_headless_client_host_request", {
-            subtype: fromEnum(e.telemetrySubtype),
-            outcome: fromEnum(h),
+            subtype: fromEnum(item.telemetrySubtype),
+            outcome: fromEnum(outcome),
           }),
         );
         return;
     }
   }
-  async post(e) {
-    let n = this.ports.liveSession();
-    if (n === null) {
-      this.failItem(e, CLIENT_CLOSED_BEFORE_COMPLETE);
-      this.logSend(e.kind, "closed");
+  async post(item) {
+    let liveSession = this.ports.liveSession();
+    if (liveSession === null) {
+      this.failItem(item, CLIENT_CLOSED_BEFORE_COMPLETE);
+      this.logSend(item.kind, "closed");
       return;
     }
-    this.ledger.postStart(e.uuid);
-    this.postsInFlight.add(e);
-    let s = this.ports.clock.now();
-    let accessToken = n.opened.getAccessToken();
-    let h = await this.postOnce(n.manager, e);
-    let y = false;
-    let S = false;
-    if (!h.ok && h.status === 401 && n.opened.onAuth401 && this.postsInFlight.has(e)) {
-      this.renewalParked.add(e);
+    this.ledger.postStart(item.uuid);
+    this.postsInFlight.add(item);
+    let startedAt = this.ports.clock.now();
+    let accessToken = liveSession.opened.getAccessToken();
+    let result = await this.postOnce(liveSession.manager, item);
+    let renewed = false;
+    let disconnected = false;
+    if (!result.ok && result.status === 401 && liveSession.opened.onAuth401 && this.postsInFlight.has(item)) {
+      this.renewalParked.add(item);
       try {
-        y =
+        renewed =
           (await scheduleTimer(
             this.ports.clock,
-            n.opened.onAuth401(accessToken).catch(() => false),
+            liveSession.opened.onAuth401(accessToken).catch(() => false),
             SEND_ACK_TIMEOUT_MS,
           )) ?? false;
-        if (y && this.postsInFlight.has(e)) await this.untilNoHold();
+        if (renewed && this.postsInFlight.has(item)) await this.untilNoHold();
       } finally {
-        this.renewalParked.delete(e);
+        this.renewalParked.delete(item);
       }
-      if (y && this.postsInFlight.has(e)) {
-        this.ports.onRepost?.(e);
-        let w = this.ports.liveSession();
-        S = w === null;
-        h =
-          w === null
+      if (renewed && this.postsInFlight.has(item)) {
+        this.ports.onRepost?.(item);
+        let renewedSession = this.ports.liveSession();
+        disconnected = renewedSession === null;
+        result =
+          renewedSession === null
             ? {
                 ok: false,
                 reason: this.closedWhy ?? "the cloud session disconnected",
               }
-            : await this.postOnce(w.manager, e);
+            : await this.postOnce(renewedSession.manager, item);
       }
     }
-    if (!this.postsInFlight.delete(e)) {
-      let w = !h.ok && h.withheld === true && h.reason === WITHDRAWN_2;
+    if (!this.postsInFlight.delete(item)) {
+      let wasWithdrawn = !result.ok && result.withheld === true && result.reason === WITHDRAWN_2;
       this.contained(() =>
-        this.logSend(e.kind, w ? "withdrawn_held" : "abandoned", {
-          renewed: y,
+        this.logSend(item.kind, wasWithdrawn ? "withdrawn_held" : "abandoned", {
+          renewed,
         }),
       );
       return;
     }
-    if (h.ok) {
+    if (result.ok) {
       let { echo } = this.ledger.postOk(
-        e.uuid,
-        h.duplicate === true ? "duplicate" : getProgressStreamability(e),
+        item.uuid,
+        result.duplicate === true ? "duplicate" : getProgressStreamability(item),
       );
-      if (echo && e.kind === "message")
+      if (echo && item.kind === "message")
         this.contained(() =>
-          this.writeEcho(scopeKey(this.ports.stampedSessionId(), e.uuid, e.content), h.duplicate === true),
+          this.writeEcho(
+            scopeKey(this.ports.stampedSessionId(), item.uuid, item.content),
+            result.duplicate === true,
+          ),
         );
-      this.ports.onSent?.(e, {
-        duplicate: h.duplicate === true,
+      this.ports.onSent?.(item, {
+        duplicate: result.duplicate === true,
       });
-    } else if (h.withheld === true)
+    } else if (result.withheld === true)
       this.failItem(
-        e,
-        h.reason === CANCELLED || h.reason === WITHDRAWN_2
+        item,
+        result.reason === CANCELLED || result.reason === WITHDRAWN_2
           ? "it was still waiting to be sent when the cloud client closed"
-          : h.reason,
+          : result.reason,
         {
           posted: true,
           unconfirmed: false,
         },
       );
     else
-      this.failItem(e, h.reason, {
+      this.failItem(item, result.reason, {
         posted: true,
-        unconfirmed: h.status === undefined && !S,
+        unconfirmed: result.status === undefined && !disconnected,
       });
     this.sendCount += 1;
-    this.logSend(e.kind, h.ok ? "ok" : h.withheld === true ? "withheld" : "failed", {
-      status: h.ok ? undefined : h.status,
-      renewed: y,
-      latency_ms: this.ports.clock.now() - s,
+    this.logSend(item.kind, result.ok ? "ok" : result.withheld === true ? "withheld" : "failed", {
+      status: result.ok ? undefined : result.status,
+      renewed,
+      latency_ms: this.ports.clock.now() - startedAt,
     });
   }
-  logSend(e, n, s = {}) {
+  logSend(kind, outcome, extra = {}) {
     logEvent("tengu_remote_headless_client_send", {
-      kind: fromEnum(e),
-      outcome: fromEnum(n),
-      ...s,
+      kind: fromEnum(kind),
+      outcome: fromEnum(outcome),
+      ...extra,
     });
   }
-  postOnce(e, n) {
-    return n.kind === "message"
-      ? e.sendMessage(n.content, {
-          uuid: n.uuid,
-          ...(n.priority && {
-            priority: n.priority,
+  postOnce(manager, item) {
+    return item.kind === "message"
+      ? manager.sendMessage(item.content, {
+          uuid: item.uuid,
+          ...(item.priority && {
+            priority: item.priority,
           }),
-          ...(n.pastedContent && {
-            pastedContent: n.pastedContent,
+          ...(item.pastedContent && {
+            pastedContent: item.pastedContent,
           }),
-          ...(n.inlinePastes && {
-            inlinePastes: n.inlinePastes,
+          ...(item.inlinePastes && {
+            inlinePastes: item.inlinePastes,
           }),
         })
-      : e.sendBashCommand(
+      : manager.sendBashCommand(
           {
-            command: n.command,
-            ...(n.cwd !== undefined && {
-              cwd: n.cwd,
+            command: item.command,
+            ...(item.cwd !== undefined && {
+              cwd: item.cwd,
             }),
           },
           {
-            uuid: n.uuid,
+            uuid: item.uuid,
           },
         );
   }
-  async forward(e, n) {
-    let { telemetrySubtype } = e;
-    let r = this.ports.liveSession();
-    if (r === null || this.forwardsInFlight.has(e.hostRequestId)) {
+  async forward(item, abortController) {
+    let { telemetrySubtype } = item;
+    let liveSession = this.ports.liveSession();
+    if (liveSession === null || this.forwardsInFlight.has(item.hostRequestId)) {
       this.failItem(
-        e,
-        r === null ? CLIENT_CLOSED_BEFORE_COMPLETE : "a request with this request_id is already in flight",
+        item,
+        liveSession === null
+          ? CLIENT_CLOSED_BEFORE_COMPLETE
+          : "a request with this request_id is already in flight",
         {
-          outcome: r === null ? "closed" : "duplicate",
+          outcome: liveSession === null ? "closed" : "duplicate",
         },
       );
       return;
     }
-    this.forwardsInFlight.set(e.hostRequestId, n);
-    let h = this.ports.clock.now();
-    let S = await r.manager
-      .sendControlRequest(e.request, {
-        signal: n.signal,
+    this.forwardsInFlight.set(item.hostRequestId, abortController);
+    let startedAt = this.ports.clock.now();
+    let outcome = await liveSession.manager
+      .sendControlRequest(item.request, {
+        signal: abortController.signal,
       })
       .then(
-        (w) => {
-          if (this.forwardsInFlight.get(e.hostRequestId) !== n) return "closed";
-          this.ports.emit(controlSuccessResponse(e.hostRequestId, w ?? {}));
-          this.forwardsInFlight.delete(e.hostRequestId);
+        (reply) => {
+          if (this.forwardsInFlight.get(item.hostRequestId) !== abortController) return "closed";
+          this.ports.emit(controlSuccessResponse(item.hostRequestId, reply ?? {}));
+          this.forwardsInFlight.delete(item.hostRequestId);
           return "forwarded";
         },
         (error) => {
-          if (this.forwardsInFlight.get(e.hostRequestId) !== n) return "closed";
+          if (this.forwardsInFlight.get(item.hostRequestId) !== abortController) return "closed";
           if (error instanceof AbortError) {
-            this.forwardsInFlight.delete(e.hostRequestId);
+            this.forwardsInFlight.delete(item.hostRequestId);
             return "cancelled";
           }
-          this.ports.emit(controlErrorResponse(e.hostRequestId, describeForwardFailure(error)));
-          this.forwardsInFlight.delete(e.hostRequestId);
+          this.ports.emit(controlErrorResponse(item.hostRequestId, describeForwardFailure(error)));
+          this.forwardsInFlight.delete(item.hostRequestId);
           return "error";
         },
       );
     this.forwardCount += 1;
     logEvent("tengu_remote_headless_client_host_request", {
       subtype: fromEnum(telemetrySubtype),
-      outcome: fromEnum(S),
-      latency_ms: this.ports.clock.now() - h,
+      outcome: fromEnum(outcome),
+      latency_ms: this.ports.clock.now() - startedAt,
     });
   }
 }
 //@ chunk-fe6rs39h.js:88163-88178 placement
 function noopPromiseHandler() {}
 //@ chunk-fe6rs39h.js:88178-88316 placement
-function getProgressStreamability(e) {
-  if (e.kind === "bash") return "streams";
-  let n = {
+function getProgressStreamability(event) {
+  if (event.kind === "bash") return "streams";
+  let message = {
     message: {
-      content: e.content,
+      content: event.content,
     },
   };
-  return isControlCommandLike(n) ? "never" : isControlShapedMessage(n) ? "unreliable" : "streams";
+  return isControlCommandLike(message) ? "never" : isControlShapedMessage(message) ? "unreliable" : "streams";
 }
 //@ chunk-fe6rs39h.js:88316-88593 placement
 function describeForwardFailure(error) {
   if (error instanceof ControlRequestTimeoutError)
     return `the cloud session did not answer ${error.subtype} in time; it may still apply it`;
-  let n = errorMessage(error);
-  if (n.startsWith("[RemoteSessionManager]")) {
-    logForDebugging(`[headlessCloudClient] forward failed: ${n}`);
+  let subtype = errorMessage(error);
+  if (subtype.startsWith("[RemoteSessionManager]")) {
+    logForDebugging(`[headlessCloudClient] forward failed: ${subtype}`);
     return "the cloud session is not connected";
   }
-  return sanitizeCloudText(n);
+  return sanitizeCloudText(subtype);
 }
 //@ chunk-fe6rs39h.js:88593-88855 placement
 var MAX_OUTBOX_ENTRIES = 100;
@@ -1598,8 +1642,8 @@ var EXIT_GRACE_MS = 5000;
 var IDLE_EXIT_MS = 180000;
 var REAL_CLOCK = {
   now: () => Date.now(),
-  setTimeout: (e, n) => {
-    let timer = setTimeout(e, n);
+  setTimeout: (callback, delayMs) => {
+    let timer = setTimeout(callback, delayMs);
     return () => clearTimeout(timer);
   },
 };
@@ -1609,9 +1653,9 @@ class ClientClosedError extends Error {}
 /**
  * 启动无头云会话客户端并返回 done Promise（由 cloudPrint 与 openBareCloudSession 调用）。
  */
-function runHeadlessCloudClient(e) {
+function runHeadlessCloudClient(options) {
   return {
-    done: new HeadlessCloudClient(e).done,
+    done: new HeadlessCloudClient(options).done,
   };
 }
 //@ chunk-fe6rs39h.js:88923-118745 placement
@@ -1671,52 +1715,54 @@ class HeadlessCloudClient {
   endingWith = null;
   preSessionEchoes = [];
   endsOnStartupResult = false;
-  constructor(e) {
-    this.config = e;
-    this.clock = e.clock ?? REAL_CLOCK;
-    this.workerReadyIdleMs = e.workerReadyIdleMs ?? STARTUP_WATCHDOG_MS;
+  constructor(config) {
+    this.config = config;
+    this.clock = config.clock ?? REAL_CLOCK;
+    this.workerReadyIdleMs = config.workerReadyIdleMs ?? STARTUP_WATCHDOG_MS;
     this.startedAt = this.clock.now();
     this.done = new Promise((resolve) => {
       this.resolveDone = resolve;
     });
-    let n = forwardUntilAbort(e.input, () => {
+    let inputStream = forwardUntilAbort(config.input, () => {
       this.inputFailed = true;
     });
-    this.io = e.createIO ? e.createIO(n, e.replayUserMessages) : new StructuredIO(n, e.replayUserMessages);
-    this.io.setUnexpectedResponseCallback(async (y) => {
+    this.io = config.createIO
+      ? config.createIO(inputStream, config.replayUserMessages)
+      : new StructuredIO(inputStream, config.replayUserMessages);
+    this.io.setUnexpectedResponseCallback(async (response) => {
       logForDebugging(
-        `[headlessCloudClient] dropped control_response for unknown request ${sanitizeCloudText(truncateToLength(String(y.response?.request_id), 64))}`,
+        `[headlessCloudClient] dropped control_response for unknown request ${sanitizeCloudText(truncateToLength(String(response.response?.request_id), 64))}`,
       );
     });
-    let track = (y) => this.track(y);
-    let emit = (y) => this.emit(y);
+    let track = (promise) => this.track(promise);
+    let emit = (frame) => this.emit(frame);
     let liveSession = () => (this.phase === "live" ? this.session : null);
     this.outbound = new OutboundMessageQueue(
       {
         clock: this.clock,
-        replayUserMessages: e.replayUserMessages,
+        replayUserMessages: config.replayUserMessages,
         emit,
-        emitEcho: (y, { duplicate }) => this.writeOwnEcho(y, duplicate),
+        emitEcho: (echo, { duplicate }) => this.writeOwnEcho(echo, duplicate),
         track,
         liveSession,
         stampedSessionId: () => this.stampedSessionId,
-        onSent: (y, { duplicate }) => {
-          if (y.kind !== "message") return;
-          this.liveness?.noteDelivered(y.content);
+        onSent: (sent, { duplicate }) => {
+          if (sent.kind !== "message") return;
+          this.liveness?.noteDelivered(sent.content);
           this.features?.noteMessageSent({
-            uuid: y.uuid,
+            uuid: sent.uuid,
             duplicate,
           });
           if (!duplicate)
             this.liveness?.noteSendOk({
-              afterStop: !this.stoppedWhileLive || this.sinceStop.has(y),
+              afterStop: !this.stoppedWhileLive || this.sinceStop.has(sent),
             });
         },
-        onRepost: (y) => {
-          if (y.kind === "message") this.sinceStop.add(y);
+        onRepost: (repost) => {
+          if (repost.kind === "message") this.sinceStop.add(repost);
         },
       },
-      e.queueCap ?? MAX_OUTBOX_ENTRIES,
+      config.queueCap ?? MAX_OUTBOX_ENTRIES,
     );
     this.agentRequests = new HostPermissionBridge({
       clock: this.clock,
@@ -1725,9 +1771,9 @@ class HeadlessCloudClient {
     });
     this.hostRequests = new ControlRequestRelay({
       clock: this.clock,
-      initializePolicy: e.initializePolicy,
-      ignoredOptionsCount: e.ignoredOptions.length,
-      openingInitializeHonours: new Set([...(e.openingInitializeHonours ?? []), "supportedDialogKinds"]),
+      initializePolicy: config.initializePolicy,
+      ignoredOptionsCount: config.ignoredOptions.length,
+      openingInitializeHonours: new Set([...(config.openingInitializeHonours ?? []), "supportedDialogKinds"]),
       outbound: this.outbound,
       emit,
       track,
@@ -1743,11 +1789,11 @@ class HeadlessCloudClient {
         };
       },
       openRequested: () => this.openRequested,
-      requestOpen: (y) => this.requestOpen(y),
-      sleepNotice: async (y) => {
+      requestOpen: (options) => this.requestOpen(options),
+      sleepNotice: async (notice) => {
         this.stopAwakeWatch?.();
         this.stopAwakeWatch = null;
-        if (y === "will_sleep") {
+        if (notice === "will_sleep") {
           this.watchAwake(0, this.clock.now());
           await this.features?.noteHostSleep();
         } else this.hostWoke();
@@ -1761,12 +1807,14 @@ class HeadlessCloudClient {
         let opened = this.opened;
         return opened !== null && (opened.entry === "attach" || opened.initialPrompt !== undefined);
       },
-      end: (y) =>
+      end: (endRequest) =>
         void this.end(
-          y.reason,
-          y.reason === "rejected_options" ? y.message : undefined,
+          endRequest.reason,
+          endRequest.reason === "rejected_options" ? endRequest.message : undefined,
           undefined,
-          y.reason === "end_session" && this.opened?.controlOnly === true ? y.leftFor : undefined,
+          endRequest.reason === "end_session" && this.opened?.controlOnly === true
+            ? endRequest.leftFor
+            : undefined,
         ),
       stampedSessionId: () => this.stampedSessionId,
       onInterrupt: () => {
@@ -1790,34 +1838,38 @@ class HeadlessCloudClient {
     this.outbound.abandonPostsInFlight(CLIENT_CLOSED_BEFORE_CONFIRMED);
     this.outbound.settleOwedEchoes();
   }
-  settleOpener(e, n) {
-    return (this.opened?.settle?.(e) ?? Promise.resolve(undefined)).then(
-      (s) => {
-        if (!s) return;
+  settleOpener(deadlineMs, at) {
+    return (this.opened?.settle?.(deadlineMs) ?? Promise.resolve(undefined)).then(
+      (noticeInfo) => {
+        if (!noticeInfo) return;
         logEvent("tengu_remote_headless_client_seed_cut_short", {
-          at: fromEnum(n),
+          at: fromEnum(at),
         });
-        this.emit(cloudInformationalMessage(this.stampedSessionId, s.level, clipCloudText(s.text)));
+        this.emit(
+          cloudInformationalMessage(this.stampedSessionId, noticeInfo.level, clipCloudText(noticeInfo.text)),
+        );
       },
       (error) => {
         logForDebugging(`[headlessCloudClient] settling the opener's work failed: ${errorMessage(error)}`);
       },
     );
   }
-  initializeWorker(e, n) {
-    let filtered = [...this.hostDialogKinds].filter((hostDialogKind) => !isConsentDialogKind(hostDialogKind));
-    let r = openingControlRequest(e, filtered);
-    this.workerInitializeReason = r;
-    if (r === null) return;
-    let h = {
+  initializeWorker(initializeRequest, manager) {
+    let declaredKinds = [...this.hostDialogKinds].filter(
+      (hostDialogKind) => !isConsentDialogKind(hostDialogKind),
+    );
+    let reason = openingControlRequest(initializeRequest, declaredKinds);
+    this.workerInitializeReason = reason;
+    if (reason === null) return;
+    let request = {
       subtype: "initialize",
-      ...(filtered.length > 0 && {
-        supportedDialogKinds: filtered,
+      ...(declaredKinds.length > 0 && {
+        supportedDialogKinds: declaredKinds,
       }),
     };
-    let y = (posted, attempt) => {
+    let logAttempt = (posted, attempt) => {
       logEvent("tengu_remote_headless_client_worker_initialize", {
-        reason: fromEnum(r),
+        reason: fromEnum(reason),
         outcome: fromEnum(posted.outcome),
         ...("cause" in posted && {
           cause: fromEnum(posted.cause),
@@ -1826,41 +1878,45 @@ class HeadlessCloudClient {
           status: posted.status,
         }),
         attempt,
-        n_dialog_kinds: filtered.length,
+        n_dialog_kinds: declaredKinds.length,
       });
     };
-    let S = this.clock.now();
-    let w = async (attempt) => {
+    let startedAt = this.clock.now();
+    let attempt = async (attempt_2) => {
       let abortController = new AbortController();
-      let I = n.postControlRequest(h, {
+      let posted = manager.postControlRequest(request, {
         answerExpected: false,
         background: true,
         timeoutMs: MAX_STARTUP_WAIT_MS,
         signal: abortController.signal,
       });
-      I.response.then(
-        () => logForDebugging(`[headlessCloudClient] the worker took this client's initialize (${r})`),
+      posted.response.then(
+        () => logForDebugging(`[headlessCloudClient] the worker took this client's initialize (${reason})`),
         (error) =>
           logForDebugging(
-            `[headlessCloudClient] this client's initialize (${r}) was not answered: ${sanitizeCloudText(truncateToLength(errorMessage(error), 200))}`,
+            `[headlessCloudClient] this client's initialize (${reason}) was not answered: ${sanitizeCloudText(truncateToLength(errorMessage(error), 200))}`,
           ),
       );
-      let posted = await I.posted;
-      y(posted, attempt);
-      if (posted.outcome === "accepted") return;
+      let posted_2 = await posted.posted;
+      logAttempt(posted_2, attempt_2);
+      if (posted_2.outcome === "accepted") return;
       abortController.abort();
-      let P = RETRY_DELAYS_MS[attempt - 1];
-      if (P !== undefined && isRetryableHttpFailure(posted) && this.clock.now() - S < CONTROL_TIMEOUT_MS) {
-        await new Promise((resolve) => this.clock.setTimeout(resolve, P));
-        if (!this.closing) return w(attempt + 1);
+      let retryDelayMs = RETRY_DELAYS_MS[attempt_2 - 1];
+      if (
+        retryDelayMs !== undefined &&
+        isRetryableHttpFailure(posted_2) &&
+        this.clock.now() - startedAt < CONTROL_TIMEOUT_MS
+      ) {
+        await new Promise((resolve) => this.clock.setTimeout(resolve, retryDelayMs));
+        if (!this.closing) return attempt(attempt_2 + 1);
       }
     };
-    this.outbound.holdLaterSendsBehind(w(1));
+    this.outbound.holdLaterSendsBehind(attempt(1));
   }
-  async applyOpeningRequests(e, n) {
-    for (let { request, required, describe } of e)
+  async applyOpeningRequests(requests, manager) {
+    for (let { request, required, describe } of requests)
       try {
-        await n.sendControlRequest(request);
+        await manager.sendControlRequest(request);
         logEvent("tengu_remote_headless_client_opening_request", {
           subtype: fromEnum(request.subtype),
           outcome: fromEnum("applied"),
@@ -1899,44 +1955,44 @@ class HeadlessCloudClient {
     }
   }
   async drainOutbound() {
-    for await (let e of this.io.outbound)
+    for await (let frame of this.io.outbound)
       try {
-        await this.io.write(e);
+        await this.io.write(frame);
       } catch (error) {
         logError(error);
         this.end("output_failed", `failed to write to stdout: ${errorMessage(error)}`);
         return;
       }
   }
-  emit(e) {
+  emit(frame) {
     if (
       !this.outputOpen ||
-      (this.endsOnStartupResult && e.type !== "control_response" && !("startup_failure_reason" in e))
+      (this.endsOnStartupResult && frame.type !== "control_response" && !("startup_failure_reason" in frame))
     ) {
       logForDebugging(
-        `[headlessCloudClient] dropped ${e.type} frame ${this.outputOpen ? "because this launch ends on one start-up result" : "after stdout closed"}`,
+        `[headlessCloudClient] dropped ${frame.type} frame ${this.outputOpen ? "because this launch ends on one start-up result" : "after stdout closed"}`,
       );
       return;
     }
-    this.io.outbound.enqueue(e);
+    this.io.outbound.enqueue(frame);
   }
-  track(e) {
-    this.inflight.add(e);
-    let n = () => {
-      this.inflight.delete(e);
+  track(promise) {
+    this.inflight.add(promise);
+    let onSettled = () => {
+      this.inflight.delete(promise);
       this.detachIfDrained();
     };
-    e.then(n, (error) => {
+    promise.then(onSettled, (error) => {
       logError(error);
-      n();
+      onSettled();
     });
-    return e;
+    return promise;
   }
   async readInput() {
     try {
-      for await (let e of this.io.structuredInput)
+      for await (let frame of this.io.structuredInput)
         try {
-          this.handleHostFrame(e);
+          this.handleHostFrame(frame);
         } catch (error) {
           if (error instanceof AbortError)
             logForDebugging("[headlessCloudClient] host frame handling aborted");
@@ -1960,60 +2016,60 @@ class HeadlessCloudClient {
   get closing() {
     return this.phase === "ending" || this.phase === "ended" || this.signalled;
   }
-  handleHostFrame(e) {
+  handleHostFrame(frame) {
     if (this.closing) {
-      this.refuseWhileClosing(e);
+      this.refuseWhileClosing(frame);
       return;
     }
-    switch (e.type) {
+    switch (frame.type) {
       case "user":
-        if (this.submitUserMessage(e)) this.requestOpen(null);
+        if (this.submitUserMessage(frame)) this.requestOpen(null);
         return;
       case "bash_command":
-        if (this.submitBashCommand(e)) this.requestOpen(null);
+        if (this.submitBashCommand(frame)) this.requestOpen(null);
         return;
       case "control_request": {
-        let n = controlRequestSubtype(e) === "set_permission_mode";
-        if (n) this.requestedModeChecked = true;
-        if (this.hostRequests.handleControlRequest(e) === "forwarded" && n)
+        let isPermissionMode = controlRequestSubtype(frame) === "set_permission_mode";
+        if (isPermissionMode) this.requestedModeChecked = true;
+        if (this.hostRequests.handleControlRequest(frame) === "forwarded" && isPermissionMode)
           this.hostSentPermissionMode = true;
         return;
       }
       case "control_cancel_request":
-        this.hostRequests.handleCancelRequest(e);
+        this.hostRequests.handleCancelRequest(frame);
         return;
       default:
-        logForDebugging(`[headlessCloudClient] ignoring host ${e.type} frame`);
+        logForDebugging(`[headlessCloudClient] ignoring host ${frame.type} frame`);
     }
   }
-  refuseWhileClosing(e) {
-    switch (e.type) {
+  refuseWhileClosing(frame) {
+    switch (frame.type) {
       case "user":
-        this.submitUserMessage(e);
+        this.submitUserMessage(frame);
         return;
       case "bash_command":
-        this.submitBashCommand(e);
+        this.submitBashCommand(frame);
         return;
       case "control_request": {
-        let requestId = "request_id" in e ? e.request_id : undefined;
+        let requestId = "request_id" in frame ? frame.request_id : undefined;
         if (typeof requestId === "string") this.emit(controlErrorResponse(requestId, CLIENT_CLOSING_REASON));
         return;
       }
       default:
-        logForDebugging(`[headlessCloudClient] ignoring ${e.type} frame while closing`);
+        logForDebugging(`[headlessCloudClient] ignoring ${frame.type} frame while closing`);
     }
   }
-  hostFrameUuid(e) {
-    if (!("uuid" in e) || e.uuid === undefined || e.uuid === null) return;
-    let n = normalizeUuidOrNull(e.uuid);
-    return n === null ? "invalid" : n.toLowerCase();
+  hostFrameUuid(frame) {
+    if (!("uuid" in frame) || frame.uuid === undefined || frame.uuid === null) return;
+    let uuid = normalizeUuidOrNull(frame.uuid);
+    return uuid === null ? "invalid" : uuid.toLowerCase();
   }
-  submitUserMessage(e) {
-    let n = this.hostFrameUuid(e);
-    let message = "message" in e ? e.message : undefined;
+  submitUserMessage(frame) {
+    let uuid = this.hostFrameUuid(frame);
+    let message = "message" in frame ? frame.message : undefined;
     let content =
       typeof message === "object" && message !== null && "content" in message ? message.content : undefined;
-    if (n === "invalid") {
+    if (uuid === "invalid") {
       this.emit(
         emitLoadError(this.stampedSessionId, [
           "Your message was not delivered to the cloud session: its uuid must be a UUID",
@@ -2028,7 +2084,7 @@ class HeadlessCloudClient {
           [
             "Your message was not delivered to the cloud session: its content must be a string or content blocks",
           ],
-          n,
+          uuid,
         ),
       );
       return false;
@@ -2045,92 +2101,93 @@ class HeadlessCloudClient {
         emitLoadError(
           this.stampedSessionId,
           [`Your message was not delivered to the cloud session: ${MALFORMED_CONTENT_BLOCKS_TEXT}`],
-          n,
+          uuid,
         ),
       );
       return false;
     }
-    let h = queuePriorityOrUndefined("priority" in e ? e.priority : undefined);
-    let pastedContent = "pasted_content" in e ? e.pasted_content : undefined;
-    let inlinePastes = "inline_pastes" in e ? e.inline_pastes : undefined;
-    let w = {
+    let userMessage = queuePriorityOrUndefined("priority" in frame ? frame.priority : undefined);
+    let pastedContent = "pasted_content" in frame ? frame.pasted_content : undefined;
+    let inlinePastes = "inline_pastes" in frame ? frame.inline_pastes : undefined;
+    let messageContent = {
       pastedContent,
       inlinePastes,
       rows: [],
     };
-    let R = {
+    let rejected = {
       kind: "message",
       content,
-      uuid: n ?? randomUUID(),
-      ...(h !== undefined && {
-        priority: h,
+      uuid: uuid ?? randomUUID(),
+      ...(userMessage !== undefined && {
+        priority: userMessage,
       }),
-      ...(Array.isArray(w.pastedContent) && {
-        pastedContent: w.pastedContent,
+      ...(Array.isArray(messageContent.pastedContent) && {
+        pastedContent: messageContent.pastedContent,
       }),
-      ...(Array.isArray(w.inlinePastes) && {
-        inlinePastes: w.inlinePastes,
+      ...(Array.isArray(messageContent.inlinePastes) && {
+        inlinePastes: messageContent.inlinePastes,
       }),
     };
-    let k = this.outbound.submit(R);
-    if (k === "new" && !this.closing) this.sinceStop.add(R);
-    if (k === "new") w.rows.forEach((I) => logFeatureSad("sdk_pasted_content", I));
+    let queued = this.outbound.submit(rejected);
+    if (queued === "new" && !this.closing) this.sinceStop.add(rejected);
+    if (queued === "new")
+      messageContent.rows.forEach((decision) => logFeatureSad("sdk_pasted_content", decision));
     return true;
   }
-  submitBashCommand(e) {
-    let n = this.hostFrameUuid(e);
-    let command = "command" in e ? e.command : undefined;
-    let cwd = "cwd" in e ? e.cwd : undefined;
-    let h = (y) => {
-      this.emit(emitLoadError(this.stampedSessionId, [y]));
+  submitBashCommand(frame) {
+    let uuid = this.hostFrameUuid(frame);
+    let command = "command" in frame ? frame.command : undefined;
+    let cwd = "cwd" in frame ? frame.cwd : undefined;
+    let reject = (message) => {
+      this.emit(emitLoadError(this.stampedSessionId, [message]));
       return false;
     };
-    if (n === "invalid") return h("bash_command was not run: its uuid must be a UUID");
-    if (typeof command !== "string") return h("bash_command was not run: it needs a string command");
+    if (uuid === "invalid") return reject("bash_command was not run: its uuid must be a UUID");
+    if (typeof command !== "string") return reject("bash_command was not run: it needs a string command");
     if (cwd !== undefined && typeof cwd !== "string")
-      return h("bash_command was not run: its cwd must be a string");
+      return reject("bash_command was not run: its cwd must be a string");
     this.outbound.submit({
       kind: "bash",
       command,
       ...(cwd !== undefined && {
         cwd,
       }),
-      uuid: n ?? randomUUID(),
+      uuid: uuid ?? randomUUID(),
     });
     return true;
   }
-  writeOwnEcho(e, duplicate = false) {
+  writeOwnEcho(echo, duplicate = false) {
     if (this.frames)
-      this.frames.writeOwnEcho(e, {
+      this.frames.writeOwnEcho(echo, {
         duplicate,
       });
     else if (
       this.phase === "pre_session" &&
       this.preSessionEchoes.length < (this.config.queueCap ?? MAX_OUTBOX_ENTRIES)
     )
-      this.preSessionEchoes.push(e);
-    else this.emit(e);
+      this.preSessionEchoes.push(echo);
+    else this.emit(echo);
   }
-  releasePreSessionEchoes(e) {
+  releasePreSessionEchoes(frames) {
     this.preSessionEchoes.splice(0).forEach((preSessionEchoe) => {
-      let r = {
+      let stamped = {
         ...preSessionEchoe,
         session_id: this.stampedSessionId,
       };
-      if (e) e.writeOwnEcho(r);
-      else this.emit(r);
+      if (frames) frames.writeOwnEcho(stamped);
+      else this.emit(stamped);
     });
   }
-  requestOpen(e) {
+  requestOpen(initialize) {
     if (this.openRequested || this.phase !== "pre_session" || this.signalled) return;
     this.openRequested = true;
-    this.hostDialogKinds = new Set(sanitizeStringList(e?.supportedDialogKinds));
-    this.track(this.openSession(e));
+    this.hostDialogKinds = new Set(sanitizeStringList(initialize?.supportedDialogKinds));
+    this.track(this.openSession(initialize));
   }
   async openSession(initialize) {
-    let n;
+    let result;
     try {
-      n = await this.config.openSession({
+      result = await this.config.openSession({
         initialize,
         signal: this.featureAbort.signal,
         dialogs: {
@@ -2144,59 +2201,59 @@ class HeadlessCloudClient {
       });
     } catch (error) {
       logError(error);
-      n = {
+      result = {
         kind: "failed",
         message: errorMessage(error),
       };
     }
     if (this.phase !== "pre_session" || this.signalled) {
       logForDebugging("[headlessCloudClient] session opened after the client ended; not attaching");
-      if (n.kind === "opened") {
+      if (result.kind === "opened") {
         logEvent("tengu_remote_headless_client_open_discarded", {
-          entry: fromEnum(n.session.entry),
+          entry: fromEnum(result.session.entry),
         });
-        if (n.session.entry === "attach") n.session.preflightCheck?.catch(() => {});
-        await n.session.dispose?.().catch((error) => {
+        if (result.session.entry === "attach") result.session.preflightCheck?.catch(() => {});
+        await result.session.dispose?.().catch((error) => {
           logForDebugging(`[headlessCloudClient] discarded session not released: ${errorMessage(error)}`);
         });
       }
       return;
     }
-    if (n.kind === "failed") {
-      this.failOpen(n.message, n.startupFailureReason);
+    if (result.kind === "failed") {
+      this.failOpen(result.message, result.startupFailureReason);
       return;
     }
     try {
-      this.attach(n.session);
+      this.attach(result.session);
     } catch (error) {
       logError(error);
-      if (n.session.entry === "attach") n.session.preflightCheck?.catch(() => {});
+      if (result.session.entry === "attach") result.session.preflightCheck?.catch(() => {});
       this.featureAbort.abort();
       this.features = null;
-      await n.session.dispose?.().catch(() => {});
+      await result.session.dispose?.().catch(() => {});
       this.failOpen(errorMessage(error));
     }
   }
-  failOpen(e, n) {
-    this.endsOnStartupResult = n !== undefined && isStartupFailureResultRequested();
+  failOpen(message, reason) {
+    this.endsOnStartupResult = reason !== undefined && isStartupFailureResultRequested();
     this.releasePreSessionEchoes(this.frames);
     this.frames?.close();
-    this.outbound.close(e, "open_failed");
+    this.outbound.close(message, "open_failed");
     if (this.endsOnStartupResult)
       this.emit(
         buildStartupFailureResult({
           sessionId: startupResultSessionId(getSessionId()),
-          message: openSessionErrorMessage(e),
-          reason: n,
+          message: openSessionErrorMessage(message),
+          reason,
         }),
       );
-    this.end(n === undefined ? "open_failed" : "start_refused", e);
+    this.end(reason === undefined ? "open_failed" : "start_refused", message);
   }
-  attach(e) {
+  attach(opened) {
     if (
-      e.entry === "create" &&
-      e.initialPrompt !== undefined &&
-      e.initialPrompt.uuid !== e.initialPrompt.uuid.toLowerCase()
+      opened.entry === "create" &&
+      opened.initialPrompt !== undefined &&
+      opened.initialPrompt.uuid !== opened.initialPrompt.uuid.toLowerCase()
     )
       logForDebugging(
         "[headlessCloudClient] the seeded prompt uuid is not canonical lowercase; host redeliveries of it will not be recognised and will be sent again",
@@ -2205,133 +2262,141 @@ class HeadlessCloudClient {
         },
       );
     this.connectEpoch = this.clock.now();
-    let n = hashSessionAddress(toInfraSessionId(e.sessionId));
-    let s = new CloudStreamFilter(
+    let sessionAddress = hashSessionAddress(toInfraSessionId(opened.sessionId));
+    let frames = new CloudStreamFilter(
       {
         clock: this.clock,
         includePartialMessages: this.config.includePartialMessages,
-        emit: (D) => this.emit(D),
+        emit: (frame) => this.emit(frame),
         outbound: this.outbound,
         cloudSession: () => this.readCloudSession(),
-        summaryLine: (D) => {
-          let syncStatusFromRemote = buildSyncStatusFromRemote(D, undefined);
+        summaryLine: (info) => {
+          let syncStatusFromRemote = buildSyncStatusFromRemote(info, undefined);
           return syncStatusFromRemote.projectFiles?.mark === "pending" ||
-            noop_3(D) ||
-            Object.values(this.features?.reports() ?? {}).some((te) => te.pending)
+            noop_3(info) ||
+            Object.values(this.features?.reports() ?? {}).some((report) => report.pending)
             ? ""
             : formatSyncStatusLine(syncStatusFromRemote);
         },
-        onWorkerReady: (D) => this.markWorkerReady(D),
-        onWorkerInit: (D) => this.features?.noteWorkerInit(D),
+        onWorkerReady: (via) => this.markWorkerReady(via),
+        onWorkerInit: (init) => this.features?.noteWorkerInit(init),
         onTurnInFlight: () => this.features?.noteTurnInFlight(),
         onTurnEnded: () => this.features?.noteTurnEnded(),
-        onWorkerUp: (D) => {
-          this.features?.noteWorkerUp(D);
+        onWorkerUp: (workerUp) => {
+          this.features?.noteWorkerUp(workerUp);
           logEvent("tengu_remote_headless_client_worker_up", {
-            generation: D.generation,
-            session_mode: fromEnumOpt(D.sessionMode),
+            generation: workerUp.generation,
+            session_mode: fromEnumOpt(workerUp.sessionMode),
           });
         },
-        onWorkerSessionId: (D) => this.features?.noteSessionCleared(D),
-        onProvisioning: (D, W) => this.liveness?.noteProvisioning(D, W),
+        onWorkerSessionId: (sessionId) => this.features?.noteSessionCleared(sessionId),
+        onProvisioning: (provisioning, previous) => this.liveness?.noteProvisioning(provisioning, previous),
       },
       {
-        entry: e.entry,
-        initialSessionId: n,
+        entry: opened.entry,
+        initialSessionId: sessionAddress,
         connectEpoch: this.connectEpoch,
-        writesStatusBeforeInit: e.controlOnly === true,
+        writesStatusBeforeInit: opened.controlOnly === true,
       },
     );
-    this.frames = s;
-    this.guarded(() => e.onDerivedSessionId(n));
-    e.notices?.forEach((notice) =>
+    this.frames = frames;
+    this.guarded(() => opened.onDerivedSessionId(sessionAddress));
+    opened.notices?.forEach((notice) =>
       this.emit(cloudInformationalMessage(this.stampedSessionId, notice.level, clipCloudText(notice.text))),
     );
-    this.releasePreSessionEchoes(s);
-    let r = new BootstrapWatchdog(
+    this.releasePreSessionEchoes(frames);
+    let watchdog = new BootstrapWatchdog(
       {
         clock: this.clock,
-        emit: (D) => this.emit(D),
+        emit: (frame) => this.emit(frame),
         stampedSessionId: () => this.stampedSessionId,
         reconnect: () => this.session?.manager.reconnect(),
         queuedSendCount: () => this.outbound.queuedSendUuids().length,
-        sessionId: e.sessionId,
+        sessionId: opened.sessionId,
         essentialTrafficOnly: isEssentialTrafficOnly(),
-        controlOnly: e.controlOnly === true,
+        controlOnly: opened.controlOnly === true,
         api: {
           markSessionRead,
           updateSessionTitle,
         },
       },
       {
-        titleFromFirstMessage: e.entry === "create" && !e.hasTitle,
+        titleFromFirstMessage: opened.entry === "create" && !opened.hasTitle,
       },
     );
-    this.liveness = r;
-    let h = new HeadlessFeatureHandles();
-    this.features = h;
-    h.adopt(e.featureHandles ?? []);
-    h.onEachSettled(() => {
+    this.liveness = watchdog;
+    let features = new HeadlessFeatureHandles();
+    this.features = features;
+    features.adopt(opened.featureHandles ?? []);
+    features.onEachSettled(() => {
       if (!this.closing) {
-        s.offerSummary();
-        s.noteCloudSessionChanged();
+        frames.offerSummary();
+        frames.noteCloudSessionChanged();
       }
     });
-    h.onEachReportChanged(() => {
-      if (!this.closing) s.noteCloudSessionChanged();
+    features.onEachReportChanged(() => {
+      if (!this.closing) frames.noteCloudSessionChanged();
     });
-    e.onCloudSessionChanged?.(() =>
+    opened.onCloudSessionChanged?.(() =>
       this.guarded(() => {
-        if (!this.closing) s.noteCloudSessionChanged();
+        if (!this.closing) frames.noteCloudSessionChanged();
       }),
     );
-    let y = e.eventSigner === undefined ? false : undefined;
-    e.eventSigner?.then(
-      (D) => {
-        y = D !== undefined;
+    let hasSigner = opened.eventSigner === undefined ? false : undefined;
+    opened.eventSigner?.then(
+      (signer) => {
+        hasSigner = signer !== undefined;
       },
       () => {
-        y = false;
+        hasSigner = false;
       },
     );
-    let S = new Set();
-    let callbacks = h.callbacks({
-      onMessage: (D, W = {}) => this.guarded(() => this.handleSessionFrame(s, D, W)),
-      onPermissionRequest: (D, W, te) =>
+    let notedTrustAsk = new Set();
+    let callbacks = features.callbacks({
+      onMessage: (frame, meta = {}) => this.guarded(() => this.handleSessionFrame(frames, frame, meta)),
+      onPermissionRequest: (request, requestId, context) =>
         this.guarded(() => {
           if (this.session !== null && this.phase !== "ending") {
-            if (te?.reinstated === true) this.agentRequests.reinstate(W);
+            if (context?.reinstated === true) this.agentRequests.reinstate(requestId);
             let manager = this.session.manager;
-            if (e.controlOnly !== true && !normalizeCanUseToolRequest(D)) {
+            if (opened.controlOnly !== true && !normalizeCanUseToolRequest(request)) {
               logEvent("tengu_remote_headless_client_malformed_ask", {});
-              manager.respondToPermissionRequest(W, parsePermissionRequest(D));
+              manager.respondToPermissionRequest(requestId, parsePermissionRequest(request));
               return;
             }
-            let ee = isRepositoryTrustGateEnabled() && isConfirmRepositoryTrustTool(D.tool_name);
-            let se = !ee && isServedCallWatchEnabled() && isRequestComputerFolderTool(D.tool_name);
-            if (se && !isComputerFolderTarget(D.input)) {
+            let isRepositoryTrust =
+              isRepositoryTrustGateEnabled() && isConfirmRepositoryTrustTool(request.tool_name);
+            let isComputerFolder =
+              !isRepositoryTrust &&
+              isServedCallWatchEnabled() &&
+              isRequestComputerFolderTool(request.tool_name);
+            if (isComputerFolder && !isComputerFolderTarget(request.input)) {
               logEvent("tengu_remote_headless_client_malformed_ask", {});
-              if (e.controlOnly !== true) manager.respondToPermissionRequest(W, parsePermissionRequest(D));
+              if (opened.controlOnly !== true)
+                manager.respondToPermissionRequest(requestId, parsePermissionRequest(request));
               return;
             }
-            let x = ee && e.hostAnswersUnattended !== true ? deviceProofState(D, y) : undefined;
-            if (x !== undefined) {
+            let proofState =
+              isRepositoryTrust && opened.hostAnswersUnattended !== true
+                ? deviceProofState(request, hasSigner)
+                : undefined;
+            if (proofState !== undefined) {
               logForDebugging(
-                `[headlessCloudClient] not passing a repository-trust question to the host (${x})`,
+                `[headlessCloudClient] not passing a repository-trust question to the host (${proofState})`,
                 {
                   level: "warn",
                 },
               );
-              if (x === "proves_no_device") {
-                r.notePermissionRequestOpened(W);
-                if (e.controlOnly !== true && !S.has(W)) {
-                  S.add(W);
+              if (proofState === "proves_no_device") {
+                watchdog.notePermissionRequestOpened(requestId);
+                if (opened.controlOnly !== true && !notedTrustAsk.has(requestId)) {
+                  notedTrustAsk.add(requestId);
                   this.emit(
                     cloudInformationalMessage(
                       this.stampedSessionId,
                       "notice",
                       REMOTE_TOOLS_CONSENT_TEXT["repository_trust.prompt.answer_elsewhere"](
-                        getRemoteSessionUrl(e.sessionId),
+                        getRemoteSessionUrl(opened.sessionId),
                       ),
                     ),
                   );
@@ -2342,63 +2407,67 @@ class HeadlessCloudClient {
             if (
               this.agentRequests.passPermissionRequest(
                 {
-                  respondToPermissionRequest: (G, Q) => {
+                  respondToPermissionRequest: (id, answer) => {
                     try {
-                      manager.respondToPermissionRequest(G, Q);
+                      manager.respondToPermissionRequest(id, answer);
                     } finally {
-                      r.notePermissionRequestClosed(G);
+                      watchdog.notePermissionRequestClosed(id);
                     }
                   },
                 },
-                ee ? toCanUseToolRequest(D) : se ? toServedPermissionRequest(D) : D,
-                W,
+                isRepositoryTrust
+                  ? toCanUseToolRequest(request)
+                  : isComputerFolder
+                    ? toServedPermissionRequest(request)
+                    : request,
+                requestId,
               )
             )
-              r.notePermissionRequestOpened(W);
+              watchdog.notePermissionRequestOpened(requestId);
           }
         }),
-      onPermissionCancelled: (D) => {
-        this.agentRequests.cancel(D);
-        r.notePermissionRequestClosed(D);
+      onPermissionCancelled: (requestId) => {
+        this.agentRequests.cancel(requestId);
+        watchdog.notePermissionRequestClosed(requestId);
       },
-      onUserDialogRequest: (D, W, te) =>
+      onUserDialogRequest: (request, requestId, context) =>
         this.guarded(() => {
           if (this.session === null || this.phase === "ending") return;
-          if (isConsentDialogKind(D.dialog_kind)) {
+          if (isConsentDialogKind(request.dialog_kind)) {
             this.dialogsReservedCount++;
             logForDebugging(
-              `[headlessCloudClient] not passing a ${sanitizeCloudText(truncateToLength(String(D.dialog_kind), 64))} dialog to the host: that kind is this client's own question, never the cloud session's`,
+              `[headlessCloudClient] not passing a ${sanitizeCloudText(truncateToLength(String(request.dialog_kind), 64))} dialog to the host: that kind is this client's own question, never the cloud session's`,
             );
             return;
           }
-          if (!this.hostDialogKinds.has(D.dialog_kind)) {
+          if (!this.hostDialogKinds.has(request.dialog_kind)) {
             this.dialogsNotDeclaredCount++;
-            let X = sanitizeCloudText(truncateToLength(String(D.dialog_kind), 64));
+            let kind = sanitizeCloudText(truncateToLength(String(request.dialog_kind), 64));
             logForDebugging(
-              `[headlessCloudClient] not passing a ${X} dialog to the host: its initialize did not declare the kind`,
+              `[headlessCloudClient] not passing a ${kind} dialog to the host: its initialize did not declare the kind`,
             );
             this.emit(
               cloudInformationalMessage(
                 this.stampedSessionId,
                 "notice",
-                `The cloud session is waiting on a ${X} dialog this host did not declare it can show; it continues when another client answers it or the session's dialog timeout passes.`,
+                `The cloud session is waiting on a ${kind} dialog this host did not declare it can show; it continues when another client answers it or the session's dialog timeout passes.`,
               ),
             );
             return;
           }
-          if (te?.reinstated === true) this.agentRequests.reinstate(W);
-          this.agentRequests.passUserDialogRequest(this.session.manager, D, W);
+          if (context?.reinstated === true) this.agentRequests.reinstate(requestId);
+          this.agentRequests.passUserDialogRequest(this.session.manager, request, requestId);
         }),
-      onUserDialogCancelled: (D) => this.agentRequests.cancel(D),
-      onConnected: (D) =>
+      onUserDialogCancelled: (requestId) => this.agentRequests.cancel(requestId),
+      onConnected: (info) =>
         this.guarded(() => {
           this.logStream("connected");
           let everConnected = this.everConnected;
           this.connection = "live";
-          s.noteCloudSessionChanged();
-          this.features?.noteStreamConnected(D);
+          frames.noteCloudSessionChanged();
+          this.features?.noteStreamConnected(info);
           this.everConnected = true;
-          if (everConnected) this.recheckServeOnlyLink(e);
+          if (everConnected) this.recheckServeOnlyLink(opened);
           this.cancelReconnectNotice?.();
           this.cancelReconnectNotice = null;
           if (this.reconnectingTold) {
@@ -2410,7 +2479,7 @@ class HeadlessCloudClient {
         this.guarded(() => {
           this.logStream("reconnecting");
           this.connection = "reconnecting";
-          s.noteCloudSessionChanged();
+          frames.noteCloudSessionChanged();
           if (
             this.closing ||
             !this.everConnected ||
@@ -2432,7 +2501,7 @@ class HeadlessCloudClient {
         }),
       onCatchUpTruncated: () =>
         this.guarded(() => {
-          s.releaseHeld();
+          frames.releaseHeld();
           this.requestedModeChecked = true;
           let missedEchoes = this.outbound.synthesizeMissedEchoes();
           this.logStream("catch_up_truncated", {
@@ -2446,51 +2515,55 @@ class HeadlessCloudClient {
             ),
           );
         }),
-      onToolHostEnded: (D) =>
+      onToolHostEnded: (info) =>
         this.guarded(() => {
-          if (e.controlOnly !== true) {
+          if (opened.controlOnly !== true) {
             logForDebugging(
               "[headlessCloudClient] tool_host_ended ignored: this client is not a serve-only helper",
             );
             return;
           }
-          if (D.reason === CONNECTION_EXPIRED && e.resumeLinkHere !== undefined) {
-            this.resumeServeOnlyLinkOrEnd(e, D.reason);
+          if (info.reason === CONNECTION_EXPIRED && opened.resumeLinkHere !== undefined) {
+            this.resumeServeOnlyLinkOrEnd(opened, info.reason);
             return;
           }
-          this.end("tool_host_ended", sessionNoLongerUsesComputer(e.sessionId, D.reason));
+          this.end("tool_host_ended", sessionNoLongerUsesComputer(opened.sessionId, info.reason));
         }),
-      onDisconnected: (D) => {
-        let W = cloudDisconnectReason(D);
-        this.end("disconnected", cloudDisconnectMessage(W), W);
+      onDisconnected: (reason) => {
+        let disconnectReason = cloudDisconnectReason(reason);
+        this.end("disconnected", cloudDisconnectMessage(disconnectReason), disconnectReason);
       },
-      onResponseUndelivered: (D, W, te) =>
+      onResponseUndelivered: (response, kind, detail) =>
         this.guarded(() => {
-          if (this.undeliveredKindsTold.has(W)) return;
+          if (this.undeliveredKindsTold.has(kind)) return;
           if (this.undeliveredKindsTold.size === 0) queueMicrotask(() => this.undeliveredKindsTold.clear());
-          this.undeliveredKindsTold.add(W);
+          this.undeliveredKindsTold.add(kind);
           this.emit(
-            cloudInformationalMessage(this.stampedSessionId, "warning", formatUndeliveredAnswerNotice(W, te)),
+            cloudInformationalMessage(
+              this.stampedSessionId,
+              "warning",
+              formatUndeliveredAnswerNotice(kind, detail),
+            ),
           );
         }),
-      onError: (D) => logForDebugging(`[headlessCloudClient] stream error: ${D.message}`),
+      onError: (error) => logForDebugging(`[headlessCloudClient] stream error: ${error.message}`),
     });
-    let R = h.homeSeed();
-    let k = {
-      sessionId: e.sessionId,
-      getAccessToken: e.getAccessToken,
-      consoleProfileBearer: e.consoleProfileBearer,
-      onAuth401: e.onAuth401,
-      orgUuid: e.orgUuid,
+    let homeSeed = features.homeSeed();
+    let managerOptions = {
+      sessionId: opened.sessionId,
+      getAccessToken: opened.getAccessToken,
+      consoleProfileBearer: opened.consoleProfileBearer,
+      onAuth401: opened.onAuth401,
+      orgUuid: opened.orgUuid,
       ...{},
-      ...(e.eventSigner && {
-        eventSigner: e.eventSigner,
+      ...(opened.eventSigner && {
+        eventSigner: opened.eventSigner,
       }),
-      ...(R && {
-        homeSeed: R,
-        homeSeedHoldsFirstSend: e.entry === "create",
+      ...(homeSeed && {
+        homeSeed,
+        homeSeedHoldsFirstSend: opened.entry === "create",
       }),
-      ...(e.controlOnly === true && {
+      ...(opened.controlOnly === true && {
         controlOnly: true,
       }),
       trackSendsInFlight: true,
@@ -2501,85 +2574,90 @@ class HeadlessCloudClient {
       nameRepositoryTrustAnswers: isRepositoryTrustGateEnabled(),
       pinComputerFolderAllow: isServedCallWatchEnabled,
       keepOwnModelSwitchBreadcrumb: true,
-      keepStreamRedialling: e.cloudSession().device.status === "bound",
-      ...(e.entry === "create"
+      keepStreamRedialling: opened.cloudSession().device.status === "bound",
+      ...(opened.entry === "create"
         ? {
-            initialPromptUuid: e.initialPrompt?.uuid,
+            initialPromptUuid: opened.initialPrompt?.uuid,
           }
         : {
             isAttachToExisting: true,
-            initialSequenceNum: e.initialSequenceNum ?? undefined,
-            preflightCheck: e.preflightCheck,
+            initialSequenceNum: opened.initialSequenceNum ?? undefined,
+            preflightCheck: opened.preflightCheck,
           }),
     };
-    let I = e.createManager ? e.createManager(k, callbacks) : new RemoteSessionManager(k, callbacks);
-    let O = h.sendWait();
-    if (O !== null)
-      I.addSendGate((D) => Promise.race([O(), D.released, D.withdrawn, D.decided]), {
+    let manager = opened.createManager
+      ? opened.createManager(managerOptions, callbacks)
+      : new RemoteSessionManager(managerOptions, callbacks);
+    let sendWait = features.sendWait();
+    if (sendWait !== null)
+      manager.addSendGate((gate) => Promise.race([sendWait(), gate.released, gate.withdrawn, gate.decided]), {
         onRelease: "send",
       });
-    let P = e.dirSync?.sync.sendGate?.bind(e.dirSync.sync);
-    if (P !== undefined)
-      I.addSendGate((D) => P(D), {
+    let dirSyncGate = opened.dirSync?.sync.sendGate?.bind(opened.dirSync.sync);
+    if (dirSyncGate !== undefined)
+      manager.addSendGate((gate) => dirSyncGate(gate), {
         onRelease: "withhold",
       });
     this.session = {
-      manager: I,
-      opened: e,
+      manager,
+      opened,
     };
-    this.opened = e;
-    h.noteSession({
-      sessionId: e.sessionId,
-      manager: I,
+    this.opened = opened;
+    features.noteSession({
+      sessionId: opened.sessionId,
+      manager,
       clock: this.clock,
-      ...(e.controlOnly === true && {
-        endServing: (D) =>
-          void (D === "idle"
+      ...(opened.controlOnly === true && {
+        endServing: (leftFor) =>
+          void (leftFor === "idle"
             ? this.end(
                 "idle_released",
-                `Cloud session ${e.sessionId} ran nothing on this computer for its idle limit; letting it go. It can ask for this folder again.`,
+                `Cloud session ${opened.sessionId} ran nothing on this computer for its idle limit; letting it go. It can ask for this folder again.`,
                 undefined,
-                D,
+                leftFor,
               )
-            : this.end("end_session", undefined, undefined, D)),
+            : this.end("end_session", undefined, undefined, leftFor)),
       }),
     });
-    if (e.entry === "create" && e.initialPrompt)
-      this.outbound.noteOwnUuid(e.initialPrompt.uuid, e.initialPrompt.content);
-    let N = e.entry === "attach" && (e.preflightCheck !== undefined || (e.openingRequests?.length ?? 0) > 0);
-    this.phase = e.entry === "create" || N ? "awaiting_worker" : "live";
-    I.connect();
-    let requestedPermissionMode = e.entry === "create" ? e.requestedPermissionMode : undefined;
+    if (opened.entry === "create" && opened.initialPrompt)
+      this.outbound.noteOwnUuid(opened.initialPrompt.uuid, opened.initialPrompt.content);
+    let needsPreflight =
+      opened.entry === "attach" &&
+      (opened.preflightCheck !== undefined || (opened.openingRequests?.length ?? 0) > 0);
+    this.phase = opened.entry === "create" || needsPreflight ? "awaiting_worker" : "live";
+    manager.connect();
+    let requestedPermissionMode = opened.entry === "create" ? opened.requestedPermissionMode : undefined;
     if (requestedPermissionMode !== undefined)
       this.outbound.holdLaterSendsBehind(
         syncRemotePermissionMode({
-          manager: I,
+          manager,
           mode: requestedPermissionMode,
           surface: "headless",
-          sessionId: e.sessionId,
-          superseded: () => this.session?.manager !== I || this.hostSentPermissionMode,
+          sessionId: opened.sessionId,
+          superseded: () => this.session?.manager !== manager || this.hostSentPermissionMode,
           observedMode: () => this.lastWorkerMode,
           seededModeReported: () => this.workerModesSeen.has(requestedPermissionMode),
           linkDown: () => this.connection !== "live",
-          onRefused: (D) => this.outbound.holdLaterSendsBehind(D),
-          onGaveUp: (D) => this.emit(cloudInformationalMessage(this.stampedSessionId, "warning", D)),
+          onRefused: (gate) => this.outbound.holdLaterSendsBehind(gate),
+          onGaveUp: (message) =>
+            this.emit(cloudInformationalMessage(this.stampedSessionId, "warning", message)),
         }),
       );
-    this.initializeWorker(e, I);
-    let z = N
-      ? (e.preflightCheck ?? Promise.resolve()).then(() =>
-          this.applyOpeningRequests(e.openingRequests ?? [], I),
+    this.initializeWorker(opened, manager);
+    let preflightDone = needsPreflight
+      ? (opened.preflightCheck ?? Promise.resolve()).then(() =>
+          this.applyOpeningRequests(opened.openingRequests ?? [], manager),
         )
       : undefined;
-    r.attachStatusFeeds([undefined, ...h.statusFeeds()], () => {
+    watchdog.attachStatusFeeds([undefined, ...features.statusFeeds()], () => {
       if (!this.closing) {
-        s.offerSummary();
-        s.noteCloudSessionChanged();
+        frames.offerSummary();
+        frames.noteCloudSessionChanged();
       }
     });
-    if (e.entry === "create") r.armStallWarning();
-    if (this.phase === "live") r.noteWorkerReady();
-    z?.then(
+    if (opened.entry === "create") watchdog.armStallWarning();
+    if (this.phase === "live") watchdog.noteWorkerReady();
+    preflightDone?.then(
       () => this.markWorkerReady("preflight"),
       (error) => {
         logForDebugging(
@@ -2593,9 +2671,9 @@ class HeadlessCloudClient {
       },
     );
     let cloudSession = this.readCloudSession();
-    let Y = h.reports();
+    let reports = features.reports();
     logEvent("tengu_remote_headless_client_started", {
-      entry: fromEnum(e.entry),
+      entry: fromEnum(opened.entry),
       device_status: fromEnumOpt(cloudSession?.device.status),
       sync_state: fromEnumOpt(cloudSession?.directory_sync.state),
       sync_reason: directorySyncReasonLabel(cloudSession?.directory_sync.reason),
@@ -2605,77 +2683,84 @@ class HeadlessCloudClient {
       include_partial_messages: this.config.includePartialMessages,
       initialize_policy: fromEnum(this.config.initializePolicy),
       has_dir_sync: false,
-      has_home_seed: R !== undefined,
+      has_home_seed: homeSeed !== undefined,
       worker_initialize: fromEnum(this.workerInitializeReason ?? "none"),
-      machine_features: h.handles().length,
-      ...Object.fromEntries(HEADLESS_FEATURE_NAMES.map((D) => [`feature_${D}`, fromEnumOpt(Y[D]?.state)])),
+      machine_features: features.handles().length,
+      ...Object.fromEntries(
+        HEADLESS_FEATURE_NAMES.map((featureName) => [
+          `feature_${featureName}`,
+          fromEnumOpt(reports[featureName]?.state),
+        ]),
+      ),
       serving_state: fromEnumOpt(cloudSession?.serving?.state),
       serving_reason: fromEnumOpt(cloudSession?.serving?.reason),
       oauth_bridge: this.oauthBridgeInstalled,
     });
-    if (this.phase === "live") this.goLive(I);
-    else if (e.entry === "create") this.armIdleDeadline();
+    if (this.phase === "live") this.goLive(manager);
+    else if (opened.entry === "create") this.armIdleDeadline();
   }
-  goLive(e) {
-    this.track(this.hostRequests.sendPendingInterrupt(e).then(() => this.outbound.flush()));
+  goLive(manager) {
+    this.track(this.hostRequests.sendPendingInterrupt(manager).then(() => this.outbound.flush()));
     this.features?.noteWorkerLive();
   }
-  recheckServeOnlyLink(e) {
-    let stillLinkedHere = e.stillLinkedHere;
-    if (e.controlOnly !== true || stillLinkedHere === undefined) return;
+  recheckServeOnlyLink(opened) {
+    let stillLinkedHere = opened.stillLinkedHere;
+    if (opened.controlOnly !== true || stillLinkedHere === undefined) return;
     stillLinkedHere().then(
-      async (s) => {
-        if (s === false && !this.closing) await this.resumeServeOnlyLinkOrEnd(e, undefined);
+      async (stillLinked) => {
+        if (stillLinked === false && !this.closing) await this.resumeServeOnlyLinkOrEnd(opened, undefined);
       },
       (error) => {
         logForDebugging(`[headlessCloudClient] re-reading the serve-only link threw: ${errorMessage(error)}`);
       },
     );
   }
-  async resumeServeOnlyLinkOrEnd(e, n) {
-    let s =
-      this.servesSession() && !this.closing ? await e.resumeLinkHere?.().catch(() => "stopped") : "stopped";
+  async resumeServeOnlyLinkOrEnd(opened, reason) {
+    let resumeResult =
+      this.servesSession() && !this.closing
+        ? await opened.resumeLinkHere?.().catch(() => "stopped")
+        : "stopped";
     if (this.closing) return;
-    if (s === "resumed" && this.servesSession()) {
+    if (resumeResult === "resumed" && this.servesSession()) {
       this.guarded(() => this.session?.manager.reconnect());
       return;
     }
-    this.end("tool_host_ended", sessionNoLongerUsesComputer(e.sessionId, n));
+    this.end("tool_host_ended", sessionNoLongerUsesComputer(opened.sessionId, reason));
   }
   servesSession() {
     let state = this.readCloudSession()?.serving?.state;
     return state === "on" || state === "pending";
   }
-  guarded(e) {
+  guarded(fn) {
     try {
-      e();
+      fn();
     } catch (error) {
       if (error instanceof AbortError)
         logForDebugging("[headlessCloudClient] session frame handling aborted");
       else logError(error);
     }
   }
-  handleSessionFrame(e, n, s) {
-    this.liveness?.noteInbound(n);
-    if (n.type === "result") {
+  handleSessionFrame(frames, frame, meta) {
+    this.liveness?.noteInbound(frame);
+    if (frame.type === "result") {
       this.features?.noteReply(this.featureAbort.signal);
-      if (!this.closing) e.offerSummary();
+      if (!this.closing) frames.offerSummary();
     }
-    if (e.handle(n, s) && this.phase === "awaiting_worker" && this.opened?.entry === "create")
+    if (frames.handle(frame, meta) && this.phase === "awaiting_worker" && this.opened?.entry === "create")
       this.armIdleDeadline();
-    if (n.type === "system" && "permissionMode" in n) {
-      let permissionMode = parsePermissionMode(n.permissionMode);
+    if (frame.type === "system" && "permissionMode" in frame) {
+      let permissionMode = parsePermissionMode(frame.permissionMode);
       if (permissionMode !== undefined) {
         this.lastWorkerMode = permissionMode;
         this.workerModesSeen.add(permissionMode);
       }
     }
-    if (n.type === "system" && n.subtype === "init") {
-      this.checkRequestedPermissionMode(n.permissionMode);
-      this.logWorkerInit(n);
+    if (frame.type === "system" && frame.subtype === "init") {
+      this.checkRequestedPermissionMode(frame.permissionMode);
+      this.logWorkerInit(frame);
     }
   }
-  logWorkerInit(e) {
+  logWorkerInit(init) {
     try {
       this.builtInNames ??= new Set(this.config.builtInToolNames?.() ?? []);
     } catch (error) {
@@ -2684,41 +2769,41 @@ class HeadlessCloudClient {
         `[headlessCloudClient] built-in tool names could not be read: ${sanitizeCloudText(truncateToLength(errorMessage(error), 200))}`,
       );
     }
-    logForDebugging(logCloudWorkerInit(e, this.builtInNames));
+    logForDebugging(logCloudWorkerInit(init, this.builtInNames));
   }
-  checkRequestedPermissionMode(e) {
+  checkRequestedPermissionMode(mode) {
     if (this.requestedModeChecked) return;
     this.requestedModeChecked = true;
     let requestedPermissionMode =
       this.opened?.entry === "create" ? this.opened.requestedPermissionMode : undefined;
-    if (requestedPermissionMode === undefined || typeof e !== "string") return;
-    let permissionMode = parsePermissionMode(e);
-    let r = permissionMode === undefined ? undefined : toExternalPermissionMode(permissionMode);
-    if (r === requestedPermissionMode) return;
-    let h = `The cloud session did not apply the ${requestedPermissionMode} permission mode requested when it was created; it is in ${r ?? sanitizeCloudText(truncateToLength(e, 24))} mode.`;
-    this.emit(cloudInformationalMessage(this.stampedSessionId, "warning", h));
+    if (requestedPermissionMode === undefined || typeof mode !== "string") return;
+    let permissionMode = parsePermissionMode(mode);
+    let appliedMode = permissionMode === undefined ? undefined : toExternalPermissionMode(permissionMode);
+    if (appliedMode === requestedPermissionMode) return;
+    let warning = `The cloud session did not apply the ${requestedPermissionMode} permission mode requested when it was created; it is in ${appliedMode ?? sanitizeCloudText(truncateToLength(mode, 24))} mode.`;
+    this.emit(cloudInformationalMessage(this.stampedSessionId, "warning", warning));
     logEvent("tengu_remote_headless_client_mode_not_applied", {
       requested: fromEnum(requestedPermissionMode),
-      actual: fromEnumOpt(r),
+      actual: fromEnumOpt(appliedMode),
     });
-    logForDebugging(`[headlessCloudClient] ${h}`, {
+    logForDebugging(`[headlessCloudClient] ${warning}`, {
       level: "warn",
     });
   }
   readCloudSession() {
     try {
-      let e = this.opened?.cloudSession();
-      let n = this.features?.reports() ?? {};
-      return e === undefined
-        ? e
+      let info = this.opened?.cloudSession();
+      let reports = this.features?.reports() ?? {};
+      return info === undefined
+        ? info
         : Object.assign(
             {},
-            n,
-            ...Object.values(n).map((s) => s.facts),
+            reports,
+            ...Object.values(reports).map((report) => report.facts),
             {
               connection: this.connection,
             },
-            e,
+            info,
           );
     } catch (error) {
       if (error instanceof AbortError)
@@ -2730,8 +2815,8 @@ class HeadlessCloudClient {
   get stampedSessionId() {
     return this.frames?.stampedSessionId ?? "";
   }
-  markWorkerReady(e) {
-    this.containerStartFailed ||= e === "step_failed";
+  markWorkerReady(via) {
+    this.containerStartFailed ||= via === "step_failed";
     if (this.phase !== "awaiting_worker" || this.session === null) return;
     this.phase = "live";
     this.cancelIdleDeadline?.();
@@ -2740,7 +2825,7 @@ class HeadlessCloudClient {
     let queued = this.outbound.queuedCount;
     this.goLive(this.session.manager);
     logEvent("tengu_remote_headless_client_worker_ready", {
-      via: fromEnum(e),
+      via: fromEnum(via),
       wait_ms: this.clock.now() - this.connectEpoch,
       queued,
     });
@@ -2756,10 +2841,10 @@ class HeadlessCloudClient {
       this.markWorkerReady("idle_deadline");
     }, this.workerReadyIdleMs);
   }
-  logStream(e, n = {}) {
+  logStream(transition, fields = {}) {
     logEvent("tengu_remote_headless_client_stream", {
-      transition: fromEnum(e),
-      ...n,
+      transition: fromEnum(transition),
+      ...fields,
     });
   }
   detachIfDrained() {
@@ -2779,12 +2864,12 @@ class HeadlessCloudClient {
     if (this.features?.noteHostWake() === true)
       this.guarded(() => this.session?.manager.reconnectAfterSuspend());
   }
-  watchAwake(e, n) {
+  watchAwake(elapsedMs, since) {
     this.stopAwakeWatch = this.clock.setTimeout(() => {
-      let s = this.clock.now();
-      let r = s - n > EXIT_GRACE_MS * 2 ? 0 : e + (s - n);
-      if (r < IDLE_EXIT_MS) {
-        this.watchAwake(r, s);
+      let now = this.clock.now();
+      let awakeMs = now - since > EXIT_GRACE_MS * 2 ? 0 : elapsedMs + (now - since);
+      if (awakeMs < IDLE_EXIT_MS) {
+        this.watchAwake(awakeMs, now);
         return;
       }
       this.stopAwakeWatch = null;
@@ -2809,7 +2894,7 @@ class HeadlessCloudClient {
     this.transportClosed = (async () => {
       await this.hostRequests.issuePendingInterrupt(session.manager).catch(() => {});
       await this.hostRequests.interruptIssued.catch(() => {});
-      let n = scheduleTimer(this.clock, this.liveness?.stop() ?? Promise.resolve(), POLL_MS);
+      let stopped = scheduleTimer(this.clock, this.liveness?.stop() ?? Promise.resolve(), POLL_MS);
       await session.manager
         .releaseHeldSends(undefined, {
           exiting: true,
@@ -2818,11 +2903,11 @@ class HeadlessCloudClient {
         .catch(() => {});
       await session.manager.flushSends(CLOSE_GRACE_MS).catch(() => {});
       session.manager.disconnect();
-      await n;
+      await stopped;
     })();
     return this.transportClosed;
   }
-  async tearDown(e, n, s) {
+  async tearDown(reason, code, leftFor) {
     this.liveness?.halt();
     this.cancelIdleDeadline?.();
     this.cancelIdleDeadline = null;
@@ -2831,16 +2916,16 @@ class HeadlessCloudClient {
     this.featureAbort.abort();
     this.releasePreSessionEchoes(this.frames);
     this.frames?.close();
-    this.outbound.close(e, n);
-    this.outbound.answerForwardsInFlight(e);
+    this.outbound.close(reason, code);
+    this.outbound.answerForwardsInFlight(reason);
     this.agentRequests.cancelAll();
     await scheduleTimer(
       this.clock,
       this.features?.dispose(
-        s === undefined
+        leftFor === undefined
           ? {}
           : {
-              leftFor: s,
+              leftFor,
             },
       ) ?? Promise.resolve(),
       MIN_POLL_MS,
@@ -2853,17 +2938,17 @@ class HeadlessCloudClient {
       setHostSessionsBearerSource(null);
     }
   }
-  logEnded(e, n, s, r) {
+  logEnded(reason, exitCode, fromPhase, disconnectCode) {
     if (this.endLogged) return;
     this.endLogged = true;
     let stats = this.outbound.stats;
     let stats_2 = this.liveness?.stats;
     logEvent("tengu_remote_headless_client_ended", {
-      reason: fromEnum(e),
-      exit_code: n,
-      ended_from: fromEnum(s),
+      reason: fromEnum(reason),
+      exit_code: exitCode,
+      ended_from: fromEnum(fromPhase),
       entry: fromEnumOpt(this.opened?.entry),
-      disconnect_code: fromEnumOpt(r),
+      disconnect_code: fromEnumOpt(disconnectCode),
       container_start_failed: this.containerStartFailed,
       duration_ms: this.clock.now() - this.startedAt,
       turns: this.frames?.turns ?? 0,
@@ -2894,27 +2979,28 @@ class HeadlessCloudClient {
       eof_to_end_ms: this.inputClosedAt === null ? undefined : this.clock.now() - this.inputClosedAt,
     });
     if (this.containerStartFailed) logFeatureBad("remote_headless_client", "container_start_failed");
-    else if (e === "start_refused") logFeatureSad("remote_headless_client", e);
-    else if (n !== 0) logFeatureBad("remote_headless_client", e);
+    else if (reason === "start_refused") logFeatureSad("remote_headless_client", reason);
+    else if (exitCode !== 0) logFeatureBad("remote_headless_client", reason);
     else if (this.inputFailed) logFeatureSad("remote_headless_client", "input_failed");
     else logFeatureOk("remote_headless_client");
   }
-  async end(e, n, s, r) {
+  async end(reason, message, reasonCode, leftFor) {
     if (this.phase === "ending" || this.phase === "ended") return;
-    let h = e === "disconnected" ? (s ?? cloudDisconnectReason(undefined)) : undefined;
-    let y = exitForReason(e, n, h);
-    let exitCode = y.exitCode;
+    let disconnectCode =
+      reason === "disconnected" ? (reasonCode ?? cloudDisconnectReason(undefined)) : undefined;
+    let exitInfo = exitForReason(reason, message, disconnectCode);
+    let exitCode = exitInfo.exitCode;
     let phase = this.phase;
     this.phase = "ending";
     this.endingWith = {
       exitCode,
-      disconnectCode: h,
+      disconnectCode,
     };
     try {
       await this.tearDown(
-        e === "disconnected" ? "the cloud session disconnected" : CLIENT_CLOSED_BEFORE_COMPLETE,
-        e === "disconnected" ? "disconnected" : "closed",
-        r,
+        reason === "disconnected" ? "the cloud session disconnected" : CLIENT_CLOSED_BEFORE_COMPLETE,
+        reason === "disconnected" ? "disconnected" : "closed",
+        leftFor,
       );
       await scheduleTimer(
         this.clock,
@@ -2928,36 +3014,37 @@ class HeadlessCloudClient {
       else logError(error);
       await this.closeTransport().catch(() => {});
     }
-    this.logEnded(e, exitCode, phase, h);
+    this.logEnded(reason, exitCode, phase, disconnectCode);
     this.outputOpen = false;
     this.io.outbound.done();
     await this.drained;
     this.phase = "ended";
     this.unregisterCleanup();
-    this.resolveDone(y);
+    this.resolveDone(exitInfo);
   }
 }
 //@ chunk-fe6rs39h.js:118745-118773 placement
 var CONNECTION_EXPIRED = "connection expired";
 //@ chunk-fe6rs39h.js:118773-118910 placement
-function sessionNoLongerUsesComputer(sessionId, n) {
-  let s = n === undefined || n === "" ? "" : ` (${sanitizeCloudText(truncateToLength(n, 64))})`;
-  return `Cloud session ${sessionId} no longer uses this computer${s}; stopping.`;
+function sessionNoLongerUsesComputer(sessionId, detail) {
+  let suffix =
+    detail === undefined || detail === "" ? "" : ` (${sanitizeCloudText(truncateToLength(detail, 64))})`;
+  return `Cloud session ${sessionId} no longer uses this computer${suffix}; stopping.`;
 }
 //@ chunk-fe6rs39h.js:118910-119007 placement
-async function* forwardUntilAbort(e, n) {
+async function* forwardUntilAbort(source, onAbort) {
   try {
-    for await (let s of e) yield s;
+    for await (let value of source) yield value;
   } catch (error) {
     if (!(error instanceof AbortError)) logError(error);
-    n();
+    onAbort();
   }
 }
 //@ chunk-fe6rs39h.js:119007-119178 placement
-function openingControlRequest(e, n) {
-  if (e.entry === "create")
-    return e.initialPrompt === undefined && n.length > 0 ? "declare_dialog_kinds" : null;
-  return e.workerAwaitsAnswer === true ? "rearm_parked_prompt" : null;
+function openingControlRequest(openResult, declaredKinds) {
+  if (openResult.entry === "create")
+    return openResult.initialPrompt === undefined && declaredKinds.length > 0 ? "declare_dialog_kinds" : null;
+  return openResult.workerAwaitsAnswer === true ? "rearm_parked_prompt" : null;
 }
 //@ chunk-fe6rs39h.js:119178-119288 placement = isHTTPConfig (1)
 function isRetryableHttpFailure(config) {
@@ -2968,80 +3055,80 @@ function isRetryableHttpFailure(config) {
   );
 }
 //@ chunk-fe6rs39h.js:119288-119963 placement
-function exitForReason(e, n, s) {
-  let r = s ?? cloudDisconnectReason(undefined);
-  switch (e) {
+function exitForReason(reason, failure, context) {
+  let fallback = context ?? cloudDisconnectReason(undefined);
+  switch (reason) {
     case "stdin_eof":
     case "end_session":
-      return n === undefined
+      return failure === undefined
         ? {
             exitCode: 0,
-            reason: e,
+            reason,
           }
         : {
             exitCode: 0,
-            reason: e,
-            message: n,
+            reason,
+            message: failure,
           };
     case "tool_host_ended":
     case "idle_released":
       return {
         exitCode: 0,
-        reason: e,
-        message: clipCloudText(n ?? e),
+        reason,
+        message: clipCloudText(failure ?? reason),
       };
     case "disconnected":
       return {
         exitCode: 1,
-        reason: e,
-        disconnectCode: r,
-        message: sanitizeCloudText(n ?? cloudDisconnectMessage(r)),
+        reason,
+        disconnectCode: fallback,
+        message: sanitizeCloudText(failure ?? cloudDisconnectMessage(fallback)),
       };
     case "rejected_options":
       return {
         exitCode: 1,
-        reason: e,
-        message: clipCloudText(n ?? e),
+        reason,
+        message: clipCloudText(failure ?? reason),
       };
     case "open_failed": {
-      let h = clipCloudText(n ?? "") || "Unable to open the cloud session";
+      let message = clipCloudText(failure ?? "") || "Unable to open the cloud session";
       return {
         exitCode: 1,
-        reason: e,
-        message: h.startsWith("Error: ") ? h : `Error: ${h}`,
+        reason,
+        message: message.startsWith("Error: ") ? message : `Error: ${message}`,
       };
     }
     case "start_refused":
       return {
         exitCode: 1,
-        reason: e,
-        message: openSessionErrorMessage(n),
+        reason,
+        message: openSessionErrorMessage(failure),
       };
     case "output_failed":
       return {
         exitCode: 1,
-        reason: e,
-        message: sanitizeCloudText(n ?? e),
+        reason,
+        message: sanitizeCloudText(failure ?? reason),
       };
   }
 }
 //@ chunk-fe6rs39h.js:119963-120032 placement
-function openSessionErrorMessage(e) {
-  return clipCloudText(e ?? "") || "Unable to open the cloud session";
+function openSessionErrorMessage(failure) {
+  return clipCloudText(failure ?? "") || "Unable to open the cloud session";
 }
 //@ chunk-fe6rs39h.js:120032-120153 placement
-function controlRequestSubtype(e) {
-  let request = "request" in e ? e.request : undefined;
+function controlRequestSubtype(frame) {
+  let request = "request" in frame ? frame.request : undefined;
   return typeof request === "object" && request !== null && "subtype" in request
     ? request.subtype
     : undefined;
 }
 //@ chunk-fe6rs39h.js:120153-120323 placement
-function notAppliedCounts(e) {
+function notAppliedCounts(entries) {
   return {
-    not_applied_lost: count(e, ({ kind }) => kind === "lost"),
-    not_applied_kept: count(e, ({ kind }) => kind === "kept"),
-    not_applied_preference: count(e, ({ kind }) => kind === "preference"),
+    not_applied_lost: count(entries, ({ kind }) => kind === "lost"),
+    not_applied_kept: count(entries, ({ kind }) => kind === "kept"),
+    not_applied_preference: count(entries, ({ kind }) => kind === "preference"),
   };
 }
 //@ chunk-fe6rs39h.js:120323-120577 placement
@@ -3063,6 +3150,6 @@ var DIR_SYNC_OFF_REASONS = [
 //@ chunk-fe6rs39h.js:120577-120657 placement
 function directorySyncReasonLabel(reason) {
   if (reason === undefined) return;
-  return fromEnumOpt(DIR_SYNC_OFF_REASONS.find((n) => n === reason)) ?? lit("engine");
+  return fromEnumOpt(DIR_SYNC_OFF_REASONS.find((limitReason) => limitReason === reason)) ?? lit("engine");
 }
 export { runHeadlessCloudClient };

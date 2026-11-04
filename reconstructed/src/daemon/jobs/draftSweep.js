@@ -17,26 +17,27 @@ import { isStorageV5Enabled } from "../../utils/hoverRest.js";
 import { STORAGE_SPACES } from "../../utils/storage/storageSpaces.js";
 import { writeFileAtomic, writeAndPublishSync } from "../../utils/atomicPublishWrite.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, string, array, E } from "../../../vendor/zod/v4/classic/schemas.js";
+import { objectSchema, stringSchema, array, numberSchema } from "../../../vendor/zod/v4/classic/schemas.js";
 import { readSmallFileOrNull } from "../../utils/readSmallFile.js";
 import { getRootSession } from "../../bootstrap/state.js";
 import { withFeatureTelemetry } from "../../services/analytics/featureTelemetry.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-3z29138t.js:699-724 placement
 var DRAFT_TTL_MS = 86400000;
 var DRAFT_MAX_BYTES = 8388608;
 //@ chunk-3z29138t.js:724-792 placement
-function shortHash(t) {
-  return createHash("sha256").update(t).digest("hex").slice(0, 8);
+function shortHash(text) {
+  return createHash("sha256").update(text).digest("hex").slice(0, 8);
 }
 //@ chunk-3z29138t.js:792-838 placement
-function draftFileName(t) {
-  return join(getJobsDir(), `.draft-${shortHash(t)}`);
+function draftFileName(canonicalLauncherCwd) {
+  return join(getJobsDir(), `.draft-${shortHash(canonicalLauncherCwd)}`);
 }
 //@ chunk-3z29138t.js:838-883 placement
-function withTimestamp(t) {
+function withTimestamp(draft) {
   return jsonStringify({
-    ...t,
+    ...draft,
     ts: Date.now(),
   });
 }
@@ -44,19 +45,19 @@ function withTimestamp(t) {
 /**
  * 函数 sweepDraft（执行一次草稿清理）。
  */
-async function sweepDraft(canonicalLauncherCwd, r, storageV5) {
-  await writeJobDraft(canonicalLauncherCwd, r, storageV5);
+async function sweepDraft(canonicalLauncherCwd, draft, storageV5) {
+  await writeJobDraft(canonicalLauncherCwd, draft, storageV5);
 }
 //@ chunk-3z29138t.js:926-1171 placement
 /**
  * 保存作业草稿：storage v5 写入 jobDraft 空间（原子发布），否则写到 jobs 目录；成功返回 true。
  */
-async function writeJobDraft(t, r, e) {
-  if (isStorageV5Enabled() && e)
+async function writeJobDraft(canonicalLauncherCwd, draft, storageV5) {
+  if (isStorageV5Enabled() && storageV5)
     return (
       (
-        await e
-          .write(STORAGE_SPACES.jobDraft(shortHash(t)), withTimestamp(r), {
+        await storageV5
+          .write(STORAGE_SPACES.jobDraft(shortHash(canonicalLauncherCwd)), withTimestamp(draft), {
             publishDiscipline: "atomic",
             mode: 438 & ~process.umask(),
           })
@@ -69,7 +70,7 @@ async function writeJobDraft(t, r, e) {
     await mkdir(getJobsDir(), {
       recursive: true,
     });
-    await writeFileAtomic(draftFileName(t), withTimestamp(r));
+    await writeFileAtomic(draftFileName(canonicalLauncherCwd), withTimestamp(draft));
     return true;
   } catch {
     return false;
@@ -79,59 +80,62 @@ async function writeJobDraft(t, r, e) {
 /**
  * 函数 writeDraftBestEffort（写草稿并吞错误）。
  */
-function writeDraftBestEffort(canonicalLauncherCwd, r) {
+function writeDraftBestEffort(canonicalLauncherCwd, draft) {
   try {
-    writeAndPublishSync(draftFileName(canonicalLauncherCwd), withTimestamp(r));
+    writeAndPublishSync(draftFileName(canonicalLauncherCwd), withTimestamp(draft));
   } catch {}
 }
 //@ chunk-3z29138t.js:1215-1328 placement
 /**
  * 删除作业草稿（存储后端或本地文件），错误忽略。
  */
-async function deleteJobDraft(t, r) {
-  if (r) {
-    await r.delete(STORAGE_SPACES.jobDraft(shortHash(t))).catch(() => {});
+async function deleteJobDraft(canonicalLauncherCwd, storageV5) {
+  if (storageV5) {
+    await storageV5.delete(STORAGE_SPACES.jobDraft(shortHash(canonicalLauncherCwd))).catch(() => {});
     return;
   }
-  await unlink(draftFileName(t)).catch(() => {});
+  await unlink(draftFileName(canonicalLauncherCwd)).catch(() => {});
 }
 //@ chunk-3z29138t.js:1328-1387 placement
-var DraftSchema = DoctorLazy(() =>
-  u({
-    q: string(),
-    collapsed: array(string()).optional(),
-    ts: E(),
-  }),
-);
+var DraftSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-3z29138t.js:1328", () => {
+  DraftSchema = DoctorLazy(() =>
+    objectSchema({
+      q: stringSchema(),
+      collapsed: array(stringSchema()).optional(),
+      ts: numberSchema(),
+    }),
+  );
+});
 //@ chunk-3z29138t.js:1387-1621 placement
 /**
  * 读取作业草稿 {q, collapsed}：解析失败或超过一天返回 undefined。
  */
-async function readJobDraft(t, storageV5) {
-  let e = storageV5
-    ? await screenDraftFile(storageV5, t)
-    : await readSmallFileOrNull(draftFileName(t), DRAFT_MAX_BYTES);
-  if (e === null) return;
-  let a;
+async function readJobDraft(canonicalLauncherCwd, storageV5) {
+  let text = storageV5
+    ? await screenDraftFile(storageV5, canonicalLauncherCwd)
+    : await readSmallFileOrNull(draftFileName(canonicalLauncherCwd), DRAFT_MAX_BYTES);
+  if (text === null) return;
+  let parsed;
   try {
-    a = DraftSchema().safeParse(jsonParse(e));
+    parsed = DraftSchema().safeParse(jsonParse(text));
   } catch {
     return;
   }
-  if (!a.success) return;
-  let { q: i, collapsed, ts } = a.data;
+  if (!parsed.success) return;
+  let { q: prompt, collapsed, ts } = parsed.data;
   if (Date.now() - ts > DRAFT_TTL_MS) return;
   return {
-    q: i,
+    q: prompt,
     collapsed: collapsed ?? [],
   };
 }
 //@ chunk-3z29138t.js:1621-1710 placement
-async function screenDraftFile(t, r) {
-  return readCappedStorageText(t, STORAGE_SPACES.jobDraft(shortHash(r)), {
+async function screenDraftFile(storageV5, canonicalLauncherCwd) {
+  return readCappedStorageText(storageV5, STORAGE_SPACES.jobDraft(shortHash(canonicalLauncherCwd)), {
     cap: DRAFT_MAX_BYTES,
     screens: draftSetForHost(),
-    screenKey: draftFileName(r),
+    screenKey: draftFileName(canonicalLauncherCwd),
   });
 }
 //@ chunk-3z29138t.js:1710-1754 placement
@@ -144,25 +148,25 @@ function draftSetForHost() {
  */
 async function sweepJobDrafts() {
   return withFeatureTelemetry("job_sweep_drafts", async () => {
-    let t;
+    let entries;
     try {
-      t = await readdir(getJobsDir());
+      entries = await readdir(getJobsDir());
     } catch {
       return;
     }
     let now = Date.now();
     await Promise.all(
-      t
-        .filter((e) => e.startsWith(".draft-"))
-        .map(async (e) => {
-          let a = join(getJobsDir(), e);
-          let smallFileOrNull = await readSmallFileOrNull(a, DRAFT_MAX_BYTES);
+      entries
+        .filter((name) => name.startsWith(".draft-"))
+        .map(async (name) => {
+          let filePath = join(getJobsDir(), name);
+          let smallFileOrNull = await readSmallFileOrNull(filePath, DRAFT_MAX_BYTES);
           if (smallFileOrNull !== null)
             try {
-              let s = DraftSchema().safeParse(jsonParse(smallFileOrNull));
-              if (s.success && now - s.data.ts <= DRAFT_TTL_MS) return;
+              let parsed = DraftSchema().safeParse(jsonParse(smallFileOrNull));
+              if (parsed.success && now - parsed.data.ts <= DRAFT_TTL_MS) return;
             } catch {}
-          await rm(a, {
+          await rm(filePath, {
             recursive: true,
             force: true,
           }).catch(() => {});

@@ -72,15 +72,15 @@ import { logError } from "../../../utils/log.js";
 /**
  * 生成发到桥接端的批准提示文字：AskUserQuestion 用专门格式，ExitPlanMode 为 approve plan，其他工具为"approve 工具名: 命令/路径/URL"。
  */
-function bridgeApprovalPrompt(e) {
-  let input = e.input;
-  if (e.tool.name === ASKUSERQUESTION) return summarizePendingQuestions(input);
-  if (e.tool.name === EXITPLANMODE)
+function bridgeApprovalPrompt(request) {
+  let input = request.input;
+  if (request.tool.name === ASKUSERQUESTION) return summarizePendingQuestions(input);
+  if (request.tool.name === EXITPLANMODE)
     return {
       text: "approve plan",
     };
-  let trimmed = e.tool.userFacingName(e.input).trim();
-  let s =
+  let trimmed = request.tool.userFacingName(request.input).trim();
+  let detailText =
     typeof input?.command === "string"
       ? input.command
       : typeof input?.file_path === "string"
@@ -88,9 +88,12 @@ function bridgeApprovalPrompt(e) {
         : typeof input?.url === "string"
           ? input.url
           : "";
-  let y = trimmed || e.tool.name;
+  let label = trimmed || request.tool.name;
   return {
-    text: s && !y.includes(s) ? truncateAttentionText(`approve ${y}: ${s}`) : `approve ${y}`,
+    text:
+      detailText && !label.includes(detailText)
+        ? truncateAttentionText(`approve ${label}: ${detailText}`)
+        : `approve ${label}`,
   };
 }
 //@ chunk-s4bxxzsw.js:37772-38387 placement
@@ -104,7 +107,7 @@ function sendOutsideReadsBridgeDialog({ bridge, toolName, path, toolUseID, onAns
     !getFeatureValue_CACHED_MAY_BE_STALE("tengu_compressed_river", true)
   )
     return;
-  let R = forwardDialogToBridge({
+  let forwarded = forwardDialogToBridge({
     bridge,
     dialog: AUTO_MODE_OUTSIDE_READS_DIALOG,
     payload: buildOutsideReadsDialog({
@@ -113,12 +116,12 @@ function sendOutsideReadsBridgeDialog({ bridge, toolName, path, toolUseID, onAns
       sandboxFenced: sandboxReadBlockApplies(),
     }),
     toolUseId: toolUseID,
-    onSettled: (C) => {
-      switch (C.kind) {
+    onSettled: (settleResult) => {
+      switch (settleResult.kind) {
         case "answered":
-          if (onAnswer(C.result))
+          if (onAnswer(settleResult.result))
             logFeatureOk("permission_outside_reads_bridge_dialog", {
-              answer: fromEnum(C.result),
+              answer: fromEnum(settleResult.result),
             });
           return;
         case "malformed":
@@ -130,32 +133,34 @@ function sendOutsideReadsBridgeDialog({ bridge, toolName, path, toolUseID, onAns
       }
     },
   });
-  if (R === undefined) {
+  if (forwarded === undefined) {
     logFeatureSad("permission_outside_reads_bridge_dialog", "send_declined");
     return;
   }
-  return R.retire;
+  return forwarded.retire;
 }
 //@ chunk-s4bxxzsw.js:38387-38797 placement
 /**
  * 应用桥接端回答附带的权限更新：远程执行或 hook/插件主导时忽略；setMode 逐个尝试（失败退回 default），其余规则持久化；返回实际应用的更新。
  */
-function applyBridgePermissionUpdates(ctx, r) {
-  if (r.length === 0) return [];
+function applyBridgePermissionUpdates(ctx, updates) {
+  if (updates.length === 0) return [];
   if (ctx.toolUseContext.forRemoteExecution === true || isHookOrPluginSteered(ctx.toolUseContext)) return [];
-  let n = [];
-  let s = [];
-  for (let y of r)
-    if (y.type === "setMode") {
-      let R = ctx.setModeFromBridge(y.mode);
-      if (R.ok) n.push(y);
+  let appliedModeUpdates = [];
+  let otherUpdates = [];
+  for (let update of updates)
+    if (update.type === "setMode") {
+      let setModeResult = ctx.setModeFromBridge(update.mode);
+      if (setModeResult.ok) appliedModeUpdates.push(update);
       else {
-        logForDebugging(`bridge setMode '${y.mode}' rejected (${R.error}); falling back to 'default'`);
+        logForDebugging(
+          `bridge setMode '${update.mode}' rejected (${setModeResult.error}); falling back to 'default'`,
+        );
         ctx.setModeFromBridge("default");
       }
-    } else s.push(y);
-  if (s.length > 0) ctx.persistPermissions(s);
-  return n.concat(s);
+    } else otherUpdates.push(update);
+  if (otherUpdates.length > 0) ctx.persistPermissions(otherUpdates);
+  return appliedModeUpdates.concat(otherUpdates);
 }
 //@ chunk-s4bxxzsw.js:38797-38962 placement
 function isLocalOnlyAsk(result, toolUseContext) {
@@ -179,7 +184,7 @@ function requiresLocalPerson(ctx, result) {
 /**
  * 交互式权限竞速：除本地对话框外，同时向 Remote Control bridge 发送请求、监听 channel 回复、服务器审批 watcher 与 PermissionRequest hooks，任一方先给出决定即 claim 并 teardown 其余方。
  */
-function handleInteractivePermission(e) {
+function handleInteractivePermission(params) {
   let {
     ctx,
     description,
@@ -195,26 +200,27 @@ function handleInteractivePermission(e) {
     onWin,
     onReprompt,
     onRemoteDialogAnswer,
-  } = e;
-  let P = isLocalOnlyAsk(result, ctx.toolUseContext);
-  let E = P ? undefined : bridgeCallbacks;
-  let bridge = P ? undefined : bridgeDialogCallbacks;
-  let x = P ? undefined : channelCallbacks;
+  } = params;
+  let isLocalOnly = isLocalOnlyAsk(result, ctx.toolUseContext);
+  let bridge = isLocalOnly ? undefined : bridgeCallbacks;
+  let bridge_2 = isLocalOnly ? undefined : bridgeDialogCallbacks;
+  let channelRelay = isLocalOnly ? undefined : channelCallbacks;
   let { setClassifierApprovals } = ctx;
-  let M = E ? randomUUID() : undefined;
-  let Y;
-  let H;
-  let ke;
-  let Re = result.offersBlockOutsideReads === true ? ctx.tool.getPath?.(displayInput) : undefined;
-  let Q = Re
+  let bridgeRequestId = bridge ? randomUUID() : undefined;
+  let bridgeAbortListener;
+  let channelAbortListener;
+  let stopServerApprovalWatch;
+  let outsideReadsPath =
+    result.offersBlockOutsideReads === true ? ctx.tool.getPath?.(displayInput) : undefined;
+  let outsideReadsRetire = outsideReadsPath
     ? sendOutsideReadsBridgeDialog({
-        bridge,
+        bridge: bridge_2,
         toolName: ctx.tool.name,
-        path: Re,
+        path: outsideReadsPath,
         toolUseID: ctx.toolUseID,
-        onAnswer: (L) => {
+        onAnswer: (answer) => {
           if (!claim()) return false;
-          switch ((clearClassifierChecking(setClassifierApprovals, ctx.toolUseID), L)) {
+          switch ((clearClassifierChecking(setClassifierApprovals, ctx.toolUseID), answer)) {
             case "allow":
               onRemoteDialogAnswer({
                 behavior: "allow",
@@ -244,57 +250,57 @@ function handleInteractivePermission(e) {
         },
       })
     : undefined;
-  function oe(L) {
-    if (E && M) {
-      if (L) E.sendResponse(M, L);
-      E.cancelRequest(M);
+  function teardown(response) {
+    if (bridge && bridgeRequestId) {
+      if (response) bridge.sendResponse(bridgeRequestId, response);
+      bridge.cancelRequest(bridgeRequestId);
     }
-    Y?.();
-    H?.();
-    Q?.();
+    bridgeAbortListener?.();
+    channelAbortListener?.();
+    outsideReadsRetire?.();
   }
-  if (E && M) {
-    let L = "";
+  if (bridge && bridgeRequestId) {
+    let summary = "";
     if (ctx.tool.name !== BASH_TOOL_NAME && ctx.tool.name !== POWERSHELL_TOOL_NAME)
       try {
-        L =
+        summary =
           ctx.tool.getToolUseSummary?.(displayInput) ?? ctx.tool.getActivityDescription?.(displayInput) ?? "";
       } catch {
-        L = "";
+        summary = "";
       }
     let metadata = result.metadata;
     if (metadata?.mcpSkill)
-      L = findSafetyCheckReason(result.decisionReason)?.reason ?? metadata.mcpSkill.summary;
-    let ce = isChromeToolName(getToolNameForPermissionCheck(ctx.tool));
-    E.sendRequest(
-      M,
+      summary = findSafetyCheckReason(result.decisionReason)?.reason ?? metadata.mcpSkill.summary;
+    let isBrowserTool = isChromeToolName(getToolNameForPermissionCheck(ctx.tool));
+    bridge.sendRequest(
+      bridgeRequestId,
       ctx.tool.name,
       displayInput,
       ctx.toolUseID,
-      sanitizePreviewLine(redactSecretsInText(L)),
+      sanitizePreviewLine(redactSecretsInText(summary)),
       result.suggestions,
       result.blockedPath,
       requiresLocalPerson(ctx, result) || undefined,
-      ce ? "browser" : undefined,
+      isBrowserTool ? "browser" : undefined,
       undefined,
     );
     let signal = ctx.toolUseContext.abortController.signal;
-    Y = E.onResponse(M, ctx.tool.name, (K) => {
+    bridgeAbortListener = bridge.onResponse(bridgeRequestId, ctx.tool.name, (response) => {
       if (!claim()) return;
-      if (K.updatedPermissionsDropped)
+      if (response.updatedPermissionsDropped)
         logFeatureSad("permission_bridge_relay", "updated_permissions_malformed");
       else logFeatureOk("permission_bridge_relay");
-      if (Y) signal.removeEventListener("abort", Y);
+      if (bridgeAbortListener) signal.removeEventListener("abort", bridgeAbortListener);
       clearClassifierChecking(setClassifierApprovals, ctx.toolUseID);
-      H?.();
-      Q?.();
-      if (K.behavior === "allow") {
+      channelAbortListener?.();
+      outsideReadsRetire?.();
+      if (response.behavior === "allow") {
         let displayInput_2 =
           result.metadata?.mcpSkill === undefined &&
           findSafetyCheckReason(result.decisionReason, (response) => !response.classifierApprovable) !==
             undefined;
         let mode = normalizePermissionUpdate(
-          K.updatedPermissions ?? [],
+          response.updatedPermissions ?? [],
           displayInput_2 ||
             ctx.tool.suppressesAlwaysAllowRule?.(displayInput) === true ||
             result.suppressAlwaysAllowRule === true
@@ -302,24 +308,24 @@ function handleInteractivePermission(e) {
             : suggestWebToolRule(ctx.tool, displayInput),
           getToolPermissionContext(ctx.toolUseContext),
         );
-        let re =
+        let mcpSkillInfo =
           result.metadata?.mcpSkill === undefined
             ? undefined
             : {
                 rule: undefined,
               };
-        let Ae =
-          re !== undefined
-            ? answerUpdatesForMcpSkillAsk(mode, re.rule)
+        let normalizedUpdates =
+          mcpSkillInfo !== undefined
+            ? answerUpdatesForMcpSkillAsk(mode, mcpSkillInfo.rule)
             : ctx.tool.suppressesAllPermissionUpdates?.(displayInput) === true || displayInput_2
               ? withoutGrantsForRemoteScope(mode)
               : ctx.tool.suppressesAlwaysAllowRule?.(displayInput) === true ||
                   result.suppressAlwaysAllowRule === true
                 ? stripWholeToolGrantsForAsk(mode, ctx.tool, getToolPermissionContext(ctx.toolUseContext))
                 : mode;
-        let _e = applyBridgePermissionUpdates(ctx, Ae);
-        if (Ae.length) logShellAllowRuleAdded(Ae);
-        let channelRequestId = permissionGrantScope(_e);
+        let appliedUpdates = applyBridgePermissionUpdates(ctx, normalizedUpdates);
+        if (normalizedUpdates.length) logShellAllowRuleAdded(normalizedUpdates);
+        let channelRequestId = permissionGrantScope(appliedUpdates);
         ctx.logDecision(
           {
             decision: "accept",
@@ -330,18 +336,18 @@ function handleInteractivePermission(e) {
             scope: channelRequestId,
           },
           {
-            input: K.updatedInput ?? displayInput,
+            input: response.updatedInput ?? displayInput,
             permissionPromptStartTimeMs,
           },
         );
-        onWin(ctx.buildAllow(K.updatedInput ?? displayInput));
+        onWin(ctx.buildAllow(response.updatedInput ?? displayInput));
       } else {
         ctx.logDecision(
           {
             decision: "reject",
             source: {
               type: "user_reject",
-              hasFeedback: !!K.message,
+              hasFeedback: !!response.message,
             },
           },
           {
@@ -349,24 +355,24 @@ function handleInteractivePermission(e) {
           },
         );
         onWin(
-          ctx.cancelAndAbort(K.message, undefined, undefined, {
+          ctx.cancelAndAbort(response.message, undefined, undefined, {
             feedbackIsFromUser: true,
           }),
         );
       }
     });
-    signal.addEventListener("abort", Y, {
+    signal.addEventListener("abort", bridgeAbortListener, {
       once: true,
     });
   }
-  if (x && isChannelsEnabled() && !requiresLocalPerson(ctx, result)) {
+  if (channelRelay && isChannelsEnabled() && !requiresLocalPerson(ctx, result)) {
     let channelRequestId = generatePermissionRequestId(`${ctx.toolUseID}:${randomUUID()}`);
     let allowedChannels = getAllowedChannels();
-    let ce = result.metadata?.mcpSkill?.server.name;
+    let ownServerName = result.metadata?.mcpSkill?.server.name;
     let channelClients = filterPermissionRelayClients(
       ctx.toolUseContext.getMcp().clients,
-      (K) => K !== ce && findChannelEntry(K, allowedChannels) !== undefined,
-      (name) => x.isServerRegistered(name),
+      (client) => client !== ownServerName && findChannelEntry(client, allowedChannels) !== undefined,
+      (name) => channelRelay.isServerRegistered(name),
     );
     if (channelClients.length > 0) {
       let params = {
@@ -390,12 +396,12 @@ function handleInteractivePermission(e) {
         });
       }
       let channelSignal = ctx.toolUseContext.abortController.signal;
-      let mapUnsub = x.onResponse(channelRequestId, (response) => {
-        if (response.behavior === "allow" && response.fromServer === ce) return;
+      let mapUnsub = channelRelay.onResponse(channelRequestId, (response) => {
+        if (response.behavior === "allow" && response.fromServer === ownServerName) return;
         if (!claim()) return;
         logFeatureOk("permission_channel_relay");
         clearClassifierChecking(setClassifierApprovals, ctx.toolUseID);
-        oe();
+        teardown();
         if (response.behavior === "allow") {
           ctx.logDecision(
             {
@@ -426,48 +432,52 @@ function handleInteractivePermission(e) {
           onWin(ctx.cancelAndAbort(`Denied via channel ${response.fromServer}`));
         }
       });
-      H = () => {
+      channelAbortListener = () => {
         mapUnsub();
-        channelSignal.removeEventListener("abort", H);
+        channelSignal.removeEventListener("abort", channelAbortListener);
       };
-      channelSignal.addEventListener("abort", H, {
+      channelSignal.addEventListener("abort", channelAbortListener, {
         once: true,
       });
     }
   }
   let serverApprovalWatch = result.serverApprovalWatch;
-  let pe = serverApprovalWatch ? getInteractiveHandlerHost() : null;
-  let De =
-    serverApprovalWatch && pe?.isEnabled()
-      ? pe.createObserver(serverApprovalWatch, ctx.toolUseContext.toolState, ctx.toolUseContext.credentials)
+  let handlerHost = serverApprovalWatch ? getInteractiveHandlerHost() : null;
+  let approvalObserver =
+    serverApprovalWatch && handlerHost?.isEnabled()
+      ? handlerHost.createObserver(
+          serverApprovalWatch,
+          ctx.toolUseContext.toolState,
+          ctx.toolUseContext.credentials,
+        )
       : null;
-  if (serverApprovalWatch && De) {
+  if (serverApprovalWatch && approvalObserver) {
     let signal = ctx.toolUseContext.abortController.signal;
-    let me = false;
-    ke = () => {
-      me = true;
+    let isWatchStopped = false;
+    stopServerApprovalWatch = () => {
+      isWatchStopped = true;
     };
     (async () => {
-      let ce = await De.poll();
-      let ie = 3000;
-      let K = 15000;
-      while (!ce && !isResolved() && !signal.aborted && !me) {
-        await sleep(ie, signal);
-        if (isResolved() || signal.aborted || me) return;
-        ce = await De.poll();
-        if (!ce) {
-          ie = Math.min(Math.round(ie * 1.5), K);
+      let approved = await approvalObserver.poll();
+      let pollDelayMs = 3000;
+      let maxPollDelayMs = 15000;
+      while (!approved && !isResolved() && !signal.aborted && !isWatchStopped) {
+        await sleep(pollDelayMs, signal);
+        if (isResolved() || signal.aborted || isWatchStopped) return;
+        approved = await approvalObserver.poll();
+        if (!approved) {
+          pollDelayMs = Math.min(Math.round(pollDelayMs * 1.5), maxPollDelayMs);
           continue;
         }
         if (getToolPermissionContext(ctx.toolUseContext).mode === "plan") {
           logForDebugging("Server approval observed but parked: session is in plan mode");
-          ce = false;
-          ie = Math.min(Math.round(ie * 1.5), K);
+          approved = false;
+          pollDelayMs = Math.min(Math.round(pollDelayMs * 1.5), maxPollDelayMs);
           continue;
         }
-        if (me || !claim()) return;
+        if (isWatchStopped || !claim()) return;
         clearClassifierChecking(setClassifierApprovals, ctx.toolUseID);
-        oe();
+        teardown();
         logFeatureOk("permission_server_approval_watch");
         ctx.logDecision(
           {
@@ -497,7 +507,7 @@ function handleInteractivePermission(e) {
   if (!awaitAutomatedChecksBeforeDialog && result.personOnly !== true)
     (async () => {
       if (isResolved()) return;
-      let L = await ctx.runHooks(
+      let hookOutcome = await ctx.runHooks(
         getToolPermissionContext(ctx.toolUseContext).mode,
         result.suggestions,
         result.suppressAlwaysAllowRule === true,
@@ -505,18 +515,18 @@ function handleInteractivePermission(e) {
         result.updatedInput,
         permissionPromptStartTimeMs,
       );
-      if (L && "reprompted" in L) {
+      if (hookOutcome && "reprompted" in hookOutcome) {
         if (isResolved()) return;
         clearClassifierChecking(setClassifierApprovals, ctx.toolUseID);
-        oe();
-        M = undefined;
-        ke?.();
-        onReprompt(L.finalInput, L.reprompted.decisionReason, L.reprompted);
+        teardown();
+        bridgeRequestId = undefined;
+        stopServerApprovalWatch?.();
+        onReprompt(hookOutcome.finalInput, hookOutcome.reprompted.decisionReason, hookOutcome.reprompted);
         return;
       }
-      if (!L || !claim()) return;
-      oe();
-      onWin(L);
+      if (!hookOutcome || !claim()) return;
+      teardown();
+      onWin(hookOutcome);
     })().catch((error) => {
       if (error instanceof StreamClosedAbortError) {
         logForDebugging("PermissionRequest hooks cancelled (control stream closed)");
@@ -525,7 +535,7 @@ function handleInteractivePermission(e) {
       logError(error);
     });
   return {
-    notifyBridgeAndTeardown: oe,
+    notifyBridgeAndTeardown: teardown,
   };
 }
 export { handleInteractivePermission, bridgeApprovalPrompt };

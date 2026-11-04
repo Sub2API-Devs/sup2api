@@ -18,16 +18,16 @@ var META_MCP_TOOL_NAME_PATTERN = /^[a-zA-Z0-9_-]{1,64}$/;
 /**
  * 解析 bridge meta MCP 的 tools[] 列表，非数组时告警
  */
-function parseMetaMcpTools(i, n = CLAUDE_CODE_REMOTE) {
-  if (!("tools" in i) || i.tools === undefined) return [];
-  if (!Array.isArray(i.tools)) {
+function parseMetaMcpTools(entry, serverName = CLAUDE_CODE_REMOTE) {
+  if (!("tools" in entry) || entry.tools === undefined) return [];
+  if (!Array.isArray(entry.tools)) {
     logForDebugging("[bridge:meta-mcp] meta tools[] is not an array", {
       level: "warn",
     });
     return null;
   }
-  let e = [];
-  for (let tool of i.tools) {
+  let tools = [];
+  for (let tool of entry.tools) {
     if (
       tool === null ||
       typeof tool !== "object" ||
@@ -40,7 +40,7 @@ function parseMetaMcpTools(i, n = CLAUDE_CODE_REMOTE) {
       });
       return null;
     }
-    e.push({
+    tools.push({
       name: tool.name,
       ...("permission_policy" in tool &&
         typeof tool.permission_policy === "string" && {
@@ -49,12 +49,12 @@ function parseMetaMcpTools(i, n = CLAUDE_CODE_REMOTE) {
     });
   }
   let { allow } = collectServerToolPolicies({
-    [n]: {
+    [serverName]: {
       type: "http",
-      tools: e,
+      tools,
     },
   });
-  let mcpToolName = buildMcpToolName(n, "");
-  return allow.map((o) => (o.startsWith(mcpToolName) ? o.slice(mcpToolName.length) : o));
+  let mcpToolName = buildMcpToolName(serverName, "");
+  return allow.map((rule) => (rule.startsWith(mcpToolName) ? rule.slice(mcpToolName.length) : rule));
 }
 export { parseMetaMcpTools };

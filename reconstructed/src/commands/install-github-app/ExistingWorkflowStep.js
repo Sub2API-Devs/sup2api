@@ -8,7 +8,7 @@
  * pieces: chunk-4v9zy7gn.js (1)
  * attribution: fingerprint 1
  */
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import {
   jsxProd_default,
@@ -19,7 +19,7 @@ import { ModelSelector } from "../../components/agents/ModelSelector.js";
 
 //@ chunk-4v9zy7gn.js:31502-32810 fingerprint = ExistingWorkflowStep (0.605)
 function ExistingWorkflowStep(props) {
-  let $ = w(13);
+  let $ = useMemoCache(13);
   let { onSelectAction } = props;
   let t1;
   if ($[0] === MEMO_CACHE_SENTINEL) {
@@ -69,9 +69,9 @@ function ExistingWorkflowStep(props) {
     });
     $[5] = t4;
   } else t4 = $[5];
-  let k;
+  let workflowLine;
   if ($[6] === MEMO_CACHE_SENTINEL) {
-    k = jsxProd_default_2(Box, {
+    workflowLine = jsxProd_default_2(Box, {
       flexDirection: "column",
       marginBottom: 1,
       children: [
@@ -91,11 +91,11 @@ function ExistingWorkflowStep(props) {
         }),
       ],
     });
-    $[6] = k;
-  } else k = $[6];
-  let E;
+    $[6] = workflowLine;
+  } else workflowLine = $[6];
+  let footer;
   if ($[7] !== handleCancel || $[8] !== handleSelect) {
-    E = jsxProd_default(Box, {
+    footer = jsxProd_default(Box, {
       flexDirection: "column",
       children: jsxProd_default(ModelSelector, {
         options,
@@ -105,8 +105,8 @@ function ExistingWorkflowStep(props) {
     });
     $[7] = handleCancel;
     $[8] = handleSelect;
-    $[9] = E;
-  } else E = $[9];
+    $[9] = footer;
+  } else footer = $[9];
   let t8;
   if ($[10] === MEMO_CACHE_SENTINEL) {
     t8 = jsxProd_default(Box, {
@@ -126,12 +126,12 @@ function ExistingWorkflowStep(props) {
     $[10] = t8;
   } else t8 = $[10];
   let t9;
-  if ($[11] !== E) {
+  if ($[11] !== footer) {
     t9 = jsxProd_default_2(Box, {
       flexDirection: "column",
-      children: [t4, k, E, t8],
+      children: [t4, workflowLine, footer, t8],
     });
-    $[11] = E;
+    $[11] = footer;
     $[12] = t9;
   } else t9 = $[12];
   return t9;

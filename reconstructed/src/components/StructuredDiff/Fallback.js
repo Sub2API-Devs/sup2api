@@ -13,10 +13,10 @@ import {
   jsxProd_default_2,
 } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Box, Text } from "../../ink/components/Text.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { useTheme } from "../design-system/ThemeProvider.js";
 import { truncateCode, truncatedCharsSuffix } from "../HighlightedCode/truncateCode.js";
-import { tos } from "../../../vendor/diff/libesm/diff/line.js";
+import { diffWordsWithSpace } from "../../../vendor/diff/libesm/diff/line.js";
 import { wrapText } from "../../ink/wrap-text.js";
 import { bunStringWidth } from "../../ink/stringWidth.js";
 import { NoSelect } from "../../ink/components/Input.js";
@@ -35,7 +35,7 @@ function renderText(node, i) {
 var DIM_ALPHA = 0.4;
 //@ chunk-887tgx6t.js:796-1192 fingerprint = StructuredDiffFallback (1)
 function StructuredDiffFallback(props) {
-  let $ = w(10);
+  let $ = useMemoCache(10);
   let { patch, dim, width } = props;
   let [theme] = useTheme();
   let t1;
@@ -133,7 +133,7 @@ function processAdjacentLines(lineObjects) {
 }
 //@ chunk-887tgx6t.js:1929-1978 fingerprint = calculateWordDiffs (1)
 function calculateWordDiffs(oldText, newText) {
-  return tos(oldText, newText, {
+  return diffWordsWithSpace(oldText, newText, {
     ignoreCase: false,
   });
 }
@@ -208,15 +208,15 @@ function generateWordDiffElements(item, width, maxWidth, dim, overrideTheme) {
       content: currentLine,
       contentWidth: currentLineWidth,
     });
-  let k = item.truncatedChars > 0 ? truncatedCharsSuffix(item.truncatedChars) : "";
-  let y = -1;
-  if (k && wrappedLines.length > 0) {
-    if (wrappedLines.at(-1).contentWidth + bunStringWidth(k) > availableContentWidth)
+  let truncatedSuffix = item.truncatedChars > 0 ? truncatedCharsSuffix(item.truncatedChars) : "";
+  let suffixLineIndex = -1;
+  if (truncatedSuffix && wrappedLines.length > 0) {
+    if (wrappedLines.at(-1).contentWidth + bunStringWidth(truncatedSuffix) > availableContentWidth)
       wrappedLines.push({
         content: [],
         contentWidth: 0,
       });
-    y = wrappedLines.length - 1;
+    suffixLineIndex = wrappedLines.length - 1;
   }
   return wrappedLines.map(({ content, contentWidth }, lineIndex) => {
     let key = `${type}-${i}-${lineIndex}`;
@@ -225,8 +225,8 @@ function generateWordDiffElements(item, width, maxWidth, dim, overrideTheme) {
     let lineNum = lineIndex === 0 ? i : undefined;
     let lineNumStr =
       (lineNum !== undefined ? lineNum.toString().padStart(maxWidth) : " ".repeat(maxWidth)) + " ";
-    let O = lineIndex === y ? k : "";
-    let usedWidth = lineNumStr.length + diffPrefixWidth + contentWidth + bunStringWidth(O);
+    let lineSuffix = lineIndex === suffixLineIndex ? truncatedSuffix : "";
+    let usedWidth = lineNumStr.length + diffPrefixWidth + contentWidth + bunStringWidth(lineSuffix);
     let padding = Math.max(0, width - usedWidth);
     return jsxProd_default_2(
       Box,
@@ -248,10 +248,10 @@ function generateWordDiffElements(item, width, maxWidth, dim, overrideTheme) {
             dimColor: dim,
             children: content,
           }),
-          O
+          lineSuffix
             ? jsxProd_default(Text, {
                 dimColor: true,
-                children: O,
+                children: lineSuffix,
               })
             : null,
           jsxProd_default(Text, {
@@ -285,12 +285,12 @@ function formatDiff(lines, startingLineNumber, width, dim, overrideTheme) {
     let availableContentWidth = Math.max(1, safeWidth - maxWidth - 1 - diffPrefixWidth);
     let lines = wrapText(code, availableContentWidth, "wrap").split(`
 `);
-    let D = item.truncatedChars > 0 ? truncatedCharsSuffix(item.truncatedChars) : "";
-    let k = -1;
-    if (D && lines.length > 0) {
+    let truncatedSuffix = item.truncatedChars > 0 ? truncatedCharsSuffix(item.truncatedChars) : "";
+    let suffixLineIndex = -1;
+    if (truncatedSuffix && lines.length > 0) {
       let last = lines.at(-1);
-      if (bunStringWidth(last) + bunStringWidth(D) > availableContentWidth) lines.push("");
-      k = lines.length - 1;
+      if (bunStringWidth(last) + bunStringWidth(truncatedSuffix) > availableContentWidth) lines.push("");
+      suffixLineIndex = lines.length - 1;
     }
     return lines.map((line, lineIndex) => {
       let key = `${type}-${i}-${lineIndex}`;
@@ -298,8 +298,8 @@ function formatDiff(lines, startingLineNumber, width, dim, overrideTheme) {
       let lineNumStr =
         (lineNum !== undefined ? lineNum.toString().padStart(maxWidth) : " ".repeat(maxWidth)) + " ";
       let sigil = type === "add" ? "+" : type === "remove" ? "-" : " ";
-      let B = lineIndex === k ? D : "";
-      let contentWidth = lineNumStr.length + 1 + bunStringWidth(line) + bunStringWidth(B);
+      let lineSuffix = lineIndex === suffixLineIndex ? truncatedSuffix : "";
+      let contentWidth = lineNumStr.length + 1 + bunStringWidth(line) + bunStringWidth(lineSuffix);
       let padding = Math.max(0, safeWidth - contentWidth);
       let bgColor =
         type === "add"
@@ -331,10 +331,10 @@ function formatDiff(lines, startingLineNumber, width, dim, overrideTheme) {
               dimColor: dim,
               children: line,
             }),
-            B
+            lineSuffix
               ? jsxProd_default(Text, {
                   dimColor: true,
-                  children: B,
+                  children: lineSuffix,
                 })
               : null,
             jsxProd_default(Text, {

@@ -8,11 +8,13 @@
  * pieces: chunk-0sfjpx19.js (1), chunk-18hwfzwa.js (1), chunk-2a8yx6fc.js (1), chunk-38t4c9qz.js (2), chunk-82kqcve8.js (1), chunk-89f54s6c.js (1), chunk-gjx0rh1b.js (1), chunk-s61vbvea.js (23)
  * attribution: placement 2, fingerprint 14, callgraph-fingerprint 2, layout 11, file-local 1, sole-consumer 1
  */
-import { isAbsolute, sep, relative, join, dirname, basename } from "path";
+import { createHash } from "crypto";
+import { dirname, join, basename, isAbsolute, sep, relative } from "path";
 import { promisify } from "util";
 import { realpath as realpath_2 } from "fs";
 import { stat, lstat } from "fs/promises";
-import { createHash } from "crypto";
+import { getFsImplementation } from "./fsOperations.js";
+import { isENOENT } from "./errors.js";
 import { serializeCalls } from "./promiseQueue.js";
 import { getRemoteUrlForGitDir, getRemoteUrlForDir } from "./git/gitFilesystem.js";
 import {
@@ -26,7 +28,6 @@ import {
 } from "./git/builderGit/gitEnv.js";
 import { getGitRepoCache } from "./git/gitRepoCache.js";
 import { env } from "./env.js";
-import { getFsImplementation } from "./fsOperations.js";
 import { nativeRealpathLong, toUncLongPath } from "./windowsUncPaths.js";
 import { logError } from "./log.js";
 import { logForDebugging } from "./debug.js";
@@ -45,8 +46,6 @@ import { getRemoteHostSessionCount } from "../commands/insights.js";
 import { buildGitConfigEnv } from "./git/gitConfigEnv.js";
 import { IGNORE_SUBMODULES_DIRTY_FLAG } from "./git/gitSafeEnv.js";
 import { execFileNoThrowWithCwd } from "./execFileNoThrow.js";
-import { isENOENT } from "./errors.js";
-import { findExistingRefs, SEQUENCER_STATE_FILES } from "./git/gitConfigFilters.js";
 import { listGitRefs } from "./git/builderGit/gitConfigAudit.js";
 import {
   GIT_PROBE_MAX_BUFFER,
@@ -54,7 +53,34 @@ import {
   parseNameStatusZ,
   classifyPathIdentity,
 } from "./teleport/gitBundleLayout.js";
+import { findExistingRefs, SEQUENCER_STATE_FILES } from "./git/gitConfigFilters.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
+//@ chunk-38t4c9qz.js:227-251 placement
+/**
+ * 匹配 64 位十六进制 sha256 摘要的正则。
+ */
+var SHA256_HEX_RE = /^[0-9a-f]{64}$/;
+//@ chunk-38t4c9qz.js:251-466 callgraph-fingerprint = computeContentHash (0.567)
+/**
+ * sha256 十六进制摘要（文本或字节），全局 140 余处用于内容比较。
+ */
+function computeContentHash(content) {
+  if (typeof content !== "string" && !ArrayBuffer.isView(content))
+    throw Object.assign(TypeError("sha256Hex: the data is neither text nor bytes"), {
+      code: "ERR_INVALID_ARG_TYPE",
+    });
+  return createHash("sha256").update(content).digest("hex");
+}
+//@ chunk-82kqcve8.js:235773-235885 fingerprint = normalizeFilePath (1)
+function normalizeFilePath(filePath) {
+  try {
+    return getFsImplementation().realpathSync(filePath);
+  } catch (error) {
+    if (!isENOENT(error) || dirname(filePath) === filePath) throw error;
+    return join(normalizeFilePath(dirname(filePath)), basename(filePath));
+  }
+}
 //@ chunk-s61vbvea.js:206706-207384 fingerprint = sanitizeModelName (0.64)
 var sanitizeModelName = [
   ["fable-5-1", "claude-fable-5-1"],
@@ -83,27 +109,30 @@ var sanitizeModelName = [
 /**
  * 判断仓库是否为 Anthropic 内部模型仓库（决定署名中能否写具体模型名），结果缓存。
  */
-var isInternalModelRepo = serializeCalls(async (e, n, r) => {
-  if (r !== undefined) {
-    let remoteUrlForGitDir = await getRemoteUrlForGitDir(r.gitDir, r.commonDir);
-    return remoteUrlForGitDir !== null && isAllowedGitRemote(remoteUrlForGitDir);
-  }
-  let s = canonicalRootOrSelf(e);
-  let repoClassByCanonicalRoot = getGitRepoCache().repoClassByCanonicalRoot;
-  let y = repoClassByCanonicalRoot.get(s);
-  if (y !== undefined) return y === "internal";
-  let remoteUrl = await getRemoteUrlForDir(e);
-  if (!remoteUrl) {
-    repoClassByCanonicalRoot.set(s, "none");
-    return false;
-  }
-  let isInternal = isAllowedGitRemote(remoteUrl);
-  repoClassByCanonicalRoot.set(s, isInternal ? "internal" : "external");
-  return isInternal;
+var isInternalModelRepo; // deferred: uses getRemoteUrlForGitDir (./git/gitFilesystem.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-s61vbvea.js:290187", () => {
+  isInternalModelRepo = serializeCalls(async (root, remoteUrl, signal) => {
+    if (signal !== undefined) {
+      let remoteUrlForGitDir = await getRemoteUrlForGitDir(signal.gitDir, signal.commonDir);
+      return remoteUrlForGitDir !== null && isAllowedGitRemote(remoteUrlForGitDir);
+    }
+    let canonicalRoot = canonicalRootOrSelf(root);
+    let repoClassByCanonicalRoot = getGitRepoCache().repoClassByCanonicalRoot;
+    let cached = repoClassByCanonicalRoot.get(canonicalRoot);
+    if (cached !== undefined) return cached === "internal";
+    let remoteUrl_2 = await getRemoteUrlForDir(root);
+    if (!remoteUrl_2) {
+      repoClassByCanonicalRoot.set(canonicalRoot, "none");
+      return false;
+    }
+    let isInternal = isAllowedGitRemote(remoteUrl_2);
+    repoClassByCanonicalRoot.set(canonicalRoot, isInternal ? "internal" : "external");
+    return isInternal;
+  });
 });
 //@ chunk-s61vbvea.js:290489-290564 layout
 function getModelFamilyForAttribution(rawModelName) {
-  let found = sanitizeModelName.find(([r]) => rawModelName.includes(r));
+  let found = sanitizeModelName.find(([prefix]) => rawModelName.includes(prefix));
   return found ? found[1] : "claude";
 }
 //@ chunk-s61vbvea.js:290564-290617 fingerprint = getClientSurface (1)
@@ -111,52 +140,52 @@ function getClientSurface() {
   return env.CLAUDE_CODE_ENTRYPOINT ?? "cli";
 }
 //@ chunk-s61vbvea.js:290617-290661 layout
-function getAttributionFileKey(e, attributionRoots) {
-  return isAbsolute(e) ? resolveAttributionKey(e, attributionRoots).key : e;
+function getAttributionFileKey(filePath, options) {
+  return isAbsolute(filePath) ? resolveAttributionKey(filePath, options).key : filePath;
 }
 //@ chunk-s61vbvea.js:290661-290762 layout
-function getAttributionRoots(e = cwdOrGitRoot()) {
-  let keyRoot = e;
+function getAttributionRoots(cwd = cwdOrGitRoot()) {
+  let keyRoot = cwd;
   try {
-    keyRoot = getFsImplementation().realpathSync(e);
+    keyRoot = getFsImplementation().realpathSync(cwd);
   } catch {}
   return {
-    cwd: e,
+    cwd,
     keyRoot,
-    root: nativeRealpathLong(e) ?? e,
+    root: nativeRealpathLong(cwd) ?? cwd,
   };
 }
 //@ chunk-s61vbvea.js:290762-291144 layout
-function resolveAttributionKey(e, n) {
+function resolveAttributionKey(filePath, options) {
   let fsImplementation = getFsImplementation();
-  let s = n?.cwd ?? cwdOrGitRoot();
-  if (isAbsolute(e) && isNotInGitRepo(s))
+  let cwd = options?.cwd ?? cwdOrGitRoot();
+  if (isAbsolute(filePath) && isNotInGitRepo(cwd))
     return {
-      key: nativeRealpathLong(e) ?? e,
+      key: nativeRealpathLong(filePath) ?? filePath,
       root: undefined,
     };
-  if (!isAbsolute(e))
+  if (!isAbsolute(filePath))
     return {
-      key: e,
-      root: n?.root ?? nativeRealpathLong(s) ?? s,
+      key: filePath,
+      root: options?.root ?? nativeRealpathLong(cwd) ?? cwd,
     };
-  let { keyRoot: resolvedCwd, root } = n ?? getAttributionRoots(s);
-  let resolvedPath = e;
+  let { keyRoot: resolvedCwd, root } = options ?? getAttributionRoots(cwd);
+  let resolvedPath = filePath;
   try {
-    resolvedPath = fsImplementation.realpathSync(e);
+    resolvedPath = fsImplementation.realpathSync(filePath);
   } catch {}
   if (resolvedPath.startsWith(resolvedCwd + sep) || resolvedPath === resolvedCwd)
     return {
       key: relative(resolvedCwd, resolvedPath).replaceAll(sep, "/"),
       root,
     };
-  if (e.startsWith(s + sep) || e === s)
+  if (filePath.startsWith(cwd + sep) || filePath === cwd)
     return {
-      key: relative(s, e).replaceAll(sep, "/"),
+      key: relative(cwd, filePath).replaceAll(sep, "/"),
       root,
     };
   return {
-    key: e,
+    key: filePath,
     root: undefined,
   };
 }
@@ -183,15 +212,8 @@ function createEmptyAttributionState() {
 /**
  * 计算单个文件修改后的署名状态（累计 Claude 贡献、内容 hash、mtime）。
  */
-function computeFileModificationState(
-  existingFileStates,
-  filePath,
-  oldContent,
-  newContent,
-  mtime,
-  attributionRoots,
-) {
-  let { key, root } = resolveAttributionKey(filePath, attributionRoots);
+function computeFileModificationState(existingFileStates, filePath, oldContent, newContent, mtime, options) {
+  let { key, root } = resolveAttributionKey(filePath, options);
   try {
     let claudeContribution;
     if (oldContent === "" || newContent === "")
@@ -249,8 +271,8 @@ function trackFileModification(state, filePath, oldContent, newContent, _userMod
   };
 }
 //@ chunk-s61vbvea.js:292079-292120 layout
-function isDeletedFileState(e) {
-  return e.contentHash === "";
+function isDeletedFileState(fileState) {
+  return fileState.contentHash === "";
 }
 //@ chunk-s61vbvea.js:292120-292680 fingerprint = trackBulkFileChanges (0.982)
 /**
@@ -258,11 +280,11 @@ function isDeletedFileState(e) {
  */
 function trackBulkFileChanges(state, changes) {
   let newFileStates = new Map(state.fileStates);
-  let attributionRoots = getAttributionRoots();
+  let options = getAttributionRoots();
   for (let change of changes) {
     let mtime = change.mtime ?? Date.now();
     if (change.type === "deleted") {
-      let { key: normalizedPath, root } = resolveAttributionKey(change.path, attributionRoots);
+      let { key: normalizedPath, root } = resolveAttributionKey(change.path, options);
       let claudeContribution = newFileStates.get(normalizedPath)?.claudeContribution ?? 0;
       let deletedChars = change.oldContent.length;
       newFileStates.set(normalizedPath, {
@@ -283,10 +305,10 @@ function trackBulkFileChanges(state, changes) {
         change.oldContent,
         change.newContent,
         mtime,
-        attributionRoots,
+        options,
       );
       if (newFileState) {
-        let normalizedPath = getAttributionFileKey(change.path, attributionRoots);
+        let normalizedPath = getAttributionFileKey(change.path, options);
         newFileStates.set(normalizedPath, newFileState);
         logForDebugging(
           `Attribution: Tracked ${newFileState.claudeContribution} chars for ${normalizedPath}`,
@@ -300,73 +322,73 @@ function trackBulkFileChanges(state, changes) {
   };
 }
 //@ chunk-s61vbvea.js:292680-292817 layout
-function relativePosixPathInside(e, n) {
-  if (!isAbsolute(e)) return null;
-  let r = relative(n, e);
-  return r !== "" && !isAbsolute(r) && r !== ".." && !r.startsWith(`..${sep}`)
-    ? r.replaceAll(sep, "/")
+function relativePosixPathInside(rootDir, targetPath) {
+  if (!isAbsolute(rootDir)) return null;
+  let relPath = relative(targetPath, rootDir);
+  return relPath !== "" && !isAbsolute(relPath) && relPath !== ".." && !relPath.startsWith(`..${sep}`)
+    ? relPath.replaceAll(sep, "/")
     : null;
 }
 //@ chunk-s61vbvea.js:292817-293128 file-local
-function trackFileDeletion(attribution, n) {
-  let r = false;
+function trackFileDeletion(attribution, cwd) {
+  let changed = false;
   for (let key of attribution.fileStates.keys())
-    if (relativePosixPathInside(key, n) !== null) {
-      r = true;
+    if (relativePosixPathInside(key, cwd) !== null) {
+      changed = true;
       break;
     }
-  if (!r) return attribution;
-  let s = new Map();
-  for (let [h, y] of attribution.fileStates) {
-    let S = relativePosixPathInside(h, n) ?? h;
-    let existingState = s.get(S);
-    s.set(
-      S,
+  if (!changed) return attribution;
+  let nextStates = new Map();
+  for (let [filePath, fileState] of attribution.fileStates) {
+    let relPath = relativePosixPathInside(filePath, cwd) ?? filePath;
+    let existingState = nextStates.get(relPath);
+    nextStates.set(
+      relPath,
       existingState === undefined
-        ? y
+        ? fileState
         : {
-            ...(y.mtime >= existingState.mtime ? y : existingState),
-            claudeContribution: existingState.claudeContribution + y.claudeContribution,
+            ...(fileState.mtime >= existingState.mtime ? fileState : existingState),
+            claudeContribution: existingState.claudeContribution + fileState.claudeContribution,
           },
     );
   }
   return {
     ...attribution,
-    fileStates: s,
+    fileStates: nextStates,
   };
 }
 //@ chunk-s61vbvea.js:293128-294149 fingerprint = restoreAttributionStateFromSnapshots (0.305)
 /**
  * resume 时从转录中的 attribution-snapshot 记录重建署名状态。
  */
-function restoreAttributionStateFromSnapshots(attribution, n) {
-  switch (n.kind) {
+function restoreAttributionStateFromSnapshots(attribution, snapshots) {
+  switch (snapshots.kind) {
     case "trackEdit":
       return trackFileModification(
         {
           ...attribution,
-          surface: n.surface,
+          surface: snapshots.surface,
         },
-        n.filePath,
-        n.oldContent,
-        n.newContent,
-        n.userModified,
-        n.mtime,
+        snapshots.filePath,
+        snapshots.oldContent,
+        snapshots.newContent,
+        snapshots.userModified,
+        snapshots.mtime,
       );
     case "trackBulk":
       return trackBulkFileChanges(
         {
           ...attribution,
-          surface: n.surface,
+          surface: snapshots.surface,
         },
-        n.changes,
+        snapshots.changes,
       );
     case "commitBoundary":
       return {
         ...attribution,
-        promptCountAtLastCommit: n.promptCountAtLastCommit,
-        permissionPromptCountAtLastCommit: n.permissionPromptCountAtLastCommit,
-        escapeCountAtLastCommit: n.escapeCountAtLastCommit,
+        promptCountAtLastCommit: snapshots.promptCountAtLastCommit,
+        permissionPromptCountAtLastCommit: snapshots.permissionPromptCountAtLastCommit,
+        escapeCountAtLastCommit: snapshots.escapeCountAtLastCommit,
       };
     case "incrementPermissionPrompt":
       return {
@@ -374,42 +396,48 @@ function restoreAttributionStateFromSnapshots(attribution, n) {
         permissionPromptCount: attribution.permissionPromptCount + 1,
       };
     case "recordVerification": {
-      let included = attribution.verificationMethods.includes(n.method);
+      let included = attribution.verificationMethods.includes(snapshots.method);
       let verificationMethodsByCheckout = attribution.verificationMethodsByCheckout;
-      let h = n.checkout === undefined ? undefined : (verificationMethodsByCheckout[n.checkout] ?? []);
-      if (included && (h === undefined || h.includes(n.method))) return attribution;
-      let y =
-        h?.length === 0 && Object.keys(verificationMethodsByCheckout).length >= MAX_PATTERN_CHARS
+      let state =
+        snapshots.checkout === undefined
+          ? undefined
+          : (verificationMethodsByCheckout[snapshots.checkout] ?? []);
+      if (included && (state === undefined || state.includes(snapshots.method))) return attribution;
+      let entry =
+        state?.length === 0 && Object.keys(verificationMethodsByCheckout).length >= MAX_PATTERN_CHARS
           ? Object.fromEntries(Object.entries(verificationMethodsByCheckout).slice(1))
           : verificationMethodsByCheckout;
       return {
         ...attribution,
         verificationMethods: included
           ? attribution.verificationMethods
-          : [...attribution.verificationMethods, n.method],
+          : [...attribution.verificationMethods, snapshots.method],
         verificationMethodsByCheckout:
-          n.checkout === undefined || h === undefined || h.includes(n.method)
+          snapshots.checkout === undefined || state === undefined || state.includes(snapshots.method)
             ? verificationMethodsByCheckout
             : {
-                ...y,
-                [n.checkout]: [...h, n.method],
+                ...entry,
+                [snapshots.checkout]: [...state, snapshots.method],
               },
       };
     }
   }
 }
 //@ chunk-s61vbvea.js:294149-294225 layout
-function gitDirWorkTreeArgs(e, gitDir) {
-  return gitDir === undefined ? [] : [`--git-dir=${gitDir}`, `--work-tree=${e}`];
+function gitDirWorkTreeArgs(repoRoot, gitDir) {
+  return gitDir === undefined ? [] : [`--git-dir=${gitDir}`, `--work-tree=${repoRoot}`];
 }
 //@ chunk-s61vbvea.js:294225-294246 layout
-var realpathNativeAsync = promisify(realpath_2.native);
+var realpathNativeAsync; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-s61vbvea.js:294225", () => {
+  realpathNativeAsync = promisify(realpath_2.native);
+});
 //@ chunk-s61vbvea.js:294246-294310 layout
-async function realpathOrSelf_2(e) {
+async function realpathOrSelf_2(path) {
   try {
-    return toUncLongPath(await realpathNativeAsync(e));
+    return toUncLongPath(await realpathNativeAsync(path));
   } catch {
-    return e;
+    return path;
   }
 }
 //@ chunk-s61vbvea.js:294310-296290 fingerprint = calculateCommitAttribution (0.831)
@@ -419,16 +447,16 @@ async function realpathOrSelf_2(e) {
 async function calculateCommitAttribution(
   states,
   stagedFiles,
-  r = {
+  options = {
     staged: true,
   },
 ) {
-  let s = r.repoRoot ?? cwdOrGitRoot();
+  let repoRoot = options.repoRoot ?? cwdOrGitRoot();
   let cwd = getSessionId();
   let sessionId = cwdOrGitRoot();
-  let S = await realpathOrSelf_2(sessionId);
-  let w = s === sessionId ? S : await realpathOrSelf_2(s);
-  let R = w === S;
+  let sessionReal = await realpathOrSelf_2(sessionId);
+  let repoReal = repoRoot === sessionId ? sessionReal : await realpathOrSelf_2(repoRoot);
+  let sameRoot = repoReal === sessionReal;
   let files = new Map();
   let excludedGenerated = [];
   let surfaces = new Set();
@@ -438,9 +466,9 @@ async function calculateCommitAttribution(
   let mergedFileStates = new Map();
   for (let state of states) {
     surfaces.add(state.surface);
-    let Ee =
+    let attribution =
       state.fileStates instanceof Map ? state.fileStates : new Map(Object.entries(state.fileStates ?? {}));
-    for (let [path, fileState] of Ee) {
+    for (let [path, fileState] of attribution) {
       let existing = mergedFileStates.get(path);
       if (existing)
         mergedFileStates.set(path, {
@@ -450,64 +478,64 @@ async function calculateCommitAttribution(
       else mergedFileStates.set(path, fileState);
     }
   }
-  let Z = r.gitDir !== undefined || findGitRootRecheckingNegative(s) !== null;
-  let [ee, ae] = await Promise.all([
-    checkLinguistGenerated(stagedFiles, s, {
-      env: getGitEnvForRepoRoot(s),
-      inRepo: Z,
-      repoArgs: gitDirWorkTreeArgs(s, r.gitDir),
+  let inGitRepo = options.gitDir !== undefined || findGitRootRecheckingNegative(repoRoot) !== null;
+  let [stagedStates, committedStates] = await Promise.all([
+    checkLinguistGenerated(stagedFiles, repoRoot, {
+      env: getGitEnvForRepoRoot(repoRoot),
+      inRepo: inGitRepo,
+      repoArgs: gitDirWorkTreeArgs(repoRoot, options.gitDir),
     }),
-    Z
+    inGitRepo
       ? getDeletedFiles({
-          ...r,
-          repoRoot: s,
+          ...options,
+          repoRoot,
         })
       : new Set(),
   ]);
-  let se;
-  let re = async (file) =>
-    Z
+  let mergedFileStates_2;
+  let resolveFile = async (file) =>
+    inGitRepo
       ? ((
-          await (se ??= getGitDiffSize({
-            ...r,
-            repoRoot: s,
+          await (mergedFileStates_2 ??= getGitDiffSize({
+            ...options,
+            repoRoot,
           }))
         ).get(file) ?? 0)
       : 0;
   let fileResults = await Promise.all(
     stagedFiles.map(async (file) => {
-      if (ee.has(file))
+      if (stagedStates.has(file))
         return {
           type: "generated",
           file,
         };
-      let absPath = join(s, file);
-      let Ie = R ? file : relativePosixPathInside(join(w, file), S);
-      let ke = R ? undefined : mergedFileStates.get(file);
-      let Me =
+      let absPath = join(repoRoot, file);
+      let resolvedFile = sameRoot ? file : relativePosixPathInside(join(repoReal, file), sessionReal);
+      let mergedState = sameRoot ? undefined : mergedFileStates.get(file);
+      let result =
         mergedFileStates.get(absPath) ??
-        (Ie === null ? undefined : mergedFileStates.get(Ie)) ??
-        (ke?.root === w ? ke : undefined);
+        (resolvedFile === null ? undefined : mergedFileStates.get(resolvedFile)) ??
+        (mergedState?.root === repoReal ? mergedState : undefined);
       let fileSurface = states[0].surface;
       let claudeChars = 0;
       let humanChars = 0;
-      if (ae.has(file)) {
-        if (Me && isDeletedFileState(Me)) {
-          claudeChars = Me.claudeContribution;
+      if (committedStates.has(file)) {
+        if (result && isDeletedFileState(result)) {
+          claudeChars = result.claudeContribution;
           humanChars = 0;
-        } else if (Me) return null;
+        } else if (result) return null;
         else {
-          let diffSize = await re(file);
+          let diffSize = await resolveFile(file);
           humanChars = diffSize > 0 ? diffSize : 100;
         }
       } else
         try {
           let stats = await stat(absPath);
-          if (Me) {
-            claudeChars = Me.claudeContribution;
+          if (result) {
+            claudeChars = result.claudeContribution;
             humanChars = 0;
           } else {
-            let diffSize = await re(file);
+            let diffSize = await resolveFile(file);
             humanChars = diffSize > 0 ? diffSize : stats.size;
           }
         } catch (error) {
@@ -569,40 +597,40 @@ async function calculateCommitAttribution(
   };
 }
 //@ chunk-s61vbvea.js:296290-296524 layout
-function buildAttributionGitEnv(e = {}, { envGrants: n = true, base: r, userLocale: s } = {}) {
-  let h = r ?? process.env;
-  let y = {};
-  for (let S of ["GIT_CONFIG_GLOBAL", "GIT_CONFIG_SYSTEM"]) {
-    let envCaseInsensitive = getEnvCaseInsensitive(h, S);
-    if (envCaseInsensitive !== undefined) y[S] = envCaseInsensitive;
+function buildAttributionGitEnv(result = {}, { envGrants = true, base, userLocale } = {}) {
+  let baseEnv = base ?? process.env;
+  let env = {};
+  for (let varName of ["GIT_CONFIG_GLOBAL", "GIT_CONFIG_SYSTEM"]) {
+    let envCaseInsensitive = getEnvCaseInsensitive(baseEnv, varName);
+    if (envCaseInsensitive !== undefined) env[varName] = envCaseInsensitive;
   }
   return getRemoteHostSessionCount(
     {
-      ...y,
-      ...(n ? buildGitConfigEnv(h) : {}),
-      ...e,
+      ...env,
+      ...(envGrants ? buildGitConfigEnv(baseEnv) : {}),
+      ...result,
     },
     {
-      base: r,
-      userLocale: s,
+      base,
+      userLocale,
     },
   );
 }
 //@ chunk-s61vbvea.js:296524-296667 layout
-function getGitEnvForRepoRoot(e, { userLocale: n } = {}) {
+function getGitEnvForRepoRoot(repoRoot, { userLocale } = {}) {
   let base = buildGitEnv(undefined);
   let originalCwd = getOriginalCwd();
-  return e === originalCwd || e === findGitRoot(originalCwd)
+  return repoRoot === originalCwd || repoRoot === findGitRoot(originalCwd)
     ? buildAttributionGitEnv(
         {},
         {
           base,
-          userLocale: n,
+          userLocale,
         },
       )
     : getRemoteHostSessionCount(undefined, {
         base,
-        userLocale: n,
+        userLocale,
       });
 }
 //@ chunk-s61vbvea.js:296667-297170 callgraph-fingerprint = getGitDiffSize (0.26)
@@ -614,70 +642,99 @@ async function getGitDiffSize(
     staged: true,
   },
 ) {
-  let n = filePath.repoRoot ?? cwdOrGitRoot();
-  let r = new Map();
-  let s = [...gitDirWorkTreeArgs(n, filePath.gitDir), "diff", IGNORE_SUBMODULES_DIRTY_FLAG];
-  if (filePath.staged) s.push("--cached");
-  s.push("--numstat", "--no-renames", "--relative", "-z");
-  let result = await execFileNoThrowWithCwd(gitExe(), s, {
-    cwd: n,
+  let repoRoot = filePath.repoRoot ?? cwdOrGitRoot();
+  let dirtyFiles = new Map();
+  let args = [...gitDirWorkTreeArgs(repoRoot, filePath.gitDir), "diff", IGNORE_SUBMODULES_DIRTY_FLAG];
+  if (filePath.staged) args.push("--cached");
+  args.push("--numstat", "--no-renames", "--relative", "-z");
+  let result = await execFileNoThrowWithCwd(gitExe(), args, {
+    cwd: repoRoot,
     timeout: GIT_COMMAND_TIMEOUT_MS,
     maxBuffer: MAX_GIT_OUTPUT_BYTES,
-    env: getGitEnvForRepoRoot(n, {
+    env: getGitEnvForRepoRoot(repoRoot, {
       userLocale: !filePath.staged,
     }),
     extendEnv: false,
   });
   if (result.code !== 0 || result.maxBufferExceeded) throw gitListingError("git diff --numstat", result);
-  for (let y of result.stdout.split("\x00")) {
-    let insertMatch = y.match(/^(\d+)\t(\d+)\t(.+)$/s);
+  for (let record of result.stdout.split("\x00")) {
+    let insertMatch = record.match(/^(\d+)\t(\d+)\t(.+)$/s);
     if (insertMatch) {
-      let w = parseInt(insertMatch[1], 10) + parseInt(insertMatch[2], 10);
-      r.set(insertMatch[3], w * 40);
+      let lineCount = parseInt(insertMatch[1], 10) + parseInt(insertMatch[2], 10);
+      dirtyFiles.set(insertMatch[3], lineCount * 40);
     }
   }
-  return r;
+  return dirtyFiles;
 }
 //@ chunk-s61vbvea.js:297170-297593 sole-consumer
 /**
  * git diff --name-only --diff-filter=D 列出删除的文件（默认暂存区）。
  */
 async function getDeletedFiles(
-  e = {
+  options = {
     staged: true,
   },
 ) {
-  let n = e.repoRoot ?? cwdOrGitRoot();
-  let r = [...gitDirWorkTreeArgs(n, e.gitDir), "diff", IGNORE_SUBMODULES_DIRTY_FLAG];
-  if (e.staged) r.push("--cached");
-  r.push("--name-only", "--diff-filter=D", "--no-renames", "--relative", "-z");
-  let s = await execFileNoThrowWithCwd(gitExe(), r, {
-    cwd: n,
+  let repoRoot = options.repoRoot ?? cwdOrGitRoot();
+  let args = [...gitDirWorkTreeArgs(repoRoot, options.gitDir), "diff", IGNORE_SUBMODULES_DIRTY_FLAG];
+  if (options.staged) args.push("--cached");
+  args.push("--name-only", "--diff-filter=D", "--no-renames", "--relative", "-z");
+  let result = await execFileNoThrowWithCwd(gitExe(), args, {
+    cwd: repoRoot,
     timeout: GIT_COMMAND_TIMEOUT_MS,
     maxBuffer: MAX_GIT_OUTPUT_BYTES,
-    env: getGitEnvForRepoRoot(n, {
-      userLocale: !e.staged,
+    env: getGitEnvForRepoRoot(repoRoot, {
+      userLocale: !options.staged,
     }),
     extendEnv: false,
   });
-  if (s.code !== 0 || s.maxBufferExceeded) throw gitListingError("git diff --diff-filter=D", s);
-  return new Set(s.stdout.split("\x00").filter(Boolean));
+  if (result.code !== 0 || result.maxBufferExceeded)
+    throw gitListingError("git diff --diff-filter=D", result);
+  return new Set(result.stdout.split("\x00").filter(Boolean));
 }
-//@ chunk-38t4c9qz.js:227-251 placement
-/**
- * 匹配 64 位十六进制 sha256 摘要的正则。
- */
-var SHA256_HEX_RE = /^[0-9a-f]{64}$/;
-//@ chunk-38t4c9qz.js:251-466 callgraph-fingerprint = computeContentHash (0.567)
-/**
- * sha256 十六进制摘要（文本或字节），全局 140 余处用于内容比较。
- */
-function computeContentHash(content) {
-  if (typeof content !== "string" && !ArrayBuffer.isView(content))
-    throw Object.assign(TypeError("sha256Hex: the data is neither text nor bytes"), {
-      code: "ERR_INVALID_ARG_TYPE",
+//@ chunk-2a8yx6fc.js:14314-14432 fingerprint = isInternalModelRepoCached (0.543)
+function isInternalModelRepoCached(visibility) {
+  let normalized = typeof visibility === "string" ? visibility.toLowerCase() : "";
+  return normalized === "public" || normalized === "private" || normalized === "internal" ? normalized : null;
+}
+//@ chunk-gjx0rh1b.js:113077-113464 fingerprint = isFileDeleted (0.485)
+async function isFileDeleted(gitRoot, commit, signal, options) {
+  let isDeletedPath = (path) =>
+    listGitRefs(gitRoot, [...GIT_READ_CONFIG_ARGS, ...path], {
+      hardened: false,
+      signal,
+      env: GIT_LIST_ENV,
+      maxBuffer: GIT_PROBE_MAX_BUFFER,
     });
-  return createHash("sha256").update(content).digest("hex");
+  let [diffOutput, statusOutput] = await Promise.all([
+    isDeletedPath([
+      "diff",
+      "--name-status",
+      "-z",
+      "--no-renames",
+      IGNORE_SUBMODULES_DIRTY_FLAG,
+      `${commit}^1`,
+      commit,
+      "--",
+    ]),
+    isDeletedPath([
+      "diff",
+      "--name-status",
+      "-z",
+      "--no-renames",
+      IGNORE_SUBMODULES_DIRTY_FLAG,
+      `${commit}^1`,
+      `${commit}^2`,
+      "--",
+    ]),
+  ]);
+  if (diffOutput.code !== 0 || statusOutput.code !== 0) return null;
+  let summary = summarizeStatusEntries(
+    parseNameStatusZ(diffOutput.stdout),
+    parseNameStatusZ(statusOutput.stdout),
+    gitRoot,
+  );
+  return classifyPathIdentity(gitRoot, summary.paths, summary.added, options, summary.deleted);
 }
 //@ chunk-0sfjpx19.js:132835-133572 placement
 function createCommitAttributionState() {
@@ -716,32 +773,14 @@ function createCommitAttributionState() {
     armedTrailerFiles: new Map(),
   };
 }
-//@ chunk-18hwfzwa.js:119585-119627 fingerprint = getStagedFiles (0.456)
-function getStagedFiles(h) {
-  return h?.source === "diff";
-}
-//@ chunk-2a8yx6fc.js:14314-14432 fingerprint = isInternalModelRepoCached (0.543)
-function isInternalModelRepoCached(visibility) {
-  let n = typeof visibility === "string" ? visibility.toLowerCase() : "";
-  return n === "public" || n === "private" || n === "internal" ? n : null;
-}
-//@ chunk-82kqcve8.js:235773-235885 fingerprint = normalizeFilePath (1)
-function normalizeFilePath(filePath) {
-  try {
-    return getFsImplementation().realpathSync(filePath);
-  } catch (error) {
-    if (!isENOENT(error) || dirname(filePath) === filePath) throw error;
-    return join(normalizeFilePath(dirname(filePath)), basename(filePath));
-  }
-}
 //@ chunk-89f54s6c.js:13743-13998 fingerprint = isGitTransientState (0.913)
-async function isGitTransientState(gitDir, o) {
+async function isGitTransientState(cwd, fsApi) {
   if (
     (
       await Promise.all(
         ["MERGE_HEAD", "CHERRY_PICK_HEAD", "REVERT_HEAD", "BISECT_LOG", "rebase-merge", "rebase-apply"].map(
           (indicator) =>
-            lstat(join(gitDir, indicator)).then(
+            lstat(join(cwd, indicator)).then(
               () => true,
               () => false,
             ),
@@ -750,43 +789,12 @@ async function isGitTransientState(gitDir, o) {
     ).includes(true)
   )
     return true;
-  let existingRefs = await findExistingRefs(gitDir, SEQUENCER_STATE_FILES, o);
+  let existingRefs = await findExistingRefs(cwd, SEQUENCER_STATE_FILES, fsApi);
   return existingRefs === null ? null : existingRefs.size > 0;
 }
-//@ chunk-gjx0rh1b.js:113077-113464 fingerprint = isFileDeleted (0.485)
-async function isFileDeleted(gitRoot, commit, signal, o) {
-  let s = (p) =>
-    listGitRefs(gitRoot, [...GIT_READ_CONFIG_ARGS, ...p], {
-      hardened: false,
-      signal,
-      env: GIT_LIST_ENV,
-      maxBuffer: GIT_PROBE_MAX_BUFFER,
-    });
-  let [l, h] = await Promise.all([
-    s([
-      "diff",
-      "--name-status",
-      "-z",
-      "--no-renames",
-      IGNORE_SUBMODULES_DIRTY_FLAG,
-      `${commit}^1`,
-      commit,
-      "--",
-    ]),
-    s([
-      "diff",
-      "--name-status",
-      "-z",
-      "--no-renames",
-      IGNORE_SUBMODULES_DIRTY_FLAG,
-      `${commit}^1`,
-      `${commit}^2`,
-      "--",
-    ]),
-  ]);
-  if (l.code !== 0 || h.code !== 0) return null;
-  let u = summarizeStatusEntries(parseNameStatusZ(l.stdout), parseNameStatusZ(h.stdout), gitRoot);
-  return classifyPathIdentity(gitRoot, u.paths, u.added, o, u.deleted);
+//@ chunk-18hwfzwa.js:119585-119627 fingerprint = getStagedFiles (0.456)
+function getStagedFiles(attribution) {
+  return attribution?.source === "diff";
 }
 export {
   computeContentHash,

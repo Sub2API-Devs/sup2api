@@ -36,8 +36,8 @@ var OPEN_UNAVAILABLE_MESSAGE = "open is not available in this session.";
 var NOTHING_WAS_OPENED = "Nothing was opened.";
 var ARTIFACT_OPEN_ACTION_HANDLER = {
   actions: ["open"],
-  async checkPermissions(e, n) {
-    if (n.action === "open") {
+  async checkPermissions(tool, input) {
+    if (input.action === "open") {
       if (!hasOpenAction())
         return {
           behavior: "deny",
@@ -50,120 +50,129 @@ var ARTIFACT_OPEN_ACTION_HANDLER = {
         };
       return {
         behavior: "allow",
-        updatedInput: n,
+        updatedInput: input,
         decisionReason: {
           type: "other",
           reason: "Showing the user an existing artifact is a read-only action",
         },
       };
     }
-    return throwUnroutedArtifactAction("open.checkPermissions", n);
+    return throwUnroutedArtifactAction("open.checkPermissions", input);
   },
-  async validateInput(e, n) {
-    if (n.action === "open") {
+  async validateInput(tool, input) {
+    if (input.action === "open") {
       if (!hasOpenAction())
         return {
           result: false,
           message: OPEN_UNAVAILABLE_MESSAGE,
           errorCode: 8,
         };
-      return validateArtifactPathInput("open", n, n.url);
+      return validateArtifactPathInput("open", input, input.url);
     }
-    return throwUnroutedArtifactAction("open.validateInput", n);
+    return throwUnroutedArtifactAction("open.validateInput", input);
   },
-  toAutoClassifierInput(e) {
-    if (e?.action === "open")
-      return `show the user artifact \u2192 ${classifierArtifactTargetFor(e.url, "(no artifact url)")} (read-only, changes nothing)`;
-    return throwUnroutedArtifactAction("open.toAutoClassifierInput", e);
+  toAutoClassifierInput(input) {
+    if (input?.action === "open")
+      return `show the user artifact \u2192 ${classifierArtifactTargetFor(input.url, "(no artifact url)")} (read-only, changes nothing)`;
+    return throwUnroutedArtifactAction("open.toAutoClassifierInput", input);
   },
-  async description(e, n) {
-    if (n?.action === "open")
-      return `Show the user the artifact ${canonicalArtifactTargetFor(n.url, "(no artifact url)")} \u2014 opens it where they view artifacts; read-only.`;
-    return throwUnroutedArtifactAction("open.description", n);
+  async description(tool, input) {
+    if (input?.action === "open")
+      return `Show the user the artifact ${canonicalArtifactTargetFor(input.url, "(no artifact url)")} \u2014 opens it where they view artifacts; read-only.`;
+    return throwUnroutedArtifactAction("open.description", input);
   },
-  getToolUseSummary(e) {
-    if (e?.action === "open") return "open artifact for the user (read-only)";
-    return throwUnroutedArtifactAction("open.getToolUseSummary", e);
+  getToolUseSummary(input) {
+    if (input?.action === "open") return "open artifact for the user (read-only)";
+    return throwUnroutedArtifactAction("open.getToolUseSummary", input);
   },
-  async call(e, n, s) {
-    if (n.action === "open") {
+  async call(tool, input, context) {
+    if (input.action === "open") {
       if (!hasOpenAction()) throw new ArtifactInputError(OPEN_UNAVAILABLE_MESSAGE, "open_gate_closed");
-      let target = parseArtifactUrlOrThrow(n.url);
-      let h = artifactViewerUrlFor(target);
+      let target = parseArtifactUrlOrThrow(input.url);
+      let viewerUrl = artifactViewerUrlFor(target);
       let liveState = getLiveState();
-      let p = {
+      let epochs = {
         account: liveState.accountEpoch,
         conversation: liveState.conversationEpoch,
       };
-      let w = await probeArtifactForOpen(target, "artifact_open", s.abortController.signal, s.credentials);
-      if (!w.ok)
-        switch (w.reason) {
+      let probe = await probeArtifactForOpen(
+        target,
+        "artifact_open",
+        context.abortController.signal,
+        context.credentials,
+      );
+      if (!probe.ok)
+        switch (probe.reason) {
           case "never_published":
             throw new ArtifactInputError(
-              `Nothing has been published at ${h} yet, so there is no page to open. ${NOTHING_WAS_OPENED}`,
+              `Nothing has been published at ${viewerUrl} yet, so there is no page to open. ${NOTHING_WAS_OPENED}`,
               "open_not_found",
             );
           case "not_found":
             throw new ArtifactInputError(
-              `No Artifact at ${h} that the user can see \u2014 it may have been deleted, or it has not been shared with them. ${NOTHING_WAS_OPENED}`,
+              `No Artifact at ${viewerUrl} that the user can see \u2014 it may have been deleted, or it has not been shared with them. ${NOTHING_WAS_OPENED}`,
               "open_not_found",
             );
           case "other_org":
-            throw new ArtifactInputError(`${h}: ${w.err}. ${NOTHING_WAS_OPENED}`, "open_other_org");
+            throw new ArtifactInputError(
+              `${viewerUrl}: ${probe.err}. ${NOTHING_WAS_OPENED}`,
+              "open_other_org",
+            );
           case "public_outside_org":
             logFeatureBad("artifact_open", "public_outside_org");
             throw new ArtifactInputError(
-              `${h} is a public Artifact from outside the user's organization, and open shows only artifacts in their organization or shared with them \u2014 give the user the link instead. ${NOTHING_WAS_OPENED}`,
+              `${viewerUrl} is a public Artifact from outside the user's organization, and open shows only artifacts in their organization or shared with them \u2014 give the user the link instead. ${NOTHING_WAS_OPENED}`,
               "open_public_outside_org",
             );
           case "failed":
             throw new ArtifactInputError(
-              `Could not confirm the Artifact at ${h} (${w.err}). ${NOTHING_WAS_OPENED}`,
-              `open_${w.errorCode}`,
+              `Could not confirm the Artifact at ${viewerUrl} (${probe.err}). ${NOTHING_WAS_OPENED}`,
+              `open_${probe.errorCode}`,
             );
         }
-      let { title } = w;
-      let S = liveState.accountEpoch === p.account && liveState.conversationEpoch === p.conversation;
-      if (S) {
-        let artifactFrame = openArtifactFrame(s, target, title);
+      let { title } = probe;
+      let sameScope =
+        liveState.accountEpoch === epochs.account && liveState.conversationEpoch === epochs.conversation;
+      if (sameScope) {
+        let artifactFrame = openArtifactFrame(context, target, title);
         autoOpenArtifactPreview(
-          s,
-          derivePublishContext(s).hasInteractiveUI && s.agentId === undefined,
+          context,
+          derivePublishContext(context).hasInteractiveUI && context.agentId === undefined,
           {
             slug: target.slug,
-            url: h,
+            url: viewerUrl,
           },
           artifactFrame.alreadyShown && !artifactFrame.lastOpenFailed,
-          (T) => markFrameOpenOutcome(s, artifactFrame.rowKey, T),
+          (succeeded) => markFrameOpenOutcome(context, artifactFrame.rowKey, succeeded),
         );
       }
       logFeatureOk("artifact_open", {
-        same_scope: S,
+        same_scope: sameScope,
       });
       return {
         data: {
           opened: true,
-          url: h,
+          url: viewerUrl,
           artifact_id: target.slug,
           ...(title !== undefined && {
             title,
           }),
-          ...ownedField(S ? w.owned : undefined),
+          ...ownedField(sameScope ? probe.owned : undefined),
         },
       };
     }
-    return throwUnroutedArtifactAction("open.call", n);
+    return throwUnroutedArtifactAction("open.call", input);
   },
 };
 var ARTIFACT_OPEN_RESULT_RENDERERS = {
-  opened(e, toolUseId) {
-    if ("opened" in e)
+  opened(result, toolUseId) {
+    if ("opened" in result)
       return {
         tool_use_id: toolUseId,
         type: "tool_result",
-        content: `Opened the Artifact at ${canonicalArtifactTargetFor(e.url, "(unrecognized address)")} for the user. Nothing was published or changed.`,
+        content: `Opened the Artifact at ${canonicalArtifactTargetFor(result.url, "(unrecognized address)")} for the user. Nothing was published or changed.`,
       };
-    return throwUnroutedArtifactAction("open.opened", e);
+    return throwUnroutedArtifactAction("open.opened", result);
   },
 };
 export { ARTIFACT_OPEN_ACTION_HANDLER, ARTIFACT_OPEN_RESULT_RENDERERS };

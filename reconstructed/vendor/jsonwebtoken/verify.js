@@ -5,7 +5,7 @@
  * pieces: chunk-mrx6y2r5.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x, importMetaRequire } from "../../runtime/bun-runtime.js";
+import { __commonJS, importMetaRequire } from "../../runtime/bun-runtime.js";
 import { require_JsonWebTokenError } from "./lib/JsonWebTokenError.js";
 import { require_NotBeforeError } from "./lib/NotBeforeError.js";
 import { require_TokenExpiredError } from "./lib/TokenExpiredError.js";
@@ -16,7 +16,7 @@ import { require_psSupported } from "./lib/psSupported.js";
 import { require_jws } from "../jws/index.js";
 
 //@ chunk-mrx6y2r5.js:6093-10340 cjs-fingerprint
-var require_verify = x(function (cjsExports, cjsModule) {
+var require_verify = __commonJS(function (cjsExports, cjsModule) {
   var JsonWebTokenError = require_JsonWebTokenError();
   var NotBeforeError = require_NotBeforeError();
   var TokenExpiredError = require_TokenExpiredError();

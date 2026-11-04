@@ -9,7 +9,14 @@
  * attribution: placement 1
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { zodStrictObject, string, literal, u, M, _enum } from "../../../vendor/zod/v4/classic/schemas.js";
+import {
+  zodStrictObject,
+  stringSchema,
+  literal,
+  objectSchema,
+  booleanSchema,
+  _enum,
+} from "../../../vendor/zod/v4/classic/schemas.js";
 import { buildTool } from "../../services/tools/permissionCheckGuard.js";
 import { PUSHNOTIFICATION } from "./constants.js";
 import { getFeatureValue_CACHED_WITH_REFRESH } from "../../services/analytics/growthbook.js";
@@ -27,19 +34,19 @@ import { resolveSetting } from "../../utils/settings/userIntentSettings.js";
  */
 var PushNotificationTool_2 = DoctorLazy(() =>
   zodStrictObject({
-    message: string()
+    message: stringSchema()
       .min(1)
       .describe("The notification body. Keep it under 200 characters; mobile OSes truncate."),
     status: literal("proactive"),
   }),
 );
 var pushNotificationOutputSchema = DoctorLazy(() =>
-  u({
-    message: string(),
-    pushSent: M().optional(),
-    localSent: M().optional(),
+  objectSchema({
+    message: stringSchema(),
+    pushSent: booleanSchema().optional(),
+    localSent: booleanSchema().optional(),
     disabledReason: _enum(["config_off", "user_present", "no_transport"]).optional(),
-    sentAt: string()
+    sentAt: stringSchema()
       .optional()
       .describe(
         "ISO timestamp captured at tool execution on the emitting process. Optional \u2014 resumed sessions replay pre-sentAt outputs verbatim.",
@@ -73,8 +80,8 @@ var PushNotificationTool = buildTool({
   isReadOnly() {
     return true;
   },
-  toAutoClassifierInput(e) {
-    return e.message;
+  toAutoClassifierInput(input) {
+    return input.message;
   },
   async description() {
     return PUSH_NOTIFICATION_DESCRIPTION;
@@ -82,45 +89,49 @@ var PushNotificationTool = buildTool({
   async prompt() {
     return pushNotificationPrompt();
   },
-  mapToolResultToToolResultBlockParam(e, toolUseId) {
-    let t;
-    if (e.disabledReason === "config_off") t = "Push not sent \u2014 mobile push is disabled in /config.";
-    else if (e.disabledReason === "user_present")
-      t =
+  mapToolResultToToolResultBlockParam(result, toolUseId) {
+    let contentText;
+    if (result.disabledReason === "config_off")
+      contentText = "Push not sent \u2014 mobile push is disabled in /config.";
+    else if (result.disabledReason === "user_present")
+      contentText =
         "Not sent \u2014 this terminal is active, so your output here already reaches the user; a separate notification would be redundant.";
-    else if (e.disabledReason === "no_transport")
-      t = e.localSent
+    else if (result.disabledReason === "no_transport")
+      contentText = result.localSent
         ? "Terminal notification sent. Mobile push not sent (Remote Control inactive)."
         : "Mobile push not sent (Remote Control inactive).";
-    else t = e.localSent ? "Terminal notification sent. Mobile push requested." : "Mobile push requested.";
+    else
+      contentText = result.localSent
+        ? "Terminal notification sent. Mobile push requested."
+        : "Mobile push requested.";
     return {
       tool_use_id: toolUseId,
       type: "tool_result",
-      content: t,
+      content: contentText,
     };
   },
-  renderToolUseMessage(e) {
-    if (!e.message) return "";
-    return e.message;
+  renderToolUseMessage(input) {
+    if (!input.message) return "";
+    return input.message;
   },
   create({ isNonInteractiveSession, session }) {
     return {
       async call({ message }, { onProgress }) {
         let sentAt = new Date().toISOString();
-        let f = env.CLAUDE_CODE_REMOTE || getIsRemoteMode();
-        let c = f || isPersistentVsCodeTransport(session);
-        let m = c || isReplBridgeActive();
-        let s = ({ pushSent, localSent, disabledReason }) => {
+        let isRemote = env.CLAUDE_CODE_REMOTE || getIsRemoteMode();
+        let hasMobileTransport = isRemote || isPersistentVsCodeTransport(session);
+        let hasAnyTransport = hasMobileTransport || isReplBridgeActive();
+        let logOutcome = ({ pushSent, localSent, disabledReason }) => {
           logEvent("tengu_push_notification_send", {
             message_length: message.length,
             push_sent: pushSent,
             local_sent: localSent,
-            is_remote: f,
+            is_remote: isRemote,
             disabled_reason: fromEnumOpt(disabledReason),
           });
         };
-        if (m && !c && !resolveSetting("agentPushNotifEnabled", false).value) {
-          s({
+        if (hasAnyTransport && !hasMobileTransport && !resolveSetting("agentPushNotifEnabled", false).value) {
+          logOutcome({
             pushSent: false,
             localSent: false,
             disabledReason: "config_off",
@@ -135,8 +146,12 @@ var PushNotificationTool = buildTool({
             },
           };
         }
-        if (!c && !env.CLAUDE_CODE_DISABLE_NOTIFICATION_PRESENCE_CHECK && isUserActiveForNotifications()) {
-          s({
+        if (
+          !hasMobileTransport &&
+          !env.CLAUDE_CODE_DISABLE_NOTIFICATION_PRESENCE_CHECK &&
+          isUserActiveForNotifications()
+        ) {
+          logOutcome({
             pushSent: false,
             localSent: false,
             disabledReason: "user_present",
@@ -157,8 +172,8 @@ var PushNotificationTool = buildTool({
           notificationType: "push_notification",
         });
         let localSent = !isNonInteractiveSession;
-        if (!m) {
-          s({
+        if (!hasAnyTransport) {
+          logOutcome({
             pushSent: false,
             localSent,
             disabledReason: "no_transport",
@@ -173,7 +188,7 @@ var PushNotificationTool = buildTool({
             },
           };
         }
-        s({
+        logOutcome({
           pushSent: true,
           localSent,
         });
@@ -189,3 +204,4 @@ var PushNotificationTool = buildTool({
     };
   },
 });
+export { PushNotificationTool };

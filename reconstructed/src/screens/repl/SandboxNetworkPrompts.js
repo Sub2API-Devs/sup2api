@@ -11,7 +11,14 @@
 import { randomUUID } from "crypto";
 import { withHideWhile } from "../../components/dialogs/dialogRequests.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, string, E, literal, union, M } from "../../../vendor/zod/v4/classic/schemas.js";
+import {
+  objectSchema,
+  stringSchema,
+  numberSchema,
+  literal,
+  union,
+  booleanSchema,
+} from "../../../vendor/zod/v4/classic/schemas.js";
 import { ConsentRowSchema, isConsentRow } from "../../components/permissions/consentRows.js";
 import { isMisleadingConsentHost, SandboxManager } from "../../utils/sandbox/sandbox-adapter.js";
 import { logForDebugging } from "../../utils/debug.js";
@@ -22,29 +29,33 @@ import { jsonStringify } from "../../utils/slowOperations.js";
 import { persistValidatedPermissionUpdate } from "../../utils/permissions/PermissionUpdate.js";
 import { reportSandboxErrorUnderStandIn } from "../../utils/sandbox/sandboxErrors.js";
 import { init_react_production } from "../../../vendor/react/cjs/react.production.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-18hwfzwa.js:175184-175459 placement
-var sandboxNetworkAccessDialogDef = withHideWhile({
-  kind: "sandbox_network_access",
-  payload: DoctorLazy(() =>
-    u({
-      host: string(),
-      port: E().optional(),
-      forwardedFromWorker: literal(true).optional(),
-      workerName: string().optional(),
-    }),
-  ),
-  result: DoctorLazy(() =>
-    union([
-      u({
-        allow: M(),
-        persistToSettings: M(),
-        persistRow: ConsentRowSchema().optional(),
+var sandboxNetworkAccessDialogDef; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-18hwfzwa.js:175184", () => {
+  sandboxNetworkAccessDialogDef = withHideWhile({
+    kind: "sandbox_network_access",
+    payload: DoctorLazy(() =>
+      objectSchema({
+        host: stringSchema(),
+        port: numberSchema().optional(),
+        forwardedFromWorker: literal(true).optional(),
+        workerName: stringSchema().optional(),
       }),
-      literal("cancelled"),
-    ]),
-  ),
-  default: "cancelled",
+    ),
+    result: DoctorLazy(() =>
+      union([
+        objectSchema({
+          allow: booleanSchema(),
+          persistToSettings: booleanSchema(),
+          persistRow: ConsentRowSchema().optional(),
+        }),
+        literal("cancelled"),
+      ]),
+    ),
+    default: "cancelled",
+  });
 });
 //@ chunk-18hwfzwa.js:175459-176551 placement
 /**
@@ -56,35 +67,35 @@ class SandboxNetworkPrompts {
   constructor(deps) {
     this.deps = deps;
   }
-  ask(h, { forwardToBridge: x = true, expiry: D } = {}) {
-    if (isMisleadingConsentHost(h.host)) {
+  ask(request, { forwardToBridge = true, expiry } = {}) {
+    if (isMisleadingConsentHost(request.host)) {
       logForDebugging(
-        `[SandboxNetworkPrompts] Refusing to ask for a host srt would re-spell: ${toApprovalLabel(h.host) ?? "(unshowable)"}`,
+        `[SandboxNetworkPrompts] Refusing to ask for a host srt would re-spell: ${toApprovalLabel(request.host) ?? "(unshowable)"}`,
         {
           level: "warn",
         },
       );
       return Promise.resolve(false);
     }
-    let L = this.inFlight.get(h.host);
-    if (L) return L;
-    let ee = this.prompt(h, x, D).finally(() => {
-      this.inFlight.delete(h.host);
+    let existing = this.inFlight.get(request.host);
+    if (existing) return existing;
+    let pending = this.prompt(request, forwardToBridge, expiry).finally(() => {
+      this.inFlight.delete(request.host);
     });
-    this.inFlight.set(h.host, ee);
-    return ee;
+    this.inFlight.set(request.host, pending);
+    return pending;
   }
-  async prompt({ host, port }, D, L) {
+  async prompt({ host, port }, forwardToBridge, expiry) {
     let abortController = new AbortController();
-    let ke;
-    let Re = false;
-    let Be;
-    let He = (kt) => {};
-    let We = D ? this.deps.getBridge() : undefined;
-    if (We) {
-      let kt = randomUUID();
-      We.sendRequest(
-        kt,
+    let expiryTimer;
+    let revealed = false;
+    let bridgeAnswer;
+    let finishBridgeAsk = (answer) => {};
+    let bridge = forwardToBridge ? this.deps.getBridge() : undefined;
+    if (bridge) {
+      let requestId = randomUUID();
+      bridge.sendRequest(
+        requestId,
         SANDBOX_NETWORK_ACCESS_TOOL_NAME,
         {
           host,
@@ -92,17 +103,17 @@ class SandboxNetworkPrompts {
         randomUUID(),
         `Allow network connection to ${host}?`,
       );
-      let At = We.onResponse(kt, SANDBOX_NETWORK_ACCESS_TOOL_NAME, (It) => {
-        Be = It.behavior === "allow";
+      let unsubscribe = bridge.onResponse(requestId, SANDBOX_NETWORK_ACCESS_TOOL_NAME, (response) => {
+        bridgeAnswer = response.behavior === "allow";
         abortController.abort();
       });
-      He = (It) => {
-        At();
-        if (!It) We.cancelRequest(kt);
+      finishBridgeAsk = (finishedEarly) => {
+        unsubscribe();
+        if (!finishedEarly) bridge.cancelRequest(requestId);
       };
     }
-    let ze = new CountedAsk();
-    let Xe = this.deps.requestDialog(
+    let countedAsk = new CountedAsk();
+    let answerPromise = this.deps.requestDialog(
       sandboxNetworkAccessDialogDef,
       {
         host,
@@ -112,29 +123,29 @@ class SandboxNetworkPrompts {
         signal: abortController.signal,
         place: "under",
         armInputGrace: true,
-        countedAsk: ze,
+        countedAsk,
         onFirstReveal: () => {
-          Re = true;
+          revealed = true;
         },
       },
     );
-    ze.settleWhen(Xe);
-    let rt = await Xe;
-    clearTimeout(ke);
-    He(Be !== undefined);
-    if (rt === "cancelled") {
-      if (Be) SandboxManager.addSessionAllowedHost(host);
-      return Be ?? false;
+    countedAsk.settleWhen(answerPromise);
+    let answer = await answerPromise;
+    clearTimeout(expiryTimer);
+    finishBridgeAsk(bridgeAnswer !== undefined);
+    if (answer === "cancelled") {
+      if (bridgeAnswer) SandboxManager.addSessionAllowedHost(host);
+      return bridgeAnswer ?? false;
     }
-    applySandboxNetworkAnswer(rt, host, this.deps.applyPermissionUpdate);
-    return rt.allow;
+    applySandboxNetworkAnswer(answer, host, this.deps.applyPermissionUpdate);
+    return answer.allow;
   }
 }
 //@ chunk-18hwfzwa.js:176551-177218 placement
-async function askSandboxNetworkFromWorker({ host, workerName, requestId }, L) {
+async function askSandboxNetworkFromWorker({ host, workerName, requestId }, deps) {
   for (let idx = 0; idx < 2; idx++) {
-    let ke = new CountedAsk();
-    let Re = L.requestDialog(
+    let countedAsk = new CountedAsk();
+    let answer = deps.requestDialog(
       sandboxNetworkAccessDialogDef,
       {
         host,
@@ -144,18 +155,18 @@ async function askSandboxNetworkFromWorker({ host, workerName, requestId }, L) {
       {
         place: "under",
         armInputGrace: true,
-        countedAsk: ke,
+        countedAsk,
       },
     );
-    ke.settleWhen(Re);
-    let Be = await Re;
-    if (Be === "cancelled") {
+    countedAsk.settleWhen(answer);
+    let answer_2 = await answer;
+    if (answer_2 === "cancelled") {
       logForDebugging(
         `[sandbox] leader dialog for ${workerName === undefined ? "an unrostered worker" : jsonStringify(workerName)}'s ask ${jsonStringify(requestId)} (${jsonStringify(host)}) closed unanswered; nothing sent`,
       );
       return;
     }
-    if (!(await L.sendResponse(Be.allow))) {
+    if (!(await deps.sendResponse(answer_2.allow))) {
       logForDebugging(
         `[sandbox] could not mail ${workerName === undefined ? "an unrostered worker" : jsonStringify(workerName)} the answer for ${jsonStringify(host)} (${jsonStringify(requestId)}); ${idx === 0 ? "asking once more" : "dropped after one retry"}`,
         {
@@ -164,16 +175,16 @@ async function askSandboxNetworkFromWorker({ host, workerName, requestId }, L) {
       );
       continue;
     }
-    applySandboxNetworkAnswer(Be, host, L.applyPermissionUpdate);
+    applySandboxNetworkAnswer(answer_2, host, deps.applyPermissionUpdate);
     return;
   }
 }
 //@ chunk-18hwfzwa.js:177218-177486 placement
 function applySandboxNetworkAnswer({ allow, persistToSettings, persistRow }, host, applyPermissionUpdate) {
   if (persistToSettings && allow && persistRow !== undefined && isConsentRow(persistRow)) {
-    for (let ke of persistRow.applies) {
-      applyPermissionUpdate(ke);
-      persistValidatedPermissionUpdate(ke)
+    for (let update of persistRow.applies) {
+      applyPermissionUpdate(update);
+      persistValidatedPermissionUpdate(update)
         .then(() => SandboxManager.refreshConfig())
         .catch((error) => reportSandboxErrorUnderStandIn(error, "networkRuleNotApplied"));
     }
@@ -181,9 +192,18 @@ function applySandboxNetworkAnswer({ allow, persistToSettings, persistRow }, hos
   } else if (allow) SandboxManager.addSessionAllowedHost(host);
 }
 //@ chunk-18hwfzwa.js:177486-177490 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:177486", () => {
+  init_react_production();
+});
 //@ chunk-18hwfzwa.js:177490-177494 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:177490", () => {
+  init_react_production();
+});
 //@ chunk-18hwfzwa.js:177494-177498 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:177494", () => {
+  init_react_production();
+});
 export { SandboxNetworkPrompts, sandboxNetworkAccessDialogDef, askSandboxNetworkFromWorker };

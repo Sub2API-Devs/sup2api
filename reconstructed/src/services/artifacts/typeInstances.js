@@ -11,8 +11,9 @@
 import { issuedUnderDepartedAccount } from "./shareEntries.js";
 import { getLiveState } from "../liveReplica/liveReplica.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, M } from "../../../vendor/zod/v4/classic/schemas.js";
+import { objectSchema, booleanSchema } from "../../../vendor/zod/v4/classic/schemas.js";
 import { ARTIFACT_SLUG_RE } from "../../tools/ArtifactTool/constants.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-jv307fw4.js:19360-19518 placement
 /**
@@ -29,23 +30,23 @@ var ATTESTATION_KIND_RANK = {
 /**
  * 记录某 artifact 的类型归属标记（第一方类型/组织置顶/流水线/模板）：忽略离开账号签发的、早于撤销时间的；按签发时间与优先级保留最强的标记。
  */
-function markAttestation(e, n, r) {
-  if (issuedUnderDepartedAccount(r)) return;
+function markAttestation(slug, typeKey, ver) {
+  if (issuedUnderDepartedAccount(ver)) return;
   let { attestedTypeArtifacts } = getLiveState();
-  let a = attestedTypeArtifacts.get(e) ?? {};
-  let l = a.revokedAt?.[n];
-  if (l !== undefined && r <= l) return;
-  let mark = a.mark;
+  let entry = attestedTypeArtifacts.get(slug) ?? {};
+  let revokedAt = entry.revokedAt?.[typeKey];
+  if (revokedAt !== undefined && ver <= revokedAt) return;
+  let mark = entry.mark;
   if (
     mark === undefined ||
-    r > mark.issuedAt ||
-    (r === mark.issuedAt && ATTESTATION_KIND_RANK[n] < ATTESTATION_KIND_RANK[mark.kind])
+    ver > mark.issuedAt ||
+    (ver === mark.issuedAt && ATTESTATION_KIND_RANK[typeKey] < ATTESTATION_KIND_RANK[mark.kind])
   )
-    attestedTypeArtifacts.set(e, {
-      ...a,
+    attestedTypeArtifacts.set(slug, {
+      ...entry,
       mark: {
-        kind: n,
-        issuedAt: r,
+        kind: typeKey,
+        issuedAt: ver,
       },
     });
 }
@@ -53,49 +54,53 @@ function markAttestation(e, n, r) {
 /**
  * 撤销某 artifact 的若干归属类别：记录各类别的撤销时间，若当前标记属于被撤销类别且不晚于撤销时间则移除。
  */
-function revokeAttestations(e, n, r) {
-  if (issuedUnderDepartedAccount(r)) return;
+function revokeAttestations(slug, kinds, issuedAt) {
+  if (issuedUnderDepartedAccount(issuedAt)) return;
   let { attestedTypeArtifacts } = getLiveState();
-  let a = attestedTypeArtifacts.get(e) ?? {};
-  let l = {
-    ...a.revokedAt,
+  let record = attestedTypeArtifacts.get(slug) ?? {};
+  let revokedAt = {
+    ...record.revokedAt,
   };
-  for (let b of n) l[b] = Math.max(l[b] ?? r, r);
-  let mark = a.mark;
-  let h = mark !== undefined && !(n.includes(mark.kind) && mark.issuedAt <= r) ? mark : undefined;
-  attestedTypeArtifacts.set(e, {
-    ...(h && {
-      mark: h,
+  for (let kind of kinds) revokedAt[kind] = Math.max(revokedAt[kind] ?? issuedAt, issuedAt);
+  let mark = record.mark;
+  let keptMark =
+    mark !== undefined && !(kinds.includes(mark.kind) && mark.issuedAt <= issuedAt) ? mark : undefined;
+  attestedTypeArtifacts.set(slug, {
+    ...(keptMark && {
+      mark: keptMark,
     }),
-    revokedAt: l,
+    revokedAt,
   });
 }
 //@ chunk-jv307fw4.js:20020-20123 placement
-var TYPE_ATTESTATION_SCHEMA = DoctorLazy(() =>
-  u({
-    firstPartyType: M().optional(),
-    typeFirstParty: M().optional(),
-    template: M().optional(),
-  }),
-);
+var TYPE_ATTESTATION_SCHEMA; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-jv307fw4.js:20020", () => {
+  TYPE_ATTESTATION_SCHEMA = DoctorLazy(() =>
+    objectSchema({
+      firstPartyType: booleanSchema().optional(),
+      typeFirstParty: booleanSchema().optional(),
+      template: booleanSchema().optional(),
+    }),
+  );
+});
 //@ chunk-jv307fw4.js:20123-20487 placement
 /**
  * 根据 boot 返回的归属信息更新标记：firstPartyType 标记 artifact 自身为第一方类型；typeFirstParty 时标记其类型为第一方，并按 template 标记或撤销模板实例（外部 artifact 不标记自身）。
  */
-function applyTypeAttestation(slug, typeFacts, r, s, a) {
+function applyTypeAttestation(slug, typeFacts, facts, ver, options) {
   if (typeFacts === undefined) return;
-  let l = TYPE_ATTESTATION_SCHEMA().safeParse(typeFacts);
-  if (!l.success) return;
-  let d = l.data;
-  let external = a.external;
-  if (d.firstPartyType === true) {
-    if (!external) markAttestation(slug, "first_party_type", s);
+  let parsed = TYPE_ATTESTATION_SCHEMA().safeParse(typeFacts);
+  if (!parsed.success) return;
+  let data = parsed.data;
+  let external = options.external;
+  if (data.firstPartyType === true) {
+    if (!external) markAttestation(slug, "first_party_type", ver);
     return;
   }
-  if (d.typeFirstParty !== true) return;
-  if (r !== undefined && ARTIFACT_SLUG_RE.test(r)) markAttestation(r, "first_party_type", s);
+  if (data.typeFirstParty !== true) return;
+  if (facts !== undefined && ARTIFACT_SLUG_RE.test(facts)) markAttestation(facts, "first_party_type", ver);
   if (external) return;
-  if (d.template === true) markAttestation(slug, "template_instance", s);
-  else revokeAttestations(slug, ["template_instance"], s);
+  if (data.template === true) markAttestation(slug, "template_instance", ver);
+  else revokeAttestations(slug, ["template_instance"], ver);
 }
 export { applyTypeAttestation, markAttestation, revokeAttestations, REVOCABLE_INSTANCE_KINDS };

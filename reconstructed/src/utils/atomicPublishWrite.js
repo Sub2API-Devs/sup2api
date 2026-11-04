@@ -32,49 +32,57 @@ import {
   hardlinkedRefusalError,
   ATOMIC_WRITE_ERRNOS,
 } from "./plugins/safeCopy.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-k176arn3.js:3097-3154 placement = atomicWriteToZipCache (0.651)
 /**
  * 生成 <路径>.tmp.<随机> 临时文件名。
  */
-function makeTempSiblingPath(e) {
-  return `${e}.tmp.${randomBytes(4).toString("hex")}`;
+function makeTempSiblingPath(targetPath) {
+  return `${targetPath}.tmp.${randomBytes(4).toString("hex")}`;
 }
 //@ chunk-k176arn3.js:3154-3253 placement
-function isOwnTempName(e, t) {
-  let n = `${t}.tmp.`;
-  return e.startsWith(n) && /^[0-9a-f]{8}$/.test(e.slice(n.length));
+function isOwnTempName(fileName, targetPath) {
+  let tempPrefix = `${targetPath}.tmp.`;
+  return fileName.startsWith(tempPrefix) && /^[0-9a-f]{8}$/.test(fileName.slice(tempPrefix.length));
 }
 //@ chunk-k176arn3.js:3253-3327 placement
-function isTempFileName(e) {
-  return /\.tmp\.(?:[0-9a-f]{8}|\d+\.[0-9a-f]{12})$/.test(e);
+function isTempFileName(fileName) {
+  return /\.tmp\.(?:[0-9a-f]{8}|\d+\.[0-9a-f]{12})$/.test(fileName);
 }
 //@ chunk-k176arn3.js:3327-3441 placement
 /**
  * 重试的基础等待时长（50 毫秒）。
  */
-var RETRY_DELAYS = 4;
-var RETRY_BASE_DELAY_MS = 50;
-var list = Array.from(
-  {
-    length: RETRY_DELAYS - 1,
-  },
-  () => RETRY_BASE_DELAY_MS,
-);
-var LONG_RETRY_DELAYS_MS = [100, 500, 2000];
-var int32Array = new Int32Array(new SharedArrayBuffer(4));
+var RETRY_DELAYS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var RETRY_BASE_DELAY_MS;
+var list;
+var LONG_RETRY_DELAYS_MS;
+var int32Array;
+deferInit("chunk-k176arn3.js:3327", () => {
+  RETRY_DELAYS = 4;
+  RETRY_BASE_DELAY_MS = 50;
+  list = Array.from(
+    {
+      length: RETRY_DELAYS - 1,
+    },
+    () => RETRY_BASE_DELAY_MS,
+  );
+  LONG_RETRY_DELAYS_MS = [100, 500, 2000];
+  int32Array = new Int32Array(new SharedArrayBuffer(4));
+});
 //@ chunk-k176arn3.js:3441-3479 placement
 /**
  * 同步等待给定毫秒（Atomics.wait）。
  */
-function sleepSync(e) {
-  Atomics.wait(int32Array, 0, 0, e);
+function sleepSync(ms) {
+  Atomics.wait(int32Array, 0, 0, ms);
 }
 //@ chunk-k176arn3.js:3479-3512 placement
 /**
  * 判断错误是否可重试（当前恒返回 false）。
  */
-function isRetryableError(error, t, n = RETRY_DELAYS - 1) {
+function isRetryableError(error, targetPath, delayCount = RETRY_DELAYS - 1) {
   return false;
 }
 //@ chunk-k176arn3.js:3512-3523 placement
@@ -86,60 +94,60 @@ var S_IXOTH = 128;
 /**
  * 异步判断文件是否不可执行（读不到时视为不可执行）。
  */
-async function isNotExecutableAsync(e) {
+async function isNotExecutableAsync(path) {
   try {
-    return ((await lstat(e)).mode & S_IXOTH) === 0;
+    return ((await lstat(path)).mode & S_IXOTH) === 0;
   } catch {
     return false;
   }
 }
 //@ chunk-k176arn3.js:3597-3783 placement
-async function retryTransient(e, t, n = list) {
-  let r = false;
+async function retryTransient(operation, targetPath, delays = list) {
+  let retried = false;
   for (let idx = 0; ; idx++)
     try {
-      await e();
-      return r;
+      await operation();
+      return retried;
     } catch (error) {
-      if (isRetryableError(error, idx, n.length)) {
-        if (idx === 0 && t !== undefined && (await isNotExecutableAsync(t))) throw error;
-        r = true;
-        await sleep(n[idx]);
+      if (isRetryableError(error, idx, delays.length)) {
+        if (idx === 0 && targetPath !== undefined && (await isNotExecutableAsync(targetPath))) throw error;
+        retried = true;
+        await sleep(delays[idx]);
         continue;
       }
       throw error;
     }
 }
 //@ chunk-k176arn3.js:3783-3828 placement
-function retryFsOp(e, t, n = rename) {
-  return retryTransient(() => n(e, t), t);
+function retryFsOp(fromPath, toPath, operation = rename) {
+  return retryTransient(() => operation(fromPath, toPath), toPath);
 }
 //@ chunk-k176arn3.js:3828-3878 placement
-function retryFsOpLong(e, t, n = rename) {
-  return retryTransient(() => n(e, t), t, LONG_RETRY_DELAYS_MS);
+function retryFsOpLong(fromPath, toPath, operation = rename) {
+  return retryTransient(() => operation(fromPath, toPath), toPath, LONG_RETRY_DELAYS_MS);
 }
 //@ chunk-k176arn3.js:3878-3938 placement
 /**
  * 同步判断文件是否不可执行（读不到视为不可执行）。
  */
-function isNotExecutableSync(e) {
+function isNotExecutableSync(path) {
   try {
-    return (lstatSync(e).mode & S_IXOTH) === 0;
+    return (lstatSync(path).mode & S_IXOTH) === 0;
   } catch {
     return false;
   }
 }
 //@ chunk-k176arn3.js:3938-4082 placement
-function retryFsOpSync(e, t, n = renameSync) {
-  let r = false;
+function retryFsOpSync(fromPath, toPath, operation = renameSync) {
+  let retried = false;
   for (let idx = 0; ; idx++)
     try {
-      n(e, t);
-      return r;
+      operation(fromPath, toPath);
+      return retried;
     } catch (error) {
       if (isRetryableError(error, idx)) {
-        if (idx === 0 && isNotExecutableSync(t)) throw error;
-        r = true;
+        if (idx === 0 && isNotExecutableSync(toPath)) throw error;
+        retried = true;
         sleepSync(RETRY_BASE_DELAY_MS);
         continue;
       }
@@ -150,30 +158,35 @@ function retryFsOpSync(e, t, n = renameSync) {
 /**
  * 复制或读取文件时的大小上限（64 MiB）。
  */
-var DISK_FULL_CODES = new Set(["ENOSPC", "EIO", "EDQUOT", "EFBIG"]);
-var MAX_COPY_BYTES = 67108864;
-var O_NONBLOCK = constants.O_NONBLOCK;
+var DISK_FULL_CODES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var MAX_COPY_BYTES;
+var O_NONBLOCK;
+deferInit("chunk-k176arn3.js:4082", () => {
+  DISK_FULL_CODES = new Set(["ENOSPC", "EIO", "EDQUOT", "EFBIG"]);
+  MAX_COPY_BYTES = 67108864;
+  O_NONBLOCK = constants.O_NONBLOCK;
+});
 //@ chunk-k176arn3.js:4162-4234 placement
 /**
  * 判断 Windows 写目标检查是否通过。
  */
-async function isWindowsTargetOk(e, t, n = "linux") {
-  return (await checkWindowsTarget(e, t, n)).kind === "pass";
+async function isWindowsTargetOk(path, allowAbsent, platform = "linux") {
+  return (await checkWindowsTarget(path, allowAbsent, platform)).kind === "pass";
 }
 //@ chunk-k176arn3.js:4234-4448 placement
-async function checkWindowsTarget(e, t, n = "linux") {
-  if (n !== "win32")
+async function checkWindowsTarget(path, allowAbsent, platform = "linux") {
+  if (platform !== "win32")
     return {
       kind: "pass",
     };
   try {
     return {
-      kind: (await lstat(e)).isFile() ? "pass" : "refuse",
+      kind: (await lstat(path)).isFile() ? "pass" : "refuse",
     };
   } catch (error) {
     if (getErrnoCode(error) === "ENOENT")
       return {
-        kind: t ? "pass" : "refuse",
+        kind: allowAbsent ? "pass" : "refuse",
       };
     return {
       kind: "failed",
@@ -182,23 +195,23 @@ async function checkWindowsTarget(e, t, n = "linux") {
   }
 }
 //@ chunk-k176arn3.js:4448-4560 placement
-function isRegularFileOnWindows(e, t, n = "linux") {
-  if (n !== "win32") return true;
+function isRegularFileOnWindows(path, allowAbsent, platform = "linux") {
+  if (platform !== "win32") return true;
   try {
-    return lstatSync(e).isFile();
+    return lstatSync(path).isFile();
   } catch (error) {
-    return t && getErrnoCode(error) === "ENOENT";
+    return allowAbsent && getErrnoCode(error) === "ENOENT";
   }
 }
 //@ chunk-k176arn3.js:4560-4994 placement
-async function openReadNoFollow(e, t = false) {
-  if (!t && !(await isWindowsTargetOk(e, true)))
+async function openReadNoFollow(path, skipNoFollow = false) {
+  if (!skipNoFollow && !(await isWindowsTargetOk(path, true)))
     return {
       kind: "unavailable",
     };
-  let n;
+  let handle;
   try {
-    n = await open(e, constants.O_RDONLY | (t ? 0 : constants.O_NOFOLLOW) | O_NONBLOCK);
+    handle = await open(path, constants.O_RDONLY | (skipNoFollow ? 0 : constants.O_NOFOLLOW) | O_NONBLOCK);
   } catch (error) {
     return getErrnoCode(error) === "ENOENT"
       ? {
@@ -209,14 +222,14 @@ async function openReadNoFollow(e, t = false) {
         };
   }
   try {
-    let stats = await n.stat();
+    let stats = await handle.stat();
     if (!stats.isFile() || stats.size > MAX_COPY_BYTES)
       return {
         kind: "unavailable",
       };
     return {
       kind: "snapshot",
-      bytes: new Uint8Array(await n.readFile()),
+      bytes: new Uint8Array(await handle.readFile()),
       mode: stats.mode & 4095,
     };
   } catch {
@@ -224,50 +237,50 @@ async function openReadNoFollow(e, t = false) {
       kind: "unavailable",
     };
   } finally {
-    await n.close().catch(() => {});
+    await handle.close().catch(() => {});
   }
 }
 //@ chunk-k176arn3.js:4994-5363 placement
-async function writeNoFollow(e, t, n = false) {
-  if (!n && !(await isWindowsTargetOk(e, true))) return false;
-  let r;
+async function writeNoFollow(path, snapshot, skipNoFollow = false) {
+  if (!skipNoFollow && !(await isWindowsTargetOk(path, true))) return false;
+  let handle;
   try {
-    r = await open(
-      e,
+    handle = await open(
+      path,
       constants.O_WRONLY |
         constants.O_CREAT |
         constants.O_TRUNC |
-        (n ? 0 : constants.O_NOFOLLOW) |
+        (skipNoFollow ? 0 : constants.O_NOFOLLOW) |
         O_NONBLOCK,
-      t.mode,
+      snapshot.mode,
     );
   } catch {
     return false;
   }
   try {
-    if (!(await r.stat()).isFile()) {
-      await r.close().catch(() => {});
+    if (!(await handle.stat()).isFile()) {
+      await handle.close().catch(() => {});
       return false;
     }
-    await r.writeFile(t.bytes);
-    await r.chmod(t.mode).catch(() => {});
-    await r.close();
+    await handle.writeFile(snapshot.bytes);
+    await handle.chmod(snapshot.mode).catch(() => {});
+    await handle.close();
     return true;
   } catch {
-    await r.close().catch(() => {});
+    await handle.close().catch(() => {});
     return false;
   }
 }
 //@ chunk-k176arn3.js:5363-5738 placement
-function annotateWriteError(error, t, n) {
+function annotateWriteError(error, preservedPath, targetOutcome) {
   try {
     if (error instanceof Error) {
-      error.message = `${error.message}; ${t !== undefined ? `new contents preserved at ${t}; ` : ""}${n === "restored" ? "original target restored" : n === "removed" ? "partial target removed" : n === "untouched" ? "target untouched" : "target left partial \u2014 treat contents as torn"}`;
+      error.message = `${error.message}; ${preservedPath !== undefined ? `new contents preserved at ${preservedPath}; ` : ""}${targetOutcome === "restored" ? "original target restored" : targetOutcome === "removed" ? "partial target removed" : targetOutcome === "untouched" ? "target untouched" : "target left partial \u2014 treat contents as torn"}`;
       Object.assign(error, {
-        ...(t !== undefined && {
-          preservedTmp: t,
+        ...(preservedPath !== undefined && {
+          preservedTmp: preservedPath,
         }),
-        targetOutcome: n,
+        targetOutcome,
       });
     }
   } catch {}
@@ -288,32 +301,32 @@ class PublishRefusedError extends Error {
   }
 }
 //@ chunk-k176arn3.js:5983-6260 placement = isFsInaccessible (0.815)
-async function isFsInaccessible(e, stagingDir) {
-  if (stagingDir === undefined) return e;
+async function isFsInaccessible(filePath, dirPath) {
+  if (dirPath === undefined) return filePath;
   try {
-    await (await open(stagingDir, constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW)).close();
+    await (await open(dirPath, constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW)).close();
   } catch (error) {
     switch (getErrnoCode(error)) {
       case "ENOENT":
       case "ELOOP":
       case "ENOTDIR":
-        return e;
+        return filePath;
       case "EACCES":
       case "EPERM":
-        if (await isOwnedByOtherUser(stagingDir)) return e;
+        if (await isOwnedByOtherUser(dirPath)) return filePath;
         throw error;
       default:
         throw error;
     }
   }
-  return join(stagingDir, basename(e));
+  return join(dirPath, basename(filePath));
 }
 //@ chunk-k176arn3.js:6260-6376 placement
-async function isOwnedByOtherUser(e) {
-  let t = process.getuid?.();
-  if (t === undefined) return false;
+async function isOwnedByOtherUser(dirPath) {
+  let uid = process.getuid?.();
+  if (uid === undefined) return false;
   try {
-    return (await lstat(e)).uid !== t;
+    return (await lstat(dirPath)).uid !== uid;
   } catch {
     return false;
   }
@@ -324,10 +337,10 @@ async function isOwnedByOtherUser(e) {
  */
 var MAX_PUBLISH_RENAME_ATTEMPTS = 3;
 //@ chunk-k176arn3.js:6384-6502 placement = getUnameSR (0.793)
-async function getUnameSR(e, t) {
-  if (t !== "win32") return false;
+async function getUnameSR(path, platform) {
+  if (platform !== "win32") return false;
   try {
-    await lstat(e);
+    await lstat(path);
     return true;
   } catch (error) {
     return getErrnoCode(error) === "ENOENT"
@@ -356,16 +369,16 @@ function exclusiveCreateTakenError(path, unameSR) {
   );
 }
 //@ chunk-k176arn3.js:6677-6861 placement = tryCreateExclusive (0.782)
-async function tryCreateExclusive(e, t, n) {
+async function tryCreateExclusive(targetPath, platform, createTemp) {
   for (let idx = 1; ; idx++) {
-    let tempSiblingPath = makeTempSiblingPath(e);
-    let unameSR = await getUnameSR(tempSiblingPath, t);
+    let path = makeTempSiblingPath(targetPath);
+    let unameSR = await getUnameSR(path, platform);
     if (unameSR !== false) {
       if (idx < MAX_PUBLISH_RENAME_ATTEMPTS) continue;
-      throw exclusiveCreateTakenError(tempSiblingPath, unameSR);
+      throw exclusiveCreateTakenError(path, unameSR);
     }
     try {
-      return await n(tempSiblingPath);
+      return await createTemp(path);
     } catch (error) {
       if (getErrnoCode(error) === "EEXIST" && idx < MAX_PUBLISH_RENAME_ATTEMPTS) continue;
       throw error;
@@ -376,17 +389,17 @@ async function tryCreateExclusive(e, t, n) {
 /**
  * 原子方式只在文件不存在时写入（wx 标志，失败清理临时文件）。
  */
-async function writeIfMissing(e, content, mode, r = "linux") {
-  return tryCreateExclusive(e, r, async (o) => {
+async function writeIfMissing(targetPath, content, mode, platform = "linux") {
+  return tryCreateExclusive(targetPath, platform, async (tempPath) => {
     try {
-      await writeFile(o, content, {
+      await writeFile(tempPath, content, {
         encoding: "utf8",
         mode,
         flag: "wx",
       });
-      return o;
+      return tempPath;
     } catch (error) {
-      if (getErrnoCode(error) !== "EEXIST") await unlink(o).catch(() => {});
+      if (getErrnoCode(error) !== "EEXIST") await unlink(tempPath).catch(() => {});
       throw error;
     }
   });
@@ -401,37 +414,41 @@ var COPY_EXCLUSIVE_FLAGS = {
   nonBlocking: true,
 };
 //@ chunk-k176arn3.js:7096-7249 placement
-async function copyIntoTemp(e, t, n = "linux") {
-  return tryCreateExclusive(t, n, async (r) => {
+async function copyIntoTemp(sourcePath, targetPath, platform = "linux") {
+  return tryCreateExclusive(targetPath, platform, async (tempPath) => {
     try {
-      await copyFileNoFollow(e, r, COPY_EXCLUSIVE_FLAGS);
-      return r;
+      await copyFileNoFollow(sourcePath, tempPath, COPY_EXCLUSIVE_FLAGS);
+      return tempPath;
     } catch (error) {
-      if (getErrnoCode(error) !== "EEXIST") await unlink(r).catch(() => {});
+      if (getErrnoCode(error) !== "EEXIST") await unlink(tempPath).catch(() => {});
       throw error;
     }
   });
 }
 //@ chunk-k176arn3.js:7249-7379 placement
-async function createExclusiveTemp(e, t, n = "linux") {
-  return tryCreateExclusive(e, n, async (r) => ({
-    fh: await open(r, n === "win32" ? "wx" : constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL, t),
-    tmp: r,
+async function createExclusiveTemp(targetPath, mode, platform = "linux") {
+  return tryCreateExclusive(targetPath, platform, async (tempPath) => ({
+    fh: await open(
+      tempPath,
+      platform === "win32" ? "wx" : constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL,
+      mode,
+    ),
+    tmp: tempPath,
   }));
 }
 //@ chunk-k176arn3.js:7379-7477 placement
-async function writeNewFile(e, t, mode, r = "linux") {
-  await assertPathSafeAsync(e, r);
-  await writeFile(e, t, {
+async function writeNewFile(path, content, mode, platform = "linux") {
+  await assertPathSafeAsync(path, platform);
+  await writeFile(path, content, {
     encoding: "utf8",
     mode,
     flag: "wx",
   });
 }
 //@ chunk-k176arn3.js:7477-7543 placement = chordToDisplayString (1)
-async function assertSafeThenWrite(e, platform, n = "linux") {
-  await assertPathSafeAsync(platform, n);
-  await copyFileNoFollow(e, platform, COPY_EXCLUSIVE_FLAGS);
+async function assertSafeThenWrite(sourcePath, platform, platform_2 = "linux") {
+  await assertPathSafeAsync(platform, platform_2);
+  await copyFileNoFollow(sourcePath, platform, COPY_EXCLUSIVE_FLAGS);
 }
 //@ chunk-k176arn3.js:7543-7641 placement = chordToDisplayString (1)
 async function assertPathSafeAsync(chord, platform = "linux") {
@@ -440,8 +457,8 @@ async function assertPathSafeAsync(chord, platform = "linux") {
   if (unameSR !== false) throw unameSR.cause;
 }
 //@ chunk-k176arn3.js:7641-7704 placement
-async function writeFileAtomic(e, t, mode, renameFn) {
-  return publishWriteAtomic(e, t, {
+async function writeFileAtomic(targetPath, content, mode, renameFn) {
+  return publishWriteAtomic(targetPath, content, {
     mode,
     renameFn,
   });
@@ -450,7 +467,7 @@ async function writeFileAtomic(e, t, mode, renameFn) {
 /**
  * 原子发布写入：写临时文件、可选 fsync、按模式重命名或就地写，处理符号链接与权限。
  */
-async function publishWriteAtomic(target, t, n) {
+async function publishWriteAtomic(targetPath, content, options) {
   let {
     mode,
     createMode,
@@ -461,99 +478,102 @@ async function publishWriteAtomic(target, t, n) {
     stagingDir,
     renameFn,
     beforePublish,
-  } = n;
-  let R = mode ?? createMode;
-  let P = () => {
-    if (beforePublish !== undefined && !beforePublish()) throw new PublishRefusedError(target);
+  } = options;
+  let createModeResolved = mode ?? createMode;
+  let assertNotRefused = () => {
+    if (beforePublish !== undefined && !beforePublish()) throw new PublishRefusedError(targetPath);
   };
-  let E = await isFsInaccessible(target, stagingDir);
+  let resolvedTarget = await isFsInaccessible(targetPath, stagingDir);
   let O_NOFOLLOW = followSymlinks === true ? 0 : constants.O_NOFOLLOW;
-  let m;
-  let N = false;
-  let M = false;
-  let z = async (p) => {
-    let readNoFollow = await openReadNoFollow(target, followSymlinks === true);
-    let h = readNoFollow.kind === "snapshot" ? readNoFollow : undefined;
-    P();
-    let u = await open(
-      target,
+  let stagingPath;
+  let stagingKept = false;
+  let tempReady = false;
+  let writeInPlace = async (existingStagingPath) => {
+    let readNoFollow = await openReadNoFollow(targetPath, followSymlinks === true);
+    let snapshot = readNoFollow.kind === "snapshot" ? readNoFollow : undefined;
+    assertNotRefused();
+    let handle = await open(
+      targetPath,
       constants.O_WRONLY | constants.O_CREAT | O_NOFOLLOW | O_NONBLOCK,
-      exactMode ?? R,
+      exactMode ?? createModeResolved,
     );
-    let O;
+    let stats;
     try {
-      O = await u.stat();
+      stats = await handle.stat();
     } catch (error) {
-      await u.close().catch(() => {});
-      N = p !== undefined;
-      throw annotateWriteError(error, p, "untouched");
+      await handle.close().catch(() => {});
+      stagingKept = existingStagingPath !== undefined;
+      throw annotateWriteError(error, existingStagingPath, "untouched");
     }
-    let d = O.isCharacterDevice();
-    if (!O.isFile() && !d) {
-      await u.close().catch(() => {});
+    let isCharDevice = stats.isCharacterDevice();
+    if (!stats.isFile() && !isCharDevice) {
+      await handle.close().catch(() => {});
       throw Object.assign(Error("refusing the in-place arm on a non-regular target"), {
         code: "ENXIO",
-        path: target,
+        path: targetPath,
       });
     }
-    if (!d && O.nlink > 1 && isInPlaceWriteDefault()) {
-      await u.close().catch(() => {});
-      throw hardlinkedRefusalError(target, O.nlink);
+    if (!isCharDevice && stats.nlink > 1 && isInPlaceWriteDefault()) {
+      await handle.close().catch(() => {});
+      throw hardlinkedRefusalError(targetPath, stats.nlink);
     }
     if (beforePublish !== undefined && !beforePublish()) {
-      await u.close().catch(() => {});
-      if (readNoFollow.kind === "absent" && O.size === 0 && !d) await unlink(target).catch(() => {});
-      throw new PublishRefusedError(target);
+      await handle.close().catch(() => {});
+      if (readNoFollow.kind === "absent" && stats.size === 0 && !isCharDevice)
+        await unlink(targetPath).catch(() => {});
+      throw new PublishRefusedError(targetPath);
     }
-    let Q = false;
+    let truncated = false;
     try {
-      if (!d) {
-        await u.truncate(0);
-        Q = true;
+      if (!isCharDevice) {
+        await handle.truncate(0);
+        truncated = true;
       }
-      await u.writeFile(t, {
+      await handle.writeFile(content, {
         encoding: "utf8",
       });
-      let b = d ? undefined : (exactMode ?? (readNoFollow.kind !== "absent" ? mode : undefined));
-      if (b !== undefined) await u.chmod(b).catch(() => {});
+      let chmodMode = isCharDevice
+        ? undefined
+        : (exactMode ?? (readNoFollow.kind !== "absent" ? mode : undefined));
+      if (chmodMode !== undefined) await handle.chmod(chmodMode).catch(() => {});
       if (flush === true)
         try {
-          await u.sync();
+          await handle.sync();
         } catch (error) {
           if (!isUnsupportedFlagError(error)) throw error;
         }
-      await u.close();
+      await handle.close();
     } catch (error) {
-      await u.close().catch(() => {});
-      if (!Q) {
-        N = p !== undefined;
-        throw annotateWriteError(error, p, "untouched");
+      await handle.close().catch(() => {});
+      if (!truncated) {
+        stagingKept = existingStagingPath !== undefined;
+        throw annotateWriteError(error, existingStagingPath, "untouched");
       }
-      N = p !== undefined;
-      let Ee =
-        h !== undefined && (await writeNoFollow(target, h, followSymlinks === true))
+      stagingKept = existingStagingPath !== undefined;
+      let targetOutcome =
+        snapshot !== undefined && (await writeNoFollow(targetPath, snapshot, followSymlinks === true))
           ? "restored"
-          : (await unlink(target).then(
+          : (await unlink(targetPath).then(
                 () => true,
                 (error) => getErrnoCode(error) === "ENOENT",
               ))
             ? "removed"
             : "partial";
-      throw annotateWriteError(error, p, Ee);
+      throw annotateWriteError(error, existingStagingPath, targetOutcome);
     }
-    let q = p ?? m;
-    if (q !== undefined) await unlink(q).catch(() => {});
+    let stagingToUnlink = existingStagingPath ?? stagingPath;
+    if (stagingToUnlink !== undefined) await unlink(stagingToUnlink).catch(() => {});
   };
   try {
     try {
       if (exactMode !== undefined || flush === true) {
-        let exclusiveTemp = await createExclusiveTemp(E, exactMode ?? R);
+        let exclusiveTemp = await createExclusiveTemp(resolvedTarget, exactMode ?? createModeResolved);
         let fh = exclusiveTemp.fh;
-        m = exclusiveTemp.tmp;
-        let u = false;
-        let O;
+        stagingPath = exclusiveTemp.tmp;
+        let writeFailed = false;
+        let writeError;
         try {
-          await fh.writeFile(t, {
+          await fh.writeFile(content, {
             encoding: "utf8",
           });
           if (exactMode !== undefined)
@@ -569,52 +589,52 @@ async function publishWriteAtomic(target, t, n) {
               if (!isUnsupportedFlagError(error)) throw error;
             }
         } catch (error) {
-          u = true;
-          O = error;
+          writeFailed = true;
+          writeError = error;
         }
-        if (!u) M = true;
+        if (!writeFailed) tempReady = true;
         try {
           await fh.close();
         } catch (error) {
-          if (!u) {
-            N = true;
-            throw annotateWriteError(error, m, "untouched");
+          if (!writeFailed) {
+            stagingKept = true;
+            throw annotateWriteError(error, stagingPath, "untouched");
           }
         }
-        if (u) throw O;
+        if (writeFailed) throw writeError;
       } else {
-        m = await writeIfMissing(E, t, R);
-        M = true;
+        stagingPath = await writeIfMissing(resolvedTarget, content, createModeResolved);
+        tempReady = true;
       }
     } catch (error) {
       if (inPlaceOnTempCreateRefused !== true) throw error;
-      if (M) throw error;
+      if (tempReady) throw error;
       if (getErrnoCode(error) !== "EACCES") throw error;
       if (
-        !(await stat(target).then(
+        !(await stat(targetPath).then(
           () => true,
           () => false,
         ))
       )
         throw error;
-      await z(undefined);
+      await writeInPlace(undefined);
       return;
     }
-    if (m === undefined) throw Error("staging block exited without a staging file");
-    let p = m;
+    if (stagingPath === undefined) throw Error("staging block exited without a staging file");
+    let stagingFile = stagingPath;
     try {
-      let l = renameFn ?? rename;
-      await retryFsOp(p, target, (h, u) => {
-        P();
-        return l(h, u);
+      let renameImpl = renameFn ?? rename;
+      await retryFsOp(stagingFile, targetPath, (fromPath, toPath) => {
+        assertNotRefused();
+        return renameImpl(fromPath, toPath);
       });
     } catch (error) {
       let errnoCode = getErrnoCode(error);
       if (errnoCode === undefined || !ATOMIC_WRITE_ERRNOS.has(errnoCode)) throw error;
-      await z(p);
+      await writeInPlace(stagingFile);
     }
   } catch (error) {
-    if (m !== undefined && !N) await unlink(m).catch(() => {});
+    if (stagingPath !== undefined && !stagingKept) await unlink(stagingPath).catch(() => {});
     throw error;
   }
 }
@@ -622,20 +642,20 @@ async function publishWriteAtomic(target, t, n) {
 /**
  * 删除文件并吞掉所有错误。
  */
-function unlinkIgnoringErrors(e) {
+function unlinkIgnoringErrors(path) {
   try {
-    unlinkSync(e);
+    unlinkSync(path);
   } catch {}
 }
 //@ chunk-k176arn3.js:9900-10265 placement
-function openReadNoFollowSync(e) {
-  if (!isRegularFileOnWindows(e, true))
+function openReadNoFollowSync(path) {
+  if (!isRegularFileOnWindows(path, true))
     return {
       kind: "unavailable",
     };
-  let t;
+  let fd;
   try {
-    t = openSync(e, constants.O_RDONLY | constants.O_NOFOLLOW | O_NONBLOCK);
+    fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW | O_NONBLOCK);
   } catch (error) {
     return getErrnoCode(error) === "ENOENT"
       ? {
@@ -646,15 +666,15 @@ function openReadNoFollowSync(e) {
         };
   }
   try {
-    let n = fstatSync(t);
-    if (!n.isFile() || n.size > MAX_COPY_BYTES)
+    let stats = fstatSync(fd);
+    if (!stats.isFile() || stats.size > MAX_COPY_BYTES)
       return {
         kind: "unavailable",
       };
     return {
       kind: "snapshot",
-      bytes: new Uint8Array(readFileSync(t)),
-      mode: n.mode & 4095,
+      bytes: new Uint8Array(readFileSync(fd)),
+      mode: stats.mode & 4095,
     };
   } catch {
     return {
@@ -662,50 +682,50 @@ function openReadNoFollowSync(e) {
     };
   } finally {
     try {
-      closeSync(t);
+      closeSync(fd);
     } catch {}
   }
 }
 //@ chunk-k176arn3.js:10265-10537 placement
-function writeNoFollowSync(e, t) {
-  if (!isRegularFileOnWindows(e, true)) return false;
-  let n;
+function writeNoFollowSync(path, snapshot) {
+  if (!isRegularFileOnWindows(path, true)) return false;
+  let fd;
   try {
-    n = openSync(
-      e,
+    fd = openSync(
+      path,
       constants.O_WRONLY | constants.O_CREAT | constants.O_TRUNC | constants.O_NOFOLLOW | O_NONBLOCK,
-      t.mode,
+      snapshot.mode,
     );
   } catch {
     return false;
   }
-  let r = false;
+  let closed = false;
   try {
-    if (!fstatSync(n).isFile()) {
-      r = true;
-      closeSync(n);
+    if (!fstatSync(fd).isFile()) {
+      closed = true;
+      closeSync(fd);
       return false;
     }
-    writeFileSync(n, t.bytes);
+    writeFileSync(fd, snapshot.bytes);
     try {
-      fchmodSync(n, t.mode);
+      fchmodSync(fd, snapshot.mode);
     } catch {}
-    r = true;
-    closeSync(n);
+    closed = true;
+    closeSync(fd);
     return true;
   } catch {
-    if (!r)
+    if (!closed)
       try {
-        closeSync(n);
+        closeSync(fd);
       } catch {}
     return false;
   }
 }
 //@ chunk-k176arn3.js:10537-10643 placement = getUnameSR (0.793)
-function getUnameSR_2(e, t) {
-  if (t !== "win32") return false;
+function getUnameSR_2(path, platform) {
+  if (platform !== "win32") return false;
   try {
-    lstatSync(e);
+    lstatSync(path);
     return true;
   } catch (error) {
     return getErrnoCode(error) === "ENOENT"
@@ -722,116 +742,120 @@ function assertPathSafeSync(chord, platform = "linux") {
   if (unameSR !== false) throw unameSR.cause;
 }
 //@ chunk-k176arn3.js:10730-10962 placement = writeIfMissing (0.817)
-function writeIfMissing_2(e, t, mode, r = "linux") {
+function writeIfMissing_2(targetPath, content, mode, platform = "linux") {
   for (let idx = 1; ; idx++) {
-    let tempSiblingPath = makeTempSiblingPath(e);
-    let unameSR = getUnameSR_2(tempSiblingPath, r);
+    let path = makeTempSiblingPath(targetPath);
+    let unameSR = getUnameSR_2(path, platform);
     if (unameSR !== false) {
       if (idx < MAX_PUBLISH_RENAME_ATTEMPTS) continue;
-      throw exclusiveCreateTakenError(tempSiblingPath, unameSR);
+      throw exclusiveCreateTakenError(path, unameSR);
     }
     try {
-      writeFileSync(tempSiblingPath, t, {
+      writeFileSync(path, content, {
         encoding: "utf8",
         mode,
         flag: "wx",
       });
-      return tempSiblingPath;
+      return path;
     } catch (error) {
       if (getErrnoCode(error) === "EEXIST") {
         if (idx < MAX_PUBLISH_RENAME_ATTEMPTS) continue;
         throw error;
       }
-      unlinkIgnoringErrors(tempSiblingPath);
+      unlinkIgnoringErrors(path);
       throw error;
     }
   }
 }
 //@ chunk-k176arn3.js:10962-11863 placement
-function writeAndPublishSync(e, t, mode, r) {
-  let o = false;
-  let i;
+function writeAndPublishSync(targetPath, content, mode, renameFn) {
+  let stagingKept = false;
+  let stagingPath;
   try {
-    i = writeIfMissing_2(e, t, mode);
+    stagingPath = writeIfMissing_2(targetPath, content, mode);
     try {
-      retryFsOpSync(i, e, r);
+      retryFsOpSync(stagingPath, targetPath, renameFn);
     } catch (error) {
       let errnoCode = getErrnoCode(error);
       if (errnoCode === undefined || !ATOMIC_WRITE_ERRNOS.has(errnoCode)) throw error;
-      let readNoFollow = openReadNoFollowSync(e);
-      let g = readNoFollow.kind === "snapshot" ? readNoFollow : undefined;
-      let w = openSync(e, constants.O_WRONLY | constants.O_CREAT | constants.O_NOFOLLOW | O_NONBLOCK, mode);
-      let y = false;
+      let readNoFollow = openReadNoFollowSync(targetPath);
+      let snapshot = readNoFollow.kind === "snapshot" ? readNoFollow : undefined;
+      let fd = openSync(
+        targetPath,
+        constants.O_WRONLY | constants.O_CREAT | constants.O_NOFOLLOW | O_NONBLOCK,
+        mode,
+      );
+      let isCharDevice = false;
       {
-        let E;
+        let stats;
         try {
-          E = fstatSync(w);
+          stats = fstatSync(fd);
         } catch (error) {
           try {
-            closeSync(w);
+            closeSync(fd);
           } catch {}
-          o = true;
-          throw annotateWriteError(error, i, "untouched");
+          stagingKept = true;
+          throw annotateWriteError(error, stagingPath, "untouched");
         }
-        y = E.isCharacterDevice();
-        if (!E.isFile() && !y) {
+        isCharDevice = stats.isCharacterDevice();
+        if (!stats.isFile() && !isCharDevice) {
           try {
-            closeSync(w);
+            closeSync(fd);
           } catch {}
           throw Object.assign(Error("refusing the in-place arm on a non-regular target"), {
             code: "ENXIO",
-            path: e,
+            path: targetPath,
           });
         }
-        if (!y && E.nlink > 1 && isInPlaceWriteDefault()) {
+        if (!isCharDevice && stats.nlink > 1 && isInPlaceWriteDefault()) {
           try {
-            closeSync(w);
+            closeSync(fd);
           } catch {}
-          throw hardlinkedRefusalError(e, E.nlink);
+          throw hardlinkedRefusalError(targetPath, stats.nlink);
         }
       }
-      let R = false;
-      let P = false;
+      let written = false;
+      let truncated = false;
       try {
-        if (!y) {
-          ftruncateSync(w, 0);
-          P = true;
+        if (!isCharDevice) {
+          ftruncateSync(fd, 0);
+          truncated = true;
         }
-        writeFileSync(w, t, {
+        writeFileSync(fd, content, {
           encoding: "utf8",
         });
-        if (mode !== undefined && readNoFollow.kind !== "absent" && !y)
+        if (mode !== undefined && readNoFollow.kind !== "absent" && !isCharDevice)
           try {
-            fchmodSync(w, mode);
+            fchmodSync(fd, mode);
           } catch {}
-        R = true;
-        closeSync(w);
+        written = true;
+        closeSync(fd);
       } catch (error) {
-        if (!R)
+        if (!written)
           try {
-            closeSync(w);
+            closeSync(fd);
           } catch {}
-        if (!P) {
-          o = true;
-          throw annotateWriteError(error, i, "untouched");
+        if (!truncated) {
+          stagingKept = true;
+          throw annotateWriteError(error, stagingPath, "untouched");
         }
-        o = true;
-        let v = g !== undefined && writeNoFollowSync(e, g);
-        let m = "partial";
-        if (v) m = "restored";
+        stagingKept = true;
+        let restored = snapshot !== undefined && writeNoFollowSync(targetPath, snapshot);
+        let targetOutcome = "partial";
+        if (restored) targetOutcome = "restored";
         else
           try {
-            unlinkSync(e);
-            m = "removed";
+            unlinkSync(targetPath);
+            targetOutcome = "removed";
           } catch (error) {
-            m = getErrnoCode(error) === "ENOENT" ? "removed" : "partial";
+            targetOutcome = getErrnoCode(error) === "ENOENT" ? "removed" : "partial";
           }
-        throw annotateWriteError(error, i, m);
+        throw annotateWriteError(error, stagingPath, targetOutcome);
       }
-      unlinkIgnoringErrors(i);
+      unlinkIgnoringErrors(stagingPath);
     }
   } catch (error) {
-    if (i !== undefined && !o) unlinkIgnoringErrors(i);
+    if (stagingPath !== undefined && !stagingKept) unlinkIgnoringErrors(stagingPath);
     throw error;
   }
 }

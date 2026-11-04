@@ -9,14 +9,14 @@
  * attribution: placement 21
  */
 import { randomUUID } from "crypto";
-import { Ar } from "../../../runtime/bun-runtime.js";
+import { __export } from "../../../runtime/bun-runtime.js";
 import {
   MAX_QUEUED_TOASTS,
   pluginToastScopeKey,
   tellRefusalOnce,
 } from "../../plugins/functionHooks/uiToast.js";
 import { emptyPluginLoadState, getPluginRegistry } from "../../utils/plugins/pluginLoadState.js";
-import { hu } from "../../../vendor/zod/v4/classic/schemas.js";
+import { custom } from "../../../vendor/zod/v4/classic/schemas.js";
 import { identity as identity_4 } from "../../utils/identity.js";
 import { ENGINE } from "../../plugins/functionHooks/dispatch/chain.js";
 import {
@@ -30,216 +30,230 @@ import { arraysEqual } from "../../utils/collections.js";
 import { sourceLabel } from "../../utils/messages/nonUserMessages.js";
 import { isPolicyTier } from "../../plugins/functionHooks/hookDispatch.js";
 import { logFeatureOk } from "../../services/analytics/featureTelemetry.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-18hwfzwa.js:32496-32506 placement
 var toastStackNamespace = {};
 //@ chunk-18hwfzwa.js:32506-32946 placement
-Ar(toastStackNamespace, {
-  NO_TOASTS: () => NO_TOASTS,
-  TOAST_FADE_MS: () => TOAST_FADE_MS,
-  TOAST_HOLD_MAX_MS: () => TOAST_HOLD_MAX_MS,
-  TOAST_STACK_MAX: () => MAX_QUEUED_TOASTS,
-  TOAST_STACK_REF: () => TOAST_STACK_REF,
-  createToastClock: () => emptyPluginLoadState,
-  default: () => toastStackNamespace,
-  dismissToast: () => dismissToast,
-  drawnToasts: () => drawnToasts,
-  expireToasts: () => expireToasts,
-  expiredToasts: () => expiredToasts,
-  holdToast: () => holdToast,
-  keepToasts: () => keepToasts,
-  pauseToasts: () => pauseToasts,
-  pushToast: () => pushToast,
-  scheduleExpiry: () => scheduleExpiry,
-  sharedStack: () => sharedStack,
-  stackToast: () => stackToast,
-  stackedToasts: () => stackedToasts,
-  tellToastUndrawn: () => tellToastUndrawn,
-  toastClock: () => toastClock,
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:32506", () => {
+  __export(toastStackNamespace, {
+    NO_TOASTS: () => NO_TOASTS,
+    TOAST_FADE_MS: () => TOAST_FADE_MS,
+    TOAST_HOLD_MAX_MS: () => TOAST_HOLD_MAX_MS,
+    TOAST_STACK_MAX: () => MAX_QUEUED_TOASTS,
+    TOAST_STACK_REF: () => TOAST_STACK_REF,
+    createToastClock: () => emptyPluginLoadState,
+    default: () => toastStackNamespace,
+    dismissToast: () => dismissToast,
+    drawnToasts: () => drawnToasts,
+    expireToasts: () => expireToasts,
+    expiredToasts: () => expiredToasts,
+    holdToast: () => holdToast,
+    keepToasts: () => keepToasts,
+    pauseToasts: () => pauseToasts,
+    pushToast: () => pushToast,
+    scheduleExpiry: () => scheduleExpiry,
+    sharedStack: () => sharedStack,
+    stackToast: () => stackToast,
+    stackedToasts: () => stackedToasts,
+    tellToastUndrawn: () => tellToastUndrawn,
+    toastClock: () => toastClock,
+  });
 });
 //@ chunk-18hwfzwa.js:180359-180409 placement
 function looseStringSchema() {
-  return hu((h) => typeof h === "string");
+  return custom((value) => typeof value === "string");
 }
 //@ chunk-18hwfzwa.js:180409-180443 placement
-var drawnToasts = identity_4(new Set(), (h) => h.clear());
+var drawnToasts; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:180409", () => {
+  drawnToasts = identity_4(new Set(), (set) => set.clear());
+});
 //@ chunk-18hwfzwa.js:180443-180454 placement
 var TOAST_FADE_MS = 240;
 //@ chunk-18hwfzwa.js:180454-180467 placement
 var TOAST_HOLD_MAX_MS = 30000;
 //@ chunk-18hwfzwa.js:180467-180711 placement
-var expiredToasts = (h, x) =>
-  h.flatMap((D) => {
-    let { heldAt, ...ee } = D;
-    let Re =
-      heldAt !== undefined && x - heldAt >= TOAST_HOLD_MAX_MS
+var expiredToasts = (toasts, now) =>
+  toasts.flatMap((toast) => {
+    let { heldAt, ...rest } = toast;
+    let unheld =
+      heldAt !== undefined && now - heldAt >= TOAST_HOLD_MAX_MS
         ? {
-            ...ee,
-            leavesAt: D.leavesAt + (x - heldAt),
+            ...rest,
+            leavesAt: toast.leavesAt + (now - heldAt),
           }
-        : D;
-    let Be = Re.heldAt === undefined && Re.leavesAt <= x;
-    let He = Be && Re.phase === "leaving";
-    let We = Be
+        : toast;
+    let isExpired = unheld.heldAt === undefined && unheld.leavesAt <= now;
+    let isLeaving = isExpired && unheld.phase === "leaving";
+    let leaving = isExpired
       ? {
-          ...Re,
+          ...unheld,
           phase: "leaving",
-          leavesAt: x + TOAST_FADE_MS,
+          leavesAt: now + TOAST_FADE_MS,
         }
-      : Re;
-    return He ? [] : [We];
+      : unheld;
+    return isLeaving ? [] : [leaving];
   });
 //@ chunk-18hwfzwa.js:180711-180737 placement
-var NO_TOASTS = Object.freeze([]);
+var NO_TOASTS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:180711", () => {
+  NO_TOASTS = Object.freeze([]);
+});
 //@ chunk-18hwfzwa.js:180737-180770 placement
-var TOAST_STACK_REF = {
-  plugin: ENGINE,
-  key: "toasts",
-};
+var TOAST_STACK_REF; // deferred: uses ENGINE (../../plugins/functionHooks/dispatch/chain.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-18hwfzwa.js:180737", () => {
+  TOAST_STACK_REF = {
+    plugin: ENGINE,
+    key: "toasts",
+  };
+});
 //@ chunk-18hwfzwa.js:180770-180866 placement
-function stackedToasts(h = pluginStateRegistry().values.getState()) {
-  let x = h.get(stateEntryKey(TOAST_STACK_REF))?.value;
-  return Array.isArray(x) ? x : NO_TOASTS;
+function stackedToasts(state = pluginStateRegistry().values.getState()) {
+  let value = state.get(stateEntryKey(TOAST_STACK_REF))?.value;
+  return Array.isArray(value) ? value : NO_TOASTS;
 }
 //@ chunk-18hwfzwa.js:180866-180893 placement
 var toastClock = () => getPluginRegistry().toastClock;
 //@ chunk-18hwfzwa.js:180893-181224 placement
-function scheduleExpiry(h, x) {
-  let D = toastClock();
-  if (D.pending !== undefined) {
-    clearTimeout(D.pending);
-    D.pending = undefined;
+function scheduleExpiry(now, onExpire) {
+  let clock = toastClock();
+  if (clock.pending !== undefined) {
+    clearTimeout(clock.pending);
+    clock.pending = undefined;
   }
   let mapped = stackedToasts().map(
-    (ke) => (ke.heldAt ?? ke.leavesAt) + (ke.heldAt === undefined ? 0 : TOAST_HOLD_MAX_MS),
+    (toast) => (toast.heldAt ?? toast.leavesAt) + (toast.heldAt === undefined ? 0 : TOAST_HOLD_MAX_MS),
   );
-  if (D.pausedAt !== undefined || mapped.length === 0) return;
-  D.pending = setTimeout(
-    (ke, Re) => {
-      if (ke === toastClock()) {
-        ke.pending = undefined;
-        Re();
+  if (clock.pausedAt !== undefined || mapped.length === 0) return;
+  clock.pending = setTimeout(
+    (ownerClock, callback) => {
+      if (ownerClock === toastClock()) {
+        ownerClock.pending = undefined;
+        callback();
       }
     },
-    Math.max(1, Math.min(...mapped) - h()),
-    D,
-    x,
+    Math.max(1, Math.min(...mapped) - now()),
+    clock,
+    onExpire,
   );
-  D.pending.unref();
+  clock.pending.unref();
 }
 //@ chunk-18hwfzwa.js:181224-181445 placement
-function sharedStack(h) {
-  if (h.length <= MAX_QUEUED_TOASTS) return h;
-  let x = h.at(-1)?.isManaged === true;
-  let [D] = [
+function sharedStack(toasts) {
+  if (toasts.length <= MAX_QUEUED_TOASTS) return toasts;
+  let lastIsManaged = toasts.at(-1)?.isManaged === true;
+  let [largestGroup] = [
     ...Map.groupBy(
-      h.filter((L) => x || !L.isManaged),
-      (L) => L.owner,
+      toasts.filter((toast) => lastIsManaged || !toast.isManaged),
+      (toast) => toast.owner,
     ).values(),
-  ].toSorted((L, ee) => ee.length - L.length);
-  return sharedStack(h.filter((L) => L !== D?.[0]));
+  ].toSorted((a, b) => b.length - a.length);
+  return sharedStack(toasts.filter((toast) => toast !== largestGroup?.[0]));
 }
 //@ chunk-18hwfzwa.js:181445-181658 placement
-function tellToastUndrawn(h) {
-  logForDebugging(`$.ui.toast (${h.owner}): ${h.id} left the stack, never drawn`);
+function tellToastUndrawn(toast) {
+  logForDebugging(`$.ui.toast (${toast.owner}): ${toast.id} left the stack, never drawn`);
   tellOnce({
-    key: ["toast undrawn", pluginToastScopeKey(h.owner)].join(" "),
-    lead: h.owner,
+    key: ["toast undrawn", pluginToastScopeKey(toast.owner)].join(" "),
+    lead: toast.owner,
     text: "$.ui.toast: a toast left the stack before it was ever drawn",
   });
 }
 //@ chunk-18hwfzwa.js:181658-181915 placement
-function keepToasts(h, x) {
-  let D = sharedStack(h);
-  let L = stackedToasts();
-  let ee = new Set(D.map((Re) => Re.id));
-  let ke = new Set(L.map((Re) => Re.id));
-  if (!arraysEqual(L, D)) writeStateValue(stateEntryKey(TOAST_STACK_REF), D);
-  L.concat(h.filter((Re) => !ke.has(Re.id)))
-    .filter((Re) => !ee.has(Re.id) && !drawnToasts.delete(Re.id))
+function keepToasts(toasts, now) {
+  let kept = sharedStack(toasts);
+  let previous = stackedToasts();
+  let keptIds = new Set(kept.map((toast) => toast.id));
+  let previousIds = new Set(previous.map((toast) => toast.id));
+  if (!arraysEqual(previous, kept)) writeStateValue(stateEntryKey(TOAST_STACK_REF), kept);
+  previous
+    .concat(toasts.filter((toast) => !previousIds.has(toast.id)))
+    .filter((toast) => !keptIds.has(toast.id) && !drawnToasts.delete(toast.id))
     .forEach(tellToastUndrawn);
-  scheduleExpiry(x, () => keepToasts(expiredToasts(stackedToasts(), x()), x));
+  scheduleExpiry(now, () => keepToasts(expiredToasts(stackedToasts(), now()), now));
 }
 //@ chunk-18hwfzwa.js:181915-182022 placement
-function dismissToast(h, x = Date.now) {
-  let D = stackedToasts();
-  let filtered = D.filter((ee) => ee.id !== h);
-  if (filtered.length !== D.length) {
-    drawnToasts.add(h);
-    keepToasts(filtered, x);
+function dismissToast(id, now = Date.now) {
+  let previous = stackedToasts();
+  let filtered = previous.filter((toast) => toast.id !== id);
+  if (filtered.length !== previous.length) {
+    drawnToasts.add(id);
+    keepToasts(filtered, now);
   }
 }
 //@ chunk-18hwfzwa.js:182022-182054 placement
-var expireToasts = (h) => keepToasts(expiredToasts(stackedToasts(), h()), h);
+var expireToasts = (now) => keepToasts(expiredToasts(stackedToasts(), now()), now);
 //@ chunk-18hwfzwa.js:182054-182333 placement
-function holdToast(h, x = Date.now) {
-  let D = x();
-  let L = stackedToasts();
-  let mapped = L.map((Re) => {
-    if (Re.id !== h.id || (Re.heldAt !== undefined) === h.isHeld) return Re;
-    if (h.isHeld)
+function holdToast(change, now = Date.now) {
+  let nowMs = now();
+  let previous = stackedToasts();
+  let mapped = previous.map((toast) => {
+    if (toast.id !== change.id || (toast.heldAt !== undefined) === change.isHeld) return toast;
+    if (change.isHeld)
       return {
-        ...Re,
+        ...toast,
         phase: "shown",
-        heldAt: D,
+        heldAt: nowMs,
       };
-    let { heldAt, ...We } = Re;
+    let { heldAt, ...rest } = toast;
     return {
-      ...We,
-      leavesAt: Re.leavesAt + (D - (heldAt ?? D)),
+      ...rest,
+      leavesAt: toast.leavesAt + (nowMs - (heldAt ?? nowMs)),
     };
   });
-  if (mapped.some((Re, Be) => Re !== L[Be])) keepToasts(mapped, x);
+  if (mapped.some((toast, index) => toast !== previous[index])) keepToasts(mapped, now);
 }
 //@ chunk-18hwfzwa.js:182333-182596 placement
-function pauseToasts(h, x = Date.now) {
-  let D = toastClock();
-  let { pausedAt } = D;
-  if (h.isPaused === (pausedAt !== undefined)) return;
-  let ee = x();
-  D.pausedAt = h.isPaused ? ee : undefined;
-  let ke = ee - (pausedAt ?? ee);
+function pauseToasts(change, now = Date.now) {
+  let clock = toastClock();
+  let { pausedAt } = clock;
+  if (change.isPaused === (pausedAt !== undefined)) return;
+  let nowMs = now();
+  clock.pausedAt = change.isPaused ? nowMs : undefined;
+  let elapsedMs = nowMs - (pausedAt ?? nowMs);
   keepToasts(
-    ke === 0
+    elapsedMs === 0
       ? stackedToasts()
-      : stackedToasts().map((Be) => ({
-          ...Be,
-          leavesAt: Be.leavesAt + ke,
-          ...(Be.heldAt !== undefined && {
-            heldAt: Be.heldAt + ke,
+      : stackedToasts().map((toast) => ({
+          ...toast,
+          leavesAt: toast.leavesAt + elapsedMs,
+          ...(toast.heldAt !== undefined && {
+            heldAt: toast.heldAt + elapsedMs,
           }),
         })),
-    x,
+    now,
   );
 }
 //@ chunk-18hwfzwa.js:182634-182833 placement
-function pushToast(h, x = Date.now) {
-  let D = x();
+function pushToast(request, now = Date.now) {
+  let nowMs = now();
   keepToasts(
     [
       ...stackedToasts(),
       {
         id: randomUUID(),
-        owner: h.plugin,
-        plugin: sourceLabel(h.plugin),
-        isManaged: isPolicyTier(h.plugin),
-        text: h.text,
-        shownAt: D,
-        leavesAt: (toastClock().pausedAt ?? D) + h.timeoutMs,
+        owner: request.plugin,
+        plugin: sourceLabel(request.plugin),
+        isManaged: isPolicyTier(request.plugin),
+        text: request.text,
+        shownAt: nowMs,
+        leavesAt: (toastClock().pausedAt ?? nowMs) + request.timeoutMs,
         phase: "shown",
       },
     ],
-    x,
+    now,
   );
 }
 //@ chunk-18hwfzwa.js:182833-183100 placement
-function stackToast(h) {
-  let x = new Set(stackedToasts().map((ee) => ee.id));
-  pushToast(h);
-  let any = stackedToasts().some((ee) => !x.has(ee.id));
-  let L = any ? "stacked" : "not stacked, the stack being full";
+function stackToast(request) {
+  let previousIds = new Set(stackedToasts().map((toast) => toast.id));
+  pushToast(request);
+  let any = stackedToasts().some((toast) => !previousIds.has(toast.id));
+  let stackResult = any ? "stacked" : "not stacked, the stack being full";
   if (any)
-    tellRefusalOnce("toast stacked", h.plugin, () => logFeatureOk("plugin_function_hooks_toast_stack"));
-  logForDebugging(`$.ui.toast: ${L} (${stackedToasts().length} up)`);
+    tellRefusalOnce("toast stacked", request.plugin, () => logFeatureOk("plugin_function_hooks_toast_stack"));
+  logForDebugging(`$.ui.toast: ${stackResult} (${stackedToasts().length} up)`);
 }
 export { looseStringSchema, drawnToasts, TOAST_FADE_MS, toastStackNamespace, pauseToasts, stackToast };

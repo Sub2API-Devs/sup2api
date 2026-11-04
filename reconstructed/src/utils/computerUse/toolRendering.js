@@ -19,8 +19,8 @@ import { Text } from "../../ink/components/Text.js";
 /**
  * 是否为 computer use MCP 服务器。
  */
-function isComputerUseServer(e) {
-  return normalizeNameForMCP(e) === COMPUTER_USE_MCP_SERVER_NAME;
+function isComputerUseServer(serverName) {
+  return normalizeNameForMCP(serverName) === COMPUTER_USE_MCP_SERVER_NAME;
 }
 //@ chunk-dcmhvw5a.js:205249-205322 placement
 /**
@@ -104,16 +104,16 @@ var RESULT_SUMMARY = {
 /**
  * 生成"非 verbose 时显示一行固定摘要"的结果渲染函数（摘要表 RESULT_SUMMARY 按 key 查）。
  */
-function renderToolResultMessage_2(m) {
-  return (d, c, { verbose }) => {
-    if (verbose || typeof d !== "object" || d === null) return null;
-    let f = RESULT_SUMMARY[m];
-    if (!f) return null;
+function renderToolResultMessage_2(toolName) {
+  return (result, input, { verbose }) => {
+    if (verbose || typeof result !== "object" || result === null) return null;
+    let summary = RESULT_SUMMARY[toolName];
+    if (!summary) return null;
     return jsxProd_default(MessageResponse, {
       height: 1,
       children: jsxProd_default(Text, {
         dimColor: true,
-        children: f,
+        children: summary,
       }),
     });
   };

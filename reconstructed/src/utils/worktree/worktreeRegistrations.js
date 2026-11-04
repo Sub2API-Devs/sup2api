@@ -10,7 +10,7 @@
  */
 import { parse, sep, normalize, dirname, join, isAbsolute, basename } from "path";
 import { readlink, realpath, stat } from "fs/promises";
-import { Re } from "../../../runtime/bun-runtime.js";
+import { __toESM } from "../../../runtime/bun-runtime.js";
 import { require_ignore } from "../../../vendor/ignore/index.js";
 import { setRepoDetectionGuards } from "../detectRepository.js";
 import { checkHasTrustDialogAccepted } from "../config.js";
@@ -40,9 +40,13 @@ import { GIT_SAFE_GLOBAL_ARGS } from "../git/gitSafeEnv.js";
 import { gitSupportsPartialCloneFetch } from "./partialClone.js";
 import { isOnForeignMount } from "../networkPaths.js";
 import { removeWorktreeSafely, worktreeRemovalText } from "../git/worktreeRemoval.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:3574892-3574912 placement
-var micromatch = Re(require_ignore(), 1);
+var micromatch; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:3574892", () => {
+  micromatch = __toESM(require_ignore(), 1);
+});
 //@ chunk-e6aww6q8.js:3575265-3575301 placement
 function installRepoDetectionGuards() {
   setRepoDetectionGuards({
@@ -52,18 +56,18 @@ function installRepoDetectionGuards() {
 //@ chunk-e6aww6q8.js:3575301-3575389 placement
 var GIT_PROGRESS_LINE_RE = /^(?:remote: )?[^:'"]+:\s+\d{1,3}% \(\d+\/\d+\)(?:,[\p{L}\p{N}\p{M} .,|/]*)?$/u;
 //@ chunk-e6aww6q8.js:3575389-3575616 placement
-function stripProgressLines(e) {
-  let n = [];
-  for (let line of e.split(/\r?\n/)) {
+function stripProgressLines(text) {
+  let lines = [];
+  for (let line of text.split(/\r?\n/)) {
     let parts = line.split("\r");
-    if (!parts.some((y) => GIT_PROGRESS_LINE_RE.test(y))) {
-      n.push(line);
+    if (!parts.some((part) => GIT_PROGRESS_LINE_RE.test(part))) {
+      lines.push(line);
       continue;
     }
-    let filtered = parts.filter((y) => y !== "" && !GIT_PROGRESS_LINE_RE.test(y));
-    if (filtered.length > 0) n.push(filtered.join("\r"));
+    let filtered = parts.filter((part) => part !== "" && !GIT_PROGRESS_LINE_RE.test(part));
+    if (filtered.length > 0) lines.push(filtered.join("\r"));
   }
-  return n
+  return lines
     .join(
       `
 `,
@@ -78,8 +82,10 @@ function isWorktreeMadeElsewhereStub() {
   return false;
 }
 //@ chunk-e6aww6q8.js:3575827-3575912 placement
-function normalizeDriveLetter(e) {
-  return getPlatform() === "windows" ? e.replace(/^[A-Za-z]:/, (n) => n.toLowerCase()) : e;
+function normalizeDriveLetter(value) {
+  return getPlatform() === "windows"
+    ? value.replace(/^[A-Za-z]:/, (driveLetter) => driveLetter.toLowerCase())
+    : value;
 }
 //@ chunk-e6aww6q8.js:3575912-3575923 placement
 var MAX_LINK_HOPS = 40;
@@ -87,7 +93,7 @@ var MAX_LINK_HOPS = 40;
 /**
  * 逐段解析路径中的符号链接（限制跳转次数），处理 .. 与 Windows 规范化，得到真实路径；无法解析时返回 unresolvable。
  */
-async function resolvePathThroughLinks(targetPath, n) {
+async function resolvePathThroughLinks(targetPath, rootPath) {
   let root = parse(targetPath).root;
   let filtered = targetPath.slice(root.length).split(sep).filter(Boolean);
   let mapped = filtered.map((name, original) => ({
@@ -95,74 +101,74 @@ async function resolvePathThroughLinks(targetPath, n) {
     original,
   }));
   let resolved = root;
-  let S = -1;
-  let w = 0;
-  let L = normalizeDriveLetter(n);
-  let G = normalizePathKey(n);
-  let q = getPlatform() === "windows";
-  let Z = (Se) =>
-    (q ? normalize(Se) : Se)
-      .split(q ? /[\\/]/ : sep)
-      .filter((ke) => ke !== "" && ke !== ".")
+  let segmentOriginalIndex = -1;
+  let linkHopCount = 0;
+  let normalizedRoot = normalizeDriveLetter(rootPath);
+  let rootPathKey = normalizePathKey(rootPath);
+  let isWindows = getPlatform() === "windows";
+  let splitTarget = (target) =>
+    (isWindows ? normalize(target) : target)
+      .split(isWindows ? /[\\/]/ : sep)
+      .filter((segment) => segment !== "" && segment !== ".")
       .map((name) => ({
         name,
         original: null,
       }));
   while (mapped.length > 0) {
-    let Se = mapped.shift();
-    if (Se === undefined) break;
-    if (Se.original !== null) S = Se.original;
-    if (Se.name === "..") resolved = dirname(resolved);
+    let segment = mapped.shift();
+    if (segment === undefined) break;
+    if (segment.original !== null) segmentOriginalIndex = segment.original;
+    if (segment.name === "..") resolved = dirname(resolved);
     else {
-      resolved = join(resolved, Se.name);
-      let Ee = await readlink(resolved).then(
-        (Ie) => Ie,
+      resolved = join(resolved, segment.name);
+      let linkTarget = await readlink(resolved).then(
+        (text) => text,
         (error) => (getErrnoCode(error) === "EINVAL" ? null : undefined),
       );
-      if (Ee === undefined)
+      if (linkTarget === undefined)
         return {
           kind: "unresolvable",
         };
-      if (Ee !== null) {
-        if (++w > MAX_LINK_HOPS)
+      if (linkTarget !== null) {
+        if (++linkHopCount > MAX_LINK_HOPS)
           return {
             kind: "unresolvable",
           };
-        if (isAbsolute(Ee)) {
-          let root = parse(Ee).root;
+        if (isAbsolute(linkTarget)) {
+          let root = parse(linkTarget).root;
           resolved = root;
-          mapped.unshift(...Z(Ee.slice(root.length)));
+          mapped.unshift(...splitTarget(linkTarget.slice(root.length)));
         } else {
           resolved = dirname(resolved);
-          mapped.unshift(...Z(Ee));
+          mapped.unshift(...splitTarget(linkTarget));
         }
         continue;
       }
-      let Ae = await realpath(resolved).catch(() => null);
-      if (Ae === null)
+      let real = await realpath(resolved).catch(() => null);
+      if (real === null)
         return {
           kind: "unresolvable",
         };
-      resolved = stripTrailingSeparators(normalize(Ae));
+      resolved = stripTrailingSeparators(normalize(real));
     }
-    let ke = normalizeDriveLetter(stripTrailingSeparators(resolved));
-    if (ke === L) {
-      let Ee = mapped[0];
-      if (Ee !== undefined && Ee.original === null)
+    let currentKey = normalizeDriveLetter(stripTrailingSeparators(resolved));
+    if (currentKey === normalizedRoot) {
+      let nextSegment = mapped[0];
+      if (nextSegment !== undefined && nextSegment.original === null)
         return {
           kind: "inside",
         };
       return {
         kind: "root",
-        rootUnder: root + filtered.slice(0, S + 1).join(sep),
+        rootUnder: root + filtered.slice(0, segmentOriginalIndex + 1).join(sep),
       };
     }
-    if (ke.startsWith(L + sep))
+    if (currentKey.startsWith(normalizedRoot + sep))
       return {
         kind: "inside",
       };
-    let we = normalizePathKey(resolved);
-    if (we === G || we.startsWith(G + sep))
+    let resolvedKey = normalizePathKey(resolved);
+    if (resolvedKey === rootPathKey || resolvedKey.startsWith(rootPathKey + sep))
       return {
         kind: "inside",
       };
@@ -176,97 +182,97 @@ async function resolvePathThroughLinks(targetPath, n) {
 /**
  * 移除工作树后注销其在仓库中的登记，仓库不一致时保留登记并记录原因。
  */
-async function deregisterRemovedWorktree(root, gitDir, r, forceTwice) {
-  let h = await isSameRepository(root, gitDir);
-  if ("refused" in h)
-    logForDebugging(`Kept worktree registration of ${r}: ${h.refused}`, {
+async function deregisterRemovedWorktree(root, gitDir, worktreePath, forceTwice) {
+  let repoCheck = await isSameRepository(root, gitDir);
+  if ("refused" in repoCheck)
+    logForDebugging(`Kept worktree registration of ${worktreePath}: ${repoCheck.refused}`, {
       level: "warn",
     });
-  let y =
-    "refused" in h
+  let dropResult =
+    "refused" in repoCheck
       ? {
           outcome: "kept",
-          reason: h.refused,
+          reason: repoCheck.refused,
         }
       : await deregisterWorktree(
-          h.gitDir,
+          repoCheck.gitDir,
           {
-            worktreePath: r,
+            worktreePath,
             repoSpelled: root,
           },
           {
             locked: forceTwice === true ? "drop" : "keep",
           },
         );
-  return y.outcome === "dropped"
+  return dropResult.outcome === "dropped"
     ? {
         outcome: "removed",
       }
-    : y.outcome === "none"
+    : dropResult.outcome === "none"
       ? {
           outcome: "unregistered",
-          reason: `the drop found no registration of ${r} in ${gitDir}`,
+          reason: `the drop found no registration of ${worktreePath} in ${gitDir}`,
         }
       : {
           outcome: "kept",
-          reason: y.reason,
+          reason: dropResult.reason,
         };
 }
 //@ chunk-e6aww6q8.js:3577478-3578384 placement
-async function vetWorktreeRegistration(e) {
-  let root = e;
-  let r = await vetWorktree(e, {
+async function vetWorktreeRegistration(root) {
+  let root_2 = root;
+  let vetted = await vetWorktree(root, {
     dotGitLink: "vet",
   });
-  if ("skipped" in r && r.skipped === "pointer") {
-    let canonicalGitRootUncached = findCanonicalGitRootUncached(e);
-    if (canonicalGitRootUncached !== null && canonicalGitRootUncached !== e) {
-      root = canonicalGitRootUncached;
-      r = await vetWorktree(canonicalGitRootUncached, {
+  if ("skipped" in vetted && vetted.skipped === "pointer") {
+    let canonicalGitRootUncached = findCanonicalGitRootUncached(root);
+    if (canonicalGitRootUncached !== null && canonicalGitRootUncached !== root) {
+      root_2 = canonicalGitRootUncached;
+      vetted = await vetWorktree(canonicalGitRootUncached, {
         dotGitLink: "vet",
       });
     }
   }
-  if ("skipped" in r)
-    return r.skipped === "gone" || r.skipped === "not-a-repository"
+  if ("skipped" in vetted)
+    return vetted.skipped === "gone" || vetted.skipped === "not-a-repository"
       ? {
           ok: false,
           outcome: "unlisted",
-          reason: r.why,
+          reason: vetted.why,
         }
       : {
           ok: false,
           outcome: "kept",
-          reason: `the repository's worktree registrations cannot be vetted before git lists them (${r.why})`,
+          reason: `the repository's worktree registrations cannot be vetted before git lists them (${vetted.why})`,
         };
-  let s = r.refused.entries().next().value;
-  if (s !== undefined) {
-    let [S, w] = s;
+  let firstRefusal = vetted.refused.entries().next().value;
+  if (firstRefusal !== undefined) {
+    let [refusedPath, refusedReason] = firstRefusal;
     return {
       ok: false,
       outcome: "kept",
-      reason: `a registered worktree cannot be vetted before git lists them (${r.refused.size} refused; ${S}: ${w})`,
+      reason: `a registered worktree cannot be vetted before git lists them (${vetted.refused.size} refused; ${refusedPath}: ${refusedReason})`,
     };
   }
-  let [h, y] = await Promise.all([
-    stat(r.gitDir, {
+  let [stats, real] = await Promise.all([
+    stat(vetted.gitDir, {
       bigint: true,
     }).catch(() => null),
-    realpath(r.gitDir).catch(() => null),
+    realpath(vetted.gitDir).catch(() => null),
   ]);
-  if (h === null)
+  if (stats === null)
     return {
       ok: false,
       outcome: "kept",
-      reason: `${r.gitDir} could not be read after its worktree registrations were checked`,
+      reason: `${vetted.gitDir} could not be read after its worktree registrations were checked`,
     };
   return {
     ok: true,
-    gitDir: r.gitDir,
-    root,
-    dev: h.dev,
-    ino: h.ino,
-    real: y,
+    gitDir: vetted.gitDir,
+    root: root_2,
+    dev: stats.dev,
+    ino: stats.ino,
+    real,
   };
 }
 //@ chunk-e6aww6q8.js:3578384-3579236 placement
@@ -279,31 +285,32 @@ async function verifyPinnedGitDir(pinned, gitDirsOrPlaceholder) {
       refused: "unpinned",
       reason: "git was not run: the repository's .git could not be confirmed to lead to its git directory",
     };
-  let r = pinned.dev !== 0n && pinned.ino !== 0n && pinned.ino !== -1n && pinned.ino !== 0xffffffffffffffffn;
-  let s = async (S) => {
-    if (r)
-      return stat(S, {
+  let hasInodeIdentity =
+    pinned.dev !== 0n && pinned.ino !== 0n && pinned.ino !== -1n && pinned.ino !== 0xffffffffffffffffn;
+  let matchesPinned = async (dirPath) => {
+    if (hasInodeIdentity)
+      return stat(dirPath, {
         bigint: true,
       }).then(
-        (L) => L.dev === pinned.dev && L.ino === pinned.ino,
+        (dirStats) => dirStats.dev === pinned.dev && dirStats.ino === pinned.ino,
         () => {
           return;
         },
       );
-    let w = await realpath(S).catch(() => null);
-    return w === null || pinned.real === null ? undefined : w === pinned.real;
+    let realDir = await realpath(dirPath).catch(() => null);
+    return realDir === null || pinned.real === null ? undefined : realDir === pinned.real;
   };
-  let [h, y] = await Promise.all([
-    s(pinned.gitDir),
-    gitDirsOrPlaceholder === undefined ? true : s(gitDirsOrPlaceholder.commonDir),
+  let [pinnedVerdict, commonVerdict] = await Promise.all([
+    matchesPinned(pinned.gitDir),
+    gitDirsOrPlaceholder === undefined ? true : matchesPinned(gitDirsOrPlaceholder.commonDir),
   ]);
-  if (h === undefined || y === undefined)
+  if (pinnedVerdict === undefined || commonVerdict === undefined)
     return {
       refused: "changed",
       reason:
         "git was not run: the repository's git directory could not be read right before git would have run",
     };
-  if (!h || !y)
+  if (!pinnedVerdict || !commonVerdict)
     return {
       refused: "changed",
       reason:
@@ -324,23 +331,26 @@ async function verifyPinnedGitDir(pinned, gitDirsOrPlaceholder) {
 /**
  * 清理与校验 worktree 登记（Windows 设备路径、. 与 .. 组件等）。
  */
-async function pruneWorktreeRegistrations(e, n, r = {}) {
-  let found = [n, e].find(
-    (Et) => /^[\\/]{3}/.test(Et) || isDeviceNamespacePath_2(Et) || hasWin32DevicePrefixSpelling(Et),
+async function pruneWorktreeRegistrations(a, b, options = {}) {
+  let found = [b, a].find(
+    (deviceFormPath) =>
+      /^[\\/]{3}/.test(deviceFormPath) ||
+      isDeviceNamespacePath_2(deviceFormPath) ||
+      hasWin32DevicePrefixSpelling(deviceFormPath),
   );
   if (found !== undefined) {
-    let Et = `${found} is spelled in a Windows device form (such as \\\\?\\C:\\) or starts with three or more separators, a form git never records a worktree in`;
-    logForDebugging(`Kept worktree ${n}: ${Et}`, {
+    let deviceFormReason = `${found} is spelled in a Windows device form (such as \\\\?\\C:\\) or starts with three or more separators, a form git never records a worktree in`;
+    logForDebugging(`Kept worktree ${b}: ${deviceFormReason}`, {
       level: "warn",
     });
     return {
       outcome: "kept",
-      reason: Et,
+      reason: deviceFormReason,
     };
   }
-  let h = gitExe();
-  let y = (reason) => {
-    logForDebugging(`Kept worktree ${n}: ${reason}`, {
+  let git = gitExe();
+  let keep = (reason) => {
+    logForDebugging(`Kept worktree ${b}: ${reason}`, {
       level: "warn",
     });
     return {
@@ -348,47 +358,51 @@ async function pruneWorktreeRegistrations(e, n, r = {}) {
       reason,
     };
   };
-  let found_2 = [n, e].find(hasDotSegment);
+  let found_2 = [b, a].find(hasDotSegment);
   if (found_2 !== undefined)
-    return y(`${found_2 === n ? "" : "the repository root "}${found_2} holds a "." or ".." component`);
-  let w = await realpath(e).catch(() => null);
-  let L = stripTrailingSeparators(normalize(n));
-  let G = stripTrailingSeparators(normalize(e));
-  let q = w === null ? null : stripTrailingSeparators(normalize(w));
-  let Z = normalizeDriveLetter(L).startsWith(normalizeDriveLetter(G) + sep) ? G : undefined;
-  let Se =
-    Z !== undefined
+    return keep(`${found_2 === b ? "" : "the repository root "}${found_2} holds a "." or ".." component`);
+  let realRoot = await realpath(a).catch(() => null);
+  let worktreePath = stripTrailingSeparators(normalize(b));
+  let rootPath = stripTrailingSeparators(normalize(a));
+  let realRootPath = realRoot === null ? null : stripTrailingSeparators(normalize(realRoot));
+  let pathPrefixRoot = normalizeDriveLetter(worktreePath).startsWith(normalizeDriveLetter(rootPath) + sep)
+    ? rootPath
+    : undefined;
+  let caseFoldRoot =
+    pathPrefixRoot !== undefined
       ? undefined
-      : [G, ...(q === null || q === G ? [] : [q])].find(
-          (Et) =>
-            !normalizeDriveLetter(L).startsWith(normalizeDriveLetter(Et) + sep) &&
-            normalizePathKey(L).startsWith(normalizePathKey(Et) + sep),
+      : [rootPath, ...(realRootPath === null || realRootPath === rootPath ? [] : [realRootPath])].find(
+          (candidateRoot) =>
+            !normalizeDriveLetter(worktreePath).startsWith(normalizeDriveLetter(candidateRoot) + sep) &&
+            normalizePathKey(worktreePath).startsWith(normalizePathKey(candidateRoot) + sep),
         );
-  if (Se !== undefined)
-    return y(`${n} begins with the repository root ${Se} spelled in a different case or Unicode form`);
-  let ke = null;
-  if (Z === undefined && q !== null && isAbsolute(L)) {
-    let pathThroughLinks = await resolvePathThroughLinks(dirname(L), q);
+  if (caseFoldRoot !== undefined)
+    return keep(
+      `${b} begins with the repository root ${caseFoldRoot} spelled in a different case or Unicode form`,
+    );
+  let resolvedParent = null;
+  if (pathPrefixRoot === undefined && realRootPath !== null && isAbsolute(worktreePath)) {
+    let pathThroughLinks = await resolvePathThroughLinks(dirname(worktreePath), realRootPath);
     switch (pathThroughLinks.kind) {
       case "root":
-        Z = pathThroughLinks.rootUnder;
+        pathPrefixRoot = pathThroughLinks.rootUnder;
         break;
       case "inside":
-        return y(`${n} is spelled outside the repository root but resolves through or under it`);
+        return keep(`${b} is spelled outside the repository root but resolves through or under it`);
       case "outside":
-        ke = pathThroughLinks.resolved;
+        resolvedParent = pathThroughLinks.resolved;
         break;
       case "unresolvable":
-        ke = null;
+        resolvedParent = null;
         break;
     }
   }
-  let we;
-  let Ee;
-  let pinned = await vetWorktreeRegistration(e);
+  let removablePath;
+  let gitPathArg;
+  let pinned = await vetWorktreeRegistration(a);
   if (!pinned.ok) {
-    if (pinned.outcome === "kept") return y(pinned.reason);
-    logForDebugging(`Worktree ${n} not listed: ${pinned.reason}`, {
+    if (pinned.outcome === "kept") return keep(pinned.reason);
+    logForDebugging(`Worktree ${b} not listed: ${pinned.reason}`, {
       level: "warn",
     });
     return {
@@ -396,146 +410,175 @@ async function pruneWorktreeRegistrations(e, n, r = {}) {
       reason: pinned.reason,
     };
   }
-  let Ie = await isSameRepository(pinned.root, pinned.gitDir);
-  if ("refused" in Ie) return y(Ie.refused);
-  let Me = async (Et) => {
-    let yt = await verifyPinnedGitDir(pinned, r.pinRepository ? resolveGitDirsOrPlaceholder(e) : undefined);
-    return "refused" in yt
-      ? yt
-      : execFileNoThrowWithCwd(h, [...GIT_SAFE_GLOBAL_ARGS, ...Et], {
-          cwd: e,
-          env: yt.env,
+  let repositoryCheck = await isSameRepository(pinned.root, pinned.gitDir);
+  if ("refused" in repositoryCheck) return keep(repositoryCheck.refused);
+  let runGitPinned = async (args) => {
+    let pinnedDir = await verifyPinnedGitDir(
+      pinned,
+      options.pinRepository ? resolveGitDirsOrPlaceholder(a) : undefined,
+    );
+    return "refused" in pinnedDir
+      ? pinnedDir
+      : execFileNoThrowWithCwd(git, [...GIT_SAFE_GLOBAL_ARGS, ...args], {
+          cwd: a,
+          env: pinnedDir.env,
         });
   };
-  let We = ["--git-dir", pinned.gitDir];
-  let lt = (await gitSupportsPartialCloneFetch(e))
-    ? await Me([...We, "worktree", "list", "--porcelain", "-z"])
+  let gitDirArgs = ["--git-dir", pinned.gitDir];
+  let listResult = (await gitSupportsPartialCloneFetch(a))
+    ? await runGitPinned([...gitDirArgs, "worktree", "list", "--porcelain", "-z"])
     : null;
-  if (lt !== null && "refused" in lt) {
-    if (lt.refused === "unpinned") {
-      logForDebugging(`Worktree ${n} not listed: ${lt.reason}`, {
+  if (listResult !== null && "refused" in listResult) {
+    if (listResult.refused === "unpinned") {
+      logForDebugging(`Worktree ${b} not listed: ${listResult.reason}`, {
         level: "warn",
       });
       return {
         outcome: "unlisted",
-        reason: lt.reason,
+        reason: listResult.reason,
       };
     }
-    return y(lt.reason);
+    return keep(listResult.reason);
   }
-  let Je = lt;
-  if (Je !== null && Je.code === 0) {
-    if (!hasDistinctWorktreePaths(Je.stdout))
-      return y(
+  let listOutput = listResult;
+  if (listOutput !== null && listOutput.code === 0) {
+    if (!hasDistinctWorktreePaths(listOutput.stdout))
+      return keep(
         "git's worktree list holds a record git would not write (a path listed twice, or a spelling that is not absolute and plain)",
       );
-    let filtered = [
-      L,
-      ...(Z === undefined && ke !== null
-        ? [join(ke, basename(L))]
-        : Z !== undefined && w !== null
-          ? [stripTrailingSeparators(w) + L.slice(Z.length)]
+    let paths = [
+      worktreePath,
+      ...(pathPrefixRoot === undefined && resolvedParent !== null
+        ? [join(resolvedParent, basename(worktreePath))]
+        : pathPrefixRoot !== undefined && realRoot !== null
+          ? [stripTrailingSeparators(realRoot) + worktreePath.slice(pathPrefixRoot.length)]
           : []),
-    ].filter((It, Yt, qt) => qt.indexOf(It) === Yt);
-    let worktreeMatchingPaths = findWorktreeMatchingPaths(Je.stdout, filtered);
+    ].filter((path, index, paths) => paths.indexOf(path) === index);
+    let worktreeMatchingPaths = findWorktreeMatchingPaths(listOutput.stdout, paths);
     if (worktreeMatchingPaths === null) {
-      let It = await symlinkVerdictForPath(L, Z === undefined ? e : L.slice(0, Z.length));
-      if (It === "link" || It === "unknown")
-        return y(
-          `git lists no worktree at ${filtered.join(" or ")}, and the path has a link in a component, or one that cannot be probed`,
+      let linkVerdict = await symlinkVerdictForPath(
+        worktreePath,
+        pathPrefixRoot === undefined ? a : worktreePath.slice(0, pathPrefixRoot.length),
+      );
+      if (linkVerdict === "link" || linkVerdict === "unknown")
+        return keep(
+          `git lists no worktree at ${paths.join(" or ")}, and the path has a link in a component, or one that cannot be probed`,
         );
-      let Yt = `git lists no worktree at ${filtered.join(" or ")}`;
-      logForDebugging(`Unregistered worktree ${n}: ${Yt}`, {
+      let unlistedReason = `git lists no worktree at ${paths.join(" or ")}`;
+      logForDebugging(`Unregistered worktree ${b}: ${unlistedReason}`, {
         level: "warn",
       });
       return {
         outcome: "unregistered",
-        reason: Yt,
+        reason: unlistedReason,
       };
     }
-    if (findSamePath(worktreeMatchingPaths, [e, ...(w === null ? [] : [w])]) !== null)
-      return y(`${worktreeMatchingPaths} names the main worktree`);
-    if (isOnForeignMount(worktreeMatchingPaths, e)) return y(`${worktreeMatchingPaths} is on another host`);
-    let gt = await symlinkVerdictForPath(worktreeMatchingPaths, e);
-    if (gt === "missing")
-      return deregisterRemovedWorktree(pinned.root, pinned.gitDir, worktreeMatchingPaths, r.forceTwice);
-    if (gt !== "clear")
-      return y(`${worktreeMatchingPaths} has a link in a component, or one that cannot be probed`);
-    let At = await realpath(worktreeMatchingPaths).catch(() => null);
-    if (At === null) return y(`${worktreeMatchingPaths} does not resolve`);
-    if (w !== null && stripTrailingSeparators(At) === stripTrailingSeparators(w))
-      return y(`${worktreeMatchingPaths} resolves to the main worktree`);
-    if (!(await isRemovableWorktreeDir(worktreeMatchingPaths, At, e)))
-      return y(`${worktreeMatchingPaths} is not intact (a link may have been introduced)`);
-    we = worktreeMatchingPaths;
-    Ee = toForwardSlashesOnWindows(worktreeMatchingPaths);
-  } else if (Je !== null) {
-    let Et = `could not read git's worktree list: ${Je.stderr.trim()}`;
-    logForDebugging(`Worktree ${n} not listed: ${Et}`, {
+    if (findSamePath(worktreeMatchingPaths, [a, ...(realRoot === null ? [] : [realRoot])]) !== null)
+      return keep(`${worktreeMatchingPaths} names the main worktree`);
+    if (isOnForeignMount(worktreeMatchingPaths, a))
+      return keep(`${worktreeMatchingPaths} is on another host`);
+    let matchVerdict = await symlinkVerdictForPath(worktreeMatchingPaths, a);
+    if (matchVerdict === "missing")
+      return deregisterRemovedWorktree(pinned.root, pinned.gitDir, worktreeMatchingPaths, options.forceTwice);
+    if (matchVerdict !== "clear")
+      return keep(`${worktreeMatchingPaths} has a link in a component, or one that cannot be probed`);
+    let realMatch = await realpath(worktreeMatchingPaths).catch(() => null);
+    if (realMatch === null) return keep(`${worktreeMatchingPaths} does not resolve`);
+    if (realRoot !== null && stripTrailingSeparators(realMatch) === stripTrailingSeparators(realRoot))
+      return keep(`${worktreeMatchingPaths} resolves to the main worktree`);
+    if (!(await isRemovableWorktreeDir(worktreeMatchingPaths, realMatch, a)))
+      return keep(`${worktreeMatchingPaths} is not intact (a link may have been introduced)`);
+    removablePath = worktreeMatchingPaths;
+    gitPathArg = toForwardSlashesOnWindows(worktreeMatchingPaths);
+  } else if (listOutput !== null) {
+    let listErrorReason = `could not read git's worktree list: ${listOutput.stderr.trim()}`;
+    logForDebugging(`Worktree ${b} not listed: ${listErrorReason}`, {
       level: "warn",
     });
     return {
       outcome: "unlisted",
-      reason: Et,
+      reason: listErrorReason,
     };
   } else {
-    if (findSamePath(n, [e, ...(w === null ? [] : [w])]) !== null) return y(`${n} names the main worktree`);
-    let Et;
-    let yt;
-    if (Z !== undefined && Z === G) {
-      Et = L;
-      yt = L.slice(0, Z.length);
-    } else if (Z !== undefined && w !== null) {
-      yt = stripTrailingSeparators(w);
-      Et = yt + L.slice(Z.length);
+    if (findSamePath(b, [a, ...(realRoot === null ? [] : [realRoot])]) !== null)
+      return keep(`${b} names the main worktree`);
+    let candidatePath;
+    let candidateAnchor;
+    if (pathPrefixRoot !== undefined && pathPrefixRoot === rootPath) {
+      candidatePath = worktreePath;
+      candidateAnchor = worktreePath.slice(0, pathPrefixRoot.length);
+    } else if (pathPrefixRoot !== undefined && realRoot !== null) {
+      candidateAnchor = stripTrailingSeparators(realRoot);
+      candidatePath = candidateAnchor + worktreePath.slice(pathPrefixRoot.length);
     } else {
-      if (ke === null) return y(`${n}'s parent does not resolve`);
-      Et = join(ke, basename(L));
-      yt = ke;
+      if (resolvedParent === null) return keep(`${b}'s parent does not resolve`);
+      candidatePath = join(resolvedParent, basename(worktreePath));
+      candidateAnchor = resolvedParent;
     }
-    let gt = await symlinkVerdictForPath(Et, yt);
-    if (gt === "missing") return deregisterRemovedWorktree(pinned.root, pinned.gitDir, Et, r.forceTwice);
-    if (gt !== "clear") return y(`${Et} is a link, or cannot be probed`);
-    let At = await realpath(Et).catch(() => null);
-    if (At !== null && w !== null && stripTrailingSeparators(At) === stripTrailingSeparators(w))
-      return y(`${Et} resolves to the main worktree`);
-    if (At === null || !(await isRemovableWorktreeDir(Et, At, yt))) return y(`${Et} is not intact`);
-    we = Et;
-    Ee = Et;
+    let candidateVerdict = await symlinkVerdictForPath(candidatePath, candidateAnchor);
+    if (candidateVerdict === "missing")
+      return deregisterRemovedWorktree(pinned.root, pinned.gitDir, candidatePath, options.forceTwice);
+    if (candidateVerdict !== "clear") return keep(`${candidatePath} is a link, or cannot be probed`);
+    let candidateReal = await realpath(candidatePath).catch(() => null);
+    if (
+      candidateReal !== null &&
+      realRoot !== null &&
+      stripTrailingSeparators(candidateReal) === stripTrailingSeparators(realRoot)
+    )
+      return keep(`${candidatePath} resolves to the main worktree`);
+    if (
+      candidateReal === null ||
+      !(await isRemovableWorktreeDir(candidatePath, candidateReal, candidateAnchor))
+    )
+      return keep(`${candidatePath} is not intact`);
+    removablePath = candidatePath;
+    gitPathArg = candidatePath;
   }
-  if (!(await clearReparsePoints(we))) return y(`${we} holds a reparse point that could not be removed`);
-  let nt = await removeWorktreeSafely(e, we, {
-    forceTwice: r.forceTwice === true,
+  if (!(await clearReparsePoints(removablePath)))
+    return keep(`${removablePath} holds a reparse point that could not be removed`);
+  let removal = await removeWorktreeSafely(a, removablePath, {
+    forceTwice: options.forceTwice === true,
     git: {
-      dir: Ie.gitDir,
+      dir: repositoryCheck.gitDir,
       root: pinned.root,
     },
-    deregisterIfStopped: r.deregisterIfStopped === true,
+    deregisterIfStopped: options.deregisterIfStopped === true,
   });
-  if (nt.outcome === "removed")
+  if (removal.outcome === "removed")
     return {
       outcome: "removed",
     };
-  if (nt.outcome === "not_registered" || nt.outcome === "refused") return y(worktreeRemovalText(nt));
-  if (nt.outcome !== "unanchored")
+  if (removal.outcome === "not_registered" || removal.outcome === "refused")
+    return keep(worktreeRemovalText(removal));
+  if (removal.outcome !== "unanchored")
     return {
       outcome: "failed",
-      stderr: worktreeRemovalText(nt),
-      checkout: nt.outcome,
+      stderr: worktreeRemovalText(removal),
+      checkout: removal.outcome,
     };
-  let pt = await Me([...We, "worktree", "remove", "--force", ...(r.forceTwice ? ["--force"] : []), Ee]);
-  if ("refused" in pt) return y(pt.reason);
-  return pt.code === 0
+  let forceResult = await runGitPinned([
+    ...gitDirArgs,
+    "worktree",
+    "remove",
+    "--force",
+    ...(options.forceTwice ? ["--force"] : []),
+    gitPathArg,
+  ]);
+  if ("refused" in forceResult) return keep(forceResult.reason);
+  return forceResult.code === 0
     ? {
         outcome: "removed",
       }
     : {
         outcome: "failed",
-        stderr: pt.stderr,
+        stderr: forceResult.stderr,
       };
 }
 //@ chunk-e6aww6q8.js:3583865-3583881 placement
-var partialCloneFetchCache = new Map();
+var partialCloneFetchCache; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:3583865", () => {
+  partialCloneFetchCache = new Map();
+});
 export {
   isWorktreeMadeElsewhereStub,
   vetWorktreeRegistration,

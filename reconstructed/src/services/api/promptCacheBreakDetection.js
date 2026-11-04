@@ -12,6 +12,10 @@ import { join as join_2 } from "path";
 import { rm, mkdir } from "fs/promises";
 import { randomUUID } from "crypto";
 import { isDeepStrictEqual } from "util";
+import { jsonStringify, jsonParse } from "../../utils/slowOperations.js";
+import { SessionRootSlot } from "../../bootstrap/sessionSlices.js";
+import { getRootSession, onSessionSwitch, isDiskless, getSessionId } from "../../bootstrap/state.js";
+import { logError } from "../../utils/log.js";
 import {
   messageRoleBucket,
   messageContentBlocks,
@@ -56,11 +60,17 @@ import { logEvent } from "../analytics/index.js";
 import { sanitizeMarkName } from "../../utils/startupMarks.js";
 import { telemetrySafeModelName } from "../../utils/model/telemetryModelName.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { array, u, _enum, tuple, E, string } from "../../../vendor/zod/v4/classic/schemas.js";
+import {
+  array,
+  objectSchema,
+  _enum,
+  tuple,
+  numberSchema,
+  stringSchema,
+} from "../../../vendor/zod/v4/classic/schemas.js";
 import { env } from "../../utils/env.js";
 import { isManagedOAuthContext_2 } from "../../utils/auth.js";
 import { streamFallbackWarning } from "./streamFallbackWarning.js";
-import { isDiskless, getSessionId, getRootSession, onSessionSwitch } from "../../bootstrap/state.js";
 import { normalizeUuidOrNull } from "../../utils/agentId.js";
 import { getClaudeTempDirRealpath } from "../../utils/tempDirRealpaths.js";
 import { FOREGROUND_529_RETRY_SOURCES } from "./withRetry.js";
@@ -80,259 +90,708 @@ import { custom } from "../../../vendor/zod/v3/types.js";
 import { onceExport } from "../../../vendor/lodash-es/once.js";
 import { verifyTempDirOwnership } from "../../utils/tempDir.js";
 import { readSmallFileOrNullSync } from "../../utils/readSmallFile.js";
-import { jsonParse, jsonStringify } from "../../utils/slowOperations.js";
 import { writeFileAtomic } from "../../utils/atomicPublishWrite.js";
 import { isPlainObject } from "../../utils/objectUtils.js";
-import { logError } from "../../utils/log.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { sanitizeToolNameForTelemetry, hashToolNames } from "../../utils/model/modelCatalog/maskedIds.js";
 import { agentTypeForTelemetry } from "../analytics/metadata.js";
-import { SessionRootSlot } from "../../bootstrap/sessionSlices.js";
 import { toolKeyOf, stripSafeguardsField, exactKeyValue } from "./toolDefinitionShape.js";
 import { getCacheControl, stripCacheControl } from "./declaredToolSet.js";
 import { canonicalToolName as canonicalToolName_2 } from "../../utils/permissions/permissionRuleParser.js";
 import { isToolResultBlockWithContent, isToolReferenceWithName } from "../../utils/toolSearch.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
+//@ chunk-1t61stbc.js:302-1230 placement
+/**
+ * 系统提示词"# Reporting outcomes"段：要求只报告在本会话中观察到的结果。
+ */
+var REPORTING_OUTCOMES_SECTION = `# Reporting outcomes
+
+Report what actually happened, not what you intended. When you say something is done, sent, saved, fixed, or verified, that claim must rest on a result you observed in this session \u2014 tool output, the file as it now reads, the page as it now loads \u2014 not on what the step should have produced. If you did not check, say you did not check. If any step failed, was skipped, or came back different from what you expected, say so in the first sentence of your report, before anything else, even when the rest of the work succeeded. Never quietly work around a failure in a way that makes it look resolved; a problem the user can see is recoverable, one your summary hides is not. When you stop before the task is complete, your first line says so plainly and names what is left. Do not describe partial work as done, and do not let a summary read as more certain than the evidence behind it.`;
+//@ chunk-1t61stbc.js:1230-1268 placement
+var X_ANTHROPIC_BILLING_HEADER = "x-anthropic-billing-header:";
+//@ chunk-1t61stbc.js:1268-1343 placement
+function isBillingHeaderBlock(block) {
+  let text = block.text;
+  return typeof text === "string" && text.startsWith(X_ANTHROPIC_BILLING_HEADER);
+}
+//@ chunk-1t61stbc.js:1343-1428 layout
+/**
+ * system 块是计费头（x-anthropic-billing-header:）或 "# Reporting outcomes" 段（不参与缓存比对）。
+ */
+function isUncachedSystemBlock(block) {
+  let text = block.text;
+  return (
+    typeof text === "string" &&
+    (text.startsWith(X_ANTHROPIC_BILLING_HEADER) || text === REPORTING_OUTCOMES_SECTION)
+  );
+}
+//@ chunk-1t61stbc.js:1428-1515 fingerprint = computeHash (0.745)
+/**
+ * 对象 JSON 序列化后用 Bun.hash 取 32 位哈希。
+ */
+function computeHash(data) {
+  let hash = Bun.hash(jsonStringify(data));
+  return typeof hash === "bigint" ? Number(hash & 0xffffffffn) : hash;
+}
+//@ chunk-1t61stbc.js:1515-1626 placement
+var FINGERPRINT_BLOCK_KEYS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-1t61stbc.js:1515", () => {
+  FINGERPRINT_BLOCK_KEYS = new Set([
+    "type",
+    "text",
+    "thinking",
+    "id",
+    "tool_use_id",
+    "name",
+    "input",
+    "source",
+    "content",
+    "cache_control",
+  ]);
+});
+//@ chunk-1t61stbc.js:1626-3308 placement
+function fingerprintContentBlock(block, parts) {
+  if (typeof block === "string") {
+    parts.push("s", String(block.length), block.slice(0, 32), block.slice(-32));
+    return;
+  }
+  switch (block.type) {
+    case "text":
+    case "image":
+    case "document":
+    case "search_result":
+    case "thinking":
+    case "redacted_thinking":
+    case "tool_use":
+    case "tool_result":
+    case "tool_reference":
+    case "server_tool_use":
+    case "web_search_tool_result":
+    case "web_fetch_tool_result":
+    case "advisor_tool_result":
+    case "code_execution_tool_result":
+    case "bash_code_execution_tool_result":
+    case "text_editor_code_execution_tool_result":
+    case "tool_search_tool_result":
+    case "mcp_tool_use":
+    case "mcp_tool_result":
+    case "mcp_tool_listing":
+    case "container_upload":
+    case "compaction":
+    case "fallback":
+    case "browser_state":
+      break;
+    default: {
+      let blockValue = block;
+      break;
+    }
+  }
+  parts.push(block.type);
+  if ("text" in block && typeof block.text === "string")
+    parts.push("t", String(block.text.length), block.text.slice(0, 32), block.text.slice(-32));
+  if ("thinking" in block && typeof block.thinking === "string")
+    parts.push("k", String(block.thinking.length));
+  if ("id" in block && typeof block.id === "string") parts.push("i", block.id);
+  if ("tool_use_id" in block && typeof block.tool_use_id === "string") parts.push("u", block.tool_use_id);
+  if ("name" in block && typeof block.name === "string") parts.push("n", block.name);
+  if ("input" in block && block.input !== undefined) parts.push("p", jsonStringify(block.input));
+  if ("source" in block && block.source && typeof block.source === "object") {
+    let source = block.source;
+    parts.push("m", String(source.type ?? ""), String(source.media_type ?? ""));
+    if (typeof source.data === "string") parts.push(String(source.data.length));
+  }
+  let content = "content" in block ? block.content : undefined;
+  if (Array.isArray(content)) {
+    parts.push("[", String(content.length));
+    for (let block of content) fingerprintContentBlock(block, parts);
+    parts.push("]");
+  } else if (typeof content === "string")
+    parts.push("c", String(content.length), content.slice(0, 32), content.slice(-32));
+  for (let [key, value] of Object.entries(block)) {
+    if (FINGERPRINT_BLOCK_KEYS.has(key) || value === undefined) continue;
+    let text = typeof value === "string" ? value : jsonStringify(value);
+    parts.push(key, text.length > 256 ? `len:${text.length}` : text);
+  }
+}
+//@ chunk-1t61stbc.js:3308-3319 placement
+var EPHEMERAL_MESSAGE_MARK = -1;
+//@ chunk-1t61stbc.js:3319-3770 placement
+/**
+ * 为每条消息计算缓存指纹（角色、内容块摘要），临时消息记为 -1，用于判断提示缓存是否被打破。
+ */
+function fingerprintMessagesForCache(messagesForAPI) {
+  return messagesForAPI.map((message) => {
+    if ((message.type === "api_system" || message.type === "user") && message.ephemeral)
+      return EPHEMERAL_MESSAGE_MARK;
+    let parts = [message.message.role];
+    if (message.type === "api_system" && message.outputConfig !== undefined) {
+      let timing = message.outputConfig.timing;
+      parts.push(`oc:${message.outputConfig.effort ?? ""}${timing ? `:${timing.now}` : ""}`);
+    }
+    let content = message.message.content;
+    if (Array.isArray(content)) {
+      parts.push(String(content.length));
+      for (let block of content) fingerprintContentBlock(block, parts);
+    } else fingerprintContentBlock(content, parts);
+    let hash = Bun.hash(parts.join("|"));
+    return typeof hash === "bigint" ? Number(hash & 0xffffffffn) : hash;
+  });
+}
+//@ chunk-1t61stbc.js:3770-3795 placement
+/**
+ * 导出常量或表 `CACHE_TTL_5M_MS`：值为 300000, oR = 3600000。
+ */
+var CACHE_TTL_5M_MS = 300000;
+var CACHE_TTL_1H_MS = 3600000;
+//@ chunk-1t61stbc.js:3795-3947 placement
+function getCacheCreationTtl(usage) {
+  if ((usage?.cache_creation?.ephemeral_5m_input_tokens ?? 0) > 0) return "5m";
+  return (usage?.cache_creation?.ephemeral_1h_input_tokens ?? 0) > 0 ? "1h" : undefined;
+}
+//@ chunk-1t61stbc.js:3947-3961 placement
+var MAIN = "main";
+//@ chunk-1t61stbc.js:3961-4050 placement = runPostCompactCleanup (0.926)
+/**
+ * 第二个参数为假（非代理请求）且 querySource 为 repl_main_thread*、sdk、compact 时为真，供提示缓存断裂检测决定是否跟踪；不是压缩后清理。
+ */
+function isCacheBreakTrackedSource(querySource, sourceCategory) {
+  return (
+    !sourceCategory &&
+    (querySource.startsWith("repl_main_thread") || querySource === "sdk" || querySource === "compact")
+  );
+}
+//@ chunk-1t61stbc.js:4050-4087 placement
+var MAX_CHANGED_MESSAGE_ENTRIES = 2000;
+var MAX_PREVIOUS_STATE_ENTRIES = 200;
+var CACHE_TTL_BY_KIND = {
+  "5m": CACHE_TTL_5M_MS,
+  "1h": CACHE_TTL_1H_MS,
+};
+//@ chunk-1t61stbc.js:4087-4860 placement
+var CACHE_BREAK_REASONS = {
+  system_prompt_changed: "system prompt changed",
+  tools_changed: "tool definitions changed",
+  model_changed: "model changed",
+  fast_mode_changed: "fast mode toggled",
+  cache_scope_or_ttl_changed: "cache scope or TTL changed",
+  betas_changed: "beta headers changed",
+  effort_changed: "effort changed",
+  thinking_mode_changed: "thinking toggled",
+  thinking_display_changed: "thinking display changed",
+  auto_mode_changed: "auto mode toggled",
+  overage_changed: "usage-limit state changed",
+  extra_body_changed: "extra request fields changed",
+  defer_loading_changed: "deferred tool loading changed",
+  messages_rewritten: "earlier messages changed",
+  ttl_expired_5m: "idle past the 5m TTL",
+  ttl_expired_1h: "idle past the 1h TTL",
+  likely_server_side: "prompt unchanged \u2014 likely server-side",
+  unknown: "unknown",
+};
+//@ chunk-1t61stbc.js:4860-7402 placement
+/**
+ * 单个查询源的提示缓存命中统计：请求数、命中/未命中、冷启动、预期重建、未命中原因归因与重缓存 token 估计。
+ */
+class PromptCacheTracker {
+  entries = [];
+  requests = 0;
+  hits = 0;
+  misses = 0;
+  expectedRebuilds = 0;
+  coldStarts = 0;
+  cacheReadTokens = 0;
+  cacheCreationTokens = 0;
+  inputTokens = 0;
+  missRecacheTokens = 0;
+  lastMissAt = null;
+  lastMissAttribution = null;
+  missCauses = {};
+  pendingAttribution = null;
+  dropExpectedAt = null;
+  touchedAt = null;
+  touch(touchedAt) {
+    if (this.entries.length > 0) this.touchedAt = Math.max(this.touchedAt ?? 0, touchedAt);
+  }
+  expectDrop(dropExpectedAt) {
+    this.dropExpectedAt = dropExpectedAt;
+  }
+  attribute(pendingAttribution) {
+    this.pendingAttribution = pendingAttribution;
+  }
+  record(sample) {
+    let previousSample = this.entries.at(-1) ?? null;
+    let dropExpectedAt = this.dropExpectedAt;
+    this.dropExpectedAt = null;
+    let pendingAttribution = this.pendingAttribution;
+    this.pendingAttribution = null;
+    let dropWasExpected =
+      dropExpectedAt !== null &&
+      previousSample !== null &&
+      sample.at - Math.max(previousSample.at, this.touchedAt ?? 0) < CACHE_TTL_BY_KIND[previousSample.ttl];
+    let outcome;
+    let hasCacheEvidence =
+      this.cacheReadTokens + this.cacheCreationTokens > 0 ||
+      sample.cacheReadTokens + sample.cacheCreationTokens > 0;
+    if (previousSample === null) outcome = "cold";
+    else if (!hasCacheEvidence) outcome = "uncached";
+    else if (
+      previousSample.cacheReadTokens + previousSample.cacheCreationTokens === 0 &&
+      sample.cacheReadTokens + sample.cacheCreationTokens > 0
+    )
+      outcome = "cold";
+    else {
+      let previousTokens =
+        previousSample.inputTokens + previousSample.cacheReadTokens + previousSample.cacheCreationTokens;
+      let currentTokens = sample.inputTokens + sample.cacheReadTokens + sample.cacheCreationTokens;
+      let min = Math.min(previousTokens, currentTokens);
+      let changedMessageEntries = min - sample.cacheReadTokens;
+      outcome =
+        sample.cacheReadTokens < min * 0.95 && changedMessageEntries >= MAX_CHANGED_MESSAGE_ENTRIES
+          ? dropWasExpected
+            ? "expected"
+            : "miss"
+          : "hit";
+    }
+    let ttl = sample.cacheCreationTokens === 0 && previousSample !== null ? previousSample.ttl : sample.ttl;
+    let entry =
+      outcome === "miss" && pendingAttribution !== null
+        ? {
+            ...sample,
+            ttl,
+            outcome,
+            attribution: pendingAttribution,
+          }
+        : {
+            ...sample,
+            ttl,
+            outcome,
+          };
+    this.entries.push(entry);
+    if (this.entries.length > MAX_PREVIOUS_STATE_ENTRIES) this.entries.shift();
+    switch (
+      (this.requests++,
+      (this.cacheReadTokens += sample.cacheReadTokens),
+      (this.cacheCreationTokens += sample.cacheCreationTokens),
+      (this.inputTokens += sample.inputTokens),
+      outcome)
+    ) {
+      case "hit":
+        this.hits++;
+        break;
+      case "miss":
+        this.misses++;
+        this.missRecacheTokens += sample.cacheCreationTokens;
+        this.lastMissAt = sample.at;
+        this.lastMissAttribution = pendingAttribution;
+        for (let cause of pendingAttribution?.causes ?? [])
+          this.missCauses[cause] = (this.missCauses[cause] ?? 0) + 1;
+        break;
+      case "expected":
+        this.expectedRebuilds++;
+        break;
+      case "cold":
+        this.coldStarts++;
+        break;
+      case "uncached":
+        break;
+    }
+    return entry;
+  }
+  summary(now) {
+    let totalTokens = this.cacheReadTokens + this.cacheCreationTokens + this.inputTokens;
+    let latestEntry = this.entries.at(-1) ?? null;
+    let ttlMs = CACHE_TTL_BY_KIND[latestEntry?.ttl ?? "5m"];
+    let cachingObserved = this.cacheReadTokens + this.cacheCreationTokens > 0;
+    let latestCachingObserved =
+      latestEntry !== null && latestEntry.cacheReadTokens + latestEntry.cacheCreationTokens > 0;
+    let lastActivityAt = latestEntry !== null ? Math.max(latestEntry.at, this.touchedAt ?? 0) : 0;
+    return {
+      requests: this.requests,
+      hits: this.hits,
+      misses: this.misses,
+      expectedRebuilds: this.expectedRebuilds,
+      coldStarts: this.coldStarts,
+      hitRatio: totalTokens > 0 ? this.cacheReadTokens / totalTokens : null,
+      cacheWriteTokens: this.cacheCreationTokens,
+      missRecacheTokens: this.missRecacheTokens,
+      lastMissAt: this.lastMissAt,
+      lastMissAttribution: this.lastMissAttribution,
+      missCauses: {
+        ...this.missCauses,
+      },
+      lastRequest: latestEntry,
+      cachingObserved,
+      lastActivityAt: latestEntry !== null ? lastActivityAt : null,
+      expiresAt: latestEntry !== null && latestCachingObserved ? lastActivityAt + ttlMs : null,
+      warm: latestEntry !== null && latestCachingObserved && now - lastActivityAt < ttlMs,
+    };
+  }
+}
+//@ chunk-1t61stbc.js:7402-7936 placement
+class PromptCacheTrackerRegistry {
+  #e = new Map();
+  record(conversationKey, sample) {
+    let tracker = this.#e.get(conversationKey);
+    if (tracker === undefined) {
+      tracker = new PromptCacheTracker();
+      this.#e.set(conversationKey, tracker);
+    }
+    return tracker.record(sample);
+  }
+  expectDrop(conversationKey, dropExpectedAt) {
+    this.#e.get(conversationKey)?.expectDrop(dropExpectedAt);
+  }
+  attribute(conversationKey, attribution) {
+    this.#e.get(conversationKey)?.attribute(attribution);
+  }
+  touch(conversationKey, touchedAt) {
+    this.#e.get(conversationKey)?.touch(touchedAt);
+  }
+  summary(conversationKey, now) {
+    return (this.#e.get(conversationKey) ?? new PromptCacheTracker()).summary(now);
+  }
+  estimateRecacheTokens(conversationKey) {
+    let tracker = this.#e.get(conversationKey);
+    let last = tracker?.entries.at(-1);
+    if (!last) return 0;
+    if (tracker?.dropExpectedAt != null) return null;
+    return last.inputTokens + last.cacheReadTokens + last.cacheCreationTokens;
+  }
+  clear(conversationKey) {
+    if (conversationKey === undefined) this.#e.clear();
+    else this.#e.delete(conversationKey);
+  }
+}
+//@ chunk-1t61stbc.js:7936-7962 placement
+var promptCacheTrackers; // deferred: uses SessionRootSlot (../../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-1t61stbc.js:7936", () => {
+  promptCacheTrackers = new SessionRootSlot(() => new PromptCacheTrackerRegistry());
+});
+//@ chunk-1t61stbc.js:7962-7994 placement
+function promptCacheTrackersForSession() {
+  return promptCacheTrackers.of(getRootSession());
+}
+//@ chunk-1t61stbc.js:7994-8066 placement
+function recordPromptCacheUsage(mainKey, usage) {
+  try {
+    return promptCacheTrackersForSession().record(mainKey, usage);
+  } catch (error) {
+    logError(error);
+    return null;
+  }
+}
+//@ chunk-1t61stbc.js:8066-8122 placement
+function attributePromptCacheMiss(mainKey, detail) {
+  try {
+    promptCacheTrackersForSession().attribute(mainKey, detail);
+  } catch (error) {
+    logError(error);
+  }
+}
+//@ chunk-1t61stbc.js:8122-8174 placement
+function touchPromptCache(mainKey, at) {
+  try {
+    promptCacheTrackersForSession().touch(mainKey, at);
+  } catch (error) {
+    logError(error);
+  }
+}
+//@ chunk-1t61stbc.js:8174-8245 placement
+function expectPromptCacheDrop(mainKey = MAIN, now = Date.now()) {
+  try {
+    promptCacheTrackersForSession().expectDrop(mainKey, now);
+  } catch (error) {
+    logError(error);
+  }
+}
+//@ chunk-1t61stbc.js:8245-8301 placement
+function getPromptCacheSummary(mainKey = MAIN, now = Date.now()) {
+  return promptCacheTrackersForSession().summary(mainKey, now);
+}
+//@ chunk-1t61stbc.js:8301-8356 placement
+function estimateRecacheTokens(mainKey = MAIN) {
+  return promptCacheTrackersForSession().estimateRecacheTokens(mainKey);
+}
+//@ chunk-1t61stbc.js:8356-8437 placement
+function clearPromptCacheOnSessionSwitch() {
+  return onSessionSwitch((sessionId, kind) => {
+    if (kind === "cd" || kind === "hydrate") return;
+    promptCacheTrackersForSession().clear();
+  });
+}
 //@ chunk-g54kbxqw.js:54510-54678 sole-consumer
-function messageFingerprint(e) {
+function messageFingerprint(message) {
   return {
-    role: messageRoleBucket(e.message.role),
-    blocks: messageContentBlocks(e).map(sanitizePath_3),
+    role: messageRoleBucket(message.message.role),
+    blocks: messageContentBlocks(message).map(sanitizePath_3),
     systemAttachments:
-      e.type === "api_system" && e.foldedAttachmentTypes ? e.foldedAttachmentTypes.map(shortHash) : [],
+      message.type === "api_system" && message.foldedAttachmentTypes
+        ? message.foldedAttachmentTypes.map(shortHash)
+        : [],
   };
 }
 //@ chunk-g54kbxqw.js:54678-54758 placement
 /**
  * 提示缓存失效检测的输出上限：摘要块数 16、散列块 10000、系统附件字符 4 倍块上限，空摘要结构。
  */
-var MAX_SYSTEM_ATTACHMENT_CHARS = 4 * PREFIX_HASH_CHUNK;
-var EMPTY_BLOCK_SUMMARY = {
-  blocks: lit(""),
-  systemAttachments: lit(""),
-  blockCount: 0,
-  truncated: false,
-};
+var MAX_SYSTEM_ATTACHMENT_CHARS; // deferred: uses PREFIX_BREAK_EVENT (./promptCacheBreakParts.js) of its import cycle while loading; runs once the cycle is complete
+var EMPTY_BLOCK_SUMMARY;
+deferInit("chunk-g54kbxqw.js:54678", () => {
+  MAX_SYSTEM_ATTACHMENT_CHARS = 4 * PREFIX_HASH_CHUNK;
+  EMPTY_BLOCK_SUMMARY = {
+    blocks: lit(""),
+    systemAttachments: lit(""),
+    blockCount: 0,
+    truncated: false,
+  };
+});
 //@ chunk-g54kbxqw.js:54758-55197 placement
-function scanChangedMessages(e, firstChangedMessageIndex, s, r) {
-  let h = [];
-  let y = [];
-  let k = 0;
-  let C = false;
-  e: for (let max = Math.max(0, firstChangedMessageIndex); max < s; max++) {
-    let S = e(max);
-    if (S === undefined) {
-      C = true;
+function scanChangedMessages(describeMessage, firstChangedMessageIndex, messageCount, maxEntries) {
+  let blockParts = [];
+  let attachmentParts = [];
+  let attachmentChars = 0;
+  let truncated = false;
+  e: for (let max = Math.max(0, firstChangedMessageIndex); max < messageCount; max++) {
+    let messageInfo = describeMessage(max);
+    if (messageInfo === undefined) {
+      truncated = true;
       break;
     }
-    k += S.systemAttachments.length;
-    if (S.systemAttachments.length > 0 && h.length < r && k <= MAX_SYSTEM_ATTACHMENT_CHARS)
-      y.push(concatSafe(fromNumber(max), lit("="), joinSafe(S.systemAttachments, "+")));
-    let w = fromEnum(S.role);
-    for (let block of S.blocks) {
-      if (h.length >= r) {
-        C = true;
+    attachmentChars += messageInfo.systemAttachments.length;
+    if (
+      messageInfo.systemAttachments.length > 0 &&
+      blockParts.length < maxEntries &&
+      attachmentChars <= MAX_SYSTEM_ATTACHMENT_CHARS
+    )
+      attachmentParts.push(
+        concatSafe(fromNumber(max), lit("="), joinSafe(messageInfo.systemAttachments, "+")),
+      );
+    let roleLabel = fromEnum(messageInfo.role);
+    for (let block of messageInfo.blocks) {
+      if (blockParts.length >= maxEntries) {
+        truncated = true;
         break e;
       }
-      h.push(joinSafe([fromNumber(max), w, fromEnum(block.type), block.hash], ":"));
+      blockParts.push(joinSafe([fromNumber(max), roleLabel, fromEnum(block.type), block.hash], ":"));
     }
   }
   return {
-    blocks: joinSafe(h),
-    systemAttachments: joinSafe(y),
-    blockCount: h.length,
-    truncated: C,
+    blocks: joinSafe(blockParts),
+    systemAttachments: joinSafe(attachmentParts),
+    blockCount: blockParts.length,
+    truncated,
   };
 }
 //@ chunk-g54kbxqw.js:55197-55389 placement
-function blockSummary(e, n) {
-  if (e === undefined)
+function blockSummary(block, limit) {
+  if (block === undefined)
     return {
       blocks: lit(""),
       blockCount: 0,
     };
-  let sliced = e.blocks.slice(0, n);
+  let sliced = block.blocks.slice(0, limit);
   return {
     blocks: joinSafe(
-      sliced.map((r) => joinSafe([fromEnum(r.type), fromNumber(r.length), fromEnum(r.prefixClass)], ":")),
+      sliced.map((block) =>
+        joinSafe([fromEnum(block.type), fromNumber(block.length), fromEnum(block.prefixClass)], ":"),
+      ),
     ),
     blockCount: sliced.length,
   };
 }
 //@ chunk-g54kbxqw.js:55389-55540 placement
-function isPrefixOf(e, n) {
+function isPrefixOf(prev, next) {
   return (
-    e.role === n.role &&
-    e.blocks.length <= n.blocks.length &&
-    e.blocks.every((block, r) => block.hash === n.blocks[r].hash && block.type === n.blocks[r].type)
+    prev.role === next.role &&
+    prev.blocks.length <= next.blocks.length &&
+    prev.blocks.every(
+      (block, part) => block.hash === next.blocks[part].hash && block.type === next.blocks[part].type,
+    )
   );
 }
 //@ chunk-g54kbxqw.js:55540-56031 placement
-function classifyFirstChange(firstChangedMessageIndex, n, prevMessageCount, newMessages, h) {
+function classifyFirstChange(firstChangedMessageIndex, hashAt, prevMessageCount, newMessages, knownHash) {
   if (firstChangedMessageIndex < 0) return "none";
-  if (n === undefined || newMessages === undefined) return "unknown";
-  let y = n(firstChangedMessageIndex);
-  if (y === undefined) return "unknown";
-  let k = newMessages[firstChangedMessageIndex];
-  if (k === undefined) return "rewrite";
-  let C = h ?? messageFingerprint(k);
-  if (C.blocks.length === y.blocks.length || !isPrefixOf(y, C)) return "rewrite";
+  if (hashAt === undefined || newMessages === undefined) return "unknown";
+  let hash = hashAt(firstChangedMessageIndex);
+  if (hash === undefined) return "unknown";
+  let message = newMessages[firstChangedMessageIndex];
+  if (message === undefined) return "rewrite";
+  let fingerprint = knownHash ?? messageFingerprint(message);
+  if (fingerprint.blocks.length === hash.blocks.length || !isPrefixOf(hash, fingerprint)) return "rewrite";
   for (let j = firstChangedMessageIndex + 1; j < prevMessageCount; j++) {
-    let S = n(j);
-    if (S === undefined) return "unknown";
-    let w = newMessages[j];
-    if (S.role !== "system" || w === undefined || w.message.role !== "system") return "rewrite";
-    let P = messageFingerprint(w);
-    if (P.blocks.length !== S.blocks.length || !isPrefixOf(S, P)) return "rewrite";
+    let hash2 = hashAt(j);
+    if (hash2 === undefined) return "unknown";
+    let message2 = newMessages[j];
+    if (hash2.role !== "system" || message2 === undefined || message2.message.role !== "system")
+      return "rewrite";
+    let fingerprint2 = messageFingerprint(message2);
+    if (fingerprint2.blocks.length !== hash2.blocks.length || !isPrefixOf(hash2, fingerprint2))
+      return "rewrite";
   }
   return "tail_append";
 }
 //@ chunk-g54kbxqw.js:56031-56168 placement
-function countSystemRows(e) {
-  if (e === undefined) return -1;
-  return "messages" in e
-    ? count(e.messages, (n) => n.message.role === "system")
-    : count(e.rows, (n) => n.role === "system");
+function countSystemRows(state) {
+  if (state === undefined) return -1;
+  return "messages" in state
+    ? count(state.messages, (message) => message.message.role === "system")
+    : count(state.rows, (row) => row.role === "system");
 }
 //@ chunk-g54kbxqw.js:56168-56206 placement
-function hashJoined(e) {
-  return shortHash(e.join(","));
+function hashJoined(parts) {
+  return shortHash(parts.join(","));
 }
 //@ chunk-g54kbxqw.js:56206-58038 placement
 /**
  * 根据前后两次请求的差异（系统、工具、首个变化的消息等）推断提示缓存失效的原因。
  */
-function explainCacheBreak(e) {
-  let firstChangedMessageIndex = e.firstChangedMessageIndex;
-  let s = EMPTY_BLOCK_SUMMARY;
-  let r;
-  let h;
+function explainCacheBreak(context) {
+  let firstChangedMessageIndex = context.firstChangedMessageIndex;
+  let previousSummary = EMPTY_BLOCK_SUMMARY;
+  let previousFirstMessage;
+  let previousMessageAt;
   if (firstChangedMessageIndex >= 0)
-    switch (e.prev.source) {
+    switch (context.prev.source) {
       case "memory": {
-        let messages = e.prev.messages;
-        let P =
+        let messages = context.prev.messages;
+        let firstChangedFingerprint =
           firstChangedMessageIndex < messages.length
             ? messageFingerprint(messages[firstChangedMessageIndex])
             : undefined;
-        r = P;
-        h = (L) =>
-          L === firstChangedMessageIndex
-            ? P
-            : L < messages.length
-              ? messageFingerprint(messages[L])
+        previousFirstMessage = firstChangedFingerprint;
+        previousMessageAt = (messageIndex) =>
+          messageIndex === firstChangedMessageIndex
+            ? firstChangedFingerprint
+            : messageIndex < messages.length
+              ? messageFingerprint(messages[messageIndex])
               : undefined;
-        s = scanChangedMessages(h, firstChangedMessageIndex, messages.length, PREFIX_HASH_CHUNK);
+        previousSummary = scanChangedMessages(
+          previousMessageAt,
+          firstChangedMessageIndex,
+          messages.length,
+          PREFIX_HASH_CHUNK,
+        );
         break;
       }
       case "disk": {
-        let rows = e.prev.rows;
-        s = scanChangedMessages(
-          (P) => rows[P],
+        let rows = context.prev.rows;
+        previousSummary = scanChangedMessages(
+          (messageIndex) => rows[messageIndex],
           firstChangedMessageIndex,
-          Math.max(rows.length, e.prevMessageCount),
+          Math.max(rows.length, context.prevMessageCount),
           PREFIX_HASH_CHUNK,
         );
-        r = rows[firstChangedMessageIndex];
-        h = (P) => rows[P];
+        previousFirstMessage = rows[firstChangedMessageIndex];
+        previousMessageAt = (messageIndex) => rows[messageIndex];
         break;
       }
       case "none":
         break;
     }
-  let newMessages = e.newMessages;
-  let k =
+  let newMessages = context.newMessages;
+  let newFirstMessage =
     firstChangedMessageIndex >= 0 &&
     newMessages !== undefined &&
     firstChangedMessageIndex < newMessages.length
       ? messageFingerprint(newMessages[firstChangedMessageIndex])
       : undefined;
-  let C =
+  let newSummary =
     firstChangedMessageIndex >= 0 && newMessages !== undefined
       ? scanChangedMessages(
-          (w) => (w === firstChangedMessageIndex ? k : messageFingerprint(newMessages[w])),
+          (messageIndex) =>
+            messageIndex === firstChangedMessageIndex
+              ? newFirstMessage
+              : messageFingerprint(newMessages[messageIndex]),
           firstChangedMessageIndex,
           newMessages.length,
           PREFIX_HASH_CHUNK,
         )
       : EMPTY_BLOCK_SUMMARY;
-  let R = blockSummary(r, PREFIX_HASH_CHUNK);
-  let S = blockSummary(k, PREFIX_HASH_CHUNK);
+  let previousFirstBlocks = blockSummary(previousFirstMessage, PREFIX_HASH_CHUNK);
+  let newFirstBlocks = blockSummary(newFirstMessage, PREFIX_HASH_CHUNK);
   logEvent(PREFIX_BREAK_EVENT, {
-    requestId: sanitizeMarkName(e.requestId) ?? lit(""),
-    model: telemetrySafeModelName(e.model),
-    cacheBroke: e.cacheBroke,
-    changeKinds: e.changeKinds,
+    requestId: sanitizeMarkName(context.requestId) ?? lit(""),
+    model: telemetrySafeModelName(context.model),
+    cacheBroke: context.cacheBroke,
+    changeKinds: context.changeKinds,
     firstChangedMessageIndex,
-    prevMessageCount: e.prevMessageCount,
-    newMessageCount: e.newMessageCount,
-    callNumber: e.callNumber,
-    baselineFromDisk: e.baselineFromDisk,
-    is1hCacheTTL: e.is1hCacheTTL,
-    lastAssistantMsgOver5minAgo: e.lastAssistantMsgOver5minAgo,
-    lastAssistantMsgOver1hAgo: e.lastAssistantMsgOver1hAgo,
-    querySource: e.querySource,
-    prevCacheReadTokens: e.prevCacheReadTokens,
-    cacheReadTokens: e.cacheReadTokens,
-    cacheCreationTokens: e.cacheCreationTokens,
-    prevBlocks: s.blocks,
-    prevBlockCount: s.blockCount,
-    prevTruncated: s.truncated,
-    prevSystemAttachments: s.systemAttachments,
-    newBlocks: C.blocks,
-    newBlockCount: C.blockCount,
-    newTruncated: C.truncated,
-    newSystemAttachments: C.systemAttachments,
-    sampleRate: e.sampleRate,
-    prevSource: fromEnum(e.prevSource),
-    baselineKind: fromEnum(e.baselineKind),
-    prevFirstMessageBlocks: R.blocks,
-    prevFirstMessageBlockCount: R.blockCount,
-    newFirstMessageBlocks: S.blocks,
-    newFirstMessageBlockCount: S.blockCount,
-    prevModel: telemetrySafeModelName(e.prevModel),
-    prevBetasHash: hashJoined(e.prevBetas),
-    newBetasHash: hashJoined(e.newBetas),
+    prevMessageCount: context.prevMessageCount,
+    newMessageCount: context.newMessageCount,
+    callNumber: context.callNumber,
+    baselineFromDisk: context.baselineFromDisk,
+    is1hCacheTTL: context.is1hCacheTTL,
+    lastAssistantMsgOver5minAgo: context.lastAssistantMsgOver5minAgo,
+    lastAssistantMsgOver1hAgo: context.lastAssistantMsgOver1hAgo,
+    querySource: context.querySource,
+    prevCacheReadTokens: context.prevCacheReadTokens,
+    cacheReadTokens: context.cacheReadTokens,
+    cacheCreationTokens: context.cacheCreationTokens,
+    prevBlocks: previousSummary.blocks,
+    prevBlockCount: previousSummary.blockCount,
+    prevTruncated: previousSummary.truncated,
+    prevSystemAttachments: previousSummary.systemAttachments,
+    newBlocks: newSummary.blocks,
+    newBlockCount: newSummary.blockCount,
+    newTruncated: newSummary.truncated,
+    newSystemAttachments: newSummary.systemAttachments,
+    sampleRate: context.sampleRate,
+    prevSource: fromEnum(context.prevSource),
+    baselineKind: fromEnum(context.baselineKind),
+    prevFirstMessageBlocks: previousFirstBlocks.blocks,
+    prevFirstMessageBlockCount: previousFirstBlocks.blockCount,
+    newFirstMessageBlocks: newFirstBlocks.blocks,
+    newFirstMessageBlockCount: newFirstBlocks.blockCount,
+    prevModel: telemetrySafeModelName(context.prevModel),
+    prevBetasHash: hashJoined(context.prevBetas),
+    newBetasHash: hashJoined(context.newBetas),
     prevSystemTurns: countSystemRows(
-      e.prev.source === "memory"
+      context.prev.source === "memory"
         ? {
-            messages: e.prev.messages,
+            messages: context.prev.messages,
           }
-        : e.prev.source === "disk"
+        : context.prev.source === "disk"
           ? {
-              rows: e.prev.rows,
+              rows: context.prev.rows,
             }
           : undefined,
     ),
     newSystemTurns: countSystemRows(
-      e.newMessages && {
-        messages: e.newMessages,
+      context.newMessages && {
+        messages: context.newMessages,
       },
     ),
     changeScope: fromEnum(
-      classifyFirstChange(firstChangedMessageIndex, h, e.prevMessageCount, e.newMessages, k),
+      classifyFirstChange(
+        firstChangedMessageIndex,
+        previousMessageAt,
+        context.prevMessageCount,
+        context.newMessages,
+        newFirstMessage,
+      ),
     ),
   });
 }
 //@ chunk-g54kbxqw.js:58038-58339 placement
-function messageOutline(e) {
-  let n = foldedAttachmentText(e, 0);
+function messageOutline(message) {
+  let text = foldedAttachmentText(message, 0);
   return {
-    role: messageRoleBucket(e.message.role),
-    blocks: messageContentBlocks(e).map((s) => {
-      let r = contentBlockTypeBucket(s);
-      let h = stripCacheControl_2(s);
-      let text = "text" in s ? s.text : undefined;
-      let k = Bun.hash(h);
+    role: messageRoleBucket(message.message.role),
+    blocks: messageContentBlocks(message).map((block) => {
+      let bucket = contentBlockTypeBucket(block);
+      let stripped = stripCacheControl_2(block);
+      let text = "text" in block ? block.text : undefined;
+      let hash = Bun.hash(stripped);
       return {
-        type: r,
-        length: h.length,
-        prefixClass: r === "text" && typeof text === "string" ? classifyUserText(text) : r,
-        hash: typeof k === "bigint" ? Number(k & 0xffffffffn) : k,
+        type: bucket,
+        length: stripped.length,
+        prefixClass: bucket === "text" && typeof text === "string" ? classifyUserText(text) : bucket,
+        hash: typeof hash === "bigint" ? Number(hash & 0xffffffffn) : hash,
       };
     }),
-    ...(n && {
-      parts: n.parts,
+    ...(text && {
+      parts: text.parts,
     }),
   };
 }
@@ -340,55 +799,63 @@ function messageOutline(e) {
 var MAX_CHANGED_MESSAGE_BLOCKS = 16;
 var MAX_HASHED_BLOCKS = 1e4;
 //@ chunk-g54kbxqw.js:58356-58577 placement
-function compactBaseline(e) {
-  let n = [];
-  let s = 0;
-  for (let r of e) {
-    s += r.blocks.length;
-    if (s > MAX_HASHED_BLOCKS) break;
-    n.push({
-      r: r.role,
-      b: r.blocks.map((block) => [block.type, block.length, block.prefixClass, block.hash]),
-      ...(r.parts && {
-        p: r.parts.map((part) => [part.type, part.len, part.hash]),
+function compactBaseline(parts) {
+  let rows = [];
+  let total = 0;
+  for (let part of parts) {
+    total += part.blocks.length;
+    if (total > MAX_HASHED_BLOCKS) break;
+    rows.push({
+      r: part.role,
+      b: part.blocks.map((block) => [block.type, block.length, block.prefixClass, block.hash]),
+      ...(part.parts && {
+        p: part.parts.map((part) => [part.type, part.len, part.hash]),
       }),
     });
   }
-  return n;
+  return rows;
 }
 //@ chunk-g54kbxqw.js:58577-58774 placement
-var BASELINE_SCHEMA = DoctorLazy(() =>
-  array(
-    u({
-      r: _enum(MESSAGE_ROLE_BUCKETS),
-      b: array(
-        tuple([_enum(CONTENT_BLOCK_TYPE_BUCKETS), maxSafeIntSchema(), _enum(TEXT_KIND_BUCKETS), E()]),
-      ).max(MAX_HASHED_BLOCKS),
-      p: array(tuple([string().regex(/^[0-9a-f]{12}$/), maxSafeIntSchema(), E()]))
-        .max(MAX_DIFF_ENTRIES)
-        .optional(),
-    }),
-  )
-    .max(20000)
-    .refine((e) => e.reduce((acc, s) => acc + s.b.length, 0) <= MAX_HASHED_BLOCKS),
-);
+var BASELINE_SCHEMA; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-g54kbxqw.js:58577", () => {
+  BASELINE_SCHEMA = DoctorLazy(() =>
+    array(
+      objectSchema({
+        r: _enum(MESSAGE_ROLE_BUCKETS),
+        b: array(
+          tuple([
+            _enum(CONTENT_BLOCK_TYPE_BUCKETS),
+            maxSafeIntSchema(),
+            _enum(TEXT_KIND_BUCKETS),
+            numberSchema(),
+          ]),
+        ).max(MAX_HASHED_BLOCKS),
+        p: array(tuple([stringSchema().regex(/^[0-9a-f]{12}$/), maxSafeIntSchema(), numberSchema()]))
+          .max(MAX_DIFF_ENTRIES)
+          .optional(),
+      }),
+    )
+      .max(20000)
+      .refine((parts) => parts.reduce((acc, part) => acc + part.b.length, 0) <= MAX_HASHED_BLOCKS),
+  );
+});
 //@ chunk-g54kbxqw.js:58774-59001 placement
 function restoreBaseline(outlines) {
-  let n = BASELINE_SCHEMA().safeParse(outlines);
-  if (!n.success) return;
-  return n.data.map((s) => ({
-    role: s.r,
-    blocks: s.b.map(([r, h, y, k]) => ({
-      type: r,
-      length: h,
-      prefixClass: y,
-      hash: k,
+  let parsed = BASELINE_SCHEMA().safeParse(outlines);
+  if (!parsed.success) return;
+  return parsed.data.map((outline) => ({
+    role: outline.r,
+    blocks: outline.b.map(([type, length, prefixClass, hash]) => ({
+      type,
+      length,
+      prefixClass,
+      hash,
     })),
-    ...(s.p && {
-      parts: s.p.map(([r, h, y]) => ({
-        type: r,
-        len: h,
-        hash: y,
+    ...(outline.p && {
+      parts: outline.p.map(([type, len, hash]) => ({
+        type,
+        len,
+        hash,
       })),
     }),
   }));
@@ -396,70 +863,75 @@ function restoreBaseline(outlines) {
 //@ chunk-g54kbxqw.js:59001-59109 placement
 function blockOutlineKey(parts) {
   return joinSafe(
-    parts.flatMap((n) => {
-      let s = normalizeShortHash(n.type);
-      return s === undefined ? [] : [concatSafe(s, lit(":"), fromNumber(n.len))];
+    parts.flatMap((part) => {
+      let type = normalizeShortHash(part.type);
+      return type === undefined ? [] : [concatSafe(type, lit(":"), fromNumber(part.len))];
     }),
   );
 }
 //@ chunk-g54kbxqw.js:59109-59241 placement
-function positionedOutlineKey(e) {
+function positionedOutlineKey(parts) {
   return joinSafe(
-    e.flatMap((n) => {
-      let s = normalizeShortHash(n.type);
-      return s === undefined
+    parts.flatMap((part) => {
+      let type = normalizeShortHash(part.type);
+      return type === undefined
         ? []
-        : [concatSafe(fromNumber(n.position), lit(":"), s, lit(":"), fromNumber(n.delta))];
+        : [concatSafe(fromNumber(part.position), lit(":"), type, lit(":"), fromNumber(part.delta))];
     }),
   );
 }
 //@ chunk-g54kbxqw.js:59241-59959 placement
-function changedMessageFields(e, n) {
-  let s = {
-    ...(e && {
-      changedMessagePrevRole: fromEnum(e.role),
-      changedMessagePrevBlocks: blockSummary(e, MAX_CHANGED_MESSAGE_BLOCKS).blocks,
-      changedMessagePrevBlockCount: e.blocks.length,
-      ...(e.parts && {
-        changedMessagePrevParts: blockOutlineKey(e.parts),
+function changedMessageFields(prev, next) {
+  let changed = {
+    ...(prev && {
+      changedMessagePrevRole: fromEnum(prev.role),
+      changedMessagePrevBlocks: blockSummary(prev, MAX_CHANGED_MESSAGE_BLOCKS).blocks,
+      changedMessagePrevBlockCount: prev.blocks.length,
+      ...(prev.parts && {
+        changedMessagePrevParts: blockOutlineKey(prev.parts),
       }),
     }),
-    ...(n && {
-      changedMessageRole: fromEnum(n.role),
-      changedMessageBlocks: blockSummary(n, MAX_CHANGED_MESSAGE_BLOCKS).blocks,
-      changedMessageBlockCount: n.blocks.length,
-      ...(n.parts && {
-        changedMessageParts: blockOutlineKey(n.parts),
+    ...(next && {
+      changedMessageRole: fromEnum(next.role),
+      changedMessageBlocks: blockSummary(next, MAX_CHANGED_MESSAGE_BLOCKS).blocks,
+      changedMessageBlockCount: next.blocks.length,
+      ...(next.parts && {
+        changedMessageParts: blockOutlineKey(next.parts),
       }),
     }),
   };
-  if (!e || !n) return s;
-  let min = Math.min(e.blocks.length, n.blocks.length);
-  let h = 0;
-  while (h < min && e.blocks[h].type === n.blocks[h].type && e.blocks[h].hash === n.blocks[h].hash) h++;
+  if (!prev || !next) return changed;
+  let min = Math.min(prev.blocks.length, next.blocks.length);
+  let count = 0;
+  while (
+    count < min &&
+    prev.blocks[count].type === next.blocks[count].type &&
+    prev.blocks[count].hash === next.blocks[count].hash
+  )
+    count++;
   return {
-    ...s,
-    changedMessageFirstBlock: h === e.blocks.length && h === n.blocks.length ? -1 : h,
-    changedMessageLengthDelta: blocksTotalLength(n) - blocksTotalLength(e),
-    ...(e.parts &&
-      n.parts && {
-        changedMessageChangedParts: positionedOutlineKey(changedPartIndexes(e.parts, n.parts)),
+    ...changed,
+    changedMessageFirstBlock: count === prev.blocks.length && count === next.blocks.length ? -1 : count,
+    changedMessageLengthDelta: blocksTotalLength(next) - blocksTotalLength(prev),
+    ...(prev.parts &&
+      next.parts && {
+        changedMessageChangedParts: positionedOutlineKey(changedPartIndexes(prev.parts, next.parts)),
       }),
   };
 }
 //@ chunk-g54kbxqw.js:59959-60026 placement
 function maxSafeIntSchema() {
-  return E().int().min(0).max(Number.MAX_SAFE_INTEGER);
+  return numberSchema().int().min(0).max(Number.MAX_SAFE_INTEGER);
 }
 //@ chunk-g54kbxqw.js:60026-60085 placement
-function blocksTotalLength(e) {
-  return e.blocks.reduce((acc, block) => acc + block.length, 0);
+function blocksTotalLength(parts) {
+  return parts.blocks.reduce((acc, block) => acc + block.length, 0);
 }
 //@ chunk-g54kbxqw.js:60085-60108 fingerprint = getCacheBreakDiffPath (0.618)
 /**
  * 缓存断裂状态文件名前缀 "cache-break-"（cache-break-state-<会话>.json）。
  */
-var getCacheBreakDiffPath = "cache-break-";
+var cacheBreakStatePrefix = "cache-break-";
 //@ chunk-g54kbxqw.js:60183-61176 placement
 var CACHE_BREAK_HINTS =
   typeof {
@@ -495,7 +967,7 @@ function isRemoteEnv() {
   return env.CLAUDE_CODE_REMOTE === true;
 }
 //@ chunk-g54kbxqw.js:61292-61303 placement
-var En = 1e4;
+var CACHE_TTL_MS = 1e4;
 //@ chunk-g54kbxqw.js:61303-61346 placement
 function promptCacheBreakState() {
   return streamFallbackWarning().promptCacheBreak;
@@ -514,8 +986,8 @@ function isCacheBreakPersistenceEnabled() {
   return isCacheBreakPersisted() || (isPrefixBreakSampled() && !isDiskless());
 }
 //@ chunk-g54kbxqw.js:61480-61534 placement
-function needsResumeBaseline(e) {
-  return !isCacheBreakPersisted() && e.resumeBaseline === undefined;
+function needsResumeBaseline(state) {
+  return !isCacheBreakPersisted() && state.resumeBaseline === undefined;
 }
 //@ chunk-g54kbxqw.js:61534-61573 placement
 function canPersistCacheBreakState() {
@@ -523,9 +995,9 @@ function canPersistCacheBreakState() {
 }
 //@ chunk-g54kbxqw.js:61573-61665 placement
 function cacheBreakStatePath() {
-  let e = normalizeUuidOrNull(getSessionId());
-  if (e === null) return null;
-  return join_2(getClaudeTempDirRealpath(), `${getCacheBreakDiffPath}state-${e}.json`);
+  let sessionId = normalizeUuidOrNull(getSessionId());
+  if (sessionId === null) return null;
+  return join_2(getClaudeTempDirRealpath(), `${cacheBreakStatePrefix}state-${sessionId}.json`);
 }
 //@ chunk-g54kbxqw.js:61665-61804 placement
 var TOOL_CHOICE_VALUES = {
@@ -547,181 +1019,196 @@ var THINKING_DISPLAY_VALUES = {
 };
 var MAX_BASELINE_BYTES = 4000000;
 //@ chunk-g54kbxqw.js:61804-61847 placement
-function isTrackedQuerySource(e) {
-  return Object.hasOwn(FOREGROUND_529_RETRY_SOURCES, e);
+function isTrackedQuerySource(querySource) {
+  return Object.hasOwn(FOREGROUND_529_RETRY_SOURCES, querySource);
 }
 //@ chunk-g54kbxqw.js:61847-63589 placement
 /**
  * 提示缓存失效检测的持久化状态结构：系统/工具/cache_control 哈希、工具名、消息哈希等。
  */
-var cacheBreakStateSchema = DoctorLazy(() =>
-  create_20(
-    create_2().max(200),
-    create({
-      systemHash: create_3(),
-      toolsHash: create_3(),
-      cacheControlHash: create_3(),
-      toolNames: create_15(create_2().max(200)).max(2000),
-      perToolHashes: create_20(create_2().max(200), create_3()).refine((e) => Object.keys(e).length <= 2000),
-      perBlockHashes: create_15(create_3()).max(5000),
-      perBlockLengths: create_15(create_3()).max(5000),
-      systemCharCount: create_3(),
-      model: create_2().max(200),
-      fastMode: create_6(),
-      globalCacheStrategy: custom((e) => typeof e === "string" && Object.hasOwn(TOOL_CHOICE_VALUES, e)),
-      betas: create_15(create_2().max(200)).max(100),
-      autoModeActive: create_6(),
-      isUsingOverage: create_6(),
-      anyDeferLoading: create_6().default(false),
-      is1hCacheTTL: create_6().default(false),
-      queryDepth: create_3().optional(),
-      cacheDiagnosis: create_6().default(false),
-      effortValue: create_2().max(200),
-      thinkingMode: custom((e) => typeof e === "string" && Object.hasOwn(SPEED_VALUES, e)).default(""),
-      thinkingDisplay: custom(
-        (e) => typeof e === "string" && Object.hasOwn(THINKING_DISPLAY_VALUES, e),
-      ).default(""),
-      extraBodyHash: create_3(),
-      callCount: create_3(),
-      prevCacheReadTokens: create_3().nullable(),
-      cacheDeletionsPending: create_6(),
-      messageHashes: create_15(create_3()).max(20000),
-      buildVersion: create_2().max(128).default(""),
-      msg0Shape: create({
-        blockCount: create_3(),
-        blocks: create_15(
-          create({
-            kind: create_26(CONTEXT_BLOCK_KINDS),
-            len: create_3(),
-            hash: create_3(),
-          }),
-        ).max(MAX_REPORTED_MESSAGE_PARTS),
-        sections: create_15(
-          create({
-            name: create_26(USER_CONTEXT_PART_NAMES),
-            len: create_3(),
-            hash: create_3(),
-          }),
-        ).max(MAX_REPORTED_BLOCK_HASHES),
-        workerTools: create({
-          toolCount: create_3(),
-          mcpServerCount: create_3(),
-        }).optional(),
-      }).optional(),
-      sysFoldShape: create({
-        index: create_3().int().min(0),
-        len: create_3().int().min(0),
-        partCount: create_3().int().min(0),
-        parts: create_15(
-          create({
-            type: create_2().regex(/^[0-9a-f]{12}$/),
-            len: create_3().int().min(0),
-            hash: create_3(),
-          }),
-        ).max(MAX_DIFF_ENTRIES),
-      })
-        .optional()
-        .catch(undefined),
-      prefixBreakHash: cacheBreakSnapshotSchema().optional().catch(undefined),
-    }),
-  ),
-);
-var cacheBreakSnapshotSchema = DoctorLazy(() =>
-  create({
-    salt: custom((e) => typeof e === "string" && normalizeUuidOrNull(e) !== null),
-    messages: create_15(
+var cacheBreakStateSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var cacheBreakSnapshotSchema;
+deferInit("chunk-g54kbxqw.js:61847", () => {
+  cacheBreakStateSchema = DoctorLazy(() =>
+    create_20(
+      create_2().max(200),
       create({
-        r: create_26(MESSAGE_ROLE_BUCKETS),
-        b: create_15(
-          create_19([
-            create_26(CONTENT_BLOCK_TYPE_BUCKETS),
-            create_2().regex(/^[0-9a-f]{12}$/),
-            create_3().int().min(0).max(Number.MAX_SAFE_INTEGER),
-            create_26(TEXT_KIND_BUCKETS),
-          ]),
-        ).max(En),
-        a: create_15(create_2().regex(/^[0-9a-f]{12}$/))
-          .max(200)
-          .optional(),
+        systemHash: create_3(),
+        toolsHash: create_3(),
+        cacheControlHash: create_3(),
+        toolNames: create_15(create_2().max(200)).max(2000),
+        perToolHashes: create_20(create_2().max(200), create_3()).refine(
+          (obj) => Object.keys(obj).length <= 2000,
+        ),
+        perBlockHashes: create_15(create_3()).max(5000),
+        perBlockLengths: create_15(create_3()).max(5000),
+        systemCharCount: create_3(),
+        model: create_2().max(200),
+        fastMode: create_6(),
+        globalCacheStrategy: custom(
+          (value) => typeof value === "string" && Object.hasOwn(TOOL_CHOICE_VALUES, value),
+        ),
+        betas: create_15(create_2().max(200)).max(100),
+        autoModeActive: create_6(),
+        isUsingOverage: create_6(),
+        anyDeferLoading: create_6().default(false),
+        is1hCacheTTL: create_6().default(false),
+        queryDepth: create_3().optional(),
+        cacheDiagnosis: create_6().default(false),
+        effortValue: create_2().max(200),
+        thinkingMode: custom(
+          (value) => typeof value === "string" && Object.hasOwn(SPEED_VALUES, value),
+        ).default(""),
+        thinkingDisplay: custom(
+          (value) => typeof value === "string" && Object.hasOwn(THINKING_DISPLAY_VALUES, value),
+        ).default(""),
+        extraBodyHash: create_3(),
+        callCount: create_3(),
+        prevCacheReadTokens: create_3().nullable(),
+        cacheDeletionsPending: create_6(),
+        messageHashes: create_15(create_3()).max(20000),
+        buildVersion: create_2().max(128).default(""),
+        msg0Shape: create({
+          blockCount: create_3(),
+          blocks: create_15(
+            create({
+              kind: create_26(CONTEXT_BLOCK_KINDS),
+              len: create_3(),
+              hash: create_3(),
+            }),
+          ).max(MAX_REPORTED_MESSAGE_PARTS),
+          sections: create_15(
+            create({
+              name: create_26(USER_CONTEXT_PART_NAMES),
+              len: create_3(),
+              hash: create_3(),
+            }),
+          ).max(MAX_REPORTED_BLOCK_HASHES),
+          workerTools: create({
+            toolCount: create_3(),
+            mcpServerCount: create_3(),
+          }).optional(),
+        }).optional(),
+        sysFoldShape: create({
+          index: create_3().int().min(0),
+          len: create_3().int().min(0),
+          partCount: create_3().int().min(0),
+          parts: create_15(
+            create({
+              type: create_2().regex(/^[0-9a-f]{12}$/),
+              len: create_3().int().min(0),
+              hash: create_3(),
+            }),
+          ).max(MAX_DIFF_ENTRIES),
+        })
+          .optional()
+          .catch(undefined),
+        prefixBreakHash: cacheBreakSnapshotSchema().optional().catch(undefined),
       }),
-    )
-      .max(20000)
-      .refine((e) => e.reduce((acc, s) => acc + s.b.length, 0) <= En),
-  }),
-);
+    ),
+  );
+  cacheBreakSnapshotSchema = DoctorLazy(() =>
+    create({
+      salt: custom((value) => typeof value === "string" && normalizeUuidOrNull(value) !== null),
+      messages: create_15(
+        create({
+          r: create_26(MESSAGE_ROLE_BUCKETS),
+          b: create_15(
+            create_19([
+              create_26(CONTENT_BLOCK_TYPE_BUCKETS),
+              create_2().regex(/^[0-9a-f]{12}$/),
+              create_3().int().min(0).max(Number.MAX_SAFE_INTEGER),
+              create_26(TEXT_KIND_BUCKETS),
+            ]),
+          ).max(CACHE_TTL_MS),
+          a: create_15(create_2().regex(/^[0-9a-f]{12}$/))
+            .max(200)
+            .optional(),
+        }),
+      )
+        .max(20000)
+        .refine((blocks) => blocks.reduce((acc, block) => acc + block.b.length, 0) <= CACHE_TTL_MS),
+    }),
+  );
+});
 //@ chunk-g54kbxqw.js:63589-63884 placement
 function outlinesFromState(prefixBreakHash) {
-  let n = [];
+  let outlines = [];
   for (let message of prefixBreakHash.messages) {
-    let r = [];
-    for (let [y, k, C, R] of message.b) {
-      let S = normalizeShortHash(k);
-      if (S === undefined) return;
-      r.push({
-        type: y,
-        hash: S,
-        length: C,
-        prefixClass: R,
+    let blocks = [];
+    for (let [type, rawHash, length, prefixClass] of message.b) {
+      let hash = normalizeShortHash(rawHash);
+      if (hash === undefined) return;
+      blocks.push({
+        type,
+        hash,
+        length,
+        prefixClass,
       });
     }
-    let h = [];
-    for (let y of message.a ?? []) {
-      let k = normalizeShortHash(y);
-      if (k === undefined) return;
-      h.push(k);
+    let systemAttachments = [];
+    for (let rawHash of message.a ?? []) {
+      let hash = normalizeShortHash(rawHash);
+      if (hash === undefined) return;
+      systemAttachments.push(hash);
     }
-    n.push({
+    outlines.push({
       role: message.r,
-      blocks: r,
-      systemAttachments: h,
+      blocks,
+      systemAttachments,
     });
   }
-  return n;
+  return outlines;
 }
 //@ chunk-g54kbxqw.js:63884-64314 placement
-function hashMessages(e, messageHashes, s) {
+function hashMessages(messages, messageHashes, previous) {
   let promptCacheHashSalt = getPromptCacheHashSalt();
-  let h = s !== undefined && s.rows.salt === promptCacheHashSalt ? s : undefined;
-  let y = [];
-  let k = 0;
-  for (let j = 0; j < e.length; j++) {
-    let R = messageHashes[j];
-    let S =
-      h !== undefined && R !== undefined && R !== EPHEMERAL_MESSAGE_MARK && h.messageHashes[j] === R
-        ? h.rows.messages[j]
+  let reusable = previous !== undefined && previous.rows.salt === promptCacheHashSalt ? previous : undefined;
+  let hashes = [];
+  let total = 0;
+  for (let j = 0; j < messages.length; j++) {
+    let previousHash = messageHashes[j];
+    let hash =
+      reusable !== undefined &&
+      previousHash !== undefined &&
+      previousHash !== EPHEMERAL_MESSAGE_MARK &&
+      reusable.messageHashes[j] === previousHash
+        ? reusable.rows.messages[j]
         : undefined;
-    if (S === undefined) {
-      let w = messageFingerprint(e[j]);
-      S = {
-        r: w.role,
-        b: w.blocks.map((block) => [block.type, block.hash, block.length, block.prefixClass]),
-        ...(w.systemAttachments.length > 0 && {
-          a: [...w.systemAttachments],
+    if (hash === undefined) {
+      let fingerprint = messageFingerprint(messages[j]);
+      hash = {
+        r: fingerprint.role,
+        b: fingerprint.blocks.map((block) => [block.type, block.hash, block.length, block.prefixClass]),
+        ...(fingerprint.systemAttachments.length > 0 && {
+          a: [...fingerprint.systemAttachments],
         }),
       };
     }
-    k += S.b.length;
-    if (k > En) break;
-    y.push(S);
+    total += hash.b.length;
+    if (total > CACHE_TTL_MS) break;
+    hashes.push(hash);
   }
   return {
     salt: promptCacheHashSalt,
-    messages: y,
+    messages: hashes,
   };
 }
 //@ chunk-g54kbxqw.js:64314-64530 placement
-function messageHashesFor(messages, messageHashes, s) {
+function messageHashesFor(messages, messageHashes, key) {
   if (messages === undefined || !isCacheBreakOutlineEnabled()) return;
-  let messageHashes_2 = s?.messageHashes;
-  let messageOutlines = s?.messageOutlines;
+  let messageHashes_2 = key?.messageHashes;
+  let messageOutlines = key?.messageOutlines;
   return onceExport(() => {
-    let y = messageOutlines?.();
-    return messages.map((k, C) => {
-      let R = messageHashes[C];
+    let outlines = messageOutlines?.();
+    return messages.map((message, index) => {
+      let previous = messageHashes[index];
       return (
-        (R !== undefined && R !== EPHEMERAL_MESSAGE_MARK && messageHashes_2?.[C] === R
-          ? y?.[C]
-          : undefined) ?? messageOutline(k)
+        (previous !== undefined &&
+        previous !== EPHEMERAL_MESSAGE_MARK &&
+        messageHashes_2?.[index] === previous
+          ? outlines?.[index]
+          : undefined) ?? messageOutline(message)
       );
     });
   });
@@ -731,29 +1218,32 @@ function messageHashesFor(messages, messageHashes, s) {
  * 会话恢复时从磁盘读回上次的提示缓存状态，作为失效检测的基线。
  */
 function hydrateCacheBreakState() {
-  let e = promptCacheBreakState();
-  if (e.hydrationAttempted || !isCacheBreakPersistenceEnabled()) return;
-  e.hydrationAttempted = true;
-  let previousStateBySource = e.previousStateBySource;
+  let state = promptCacheBreakState();
+  if (state.hydrationAttempted || !isCacheBreakPersistenceEnabled()) return;
+  state.hydrationAttempted = true;
+  let previousStateBySource = state.previousStateBySource;
   try {
     verifyTempDirOwnership(getClaudeTempDirRealpath());
-    let s = cacheBreakStatePath();
-    if (s === null) return;
-    let smallFileOrNull = readSmallFileOrNullSync(s, MAX_BASELINE_BYTES);
+    let path = cacheBreakStatePath();
+    if (path === null) return;
+    let smallFileOrNull = readSmallFileOrNullSync(path, MAX_BASELINE_BYTES);
     if (smallFileOrNull === null) return;
-    let h = cacheBreakStateSchema().safeParse(jsonParse(smallFileOrNull));
-    if (!h.success) return;
-    let y = count(Object.keys(h.data), (C) => isTrackedQuerySource(C) && C.startsWith("repl_main_thread"));
-    let k = !isCacheBreakPersisted();
-    for (let [key, value] of Object.entries(h.data)) {
+    let parsed = cacheBreakStateSchema().safeParse(jsonParse(smallFileOrNull));
+    if (!parsed.success) return;
+    let trackedCount = count(
+      Object.keys(parsed.data),
+      (key) => isTrackedQuerySource(key) && key.startsWith("repl_main_thread"),
+    );
+    let canPersist = !isCacheBreakPersisted();
+    for (let [key, value] of Object.entries(parsed.data)) {
       if (previousStateBySource.size >= MAX_TRACKED_SOURCES) break;
       if (!isTrackedQuerySource(key)) continue;
-      let S = key.startsWith("repl_main_thread:") ? "repl_main_thread" : key;
-      if (S === "repl_main_thread" && y > 1) continue;
-      if (previousStateBySource.has(S)) continue;
-      previousStateBySource.set(S, {
+      let baseKey = key.startsWith("repl_main_thread:") ? "repl_main_thread" : key;
+      if (baseKey === "repl_main_thread" && trackedCount > 1) continue;
+      if (previousStateBySource.has(baseKey)) continue;
+      previousStateBySource.set(baseKey, {
         ...value,
-        ...(k && {
+        ...(canPersist && {
           callCount: 0,
           cacheDeletionsPending: false,
         }),
@@ -773,7 +1263,7 @@ function hydrateCacheBreakState() {
 /**
  * 去掉持久化快照里的大字段（哈希前缀、内容、基线等），只留元数据。与团队无关。
  */
-function stripSnapshotPayload(e) {
+function stripSnapshotPayload(payload) {
   let {
     hashedPrefix,
     content,
@@ -787,9 +1277,9 @@ function stripSnapshotPayload(e) {
     baselineHashSource,
     messageOutlines,
     resumeBaseline,
-    ...j
-  } = e;
-  return j;
+    ...rest
+  } = payload;
+  return rest;
 }
 //@ chunk-g54kbxqw.js:65579-66075 placement = destroyWorktree (0.326)
 /**
@@ -798,40 +1288,40 @@ function stripSnapshotPayload(e) {
 function persistPreviousStates() {
   if (!isCacheBreakPersistenceEnabled()) return;
   try {
-    let e = promptCacheBreakState();
-    let n = {};
-    for (let [h, y] of e.previousStateBySource) {
-      if (!isTrackedQuerySource(h)) continue;
-      n[h] = stripSnapshotPayload(y);
+    let state = promptCacheBreakState();
+    let out = {};
+    for (let [key, entry] of state.previousStateBySource) {
+      if (!isTrackedQuerySource(key)) continue;
+      out[key] = stripSnapshotPayload(entry);
     }
-    let s = cacheBreakStatePath();
-    if (s === null) return;
-    let r =
-      Object.keys(n).length === 0
+    let path = cacheBreakStatePath();
+    if (path === null) return;
+    let record =
+      Object.keys(out).length === 0
         ? {
             action: "remove",
           }
         : {
             action: "write",
-            payload: jsonStringify(n),
+            payload: jsonStringify(out),
           };
-    e.latestQueuedPersist = r;
-    e.pendingPersist = e.pendingPersist
+    state.latestQueuedPersist = record;
+    state.pendingPersist = state.pendingPersist
       .then(async () => {
-        if (r.action === "remove") {
+        if (record.action === "remove") {
           verifyTempDirOwnership(getClaudeTempDirRealpath());
-          await rm(s, {
+          await rm(path, {
             force: true,
           });
           return;
         }
-        if (e.latestQueuedPersist !== r) return;
+        if (state.latestQueuedPersist !== record) return;
         await mkdir(getClaudeTempDirRealpath(), {
           recursive: true,
           mode: 448,
         });
         verifyTempDirOwnership(getClaudeTempDirRealpath());
-        await writeFileAtomic(s, r.payload);
+        await writeFileAtomic(path, record.payload);
       })
       .catch(() => {});
   } catch {}
@@ -892,8 +1382,8 @@ function stripCacheControlAll(items) {
 /**
  * 块的 text 字段（字符串时）。
  */
-function getBlockText(e) {
-  let text = e.text;
+function getBlockText(block) {
+  let text = block.text;
   return typeof text === "string" ? text : undefined;
 }
 //@ chunk-g54kbxqw.js:66659-66752 fingerprint = computePerToolHashes (1)
@@ -910,14 +1400,15 @@ function computePerToolHashes(strippedTools, names) {
 /**
  * 两个对象键集相同、值全等且除指定键外都是原始值。
  */
-function isShallowEqualExcept(e, n, s) {
-  if (!isPlainObject(e) || !isPlainObject(n)) return false;
-  let keys = Object.keys(e);
-  if (!arraysEqual(keys, Object.keys(n))) return false;
-  for (let h of keys) {
-    let y = e[h];
-    if (y !== n[h]) return false;
-    if (!(y === null || (typeof y !== "object" && typeof y !== "function")) && h !== s) return false;
+function isShallowEqualExcept(a, b, keys) {
+  if (!isPlainObject(a) || !isPlainObject(b)) return false;
+  let keys_2 = Object.keys(a);
+  if (!arraysEqual(keys_2, Object.keys(b))) return false;
+  for (let key of keys_2) {
+    let value = a[key];
+    if (value !== b[key]) return false;
+    if (!(value === null || (typeof value !== "object" && typeof value !== "function")) && key !== keys)
+      return false;
   }
   return true;
 }
@@ -925,20 +1416,20 @@ function isShallowEqualExcept(e, n, s) {
 /**
  * 计算条目数组哈希；与上次条目浅相等时复用上次哈希。
  */
-function hashEntriesReusing(e, n, s) {
-  let r =
-    n !== undefined &&
-    n.entries.length === e.length &&
-    e.every((h, y) => isShallowEqualExcept(h, n.entries[y], s));
+function hashEntriesReusing(entries, hashes, previous) {
+  let reusable =
+    hashes !== undefined &&
+    hashes.entries.length === entries.length &&
+    entries.every((entry, index) => isShallowEqualExcept(entry, hashes.entries[index], previous));
   return {
-    entries: e.map((h) =>
-      isPlainObject(h)
+    entries: entries.map((entry) =>
+      isPlainObject(entry)
         ? {
-            ...h,
+            ...entry,
           }
-        : h,
+        : entry,
     ),
-    hash: r ? n.hash : computeHash(e),
+    hash: reusable ? hashes.hash : computeHash(entries),
   };
 }
 //@ chunk-g54kbxqw.js:67151-67218 file-local
@@ -954,24 +1445,28 @@ function getSystemCharCount(system) {
 /**
  * 比较前后两次请求的标量：system/工具/模型/fast/cache_control/全局缓存策略/beta/auto mode/超额/诊断/effort/thinking/额外 body/defer_loading 是否变化。
  */
-function diffPromptScalars(e, n) {
+function diffPromptScalars(prev, next) {
   return {
-    systemPromptChanged: n.systemHash !== e.systemHash,
-    toolSchemasChanged: n.toolsHash !== e.toolsHash,
-    modelChanged: n.model !== e.model,
-    fastModeChanged: n.fastMode !== e.fastMode,
-    cacheControlChanged: n.cacheControlHash !== e.cacheControlHash,
-    globalCacheStrategyChanged: n.globalCacheStrategy !== e.globalCacheStrategy,
-    betasChanged: n.betas.length !== e.betas.length || n.betas.some((s, r) => s !== e.betas[r]),
-    autoModeChanged: n.autoModeActive !== e.autoModeActive,
-    overageChanged: n.isUsingOverage !== e.isUsingOverage,
-    cacheDiagnosisChanged: n.cacheDiagnosis !== e.cacheDiagnosis,
-    effortChanged: n.effortValue !== e.effortValue,
-    thinkingModeChanged: e.thinkingMode !== "" && n.thinkingMode !== "" && n.thinkingMode !== e.thinkingMode,
+    systemPromptChanged: next.systemHash !== prev.systemHash,
+    toolSchemasChanged: next.toolsHash !== prev.toolsHash,
+    modelChanged: next.model !== prev.model,
+    fastModeChanged: next.fastMode !== prev.fastMode,
+    cacheControlChanged: next.cacheControlHash !== prev.cacheControlHash,
+    globalCacheStrategyChanged: next.globalCacheStrategy !== prev.globalCacheStrategy,
+    betasChanged:
+      next.betas.length !== prev.betas.length || next.betas.some((beta, index) => beta !== prev.betas[index]),
+    autoModeChanged: next.autoModeActive !== prev.autoModeActive,
+    overageChanged: next.isUsingOverage !== prev.isUsingOverage,
+    cacheDiagnosisChanged: next.cacheDiagnosis !== prev.cacheDiagnosis,
+    effortChanged: next.effortValue !== prev.effortValue,
+    thinkingModeChanged:
+      prev.thinkingMode !== "" && next.thinkingMode !== "" && next.thinkingMode !== prev.thinkingMode,
     thinkingDisplayChanged:
-      e.thinkingMode !== "" && n.thinkingMode === e.thinkingMode && n.thinkingDisplay !== e.thinkingDisplay,
-    extraBodyChanged: n.extraBodyHash !== e.extraBodyHash,
-    deferLoadingPresenceChanged: n.anyDeferLoading !== e.anyDeferLoading,
+      prev.thinkingMode !== "" &&
+      next.thinkingMode === prev.thinkingMode &&
+      next.thinkingDisplay !== prev.thinkingDisplay,
+    extraBodyChanged: next.extraBodyHash !== prev.extraBodyHash,
+    deferLoadingPresenceChanged: next.anyDeferLoading !== prev.anyDeferLoading,
   };
 }
 //@ chunk-g54kbxqw.js:68153-68283 file-local
@@ -979,12 +1474,12 @@ function diffPromptScalars(e, n) {
  * 跟踪来源数超过上限时淘汰旧条目（优先淘汰非主线程）。
  */
 function cleanupAgentTracking(agentId) {
-  let n = isPrefixBreakSampled() ? MAX_TRACKED_SOURCES_ANT : MAX_TRACKED_SOURCES;
-  while (agentId.size >= n) {
-    let s = [...agentId.keys()];
-    let r = s.find((h) => !isTrackedQuerySource(h)) ?? s[0];
-    if (r === undefined) break;
-    agentId.delete(r);
+  let maxSources = isPrefixBreakSampled() ? MAX_TRACKED_SOURCES_ANT : MAX_TRACKED_SOURCES;
+  while (agentId.size >= maxSources) {
+    let keys = [...agentId.keys()];
+    let evictable = keys.find((key) => !isTrackedQuerySource(key)) ?? keys[0];
+    if (evictable === undefined) break;
+    agentId.delete(evictable);
   }
 }
 //@ chunk-g54kbxqw.js:68283-73678 fingerprint = recordPromptState (0.62)
@@ -1016,7 +1511,7 @@ function recordPromptState(snapshot) {
       baselineAgentId,
     } = snapshot;
     let key = getTrackingKey(querySource, agentId);
-    let Me =
+    let forkKeyOverride =
       key === null &&
       querySource === AGENT_SUMMARY &&
       agentId !== undefined &&
@@ -1027,29 +1522,29 @@ function recordPromptState(snapshot) {
             parentKey: baselineAgentId,
           }
         : undefined;
-    if (key === null && Me === undefined) return;
+    if (key === null && forkKeyOverride === undefined) return;
     let messageHashes = getMessageHashes();
-    let system_2 = stripCacheControlAll(system).filter((ue) => !isUncachedSystemBlock(ue));
+    let filtered = stripCacheControlAll(system).filter((block) => !isUncachedSystemBlock(block));
     let strippedSystem = stripCacheControlAll(toolSchemas);
     hydrateCacheBreakState();
     let previousStateBySource = promptCacheBreakState().previousStateBySource;
-    let x = key === null ? undefined : previousStateBySource.get(key);
-    let ce = {
-      system: hashEntriesReusing(system_2, x?.hashedPrefix?.system),
-      tools: hashEntriesReusing(strippedSystem, x?.hashedPrefix?.tools, "input_schema"),
+    let previousState = key === null ? undefined : previousStateBySource.get(key);
+    let hashedPrefix = {
+      system: hashEntriesReusing(filtered, previousState?.hashedPrefix?.system),
+      tools: hashEntriesReusing(strippedSystem, previousState?.hashedPrefix?.tools, "input_schema"),
     };
-    let systemHash = ce.system.hash;
-    let toolsHash = ce.tools.hash;
+    let systemHash = hashedPrefix.system.hash;
+    let toolsHash = hashedPrefix.tools.hash;
     let cacheControlHash = computeHash(
       system
-        .filter((ue) => !isUncachedSystemBlock(ue))
-        .map((ue) => ("cache_control" in ue ? ue.cache_control : null)),
+        .filter((block) => !isUncachedSystemBlock(block))
+        .map((block) => ("cache_control" in block ? block.cache_control : null)),
     );
     let toolNames = toolSchemas.map((t) => ("name" in t ? t.name : "unknown"));
     let computeToolHashes = () => computePerToolHashes(strippedSystem, toolNames);
-    let Wn = () => system_2.map((ue) => computeHash(ue));
-    let $n = () => system_2.map((ue) => getBlockText(ue)?.length ?? 0);
-    let systemCharCount = getSystemCharCount(system_2);
+    let perBlockHashes = () => filtered.map((block) => computeHash(block));
+    let perBlockLengths = () => filtered.map((block) => getBlockText(block)?.length ?? 0);
+    let systemCharCount = getSystemCharCount(filtered);
     let messages_2 = undefined;
     let lazyDiffableContent = () => ({
       model,
@@ -1059,17 +1554,17 @@ function recordPromptState(snapshot) {
     });
     let msg0Shape = messages ? noopShape(messages) : undefined;
     let sysFoldShape = messages && isCacheBreakOutlineEnabled() ? foldedAttachmentIndex(messages) : undefined;
-    let De = isPrefixBreakSampled() ? messages : undefined;
+    let sampledMessages = isPrefixBreakSampled() ? messages : undefined;
     let isFastMode = fastMode ?? false;
     let sortedBetas = [...betas].sort();
     let effortStr = effortValue === undefined ? "" : String(effortValue);
-    let Je = thinkingConfig === undefined ? "" : thinkingConfig.type === "disabled" ? "off" : "on";
-    let et =
+    let thinkingMode = thinkingConfig === undefined ? "" : thinkingConfig.type === "disabled" ? "off" : "on";
+    let thinkingDisplay =
       thinkingConfig === undefined || thinkingConfig.type === "disabled"
         ? ""
         : (thinkingConfig.display ?? "");
     let extraBodyHash = extraBodyParams === undefined ? 0 : computeHash(extraBodyParams);
-    let qn = {
+    let scalars = {
       systemHash,
       toolsHash,
       cacheControlHash,
@@ -1081,29 +1576,30 @@ function recordPromptState(snapshot) {
       isUsingOverage,
       cacheDiagnosis,
       effortValue: effortStr,
-      thinkingMode: Je,
-      thinkingDisplay: et,
+      thinkingMode,
+      thinkingDisplay,
       extraBodyHash,
       anyDeferLoading,
     };
     if (key === null) {
-      if (Me !== undefined)
+      if (forkKeyOverride !== undefined)
         recordSummaryFork_2({
-          ...Me,
-          scalars: qn,
+          ...forkKeyOverride,
+          scalars,
           messageHashes,
-          messages: De,
+          messages: sampledMessages,
         });
       return;
     }
-    let messageOutlines = messageHashesFor(messages, messageHashes, x);
-    let Xn = De !== undefined && isTrackedQuerySource(key) && canPersistCacheBreakState();
-    if (!x) {
+    let messageOutlines = messageHashesFor(messages, messageHashes, previousState);
+    let hashPrefixBreak =
+      sampledMessages !== undefined && isTrackedQuerySource(key) && canPersistCacheBreakState();
+    if (!previousState) {
       cleanupAgentTracking(previousStateBySource);
       previousStateBySource.set(key, {
         systemHash,
         toolsHash,
-        hashedPrefix: ce,
+        hashedPrefix,
         cacheControlHash,
         toolNames,
         systemCharCount,
@@ -1118,8 +1614,8 @@ function recordPromptState(snapshot) {
         queryDepth,
         cacheDiagnosis,
         effortValue: effortStr,
-        thinkingMode: Je,
-        thinkingDisplay: et,
+        thinkingMode,
+        thinkingDisplay,
         extraBodyHash,
         callCount: 1,
         pendingChanges: null,
@@ -1132,19 +1628,26 @@ function recordPromptState(snapshot) {
         sysFoldShape,
         messageOutlines,
         content: lazyDiffableContent,
-        hashSampleMessages: De,
+        hashSampleMessages: sampledMessages,
         perToolHashes: computeToolHashes(),
-        perBlockHashes: Wn(),
-        perBlockLengths: $n(),
-        prefixBreakHash: Xn ? hashMessages(De, messageHashes, undefined) : undefined,
+        perBlockHashes: perBlockHashes(),
+        perBlockLengths: perBlockLengths(),
+        prefixBreakHash: hashPrefixBreak
+          ? hashMessages(sampledMessages, messageHashes, undefined)
+          : undefined,
       });
       persistPreviousStates();
       return;
     }
-    x.callCount++;
-    x.baselineHashSource =
-      x.hashSampleMessages !== undefined ? "memory" : x.hydratedHashRows !== undefined ? "disk" : "none";
-    x.diffedAgainst = x.diffedAgainst === undefined && x.baselineFromDisk ? "disk" : "memory";
+    previousState.callCount++;
+    previousState.baselineHashSource =
+      previousState.hashSampleMessages !== undefined
+        ? "memory"
+        : previousState.hydratedHashRows !== undefined
+          ? "disk"
+          : "none";
+    previousState.diffedAgainst =
+      previousState.diffedAgainst === undefined && previousState.baselineFromDisk ? "disk" : "memory";
     let {
       systemPromptChanged,
       toolSchemasChanged,
@@ -1161,9 +1664,9 @@ function recordPromptState(snapshot) {
       thinkingDisplayChanged,
       extraBodyChanged,
       deferLoadingPresenceChanged,
-    } = diffPromptScalars(x, qn);
-    let firstChangedHash = findFirstChangedHash(x.messageHashes, messageHashes);
-    let mo = firstChangedHash !== -1;
+    } = diffPromptScalars(previousState, scalars);
+    let firstChangedHash = findFirstChangedHash(previousState.messageHashes, messageHashes);
+    let messagesHistoryChanged = firstChangedHash !== -1;
     if (
       systemPromptChanged ||
       toolSchemasChanged ||
@@ -1180,41 +1683,41 @@ function recordPromptState(snapshot) {
       thinkingDisplayChanged ||
       extraBodyChanged ||
       deferLoadingPresenceChanged ||
-      mo
+      messagesHistoryChanged
     ) {
-      let prevToolSet = new Set(x.toolNames);
+      let prevToolSet = new Set(previousState.toolNames);
       let newToolSet = new Set(toolNames);
-      let prevBetaSet = new Set(x.betas);
+      let prevBetaSet = new Set(previousState.betas);
       let newBetaSet = new Set(sortedBetas);
       let addedTools = toolNames.filter((n) => !prevToolSet.has(n));
-      let removedTools = x.toolNames.filter((n) => !newToolSet.has(n));
+      let removedTools = previousState.toolNames.filter((n) => !newToolSet.has(n));
       let changedToolSchemas = [];
       if (toolSchemasChanged) {
         let newHashes = computeToolHashes();
         for (let name of toolNames) {
           if (!prevToolSet.has(name)) continue;
-          if (newHashes[name] !== x.perToolHashes[name]) changedToolSchemas.push(name);
+          if (newHashes[name] !== previousState.perToolHashes[name]) changedToolSchemas.push(name);
         }
-        x.perToolHashes = newHashes;
+        previousState.perToolHashes = newHashes;
       }
-      let yo = x.perBlockHashes.length;
-      let Ft = system_2.length;
-      let _o = [];
-      let bo = [];
+      let previousBlockCount = previousState.perBlockHashes.length;
+      let newBlockCount = filtered.length;
+      let changedBlockIndices = [];
+      let changedBlockLengthDeltas = [];
       if (systemPromptChanged) {
-        let he = Wn();
-        let Pe = $n();
-        if (Ft === yo) {
-          for (let idx = 0; idx < Ft; idx++)
-            if (he[idx] !== x.perBlockHashes[idx]) {
-              _o.push(idx);
-              bo.push(Pe[idx] - x.perBlockLengths[idx]);
+        let newBlockHashes = perBlockHashes();
+        let newBlockLengths = perBlockLengths();
+        if (newBlockCount === previousBlockCount) {
+          for (let idx = 0; idx < newBlockCount; idx++)
+            if (newBlockHashes[idx] !== previousState.perBlockHashes[idx]) {
+              changedBlockIndices.push(idx);
+              changedBlockLengthDeltas.push(newBlockLengths[idx] - previousState.perBlockLengths[idx]);
             }
         }
-        x.perBlockHashes = he;
-        x.perBlockLengths = Pe;
+        previousState.perBlockHashes = newBlockHashes;
+        previousState.perBlockLengths = newBlockLengths;
       }
-      x.pendingChanges = {
+      previousState.pendingChanges = {
         systemPromptChanged,
         toolSchemasChanged,
         modelChanged,
@@ -1230,80 +1733,80 @@ function recordPromptState(snapshot) {
         thinkingDisplayChanged,
         extraBodyChanged,
         deferLoadingPresenceChanged,
-        messagesHistoryChanged: mo,
+        messagesHistoryChanged,
         firstChangedMessageIndex: firstChangedHash,
-        prevMessageCount: x.messageHashes.length,
+        prevMessageCount: previousState.messageHashes.length,
         addedToolCount: addedTools.length,
         removedToolCount: removedTools.length,
         addedTools,
         removedTools,
         changedToolSchemas,
-        prevBlockCount: yo,
-        newBlockCount: Ft,
-        changedBlockIndices: _o,
-        changedBlockLengthDeltas: bo,
-        systemCharDelta: systemCharCount - x.systemCharCount,
-        previousModel: x.model,
+        prevBlockCount: previousBlockCount,
+        newBlockCount,
+        changedBlockIndices,
+        changedBlockLengthDeltas,
+        systemCharDelta: systemCharCount - previousState.systemCharCount,
+        previousModel: previousState.model,
         newModel: model,
-        previousBetas: x.betas,
-        prevGlobalCacheStrategy: x.globalCacheStrategy,
+        previousBetas: previousState.betas,
+        prevGlobalCacheStrategy: previousState.globalCacheStrategy,
         newGlobalCacheStrategy: globalCacheStrategy,
-        addedBetas: sortedBetas.filter((he) => !prevBetaSet.has(he)),
-        removedBetas: x.betas.filter((he) => !newBetaSet.has(he)),
-        prevEffortValue: x.effortValue,
+        addedBetas: sortedBetas.filter((beta) => !prevBetaSet.has(beta)),
+        removedBetas: previousState.betas.filter((beta) => !newBetaSet.has(beta)),
+        prevEffortValue: previousState.effortValue,
         newEffortValue: effortStr,
-        prevThinkingMode: x.thinkingMode,
-        newThinkingMode: Je,
-        prevThinkingDisplay: x.thinkingDisplay,
-        newThinkingDisplay: et,
-        prevContent: x.content,
-        prevMsg0Shape: x.msg0Shape,
-        prevSysFoldShape: x.sysFoldShape,
-        prevMessageOutlines: x.messageOutlines,
-        prevHashSampleMessages: x.hashSampleMessages,
-        prevHydratedHashRows: x.hydratedHashRows,
+        prevThinkingMode: previousState.thinkingMode,
+        newThinkingMode: thinkingMode,
+        prevThinkingDisplay: previousState.thinkingDisplay,
+        newThinkingDisplay: thinkingDisplay,
+        prevContent: previousState.content,
+        prevMsg0Shape: previousState.msg0Shape,
+        prevSysFoldShape: previousState.sysFoldShape,
+        prevMessageOutlines: previousState.messageOutlines,
+        prevHashSampleMessages: previousState.hashSampleMessages,
+        prevHydratedHashRows: previousState.hydratedHashRows,
       };
-    } else x.pendingChanges = null;
-    let prefixBreakHash = Xn
+    } else previousState.pendingChanges = null;
+    let prefixBreakHash = hashPrefixBreak
       ? hashMessages(
-          De,
+          sampledMessages,
           messageHashes,
-          x.prefixBreakHash && {
-            rows: x.prefixBreakHash,
-            messageHashes: x.messageHashes,
+          previousState.prefixBreakHash && {
+            rows: previousState.prefixBreakHash,
+            messageHashes: previousState.messageHashes,
           },
         )
       : undefined;
-    x.systemHash = systemHash;
-    x.toolsHash = toolsHash;
-    x.hashedPrefix = ce;
-    x.cacheControlHash = cacheControlHash;
-    x.toolNames = toolNames;
-    x.systemCharCount = systemCharCount;
-    x.model = model;
-    x.fastMode = isFastMode;
-    x.globalCacheStrategy = globalCacheStrategy;
-    x.betas = sortedBetas;
-    x.autoModeActive = autoModeActive;
-    x.isUsingOverage = isUsingOverage;
-    x.is1hCacheTTL = is1hCacheTTL;
-    x.queryDepth = queryDepth;
-    x.cacheDiagnosis = cacheDiagnosis;
-    x.effortValue = effortStr;
-    x.thinkingMode = Je;
-    x.thinkingDisplay = et;
-    x.extraBodyHash = extraBodyHash;
-    x.anyDeferLoading = anyDeferLoading;
-    x.buildVersion = CACHE_BREAK_HINTS;
-    x.baselineMessageHashes = x.messageHashes;
-    x.messageHashes = messageHashes;
-    x.msg0Shape = msg0Shape;
-    x.sysFoldShape = sysFoldShape;
-    x.messageOutlines = messageOutlines;
-    x.content = lazyDiffableContent;
-    x.hashSampleMessages = De;
-    x.prefixBreakHash = prefixBreakHash;
-    x.hydratedHashRows = undefined;
+    previousState.systemHash = systemHash;
+    previousState.toolsHash = toolsHash;
+    previousState.hashedPrefix = hashedPrefix;
+    previousState.cacheControlHash = cacheControlHash;
+    previousState.toolNames = toolNames;
+    previousState.systemCharCount = systemCharCount;
+    previousState.model = model;
+    previousState.fastMode = isFastMode;
+    previousState.globalCacheStrategy = globalCacheStrategy;
+    previousState.betas = sortedBetas;
+    previousState.autoModeActive = autoModeActive;
+    previousState.isUsingOverage = isUsingOverage;
+    previousState.is1hCacheTTL = is1hCacheTTL;
+    previousState.queryDepth = queryDepth;
+    previousState.cacheDiagnosis = cacheDiagnosis;
+    previousState.effortValue = effortStr;
+    previousState.thinkingMode = thinkingMode;
+    previousState.thinkingDisplay = thinkingDisplay;
+    previousState.extraBodyHash = extraBodyHash;
+    previousState.anyDeferLoading = anyDeferLoading;
+    previousState.buildVersion = CACHE_BREAK_HINTS;
+    previousState.baselineMessageHashes = previousState.messageHashes;
+    previousState.messageHashes = messageHashes;
+    previousState.msg0Shape = msg0Shape;
+    previousState.sysFoldShape = sysFoldShape;
+    previousState.messageOutlines = messageOutlines;
+    previousState.content = lazyDiffableContent;
+    previousState.hashSampleMessages = sampledMessages;
+    previousState.prefixBreakHash = prefixBreakHash;
+    previousState.hydratedHashRows = undefined;
     persistPreviousStates();
   } catch (e) {
     logError(e);
@@ -1343,45 +1846,47 @@ function recordMessageHistory({ querySource, agentId, messages, getMessageHashes
         updateSummaryForkMessages(agentId, messages, getMessageHashes);
       return;
     }
-    let y = promptCacheBreakState().previousStateBySource.get(trackingKey);
-    if (!y) return;
+    let previous = promptCacheBreakState().previousStateBySource.get(trackingKey);
+    if (!previous) return;
     let messageHashes = getMessageHashes();
-    y.baselineMessageHashes ??= y.messageHashes;
-    let { baselineMessageHashes, content } = y;
+    previous.baselineMessageHashes ??= previous.messageHashes;
+    let { baselineMessageHashes, content } = previous;
     let { model, system, tools } = content();
     let messages_2 = undefined;
-    let { msg0Shape, sysFoldShape, messageOutlines, hashSampleMessages } = y;
-    let se = y.prefixBreakHash && {
-      rows: y.prefixBreakHash,
-      messageHashes: y.messageHashes,
+    let { msg0Shape, sysFoldShape, messageOutlines, hashSampleMessages } = previous;
+    let prefixBreak = previous.prefixBreakHash && {
+      rows: previous.prefixBreakHash,
+      messageHashes: previous.messageHashes,
     };
-    y.messageOutlines = messageHashesFor(messages, messageHashes, y);
-    y.messageHashes = messageHashes;
-    y.msg0Shape = noopShape(messages);
-    y.sysFoldShape = isCacheBreakOutlineEnabled() ? foldedAttachmentIndex(messages) : undefined;
-    y.content = () => ({
+    previous.messageOutlines = messageHashesFor(messages, messageHashes, previous);
+    previous.messageHashes = messageHashes;
+    previous.msg0Shape = noopShape(messages);
+    previous.sysFoldShape = isCacheBreakOutlineEnabled() ? foldedAttachmentIndex(messages) : undefined;
+    previous.content = () => ({
       model,
       system,
       tools,
       messages: messages_2,
     });
-    y.hashSampleMessages = isPrefixBreakSampled() ? messages : undefined;
-    y.prefixBreakHash =
-      y.hashSampleMessages !== undefined && isTrackedQuerySource(trackingKey) && canPersistCacheBreakState()
-        ? hashMessages(y.hashSampleMessages, messageHashes, se)
+    previous.hashSampleMessages = isPrefixBreakSampled() ? messages : undefined;
+    previous.prefixBreakHash =
+      previous.hashSampleMessages !== undefined &&
+      isTrackedQuerySource(trackingKey) &&
+      canPersistCacheBreakState()
+        ? hashMessages(previous.hashSampleMessages, messageHashes, prefixBreak)
         : undefined;
     let firstChangedHash = findFirstChangedHash(baselineMessageHashes, messageHashes);
-    let pendingChanges = y.pendingChanges;
+    let pendingChanges = previous.pendingChanges;
     if (pendingChanges) {
-      let _e = {
+      let changes = {
         ...pendingChanges,
         messagesHistoryChanged: firstChangedHash !== -1,
         firstChangedMessageIndex: firstChangedHash,
       };
-      y.pendingChanges = CHANGE_KINDS.some((re) => _e[re]) ? _e : null;
+      previous.pendingChanges = CHANGE_KINDS.some((kind) => changes[kind]) ? changes : null;
     } else if (firstChangedHash !== -1) {
-      y.baselineHashSource = hashSampleMessages !== undefined ? "memory" : "none";
-      y.pendingChanges = {
+      previous.baselineHashSource = hashSampleMessages !== undefined ? "memory" : "none";
+      previous.pendingChanges = {
         systemPromptChanged: false,
         toolSchemasChanged: false,
         modelChanged: false,
@@ -1406,23 +1911,23 @@ function recordMessageHistory({ querySource, agentId, messages, getMessageHashes
         addedTools: [],
         removedTools: [],
         changedToolSchemas: [],
-        prevBlockCount: y.perBlockHashes.length,
-        newBlockCount: y.perBlockHashes.length,
+        prevBlockCount: previous.perBlockHashes.length,
+        newBlockCount: previous.perBlockHashes.length,
         changedBlockIndices: [],
         changedBlockLengthDeltas: [],
         previousModel: model,
         newModel: model,
-        previousBetas: y.betas,
-        prevGlobalCacheStrategy: y.globalCacheStrategy,
-        newGlobalCacheStrategy: y.globalCacheStrategy,
+        previousBetas: previous.betas,
+        prevGlobalCacheStrategy: previous.globalCacheStrategy,
+        newGlobalCacheStrategy: previous.globalCacheStrategy,
         addedBetas: [],
         removedBetas: [],
-        prevEffortValue: y.effortValue,
-        newEffortValue: y.effortValue,
-        prevThinkingMode: y.thinkingMode,
-        newThinkingMode: y.thinkingMode,
-        prevThinkingDisplay: y.thinkingDisplay,
-        newThinkingDisplay: y.thinkingDisplay,
+        prevEffortValue: previous.effortValue,
+        newEffortValue: previous.effortValue,
+        prevThinkingMode: previous.thinkingMode,
+        newThinkingMode: previous.thinkingMode,
+        prevThinkingDisplay: previous.thinkingDisplay,
+        newThinkingDisplay: previous.thinkingDisplay,
         prevContent: content,
         prevMsg0Shape: msg0Shape,
         prevSysFoldShape: sysFoldShape,
@@ -1453,18 +1958,18 @@ function flushMessageOutlines(querySource, agentId) {
 /**
  * 两个哈希数组首个不同的下标（-1 表示相同）。
  */
-function findFirstChangedHash(e, messageHashes) {
-  return e.findIndex((s, r) => s !== EPHEMERAL_MESSAGE_MARK && messageHashes[r] !== s);
+function findFirstChangedHash(hashes, messageHashes) {
+  return hashes.findIndex((hash, index) => hash !== EPHEMERAL_MESSAGE_MARK && messageHashes[index] !== hash);
 }
 //@ chunk-g54kbxqw.js:76359-76665 layout
 /**
  * 本来源待定变化的类型列表、首个变化消息下标、基线来源、调用次数（遥测用）。
  */
-function getPendingChangeSummary(querySource, agentId) {
+function getPendingChangeSummary(source, trackingKey) {
   try {
-    let { changes, baseline, callNumber } = getPendingChangesForSource(querySource, agentId);
+    let { changes, baseline, callNumber } = getPendingChangesForSource(source, trackingKey);
     return {
-      kinds: changes ? fromEnumArr(CHANGE_KINDS.filter((y) => changes[y])) : lit("none"),
+      kinds: changes ? fromEnumArr(CHANGE_KINDS.filter((kind) => changes[kind])) : lit("none"),
       firstChangedMessageIndex: changes?.firstChangedMessageIndex ?? -1,
       baseline,
       callNumber,
@@ -1483,21 +1988,21 @@ function getPendingChangeSummary(querySource, agentId) {
 /**
  * 取来源状态、待定变化与基线类型（磁盘基线未比对时不报变化）。
  */
-function getPendingChangesForSource(e, n) {
-  let trackingKey = getTrackingKey(e, n);
-  let r = trackingKey ? promptCacheBreakState().previousStateBySource.get(trackingKey) : undefined;
-  if (r?.diffedAgainst === "disk" && needsResumeBaseline(r))
+function getPendingChangesForSource(source, trackingKey) {
+  let trackingKey_2 = getTrackingKey(source, trackingKey);
+  let previous = trackingKey_2 ? promptCacheBreakState().previousStateBySource.get(trackingKey_2) : undefined;
+  if (previous?.diffedAgainst === "disk" && needsResumeBaseline(previous))
     return {
-      state: r,
+      state: previous,
       changes: undefined,
       baseline: lit("none"),
-      callNumber: r.callCount,
+      callNumber: previous.callCount,
     };
   return {
-    state: r,
-    changes: r?.pendingChanges ?? undefined,
-    baseline: fromEnumOpt(r?.diffedAgainst) ?? lit("none"),
-    callNumber: r?.callCount,
+    state: previous,
+    changes: previous?.pendingChanges ?? undefined,
+    baseline: fromEnumOpt(previous?.diffedAgainst) ?? lit("none"),
+    callNumber: previous?.callCount,
   };
 }
 //@ chunk-g54kbxqw.js:76966-78865 fingerprint = checkResponseForCacheBreak (0.586)
@@ -1569,9 +2074,9 @@ function checkResponseForCacheBreak_2(pendingChanges, baselineFromDisk) {
 /**
  * 段列表格式化为 "名:长度" 脱敏串。
  */
-function formatSectionLengths(e) {
+function formatSectionLengths(lengths) {
   return joinSafe(
-    e.sections.map((section) => concatSafe(fromEnum(section.name), lit(":"), fromNumber(section.len))),
+    lengths.sections.map((section) => concatSafe(fromEnum(section.name), lit(":"), fromNumber(section.len))),
   );
 }
 //@ chunk-g54kbxqw.js:78943-79534 layout
@@ -1582,25 +2087,26 @@ function describeFirstMessageChange(pendingChanges, msg0Shape) {
   if (!pendingChanges?.messagesHistoryChanged || pendingChanges.firstChangedMessageIndex !== 0 || !msg0Shape)
     return {};
   let prevMsg0Shape = pendingChanges.prevMsg0Shape;
-  let r = (k) => (k?.workerTools ? [k.workerTools.toolCount, k.workerTools.mcpServerCount] : [-1, -1]);
-  let h = {
+  let compare = (block) =>
+    block?.workerTools ? [block.workerTools.toolCount, block.workerTools.mcpServerCount] : [-1, -1];
+  let result = {
     msg0Sections: formatSectionLengths(msg0Shape),
-    msg0WorkerTools: fromNumberArr([...r(prevMsg0Shape), ...r(msg0Shape)]),
+    msg0WorkerTools: fromNumberArr([...compare(prevMsg0Shape), ...compare(msg0Shape)]),
   };
-  if (!prevMsg0Shape) return h;
-  let y = diffSystemParts(prevMsg0Shape, msg0Shape);
+  if (!prevMsg0Shape) return result;
+  let diff = diffSystemParts(prevMsg0Shape, msg0Shape);
   return {
-    ...h,
+    ...result,
     msg0PrevSections: formatSectionLengths(prevMsg0Shape),
     msg0ChangedSections: joinSafe(
-      y.changedSections.map((changedSection) =>
+      diff.changedSections.map((changedSection) =>
         concatSafe(fromEnum(changedSection.name), lit(":"), fromNumber(changedSection.delta)),
       ),
     ),
-    msg0AddedSections: fromEnumArr(y.addedSections),
-    msg0RemovedSections: fromEnumArr(y.removedSections),
+    msg0AddedSections: fromEnumArr(diff.addedSections),
+    msg0RemovedSections: fromEnumArr(diff.removedSections),
     msg0ChangedBlocks: joinSafe(
-      y.changedBlocks.map((changedBlock) =>
+      diff.changedBlocks.map((changedBlock) =>
         concatSafe(
           fromNumber(changedBlock.index),
           lit(":"),
@@ -1616,8 +2122,8 @@ function describeFirstMessageChange(pendingChanges, msg0Shape) {
 /**
  * 形状各部分展开后格式化（遥测）。
  */
-function formatShapeParts(e) {
-  return joinSafe(e.flatMap((n) => normalizeShortHash(n) ?? []));
+function formatShapeParts(parts) {
+  return joinSafe(parts.flatMap((part) => normalizeShortHash(part) ?? []));
 }
 //@ chunk-g54kbxqw.js:79587-80140 layout
 /**
@@ -1631,7 +2137,7 @@ function describeSystemFoldChange(pendingChanges, sysFoldShape) {
     (firstChangedMessageIndex !== sysFoldShape?.index && firstChangedMessageIndex !== prevSysFoldShape?.index)
   )
     return {};
-  let h = {
+  let step = {
     sysFoldIndex: sysFoldShape?.index ?? -1,
     ...(sysFoldShape && {
       sysFoldParts: blockOutlineKey(sysFoldShape.parts),
@@ -1642,15 +2148,15 @@ function describeSystemFoldChange(pendingChanges, sysFoldShape) {
       sysFoldPrevPartCount: prevSysFoldShape.partCount,
     }),
   };
-  if (!prevSysFoldShape || !sysFoldShape) return h;
-  let y = diffPromptParts(prevSysFoldShape, sysFoldShape);
+  if (!prevSysFoldShape || !sysFoldShape) return step;
+  let diff = diffPromptParts(prevSysFoldShape, sysFoldShape);
   return {
-    ...h,
-    sysFoldChangedParts: positionedOutlineKey(y.changedParts),
-    sysFoldAddedTypes: formatShapeParts(y.addedTypes),
-    sysFoldRemovedTypes: formatShapeParts(y.removedTypes),
-    sysFoldReordered: y.reordered,
-    sysFoldOtherDelta: y.otherDelta,
+    ...step,
+    sysFoldChangedParts: positionedOutlineKey(diff.changedParts),
+    sysFoldAddedTypes: formatShapeParts(diff.addedTypes),
+    sysFoldRemovedTypes: formatShapeParts(diff.removedTypes),
+    sysFoldReordered: diff.reordered,
+    sysFoldOtherDelta: diff.otherDelta,
     sysFoldLenDelta: sysFoldShape.len - prevSysFoldShape.len,
   };
 }
@@ -1664,127 +2170,127 @@ async function checkResponseForCacheBreak(
   cacheCreationInputTokens,
   messages,
   agentId,
-  y,
-  k,
-  C,
+  requestId,
+  previousMessageId,
+  forceCheck,
 ) {
   let key = getTrackingKey(querySource, agentId);
   if (!key) {
     if (querySource === AGENT_SUMMARY && agentId !== undefined)
       checkSummaryForkCacheBreak(agentId, {
-        requestId: y,
+        requestId,
         cacheReadTokens: cacheReadInputTokens,
         cacheCreationTokens: cacheCreationInputTokens,
       });
     return;
   }
-  let S = promptCacheBreakState().previousStateBySource.get(key);
-  if (!S) return;
-  if (isExcludedModel(S.model)) return;
+  let state = promptCacheBreakState().previousStateBySource.get(key);
+  if (!state) return;
+  if (isExcludedModel(state.model)) return;
   try {
-    let prevCacheReadTokens = S.prevCacheReadTokens;
-    S.prevCacheReadTokens = cacheReadInputTokens;
-    let baselineFromDisk = S.baselineFromDisk;
-    S.baselineFromDisk = false;
-    let L = baselineFromDisk && needsResumeBaseline(S);
-    let resumeBaseline = S.resumeBaseline;
-    S.resumeBaseline = undefined;
+    let prevCacheReadTokens = state.prevCacheReadTokens;
+    state.prevCacheReadTokens = cacheReadInputTokens;
+    let baselineFromDisk = state.baselineFromDisk;
+    state.baselineFromDisk = false;
+    let shouldUseResumeBaseline = baselineFromDisk && needsResumeBaseline(state);
+    let resumeBaseline = state.resumeBaseline;
+    state.resumeBaseline = undefined;
     let last = messages.findLast((m) => m.type === "assistant");
-    let q = last ? Date.now() - new Date(last.timestamp).getTime() : null;
-    let G = q !== null && q > CACHE_TTL_5M_MS;
-    let se = q !== null && q > CACHE_TTL_1H_MS;
+    let sinceLastAssistantMs = last ? Date.now() - new Date(last.timestamp).getTime() : null;
+    let lastAssistantOver5min = sinceLastAssistantMs !== null && sinceLastAssistantMs > CACHE_TTL_5M_MS;
+    let lastAssistantOver1h = sinceLastAssistantMs !== null && sinceLastAssistantMs > CACHE_TTL_1H_MS;
     if (prevCacheReadTokens === null) {
-      S.pendingChanges = null;
+      state.pendingChanges = null;
       return;
     }
-    let pendingChanges = S.pendingChanges;
-    if (L) {
-      if (!S.cacheDeletionsPending) {
-        let z = isCacheReadDrop(prevCacheReadTokens, cacheReadInputTokens);
-        if (pendingChanges || z)
-          reportCacheBreak(S, pendingChanges, {
-            requestId: y,
+    let pendingChanges = state.pendingChanges;
+    if (shouldUseResumeBaseline) {
+      if (!state.cacheDeletionsPending) {
+        let cacheReadDropped = isCacheReadDrop(prevCacheReadTokens, cacheReadInputTokens);
+        if (pendingChanges || cacheReadDropped)
+          reportCacheBreak(state, pendingChanges, {
+            requestId,
             querySource,
-            cacheBroke: z,
+            cacheBroke: cacheReadDropped,
             baselineFromDisk,
             prevCacheReadTokens,
             cacheReadTokens: cacheReadInputTokens,
             cacheCreationTokens: cacheCreationInputTokens,
-            lastAssistantMsgOver5minAgo: G,
-            lastAssistantMsgOver1hAgo: se,
+            lastAssistantMsgOver5minAgo: lastAssistantOver5min,
+            lastAssistantMsgOver1hAgo: lastAssistantOver1h,
           });
       }
-      S.pendingChanges = null;
+      state.pendingChanges = null;
       return;
     }
-    if (S.cacheDeletionsPending) {
-      S.cacheDeletionsPending = false;
+    if (state.cacheDeletionsPending) {
+      state.cacheDeletionsPending = false;
       logForDebugging(
         `[PROMPT CACHE] cache deletion applied, cache read: ${prevCacheReadTokens} \u2192 ${cacheReadInputTokens} (expected drop)`,
       );
-      S.pendingChanges = null;
+      state.pendingChanges = null;
       return;
     }
-    let ie = isCacheReadDrop(prevCacheReadTokens, cacheReadInputTokens);
-    if (pendingChanges || ie)
-      reportCacheBreak(S, pendingChanges, {
-        requestId: y,
+    let cacheBroke = isCacheReadDrop(prevCacheReadTokens, cacheReadInputTokens);
+    if (pendingChanges || cacheBroke)
+      reportCacheBreak(state, pendingChanges, {
+        requestId,
         querySource,
-        cacheBroke: ie,
+        cacheBroke,
         baselineFromDisk,
         prevCacheReadTokens,
         cacheReadTokens: cacheReadInputTokens,
         cacheCreationTokens: cacheCreationInputTokens,
-        lastAssistantMsgOver5minAgo: G,
-        lastAssistantMsgOver1hAgo: se,
+        lastAssistantMsgOver5minAgo: lastAssistantOver5min,
+        lastAssistantMsgOver1hAgo: lastAssistantOver1h,
       });
-    if (!ie) {
-      S.pendingChanges = null;
+    if (!cacheBroke) {
+      state.pendingChanges = null;
       return;
     }
-    let _e = pendingChanges ? checkResponseForCacheBreak_2(pendingChanges, baselineFromDisk) : [];
-    let re;
-    if (_e.length > 0) re = _e.join(", ");
-    else if (se) re = "possible 1h TTL expiry (prompt unchanged)";
-    else if (G) re = "possible 5min TTL expiry (prompt unchanged)";
-    else if (q !== null) re = "likely server-side (prompt unchanged, <5min gap)";
-    else re = "unknown cause";
-    if (C ?? (isCacheBreakTrackedSource(querySource, agentId) && querySource !== "compact")) {
-      let z = [];
-      if (pendingChanges?.systemPromptChanged) z.push("system_prompt_changed");
-      if (pendingChanges?.toolSchemasChanged) z.push("tools_changed");
-      if (pendingChanges?.modelChanged) z.push("model_changed");
-      if (pendingChanges?.fastModeChanged) z.push("fast_mode_changed");
+    let breakReasons = pendingChanges ? checkResponseForCacheBreak_2(pendingChanges, baselineFromDisk) : [];
+    let reasonsText;
+    if (breakReasons.length > 0) reasonsText = breakReasons.join(", ");
+    else if (lastAssistantOver1h) reasonsText = "possible 1h TTL expiry (prompt unchanged)";
+    else if (lastAssistantOver5min) reasonsText = "possible 5min TTL expiry (prompt unchanged)";
+    else if (sinceLastAssistantMs !== null) reasonsText = "likely server-side (prompt unchanged, <5min gap)";
+    else reasonsText = "unknown cause";
+    if (forceCheck ?? (isCacheBreakTrackedSource(querySource, agentId) && querySource !== "compact")) {
+      let causes = [];
+      if (pendingChanges?.systemPromptChanged) causes.push("system_prompt_changed");
+      if (pendingChanges?.toolSchemasChanged) causes.push("tools_changed");
+      if (pendingChanges?.modelChanged) causes.push("model_changed");
+      if (pendingChanges?.fastModeChanged) causes.push("fast_mode_changed");
       if (
         pendingChanges &&
         (pendingChanges.globalCacheStrategyChanged ||
           (pendingChanges.cacheControlChanged && !pendingChanges.systemPromptChanged))
       )
-        z.push("cache_scope_or_ttl_changed");
-      if (pendingChanges?.betasChanged) z.push("betas_changed");
-      if (pendingChanges?.effortChanged) z.push("effort_changed");
-      if (pendingChanges?.thinkingModeChanged) z.push("thinking_mode_changed");
-      if (pendingChanges?.thinkingDisplayChanged) z.push("thinking_display_changed");
-      if (pendingChanges?.autoModeChanged) z.push("auto_mode_changed");
-      if (pendingChanges?.overageChanged) z.push("overage_changed");
+        causes.push("cache_scope_or_ttl_changed");
+      if (pendingChanges?.betasChanged) causes.push("betas_changed");
+      if (pendingChanges?.effortChanged) causes.push("effort_changed");
+      if (pendingChanges?.thinkingModeChanged) causes.push("thinking_mode_changed");
+      if (pendingChanges?.thinkingDisplayChanged) causes.push("thinking_display_changed");
+      if (pendingChanges?.autoModeChanged) causes.push("auto_mode_changed");
+      if (pendingChanges?.overageChanged) causes.push("overage_changed");
       if (pendingChanges?.extraBodyChanged || pendingChanges?.cacheDiagnosisChanged)
-        z.push("extra_body_changed");
-      if (pendingChanges?.deferLoadingPresenceChanged) z.push("defer_loading_changed");
-      if (pendingChanges?.messagesHistoryChanged) z.push("messages_rewritten");
-      if (z.length === 0) {
-        let Re = S.is1hCacheTTL ? se : G;
-        z.push(
-          Re
-            ? S.is1hCacheTTL
+        causes.push("extra_body_changed");
+      if (pendingChanges?.deferLoadingPresenceChanged) causes.push("defer_loading_changed");
+      if (pendingChanges?.messagesHistoryChanged) causes.push("messages_rewritten");
+      if (causes.length === 0) {
+        let ttlExpired = state.is1hCacheTTL ? lastAssistantOver1h : lastAssistantOver5min;
+        causes.push(
+          ttlExpired
+            ? state.is1hCacheTTL
               ? "ttl_expired_1h"
               : "ttl_expired_5m"
-            : q !== null
+            : sinceLastAssistantMs !== null
               ? "likely_server_side"
               : "unknown",
         );
       }
       attributePromptCacheMiss(MAIN, {
-        causes: z,
+        causes,
         ...(pendingChanges?.toolSchemasChanged &&
           (pendingChanges.addedToolCount > 0 || pendingChanges.removedToolCount > 0) && {
             toolsAdded: pendingChanges.addedToolCount,
@@ -1832,52 +2338,52 @@ async function checkResponseForCacheBreak(
         removedBetas: hashToolNames(baselineFromDisk ? [] : (pendingChanges?.removedBetas ?? [])),
         prevGlobalCacheStrategy: fromEnumOpt(pendingChanges?.prevGlobalCacheStrategy),
         newGlobalCacheStrategy: fromEnumOpt(pendingChanges?.newGlobalCacheStrategy),
-        systemHash: S.systemHash,
-        toolsHash: S.toolsHash,
-        is1hCacheTTL: S.is1hCacheTTL,
-        queryDepth: S.queryDepth,
+        systemHash: state.systemHash,
+        toolsHash: state.toolsHash,
+        is1hCacheTTL: state.is1hCacheTTL,
+        queryDepth: state.queryDepth,
         querySource: agentTypeForTelemetry(querySource),
-        model: telemetrySafeModelName(S.model),
-        globalCacheStrategy: fromEnum(S.globalCacheStrategy),
-        callNumber: S.callCount,
+        model: telemetrySafeModelName(state.model),
+        globalCacheStrategy: fromEnum(state.globalCacheStrategy),
+        callNumber: state.callCount,
         prevCacheReadTokens,
         cacheReadTokens: cacheReadInputTokens,
         cacheCreationTokens: cacheCreationInputTokens,
-        timeSinceLastAssistantMsg: q ?? -1,
-        lastAssistantMsgOver5minAgo: G,
-        lastAssistantMsgOver1hAgo: se,
+        timeSinceLastAssistantMsg: sinceLastAssistantMs ?? -1,
+        lastAssistantMsgOver5minAgo: lastAssistantOver5min,
+        lastAssistantMsgOver1hAgo: lastAssistantOver1h,
         isCowork: env.CLAUDE_CODE_IS_COWORK,
         isDesktop: isManagedOAuthContext_2(),
         baselineFromDisk,
         versionChanged: !baselineFromDisk
           ? false
-          : !S.baselineBuildVersion
+          : !state.baselineBuildVersion
             ? undefined
-            : S.baselineBuildVersion !== CACHE_BREAK_HINTS,
-        ...describeFirstMessageChange(pendingChanges, S.msg0Shape),
-        ...describeSystemFoldChange(pendingChanges, S.sysFoldShape),
+            : state.baselineBuildVersion !== CACHE_BREAK_HINTS,
+        ...describeFirstMessageChange(pendingChanges, state.msg0Shape),
+        ...describeSystemFoldChange(pendingChanges, state.sysFoldShape),
         ...(pendingChanges?.messagesHistoryChanged &&
           changedMessageFields(
             pendingChanges.prevMessageOutlines?.()?.[pendingChanges.firstChangedMessageIndex],
-            S.messageOutlines?.()?.[pendingChanges.firstChangedMessageIndex],
+            state.messageOutlines?.()?.[pendingChanges.firstChangedMessageIndex],
           )),
         isSubagent: agentId !== undefined,
         isResume: resumeBaseline !== undefined,
         resumedInNewProcess: resumeBaseline?.newProcess === true,
-        prevMessageCount: S.baselineMessageHashes?.length ?? -1,
-        newMessageCount: S.messageHashes.length,
-        requestId: sanitizeMarkName(y) ?? lit(""),
-        previousMessageId: sanitizeMarkName(k) ?? lit(""),
+        prevMessageCount: state.baselineMessageHashes?.length ?? -1,
+        newMessageCount: state.messageHashes.length,
+        requestId: sanitizeMarkName(requestId) ?? lit(""),
+        previousMessageId: sanitizeMarkName(previousMessageId) ?? lit(""),
       });
-    let ge;
+    let outlineDiff;
     if (isCacheBreakOutlineEnabled()) {
-      let z = ge ? `, diff: ${ge}` : "";
-      let summary = `[PROMPT CACHE BREAK] ${re} [source=${querySource}, call #${S.callCount}, cache read: ${prevCacheReadTokens} \u2192 ${cacheReadInputTokens}, creation: ${cacheCreationInputTokens}${z}]`;
+      let diffSuffix = outlineDiff ? `, diff: ${outlineDiff}` : "";
+      let summary = `[PROMPT CACHE BREAK] ${reasonsText} [source=${querySource}, call #${state.callCount}, cache read: ${prevCacheReadTokens} \u2192 ${cacheReadInputTokens}, creation: ${cacheCreationInputTokens}${diffSuffix}]`;
       logForDebugging(summary, {
         level: "warn",
       });
     }
-    S.pendingChanges = null;
+    state.pendingChanges = null;
   } catch (e) {
     logError(e);
   } finally {
@@ -1889,7 +2395,7 @@ async function checkResponseForCacheBreak(
  * 上报一次缓存断裂（模型、beta、变化类型、cache read/creation、TTL 是否过期）。
  */
 function reportCacheBreak(
-  e,
+  input,
   pendingChanges,
   {
     requestId,
@@ -1904,16 +2410,18 @@ function reportCacheBreak(
   },
 ) {
   try {
-    let P = prefixBreakSampleRate();
-    if (!isSampledIn(getSessionId(), P)) return;
+    let sampleRate = prefixBreakSampleRate();
+    if (!isSampledIn(getSessionId(), sampleRate)) return;
     explainCacheBreak({
       requestId,
-      model: e.model,
-      prevModel: pendingChanges?.previousModel ?? e.model,
-      prevBetas: pendingChanges?.previousBetas ?? e.betas,
-      newBetas: e.betas,
+      model: input.model,
+      prevModel: pendingChanges?.previousModel ?? input.model,
+      prevBetas: pendingChanges?.previousBetas ?? input.betas,
+      newBetas: input.betas,
       cacheBroke,
-      changeKinds: pendingChanges ? fromEnumArr(CHANGE_KINDS.filter((L) => pendingChanges[L])) : lit("none"),
+      changeKinds: pendingChanges
+        ? fromEnumArr(CHANGE_KINDS.filter((kind) => pendingChanges[kind]))
+        : lit("none"),
       firstChangedMessageIndex: pendingChanges?.firstChangedMessageIndex ?? -1,
       prev:
         pendingChanges?.prevHashSampleMessages !== undefined
@@ -1929,18 +2437,18 @@ function reportCacheBreak(
             : {
                 source: "none",
               },
-      prevSource: e.baselineHashSource ?? "none",
-      newMessages: e.hashSampleMessages,
-      prevMessageCount: e.baselineMessageHashes?.length ?? -1,
-      newMessageCount: e.messageHashes.length,
-      callNumber: e.callCount,
+      prevSource: input.baselineHashSource ?? "none",
+      newMessages: input.hashSampleMessages,
+      prevMessageCount: input.baselineMessageHashes?.length ?? -1,
+      newMessageCount: input.messageHashes.length,
+      callNumber: input.callCount,
       baselineFromDisk,
       baselineKind: "previous_request",
       prevCacheReadTokens,
       cacheReadTokens,
       cacheCreationTokens,
-      sampleRate: P,
-      is1hCacheTTL: e.is1hCacheTTL,
+      sampleRate,
+      is1hCacheTTL: input.is1hCacheTTL,
       lastAssistantMsgOver5minAgo,
       lastAssistantMsgOver1hAgo,
       querySource: agentTypeForTelemetry(querySource),
@@ -1953,33 +2461,36 @@ function reportCacheBreak(
 /**
  * 去掉 messagesHistoryChanged 的变化类型。
  */
-var SCALAR_CHANGE_KINDS = CHANGE_KINDS.filter((e) => e !== "messagesHistoryChanged");
+var SCALAR_CHANGE_KINDS; // deferred: uses CHANGE_KINDS of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-g54kbxqw.js:86621", () => {
+  SCALAR_CHANGE_KINDS = CHANGE_KINDS.filter((kind) => kind !== "messagesHistoryChanged");
+});
 //@ chunk-g54kbxqw.js:86673-87322 layout
 /**
  * 摘要代理分叉：记录相对父来源的标量变化与消息基线。
  */
 function recordSummaryFork_2({ forkAgentId, parentKey, scalars, messageHashes, messages }) {
   let { previousStateBySource, summaryForks } = promptCacheBreakState();
-  let C = previousStateBySource.get(parentKey);
-  let R = C ? diffPromptScalars(C, scalars) : undefined;
+  let parent = previousStateBySource.get(parentKey);
+  let diff = parent ? diffPromptScalars(parent, scalars) : undefined;
   summaryForks.delete(forkAgentId);
   while (summaryForks.size >= MAX_SUMMARY_FORKS) {
-    let S = summaryForks.keys().next().value;
-    if (S === undefined) break;
-    summaryForks.delete(S);
+    let oldestFork = summaryForks.keys().next().value;
+    if (oldestFork === undefined) break;
+    summaryForks.delete(oldestFork);
   }
   summaryForks.set(forkAgentId, {
-    parentFound: C !== undefined,
-    parentMessageHashes: C?.messageHashes ?? [],
-    prevMessages: C?.hashSampleMessages,
-    prevCacheReadTokens: C?.prevCacheReadTokens ?? null,
-    callNumber: C?.callCount ?? 0,
+    parentFound: parent !== undefined,
+    parentMessageHashes: parent?.messageHashes ?? [],
+    prevMessages: parent?.hashSampleMessages,
+    prevCacheReadTokens: parent?.prevCacheReadTokens ?? null,
+    callNumber: parent?.callCount ?? 0,
     model: scalars.model,
-    prevModel: C?.model ?? scalars.model,
-    prevBetas: C?.betas ?? scalars.betas,
+    prevModel: parent?.model ?? scalars.model,
+    prevBetas: parent?.betas ?? scalars.betas,
     newBetas: scalars.betas,
-    scalarFlags: R ? SCALAR_CHANGE_KINDS.filter((S) => R[S]) : [],
-    firstChangedMessageIndex: C ? findFirstChangedHash(C.messageHashes, messageHashes) : -1,
+    scalarFlags: diff ? SCALAR_CHANGE_KINDS.filter((kind) => diff[kind]) : [],
+    firstChangedMessageIndex: parent ? findFirstChangedHash(parent.messageHashes, messageHashes) : -1,
     newMessages: messages,
     newMessageCount: messageHashes.length,
   });
@@ -1989,60 +2500,63 @@ function recordSummaryFork_2({ forkAgentId, parentKey, scalars, messageHashes, m
  * 摘要分叉补记本次消息与首个变化下标。
  */
 function updateSummaryForkMessages(agentId, messages, getMessageHashes) {
-  let r = promptCacheBreakState().summaryForks.get(agentId);
-  if (!r) return;
-  let h = getMessageHashes();
-  r.newMessages = isPrefixBreakSampled() ? messages : undefined;
-  r.newMessageCount = h.length;
-  r.firstChangedMessageIndex = r.parentFound ? findFirstChangedHash(r.parentMessageHashes, h) : -1;
+  let fork = promptCacheBreakState().summaryForks.get(agentId);
+  if (!fork) return;
+  let hashes = getMessageHashes();
+  fork.newMessages = isPrefixBreakSampled() ? messages : undefined;
+  fork.newMessageCount = hashes.length;
+  fork.firstChangedMessageIndex = fork.parentFound
+    ? findFirstChangedHash(fork.parentMessageHashes, hashes)
+    : -1;
 }
 //@ chunk-g54kbxqw.js:87522-88683 layout
 /**
  * 摘要分叉响应后的断裂检查与上报。
  */
-function checkSummaryForkCacheBreak(e, { requestId, cacheReadTokens, cacheCreationTokens }) {
+function checkSummaryForkCacheBreak(agentId, { requestId, cacheReadTokens, cacheCreationTokens }) {
   try {
     let { summaryForks } = promptCacheBreakState();
-    let y = summaryForks.get(e);
-    if (!y) return;
-    summaryForks.delete(e);
-    if (isExcludedModel(y.model)) return;
-    let k = prefixBreakSampleRate();
-    if (!isSampledIn(getSessionId(), k)) return;
-    let prevCacheReadTokens = y.prevCacheReadTokens;
-    let R = prevCacheReadTokens !== null && isCacheReadDrop(prevCacheReadTokens, cacheReadTokens);
-    let S = y.firstChangedMessageIndex !== -1;
-    if (y.parentFound && y.scalarFlags.length === 0 && !S && !R) return;
-    let w = [...y.scalarFlags, ...(S ? ["messagesHistoryChanged"] : [])];
+    let fork = summaryForks.get(agentId);
+    if (!fork) return;
+    summaryForks.delete(agentId);
+    if (isExcludedModel(fork.model)) return;
+    let sampleRate = prefixBreakSampleRate();
+    if (!isSampledIn(getSessionId(), sampleRate)) return;
+    let prevCacheReadTokens = fork.prevCacheReadTokens;
+    let cacheReadDropped =
+      prevCacheReadTokens !== null && isCacheReadDrop(prevCacheReadTokens, cacheReadTokens);
+    let hasFirstChange = fork.firstChangedMessageIndex !== -1;
+    if (fork.parentFound && fork.scalarFlags.length === 0 && !hasFirstChange && !cacheReadDropped) return;
+    let flags = [...fork.scalarFlags, ...(hasFirstChange ? ["messagesHistoryChanged"] : [])];
     explainCacheBreak({
       requestId,
-      model: y.model,
-      prevModel: y.prevModel,
-      prevBetas: y.prevBetas,
-      newBetas: y.newBetas,
-      cacheBroke: R,
-      changeKinds: w.length > 0 ? fromEnumArr(w) : lit("none"),
-      firstChangedMessageIndex: y.firstChangedMessageIndex,
+      model: fork.model,
+      prevModel: fork.prevModel,
+      prevBetas: fork.prevBetas,
+      newBetas: fork.newBetas,
+      cacheBroke: cacheReadDropped,
+      changeKinds: flags.length > 0 ? fromEnumArr(flags) : lit("none"),
+      firstChangedMessageIndex: fork.firstChangedMessageIndex,
       prev:
-        y.prevMessages !== undefined
+        fork.prevMessages !== undefined
           ? {
               source: "memory",
-              messages: y.prevMessages,
+              messages: fork.prevMessages,
             }
           : {
               source: "none",
             },
-      prevSource: y.prevMessages !== undefined ? "memory" : "none",
-      newMessages: y.newMessages,
-      prevMessageCount: y.parentFound ? y.parentMessageHashes.length : -1,
-      newMessageCount: y.newMessageCount,
-      callNumber: y.callNumber,
+      prevSource: fork.prevMessages !== undefined ? "memory" : "none",
+      newMessages: fork.newMessages,
+      prevMessageCount: fork.parentFound ? fork.parentMessageHashes.length : -1,
+      newMessageCount: fork.newMessageCount,
+      callNumber: fork.callNumber,
       baselineFromDisk: false,
-      baselineKind: y.parentFound ? "parent_agent" : "parent_agent_missing",
+      baselineKind: fork.parentFound ? "parent_agent" : "parent_agent_missing",
       prevCacheReadTokens: prevCacheReadTokens ?? -1,
       cacheReadTokens,
       cacheCreationTokens,
-      sampleRate: k,
+      sampleRate,
       is1hCacheTTL: undefined,
       lastAssistantMsgOver5minAgo: undefined,
       lastAssistantMsgOver1hAgo: undefined,
@@ -2075,23 +2589,23 @@ function isKnownCacheDiagnosisType(type) {
 /**
  * 记 tengu_prompt_cache_diagnosis_received（诊断类型、缺失 token 等）。
  */
-function logCacheDiagnosisReceived(e, n) {
+function logCacheDiagnosisReceived(info, detail) {
   try {
     logEvent("tengu_prompt_cache_diagnosis_received", {
       diagnosisType:
-        typeof e.type !== "string"
+        typeof info.type !== "string"
           ? undefined
-          : isKnownCacheDiagnosisType(e.type)
-            ? fromEnum(e.type)
+          : isKnownCacheDiagnosisType(info.type)
+            ? fromEnum(info.type)
             : lit("other"),
-      tokensMissed: typeof e.cache_missed_input_tokens === "number" ? e.cache_missed_input_tokens : -1,
-      requestId: sanitizeMarkName(n.requestId) ?? lit(""),
-      previousMessageId: sanitizeMarkName(n.previousMessageId) ?? lit(""),
-      model: telemetrySafeModelName(n.model),
+      tokensMissed: typeof info.cache_missed_input_tokens === "number" ? info.cache_missed_input_tokens : -1,
+      requestId: sanitizeMarkName(detail.requestId) ?? lit(""),
+      previousMessageId: sanitizeMarkName(detail.previousMessageId) ?? lit(""),
+      model: telemetrySafeModelName(detail.model),
       isCowork: env.CLAUDE_CODE_IS_COWORK,
-      is1hCacheTTL: n.is1hCacheTTL,
-      querySource: agentTypeForTelemetry(n.querySource),
-      queryDepth: n.queryDepth,
+      is1hCacheTTL: detail.is1hCacheTTL,
+      querySource: agentTypeForTelemetry(detail.querySource),
+      queryDepth: detail.queryDepth,
     });
   } catch (error) {
     logError(error);
@@ -2112,8 +2626,8 @@ function notifyCacheDeletion(querySource, agentId) {
     persistPreviousStates();
   }
   if (key !== null && isTrackedQuerySource(key)) {
-    let y = previousStateBySource.get(COMPACT_FORK);
-    if (y) y.cacheDeletionsPending = true;
+    let previous = previousStateBySource.get(COMPACT_FORK);
+    if (previous) previous.cacheDeletionsPending = true;
   }
 }
 //@ chunk-g54kbxqw.js:89585-90016 fingerprint = notifyCompaction (0.499)
@@ -2123,9 +2637,9 @@ function notifyCacheDeletion(querySource, agentId) {
 function notifyCompaction(agentId) {
   if (isCacheBreakOutlineEnabled()) {
     let classifierCompactions = promptCacheBreakState().classifierCompactions;
-    let y = classifierCompactions.get(agentId) ?? [];
+    let compactions = classifierCompactions.get(agentId) ?? [];
     classifierCompactions.delete(agentId);
-    classifierCompactions.set(agentId, [...y, Date.now()].slice(-MAX_COMPACTION_TIMESTAMPS));
+    classifierCompactions.set(agentId, [...compactions, Date.now()].slice(-MAX_COMPACTION_TIMESTAMPS));
     if (classifierCompactions.size > MAX_CLASSIFIER_COMPACTION_KEYS) {
       let found = [...classifierCompactions.keys()].find((key) => key !== undefined);
       if (found !== undefined) classifierCompactions.delete(found);
@@ -2133,80 +2647,85 @@ function notifyCompaction(agentId) {
   }
   hydrateCacheBreakState();
   let previousStateBySource = promptCacheBreakState().previousStateBySource;
-  let s = previousStateBySource.get(COMPACT_FORK);
-  if (s) s.prevCacheReadTokens = null;
+  let compactFork = previousStateBySource.get(COMPACT_FORK);
+  if (compactFork) compactFork.prevCacheReadTokens = null;
   if (agentId) {
-    let h = previousStateBySource.get(agentId);
-    if (h) {
-      h.prevCacheReadTokens = null;
+    let previous = previousStateBySource.get(agentId);
+    if (previous) {
+      previous.prevCacheReadTokens = null;
       persistPreviousStates();
     }
     return;
   }
-  let r = false;
-  for (let [h, y] of previousStateBySource)
-    if (isTrackedQuerySource(h)) {
-      y.prevCacheReadTokens = null;
-      r = true;
+  let changed = false;
+  for (let [key, entry] of previousStateBySource)
+    if (isTrackedQuerySource(key)) {
+      entry.prevCacheReadTokens = null;
+      changed = true;
     }
-  if (r) persistPreviousStates();
+  if (changed) persistPreviousStates();
 }
 //@ chunk-g54kbxqw.js:90016-90187 placement
-function forgetClassifierCompaction(e) {
-  promptCacheBreakState().classifierCompactions.delete(e);
+function forgetClassifierCompaction(agentId) {
+  promptCacheBreakState().classifierCompactions.delete(agentId);
   let classifierLines = promptCacheBreakState().classifierLines;
-  for (let [s, r] of classifierLines) if (r.agentId === e) classifierLines.delete(s);
-  if (promptCacheBreakState().previousStateBySource.delete(e)) persistPreviousStates();
+  for (let [key, line] of classifierLines) if (line.agentId === agentId) classifierLines.delete(key);
+  if (promptCacheBreakState().previousStateBySource.delete(agentId)) persistPreviousStates();
 }
 //@ chunk-g54kbxqw.js:90187-90286 placement
 /**
  * 缓存断裂状态文件的限额：最多 32 个状态、文件 2 MB、版本号 1 与 outlines 结构。
  */
-var CACHE_STATE_LIMITS = 32;
-var MAX_CACHE_STATE_BYTES = 2000000;
-var cacheBreakStateFileSchema = DoctorLazy(() =>
-  create({
-    v: create_25(1),
-    by: create_2().max(64),
-    state: cacheBreakStateSchema().valueSchema,
-    outlines: create_12(),
-  }),
-);
+var CACHE_STATE_LIMITS; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var MAX_CACHE_STATE_BYTES;
+var cacheBreakStateFileSchema;
+deferInit("chunk-g54kbxqw.js:90187", () => {
+  CACHE_STATE_LIMITS = 32;
+  MAX_CACHE_STATE_BYTES = 2000000;
+  cacheBreakStateFileSchema = DoctorLazy(() =>
+    create({
+      v: create_25(1),
+      by: create_2().max(64),
+      state: cacheBreakStateSchema().valueSchema,
+      outlines: create_12(),
+    }),
+  );
+});
 //@ chunk-g54kbxqw.js:90286-90898 placement
-function parkAgentBaseline(e) {
+function parkAgentBaseline(agentId) {
   try {
-    let n = promptCacheBreakState();
-    let s = n.previousStateBySource.get(e);
-    forgetClassifierCompaction(e);
-    if (s === undefined) return;
-    let { prefixBreakHash, ...h } = stripSnapshotPayload(s);
-    let { messageOutlines } = s;
+    let state = promptCacheBreakState();
+    let previous = state.previousStateBySource.get(agentId);
+    forgetClassifierCompaction(agentId);
+    if (previous === undefined) return;
+    let { prefixBreakHash, ...rest } = stripSnapshotPayload(previous);
+    let { messageOutlines } = previous;
     messageOutlines?.();
-    let { parkedAgentBaselines } = n;
-    parkedAgentBaselines.delete(e);
+    let { parkedAgentBaselines } = state;
+    parkedAgentBaselines.delete(agentId);
     while (parkedAgentBaselines.size >= CACHE_STATE_LIMITS) {
-      let R = parkedAgentBaselines.keys().next().value;
-      if (R === undefined) break;
-      parkedAgentBaselines.delete(R);
+      let oldest = parkedAgentBaselines.keys().next().value;
+      if (oldest === undefined) break;
+      parkedAgentBaselines.delete(oldest);
     }
-    parkedAgentBaselines.set(e, {
-      ...h,
+    parkedAgentBaselines.set(agentId, {
+      ...rest,
       messageOutlines,
       pendingChanges: null,
-      baselineFromDisk: s.baselineFromDisk,
-      baselineBuildVersion: s.baselineBuildVersion,
-      resumeBaseline: s.resumeBaseline,
-      content: modelWithEmptySystem(h.model),
+      baselineFromDisk: previous.baselineFromDisk,
+      baselineBuildVersion: previous.baselineBuildVersion,
+      resumeBaseline: previous.resumeBaseline,
+      content: modelWithEmptySystem(rest.model),
     });
     if (!isCacheBreakOutlineEnabled() || isDiskless()) return;
-    n.parkedBy ??= randomUUID();
-    let C = jsonStringify({
+    state.parkedBy ??= randomUUID();
+    let json = jsonStringify({
       v: 1,
-      by: n.parkedBy,
-      state: h,
+      by: state.parkedBy,
+      state: rest,
       outlines: compactBaseline(messageOutlines?.() ?? []),
     });
-    return C.length <= MAX_CACHE_STATE_BYTES ? C : undefined;
+    return json.length <= MAX_CACHE_STATE_BYTES ? json : undefined;
   } catch (error) {
     logError(error);
     return;
@@ -2221,476 +2740,77 @@ function modelWithEmptySystem(model) {
   });
 }
 //@ chunk-g54kbxqw.js:90954-91010 placement
-function hasParkedAgentBaseline(e) {
-  return promptCacheBreakState().parkedAgentBaselines.has(e);
+function hasParkedAgentBaseline(agentId) {
+  return promptCacheBreakState().parkedAgentBaselines.has(agentId);
 }
 //@ chunk-g54kbxqw.js:91010-91615 placement
-function restoreAgentBaseline(e, n) {
+function restoreAgentBaseline(agentId, outlines) {
   try {
-    let s = promptCacheBreakState();
-    let { previousStateBySource, parkedAgentBaselines } = s;
-    let y = parkedAgentBaselines.get(e);
-    parkedAgentBaselines.delete(e);
-    if (previousStateBySource.has(e)) return;
-    let k;
-    if (y !== undefined)
-      k = {
-        ...y,
-        resumeBaseline: y.resumeBaseline ?? {
+    let state = promptCacheBreakState();
+    let { previousStateBySource, parkedAgentBaselines } = state;
+    let parked = parkedAgentBaselines.get(agentId);
+    parkedAgentBaselines.delete(agentId);
+    if (previousStateBySource.has(agentId)) return;
+    let result;
+    if (parked !== undefined)
+      result = {
+        ...parked,
+        resumeBaseline: parked.resumeBaseline ?? {
           source: "memory",
           newProcess: false,
         },
       };
     else {
-      if (n === null) return;
-      let C;
+      if (outlines === null) return;
+      let merged;
       try {
-        C = cacheBreakStateFileSchema().safeParse(jsonParse(n));
+        merged = cacheBreakStateFileSchema().safeParse(jsonParse(outlines));
       } catch {
         return;
       }
-      if (!C.success) return;
-      let { by, state, outlines } = C.data;
-      let P = restoreBaseline(outlines);
-      k = {
-        ...state,
+      if (!merged.success) return;
+      let { by, state: state_2, outlines: outlines_2 } = merged.data;
+      let restored = restoreBaseline(outlines_2);
+      result = {
+        ...state_2,
         prefixBreakHash: undefined,
-        messageOutlines: P && (() => P),
+        messageOutlines: restored && (() => restored),
         pendingChanges: null,
         baselineFromDisk: true,
-        baselineBuildVersion: state.buildVersion,
+        baselineBuildVersion: state_2.buildVersion,
         resumeBaseline: {
           source: "disk",
-          newProcess: by !== s.parkedBy,
+          newProcess: by !== state.parkedBy,
         },
-        content: modelWithEmptySystem(state.model),
+        content: modelWithEmptySystem(state_2.model),
       };
     }
     hydrateCacheBreakState();
     cleanupAgentTracking(previousStateBySource);
-    previousStateBySource.set(e, k);
+    previousStateBySource.set(agentId, result);
   } catch (error) {
     logError(error);
   }
 }
 //@ chunk-g54kbxqw.js:91615-92203 placement
-function recordSummaryFork(e) {
-  let n = promptCacheBreakState();
-  let s = n.previousStateBySource.size === 0 && !n.hydrationAttempted;
-  n.summaryForks.clear();
-  for (let key of [...n.parkedAgentBaselines.keys()]) if (!e?.has(key)) n.parkedAgentBaselines.delete(key);
-  for (let [r, h] of n.classifierLines)
-    if (h.agentId === undefined || !e?.has(h.agentId)) n.classifierLines.delete(r);
-  for (let key of n.classifierCompactions.keys())
-    if (key === undefined || !e?.has(key)) n.classifierCompactions.delete(key);
-  if (e?.size) {
-    for (let key of [...n.previousStateBySource.keys()]) if (!e.has(key)) n.previousStateBySource.delete(key);
+function recordSummaryFork(fork) {
+  let state = promptCacheBreakState();
+  let neededHydration = state.previousStateBySource.size === 0 && !state.hydrationAttempted;
+  state.summaryForks.clear();
+  for (let key of [...state.parkedAgentBaselines.keys()])
+    if (!fork?.has(key)) state.parkedAgentBaselines.delete(key);
+  for (let [key, line] of state.classifierLines)
+    if (line.agentId === undefined || !fork?.has(line.agentId)) state.classifierLines.delete(key);
+  for (let key of state.classifierCompactions.keys())
+    if (key === undefined || !fork?.has(key)) state.classifierCompactions.delete(key);
+  if (fork?.size) {
+    for (let key of [...state.previousStateBySource.keys()])
+      if (!fork.has(key)) state.previousStateBySource.delete(key);
   } else {
-    n.previousStateBySource.clear();
-    n.hydrationAttempted = false;
+    state.previousStateBySource.clear();
+    state.hydrationAttempted = false;
   }
-  if (!s) persistPreviousStates();
-}
-//@ chunk-1t61stbc.js:302-1230 placement
-/**
- * 系统提示词"# Reporting outcomes"段：要求只报告在本会话中观察到的结果。
- */
-var REPORTING_OUTCOMES_SECTION = `# Reporting outcomes
-
-Report what actually happened, not what you intended. When you say something is done, sent, saved, fixed, or verified, that claim must rest on a result you observed in this session \u2014 tool output, the file as it now reads, the page as it now loads \u2014 not on what the step should have produced. If you did not check, say you did not check. If any step failed, was skipped, or came back different from what you expected, say so in the first sentence of your report, before anything else, even when the rest of the work succeeded. Never quietly work around a failure in a way that makes it look resolved; a problem the user can see is recoverable, one your summary hides is not. When you stop before the task is complete, your first line says so plainly and names what is left. Do not describe partial work as done, and do not let a summary read as more certain than the evidence behind it.`;
-//@ chunk-1t61stbc.js:1230-1268 placement
-var X_ANTHROPIC_BILLING_HEADER = "x-anthropic-billing-header:";
-//@ chunk-1t61stbc.js:1268-1343 placement
-function isBillingHeaderBlock(e) {
-  let text = e.text;
-  return typeof text === "string" && text.startsWith(X_ANTHROPIC_BILLING_HEADER);
-}
-//@ chunk-1t61stbc.js:1343-1428 layout
-/**
- * system 块是计费头（x-anthropic-billing-header:）或 "# Reporting outcomes" 段（不参与缓存比对）。
- */
-function isUncachedSystemBlock(e) {
-  let text = e.text;
-  return (
-    typeof text === "string" &&
-    (text.startsWith(X_ANTHROPIC_BILLING_HEADER) || text === REPORTING_OUTCOMES_SECTION)
-  );
-}
-//@ chunk-1t61stbc.js:1428-1515 fingerprint = computeHash (0.745)
-/**
- * 对象 JSON 序列化后用 Bun.hash 取 32 位哈希。
- */
-function computeHash(data) {
-  let hash = Bun.hash(jsonStringify(data));
-  return typeof hash === "bigint" ? Number(hash & 0xffffffffn) : hash;
-}
-//@ chunk-1t61stbc.js:1515-1626 placement
-var FINGERPRINT_BLOCK_KEYS = new Set([
-  "type",
-  "text",
-  "thinking",
-  "id",
-  "tool_use_id",
-  "name",
-  "input",
-  "source",
-  "content",
-  "cache_control",
-]);
-//@ chunk-1t61stbc.js:1626-3308 placement
-function fingerprintContentBlock(e, t) {
-  if (typeof e === "string") {
-    t.push("s", String(e.length), e.slice(0, 32), e.slice(-32));
-    return;
-  }
-  switch (e.type) {
-    case "text":
-    case "image":
-    case "document":
-    case "search_result":
-    case "thinking":
-    case "redacted_thinking":
-    case "tool_use":
-    case "tool_result":
-    case "tool_reference":
-    case "server_tool_use":
-    case "web_search_tool_result":
-    case "web_fetch_tool_result":
-    case "advisor_tool_result":
-    case "code_execution_tool_result":
-    case "bash_code_execution_tool_result":
-    case "text_editor_code_execution_tool_result":
-    case "tool_search_tool_result":
-    case "mcp_tool_use":
-    case "mcp_tool_result":
-    case "mcp_tool_listing":
-    case "container_upload":
-    case "compaction":
-    case "fallback":
-    case "browser_state":
-      break;
-    default: {
-      let n = e;
-      break;
-    }
-  }
-  t.push(e.type);
-  if ("text" in e && typeof e.text === "string")
-    t.push("t", String(e.text.length), e.text.slice(0, 32), e.text.slice(-32));
-  if ("thinking" in e && typeof e.thinking === "string") t.push("k", String(e.thinking.length));
-  if ("id" in e && typeof e.id === "string") t.push("i", e.id);
-  if ("tool_use_id" in e && typeof e.tool_use_id === "string") t.push("u", e.tool_use_id);
-  if ("name" in e && typeof e.name === "string") t.push("n", e.name);
-  if ("input" in e && e.input !== undefined) t.push("p", jsonStringify(e.input));
-  if ("source" in e && e.source && typeof e.source === "object") {
-    let source = e.source;
-    t.push("m", String(source.type ?? ""), String(source.media_type ?? ""));
-    if (typeof source.data === "string") t.push(String(source.data.length));
-  }
-  let content = "content" in e ? e.content : undefined;
-  if (Array.isArray(content)) {
-    t.push("[", String(content.length));
-    for (let n of content) fingerprintContentBlock(n, t);
-    t.push("]");
-  } else if (typeof content === "string")
-    t.push("c", String(content.length), content.slice(0, 32), content.slice(-32));
-  for (let [key, value] of Object.entries(e)) {
-    if (FINGERPRINT_BLOCK_KEYS.has(key) || value === undefined) continue;
-    let o = typeof value === "string" ? value : jsonStringify(value);
-    t.push(key, o.length > 256 ? `len:${o.length}` : o);
-  }
-}
-//@ chunk-1t61stbc.js:3308-3319 placement
-var EPHEMERAL_MESSAGE_MARK = -1;
-//@ chunk-1t61stbc.js:3319-3770 placement
-/**
- * 为每条消息计算缓存指纹（角色、内容块摘要），临时消息记为 -1，用于判断提示缓存是否被打破。
- */
-function fingerprintMessagesForCache(messagesForAPI) {
-  return messagesForAPI.map((t) => {
-    if ((t.type === "api_system" || t.type === "user") && t.ephemeral) return EPHEMERAL_MESSAGE_MARK;
-    let s = [t.message.role];
-    if (t.type === "api_system" && t.outputConfig !== undefined) {
-      let timing = t.outputConfig.timing;
-      s.push(`oc:${t.outputConfig.effort ?? ""}${timing ? `:${timing.now}` : ""}`);
-    }
-    let content = t.message.content;
-    if (Array.isArray(content)) {
-      s.push(String(content.length));
-      for (let o of content) fingerprintContentBlock(o, s);
-    } else fingerprintContentBlock(content, s);
-    let r = Bun.hash(s.join("|"));
-    return typeof r === "bigint" ? Number(r & 0xffffffffn) : r;
-  });
-}
-//@ chunk-1t61stbc.js:3770-3795 placement
-/**
- * 导出常量或表 `CACHE_TTL_5M_MS`：值为 300000, oR = 3600000。
- */
-var CACHE_TTL_5M_MS = 300000;
-var CACHE_TTL_1H_MS = 3600000;
-//@ chunk-1t61stbc.js:3795-3947 placement
-function getCacheCreationTtl(usage) {
-  if ((usage?.cache_creation?.ephemeral_5m_input_tokens ?? 0) > 0) return "5m";
-  return (usage?.cache_creation?.ephemeral_1h_input_tokens ?? 0) > 0 ? "1h" : undefined;
-}
-//@ chunk-1t61stbc.js:3947-3961 placement
-var MAIN = "main";
-//@ chunk-1t61stbc.js:3961-4050 placement = runPostCompactCleanup (0.926)
-/**
- * 第二个参数为假（非代理请求）且 querySource 为 repl_main_thread*、sdk、compact 时为真，供提示缓存断裂检测决定是否跟踪；不是压缩后清理。
- */
-function isCacheBreakTrackedSource(e, t) {
-  return !t && (e.startsWith("repl_main_thread") || e === "sdk" || e === "compact");
-}
-//@ chunk-1t61stbc.js:4050-4087 placement
-var MAX_CHANGED_MESSAGE_ENTRIES = 2000;
-var MAX_PREVIOUS_STATE_ENTRIES = 200;
-var CACHE_TTL_BY_KIND = {
-  "5m": CACHE_TTL_5M_MS,
-  "1h": CACHE_TTL_1H_MS,
-};
-//@ chunk-1t61stbc.js:4087-4860 placement
-var CACHE_BREAK_REASONS = {
-  system_prompt_changed: "system prompt changed",
-  tools_changed: "tool definitions changed",
-  model_changed: "model changed",
-  fast_mode_changed: "fast mode toggled",
-  cache_scope_or_ttl_changed: "cache scope or TTL changed",
-  betas_changed: "beta headers changed",
-  effort_changed: "effort changed",
-  thinking_mode_changed: "thinking toggled",
-  thinking_display_changed: "thinking display changed",
-  auto_mode_changed: "auto mode toggled",
-  overage_changed: "usage-limit state changed",
-  extra_body_changed: "extra request fields changed",
-  defer_loading_changed: "deferred tool loading changed",
-  messages_rewritten: "earlier messages changed",
-  ttl_expired_5m: "idle past the 5m TTL",
-  ttl_expired_1h: "idle past the 1h TTL",
-  likely_server_side: "prompt unchanged \u2014 likely server-side",
-  unknown: "unknown",
-};
-//@ chunk-1t61stbc.js:4860-7402 placement
-/**
- * 单个查询源的提示缓存命中统计：请求数、命中/未命中、冷启动、预期重建、未命中原因归因与重缓存 token 估计。
- */
-class PromptCacheTracker {
-  entries = [];
-  requests = 0;
-  hits = 0;
-  misses = 0;
-  expectedRebuilds = 0;
-  coldStarts = 0;
-  cacheReadTokens = 0;
-  cacheCreationTokens = 0;
-  inputTokens = 0;
-  missRecacheTokens = 0;
-  lastMissAt = null;
-  lastMissAttribution = null;
-  missCauses = {};
-  pendingAttribution = null;
-  dropExpectedAt = null;
-  touchedAt = null;
-  touch(e) {
-    if (this.entries.length > 0) this.touchedAt = Math.max(this.touchedAt ?? 0, e);
-  }
-  expectDrop(dropExpectedAt) {
-    this.dropExpectedAt = dropExpectedAt;
-  }
-  attribute(pendingAttribution) {
-    this.pendingAttribution = pendingAttribution;
-  }
-  record(e) {
-    let t = this.entries.at(-1) ?? null;
-    let dropExpectedAt = this.dropExpectedAt;
-    this.dropExpectedAt = null;
-    let pendingAttribution = this.pendingAttribution;
-    this.pendingAttribution = null;
-    let r =
-      dropExpectedAt !== null &&
-      t !== null &&
-      e.at - Math.max(t.at, this.touchedAt ?? 0) < CACHE_TTL_BY_KIND[t.ttl];
-    let o;
-    let a =
-      this.cacheReadTokens + this.cacheCreationTokens > 0 || e.cacheReadTokens + e.cacheCreationTokens > 0;
-    if (t === null) o = "cold";
-    else if (!a) o = "uncached";
-    else if (t.cacheReadTokens + t.cacheCreationTokens === 0 && e.cacheReadTokens + e.cacheCreationTokens > 0)
-      o = "cold";
-    else {
-      let c = t.inputTokens + t.cacheReadTokens + t.cacheCreationTokens;
-      let C = e.inputTokens + e.cacheReadTokens + e.cacheCreationTokens;
-      let min = Math.min(c, C);
-      let T = min - e.cacheReadTokens;
-      o =
-        e.cacheReadTokens < min * 0.95 && T >= MAX_CHANGED_MESSAGE_ENTRIES
-          ? r
-            ? "expected"
-            : "miss"
-          : "hit";
-    }
-    let ttl = e.cacheCreationTokens === 0 && t !== null ? t.ttl : e.ttl;
-    let p =
-      o === "miss" && pendingAttribution !== null
-        ? {
-            ...e,
-            ttl,
-            outcome: o,
-            attribution: pendingAttribution,
-          }
-        : {
-            ...e,
-            ttl,
-            outcome: o,
-          };
-    this.entries.push(p);
-    if (this.entries.length > MAX_PREVIOUS_STATE_ENTRIES) this.entries.shift();
-    switch (
-      (this.requests++,
-      (this.cacheReadTokens += e.cacheReadTokens),
-      (this.cacheCreationTokens += e.cacheCreationTokens),
-      (this.inputTokens += e.inputTokens),
-      o)
-    ) {
-      case "hit":
-        this.hits++;
-        break;
-      case "miss":
-        this.misses++;
-        this.missRecacheTokens += e.cacheCreationTokens;
-        this.lastMissAt = e.at;
-        this.lastMissAttribution = pendingAttribution;
-        for (let c of pendingAttribution?.causes ?? []) this.missCauses[c] = (this.missCauses[c] ?? 0) + 1;
-        break;
-      case "expected":
-        this.expectedRebuilds++;
-        break;
-      case "cold":
-        this.coldStarts++;
-        break;
-      case "uncached":
-        break;
-    }
-    return p;
-  }
-  summary(e) {
-    let t = this.cacheReadTokens + this.cacheCreationTokens + this.inputTokens;
-    let s = this.entries.at(-1) ?? null;
-    let n = CACHE_TTL_BY_KIND[s?.ttl ?? "5m"];
-    let cachingObserved = this.cacheReadTokens + this.cacheCreationTokens > 0;
-    let o = s !== null && s.cacheReadTokens + s.cacheCreationTokens > 0;
-    let a = s !== null ? Math.max(s.at, this.touchedAt ?? 0) : 0;
-    return {
-      requests: this.requests,
-      hits: this.hits,
-      misses: this.misses,
-      expectedRebuilds: this.expectedRebuilds,
-      coldStarts: this.coldStarts,
-      hitRatio: t > 0 ? this.cacheReadTokens / t : null,
-      cacheWriteTokens: this.cacheCreationTokens,
-      missRecacheTokens: this.missRecacheTokens,
-      lastMissAt: this.lastMissAt,
-      lastMissAttribution: this.lastMissAttribution,
-      missCauses: {
-        ...this.missCauses,
-      },
-      lastRequest: s,
-      cachingObserved,
-      lastActivityAt: s !== null ? a : null,
-      expiresAt: s !== null && o ? a + n : null,
-      warm: s !== null && o && e - a < n,
-    };
-  }
-}
-//@ chunk-1t61stbc.js:7402-7936 placement
-class PromptCacheTrackerRegistry {
-  #e = new Map();
-  record(e, t) {
-    let s = this.#e.get(e);
-    if (s === undefined) {
-      s = new PromptCacheTracker();
-      this.#e.set(e, s);
-    }
-    return s.record(t);
-  }
-  expectDrop(e, t) {
-    this.#e.get(e)?.expectDrop(t);
-  }
-  attribute(e, t) {
-    this.#e.get(e)?.attribute(t);
-  }
-  touch(e, t) {
-    this.#e.get(e)?.touch(t);
-  }
-  summary(e, t) {
-    return (this.#e.get(e) ?? new PromptCacheTracker()).summary(t);
-  }
-  estimateRecacheTokens(e) {
-    let t = this.#e.get(e);
-    let last = t?.entries.at(-1);
-    if (!last) return 0;
-    if (t?.dropExpectedAt != null) return null;
-    return last.inputTokens + last.cacheReadTokens + last.cacheCreationTokens;
-  }
-  clear(e) {
-    if (e === undefined) this.#e.clear();
-    else this.#e.delete(e);
-  }
-}
-//@ chunk-1t61stbc.js:7936-7962 placement
-var promptCacheTrackers = new SessionRootSlot(() => new PromptCacheTrackerRegistry());
-//@ chunk-1t61stbc.js:7962-7994 placement
-function promptCacheTrackersForSession() {
-  return promptCacheTrackers.of(getRootSession());
-}
-//@ chunk-1t61stbc.js:7994-8066 placement
-function recordPromptCacheUsage(e, t) {
-  try {
-    return promptCacheTrackersForSession().record(e, t);
-  } catch (error) {
-    logError(error);
-    return null;
-  }
-}
-//@ chunk-1t61stbc.js:8066-8122 placement
-function attributePromptCacheMiss(e, t) {
-  try {
-    promptCacheTrackersForSession().attribute(e, t);
-  } catch (error) {
-    logError(error);
-  }
-}
-//@ chunk-1t61stbc.js:8122-8174 placement
-function touchPromptCache(e, t) {
-  try {
-    promptCacheTrackersForSession().touch(e, t);
-  } catch (error) {
-    logError(error);
-  }
-}
-//@ chunk-1t61stbc.js:8174-8245 placement
-function expectPromptCacheDrop(e = MAIN, t = Date.now()) {
-  try {
-    promptCacheTrackersForSession().expectDrop(e, t);
-  } catch (error) {
-    logError(error);
-  }
-}
-//@ chunk-1t61stbc.js:8245-8301 placement
-function getPromptCacheSummary(e = MAIN, t = Date.now()) {
-  return promptCacheTrackersForSession().summary(e, t);
-}
-//@ chunk-1t61stbc.js:8301-8356 placement
-function estimateRecacheTokens(e = MAIN) {
-  return promptCacheTrackersForSession().estimateRecacheTokens(e);
-}
-//@ chunk-1t61stbc.js:8356-8437 placement
-function clearPromptCacheOnSessionSwitch() {
-  return onSessionSwitch((e, t) => {
-    if (t === "cd" || t === "hydrate") return;
-    promptCacheTrackersForSession().clear();
-  });
+  if (!neededHydration) persistPreviousStates();
 }
 //@ chunk-a76knw89.js:2168-2282 placement
 var ENVELOPE_DIFF_FIELDS = [
@@ -2707,17 +2827,17 @@ var ENVELOPE_DIFF_FIELDS = [
 /**
  * 由已知的模型、工具和 system 生成提示前缀账本的初始快照（标记为播种）。
  */
-function seedLedgerSnapshot(e) {
+function seedLedgerSnapshot(snapshot) {
   return {
-    model: e.model,
-    tools: e.tools.map((tool, o) => ({
-      key: toolKeyOf(tool, o),
+    model: snapshot.model,
+    tools: snapshot.tools.map((tool, index) => ({
+      key: toolKeyOf(tool, index),
       deferred: isDeferredTool(tool),
       bound: isDeferredTool(tool),
       cacheControl: undefined,
       body: tool,
     })),
-    system: e.system.map((body) => ({
+    system: snapshot.system.map((body) => ({
       preamble: false,
       cacheControl: undefined,
       body,
@@ -2731,42 +2851,47 @@ function seedLedgerSnapshot(e) {
 /**
  * 把请求转换为可比较的快照（system 块、工具、betas、参数），可绑定引用到的延迟工具。
  */
-function snapshotRequestForCacheDiff(e, n = {}) {
-  let o =
-    n.boundDeferredToolNames ??
-    (n.bindReferencedDeferredTools === true ? collectReferencedDeferredTools(e.messages) : undefined);
-  let r =
-    typeof e.system === "string"
+function snapshotRequestForCacheDiff(request, options = {}) {
+  let boundDeferredToolNames =
+    options.boundDeferredToolNames ??
+    (options.bindReferencedDeferredTools === true
+      ? collectReferencedDeferredTools(request.messages)
+      : undefined);
+  let systemBlocks =
+    typeof request.system === "string"
       ? [
           {
             type: "text",
-            text: e.system,
+            text: request.system,
           },
         ]
-      : (e.system ?? []);
-  let c = {};
-  for (let s of ENVELOPE_DIFF_FIELDS) {
-    let u = s === "betas" ? sortedList(e.betas) : e[s];
-    if (u !== undefined) c[s] = u;
+      : (request.system ?? []);
+  let envelope = {};
+  for (let fieldName of ENVELOPE_DIFF_FIELDS) {
+    let fieldValue = fieldName === "betas" ? sortedList(request.betas) : request[fieldName];
+    if (fieldValue !== undefined) envelope[fieldName] = fieldValue;
   }
   return {
-    model: e.model,
-    envelope: c,
-    tools: (e.tools ?? []).map((s, u) => ({
-      key: toolKeyOf(s, u),
-      deferred: s.defer_loading === true,
-      bound: s.defer_loading === true && typeof s.name === "string" && o?.has(s.name) === true,
-      cacheControl: getCacheControl(s),
-      body: stripCacheControl(s),
+    model: request.model,
+    envelope,
+    tools: (request.tools ?? []).map((tool, toolIndex) => ({
+      key: toolKeyOf(tool, toolIndex),
+      deferred: tool.defer_loading === true,
+      bound:
+        tool.defer_loading === true &&
+        typeof tool.name === "string" &&
+        boundDeferredToolNames?.has(tool.name) === true,
+      cacheControl: getCacheControl(tool),
+      body: stripCacheControl(tool),
     })),
-    system: r.map((s) => ({
-      preamble: isUncachedSystemBlock(s),
-      cacheControl: getCacheControl(s),
-      body: stripCacheControl(s),
+    system: systemBlocks.map((block) => ({
+      preamble: isUncachedSystemBlock(block),
+      cacheControl: getCacheControl(block),
+      body: stripCacheControl(block),
     })),
-    messages: e.messages.map((message, u, p) => ({
+    messages: request.messages.map((message, messageIndex, messages) => ({
       role: message.role,
-      turnScopedSystem: message.role === "system" && u === p.length - 1,
+      turnScopedSystem: message.role === "system" && messageIndex === messages.length - 1,
       blocks:
         typeof message.content === "string"
           ? [
@@ -2779,10 +2904,10 @@ function snapshotRequestForCacheDiff(e, n = {}) {
                 },
               },
             ]
-          : message.content.map((h) => ({
-              thinking: h.type === "thinking" || h.type === "redacted_thinking",
-              cacheControl: getCacheControl(h),
-              body: stripSafeguardsField(stripCacheControl(h)),
+          : message.content.map((block) => ({
+              thinking: block.type === "thinking" || block.type === "redacted_thinking",
+              cacheControl: getCacheControl(block),
+              body: stripSafeguardsField(stripCacheControl(block)),
             })),
     })),
   };
@@ -2791,12 +2916,12 @@ function snapshotRequestForCacheDiff(e, n = {}) {
 /**
  * 把提示前缀账本转成可比较的视图：去掉前导 system、回合内 system 消息和 thinking 块。
  */
-function ledgerComparableView(e) {
+function ledgerComparableView(ledger) {
   return {
-    model: e.model,
-    tools: e.tools.filter(isBoundTool).map((tool) => tool.body),
-    system: e.system.filter((n) => !n.preamble).map((n) => n.body),
-    messages: e.messages
+    model: ledger.model,
+    tools: ledger.tools.filter(isBoundTool).map((tool) => tool.body),
+    system: ledger.system.filter((row) => !row.preamble).map((row) => row.body),
+    messages: ledger.messages
       .filter((message) => !message.turnScopedSystem)
       .map((message) => ({
         role: message.role,
@@ -2808,8 +2933,8 @@ function ledgerComparableView(e) {
 /**
  * 导出函数 `isCacheFingerprintPart`：参数 e，返回 e.part === "tool" || e.part === "system" || e.part === "message"。
  */
-function isCacheFingerprintPart(e) {
-  return e.part === "tool" || e.part === "system" || e.part === "message";
+function isCacheFingerprintPart(part) {
+  return part.part === "tool" || part.part === "system" || part.part === "message";
 }
 //@ chunk-a76knw89.js:3743-3753 placement
 var MAX_LEDGER_ENTRIES = 16;
@@ -2817,275 +2942,294 @@ var MAX_LEDGER_ENTRIES = 16;
 /**
  * 导出函数 `describeSnapshotDiff`：参数 e, n，返回 e.seeded ? diffToolLists(e, n) : [ ...diffToolLists(e, n), ...diffThinkingBlocks(e, n), ...diffCacheMarkers(e,…。
  */
-function describeSnapshotDiff(committed, n) {
-  return committed.seeded
-    ? diffToolLists(committed, n)
+function describeSnapshotDiff(previous, diff) {
+  return previous.seeded
+    ? diffToolLists(previous, diff)
     : [
-        ...diffToolLists(committed, n),
-        ...diffThinkingBlocks(committed, n),
-        ...diffCacheMarkers(committed, n),
-        ...describeRequestDifferences(committed, n),
+        ...diffToolLists(previous, diff),
+        ...diffThinkingBlocks(previous, diff),
+        ...diffCacheMarkers(previous, diff),
+        ...describeRequestDifferences(previous, diff),
       ];
 }
 //@ chunk-a76knw89.js:3841-5399 placement
 /**
  * 比较两次请求的工具列表（新增、移除、变化、重排），延迟工具单独处理。
  */
-function diffToolLists(e, n) {
-  let o = ledgerComparableView(e);
-  let r = ledgerComparableView(n);
-  let c = [];
-  let s = (k) => {
-    c.push(k);
-    return c.length < MAX_LEDGER_ENTRIES;
+function diffToolLists(previous, next) {
+  let previousView = ledgerComparableView(previous);
+  let nextView = ledgerComparableView(next);
+  let entries = [];
+  let pushEntry = (entry) => {
+    entries.push(entry);
+    return entries.length < MAX_LEDGER_ENTRIES;
   };
-  let u = (tools) =>
-    new Map([...tools.filter((S) => !S.deferred), ...tools.filter((S) => S.bound)].map((S) => [S.key, S]));
-  let p = u(e.tools);
-  let h = u(n.tools);
-  let T = [];
-  let y = false;
-  for (let [k, S] of p) {
-    let body = S.body;
-    let w = h.get(k);
-    if (w === undefined) {
-      if (S.deferred) {
-        if (!e.seeded)
-          T.push({
+  let indexTools = (tools) =>
+    new Map(
+      [...tools.filter((tool) => !tool.deferred), ...tools.filter((tool) => tool.bound)].map((tool) => [
+        tool.key,
+        tool,
+      ]),
+    );
+  let previousTools = indexTools(previous.tools);
+  let nextTools = indexTools(next.tools);
+  let seededRemovals = [];
+  let hasRealChange = false;
+  for (let [toolKey, previousTool] of previousTools) {
+    let body = previousTool.body;
+    let nextTool = nextTools.get(toolKey);
+    if (nextTool === undefined) {
+      if (previousTool.deferred) {
+        if (!previous.seeded)
+          seededRemovals.push({
             part: "tool",
-            id: k,
+            id: toolKey,
             kind: "removed",
             prev: body,
           });
         continue;
       }
-      y = true;
+      hasRealChange = true;
       if (
-        !s({
+        !pushEntry({
           part: "tool",
-          id: k,
+          id: toolKey,
           kind: "removed",
           prev: body,
         })
       )
-        return c;
-    } else if (S.deferred !== w.deferred) {
-      y = true;
-      let O = S.deferred
+        return entries;
+    } else if (previousTool.deferred !== nextTool.deferred) {
+      hasRealChange = true;
+      let deferralEntry = previousTool.deferred
         ? {
             part: "tool",
-            id: k,
+            id: toolKey,
             kind: "added",
-            next: w.body,
+            next: nextTool.body,
           }
         : {
             part: "tool",
-            id: k,
+            id: toolKey,
             kind: "removed",
             prev: body,
           };
-      if (!s(O)) return c;
-    } else if (!isDeepStrictEqual(body, w.body)) {
-      y ||= !S.deferred;
-      let body_2 = w.body;
+      if (!pushEntry(deferralEntry)) return entries;
+    } else if (!isDeepStrictEqual(body, nextTool.body)) {
+      hasRealChange ||= !previousTool.deferred;
+      let body_2 = nextTool.body;
       let field =
         [...Object.keys(body), ...Object.keys(body_2)].find(
-          (I) => !isDeepStrictEqual(exactKeyValue(body, I), exactKeyValue(body_2, I)),
+          (fieldName) => !isDeepStrictEqual(exactKeyValue(body, fieldName), exactKeyValue(body_2, fieldName)),
         ) ?? "?";
       if (
-        !s({
+        !pushEntry({
           part: "tool",
-          id: k,
+          id: toolKey,
           kind: "changed",
           field,
           prev: body,
           next: body_2,
         })
       )
-        return c;
+        return entries;
     }
   }
-  for (let [k, S] of h)
-    if (!p.has(k) && !S.deferred) {
-      y = true;
+  for (let [toolKey, nextTool] of nextTools)
+    if (!previousTools.has(toolKey) && !nextTool.deferred) {
+      hasRealChange = true;
       if (
-        !s({
+        !pushEntry({
           part: "tool",
-          id: k,
+          id: toolKey,
           kind: "added",
-          next: S.body,
+          next: nextTool.body,
         })
       )
-        return c;
+        return entries;
     }
-  if (!y) {
-    let k = (O) => [...O.values()].flatMap((M) => (M.deferred ? [] : [M.key]));
-    let S = k(p);
-    let found = k(h)
-      .filter((O) => p.has(O))
-      .find((O, M) => S[M] !== O);
+  if (!hasRealChange) {
+    let activeToolKeys = (toolMap) =>
+      [...toolMap.values()].flatMap((tool) => (tool.deferred ? [] : [tool.key]));
+    let previousKeys = activeToolKeys(previousTools);
+    let found = activeToolKeys(nextTools)
+      .filter((toolKey) => previousTools.has(toolKey))
+      .find((nextKey, keyIndex) => previousKeys[keyIndex] !== nextKey);
     if (found !== undefined)
-      s({
+      pushEntry({
         part: "tool",
         id: found,
         kind: "reordered",
       });
   }
-  let max = Math.max(o.system.length, r.system.length);
+  let max = Math.max(previousView.system.length, nextView.system.length);
   for (let j = 0; j < max; j++) {
-    let S = o.system[j];
-    let x = r.system[j];
-    let w = S === undefined ? "added" : x === undefined ? "removed" : "changed";
-    if (w !== "changed" || !isDeepStrictEqual(S, x)) {
+    let previousPart = previousView.system[j];
+    let nextPart = nextView.system[j];
+    let changeKind = previousPart === undefined ? "added" : nextPart === undefined ? "removed" : "changed";
+    if (changeKind !== "changed" || !isDeepStrictEqual(previousPart, nextPart)) {
       if (
-        !s({
+        !pushEntry({
           part: "system",
           index: j,
-          kind: w,
-          prev: S,
-          next: x,
+          kind: changeKind,
+          prev: previousPart,
+          next: nextPart,
         })
       )
-        return c;
+        return entries;
     }
   }
-  for (let j = 0; j < o.messages.length; j++) {
-    let S = o.messages[j];
-    let x = r.messages[j];
-    if (x !== undefined && isDeepStrictEqual(S, x)) continue;
-    let w = {
+  for (let j = 0; j < previousView.messages.length; j++) {
+    let previousMessage = previousView.messages[j];
+    let nextMessage = nextView.messages[j];
+    if (nextMessage !== undefined && isDeepStrictEqual(previousMessage, nextMessage)) continue;
+    let messageEntry = {
       part: "message",
       index: j,
-      role: S.role,
-      kind: x === undefined ? "removed" : "changed",
-      prev: S,
-      next: x,
+      role: previousMessage.role,
+      kind: nextMessage === undefined ? "removed" : "changed",
+      prev: previousMessage,
+      next: nextMessage,
     };
-    if (!s(w)) return c;
+    if (!pushEntry(messageEntry)) return entries;
   }
-  for (let k of T) if (!s(k)) break;
-  return c;
+  for (let entry of seededRemovals) if (!pushEntry(entry)) break;
+  return entries;
 }
 //@ chunk-a76knw89.js:5399-5876 placement
-function diffThinkingBlocks(e, n) {
-  let o = [];
-  let min = Math.min(e.messages.length, n.messages.length);
-  for (let j = 0; j < min && o.length < MAX_LEDGER_ENTRIES; j++) {
-    let s = describeSignatureField(e.messages[j]);
-    let u = describeSignatureField(n.messages[j]);
-    if (s.length === 0 && u.length === 0) continue;
-    if (s.length === u.length && s.every((h, T) => h === u[T])) continue;
-    let p =
-      s.slice(0, u.length).every((h, T) => h === u[T]) || u.slice(0, s.length).every((h, T) => h === s[T]);
-    o.push({
+function diffThinkingBlocks(previous, next) {
+  let entries = [];
+  let min = Math.min(previous.messages.length, next.messages.length);
+  for (let j = 0; j < min && entries.length < MAX_LEDGER_ENTRIES; j++) {
+    let previousSignatures = describeSignatureField(previous.messages[j]);
+    let nextSignatures = describeSignatureField(next.messages[j]);
+    if (previousSignatures.length === 0 && nextSignatures.length === 0) continue;
+    if (
+      previousSignatures.length === nextSignatures.length &&
+      previousSignatures.every((signature, signatureIndex) => signature === nextSignatures[signatureIndex])
+    )
+      continue;
+    let sharesPrefix =
+      previousSignatures
+        .slice(0, nextSignatures.length)
+        .every((signature, signatureIndex) => signature === nextSignatures[signatureIndex]) ||
+      nextSignatures
+        .slice(0, previousSignatures.length)
+        .every((signature, signatureIndex) => signature === previousSignatures[signatureIndex]);
+    entries.push({
       part: "thinking",
       index: j,
-      kind: !p ? "changed" : u.length < s.length ? "dropped" : "added",
-      prevCount: s.length,
-      nextCount: u.length,
+      kind: !sharesPrefix
+        ? "changed"
+        : nextSignatures.length < previousSignatures.length
+          ? "dropped"
+          : "added",
+      prevCount: previousSignatures.length,
+      nextCount: nextSignatures.length,
     });
   }
-  return o;
+  return entries;
 }
 //@ chunk-a76knw89.js:5876-6052 placement
-function describeSignatureField(e) {
-  return e.blocks.flatMap((block) => {
+function describeSignatureField(block) {
+  return block.blocks.flatMap((block) => {
     if (!block.thinking) return [];
-    let o = exactKeyValue(block.body, "signature");
-    let r = exactKeyValue(block.body, "data");
-    return [typeof o === "string" ? o : typeof r === "string" ? r : "?"];
+    let signature = exactKeyValue(block.body, "signature");
+    let data = exactKeyValue(block.body, "data");
+    return [typeof signature === "string" ? signature : typeof data === "string" ? data : "?"];
   });
 }
 //@ chunk-a76knw89.js:6052-6505 placement
-function diffCacheMarkers(e, n) {
-  let cacheControlMarkers = collectCacheControlMarkers(e, e.messages.length);
-  let cacheControlMarkers_2 = collectCacheControlMarkers(n, e.messages.length);
-  let c = [];
-  for (let [s, { at: u, marker: p }] of cacheControlMarkers) {
-    if (c.length >= MAX_LEDGER_ENTRIES) return c;
-    let h = cacheControlMarkers_2.get(s);
-    if (h === undefined)
-      c.push({
+function diffCacheMarkers(previous, next) {
+  let cacheControlMarkers = collectCacheControlMarkers(previous, previous.messages.length);
+  let cacheControlMarkers_2 = collectCacheControlMarkers(next, previous.messages.length);
+  let entries = [];
+  for (let [markerKey, { at, marker }] of cacheControlMarkers) {
+    if (entries.length >= MAX_LEDGER_ENTRIES) return entries;
+    let nextMarkerInfo = cacheControlMarkers_2.get(markerKey);
+    if (nextMarkerInfo === undefined)
+      entries.push({
         part: "cache",
-        at: u,
+        at,
         kind: "dropped",
-        prev: p,
+        prev: marker,
         next: undefined,
       });
-    else if (!isDeepStrictEqual(p, h.marker))
-      c.push({
+    else if (!isDeepStrictEqual(marker, nextMarkerInfo.marker))
+      entries.push({
         part: "cache",
-        at: u,
+        at,
         kind: "changed",
-        prev: p,
-        next: h.marker,
+        prev: marker,
+        next: nextMarkerInfo.marker,
       });
   }
-  for (let [s, { at: u, marker: p }] of cacheControlMarkers_2) {
-    if (c.length >= MAX_LEDGER_ENTRIES) return c;
-    if (!cacheControlMarkers.has(s))
-      c.push({
+  for (let [markerKey, { at, marker }] of cacheControlMarkers_2) {
+    if (entries.length >= MAX_LEDGER_ENTRIES) return entries;
+    if (!cacheControlMarkers.has(markerKey))
+      entries.push({
         part: "cache",
-        at: u,
+        at,
         kind: "added",
         prev: undefined,
-        next: p,
+        next: marker,
       });
   }
-  return c;
+  return entries;
 }
 //@ chunk-a76knw89.js:6505-6987 placement
-function collectCacheControlMarkers(e, n) {
-  let o = new Map();
-  for (let tool of e.tools)
+function collectCacheControlMarkers(request, limit) {
+  let markers = new Map();
+  for (let tool of request.tools)
     if (tool.cacheControl !== undefined)
-      o.set(`tools:${tool.key}`, {
+      markers.set(`tools:${tool.key}`, {
         at: {
           segment: "tools",
           key: tool.key,
         },
         marker: tool.cacheControl,
       });
-  e.system.forEach((r, c) => {
-    if (r.cacheControl !== undefined)
-      o.set(`system:${c}`, {
+  request.system.forEach((section, index) => {
+    if (section.cacheControl !== undefined)
+      markers.set(`system:${index}`, {
         at: {
           segment: "system",
-          index: c,
+          index,
         },
-        marker: r.cacheControl,
+        marker: section.cacheControl,
       });
   });
-  e.messages.slice(0, n).forEach((message, c) => {
-    message.blocks.forEach((block, u) => {
+  request.messages.slice(0, limit).forEach((message, index) => {
+    message.blocks.forEach((block, blockItem) => {
       if (block.cacheControl !== undefined)
-        o.set(`messages:${c}.${u}`, {
+        markers.set(`messages:${index}.${blockItem}`, {
           at: {
             segment: "messages",
-            index: c,
-            block: u,
+            index,
+            block: blockItem,
           },
           marker: block.cacheControl,
         });
     });
   });
-  return o;
+  return markers;
 }
 //@ chunk-a76knw89.js:6987-7249 placement
-function describeRequestDifferences(e, n) {
+function describeRequestDifferences(left, right) {
   return [
-    ["model", e.model, n.model],
-    ["attribution_header", billingHeaderText(e), billingHeaderText(n)],
-    ["deferred_tools", deferredToolKeys(e), deferredToolKeys(n)],
-    ...ENVELOPE_DIFF_FIELDS.map((r) => [r, e.envelope[r], n.envelope[r]]),
+    ["model", left.model, right.model],
+    ["attribution_header", billingHeaderText(left), billingHeaderText(right)],
+    ["deferred_tools", deferredToolKeys(left), deferredToolKeys(right)],
+    ...ENVELOPE_DIFF_FIELDS.map((field) => [field, left.envelope[field], right.envelope[field]]),
   ]
-    .filter(([, r, c]) => !isDeepStrictEqual(r, c))
-    .map(([r, c, s]) => ({
+    .filter(([, leftValue, rightValue]) => !isDeepStrictEqual(leftValue, rightValue))
+    .map(([field, leftValue, rightValue]) => ({
       part: "envelope",
-      id: r,
+      id: field,
       kind: "changed",
-      prev: c,
-      next: s,
+      prev: leftValue,
+      next: rightValue,
     }));
 }
 //@ chunk-a76knw89.js:7249-7288 placement
@@ -3093,55 +3237,56 @@ function sortedList(betas) {
   return betas && [...betas].sort();
 }
 //@ chunk-a76knw89.js:7288-7410 placement
-function billingHeaderText(e) {
-  for (let n of e.system) {
-    let o = exactKeyValue(n.body, "text");
-    if (typeof o === "string" && o.startsWith(X_ANTHROPIC_BILLING_HEADER)) return o;
+function billingHeaderText(row) {
+  for (let systemRow of row.system) {
+    let text = exactKeyValue(systemRow.body, "text");
+    if (typeof text === "string" && text.startsWith(X_ANTHROPIC_BILLING_HEADER)) return text;
   }
   return "";
 }
 //@ chunk-a76knw89.js:7410-7497 placement
-function deferredToolKeys(e) {
-  return e.tools
+function deferredToolKeys(reference) {
+  return reference.tools
     .filter((tool) => tool.deferred)
     .map((tool) => tool.key)
     .sort()
     .join(",");
 }
 //@ chunk-a76knw89.js:7497-7539 placement
-function isBoundTool(e) {
-  return !e.deferred || e.bound;
+function isBoundTool(tool) {
+  return !tool.deferred || tool.bound;
 }
 //@ chunk-a76knw89.js:7539-7589 placement
 /**
  * 导出函数 `isDeferredTool`：参数 e，返回 lO(e, "defer_loading") === !0。
  */
-function isDeferredTool(e) {
-  return exactKeyValue(e, "defer_loading") === true;
+function isDeferredTool(tool) {
+  return exactKeyValue(tool, "defer_loading") === true;
 }
 //@ chunk-a76knw89.js:7589-8006 placement
 function collectReferencedDeferredTools(messages) {
-  let n = new Set();
-  for (let o of messages) {
-    if (typeof o.content === "string") continue;
-    if (o.role === "system") {
-      for (let c of o.content) {
-        let s = exactKeyValue(c, "tool");
-        let u =
-          exactKeyValue(c, "type") === "tool_addition" && typeof s === "object" && s !== null
-            ? exactKeyValue(s, "name")
+  let seen = new Set();
+  for (let message of messages) {
+    if (typeof message.content === "string") continue;
+    if (message.role === "system") {
+      for (let block of message.content) {
+        let tool = exactKeyValue(block, "tool");
+        let out =
+          exactKeyValue(block, "type") === "tool_addition" && typeof tool === "object" && tool !== null
+            ? exactKeyValue(tool, "name")
             : undefined;
-        if (typeof u === "string") n.add(canonicalToolName_2(u));
+        if (typeof out === "string") seen.add(canonicalToolName_2(out));
       }
       continue;
     }
-    if (o.role !== "user") continue;
-    for (let c of o.content) {
-      if (!isToolResultBlockWithContent(c)) continue;
-      for (let s of c.content) if (isToolReferenceWithName(s)) n.add(canonicalToolName_2(s.tool_name));
+    if (message.role !== "user") continue;
+    for (let block of message.content) {
+      if (!isToolResultBlockWithContent(block)) continue;
+      for (let inner of block.content)
+        if (isToolReferenceWithName(inner)) seen.add(canonicalToolName_2(inner.tool_name));
     }
   }
-  return n;
+  return seen;
 }
 export {
   parkAgentBaseline,
@@ -3166,7 +3311,7 @@ export {
   flushMessageOutlines,
   checkResponseForCacheBreak,
   logCacheDiagnosisReceived,
-  getCacheBreakDiffPath,
+  cacheBreakStatePrefix,
   isUncachedSystemBlock,
   expectPromptCacheDrop,
   recordSummaryFork,

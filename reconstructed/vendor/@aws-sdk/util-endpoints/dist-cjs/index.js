@@ -5,12 +5,12 @@
  * pieces: chunk-edce4vxq.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 import { require_index_browser as require_index_browser_3 } from "../../../@smithy/core/dist-cjs/submodules/endpoints/index.browser.js";
 import { require_url_parser } from "../../../@smithy/url-parser/dist-cjs/index.js";
 
 //@ chunk-edce4vxq.js:5421-12143 cjs-fingerprint
-var require_util_endpoints = x(function (cjsExports) {
+var require_util_endpoints = __commonJS(function (cjsExports) {
   var utilEndpoints = require_index_browser_3();
   var urlParser = require_url_parser();
   var isVirtualHostableS3Bucket = (value, allowSubDomains = false) => {

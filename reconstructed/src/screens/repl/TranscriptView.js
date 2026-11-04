@@ -8,13 +8,18 @@
  * pieces: chunk-18hwfzwa.js (3)
  * attribution: placement 3
  */
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { logEvent } from "../../services/analytics/index.js";
 import { useKeybinding } from "../../keybindings/useKeybinding.js";
 import { useSession } from "../../context/session.js";
 import { useTheme_2 } from "../../components/design-system/ThemeProvider.js";
 import { useClock } from "../../ink/components/ClockContext.js";
-import { y, R, P, init_react_production } from "../../../vendor/react/cjs/react.production.js";
+import {
+  useState,
+  useRef,
+  useEffect,
+  init_react_production,
+} from "../../../vendor/react/cjs/react.production.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { useSearchHighlight } from "../../ink/hooks/use-search-highlight.js";
 import { useTerminalSize } from "../../hooks/useTerminalSize.js";
@@ -41,15 +46,16 @@ import { Box } from "../../ink/components/Text.js";
 import { FullscreenLayout } from "../../components/FullscreenLayout.js";
 import { AgentWaitingMessages } from "../../components/PromptInput/WaitingMessages.js";
 import { SandboxViolationExpandedView } from "../../components/SandboxViolationExpandedView.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-18hwfzwa.js:142030-142807 placement
 function TranscriptModeHeader(props) {
-  let $ = w(12);
+  let $ = useMemoCache(12);
   let { showAllInTranscript, onToggleShowAll, onExit, messageCount, virtualScrollActive, searchBarOpen } =
     props;
-  let He;
+  let toggleShowAll;
   if ($[0] !== messageCount || $[1] !== onToggleShowAll || $[2] !== showAllInTranscript) {
-    He = () => {
+    toggleShowAll = () => {
       logEvent("tengu_transcript_toggle_show_all", {
         is_expanding: !showAllInTranscript,
         message_count: messageCount,
@@ -59,12 +65,12 @@ function TranscriptModeHeader(props) {
     $[0] = messageCount;
     $[1] = onToggleShowAll;
     $[2] = showAllInTranscript;
-    $[3] = He;
-  } else He = $[3];
-  let We = He;
-  let ze;
+    $[3] = toggleShowAll;
+  } else toggleShowAll = $[3];
+  let toggleShowAll_2 = toggleShowAll;
+  let exitTranscript;
   if ($[4] !== messageCount || $[5] !== onExit || $[6] !== showAllInTranscript) {
-    ze = () => {
+    exitTranscript = () => {
       logEvent("tengu_transcript_exit", {
         show_all: showAllInTranscript,
         message_count: messageCount,
@@ -74,31 +80,31 @@ function TranscriptModeHeader(props) {
     $[4] = messageCount;
     $[5] = onExit;
     $[6] = showAllInTranscript;
-    $[7] = ze;
-  } else ze = $[7];
-  let Xe = ze;
+    $[7] = exitTranscript;
+  } else exitTranscript = $[7];
+  let exitTranscript_2 = exitTranscript;
   const isActive = !virtualScrollActive;
-  let kt;
+  let toggleKeybindingOptions;
   if ($[8] !== isActive) {
-    kt = {
+    toggleKeybindingOptions = {
       context: "Transcript",
       isActive,
     };
     $[8] = isActive;
-    $[9] = kt;
-  } else kt = $[9];
-  useKeybinding("transcript:toggleShowAll", We, kt);
+    $[9] = toggleKeybindingOptions;
+  } else toggleKeybindingOptions = $[9];
+  useKeybinding("transcript:toggleShowAll", toggleShowAll_2, toggleKeybindingOptions);
   const isActive_2 = !searchBarOpen;
-  let It;
+  let exitKeybindingOptions;
   if ($[10] !== isActive_2) {
-    It = {
+    exitKeybindingOptions = {
       context: "Transcript",
       isActive: isActive_2,
     };
     $[10] = isActive_2;
-    $[11] = It;
-  } else It = $[11];
-  useKeybinding("transcript:exit", Xe, It);
+    $[11] = exitKeybindingOptions;
+  } else exitKeybindingOptions = $[11];
+  useKeybinding("transcript:exit", exitTranscript_2, exitKeybindingOptions);
   return null;
 }
 //@ chunk-18hwfzwa.js:142807-149068 placement
@@ -106,7 +112,7 @@ function TranscriptModeHeader(props) {
  * 转录模式（ctrl+o）视图：虚拟滚动渲染全部消息，支持显示全部/退出快捷键，把转录写入临时文件 cc-transcript-*.txt 并用 $VISUAL/$EDITOR 打开。
  */
 function TranscriptView(props) {
-  let $ = w(92);
+  let $ = useMemoCache(92);
   let {
     focused,
     tools,
@@ -128,90 +134,90 @@ function TranscriptView(props) {
   let messages = useSession();
   let { storageV5 } = useTheme_2();
   let clock = useClock();
-  let [oo, Xt] = y(false);
-  let io = oo || dumpMode;
-  let [so, po] = y(false);
-  let [ao, co] = y("");
-  let bo = R(0);
-  let Ao = R(undefined);
-  let Bo = R(false);
-  let Ho;
-  let Io;
+  let [showAll, setShowAll] = useState(false);
+  let showAllMessages = showAll || dumpMode;
+  let [searchActive, setSearchActive] = useState(false);
+  let [statusText, setStatusText] = useState("");
+  let renderGeneration = useRef(0);
+  let clearStatusTimer = useRef(undefined);
+  let renderInFlight = useRef(false);
+  let invalidateRender;
+  let invalidateDeps;
   if ($[0] === MEMO_CACHE_SENTINEL) {
-    Ho = () => () => {
-      bo.current = bo.current + 1;
-      Ao.current?.();
+    invalidateRender = () => () => {
+      renderGeneration.current = renderGeneration.current + 1;
+      clearStatusTimer.current?.();
     };
-    Io = [];
-    $[0] = Ho;
-    $[1] = Io;
+    invalidateDeps = [];
+    $[0] = invalidateRender;
+    $[1] = invalidateDeps;
   } else {
-    Ho = $[0];
-    Io = $[1];
+    invalidateRender = $[0];
+    invalidateDeps = $[1];
   }
-  P(Ho, Io);
-  let Wo = R(null);
-  let [mn, Cn] = y(false);
-  let [No, vo] = y("");
-  let [Yo, kn] = y(0);
-  let [Fn, bn] = y(0);
-  let Go;
+  useEffect(invalidateRender, invalidateDeps);
+  let jumpRef = useRef(null);
+  let [isSearching, setIsSearching] = useState(false);
+  let [query, setQueryState] = useState("");
+  let [matchCount, setMatchCount] = useState(0);
+  let [currentMatch, setCurrentMatch] = useState(0);
+  let onSearchMatchesChange;
   if ($[2] === MEMO_CACHE_SENTINEL) {
-    Go = (hn, Mn) => {
-      kn(hn);
-      bn(Mn);
+    onSearchMatchesChange = (count, index) => {
+      setMatchCount(count);
+      setCurrentMatch(index);
     };
-    $[2] = Go;
-  } else Go = $[2];
-  let onSearchMatchesChange = Go;
+    $[2] = onSearchMatchesChange;
+  } else onSearchMatchesChange = $[2];
+  let onSearchMatchesChange_2 = onSearchMatchesChange;
   let { setQuery, scanElement, setPositions } = useSearchHighlight();
-  let _o;
+  let search;
   if ($[3] !== scanElement || $[4] !== setPositions) {
-    _o = {
-      jumpRef: Wo,
-      onSearchMatchesChange,
+    search = {
+      jumpRef,
+      onSearchMatchesChange: onSearchMatchesChange_2,
       scanElement,
       setPositions,
     };
     $[3] = scanElement;
     $[4] = setPositions;
-    $[5] = _o;
-  } else _o = $[5];
-  let search = _o;
+    $[5] = search;
+  } else search = $[5];
+  let search_2 = search;
   let { columns } = useTerminalSize();
-  let columnsRef = R(columns);
-  let mr;
-  let Kn;
-  if ($[6] !== mn || $[7] !== No || $[8] !== setQuery || $[9] !== columns) {
-    mr = () => {
+  let columnsRef = useRef(columns);
+  let columnsEffect;
+  let columnsDeps;
+  if ($[6] !== isSearching || $[7] !== query || $[8] !== setQuery || $[9] !== columns) {
+    columnsEffect = () => {
       if (columnsRef.current !== columns) {
         columnsRef.current = columns;
-        if (No || mn) {
-          Cn(false);
-          vo("");
-          kn(0);
-          bn(0);
-          Wo.current?.disarmSearch();
+        if (query || isSearching) {
+          setIsSearching(false);
+          setQueryState("");
+          setMatchCount(0);
+          setCurrentMatch(0);
+          jumpRef.current?.disarmSearch();
           setQuery("");
         }
       }
     };
-    Kn = [columns, No, mn, setQuery];
-    $[6] = mn;
-    $[7] = No;
+    columnsDeps = [columns, query, isSearching, setQuery];
+    $[6] = isSearching;
+    $[7] = query;
     $[8] = setQuery;
     $[9] = columns;
-    $[10] = mr;
-    $[11] = Kn;
+    $[10] = columnsEffect;
+    $[11] = columnsDeps;
   } else {
-    mr = $[10];
-    Kn = $[11];
+    columnsEffect = $[10];
+    columnsDeps = $[11];
   }
-  P(mr, Kn);
-  let Wn = R(null);
-  let Fr = !mn;
-  useFocusOnMount(Wn, Fr, true);
-  let Zn;
+  useEffect(columnsEffect, columnsDeps);
+  let containerRef = useRef(null);
+  let focusable = !isSearching;
+  useFocusOnMount(containerRef, focusable, true);
+  let onKeyDown;
   if (
     $[12] !== clock ||
     $[13] !== dumpMode ||
@@ -219,95 +225,106 @@ function TranscriptView(props) {
     $[15] !== focused.messages ||
     $[16] !== focused.task ||
     $[17] !== onDumpToScrollback ||
-    $[18] !== Yo ||
+    $[18] !== matchCount ||
     $[19] !== messages ||
     $[20] !== storageV5 ||
     $[21] !== tools ||
-    $[22] !== Fr ||
+    $[22] !== focusable ||
     $[23] !== virtualScrollActive
   ) {
-    Zn = function fr(event) {
-      if (!Fr || !virtualScrollActive) {
+    onKeyDown = function onKeyDownImpl(event) {
+      if (!focusable || !virtualScrollActive) {
         return;
       }
       if (event.ctrl || event.meta) {
         return;
       }
       if (event.key === "?" && !dumpMode) {
-        po(negateBoolean);
+        setSearchActive(negateBoolean);
         event.preventDefault();
         return;
       }
       if (event.key === "/" && !dumpMode) {
-        Wo.current?.setAnchor();
-        Cn(true);
-        po(false);
+        jumpRef.current?.setAnchor();
+        setIsSearching(true);
+        setSearchActive(false);
         event.preventDefault();
         return;
       }
-      let dr = event.key[0];
-      if (!dumpMode && (dr === "n" || dr === "N") && event.key === dr.repeat(event.key.length) && Yo > 0) {
-        let or = dr === "n" ? Wo.current?.nextMatch : Wo.current?.prevMatch;
-        if (or) {
-          for (let idx = 0; idx < event.key.length; idx++) or();
+      let firstKeyChar = event.key[0];
+      if (
+        !dumpMode &&
+        (firstKeyChar === "n" || firstKeyChar === "N") &&
+        event.key === firstKeyChar.repeat(event.key.length) &&
+        matchCount > 0
+      ) {
+        let jumpMatch = firstKeyChar === "n" ? jumpRef.current?.nextMatch : jumpRef.current?.prevMatch;
+        if (jumpMatch) {
+          for (let idx = 0; idx < event.key.length; idx++) jumpMatch();
         }
         event.preventDefault();
         return;
       }
-      if (!dumpMode && (dr === "{" || dr === "}") && event.key === dr.repeat(event.key.length)) {
-        let Qn = dr === "}" ? Wo.current?.nextMessage : Wo.current?.prevMessage;
-        if (Qn) {
-          for (let idx = 0; idx < event.key.length; idx++) Qn();
+      if (
+        !dumpMode &&
+        (firstKeyChar === "{" || firstKeyChar === "}") &&
+        event.key === firstKeyChar.repeat(event.key.length)
+      ) {
+        let jumpMessage = firstKeyChar === "}" ? jumpRef.current?.nextMessage : jumpRef.current?.prevMessage;
+        if (jumpMessage) {
+          for (let idx = 0; idx < event.key.length; idx++) jumpMessage();
         }
         event.preventDefault();
         return;
       }
       if (event.key === "[" && !dumpMode && !embedded) {
         onDumpToScrollback();
-        po(false);
+        setSearchActive(false);
         event.preventDefault();
         return;
       }
       if (event.key === "v") {
         event.preventDefault();
-        po(false);
-        if (Bo.current) {
+        setSearchActive(false);
+        if (renderInFlight.current) {
           return;
         }
-        Bo.current = true;
-        let Ir = bo.current;
-        let ts = (Pr) => {
-          if (Ir !== bo.current) {
+        renderInFlight.current = true;
+        let startGeneration = renderGeneration.current;
+        let setStatus = (message) => {
+          if (startGeneration !== renderGeneration.current) {
             return;
           }
-          Ao.current?.();
-          co(Pr);
+          clearStatusTimer.current?.();
+          setStatusText(message);
         };
-        ts(`rendering ${focused.messages.length} messages\u2026`);
+        setStatus(`rendering ${focused.messages.length} messages\u2026`);
         (async () => {
           try {
             let columns = Math.max(80, (process.stdout.columns ?? 80) - 6);
-            let replaced = (
+            let content = (
               await renderMessagesToPlainText(messages, focused.messages, tools, {
                 columns,
                 storageV5,
                 viewedAgent: focused.task,
               })
             ).replace(/[ \t]+$/gm, "");
-            let filePath = await writeTempFile("cc-transcript-", ".txt", replaced);
+            let filePath = await writeTempFile("cc-transcript-", ".txt", content);
             let fileInExternalEditor = openFileInExternalEditor(filePath);
-            ts(
+            setStatus(
               fileInExternalEditor ? `opening ${filePath}` : `wrote ${filePath} \xB7 no $VISUAL/$EDITOR set`,
             );
           } catch (error) {
-            let _r = error;
-            ts(`render failed: ${_r instanceof Error ? _r.message : String(_r)}`);
+            let renderError = error;
+            setStatus(
+              `render failed: ${renderError instanceof Error ? renderError.message : String(renderError)}`,
+            );
           }
-          Bo.current = false;
-          if (Ir !== bo.current) {
+          renderInFlight.current = false;
+          if (startGeneration !== renderGeneration.current) {
             return;
           }
-          Ao.current = clock.setTimeout(() => co(""), 4000);
+          clearStatusTimer.current = clock.setTimeout(() => setStatusText(""), 4000);
         })();
       }
     };
@@ -317,60 +334,60 @@ function TranscriptView(props) {
     $[15] = focused.messages;
     $[16] = focused.task;
     $[17] = onDumpToScrollback;
-    $[18] = Yo;
+    $[18] = matchCount;
     $[19] = messages;
     $[20] = storageV5;
     $[21] = tools;
-    $[22] = Fr;
+    $[22] = focusable;
     $[23] = virtualScrollActive;
-    $[24] = Zn;
-  } else Zn = $[24];
-  let onKeyDown = Zn;
-  let Gn;
-  let $r;
-  if ($[25] !== No || $[26] !== setQuery || $[27] !== setPositions || $[28] !== virtualScrollActive) {
-    Gn = () => {
-      setQuery(virtualScrollActive ? No : "");
+    $[24] = onKeyDown;
+  } else onKeyDown = $[24];
+  let onKeyDown_2 = onKeyDown;
+  let queryEffect;
+  let queryDeps;
+  if ($[25] !== query || $[26] !== setQuery || $[27] !== setPositions || $[28] !== virtualScrollActive) {
+    queryEffect = () => {
+      setQuery(virtualScrollActive ? query : "");
       if (!virtualScrollActive) setPositions(null);
     };
-    $r = [virtualScrollActive, No, setQuery, setPositions];
-    $[25] = No;
+    queryDeps = [virtualScrollActive, query, setQuery, setPositions];
+    $[25] = query;
     $[26] = setQuery;
     $[27] = setPositions;
     $[28] = virtualScrollActive;
-    $[29] = Gn;
-    $[30] = $r;
+    $[29] = queryEffect;
+    $[30] = queryDeps;
   } else {
-    Gn = $[29];
-    $r = $[30];
+    queryEffect = $[29];
+    queryDeps = $[30];
   }
-  P(Gn, $r);
-  let Yr;
-  let Er;
+  useEffect(queryEffect, queryDeps);
+  let clearOnUnmount;
+  let clearDeps;
   if ($[31] !== setQuery || $[32] !== setPositions) {
-    Yr = () => () => {
+    clearOnUnmount = () => () => {
       setQuery("");
       setPositions(null);
     };
-    Er = [setQuery, setPositions];
+    clearDeps = [setQuery, setPositions];
     $[31] = setQuery;
     $[32] = setPositions;
-    $[33] = Yr;
-    $[34] = Er;
+    $[33] = clearOnUnmount;
+    $[34] = clearDeps;
   } else {
-    Yr = $[33];
-    Er = $[34];
+    clearOnUnmount = $[33];
+    clearDeps = $[34];
   }
-  P(Yr, Er);
-  let Vr = dumpMode ? "uncapped" : io ? "all" : undefined;
-  let ms;
+  useEffect(clearOnUnmount, clearDeps);
+  let scriptSourceMode = dumpMode ? "uncapped" : showAllMessages ? "all" : undefined;
+  let logoHeader;
   if ($[35] !== hideWelcomeChrome) {
-    ms = jsxProd_default(LogoHeader, {
+    logoHeader = jsxProd_default(LogoHeader, {
       hideWelcomeChrome,
     });
     $[35] = hideWelcomeChrome;
-    $[36] = ms;
-  } else ms = $[36];
+    $[36] = logoHeader;
+  } else logoHeader = $[36];
   let source;
   if ($[37] !== focused || $[38] !== turn) {
     source = {
@@ -382,107 +399,107 @@ function TranscriptView(props) {
     $[38] = turn;
     $[39] = source;
   } else source = $[39];
-  const scriptSources = Vr === undefined ? "collapsed" : "whole";
-  let is;
+  const scriptSources = scriptSourceMode === undefined ? "collapsed" : "whole";
+  let exportView;
   if (
     $[40] !== commands ||
-    $[41] !== Vr ||
+    $[41] !== scriptSourceMode ||
     $[42] !== reveal ||
     $[43] !== scrollViewport ||
-    $[44] !== search ||
+    $[44] !== search_2 ||
     $[45] !== source ||
     $[46] !== scriptSources ||
     $[47] !== tools
   ) {
-    is = jsxProd_default(ExportTranscriptView, {
+    exportView = jsxProd_default(ExportTranscriptView, {
       source,
       tools,
       commands,
       screen: "transcript",
-      history: Vr,
+      history: scriptSourceMode,
       scriptSources,
       scrollViewport,
-      search,
+      search: search_2,
       reveal,
     });
     $[40] = commands;
-    $[41] = Vr;
+    $[41] = scriptSourceMode;
     $[42] = reveal;
     $[43] = scrollViewport;
-    $[44] = search;
+    $[44] = search_2;
     $[45] = source;
     $[46] = scriptSources;
     $[47] = tools;
-    $[48] = is;
-  } else is = $[48];
-  let ws;
-  if ($[49] !== ms || $[50] !== is) {
-    ws = jsxProd_default_2(Fragment, {
-      children: [ms, is],
+    $[48] = exportView;
+  } else exportView = $[48];
+  let headerFragment;
+  if ($[49] !== logoHeader || $[50] !== exportView) {
+    headerFragment = jsxProd_default_2(Fragment, {
+      children: [logoHeader, exportView],
     });
-    $[49] = ms;
-    $[50] = is;
-    $[51] = ws;
-  } else ws = $[51];
-  let Ci = ws;
-  let oi;
-  if ($[52] !== focused.messages.length || $[53] !== onExit || $[54] !== io) {
-    oi = jsxProd_default(GlobalKeybindingHandlers, {
+    $[49] = logoHeader;
+    $[50] = exportView;
+    $[51] = headerFragment;
+  } else headerFragment = $[51];
+  let header = headerFragment;
+  let keybindingHandlers;
+  if ($[52] !== focused.messages.length || $[53] !== onExit || $[54] !== showAllMessages) {
+    keybindingHandlers = jsxProd_default(GlobalKeybindingHandlers, {
       screen: "transcript",
       onToggleTranscript: onExit,
-      showAllInTranscript: io,
+      showAllInTranscript: showAllMessages,
       messageCount: focused.messages.length,
     });
     $[52] = focused.messages.length;
     $[53] = onExit;
-    $[54] = io;
-    $[55] = oi;
-  } else oi = $[55];
+    $[54] = showAllMessages;
+    $[55] = keybindingHandlers;
+  } else keybindingHandlers = $[55];
   let onToggleShowAll;
   if ($[56] === MEMO_CACHE_SENTINEL) {
-    onToggleShowAll = () => Xt(notB);
+    onToggleShowAll = () => setShowAll(notB);
     $[56] = onToggleShowAll;
   } else onToggleShowAll = $[56];
-  let Hi;
+  let modeHeader;
   if (
     $[57] !== focused.messages.length ||
     $[58] !== onExit ||
-    $[59] !== mn ||
-    $[60] !== io ||
+    $[59] !== isSearching ||
+    $[60] !== showAllMessages ||
     $[61] !== virtualScrollActive
   ) {
-    Hi = jsxProd_default(TranscriptModeHeader, {
-      showAllInTranscript: io,
+    modeHeader = jsxProd_default(TranscriptModeHeader, {
+      showAllInTranscript: showAllMessages,
       onToggleShowAll,
       onExit,
       messageCount: focused.messages.length,
       virtualScrollActive,
-      searchBarOpen: mn,
+      searchBarOpen: isSearching,
     });
     $[57] = focused.messages.length;
     $[58] = onExit;
-    $[59] = mn;
-    $[60] = io;
+    $[59] = isSearching;
+    $[60] = showAllMessages;
     $[61] = virtualScrollActive;
-    $[62] = Hi;
-  } else Hi = $[62];
-  let Zi;
+    $[62] = modeHeader;
+  } else modeHeader = $[62];
+  let bodyView;
   if (
     $[63] !== onUserScroll ||
     $[64] !== reveal?.current ||
     $[65] !== scrollKeysActive ||
     $[66] !== scrollViewport ||
-    $[67] !== mn
+    $[67] !== isSearching
   ) {
-    Zi = scrollViewport
+    bodyView = scrollViewport
       ? jsxProd_default(ScrollKeybindingHandler, {
           scrollViewport,
           isActive: scrollKeysActive,
-          isModal: !mn,
-          onScroll: (da) => {
-            Wo.current?.disarmSearch();
+          isModal: !isSearching,
+          onScroll: (scrollEvent) => {
+            jumpRef.current?.disarmSearch();
             reveal?.current?.release();
-            onUserScroll?.(da);
+            onUserScroll?.(scrollEvent);
           },
         })
       : null;
@@ -490,42 +507,42 @@ function TranscriptView(props) {
     $[64] = reveal?.current;
     $[65] = scrollKeysActive;
     $[66] = scrollViewport;
-    $[67] = mn;
-    $[68] = Zi;
-  } else Zi = $[68];
-  let qn;
-  if ($[69] !== onKeyDown) {
-    qn = jsxProd_default(Box, {
-      ref: Wn,
+    $[67] = isSearching;
+    $[68] = bodyView;
+  } else bodyView = $[68];
+  let keyboardBox;
+  if ($[69] !== onKeyDown_2) {
+    keyboardBox = jsxProd_default(Box, {
+      ref: containerRef,
       tabIndex: -1,
-      onKeyDown,
+      onKeyDown: onKeyDown_2,
     });
-    $[69] = onKeyDown;
-    $[70] = qn;
-  } else qn = $[70];
-  let ps;
+    $[69] = onKeyDown_2;
+    $[70] = keyboardBox;
+  } else keyboardBox = $[70];
+  let bodyContent;
   if (
     $[71] !== dumpMode ||
-    $[72] !== ao ||
+    $[72] !== statusText ||
     $[73] !== focused ||
     $[74] !== scrollViewport ||
-    $[75] !== Yo ||
-    $[76] !== Fn ||
-    $[77] !== mn ||
-    $[78] !== No ||
+    $[75] !== matchCount ||
+    $[76] !== currentMatch ||
+    $[77] !== isSearching ||
+    $[78] !== query ||
     $[79] !== setQuery ||
-    $[80] !== io ||
+    $[80] !== showAllMessages ||
     $[81] !== showSandboxViolations ||
     $[82] !== toolProgress ||
-    $[83] !== so ||
-    $[84] !== Ci
+    $[83] !== searchActive ||
+    $[84] !== header
   ) {
-    ps = scrollViewport
+    bodyContent = scrollViewport
       ? jsxProd_default(FullscreenLayout, {
           scrollViewport,
           scrollable: jsxProd_default_2(Fragment, {
             children: [
-              Ci,
+              header,
               toolProgress,
               jsxProd_default(
                 AgentWaitingMessages,
@@ -537,47 +554,47 @@ function TranscriptView(props) {
               showSandboxViolations && jsxProd_default(SandboxViolationExpandedView, {}),
             ],
           }),
-          bottom: mn
+          bottom: isSearching
             ? jsxProd_default(TranscriptSearchBar, {
-                jumpRef: Wo,
+                jumpRef,
                 initialQuery: "",
-                count: Yo,
-                current: Fn,
-                onClose: (xs) => {
-                  vo(Yo > 0 ? xs : "");
-                  Cn(false);
-                  if (!xs) {
-                    kn(0);
-                    bn(0);
-                    Wo.current?.setSearchQuery("");
+                count: matchCount,
+                current: currentMatch,
+                onClose: (closeArgs) => {
+                  setQueryState(matchCount > 0 ? closeArgs : "");
+                  setIsSearching(false);
+                  if (!closeArgs) {
+                    setMatchCount(0);
+                    setCurrentMatch(0);
+                    jumpRef.current?.setSearchQuery("");
                   }
                 },
                 onCancel: () => {
-                  Cn(false);
-                  Wo.current?.setSearchQuery("");
-                  Wo.current?.setSearchQuery(No);
-                  setQuery(No);
+                  setIsSearching(false);
+                  jumpRef.current?.setSearchQuery("");
+                  jumpRef.current?.setSearchQuery(query);
+                  setQuery(query);
                 },
                 setHighlight: setQuery,
               })
-            : so
+            : searchActive
               ? jsxProd_default(TranscriptHelpFooter, {})
               : jsxProd_default(TranscriptModeFooter, {
-                  showAllInTranscript: io,
+                  showAllInTranscript: showAllMessages,
                   virtualScroll: true,
-                  status: ao || undefined,
+                  status: statusText || undefined,
                   searchBadge:
-                    No && Yo > 0
+                    query && matchCount > 0
                       ? {
-                          current: Fn,
-                          count: Yo,
+                          current: currentMatch,
+                          count: matchCount,
                         }
                       : undefined,
                 }),
         })
       : jsxProd_default_2(Fragment, {
           children: [
-            Ci,
+            header,
             toolProgress,
             jsxProd_default(
               AgentWaitingMessages,
@@ -588,43 +605,52 @@ function TranscriptView(props) {
             ),
             showSandboxViolations && jsxProd_default(SandboxViolationExpandedView, {}),
             jsxProd_default(TranscriptModeFooter, {
-              showAllInTranscript: io,
+              showAllInTranscript: showAllMessages,
               virtualScroll: false,
               suppressShowAll: dumpMode,
-              status: ao || undefined,
+              status: statusText || undefined,
             }),
           ],
         });
     $[71] = dumpMode;
-    $[72] = ao;
+    $[72] = statusText;
     $[73] = focused;
     $[74] = scrollViewport;
-    $[75] = Yo;
-    $[76] = Fn;
-    $[77] = mn;
-    $[78] = No;
+    $[75] = matchCount;
+    $[76] = currentMatch;
+    $[77] = isSearching;
+    $[78] = query;
     $[79] = setQuery;
-    $[80] = io;
+    $[80] = showAllMessages;
     $[81] = showSandboxViolations;
     $[82] = toolProgress;
-    $[83] = so;
-    $[84] = Ci;
-    $[85] = ps;
-  } else ps = $[85];
-  let kr;
-  if ($[86] !== oi || $[87] !== Hi || $[88] !== Zi || $[89] !== qn || $[90] !== ps) {
-    kr = jsxProd_default_2(Fragment, {
-      children: [oi, Hi, Zi, qn, ps],
+    $[83] = searchActive;
+    $[84] = header;
+    $[85] = bodyContent;
+  } else bodyContent = $[85];
+  let view;
+  if (
+    $[86] !== keybindingHandlers ||
+    $[87] !== modeHeader ||
+    $[88] !== bodyView ||
+    $[89] !== keyboardBox ||
+    $[90] !== bodyContent
+  ) {
+    view = jsxProd_default_2(Fragment, {
+      children: [keybindingHandlers, modeHeader, bodyView, keyboardBox, bodyContent],
     });
-    $[86] = oi;
-    $[87] = Hi;
-    $[88] = Zi;
-    $[89] = qn;
-    $[90] = ps;
-    $[91] = kr;
-  } else kr = $[91];
-  return kr;
+    $[86] = keybindingHandlers;
+    $[87] = modeHeader;
+    $[88] = bodyView;
+    $[89] = keyboardBox;
+    $[90] = bodyContent;
+    $[91] = view;
+  } else view = $[91];
+  return view;
 }
 //@ chunk-18hwfzwa.js:149068-149072 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:149068", () => {
+  init_react_production();
+});
 export { TranscriptView };

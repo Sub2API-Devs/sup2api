@@ -9,6 +9,18 @@
  * attribution: fingerprint 12, sole-consumer 2, affinity 1, placement 1, layout 1
  */
 import { win32, join } from "path";
+import { identity } from "../pathClassification.js";
+import {
+  identityReader,
+  splitCommandWords,
+  REFRESH_LOCK_ENV_KEYS,
+  REFRESH_LOCK_FILES,
+} from "../auth/cloudAuthRefreshLock.js";
+import { computeContentHash } from "../commitAttribution.js";
+import { jsonStringify } from "../slowOperations.js";
+import { getProjectConfigRoot } from "../../bootstrap/state.js";
+import { getFsImplementation } from "../fsOperations.js";
+import { getProjectDirsUpToHome } from "../secureStorage/macOsKeychainHelpers.js";
 import { getTeamName, getAgentId, getAgentName, getTeammateColor } from "../teammate.js";
 import { isTeamLeadDefault } from "../../components/teams/TeamStatus.js";
 import { readTeamFileAsync } from "./teamHelpers.js";
@@ -21,22 +33,43 @@ import {
   createSandboxPermissionRequestMessage,
   createSandboxPermissionResponseMessage,
 } from "../teammateMailbox.js";
-import { jsonStringify } from "../slowOperations.js";
 import { logError } from "../log.js";
 import { logFeatureBad, logFeatureOk } from "../../services/analytics/featureTelemetry.js";
 import { readStringListAt } from "../../services/claudeGateway/desktopSettings.js";
-import {
-  identityReader,
-  splitCommandWords,
-  REFRESH_LOCK_ENV_KEYS,
-  REFRESH_LOCK_FILES,
-} from "../auth/cloudAuthRefreshLock.js";
-import { computeContentHash } from "../commitAttribution.js";
-import { getProjectConfigRoot } from "../../bootstrap/state.js";
-import { getFsImplementation } from "../fsOperations.js";
-import { getProjectDirsUpToHome } from "../secureStorage/macOsKeychainHelpers.js";
-import { identity } from "../pathClassification.js";
 
+//@ chunk-cgr0tezp.js:29083-29143 fingerprint = getResolvedDir (1)
+function getResolvedPath(target) {
+  return target.kind === "resolved" ? identity(target.path) : undefined;
+}
+//@ chunk-aepeg2w5.js:327126-327537 fingerprint = readPendingPermissions (0.309)
+/**
+ * 为一次带锁的操作计算锁/结果/持有者/接管请求文件路径（按命令与参数哈希）。与团队权限无关。
+ */
+function getOperationLockPaths(operation, command, readEnv = identityReader) {
+  let any = splitCommandWords(command).some((word) => {
+    let replaced = word.replace(/["']/g, "").replace(/^--?\w[\w-]*=|^[&*]?\d*[<>]+&?/, "");
+    return (
+      /[\\/]/.test(replaced) &&
+      !replaced.includes("://") &&
+      !/^[~$%]/.test(replaced) &&
+      !win32.isAbsolute(replaced)
+    );
+  });
+  let sliced = computeContentHash(
+    jsonStringify([
+      command,
+      ...readEnv(REFRESH_LOCK_ENV_KEYS[operation]),
+      ...(any ? [getProjectConfigRoot() ?? getFsImplementation().cwd()] : []),
+    ]),
+  ).slice(0, 16);
+  let filePath = join(getProjectDirsUpToHome(), `${REFRESH_LOCK_FILES[operation]}-${sliced}`);
+  return {
+    lockfilePath: `${filePath}.lock`,
+    outcomePath: `${filePath}.json`,
+    holderPath: `${filePath}.holder.json`,
+    requestPath: `${filePath}.takeover.json`,
+  };
+}
 //@ chunk-ay9hyszk.js:884-969 fingerprint = generateRequestId (1)
 function generateRequestId() {
   return `perm-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
@@ -225,7 +258,7 @@ async function sendSandboxPermissionRequestViaMailbox(host, requestId, teamName,
       workerColor,
       host,
     });
-    let w = await deliverViaMailbox(
+    let delivered = await deliverViaMailbox(
       leaderName,
       {
         from: workerName,
@@ -237,9 +270,9 @@ async function sendSandboxPermissionRequestViaMailbox(host, requestId, teamName,
       `sandbox permission request ${jsonStringify(requestId)} for host ${jsonStringify(host)} to leader ${jsonStringify(leaderName)} via mailbox`,
       storage,
     );
-    if (w) logFeatureOk("swarm_sandbox_permission_request");
+    if (delivered) logFeatureOk("swarm_sandbox_permission_request");
     else logFeatureBad("swarm_sandbox_permission_request", "mailbox_write_failed");
-    return w;
+    return delivered;
   } catch (error) {
     logForDebugging(`[PermissionSync] Failed to send sandbox permission request via mailbox: ${error}`);
     logError(error);
@@ -288,7 +321,8 @@ async function sendSandboxPermissionResponseViaMailbox(
   }
 }
 //@ chunk-9cjx5pnm.js:19664-19726 sole-consumer
-var findInstallPreferenceEntry = (e, r, s) => e.find((n) => n.plugin_id === r.id && n.status === s);
+var findInstallPreferenceEntry = (entries, plugin, status) =>
+  entries.find((entry) => entry.plugin_id === plugin.id && entry.status === status);
 //@ chunk-9cjx5pnm.js:19726-19768 sole-consumer
 var installPreferenceValue = (installPreferenceEntry) =>
   installPreferenceEntry === undefined ? "available" : undefined;
@@ -298,10 +332,12 @@ var pluginInstallSource = (a_5) => ({
   id: a_5.id,
 });
 //@ chunk-9cjx5pnm.js:19806-19928 fingerprint = pollForResponse (0.385)
-var buildInstallPreferenceFields = (e, r) => ({
-  source: pluginInstallSource(e),
-  proposed_install_preference: installPreferenceValue(findInstallPreferenceEntry(r, e, "approved")),
-  predecessor_uuid: findInstallPreferenceEntry(r, e, "denied")?.uuid,
+var buildInstallPreferenceFields = (plugin, entries) => ({
+  source: pluginInstallSource(plugin),
+  proposed_install_preference: installPreferenceValue(
+    findInstallPreferenceEntry(entries, plugin, "approved"),
+  ),
+  predecessor_uuid: findInstallPreferenceEntry(entries, plugin, "denied")?.uuid,
 });
 //@ chunk-1ny7cxrt.js:1385435-1385609 fingerprint = getPermissionDir (0.573)
 /**
@@ -310,45 +346,12 @@ var buildInstallPreferenceFields = (e, r) => ({
 function getDisabledBuiltinToolsFromSettings(settings) {
   let stringListAt = readStringListAt(settings, ["permissions", "deny"]);
   if (!stringListAt) return {};
-  let filtered = stringListAt.filter((o) => !o.includes("(") && !o.startsWith("mcp__"));
+  let filtered = stringListAt.filter((name) => !name.includes("(") && !name.startsWith("mcp__"));
   return filtered.length > 0
     ? {
         disabledBuiltinTools: filtered,
       }
     : {};
-}
-//@ chunk-aepeg2w5.js:327126-327537 fingerprint = readPendingPermissions (0.309)
-/**
- * 为一次带锁的操作计算锁/结果/持有者/接管请求文件路径（按命令与参数哈希）。与团队权限无关。
- */
-function getOperationLockPaths(e, n, r = identityReader) {
-  let any = splitCommandWords(n).some((S) => {
-    let replaced = S.replace(/["']/g, "").replace(/^--?\w[\w-]*=|^[&*]?\d*[<>]+&?/, "");
-    return (
-      /[\\/]/.test(replaced) &&
-      !replaced.includes("://") &&
-      !/^[~$%]/.test(replaced) &&
-      !win32.isAbsolute(replaced)
-    );
-  });
-  let sliced = computeContentHash(
-    jsonStringify([
-      n,
-      ...r(REFRESH_LOCK_ENV_KEYS[e]),
-      ...(any ? [getProjectConfigRoot() ?? getFsImplementation().cwd()] : []),
-    ]),
-  ).slice(0, 16);
-  let filePath = join(getProjectDirsUpToHome(), `${REFRESH_LOCK_FILES[e]}-${sliced}`);
-  return {
-    lockfilePath: `${filePath}.lock`,
-    outcomePath: `${filePath}.json`,
-    holderPath: `${filePath}.holder.json`,
-    requestPath: `${filePath}.takeover.json`,
-  };
-}
-//@ chunk-cgr0tezp.js:29083-29143 fingerprint = getResolvedDir (1)
-function getResolvedPath(target) {
-  return target.kind === "resolved" ? identity(target.path) : undefined;
 }
 export {
   isTeammateContextReady,

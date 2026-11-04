@@ -5,13 +5,13 @@
  * pieces: chunk-fq0cr76a.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../runtime/bun-runtime.js";
 import { require_forge } from "./forge.js";
 import { require_aes } from "./aes.js";
 import { require_tls } from "./tls.js";
 
 //@ chunk-fq0cr76a.js:249438-252318 cjs-fingerprint
-var require_aesCipherSuites = x(function (cjsExports, cjsModule) {
+var require_aesCipherSuites = __commonJS(function (cjsExports, cjsModule) {
   var forge = require_forge();
   require_aes();
   require_tls();

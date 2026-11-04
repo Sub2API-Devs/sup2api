@@ -29,13 +29,13 @@ var RELEASED_SLOT = {
 /**
  * 占到信号量位置后执行函数，完成后释放；被中止时直接返回 undefined。
  */
-async function runWithSlot(e, name, maxInFlight, signal, h) {
-  let y = await e.acquire(name, maxInFlight, signal);
-  if (y === undefined) return;
+async function runWithSlot(queue, name, maxInFlight, signal, body) {
+  let release = await queue.acquire(name, maxInFlight, signal);
+  if (release === undefined) return;
   try {
-    return await h();
+    return await body();
   } finally {
-    y();
+    release();
   }
 }
 export { KeyedSemaphoreSubclass, RELEASED_SLOT, runWithSlot };

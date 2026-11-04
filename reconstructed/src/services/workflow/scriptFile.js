@@ -5,8 +5,8 @@
  *
  * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
  * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-41w44bgm.js (5), chunk-82kqcve8.js (7)
- * attribution: placement 12
+ * pieces: chunk-41w44bgm.js (6), chunk-82kqcve8.js (7)
+ * attribution: placement 13
  */
 import { join, sep, resolve } from "path";
 import { mkdir, writeFile, open, realpath } from "fs/promises";
@@ -23,9 +23,10 @@ import { WORKFLOW_TOOL_NAME } from "../../tools/WorkflowTool/constants.js";
 import { getToolPermissionContext } from "../../utils/permissions/toolPermissionContext.js";
 import { getCwd } from "../../utils/cwd.js";
 import { poolCanRead, readAutoAllowedForMutation } from "../../utils/permissions/filesystem.js";
-import { O_NONBLOCK_FLAG, O_NOFOLLOW_FLAG_2 } from "../../skills/bundledSkills.js";
 import { isENOENT } from "../../utils/errors.js";
 import { fdRealPath } from "../../utils/plugins/npmPluginSource.js";
+import { getPlatform } from "../../utils/platform.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-82kqcve8.js:156136-156162 placement
 /**
@@ -37,9 +38,9 @@ var MAX_SCRIPT_BUNDLE_BYTES = 1048576;
 /**
  * 把工作流名转成文件名用的 slug（小写、非字母数字转连字符），为空时用 workflow。
  */
-function slugifyWorkflowName(e) {
+function slugifyWorkflowName(name) {
   return (
-    e
+    name
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, "-")
       .replace(/^-+|-+$/g, "") || "workflow"
@@ -56,55 +57,56 @@ function workflowScriptsDir() {
 /**
  * 由工作流名与哈希拼出脚本文件路径。
  */
-function workflowScriptPath(e, n) {
-  return `${workflowScriptsDir()}${slugifyWorkflowName(e)}-${n}.js`;
+function workflowScriptPath(workflowName, runId) {
+  return `${workflowScriptsDir()}${slugifyWorkflowName(workflowName)}-${runId}.js`;
 }
 //@ chunk-82kqcve8.js:156375-156889 placement
-function resolveWorkflowScriptPath(e, n, script, storageV5) {
-  let h = workflowScriptsDir();
-  let y = workflowScriptPath(e, n);
-  let w = `${slugifyWorkflowName(e)}-${n}.js`;
+function resolveWorkflowScriptPath(workflowName, runId, script, storageV5) {
+  let scriptsDir = workflowScriptsDir();
+  let filePath = workflowScriptPath(workflowName, runId);
+  let fileName = `${slugifyWorkflowName(workflowName)}-${runId}.js`;
   (async () => {
-    let S = isStorageV5Enabled() && storageV5 ? getProjectKeyIfRepresentable(resolveProjectDir()) : undefined;
+    let projectKey =
+      isStorageV5Enabled() && storageV5 ? getProjectKeyIfRepresentable(resolveProjectDir()) : undefined;
     let sessionId = getSessionId();
     try {
-      await mkdir(h, {
+      await mkdir(scriptsDir, {
         recursive: true,
         mode: 448,
       });
-      if (isStorageV5Enabled() && storageV5 && S !== undefined && isValidKeySegment(w)) {
-        let O = await storageV5.write(
-          STORAGE_SPACES.sidecar(S, sessionId, ["workflows", "scripts", w]),
+      if (isStorageV5Enabled() && storageV5 && projectKey !== undefined && isValidKeySegment(fileName)) {
+        let writeResult = await storageV5.write(
+          STORAGE_SPACES.sidecar(projectKey, sessionId, ["workflows", "scripts", fileName]),
           script,
           {
             publishDiscipline: "inPlace",
             mode: 384,
           },
         );
-        if (!O.ok)
-          logForDebugging(`Failed to persist workflow script to ${y}: ${O.error.code}`, {
+        if (!writeResult.ok)
+          logForDebugging(`Failed to persist workflow script to ${filePath}: ${writeResult.error.code}`, {
             level: "warn",
           });
         return;
       }
-      await writeFile(y, script, {
+      await writeFile(filePath, script, {
         encoding: "utf-8",
         mode: 384,
       });
     } catch (error) {
-      logForDebugging(`Failed to persist workflow script to ${y}: ${error}`, {
+      logForDebugging(`Failed to persist workflow script to ${filePath}: ${error}`, {
         level: "warn",
       });
     }
   })();
-  return y;
+  return filePath;
 }
 //@ chunk-82kqcve8.js:156889-156936 placement
 /**
  * 把 CRLF 统一成 LF。
  */
-function normalizeCrLf(e) {
-  return e.replaceAll(
+function normalizeCrLf(text) {
+  return text.replaceAll(
     `\r
 `,
     `
@@ -112,12 +114,12 @@ function normalizeCrLf(e) {
   );
 }
 //@ chunk-82kqcve8.js:156936-157089 placement
-function networkScriptPathError(e, n) {
-  return isUncOrDevicePath(e) ||
-    isDevicePrefixPath(e) ||
-    isNetworkOrSpecialPath(e) ||
-    isNetworkOrSpecialPath(n)
-    ? `Network (UNC, NT-namespace, or automount) paths are not allowed for workflow scriptPath: ${e}`
+function networkScriptPathError(rawPath, resolvedPath) {
+  return isUncOrDevicePath(rawPath) ||
+    isDevicePrefixPath(rawPath) ||
+    isNetworkOrSpecialPath(rawPath) ||
+    isNetworkOrSpecialPath(resolvedPath)
+    ? `Network (UNC, NT-namespace, or automount) paths are not allowed for workflow scriptPath: ${rawPath}`
     : null;
 }
 //@ chunk-41w44bgm.js:12301-12600 placement
@@ -139,35 +141,40 @@ function workflowToolContext(context) {
 /**
  * 脚本路径不可用时的拒绝说明（网络路径、不可读）。
  */
-function scriptPathRefusal(scriptPath, n) {
-  let r = resolve(getCwd(), scriptPath);
-  let h = networkScriptPathError(scriptPath, r);
-  if (h !== null) return h;
-  return canReadWorkflowScript(r, n) ? null : scriptPathNotReadableMessage(scriptPath);
+function scriptPathRefusal(scriptPath, storage) {
+  let resolved = resolve(getCwd(), scriptPath);
+  let networkError = networkScriptPathError(scriptPath, resolved);
+  if (networkError !== null) return networkError;
+  return canReadWorkflowScript(resolved, storage) ? null : scriptPathNotReadableMessage(scriptPath);
 }
 //@ chunk-41w44bgm.js:12760-12856 placement
 /**
  * 是否允许读取该工作流脚本（受工具表与权限规则约束）。
  */
-function canReadWorkflowScript(e, n) {
-  if ((n.tools ?? []).length > 0 && !poolCanRead(n)) return false;
-  return readAutoAllowedForMutation(WORKFLOW_TOOL_NAME, e, n, n.permissions());
+function canReadWorkflowScript(resolvedPath, permissionContext) {
+  if ((permissionContext.tools ?? []).length > 0 && !poolCanRead(permissionContext)) return false;
+  return readAutoAllowedForMutation(
+    WORKFLOW_TOOL_NAME,
+    resolvedPath,
+    permissionContext,
+    permissionContext.permissions(),
+  );
 }
 //@ chunk-41w44bgm.js:12856-13979 placement
 /**
  * 安全加载 scriptPath 指定的工作流脚本：拒绝网络路径；打开后要求单链接普通文件、realpath 与 fd 身份一致、在可读范围内且不超过大小上限，读出并规范化脚本文本。
  */
 async function loadWorkflowScriptFile(scriptPath, permissionContext) {
-  let r = scriptPathRefusal(scriptPath, permissionContext);
-  if (r !== null)
+  let refusal = scriptPathRefusal(scriptPath, permissionContext);
+  if (refusal !== null)
     return {
-      error: r,
+      error: refusal,
     };
-  let h = resolve(getCwd(), scriptPath);
-  let T = constants.O_RDONLY | O_NONBLOCK_FLAG;
-  let y;
+  let absolutePath = resolve(getCwd(), scriptPath);
+  let openFlags = constants.O_RDONLY | O_NONBLOCK_FLAG;
+  let handle;
   try {
-    y = await open(h, T);
+    handle = await open(absolutePath, openFlags);
   } catch (error) {
     return {
       error: isENOENT(error)
@@ -176,19 +183,19 @@ async function loadWorkflowScriptFile(scriptPath, permissionContext) {
     };
   }
   try {
-    let stats = await y.stat({
+    let stats = await handle.stat({
       bigint: true,
     });
     if (stats.ino === 0n || stats.nlink > 1n)
       return {
         error: scriptPathNotReadableMessage(scriptPath),
       };
-    let L = await fdRealPath(y.fd);
-    let j = L ?? (await realpath(h));
-    if (L === null) {
-      let te = await open(j, T | O_NOFOLLOW_FLAG_2);
+    let fdPath = await fdRealPath(handle.fd);
+    let realPath = fdPath ?? (await realpath(absolutePath));
+    if (fdPath === null) {
+      let verifyHandle = await open(realPath, openFlags | O_NOFOLLOW_FLAG);
       try {
-        let stats_2 = await te.stat({
+        let stats_2 = await verifyHandle.stat({
           bigint: true,
         });
         if (stats_2.ino !== stats.ino || stats_2.dev !== stats.dev || stats_2.nlink !== 1n)
@@ -196,15 +203,15 @@ async function loadWorkflowScriptFile(scriptPath, permissionContext) {
             error: scriptPathNotReadableMessage(scriptPath),
           };
       } finally {
-        await te.close();
+        await verifyHandle.close();
       }
-      if ((await realpath(j).catch(() => null)) !== j)
+      if ((await realpath(realPath).catch(() => null)) !== realPath)
         return {
           error: scriptPathNotReadableMessage(scriptPath),
         };
       if (
         (
-          await y.stat({
+          await handle.stat({
             bigint: true,
           })
         ).nlink !== 1n
@@ -213,7 +220,7 @@ async function loadWorkflowScriptFile(scriptPath, permissionContext) {
           error: scriptPathNotReadableMessage(scriptPath),
         };
     }
-    if (!canReadWorkflowScript(j, permissionContext))
+    if (!canReadWorkflowScript(realPath, permissionContext))
       return {
         error: scriptPathNotReadableMessage(scriptPath),
       };
@@ -225,25 +232,35 @@ async function loadWorkflowScriptFile(scriptPath, permissionContext) {
       return {
         error: `Workflow script file ${scriptPath} exceeds ${MAX_SCRIPT_FILE_BYTES} bytes`,
       };
-    let he = Buffer.alloc(Number(stats.size));
-    let ke = 0;
-    while (ke < he.length) {
-      let { bytesRead } = await y.read(he, ke, he.length - ke, ke);
+    let buffer = Buffer.alloc(Number(stats.size));
+    let totalRead = 0;
+    while (totalRead < buffer.length) {
+      let { bytesRead } = await handle.read(buffer, totalRead, buffer.length - totalRead, totalRead);
       if (bytesRead === 0) break;
-      ke += bytesRead;
+      totalRead += bytesRead;
     }
     return {
-      script: normalizeCrLf(he.subarray(0, ke).toString("utf-8")),
-      path: j,
+      script: normalizeCrLf(buffer.subarray(0, totalRead).toString("utf-8")),
+      path: realPath,
     };
   } catch {
     return {
       error: `Failed to read workflow script file ${scriptPath}`,
     };
   } finally {
-    await y.close();
+    await handle.close();
   }
 }
+//@ chunk-41w44bgm.js:13979-14053 placement = O_NOFOLLOW (0.659)
+/**
+ * 平台不支持的 O_NONBLOCK 回退为 0。
+ */
+var O_NONBLOCK_FLAG; // deferred: uses getPlatform (../../utils/platform.js) of its import cycle while loading; runs once the cycle is complete
+var O_NOFOLLOW_FLAG;
+deferInit("chunk-41w44bgm.js:13979", () => {
+  O_NONBLOCK_FLAG = getPlatform() === "windows" ? 0 : constants.O_NONBLOCK;
+  O_NOFOLLOW_FLAG = getPlatform() === "windows" ? 0 : constants.O_NOFOLLOW;
+});
 export {
   workflowScriptsDir,
   loadWorkflowScriptFile,

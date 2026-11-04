@@ -42,16 +42,16 @@ import { jsonStringify } from "../../slowOperations.js";
 import { sortKeysDeep } from "../settingsSourceTrust.js";
 
 //@ chunk-q8cqcff6.js:69996-70148 placement
-function addSelectionWarning(e) {
+function addSelectionWarning(message) {
   policyHelperRunner.selectionWarnings.push({
     file: "policyHelper",
     path: "policyHelpers",
-    message: e,
+    message,
     severity: "warning",
     statusOnly: true,
   });
   invalidatePolicyLayer();
-  logForDebugging(e, {
+  logForDebugging(message, {
     level: "warn",
   });
 }
@@ -75,29 +75,30 @@ function clearAllRemoteWarnings() {
 //@ chunk-q8cqcff6.js:70226-70266 placement
 var HELPER_REFRESH_FAILING_PREFIX = "policyHelper refresh failing: ";
 //@ chunk-q8cqcff6.js:70266-70675 placement
-function warnPolicyHelperRefresh(error, n, r) {
-  let s = `; ${n}`;
-  let S = truncateWarning(
+function warnPolicyHelperRefresh(error, suffix, usesPl) {
+  let suffixNote = `; ${suffix}`;
+  let detail = truncateWarning(
     asciiOnly(error.replace(/\s+/gu, " ")),
-    MAX_WARNING_CHARS - HELPER_REFRESH_FAILING_PREFIX.length - s.length,
+    MAX_WARNING_CHARS - HELPER_REFRESH_FAILING_PREFIX.length - suffixNote.length,
   );
-  let E = `${HELPER_REFRESH_FAILING_PREFIX}${S}${s}`;
-  if (policyHelperRunner.selectionWarnings.some((selectionWarning) => selectionWarning.message === E)) return;
+  let message = `${HELPER_REFRESH_FAILING_PREFIX}${detail}${suffixNote}`;
+  if (policyHelperRunner.selectionWarnings.some((selectionWarning) => selectionWarning.message === message))
+    return;
   let filtered = policyHelperRunner.selectionWarnings.filter(
     (selectionWarning) => !selectionWarning.message.startsWith(HELPER_REFRESH_FAILING_PREFIX),
   );
-  let y = filtered.length !== policyHelperRunner.selectionWarnings.length;
+  let removed = filtered.length !== policyHelperRunner.selectionWarnings.length;
   policyHelperRunner.selectionWarnings = [
     ...filtered,
     {
       file: "policyHelper",
-      path: r ? "policyHelpers" : "policyHelper",
-      message: E,
+      path: usesPl ? "policyHelpers" : "policyHelper",
+      message,
       severity: "warning",
       statusOnly: true,
     },
   ];
-  if (!y) invalidatePolicyLayer();
+  if (!removed) invalidatePolicyLayer();
 }
 //@ chunk-q8cqcff6.js:70675-70696 placement
 /**
@@ -112,200 +113,207 @@ function clearHelperRefreshWarning() {
  */
 var NO_PLATFORM_ENTRY_TEXT = "policyHelpers is configured but has no entry for platform ";
 //@ chunk-q8cqcff6.js:70764-70918 placement
-function clearSelectionWarnings(e) {
+function clearSelectionWarnings(prefix) {
   let filtered = policyHelperRunner.selectionWarnings.filter(
-    (selectionWarning) => !selectionWarning.message.startsWith(e),
+    (selectionWarning) => !selectionWarning.message.startsWith(prefix),
   );
   if (filtered.length === policyHelperRunner.selectionWarnings.length) return;
   policyHelperRunner.selectionWarnings = filtered;
   invalidatePolicyLayer();
 }
 //@ chunk-q8cqcff6.js:70918-71131 placement
-function validatePayloadAndLog(e, n) {
-  let r = validatePolicyHelperConfig(e, n);
-  for (let strippedKey of r.strippedKeys)
-    logForDebugging(`${n}: stripped ${strippedKey} from the settings payload (no recursion)`, {
+function validatePayloadAndLog(raw, field) {
+  let result = validatePolicyHelperConfig(raw, field);
+  for (let strippedKey of result.strippedKeys)
+    logForDebugging(`${field}: stripped ${strippedKey} from the settings payload (no recursion)`, {
       level: "warn",
     });
-  for (let warning of r.warnings)
-    logForDebugging(`${n}: ${warning.message}`, {
+  for (let warning of result.warnings)
+    logForDebugging(`${field}: ${warning.message}`, {
       level: "warn",
     });
-  return r;
+  return result;
 }
 //@ chunk-q8cqcff6.js:71131-71641 placement
-function mergeDefaultSettingsPayload(e, n) {
-  let r = [];
-  for (let s of n) {
-    let S = e[s];
-    let defaultSettings = S?.defaultSettings;
+function mergeDefaultSettingsPayload(helpers, onChain) {
+  let payloads = [];
+  for (let key of onChain) {
+    let entry = helpers[key];
+    let defaultSettings = entry?.defaultSettings;
     if (defaultSettings !== undefined && defaultSettings !== null)
-      r.push({
-        field: `policyHelpers.${s}.defaultSettings`,
+      payloads.push({
+        field: `policyHelpers.${key}.defaultSettings`,
         raw: defaultSettings,
         onChain: true,
-        mergesOutput: S?.outputBehavior === "merge",
+        mergesOutput: entry?.outputBehavior === "merge",
       });
   }
-  for (let s of SUPPORTED_PLATFORMS) {
-    let defaultSettings = e[s]?.defaultSettings;
-    if (defaultSettings !== undefined && defaultSettings !== null && !n.includes(s))
-      r.push({
-        field: `policyHelpers.${s}.defaultSettings`,
+  for (let platform of SUPPORTED_PLATFORMS) {
+    let defaultSettings = helpers[platform]?.defaultSettings;
+    if (defaultSettings !== undefined && defaultSettings !== null && !onChain.includes(platform))
+      payloads.push({
+        field: `policyHelpers.${platform}.defaultSettings`,
         raw: defaultSettings,
         onChain: false,
         mergesOutput: false,
       });
   }
-  if (e.default !== undefined && e.default !== null)
-    r.push({
+  if (helpers.default !== undefined && helpers.default !== null)
+    payloads.push({
       field: "policyHelpers.default",
-      raw: e.default,
+      raw: helpers.default,
       onChain: true,
       mergesOutput: false,
     });
-  return r;
+  return payloads;
 }
 //@ chunk-q8cqcff6.js:71641-72078 placement
-function validateStaticPayload(e, n) {
-  if (e.raw !== null && typeof e.raw === "object" && !Array.isArray(e.raw)) {
-    let { policyHelper, policyHelpers, ...E } = e.raw;
-    let h = STATIC_PAYLOAD_SCHEMA().safeParse(E);
-    if (!h.success)
+function validateStaticPayload(payload, log) {
+  if (payload.raw !== null && typeof payload.raw === "object" && !Array.isArray(payload.raw)) {
+    let { policyHelper, policyHelpers, ...rest } = payload.raw;
+    let parsed = STATIC_PAYLOAD_SCHEMA().safeParse(rest);
+    if (!parsed.success)
       return {
-        error: h.error.issues[0]?.message ?? "failed validation",
+        error: parsed.error.issues[0]?.message ?? "failed validation",
       };
   }
-  let r = n ? validatePayloadAndLog(e.raw, e.field) : validatePolicyHelperConfig(e.raw, e.field);
-  if ("error" in r)
+  let result = log
+    ? validatePayloadAndLog(payload.raw, payload.field)
+    : validatePolicyHelperConfig(payload.raw, payload.field);
+  if ("error" in result)
     return {
-      error: r.error,
+      error: result.error,
     };
   return {
-    settings: r.settings,
-    warnings: r.warnings.map((warning) => ({
+    settings: result.settings,
+    warnings: result.warnings.map((warning) => ({
       ...warning,
       statusOnly: true,
     })),
-    sourceField: e.field,
-    mergesOutput: e.mergesOutput,
+    sourceField: payload.field,
+    mergesOutput: payload.mergesOutput,
   };
 }
 //@ chunk-q8cqcff6.js:72078-72443 placement
 /**
  * 校验 policyHelpers 默认设置载荷，记录链上第一个有效的作为默认回退；任何一个无效则返回阻止启动的错误。
  */
-function applyDefaultPayloads(policyHelpers, n) {
+function applyDefaultPayloads(helpers, onChain) {
   policyHelperRunner.defaultFallback = null;
-  if (!policyHelpers) return null;
-  let r = null;
-  for (let s of mergeDefaultSettingsPayload(policyHelpers, n)) {
-    let S = validateStaticPayload(s, s.onChain && !r);
-    if ("error" in S) {
+  if (!helpers) return null;
+  let fallback = null;
+  for (let payload of mergeDefaultSettingsPayload(helpers, onChain)) {
+    let validated = validateStaticPayload(payload, payload.onChain && !fallback);
+    if ("error" in validated) {
       logFeatureBad("settings_policy_helpers_per_os", "default_payload_invalid");
-      return `${s.field} is not a valid static settings payload (${S.error}); Claude Code will not start until it is fixed`;
+      return `${payload.field} is not a valid static settings payload (${validated.error}); Claude Code will not start until it is fixed`;
     }
-    if (s.onChain && !r) r = S;
+    if (payload.onChain && !fallback) fallback = validated;
   }
-  policyHelperRunner.defaultFallback = r;
+  policyHelperRunner.defaultFallback = fallback;
   return null;
 }
 //@ chunk-q8cqcff6.js:72443-72630 placement
-function pickStaticPayload(e) {
-  let n = null;
-  let r = [];
-  for (let s of e) {
-    let S = validateStaticPayload(s, false);
-    if ("error" in S)
-      r.push({
-        field: s.field,
-        error: S.error,
+function pickStaticPayload(payloads) {
+  let winner = null;
+  let skipped = [];
+  for (let payload of payloads) {
+    let validated = validateStaticPayload(payload, false);
+    if ("error" in validated)
+      skipped.push({
+        field: payload.field,
+        error: validated.error,
       });
-    else if (!n)
-      n = {
-        ...S,
-        warnings: serializeSettingsErrors(S.warnings),
+    else if (!winner)
+      winner = {
+        ...validated,
+        warnings: serializeSettingsErrors(validated.warnings),
       };
   }
   return {
-    winner: n,
-    skipped: r,
+    winner,
+    skipped,
   };
 }
 //@ chunk-q8cqcff6.js:72630-72735 placement
-function applyStaticPayloadChoice(e) {
+function applyStaticPayloadChoice(choice) {
   clearSelectionWarnings(REMOTE_HELPER_PAYLOAD_SKIPPED_PREFIX);
-  policyHelperRunner.defaultFallback = e.winner;
-  for (let { field, error } of e.skipped) warnInvalidStaticPayload(field, error, e.verified);
+  policyHelperRunner.defaultFallback = choice.winner;
+  for (let { field, error } of choice.skipped) warnInvalidStaticPayload(field, error, choice.verified);
 }
 //@ chunk-q8cqcff6.js:72735-72805 placement
-function hasRiskyManagedSettings(e, winner) {
+function hasRiskyManagedSettings(settings, winner) {
   return (
-    hasPayloadSlot(summarizeManagedSettingsRisk(e), winner.sourceField) ||
+    hasPayloadSlot(summarizeManagedSettingsRisk(settings), winner.sourceField) ||
     hasDangerousManagedSettings(summarizeManagedSettingsRisk(winner.settings))
   );
 }
 //@ chunk-q8cqcff6.js:72805-72896 placement
-function remoteSettingsPayload(e) {
-  let policyHelpers = e?.policyHelpers;
+function remoteSettingsPayload(settings) {
+  let policyHelpers = settings?.policyHelpers;
   return policyHelpers
-    ? mergeDefaultSettingsPayload(policyHelpers, platformSettingsChain().chain).filter((r) => r.onChain)
+    ? mergeDefaultSettingsPayload(policyHelpers, platformSettingsChain().chain).filter(
+        (payload) => payload.onChain,
+      )
     : [];
 }
 //@ chunk-q8cqcff6.js:72896-72988 placement
 /**
  * hasStaticPayload：是否有静态载荷。
  */
-function hasStaticPayload(basePolicySettings) {
-  if (remoteHelperCommand(basePolicySettings) !== undefined) return true;
-  let { winner } = pickStaticPayload(remoteSettingsPayload(basePolicySettings));
-  return winner !== null && hasRiskyManagedSettings(basePolicySettings, winner);
+function hasStaticPayload(settings) {
+  if (remoteHelperCommand(settings) !== undefined) return true;
+  let { winner } = pickStaticPayload(remoteSettingsPayload(settings));
+  return winner !== null && hasRiskyManagedSettings(settings, winner);
 }
 //@ chunk-q8cqcff6.js:72988-73029 placement
 /**
  * withholdUnverifiedCacheKeys：未验证缓存时扣留键。
  */
-function withholdUnverifiedCacheKeys(settings, n, verified) {
-  return n && !verified ? withholdUnverifiedCacheKeys_2(settings) : settings;
+function withholdUnverifiedCacheKeys(settings, candidates, verified) {
+  return candidates && !verified ? withholdUnverifiedCacheKeys_2(settings) : settings;
 }
 //@ chunk-q8cqcff6.js:73029-73441 placement
 /**
  * 汇总远程托管设置中 policyHelper 的关键状态：是否已验证、命令、能否执行、是否合并输出/失败拒绝、载荷键、选中的静态载荷与跳过项、载荷能否使用。
  */
-function remotePolicySnapshot(e) {
-  let n = isRemoteManagedSettingsVerified();
-  let r = isRemoteManagedSettingsVerifiedAndApprovedForSession();
-  let policyHelpers = e?.policyHelpers;
-  let S = policyHelpers
+function remotePolicySnapshot(settings) {
+  let verified = isRemoteManagedSettingsVerified();
+  let approved = isRemoteManagedSettingsVerifiedAndApprovedForSession();
+  let policyHelpers = settings?.policyHelpers;
+  let config = policyHelpers
     ? (selectPerOsConfig(policyHelpers, platformSettingsChain().chain, true)?.config ?? null)
     : null;
-  let policyHelperCommand = getPolicyHelperCommand(S);
-  let h = remoteSettingsPayload(e);
-  let { winner, skipped } = pickStaticPayload(h);
+  let policyHelperCommand = getPolicyHelperCommand(config);
+  let payloads = remoteSettingsPayload(settings);
+  let { winner, skipped } = pickStaticPayload(payloads);
   return {
-    verified: n,
+    verified,
     tuple: policyHelperCommand,
-    helperMayExec: policyHelperCommand !== undefined && r,
-    helperMergesOutput: S?.outputBehavior === "merge",
-    helperRefusesOnFailure: helperFailureBlocks(S, true),
-    payloadKey: jsonStringify(sortKeysDeep(h.map((O) => [O.field, O.raw, O.mergesOutput]))),
+    helperMayExec: policyHelperCommand !== undefined && approved,
+    helperMergesOutput: config?.outputBehavior === "merge",
+    helperRefusesOnFailure: helperFailureBlocks(config, true),
+    payloadKey: jsonStringify(
+      sortKeysDeep(payloads.map((payload) => [payload.field, payload.raw, payload.mergesOutput])),
+    ),
     winner,
     skipped,
     payloadServable:
       winner !== null &&
-      (r || (!hasRiskyManagedSettings(e, winner) && (n || policyHelperCommand === undefined))),
+      (approved ||
+        (!hasRiskyManagedSettings(settings, winner) && (verified || policyHelperCommand === undefined))),
   };
 }
 //@ chunk-q8cqcff6.js:73441-73709 placement
-function sameRemoteSnapshot(remoteDecision, n) {
+function sameRemoteSnapshot(remoteDecision, other) {
   return (
-    remoteDecision.verified === n.verified &&
-    remoteDecision.tuple === n.tuple &&
-    remoteDecision.helperMayExec === n.helperMayExec &&
-    remoteDecision.helperMergesOutput === n.helperMergesOutput &&
-    remoteDecision.helperRefusesOnFailure === n.helperRefusesOnFailure &&
-    remoteDecision.payloadKey === n.payloadKey &&
-    remoteDecision.payloadServable === n.payloadServable
+    remoteDecision.verified === other.verified &&
+    remoteDecision.tuple === other.tuple &&
+    remoteDecision.helperMayExec === other.helperMayExec &&
+    remoteDecision.helperMergesOutput === other.helperMergesOutput &&
+    remoteDecision.helperRefusesOnFailure === other.helperRefusesOnFailure &&
+    remoteDecision.payloadKey === other.payloadKey &&
+    remoteDecision.payloadServable === other.payloadServable
   );
 }
 //@ chunk-q8cqcff6.js:73709-73782 placement
@@ -316,23 +324,23 @@ function mergesOutputBehavior(config, defaultFallback) {
   return config.outputBehavior === "merge" || defaultFallback?.mergesOutput === true;
 }
 //@ chunk-q8cqcff6.js:73782-74229 placement
-function applyStaticPayload(e, mergesOutput, r) {
+function applyStaticPayload(choice, mergesOutput, fromRemote) {
   let defaultFallback = policyHelperRunner.defaultFallback;
   if (!defaultFallback) return;
-  let S = isRemoteManagedSettingsVerified();
+  let verified = isRemoteManagedSettingsVerified();
   policyHelperRunner.apply({
-    config: e?.config ?? null,
-    fromPerOs: e?.fromPerOs ?? false,
+    config: choice?.config ?? null,
+    fromPerOs: choice?.fromPerOs ?? false,
     serving: "default",
-    armedFromRemote: r,
+    armedFromRemote: fromRemote,
     mergesOutput,
     output: {
-      managedSettings: withholdUnverifiedCacheKeys(defaultFallback.settings, r, S),
+      managedSettings: withholdUnverifiedCacheKeys(defaultFallback.settings, fromRemote, verified),
     },
     warnings: defaultFallback.warnings,
   });
   logForDebugging(
-    `${defaultFallback.sourceField} static settings payload applied${r ? ` from remote managed settings${S ? "" : " (cached, not yet verified this session)"}` : ""} (keys: ${Object.keys(defaultFallback.settings).join(",")})`,
+    `${defaultFallback.sourceField} static settings payload applied${fromRemote ? ` from remote managed settings${verified ? "" : " (cached, not yet verified this session)"}` : ""} (keys: ${Object.keys(defaultFallback.settings).join(",")})`,
     {
       level: "debug",
     },
@@ -342,15 +350,15 @@ function applyStaticPayload(e, mergesOutput, r) {
 /**
  * 判断设置中是否配置了适用于本平台的 policyHelper 或静态载荷。
  */
-function hasPolicyHelperConfig(e) {
-  let policyHelpers = e?.policyHelpers;
+function hasPolicyHelperConfig(settings) {
+  let policyHelpers = settings?.policyHelpers;
   if (!policyHelpers) return false;
   let chain = platformSettingsChain().chain;
   return (
     selectPerOsConfig(policyHelpers, chain, true) !== null ||
     (policyHelpers.default !== undefined && policyHelpers.default !== null) ||
-    chain.some((s) => {
-      let defaultSettings = policyHelpers[s]?.defaultSettings;
+    chain.some((platform) => {
+      let defaultSettings = policyHelpers[platform]?.defaultSettings;
       return defaultSettings !== undefined && defaultSettings !== null;
     })
   );

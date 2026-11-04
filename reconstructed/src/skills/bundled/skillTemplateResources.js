@@ -24,3 +24,4 @@ var templateText = __cc_resource_1;
  */
 var SKILL_MD = skill;
 var TEMPLATE_MD = templateText;
+export { SKILL_MD, TEMPLATE_MD };

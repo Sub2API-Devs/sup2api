@@ -33,7 +33,7 @@ function registerArtifactDiagramSkill() {
     isEnabled: isArtifactDiagramSkillEnabled,
     userInvocable: true,
     async getPromptForCommand() {
-      let { SKILL_MD } = await import("./chunk-84d2fjs2.js");
+      let { SKILL_MD } = await import("./SKILL_MD_2.lazy.js");
       return [
         {
           type: "text",

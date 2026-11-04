@@ -17,8 +17,8 @@ import {
   SCHEDULED_PERMISSION_MODES,
 } from "../../daemon/scheduledWorker.js";
 import { logError } from "../../utils/log.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
-import { y } from "../../../vendor/react/cjs/react.production.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
+import { useState } from "../../../vendor/react/cjs/react.production.js";
 import { errorMessage } from "../../utils/errors.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
@@ -41,15 +41,15 @@ import {
 import { AgentsList } from "../agents/AgentsList.js";
 
 //@ chunk-vde9a20m.js:1114-1160 placement
-function permissionModeOption(co) {
+function permissionModeOption(mode) {
   return {
-    label: permissionModeTitle(co),
-    value: co,
+    label: permissionModeTitle(mode),
+    value: mode,
   };
 }
 //@ chunk-vde9a20m.js:1160-1225 placement
-async function loadScheduledTaskRuns(u) {
-  return listScheduledTasks(undefined, u).catch((error) => {
+async function loadScheduledTaskRuns(storageV5) {
+  return listScheduledTasks(undefined, storageV5).catch((error) => {
     logError(error);
     return [];
   });
@@ -59,17 +59,17 @@ async function loadScheduledTaskRuns(u) {
  * 后台定时任务详情页：运行记录、启用/停用、编辑、立即运行与删除。
  */
 function DaemonScheduledTaskDetail(props) {
-  let i = w(76);
+  let $ = useMemoCache(76);
   let { task, onBack, onEdit, onDone, refresh, storageV5 } = props;
-  let [g, U] = y(false);
-  let [p, ee] = y(false);
-  let b;
-  if (i[0] !== g || i[1] !== onDone || i[2] !== refresh || i[3] !== storageV5 || i[4] !== task) {
-    b = async function I() {
-      if (g) {
+  let [isBusy, setIsBusy] = useState(false);
+  let [isConfirmingRemove, setIsConfirmingRemove] = useState(false);
+  let toggleHandlerCached;
+  if ($[0] !== isBusy || $[1] !== onDone || $[2] !== refresh || $[3] !== storageV5 || $[4] !== task) {
+    toggleHandlerCached = async function handleToggle() {
+      if (isBusy) {
         return;
       }
-      U(true);
+      setIsBusy(true);
       try {
         await addScheduledTask(
           toTaskFormValues({
@@ -84,28 +84,28 @@ function DaemonScheduledTaskDetail(props) {
           display: "system",
         });
       } catch (error) {
-        let Be = error;
-        logError(Be);
-        onDone(`Toggle failed: ${errorMessage(Be)}`, {
+        let toggleError = error;
+        logError(toggleError);
+        onDone(`Toggle failed: ${errorMessage(toggleError)}`, {
           display: "system",
         });
       }
     };
-    i[0] = g;
-    i[1] = onDone;
-    i[2] = refresh;
-    i[3] = storageV5;
-    i[4] = task;
-    i[5] = b;
-  } else b = i[5];
-  let I = b;
-  let Y;
-  if (i[6] !== g || i[7] !== onDone || i[8] !== refresh || i[9] !== storageV5 || i[10] !== task.id) {
-    Y = async function L() {
-      if (g) {
+    $[0] = isBusy;
+    $[1] = onDone;
+    $[2] = refresh;
+    $[3] = storageV5;
+    $[4] = task;
+    $[5] = toggleHandlerCached;
+  } else toggleHandlerCached = $[5];
+  let toggleTask = toggleHandlerCached;
+  let removeHandlerCached;
+  if ($[6] !== isBusy || $[7] !== onDone || $[8] !== refresh || $[9] !== storageV5 || $[10] !== task.id) {
+    removeHandlerCached = async function handleRemove() {
+      if (isBusy) {
         return;
       }
-      U(true);
+      setIsBusy(true);
       try {
         await removeScheduledTask(task.id, undefined, storageV5);
         await refresh();
@@ -113,46 +113,46 @@ function DaemonScheduledTaskDetail(props) {
           display: "system",
         });
       } catch (error) {
-        let oe = error;
+        let removeError = error;
         logForDebugging(
-          `Failed to remove scheduled task '${task.id}' from daemon.json: ${errorMessage(oe)}`,
+          `Failed to remove scheduled task '${task.id}' from daemon.json: ${errorMessage(removeError)}`,
           {
             level: "error",
           },
         );
-        onDone(`Remove failed: ${errorMessage(oe)}`, {
+        onDone(`Remove failed: ${errorMessage(removeError)}`, {
           display: "system",
         });
       }
     };
-    i[6] = g;
-    i[7] = onDone;
-    i[8] = refresh;
-    i[9] = storageV5;
-    i[10] = task.id;
-    i[11] = Y;
-  } else Y = i[11];
-  let L = Y;
-  if (p) {
+    $[6] = isBusy;
+    $[7] = onDone;
+    $[8] = refresh;
+    $[9] = storageV5;
+    $[10] = task.id;
+    $[11] = removeHandlerCached;
+  } else removeHandlerCached = $[11];
+  let removeTask = removeHandlerCached;
+  if (isConfirmingRemove) {
     const subtitle = `Delete '${task.id}' from daemon.json. The daemon will stop firing it on its next reconcile.`;
     let onCancel;
-    if (i[12] === MEMO_CACHE_SENTINEL) {
-      onCancel = () => ee(false);
-      i[12] = onCancel;
-    } else onCancel = i[12];
+    if ($[12] === MEMO_CACHE_SENTINEL) {
+      onCancel = () => setIsConfirmingRemove(false);
+      $[12] = onCancel;
+    } else onCancel = $[12];
     let onConfirm;
-    if (i[13] !== L) {
-      onConfirm = () => void L();
-      i[13] = L;
-      i[14] = onConfirm;
-    } else onConfirm = i[14];
+    if ($[13] !== removeTask) {
+      onConfirm = () => void removeTask();
+      $[13] = removeTask;
+      $[14] = onConfirm;
+    } else onConfirm = $[14];
     let onCancel_2;
-    if (i[15] === MEMO_CACHE_SENTINEL) {
-      onCancel_2 = () => ee(false);
-      i[15] = onCancel_2;
-    } else onCancel_2 = i[15];
+    if ($[15] === MEMO_CACHE_SENTINEL) {
+      onCancel_2 = () => setIsConfirmingRemove(false);
+      $[15] = onCancel_2;
+    } else onCancel_2 = $[15];
     let children;
-    if (i[16] !== onConfirm) {
+    if ($[16] !== onConfirm) {
       children = jsxProd_default(ConfirmSelect, {
         cancelFirst: true,
         focus: "cancel",
@@ -161,252 +161,261 @@ function DaemonScheduledTaskDetail(props) {
         onConfirm,
         onCancel: onCancel_2,
       });
-      i[16] = onConfirm;
-      i[17] = children;
-    } else children = i[17];
-    let f;
-    if (i[18] !== subtitle || i[19] !== children) {
-      f = jsxProd_default(Dialog, {
+      $[16] = onConfirm;
+      $[17] = children;
+    } else children = $[17];
+    let confirmDialog;
+    if ($[18] !== subtitle || $[19] !== children) {
+      confirmDialog = jsxProd_default(Dialog, {
         title: "Remove task?",
         subtitle,
         onCancel,
         color: "error",
         children,
       });
-      i[18] = subtitle;
-      i[19] = children;
-      i[20] = f;
-    } else f = i[20];
-    return f;
+      $[18] = subtitle;
+      $[19] = children;
+      $[20] = confirmDialog;
+    } else confirmDialog = $[20];
+    return confirmDialog;
   }
   const label = task.enabled ? "Disable" : "Enable";
-  let x;
-  if (i[21] !== label) {
-    x = {
+  let toggleOption;
+  if ($[21] !== label) {
+    toggleOption = {
       label,
       value: "toggle",
     };
-    i[21] = label;
-    i[22] = x;
-  } else x = i[22];
-  let C;
-  let E;
-  let M;
-  if (i[23] === MEMO_CACHE_SENTINEL) {
-    C = {
+    $[21] = label;
+    $[22] = toggleOption;
+  } else toggleOption = $[22];
+  let editOption;
+  let removeOption;
+  let backOption;
+  if ($[23] === MEMO_CACHE_SENTINEL) {
+    editOption = {
       label: "Edit",
       value: "edit",
     };
-    E = {
+    removeOption = {
       label: "Remove",
       value: "remove",
     };
-    M = {
+    backOption = {
       label: "Back",
       value: "back",
     };
-    i[23] = C;
-    i[24] = E;
-    i[25] = M;
+    $[23] = editOption;
+    $[24] = removeOption;
+    $[25] = backOption;
   } else {
-    C = i[23];
-    E = i[24];
-    M = i[25];
+    editOption = $[23];
+    removeOption = $[24];
+    backOption = $[25];
   }
-  let f;
-  if (i[26] !== x) {
-    f = [x, C, E, M];
-    i[26] = x;
-    i[27] = f;
-  } else f = i[27];
-  let options = f;
+  let options;
+  if ($[26] !== toggleOption) {
+    options = [toggleOption, editOption, removeOption, backOption];
+    $[26] = toggleOption;
+    $[27] = options;
+  } else options = $[27];
+  let options_2 = options;
   const { id, cron } = task;
-  let Q;
-  if (i[28] !== task.cron) {
-    Q = cronToHuman(task.cron);
-    i[28] = task.cron;
-    i[29] = Q;
-  } else Q = i[29];
-  let G;
-  if (i[30] !== Q || i[31] !== task.cron) {
-    G = jsxProd_default_2(Text, {
+  let cronHuman;
+  if ($[28] !== task.cron) {
+    cronHuman = cronToHuman(task.cron);
+    $[28] = task.cron;
+    $[29] = cronHuman;
+  } else cronHuman = $[29];
+  let cronLine;
+  if ($[30] !== cronHuman || $[31] !== task.cron) {
+    cronLine = jsxProd_default_2(Text, {
       dimColor: true,
-      children: ["Cron ", cron, " (", Q, ")"],
+      children: ["Cron ", cron, " (", cronHuman, ")"],
     });
-    i[30] = Q;
-    i[31] = task.cron;
-    i[32] = G;
-  } else G = i[32];
-  let H;
-  if (i[33] !== task.directory) {
-    H = jsxProd_default_2(Text, {
+    $[30] = cronHuman;
+    $[31] = task.cron;
+    $[32] = cronLine;
+  } else cronLine = $[32];
+  let directoryLine;
+  if ($[33] !== task.directory) {
+    directoryLine = jsxProd_default_2(Text, {
       dimColor: true,
       children: ["Directory ", task.directory],
     });
-    i[33] = task.directory;
-    i[34] = H;
-  } else H = i[34];
-  let D;
-  if (i[35] !== task.prompt) {
-    D = jsxProd_default_2(Text, {
+    $[33] = task.directory;
+    $[34] = directoryLine;
+  } else directoryLine = $[34];
+  let promptLine;
+  if ($[35] !== task.prompt) {
+    promptLine = jsxProd_default_2(Text, {
       dimColor: true,
       children: ["Prompt ", task.prompt],
     });
-    i[35] = task.prompt;
-    i[36] = D;
-  } else D = i[36];
+    $[35] = task.prompt;
+    $[36] = promptLine;
+  } else promptLine = $[36];
   const status = task.enabled ? "on" : "off";
-  let N;
-  if (i[37] !== status) {
-    N = jsxProd_default(StatusIcon, {
+  let statusIcon;
+  if ($[37] !== status) {
+    statusIcon = jsxProd_default(StatusIcon, {
       status,
       withSpace: true,
     });
-    i[37] = status;
-    i[38] = N;
-  } else N = i[38];
-  const q = task.enabled ? "enabled" : "disabled";
-  let P;
-  if (i[39] !== N || i[40] !== q) {
-    P = jsxProd_default_2(Text, {
+    $[37] = status;
+    $[38] = statusIcon;
+  } else statusIcon = $[38];
+  const enabledText = task.enabled ? "enabled" : "disabled";
+  let statusLine;
+  if ($[39] !== statusIcon || $[40] !== enabledText) {
+    statusLine = jsxProd_default_2(Text, {
       dimColor: true,
-      children: ["Status ", N, q],
+      children: ["Status ", statusIcon, enabledText],
     });
-    i[39] = N;
-    i[40] = q;
-    i[41] = P;
-  } else P = i[41];
-  let K;
-  if (i[42] !== task.permissionMode) {
-    K = permissionModeTitle(task.permissionMode);
-    i[42] = task.permissionMode;
-    i[43] = K;
-  } else K = i[43];
-  let ie;
-  if (i[44] !== K) {
-    ie = jsxProd_default_2(Text, {
+    $[39] = statusIcon;
+    $[40] = enabledText;
+    $[41] = statusLine;
+  } else statusLine = $[41];
+  let modeTitle;
+  if ($[42] !== task.permissionMode) {
+    modeTitle = permissionModeTitle(task.permissionMode);
+    $[42] = task.permissionMode;
+    $[43] = modeTitle;
+  } else modeTitle = $[43];
+  let modeLine;
+  if ($[44] !== modeTitle) {
+    modeLine = jsxProd_default_2(Text, {
       dimColor: true,
-      children: ["Mode ", K],
+      children: ["Mode ", modeTitle],
     });
-    i[44] = K;
-    i[45] = ie;
-  } else ie = i[45];
-  let T;
-  if (i[46] !== task.model) {
-    T =
+    $[44] = modeTitle;
+    $[45] = modeLine;
+  } else modeLine = $[45];
+  let modelLine;
+  if ($[46] !== task.model) {
+    modelLine =
       task.model &&
       jsxProd_default_2(Text, {
         dimColor: true,
         children: ["Model ", task.model],
       });
-    i[46] = task.model;
-    i[47] = T;
-  } else T = i[47];
-  let W;
-  if (i[48] !== task.runTimeoutMinutes) {
-    W = jsxProd_default_2(Text, {
+    $[46] = task.model;
+    $[47] = modelLine;
+  } else modelLine = $[47];
+  let timeoutLine;
+  if ($[48] !== task.runTimeoutMinutes) {
+    timeoutLine = jsxProd_default_2(Text, {
       dimColor: true,
       children: ["Timeout ", task.runTimeoutMinutes, "m"],
     });
-    i[48] = task.runTimeoutMinutes;
-    i[49] = W;
-  } else W = i[49];
-  let Z;
-  if (i[50] !== task.maxQueued) {
-    Z = jsxProd_default_2(Text, {
+    $[48] = task.runTimeoutMinutes;
+    $[49] = timeoutLine;
+  } else timeoutLine = $[49];
+  let maxQueuedLine;
+  if ($[50] !== task.maxQueued) {
+    maxQueuedLine = jsxProd_default_2(Text, {
       dimColor: true,
       children: ["Max queue ", task.maxQueued],
     });
-    i[50] = task.maxQueued;
-    i[51] = Z;
-  } else Z = i[51];
-  let O;
+    $[50] = task.maxQueued;
+    $[51] = maxQueuedLine;
+  } else maxQueuedLine = $[51];
+  let detailBody;
   if (
-    i[52] !== G ||
-    i[53] !== H ||
-    i[54] !== D ||
-    i[55] !== P ||
-    i[56] !== ie ||
-    i[57] !== T ||
-    i[58] !== W ||
-    i[59] !== Z
+    $[52] !== cronLine ||
+    $[53] !== directoryLine ||
+    $[54] !== promptLine ||
+    $[55] !== statusLine ||
+    $[56] !== modeLine ||
+    $[57] !== modelLine ||
+    $[58] !== timeoutLine ||
+    $[59] !== maxQueuedLine
   ) {
-    O = jsxProd_default_2(Box, {
+    detailBody = jsxProd_default_2(Box, {
       flexDirection: "column",
       marginBottom: 1,
-      children: [G, H, D, P, ie, T, W, Z],
+      children: [
+        cronLine,
+        directoryLine,
+        promptLine,
+        statusLine,
+        modeLine,
+        modelLine,
+        timeoutLine,
+        maxQueuedLine,
+      ],
     });
-    i[52] = G;
-    i[53] = H;
-    i[54] = D;
-    i[55] = P;
-    i[56] = ie;
-    i[57] = T;
-    i[58] = W;
-    i[59] = Z;
-    i[60] = O;
-  } else O = i[60];
+    $[52] = cronLine;
+    $[53] = directoryLine;
+    $[54] = promptLine;
+    $[55] = statusLine;
+    $[56] = modeLine;
+    $[57] = modelLine;
+    $[58] = timeoutLine;
+    $[59] = maxQueuedLine;
+    $[60] = detailBody;
+  } else detailBody = $[60];
   let onChange;
-  if (i[61] !== onBack || i[62] !== onEdit || i[63] !== task || i[64] !== I) {
-    onChange = (re) => {
-      if (re === "back") {
+  if ($[61] !== onBack || $[62] !== onEdit || $[63] !== task || $[64] !== toggleTask) {
+    onChange = (selectedValue) => {
+      if (selectedValue === "back") {
         return onBack();
       }
-      if (re === "edit") {
+      if (selectedValue === "edit") {
         return onEdit(task);
       }
-      if (re === "remove") {
-        return ee(true);
+      if (selectedValue === "remove") {
+        return setIsConfirmingRemove(true);
       }
-      if (re === "toggle") {
-        return void I();
+      if (selectedValue === "toggle") {
+        return void toggleTask();
       }
     };
-    i[61] = onBack;
-    i[62] = onEdit;
-    i[63] = task;
-    i[64] = I;
-    i[65] = onChange;
-  } else onChange = i[65];
-  let J;
-  if (i[66] !== g || i[67] !== onBack || i[68] !== options || i[69] !== onChange) {
-    J = jsxProd_default(ModelSelector, {
-      options,
-      isDisabled: g,
+    $[61] = onBack;
+    $[62] = onEdit;
+    $[63] = task;
+    $[64] = toggleTask;
+    $[65] = onChange;
+  } else onChange = $[65];
+  let selectorElement;
+  if ($[66] !== isBusy || $[67] !== onBack || $[68] !== options_2 || $[69] !== onChange) {
+    selectorElement = jsxProd_default(ModelSelector, {
+      options: options_2,
+      isDisabled: isBusy,
       onChange,
       onCancel: onBack,
     });
-    i[66] = g;
-    i[67] = onBack;
-    i[68] = options;
-    i[69] = onChange;
-    i[70] = J;
-  } else J = i[70];
-  let _;
-  if (i[71] !== onBack || i[72] !== O || i[73] !== J || i[74] !== task.id) {
-    _ = jsxProd_default_2(Dialog, {
+    $[66] = isBusy;
+    $[67] = onBack;
+    $[68] = options_2;
+    $[69] = onChange;
+    $[70] = selectorElement;
+  } else selectorElement = $[70];
+  let dialogElement;
+  if ($[71] !== onBack || $[72] !== detailBody || $[73] !== selectorElement || $[74] !== task.id) {
+    dialogElement = jsxProd_default_2(Dialog, {
       title: id,
       onCancel: onBack,
-      children: [O, J],
+      children: [detailBody, selectorElement],
     });
-    i[71] = onBack;
-    i[72] = O;
-    i[73] = J;
-    i[74] = task.id;
-    i[75] = _;
-  } else _ = i[75];
-  return _;
+    $[71] = onBack;
+    $[72] = detailBody;
+    $[73] = selectorElement;
+    $[74] = task.id;
+    $[75] = dialogElement;
+  } else dialogElement = $[75];
+  return dialogElement;
 }
 //@ chunk-vde9a20m.js:5219-8902 placement
 /**
  * 新建或编辑后台定时任务的表单：名称、计划、目录、模型与提示词。
  */
 function DaemonScheduledTaskForm(props) {
-  let p = w(59);
+  let $ = useMemoCache(59);
   let { defaultDir, existingIds, prefill, modelOptions, onCancel, onDone, onSaved, storageV5 } = props;
-  let ee;
-  if (p[0] !== modelOptions) {
-    ee =
+  let modelOptionsCached;
+  if ($[0] !== modelOptions) {
+    modelOptionsCached =
       modelOptions === undefined
         ? [
             {
@@ -415,36 +424,36 @@ function DaemonScheduledTaskForm(props) {
             },
           ]
         : modelOptions;
-    p[0] = modelOptions;
-    p[1] = ee;
-  } else ee = p[1];
-  let i = ee;
-  let b = prefill !== undefined;
-  let Y;
-  if (p[2] !== existingIds || p[3] !== b || p[4] !== prefill) {
-    Y = b ? existingIds.filter((existingId) => existingId !== prefill.id) : existingIds;
-    p[2] = existingIds;
-    p[3] = b;
-    p[4] = prefill;
-    p[5] = Y;
-  } else Y = p[5];
-  let I = Y;
+    $[0] = modelOptions;
+    $[1] = modelOptionsCached;
+  } else modelOptionsCached = $[1];
+  let modelOptionsResolved = modelOptionsCached;
+  let isEditing = prefill !== undefined;
+  let otherIdsCached;
+  if ($[2] !== existingIds || $[3] !== isEditing || $[4] !== prefill) {
+    otherIdsCached = isEditing ? existingIds.filter((existingId) => existingId !== prefill.id) : existingIds;
+    $[2] = existingIds;
+    $[3] = isEditing;
+    $[4] = prefill;
+    $[5] = otherIdsCached;
+  } else otherIdsCached = $[5];
+  let otherIds = otherIdsCached;
   const prompt = prefill?.prompt ?? "";
   const schedule = prefill?.cron ?? "";
   const dir = prefill?.directory ?? defaultDir;
   const id = prefill?.id ?? "";
   const permissionMode = prefill?.permissionMode ?? "dontAsk";
   const model = prefill?.model ?? "";
-  let M;
+  let initialValues;
   if (
-    p[6] !== prompt ||
-    p[7] !== schedule ||
-    p[8] !== dir ||
-    p[9] !== id ||
-    p[10] !== permissionMode ||
-    p[11] !== model
+    $[6] !== prompt ||
+    $[7] !== schedule ||
+    $[8] !== dir ||
+    $[9] !== id ||
+    $[10] !== permissionMode ||
+    $[11] !== model
   ) {
-    M = {
+    initialValues = {
       prompt,
       schedule,
       dir,
@@ -452,60 +461,63 @@ function DaemonScheduledTaskForm(props) {
       permissionMode,
       model,
     };
-    p[6] = prompt;
-    p[7] = schedule;
-    p[8] = dir;
-    p[9] = id;
-    p[10] = permissionMode;
-    p[11] = model;
-    p[12] = M;
-  } else M = p[12];
-  let [f, ce] = y(M);
-  let [F, _e] = y(b);
-  let [Q, G] = y(false);
-  let H;
-  if (p[13] !== defaultDir || p[14] !== F) {
-    H = function P(D, te) {
-      if (D === "id") _e(true);
-      ce((N) => {
-        if (N[D] === te) {
-          return N;
+    $[6] = prompt;
+    $[7] = schedule;
+    $[8] = dir;
+    $[9] = id;
+    $[10] = permissionMode;
+    $[11] = model;
+    $[12] = initialValues;
+  } else initialValues = $[12];
+  let [values, setValues] = useState(initialValues);
+  let [isIdDirty, setIsIdDirty] = useState(isEditing);
+  let [isSaving, setIsSaving] = useState(false);
+  let changeHandlerCached;
+  if ($[13] !== defaultDir || $[14] !== isIdDirty) {
+    changeHandlerCached = function handleChange(fieldKey, fieldValue) {
+      if (fieldKey === "id") setIsIdDirty(true);
+      setValues((previousValues) => {
+        if (previousValues[fieldKey] === fieldValue) {
+          return previousValues;
         }
-        let q = {
-          ...N,
-          [D]: te,
+        let nextValues = {
+          ...previousValues,
+          [fieldKey]: fieldValue,
         };
-        if (D !== "id" && !F && (D === "prompt" || D === "dir"))
-          q.id = defaultTaskSlug(resolve(expandTildeWithHome(q.dir?.trim() || defaultDir)), q.prompt ?? "");
-        return q;
+        if (fieldKey !== "id" && !isIdDirty && (fieldKey === "prompt" || fieldKey === "dir"))
+          nextValues.id = defaultTaskSlug(
+            resolve(expandTildeWithHome(nextValues.dir?.trim() || defaultDir)),
+            nextValues.prompt ?? "",
+          );
+        return nextValues;
       });
     };
-    p[13] = defaultDir;
-    p[14] = F;
-    p[15] = H;
-  } else H = p[15];
-  let onChange = H;
-  let K;
-  if (p[16] !== i || p[17] !== prefill) {
-    K =
-      prefill?.model && !i.some((ie) => ie.value === prefill.model)
+    $[13] = defaultDir;
+    $[14] = isIdDirty;
+    $[15] = changeHandlerCached;
+  } else changeHandlerCached = $[15];
+  let onChange = changeHandlerCached;
+  let modelOptionsWithPrefillCached;
+  if ($[16] !== modelOptionsResolved || $[17] !== prefill) {
+    modelOptionsWithPrefillCached =
+      prefill?.model && !modelOptionsResolved.some((option) => option.value === prefill.model)
         ? [
-            ...i,
+            ...modelOptionsResolved,
             {
               label: prefill.model,
               value: prefill.model,
             },
           ]
-        : i;
-    p[16] = i;
-    p[17] = prefill;
-    p[18] = K;
-  } else K = p[18];
-  let T = K;
-  let W;
-  let Z;
-  if (p[19] === MEMO_CACHE_SENTINEL) {
-    W = {
+        : modelOptionsResolved;
+    $[16] = modelOptionsResolved;
+    $[17] = prefill;
+    $[18] = modelOptionsWithPrefillCached;
+  } else modelOptionsWithPrefillCached = $[18];
+  let modelOptionsWithPrefill = modelOptionsWithPrefillCached;
+  let promptField;
+  let scheduleField;
+  if ($[19] === MEMO_CACHE_SENTINEL) {
+    promptField = {
       type: "text",
       key: "prompt",
       label: "Prompt",
@@ -513,7 +525,7 @@ function DaemonScheduledTaskForm(props) {
       required: true,
       hint: cronPromptFieldHint,
     };
-    Z = {
+    scheduleField = {
       type: "text",
       key: "schedule",
       label: "Schedule",
@@ -522,197 +534,197 @@ function DaemonScheduledTaskForm(props) {
       validate: validateScheduleInput,
       hint: renderCreateToolUseMessage,
     };
-    p[19] = W;
-    p[20] = Z;
+    $[19] = promptField;
+    $[20] = scheduleField;
   } else {
-    W = p[19];
-    Z = p[20];
+    promptField = $[19];
+    scheduleField = $[20];
   }
-  let O;
-  if (p[21] !== defaultDir) {
-    O = {
+  let dirField;
+  if ($[21] !== defaultDir) {
+    dirField = {
       type: "text",
       key: "dir",
       label: "Directory",
       placeholder: defaultDir,
     };
-    p[21] = defaultDir;
-    p[22] = O;
-  } else O = p[22];
+    $[21] = defaultDir;
+    $[22] = dirField;
+  } else dirField = $[22];
   let validate;
-  if (p[23] !== I) {
-    validate = (re) => {
-      let trimmed = re.trim();
-      if (trimmed !== "" && I.includes(trimmed)) {
+  if ($[23] !== otherIds) {
+    validate = (rawId) => {
+      let trimmed = rawId.trim();
+      if (trimmed !== "" && otherIds.includes(trimmed)) {
         return `id '${trimmed}' is already in use`;
       }
       return null;
     };
-    p[23] = I;
-    p[24] = validate;
-  } else validate = p[24];
+    $[23] = otherIds;
+    $[24] = validate;
+  } else validate = $[24];
   let hint;
-  if (p[25] !== F) {
-    hint = () => (F ? undefined : "Auto-generated from prompt and directory.");
-    p[25] = F;
-    p[26] = hint;
-  } else hint = p[26];
-  let pe;
-  if (p[27] !== validate || p[28] !== hint) {
-    pe = {
+  if ($[25] !== isIdDirty) {
+    hint = () => (isIdDirty ? undefined : "Auto-generated from prompt and directory.");
+    $[25] = isIdDirty;
+    $[26] = hint;
+  } else hint = $[26];
+  let idField;
+  if ($[27] !== validate || $[28] !== hint) {
+    idField = {
       type: "text",
       key: "id",
       label: "Id",
       validate,
       hint,
     };
-    p[27] = validate;
-    p[28] = hint;
-    p[29] = pe;
-  } else pe = p[29];
-  let eo;
-  if (p[30] === MEMO_CACHE_SENTINEL) {
-    eo = {
+    $[27] = validate;
+    $[28] = hint;
+    $[29] = idField;
+  } else idField = $[29];
+  let permissionModeField;
+  if ($[30] === MEMO_CACHE_SENTINEL) {
+    permissionModeField = {
       type: "select",
       key: "permissionMode",
       label: "Permission mode",
       options: SCHEDULED_PERMISSION_MODES.map(permissionModeOption),
     };
-    p[30] = eo;
-  } else eo = p[30];
+    $[30] = permissionModeField;
+  } else permissionModeField = $[30];
   let hint_2;
-  if (p[31] !== T) {
-    hint_2 = (oo) =>
-      T.find((Fo) => Fo.value === oo)?.description ??
-      (oo === "" ? "Uses your configured default model." : undefined);
-    p[31] = T;
-    p[32] = hint_2;
-  } else hint_2 = p[32];
-  let ke;
-  if (p[33] !== T || p[34] !== hint_2) {
-    ke = {
+  if ($[31] !== modelOptionsWithPrefill) {
+    hint_2 = (modelValue) =>
+      modelOptionsWithPrefill.find((option) => option.value === modelValue)?.description ??
+      (modelValue === "" ? "Uses your configured default model." : undefined);
+    $[31] = modelOptionsWithPrefill;
+    $[32] = hint_2;
+  } else hint_2 = $[32];
+  let modelField;
+  if ($[33] !== modelOptionsWithPrefill || $[34] !== hint_2) {
+    modelField = {
       type: "select",
       key: "model",
       label: "Model",
-      options: T,
+      options: modelOptionsWithPrefill,
       hint: hint_2,
     };
-    p[33] = T;
-    p[34] = hint_2;
-    p[35] = ke;
-  } else ke = p[35];
-  let to;
-  if (p[36] !== O || p[37] !== pe || p[38] !== ke) {
-    to = [W, Z, O, pe, eo, ke];
-    p[36] = O;
-    p[37] = pe;
-    p[38] = ke;
-    p[39] = to;
-  } else to = p[39];
-  let fields = to;
-  let io;
+    $[33] = modelOptionsWithPrefill;
+    $[34] = hint_2;
+    $[35] = modelField;
+  } else modelField = $[35];
+  let fields;
+  if ($[36] !== dirField || $[37] !== idField || $[38] !== modelField) {
+    fields = [promptField, scheduleField, dirField, idField, permissionModeField, modelField];
+    $[36] = dirField;
+    $[37] = idField;
+    $[38] = modelField;
+    $[39] = fields;
+  } else fields = $[39];
+  let fields_2 = fields;
+  let saveHandlerCached;
   if (
-    p[40] !== Q ||
-    p[41] !== defaultDir ||
-    p[42] !== b ||
-    p[43] !== onDone ||
-    p[44] !== onSaved ||
-    p[45] !== prefill ||
-    p[46] !== storageV5 ||
-    p[47] !== f
+    $[40] !== isSaving ||
+    $[41] !== defaultDir ||
+    $[42] !== isEditing ||
+    $[43] !== onDone ||
+    $[44] !== onSaved ||
+    $[45] !== prefill ||
+    $[46] !== storageV5 ||
+    $[47] !== values
   ) {
-    io = async function ve() {
-      if (Q) {
+    saveHandlerCached = async function handleSave() {
+      if (isSaving) {
         return;
       }
-      G(true);
-      let ro = resolve(expandTildeWithHome(f.dir?.trim() || defaultDir));
-      let scheduleInput = parseScheduleInput(f.schedule ?? "");
+      setIsSaving(true);
+      let resolvedDir = resolve(expandTildeWithHome(values.dir?.trim() || defaultDir));
+      let scheduleInput = parseScheduleInput(values.schedule ?? "");
       if (scheduleInput.cron === undefined) {
-        G(false);
+        setIsSaving(false);
         return;
       }
-      let Me = f.id?.trim() || defaultTaskSlug(ro, f.prompt?.trim() ?? "");
-      let permissionMode = f.permissionMode ?? "dontAsk";
-      let so = f.model?.trim() || undefined;
-      let No = {
-        id: Me,
+      let taskId = values.id?.trim() || defaultTaskSlug(resolvedDir, values.prompt?.trim() ?? "");
+      let permissionMode = values.permissionMode ?? "dontAsk";
+      let modelValue = values.model?.trim() || undefined;
+      let task = {
+        id: taskId,
         cron: scheduleInput.cron,
-        prompt: f.prompt.trim(),
-        directory: ro,
+        prompt: values.prompt.trim(),
+        directory: resolvedDir,
         enabled: prefill?.enabled ?? true,
         permissionMode,
         runTimeoutMinutes: prefill?.runTimeoutMinutes ?? 30,
         maxQueued: prefill?.maxQueued ?? 1,
-        ...(so && {
-          model: so,
+        ...(modelValue && {
+          model: modelValue,
         }),
       };
       try {
-        if (b && prefill.id !== Me) await removeScheduledTask(prefill.id, undefined, storageV5);
-        await addScheduledTask(No, undefined, storageV5);
-        await onSaved(Me, b);
+        if (isEditing && prefill.id !== taskId) await removeScheduledTask(prefill.id, undefined, storageV5);
+        await addScheduledTask(task, undefined, storageV5);
+        await onSaved(taskId, isEditing);
       } catch (error) {
-        let lo = error;
-        logError(lo);
-        onDone(`Save failed: ${errorMessage(lo)}`, {
+        let saveError = error;
+        logError(saveError);
+        onDone(`Save failed: ${errorMessage(saveError)}`, {
           display: "system",
         });
       }
     };
-    p[40] = Q;
-    p[41] = defaultDir;
-    p[42] = b;
-    p[43] = onDone;
-    p[44] = onSaved;
-    p[45] = prefill;
-    p[46] = storageV5;
-    p[47] = f;
-    p[48] = io;
-  } else io = p[48];
-  let ve = io;
-  const title = b ? `Edit '${prefill.id}'` : "New scheduled task";
+    $[40] = isSaving;
+    $[41] = defaultDir;
+    $[42] = isEditing;
+    $[43] = onDone;
+    $[44] = onSaved;
+    $[45] = prefill;
+    $[46] = storageV5;
+    $[47] = values;
+    $[48] = saveHandlerCached;
+  } else saveHandlerCached = $[48];
+  let saveTask = saveHandlerCached;
+  const title = isEditing ? `Edit '${prefill.id}'` : "New scheduled task";
   let onSubmit;
-  if (p[49] !== ve) {
-    onSubmit = () => void ve();
-    p[49] = ve;
-    p[50] = onSubmit;
-  } else onSubmit = p[50];
-  const submitLabel = b ? "Save changes" : "Create task";
-  let ao;
+  if ($[49] !== saveTask) {
+    onSubmit = () => void saveTask();
+    $[49] = saveTask;
+    $[50] = onSubmit;
+  } else onSubmit = $[50];
+  const submitLabel = isEditing ? "Save changes" : "Create task";
+  let formElement;
   if (
-    p[51] !== fields ||
-    p[52] !== onCancel ||
-    p[53] !== onChange ||
-    p[54] !== title ||
-    p[55] !== onSubmit ||
-    p[56] !== submitLabel ||
-    p[57] !== f
+    $[51] !== fields_2 ||
+    $[52] !== onCancel ||
+    $[53] !== onChange ||
+    $[54] !== title ||
+    $[55] !== onSubmit ||
+    $[56] !== submitLabel ||
+    $[57] !== values
   ) {
-    ao = jsxProd_default(AgentsList, {
+    formElement = jsxProd_default(AgentsList, {
       title,
       subtitle: "Fire a prompt on a recurring schedule",
-      fields,
-      values: f,
+      fields: fields_2,
+      values,
       onChange,
       onSubmit,
       onCancel,
       submitLabel,
     });
-    p[51] = fields;
-    p[52] = onCancel;
-    p[53] = onChange;
-    p[54] = title;
-    p[55] = onSubmit;
-    p[56] = submitLabel;
-    p[57] = f;
-    p[58] = ao;
-  } else ao = p[58];
-  return ao;
+    $[51] = fields_2;
+    $[52] = onCancel;
+    $[53] = onChange;
+    $[54] = title;
+    $[55] = onSubmit;
+    $[56] = submitLabel;
+    $[57] = values;
+    $[58] = formElement;
+  } else formElement = $[58];
+  return formElement;
 }
 //@ chunk-vde9a20m.js:8902-9003 placement
-function slugifyTaskName(u) {
-  return u
+function slugifyTaskName(name) {
+  return name
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "")
@@ -722,27 +734,27 @@ function slugifyTaskName(u) {
 /**
  * 由目录名和提示词前几个词生成任务名，空则为 task。
  */
-function defaultTaskSlug(u, o) {
-  let k = slugifyTaskName(basename(u));
-  let a = slugifyTaskName(o.split(/\s+/).slice(0, 4).join(" "));
-  return [k, a].filter(Boolean).join("-") || "task";
+function defaultTaskSlug(directory, prompt) {
+  let dirSlug = slugifyTaskName(basename(directory));
+  let promptSlug = slugifyTaskName(prompt.split(/\s+/).slice(0, 4).join(" "));
+  return [dirSlug, promptSlug].filter(Boolean).join("-") || "task";
 }
 //@ chunk-vde9a20m.js:9126-9345 placement
 /**
  * 定时任务对象转为表单字段值。
  */
-function toTaskFormValues(u) {
+function toTaskFormValues(task) {
   return {
-    id: u.id,
-    cron: u.cron,
-    prompt: u.prompt,
-    directory: u.directory,
-    enabled: u.enabled,
-    permissionMode: u.permissionMode,
-    runTimeoutMinutes: u.runTimeoutMinutes,
-    maxQueued: u.maxQueued,
-    ...(u.model && {
-      model: u.model,
+    id: task.id,
+    cron: task.cron,
+    prompt: task.prompt,
+    directory: task.directory,
+    enabled: task.enabled,
+    permissionMode: task.permissionMode,
+    runTimeoutMinutes: task.runTimeoutMinutes,
+    maxQueued: task.maxQueued,
+    ...(task.model && {
+      model: task.model,
     }),
   };
 }

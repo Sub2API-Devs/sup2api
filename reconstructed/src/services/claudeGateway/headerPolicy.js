@@ -46,7 +46,9 @@ var RESERVED_HEADER_PREFIXES = [
 /**
  * 判断请求头名是否保留（命中保留集合或前缀）。
  */
-function isReservedHeaderName(e) {
-  return RESERVED_FORWARD_HEADERS.has(e) || RESERVED_HEADER_PREFIXES.some((t) => e.startsWith(t));
+function isReservedHeaderName(name) {
+  return (
+    RESERVED_FORWARD_HEADERS.has(name) || RESERVED_HEADER_PREFIXES.some((prefix) => name.startsWith(prefix))
+  );
 }
 export { isReservedHeaderName, HTTPS_API_ANTHROPIC_COM };

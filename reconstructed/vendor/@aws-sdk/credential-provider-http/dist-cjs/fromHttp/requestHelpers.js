@@ -5,17 +5,17 @@
  * pieces: chunk-0c72454j.js (3)
  * attribution: esm-layout 1, esm-fingerprint 2
  */
-import { Re } from "../../../../../runtime/bun-runtime.js";
+import { __toESM } from "../../../../../runtime/bun-runtime.js";
 import { require_property_provider } from "../../../../@smithy/property-provider/dist-cjs/index.js";
 import { require_protocol_http } from "../../../../@smithy/protocol-http/dist-cjs/index.js";
 import { require_client } from "../../../../@smithy/core/dist-cjs/submodules/client/index.js";
 import { require_util_stream } from "../../../../@smithy/util-stream/dist-cjs/index.js";
 
 //@ chunk-0c72454j.js:1266-1315 esm-layout
-var config_1 = Re(require_property_provider());
-var import_protocol_http = Re(require_protocol_http());
-var import_client_2 = Re(require_client());
-var serde_2 = Re(require_util_stream());
+var config_1 = __toESM(require_property_provider());
+var import_protocol_http = __toESM(require_protocol_http());
+var import_client_2 = __toESM(require_client());
+var serde_2 = __toESM(require_util_stream());
 //@ chunk-0c72454j.js:1315-1525 esm-fingerprint
 function createGetRequest(url) {
   return new import_protocol_http.HttpRequest({

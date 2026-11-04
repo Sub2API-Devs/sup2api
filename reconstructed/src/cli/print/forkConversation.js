@@ -13,7 +13,13 @@ import { mkdir, lstat, open, lutimes, unlink, readdir, readFile, readlink } from
 import { constants } from "fs";
 import { posix } from "path";
 import { DoctorLazy } from "../handlers/util.js";
-import { u, literal, string, array, hu } from "../../../vendor/zod/v4/classic/schemas.js";
+import {
+  objectSchema,
+  literal,
+  stringSchema,
+  array,
+  custom,
+} from "../../../vendor/zod/v4/classic/schemas.js";
 import { parseToolOutputSchema } from "../../services/mcp/schemaParse.js";
 import { jsonStringify, jsonParse } from "../../utils/slowOperations.js";
 import {
@@ -77,25 +83,32 @@ import { getTaskOutputSize } from "../../utils/task/diskOutput.js";
 import { getCpuacctDir } from "../../utils/shell/cpuReport.js";
 import { getRunningTasks } from "../../utils/task/framework.js";
 import { MAX_PROC_ENTRIES } from "../../utils/shell/processCpuTime.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-tyg7f3ek.js:588935-589005 sole-consumer
-var TRANSCRIPT_MESSAGE_TYPES = new Set(["user", "assistant", "attachment", "system", "progress"]);
+var TRANSCRIPT_MESSAGE_TYPES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-tyg7f3ek.js:588935", () => {
+  TRANSCRIPT_MESSAGE_TYPES = new Set(["user", "assistant", "attachment", "system", "progress"]);
+});
 //@ chunk-tyg7f3ek.js:589005-589179 affinity = isLegacyProgressEntry (0.8)
 function isLegacyProgressEntry(entry) {
   if (typeof entry !== "object" || entry === null) return false;
-  let n = "type" in entry ? entry.type : undefined;
+  let type = "type" in entry ? entry.type : undefined;
   let uuid = "uuid" in entry ? entry.uuid : undefined;
-  return typeof n === "string" && TRANSCRIPT_MESSAGE_TYPES.has(n) && typeof uuid === "string";
+  return typeof type === "string" && TRANSCRIPT_MESSAGE_TYPES.has(type) && typeof uuid === "string";
 }
 //@ chunk-tyg7f3ek.js:589179-589288 placement = getParentSessionId (0.704)
-var getParentSessionId = DoctorLazy(() =>
-  u({
-    version: literal(1),
-    parentSessionId: string().min(1).max(200),
-    createdAt: parseToolOutputSchema(),
-    messages: array(hu(isLegacyProgressEntry)).min(1),
-  }),
-);
+var getParentSessionId; // deferred: uses DoctorLazy (../handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-tyg7f3ek.js:589179", () => {
+  getParentSessionId = DoctorLazy(() =>
+    objectSchema({
+      version: literal(1),
+      parentSessionId: stringSchema().min(1).max(200),
+      createdAt: parseToolOutputSchema(),
+      messages: array(custom(isLegacyProgressEntry)).min(1),
+    }),
+  );
+});
 //@ chunk-tyg7f3ek.js:589288-589388 placement
 class ForkSeedTooLargeError extends Error {
   bytes;
@@ -105,43 +118,43 @@ class ForkSeedTooLargeError extends Error {
   }
 }
 //@ chunk-tyg7f3ek.js:589388-589535 placement
-function encodeForkSeed(e) {
-  let n = jsonStringify({
+function encodeForkSeed(seed) {
+  let body = jsonStringify({
     version: 1,
-    ...e,
+    ...seed,
   });
-  let bytes = Buffer.byteLength(n);
+  let bytes = Buffer.byteLength(body);
   if (bytes > FORK_SEED_MAX_BYTES) throw new ForkSeedTooLargeError(bytes);
   return {
-    body: n,
-    sha256: createHash("sha256").update(n).digest("hex"),
+    body,
+    sha256: createHash("sha256").update(body).digest("hex"),
   };
 }
 //@ chunk-tyg7f3ek.js:589535-589683 placement
-async function writeForkSeed(e, n) {
-  let r = forkSeedPath(e);
-  if (!r) throw Error("fork seed: not a server session id");
+async function writeForkSeed(sessionId, body) {
+  let path = forkSeedPath(sessionId);
+  if (!path) throw Error("fork seed: not a server session id");
   await mkdir(forkSeedsDir(), {
     recursive: true,
     mode: 448,
   });
-  await writeFileAtomic(r, n, 384);
+  await writeFileAtomic(path, body, 384);
 }
 //@ chunk-tyg7f3ek.js:589683-590804 placement
 /**
  * 读取 Remote Control fork 的种子文件（大小上限、非普通文件、符号链接检查），返回 none/invalid/seed。
  */
-async function readForkSeed(e) {
-  let n = forkSeedPath(e);
-  if (!n)
+async function readForkSeed(sessionId) {
+  let path = forkSeedPath(sessionId);
+  if (!path)
     return {
       kind: "none",
     };
-  let r = getPlatform() === "windows";
-  if (r)
+  let isWindows = getPlatform() === "windows";
+  if (isWindows)
     try {
-      if (!(await lstat(n)).isFile()) {
-        await deleteForkSeed(e);
+      if (!(await lstat(path)).isFile()) {
+        await deleteForkSeed(sessionId);
         return {
           kind: "invalid",
           reason: "not_a_file",
@@ -154,11 +167,11 @@ async function readForkSeed(e) {
         };
       throw error;
     }
-  let s;
+  let handle;
   try {
-    s = await open(
-      n,
-      r ? constants.O_RDONLY : constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK,
+    handle = await open(
+      path,
+      isWindows ? constants.O_RDONLY : constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK,
     );
   } catch (error) {
     if (isENOENT(error))
@@ -166,7 +179,7 @@ async function readForkSeed(e) {
         kind: "none",
       };
     if (getErrnoCode(error) === "ELOOP") {
-      await deleteForkSeed(e);
+      await deleteForkSeed(sessionId);
       return {
         kind: "invalid",
         reason: "not_a_file",
@@ -174,56 +187,56 @@ async function readForkSeed(e) {
     }
     throw error;
   }
-  let h;
+  let buffer;
   try {
-    let stats = await s.stat();
+    let stats = await handle.stat();
     if (!stats.isFile()) {
-      await deleteForkSeed(e);
+      await deleteForkSeed(sessionId);
       return {
         kind: "invalid",
         reason: "not_a_file",
       };
     }
     if (stats.size > FORK_SEED_MAX_BYTES) {
-      await deleteForkSeed(e);
+      await deleteForkSeed(sessionId);
       return {
         kind: "invalid",
         reason: "oversize",
       };
     }
-    h = Buffer.allocUnsafe(stats.size + 1);
-    let q = 0;
-    let x;
+    buffer = Buffer.allocUnsafe(stats.size + 1);
+    let total = 0;
+    let bytesRead;
     do {
-      ({ bytesRead: x } = await s.read(h, q, h.length - q, null));
-      q += x;
-    } while (x > 0 && q < h.length);
-    if (q > stats.size) {
-      await deleteForkSeed(e);
+      ({ bytesRead } = await handle.read(buffer, total, buffer.length - total, null));
+      total += bytesRead;
+    } while (bytesRead > 0 && total < buffer.length);
+    if (total > stats.size) {
+      await deleteForkSeed(sessionId);
       return {
         kind: "invalid",
         reason: "oversize",
       };
     }
-    h = h.subarray(0, q);
+    buffer = buffer.subarray(0, total);
   } finally {
-    await s.close();
+    await handle.close();
   }
-  let y;
+  let parsed;
   try {
-    y = jsonParse(h.toString("utf8"));
+    parsed = jsonParse(buffer.toString("utf8"));
   } catch {
-    y = undefined;
+    parsed = undefined;
   }
-  let S = getParentSessionId().safeParse(y);
-  if (!S.success) {
-    await deleteForkSeed(e);
+  let parsedSchema = getParentSessionId().safeParse(parsed);
+  if (!parsedSchema.success) {
+    await deleteForkSeed(sessionId);
     return {
       kind: "invalid",
       reason: "malformed",
     };
   }
-  let { parentSessionId, createdAt, messages } = S.data;
+  let { parentSessionId, createdAt, messages } = parsedSchema.data;
   return {
     kind: "seed",
     seed: {
@@ -231,25 +244,25 @@ async function readForkSeed(e) {
       createdAt,
       messages,
     },
-    sha256: createHash("sha256").update(h).digest("hex"),
+    sha256: createHash("sha256").update(buffer).digest("hex"),
   };
 }
 //@ chunk-tyg7f3ek.js:590804-590963 placement
-async function touchForkSeed(e) {
-  let n = forkSeedPath(e);
-  if (!n) return;
+async function touchForkSeed(sessionId) {
+  let path = forkSeedPath(sessionId);
+  if (!path) return;
   let date = new Date();
-  await lutimes(n, date, date).catch((error) => {
-    logForDebugging(`[rc-fork] Could not refresh the seed's mtime for ${e}: ${errorMessage(error)}`);
+  await lutimes(path, date, date).catch((error) => {
+    logForDebugging(`[rc-fork] Could not refresh the seed's mtime for ${sessionId}: ${errorMessage(error)}`);
   });
 }
 //@ chunk-tyg7f3ek.js:590963-591254 placement
-async function deleteForkSeed(e) {
-  let n = forkSeedPath(e);
-  if (!n) return true;
+async function deleteForkSeed(sessionId) {
+  let path = forkSeedPath(sessionId);
+  if (!path) return true;
   for (let j = 0; ; j++)
     try {
-      await unlink(n);
+      await unlink(path);
       return true;
     } catch (error) {
       if (isENOENT(error)) return true;
@@ -260,25 +273,25 @@ async function deleteForkSeed(e) {
         });
         continue;
       }
-      logForDebugging(`[rc-fork] Could not delete the seed for ${e}: ${errorMessage(error)}`, {
+      logForDebugging(`[rc-fork] Could not delete the seed for ${sessionId}: ${errorMessage(error)}`, {
         level: "error",
       });
       return false;
     }
 }
 //@ chunk-tyg7f3ek.js:591254-591293 placement
-function isBridgeForkSupported(e) {
-  return Boolean(e) && isBridgeEnvironment();
+function isBridgeForkSupported(reference) {
+  return Boolean(reference) && isBridgeEnvironment();
 }
 //@ chunk-tyg7f3ek.js:591293-591334 placement
-function bridgeForkSessionId(sdkUrl) {
-  return isBridgeForkSupported(sdkUrl) ? getSupervisedBridgeSessionId() : undefined;
+function bridgeForkSessionId(reference) {
+  return isBridgeForkSupported(reference) ? getSupervisedBridgeSessionId() : undefined;
 }
 //@ chunk-tyg7f3ek.js:591334-593736 placement
 /**
  * 处理 rc fork_conversation 控制请求：校验目标消息、写种子、创建新云会话并返回结果。
  */
-async function handleForkConversation(request, n) {
+async function handleForkConversation(request, context) {
   let targetMessageUuid = request.target_message_uuid;
   if (targetMessageUuid !== undefined && typeof targetMessageUuid !== "string")
     return {
@@ -291,35 +304,35 @@ async function handleForkConversation(request, n) {
       ok: false,
       error: "fork_conversation: title must be a string",
     };
-  let reference = bridgeForkSessionId(n.sdkUrl);
+  let reference = bridgeForkSessionId(context.sdkUrl);
   if (reference === undefined || !isFirstPartyProvider() || isEssentialTrafficOnly())
     return forkRefused("unsupported");
-  let y = n.blockedReason();
-  if (y !== null) return forkRefused(y);
+  let blockedReason = context.blockedReason();
+  if (blockedReason !== null) return forkRefused(blockedReason);
   if (isTranscriptPersistenceDisabled()) return forkRefused("history suppressed", "persistence_disabled");
-  let S;
-  let R;
-  let w;
+  let messages;
+  let targetUuid;
+  let prefillText;
   if (targetMessageUuid !== undefined) {
-    let rewindTarget = findRewindTarget(n.messages, targetMessageUuid);
+    let rewindTarget = findRewindTarget(context.messages, targetMessageUuid);
     if (!rewindTarget) return forkRefused("target not found");
-    if (hasCronToolUse(n.messages, rewindTarget.index)) return forkRefused("target splits a tool call");
-    S = n.messages.slice(0, rewindTarget.index);
-    R = rewindTarget.uuid;
-    w = rewindTarget.prefillText ?? undefined;
-  } else S = n.messages.slice();
+    if (hasCronToolUse(context.messages, rewindTarget.index)) return forkRefused("target splits a tool call");
+    messages = context.messages.slice(0, rewindTarget.index);
+    targetUuid = rewindTarget.uuid;
+    prefillText = rewindTarget.prefillText ?? undefined;
+  } else messages = context.messages.slice();
   let sessionId = getSessionId();
   if (isRemoteEgressSuppressedFor(pinSessionId(sessionId))) return forkRefused("history suppressed");
-  let L = title !== undefined ? sanitizeSessionTitle(title).replace(/\s+/g, " ") : "";
+  let sanitizedTitle = title !== undefined ? sanitizeSessionTitle(title).replace(/\s+/g, " ") : "";
   let currentSessionDisplayTitle = getCurrentSessionDisplayTitle(sessionId);
-  let x = currentSessionDisplayTitle
+  let forkTitle = currentSessionDisplayTitle
     ? sanitizeSessionTitle(`${currentSessionDisplayTitle} (fork)`).replace(/\s+/g, " ")
     : "";
-  let title_2 = L || x || undefined;
-  let id = null;
+  let title_2 = sanitizedTitle || forkTitle || undefined;
+  let sessionId_2 = null;
   try {
     let bridgeSessionOrStatus = await getBridgeSessionOrStatus(reference, {
-      credentials: n.credentials,
+      credentials: context.credentials,
     });
     if (!bridgeSessionOrStatus.session?.environment_id)
       return forkFailed(
@@ -330,20 +343,20 @@ async function handleForkConversation(request, n) {
             : "session_fetch_failed",
       );
     let environmentId = bridgeSessionOrStatus.session.environment_id;
-    let Ue = null;
-    if (S.length > 0)
+    let seed = null;
+    if (messages.length > 0)
       try {
-        Ue = encodeForkSeed({
+        seed = encodeForkSeed({
           parentSessionId: reference,
           createdAt: new Date().toISOString(),
-          messages: S.map((Ee) =>
+          messages: messages.map((message) =>
             withVersionToRecord(
-              Ee.type === "system" && Ee.subtype === "model_refusal_fallback"
+              message.type === "system" && message.subtype === "model_refusal_fallback"
                 ? {
-                    ...Ee,
+                    ...message,
                     neutralizedByFork: true,
                   }
-                : Ee,
+                : message,
             ),
           ),
         });
@@ -352,63 +365,65 @@ async function handleForkConversation(request, n) {
         return forkFailed("seed_too_large");
       }
     let { branch, gitRepoUrl, defaultBranch } = await snapshotGitEvidenceForBridge();
-    let { uploadForkDisplayHistory } = await import("./chunk-6kcmnrx0.js");
-    let me = await forkHistorySuppression(sessionId, n.storageV5);
-    if (me !== null) return forkRefused("history suppressed", me);
-    id = await createBridgeSession({
+    let { uploadForkDisplayHistory } = await import("../../bridge/forkHistoryUpload.js");
+    let suppression = await forkHistorySuppression(sessionId, context.storageV5);
+    if (suppression !== null) return forkRefused("history suppressed", suppression);
+    sessionId_2 = await createBridgeSession({
       environmentId,
       title: title_2,
       gitRepoUrl,
       branch,
       defaultBranch,
       signal: AbortSignal.timeout(15000),
-      credentials: n.credentials,
+      credentials: context.credentials,
       permissionMode:
-        n.permissionMode === "bypassPermissions" ? undefined : toExternalPermissionMode(n.permissionMode),
+        context.permissionMode === "bypassPermissions"
+          ? undefined
+          : toExternalPermissionMode(context.permissionMode),
       tags: [
         REMOTE_CONTROL_FORK,
         `${REMOTE_CONTROL_FORK_PARENT}${toCompatSessionId(reference)}`,
-        ...(Ue ? [`${REMOTE_CONTROL_FORK_SEED}${Ue.sha256}`] : []),
+        ...(seed ? [`${REMOTE_CONTROL_FORK_SEED}${seed.sha256}`] : []),
       ],
     });
-    if (id === null) return forkFailed("session_create_failed");
-    let Me = Ue && (await tryWriteForkSeed(id, Ue.body));
-    if (Me === null) {
-      let Ee = await forkHistorySuppression(sessionId, n.storageV5);
-      if (Ee !== null) {
-        await discardForkSession(id, n.credentials);
-        return forkRefused("history suppressed", Ee);
+    if (sessionId_2 === null) return forkFailed("session_create_failed");
+    let uploadFailure = seed && (await tryWriteForkSeed(sessionId_2, seed.body));
+    if (uploadFailure === null) {
+      let suppression = await forkHistorySuppression(sessionId, context.storageV5);
+      if (suppression !== null) {
+        await discardForkSession(sessionId_2, context.credentials);
+        return forkRefused("history suppressed", suppression);
       }
-      Me = await uploadForkDisplayHistory(
-        id,
-        S,
-        n.credentials,
+      uploadFailure = await uploadForkDisplayHistory(
+        sessionId_2,
+        messages,
+        context.credentials,
         "rc_fork_conversation",
-        n.host,
-        n.getTools?.(),
+        context.host,
+        context.getTools?.(),
       );
     }
-    if (Me !== null) {
-      await discardForkSession(id, n.credentials);
-      return forkFailed(Me);
+    if (uploadFailure !== null) {
+      await discardForkSession(sessionId_2, context.credentials);
+      return forkFailed(uploadFailure);
     }
     logFeatureOk("rc_fork_conversation");
     return {
       ok: true,
       response: {
         forked: true,
-        sessionId: inSessionIdCostumeOf(reference, id),
-        ...(R !== undefined && {
-          targetMessageUuid: R,
+        sessionId: inSessionIdCostumeOf(reference, sessionId_2),
+        ...(targetUuid !== undefined && {
+          targetMessageUuid: targetUuid,
         }),
-        ...(w !== undefined && {
-          prefillText: w,
+        ...(prefillText !== undefined && {
+          prefillText,
         }),
       },
     };
   } catch (error) {
     logError(error);
-    if (id !== null) await discardForkSession(id, n.credentials);
+    if (sessionId_2 !== null) await discardForkSession(sessionId_2, context.credentials);
     return forkFailed("exception");
   }
 }
@@ -423,20 +438,20 @@ var FORK_REFUSAL_REASONS = {
   "history suppressed": "history_suppressed",
 };
 //@ chunk-tyg7f3ek.js:594005-594147 placement
-function forkRefused(e, n = e === "unsupported" ? null : FORK_REFUSAL_REASONS[e]) {
-  if (n !== null) logFeatureSad("rc_fork_conversation", n);
+function forkRefused(error, reason = error === "unsupported" ? null : FORK_REFUSAL_REASONS[error]) {
+  if (reason !== null) logFeatureSad("rc_fork_conversation", reason);
   return {
     ok: true,
     response: {
       forked: false,
-      error: e,
-      reason: FORK_REFUSAL_REASONS[e],
+      error,
+      reason: FORK_REFUSAL_REASONS[error],
     },
   };
 }
 //@ chunk-tyg7f3ek.js:594147-594267 placement
-function forkFailed(e) {
-  logFeatureBad("rc_fork_conversation", e);
+function forkFailed(error) {
+  logFeatureBad("rc_fork_conversation", error);
   return {
     ok: true,
     response: {
@@ -453,22 +468,22 @@ async function forkHistorySuppression(sessionId, storageV5) {
   return historySuppressionFromDisk !== "clean" ? "history_suppressed_on_disk" : null;
 }
 //@ chunk-tyg7f3ek.js:594402-594566 placement
-async function tryWriteForkSeed(e, body) {
+async function tryWriteForkSeed(sessionId, body) {
   try {
-    await writeForkSeed(e, body);
+    await writeForkSeed(sessionId, body);
     return null;
   } catch (error) {
-    logForDebugging(`[rc-fork] Could not write the seed for ${e}: ${errorMessage(error)}`, {
+    logForDebugging(`[rc-fork] Could not write the seed for ${sessionId}: ${errorMessage(error)}`, {
       level: "error",
     });
     return "seed_write_failed";
   }
 }
 //@ chunk-tyg7f3ek.js:594566-594685 placement
-async function discardForkSession(e, credentials) {
-  await deleteForkSeed(e);
-  let { archiveAbandonedForkSession } = await import("./chunk-6kcmnrx0.js");
-  await archiveAbandonedForkSession(e, credentials);
+async function discardForkSession(sessionId, credentials) {
+  await deleteForkSeed(sessionId);
+  let { archiveAbandonedForkSession } = await import("../../bridge/forkHistoryUpload.js");
+  await archiveAbandonedForkSession(sessionId, credentials);
 }
 //@ chunk-tyg7f3ek.js:594685-594733 placement
 var FORK_VERIFY_TIMINGS = 600000;
@@ -494,24 +509,24 @@ class ForkSeedUnverifiedError extends Error {
  * 启动时核对上一次 Remote Control fork 的种子是否已被服务器接收，未确认则保留到下次。
  */
 function createForkSeedVerifier({ sdkUrl, credentials, writeNote }) {
-  let s = bridgeForkSessionId(sdkUrl);
-  if (s === undefined) return null;
-  let h = s;
-  let y = false;
-  function S(L) {
+  let reference = bridgeForkSessionId(sdkUrl);
+  if (reference === undefined) return null;
+  let forkReference = reference;
+  let isFork = false;
+  function noteWrite(sha256) {
     return Promise.race([
-      writeNote(L),
+      writeNote(sha256),
       sleep(FORK_NOTE_WRITE_TIMEOUT_MS, undefined, {
         unref: true,
       }).then(() => false),
     ]);
   }
-  function R(code) {
+  function logRefused(code) {
     logFeatureSad("rc_fork_conversation", code);
   }
-  async function w() {
+  async function readTags() {
     if (!isFirstPartyProvider()) throw new ForkSeedUnverifiedError("provider_not_first_party", false);
-    let { session } = await getBridgeSessionOrStatus(h, {
+    let { session } = await getBridgeSessionOrStatus(forkReference, {
       credentials,
       useV2: true,
     });
@@ -520,65 +535,66 @@ function createForkSeedVerifier({ sdkUrl, credentials, writeNote }) {
       throw new ForkSeedUnverifiedError("record_unread");
     return tags;
   }
-  async function P(L) {
-    if (L.sha256 === REVOKED) {
-      await deleteForkSeed(h);
+  async function adopt(note) {
+    if (note.sha256 === REVOKED) {
+      await deleteForkSeed(forkReference);
       return null;
     }
-    let q;
+    let seed;
     try {
-      q = await readForkSeed(h);
+      seed = await readForkSeed(forkReference);
     } catch (error) {
       logForDebugging(`[rc-fork] ${errorMessage(error)}`, {
         level: "error",
       });
-      if (!(await w()).includes(REMOTE_CONTROL_FORK)) {
-        R("seed_unreadable");
+      if (!(await readTags()).includes(REMOTE_CONTROL_FORK)) {
+        logRefused("seed_unreadable");
         return null;
       }
       throw new ForkSeedUnverifiedError("seed_unreadable");
     }
-    if (q.kind === "none") return null;
-    if (q.kind === "invalid") {
-      R(`seed_${q.reason}`);
+    if (seed.kind === "none") return null;
+    if (seed.kind === "invalid") {
+      logRefused(`seed_${seed.reason}`);
       return null;
     }
-    if (L.unread) throw new ForkSeedUnverifiedError("note_unread", false);
-    let { messages, createdAt, parentSessionId } = q.seed;
-    let re = await w();
-    let filtered = re.filter((ce) => ce.startsWith(REMOTE_CONTROL_FORK_SEED));
+    if (note.unread) throw new ForkSeedUnverifiedError("note_unread", false);
+    let { messages, createdAt, parentSessionId } = seed.seed;
+    let tags = await readTags();
+    let filtered = tags.filter((tag) => tag.startsWith(REMOTE_CONTROL_FORK_SEED));
     if (
-      !re.includes(REMOTE_CONTROL_FORK) ||
+      !tags.includes(REMOTE_CONTROL_FORK) ||
       filtered.length !== 1 ||
-      filtered[0] !== `${REMOTE_CONTROL_FORK_SEED}${q.sha256}`
+      filtered[0] !== `${REMOTE_CONTROL_FORK_SEED}${seed.sha256}`
     ) {
-      R("seed_unbound");
-      await deleteForkSeed(h);
+      logRefused("seed_unbound");
+      await deleteForkSeed(forkReference);
       return null;
     }
-    let Ue = L.sha256 !== undefined && /^[0-9a-f]{64}$/.test(L.sha256) && L.sha256 === q.sha256;
-    if (!Ue) {
+    let noteMatches =
+      note.sha256 !== undefined && /^[0-9a-f]{64}$/.test(note.sha256) && note.sha256 === seed.sha256;
+    if (!noteMatches) {
       if (Date.now() - Date.parse(createdAt) > FORK_VERIFY_TIMINGS) {
-        R("note_missing");
-        await deleteForkSeed(h);
+        logRefused("note_missing");
+        await deleteForkSeed(forkReference);
         return null;
       }
-      if (!(await S(q.sha256))) R("note_unconfirmed");
+      if (!(await noteWrite(seed.sha256))) logRefused("note_unconfirmed");
     }
-    await touchForkSeed(h);
+    await touchForkSeed(forkReference);
     logForDebugging(`[rc-fork] Seeded ${messages.length} messages from ${parentSessionId}`);
-    y = true;
+    isFork = true;
     return {
       rows: messages,
-      firstBoot: !Ue,
+      firstBoot: !noteMatches,
     };
   }
   return {
-    async adoptSeed(L) {
-      y = false;
+    async adoptSeed(note) {
+      isFork = false;
       for (let j = 1; ; j++)
         try {
-          return await P(L);
+          return await adopt(note);
         } catch (error) {
           if (!(error instanceof ForkSeedUnverifiedError)) {
             logError(error);
@@ -591,18 +607,18 @@ function createForkSeedVerifier({ sdkUrl, credentials, writeNote }) {
             });
             continue;
           }
-          R(error.code);
+          logRefused(error.code);
           throw error;
         }
     },
     isFork() {
-      return y;
+      return isFork;
     },
     async discardSeed() {
       try {
-        let [L, q] = await Promise.all([S(REVOKED), deleteForkSeed(h)]);
-        if (q) y = false;
-        if (!L && !q) R("revoke_unconfirmed");
+        let [noteWritten, deleted] = await Promise.all([noteWrite(REVOKED), deleteForkSeed(forkReference)]);
+        if (deleted) isFork = false;
+        if (!noteWritten && !deleted) logRefused("revoke_unconfirmed");
       } catch (error) {
         logError(error);
         logFeatureBad("rc_fork_conversation", "revoke_failed");
@@ -611,52 +627,59 @@ function createForkSeedVerifier({ sdkUrl, credentials, writeNote }) {
   };
 }
 //@ chunk-tyg7f3ek.js:596723-596952 placement
-function mcpSyncNeeded(e, n) {
-  for (let key of Object.keys(e)) if (!n.some((h) => h.name === key)) return "sync";
-  let r = false;
-  for (let s of n) {
-    if (!Object.hasOwn(e, s.name) || s.type === "pending") return "sync";
-    if (s.type === "failed") r = true;
+function mcpSyncNeeded(configs, clients) {
+  for (let key of Object.keys(configs)) if (!clients.some((client) => client.name === key)) return "sync";
+  let anyFailed = false;
+  for (let client of clients) {
+    if (!Object.hasOwn(configs, client.name) || client.type === "pending") return "sync";
+    if (client.type === "failed") anyFailed = true;
   }
-  return r ? "retry_failed" : "none";
+  return anyFailed ? "retry_failed" : "none";
 }
 //@ chunk-tyg7f3ek.js:596952-597195 placement
-function pickReusableMcpClients(e, n, r) {
-  let s = new Set(
-    n
+function pickReusableMcpClients(configs, clients, reuseConnected) {
+  let reusedNames = new Set(
+    clients
       .filter(
-        (y) =>
-          y.type === "disabled" ||
-          (r && y.type === "connected" && y.toolsListError === undefined && !y.skillsListFailed),
+        (client) =>
+          client.type === "disabled" ||
+          (reuseConnected &&
+            client.type === "connected" &&
+            client.toolsListError === undefined &&
+            !client.skillsListFailed),
       )
-      .map((y) => y.name),
+      .map((client) => client.name),
   );
-  let h = Object.create(null);
-  for (let [key, value] of Object.entries(e)) if (!s.has(key)) h[key] = value;
-  return h;
+  let kept = Object.create(null);
+  for (let [key, value] of Object.entries(configs)) if (!reusedNames.has(key)) kept[key] = value;
+  return kept;
 }
 //@ chunk-tyg7f3ek.js:597195-597358 placement
-function mcpServersToReconnect(e, n, r, s) {
-  return e.filter(
-    (h) =>
-      Object.hasOwn(n, h.name) &&
-      (h.type === "disabled" ||
-        (!Object.hasOwn(r, h.name) && (h.type === "pending" || (s && h.type === "connected")))),
+function mcpServersToReconnect(clients, configs, added, reuseConnected) {
+  return clients.filter(
+    (client) =>
+      Object.hasOwn(configs, client.name) &&
+      (client.type === "disabled" ||
+        (!Object.hasOwn(added, client.name) &&
+          (client.type === "pending" || (reuseConnected && client.type === "connected")))),
   );
 }
 //@ chunk-tyg7f3ek.js:597358-597627 placement = findChromeClient (0.791)
-function mergeMcpToolsAndCommands(e, n, r, s, h) {
-  let mapped = e
+function mergeMcpToolsAndCommands(clients, added, removed, previous, next) {
+  let mapped = clients
     .filter(
       (client) =>
-        client.type === "connected" && (Object.hasOwn(r, client.name) || !Object.hasOwn(n, client.name)),
+        client.type === "connected" &&
+        (Object.hasOwn(removed, client.name) || !Object.hasOwn(added, client.name)),
     )
-    .map((S) => S.name);
+    .map((client) => client.name);
   return {
-    tools: uniq([...mapped.reduce(filterCommandsByServer, [...s.tools]), ...h.tools]),
+    tools: uniq([...mapped.reduce(filterCommandsByServer, [...previous.tools]), ...next.tools]),
     commands: [
-      ...s.commands.filter((command) => !mapped.some((R) => getToolNameForPermissionCheck(command, R))),
-      ...h.commands,
+      ...previous.commands.filter(
+        (command) => !mapped.some((serverName) => getToolNameForPermissionCheck(command, serverName)),
+      ),
+      ...next.commands,
     ],
   };
 }
@@ -664,46 +687,48 @@ function mergeMcpToolsAndCommands(e, n, r, s, h) {
 /**
  * 应用 SDK 宿主的 MCP 服务器增删：计算新增/删除/重连集合并更新客户端、工具与命令。
  */
-function applySdkMcpServerChanges(e, n, r) {
-  let { sdkServersAdded, sdkServersRemoved } = r;
-  let y = new Set(e.clients.map((client) => client.name));
-  let S = new Set(sdkServersAdded.filter((G) => !y.has(G)));
-  let filtered = sdkServersRemoved.filter((G) => y.has(G));
-  let filtered_2 = sdkServersAdded.filter((G) => !Object.hasOwn(e.configs, G));
-  let filtered_3 = sdkServersRemoved.filter((G) => Object.hasOwn(e.configs, G));
-  let filtered_4 = r.sdkServersUpdated.filter(
-    (G) => Object.hasOwn(e.configs, G) && e.configs[G] === r.sdkConfigsAtSnapshot[G],
+function applySdkMcpServerChanges(state, keepClients, snapshot) {
+  let { sdkServersAdded, sdkServersRemoved } = snapshot;
+  let existingNames = new Set(state.clients.map((client) => client.name));
+  let addedNames = new Set(sdkServersAdded.filter((name) => !existingNames.has(name)));
+  let filtered = sdkServersRemoved.filter((name) => existingNames.has(name));
+  let filtered_2 = sdkServersAdded.filter((name) => !Object.hasOwn(state.configs, name));
+  let filtered_3 = sdkServersRemoved.filter((name) => Object.hasOwn(state.configs, name));
+  let filtered_4 = snapshot.sdkServersUpdated.filter(
+    (name) =>
+      Object.hasOwn(state.configs, name) && state.configs[name] === snapshot.sdkConfigsAtSnapshot[name],
   );
   if (
-    S.size === 0 &&
+    addedNames.size === 0 &&
     filtered.length === 0 &&
     filtered_2.length === 0 &&
     filtered_3.length === 0 &&
     filtered_4.length === 0
   )
     return {
-      state: e,
+      state,
       clientsToCleanUp: [],
     };
-  let merged = Object.assign(Object.create(null), e.configs);
-  for (let G of filtered_3) delete merged[G];
-  for (let G of [...filtered_2, ...filtered_4]) {
-    let Z = getOwn(r.newSdkState.configs, G);
-    if (Z !== undefined) merged[G] = Z;
+  let merged = Object.assign(Object.create(null), state.configs);
+  for (let name of filtered_3) delete merged[name];
+  for (let name of [...filtered_2, ...filtered_4]) {
+    let config = getOwn(snapshot.newSdkState.configs, name);
+    if (config !== undefined) merged[name] = config;
   }
-  let x = new Set(filtered);
+  let removedNames = new Set(filtered);
   return {
     state: {
       configs: merged,
       clients: [
-        ...e.clients.filter((client) => !x.has(client.name)),
-        ...r.newSdkState.clients.filter((client) => S.has(client.name)),
+        ...state.clients.filter((client) => !removedNames.has(client.name)),
+        ...snapshot.newSdkState.clients.filter((client) => addedNames.has(client.name)),
       ],
-      tools: filtered.reduce(filterCommandsByServer, [...e.tools]),
-      commands: filtered.reduce(excludeCommandsByServer, e.commands),
+      tools: filtered.reduce(filterCommandsByServer, [...state.tools]),
+      commands: filtered.reduce(excludeCommandsByServer, state.commands),
     },
-    clientsToCleanUp: e.clients.filter(
-      (client) => x.has(client.name) && client.type === "connected" && !n.includes(client),
+    clientsToCleanUp: state.clients.filter(
+      (client) =>
+        removedNames.has(client.name) && client.type === "connected" && !keepClients.includes(client),
     ),
   };
 }
@@ -714,103 +739,103 @@ var HOST_CPU_SATURATION_RATIO = 0.9;
 var HOST_CPU_TOP_PROCESSES = 10;
 var PROC_FS_READER = {
   names: () => readdir("/proc"),
-  file: (e) => readFile(`/proc/${e}`, "utf8").catch(() => ""),
+  file: (entry) => readFile(`/proc/${entry}`, "utf8").catch(() => ""),
 };
 //@ chunk-tyg7f3ek.js:598734-598997 placement
-function parseProcStatCpu(e) {
-  let mapped = /^cpu +(.+)$/m.exec(e)?.[1]?.split(/ +/).slice(0, 8).map(Number);
+function parseProcStatCpu(statText) {
+  let mapped = /^cpu +(.+)$/m.exec(statText)?.[1]?.split(/ +/).slice(0, 8).map(Number);
   if (mapped === undefined || mapped.length < 8 || mapped.some(Number.isNaN)) return;
-  let reduced = mapped.reduce((acc, R) => acc + R, 0);
-  let [, , , s = 0, h = 0, , , y = 0] = mapped;
+  let reduced = mapped.reduce((acc, value) => acc + value, 0);
+  let [, , , idleTicks = 0, iowaitTicks = 0, , , stealTicks = 0] = mapped;
   return {
-    busy: reduced - s - h,
-    steal: y,
+    busy: reduced - idleTicks - iowaitTicks,
+    steal: stealTicks,
     total: reduced,
-    cpus: e.match(/^cpu\d+ /gm)?.length ?? 0,
+    cpus: statText.match(/^cpu\d+ /gm)?.length ?? 0,
   };
 }
 //@ chunk-tyg7f3ek.js:598997-599115 placement
-function countFullCpuWindows(e, n) {
-  if (n) e.fullWindows++;
-  else if (e.lastWindowLow) e.fullWindows = 0;
-  e.lastWindowLow = !n;
-  return e.fullWindows;
+function countFullCpuWindows(state, isFull) {
+  if (isFull) state.fullWindows++;
+  else if (state.lastWindowLow) state.fullWindows = 0;
+  state.lastWindowLow = !isFull;
+  return state.fullWindows;
 }
 //@ chunk-tyg7f3ek.js:599115-599212 placement
-function isClaudeCodeAgentEnviron(e) {
-  return e.split("\x00").some((n) => /^AI_AGENT=claude-code[_/].+[_/]agent$/.test(n));
+function isClaudeCodeAgentEnviron(environ) {
+  return environ.split("\x00").some((entry) => /^AI_AGENT=claude-code[_/].+[_/]agent$/.test(entry));
 }
 //@ chunk-tyg7f3ek.js:599212-599450 placement
-async function listAgentProcesses(e) {
-  let n = [];
-  for (let r of await e.names()) {
-    let s = Number(r);
-    if (!(s > 1) || s === process.pid) continue;
-    let h = procStatField(await e.file(`${s}/stat`));
-    let y = await e.file(`${s}/environ`);
-    if (h !== undefined && isClaudeCodeAgentEnviron(y))
-      n.push({
-        pid: s,
-        startToken: h,
+async function listAgentProcesses(proc) {
+  let found = [];
+  for (let name of await proc.names()) {
+    let pid = Number(name);
+    if (!(pid > 1) || pid === process.pid) continue;
+    let startToken = procStatField(await proc.file(`${pid}/stat`));
+    let environ = await proc.file(`${pid}/environ`);
+    if (startToken !== undefined && isClaudeCodeAgentEnviron(environ))
+      found.push({
+        pid,
+        startToken,
       });
   }
-  return n;
+  return found;
 }
 //@ chunk-tyg7f3ek.js:599450-599508 placement
-function secondsToMs(e) {
-  return typeof e === "number" && e > 0 ? e * 1000 : 1 / 0;
+function secondsToMs(seconds) {
+  return typeof seconds === "number" && seconds > 0 ? seconds * 1000 : 1 / 0;
 }
 //@ chunk-tyg7f3ek.js:599508-601512 placement
 /**
  * hosted worker 上每 10 分钟读 /proc/stat，CPU 持续饱和时停止 agent 子进程并上报。
  */
-async function sampleHostCpuSaturation(e, n = PROC_FS_READER) {
+async function sampleHostCpuSaturation(state, proc = PROC_FS_READER) {
   try {
-    let procStatCpu = parseProcStatCpu(await n.file("stat"));
-    let last = e.last;
-    e.last = procStatCpu;
+    let procStatCpu = parseProcStatCpu(await proc.file("stat"));
+    let last = state.last;
+    state.last = procStatCpu;
     if (procStatCpu === undefined || last === undefined || procStatCpu.total <= last.total) return;
-    let h = (procStatCpu.busy - last.busy) / (procStatCpu.total - last.total);
-    let y = h >= HOST_CPU_SATURATION_RATIO;
-    if (e.stoppedLastWindow) {
-      e.stoppedLastWindow = false;
+    let busyRatio = (procStatCpu.busy - last.busy) / (procStatCpu.total - last.total);
+    let isFull = busyRatio >= HOST_CPU_SATURATION_RATIO;
+    if (state.stoppedLastWindow) {
+      state.stoppedLastWindow = false;
       logForDiagnosticsNoPII("warn", "full_cpu_after_stop", {
-        busy_pct: Math.round(h * 100),
+        busy_pct: Math.round(busyRatio * 100),
       });
     }
-    let S = e.fullWindows * HOST_CPU_WINDOW_MS;
-    let R = countFullCpuWindows(e, y) * HOST_CPU_WINDOW_MS;
-    if (!y) return;
+    let fullMsBefore = state.fullWindows * HOST_CPU_WINDOW_MS;
+    let fullMs = countFullCpuWindows(state, isFull) * HOST_CPU_WINDOW_MS;
+    if (!isFull) return;
     let featureValue_CACHED_MAY_BE_STALE = getFeatureValue_CACHED_MAY_BE_STALE(PROC_CPU_SAMPLING, null);
-    let P = secondsToMs(featureValue_CACHED_MAY_BE_STALE?.stop_after_s);
-    let L = secondsToMs(featureValue_CACHED_MAY_BE_STALE?.log_after_s);
-    let q = R >= P;
-    if (!q && !(S < L && R >= L)) return;
-    let x = await listAgentProcesses(n);
-    let filtered = Object.values(e.taskRegistry.all()).filter(
-      (re) => isLocalShellTask(re) && re.status === "running",
+    let stopAfterMs = secondsToMs(featureValue_CACHED_MAY_BE_STALE?.stop_after_s);
+    let logAfterMs = secondsToMs(featureValue_CACHED_MAY_BE_STALE?.log_after_s);
+    let shouldStop = fullMs >= stopAfterMs;
+    if (!shouldStop && !(fullMsBefore < logAfterMs && fullMs >= logAfterMs)) return;
+    let agentProcesses = await listAgentProcesses(proc);
+    let filtered = Object.values(state.taskRegistry.all()).filter(
+      (task) => isLocalShellTask(task) && task.status === "running",
     );
-    if (q) {
-      e.fullWindows = 0;
-      e.stoppedLastWindow = true;
-      e.stops++;
+    if (shouldStop) {
+      state.fullWindows = 0;
+      state.stoppedLastWindow = true;
+      state.stops++;
     }
-    logFeatureOk(q ? "ccr_full_cpu_stop" : "ccr_full_cpu_log");
+    logFeatureOk(shouldStop ? "ccr_full_cpu_stop" : "ccr_full_cpu_log");
     logForDiagnosticsNoPII("warn", "full_cpu_stop", {
-      stops: q,
-      stops_so_far: e.stops,
-      run_s: R / 1000,
-      after_s: (q ? P : L) / 1000,
+      stops: shouldStop,
+      stops_so_far: state.stops,
+      run_s: fullMs / 1000,
+      after_s: (shouldStop ? stopAfterMs : logAfterMs) / 1000,
       cpus: procStatCpu.cpus,
-      busy_pct: Math.round(h * 100),
+      busy_pct: Math.round(busyRatio * 100),
       steal_pct: Math.round(((procStatCpu.steal - last.steal) / (procStatCpu.total - last.total)) * 100),
       shell_tasks: filtered.length,
-      shell_processes: x.length,
+      shell_processes: agentProcesses.length,
     });
-    if (!q || (filtered.length === 0 && x.length === 0)) return;
+    if (!shouldStop || (filtered.length === 0 && agentProcesses.length === 0)) return;
     let joined = filtered
       .slice(0, HOST_CPU_TOP_PROCESSES)
-      .map((re) => `"${escapeXml(re.description)}"`)
+      .map((task) => `"${escapeXml(task.description)}"`)
       .join(", ");
     enqueuePendingNotification(
       {
@@ -820,19 +845,19 @@ async function sampleHostCpuSaturation(e, n = PROC_FS_READER) {
         skipAttachments: true,
         value: formatTaskNotification({
           status: "stopped",
-          summary: `This cloud sandbox used 90% or more of all its CPUs for ${formatDurationCoarse(R)}, almost without a break. The limit is ${formatDurationCoarse(P)}. At the limit, Claude Code stops the shell commands of this session and the processes that they started, also those that used little CPU. The commands themselves did not fail. The files are kept. Commands that use little CPU, such as a dev server, can start again. Work that fills the CPUs again will be stopped again, so do not start it again in the same form. Tell the user what was stopped and why. If the heavy work is still necessary, first agree with the user on a form that uses less CPU, for example a smaller job or fewer parallel workers.${joined && ` Stopped commands: ${joined}.`}`,
+          summary: `This cloud sandbox used 90% or more of all its CPUs for ${formatDurationCoarse(fullMs)}, almost without a break. The limit is ${formatDurationCoarse(stopAfterMs)}. At the limit, Claude Code stops the shell commands of this session and the processes that they started, also those that used little CPU. The commands themselves did not fail. The files are kept. Commands that use little CPU, such as a dev server, can start again. Work that fills the CPUs again will be stopped again, so do not start it again in the same form. Tell the user what was stopped and why. If the heavy work is still necessary, first agree with the user on a form that uses less CPU, for example a smaller job or fewer parallel workers.${joined && ` Stopped commands: ${joined}.`}`,
         }),
       },
       {
         turnAttribution: "inherit",
       },
     );
-    for (let re of filtered)
-      killTask(re.id, e.taskRegistry, {
+    for (let task of filtered)
+      killTask(task.id, state.taskRegistry, {
         cause: "full_cpu",
       });
-    for (let { pid, startToken } of x)
-      if (procStatField(await n.file(`${pid}/stat`)) === startToken) sigtermThenKill([pid], startToken);
+    for (let { pid, startToken } of agentProcesses)
+      if (procStatField(await proc.file(`${pid}/stat`)) === startToken) sigtermThenKill([pid], startToken);
   } catch (error) {
     logFeatureBad("ccr_full_cpu_stop", "threw");
     logError(error);
@@ -856,81 +881,104 @@ function sessionSurfaceKind() {
   if (sessionEntrypoint === "remote_projects" || getCurrentAuthSurface()) return "projects";
   if (isCoworkSession()) return "cowork";
   if (sessionEntrypoint === "remote_trigger") return "trigger";
-  return REMOTE_ENTRYPOINT_NAMES.some((n) => n === sessionEntrypoint) ? "code" : "other";
+  return REMOTE_ENTRYPOINT_NAMES.some((name) => name === sessionEntrypoint) ? "code" : "other";
 }
 //@ chunk-tyg7f3ek.js:601972-602053 placement
-var WAIT_COMMAND_KINDS = new Set(["wait", "shell_word", "file_read", "file_search", "text_transform"]);
+var WAIT_COMMAND_KINDS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-tyg7f3ek.js:601972", () => {
+  WAIT_COMMAND_KINDS = new Set(["wait", "shell_word", "file_read", "file_search", "text_transform"]);
+});
 //@ chunk-tyg7f3ek.js:602053-602235 placement
 function classifyBashForCpu(command) {
   let parts = classifyBashCommand(command).bash_command_kinds.split(",");
   if (parts.includes("serves_or_watches")) return "serve_or_watch";
-  return parts.includes("wait") && parts.every((r) => WAIT_COMMAND_KINDS.has(r)) ? "wait" : "other";
+  return parts.includes("wait") && parts.every((kind) => WAIT_COMMAND_KINDS.has(kind)) ? "wait" : "other";
 }
 //@ chunk-tyg7f3ek.js:602235-603290 placement
 /**
  * 工具 CPU 采样常量：分钟刻度、时钟 tick、采样超时、各类条数上限、/proc 读取上限与噪声阈值，以及带 fd/environ/cgroup 读取的 proc 读取器实现。
  */
-var TOOL_CPU_SAMPLING_FLAG = "tengu_starry_balloon";
-var MINUTE_MS = 60000;
-var CLOCK_TICKS_MS = 10;
-var CPU_MARK_TIMEOUT_MS = 30000;
-var MAX_CPU_MARKS = 32;
-var MAX_MINUTE_MARK = 10080;
-var MIN_THEN_EVERY_MIN = 10;
-var MAX_SHELLS_SAMPLED = 10;
-var MAX_FULL_CORE_PROCESSES = 9;
-var MAX_CPU_PROCESSES = 64;
-var MAX_DESCRIPTOR_LINKS = 16384;
-var DESCRIPTOR_LINK_COST = 32;
-var MAX_FD_ENTRIES = 1024;
-var ENVIRON_READ_BYTES = 262144;
-var CPU_NOISE_RATIO = 0.01;
-var FULL_CORE_CPU_RATIO = 0.9;
-var PROC_STAT_PATTERN = /^ *\d+: \S+ \S+ 0A \S+ \S+ \S+ +\d+ +\d+ +(\d+) /gm;
-var PROC_FS_READER_WITH_LINKS = {
-  ...PROC_FS_READER,
-  startOfFile: async (e) => {
-    let n = await open(`/proc/${e}`).catch(() => {
-      return;
-    });
-    if (n === undefined) return "";
-    try {
-      let r = Buffer.allocUnsafe(ENVIRON_READ_BYTES);
-      let s = 0;
-      for (let h = -1; h !== 0 && s < r.length; s += h)
-        h = (await n.read(r, s, r.length - s, null)).bytesRead;
-      return r.toString("latin1", 0, s);
-    } catch {
-      return "";
-    } finally {
-      await n.close().catch(() => {});
-    }
-  },
-  descriptorLinks: async (e) => {
-    let n = /^FDSize:\s+(\d+)$/m.exec(await PROC_FS_READER.file(`${e}/status`))?.[1];
-    if (n === undefined) return [];
-    if (Number(n) > MAX_FD_ENTRIES) return;
-    try {
-      let r = await readdir(`/proc/${e}/fd`);
-      return r.length > MAX_FD_ENTRIES
-        ? undefined
-        : await Promise.all(r.map((s) => readlink(`/proc/${e}/fd/${s}`).catch(() => "")));
-    } catch (error) {
-      let errnoCode = getErrnoCode(error);
-      return errnoCode === "ENOENT" || errnoCode === "ESRCH" ? [] : undefined;
-    }
-  },
-  outputBytes: getTaskOutputSize,
-  shellCgroupCpuMs: async () => {
-    let cpuacctDir = getCpuacctDir();
-    let n =
-      cpuacctDir === undefined
-        ? ""
-        : (await readFile(posix.join(cpuacctDir, "cpuacct.usage"), "utf8").catch(() => "")).trim();
-    let r = n === "" ? Number.NaN : Number(n);
-    return Number.isFinite(r) ? r / 1e6 : undefined;
-  },
-};
+var TOOL_CPU_SAMPLING_FLAG; // deferred: uses PROC_CPU_SAMPLING of its import cycle while loading; runs once the cycle is complete
+var MINUTE_MS;
+var CLOCK_TICKS_MS;
+var CPU_MARK_TIMEOUT_MS;
+var MAX_CPU_MARKS;
+var MAX_MINUTE_MARK;
+var MIN_THEN_EVERY_MIN;
+var MAX_SHELLS_SAMPLED;
+var MAX_FULL_CORE_PROCESSES;
+var MAX_CPU_PROCESSES;
+var MAX_DESCRIPTOR_LINKS;
+var DESCRIPTOR_LINK_COST;
+var MAX_FD_ENTRIES;
+var ENVIRON_READ_BYTES;
+var CPU_NOISE_RATIO;
+var FULL_CORE_CPU_RATIO;
+var PROC_STAT_PATTERN;
+var PROC_FS_READER_WITH_LINKS;
+deferInit("chunk-tyg7f3ek.js:602235", () => {
+  TOOL_CPU_SAMPLING_FLAG = "tengu_starry_balloon";
+  MINUTE_MS = 60000;
+  CLOCK_TICKS_MS = 10;
+  CPU_MARK_TIMEOUT_MS = 30000;
+  MAX_CPU_MARKS = 32;
+  MAX_MINUTE_MARK = 10080;
+  MIN_THEN_EVERY_MIN = 10;
+  MAX_SHELLS_SAMPLED = 10;
+  MAX_FULL_CORE_PROCESSES = 9;
+  MAX_CPU_PROCESSES = 64;
+  MAX_DESCRIPTOR_LINKS = 16384;
+  DESCRIPTOR_LINK_COST = 32;
+  MAX_FD_ENTRIES = 1024;
+  ENVIRON_READ_BYTES = 262144;
+  CPU_NOISE_RATIO = 0.01;
+  FULL_CORE_CPU_RATIO = 0.9;
+  PROC_STAT_PATTERN = /^ *\d+: \S+ \S+ 0A \S+ \S+ \S+ +\d+ +\d+ +(\d+) /gm;
+  PROC_FS_READER_WITH_LINKS = {
+    ...PROC_FS_READER,
+    startOfFile: async (pid) => {
+      let handle = await open(`/proc/${pid}`).catch(() => {
+        return;
+      });
+      if (handle === undefined) return "";
+      try {
+        let buffer = Buffer.allocUnsafe(ENVIRON_READ_BYTES);
+        let total = 0;
+        for (let bytesRead = -1; bytesRead !== 0 && total < buffer.length; total += bytesRead)
+          bytesRead = (await handle.read(buffer, total, buffer.length - total, null)).bytesRead;
+        return buffer.toString("latin1", 0, total);
+      } catch {
+        return "";
+      } finally {
+        await handle.close().catch(() => {});
+      }
+    },
+    descriptorLinks: async (pid) => {
+      let fdSize = /^FDSize:\s+(\d+)$/m.exec(await PROC_FS_READER.file(`${pid}/status`))?.[1];
+      if (fdSize === undefined) return [];
+      if (Number(fdSize) > MAX_FD_ENTRIES) return;
+      try {
+        let entries = await readdir(`/proc/${pid}/fd`);
+        return entries.length > MAX_FD_ENTRIES
+          ? undefined
+          : await Promise.all(entries.map((entry) => readlink(`/proc/${pid}/fd/${entry}`).catch(() => "")));
+      } catch (error) {
+        let errnoCode = getErrnoCode(error);
+        return errnoCode === "ENOENT" || errnoCode === "ESRCH" ? [] : undefined;
+      }
+    },
+    outputBytes: getTaskOutputSize,
+    shellCgroupCpuMs: async () => {
+      let cpuacctDir = getCpuacctDir();
+      let text =
+        cpuacctDir === undefined
+          ? ""
+          : (await readFile(posix.join(cpuacctDir, "cpuacct.usage"), "utf8").catch(() => "")).trim();
+      let usageUs = text === "" ? Number.NaN : Number(text);
+      return Number.isFinite(usageUs) ? usageUs / 1e6 : undefined;
+    },
+  };
+});
 //@ chunk-tyg7f3ek.js:603290-603366 placement
 function isValidMinuteMark(thenEveryMin) {
   return (
@@ -943,16 +991,16 @@ function isValidMinuteMark(thenEveryMin) {
 //@ chunk-tyg7f3ek.js:603366-603632 placement
 function readToolCpuSamplingConfig() {
   let featureValue_CACHED_MAY_BE_STALE = getFeatureValue_CACHED_MAY_BE_STALE(TOOL_CPU_SAMPLING_FLAG, null);
-  let n = Array.isArray(featureValue_CACHED_MAY_BE_STALE?.marks_min)
+  let marks = Array.isArray(featureValue_CACHED_MAY_BE_STALE?.marks_min)
     ? featureValue_CACHED_MAY_BE_STALE.marks_min
         .slice(0, MAX_CPU_MARKS)
         .filter(isValidMinuteMark)
-        .sort((r, s) => r - s)
+        .sort((a, b) => a - b)
     : [];
-  return n.length === 0
+  return marks.length === 0
     ? undefined
     : {
-        marksMin: n,
+        marksMin: marks,
         thenEveryMin:
           isValidMinuteMark(featureValue_CACHED_MAY_BE_STALE?.then_every_min) &&
           featureValue_CACHED_MAY_BE_STALE.then_every_min >= MIN_THEN_EVERY_MIN
@@ -962,146 +1010,148 @@ function readToolCpuSamplingConfig() {
       };
 }
 //@ chunk-tyg7f3ek.js:603632-603708 placement
-function pushToMapList(e, n, r) {
-  let s = e.get(n);
-  if (s === undefined) e.set(n, [r]);
-  else s.push(r);
+function pushToMapList(map, key, value) {
+  let list = map.get(key);
+  if (list === undefined) map.set(key, [value]);
+  else list.push(value);
 }
 //@ chunk-tyg7f3ek.js:603708-603793 placement
-function runningLocalShells(e) {
-  return getRunningTasks(e.getState())
+function runningLocalShells(framework) {
+  return getRunningTasks(framework.getState())
     .filter(isLocalShellTask)
-    .filter((n) => n.elsewhere === undefined);
+    .filter((task) => task.elsewhere === undefined);
 }
 //@ chunk-tyg7f3ek.js:603793-604870 placement
 /**
  * 采样后台 shell 进程树的 CPU 与监听端口，用于 tengu_tool_cpu_by_phase 遥测。
  */
-async function sampleShellCpuTree(e, last, markMin) {
-  let procStatCpu = parseProcStatCpu(await e.proc.file("stat"));
+async function sampleShellCpuTree(state, last, markMin) {
+  let procStatCpu = parseProcStatCpu(await state.proc.file("stat"));
   if (procStatCpu === undefined) return "no_cpu_counters";
-  let atMs = e.clock.monotonicNow();
-  let filtered = (await e.proc.names()).map(Number).filter(Number.isInteger);
+  let atMs = state.clock.monotonicNow();
+  let filtered = (await state.proc.names()).map(Number).filter(Number.isInteger);
   if (filtered.length > MAX_PROC_ENTRIES) return "too_many_processes";
-  let S = runningLocalShells(e);
-  let R = {
+  let shells = runningLocalShells(state);
+  let sample = {
     markMin,
     atMs,
     vmBusyTicks: procStatCpu.busy,
-    shellCgroupCpuMs: await e.proc.shellCgroupCpuMs(),
+    shellCgroupCpuMs: await state.proc.shellCgroupCpuMs(),
     processes: new Map(),
     childrenOf: new Map(),
     ledBy: new Map(),
-    runningShellIds: new Set(S.map((P) => P.id)),
+    runningShellIds: new Set(shells.map((shell) => shell.id)),
     shells: [],
   };
-  for (let P of filtered) {
-    if (e.timedOut) break;
-    let statTimes = parseStatTimes(await e.proc.file(`${P}/stat`));
+  for (let pid of filtered) {
+    if (state.timedOut) break;
+    let statTimes = parseStatTimes(await state.proc.file(`${pid}/stat`));
     if (statTimes !== undefined) {
-      R.processes.set(P, statTimes);
-      pushToMapList(R.childrenOf, statTimes.ppid, P);
-      pushToMapList(R.ledBy, statTimes.pgrp, P);
-      pushToMapList(R.ledBy, statTimes.session, P);
+      sample.processes.set(pid, statTimes);
+      pushToMapList(sample.childrenOf, statTimes.ppid, pid);
+      pushToMapList(sample.ledBy, statTimes.pgrp, pid);
+      pushToMapList(sample.ledBy, statTimes.session, pid);
     }
   }
-  let kinds = e.kinds;
-  e.kinds = new Map();
-  for (let P of S.slice(0, MAX_SHELLS_SAMPLED)) {
-    let found = last?.shells.find((shell) => shell.id === P.id);
-    let pid = P.shellCommand?.pid;
-    R.shells.push({
-      id: P.id,
+  let kinds = state.kinds;
+  state.kinds = new Map();
+  for (let shell of shells.slice(0, MAX_SHELLS_SAMPLED)) {
+    let found = last?.shells.find((shell_2) => shell_2.id === shell.id);
+    let pid = shell.shellCommand?.pid;
+    sample.shells.push({
+      id: shell.id,
       pid,
-      starttime: found?.starttime ?? (pid === undefined ? undefined : R.processes.get(pid)?.starttime),
-      outputBytes: await e.proc.outputBytes(P.id).catch(() => {
+      starttime: found?.starttime ?? (pid === undefined ? undefined : sample.processes.get(pid)?.starttime),
+      outputBytes: await state.proc.outputBytes(shell.id).catch(() => {
         return;
       }),
-      kind: kinds.get(P.id) ?? classifyBashForCpu(P.command),
+      kind: kinds.get(shell.id) ?? classifyBashForCpu(shell.command),
       listens: undefined,
-      usage: P.shellCommand?.result.then(
-        (x) => x.shellUsage,
+      usage: shell.shellCommand?.result.then(
+        (result) => result.shellUsage,
         () => {
           return;
         },
       ),
     });
   }
-  for (let shell of R.shells) e.kinds.set(shell.id, shell.kind);
-  return R;
+  for (let shell of sample.shells) state.kinds.set(shell.id, shell.kind);
+  return sample;
 }
 //@ chunk-tyg7f3ek.js:604870-604977 placement
-function isSameProcess(e, n, r) {
-  let s = e.processes.get(r);
-  return s !== undefined && s.starttime === n.processes.get(r)?.starttime;
+function isSameProcess(previous, current, pid) {
+  let entry = previous.processes.get(pid);
+  return entry !== undefined && entry.starttime === current.processes.get(pid)?.starttime;
 }
 //@ chunk-tyg7f3ek.js:604977-605026 placement
-function processLeaders(e, pid) {
-  return [pid, ...(e.ledBy.get(pid) ?? [])];
+function processLeaders(sample, pid) {
+  return [pid, ...(sample.ledBy.get(pid) ?? [])];
 }
 //@ chunk-tyg7f3ek.js:605026-605209 placement
-function collectProcessTree(e, n, now, s) {
-  let h = [];
-  let y = [...n];
-  for (let S = y.pop(); S !== undefined; S = y.pop())
-    if (!now.has(S) && e.processes.has(S) && !s?.(S)) {
-      now.add(S);
-      h.push(S);
-      y.push(...(e.childrenOf.get(S) ?? []));
+function collectProcessTree(sample, leaders, now, exclude) {
+  let tree = [];
+  let pending = [...leaders];
+  for (let pid = pending.pop(); pid !== undefined; pid = pending.pop())
+    if (!now.has(pid) && sample.processes.has(pid) && !exclude?.(pid)) {
+      now.add(pid);
+      tree.push(pid);
+      pending.push(...(sample.childrenOf.get(pid) ?? []));
     }
-  return h;
+  return tree;
 }
 //@ chunk-tyg7f3ek.js:605209-605327 placement
-function sumProcessTicks(e, processTree) {
-  return processTree.reduce((acc, s) => {
-    let h = e.processes.get(s);
-    return acc + (h?.ownTicks ?? 0) + (h?.childrenTicks ?? 0);
+function sumProcessTicks(sample, processTree) {
+  return processTree.reduce((acc, pid) => {
+    let entry = sample.processes.get(pid);
+    return acc + (entry?.ownTicks ?? 0) + (entry?.childrenTicks ?? 0);
   }, 0);
 }
 //@ chunk-tyg7f3ek.js:605327-605608 placement
-function diffProcessTreeCpu(e, n, pid, s) {
-  let processTree = collectProcessTree(n, processLeaders(n, pid), s.now);
-  let y = new Set(processTree);
+function diffProcessTreeCpu(previous, current, pid, sample) {
+  let processTree = collectProcessTree(current, processLeaders(current, pid), sample.now);
+  let currentPids = new Set(processTree);
   let processTree_2 = collectProcessTree(
-    e,
-    processTree.filter((w) => isSameProcess(e, n, w)),
-    s.then,
-    (w) => isSameProcess(e, n, w) && !y.has(w),
+    previous,
+    processTree.filter((pid) => isSameProcess(previous, current, pid)),
+    sample.then,
+    (pid) => isSameProcess(previous, current, pid) && !currentPids.has(pid),
   );
   let reduced = processTree.reduce(
-    (acc, P) =>
+    (acc, pid) =>
       acc +
-      (n.processes.get(P)?.ownTicks ?? 0) -
-      (isSameProcess(e, n, P) ? (e.processes.get(P)?.ownTicks ?? 0) : 0),
+      (current.processes.get(pid)?.ownTicks ?? 0) -
+      (isSameProcess(previous, current, pid) ? (previous.processes.get(pid)?.ownTicks ?? 0) : 0),
     0,
   );
   return {
     tree: processTree,
     cpuMs:
-      Math.max(reduced, sumProcessTicks(n, processTree) - sumProcessTicks(e, processTree_2)) * CLOCK_TICKS_MS,
+      Math.max(reduced, sumProcessTicks(current, processTree) - sumProcessTicks(previous, processTree_2)) *
+      CLOCK_TICKS_MS,
   };
 }
 //@ chunk-tyg7f3ek.js:605608-605763 placement
 async function listListeningSockets(proc) {
-  let n = new Set();
-  for (let r of ["net/tcp", "net/tcp6"])
-    for (let s of (await proc.startOfFile(r)).matchAll(PROC_STAT_PATTERN)) n.add(`socket:[${s[1]}]`);
-  return n;
+  let sockets = new Set();
+  for (let table of ["net/tcp", "net/tcp6"])
+    for (let match of (await proc.startOfFile(table)).matchAll(PROC_STAT_PATTERN))
+      sockets.add(`socket:[${match[1]}]`);
+  return sockets;
 }
 //@ chunk-tyg7f3ek.js:605763-606037 placement
-async function checksListeningSockets(proc, tree, r) {
-  if (r.listeningSockets.size === 0) return "no";
-  let s = "no";
-  for (let h of tree) {
-    let y = r.linksLeft > 0 ? await proc.descriptorLinks(h) : undefined;
-    if (y === undefined) {
-      s = "unchecked";
+async function checksListeningSockets(proc, tree, state) {
+  if (state.listeningSockets.size === 0) return "no";
+  let result = "no";
+  for (let pid of tree) {
+    let links = state.linksLeft > 0 ? await proc.descriptorLinks(pid) : undefined;
+    if (links === undefined) {
+      result = "unchecked";
       continue;
     }
-    if (y.some((S) => r.listeningSockets.has(S))) return "yes";
-    r.linksLeft -= DESCRIPTOR_LINK_COST + y.length;
+    if (links.some((link) => state.listeningSockets.has(link))) return "yes";
+    state.linksLeft -= DESCRIPTOR_LINK_COST + links.length;
   }
-  return s;
+  return result;
 }
 export {
   createForkSeedVerifier,

@@ -5,10 +5,10 @@
  * pieces: chunk-spjgqa4y.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../runtime/bun-runtime.js";
 
 //@ chunk-spjgqa4y.js:26249-26646 cjs-fingerprint
-var require_constants = x(function (cjsExports, cjsModule) {
+var require_constants = __commonJS(function (cjsExports, cjsModule) {
   cjsModule.exports = {
     PNG_SIGNATURE: [137, 80, 78, 71, 13, 10, 26, 10],
     TYPE_IHDR: 1229472850,

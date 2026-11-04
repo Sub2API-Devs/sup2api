@@ -11,7 +11,7 @@
 import { UserToolSuccessMessage } from "./UserToolSuccessMessage.js";
 import { UserToolRejectMessage } from "./UserToolRejectMessage.js";
 import { UserToolErrorMessage } from "./UserToolErrorMessage.js";
-import { w } from "../../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../../vendor/react/compiler-runtime.js";
 import { folderWaitRefusal, useDeferredToolResult, FolderWaitRefusalNotice } from "../AgentMessage.js";
 import {
   isToolDenial,
@@ -44,7 +44,7 @@ var TOOL_RESULT_MESSAGE_BY_KIND = {
  * tool_result 分派：is_error 时 UserToolErrorMessage（非 verbose 时可能按工具格式化错误），拒绝内容时 UserToolRejectMessage，否则 UserToolSuccessMessage；找不到对应 tool_use 时不渲染。
  */
 function UserToolResultMessage(props) {
-  let $ = w(58);
+  let $ = useMemoCache(58);
   let {
     param,
     message,
@@ -57,7 +57,7 @@ function UserToolResultMessage(props) {
     isTranscriptMode,
     toolUse,
   } = props;
-  let B;
+  let refusalRow;
   if (
     $[0] !== isTranscriptMode ||
     $[1] !== param.content ||
@@ -65,7 +65,7 @@ function UserToolResultMessage(props) {
     $[3] !== toolUse ||
     $[4] !== verbose
   ) {
-    B =
+    refusalRow =
       param.is_error === true && !verbose && isTranscriptMode !== true
         ? folderWaitRefusal(toolUse.toolUse.name, param.content)
         : undefined;
@@ -74,21 +74,21 @@ function UserToolResultMessage(props) {
     $[2] = param.is_error;
     $[3] = toolUse;
     $[4] = verbose;
-    $[5] = B;
-  } else B = $[5];
-  let L = B;
+    $[5] = refusalRow;
+  } else refusalRow = $[5];
+  let isError = refusalRow;
   let toolUse_2 = isToolDenial(param.content, message, INTERRUPTED_TOOL_STATUSES);
-  let W = isToolDenial(param.content, message, USER_REJECTED_KIND);
-  let U;
+  let isVerbose = isToolDenial(param.content, message, USER_REJECTED_KIND);
+  let rowElement;
   if (toolUse_2 && typeof param.content === "string" && isUserInterruptMessage(param.content)) {
-    let K;
+    let rejectedToolUseMessageElement;
     if ($[6] === MEMO_CACHE_SENTINEL) {
-      K = jsxProd_default(RejectedToolUseMessage, {});
-      $[6] = K;
-    } else K = $[6];
-    U = K;
+      rejectedToolUseMessageElement = jsxProd_default(RejectedToolUseMessage, {});
+      $[6] = rejectedToolUseMessageElement;
+    } else rejectedToolUseMessageElement = $[6];
+    rowElement = rejectedToolUseMessageElement;
   } else if (
-    (W &&
+    (isVerbose &&
       typeof param.content === "string" &&
       (param.content.startsWith(REJECT_MESSAGE) ||
         (param.content.startsWith(REJECT_MESSAGE_WITH_REASON_PREFIX) &&
@@ -113,7 +113,7 @@ function UserToolResultMessage(props) {
       $[7] = param.content;
       $[8] = isInterrupted;
     } else isInterrupted = $[8];
-    let Y;
+    let userToolRejectMessageElement;
     if (
       $[9] !== isTranscriptMode ||
       $[10] !== progressMessagesForMessage ||
@@ -124,7 +124,7 @@ function UserToolResultMessage(props) {
       $[15] !== tools ||
       $[16] !== verbose
     ) {
-      Y = jsxProd_default(UserToolRejectMessage, {
+      userToolRejectMessageElement = jsxProd_default(UserToolRejectMessage, {
         input,
         progressMessagesForMessage,
         isInterrupted,
@@ -142,11 +142,11 @@ function UserToolResultMessage(props) {
       $[14] = toolUse.toolUse.input;
       $[15] = tools;
       $[16] = verbose;
-      $[17] = Y;
-    } else Y = $[17];
-    U = Y;
+      $[17] = userToolRejectMessageElement;
+    } else userToolRejectMessageElement = $[17];
+    rowElement = userToolRejectMessageElement;
   } else if (isDetachedToolResult(toolUse.tool, message.toolUseResult)) {
-    let K;
+    let useDeferredToolResultElement;
     if (
       $[18] !== isTranscriptMode ||
       $[19] !== lookups ||
@@ -161,7 +161,7 @@ function UserToolResultMessage(props) {
       $[28] !== verbose ||
       $[29] !== width
     ) {
-      K = jsxProd_default(useDeferredToolResult, {
+      useDeferredToolResultElement = jsxProd_default(useDeferredToolResult, {
         param,
         message,
         lookups,
@@ -188,19 +188,19 @@ function UserToolResultMessage(props) {
       $[27] = tools;
       $[28] = verbose;
       $[29] = width;
-      $[30] = K;
-    } else K = $[30];
-    U = K;
-  } else if (L !== undefined) {
-    let K;
-    if ($[31] !== L) {
-      K = jsxProd_default(FolderWaitRefusalNotice, {
-        refusal: L,
+      $[30] = useDeferredToolResultElement;
+    } else useDeferredToolResultElement = $[30];
+    rowElement = useDeferredToolResultElement;
+  } else if (isError !== undefined) {
+    let folderWaitRefusalNoticeElement;
+    if ($[31] !== isError) {
+      folderWaitRefusalNoticeElement = jsxProd_default(FolderWaitRefusalNotice, {
+        refusal: isError,
       });
-      $[31] = L;
-      $[32] = K;
-    } else K = $[32];
-    U = K;
+      $[31] = isError;
+      $[32] = folderWaitRefusalNoticeElement;
+    } else folderWaitRefusalNoticeElement = $[32];
+    rowElement = folderWaitRefusalNoticeElement;
   } else if (
     toolUse.toolUse.name === GET_TASK_TOOL_TEXT &&
     param.content === GET_TASK_TOOL_ERROR_TEXT &&
@@ -209,7 +209,7 @@ function UserToolResultMessage(props) {
   ) {
     return null;
   } else if (param.is_error) {
-    let K;
+    let userToolErrorMessageElement;
     if (
       $[33] !== isTranscriptMode ||
       $[34] !== message.remoteToolDenialKind ||
@@ -223,7 +223,7 @@ function UserToolResultMessage(props) {
       $[42] !== tools ||
       $[43] !== verbose
     ) {
-      K = jsxProd_default(UserToolErrorMessage, {
+      userToolErrorMessageElement = jsxProd_default(UserToolErrorMessage, {
         progressMessagesForMessage,
         tool: toolUse.tool,
         tools,
@@ -247,11 +247,11 @@ function UserToolResultMessage(props) {
       $[41] = toolUse.toolUse.input;
       $[42] = tools;
       $[43] = verbose;
-      $[44] = K;
-    } else K = $[44];
-    U = K;
+      $[44] = userToolErrorMessageElement;
+    } else userToolErrorMessageElement = $[44];
+    rowElement = userToolErrorMessageElement;
   } else {
-    let K;
+    let userToolSuccessMessageElement;
     if (
       $[45] !== isTranscriptMode ||
       $[46] !== lookups ||
@@ -264,7 +264,7 @@ function UserToolResultMessage(props) {
       $[53] !== verbose ||
       $[54] !== width
     ) {
-      K = jsxProd_default(UserToolSuccessMessage, {
+      userToolSuccessMessageElement = jsxProd_default(UserToolSuccessMessage, {
         message,
         lookups,
         toolUseID: toolUse.toolUse.id,
@@ -286,19 +286,19 @@ function UserToolResultMessage(props) {
       $[52] = tools;
       $[53] = verbose;
       $[54] = width;
-      $[55] = K;
-    } else K = $[55];
-    U = K;
+      $[55] = userToolSuccessMessageElement;
+    } else userToolSuccessMessageElement = $[55];
+    rowElement = userToolSuccessMessageElement;
   }
-  let K;
-  if ($[56] !== U) {
-    K = jsxProd_default(Box, {
+  let boxElement;
+  if ($[56] !== rowElement) {
+    boxElement = jsxProd_default(Box, {
       flexDirection: "column",
-      children: U,
+      children: rowElement,
     });
-    $[56] = U;
-    $[57] = K;
-  } else K = $[57];
-  return K;
+    $[56] = rowElement;
+    $[57] = boxElement;
+  } else boxElement = $[57];
+  return boxElement;
 }
 export { UserToolResultMessage };

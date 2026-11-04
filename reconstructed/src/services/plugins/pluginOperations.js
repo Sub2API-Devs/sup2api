@@ -9,7 +9,77 @@
  * attribution: fingerprint 10, callgraph-fingerprint 3, placement 38, file-local 2, layout 63, callgraph-witnessed 1
  */
 import { join, dirname, relative, resolve, sep } from "path";
-import { Re } from "../../../runtime/bun-runtime.js";
+import {
+  parsePluginIdentifier_2,
+  findPluginName,
+  isOfficialMarketplace,
+  parsePluginIdentifier,
+  parsePluginId,
+  scopeToSettingSource,
+  isPluginEnabled_2,
+  pluginNamesEqual,
+  joinPluginId,
+  canonicalPluginId,
+  legacyPluginIds,
+  pluginsNamed,
+  isOfficialMarketplaceName_3,
+  normalizePluginId,
+  parseNpmPluginId,
+  marketplaceSuffix,
+  isRequiredPlugin,
+  splitPluginId,
+  isPluginEnabled,
+  pluginSettingAt,
+  SETTING_SOURCE_TO_SCOPE,
+  pluginNameAliases_2,
+  groupEnabledPlugins,
+  isOfficialPluginId,
+  findPluginSetting,
+} from "../../utils/plugins/pluginIdentifier.js";
+import {
+  pluginIdHash,
+  INLINE_PLUGIN_MARKETPLACE,
+  SYNCED,
+  SKILLS_DIR,
+  BUILTIN,
+  removePluginUsage,
+  seedPluginUsage,
+  touchPluginUsage,
+} from "../../utils/telemetry/pluginTelemetry.js";
+import { hashEntries } from "../../utils/model/modelCatalog/maskedIds.js";
+import {
+  WireSafeControlError,
+  errorMessage,
+  isAbortError,
+  TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
+  isENOENT,
+} from "../../utils/errors.js";
+import { sanitizeTelemetryString } from "../../utils/sanitization.js";
+import { logForDebugging } from "../../utils/debug.js";
+import { isStorageV5Enabled } from "../../utils/hoverRest.js";
+import {
+  loadInstalledPlugins,
+  loadInstalledPluginsSync,
+  hasFailedInstalledPluginsRead,
+  isInstallationRelevantToCurrentProject,
+  getInstalledPlugins,
+  listInstalledPluginIds,
+  hasInstallationForCurrentProject,
+  getInstalledListRefusal,
+  readInstalledPluginsFile,
+  clearAutoInstalledFlag,
+  formatInvalidPluginIdMessage,
+  addInstalledPlugin,
+  removePluginInstallation,
+  findDataDirSharers,
+  isPluginUnreadableOrShared,
+  primeInstalledPluginsCache,
+  findInstallationForCurrentProject,
+  recordDirectoryRepositoryKey,
+  updateInstallationPathOnDisk,
+  filterInstallationsForCurrentProject,
+} from "../../utils/plugins/installedPluginsManager.js";
+import { __toESM } from "../../../runtime/bun-runtime.js";
 import { require_semver_3 } from "../../../vendor/semver/index.js";
 import { shouldSkipPluginAutoupdate } from "../../utils/config.js";
 import {
@@ -54,14 +124,6 @@ import {
   loadKnownMarketplacesSafe,
 } from "../../utils/plugins/marketplaceManager.js";
 import { getPluginRegistry } from "../../utils/plugins/pluginLoadState.js";
-import { logForDebugging } from "../../utils/debug.js";
-import {
-  errorMessage,
-  TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
-  isENOENT,
-  WireSafeControlError,
-  isAbortError,
-} from "../../utils/errors.js";
 import { logFeatureOk, logFeatureBad, logFeatureSad } from "../analytics/featureTelemetry.js";
 import { isEssentialTrafficOnly } from "../../utils/privacyLevel.js";
 import { isLocalMarketplaceSource } from "../../utils/plugins/reconciler.js";
@@ -80,56 +142,6 @@ import {
   printableLabel,
   printableName,
 } from "../../utils/printableName.js";
-import { isStorageV5Enabled } from "../../utils/hoverRest.js";
-import {
-  loadInstalledPlugins,
-  loadInstalledPluginsSync,
-  getInstalledPlugins,
-  listInstalledPluginIds,
-  hasFailedInstalledPluginsRead,
-  hasInstallationForCurrentProject,
-  getInstalledListRefusal,
-  readInstalledPluginsFile,
-  clearAutoInstalledFlag,
-  formatInvalidPluginIdMessage,
-  isInstallationRelevantToCurrentProject,
-  addInstalledPlugin,
-  removePluginInstallation,
-  findDataDirSharers,
-  isPluginUnreadableOrShared,
-  primeInstalledPluginsCache,
-  findInstallationForCurrentProject,
-  recordDirectoryRepositoryKey,
-  updateInstallationPathOnDisk,
-  filterInstallationsForCurrentProject,
-} from "../../utils/plugins/installedPluginsManager.js";
-import {
-  findPluginName,
-  isOfficialMarketplace,
-  parsePluginIdentifier,
-  parsePluginId,
-  scopeToSettingSource,
-  isPluginEnabled_2,
-  pluginNamesEqual,
-  joinPluginId,
-  canonicalPluginId,
-  legacyPluginIds,
-  pluginsNamed,
-  isOfficialMarketplaceName_3,
-  normalizePluginId,
-  parseNpmPluginId,
-  marketplaceSuffix,
-  isRequiredPlugin,
-  splitPluginId,
-  isPluginEnabled,
-  pluginSettingAt,
-  SETTING_SOURCE_TO_SCOPE,
-  pluginNameAliases_2,
-  groupEnabledPlugins,
-  isOfficialPluginId,
-  findPluginSetting,
-  parsePluginIdentifier_2,
-} from "../../utils/plugins/pluginIdentifier.js";
 import {
   installationAtTarget,
   isSameInstallScope,
@@ -190,16 +202,6 @@ import {
   deletePluginDataDir,
 } from "../../utils/plugins/pluginDirectories.js";
 import { stripInvisibleKeepEmoji } from "../../utils/settings/marketplaceSettingsAliases.js";
-import {
-  INLINE_PLUGIN_MARKETPLACE,
-  SYNCED,
-  SKILLS_DIR,
-  BUILTIN,
-  removePluginUsage,
-  seedPluginUsage,
-  touchPluginUsage,
-  pluginIdHash,
-} from "../../utils/telemetry/pluginTelemetry.js";
 import { tildify } from "../../utils/path.js";
 import { getClaudeConfigDir } from "../../utils/envUtils.js";
 import { isBuiltinPluginId, getBuiltinPlugin, getBuiltinPlugins } from "../../plugins/builtinPlugins.js";
@@ -342,7 +344,7 @@ import {
   bindingsWithReadFailure,
   isUnreadableBindings,
   findBindingKeysFor,
-  MAX_BINDINGS_FILE_BYTES,
+  MAX_REPOSITORY_KEY_CHARS,
 } from "../../utils/plugins/pluginDirectoryBindings.js";
 import {
   formatSharedDataFolderMessage,
@@ -403,34 +405,84 @@ import { CLAUDE_PLUGINS_OFFICIAL } from "../../utils/plugins/officialMarketplace
 import { emitProducerDirsChanged } from "../../utils/plugins/pluginCachePaths.js";
 import { describeArchiveFetchCommand } from "../../components/ManagedSettingsSecurityDialog/utils.js";
 import { isReviewerMarkedEntry } from "../../utils/plugins/commandSourceErrors.js";
-import { Uo } from "../../../vendor/@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
-import { sanitizeTelemetryString } from "../../utils/sanitization.js";
-import { hashEntries } from "../../utils/model/modelCatalog/maskedIds.js";
+import { omitAlias } from "../../../vendor/@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
+//@ chunk-csq9ftr9.js:8420-8587 callgraph-fingerprint = updatePluginOp (0.187)
+/**
+ * 按插件 ID 对一组条目分组（名字配错，见 lead 建议）。
+ */
+function countByPluginKey(userHooks) {
+  let countsByKey = new Map();
+  for (let { pluginId } of userHooks) {
+    if (!pluginId) continue;
+    let { name: pluginName, marketplace: marketplaceName } = parsePluginIdentifier_2(pluginId);
+    let pluginKey = pluginIdHash(pluginName, marketplaceName);
+    countsByKey.set(pluginKey, (countsByKey.get(pluginKey) ?? 0) + 1);
+  }
+  return countsByKey.size > 0 ? hashEntries(countsByKey) : undefined;
+}
+//@ chunk-1qpz7qcd.js:7508-7648 fingerprint = disableAllPluginsOp (0.338)
+/**
+ * 插件批量操作的错误转文本（用户可见错误原样，其他记日志后返回“X failed”）。属 CLI 处理器，见 lead 建议。
+ */
+function formatOperationFailure(subtype, error) {
+  if (error instanceof WireSafeControlError) return sanitizeTelemetryString(errorMessage(error));
+  if (isAbortError(error)) return sanitizeTelemetryString(errorMessage(error));
+  logForDebugging(`${subtype} failed: ${errorMessage(error)}`, {
+    level: "error",
+  });
+  return `${subtype} failed`;
+}
+//@ chunk-e6aww6q8.js:4444317-4444531 fingerprint = resolveDelistedPluginId (0.791)
+/**
+ * 已下架插件 ID 的解析：排除已有结果的，从安装记录中找出仍存在的。
+ */
+async function resolveDelistedPluginId(keys, resolved, storageV5) {
+  let filtered = (keys ?? []).filter((key) => !resolved.some((entry) => entry.pluginId === key));
+  if (filtered.length === 0) return [];
+  let installedData =
+    isStorageV5Enabled() && storageV5 !== undefined
+      ? await loadInstalledPlugins(storageV5)
+      : loadInstalledPluginsSync();
+  if (hasFailedInstalledPluginsRead(installedData)) return filtered;
+  return filtered.filter(
+    (key) => installedData.plugins[key]?.some(isInstallationRelevantToCurrentProject) === true,
+  );
+}
 //@ chunk-pp50kewz.js:2631-2649 placement
 /**
  * 懒加载的 semver 模块。
  */
-var semverModule = Re(require_semver_3(), 1);
+var semverModule; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-pp50kewz.js:2631", () => {
+  semverModule = __toESM(require_semver_3(), 1);
+});
 //@ chunk-pp50kewz.js:2731-3129 placement
 /**
  * 安装时插件不在目录中则刷新一次市场（失败时用缓存）。
  */
-async function refreshMarketplaceOnCatalogMiss(e, n, storageV5) {
+async function refreshMarketplaceOnCatalogMiss(marketplaceName, knownMarketplace, storageV5) {
   if (shouldSkipPluginAutoupdate()) return "ineligible";
-  if (!n?.source || !isSourceAllowedByPolicy(n.source)) return "ineligible";
-  if (!isMarketplaceAutoUpdate(e, n, getMarketplaceAutoUpdate(e, getDeclaredMarketplaces())))
+  if (!knownMarketplace?.source || !isSourceAllowedByPolicy(knownMarketplace.source)) return "ineligible";
+  if (
+    !isMarketplaceAutoUpdate(
+      marketplaceName,
+      knownMarketplace,
+      getMarketplaceAutoUpdate(marketplaceName, getDeclaredMarketplaces()),
+    )
+  )
     return "ineligible";
   try {
-    await refreshMarketplaceDeduped(e, storageV5, undefined, {
+    await refreshMarketplaceDeduped(marketplaceName, storageV5, undefined, {
       skipIfRecent: true,
       directoryTrigger: "install",
     });
-    getPluginRegistry().marketplaces.delete(e);
+    getPluginRegistry().marketplaces.delete(marketplaceName);
     return "refreshed";
   } catch (error) {
     logForDebugging(
-      `Failed to refresh marketplace '${e}' on catalog miss; using cached data: ${errorMessage(error)}`,
+      `Failed to refresh marketplace '${marketplaceName}' on catalog miss; using cached data: ${errorMessage(error)}`,
       {
         level: "warn",
       },
@@ -451,20 +503,20 @@ function logInstallRefreshFirst(outcome) {
 /**
  * 按作用域安装前刷新 github 来源的市场。
  */
-async function refreshBeforeScopedInstall(e, n, storageV5) {
+async function refreshBeforeScopedInstall(marketplaceName, knownMarketplace, storageV5) {
   if (isEssentialTrafficOnly())
     return {
       outcome: "ineligible",
     };
-  if (!n?.source || !isSourceAllowedByPolicy(n.source))
+  if (!knownMarketplace?.source || !isSourceAllowedByPolicy(knownMarketplace.source))
     return {
       outcome: "ineligible",
     };
-  if (n.installLocation && seedDirFor(n.installLocation))
+  if (knownMarketplace.installLocation && seedDirFor(knownMarketplace.installLocation))
     return {
       outcome: "ineligible",
     };
-  let source = n.source.source;
+  let source = knownMarketplace.source.source;
   if (
     source !== "github" &&
     source !== "git" &&
@@ -472,24 +524,24 @@ async function refreshBeforeScopedInstall(e, n, storageV5) {
     source !== "claudeai" &&
     source !== "pluginDirectory"
   ) {
-    if (isLocalMarketplaceSource(n.source) || source === "settings")
-      getPluginRegistry().marketplaces.delete(e);
+    if (isLocalMarketplaceSource(knownMarketplace.source) || source === "settings")
+      getPluginRegistry().marketplaces.delete(marketplaceName);
     return {
       outcome: "ineligible",
     };
   }
   try {
-    await refreshMarketplaceDeduped(e, storageV5, undefined, {
+    await refreshMarketplaceDeduped(marketplaceName, storageV5, undefined, {
       skipIfRecent: true,
       directoryTrigger: "install",
     });
-    getPluginRegistry().marketplaces.delete(e);
+    getPluginRegistry().marketplaces.delete(marketplaceName);
     return {
       outcome: "refreshed",
     };
   } catch (error) {
     logForDebugging(
-      `Failed to refresh marketplace '${e}' before scoped install; using cached data: ${errorMessage(error)}`,
+      `Failed to refresh marketplace '${marketplaceName}' before scoped install; using cached data: ${errorMessage(error)}`,
       {
         level: "warn",
       },
@@ -501,51 +553,64 @@ async function refreshBeforeScopedInstall(e, n, storageV5) {
   }
 }
 //@ chunk-pp50kewz.js:4013-4187 placement
-async function installedAndAvailableVersions(e) {
-  let n = await installedVersionAtScope(e);
-  let i = await getAvailablePluginVersion(e).catch(() => Jn);
+async function installedAndAvailableVersions(input) {
+  let installedVersion = await installedVersionAtScope(input);
+  let available = await getAvailablePluginVersion(input).catch(() => NO_AVAILABLE_VERSION);
   return {
-    installedVersion: cleanVersion(n),
-    availableVersion: cleanVersion(i.availableVersion),
-    loadsInPlaceFrom: i.loadsInPlaceFrom,
+    installedVersion: cleanVersion(installedVersion),
+    availableVersion: cleanVersion(available.availableVersion),
+    loadsInPlaceFrom: available.loadsInPlaceFrom,
   };
 }
 //@ chunk-pp50kewz.js:4187-4838 placement
 /**
  * 描述插件可更新版本与更新命令。
  */
-function describeUpdateAvailability(e, scope, marketplace) {
-  let a = claudeCommand("plugin update", e, scope === "user" ? undefined : `--scope ${scope}`);
-  let o =
+function describeUpdateAvailability(pluginId, scope, marketplace) {
+  let updateCommand = claudeCommand(
+    "plugin update",
+    pluginId,
+    scope === "user" ? undefined : `--scope ${scope}`,
+  );
+  let hasNewerVersion =
     marketplace.availableVersion !== undefined &&
     marketplace.installedVersion !== undefined &&
     marketplace.availableVersion !== marketplace.installedVersion;
-  let u = quotedPrintable(marketplace.installedVersion, MAX_VERSION_CHARS);
-  let h = quotedPrintable(marketplace.availableVersion, MAX_VERSION_CHARS);
-  let p = `${u} to ${h}`;
+  let installedLabel = quotedPrintable(marketplace.installedVersion, MAX_VERSION_CHARS);
+  let availableLabel = quotedPrintable(marketplace.availableVersion, MAX_VERSION_CHARS);
+  let versionChange = `${installedLabel} to ${availableLabel}`;
   if (marketplace.loadsInPlaceFrom !== undefined) {
-    let j = printableOrEmpty(marketplace.loadsInPlaceFrom);
-    let I = o && a !== null ? `; \`${a}\` re-records its version, ${p}` : "";
-    return ` \u2014 it loads in place from ${j}, so edits there take effect at the next session start or /reload-plugins${I}`;
+    let displayPath = printableOrEmpty(marketplace.loadsInPlaceFrom);
+    let versionNote =
+      hasNewerVersion && updateCommand !== null
+        ? `; \`${updateCommand}\` re-records its version, ${versionChange}`
+        : "";
+    return ` \u2014 it loads in place from ${displayPath}, so edits there take effect at the next session start or /reload-plugins${versionNote}`;
   }
-  if (!o) return "";
-  let c = a !== null ? `run \`${a}\` to get it` : "update it from /plugin";
-  return `${` \u2014 the marketplace now offers ${h}`} (installed: ${u}); ${c}`;
+  if (!hasNewerVersion) return "";
+  let updateHint = updateCommand !== null ? `run \`${updateCommand}\` to get it` : "update it from /plugin";
+  return `${` \u2014 the marketplace now offers ${availableLabel}`} (installed: ${installedLabel}); ${updateHint}`;
 }
 //@ chunk-pp50kewz.js:4838-4869 placement
 /**
  * 版本号展示的最大字符数（64）。
  */
-var MAX_VERSION_CHARS = 64;
-var Jn = Object.freeze({});
+var MAX_VERSION_CHARS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var NO_AVAILABLE_VERSION;
+deferInit("chunk-pp50kewz.js:4838", () => {
+  MAX_VERSION_CHARS = 64;
+  NO_AVAILABLE_VERSION = Object.freeze({});
+});
 //@ chunk-pp50kewz.js:4869-5087 placement
 async function installedVersionAtScope({ pluginId, scope, projectPath, storageV5 }) {
-  let u =
+  let installedPlugins =
     isStorageV5Enabled() && storageV5 !== undefined
       ? await loadInstalledPlugins(storageV5)
       : loadInstalledPluginsSync();
-  let pluginName = findPluginName(Object.keys(u.plugins), pluginId);
-  let filtered = (u.plugins[pluginName ?? pluginId] ?? []).filter((c) => c.scope === scope);
+  let pluginName = findPluginName(Object.keys(installedPlugins.plugins), pluginId);
+  let filtered = (installedPlugins.plugins[pluginName ?? pluginId] ?? []).filter(
+    (installation) => installation.scope === scope,
+  );
   return (installationAtTarget(filtered, scope, projectPath) ?? filtered[0])?.version;
 }
 //@ chunk-pp50kewz.js:5087-5704 placement
@@ -563,9 +628,9 @@ async function getAvailablePluginVersion({
     return {
       availableVersion: claudeAiSourceVersion(entry),
     };
-  if (marketplaceInstallLocation === undefined) return Jn;
+  if (marketplaceInstallLocation === undefined) return NO_AVAILABLE_VERSION;
   let knownMarketplacesWithDeclared = await loadKnownMarketplacesWithDeclared(storageV5);
-  let p = seedDirFor(marketplaceInstallLocation) !== undefined ? "system" : "workspace";
+  let directoryKind = seedDirFor(marketplaceInstallLocation) !== undefined ? "system" : "workspace";
   let pluginEntryPath = await resolvePluginEntryPath(
     pluginId,
     marketplaceInstallLocation,
@@ -573,9 +638,9 @@ async function getAvailablePluginVersion({
     knownMarketplacesWithDeclared,
     tryUnwrapTextPayload(),
     storageV5,
-    p,
+    directoryKind,
   );
-  if (pluginEntryPath.kind !== "ok") return Jn;
+  if (pluginEntryPath.kind !== "ok") return NO_AVAILABLE_VERSION;
   let pluginVersion = await calculatePluginVersion(
     pluginId,
     entry.source,
@@ -596,10 +661,13 @@ async function getAvailablePluginVersion({
     undefined,
     pluginEntryPath.marketplaceDir,
   );
-  let y = isLocalMarketplaceEntry(entry.source, knownMarketplacesWithDeclared[marketplaceName]?.source);
+  let loadsInPlace = isLocalMarketplaceEntry(
+    entry.source,
+    knownMarketplacesWithDeclared[marketplaceName]?.source,
+  );
   return {
     availableVersion: pluginVersion !== "unknown" ? pluginVersion : undefined,
-    loadsInPlaceFrom: y ? pluginEntryPath.entryPath : undefined,
+    loadsInPlaceFrom: loadsInPlace ? pluginEntryPath.entryPath : undefined,
   };
 }
 //@ chunk-pp50kewz.js:5704-5827 placement
@@ -612,49 +680,50 @@ function claudeAiSourceVersion(entry) {
 /**
  * 清洗版本号（去掉不可见字符但保留 emoji）。
  */
-function cleanVersion(e) {
-  return e === undefined ? undefined : stripInvisibleKeepEmoji(e);
+function cleanVersion(version) {
+  return version === undefined ? undefined : stripInvisibleKeepEmoji(version);
 }
 //@ chunk-pp50kewz.js:5873-6648 placement
 /**
  * --plugin-dir 等无法安装/更新/卸载的插件说明。
  */
-function unmanageablePluginMessage(e, n) {
-  let i = {
+function unmanageablePluginMessage(marketplaceName, operation) {
+  let pastTense = {
     install: "installed",
     update: "updated",
     uninstall: "uninstalled",
-  }[n];
-  switch (e) {
+  }[operation];
+  switch (marketplaceName) {
     case INLINE_PLUGIN_MARKETPLACE:
-      return `This plugin is loaded via --plugin-dir for this session with no marketplace backing \u2014 it cannot be ${i}. Drop the --plugin-dir flag to stop loading it, or \`claude plugin disable\` to turn it off.`;
+      return `This plugin is loaded via --plugin-dir for this session with no marketplace backing \u2014 it cannot be ${pastTense}. Drop the --plugin-dir flag to stop loading it, or \`claude plugin disable\` to turn it off.`;
     case SYNCED:
-      return `This plugin is synced from your claude.ai account with no marketplace backing \u2014 it cannot be ${i} here. Manage it on claude.ai, or \`claude plugin disable\` to turn it off on this machine.`;
+      return `This plugin is synced from your claude.ai account with no marketplace backing \u2014 it cannot be ${pastTense} here. Manage it on claude.ai, or \`claude plugin disable\` to turn it off on this machine.`;
     case SKILLS_DIR:
-      return `This plugin is loaded from ${tildify(join(getClaudeConfigDir(), "skills"))}/ with no marketplace backing \u2014 it cannot be ${i}. Delete the directory to remove it; \`claude plugin disable\` to turn it off; edits there take effect after /reload-plugins.`;
+      return `This plugin is loaded from ${tildify(join(getClaudeConfigDir(), "skills"))}/ with no marketplace backing \u2014 it cannot be ${pastTense}. Delete the directory to remove it; \`claude plugin disable\` to turn it off; edits there take effect after /reload-plugins.`;
   }
 }
 //@ chunk-pp50kewz.js:6648-6968 placement
 /**
  * 插件操作被拒原因（内置插件、托管插件等）。
  */
-function pluginOperationRefusal(pluginId, n, i) {
-  if (isOfficialMarketplace(n)) return unmanageablePluginMessage(n, i);
-  if (n !== undefined && isUnavailablePackageMarketplace(n)) return formatPackageMarketplaceUnavailable(n);
+function pluginOperationRefusal(pluginId, marketplaceName, operation) {
+  if (isOfficialMarketplace(marketplaceName)) return unmanageablePluginMessage(marketplaceName, operation);
+  if (marketplaceName !== undefined && isUnavailablePackageMarketplace(marketplaceName))
+    return formatPackageMarketplaceUnavailable(marketplaceName);
   if (isBuiltinPluginId(pluginId) && getBuiltinPlugin(parsePluginIdentifier(pluginId).name) !== undefined)
     return `This is a built-in plugin \u2014 built-in plugins cannot be installed, updated or uninstalled. ${managedPluginRefusal(pluginId)?.message ?? "Use `claude plugin enable` / `claude plugin disable` to turn it on or off."}`;
   return;
 }
 //@ chunk-pp50kewz.js:6968-7071 placement
-function unmanageablePluginReason(pluginId, n) {
-  if (isUnavailablePackageMarketplace(n)) return "marketplace_not_available";
+function unmanageablePluginReason(pluginId, marketplaceName) {
+  if (isUnavailablePackageMarketplace(marketplaceName)) return "marketplace_not_available";
   return isBuiltinPluginId(pluginId) ? "builtin" : "directory_loaded";
 }
 //@ chunk-pp50kewz.js:7071-7172 placement
-function lockedDependentName(e, n) {
-  let { name: i } = parsePluginId(e);
-  let a = matchPolicyPluginEntry(getPolicyEnabledPluginEntries(), i, n);
-  return a.outcome === "locked" ? a.entry.name : undefined;
+function lockedDependentName(pluginId, marketplaceName) {
+  let { name: pluginName } = parsePluginId(pluginId);
+  let match = matchPolicyPluginEntry(getPolicyEnabledPluginEntries(), pluginName, marketplaceName);
+  return match.outcome === "locked" ? match.entry.name : undefined;
 }
 //@ chunk-pp50kewz.js:7172-7293 placement
 function nonInstallableSourceLabel(marketplace) {
@@ -720,38 +789,41 @@ function isSadFailureCode(failureCode) {
   return FAILURE_CODE_SEVERITY[failureCode] === "sad";
 }
 //@ chunk-pp50kewz.js:7859-8716 layout
-var FAILURE_CODE_SEVERITY = {
-  ...ENTRY_HELPER_FAILURE_SEVERITY,
-  not_installed: "bad",
-  not_installed_at_scope: "bad",
-  install_records_unreadable: "bad",
-  ambiguous_marketplace: "sad",
-  not_found: "bad",
-  not_cached: "bad",
-  source_missing: "bad",
-  directory_loaded: "sad",
-  builtin: "sad",
-  marketplace_dir_missing: "bad",
-  marketplace_dir_unreadable: "bad",
-  marketplace_location_refused: "bad",
-  marketplace_entry_path_refused: "bad",
-  marketplace_policy_blocked: "sad",
-  plugin_policy_blocked: "sad",
-  directory_unavailable: "bad",
-  command_source_inactive: "sad",
-  command_source_skipped: "sad",
-  command_source_refused: "sad",
-  entry_helper_declined: "sad",
-  claudeai_identity_changed: "sad",
-  directory_identity_changed: "sad",
-  directory_binding_unreadable: "bad",
-  directory_commit_mismatch: "bad",
-  directory_listing_not_installable: "sad",
-  npm_marketplace_disabled: "sad",
-  marketplace_not_available: "sad",
-  dependencies_not_installed: "bad",
-  dependencies_not_screened: "bad",
-};
+var FAILURE_CODE_SEVERITY; // deferred: uses ENTRY_HELPER_FAILURE_SEVERITY (../../utils/plugins/headersHelper.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-pp50kewz.js:7859", () => {
+  FAILURE_CODE_SEVERITY = {
+    ...ENTRY_HELPER_FAILURE_SEVERITY,
+    not_installed: "bad",
+    not_installed_at_scope: "bad",
+    install_records_unreadable: "bad",
+    ambiguous_marketplace: "sad",
+    not_found: "bad",
+    not_cached: "bad",
+    source_missing: "bad",
+    directory_loaded: "sad",
+    builtin: "sad",
+    marketplace_dir_missing: "bad",
+    marketplace_dir_unreadable: "bad",
+    marketplace_location_refused: "bad",
+    marketplace_entry_path_refused: "bad",
+    marketplace_policy_blocked: "sad",
+    plugin_policy_blocked: "sad",
+    directory_unavailable: "bad",
+    command_source_inactive: "sad",
+    command_source_skipped: "sad",
+    command_source_refused: "sad",
+    entry_helper_declined: "sad",
+    claudeai_identity_changed: "sad",
+    directory_identity_changed: "sad",
+    directory_binding_unreadable: "bad",
+    directory_commit_mismatch: "bad",
+    directory_listing_not_installable: "sad",
+    npm_marketplace_disabled: "sad",
+    marketplace_not_available: "sad",
+    dependencies_not_installed: "bad",
+    dependencies_not_screened: "bad",
+  };
+});
 //@ chunk-pp50kewz.js:8716-8925 layout = findPluginInSettings (0.828)
 /**
  * 在 installed_plugins 中把用户输入的名字解析成已安装的完整插件 ID。
@@ -760,8 +832,8 @@ function findPluginInSettings_2(plugin) {
   let installedPlugins = getInstalledPlugins();
   let pluginName = findPluginName(Object.keys(installedPlugins.plugins), plugin);
   if (pluginName) return pluginName;
-  for (let a of ["local", "project", "user"]) {
-    let enabledPlugins = getSettingsForSourceForUpkeep(scopeToSettingSource(a))?.enabledPlugins;
+  for (let scope of ["local", "project", "user"]) {
+    let enabledPlugins = getSettingsForSourceForUpkeep(scopeToSettingSource(scope))?.enabledPlugins;
     if (!enabledPlugins) continue;
     let pluginName = findPluginName(Object.keys(enabledPlugins), plugin);
     if (pluginName) return pluginName;
@@ -772,49 +844,49 @@ function findPluginInSettings_2(plugin) {
 /**
  * 综合各设置源 enabledPlugins、manifest.defaultEnabled 与安装偏好，判断插件当前是否实际启用。
  */
-function isPluginEffectivelyEnabled(e, plugin, i) {
+function isPluginEffectivelyEnabled(pluginId, plugin, builtinPlugins) {
   return isPluginEnabled_2(
-    e,
-    filterTrustedForBuiltin(e, i),
+    pluginId,
+    filterTrustedForBuiltin(pluginId, builtinPlugins),
     plugin.manifest.defaultEnabled,
     plugin.installationPreference,
   );
 }
 //@ chunk-pp50kewz.js:9019-9103 layout
-function findScopeDeclaringPlugin(e, n) {
-  return e.find((i) =>
-    Object.hasOwn(getSettingsForSourceForUpkeep(scopeToSettingSource(i))?.enabledPlugins ?? {}, n),
+function findScopeDeclaringPlugin(scopes, pluginId) {
+  return scopes.find((scope) =>
+    Object.hasOwn(getSettingsForSourceForUpkeep(scopeToSettingSource(scope))?.enabledPlugins ?? {}, pluginId),
   );
 }
 //@ chunk-pp50kewz.js:9103-9662 fingerprint = findPluginInSettings (0.869)
 /**
  * 在 local > project > user 设置的 enabledPlugins 中找插件，返回 {pluginId, scope}。
  */
-function findPluginInSettings(pluginId, n = ["local", "project", "user"]) {
+function findPluginInSettings(pluginId, scopes = ["local", "project", "user"]) {
   let hasMarketplace = pluginId.includes("@");
   let lower = pluginId.toLowerCase();
   if (hasMarketplace) {
-    let o = listInstalledPluginIds(getInstalledPlugins());
-    let u = o === "unknown" ? undefined : findPluginName(o, pluginId);
-    if (u !== undefined) {
-      let filtered = n.filter((p) => !hasSuspectSettingsLink(scopeToSettingSource(p)));
+    let installedIds = listInstalledPluginIds(getInstalledPlugins());
+    let resolvedId = installedIds === "unknown" ? undefined : findPluginName(installedIds, pluginId);
+    if (resolvedId !== undefined) {
+      let scopes_2 = scopes.filter((scope) => !hasSuspectSettingsLink(scopeToSettingSource(scope)));
       if (
-        u === pluginId ||
-        (filtered.length === n.length && findScopeDeclaringPlugin(filtered, pluginId) === undefined)
+        resolvedId === pluginId ||
+        (scopes_2.length === scopes.length && findScopeDeclaringPlugin(scopes_2, pluginId) === undefined)
       ) {
-        let scopeDeclaringPlugin = findScopeDeclaringPlugin(filtered, u);
+        let scopeDeclaringPlugin = findScopeDeclaringPlugin(scopes_2, resolvedId);
         if (
           scopeDeclaringPlugin !== undefined &&
-          n.slice(0, n.indexOf(scopeDeclaringPlugin)).every((r) => filtered.includes(r))
+          scopes.slice(0, scopes.indexOf(scopeDeclaringPlugin)).every((scope) => scopes_2.includes(scope))
         )
           return {
-            pluginId: u,
+            pluginId: resolvedId,
             scope: scopeDeclaringPlugin,
           };
       }
     }
   }
-  for (let scope of n) {
+  for (let scope of scopes) {
     let enabledPlugins = getSettingsForSourceForUpkeep(scopeToSettingSource(scope))?.enabledPlugins;
     if (!enabledPlugins) continue;
     for (let key of Object.keys(enabledPlugins))
@@ -830,16 +902,16 @@ function findPluginInSettings(pluginId, n = ["local", "project", "user"]) {
   return null;
 }
 //@ chunk-pp50kewz.js:9662-9724 layout
-function isSameRepoRoot(key, n) {
-  let i = canonicalPluginId(key);
-  return legacyPluginIds(i).length > 0 && i === canonicalPluginId(n);
+function isSameRepoRoot(key, pluginId) {
+  let canonicalId = canonicalPluginId(key);
+  return legacyPluginIds(canonicalId).length > 0 && canonicalId === canonicalPluginId(pluginId);
 }
 //@ chunk-pp50kewz.js:9724-9760 layout
 /**
  * 插件是否出现在任一可写设置源的 enabledPlugins 中。
  */
-function isPluginInSettings(e) {
-  return findPluginInSettings(e) !== null;
+function isPluginInSettings(pluginId) {
+  return findPluginInSettings(pluginId) !== null;
 }
 //@ chunk-pp50kewz.js:9760-9971 callgraph-fingerprint = findPluginByIdentifier (1)
 function findPluginByIdentifier(plugin, plugins) {
@@ -855,34 +927,38 @@ function findPluginByIdentifier(plugin, plugins) {
   });
 }
 //@ chunk-pp50kewz.js:9971-10385 layout
-function resolveInstalledPluginId(pluginId, scope, projectPathForScope) {
-  let { name: a } = parsePluginIdentifier(pluginId);
+function resolveInstalledPluginId(pluginId, scope, projectPath) {
+  let { name: pluginName } = parsePluginIdentifier(pluginId);
   let installedPlugins = getInstalledPlugins();
   let keys = Object.keys(installedPlugins.plugins);
-  let pluginName = findPluginName(keys, pluginId);
-  if (pluginName && installedPlugins.plugins[pluginName]?.length)
+  let pluginName_2 = findPluginName(keys, pluginId);
+  if (pluginName_2 && installedPlugins.plugins[pluginName_2]?.length)
     return {
-      pluginId: pluginName,
-      pluginName: a,
+      pluginId: pluginName_2,
+      pluginName,
     };
   let included = pluginId.includes("@");
-  let filtered = pluginsNamed(keys, a).filter(
+  let filtered = pluginsNamed(keys, pluginName).filter(
     (key) =>
       (!included || !parsePluginIdentifier(key).marketplace) &&
       (installedPlugins.plugins[key]?.length ?? 0) > 0,
   );
-  let c =
-    filtered.find((y) =>
-      installedPlugins.plugins[y]?.some((j) => j.scope === scope && j.projectPath === projectPathForScope),
+  let chosenKey =
+    filtered.find((key) =>
+      installedPlugins.plugins[key]?.some(
+        (installation) => installation.scope === scope && installation.projectPath === projectPath,
+      ),
     ) ??
-    filtered.find((y) =>
-      installedPlugins.plugins[y]?.some((j) => isSameInstallScope(j, scope, projectPathForScope)),
+    filtered.find((key) =>
+      installedPlugins.plugins[key]?.some((installation) =>
+        isSameInstallScope(installation, scope, projectPath),
+      ),
     ) ??
     filtered[0];
-  if (c)
+  if (chosenKey)
     return {
-      pluginId: c,
-      pluginName: a,
+      pluginId: chosenKey,
+      pluginName,
     };
   return null;
 }
@@ -920,12 +996,12 @@ function getPluginInstallationFromV2(pluginId) {
     return {
       scope: userInstall.scope,
     };
-  for (let r of ["local", "project"]) {
-    let c = installationAtTarget(installations, r, currentProjectPath);
-    if (c)
+  for (let scope of ["local", "project"]) {
+    let installation = installationAtTarget(installations, scope, currentProjectPath);
+    if (installation)
       return {
-        scope: c.scope,
-        projectPath: c.projectPath,
+        scope: installation.scope,
+        projectPath: installation.projectPath,
       };
   }
   return {
@@ -934,16 +1010,16 @@ function getPluginInstallationFromV2(pluginId) {
   };
 }
 //@ chunk-pp50kewz.js:10954-11366 layout
-function describePolicyBlock(e) {
-  switch (e.reason) {
+function describePolicyBlock(block) {
+  switch (block.reason) {
     case "blocked-by-policy":
       return {
-        message: `Plugin "${e.pluginName}" is blocked by your organization's policy and cannot be installed`,
+        message: `Plugin "${block.pluginName}" is blocked by your organization's policy and cannot be installed`,
         failureCode: "plugin_policy_blocked",
       };
     case "marketplace-blocked-by-policy":
       return {
-        message: `Plugin "${e.pluginName}" is from marketplace "${e.marketplaceName}", which is blocked by your organization's policy`,
+        message: `Plugin "${block.pluginName}" is from marketplace "${block.marketplaceName}", which is blocked by your organization's policy`,
         failureCode: "marketplace_policy_blocked",
       };
   }
@@ -952,24 +1028,26 @@ function describePolicyBlock(e) {
 /**
  * 是否“仅缺少依赖”：插件在该作用域启用且缓存存在，加载问题只有依赖未找到（dependency-unsatisfied/not-found）。
  */
-async function hasOnlyMissingDependencyIssues(e, n, i) {
-  if (!(await isPluginEnabledAndCachedAtScope(e, n, i))) return false;
-  return !(await dependencyErrorsForSource(e, i)).some(
-    (o) => o.type !== "dependency-unsatisfied" || o.reason !== "not-found",
+async function hasOnlyMissingDependencyIssues(pluginId, scope, storageV5) {
+  if (!(await isPluginEnabledAndCachedAtScope(pluginId, scope, storageV5))) return false;
+  return !(await dependencyErrorsForSource(pluginId, storageV5)).some(
+    (error) => error.type !== "dependency-unsatisfied" || error.reason !== "not-found",
   );
 }
 //@ chunk-pp50kewz.js:11515-11715 layout
 function hasDirectoryCounterpartInstalled(pluginName, marketplaceName) {
   {
-    let i = marketplaceName === OFFICIAL_MARKETPLACE_NAME;
+    let officialMarketplaceTarget = marketplaceName === OFFICIAL_MARKETPLACE_NAME;
     return Object.entries(getInstalledPlugins().plugins).some(([key, value]) => {
       if (value.length === 0) return false;
-      let { name: u, marketplace } = parsePluginIdentifier(key);
+      let { name, marketplace } = parsePluginIdentifier(key);
       return (
-        u === pluginName &&
+        name === pluginName &&
         marketplace !== undefined &&
         marketplace !== marketplaceName &&
-        (i ? isOfficialMarketplaceName_3(marketplace) : marketplace === OFFICIAL_MARKETPLACE_NAME)
+        (officialMarketplaceTarget
+          ? isOfficialMarketplaceName_3(marketplace)
+          : marketplace === OFFICIAL_MARKETPLACE_NAME)
       );
     });
   }
@@ -989,7 +1067,7 @@ function replaceNeedsFullIdMessage() {
 function getReplaceUnavailableReason() {
   if (!isPluginDirectoryAvailable()) return "directory-not-in-session";
   if (isWorkspaceRestricted()) return "workspace-restricted";
-  if (!EDITABLE_SETTING_SOURCES.every((e) => getEnabledSettingSources().includes(e)))
+  if (!EDITABLE_SETTING_SOURCES.every((source) => getEnabledSettingSources().includes(source)))
     return "setting-sources-narrowed";
   return;
 }
@@ -997,28 +1075,28 @@ function getReplaceUnavailableReason() {
 /**
  * 把 --replace 不可用原因转成用户提示（CLI 与界面两种措辞）。
  */
-function describeReplaceUnavailable(e, n) {
+function describeReplaceUnavailable(reason, surface) {
   {
-    let i = n === "cli" ? ", so nothing was installed" : "";
-    switch (e) {
+    let cliSuffix = surface === "cli" ? ", so nothing was installed" : "";
+    switch (reason) {
       case "directory-not-in-session":
-        return n === "cli"
+        return surface === "cli"
           ? "--replace is not available in this session, so nothing was installed."
           : `Switching marketplaces needs the ${OFFICIAL_MARKETPLACE_DISPLAY}, which is not available in this session.`;
       case "workspace-restricted":
-        return `Switching marketplaces is not available while this folder's project and local settings are not being read${i}. Try again from a session that reads them.`;
+        return `Switching marketplaces is not available while this folder's project and local settings are not being read${cliSuffix}. Try again from a session that reads them.`;
       case "setting-sources-narrowed":
-        return `Switching marketplaces is not available while this session ignores any of your user, project or local settings files${i}. Try again from a session started without --setting-sources or --restricted.`;
+        return `Switching marketplaces is not available while this session ignores any of your user, project or local settings files${cliSuffix}. Try again from a session started without --setting-sources or --restricted.`;
     }
   }
   return "";
 }
 //@ chunk-pp50kewz.js:12766-12879 layout
-function describeImpersonatingMarketplace(e, n) {
-  return `${isAsciiImpersonatingOfficialName(e) ? reservedMarketplaceNameError(e) : marketplaceLoadFailedMessage(e, IMPERSONATION_ERROR_MESSAGE)}. ${marketplaceRemovalAdvice(
-    e,
+function describeImpersonatingMarketplace(marketplaceName, knownMarketplace) {
+  return `${isAsciiImpersonatingOfficialName(marketplaceName) ? reservedMarketplaceNameError(marketplaceName) : marketplaceLoadFailedMessage(marketplaceName, IMPERSONATION_ERROR_MESSAGE)}. ${marketplaceRemovalAdvice(
+    marketplaceName,
     {
-      declaredInSettings: n.source.source === "settings",
+      declaredInSettings: knownMarketplace.source.source === "settings",
     },
   )}`;
 }
@@ -1055,12 +1133,14 @@ async function whyNotInstallableInPlace(official, storageV5) {
   }
 }
 //@ chunk-pp50kewz.js:13496-13557 layout
-async function readInstalledPlugins(e) {
-  return isStorageV5Enabled() && e !== undefined ? await loadInstalledPlugins(e) : loadInstalledPluginsSync();
+async function readInstalledPlugins(storageV5) {
+  return isStorageV5Enabled() && storageV5 !== undefined
+    ? await loadInstalledPlugins(storageV5)
+    : loadInstalledPluginsSync();
 }
 //@ chunk-pp50kewz.js:13557-13611 layout
-async function getInstallationsOf(e, storageV5) {
-  return (await readInstalledPlugins(storageV5)).plugins[e];
+async function getInstallationsOf(pluginId, storageV5) {
+  return (await readInstalledPlugins(storageV5)).plugins[pluginId];
 }
 //@ chunk-pp50kewz.js:13611-13694 layout
 async function isPluginPossiblyInstalled(key, storageV5) {
@@ -1069,7 +1149,9 @@ async function isPluginPossiblyInstalled(key, storageV5) {
 }
 //@ chunk-pp50kewz.js:13694-13756 layout
 function latestInstallationAtScope(installationsOf, scope) {
-  return hasInstallationForCurrentProject((installationsOf ?? []).filter((i) => i.scope === scope));
+  return hasInstallationForCurrentProject(
+    (installationsOf ?? []).filter((installation) => installation.scope === scope),
+  );
 }
 //@ chunk-pp50kewz.js:13756-36288 callgraph-witnessed = installPluginOp (0.16)
 /**
@@ -1079,27 +1161,27 @@ async function installPluginOp(
   pluginId,
   scope = "user",
   {
-    shownSourceCommand: i,
-    shownEntryHelper: a,
-    announceRefreshResult: o,
-    replaceInstalledCopy: u,
-    replaceOnlyPluginIds: h,
-    carrySettingsFrom: p,
-    surface: r = "cli",
-    npmRegistry: c,
-    gitHubHttpsFallback: y,
-    withoutRefresh: j,
+    shownSourceCommand,
+    shownEntryHelper,
+    announceRefreshResult,
+    replaceInstalledCopy,
+    replaceOnlyPluginIds,
+    carrySettingsFrom,
+    surface = "cli",
+    npmRegistry,
+    gitHubHttpsFallback,
+    withoutRefresh,
   } = {},
   storageV5,
 ) {
   assertInstallableScope(scope);
   pluginId = normalizePluginId(pluginId);
   let { name: pluginName, marketplace: marketplaceName } = parsePluginId(pluginId);
-  let b = pluginOperationRefusal(pluginId, marketplaceName, "install");
-  if (b !== undefined)
+  let refusal = pluginOperationRefusal(pluginId, marketplaceName, "install");
+  if (refusal !== undefined)
     return {
       success: false,
-      message: b,
+      message: refusal,
       failureCode: unmanageablePluginReason(pluginId, marketplaceName),
     };
   let installedListRefusal = await getInstalledListRefusal(storageV5);
@@ -1109,114 +1191,125 @@ async function installPluginOp(
       message: `Plugin "${quotedPrintable(pluginId)}" was not installed: ${readInstalledPluginsFile(installedListRefusal)}`,
       failureCode: "install_records_unreadable",
     };
-  if (u && !marketplaceName)
+  if (replaceInstalledCopy && !marketplaceName)
     return {
       success: false,
       message: replaceNeedsFullIdMessage(),
       failureCode: "replace_needs_full_id",
     };
-  let ee = u ? getReplaceUnavailableReason() : undefined;
-  if (ee !== undefined)
+  let replaceUnavailable = replaceInstalledCopy ? getReplaceUnavailableReason() : undefined;
+  if (replaceUnavailable !== undefined)
     return {
       success: false,
-      message: describeReplaceUnavailable(ee, "cli"),
+      message: describeReplaceUnavailable(replaceUnavailable, "cli"),
       failureCode: "replace_unavailable",
     };
-  let W;
-  let se;
-  let Ce;
-  let X = false;
-  let we;
-  let J;
-  let D;
-  let ce = false;
-  let ge = false;
-  let k;
-  let pe = false;
-  let Ee = false;
-  let M;
-  let P = "";
-  let L;
-  let U = "";
-  let B = "";
-  let me = false;
-  let npmPluginId = parseNpmPluginId(pluginId);
-  if (npmPluginId === null && pluginId.toLowerCase().endsWith(`@${pluginManifestPathSchemas}`))
+  let entry;
+  let foundMarketplace;
+  let installLocation;
+  let refreshed = false;
+  let refreshError;
+  let reviewerMarked;
+  let switchDetail;
+  let marketplacePolicyBlocked = false;
+  let refreshFailed = false;
+  let refreshErrorMessage;
+  let isDirectorySource = false;
+  let officialUnavailable = false;
+  let officialError;
+  let officialNote = "";
+  let preferredOver;
+  let blockedNote = "";
+  let offNote = "";
+  let isReservedName = false;
+  let request = parseNpmPluginId(pluginId);
+  if (request === null && pluginId.toLowerCase().endsWith(`@${pluginManifestPathSchemas}`))
     return {
       success: false,
       message: `"${pluginId}" is not an npm package spec: expected <package>@npm, e.g. @scope/name@npm, name@npm or name@1.2.3@npm`,
       failureCode: "not_found",
     };
-  if (npmPluginId !== null && c !== undefined && !isHttpUrl(c))
+  if (request !== null && npmRegistry !== undefined && !isHttpUrl(npmRegistry))
     return {
       success: false,
-      message: `--registry must be an http(s) URL (got "${c}")`,
+      message: `--registry must be an http(s) URL (got "${npmRegistry}")`,
       failureCode: "not_found",
     };
-  if (npmPluginId !== null) {
+  if (request !== null) {
     if (!npmMarketplaceEnabled())
       return {
         success: false,
         message: NPM_DIRECT_INSTALL_DISABLED_MESSAGE,
         failureCode: "npm_marketplace_disabled",
       };
-    W = toNpmPluginSource(npmPluginId, c);
-    se = pluginManifestPathSchemas;
-    Ce = NPM_REGISTRY;
+    entry = toNpmPluginSource(request, npmRegistry);
+    foundMarketplace = pluginManifestPathSchemas;
+    installLocation = NPM_REGISTRY;
   } else if (marketplaceName) {
     let pluginInfo = await loadKnownMarketplacesWithDeclared(storageV5);
-    let ie = ownPropertyOrUndefined(pluginInfo, marketplaceName);
-    if (ie !== undefined && isImpersonatingOfficialMarketplace(marketplaceName, ie)) {
+    let knownMarketplace = ownPropertyOrUndefined(pluginInfo, marketplaceName);
+    if (
+      knownMarketplace !== undefined &&
+      isImpersonatingOfficialMarketplace(marketplaceName, knownMarketplace)
+    ) {
       logFeatureBad("plugin_marketplace_resolve", "marketplace_name_refused", {
         scoped: true,
       });
       return {
         success: false,
-        message: describeImpersonatingMarketplace(marketplaceName, ie),
+        message: describeImpersonatingMarketplace(marketplaceName, knownMarketplace),
         failureCode: "not_found",
       };
     }
-    me = listReservedNameRefusals(pluginInfo).some((ue) => ue.name === marketplaceName);
-    let V = ie !== undefined && isSourceAllowedByPolicy(ie.source);
-    ce = ie !== undefined && !V;
-    let He =
-      u && ie !== undefined && V && isPluginDirectorySource(ie.source)
+    isReservedName = listReservedNameRefusals(pluginInfo).some((entry) => entry.name === marketplaceName);
+    let policyAllowed = knownMarketplace !== undefined && isSourceAllowedByPolicy(knownMarketplace.source);
+    marketplacePolicyBlocked = knownMarketplace !== undefined && !policyAllowed;
+    let switchLookup =
+      replaceInstalledCopy &&
+      knownMarketplace !== undefined &&
+      policyAllowed &&
+      isPluginDirectorySource(knownMarketplace.source)
         ? await lookUpPluginForSwitch(pluginName, storageV5)
         : undefined;
-    if (He !== undefined && "notFreshEnoughFor" in He) {
-      D = He.detail;
+    if (switchLookup !== undefined && "notFreshEnoughFor" in switchLookup) {
+      switchDetail = switchLookup.detail;
       if (hasDirectoryCounterpartInstalled(pluginName, marketplaceName)) {
         logFeatureBad("plugin_marketplace_resolve", "refresh_failed", {
           scoped: true,
         });
         return {
           success: false,
-          message: `Plugin "${quotedPrintable(pluginName)}" was not switched. ${formatSwitchNeedsFreshReadMessage(He.detail)}`,
+          message: `Plugin "${quotedPrintable(pluginName)}" was not switched. ${formatSwitchNeedsFreshReadMessage(switchLookup.detail)}`,
           failureCode: "replace_needs_fresh_listing",
         };
       }
     }
-    let R = He !== undefined && "entry" in He ? He : undefined;
-    let Q =
-      R !== undefined
+    let freshLookup = switchLookup !== undefined && "entry" in switchLookup ? switchLookup : undefined;
+    let refreshResult =
+      freshLookup !== undefined
         ? {
             outcome: "refreshed",
           }
-        : j
+        : withoutRefresh
           ? {
               outcome: "ineligible",
             }
-          : (o ?? (await refreshBeforeScopedInstall(marketplaceName, ie, storageV5)));
-    if (!j) logInstallRefreshFirst(Q.outcome);
-    if (Q.outcome === "refreshed") X = true;
-    else if (Q.outcome === "refresh-failed") {
-      ge = true;
-      we = `marketplace not refreshed (${Q.errorMessage})`;
-      if (ie && isPluginDirectorySource(ie.source)) k = Q.errorMessage;
+          : (announceRefreshResult ??
+            (await refreshBeforeScopedInstall(marketplaceName, knownMarketplace, storageV5)));
+    if (!withoutRefresh) logInstallRefreshFirst(refreshResult.outcome);
+    if (refreshResult.outcome === "refreshed") refreshed = true;
+    else if (refreshResult.outcome === "refresh-failed") {
+      refreshFailed = true;
+      refreshError = `marketplace not refreshed (${refreshResult.errorMessage})`;
+      if (knownMarketplace && isPluginDirectorySource(knownMarketplace.source))
+        refreshErrorMessage = refreshResult.errorMessage;
     }
-    pe = ie !== undefined && isPluginDirectorySource(ie.source);
-    Ee = ie === undefined && marketplaceName === OFFICIAL_MARKETPLACE_NAME && !isPluginDirectoryAvailable();
-    if (pe && (await getPluginDirectoryState()) === "blocked") {
+    isDirectorySource = knownMarketplace !== undefined && isPluginDirectorySource(knownMarketplace.source);
+    officialUnavailable =
+      knownMarketplace === undefined &&
+      marketplaceName === OFFICIAL_MARKETPLACE_NAME &&
+      !isPluginDirectoryAvailable();
+    if (isDirectorySource && (await getPluginDirectoryState()) === "blocked") {
       logFeatureBad("plugin_marketplace_resolve", "marketplace_policy_blocked", {
         scoped: true,
       });
@@ -1226,74 +1319,81 @@ async function installPluginOp(
         failureCode: "marketplace_policy_blocked",
       };
     }
-    let x =
-      R !== undefined
-        ? R.entry === null
+    let lookup =
+      freshLookup !== undefined
+        ? freshLookup.entry === null
           ? null
-          : R
-        : k === undefined
+          : freshLookup
+        : refreshErrorMessage === undefined
           ? await getPluginById(pluginId, storageV5, "install")
           : await getPluginByIdCacheOnly(pluginId, storageV5, "install");
-    if (R !== undefined && R.entry !== null) J = R.reviewerMarked;
-    if (x) {
-      W = x.entry;
-      se = marketplaceName;
-      Ce = x.marketplaceInstallLocation;
+    if (freshLookup !== undefined && freshLookup.entry !== null) reviewerMarked = freshLookup.reviewerMarked;
+    if (lookup) {
+      entry = lookup.entry;
+      foundMarketplace = marketplaceName;
+      installLocation = lookup.marketplaceInstallLocation;
     }
   } else {
-    let K;
-    let pluginInMarketplaces = await findPluginInMarketplaces(pluginName, storageV5, (Q) => {
-      K = Q;
+    let lookupFailure;
+    let pluginInMarketplaces = await findPluginInMarketplaces(pluginName, storageV5, (failure) => {
+      lookupFailure = failure;
     });
-    let ie = !pluginInMarketplaces ? await getPluginDirectoryState() : undefined;
-    let message = K?.message;
-    let He = message?.indexOf(": ") ?? -1;
-    let R =
-      message?.startsWith(`${OFFICIAL_MARKETPLACE_DISPLAY} `) && He !== -1 ? message.slice(He + 2) : message;
+    let directoryState = !pluginInMarketplaces ? await getPluginDirectoryState() : undefined;
+    let message = lookupFailure?.message;
+    let separatorIndex = message?.indexOf(": ") ?? -1;
+    let officialMessage =
+      message?.startsWith(`${OFFICIAL_MARKETPLACE_DISPLAY} `) && separatorIndex !== -1
+        ? message.slice(separatorIndex + 2)
+        : message;
     if (pluginInMarketplaces) {
-      W = pluginInMarketplaces.entry;
-      se = pluginInMarketplaces.marketplace;
-      Ce = pluginInMarketplaces.marketplaceInstallLocation;
-      L = pluginInMarketplaces.preferredOver;
+      entry = pluginInMarketplaces.entry;
+      foundMarketplace = pluginInMarketplaces.marketplace;
+      installLocation = pluginInMarketplaces.marketplaceInstallLocation;
+      preferredOver = pluginInMarketplaces.preferredOver;
       if (
-        R !== undefined &&
+        officialMessage !== undefined &&
         pluginInMarketplaces.marketplace !== OFFICIAL_MARKETPLACE_NAME &&
         isPluginDirectoryAvailable()
       )
-        P = ` (The ${OFFICIAL_MARKETPLACE_DISPLAY} could not be checked: ${R}; installed from ${
+        officialNote = ` (The ${OFFICIAL_MARKETPLACE_DISPLAY} could not be checked: ${officialMessage}; installed from ${
           printableLabel(marketplaceDisplayName(pluginInMarketplaces.marketplace), {
             head: 60,
             tail: 20,
           }) || "another marketplace"
         }.)`;
-    } else if (ie === "blocked")
-      U = `. (The ${OFFICIAL_MARKETPLACE_DISPLAY} is blocked by your organization. ${pluginDirectoryPolicyBlockHint()})`;
-    else if (ie === "off")
-      B = `. (The ${OFFICIAL_MARKETPLACE_DISPLAY} was not searched: it is turned off. Turn it back on: claude plugin marketplace add ${OFFICIAL_MARKETPLACE_NAME})`;
+    } else if (directoryState === "blocked")
+      blockedNote = `. (The ${OFFICIAL_MARKETPLACE_DISPLAY} is blocked by your organization. ${pluginDirectoryPolicyBlockHint()})`;
+    else if (directoryState === "off")
+      offNote = `. (The ${OFFICIAL_MARKETPLACE_DISPLAY} was not searched: it is turned off. Turn it back on: claude plugin marketplace add ${OFFICIAL_MARKETPLACE_NAME})`;
     else {
-      M = R;
-      if (M === undefined && (await isPluginDirectoryListingBlocked(pluginName, storageV5)))
-        U = `. (The ${OFFICIAL_MARKETPLACE_DISPLAY} lists it, but it is blocked by your organization's policy.)`;
+      officialError = officialMessage;
+      if (officialError === undefined && (await isPluginDirectoryListingBlocked(pluginName, storageV5)))
+        blockedNote = `. (The ${OFFICIAL_MARKETPLACE_DISPLAY} lists it, but it is blocked by your organization's policy.)`;
     }
   }
-  if (!W || !se) {
-    if ((!W || !se) && pe && marketplaceName && k === undefined)
+  if (!entry || !foundMarketplace) {
+    if (
+      (!entry || !foundMarketplace) &&
+      isDirectorySource &&
+      marketplaceName &&
+      refreshErrorMessage === undefined
+    )
       try {
         await getMarketplace(marketplaceName, storageV5, "install");
       } catch (error) {
-        if (error instanceof PluginDirectoryUnavailableError) k = error.message;
+        if (error instanceof PluginDirectoryUnavailableError) refreshErrorMessage = error.message;
       }
-    if ((!W || !se) && k) {
+    if ((!entry || !foundMarketplace) && refreshErrorMessage) {
       logFeatureBad("plugin_marketplace_resolve", "refresh_failed_stale_lookup", {
         scoped: true,
       });
       return {
         success: false,
-        message: `Could not look up "${quotedPrintable(pluginName)}". ${k}`,
+        message: `Could not look up "${quotedPrintable(pluginName)}". ${refreshErrorMessage}`,
         failureCode: "directory_unavailable",
       };
     }
-    if ((!W || !se) && Ee) {
+    if ((!entry || !foundMarketplace) && officialUnavailable) {
       logFeatureBad("plugin_marketplace_resolve", "not_found", {
         scoped: true,
       });
@@ -1304,7 +1404,7 @@ async function installPluginOp(
       };
     }
     if (
-      (!W || !se) &&
+      (!entry || !foundMarketplace) &&
       marketplaceName === OFFICIAL_MARKETPLACE_NAME &&
       (await getPluginDirectoryState()) === "off"
     ) {
@@ -1317,7 +1417,11 @@ async function installPluginOp(
         failureCode: "directory_off",
       };
     }
-    if ((!W || !se) && pe && (await isPluginDirectoryListingBlocked(pluginName, storageV5))) {
+    if (
+      (!entry || !foundMarketplace) &&
+      isDirectorySource &&
+      (await isPluginDirectoryListingBlocked(pluginName, storageV5))
+    ) {
       logFeatureBad("plugin_marketplace_resolve", "marketplace_policy_blocked", {
         scoped: true,
       });
@@ -1327,20 +1431,20 @@ async function installPluginOp(
         failureCode: "plugin_policy_blocked",
       };
     }
-    if ((!W || !se) && pe) {
-      let K = await pluginDirectoryNotInstallableMessage(pluginName);
-      if (K !== undefined) {
+    if ((!entry || !foundMarketplace) && isDirectorySource) {
+      let notInstallable = await pluginDirectoryNotInstallableMessage(pluginName);
+      if (notInstallable !== undefined) {
         logFeatureBad("plugin_marketplace_resolve", "not_installable", {
           scoped: true,
         });
         return {
           success: false,
-          message: K,
+          message: notInstallable,
           failureCode: "not_found",
         };
       }
     }
-    if ((!W || !se) && me) {
+    if ((!entry || !foundMarketplace) && isReservedName) {
       logFeatureBad("plugin_marketplace_resolve", "not_found", {
         scoped: true,
       });
@@ -1351,52 +1455,58 @@ async function installPluginOp(
       };
     }
   }
-  if (!W || !se) {
-    let K = marketplaceName ? `marketplace "${marketplaceName}"` : "any configured marketplace";
-    let q = marketplaceName ? claudeCommand("plugin marketplace update", marketplaceName) : null;
-    let ie =
+  if (!entry || !foundMarketplace) {
+    let whereText = marketplaceName ? `marketplace "${marketplaceName}"` : "any configured marketplace";
+    let updateCommand = marketplaceName ? claudeCommand("plugin marketplace update", marketplaceName) : null;
+    let officialSpelling =
       marketplaceName !== undefined &&
       marketplaceName !== OFFICIAL_MARKETPLACE_NAME &&
       isOfficialMarketplaceSpelling(marketplaceName)
         ? true
         : false;
-    let V =
-      marketplaceName && !X && !ie
-        ? `. Your local copy may be out of date${q ? ` \u2014 try \`${q}\`` : " \u2014 update it from /plugin > Marketplaces"}.`
+    let staleHint =
+      marketplaceName && !refreshed && !officialSpelling
+        ? `. Your local copy may be out of date${updateCommand ? ` \u2014 try \`${updateCommand}\`` : " \u2014 update it from /plugin > Marketplaces"}.`
         : "";
     logFeatureBad(
       "plugin_marketplace_resolve",
-      ce ? "marketplace_policy_blocked" : ge ? "refresh_failed_stale_lookup" : "not_found",
+      marketplacePolicyBlocked
+        ? "marketplace_policy_blocked"
+        : refreshFailed
+          ? "refresh_failed_stale_lookup"
+          : "not_found",
       {
         scoped: marketplaceName !== undefined,
       },
     );
-    let He = M ? `. (The ${OFFICIAL_MARKETPLACE_DISPLAY} could not be checked: ${M})` : "";
-    let R = "";
-    if (pe && marketplaceName) {
+    let officialErrorNote = officialError
+      ? `. (The ${OFFICIAL_MARKETPLACE_DISPLAY} could not be checked: ${officialError})`
+      : "";
+    let similarNote = "";
+    if (isDirectorySource && marketplaceName) {
       let replaced = pluginName.toLowerCase().replace(/[^a-z0-9]+/g, "-");
       let sliced = (await getMarketplace(marketplaceName, storageV5, "install").catch(() => null))?.plugins
         .filter((plugin) => plugin.displayName?.toLowerCase().replace(/[^a-z0-9]+/g, "-") === replaced)
         .map((plugin) => plugin.name)
         .slice(0, 3);
       if (sliced !== undefined && sliced.length > 0)
-        R = `${V === "" ? "." : ""} It may be listed as: ${sliced.map((ue) => printableName(ue, 80)).join(", ")}`;
+        similarNote = `${staleHint === "" ? "." : ""} It may be listed as: ${sliced.map((name) => printableName(name, 80)).join(", ")}`;
     }
     return {
       success: false,
-      message: `Plugin "${pluginName}" not found in ${K}${V}${R}${He}${U}${B}`,
-      failureCode: ce
+      message: `Plugin "${pluginName}" not found in ${whereText}${staleHint}${similarNote}${officialErrorNote}${blockedNote}${offNote}`,
+      failureCode: marketplacePolicyBlocked
         ? "marketplace_policy_blocked"
-        : ge
+        : refreshFailed
           ? "not_found_stale_catalog"
-          : M
+          : officialError
             ? "directory_unavailable"
             : "not_found",
     };
   }
-  let Z = W;
-  let S = `${Z.name}@${se}`;
-  if (ce)
+  let catalogEntry = entry;
+  let fullPluginId = `${catalogEntry.name}@${foundMarketplace}`;
+  if (marketplacePolicyBlocked)
     logFeatureBad("plugin_marketplace_resolve", "marketplace_policy_blocked", {
       scoped: true,
     });
@@ -1404,52 +1514,72 @@ async function installPluginOp(
     logFeatureOk("plugin_marketplace_resolve", {
       scoped: marketplaceName !== undefined,
     });
-  if (npmPluginId?.versionSpec === undefined && (await hasOnlyMissingDependencyIssues(S, scope, storageV5))) {
-    let K = S.endsWith(`@${OFFICIAL_MARKETPLACE_NAME}`)
+  if (
+    request?.versionSpec === undefined &&
+    (await hasOnlyMissingDependencyIssues(fullPluginId, scope, storageV5))
+  ) {
+    let bindingKeys = fullPluginId.endsWith(`@${OFFICIAL_MARKETPLACE_NAME}`)
       ? bindingKeysFor(
           (isStorageV5Enabled() && storageV5 !== undefined
             ? await loadInstalledPlugins(storageV5)
             : loadInstalledPluginsSync()
           ).plugins,
-          S,
+          fullPluginId,
         )
       : [];
-    let q = K.length > 0 ? K.flatMap(([, Te]) => Te) : undefined;
-    let ie = q !== undefined ? await seedDirectoryBindings(K) : undefined;
-    if (ie !== undefined && isUnboundOfficialPlugin(S, q, ie))
+    let installs = bindingKeys.length > 0 ? bindingKeys.flatMap(([, installs]) => installs) : undefined;
+    let bindings = installs !== undefined ? await seedDirectoryBindings(bindingKeys) : undefined;
+    if (bindings !== undefined && isUnboundOfficialPlugin(fullPluginId, installs, bindings))
       return {
         success: false,
-        message: `"${printableName(Z.name, 120)}" is already installed, but plugin-directory-bindings.json in the plugins folder could not be used (unreadable, a symbolic link or not a file, over 1 MB, damaged, or written by a newer Claude Code), so its ${OFFICIAL_MARKETPLACE_DISPLAY} listing could not be checked against the repository it was installed from. Nothing was changed. Try again; if this repeats, check the file for those causes.`,
+        message: `"${printableName(catalogEntry.name, 120)}" is already installed, but plugin-directory-bindings.json in the plugins folder could not be used (unreadable, a symbolic link or not a file, over 1 MB, damaged, or written by a newer Claude Code), so its ${OFFICIAL_MARKETPLACE_DISPLAY} listing could not be checked against the repository it was installed from. Nothing was changed. Try again; if this repeats, check the file for those causes.`,
         failureCode: "directory_binding_unreadable",
       };
-    if (q !== undefined && ie !== undefined && isDirectoryRepositoryChanged(S, q, Z.source, ie)) {
-      let dataDirConflictingRecord = findDataDirConflictingRecord(Object.fromEntries(K), ie, S, Z.source);
+    if (
+      installs !== undefined &&
+      bindings !== undefined &&
+      isDirectoryRepositoryChanged(fullPluginId, installs, catalogEntry.source, bindings)
+    ) {
+      let dataDirConflictingRecord = findDataDirConflictingRecord(
+        Object.fromEntries(bindingKeys),
+        bindings,
+        fullPluginId,
+        catalogEntry.source,
+      );
       return {
         success: false,
         message:
           dataDirConflictingRecord !== undefined
-            ? formatSharedDataFolderMessage(Z.name, dataDirConflictingRecord)
-            : `"${quotedPrintable(Z.name, 120)}" is already installed from a different repository than the one the ${OFFICIAL_MARKETPLACE_DISPLAY} now lists under that name. Uninstall it first, then install it again.`,
+            ? formatSharedDataFolderMessage(catalogEntry.name, dataDirConflictingRecord)
+            : `"${quotedPrintable(catalogEntry.name, 120)}" is already installed from a different repository than the one the ${OFFICIAL_MARKETPLACE_DISPLAY} now lists under that name. Uninstall it first, then install it again.`,
         failureCode: "directory_identity_changed",
       };
     }
-    let V = isPluginDirectoryAvailable()
-      ? await describeOtherMarketplaceInstalls(S, Z, await loadKnownMarketplacesSafe(storageV5), storageV5)
+    let otherInstalls = isPluginDirectoryAvailable()
+      ? await describeOtherMarketplaceInstalls(
+          fullPluginId,
+          catalogEntry,
+          await loadKnownMarketplacesSafe(storageV5),
+          storageV5,
+        )
       : [];
-    let He = () => checkInstallAllowed(S, Z, storageV5).then((Te) => (Te.ok ? undefined : Te.refusal));
-    if (u) {
-      if ((await resolveDelistedPluginId(h, V, storageV5)).length > 0)
+    let checkAllowed = () =>
+      checkInstallAllowed(fullPluginId, catalogEntry, storageV5).then((allowed) =>
+        allowed.ok ? undefined : allowed.refusal,
+      );
+    if (replaceInstalledCopy) {
+      if ((await resolveDelistedPluginId(replaceOnlyPluginIds, otherInstalls, storageV5)).length > 0)
         return {
           success: false,
-          message: formatSwitchTargetChangedMessage(Z.name),
+          message: formatSwitchTargetChangedMessage(catalogEntry.name),
           failureCode: "installed_from_other_marketplace",
         };
-      let [Te] = V;
-      if (Te !== undefined && D !== undefined) {
+      let [firstOther] = otherInstalls;
+      if (firstOther !== undefined && switchDetail !== undefined) {
         logMarketplaceSwitch({
-          fromPluginId: Te.pluginId,
-          toPluginId: S,
-          surface: r,
+          fromPluginId: firstOther.pluginId,
+          toPluginId: fullPluginId,
+          surface,
           managedNames: policyEnabledPluginNameSet(),
           result: {
             outcome: "bad",
@@ -1458,51 +1588,59 @@ async function installPluginOp(
         });
         return {
           success: false,
-          message: `Plugin ${displayPluginId(S)} is already installed (scope: ${scope}), and nothing was switched. ${formatSwitchNeedsFreshReadMessage(D)}`,
+          message: `Plugin ${displayPluginId(fullPluginId)} is already installed (scope: ${scope}), and nothing was switched. ${formatSwitchNeedsFreshReadMessage(switchDetail)}`,
           failureCode: "replace_needs_fresh_listing",
         };
       }
-      let Ze = Te === undefined ? undefined : await He();
-      if (Ze !== undefined && Te !== undefined) {
-        let Be =
-          Ze.reason === "plugin-directory-unavailable"
+      let policyRefusal = firstOther === undefined ? undefined : await checkAllowed();
+      if (policyRefusal !== undefined && firstOther !== undefined) {
+        let policyBlock =
+          policyRefusal.reason === "plugin-directory-unavailable"
             ? {
-                message: formatDirectoryUnavailableMessage(Ze.pluginName, Ze.unavailableDependency),
+                message: formatDirectoryUnavailableMessage(
+                  policyRefusal.pluginName,
+                  policyRefusal.unavailableDependency,
+                ),
                 failureCode: "plugin_directory_unavailable",
               }
-            : describePolicyBlock(Ze);
-        let wn =
-          Be.failureCode === "plugin_directory_unavailable"
+            : describePolicyBlock(policyRefusal);
+        let joiner =
+          policyBlock.failureCode === "plugin_directory_unavailable"
             ? ": switching to this copy is allowed only where installing it is. "
             : ". ";
         logMarketplaceSwitch({
-          fromPluginId: Te.pluginId,
-          toPluginId: S,
-          surface: r,
+          fromPluginId: firstOther.pluginId,
+          toPluginId: fullPluginId,
+          surface,
           managedNames: policyEnabledPluginNameSet(),
           result: {
             outcome: "bad",
-            code: Be.failureCode,
+            code: policyBlock.failureCode,
           },
         });
         return {
           success: false,
-          message: `Plugin ${displayPluginId(S)} is already installed (scope: ${scope}), and nothing was switched${wn}${Be.message}`,
-          failureCode: Be.failureCode,
+          message: `Plugin ${displayPluginId(fullPluginId)} is already installed (scope: ${scope}), and nothing was switched${joiner}${policyBlock.message}`,
+          failureCode: policyBlock.failureCode,
         };
       }
-      let otherMarketplaceInstallBlocker = findOtherMarketplaceInstallBlocker(S, V, h, J);
+      let otherMarketplaceInstallBlocker = findOtherMarketplaceInstallBlocker(
+        fullPluginId,
+        otherInstalls,
+        replaceOnlyPluginIds,
+        reviewerMarked,
+      );
       if (otherMarketplaceInstallBlocker?.reason === "more-installed-than-shown")
         return {
           success: false,
-          message: formatMoreInstallsThanShownMessage(Z.name),
+          message: formatMoreInstallsThanShownMessage(catalogEntry.name),
           failureCode: "installed_from_other_marketplace",
         };
       if (otherMarketplaceInstallBlocker !== undefined) {
         logMarketplaceSwitch({
           fromPluginId: otherMarketplaceInstallBlocker.blocking.pluginId,
-          toPluginId: S,
-          surface: r,
+          toPluginId: fullPluginId,
+          surface,
           managedNames: policyEnabledPluginNameSet(),
           result: {
             outcome: "bad",
@@ -1511,254 +1649,295 @@ async function installPluginOp(
         });
         return {
           success: false,
-          message: `Plugin ${displayPluginId(S)} is already installed (scope: ${scope}), and nothing was switched. ${installFromOtherMarketplace(S, Z.name, V, r === "cli" ? "cli" : "ui", scope, J)}`,
+          message: `Plugin ${displayPluginId(fullPluginId)} is already installed (scope: ${scope}), and nothing was switched. ${installFromOtherMarketplace(fullPluginId, catalogEntry.name, otherInstalls, surface === "cli" ? "cli" : "ui", scope, reviewerMarked)}`,
           failureCode: "installed_from_other_marketplace",
         };
       }
-      let [gn, ...on] = V;
-      if (gn) {
-        let Be = await finishReplaceSwitch(
-          S,
+      let [firstCopy, ...remainingCopies] = otherInstalls;
+      if (firstCopy) {
+        let switchResult = await finishReplaceSwitch(
+          fullPluginId,
           scope,
-          [gn, ...on],
+          [firstCopy, ...remainingCopies],
           {
             newCopyWasJustInstalled: false,
-            newCopyWasOn: locatePluginInstall(S, undefined, groupedEnabledPlugins()).effective === true,
-            surface: r,
-            carrySettingsFrom: p,
+            newCopyWasOn:
+              locatePluginInstall(fullPluginId, undefined, groupedEnabledPlugins()).effective === true,
+            surface,
+            carrySettingsFrom,
           },
           storageV5,
         );
-        let wn =
+        let projectInstalls =
           scope === "user"
-            ? await findOtherProjectInstalls(S, Z, await loadKnownMarketplacesSafe(storageV5), storageV5)
+            ? await findOtherProjectInstalls(
+                fullPluginId,
+                catalogEntry,
+                await loadKnownMarketplacesSafe(storageV5),
+                storageV5,
+              )
             : [];
-        let kn = describeOtherMarketplaceInstall(S, Z.name, wn);
-        if (Be.ok) await clearAutoInstalledFlag(S, scope, getProjectPathForScope(scope), storageV5);
-        let _n = claudeCommand("plugin enable", S);
-        let jn =
-          Be.ok &&
-          !Be.stayedDisabled &&
-          locatePluginInstall(S, undefined, groupedEnabledPlugins()).effective === false
-            ? `. ${displayPluginId(S)} is disabled in your settings \u2014 enable it ${_n ? `with: ${_n}` : "in /plugin"}`
+        let otherNote = describeOtherMarketplaceInstall(fullPluginId, catalogEntry.name, projectInstalls);
+        if (switchResult.ok)
+          await clearAutoInstalledFlag(fullPluginId, scope, getProjectPathForScope(scope), storageV5);
+        let enableCommand = claudeCommand("plugin enable", fullPluginId);
+        let disabledNote =
+          switchResult.ok &&
+          !switchResult.stayedDisabled &&
+          locatePluginInstall(fullPluginId, undefined, groupedEnabledPlugins()).effective === false
+            ? `. ${displayPluginId(fullPluginId)} is disabled in your settings \u2014 enable it ${enableCommand ? `with: ${enableCommand}` : "in /plugin"}`
             : "";
-        return Be.ok
+        return switchResult.ok
           ? {
               success: true,
-              message: `Plugin ${displayPluginId(S)} was already installed (scope: ${scope})${Be.note}${jn}${kn === "" ? "" : `. ${kn}`}`,
-              pluginId: S,
-              pluginName: Z.name,
+              message: `Plugin ${displayPluginId(fullPluginId)} was already installed (scope: ${scope})${switchResult.note}${disabledNote}${otherNote === "" ? "" : `. ${otherNote}`}`,
+              pluginId: fullPluginId,
+              pluginName: catalogEntry.name,
               scope,
               switched: {
-                from: Be.from,
-                replaced: Be.replaced,
-                stayedDisabled: Be.stayedDisabled,
-                keptOwnSettings: Be.keptOwnSettings,
-                settingsRemovedFrom: Be.settingsRemovedFrom,
-                ...(Be.settingsLeftInPlace && {
-                  settingsLeftInPlace: Be.settingsLeftInPlace,
+                from: switchResult.from,
+                replaced: switchResult.replaced,
+                stayedDisabled: switchResult.stayedDisabled,
+                keptOwnSettings: switchResult.keptOwnSettings,
+                settingsRemovedFrom: switchResult.settingsRemovedFrom,
+                ...(switchResult.settingsLeftInPlace && {
+                  settingsLeftInPlace: switchResult.settingsLeftInPlace,
                 }),
-                savedDataRemovedFrom: Be.savedDataRemovedFrom,
-                ...(Be.keptDataDir && {
-                  keptDataDir: Be.keptDataDir,
+                savedDataRemovedFrom: switchResult.savedDataRemovedFrom,
+                ...(switchResult.keptDataDir && {
+                  keptDataDir: switchResult.keptDataDir,
                 }),
-                ...(Be.oldCopyStillRecordedAt.length > 0 && {
-                  oldCopyStillRecordedAt: Be.oldCopyStillRecordedAt,
+                ...(switchResult.oldCopyStillRecordedAt.length > 0 && {
+                  oldCopyStillRecordedAt: switchResult.oldCopyStillRecordedAt,
                 }),
-                ...((Be.saysMore || jn !== "" || kn !== "") && {
+                ...((switchResult.saysMore || disabledNote !== "" || otherNote !== "") && {
                   messageSaysMore: true,
                 }),
               },
             }
           : {
               success: false,
-              message: Be.message,
+              message: switchResult.message,
               failureCode: "replace_failed",
             };
       }
     }
-    let R = await clearAutoInstalledFlag(S, scope, getProjectPathForScope(scope), storageV5);
-    let Q = await installMissingDependencies(S, storageV5);
-    let x =
-      V.length > 0 &&
-      findOtherMarketplaceInstallBlocker(S, V, undefined) === undefined &&
-      (await He()) === undefined
-        ? claudeCommand("plugin install", S, scope === "user" ? "--replace" : `--replace --scope ${scope}`)
+    let clearedAutoFlag = await clearAutoInstalledFlag(
+      fullPluginId,
+      scope,
+      getProjectPathForScope(scope),
+      storageV5,
+    );
+    let dependencyResult = await installMissingDependencies(fullPluginId, storageV5);
+    let replaceCommand =
+      otherInstalls.length > 0 &&
+      findOtherMarketplaceInstallBlocker(fullPluginId, otherInstalls, undefined) === undefined &&
+      (await checkAllowed()) === undefined
+        ? claudeCommand(
+            "plugin install",
+            fullPluginId,
+            scope === "user" ? "--replace" : `--replace --scope ${scope}`,
+          )
         : null;
-    let ue = (pluginId) => {
-      let Ze = marketplaceNameOfId(pluginId);
-      return Ze !== OFFICIAL_MARKETPLACE_NAME && !(Ze !== undefined && isOfficialMarketplaceName_3(Ze));
+    let isOtherMarketplace = (candidateId) => {
+      let marketplaceName = marketplaceNameOfId(candidateId);
+      return (
+        marketplaceName !== OFFICIAL_MARKETPLACE_NAME &&
+        !(marketplaceName !== undefined && isOfficialMarketplaceName_3(marketplaceName))
+      );
     };
-    let fe = (Te) => {
-      let Ze = new Map();
-      for (let Ve of Te) {
-        let gn = marketplaceNameOfId(Ve.pluginId);
-        Ze.set(gn, [...(Ze.get(gn) ?? []), displayPluginId(Ve.pluginId)]);
+    let describeByMarketplace = (installs) => {
+      let byMarketplace = new Map();
+      for (let install of installs) {
+        let marketplaceName = marketplaceNameOfId(install.pluginId);
+        byMarketplace.set(marketplaceName, [
+          ...(byMarketplace.get(marketplaceName) ?? []),
+          displayPluginId(install.pluginId),
+        ]);
       }
       return new Intl.ListFormat("en", {
         type: "conjunction",
       }).format(
-        [...Ze].map(
-          ([Ve, gn]) =>
-            `${(Ve !== undefined ? displayMarketplaceName(Ve) : "") || "another marketplace"} (${gn.join(", ")})`,
+        [...byMarketplace].map(
+          ([marketplaceName, pluginNames]) =>
+            `${(marketplaceName !== undefined ? displayMarketplaceName(marketplaceName) : "") || "another marketplace"} (${pluginNames.join(", ")})`,
         ),
       );
     };
-    let ze = marketplaceNameOfId(S);
-    let Se = ze !== undefined && ue(S);
-    let Fe = Se ? [] : V.filter((Te) => !ue(Te.pluginId));
-    let Ye = Se ? [] : V.filter((Te) => ue(Te.pluginId));
-    let sn = V.length > 0 ? fe(V) : "";
-    let an = plural(V.length, "other", "others");
+    let targetMarketplace = marketplaceNameOfId(fullPluginId);
+    let targetIsOther = targetMarketplace !== undefined && isOtherMarketplace(fullPluginId);
+    let sameMarketplaceInstalls = targetIsOther
+      ? []
+      : otherInstalls.filter((install) => !isOtherMarketplace(install.pluginId));
+    let otherMarketplaceInstalls = targetIsOther
+      ? []
+      : otherInstalls.filter((install) => isOtherMarketplace(install.pluginId));
+    let marketplacesText = otherInstalls.length > 0 ? describeByMarketplace(otherInstalls) : "";
+    let othersWord = plural(otherInstalls.length, "other", "others");
     let marketplace = await installedAndAvailableVersions({
-      pluginId: S,
-      entry: Z,
-      marketplaceName: se,
-      marketplaceInstallLocation: Ce,
+      pluginId: fullPluginId,
+      entry: catalogEntry,
+      marketplaceName: foundMarketplace,
+      marketplaceInstallLocation: installLocation,
       scope,
       projectPath: getProjectPathForScope(scope),
       storageV5,
     });
-    let Qe = `${describeUpdateAvailability(S, scope, marketplace)}${Q?.suffix ?? ""}`;
-    let ye = /[.?]$/.test(Qe) ? " " : ". ";
-    let We =
-      sn !== ""
-        ? Se
-          ? `${ye}${displayMarketplaceName(ze ?? "") || "\u201C\u201D"} lists it at the same repository and folder as ${plural(V.length, "a plugin", "plugins")} installed here from ${sn}. If they are the same plugin, it loads ${V.length === 1 ? "twice" : "more than once"}: to keep only one, uninstall the ${an}`
-          : `${Fe.length === 0 ? "" : `${Qe === "" ? " \u2014 also installed from " : `${ye}${displayPluginId(S)} is also installed from `}${fe(Fe)}${x !== null ? `; to keep only this one: ${x}` : ""}`}${Ye.length === 0 ? "" : `${Fe.length === 0 ? ye : ". "}${plural(Ye.length, "A plugin", "Plugins")} installed here from ${fe(Ye)} ${plural(Ye.length, "is", "are")} listed there at the same repository and folder as this one. ${Fe.length === 0 ? `If they are the same plugin, it loads ${V.length === 1 ? "twice" : "more than once"}` : `If ${plural(Ye.length, "that one is", "those are")} the same plugin too, it loads ${V.length + 1} times`}: to keep only one, uninstall the ${an}`}`
+    let updateText = `${describeUpdateAvailability(fullPluginId, scope, marketplace)}${dependencyResult?.suffix ?? ""}`;
+    let separator = /[.?]$/.test(updateText) ? " " : ". ";
+    let duplicateNote =
+      marketplacesText !== ""
+        ? targetIsOther
+          ? `${separator}${displayMarketplaceName(targetMarketplace ?? "") || "\u201C\u201D"} lists it at the same repository and folder as ${plural(otherInstalls.length, "a plugin", "plugins")} installed here from ${marketplacesText}. If they are the same plugin, it loads ${otherInstalls.length === 1 ? "twice" : "more than once"}: to keep only one, uninstall the ${othersWord}`
+          : `${sameMarketplaceInstalls.length === 0 ? "" : `${updateText === "" ? " \u2014 also installed from " : `${separator}${displayPluginId(fullPluginId)} is also installed from `}${describeByMarketplace(sameMarketplaceInstalls)}${replaceCommand !== null ? `; to keep only this one: ${replaceCommand}` : ""}`}${otherMarketplaceInstalls.length === 0 ? "" : `${sameMarketplaceInstalls.length === 0 ? separator : ". "}${plural(otherMarketplaceInstalls.length, "A plugin", "Plugins")} installed here from ${describeByMarketplace(otherMarketplaceInstalls)} ${plural(otherMarketplaceInstalls.length, "is", "are")} listed there at the same repository and folder as this one. ${sameMarketplaceInstalls.length === 0 ? `If they are the same plugin, it loads ${otherInstalls.length === 1 ? "twice" : "more than once"}` : `If ${plural(otherMarketplaceInstalls.length, "that one is", "those are")} the same plugin too, it loads ${otherInstalls.length + 1} times`}: to keep only one, uninstall the ${othersWord}`}`
         : "";
     return {
       success: true,
-      message: `Plugin ${We === "" ? `"${S}"` : displayPluginId(S)} is already installed (scope: ${scope})${R ? " \u2014 marked as manually installed" : ""}${Qe}${We}${nothingSwitchedSuffix(u === true && V.length === 0, `${Qe}${We}`)}`,
-      pluginId: S,
-      pluginName: Z.name,
+      message: `Plugin ${duplicateNote === "" ? `"${fullPluginId}"` : displayPluginId(fullPluginId)} is already installed (scope: ${scope})${clearedAutoFlag ? " \u2014 marked as manually installed" : ""}${updateText}${duplicateNote}${nothingSwitchedSuffix(replaceInstalledCopy === true && otherInstalls.length === 0, `${updateText}${duplicateNote}`)}`,
+      pluginId: fullPluginId,
+      pluginName: catalogEntry.name,
       scope,
       installedVersion: marketplace.installedVersion,
       availableVersion: marketplace.availableVersion,
     };
   }
-  let he;
-  if (a !== undefined) he = a;
+  let entryHelper;
+  if (shownEntryHelper !== undefined) entryHelper = shownEntryHelper;
   else {
-    he = await archiveFetchWarning(S, Z, storageV5);
-    if (he !== null)
+    entryHelper = await archiveFetchWarning(fullPluginId, catalogEntry, storageV5);
+    if (entryHelper !== null)
       throw new EntryHelperError(
-        `${archiveHelperDisclosure(he)}
+        `${archiveHelperDisclosure(entryHelper)}
 This install runs that command; confirm it by running \`claude plugin install\` in a terminal (or with -y/--yes).`,
         "entry_helper_unconfirmed",
       );
   }
-  let installationsOf = await getInstallationsOf(S, storageV5);
-  let Oe = latestInstallationAtScope(installationsOf, scope);
+  let installationsOf = await getInstallationsOf(fullPluginId, storageV5);
+  let existingInstall = latestInstallationAtScope(installationsOf, scope);
   let newCopyWasOn =
     hasInstallationForCurrentProject(installationsOf ?? []) &&
-    locatePluginInstall(S, undefined, groupedEnabledPlugins()).effective === true;
-  let Ge = await installResolvedPlugin({
-    pluginId: S,
-    entry: Z,
+    locatePluginInstall(fullPluginId, undefined, groupedEnabledPlugins()).effective === true;
+  let installOutcome = await installResolvedPlugin({
+    pluginId: fullPluginId,
+    entry: catalogEntry,
     scope,
-    marketplaceInstallLocation: Ce,
+    marketplaceInstallLocation: installLocation,
     trigger: "cli",
     explicit: true,
-    consentedEntryHelper: he,
+    consentedEntryHelper: entryHelper,
     commandSourceConsent:
-      i !== undefined
+      shownSourceCommand !== undefined
         ? {
             kind: "shown",
-            command: i,
-            pluginId: S,
+            command: shownSourceCommand,
+            pluginId: fullPluginId,
           }
-        : recordedSourceCommand(S, Z.source, installationsOf),
-    replaceInstalledCopy: u,
-    replaceOnlyPluginIds: h,
-    switchTargetMarkedInItsOwnWalk: J,
-    switchWalkNotFresh: D,
+        : recordedSourceCommand(fullPluginId, catalogEntry.source, installationsOf),
+    replaceInstalledCopy,
+    replaceOnlyPluginIds,
+    switchTargetMarkedInItsOwnWalk: reviewerMarked,
+    switchWalkNotFresh: switchDetail,
     storageV5,
-    gitHubHttpsFallback: y,
+    gitHubHttpsFallback,
   }).catch(async (error) => {
-    let q =
-      L !== undefined &&
-      typeof L.entry.source === "string" &&
+    let fetchFailureClass =
+      preferredOver !== undefined &&
+      typeof preferredOver.entry.source === "string" &&
       !installationsOf?.length &&
-      !(await isPluginPossiblyInstalled(S, storageV5))
+      !(await isPluginPossiblyInstalled(fullPluginId, storageV5))
         ? classifyOfficialFetchError(error)
         : undefined;
-    if (q !== undefined && L !== undefined)
+    if (fetchFailureClass !== undefined && preferredOver !== undefined)
       return {
         fetchFailed: error,
-        why: q,
-        official: L,
+        why: fetchFailureClass,
+        official: preferredOver,
       };
     throw error;
   });
-  if ("fetchFailed" in Ge) {
+  if ("fetchFailed" in installOutcome) {
     {
-      let { fetchFailed, why, official } = Ge;
-      let V = `${official.entry.name}@${official.marketplace}`;
-      let He = await whyNotInstallableInPlace(official, storageV5);
-      if (He !== undefined) {
+      let { fetchFailed, why, official } = installOutcome;
+      let officialId = `${official.entry.name}@${official.marketplace}`;
+      let notInstallable = await whyNotInstallableInPlace(official, storageV5);
+      if (notInstallable !== undefined) {
         logForDebugging(
-          `Bare-name install of "${quotedPrintable(pluginName)}": the ${OFFICIAL_MARKETPLACE_DISPLAY}'s copy could not be fetched, and ${quotedPrintable(V)} was not installed in its place: ${He}`,
+          `Bare-name install of "${quotedPrintable(pluginName)}": the ${OFFICIAL_MARKETPLACE_DISPLAY}'s copy could not be fetched, and ${quotedPrintable(officialId)} was not installed in its place: ${notInstallable}`,
         );
         throw fetchFailed;
       }
-      let R;
-      let Q;
+      let dependencies;
+      let dependencyReadError;
       try {
         let allPluginsCacheOnly = await loadAllPluginsCacheOnly(storageV5);
-        R = collectDependencyVersionRanges(
+        dependencies = collectDependencyVersionRanges(
           [...allPluginsCacheOnly.enabled, ...allPluginsCacheOnly.disabled],
           new Set(),
         );
       } catch (error) {
         logError(error);
-        Q = errorMessage(error);
+        dependencyReadError = errorMessage(error);
       }
-      let x = R?.ranges.get(V) ?? [];
-      let ue = x.length > 0 ? intersectVersionConstraints(x) : undefined;
-      if (Q !== undefined || (ue !== undefined && (!ue.ok || ue.range !== "*"))) {
-        let Fe = uniq(R?.requirers.get(V) ?? []);
+      let ranges = dependencies?.ranges.get(officialId) ?? [];
+      let intersected = ranges.length > 0 ? intersectVersionConstraints(ranges) : undefined;
+      if (
+        dependencyReadError !== undefined ||
+        (intersected !== undefined && (!intersected.ok || intersected.range !== "*"))
+      ) {
+        let requirers = uniq(dependencies?.requirers.get(officialId) ?? []);
         logForDebugging(
-          `Bare-name install of "${quotedPrintable(pluginName)}": the ${OFFICIAL_MARKETPLACE_DISPLAY}'s copy could not be fetched, and ${quotedPrintable(V)} was not installed in its place: ${Q !== undefined ? `could not read the installed plugins to check (${quotedPrintable(Q, 300)})` : `${quotedPrintable(Fe.join(", "))} ${Fe.length === 1 ? "requires" : "require"} version ${quotedPrintable(x.join(", "))} of it, which could be downloaded from the marketplace's git host`}`,
+          `Bare-name install of "${quotedPrintable(pluginName)}": the ${OFFICIAL_MARKETPLACE_DISPLAY}'s copy could not be fetched, and ${quotedPrintable(officialId)} was not installed in its place: ${dependencyReadError !== undefined ? `could not read the installed plugins to check (${quotedPrintable(dependencyReadError, 300)})` : `${quotedPrintable(requirers.join(", "))} ${requirers.length === 1 ? "requires" : "require"} version ${quotedPrintable(ranges.join(", "))} of it, which could be downloaded from the marketplace's git host`}`,
         );
         throw fetchFailed;
       }
       logForDebugging(
         `Bare-name install of "${quotedPrintable(pluginName)}": the ${OFFICIAL_MARKETPLACE_DISPLAY}'s copy could not be fetched (${quotedPrintable(errorMessage(fetchFailed), 300)}); installing ${quotedPrintable(official.marketplace)}'s copy instead`,
       );
-      let fe = latestInstallationAtScope(await getInstallationsOf(V, storageV5), scope);
-      let ze;
-      let Se = await installPluginOp(
-        V,
+      let existingOfficialInstall = latestInstallationAtScope(
+        await getInstallationsOf(officialId, storageV5),
+        scope,
+      );
+      let fallbackError;
+      let fallbackResult = await installPluginOp(
+        officialId,
         scope,
         {
-          surface: r,
+          surface,
           withoutRefresh: true,
-          gitHubHttpsFallback: y,
+          gitHubHttpsFallback,
         },
         storageV5,
       ).catch((error) => {
-        ze = error;
+        fallbackError = error;
         logForDebugging(
           `Bare-name install of "${quotedPrintable(pluginName)}": ${quotedPrintable(official.marketplace)}'s copy did not install either: ${quotedPrintable(errorMessage(error), 300)}`,
         );
         return;
       });
-      if (!Se?.success && !fe && latestInstallationAtScope(await getInstallationsOf(V, storageV5), scope))
+      if (
+        !fallbackResult?.success &&
+        !existingOfficialInstall &&
+        latestInstallationAtScope(await getInstallationsOf(officialId, storageV5), scope)
+      )
         throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
           describeInstallFetchFailure(
             why,
-            V,
+            officialId,
             official.marketplace,
             scope,
-            Se === undefined ? errorMessage(ze) : Se.message,
+            fallbackResult === undefined ? errorMessage(fallbackError) : fallbackResult.message,
           ),
           "bare-name install: the official copy it fell back to was left installed after its install failed",
         );
-      if (!Se?.success || Se.pluginId !== V || Se.aliasedId || Se.nothingWritten) {
-        if (Se !== undefined)
+      if (
+        !fallbackResult?.success ||
+        fallbackResult.pluginId !== officialId ||
+        fallbackResult.aliasedId ||
+        fallbackResult.nothingWritten
+      ) {
+        if (fallbackResult !== undefined)
           logForDebugging(
-            `Bare-name install of "${quotedPrintable(pluginName)}": ${quotedPrintable(official.marketplace)}'s copy was not installed: ${quotedPrintable(Se.message, 300)}`,
+            `Bare-name install of "${quotedPrintable(pluginName)}": ${quotedPrintable(official.marketplace)}'s copy was not installed: ${quotedPrintable(fallbackResult.message, 300)}`,
           );
         throw fetchFailed;
       }
@@ -1767,15 +1946,15 @@ This install runs that command; confirm it by running \`claude plugin install\` 
         why === "git-missing" ? "directory_copy_git_missing" : "directory_copy_fetch_failed",
       );
       return {
-        ...Se,
-        message: `${Se.message}${formatOfficialFallbackNote(why, official.marketplace)}`,
+        ...fallbackResult,
+        message: `${fallbackResult.message}${formatOfficialFallbackNote(why, official.marketplace)}`,
       };
     }
-    throw Ge.fetchFailed;
+    throw installOutcome.fetchFailed;
   }
-  let A = Ge;
-  if (!A.ok)
-    switch (A.reason) {
+  let outcome = installOutcome;
+  if (!outcome.ok)
+    switch (outcome.reason) {
       case "installed-from-other-marketplace":
       case "more-installed-than-shown":
       case "fewer-installed-than-shown":
@@ -1783,12 +1962,12 @@ This install runs that command; confirm it by running \`claude plugin install\` 
       case "directory-pin-unsatisfied":
       case "directory-binding-unreadable":
       case "directory-identity-changed":
-        switch (A.reason) {
+        switch (outcome.reason) {
           case "switch-needs-fresh-listing":
             logMarketplaceSwitch({
-              fromPluginId: A.installedCopies[0].pluginId,
-              toPluginId: S,
-              surface: r,
+              fromPluginId: outcome.installedCopies[0].pluginId,
+              toPluginId: fullPluginId,
+              surface,
               managedNames: policyEnabledPluginNameSet(),
               result: {
                 outcome: "bad",
@@ -1797,118 +1976,150 @@ This install runs that command; confirm it by running \`claude plugin install\` 
             });
             return {
               success: false,
-              message: `Plugin "${quotedPrintable(A.pluginName)}" was not switched. ${formatSwitchNeedsFreshReadMessage(A.detail)}`,
+              message: `Plugin "${quotedPrintable(outcome.pluginName)}" was not switched. ${formatSwitchNeedsFreshReadMessage(outcome.detail)}`,
               failureCode: "replace_needs_fresh_listing",
             };
           case "installed-from-other-marketplace":
-            if (u)
+            if (replaceInstalledCopy)
               logMarketplaceSwitch({
                 fromPluginId: (
-                  A.installedCopies.find((installedCopy) => !installedCopy.replaceable) ??
-                  A.installedCopies[0]
+                  outcome.installedCopies.find((installedCopy) => !installedCopy.replaceable) ??
+                  outcome.installedCopies[0]
                 ).pluginId,
-                toPluginId: S,
-                surface: r,
+                toPluginId: fullPluginId,
+                surface,
                 managedNames: policyEnabledPluginNameSet(),
                 result: {
                   outcome: "bad",
                   code: "installed_from_other_marketplace",
                 },
               });
-            else if (r === "cli") {
-              let K = await installSelectedPlugins(S, storageV5);
-              let q = K?.installed.scopes.some(isInstallableScope) ? K : undefined;
-              if (q) {
-                let index = q.repositoryKey.indexOf("#");
-                let V = index < 0 ? q.repositoryKey : q.repositoryKey.slice(0, index);
-                let He = index < 0 ? "" : q.repositoryKey.slice(index + 1);
-                let R = V.startsWith(`${GITHUB_HOST}/`) ? V.slice(GITHUB_HOST.length + 1) : V;
-                let Q = quotedPrintable(A.pluginName, 120);
-                let included = q.installed.scopes.includes(scope);
-                let ue = included ? "" : ` at ${q.installed.scopes.join(" and ")} scope`;
-                let fe = included ? scope : q.installed.scopes.find(isInstallableScope);
-                if (fe !== undefined && (included || scope === "user")) {
-                  let ze = marketplaceDisplayName(
-                    parsePluginIdentifier(q.installed.pluginId).marketplace ?? "",
+            else if (surface === "cli") {
+              let selected = await installSelectedPlugins(fullPluginId, storageV5);
+              let selectedInstall = selected?.installed.scopes.some(isInstallableScope)
+                ? selected
+                : undefined;
+              if (selectedInstall) {
+                let index = selectedInstall.repositoryKey.indexOf("#");
+                let repository =
+                  index < 0 ? selectedInstall.repositoryKey : selectedInstall.repositoryKey.slice(0, index);
+                let subPath = index < 0 ? "" : selectedInstall.repositoryKey.slice(index + 1);
+                let repoSlug = repository.startsWith(`${GITHUB_HOST}/`)
+                  ? repository.slice(GITHUB_HOST.length + 1)
+                  : repository;
+                let shownName = quotedPrintable(outcome.pluginName, 120);
+                let included = selectedInstall.installed.scopes.includes(scope);
+                let scopeSuffix = included
+                  ? ""
+                  : ` at ${selectedInstall.installed.scopes.join(" and ")} scope`;
+                let ownScope = included ? scope : selectedInstall.installed.scopes.find(isInstallableScope);
+                if (ownScope !== undefined && (included || scope === "user")) {
+                  let installedMarketplace = marketplaceDisplayName(
+                    parsePluginIdentifier(selectedInstall.installed.pluginId).marketplace ?? "",
                   );
-                  let trimmed = printableName(He, 200).trim();
-                  let Fe = printableLabel(
-                    printableName(`${R}${trimmed === "" ? "" : ` \xB7 ${trimmed}`}`, 200),
+                  let trimmed = printableName(subPath, 200).trim();
+                  let repoLabel = printableLabel(
+                    printableName(`${repoSlug}${trimmed === "" ? "" : ` \xB7 ${trimmed}`}`, 200),
                   );
-                  let Ye = Fe === "" ? "" : ` (the same plugin: ${Fe})`;
-                  let sn = scope === "user" ? "--replace" : `--replace --scope ${scope}`;
-                  let an = claudeCommand("plugin install", S, sn);
-                  let Ue = marketplaceDisplayName(se);
-                  let Qe = findOtherMarketplaceInstallBlocker(S, [q.installed], undefined) === undefined;
-                  let ye = !Qe
+                  let samePluginNote = repoLabel === "" ? "" : ` (the same plugin: ${repoLabel})`;
+                  let replaceFlags = scope === "user" ? "--replace" : `--replace --scope ${scope}`;
+                  let ownInstallCommand = claudeCommand("plugin install", fullPluginId, replaceFlags);
+                  let targetMarketplaceDisplay = marketplaceDisplayName(foundMarketplace);
+                  let canSwitch =
+                    findOtherMarketplaceInstallBlocker(
+                      fullPluginId,
+                      [selectedInstall.installed],
+                      undefined,
+                    ) === undefined;
+                  let switchHint = !canSwitch
                     ? ""
-                    : an === null
-                      ? ` To switch it to ${Ue}, open it in /plugin \u2192 Installed and choose "Switch to ${Ue}"`
-                      : ` To switch it to ${Ue}: ${an}`;
-                  let We = !Qe ? "" : ` To switch it to ${Ue}, install ${displayPluginId(S)} with ${sn}.`;
-                  let Te = included ? [fe] : q.installed.scopes.filter(isInstallableScope);
-                  let Ze;
-                  for (let on of Te)
-                    if (await hasCachedInstallationAtScope(q.installed.pluginId, on, storageV5)) {
-                      Ze = on;
+                    : ownInstallCommand === null
+                      ? ` To switch it to ${targetMarketplaceDisplay}, open it in /plugin \u2192 Installed and choose "Switch to ${targetMarketplaceDisplay}"`
+                      : ` To switch it to ${targetMarketplaceDisplay}: ${ownInstallCommand}`;
+                  let switchHintShort = !canSwitch
+                    ? ""
+                    : ` To switch it to ${targetMarketplaceDisplay}, install ${displayPluginId(fullPluginId)} with ${replaceFlags}.`;
+                  let scopesToCheck = included
+                    ? [ownScope]
+                    : selectedInstall.installed.scopes.filter(isInstallableScope);
+                  let cachedScope;
+                  for (let scope of scopesToCheck)
+                    if (
+                      await hasCachedInstallationAtScope(selectedInstall.installed.pluginId, scope, storageV5)
+                    ) {
+                      cachedScope = scope;
                       break;
                     }
-                  if (Ze === undefined) {
-                    let on = claudeCommand(
+                  if (cachedScope === undefined) {
+                    let restoreCommand = claudeCommand(
                       "plugin install",
-                      q.installed.pluginId,
-                      fe === "user" ? undefined : `--scope ${fe}`,
+                      selectedInstall.installed.pluginId,
+                      ownScope === "user" ? undefined : `--scope ${ownScope}`,
                     );
                     return {
                       success: false,
-                      message: `"${Q}" is installed from ${ze}${ue}${Ye}, but its files are missing from the plugin cache. Nothing was changed. To restore them${on === null ? ", install it again from /plugin" : `: ${on}`}`,
+                      message: `"${shownName}" is installed from ${installedMarketplace}${scopeSuffix}${samePluginNote}, but its files are missing from the plugin cache. Nothing was changed. To restore them${restoreCommand === null ? ", install it again from /plugin" : `: ${restoreCommand}`}`,
                       failureCode: "installed_from_other_marketplace",
-                      pluginId: q.installed.pluginId,
+                      pluginId: selectedInstall.installed.pluginId,
                       aliasedId: true,
                     };
                   }
                   if (!included) {
-                    let on = claudeCommand("plugin enable", q.installed.pluginId, "--scope local");
-                    let Be = locatePluginInstall(q.installed.pluginId, undefined, groupedEnabledPlugins());
-                    let wn =
-                      Be.effective === true
+                    let localEnableCommand = claudeCommand(
+                      "plugin enable",
+                      selectedInstall.installed.pluginId,
+                      "--scope local",
+                    );
+                    let installLocation = locatePluginInstall(
+                      selectedInstall.installed.pluginId,
+                      undefined,
+                      groupedEnabledPlugins(),
+                    );
+                    let disabledNote =
+                      installLocation.effective === true
                         ? ""
-                        : Be.override !== undefined
-                          ? ` The plugin is turned off by ${Be.override.source === "policySettings" ? "your organization's managed settings" : "this session's --settings flag"}, and this command changed nothing.`
-                          : ` The plugin is turned off in this project, and this command did not turn it on. To turn it on${on === null ? ", open it in /plugin" : ` for yourself in this project: ${on}`}`;
+                        : installLocation.override !== undefined
+                          ? ` The plugin is turned off by ${installLocation.override.source === "policySettings" ? "your organization's managed settings" : "this session's --settings flag"}, and this command changed nothing.`
+                          : ` The plugin is turned off in this project, and this command did not turn it on. To turn it on${localEnableCommand === null ? ", open it in /plugin" : ` for yourself in this project: ${localEnableCommand}`}`;
                     return {
                       success: true,
-                      message: `"${Q}" is already installed from ${ze}${ue}${Ye}. Nothing to install.${wn === "" ? ye : We}${wn}`,
-                      pluginId: q.installed.pluginId,
-                      pluginName: A.pluginName,
-                      scope: Ze,
+                      message: `"${shownName}" is already installed from ${installedMarketplace}${scopeSuffix}${samePluginNote}. Nothing to install.${disabledNote === "" ? switchHint : switchHintShort}${disabledNote}`,
+                      pluginId: selectedInstall.installed.pluginId,
+                      pluginName: outcome.pluginName,
+                      scope: cachedScope,
                       aliasedId: true,
                       nothingWritten: true,
                     };
                   }
-                  let Ve = await setPluginEnabledOp(q.installed.pluginId, true, fe, undefined, storageV5);
-                  if (!Ve.success && !Ve.alreadyInGoalState)
+                  let enableResult = await setPluginEnabledOp(
+                    selectedInstall.installed.pluginId,
+                    true,
+                    ownScope,
+                    undefined,
+                    storageV5,
+                  );
+                  if (!enableResult.success && !enableResult.alreadyInGoalState)
                     return {
                       success: false,
-                      message: Ve.message,
-                      failureCode: Ve.failureCode,
-                      pluginId: q.installed.pluginId,
+                      message: enableResult.message,
+                      failureCode: enableResult.failureCode,
+                      pluginId: selectedInstall.installed.pluginId,
                       aliasedId: true,
                     };
-                  let gn = await clearAutoInstalledFlag(
-                    q.installed.pluginId,
-                    fe,
-                    getProjectPathForScope(fe),
+                  let clearedAutoFlag = await clearAutoInstalledFlag(
+                    selectedInstall.installed.pluginId,
+                    ownScope,
+                    getProjectPathForScope(ownScope),
                     storageV5,
                   );
                   return {
                     success: true,
-                    message: `"${Q}" is already installed from ${ze}${Ye}. ${Ve.success ? "It was disabled, so it is enabled again." : "Nothing to install."}${gn ? " It is now marked as manually installed." : ""}${ye}`,
-                    pluginId: q.installed.pluginId,
-                    pluginName: A.pluginName,
-                    scope: (Ve.success ? Ve.scope : undefined) ?? fe,
+                    message: `"${shownName}" is already installed from ${installedMarketplace}${samePluginNote}. ${enableResult.success ? "It was disabled, so it is enabled again." : "Nothing to install."}${clearedAutoFlag ? " It is now marked as manually installed." : ""}${switchHint}`,
+                    pluginId: selectedInstall.installed.pluginId,
+                    pluginName: outcome.pluginName,
+                    scope: (enableResult.success ? enableResult.scope : undefined) ?? ownScope,
                     aliasedId: true,
-                    ...(Ve.success && {
+                    ...(enableResult.success && {
                       reenabled: true,
                     }),
                   };
@@ -1918,65 +2129,65 @@ This install runs that command; confirm it by running \`claude plugin install\` 
             return {
               success: false,
               message: installFromOtherMarketplace(
-                S,
-                A.pluginName,
-                A.installedCopies,
-                r === "cli" ? "cli" : "ui",
+                fullPluginId,
+                outcome.pluginName,
+                outcome.installedCopies,
+                surface === "cli" ? "cli" : "ui",
                 scope,
-                J,
+                reviewerMarked,
               ),
               failureCode: "installed_from_other_marketplace",
             };
           case "more-installed-than-shown":
             return {
               success: false,
-              message: formatMoreInstallsThanShownMessage(A.pluginName),
+              message: formatMoreInstallsThanShownMessage(outcome.pluginName),
               failureCode: "installed_from_other_marketplace",
             };
           case "fewer-installed-than-shown":
             return {
               success: false,
-              message: formatSwitchTargetChangedMessage(A.pluginName),
+              message: formatSwitchTargetChangedMessage(outcome.pluginName),
               failureCode: "installed_from_other_marketplace",
             };
           case "directory-pin-unsatisfied":
             return {
               success: false,
-              message: A.message,
+              message: outcome.message,
               failureCode: "dependency_pinned_version_unsatisfied",
             };
           case "directory-binding-unreadable":
             return {
               success: false,
-              message: A.message,
+              message: outcome.message,
               failureCode: "directory_binding_unreadable",
             };
           case "directory-identity-changed":
             return {
               success: false,
-              message: A.message,
+              message: outcome.message,
               failureCode: "directory_identity_changed",
             };
         }
         return {
           success: false,
-          message: `Failed to install plugin "${S}"`,
+          message: `Failed to install plugin "${fullPluginId}"`,
           failureCode: "dependency_resolution_failed",
         };
       case "local-source-no-location":
         return {
           success: false,
-          message: `Cannot install local plugin "${A.pluginName}" without marketplace install location`,
+          message: `Cannot install local plugin "${outcome.pluginName}" without marketplace install location`,
           failureCode: "local_source_no_location",
         };
       case "plugin-folder-held":
         return {
           success: false,
           message: findPluginNameCollision({
-            ...A,
-            refused: A.pluginId,
-            askedFor: S,
-            surface: r === "cli" ? "cli" : "ui",
+            ...outcome,
+            refused: outcome.pluginId,
+            askedFor: fullPluginId,
+            surface: surface === "cli" ? "cli" : "ui",
           }),
           failureCode: "plugin_folder_held",
         };
@@ -1984,12 +2195,12 @@ This install runs that command; confirm it by running \`claude plugin install\` 
         return {
           success: false,
           message: formatInvalidPluginIdMessage(
-            A.pluginId,
-            S,
-            A.pluginId === S
+            outcome.pluginId,
+            fullPluginId,
+            outcome.pluginId === fullPluginId
               ? {
-                  pluginName: Z.name,
-                  marketplaceName: se,
+                  pluginName: catalogEntry.name,
+                  marketplaceName: foundMarketplace,
                 }
               : undefined,
           ),
@@ -1998,152 +2209,163 @@ This install runs that command; confirm it by running \`claude plugin install\` 
       case "installed-list-held":
         return {
           success: false,
-          message: `Plugin "${quotedPrintable(S)}" was not installed: ${readInstalledPluginsFile(A.held)}`,
+          message: `Plugin "${quotedPrintable(fullPluginId)}" was not installed: ${readInstalledPluginsFile(outcome.held)}`,
           failureCode: "install_records_unreadable",
         };
       case "settings-write-failed":
         return {
           success: false,
-          message: `Failed to update settings: ${A.message}`,
+          message: `Failed to update settings: ${outcome.message}`,
           failureCode: "settings_write_failed",
         };
       case "resolution-failed":
         return {
           success: false,
-          message: formatResolutionError(A.resolution),
+          message: formatResolutionError(outcome.resolution),
           failureCode: "dependency_resolution_failed",
         };
       case "blocked-by-policy":
         return {
           success: false,
-          ...describePolicyBlock(A),
+          ...describePolicyBlock(outcome),
         };
       case "dependency-blocked-by-policy":
         return {
           success: false,
-          message: `Plugin "${A.pluginName}" depends on "${A.blockedDependency}", which is blocked by your organization's policy`,
+          message: `Plugin "${outcome.pluginName}" depends on "${outcome.blockedDependency}", which is blocked by your organization's policy`,
           failureCode: "dependency_policy_blocked",
         };
       case "marketplace-blocked-by-policy":
         return {
           success: false,
-          ...describePolicyBlock(A),
+          ...describePolicyBlock(outcome),
         };
       case "dependency-marketplace-blocked-by-policy":
         return {
           success: false,
-          message: `Plugin "${A.pluginName}" depends on "${A.blockedDependency}" from marketplace "${A.marketplaceName}", which is blocked by your organization's policy`,
+          message: `Plugin "${outcome.pluginName}" depends on "${outcome.blockedDependency}" from marketplace "${outcome.marketplaceName}", which is blocked by your organization's policy`,
           failureCode: "dependency_policy_blocked",
         };
       case "plugin-directory-unavailable":
-        switch (A.reason) {
+        switch (outcome.reason) {
           case "plugin-directory-unavailable":
             return {
               success: false,
-              message: formatDirectoryUnavailableMessage(A.pluginName, A.unavailableDependency),
+              message: formatDirectoryUnavailableMessage(outcome.pluginName, outcome.unavailableDependency),
               failureCode: "plugin_directory_unavailable",
             };
         }
         return {
           success: false,
-          message: `Failed to install plugin "${quotedPrintable(S)}"`,
+          message: `Failed to install plugin "${quotedPrintable(fullPluginId)}"`,
           failureCode: "dependency_resolution_failed",
         };
       case "range-conflict": {
-        let K = A.dep === S ? "Plugin" : "Dependency";
+        let subjectWord = outcome.dep === fullPluginId ? "Plugin" : "Dependency";
         return {
           success: false,
           failureCode: "dependency_version_conflict",
           message: describeConstraintConflict(
-            K,
-            A.dep,
-            A.ranges,
-            A.why,
-            A.installed,
-            A.suggestDependencyUpdate,
+            subjectWord,
+            outcome.dep,
+            outcome.ranges,
+            outcome.why,
+            outcome.installed,
+            outcome.suggestDependencyUpdate,
           ),
         };
       }
       case "no-matching-tag": {
-        let K = A.dep === S ? "Plugin" : "Dependency";
+        let subjectWord = outcome.dep === fullPluginId ? "Plugin" : "Dependency";
         return {
           success: false,
-          message: noMatchingTagMessage(K, A.dep, A.range),
+          message: noMatchingTagMessage(subjectWord, outcome.dep, outcome.range),
           failureCode: "dependency_version_conflict",
         };
       }
     }
-  let Ke = claudeCommand("plugin enable", S);
-  let De = Ke ? ` \u2014 enable it with: ${Ke}` : " \u2014 enable it in /plugin";
-  let Ie = A.installedDisabled.includes(S)
-    ? A.installedDisabledByDefault.includes(S)
-      ? `. This plugin is disabled by default${De}`
-      : `. This plugin is disabled in your settings${De}`
+  let enableCommand = claudeCommand("plugin enable", fullPluginId);
+  let enableHint = enableCommand
+    ? ` \u2014 enable it with: ${enableCommand}`
+    : " \u2014 enable it in /plugin";
+  let disabledNote = outcome.installedDisabled.includes(fullPluginId)
+    ? outcome.installedDisabledByDefault.includes(fullPluginId)
+      ? `. This plugin is disabled by default${enableHint}`
+      : `. This plugin is disabled in your settings${enableHint}`
     : "";
-  let Le = !we
+  let staleWarning = !refreshError
     ? ""
-    : pe
+    : isDirectorySource
       ? `. Warning: ${directoryUnreachableMessage()}`
-      : `. Warning: ${we} \u2014 installed from the cached catalog, so the version may be stale`;
-  let un = describeOtherMarketplaceInstall(S, Z.name, A.copiesInOtherProjects);
-  let qe = "";
-  let fn;
-  if (A.replacedCopies) {
-    let K = await finishReplaceSwitch(
-      S,
+      : `. Warning: ${refreshError} \u2014 installed from the cached catalog, so the version may be stale`;
+  let otherInstallsNote = describeOtherMarketplaceInstall(
+    fullPluginId,
+    catalogEntry.name,
+    outcome.copiesInOtherProjects,
+  );
+  let switchNote = "";
+  let switched;
+  if (outcome.replacedCopies) {
+    let switchResult = await finishReplaceSwitch(
+      fullPluginId,
       scope,
-      A.replacedCopies,
+      outcome.replacedCopies,
       {
-        newCopyWasJustInstalled: !Oe,
+        newCopyWasJustInstalled: !existingInstall,
         newCopyWasOn,
-        surface: r,
-        carrySettingsFrom: p,
+        surface,
+        carrySettingsFrom,
       },
       storageV5,
     );
-    if (!K.ok)
+    if (!switchResult.ok)
       return {
         success: false,
-        message: K.message,
+        message: switchResult.message,
         failureCode: "replace_failed",
       };
-    qe = K.note;
-    fn = {
-      from: K.from,
-      replaced: K.replaced,
-      stayedDisabled: K.stayedDisabled,
-      keptOwnSettings: K.keptOwnSettings,
-      settingsRemovedFrom: K.settingsRemovedFrom,
-      ...(K.settingsLeftInPlace && {
-        settingsLeftInPlace: K.settingsLeftInPlace,
+    switchNote = switchResult.note;
+    switched = {
+      from: switchResult.from,
+      replaced: switchResult.replaced,
+      stayedDisabled: switchResult.stayedDisabled,
+      keptOwnSettings: switchResult.keptOwnSettings,
+      settingsRemovedFrom: switchResult.settingsRemovedFrom,
+      ...(switchResult.settingsLeftInPlace && {
+        settingsLeftInPlace: switchResult.settingsLeftInPlace,
       }),
-      savedDataRemovedFrom: K.savedDataRemovedFrom,
-      ...(K.keptDataDir && {
-        keptDataDir: K.keptDataDir,
+      savedDataRemovedFrom: switchResult.savedDataRemovedFrom,
+      ...(switchResult.keptDataDir && {
+        keptDataDir: switchResult.keptDataDir,
       }),
-      ...(K.oldCopyStillRecordedAt.length > 0 && {
-        oldCopyStillRecordedAt: K.oldCopyStillRecordedAt,
+      ...(switchResult.oldCopyStillRecordedAt.length > 0 && {
+        oldCopyStillRecordedAt: switchResult.oldCopyStillRecordedAt,
       }),
-      ...((K.saysMore || A.depNote !== "" || Ie !== "" || Le !== "" || un !== "" || P !== "") && {
+      ...((switchResult.saysMore ||
+        outcome.depNote !== "" ||
+        disabledNote !== "" ||
+        staleWarning !== "" ||
+        otherInstallsNote !== "" ||
+        officialNote !== "") && {
         messageSaysMore: true,
       }),
     };
   }
-  let pluginId_2 = `Successfully installed plugin: ${qe !== "" || un !== "" ? displayPluginId(S) : S} (scope: ${scope})${A.depNote}${Ie}${Le}${qe}${un === "" ? "" : `. ${un}`}${P}`;
+  let pluginId_2 = `Successfully installed plugin: ${switchNote !== "" || otherInstallsNote !== "" ? displayPluginId(fullPluginId) : fullPluginId} (scope: ${scope})${outcome.depNote}${disabledNote}${staleWarning}${switchNote}${otherInstallsNote === "" ? "" : `. ${otherInstallsNote}`}${officialNote}`;
   return {
     success: true,
-    message: `${pluginId_2}${nothingSwitchedSuffix(u === true && A.replacedCopies === undefined, pluginId_2)}`,
-    pluginId: S,
-    pluginName: Z.name,
+    message: `${pluginId_2}${nothingSwitchedSuffix(replaceInstalledCopy === true && outcome.replacedCopies === undefined, pluginId_2)}`,
+    pluginId: fullPluginId,
+    pluginName: catalogEntry.name,
     scope,
-    ...(fn && {
-      switched: fn,
+    ...(switched && {
+      switched,
     }),
   };
 }
 //@ chunk-pp50kewz.js:36288-36447 layout
-function nothingSwitchedSuffix(e, pluginId) {
-  return e
+function nothingSwitchedSuffix(isSwitchContext, pluginId) {
+  return isSwitchContext
     ? `${/[.?]$/.test(pluginId) ? " " : ". "}Nothing was switched: no installed copy of this plugin from another marketplace matched this listing`
     : "";
 }
@@ -2159,24 +2381,26 @@ function displayFolderName(file) {
   return printableLabel(file) || "a folder with no visible characters in its name";
 }
 //@ chunk-pp50kewz.js:36598-36663 layout
-function describeFolder(e) {
-  let n = printableLabel(e);
-  return n === "" ? displayFolderName(e) : `the folder ${n}`;
+function describeFolder(folder) {
+  let label = printableLabel(folder);
+  return label === "" ? displayFolderName(folder) : `the folder ${label}`;
 }
 //@ chunk-pp50kewz.js:36663-36712 layout
-function displayMarketplaceName(e) {
-  return e === OFFICIAL_MARKETPLACE_NAME ? marketplaceDisplayName(e) : printableLabel(printableName(e, 64));
+function displayMarketplaceName(marketplaceName) {
+  return marketplaceName === OFFICIAL_MARKETPLACE_NAME
+    ? marketplaceDisplayName(marketplaceName)
+    : printableLabel(printableName(marketplaceName, 64));
 }
 //@ chunk-pp50kewz.js:36712-36987 layout
-function findOtherPluginSharingDataDir(pluginId, n, i = new Set([pluginId])) {
+function findOtherPluginSharingDataDir(pluginId, installedData, excluded = new Set([pluginId])) {
   {
-    if (hasFailedInstalledPluginsRead(n))
+    if (hasFailedInstalledPluginsRead(installedData))
       return {
         kind: "records-unreadable",
       };
     let lower = pluginDataDirPath(pluginId).toLowerCase();
-    let found = Object.keys(n.plugins).find(
-      (key) => key !== pluginId && !i.has(key) && pluginDataDirPath(key).toLowerCase() === lower,
+    let found = Object.keys(installedData.plugins).find(
+      (key) => key !== pluginId && !excluded.has(key) && pluginDataDirPath(key).toLowerCase() === lower,
     );
     return found === undefined
       ? {
@@ -2195,19 +2419,19 @@ function findOtherPluginSharingDataDir(pluginId, n, i = new Set([pluginId])) {
 /**
  * 卸载时插件数据目录被保留的说明（另一插件共用、或安装列表读不到无法判断）。
  */
-function describeKeptDataDir(e, n) {
-  return `The data directory of ${displayPluginId(e.pluginId)} was kept: ${e.reason === "another-plugin-uses-it" ? `${e.usedBy === undefined ? "the list of installed plugins could not be read, so another installed plugin may use it" : `${displayPluginId(e.usedBy)} is installed and uses it`}${e.copied ? `; its contents were also copied to ${displayPluginId(n)}` : ""}` : e.reason === "target-had-own" ? `${displayPluginId(n)} already had its own` : "it could not be copied"}`;
+function describeKeptDataDir(keptData, targetPluginId) {
+  return `The data directory of ${displayPluginId(keptData.pluginId)} was kept: ${keptData.reason === "another-plugin-uses-it" ? `${keptData.usedBy === undefined ? "the list of installed plugins could not be read, so another installed plugin may use it" : `${displayPluginId(keptData.usedBy)} is installed and uses it`}${keptData.copied ? `; its contents were also copied to ${displayPluginId(targetPluginId)}` : ""}` : keptData.reason === "target-had-own" ? `${displayPluginId(targetPluginId)} already had its own` : "it could not be copied"}`;
 }
 //@ chunk-pp50kewz.js:37402-37589 layout
-function getEnabledValueAtScope(scope, n, i) {
+function getEnabledValueAtScope(scope, pluginId, installedIds) {
   let enabledPlugins = getSettingsForSourceForUpkeep(scopeToSettingSource(scope))?.enabledPlugins ?? {};
-  let pluginName = findPluginName(Object.keys(enabledPlugins), n);
-  if (pluginName === undefined || pluginName === n) return enabledPlugins[n];
-  return i !== "unknown" &&
+  let pluginName = findPluginName(Object.keys(enabledPlugins), pluginId);
+  if (pluginName === undefined || pluginName === pluginId) return enabledPlugins[pluginId];
+  return installedIds !== "unknown" &&
     enabledPluginKeys(
       enabledPlugins,
-      n,
-      i.filter((u) => u !== n),
+      pluginId,
+      installedIds.filter((key) => key !== pluginId),
     ).includes(pluginName)
     ? enabledPlugins[pluginName]
     : undefined;
@@ -2222,155 +2446,181 @@ function dataDirKey(pluginId) {
  */
 function describeLeftLocalRecords({ shownId, shownNewId, folders, because }) {
   {
-    let o = new Intl.ListFormat("en", {
+    let listFormat = new Intl.ListFormat("en", {
       type: "conjunction",
     });
-    let u = (M, P) => o.format(M.length > 2 ? [...M.slice(0, 2), `${M.length - 2} ${P}`] : M);
-    let [h] = folders;
-    let p = folders.length !== 1 || h === undefined;
-    let r = p
-      ? `the folders ${u(folders.map(displayFolderName), "more of this repository")}`
-      : describeFolder(h);
-    let c = `. ${capitalize(shownId)} is still recorded as installed at local scope from ${r}: ${p ? "those records were" : "that record was"} left, because `;
-    let y = `To remove ${p ? "them" : "it"}`;
-    let j = p
+    let listWithCount = (items, moreWord) =>
+      listFormat.format(items.length > 2 ? [...items.slice(0, 2), `${items.length - 2} ${moreWord}`] : items);
+    let [onlyFolder] = folders;
+    let severalFolders = folders.length !== 1 || onlyFolder === undefined;
+    let folderPhrase = severalFolders
+      ? `the folders ${listWithCount(folders.map(displayFolderName), "more of this repository")}`
+      : describeFolder(onlyFolder);
+    let intro = `. ${capitalize(shownId)} is still recorded as installed at local scope from ${folderPhrase}: ${severalFolders ? "those records were" : "that record was"} left, because `;
+    let removeClause = `To remove ${severalFolders ? "them" : "it"}`;
+    let whereToUninstall = severalFolders
       ? "start Claude Code in each of those folders and uninstall it there"
       : "start Claude Code in that folder and uninstall it there";
-    let T = (M) =>
-      M.readsBack === "on"
-        ? displayFolderName(M.file)
+    let describeFile = (fileJudgement) =>
+      fileJudgement.readsBack === "on"
+        ? displayFolderName(fileJudgement.file)
         : describeUnwritableSettingsSource({
             source: "otherFolder",
-            file: M.file,
-            readsBack: M.readsBack,
-            ...(M.notReadBecause !== undefined && {
-              notReadBecause: M.notReadBecause,
+            file: fileJudgement.file,
+            readsBack: fileJudgement.readsBack,
+            ...(fileJudgement.notReadBecause !== undefined && {
+              notReadBecause: fileJudgement.notReadBecause,
             }),
-          }).replace(M.file, () => displayFolderName(M.file));
+          }).replace(fileJudgement.file, () => displayFolderName(fileJudgement.file));
     if (because.kind === "own-local-line")
-      return `${c}its line in local settings (.claude/settings.local.json) is still there although its uninstall was to remove it. ${y}, first take that line out of "enabledPlugins" in that file yourself, then ${j}`;
+      return `${intro}its line in local settings (.claude/settings.local.json) is still there although its uninstall was to remove it. ${removeClause}, first take that line out of "enabledPlugins" in that file yourself, then ${whereToUninstall}`;
     if (because.kind === "legacy-local-file") {
       let { file } = because;
-      let P = file.readsBack === "on";
-      let L = P
+      let readsBackOn = file.readsBack === "on";
+      let fixInstruction = readsBackOn
         ? 'take it out of "enabledPlugins" in that file yourself'
         : file.readsBack === "unreadable"
           ? "fix that file so that it can be read as settings, and switch the plugin off in it if it is on there"
           : "switch it off in that file if it is on there";
-      return `${c}${T(file)} ${P ? "still switches it on" : "may still switch it on"} (it is an older local settings file in the folder this session was started in). ${y}, first ${L}, then ${j}. Until then it ${P ? "can load" : "may still load"} beside ${shownNewId}`;
+      return `${intro}${describeFile(file)} ${readsBackOn ? "still switches it on" : "may still switch it on"} (it is an older local settings file in the folder this session was started in). ${removeClause}, first ${fixInstruction}, then ${whereToUninstall}. Until then it ${readsBackOn ? "can load" : "may still load"} beside ${shownNewId}`;
     }
-    let I = because.ofTheLaunchFolder.length > 0;
-    let w = I && because.ofFolders.length > 0;
-    let b = w
+    let hasLaunchFolderFiles = because.ofTheLaunchFolder.length > 0;
+    let hasBothGroups = hasLaunchFolderFiles && because.ofFolders.length > 0;
+    let relevantFiles = hasBothGroups
       ? [...because.ofTheLaunchFolder, ...because.ofFolders]
-      : I
+      : hasLaunchFolderFiles
         ? because.ofTheLaunchFolder
         : because.ofFolders;
-    let all = b.every((M) => M.readsBack === "on");
-    let all_2 = b.every((M) => M.readsBack !== "on");
-    let any = b.some((M) => M.readsBack === "unreadable");
-    let se = (M) => (M.readsBack === "not-read-here" ? (M.notReadBecause ?? "not-trusted") : M.readsBack);
-    let [Ce] = b;
-    let X =
-      b.length > 1 && Ce !== undefined && all_2 && b.every((M) => se(M) === se(Ce)) ? se(Ce) : undefined;
-    let we = all ? "can load" : "may still load";
-    let J = b.length === 1 ? "that file" : "those files";
-    let D = b.every((M) => M.file.endsWith(join(".claude", "settings.json")))
-      ? ` (that uninstall does not edit ${J})`
+    let all = relevantFiles.every((fileJudgement) => fileJudgement.readsBack === "on");
+    let all_2 = relevantFiles.every((fileJudgement) => fileJudgement.readsBack !== "on");
+    let any = relevantFiles.some((fileJudgement) => fileJudgement.readsBack === "unreadable");
+    let readsBackKey = (fileJudgement) =>
+      fileJudgement.readsBack === "not-read-here"
+        ? (fileJudgement.notReadBecause ?? "not-trusted")
+        : fileJudgement.readsBack;
+    let [firstFile] = relevantFiles;
+    let commonUnreadReason =
+      relevantFiles.length > 1 &&
+      firstFile !== undefined &&
+      all_2 &&
+      relevantFiles.every((fileJudgement) => readsBackKey(fileJudgement) === readsBackKey(firstFile))
+        ? readsBackKey(firstFile)
+        : undefined;
+    let loadPhrase = all ? "can load" : "may still load";
+    let filesPronoun = relevantFiles.length === 1 ? "that file" : "those files";
+    let projectFileNote = relevantFiles.every((fileJudgement) =>
+      fileJudgement.file.endsWith(join(".claude", "settings.json")),
+    )
+      ? ` (that uninstall does not edit ${filesPronoun})`
       : "";
-    let ce =
-      X === "unreadable"
+    let notReadPhrase =
+      commonUnreadReason === "unreadable"
         ? "they are there and could not be read"
-        : X === "network-path"
+        : commonUnreadReason === "network-path"
           ? "not read: they are on a network path or are links to one, or could not be checked"
           : "not read: this workspace is not yet trusted";
-    if (w) {
-      let M = (B) =>
-        X !== undefined || B.readsBack === "on"
+    if (hasBothGroups) {
+      let reasonSuffix = (fileJudgement) =>
+        commonUnreadReason !== undefined || fileJudgement.readsBack === "on"
           ? ""
-          : `; ${T(B).slice(displayFolderName(B.file).length + 2, -1)}`;
-      let P = [
+          : `; ${describeFile(fileJudgement).slice(displayFolderName(fileJudgement.file).length + 2, -1)}`;
+      let fileDescriptions = [
         ...because.ofTheLaunchFolder.map(
-          (B) => `${displayFolderName(B.file)} (in the folder this session was started in${M(B)})`,
+          (fileJudgement) =>
+            `${displayFolderName(fileJudgement.file)} (in the folder this session was started in${reasonSuffix(fileJudgement)})`,
         ),
         ...because.ofFolders
           .slice(0, 2)
-          .map((ofFolder) => (X === undefined ? T(ofFolder) : displayFolderName(ofFolder.file))),
+          .map((ofFolder) =>
+            commonUnreadReason === undefined ? describeFile(ofFolder) : displayFolderName(ofFolder.file),
+          ),
         ...(because.ofFolders.length > 2 ? [`${because.ofFolders.length - 2} more`] : []),
       ];
-      let L = all ? "still switch it on" : all_2 ? "may still switch it on" : "still switch it on, or may";
-      let U = all
+      let switchPhrase = all
+        ? "still switch it on"
+        : all_2
+          ? "may still switch it on"
+          : "still switch it on, or may";
+      let fixInstruction = all
         ? "switch it off in each of those files"
         : any
           ? "fix any of those files that cannot be read as settings, and switch it off in each where it is on"
           : "switch it off in each of those files where it is on";
-      return `${c}settings files that this session does not read ${L}: ${o.format(P)}${X === undefined ? "" : ` (${ce})`}. ${y}, first ${U}, then ${j}. Until then it ${we} beside ${shownNewId}`;
+      return `${intro}settings files that this session does not read ${switchPhrase}: ${listFormat.format(fileDescriptions)}${commonUnreadReason === undefined ? "" : ` (${notReadPhrase})`}. ${removeClause}, first ${fixInstruction}, then ${whereToUninstall}. Until then it ${loadPhrase} beside ${shownNewId}`;
     }
-    if (!I && p) {
-      let M = all ? "still switch it on" : all_2 ? "may still switch it on" : "still switch it on, or may";
-      let P =
-        X === undefined
-          ? u(b.map(T), "more")
-          : `${u(
-              b.map((U) => displayFolderName(U.file)),
+    if (!hasLaunchFolderFiles && severalFolders) {
+      let switchPhrase = all
+        ? "still switch it on"
+        : all_2
+          ? "may still switch it on"
+          : "still switch it on, or may";
+      let fileDescriptions =
+        commonUnreadReason === undefined
+          ? listWithCount(relevantFiles.map(describeFile), "more")
+          : `${listWithCount(
+              relevantFiles.map((fileJudgement) => displayFolderName(fileJudgement.file)),
               "more",
-            )} (${ce})`;
-      return `${c}settings files in those folders ${M}: ${P}. ${y}, for each folder first ${`switch it off in its settings file${any ? ", or fix the file if it cannot be read as settings" : all_2 ? " if it is on there" : ""}`}, then start Claude Code in that folder and uninstall it there${D}. Until then it ${we} in those folders beside ${shownNewId}`;
+            )} (${notReadPhrase})`;
+      return `${intro}settings files in those folders ${switchPhrase}: ${fileDescriptions}. ${removeClause}, for each folder first ${`switch it off in its settings file${any ? ", or fix the file if it cannot be read as settings" : all_2 ? " if it is on there" : ""}`}, then start Claude Code in that folder and uninstall it there${projectFileNote}. Until then it ${loadPhrase} in those folders beside ${shownNewId}`;
     }
-    let ge = o.format(X === undefined ? b.map(T) : b.map((M) => displayFolderName(M.file)));
-    let k =
-      X === "unreadable"
+    let fileDescriptions = listFormat.format(
+      commonUnreadReason === undefined
+        ? relevantFiles.map(describeFile)
+        : relevantFiles.map((fileJudgement) => displayFolderName(fileJudgement.file)),
+    );
+    let statusPhrase =
+      commonUnreadReason === "unreadable"
         ? "are there and could not be read, and may still switch it on"
-        : X === "network-path"
+        : commonUnreadReason === "network-path"
           ? "were not read (they are on a network path or are links to one, or could not be checked) and may still switch it on"
-          : X === "not-trusted"
+          : commonUnreadReason === "not-trusted"
             ? "were not read (this workspace is not yet trusted) and may still switch it on"
             : all
-              ? b.length === 1
+              ? relevantFiles.length === 1
                 ? "still switches it on"
                 : "still switch it on"
               : all_2
                 ? "may still switch it on"
                 : "still switch it on, or may";
-    let pe = b.length === 1;
-    let Ee = all
-      ? pe
+    let isSingleFile = relevantFiles.length === 1;
+    let fixInstruction = all
+      ? isSingleFile
         ? "switch it off in that file"
         : "switch it off in both files"
       : any
-        ? pe
+        ? isSingleFile
           ? "fix that file so that it can be read as settings, and switch the plugin off in it if it is on there"
           : "fix the file that could not be read so that it can be read as settings, and switch the plugin off in both files where it is on"
-        : pe
+        : isSingleFile
           ? "switch it off in that file if it is on there"
           : "switch it off in those files where it is on";
-    if (I)
-      return `${c}in the folder this session was started in ${ge} ${k} (this session reads its settings from another folder, so nothing done from here edits ${J}). ${y}, first ${Ee}, then ${j}. Until then it ${we} beside ${shownNewId}`;
-    if (because.sharedCheckout && pe && all)
-      return `${c}${ge} ${k}. ${y}: if that is this repository's shared settings file, checked out in that folder too, first switch the plugin off in the repository's settings file and update the other checkouts; otherwise first switch it off in that file; then ${j}. Until then it ${we} in that folder beside ${shownNewId}`;
-    return `${c}${ge} ${k}. ${y}, first ${Ee}, then ${j}${D}. Until then it ${we} in that folder beside ${shownNewId}`;
+    if (hasLaunchFolderFiles)
+      return `${intro}in the folder this session was started in ${fileDescriptions} ${statusPhrase} (this session reads its settings from another folder, so nothing done from here edits ${filesPronoun}). ${removeClause}, first ${fixInstruction}, then ${whereToUninstall}. Until then it ${loadPhrase} beside ${shownNewId}`;
+    if (because.sharedCheckout && isSingleFile && all)
+      return `${intro}${fileDescriptions} ${statusPhrase}. ${removeClause}: if that is this repository's shared settings file, checked out in that folder too, first switch the plugin off in the repository's settings file and update the other checkouts; otherwise first switch it off in that file; then ${whereToUninstall}. Until then it ${loadPhrase} in that folder beside ${shownNewId}`;
+    return `${intro}${fileDescriptions} ${statusPhrase}. ${removeClause}, first ${fixInstruction}, then ${whereToUninstall}${projectFileNote}. Until then it ${loadPhrase} in that folder beside ${shownNewId}`;
   }
   return "";
 }
 //@ chunk-pp50kewz.js:42839-43471 layout
 function describeSecretStore(pluginId, carriedTo) {
   {
-    let i = primarySecureStoreKind();
+    let storeKind = primarySecureStoreKind();
     return {
       name: quotedPrintable(parsePluginIdentifier(pluginId).name, 120),
       store:
-        i === "keychain"
+        storeKind === "keychain"
           ? "your keychain (or in the credentials file in your Claude configuration folder)"
-          : i === "credential-manager"
+          : storeKind === "credential-manager"
             ? "Windows Credential Manager (or in the credentials file in your Claude configuration folder)"
             : "the credentials file in your Claude configuration folder",
       uninstallCommand: runCommandHint("plugin uninstall", pluginId, {
         fallback: `uninstall "${quotedPrintable(pluginId, 200)}" from the command line`,
       }),
-      carriedClause: (a) =>
+      carriedClause: (leftoverPhrase) =>
         carriedTo === undefined
           ? ""
-          : ` (its settings and stored secrets were also carried over to ${carriedTo}; ${a} the old copies)`,
+          : ` (its settings and stored secrets were also carried over to ${carriedTo}; ${leftoverPhrase} the old copies)`,
     };
   }
   return {
@@ -2386,21 +2636,26 @@ function describeSecretStore(pluginId, carriedTo) {
  */
 function describeUnfinishedCleanup({ pluginId, entry, carriedTo, dataFolder }) {
   {
-    let { name: o, store, uninstallCommand, carriedClause } = describeSecretStore(pluginId, carriedTo);
-    let r = `. ${capitalize(displayPluginId(pluginId))} has no install record left, but the clean-up after its last uninstall did not finish${carriedClause("what may be left are")}: `;
+    let {
+      name: pluginName,
+      store,
+      uninstallCommand,
+      carriedClause,
+    } = describeSecretStore(pluginId, carriedTo);
+    let intro = `. ${capitalize(displayPluginId(pluginId))} has no install record left, but the clean-up after its last uninstall did not finish${carriedClause("what may be left are")}: `;
     if (entry === "held")
-      return `${r}its settings and stored secrets or its data folder may still be there, and "${o}" may still be tied to the repository it came from. To finish it, ${uninstallCommand}`;
-    let c =
+      return `${intro}its settings and stored secrets or its data folder may still be there, and "${pluginName}" may still be tied to the repository it came from. To finish it, ${uninstallCommand}`;
+    let leftoverText =
       dataFolder === "may-go"
-        ? `${r}its settings may still be under "pluginConfigs" in your user settings file, its stored secrets in ${store}, and its data folder (${displayFolderName(pluginDataDirPath(pluginId))}) may still be there. No command removes them for this id yet; you can take that entry out and delete that folder yourself; the stored secrets stay`
+        ? `${intro}its settings may still be under "pluginConfigs" in your user settings file, its stored secrets in ${store}, and its data folder (${displayFolderName(pluginDataDirPath(pluginId))}) may still be there. No command removes them for this id yet; you can take that entry out and delete that folder yourself; the stored secrets stay`
         : dataFolder === "not-known"
-          ? `${r}its settings may still be under "pluginConfigs" in your user settings file, its stored secrets in ${store}, and its data folder (${displayFolderName(pluginDataDirPath(pluginId))}) may still be there. No command removes them for this id yet; you can take that entry out yourself; leave the data folder until the install records can be read again, because another installed plugin may use it; the stored secrets stay`
-          : `${r}its settings may still be under "pluginConfigs" in your user settings file, and its stored secrets in ${store}. No command removes them for this id yet; you can take that entry out yourself; the stored secrets stay`;
+          ? `${intro}its settings may still be under "pluginConfigs" in your user settings file, its stored secrets in ${store}, and its data folder (${displayFolderName(pluginDataDirPath(pluginId))}) may still be there. No command removes them for this id yet; you can take that entry out yourself; leave the data folder until the install records can be read again, because another installed plugin may use it; the stored secrets stay`
+          : `${intro}its settings may still be under "pluginConfigs" in your user settings file, and its stored secrets in ${store}. No command removes them for this id yet; you can take that entry out yourself; the stored secrets stay`;
     return entry === "none"
-      ? `${c}. Nothing ties "${o}" to the repository it came from, so a plugin installed under that name later could read what is left`
+      ? `${leftoverText}. Nothing ties "${pluginName}" to the repository it came from, so a plugin installed under that name later could read what is left`
       : entry === "unreadable"
-        ? `${c}. plugin-directory-bindings.json in the plugins folder could not be used, so "${o}" cannot be installed again until that file can be used`
-        : c;
+        ? `${leftoverText}. plugin-directory-bindings.json in the plugins folder could not be used, so "${pluginName}" cannot be installed again until that file can be used`
+        : leftoverText;
   }
   return "";
 }
@@ -2410,12 +2665,17 @@ function describeUnfinishedCleanup({ pluginId, entry, carriedTo, dataFolder }) {
  */
 function describeLeftRecordCleanup({ pluginId, folder, entry, carriedTo, dataFolder }) {
   {
-    let { name: u, store, uninstallCommand, carriedClause } = describeSecretStore(pluginId, carriedTo);
-    let c = `. After Claude Code tried to remove the record of ${displayPluginId(pluginId)} for ${describeFolder(folder)}, the install records could not be read, so it is not known whether that record went or whether the plugin is still installed anywhere, and what the plugin saved was left in place${carriedClause("what is left are")}`;
+    let {
+      name: pluginName,
+      store,
+      uninstallCommand,
+      carriedClause,
+    } = describeSecretStore(pluginId, carriedTo);
+    let intro = `. After Claude Code tried to remove the record of ${displayPluginId(pluginId)} for ${describeFolder(folder)}, the install records could not be read, so it is not known whether that record went or whether the plugin is still installed anywhere, and what the plugin saved was left in place${carriedClause("what is left are")}`;
     if (entry === "held")
-      return `${c}. If it is installed nowhere any more, ${uninstallCommand} to remove what it saved and free its name`;
-    let y = dataFolder !== "in-use";
-    return `${c}: its settings under "pluginConfigs" in your user settings file, ${y ? `its stored secrets in ${store}, and its data folder (${displayFolderName(pluginDataDirPath(pluginId))})` : `and its stored secrets in ${store}`}.${entry === "unreadable" ? ` plugin-directory-bindings.json in the plugins folder could not be used, so "${u}" cannot be installed again until that file can be used.` : ""} If it is installed nowhere any more, no command removes them for this id yet; you can take that entry out yourself; ${y ? "leave the data folder until the install records can be read again, because another installed plugin may use it; " : ""}the stored secrets stay${entry === "none" ? `. Nothing ties "${u}" to the repository it came from, so a plugin installed under that name later could read what is left` : ""}`;
+      return `${intro}. If it is installed nowhere any more, ${uninstallCommand} to remove what it saved and free its name`;
+    let hasDataFolder = dataFolder !== "in-use";
+    return `${intro}: its settings under "pluginConfigs" in your user settings file, ${hasDataFolder ? `its stored secrets in ${store}, and its data folder (${displayFolderName(pluginDataDirPath(pluginId))})` : `and its stored secrets in ${store}`}.${entry === "unreadable" ? ` plugin-directory-bindings.json in the plugins folder could not be used, so "${pluginName}" cannot be installed again until that file can be used.` : ""} If it is installed nowhere any more, no command removes them for this id yet; you can take that entry out yourself; ${hasDataFolder ? "leave the data folder until the install records can be read again, because another installed plugin may use it; " : ""}the stored secrets stay${entry === "none" ? `. Nothing ties "${pluginName}" to the repository it came from, so a plugin installed under that name later could read what is left` : ""}`;
   }
   return "";
 }
@@ -2423,51 +2683,56 @@ function describeLeftRecordCleanup({ pluginId, folder, entry, carriedTo, dataFol
 /**
  * 找出哪些 settings.local.json（本会话目录、其他仓库目录）仍提到该插件，供卸载提示使用。
  */
-async function findLocalSettingsMentions(pluginId, n, { installedOthers, launchFolderToo, ownLocalFileToo }) {
+async function findLocalSettingsMentions(
+  pluginId,
+  folders,
+  { installedOthers, launchFolderToo, ownLocalFileToo },
+) {
   {
-    let u = {
+    let mentions = {
       kind: "by-files",
       ofTheLaunchFolder: [],
       ofFolders: new Map(),
       launchProjectFileOn: undefined,
     };
-    let h = await scanSettingsForPluginUninstall(
+    let scan = await scanSettingsForPluginUninstall(
       pluginId,
       installedOthers,
-      launchFolderToo === undefined ? n : [...n, launchFolderToo],
+      launchFolderToo === undefined ? folders : [...folders, launchFolderToo],
       {
         theSessions: getSettingsFilePathForSource("localSettings"),
         byAFreshWalk: join(getRepoRootOrCwd(), ".claude", "settings.local.json"),
       },
     );
-    if (ownLocalFileToo && h.thisLaunchsLocalFile !== undefined)
+    if (ownLocalFileToo && scan.thisLaunchsLocalFile !== undefined)
       return {
         kind: "own-local-file",
-        readsBack: h.thisLaunchsLocalFile,
+        readsBack: scan.thisLaunchsLocalFile,
         theSessionsOwn: true,
       };
-    if (ownLocalFileToo && h.thisLaunchsLocalFileByAFreshWalk !== undefined)
+    if (ownLocalFileToo && scan.thisLaunchsLocalFileByAFreshWalk !== undefined)
       return {
         kind: "own-local-file",
-        readsBack: h.thisLaunchsLocalFileByAFreshWalk,
+        readsBack: scan.thisLaunchsLocalFileByAFreshWalk,
         theSessionsOwn: false,
       };
-    if (ownLocalFileToo && h.thisLaunchsLegacyLocalFile !== undefined)
+    if (ownLocalFileToo && scan.thisLaunchsLegacyLocalFile !== undefined)
       return {
         kind: "own-legacy-local-file",
-        file: h.thisLaunchsLegacyLocalFile,
+        file: scan.thisLaunchsLegacyLocalFile,
       };
-    let p = (r) =>
-      (h.byFolder.get(r) ?? []).filter(
-        (c) => c.alsoThisLaunchs !== "localSettings" && c.alsoThisLaunchs !== "legacyLocalSettings",
+    let mentionsInFolder = (folder) =>
+      (scan.byFolder.get(folder) ?? []).filter(
+        (mention) =>
+          mention.alsoThisLaunchs !== "localSettings" && mention.alsoThisLaunchs !== "legacyLocalSettings",
       );
-    if (launchFolderToo !== undefined) u.ofTheLaunchFolder = p(launchFolderToo);
-    for (let r of n) {
-      let c = p(r);
-      if (c.length > 0) u.ofFolders.set(r, c);
+    if (launchFolderToo !== undefined) mentions.ofTheLaunchFolder = mentionsInFolder(launchFolderToo);
+    for (let folder of folders) {
+      let folderMentions = mentionsInFolder(folder);
+      if (folderMentions.length > 0) mentions.ofFolders.set(folder, folderMentions);
     }
-    u.launchProjectFileOn = h.thisLaunchsProjectFileOn;
-    return u;
+    mentions.launchProjectFileOn = scan.thisLaunchsProjectFileOn;
+    return mentions;
   }
   return {
     kind: "by-files",
@@ -2477,24 +2742,24 @@ async function findLocalSettingsMentions(pluginId, n, { installedOthers, launchF
   };
 }
 //@ chunk-pp50kewz.js:47492-47607 layout
-function isSameRepoPathMoved(file, n) {
+function isSameRepoPathMoved(file, otherFile) {
   if (realpathAllowMissing(file)) return false;
   let gitRootUncached = findGitRootUncached(dirname(file));
-  let gitRootUncached_2 = findGitRootUncached(dirname(n));
+  let gitRootUncached_2 = findGitRootUncached(dirname(otherFile));
   return (
     gitRootUncached !== null &&
     gitRootUncached_2 !== null &&
     gitRootUncached !== gitRootUncached_2 &&
-    relative(gitRootUncached, file) === relative(gitRootUncached_2, n)
+    relative(gitRootUncached, file) === relative(gitRootUncached_2, otherFile)
   );
 }
 //@ chunk-pp50kewz.js:47607-48061 layout
 async function checkDirectoryBindingPersistable(pluginId) {
   {
-    let n = await persistDirectoryBinding(pluginId, getInstalledPlugins().plugins[pluginId]);
-    return n === "not-persisted"
+    let outcome = await persistDirectoryBinding(pluginId, getInstalledPlugins().plugins[pluginId]);
+    return outcome === "not-persisted"
       ? "plugin-directory-bindings.json in the plugins folder could not be used or written, so nothing would keep the name for the repository it was installed from: once the file can be written, switch again"
-      : n === "cannot-hold"
+      : outcome === "cannot-hold"
         ? "its id is too long for plugin-directory-bindings.json to hold, so nothing would keep the name for the repository it was installed from"
         : undefined;
   }
@@ -2505,18 +2770,18 @@ function getRepoRootOrCwd() {
   return getProjectConfigRoot() ?? resolveLocalSettingsStoreRoot(getOriginalCwd(), uncachedStorageRootFor);
 }
 //@ chunk-pp50kewz.js:48100-48294 layout
-function isInstallationForThisRepo(e) {
+function isInstallationForThisRepo(installation) {
   {
     let originalCwd = getOriginalCwd();
-    let projectPath = e.projectPath;
+    let projectPath = installation.projectPath;
     if (projectPath !== undefined && projectPath !== originalCwd && realpathAllowMissing(projectPath))
       return false;
-    if (!isInstallationRelevantToCurrentProject(e)) return false;
+    if (!isInstallationRelevantToCurrentProject(installation)) return false;
     if (projectPath === undefined || projectPath === originalCwd) return true;
-    let a = uncachedStorageRootFor(originalCwd);
+    let storageRoot = uncachedStorageRootFor(originalCwd);
     return (
-      a !== null &&
-      uncachedStorageRootFor(projectPath) === a &&
+      storageRoot !== null &&
+      uncachedStorageRootFor(projectPath) === storageRoot &&
       resolveLocalSettingsStoreRoot(projectPath, uncachedStorageRootFor) === getRepoRootOrCwd()
     );
   }
@@ -2527,57 +2792,62 @@ function isInstallationForThisRepo(e) {
  * --replace 切换到另一个市场的同名插件之后的收尾：迁移启用状态与插件选项、禁用/卸载旧副本，生成结果说明。
  */
 async function finishReplaceSwitch(
-  e,
+  pluginId,
   scope,
-  i,
+  copies,
   { newCopyWasJustInstalled, newCopyWasOn, surface, carrySettingsFrom },
   storageV5,
 ) {
   {
-    let r = displayPluginId(e);
-    let c =
-      i.find((s) => s.pluginId === carrySettingsFrom) ??
-      i.find(
-        (s) => locatePluginInstall(s.pluginId, undefined, groupedEnabledPlugins()).effective !== false,
+    let newPluginName = displayPluginId(pluginId);
+    let primaryCopy =
+      copies.find((copy) => copy.pluginId === carrySettingsFrom) ??
+      copies.find(
+        (copy) => locatePluginInstall(copy.pluginId, undefined, groupedEnabledPlugins()).effective !== false,
       ) ??
-      i[0];
-    let y = displayPluginId(c.pluginId);
-    let j = new Intl.ListFormat("en", {
+      copies[0];
+    let oldPluginName = displayPluginId(primaryCopy.pluginId);
+    let listFormat = new Intl.ListFormat("en", {
       type: "conjunction",
     });
-    let T = {
+    let labelBudget = {
       head: 200,
       tail: 200,
     };
-    let I = j.format(i.map((s) => displayPluginId(s.pluginId)));
-    let w = i.length > 1;
-    let b = `${I} ${w ? "are" : "is"} still installed`;
-    let _e = {
-      fromPluginId: c.pluginId,
-      toPluginId: e,
+    let oldNamesText = listFormat.format(copies.map((copy) => displayPluginId(copy.pluginId)));
+    let severalOldCopies = copies.length > 1;
+    let stillInstalledText = `${oldNamesText} ${severalOldCopies ? "are" : "is"} still installed`;
+    let switchEvent = {
+      fromPluginId: primaryCopy.pluginId,
+      toPluginId: pluginId,
       surface,
       managedNames: policyEnabledPluginNameSet(),
     };
-    let gitCommitSha = getInstalledPlugins().plugins[e]?.find(
-      (s) => s.scope === scope && isInstallationRelevantToCurrentProject(s),
+    let gitCommitSha = getInstalledPlugins().plugins[pluginId]?.find(
+      (install) => install.scope === scope && isInstallationRelevantToCurrentProject(install),
     )?.gitCommitSha;
     let pinChanged =
-      c.gitCommitSha !== undefined && gitCommitSha !== undefined && c.gitCommitSha !== gitCommitSha;
-    let se = locatePluginInstall(c.pluginId, undefined, groupedEnabledPlugins());
-    let X = se.effective === false && !newCopyWasOn;
-    let we = async () => {
-      let scope_2 = findPluginInSettings(e)?.scope;
-      let decidingScope = se.decidingScope === "project" && scope !== "project" ? "local" : se.decidingScope;
-      let v =
+      primaryCopy.gitCommitSha !== undefined &&
+      gitCommitSha !== undefined &&
+      primaryCopy.gitCommitSha !== gitCommitSha;
+    let oldCopyLocation = locatePluginInstall(primaryCopy.pluginId, undefined, groupedEnabledPlugins());
+    let oldCopyWasOff = oldCopyLocation.effective === false && !newCopyWasOn;
+    let keepNewCopyOffIfNeeded = async () => {
+      let scope_2 = findPluginInSettings(pluginId)?.scope;
+      let decidingScope =
+        oldCopyLocation.decidingScope === "project" && scope !== "project"
+          ? "local"
+          : oldCopyLocation.decidingScope;
+      let disableScope =
         decidingScope !== undefined &&
         (scope_2 === undefined || SCOPE_PRECEDENCE[decidingScope] >= SCOPE_PRECEDENCE[scope_2])
           ? decidingScope
           : undefined;
-      let G = await disablePluginOp(e, v, storageV5).catch(() => ({
+      let disableResult = await disablePluginOp(pluginId, disableScope, storageV5).catch(() => ({
         success: false,
         message: "",
       }));
-      return G.success || G.alreadyInGoalState === true;
+      return disableResult.success || disableResult.alreadyInGoalState === true;
     };
     let {
       optionsCarried,
@@ -2586,233 +2856,252 @@ async function finishReplaceSwitch(
       dataDirCopied,
       targetHadOwn,
       dataDirKeptReason,
-    } = await copyPluginOptions(c.pluginId, e, copyDir, storageV5);
-    let Ee = dataDirKey(e);
-    let M = dataDirKey(c.pluginId);
-    let P;
-    let L = false;
-    let U = (s) => {
-      if (!oldDataDirDisposable || M === Ee) return false;
+    } = await copyPluginOptions(primaryCopy.pluginId, pluginId, copyDir, storageV5);
+    let newDataDirKey = dataDirKey(pluginId);
+    let oldDataDirKey = dataDirKey(primaryCopy.pluginId);
+    let otherDataDirUser;
+    let oldDataDirShared = false;
+    let canRemoveOldDataDir = (registry) => {
+      if (!oldDataDirDisposable || oldDataDirKey === newDataDirKey) return false;
       let otherPluginSharingDataDir = findOtherPluginSharingDataDir(
-        c.pluginId,
-        s,
+        primaryCopy.pluginId,
+        registry,
         new Set(
-          i.flatMap((v) => (v === c || (s.plugins[v.pluginId]?.length ?? 0) === 0 ? [v.pluginId] : [])),
+          copies.flatMap((copy) =>
+            copy === primaryCopy || (registry.plugins[copy.pluginId]?.length ?? 0) === 0
+              ? [copy.pluginId]
+              : [],
+          ),
         ),
       );
-      P = otherPluginSharingDataDir.kind === "nobody" ? undefined : otherPluginSharingDataDir;
+      otherDataDirUser = otherPluginSharingDataDir.kind === "nobody" ? undefined : otherPluginSharingDataDir;
       return otherPluginSharingDataDir.kind === "nobody";
     };
-    let B;
+    let failure;
     if (!optionsCarried || !secretsCarried) {
       let joined = [
         ...(optionsCarried ? [] : ["option values"]),
         ...(secretsCarried ? [] : ["stored secrets"]),
       ].join(" and ");
-      B = {
-        fromPluginId: c.pluginId,
+      failure = {
+        fromPluginId: primaryCopy.pluginId,
         rollBack: newCopyWasJustInstalled,
-        rolledBack: `Could not switch: the ${joined} of ${y} could not be copied to ${r}. ${capitalize(b)} and ${r} was uninstalled again. Plugins that were installed with it as its dependencies, if any, stay installed`,
-        bothInstalled: w
-          ? `${capitalize(r)} is installed, but the ${joined} of ${y} could not be copied to it, so nothing was uninstalled. ${capitalize(b)} beside it until you switch again or uninstall them`
-          : `${capitalize(r)} is installed, but the ${joined} of ${y} could not be copied to it, so ${y} was not uninstalled. Both are installed until you switch again or uninstall ${y}`,
+        rolledBack: `Could not switch: the ${joined} of ${oldPluginName} could not be copied to ${newPluginName}. ${capitalize(stillInstalledText)} and ${newPluginName} was uninstalled again. Plugins that were installed with it as its dependencies, if any, stay installed`,
+        bothInstalled: severalOldCopies
+          ? `${capitalize(newPluginName)} is installed, but the ${joined} of ${oldPluginName} could not be copied to it, so nothing was uninstalled. ${capitalize(stillInstalledText)} beside it until you switch again or uninstall them`
+          : `${capitalize(newPluginName)} is installed, but the ${joined} of ${oldPluginName} could not be copied to it, so ${oldPluginName} was not uninstalled. Both are installed until you switch again or uninstall ${oldPluginName}`,
       };
     }
-    let me = [];
-    let N = (s) =>
-      s === "unknown"
-        ? s
-        : uniq([...s, ...me.flatMap((_) => (_.record === undefined ? [] : [_.copy.pluginId]))]);
-    let Z = [];
-    let S = new Set();
-    let he = new Map();
-    let re;
-    let Oe;
-    let ae = new Set();
-    let Ge = new Set();
-    let A = listInstalledPluginIds(getInstalledPlugins());
-    let Ke =
-      B !== undefined
+    let uninstalledCopies = [];
+    let withDataDirUsers = (installedIds) =>
+      installedIds === "unknown"
+        ? installedIds
+        : uniq([
+            ...installedIds,
+            ...uninstalledCopies.flatMap((uninstalled) =>
+              uninstalled.record === undefined ? [] : [uninstalled.copy.pluginId],
+            ),
+          ]);
+    let directoryNotes = [];
+    let optionsRemoved = new Set();
+    let dataFolderOwner = new Map();
+    let blocker;
+    let blockerEnabledValue;
+    let uninstalledSet = new Set();
+    let settingsKept = new Set();
+    let installedIds = listInstalledPluginIds(getInstalledPlugins());
+    let enabledValues =
+      failure !== undefined
         ? []
-        : i.flatMap((s) =>
-            ["user", "local"].map((_) => ({
-              scope: _,
-              id: s.pluginId,
-              value: getEnabledValueAtScope(_, s.pluginId, A),
+        : copies.flatMap((copy) =>
+            ["user", "local"].map((scope) => ({
+              scope,
+              id: copy.pluginId,
+              value: getEnabledValueAtScope(scope, copy.pluginId, installedIds),
             })),
           );
-    let De = (copy, oldScope) => {
+    let localRecords = (copy, oldScope) => {
       let filtered = (getInstalledPlugins().plugins[copy.pluginId] ?? []).filter(
-        (Pe) => Pe.scope === oldScope,
+        (install) => install.scope === oldScope,
       );
       let found = filtered.find(isInstallationRelevantToCurrentProject);
       let projectPathForScope = getProjectPathForScope(oldScope);
-      let de =
+      let record =
         projectPathForScope === undefined
           ? found
           : filtered.find(
-              (Pe) => Pe.projectPath === projectPathForScope && isInstallationRelevantToCurrentProject(Pe),
+              (install) =>
+                install.projectPath === projectPathForScope &&
+                isInstallationRelevantToCurrentProject(install),
             );
-      let Je = new Set([projectPathForScope]);
+      let seenPaths = new Set([projectPathForScope]);
       let otherFolders =
-        oldScope !== "local" || de === undefined
+        oldScope !== "local" || record === undefined
           ? []
-          : filtered.filter((Pe) => {
-              if (Je.has(Pe.projectPath)) return false;
-              Je.add(Pe.projectPath);
-              return isInstallationForThisRepo(Pe);
+          : filtered.filter((install) => {
+              if (seenPaths.has(install.projectPath)) return false;
+              seenPaths.add(install.projectPath);
+              return isInstallationForThisRepo(install);
             });
       return {
         anyRecordHere: found,
         launchFolder: projectPathForScope,
-        record: de,
+        record,
         otherFolders,
       };
     };
-    let flattened = [c, ...i.filter((s) => s !== c)].flatMap((s) =>
-      s.scopes.flatMap((scope) =>
+    let flattened = [primaryCopy, ...copies.filter((copy) => copy !== primaryCopy)].flatMap((copy) =>
+      copy.scopes.flatMap((scope) =>
         scope === "managed"
           ? []
           : [
               {
-                copy: s,
+                copy,
                 oldScope: scope,
               },
             ],
       ),
     );
-    let Le = (oldScope, projectPath) =>
+    let folderHint = (oldScope, projectPath) =>
       `it was installed at ${oldScope} scope from the folder ${projectPath}: start Claude Code in that folder and switch there`;
-    for (let { copy, oldScope } of B !== undefined ? [] : flattened) {
-      let { anyRecordHere, record } = De(copy, oldScope);
+    for (let { copy, oldScope } of failure !== undefined ? [] : flattened) {
+      let { anyRecordHere, record } = localRecords(copy, oldScope);
       if (record === undefined && anyRecordHere?.projectPath) {
-        re = {
+        blocker = {
           copy,
           scope: oldScope,
-          message: Le(oldScope, anyRecordHere.projectPath),
+          message: folderHint(oldScope, anyRecordHere.projectPath),
         };
         break;
       }
     }
-    let un = new Map();
+    let judgedByCopy = new Map();
     let projectConfigRoot = getProjectConfigRoot();
     let launchFolderToo =
       projectConfigRoot !== null && resolve(projectConfigRoot) !== resolve(getOriginalCwd())
         ? getOriginalCwd()
         : undefined;
-    let vn = (plugins, pluginId) =>
-      bindingKeysFor(plugins, pluginId).flatMap(([v, G]) => (v !== pluginId && G.length > 0 ? [v] : []));
-    for (let s of B !== undefined || re !== undefined ? [] : i) {
+    let otherInstalledUsers = (plugins, pluginId) =>
+      bindingKeysFor(plugins, pluginId).flatMap(([otherId, installs]) =>
+        otherId !== pluginId && installs.length > 0 ? [otherId] : [],
+      );
+    for (let copy of failure !== undefined || blocker !== undefined ? [] : copies) {
       let plugins = getInstalledPlugins().plugins;
-      let otherFolders = s.scopes.includes("local") ? De(s, "local").otherFolders : [];
-      let flattened = otherFolders.flatMap((otherFolder) => otherFolder.projectPath ?? []);
-      let oe =
-        flattened.length === 0
+      let otherFolders = copy.scopes.includes("local") ? localRecords(copy, "local").otherFolders : [];
+      let folders = otherFolders.flatMap((otherFolder) => otherFolder.projectPath ?? []);
+      let judged =
+        folders.length === 0
           ? undefined
-          : await findLocalSettingsMentions(s.pluginId, flattened, {
-              installedOthers: vn(plugins, s.pluginId),
+          : await findLocalSettingsMentions(copy.pluginId, folders, {
+              installedOthers: otherInstalledUsers(plugins, copy.pluginId),
               launchFolderToo,
               ownLocalFileToo: false,
             }).catch((error) => errorMessage(error));
-      if (typeof oe === "string") {
-        re = {
-          copy: s,
+      if (typeof judged === "string") {
+        blocker = {
+          copy,
           scope: "local",
-          message: oe,
+          message: judged,
         };
         break;
       }
-      un.set(s, {
-        records: [...(plugins[s.pluginId] ?? [])],
+      judgedByCopy.set(copy, {
+        records: [...(plugins[copy.pluginId] ?? [])],
         otherFolders,
-        judged: oe,
+        judged,
       });
     }
-    for (let [s, { otherFolders: _ }] of re !== undefined ? [] : un) {
-      let v =
-        _.length > 0 && isOfficialPluginDirectoryId(s.pluginId)
-          ? await checkDirectoryBindingPersistable(s.pluginId).catch((error) => errorMessage(error))
+    for (let [copy, { otherFolders }] of blocker !== undefined ? [] : judgedByCopy) {
+      let persistError =
+        otherFolders.length > 0 && isOfficialPluginDirectoryId(copy.pluginId)
+          ? await checkDirectoryBindingPersistable(copy.pluginId).catch((error) => errorMessage(error))
           : undefined;
-      if (v !== undefined) {
-        re = {
-          copy: s,
+      if (persistError !== undefined) {
+        blocker = {
+          copy,
           scope: "local",
-          message: v,
+          message: persistError,
         };
         break;
       }
     }
-    let tn = new Map();
-    for (let { copy, oldScope } of B !== undefined || re !== undefined ? [] : flattened) {
-      let { anyRecordHere, launchFolder, record } = De(copy, oldScope);
-      let de = Ke.find((Pe) => Pe.id === copy.pluginId && Pe.scope === oldScope)?.value;
-      let Je = copy === c && U(getInstalledPlugins());
-      L ||= Je;
-      let Me = await uninstallPluginOp(copy.pluginId, oldScope, Je, storageV5, {
+    let installPaths = new Map();
+    for (let { copy, oldScope } of failure !== undefined || blocker !== undefined ? [] : flattened) {
+      let { anyRecordHere, launchFolder, record } = localRecords(copy, oldScope);
+      let enabledValue = enabledValues.find(
+        (entry) => entry.id === copy.pluginId && entry.scope === oldScope,
+      )?.value;
+      let sharesDataDir = copy === primaryCopy && canRemoveOldDataDir(getInstalledPlugins());
+      oldDataDirShared ||= sharesDataDir;
+      let uninstallResult = await uninstallPluginOp(copy.pluginId, oldScope, sharesDataDir, storageV5, {
         settingsStillOn: "remove-anyway",
       }).catch((error) => ({
         success: false,
         message: errorMessage(error),
       }));
-      if (Me.success) {
-        me.push({
+      if (uninstallResult.success) {
+        uninstalledCopies.push({
           copy,
           scope: oldScope,
           record,
-          enabledValue: de,
+          enabledValue,
         });
-        tn.set(copy, record?.installPath);
-        if (Me.directoryNameNote) Z.push([copy.pluginId, Me.directoryNameNote]);
-        if (Me.optionsRemoved) S.add(copy);
-        if (Me.savedKept !== undefined) Ge.add(copy);
-        else Ge.delete(copy);
-        if (Me.dataFolderUser !== undefined) he.set(copy, Me.dataFolderUser);
-        if ((getInstalledPlugins().plugins[copy.pluginId]?.length ?? 0) === 0) ae.add(copy);
+        installPaths.set(copy, record?.installPath);
+        if (uninstallResult.directoryNameNote)
+          directoryNotes.push([copy.pluginId, uninstallResult.directoryNameNote]);
+        if (uninstallResult.optionsRemoved) optionsRemoved.add(copy);
+        if (uninstallResult.savedKept !== undefined) settingsKept.add(copy);
+        else settingsKept.delete(copy);
+        if (uninstallResult.dataFolderUser !== undefined)
+          dataFolderOwner.set(copy, uninstallResult.dataFolderUser);
+        if ((getInstalledPlugins().plugins[copy.pluginId]?.length ?? 0) === 0) uninstalledSet.add(copy);
       } else {
-        let Pe = !getInstalledPlugins().plugins[copy.pluginId]?.some(
-          (je) =>
-            je.scope === oldScope &&
+        let stillInstalled = !getInstalledPlugins().plugins[copy.pluginId]?.some(
+          (install) =>
+            install.scope === oldScope &&
             (record === undefined || launchFolder === undefined
-              ? isInstallationRelevantToCurrentProject(je)
-              : je.projectPath === launchFolder),
+              ? isInstallationRelevantToCurrentProject(install)
+              : install.projectPath === launchFolder),
         );
-        let Ae = Me.failureCode === "not_installed" || Me.failureCode === "not_installed_at_scope";
-        if (Ae && (anyRecordHere === undefined || Pe)) continue;
-        re = {
+        let notInstalled =
+          uninstallResult.failureCode === "not_installed" ||
+          uninstallResult.failureCode === "not_installed_at_scope";
+        if (notInstalled && (anyRecordHere === undefined || stillInstalled)) continue;
+        blocker = {
           copy,
           scope: oldScope,
           message:
-            Ae && record === undefined && anyRecordHere?.projectPath
-              ? Le(oldScope, anyRecordHere.projectPath)
-              : Me.message,
+            notInstalled && record === undefined && anyRecordHere?.projectPath
+              ? folderHint(oldScope, anyRecordHere.projectPath)
+              : uninstallResult.message,
         };
-        if (record !== undefined && Pe)
-          me.push({
+        if (record !== undefined && stillInstalled)
+          uninstalledCopies.push({
             copy,
             scope: oldScope,
-            enabledValue: de,
+            enabledValue,
             record,
           });
-        else if (anyRecordHere !== undefined) Oe = de;
+        else if (anyRecordHere !== undefined) blockerEnabledValue = enabledValue;
         break;
       }
     }
-    if (re !== undefined) {
+    if (blocker !== undefined) {
       let installedPlugins = getInstalledPlugins();
-      let _ = N(listInstalledPluginIds(installedPlugins));
-      let v = (installedPlugins.plugins[c.pluginId]?.length ?? 0) === 0;
-      let G = [];
-      let oe = [];
-      let de = async (scope, ln, Pn) => {
+      let installedIds = withDataDirUsers(listInstalledPluginIds(installedPlugins));
+      let oldCopyGone = (installedPlugins.plugins[primaryCopy.pluginId]?.length ?? 0) === 0;
+      let couldNotRestore = [];
+      let settingsNotes = [];
+      let setEnabledAtScope = async (scope, pluginId, value) => {
         try {
           return (
             (
               await updateSettingsForSourceWithTransform(
                 scopeToSettingSource(scope),
-                (In) => ({
+                (settings) => ({
                   enabledPlugins: {
-                    ...In?.enabledPlugins,
-                    [ln]: Pn,
+                    ...settings?.enabledPlugins,
+                    [pluginId]: value,
                   },
                 }),
                 undefined,
@@ -2824,176 +3113,214 @@ async function finishReplaceSwitch(
           return false;
         }
       };
-      let Je = (scope, id) =>
+      let enabledLineNote = (scope, id) =>
         `the "enabledPlugins" line in ${scope} settings that turned ${displayPluginId(id)} off there (if you want it off, disable it in /plugin)`;
-      let Me = new Set();
-      let pluginId = re.copy.pluginId;
-      let Ae =
-        Oe !== undefined && getEnabledValueAtScope(re.scope, pluginId, _) === undefined ? Oe : undefined;
-      for (let ke of Ke.filter((ln) => ln.value === false))
-        if (getEnabledValueAtScope(ke.scope, ke.id, _) !== false && !(await de(ke.scope, ke.id, false))) {
-          Me.add(ke.id);
-          oe.push(Je(ke.scope, ke.id));
+      let failedToDisable = new Set();
+      let pluginId_2 = blocker.copy.pluginId;
+      let blockerEnabled =
+        blockerEnabledValue !== undefined &&
+        getEnabledValueAtScope(blocker.scope, pluginId_2, installedIds) === undefined
+          ? blockerEnabledValue
+          : undefined;
+      for (let entry of enabledValues.filter((entry) => entry.value === false))
+        if (
+          getEnabledValueAtScope(entry.scope, entry.id, installedIds) !== false &&
+          !(await setEnabledAtScope(entry.scope, entry.id, false))
+        ) {
+          failedToDisable.add(entry.id);
+          settingsNotes.push(enabledLineNote(entry.scope, entry.id));
         }
-      for (let ke of me) {
-        let { record, enabledValue } = ke;
-        let In =
+      for (let uninstalled of uninstalledCopies) {
+        let { record, enabledValue } = uninstalled;
+        let reinstalled =
           record !== undefined &&
           (await addInstalledPlugin(
-            ke.copy.pluginId,
+            uninstalled.copy.pluginId,
             {
               ...record,
               version: record.version ?? "unknown",
               installedAt: record.installedAt ?? new Date().toISOString(),
             },
-            ke.scope,
+            uninstalled.scope,
             record.projectPath,
             storageV5,
           ).then(
             () => true,
             () => false,
           ));
-        let It =
+        let enabledRestored =
           enabledValue === undefined ||
           enabledValue === false ||
-          !In ||
-          (!Me.has(ke.copy.pluginId) && (await de(ke.scope, ke.copy.pluginId, enabledValue)));
-        if (!In) G.push(`${displayPluginId(ke.copy.pluginId)} (${ke.scope} scope)`);
-        else if (!It)
-          oe.push(
-            `the "enabledPlugins" line for ${displayPluginId(ke.copy.pluginId)} in ${ke.scope} settings${Me.has(ke.copy.pluginId) ? " (left out, because the line that turned it off could not be put back; if you want it on, enable it in /plugin)" : ""}`,
+          !reinstalled ||
+          (!failedToDisable.has(uninstalled.copy.pluginId) &&
+            (await setEnabledAtScope(uninstalled.scope, uninstalled.copy.pluginId, enabledValue)));
+        if (!reinstalled)
+          couldNotRestore.push(`${displayPluginId(uninstalled.copy.pluginId)} (${uninstalled.scope} scope)`);
+        else if (!enabledRestored)
+          settingsNotes.push(
+            `the "enabledPlugins" line for ${displayPluginId(uninstalled.copy.pluginId)} in ${uninstalled.scope} settings${failedToDisable.has(uninstalled.copy.pluginId) ? " (left out, because the line that turned it off could not be put back; if you want it on, enable it in /plugin)" : ""}`,
           );
       }
-      if (Ae !== undefined && Ae !== false && !(!Me.has(pluginId) && (await de(re.scope, pluginId, Ae))))
-        oe.push(
-          `the "enabledPlugins" line for ${displayPluginId(pluginId)} in ${re.scope} settings${Me.has(pluginId) ? " (left out, because the line that turned it off could not be put back; if you want it on, enable it in /plugin)" : ""}`,
+      if (
+        blockerEnabled !== undefined &&
+        blockerEnabled !== false &&
+        !(
+          !failedToDisable.has(pluginId_2) &&
+          (await setEnabledAtScope(blocker.scope, pluginId_2, blockerEnabled))
+        )
+      )
+        settingsNotes.push(
+          `the "enabledPlugins" line for ${displayPluginId(pluginId_2)} in ${blocker.scope} settings${failedToDisable.has(pluginId_2) ? " (left out, because the line that turned it off could not be put back; if you want it on, enable it in /plugin)" : ""}`,
         );
-      if (ae.has(c) || (v && me.some((ke) => ke.copy === c))) {
-        let ke = await copyPluginOptions(e, c.pluginId, copyDir, storageV5).catch(() => ({
-          optionsCarried: false,
-          secretsCarried: false,
-          targetHadOwn: false,
-          dataDirCopied: false,
-        }));
-        if (!ke.optionsCarried || !ke.secretsCarried)
-          G.push(`the option values and stored secrets of ${y} (they are under ${r})`);
-        else if (targetHadOwn && !ke.targetHadOwn)
-          G.push(`the option values ${y} had (${r} already had its own, and ${y} now has those)`);
-        if (dataDirCopied && !ke.dataDirCopied) {
-          if (!(await pathExists(pluginDataDirPath(c.pluginId))))
-            G.push(`the data directory of ${y} (it is under ${r})`);
-          else if (L)
-            G.push(
-              `the data directory of ${y} (what is left of it may be incomplete; the whole copy is under ${r})`,
+      if (
+        uninstalledSet.has(primaryCopy) ||
+        (oldCopyGone && uninstalledCopies.some((uninstalled) => uninstalled.copy === primaryCopy))
+      ) {
+        let copyBack = await copyPluginOptions(pluginId, primaryCopy.pluginId, copyDir, storageV5).catch(
+          () => ({
+            optionsCarried: false,
+            secretsCarried: false,
+            targetHadOwn: false,
+            dataDirCopied: false,
+          }),
+        );
+        if (!copyBack.optionsCarried || !copyBack.secretsCarried)
+          couldNotRestore.push(
+            `the option values and stored secrets of ${oldPluginName} (they are under ${newPluginName})`,
+          );
+        else if (targetHadOwn && !copyBack.targetHadOwn)
+          couldNotRestore.push(
+            `the option values ${oldPluginName} had (${newPluginName} already had its own, and ${oldPluginName} now has those)`,
+          );
+        if (dataDirCopied && !copyBack.dataDirCopied) {
+          if (!(await pathExists(pluginDataDirPath(primaryCopy.pluginId))))
+            couldNotRestore.push(`the data directory of ${oldPluginName} (it is under ${newPluginName})`);
+          else if (oldDataDirShared)
+            couldNotRestore.push(
+              `the data directory of ${oldPluginName} (what is left of it may be incomplete; the whole copy is under ${newPluginName})`,
             );
         }
       }
       refreshPluginCaches(storageV5);
-      let filtered = i.filter((ke) => ke !== c && ke !== re.copy && ae.has(ke) && !Ge.has(ke));
-      let Ne = [...G, ...oe];
-      let en = j.format(filtered.map((ke) => displayPluginId(ke.pluginId)));
-      let pn = `they were deleted when ${filtered.length === 1 ? "that plugin was" : "those plugins were"} uninstalled and have to be entered again`;
-      let mn =
-        me.length === 0 && Ne.length === 0
+      let filtered = copies.filter(
+        (copy) =>
+          copy !== primaryCopy &&
+          copy !== blocker.copy &&
+          uninstalledSet.has(copy) &&
+          !settingsKept.has(copy),
+      );
+      let problems = [...couldNotRestore, ...settingsNotes];
+      let affectedNames = listFormat.format(filtered.map((copy) => displayPluginId(copy.pluginId)));
+      let reenterText = `they were deleted when ${filtered.length === 1 ? "that plugin was" : "those plugins were"} uninstalled and have to be entered again`;
+      let extraNote =
+        uninstalledCopies.length === 0 && problems.length === 0
           ? ""
-          : Ne.length > 0
-            ? ` Could not be put back: ${j.format(Ne)}.${filtered.length > 0 ? ` The settings and stored secrets saved for ${en} did not come back either: ${pn}.` : ""}`
-            : ` What had been uninstalled was put back${filtered.length > 0 ? `, except the settings and stored secrets saved for ${en}: ${pn}` : ""}.`;
-      let message = re.message;
-      let Un = printableLabel(
+          : problems.length > 0
+            ? ` Could not be put back: ${listFormat.format(problems)}.${filtered.length > 0 ? ` The settings and stored secrets saved for ${affectedNames} did not come back either: ${reenterText}.` : ""}`
+            : ` What had been uninstalled was put back${filtered.length > 0 ? `, except the settings and stored secrets saved for ${affectedNames}: ${reenterText}` : ""}.`;
+      let message = blocker.message;
+      let shortMessage = printableLabel(
         printableName(
           message.length > 1000
             ? `${truncateToLength(message, 500)} \u2026 ${takeLastChars(message, 500)}`
             : message,
           1100,
         ),
-        T,
+        labelBudget,
       );
-      let Fn = Un === "" ? "" : ` (${Un})`;
-      B = {
-        fromPluginId: re.copy.pluginId,
-        rollBack: G.length === 0 && newCopyWasJustInstalled,
-        rolledBack: `Could not switch: ${displayPluginId(re.copy.pluginId)} could not be uninstalled${Fn}.${mn} ${capitalize(b)} and ${r} was uninstalled again. Plugins that were installed with it as its dependencies, if any, stay installed`,
-        bothInstalled: w
-          ? `${capitalize(r)} is installed, but ${displayPluginId(re.copy.pluginId)} could not be uninstalled at ${re.scope} scope${Fn}.${mn} Uninstall ${G.length > 0 ? "what is left of them" : I} to finish the switch`
-          : `${capitalize(r)} is installed, but ${y} could not be uninstalled at ${re.scope} scope${Fn}.${mn} Both are installed until you uninstall ${y}`,
+      let messageSuffix = shortMessage === "" ? "" : ` (${shortMessage})`;
+      failure = {
+        fromPluginId: blocker.copy.pluginId,
+        rollBack: couldNotRestore.length === 0 && newCopyWasJustInstalled,
+        rolledBack: `Could not switch: ${displayPluginId(blocker.copy.pluginId)} could not be uninstalled${messageSuffix}.${extraNote} ${capitalize(stillInstalledText)} and ${newPluginName} was uninstalled again. Plugins that were installed with it as its dependencies, if any, stay installed`,
+        bothInstalled: severalOldCopies
+          ? `${capitalize(newPluginName)} is installed, but ${displayPluginId(blocker.copy.pluginId)} could not be uninstalled at ${blocker.scope} scope${messageSuffix}.${extraNote} Uninstall ${couldNotRestore.length > 0 ? "what is left of them" : oldNamesText} to finish the switch`
+          : `${capitalize(newPluginName)} is installed, but ${oldPluginName} could not be uninstalled at ${blocker.scope} scope${messageSuffix}.${extraNote} Both are installed until you uninstall ${oldPluginName}`,
       };
     }
-    if (B !== undefined) {
+    if (failure !== undefined) {
       logMarketplaceSwitch({
-        ..._e,
-        fromPluginId: B.fromPluginId,
+        ...switchEvent,
+        fromPluginId: failure.fromPluginId,
         result: {
           outcome: "bad",
           code: "replace_failed",
         },
       });
-      let s = async (bothInstalled) => {
-        if (!X)
+      let failureResult = async (bothInstalled) => {
+        if (!oldCopyWasOff)
           return {
             ok: false,
             message: bothInstalled,
           };
-        let G = await we().catch(() => false);
+        let disabled = await keepNewCopyOffIfNeeded().catch(() => false);
         return {
           ok: false,
-          message: `${bothInstalled}. ${G ? `${capitalize(r)} was turned off, as ${y} was` : `${capitalize(y)} was disabled, but ${r} could not be disabled \u2014 disable it in /plugin`}`,
+          message: `${bothInstalled}. ${disabled ? `${capitalize(newPluginName)} was turned off, as ${oldPluginName} was` : `${capitalize(oldPluginName)} was disabled, but ${newPluginName} could not be disabled \u2014 disable it in /plugin`}`,
         };
       };
-      if (!B.rollBack) return s(B.bothInstalled);
-      let _ = await uninstallPluginOp(e, scope, false, storageV5, {
+      if (!failure.rollBack) return failureResult(failure.bothInstalled);
+      let rollbackResult = await uninstallPluginOp(pluginId, scope, false, storageV5, {
         settingsStillOn: "remove-anyway",
       }).catch((error) => ({
         success: false,
         message: errorMessage(error),
       }));
-      if (_.success && dataDirCopied) {
-        let v = listInstalledPluginIds(await loadInstalledPlugins(storageV5));
-        if (v !== "unknown" && !v.some((G) => dataDirKey(G) === Ee))
-          await removeDirectoryTreeNoFollow(pluginDataDirPath(e)).catch((error) => {
+      if (rollbackResult.success && dataDirCopied) {
+        let installedIds = listInstalledPluginIds(await loadInstalledPlugins(storageV5));
+        if (
+          installedIds !== "unknown" &&
+          !installedIds.some((installedId) => dataDirKey(installedId) === newDataDirKey)
+        )
+          await removeDirectoryTreeNoFollow(pluginDataDirPath(pluginId)).catch((error) => {
             logForDebugging(
-              `Switch to ${e}: could not remove the data directory that the switch had copied: ${errorMessage(error)}`,
+              `Switch to ${pluginId}: could not remove the data directory that the switch had copied: ${errorMessage(error)}`,
               {
                 level: "warn",
               },
             );
           });
       }
-      return _.success || _.failureCode === "not_installed"
+      return rollbackResult.success || rollbackResult.failureCode === "not_installed"
         ? {
             ok: false,
-            message: B.rolledBack,
+            message: failure.rolledBack,
           }
-        : s(B.bothInstalled);
+        : failureResult(failure.bothInstalled);
     }
-    let K = X && (await we().catch(() => false));
-    let q = [];
-    let ie = [];
-    let V = new Set();
-    for (let s of Ge) {
-      V.add(s.pluginId);
-      ie.push(
-        `. The settings and stored secrets of ${displayPluginId(s.pluginId)} were left in place because the list of installed plugins could not be read`,
+    let stayedDisabled = oldCopyWasOff && (await keepNewCopyOffIfNeeded().catch(() => false));
+    let dataRemovedIds = [];
+    let cleanupNotes = [];
+    let keptDataDirIds = new Set();
+    for (let copy of settingsKept) {
+      keptDataDirIds.add(copy.pluginId);
+      cleanupNotes.push(
+        `. The settings and stored secrets of ${displayPluginId(copy.pluginId)} were left in place because the list of installed plugins could not be read`,
       );
     }
-    if (Ge.size > 0)
-      ie.push(`. To delete what was left in place, ${manualCleanupHint(Ge.size === 1 ? "its" : "their")}`);
-    let He = async (s) => {
-      let _ = dataDirKey(s.pluginId);
-      if ([Ee, M].includes(_)) return;
-      let v = listInstalledPluginIds(await loadInstalledPlugins(storageV5));
-      let G = v === "unknown" ? undefined : v.find((de) => dataDirKey(de) === _);
-      if (v === "unknown" || G !== undefined) {
-        if (G !== s.pluginId && (await pathExists(pluginDataDirPath(s.pluginId))))
-          ie.push(
-            `. The saved data of ${displayPluginId(s.pluginId)} was left in place because ${G === undefined ? "the list of installed plugins could not be read" : `${displayPluginId(G)} is installed and uses it`}`,
+    if (settingsKept.size > 0)
+      cleanupNotes.push(
+        `. To delete what was left in place, ${manualCleanupHint(settingsKept.size === 1 ? "its" : "their")}`,
+      );
+    let removeLeftData = async (copy) => {
+      let copyDataDirKey = dataDirKey(copy.pluginId);
+      if ([newDataDirKey, oldDataDirKey].includes(copyDataDirKey)) return;
+      let installedIds = listInstalledPluginIds(await loadInstalledPlugins(storageV5));
+      let owner =
+        installedIds === "unknown"
+          ? undefined
+          : installedIds.find((installedId) => dataDirKey(installedId) === copyDataDirKey);
+      if (installedIds === "unknown" || owner !== undefined) {
+        if (owner !== copy.pluginId && (await pathExists(pluginDataDirPath(copy.pluginId))))
+          cleanupNotes.push(
+            `. The saved data of ${displayPluginId(copy.pluginId)} was left in place because ${owner === undefined ? "the list of installed plugins could not be read" : `${displayPluginId(owner)} is installed and uses it`}`,
           );
         return;
       }
       if (
-        (await deletePluginDataDir(s.pluginId).catch((error) => {
+        (await deletePluginDataDir(copy.pluginId).catch((error) => {
           logForDebugging(
-            `Switch to ${e}: could not remove the data directory of ${s.pluginId}: ${errorMessage(error)}`,
+            `Switch to ${pluginId}: could not remove the data directory of ${copy.pluginId}: ${errorMessage(error)}`,
             {
               level: "warn",
             },
@@ -3001,249 +3328,269 @@ async function finishReplaceSwitch(
           return "failed";
         })) === "removed"
       )
-        q.push(s.pluginId);
+        dataRemovedIds.push(copy.pluginId);
     };
-    let R = async (s, installPath, v, G) => {
-      let oe = listInstalledPluginIds(v);
-      let de = dataDirKey(s.pluginId);
+    let cleanupCopy = async (copy, installPath, registry, dataDirExists) => {
+      let installedIds = listInstalledPluginIds(registry);
+      let copyDataDirKey = dataDirKey(copy.pluginId);
       let deleteDataDir =
-        s === c
-          ? U(v)
-          : isOfficialPluginDirectoryId(s.pluginId) &&
-            ![Ee, M].includes(de) &&
-            oe !== "unknown" &&
-            !oe.some((en) => dataDirKey(en) === de);
+        copy === primaryCopy
+          ? canRemoveOldDataDir(registry)
+          : isOfficialPluginDirectoryId(copy.pluginId) &&
+            ![newDataDirKey, oldDataDirKey].includes(copyDataDirKey) &&
+            installedIds !== "unknown" &&
+            !installedIds.some((installedId) => dataDirKey(installedId) === copyDataDirKey);
       let { dataDirKept, directoryBindingKept } = await cleanupAfterUninstall({
-        pluginId: s.pluginId,
+        pluginId: copy.pluginId,
         installPath,
         deleteDataDir,
-        scope: s.scopes.filter(isInstallableScope).at(-1) ?? scope,
+        scope: copy.scopes.filter(isInstallableScope).at(-1) ?? scope,
         storageV5,
-        registry: v,
-        installedOthers: oe === "unknown" ? [] : vn(v.plugins, s.pluginId),
+        registry,
+        installedOthers:
+          installedIds === "unknown" ? [] : otherInstalledUsers(registry.plugins, copy.pluginId),
       });
-      let index = Z.findIndex(([en]) => en === s.pluginId);
-      if (directoryBindingKept?.installsUnknown === true && Q.has(s) && S.has(s)) {
-        let en = he.get(s);
-        let any = i.some((mn) => mn !== s && mn.pluginId === en && (ae.has(mn) || Fe.includes(mn)));
-        if (any && index !== -1) Z.splice(index, 1);
-        if ((index === -1 || any) && G)
-          ie.push(
-            `. The saved data of ${displayPluginId(s.pluginId)} was left in place because the list of installed plugins could not be read`,
+      let index = directoryNotes.findIndex(([pluginId]) => pluginId === copy.pluginId);
+      if (
+        directoryBindingKept?.installsUnknown === true &&
+        officialUninstalled.has(copy) &&
+        optionsRemoved.has(copy)
+      ) {
+        let dataFolderUser = dataFolderOwner.get(copy);
+        let any = copies.some(
+          (otherCopy) =>
+            otherCopy !== copy &&
+            otherCopy.pluginId === dataFolderUser &&
+            (uninstalledSet.has(otherCopy) || doubleRejected.includes(otherCopy)),
+        );
+        if (any && index !== -1) directoryNotes.splice(index, 1);
+        if ((index === -1 || any) && dataDirExists)
+          cleanupNotes.push(
+            `. The saved data of ${displayPluginId(copy.pluginId)} was left in place because the list of installed plugins could not be read`,
           );
         return {
           stillSwitchedOn: false,
         };
       }
-      let je = directoryReleaseNote(directoryBindingKept);
-      let Ne = je === "" ? [] : [[s.pluginId, je]];
-      if (index === -1) Z.push(...Ne);
-      else Z.splice(index, 1, ...Ne);
-      if (directoryBindingKept !== undefined && !directoryBindingKept.optionsGone) V.add(s.pluginId);
-      else V.delete(s.pluginId);
+      let releaseNote = directoryReleaseNote(directoryBindingKept);
+      let releaseNotes = releaseNote === "" ? [] : [[copy.pluginId, releaseNote]];
+      if (index === -1) directoryNotes.push(...releaseNotes);
+      else directoryNotes.splice(index, 1, ...releaseNotes);
+      if (directoryBindingKept !== undefined && !directoryBindingKept.optionsGone)
+        keptDataDirIds.add(copy.pluginId);
+      else keptDataDirIds.delete(copy.pluginId);
       if (
-        s !== c &&
-        G &&
+        copy !== primaryCopy &&
+        dataDirExists &&
         !dataDirKept &&
         (directoryBindingKept === undefined || directoryBindingKept.dataGone)
       )
-        q.push(s.pluginId);
+        dataRemovedIds.push(copy.pluginId);
       return {
         stillSwitchedOn: directoryBindingKept?.stillOnIn !== undefined,
       };
     };
-    let Q = new Set(ae);
-    let x = [];
-    let ue = new Map();
-    let fe = new Map();
-    let ze = new Map();
-    let Se = new Map();
-    let Fe = [];
-    let Ye = new Map();
-    let sn = new Map();
-    let an = async (installedPlugins) => {
+    let officialUninstalled = new Set(uninstalledSet);
+    let removedFolders = [];
+    let folderJudgements = new Map();
+    let launchFolderFiles = new Map();
+    let legacyLocalFiles = new Map();
+    let stillSwitchedOn = new Map();
+    let doubleRejected = [];
+    let failedReads = new Map();
+    let installPathByCopy = new Map();
+    let loadRegistry = async (installedPlugins) => {
       let installedPlugins_2 = await loadInstalledPlugins(storageV5);
       return listInstalledPluginIds(installedPlugins_2) === "unknown" ? installedPlugins : installedPlugins_2;
     };
-    let Ue = async (s, installPath, v) => {
-      let G = await pathExists(pluginDataDirPath(s.pluginId));
-      let oe = await R(s, installPath, v, G)
-        .catch(() => R(s, undefined, v, G))
+    let cleanupUninstalled = async (copy, installPath, registry) => {
+      let dataDirExists = await pathExists(pluginDataDirPath(copy.pluginId));
+      let cleanupResult = await cleanupCopy(copy, installPath, registry, dataDirExists)
+        .catch(() => cleanupCopy(copy, undefined, registry, dataDirExists))
         .catch((error) => {
           logForDebugging(
-            `Switch to ${e}: could not finish removing what ${s.pluginId} saved: ${errorMessage(error)}`,
+            `Switch to ${pluginId}: could not finish removing what ${copy.pluginId} saved: ${errorMessage(error)}`,
             {
               level: "warn",
             },
           );
           return "rejected-twice";
         });
-      if (oe === "rejected-twice") {
-        Fe.push(s);
-        V.add(s.pluginId);
+      if (cleanupResult === "rejected-twice") {
+        doubleRejected.push(copy);
+        keptDataDirIds.add(copy.pluginId);
         return;
       }
-      ae.add(s);
-      Se.set(s, oe.stillSwitchedOn);
-      if (s !== c && !isOfficialPluginDirectoryId(s.pluginId)) await He(s);
+      uninstalledSet.add(copy);
+      stillSwitchedOn.set(copy, cleanupResult.stillSwitchedOn);
+      if (copy !== primaryCopy && !isOfficialPluginDirectoryId(copy.pluginId)) await removeLeftData(copy);
     };
-    for (let s of i) {
-      let _ = un.get(s);
-      let judged = _?.judged;
-      let records = _?.records ?? [];
-      let oe = ue.get(s) ?? [];
-      let de;
+    for (let copy of copies) {
+      let judgedEntry = judgedByCopy.get(copy);
+      let judged = judgedEntry?.judged;
+      let records = judgedEntry?.records ?? [];
+      let folderJudged = folderJudgements.get(copy) ?? [];
+      let filesBecause;
       if (judged?.kind === "by-files" && judged.ofTheLaunchFolder.length > 0) {
-        de = "launch-folder-files";
-        fe.set(s, judged.ofTheLaunchFolder);
+        filesBecause = "launch-folder-files";
+        launchFolderFiles.set(copy, judged.ofTheLaunchFolder);
       }
-      let Je = tn.get(s);
-      let Me;
-      for (let Ae of _?.otherFolders ?? []) {
-        let projectPath = Ae.projectPath;
+      let installPath = installPaths.get(copy);
+      let registry;
+      for (let otherFolder of judgedEntry?.otherFolders ?? []) {
+        let projectPath = otherFolder.projectPath;
         if (projectPath === undefined) continue;
-        let Ne = (because, Hn = [], launchProjectFileOn) => {
-          let [Ct] = Hn;
-          oe.push({
+        let addFolder = (because, files = [], otherFile) => {
+          let [firstFile] = files;
+          folderJudged.push({
             folder: projectPath,
             because,
-            files: Hn,
+            files,
             sharedCheckout:
-              launchProjectFileOn !== undefined &&
-              Hn.length === 1 &&
-              Ct?.readsBack === "on" &&
-              isSameRepoPathMoved(Ct.file, launchProjectFileOn),
+              otherFile !== undefined &&
+              files.length === 1 &&
+              firstFile?.readsBack === "on" &&
+              isSameRepoPathMoved(firstFile.file, otherFile),
           });
         };
-        let en = judged?.kind === "by-files" ? judged.ofFolders.get(projectPath) : undefined;
-        if (en !== undefined && judged?.kind === "by-files") {
-          Ne("own-files", en, judged.launchProjectFileOn);
+        let folderFiles = judged?.kind === "by-files" ? judged.ofFolders.get(projectPath) : undefined;
+        if (folderFiles !== undefined && judged?.kind === "by-files") {
+          addFolder("own-files", folderFiles, judged.launchProjectFileOn);
           continue;
         }
-        if (de !== undefined) {
-          Ne(de);
+        if (filesBecause !== undefined) {
+          addFolder(filesBecause);
           continue;
         }
-        if (Ye.has(s)) {
-          Ne("a-failed-read");
+        if (failedReads.has(copy)) {
+          addFolder("a-failed-read");
           continue;
         }
         let installedPlugins = await loadInstalledPlugins(storageV5);
         if (listInstalledPluginIds(installedPlugins) === "unknown") {
-          Ne("a-failed-read");
+          addFolder("a-failed-read");
           continue;
         }
-        Me = installedPlugins;
-        let mn = installedPlugins.plugins[s.pluginId] ?? [];
-        if (!mn.some((nn) => nn.scope === "local" && nn.projectPath === projectPath)) continue;
-        let rn = await findLocalSettingsMentions(s.pluginId, [projectPath], {
-          installedOthers: vn(installedPlugins.plugins, s.pluginId),
+        registry = installedPlugins;
+        let installs = installedPlugins.plugins[copy.pluginId] ?? [];
+        if (!installs.some((install) => install.scope === "local" && install.projectPath === projectPath))
+          continue;
+        let localMentions = await findLocalSettingsMentions(copy.pluginId, [projectPath], {
+          installedOthers: otherInstalledUsers(installedPlugins.plugins, copy.pluginId),
           launchFolderToo,
           ownLocalFileToo: true,
         }).catch(() => "threw");
-        if (rn === "threw") {
-          de = "a-failed-read";
-          Ne("a-failed-read");
+        if (localMentions === "threw") {
+          filesBecause = "a-failed-read";
+          addFolder("a-failed-read");
           continue;
         }
-        if (rn.kind === "own-local-file") {
-          de = rn.readsBack === "on" && rn.theSessionsOwn ? "own-local-line" : "own-local-file-unsure";
-          Ne(de);
+        if (localMentions.kind === "own-local-file") {
+          filesBecause =
+            localMentions.readsBack === "on" && localMentions.theSessionsOwn
+              ? "own-local-line"
+              : "own-local-file-unsure";
+          addFolder(filesBecause);
           continue;
         }
-        if (rn.kind === "own-legacy-local-file") {
-          de = "own-legacy-local-file";
-          ze.set(s, rn.file);
-          Ne("own-legacy-local-file");
+        if (localMentions.kind === "own-legacy-local-file") {
+          filesBecause = "own-legacy-local-file";
+          legacyLocalFiles.set(copy, localMentions.file);
+          addFolder("own-legacy-local-file");
           continue;
         }
-        let Un = rn.ofTheLaunchFolder.length > 0;
-        if (Un) {
-          de = "launch-folder-files";
-          fe.set(s, rn.ofTheLaunchFolder);
+        let hasLaunchFolderFiles = localMentions.ofTheLaunchFolder.length > 0;
+        if (hasLaunchFolderFiles) {
+          filesBecause = "launch-folder-files";
+          launchFolderFiles.set(copy, localMentions.ofTheLaunchFolder);
         }
-        let Fn = rn.ofFolders.get(projectPath);
-        if (Fn !== undefined) {
-          Ne("own-files", Fn, rn.launchProjectFileOn);
+        let folderFileList = localMentions.ofFolders.get(projectPath);
+        if (folderFileList !== undefined) {
+          addFolder("own-files", folderFileList, localMentions.launchProjectFileOn);
           continue;
         }
-        if (Un) {
-          Ne("launch-folder-files");
+        if (hasLaunchFolderFiles) {
+          addFolder("launch-folder-files");
           continue;
         }
         if (
-          isOfficialPluginDirectoryId(s.pluginId) &&
-          !mn
-            .filter((nn) => !(nn.scope === "local" && nn.projectPath === projectPath))
+          isOfficialPluginDirectoryId(copy.pluginId) &&
+          !installs
+            .filter((install) => !(install.scope === "local" && install.projectPath === projectPath))
             .some(hasDirectoryRepositoryKey)
         ) {
-          let nn = await persistDirectoryBinding(s.pluginId, [...mn, ...records]).catch(
+          let persistResult = await persistDirectoryBinding(copy.pluginId, [...installs, ...records]).catch(
             () => "not-persisted",
           );
           if (!(
-            nn === "held" ||
-            (nn === "no-key" && !records.some((record) => record.directoryRepositoryKey))
+            persistResult === "held" ||
+            (persistResult === "no-key" && !records.some((record) => record.directoryRepositoryKey))
           )) {
-            Ne("hold-not-proven");
+            addFolder("hold-not-proven");
             continue;
           }
         }
-        let ke = await removePluginInstallation(s.pluginId, "local", projectPath, storageV5, {
-          installPath: Ae.installPath,
-          lastUpdated: Ae.lastUpdated,
+        let removed = await removePluginInstallation(copy.pluginId, "local", projectPath, storageV5, {
+          installPath: otherFolder.installPath,
+          lastUpdated: otherFolder.lastUpdated,
         }).then(
-          (nn) => nn !== false,
+          (result) => result !== false,
           () => false,
         );
-        let ln = async () => {
+        let loadRegistryOrUnknown = async () => {
           let installedPlugins = await loadInstalledPlugins(storageV5);
           return listInstalledPluginIds(installedPlugins) === "unknown" ? "unknown" : installedPlugins;
         };
-        let Pn = await ln();
-        let In = Pn === "unknown" && ke ? await ln() : Pn;
-        if (In === "unknown") {
-          if (ke)
-            Ye.set(s, {
+        let registryNow = await loadRegistryOrUnknown();
+        let registryAgain =
+          registryNow === "unknown" && removed ? await loadRegistryOrUnknown() : registryNow;
+        if (registryAgain === "unknown") {
+          if (removed)
+            failedReads.set(copy, {
               folder: projectPath,
-              installPath: Ae.installPath,
+              installPath: otherFolder.installPath,
             });
-          else Ne("a-failed-read");
+          else addFolder("a-failed-read");
           continue;
         }
-        Me = In;
+        registry = registryAgain;
         if (
-          (In.plugins[s.pluginId] ?? []).some((nn) => nn.scope === "local" && nn.projectPath === projectPath)
+          (registryAgain.plugins[copy.pluginId] ?? []).some(
+            (install) => install.scope === "local" && install.projectPath === projectPath,
+          )
         )
-          Ne("not-removed");
-        else if (ke) {
-          x.push({
-            copy: s,
+          addFolder("not-removed");
+        else if (removed) {
+          removedFolders.push({
+            copy,
             folder: projectPath,
           });
-          Je = Ae.installPath;
+          installPath = otherFolder.installPath;
         }
       }
-      if (oe.length > 0) ue.set(s, oe);
-      sn.set(s, Je);
-      if (ae.has(s) || Ye.has(s)) continue;
-      let Pe = await an(x.some((Ae) => Ae.copy === s) ? Me : undefined);
-      if (Pe === undefined || (Pe.plugins[s.pluginId]?.length ?? 0) > 0) continue;
-      await Ue(s, Je, Pe);
+      if (folderJudged.length > 0) folderJudgements.set(copy, folderJudged);
+      installPathByCopy.set(copy, installPath);
+      if (uninstalledSet.has(copy) || failedReads.has(copy)) continue;
+      let loadedRegistry = await loadRegistry(
+        removedFolders.some((removed) => removed.copy === copy) ? registry : undefined,
+      );
+      if (loadedRegistry === undefined || (loadedRegistry.plugins[copy.pluginId]?.length ?? 0) > 0) continue;
+      await cleanupUninstalled(copy, installPath, loadedRegistry);
     }
     let installedPlugins = await loadInstalledPlugins(storageV5);
-    let ye = listInstalledPluginIds(installedPlugins);
-    for (let [s, { folder: _, installPath: v }] of [...Ye]) {
-      if (ye === "unknown") continue;
-      Ye.delete(s);
+    let finalInstalledIds = listInstalledPluginIds(installedPlugins);
+    for (let [copy, { folder, installPath }] of [...failedReads]) {
+      if (finalInstalledIds === "unknown") continue;
+      failedReads.delete(copy);
       if (
-        (installedPlugins.plugins[s.pluginId] ?? []).some(
-          (oe) => oe.scope === "local" && oe.projectPath === _,
+        (installedPlugins.plugins[copy.pluginId] ?? []).some(
+          (install) => install.scope === "local" && install.projectPath === folder,
         )
       ) {
-        ue.set(s, [
-          ...(ue.get(s) ?? []),
+        folderJudgements.set(copy, [
+          ...(folderJudgements.get(copy) ?? []),
           {
-            folder: _,
+            folder,
             because: "not-removed",
             files: [],
             sharedCheckout: false,
@@ -3251,141 +3598,167 @@ async function finishReplaceSwitch(
         ]);
         continue;
       }
-      x.push({
-        copy: s,
-        folder: _,
+      removedFolders.push({
+        copy,
+        folder,
       });
-      sn.set(s, v);
+      installPathByCopy.set(copy, installPath);
     }
-    if (ye !== "unknown") {
-      for (let s of i)
-        if ((installedPlugins.plugins[s.pluginId]?.length ?? 0) === 0 && !ae.has(s) && !Fe.includes(s)) {
-          let _ = (await an(installedPlugins)) ?? installedPlugins;
-          if ((_.plugins[s.pluginId]?.length ?? 0) > 0) continue;
-          await Ue(s, sn.get(s), _);
+    if (finalInstalledIds !== "unknown") {
+      for (let copy of copies)
+        if (
+          (installedPlugins.plugins[copy.pluginId]?.length ?? 0) === 0 &&
+          !uninstalledSet.has(copy) &&
+          !doubleRejected.includes(copy)
+        ) {
+          let registry = (await loadRegistry(installedPlugins)) ?? installedPlugins;
+          if ((registry.plugins[copy.pluginId]?.length ?? 0) > 0) continue;
+          await cleanupUninstalled(copy, installPathByCopy.get(copy), registry);
         }
     }
-    let joined = i
-      .map((s) => {
-        let flattened = x.flatMap(({ copy, folder }) => (copy === s ? [displayFolderName(folder)] : []));
-        let v = flattened.length - 2;
+    let joined = copies
+      .map((copy) => {
+        let flattened = removedFolders.flatMap(({ copy: copy_2, folder }) =>
+          copy_2 === copy ? [displayFolderName(folder)] : [],
+        );
+        let moreCount = flattened.length - 2;
         return flattened.length === 0
           ? ""
-          : `. Claude Code had also recorded ${displayPluginId(s.pluginId)} as installed from ${j.format(v > 0 ? [...flattened.slice(0, 2), `${v} more ${plural(v, "folder")} of this repository`] : flattened)} (it does so when it is started there); ${flattened.length === 1 ? "that record was" : "those records were"} removed too`;
+          : `. Claude Code had also recorded ${displayPluginId(copy.pluginId)} as installed from ${listFormat.format(moreCount > 0 ? [...flattened.slice(0, 2), `${moreCount} more ${plural(moreCount, "folder")} of this repository`] : flattened)} (it does so when it is started there); ${flattened.length === 1 ? "that record was" : "those records were"} removed too`;
       })
       .join("");
-    let Te = (s) =>
+    let localFolders = (copy) =>
       uniq(
-        (installedPlugins.plugins[s.pluginId] ?? []).flatMap((_) =>
-          _.scope === "local" && _.projectPath !== undefined && isInstallationForThisRepo(_)
-            ? [_.projectPath]
+        (installedPlugins.plugins[copy.pluginId] ?? []).flatMap((install) =>
+          install.scope === "local" && install.projectPath !== undefined && isInstallationForThisRepo(install)
+            ? [install.projectPath]
             : [],
         ),
       );
-    let Ze = new Set(["own-local-line", "own-legacy-local-file", "launch-folder-files", "own-files"]);
-    let Ve = new Map();
-    let gn = new Set();
-    let joined_2 = i
-      .map((s) => {
-        let _ = Te(s);
-        let filtered = (ue.get(s) ?? []).filter(
-          ({ folder, because }) => Ze.has(because) && (ye === "unknown" || _.includes(folder)),
+    let reportableReasons = new Set([
+      "own-local-line",
+      "own-legacy-local-file",
+      "launch-folder-files",
+      "own-files",
+    ]);
+    let keptFolders = new Map();
+    let projectSettingsFolders = new Set();
+    let joined_2 = copies
+      .map((copy) => {
+        let coveredFolders = localFolders(copy);
+        let filtered = (folderJudgements.get(copy) ?? []).filter(
+          ({ folder, because }) =>
+            reportableReasons.has(because) &&
+            (finalInstalledIds === "unknown" || coveredFolders.includes(folder)),
         );
-        Ve.set(
-          s,
+        keptFolders.set(
+          copy,
           filtered.map(({ folder }) => folder),
         );
-        let G = (...Ne) => filtered.flatMap(({ folder, because }) => (Ne.includes(because) ? [folder] : []));
-        let oe = ze.get(s);
+        let foldersWith = (...reasons) =>
+          filtered.flatMap(({ folder, because }) => (reasons.includes(because) ? [folder] : []));
+        let legacyFile = legacyLocalFiles.get(copy);
         let flattened = filtered.flatMap(({ because, files }) => (because === "own-files" ? files : []));
         let filtered_2 = filtered.filter(({ because }) =>
           ["launch-folder-files", "own-files"].includes(because),
         );
-        let Me = filtered_2.length === 0 ? [] : (fe.get(s) ?? []);
-        if ([...Me, ...flattened.slice(0, 2)].some((Ne) => Ne.alsoThisLaunchs === "projectSettings"))
-          gn.add(s);
-        let [Ae] = filtered_2;
-        let je = (Ne, because) =>
-          Ne.length === 0
+        let launchFiles = filtered_2.length === 0 ? [] : (launchFolderFiles.get(copy) ?? []);
+        if (
+          [...launchFiles, ...flattened.slice(0, 2)].some(
+            (file) => file.alsoThisLaunchs === "projectSettings",
+          )
+        )
+          projectSettingsFolders.add(copy);
+        let [firstKept] = filtered_2;
+        let describeFolders = (folders, because) =>
+          folders.length === 0
             ? ""
             : describeLeftLocalRecords({
-                shownId: displayPluginId(s.pluginId),
-                shownNewId: r,
-                folders: Ne,
+                shownId: displayPluginId(copy.pluginId),
+                shownNewId: newPluginName,
+                folders,
                 because,
               });
         return [
-          je(G("own-local-line"), {
+          describeFolders(foldersWith("own-local-line"), {
             kind: "own-local-line",
           }),
-          oe === undefined
+          legacyFile === undefined
             ? ""
-            : je(G("own-legacy-local-file"), {
+            : describeFolders(foldersWith("own-legacy-local-file"), {
                 kind: "legacy-local-file",
-                file: oe,
+                file: legacyFile,
               }),
-          je(G("launch-folder-files", "own-files"), {
+          describeFolders(foldersWith("launch-folder-files", "own-files"), {
             kind: "files",
-            ofTheLaunchFolder: Me,
+            ofTheLaunchFolder: launchFiles,
             ofFolders: flattened,
-            sharedCheckout: filtered_2.length === 1 && Ae?.sharedCheckout === true,
+            sharedCheckout: filtered_2.length === 1 && firstKept?.sharedCheckout === true,
           }),
         ].join("");
       })
       .join("");
-    let flattened_2 = i.flatMap((s) => {
-      let _ = Ve.get(s) ?? [];
-      let filtered = (ye === "unknown" ? uniq((ue.get(s) ?? []).map(({ folder }) => folder)) : Te(s)).filter(
-        (Je) => !_.includes(Je),
-      );
-      let [G] = filtered;
-      if (G === undefined) return [];
-      let oe = `. ${capitalize(displayPluginId(s.pluginId))} is still recorded as installed at local scope from`;
-      let de = filtered.length - 2;
+    let flattened_2 = copies.flatMap((copy) => {
+      let kept = keptFolders.get(copy) ?? [];
+      let filtered = (
+        finalInstalledIds === "unknown"
+          ? uniq((folderJudgements.get(copy) ?? []).map(({ folder }) => folder))
+          : localFolders(copy)
+      ).filter((folder) => !kept.includes(folder));
+      let [firstFolder] = filtered;
+      if (firstFolder === undefined) return [];
+      let prefix = `. ${capitalize(displayPluginId(copy.pluginId))} is still recorded as installed at local scope from`;
+      let moreCount = filtered.length - 2;
       return [
         {
           scope: "local",
           said:
             filtered.length === 1
-              ? `${oe} ${describeFolder(G)}: to remove it, start Claude Code in that folder and uninstall it there`
-              : `${oe} the folders ${j.format(de > 0 ? [...filtered.slice(0, 2).map(displayFolderName), `${de} more in which Claude Code was started`] : filtered.map(displayFolderName))}: to remove it, start Claude Code in each of those folders and uninstall it there`,
+              ? `${prefix} ${describeFolder(firstFolder)}: to remove it, start Claude Code in that folder and uninstall it there`
+              : `${prefix} the folders ${listFormat.format(moreCount > 0 ? [...filtered.slice(0, 2).map(displayFolderName), `${moreCount} more in which Claude Code was started`] : filtered.map(displayFolderName))}: to remove it, start Claude Code in each of those folders and uninstall it there`,
         },
       ];
     });
-    let joined_3 = flattened_2.map((s) => s.said).join("");
-    let kn = [];
-    let _n = new Map();
-    let jn = false;
-    for (let s of i) {
-      let _ = ye === "unknown" || ye.includes(s.pluginId);
-      let v = ye === "unknown" ? undefined : ye.filter((G) => G !== s.pluginId);
-      for (let G of SETTING_SOURCES) {
-        let enabledPlugins = getSettingsForSourceForUpkeep(G)?.enabledPlugins ?? {};
-        let pluginName = findPluginName(Object.keys(enabledPlugins), s.pluginId);
-        let Je = pluginName === undefined ? undefined : enabledPlugins[pluginName];
-        if (pluginName === undefined || !isDependencyAutoInstallState(Je)) continue;
-        if (v !== undefined && !enabledPluginKeys(enabledPlugins, s.pluginId, v).includes(pluginName))
+    let joined_3 = flattened_2.map((entry) => entry.said).join("");
+    let stillListed = [];
+    let ambiguousLines = new Map();
+    let touchedUserSettings = false;
+    for (let copy of copies) {
+      let mayStillBeInstalled = finalInstalledIds === "unknown" || finalInstalledIds.includes(copy.pluginId);
+      let otherInstalledIds =
+        finalInstalledIds === "unknown"
+          ? undefined
+          : finalInstalledIds.filter((installedId) => installedId !== copy.pluginId);
+      for (let settingSource of SETTING_SOURCES) {
+        let enabledPlugins = getSettingsForSourceForUpkeep(settingSource)?.enabledPlugins ?? {};
+        let pluginName = findPluginName(Object.keys(enabledPlugins), copy.pluginId);
+        let value = pluginName === undefined ? undefined : enabledPlugins[pluginName];
+        if (pluginName === undefined || !isDependencyAutoInstallState(value)) continue;
+        if (
+          otherInstalledIds !== undefined &&
+          !enabledPluginKeys(enabledPlugins, copy.pluginId, otherInstalledIds).includes(pluginName)
+        )
           continue;
         if (
-          !_ &&
-          G === "userSettings" &&
+          !mayStillBeInstalled &&
+          settingSource === "userSettings" &&
           (
             await updateSettingsForSourceWithTransform(
-              G,
-              (Pe) => {
-                let Ae = {
-                  ...Pe?.enabledPlugins,
+              settingSource,
+              (settings) => {
+                let enabledPlugins = {
+                  ...settings?.enabledPlugins,
                 };
-                let pluginName = findPluginName(Object.keys(Ae), s.pluginId);
+                let pluginName = findPluginName(Object.keys(enabledPlugins), copy.pluginId);
                 if (
                   pluginName === undefined ||
-                  v === undefined ||
-                  !enabledPluginKeys(Ae, s.pluginId, v).includes(pluginName)
+                  otherInstalledIds === undefined ||
+                  !enabledPluginKeys(enabledPlugins, copy.pluginId, otherInstalledIds).includes(pluginName)
                 )
                   return null;
-                Ae[pluginName] = undefined;
+                enabledPlugins[pluginName] = undefined;
                 return {
-                  enabledPlugins: Ae,
+                  enabledPlugins,
                 };
               },
               undefined,
@@ -3395,201 +3768,232 @@ async function finishReplaceSwitch(
             }))
           ).error === null
         )
-          jn = true;
+          touchedUserSettings = true;
         else {
-          let Pe =
-            G === "policySettings"
+          let reasonText =
+            settingSource === "policySettings"
               ? "managed settings: only your administrator can remove it"
-              : G === "flagSettings"
+              : settingSource === "flagSettings"
                 ? "the --settings flag"
-                : G === "projectSettings"
+                : settingSource === "projectSettings"
                   ? "project settings: .claude/settings.json"
-                  : G === "localSettings"
+                  : settingSource === "localSettings"
                     ? "local settings: .claude/settings.local.json"
-                    : ye === "unknown"
+                    : finalInstalledIds === "unknown"
                       ? "user settings: kept, because the list of installed plugins could not be read"
-                      : _
+                      : mayStillBeInstalled
                         ? "user settings: kept, because it is still recorded as installed from another folder; when you uninstall it there, also take this line out of your user settings file, or the next start can record it again"
                         : "user settings: it could not be removed";
-          if (ye === "unknown" && pluginName !== s.pluginId)
-            _n.set(
-              `${displayPluginId(pluginName)} (${Pe}; it may be another installed plugin's own line${G === "userSettings" ? "" : ": the list of installed plugins could not be read"})`,
+          if (finalInstalledIds === "unknown" && pluginName !== copy.pluginId)
+            ambiguousLines.set(
+              `${displayPluginId(pluginName)} (${reasonText}; it may be another installed plugin's own line${settingSource === "userSettings" ? "" : ": the list of installed plugins could not be read"})`,
               pluginName,
             );
-          else if (!(G === "projectSettings" && gn.has(s))) kn.push(`${displayPluginId(s.pluginId)} (${Pe})`);
+          else if (!(settingSource === "projectSettings" && projectSettingsFolders.has(copy)))
+            stillListed.push(`${displayPluginId(copy.pluginId)} (${reasonText})`);
         }
       }
     }
-    if (jn) refreshPluginCaches(storageV5);
-    for (let s of i) {
-      if (Fe.includes(s) || Ye.has(s)) continue;
-      if (Q.has(s)) {
-        if (s === c) continue;
-        if (!isOfficialPluginDirectoryId(s.pluginId)) {
-          await He(s);
+    if (touchedUserSettings) refreshPluginCaches(storageV5);
+    for (let copy of copies) {
+      if (doubleRejected.includes(copy) || failedReads.has(copy)) continue;
+      if (officialUninstalled.has(copy)) {
+        if (copy === primaryCopy) continue;
+        if (!isOfficialPluginDirectoryId(copy.pluginId)) {
+          await removeLeftData(copy);
           continue;
         }
-        if ([Ee, M].includes(dataDirKey(s.pluginId))) continue;
-      } else if (Se.get(s) !== true) continue;
-      if (!isOfficialPluginDirectoryId(s.pluginId)) continue;
-      let installedPlugins = await loadInstalledPlugins(storageV5);
-      if ((installedPlugins.plugins[s.pluginId]?.length ?? 0) > 0) continue;
-      let v = await pathExists(pluginDataDirPath(s.pluginId));
-      await R(s, undefined, installedPlugins, v).catch((error) => {
+        if ([newDataDirKey, oldDataDirKey].includes(dataDirKey(copy.pluginId))) continue;
+      } else if (stillSwitchedOn.get(copy) !== true) continue;
+      if (!isOfficialPluginDirectoryId(copy.pluginId)) continue;
+      let registry = await loadInstalledPlugins(storageV5);
+      if ((registry.plugins[copy.pluginId]?.length ?? 0) > 0) continue;
+      let dataDirExists = await pathExists(pluginDataDirPath(copy.pluginId));
+      await cleanupCopy(copy, undefined, registry, dataDirExists).catch((error) => {
         logForDebugging(
-          `Switch to ${e}: could not finish removing what ${s.pluginId} saved: ${errorMessage(error)}`,
+          `Switch to ${pluginId}: could not finish removing what ${copy.pluginId} saved: ${errorMessage(error)}`,
           {
             level: "warn",
           },
         );
-        V.add(s.pluginId);
+        keptDataDirIds.add(copy.pluginId);
       });
     }
-    let Mn = P === undefined ? undefined : await loadInstalledPlugins(storageV5);
-    let En =
-      Mn === undefined || (!hasFailedInstalledPluginsRead(Mn) && (Mn.plugins[c.pluginId]?.length ?? 0) > 0)
+    let registry = otherDataDirUser === undefined ? undefined : await loadInstalledPlugins(storageV5);
+    let dataDirOwner =
+      registry === undefined ||
+      (!hasFailedInstalledPluginsRead(registry) && (registry.plugins[primaryCopy.pluginId]?.length ?? 0) > 0)
         ? undefined
-        : findOtherPluginSharingDataDir(c.pluginId, Mn);
-    if (En?.kind === "nobody" && dataDirCopied && !isOfficialPluginDirectoryId(c.pluginId)) {
-      if ((await deletePluginDataDir(c.pluginId).catch(() => "failed")) === "failed")
-        logForDebugging(`Switch to ${e}: could not remove the data directory of ${c.pluginId}`, {
-          level: "warn",
-        });
+        : findOtherPluginSharingDataDir(primaryCopy.pluginId, registry);
+    if (
+      dataDirOwner?.kind === "nobody" &&
+      dataDirCopied &&
+      !isOfficialPluginDirectoryId(primaryCopy.pluginId)
+    ) {
+      if ((await deletePluginDataDir(primaryCopy.pluginId).catch(() => "failed")) === "failed")
+        logForDebugging(
+          `Switch to ${pluginId}: could not remove the data directory of ${primaryCopy.pluginId}`,
+          {
+            level: "warn",
+          },
+        );
     }
-    let ut =
-      En === undefined || En.kind === "nobody"
+    let dataDirInUse =
+      dataDirOwner === undefined || dataDirOwner.kind === "nobody"
         ? undefined
         : {
-            usedBy: En.kind === "plugin" ? En.pluginId : undefined,
+            usedBy: dataDirOwner.kind === "plugin" ? dataDirOwner.pluginId : undefined,
           };
-    let di = !X
+    let disabledNote = !oldCopyWasOff
       ? ""
-      : K
+      : stayedDisabled
         ? " (it stays disabled, as before)"
-        : ` (it was disabled before, but ${r} could not be disabled \u2014 disable it in /plugin)`;
-    let ft = !c.scopes.some((scope_2) => scope_2 === scope);
-    let ci =
-      ft || c.scopes.some((scope_2) => scope_2 !== scope) ? ` (was ${c.scopes.join(" and ")} scope)` : "";
-    let qn = oldDataDirDisposable
-      ? ut !== undefined && (await pathExists(pluginDataDirPath(c.pluginId)))
+        : ` (it was disabled before, but ${newPluginName} could not be disabled \u2014 disable it in /plugin)`;
+    let scopeChanged = !primaryCopy.scopes.some((scope_2) => scope_2 === scope);
+    let scopeNote =
+      scopeChanged || primaryCopy.scopes.some((scope_2) => scope_2 !== scope)
+        ? ` (was ${primaryCopy.scopes.join(" and ")} scope)`
+        : "";
+    let keptDataDir = oldDataDirDisposable
+      ? dataDirInUse !== undefined && (await pathExists(pluginDataDirPath(primaryCopy.pluginId)))
         ? {
-            pluginId: c.pluginId,
+            pluginId: primaryCopy.pluginId,
             reason: "another-plugin-uses-it",
-            usedBy: ut.usedBy,
+            usedBy: dataDirInUse.usedBy,
             copied: dataDirCopied,
           }
         : undefined
       : {
-          pluginId: c.pluginId,
+          pluginId: primaryCopy.pluginId,
           reason: dataDirKeptReason === "target-had-own" ? "target-had-own" : "copy-failed",
         };
-    let ui = qn === undefined ? "" : `. ${describeKeptDataDir(qn, e)}`;
-    let zn = {
-      scopeChanged: ft,
-      stayedDisabled: K,
+    let keptDataDirNote = keptDataDir === undefined ? "" : `. ${describeKeptDataDir(keptDataDir, pluginId)}`;
+    let switchResult = {
+      scopeChanged,
+      stayedDisabled,
       dataDirCarried: dataDirCopied,
       pinChanged,
-      replacedCount: i.length,
+      replacedCount: copies.length,
       isPrimary: true,
     };
     logMarketplaceSwitch({
-      ..._e,
+      ...switchEvent,
       result:
-        X && !K
+        oldCopyWasOff && !stayedDisabled
           ? {
-              ...zn,
+              ...switchResult,
               outcome: "sad",
               code: "disable_failed",
             }
           : !oldDataDirDisposable
             ? {
-                ...zn,
+                ...switchResult,
                 outcome: "sad",
                 code: "data_dir_kept",
               }
             : {
-                ...zn,
+                ...switchResult,
                 outcome: "ok",
               },
     });
-    for (let s of i) {
-      if (s === c) continue;
+    for (let copy of copies) {
+      if (copy === primaryCopy) continue;
       logMarketplaceSwitch({
-        ..._e,
-        fromPluginId: s.pluginId,
+        ...switchEvent,
+        fromPluginId: copy.pluginId,
         result: {
           outcome: "ok",
-          scopeChanged: !s.scopes.some((scope_2) => scope_2 === scope),
+          scopeChanged: !copy.scopes.some((scope_2) => scope_2 === scope),
           stayedDisabled: false,
           dataDirCarried: false,
           pinChanged:
-            s.gitCommitSha !== undefined && gitCommitSha !== undefined && s.gitCommitSha !== gitCommitSha,
-          replacedCount: i.length,
+            copy.gitCommitSha !== undefined &&
+            gitCommitSha !== undefined &&
+            copy.gitCommitSha !== gitCommitSha,
+          replacedCount: copies.length,
           isPrimary: false,
         },
       });
     }
-    let mapped = i
-      .filter((s) => ae.has(s) && (targetHadOwn || s !== c) && !V.has(s.pluginId))
-      .map((s) => s.pluginId);
-    let filtered = mapped.filter((s) => q.includes(s));
-    let filtered_2 = mapped.filter((s) => !q.includes(s));
-    let filtered_3 = q.filter((s) => !mapped.includes(s));
-    let ht = [
+    let mapped = copies
+      .filter(
+        (copy) =>
+          uninstalledSet.has(copy) &&
+          (targetHadOwn || copy !== primaryCopy) &&
+          !keptDataDirIds.has(copy.pluginId),
+      )
+      .map((copy) => copy.pluginId);
+    let filtered = mapped.filter((pluginId) => dataRemovedIds.includes(pluginId));
+    let filtered_2 = mapped.filter((pluginId) => !dataRemovedIds.includes(pluginId));
+    let filtered_3 = dataRemovedIds.filter((pluginId) => !mapped.includes(pluginId));
+    let removedThings = [
       ...(filtered.length > 0
-        ? [`the settings and saved data for ${j.format(filtered.map(displayPluginId))}`]
+        ? [`the settings and saved data for ${listFormat.format(filtered.map(displayPluginId))}`]
         : []),
       ...(filtered_2.length > 0
-        ? [`the settings saved for ${j.format(filtered_2.map(displayPluginId))}`]
+        ? [`the settings saved for ${listFormat.format(filtered_2.map(displayPluginId))}`]
         : []),
-      ...(filtered_3.length > 0 ? [`the saved data of ${j.format(filtered_3.map(displayPluginId))}`] : []),
+      ...(filtered_3.length > 0
+        ? [`the saved data of ${listFormat.format(filtered_3.map(displayPluginId))}`]
+        : []),
     ];
-    let yt = ht.length === 0 ? "" : `, and ${j.format(ht)} were removed`;
-    let fi = targetHadOwn
-      ? `${r} kept its own settings${yt}`
-      : w
-        ? `your plugin settings carried over from ${y}${yt}`
+    let removedSuffix =
+      removedThings.length === 0 ? "" : `, and ${listFormat.format(removedThings)} were removed`;
+    let carriedText = targetHadOwn
+      ? `${newPluginName} kept its own settings${removedSuffix}`
+      : severalOldCopies
+        ? `your plugin settings carried over from ${oldPluginName}${removedSuffix}`
         : "your plugin settings carried over";
-    let joined_4 = Z.map(([s, _]) => `. About ${displayPluginId(s)}: ${_.replace(/\.$/, "")}`).join("");
-    let wt = async (s) => {
-      let _ = dataDirKey(s.pluginId);
-      let v =
-        s === c
-          ? !(oldDataDirDisposable && M !== Ee) || (Mn !== undefined && En?.kind !== "nobody")
-          : [Ee, M].includes(_);
+    let joined_4 = directoryNotes
+      .map(([pluginId, note]) => `. About ${displayPluginId(pluginId)}: ${note.replace(/\.$/, "")}`)
+      .join("");
+    let describeDataDir = async (copy) => {
+      let copyDataDirKey = dataDirKey(copy.pluginId);
+      let knownInUse =
+        copy === primaryCopy
+          ? !(oldDataDirDisposable && oldDataDirKey !== newDataDirKey) ||
+            (registry !== undefined && dataDirOwner?.kind !== "nobody")
+          : [newDataDirKey, oldDataDirKey].includes(copyDataDirKey);
       return {
-        pluginId: s.pluginId,
-        entry: isOfficialPluginDirectoryId(s.pluginId)
-          ? await releaseDirectoryBinding_2(s.pluginId, false).catch(() => "unreadable")
+        pluginId: copy.pluginId,
+        entry: isOfficialPluginDirectoryId(copy.pluginId)
+          ? await releaseDirectoryBinding_2(copy.pluginId, false).catch(() => "unreadable")
           : undefined,
-        carriedTo: s === c && !targetHadOwn ? r : undefined,
-        knownInUse: v,
-        mayGo: !v && ye !== "unknown" && !ye.some((G) => dataDirKey(G) === _),
+        carriedTo: copy === primaryCopy && !targetHadOwn ? newPluginName : undefined,
+        knownInUse,
+        mayGo:
+          !knownInUse &&
+          finalInstalledIds !== "unknown" &&
+          !finalInstalledIds.some((installedId) => dataDirKey(installedId) === copyDataDirKey),
       };
     };
     let joined_5 = (
       await Promise.all(
-        i
-          .filter((s) => Fe.includes(s))
-          .map(async (s) => {
-            let { mayGo, knownInUse, ...G } = await wt(s);
+        copies
+          .filter((copy) => doubleRejected.includes(copy))
+          .map(async (copy) => {
+            let { mayGo, knownInUse, ...rest } = await describeDataDir(copy);
             return describeUnfinishedCleanup({
-              ...G,
-              dataFolder: mayGo ? "may-go" : !knownInUse && ye === "unknown" ? "not-known" : "in-use",
+              ...rest,
+              dataFolder: mayGo
+                ? "may-go"
+                : !knownInUse && finalInstalledIds === "unknown"
+                  ? "not-known"
+                  : "in-use",
             });
           }),
       )
     ).join("");
     let joined_6 = (
       await Promise.all(
-        i.flatMap((s) => {
-          let folder = Ye.get(s)?.folder;
+        copies.flatMap((copy) => {
+          let folder = failedReads.get(copy)?.folder;
           return folder === undefined
             ? []
             : [
-                wt(s).then(({ mayGo, knownInUse, ...oe }) =>
+                describeDataDir(copy).then(({ mayGo, knownInUse, ...rest }) =>
                   describeLeftRecordCleanup({
-                    ...oe,
+                    ...rest,
                     folder,
                     dataFolder: knownInUse ? "in-use" : "not-known",
                   }),
@@ -3598,30 +4002,30 @@ async function finishReplaceSwitch(
         }),
       )
     ).join("");
-    let mi =
-      kn.length === 0
+    let stillListedNote =
+      stillListed.length === 0
         ? ""
-        : `. Still listed under "enabledPlugins": ${j.format(kn)}. Until ${kn.length === 1 ? "that line is" : "those lines are"} removed, an old copy can load again beside ${r} or show as enabled but not installed`;
-    let [Pt] = [..._n.values()];
-    let hi =
-      Pt === undefined
+        : `. Still listed under "enabledPlugins": ${listFormat.format(stillListed)}. Until ${stillListed.length === 1 ? "that line is" : "those lines are"} removed, an old copy can load again beside ${newPluginName} or show as enabled but not installed`;
+    let [firstAmbiguousId] = [...ambiguousLines.values()];
+    let ambiguousNote =
+      firstAmbiguousId === undefined
         ? ""
-        : `. Still listed under "enabledPlugins": ${j.format([..._n.keys()])}. ${_n.size === 1 ? `If ${displayPluginId(Pt)} does not name a plugin you have installed, that line should be removed` : "Any of these that does not name a plugin you have installed should be removed"}: until then an old copy can load again beside ${r} or show as enabled but not installed`;
+        : `. Still listed under "enabledPlugins": ${listFormat.format([...ambiguousLines.keys()])}. ${ambiguousLines.size === 1 ? `If ${displayPluginId(firstAmbiguousId)} does not name a plugin you have installed, that line should be removed` : "Any of these that does not name a plugin you have installed should be removed"}: until then an old copy can load again beside ${newPluginName} or show as enabled but not installed`;
     return {
       ok: true,
-      note: `. Switched from ${I}; ${fi}${di}${ci}${joined}${ui}${ie.join("")}${joined_4}${joined_5}${joined_6}${mi}${hi}${joined_2}${joined_3}`,
-      stayedDisabled: K,
+      note: `. Switched from ${oldNamesText}; ${carriedText}${disabledNote}${scopeNote}${joined}${keptDataDirNote}${cleanupNotes.join("")}${joined_4}${joined_5}${joined_6}${stillListedNote}${ambiguousNote}${joined_2}${joined_3}`,
+      stayedDisabled,
       keptOwnSettings: targetHadOwn,
       settingsRemovedFrom: mapped,
-      ...(Ge.size > 0 && {
-        settingsLeftInPlace: [...Ge].map((s) => s.pluginId),
+      ...(settingsKept.size > 0 && {
+        settingsLeftInPlace: [...settingsKept].map((copy) => copy.pluginId),
       }),
-      savedDataRemovedFrom: q,
-      keptDataDir: qn,
-      from: c.pluginId,
-      replaced: i.map((s) => s.pluginId),
+      savedDataRemovedFrom: dataRemovedIds,
+      keptDataDir,
+      from: primaryCopy.pluginId,
+      replaced: copies.map((copy) => copy.pluginId),
       oldCopyStillRecordedAt: uniq([
-        ...flattened_2.map((s) => s.scope),
+        ...flattened_2.map((entry) => entry.scope),
         ...(joined_2 === "" ? [] : ["local"]),
       ]),
       saysMore:
@@ -3630,10 +4034,10 @@ async function finishReplaceSwitch(
         joined_5 !== "" ||
         joined_6 !== "" ||
         joined_3 !== "" ||
-        (X && !K) ||
-        kn.length > 0 ||
-        _n.size > 0 ||
-        ie.length > 0 ||
+        (oldCopyWasOff && !stayedDisabled) ||
+        stillListed.length > 0 ||
+        ambiguousLines.size > 0 ||
+        cleanupNotes.length > 0 ||
         joined_4 !== "",
     };
   }
@@ -3643,26 +4047,29 @@ async function finishReplaceSwitch(
   };
 }
 //@ chunk-pp50kewz.js:70928-71035 layout
-function directoryBlockedMessage(e) {
-  return `Plugin "${quotedPrintable(e)}" is from the ${OFFICIAL_MARKETPLACE_DISPLAY}, which is blocked by your organization. ${pluginDirectoryPolicyBlockHint()}`;
+function directoryBlockedMessage(pluginName) {
+  return `Plugin "${quotedPrintable(pluginName)}" is from the ${OFFICIAL_MARKETPLACE_DISPLAY}, which is blocked by your organization. ${pluginDirectoryPolicyBlockHint()}`;
 }
 //@ chunk-pp50kewz.js:71035-71113 layout
 function directoryUnreachableMessage() {
   return `couldn't reach the ${OFFICIAL_MARKETPLACE_DISPLAY}, so this may not be the latest`;
 }
 //@ chunk-pp50kewz.js:71113-71275 layout
-function appendRefreshWarning({ refreshWarning, directoryRefreshFailed }, i) {
+function appendRefreshWarning({ refreshWarning, directoryRefreshFailed }, message) {
   return refreshWarning === undefined
-    ? i
+    ? message
     : directoryRefreshFailed
-      ? `${i} Warning: ${directoryUnreachableMessage()}.`
-      : `${i} Warning: ${refreshWarning} \u2014 version shown may be stale.`;
+      ? `${message} Warning: ${directoryUnreachableMessage()}.`
+      : `${message} Warning: ${refreshWarning} \u2014 version shown may be stale.`;
 }
 //@ chunk-pp50kewz.js:71275-71493 layout
-function upToDateMessage(e, version) {
-  return e.directoryNotChecked
-    ? `${e.pluginName} was not checked for updates: the ${OFFICIAL_MARKETPLACE_DISPLAY} isn't available in this session (installed: ${version})`
-    : appendRefreshWarning(e, `${e.pluginName} is already at the latest version (${version}).`);
+function upToDateMessage(updateInfo, version) {
+  return updateInfo.directoryNotChecked
+    ? `${updateInfo.pluginName} was not checked for updates: the ${OFFICIAL_MARKETPLACE_DISPLAY} isn't available in this session (installed: ${version})`
+    : appendRefreshWarning(
+        updateInfo,
+        `${updateInfo.pluginName} is already at the latest version (${version}).`,
+      );
 }
 //@ chunk-pp50kewz.js:71493-77525 fingerprint = uninstallPluginOp (0.405)
 /**
@@ -3673,15 +4080,15 @@ async function uninstallPluginOp(
   scope = "user",
   deleteDataDir = true,
   storageV5,
-  { settingsStillOn: o = "refuse" } = {},
+  { settingsStillOn = "refuse" } = {},
 ) {
   assertInstallableScope(scope);
   pluginId = normalizePluginId(pluginId);
-  let u = pluginOperationRefusal(pluginId, parsePluginId(pluginId).marketplace, "uninstall");
-  if (u !== undefined)
+  let refusal = pluginOperationRefusal(pluginId, parsePluginId(pluginId).marketplace, "uninstall");
+  if (refusal !== undefined)
     return {
       success: false,
-      message: u,
+      message: refusal,
       failureCode: unmanageablePluginReason(pluginId, parsePluginId(pluginId).marketplace),
     };
   let installedListRefusal = await getInstalledListRefusal(storageV5);
@@ -3697,40 +4104,49 @@ async function uninstallPluginOp(
   let settingSource = scopeToSettingSource(scope);
   let settings = getSettingsForSourceForUpkeep(settingSource);
   let pluginId_2;
-  let pluginId_3;
+  let pluginName;
   let installedPlugins = getInstalledPlugins();
   let keys = Object.keys(installedPlugins.plugins);
-  let projectPathForScope = getProjectPathForScope(scope);
+  let projectPath = getProjectPathForScope(scope);
   if (foundPlugin) {
     let keys_2 = Object.keys(settings?.enabledPlugins ?? {});
     let lower = foundPlugin.name.toLowerCase();
     let included = pluginId.includes("@");
-    let N = [
-      ...keys_2.filter((he) => he === pluginId),
-      ...keys_2.filter((he) => pluginNamesEqual(he, pluginId)),
+    let candidateIds = [
+      ...keys_2.filter((key) => key === pluginId),
+      ...keys_2.filter((key) => pluginNamesEqual(key, pluginId)),
       ...(included
         ? []
         : [
-            ...keys_2.filter((he) => he === foundPlugin.name),
-            ...keys_2.filter((he) => he.startsWith(`${foundPlugin.name}@`)),
-            ...keys_2.filter((he) => he.toLowerCase() === lower),
-            ...keys_2.filter((he) => he.toLowerCase().startsWith(`${lower}@`)),
+            ...keys_2.filter((key) => key === foundPlugin.name),
+            ...keys_2.filter((key) => key.startsWith(`${foundPlugin.name}@`)),
+            ...keys_2.filter((key) => key.toLowerCase() === lower),
+            ...keys_2.filter((key) => key.toLowerCase().startsWith(`${lower}@`)),
           ]),
       included ? pluginId : foundPlugin.name,
     ];
-    let Z = included && (installedPlugins.plugins[pluginId] ?? []).length > 0;
-    let S = (he) => installedPlugins.plugins[findPluginName(keys, he) ?? he] ?? [];
-    pluginId_2 = Z
+    let idIsInstalled = included && (installedPlugins.plugins[pluginId] ?? []).length > 0;
+    let installationsOf = (candidateId) =>
+      installedPlugins.plugins[findPluginName(keys, candidateId) ?? candidateId] ?? [];
+    pluginId_2 = idIsInstalled
       ? pluginId
-      : (N.find((he) => S(he).some((re) => re.scope === scope && re.projectPath === projectPathForScope)) ??
-        N.find((he) => S(he).some((re) => isSameInstallScope(re, scope, projectPathForScope))) ??
-        N[0]);
-    pluginId_3 = foundPlugin.name;
+      : (candidateIds.find((candidateId) =>
+          installationsOf(candidateId).some(
+            (installation) => installation.scope === scope && installation.projectPath === projectPath,
+          ),
+        ) ??
+        candidateIds.find((candidateId) =>
+          installationsOf(candidateId).some((installation) =>
+            isSameInstallScope(installation, scope, projectPath),
+          ),
+        ) ??
+        candidateIds[0]);
+    pluginName = foundPlugin.name;
   } else {
-    let installedPluginId = resolveInstalledPluginId(pluginId, scope, projectPathForScope);
+    let installedPluginId = resolveInstalledPluginId(pluginId, scope, projectPath);
     if (!installedPluginId) {
-      let B = await uninstallLeftoverOfficialName(pluginId, scope, deleteDataDir, storageV5);
-      if (B !== undefined) return B;
+      let leftoverResult = await uninstallLeftoverOfficialName(pluginId, scope, deleteDataDir, storageV5);
+      if (leftoverResult !== undefined) return leftoverResult;
       return {
         success: false,
         message: `Plugin "${pluginId}" not found in installed plugins`,
@@ -3738,22 +4154,22 @@ async function uninstallPluginOp(
       };
     }
     pluginId_2 = installedPluginId.pluginId;
-    pluginId_3 = installedPluginId.pluginName;
+    pluginName = installedPluginId.pluginName;
   }
   pluginId_2 = findPluginName(keys, pluginId_2) ?? pluginId_2;
-  let W = installedPlugins.plugins[pluginId_2];
-  let se = installationAtTarget(W, scope, projectPathForScope);
-  if (!se) {
+  let installations = installedPlugins.plugins[pluginId_2];
+  let installation = installationAtTarget(installations, scope, projectPath);
+  if (!installation) {
     let { scope: actualScope } = getPluginInstallationFromV2(pluginId_2);
-    if (actualScope !== scope && W && W.length > 0) {
+    if (actualScope !== scope && installations && installations.length > 0) {
       if (actualScope === "project" && isPluginEnabledAtProjectScope(pluginId_2)) {
-        let B = claudeCommand("plugin disable", pluginId, "--scope local");
-        let me =
+        let disableCommand = claudeCommand("plugin disable", pluginId, "--scope local");
+        let disableHint =
           managedPluginRefusal(pluginId_2)?.message ??
-          `To disable just for you${B ? `: ${B}` : ", use claude plugin disable with --scope local"}`;
+          `To disable just for you${disableCommand ? `: ${disableCommand}` : ", use claude plugin disable with --scope local"}`;
         return {
           success: false,
-          message: `Plugin "${pluginId}" is enabled at project scope (.claude/settings.json, shared with your team). ${me}`,
+          message: `Plugin "${pluginId}" is enabled at project scope (.claude/settings.json, shared with your team). ${disableHint}`,
           failureCode: "enabled_at_project_scope",
           installedScope: actualScope,
         };
@@ -3765,9 +4181,9 @@ async function uninstallPluginOp(
         installedScope: actualScope,
       };
     }
-    if ((W?.length ?? 0) === 0) {
-      let B = await uninstallLeftoverOfficialName(pluginId, scope, deleteDataDir, storageV5);
-      if (B !== undefined) return B;
+    if ((installations?.length ?? 0) === 0) {
+      let leftoverResult = await uninstallLeftoverOfficialName(pluginId, scope, deleteDataDir, storageV5);
+      if (leftoverResult !== undefined) return leftoverResult;
     }
     return {
       success: false,
@@ -3775,34 +4191,34 @@ async function uninstallPluginOp(
       failureCode: "not_installed_at_scope",
     };
   }
-  let installPath = se.installPath;
+  let installPath = installation.installPath;
   let flattened = Object.entries(installedPlugins.plugins).flatMap(([key, value]) =>
     key !== pluginId_2 && pluginNamesEqual(key, pluginId_2) && value.length > 0 ? [key] : [],
   );
   flattened = uniq([
     ...flattened,
-    ...bindingKeysFor(installedPlugins.plugins, pluginId_2).flatMap(([U, B]) =>
-      U !== pluginId_2 && B.length > 0 ? [U] : [],
+    ...bindingKeysFor(installedPlugins.plugins, pluginId_2).flatMap(([key, installations]) =>
+      key !== pluginId_2 && installations.length > 0 ? [key] : [],
     ),
   ]);
   if (isOfficialPluginDirectoryId(pluginId_2) && isWorkspaceRestrictedSource(settingSource))
     return {
       success: false,
-      message: `"${quotedPrintable(pluginId_3)}" was not uninstalled: this workspace is not yet trusted, so its settings files are not read, and the change could not be checked afterwards. Nothing was changed. Trust the workspace, start Claude Code again, then uninstall it again.`,
+      message: `"${quotedPrintable(pluginName)}" was not uninstalled: this workspace is not yet trusted, so its settings files are not read, and the change could not be checked afterwards. Nothing was changed. Trust the workspace, start Claude Code again, then uninstall it again.`,
       failureCode: "settings_write_failed",
       pluginId: pluginId_2,
       scope,
     };
-  let we = (enablingSettingsFile, error, me) => ({
+  let settingsFailure = (enablingSettingsFile, error, changeNote) => ({
     success: false,
     message: describeSettingsWriteNotRead(
-      pluginId_3,
+      pluginName,
       "network-path",
       enablingSettingsFile.notRead[0],
       error,
       settingSource,
       enablingSettingsFile.why,
-      me,
+      changeNote,
     ),
     failureCode: "settings_still_on",
     pluginId: pluginId_2,
@@ -3810,20 +4226,24 @@ async function uninstallPluginOp(
   });
   if (isOfficialPluginDirectoryId(pluginId_2) && settingSource !== "userSettings") {
     let enablingSettingsFile = await findEnablingSettingsFile(settingSource, pluginId_2, flattened);
-    if ("notRead" in enablingSettingsFile) return we(enablingSettingsFile, undefined, "nothing-was-changed");
+    if ("notRead" in enablingSettingsFile)
+      return settingsFailure(enablingSettingsFile, undefined, "nothing-was-changed");
   }
   let { error } = await updateSettingsForSourceWithTransform(
     settingSource,
-    (U) => {
-      if (enabledPluginKeys(U?.enabledPlugins ?? {}, pluginId_2).length === 0) return null;
+    (settings) => {
+      if (enabledPluginKeys(settings?.enabledPlugins ?? {}, pluginId_2).length === 0) return null;
       let newEnabledPlugins = {
-        ...U?.enabledPlugins,
+        ...settings?.enabledPlugins,
       };
-      let me = findPluginName(Object.keys(newEnabledPlugins), pluginId_2) ?? pluginId_2;
-      if (me === pluginId_2 || !flattened.some((N) => pluginNamesEqual(N, me)))
-        newEnabledPlugins[me] = undefined;
-      for (let N of enabledPluginKeys(newEnabledPlugins, pluginId_2, flattened))
-        newEnabledPlugins[N] = undefined;
+      let enabledKey = findPluginName(Object.keys(newEnabledPlugins), pluginId_2) ?? pluginId_2;
+      if (
+        enabledKey === pluginId_2 ||
+        !flattened.some((candidateId) => pluginNamesEqual(candidateId, enabledKey))
+      )
+        newEnabledPlugins[enabledKey] = undefined;
+      for (let enabledKey of enabledPluginKeys(newEnabledPlugins, pluginId_2, flattened))
+        newEnabledPlugins[enabledKey] = undefined;
       return {
         enabledPlugins: newEnabledPlugins,
       };
@@ -3834,32 +4254,33 @@ async function uninstallPluginOp(
   refreshPluginCaches(storageV5);
   if (isOfficialPluginDirectoryId(pluginId_2)) {
     let enablingSettingsFile = await findEnablingSettingsFile(settingSource, pluginId_2, flattened);
-    if ("notRead" in enablingSettingsFile) return we(enablingSettingsFile, error, "change-may-be-made");
+    if ("notRead" in enablingSettingsFile)
+      return settingsFailure(enablingSettingsFile, error, "change-may-be-made");
     let { readsBack, file } = enablingSettingsFile;
     if (readsBack !== "off") {
-      let N = quotedPrintable(pluginId_3);
-      let Z = file ?? "that settings file";
-      let S = error ? `, and the settings change failed (${error.message})` : "";
+      let printableId = quotedPrintable(pluginName);
+      let fileLabel = file ?? "that settings file";
+      let errorSuffix = error ? `, and the settings change failed (${error.message})` : "";
       return {
         success: false,
         message:
           readsBack !== "on"
-            ? `"${N}" was not uninstalled: ${Z} is there and could not be read, so it may still switch "${N}" on${S}. It is still installed. Once that file can be read and saved, uninstall it again.`
+            ? `"${printableId}" was not uninstalled: ${fileLabel} is there and could not be read, so it may still switch "${printableId}" on${errorSuffix}. It is still installed. Once that file can be read and saved, uninstall it again.`
             : error
-              ? `"${N}" was not uninstalled: it is still switched on in ${Z}${S}. It is still installed. Once that file can be saved, uninstall it again.`
-              : `"${N}" was not uninstalled: it is still switched on in ${Z}, although the settings change reported no error. It is still installed. Take it out of "enabledPlugins" in that file yourself, then uninstall it again.`,
+              ? `"${printableId}" was not uninstalled: it is still switched on in ${fileLabel}${errorSuffix}. It is still installed. Once that file can be saved, uninstall it again.`
+              : `"${printableId}" was not uninstalled: it is still switched on in ${fileLabel}, although the settings change reported no error. It is still installed. Take it out of "enabledPlugins" in that file yourself, then uninstall it again.`,
         failureCode: "settings_write_failed",
         pluginId: pluginId_2,
         scope,
       };
     }
   }
-  let D = false;
-  D = isOfficialPluginDirectoryId(pluginId_2);
-  let ce;
-  if (!D && o === "refuse") {
+  let isDirectoryPlugin = false;
+  isDirectoryPlugin = isOfficialPluginDirectoryId(pluginId_2);
+  let legacyNote;
+  if (!isDirectoryPlugin && settingsStillOn === "refuse") {
     let enablingSettingsFile = await findEnablingSettingsFile(settingSource, pluginId_2, flattened);
-    if ("notRead" in enablingSettingsFile) return we(enablingSettingsFile, error);
+    if ("notRead" in enablingSettingsFile) return settingsFailure(enablingSettingsFile, error);
     let { readsBack, file } = enablingSettingsFile;
     if (
       readsBack === "unreadable" &&
@@ -3867,35 +4288,42 @@ async function uninstallPluginOp(
       file === getLegacyLocalSettingsFilePath() &&
       (await formatFileSize(file))
     )
-      ce = `${file} (an older local settings file) is not JSON, so it was not checked: as it is, Claude Code ignores it and it switches nothing on. If you repair it, take "${quotedPrintable(pluginId_3)}" out of its "enabledPlugins" if it is there.`;
+      legacyNote = `${file} (an older local settings file) is not JSON, so it was not checked: as it is, Claude Code ignores it and it switches nothing on. If you repair it, take "${quotedPrintable(pluginName)}" out of its "enabledPlugins" if it is there.`;
     else if (readsBack === "on" || readsBack === "unreadable" || (readsBack === "not-read-here" && error))
       return {
         success: false,
-        message: describeSettingsWriteNotRead(pluginId_3, readsBack, file, error, settingSource),
+        message: describeSettingsWriteNotRead(pluginName, readsBack, file, error, settingSource),
         failureCode: "settings_still_on",
         pluginId: pluginId_2,
         scope,
       };
   }
   if (isOfficialPluginDirectoryId(pluginId_2)) {
-    let U =
+    let latestInstallations =
       (isStorageV5Enabled() && storageV5 !== undefined
         ? await loadInstalledPlugins(storageV5)
         : loadInstalledPluginsSync()
       ).plugins[pluginId_2] ?? [];
-    let matchingInstallations = findMatchingInstallations(U, scope, projectPathForScope);
-    if (!U.filter((N) => !matchingInstallations.includes(N)).some(hasDirectoryRepositoryKey)) {
-      if ((await persistDirectoryBinding(pluginId_2, [...U, ...(W ?? [])])) === "not-persisted")
+    let matchingInstallations = findMatchingInstallations(latestInstallations, scope, projectPath);
+    if (
+      !latestInstallations
+        .filter((installation) => !matchingInstallations.includes(installation))
+        .some(hasDirectoryRepositoryKey)
+    ) {
+      if (
+        (await persistDirectoryBinding(pluginId_2, [...latestInstallations, ...(installations ?? [])])) ===
+        "not-persisted"
+      )
         return {
           success: false,
-          message: `"${quotedPrintable(pluginId_3)}" was switched off at ${scope} scope but not uninstalled, and nothing it saved was removed: plugin-directory-bindings.json in the plugins folder could not be used or written (unreadable, a symbolic link or not a file, over 1 MB, damaged, written by a newer Claude Code, or not writable), so nothing would keep the name for the repository it was installed from. Once the file can be written, uninstall it again.`,
+          message: `"${quotedPrintable(pluginName)}" was switched off at ${scope} scope but not uninstalled, and nothing it saved was removed: plugin-directory-bindings.json in the plugins folder could not be used or written (unreadable, a symbolic link or not a file, over 1 MB, damaged, written by a newer Claude Code, or not writable), so nothing would keep the name for the repository it was installed from. Once the file can be written, uninstall it again.`,
           failureCode: "directory_binding_unreadable",
           pluginId: pluginId_2,
           scope,
         };
-    } else await seedBindingsFromInstall(pluginId_2, W);
+    } else await seedBindingsFromInstall(pluginId_2, installations);
   }
-  await removePluginInstallation(pluginId_2, scope, projectPathForScope, storageV5);
+  await removePluginInstallation(pluginId_2, scope, projectPath, storageV5);
   let { dataDirKept, directoryBindingKept, optionsRemoved, savedKept } = await cleanupAfterUninstall({
     pluginId: pluginId_2,
     installPath,
@@ -3907,22 +4335,22 @@ async function uninstallPluginOp(
   });
   let reverseDependents = findReverseDependentNames(pluginId_2, allPlugins);
   let depWarn = formatReverseDependentsSuffix(reverseDependents);
-  let L = savedKept === undefined ? undefined : keptSavedDataMessage(pluginId_3, deleteDataDir);
+  let savedDataNote = savedKept === undefined ? undefined : keptSavedDataMessage(pluginName, deleteDataDir);
   return {
     success: true,
-    message: `Successfully uninstalled plugin: ${pluginId_3} (scope: ${scope})${depWarn}${directoryBindingKept === undefined ? "" : `. ${directoryReleaseNote(directoryBindingKept)}`}${L === undefined ? "" : `. ${L}`}${ce === undefined ? "" : `${L === undefined ? "." : ""} ${ce}`}`,
+    message: `Successfully uninstalled plugin: ${pluginName} (scope: ${scope})${depWarn}${directoryBindingKept === undefined ? "" : `. ${directoryReleaseNote(directoryBindingKept)}`}${savedDataNote === undefined ? "" : `. ${savedDataNote}`}${legacyNote === undefined ? "" : `${savedDataNote === undefined ? "." : ""} ${legacyNote}`}`,
     pluginId: pluginId_2,
-    pluginName: pluginId_3,
+    pluginName,
     scope,
     ...(savedKept !== undefined &&
-      L !== undefined && {
+      savedDataNote !== undefined && {
         savedKept: {
           reason: savedKept,
-          note: L,
+          note: savedDataNote,
         },
       }),
-    ...(ce !== undefined && {
-      olderLocalSettingsSkippedNote: ce,
+    ...(legacyNote !== undefined && {
+      olderLocalSettingsSkippedNote: legacyNote,
     }),
     dataDirKept: dataDirKept || directoryBindingKept?.dataLeftInPlace === true,
     ...(directoryBindingKept !== undefined && {
@@ -3942,38 +4370,38 @@ async function uninstallPluginOp(
 /**
  * 设置文件写入了但本会话读不到（网络路径或未被读取）时的提示文本。
  */
-function describeSettingsWriteNotRead(e, n, i, a, source, u, h) {
-  let p = quotedPrintable(e);
-  let r = i ?? "that settings file";
-  let c = a ? `, and the settings change failed (${a.message})` : "";
-  if (n === "network-path" || n === "not-read-here") {
-    let y = describeUnwritableSettingsSource({
+function describeSettingsWriteNotRead(pluginName, readFailure, file, error, source, pathIssue, changeState) {
+  let printableName = quotedPrintable(pluginName);
+  let fileLabel = file ?? "that settings file";
+  let errorSuffix = error ? `, and the settings change failed (${error.message})` : "";
+  if (readFailure === "network-path" || readFailure === "not-read-here") {
+    let sourceDescription = describeUnwritableSettingsSource({
       source,
-      file: r,
+      file: fileLabel,
       readsBack: "not-read-here",
-      ...(n === "network-path" && {
-        notReadBecause: n,
+      ...(readFailure === "network-path" && {
+        notReadBecause: readFailure,
       }),
     });
-    let j =
-      n === "not-read-here"
+    let retryAdvice =
+      readFailure === "not-read-here"
         ? "Once that file can be saved, uninstall it again."
-        : u === "vet-network" || u === "suspect-link" || u === "crossing"
+        : pathIssue === "vet-network" || pathIssue === "suspect-link" || pathIssue === "crossing"
           ? `If that file, its ".claude" folder or a folder above them is a link to another machine, replace the link with a real file or folder, or start Claude Code from the folder's real location. Then uninstall it again.`
           : "Try uninstalling it again: if the path to that file changed during the check, that will work. If you see this again, the path cannot be checked, and trying again will not help.";
-    let T =
-      h === "nothing-was-changed"
+    let changeNote =
+      changeState === "nothing-was-changed"
         ? " Nothing was changed."
-        : h === "change-may-be-made" && !a
-          ? ` "${p}" may already have been removed from the enabled plugins in this scope's settings.`
+        : changeState === "change-may-be-made" && !error
+          ? ` "${printableName}" may already have been removed from the enabled plugins in this scope's settings.`
           : "";
-    return `"${p}" was not uninstalled: ${y}, so it may still switch "${p}" on${c}.${T} It is still installed. ${j}`;
+    return `"${printableName}" was not uninstalled: ${sourceDescription}, so it may still switch "${printableName}" on${errorSuffix}.${changeNote} It is still installed. ${retryAdvice}`;
   }
-  if (n === "unreadable")
-    return `"${p}" was not uninstalled: ${r} is there and could not be read, so it may still switch "${p}" on${c}. It is still installed. Once that file can be read and saved, uninstall it again.`;
-  return a
-    ? `"${p}" was not uninstalled: it is still switched on in ${r}${c}. It is still installed. Once that file can be saved, uninstall it again.`
-    : `"${p}" was not uninstalled: it is still switched on in ${r}, although the settings change reported no error. It is still installed. Take it out of "enabledPlugins" in that file yourself, then uninstall it again.`;
+  if (readFailure === "unreadable")
+    return `"${printableName}" was not uninstalled: ${fileLabel} is there and could not be read, so it may still switch "${printableName}" on${errorSuffix}. It is still installed. Once that file can be read and saved, uninstall it again.`;
+  return error
+    ? `"${printableName}" was not uninstalled: it is still switched on in ${fileLabel}${errorSuffix}. It is still installed. Once that file can be saved, uninstall it again.`
+    : `"${printableName}" was not uninstalled: it is still switched on in ${fileLabel}, although the settings change reported no error. It is still installed. Take it out of "enabledPlugins" in that file yourself, then uninstall it again.`;
 }
 //@ chunk-pp50kewz.js:79169-79329 layout = formatFileSize (0.782)
 async function formatFileSize(sizeInBytes) {
@@ -3991,8 +4419,8 @@ async function formatFileSize(sizeInBytes) {
   }
 }
 //@ chunk-pp50kewz.js:79329-79482 layout
-function manualCleanupHint(e) {
-  return `take ${e} entries out of "pluginConfigs" in your user settings file and out of "pluginSecrets" in your credentials store yourself`;
+function manualCleanupHint(pluginId) {
+  return `take ${pluginId} entries out of "pluginConfigs" in your user settings file and out of "pluginSecrets" in your credentials store yourself`;
 }
 //@ chunk-pp50kewz.js:79482-79983 layout
 /**
@@ -4031,7 +4459,9 @@ async function cleanupAfterUninstall({
         logForDebugging(
           `installed_plugins.json could not be read, so the version folder of ${pluginId} was kept`,
         );
-      officialSiblings = findDataDirSharers(pluginId, registry).flatMap((b) => registry.plugins[b] ?? []);
+      officialSiblings = findDataDirSharers(pluginId, registry).flatMap(
+        (pluginId) => registry.plugins[pluginId] ?? [],
+      );
     }
   }
   let readBack = false;
@@ -4055,8 +4485,8 @@ async function cleanupAfterUninstall({
     installPath &&
     !installsUnknown &&
     !officialSiblings.some((officialSibling) => {
-      let b = normalizeMarketplaceInputPath(officialSibling.installPath);
-      return b !== undefined && b === normalizeMarketplaceInputPath(installPath);
+      let normalizedPath = normalizeMarketplaceInputPath(officialSibling.installPath);
+      return normalizedPath !== undefined && normalizedPath === normalizeMarketplaceInputPath(installPath);
     })
   )
     await markPluginVersionOrphaned(installPath, storageV5);
@@ -4115,15 +4545,16 @@ async function releaseDirectoryBinding(
       dataGone: false,
       dataKeptOnRequest: !deleteDataDir,
       stillOnIn: getProjectPathForScope_2(stillOn, scope),
-      stillOnUnsure: stillOn.some((w) => w.readsBack !== "on"),
+      stillOnUnsure: stillOn.some((stillOn) => stillOn.readsBack !== "on"),
       stillOnNotReadHere: stillOn.some(
-        (w) => w.readsBack === "not-read-here" && w.notReadBecause === undefined,
+        (stillOn) => stillOn.readsBack === "not-read-here" && stillOn.notReadBecause === undefined,
       ),
-      ...(stillOn.some((w) => w.notReadBecause === "network-path") && {
+      ...(stillOn.some((stillOn) => stillOn.notReadBecause === "network-path") && {
         stillOnNotReadForItsPath: stillOn,
       }),
       stillOnProjectFile:
-        scope !== "project" && stillOn.some((w) => w.source === "projectSettings" && w.readsBack === "on"),
+        scope !== "project" &&
+        stillOn.some((stillOn) => stillOn.source === "projectSettings" && stillOn.readsBack === "on"),
       dataLeftInPlace: true,
       entry,
     };
@@ -4150,13 +4581,13 @@ async function releaseDirectoryBinding(
   return;
 }
 //@ chunk-pp50kewz.js:81955-82112 file-local
-function getProjectPathForScope_2(e, scope) {
-  return e.map((i) =>
-    i.readsBack !== "on"
-      ? describeUnwritableSettingsSource(i)
-      : i.source === "projectSettings" && scope !== "project"
-        ? `${i.file} (the project's shared settings)`
-        : describeUnwritableSettingsSource(i),
+function getProjectPathForScope_2(stillOn, scope) {
+  return stillOn.map((stillOn) =>
+    stillOn.readsBack !== "on"
+      ? describeUnwritableSettingsSource(stillOn)
+      : stillOn.source === "projectSettings" && scope !== "project"
+        ? `${stillOn.file} (the project's shared settings)`
+        : describeUnwritableSettingsSource(stillOn),
   );
 }
 //@ chunk-pp50kewz.js:82112-85070 layout
@@ -4165,77 +4596,86 @@ function getProjectPathForScope_2(e, scope) {
  */
 async function uninstallLeftoverOfficialName(pluginId, scope, deleteDataDir, storageV5) {
   {
-    let { name: o, marketplace } = parsePluginIdentifier(pluginId);
-    let h = quotedPrintable(o, 120);
+    let { name: pluginName, marketplace } = parsePluginIdentifier(pluginId);
+    let printableName = quotedPrintable(pluginName, 120);
     if (marketplace !== OFFICIAL_MARKETPLACE_NAME) return;
-    let p = await bindingsWithReadFailure();
-    if (isUnreadableBindings(p)) return;
-    let r = `${o}@${marketplace}`;
-    let pluginId_2 = findBindingKeysFor(p.keys(), r)[0];
+    let bindings = await bindingsWithReadFailure();
+    if (isUnreadableBindings(bindings)) return;
+    let officialId = `${pluginName}@${marketplace}`;
+    let pluginId_2 = findBindingKeysFor(bindings.keys(), officialId)[0];
     if (pluginId_2 === undefined) return;
-    let j =
+    let installedData =
       isStorageV5Enabled() && storageV5 !== undefined
         ? await loadInstalledPlugins(storageV5)
         : loadInstalledPluginsSync();
-    if (hasFailedInstalledPluginsRead(j)) return;
-    let T = bindingKeysFor(j.plugins, r).find(([, ee]) => ee.length > 0)?.[0];
-    if (T === r) return;
-    if (T !== undefined)
+    if (hasFailedInstalledPluginsRead(installedData)) return;
+    let boundKey = bindingKeysFor(installedData.plugins, officialId).find(
+      ([, installations]) => installations.length > 0,
+    )?.[0];
+    if (boundKey === officialId) return;
+    if (boundKey !== undefined)
       return {
         success: false,
-        message: `"${h}" is not installed. "${quotedPrintable(T, 200)}" is, and it uses the same data folder, so nothing was removed. To free the name, ${runCommandHint(
+        message: `"${printableName}" is not installed. "${quotedPrintable(boundKey, 200)}" is, and it uses the same data folder, so nothing was removed. To free the name, ${runCommandHint(
           "plugin uninstall",
-          T,
+          boundKey,
           {
-            fallback: `uninstall "${quotedPrintable(T, 200)}" from the command line`,
+            fallback: `uninstall "${quotedPrintable(boundKey, 200)}" from the command line`,
           },
         )}.`,
         failureCode: "directory_name_held",
-        pluginId: r,
+        pluginId: officialId,
         scope,
       };
-    let I = (enabledPlugins) => enabledPluginKeys(enabledPlugins, pluginId_2);
-    let w = [];
+    let enabledKeysOf = (enabledPlugins) => enabledPluginKeys(enabledPlugins, pluginId_2);
+    let clearedFiles = [];
     try {
-      for (let W of ["userSettings", "localSettings", ...(scope === "project" ? ["projectSettings"] : [])]) {
-        let enablingSettingsFile = await findEnablingSettingsFile(W, pluginId_2);
+      for (let source of [
+        "userSettings",
+        "localSettings",
+        ...(scope === "project" ? ["projectSettings"] : []),
+      ]) {
+        let enablingSettingsFile = await findEnablingSettingsFile(source, pluginId_2);
         if ("notRead" in enablingSettingsFile || enablingSettingsFile.readsBack !== "on") continue;
         let { error } = await updateSettingsForSourceWithTransform(
-          W,
-          (we) => ({
+          source,
+          (settings) => ({
             enabledPlugins: {
-              ...we?.enabledPlugins,
-              ...Object.fromEntries(I(we?.enabledPlugins).map((J) => [J, undefined])),
+              ...settings?.enabledPlugins,
+              ...Object.fromEntries(enabledKeysOf(settings?.enabledPlugins).map((key) => [key, undefined])),
             },
           }),
           undefined,
           storageV5,
         );
-        let X = getSettingsFilePathForSource(W) ?? `your ${getSettingSourceDisplayNameLowercase(W)}`;
+        let fileLabel =
+          getSettingsFilePathForSource(source) ?? `your ${getSettingSourceDisplayNameLowercase(source)}`;
         if (error)
           return {
             success: false,
-            message: `"${h}" could not be removed from the enabled plugins in ${X} (${error.message})${w.length > 0 ? `; it was removed from them in ${w.join(" and ")}` : ""}. Nothing it saved was removed, so "${h}" can still only be installed from the same repository. Once ${X} can be saved, uninstall it again.`,
+            message: `"${printableName}" could not be removed from the enabled plugins in ${fileLabel} (${error.message})${clearedFiles.length > 0 ? `; it was removed from them in ${clearedFiles.join(" and ")}` : ""}. Nothing it saved was removed, so "${printableName}" can still only be installed from the same repository. Once ${fileLabel} can be saved, uninstall it again.`,
             failureCode: "settings_write_failed",
             pluginId: pluginId_2,
             scope,
           };
-        w.push(X);
+        clearedFiles.push(fileLabel);
       }
-      let entries = await listUninstallSettingsFiles(pluginId_2);
-      if (entries.length > 0) {
-        let any = entries.some((Ce) => Ce.readsBack !== "on");
-        let se =
+      let settingsFiles = await listUninstallSettingsFiles(pluginId_2);
+      if (settingsFiles.length > 0) {
+        let any = settingsFiles.some((entry) => entry.readsBack !== "on");
+        let advice =
           scope !== "project" &&
-          entries.some((Ce) => Ce.source === "projectSettings" && Ce.readsBack === "on")
+          settingsFiles.some((entry) => entry.source === "projectSettings" && entry.readsBack === "on")
             ? "To remove it there, uninstall it again with --scope project"
-            : entries.some((Ce) => Ce.readsBack === "not-read-here" && Ce.notReadBecause === undefined)
+            : settingsFiles.some(
+                  (entry) => entry.readsBack === "not-read-here" && entry.notReadBecause === undefined,
+                )
               ? "Once this workspace is trusted and Claude Code has been started again, uninstall it again"
-              : (networkPathRetryHint(entries, "uninstall it again") ??
+              : (networkPathRetryHint(settingsFiles, "uninstall it again") ??
                 "Once it is switched off there, uninstall it again");
         return {
           success: false,
-          message: `"${h}" is still switched on${any ? ", or may be," : ""} in ${getProjectPathForScope_2(entries, scope).join(" and ")}${w.length > 0 ? `; it was removed from the enabled plugins in ${w.join(" and ")}` : ""}. Nothing it saved was removed, so "${h}" can still only be installed from the same repository. ${se}.`,
+          message: `"${printableName}" is still switched on${any ? ", or may be," : ""} in ${getProjectPathForScope_2(settingsFiles, scope).join(" and ")}${clearedFiles.length > 0 ? `; it was removed from the enabled plugins in ${clearedFiles.join(" and ")}` : ""}. Nothing it saved was removed, so "${printableName}" can still only be installed from the same repository. ${advice}.`,
           failureCode: "directory_name_held",
           pluginId: pluginId_2,
           scope,
@@ -4244,33 +4684,38 @@ async function uninstallLeftoverOfficialName(pluginId, scope, deleteDataDir, sto
     } finally {
       refreshPluginCaches(storageV5);
     }
-    let b =
+    let installedAfterRefresh =
       isStorageV5Enabled() && storageV5 !== undefined
         ? await loadInstalledPlugins(storageV5)
         : loadInstalledPluginsSync();
-    if (hasFailedInstalledPluginsRead(b) || bindingKeysFor(b.plugins, r).some(([, ee]) => ee.length > 0))
+    if (
+      hasFailedInstalledPluginsRead(installedAfterRefresh) ||
+      bindingKeysFor(installedAfterRefresh.plugins, officialId).some(
+        ([, installations]) => installations.length > 0,
+      )
+    )
       return {
         success: false,
-        message: `"${h}" was not removed: an install record for it appeared while it was being switched off, or the install records could no longer be read. Nothing it saved was removed. Run the uninstall again.`,
+        message: `"${printableName}" was not removed: an install record for it appeared while it was being switched off, or the install records could no longer be read. Nothing it saved was removed. Run the uninstall again.`,
         failureCode: "directory_name_held",
         pluginId: pluginId_2,
         scope,
       };
-    let _e = await releaseDirectoryBinding(
+    let releaseNote = await releaseDirectoryBinding(
       pluginId_2,
       deleteDataDir,
-      listInstalledPluginIds(b),
+      listInstalledPluginIds(installedAfterRefresh),
       storageV5,
       scope,
     );
     return {
       success: true,
-      message: `"${h}" was no longer installed.${w.length > 0 ? ` Removed it from the enabled plugins in ${w.join(" and ")}.` : ""} ${_e === undefined ? `Removed anything still saved under its name (${deleteDataDir ? "options, secrets, data" : "options, secrets"}).` : directoryReleaseNote(_e)}`,
+      message: `"${printableName}" was no longer installed.${clearedFiles.length > 0 ? ` Removed it from the enabled plugins in ${clearedFiles.join(" and ")}.` : ""} ${releaseNote === undefined ? `Removed anything still saved under its name (${deleteDataDir ? "options, secrets, data" : "options, secrets"}).` : directoryReleaseNote(releaseNote)}`,
       pluginId: pluginId_2,
-      pluginName: o,
+      pluginName,
       scope,
-      dataDirKept: !deleteDataDir || _e?.dataLeftInPlace === true,
-      directoryNameNote: _e && directoryReleaseNote(_e),
+      dataDirKept: !deleteDataDir || releaseNote?.dataLeftInPlace === true,
+      directoryNameNote: releaseNote && directoryReleaseNote(releaseNote),
     };
   }
   return;
@@ -4281,7 +4726,7 @@ async function uninstallLeftoverOfficialName(pluginId, scope, deleteDataDir, sto
  */
 function savedDataFixSteps(reasons, storeKind) {
   {
-    let i = [
+    let firstSteps = [
       ...(reasons.includes("secrets_unreadable") && storeKind === "keychain"
         ? ["unlock your keychain, or allow its prompt, so that the saved secrets can be checked"]
         : []),
@@ -4300,13 +4745,13 @@ function savedDataFixSteps(reasons, storeKind) {
           ]
         : []),
     ];
-    let a = [
+    let notes = [
       ...(reasons.includes("secrets_unreadable") && storeKind === "credential-manager"
         ? [
             "run it from a Claude Code that can reach Windows Credential Manager (this one could not, so it cannot tell whether secrets are still saved there)",
           ]
         : []),
-      ...(i.length > 0 ? [`first ${i.join(", and ")}`] : []),
+      ...(firstSteps.length > 0 ? [`first ${firstSteps.join(", and ")}`] : []),
       ...(reasons.includes("secrets_remain") ? ["its secrets were still there after this delete"] : []),
       ...(reasons.includes("settings_remain")
         ? [
@@ -4314,8 +4759,8 @@ function savedDataFixSteps(reasons, storeKind) {
           ]
         : []),
     ];
-    return a.length > 0
-      ? a.join("; ")
+    return notes.length > 0
+      ? notes.join("; ")
       : "first make sure your user settings file and the credentials store can be read and written";
   }
   return "";
@@ -4327,11 +4772,13 @@ function savedDataFixSteps(reasons, storeKind) {
 function directoryReleaseNote(result) {
   {
     if (result === undefined) return "";
-    let n = quotedPrintable(parsePluginIdentifier(result.pluginId).name, 120);
-    let i = pluginDataDirPath(result.pluginId);
-    let a = "Its saved options and secrets could not be deleted";
-    let o =
-      result.entry === "held" ? `, and "${n}" can still only be installed from the same repository` : "";
+    let printableName = quotedPrintable(parsePluginIdentifier(result.pluginId).name, 120);
+    let dataDir = pluginDataDirPath(result.pluginId);
+    let optionsError = "Its saved options and secrets could not be deleted";
+    let stillOnNote =
+      result.entry === "held"
+        ? `, and "${printableName}" can still only be installed from the same repository`
+        : "";
     let action = runCommandHint("plugin uninstall", result.pluginId, {
       ...(result.stillOnProjectFile && {
         extra: "--scope project",
@@ -4340,29 +4787,29 @@ function directoryReleaseNote(result) {
       fallback: `uninstall "${quotedPrintable(result.pluginId, 200)}" again from the command line${result.stillOnProjectFile ? " with --scope project" : ""}`,
     });
     if (result.stillOnIn !== undefined) {
-      let c = result.stillOnProjectFile
+      let projectFileNote = result.stillOnProjectFile
         ? `To remove it there too, ${action}`
         : result.stillOnNotReadHere
           ? `Once this workspace is trusted and Claude Code has been started again, ${action}`
           : (networkPathRetryHint(result.stillOnNotReadForItsPath ?? [], action) ??
             `Once it is switched off there, ${action}`);
-      return `It is still switched on${result.stillOnUnsure ? ", or may be," : ""} in ${result.stillOnIn.join(" and ")}, so nothing it saved was removed${o}. ${c}.`;
+      return `It is still switched on${result.stillOnUnsure ? ", or may be," : ""} in ${result.stillOnIn.join(" and ")}, so nothing it saved was removed${stillOnNote}. ${projectFileNote}.`;
     }
     if (result.installsUnknown)
-      return `The list of installed plugins could not be read, so nothing it saved was removed${o}. Once the list can be read, ${action}.`;
+      return `The list of installed plugins could not be read, so nothing it saved was removed${stillOnNote}. Once the list can be read, ${action}.`;
     if (result.liveHolder === result.pluginId)
-      return `An install record for "${n}" appeared while it was being uninstalled, so nothing it saved was removed.`;
+      return `An install record for "${printableName}" appeared while it was being uninstalled, so nothing it saved was removed.`;
     if (result.liveHolder !== undefined) {
-      let c = quotedPrintable(result.liveHolder, 200);
-      let y = runCommandHint("plugin uninstall", result.liveHolder, {
-        fallback: `uninstall "${c}" from the command line`,
+      let holderName = quotedPrintable(result.liveHolder, 200);
+      let uninstallHolderHint = runCommandHint("plugin uninstall", result.liveHolder, {
+        fallback: `uninstall "${holderName}" from the command line`,
       });
-      let j = isOfficialPluginDirectoryId(result.liveHolder)
+      let holderNote = isOfficialPluginDirectoryId(result.liveHolder)
         ? ""
         : `, then ${runCommandHint("plugin uninstall", result.pluginId, {
             fallback: `uninstall "${quotedPrintable(result.pluginId, 200)}" from the command line`,
           })}`;
-      return `${result.optionsGone ? "" : `${a}. `}Its data folder (${i}) was left in place because "${c}" is installed and uses it${result.entry === "held" ? `, so "${n}" can still only be installed from the same repository` : ""}. What is left is removed when "${c}" is uninstalled: ${y}${j}.`;
+      return `${result.optionsGone ? "" : `${optionsError}. `}Its data folder (${dataDir}) was left in place because "${holderName}" is installed and uses it${result.entry === "held" ? `, so "${printableName}" can still only be installed from the same repository` : ""}. What is left is removed when "${holderName}" is uninstalled: ${uninstallHolderHint}${holderNote}.`;
     }
     if (result.entry !== "held")
       return [
@@ -4370,25 +4817,26 @@ function directoryReleaseNote(result) {
           ...(result.optionsGone ? [] : ["Its saved options and secrets may not have been deleted."]),
           ...(result.dataGone || result.dataKeptOnRequest
             ? []
-            : [`Its data folder could not be deleted (${i}); you can delete it yourself.`]),
+            : [`Its data folder could not be deleted (${dataDir}); you can delete it yourself.`]),
         ],
         result.entry === "unreadable"
-          ? `plugin-directory-bindings.json in the plugins folder could not be used, so "${n}" cannot be installed again until that file can be used.`
-          : `Nothing ties "${n}" to the repository it came from, so a plugin installed under that name later could read what is left.`,
+          ? `plugin-directory-bindings.json in the plugins folder could not be used, so "${printableName}" cannot be installed again until that file can be used.`
+          : `Nothing ties "${printableName}" to the repository it came from, so a plugin installed under that name later could read what is left.`,
       ].join(" ");
-    let h = `so "${n}" can still only be installed from the same repository`;
-    let p = runCommandHint("plugin uninstall", result.pluginId, {
+    let repoTieNote = `so "${printableName}" can still only be installed from the same repository`;
+    let uninstallHint = runCommandHint("plugin uninstall", result.pluginId, {
       fallback: `uninstall "${quotedPrintable(result.pluginId, 200)}" from the command line`,
     });
-    let r = savedDataFixSteps(result.optionsNotGoneBecause, primarySecureStoreKind());
+    let fixSteps = savedDataFixSteps(result.optionsNotGoneBecause, primarySecureStoreKind());
     if (result.optionsGone)
       return result.dataKeptOnRequest
-        ? `Its data folder was kept (${i}), ${h}. To free the name, ${p}, which deletes that folder.`
-        : `Its data folder could not be deleted (${i}), ${h}. Once the folder can be deleted, ${p} to free the name.`;
-    if (result.dataGone) return `${a}, ${h}. To delete them and free the name, ${p} (${r}).`;
+        ? `Its data folder was kept (${dataDir}), ${repoTieNote}. To free the name, ${uninstallHint}, which deletes that folder.`
+        : `Its data folder could not be deleted (${dataDir}), ${repoTieNote}. Once the folder can be deleted, ${uninstallHint} to free the name.`;
+    if (result.dataGone)
+      return `${optionsError}, ${repoTieNote}. To delete them and free the name, ${uninstallHint} (${fixSteps}).`;
     return result.dataKeptOnRequest
-      ? `${a}, and its data folder was kept (${i}), ${h}. To delete both and free the name, ${p} (${r}).`
-      : `Its saved options and secrets and its data folder (${i}) could not be deleted, ${h}. Once they can be deleted (${r}), ${p} to free the name.`;
+      ? `${optionsError}, and its data folder was kept (${dataDir}), ${repoTieNote}. To delete both and free the name, ${uninstallHint} (${fixSteps}).`
+      : `Its saved options and secrets and its data folder (${dataDir}) could not be deleted, ${repoTieNote}. Once they can be deleted (${fixSteps}), ${uninstallHint} to free the name.`;
   }
   return "";
 }
@@ -4396,25 +4844,25 @@ function directoryReleaseNote(result) {
 /**
  * 启用/禁用插件：写入目标作用域 settings 的 enabledPlugins[pluginId]=true/false；处理托管策略锁定、被依赖（禁用时提示谁依赖它）、依赖自动启用、作用域优先级（已有更高作用域值时提示）。
  */
-async function setPluginEnabledOp(pluginId, enabled, scope, a, storageV5) {
-  let u = enabled ? "enable" : "disable";
-  let h = groupedEnabledPlugins();
+async function setPluginEnabledOp(pluginId, enabled, scope, options, storageV5) {
+  let verb = enabled ? "enable" : "disable";
+  let grouped = groupedEnabledPlugins();
   pluginId = normalizePluginId(pluginId);
-  let { name: p, marketplace } = parsePluginId(pluginId);
+  let { name: bareName, marketplace } = parsePluginId(pluginId);
   if (isStorageV5Enabled() && storageV5 !== undefined) await primeInstalledPluginsCache(storageV5);
   if (marketplace === undefined && !isBuiltinPluginId(pluginId)) {
-    let J = joinPluginId(pluginId, BUILTIN);
+    let builtinId = joinPluginId(pluginId, BUILTIN);
     let pluginId_2 = findPluginInSettings(pluginId, ["user"])?.pluginId;
-    if (hasTrustedOnlyBuiltinPlugin(J) && pluginId_2 !== undefined && !isBuiltinPluginId(pluginId_2))
-      return setPluginEnabledOp(pluginId_2, enabled, scope, a, storageV5);
-    if (hasTrustedOnlyBuiltinPlugin(J)) {
+    if (hasTrustedOnlyBuiltinPlugin(builtinId) && pluginId_2 !== undefined && !isBuiltinPluginId(pluginId_2))
+      return setPluginEnabledOp(pluginId_2, enabled, scope, options, storageV5);
+    if (hasTrustedOnlyBuiltinPlugin(builtinId)) {
       let allPlugins = await loadAllPlugins(storageV5);
       if (
         ![...allPlugins.enabled, ...allPlugins.disabled].some(
-          (pe) => pluginNamesEqual(pe.name, pluginId) && !isBuiltinPluginId(pe.source),
+          (plugin) => pluginNamesEqual(plugin.name, pluginId) && !isBuiltinPluginId(plugin.source),
         )
       )
-        return setPluginEnabledOp(J, enabled, scope, a, storageV5);
+        return setPluginEnabledOp(builtinId, enabled, scope, options, storageV5);
       return {
         success: false,
         message: `Plugin "${pluginId}" names both a built-in and another loaded plugin. Use plugin@marketplace format.`,
@@ -4426,52 +4874,54 @@ async function setPluginEnabledOp(pluginId, enabled, scope, a, storageV5) {
       pluginId_3 !== undefined &&
       (isOfficialMarketplace(marketplaceSuffix(pluginId_3)) || hasTrustedOnlyBuiltinPlugin(pluginId_3))
     )
-      return setPluginEnabledOp(pluginId_3, enabled, scope, a, storageV5);
+      return setPluginEnabledOp(pluginId_3, enabled, scope, options, storageV5);
   }
   if (isBuiltinPluginId(pluginId) || isOfficialMarketplace(marketplace)) {
-    let J = "user";
-    let D = trustedOnlyBuiltinPluginId(pluginId) ?? pluginId;
-    let ce = hasTrustedOnlyBuiltinPlugin(D) ? getPluginEnablementLockingSource(D, enabled) : undefined;
-    if (ce !== undefined) return pluginBlockedResult(D, enabled, ce, D);
-    let ge = !enabled && isBuiltinPluginId(D) ? managedPluginRefusal(D) : undefined;
-    if (ge !== undefined) return ge;
-    let k;
-    let pe;
-    let Ee = [];
-    let M = false;
-    let P = false;
-    let L;
-    let U = false;
-    let B = "";
+    let settingScope = "user";
+    let targetId = trustedOnlyBuiltinPluginId(pluginId) ?? pluginId;
+    let lockSource = hasTrustedOnlyBuiltinPlugin(targetId)
+      ? getPluginEnablementLockingSource(targetId, enabled)
+      : undefined;
+    if (lockSource !== undefined) return pluginBlockedResult(targetId, enabled, lockSource, targetId);
+    let managedRefusal = !enabled && isBuiltinPluginId(targetId) ? managedPluginRefusal(targetId) : undefined;
+    if (managedRefusal !== undefined) return managedRefusal;
+    let defaultEnabled;
+    let syncedFallback;
+    let shadowsToTurnOff = [];
+    let policyAdmitted = false;
+    let required = false;
+    let override;
+    let scopeGiven = false;
+    let shadowNote = "";
     if (isOfficialMarketplace(marketplace)) {
       let allPlugins = await loadAllPlugins(storageV5);
       let pluginByIdentifier = findPluginByIdentifier(
         pluginId,
         [...allPlugins.enabled, ...allPlugins.disabled].filter(
-          (De) => marketplaceSuffix(De.source) === marketplace,
+          (plugin) => marketplaceSuffix(plugin.source) === marketplace,
         ),
       );
       if (pluginByIdentifier) {
-        D = pluginByIdentifier.source;
-        k = pluginByIdentifier.manifest.defaultEnabled === false;
+        targetId = pluginByIdentifier.source;
+        defaultEnabled = pluginByIdentifier.manifest.defaultEnabled === false;
       }
-      P =
+      required =
         marketplace === SYNCED &&
         (pluginByIdentifier !== undefined
           ? isRequiredPlugin(pluginByIdentifier.source, pluginByIdentifier.installationPreference)
           : (await listSyncedRequiredPlugins(storageV5)).some(
-              (De) => De.required && nfcLower(De.id) === nfcLower(D),
+              (entry) => entry.required && nfcLower(entry.id) === nfcLower(targetId),
             ));
-      if (!enabled && P)
+      if (!enabled && required)
         return {
           success: false,
-          message: requiredPluginMessage(D),
+          message: requiredPluginMessage(targetId),
           failureCode: "required_by_organization",
         };
       if (!enabled && marketplace === INLINE_PLUGIN_MARKETPLACE && pluginByIdentifier === undefined) {
-        let De = `${p}@${SYNCED}`;
+        let syncedId = `${bareName}@${SYNCED}`;
         let found = (await listSyncedRequiredPlugins(storageV5)).find(
-          (Le) => Le.required && nfcLower(Le.id) === nfcLower(De),
+          (entry) => entry.required && nfcLower(entry.id) === nfcLower(syncedId),
         );
         if (found !== undefined)
           return {
@@ -4480,46 +4930,50 @@ async function setPluginEnabledOp(pluginId, enabled, scope, a, storageV5) {
             failureCode: "required_by_organization",
           };
       }
-      if (!enabled && !a?.bypassDependentsBlock) {
-        let De =
-          buildRequiredByPolicyMap([...allPlugins.enabled, ...allPlugins.disabled]).get(nfcLower(D)) ?? [];
-        if (De.length > 0)
+      if (!enabled && !options?.bypassDependentsBlock) {
+        let requiredBy =
+          buildRequiredByPolicyMap([...allPlugins.enabled, ...allPlugins.disabled]).get(nfcLower(targetId)) ??
+          [];
+        if (requiredBy.length > 0)
           return {
             success: false,
-            message: requiredDependencyMessage(parsePluginId(D).name, De),
+            message: requiredDependencyMessage(parsePluginId(targetId).name, requiredBy),
             failureCode: "required_by_organization",
-            reverseDependents: De.map((Ie) => Ie.name),
+            reverseDependents: requiredBy.map((dependent) => dependent.name),
           };
       }
       let any = allPlugins.warnings.some(
-        (warning) => warning.type === "synced-plugin-shadowed" && nfcLower(warning.source) === nfcLower(D),
+        (warning) =>
+          warning.type === "synced-plugin-shadowed" && nfcLower(warning.source) === nfcLower(targetId),
       );
-      let A =
-        enabled && !any ? lockedDependentName(D, pluginByIdentifier?.attributedMarketplaceName) : undefined;
-      if (A !== undefined)
+      let lockedName =
+        enabled && !any
+          ? lockedDependentName(targetId, pluginByIdentifier?.attributedMarketplaceName)
+          : undefined;
+      if (lockedName !== undefined)
         return {
           success: false,
-          message: `Plugin "${D}" cannot be ${u}d here: "${A}" is locked by your organization's managed settings, so this ${nonInstallableSourceLabel(marketplace)} copy is never loaded`,
+          message: `Plugin "${targetId}" cannot be ${verb}d here: "${lockedName}" is locked by your organization's managed settings, so this ${nonInstallableSourceLabel(marketplace)} copy is never loaded`,
           failureCode: "managed_name_locked",
         };
-      M =
+      policyAdmitted =
         pluginByIdentifier !== undefined &&
         matchPolicyPluginEntry(
           getPolicyEnabledPluginEntries(),
-          parsePluginId(D).name,
+          parsePluginId(targetId).name,
           pluginByIdentifier.attributedMarketplaceName,
         ).outcome === "admitted";
-      if (enabled && M && pluginByIdentifier !== undefined)
-        Ee = [
+      if (enabled && policyAdmitted && pluginByIdentifier !== undefined)
+        shadowsToTurnOff = [
           `${pluginByIdentifier.name}@${SYNCED}`,
           `${pluginByIdentifier.name}@${INLINE_PLUGIN_MARKETPLACE}`,
-        ].flatMap((De) =>
-          ["local", "user"].flatMap((Ie) => {
-            let pluginInSource = findPluginInSource(Ie, De, h);
+        ].flatMap((otherId) =>
+          ["local", "user"].flatMap((scope) => {
+            let pluginInSource = findPluginInSource(scope, otherId, grouped);
             return pluginInSource?.value === false
               ? [
                   {
-                    scope: Ie,
+                    scope,
                     key: pluginInSource.key,
                   },
                 ]
@@ -4527,53 +4981,54 @@ async function setPluginEnabledOp(pluginId, enabled, scope, a, storageV5) {
           }),
         );
       if (enabled && marketplace === SYNCED) {
-        let De = new Set(allPlugins.errors.filter(isDependencyError).map((error) => error.source));
-        let Ie = localCopyShadowingSynced(p, [
-          ...allPlugins.enabled.filter((Le) => !Le.isBuiltin),
+        let brokenSources = new Set(allPlugins.errors.filter(isDependencyError).map((error) => error.source));
+        let shadowingCopy = localCopyShadowingSynced(bareName, [
+          ...allPlugins.enabled.filter((plugin) => !plugin.isBuiltin),
           ...allPlugins.disabled
-            .filter((Le) => De.has(Le.source))
-            .map((Le) => ({
-              ...Le,
+            .filter((plugin) => brokenSources.has(plugin.source))
+            .map((plugin) => ({
+              ...plugin,
               enabled: true,
             })),
-          ...allPlugins.enabled.filter((Le) => Le.isBuiltin),
+          ...allPlugins.enabled.filter((plugin) => plugin.isBuiltin),
         ]);
-        if (Ie !== undefined)
-          B = ` (a local copy, ${stripInvisibleKeepEmoji(Ie.source)}, currently takes precedence over the synced one \u2014 disable it in /plugin to run this copy)`;
+        if (shadowingCopy !== undefined)
+          shadowNote = ` (a local copy, ${stripInvisibleKeepEmoji(shadowingCopy.source)}, currently takes precedence over the synced one \u2014 disable it in /plugin to run this copy)`;
       }
-      if (enabled && marketplace === INLINE_PLUGIN_MARKETPLACE && !M) {
-        let { name: De } = splitPluginId(D);
-        let Ie = `${De}@${SYNCED}`;
+      if (enabled && marketplace === INLINE_PLUGIN_MARKETPLACE && !policyAdmitted) {
+        let { name } = splitPluginId(targetId);
+        let syncedId = `${name}@${SYNCED}`;
         let filtered = VALID_INSTALLABLE_SCOPES.filter(
-          (un) =>
-            findPluginInSource(un, D, h)?.value === false && findPluginInSource(un, Ie, h) === undefined,
+          (scope) =>
+            findPluginInSource(scope, targetId, grouped)?.value === false &&
+            findPluginInSource(scope, syncedId, grouped) === undefined,
         );
         if (filtered.length > 0)
-          pe = {
-            syncedId: Ie,
+          syncedFallback = {
+            syncedId,
             scopes: filtered,
           };
       }
-      let Ke = locatePluginInstall(D, scope, h);
-      L = Ke.override;
+      let located = locatePluginInstall(targetId, scope, grouped);
+      override = located.override;
       if (scope) {
-        D = Ke.atRequested?.key ?? Ke.found?.key ?? D;
-        U = Ke.atRequested !== undefined;
+        targetId = located.atRequested?.key ?? located.found?.key ?? targetId;
+        scopeGiven = located.atRequested !== undefined;
         if (
-          Ke.atRequested === undefined &&
-          Ke.found &&
-          SCOPE_PRECEDENCE[Ke.found.scope] > SCOPE_PRECEDENCE[scope]
+          located.atRequested === undefined &&
+          located.found &&
+          SCOPE_PRECEDENCE[located.found.scope] > SCOPE_PRECEDENCE[scope]
         )
           return {
             success: false,
-            message: `Plugin "${D}" is set at ${Ke.found.scope} scope (which overrides ${scope}). Use --scope ${Ke.found.scope} or omit --scope to auto-detect.`,
+            message: `Plugin "${targetId}" is set at ${located.found.scope} scope (which overrides ${scope}). Use --scope ${located.found.scope} or omit --scope to auto-detect.`,
             failureCode: "not_installed_at_scope",
-            installedScope: Ke.found.scope,
+            installedScope: located.found.scope,
           };
-        J = scope;
+        settingScope = scope;
       } else {
-        J = Ke.decidingScope ?? Ke.found?.scope ?? "user";
-        D = findPluginInSource(J, D, h)?.key ?? D;
+        settingScope = located.decidingScope ?? located.found?.scope ?? "user";
+        targetId = findPluginInSource(settingScope, targetId, grouped)?.key ?? targetId;
       }
     }
     if (enabled && marketplace === SKILLS_DIR) {
@@ -4584,86 +5039,94 @@ async function setPluginEnabledOp(pluginId, enabled, scope, a, storageV5) {
           failureCode: "local_plugin_dirs_blocked",
         };
     }
-    if (enabled && isPluginBlockedByPolicy(D))
+    if (enabled && isPluginBlockedByPolicy(targetId))
       return {
         success: false,
-        message: `Plugin "${D}" is blocked by your organization's policy and cannot be enabled`,
+        message: `Plugin "${targetId}" is blocked by your organization's policy and cannot be enabled`,
         failureCode: "plugin_policy_blocked",
       };
-    if (marketplace === SYNCED && L && L.enabling !== enabled && !(P && L.source === "flagSettings"))
-      return pluginBlockedResult(D, enabled, L.source, L.key);
-    let me = scopeToSettingSource(J);
-    let N =
+    if (
+      marketplace === SYNCED &&
+      override &&
+      override.enabling !== enabled &&
+      !(required && override.source === "flagSettings")
+    )
+      return pluginBlockedResult(targetId, enabled, override.source, override.key);
+    let settingSource = scopeToSettingSource(settingScope);
+    let writeValue =
       enabled &&
       isOfficialMarketplace(marketplace) &&
-      me === "userSettings" &&
-      k === false &&
-      (marketplace !== SYNCED || isPluginEnabled(D, pluginRecordsFor(me, D)) !== false)
+      settingSource === "userSettings" &&
+      defaultEnabled === false &&
+      (marketplace !== SYNCED ||
+        isPluginEnabled(targetId, pluginRecordsFor(settingSource, targetId)) !== false)
         ? undefined
         : enabled;
-    let Z = "";
+    let governedNote = "";
     if (marketplace === SYNCED) {
-      let Oe = enabledPluginsBySource(me, D, N);
-      let ae = pluginSettingAt(
-        D,
-        Oe.map(({ record }) => record),
+      let records = enabledPluginsBySource(settingSource, targetId, writeValue);
+      let setting = pluginSettingAt(
+        targetId,
+        records.map(({ record }) => record),
       );
-      let Ge = ae?.enabled ?? k !== true;
-      let source = ae === undefined ? undefined : Oe[ae.index]?.source;
-      if (Ge !== enabled && source !== undefined && !(P && source !== "policySettings")) {
+      let currentEnabled = setting?.enabled ?? defaultEnabled !== true;
+      let source = setting === undefined ? undefined : records[setting.index]?.source;
+      if (currentEnabled !== enabled && source !== undefined && !(required && source !== "policySettings")) {
         let settingSourceName = getSettingSourceName(source);
-        let De =
+        let governingScope =
           source === "localSettings" || source === "projectSettings" || source === "userSettings"
             ? SETTING_SOURCE_TO_SCOPE[source]
             : undefined;
-        let Ie = De !== undefined ? ` (--scope ${De})` : "";
-        if (!U)
+        let scopeSuffix = governingScope !== undefined ? ` (--scope ${governingScope})` : "";
+        if (!scopeGiven)
           return {
             success: false,
-            message: `Plugin "${D}" would still be ${enabled ? "disabled" : "enabled"} after writing ${J} settings: ${settingSourceName} settings govern it. Change it there${Ie}.`,
+            message: `Plugin "${targetId}" would still be ${enabled ? "disabled" : "enabled"} after writing ${settingScope} settings: ${settingSourceName} settings govern it. Change it there${scopeSuffix}.`,
             failureCode: "governed_elsewhere",
-            ...(De !== undefined && {
-              governingScope: De,
+            ...(governingScope !== undefined && {
+              governingScope,
             }),
           };
-        Z = ` (still ${enabled ? "disabled" : "enabled"} here: ${settingSourceName} settings govern it${Ie})`;
+        governedNote = ` (still ${enabled ? "disabled" : "enabled"} here: ${settingSourceName} settings govern it${scopeSuffix})`;
       }
-      if (!getEnabledSettingSources().includes(me))
-        Z += ` (this session ignores ${getSettingSourceName(me)} settings: --setting-sources)`;
+      if (!getEnabledSettingSources().includes(settingSource))
+        governedNote += ` (this session ignores ${getSettingSourceName(settingSource)} settings: --setting-sources)`;
     }
-    for (let { scope, key } of Ee) {
-      if (scope === J && nfcLower(key) === nfcLower(D)) continue;
+    for (let { scope, key } of shadowsToTurnOff) {
+      if (scope === settingScope && nfcLower(key) === nfcLower(targetId)) continue;
       let { error } = await writeEnabledPlugins(scopeToSettingSource(scope), key, true, {}, storageV5);
       if (error)
         return {
           success: false,
-          message: `Failed to ${u} plugin: ${error.message}`,
+          message: `Failed to ${verb} plugin: ${error.message}`,
           failureCode: "settings_write_failed",
         };
     }
     if (
       !enabled &&
       isOfficialMarketplace(marketplace) &&
-      J === "project" &&
+      settingScope === "project" &&
       (getPolicyEnabledPluginEntries()?.some(
-        (Oe) =>
-          Oe.enabled &&
-          pluginNameAliases_2(Oe).some((ae) => nfcLower(ae) === nfcLower(parsePluginId(D).name)),
+        (entry) =>
+          entry.enabled &&
+          pluginNameAliases_2(entry).some(
+            (alias) => nfcLower(alias) === nfcLower(parsePluginId(targetId).name),
+          ),
       ) ??
         false)
     ) {
-      let { error } = await writeEnabledPlugins("userSettings", D, false, {}, storageV5);
+      let { error } = await writeEnabledPlugins("userSettings", targetId, false, {}, storageV5);
       if (error)
         return {
           success: false,
-          message: `Failed to ${u} plugin: ${error.message}`,
+          message: `Failed to ${verb} plugin: ${error.message}`,
           failureCode: "settings_write_failed",
         };
     }
-    if (pe) {
-      let { syncedId, scopes } = pe;
+    if (syncedFallback) {
+      let { syncedId, scopes } = syncedFallback;
       for (let scope of scopes) {
-        if (scope === J) continue;
+        if (scope === settingScope) continue;
         let { error } = await writeEnabledPlugins(
           scopeToSettingSource(scope),
           syncedId,
@@ -4674,18 +5137,18 @@ async function setPluginEnabledOp(pluginId, enabled, scope, a, storageV5) {
         if (error)
           return {
             success: false,
-            message: `Failed to ${u} plugin: ${error.message}`,
+            message: `Failed to ${verb} plugin: ${error.message}`,
             failureCode: "settings_write_failed",
           };
       }
     }
     let { error } = await writeEnabledPlugins(
-      me,
-      D,
-      N,
-      pe?.scopes.includes(J)
+      settingSource,
+      targetId,
+      writeValue,
+      syncedFallback?.scopes.includes(settingScope)
         ? {
-            [pe.syncedId]: false,
+            [syncedFallback.syncedId]: false,
           }
         : {},
       storageV5,
@@ -4693,27 +5156,27 @@ async function setPluginEnabledOp(pluginId, enabled, scope, a, storageV5) {
     if (error)
       return {
         success: false,
-        message: `Failed to ${u} plugin: ${error.message}`,
+        message: `Failed to ${verb} plugin: ${error.message}`,
         failureCode: "settings_write_failed",
       };
     refreshPluginCaches(storageV5);
-    let { name: pluginName } = splitPluginId(D);
+    let { name: pluginName } = splitPluginId(targetId);
     return {
       success: true,
-      message: `Successfully ${u}d plugin: ${pluginName}${Z}${B}${enabled ? "" : flagSettingsEnabledNote(D)}`,
-      pluginId: D,
+      message: `Successfully ${verb}d plugin: ${pluginName}${governedNote}${shadowNote}${enabled ? "" : flagSettingsEnabledNote(targetId)}`,
+      pluginId: targetId,
       pluginName,
-      scope: J,
+      scope: settingScope,
     };
   }
   if (scope) assertInstallableScope(scope);
-  let rootId;
-  let y;
+  let resolvedId;
+  let resolvedScope;
   let found = findPluginInSettings(pluginId);
   if (scope) {
-    y = scope;
-    if (found) rootId = found.pluginId;
-    else if (pluginId.includes("@")) rootId = pluginId;
+    resolvedScope = scope;
+    if (found) resolvedId = found.pluginId;
+    else if (pluginId.includes("@")) resolvedId = pluginId;
     else
       return {
         success: false,
@@ -4721,58 +5184,62 @@ async function setPluginEnabledOp(pluginId, enabled, scope, a, storageV5) {
         failureCode: "ambiguous_marketplace",
       };
   } else if (found) {
-    rootId = found.pluginId;
-    y = found.scope;
+    resolvedId = found.pluginId;
+    resolvedScope = found.scope;
   } else if (pluginId.includes("@")) {
-    rootId = pluginId;
-    y = "user";
+    resolvedId = pluginId;
+    resolvedScope = "user";
   } else
     return {
       success: false,
       message: `Plugin "${pluginId}" not found in any editable settings scope. Use plugin@marketplace format.`,
       failureCode: "ambiguous_marketplace",
     };
-  if (enabled && isPluginBlockedByPolicy(rootId))
+  if (enabled && isPluginBlockedByPolicy(resolvedId))
     return {
       success: false,
-      message: `Plugin "${rootId}" is blocked by your organization's policy and cannot be enabled`,
+      message: `Plugin "${resolvedId}" is blocked by your organization's policy and cannot be enabled`,
       failureCode: "plugin_policy_blocked",
     };
-  let T = enabled ? undefined : managedPluginRefusal(rootId);
-  if (T !== undefined) return T;
-  if (isNpmPluginSource(rootId)) {
-    let J = parsePluginIdentifier(rootId).name ?? rootId;
+  let managedRefusal = enabled ? undefined : managedPluginRefusal(resolvedId);
+  if (managedRefusal !== undefined) return managedRefusal;
+  if (isNpmPluginSource(resolvedId)) {
+    let name = parsePluginIdentifier(resolvedId).name ?? resolvedId;
     if (enabled && pluginDirectoryPolicyBlock() !== null)
       return {
         success: false,
-        message: directoryBlockedMessage(J),
+        message: directoryBlockedMessage(name),
         failureCode: "marketplace_policy_blocked",
       };
-    if (enabled && (await isPluginDirectoryListingBlocked(J, storageV5)))
+    if (enabled && (await isPluginDirectoryListingBlocked(name, storageV5)))
       return {
         success: false,
-        message: `Plugin "${quotedPrintable(rootId)}" is blocked by your organization's policy and cannot be enabled`,
+        message: `Plugin "${quotedPrintable(resolvedId)}" is blocked by your organization's policy and cannot be enabled`,
         failureCode: "plugin_policy_blocked",
       };
-    await seedBindingsFromInstall(rootId, getInstalledPlugins().plugins[rootId]);
+    await seedBindingsFromInstall(resolvedId, getInstalledPlugins().plugins[resolvedId]);
   }
-  let settingSource = scopeToSettingSource(y);
-  let w = lookupByPluginAliases(getSettingsForSourceForUpkeep(settingSource)?.enabledPlugins, rootId);
-  let b = scope && found && SCOPE_PRECEDENCE[scope] > SCOPE_PRECEDENCE[found.scope];
-  if (scope && w === undefined && found && found.scope !== scope && !b)
+  let settingSource = scopeToSettingSource(resolvedScope);
+  let existingValue = lookupByPluginAliases(
+    getSettingsForSourceForUpkeep(settingSource)?.enabledPlugins,
+    resolvedId,
+  );
+  let scopeOverrides = scope && found && SCOPE_PRECEDENCE[scope] > SCOPE_PRECEDENCE[found.scope];
+  if (scope && existingValue === undefined && found && found.scope !== scope && !scopeOverrides)
     return {
       success: false,
       message: `Plugin "${pluginId}" is installed at ${found.scope} scope, not ${scope}. Use --scope ${found.scope} or omit --scope to auto-detect.`,
       failureCode: "not_installed_at_scope",
       installedScope: found.scope,
     };
-  let _e =
-    scope && !b
-      ? w === true || (!enabled && getPluginEnablingSource(rootId, h) === "flagSettings")
-      : legacyPluginIds(canonicalPluginId(rootId)).length > 0
-        ? findEnabledSettingForPlugin(canonicalPluginId(rootId)) === true
-        : getPluginEditableScopes().has(rootId);
-  if (enabled === _e)
+  let alreadyThere =
+    scope && !scopeOverrides
+      ? existingValue === true ||
+        (!enabled && getPluginEnablingSource(resolvedId, grouped) === "flagSettings")
+      : legacyPluginIds(canonicalPluginId(resolvedId)).length > 0
+        ? findEnabledSettingForPlugin(canonicalPluginId(resolvedId)) === true
+        : getPluginEditableScopes().has(resolvedId);
+  if (enabled === alreadyThere)
     return {
       success: false,
       alreadyInGoalState: true,
@@ -4782,152 +5249,157 @@ async function setPluginEnabledOp(pluginId, enabled, scope, a, storageV5) {
   let rdeps;
   if (!enabled) {
     let { enabled, disabled } = await loadAllPlugins(storageV5);
-    let ce = [...enabled, ...disabled];
-    let ge = canonicalPluginId(rootId);
-    let reverseDependentNames = findReverseDependentNames(ge, ce);
+    let allPlugins = [...enabled, ...disabled];
+    let canonical = canonicalPluginId(resolvedId);
+    let reverseDependentNames = findReverseDependentNames(canonical, allPlugins);
     if (reverseDependentNames.length > 0) rdeps = reverseDependentNames;
-    if (!a?.bypassDependentsBlock) {
-      let M = buildRequiredByPolicyMap(ce).get(nfcLower(ge)) ?? [];
-      if (M.length > 0)
+    if (!options?.bypassDependentsBlock) {
+      let requiredBy = buildRequiredByPolicyMap(allPlugins).get(nfcLower(canonical)) ?? [];
+      if (requiredBy.length > 0)
         return {
           success: false,
-          message: requiredDependencyMessage(parsePluginIdentifier(rootId).name, M),
+          message: requiredDependencyMessage(parsePluginIdentifier(resolvedId).name, requiredBy),
           failureCode: "required_by_organization",
-          reverseDependents: M.map((P) => P.name),
+          reverseDependents: requiredBy.map((dependent) => dependent.name),
         };
     }
-    let pe = isSyncWanted() ? ce : ce.filter((M) => marketplaceSuffix(M.source) !== SYNCED);
-    let reverseDependentNames_2 = findReverseDependentNames(ge, pe);
-    if (reverseDependentNames_2.length > 0 && !a?.bypassDependentsBlock) {
-      let { name: M } = parsePluginIdentifier(rootId);
-      let rdeps = collectTransitiveDependents(ge, pe);
-      let mapped = [...rdeps, rootId].map((B) => claudeCommand("plugin disable", B));
-      let U = mapped.every((B) => B !== null)
+    let relevantPlugins = isSyncWanted()
+      ? allPlugins
+      : allPlugins.filter((plugin) => marketplaceSuffix(plugin.source) !== SYNCED);
+    let reverseDependentNames_2 = findReverseDependentNames(canonical, relevantPlugins);
+    if (reverseDependentNames_2.length > 0 && !options?.bypassDependentsBlock) {
+      let { name } = parsePluginIdentifier(resolvedId);
+      let rdeps = collectTransitiveDependents(canonical, relevantPlugins);
+      let mapped = [...rdeps, resolvedId].map((id) => claudeCommand("plugin disable", id));
+      let hint = mapped.every((command) => command !== null)
         ? `, or disable everything together: ${mapped.join(" && ")}`
         : ", or disable them together in /plugin.";
       return {
         success: false,
-        message: `${M} is still required by ${reverseDependentNames_2.map(stripInvisibleKeepEmoji).join(", ")}. Disable ${plural(reverseDependentNames_2.length, "that plugin", "those plugins")} first${U}`,
+        message: `${name} is still required by ${reverseDependentNames_2.map(stripInvisibleKeepEmoji).join(", ")}. Disable ${plural(reverseDependentNames_2.length, "that plugin", "those plugins")} first${hint}`,
         failureCode: "required_by_dependents",
         reverseDependents: reverseDependentNames_2,
         disableFirst: rdeps,
       };
     }
   }
-  let W = [];
+  let dependenciesToEnable = [];
   if (enabled) {
     let { enabled, disabled } = await loadAllPlugins(storageV5);
-    let { closure, missing } = computeDependencyClosure(rootId, [...enabled, ...disabled]);
+    let { closure, missing } = computeDependencyClosure(resolvedId, [...enabled, ...disabled]);
     if (missing.length > 0) {
-      let { name: N } = parsePluginIdentifier(rootId);
-      let mapped = missing.map((he) => claudeCommand("plugin install", he));
-      let S = mapped.every((he) => he !== null) ? `: ${mapped.join(" && ")}` : " from /plugin.";
+      let { name } = parsePluginIdentifier(resolvedId);
+      let mapped = missing.map((dependency) => claudeCommand("plugin install", dependency));
+      let hint = mapped.every((command) => command !== null) ? `: ${mapped.join(" && ")}` : " from /plugin.";
       return {
         success: false,
-        message: `${N} depends on ${missing.join(", ")}, which ${plural(missing.length, "is", "are")} not installed. Install ${plural(missing.length, "it", "them")} first${S}`,
+        message: `${name} depends on ${missing.join(", ")}, which ${plural(missing.length, "is", "are")} not installed. Install ${plural(missing.length, "it", "them")} first${hint}`,
         failureCode: "dependency_missing",
         dependencies: missing,
       };
     }
-    let k = new Set(enabled.map((N) => N.source));
-    let pe = new Map(
+    let enabledSources = new Set(enabled.map((plugin) => plugin.source));
+    let knownBySource = new Map(
       [...enabled, ...disabled]
-        .filter((N) => isOfficialMarketplace(marketplaceSuffix(N.source)))
-        .map((N) => [N.source, N]),
+        .filter((plugin) => isOfficialMarketplace(marketplaceSuffix(plugin.source)))
+        .map((plugin) => [plugin.source, plugin]),
     );
     let enabledPluginsBySource = getEnabledPluginsBySource();
     let filtered = closure.filter(
-      (N) =>
-        isOfficialMarketplace(marketplaceSuffix(N)) &&
-        !k.has(N) &&
+      (dependency) =>
+        isOfficialMarketplace(marketplaceSuffix(dependency)) &&
+        !enabledSources.has(dependency) &&
         !isPluginEnabled_2(
-          N,
+          dependency,
           enabledPluginsBySource,
-          pe.get(N)?.manifest.defaultEnabled,
-          pe.get(N)?.installationPreference,
+          knownBySource.get(dependency)?.manifest.defaultEnabled,
+          knownBySource.get(dependency)?.installationPreference,
         ),
     );
     if (filtered.length > 0) {
-      let { name: N } = parsePluginIdentifier(rootId);
-      let Z = filtered.length;
-      let mapped = filtered.map((re) => claudeCommand("plugin enable", re));
-      let he = mapped.every((re) => re !== null) ? `: ${mapped.join(" && ")}` : " in /plugin.";
+      let { name } = parsePluginIdentifier(resolvedId);
+      let count = filtered.length;
+      let mapped = filtered.map((dependency) => claudeCommand("plugin enable", dependency));
+      let hint = mapped.every((command) => command !== null) ? `: ${mapped.join(" && ")}` : " in /plugin.";
       return {
         success: false,
-        message: `${N} depends on ${filtered.join(", ")}, ${plural(Z, "a local copy that is", "local copies that are")} currently disabled. Enable ${plural(Z, "it", "them")} first${he}`,
+        message: `${name} depends on ${filtered.join(", ")}, ${plural(count, "a local copy that is", "local copies that are")} currently disabled. Enable ${plural(count, "it", "them")} first${hint}`,
         failureCode: "dependency_disabled",
         dependencies: filtered,
       };
     }
-    let filtered_2 = closure.filter((N) => !isOfficialMarketplace(marketplaceSuffix(N)));
-    let filtered_3 = filtered_2.filter((N) => isPluginBlockedByPolicy(N));
+    let filtered_2 = closure.filter((dependency) => !isOfficialMarketplace(marketplaceSuffix(dependency)));
+    let filtered_3 = filtered_2.filter((dependency) => isPluginBlockedByPolicy(dependency));
     if (filtered_3.length > 0) {
-      let { name: N } = parsePluginIdentifier(rootId);
+      let { name } = parsePluginIdentifier(resolvedId);
       return {
         success: false,
-        message: `${N} depends on ${filtered_3.join(", ")}, which ${plural(filtered_3.length, "is", "are")} blocked by your organization's plugin policy. Ask an admin to allow ${plural(filtered_3.length, "it", "them")}.`,
+        message: `${name} depends on ${filtered_3.join(", ")}, which ${plural(filtered_3.length, "is", "are")} blocked by your organization's plugin policy. Ask an admin to allow ${plural(filtered_3.length, "it", "them")}.`,
         failureCode: "dependency_policy_blocked",
       };
     }
-    let sorted = [...VALID_INSTALLABLE_SCOPES].sort((N, Z) => SCOPE_PRECEDENCE[Z] - SCOPE_PRECEDENCE[N]);
-    let B = [];
-    for (let N of filtered_2)
-      for (let Z of sorted) {
-        if (SCOPE_PRECEDENCE[Z] <= SCOPE_PRECEDENCE[y]) continue;
-        let S = getSettingsForSourceForUpkeep(scopeToSettingSource(Z))?.enabledPlugins?.[N];
-        if (S === undefined) continue;
-        if (S === false)
-          B.push({
-            dep: N,
-            scope: Z,
+    let sorted = [...VALID_INSTALLABLE_SCOPES].sort(
+      (left, right) => SCOPE_PRECEDENCE[right] - SCOPE_PRECEDENCE[left],
+    );
+    let disableAtScopes = [];
+    for (let dependency of filtered_2)
+      for (let scope of sorted) {
+        if (SCOPE_PRECEDENCE[scope] <= SCOPE_PRECEDENCE[resolvedScope]) continue;
+        let value = getSettingsForSourceForUpkeep(scopeToSettingSource(scope))?.enabledPlugins?.[dependency];
+        if (value === undefined) continue;
+        if (value === false)
+          disableAtScopes.push({
+            dep: dependency,
+            scope,
           });
         break;
       }
-    if (B.length > 0) {
-      let { name: N } = parsePluginIdentifier(rootId);
-      let joined = B.map((re) => `${re.dep} (${re.scope} scope)`).join(", ");
-      let S = uniq(B.map((re) => re.scope));
-      let he = S.length === 1 ? `, or use --scope ${S[0]} to write where the override lives` : "";
+    if (disableAtScopes.length > 0) {
+      let { name } = parsePluginIdentifier(resolvedId);
+      let joined = disableAtScopes.map((entry) => `${entry.dep} (${entry.scope} scope)`).join(", ");
+      let scopes = uniq(disableAtScopes.map((entry) => entry.scope));
+      let scopeHint =
+        scopes.length === 1 ? `, or use --scope ${scopes[0]} to write where the override lives` : "";
       return {
         success: false,
-        message: `${N} depends on ${joined}, which ${plural(B.length, "is", "are")} disabled there. Enable ${plural(B.length, "it", "them")} at that scope${he}.`,
+        message: `${name} depends on ${joined}, which ${plural(disableAtScopes.length, "is", "are")} disabled there. Enable ${plural(disableAtScopes.length, "it", "them")} at that scope${scopeHint}.`,
         failureCode: "dependency_disabled",
-        dependencies: B.map((re) => re.dep),
+        dependencies: disableAtScopes.map((entry) => entry.dep),
       };
     }
     let enabledPluginIdsInSource = getEnabledPluginIdsInSource(settingSource);
-    W = filtered_2.filter((N) => !enabledPluginIdsInSource.has(N));
+    dependenciesToEnable = filtered_2.filter((dependency) => !enabledPluginIdsInSource.has(dependency));
   }
   let { error } = await writeEnabledPlugins(
     settingSource,
-    rootId,
+    resolvedId,
     enabled,
-    Object.fromEntries(W.map((J) => [J, true])),
+    Object.fromEntries(dependenciesToEnable.map((dependency) => [dependency, true])),
     storageV5,
   );
   if (error)
     return {
       success: false,
-      message: `Failed to ${u} plugin: ${error.message}`,
+      message: `Failed to ${verb} plugin: ${error.message}`,
       failureCode: "settings_write_failed",
     };
   refreshPluginCaches(storageV5);
   if (enabled) {
-    seedPluginUsage([rootId, ...W], storageV5);
-    touchPluginUsage([rootId, ...W], storageV5);
+    seedPluginUsage([resolvedId, ...dependenciesToEnable], storageV5);
+    touchPluginUsage([resolvedId, ...dependenciesToEnable], storageV5);
   }
-  let { name: pluginName } = parsePluginIdentifier(rootId);
+  let { name: pluginName } = parsePluginIdentifier(resolvedId);
   let depWarn = formatReverseDependentsSuffix(rdeps);
-  let we =
-    W.length > 0
-      ? ` (also enabled ${W.length} ${plural(W.length, "dependency", "dependencies")}: ${W.map((J) => parsePluginIdentifier(J).name).join(", ")})`
+  let enabledNote =
+    dependenciesToEnable.length > 0
+      ? ` (also enabled ${dependenciesToEnable.length} ${plural(dependenciesToEnable.length, "dependency", "dependencies")}: ${dependenciesToEnable.map((dependency) => parsePluginIdentifier(dependency).name).join(", ")})`
       : "";
   return {
     success: true,
-    message: `Successfully ${u}d plugin: ${pluginName} (scope: ${y})${enabled ? "" : flagSettingsEnabledNote(rootId)}${depWarn}${we}`,
-    pluginId: rootId,
+    message: `Successfully ${verb}d plugin: ${pluginName} (scope: ${resolvedScope})${enabled ? "" : flagSettingsEnabledNote(resolvedId)}${depWarn}${enabledNote}`,
+    pluginId: resolvedId,
     pluginName,
-    scope: y,
+    scope: resolvedScope,
     reverseDependents: rdeps,
   };
 }
@@ -4935,152 +5407,178 @@ async function setPluginEnabledOp(pluginId, enabled, scope, a, storageV5) {
 /**
  * 启用插件：setPluginEnabledOp(pluginId, true, scope)。
  */
-async function enablePluginOp(e, n, storageV5) {
-  return setPluginEnabledOp(e, true, n, undefined, storageV5);
+async function enablePluginOp(pluginId, scope, storageV5) {
+  return setPluginEnabledOp(pluginId, true, scope, undefined, storageV5);
 }
 //@ chunk-pp50kewz.js:99844-99897 layout
 /**
  * 禁用插件：setPluginEnabledOp(pluginId, false, scope)。
  */
-async function disablePluginOp(e, n, storageV5) {
-  return setPluginEnabledOp(e, false, n, undefined, storageV5);
+async function disablePluginOp(pluginId, scope, storageV5) {
+  return setPluginEnabledOp(pluginId, false, scope, undefined, storageV5);
 }
 //@ chunk-pp50kewz.js:99897-102187 layout
 /**
  * 列出必须保持启用的插件：托管策略 policySettings 启用的、claude.ai 同步要求的，以及它们的依赖闭包；用于禁止禁用。
  */
-async function listRequiredPlugins(e) {
+async function listRequiredPlugins(storageV5) {
   let pluginEditableScopes = getPluginEditableScopes();
   await ensureSyncedPluginDirsRegistered();
-  let i = await listSyncedRequiredPlugins(e);
-  let a = uniq(i.map((P) => P.id));
-  let o = new Set(i.filter((P) => P.required).map((P) => nfcLower(P.id)));
-  let u = enabledPluginRecordsBySource();
-  let h = groupedEnabledPlugins();
+  let syncedRequired = await listSyncedRequiredPlugins(storageV5);
+  let syncedIds = uniq(syncedRequired.map((syncedPlugin) => syncedPlugin.id));
+  let requiredSyncedIds = new Set(
+    syncedRequired
+      .filter((syncedPlugin) => syncedPlugin.required)
+      .map((syncedPlugin) => nfcLower(syncedPlugin.id)),
+  );
+  let recordsBySource = enabledPluginRecordsBySource();
+  let groupedPlugins = groupedEnabledPlugins();
   let filtered = [
-    ...a,
-    ...u
+    ...syncedIds,
+    ...recordsBySource
       .filter(({ source }) => source === "policySettings")
       .flatMap(({ record }) => Object.keys(record ?? {})),
-  ].filter((P) => getPluginEnablingSource(P, h) === "policySettings");
-  let r =
-    (o.size > 0 && isSyncAvailable()) || filtered.length > 0
-      ? await loadAllPlugins(e).then((allPlugins) => [...allPlugins.enabled, ...allPlugins.disabled])
+  ].filter((pluginId) => getPluginEnablingSource(pluginId, groupedPlugins) === "policySettings");
+  let allPlugins =
+    (requiredSyncedIds.size > 0 && isSyncAvailable()) || filtered.length > 0
+      ? await loadAllPlugins(storageV5).then((allPlugins) => [...allPlugins.enabled, ...allPlugins.disabled])
       : [];
-  let c = new Set(
-    r.filter((P) => marketplaceSuffix(P.source) === INLINE_PLUGIN_MARKETPLACE).map((P) => nfcLower(P.source)),
+  let inlineSources = new Set(
+    allPlugins
+      .filter((plugin) => marketplaceSuffix(plugin.source) === INLINE_PLUGIN_MARKETPLACE)
+      .map((plugin) => nfcLower(plugin.source)),
   );
-  let y = (P) => {
-    let L = normalizePluginId(P);
-    let U = marketplaceSuffix(L);
-    if (U === INLINE_PLUGIN_MARKETPLACE) {
-      if (c.has(nfcLower(L))) return false;
-    } else if (U !== SYNCED) return false;
-    let sliced = L.slice(0, L.lastIndexOf("@"));
-    return o.has(nfcLower(`${sliced}@${SYNCED}`));
+  let isSyncedDisabled = (pluginId) => {
+    let normalizedId = normalizePluginId(pluginId);
+    let marketplace = marketplaceSuffix(normalizedId);
+    if (marketplace === INLINE_PLUGIN_MARKETPLACE) {
+      if (inlineSources.has(nfcLower(normalizedId))) return false;
+    } else if (marketplace !== SYNCED) return false;
+    let sliced = normalizedId.slice(0, normalizedId.lastIndexOf("@"));
+    return requiredSyncedIds.has(nfcLower(`${sliced}@${SYNCED}`));
   };
-  let T = ((P) => new Set(P.flatMap(({ record }) => Object.keys(record ?? {}).map(nfcLower))))(u);
-  let filtered_2 = a.filter((P) => !T.has(nfcLower(P)) && !y(P));
-  let w = (P) => new Set(P.flatMap(({ record }) => Object.keys(record ?? {})));
-  let b = w(u);
-  let _e = w(u.filter(({ source }) => TRUSTED_SETTING_SOURCES.includes(source)));
+  let allRecordKeys = ((records) =>
+    new Set(records.flatMap(({ record }) => Object.keys(record ?? {}).map(nfcLower))))(recordsBySource);
+  let filtered_2 = syncedIds.filter(
+    (pluginId) => !allRecordKeys.has(nfcLower(pluginId)) && !isSyncedDisabled(pluginId),
+  );
+  let recordKeysOf = (records) => new Set(records.flatMap(({ record }) => Object.keys(record ?? {})));
+  let allKeys = recordKeysOf(recordsBySource);
+  let trustedKeys = recordKeysOf(
+    recordsBySource.filter(({ source }) => TRUSTED_SETTING_SOURCES.includes(source)),
+  );
   let filtered_3 = getBuiltinPlugins()
-    .enabled.map((P) => P.source)
-    .filter((P) => {
-      let L = hasTrustedOnlyBuiltinPlugin(P) ? _e : b;
-      return ![P, ...legacyPluginIds(P)].some((U) => L.has(U));
+    .enabled.map((builtin) => builtin.source)
+    .filter((builtinId) => {
+      let candidateKeys = hasTrustedOnlyBuiltinPlugin(builtinId) ? trustedKeys : allKeys;
+      return ![builtinId, ...legacyPluginIds(builtinId)].some((id) => candidateKeys.has(id));
     });
-  let W = new Set(buildRequiredByPolicyMap(r).keys());
-  let se = (P) => W.has(nfcLower(normalizePluginId(P)));
-  let Ce = [...pluginEditableScopes.keys(), ...filtered_2, ...filtered_3];
-  let X = uniq(Ce.filter((P) => !isManagedDisabled(P, y, h) && se(P)));
-  let filtered_4 = [...filtered_2, ...filtered_3].filter((P) => !isManagedDisabled(P, y, h) && !se(P));
+  let policyRequired = new Set(buildRequiredByPolicyMap(allPlugins).keys());
+  let isPolicyRequired = (pluginId) => policyRequired.has(nfcLower(normalizePluginId(pluginId)));
+  let candidates = [...pluginEditableScopes.keys(), ...filtered_2, ...filtered_3];
+  let requiredAndDisabled = uniq(
+    candidates.filter(
+      (pluginId) =>
+        !isManagedDisabled(pluginId, isSyncedDisabled, groupedPlugins) && isPolicyRequired(pluginId),
+    ),
+  );
+  let filtered_4 = [...filtered_2, ...filtered_3].filter(
+    (pluginId) =>
+      !isManagedDisabled(pluginId, isSyncedDisabled, groupedPlugins) && !isPolicyRequired(pluginId),
+  );
   let filtered_5 = [...pluginEditableScopes.keys()].filter(
-    (key) => !isManagedDisabled(key, y, h) && !se(key),
+    (key) => !isManagedDisabled(key, isSyncedDisabled, groupedPlugins) && !isPolicyRequired(key),
   );
   let size = new Set([
-    ...o,
+    ...requiredSyncedIds,
     ...[
       ...filtered_3,
-      ...a,
-      ...r.map((P) => P.source),
-      ...[...pluginEditableScopes].filter(([, P]) => P !== "managed").map(([P]) => P),
+      ...syncedIds,
+      ...allPlugins.map((plugin) => plugin.source),
+      ...[...pluginEditableScopes]
+        .filter(([, scopeEntry]) => scopeEntry !== "managed")
+        .map(([editableKey]) => editableKey),
     ]
-      .filter((P) => getPluginEnablingSource(P, h) === "policySettings")
+      .filter((pluginId) => getPluginEnablingSource(pluginId, groupedPlugins) === "policySettings")
       .map(nfcLower),
   ]).size;
-  let ce =
-    X.length > 0
-      ? ` and ${X.length} ${plural(X.length, "plugin")} ${plural(size, "it depends", "they depend")} on`
+  let dependentsClause =
+    requiredAndDisabled.length > 0
+      ? ` and ${requiredAndDisabled.length} ${plural(requiredAndDisabled.length, "plugin")} ${plural(size, "it depends", "they depend")} on`
       : "";
-  let ge = size > 0 ? ` (skipped ${size} required by your organization${ce})` : "";
+  let skippedSuffix = size > 0 ? ` (skipped ${size} required by your organization${dependentsClause})` : "";
   if (filtered_5.length === 0 && filtered_4.length === 0)
     return {
       success: true,
-      message: `No enabled plugins to disable${ge}`,
+      message: `No enabled plugins to disable${skippedSuffix}`,
     };
-  let k = [];
-  let pe = [];
-  for (let P of filtered_5) {
-    let L = await setPluginEnabledOp(
-      P,
+  let disabled = [];
+  let failures = [];
+  for (let pluginId of filtered_5) {
+    let result = await setPluginEnabledOp(
+      pluginId,
       false,
       undefined,
       {
         bypassDependentsBlock: true,
       },
-      e,
+      storageV5,
     );
-    if (L.success) k.push(P);
-    else pe.push(stripInvisibleKeepEmoji(`${P}: ${L.message}`));
+    if (result.success) disabled.push(pluginId);
+    else failures.push(stripInvisibleKeepEmoji(`${pluginId}: ${result.message}`));
   }
-  for (let P of filtered_4) {
+  for (let pluginId of filtered_4) {
     let { error } = await updateSettingsForSourceWithTransform(
       "userSettings",
-      (U) => ({
+      (settings) => ({
         enabledPlugins: {
-          ...U?.enabledPlugins,
-          [P]: false,
+          ...settings?.enabledPlugins,
+          [pluginId]: false,
         },
       }),
       undefined,
-      e,
+      storageV5,
     );
-    if (error) pe.push(stripInvisibleKeepEmoji(`${P}: ${error.message}`));
-    else k.push(P);
+    if (error) failures.push(stripInvisibleKeepEmoji(`${pluginId}: ${error.message}`));
+    else disabled.push(pluginId);
   }
-  if (filtered_4.length > 0) refreshPluginCaches(e);
-  let Ee = count(k, (P) => getPluginEnablingSource(P, h) === "flagSettings");
-  let M =
-    Ee > 0 ? ` (${Ee} still enabled this session: --settings keeps ${plural(Ee, "it", "them")} on)` : "";
-  if (pe.length > 0)
+  if (filtered_4.length > 0) refreshPluginCaches(storageV5);
+  let stillOnCount = count(
+    disabled,
+    (pluginId) => getPluginEnablingSource(pluginId, groupedPlugins) === "flagSettings",
+  );
+  let stillOnSuffix =
+    stillOnCount > 0
+      ? ` (${stillOnCount} still enabled this session: --settings keeps ${plural(stillOnCount, "it", "them")} on)`
+      : "";
+  if (failures.length > 0)
     return {
       success: false,
-      message: `Disabled ${k.length} ${plural(k.length, "plugin")}${ge}${M}, ${pe.length} failed:
-${pe.join(`
+      message: `Disabled ${disabled.length} ${plural(disabled.length, "plugin")}${skippedSuffix}${stillOnSuffix}, ${failures.length} failed:
+${failures.join(`
 `)}`,
       failureCode: "partial_failure",
     };
   return {
     success: true,
-    message: `Disabled ${k.length} ${plural(k.length, "plugin")}${ge}${M}`,
+    message: `Disabled ${disabled.length} ${plural(disabled.length, "plugin")}${skippedSuffix}${stillOnSuffix}`,
   };
 }
 //@ chunk-pp50kewz.js:102187-102435 layout
 async function listSyncedRequiredPlugins(storageV5) {
   return (
     await Promise.all(
-      getSyncedPluginDirs().map(async (i) => {
-        let a = await syncedPluginMintedName(i, storageV5);
-        if (a === undefined) return [];
-        let o = `${a}@${SYNCED}`;
-        let pluginAttribution = await getPluginAttribution(resolve(i));
+      getSyncedPluginDirs().map(async (dir) => {
+        let mintedName = await syncedPluginMintedName(dir, storageV5);
+        if (mintedName === undefined) return [];
+        let pluginId = `${mintedName}@${SYNCED}`;
+        let pluginAttribution = await getPluginAttribution(resolve(dir));
         return [
           {
-            id: o,
+            id: pluginId,
             required:
-              isRequiredPlugin(o, pluginAttribution.installationPreference) &&
-              lockedDependentName(o, pluginAttribution.marketplaceName) === undefined,
+              isRequiredPlugin(pluginId, pluginAttribution.installationPreference) &&
+              lockedDependentName(pluginId, pluginAttribution.marketplaceName) === undefined,
           },
         ];
       }),
@@ -5089,49 +5587,50 @@ async function listSyncedRequiredPlugins(storageV5) {
 }
 //@ chunk-pp50kewz.js:102435-102675 layout
 function buildRequiredByPolicyMap(plugins) {
-  let n = new Map();
-  let i = isSyncAvailable();
-  let a = groupedEnabledPlugins();
-  for (let o of plugins) {
+  let dependentsByKey = new Map();
+  let syncAvailable = isSyncAvailable();
+  let groupedPlugins = groupedEnabledPlugins();
+  for (let plugin of plugins) {
     if (
-      !(i && isRequiredPlugin(o.source, o.installationPreference)) &&
-      getPluginEnablingSource(o.source, a) !== "policySettings"
+      !(syncAvailable && isRequiredPlugin(plugin.source, plugin.installationPreference)) &&
+      getPluginEnablingSource(plugin.source, groupedPlugins) !== "policySettings"
     )
       continue;
-    for (let h of computeDependencyClosure(o.source, plugins).closure) {
-      let p = nfcLower(h);
-      n.set(p, [...(n.get(p) ?? []), o]);
+    for (let dependencyId of computeDependencyClosure(plugin.source, plugins).closure) {
+      let dependencyKey = nfcLower(dependencyId);
+      dependentsByKey.set(dependencyKey, [...(dependentsByKey.get(dependencyKey) ?? []), plugin]);
     }
   }
-  return n;
+  return dependentsByKey;
 }
 //@ chunk-pp50kewz.js:102675-102882 layout
-function requiredDependencyMessage(name, n) {
-  return `${name} is needed by ${n.map((i) => stripInvisibleKeepEmoji(i.name)).join(", ")}, which ${plural(n.length, "is", "are")} required by your organization, so it can't be disabled here. Contact your admin to change it.`;
+function requiredDependencyMessage(name, dependents) {
+  return `${name} is needed by ${dependents.map((dependent) => stripInvisibleKeepEmoji(dependent.name)).join(", ")}, which ${plural(dependents.length, "is", "are")} required by your organization, so it can't be disabled here. Contact your admin to change it.`;
 }
 //@ chunk-pp50kewz.js:102882-103014 layout
 /**
  * “该插件由组织要求启用，不能在此禁用”的提示文本。
  */
-function requiredPluginMessage(id) {
-  return `Plugin "${id}" is required by your organization and can't be disabled here. Contact your admin to change it.`;
+function requiredPluginMessage(pluginName) {
+  return `Plugin "${pluginName}" is required by your organization and can't be disabled here. Contact your admin to change it.`;
 }
 //@ chunk-pp50kewz.js:103014-104076 layout
 /**
  * 更新插件的操作入口（CLI 与 /plugin 界面共用）：执行实际更新，异常按 failureCode 分 bad/sad 记 plugin_update_op 遥测，返回 {outcome, message, scope, failureCode}。
  */
-async function updatePluginOp(pluginId, scope, i = {}, storageV5) {
-  let o;
+async function updatePluginOp(pluginId, scope, options = {}, storageV5) {
+  let result;
   try {
-    o = await updatePluginOpInner(pluginId, scope, i, storageV5);
+    result = await updatePluginOpInner(pluginId, scope, options, storageV5);
   } catch (error) {
-    let p = {
+    let fields = {
       is_directory: isOfficialDirectoryPlugin(pluginId),
     };
     if (error instanceof CommandSourceError) {
       let failureCode = error instanceof EntryHelperError ? error.failureCode : "command_source_refused";
-      if (FAILURE_CODE_SEVERITY[failureCode] === "sad") logFeatureSad("plugin_update_op", failureCode, p);
-      else logFeatureBad("plugin_update_op", failureCode, p);
+      if (FAILURE_CODE_SEVERITY[failureCode] === "sad")
+        logFeatureSad("plugin_update_op", failureCode, fields);
+      else logFeatureBad("plugin_update_op", failureCode, fields);
       return {
         outcome: "failed",
         message: error.message,
@@ -5139,50 +5638,50 @@ async function updatePluginOp(pluginId, scope, i = {}, storageV5) {
         failureCode,
       };
     }
-    logFeatureBad("plugin_update_op", "exception", p);
+    logFeatureBad("plugin_update_op", "exception", fields);
     throw error;
   }
-  let u = {
-    is_directory: isOfficialDirectoryPlugin(o.pluginId ?? pluginId),
-    pin_changed: o.pinChanged === true,
-    no_clone_short_circuit: o.noCloneShortCircuit === true,
-    not_checked: o.notChecked === true,
+  let fields = {
+    is_directory: isOfficialDirectoryPlugin(result.pluginId ?? pluginId),
+    pin_changed: result.pinChanged === true,
+    no_clone_short_circuit: result.noCloneShortCircuit === true,
+    not_checked: result.notChecked === true,
   };
-  switch (o.outcome) {
+  switch (result.outcome) {
     case "failed":
-      if (o.failureCode !== undefined && FAILURE_CODE_SEVERITY[o.failureCode] === "sad")
-        logFeatureSad("plugin_update_op", o.failureCode, u);
-      else logFeatureBad("plugin_update_op", o.failureCode ?? "op_failed", u);
+      if (result.failureCode !== undefined && FAILURE_CODE_SEVERITY[result.failureCode] === "sad")
+        logFeatureSad("plugin_update_op", result.failureCode, fields);
+      else logFeatureBad("plugin_update_op", result.failureCode ?? "op_failed", fields);
       break;
     case "skipped":
-      logFeatureSad("plugin_update_op", o.skipReason ?? "skipped", u);
+      logFeatureSad("plugin_update_op", result.skipReason ?? "skipped", fields);
       break;
     case "up_to_date":
     case "updated":
-      if (o.refreshFailed)
+      if (result.refreshFailed)
         logFeatureSad(
           "plugin_update_op",
-          o.refreshRefusedByPolicy ? "marketplace_refresh_policy_refused" : "marketplace_refresh_failed",
-          u,
+          result.refreshRefusedByPolicy ? "marketplace_refresh_policy_refused" : "marketplace_refresh_failed",
+          fields,
         );
       else
         logFeatureOk("plugin_update_op", {
-          already_up_to_date: o.outcome === "up_to_date",
-          version_unknown: o.newVersion === "unknown",
-          ...u,
+          already_up_to_date: result.outcome === "up_to_date",
+          version_unknown: result.newVersion === "unknown",
+          ...fields,
         });
       break;
   }
-  return o;
+  return result;
 }
 //@ chunk-pp50kewz.js:104076-105363 layout
 /**
  * 更新结果为 up_to_date 时补充检查：安装路径已不存在则改报需重新安装。
  */
-async function annotateUpToDateResult(e, n, i, a) {
-  if (e.outcome !== "up_to_date") return e;
-  let { absolute, suspect } = classifyMarketplacePath(n.installPath);
-  let p =
+async function annotateUpToDateResult(result, installation, pluginName, storageV5) {
+  if (result.outcome !== "up_to_date") return result;
+  let { absolute, suspect } = classifyMarketplacePath(installation.installPath);
+  let sourceReal =
     (suspect
       ? undefined
       : await cacheCopyDependencyGap(absolute).catch(() => {
@@ -5191,59 +5690,61 @@ async function annotateUpToDateResult(e, n, i, a) {
     )?.kind === "not-installed"
       ? await realPathInsideCache(absolute)
       : undefined;
-  if (p === undefined) return e;
-  if (isEssentialTrafficOnly()) return e;
-  let r = n.projectPath ? `${n.scope} (${n.projectPath})` : n.scope;
-  let c;
-  let y = false;
+  if (sourceReal === undefined) return result;
+  if (isEssentialTrafficOnly()) return result;
+  let scopeLabel = installation.projectPath
+    ? `${installation.scope} (${installation.projectPath})`
+    : installation.scope;
+  let installError;
+  let installThrew = false;
   try {
-    await unvouchBeforeDependencyStep(absolute, a);
-    c = (
+    await unvouchBeforeDependencyStep(absolute, storageV5);
+    installError = (
       await installPluginDependencies(absolute, {
-        inPlaceAt: p,
+        inPlaceAt: sourceReal,
       })
     ).error;
   } catch (error) {
-    y = true;
-    c = errorMessage(error);
+    installThrew = true;
+    installError = errorMessage(error);
   }
-  let j;
-  if (!y)
-    await rescreenCachedPluginTree(absolute, a).catch((error) => {
-      j = errorMessage(error);
+  let screenError;
+  if (!installThrew)
+    await rescreenCachedPluginTree(absolute, storageV5).catch((error) => {
+      screenError = errorMessage(error);
     });
   if (!(
-    !y &&
-    (await realPathInsideCache(absolute)) === p &&
+    !installThrew &&
+    (await realPathInsideCache(absolute)) === sourceReal &&
     (await hasNodeModulesDir(absolute)) &&
     (await cacheCopyDependencyGap(absolute).then(
-      (I) => I === undefined,
+      (gap) => gap === undefined,
       () => false,
     ))
   ))
     return {
-      pluginId: e.pluginId,
-      newVersion: e.newVersion,
-      oldVersion: e.oldVersion,
-      scope: e.scope,
+      pluginId: result.pluginId,
+      newVersion: result.newVersion,
+      oldVersion: result.oldVersion,
+      scope: result.scope,
       outcome: "failed",
-      message: `Could not install the packages that "${i}" lists for scope ${r}, so parts of it may not work. Updating it again retries the install.${c ? ` Cause: ${quotedPrintable(c)}` : ""}`,
+      message: `Could not install the packages that "${pluginName}" lists for scope ${scopeLabel}, so parts of it may not work. Updating it again retries the install.${installError ? ` Cause: ${quotedPrintable(installError)}` : ""}`,
       failureCode: "dependencies_not_installed",
     };
-  if (j !== undefined)
+  if (screenError !== undefined)
     return {
-      pluginId: e.pluginId,
-      newVersion: e.newVersion,
-      oldVersion: e.oldVersion,
-      scope: e.scope,
+      pluginId: result.pluginId,
+      newVersion: result.newVersion,
+      oldVersion: result.oldVersion,
+      scope: result.scope,
       outcome: "failed",
-      message: `Installed the packages that "${i}" lists for scope ${r}, but could not finish checking them for links that lead outside the plugin. Cause: ${quotedPrintable(j)}`,
+      message: `Installed the packages that "${pluginName}" lists for scope ${scopeLabel}, but could not finish checking them for links that lead outside the plugin. Cause: ${quotedPrintable(screenError)}`,
       failureCode: "dependencies_not_screened",
     };
   return {
-    ...e,
+    ...result,
     outcome: "updated",
-    message: `Installed the packages that "${i}" lists for scope ${r}. Restart to apply changes. ${e.message}`,
+    message: `Installed the packages that "${pluginName}" lists for scope ${scopeLabel}. Restart to apply changes. ${result.message}`,
   };
 }
 //@ chunk-pp50kewz.js:105363-121835 layout
@@ -5263,14 +5764,14 @@ async function updatePluginOpInner(
   },
   storageV5,
 ) {
-  let c = explicit;
+  let isExplicit = explicit;
   pluginId = normalizePluginId(pluginId);
-  let { name: y, marketplace } = parsePluginId(pluginId);
-  let T = pluginOperationRefusal(pluginId, marketplace, "update");
-  if (T !== undefined)
+  let { name: pluginName, marketplace } = parsePluginId(pluginId);
+  let refusal = pluginOperationRefusal(pluginId, marketplace, "update");
+  if (refusal !== undefined)
     return {
       outcome: "failed",
-      message: T,
+      message: refusal,
       failureCode: unmanageablePluginReason(pluginId, marketplace),
     };
   let installedListRefusal = await getInstalledListRefusal(storageV5);
@@ -5280,93 +5781,103 @@ async function updatePluginOpInner(
       message: `Plugin "${quotedPrintable(pluginId)}" was not updated: ${readInstalledPluginsFile(installedListRefusal)}`,
       failureCode: "install_records_unreadable",
     };
-  let w = marketplace;
-  let b = w ? `${y}@${w}` : pluginId;
-  let _e =
+  let marketplaceName = marketplace;
+  let fullId = marketplaceName ? `${pluginName}@${marketplaceName}` : pluginId;
+  let installed =
     isStorageV5Enabled() && storageV5 !== undefined
       ? await loadInstalledPlugins(storageV5)
       : loadInstalledPluginsSync();
-  let pluginName = findPluginName(Object.keys(_e.plugins), b);
-  if (pluginName === undefined && w === undefined) {
-    let filtered = pluginsNamed(Object.keys(_e.plugins), y).filter((Q) => (_e.plugins[Q]?.length ?? 0) > 0);
+  let pluginName_2 = findPluginName(Object.keys(installed.plugins), fullId);
+  if (pluginName_2 === undefined && marketplaceName === undefined) {
+    let filtered = pluginsNamed(Object.keys(installed.plugins), pluginName).filter(
+      (name) => (installed.plugins[name]?.length ?? 0) > 0,
+    );
     if (filtered.length > 1)
       return {
         outcome: "failed",
-        message: `Plugin "${printableName(y, 200)}" is installed from more than one marketplace. Include the marketplace name to pick one: ${filtered.map((Q) => `\`claude plugin update ${printableName(Q, 200)}\``).join(" or ")}`,
+        message: `Plugin "${printableName(pluginName, 200)}" is installed from more than one marketplace. Include the marketplace name to pick one: ${filtered.map((name) => `\`claude plugin update ${printableName(name, 200)}\``).join(" or ")}`,
         scope,
         failureCode: "ambiguous_marketplace",
       };
     if (filtered.length === 0)
       return {
         outcome: "failed",
-        message: `Plugin "${printableName(y, 200)}" is not installed`,
+        message: `Plugin "${printableName(pluginName, 200)}" is not installed`,
         scope,
         failureCode: "not_installed",
       };
-    pluginName = filtered[0];
+    pluginName_2 = filtered[0];
   }
-  if (pluginName) {
-    b = pluginName;
-    ({ marketplace: w } = parsePluginIdentifier(b));
+  if (pluginName_2) {
+    fullId = pluginName_2;
+    ({ marketplace: marketplaceName } = parsePluginIdentifier(fullId));
   }
-  let W = pluginName ? _e.plugins[pluginName] : undefined;
-  let se = await seedBindingsFromInstall(b, W);
-  let Ce = undefined;
-  if (Ce !== undefined && !Ce.ok)
+  let installs = pluginName_2 ? installed.plugins[pluginName_2] : undefined;
+  let bindings = await seedBindingsFromInstall(fullId, installs);
+  let bindingResult = undefined;
+  if (bindingResult !== undefined && !bindingResult.ok)
     return {
       outcome: "failed",
-      message: Ce.message,
-      pluginId: b,
+      message: bindingResult.message,
+      pluginId: fullId,
       scope,
       failureCode: "not_found",
     };
-  let X;
-  let we = false;
-  let J;
-  let D = false;
-  if (isPluginBlockedByPolicy(b))
+  let refreshWarning;
+  let refreshRefusedByPolicy = false;
+  let directoryError;
+  let directoryNotChecked = false;
+  if (isPluginBlockedByPolicy(fullId))
     return {
       outcome: "failed",
-      message: `Plugin "${printableName(b, 200)}" is blocked by your organization's policy and was not updated`,
-      pluginId: b,
+      message: `Plugin "${printableName(fullId, 200)}" is blocked by your organization's policy and was not updated`,
+      pluginId: fullId,
       scope,
       failureCode: "plugin_policy_blocked",
     };
-  if (w === pluginManifestPathSchemas) {
+  if (marketplaceName === pluginManifestPathSchemas) {
     if (!npmMarketplaceEnabled())
       return {
         outcome: "failed",
         message: NPM_DIRECT_INSTALL_DISABLED_MESSAGE,
-        pluginId: b,
+        pluginId: fullId,
         scope,
         failureCode: "npm_marketplace_disabled",
       };
-    if (!W || W.length === 0)
+    if (!installs || installs.length === 0)
       return {
         outcome: "failed",
-        message: `Plugin "${y}" is not installed`,
-        pluginId: b,
+        message: `Plugin "${pluginName}" is not installed`,
+        pluginId: fullId,
         scope,
         failureCode: "not_installed",
       };
-    return performPluginUpdate(b, y, scope ?? VALID_UPDATE_SCOPES_2(W), W, storageV5, explicit);
+    return performPluginUpdate(
+      fullId,
+      pluginName,
+      scope ?? pickUpdateScope(installs),
+      installs,
+      storageV5,
+      explicit,
+    );
   }
-  if (w) {
+  if (marketplaceName) {
     let knownMarketplacesWithDeclared = await loadKnownMarketplacesWithDeclared(storageV5);
-    let Q = ownPropertyOrUndefined(knownMarketplacesWithDeclared, w);
-    let source = Q?.source;
+    let knownMarketplace = ownPropertyOrUndefined(knownMarketplacesWithDeclared, marketplaceName);
+    let source = knownMarketplace?.source;
     if (source && isPluginDirectorySource(source) && (await getPluginDirectoryState()) === "blocked")
       return {
         outcome: "failed",
-        message: directoryBlockedMessage(y),
-        pluginId: b,
+        message: directoryBlockedMessage(pluginName),
+        pluginId: fullId,
         scope,
         failureCode: "marketplace_policy_blocked",
       };
-    let ue = !source && w === OFFICIAL_MARKETPLACE_NAME && isPluginDirectoryAvailable();
+    let usesDirectory =
+      !source && marketplaceName === OFFICIAL_MARKETPLACE_NAME && isPluginDirectoryAvailable();
     if (
       isSourceDisallowedOrUnverifiable(
-        ue
+        usesDirectory
           ? {
               source: "pluginDirectory",
             }
@@ -5375,20 +5886,24 @@ async function updatePluginOpInner(
     )
       return {
         outcome: "failed",
-        message: `Plugin "${y}" is from marketplace "${w}", which is blocked by your organization's policy`,
-        pluginId: b,
+        message: `Plugin "${pluginName}" is from marketplace "${marketplaceName}", which is blocked by your organization's policy`,
+        pluginId: fullId,
         scope,
         failureCode: "marketplace_policy_blocked",
       };
-    if (Q !== undefined && isImpersonatingOfficialMarketplace(w, Q))
+    if (
+      knownMarketplace !== undefined &&
+      isImpersonatingOfficialMarketplace(marketplaceName, knownMarketplace)
+    )
       return {
         outcome: "failed",
-        message: describeImpersonatingMarketplace(w, Q),
-        pluginId: b,
+        message: describeImpersonatingMarketplace(marketplaceName, knownMarketplace),
+        pluginId: fullId,
         scope,
         failureCode: "not_found",
       };
-    D = !source && w === OFFICIAL_MARKETPLACE_NAME && !isPluginDirectoryAvailable();
+    directoryNotChecked =
+      !source && marketplaceName === OFFICIAL_MARKETPLACE_NAME && !isPluginDirectoryAvailable();
     if (
       !skipMarketplaceRefresh &&
       ((source &&
@@ -5397,201 +5912,206 @@ async function updatePluginOpInner(
           source.source === "url" ||
           source.source === "claudeai" ||
           source.source === "pluginDirectory")) ||
-        (!source && w === OFFICIAL_MARKETPLACE_NAME && isPluginDirectoryAvailable()))
+        (!source && marketplaceName === OFFICIAL_MARKETPLACE_NAME && isPluginDirectoryAvailable()))
     )
       try {
-        await refreshMarketplaceDeduped(w, storageV5, undefined, {
+        await refreshMarketplaceDeduped(marketplaceName, storageV5, undefined, {
           skipIfRecent: true,
         });
       } catch (error) {
-        we = error instanceof CommandSourceError;
-        X = we
+        refreshRefusedByPolicy = error instanceof CommandSourceError;
+        refreshWarning = refreshRefusedByPolicy
           ? "marketplace not refreshed \u2014 your organization's managed settings forbid its headersHelper (the version shown is from the cached catalog; ask your admin)"
           : `marketplace not refreshed (${oneLineClipped(errorMessage(error))})`;
-        if (error instanceof PluginDirectoryUnavailableError) J = oneLineClipped(error.message);
+        if (error instanceof PluginDirectoryUnavailableError) directoryError = oneLineClipped(error.message);
         logForDebugging(
-          `Failed to refresh marketplace '${w}' before update; using cached data: ${errorMessage(error)}`,
+          `Failed to refresh marketplace '${marketplaceName}' before update; using cached data: ${errorMessage(error)}`,
           {
             level: "warn",
           },
         );
       }
   }
-  let ce = {
-    pluginName: y,
-    refreshWarning: X,
-    directoryRefreshFailed: w === OFFICIAL_MARKETPLACE_NAME && !we,
-    directoryNotChecked: D,
+  let refreshState = {
+    pluginName,
+    refreshWarning,
+    directoryRefreshFailed: marketplaceName === OFFICIAL_MARKETPLACE_NAME && !refreshRefusedByPolicy,
+    directoryNotChecked,
   };
-  let ge =
-    skipMarketplaceRefresh || J !== undefined
-      ? await getPluginByIdCacheOnly(b, storageV5)
-      : await getPluginById(b, storageV5, "update");
-  if (!ge && !skipMarketplaceRefresh && w === OFFICIAL_MARKETPLACE_NAME) {
-    if (J !== undefined)
+  let lookup =
+    skipMarketplaceRefresh || directoryError !== undefined
+      ? await getPluginByIdCacheOnly(fullId, storageV5)
+      : await getPluginById(fullId, storageV5, "update");
+  if (!lookup && !skipMarketplaceRefresh && marketplaceName === OFFICIAL_MARKETPLACE_NAME) {
+    if (directoryError !== undefined)
       return {
         outcome: "failed",
-        message: `Could not check "${quotedPrintable(y)}" for updates. ${J}`,
-        pluginId: b,
+        message: `Could not check "${quotedPrintable(pluginName)}" for updates. ${directoryError}`,
+        pluginId: fullId,
         scope,
         failureCode: "directory_unavailable",
       };
-    if (await isPluginDirectoryListingBlocked(y, storageV5))
+    if (await isPluginDirectoryListingBlocked(pluginName, storageV5))
       return {
         outcome: "failed",
-        message: `Plugin "${quotedPrintable(y)}" is blocked by your organization's policy and was not updated`,
-        pluginId: b,
+        message: `Plugin "${quotedPrintable(pluginName)}" is blocked by your organization's policy and was not updated`,
+        pluginId: fullId,
         scope,
         failureCode: "plugin_policy_blocked",
       };
-    let R = await pluginDirectoryNotInstallableMessage(y);
-    if (R !== undefined)
+    let notInstallable = await pluginDirectoryNotInstallableMessage(pluginName);
+    if (notInstallable !== undefined)
       return {
         outcome: "failed",
-        message: `"${quotedPrintable(y)}" was not updated: ${R}`,
-        pluginId: b,
+        message: `"${quotedPrintable(pluginName)}" was not updated: ${notInstallable}`,
+        pluginId: fullId,
         scope,
         failureCode: "directory_listing_not_installable",
       };
   }
-  if (!ge)
+  if (!lookup)
     return {
       outcome: "failed",
       message: skipMarketplaceRefresh
-        ? `Plugin "${y}" is not in the locally cached marketplace catalog; it was not re-resolved.`
-        : `Plugin "${y}" not found`,
-      pluginId: b,
+        ? `Plugin "${pluginName}" is not in the locally cached marketplace catalog; it was not re-resolved.`
+        : `Plugin "${pluginName}" not found`,
+      pluginId: fullId,
       scope,
       failureCode: skipMarketplaceRefresh ? "not_cached" : "not_found",
     };
-  let { entry } = ge;
-  let { marketplaceInstallLocation } = ge;
-  if (!W || W.length === 0)
+  let { entry } = lookup;
+  let { marketplaceInstallLocation } = lookup;
+  if (!installs || installs.length === 0)
     return {
       outcome: "failed",
-      message: `Plugin "${y}" is not installed`,
-      pluginId: b,
+      message: `Plugin "${pluginName}" is not installed`,
+      pluginId: fullId,
       scope,
       failureCode: "not_installed",
     };
-  if (scope === undefined) scope = VALID_UPDATE_SCOPES_2(W);
+  if (scope === undefined) scope = pickUpdateScope(installs);
   let projectPathForScope = getProjectPathForScope(scope);
-  let filtered = W.filter((R) => R.scope === scope);
-  let installationForCurrentProject = findInstallationForCurrentProject(filtered);
-  if (!installationForCurrentProject && filtered.length > 1)
+  let installations = installs.filter((install) => install.scope === scope);
+  let installationForCurrentProject = findInstallationForCurrentProject(installations);
+  if (!installationForCurrentProject && installations.length > 1)
     logForDebugging(
-      `updatePluginOp: ${filtered.length} ${scope}-scope installs, none match CWD '${projectPathForScope}'; updating '${filtered[0]?.projectPath}' only`,
+      `updatePluginOp: ${installations.length} ${scope}-scope installs, none match CWD '${projectPathForScope}'; updating '${installations[0]?.projectPath}' only`,
       {
         level: "warn",
       },
     );
-  let L = installationForCurrentProject ?? filtered[0];
-  if (!L) {
-    let R = projectPathForScope ? `${scope} (${projectPathForScope})` : scope;
+  let install = installationForCurrentProject ?? installations[0];
+  if (!install) {
+    let scopeLabel = projectPathForScope ? `${scope} (${projectPathForScope})` : scope;
     return {
       outcome: "failed",
-      message: `Plugin "${y}" is not installed at scope ${R}`,
-      pluginId: b,
+      message: `Plugin "${pluginName}" is not installed at scope ${scopeLabel}`,
+      pluginId: fullId,
       scope,
       failureCode: "not_installed_at_scope",
     };
   }
-  let projectPath = L.projectPath;
-  let B;
+  let projectPath = install.projectPath;
+  let shownCommand;
   if (typeof entry.source === "object" && entry.source.source === "command") {
-    let R = areCommandPluginSourcesDisabledByPolicy();
-    let Q = R || skipCommandSources;
-    let x = findPluginName(await checkEnabledPlugins(), b) !== undefined;
-    let ue = R || (skipCommandSources && !x);
+    let commandSourcesDisabled = areCommandPluginSourcesDisabledByPolicy();
+    let commandSkipped = commandSourcesDisabled || skipCommandSources;
+    let enabledByName = findPluginName(await checkEnabledPlugins(), fullId) !== undefined;
+    let commandInactive = commandSourcesDisabled || (skipCommandSources && !enabledByName);
     let extra = scope === "user" ? undefined : `--scope ${scope}`;
-    B = Q ? undefined : await announceCommandSource?.(b, entry, L.sourceCommand);
-    let ze =
+    shownCommand = commandSkipped
+      ? undefined
+      : await announceCommandSource?.(fullId, entry, install.sourceCommand);
+    let commandModeMatches =
       announceCommandSource !== undefined &&
       !isPluginsDirOnLocalDisk() &&
-      L.sourceCommand === describeCommandOutputMode(entry.source);
-    if (Q || (B === undefined && !ze && !x))
+      install.sourceCommand === describeCommandOutputMode(entry.source);
+    if (commandSkipped || (shownCommand === undefined && !commandModeMatches && !enabledByName))
       return {
         outcome: "failed",
         message:
-          skipCommandSources && !ue
-            ? `${printableName(y, 200)} is installed by running a command, which the background marketplace update never runs; it is left to the per-session re-resolve (when that is enabled) or an explicit update \u2014 ${runCommandHint(
+          skipCommandSources && !commandInactive
+            ? `${printableName(pluginName, 200)} is installed by running a command, which the background marketplace update never runs; it is left to the per-session re-resolve (when that is enabled) or an explicit update \u2014 ${runCommandHint(
                 "plugin update",
-                b,
+                fullId,
                 {
                   extra,
                   fallback: "a per-plugin update reviews it",
                 },
               )}.`
-            : R
+            : commandSourcesDisabled
               ? commandPluginSourcesDisabledMessage()
-              : `${printableName(y, 200)} is disabled, so the command that installs it was not run. Enable it first, then ${runCommandHint(
+              : `${printableName(pluginName, 200)} is disabled, so the command that installs it was not run. Enable it first, then ${runCommandHint(
                   "plugin update",
-                  b,
+                  fullId,
                   {
                     extra,
                     fallback: "update it explicitly",
                   },
                 )}.`,
-        pluginId: b,
+        pluginId: fullId,
         scope,
-        failureCode: skipCommandSources && !ue ? "command_source_skipped" : "command_source_inactive",
+        failureCode:
+          skipCommandSources && !commandInactive ? "command_source_skipped" : "command_source_inactive",
       };
   }
   let fsImplementation = getFsImplementation();
-  let version = L.version;
+  let version = install.version;
   let { enabled, disabled } = skipMarketplaceRefresh
     ? await loadAllPluginsCacheOnly(storageV5)
     : await loadAllPlugins(storageV5);
-  let constraintsOn = collectConstraintsOn(b, [...enabled, ...disabled]);
-  let filtered_2 = constraintsOn.filter((R) => R.constraint.version !== undefined);
-  let filtered_3 = constraintsOn.map((R) => R.constraint.version).filter((R) => R !== undefined);
-  let ae;
-  let Ge = "";
+  let constraintsOn = collectConstraintsOn(fullId, [...enabled, ...disabled]);
+  let filtered = constraintsOn.filter((constraint) => constraint.constraint.version !== undefined);
+  let filtered_2 = constraintsOn
+    .map((constraint) => constraint.constraint.version)
+    .filter((range) => range !== undefined);
+  let resolvedRange;
+  let rangeNote = "";
   let knownMarketplacesWithDeclared = await loadKnownMarketplacesWithDeclared(storageV5);
-  let source = knownMarketplacesWithDeclared[w ?? ""]?.source;
-  let De = (R) =>
+  let source = knownMarketplacesWithDeclared[marketplaceName ?? ""]?.source;
+  let finishUpToDate = (result) =>
     explicit && !isLinkModeCommandSource(entry.source) && !isLocalMarketplaceEntry(entry.source, source)
-      ? annotateUpToDateResult(R, L, y, storageV5)
-      : Promise.resolve(R);
-  if (filtered_3.length > 0) {
-    let R = intersectVersionConstraints(filtered_3);
-    if (!R.ok)
+      ? annotateUpToDateResult(result, install, pluginName, storageV5)
+      : Promise.resolve(result);
+  if (filtered_2.length > 0) {
+    let intersected = intersectVersionConstraints(filtered_2);
+    if (!intersected.ok)
       return {
         outcome: "skipped",
-        message: `Skipped \u2014 ${describeConstraintConflict("Plugin", b, filtered_3, R.reason)}`,
-        pluginId: b,
+        message: `Skipped \u2014 ${describeConstraintConflict("Plugin", fullId, filtered_2, intersected.reason)}`,
+        pluginId: fullId,
         scope,
-        blockedBy: filtered_2.map((ue) => ue.plugin.source),
+        blockedBy: filtered.map((constraint) => constraint.plugin.source),
         oldVersion: version,
         skipReason: "pinner_blocked",
       };
-    let source = knownMarketplacesWithDeclared[w ?? ""]?.source;
-    let x =
+    let source = knownMarketplacesWithDeclared[marketplaceName ?? ""]?.source;
+    let cloneUrl =
       getPluginCloneUrl(entry.source) ??
       (typeof entry.source === "string" ? getMarketplaceCloneUrl(source) : null);
-    if (x !== null && R.range !== "*" && !b.endsWith(`@${OFFICIAL_MARKETPLACE_NAME}`)) {
-      let versionRange = await resolveVersionRange(x, entry.name, R.range);
+    if (cloneUrl !== null && intersected.range !== "*" && !fullId.endsWith(`@${OFFICIAL_MARKETPLACE_NAME}`)) {
+      let versionRange = await resolveVersionRange(cloneUrl, entry.name, intersected.range);
       if (versionRange === null)
         logForDebugging(
-          `updatePluginOp(${b}): no ${entry.name}--v* tag satisfying ${R.range}; falling back to HEAD + post-fetch guard`,
+          `updatePluginOp(${fullId}): no ${entry.name}--v* tag satisfying ${intersected.range}; falling back to HEAD + post-fetch guard`,
         );
-      else if (versionRange.version === L.resolvedVersion && versionRange.sha === L.gitCommitSha)
-        return De({
+      else if (versionRange.version === install.resolvedVersion && versionRange.sha === install.gitCommitSha)
+        return finishUpToDate({
           outcome: "up_to_date",
           message: appendRefreshWarning(
-            ce,
-            `${y} is already at the latest version satisfying ${filtered_3.join(", ")} (${versionRange.version}, required by ${filtered_2.map((fe) => fe.plugin.name).join(", ")}).`,
+            refreshState,
+            `${pluginName} is already at the latest version satisfying ${filtered_2.join(", ")} (${versionRange.version}, required by ${filtered.map((constraint) => constraint.plugin.name).join(", ")}).`,
           ),
-          pluginId: b,
-          newVersion: L.version,
+          pluginId: fullId,
+          newVersion: install.version,
           oldVersion: version,
           scope,
-          refreshFailed: X !== undefined ? true : undefined,
-          refreshRefusedByPolicy: we || undefined,
+          refreshFailed: refreshWarning !== undefined ? true : undefined,
+          refreshRefusedByPolicy: refreshRefusedByPolicy || undefined,
         });
       else {
-        ae = versionRange;
-        Ge = ` (highest tag satisfying ${filtered_3.join(", ")} from ${filtered_2.map((fe) => fe.plugin.name).join(", ")})`;
+        resolvedRange = versionRange;
+        rangeNote = ` (highest tag satisfying ${filtered_2.join(", ")} from ${filtered.map((constraint) => constraint.plugin.name).join(", ")})`;
         if (typeof entry.source === "string") {
           let relativePluginSource = toRelativePluginSource(source, entry.source);
           if (relativePluginSource !== null)
@@ -5603,89 +6123,90 @@ async function updatePluginOpInner(
       }
     }
   }
-  let Ie;
-  let Le;
+  let pluginPath;
+  let producerPath;
   let archiveSha256;
-  let qe;
-  let fn;
-  let vn = false;
+  let newVersion;
+  let manifestVersion;
+  let fetched = false;
   let gitCommitSha;
-  let K;
-  let q;
+  let marketplaceCommit;
+  let marketplaceDir;
   {
     let source = entry.source;
-    let Q = typeof source === "object" && source.source === "claudeai";
-    let claudeaiPluginId = L.claudeaiPluginId;
+    let isClaudeAiSource = typeof source === "object" && source.source === "claudeai";
+    let claudeaiPluginId = install.claudeaiPluginId;
     if (
-      (claudeaiPluginId !== undefined && (!Q || source.pluginId !== claudeaiPluginId)) ||
-      (claudeaiPluginId === undefined && Q)
+      (claudeaiPluginId !== undefined && (!isClaudeAiSource || source.pluginId !== claudeaiPluginId)) ||
+      (claudeaiPluginId === undefined && isClaudeAiSource)
     )
       return {
         outcome: "failed",
         message:
           claudeaiPluginId === undefined
-            ? `${y} is listed by a claude.ai-hosted marketplace but its install record no longer says which claude.ai plugin it came from \u2014 not updated. Uninstall and install it again to re-pin it.`
-            : `${y} was installed from a claude.ai-hosted marketplace, but "${w}" now lists ${Q ? "a different claude.ai plugin" : "another source"} under that name \u2014 not updated. Uninstall and install it again to switch to what the marketplace lists now, or remove it.`,
-        pluginId: b,
+            ? `${pluginName} is listed by a claude.ai-hosted marketplace but its install record no longer says which claude.ai plugin it came from \u2014 not updated. Uninstall and install it again to re-pin it.`
+            : `${pluginName} was installed from a claude.ai-hosted marketplace, but "${marketplaceName}" now lists ${isClaudeAiSource ? "a different claude.ai plugin" : "another source"} under that name \u2014 not updated. Uninstall and install it again to switch to what the marketplace lists now, or remove it.`,
+        pluginId: fullId,
         scope,
         failureCode: "claudeai_identity_changed",
       };
   }
-  let ie = b.endsWith(`@${OFFICIAL_MARKETPLACE_NAME}`);
-  if (ie && isUnboundOfficialPlugin(b, W, se))
+  let isOfficial = fullId.endsWith(`@${OFFICIAL_MARKETPLACE_NAME}`);
+  if (isOfficial && isUnboundOfficialPlugin(fullId, installs, bindings))
     return {
       outcome: "failed",
-      message: `"${quotedPrintable(y)}" was not updated: plugin-directory-bindings.json in the plugins folder could not be used (unreadable, a symbolic link or not a file, over 1 MB, damaged, or written by a newer Claude Code), so its ${OFFICIAL_MARKETPLACE_DISPLAY} listing could not be checked against the repository it was installed from. Nothing was changed. Try again; if this repeats, check the file for those causes.`,
-      pluginId: b,
+      message: `"${quotedPrintable(pluginName)}" was not updated: plugin-directory-bindings.json in the plugins folder could not be used (unreadable, a symbolic link or not a file, over 1 MB, damaged, or written by a newer Claude Code), so its ${OFFICIAL_MARKETPLACE_DISPLAY} listing could not be checked against the repository it was installed from. Nothing was changed. Try again; if this repeats, check the file for those causes.`,
+      pluginId: fullId,
       scope,
       failureCode: "directory_binding_unreadable",
     };
-  if (ie && isDirectoryRepositoryChanged(b, W, entry.source, se))
+  if (isOfficial && isDirectoryRepositoryChanged(fullId, installs, entry.source, bindings))
     return {
       outcome: "failed",
-      message: `"${quotedPrintable(y)}" was not updated: the ${OFFICIAL_MARKETPLACE_DISPLAY} now lists a different repository under that name. Uninstall it, then install the new listing if you want it.`,
-      pluginId: b,
+      message: `"${quotedPrintable(pluginName)}" was not updated: the ${OFFICIAL_MARKETPLACE_DISPLAY} now lists a different repository under that name. Uninstall it, then install the new listing if you want it.`,
+      pluginId: fullId,
       scope,
       failureCode: "directory_identity_changed",
     };
-  if (ie && (samePluginSource(entry.source, undefined)?.length ?? 0) > MAX_BINDINGS_FILE_BYTES)
+  if (isOfficial && (samePluginSource(entry.source, undefined)?.length ?? 0) > MAX_REPOSITORY_KEY_CHARS)
     return {
       outcome: "failed",
-      message: `"${quotedPrintable(y)}" was not updated: the repository address in its ${OFFICIAL_MARKETPLACE_DISPLAY} listing is too long. Nothing was changed. Only a change to the listing can fix this.`,
-      pluginId: b,
+      message: `"${quotedPrintable(pluginName)}" was not updated: the repository address in its ${OFFICIAL_MARKETPLACE_DISPLAY} listing is too long. Nothing was changed. Only a change to the listing can fix this.`,
+      pluginId: fullId,
       scope,
       failureCode: "directory_listing_not_installable",
     };
-  let V = getBoundRepositoryKeys(b, W, se).length > 0;
-  let He = verifyReviewedCommit({
-    pluginId: b,
-    pluginName: y,
+  let boundByRecord = getBoundRepositoryKeys(fullId, installs, bindings).length > 0;
+  let reviewCheck = verifyReviewedCommit({
+    pluginId: fullId,
+    pluginName,
     source: entry.source,
-    boundByRecord: V,
+    boundByRecord,
     action: "updated",
   });
-  if (!He.ok)
+  if (!reviewCheck.ok)
     return {
       outcome: "failed",
-      message: He.message,
-      pluginId: b,
+      message: reviewCheck.message,
+      pluginId: fullId,
       scope,
       failureCode: "directory_listing_not_installable",
     };
   if (typeof entry.source !== "string") {
     let source = entry.source;
-    let Q =
-      ae && (source.source === "github" || source.source === "url" || source.source === "git-subdir")
+    let sourceForFetch =
+      resolvedRange &&
+      (source.source === "github" || source.source === "url" || source.source === "git-subdir")
         ? {
             ...source,
-            ref: ae.ref,
-            sha: ae.sha,
+            ref: resolvedRange.ref,
+            sha: resolvedRange.sha,
           }
         : source;
-    let source_2 = knownMarketplacesWithDeclared[w ?? ""]?.source;
-    let ue = marketplaceNameOfId(b);
-    let trustedSettingsEntryAuth = findSettingsArchiveEntry(ue, entry.name);
-    let ze =
+    let source_2 = knownMarketplacesWithDeclared[marketplaceName ?? ""]?.source;
+    let marketplaceId = marketplaceNameOfId(fullId);
+    let trustedSettingsEntryAuth = findSettingsArchiveEntry(marketplaceId, entry.name);
+    let helperNotRun =
       source.source === "archive"
         ? headersHelperNotRunReason({
             entry,
@@ -5694,110 +6215,125 @@ async function updatePluginOpInner(
             trustedSettingsEntryAuth,
           })
         : undefined;
-    let Se =
-      ze !== undefined && source.source === "archive" ? getEntryHelperConsentSubject(ze, source.url) : null;
-    let Fe = Se === null ? null : headersHelperPolicyRefusal(source_2, w);
-    let Ye =
-      Fe !== null
+    let helperConsentSubject =
+      helperNotRun !== undefined && source.source === "archive"
+        ? getEntryHelperConsentSubject(helperNotRun, source.url)
+        : null;
+    let helperRefusal =
+      helperConsentSubject === null ? null : headersHelperPolicyRefusal(source_2, marketplaceName);
+    let helperFailure =
+      helperRefusal !== null
         ? {
             outcome: "failed",
-            message: checkHeadersHelperConsent(entry.name, Fe),
-            pluginId: b,
+            message: checkHeadersHelperConsent(entry.name, helperRefusal),
+            pluginId: fullId,
             scope,
-            failureCode: helperRefusalFailureCode(Fe),
+            failureCode: helperRefusalFailureCode(helperRefusal),
           }
         : null;
-    if (c && Ye !== null) return Ye;
-    let sn =
-      c && onEntryHelperDisclosure === undefined ? diffEntryHelperConsent(consentedEntryHelper, Se) : null;
-    if (sn !== null)
+    if (isExplicit && helperFailure !== null) return helperFailure;
+    let consentDiff =
+      isExplicit && onEntryHelperDisclosure === undefined
+        ? diffEntryHelperConsent(consentedEntryHelper, helperConsentSubject)
+        : null;
+    if (consentDiff !== null)
       return {
         outcome: "failed",
-        message: describeHelperReview(sn, entry.name, "update"),
-        pluginId: b,
+        message: describeHelperReview(consentDiff, entry.name, "update"),
+        pluginId: fullId,
         scope,
-        failureCode: HELPER_CONSENT_MISMATCH_CODES[sn],
+        failureCode: HELPER_CONSENT_MISMATCH_CODES[consentDiff],
       };
-    if (!c && Se !== null) {
-      let ye =
+    if (!isExplicit && helperConsentSubject !== null) {
+      let listedVersion =
         entry.version ??
         (source.source === "archive" && source.sha256 !== undefined
           ? shortLowerPrefix(source.sha256)
           : undefined);
-      if (ye !== undefined && ye === version)
+      if (listedVersion !== undefined && listedVersion === version)
         return {
           outcome: "up_to_date",
-          message: upToDateMessage(ce, version),
-          pluginId: b,
+          message: upToDateMessage(refreshState, version),
+          pluginId: fullId,
           newVersion: version,
           oldVersion: version,
           scope,
-          refreshFailed: X !== undefined ? true : undefined,
-          refreshRefusedByPolicy: we || undefined,
+          refreshFailed: refreshWarning !== undefined ? true : undefined,
+          refreshRefusedByPolicy: refreshRefusedByPolicy || undefined,
         };
-      if (Ye !== null) return Ye;
-      let We = claudeCommand("plugin update", b);
+      if (helperFailure !== null) return helperFailure;
+      let updateCommand = claudeCommand("plugin update", fullId);
       return {
         outcome: "skipped",
         message:
           `Skipped \u2014 "${quotedPrintable(entry.name)}" fetches its archive through a headersHelper, which only runs when you update it yourself. Update it from /plugin` +
-          (We ? ` (or \`${We}\`).` : "."),
-        pluginId: b,
+          (updateCommand ? ` (or \`${updateCommand}\`).` : "."),
+        pluginId: fullId,
         scope,
         oldVersion: version,
         skipReason: "entry_helper_deferred",
       };
     }
-    if (c && Se !== null) {
+    if (isExplicit && helperConsentSubject !== null) {
       if (onEntryHelperDisclosure !== undefined) {
-        let ye = await onEntryHelperDisclosure(archiveHelperDisclosure(Se), Se, b);
-        if (ye !== "accepted")
+        let disclosureAnswer = await onEntryHelperDisclosure(
+          archiveHelperDisclosure(helperConsentSubject),
+          helperConsentSubject,
+          fullId,
+        );
+        if (disclosureAnswer !== "accepted")
           return {
             outcome: "failed",
             message: "Aborted \u2014 the headersHelper command was not confirmed, so it was not run.",
-            pluginId: b,
+            pluginId: fullId,
             scope,
-            failureCode: ye === "declined" ? "entry_helper_declined" : "entry_helper_unconfirmed",
+            failureCode:
+              disclosureAnswer === "declined" ? "entry_helper_declined" : "entry_helper_unconfirmed",
           };
       }
     }
     if (
       source.source === "claudeai" &&
-      ae === undefined &&
+      resolvedRange === undefined &&
       source.version !== "" &&
       source.version === version
     )
-      return De({
+      return finishUpToDate({
         outcome: "up_to_date",
-        message: upToDateMessage(ce, version),
-        pluginId: b,
+        message: upToDateMessage(refreshState, version),
+        pluginId: fullId,
         newVersion: version,
         oldVersion: version,
         scope,
-        refreshFailed: X !== undefined ? true : undefined,
-        refreshRefusedByPolicy: we || undefined,
+        refreshFailed: refreshWarning !== undefined ? true : undefined,
+        refreshRefusedByPolicy: refreshRefusedByPolicy || undefined,
       });
-    let an = pinnedSha(b, entry.source);
-    if (an !== undefined && (D || L.gitCommitSha === an)) {
-      let ye = samePluginSource(entry.source, undefined);
-      if (!D && L.gitCommitSha === an && L.directoryRepositoryKey === undefined && ye !== undefined)
+    let pinned = pinnedSha(fullId, entry.source);
+    if (pinned !== undefined && (directoryNotChecked || install.gitCommitSha === pinned)) {
+      let sameSource = samePluginSource(entry.source, undefined);
+      if (
+        !directoryNotChecked &&
+        install.gitCommitSha === pinned &&
+        install.directoryRepositoryKey === undefined &&
+        sameSource !== undefined
+      )
         try {
-          await recordDirectoryRepositoryKey(b, scope, projectPath, ye, storageV5);
+          await recordDirectoryRepositoryKey(fullId, scope, projectPath, sameSource, storageV5);
         } catch (error) {
-          logForDebugging(`Could not record the repository of ${b}: ${errorMessage(error)}`, {
+          logForDebugging(`Could not record the repository of ${fullId}: ${errorMessage(error)}`, {
             level: "warn",
           });
         }
-      return De({
+      return finishUpToDate({
         outcome: "up_to_date",
-        message: upToDateMessage(ce, version),
-        pluginId: b,
+        message: upToDateMessage(refreshState, version),
+        pluginId: fullId,
         newVersion: version,
         oldVersion: version,
         scope,
-        refreshFailed: X !== undefined ? true : undefined,
-        refreshRefusedByPolicy: we || undefined,
-        ...(D
+        refreshFailed: refreshWarning !== undefined ? true : undefined,
+        refreshRefusedByPolicy: refreshRefusedByPolicy || undefined,
+        ...(directoryNotChecked
           ? {
               notChecked: true,
             }
@@ -5806,163 +6342,172 @@ async function updatePluginOpInner(
             }),
       });
     }
-    let Ue = await cachePlugin(Q, {
+    let cached = await cachePlugin(sourceForFetch, {
       manifest: {
         name: entry.name,
       },
       storageV5,
-      isDirectoryPlugin: isOfficialDirectoryPlugin(b),
-      directoryPin: pinnedSha(b, Q) ?? null,
+      isDirectoryPlugin: isOfficialDirectoryPlugin(fullId),
+      directoryPin: pinnedSha(fullId, sourceForFetch) ?? null,
       archiveAuth: await resolveArchiveDownloadHeaders({
-        pluginSource: Q,
+        pluginSource: sourceForFetch,
         pluginName: entry.name,
-        marketplaceName: w,
+        marketplaceName,
         marketplaceSource: source_2,
-        trustedMarketplaceAuth: findUrlMarketplaceHeaders(source_2, ue),
+        trustedMarketplaceAuth: findUrlMarketplaceHeaders(source_2, marketplaceId),
         trustedSettingsEntryAuth,
         entry,
-        runEntryHelper: c,
+        runEntryHelper: isExplicit,
       }),
       entryDeclaresComponents: entryDeclaresComponents(entry),
       declaredComponentPaths: entryDeclaredComponentPaths(entry),
       commandSourceConsent:
-        B !== undefined
+        shownCommand !== undefined
           ? {
               kind: "shown",
-              command: B,
-              pluginId: b,
+              command: shownCommand,
+              pluginId: fullId,
             }
           : {
               kind: "recorded",
-              command: isPluginsDirOnLocalDisk() ? undefined : L.sourceCommand,
-              pluginId: b,
+              command: isPluginsDirOnLocalDisk() ? undefined : install.sourceCommand,
+              pluginId: fullId,
             },
     });
-    Ie = Ue.path;
-    Le = Ue.producerPath;
-    archiveSha256 = Ue.contentSha256;
-    vn = true;
+    pluginPath = cached.path;
+    producerPath = cached.producerPath;
+    archiveSha256 = cached.contentSha256;
+    fetched = true;
     if (
-      ae?.sha !== undefined ||
-      Ue.gitCommitSha !== undefined ||
-      V ||
-      b.endsWith(`@${OFFICIAL_MARKETPLACE_NAME}`)
+      resolvedRange?.sha !== undefined ||
+      cached.gitCommitSha !== undefined ||
+      boundByRecord ||
+      fullId.endsWith(`@${OFFICIAL_MARKETPLACE_NAME}`)
     )
-      gitCommitSha = ae?.sha ?? Ue.gitCommitSha;
-    else if (getPluginCloneUrl(Q) !== null) {
-      let ye = await probePluginGitHead(Ue.path);
-      gitCommitSha = ye.repo ? (ye.sha ?? undefined) : null;
+      gitCommitSha = resolvedRange?.sha ?? cached.gitCommitSha;
+    else if (getPluginCloneUrl(sourceForFetch) !== null) {
+      let head = await probePluginGitHead(cached.path);
+      gitCommitSha = head.repo ? (head.sha ?? undefined) : null;
     } else gitCommitSha = null;
-    fn = Ue.manifest?.version;
-    let pluginVersion = await calculatePluginVersion(
-      b,
+    manifestVersion = cached.manifest?.version;
+    let version_2 = await calculatePluginVersion(
+      fullId,
       entry.source,
-      Ue.manifest,
-      Ue.path,
+      cached.manifest,
+      cached.path,
       {
         kind: "catalog",
         version: entry.version,
       },
-      ae?.sha ?? Ue.gitCommitSha,
-      Ue.contentSha256,
+      resolvedRange?.sha ?? cached.gitCommitSha,
+      cached.contentSha256,
     );
-    qe = ae && (Ue.manifest?.version || entry.version) ? withShaSuffix(pluginVersion, ae.sha) : pluginVersion;
+    newVersion =
+      resolvedRange && (cached.manifest?.version || entry.version)
+        ? withShaSuffix(version_2, resolvedRange.sha)
+        : version_2;
   } else {
-    let R = seedDirFor(marketplaceInstallLocation) !== undefined ? "system" : "workspace";
+    let seedDir = seedDirFor(marketplaceInstallLocation) !== undefined ? "system" : "workspace";
     let pluginEntryPath = await resolvePluginEntryPath(
-      b,
+      fullId,
       marketplaceInstallLocation,
       entry.source,
       knownMarketplacesWithDeclared,
       tryUnwrapTextPayload(),
       storageV5,
-      R,
+      seedDir,
     );
     if (pluginEntryPath.kind === "location-error") throw pluginEntryPath.error;
     if (pluginEntryPath.kind !== "ok") {
-      let Se = entryResolutionError(pluginEntryPath, marketplaceInstallLocation, entry.source);
+      let resolutionError = entryResolutionError(pluginEntryPath, marketplaceInstallLocation, entry.source);
       return {
         outcome: "failed",
-        message: Se.message,
-        pluginId: b,
+        message: resolutionError.message,
+        pluginId: fullId,
         scope,
-        failureCode: Se.code,
+        failureCode: resolutionError.code,
       };
     }
-    q = pluginEntryPath.marketplaceDir;
-    Ie = pluginEntryPath.entryPath;
-    let x = knownMarketplacesWithDeclared[w ?? ""];
-    let ue = x !== undefined && isLocalMarketplaceSource(x.source);
+    marketplaceDir = pluginEntryPath.marketplaceDir;
+    pluginPath = pluginEntryPath.entryPath;
+    let knownMarketplace = knownMarketplacesWithDeclared[marketplaceName ?? ""];
+    let isLocalMarketplace =
+      knownMarketplace !== undefined && isLocalMarketplaceSource(knownMarketplace.source);
     try {
-      if (ue) await probeLocalMarketplacePath(storageV5, Ie, R);
-      else await fsImplementation.stat(Ie);
+      if (isLocalMarketplace) await probeLocalMarketplacePath(storageV5, pluginPath, seedDir);
+      else await fsImplementation.stat(pluginPath);
     } catch (error) {
       if (isENOENT(error))
         return {
           outcome: "failed",
-          message: `Plugin source not found at ${printableOrEmpty(Ie)}`,
-          pluginId: b,
+          message: `Plugin source not found at ${printableOrEmpty(pluginPath)}`,
+          pluginId: fullId,
           scope,
           failureCode: "source_missing",
         };
       throw error;
     }
-    let fe;
+    let manifest;
     try {
-      fe = (await loadPluginManifest(Ie, entry.name, entry.source)).manifest;
+      manifest = (await loadPluginManifest(pluginPath, entry.name, entry.source)).manifest;
     } catch {}
-    fn = fe?.version;
-    let ze = await probePluginGitHead(Ie, q);
-    if (!ze.repo && w === CLAUDE_PLUGINS_OFFICIAL) K = await readMarketplaceCommit(Ie);
-    gitCommitSha = ze.repo ? (ze.sha ?? undefined) : K !== undefined ? commitShaOf(K) : null;
-    qe = await calculatePluginVersion(
-      b,
+    manifestVersion = manifest?.version;
+    let head = await probePluginGitHead(pluginPath, marketplaceDir);
+    if (!head.repo && marketplaceName === CLAUDE_PLUGINS_OFFICIAL)
+      marketplaceCommit = await readMarketplaceCommit(pluginPath);
+    gitCommitSha = head.repo
+      ? (head.sha ?? undefined)
+      : marketplaceCommit !== undefined
+        ? commitShaOf(marketplaceCommit)
+        : null;
+    newVersion = await calculatePluginVersion(
+      fullId,
       entry.source,
-      fe,
-      Ie,
+      manifest,
+      pluginPath,
       {
         kind: "catalog",
         version: entry.version,
       },
       undefined,
       undefined,
-      q,
+      marketplaceDir,
     );
   }
   try {
-    let R = verifyReviewedCommit({
-      pluginId: b,
-      pluginName: y,
+    let reviewCheck = verifyReviewedCommit({
+      pluginId: fullId,
+      pluginName,
       source: entry.source,
-      boundByRecord: V,
+      boundByRecord,
       fetched: {
         gitCommitSha: gitCommitSha ?? undefined,
       },
       action: "updated",
     });
-    if (!R.ok)
+    if (!reviewCheck.ok)
       return {
         outcome: "failed",
-        message: R.message,
-        pluginId: b,
+        message: reviewCheck.message,
+        pluginId: fullId,
         scope,
         failureCode: "directory_commit_mismatch",
       };
-    if (ae === undefined && filtered_3.length > 0) {
-      let ye = semverModule.valid(fn) ?? semverModule.coerce(fn)?.version;
+    if (resolvedRange === undefined && filtered_2.length > 0) {
+      let semver = semverModule.valid(manifestVersion) ?? semverModule.coerce(manifestVersion)?.version;
       let mapped = constraintsOn
         .filter(
           ({ constraint }) =>
             constraint.version !== undefined &&
-            ye !== undefined &&
-            !semverModule.satisfies(ye, constraint.version),
+            semver !== undefined &&
+            !semverModule.satisfies(semver, constraint.version),
         )
         .map(({ plugin }) => plugin.source);
       if (mapped.length > 0)
         return {
           outcome: "skipped",
-          message: `Skipped \u2014 ${mapped.join(", ")} requires ${y} at a version range that ${fn ?? qe} does not satisfy`,
-          pluginId: b,
+          message: `Skipped \u2014 ${mapped.join(", ")} requires ${pluginName} at a version range that ${manifestVersion ?? newVersion} does not satisfy`,
+          pluginId: fullId,
           scope,
           blockedBy: mapped,
           oldVersion: version,
@@ -5970,104 +6515,111 @@ async function updatePluginOpInner(
         };
     }
     if (
-      qe === "unknown" &&
+      newVersion === "unknown" &&
       version !== undefined &&
       version !== "unknown" &&
-      (K?.kind === "refused" || K?.kind === "too-large")
+      (marketplaceCommit?.kind === "refused" || marketplaceCommit?.kind === "too-large")
     )
       return {
         outcome: "skipped",
         message:
-          K.kind === "refused"
-            ? `Skipped \u2014 ${y} stays at ${version}. Its new version comes from the official marketplace's .gcs-sha file, and that name is now a link, a folder or another special file, so it was not read.`
-            : `Skipped \u2014 ${y} stays at ${version}. Its new version comes from the official marketplace's .gcs-sha file, which is larger than 1 MB, so it was not read.`,
-        pluginId: b,
+          marketplaceCommit.kind === "refused"
+            ? `Skipped \u2014 ${pluginName} stays at ${version}. Its new version comes from the official marketplace's .gcs-sha file, and that name is now a link, a folder or another special file, so it was not read.`
+            : `Skipped \u2014 ${pluginName} stays at ${version}. Its new version comes from the official marketplace's .gcs-sha file, which is larger than 1 MB, so it was not read.`,
+        pluginId: fullId,
         scope,
         oldVersion: version,
         skipReason: "snapshot_file_refused",
       };
-    let versionedCachePath = getVersionedCachePath(b, qe);
-    let x = qe === "unknown";
-    let versionedZipCachePath = getVersionedZipCachePath(b, qe);
-    let fe = R.reviewedCommit !== undefined && L.gitCommitSha !== R.reviewedCommit;
-    let ze =
-      !x &&
-      !fe &&
-      (L.version === qe || L.installPath === versionedCachePath || L.installPath === versionedZipCachePath);
-    let Se = false;
-    if (ze && typeof entry.source === "object" && entry.source.source === "command") {
-      let ye = classifyMarketplacePath(L.installPath, {
-        trustedRoots: getMarketplaceCandidatePaths(b, knownMarketplacesWithDeclared, tryUnwrapTextPayload()),
+    let installPath = getVersionedCachePath(fullId, newVersion);
+    let unknownVersion = newVersion === "unknown";
+    let versionedZipCachePath = getVersionedZipCachePath(fullId, newVersion);
+    let reviewChanged =
+      reviewCheck.reviewedCommit !== undefined && install.gitCommitSha !== reviewCheck.reviewedCommit;
+    let alreadyCurrent =
+      !unknownVersion &&
+      !reviewChanged &&
+      (install.version === newVersion ||
+        install.installPath === installPath ||
+        install.installPath === versionedZipCachePath);
+    let cacheSuspect = false;
+    if (alreadyCurrent && typeof entry.source === "object" && entry.source.source === "command") {
+      let classified = classifyMarketplacePath(install.installPath, {
+        trustedRoots: getMarketplaceCandidatePaths(
+          fullId,
+          knownMarketplacesWithDeclared,
+          tryUnwrapTextPayload(),
+        ),
       });
-      let absolute = ye.absolute;
-      Se =
-        ye.suspect ||
+      let absolute = classified.absolute;
+      cacheSuspect =
+        classified.suspect ||
         !(await (isLinkModeCommandSource(entry.source)
           ? isLiveLinkFarm(absolute)
           : absolute.endsWith(".zip")
             ? pathExists(absolute)
             : cacheDirHasPluginContentStrict(absolute, storageV5))) ||
         (isLinkModeCommandSource(entry.source)
-          ? await hasEntriesOutsideTarget(absolute, Le ?? L.sourceProducerPath)
+          ? await hasEntriesOutsideTarget(absolute, producerPath ?? install.sourceProducerPath)
           : await isLiveLinkFarm(absolute, {
               unclassifiableIsFarm: true,
             }));
     }
-    if (ze && !Se) {
+    if (alreadyCurrent && !cacheSuspect) {
       if (
         typeof entry.source === "object" &&
         entry.source.source === "command" &&
-        (L.sourceCommand !== describeCommandOutputMode(entry.source) ||
-          (Le !== undefined && L.sourceProducerPath !== Le))
+        (install.sourceCommand !== describeCommandOutputMode(entry.source) ||
+          (producerPath !== undefined && install.sourceProducerPath !== producerPath))
       ) {
         await updateInstallationPathOnDisk(
-          b,
+          fullId,
           scope,
           projectPath,
-          L.installPath,
-          qe,
-          L.gitCommitSha,
-          L.resolvedVersion,
+          install.installPath,
+          newVersion,
+          install.gitCommitSha,
+          install.resolvedVersion,
           {
             sourceCommand: describeCommandOutputMode(entry.source),
-            sourceProducerPath: Le ?? L.sourceProducerPath,
+            sourceProducerPath: producerPath ?? install.sourceProducerPath,
           },
           storageV5,
         );
         emitProducerDirsChanged();
       }
-      let ye = isLocalMarketplaceEntry(entry.source, source);
-      return De({
+      let isLocalEntry = isLocalMarketplaceEntry(entry.source, source);
+      return finishUpToDate({
         outcome: "up_to_date",
-        message: upToDateMessage(ce, qe),
-        folderNote: ye
-          ? `${y} is read from its folder, ${printableOrEmpty(Ie)}: nothing to update. Edits there take effect at the next session start or /reload-plugins.`
+        message: upToDateMessage(refreshState, newVersion),
+        folderNote: isLocalEntry
+          ? `${pluginName} is read from its folder, ${printableOrEmpty(pluginPath)}: nothing to update. Edits there take effect at the next session start or /reload-plugins.`
           : undefined,
-        pluginId: b,
-        newVersion: qe,
+        pluginId: fullId,
+        newVersion,
         oldVersion: version,
         scope,
-        refreshFailed: X !== undefined ? true : undefined,
-        refreshRefusedByPolicy: we || undefined,
+        refreshFailed: refreshWarning !== undefined ? true : undefined,
+        refreshRefusedByPolicy: refreshRefusedByPolicy || undefined,
       });
     }
-    versionedCachePath = await copyPluginToVersionedCache(Ie, b, qe, entry, q, {
-      forceOverwrite: x || fe,
+    installPath = await copyPluginToVersionedCache(pluginPath, fullId, newVersion, entry, marketplaceDir, {
+      forceOverwrite: unknownVersion || reviewChanged,
       storageV5,
     });
-    let installPath = L.installPath;
+    let installPath_2 = install.installPath;
     await updateInstallationPathOnDisk(
-      b,
+      fullId,
       scope,
       projectPath,
-      versionedCachePath,
-      qe,
+      installPath,
+      newVersion,
       gitCommitSha,
-      ae?.version,
+      resolvedRange?.version,
       typeof entry.source === "object" && entry.source.source === "command"
         ? {
             sourceCommand: describeCommandOutputMode(entry.source),
-            sourceProducerPath: Le ?? L.sourceProducerPath,
+            sourceProducerPath: producerPath ?? install.sourceProducerPath,
           }
         : undefined,
       storageV5,
@@ -6077,132 +6629,151 @@ async function updatePluginOpInner(
             archiveSha256,
           }
         : undefined,
-      ie ? samePluginSource(entry.source, undefined) : undefined,
+      isOfficial ? samePluginSource(entry.source, undefined) : undefined,
     );
-    if (Le !== undefined) emitProducerDirsChanged();
-    if (installPath && installPath !== versionedCachePath) {
-      let ye =
+    if (producerPath !== undefined) emitProducerDirsChanged();
+    if (installPath_2 && installPath_2 !== installPath) {
+      let installedNow =
         isStorageV5Enabled() && storageV5 !== undefined
           ? await loadInstalledPlugins(storageV5)
           : loadInstalledPluginsSync();
-      if (!Object.values(ye.plugins).some((plugin) => plugin.some((Ze) => Ze.installPath === installPath)))
-        await markPluginVersionOrphaned(installPath, storageV5);
+      if (
+        !Object.values(installedNow.plugins).some((plugin) =>
+          plugin.some((install) => install.installPath === installPath_2),
+        )
+      )
+        await markPluginVersionOrphaned(installPath_2, storageV5);
     }
-    let Ye = projectPath ? `${scope} (${projectPath})` : scope;
-    let sn = pinnedSha(b, entry.source);
-    let an = sn === undefined ? undefined : (gitCommitSha ?? sn);
-    let Ue = displayableGitHeadName(qe);
-    let Qe = an
-      ? `Plugin "${y}" updated to the listed commit ${an.slice(0, 7)}${Ue ? ` (version ${Ue})` : ""} for scope ${Ye}. Restart to apply changes.`
-      : x && (version ?? "unknown") === "unknown"
-        ? `Plugin "${y}" refreshed from source for scope ${Ye}. Restart to apply changes.`
-        : `Plugin "${y}" updated from ${version || "unknown"} to ${qe}${Ge} for scope ${Ye}. Restart to apply changes.`;
+    let scopeLabel = projectPath ? `${scope} (${projectPath})` : scope;
+    let pinned = pinnedSha(fullId, entry.source);
+    let commitShown = pinned === undefined ? undefined : (gitCommitSha ?? pinned);
+    let versionLabel = displayableGitHeadName(newVersion);
+    let message = commitShown
+      ? `Plugin "${pluginName}" updated to the listed commit ${commitShown.slice(0, 7)}${versionLabel ? ` (version ${versionLabel})` : ""} for scope ${scopeLabel}. Restart to apply changes.`
+      : unknownVersion && (version ?? "unknown") === "unknown"
+        ? `Plugin "${pluginName}" refreshed from source for scope ${scopeLabel}. Restart to apply changes.`
+        : `Plugin "${pluginName}" updated from ${version || "unknown"} to ${newVersion}${rangeNote} for scope ${scopeLabel}. Restart to apply changes.`;
     return {
       outcome: "updated",
       message:
-        X === undefined
-          ? Qe
-          : ce.directoryRefreshFailed
-            ? `${Qe} Warning: ${directoryUnreachableMessage()}.`
-            : `${Qe} Warning: ${X}.`,
-      pluginId: b,
-      newVersion: qe,
+        refreshWarning === undefined
+          ? message
+          : refreshState.directoryRefreshFailed
+            ? `${message} Warning: ${directoryUnreachableMessage()}.`
+            : `${message} Warning: ${refreshWarning}.`,
+      pluginId: fullId,
+      newVersion,
       oldVersion: version,
       ...(gitCommitSha && {
         gitCommitSha,
       }),
       scope,
-      refreshFailed: X !== undefined ? true : undefined,
-      refreshRefusedByPolicy: we || undefined,
+      refreshFailed: refreshWarning !== undefined ? true : undefined,
+      refreshRefusedByPolicy: refreshRefusedByPolicy || undefined,
       pinChanged:
-        typeof L.gitCommitSha === "string" &&
+        typeof install.gitCommitSha === "string" &&
         typeof gitCommitSha === "string" &&
-        L.gitCommitSha !== gitCommitSha,
+        install.gitCommitSha !== gitCommitSha,
     };
   } finally {
-    let versionedCachePath = getVersionedCachePath(b, qe);
-    if (vn && Ie !== versionedCachePath && !resolve(versionedCachePath).startsWith(resolve(Ie) + sep))
-      await fsImplementation.rm(Ie, {
+    let versionedCachePath = getVersionedCachePath(fullId, newVersion);
+    if (
+      fetched &&
+      pluginPath !== versionedCachePath &&
+      !resolve(versionedCachePath).startsWith(resolve(pluginPath) + sep)
+    )
+      await fsImplementation.rm(pluginPath, {
         recursive: true,
         force: true,
       });
   }
 }
 //@ chunk-pp50kewz.js:121835-121960 fingerprint = VALID_UPDATE_SCOPES (1)
-function VALID_UPDATE_SCOPES_2(e) {
-  let n = filterInstallationsForCurrentProject(e);
-  let i = n.length > 0 ? n : e;
-  return ["local", "project", "user"].find((a) => i.some((o) => o.scope === a)) ?? "managed";
+/**
+ * 按插件各条目的 scope 选出一个更新作用域：local < project < user，都没有则 managed。
+ */
+function pickUpdateScope(installations) {
+  let projectInstallations = filterInstallationsForCurrentProject(installations);
+  let candidates = projectInstallations.length > 0 ? projectInstallations : installations;
+  return (
+    ["local", "project", "user"].find((scope) =>
+      candidates.some((installation) => installation.scope === scope),
+    ) ?? "managed"
+  );
 }
 //@ chunk-pp50kewz.js:121960-123943 fingerprint = performPluginUpdate (0.358)
 /**
  * 执行一次插件更新并整理成 CLI 输出用的结果对象（不存在时报“not installed”）。
  */
-async function performPluginUpdate(e, n, i, a, storageV5, explicit) {
-  if (!a || a.length === 0)
+async function performPluginUpdate(pluginId, pluginName, scope, installations, storageV5, explicit) {
+  if (!installations || installations.length === 0)
     return {
       outcome: "failed",
-      message: `Plugin "${n}" is not installed`,
-      pluginId: e,
-      scope: i,
+      message: `Plugin "${pluginName}" is not installed`,
+      pluginId,
+      scope,
       failureCode: "not_installed",
     };
-  let projectPathForScope = getProjectPathForScope(i);
-  let filtered = a.filter((D) => D.scope === i);
-  let r = installationAtTarget(filtered, i, projectPathForScope) ?? filtered[0];
-  if (!r) {
-    let D = projectPathForScope ? `${i} (${projectPathForScope})` : i;
+  let projectPathForScope = getProjectPathForScope(scope);
+  let filtered = installations.filter((installation) => installation.scope === scope);
+  let installation = installationAtTarget(filtered, scope, projectPathForScope) ?? filtered[0];
+  if (!installation) {
+    let scopeLabel = projectPathForScope ? `${scope} (${projectPathForScope})` : scope;
     return {
       outcome: "failed",
-      message: `Plugin "${n}" is not installed at scope ${D}`,
-      pluginId: e,
-      scope: i,
+      message: `Plugin "${pluginName}" is not installed at scope ${scopeLabel}`,
+      pluginId,
+      scope,
       failureCode: "not_installed_at_scope",
     };
   }
-  if (r.scope === "managed")
+  if (installation.scope === "managed")
     return {
       outcome: "failed",
-      message: `Plugin "${n}" is installed by managed settings and is not updated here`,
-      pluginId: e,
-      scope: i,
+      message: `Plugin "${pluginName}" is installed by managed settings and is not updated here`,
+      pluginId,
+      scope,
       failureCode: "not_installed_at_scope",
     };
-  let { scope, projectPath, version, npmVersionSpec } = r;
-  let I = (D) => (explicit ? annotateUpToDateResult(D, r, n, storageV5) : Promise.resolve(D));
+  let { scope: scope_2, projectPath, version, npmVersionSpec } = installation;
+  let recordResult = (result) =>
+    explicit ? annotateUpToDateResult(result, installation, pluginName, storageV5) : Promise.resolve(result);
   let npmPluginSource = toNpmPluginSource({
-    packageName: n,
+    packageName: pluginName,
     versionSpec: npmVersionSpec,
   });
-  let b = join(anchoredPluginCachePath(), `${makeTempCachePathName("npm")}${TEMP_CACHE_LINK_SUFFIX}`);
-  let _e;
+  let workDir = join(anchoredPluginCachePath(), `${makeTempCachePathName("npm")}${TEMP_CACHE_LINK_SUFFIX}`);
+  let resolvedVersion;
   try {
-    await getFsImplementation().mkdir(b);
-    _e = (
-      await resolveNpmPackage(n, npmVersionSpec, {
-        workDir: b,
-        registry: r.npmRegistry,
+    await getFsImplementation().mkdir(workDir);
+    resolvedVersion = (
+      await resolveNpmPackage(pluginName, npmVersionSpec, {
+        workDir,
+        registry: installation.npmRegistry,
       })
     ).version;
   } finally {
-    await removeDirectoryTreeNoFollow(b).catch(() => {});
+    await removeDirectoryTreeNoFollow(workDir).catch(() => {});
   }
-  let ee = npmVersionSpec !== undefined ? ` (tracking ${npmVersionSpec})` : "";
-  if (_e === version || r.installPath === getVersionedCachePath(e, _e))
-    return I({
+  let trackingSuffix = npmVersionSpec !== undefined ? ` (tracking ${npmVersionSpec})` : "";
+  if (
+    resolvedVersion === version ||
+    installation.installPath === getVersionedCachePath(pluginId, resolvedVersion)
+  )
+    return recordResult({
       outcome: "up_to_date",
-      message: `${n} is already at the latest version${ee} (${_e}).`,
-      pluginId: e,
-      newVersion: _e,
+      message: `${pluginName} is already at the latest version${trackingSuffix} (${resolvedVersion}).`,
+      pluginId,
+      newVersion: resolvedVersion,
       oldVersion: version,
-      scope: i,
+      scope,
     });
   let source = toNpmPluginSource(
     {
-      packageName: n,
-      versionSpec: _e,
+      packageName: pluginName,
+      versionSpec: resolvedVersion,
     },
-    r.npmRegistry,
+    installation.npmRegistry,
   ).source;
   let cacheResult = await cachePlugin(source, {
     manifest: {
@@ -6210,15 +6781,15 @@ async function performPluginUpdate(e, n, i, a, storageV5, explicit) {
     },
     storageV5,
     isNpmMarketplaceLane: true,
-    directoryPin: pinnedSha(e, source) ?? null,
+    directoryPin: pinnedSha(pluginId, source) ?? null,
   });
   let npmResolution = cacheResult.npmResolution;
-  let version_2 = npmResolution?.version ?? _e;
-  let versionedPath = getVersionedCachePath(e, version_2);
+  let version_2 = npmResolution?.version ?? resolvedVersion;
+  let versionedPath = getVersionedCachePath(pluginId, version_2);
   try {
     versionedPath = await copyPluginToVersionedCache(
       cacheResult.path,
-      e,
+      pluginId,
       version_2,
       npmPluginSource,
       undefined,
@@ -6227,8 +6798,8 @@ async function performPluginUpdate(e, n, i, a, storageV5, explicit) {
       },
     );
     await updateInstallationPathOnDisk(
-      e,
-      scope,
+      pluginId,
+      scope_2,
       projectPath,
       versionedPath,
       version_2,
@@ -6240,12 +6811,12 @@ async function performPluginUpdate(e, n, i, a, storageV5, explicit) {
       undefined,
       {
         npmVersionSpec,
-        npmResolved: npmResolution?.tarballUrl ?? r.npmResolved,
+        npmResolved: npmResolution?.tarballUrl ?? installation.npmResolved,
         npmIntegrity: npmResolution?.integrity,
-        npmRegistry: r.npmRegistry,
+        npmRegistry: installation.npmRegistry,
       },
     );
-    let oldVersionPath = r.installPath;
+    let oldVersionPath = installation.installPath;
     if (oldVersionPath && oldVersionPath !== versionedPath) {
       let updatedDiskData =
         isStorageV5Enabled() && storageV5 !== undefined
@@ -6265,69 +6836,70 @@ async function performPluginUpdate(e, n, i, a, storageV5, explicit) {
     )
       await removeDirectoryTreeNoFollow(cacheResult.path).catch(() => {});
   }
-  let scopeDesc = projectPath ? `${i} (${projectPath})` : i;
+  let scopeDesc = projectPath ? `${scope} (${projectPath})` : scope;
   return {
     outcome: "updated",
-    message: `Plugin "${n}" updated from ${version || "unknown"} to ${version_2}${ee} for scope ${scopeDesc}. Restart to apply changes.`,
-    pluginId: e,
+    message: `Plugin "${pluginName}" updated from ${version || "unknown"} to ${version_2}${trackingSuffix} for scope ${scopeDesc}. Restart to apply changes.`,
+    pluginId,
     newVersion: version_2,
     oldVersion: version,
-    scope: i,
+    scope,
   };
 }
 //@ chunk-pp50kewz.js:123943-124391 placement
 /**
  * 归档来源插件下载会运行 headersHelper 时的警告。
  */
-async function archiveFetchWarning(e, n, storageV5) {
-  let a = n ?? (await getPluginByIdCacheOnly(e, storageV5))?.entry;
-  if (!a || typeof a.source !== "object" || a.source.source !== "archive") return null;
-  if (isPluginBlockedByPolicy(e)) return null;
+async function archiveFetchWarning(pluginId, entry, storageV5) {
+  let resolvedEntry = entry ?? (await getPluginByIdCacheOnly(pluginId, storageV5))?.entry;
+  if (!resolvedEntry || typeof resolvedEntry.source !== "object" || resolvedEntry.source.source !== "archive")
+    return null;
+  if (isPluginBlockedByPolicy(pluginId)) return null;
   let knownMarketplaces = await loadKnownMarketplacesSafe(storageV5);
-  let u = marketplaceNameOfId(e);
+  let marketplaceName = marketplaceNameOfId(pluginId);
   if (
-    u !== undefined &&
-    isSourceDisallowedOrUnverifiable(ownPropertyOrUndefined(knownMarketplaces, u)?.source)
+    marketplaceName !== undefined &&
+    isSourceDisallowedOrUnverifiable(ownPropertyOrUndefined(knownMarketplaces, marketplaceName)?.source)
   )
     return null;
-  let h = marketplaceSourceOfEntry(e, knownMarketplaces);
-  let p;
+  let marketplaceSource = marketplaceSourceOfEntry(pluginId, knownMarketplaces);
+  let consentSubject;
   try {
-    p = headersHelperNotRunReason({
-      entry: a,
-      archiveUrl: a.source.url,
-      marketplaceSource: h,
-      trustedSettingsEntryAuth: findSettingsArchiveEntry(u, a.name),
+    consentSubject = headersHelperNotRunReason({
+      entry: resolvedEntry,
+      archiveUrl: resolvedEntry.source.url,
+      marketplaceSource,
+      trustedSettingsEntryAuth: findSettingsArchiveEntry(marketplaceName, resolvedEntry.name),
     });
   } catch (error) {
     if (error instanceof EntryHelperError) return null;
     throw error;
   }
-  if (isHeadersHelperDisabledByPolicy(h, u)) return null;
-  return getEntryHelperConsentSubject(p, a.source.url);
+  if (isHeadersHelperDisabledByPolicy(marketplaceSource, marketplaceName)) return null;
+  return getEntryHelperConsentSubject(consentSubject, resolvedEntry.source.url);
 }
 //@ chunk-pp50kewz.js:124391-124642 placement
 /**
  * 生成插件归档获取命令的披露文本：会把 helper 生成的请求头发到哪个地址、隐藏字符警告与实际运行的本地命令。
  */
-function archiveHelperDisclosure(e) {
-  let n = describeArchiveFetchCommand(e);
+function archiveHelperDisclosure(entry) {
+  let details = describeArchiveFetchCommand(entry);
   return (
-    `Fetching this plugin's archive sends helper-minted headers to ${n.destination}; ` +
-    (n.hiddenCharactersWarning ? `WARNING: ${n.hiddenCharactersWarning} ` : "") +
-    `the local command it runs (headersHelper) is: ${n.command}`
+    `Fetching this plugin's archive sends helper-minted headers to ${details.destination}; ` +
+    (details.hiddenCharactersWarning ? `WARNING: ${details.hiddenCharactersWarning} ` : "") +
+    `the local command it runs (headersHelper) is: ${details.command}`
   );
 }
 //@ chunk-pp50kewz.js:124642-124869 placement
 function recordedSourceCommand(pluginId, source, installationsOf) {
-  let a = commandSourceSpecOf(source);
-  if (!a || !installationsOf || installationsOf.length === 0 || isPluginsDirOnLocalDisk()) return;
-  let o = describeCommandOutputMode(a);
+  let spec = commandSourceSpecOf(source);
+  if (!spec || !installationsOf || installationsOf.length === 0 || isPluginsDirOnLocalDisk()) return;
+  let outputMode = describeCommandOutputMode(spec);
   return {
     kind: "recorded",
     command:
-      installationsOf.find((h) => h.sourceCommand === o)?.sourceCommand ??
-      installationsOf.find((h) => h.sourceCommand !== undefined)?.sourceCommand,
+      installationsOf.find((installation) => installation.sourceCommand === outputMode)?.sourceCommand ??
+      installationsOf.find((installation) => installation.sourceCommand !== undefined)?.sourceCommand,
     pluginId,
   };
 }
@@ -6335,34 +6907,48 @@ function recordedSourceCommand(pluginId, source, installationsOf) {
 /**
  * 在已知市场中自动安装缺失的插件。
  */
-async function autoInstallFromMarketplace(e, knownMarketplacesWithDeclared, i, a) {
-  let source = knownMarketplacesWithDeclared[e.marketplace]?.source;
+async function autoInstallFromMarketplace(
+  listing,
+  knownMarketplacesWithDeclared,
+  storageV5,
+  onDirectoryError,
+) {
+  let source = knownMarketplacesWithDeclared[listing.marketplace]?.source;
   if (!source || isPluginDirectorySource(source)) return;
-  if (!isOfficialMarketplaceName_3(e.marketplace)) return;
+  if (!isOfficialMarketplaceName_3(listing.marketplace)) return;
   let plugins = (
-    isStorageV5Enabled() && i !== undefined ? await loadInstalledPlugins(i) : loadInstalledPluginsSync()
+    isStorageV5Enabled() && storageV5 !== undefined
+      ? await loadInstalledPlugins(storageV5)
+      : loadInstalledPluginsSync()
   ).plugins;
-  if (plugins[`${e.entry.name}@${e.marketplace}`]?.length) return;
-  let h = samePluginSource(e.entry.source, sourceUrlAndRef(source));
-  if (h === undefined) return;
+  if (plugins[`${listing.entry.name}@${listing.marketplace}`]?.length) return;
+  let sameSource = samePluginSource(listing.entry.source, sourceUrlAndRef(source));
+  if (sameSource === undefined) return;
   for (let [key, value] of Object.entries(knownMarketplacesWithDeclared)) {
     if (!isPluginDirectorySource(value.source) || !isSourceAllowedByPolicy(value.source)) continue;
-    if (isOfficialFamilySameSource(e.marketplace, e.entry) && !plugins[`${e.entry.name}@${key}`]?.length)
+    if (
+      isOfficialFamilySameSource(listing.marketplace, listing.entry) &&
+      !plugins[`${listing.entry.name}@${key}`]?.length
+    )
       continue;
     try {
-      let found = (await getMarketplace(key, i, "install")).plugins.find(
-        (plugin) => plugin.name === e.entry.name,
+      let found = (await getMarketplace(key, storageV5, "install")).plugins.find(
+        (plugin) => plugin.name === listing.entry.name,
       );
-      if (found && isReviewerMarkedEntry(found.name) && samePluginSource(found.source, undefined) === h)
+      if (
+        found &&
+        isReviewerMarkedEntry(found.name) &&
+        samePluginSource(found.source, undefined) === sameSource
+      )
         return {
           entry: found,
           marketplace: key,
           marketplaceInstallLocation: value.installLocation,
         };
     } catch (error) {
-      if (error instanceof PluginDirectoryUnavailableError) a?.(error);
+      if (error instanceof PluginDirectoryUnavailableError) onDirectoryError?.(error);
       logForDebugging(
-        `Bare-name search for "${e.entry.name}": the ${OFFICIAL_MARKETPLACE_DISPLAY} could not be read, keeping ${e.marketplace}'s listing: ${errorMessage(error)}`,
+        `Bare-name search for "${listing.entry.name}": the ${OFFICIAL_MARKETPLACE_DISPLAY} could not be read, keeping ${listing.marketplace}'s listing: ${errorMessage(error)}`,
       );
     }
   }
@@ -6372,114 +6958,126 @@ async function autoInstallFromMarketplace(e, knownMarketplacesWithDeclared, i, a
 /**
  * 按名字在所有市场中搜索插件。
  */
-async function findPluginInMarketplaces(e, n, i) {
-  let knownMarketplacesWithDeclared = await loadKnownMarketplacesWithDeclared(n);
-  let o;
+async function findPluginInMarketplaces(pluginName, storageV5, onDirectoryError) {
+  let knownMarketplacesWithDeclared = await loadKnownMarketplacesWithDeclared(storageV5);
+  let firstError;
   for (let [key, value] of Object.entries(knownMarketplacesWithDeclared)) {
     if (!isSourceAllowedByPolicy(value.source)) continue;
     try {
-      let found = (await getMarketplace(key, n, "install")).plugins.find((plugin) => plugin.name === e);
+      let found = (await getMarketplace(key, storageV5, "install")).plugins.find(
+        (plugin) => plugin.name === pluginName,
+      );
       if (found) {
-        let c = {
+        let localFound = {
           entry: found,
           marketplace: key,
           marketplaceInstallLocation: value.installLocation,
         };
         {
-          let y = await autoInstallFromMarketplace(c, knownMarketplacesWithDeclared, n, i);
-          return y
+          let preferred = await autoInstallFromMarketplace(
+            localFound,
+            knownMarketplacesWithDeclared,
+            storageV5,
+            onDirectoryError,
+          );
+          return preferred
             ? {
-                ...y,
-                preferredOver: c,
+                ...preferred,
+                preferredOver: localFound,
               }
-            : c;
+            : localFound;
         }
-        return c;
+        return localFound;
       }
     } catch (error) {
       if (error instanceof CommandSourceError) {
-        o ??= error;
+        firstError ??= error;
         continue;
       }
-      if (error instanceof PluginDirectoryUnavailableError) i?.(error);
+      if (error instanceof PluginDirectoryUnavailableError) onDirectoryError?.(error);
       logForDebugging(
-        `Failed to load marketplace "${key}" while searching for plugin "${e}": ${errorMessage(error)}`,
+        `Failed to load marketplace "${key}" while searching for plugin "${pluginName}": ${errorMessage(error)}`,
         {
           level: "error",
         },
       );
     }
   }
-  if (o !== undefined) throw o;
+  if (firstError !== undefined) throw firstError;
   return;
 }
 //@ chunk-pp50kewz.js:126162-126219 placement
 /**
  * 判断目标目录之外是否还有条目。
  */
-async function hasEntriesOutsideTarget(absolute, n) {
-  return n === undefined || (await hasEntriesOutsideTarget_2(absolute, n));
+async function hasEntriesOutsideTarget(absolute, oldInstallPath) {
+  return oldInstallPath === undefined || (await hasEntriesOutsideTarget_2(absolute, oldInstallPath));
 }
 //@ chunk-pp50kewz.js:126219-126279 placement
 /**
  * 在指定作用域的启用插件里查找条目。
  */
-function findPluginInSource(e, n, i) {
-  return findPluginEntry(getSettingsForSourceForUpkeep(scopeToSettingSource(e))?.enabledPlugins, n, i);
+function findPluginInSource(scope, pluginId, pluginName) {
+  return findPluginEntry(
+    getSettingsForSourceForUpkeep(scopeToSettingSource(scope))?.enabledPlugins,
+    pluginId,
+    pluginName,
+  );
 }
 //@ chunk-pp50kewz.js:126279-126378 placement
 /**
  * 按来源缓存分组后的启用插件。
  */
 function groupedEnabledPlugins() {
-  let e = new Map();
-  return (n) => {
-    let i = e.get(n);
-    if (i === undefined) {
-      i = groupEnabledPlugins(n);
-      e.set(n, i);
+  let cache = new Map();
+  return (enabledPlugins) => {
+    let grouped = cache.get(enabledPlugins);
+    if (grouped === undefined) {
+      grouped = groupEnabledPlugins(enabledPlugins);
+      cache.set(enabledPlugins, grouped);
     }
-    return i;
+    return grouped;
   };
 }
 //@ chunk-pp50kewz.js:126378-126516 placement
-function findPluginEntry(enabledPlugins, n, i) {
+function findPluginEntry(enabledPlugins, pluginId, groupPlugins) {
   if (!enabledPlugins) return;
-  let a = isOfficialPluginId(n)
-    ? i(enabledPlugins).byFold.get(nfcLower(n))?.key
-    : findPluginName(Object.keys(enabledPlugins), n);
-  return a === undefined
+  let key = isOfficialPluginId(pluginId)
+    ? groupPlugins(enabledPlugins).byFold.get(nfcLower(pluginId))?.key
+    : findPluginName(Object.keys(enabledPlugins), pluginId);
+  return key === undefined
     ? undefined
     : {
-        key: a,
-        value: enabledPlugins[a],
+        key,
+        value: enabledPlugins[key],
       };
 }
 //@ chunk-pp50kewz.js:126516-126997 placement
 /**
  * 按作用域查找插件安装记录。
  */
-function locatePluginInstall(e, n, i) {
+function locatePluginInstall(pluginId, requestedScope, groupPlugins) {
   let found;
-  for (let p of sorted) {
-    let pluginInSource = findPluginInSource(p, e, i);
+  for (let scope of sorted) {
+    let pluginInSource = findPluginInSource(scope, pluginId, groupPlugins);
     if (pluginInSource !== undefined) {
       found = {
-        scope: p,
+        scope,
         ...pluginInSource,
       };
       break;
     }
   }
-  let o = pluginSettingRecords(e);
+  let records = pluginSettingRecords(pluginId);
   let pluginSetting = findPluginSetting(
-    e,
-    o.map(({ record }) => (record === undefined ? undefined : i(record))),
+    pluginId,
+    records.map(({ record }) => (record === undefined ? undefined : groupPlugins(record))),
   );
-  let source = pluginSetting === undefined ? undefined : o[pluginSetting.index]?.source;
+  let source = pluginSetting === undefined ? undefined : records[pluginSetting.index]?.source;
   return {
     found,
-    atRequested: n === undefined ? undefined : findPluginInSource(n, e, i),
+    atRequested:
+      requestedScope === undefined ? undefined : findPluginInSource(requestedScope, pluginId, groupPlugins),
     override:
       pluginSetting !== undefined && (source === "policySettings" || source === "flagSettings")
         ? {
@@ -6496,38 +7094,45 @@ function locatePluginInstall(e, n, i) {
   };
 }
 //@ chunk-pp50kewz.js:126997-127038 placement
-var sorted = [...VALID_INSTALLABLE_SCOPES].sort((e, n) => SCOPE_PRECEDENCE[n] - SCOPE_PRECEDENCE[e]);
+var sorted; // deferred: uses MANAGED_PLUGIN_DISABLE_MESSAGE of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-pp50kewz.js:126997", () => {
+  sorted = [...VALID_INSTALLABLE_SCOPES].sort(
+    (left, right) => SCOPE_PRECEDENCE[right] - SCOPE_PRECEDENCE[left],
+  );
+});
 //@ chunk-pp50kewz.js:127038-127856 placement
 /**
  * 插件被组织或策略阻止时的结果。
  */
-function pluginBlockedResult(e, enabled, i, a) {
-  let o = pluginNamesEqual(a, e) ? "" : ` via its legacy "${stripInvisibleKeepEmoji(a)}" entry`;
-  let u = o ? ` (remove that entry, or add "${e}": true beside it)` : "";
-  if (i === "policySettings")
+function pluginBlockedResult(pluginId, enabled, lockSource, legacyKey) {
+  let legacyNote = pluginNamesEqual(legacyKey, pluginId)
+    ? ""
+    : ` via its legacy "${stripInvisibleKeepEmoji(legacyKey)}" entry`;
+  let legacyHint = legacyNote ? ` (remove that entry, or add "${pluginId}": true beside it)` : "";
+  if (lockSource === "policySettings")
     return {
       success: false,
       message: enabled
-        ? `Plugin "${e}" is blocked by your organization's policy${o} and cannot be enabled here \u2014 ask an admin${u}`
-        : `Plugin "${e}" is turned on by your organization's managed settings and cannot be disabled here`,
+        ? `Plugin "${pluginId}" is blocked by your organization's policy${legacyNote} and cannot be enabled here \u2014 ask an admin${legacyHint}`
+        : `Plugin "${pluginId}" is turned on by your organization's managed settings and cannot be disabled here`,
       failureCode: enabled ? "plugin_policy_blocked" : "managed_settings_override",
     };
   return {
     success: false,
     message: enabled
-      ? `Plugin "${e}" is turned off by this session's --settings flag${o}, which overrides your settings files. Change it in --settings to enable it${u}.`
-      : `Plugin "${e}" is turned on by this session's --settings flag, which overrides your settings files. Remove it from --settings to disable it.`,
+      ? `Plugin "${pluginId}" is turned off by this session's --settings flag${legacyNote}, which overrides your settings files. Change it in --settings to enable it${legacyHint}.`
+      : `Plugin "${pluginId}" is turned on by this session's --settings flag, which overrides your settings files. Remove it from --settings to disable it.`,
     failureCode: "settings_flag_override",
   };
 }
 //@ chunk-pp50kewz.js:127856-128053 placement = getEnabledSettingSources (0.862)
-function getPluginEnablementLockingSource(e, n) {
+function getPluginEnablementLockingSource(pluginId, desiredEnabled) {
   let result = new Set(getEnabledSettingSources());
-  for (let a of ["policySettings", "flagSettings"]) {
-    if (!result.has(a)) continue;
-    let o = lookupByPluginAliases(getSettingsForSource(a)?.enabledPlugins, e);
-    if (o === undefined) continue;
-    return (o === true) === n ? undefined : a;
+  for (let source of ["policySettings", "flagSettings"]) {
+    if (!result.has(source)) continue;
+    let value = lookupByPluginAliases(getSettingsForSource(source)?.enabledPlugins, pluginId);
+    if (value === undefined) continue;
+    return (value === true) === desiredEnabled ? undefined : source;
   }
   return;
 }
@@ -6535,15 +7140,20 @@ function getPluginEnablementLockingSource(e, n) {
 /**
  * 插件启用的锁定来源：仅策略启用的插件返回 policySettings；否则看覆盖来源是否为 flagSettings 等（属插件启用管理，误归入 permissionsLoader）。
  */
-function getPluginEnablingSource(e, n) {
-  let i = normalizePluginId(e);
-  let a = canonicalPluginId(i);
-  if (isBuiltinPluginId(a) && getBuiltinPlugin(parsePluginIdentifier(a).name)?.enabledFromPolicyOnly)
-    return getBuiltinPlugins().enabled.some((h) => h.source === a) ? "policySettings" : undefined;
-  let o = marketplaceSuffix(i);
-  if (!isOfficialMarketplace(o)) return getPluginEnablementLockingSource(i, false);
-  let { override } = locatePluginInstall(i, undefined, n);
-  return override?.enabling && (override.source === "flagSettings" || o === SYNCED)
+function getPluginEnablingSource(pluginId, groupPlugins) {
+  let normalizedId = normalizePluginId(pluginId);
+  let canonicalId = canonicalPluginId(normalizedId);
+  if (
+    isBuiltinPluginId(canonicalId) &&
+    getBuiltinPlugin(parsePluginIdentifier(canonicalId).name)?.enabledFromPolicyOnly
+  )
+    return getBuiltinPlugins().enabled.some((builtin) => builtin.source === canonicalId)
+      ? "policySettings"
+      : undefined;
+  let marketplace = marketplaceSuffix(normalizedId);
+  if (!isOfficialMarketplace(marketplace)) return getPluginEnablementLockingSource(normalizedId, false);
+  let { override } = locatePluginInstall(normalizedId, undefined, groupPlugins);
+  return override?.enabling && (override.source === "flagSettings" || marketplace === SYNCED)
     ? override.source
     : undefined;
 }
@@ -6551,15 +7161,15 @@ function getPluginEnablingSource(e, n) {
 /**
  * 是否由托管策略启用（不能禁用/卸载）。
  */
-function isManagedDisabled(e, n, i) {
-  return n(e) || getPluginEnablingSource(e, i) === "policySettings";
+function isManagedDisabled(pluginId, isDisabledBySync, groupPlugins) {
+  return isDisabledBySync(pluginId) || getPluginEnablingSource(pluginId, groupPlugins) === "policySettings";
 }
 //@ chunk-pp50kewz.js:128406-128531 placement
 /**
  * 插件由托管策略设置启用时返回拒绝结果（不能禁用或卸载）。
  */
-function managedPluginRefusal(e) {
-  return getPluginEnablingSource(e, groupedEnabledPlugins()) === "policySettings"
+function managedPluginRefusal(pluginId) {
+  return getPluginEnablingSource(pluginId, groupedEnabledPlugins()) === "policySettings"
     ? {
         success: false,
         message: MANAGED_PLUGIN_DISABLE_MESSAGE,
@@ -6571,46 +7181,46 @@ function managedPluginRefusal(e) {
 /**
  * 插件由 --settings 启用时返回附注："本会话仍启用"。
  */
-function flagSettingsEnabledNote(e) {
-  return getPluginEnablingSource(e, groupedEnabledPlugins()) === "flagSettings"
+function flagSettingsEnabledNote(pluginId) {
+  return getPluginEnablingSource(pluginId, groupedEnabledPlugins()) === "flagSettings"
     ? " (still enabled this session: --settings keeps it on)"
     : "";
 }
 //@ chunk-pp50kewz.js:128641-128766 placement
-function matchingEnabledKeys(enabledPlugins, n) {
+function matchingEnabledKeys(enabledPlugins, pluginId) {
   let keys = Object.keys(enabledPlugins ?? {});
-  if (!isOfficialPluginId(n)) return keys.filter((o) => o === n);
-  let a = nfcLower(n);
-  return keys.filter((o) => nfcLower(o) === a);
+  if (!isOfficialPluginId(pluginId)) return keys.filter((key) => key === pluginId);
+  let lowerId = nfcLower(pluginId);
+  return keys.filter((key) => nfcLower(key) === lowerId);
 }
 //@ chunk-pp50kewz.js:128766-129148 placement
 /**
  * 写入 enabledPlugins（替换遗留键）。
  */
-function writeEnabledPlugins(e, n, i, a, storageV5) {
+function writeEnabledPlugins(source, pluginId, enabled, extraRecords, storageV5) {
   return updateSettingsForSourceWithTransform(
-    e,
-    (u) => {
-      let h = Object.fromEntries(
+    source,
+    (settings) => {
+      let merged = Object.fromEntries(
         Object.entries({
-          ...a,
-          [n]: i,
+          ...extraRecords,
+          [pluginId]: enabled,
         }).flatMap(([key, value]) => {
-          let c = pluginSettingWriteTarget(u?.enabledPlugins, key);
-          return [...c.replaced.map((y) => [y, undefined]), [c.written, value]];
+          let target = pluginSettingWriteTarget(settings?.enabledPlugins, key);
+          return [...target.replaced.map((replacedKey) => [replacedKey, undefined]), [target.written, value]];
         }),
       );
       return {
         enabledPlugins: {
-          ...u?.enabledPlugins,
+          ...settings?.enabledPlugins,
           ...Object.fromEntries(
-            Object.keys(h).flatMap((key) =>
-              matchingEnabledKeys(u?.enabledPlugins, key)
-                .filter((r) => r !== key)
-                .map((r) => [r, undefined]),
+            Object.keys(merged).flatMap((key) =>
+              matchingEnabledKeys(settings?.enabledPlugins, key)
+                .filter((existingKey) => existingKey !== key)
+                .map((existingKey) => [existingKey, undefined]),
             ),
           ),
-          ...h,
+          ...merged,
         },
       };
     },
@@ -6622,73 +7232,36 @@ function writeEnabledPlugins(e, n, i, a, storageV5) {
 /**
  * 取某作用域下所有插件的记录。
  */
-function pluginRecordsFor(e, n) {
-  return enabledPluginsBySource(e, n, undefined).map(({ record }) => record);
+function pluginRecordsFor(source, pluginId) {
+  return enabledPluginsBySource(source, pluginId, undefined).map(({ record }) => record);
 }
 //@ chunk-pp50kewz.js:129208-129386 placement
-function enabledPluginsBySource(e, n, i) {
-  return Yi.map((a) => {
-    let enabledPlugins = getSettingsForSourceForUpkeep(a)?.enabledPlugins;
-    if (a !== e)
+function enabledPluginsBySource(overriddenSource, pluginId, overrideValue) {
+  return SETTING_SOURCES_DESC.map((source) => {
+    let enabledPlugins = getSettingsForSourceForUpkeep(source)?.enabledPlugins;
+    if (source !== overriddenSource)
       return {
-        source: a,
+        source,
         record: enabledPlugins,
       };
-    let u = Uo(enabledPlugins ?? {}, matchingEnabledKeys(enabledPlugins, n));
+    let filteredRecord = omitAlias(enabledPlugins ?? {}, matchingEnabledKeys(enabledPlugins, pluginId));
     return {
-      source: a,
+      source,
       record:
-        i === undefined
-          ? u
+        overrideValue === undefined
+          ? filteredRecord
           : {
-              ...u,
-              [n]: i,
+              ...filteredRecord,
+              [pluginId]: overrideValue,
             },
     };
   });
 }
 //@ chunk-pp50kewz.js:129386-129411 placement
-var Yi = [...SETTING_SOURCES].reverse();
-//@ chunk-1qpz7qcd.js:7508-7648 fingerprint = disableAllPluginsOp (0.338)
-/**
- * 插件批量操作的错误转文本（用户可见错误原样，其他记日志后返回“X failed”）。属 CLI 处理器，见 lead 建议。
- */
-function formatOperationFailure(subtype, error) {
-  if (error instanceof WireSafeControlError) return sanitizeTelemetryString(errorMessage(error));
-  if (isAbortError(error)) return sanitizeTelemetryString(errorMessage(error));
-  logForDebugging(`${subtype} failed: ${errorMessage(error)}`, {
-    level: "error",
-  });
-  return `${subtype} failed`;
-}
-//@ chunk-csq9ftr9.js:8420-8587 callgraph-fingerprint = updatePluginOp (0.187)
-/**
- * 按插件 ID 对一组条目分组（名字配错，见 lead 建议）。
- */
-function countByPluginKey(userHooks) {
-  let n = new Map();
-  for (let { pluginId } of userHooks) {
-    if (!pluginId) continue;
-    let { name: pluginName, marketplace: marketplaceName } = parsePluginIdentifier_2(pluginId);
-    let f = pluginIdHash(pluginName, marketplaceName);
-    n.set(f, (n.get(f) ?? 0) + 1);
-  }
-  return n.size > 0 ? hashEntries(n) : undefined;
-}
-//@ chunk-e6aww6q8.js:4444317-4444531 fingerprint = resolveDelistedPluginId (0.791)
-/**
- * 已下架插件 ID 的解析：排除已有结果的，从安装记录中找出仍存在的。
- */
-async function resolveDelistedPluginId(e, n, storageV5) {
-  let filtered = (e ?? []).filter((y) => !n.some((S) => S.pluginId === y));
-  if (filtered.length === 0) return [];
-  let h =
-    isStorageV5Enabled() && storageV5 !== undefined
-      ? await loadInstalledPlugins(storageV5)
-      : loadInstalledPluginsSync();
-  if (hasFailedInstalledPluginsRead(h)) return filtered;
-  return filtered.filter((key) => h.plugins[key]?.some(isInstallationRelevantToCurrentProject) === true);
-}
+var SETTING_SOURCES_DESC; // deferred: uses SETTING_SOURCES (../../utils/settings/constants.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-pp50kewz.js:129386", () => {
+  SETTING_SOURCES_DESC = [...SETTING_SOURCES].reverse();
+});
 export {
   updatePluginOp,
   findPluginInMarketplaces,

@@ -8,9 +8,11 @@
  * pieces: chunk-18hwfzwa.js (24), chunk-e6aww6q8.js (1), chunk-s4bxxzsw.js (1)
  * attribution: affinity 1, fingerprint 11, layout 2, file-local 3, placement 9
  */
-import { never, _enum, string } from "../../../vendor/zod/v4/classic/schemas.js";
+import { modelSupportsStructuredOutputs, BETA_STRUCTURED_OUTPUTS } from "../betas.js";
+import { isStructuredOutputsUnsupportedClaude } from "../../services/api/claude.js";
+import { never, _enum, stringSchema } from "../../../vendor/zod/v4/classic/schemas.js";
 import { plural } from "../stringUtils.js";
-import { F1e, v1i } from "../../../vendor/zod/v4/classic/compat.js";
+import { coerceNumber, coerceBoolean } from "../../../vendor/zod/v4/classic/compat.js";
 import { jsonStringify } from "../slowOperations.js";
 import { parseNaturalLanguageDateTime } from "./dateTimeParser.js";
 import {
@@ -19,9 +21,26 @@ import {
   replaceLineBreaks,
   stripUnsafeChars,
 } from "../permissions/approvalPayloadSerialization.js";
-import { modelSupportsStructuredOutputs, BETA_STRUCTURED_OUTPUTS } from "../betas.js";
-import { isStructuredOutputsUnsupportedClaude } from "../../services/api/claude.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
+//@ chunk-e6aww6q8.js:2651592-2651710 fingerprint = hasStringFormat (1)
+function hasStringFormat(outputFormat, outputConfig, betas, model) {
+  if (
+    !outputFormat ||
+    "format" in outputConfig ||
+    !modelSupportsStructuredOutputs(model) ||
+    isStructuredOutputsUnsupportedClaude(model)
+  )
+    return false;
+  outputConfig.format = outputFormat;
+  if (!betas.includes(BETA_STRUCTURED_OUTPUTS)) betas.push(BETA_STRUCTURED_OUTPUTS);
+  return true;
+}
+//@ chunk-s4bxxzsw.js:7715-7745 file-local
+var STRING_FORMATS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-s4bxxzsw.js:7715", () => {
+  STRING_FORMATS = new Set(["date-time"]);
+});
 //@ chunk-18hwfzwa.js:1201454-1201517 affinity
 function looksLikeIsoDate(stringValue) {
   return /^\d{4}-\d{2}-\d{2}(T|$)/.test(stringValue.trim());
@@ -45,8 +64,8 @@ function isConstOption(schema) {
   );
 }
 //@ chunk-18hwfzwa.js:1201808-1201850 layout
-function isString(h) {
-  return typeof h === "string";
+function isString(value) {
+  return typeof value === "string";
 }
 //@ chunk-18hwfzwa.js:1201850-1202070 fingerprint = getMultiSelectValues (1)
 /**
@@ -103,7 +122,7 @@ function getEnumLabels(schema) {
   if ("enum" in schema) {
     if (!Array.isArray(schema.enum)) return [];
     let enumNames = "enumNames" in schema ? schema.enumNames : undefined;
-    if (Array.isArray(enumNames)) return enumNames.filter((enumName, L) => isString(schema.enum[L]));
+    if (Array.isArray(enumNames)) return enumNames.filter((enumName, index) => isString(schema.enum[index]));
     return schema.enum.filter(isString);
   }
   return [];
@@ -124,31 +143,31 @@ function getZodSchema(schema) {
     return _enum([first, ...rest]);
   }
   if (schema.type === "string") {
-    let stringSchema = string();
+    let stringSchema_2 = stringSchema();
     if (schema.minLength !== undefined)
-      stringSchema = stringSchema.min(schema.minLength, {
+      stringSchema_2 = stringSchema_2.min(schema.minLength, {
         message: `Must be at least ${schema.minLength} ${plural(schema.minLength, "character")}`,
       });
     if (schema.maxLength !== undefined)
-      stringSchema = stringSchema.max(schema.maxLength, {
+      stringSchema_2 = stringSchema_2.max(schema.maxLength, {
         message: `Must be at most ${schema.maxLength} ${plural(schema.maxLength, "character")}`,
       });
     switch (schema.format) {
       case "email":
-        stringSchema = stringSchema.email({
+        stringSchema_2 = stringSchema_2.email({
           message: "Must be a valid email address, e.g. user@example.com",
         });
         break;
       case "uri":
-        stringSchema = stringSchema.url({
+        stringSchema_2 = stringSchema_2.url({
           message: "Must be a valid URI, e.g. https://example.com",
         });
         break;
       case "date":
-        stringSchema = stringSchema.date("Must be a valid date, e.g. 2024-03-15, today, next Monday");
+        stringSchema_2 = stringSchema_2.date("Must be a valid date, e.g. 2024-03-15, today, next Monday");
         break;
       case "date-time":
-        stringSchema = stringSchema.datetime({
+        stringSchema_2 = stringSchema_2.datetime({
           offset: true,
           message: "Must be a valid date-time, e.g. 2024-03-15T14:30:00Z, tomorrow at 3pm",
         });
@@ -156,7 +175,7 @@ function getZodSchema(schema) {
       default:
         break;
     }
-    return stringSchema;
+    return stringSchema_2;
   }
   if (schema.type === "number" || schema.type === "integer") {
     let typeLabel = schema.type === "integer" ? "an integer" : "a number";
@@ -170,7 +189,7 @@ function getZodSchema(schema) {
           : schema.maximum !== undefined
             ? `Must be ${typeLabel} <= ${formatNum(schema.maximum)}`
             : `Must be ${typeLabel}`;
-    let numberSchema = F1e({
+    let numberSchema = coerceNumber({
       error: rangeMsg,
     });
     if (schema.type === "integer")
@@ -187,7 +206,7 @@ function getZodSchema(schema) {
       });
     return numberSchema;
   }
-  if (schema.type === "boolean") return v1i();
+  if (schema.type === "boolean") return coerceBoolean();
   throw Error(`Unsupported schema: ${jsonStringify(schema)}`);
 }
 //@ chunk-18hwfzwa.js:1204340-1204501 fingerprint = validateElicitationInput (1)
@@ -240,12 +259,12 @@ var URL_ESCAPE_CHARS_RE = /[()\][%!^"`<>&|;, *?]/g;
 /**
  * 估算 URL 字段的编码成本（长度加上需转义字符的额外开销）。
  */
-function elicitationUrlCost(h) {
+function elicitationUrlCost(url) {
   return (
-    h.length +
-    3 * (h.match(URL_ESCAPE_CHARS_RE)?.length ?? 0) +
-    4 * (h.match(/"/g)?.length ?? 0) +
-    (h.match(/\\/g)?.length ?? 0) +
+    url.length +
+    3 * (url.match(URL_ESCAPE_CHARS_RE)?.length ?? 0) +
+    4 * (url.match(/"/g)?.length ?? 0) +
+    (url.match(/\\/g)?.length ?? 0) +
     16
   );
 }
@@ -273,15 +292,19 @@ var REDACTED_FIELD_TEXT = "********";
 /**
  * 判断值是否为空（undefined/null/空串/空数组）。
  */
-function isBlankValue(h) {
-  return h === undefined || h === null || h === "" || (Array.isArray(h) && h.length === 0);
+function isBlankValue(value) {
+  return (
+    value === undefined || value === null || value === "" || (Array.isArray(value) && value.length === 0)
+  );
 }
 //@ chunk-18hwfzwa.js:1205437-1205530 placement
 /**
  * 取对象中值为对象类型的字段条目。
  */
 function objectFieldEntries(properties) {
-  return Object.entries(properties ?? {}).filter((x) => typeof x[1] === "object" && x[1] !== null);
+  return Object.entries(properties ?? {}).filter(
+    (entry) => typeof entry[1] === "object" && entry[1] !== null,
+  );
 }
 //@ chunk-18hwfzwa.js:1205530-1205755 placement
 /**
@@ -296,55 +319,55 @@ function parseElicitationField(schema, stringValue) {
       : {
           kind: "keepEmptyIfSet",
         };
-  let L = validateElicitationInput(stringValue, schema);
-  return L.isValid
+  let validation = validateElicitationInput(stringValue, schema);
+  return validation.isValid
     ? {
         kind: "set",
-        value: L.value,
+        value: validation.value,
       }
     : {
         kind: "set",
         value: stringValue,
-        error: L.error,
+        error: validation.error,
       };
 }
 //@ chunk-18hwfzwa.js:1205755-1206341 placement
 /**
  * 把预填值还原为表单值：多选只保留合法选项，布尔原样，其余字符串化后校验。
  */
-function restoreElicitationValue(propSchema, x) {
-  if (x === undefined) return;
+function restoreElicitationValue(propSchema, rawValue) {
+  if (rawValue === undefined) return;
   if (isMultiSelectEnumSchema(propSchema)) {
-    if (!Array.isArray(x)) return;
-    let D = x.length;
-    if (typeof D !== "number" || !Number.isSafeInteger(D) || D < 0) return;
+    if (!Array.isArray(rawValue)) return;
+    let valueCount = rawValue.length;
+    if (typeof valueCount !== "number" || !Number.isSafeInteger(valueCount) || valueCount < 0) return;
     let multiSelectValues = getMultiSelectValues(propSchema);
-    let ee = [];
-    for (let idx = 0; idx < D; idx++) {
-      let Re = x[idx];
-      if (typeof Re !== "string") return;
-      let Be = markBrokenSequences(replaceLineBreaks(stripUnsafeChars(Re)));
-      if (!multiSelectValues.includes(Be)) continue;
-      ee.push(Be);
+    let selectedValues = [];
+    for (let idx = 0; idx < valueCount; idx++) {
+      let candidate = rawValue[idx];
+      if (typeof candidate !== "string") return;
+      let sanitizedValue = markBrokenSequences(replaceLineBreaks(stripUnsafeChars(candidate)));
+      if (!multiSelectValues.includes(sanitizedValue)) continue;
+      selectedValues.push(sanitizedValue);
     }
-    return ee.length > 0
+    return selectedValues.length > 0
       ? {
-          value: ee,
+          value: selectedValues,
         }
       : undefined;
   }
   if (propSchema.type === "boolean")
-    return typeof x === "boolean"
+    return typeof rawValue === "boolean"
       ? {
-          value: x,
+          value: rawValue,
         }
       : undefined;
   if (
     isScalarSchemaType(propSchema) &&
-    (typeof x === "string" || typeof x === "number" || typeof x === "boolean")
+    (typeof rawValue === "string" || typeof rawValue === "number" || typeof rawValue === "boolean")
   ) {
-    let D = markBrokenSequences(replaceLineBreaks(stripUnsafeChars(String(x))));
-    let elicitationField = parseElicitationField(propSchema, D);
+    let sanitizedValue = markBrokenSequences(replaceLineBreaks(stripUnsafeChars(String(rawValue))));
+    let elicitationField = parseElicitationField(propSchema, sanitizedValue);
     return elicitationField.kind === "set"
       ? {
           value: elicitationField.value,
@@ -354,21 +377,6 @@ function restoreElicitationValue(propSchema, x) {
   }
   return;
 }
-//@ chunk-e6aww6q8.js:2651592-2651710 fingerprint = hasStringFormat (1)
-function hasStringFormat(outputFormat, outputConfig, r, model) {
-  if (
-    !outputFormat ||
-    "format" in outputConfig ||
-    !modelSupportsStructuredOutputs(model) ||
-    isStructuredOutputsUnsupportedClaude(model)
-  )
-    return false;
-  outputConfig.format = outputFormat;
-  if (!r.includes(BETA_STRUCTURED_OUTPUTS)) r.push(BETA_STRUCTURED_OUTPUTS);
-  return true;
-}
-//@ chunk-s4bxxzsw.js:7715-7745 file-local
-var STRING_FORMATS = new Set(["date-time"]);
 export {
   objectFieldEntries,
   MAX_URL_FIELD_CHARS,

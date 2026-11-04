@@ -42,6 +42,7 @@ import {
   shouldDisableAllHooksIncludingManaged,
   shouldAllowManagedHooksOnly,
 } from "../../utils/hooks/hooksConfigSnapshot.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-pm6ycja1.js:742-752 placement
 /**
@@ -84,26 +85,29 @@ var hasAnyCredential = () =>
  */
 async function isCredentialStoreEmpty() {
   if (hasAnyCredential()) return false;
-  let [everyCredentialLeg, r] = await Promise.all([
-    readEveryCredentialLeg(getSecureStorage(), (s) => s.claudeAiOauth !== undefined),
+  let [everyCredentialLeg, keychainMissing] = await Promise.all([
+    readEveryCredentialLeg(getSecureStorage(), (leg) => leg.claudeAiOauth !== undefined),
     getPlatform() !== "macos" || isKeychainItemMissing(),
   ]);
-  return r && everyCredentialLeg.every((s) => s.value === false);
+  return keychainMissing && everyCredentialLeg.every((leg) => leg.value === false);
 }
 //@ chunk-pm6ycja1.js:1362-1439 placement
 /**
  * 凭证存储状态缓存（是否已检查、检查中的 Promise），用于判断能否使用首批凭据读取功能开关。
  */
-var credentialStoreState = identity(
-  {
-    isLifted: false,
-    lifting: undefined,
-  },
-  (o) => {
-    o.isLifted = false;
-    o.lifting = undefined;
-  },
-);
+var credentialStoreState; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-pm6ycja1.js:1362", () => {
+  credentialStoreState = identity(
+    {
+      isLifted: false,
+      lifting: undefined,
+    },
+    (state) => {
+      state.isLifted = false;
+      state.lifting = undefined;
+    },
+  );
+});
 //@ chunk-pm6ycja1.js:1439-1568 placement
 /**
  * 异步检查凭证存储是否为空（只做一次）。
@@ -123,26 +127,35 @@ function liftCredentialCheck() {
 /**
  * 导出函数 `hooksModulesFollowState`。
  */
-var hooksModulesFollowState = identity(
-  {
-    isFollowed: false,
-  },
-  (o) => {
-    o.isFollowed = false;
-  },
-);
+var hooksModulesFollowState; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-pm6ycja1.js:1568", () => {
+  hooksModulesFollowState = identity(
+    {
+      isFollowed: false,
+    },
+    (state) => {
+      state.isFollowed = false;
+    },
+  );
+});
 //@ chunk-pm6ycja1.js:1619-1653 placement
-var FOLLOWABLE_SOURCES = new Set(["disk", "payload"]);
+var FOLLOWABLE_SOURCES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-pm6ycja1.js:1619", () => {
+  FOLLOWABLE_SOURCES = new Set(["disk", "payload"]);
+});
 //@ chunk-pm6ycja1.js:1653-1760 placement
 /**
  * 读取 hooks 模块开关的服务端值（需要时触发刷新）。
  */
 async function checkHooksModulesFlag() {
-  let o = getFeatureValueWithSource_CACHED_MAY_BE_STALE(PLUGIN_HOOKS_MODULES_GATE, HOOKS_MODULES_DEFAULT);
+  let flagValue = getFeatureValueWithSource_CACHED_MAY_BE_STALE(
+    PLUGIN_HOOKS_MODULES_GATE,
+    HOOKS_MODULES_DEFAULT,
+  );
   return !hooksModulesFollowState.isFollowed &&
     isGrowthBookEnabled() &&
-    o.value !== HOOKS_MODULES_DEFAULT &&
-    FOLLOWABLE_SOURCES.has(o.source)
+    flagValue.value !== HOOKS_MODULES_DEFAULT &&
+    FOLLOWABLE_SOURCES.has(flagValue.source)
     ? liftCredentialCheck()
     : undefined;
 }
@@ -177,10 +190,11 @@ function resolveHooksModulesValue() {
     PLUGIN_HOOKS_MODULES_GATE,
     HOOKS_MODULES_DEFAULT,
   );
-  let r = featureValue_CACHED_MAY_BE_STALE !== HOOKS_MODULES_DEFAULT;
-  let s = r && (hasGrowthBookUsedNonDefaultHost() || shouldCheckHooksModulesFlag());
-  if (r) checkHooksModulesFlag();
-  return s ? HOOKS_MODULES_DEFAULT : featureValue_CACHED_MAY_BE_STALE;
+  let differsFromDefault = featureValue_CACHED_MAY_BE_STALE !== HOOKS_MODULES_DEFAULT;
+  let trustedOverride =
+    differsFromDefault && (hasGrowthBookUsedNonDefaultHost() || shouldCheckHooksModulesFlag());
+  if (differsFromDefault) checkHooksModulesFlag();
+  return trustedOverride ? HOOKS_MODULES_DEFAULT : featureValue_CACHED_MAY_BE_STALE;
 }
 //@ chunk-pm6ycja1.js:2050-2082 placement
 /**

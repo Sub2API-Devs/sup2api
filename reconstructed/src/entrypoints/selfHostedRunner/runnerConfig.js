@@ -33,8 +33,8 @@ import { decodeJwtPayload } from "../../bridge/jwtUtils.js";
 /**
  * 解析 self-hosted runner 的命令行与 SELF_HOSTED_RUNNER_* 环境变量（API 地址、钩子目录、健康端口、并发、排空时间等）。
  */
-function parseRunnerArgs(e) {
-  let t = {
+function parseRunnerArgs(argv) {
+  let config = {
     apiUrl: RUNNER_DEFAULTS,
     hooksDir: process.env.SELF_HOSTED_RUNNER_HOOKS_DIR
       ? resolve(process.env.SELF_HOSTED_RUNNER_HOOKS_DIR)
@@ -52,182 +52,202 @@ function parseRunnerArgs(e) {
     logLevel: "info",
     shutdownDrainMs: 0,
   };
-  let r;
-  let n;
+  let connectorHost;
+  let connectorId;
   let provider = "ghe";
-  let o = false;
-  let l;
-  let g;
-  for (let j = 0; j < e.length; j++) {
-    let S = e[j];
-    let s = e[j + 1];
-    switch (S) {
+  let providerExplicit = false;
+  let caFile;
+  let hostRewrite;
+  for (let j = 0; j < argv.length; j++) {
+    let flag = argv[j];
+    let value = argv[j + 1];
+    switch (flag) {
       case "--api-url":
-        if (s) {
-          t.apiUrl = s;
+        if (value) {
+          config.apiUrl = value;
           j++;
         }
         break;
       case "--pool-secret-file":
       case "--environment-secret-file":
-        if (S === "--pool-secret-file")
+        if (flag === "--pool-secret-file")
           console.error("[runner:warn] --pool-secret-file is deprecated; use --environment-secret-file");
-        if (s) {
-          t.poolSecretFile = s;
+        if (value) {
+          config.poolSecretFile = value;
           j++;
         }
         break;
       case "--hooks-dir":
-        if (s) {
-          t.hooksDir = resolve(s);
+        if (value) {
+          config.hooksDir = resolve(value);
           j++;
         }
         break;
       case "--health-port":
-        if (s) {
-          let intLoose = parseIntLoose(s);
+        if (value) {
+          let intLoose = parseIntLoose(value);
           if (Number.isNaN(intLoose) || intLoose < 0 || intLoose > 65535)
-            throw Error(`--health-port must be an integer in [0, 65535] (0 disables), got: ${s}`);
-          t.healthPort = intLoose;
+            throw Error(`--health-port must be an integer in [0, 65535] (0 disables), got: ${value}`);
+          config.healthPort = intLoose;
           j++;
         }
         break;
       case "--hook-concurrency":
-        if (s) {
-          let intLoose = parseIntLoose(s);
+        if (value) {
+          let intLoose = parseIntLoose(value);
           if (Number.isNaN(intLoose) || intLoose < 1 || intLoose > 100)
-            throw Error(`--hook-concurrency must be an integer in [1, 100], got: ${s}`);
-          t.hookConcurrency = intLoose;
+            throw Error(`--hook-concurrency must be an integer in [1, 100], got: ${value}`);
+          config.hookConcurrency = intLoose;
           j++;
         }
         break;
       case "--hook-timeout":
-        if (s) {
-          let u = Number(s);
-          if (!Number.isFinite(u) || u <= 0)
-            throw Error(`--hook-timeout must be a positive number of seconds, got: ${s}`);
-          t.hookTimeoutMs = u * 1000;
+        if (value) {
+          let seconds = Number(value);
+          if (!Number.isFinite(seconds) || seconds <= 0)
+            throw Error(`--hook-timeout must be a positive number of seconds, got: ${value}`);
+          config.hookTimeoutMs = seconds * 1000;
           j++;
         }
         break;
       case "--expected-spawn-seconds":
-        if (s) {
-          let u = parseInt(s, 10);
-          if (Number.isNaN(u) || u < 10 || u > 3600 || String(u) !== s.trim())
-            throw Error(`--expected-spawn-seconds must be an integer in [10, 3600], got: ${s}`);
-          t.expectedSpawnSeconds = u;
+        if (value) {
+          let seconds = parseInt(value, 10);
+          if (Number.isNaN(seconds) || seconds < 10 || seconds > 3600 || String(seconds) !== value.trim())
+            throw Error(`--expected-spawn-seconds must be an integer in [10, 3600], got: ${value}`);
+          config.expectedSpawnSeconds = seconds;
           j++;
         }
         break;
       case "--min-idle":
-        if (s) {
-          let u = parseInt(s, 10);
-          if (Number.isNaN(u) || u < 0 || u > 200 || String(u) !== s.trim())
+        if (value) {
+          let idleCount = parseInt(value, 10);
+          if (
+            Number.isNaN(idleCount) ||
+            idleCount < 0 ||
+            idleCount > 200 ||
+            String(idleCount) !== value.trim()
+          )
             throw Error("--min-idle must be an integer in [0, 200]");
-          t.minIdle = u;
+          config.minIdle = idleCount;
           j++;
         }
         break;
       case "--scm-connector-host":
-        if (!s) throw Error("--scm-connector-host requires HOST[:PORT]");
-        r = parseScmConnectorHost(s);
+        if (!value) throw Error("--scm-connector-host requires HOST[:PORT]");
+        connectorHost = parseScmConnectorHost(value);
         j++;
         break;
       case "--scm-connector-id": {
-        if (!s) throw Error("--scm-connector-id requires an integer");
-        let u = parseInt(s, 10);
-        if (Number.isNaN(u) || u < 1 || String(u) !== s.trim())
+        if (!value) throw Error("--scm-connector-id requires an integer");
+        let connectorIdValue = parseInt(value, 10);
+        if (
+          Number.isNaN(connectorIdValue) ||
+          connectorIdValue < 1 ||
+          String(connectorIdValue) !== value.trim()
+        )
           throw Error("--scm-connector-id must be a positive integer");
-        n = u;
+        connectorId = connectorIdValue;
         j++;
         break;
       }
       case "--scm-connector-provider":
-        if (!s) throw Error("--scm-connector-provider requires a value");
-        if (!/^[a-z0-9-]{1,32}$/.test(s))
+        if (!value) throw Error("--scm-connector-provider requires a value");
+        if (!/^[a-z0-9-]{1,32}$/.test(value))
           throw Error("--scm-connector-provider must match ^[a-z0-9-]{1,32}$");
-        provider = s;
-        o = true;
+        provider = value;
+        providerExplicit = true;
         j++;
         break;
       case "--scm-connector-ca-file":
-        if (!s) throw Error("--scm-connector-ca-file requires a path");
-        l = s;
+        if (!value) throw Error("--scm-connector-ca-file requires a path");
+        caFile = value;
         j++;
         break;
       case "--scm-connector-host-rewrite":
-        if (!s) throw Error("--scm-connector-host-rewrite requires <from>=<to_host:to_port>");
-        g = parseScmHostRewrite(s);
+        if (!value) throw Error("--scm-connector-host-rewrite requires <from>=<to_host:to_port>");
+        hostRewrite = parseScmHostRewrite(value);
         j++;
         break;
       case "--debug-dir":
-        if (s) {
-          t.debugDir = s;
+        if (value) {
+          config.debugDir = value;
           j++;
         }
         break;
       case "--shutdown-drain-sec":
-        if (s) {
-          t.shutdownDrainMs = parseShutdownDrainSec(s) * 1000;
+        if (value) {
+          config.shutdownDrainMs = parseShutdownDrainSec(value) * 1000;
           j++;
         }
         break;
       case "--log-level":
-        if (s) {
-          t.logLevel = s;
+        if (value) {
+          config.logLevel = value;
           j++;
         }
         break;
       case "--agent-proxy-url": {
-        let u = e[++j];
-        if (u === undefined || u.trim() === "" || u.startsWith("--"))
+        let agentProxyUrl = argv[++j];
+        if (agentProxyUrl === undefined || agentProxyUrl.trim() === "" || agentProxyUrl.startsWith("--"))
           throw Error("--agent-proxy-url requires your proxy's https:// URL");
-        checkRunnerAgentProxyStandaloneUrl(u, "--agent-proxy-url");
-        env.set("SELF_HOSTED_RUNNER_AGENT_PROXY_URL", u);
+        checkRunnerAgentProxyStandaloneUrl(agentProxyUrl, "--agent-proxy-url");
+        env.set("SELF_HOSTED_RUNNER_AGENT_PROXY_URL", agentProxyUrl);
         break;
       }
       default:
-        if (S?.startsWith("--")) throw Error(`unknown flag ${S}`);
+        if (flag?.startsWith("--")) throw Error(`unknown flag ${flag}`);
         break;
     }
   }
-  if (r !== undefined) {
-    if (n === undefined) throw Error("--scm-connector-id is required when --scm-connector-host is set");
-    t.scmConnector = {
-      host: r.host,
-      port: r.port,
+  if (connectorHost !== undefined) {
+    if (connectorId === undefined)
+      throw Error("--scm-connector-id is required when --scm-connector-host is set");
+    config.scmConnector = {
+      host: connectorHost.host,
+      port: connectorHost.port,
       provider,
-      connectorId: n,
-      caFile: l,
-      hostRewrite: g,
+      connectorId,
+      caFile,
+      hostRewrite,
     };
-  } else if (n !== undefined || o || l !== undefined || g !== undefined)
+  } else if (
+    connectorId !== undefined ||
+    providerExplicit ||
+    caFile !== undefined ||
+    hostRewrite !== undefined
+  )
     throw Error(
       "--scm-connector-id / --scm-connector-provider / --scm-connector-ca-file / --scm-connector-host-rewrite require --scm-connector-host",
     );
-  if (t.hookTimeoutMs + ORCHESTRATOR_DEBUG_LIMITS >= t.expectedSpawnSeconds * 1000)
+  if (config.hookTimeoutMs + ORCHESTRATOR_DEBUG_LIMITS >= config.expectedSpawnSeconds * 1000)
     throw Error(
-      `--hook-timeout (${t.hookTimeoutMs / 1000}s) + ${ORCHESTRATOR_DEBUG_LIMITS / 1000}s SIGKILL grace must be less than --expected-spawn-seconds (${t.expectedSpawnSeconds}s) \u2014 otherwise an HA replica ` +
+      `--hook-timeout (${config.hookTimeoutMs / 1000}s) + ${ORCHESTRATOR_DEBUG_LIMITS / 1000}s SIGKILL grace must be less than --expected-spawn-seconds (${config.expectedSpawnSeconds}s) \u2014 otherwise an HA replica ` +
         "re-claims the lease while this hook is still running and both spawn a runner",
     );
-  return t;
+  return config;
 }
 //@ chunk-2cbdmxy9.js:23784-23954 placement
-function parsePortArg(e, t, r) {
-  if (e === undefined || e === "") return t;
-  let intLoose = parseIntLoose(e);
+function parsePortArg(raw, fallback, envName) {
+  if (raw === undefined || raw === "") return fallback;
+  let intLoose = parseIntLoose(raw);
   if (Number.isNaN(intLoose) || intLoose < 0 || intLoose > 65535)
-    throw Error(`${r} must be an integer in [0, 65535], got: "${e}"`);
+    throw Error(`${envName} must be an integer in [0, 65535], got: "${raw}"`);
   return intLoose;
 }
 //@ chunk-2cbdmxy9.js:23954-24160 placement
-function parseShutdownDrainSec(e) {
-  let t = parseInt(e, 10);
-  if (Number.isNaN(t) || t < 0 || t > MAX_CONNECTION_SECONDS || String(t) !== e.trim())
+function parseShutdownDrainSec(raw) {
+  let seconds = parseInt(raw, 10);
+  if (
+    Number.isNaN(seconds) ||
+    seconds < 0 ||
+    seconds > MAX_CONNECTION_SECONDS ||
+    String(seconds) !== raw.trim()
+  )
     throw Error(
       "--shutdown-drain-sec must be a whole number of seconds from 0 to 3600 (0 turns the drain off)",
     );
-  return t;
+  return seconds;
 }
 //@ chunk-2cbdmxy9.js:24160-24720 placement
 async function resolveSpawnRunnerHook(hooksDir) {
@@ -235,33 +255,33 @@ async function resolveSpawnRunnerHook(hooksDir) {
     throw Error(
       "orchestrator requires --hooks-dir (or SELF_HOSTED_RUNNER_HOOKS_DIR) \u2014 no spawn-runner hook directory configured",
     );
-  let t = join(hooksDir, "spawn-runner");
-  let r;
+  let hookPath = join(hooksDir, "spawn-runner");
+  let stats;
   try {
-    r = await withBoundedTimeout(stat(t), 5000, `stat ${t}`);
+    stats = await withBoundedTimeout(stat(hookPath), 5000, `stat ${hookPath}`);
   } catch (error) {
     throw Error(
-      `spawn-runner hook not found at ${t} \u2014 the orchestrator cannot start without it (${errorMessage(error)})`,
+      `spawn-runner hook not found at ${hookPath} \u2014 the orchestrator cannot start without it (${errorMessage(error)})`,
     );
   }
-  if (!r.isFile()) throw Error(`spawn-runner hook at ${t} is not a regular file`);
+  if (!stats.isFile()) throw Error(`spawn-runner hook at ${hookPath} is not a regular file`);
   try {
-    await withBoundedTimeout(access(t, constants.X_OK), 5000, `access ${t}`);
+    await withBoundedTimeout(access(hookPath, constants.X_OK), 5000, `access ${hookPath}`);
   } catch {
-    throw Error(`spawn-runner hook at ${t} is not executable (chmod +x ${t})`);
+    throw Error(`spawn-runner hook at ${hookPath} is not executable (chmod +x ${hookPath})`);
   }
-  return t;
+  return hookPath;
 }
 //@ chunk-2cbdmxy9.js:24720-25007 placement
-function poolIdFromSecret(e) {
-  let replaced = e.replace(/^sk-ant-[a-z]+-/, "");
-  let r = decodeJwtPayload(replaced);
-  let n = r !== null && typeof r === "object" ? r["ccr:pool_id"] : undefined;
-  if (typeof n !== "string" || n === "")
+function poolIdFromSecret(secret) {
+  let replaced = secret.replace(/^sk-ant-[a-z]+-/, "");
+  let payload = decodeJwtPayload(replaced);
+  let poolId = payload !== null && typeof payload === "object" ? payload["ccr:pool_id"] : undefined;
+  if (typeof poolId !== "string" || poolId === "")
     throw Error(
       "environment secret is missing the ccr:pool_id claim \u2014 cannot derive the environment ID for spawn-hint polling",
     );
-  return n;
+  return poolId;
 }
 //@ chunk-2cbdmxy9.js:25007-25175 placement
 function workOrderNumberOf(attempt) {
@@ -271,41 +291,41 @@ function workOrderNumberOf(attempt) {
   return String(attempt);
 }
 //@ chunk-2cbdmxy9.js:25175-25959 placement
-function workOrderClaims(e, t) {
-  let r = decodeJwtPayload(e.work_order_jwt);
-  let n = r !== null && typeof r === "object" ? r : {};
-  let h = (S) => (typeof n[S] === "string" ? n[S] : "");
-  let aud = n.aud;
-  let l = Array.isArray(aud)
-    ? (aud.find((S) => typeof S === "string") ?? "")
+function workOrderClaims(workOrder, serverTime) {
+  let payload = decodeJwtPayload(workOrder.work_order_jwt);
+  let claims = payload !== null && typeof payload === "object" ? payload : {};
+  let textClaim = (name) => (typeof claims[name] === "string" ? claims[name] : "");
+  let aud = claims.aud;
+  let audience = Array.isArray(aud)
+    ? (aud.find((candidate) => typeof candidate === "string") ?? "")
     : typeof aud === "string"
       ? aud
       : "";
-  let poolId = h("ccr:pool_id") || (l.startsWith("ccpool_") ? l : "");
-  let mapped = (e.sources ?? []).map((S) => ({
-    url: S.url ?? "",
-    revision: S.revision ?? "",
+  let poolId = textClaim("ccr:pool_id") || (audience.startsWith("ccpool_") ? audience : "");
+  let mapped = (workOrder.sources ?? []).map((source) => ({
+    url: source.url ?? "",
+    revision: source.revision ?? "",
   }));
   return {
-    jti: e.jti || h("jti"),
-    session_id: e.session_uuid ?? "",
-    attempt: workOrderNumberOf(e.attempt),
+    jti: workOrder.jti || textClaim("jti"),
+    session_id: workOrder.session_uuid ?? "",
+    attempt: workOrderNumberOf(workOrder.attempt),
     pool_id: poolId,
-    account_id: h("ccr:spawn_account_id") || h("account_id"),
-    account_email: h("ccr:spawn_account_email") || h("account_email"),
-    server_time: t ?? "",
+    account_id: textClaim("ccr:spawn_account_id") || textClaim("account_id"),
+    account_email: textClaim("ccr:spawn_account_email") || textClaim("account_email"),
+    server_time: serverTime ?? "",
     repo_sources: mapped,
     primary_repo_url: mapped[0]?.url ?? "",
     primary_repo_revision: mapped[0]?.revision ?? "",
-    correlation_id: typeof e.correlation_id === "string" ? e.correlation_id : "",
-    client_platform: typeof e.client_platform === "string" ? e.client_platform : "",
+    correlation_id: typeof workOrder.correlation_id === "string" ? workOrder.correlation_id : "",
+    client_platform: typeof workOrder.client_platform === "string" ? workOrder.client_platform : "",
   };
 }
 //@ chunk-2cbdmxy9.js:25959-26067 placement
-function ageMs(e, t = Date.now()) {
-  if (!e) return null;
-  let timestamp = Date.parse(e);
-  if (Number.isNaN(timestamp)) return null;
-  return t - timestamp;
+function ageMs(timestamp, now = Date.now()) {
+  if (!timestamp) return null;
+  let timestamp_2 = Date.parse(timestamp);
+  if (Number.isNaN(timestamp_2)) return null;
+  return now - timestamp_2;
 }
 export { ageMs, workOrderClaims, parseRunnerArgs, resolveSpawnRunnerHook, poolIdFromSecret };

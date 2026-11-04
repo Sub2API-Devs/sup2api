@@ -24,14 +24,21 @@ import { PluginFolderHeldError } from "../utils/plugins/crossMarketplaceInstall.
 import { findPluginNameCollision } from "../utils/plugins/pluginNameCollision.js";
 
 //@ chunk-18hwfzwa.js:1801339-1802617 fingerprint = installPluginAndNotify (0.441)
-async function installPluginAndNotify(pluginId, pluginName, D, L, install, ke) {
-  let Re = labelOr(pluginName, "(unnamed plugin)");
+async function installPluginAndNotify(
+  pluginId,
+  pluginName,
+  noticePrefix,
+  addNotification,
+  install,
+  storageV5,
+) {
+  let displayName = labelOr(pluginName, "(unnamed plugin)");
   try {
-    let pluginData = await getPluginById(pluginId, ke, "install");
+    let pluginData = await getPluginById(pluginId, storageV5, "install");
     if (!pluginData) throw Error(`Plugin ${pluginId} not found in marketplace`);
     await install(pluginData);
-    L({
-      key: `${D}-installed`,
+    addNotification({
+      key: `${noticePrefix}-installed`,
       kind: "feedback",
       jsx: jsxProd_default_2(Text, {
         color: "success",
@@ -40,7 +47,7 @@ async function installPluginAndNotify(pluginId, pluginName, D, L, install, ke) {
             status: "success",
             withSpace: true,
           }),
-          Re,
+          displayName,
           " installed \xB7 restart to apply",
         ],
       }),
@@ -51,8 +58,8 @@ async function installPluginAndNotify(pluginId, pluginName, D, L, install, ke) {
   } catch (error) {
     if (error instanceof CommandSourceError) {
       logForDebugging(`Plugin ${pluginId} not installed: ${error.message}`);
-      L({
-        key: `${D}-install-refused`,
+      addNotification({
+        key: `${noticePrefix}-install-refused`,
         text: error.message,
         color: "warning",
         priority: "immediate",
@@ -65,8 +72,8 @@ async function installPluginAndNotify(pluginId, pluginName, D, L, install, ke) {
     }
     if (error instanceof PluginFolderHeldError) {
       logForDebugging(`Plugin ${pluginId} not installed: ${error.message}`);
-      L({
-        key: `${D}-install-refused`,
+      addNotification({
+        key: `${noticePrefix}-install-refused`,
         text: findPluginNameCollision({
           refused: pluginId,
           askedFor: pluginId,
@@ -87,9 +94,9 @@ async function installPluginAndNotify(pluginId, pluginName, D, L, install, ke) {
         level: "error",
       },
     );
-    L({
-      key: `${D}-install-failed`,
-      text: `Failed to install ${Re}`,
+    addNotification({
+      key: `${noticePrefix}-install-failed`,
+      text: `Failed to install ${displayName}`,
       color: "error",
       priority: "immediate",
       timeoutMs: 5000,

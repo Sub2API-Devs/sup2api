@@ -9,8 +9,15 @@
  * attribution: placement 12, fingerprint 1
  */
 import { watch } from "fs";
+import { getPrStatusColor } from "../components/PrBadge.js";
 import { HistorySearchInput } from "../components/PromptInput/HistorySearchInput.js";
-import { init_react_production, y, P, Q, yt } from "../../vendor/react/cjs/react.production.js";
+import {
+  init_react_production,
+  useState,
+  useEffect,
+  useMemo,
+  useSyncExternalStore,
+} from "../../vendor/react/cjs/react.production.js";
 import { useTheme_2 } from "../components/design-system/ThemeProvider.js";
 import { isBgSession } from "../utils/concurrentSessions.js";
 import { isRemoteSessionAvailable } from "../remote/remoteMode.js";
@@ -23,7 +30,7 @@ import {
   errorMessage,
   TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
 } from "../utils/errors.js";
-import { w } from "../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import {
   jsxProd_default_2,
   Fragment,
@@ -32,7 +39,7 @@ import {
 import { Text, Link, Box } from "../ink/components/Text.js";
 import { useAppState } from "../state/AppState.js";
 import { MAX_UNKEYED_FOOTER_LINKS } from "../components/PromptInput/footerLinks.js";
-import { string, u, literal } from "../../vendor/zod/v4/classic/schemas.js";
+import { stringSchema, objectSchema, literal } from "../../vendor/zod/v4/classic/schemas.js";
 import { createSignal } from "../utils/signal.js";
 import { fromEnum, lit as lit_2 } from "../services/analytics/safeMetadata.js";
 import { env } from "../utils/env.js";
@@ -47,64 +54,80 @@ import { useHost } from "../context/session.js";
 import { useTerminalFocus } from "../ink/hooks/use-terminal-focus.js";
 import { getLastInteractionTime } from "../bootstrap/state.js";
 import { getPrStatus, currentPrStatusFetcher } from "../utils/ghPrStatus.js";
-import { getPrStatusColor } from "../components/PrBadge.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
+//@ chunk-qgpgvvwv.js:624-808 fingerprint = INITIAL_STATE (0.568)
+function INITIAL_STATE(reference, url) {
+  if (!reference || !url) return null;
+  let isCrOnly = reference.kind === "cr" && false;
+  let isMergeRequest = reference.kind === "mr";
+  return {
+    prefix: isMergeRequest ? "MR" : "PR",
+    label: `${isMergeRequest ? "!" : "#"}${reference.number}`,
+    url,
+    dedupUrl: reference.url,
+    color: getPrStatusColor(reference.reviewState),
+  };
+}
 //@ chunk-18hwfzwa.js:814630-814642 placement
 var HistorySearchInputRef = HistorySearchInput;
 //@ chunk-18hwfzwa.js:814642-814646 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:814642", () => {
+  init_react_production();
+});
 //@ chunk-18hwfzwa.js:814675-815319 placement
 function useBgSessionPr() {
-  let [h, x] = y(null);
+  let [pr, setPr] = useState(null);
   let storageV5 = useTheme_2().storageV5;
-  P(() => {
+  useEffect(() => {
     if (!isBgSession() || isRemoteSessionAvailable()) return;
     let ownJobShortId = getOwnJobShortId();
     let jobDir = getJobDir(ownJobShortId);
-    let ke;
-    let Re = async () => {
+    let watcher;
+    let refresh = async () => {
       let found = (await readJobState(jobDir, storageV5))?.children?.find(
         (child) => child.kind !== "frame" && !ANY_CONTROL_CHAR_RE.test(child.href),
       );
-      let We = found ? Number(found.id) : NaN;
-      if (!found || !Number.isFinite(We)) return;
-      x((ze) =>
-        ze?.number === We && ze.url === found.href
-          ? ze
+      let number = found ? Number(found.id) : NaN;
+      if (!found || !Number.isFinite(number)) return;
+      setPr((prev) =>
+        prev?.number === number && prev.url === found.href
+          ? prev
           : {
-              number: We,
+              number,
               url: found.href,
             },
       );
     };
     if (storageV5 && isValidKeySegment(ownJobShortId))
-      return watchJobStateFile(storageV5, ownJobShortId, Re, "[useBgSessionPr]");
+      return watchJobStateFile(storageV5, ownJobShortId, refresh, "[useBgSessionPr]");
     try {
-      ke = watch(jobDir, (Be, He) => {
-        if (He && !He.startsWith("state.json")) return;
-        Re();
+      watcher = watch(jobDir, (event, fileName) => {
+        if (fileName && !fileName.startsWith("state.json")) return;
+        refresh();
       });
-      ke.on("error", (Be) =>
-        logForDebugging(`[useBgSessionPr] watcher error: ${errorMessage(Be)}`, {
+      watcher.on("error", (error) =>
+        logForDebugging(`[useBgSessionPr] watcher error: ${errorMessage(error)}`, {
           level: "warn",
         }),
       );
-      ke.unref();
+      watcher.unref();
     } catch (error) {
       logForDebugging(`[useBgSessionPr] watch skipped: ${errorMessage(error)}`);
     }
-    Re();
-    return () => ke?.close();
+    refresh();
+    return () => watcher?.close();
   }, [storageV5]);
-  return h;
+  return pr;
 }
 //@ chunk-18hwfzwa.js:815319-816131 placement
 function FooterLink(props) {
-  let $ = w(17);
+  let $ = useMemoCache(17);
   let { link } = props;
-  let L;
+  let previous;
   if ($[0] !== link.prefix) {
-    L =
+    previous =
       link.prefix !== undefined &&
       jsxProd_default_2(Fragment, {
         children: [
@@ -116,8 +139,8 @@ function FooterLink(props) {
         ],
       });
     $[0] = link.prefix;
-    $[1] = L;
-  } else L = $[1];
+    $[1] = previous;
+  } else previous = $[1];
   const dimColor = !link.color;
   let fallback;
   if ($[2] !== link.color || $[3] !== link.label || $[4] !== dimColor) {
@@ -145,9 +168,9 @@ function FooterLink(props) {
     $[8] = dimColor_2;
     $[9] = children;
   } else children = $[9];
-  let He;
+  let inner;
   if ($[10] !== link.url || $[11] !== fallback || $[12] !== children) {
-    He = jsxProd_default(Link, {
+    inner = jsxProd_default(Link, {
       url: link.url,
       fallback,
       assumeSupport: true,
@@ -156,32 +179,40 @@ function FooterLink(props) {
     $[10] = link.url;
     $[11] = fallback;
     $[12] = children;
-    $[13] = He;
-  } else He = $[13];
-  let We;
-  if ($[14] !== L || $[15] !== He) {
-    We = jsxProd_default_2(Text, {
-      children: [L, He],
+    $[13] = inner;
+  } else inner = $[13];
+  let linkElement;
+  if ($[14] !== previous || $[15] !== inner) {
+    linkElement = jsxProd_default_2(Text, {
+      children: [previous, inner],
     });
-    $[14] = L;
-    $[15] = He;
-    $[16] = We;
-  } else We = $[16];
-  return We;
+    $[14] = previous;
+    $[15] = inner;
+    $[16] = linkElement;
+  } else linkElement = $[16];
+  return linkElement;
 }
 //@ chunk-18hwfzwa.js:816131-816135 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:816131", () => {
+  init_react_production();
+});
 //@ chunk-18hwfzwa.js:816135-816302 placement
-function useFooterLinks(h) {
-  let x = useAppState((L) => L.footerLinks);
-  let D = h?.excludeKeyed === true;
-  return Q(() => {
-    let L = D ? x.filter((ee) => ee.key === undefined) : x;
-    return L.length <= MAX_UNKEYED_FOOTER_LINKS ? L : L.slice(0, MAX_UNKEYED_FOOTER_LINKS);
-  }, [x, D]);
+function useFooterLinks(options) {
+  let links = useAppState((appState) => appState.footerLinks);
+  let excludeKeyed = options?.excludeKeyed === true;
+  return useMemo(() => {
+    let filtered = excludeKeyed ? links.filter((link) => link.key === undefined) : links;
+    return filtered.length <= MAX_UNKEYED_FOOTER_LINKS
+      ? filtered
+      : filtered.slice(0, MAX_UNKEYED_FOOTER_LINKS);
+  }, [links, excludeKeyed]);
 }
 //@ chunk-18hwfzwa.js:816302-816306 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:816302", () => {
+  init_react_production();
+});
 //@ chunk-18hwfzwa.js:816306-816399 placement
 var PR_POLL_SLOW_MS = 4000;
 var PR_INTERACTION_CACHE_MS = 3600000;
@@ -209,33 +240,37 @@ class PrStatusPoller {
   #m = 0;
   #p = -1;
   #u = 0;
-  constructor(h, x) {
-    this.#e = h;
-    this.#t = x;
+  constructor(deps, clock) {
+    this.#e = deps;
+    this.#t = clock;
   }
   getSnapshot = () => this.#o;
-  subscribe = (h) => {
-    let x = this.#n.subscribe(h);
+  subscribe = (fn) => {
+    let unsubscribe = this.#n.subscribe(fn);
     this.#s++;
     if (!this.#r) this.#f();
-    let D = false;
+    let unsubscribed = false;
     return () => {
-      if (D) return;
-      D = true;
-      x();
+      if (unsubscribed) return;
+      unsubscribed = true;
+      unsubscribe();
       this.#s--;
       if (this.#s === 0) this.#S();
     };
   };
-  setInputs(h) {
-    let x = this.#t;
-    this.#t = h;
+  setInputs(inputs) {
+    let prev = this.#t;
+    this.#t = inputs;
     if (!this.#r) return;
-    if (h.enabled && !x.enabled) {
+    if (inputs.enabled && !prev.enabled) {
       this.#m = 0;
       this.#e.shared.pollerNotModifiedStreak = 0;
     }
-    if ((h.focused !== x.focused && this.#y()) || h.isLoading !== x.isLoading || h.enabled !== x.enabled)
+    if (
+      (inputs.focused !== prev.focused && this.#y()) ||
+      inputs.isLoading !== prev.isLoading ||
+      inputs.enabled !== prev.enabled
+    )
       this.#h();
   }
   #f() {
@@ -286,93 +321,93 @@ class PrStatusPoller {
     this.#b();
     if (!this.#t.enabled) return;
     if (this.#e.shared.pollerDisabled) return;
-    let h = this.#i;
+    let state = this.#i;
     this.#p = -1;
     this.#u = this.#e.now();
-    let x = this.#w(true);
-    let D = this.#e.now() - this.#d;
-    if (D >= x) this.#C(h);
-    else this.#v(h, x - D);
+    let streak = this.#w(true);
+    let elapsedMs = this.#e.now() - this.#d;
+    if (elapsedMs >= streak) this.#C(state);
+    else this.#v(state, streak - elapsedMs);
   }
-  #v(h, x) {
+  #v(status, notModified) {
     this.#l = this.#e.setTimeout(() => {
       this.#l = null;
-      this.#C(h);
-    }, x);
+      this.#C(status);
+    }, notModified);
   }
-  #C(h) {
-    this.#T(h).catch(logError);
+  #C(focused) {
+    this.#T(focused).catch(logError);
   }
-  #w(h) {
+  #w(setStreak) {
     return computePrPollIntervalMs(
       this.#t.focused,
       this.#e.now() - this.#e.getLastInteractionTime(),
-      h ? 0 : this.#m,
+      setStreak ? 0 : this.#m,
       this.#e.shared.pollerNotModifiedStreak,
     );
   }
-  async #T(h) {
-    if (h !== this.#i) return;
+  async #T(reason) {
+    if (reason !== this.#i) return;
     let { now, shared } = this.#e;
     let lastInteractionTime = this.#e.getLastInteractionTime();
     if (this.#p !== lastInteractionTime) {
       this.#p = lastInteractionTime;
       this.#u = now();
     } else if (now() - this.#u >= PR_INTERACTION_CACHE_MS) return;
-    let ee = now();
-    let ke;
+    let start = now();
+    let result;
     try {
-      ke = await this.#e.fetchPrStatus();
+      result = await this.#e.fetchPrStatus();
     } catch (error) {
       logError(error);
-      ke = null;
+      result = null;
     }
-    let Re = ke;
-    if (h !== this.#i) return;
-    this.#d = ee;
-    let Be = Re === "needs-auth" || Re === "gh-missing";
-    let He = Be ? Re : false;
-    let We = Re === "fetch-failed";
-    let ze = null;
-    let Xe = false;
-    if (!Be && !We && Re !== null) {
-      let { notModified = false, ...At } = Re;
-      Xe = notModified;
-      ze = At;
+    let result_ = result;
+    if (reason !== this.#i) return;
+    this.#d = start;
+    let needsSetup = result_ === "needs-auth" || result_ === "gh-missing";
+    let statusText = needsSetup ? result_ : false;
+    let isFetchFailed = result_ === "fetch-failed";
+    let nextAt = null;
+    let timedOut = false;
+    if (!needsSetup && !isFetchFailed && result_ !== null) {
+      let { notModified = false, ...rest } = result_;
+      timedOut = notModified;
+      nextAt = rest;
     }
-    this.#m = He ? 1 : ze === null ? this.#m + 1 : 0;
-    shared.pollerBadStreak = We ? shared.pollerBadStreak + 1 : 0;
-    shared.pollerNotModifiedStreak = Xe ? shared.pollerNotModifiedStreak + 1 : 0;
-    this.#x(ze, He);
+    this.#m = statusText ? 1 : nextAt === null ? this.#m + 1 : 0;
+    shared.pollerBadStreak = isFetchFailed ? shared.pollerBadStreak + 1 : 0;
+    shared.pollerNotModifiedStreak = timedOut ? shared.pollerNotModifiedStreak + 1 : 0;
+    this.#x(nextAt, statusText);
     if (shared.pollerBadStreak >= PR_MAX_CONSECUTIVE_ERRORS) {
       shared.pollerDisabled = true;
       logFeatureSad("github_pr_status_direct", "bad_streak_disabled");
       return;
     }
-    let rt = now() - ee;
-    if (rt > PR_POLL_SLOW_MS) {
+    let durationMs = now() - start;
+    if (durationMs > PR_POLL_SLOW_MS) {
       shared.pollerDisabled = true;
       logFeatureSad("github_pr_status_direct", "slow_disabled", {
-        elapsed_ms: rt,
+        elapsed_ms: durationMs,
       });
       return;
     }
-    this.#v(h, this.#w(false));
+    this.#v(reason, this.#w(false));
   }
-  #x(h, x) {
-    let D = this.#o;
+  #x(delayMs, value) {
+    let timer = this.#o;
     if (
-      D.lastUpdated > 0 &&
-      D.pr?.number === h?.number &&
-      D.pr?.url === h?.url &&
-      D.pr?.reviewState === h?.reviewState &&
-      D.pr?.kind === h?.kind &&
-      D.needsAuth === x
+      timer.lastUpdated > 0 &&
+      timer.pr?.number === delayMs?.number &&
+      timer.pr?.url === delayMs?.url &&
+      timer.pr?.reviewState === delayMs?.reviewState &&
+      timer.pr?.kind === delayMs?.kind &&
+      timer.needsAuth === value
     )
       return;
     this.#o = {
-      pr: h,
-      needsAuth: x,
+      pr: delayMs,
+      needsAuth: value,
       lastUpdated: this.#e.now(),
     };
     try {
@@ -386,10 +421,10 @@ class PrStatusPoller {
 /**
  * 根据空闲时长、连续未变化次数等计算 PR 状态轮询间隔（90 秒到 30 分钟，取各项最大值）。
  */
-function computePrPollIntervalMs(focused, x, D, pollerNotModifiedStreak) {
-  let ee = x < 30000 ? 90000 : x < 300000 ? 180000 : x < 1800000 ? 600000 : 1800000;
-  let ke = D <= 0 ? 90000 : D === 1 ? 300000 : D === 2 ? 900000 : 1800000;
-  let Re =
+function computePrPollIntervalMs(focused, baseMs, streak, pollerNotModifiedStreak) {
+  let interval = baseMs < 30000 ? 90000 : baseMs < 300000 ? 180000 : baseMs < 1800000 ? 600000 : 1800000;
+  let backoffMs = streak <= 0 ? 90000 : streak === 1 ? 300000 : streak === 2 ? 900000 : 1800000;
+  let jittered =
     pollerNotModifiedStreak <= 0
       ? 90000
       : pollerNotModifiedStreak === 1
@@ -397,21 +432,21 @@ function computePrPollIntervalMs(focused, x, D, pollerNotModifiedStreak) {
         : pollerNotModifiedStreak === 2
           ? 240000
           : 300000;
-  return Math.max(ee, ke, Re, focused ? 0 : PR_STALE_MS);
+  return Math.max(interval, backoffMs, jittered, focused ? 0 : PR_STALE_MS);
 }
 //@ chunk-18hwfzwa.js:819222-819564 placement
 /**
  * 创建并订阅 PrStatusPoller：按加载状态、启用开关与终端焦点调整轮询，返回当前分支 PR 状态快照。
  */
-function usePrStatus(isLoading, x = true) {
+function usePrStatus(isLoading, enabled = true) {
   let clock = useClock();
   let host = useHost();
   let terminalFocus = useTerminalFocus();
-  let [ke] = y(
+  let [poller] = useState(
     () =>
       new PrStatusPoller(
         {
-          setTimeout: (Re, Be) => clock.setTimeout(Re, Be),
+          setTimeout: (fn, ms) => clock.setTimeout(fn, ms),
           now: () => Date.now(),
           getLastInteractionTime: () => getLastInteractionTime(),
           fetchPrStatus: () => getPrStatus(host),
@@ -419,33 +454,23 @@ function usePrStatus(isLoading, x = true) {
         },
         {
           isLoading,
-          enabled: x,
+          enabled,
           focused: terminalFocus,
         },
       ),
   );
-  P(() => {
-    ke.setInputs({
+  useEffect(() => {
+    poller.setInputs({
       isLoading,
-      enabled: x,
+      enabled,
       focused: terminalFocus,
     });
-  }, [ke, isLoading, x, terminalFocus]);
-  return yt(ke.subscribe, ke.getSnapshot);
+  }, [poller, isLoading, enabled, terminalFocus]);
+  return useSyncExternalStore(poller.subscribe, poller.getSnapshot);
 }
 //@ chunk-18hwfzwa.js:819564-819568 placement
-init_react_production();
-//@ chunk-qgpgvvwv.js:624-808 fingerprint = INITIAL_STATE (0.568)
-function INITIAL_STATE(s, o) {
-  if (!s || !o) return null;
-  let d = s.kind === "cr" && false;
-  let u = s.kind === "mr";
-  return {
-    prefix: u ? "MR" : "PR",
-    label: `${u ? "!" : "#"}${s.number}`,
-    url: o,
-    dedupUrl: s.url,
-    color: getPrStatusColor(s.reviewState),
-  };
-}
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:819564", () => {
+  init_react_production();
+});
 export { usePrStatus, useBgSessionPr, INITIAL_STATE, HistorySearchInputRef, useFooterLinks, FooterLink };

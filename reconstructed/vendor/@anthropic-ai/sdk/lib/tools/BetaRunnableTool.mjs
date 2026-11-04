@@ -12,18 +12,20 @@ function toolName(tool) {
   return "name" in tool ? tool.name : "mcp_server_name" in tool ? tool.mcp_server_name : tool.type;
 }
 //@ chunk-hwmsct5x.js:60998-61097 esm-fingerprint
-function formatToolRunnerError(e) {
-  return e instanceof ToolError ? e.content : `Error: ${e instanceof Error ? e.message : String(e)}`;
+function formatToolRunnerError(tool) {
+  return tool instanceof ToolError
+    ? tool.content
+    : `Error: ${tool instanceof Error ? tool.message : String(tool)}`;
 }
 //@ chunk-hwmsct5x.js:61097-61240 esm-fingerprint
 /**
  * （切分错误，Anthropic SDK 会话 tool runner）解析工具输入并运行，异常转为 {content: "Error: …", isError: true}。
  */
-async function runRunnableTool(tool, rawInput, r) {
+async function runRunnableTool(tool, rawInput, options) {
   try {
     let input = tool.parse ? tool.parse(rawInput) : rawInput;
     return {
-      content: await tool.run(input, r),
+      content: await tool.run(input, options),
       isError: false,
     };
   } catch (e) {

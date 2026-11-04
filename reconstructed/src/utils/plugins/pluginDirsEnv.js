@@ -25,9 +25,9 @@ var PLUGIN_DIRS_ENV_RECOVERY_HINT =
 function pluginDirsFromEnv() {
   let filtered = (env.CLAUDE_CODE_PLUGIN_DIRS ?? "")
     .split(delimiter)
-    .map((e) => expandTildeWithHome(e.trim()))
-    .filter((e) => e !== "");
-  let filtered_2 = filtered.filter((e) => !isSafeAbsolutePluginDir(e));
+    .map((raw) => expandTildeWithHome(raw.trim()))
+    .filter((dir) => dir !== "");
+  let filtered_2 = filtered.filter((dir) => !isSafeAbsolutePluginDir(dir));
   if (filtered_2.length > 0)
     logForDebugging(
       `${PLUGIN_DIRS_ENV_VAR}: skipped ${filtered_2.join(", ")}: a plugin folder here is an absolute local path or starts with ~`,
@@ -35,31 +35,33 @@ function pluginDirsFromEnv() {
         level: "warn",
       },
     );
-  return filtered.filter(isSafeAbsolutePluginDir).map((e) => resolve(e));
+  return filtered.filter(isSafeAbsolutePluginDir).map((dir) => resolve(dir));
 }
 //@ chunk-fj3y0bxk.js:827-944 placement
 function settlePluginDirsEnv() {
-  let n = pluginDirsFromEnv();
-  if (env.CLAUDE_CODE_PLUGIN_DIRS !== undefined) env.set("CLAUDE_CODE_PLUGIN_DIRS", n.join(delimiter));
-  return n;
+  let dirs = pluginDirsFromEnv();
+  if (env.CLAUDE_CODE_PLUGIN_DIRS !== undefined) env.set("CLAUDE_CODE_PLUGIN_DIRS", dirs.join(delimiter));
+  return dirs;
 }
 //@ chunk-fj3y0bxk.js:944-1056 placement
-function mergePluginDirs(...n) {
-  let r = new Map();
-  for (let e of n.flat()) {
-    let o = resolve(e);
-    if (!r.has(o)) r.set(o, e);
+function mergePluginDirs(...lists) {
+  let byPath = new Map();
+  for (let dir of lists.flat()) {
+    let resolved = resolve(dir);
+    if (!byPath.has(resolved)) byPath.set(resolved, dir);
   }
-  return [...r.values()];
+  return [...byPath.values()];
 }
 //@ chunk-fj3y0bxk.js:1056-1141 placement
-function withoutPluginDirs(n, r) {
-  let e = new Set(r.map((o) => resolve(o)));
-  return n.filter((o) => !e.has(resolve(o)));
+function withoutPluginDirs(dirs, remove) {
+  let removeSet = new Set(remove.map((dir) => resolve(dir)));
+  return dirs.filter((dir) => !removeSet.has(resolve(dir)));
 }
 //@ chunk-fj3y0bxk.js:1141-1191 placement
-function isSafeAbsolutePluginDir(n) {
-  return isAbsolute(n) && !isWindowsDevicePath(n) && !isNetworkMountPath(n) && !neverOtherHostMount(n);
+function isSafeAbsolutePluginDir(dir) {
+  return (
+    isAbsolute(dir) && !isWindowsDevicePath(dir) && !isNetworkMountPath(dir) && !neverOtherHostMount(dir)
+  );
 }
 export {
   mergePluginDirs,

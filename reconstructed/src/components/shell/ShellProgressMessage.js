@@ -8,7 +8,7 @@
  * pieces: chunk-cqn8yadz.js (1)
  * attribution: fingerprint 1
  */
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { useTerminalSize } from "../../hooks/useTerminalSize.js";
 import { clipShellOutput, CLIP_HEAD_LINES } from "./shellOutputClip.js";
 import { stripAnsiPerLine } from "../../utils/stripAnsi.js";
@@ -26,26 +26,26 @@ import { formatFileSize } from "../../utils/format.js";
 
 //@ chunk-cqn8yadz.js:606-1961 fingerprint = ShellProgressMessage (0.658)
 function ShellProgressMessage(props) {
-  let $ = w(27);
+  let $ = useMemoCache(27);
   let { output, fullOutput, elapsedTimeSeconds, totalLines, totalBytes, timeoutMs, verbose } = props;
   let { columns } = useTerminalSize();
-  let z;
+  let clippedOutput;
   if ($[0] !== columns || $[1] !== output || $[2] !== verbose) {
-    z = verbose ? null : clipShellOutput(output, columns);
+    clippedOutput = verbose ? null : clipShellOutput(output, columns);
     $[0] = columns;
     $[1] = output;
     $[2] = verbose;
-    $[3] = z;
-  } else z = $[3];
-  let g = z;
-  let A;
-  if ($[4] !== fullOutput || $[5] !== g) {
-    A = g ? g.text : stripAnsiPerLine(fullOutput.trim());
+    $[3] = clippedOutput;
+  } else clippedOutput = $[3];
+  let displayOutput = clippedOutput;
+  let outputText;
+  if ($[4] !== fullOutput || $[5] !== displayOutput) {
+    outputText = displayOutput ? displayOutput.text : stripAnsiPerLine(fullOutput.trim());
     $[4] = fullOutput;
-    $[5] = g;
-    $[6] = A;
-  } else A = $[6];
-  let displayLines = A;
+    $[5] = displayOutput;
+    $[6] = outputText;
+  } else outputText = $[6];
+  let displayLines = outputText;
   if (!displayLines) {
     let t3;
     if ($[7] === MEMO_CACHE_SENTINEL) {
@@ -74,37 +74,37 @@ function ShellProgressMessage(props) {
     } else t4 = $[10];
     return t4;
   }
-  let _ = g
+  let bodyElement = displayOutput
     ? CLIP_HEAD_LINES
     : countCharInString(
         fullOutput,
         `
 `,
       ) + 1;
-  let E = (totalLines ? Math.max(0, totalLines - _) : 0) + (g?.dropped ?? 0);
+  let statsRow = (totalLines ? Math.max(0, totalLines - bodyElement) : 0) + (displayOutput?.dropped ?? 0);
   let lineStatus = "";
   if (totalBytes && totalLines) lineStatus = `~${totalLines} lines`;
-  else if (E > 0) lineStatus = `+${E} lines`;
-  let c;
+  else if (statsRow > 0) lineStatus = `+${statsRow} lines`;
+  let textElement;
   if ($[11] !== displayLines) {
-    c = jsxProd_default(Text, {
+    textElement = jsxProd_default(Text, {
       dimColor: true,
       children: displayLines,
     });
     $[11] = displayLines;
-    $[12] = c;
-  } else c = $[12];
-  let f;
+    $[12] = textElement;
+  } else textElement = $[12];
+  let lineStatusElement;
   if ($[13] !== lineStatus) {
-    f = lineStatus
+    lineStatusElement = lineStatus
       ? jsxProd_default(Text, {
           dimColor: true,
           children: lineStatus,
         })
       : null;
     $[13] = lineStatus;
-    $[14] = f;
-  } else f = $[14];
+    $[14] = lineStatusElement;
+  } else lineStatusElement = $[14];
   let t7;
   if ($[15] !== elapsedTimeSeconds || $[16] !== timeoutMs) {
     t7 = jsxProd_default(ShellTimeDisplay, {
@@ -127,28 +127,28 @@ function ShellProgressMessage(props) {
     $[19] = t8;
   } else t8 = $[19];
   let t9;
-  if ($[20] !== f || $[21] !== t7 || $[22] !== t8) {
+  if ($[20] !== lineStatusElement || $[21] !== t7 || $[22] !== t8) {
     t9 = jsxProd_default_2(Box, {
       flexDirection: "row",
       gap: 1,
-      children: [f, t7, t8],
+      children: [lineStatusElement, t7, t8],
     });
-    $[20] = f;
+    $[20] = lineStatusElement;
     $[21] = t7;
     $[22] = t8;
     $[23] = t9;
   } else t9 = $[23];
   let t10;
-  if ($[24] !== c || $[25] !== t9) {
+  if ($[24] !== textElement || $[25] !== t9) {
     t10 = jsxProd_default(MessageResponse, {
       children: jsxProd_default(FreezeWhenOffscreen, {
         children: jsxProd_default_2(Box, {
           flexDirection: "column",
-          children: [c, t9],
+          children: [textElement, t9],
         }),
       }),
     });
-    $[24] = c;
+    $[24] = textElement;
     $[25] = t9;
     $[26] = t10;
   } else t10 = $[26];

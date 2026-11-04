@@ -19,10 +19,9 @@ import { getSessionId } from "../../bootstrap/state.js";
 import { STORAGE_SPACES } from "../../utils/storage/storageSpaces.js";
 import { getSettingsFilePathForSource } from "../../utils/settings/settings.js";
 import { CLAUDE_CODE_GUIDE } from "../../constants/prompts.js";
-import { daemonLogPath } from "../../services/daemon/paths.js";
+import { daemonLogPath, daemonRosterFile } from "../../services/daemon/paths.js";
 import { daemonLockPath, daemonLockStateKey } from "../../utils/daemon/daemonLock.js";
 import { daemonStatusPath, daemonStatusKey } from "../../daemon/daemonStatus.js";
-import { daemonRosterFile } from "../../utils/sandbox/userNamespace.js";
 import { getJobsDir } from "../../services/daemon/jobState.js";
 import { formatStorageError } from "../../utils/storage/storageErrors.js";
 import { tailFile } from "../../utils/fsOperations.js";
@@ -49,7 +48,7 @@ function registerDebugSkill() {
     argumentHint: "[issue description]",
     disableModelInvocation: true,
     userInvocable: true,
-    async getPromptForCommand(args, n) {
+    async getPromptForCommand(args, context) {
       let wasAlreadyLogging = enableDebugLogging();
       let debugLogPath = getDebugLogPath();
       await flushDebugLogs();
@@ -57,14 +56,14 @@ function registerDebugSkill() {
       let [logTailSection, daemonDebugSection] = await Promise.all([
         readLogTailSection(
           debugLogPath,
-          n.storageV5 && isDefaultDebugLogPath(debugLogPath, sessionId)
+          context.storageV5 && isDefaultDebugLogPath(debugLogPath, sessionId)
             ? {
-                backend: n.storageV5,
+                backend: context.storageV5,
                 key: STORAGE_SPACES.log(sessionId, "debug"),
               }
             : undefined,
         ),
-        buildDaemonDebugSection(n.storageV5),
+        buildDaemonDebugSection(context.storageV5),
       ]);
       return [
         {
@@ -122,7 +121,7 @@ Remember that settings are in:
  * 为内置 debug 技能生成 "## Daemon" 段：读取后台守护进程的 lock、status 文件与日志尾部；都不存在时说明守护进程未运行并给出日志路径。
  */
 async function buildDaemonDebugSection(backend) {
-  let n = daemonLogPath();
+  let daemonLogPathValue = daemonLogPath();
   let [daemonStateFile, daemonStateFile_2, logTailSection] = await Promise.all([
     readDaemonStateFile(
       daemonLockPath(),
@@ -139,7 +138,7 @@ async function buildDaemonDebugSection(backend) {
       },
     ),
     readLogTailSection(
-      n,
+      daemonLogPathValue,
       backend && {
         backend,
         key: STORAGE_SPACES.state("daemon-log"),
@@ -149,7 +148,7 @@ async function buildDaemonDebugSection(backend) {
   if (daemonStateFile === null && daemonStateFile_2 === null)
     return `## Daemon
 
-No daemon lock or status file found \u2014 the background daemon does not appear to be running. If the issue involves background sessions or \`claude agents\`, the daemon log (if any) is at \`${n}\`.`;
+No daemon lock or status file found \u2014 the background daemon does not appear to be running. If the issue involves background sessions or \`claude agents\`, the daemon log (if any) is at \`${daemonLogPathValue}\`.`;
   return `## Daemon
 
 The background daemon manages \`& <prompt>\` jobs and \`claude agents\`. If the issue involves background sessions, look here.
@@ -164,7 +163,7 @@ ${daemonStateFile ?? "(missing)"}
 ${daemonStateFile_2 ?? "(missing)"}
 \`\`\`
 
-### Daemon log (\`${n}\`)
+### Daemon log (\`${daemonLogPathValue}\`)
 ${logTailSection}
 
 Other daemon state on disk (Read if relevant \u2014 roster contains user prompts and env vars):
@@ -175,24 +174,25 @@ Other daemon state on disk (Read if relevant \u2014 roster contains user prompts
 /**
  * 读取调试日志末尾若干行（经存储后端或本地文件），失败时返回说明文字。
  */
-async function readLogTailSection(e, n) {
-  if (n) {
-    let s = await n.backend.read([
+async function readLogTailSection(logPath, backendRef) {
+  if (backendRef) {
+    let readResult = await backendRef.backend.read([
       {
-        key: n.key,
+        key: backendRef.key,
         tail: MAX_DEBUG_LOG_BYTES,
       },
     ]);
-    if (!s.ok) return `Failed to read last ${DEBUG_TAIL_LINES} lines: ${formatStorageError(s.error)}`;
-    let r = s.value.items[0];
-    if (!r.found) return "No log file exists yet.";
+    if (!readResult.ok)
+      return `Failed to read last ${DEBUG_TAIL_LINES} lines: ${formatStorageError(readResult.error)}`;
+    let item = readResult.value.items[0];
+    if (!item.found) return "No log file exists yet.";
     return formatLogTail({
-      content: Buffer.from(r.value).toString("utf8"),
-      bytesTotal: r.totalBytes,
+      content: Buffer.from(item.value).toString("utf8"),
+      bytesTotal: item.totalBytes,
     });
   }
   try {
-    return formatLogTail(await tailFile(e, MAX_DEBUG_LOG_BYTES));
+    return formatLogTail(await tailFile(logPath, MAX_DEBUG_LOG_BYTES));
   } catch (error) {
     return isENOENT(error)
       ? "No log file exists yet."
@@ -220,21 +220,21 @@ ${joined}
 /**
  * 读取守护进程状态文件内容，失败时返回错误说明，不存在时返回 null。
  */
-async function readDaemonStateFile(e, n) {
-  if (n) {
-    let s = await n.backend.read([
+async function readDaemonStateFile(filePath, backendRef) {
+  if (backendRef) {
+    let readResult = await backendRef.backend.read([
       {
-        key: n.key,
+        key: backendRef.key,
         tail: MAX_DEBUG_SETTINGS_CHARS,
       },
     ]);
-    if (!s.ok) return `(read error: ${formatStorageError(s.error)})`;
-    let r = s.value.items[0];
-    if (!r.found) return null;
-    return Buffer.from(r.value).toString("utf8");
+    if (!readResult.ok) return `(read error: ${formatStorageError(readResult.error)})`;
+    let item = readResult.value.items[0];
+    if (!item.found) return null;
+    return Buffer.from(item.value).toString("utf8");
   }
   try {
-    return (await tailFile(e, MAX_DEBUG_SETTINGS_CHARS)).content;
+    return (await tailFile(filePath, MAX_DEBUG_SETTINGS_CHARS)).content;
   } catch (error) {
     return isENOENT(error) ? null : `(read error: ${errorMessage(error)})`;
   }

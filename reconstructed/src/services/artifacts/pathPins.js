@@ -30,38 +30,42 @@ var STALE_PUBLISH_HEADLINE =
 var CHANGED_SINCE_SEEN_LABEL = "Changed since you last saw them:";
 var UNSEEN_PUBLISHED_LABEL = "Already published, and not read as published or listed by you in this session:";
 //@ chunk-hag5hcx6.js:827-2422 placement
-function parsePathPinRefusal(e) {
+function parsePathPinRefusal(message) {
   if (
-    !e.startsWith(
+    !message.startsWith(
       "Nothing was published or removed: this publish touches files whose published content is not what you last saw",
     )
   )
     return;
-  let index = e.indexOf(`
+  let start = message.indexOf(`
 Changed since you last saw them:`);
-  let index_2 = e.indexOf(`
+  let index = message.indexOf(`
 Already published, and not read as published or listed by you in this session:`);
-  let s = (c, p) => (c === -1 ? "" : e.slice(c, p === -1 || p < c ? undefined : p));
-  let a = s(index, index_2);
-  let o = s(index_2, -1);
-  let l = (c) => [...c.matchAll(/^- ("(?:[^"\\]|\\.)*")/gm)].map((p) => p[1]);
-  let d = (c) => Number(/^- (?:and )?(\d+) (?:more|paths?, not named here):/m.exec(c)?.[1] ?? 0);
-  let h = l(a);
-  let u = l(o);
-  let P = h.length + d(a);
-  let m = u.length + d(o);
-  let v = [...a.matchAll(/^- "(?:[^"\\]|\\.)*": [^\n]*it has since been removed/gm)].length;
-  if (P > 0 && m > 0)
+  let section = (start, end) =>
+    start === -1 ? "" : message.slice(start, end === -1 || end < start ? undefined : end);
+  let knownSection = section(start, index);
+  let removedSection = section(index, -1);
+  let countBullets = (sectionText) =>
+    [...sectionText.matchAll(/^- ("(?:[^"\\]|\\.)*")/gm)].map((match) => match[1]);
+  let countIndented = (sectionText) =>
+    Number(/^- (?:and )?(\d+) (?:more|paths?, not named here):/m.exec(sectionText)?.[1] ?? 0);
+  let knownPaths = countBullets(knownSection);
+  let removedPaths = countBullets(removedSection);
+  let knownCount = knownPaths.length + countIndented(knownSection);
+  let removedCount = removedPaths.length + countIndented(removedSection);
+  let staleCount = [...knownSection.matchAll(/^- "(?:[^"\\]|\\.)*": [^\n]*it has since been removed/gm)]
+    .length;
+  if (knownCount > 0 && removedCount > 0)
     return "Not published: some files on the artifact changed since Claude last saw them, and others Claude has not read yet. Claude needs to read the latest versions before publishing again.";
-  if (P === 1)
-    return v === 1
-      ? `Not published: ${h[0]} was removed from the artifact since Claude last saw it. Publishing again creates it afresh.`
-      : `Not published: ${h[0]} changed on the artifact since Claude last saw it. Claude needs to read the latest version before publishing again.`;
-  if (P > 1)
-    return `Not published: ${P} files changed on the artifact since Claude last saw them. Claude needs to read the latest versions before publishing again.`;
-  if (m === 1)
-    return `Not published: ${u[0]} is already on the artifact and Claude has not read it. Claude needs to read it before replacing or removing it.`;
-  return `Not published: ${m} files are already on the artifact and Claude has not read them. Claude needs to read them before replacing or removing them.`;
+  if (knownCount === 1)
+    return staleCount === 1
+      ? `Not published: ${knownPaths[0]} was removed from the artifact since Claude last saw it. Publishing again creates it afresh.`
+      : `Not published: ${knownPaths[0]} changed on the artifact since Claude last saw it. Claude needs to read the latest version before publishing again.`;
+  if (knownCount > 1)
+    return `Not published: ${knownCount} files changed on the artifact since Claude last saw them. Claude needs to read the latest versions before publishing again.`;
+  if (removedCount === 1)
+    return `Not published: ${removedPaths[0]} is already on the artifact and Claude has not read it. Claude needs to read it before replacing or removing it.`;
+  return `Not published: ${removedCount} files are already on the artifact and Claude has not read them. Claude needs to read them before replacing or removing them.`;
 }
 //@ chunk-hag5hcx6.js:2422-2441 placement
 /**
@@ -86,30 +90,30 @@ function pathPinAckOffered() {
   return getLiveState().frozenPathPinAck ?? isPathPinActive();
 }
 //@ chunk-hag5hcx6.js:2630-2720 placement
-function pathPinsFor(e) {
+function pathPinsFor(slug) {
   let { pathPins } = getLiveState();
-  let n = pathPins.get(e);
-  if (n === undefined) {
-    n = new Map();
-    pathPins.set(e, n);
+  let pins = pathPins.get(slug);
+  if (pins === undefined) {
+    pins = new Map();
+    pathPins.set(slug, pins);
   }
-  return n;
+  return pins;
 }
 //@ chunk-hag5hcx6.js:2720-2759 placement
 function nextPathPinSeq() {
   return ++getLiveState().pathPinSeq;
 }
 //@ chunk-hag5hcx6.js:2759-2846 placement
-function setPathPin(e, r, n, s) {
-  let a = e.get(r);
-  if (a !== undefined && a.seq > s) return;
-  e.set(r, {
-    ...n,
-    seq: s,
+function setPathPin(store, path, sha256, ver) {
+  let slugPins = store.get(path);
+  if (slugPins !== undefined && slugPins.seq > ver) return;
+  store.set(path, {
+    ...sha256,
+    seq: ver,
   });
 }
 //@ chunk-hag5hcx6.js:2846-2932 placement
-function pinPathFromRead(slug, path, sha256, ver, a = nextPathPinSeq()) {
+function pinPathFromRead(slug, path, sha256, ver, seq = nextPathPinSeq()) {
   if (!pathPinOn()) return;
   setPathPin(
     pathPinsFor(slug),
@@ -119,11 +123,11 @@ function pinPathFromRead(slug, path, sha256, ver, a = nextPathPinSeq()) {
       ver,
       via: "read",
     },
-    a,
+    seq,
   );
 }
 //@ chunk-hag5hcx6.js:2932-3018 placement
-function pinPathFromList(slug, path, sha256, ver, a = nextPathPinSeq()) {
+function pinPathFromList(slug, path, sha256, ver, seq = nextPathPinSeq()) {
   if (!pathPinOn()) return;
   setPathPin(
     pathPinsFor(slug),
@@ -133,110 +137,110 @@ function pinPathFromList(slug, path, sha256, ver, a = nextPathPinSeq()) {
       ver,
       via: "list",
     },
-    a,
+    seq,
   );
 }
 //@ chunk-hag5hcx6.js:3018-3134 placement
-function unpinPath(slug, path, n = nextPathPinSeq()) {
+function unpinPath(slug, path, seq = nextPathPinSeq()) {
   if (!pathPinOn()) return;
-  let s = getLiveState().pathPins.get(slug);
-  let a = s?.get(path);
-  if (a !== undefined && a.seq < n) s.delete(path);
+  let slugPins = getLiveState().pathPins.get(slug);
+  let pin = slugPins?.get(path);
+  if (pin !== undefined && pin.seq < seq) slugPins.delete(path);
 }
 //@ chunk-hag5hcx6.js:3134-3335 placement
-function pinListedPaths(slug, ver, n, s = nextPathPinSeq()) {
+function pinListedPaths(slug, ver, files, seq = nextPathPinSeq()) {
   if (!pathPinOn()) return;
-  let a = pathPinsFor(slug);
-  for (let o of n) {
-    let l = a.get(o.path);
-    if (l === undefined || (l.via === "list" && l.sha256 !== null))
+  let pins = pathPinsFor(slug);
+  for (let file of files) {
+    let existing = pins.get(file.path);
+    if (existing === undefined || (existing.via === "list" && existing.sha256 !== null))
       setPathPin(
-        a,
-        o.path,
+        pins,
+        file.path,
         {
-          sha256: o.sha256,
+          sha256: file.sha256,
           ver,
           via: "list",
         },
-        s,
+        seq,
       );
   }
-  diffPinnedPaths(a, ver, s, n, false);
+  diffPinnedPaths(pins, ver, seq, files, false);
 }
 //@ chunk-hag5hcx6.js:3335-3664 placement
-function diffPinnedPaths(e, ver, n, s, a) {
-  let o = new Map(s.map((l) => [l.path, l]));
-  for (let [l, d] of e) {
-    let h = o.get(l);
-    if (d.seq > n || (h === undefined && !a)) continue;
-    let sha256 = h?.sha256 ?? null;
-    if (h?.live === true || sha256 === d.sha256) {
-      if (d.behind !== undefined)
-        e.set(l, {
-          sha256: d.sha256,
-          ver: d.ver,
-          via: d.via,
-          seq: d.seq,
+function diffPinnedPaths(pins, ver, listingVer, files, notNarrowed) {
+  let liveByPath = new Map(files.map((file) => [file.path, file]));
+  for (let [path, pin] of pins) {
+    let liveFile = liveByPath.get(path);
+    if (pin.seq > listingVer || (liveFile === undefined && !notNarrowed)) continue;
+    let sha256 = liveFile?.sha256 ?? null;
+    if (liveFile?.live === true || sha256 === pin.sha256) {
+      if (pin.behind !== undefined)
+        pins.set(path, {
+          sha256: pin.sha256,
+          ver: pin.ver,
+          via: pin.via,
+          seq: pin.seq,
         });
     } else
-      e.set(l, {
-        ...d,
+      pins.set(path, {
+        ...pin,
         behind: {
           sha256,
-          sizeBytes: h?.sizeBytes,
+          sizeBytes: liveFile?.sizeBytes,
           ver,
         },
       });
   }
 }
 //@ chunk-hag5hcx6.js:3664-3903 placement
-function pinPublishedPaths(slug, ver, n) {
+function pinPublishedPaths(slug, ver, changes) {
   if (!pathPinOn()) return;
-  let s = pathPinsFor(slug);
-  let a = nextPathPinSeq();
-  for (let o of n.written)
-    if (o.sha256 === undefined) s.delete(o.path);
+  let pins = pathPinsFor(slug);
+  let seq = nextPathPinSeq();
+  for (let path of changes.written)
+    if (path.sha256 === undefined) pins.delete(path.path);
     else
       setPathPin(
-        s,
-        o.path,
+        pins,
+        path.path,
         {
-          sha256: o.sha256,
+          sha256: path.sha256,
           ver,
           via: "publish",
         },
-        a,
+        seq,
       );
-  for (let o of n.removed)
+  for (let path of changes.removed)
     setPathPin(
-      s,
-      o,
+      pins,
+      path,
       {
         sha256: null,
         ver,
         via: "publish",
       },
-      a,
+      seq,
     );
 }
 //@ chunk-hag5hcx6.js:3903-4047 placement
 function hasReadPins(slug) {
   if (!pathPinOn()) return false;
-  let r = getLiveState().pathPins.get(slug);
-  if (r === undefined) return false;
-  for (let n of r.values()) if (n.via !== "list") return true;
+  let slugPins = getLiveState().pathPins.get(slug);
+  if (slugPins === undefined) return false;
+  for (let pin of slugPins.values()) if (pin.via !== "list") return true;
   return false;
 }
 //@ chunk-hag5hcx6.js:4047-4264 placement
-function publishPinFields(e) {
-  if (e === undefined) return {};
-  let flattened = e.written.flatMap((n) =>
-    n.sha256 === undefined
+function publishPinFields(changes) {
+  if (changes === undefined) return {};
+  let flattened = changes.written.flatMap((change) =>
+    change.sha256 === undefined
       ? []
       : [
           {
-            path: n.path,
-            sha256: n.sha256,
+            path: change.path,
+            sha256: change.sha256,
           },
         ],
   );
@@ -244,174 +248,177 @@ function publishPinFields(e) {
     ...(flattened.length > 0 && {
       files_written: flattened,
     }),
-    ...(e.removed.length > 0 && {
-      files_removed: [...e.removed],
+    ...(changes.removed.length > 0 && {
+      files_removed: [...changes.removed],
     }),
   };
 }
 //@ chunk-hag5hcx6.js:4264-4368 placement
-function pinRemovedPaths(e, ver, n, s) {
+function pinRemovedPaths(slug, ver, paths, seq) {
   if (!pathPinOn()) return;
-  let a = pathPinsFor(e);
-  for (let o of n)
+  let pins = pathPinsFor(slug);
+  for (let path of paths)
     setPathPin(
-      a,
-      o,
+      pins,
+      path,
       {
         sha256: null,
         ver,
         via: "list",
       },
-      s,
+      seq,
     );
 }
 //@ chunk-hag5hcx6.js:4368-4437 placement
-function reconcilePins(slug, ver, n, s) {
-  if (!pathPinOn() || n.length === 0) return;
-  diffPinnedPaths(pathPinsFor(slug), ver, s, n, false);
+function reconcilePins(slug, ver, files, seq) {
+  if (!pathPinOn() || files.length === 0) return;
+  diffPinnedPaths(pathPinsFor(slug), ver, seq, files, false);
 }
 //@ chunk-hag5hcx6.js:4437-4571 placement
-function makeRemovedPathPinner(slug, ver, n) {
-  let mapped = n.filter((o) => o.liveSha256 === null).map((o) => o.path);
-  if (mapped.length === 0) return;
-  let a = nextPathPinSeq();
-  return () => pinRemovedPaths(slug, ver, mapped, a);
+function makeRemovedPathPinner(slug, ver, changes) {
+  let paths = changes.filter((change) => change.liveSha256 === null).map((change) => change.path);
+  if (paths.length === 0) return;
+  let seq = nextPathPinSeq();
+  return () => pinRemovedPaths(slug, ver, paths, seq);
 }
 //@ chunk-hag5hcx6.js:4571-4709 placement
-function orderChangedPaths(e) {
-  let filtered = e.filter((n) => n.kind === "changed");
-  return [...filtered.filter((n) => n.liveSha256 === null), ...filtered.filter((n) => n.liveSha256 !== null)];
+function orderChangedPaths(changes) {
+  let filtered = changes.filter((change) => change.kind === "changed");
+  return [
+    ...filtered.filter((change) => change.liveSha256 === null),
+    ...filtered.filter((change) => change.liveSha256 !== null),
+  ];
 }
 //@ chunk-hag5hcx6.js:4709-5327 placement
-function publishPathChanges(e) {
-  let r = [];
-  let n = [
-    ...e.writes.map((write) => ({
+function publishPathChanges(input) {
+  let changed = [];
+  let unread = [
+    ...input.writes.map((write) => ({
       ...write,
       operation: "write",
     })),
-    ...e.removes.map((path) => ({
+    ...input.removes.map((path) => ({
       path,
       operation: "remove",
       sha256: undefined,
     })),
   ];
-  for (let { path, operation, sha256 } of n) {
-    if (e.liveDocs?.has(path)) continue;
-    let l = e.pins?.get(path);
-    let d = e.live.get(path) ?? null;
-    if (l === undefined) {
-      if (d === null || e.acknowledged.has(path)) continue;
-      if (operation === "write" && sha256 === d) continue;
-      r.push({
+  for (let { path, operation, sha256 } of unread) {
+    if (input.liveDocs?.has(path)) continue;
+    let pin = input.pins?.get(path);
+    let liveSha = input.live.get(path) ?? null;
+    if (pin === undefined) {
+      if (liveSha === null || input.acknowledged.has(path)) continue;
+      if (operation === "write" && sha256 === liveSha) continue;
+      changed.push({
         kind: "unread",
         path,
         operation,
       });
       continue;
     }
-    if (l.sha256 === d) continue;
-    if (operation === "write" && sha256 !== undefined && sha256 === d) continue;
-    if (operation === "remove" && d === null) continue;
-    r.push({
+    if (pin.sha256 === liveSha) continue;
+    if (operation === "write" && sha256 !== undefined && sha256 === liveSha) continue;
+    if (operation === "remove" && liveSha === null) continue;
+    changed.push({
       kind: "changed",
       path,
       operation,
-      readSha256: l.sha256,
-      readVer: l.ver,
-      readVia: l.via,
-      liveSha256: d,
+      readSha256: pin.sha256,
+      readVer: pin.ver,
+      readVia: pin.via,
+      liveSha256: liveSha,
     });
   }
-  return r;
+  return changed;
 }
 //@ chunk-hag5hcx6.js:5327-5369 placement
-function jsonActionForCore(e, r) {
-  return jsonStringify(e.core ? collapseArtifactAction(r) : r);
+function jsonActionForCore(path, hint) {
+  return jsonStringify(path.core ? collapseArtifactAction(hint) : hint);
 }
 //@ chunk-hag5hcx6.js:5369-5450 placement
-function readActionHint(e) {
-  return e.core ? 'action "read" with its `path`' : 'action "read_file"';
+function readActionHint(hint) {
+  return hint.core ? 'action "read" with its `path`' : 'action "read_file"';
 }
 //@ chunk-hag5hcx6.js:5450-5785 placement
-function currentFileState(path, r) {
-  let n = r.files.get(path);
-  if (n === undefined)
+function currentFileState(path, state) {
+  let file = state.files.get(path);
+  if (file === undefined)
     return "  now: deleted; publishing this path again creates it afresh, so do that only if the user wants it back";
-  let s = n.sizeBytes === undefined ? "" : `, ${n.sizeBytes} ${plural(n.sizeBytes, "byte")}`;
-  return `  now: sha256 ${n.sha256}${s}; read it with ${jsonActionForCore(r, {
+  let detail = file.sizeBytes === undefined ? "" : `, ${file.sizeBytes} ${plural(file.sizeBytes, "byte")}`;
+  return `  now: sha256 ${file.sha256}${detail}; read it with ${jsonActionForCore(state, {
     action: "read_file",
-    url: r.url,
+    url: state.url,
     path,
   })}`;
 }
 //@ chunk-hag5hcx6.js:5785-6233 placement
-function describePinnedState(e, r, n) {
-  let s =
-    e.readSha256 !== null
-      ? `you last saw it at version ${e.readVer}`
-      : e.readVia === "publish"
-        ? `you removed it at version ${e.readVer}`
-        : `it was gone when you last checked (version ${e.readVer})`;
-  let a =
-    e.liveSha256 === null
-      ? `it has since been removed (version ${r})`
-      : e.readSha256 === null
-        ? `someone has since published a file there (version ${r})`
-        : `someone has since replaced it (version ${r})`;
-  return `- ${jsonStringify(e.path)}: ${s}; ${a}
-${currentFileState(e.path, n)}`;
+function describePinnedState(change, ver, options) {
+  let lines =
+    change.readSha256 !== null
+      ? `you last saw it at version ${change.readVer}`
+      : change.readVia === "publish"
+        ? `you removed it at version ${change.readVer}`
+        : `it was gone when you last checked (version ${change.readVer})`;
+  let changeLine =
+    change.liveSha256 === null
+      ? `it has since been removed (version ${ver})`
+      : change.readSha256 === null
+        ? `someone has since published a file there (version ${ver})`
+        : `someone has since replaced it (version ${ver})`;
+  return `- ${jsonStringify(change.path)}: ${lines}; ${changeLine}
+${currentFileState(change.path, options)}`;
 }
 //@ chunk-hag5hcx6.js:6233-6497 placement
-function listWithOverflow(e, r, n) {
-  if (e.length <= r)
-    return e.join(`
+function listWithOverflow(paths, namedCount, options) {
+  if (paths.length <= namedCount)
+    return paths.join(`
 `);
-  let s = `- ${r > 0 ? `and ${e.length - r} more` : `${e.length} ${plural(e.length, "path")}, not named here`}: ${jsonActionForCore(
-    n,
+  let line = `- ${namedCount > 0 ? `and ${paths.length - namedCount} more` : `${paths.length} ${plural(paths.length, "path")}, not named here`}: ${jsonActionForCore(
+    options,
     {
       action: "list_files",
-      url: n.url,
+      url: options.url,
     },
   )} lists every file with its size`;
-  return r > 0
-    ? `${e.slice(0, r).join(`
+  return namedCount > 0
+    ? `${paths.slice(0, namedCount).join(`
 `)}
-${s}`
-    : s;
+${line}`
+    : line;
 }
 //@ chunk-hag5hcx6.js:6497-7620 placement
-function stalePathsMessage(e, r, n) {
-  let s = orderChangedPaths(e);
-  let filtered = e.filter((d) => d.kind === "unread");
-  let o = [
-    s.length > 0
+function stalePathsMessage(changes, ver, options) {
+  let ordered = orderChangedPaths(changes);
+  let filtered = changes.filter((change) => change.kind === "unread");
+  let sections = [
+    ordered.length > 0
       ? `${STALE_PUBLISH_HEADLINE}, and sending your copy would replace a newer edit.`
       : `${STALE_PUBLISH_HEADLINE}, and sending your copy could discard content you have not read.`,
   ];
-  let min = Math.min(s.length, PATH_PIN_LIMITS);
-  if (s.length > 0) {
-    let any = s.some((h) => h.liveSha256 === null);
-    o.push(`${CHANGED_SINCE_SEEN_LABEL}
+  let min = Math.min(ordered.length, PATH_PIN_LIMITS);
+  if (ordered.length > 0) {
+    let any = ordered.some((change) => change.liveSha256 === null);
+    sections.push(`${CHANGED_SINCE_SEEN_LABEL}
 ${listWithOverflow(
-  s.map((h) => describePinnedState(h, r, n)),
+  ordered.map((change) => describePinnedState(change, ver, options)),
   min,
-  n,
+  options,
 )}
-Read each one${any ? " that still exists" : ""} again (${readActionHint(n)}), re-apply your change to what it holds now, and publish again${any ? "; a deleted one needs no read" : ""}. Never resend your earlier copy.${n.forced ? " `force` does not override this." : ""}${n.remembered ? ' The live file list could not be read for this publish, so each "now" line and its version are from an earlier listing or publish result in this session; the reads will show what is there now.' : ""}`);
+Read each one${any ? " that still exists" : ""} again (${readActionHint(options)}), re-apply your change to what it holds now, and publish again${any ? "; a deleted one needs no read" : ""}. Never resend your earlier copy.${options.forced ? " `force` does not override this." : ""}${options.remembered ? ' The live file list could not be read for this publish, so each "now" line and its version are from an earlier listing or publish result in this session; the reads will show what is there now.' : ""}`);
   }
   if (filtered.length > 0)
-    o.push(`${UNSEEN_PUBLISHED_LABEL}
+    sections.push(`${UNSEEN_PUBLISHED_LABEL}
 ${listWithOverflow(
   filtered.map(
-    (d) => `- ${jsonStringify(d.path)}
-${currentFileState(d.path, n)}`,
+    (change) => `- ${jsonStringify(change.path)}
+${currentFileState(change.path, options)}`,
   ),
   PATH_PIN_LIMITS - min,
-  n,
+  options,
 )}
-Read each one first (${readActionHint(n)}) and build on it.${n.ackOffered === false ? " Do so even when the user wants the file replaced outright." : " Only when the user asked for the file to be replaced without looking, name it in `overwrite_unread`."}`);
-  return o.join(`
+Read each one first (${readActionHint(options)}) and build on it.${options.ackOffered === false ? " Do so even when the user wants the file replaced outright." : " Only when the user asked for the file to be replaced without looking, name it in `overwrite_unread`."}`);
+  return sections.join(`
 
 `);
 }
@@ -419,53 +426,53 @@ Read each one first (${readActionHint(n)}) and build on it.${n.ackOffered === fa
 /**
  * 发布前检查路径固定（path pins）：列出 artifact 当前文件并对比本会话读到/发布过的版本，有未读更改则拒绝发布。
  */
-async function checkPathPins(e) {
-  if (e.writes.length === 0 && e.removes.length === 0)
+async function checkPathPins(request) {
+  if (request.writes.length === 0 && request.removes.length === 0)
     return {
       kind: "pass",
       liveVer: undefined,
     };
-  let r = nextPathPinSeq();
-  let n = await listArtifactFiles(e.target, e.signal, e.credentials);
-  if (n.kind === "error") {
-    logForDebugging(`[artifact] path pins: no listing (${n.reason}) slug=${e.target.slug}`);
-    if (n.reason === "single_page")
+  let seq = nextPathPinSeq();
+  let listing = await listArtifactFiles(request.target, request.signal, request.credentials);
+  if (listing.kind === "error") {
+    logForDebugging(`[artifact] path pins: no listing (${listing.reason}) slug=${request.target.slug}`);
+    if (listing.reason === "single_page")
       return {
         kind: "pass",
         liveVer: undefined,
       };
-    let d = getLiveState().pathPins.get(e.target.slug);
-    let h = new Set();
-    let u = new Map();
-    let P = new Map();
-    let m = "";
-    for (let c of [...e.writes.map((write) => write.path), ...e.removes]) {
-      let behind = d?.get(c)?.behind;
+    let slugPins = getLiveState().pathPins.get(request.target.slug);
+    let pinnedPaths = new Set();
+    let liveShas = new Map();
+    let liveFiles = new Map();
+    let latestVer = "";
+    for (let path of [...request.writes.map((write) => write.path), ...request.removes]) {
+      let behind = slugPins?.get(path)?.behind;
       if (behind === undefined) continue;
-      h.add(c);
+      pinnedPaths.add(path);
       if (behind.sha256 !== null) {
-        u.set(c, behind.sha256);
-        P.set(c, {
+        liveShas.set(path, behind.sha256);
+        liveFiles.set(path, {
           sha256: behind.sha256,
           ...(behind.sizeBytes !== undefined && {
             sizeBytes: behind.sizeBytes,
           }),
         });
       }
-      if (m === "" || (compareNumericPrefix(behind.ver, m) ?? 1) > 0) m = behind.ver;
+      if (latestVer === "" || (compareNumericPrefix(behind.ver, latestVer) ?? 1) > 0) latestVer = behind.ver;
     }
-    let v = publishPathChanges({
-      pins: d,
-      live: u,
-      writes: e.writes.filter((write) => h.has(write.path)),
-      removes: e.removes.filter((remove) => h.has(remove)),
-      acknowledged: new Set(e.acknowledged),
+    let refused = publishPathChanges({
+      pins: slugPins,
+      live: liveShas,
+      writes: request.writes.filter((write) => pinnedPaths.has(write.path)),
+      removes: request.removes.filter((remove) => pinnedPaths.has(remove)),
+      acknowledged: new Set(request.acknowledged),
     });
     logFeatureSad(
       "artifact_path_pin",
-      v.length === 0 ? `skipped_${n.reason}` : `refused_without_listing_${n.reason}`,
+      refused.length === 0 ? `skipped_${listing.reason}` : `refused_without_listing_${listing.reason}`,
     );
-    if (v.length === 0)
+    if (refused.length === 0)
       return {
         kind: "pass",
         liveVer: undefined,
@@ -473,67 +480,79 @@ async function checkPathPins(e) {
     return {
       kind: "refuse",
       reasonCode: "path_pin_changed",
-      message: stalePathsMessage(v, m, {
-        url: e.url ?? artifactViewerUrlFor(e.target),
-        files: P,
+      message: stalePathsMessage(refused, latestVer, {
+        url: request.url ?? artifactViewerUrlFor(request.target),
+        files: liveFiles,
         core: isArtifactToolsetSplit(),
-        forced: e.force === true,
+        forced: request.force === true,
         ackOffered: pathPinAckOffered(),
         remembered: true,
       }),
-      onCommitted: makeRemovedPathPinner(e.target.slug, m, orderChangedPaths(v).slice(0, PATH_PIN_LIMITS)),
+      onCommitted: makeRemovedPathPinner(
+        request.target.slug,
+        latestVer,
+        orderChangedPaths(refused).slice(0, PATH_PIN_LIMITS),
+      ),
     };
   }
-  let s = getLiveState().pathPins.get(e.target.slug);
-  if (s !== undefined) diffPinnedPaths(s, n.ver, r, n.files, !n.narrowed);
-  let a = new Map(n.files.map((file) => [file.path, file.sha256]));
-  let o = new Set(n.files.filter((file) => file.live).map((file) => file.path));
-  let l = publishPathChanges({
-    pins: s,
-    live: a,
-    liveDocs: o,
-    writes: e.writes,
-    removes: e.removes,
-    acknowledged: new Set(e.acknowledged),
+  let slugPins = getLiveState().pathPins.get(request.target.slug);
+  if (slugPins !== undefined) diffPinnedPaths(slugPins, listing.ver, seq, listing.files, !listing.narrowed);
+  let liveShas = new Map(listing.files.map((file) => [file.path, file.sha256]));
+  let liveDocs = new Set(listing.files.filter((file) => file.live).map((file) => file.path));
+  let refused = publishPathChanges({
+    pins: slugPins,
+    live: liveShas,
+    liveDocs,
+    writes: request.writes,
+    removes: request.removes,
+    acknowledged: new Set(request.acknowledged),
   });
   logFeatureOk("artifact_path_pin", {
-    checked: e.writes.length + e.removes.length,
-    refused: l.length,
+    checked: request.writes.length + request.removes.length,
+    refused: refused.length,
   });
-  if (l.length === 0) {
-    let d = n.publishPreconditions === true ? collectPinnedHashes(a, o, e.writes, e.removes) : undefined;
-    let mapped = e.writes
+  if (refused.length === 0) {
+    let preconditions =
+      listing.publishPreconditions === true
+        ? collectPinnedHashes(liveShas, liveDocs, request.writes, request.removes)
+        : undefined;
+    let mapped = request.writes
       .filter(
-        (write) => write.sha256 !== undefined && !o.has(write.path) && a.get(write.path) === write.sha256,
+        (write) =>
+          write.sha256 !== undefined &&
+          !liveDocs.has(write.path) &&
+          liveShas.get(write.path) === write.sha256,
       )
       .map((write) => write.path);
     return {
       kind: "pass",
-      liveVer: n.ver,
+      liveVer: listing.ver,
       ...(mapped.length > 0 && {
         unchanged: mapped,
       }),
-      ...(!n.narrowed && {
-        liveOwnPaths: n.files.map((file) => file.path).filter((u) => n.typePaths?.includes(u) !== true),
+      ...(!listing.narrowed && {
+        liveOwnPaths: listing.files
+          .map((file) => file.path)
+          .filter((path) => listing.typePaths?.includes(path) !== true),
       }),
-      ...(n.title !== undefined && {
-        liveTitle: n.title,
+      ...(listing.title !== undefined && {
+        liveTitle: listing.title,
       }),
-      ...(n.favicon !== undefined && {
-        liveFavicon: n.favicon,
+      ...(listing.favicon !== undefined && {
+        liveFavicon: listing.favicon,
       }),
-      ...(d !== undefined && {
-        preconditions: d,
+      ...(preconditions !== undefined && {
+        preconditions,
       }),
     };
   }
   return {
     kind: "refuse",
-    reasonCode: l.some((d) => d.kind === "changed") ? "path_pin_changed" : "path_pin_unread",
-    message: stalePathsMessage(l, n.ver, {
-      url: e.url ?? artifactViewerUrlFor(e.target),
+    reasonCode: refused.some((change) => change.kind === "changed") ? "path_pin_changed" : "path_pin_unread",
+    message: stalePathsMessage(refused, listing.ver, {
+      url: request.url ?? artifactViewerUrlFor(request.target),
       files: new Map(
-        n.files.map((file) => [
+        listing.files.map((file) => [
           file.path,
           {
             sha256: file.sha256,
@@ -542,40 +561,44 @@ async function checkPathPins(e) {
         ]),
       ),
       core: isArtifactToolsetSplit(),
-      forced: e.force === true,
+      forced: request.force === true,
       ackOffered: pathPinAckOffered(),
     }),
-    onCommitted: makeRemovedPathPinner(e.target.slug, n.ver, orderChangedPaths(l).slice(0, PATH_PIN_LIMITS)),
+    onCommitted: makeRemovedPathPinner(
+      request.target.slug,
+      listing.ver,
+      orderChangedPaths(refused).slice(0, PATH_PIN_LIMITS),
+    ),
   };
 }
 //@ chunk-hag5hcx6.js:9946-10126 placement
-function collectPinnedHashes(e, r, writes, removes) {
-  let a = new Map();
+function collectPinnedHashes(liveShas, liveDocs, writes, removes) {
+  let pinned = new Map();
   for (let { path } of writes) {
-    if (r.has(path)) return;
-    a.set(path, e.get(path) ?? null);
+    if (liveDocs.has(path)) return;
+    pinned.set(path, liveShas.get(path) ?? null);
   }
-  for (let o of removes) {
-    let l = e.get(o);
-    if (l === undefined || r.has(o)) return;
-    a.set(o, l);
+  for (let path of removes) {
+    let sha256 = liveShas.get(path);
+    if (sha256 === undefined || liveDocs.has(path)) return;
+    pinned.set(path, sha256);
   }
-  return a;
+  return pinned;
 }
 //@ chunk-hag5hcx6.js:10126-10689 placement
-function pathPinTelemetry(e) {
-  let r = getLiveState().pathPins.get(e.target.slug);
-  let mapped = e.paths.map((path) => {
-    let o = r?.get(path.path);
-    let operation = e.removes.includes(path.path) ? "remove" : "write";
-    return o !== undefined && o.sha256 === path.expected
+function pathPinTelemetry(request) {
+  let slugPins = getLiveState().pathPins.get(request.target.slug);
+  let changes = request.paths.map((path) => {
+    let pin = slugPins?.get(path.path);
+    let operation = request.removes.includes(path.path) ? "remove" : "write";
+    return pin !== undefined && pin.sha256 === path.expected
       ? {
           kind: "changed",
           path: path.path,
           operation,
           readSha256: path.expected,
-          readVer: o.ver,
-          readVia: o.via,
+          readVer: pin.ver,
+          readVia: pin.via,
           liveSha256: path.actual,
         }
       : {
@@ -584,23 +607,23 @@ function pathPinTelemetry(e) {
           operation,
         };
   });
-  let s = new Map();
-  for (let path of e.paths)
+  let texts = new Map();
+  for (let path of request.paths)
     if (path.actual !== null)
-      s.set(path.path, {
+      texts.set(path.path, {
         sha256: path.actual,
       });
   return {
-    message: stalePathsMessage(mapped, e.liveVer, {
-      url: e.url ?? artifactViewerUrlFor(e.target),
-      files: s,
+    message: stalePathsMessage(changes, request.liveVer, {
+      url: request.url ?? artifactViewerUrlFor(request.target),
+      files: texts,
       core: isArtifactToolsetSplit(),
       ackOffered: pathPinAckOffered(),
     }),
     onCommitted: makeRemovedPathPinner(
-      e.target.slug,
-      e.liveVer,
-      orderChangedPaths(mapped).slice(0, PATH_PIN_LIMITS),
+      request.target.slug,
+      request.liveVer,
+      orderChangedPaths(changes).slice(0, PATH_PIN_LIMITS),
     ),
   };
 }

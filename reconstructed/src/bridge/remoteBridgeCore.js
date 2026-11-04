@@ -9,6 +9,21 @@
  * attribution: callgraph-witnessed 1, fingerprint 2, layout 8, callgraph-fingerprint 1, affinity 3
  */
 import {
+  isValidSessionId,
+  readUntrustedDeviceRefusal,
+  shouldRemoteControlEnroll,
+  classifyElevatedAuthError,
+  isCredentialsFailure,
+  createCodeSession,
+  isCreateSessionFailure,
+  isCredentialsRejection,
+  attachBridgeWorker,
+} from "./codeSessionApi.js";
+import { buildSessionEndpoint } from "../assistant/sessionHistory.js";
+import { axios_default } from "../../vendor/axios/dist/esm/axios.js";
+import { logForDebugging } from "../utils/debug.js";
+import { errorMessage } from "../utils/errors.js";
+import {
   createRemoteBridgeRedactor,
   noop,
   noopTwoArgs,
@@ -41,20 +56,8 @@ import {
   UPLOAD_BUDGET_MS,
   MAX_QUEUED_SUBAGENT_FRAMES,
 } from "./remoteBridgeCloseCodes.js";
-import { logForDebugging } from "../utils/debug.js";
 import { logFeatureBad, logFeatureSad, logFeatureOk } from "../services/analytics/featureTelemetry.js";
 import { getEnvLessBridgeConfig } from "./envLessBridgeConfig.js";
-import {
-  isCredentialsFailure,
-  createCodeSession,
-  isCreateSessionFailure,
-  isCredentialsRejection,
-  attachBridgeWorker,
-  shouldRemoteControlEnroll,
-  isValidSessionId,
-  readUntrustedDeviceRefusal,
-  classifyElevatedAuthError,
-} from "./codeSessionApi.js";
 import { logForDiagnosticsNoPII } from "../utils/diagLogs.js";
 import {
   BRIDGE_MALFORMED_RESPONSE_HINT,
@@ -124,7 +127,6 @@ import { TENGU_TOASTY_BEACON } from "../services/api/withRetry.js";
 import { isTerminalShutdown } from "../utils/terminalShutdown.js";
 import { getPollIntervalConfig } from "./pollConfig.js";
 import { createV2ReplTransport } from "./replBridgeTransport.js";
-import { errorMessage } from "../utils/errors.js";
 import {
   BoundedUUIDSet,
   isEligibleBridgeMessage,
@@ -187,9 +189,54 @@ import { hasHostField } from "./deviceRegistration.js";
 import { truncate } from "../utils/format.js";
 import { dialogPermissionRequest } from "../utils/teleport/sessionCreate.js";
 import { subscribeGithubPullRequest, buildJsonHeaders } from "./githubPrSubscription.js";
-import { buildSessionEndpoint } from "../assistant/sessionHistory.js";
-import { axios_default } from "../../vendor/axios/dist/esm/axios.js";
 
+//@ chunk-kgtpkbhq.js:8680-9302 fingerprint = archiveSession (0.358)
+/**
+ * 对会话执行生命周期动作（archive / unarchive）：POST {session}/{action}，返回 HTTP 状态或 invalid/timeout/error/untrusted_device 等。
+ */
+async function postSessionAction(
+  label,
+  pathSuffix,
+  baseUrl,
+  accessToken,
+  sessionId,
+  timeoutMs,
+  authOptions,
+  refusalMode,
+) {
+  if (!isValidSessionId(sessionId, label)) return "invalid";
+  let sessionEndpoint = buildSessionEndpoint(label, baseUrl, accessToken, sessionId, authOptions, pathSuffix);
+  if (!sessionEndpoint) return "invalid";
+  let { url, headers, id } = sessionEndpoint;
+  try {
+    let response = await axios_default.post(
+      url,
+      {},
+      {
+        headers,
+        timeout: timeoutMs,
+        validateStatus: () => true,
+      },
+    );
+    logForDebugging(`[code-session] ${label} ${id} status=${response.status}`);
+    if (response.status === 403) {
+      let compatId = readUntrustedDeviceRefusal(response.data);
+      if (compatId !== undefined)
+        return refusalMode === "elevated_auth" && !shouldRemoteControlEnroll(compatId)
+          ? "untrusted_device_no_enroll"
+          : "untrusted_device";
+      if (
+        refusalMode === "elevated_auth" &&
+        classifyElevatedAuthError(response.data) === "session_stale_relogin"
+      )
+        return "session_stale_relogin";
+    }
+    return response.status;
+  } catch (err) {
+    logForDebugging(`[code-session] ${label} ${id} failed: ${errorMessage(err)}`);
+    return axios_default.isAxiosError(err) && err.code === "ECONNABORTED" ? "timeout" : "error";
+  }
+}
 //@ chunk-4cm44bmp.js:29785-95205 callgraph-witnessed = initEnvLessBridgeCore (0.223)
 /**
  * REPL Remote Control 的总装函数（约 65KB 单函数）：先按 work secret / 重连指针 / 新建三条路径确定 sessionId（cse_*），调 /bridge 取 worker_jwt 与 worker_epoch，再用 createV2ReplTransport 建 SSE+CCRClient 传输；
@@ -281,41 +328,42 @@ async function initEnvLessBridgeCore(params) {
     mode: strayDropMode,
     placeAccountMemoryTool,
     accountMemoryInPlay,
-    onDropped: (e, r) => {
+    onDropped: (reason, rowKind) => {
       logForDebugging(
-        `[remote-bridge] Kept one '${r}' row's content out of the upload for account memory (reason: ${e})`,
+        `[remote-bridge] Kept one '${rowKind}' row's content out of the upload for account memory (reason: ${reason})`,
       );
-      if (e === "unreadable") logFeatureBad("bridge_account_memory_redaction", `unredactable_${r}_row`);
+      if (reason === "unreadable")
+        logFeatureBad("bridge_account_memory_redaction", `unredactable_${rowKind}_row`);
     },
   });
   accountMemoryRedactor.note(conversationForPairing?.() ?? initialMessages ?? []);
-  let toRedactedSdkEvents = (e, r = "history") =>
+  let toRedactedSdkEvents = (messages, mirror = "history") =>
     accountMemoryRedactor.redact(
-      toSDKMessages(accountMemoryRedactor.withoutMemoryCallAttachments(e, r)),
+      toSDKMessages(accountMemoryRedactor.withoutMemoryCallAttachments(messages, mirror)),
       "events",
-      r,
+      mirror,
     );
   let keepSessionOnTeardown = workSecretCredentials !== undefined ? true : neverArchive;
   let sessionTitle = title;
   let isReattach = !!reattachSessionId;
   let cfg = await getEnvLessBridgeConfig();
   let workSecretRegistered = false;
-  let noteAcceptedToken = (e) => {
-    if (!workSecretCredentials) ownerPin?.noteAcceptedToken(e);
+  let noteAcceptedToken = (token) => {
+    if (!workSecretCredentials) ownerPin?.noteAcceptedToken(token);
   };
-  let ri = "work-secret-lane";
-  let getLaneToken = () => (workSecretCredentials ? ri : getAccessToken());
+  let workSecretLaneToken = "work-secret-lane";
+  let getLaneToken = () => (workSecretCredentials ? workSecretLaneToken : getAccessToken());
   let fetchBridgeCredentials = workSecretCredentials
     ? () => {
-        let e = workSecretRegistered ? "refresh" : "initial";
+        let registerKind = workSecretRegistered ? "refresh" : "initial";
         return workSecretCredentials
-          .register(e, {
-            stillWanted: () => !I && supersession === undefined,
+          .register(registerKind, {
+            stillWanted: () => !stopped && supersession === undefined,
             reuseHeldAboveS: Math.ceil(cfg.token_refresh_buffer_ms / 1000) + 60,
           })
-          .then((r) => {
-            if (r !== null && !isCredentialsFailure(r)) workSecretRegistered = true;
-            return r;
+          .then((credentials) => {
+            if (credentials !== null && !isCredentialsFailure(credentials)) workSecretRegistered = true;
+            return credentials;
           });
       }
     : fetchCredentialsWithTrustedDevice;
@@ -328,31 +376,31 @@ async function initEnvLessBridgeCore(params) {
   let getCurrentAccessToken = () => getAccessToken() ?? accessToken;
   let getOwnerToken = () => ownerPin?.ownerToken() ?? getAccessToken() ?? accessToken;
   let recoveryAttemptedTokens = new Set();
-  let { getOriginalCwd } = await import("./chunk-nj7t53r7.js");
-  let { getMainLoopModel } = await import("./chunk-gqemcfsb.js");
+  let { getOriginalCwd } = await import("../bootstrap/state.js");
+  let { getMainLoopModel } = await import("../utils/model/DEFAULT_3P_FABLE_KEY.lazy.js");
   let groupingIdForCreate = requestedSessionGroupingId ?? sessionGroupingId;
   let effectiveGroupingId = sessionGroupingId;
-  let ii = false;
+  let repositoryUrl = false;
   async function createSessionWithRetry() {
-    let e = gitRepoUrl ? undefined : await nameSourceForCreate?.();
-    let r = e
+    let namedRepository = gitRepoUrl ? undefined : await nameSourceForCreate?.();
+    let fallbackGitContext = namedRepository
       ? {
-          repositoryUrl: e,
+          repositoryUrl: namedRepository,
         }
       : undefined;
-    ii = r !== undefined;
+    repositoryUrl = fallbackGitContext !== undefined;
     let warnState = {};
-    let y = async () => {
+    let reportGitContext = async () => {
       if (gitRepoUrl) {
-        let { buildGitSessionContext } = await import("./chunk-wx4f8343.js");
-        let { reportGitSessionContext } = await import("./chunk-587ph99w.js");
+        let { buildGitSessionContext } = await import("./gitSessionContext.js");
+        let { reportGitSessionContext } = await import("./reportGitSessionContext.js");
         let { report } = await buildGitSessionContext(gitRepoUrl, branch, defaultBranch ?? undefined);
         reportGitSessionContext(report);
       }
     };
-    let R = (groupingId) =>
+    let createForGrouping = (groupingId) =>
       withRetryAndAuthRecovery(
-        (accessToken, j) =>
+        (accessToken, recoverAuth) =>
           createCodeSession(
             baseUrl,
             accessToken,
@@ -365,12 +413,12 @@ async function initEnvLessBridgeCore(params) {
                   branch,
                   defaultBranch: defaultBranch ?? undefined,
                 }
-              : r,
+              : fallbackGitContext,
             getOriginalCwd(),
             getMainLoopModel(),
             groupingId,
             warnState,
-            j,
+            recoverAuth,
           ).then((codeSession) => {
             if (typeof codeSession === "string") ownerPin?.noteAcceptedToken(accessToken);
             return codeSession;
@@ -383,58 +431,59 @@ async function initEnvLessBridgeCore(params) {
           recoveryAttemptedTokens,
         },
       );
-    let _ = await R(groupingIdForCreate);
+    let created = await createForGrouping(groupingIdForCreate);
     if (
-      isCreateSessionFailure(_) &&
-      _.reason === "grouping_rejected" &&
+      isCreateSessionFailure(created) &&
+      created.reason === "grouping_rejected" &&
       requestedSessionGroupingId === undefined &&
       groupingIdForCreate !== undefined
     ) {
-      let S = await R(undefined);
-      if (typeof S === "string") {
+      let retried = await createForGrouping(undefined);
+      if (typeof retried === "string") {
         effectiveGroupingId = undefined;
-        await y();
-        if (r) noop("connect");
+        await reportGitContext();
+        if (fallbackGitContext) noop("connect");
         logForDiagnosticsNoPII("info", "bridge_repl_v2_grouping_dropped", {
-          status: _.status,
+          status: created.status,
         });
         logForDebugging("[bridge:core] persisted Project no longer available; recreated session outside it");
-        logForDebugging(`[remote-bridge] Created session ${S}`);
+        logForDebugging(`[remote-bridge] Created session ${retried}`);
         logForDiagnosticsNoPII("info", "bridge_repl_v2_session_created");
-        return S;
+        return retried;
       }
-      if (r && !isCredentialsRejection(S)) noopTwoArgs("connect", S);
-      return _;
+      if (fallbackGitContext && !isCredentialsRejection(retried)) noopTwoArgs("connect", retried);
+      return created;
     }
-    if (typeof _ === "string") {
+    if (typeof created === "string") {
       effectiveGroupingId = groupingIdForCreate;
-      await y();
-      if (r) noop("connect");
-      logForDebugging(`[remote-bridge] Created session ${_}`);
+      await reportGitContext();
+      if (fallbackGitContext) noop("connect");
+      logForDebugging(`[remote-bridge] Created session ${created}`);
       logForDiagnosticsNoPII("info", "bridge_repl_v2_session_created");
     }
-    return _;
+    return created;
   }
-  function describeCreateFailure(e) {
-    if (e?.reason === "grouping_rejected" && groupingIdForCreate !== undefined) {
-      let r = e.detail ? `: ${e.detail}` : "";
+  function describeCreateFailure(failure) {
+    if (failure?.reason === "grouping_rejected" && groupingIdForCreate !== undefined) {
+      let detailSuffix = failure.detail ? `: ${failure.detail}` : "";
       return requestedSessionGroupingId !== undefined
-        ? `Couldn't create a session in the requested Project (server ${e.status}${r}). The Project may not exist or may not be available to you.`
-        : `Couldn't recreate the session in its previous Project (server ${e.status}${r}) \u2014 the Project may have been deleted or is no longer available.`;
+        ? `Couldn't create a session in the requested Project (server ${failure.status}${detailSuffix}). The Project may not exist or may not be available to you.`
+        : `Couldn't recreate the session in its previous Project (server ${failure.status}${detailSuffix}) \u2014 the Project may have been deleted or is no longer available.`;
     }
-    if (e?.reason === "request_rejected")
-      return `Session creation failed (server ${e.status}) \u2014 see debug log`;
-    if (e?.reason === "malformed_response") return BRIDGE_MALFORMED_RESPONSE_HINT;
+    if (failure?.reason === "request_rejected")
+      return `Session creation failed (server ${failure.status}) \u2014 see debug log`;
+    if (failure?.reason === "malformed_response") return BRIDGE_MALFORMED_RESPONSE_HINT;
     return "Session creation failed \u2014 see debug log";
   }
   function reportCreateFailure(sessionWithRetry) {
     if (sessionWithRetry !== null && sessionWithRetry.terminal === false) {
-      onStateChange?.("failed", Yn, "auth");
+      onStateChange?.("failed", loginRejectedMessage, "auth");
       logBridgeSkip("v2_session_create_oauth_rejected", undefined, true);
       logFeatureBad("bridge_connect", "bridge_connect_create_oauth_rejected");
       return;
     }
-    if (ii) noopTwoArgs("connect", isCreateSessionFailure(sessionWithRetry) ? sessionWithRetry : null);
+    if (repositoryUrl)
+      noopTwoArgs("connect", isCreateSessionFailure(sessionWithRetry) ? sessionWithRetry : null);
     onStateChange?.(
       "failed",
       describeCreateFailure(isCreateSessionFailure(sessionWithRetry) ? sessionWithRetry : null),
@@ -442,11 +491,11 @@ async function initEnvLessBridgeCore(params) {
     logBridgeSkip("v2_session_create_failed", undefined, true);
     logFeatureBad("bridge_connect", "bridge_connect_session_create_failed");
   }
-  let ca = "JWT refresh failed: no OAuth token \u2014 run /login";
-  let Yn = "Claude.ai login was rejected \u2014 run /login, then /remote-control";
-  let fa = "Claude.ai login expired \u2014 run /login, then /remote-control";
-  let _a = "Claude.ai login expired \u2014 run /login to restore Remote Control";
-  let pa = "Signed out of Claude \u2014 run /login, then /remote-control";
+  let jwtRefreshNoTokenMessage = "JWT refresh failed: no OAuth token \u2014 run /login";
+  let loginRejectedMessage = "Claude.ai login was rejected \u2014 run /login, then /remote-control";
+  let loginExpiredMessage = "Claude.ai login expired \u2014 run /login, then /remote-control";
+  let loginExpiredForRefreshMessage = "Claude.ai login expired \u2014 run /login to restore Remote Control";
+  let signedOutMessage = "Signed out of Claude \u2014 run /login, then /remote-control";
   let reattachSuppressed = false;
   let reattachFellBackToFresh = false;
   if (reattachSessionId && isTeleportedSession(reattachSessionId)) {
@@ -489,15 +538,15 @@ async function initEnvLessBridgeCore(params) {
     sessionId = reattachSessionId;
     logForDebugging(`[remote-bridge] Reattaching to session ${sessionId}`);
     logForDiagnosticsNoPII("info", "bridge_repl_v2_session_reattached");
-    let e = await withRetryAndAuthRecovery(
-      (r, i) =>
+    let unarchiveOutcome = await withRetryAndAuthRecovery(
+      (token, recoverAuth) =>
         unarchiveRemoteBridgeSession(
           sessionId,
           baseUrl,
-          r,
+          token,
           orgUUID,
           cfg.http_timeout_ms,
-          i,
+          recoverAuth,
           credentialsStore,
         ),
       "unarchiveSession",
@@ -508,14 +557,14 @@ async function initEnvLessBridgeCore(params) {
         recoveryAttemptedTokens,
       },
     );
-    if (e?.outcome === "elevated_auth") {
+    if (unarchiveOutcome?.outcome === "elevated_auth") {
       logForDebugging(
-        `[remote-bridge] Reattach ${sessionId}: unarchive elevated-auth (${e.reason}) \u2014 surfacing the failure, pointer preserved`,
+        `[remote-bridge] Reattach ${sessionId}: unarchive elevated-auth (${unarchiveOutcome.reason}) \u2014 surfacing the failure, pointer preserved`,
       );
       logForDiagnosticsNoPII("info", "bridge_repl_v2_reattach_elevated_auth");
-      let r = e.reason === "untrusted_device" && !isTrustedDeviceGateEnabled();
-      let { outcome, ...y } = e;
-      let R = r
+      let untrustedGateOff = unarchiveOutcome.reason === "untrusted_device" && !isTrustedDeviceGateEnabled();
+      let { outcome, ...outcomeRest } = unarchiveOutcome;
+      let credentialFailure = untrustedGateOff
         ? {
             terminal: true,
             reason: "request_rejected",
@@ -523,16 +572,20 @@ async function initEnvLessBridgeCore(params) {
           }
         : {
             terminal: true,
-            ...y,
+            ...outcomeRest,
           };
-      onStateChange?.("failed", describeCredentialFailure(R), failureSeverity(R));
+      onStateChange?.(
+        "failed",
+        describeCredentialFailure(credentialFailure),
+        failureSeverity_2(credentialFailure),
+      );
       logBridgeSkip("v2_reattach_elevated_auth", undefined, true);
       logFeatureBad("bridge_connect", "bridge_connect_reattach_elevated_auth");
       return null;
     }
-    if (e?.outcome === "gone" && reattachOrFail) {
+    if (unarchiveOutcome?.outcome === "gone" && reattachOrFail) {
       logForDebugging(
-        `[remote-bridge] Reattach-or-fail: ${sessionId} gone (unarchive ${e.status}); failing terminally instead of minting fresh`,
+        `[remote-bridge] Reattach-or-fail: ${sessionId} gone (unarchive ${unarchiveOutcome.status}); failing terminally instead of minting fresh`,
       );
       logForDiagnosticsNoPII("info", "bridge_repl_v2_revive_reattach_gone");
       onReattachGoneBounce();
@@ -545,21 +598,24 @@ async function initEnvLessBridgeCore(params) {
       logFeatureBad("bridge_connect", "bridge_connect_reattach_gone");
       return null;
     }
-    if (e?.outcome === "gone") {
+    if (unarchiveOutcome?.outcome === "gone") {
       logForDebugging(
-        `[remote-bridge] Reattach ${sessionId} gone (unarchive ${e.status}); minting fresh session`,
+        `[remote-bridge] Reattach ${sessionId} gone (unarchive ${unarchiveOutcome.status}); minting fresh session`,
       );
       reattachFellBackToFresh = true;
       onReattachGoneBounce();
       sessionTitle = neutralFallbackTitle ?? `${getBridgeSessionNamePrefix()}-${randomWordSlug()}`;
       logForDiagnosticsNoPII("info", "bridge_repl_v2_reattach_fallback", {
         via: "unarchive",
-        status: e.status,
+        status: unarchiveOutcome.status,
       });
       logEvent("tengu_bridge_repl_env_expired_fresh_session", {
         v2: true,
         via: fromEnum("unarchive"),
-        status: typeof e.status === "number" ? e.status : fromEnum(e.status),
+        status:
+          typeof unarchiveOutcome.status === "number"
+            ? unarchiveOutcome.status
+            : fromEnum(unarchiveOutcome.status),
         reattach_origin: fromEnumOpt(reattachOrigin),
         revive_initiated: reviveInitiated === true,
       });
@@ -605,9 +661,9 @@ async function initEnvLessBridgeCore(params) {
     baseUrl,
     getAccessToken: getCurrentAccessToken,
     skipSessionId: sessionId,
-    archive: (e) =>
+    archive: (sessionIdToArchive) =>
       archiveRemoteBridgeSession(
-        e,
+        sessionIdToArchive,
         baseUrl,
         getCurrentAccessToken(),
         orgUUID,
@@ -617,63 +673,73 @@ async function initEnvLessBridgeCore(params) {
       ),
     storageV5,
   });
-  let ha = BRIDGE_REMINT_BACKOFF_CAP_MS + 60000;
-  let ft;
-  function Xn() {
-    ft = undefined;
+  let nonOriginWindowMs = BRIDGE_REMINT_BACKOFF_CAP_MS + 60000;
+  let nonOriginStreak;
+  function resetNonOriginStreak() {
+    nonOriginStreak = undefined;
   }
-  function screenNonOriginRefusal(e) {
-    if (!isCredentialsFailure(e) || !isNonOrigin403(e)) {
-      if (e !== null && !isCredentialsFailure(e) && !isCredentialsRejection(e)) Xn();
-      return e;
+  function screenNonOriginRefusal(refusal) {
+    if (!isCredentialsFailure(refusal) || !isNonOrigin403(refusal)) {
+      if (refusal !== null && !isCredentialsFailure(refusal) && !isCredentialsRejection(refusal))
+        resetNonOriginStreak();
+      return refusal;
     }
-    if (!isBridgeNonOrigin403RetryEnabled()) return e;
+    if (!isBridgeNonOrigin403RetryEnabled()) return refusal;
     let now = Date.now();
-    if (ft === undefined || now - ft.lastAtMs > ha)
-      ft = {
+    if (nonOriginStreak === undefined || now - nonOriginStreak.lastAtMs > nonOriginWindowMs)
+      nonOriginStreak = {
         startedAtMs: now,
         lastAtMs: now,
         refusals: 0,
       };
-    ft.lastAtMs = now;
-    ft.refusals++;
-    let i = now - ft.startedAtMs;
-    if (ft.refusals > 1 && i >= LONG_POLL_TIMEOUT_MS) {
+    nonOriginStreak.lastAtMs = now;
+    nonOriginStreak.refusals++;
+    let streakMs = now - nonOriginStreak.startedAtMs;
+    if (nonOriginStreak.refusals > 1 && streakMs >= LONG_POLL_TIMEOUT_MS) {
       logForDebugging(
-        `[remote-bridge] /bridge refused by ${e.source} ${ft.refusals}\xD7 over ${Math.round(i / 1000)}s with nothing reaching Anthropic since \u2014 treating as a verdict`,
+        `[remote-bridge] /bridge refused by ${refusal.source} ${nonOriginStreak.refusals}\xD7 over ${Math.round(streakMs / 1000)}s with nothing reaching Anthropic since \u2014 treating as a verdict`,
       );
-      return e;
+      return refusal;
     }
     logForDebugging(
-      `[remote-bridge] /bridge 403 not written by Anthropic's origin (${e.source}) \u2014 treating as unreachable`,
+      `[remote-bridge] /bridge 403 not written by Anthropic's origin (${refusal.source}) \u2014 treating as unreachable`,
     );
     logForDiagnosticsNoPII("warn", "bridge_repl_v2_bridge_403_nonorigin", {
-      source: e.source,
+      source: refusal.source,
     });
     return null;
   }
-  function refetchCredentials(e, stale) {
-    if (I || supersession !== undefined || ae !== stale) return Promise.resolve(null);
-    let i = () =>
-      eo(sessionId, e).then((y) => {
-        if (ae !== stale) return y;
-        let R = screenNonOriginRefusal(y);
-        if (R !== null && !isCredentialsFailure(R) && !isCredentialsRejection(R)) {
-          noteAcceptedToken(e);
-          So();
+  function refetchCredentials(token, stale) {
+    if (stopped || supersession !== undefined || recoveryGeneration !== stale) return Promise.resolve(null);
+    let refetch = () =>
+      refetchWithEpoch(sessionId, token).then((result) => {
+        if (recoveryGeneration !== stale) return result;
+        let screened = screenNonOriginRefusal(result);
+        if (screened !== null && !isCredentialsFailure(screened) && !isCredentialsRejection(screened)) {
+          noteAcceptedToken(token);
+          clearRejectedToken();
         }
-        return R;
+        return screened;
       });
-    if (!Mt()) return i();
-    return lr("owner_changed_recovery").then((y) =>
-      y || I || supersession !== undefined || ae !== stale ? null : i(),
+    if (!ownerLooksChanged()) return refetch();
+    return ownerChangedSince("owner_changed_recovery").then((ownerUnchanged) =>
+      ownerUnchanged || stopped || supersession !== undefined || recoveryGeneration !== stale
+        ? null
+        : refetch(),
     );
   }
-  let di = accessToken;
+  let lastFetchedToken = accessToken;
   let bridgeCredentials = await withRetryAndAuthRecovery(
-    (e, r) => {
-      di = e;
-      return fetchBridgeCredentials(sessionId, baseUrl, e, cfg.http_timeout_ms, r, credentialsStore);
+    (token, deviceToken) => {
+      lastFetchedToken = token;
+      return fetchBridgeCredentials(
+        sessionId,
+        baseUrl,
+        token,
+        cfg.http_timeout_ms,
+        deviceToken,
+        credentialsStore,
+      );
     },
     "fetchRemoteCredentials",
     cfg,
@@ -694,22 +760,22 @@ async function initEnvLessBridgeCore(params) {
     isCredentialsFailure(bridgeCredentials) ||
     isCredentialsRejection(bridgeCredentials)
   ) {
-    let e =
+    let failureMessage =
       bridgeCredentials === null
         ? isReattach
           ? "Couldn't reconnect to your Remote Control session. Retry, or start a fresh session without --resume."
           : "Remote credentials fetch failed \u2014 see debug log"
         : isCredentialsRejection(bridgeCredentials)
-          ? fa
+          ? loginExpiredMessage
           : describeCredentialFailure(bridgeCredentials);
-    let r =
+    let severity =
       bridgeCredentials === null
         ? reviveInitiated
           ? "auth"
           : "terminal"
         : isCredentialsRejection(bridgeCredentials)
           ? "auth"
-          : failureSeverity(bridgeCredentials);
+          : failureSeverity_2(bridgeCredentials);
     let reason =
       bridgeCredentials === null
         ? isReattach
@@ -721,9 +787,9 @@ async function initEnvLessBridgeCore(params) {
             ? `v2_remote_creds_request_rejected_${bridgeCredentials.source}`
             : `v2_remote_creds_${bridgeCredentials.reason}`;
     logForDebugging(
-      `[remote-bridge] Creds failed; onStateChange ${onStateChange ? "set" : "UNSET"}, msg="${e}"`,
+      `[remote-bridge] Creds failed; onStateChange ${onStateChange ? "set" : "UNSET"}, msg="${failureMessage}"`,
     );
-    onStateChange?.("failed", e, r);
+    onStateChange?.("failed", failureMessage, severity);
     logBridgeSkip(reason, undefined, true);
     logFeatureBad("bridge_connect", "bridge_connect_creds_failed");
     if (!isReattach)
@@ -741,55 +807,67 @@ async function initEnvLessBridgeCore(params) {
     return null;
   }
   logForDebugging(`[remote-bridge] Fetched bridge credentials (expires_in=${bridgeCredentials.expires_in}s)`);
-  noteAcceptedToken(di);
+  noteAcceptedToken(lastFetchedToken);
   onSessionEstablished?.(sessionId);
   let workerEpoch = bridgeCredentials.worker_epoch;
   function raiseWorkerEpoch(workerEpoch_2) {
     workerEpoch = Math.max(workerEpoch, workerEpoch_2);
   }
-  function eo(e, r) {
+  function refetchWithEpoch(token, deviceToken) {
     if (workSecretCredentials || !isBridgeAttachEpochFenceEnabled())
-      return fetchBridgeCredentials(e, baseUrl, r, cfg.http_timeout_ms, undefined, credentialsStore);
-    let i = workerEpoch;
-    let y = ae;
+      return fetchBridgeCredentials(
+        token,
+        baseUrl,
+        deviceToken,
+        cfg.http_timeout_ms,
+        undefined,
+        credentialsStore,
+      );
+    let heldEpoch = workerEpoch;
+    let generation = recoveryGeneration;
     return sendWithEpochFollowUps({
-      heldEpoch: i,
-      send: (R, onRefused) =>
+      heldEpoch,
+      send: (epoch, onRefused) =>
         fetchBridgeCredentials(
-          e,
+          token,
           baseUrl,
-          r,
+          deviceToken,
           cfg.http_timeout_ms,
           undefined,
           credentialsStore,
-          R === undefined
+          epoch === undefined
             ? undefined
             : {
-                expectedEpoch: R,
+                expectedEpoch: epoch,
                 onRefused,
               },
         ),
       maySendAgain: () => {
         if (isTeleportedSession(sessionId)) return false;
-        return !I && !re && supersession === undefined && ae === y;
+        return !stopped && !ownerChanged && supersession === undefined && recoveryGeneration === generation;
       },
-    }).then((R) => {
-      let answer = R.answer;
+    }).then((followUp) => {
+      let answer = followUp.answer;
       try {
         let workerEpoch =
           answer !== null && !isCredentialsFailure(answer) && !isCredentialsRejection(answer)
             ? answer.worker_epoch
             : undefined;
-        if (workerEpoch !== undefined && !I && ae === y) raiseWorkerEpoch(workerEpoch);
-        if (R.ending !== "not_refused" && qt()) {
-          let D = workerEpoch !== undefined;
+        if (workerEpoch !== undefined && !stopped && recoveryGeneration === generation)
+          raiseWorkerEpoch(workerEpoch);
+        if (followUp.ending !== "not_refused" && canReportPresence()) {
+          let hasAnswer = workerEpoch !== undefined;
           logEvent("tengu_bridge_repl_attach_conflict", {
-            outcome: fromEnum(R.ending === "followed_up" ? (D ? "resolved" : "unresolved") : R.ending),
-            accepted: D,
-            stated_epoch: i,
-            session_epoch: R.sessionEpoch,
-            follow_ups: R.followUps,
-            fallback_reason: fromEnumOpt(R.ending === "unfenced_fallback" ? R.fallbackReason : undefined),
+            outcome: fromEnum(
+              followUp.ending === "followed_up" ? (hasAnswer ? "resolved" : "unresolved") : followUp.ending,
+            ),
+            accepted: hasAnswer,
+            stated_epoch: heldEpoch,
+            session_epoch: followUp.sessionEpoch,
+            follow_ups: followUp.followUps,
+            fallback_reason: fromEnumOpt(
+              followUp.ending === "unfenced_fallback" ? followUp.fallbackReason : undefined,
+            ),
           });
         }
       } catch (error) {
@@ -801,75 +879,75 @@ async function initEnvLessBridgeCore(params) {
   }
   let sessionUrl = buildCCRv2SdkUrl(bridgeCredentials.api_base_url, sessionId);
   logForDebugging(`[remote-bridge] v2 session URL: ${sessionUrl}`);
-  function ga() {
+  function selfHealHeartbeats() {
     return getFeatureValue_CACHED_MAY_BE_STALE("tengu_bridge_selfheal_heartbeats", true);
   }
-  function to() {
+  function isRecoveryPatienceEnabled() {
     return getFeatureValue_CACHED_MAY_BE_STALE("tengu_bridge_recovery_patience", true);
   }
-  function ci() {
+  function isDazzlingGardenEnabled() {
     return getFeatureValue_CACHED_MAY_BE_STALE("tengu_dazzling_garden", true);
   }
-  function fi() {
+  function streamEventFlushIntervalMs() {
     return getFeatureValue_CACHED_MAY_BE_STALE(
       "tengu_ccr_stream_event_flush_ms",
       DEFAULT_STREAM_EVENT_FLUSH_INTERVAL_MS,
     );
   }
-  function _i() {
+  function streamEventFirstFlushMs() {
     return getFeatureValue_CACHED_MAY_BE_STALE("tengu_ccr_stream_first_flush_ms", 0);
   }
-  function pi() {
+  function noSubscriberFlushMs() {
     return getFeatureValue_CACHED_MAY_BE_STALE("tengu_ccr_no_subscriber_flush_ms", 0);
   }
-  function Ht() {
+  function noSubscriberHoldMs() {
     return outboundOnly ? 0 : getFeatureValue_CACHED_MAY_BE_STALE("tengu_ccr_no_subscriber_hold_ms", 0);
   }
-  function er() {
-    return Ht() > 0 || transport.mayHoldUploads?.() === true;
+  function mayHoldUploads() {
+    return noSubscriberHoldMs() > 0 || transport.mayHoldUploads?.() === true;
   }
-  function ma() {
+  function sseKeepaliveMaxIntervalSeconds() {
     return getFeatureValue_CACHED_MAY_BE_STALE("tengu_ccr_sse_keepalive_max_interval_s", 0);
   }
-  function va() {
+  function shouldLongPollFallback() {
     return getFeatureValue_CACHED_MAY_BE_STALE("tengu_ccr_sse_long_poll_fallback", true);
   }
-  function hi() {
+  function shouldDropUnwatchedStreamEvents() {
     return outboundOnly
       ? false
       : getFeatureValue_CACHED_MAY_BE_STALE("tengu_ccr_drop_unwatched_stream_events", false);
   }
-  function tr() {
+  function backfillConfig() {
     return outboundOnly ? DEFAULT_HISTORY_BACKFILL_CONFIG : historyBackfillConfig();
   }
-  function ba() {
+  function advertiseHeartbeatProbeSupport() {
     return getFeatureValue_CACHED_MAY_BE_STALE("tengu_ccr_idle_heartbeat", false);
   }
-  function ya() {
+  function shouldBeatOnStaleReconnect() {
     return getFeatureValue_CACHED_MAY_BE_STALE("tengu_ccr_reconnect_beat", false);
   }
-  function Ra() {
+  function shouldBeatOnReactivation() {
     return getFeatureValue_CACHED_MAY_BE_STALE("tengu_ccr_reactivation_beat", false);
   }
-  function wa() {
+  function shouldSkipRedundantHeartbeats() {
     return getFeatureValue_CACHED_MAY_BE_STALE("tengu_ccr_skip_redundant_heartbeat", false);
   }
   let idleTracker = createIdleTracker();
   let starts = new Map();
   let artifactSocketIds = new Set();
   let gzipRequestBodyFetch = createGzipFetchWrapper("ccr_worker", storageV5);
-  function gi() {
+  function buildTransportOptions() {
     return {
       heartbeatIntervalMs: cfg.heartbeat_interval_ms,
       heartbeatJitterFraction: cfg.heartbeat_jitter_fraction,
-      onRequestAuthOk: Ua,
+      onRequestAuthOk: noteAuthOk,
       causeTypedCloseCodes: true,
-      selfHealHeartbeats: ga(),
-      advertiseHeartbeatProbeSupport: ba(),
-      beatOnStaleReconnect: ya(),
+      selfHealHeartbeats: selfHealHeartbeats(),
+      advertiseHeartbeatProbeSupport: advertiseHeartbeatProbeSupport(),
+      beatOnStaleReconnect: shouldBeatOnStaleReconnect(),
       idleTracker,
-      beatOnReactivation: Ra(),
-      skipRedundantHeartbeats: wa(),
+      beatOnReactivation: shouldBeatOnReactivation(),
+      skipRedundantHeartbeats: shouldSkipRedundantHeartbeats(),
       uploadTrim: () => getFeatureValue_CACHED_MAY_BE_STALE("tengu_ccr_upload_trim", {}),
       keepsRequestId: () => getFeatureValue_CACHED_MAY_BE_STALE(TENGU_TOASTY_BEACON, false),
       uploadHoldMarker: () => getFeatureValue_CACHED_MAY_BE_STALE("tengu_ccr_upload_hold_marker", false),
@@ -880,19 +958,19 @@ async function initEnvLessBridgeCore(params) {
       artifactSocketIds,
       followsServedPolicy: true,
       processExiting: isTerminalShutdown,
-      streamEventFlushIntervalMs: fi(),
-      streamEventFirstFlushMs: _i(),
+      streamEventFlushIntervalMs: streamEventFlushIntervalMs(),
+      streamEventFirstFlushMs: streamEventFirstFlushMs(),
       sseConnectTimeoutMs: () => getPollIntervalConfig().sse_connect_timeout_ms,
       gzipRequestBodyFetch,
-      noSubscriberStreamEventFlushIntervalMs: pi(),
-      noSubscriberUploadHoldMs: Ht(),
-      dropUnwatchedStreamEvents: hi(),
-      sseKeepaliveMaxIntervalSeconds: ma,
-      longPollFallback: va,
+      noSubscriberStreamEventFlushIntervalMs: noSubscriberFlushMs(),
+      noSubscriberUploadHoldMs: noSubscriberHoldMs(),
+      dropUnwatchedStreamEvents: shouldDropUnwatchedStreamEvents(),
+      sseKeepaliveMaxIntervalSeconds,
+      longPollFallback: shouldLongPollFallback,
       outboundOnly,
       nonOrigin403Retry: isBridgeNonOrigin403RetryEnabled(),
       inboundReadReceipts: isBridgeInboundReadReceiptsEnabled,
-      onNonOriginRejectionRecovered: Ha,
+      onNonOriginRejectionRecovered: onNonOriginRecovered,
       retainUndeliveredOnClose: true,
       internalEventUploader: {
         maxConsecutiveFailures: MAX_CONSECUTIVE_UPLOAD_FAILURES,
@@ -901,17 +979,17 @@ async function initEnvLessBridgeCore(params) {
       },
     };
   }
-  let ro = isReattach && (remoteControlOrigin !== undefined || noHistoryBackfill);
+  let onConnectNeedsRecord = isReattach && (remoteControlOrigin !== undefined || noHistoryBackfill);
   let transport;
   try {
     transport = await createV2ReplTransport({
-      ...gi(),
+      ...buildTransportOptions(),
       sessionUrl,
       ingressToken: bridgeCredentials.worker_jwt,
       sessionId,
       epoch: bridgeCredentials.worker_epoch,
       initialSequenceNum: isReattach ? reattachSequenceNum : undefined,
-      onConnectNeedsRecord: ro,
+      onConnectNeedsRecord,
       getAuthToken: () => bridgeCredentials.worker_jwt,
     });
   } catch (err) {
@@ -938,34 +1016,34 @@ async function initEnvLessBridgeCore(params) {
   logForDebugging(`[remote-bridge] v2 transport created (epoch=${bridgeCredentials.worker_epoch})`);
   onStateChange?.("ready");
   let { worker_jwt: workerJwt, worker_epoch: workerEpoch_2, api_base_url: apiBaseUrl } = bridgeCredentials;
-  let rl = null;
-  let nl = new Set();
-  let Ca = new Set();
-  let Ma = false;
-  let ol = false;
-  let tn = 0;
-  function il() {
-    tn++;
-    Ma = false;
-    Ca = new Set();
+  let heldMcpStatus = null;
+  let pendingMcpAdds = new Set();
+  let removedMcpServers = new Set();
+  let mcpInjectedOnce = false;
+  let mcpRelinquished = false;
+  let mcpGeneration = 0;
+  function resetMcpSync() {
+    mcpGeneration++;
+    mcpInjectedOnce = false;
+    removedMcpServers = new Set();
   }
-  let ka = null;
-  function sl(e, r = false) {}
-  function dl() {
-    ka = null;
+  let heldMcpSync = null;
+  function applyInjectedMcp(servers, reassert = false) {}
+  function clearHeldMcpSync() {
+    heldMcpSync = null;
   }
-  function Aa() {
+  function canAdoptInjectedMcp() {
     return false;
   }
-  function ul(e, r, i = false) {
+  function computeMcpDelta(servers, reassert, force = false) {
     return {
       added: [],
       removed: [],
     };
   }
-  function Pa(e, r = false) {}
-  let onMcpSetServers = (e) => {
-    if (Object.keys(e).length === 0) {
+  function refreshInjectedMcp(results, reassert = false) {}
+  let onMcpSetServers = (servers) => {
+    if (Object.keys(servers).length === 0) {
       onProjectsBindingHint?.();
       return {
         ok: true,
@@ -980,34 +1058,34 @@ async function initEnvLessBridgeCore(params) {
       error: "Server-injected MCP servers are disabled for this Remote Control session",
     };
   };
-  let xt = 0;
-  let Lt = false;
-  function Ia() {
-    if (I) return;
+  let lastRefreshAt = 0;
+  let refreshDeferred = false;
+  function requestInjectedMcpReassert() {
+    if (stopped) return;
     let now = Date.now();
-    if (now - xt < REFRESH_MIN_INTERVAL_MS) {
-      Lt = true;
+    if (now - lastRefreshAt < REFRESH_MIN_INTERVAL_MS) {
+      refreshDeferred = true;
       return;
     }
-    xt = now;
-    Lt = false;
+    lastRefreshAt = now;
+    refreshDeferred = false;
     refresh.refreshNow(sessionId);
   }
-  function vi() {
-    if (I || !Lt) return;
-    Lt = false;
-    xt = Date.now();
+  function runDeferredRefresh() {
+    if (stopped || !refreshDeferred) return;
+    refreshDeferred = false;
+    lastRefreshAt = Date.now();
     refresh.refreshNow(sessionId);
   }
-  function rn() {
+  function relinquishInjectedMcp() {
     try {
-      Da("withdrawn");
+      reportMcpRelinquished("withdrawn");
     } catch (error) {
       logError(error);
       logFeatureBad("bridge_webagent_mcp_inject", "relinquish_threw");
     }
   }
-  function Da(e) {}
+  function reportMcpRelinquished(reason) {}
   let recentPostedUUIDs = new BoundedUUIDSet(cfg.uuid_dedup_buffer_size);
   let initialMessageUUIDs = new Set();
   if (initialMessages)
@@ -1017,99 +1095,99 @@ async function initEnvLessBridgeCore(params) {
     }
   let recentInboundUUIDs = new BoundedUUIDSet(cfg.uuid_dedup_buffer_size);
   let flushGate = new Map();
-  let no = new BoundedUUIDSet(cfg.uuid_dedup_buffer_size);
+  let writtenSdkUuids = new BoundedUUIDSet(cfg.uuid_dedup_buffer_size);
   let messageFlushGate = new FlushGate();
   let frameFlushGate = new FlushGate();
-  let oo = 0;
-  let $t = false;
-  let Rt = false;
-  let or = new Map();
-  let ja = 64;
-  let yr = isReattach;
-  let io;
-  let Rr;
+  let frameSeq = 0;
+  let queuedAnyMessage = false;
+  let turnResultReported = false;
+  let replyStamps = new Map();
+  let maxReplyStamps = 64;
+  let historyFlushed = isReattach;
+  let firstHistoryPromise;
+  let lastClosedTransport;
   let transcriptMirrorMode =
     !isReattach &&
     !noHistoryBackfill &&
     !reattachFellBackToFresh &&
-    isBackfillScopeAllowedForOrigin(tr().scope, remoteControlOrigin)
+    isBackfillScopeAllowedForOrigin(backfillConfig().scope, remoteControlOrigin)
       ? "deferred"
       : "live";
   let transcriptUploadDeferred = remoteControlOrigin;
-  let sn = new BoundedUUIDSet(cfg.uuid_dedup_buffer_size);
-  let wt;
-  let wr = {};
-  let I = false;
-  let an;
-  let Be = false;
-  let yi = 0;
-  let ae = 0;
-  function Ri() {
-    yi++;
-    ae = yi;
-    Be = true;
-    ir = Date.now();
-    Er = false;
-    return ae;
+  let backfilledUuids = new BoundedUUIDSet(cfg.uuid_dedup_buffer_size);
+  let transcriptRelease;
+  let deferredMetadata = {};
+  let stopped = false;
+  let teardownPromise;
+  let recoveryInFlight = false;
+  let generationCounter = 0;
+  let recoveryGeneration = 0;
+  function beginRecovery() {
+    generationCounter++;
+    recoveryGeneration = generationCounter;
+    recoveryInFlight = true;
+    recoveryStartedAt = Date.now();
+    rebuiltSinceStart = false;
+    return recoveryGeneration;
   }
-  function wi(e) {
-    if (ae !== e) return false;
-    ae = 0;
-    Be = false;
-    ir = 0;
-    Ei();
+  function endRecovery(token) {
+    if (recoveryGeneration !== token) return false;
+    recoveryGeneration = 0;
+    recoveryInFlight = false;
+    recoveryStartedAt = 0;
+    drainAfterRecovery();
     return true;
   }
-  let dn = false;
-  function Ei() {
-    if (!dn || I || re) {
-      dn = false;
+  let drainAfterRecoveryPending = false;
+  function drainAfterRecovery() {
+    if (!drainAfterRecoveryPending || stopped || ownerChanged) {
+      drainAfterRecoveryPending = false;
       return;
     }
-    dn = false;
-    if (pt !== undefined || !transport.isConnectedStatus()) return;
+    drainAfterRecoveryPending = false;
+    if (recoverTimer !== undefined || !transport.isConnectedStatus()) return;
     if (messageFlushGate.active || frameFlushGate.active) drainFlushGate();
-    Ao();
+    installPersistence();
   }
-  function Si() {
-    ae = 0;
-    Be = false;
-    ir = 0;
-    Ei();
+  function resetRecoveryFlags() {
+    recoveryGeneration = 0;
+    recoveryInFlight = false;
+    recoveryStartedAt = 0;
+    drainAfterRecovery();
   }
-  let ir = 0;
-  let Er = false;
-  let Ti =
+  let recoveryStartedAt = 0;
+  let rebuiltSinceStart = false;
+  let initRetryBudgetMs =
     cfg.init_retry_max_attempts * cfg.http_timeout_ms +
     (cfg.init_retry_max_attempts - 1) * cfg.init_retry_max_delay_ms;
-  let Na =
+  let oauthRetryBudgetMs =
     cfg.oauth_retry_base_delay_ms * (2 ** cfg.oauth_retry_max_attempts - 1) +
-    cfg.oauth_retry_max_attempts * Ti;
-  let Ci = 2 * (15000 + Ti + Na);
-  let sr = 0;
-  let Mi = 3;
-  let ln = 0;
+    cfg.oauth_retry_max_attempts * initRetryBudgetMs;
+  let recoveryCeilingMs = 2 * (15000 + initRetryBudgetMs + oauthRetryBudgetMs);
+  let recoveryAttempts = 0;
+  let maxRecoveryAttempts = 3;
+  let credRecoveryAttempts = 0;
   let reconnectBudget = createReconnectBudget();
-  function Ua() {
-    ln = 0;
+  function noteAuthOk() {
+    credRecoveryAttempts = 0;
     reconnectBudget.noteHealthyBeat(Date.now());
-    Xn();
+    resetNonOriginStreak();
     onAuthProven?.();
   }
-  let un = false;
-  let pt;
-  function ar() {
-    clearTimeout(pt);
-    pt = undefined;
+  let remintLoopActive = false;
+  let recoverTimer;
+  function clearRecoverTimer() {
+    clearTimeout(recoverTimer);
+    recoverTimer = undefined;
   }
-  let Et = false;
-  let St = null;
-  let cn = false;
-  function Sr() {
-    let e = St;
-    St = null;
+  let failedTerminally = false;
+  let livePreview = null;
+  let shutdownStarted = false;
+  function stopLivePreview() {
+    let held = livePreview;
+    livePreview = null;
     try {
-      e?.tunnel.stop();
+      held?.tunnel.stop();
     } catch (error) {
       logForDebugging(`[remote-bridge] a held tunnel's stop threw: ${errorMessage(error)}`, {
         level: "error",
@@ -1117,38 +1195,58 @@ async function initEnvLessBridgeCore(params) {
       logError(error);
     }
   }
-  let Ai = 0;
-  let Pi = 0;
-  function so(e) {
-    let r = e === "a_start" ? Pi : Ai;
-    let i = Date.now() - r;
-    return Mt() && !(i >= 0 && i < OWNER_PIN_INCONCLUSIVE_TTL_MS);
+  let lastSignInCheckAt = 0;
+  let lastFreshCheckAt = 0;
+  function isSignInCheckStale(kind) {
+    let lastCheckAt = kind === "a_start" ? lastFreshCheckAt : lastSignInCheckAt;
+    let ageMs = Date.now() - lastCheckAt;
+    return ownerLooksChanged() && !(ageMs >= 0 && ageMs < OWNER_PIN_INCONCLUSIVE_TTL_MS);
   }
-  function Oi() {
+  function isTransportUnusable() {
     if (isTeleportedSession(sessionId)) return true;
-    if (cn || I || re || Et || supersession !== undefined || checkSdkUrl(apiBaseUrl) !== null) return true;
-    let e = URL.parse(apiBaseUrl);
-    return e === null || (e.protocol !== "https:" && e.protocol !== "wss:" && !isLoopbackHost(e.hostname));
+    if (
+      shutdownStarted ||
+      stopped ||
+      ownerChanged ||
+      failedTerminally ||
+      supersession !== undefined ||
+      checkSdkUrl(apiBaseUrl) !== null
+    )
+      return true;
+    let parsedBase = URL.parse(apiBaseUrl);
+    return (
+      parsedBase === null ||
+      (parsedBase.protocol !== "https:" &&
+        parsedBase.protocol !== "wss:" &&
+        !isLoopbackHost(parsedBase.hostname))
+    );
   }
-  let Ii = params.fixedCredentialNow !== undefined && params.fixedCredentialNow() !== "replaced";
-  function lo() {
-    return Ii && !Ar() && params.fixedCredentialNow?.() === "replaced";
+  let hasFixedCredential =
+    params.fixedCredentialNow !== undefined && params.fixedCredentialNow() !== "replaced";
+  function credentialWasReplaced() {
+    return hasFixedCredential && !isOwnerPinned() && params.fixedCredentialNow?.() === "replaced";
   }
-  function Fa(e) {
-    if (St === null) return false;
+  function livePreviewMustRestart(cause) {
+    if (livePreview === null) return false;
     try {
-      let r;
-      switch (e) {
+      let mustRestart;
+      switch (cause) {
         case "flag_refresh":
-          r = false;
+          mustRestart = false;
           break;
         case "hand_over":
-          r = so("hand_over");
+          mustRestart = isSignInCheckStale("hand_over");
           break;
         default:
-          r = true;
+          mustRestart = true;
       }
-      return Oi() || r || lo() || St.dialedBase !== apiBaseUrl || St.isRefusedBySession();
+      return (
+        isTransportUnusable() ||
+        mustRestart ||
+        credentialWasReplaced() ||
+        livePreview.dialedBase !== apiBaseUrl ||
+        livePreview.isRefusedBySession()
+      );
     } catch (error) {
       logForDebugging(
         `[remote-bridge] live preview: the caller's check of its session threw: ${errorMessage(error)}`,
@@ -1160,204 +1258,216 @@ async function initEnvLessBridgeCore(params) {
       return true;
     }
   }
-  function fn(reconnectingDetail) {
-    Et = false;
+  function setReconnecting(reconnectingDetail) {
+    failedTerminally = false;
     onStateChange?.("reconnecting", reconnectingDetail);
   }
-  function Tr() {
-    Et = false;
+  function setConnected() {
+    failedTerminally = false;
     onStateChange?.("connected");
   }
-  function ve(e, r = "terminal") {
-    Et = true;
-    ar();
-    tt = undefined;
-    _n();
-    ko?.end();
-    Sr();
-    onStateChange?.("failed", e, r);
+  function failTransport(message, severity = "terminal") {
+    failedTerminally = true;
+    clearRecoverTimer();
+    pendingAuthCode = undefined;
+    dropPendingWrites();
+    persistenceCatchUp?.end();
+    stopLivePreview();
+    onStateChange?.("failed", message, severity);
   }
-  function Di() {
-    let e = er();
+  function flushAll() {
+    let holdUploads = mayHoldUploads();
     return Promise.all([
       transport.flush({
-        retryNow: e,
+        retryNow: holdUploads,
       }),
-      e &&
+      holdUploads &&
         transport.flushInternalEvents?.({
-          retryNow: e,
+          retryNow: holdUploads,
         }),
     ]).then(() => {});
   }
-  function Cr(e = FLUSH_TIMEOUT_MS) {
-    let r = sleep(e);
-    let winner = Promise.race([Di().then(() => true), r.then(() => false)]);
+  function flushWithTimeout(timeoutMs = FLUSH_TIMEOUT_MS) {
+    let sleeper = sleep(timeoutMs);
+    let winner = Promise.race([flushAll().then(() => true), sleeper.then(() => false)]);
     let winner_2 = Promise.race([
       transport.flushDeliveryAcks?.({
         retryNow: true,
       }),
-      r,
+      sleeper,
     ]);
-    return Promise.all([winner, winner_2]).then(([R]) => R);
+    return Promise.all([winner, winner_2]).then(([flushed]) => flushed);
   }
-  async function Bi(e, r = Date.now()) {
-    let i = transport.getUploadBacklog?.();
-    let y = await Cr(PREFLUSH_TIMEOUT_MS);
-    let R = {
-      hold_preflush_ms: Date.now() - r,
-      hold_preflush_landed: y,
-      hold_preflush_inflight_age_ms: i?.oldestInFlightMs,
-      hold_preflush_lane_in_backoff: i?.backingOff,
+  async function preflushHold(bucket, startedAt = Date.now()) {
+    let backlog = transport.getUploadBacklog?.();
+    let landed = await flushWithTimeout(PREFLUSH_TIMEOUT_MS);
+    let attributes = {
+      hold_preflush_ms: Date.now() - startedAt,
+      hold_preflush_landed: landed,
+      hold_preflush_inflight_age_ms: backlog?.oldestInFlightMs,
+      hold_preflush_lane_in_backoff: backlog?.backingOff,
     };
-    if (!y) logFeatureSad("ccr_no_subscriber_hold", e);
-    return R;
+    if (!landed) logFeatureSad("ccr_no_subscriber_hold", bucket);
+    return attributes;
   }
-  function ji() {
-    let e = transport.getUploadBacklog?.();
+  function backlogAtClose() {
+    let backlog = transport.getUploadBacklog?.();
     return {
-      unsent_client_events_at_close: e?.unsentClientEvents,
-      unsent_internal_events_at_close: e?.unsentInternalEvents,
+      unsent_client_events_at_close: backlog?.unsentClientEvents,
+      unsent_internal_events_at_close: backlog?.unsentInternalEvents,
     };
   }
-  function _n() {
-    let e = messageFlushGate.end();
-    let mapped = frameFlushGate.end().map((i) => i.frame);
-    $t = false;
-    Ni(e.length + mapped.length, mapped, transport.discardUndeliveredEvents?.() ?? []);
+  function dropPendingWrites() {
+    let queuedMessages = messageFlushGate.end();
+    let frames = frameFlushGate.end().map((frame) => frame.frame);
+    queuedAnyMessage = false;
+    reportLostEvents(
+      queuedMessages.length + frames.length,
+      frames,
+      transport.discardUndeliveredEvents?.() ?? [],
+    );
   }
-  function Ni(e, r, i) {
-    if (e === 0 && i.length === 0) return;
+  function reportLostEvents(queuedCount, frames, undelivered) {
+    if (queuedCount === 0 && undelivered.length === 0) return;
     logForDiagnosticsNoPII("warn", "bridge_repl_v2_client_events_lost", {
-      queued: e,
-      undelivered: i.length,
+      queued: queuedCount,
+      undelivered: undelivered.length,
     });
     logFeatureSad("bridge_repl", "client_events_lost_at_dead_end", {
-      queued: e,
-      undelivered: i.length,
+      queued: queuedCount,
+      undelivered: undelivered.length,
     });
-    let y = [
-      ...i.map((S) => S.payload.subtype),
-      ...r.map((S) => (S.type === "system" && "subtype" in S ? S.subtype : undefined)),
+    let subtypes = [
+      ...undelivered.map((event) => event.payload.subtype),
+      ...frames.map((frame) => (frame.type === "system" && "subtype" in frame ? frame.subtype : undefined)),
     ];
-    let included = y.includes("task_notification");
-    let included_2 = y.includes("background_tasks_changed");
+    let included = subtypes.includes("task_notification");
+    let included_2 = subtypes.includes("background_tasks_changed");
     if (included || included_2)
       logFeatureSad("ccr_task_status_publish", "status_events_lost_at_dead_end", {
         has_terminal_bookend: included,
         has_level: included_2,
       });
   }
-  let be;
+  let pendingClose;
   let supersession;
-  let Wt = false;
-  let dr;
-  let Tt;
-  let tt;
-  let Se = false;
-  let Mr;
-  let re = false;
-  let kr;
-  function qt() {
+  let presenceLogged = false;
+  let pendingPresenceSad;
+  let authEndCode;
+  let pendingAuthCode;
+  let episodeDead = false;
+  let firstCloseAt;
+  let ownerChanged = false;
+  let unsubscribeOwnerPin;
+  function canReportPresence() {
     return true;
   }
-  function ht(e, r, i = true) {
-    if (i) {
-      dr = undefined;
-      Tt = undefined;
+  function notePresenceSad(code, attributes, clearDetail = true) {
+    if (clearDetail) {
+      pendingPresenceSad = undefined;
+      authEndCode = undefined;
     }
-    if (!Wt || !qt()) return false;
-    if (r === undefined) logFeatureSad("bridge_presence", e);
-    else logFeatureSad("bridge_presence", e, r);
+    if (!presenceLogged || !canReportPresence()) return false;
+    if (attributes === undefined) logFeatureSad("bridge_presence", code);
+    else logFeatureSad("bridge_presence", code, attributes);
     return true;
   }
-  function ke(e, r) {
-    dr = undefined;
-    Tt = undefined;
-    Se = true;
-    if (!qt()) return false;
-    if (!Wt) {
+  function notePresenceBad(code, attributes) {
+    pendingPresenceSad = undefined;
+    authEndCode = undefined;
+    episodeDead = true;
+    if (!canReportPresence()) return false;
+    if (!presenceLogged) {
       logFeatureBad("bridge_connect", "bridge_connect_died_before_presence");
       return false;
     }
-    if (r === undefined) logFeatureBad("bridge_presence", e);
-    else logFeatureBad("bridge_presence", e, r);
+    if (attributes === undefined) logFeatureBad("bridge_presence", code);
+    else logFeatureBad("bridge_presence", code, attributes);
     return true;
   }
-  let pn = false;
-  function Ha(e) {
-    if (I || re || Se) return;
+  let nonOriginEpisodeReported = false;
+  function onNonOriginRecovered(detail) {
+    if (stopped || ownerChanged || episodeDead) return;
     logForDebugging(
-      `[remote-bridge] SSE stream live again after ${e.attempts} non-origin 403(s) over ${Math.round(e.streakMs / 1000)}s (source=${e.source})`,
+      `[remote-bridge] SSE stream live again after ${detail.attempts} non-origin 403(s) over ${Math.round(detail.streakMs / 1000)}s (source=${detail.source})`,
     );
     if (
-      ht(
-        RECOVERED_NONORIGIN_CODES[e.source],
+      notePresenceSad(
+        RECOVERED_NONORIGIN_CODES[detail.source],
         {
-          attempts: e.attempts,
-          streak_s: Math.round(e.streakMs / 1000),
-          first_in_episode: pn ? 0 : 1,
-          recovery_bucket: bucketRecentUse(e.streakMs),
+          attempts: detail.attempts,
+          streak_s: Math.round(detail.streakMs / 1000),
+          first_in_episode: nonOriginEpisodeReported ? 0 : 1,
+          recovery_bucket: bucketRecentUse(detail.streakMs),
         },
         false,
       )
     )
-      pn = true;
+      nonOriginEpisodeReported = true;
   }
-  function uo(detail) {
-    if (!isNonOriginSource(detail?.rejectSource)) {
-      ke(transportClosed403Code(detail));
+  function noteNonOriginClose(details) {
+    if (!isNonOriginSource(details?.rejectSource)) {
+      notePresenceBad(transportClosed403Code(details));
       return;
     }
     if (
-      ke(transportClosed403Code(detail), {
-        ...(detail.streak !== undefined && {
-          attempts: detail.streak.attempts,
-          streak_s: Math.round(detail.streak.streakMs / 1000),
+      notePresenceBad(transportClosed403Code(details), {
+        ...(details.streak !== undefined && {
+          attempts: details.streak.attempts,
+          streak_s: Math.round(details.streak.streakMs / 1000),
         }),
-        first_in_episode: pn ? 0 : 1,
+        first_in_episode: nonOriginEpisodeReported ? 0 : 1,
       })
     )
-      pn = true;
+      nonOriginEpisodeReported = true;
   }
-  function Ui(e) {
+  function latchSupersession(site) {
     if (isTeleportedSession(sessionId)) return;
-    let r = be === undefined ? undefined : classifySupersession(be.code, be.cause);
-    if (supersession !== undefined || be === undefined || r === undefined || (Er && isNotArchived(r))) return;
-    supersession = r;
+    let classified =
+      pendingClose === undefined ? undefined : classifySupersession(pendingClose.code, pendingClose.cause);
+    if (
+      supersession !== undefined ||
+      pendingClose === undefined ||
+      classified === undefined ||
+      (rebuiltSinceStart && isNotArchived(classified))
+    )
+      return;
+    supersession = classified;
     logForDebugging(
-      `[remote-bridge] ${e} latched a stashed supersession close (${be.code}/${be.cause ?? "uncaused"}) \u2014 archive suppressed`,
+      `[remote-bridge] ${site} latched a stashed supersession close (${pendingClose.code}/${pendingClose.cause ?? "uncaused"}) \u2014 archive suppressed`,
     );
-    if (!Se) {
-      if (be.code === 403) uo(be.detail);
-      else if (be.code === 404) ke("transport_closed_404");
+    if (!episodeDead) {
+      if (pendingClose.code === 403) noteNonOriginClose(pendingClose.detail);
+      else if (pendingClose.code === 404) notePresenceBad("transport_closed_404");
       else {
-        ht("transport_closed_4090");
-        Se = true;
+        notePresenceSad("transport_closed_4090");
+        episodeDead = true;
       }
-      tt = undefined;
+      pendingAuthCode = undefined;
     }
   }
-  function co(e) {
-    if (!qt()) return;
-    switch (e.leg) {
+  function reportRefreshLeg(status) {
+    if (!canReportPresence()) return;
+    switch (status.leg) {
       case "ok":
         logFeatureOk("bridge_token_refresh");
         return;
       case "sad":
-        logFeatureSad("bridge_token_refresh", e.code);
+        logFeatureSad("bridge_token_refresh", status.code);
         return;
       case "bad":
-        logFeatureBad("bridge_token_refresh", e.code);
+        logFeatureBad("bridge_token_refresh", status.code);
         return;
     }
   }
-  function Fi(launcherLoginGeneration) {
+  function hostDeclinedCode(launcherLoginGeneration) {
     if (!isBridgeHostDeclinedEndEnabled()) return;
     let launcherLoginEnd = getLauncherLoginEnd();
-    if (launcherLoginEnd === undefined || launcherLoginEnd.generation <= launcherLoginGeneration) return xi();
-    return Hi(launcherLoginEnd.reason);
+    if (launcherLoginEnd === undefined || launcherLoginEnd.generation <= launcherLoginGeneration)
+      return staleLauncherCode();
+    return mapLauncherReason(launcherLoginEnd.reason);
   }
-  function Hi(reason) {
+  function mapLauncherReason(reason) {
     switch (reason) {
       case "signed_out":
         return "host_signed_out";
@@ -1368,93 +1478,97 @@ async function initEnvLessBridgeCore(params) {
         return;
     }
   }
-  function xi() {
-    if (Tt === undefined) return;
-    if (Tt.generation === getLauncherLoginGeneration()) return Tt.code;
+  function staleLauncherCode() {
+    if (authEndCode === undefined) return;
+    if (authEndCode.generation === getLauncherLoginGeneration()) return authEndCode.code;
     let launcherLoginEnd = getLauncherLoginEnd();
-    return launcherLoginEnd === undefined ? undefined : Hi(launcherLoginEnd.reason);
+    return launcherLoginEnd === undefined ? undefined : mapLauncherReason(launcherLoginEnd.reason);
   }
-  function Li(e) {
-    return e === "host_signed_out" ? BRIDGE_HOST_SIGNED_OUT_HINT : BRIDGE_HOST_ACCOUNT_CHANGED_HINT;
+  function hostDeclinedHint(declineReason) {
+    return declineReason === "host_signed_out"
+      ? BRIDGE_HOST_SIGNED_OUT_HINT
+      : BRIDGE_HOST_ACCOUNT_CHANGED_HINT;
   }
-  function $i(e) {
-    return e === "host_signed_out" ? "auth" : "terminal";
+  function hostDeclinedSeverity(declineReason) {
+    return declineReason === "host_signed_out" ? "auth" : "terminal";
   }
-  function Ar() {
-    return ownerPin !== undefined && !I && !re && isBridgeOwnerPinnedEndEnabled();
+  function isOwnerPinned() {
+    return ownerPin !== undefined && !stopped && !ownerChanged && isBridgeOwnerPinnedEndEnabled();
   }
-  function Mt() {
-    return Ar() && ownerPin !== undefined && ownerPin.identityLooksChanged();
+  function ownerLooksChanged() {
+    return isOwnerPinned() && ownerPin !== undefined && ownerPin.identityLooksChanged();
   }
-  async function fo(e, r) {
-    if (re) return "changed";
-    if (!Ar() || ownerPin === undefined) return "unchanged";
-    let i = await ownerPin.confirmChanged(r);
-    if (i === "changed") {
-      await xa(e);
+  async function confirmOwnerChange(site, options) {
+    if (ownerChanged) return "changed";
+    if (!isOwnerPinned() || ownerPin === undefined) return "unchanged";
+    let verdict = await ownerPin.confirmChanged(options);
+    if (verdict === "changed") {
+      await stopForOwnerChange(site);
       return "changed";
     }
-    return re ? "changed" : i;
+    return ownerChanged ? "changed" : verdict;
   }
-  async function lr(e) {
-    return (await fo(e)) === "changed";
+  async function ownerChangedSince(site) {
+    return (await confirmOwnerChange(site)) === "changed";
   }
-  async function Pr(e, stale) {
-    if (Mt() && (await lr(e))) return true;
-    return I || ae !== stale;
+  async function staleAfterOwnerCheck(site, stale) {
+    if (ownerLooksChanged() && (await ownerChangedSince(site))) return true;
+    return stopped || recoveryGeneration !== stale;
   }
-  async function xa(e) {
-    if (I || re || ownerPin === undefined) return;
-    re = true;
-    kr?.();
-    kr = undefined;
+  async function stopForOwnerChange(site) {
+    if (stopped || ownerChanged || ownerPin === undefined) return;
+    ownerChanged = true;
+    unsubscribeOwnerPin?.();
+    unsubscribeOwnerPin = undefined;
     refresh.cancelAll();
-    Si();
+    resetRecoveryFlags();
     onOwnerChanged?.();
-    un = false;
-    Ui("owner_changed");
-    be = undefined;
-    clearTimeout(cr);
-    ar();
-    mn?.();
-    mn = undefined;
-    Gi();
-    Ki();
-    releaseReadReceiptOwnership(Ro);
-    cn = true;
-    Sr();
+    remintLoopActive = false;
+    latchSupersession("owner_changed");
+    pendingClose = undefined;
+    clearTimeout(connectTimeoutTimer);
+    clearRecoverTimer();
+    stopGitWatcher?.();
+    stopGitWatcher = undefined;
+    unsubscribeInteraction();
+    unsubscribeGrowthBook();
+    releaseReadReceiptOwnership(readReceiptOwner);
+    shutdownStarted = true;
+    stopLivePreview();
     if (isTeleportedSession(sessionId)) {
       logForDebugging(
-        `[remote-bridge] Signed-in account changed under teleported session ${sessionId} (${e}) \u2014 latched only`,
+        `[remote-bridge] Signed-in account changed under teleported session ${sessionId} (${site}) \u2014 latched only`,
       );
-      _n();
-      Sn();
-      rn();
+      dropPendingWrites();
+      teardownPersistence();
+      relinquishInjectedMcp();
       transport.close();
       return;
     }
-    let r = Se || supersession !== undefined;
+    let episodeDeadAlready = episodeDead || supersession !== undefined;
     logForDebugging(
-      `[remote-bridge] Signed-in account changed under ${sessionId} (${e}${r ? ", episode already dead" : ""}) \u2014 stopping`,
+      `[remote-bridge] Signed-in account changed under ${sessionId} (${site}${episodeDeadAlready ? ", episode already dead" : ""}) \u2014 stopping`,
     );
     logForDiagnosticsNoPII("info", "bridge_repl_v2_owner_changed");
-    if (!r) {
-      ht(e);
-      Se = true;
-      ve(BRIDGE_OWNER_CHANGED_HINT, "terminal");
+    if (!episodeDeadAlready) {
+      notePresenceSad(site);
+      episodeDead = true;
+      failTransport(BRIDGE_OWNER_CHANGED_HINT, "terminal");
       transport.write(buildWorkerShuttingDownMessage(sessionId, "account_changed"));
-      await Cr(er() ? cfg.teardown_archive_timeout_ms : FLUSH_TIMEOUT_MS).catch(() => {
-        return;
-      });
-    } else if (!Et) ve(BRIDGE_OWNER_CHANGED_HINT, "terminal");
-    else _n();
-    Sn();
-    rn();
-    if (!I) transport.close();
+      await flushWithTimeout(mayHoldUploads() ? cfg.teardown_archive_timeout_ms : FLUSH_TIMEOUT_MS).catch(
+        () => {
+          return;
+        },
+      );
+    } else if (!failedTerminally) failTransport(BRIDGE_OWNER_CHANGED_HINT, "terminal");
+    else dropPendingWrites();
+    teardownPersistence();
+    relinquishInjectedMcp();
+    if (!stopped) transport.close();
     if (supersession !== undefined) return;
-    let i;
+    let archiveStatus;
     if (keepSessionOnTeardown) {
-      i = "skipped_host_owned";
+      archiveStatus = "skipped_host_owned";
       logForDebugging(`[remote-bridge] Owner-changed settle left host-owned session ${sessionId} unarchived`);
     } else {
       let archiveResult = await archiveRemoteBridgeSession(
@@ -1466,24 +1580,24 @@ async function initEnvLessBridgeCore(params) {
         undefined,
         storageV5,
       );
-      i = archiveStatusCode(archiveResult, supersession);
+      archiveStatus = archiveStatusCode(archiveResult, supersession);
       logForDebugging(
         `[remote-bridge] Owner-changed settle archived ${sessionId} with the owner's credential (archive=${archiveResult})`,
       );
     }
-    if (qt())
+    if (canReportPresence())
       logEvent("tengu_bridge_owner_changed", {
-        site: fromEnum(e),
-        archive_status: fromEnum(i),
-        episode_already_dead: r,
+        site: fromEnum(site),
+        archive_status: fromEnum(archiveStatus),
+        episode_already_dead: episodeDeadAlready,
       });
   }
-  function Wi() {
+  function deadReason() {
     if (supersession !== undefined) return supersession;
-    if (re) return "owner_changed";
+    if (ownerChanged) return "owner_changed";
     return;
   }
-  function _o() {
+  function archiveCredential() {
     if (ownerPin !== undefined && isBridgeOwnerPinnedEndEnabled() && ownerPin.identityLooksChanged())
       return {
         token: ownerPin.ownerToken(),
@@ -1494,276 +1608,287 @@ async function initEnvLessBridgeCore(params) {
       source: "current",
     };
   }
-  let hn = isReattach;
-  let De = new Map();
-  let cl = undefined;
-  let Gt = new Set();
-  let ho = new BoundedIdSet(256);
-  let qi = new BoundedIdSet(cfg.uuid_dedup_buffer_size);
-  function go(requestId, r) {
-    Gt.delete(requestId);
-    if (De.delete(requestId) && r) rememberResolvedPromptRequestId(requestId);
+  let pendingActionShown = isReattach;
+  let pendingRequests = new Map();
+  let pendingAction = undefined;
+  let notForwardedIds = new Set();
+  let localOnlyMemoryRequests = new BoundedIdSet(256);
+  let liveOnlyUuids = new BoundedIdSet(cfg.uuid_dedup_buffer_size);
+  function resolvePendingAction(requestId, answered) {
+    notForwardedIds.delete(requestId);
+    if (pendingRequests.delete(requestId) && answered) rememberResolvedPromptRequestId(requestId);
   }
-  function mo() {
-    let e;
-    let r = false;
-    for (let [i, y] of De) {
-      if (Gt.has(i)) continue;
-      r = true;
-      e = y.details ?? e;
+  function reportPendingState() {
+    let lastDetails;
+    let hasPending = false;
+    for (let [requestId, entry] of pendingRequests) {
+      if (notForwardedIds.has(requestId)) continue;
+      hasPending = true;
+      lastDetails = entry.details ?? lastDetails;
     }
-    if (r) $e("requires_action", e);
-    else $e("running");
+    if (hasPending) reportState("requires_action", lastDetails);
+    else reportState("running");
   }
-  let vo;
-  let $e = (e, r) => {
-    if (onBeforePushTriggeringState && !re && (e === "requires_action" || e === "idle"))
+  let lastReportedState;
+  let reportState = (state, details) => {
+    if (onBeforePushTriggeringState && !ownerChanged && (state === "requires_action" || state === "idle"))
       onBeforePushTriggeringState();
-    transport.reportState(e, r);
-    if (e === "requires_action" && r) {
-      hn = true;
-      let i = [...De.values()].flatMap((y) => (y.details ? [y.details] : [])).reverse();
+    transport.reportState(state, details);
+    if (state === "requires_action" && details) {
+      pendingActionShown = true;
+      let otherDetails = [...pendingRequests.values()]
+        .flatMap((entry) => (entry.details ? [entry.details] : []))
+        .reverse();
       transport.reportMetadata({
-        pending_action: r,
+        pending_action: details,
         pending_actions: pendingActionRows(
-          r,
-          i.filter((y) => y !== r),
+          details,
+          otherDetails.filter((detail) => detail !== details),
         ),
       });
-    } else if (hn) {
-      hn = false;
+    } else if (pendingActionShown) {
+      pendingActionShown = false;
       transport.reportMetadata({
         pending_action: null,
         pending_actions: null,
       });
     }
-    if (e === "running" && vo !== "running") {
+    if (state === "running" && lastReportedState !== "running") {
       transport.reportMetadata({
         post_turn_summary: null,
         recap: null,
       });
       noteBridgePostTurnSummaryWiped();
       if (transcriptMirrorMode === "deferred") {
-        delete wr.post_turn_summary;
-        delete wr.recap;
+        delete deferredMetadata.post_turn_summary;
+        delete deferredMetadata.recap;
       }
     }
-    vo = e;
+    lastReportedState = state;
   };
-  function La() {
-    Gt.clear();
-    return [...De.values()].map((e) => e.request);
+  function takePendingPrompts() {
+    notForwardedIds.clear();
+    return [...pendingRequests.values()].map((entry) => entry.request);
   }
-  let mn;
-  let bo;
-  let vn;
-  let yo;
+  let stopGitWatcher;
+  let invalidateGitState;
+  let refreshGitBranch;
+  let publishGitStateBeforeHandoff;
   if (gitRepoUrl)
     (async () => {
       let { isNestedGitLabProject, parseGitRemote, parseGitHubRepository } =
-        await import("./chunk-zqrznfbt.js");
+        await import("../utils/detectRepository.js");
       let {
         addWatchedRepo,
         removeWatchedRepo,
         getCachedBranchForRepo,
         onRepoBranchChange,
         getRemoteUrlForDir,
-      } = await import("./chunk-crvm1n0n.js");
-      let j = await import("./chunk-ehd9f85g.js");
+      } = await import("../utils/git/gitFilesystem.js");
+      let worktreeModule = await import("./worktreeState.js");
       let gitRemote = parseGitRemote(gitRepoUrl);
       if (gitRemote && isNestedGitLabProject(gitRemote)) return;
-      let W = gitRemote ? `${gitRemote.owner}/${gitRemote.name}` : parseGitHubRepository(gitRepoUrl);
-      if (!W) return;
-      let z = gitRemote ? `${gitRemote.host}/${gitRemote.owner}/${gitRemote.name}` : `github.com/${W}`;
+      let repoKey = gitRemote ? `${gitRemote.owner}/${gitRemote.name}` : parseGitHubRepository(gitRepoUrl);
+      if (!repoKey) return;
+      let repoLabel = gitRemote
+        ? `${gitRemote.host}/${gitRemote.owner}/${gitRemote.name}`
+        : `github.com/${repoKey}`;
       let originalCwd = getOriginalCwd();
       await addWatchedRepo(originalCwd);
-      if (I || re) {
+      if (stopped || ownerChanged) {
         removeWatchedRepo(originalCwd);
         return;
       }
-      let le;
-      let ce = isReattach;
-      let ne = isReattach;
-      let xe = 0;
-      let qe = false;
-      let rt = false;
-      let Tn = async () => {
-        qe = true;
+      let lastEmitted;
+      let emittedWorktreeState = isReattach;
+      let everHadWorktreeState = isReattach;
+      let generationCounter = 0;
+      let running = false;
+      let rerun = false;
+      let emitGitState = async () => {
+        running = true;
         try {
           do {
-            rt = false;
-            let Ue = xe;
-            if (I || re) return;
+            rerun = false;
+            let generation = generationCounter;
+            if (stopped || ownerChanged) return;
             let originalCwd_2 = getOriginalCwd();
             if (originalCwd_2 !== originalCwd) {
               removeWatchedRepo(originalCwd);
               originalCwd = originalCwd_2;
               await addWatchedRepo(originalCwd_2);
-              if (I || re) {
+              if (stopped || ownerChanged) {
                 removeWatchedRepo(originalCwd_2);
                 return;
               }
             }
             let cachedBranchForRepo = await getCachedBranchForRepo(originalCwd_2);
-            if (Ue !== xe) {
-              rt = true;
+            if (generation !== generationCounter) {
+              rerun = true;
               continue;
             }
-            if (I || et("branch_metadata")) return;
+            if (stopped || shouldDropAfterOwnerChange("branch_metadata")) return;
             if (cachedBranchForRepo === undefined) {
-              if (le !== null) {
-                le = null;
-                if (ce) {
-                  ce = false;
+              if (lastEmitted !== null) {
+                lastEmitted = null;
+                if (emittedWorktreeState) {
+                  emittedWorktreeState = false;
                   transport.reportMetadata({
                     current_branches: {
-                      [W]: null,
+                      [repoKey]: null,
                     },
                     worktree_state: {
-                      [W]: null,
+                      [repoKey]: null,
                     },
                   });
                 } else
                   transport.reportMetadata({
                     current_branches: {
-                      [W]: null,
+                      [repoKey]: null,
                     },
                   });
               }
               continue;
             }
             if (getFeatureValue_CACHED_MAY_BE_STALE("tengu_ccr_handoff_metadata", false)) {
-              let [nd, Mn] = await Promise.all([
-                j.collectWorktreeState(originalCwd_2, cachedBranchForRepo),
-                j.withCollectTimeout(getRemoteUrlForDir(originalCwd_2)).catch(() => null),
+              let [worktreeState, remoteUrl] = await Promise.all([
+                worktreeModule.collectWorktreeState(originalCwd_2, cachedBranchForRepo),
+                worktreeModule.withCollectTimeout(getRemoteUrlForDir(originalCwd_2)).catch(() => null),
               ]);
-              if (Ue !== xe) {
-                rt = true;
+              if (generation !== generationCounter) {
+                rerun = true;
                 continue;
               }
-              if (I || et("branch_metadata")) return;
-              let kn = Mn ? parseGitRemote(Mn) : null;
-              let us = Mn ? parseGitHubRepository(Mn) : null;
-              let cs = (kn ? `${kn.host}/${kn.owner}/${kn.name}` : us ? `github.com/${us}` : null) === z;
-              let Io = cs ? cachedBranchForRepo : null;
-              let Xe = cs ? nd : null;
-              let fs = Xe
+              if (stopped || shouldDropAfterOwnerChange("branch_metadata")) return;
+              let parsedRemote = remoteUrl ? parseGitRemote(remoteUrl) : null;
+              let repository = remoteUrl ? parseGitHubRepository(remoteUrl) : null;
+              let isRepoLabelMatch =
+                (parsedRemote
+                  ? `${parsedRemote.host}/${parsedRemote.owner}/${parsedRemote.name}`
+                  : repository
+                    ? `github.com/${repository}`
+                    : null) === repoLabel;
+              let branchName = isRepoLabelMatch ? cachedBranchForRepo : null;
+              let emittedState = isRepoLabelMatch ? worktreeState : null;
+              let stateKey = emittedState
                 ? JSON.stringify([
-                    Io,
-                    Xe.head_sha,
-                    Xe.unpushed_count,
-                    Xe.is_dirty,
-                    Xe.mid_operation,
-                    Xe.upstream_exists,
-                    Xe.has_submodules,
-                    Xe.submodules_unverified,
-                    Xe.has_lfs,
+                    branchName,
+                    emittedState.head_sha,
+                    emittedState.unpushed_count,
+                    emittedState.is_dirty,
+                    emittedState.mid_operation,
+                    emittedState.upstream_exists,
+                    emittedState.has_submodules,
+                    emittedState.submodules_unverified,
+                    emittedState.has_lfs,
                   ])
-                : JSON.stringify([Io]);
-              if (fs === le) continue;
-              le = fs;
-              logForDebugging(`[remote-bridge] worktree_state \u2192 ${W}: ${JSON.stringify(Xe)}`);
-              ce = Xe !== null;
-              if (Xe !== null) ne = true;
+                : JSON.stringify([branchName]);
+              if (stateKey === lastEmitted) continue;
+              lastEmitted = stateKey;
+              logForDebugging(
+                `[remote-bridge] worktree_state \u2192 ${repoKey}: ${JSON.stringify(emittedState)}`,
+              );
+              emittedWorktreeState = emittedState !== null;
+              if (emittedState !== null) everHadWorktreeState = true;
               transport.reportMetadata({
                 current_branches: {
-                  [W]: Io,
+                  [repoKey]: branchName,
                 },
                 worktree_state: {
-                  [W]: Xe,
+                  [repoKey]: emittedState,
                 },
               });
               continue;
             }
-            if (ce) {
-              ce = false;
-              le = cachedBranchForRepo;
+            if (emittedWorktreeState) {
+              emittedWorktreeState = false;
+              lastEmitted = cachedBranchForRepo;
               transport.reportMetadata({
                 current_branches: {
-                  [W]: cachedBranchForRepo,
+                  [repoKey]: cachedBranchForRepo,
                 },
                 worktree_state: {
-                  [W]: null,
+                  [repoKey]: null,
                 },
               });
               continue;
             }
-            if (cachedBranchForRepo === le) continue;
-            le = cachedBranchForRepo;
+            if (cachedBranchForRepo === lastEmitted) continue;
+            lastEmitted = cachedBranchForRepo;
             transport.reportMetadata({
               current_branches: {
-                [W]: cachedBranchForRepo,
+                [repoKey]: cachedBranchForRepo,
               },
             });
-          } while (rt);
+          } while (rerun);
         } catch (error) {
           logForDebugging(`[remote-bridge] current_branches emit failed: ${errorMessage(error)}`);
         } finally {
-          qe = false;
+          running = false;
         }
       };
-      bo = () => {
-        le = undefined;
-        ce = ne;
-        xe++;
-        if (qe) rt = true;
+      invalidateGitState = () => {
+        lastEmitted = undefined;
+        emittedWorktreeState = everHadWorktreeState;
+        generationCounter++;
+        if (running) rerun = true;
       };
       let resolved = Promise.resolve();
-      let Je = () => {
-        if (qe) rt = true;
-        else resolved = Tn();
+      let runEmit = () => {
+        if (running) rerun = true;
+        else resolved = emitGitState();
         return resolved;
       };
-      yo = () =>
+      publishGitStateBeforeHandoff = () =>
         withDeadline(
-          Je().then(() => transport.flushWorkerState?.() ?? true),
-          j.WORKTREE_COLLECT_TIMEOUT_MS + TEARDOWN_FLUSH_TIMEOUT_MS,
+          runEmit().then(() => transport.flushWorkerState?.() ?? true),
+          worktreeModule.WORKTREE_COLLECT_TIMEOUT_MS + TEARDOWN_FLUSH_TIMEOUT_MS,
         );
-      vn = () => void Je();
-      let Cn = onRepoBranchChange(vn);
-      mn = () => {
-        Cn();
+      refreshGitBranch = () => void runEmit();
+      let unsubscribeBranch = onRepoBranchChange(refreshGitBranch);
+      stopGitWatcher = () => {
+        unsubscribeBranch();
         removeWatchedRepo(originalCwd);
       };
-      Je();
+      runEmit();
     })().catch((error) =>
       logForDebugging(`[remote-bridge] current_branches setup failed: ${errorMessage(error)}`),
     );
-  let Gi = onInteraction(() => idleTracker.noteActivity());
-  let Ki = onGrowthBookRefresh(() => {
-    transport.setStreamEventFlushIntervalMs?.(fi());
-    transport.setStreamEventFirstFlushMs?.(_i());
-    transport.setNoSubscriberStreamEventFlushIntervalMs?.(pi());
-    transport.setNoSubscriberUploadHoldMs?.(Ht());
-    transport.setDropUnwatchedStreamEvents?.(hi());
-    Qa();
+  let unsubscribeInteraction = onInteraction(() => idleTracker.noteActivity());
+  let unsubscribeGrowthBook = onGrowthBookRefresh(() => {
+    transport.setStreamEventFlushIntervalMs?.(streamEventFlushIntervalMs());
+    transport.setStreamEventFirstFlushMs?.(streamEventFirstFlushMs());
+    transport.setNoSubscriberStreamEventFlushIntervalMs?.(noSubscriberFlushMs());
+    transport.setNoSubscriberUploadHoldMs?.(noSubscriberHoldMs());
+    transport.setDropUnwatchedStreamEvents?.(shouldDropUnwatchedStreamEvents());
+    recheckBackfillFlag();
   });
-  let Ro = {};
+  let readReceiptOwner = {};
   bindReadReceiptSession({
-    owner: Ro,
+    owner: readReceiptOwner,
     sessionId,
-    report: (e, r) => transport.reportDelivery(e, r),
+    report: (eventId, phase) => transport.reportDelivery(eventId, phase),
   });
-  let ur = new Map();
-  let Vi = !onUserMessage;
+  let prSubscriptions = new Map();
+  let userMessageTitleSent = !onUserMessage;
   let userMessageCallbackDone = false;
   let connectCause = "initial";
-  let wo = 0;
-  let cr;
+  let remintAttempts = 0;
+  let connectTimeoutTimer;
   function onConnectTimeout(cause) {
-    if (I) return;
+    if (stopped) return;
     logEvent("tengu_bridge_repl_connect_timeout", {
       v2: true,
       elapsed_ms: cfg.connect_timeout_ms,
       cause: fromEnum(cause),
     });
     logFeatureBad("bridge_connect", "bridge_connect_timeout");
-    if (Se);
-    else if (Object.values(CLOSE_CODE_RECOVERY).some((r) => r.cause === cause))
-      tt = "recovery_connect_timeout";
-    else if (cause === "proactive_refresh") tt = "refresh_connect_timeout";
+    if (episodeDead);
+    else if (Object.values(CLOSE_CODE_RECOVERY).some((recoveryEntry) => recoveryEntry.cause === cause))
+      pendingAuthCode = "recovery_connect_timeout";
+    else if (cause === "proactive_refresh") pendingAuthCode = "refresh_connect_timeout";
   }
-  async function $a(oauthToken) {
+  async function forceOAuthRefresh(oauthToken) {
     if (!onAuth401) return "rejected";
     try {
       if (await onAuth401(oauthToken)) return "recovered";
@@ -1772,36 +1897,36 @@ async function initEnvLessBridgeCore(params) {
         level: "error",
       });
     }
-    if (!ci() || !classifyFailedOAuthRefresh) return "rejected";
+    if (!isDazzlingGardenEnabled() || !classifyFailedOAuthRefresh) return "rejected";
     return classifyFailedOAuthRefresh();
   }
-  let Wa = 3;
-  let Eo;
-  let yn = 0;
-  function So() {
-    Eo = undefined;
-    yn = 0;
+  let maxEarlyRetries = 3;
+  let rejectedToken;
+  let earlyRetryCount = 0;
+  function clearRejectedToken() {
+    rejectedToken = undefined;
+    earlyRetryCount = 0;
   }
-  function Ji(e) {
-    return e !== undefined && e === Eo && ci();
+  function isAlreadyRejected(token) {
+    return token !== undefined && token === rejectedToken && isDazzlingGardenEnabled();
   }
   let refresh = createTokenRefreshScheduler({
     refreshBufferMs: cfg.token_refresh_buffer_ms,
-    onExhausted: (e) => {
-      if (!I && !Se)
-        co({
+    onExhausted: (sessionId) => {
+      if (!stopped && !episodeDead)
+        reportRefreshLeg({
           leg: "bad",
           code: "chain_exhausted_no_oauth",
         });
-      if (Be || I) return;
-      if (Et) {
+      if (recoveryInFlight || stopped) return;
+      if (failedTerminally) {
         logForDebugging(
-          `[remote-bridge] Token refresh chain exhausted for ${e} \u2014 terminal state already showing, not repainting`,
+          `[remote-bridge] Token refresh chain exhausted for ${sessionId} \u2014 terminal state already showing, not repainting`,
         );
         return;
       }
       logForDebugging(
-        `[remote-bridge] Token refresh chain exhausted for ${e} \u2014 surfacing auth failure`,
+        `[remote-bridge] Token refresh chain exhausted for ${sessionId} \u2014 surfacing auth failure`,
         {
           level: "error",
         },
@@ -1813,23 +1938,23 @@ async function initEnvLessBridgeCore(params) {
       );
     },
     getAccessToken: async () => {
-      if (re) return;
-      if (Mt()) {
-        let i = Se;
-        if (await lr("owner_changed_refresh")) {
-          if (re && !i)
-            co({
+      if (ownerChanged) return;
+      if (ownerLooksChanged()) {
+        let episodeWasDead = episodeDead;
+        if (await ownerChangedSince("owner_changed_refresh")) {
+          if (ownerChanged && !episodeWasDead)
+            reportRefreshLeg({
               leg: "sad",
               code: "owner_changed",
             });
           return;
         }
       }
-      if (workSecretCredentials) return ri;
+      if (workSecretCredentials) return workSecretLaneToken;
       let stale = getAccessToken();
-      let r = Ji(stale);
+      let alreadyRejected = isAlreadyRejected(stale);
       try {
-        if (r) await onReadFreshOAuthToken?.();
+        if (alreadyRejected) await onReadFreshOAuthToken?.();
         else await onProactiveRefresh?.();
       } catch (error) {
         logForDebugging(`[remote-bridge] scheduler token refresh failed: ${errorMessage(error)}`, {
@@ -1840,171 +1965,192 @@ async function initEnvLessBridgeCore(params) {
     },
     onRefresh: (sid, oauthToken) => {
       (async () => {
-        if (supersession !== undefined || re) {
+        if (supersession !== undefined || ownerChanged) {
           logForDebugging(
-            `[remote-bridge] Proactive refresh skipped: session ${re ? "stopped for an owner change" : "superseded"}`,
+            `[remote-bridge] Proactive refresh skipped: session ${ownerChanged ? "stopped for an owner change" : "superseded"}`,
           );
           return;
         }
-        if (Be || I) {
+        if (recoveryInFlight || stopped) {
           logForDebugging("[remote-bridge] Recovery already in flight, skipping proactive refresh");
-          if (Be && xt !== 0) Lt = true;
+          if (recoveryInFlight && lastRefreshAt !== 0) refreshDeferred = true;
           return;
         }
         if (isTeleportedSession(sid)) {
           logForDebugging(`[remote-bridge] Proactive refresh suppressed for teleported session ${sid}`);
           return;
         }
-        let i = Ri();
-        let y = Se;
-        let R = false;
-        let _;
-        let S;
-        let D;
-        let j;
-        let H = false;
-        function W(L, le, ce = "refresh_credentials_rejected", ne) {
-          if (I) return;
-          if (tt !== undefined && be === undefined) {
-            ke(tt);
-            tt = undefined;
-          } else if (!y) {
-            dr = ce;
-            Tt =
-              ne === undefined
+        let generation = beginRecovery();
+        let episodeDeadAtStart = episodeDead;
+        let rebuilt = false;
+        let failureMessage;
+        let failureCode;
+        let failureSeverity;
+        let refreshLeg;
+        let suppressedTeleported = false;
+        function noteRefreshFailure(message, severity, code = "refresh_credentials_rejected", authCode) {
+          if (stopped) return;
+          if (pendingAuthCode !== undefined && pendingClose === undefined) {
+            notePresenceBad(pendingAuthCode);
+            pendingAuthCode = undefined;
+          } else if (!episodeDeadAtStart) {
+            pendingPresenceSad = code;
+            authEndCode =
+              authCode === undefined
                 ? undefined
                 : {
-                    code: ne,
+                    code: authCode,
                     generation: getLauncherLoginGeneration(),
                   };
           }
-          _ = L;
-          S = "refresh_credentials_rejected";
-          D = le;
+          failureMessage = message;
+          failureCode = "refresh_credentials_rejected";
+          failureSeverity = severity;
         }
-        async function z() {
-          if (!(await Pr("owner_changed_refresh", i))) return false;
-          if (re)
-            j = {
+        async function checkOwnerStale() {
+          if (!(await staleAfterOwnerCheck("owner_changed_refresh", generation))) return false;
+          if (ownerChanged)
+            refreshLeg = {
               leg: "sad",
               code: "owner_changed",
             };
           return true;
         }
         try {
-          if (await z()) return;
-          let L = Ji(oauthToken);
-          if (!L) So();
+          if (await checkOwnerStale()) return;
+          let alreadyRejected = isAlreadyRejected(oauthToken);
+          if (!alreadyRejected) clearRejectedToken();
           let now = Date.now();
-          let ce = tn;
+          let mcpGenerationAtRefresh = mcpGeneration;
           let fresh = await withRetry(
             () => {
-              if (L)
+              if (alreadyRejected)
                 return Promise.resolve({
                   terminal: false,
                   reason: "oauth_rejected",
                 });
-              if (I || supersession !== undefined || ae !== i) return Promise.resolve(null);
-              return eo(sid, oauthToken).then((qe) => (I || ae !== i ? qe : screenNonOriginRefusal(qe)));
+              if (stopped || supersession !== undefined || recoveryGeneration !== generation)
+                return Promise.resolve(null);
+              return refetchWithEpoch(sid, oauthToken).then((result) =>
+                stopped || recoveryGeneration !== generation ? result : screenNonOriginRefusal(result),
+              );
             },
             "fetchRemoteCredentials (proactive)",
             cfg,
           );
-          if (I || ae !== i) return;
+          if (stopped || recoveryGeneration !== generation) return;
           if (isCredentialsRejection(fresh)) {
             logForDebugging(
-              L
+              alreadyRejected
                 ? "[remote-bridge] Proactive cycle: bearer already rejected by /bridge \u2014 retrying the forced OAuth refresh without re-registering"
                 : "[remote-bridge] Proactive /bridge re-mint rejected (oauth_rejected) \u2014 attempting forced OAuth refresh",
             );
-            if (!L) logForDiagnosticsNoPII("error", "bridge_repl_v2_proactive_oauth_rejected");
-            if (await z()) return;
+            if (!alreadyRejected) logForDiagnosticsNoPII("error", "bridge_repl_v2_proactive_oauth_rejected");
+            if (await checkOwnerStale()) return;
             let launcherLoginGeneration = getLauncherLoginGeneration();
-            let rt = await $a(oauthToken);
-            let Tn = getAccessToken() ?? oauthToken;
-            if (await z()) return;
-            if (rt === "unreachable") {
+            let refreshOutcome = await forceOAuthRefresh(oauthToken);
+            let latestToken = getAccessToken() ?? oauthToken;
+            if (await checkOwnerStale()) return;
+            if (refreshOutcome === "unreachable") {
               logForDebugging(
                 "[remote-bridge] Proactive forced OAuth refresh got no verdict (token endpoint unreachable); keeping transport, a later cycle retries the refresh",
               );
-              if (!L)
-                j = {
+              if (!alreadyRejected)
+                refreshLeg = {
                   leg: "sad",
                   code: "refresh_deferred_transient",
                 };
-              Eo = oauthToken;
-              let Ue = yn < Wa;
-              if (isTeleportedSession(sid)) Ue = false;
-              if (Ue) {
-                yn++;
+              rejectedToken = oauthToken;
+              let shouldRetry = earlyRetryCount < maxEarlyRetries;
+              if (isTeleportedSession(sid)) shouldRetry = false;
+              if (shouldRetry) {
+                earlyRetryCount++;
                 refresh.scheduleFromExpiresIn(sid, 0);
               }
               logForDiagnosticsNoPII("info", "bridge_repl_v2_proactive_refresh_unreachable", {
-                early_retry: yn,
-                rearmed: Ue,
+                early_retry: earlyRetryCount,
+                rearmed: shouldRetry,
               });
               return;
             }
-            let It = rt === "recovered";
-            if (It) So();
-            let Je = It
+            let recovered = refreshOutcome === "recovered";
+            if (recovered) clearRejectedToken();
+            let reminted = recovered
               ? await withRetry(
                   () => {
-                    if (I || supersession !== undefined || ae !== i) return Promise.resolve(null);
-                    return eo(sid, Tn).then((Ue) => (I || ae !== i ? Ue : screenNonOriginRefusal(Ue)));
+                    if (stopped || supersession !== undefined || recoveryGeneration !== generation)
+                      return Promise.resolve(null);
+                    return refetchWithEpoch(sid, latestToken).then((result) =>
+                      stopped || recoveryGeneration !== generation ? result : screenNonOriginRefusal(result),
+                    );
                   },
                   "fetchRemoteCredentials (proactive post-refresh)",
                   cfg,
                 )
               : null;
-            if (I || ae !== i) return;
-            if (It && Je === null) {
+            if (stopped || recoveryGeneration !== generation) return;
+            if (recovered && reminted === null) {
               logForDebugging(
                 "[remote-bridge] Proactive post-refresh re-mint failed (transient); fallback refresh will retry",
               );
               if (supersession === undefined)
-                j = {
+                refreshLeg = {
                   leg: "sad",
                   code: "post_refresh_remint_null",
                 };
               return;
             }
-            if (isCredentialsFailure(Je)) {
-              j = {
+            if (isCredentialsFailure(reminted)) {
+              refreshLeg = {
                 leg: "bad",
-                code: `post_refresh_credentials_${failureSeverity(Je)}`,
+                code: `post_refresh_credentials_${failureSeverity_2(reminted)}`,
               };
-              W(describeCredentialFailure(Je), failureSeverity(Je), credentialsRejectedCode("refresh", Je));
+              noteRefreshFailure(
+                describeCredentialFailure(reminted),
+                failureSeverity_2(reminted),
+                credentialsRejectedCode("refresh", reminted),
+              );
               return;
             }
-            if (Je === null || isCredentialsRejection(Je)) {
-              let Ue = It ? undefined : Fi(launcherLoginGeneration);
-              if (Ue !== undefined) {
-                j = {
+            if (reminted === null || isCredentialsRejection(reminted)) {
+              let hostDeclined = recovered ? undefined : hostDeclinedCode(launcherLoginGeneration);
+              if (hostDeclined !== undefined) {
+                refreshLeg = {
                   leg: "sad",
-                  code: Ue,
+                  code: hostDeclined,
                 };
                 logForDiagnosticsNoPII("info", "bridge_repl_v2_proactive_host_declined");
-                W(Li(Ue), $i(Ue), "refresh_credentials_rejected", Ue);
+                noteRefreshFailure(
+                  hostDeclinedHint(hostDeclined),
+                  hostDeclinedSeverity(hostDeclined),
+                  "refresh_credentials_rejected",
+                  hostDeclined,
+                );
                 return;
               }
-              j = {
+              refreshLeg = {
                 leg: "bad",
-                code: It
+                code: recovered
                   ? "oauth_rejected_after_refresh"
                   : onAuth401
                     ? "oauth_rejected_refresh_failed"
                     : "oauth_rejected_no_refresh_path",
               };
-              W(_a, "auth");
+              noteRefreshFailure(loginExpiredForRefreshMessage, "auth");
               return;
             }
-            noteAcceptedToken(Tn);
-            let Cn = await To(Je, "proactive_refresh", 0, now, ce);
-            if (Cn === "suppressed_teleported") H = true;
-            if (Cn === "rebuilt") {
-              R = true;
-              j = {
+            noteAcceptedToken(latestToken);
+            let rebuildResult = await rebuildWithCredentials(
+              reminted,
+              "proactive_refresh",
+              0,
+              now,
+              mcpGenerationAtRefresh,
+            );
+            if (rebuildResult === "suppressed_teleported") suppressedTeleported = true;
+            if (rebuildResult === "rebuilt") {
+              rebuilt = true;
+              refreshLeg = {
                 leg: "sad",
                 code: "oauth_rejected_recovered",
               };
@@ -2020,30 +2166,36 @@ async function initEnvLessBridgeCore(params) {
             );
             logForDiagnosticsNoPII("warn", "bridge_repl_v2_proactive_remint_null");
             if (supersession === undefined)
-              j = {
+              refreshLeg = {
                 leg: "sad",
                 code: "remint_null",
               };
             return;
           }
           if (isCredentialsFailure(fresh)) {
-            j = {
+            refreshLeg = {
               leg: "bad",
-              code: `credentials_${failureSeverity(fresh)}`,
+              code: `credentials_${failureSeverity_2(fresh)}`,
             };
-            W(
+            noteRefreshFailure(
               describeCredentialFailure(fresh),
-              failureSeverity(fresh),
+              failureSeverity_2(fresh),
               credentialsRejectedCode("refresh", fresh),
             );
             return;
           }
           noteAcceptedToken(oauthToken);
-          let xe = await To(fresh, "proactive_refresh", 0, now, ce);
-          if (xe === "suppressed_teleported") H = true;
-          if (xe === "rebuilt") {
-            R = true;
-            j = {
+          let rebuildResult = await rebuildWithCredentials(
+            fresh,
+            "proactive_refresh",
+            0,
+            now,
+            mcpGenerationAtRefresh,
+          );
+          if (rebuildResult === "suppressed_teleported") suppressedTeleported = true;
+          if (rebuildResult === "rebuilt") {
+            rebuilt = true;
+            refreshLeg = {
               leg: "ok",
             };
             logForDebugging("[remote-bridge] Transport rebuilt (proactive refresh)");
@@ -2053,36 +2205,54 @@ async function initEnvLessBridgeCore(params) {
             level: "error",
           });
           logForDiagnosticsNoPII("error", "bridge_repl_v2_proactive_refresh_failed");
-          if (!I && !re) {
-            _ = `Refresh failed: ${errorMessage(err)}`;
-            S = "refresh_rebuild_failed";
-            D = "terminal";
-            j = {
+          if (!stopped && !ownerChanged) {
+            failureMessage = `Refresh failed: ${errorMessage(err)}`;
+            failureCode = "refresh_rebuild_failed";
+            failureSeverity = "terminal";
+            refreshLeg = {
               leg: "bad",
               code: "rebuild_threw",
             };
           }
         } finally {
-          let L = H;
-          if (isTeleportedSession(sid)) L = true;
-          if (j !== undefined && !y && !I && !(L && j.leg === "bad")) co(j);
-          if (!wi(i)) return;
-          vi();
-          let le = be;
-          be = undefined;
-          if (L) {
-            if (le !== undefined && !I) ve("Session teleported to cloud");
-          } else if (le !== undefined && !R && !I && !Se) {
-            let ce = Rn(le.code, le.cause, le.detail, true, le.at);
-            if (_ !== undefined && !ce && !I && !Be) ve(_, D);
-          } else if (le !== undefined && R && !I) {
-            if (Zi(le.code) && !y)
-              ht(CLOSE_CODE_RECOVERY[le.code].recoveredCode, {
-                recovery_bucket: bucketRecentUse(Date.now() - le.at),
+          let teleported = suppressedTeleported;
+          if (isTeleportedSession(sid)) teleported = true;
+          if (
+            refreshLeg !== undefined &&
+            !episodeDeadAtStart &&
+            !stopped &&
+            !(teleported && refreshLeg.leg === "bad")
+          )
+            reportRefreshLeg(refreshLeg);
+          if (!endRecovery(generation)) return;
+          runDeferredRefresh();
+          let stashedClose = pendingClose;
+          pendingClose = undefined;
+          if (teleported) {
+            if (stashedClose !== undefined && !stopped) failTransport("Session teleported to cloud");
+          } else if (stashedClose !== undefined && !rebuilt && !stopped && !episodeDead) {
+            let handled = handleClose(
+              stashedClose.code,
+              stashedClose.cause,
+              stashedClose.detail,
+              true,
+              stashedClose.at,
+            );
+            if (failureMessage !== undefined && !handled && !stopped && !recoveryInFlight)
+              failTransport(failureMessage, failureSeverity);
+          } else if (stashedClose !== undefined && rebuilt && !stopped) {
+            if (isRecoverableCode(stashedClose.code) && !episodeDeadAtStart)
+              notePresenceSad(CLOSE_CODE_RECOVERY[stashedClose.code].recoveredCode, {
+                recovery_bucket: bucketRecentUse(Date.now() - stashedClose.at),
               });
-          } else if (_ !== undefined && !I) {
-            ve(_, D);
-            if (S !== undefined && S !== "refresh_credentials_rejected" && !y) ke(S);
+          } else if (failureMessage !== undefined && !stopped) {
+            failTransport(failureMessage, failureSeverity);
+            if (
+              failureCode !== undefined &&
+              failureCode !== "refresh_credentials_rejected" &&
+              !episodeDeadAtStart
+            )
+              notePresenceBad(failureCode);
           }
         }
       })();
@@ -2090,133 +2260,135 @@ async function initEnvLessBridgeCore(params) {
     label: "remote",
   });
   refresh.scheduleFromExpiresIn(sessionId, bridgeCredentials.expires_in);
-  kr = ownerPin?.subscribe(() => {
-    lr("owner_changed");
+  unsubscribeOwnerPin = ownerPin?.subscribe(() => {
+    ownerChangedSince("owner_changed");
   });
-  if (Mt()) lr("owner_changed");
-  let Kt;
+  if (ownerLooksChanged()) ownerChangedSince("owner_changed");
+  let heldData;
   function wireTransportCallbacks() {
     transport.setOnConnect((msgs) => {
-      if (re) return;
-      clearTimeout(cr);
-      sr = 0;
-      Mr = undefined;
-      tt = undefined;
-      Se = false;
-      dr = undefined;
-      Tt = undefined;
-      Et = false;
-      Xn();
+      if (ownerChanged) return;
+      clearTimeout(connectTimeoutTimer);
+      recoveryAttempts = 0;
+      firstCloseAt = undefined;
+      pendingAuthCode = undefined;
+      episodeDead = false;
+      pendingPresenceSad = undefined;
+      authEndCode = undefined;
+      failedTerminally = false;
+      resetNonOriginStreak();
       supersession = undefined;
-      if (De.size > 0) {
-        let last = [...De.values()].findLast((_) => _.details !== undefined);
-        $e("requires_action", last?.details);
-        Gt.clear();
-      } else if (vo === "running" && Pt(() => true)) $e("running");
+      if (pendingRequests.size > 0) {
+        let last = [...pendingRequests.values()].findLast((entry) => entry.details !== undefined);
+        reportState("requires_action", last?.details);
+        notForwardedIds.clear();
+      } else if (lastReportedState === "running" && isLive(() => true)) reportState("running");
       logForDebugging("[remote-bridge] v2 transport connected");
       logForDiagnosticsNoPII("info", "bridge_repl_v2_transport_connected");
       resendReceipts();
       flushHistory(msgs);
       if (transcriptMirrorMode === "deferred") {
-        if (Yt === undefined && !ns)
+        if (releaseReason === undefined && !deferralReported)
           reportTranscriptDeferred(transcriptUploadDeferred, () => {
-            ns = true;
+            deferralReported = true;
           });
       } else {
-        if (fr)
+        if (deferralCleared)
           reportTranscriptDeferred(null, () => {
-            fr = false;
+            deferralCleared = false;
           });
-        Ao();
+        installPersistence();
       }
       logEvent("tengu_bridge_repl_ws_connected", {
         v2: true,
         cause: fromEnum(connectCause),
-        ...(wo > 0 && {
-          remint_attempts: wo,
+        ...(remintAttempts > 0 && {
+          remint_attempts: remintAttempts,
         }),
       });
-      if (!Wt && qt()) {
-        Wt = true;
+      if (!presenceLogged && canReportPresence()) {
+        presenceLogged = true;
         logFeatureOk("bridge_presence");
       }
       if (transcriptMirrorMode === "deferred") {
-        if (!yr && De.size === 0) {
+        if (!historyFlushed && pendingRequests.size === 0) {
           let last = initialMessages
             ?.filter((initialMessage) => isEligibleBridgeMessage(initialMessage))
             .findLast((initialMessage) => !isAttachmentOrConsentFallback(initialMessage));
-          if (Pt(() => last !== undefined && isRealUserTurn(last) && !isInterruptionMessage(last)))
-            $e("running");
+          if (isLive(() => last !== undefined && isRealUserTurn(last) && !isInterruptionMessage(last)))
+            reportState("running");
         }
-        yr = true;
+        historyFlushed = true;
       }
-      if (!yr && initialMessages && initialMessages.length > 0 && !reattachFellBackToFresh) {
-        yr = true;
-        let R = transport;
-        let _ = flushInitialHistory(initialMessages);
+      if (!historyFlushed && initialMessages && initialMessages.length > 0 && !reattachFellBackToFresh) {
+        historyFlushed = true;
+        let flushingTransport = transport;
+        let historyFlush = flushInitialHistory(initialMessages);
         let deferred = Promise.withResolvers();
-        _.catch((error) => logForDebugging(`[remote-bridge] flushHistory failed: ${error}`)).finally(() => {
-          deferred.resolve();
-          if (transport !== R || I || re || Be) return;
-          drainFlushGate();
-          Tr();
-        });
-        io = Promise.all([_, deferred.promise]);
-        io.catch(() => {});
-      } else if (Ir) Tr();
-      else if ((messageFlushGate.active || frameFlushGate.active) && !Be) {
-        ar();
+        historyFlush
+          .catch((error) => logForDebugging(`[remote-bridge] flushHistory failed: ${error}`))
+          .finally(() => {
+            deferred.resolve();
+            if (transport !== flushingTransport || stopped || ownerChanged || recoveryInFlight) return;
+            drainFlushGate();
+            setConnected();
+          });
+        firstHistoryPromise = Promise.all([historyFlush, deferred.promise]);
+        firstHistoryPromise.catch(() => {});
+      } else if (transcriptReleasing) setConnected();
+      else if ((messageFlushGate.active || frameFlushGate.active) && !recoveryInFlight) {
+        clearRecoverTimer();
         drainFlushGate();
-        Tr();
-      } else if (!messageFlushGate.active) Tr();
-      Ja();
-      Rr = transport;
+        setConnected();
+      } else if (!messageFlushGate.active) setConnected();
+      reportReleaseReason();
+      lastClosedTransport = transport;
     });
     transport.setOnData((data) => {
-      if (re) return;
-      if (Kt !== undefined) {
-        Kt.push(data);
+      if (ownerChanged) return;
+      if (heldData !== undefined) {
+        heldData.push(data);
         return;
       }
-      if (!Mt()) {
-        i(data);
+      if (!ownerLooksChanged()) {
+        handleFrame(data);
         return;
       }
-      Kt = [data];
-      r();
+      heldData = [data];
+      drainHeldData();
     });
-    let e = transport;
-    transport.setOnClose((y, R, _) => {
-      if (Rr === e) Rr = undefined;
+    let closedTransport = transport;
+    transport.setOnClose((code, cause, detail) => {
+      if (lastClosedTransport === closedTransport) lastClosedTransport = undefined;
       let now = Date.now();
-      return Rn(y, R, _, false, Math.min(now, e.lastFrameReadAt() ?? now));
+      return handleClose(code, cause, detail, false, Math.min(now, closedTransport.lastFrameReadAt() ?? now));
     });
-    function r() {
-      lr("owner_changed").then((res) => {
-        let R = Kt;
-        if (R === undefined) return;
-        if (res || I) {
-          Kt = undefined;
+    function drainHeldData() {
+      ownerChangedSince("owner_changed").then((res) => {
+        let queue = heldData;
+        if (queue === undefined) return;
+        if (res || stopped) {
+          heldData = undefined;
           return;
         }
-        let _ = R.length;
-        while (R.length > 0) {
-          if (re || I) {
-            Kt = undefined;
+        let remaining = queue.length;
+        while (queue.length > 0) {
+          if (ownerChanged || stopped) {
+            heldData = undefined;
             return;
           }
-          if (_ === 0 && Mt()) {
-            r();
+          if (remaining === 0 && ownerLooksChanged()) {
+            drainHeldData();
             return;
           }
-          _ = Math.max(0, _ - 1);
-          let req = R.shift();
-          if (req !== undefined) i(req);
+          remaining = Math.max(0, remaining - 1);
+          let req = queue.shift();
+          if (req !== undefined) handleFrame(req);
         }
-        Kt = undefined;
+        heldData = undefined;
       });
     }
-    function i(req) {
+    function handleFrame(req) {
       handleIngressMessage(
         req,
         recentPostedUUIDs,
@@ -2224,34 +2396,34 @@ async function initEnvLessBridgeCore(params) {
         (code) => {
           if (isHumanInboundMessage(code, "bridge")) {
             idleTracker.noteActivity();
-            Ot("client_prompt");
+            releaseTranscript("client_prompt");
           }
-          let _ =
+          let receiptUuid =
             onInboundMessage !== undefined && code.type === "user" && isBridgeInboundReadReceiptsEnabled()
               ? normalizeUuidOrNull(code.uuid)
               : null;
-          if (_ === null) return onInboundMessage?.(code);
-          return withReadReceiptClaim(_, () => onInboundMessage?.(code));
+          if (receiptUuid === null) return onInboundMessage?.(code);
+          return withReadReceiptClaim(receiptUuid, () => onInboundMessage?.(code));
         },
         onPermissionResponse
-          ? (R) => {
-              if (onPermissionResponse(R)) {
-                let _ = R.response.subtype === "success" && !!R.response.response;
-                if (_) {
+          ? (response) => {
+              if (onPermissionResponse(response)) {
+                let answered = response.response.subtype === "success" && !!response.response.response;
+                if (answered) {
                   idleTracker.noteActivity();
-                  Ot("client_input");
+                  releaseTranscript("client_input");
                 }
-                go(R.response.request_id, _);
-                if (!Rt) mo();
+                resolvePendingAction(response.response.request_id, answered);
+                if (!turnResultReported) reportPendingState();
               }
             }
           : undefined,
-        (R) => {
-          if (isCoalescableControlRequest(R)) {
+        (controlRequest) => {
+          if (isCoalescableControlRequest(controlRequest)) {
             idleTracker.noteActivity();
-            Ot("client_input");
+            releaseTranscript("client_input");
           }
-          handleReplBridgeControlRequest(R, {
+          handleReplBridgeControlRequest(controlRequest, {
             transport,
             sessionId,
             onInterrupt,
@@ -2273,9 +2445,9 @@ async function initEnvLessBridgeCore(params) {
               DD_SOURCEMAP_GROUP: "default",
             }.VERSION,
             getCommands,
-            getPendingPrompts: La,
+            getPendingPrompts: takePendingPrompts,
             onDialogKindsDeclared,
-            onClientInitialize: Xa,
+            onClientInitialize: clientInitializeHandler,
             onSetModel,
             onSetMaxThinkingTokens,
             onSetPermissionMode,
@@ -2293,28 +2465,28 @@ async function initEnvLessBridgeCore(params) {
             onMcpReconnect,
             onMcpSetServers,
             onForkConversation,
-            hasPendingPrompts: () => De.size > 0,
+            hasPendingPrompts: () => pendingRequests.size > 0,
             outboundOnly,
-            writeFrame: (_) => {
-              if (et(_.type)) return;
-              writeOrQueueFrame(_, _.type);
+            writeFrame: (frame) => {
+              if (shouldDropAfterOwnerChange(frame.type)) return;
+              writeOrQueueFrame(frame, frame.type);
             },
             cancellableRequests: flushGate,
           });
         },
-        (R) => flushGate.get(R)?.abort(),
+        (requestId) => flushGate.get(requestId)?.abort(),
         onQueuedNotification,
       );
     }
   }
-  function Rn(code, cause, detail, y, R) {
-    let _ = false;
-    clearTimeout(cr);
-    if (I || re) {
-      Ni(0, [], transport.discardUndeliveredEvents?.() ?? []);
+  function handleClose(code, cause, detail, synthetic, closedAt) {
+    let leakedRecovery = false;
+    clearTimeout(connectTimeoutTimer);
+    if (stopped || ownerChanged) {
+      reportLostEvents(0, [], transport.discardUndeliveredEvents?.() ?? []);
       return false;
     }
-    if (!y) {
+    if (!synthetic) {
       logForDebugging(
         `[remote-bridge] v2 transport closed (code=${code}${detail ? ` source=${detail.rejectSource}` : ""})`,
       );
@@ -2322,73 +2494,75 @@ async function initEnvLessBridgeCore(params) {
         code,
         v2: true,
         close_cause: fromEnumOpt(cause),
-        recovery_in_flight: Be,
+        recovery_in_flight: recoveryInFlight,
         ...(detail !== undefined && {
           reject_source: fromEnum(detail.rejectSource),
         }),
       });
     }
-    if (Be) {
-      let W = ir ? Date.now() - ir : 0;
-      if (W <= Ci) {
-        be = {
+    if (recoveryInFlight) {
+      let heldMs = recoveryStartedAt ? Date.now() - recoveryStartedAt : 0;
+      if (heldMs <= recoveryCeilingMs) {
+        pendingClose = {
           code: code ?? 4092,
           cause,
           detail,
-          at: be?.at ?? Mr ?? R,
+          at: pendingClose?.at ?? firstCloseAt ?? closedAt,
         };
         return false;
       }
       logForDebugging(
-        `[remote-bridge] authRecoveryInFlight held ${Math.round(W / 1000)}s (> ceiling ${Math.round(Ci / 1000)}s) \u2014 treating as leaked, handling close directly`,
+        `[remote-bridge] authRecoveryInFlight held ${Math.round(heldMs / 1000)}s (> ceiling ${Math.round(recoveryCeilingMs / 1000)}s) \u2014 treating as leaked, handling close directly`,
         {
           level: "error",
         },
       );
       logForDiagnosticsNoPII("error", "bridge_repl_v2_recovery_flag_leaked");
-      Si();
-      be = undefined;
-      _ = true;
+      resetRecoveryFlags();
+      pendingClose = undefined;
+      leakedRecovery = true;
     }
-    if (Zi(code)) {
-      if (sr >= Mi) {
-        logForDebugging(`[remote-bridge] ${code} recovery exhausted after ${sr} attempts`, {
+    if (isRecoverableCode(code)) {
+      if (recoveryAttempts >= maxRecoveryAttempts) {
+        logForDebugging(`[remote-bridge] ${code} recovery exhausted after ${recoveryAttempts} attempts`, {
           level: "error",
         });
-        ve(`Transport recovery exhausted (code ${code})`);
-        if (!Se)
-          ke("recovery_exhausted", {
+        failTransport(`Transport recovery exhausted (code ${code})`);
+        if (!episodeDead)
+          notePresenceBad("recovery_exhausted", {
             close_code: code,
           });
         return false;
       }
-      if (code === 4094 && !y) {
-        if (ln >= Mi) {
+      if (code === 4094 && !synthetic) {
+        if (credRecoveryAttempts >= maxRecoveryAttempts) {
           logForDebugging(
-            `[remote-bridge] worker-credential recovery exhausted after ${ln} attempts with no successful heartbeat between them`,
+            `[remote-bridge] worker-credential recovery exhausted after ${credRecoveryAttempts} attempts with no successful heartbeat between them`,
             {
               level: "error",
             },
           );
-          ve("Transport recovery exhausted (worker credential failures)", "auth");
-          if (!Se) ke("cred_recovery_exhausted");
+          failTransport("Transport recovery exhausted (worker credential failures)", "auth");
+          if (!episodeDead) notePresenceBad("cred_recovery_exhausted");
           return false;
         }
-        ln++;
+        credRecoveryAttempts++;
       }
-      if (code === 4093 && !y) {
-        let W = reconnectBudget.charge(Date.now(), to());
-        switch (W) {
+      if (code === 4093 && !synthetic) {
+        let budgetVerdict = reconnectBudget.charge(Date.now(), isRecoveryPatienceEnabled());
+        switch (budgetVerdict) {
           case "hourly_exhausted":
           case "daily_exhausted": {
-            let z = W === "hourly_exhausted" ? 1 : 24;
-            logForDebugging(`[remote-bridge] heartbeat recovery budget exhausted (${z}h window)`, {
+            let windowHours = budgetVerdict === "hourly_exhausted" ? 1 : 24;
+            logForDebugging(`[remote-bridge] heartbeat recovery budget exhausted (${windowHours}h window)`, {
               level: "error",
             });
-            ve(W === "hourly_exhausted" ? HOURLY_EXHAUSTED_DETAIL : DAILY_EXHAUSTED_DETAIL);
-            if (!Se)
-              ke("heartbeat_budget_exhausted", {
-                window_h: z,
+            failTransport(
+              budgetVerdict === "hourly_exhausted" ? HOURLY_EXHAUSTED_DETAIL : DAILY_EXHAUSTED_DETAIL,
+            );
+            if (!episodeDead)
+              notePresenceBad("heartbeat_budget_exhausted", {
+                window_h: windowHours,
               });
             return false;
           }
@@ -2396,80 +2570,85 @@ async function initEnvLessBridgeCore(params) {
             break;
         }
       }
-      sr++;
-      Mr ??= R;
-      Ka(code);
+      recoveryAttempts++;
+      firstCloseAt ??= closedAt;
+      recoverFromClose(code);
       return false;
     }
-    let S = (y || _) && Er;
-    let D = classifySupersession(code, cause);
-    if (D !== undefined && !(S && isNotArchived(D))) supersession = D;
-    let j = S && cause === "superseded_by_worker" ? undefined : cause;
-    let H =
+    let inEpisode = (synthetic || leakedRecovery) && rebuiltSinceStart;
+    let supersessionClass = classifySupersession(code, cause);
+    if (supersessionClass !== undefined && !(inEpisode && isNotArchived(supersessionClass)))
+      supersession = supersessionClass;
+    let effectiveCause = inEpisode && cause === "superseded_by_worker" ? undefined : cause;
+    let endedElsewhere =
       code === 4090 &&
-      (j === "superseded_by_worker" || j === "session_not_active" || j === "session_not_found");
-    ve(
-      H ? describeBridgeCloseCode(code, j) : `Transport closed: ${describeBridgeCloseCode(code, j, detail)}`,
-      H ? "ended_elsewhere" : "terminal",
+      (effectiveCause === "superseded_by_worker" ||
+        effectiveCause === "session_not_active" ||
+        effectiveCause === "session_not_found");
+    failTransport(
+      endedElsewhere
+        ? describeBridgeCloseCode(code, effectiveCause)
+        : `Transport closed: ${describeBridgeCloseCode(code, effectiveCause, detail)}`,
+      endedElsewhere ? "ended_elsewhere" : "terminal",
     );
-    if (Se) return H;
+    if (episodeDead) return endedElsewhere;
     if (code === 4090) {
-      if (y && Er) ke("transport_closed_4090");
+      if (synthetic && rebuiltSinceStart) notePresenceBad("transport_closed_4090");
       else {
-        ht("transport_closed_4090");
-        Se = true;
+        notePresenceSad("transport_closed_4090");
+        episodeDead = true;
       }
-    } else if (code === 403) uo(detail);
-    else ke(code === 404 ? "transport_closed_404" : "transport_closed_other");
-    return H;
+    } else if (code === 403) noteNonOriginClose(detail);
+    else notePresenceBad(code === 404 ? "transport_closed_404" : "transport_closed_other");
+    return endedElsewhere;
   }
-  async function To(fresh, r, i, y, R) {
-    raiseWorkerEpoch(fresh.worker_epoch);
+  async function rebuildWithCredentials(results, cause, attempts, refreshAt, mcpGenerationAt) {
+    raiseWorkerEpoch(results.worker_epoch);
     if (isTeleportedSession(sessionId)) {
       logForDebugging(`[remote-bridge] Rebuild suppressed for teleported session ${sessionId}`);
       return "suppressed_teleported";
     }
-    connectCause = r;
-    wo = i;
+    connectCause = cause;
+    remintAttempts = attempts;
     supersession = undefined;
-    Er = true;
-    hn = false;
-    bo?.();
-    Sn();
+    rebuiltSinceStart = true;
+    pendingActionShown = false;
+    invalidateGitState?.();
+    teardownPersistence();
     messageFlushGate.start();
     frameFlushGate.start();
     try {
-      let _ = transport;
-      let initialSequenceNum = _.getLastSequenceNum();
-      let initialLongPollMode = _.isLongPolling?.() === true;
-      Rr = undefined;
-      _.close({
+      let oldTransport = transport;
+      let initialSequenceNum = oldTransport.getLastSequenceNum();
+      let initialLongPollMode = oldTransport.isLongPolling?.() === true;
+      lastClosedTransport = undefined;
+      oldTransport.close({
         goodbye: false,
         retainUndelivered: true,
       });
       transport = await createV2ReplTransport({
-        ...gi(),
-        sessionUrl: buildCCRv2SdkUrl(fresh.api_base_url, sessionId),
-        ingressToken: fresh.worker_jwt,
+        ...buildTransportOptions(),
+        sessionUrl: buildCCRv2SdkUrl(results.api_base_url, sessionId),
+        ingressToken: results.worker_jwt,
         sessionId,
-        epoch: fresh.worker_epoch,
+        epoch: results.worker_epoch,
         initialSequenceNum,
         initialLongPollMode,
-        onConnectNeedsRecord: ro && !wn,
-        getAuthToken: () => fresh.worker_jwt,
+        onConnectNeedsRecord: onConnectNeedsRecord && !historyFlushStarted,
+        getAuthToken: () => results.worker_jwt,
       });
-      if (I) {
+      if (stopped) {
         transport.close();
         return "rebuilt";
       }
-      if (re) {
+      if (ownerChanged) {
         transport.close();
         return "suppressed_owner_changed";
       }
       wireTransportCallbacks();
       transport.connect();
-      carryOverUndeliveredEvents(_);
-      vn?.();
+      carryOverUndeliveredEvents(oldTransport);
+      refreshGitBranch?.();
       reseedBridgePermissionMode();
       reseedBridgeCrossSessionInbound();
       reseedBridgeModel();
@@ -2478,17 +2657,17 @@ async function initEnvLessBridgeCore(params) {
       resendBridgeEffortMetadata();
       reseedBridgeContextUsage();
       onTransportRebuilt?.();
-      cr = setTimeout(onConnectTimeout, cfg.connect_timeout_ms, connectCause);
-      refresh.scheduleFromExpiresIn(sessionId, fresh.expires_in);
-      workerJwt = fresh.worker_jwt;
-      workerEpoch_2 = fresh.worker_epoch;
-      apiBaseUrl = fresh.api_base_url;
-      let j = xt !== 0 && (Lt || y < xt);
-      xt = 0;
-      let H = R < tn;
-      Lt = j || H;
+      connectTimeoutTimer = setTimeout(onConnectTimeout, cfg.connect_timeout_ms, connectCause);
+      refresh.scheduleFromExpiresIn(sessionId, results.expires_in);
+      workerJwt = results.worker_jwt;
+      workerEpoch_2 = results.worker_epoch;
+      apiBaseUrl = results.api_base_url;
+      let deferredRefresh = lastRefreshAt !== 0 && (refreshDeferred || refreshAt < lastRefreshAt);
+      lastRefreshAt = 0;
+      let staleMentions = mcpGenerationAt < mcpGeneration;
+      refreshDeferred = deferredRefresh || staleMentions;
       try {
-        Pa(fresh, H);
+        refreshInjectedMcp(results, staleMentions);
       } catch (error) {
         logError(error);
         logFeatureBad("bridge_webagent_mcp_inject", "refresh_threw");
@@ -2500,164 +2679,170 @@ async function initEnvLessBridgeCore(params) {
     }
     return "rebuilt";
   }
-  async function Qi(e, r, i) {
-    let y = !i && onClassifyMissingOAuthToken !== undefined && qt() && isBridgeSignedOutNeutralEnabled();
-    let R = y ? await onClassifyMissingOAuthToken(e) : undefined;
-    if (y && (I || ae !== r)) return;
-    if (R === "signed_out") {
-      logForDebugging(`[remote-bridge] Signed out on this machine under ${sessionId} (${e}) \u2014 stopping`);
+  async function handleMissingToken(site, generation, episodeDeadInHandler) {
+    let classifyEnabled =
+      !episodeDeadInHandler &&
+      onClassifyMissingOAuthToken !== undefined &&
+      canReportPresence() &&
+      isBridgeSignedOutNeutralEnabled();
+    let verdict = classifyEnabled ? await onClassifyMissingOAuthToken(site) : undefined;
+    if (classifyEnabled && (stopped || recoveryGeneration !== generation)) return;
+    if (verdict === "signed_out") {
+      logForDebugging(
+        `[remote-bridge] Signed out on this machine under ${sessionId} (${site}) \u2014 stopping`,
+      );
       logForDiagnosticsNoPII("info", "bridge_repl_v2_signed_out");
-      ht("signed_out");
-      if (!Wt) logFeatureSad("bridge_connect", "signed_out");
-      Se = true;
-      ve(pa, "auth");
+      notePresenceSad("signed_out");
+      if (!presenceLogged) logFeatureSad("bridge_connect", "signed_out");
+      episodeDead = true;
+      failTransport(signedOutMessage, "auth");
       return;
     }
-    ve(ca, "auth");
-    if (!i) ke("recovery_no_oauth_token");
+    failTransport(jwtRefreshNoTokenMessage, "auth");
+    if (!episodeDeadInHandler) notePresenceBad("recovery_no_oauth_token");
   }
-  async function qa(e, stale, i, y) {
+  async function remintLoop(closeCode, generation, episodeDead, cap) {
     let now = Date.now();
     logForDiagnosticsNoPII("info", "bridge_repl_v2_remint_loop_entered");
-    un = true;
-    let _ = 0;
+    remintLoopActive = true;
+    let attempts = 0;
     try {
-      let S = false;
-      let D = 0;
-      for (let j = 1; !I; j++) {
-        if (ae !== stale)
+      let oauthRetried = false;
+      let unreachableCount = 0;
+      for (let attempt = 1; !stopped; attempt++) {
+        if (recoveryGeneration !== generation)
           return {
             creds: null,
-            attempts: _,
+            attempts,
           };
         let rounded = Math.round((Date.now() - now) / 60000);
-        fn(
-          `${workSecretCredentials ? "Remote Control credentials unavailable" : "Remote Control server unreachable"} \u2014 retrying (attempt ${j}${rounded > 0 ? `, ${rounded}m elapsed` : ""})`,
+        setReconnecting(
+          `${workSecretCredentials ? "Remote Control credentials unavailable" : "Remote Control server unreachable"} \u2014 retrying (attempt ${attempt}${rounded > 0 ? `, ${rounded}m elapsed` : ""})`,
         );
-        let min = Math.min(BRIDGE_REMINT_BACKOFF_BASE_MS * 2 ** (j - 1), BRIDGE_REMINT_BACKOFF_CAP_MS);
+        let min = Math.min(BRIDGE_REMINT_BACKOFF_BASE_MS * 2 ** (attempt - 1), BRIDGE_REMINT_BACKOFF_CAP_MS);
         await sleep(Math.max(Math.random() * min, BRIDGE_REMINT_MIN_JITTER_MS));
-        if (I) break;
-        if (ae !== stale)
+        if (stopped) break;
+        if (recoveryGeneration !== generation)
           return {
             creds: null,
-            attempts: _,
+            attempts,
           };
-        ir = Date.now();
+        recoveryStartedAt = Date.now();
         if (isTeleportedSession(sessionId)) {
-          ve("Session teleported to cloud");
+          failTransport("Session teleported to cloud");
           logForDiagnosticsNoPII("info", "bridge_repl_v2_remint_loop_teleported");
           return {
             creds: null,
-            attempts: _,
+            attempts,
           };
         }
         let laneToken = getLaneToken();
         if (!laneToken) {
           logForDiagnosticsNoPII("info", "bridge_repl_v2_remint_loop_no_oauth");
-          await Qi("remint_loop", stale, i);
+          await handleMissingToken("remint_loop", generation, episodeDead);
           return {
             creds: null,
-            attempts: _,
+            attempts,
           };
         }
-        let L = await refetchCredentials(laneToken, stale);
-        _ = j;
-        if (I) break;
-        if (ae !== stale)
+        let result = await refetchCredentials(laneToken, generation);
+        attempts = attempt;
+        if (stopped) break;
+        if (recoveryGeneration !== generation)
           return {
             creds: null,
-            attempts: _,
+            attempts,
           };
-        if (L === null) {
-          D++;
-          if (y === undefined || D < y.attempts) continue;
+        if (result === null) {
+          unreachableCount++;
+          if (cap === undefined || unreachableCount < cap.attempts) continue;
           logForDebugging(
-            `[remote-bridge] Re-mint loop exhausted (code ${e}): ${D} unreachable attempts, ${Math.round((Date.now() - now) / 1000)}s`,
+            `[remote-bridge] Re-mint loop exhausted (code ${closeCode}): ${unreachableCount} unreachable attempts, ${Math.round((Date.now() - now) / 1000)}s`,
             {
               level: "error",
             },
           );
           logForDiagnosticsNoPII("info", "bridge_repl_v2_remint_loop_exhausted", {
-            attempts: _,
+            attempts,
             elapsed_ms: Date.now() - now,
             queued_writes_dropped:
               messageFlushGate.pendingCount + frameFlushGate.pendingCount + frameFlushGate.evictedCount,
           });
-          ve(y.exhaustedDetail);
-          if (!i)
-            ke("recovery_exhausted", {
-              close_code: e,
-              remint_attempts: _,
+          failTransport(cap.exhaustedDetail);
+          if (!episodeDead)
+            notePresenceBad("recovery_exhausted", {
+              close_code: closeCode,
+              remint_attempts: attempts,
             });
           return {
             creds: null,
-            attempts: _,
+            attempts,
           };
         }
-        if (isCredentialsRejection(L)) {
-          if (onAuth401 && !S) {
-            if (await Pr("owner_changed_recovery", stale))
+        if (isCredentialsRejection(result)) {
+          if (onAuth401 && !oauthRetried) {
+            if (await staleAfterOwnerCheck("owner_changed_recovery", generation))
               return {
                 creds: null,
-                attempts: _,
+                attempts,
               };
-            S = true;
-            let le = false;
+            oauthRetried = true;
+            let refreshed = false;
             try {
-              le = await onAuth401(laneToken);
+              refreshed = await onAuth401(laneToken);
             } catch (error) {
               logForDebugging(`[remote-bridge] Re-mint loop OAuth refresh threw: ${errorMessage(error)}`, {
                 level: "error",
               });
             }
-            if (I) break;
-            if (ae !== stale)
+            if (stopped) break;
+            if (recoveryGeneration !== generation)
               return {
                 creds: null,
-                attempts: _,
+                attempts,
               };
-            if (le) {
+            if (refreshed) {
               logForDebugging(
                 "[remote-bridge] Re-mint rejected after outage \u2014 OAuth refresh succeeded; retrying with the refreshed credential",
               );
               continue;
             }
           }
-          ve(Yn, "auth");
-          if (!i) ke("recovery_credentials_rejected");
+          failTransport(loginRejectedMessage, "auth");
+          if (!episodeDead) notePresenceBad("recovery_credentials_rejected");
           logForDiagnosticsNoPII("info", "bridge_repl_v2_remint_loop_rejected");
           return {
             creds: null,
-            attempts: _,
+            attempts,
           };
         }
-        if (isCredentialsFailure(L)) {
-          ve(describeCredentialFailure(L), failureSeverity(L));
-          if (!i) ke(credentialsRejectedCode("recovery", L));
+        if (isCredentialsFailure(result)) {
+          failTransport(describeCredentialFailure(result), failureSeverity_2(result));
+          if (!episodeDead) notePresenceBad(credentialsRejectedCode("recovery", result));
           logForDiagnosticsNoPII("info", "bridge_repl_v2_remint_loop_denied");
           return {
             creds: null,
-            attempts: _,
+            attempts,
           };
         }
         logForDebugging(
-          `[remote-bridge] Re-mint loop succeeded (code ${e}, attempt ${j}, ${Math.round((Date.now() - now) / 1000)}s)`,
+          `[remote-bridge] Re-mint loop succeeded (code ${closeCode}, attempt ${attempt}, ${Math.round((Date.now() - now) / 1000)}s)`,
         );
         logForDiagnosticsNoPII("info", "bridge_repl_v2_remint_loop_recovered", {
-          attempts: j,
+          attempts: attempt,
           elapsed_ms: Date.now() - now,
         });
         return {
-          creds: L,
-          attempts: _,
+          creds: result,
+          attempts,
         };
       }
       return {
         creds: null,
-        attempts: _,
+        attempts,
       };
     } finally {
-      if (ae === stale) un = false;
+      if (recoveryGeneration === generation) remintLoopActive = false;
     }
   }
   let CLOSE_CODE_RECOVERY = {
@@ -2698,68 +2883,73 @@ async function initEnvLessBridgeCore(params) {
       needsOAuthRefresh: true,
     },
   };
-  function Zi(e) {
-    if (e === 4094) return isBridgeAuthReviveEnabled();
-    return e === 401 || e === 4091 || e === 4093;
+  function isRecoverableCode(code) {
+    if (code === 4094) return isBridgeAuthReviveEnabled();
+    return code === 401 || code === 4091 || code === 4093;
   }
-  let es = 30000;
-  let Ga = 5000;
+  let retryDelayMs = 30000;
+  let deferredRetryMs = 5000;
   function rebuildTransport(fresh, cause) {
     if (CLOSE_CODE_RECOVERY[fresh].fetchFailure === "terminal") {
-      ve(cause);
+      failTransport(cause);
       return;
     }
     messageFlushGate.start();
     frameFlushGate.start();
-    fn("presence recovery failed \u2014 retrying");
-    logForDebugging(`[remote-bridge] ${fresh} recovery fetch failed \u2014 retrying in ${es}ms`);
-    ar();
-    let i = transport;
+    setReconnecting("presence recovery failed \u2014 retrying");
+    logForDebugging(`[remote-bridge] ${fresh} recovery fetch failed \u2014 retrying in ${retryDelayMs}ms`);
+    clearRecoverTimer();
+    let closedTransport = transport;
     function recoverFromAuthFailure() {
-      pt = undefined;
-      if (I) return;
-      if (sr === 0) {
+      recoverTimer = undefined;
+      if (stopped) return;
+      if (recoveryAttempts === 0) {
         if (messageFlushGate.active || frameFlushGate.active) {
-          if (Be) {
-            pt = setTimeout(recoverFromAuthFailure, Ga);
+          if (recoveryInFlight) {
+            recoverTimer = setTimeout(recoverFromAuthFailure, deferredRetryMs);
             return;
           }
           drainFlushGate();
-          Tr();
+          setConnected();
         }
         return;
       }
-      if (transport !== i) return;
-      Rn(fresh, undefined, undefined, true, Mr ?? Date.now());
+      if (transport !== closedTransport) return;
+      handleClose(fresh, undefined, undefined, true, firstCloseAt ?? Date.now());
     }
-    pt = setTimeout(recoverFromAuthFailure, es);
+    recoverTimer = setTimeout(recoverFromAuthFailure, retryDelayMs);
   }
-  async function Ka(fresh) {
-    let r = Se;
-    let i = Mr ?? Date.now();
+  async function recoverFromClose(closeCode) {
+    let episodeDeadBeforeRecovery = episodeDead;
+    let episodeStartAt = firstCloseAt ?? Date.now();
     if (isTeleportedSession(sessionId)) {
-      ve("Session teleported to cloud");
+      failTransport("Session teleported to cloud");
       return;
     }
-    if (Be) return;
-    let stale = Ri();
+    if (recoveryInFlight) return;
+    let stale = beginRecovery();
     messageFlushGate.start();
     frameFlushGate.start();
-    fn(CLOSE_CODE_RECOVERY[fresh].reconnectingDetail);
-    logForDebugging(`[remote-bridge] ${fresh} on transport \u2014 attempting credential refresh + rebuild`);
+    setReconnecting(CLOSE_CODE_RECOVERY[closeCode].reconnectingDetail);
+    logForDebugging(
+      `[remote-bridge] ${closeCode} on transport \u2014 attempting credential refresh + rebuild`,
+    );
     try {
-      if (await Pr("owner_changed_recovery", stale)) return;
+      if (await staleAfterOwnerCheck("owner_changed_recovery", stale)) return;
       let accessToken = getAccessToken();
-      let _ = true;
+      let refreshed = true;
       let launcherLoginGeneration = getLauncherLoginGeneration();
-      if (!workSecretCredentials && CLOSE_CODE_RECOVERY[fresh].needsOAuthRefresh && onAuth401)
+      if (!workSecretCredentials && CLOSE_CODE_RECOVERY[closeCode].needsOAuthRefresh && onAuth401)
         try {
-          _ = await onAuth401(accessToken ?? "", "stale");
+          refreshed = await onAuth401(accessToken ?? "", "stale");
         } catch (error) {
-          _ = false;
-          logForDebugging(`[remote-bridge] ${fresh} recovery OAuth refresh threw: ${errorMessage(error)}`, {
-            level: "error",
-          });
+          refreshed = false;
+          logForDebugging(
+            `[remote-bridge] ${closeCode} recovery OAuth refresh threw: ${errorMessage(error)}`,
+            {
+              level: "error",
+            },
+          );
         }
       else if (!workSecretCredentials && onProactiveRefresh)
         try {
@@ -2769,35 +2959,35 @@ async function initEnvLessBridgeCore(params) {
             level: "error",
           });
         }
-      if (ae !== stale) return;
-      let D = getLaneToken() ?? accessToken;
-      let j = D === heldHostSessionsBearer();
-      if (!D || I) {
-        if (!I) await Qi("recovery", stale, r);
+      if (recoveryGeneration !== stale) return;
+      let laneToken = getLaneToken() ?? accessToken;
+      let isHostBearer = laneToken === heldHostSessionsBearer();
+      if (!laneToken || stopped) {
+        if (!stopped) await handleMissingToken("recovery", stale, episodeDeadBeforeRecovery);
         return;
       }
       if (isTeleportedSession(sessionId)) {
-        ve("Session teleported to cloud");
+        failTransport("Session teleported to cloud");
         return;
       }
       let now = Date.now();
-      let W = tn;
-      let fresh_2 = await withRetry(
-        () => refetchCredentials(D, stale),
+      let mcpGenerationAtRecovery = mcpGeneration;
+      let fresh = await withRetry(
+        () => refetchCredentials(laneToken, stale),
         "fetchRemoteCredentials (recovery)",
         cfg,
       );
-      if (ae !== stale) return;
+      if (recoveryGeneration !== stale) return;
       if (
-        (!fresh_2 || isCredentialsRejection(fresh_2)) &&
-        !I &&
-        CLOSE_CODE_RECOVERY[fresh].needsOAuthRefresh &&
+        (!fresh || isCredentialsRejection(fresh)) &&
+        !stopped &&
+        CLOSE_CODE_RECOVERY[closeCode].needsOAuthRefresh &&
         onAuth401 &&
-        !_
+        !refreshed
       ) {
-        let ce = false;
-        for (let idx = 1; idx <= cfg.oauth_retry_max_attempts && !I; idx++) {
-          fn(
+        let adoptedNewToken = false;
+        for (let idx = 1; idx <= cfg.oauth_retry_max_attempts && !stopped; idx++) {
+          setReconnecting(
             `OAuth refresh failed \u2014 waiting for a fresh login (${idx}/${cfg.oauth_retry_max_attempts})`,
           );
           await sleep(
@@ -2810,10 +3000,10 @@ async function initEnvLessBridgeCore(params) {
               },
             }),
           );
-          if (await Pr("owner_changed_recovery", stale)) return;
-          let xe;
+          if (await staleAfterOwnerCheck("owner_changed_recovery", stale)) return;
+          let nextToken;
           try {
-            xe = onReadFreshOAuthToken
+            nextToken = onReadFreshOAuthToken
               ? await onReadFreshOAuthToken()
               : (await onAuth401(accessToken ?? ""))
                 ? getAccessToken()
@@ -2826,128 +3016,144 @@ async function initEnvLessBridgeCore(params) {
               },
             );
           }
-          if (I || ae !== stale) return;
-          let qe = xe !== undefined && xe !== (accessToken ?? "") ? xe : undefined;
-          if (!qe) continue;
-          ce = true;
+          if (stopped || recoveryGeneration !== stale) return;
+          let usableToken =
+            nextToken !== undefined && nextToken !== (accessToken ?? "") ? nextToken : undefined;
+          if (!usableToken) continue;
+          adoptedNewToken = true;
           if (isTeleportedSession(sessionId)) {
-            ve("Session teleported to cloud");
+            failTransport("Session teleported to cloud");
             return;
           }
-          fresh_2 = await withRetry(
-            () => refetchCredentials(qe, stale),
+          fresh = await withRetry(
+            () => refetchCredentials(usableToken, stale),
             "fetchRemoteCredentials (recovery re-poll)",
             cfg,
           );
           break;
         }
-        if (ae !== stale) return;
-        if (isCredentialsRejection(fresh_2) && !ce) {
-          if (!I) {
-            let ne = Fi(launcherLoginGeneration);
-            if (ne !== undefined) {
+        if (recoveryGeneration !== stale) return;
+        if (isCredentialsRejection(fresh) && !adoptedNewToken) {
+          if (!stopped) {
+            let hostDeclined = hostDeclinedCode(launcherLoginGeneration);
+            if (hostDeclined !== undefined) {
               logForDiagnosticsNoPII("info", "bridge_repl_v2_recovery_host_declined");
-              ve(Li(ne), $i(ne));
-              if (!r)
-                if (Wt) {
-                  ht(ne);
-                  Se = true;
-                } else ke("recovery_reauth_required");
+              failTransport(hostDeclinedHint(hostDeclined), hostDeclinedSeverity(hostDeclined));
+              if (!episodeDeadBeforeRecovery)
+                if (presenceLogged) {
+                  notePresenceSad(hostDeclined);
+                  episodeDead = true;
+                } else notePresenceBad("recovery_reauth_required");
               return;
             }
-            ve("OAuth token refresh failed \u2014 run /login to re-authenticate", "auth");
-            if (!r) ke("recovery_reauth_required");
+            failTransport("OAuth token refresh failed \u2014 run /login to re-authenticate", "auth");
+            if (!episodeDeadBeforeRecovery) notePresenceBad("recovery_reauth_required");
           }
           return;
         }
       }
-      if (I) return;
-      if (!fresh_2 && CLOSE_CODE_RECOVERY[fresh].fetchFailure === "retry" && !to()) {
-        rebuildTransport(fresh, `could not fetch fresh session credentials after code ${fresh}`);
+      if (stopped) return;
+      if (!fresh && CLOSE_CODE_RECOVERY[closeCode].fetchFailure === "retry" && !isRecoveryPatienceEnabled()) {
+        rebuildTransport(closeCode, `could not fetch fresh session credentials after code ${closeCode}`);
         return;
       }
       if (
-        isCredentialsRejection(fresh_2) &&
-        (!CLOSE_CODE_RECOVERY[fresh].needsOAuthRefresh || (_ && D === accessToken && j)) &&
+        isCredentialsRejection(fresh) &&
+        (!CLOSE_CODE_RECOVERY[closeCode].needsOAuthRefresh ||
+          (refreshed && laneToken === accessToken && isHostBearer)) &&
         onAuth401
       ) {
-        if (await Pr("owner_changed_recovery", stale)) return;
-        let ce = false;
+        if (await staleAfterOwnerCheck("owner_changed_recovery", stale)) return;
+        let refreshed = false;
         try {
-          ce = await onAuth401(CLOSE_CODE_RECOVERY[fresh].needsOAuthRefresh ? D : (accessToken ?? ""));
+          refreshed = await onAuth401(
+            CLOSE_CODE_RECOVERY[closeCode].needsOAuthRefresh ? laneToken : (accessToken ?? ""),
+          );
         } catch (error) {
-          logForDebugging(`[remote-bridge] ${fresh} late OAuth refresh threw: ${errorMessage(error)}`, {
+          logForDebugging(`[remote-bridge] ${closeCode} late OAuth refresh threw: ${errorMessage(error)}`, {
             level: "error",
           });
         }
-        if (I || ae !== stale) return;
-        if (ce) {
-          fresh_2 = await withRetry(
+        if (stopped || recoveryGeneration !== stale) return;
+        if (refreshed) {
+          fresh = await withRetry(
             () => refetchCredentials(getAccessToken() ?? accessToken ?? "", stale),
-            `fetchRemoteCredentials (${fresh} late refresh)`,
+            `fetchRemoteCredentials (${closeCode} late refresh)`,
             cfg,
           );
-          if (I || ae !== stale) return;
+          if (stopped || recoveryGeneration !== stale) return;
         }
       }
-      if (isCredentialsRejection(fresh_2)) {
-        ve(Yn, "auth");
-        if (!r) ke("recovery_credentials_rejected");
+      if (isCredentialsRejection(fresh)) {
+        failTransport(loginRejectedMessage, "auth");
+        if (!episodeDeadBeforeRecovery) notePresenceBad("recovery_credentials_rejected");
         return;
       }
-      let L = 0;
-      if (!fresh_2) {
-        let ce = await qa(fresh, stale, r, to() ? CLOSE_CODE_RECOVERY[fresh].remintCap : undefined);
-        fresh_2 = ce.creds;
-        L = ce.attempts;
-        if (!fresh_2 || I || ae !== stale) return;
+      let remintAttempts = 0;
+      if (!fresh) {
+        let remintResult = await remintLoop(
+          closeCode,
+          stale,
+          episodeDeadBeforeRecovery,
+          isRecoveryPatienceEnabled() ? CLOSE_CODE_RECOVERY[closeCode].remintCap : undefined,
+        );
+        fresh = remintResult.creds;
+        remintAttempts = remintResult.attempts;
+        if (!fresh || stopped || recoveryGeneration !== stale) return;
       }
-      if (isCredentialsFailure(fresh_2)) {
-        if (!I) {
-          ve(describeCredentialFailure(fresh_2), failureSeverity(fresh_2));
-          if (!r) ke(credentialsRejectedCode("recovery", fresh_2));
+      if (isCredentialsFailure(fresh)) {
+        if (!stopped) {
+          failTransport(describeCredentialFailure(fresh), failureSeverity_2(fresh));
+          if (!episodeDeadBeforeRecovery) notePresenceBad(credentialsRejectedCode("recovery", fresh));
         }
         return;
       }
-      if (ae !== stale) return;
-      let le = await To(fresh_2, CLOSE_CODE_RECOVERY[fresh].cause, L, now, W);
-      if (le === "suppressed_teleported") {
-        ve("Session teleported to cloud");
+      if (recoveryGeneration !== stale) return;
+      let rebuildResult = await rebuildWithCredentials(
+        fresh,
+        CLOSE_CODE_RECOVERY[closeCode].cause,
+        remintAttempts,
+        now,
+        mcpGenerationAtRecovery,
+      );
+      if (rebuildResult === "suppressed_teleported") {
+        failTransport("Session teleported to cloud");
         return;
       }
-      if (le === "suppressed_owner_changed") return;
-      logForDebugging(`[remote-bridge] Transport rebuilt after ${fresh}`);
-      if (!I) {
-        if (!r)
-          ht(CLOSE_CODE_RECOVERY[fresh].recoveredCode, {
-            ...(L > 0 && {
-              remint_attempts: L,
+      if (rebuildResult === "suppressed_owner_changed") return;
+      logForDebugging(`[remote-bridge] Transport rebuilt after ${closeCode}`);
+      if (!stopped) {
+        if (!episodeDeadBeforeRecovery)
+          notePresenceSad(CLOSE_CODE_RECOVERY[closeCode].recoveredCode, {
+            ...(remintAttempts > 0 && {
+              remint_attempts: remintAttempts,
             }),
-            recovery_bucket: bucketRecentUse(Date.now() - i),
+            recovery_bucket: bucketRecentUse(Date.now() - episodeStartAt),
           });
       }
     } catch (error) {
-      logForDebugging(`[remote-bridge] ${fresh} recovery failed: ${errorMessage(error)}`, {
+      logForDebugging(`[remote-bridge] ${closeCode} recovery failed: ${errorMessage(error)}`, {
         level: "error",
       });
-      logForDiagnosticsNoPII("error", CLOSE_CODE_RECOVERY[fresh].failureDiagnostic);
-      if (!I && !re) {
-        rebuildTransport(fresh, `Transport recovery failed (${fresh}): ${errorMessage(error)}`);
-        if (CLOSE_CODE_RECOVERY[fresh].fetchFailure === "terminal" && !r) ke("recovery_failed");
+      logForDiagnosticsNoPII("error", CLOSE_CODE_RECOVERY[closeCode].failureDiagnostic);
+      if (!stopped && !ownerChanged) {
+        rebuildTransport(closeCode, `Transport recovery failed (${closeCode}): ${errorMessage(error)}`);
+        if (CLOSE_CODE_RECOVERY[closeCode].fetchFailure === "terminal" && !episodeDeadBeforeRecovery)
+          notePresenceBad("recovery_failed");
       }
     } finally {
-      if (wi(stale)) {
-        vi();
-        if (pt !== undefined && be !== undefined) {
-          ar();
-          let R = be;
-          be = undefined;
-          Rn(R.code, R.cause, R.detail, true, R.at);
-        } else be = undefined;
-        if (pt === undefined && !Be) {
+      if (endRecovery(stale)) {
+        runDeferredRefresh();
+        if (recoverTimer !== undefined && pendingClose !== undefined) {
+          clearRecoverTimer();
+          let stashedClose = pendingClose;
+          pendingClose = undefined;
+          handleClose(stashedClose.code, stashedClose.cause, stashedClose.detail, true, stashedClose.at);
+        } else pendingClose = undefined;
+        if (recoverTimer === undefined && !recoveryInFlight) {
           messageFlushGate.drop();
           frameFlushGate.drop();
-          $t = false;
+          queuedAnyMessage = false;
         }
       }
     }
@@ -2958,112 +3164,114 @@ async function initEnvLessBridgeCore(params) {
     frameFlushGate.start();
   }
   transport.connect();
-  cr = setTimeout(onConnectTimeout, cfg.connect_timeout_ms, connectCause);
-  function Pt(e) {
-    return isTurnLive ? isTurnLive(e) : e();
+  connectTimeoutTimer = setTimeout(onConnectTimeout, cfg.connect_timeout_ms, connectCause);
+  function isLive(check) {
+    return isTurnLive ? isTurnLive(check) : check();
   }
-  function toLiveSdkEvents(e) {
-    return toRedactedSdkEvents(e, "live").map((r) => {
-      if (r.type !== "assistant" || r.parent_tool_use_id !== null || r.uuid === undefined)
+  function toLiveSdkEvents(messages) {
+    return toRedactedSdkEvents(messages, "live").map((event) => {
+      if (event.type !== "assistant" || event.parent_tool_use_id !== null || event.uuid === undefined)
         return {
-          ...r,
+          ...event,
           session_id: sessionId,
         };
-      let i = or.get(r.uuid);
-      if (i === undefined)
+      let userMessageUuid = replyStamps.get(event.uuid);
+      if (userMessageUuid === undefined)
         return {
-          ...r,
+          ...event,
           session_id: sessionId,
         };
-      or.delete(r.uuid);
+      replyStamps.delete(event.uuid);
       return {
-        ...r,
+        ...event,
         session_id: sessionId,
-        user_message_uuid: i,
-        user_message_uuids: [i],
+        user_message_uuid: userMessageUuid,
+        user_message_uuids: [userMessageUuid],
       };
     });
   }
   function drainFlushGate() {
-    let e = transcriptMirrorMode === "deferred";
-    let r = e
-      ? messageFlushGate.end().filter((H) => hasUserMessagingToolUse(H.message))
+    let deferred = transcriptMirrorMode === "deferred";
+    let messages = deferred
+      ? messageFlushGate.end().filter((entry) => hasUserMessagingToolUse(entry.message))
       : messageFlushGate.end();
-    let i = e ? frameFlushGate.end().filter((H) => !isTaskLifecycleMessage(H.frame)) : frameFlushGate.end();
-    let y = $t;
-    $t = false;
-    if (r.length === 0 && i.length === 0) {
-      if (e && Pt(() => y) && De.size === 0) $e("running");
+    let frames = deferred
+      ? frameFlushGate.end().filter((entry) => !isTaskLifecycleMessage(entry.frame))
+      : frameFlushGate.end();
+    let passedLive = queuedAnyMessage;
+    queuedAnyMessage = false;
+    if (messages.length === 0 && frames.length === 0) {
+      if (deferred && isLive(() => passedLive) && pendingRequests.size === 0) reportState("running");
       return;
     }
-    let R = [];
-    let _ = [];
-    let S = () => {
-      if (_.length > 0) {
-        R.push(...toLiveSdkEvents(_));
-        _ = [];
+    let out = [];
+    let pendingMessages = [];
+    let flushPending = () => {
+      if (pendingMessages.length > 0) {
+        out.push(...toLiveSdkEvents(pendingMessages));
+        pendingMessages = [];
       }
     };
-    let D = 0;
-    let j = 0;
-    while (D < r.length || j < i.length) {
-      let H = r[D];
-      let W = i[j];
-      if (H && (!W || H.seq < W.seq)) {
-        recentPostedUUIDs.add(H.message.uuid);
-        sn.add(H.message.uuid);
-        Co = true;
-        _.push(H.message);
-        D++;
-      } else if (W) {
-        S();
-        let frame = W.frame;
-        if ("uuid" in frame && typeof frame.uuid === "string") no.add(frame.uuid);
-        R.push(
+    let messageIndex = 0;
+    let frameIndex = 0;
+    while (messageIndex < messages.length || frameIndex < frames.length) {
+      let messageEntry = messages[messageIndex];
+      let frameEntry = frames[frameIndex];
+      if (messageEntry && (!frameEntry || messageEntry.seq < frameEntry.seq)) {
+        recentPostedUUIDs.add(messageEntry.message.uuid);
+        backfilledUuids.add(messageEntry.message.uuid);
+        anyMessageLive = true;
+        pendingMessages.push(messageEntry.message);
+        messageIndex++;
+      } else if (frameEntry) {
+        flushPending();
+        let frame = frameEntry.frame;
+        if ("uuid" in frame && typeof frame.uuid === "string") writtenSdkUuids.add(frame.uuid);
+        out.push(
           Object.assign({}, frame, {
             session_id: sessionId,
           }),
         );
-        j++;
+        frameIndex++;
       }
     }
-    S();
-    if (Pt(() => y) && De.size === 0) $e("running");
+    flushPending();
+    if (isLive(() => passedLive) && pendingRequests.size === 0) reportState("running");
     logForDebugging(
-      `[remote-bridge] Drained ${r.length} queued message(s) and ${i.length} SDK event(s) / control frame(s) after flush`,
+      `[remote-bridge] Drained ${messages.length} queued message(s) and ${frames.length} SDK event(s) / control frame(s) after flush`,
     );
-    transport.writeBatch(R);
+    transport.writeBatch(out);
   }
-  function carryOverUndeliveredEvents(e) {
-    let r = e.takeUndeliveredEvents?.() ?? [];
-    if (r.length === 0) return;
+  function carryOverUndeliveredEvents(oldTransport) {
+    let undelivered = oldTransport.takeUndeliveredEvents?.() ?? [];
+    if (undelivered.length === 0) return;
     logForDebugging(
-      `[remote-bridge] Carrying ${r.length} undelivered client event(s) over to the rebuilt transport`,
+      `[remote-bridge] Carrying ${undelivered.length} undelivered client event(s) over to the rebuilt transport`,
     );
     logForDiagnosticsNoPII("info", "bridge_repl_v2_events_carried_over", {
-      count: r.length,
+      count: undelivered.length,
     });
     logEvent("tengu_bridge_repl_events_carried_over", {
-      count: r.length,
+      count: undelivered.length,
     });
-    transport.adoptUndeliveredEvents?.(r);
+    transport.adoptUndeliveredEvents?.(undelivered);
   }
-  function writeOrQueueFrame(event, r) {
-    let i = event.type !== "result" && Ir && !Be;
-    let [y] = accountMemoryRedactor.redact([event], "events", "live");
-    if (y === undefined) return;
+  function writeOrQueueFrame(event, label) {
+    let canHold = event.type !== "result" && transcriptReleasing && !recoveryInFlight;
+    let [redacted] = accountMemoryRedactor.redact([event], "events", "live");
+    if (redacted === undefined) return;
     if (
-      !i &&
+      !canHold &&
       frameFlushGate.enqueue({
-        seq: oo++,
-        frame: y,
+        seq: frameSeq++,
+        frame: redacted,
       })
     ) {
-      logForDebugging(`[remote-bridge] Queued ${r} during flush`);
+      logForDebugging(`[remote-bridge] Queued ${label} during flush`);
       return;
     }
-    transport.write(y);
-    logForDebugging(`[remote-bridge] Sent ${r}`);
+    transport.write(redacted);
+    logForDebugging(`[remote-bridge] Sent ${label}`);
   }
   async function flushInitialHistory(msgs) {
     accountMemoryRedactor.note(msgs);
@@ -3079,76 +3287,83 @@ async function initEnvLessBridgeCore(params) {
       historical: true,
     }));
     if (events.length === 0) return;
-    let last = eligible.findLast((_) => !isAttachmentOrConsentFallback(_));
-    if (Pt(() => last !== undefined && isRealUserTurn(last) && !isInterruptionMessage(last)) && De.size === 0)
-      $e("running");
+    let last = eligible.findLast((message) => !isAttachmentOrConsentFallback(message));
+    if (
+      isLive(() => last !== undefined && isRealUserTurn(last) && !isInterruptionMessage(last)) &&
+      pendingRequests.size === 0
+    )
+      reportState("running");
     logForDebugging(`[remote-bridge] Flushing ${events.length} history events`);
     await transport.writeBatch(events);
   }
-  let wn = false;
-  let Ir = false;
-  let Co = false;
-  let ns = false;
-  let fr = false;
-  function reportTranscriptDeferred(transcriptUploadDeferred, r) {
-    let i = transport;
-    let y = i.droppedWorkerStatePatchCount?.() ?? 0;
-    i.reportInternalMetadata?.({
+  let historyFlushStarted = false;
+  let transcriptReleasing = false;
+  let anyMessageLive = false;
+  let deferralReported = false;
+  let deferralCleared = false;
+  function reportTranscriptDeferred(transcriptUploadDeferred, onCleared) {
+    let currentTransport = transport;
+    let droppedBefore = currentTransport.droppedWorkerStatePatchCount?.() ?? 0;
+    currentTransport.reportInternalMetadata?.({
       transcript_upload_deferred: transcriptUploadDeferred,
     });
-    i.flushWorkerState?.().then((R) => {
-      if (R && (i.droppedWorkerStatePatchCount?.() ?? 0) === y) r();
+    currentTransport.flushWorkerState?.().then((flushed) => {
+      if (flushed && (currentTransport.droppedWorkerStatePatchCount?.() ?? 0) === droppedBefore) onCleared();
     });
   }
-  let Dr;
+  let deferredAt;
   function flushHistory(msgs) {
-    if (wn) return;
-    wn = true;
+    if (historyFlushStarted) return;
+    historyFlushStarted = true;
     if (transcriptMirrorMode === "deferred") {
       transport.reportMetadata({
         transcript_mirror: "deferred",
       });
-      os();
+      noteTranscriptDeferred();
       return;
     }
-    if (!ro) return;
-    let r = msgs === undefined || msgs.readFailed === true;
-    let transcriptUploadDeferred_2 = r ? undefined : msgs.internal?.transcript_upload_deferred;
+    if (!onConnectNeedsRecord) return;
+    let historyUnreadable = msgs === undefined || msgs.readFailed === true;
+    let transcriptUploadDeferred_2 = historyUnreadable
+      ? undefined
+      : msgs.internal?.transcript_upload_deferred;
     if (
       isBackfillOriginScope(transcriptUploadDeferred_2) &&
       (noHistoryBackfill || remoteControlOrigin === undefined)
     ) {
-      if (!re)
+      if (!ownerChanged)
         transport.reportMetadata({
           transcript_mirror: "live",
         });
-      fr = true;
+      deferralCleared = true;
       reportTranscriptDeferred(null, () => {
-        fr = false;
+        deferralCleared = false;
       });
     } else if (isBackfillOriginScope(transcriptUploadDeferred_2)) {
       transcriptUploadDeferred = transcriptUploadDeferred_2;
       transcriptMirrorMode = "deferred";
-      os();
-      if (Co) Yt = "rows_already_live";
-      else if (!isBackfillScopeAllowedForOrigin(tr().scope, transcriptUploadDeferred)) Yt = "flag_off";
+      noteTranscriptDeferred();
+      if (anyMessageLive) releaseReason = "rows_already_live";
+      else if (!isBackfillScopeAllowedForOrigin(backfillConfig().scope, transcriptUploadDeferred))
+        releaseReason = "flag_off";
     } else if (
-      (r || (transcriptUploadDeferred_2 !== undefined && transcriptUploadDeferred_2 !== null)) &&
-      isBackfillScopeAllowedForOrigin(tr().scope, remoteControlOrigin)
+      (historyUnreadable ||
+        (transcriptUploadDeferred_2 !== undefined && transcriptUploadDeferred_2 !== null)) &&
+      isBackfillScopeAllowedForOrigin(backfillConfig().scope, remoteControlOrigin)
     ) {
       transcriptMirrorMode = "deferred";
-      Yt = "marker_unreadable";
+      releaseReason = "marker_unreadable";
     }
   }
-  let Yt;
-  function Ja() {
-    if (Yt === undefined) return;
-    let e = Yt;
-    Yt = undefined;
-    Ot(e);
+  let releaseReason;
+  function reportReleaseReason() {
+    if (releaseReason === undefined) return;
+    let reason = releaseReason;
+    releaseReason = undefined;
+    releaseTranscript(reason);
   }
-  function os() {
-    Dr = Date.now();
+  function noteTranscriptDeferred() {
+    deferredAt = Date.now();
     logForDebugging("[remote-bridge] Transcript upload deferred until a client opens this session");
     logForDiagnosticsNoPII("info", "bridge_repl_transcript_deferred", {
       reattach: isReattach,
@@ -3156,19 +3371,19 @@ async function initEnvLessBridgeCore(params) {
     logEvent("tengu_bridge_transcript_deferral", {
       phase: fromEnum("deferred"),
       reattach: isReattach,
-      hold_ms: Ht(),
+      hold_ms: noSubscriberHoldMs(),
     });
   }
-  let is = false;
-  function Xa() {
-    if (transcriptMirrorMode !== "deferred" || is) {
+  let clientInitHandled = false;
+  function clientInitializeHandler() {
+    if (transcriptMirrorMode !== "deferred" || clientInitHandled) {
       onClientInitialize?.();
       return;
     }
-    is = true;
-    let e = Za();
+    clientInitHandled = true;
+    let subscribersReported = awaitSubscribersReported();
     queueMicrotask(() => {
-      Ot("client_open", e);
+      releaseTranscript("client_open", subscribersReported);
       try {
         onClientInitialize?.();
       } catch (error) {
@@ -3178,107 +3393,117 @@ async function initEnvLessBridgeCore(params) {
       }
     });
   }
-  function Qa() {
+  function recheckBackfillFlag() {
     if (
       transcriptMirrorMode === "deferred" &&
-      !isBackfillScopeAllowedForOrigin(tr().scope, transcriptUploadDeferred)
+      !isBackfillScopeAllowedForOrigin(backfillConfig().scope, transcriptUploadDeferred)
     )
-      Ot("flag_off");
+      releaseTranscript("flag_off");
   }
-  function Ot(e, r = Promise.resolve()) {
-    if (wt) return wt;
-    if (I || transcriptMirrorMode !== "deferred") return Promise.resolve();
-    if (!re)
+  function releaseTranscript(reason, waitFor = Promise.resolve()) {
+    if (transcriptRelease) return transcriptRelease;
+    if (stopped || transcriptMirrorMode !== "deferred") return Promise.resolve();
+    if (!ownerChanged)
       transport.reportMetadata({
-        ...wr,
+        ...deferredMetadata,
         transcript_mirror: "live",
       });
-    wr = {};
+    deferredMetadata = {};
     transcriptMirrorMode = "live";
-    yr = true;
-    let i = De.size > 0;
-    logForDebugging(`[remote-bridge] Releasing deferred transcript (${e})`);
-    Ir = true;
+    historyFlushed = true;
+    let hadPendingAction = pendingRequests.size > 0;
+    logForDebugging(`[remote-bridge] Releasing deferred transcript (${reason})`);
+    transcriptReleasing = true;
     messageFlushGate.start();
     frameFlushGate.start();
-    resolved = onTransportPersistenceReady ? Mo() : Promise.resolve();
-    let y = transport;
-    wt = r
-      .then(() => ed(e, i))
+    resolved = onTransportPersistenceReady ? makePersistenceWaiter() : Promise.resolve();
+    let releasedTransport = transport;
+    transcriptRelease = waitFor
+      .then(() => backfillTranscript(reason, hadPendingAction))
       .catch((error) =>
         logForDebugging(`[remote-bridge] Transcript back-fill failed: ${errorMessage(error)}`, {
           level: "error",
         }),
       )
       .finally(() => {
-        Ir = false;
-        if (transport !== y || I || re || !wn) return;
-        if (Be) {
-          dn = true;
+        transcriptReleasing = false;
+        if (transport !== releasedTransport || stopped || ownerChanged || !historyFlushStarted) return;
+        if (recoveryInFlight) {
+          drainAfterRecoveryPending = true;
           return;
         }
         drainFlushGate();
-        Ao();
+        installPersistence();
       });
-    return wt;
+    return transcriptRelease;
   }
-  let Jt;
+  let persistenceOwner;
   let resolved = Promise.resolve();
-  let ss = [];
-  function Mo() {
+  let persistenceWaiters = [];
+  function makePersistenceWaiter() {
     return new Promise((resolve) => {
-      ss.push(resolve);
+      persistenceWaiters.push(resolve);
     });
   }
-  let jr = false;
-  let ko;
-  function as() {
+  let persistenceBehind = false;
+  let persistenceCatchUp;
+  function runCatchUp() {
     return Promise.resolve()
-      .then(() => ko?.runNow())
+      .then(() => persistenceCatchUp?.runNow())
       .catch(logError);
   }
-  function Sn() {
-    if (Jt !== undefined) {
-      jr = true;
-      resolved = Mo();
+  function teardownPersistence() {
+    if (persistenceOwner !== undefined) {
+      persistenceBehind = true;
+      resolved = makePersistenceWaiter();
     }
     onTransportPersistenceTeardown?.();
   }
-  function Ao() {
-    if (!onTransportPersistenceReady || Jt === transport) return;
+  function installPersistence() {
+    if (!onTransportPersistenceReady || persistenceOwner === transport) return;
     let internalEventWriter = transport.getInternalEventWriter?.();
-    let r = internalEventWriter && accountMemoryRedactor.wrapInternalEventWriter(internalEventWriter);
-    let i = internalEventWriter && accountMemoryRedactor.wrapInternalEventWriter(internalEventWriter, "live");
-    let y = r && i && ((_, S, D) => (typeof S.uuid === "string" && qi.has(S.uuid) ? i : r)(_, S, D));
+    let historyWriter =
+      internalEventWriter && accountMemoryRedactor.wrapInternalEventWriter(internalEventWriter);
+    let liveWriter =
+      internalEventWriter && accountMemoryRedactor.wrapInternalEventWriter(internalEventWriter, "live");
+    let pickWriter =
+      historyWriter &&
+      liveWriter &&
+      ((session, message, options) =>
+        (typeof message.uuid === "string" && liveOnlyUuids.has(message.uuid) ? liveWriter : historyWriter)(
+          session,
+          message,
+          options,
+        ));
     let internalEventReaders = transport.getInternalEventReaders?.();
-    if (r && internalEventReaders) {
-      let _ = !isReattach && Jt === undefined;
-      let S = transport;
-      Jt = S;
-      jr = true;
-      resolved = Mo();
-      ko = onTransportPersistenceReady(
-        r,
+    if (historyWriter && internalEventReaders) {
+      let catchUpOnInstall = !isReattach && persistenceOwner === undefined;
+      let installedTransport = transport;
+      persistenceOwner = installedTransport;
+      persistenceBehind = true;
+      resolved = makePersistenceWaiter();
+      persistenceCatchUp = onTransportPersistenceReady(
+        historyWriter,
         internalEventReaders,
         sessionId,
-        _,
-        (D) => {
-          if (D && Jt === S) {
-            jr = false;
-            for (let j of ss.splice(0)) j();
+        catchUpOnInstall,
+        (caughtUp) => {
+          if (caughtUp && persistenceOwner === installedTransport) {
+            persistenceBehind = false;
+            for (let resolve of persistenceWaiters.splice(0)) resolve();
           }
         },
         accountMemoryRedactor.note,
-        y,
+        pickWriter,
       );
     }
   }
-  function Za() {
-    let e = transport;
-    if (!e.setSubscribersReportedListener) return Promise.resolve();
+  function awaitSubscribersReported() {
+    let currentTransport = transport;
+    if (!currentTransport.setSubscribersReportedListener) return Promise.resolve();
     let promise = new Promise((resolve) => {
-      e.setSubscribersReportedListener?.((y) => {
-        if (y) resolve();
+      currentTransport.setSubscribersReportedListener?.((reported) => {
+        if (reported) resolve();
       });
     });
     return Promise.race([
@@ -3286,64 +3511,68 @@ async function initEnvLessBridgeCore(params) {
       sleep(SUBSCRIBERS_REPORTED_TIMEOUT_MS, undefined, {
         unref: true,
       }),
-    ]).finally(() => e.setSubscribersReportedListener?.(undefined));
+    ]).finally(() => currentTransport.setSubscribersReportedListener?.(undefined));
   }
-  async function ed(e, r) {
-    if (I) return;
-    let i = et("transcript backfill") ? undefined : getBackfillMessages?.(sessionId);
-    accountMemoryRedactor.note(i ?? []);
-    let y = new Set(messageFlushGate.pending.map((L) => L.message.uuid));
-    let eligible = (i ?? []).filter((m) => isEligibleBridgeMessage(m) && !sn.has(m.uuid) && !y.has(m.uuid));
-    let _ = sliceTailKeepingGroups(eligible, tr().backfillMessages);
+  async function backfillTranscript(reason, hadPendingAction) {
+    if (stopped) return;
+    let messages = shouldDropAfterOwnerChange("transcript backfill")
+      ? undefined
+      : getBackfillMessages?.(sessionId);
+    accountMemoryRedactor.note(messages ?? []);
+    let queuedUuids = new Set(messageFlushGate.pending.map((entry) => entry.message.uuid));
+    let eligible = (messages ?? []).filter(
+      (m) => isEligibleBridgeMessage(m) && !backfilledUuids.has(m.uuid) && !queuedUuids.has(m.uuid),
+    );
+    let selected = sliceTailKeepingGroups(eligible, backfillConfig().backfillMessages);
     logForDebugging(
-      `[remote-bridge] Back-filling ${_.length} of ${eligible.length} eligible message(s)${i === undefined ? " (history withheld by host)" : ""}`,
+      `[remote-bridge] Back-filling ${selected.length} of ${eligible.length} eligible message(s)${messages === undefined ? " (history withheld by host)" : ""}`,
     );
     logForDiagnosticsNoPII("info", "bridge_repl_transcript_released", {
-      reason: e,
-      backfilled: _.length,
+      reason,
+      backfilled: selected.length,
       eligible: eligible.length,
-      withheld: i === undefined,
+      withheld: messages === undefined,
     });
     logEvent("tengu_bridge_transcript_deferral", {
       phase: fromEnum("released"),
-      reason: fromEnum(e),
-      backfilled: _.length,
+      reason: fromEnum(reason),
+      backfilled: selected.length,
       eligible: eligible.length,
-      history_withheld: i === undefined,
-      deferred_ms: Dr === undefined ? undefined : Date.now() - Dr,
-      hold_ms: Ht(),
+      history_withheld: messages === undefined,
+      deferred_ms: deferredAt === undefined ? undefined : Date.now() - deferredAt,
+      hold_ms: noSubscriberHoldMs(),
     });
-    let events = toRedactedSdkEvents(_).map((L) => ({
-      ...L,
+    let events = toRedactedSdkEvents(selected).map((event) => ({
+      ...event,
       session_id: sessionId,
       historical: true,
     }));
-    for (let L of eligible) {
-      recentPostedUUIDs.add(L.uuid);
-      initialMessageUUIDs.add(L.uuid);
+    for (let message of eligible) {
+      recentPostedUUIDs.add(message.uuid);
+      initialMessageUUIDs.add(message.uuid);
     }
-    for (let L of _) sn.add(L.uuid);
-    let last = eligible.findLast((L) => !isAttachmentOrConsentFallback(L));
-    let j =
-      r ||
-      De.size > 0 ||
-      Pt(() => last !== undefined && isRealUserTurn(last) && !isInterruptionMessage(last));
-    if (e !== "client_prompt" && !j && events.length > 0)
+    for (let message of selected) backfilledUuids.add(message.uuid);
+    let last = eligible.findLast((message) => !isAttachmentOrConsentFallback(message));
+    let turnWillRun =
+      hadPendingAction ||
+      pendingRequests.size > 0 ||
+      isLive(() => last !== undefined && isRealUserTurn(last) && !isInterruptionMessage(last));
+    if (reason !== "client_prompt" && !turnWillRun && events.length > 0)
       events.push(
         Object.assign(buildBridgeResultMessage(sessionId), {
           historical: true,
         }),
       );
-    let H = transport.droppedDurableBatchCount?.() ?? 0;
-    let W = transport;
-    for (let L = 0; L < events.length; L += BACKFILL_BATCH_SIZE) {
-      if (I || re) return;
-      if (transport !== W) {
-        await transport.writeBatch(events.slice(L));
+    let droppedBefore = transport.droppedDurableBatchCount?.() ?? 0;
+    let writingTransport = transport;
+    for (let index = 0; index < events.length; index += BACKFILL_BATCH_SIZE) {
+      if (stopped || ownerChanged) return;
+      if (transport !== writingTransport) {
+        await transport.writeBatch(events.slice(index));
         break;
       }
-      await transport.writeBatch(events.slice(L, L + BACKFILL_BATCH_SIZE));
-      if (L + BACKFILL_BATCH_SIZE < events.length)
+      await transport.writeBatch(events.slice(index, index + BACKFILL_BATCH_SIZE));
+      if (index + BACKFILL_BATCH_SIZE < events.length)
         await Promise.race([
           transport.flush(),
           sleep(BACKFILL_BATCH_FLUSH_TIMEOUT_MS, undefined, {
@@ -3351,132 +3580,147 @@ async function initEnvLessBridgeCore(params) {
           }),
         ]);
     }
-    let z = transport;
-    z.flush().then(() => {
-      if ((z.droppedDurableBatchCount?.() ?? 0) > H) {
+    let finalTransport = transport;
+    finalTransport.flush().then(() => {
+      if ((finalTransport.droppedDurableBatchCount?.() ?? 0) > droppedBefore) {
         logForDiagnosticsNoPII("warn", "bridge_repl_transcript_backfill_dropped");
         logEvent("tengu_bridge_transcript_deferral", {
           phase: fromEnum("backfill_dropped"),
-          reason: fromEnum(e),
-          hold_ms: Ht(),
+          reason: fromEnum(reason),
+          hold_ms: noSubscriberHoldMs(),
         });
       }
-      if (I || re) return;
-      fr = true;
+      if (stopped || ownerChanged) return;
+      deferralCleared = true;
       reportTranscriptDeferred(null, () => {
-        fr = false;
+        deferralCleared = false;
       });
     });
   }
-  let Po = keepSessionOnTeardown === true;
+  let teleported = keepSessionOnTeardown === true;
   let reason;
-  function td(e) {
-    if (e?.skipArchive) Po = true;
-    if (e?.reason) reason = e.reason;
-    if (an) return an;
-    I = true;
-    an = teardown();
-    return an;
+  function teardown(options) {
+    if (options?.skipArchive) teleported = true;
+    if (options?.reason) reason = options.reason;
+    if (teardownPromise) return teardownPromise;
+    stopped = true;
+    teardownPromise = teardown_2();
+    return teardownPromise;
   }
-  async function teardown() {
-    Ui("teardown");
+  async function teardown_2() {
+    latchSupersession("teardown");
     if (transcriptMirrorMode === "deferred")
       logEvent("tengu_bridge_transcript_deferral", {
         phase: fromEnum("exited_unopened"),
-        deferred_ms: Dr === undefined ? undefined : Date.now() - Dr,
-        hold_ms: Ht(),
+        deferred_ms: deferredAt === undefined ? undefined : Date.now() - deferredAt,
+        hold_ms: noSubscriberHoldMs(),
       });
-    let e = tt ?? dr;
-    if (e !== undefined) {
+    let pendingCode = pendingAuthCode ?? pendingPresenceSad;
+    if (pendingCode !== undefined) {
       if (!isTeleportedSession(sessionId)) {
-        let ne = tt === undefined ? xi() : undefined;
-        if (ne !== undefined && Wt && isBridgeHostDeclinedEndEnabled()) ht(ne);
-        else ke(e);
+        let hostDeclined = pendingAuthCode === undefined ? staleLauncherCode() : undefined;
+        if (hostDeclined !== undefined && presenceLogged && isBridgeHostDeclinedEndEnabled())
+          notePresenceSad(hostDeclined);
+        else notePresenceBad(pendingCode);
       }
-      tt = undefined;
-      dr = undefined;
-      Tt = undefined;
-    } else if (!Se && be?.code === 403 && !isTeleportedSession(sessionId)) uo(be.detail);
+      pendingAuthCode = undefined;
+      pendingPresenceSad = undefined;
+      authEndCode = undefined;
+    } else if (!episodeDead && pendingClose?.code === 403 && !isTeleportedSession(sessionId))
+      noteNonOriginClose(pendingClose.detail);
     else if (
-      !Se &&
-      ((sr > 0 && (pt !== undefined || Be)) || (be !== undefined && be.code !== 4090)) &&
+      !episodeDead &&
+      ((recoveryAttempts > 0 && (recoverTimer !== undefined || recoveryInFlight)) ||
+        (pendingClose !== undefined && pendingClose.code !== 4090)) &&
       !isTeleportedSession(sessionId)
     )
-      ke("recovery_abandoned_at_teardown");
-    mn?.();
-    Gi();
-    Ki();
-    releaseReadReceiptOwnership(Ro);
-    kr?.();
-    kr = undefined;
-    Sn();
-    rn();
-    cn = true;
-    Sr();
+      notePresenceBad("recovery_abandoned_at_teardown");
+    stopGitWatcher?.();
+    unsubscribeInteraction();
+    unsubscribeGrowthBook();
+    releaseReadReceiptOwnership(readReceiptOwner);
+    unsubscribeOwnerPin?.();
+    unsubscribeOwnerPin = undefined;
+    teardownPersistence();
+    relinquishInjectedMcp();
+    shutdownStarted = true;
+    stopLivePreview();
     refresh.cancelAll();
-    clearTimeout(cr);
-    ar();
-    _n();
+    clearTimeout(connectTimeoutTimer);
+    clearRecoverTimer();
+    dropPendingWrites();
     transport.writeBatch(
       reason !== undefined
         ? [buildWorkerShuttingDownMessage(sessionId, reason), buildBridgeResultMessage(sessionId)]
         : [buildBridgeResultMessage(sessionId)],
     );
-    $e("idle");
-    if (Po || (un && reason !== "remote_control_disabled")) {
-      let ne = keepSessionOnTeardown ? "skipped_host_owned" : Po ? "skipped_teleport" : "skipped_remint_loop";
-      let xe;
-      if (er()) xe = await Bi("skip_archive_flush_timeout");
-      else if (reason !== undefined) await Cr();
-      let token = ji();
+    reportState("idle");
+    if (teleported || (remintLoopActive && reason !== "remote_control_disabled")) {
+      let skipReason = keepSessionOnTeardown
+        ? "skipped_host_owned"
+        : teleported
+          ? "skipped_teleport"
+          : "skipped_remint_loop";
+      let preflush;
+      if (mayHoldUploads()) preflush = await preflushHold("skip_archive_flush_timeout");
+      else if (reason !== undefined) await flushWithTimeout();
+      let token = backlogAtClose();
       transport.close();
       logEvent("tengu_bridge_repl_teardown", {
         v2: true,
-        archive_status: fromEnum(ne),
+        archive_status: fromEnum(skipReason),
         archive_ok: false,
-        ...xe,
+        ...preflush,
         ...token,
       });
       await transport.flushGoodbye();
       logForDebugging(`[remote-bridge] Teardown complete (skipArchive): session=${sessionId}`);
       logForDiagnosticsNoPII("info", "bridge_repl_v2_teardown");
-      ls();
+      unregisterCleanup();
       return;
     }
     let teardownArchiveTimeoutMs = cfg.teardown_archive_timeout_ms;
     let now = Date.now();
-    let y = Wi();
-    let R;
-    let _ = now;
-    let S = teardownArchiveTimeoutMs;
-    if (er() && y === undefined) {
-      let ne = now + CLEANUP_TIMEOUT_MS - CLEANUP_FLUSH_RESERVE_MS;
-      R = await Bi("exit_flush_timeout", now);
-      _ = now + R.hold_preflush_ms;
-      S = Math.max(1, Math.min(teardownArchiveTimeoutMs, ne - _));
+    let deadReasonForArchive = deadReason();
+    let preflushResult;
+    let archiveStartAt = now;
+    let archiveBudgetMs = teardownArchiveTimeoutMs;
+    if (mayHoldUploads() && deadReasonForArchive === undefined) {
+      let cleanupDeadline = now + CLEANUP_TIMEOUT_MS - CLEANUP_FLUSH_RESERVE_MS;
+      preflushResult = await preflushHold("exit_flush_timeout", now);
+      archiveStartAt = now + preflushResult.hold_preflush_ms;
+      archiveBudgetMs = Math.max(1, Math.min(teardownArchiveTimeoutMs, cleanupDeadline - archiveStartAt));
     }
-    let D = _ + S;
-    let j = y === undefined ? _o() : undefined;
-    let token = j?.token;
-    let archiveResult = await archiveRemoteBridgeSession(sessionId, baseUrl, token, orgUUID, S, y, storageV5);
-    let z = D - Date.now();
+    let archiveDeadline = archiveStartAt + archiveBudgetMs;
+    let credential = deadReasonForArchive === undefined ? archiveCredential() : undefined;
+    let token = credential?.token;
+    let archiveResult = await archiveRemoteBridgeSession(
+      sessionId,
+      baseUrl,
+      token,
+      orgUUID,
+      archiveBudgetMs,
+      deadReasonForArchive,
+      storageV5,
+    );
+    let remainingMs = archiveDeadline - Date.now();
     if (
       archiveResult === 401 &&
-      j?.source === "current" &&
+      credential?.source === "current" &&
       onAuth401 &&
-      z >= ARCHIVE_AUTH_RETRY_MIN_REMAINING_MS
+      remainingMs >= ARCHIVE_AUTH_RETRY_MIN_REMAINING_MS
     )
       try {
-        await Promise.race([onAuth401(token ?? ""), sleep(z)]);
-        j = _o();
-        token = j.token;
+        await Promise.race([onAuth401(token ?? ""), sleep(remainingMs)]);
+        credential = archiveCredential();
+        token = credential.token;
         archiveResult = await archiveRemoteBridgeSession(
           sessionId,
           baseUrl,
           token,
           orgUUID,
-          Math.max(1, D - Date.now()),
-          y,
+          Math.max(1, archiveDeadline - Date.now()),
+          deadReasonForArchive,
           storageV5,
         );
       } catch (error) {
@@ -3484,15 +3728,15 @@ async function initEnvLessBridgeCore(params) {
           level: "error",
         });
       }
-    let archiveMs = Date.now() - _;
-    if (reason !== undefined && R === undefined) await Cr();
-    let le = ji();
+    let archiveMs = Date.now() - archiveStartAt;
+    if (reason !== undefined && preflushResult === undefined) await flushWithTimeout();
+    let backlog = backlogAtClose();
     transport.close();
-    let ce = archiveStatusCode(archiveResult, supersession);
+    let archiveStatus = archiveStatusCode(archiveResult, supersession);
     logEvent("tengu_bridge_repl_teardown", {
       v2: true,
-      archive_status: fromEnum(ce),
-      archive_credential: fromEnumOpt(j?.source),
+      archive_status: fromEnum(archiveStatus),
+      archive_credential: fromEnumOpt(credential?.source),
       archive_ok: typeof archiveResult === "number" && archiveResult < 400,
       archive_http_status:
         typeof archiveResult === "number"
@@ -3502,15 +3746,15 @@ async function initEnvLessBridgeCore(params) {
             : undefined,
       archive_timeout: archiveResult === "timeout",
       archive_no_token: archiveResult === "no_token",
-      ...R,
-      archive_budget_ms: S,
+      ...preflushResult,
+      archive_budget_ms: archiveBudgetMs,
       archive_ms: archiveMs,
-      ...le,
+      ...backlog,
     });
     await transport.flushGoodbye();
     logForDebugging(`[remote-bridge] Torn down (archive=${archiveResult})`);
     logForDiagnosticsNoPII("info", "bridge_repl_v2_teardown");
-    ls();
+    unregisterCleanup();
   }
   logEvent("tengu_bridge_repl_started", {
     has_initial_messages: !!(initialMessages && initialMessages.length > 0),
@@ -3521,31 +3765,31 @@ async function initEnvLessBridgeCore(params) {
     ...cooAttributes(),
   });
   logFeatureOk("bridge_connect");
-  function et(type) {
-    if (!re) return false;
+  function shouldDropAfterOwnerChange(type) {
+    if (!ownerChanged) return false;
     logForDebugging(`[remote-bridge] Dropping ${type} after owner change`);
     return true;
   }
-  function fl(e) {
-    Sr();
-    if (Oi() || outboundOnly || workSecretCredentials) return "refused";
-    if (lo()) return "sign_in_changed";
-    if (so("a_start")) {
-      ds((r) => e.onSignInChecked(r));
+  function startLivePreview(starter) {
+    stopLivePreview();
+    if (isTransportUnusable() || outboundOnly || workSecretCredentials) return "refused";
+    if (credentialWasReplaced()) return "sign_in_changed";
+    if (isSignInCheckStale("a_start")) {
+      checkOwnerThenStart((ownerUnchanged) => starter.onSignInChecked(ownerUnchanged));
       return "checking_sign_in";
     }
     try {
-      let r = apiBaseUrl;
-      let i = e.start({
+      let baseUrl = apiBaseUrl;
+      let tunnel = starter.start({
         sessionId,
-        apiBaseUrl: r,
+        apiBaseUrl: baseUrl,
         accessToken: workerJwt,
       });
-      if (i !== null)
-        St = {
-          tunnel: i,
-          isRefusedBySession: e.isRefusedBySession,
-          dialedBase: r,
+      if (tunnel !== null)
+        livePreview = {
+          tunnel,
+          isRefusedBySession: starter.isRefusedBySession,
+          dialedBase: baseUrl,
         };
     } catch (error) {
       logForDebugging(`[remote-bridge] live preview: the starter threw: ${errorMessage(error)}`, {
@@ -3553,16 +3797,16 @@ async function initEnvLessBridgeCore(params) {
       });
       logError(error);
     }
-    return St === null ? "refused" : "started";
+    return livePreview === null ? "refused" : "started";
   }
-  async function ds(e) {
-    let r = false;
+  async function checkOwnerThenStart(onSignInChecked) {
+    let ownerUnchanged = false;
     try {
-      r =
-        (await fo("owner_changed_live_preview", {
+      ownerUnchanged =
+        (await confirmOwnerChange("owner_changed_live_preview", {
           fresh: true,
-        })) === "unchanged" && Ai !== 0;
-      if (r) Pi = Date.now();
+        })) === "unchanged" && lastSignInCheckAt !== 0;
+      if (ownerUnchanged) lastFreshCheckAt = Date.now();
     } catch (error) {
       logForDebugging(`[remote-bridge] live preview: the owner check failed: ${errorMessage(error)}`, {
         level: "error",
@@ -3570,7 +3814,7 @@ async function initEnvLessBridgeCore(params) {
       logError(error);
     } finally {
       try {
-        e(r);
+        onSignInChecked(ownerUnchanged);
       } catch (err) {
         logForDebugging(
           `[remote-bridge] live preview: the caller's report of the sign-in check threw: ${errorMessage(err)}`,
@@ -3582,13 +3826,13 @@ async function initEnvLessBridgeCore(params) {
       }
     }
   }
-  function _l() {
-    if (St === null) return "refused";
-    if (lo()) return "sign_in_changed";
-    if (Fa("flag_refresh")) return "refused";
-    if (!Ar()) {
-      let e = Ii ? params.fixedCredentialNow?.() : undefined;
-      switch (e) {
+  function livePreviewStopReason() {
+    if (livePreview === null) return "refused";
+    if (credentialWasReplaced()) return "sign_in_changed";
+    if (livePreviewMustRestart("flag_refresh")) return "refused";
+    if (!isOwnerPinned()) {
+      let credentialNow = hasFixedCredential ? params.fixedCredentialNow?.() : undefined;
+      switch (credentialNow) {
         case "as_at_init":
           return null;
         case "unreadable":
@@ -3601,23 +3845,23 @@ async function initEnvLessBridgeCore(params) {
           return "no_sign_in_check";
       }
     }
-    return so("a_start") ? "sign_in_in_doubt" : null;
+    return isSignInCheckStale("a_start") ? "sign_in_in_doubt" : null;
   }
-  function pl(e) {
-    ds(() => e());
+  function checkSignInThen(onChecked) {
+    checkOwnerThenStart(() => onChecked());
   }
-  let Oo = {
+  let bridgeHandle = {
     bridgeSessionId: sessionId,
     titleWriter: params.titleWriter,
     noHistoryBackfill: noHistoryBackfill || reattachFellBackToFresh,
     getJoinedProjectThread: undefined,
-    requestInjectedMcpReassert: Ia,
-    canAdoptInjectedMcp: Aa,
+    requestInjectedMcpReassert,
+    canAdoptInjectedMcp,
     detachForHandoff: () => {
       refresh.cancelAll();
-      rn();
-      cn = true;
-      Sr();
+      relinquishInjectedMcp();
+      shutdownStarted = true;
+      stopLivePreview();
     },
     sessionGroupingId: effectiveGroupingId,
     outboundOnly: outboundOnly ?? false,
@@ -3625,37 +3869,37 @@ async function initEnvLessBridgeCore(params) {
     sessionIngressUrl: bridgeCredentials.api_base_url,
     gitRepoUrl,
     ...(workSecretCredentials && {
-      getWorkerBearerToken: () => (I ? null : workerJwt),
+      getWorkerBearerToken: () => (stopped ? null : workerJwt),
       getWorkerEpoch: () => workerEpoch_2,
     }),
     ...false,
     getLastSequenceNum: () => transport.getLastSequenceNum(),
     settleUploadsBeforeHandoff: () => {
-      if (wt !== undefined || transcriptMirrorMode === "deferred" || jr) {
-        let e = async () => {
-          let r = Date.now() + UPLOAD_BUDGET_MS;
-          let i = async (y, what, _) => {
-            let S = false;
+      if (transcriptRelease !== undefined || transcriptMirrorMode === "deferred" || persistenceBehind) {
+        let settleTask = async () => {
+          let deadline = Date.now() + UPLOAD_BUDGET_MS;
+          let waitBounded = async (promise, what, deadlineAt) => {
+            let done = false;
             await Promise.race([
-              y.finally(() => {
-                S = true;
+              promise.finally(() => {
+                done = true;
               }),
-              sleep(Math.max(0, _ - Date.now()), undefined, {
+              sleep(Math.max(0, deadlineAt - Date.now()), undefined, {
                 unref: true,
               }),
             ]);
-            if (!S)
+            if (!done)
               logForDiagnosticsNoPII("warn", "bridge_repl_handoff_wait_expired", {
                 what,
               });
           };
-          await i(
-            Jt === transport ? as() : resolved,
+          await waitBounded(
+            persistenceOwner === transport ? runCatchUp() : resolved,
             "transcript_copy_catch_up",
-            r - TEARDOWN_FLUSH_TIMEOUT_MS,
+            deadline - TEARDOWN_FLUSH_TIMEOUT_MS,
           );
-          if (jr) logForDiagnosticsNoPII("warn", "bridge_repl_handoff_transcript_copy_behind");
-          await i(
+          if (persistenceBehind) logForDiagnosticsNoPII("warn", "bridge_repl_handoff_transcript_copy_behind");
+          await waitBounded(
             Promise.all([
               transport.flush({
                 retryNow: true,
@@ -3665,42 +3909,45 @@ async function initEnvLessBridgeCore(params) {
               }),
             ]),
             "upload_lanes",
-            r,
+            deadline,
           );
         };
-        return (wt ?? Ot("handoff")).then(e).then(
+        return (transcriptRelease ?? releaseTranscript("handoff")).then(settleTask).then(
           () => {},
           () => {},
         );
       }
-      return er()
-        ? Cr(TEARDOWN_FLUSH_TIMEOUT_MS).then(
+      return mayHoldUploads()
+        ? flushWithTimeout(TEARDOWN_FLUSH_TIMEOUT_MS).then(
             () => {},
             () => {},
           )
         : Promise.resolve();
     },
-    awaitUploadsForHandoff: (e) =>
+    awaitUploadsForHandoff: (options) =>
       settleRemoteBridgeDelivery(
         {
           sessionKind: () => {
-            if (wt !== undefined || transcriptMirrorMode === "deferred") return "deferred";
-            if (er()) return "held";
+            if (transcriptRelease !== undefined || transcriptMirrorMode === "deferred") return "deferred";
+            if (mayHoldUploads()) return "held";
             return onTransportPersistenceReady ? "live" : "no_transcript_copy";
           },
-          release: () => wt ?? (transcriptMirrorMode === "deferred" ? Ot("handoff") : Promise.resolve()),
-          isSessionOver: () => I || re,
-          hasFailedForGood: () => Et,
+          release: () =>
+            transcriptRelease ??
+            (transcriptMirrorMode === "deferred" ? releaseTranscript("handoff") : Promise.resolve()),
+          isSessionOver: () => stopped || ownerChanged,
+          hasFailedForGood: () => failedTerminally,
           transport: () => transport,
-          droppedBatches: (r) =>
-            (r.droppedDurableBatchCount?.() ?? 0) + (r.getInternalEventBacklog?.().droppedBatches ?? 0),
-          isConnected: () => Rr === transport && transport.isConnectedStatus(),
+          droppedBatches: (transport) =>
+            (transport.droppedDurableBatchCount?.() ?? 0) +
+            (transport.getInternalEventBacklog?.().droppedBatches ?? 0),
+          isConnected: () => lastClosedTransport === transport && transport.isConnectedStatus(),
           transcriptCopy: onTransportPersistenceReady && {
-            isInstalledOnCurrentTransport: () => Jt === transport,
+            isInstalledOnCurrentTransport: () => persistenceOwner === transport,
             catchUp: () => resolved,
-            wakeCatchUp: () => void as(),
+            wakeCatchUp: () => void runCatchUp(),
           },
-          firstHistoryFlush: () => io,
+          firstHistoryFlush: () => firstHistoryPromise,
           holdsWrites: () =>
             messageFlushGate.active ||
             frameFlushGate.active ||
@@ -3716,9 +3963,9 @@ async function initEnvLessBridgeCore(params) {
             ]).then(() => {}),
         },
         {
-          budgetMs: e?.budgetMs ?? UPLOAD_BUDGET_MS,
-          signal: e?.signal,
-          log: (r) => logForDebugging(r),
+          budgetMs: options?.budgetMs ?? UPLOAD_BUDGET_MS,
+          signal: options?.signal,
+          log: (message) => logForDebugging(message),
           onBudgetPassed: (what) =>
             logForDiagnosticsNoPII("warn", "bridge_repl_handoff_upload_wait_expired", {
               what,
@@ -3731,75 +3978,77 @@ async function initEnvLessBridgeCore(params) {
       ),
     flush: () => {
       drainFlushGate();
-      return Di();
+      return flushAll();
     },
-    writeMessages(e) {
-      if (et("writeMessages")) return;
-      accountMemoryRedactor.note(e, "live");
-      for (let _ of e) if (!initialMessageUUIDs.has(_.uuid)) qi.add(_.uuid);
-      let filtered = e.filter(
+    writeMessages(messages) {
+      if (shouldDropAfterOwnerChange("writeMessages")) return;
+      accountMemoryRedactor.note(messages, "live");
+      for (let message of messages)
+        if (!initialMessageUUIDs.has(message.uuid)) liveOnlyUuids.add(message.uuid);
+      let filtered = messages.filter(
         (m) =>
           isEligibleBridgeMessage(m) && !initialMessageUUIDs.has(m.uuid) && !recentPostedUUIDs.has(m.uuid),
       );
       if (filtered.length === 0) return;
-      if (!Vi)
-        for (let _ of filtered) {
-          let text = deriveTitleFromHumanTurn(_);
+      if (!userMessageTitleSent)
+        for (let message of filtered) {
+          let text = deriveTitleFromHumanTurn(message);
           if (text !== undefined && onUserMessage?.(text, sessionId)) {
-            Vi = true;
+            userMessageTitleSent = true;
             break;
           }
         }
-      let any = filtered.some(Rt ? isPlainUserPrompt : isRealUserTurn);
-      if (any) Rt = false;
+      let any = filtered.some(turnResultReported ? isPlainUserPrompt : isRealUserTurn);
+      if (any) turnResultReported = false;
       if (!userMessageCallbackDone && any) {
         userMessageCallbackDone = true;
         markBridgePlaceholderUsed(sessionId, storageV5);
       }
-      let y = filtered;
+      let toSend = filtered;
       if (transcriptMirrorMode === "deferred") {
-        y = filtered.filter(hasUserMessagingToolUse);
-        if (y.length === 0) {
-          if (messageFlushGate.active) $t ||= any;
-          else if (Pt(() => any) && De.size === 0) $e("running");
+        toSend = filtered.filter(hasUserMessagingToolUse);
+        if (toSend.length === 0) {
+          if (messageFlushGate.active) queuedAnyMessage ||= any;
+          else if (isLive(() => any) && pendingRequests.size === 0) reportState("running");
           return;
         }
       }
       if (
         messageFlushGate.enqueue(
-          ...y.map((message) => ({
-            seq: oo++,
+          ...toSend.map((message) => ({
+            seq: frameSeq++,
             message,
           })),
         )
       ) {
-        if (any) $t = true;
-        logForDebugging(`[remote-bridge] Queued ${y.length} message(s) during flush`);
+        if (any) queuedAnyMessage = true;
+        logForDebugging(`[remote-bridge] Queued ${toSend.length} message(s) during flush`);
         return;
       }
-      for (let msg of y) {
-        sn.add(msg.uuid);
+      for (let msg of toSend) {
+        backfilledUuids.add(msg.uuid);
         recentPostedUUIDs.add(msg.uuid);
       }
-      Co = true;
-      let liveSdkEvents = toLiveSdkEvents(y);
-      if (Pt(() => any) && De.size === 0) $e("running");
-      logForDebugging(`[remote-bridge] Sending ${y.length} message(s)`);
+      anyMessageLive = true;
+      let liveSdkEvents = toLiveSdkEvents(toSend);
+      if (isLive(() => any) && pendingRequests.size === 0) reportState("running");
+      logForDebugging(`[remote-bridge] Sending ${toSend.length} message(s)`);
       transport.writeBatch(liveSdkEvents);
     },
-    reportMetadata(e) {
-      if (et("reportMetadata")) return;
+    reportMetadata(metadata) {
+      if (shouldDropAfterOwnerChange("reportMetadata")) return;
       if (transcriptMirrorMode === "deferred") {
-        let { post_turn_summary: postTurnSummary, task_summary: taskSummary, recap, ...R } = e;
-        let _ = {
+        let { post_turn_summary: postTurnSummary, task_summary: taskSummary, recap, ...rest } = metadata;
+        let deferredFields = {
           post_turn_summary: postTurnSummary,
           task_summary: taskSummary,
           recap,
         };
-        for (let key of Object.keys(_)) if (key in e) wr[key] = _[key];
-        let S = R;
-        if ("post_turn_summary" in e)
-          S.post_turn_summary =
+        for (let key of Object.keys(deferredFields))
+          if (key in metadata) deferredMetadata[key] = deferredFields[key];
+        let forward = rest;
+        if ("post_turn_summary" in metadata)
+          forward.post_turn_summary =
             typeof postTurnSummary === "object" &&
             postTurnSummary !== null &&
             "status_category" in postTurnSummary
@@ -3807,31 +4056,31 @@ async function initEnvLessBridgeCore(params) {
                   status_category: postTurnSummary.status_category,
                 }
               : null;
-        if (Object.keys(S).length === 0) return;
-        transport.reportMetadata(S);
+        if (Object.keys(forward).length === 0) return;
+        transport.reportMetadata(forward);
         return;
       }
-      transport.reportMetadata(e);
+      transport.reportMetadata(metadata);
     },
-    reportInternalMetadata(e) {
-      if (et("reportInternalMetadata")) return false;
-      return transport.reportInternalMetadata?.(e) ?? false;
+    reportInternalMetadata(metadata) {
+      if (shouldDropAfterOwnerChange("reportInternalMetadata")) return false;
+      return transport.reportInternalMetadata?.(metadata) ?? false;
     },
     workerEpoch: () => ({
       sessionId,
       epoch: transport.getEpoch(),
     }),
     refreshGitBranch() {
-      vn?.();
+      refreshGitBranch?.();
     },
     async publishGitStateBeforeHandoff() {
-      if (!yo) return;
+      if (!publishGitStateBeforeHandoff) return;
       try {
-        bo?.();
-        let e = await yo();
-        if (e === undefined)
+        invalidateGitState?.();
+        let published = await publishGitStateBeforeHandoff();
+        if (published === undefined)
           logForDebugging("[remote-bridge] git state publish before handoff ran past its bound");
-        else if (!e)
+        else if (!published)
           logForDebugging("[remote-bridge] git state publish before handoff ended with the transport closed");
       } catch (error) {
         logForDebugging(`[remote-bridge] git state publish before handoff failed: ${errorMessage(error)}`, {
@@ -3839,31 +4088,39 @@ async function initEnvLessBridgeCore(params) {
         });
       }
     },
-    writeSdkMessages(e) {
-      if (et("writeSdkMessages")) return;
-      accountMemoryRedactor.note(e);
-      let filtered = e.filter((_) => !_.uuid || !no.has(_.uuid));
-      let i =
-        transcriptMirrorMode === "deferred" ? filtered.filter((_) => !isTaskLifecycleMessage(_)) : filtered;
-      let y = accountMemoryRedactor.redact(i);
-      if (y.length === 0) return;
+    writeSdkMessages(events) {
+      if (shouldDropAfterOwnerChange("writeSdkMessages")) return;
+      accountMemoryRedactor.note(events);
+      let filtered = events.filter((event) => !event.uuid || !writtenSdkUuids.has(event.uuid));
+      let eligible =
+        transcriptMirrorMode === "deferred"
+          ? filtered.filter((event) => !isTaskLifecycleMessage(event))
+          : filtered;
+      let redacted = accountMemoryRedactor.redact(eligible);
+      if (redacted.length === 0) return;
       if (frameFlushGate.active) {
-        let filtered = y.filter((D) => D.type !== "stream_event");
-        let S = y.length - filtered.length;
-        if (S > 0) logForDebugging(`[remote-bridge] Dropped ${S} stream_event frame(s) during flush`);
+        let filtered = redacted.filter((event) => event.type !== "stream_event");
+        let droppedStreamEvents = redacted.length - filtered.length;
+        if (droppedStreamEvents > 0)
+          logForDebugging(
+            `[remote-bridge] Dropped ${droppedStreamEvents} stream_event frame(s) during flush`,
+          );
         if (filtered.length > 0) {
           frameFlushGate.enqueue(
             ...filtered.map((frame) => ({
-              seq: oo++,
+              seq: frameSeq++,
               frame,
             })),
           );
           logForDebugging(`[remote-bridge] Queued ${filtered.length} SDK event(s) during flush`);
           try {
             if (filtered.some(isSubagentStreamMessage)) {
-              let D = frameFlushGate.evictedCount > 0;
-              frameFlushGate.evictOldest((j) => isSubagentStreamMessage(j.frame), MAX_QUEUED_SUBAGENT_FRAMES);
-              if (!D && frameFlushGate.evictedCount > 0)
+              let evictedBefore = frameFlushGate.evictedCount > 0;
+              frameFlushGate.evictOldest(
+                (entry) => isSubagentStreamMessage(entry.frame),
+                MAX_QUEUED_SUBAGENT_FRAMES,
+              );
+              if (!evictedBefore && frameFlushGate.evictedCount > 0)
                 logForDebugging(
                   `[remote-bridge] Over ${MAX_QUEUED_SUBAGENT_FRAMES} subagent frames queued during flush; dropping the oldest until it drains`,
                 );
@@ -3876,175 +4133,186 @@ async function initEnvLessBridgeCore(params) {
         }
         return;
       }
-      for (let msg of y) if (msg.uuid) no.add(msg.uuid);
-      let events = y.map((_) => ({
-        ..._,
+      for (let msg of redacted) if (msg.uuid) writtenSdkUuids.add(msg.uuid);
+      let events_2 = redacted.map((event) => ({
+        ...event,
         session_id: sessionId,
       }));
-      transport.writeBatch(events);
+      transport.writeBatch(events_2);
     },
-    sendControlRequest(e) {
-      rememberOutboundRequestId(e.request_id, {
-        automated: !isPermissionPromptSubtype(e),
+    sendControlRequest(request) {
+      rememberOutboundRequestId(request.request_id, {
+        automated: !isPermissionPromptSubtype(request),
       });
-      let request = e.request;
-      if (isAccountMemoryControlRequest(request, placeAccountMemoryTool)) {
-        ho.add(e.request_id);
+      let request_2 = request.request;
+      if (isAccountMemoryControlRequest(request_2, placeAccountMemoryTool)) {
+        localOnlyMemoryRequests.add(request.request_id);
         logForDebugging(
-          `[remote-bridge] Keeping an account memory prompt at the terminal (not sent to Remote Control): ${e.request_id}`,
+          `[remote-bridge] Keeping an account memory prompt at the terminal (not sent to Remote Control): ${request.request_id}`,
         );
         return false;
       }
-      if (request.subtype === "can_use_tool" || request.subtype === "request_user_dialog") {
-        De.delete(e.request_id);
-        De.set(e.request_id, {
-          request: e,
+      if (request_2.subtype === "can_use_tool" || request_2.subtype === "request_user_dialog") {
+        pendingRequests.delete(request.request_id);
+        pendingRequests.set(request.request_id, {
+          request,
         });
-        Gt.delete(e.request_id);
+        notForwardedIds.delete(request.request_id);
       }
-      if (request.subtype === "request_user_dialog" && ((frameFlushGate.active && !Ir) || Be)) {
-        Gt.add(e.request_id);
+      if (
+        request_2.subtype === "request_user_dialog" &&
+        ((frameFlushGate.active && !transcriptReleasing) || recoveryInFlight)
+      ) {
+        notForwardedIds.add(request.request_id);
         logForDebugging(
-          `[remote-bridge] Not forwarding request_user_dialog while writes are gated / transport recovering (local-only): ${e.request_id}`,
+          `[remote-bridge] Not forwarding request_user_dialog while writes are gated / transport recovering (local-only): ${request.request_id}`,
         );
         return false;
       }
-      if (et("control_request")) return false;
+      if (shouldDropAfterOwnerChange("control_request")) return false;
       let event = {
-        ...e,
+        ...request,
         session_id: sessionId,
       };
-      if (request.subtype === "can_use_tool") {
-        let y;
+      if (request_2.subtype === "can_use_tool") {
+        let details;
         if (getFeatureValue_CACHED_MAY_BE_STALE("tengu_bridge_requires_action_details", false)) {
-          let R = request.tool_name === BASH_TOOL_NAME || request.tool_name === POWERSHELL_TOOL_NAME;
-          let _;
-          if (request.tool_name === ASKUSERQUESTION) {
-            let questions = Array.isArray(request.input?.questions) ? request.input.questions : [];
-            let W = questions[0];
-            let z = W?.header || W?.question;
-            _ = {
+          let isShellTool =
+            request_2.tool_name === BASH_TOOL_NAME || request_2.tool_name === POWERSHELL_TOOL_NAME;
+          let summary;
+          if (request_2.tool_name === ASKUSERQUESTION) {
+            let questions = Array.isArray(request_2.input?.questions) ? request_2.input.questions : [];
+            let firstQuestion = questions[0];
+            let questionTitle = firstQuestion?.header || firstQuestion?.question;
+            summary = {
               label: "Question",
-              body: z
-                ? z + (questions.length > 1 ? ` (+${questions.length - 1} more)` : "")
+              body: questionTitle
+                ? questionTitle + (questions.length > 1 ? ` (+${questions.length - 1} more)` : "")
                 : "Tap to answer",
             };
-          } else if (request.tool_name === EXITPLANMODE)
-            _ = {
+          } else if (request_2.tool_name === EXITPLANMODE)
+            summary = {
               label: "Plan",
               body: "Plan ready for review",
             };
-          else if (request.tool_kind === "mcp_skill")
-            _ = {
-              label: request.display_name ?? request.tool_name,
+          else if (request_2.tool_kind === "mcp_skill")
+            summary = {
+              label: request_2.display_name ?? request_2.tool_name,
               body: "",
             };
-          if (!_ && request.requires_user_interaction)
-            _ = {
-              label: request.display_name ?? request.tool_name,
+          if (!summary && request_2.requires_user_interaction)
+            summary = {
+              label: request_2.display_name ?? request_2.tool_name,
               body: "",
             };
-          let S =
-            R && typeof request.input?.command === "string"
-              ? redactSecretsInText(request.input.command)
+          let commandText =
+            isShellTool && typeof request_2.input?.command === "string"
+              ? redactSecretsInText(request_2.input.command)
               : undefined;
-          let D = R && (request.description === undefined || hasHostField(request.input));
+          let useHostField =
+            isShellTool && (request_2.description === undefined || hasHostField(request_2.input));
           let description =
-            R && typeof request.input?.description === "string" ? request.input.description : undefined;
-          y = {
-            tool_name: request.tool_name,
-            display_tool_name: _?.label ?? request.display_name ?? request.tool_name,
+            isShellTool && typeof request_2.input?.description === "string"
+              ? request_2.input.description
+              : undefined;
+          details = {
+            tool_name: request_2.tool_name,
+            display_tool_name: summary?.label ?? request_2.display_name ?? request_2.tool_name,
             action_description:
-              _?.body ??
+              summary?.body ??
               redactSecretsInText(
-                (!D && (request.description || description)) || (S && truncate(S, 120)) || "",
+                (!useHostField && (request_2.description || description)) ||
+                  (commandText && truncate(commandText, 120)) ||
+                  "",
               ),
-            raw_command: _ ? undefined : S,
-            tool_use_id: request.tool_use_id,
-            request_id: _ ? "" : e.request_id,
-            ...(_ &&
-              e.request_id && {
-                suppressed_request_id: e.request_id,
+            raw_command: summary ? undefined : commandText,
+            tool_use_id: request_2.tool_use_id,
+            request_id: summary ? "" : request.request_id,
+            ...(summary &&
+              request.request_id && {
+                suppressed_request_id: request.request_id,
               }),
-            input: request.input,
+            input: request_2.input,
           };
         }
-        if (y)
-          De.set(e.request_id, {
-            request: e,
-            details: y,
+        if (details)
+          pendingRequests.set(request.request_id, {
+            request,
+            details,
           });
-        Rt = false;
-        $e("requires_action", y);
-      } else if (request.subtype === "request_user_dialog") {
-        let y;
+        turnResultReported = false;
+        reportState("requires_action", details);
+      } else if (request_2.subtype === "request_user_dialog") {
+        let details;
         if (getFeatureValue_CACHED_MAY_BE_STALE("tengu_bridge_requires_action_details", false))
-          y = dialogPermissionRequest(
-            request.dialog_kind,
-            request.payload,
-            e.request_id,
-            request.tool_use_id,
+          details = dialogPermissionRequest(
+            request_2.dialog_kind,
+            request_2.payload,
+            request.request_id,
+            request_2.tool_use_id,
           );
-        if (y)
-          De.set(e.request_id, {
-            request: e,
-            details: y,
+        if (details)
+          pendingRequests.set(request.request_id, {
+            request,
+            details,
           });
-        Rt = false;
-        $e("requires_action", y);
+        turnResultReported = false;
+        reportState("requires_action", details);
       }
-      writeOrQueueFrame(event, `control_request request_id=${e.request_id}`);
+      writeOrQueueFrame(event, `control_request request_id=${request.request_id}`);
       return true;
     },
-    sendControlResponse(e, r) {
-      if (ho.has(e.response.request_id)) return;
-      if (!r?.skipStateReport) go(e.response.request_id, true);
-      if (et("control_response")) return;
+    sendControlResponse(response, options) {
+      if (localOnlyMemoryRequests.has(response.response.request_id)) return;
+      if (!options?.skipStateReport) resolvePendingAction(response.response.request_id, true);
+      if (shouldDropAfterOwnerChange("control_response")) return;
       let event = {
-        ...e,
+        ...response,
         session_id: sessionId,
       };
-      if (!r?.skipStateReport && !Rt) mo();
+      if (!options?.skipStateReport && !turnResultReported) reportPendingState();
       writeOrQueueFrame(event, "control_response");
     },
-    sendControlCancelRequest(e) {
-      if (ho.delete(e)) return;
-      if (Gt.delete(e)) {
-        De.delete(e);
-        logForDebugging(`[remote-bridge] Local-only retract of a declined dialog forward request_id=${e}`);
+    sendControlCancelRequest(requestId) {
+      if (localOnlyMemoryRequests.delete(requestId)) return;
+      if (notForwardedIds.delete(requestId)) {
+        pendingRequests.delete(requestId);
+        logForDebugging(
+          `[remote-bridge] Local-only retract of a declined dialog forward request_id=${requestId}`,
+        );
         return;
       }
-      go(e, true);
-      if (et("control_cancel_request")) return;
+      resolvePendingAction(requestId, true);
+      if (shouldDropAfterOwnerChange("control_cancel_request")) return;
       let event = {
         type: "control_cancel_request",
-        request_id: e,
+        request_id: requestId,
         session_id: sessionId,
       };
-      if (!Rt) mo();
-      writeOrQueueFrame(event, `control_cancel_request request_id=${e}`);
+      if (!turnResultReported) reportPendingState();
+      writeOrQueueFrame(event, `control_cancel_request request_id=${requestId}`);
     },
-    sendResult(e) {
-      $t = false;
-      Rt = true;
-      if (et("result")) return;
+    sendResult(result) {
+      queuedAnyMessage = false;
+      turnResultReported = true;
+      if (shouldDropAfterOwnerChange("result")) return;
       settleHeldReadReceipts();
-      $e("idle");
-      if (transcriptMirrorMode === "deferred" && !tr().eagerResult) {
+      reportState("idle");
+      if (transcriptMirrorMode === "deferred" && !backfillConfig().eagerResult) {
         logForDebugging("[remote-bridge] Withheld result (transcript deferred)");
         return;
       }
       let bridgeResultMessage = buildBridgeResultMessage(
         sessionId,
-        transcriptMirrorMode === "deferred" && e?.outcome !== undefined
+        transcriptMirrorMode === "deferred" && result?.outcome !== undefined
           ? {
-              ...e,
+              ...result,
               outcome: {
-                ...e.outcome,
+                ...result.outcome,
                 result: undefined,
               },
             }
-          : e,
+          : result,
       );
       writeOrQueueFrame(
         bridgeResultMessage,
@@ -4052,65 +4320,65 @@ async function initEnvLessBridgeCore(params) {
       );
     },
     stampReply({ assistantUuid, userMessageUuid }) {
-      or.set(assistantUuid, userMessageUuid);
-      if (or.size > ja) {
-        let i = or.keys().next().value;
-        if (i !== undefined) or.delete(i);
+      replyStamps.set(assistantUuid, userMessageUuid);
+      if (replyStamps.size > maxReplyStamps) {
+        let oldestUuid = replyStamps.keys().next().value;
+        if (oldestUuid !== undefined) replyStamps.delete(oldestUuid);
       }
     },
-    async subscribePR(e, r, i) {
-      if (re)
+    async subscribePR(repo, prNumber, agentId) {
+      if (ownerChanged)
         return {
           ok: false,
           reason: "owner_changed",
         };
-      let y = `${e}#${r}`;
-      let R = ur.get(y);
-      if (i)
-        ur.set(y, {
-          agentId: i,
-          repo: e,
-          prNumber: r,
+      let key = `${repo}#${prNumber}`;
+      let previous = prSubscriptions.get(key);
+      if (agentId)
+        prSubscriptions.set(key, {
+          agentId,
+          repo,
+          prNumber,
         });
-      let _ = await subscribeGithubPullRequest("subscribe", {
+      let outcome = await subscribeGithubPullRequest("subscribe", {
         sessionId,
-        repo: e,
-        prNumber: r,
+        repo,
+        prNumber,
         baseUrl,
         getAccessToken,
         getTrustedDeviceToken,
         onUnauthorized: recoverHostSessionsBearer,
       });
-      if (!_.ok && i)
-        if (R) ur.set(y, R);
-        else ur.delete(y);
-      return _;
+      if (!outcome.ok && agentId)
+        if (previous) prSubscriptions.set(key, previous);
+        else prSubscriptions.delete(key);
+      return outcome;
     },
-    async unsubscribePR(e, r) {
-      if (re)
+    async unsubscribePR(repo, prNumber) {
+      if (ownerChanged)
         return {
           ok: false,
           reason: "owner_changed",
         };
-      let i = await subscribeGithubPullRequest("unsubscribe", {
+      let outcome = await subscribeGithubPullRequest("unsubscribe", {
         sessionId,
-        repo: e,
-        prNumber: r,
+        repo,
+        prNumber,
         baseUrl,
         getAccessToken,
         getTrustedDeviceToken,
         onUnauthorized: recoverHostSessionsBearer,
       });
-      if (i.ok) ur.delete(`${e}#${r}`);
-      return i;
+      if (outcome.ok) prSubscriptions.delete(`${repo}#${prNumber}`);
+      return outcome;
     },
-    async recordCreatedPR(e, timeoutMs) {
-      if (I)
+    async recordCreatedPR(prInfo, timeoutMs) {
+      if (stopped)
         return {
           ok: false,
           skipped: "no_bridge",
         };
-      if (re)
+      if (ownerChanged)
         return {
           ok: false,
           skipped: "owner_changed",
@@ -4118,33 +4386,33 @@ async function initEnvLessBridgeCore(params) {
       return buildJsonHeaders({
         sessionUrl: buildCCRv2SdkUrl(apiBaseUrl, sessionId),
         workerToken: workerJwt,
-        ...e,
+        ...prInfo,
         timeoutMs,
       });
     },
     async fetchInboxMessage(fileId) {
-      let r = (i) => {
-        logFeatureBad("bridge_inbox_fetch", i);
+      let fail = (reason) => {
+        logFeatureBad("bridge_inbox_fetch", reason);
         return {
           ok: false,
-          reason: i,
+          reason,
         };
       };
-      if (I) return r("no_bridge");
-      if (re) return r("owner_changed");
+      if (stopped) return fail("no_bridge");
+      if (ownerChanged) return fail("owner_changed");
       {
-        let i = async (D) => {
-          if (I) return "no_bridge";
-          if (re) return "owner_changed";
-          if (D?.fresh ? Ar() : Mt()) {
-            let j = await fo("owner_changed_inbox", D);
-            if (j === "changed") return "owner_changed";
-            if (j === "inconclusive") return I ? "no_bridge" : "owner_unverified";
+        let checkOwner = async (options) => {
+          if (stopped) return "no_bridge";
+          if (ownerChanged) return "owner_changed";
+          if (options?.fresh ? isOwnerPinned() : ownerLooksChanged()) {
+            let verdict = await confirmOwnerChange("owner_changed_inbox", options);
+            if (verdict === "changed") return "owner_changed";
+            if (verdict === "inconclusive") return stopped ? "no_bridge" : "owner_unverified";
           }
-          return I ? "no_bridge" : undefined;
+          return stopped ? "no_bridge" : undefined;
         };
-        let y = await i();
-        if (y) return r(y);
+        let blocked = await checkOwner();
+        if (blocked) return fail(blocked);
         if (onProactiveRefresh)
           try {
             await onProactiveRefresh();
@@ -4156,12 +4424,12 @@ async function initEnvLessBridgeCore(params) {
         let accessToken = getAccessToken();
         let trustedDeviceToken = await getTrustedDeviceToken();
         if (onProactiveRefresh) {
-          let D = await i({
+          let blocked = await checkOwner({
             fresh: true,
           });
-          if (D) return r(D);
+          if (blocked) return fail(blocked);
         }
-        let { fetchSessionInboxMessage } = require("./chunk-49ddv0ee.js");
+        let { fetchSessionInboxMessage } = require("./sessionInbox.js");
         return fetchSessionInboxMessage({
           sessionId,
           fileId,
@@ -4170,35 +4438,35 @@ async function initEnvLessBridgeCore(params) {
           getTrustedDeviceToken: () => Promise.resolve(trustedDeviceToken),
         });
       }
-      return r("feature_disabled");
+      return fail("feature_disabled");
     },
     getPRWebhookTargets() {
-      return [...ur.values()];
+      return [...prSubscriptions.values()];
     },
-    teardown: td,
+    teardown,
     neverArchive: keepSessionOnTeardown,
     async archive() {
       if (keepSessionOnTeardown) return;
-      let e = Wi();
+      let deadReasonAtArchive = deadReason();
       await archiveRemoteBridgeSession(
         sessionId,
         baseUrl,
-        e === undefined ? _o().token : undefined,
+        deadReasonAtArchive === undefined ? archiveCredential().token : undefined,
         orgUUID,
         cfg.teardown_archive_timeout_ms,
-        e,
+        deadReasonAtArchive,
         storageV5,
       );
     },
     [Symbol.asyncDispose]() {
-      return Oo.teardown({
+      return bridgeHandle.teardown({
         reason: "host_exit",
       });
     },
   };
   if (keepSessionOnTeardown && !isReattach) removeBridgePlaceholdersFor(sessionId, storageV5);
-  let ls = registerCleanup(Oo);
-  return Oo;
+  let unregisterCleanup = registerCleanup(bridgeHandle);
+  return bridgeHandle;
 }
 //@ chunk-4cm44bmp.js:95205-95591 fingerprint = withRetry (0.782)
 /**
@@ -4235,53 +4503,53 @@ async function withRetry(fn, label, cfg) {
  */
 async function withRetryAndAuthRecovery(call, label, cfg, authOptions) {
   let refreshed = false;
-  let x = false;
-  let Q = await withRetry(
+  let didLoseRefresh = false;
+  let result = await withRetry(
     async () => {
-      if (refreshed) x = true;
+      if (refreshed) didLoseRefresh = true;
       let accessToken = authOptions.getAccessToken();
-      let A = false;
-      let Z = await call(accessToken, () => {
-        A = true;
+      let didCall = false;
+      let callResult = await call(accessToken, () => {
+        didCall = true;
       });
-      let Y = isCredentialsRejection(Z);
+      let isRejected = isCredentialsRejection(callResult);
       if (
-        (Z === null || Y) &&
-        A &&
+        (callResult === null || isRejected) &&
+        didCall &&
         authOptions.onAuth401 &&
         !refreshed &&
         !authOptions.recoveryAttemptedTokens.has(accessToken)
       ) {
         authOptions.recoveryAttemptedTokens.add(accessToken);
-        let ie = false;
+        let didRefresh = false;
         try {
-          ie = await authOptions.onAuth401(accessToken);
+          didRefresh = await authOptions.onAuth401(accessToken);
         } catch (error) {
           logForDebugging(`[remote-bridge] ${label} 401 \u2014 OAuth refresh threw: ${errorMessage(error)}`, {
             level: "error",
           });
         }
-        refreshed = ie;
+        refreshed = didRefresh;
         logForDebugging(
-          `[remote-bridge] ${label} 401 \u2014 OAuth ${ie ? "refreshed; retrying with the fresh token" : "refresh unavailable"}`,
+          `[remote-bridge] ${label} 401 \u2014 OAuth ${didRefresh ? "refreshed; retrying with the fresh token" : "refresh unavailable"}`,
         );
         logForDiagnosticsNoPII("info", "bridge_repl_v2_init_401_refresh", {
-          refreshed: ie,
+          refreshed: didRefresh,
         });
-        if (refreshed && Y) return null;
+        if (refreshed && isRejected) return null;
       }
-      return Z;
+      return callResult;
     },
     label,
     cfg,
   );
-  if (Q === null && refreshed && !x) {
+  if (result === null && refreshed && !didLoseRefresh) {
     logForDebugging(
       `[remote-bridge] ${label} refreshed on the final attempt; one extra try with the fresh token`,
     );
     return call(authOptions.getAccessToken(), () => {});
   }
-  return Q;
+  return result;
 }
 //@ chunk-4cm44bmp.js:96332-96474 layout
 /**
@@ -4296,7 +4564,7 @@ function isReloginRecoverable(failure) {
 /**
  * 失败的严重级别：可重登恢复为 auth，否则 terminal。
  */
-function failureSeverity(failure) {
+function failureSeverity_2(failure) {
   return isReloginRecoverable(failure) ? "auth" : "terminal";
 }
 //@ chunk-4cm44bmp.js:96520-96603 layout
@@ -4318,8 +4586,8 @@ var RECOVERED_NONORIGIN_CODES = {
   nonorigin_other: "recovered_403_nonorigin_other",
 };
 //@ chunk-4cm44bmp.js:96798-97020 layout
-function transportClosed403Code(n) {
-  switch (n?.rejectSource) {
+function transportClosed403Code(details) {
+  switch (details?.rejectSource) {
     case "nonorigin_cf":
       return "transport_closed_403_nonorigin_cf";
     case "nonorigin_other":
@@ -4377,20 +4645,20 @@ async function fetchCredentialsWithTrustedDevice(
   let refusal =
     isCredentialsFailure(result) && result.reason === "untrusted_device" ? result.refusal : undefined;
   if (refusal !== undefined && shouldRemoteControlEnroll(refusal)) {
-    let Y = await withUntrustedDeviceRecovery(
+    let recoveryResult = await withUntrustedDeviceRecovery(
       deviceToken,
       (deviceToken) =>
         attachBridgeWorker(sessionId, baseUrl, accessToken, timeoutMs, deviceToken, onAuth401, epochGuard),
       credentialsStore,
     );
-    if (Y !== undefined && Y !== null)
+    if (recoveryResult !== undefined && recoveryResult !== null)
       result =
-        isCredentialsFailure(Y) && Y.reason === "untrusted_device"
+        isCredentialsFailure(recoveryResult) && recoveryResult.reason === "untrusted_device"
           ? {
-              ...Y,
+              ...recoveryResult,
               justEnrolled: true,
             }
-          : Y;
+          : recoveryResult;
   } else if (refusal !== undefined) {
     logRefusalWithoutEnrollment("[remote-bridge]", refusal);
     clearTrustedDeviceTokenCache();
@@ -4436,8 +4704,8 @@ function classifySupersession(code, cause) {
   }
 }
 //@ chunk-4cm44bmp.js:98391-98436 affinity
-function isNotArchived(n) {
-  return n !== "session_archived";
+function isNotArchived(outcome) {
+  return outcome !== "session_archived";
 }
 //@ chunk-4cm44bmp.js:98436-98795 affinity
 /**
@@ -4463,49 +4731,5 @@ function archiveStatusCode(archiveResult, supersession) {
                 : archiveResult >= 400
                   ? "server_4xx"
                   : "ok";
-}
-//@ chunk-kgtpkbhq.js:8680-9302 fingerprint = archiveSession (0.358)
-/**
- * 对会话执行生命周期动作（archive / unarchive）：POST {session}/{action}，返回 HTTP 状态或 invalid/timeout/error/untrusted_device 等。
- */
-async function postSessionAction(
-  label,
-  pathSuffix,
-  baseUrl,
-  accessToken,
-  sessionId,
-  timeoutMs,
-  authOptions,
-  refusalMode,
-) {
-  if (!isValidSessionId(sessionId, label)) return "invalid";
-  let sessionEndpoint = buildSessionEndpoint(label, baseUrl, accessToken, sessionId, authOptions, pathSuffix);
-  if (!sessionEndpoint) return "invalid";
-  let { url, headers, id } = sessionEndpoint;
-  try {
-    let i = await axios_default.post(
-      url,
-      {},
-      {
-        headers,
-        timeout: timeoutMs,
-        validateStatus: () => true,
-      },
-    );
-    logForDebugging(`[code-session] ${label} ${id} status=${i.status}`);
-    if (i.status === 403) {
-      let compatId = readUntrustedDeviceRefusal(i.data);
-      if (compatId !== undefined)
-        return refusalMode === "elevated_auth" && !shouldRemoteControlEnroll(compatId)
-          ? "untrusted_device_no_enroll"
-          : "untrusted_device";
-      if (refusalMode === "elevated_auth" && classifyElevatedAuthError(i.data) === "session_stale_relogin")
-        return "session_stale_relogin";
-    }
-    return i.status;
-  } catch (err) {
-    logForDebugging(`[code-session] ${label} ${id} failed: ${errorMessage(err)}`);
-    return axios_default.isAxiosError(err) && err.code === "ECONNABORTED" ? "timeout" : "error";
-  }
 }
 export { describeCredentialFailure, initEnvLessBridgeCore, postSessionAction };

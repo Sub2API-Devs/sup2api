@@ -16,6 +16,31 @@ import { logForDebugging } from "../../utils/debug.js";
 import { getGlobalConfig, saveGlobalConfig } from "../../utils/config.js";
 import { logError } from "../../utils/log.js";
 
+//@ chunk-aepeg2w5.js:288982-289234 placement = initializationState (0.51)
+/**
+ * （匹配存疑）恒返回 null 的死代码函数，后面是按 "not-started"/"expired"/数字算 endsAt 的不可达分支；与 LSP 无关。
+ */
+function initializationState() {
+  return null;
+  switch (n) {
+    case "not-started":
+      return {
+        endsAt: null,
+      };
+    case "expired":
+      return {
+        endsAt: new Date(Date.now() - r).toISOString(),
+      };
+    default: {
+      let value = Number(n);
+      return Number.isFinite(value) && value > 0
+        ? {
+            endsAt: new Date(Date.now() + value * r).toISOString(),
+          }
+        : null;
+    }
+  }
+}
 //@ chunk-73yknwsx.js:353-362 placement
 /**
  * Pro 试用默认 14 天（本地初始化试用结束时间用）。
@@ -38,12 +63,12 @@ var INELIGIBLE_TRIAL_STATUS = {
  * 读取 Pro 试用状态：本地已初始化则按其结束时间；否则仅 pro 订阅且具备试用标志时按账号的试用结束时间计算。
  */
 function getProTrialStatus() {
-  let r = initializationState();
-  if (r) return trialStatusFrom(true, r.endsAt);
+  let state = initializationState();
+  if (state) return trialStatusFrom(true, state.endsAt);
   let oauthAccountInfo = getOauthAccountInfo();
   if (!oauthAccountInfo || getSubscriptionType() !== "pro") return INELIGIBLE_TRIAL_STATUS;
-  let a = oauthAccountInfo.ccOnboardingFlags?.e10 === true;
-  return trialStatusFrom(a, oauthAccountInfo.claudeCodeTrialEndsAt ?? null);
+  let onboarding = oauthAccountInfo.ccOnboardingFlags?.e10 === true;
+  return trialStatusFrom(onboarding, oauthAccountInfo.claudeCodeTrialEndsAt ?? null);
 }
 //@ chunk-73yknwsx.js:643-1109 placement
 /**
@@ -58,7 +83,7 @@ async function startProTrial(storage, credentials) {
       });
       return trialStatusFrom(true, iso);
     }
-    let n = await apiClient.post(
+    let response = await apiClient.post(
       "/api/oauth/organizations/:orgUUID/claude_code/pro_trial",
       {},
       {
@@ -66,12 +91,15 @@ async function startProTrial(storage, credentials) {
         credentials,
       },
     );
-    if (!n.ok) throw Error(n.reason === "no-auth" ? n.detail : `Pro trial start unavailable: ${n.reason}`);
+    if (!response.ok)
+      throw Error(
+        response.reason === "no-auth" ? response.detail : `Pro trial start unavailable: ${response.reason}`,
+      );
     logForDebugging("Pro trial started", {
       level: "debug",
     });
-    saveTrialEndsAt(n.data.ends_at, storage);
-    return trialStatusFrom(true, n.data.ends_at);
+    saveTrialEndsAt(response.data.ends_at, storage);
+    return trialStatusFrom(true, response.data.ends_at);
   });
 }
 //@ chunk-73yknwsx.js:1109-1211 placement
@@ -86,10 +114,10 @@ function isProTrialExpiredWithDisabledCredits() {
 /**
  * 生成试用徽标文字：进行中显示剩余天数，过期显示 Usage credits，其他不显示。
  */
-function proTrialBadgeText(r) {
-  switch (r.status) {
+function proTrialBadgeText(daysLeft) {
+  switch (daysLeft.status) {
     case "active": {
-      let daysRemaining = r.daysRemaining ?? 0;
+      let daysRemaining = daysLeft.daysRemaining ?? 0;
       return `Trial: ${daysRemaining} ${daysRemaining === 1 ? "day" : "days"} left`;
     }
     case "expired":
@@ -115,54 +143,29 @@ function trialStatusFrom(eligible, endsAt) {
     logError(Error(`Invalid claude_code_trial_ends_at: ${endsAt}`));
     return INELIGIBLE_TRIAL_STATUS;
   }
-  let n = date.getTime() - Date.now();
-  if (n <= 0)
+  let msUntil = date.getTime() - Date.now();
+  if (msUntil <= 0)
     return {
       status: "expired",
       daysRemaining: 0,
     };
   return {
     status: "active",
-    daysRemaining: Math.ceil(n / 86400000),
+    daysRemaining: Math.ceil(msUntil / 86400000),
   };
 }
 //@ chunk-73yknwsx.js:1745-1914 placement
 function saveTrialEndsAt(endsAt, storage) {
-  saveGlobalConfig((a) => {
-    if (!a.oauthAccount || a.oauthAccount.claudeCodeTrialEndsAt === endsAt) return a;
+  saveGlobalConfig((config) => {
+    if (!config.oauthAccount || config.oauthAccount.claudeCodeTrialEndsAt === endsAt) return config;
     return {
-      ...a,
+      ...config,
       oauthAccount: {
-        ...a.oauthAccount,
+        ...config.oauthAccount,
         claudeCodeTrialEndsAt: endsAt,
       },
     };
   }, storage);
-}
-//@ chunk-aepeg2w5.js:288982-289234 placement = initializationState (0.51)
-/**
- * （匹配存疑）恒返回 null 的死代码函数，后面是按 "not-started"/"expired"/数字算 endsAt 的不可达分支；与 LSP 无关。
- */
-function initializationState() {
-  return null;
-  switch (n) {
-    case "not-started":
-      return {
-        endsAt: null,
-      };
-    case "expired":
-      return {
-        endsAt: new Date(Date.now() - r).toISOString(),
-      };
-    default: {
-      let s = Number(n);
-      return Number.isFinite(s) && s > 0
-        ? {
-            endsAt: new Date(Date.now() + s * r).toISOString(),
-          }
-        : null;
-    }
-  }
 }
 export {
   isProTrialExpiredWithDisabledCredits,

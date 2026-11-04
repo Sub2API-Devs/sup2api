@@ -25,34 +25,34 @@ import { EDGE_LABEL_OFFSET } from "./flowchartRender.js";
 /**
  * 在字符画布上绘制 mermaid 时序图（参与者、消息箭头、note、frame）。
  */
-function drawSequenceDiagram(e, t) {
-  let n = measureSequenceDiagram(e);
-  let o = Math.max(...e.participants.map((participant) => participant.length)) + 2;
-  let stylePool = o + 1 + e.steps.reduce((acc, step) => acc + stepHeight(step), 0);
-  if (n.width > t || n.width * stylePool > MAX_CANVAS_CELLS) return;
-  let boxCanvas = createBoxCanvas(n.width, stylePool);
-  let r = new Set();
-  let s = o + 1;
-  let mapped = e.steps.map((step) => {
-    let h = s;
-    s += stepHeight(step);
+function drawSequenceDiagram(diagram, columns) {
+  let layout = measureSequenceDiagram(diagram);
+  let headerHeight = Math.max(...diagram.participants.map((participant) => participant.length)) + 2;
+  let stylePool = headerHeight + 1 + diagram.steps.reduce((acc, step) => acc + stepHeight(step), 0);
+  if (layout.width > columns || layout.width * stylePool > MAX_CANVAS_CELLS) return;
+  let boxCanvas = createBoxCanvas(layout.width, stylePool);
+  let noteCells = new Set();
+  let row = headerHeight + 1;
+  let mapped = diagram.steps.map((step) => {
+    let stepRow = row;
+    row += stepHeight(step);
     if (step.kind === "note") {
-      let c = noteBox(step, n, h);
-      for (let p = c.y; p < c.y + c.height; p++)
-        for (let y = c.x; y < c.x + c.width; y++) r.add(p * n.width + y);
+      let box = noteBox(step, layout, stepRow);
+      for (let boxY = box.y; boxY < box.y + box.height; boxY++)
+        for (let x = box.x; x < box.x + box.width; x++) noteCells.add(boxY * layout.width + x);
     }
-    return h;
+    return stepRow;
   });
-  e.participants.forEach((participant, h) => {
-    let c = n.centers[h] ?? 0;
-    let p = textDisplayWidth(widest(participant)) + 4;
+  diagram.participants.forEach((participant, index) => {
+    let center = layout.centers[index] ?? 0;
+    let width = textDisplayWidth(widest(participant)) + 4;
     drawCanvasBox(
       boxCanvas,
       {
-        x: c - Math.floor(p / 2),
+        x: center - Math.floor(width / 2),
         y: 0,
-        width: p,
-        height: o,
+        width,
+        height: headerHeight,
       },
       participant,
       false,
@@ -60,131 +60,131 @@ function drawSequenceDiagram(e, t) {
     linkCells(
       boxCanvas,
       {
-        x: c,
-        y: o - 1,
+        x: center,
+        y: headerHeight - 1,
       },
       {
-        x: c,
-        y: o,
+        x: center,
+        y: headerHeight,
       },
     );
-    for (let y = o; y < stylePool; y++)
-      if (!r.has(y * n.width + c))
+    for (let rowY = headerHeight; rowY < stylePool; rowY++)
+      if (!noteCells.has(rowY * layout.width + center))
         drawCanvasText(
           boxCanvas,
           {
-            x: c,
-            y,
+            x: center,
+            y: rowY,
           },
           "\u2502",
         );
   });
-  e.steps.forEach((step, h) => {
-    drawSequenceStep(boxCanvas, step, n, mapped[h] ?? 0);
+  diagram.steps.forEach((step, index) => {
+    drawSequenceStep(boxCanvas, step, layout, mapped[index] ?? 0);
   });
   return gridToLines(boxCanvas);
 }
 //@ chunk-yb0ajcmt.js:21687-22457 placement
-function drawSequenceStep(boxCanvas, step, n, o) {
+function drawSequenceStep(boxCanvas, step, layout, row) {
   switch (step.kind) {
     case "frame": {
-      let i = `\u2500\u2500 ${step.label} `;
+      let label = `\u2500\u2500 ${step.label} `;
       drawCanvasText(
         boxCanvas,
         {
           x: 0,
-          y: o,
+          y: row,
         },
-        i + "\u2500".repeat(Math.max(0, n.width - textDisplayWidth(i))),
+        label + "\u2500".repeat(Math.max(0, layout.width - textDisplayWidth(label))),
       );
       return;
     }
     case "note": {
-      drawCanvasBox(boxCanvas, noteBox(step, n, o), step.text, false);
+      drawCanvasBox(boxCanvas, noteBox(step, layout, row), step.text, false);
       return;
     }
     case "message": {
-      let i = n.centers[step.from] ?? 0;
-      let u = n.centers[step.to] ?? 0;
-      let r = o + step.text.length;
-      let s = step.line === "dotted" ? "\u2504" : "\u2500";
+      let from = layout.centers[step.from] ?? 0;
+      let to = layout.centers[step.to] ?? 0;
+      let textRow = row + step.text.length;
+      let lineChar = step.line === "dotted" ? "\u2504" : "\u2500";
       if (step.from === step.to) {
-        step.text.forEach((p, y) => {
+        step.text.forEach((line, index) => {
           drawCanvasText(
             boxCanvas,
             {
-              x: i + 2,
-              y: o + y,
+              x: from + 2,
+              y: row + index,
             },
-            p,
+            line,
           );
         });
-        let c = [];
-        for (let p = i; p <= i + EDGE_LABEL_OFFSET; p++)
-          c.push({
-            x: p,
-            y: r,
+        let points = [];
+        for (let x = from; x <= from + EDGE_LABEL_OFFSET; x++)
+          points.push({
+            x,
+            y: textRow,
           });
-        for (let k = i + EDGE_LABEL_OFFSET; k > i; k--)
-          c.push({
+        for (let k = from + EDGE_LABEL_OFFSET; k > from; k--)
+          points.push({
             x: k,
-            y: r + 1,
+            y: textRow + 1,
           });
-        linkPath(boxCanvas, c, step.line);
+        linkPath(boxCanvas, points, step.line);
         drawCanvasText(
           boxCanvas,
           {
-            x: i,
-            y: r,
+            x: from,
+            y: textRow,
           },
           "\u251C",
         );
         drawCanvasText(
           boxCanvas,
           {
-            x: i + 1,
-            y: r + 1,
+            x: from + 1,
+            y: textRow + 1,
           },
-          arrowHead(step.head, false, s),
+          arrowHead(step.head, false, lineChar),
         );
         return;
       }
-      let min = Math.min(i, u);
-      let a = Math.abs(u - i) - 1;
-      step.text.forEach((c, p) => {
+      let min = Math.min(from, to);
+      let span = Math.abs(to - from) - 1;
+      step.text.forEach((line, index) => {
         drawCanvasText(
           boxCanvas,
           {
-            x: min + 1 + Math.floor((a - textDisplayWidth(c)) / 2),
-            y: o + p,
+            x: min + 1 + Math.floor((span - textDisplayWidth(line)) / 2),
+            y: row + index,
           },
-          c,
+          line,
         );
       });
-      let h = u > i;
+      let isRightward = to > from;
       drawCanvasText(
         boxCanvas,
         {
-          x: i,
-          y: r,
+          x: from,
+          y: textRow,
         },
-        h ? "\u251C" : "\u2524",
+        isRightward ? "\u251C" : "\u2524",
       );
       drawCanvasText(
         boxCanvas,
         {
           x: min + 1,
-          y: r,
+          y: textRow,
         },
-        s.repeat(a),
+        lineChar.repeat(span),
       );
       drawCanvasText(
         boxCanvas,
         {
-          x: h ? u - 1 : u + 1,
-          y: r,
+          x: isRightward ? to - 1 : to + 1,
+          y: textRow,
         },
-        arrowHead(step.head, h, s),
+        arrowHead(step.head, isRightward, lineChar),
       );
     }
   }
@@ -193,16 +193,16 @@ function drawSequenceStep(boxCanvas, step, n, o) {
 /**
  * 时序图箭头头部字符。
  */
-function arrowHead(head, t, n) {
+function arrowHead(head, isRightward, lineChar) {
   switch (head) {
     case "arrow":
-      return t ? "\u25B6" : "\u25C0";
+      return isRightward ? "\u25B6" : "\u25C0";
     case "async":
-      return t ? ">" : "<";
+      return isRightward ? ">" : "<";
     case "cross":
       return "x";
     case "open":
-      return n;
+      return lineChar;
   }
 }
 //@ chunk-yb0ajcmt.js:22597-22738 placement
@@ -223,67 +223,70 @@ function stepHeight(step) {
 /**
  * 最宽的字符串
  */
-function widest(e) {
-  return e.reduce((acc, n) => (textDisplayWidth(n) > textDisplayWidth(acc) ? n : acc), "");
+function widest(texts) {
+  return texts.reduce((acc, text) => (textDisplayWidth(text) > textDisplayWidth(acc) ? text : acc), "");
 }
 //@ chunk-yb0ajcmt.js:22794-23077 placement
 /**
  * 注释框的位置与大小。
  */
-function noteBox(step, t, n) {
-  let o = t.centers[step.first] ?? 0;
-  let i = t.centers[step.last] ?? 0;
-  let u = textDisplayWidth(widest(step.text)) + 4;
-  let r = step.placement === "over" && step.first !== step.last ? Math.max(u, i - o + 5) : u;
+function noteBox(step, layout, row) {
+  let from = layout.centers[step.first] ?? 0;
+  let to = layout.centers[step.last] ?? 0;
+  let minWidth = textDisplayWidth(widest(step.text)) + 4;
+  let width =
+    step.placement === "over" && step.first !== step.last ? Math.max(minWidth, to - from + 5) : minWidth;
   return {
     x:
       step.placement === "left"
-        ? o - 1 - r
+        ? from - 1 - width
         : step.placement === "right"
-          ? o + 2
-          : Math.floor((o + i) / 2) - Math.floor(r / 2),
-    y: n,
-    width: r,
+          ? from + 2
+          : Math.floor((from + to) / 2) - Math.floor(width / 2),
+    y: row,
+    width,
     height: step.text.length + 2,
   };
 }
 //@ chunk-yb0ajcmt.js:23077-24088 placement
-function measureSequenceDiagram(e) {
-  let mapped = e.participants.map((participant) => textDisplayWidth(widest(participant)) + 4);
-  let n = {
-    gaps: mapped.slice(1).map((l, a) => Math.ceil((mapped[a] ?? 0) / 2) + Math.ceil(l / 2) + 2),
+function measureSequenceDiagram(diagram) {
+  let mapped = diagram.participants.map((participant) => textDisplayWidth(widest(participant)) + 4);
+  let spacing = {
+    gaps: mapped
+      .slice(1)
+      .map((width, index) => Math.ceil((mapped[index] ?? 0) / 2) + Math.ceil(width / 2) + 2),
     leftRoom: Math.floor((mapped[0] ?? 0) / 2),
     rightRoom: Math.ceil((mapped.at(-1) ?? 0) / 2),
   };
-  let o = 0;
-  for (let step of e.steps) {
-    let a = step.kind === "frame" ? 0 : textDisplayWidth(widest(step.text));
-    if (step.kind === "frame") o = Math.max(o, textDisplayWidth(step.label) + 6);
+  let maxFrameWidth = 0;
+  for (let step of diagram.steps) {
+    let textWidth = step.kind === "frame" ? 0 : textDisplayWidth(widest(step.text));
+    if (step.kind === "frame") maxFrameWidth = Math.max(maxFrameWidth, textDisplayWidth(step.label) + 6);
     else if (step.kind === "message" && step.from === step.to)
-      reserveGap(n, step.from, Math.max(a + 2, EDGE_LABEL_OFFSET + 1));
+      reserveGap(spacing, step.from, Math.max(textWidth + 2, EDGE_LABEL_OFFSET + 1));
     else if (step.kind === "message")
-      widenGapsForSpan(n, Math.min(step.from, step.to), Math.max(step.from, step.to), a + 4);
-    else if (step.placement === "left") reserveGap(n, step.first - 1, a + 5);
-    else if (step.placement === "right") reserveGap(n, step.first, a + 6);
+      widenGapsForSpan(spacing, Math.min(step.from, step.to), Math.max(step.from, step.to), textWidth + 4);
+    else if (step.placement === "left") reserveGap(spacing, step.first - 1, textWidth + 5);
+    else if (step.placement === "right") reserveGap(spacing, step.first, textWidth + 6);
     else if (step.first === step.last) {
-      reserveGap(n, step.first - 1, Math.ceil((a + 4) / 2) + 1);
-      reserveGap(n, step.first, Math.ceil((a + 4) / 2) + 1);
+      reserveGap(spacing, step.first - 1, Math.ceil((textWidth + 4) / 2) + 1);
+      reserveGap(spacing, step.first, Math.ceil((textWidth + 4) / 2) + 1);
     } else {
-      widenGapsForSpan(n, step.first, step.last, a);
-      reserveGap(n, step.first - 1, 2);
-      reserveGap(n, step.last, 2);
+      widenGapsForSpan(spacing, step.first, step.last, textWidth);
+      reserveGap(spacing, step.first - 1, 2);
+      reserveGap(spacing, step.last, 2);
     }
   }
-  let i = [n.leftRoom];
-  for (let gap of n.gaps) i.push((i.at(-1) ?? 0) + gap);
-  let max = Math.max(o, (i.at(-1) ?? 0) + n.rightRoom + 1);
-  let flattened = e.steps.flatMap((step) =>
+  let centers = [spacing.leftRoom];
+  for (let gap of spacing.gaps) centers.push((centers.at(-1) ?? 0) + gap);
+  let max = Math.max(maxFrameWidth, (centers.at(-1) ?? 0) + spacing.rightRoom + 1);
+  let flattened = diagram.steps.flatMap((step) =>
     step.kind === "note"
       ? [
           noteBox(
             step,
             {
-              centers: i,
+              centers,
               width: max,
             },
             0,
@@ -291,32 +294,32 @@ function measureSequenceDiagram(e) {
         ]
       : [],
   );
-  let max_2 = Math.max(0, ...flattened.map((l) => -l.x));
+  let max_2 = Math.max(0, ...flattened.map((box) => -box.x));
   return {
-    centers: i.map((l) => l + max_2),
-    width: Math.max(max + max_2, ...flattened.map((l) => l.x + max_2 + l.width)),
+    centers: centers.map((x) => x + max_2),
+    width: Math.max(max + max_2, ...flattened.map((box) => box.x + max_2 + box.width)),
   };
 }
 //@ chunk-yb0ajcmt.js:24088-24250 placement
 /**
  * 为参与者间隙或两侧预留宽度。
  */
-function reserveGap(e, t, n) {
-  if (t < 0) e.leftRoom = Math.max(e.leftRoom, n);
-  else if (t >= e.gaps.length) e.rightRoom = Math.max(e.rightRoom, n);
-  else e.gaps[t] = Math.max(e.gaps[t] ?? 0, n + 1);
+function reserveGap(spacing, gapIndex, width) {
+  if (gapIndex < 0) spacing.leftRoom = Math.max(spacing.leftRoom, width);
+  else if (gapIndex >= spacing.gaps.length) spacing.rightRoom = Math.max(spacing.rightRoom, width);
+  else spacing.gaps[gapIndex] = Math.max(spacing.gaps[gapIndex] ?? 0, width + 1);
 }
 //@ chunk-yb0ajcmt.js:24250-24361 placement
 /**
  * 跨多个参与者的内容不够宽时加宽最后一个间隙。
  */
-function widenGapsForSpan(e, t, n, o) {
-  let reduced = e.gaps.slice(t, n).reduce((acc, gap) => acc + gap, 0);
-  e.gaps[n - 1] = (e.gaps[n - 1] ?? 0) + Math.max(0, o - reduced);
+function widenGapsForSpan(spacing, from, to, width) {
+  let reduced = spacing.gaps.slice(from, to).reduce((acc, gap) => acc + gap, 0);
+  spacing.gaps[to - 1] = (spacing.gaps[to - 1] ?? 0) + Math.max(0, width - reduced);
 }
 //@ chunk-yb0ajcmt.js:24361-24814 placement
 /**
- * mermaid 时序图的消息箭头写法表（-->>、->>、--x、--)、-->、-x、-) ），每项给出线型（dotted/solid）与箭头形状（arrow/cross/async/open）；同组还有参与方、注记、分组等行正则。
+ * mermaid 时序图解析：Ct 是消息箭头写法表（写法 → 线型 + 箭头形状）；Dt 是 participant/actor 行正则；He 是 " as " 关键字；Rt/Ot/We/_t/Lt 是注记、激活/停用、分组、else/and/option、方向标记的正则；Nt/It 是参与方与步骤数上限（50/400）。
  */
 var SEQUENCE_ARROW_KINDS = [
   ["-->>", "dotted", "arrow"],
@@ -328,21 +331,21 @@ var SEQUENCE_ARROW_KINDS = [
   ["-)", "solid", "async"],
   ["->", "solid", "open"],
 ];
-var SEQUENCE_ARROW_MAP = /^(?:participant|actor)\s+(\S.*)$/;
+var SEQUENCE_PARTICIPANT_RE = /^(?:participant|actor)\s+(\S.*)$/;
 var SEQUENCE_PARTICIPANT_KEYWORD = " as ";
 var SEQUENCE_NOTE_RE = /^note\s+(over|left of|right of)\s+(\S[^:]*):(.*)$/i;
 var SEQUENCE_BLOCK_RE = /^(?:activate|deactivate)\s+(\S.*)$/;
 var SEQUENCE_MESSAGE_RE = /^(?:loop|alt|opt|par|critical|break)(?:\s|$)/;
 var SEQUENCE_ACTIVATION_RE = /^(?:else|and|option)(?:\s|$)/;
 var SEQUENCE_DIRECTION_RE = /[<>:]/;
-var SEQUENCE_TITLE_RE = 50;
-var SEQUENCE_AUTONUMBER_RE = 400;
+var MAX_SEQUENCE_TITLE_CHARS = 50;
+var MAX_SEQUENCE_STEPS = 400;
 //@ chunk-yb0ajcmt.js:24814-25243 placement
 /**
  * 解析 mermaid sequenceDiagram 源码为参与者与步骤列表，超出规模限制返回 undefined。
  */
-function parseSequenceDiagram(e) {
-  let t = {
+function parseSequenceDiagram(lines) {
+  let diagram = {
     participants: [],
     steps: [],
     ids: [],
@@ -350,107 +353,107 @@ function parseSequenceDiagram(e) {
     isNumbered: false,
     hiddenCells: 0,
   };
-  for (let i of e.slice(1)) {
-    let sequenceLine = parseSequenceLine(t, i);
-    let r =
-      t.ids.length <= SEQUENCE_TITLE_RE &&
-      t.steps.length <= SEQUENCE_AUTONUMBER_RE &&
-      t.hiddenCells <= MAX_CELL_WIDTH;
-    if (!sequenceLine || !r) return;
+  for (let line of lines.slice(1)) {
+    let sequenceLine = parseSequenceLine(diagram, line);
+    let fits =
+      diagram.ids.length <= MAX_SEQUENCE_TITLE_CHARS &&
+      diagram.steps.length <= MAX_SEQUENCE_STEPS &&
+      diagram.hiddenCells <= MAX_CELL_WIDTH;
+    if (!sequenceLine || !fits) return;
   }
-  if (t.depth !== 0 || t.ids.length === 0) return;
-  let n = 0;
-  let steps = t.steps.map((step) => {
-    if (step.kind !== "message" || !t.isNumbered) return step;
-    n++;
-    let [u = "", ...r] = step.text;
+  if (diagram.depth !== 0 || diagram.ids.length === 0) return;
+  let counter = 0;
+  let steps = diagram.steps.map((step) => {
+    if (step.kind !== "message" || !diagram.isNumbered) return step;
+    counter++;
+    let [firstLine = "", ...rest] = step.text;
     return {
       ...step,
-      text: [`${n}. ${u}`, ...r],
+      text: [`${counter}. ${firstLine}`, ...rest],
     };
   });
   return {
-    participants: t.participants,
+    participants: diagram.participants,
     steps,
   };
 }
 //@ chunk-yb0ajcmt.js:25243-26080 placement
-function parseSequenceLine(e, t) {
-  if (t === "autonumber") {
-    e.isNumbered = true;
+function parseSequenceLine(diagram, line) {
+  if (line === "autonumber") {
+    diagram.isNumbered = true;
     return true;
   }
-  if (t === "end") {
-    e.depth--;
-    e.steps.push({
+  if (line === "end") {
+    diagram.depth--;
+    diagram.steps.push({
       kind: "frame",
       label: "end",
     });
-    return e.depth >= 0;
+    return diagram.depth >= 0;
   }
-  if (SEQUENCE_MESSAGE_RE.test(t) || SEQUENCE_ACTIVATION_RE.test(t)) {
-    e.depth += SEQUENCE_MESSAGE_RE.test(t) ? 1 : 0;
-    e.steps.push({
+  if (SEQUENCE_MESSAGE_RE.test(line) || SEQUENCE_ACTIVATION_RE.test(line)) {
+    diagram.depth += SEQUENCE_MESSAGE_RE.test(line) ? 1 : 0;
+    diagram.steps.push({
       kind: "frame",
-      label: parseLabelLines(t).join(" "),
+      label: parseLabelLines(line).join(" "),
     });
-    return e.depth > 0;
+    return diagram.depth > 0;
   }
-  let n = SEQUENCE_ARROW_MAP.exec(t)?.[1];
-  if (n !== undefined) {
-    let index = n.indexOf(SEQUENCE_PARTICIPANT_KEYWORD);
-    let r = index < 0 ? n : n.slice(0, index);
-    let labelLines = parseLabelLines(index < 0 ? n : n.slice(index + SEQUENCE_PARTICIPANT_KEYWORD.length));
-    let l = !e.ids.includes(r.trim());
-    e.hiddenCells += identifierWidth(r.trim(), labelLines);
-    return l && participantIndex(e, r, labelLines) >= 0;
+  let head = SEQUENCE_PARTICIPANT_RE.exec(line)?.[1];
+  if (head !== undefined) {
+    let index = head.indexOf(SEQUENCE_PARTICIPANT_KEYWORD);
+    let id = index < 0 ? head : head.slice(0, index);
+    let tokens = parseLabelLines(index < 0 ? head : head.slice(index + SEQUENCE_PARTICIPANT_KEYWORD.length));
+    let isNew = !diagram.ids.includes(id.trim());
+    diagram.hiddenCells += identifierWidth(id.trim(), tokens);
+    return isNew && participantIndex(diagram, id, tokens) >= 0;
   }
-  let o = SEQUENCE_BLOCK_RE.exec(t)?.[1];
-  if (o !== undefined) return e.ids.includes(o.trim());
-  let match = SEQUENCE_NOTE_RE.exec(t);
+  let id = SEQUENCE_BLOCK_RE.exec(line)?.[1];
+  if (id !== undefined) return diagram.ids.includes(id.trim());
+  let match = SEQUENCE_NOTE_RE.exec(line);
   if (match) {
-    let [, u = "", r = "", s = ""] = match;
-    let mapped = r.split(",").map((h) => participantIndex(e, h));
-    let a = u.toLowerCase() === "over";
-    if (mapped.includes(-1) || mapped.length > (a ? 2 : 1)) return false;
-    e.steps.push({
+    let [, placement = "", ids = "", text = ""] = match;
+    let mapped = ids.split(",").map((id) => participantIndex(diagram, id));
+    let isOver = placement.toLowerCase() === "over";
+    if (mapped.includes(-1) || mapped.length > (isOver ? 2 : 1)) return false;
+    diagram.steps.push({
       kind: "note",
-      placement: a ? "over" : u.toLowerCase() === "left of" ? "left" : "right",
+      placement: isOver ? "over" : placement.toLowerCase() === "left of" ? "left" : "right",
       first: Math.min(...mapped),
       last: Math.max(...mapped),
-      text: parseLabelLines(s),
+      text: parseLabelLines(text),
     });
     return true;
   }
-  return parseSequenceMessage(e, t);
+  return parseSequenceMessage(diagram, line);
 }
 //@ chunk-yb0ajcmt.js:26080-26488 placement
-function parseSequenceMessage(e, t) {
-  let index = t.indexOf(":");
-  let o = index < 0 ? "" : t.slice(0, index);
-  let i = -1;
-  let u;
-  for (let index = o.indexOf("-"); index >= 0 && !u;) {
-    u = SEQUENCE_ARROW_KINDS.find(([y]) => o.startsWith(y, index));
-    i = index;
-    index = o.indexOf("-", index + 1);
+function parseSequenceMessage(diagram, line) {
+  let index = line.indexOf(":");
+  let head = index < 0 ? "" : line.slice(0, index);
+  let arrowIndex = -1;
+  let arrowKind;
+  for (let index = head.indexOf("-"); index >= 0 && !arrowKind;) {
+    arrowKind = SEQUENCE_ARROW_KINDS.find(([pattern]) => head.startsWith(pattern, index));
+    arrowIndex = index;
+    index = head.indexOf("-", index + 1);
   }
-  if (!u) return false;
-  let [r, s, l] = u;
-  let trimmed = o.slice(i + r.length).trim();
-  let h = participantIndex(e, o.slice(0, i));
-  let c = participantIndex(
-    e,
+  if (!arrowKind) return false;
+  let [patternLength, lineKind, headKind] = arrowKind;
+  let trimmed = head.slice(arrowIndex + patternLength.length).trim();
+  let from = participantIndex(diagram, head.slice(0, arrowIndex));
+  let to = participantIndex(
+    diagram,
     trimmed.startsWith("+") || trimmed.startsWith("-") ? trimmed.slice(1) : trimmed,
   );
-  if (h < 0 || c < 0) return false;
-  e.steps.push({
+  if (from < 0 || to < 0) return false;
+  diagram.steps.push({
     kind: "message",
-    from: h,
-    to: c,
-    text: parseLabelLines(t.slice(index + 1)),
-    line: s,
-    head: l,
+    from,
+    to,
+    text: parseLabelLines(line.slice(index + 1)),
+    line: lineKind,
+    head: headKind,
   });
   return true;
 }
@@ -458,40 +461,40 @@ function parseSequenceMessage(e, t) {
 /**
  * 取或登记参与者，返回下标（非法名返回 -1）。
  */
-function participantIndex(e, t, labelLines) {
-  let trimmed = t.trim();
+function participantIndex(diagram, id, labelLines) {
+  let trimmed = id.trim();
   if (trimmed === "" || SEQUENCE_DIRECTION_RE.test(trimmed)) return -1;
-  let index = e.ids.indexOf(trimmed);
+  let index = diagram.ids.indexOf(trimmed);
   if (index >= 0) return index;
-  e.ids.push(trimmed);
-  e.participants.push(labelLines ?? parseLabelLines(trimmed));
-  return e.ids.length - 1;
+  diagram.ids.push(trimmed);
+  diagram.participants.push(labelLines ?? parseLabelLines(trimmed));
+  return diagram.ids.length - 1;
 }
 //@ chunk-yb0ajcmt.js:26658-27065 placement
-function splitMermaidStatements(e) {
-  let t = [];
-  for (let line of e.split(`
+function splitMermaidStatements(source) {
+  let statements = [];
+  for (let line of source.split(`
 `)) {
     let trimmed = line.trim();
     if (trimmed.startsWith("%%")) {
       if (trimmed !== "%%") return;
       continue;
     }
-    let i = 0;
-    let u = false;
-    let r = 0;
+    let depth = 0;
+    let inQuote = false;
+    let start = 0;
     for (let k = 0; k < trimmed.length; k++) {
-      let l = trimmed[k];
-      if (l === '"') u = !u;
-      else if (!u && (l === "[" || l === "(" || l === "{")) i++;
-      else if (!u && (l === "]" || l === ")" || l === "}")) i = Math.max(0, i - 1);
-      else if (!u && i === 0 && l === ";") {
-        t.push(trimmed.slice(r, k).trim());
-        r = k + 1;
+      let char = trimmed[k];
+      if (char === '"') inQuote = !inQuote;
+      else if (!inQuote && (char === "[" || char === "(" || char === "{")) depth++;
+      else if (!inQuote && (char === "]" || char === ")" || char === "}")) depth = Math.max(0, depth - 1);
+      else if (!inQuote && depth === 0 && char === ";") {
+        statements.push(trimmed.slice(start, k).trim());
+        start = k + 1;
       }
     }
-    t.push(trimmed.slice(r).trim());
+    statements.push(trimmed.slice(start).trim());
   }
-  return t.filter((n) => n !== "");
+  return statements.filter((statement) => statement !== "");
 }
 export { splitMermaidStatements, parseSequenceDiagram, drawSequenceDiagram };

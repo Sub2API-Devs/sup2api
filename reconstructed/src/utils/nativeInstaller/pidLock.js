@@ -149,7 +149,7 @@ async function cleanupStaleLocks(locksDir) {
   let cleanedCount = 0;
   let lockEntries;
   try {
-    lockEntries = (await readdir(locksDir)).filter((h) => h.endsWith(".lock"));
+    lockEntries = (await readdir(locksDir)).filter((fileName) => fileName.endsWith(".lock"));
   } catch (error) {
     if (isENOENT(error)) return 0;
     logForDebugging(`Failed to readdir locks directory: ${toError(error).message}`, {

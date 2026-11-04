@@ -5,8 +5,8 @@
  * pieces: chunk-mrx6y2r5.js (8)
  * attribution: esm-fingerprint 8
  */
-import { Xn } from "./tracingPolicy.js";
-import { ut } from "../../../../../@typespec/ts-http-runtime/dist/esm/policies/agentPolicy.js";
+import { createSpan } from "./tracingPolicy.js";
+import { coreRestPipelineLogger } from "../../../../../@typespec/ts-http-runtime/dist/esm/policies/agentPolicy.js";
 import { createTokenCycler } from "../util/tokenCycler.js";
 
 //@ chunk-mrx6y2r5.js:64307-64348 esm-fingerprint
@@ -16,7 +16,7 @@ async function trySendRequest(request, next) {
   try {
     return [await next(request), undefined];
   } catch (e) {
-    if (Xn(e) && e.response) return [e.response, e];
+    if (createSpan(e) && e.response) return [e.response, e];
     else throw e;
   }
 }
@@ -56,7 +56,7 @@ function bearerTokenAuthenticationPolicy(options) {
   var _b;
   var _c;
   let { credential, scopes, challengeCallbacks } = options;
-  let logger = options.logger || ut;
+  let logger = options.logger || coreRestPipelineLogger;
   let callbacks = {
     authorizeRequest:
       (_b =

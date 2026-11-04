@@ -5,7 +5,7 @@
  * pieces: audio-capture.js (1)
  * attribution: placement 1
  */
-import { srs } from "../private-unresolved/audio-capture.node.js";
+import { require_audio_capture_node } from "../private-unresolved/audio-capture.node.js";
 
 //@ audio-capture.js:228-249 placement
-export default srs();
+export default require_audio_capture_node();

@@ -9,6 +9,7 @@
  * attribution: placement 6
  */
 import { stripControlChars, renderToolUseMessage_3 } from "./UI.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-4bsqyjz4.js:232-260 placement
 /**
@@ -16,16 +17,20 @@ import { stripControlChars, renderToolUseMessage_3 } from "./UI.js";
  */
 var SLACK_CHANNEL_ID_RE = /^[CDG][A-Z0-9]{6,}$/;
 //@ chunk-4bsqyjz4.js:260-369 placement
-function slackChannelUrl(e) {
-  let replaced = e.replace(/^#/, "");
+function slackChannelUrl(channel) {
+  let replaced = channel.replace(/^#/, "");
   return SLACK_CHANNEL_ID_RE.test(replaced) ? `https://slack.com/app_redirect?channel=${replaced}` : null;
 }
 //@ chunk-4bsqyjz4.js:369-449 placement
 /**
  * Slack 发送类工具的 MCP 工具名集合。
  */
-var SLACK_SEND_TOOL_NAMES = new Set(["slack_send_message", "slack_post_message"]);
-var MCP_SLACK_SEND = "mcp-slack-send";
+var SLACK_SEND_TOOL_NAMES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var MCP_SLACK_SEND;
+deferInit("chunk-4bsqyjz4.js:369", () => {
+  SLACK_SEND_TOOL_NAMES = new Set(["slack_send_message", "slack_post_message"]);
+  MCP_SLACK_SEND = "mcp-slack-send";
+});
 //@ chunk-4bsqyjz4.js:449-481 placement
 /**
  * 判断工具名是否属于 Slack 发送类工具。
@@ -37,14 +42,14 @@ function isSlackSendToolName(name) {
 /**
  * 从 Slack 发送输入中取频道并生成 #频道 标签与链接。
  */
-function getSlackChannelLink(e) {
-  let n = e.channel_id ?? e.channel;
-  if (typeof n !== "string") return null;
-  let r = stripControlChars(n);
-  if (!r) return null;
+function getSlackChannelLink(input) {
+  let channelValue = input.channel_id ?? input.channel;
+  if (typeof channelValue !== "string") return null;
+  let channelName = stripControlChars(channelValue);
+  if (!channelName) return null;
   return {
-    label: `#${r.replace(/^#/, "")}`,
-    url: slackChannelUrl(n),
+    label: `#${channelName.replace(/^#/, "")}`,
+    url: slackChannelUrl(channelValue),
   };
 }
 //@ chunk-4bsqyjz4.js:643-771 placement
@@ -57,8 +62,8 @@ function createSlackSendToolUi() {
     userFacingName() {
       return "Slacked";
     },
-    renderToolUseMessage(e, n) {
-      return n.verbose ? renderToolUseMessage_3(e, n) : "";
+    renderToolUseMessage(input, options) {
+      return options.verbose ? renderToolUseMessage_3(input, options) : "";
     },
   };
 }

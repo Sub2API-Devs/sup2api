@@ -27,29 +27,34 @@ import {
 } from "../../skills/syncedSkills.js";
 import { normalizedSkillToolName } from "../../tools/SkillTool/skillToolNames.js";
 import { uniq } from "../collections.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:3252567-3252635 placement
 /**
  * 允许使用本地插件技能的会话入口（cli）。
  */
-var CLI_ENTRYPOINTS = new Set(["cli"]);
-var EXCLUDED_MARKETPLACES = new Set(["local-desktop-app-uploads"]);
+var CLI_ENTRYPOINTS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var EXCLUDED_MARKETPLACES;
+deferInit("chunk-e6aww6q8.js:3252567", () => {
+  CLI_ENTRYPOINTS = new Set(["cli"]);
+  EXCLUDED_MARKETPLACES = new Set(["local-desktop-app-uploads"]);
+});
 //@ chunk-e6aww6q8.js:3252635-3252973 placement
 /**
  * 判断插件技能是否来自第三方 marketplace（非保留名、非 claude.ai 前缀、不在排除表），且会话入口在允许集合内、使用默认插件目录。
  */
-function isListablePluginSkill(e) {
-  if (e.loadedFrom !== "plugin" || e.pluginInfo === undefined) return false;
-  if (e.pluginInfo.accountSkillsWrapper === true) return false;
-  let { repository } = e.pluginInfo;
-  let r = marketplaceSuffix(repository);
-  if (r === undefined || repository.lastIndexOf("@") === 0) return false;
-  let s = canonicalMarketplaceKey(r.trim());
+function isListablePluginSkill(skill) {
+  if (skill.loadedFrom !== "plugin" || skill.pluginInfo === undefined) return false;
+  if (skill.pluginInfo.accountSkillsWrapper === true) return false;
+  let { repository } = skill.pluginInfo;
+  let marketplace = marketplaceSuffix(repository);
+  if (marketplace === undefined || repository.lastIndexOf("@") === 0) return false;
+  let marketplaceKey = canonicalMarketplaceKey(marketplace.trim());
   if (
-    s === "" ||
-    isReservedMarketplaceName(s) ||
-    hasClaudeAiReservedPrefix(r) ||
-    EXCLUDED_MARKETPLACES.has(s)
+    marketplaceKey === "" ||
+    isReservedMarketplaceName(marketplaceKey) ||
+    hasClaudeAiReservedPrefix(marketplace) ||
+    EXCLUDED_MARKETPLACES.has(marketplaceKey)
   )
     return false;
   let sessionEntrypoint = getSessionEntrypoint();
@@ -60,22 +65,22 @@ function isListablePluginSkill(e) {
 /**
  * 判断技能来源是否可信（非插件、账号技能、官方或保留 marketplace、非默认插件目录）。
  */
-function isTrustedSkillSource(e) {
-  let repository = e.pluginInfo?.repository ?? "";
-  let r = marketplaceSuffix(repository);
+function isTrustedSkillSource(skill) {
+  let repository = skill.pluginInfo?.repository ?? "";
+  let marketplace = marketplaceSuffix(repository);
   if (
-    e.loadedFrom !== "plugin" ||
-    e.pluginInfo?.accountSkillsWrapper === true ||
-    r === undefined ||
+    skill.loadedFrom !== "plugin" ||
+    skill.pluginInfo?.accountSkillsWrapper === true ||
+    marketplace === undefined ||
     repository.lastIndexOf("@") === 0
   )
     return true;
-  let s = canonicalMarketplaceKey(r.trim());
+  let marketplaceKey = canonicalMarketplaceKey(marketplace.trim());
   return (
-    s === "" ||
-    isOfficialMarketplace_2(s) ||
-    hasClaudeAiReservedPrefix(r) ||
-    EXCLUDED_MARKETPLACES.has(s) ||
+    marketplaceKey === "" ||
+    isOfficialMarketplace_2(marketplaceKey) ||
+    hasClaudeAiReservedPrefix(marketplace) ||
+    EXCLUDED_MARKETPLACES.has(marketplaceKey) ||
     !isUsingDefaultPluginsDirectory()
   );
 }
@@ -83,54 +88,60 @@ function isTrustedSkillSource(e) {
 /**
  * 技能在列表里展示的全部别名：可列出时只给同步技能别名，否则再并入插件别名。
  */
-function skillAliasesForList(e) {
-  let n = pluginSkillAliases(e);
-  return [...(n.length > 0 && isListablePluginSkill(e) ? [] : n), ...syncedSkillAliases_2(e)];
+function skillAliasesForList(skill) {
+  let pluginAliases = pluginSkillAliases(skill);
+  return [
+    ...(pluginAliases.length > 0 && isListablePluginSkill(skill) ? [] : pluginAliases),
+    ...syncedSkillAliases_2(skill),
+  ];
 }
 //@ chunk-e6aww6q8.js:3253288-3253387 placement
 /**
  * 去掉自身名后的其他技能别名，没有则返回 undefined。
  */
-function otherSkillAliases(e) {
-  let n = normalizedSkillToolName(e.name);
-  let filtered = uniq(skillAliasesForList(e).map(normalizedSkillToolName)).filter((s) => s !== n);
+function otherSkillAliases(skill) {
+  let primaryName = normalizedSkillToolName(skill.name);
+  let filtered = uniq(skillAliasesForList(skill).map(normalizedSkillToolName)).filter(
+    (alias) => alias !== primaryName,
+  );
   return filtered.length ? filtered : undefined;
 }
 //@ chunk-e6aww6q8.js:3253387-3253525 placement
 /**
  * 解析技能权限规则：去掉前导 /，以 :* 或空格 * 结尾时视为前缀规则。
  */
-function parseSkillPermissionRule(e) {
-  let n = e.startsWith("/") ? e.substring(1) : e;
-  return n.endsWith(":*") || n.endsWith(" *")
+function parseSkillPermissionRule(rule) {
+  let normalizedRule = rule.startsWith("/") ? rule.substring(1) : rule;
+  return normalizedRule.endsWith(":*") || normalizedRule.endsWith(" *")
     ? {
-        name: n,
-        prefix: n.slice(0, -2),
+        name: normalizedRule,
+        prefix: normalizedRule.slice(0, -2),
       }
     : {
-        name: n,
+        name: normalizedRule,
       };
 }
 //@ chunk-e6aww6q8.js:3253525-3253613 placement
 /**
  * 判断技能名是否匹配某条技能权限规则（前缀规则用前缀比较）。
  */
-function skillMatchesPermissionRule(e, n) {
-  let { name: r, prefix } = parseSkillPermissionRule(e);
-  return r === n || (prefix !== undefined && n.startsWith(prefix));
+function skillMatchesPermissionRule(rule, skillName) {
+  let { name: ruleName, prefix } = parseSkillPermissionRule(rule);
+  return ruleName === skillName || (prefix !== undefined && skillName.startsWith(prefix));
 }
 //@ chunk-e6aww6q8.js:3253613-3253818 placement
 /**
  * 判断技能名是否匹配权限规则（前缀规则需考虑同步技能前缀）。
  */
-function skillRuleMatches(e, n) {
-  let { prefix } = parseSkillPermissionRule(e);
-  if (prefix === undefined) return skillMatchesPermissionRule(e, n);
+function skillRuleMatches(rule, skillName) {
+  let { prefix } = parseSkillPermissionRule(rule);
+  if (prefix === undefined) return skillMatchesPermissionRule(rule, skillName);
   let lower = prefix.toLowerCase();
   let included = SYNCED_SKILL_PREFIXES.includes(lower);
-  let y = hasSyncedSkillPrefix(lower);
-  if (!included && !y) return !hasSyncedSkillPrefix(n.toLowerCase()) && skillMatchesPermissionRule(e, n);
-  return (!included && n === prefix) || n.startsWith(`${prefix}:`);
+  let isSyncedPrefix = hasSyncedSkillPrefix(lower);
+  if (!included && !isSyncedPrefix)
+    return !hasSyncedSkillPrefix(skillName.toLowerCase()) && skillMatchesPermissionRule(rule, skillName);
+  return (!included && skillName === prefix) || skillName.startsWith(`${prefix}:`);
 }
 export {
   skillMatchesPermissionRule,

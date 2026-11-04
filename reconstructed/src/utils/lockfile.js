@@ -22,32 +22,32 @@ function requireProperLockfile() {
  * lock：proper-lockfile 加锁并让返回的释放函数支持 `await using`（Symbol.asyncDispose）。全局配置、history、OAuth 刷新等都用它。
  */
 async function lock(file, options) {
-  let n = await requireProperLockfile().lock(file, options);
-  return Object.assign(n, {
-    [Symbol.asyncDispose]: n,
+  let lockHandle = await requireProperLockfile().lock(file, options);
+  return Object.assign(lockHandle, {
+    [Symbol.asyncDispose]: lockHandle,
   });
 }
 //@ chunk-bmbhxpfm.js:22265-22306 placement
-function checkLockfile(resolvedPath, r) {
-  return requireProperLockfile().check(resolvedPath, r);
+function checkLockfile(resolvedPath, options) {
+  return requireProperLockfile().check(resolvedPath, options);
 }
 //@ chunk-bmbhxpfm.js:22306-22694 placement
-async function releaseLockQuietly(e, r) {
-  if (!e) return;
+async function releaseLockQuietly(release, label) {
+  if (!release) return;
   try {
-    await e();
+    await release();
   } catch (error) {
-    let i;
+    let message;
     try {
       let errnoCode = getErrnoCode(error);
-      i =
+      message =
         errnoCode === "ERELEASED" || errnoCode === "ENOTACQUIRED"
           ? `lock was no longer held at release (${errnoCode}); the locked section may have run without exclusivity`
           : `lock directory could not be removed and is left to go stale: ${errorMessage(error)}`;
     } catch {
-      i = "lock release rejected with a value that cannot be described";
+      message = "lock release rejected with a value that cannot be described";
     }
-    logForDebugging(`${r}: ${i}`, {
+    logForDebugging(`${label}: ${message}`, {
       level: "warn",
     });
   }

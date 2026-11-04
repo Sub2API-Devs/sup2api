@@ -6,7 +6,7 @@
  * attribution: esm-layout 2, esm-fingerprint 2
  */
 import { isThrottlingRetryResponse } from "./throttlingRetryStrategy.js";
-import { Kn } from "../util/delay.js";
+import { calculateRetryDelay } from "../util/delay.js";
 
 //@ chunk-mrx6y2r5.js:44526-44547 esm-layout
 var DEFAULT_CLIENT_RETRY_INTERVAL = 1000;
@@ -38,7 +38,7 @@ function exponentialRetryStrategy(options = {}) {
         return {
           errorToThrow: responseError,
         };
-      return Kn(retryCount, {
+      return calculateRetryDelay(retryCount, {
         retryDelayInMs: retryInterval,
         maxRetryDelayInMs: maxRetryInterval,
       });

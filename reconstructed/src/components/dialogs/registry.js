@@ -24,7 +24,7 @@ import { SandboxPermissionRequest } from "../permissions/SandboxPermissionReques
 import { BackgroundConfirmDialog } from "../../screens/repl/backgroundConfirm.js";
 import { LspRecommendationMenu } from "../LspRecommendation/LspRecommendationMenu.js";
 import { PluginHintMenu } from "../ClaudeCodeHint/PluginHintMenu.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { useRefusableAnswer } from "../../hooks/useRefusableAnswer.js";
 import { RemoteCallout, REMOTE_CALLOUT_DIALOG } from "../RemoteCallout.js";
 import { UltraplanLaunchDialog } from "../ultraplan/UltraplanLaunchDialog.js";
@@ -35,7 +35,12 @@ import { useNotifications } from "../../context/notifications.js";
 import { useCommandQueueOrDefault } from "../../context/QueuedMessageContext.js";
 import { mainAgentId } from "../../bootstrap/state.js";
 import { FableUsageCreditsConsent } from "../usageCredits/FableUsageCreditsConsent.js";
-import { qt, Se, yt, init_react_production } from "../../../vendor/react/cjs/react.production.js";
+import {
+  createContext,
+  useContext,
+  useSyncExternalStore,
+  init_react_production,
+} from "../../../vendor/react/cjs/react.production.js";
 import { useStoreSelector } from "../../hooks/useStoreSelector.js";
 import { LOCAL_JSX_DIALOG } from "../../commands/rate-limit-options/index.js";
 import {
@@ -121,204 +126,268 @@ import {
 } from "../../utils/claudeInChrome/installUpsell.js";
 import { ChromeSetupDialog, ChromeInstallFlow } from "../ChromeSetupDialog.js";
 import { autoModeSetupReviewDialog, autoModeSetupFlaggedDialog } from "../permissions/AutoModeSetupReview.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-18hwfzwa.js:1417159-1420111 placement
 /**
  * 对话框种类到懒加载视图组件的映射表。
  */
-var LAZY_DIALOG_COMPONENTS = null;
-var OPTIONAL_DIALOG_KIND_1 = null;
-var WorkflowPermissionDialog = require("./chunk-sycr1qkz.js").WorkflowPermissionDialog;
-var workflowPermissionDialog_2 = require("./chunk-vhnfh0m3.js").workflowPermissionDialog;
-var OPTIONAL_DIALOG_VIEW_2 = null;
-var OPTIONAL_DIALOG_KIND_2 = null;
-var OPTIONAL_DIALOG_KIND_3 = null;
-var OPTIONAL_DIALOG_VIEW_3 = null;
-var OPTIONAL_DIALOG_KIND_4 = null;
-var OPTIONAL_DIALOG_VIEW_4 = null;
-var ContinueInProjectsPermissionDialog = require("./chunk-6d9n2xk3.js").ContinueInProjectsPermissionDialog;
-var optionalProjectContinueChunk = require("./chunk-dkjq625a.js");
-var PROJECT_CONTINUE_PERMISSION_DIALOG =
-  optionalProjectContinueChunk?.projectContinuePermissionDialog ?? null;
-var ContinueInProjectsTargetDialog = require("./chunk-ftzr67d2.js").ContinueInProjectsTargetDialog;
-var continueInProjectsTargetDialog = require("./chunk-c7qavzqd.js").continueInProjectsTargetDialog;
-var ContinueInProjectsMessageDialog = require("./chunk-kv464nx7.js").ContinueInProjectsMessageDialog;
-var continueInProjectsMessageDialog = require("./chunk-j3dac3ab.js").continueInProjectsMessageDialog;
-var OPTIONAL_DIALOG_KIND_5 = null;
-var OPTIONAL_DIALOG_VIEW_5 = null;
-var OPTIONAL_DIALOG_KIND_6 = null;
-var OPTIONAL_DIALOG_VIEW_6 = null;
-var STARTUP_MODEL_SWITCH_MODULE = null;
-var STARTUP_MODEL_SWITCH_VIEW = null;
-var IMPORT_REVIEW_OFFER_MODULE = null;
-var IMPORT_REVIEW_OFFER_VIEW = null;
-var EFFORT_AUTO_NUDGE_MODULE = null;
-var EFFORT_AUTO_NUDGE_VIEW = null;
-var ACCOUNT_MEMORY_EDIT_CONFIRM_MODULE = null;
-var ACCOUNT_MEMORY_EDIT_CONFIRM_VIEW = null;
-var ACCOUNT_MEMORY_EVERYWHERE_MODULE = null;
-var ACCOUNT_MEMORY_EVERYWHERE_VIEW = null;
-var SECRET_PROMPT_MODULE = null;
-var SECRET_PROMPT_VIEW = null;
-var ACCOUNT_MEMORY_WRITE_PERMISSION_MODULE = null;
-var ACCOUNT_MEMORY_WRITE_PERMISSION_VIEW = null;
-var SLACK_CONNECT_DIALOGS_MODULE = null;
-var SLACK_CONNECT_DIALOG_SPECS = null;
-var SLACK_SIGN_IN_OFFER_VIEW = null;
-var SLACK_SIGN_IN_OFFER_SPEC = null;
-var OPTIONAL_COMPARE_MODELS_VIEW = null;
-var OPTIONAL_COMPARE_MODELS_KIND = null;
-var OPTIONAL_COMPARE_MODELS_WRAPPER = OPTIONAL_COMPARE_MODELS_VIEW
-  ? ({ payload, answer }) =>
-      jsxProd_default(OPTIONAL_COMPARE_MODELS_VIEW, {
-        left: payload.left,
-        right: payload.right,
-        mode: {
-          optOut: payload.optOut,
-          comparesModels: payload.comparesModels,
-          hasSeenBoth: payload.hasSeenBoth,
-          minTogetherRows: payload.minTogetherRows,
-          minPaneRows: payload.minPaneRows,
-          onDone: (choice, arrangement) =>
-            answer({
-              choice,
-              arrangement,
-            }),
-        },
-      })
-  : null;
-var It2SetupDialogView = ({ payload, answer, wouldTakeAnswer }) =>
-  jsxProd_default(AgentDetail, {
-    tmuxAvailable: payload.tmuxAvailable,
-    onDone: answer,
-    wouldTakeAnswer,
-  });
-var ComputerUseApprovalDialogView = ({ payload, answer, wouldTakeAnswer }) =>
-  jsxProd_default(ComputerUseApproval, {
-    request: payload,
-    onDone: answer,
-    wouldTakeAnswer,
-  });
-var CostThresholdDialogView = ({ answer }) =>
-  jsxProd_default(CostThresholdDialog, {
-    onDone: () => answer("acknowledged"),
-  });
-var AutocompactOfferDialogView = ({ payload, answer }) =>
-  jsxProd_default(AutocompactOfferDialog, {
-    payload,
-    onDone: answer,
-  });
-var ServerFallbackNoticeView = ({ payload, answer }) =>
-  jsxProd_default(SingleEnvironmentContent, {
-    title: payload.title,
-    paragraphs: payload.paragraphs,
-    onDone: answer,
-  });
-var ResumeCompactDialogView = ({ payload, answer }) =>
-  jsxProd_default(IdleReturnDialog, {
-    sessionAgeMinutes: payload.sessionAgeMinutes,
-    estimatedTokens: payload.estimatedTokens,
-    hasPrecomputedSummary: payload.hasPrecomputedSummary,
-    onDone: answer,
-  });
-var IdleReturnDialogView = ({ payload, answer }) =>
-  jsxProd_default(ResumeStaleConversationDialog, {
-    inactiveSince: payload.inactiveSince,
-    contextTokens: payload.contextTokens,
-    percentOfFiveHourLimit: payload.percentOfFiveHourLimit,
-    trigger: payload.trigger,
-    focusedAction: payload.focusedAction,
-    offersLookUp: payload.offersLookUp,
-    ask: payload,
-    onDone: answer,
-  });
-var NewerModelOfferDialogView = ({ payload, answer }) =>
-  jsxProd_default(NewerModelOfferDialog, {
-    offer: payload,
-    onDone: answer,
-  });
-var AutoModeDefaultNudgeDialogView = ({ payload, answer }) =>
-  jsxProd_default(AutoModeDefaultNudgeDialog, {
-    currentMode: payload.currentMode,
-    onDone: answer,
-  });
-var EffortMediumNudgeDialogView = ({ payload, answer }) =>
-  jsxProd_default(EffortMediumNudgeDialog, {
-    model: payload.model,
-    copy: payload.copy,
-    onDone: (choice, optionOrder) =>
-      answer({
-        choice,
-        optionOrder,
-      }),
-  });
-var IdeOnboardingDialogView = ({ payload, answer }) =>
-  jsxProd_default(IdeOnboardingDialog, {
-    installationStatus: payload.installationStatus,
-    onDone: () => answer("dismissed"),
-  });
-var SandboxNetworkAccessDialogView = ({ payload, answer }) =>
-  jsxProd_default(SandboxPermissionRequest, {
-    hostPattern: {
-      host: payload.host,
-      port: payload.port,
-    },
-    requestSource: payload.forwardedFromWorker
-      ? {
-          type: "subagent",
-          agentName: payload.workerName,
-        }
-      : undefined,
-    onUserResponse: answer,
-  });
-var LeftArrowConfirmDialogView = ({ payload, answer }) =>
-  jsxProd_default(BackgroundConfirmDialog, {
-    summary: payload.summary,
-    carryOverCount: payload.carryOverCount,
-    monitorParkCount: payload.monitorParkCount,
-    workflowAgents: payload.workflowAgents,
-    onConfirm: () => answer("confirm"),
-    onCancel: () => answer("stay"),
-  });
-var LspRecommendationDialogView = ({ payload, answer }) =>
-  jsxProd_default(LspRecommendationMenu, {
-    pluginName: payload.pluginName,
-    pluginDescription: payload.pluginDescription,
-    marketplaceName: payload.marketplaceName,
-    fileExtension: payload.fileExtension,
-    onResponse: answer,
-  });
-var PluginHintMenuDialogView = ({ payload, answer }) =>
-  jsxProd_default(PluginHintMenu, {
-    pluginName: payload.pluginName,
-    pluginDescription: payload.pluginDescription,
-    marketplaceName: payload.marketplaceName,
-    sourceCommand: payload.sourceCommand,
-    onResponse: answer,
-  });
+var LAZY_DIALOG_COMPONENTS; // deferred: loads other modules while loading; runs once its import cycle is complete
+var OPTIONAL_DIALOG_KIND_1;
+var WorkflowPermissionDialog;
+var workflowPermissionDialog_2;
+var OPTIONAL_DIALOG_VIEW_2;
+var OPTIONAL_DIALOG_KIND_2;
+var OPTIONAL_DIALOG_KIND_3;
+var OPTIONAL_DIALOG_VIEW_3;
+var OPTIONAL_DIALOG_KIND_4;
+var OPTIONAL_DIALOG_VIEW_4;
+var ContinueInProjectsPermissionDialog;
+var optionalProjectContinueChunk;
+var PROJECT_CONTINUE_PERMISSION_DIALOG;
+var ContinueInProjectsTargetDialog;
+var continueInProjectsTargetDialog;
+var ContinueInProjectsMessageDialog;
+var continueInProjectsMessageDialog;
+var OPTIONAL_DIALOG_KIND_5;
+var OPTIONAL_DIALOG_VIEW_5;
+var OPTIONAL_DIALOG_KIND_6;
+var OPTIONAL_DIALOG_VIEW_6;
+var STARTUP_MODEL_SWITCH_MODULE;
+var STARTUP_MODEL_SWITCH_VIEW;
+var IMPORT_REVIEW_OFFER_MODULE;
+var IMPORT_REVIEW_OFFER_VIEW;
+var EFFORT_AUTO_NUDGE_MODULE;
+var EFFORT_AUTO_NUDGE_VIEW;
+var ACCOUNT_MEMORY_EDIT_CONFIRM_MODULE;
+var ACCOUNT_MEMORY_EDIT_CONFIRM_VIEW;
+var ACCOUNT_MEMORY_EVERYWHERE_MODULE;
+var ACCOUNT_MEMORY_EVERYWHERE_VIEW;
+var SECRET_PROMPT_MODULE;
+var SECRET_PROMPT_VIEW;
+var ACCOUNT_MEMORY_WRITE_PERMISSION_MODULE;
+var ACCOUNT_MEMORY_WRITE_PERMISSION_VIEW;
+var SLACK_CONNECT_DIALOGS_MODULE;
+var SLACK_CONNECT_DIALOG_SPECS;
+var SLACK_SIGN_IN_OFFER_VIEW;
+var SLACK_SIGN_IN_OFFER_SPEC;
+var OPTIONAL_COMPARE_MODELS_VIEW;
+var OPTIONAL_COMPARE_MODELS_KIND;
+var OPTIONAL_COMPARE_MODELS_WRAPPER;
+var It2SetupDialogView;
+var ComputerUseApprovalDialogView;
+var CostThresholdDialogView;
+var AutocompactOfferDialogView;
+var ServerFallbackNoticeView;
+var ResumeCompactDialogView;
+var IdleReturnDialogView;
+var NewerModelOfferDialogView;
+var AutoModeDefaultNudgeDialogView;
+var EffortMediumNudgeDialogView;
+var IdeOnboardingDialogView;
+var SandboxNetworkAccessDialogView;
+var LeftArrowConfirmDialogView;
+var LspRecommendationDialogView;
+var PluginHintMenuDialogView;
+deferInit("chunk-18hwfzwa.js:1417159", () => {
+  LAZY_DIALOG_COMPONENTS = null;
+  OPTIONAL_DIALOG_KIND_1 = null;
+  WorkflowPermissionDialog = require("../permissions/WorkflowPermissionDialog.js").WorkflowPermissionDialog;
+  workflowPermissionDialog_2 = require("./workflowPermissionDialog.lazy.js").workflowPermissionDialog;
+  OPTIONAL_DIALOG_VIEW_2 = null;
+  OPTIONAL_DIALOG_KIND_2 = null;
+  OPTIONAL_DIALOG_KIND_3 = null;
+  OPTIONAL_DIALOG_VIEW_3 = null;
+  OPTIONAL_DIALOG_KIND_4 = null;
+  OPTIONAL_DIALOG_VIEW_4 = null;
+  ContinueInProjectsPermissionDialog =
+    require("../sendToProject/ContinueInProjectsPermissionDialog.lazy.js").ContinueInProjectsPermissionDialog;
+  optionalProjectContinueChunk = require("../../tools/ContinueInProjectsTool/CONTINUE_NOTIFICATION.lazy.js");
+  PROJECT_CONTINUE_PERMISSION_DIALOG = optionalProjectContinueChunk?.projectContinuePermissionDialog ?? null;
+  ContinueInProjectsTargetDialog =
+    require("../projects/ContinueInProjectsTargetDialog.js").ContinueInProjectsTargetDialog;
+  continueInProjectsTargetDialog =
+    require("../projects/continueInProjectsTargetRequest.js").continueInProjectsTargetDialog;
+  ContinueInProjectsMessageDialog =
+    require("../projects/ContinueInProjectsMessageDialog.js").ContinueInProjectsMessageDialog;
+  continueInProjectsMessageDialog =
+    require("../projects/messageRevealConfirm.js").continueInProjectsMessageDialog;
+  OPTIONAL_DIALOG_KIND_5 = null;
+  OPTIONAL_DIALOG_VIEW_5 = null;
+  OPTIONAL_DIALOG_KIND_6 = null;
+  OPTIONAL_DIALOG_VIEW_6 = null;
+  STARTUP_MODEL_SWITCH_MODULE = null;
+  STARTUP_MODEL_SWITCH_VIEW = null;
+  IMPORT_REVIEW_OFFER_MODULE = null;
+  IMPORT_REVIEW_OFFER_VIEW = null;
+  EFFORT_AUTO_NUDGE_MODULE = null;
+  EFFORT_AUTO_NUDGE_VIEW = null;
+  ACCOUNT_MEMORY_EDIT_CONFIRM_MODULE = null;
+  ACCOUNT_MEMORY_EDIT_CONFIRM_VIEW = null;
+  ACCOUNT_MEMORY_EVERYWHERE_MODULE = null;
+  ACCOUNT_MEMORY_EVERYWHERE_VIEW = null;
+  SECRET_PROMPT_MODULE = null;
+  SECRET_PROMPT_VIEW = null;
+  ACCOUNT_MEMORY_WRITE_PERMISSION_MODULE = null;
+  ACCOUNT_MEMORY_WRITE_PERMISSION_VIEW = null;
+  SLACK_CONNECT_DIALOGS_MODULE = null;
+  SLACK_CONNECT_DIALOG_SPECS = null;
+  SLACK_SIGN_IN_OFFER_VIEW = null;
+  SLACK_SIGN_IN_OFFER_SPEC = null;
+  OPTIONAL_COMPARE_MODELS_VIEW = null;
+  OPTIONAL_COMPARE_MODELS_KIND = null;
+  OPTIONAL_COMPARE_MODELS_WRAPPER = OPTIONAL_COMPARE_MODELS_VIEW
+    ? ({ payload, answer }) =>
+        jsxProd_default(OPTIONAL_COMPARE_MODELS_VIEW, {
+          left: payload.left,
+          right: payload.right,
+          mode: {
+            optOut: payload.optOut,
+            comparesModels: payload.comparesModels,
+            hasSeenBoth: payload.hasSeenBoth,
+            minTogetherRows: payload.minTogetherRows,
+            minPaneRows: payload.minPaneRows,
+            onDone: (choice, arrangement) =>
+              answer({
+                choice,
+                arrangement,
+              }),
+          },
+        })
+    : null;
+  It2SetupDialogView = ({ payload, answer, wouldTakeAnswer }) =>
+    jsxProd_default(AgentDetail, {
+      tmuxAvailable: payload.tmuxAvailable,
+      onDone: answer,
+      wouldTakeAnswer,
+    });
+  ComputerUseApprovalDialogView = ({ payload, answer, wouldTakeAnswer }) =>
+    jsxProd_default(ComputerUseApproval, {
+      request: payload,
+      onDone: answer,
+      wouldTakeAnswer,
+    });
+  CostThresholdDialogView = ({ answer }) =>
+    jsxProd_default(CostThresholdDialog, {
+      onDone: () => answer("acknowledged"),
+    });
+  AutocompactOfferDialogView = ({ payload, answer }) =>
+    jsxProd_default(AutocompactOfferDialog, {
+      payload,
+      onDone: answer,
+    });
+  ServerFallbackNoticeView = ({ payload, answer }) =>
+    jsxProd_default(SingleEnvironmentContent, {
+      title: payload.title,
+      paragraphs: payload.paragraphs,
+      onDone: answer,
+    });
+  ResumeCompactDialogView = ({ payload, answer }) =>
+    jsxProd_default(IdleReturnDialog, {
+      sessionAgeMinutes: payload.sessionAgeMinutes,
+      estimatedTokens: payload.estimatedTokens,
+      hasPrecomputedSummary: payload.hasPrecomputedSummary,
+      onDone: answer,
+    });
+  IdleReturnDialogView = ({ payload, answer }) =>
+    jsxProd_default(ResumeStaleConversationDialog, {
+      inactiveSince: payload.inactiveSince,
+      contextTokens: payload.contextTokens,
+      percentOfFiveHourLimit: payload.percentOfFiveHourLimit,
+      trigger: payload.trigger,
+      focusedAction: payload.focusedAction,
+      offersLookUp: payload.offersLookUp,
+      ask: payload,
+      onDone: answer,
+    });
+  NewerModelOfferDialogView = ({ payload, answer }) =>
+    jsxProd_default(NewerModelOfferDialog, {
+      offer: payload,
+      onDone: answer,
+    });
+  AutoModeDefaultNudgeDialogView = ({ payload, answer }) =>
+    jsxProd_default(AutoModeDefaultNudgeDialog, {
+      currentMode: payload.currentMode,
+      onDone: answer,
+    });
+  EffortMediumNudgeDialogView = ({ payload, answer }) =>
+    jsxProd_default(EffortMediumNudgeDialog, {
+      model: payload.model,
+      copy: payload.copy,
+      onDone: (choice, optionOrder) =>
+        answer({
+          choice,
+          optionOrder,
+        }),
+    });
+  IdeOnboardingDialogView = ({ payload, answer }) =>
+    jsxProd_default(IdeOnboardingDialog, {
+      installationStatus: payload.installationStatus,
+      onDone: () => answer("dismissed"),
+    });
+  SandboxNetworkAccessDialogView = ({ payload, answer }) =>
+    jsxProd_default(SandboxPermissionRequest, {
+      hostPattern: {
+        host: payload.host,
+        port: payload.port,
+      },
+      requestSource: payload.forwardedFromWorker
+        ? {
+            type: "subagent",
+            agentName: payload.workerName,
+          }
+        : undefined,
+      onUserResponse: answer,
+    });
+  LeftArrowConfirmDialogView = ({ payload, answer }) =>
+    jsxProd_default(BackgroundConfirmDialog, {
+      summary: payload.summary,
+      carryOverCount: payload.carryOverCount,
+      monitorParkCount: payload.monitorParkCount,
+      workflowAgents: payload.workflowAgents,
+      onConfirm: () => answer("confirm"),
+      onCancel: () => answer("stay"),
+    });
+  LspRecommendationDialogView = ({ payload, answer }) =>
+    jsxProd_default(LspRecommendationMenu, {
+      pluginName: payload.pluginName,
+      pluginDescription: payload.pluginDescription,
+      marketplaceName: payload.marketplaceName,
+      fileExtension: payload.fileExtension,
+      onResponse: answer,
+    });
+  PluginHintMenuDialogView = ({ payload, answer }) =>
+    jsxProd_default(PluginHintMenu, {
+      pluginName: payload.pluginName,
+      pluginDescription: payload.pluginDescription,
+      marketplaceName: payload.marketplaceName,
+      sourceCommand: payload.sourceCommand,
+      onResponse: answer,
+    });
+});
 //@ chunk-18hwfzwa.js:1420111-1420385 placement
 function RemoteCalloutDialog(props) {
-  let $ = w(4);
+  let $ = useMemoCache(4);
   let { answer } = props;
   let refusableAnswer = useRefusableAnswer(answer);
-  const L = `remote-callout-${refusableAnswer.attempts}`;
+  const rowKey = `remote-callout-${refusableAnswer.attempts}`;
   const defaultFocusValue = refusableAnswer.refused ?? undefined;
-  let Re;
-  if ($[0] !== refusableAnswer.answer || $[1] !== L || $[2] !== defaultFocusValue) {
-    Re = jsxProd_default(
+  let dialog;
+  if ($[0] !== refusableAnswer.answer || $[1] !== rowKey || $[2] !== defaultFocusValue) {
+    dialog = jsxProd_default(
       RemoteCallout,
       {
         defaultFocusValue,
         onDone: refusableAnswer.answer,
       },
-      L,
+      rowKey,
     );
     $[0] = refusableAnswer.answer;
-    $[1] = L;
+    $[1] = rowKey;
     $[2] = defaultFocusValue;
-    $[3] = Re;
-  } else Re = $[3];
-  return Re;
+    $[3] = dialog;
+  } else dialog = $[3];
+  return dialog;
 }
 //@ chunk-18hwfzwa.js:1420385-1421497 placement
 /**
@@ -367,8 +436,8 @@ var McpElicitationWaitingDialogView = ({ payload, answer }) =>
     waitingState: payload.waitingState,
     initialPhase: "waiting",
     onResponse: () => false,
-    onWaitingDismiss: (D) => {
-      answer(D);
+    onWaitingDismiss: (dismissValue) => {
+      answer(dismissValue);
     },
   });
 var McpUrlElicitationDialogView = ({ payload, answer }) =>
@@ -379,37 +448,39 @@ var McpUrlElicitationDialogView = ({ payload, answer }) =>
       actionLabel: "Retry now",
       showCancel: true,
     },
-    onResponse: (D, content) => {
-      if (D === "accept") return;
+    onResponse: (action, content) => {
+      if (action === "accept") return;
       return answer({
-        action: D,
+        action,
         content,
       });
     },
-    onWaitingDismiss: (D) => {
+    onWaitingDismiss: (dismissValue) => {
       answer({
-        action: D === "retry" ? "accept" : "cancel",
+        action: dismissValue === "retry" ? "accept" : "cancel",
       });
     },
   });
 //@ chunk-18hwfzwa.js:1421497-1422258 placement
 function FastModeConsentDialogView(props) {
-  let $ = w(9);
+  let $ = useMemoCache(9);
   let { payload, answer, wouldTakeAnswer } = props;
   let { addNotification } = useNotifications();
   let commandQueueOrDefault = useCommandQueueOrDefault();
   let onDone;
   if ($[0] !== addNotification || $[1] !== answer || $[2] !== commandQueueOrDefault) {
-    onDone = (He, We) => {
-      let ze = answer(He === "consent" ? "consent" : He === "switch" ? "switch_default" : "cancelled");
-      if (ze && We !== undefined)
+    onDone = (choice, notice) => {
+      let taken = answer(
+        choice === "consent" ? "consent" : choice === "switch" ? "switch_default" : "cancelled",
+      );
+      if (taken && notice !== undefined)
         addNotification({
           kind: "feedback",
           key: "fable-consent-result",
-          text: We,
+          text: notice,
           priority: "high",
         });
-      if (ze && He === "upgrade")
+      if (taken && choice === "upgrade")
         commandQueueOrDefault.enqueue({
           agentId: mainAgentId(),
           value: "/upgrade",
@@ -418,16 +489,16 @@ function FastModeConsentDialogView(props) {
             kind: "task-notification",
           },
         });
-      return ze;
+      return taken;
     };
     $[0] = addNotification;
     $[1] = answer;
     $[2] = commandQueueOrDefault;
     $[3] = onDone;
   } else onDone = $[3];
-  let Xe;
+  let dialog;
   if ($[4] !== payload.model || $[5] !== payload.modelName || $[6] !== onDone || $[7] !== wouldTakeAnswer) {
-    Xe = jsxProd_default(FableUsageCreditsConsent, {
+    dialog = jsxProd_default(FableUsageCreditsConsent, {
       variant: "mid-session",
       modelName: payload.modelName,
       model: payload.model,
@@ -438,274 +509,289 @@ function FastModeConsentDialogView(props) {
     $[5] = payload.modelName;
     $[6] = onDone;
     $[7] = wouldTakeAnswer;
-    $[8] = Xe;
-  } else Xe = $[8];
-  return Xe;
+    $[8] = dialog;
+  } else dialog = $[8];
+  return dialog;
 }
 //@ chunk-18hwfzwa.js:1422258-1422274 placement
-var LOCAL_JSX_REGISTRY_CONTEXT = qt(null);
+var LOCAL_JSX_REGISTRY_CONTEXT; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:1422258", () => {
+  LOCAL_JSX_REGISTRY_CONTEXT = createContext(null);
+});
 //@ chunk-18hwfzwa.js:1422274-1422543 placement
 function LocalJsxDialog(props) {
-  let $ = w(2);
+  let $ = useMemoCache(2);
   let { payload } = props;
-  let D = Se(LOCAL_JSX_REGISTRY_CONTEXT);
-  if (!D) {
+  let registryStore = useContext(LOCAL_JSX_REGISTRY_CONTEXT);
+  if (!registryStore) {
     throw ReferenceError("A local_jsx dialog cannot render outside of a LocalJsxRegistryContext provider");
   }
-  let ee;
+  let selector;
   if ($[0] !== payload.nodeId) {
-    ee = (ke) => ke.get(payload.nodeId) ?? null;
+    selector = (registry) => registry.get(payload.nodeId) ?? null;
     $[0] = payload.nodeId;
-    $[1] = ee;
-  } else ee = $[1];
-  return useStoreSelector(D, ee);
+    $[1] = selector;
+  } else selector = $[1];
+  return useStoreSelector(registryStore, selector);
 }
 //@ chunk-18hwfzwa.js:1422543-1422592 placement
-var LOCAL_JSX_PROMPT_VISIBILITY = {
-  [LOCAL_JSX_DIALOG.kind]: (h) => parseLocalJsxDialogPayload(h)?.hidesPrompt === false,
-};
+var LOCAL_JSX_PROMPT_VISIBILITY; // deferred: uses LOCAL_JSX_DIALOG (../../commands/rate-limit-options/index.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-18hwfzwa.js:1422543", () => {
+  LOCAL_JSX_PROMPT_VISIBILITY = {
+    [LOCAL_JSX_DIALOG.kind]: (payload) => parseLocalJsxDialogPayload(payload)?.hidesPrompt === false,
+  };
+});
 //@ chunk-18hwfzwa.js:1422592-1422644 placement
-function isLocalJsxPromptVisible(h) {
-  return LOCAL_JSX_PROMPT_VISIBILITY[h.kind]?.(h.payload) ?? false;
+function isLocalJsxPromptVisible(request) {
+  return LOCAL_JSX_PROMPT_VISIBILITY[request.kind]?.(request.payload) ?? false;
 }
 //@ chunk-18hwfzwa.js:1422644-1422846 placement
 function useHasBlockingDialog() {
-  let $ = w(3);
+  let $ = useMemoCache(3);
   let dialogStore = useDialogStore();
-  let x = getActiveBottomSurface() !== null;
-  let L;
-  if ($[0] !== dialogStore || $[1] !== x) {
-    L = () => {
+  let hasBottomSurface = getActiveBottomSurface() !== null;
+  let computeCached;
+  if ($[0] !== dialogStore || $[1] !== hasBottomSurface) {
+    computeCached = () => {
       let state = dialogStore.getState();
-      return hasVisibleUserDialog(state) || (!x && topAutoDialog(state) !== null);
+      return hasVisibleUserDialog(state) || (!hasBottomSurface && topAutoDialog(state) !== null);
     };
     $[0] = dialogStore;
-    $[1] = x;
-    $[2] = L;
-  } else L = $[2];
-  let ke = L;
-  return yt(dialogStore.subscribe, ke, ke);
+    $[1] = hasBottomSurface;
+    $[2] = computeCached;
+  } else computeCached = $[2];
+  let store = computeCached;
+  return useSyncExternalStore(dialogStore.subscribe, store, store);
 }
 //@ chunk-18hwfzwa.js:1422846-1422976 placement
 function useHasOpenDialog() {
-  let $ = w(2);
+  let $ = useMemoCache(2);
   let dialogStore = useDialogStore();
-  let D;
+  let selector;
   if ($[0] !== dialogStore) {
-    D = () => hasVisibleUserDialog(dialogStore.getState());
+    selector = () => hasVisibleUserDialog(dialogStore.getState());
     $[0] = dialogStore;
-    $[1] = D;
-  } else D = $[1];
-  let L = D;
-  return yt(dialogStore.subscribe, L, L);
+    $[1] = selector;
+  } else selector = $[1];
+  let hasOpen = selector;
+  return useSyncExternalStore(dialogStore.subscribe, hasOpen, hasOpen);
 }
 //@ chunk-18hwfzwa.js:1422976-1423029 placement
-function hasVisibleUserDialog(h) {
-  let x = topUserDialog(h);
-  return x !== null && !isLocalJsxPromptVisible(x);
+function hasVisibleUserDialog(state) {
+  let top = topUserDialog(state);
+  return top !== null && !isLocalJsxPromptVisible(top);
 }
 //@ chunk-18hwfzwa.js:1423029-1423107 placement
 function hasNonBlockingAutoDialog(state) {
-  return state.open.some((x) => x.userInvoked !== true && !NON_BLOCKING_DIALOG_KINDS.has(x.kind));
+  return state.open.some(
+    (request) => request.userInvoked !== true && !NON_BLOCKING_DIALOG_KINDS.has(request.kind),
+  );
 }
 //@ chunk-18hwfzwa.js:1423107-1423180 placement
-function hasAutoDialogWithoutMeta(h) {
+function hasAutoDialogWithoutMeta(state) {
   return hasNonBlockingAutoDialog({
-    open: h.open.filter((x) => dialogCueBehindDraft(DIALOG_KIND_META, x) === undefined),
+    open: state.open.filter((request) => dialogCueBehindDraft(DIALOG_KIND_META, request) === undefined),
   });
 }
 //@ chunk-18hwfzwa.js:1423180-1423238 placement
-function isDialogKindBlocking(h, x) {
-  let D = x ? topBlockingDialog(h) : topAutoDialog(h);
-  return dialogWaitingForLabel(D?.kind);
+function isDialogKindBlocking(state, userFacing) {
+  let topDialog = userFacing ? topBlockingDialog(state) : topAutoDialog(state);
+  return dialogWaitingForLabel(topDialog?.kind);
 }
 //@ chunk-18hwfzwa.js:1423238-1423398 placement
 function useHasModalDialog() {
-  let $ = w(3);
+  let $ = useMemoCache(3);
   let dialogStore = useDialogStore();
   let renderMode = useRenderMode();
-  let L;
+  let selector;
   if ($[0] !== renderMode || $[1] !== dialogStore) {
-    L = () => hasModalDialog(dialogStore.getState(), renderMode);
+    selector = () => hasModalDialog(dialogStore.getState(), renderMode);
     $[0] = renderMode;
     $[1] = dialogStore;
-    $[2] = L;
-  } else L = $[2];
-  let ee = L;
-  return yt(dialogStore.subscribe, ee, ee);
+    $[2] = selector;
+  } else selector = $[2];
+  let hasModal = selector;
+  return useSyncExternalStore(dialogStore.subscribe, hasModal, hasModal);
 }
 //@ chunk-18hwfzwa.js:1423398-1423721 placement
 /**
  * 判断当前是否有以模态方式显示的用户对话框（对话框存储或本地 JSX 命令）。
  */
 function useHasModalUserDialog() {
-  let $ = w(6);
+  let $ = useMemoCache(6);
   let dialogStore = useDialogStore();
   let renderMode = useRenderMode();
   let autoDialogKind = useAutoDialogKind();
-  let ee;
+  let selector;
   if ($[0] !== renderMode || $[1] !== dialogStore) {
-    ee = () => {
-      let ke = topUserDialog(dialogStore.getState());
-      return ke !== null && dialogLayout(DIALOG_KIND_META, ke, renderMode) === "modal";
+    selector = () => {
+      let top = topUserDialog(dialogStore.getState());
+      return top !== null && dialogLayout(DIALOG_KIND_META, top, renderMode) === "modal";
     };
     $[0] = renderMode;
     $[1] = dialogStore;
-    $[2] = ee;
-  } else ee = $[2];
-  let Re = ee;
-  let Be = yt(dialogStore.subscribe, Re, Re);
-  let He;
+    $[2] = selector;
+  } else selector = $[2];
+  let userModalSelector = selector;
+  let result = useSyncExternalStore(dialogStore.subscribe, userModalSelector, userModalSelector);
+  let autoModal;
   if ($[3] !== renderMode || $[4] !== autoDialogKind) {
-    He = autoDialogKind !== null && dialogLayout(DIALOG_KIND_META, autoDialogKind, renderMode) === "modal";
+    autoModal =
+      autoDialogKind !== null && dialogLayout(DIALOG_KIND_META, autoDialogKind, renderMode) === "modal";
     $[3] = renderMode;
     $[4] = autoDialogKind;
-    $[5] = He;
-  } else He = $[5];
-  return He || Be;
+    $[5] = autoModal;
+  } else autoModal = $[5];
+  return autoModal || result;
 }
 //@ chunk-18hwfzwa.js:1423721-1423830 placement
 function hasModalDialog(state, renderMode) {
-  let D = topAutoDialog(state);
-  let L = topUserDialog(state);
+  let autoTop = topAutoDialog(state);
+  let userTop = topUserDialog(state);
   return (
-    (D !== null && dialogLayout(DIALOG_KIND_META, D, renderMode) === "modal") ||
-    (L !== null && dialogLayout(DIALOG_KIND_META, L, renderMode) === "modal")
+    (autoTop !== null && dialogLayout(DIALOG_KIND_META, autoTop, renderMode) === "modal") ||
+    (userTop !== null && dialogLayout(DIALOG_KIND_META, userTop, renderMode) === "modal")
   );
 }
 //@ chunk-18hwfzwa.js:1423830-1423866 placement
-function dialogEntry(h, x) {
+function dialogEntry(kind, payload) {
   return {
-    [h.kind]: x,
+    [kind.kind]: payload,
   };
 }
 //@ chunk-18hwfzwa.js:1423866-1425369 placement
 /**
  * 对话框注册表：每个 kind 的定义对象经 gl(def, Component) 注册到这里，DialogHost 按 kind 查组件渲染；部分 kind 由可选 chunk 提供。
  */
-var DIALOG_REGISTRY = {
-  ...dialogEntry(LOCAL_JSX_DIALOG, LocalJsxDialog),
-  ...dialogEntry(IT2_SETUP_DIALOG, It2SetupDialogView),
-  ...dialogEntry(computerUseApprovalDialogDef, ComputerUseApprovalDialogView),
-  ...dialogEntry(costThresholdDialogDef, CostThresholdDialogView),
-  ...dialogEntry(AUTOCOMPACT_OFFER_DIALOG, AutocompactOfferDialogView),
-  ...dialogEntry(serverFallbackNoticeSpec, ServerFallbackNoticeView),
-  ...dialogEntry(RESUME_COMPACT_DIALOG, ResumeCompactDialogView),
-  ...dialogEntry(idleReturnDialogDef, IdleReturnDialogView),
-  ...dialogEntry(resumeOnNewerModelDialogDef, NewerModelOfferDialogView),
-  ...dialogEntry(managedSettingsSecurityDialogDef, ManagedSettingsSecurityDialogView),
-  ...dialogEntry(IDE_ONBOARDING_DIALOG, IdeOnboardingDialogView),
-  ...dialogEntry(sandboxNetworkAccessDialogDef, SandboxNetworkAccessDialogView),
-  ...dialogEntry(LEFT_ARROW_CONFIRM_DIALOG, LeftArrowConfirmDialogView),
-  ...dialogEntry(REMOTE_CALLOUT_DIALOG, RemoteCalloutDialog),
-  ...dialogEntry(ULTRAPLAN_LAUNCH_DIALOG, ultraplanLaunchDialogView),
-  ...dialogEntry(ULTRAPLAN_CHOICE_DIALOG_SPEC, UltraplanChoiceDialogView),
-  ...dialogEntry(LSP_RECOMMENDATION_DIALOG, LspRecommendationDialogView),
-  ...dialogEntry(PLUGIN_HINT_DIALOG, PluginHintMenuDialogView),
-  ...dialogEntry(AUTO_DEFAULT_NUDGE_DIALOG, AutoModeDefaultNudgeDialogView),
-  ...dialogEntry(effortMediumNudgeDialogDef, EffortMediumNudgeDialogView),
-  ...dialogEntry(FULLSCREEN_UPSELL_DIALOG, FullscreenUpsellDialog),
-  ...(STARTUP_MODEL_SWITCH_MODULE && STARTUP_MODEL_SWITCH_VIEW
-    ? dialogEntry(STARTUP_MODEL_SWITCH_MODULE.startupModelSwitchDialog, STARTUP_MODEL_SWITCH_VIEW)
-    : {}),
-  ...(IMPORT_REVIEW_OFFER_MODULE && IMPORT_REVIEW_OFFER_VIEW
-    ? dialogEntry(IMPORT_REVIEW_OFFER_MODULE.importReviewOfferDialog, IMPORT_REVIEW_OFFER_VIEW)
-    : {}),
-  ...(EFFORT_AUTO_NUDGE_MODULE && EFFORT_AUTO_NUDGE_VIEW
-    ? dialogEntry(EFFORT_AUTO_NUDGE_MODULE.effortAutoNudgeDialog, EFFORT_AUTO_NUDGE_VIEW)
-    : {}),
-  ...(ACCOUNT_MEMORY_EDIT_CONFIRM_MODULE && ACCOUNT_MEMORY_EDIT_CONFIRM_VIEW
-    ? dialogEntry(
-        ACCOUNT_MEMORY_EDIT_CONFIRM_MODULE.accountMemoryEditConfirmDialog,
-        ACCOUNT_MEMORY_EDIT_CONFIRM_VIEW,
-      )
-    : {}),
-  ...(ACCOUNT_MEMORY_EVERYWHERE_MODULE && ACCOUNT_MEMORY_EVERYWHERE_VIEW
-    ? dialogEntry(
-        ACCOUNT_MEMORY_EVERYWHERE_MODULE.accountMemoryEverywhereConfirmDialog,
-        ACCOUNT_MEMORY_EVERYWHERE_VIEW,
-      )
-    : {}),
-  ...(SECRET_PROMPT_MODULE && SECRET_PROMPT_VIEW
-    ? dialogEntry(SECRET_PROMPT_MODULE.secretPromptDialog, SECRET_PROMPT_VIEW)
-    : {}),
-  ...(ACCOUNT_MEMORY_WRITE_PERMISSION_MODULE && ACCOUNT_MEMORY_WRITE_PERMISSION_VIEW
-    ? dialogEntry(
-        ACCOUNT_MEMORY_WRITE_PERMISSION_MODULE.accountMemoryWritePermissionDialog,
-        ACCOUNT_MEMORY_WRITE_PERMISSION_VIEW,
-      )
-    : {}),
-  ...dialogEntry(MCP_ELICITATION_DIALOG, McpElicitationDialogView),
-  ...dialogEntry(MCP_ELICITATION_WAITING_DIALOG, McpElicitationWaitingDialogView),
-  ...dialogEntry(MCP_URL_ELICITATION_DIALOG, McpUrlElicitationDialogView),
-  ...dialogEntry(PERMISSION_PROMPT_DIALOG, FallbackPermissionRequest),
-  ...dialogEntry(WEBFETCH_PERMISSION_CARD, WebFetchPermissionRequest),
-  ...dialogEntry(SKILL_PERMISSION_CARD, SkillUsePermissionDialog),
-  ...dialogEntry(POWERSHELL_PERMISSION_CARD, PowerShellPermissionRequest),
-  ...dialogEntry(FILE_PERMISSION_CARD, FilePermissionDialog),
-  ...dialogEntry(ASK_USER_QUESTION_PERMISSION_CARD, AskUserQuestionPermissionRequest),
-  ...dialogEntry(ENTER_PLAN_MODE_PERMISSION_CARD, EnterPlanModePermissionRequest),
-  ...dialogEntry(PUBLISH_PLUGIN_PERMISSION_CARD, FolderAccessPermissionRequest),
-  ...dialogEntry(GOAL_PROPOSAL_DIALOG, GoalProposalPermissionRequest),
-  ...dialogEntry(EXIT_PLAN_MODE_V2_PERMISSION_CARD, ExitPlanModePermissionRequest),
-  ...dialogEntry(MONITOR_PERMISSION_CARD, SkillPermissionRequest),
-  ...dialogEntry(BASH_PERMISSION_CARD, BashPermissionRequestInner),
-  ...dialogEntry(REFUSAL_FALLBACK_DIALOG, ModelRefusalPausedDialog),
-  ...dialogEntry(FABLE_OVERAGE_CONSENT_DIALOG, FastModeConsentDialogView),
-  ...dialogEntry(BROWSER_PERMISSION_CARD, ChromePermissionRequest),
-  ...dialogEntry(peerInboundApprovalDialogDef, PeerMessageApproval),
-  ...dialogEntry(CHROME_INSTALL_UPSELL_DIALOG, ChromeSetupDialog),
-  ...dialogEntry(CHROME_INSTALL_SETUP_DIALOG, ChromeInstallFlow),
-  ...(OPTIONAL_DIALOG_VIEW_2 && OPTIONAL_DIALOG_KIND_2
-    ? dialogEntry(OPTIONAL_DIALOG_KIND_2, OPTIONAL_DIALOG_VIEW_2)
-    : {}),
-  ...(OPTIONAL_DIALOG_KIND_3 && OPTIONAL_DIALOG_VIEW_3
-    ? dialogEntry(OPTIONAL_DIALOG_VIEW_3, OPTIONAL_DIALOG_KIND_3)
-    : {}),
-  ...(OPTIONAL_DIALOG_KIND_4 && OPTIONAL_DIALOG_VIEW_4
-    ? dialogEntry(OPTIONAL_DIALOG_VIEW_4, OPTIONAL_DIALOG_KIND_4)
-    : {}),
-  ...(LAZY_DIALOG_COMPONENTS && OPTIONAL_DIALOG_KIND_1
-    ? dialogEntry(OPTIONAL_DIALOG_KIND_1, LAZY_DIALOG_COMPONENTS)
-    : {}),
-  ...dialogEntry(workflowPermissionDialog_2, WorkflowPermissionDialog),
-  ...(ContinueInProjectsPermissionDialog && PROJECT_CONTINUE_PERMISSION_DIALOG
-    ? dialogEntry(PROJECT_CONTINUE_PERMISSION_DIALOG, ContinueInProjectsPermissionDialog)
-    : {}),
-  ...(ContinueInProjectsTargetDialog && continueInProjectsTargetDialog
-    ? dialogEntry(continueInProjectsTargetDialog, ContinueInProjectsTargetDialog)
-    : {}),
-  ...(ContinueInProjectsMessageDialog && continueInProjectsMessageDialog
-    ? dialogEntry(continueInProjectsMessageDialog, ContinueInProjectsMessageDialog)
-    : {}),
-  ...(OPTIONAL_DIALOG_KIND_5 && OPTIONAL_DIALOG_VIEW_5
-    ? dialogEntry(OPTIONAL_DIALOG_VIEW_5, OPTIONAL_DIALOG_KIND_5)
-    : {}),
-  ...(OPTIONAL_DIALOG_KIND_6 && OPTIONAL_DIALOG_VIEW_6
-    ? dialogEntry(OPTIONAL_DIALOG_VIEW_6, OPTIONAL_DIALOG_KIND_6)
-    : {}),
-  ...(SLACK_CONNECT_DIALOGS_MODULE && SLACK_CONNECT_DIALOG_SPECS
-    ? Object.assign(
-        {},
-        ...SLACK_CONNECT_DIALOG_SPECS.slackConnectDialogs.map((slackConnectDialog) =>
-          dialogEntry(slackConnectDialog, SLACK_CONNECT_DIALOGS_MODULE.SlackConnectConsentDialog),
-        ),
-      )
-    : {}),
-  ...(SLACK_SIGN_IN_OFFER_VIEW && SLACK_SIGN_IN_OFFER_SPEC
-    ? dialogEntry(
-        SLACK_SIGN_IN_OFFER_SPEC.slackSignInOfferDialog,
-        SLACK_SIGN_IN_OFFER_VIEW.SlackSignInOfferDialog,
-      )
-    : {}),
-  ...(OPTIONAL_COMPARE_MODELS_KIND && OPTIONAL_COMPARE_MODELS_WRAPPER
-    ? dialogEntry(OPTIONAL_COMPARE_MODELS_KIND, OPTIONAL_COMPARE_MODELS_WRAPPER)
-    : {}),
-  ...dialogEntry(autoModeSetupReviewDialogDef, autoModeSetupReviewDialog),
-  ...dialogEntry(AUTO_MODE_SETUP_FLAGGED_DIALOG, autoModeSetupFlaggedDialog),
-};
+var DIALOG_REGISTRY; // deferred: uses dialogEntry of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-18hwfzwa.js:1423866", () => {
+  DIALOG_REGISTRY = {
+    ...dialogEntry(LOCAL_JSX_DIALOG, LocalJsxDialog),
+    ...dialogEntry(IT2_SETUP_DIALOG, It2SetupDialogView),
+    ...dialogEntry(computerUseApprovalDialogDef, ComputerUseApprovalDialogView),
+    ...dialogEntry(costThresholdDialogDef, CostThresholdDialogView),
+    ...dialogEntry(AUTOCOMPACT_OFFER_DIALOG, AutocompactOfferDialogView),
+    ...dialogEntry(serverFallbackNoticeSpec, ServerFallbackNoticeView),
+    ...dialogEntry(RESUME_COMPACT_DIALOG, ResumeCompactDialogView),
+    ...dialogEntry(idleReturnDialogDef, IdleReturnDialogView),
+    ...dialogEntry(resumeOnNewerModelDialogDef, NewerModelOfferDialogView),
+    ...dialogEntry(managedSettingsSecurityDialogDef, ManagedSettingsSecurityDialogView),
+    ...dialogEntry(IDE_ONBOARDING_DIALOG, IdeOnboardingDialogView),
+    ...dialogEntry(sandboxNetworkAccessDialogDef, SandboxNetworkAccessDialogView),
+    ...dialogEntry(LEFT_ARROW_CONFIRM_DIALOG, LeftArrowConfirmDialogView),
+    ...dialogEntry(REMOTE_CALLOUT_DIALOG, RemoteCalloutDialog),
+    ...dialogEntry(ULTRAPLAN_LAUNCH_DIALOG, ultraplanLaunchDialogView),
+    ...dialogEntry(ULTRAPLAN_CHOICE_DIALOG_SPEC, UltraplanChoiceDialogView),
+    ...dialogEntry(LSP_RECOMMENDATION_DIALOG, LspRecommendationDialogView),
+    ...dialogEntry(PLUGIN_HINT_DIALOG, PluginHintMenuDialogView),
+    ...dialogEntry(AUTO_DEFAULT_NUDGE_DIALOG, AutoModeDefaultNudgeDialogView),
+    ...dialogEntry(effortMediumNudgeDialogDef, EffortMediumNudgeDialogView),
+    ...dialogEntry(FULLSCREEN_UPSELL_DIALOG, FullscreenUpsellDialog),
+    ...(STARTUP_MODEL_SWITCH_MODULE && STARTUP_MODEL_SWITCH_VIEW
+      ? dialogEntry(STARTUP_MODEL_SWITCH_MODULE.startupModelSwitchDialog, STARTUP_MODEL_SWITCH_VIEW)
+      : {}),
+    ...(IMPORT_REVIEW_OFFER_MODULE && IMPORT_REVIEW_OFFER_VIEW
+      ? dialogEntry(IMPORT_REVIEW_OFFER_MODULE.importReviewOfferDialog, IMPORT_REVIEW_OFFER_VIEW)
+      : {}),
+    ...(EFFORT_AUTO_NUDGE_MODULE && EFFORT_AUTO_NUDGE_VIEW
+      ? dialogEntry(EFFORT_AUTO_NUDGE_MODULE.effortAutoNudgeDialog, EFFORT_AUTO_NUDGE_VIEW)
+      : {}),
+    ...(ACCOUNT_MEMORY_EDIT_CONFIRM_MODULE && ACCOUNT_MEMORY_EDIT_CONFIRM_VIEW
+      ? dialogEntry(
+          ACCOUNT_MEMORY_EDIT_CONFIRM_MODULE.accountMemoryEditConfirmDialog,
+          ACCOUNT_MEMORY_EDIT_CONFIRM_VIEW,
+        )
+      : {}),
+    ...(ACCOUNT_MEMORY_EVERYWHERE_MODULE && ACCOUNT_MEMORY_EVERYWHERE_VIEW
+      ? dialogEntry(
+          ACCOUNT_MEMORY_EVERYWHERE_MODULE.accountMemoryEverywhereConfirmDialog,
+          ACCOUNT_MEMORY_EVERYWHERE_VIEW,
+        )
+      : {}),
+    ...(SECRET_PROMPT_MODULE && SECRET_PROMPT_VIEW
+      ? dialogEntry(SECRET_PROMPT_MODULE.secretPromptDialog, SECRET_PROMPT_VIEW)
+      : {}),
+    ...(ACCOUNT_MEMORY_WRITE_PERMISSION_MODULE && ACCOUNT_MEMORY_WRITE_PERMISSION_VIEW
+      ? dialogEntry(
+          ACCOUNT_MEMORY_WRITE_PERMISSION_MODULE.accountMemoryWritePermissionDialog,
+          ACCOUNT_MEMORY_WRITE_PERMISSION_VIEW,
+        )
+      : {}),
+    ...dialogEntry(MCP_ELICITATION_DIALOG, McpElicitationDialogView),
+    ...dialogEntry(MCP_ELICITATION_WAITING_DIALOG, McpElicitationWaitingDialogView),
+    ...dialogEntry(MCP_URL_ELICITATION_DIALOG, McpUrlElicitationDialogView),
+    ...dialogEntry(PERMISSION_PROMPT_DIALOG, FallbackPermissionRequest),
+    ...dialogEntry(WEBFETCH_PERMISSION_CARD, WebFetchPermissionRequest),
+    ...dialogEntry(SKILL_PERMISSION_CARD, SkillUsePermissionDialog),
+    ...dialogEntry(POWERSHELL_PERMISSION_CARD, PowerShellPermissionRequest),
+    ...dialogEntry(FILE_PERMISSION_CARD, FilePermissionDialog),
+    ...dialogEntry(ASK_USER_QUESTION_PERMISSION_CARD, AskUserQuestionPermissionRequest),
+    ...dialogEntry(ENTER_PLAN_MODE_PERMISSION_CARD, EnterPlanModePermissionRequest),
+    ...dialogEntry(PUBLISH_PLUGIN_PERMISSION_CARD, FolderAccessPermissionRequest),
+    ...dialogEntry(GOAL_PROPOSAL_DIALOG, GoalProposalPermissionRequest),
+    ...dialogEntry(EXIT_PLAN_MODE_V2_PERMISSION_CARD, ExitPlanModePermissionRequest),
+    ...dialogEntry(MONITOR_PERMISSION_CARD, SkillPermissionRequest),
+    ...dialogEntry(BASH_PERMISSION_CARD, BashPermissionRequestInner),
+    ...dialogEntry(REFUSAL_FALLBACK_DIALOG, ModelRefusalPausedDialog),
+    ...dialogEntry(FABLE_OVERAGE_CONSENT_DIALOG, FastModeConsentDialogView),
+    ...dialogEntry(BROWSER_PERMISSION_CARD, ChromePermissionRequest),
+    ...dialogEntry(peerInboundApprovalDialogDef, PeerMessageApproval),
+    ...dialogEntry(CHROME_INSTALL_UPSELL_DIALOG, ChromeSetupDialog),
+    ...dialogEntry(CHROME_INSTALL_SETUP_DIALOG, ChromeInstallFlow),
+    ...(OPTIONAL_DIALOG_VIEW_2 && OPTIONAL_DIALOG_KIND_2
+      ? dialogEntry(OPTIONAL_DIALOG_KIND_2, OPTIONAL_DIALOG_VIEW_2)
+      : {}),
+    ...(OPTIONAL_DIALOG_KIND_3 && OPTIONAL_DIALOG_VIEW_3
+      ? dialogEntry(OPTIONAL_DIALOG_VIEW_3, OPTIONAL_DIALOG_KIND_3)
+      : {}),
+    ...(OPTIONAL_DIALOG_KIND_4 && OPTIONAL_DIALOG_VIEW_4
+      ? dialogEntry(OPTIONAL_DIALOG_VIEW_4, OPTIONAL_DIALOG_KIND_4)
+      : {}),
+    ...(LAZY_DIALOG_COMPONENTS && OPTIONAL_DIALOG_KIND_1
+      ? dialogEntry(OPTIONAL_DIALOG_KIND_1, LAZY_DIALOG_COMPONENTS)
+      : {}),
+    ...dialogEntry(workflowPermissionDialog_2, WorkflowPermissionDialog),
+    ...(ContinueInProjectsPermissionDialog && PROJECT_CONTINUE_PERMISSION_DIALOG
+      ? dialogEntry(PROJECT_CONTINUE_PERMISSION_DIALOG, ContinueInProjectsPermissionDialog)
+      : {}),
+    ...(ContinueInProjectsTargetDialog && continueInProjectsTargetDialog
+      ? dialogEntry(continueInProjectsTargetDialog, ContinueInProjectsTargetDialog)
+      : {}),
+    ...(ContinueInProjectsMessageDialog && continueInProjectsMessageDialog
+      ? dialogEntry(continueInProjectsMessageDialog, ContinueInProjectsMessageDialog)
+      : {}),
+    ...(OPTIONAL_DIALOG_KIND_5 && OPTIONAL_DIALOG_VIEW_5
+      ? dialogEntry(OPTIONAL_DIALOG_VIEW_5, OPTIONAL_DIALOG_KIND_5)
+      : {}),
+    ...(OPTIONAL_DIALOG_KIND_6 && OPTIONAL_DIALOG_VIEW_6
+      ? dialogEntry(OPTIONAL_DIALOG_VIEW_6, OPTIONAL_DIALOG_KIND_6)
+      : {}),
+    ...(SLACK_CONNECT_DIALOGS_MODULE && SLACK_CONNECT_DIALOG_SPECS
+      ? Object.assign(
+          {},
+          ...SLACK_CONNECT_DIALOG_SPECS.slackConnectDialogs.map((slackConnectDialog) =>
+            dialogEntry(slackConnectDialog, SLACK_CONNECT_DIALOGS_MODULE.SlackConnectConsentDialog),
+          ),
+        )
+      : {}),
+    ...(SLACK_SIGN_IN_OFFER_VIEW && SLACK_SIGN_IN_OFFER_SPEC
+      ? dialogEntry(
+          SLACK_SIGN_IN_OFFER_SPEC.slackSignInOfferDialog,
+          SLACK_SIGN_IN_OFFER_VIEW.SlackSignInOfferDialog,
+        )
+      : {}),
+    ...(OPTIONAL_COMPARE_MODELS_KIND && OPTIONAL_COMPARE_MODELS_WRAPPER
+      ? dialogEntry(OPTIONAL_COMPARE_MODELS_KIND, OPTIONAL_COMPARE_MODELS_WRAPPER)
+      : {}),
+    ...dialogEntry(autoModeSetupReviewDialogDef, autoModeSetupReviewDialog),
+    ...dialogEntry(AUTO_MODE_SETUP_FLAGGED_DIALOG, autoModeSetupFlaggedDialog),
+  };
+});
 //@ chunk-18hwfzwa.js:1425369-1425373 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:1425369", () => {
+  init_react_production();
+});
 export {
   useHasOpenDialog,
   useHasBlockingDialog,

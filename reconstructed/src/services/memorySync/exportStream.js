@@ -11,10 +11,11 @@
 import { StringDecoder } from "string_decoder";
 import { yieldToEventLoop } from "../../native-ts/file-index/index.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { looseObject, string, literal, E } from "../../../vendor/zod/v4/classic/schemas.js";
+import { looseObject, stringSchema, literal, numberSchema } from "../../../vendor/zod/v4/classic/schemas.js";
 import { memoryIdSchema } from "../orgMemory/storeErrors.js";
 import { withTimeout } from "../../utils/sleep.js";
 import { jsonParseRaw } from "../../utils/slowOperations.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-s61vbvea.js:91861-91872 placement
 /**
@@ -25,86 +26,93 @@ var DEFAULT_YIELD_BUDGET_MS = 200;
 /**
  * 创建并发受限且定期让出事件循环的执行器：runBounded 限制并发数，maybeYield 超过时间预算时让出。
  */
-function createYieldingRunner(e = {}) {
-  let yieldBudgetMs = e.yieldBudgetMs ?? DEFAULT_YIELD_BUDGET_MS;
-  let maxConcurrent = e.maxConcurrent;
+function createYieldingRunner(options = {}) {
+  let yieldBudgetMs = options.yieldBudgetMs ?? DEFAULT_YIELD_BUDGET_MS;
+  let maxConcurrent = options.maxConcurrent;
   let startTime = performance.now();
-  async function h() {
+  async function maybeYield() {
     if (performance.now() - startTime <= yieldBudgetMs) return;
     await yieldToEventLoop();
     startTime = performance.now();
   }
-  let y = 0;
-  let S = [];
-  let w = 0;
-  function R() {
-    if (maxConcurrent === undefined || y < maxConcurrent) {
-      y++;
+  let runningCount = 0;
+  let waiting = [];
+  let nextWaitingIndex = 0;
+  function acquireSlot() {
+    if (maxConcurrent === undefined || runningCount < maxConcurrent) {
+      runningCount++;
       return Promise.resolve();
     }
     return new Promise((resolve) => {
-      S.push(() => {
-        y++;
+      waiting.push(() => {
+        runningCount++;
         resolve();
       });
     });
   }
-  function x() {
-    y--;
-    if (w >= S.length) return;
-    let j = S[w];
-    w++;
-    if (w === S.length) {
-      S.length = 0;
-      w = 0;
+  function releaseSlot() {
+    runningCount--;
+    if (nextWaitingIndex >= waiting.length) return;
+    let resumeNext = waiting[nextWaitingIndex];
+    nextWaitingIndex++;
+    if (nextWaitingIndex === waiting.length) {
+      waiting.length = 0;
+      nextWaitingIndex = 0;
     }
-    j();
+    resumeNext();
   }
-  async function P(j) {
-    await R();
-    let G;
+  async function runBounded(task) {
+    await acquireSlot();
+    let result;
     try {
-      G = await j();
+      result = await task();
     } finally {
-      x();
+      releaseSlot();
     }
-    await h();
-    return G;
+    await maybeYield();
+    return result;
   }
   return {
-    maybeYield: h,
-    runBounded: P,
+    maybeYield,
+    runBounded,
   };
 }
 //@ chunk-s61vbvea.js:92370-92634 placement
-var EXPORT_IDLE_TIMEOUT_MS = 60000;
-var EXPORT_TOTAL_TIMEOUT_MS = 300000;
-var exportLineTypeSchema = DoctorLazy(() =>
-  looseObject({
-    type: string(),
-  }),
-);
-var exportMemoryLineSchema = DoctorLazy(() =>
-  looseObject({
-    type: literal("memory"),
-    id: memoryIdSchema(),
-    path: string(),
-    content: string(),
-    content_sha256: string(),
-    updated_at: string(),
-  }),
-);
-var exportCompleteLineSchema = DoctorLazy(() =>
-  looseObject({
-    type: literal("complete"),
-    memory_count: E().int().nonnegative(),
-    error_count: E().int().nonnegative().optional(),
-  }),
-);
+var EXPORT_IDLE_TIMEOUT_MS; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var EXPORT_TOTAL_TIMEOUT_MS;
+var exportLineTypeSchema;
+var exportMemoryLineSchema;
+var exportCompleteLineSchema;
+deferInit("chunk-s61vbvea.js:92370", () => {
+  EXPORT_IDLE_TIMEOUT_MS = 60000;
+  EXPORT_TOTAL_TIMEOUT_MS = 300000;
+  exportLineTypeSchema = DoctorLazy(() =>
+    looseObject({
+      type: stringSchema(),
+    }),
+  );
+  exportMemoryLineSchema = DoctorLazy(() =>
+    looseObject({
+      type: literal("memory"),
+      id: memoryIdSchema(),
+      path: stringSchema(),
+      content: stringSchema(),
+      content_sha256: stringSchema(),
+      updated_at: stringSchema(),
+    }),
+  );
+  exportCompleteLineSchema = DoctorLazy(() =>
+    looseObject({
+      type: literal("complete"),
+      memory_count: numberSchema().int().nonnegative(),
+      error_count: numberSchema().int().nonnegative().optional(),
+    }),
+  );
+});
 //@ chunk-s61vbvea.js:92634-92742 placement
 class LineTooLongError extends Error {
-  constructor(e) {
-    super(`NDJSON line exceeds ${e} bytes`);
+  constructor(maxLineLength) {
+    super(`NDJSON line exceeds ${maxLineLength} bytes`);
     this.name = "LineTooLongError";
   }
 }
@@ -123,48 +131,50 @@ async function* readExportStreamLines(
   source,
   maxLineLength,
   stallTimeoutMs = EXPORT_IDLE_TIMEOUT_MS,
-  s,
+  maxLines,
   deadlineMs = EXPORT_TOTAL_TIMEOUT_MS,
 ) {
-  let y = new StringDecoder("utf8");
-  let S = "";
-  let w = 0;
-  let R = Date.now() + deadlineMs;
-  let x = source.stream[Symbol.asyncIterator]();
+  let decoder = new StringDecoder("utf8");
+  let pending = "";
+  let lineCount = 0;
+  let deadline = Date.now() + deadlineMs;
+  let chunks = source.stream[Symbol.asyncIterator]();
   try {
     while (true) {
-      let P = R - Date.now();
-      if (P <= 0) throw Error("export stream exceeded its overall deadline");
-      let j = await withTimeout(
-        x.next(),
-        Math.min(stallTimeoutMs, P),
-        P < stallTimeoutMs ? "export stream exceeded its overall deadline" : "export stream stalled",
+      let remainingMs = deadline - Date.now();
+      if (remainingMs <= 0) throw Error("export stream exceeded its overall deadline");
+      let chunk = await withTimeout(
+        chunks.next(),
+        Math.min(stallTimeoutMs, remainingMs),
+        remainingMs < stallTimeoutMs
+          ? "export stream exceeded its overall deadline"
+          : "export stream stalled",
       );
-      if (j.done) break;
-      let G = j.value;
-      S += typeof G === "string" ? G : y.write(G);
-      let L;
+      if (chunk.done) break;
+      let value = chunk.value;
+      pending += typeof value === "string" ? value : decoder.write(value);
+      let newlineIndex;
       while (
-        (L = S.indexOf(`
+        (newlineIndex = pending.indexOf(`
 `)) >= 0
       ) {
-        let sliced = S.slice(0, L);
-        S = S.slice(L + 1);
-        if (s !== undefined && ++w > s) throw new TooManyLinesError();
+        let sliced = pending.slice(0, newlineIndex);
+        pending = pending.slice(newlineIndex + 1);
+        if (maxLines !== undefined && ++lineCount > maxLines) throw new TooManyLinesError();
         if (sliced.endsWith("\r")) sliced = sliced.slice(0, -1);
         if (sliced.length > maxLineLength) throw new LineTooLongError(maxLineLength);
         if (sliced !== "") yield sliced;
       }
-      if (S.length > maxLineLength) throw new LineTooLongError(maxLineLength);
+      if (pending.length > maxLineLength) throw new LineTooLongError(maxLineLength);
     }
-    S += y.end();
-    if (S !== "" && S !== "\r") {
-      if (s !== undefined && ++w > s) throw new TooManyLinesError();
-      yield S.endsWith("\r") ? S.slice(0, -1) : S;
+    pending += decoder.end();
+    if (pending !== "" && pending !== "\r") {
+      if (maxLines !== undefined && ++lineCount > maxLines) throw new TooManyLinesError();
+      yield pending.endsWith("\r") ? pending.slice(0, -1) : pending;
     }
   } finally {
     source.destroy();
-    x.return?.().catch(() => {
+    chunks.return?.().catch(() => {
       return;
     });
   }
@@ -179,68 +189,74 @@ async function pullStoreExport({
   deadlineMs = EXPORT_TOTAL_TIMEOUT_MS,
   maxLines,
 }) {
-  let w = new Set();
-  let R;
-  let x = 0;
-  let P = 0;
-  let j = null;
+  let pendingWrites = new Set();
+  let writeError;
+  let memoryCount = 0;
+  let errorLineCount = 0;
+  let completeLine = null;
   let yieldingRunner = createYieldingRunner();
-  async function L() {
-    await Promise.all(w);
+  async function drainWrites() {
+    await Promise.all(pendingWrites);
   }
-  async function q(reason) {
-    await L();
+  async function fail(reason) {
+    await drainWrites();
     return {
       ok: false,
       reason,
     };
   }
   try {
-    for await (let Q of readExportStreamLines(source, maxLineLength, stallTimeoutMs, maxLines, deadlineMs)) {
-      if (j !== null) return await q("parse_failed");
-      let Z;
+    for await (let line of readExportStreamLines(
+      source,
+      maxLineLength,
+      stallTimeoutMs,
+      maxLines,
+      deadlineMs,
+    )) {
+      if (completeLine !== null) return await fail("parse_failed");
+      let raw;
       try {
-        Z = jsonParseRaw(Q);
+        raw = jsonParseRaw(line);
       } catch {
-        return await q("parse_failed");
+        return await fail("parse_failed");
       }
-      let ee = exportLineTypeSchema().safeParse(Z);
-      if (!ee.success) return await q("parse_failed");
-      switch (ee.data.type) {
+      let typeCheck = exportLineTypeSchema().safeParse(raw);
+      if (!typeCheck.success) return await fail("parse_failed");
+      switch (typeCheck.data.type) {
         case "store":
           break;
         case "memory": {
-          let ae = exportMemoryLineSchema().safeParse(Z);
-          if (!ae.success) return await q("parse_failed");
-          x++;
-          while (w.size >= maxConcurrentWrites) await Promise.race(w);
-          if (R !== undefined) return await q("write_failed");
-          let se = {
-            path: ae.data.path,
-            content: ae.data.content,
-            contentSha256: ae.data.content_sha256,
-            memoryId: ae.data.id,
-            updatedAt: ae.data.updated_at,
+          let memoryCheck = exportMemoryLineSchema().safeParse(raw);
+          if (!memoryCheck.success) return await fail("parse_failed");
+          memoryCount++;
+          while (pendingWrites.size >= maxConcurrentWrites) await Promise.race(pendingWrites);
+          if (writeError !== undefined) return await fail("write_failed");
+          let record = {
+            path: memoryCheck.data.path,
+            content: memoryCheck.data.content,
+            contentSha256: memoryCheck.data.content_sha256,
+            memoryId: memoryCheck.data.id,
+            updatedAt: memoryCheck.data.updated_at,
           };
-          let re = handleMemory(se)
+          let write = handleMemory(record)
             .catch((error) => {
-              R ??= error;
+              writeError ??= error;
             })
             .finally(() => {
-              w.delete(re);
+              pendingWrites.delete(write);
             });
-          w.add(re);
+          pendingWrites.add(write);
           break;
         }
         case "memory_error":
-          P++;
+          errorLineCount++;
           break;
         case "complete": {
-          let ae = exportCompleteLineSchema().safeParse(Z);
-          if (!ae.success) return await q("parse_failed");
-          j = {
-            memoryCount: ae.data.memory_count,
-            errorCount: ae.data.error_count ?? 0,
+          let completeCheck = exportCompleteLineSchema().safeParse(raw);
+          if (!completeCheck.success) return await fail("parse_failed");
+          completeLine = {
+            memoryCount: completeCheck.data.memory_count,
+            errorCount: completeCheck.data.error_count ?? 0,
           };
           break;
         }
@@ -250,7 +266,7 @@ async function pullStoreExport({
       await yieldingRunner.maybeYield();
     }
   } catch (error) {
-    await L();
+    await drainWrites();
     if (error instanceof LineTooLongError)
       return {
         ok: false,
@@ -266,48 +282,52 @@ async function pullStoreExport({
       reason: "stream_error",
     };
   }
-  await L();
-  if (R !== undefined)
+  await drainWrites();
+  if (writeError !== undefined)
     return {
       ok: false,
       reason: "write_failed",
     };
-  if (j === null)
+  if (completeLine === null)
     return {
       ok: false,
       reason: "stream_truncated",
     };
-  if (j.memoryCount !== x)
+  if (completeLine.memoryCount !== memoryCount)
     return {
       ok: false,
       reason: "count_mismatch",
     };
-  if (j.errorCount > 0 || P > 0)
+  if (completeLine.errorCount > 0 || errorLineCount > 0)
     return {
       ok: false,
       reason: "decrypt_errors",
     };
   return {
     ok: true,
-    memoryLines: x,
+    memoryLines: memoryCount,
   };
 }
 //@ chunk-s61vbvea.js:95181-95361 placement
-var exportStoreLineSchema = DoctorLazy(() =>
-  looseObject({
-    type: literal("store"),
-    view: string().optional(),
-  }),
-);
-var exportMemoryRefLineSchema = DoctorLazy(() =>
-  looseObject({
-    type: literal("memory"),
-    id: memoryIdSchema(),
-    path: string(),
-    content_sha256: string(),
-    content_size_bytes: E().int().nonnegative().optional(),
-  }),
-);
+var exportStoreLineSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var exportMemoryRefLineSchema;
+deferInit("chunk-s61vbvea.js:95181", () => {
+  exportStoreLineSchema = DoctorLazy(() =>
+    looseObject({
+      type: literal("store"),
+      view: stringSchema().optional(),
+    }),
+  );
+  exportMemoryRefLineSchema = DoctorLazy(() =>
+    looseObject({
+      type: literal("memory"),
+      id: memoryIdSchema(),
+      path: stringSchema(),
+      content_sha256: stringSchema(),
+      content_size_bytes: numberSchema().int().nonnegative().optional(),
+    }),
+  );
+});
 //@ chunk-s61vbvea.js:95361-96918 placement
 async function pullStoreView({
   source,
@@ -316,108 +336,108 @@ async function pullStoreView({
   stallTimeoutMs = EXPORT_IDLE_TIMEOUT_MS,
   deadlineMs = EXPORT_TOTAL_TIMEOUT_MS,
 }) {
-  let y = [];
-  let S = false;
-  let w = 0;
-  let R = null;
+  let entries = [];
+  let sawStore = false;
+  let errorLineCount = 0;
+  let completeLine = null;
   let yieldingRunner = createYieldingRunner();
   try {
-    for await (let P of readExportStreamLines(
+    for await (let line of readExportStreamLines(
       source,
       maxLineLength,
       stallTimeoutMs,
       maxEntries * 2 + 2,
       deadlineMs,
     )) {
-      if (R !== null)
+      if (completeLine !== null)
         return {
           ok: false,
           reason: "parse_failed",
         };
-      let j;
+      let raw;
       try {
-        j = jsonParseRaw(P);
+        raw = jsonParseRaw(line);
       } catch {
         return {
           ok: false,
           reason: "parse_failed",
         };
       }
-      let G = exportLineTypeSchema().safeParse(j);
-      if (!G.success)
+      let typeCheck = exportLineTypeSchema().safeParse(raw);
+      if (!typeCheck.success)
         return {
           ok: false,
           reason: "parse_failed",
         };
-      switch (G.data.type) {
+      switch (typeCheck.data.type) {
         case "store": {
-          if (S)
+          if (sawStore)
             return {
               ok: false,
               reason: "parse_failed",
             };
-          let L = exportStoreLineSchema().safeParse(j);
-          if (!L.success)
+          let storeCheck = exportStoreLineSchema().safeParse(raw);
+          if (!storeCheck.success)
             return {
               ok: false,
               reason: "parse_failed",
             };
-          if (L.data.view !== "basic")
+          if (storeCheck.data.view !== "basic")
             return {
               ok: false,
               reason: "view_not_honored",
             };
-          S = true;
+          sawStore = true;
           break;
         }
         case "memory": {
-          if (!S)
+          if (!sawStore)
             return {
               ok: false,
               reason: "view_not_honored",
             };
-          let L = exportMemoryRefLineSchema().safeParse(j);
-          if (!L.success)
+          let memoryCheck = exportMemoryRefLineSchema().safeParse(raw);
+          if (!memoryCheck.success)
             return {
               ok: false,
               reason: "parse_failed",
             };
-          if (y.length >= maxEntries)
+          if (entries.length >= maxEntries)
             return {
               ok: false,
               reason: "too_many_entries",
             };
-          y.push({
-            id: L.data.id,
-            path: L.data.path,
-            sha256: L.data.content_sha256,
-            sizeBytes: L.data.content_size_bytes,
+          entries.push({
+            id: memoryCheck.data.id,
+            path: memoryCheck.data.path,
+            sha256: memoryCheck.data.content_sha256,
+            sizeBytes: memoryCheck.data.content_size_bytes,
           });
           break;
         }
         case "memory_error":
-          if (!S)
+          if (!sawStore)
             return {
               ok: false,
               reason: "view_not_honored",
             };
-          w++;
+          errorLineCount++;
           break;
         case "complete": {
-          if (!S)
+          if (!sawStore)
             return {
               ok: false,
               reason: "parse_failed",
             };
-          let L = exportCompleteLineSchema().safeParse(j);
-          if (!L.success)
+          let completeCheck = exportCompleteLineSchema().safeParse(raw);
+          if (!completeCheck.success)
             return {
               ok: false,
               reason: "parse_failed",
             };
-          R = {
-            memoryCount: L.data.memory_count,
-            errorCount: L.data.error_count ?? 0,
+          completeLine = {
+            memoryCount: completeCheck.data.memory_count,
+            errorCount: completeCheck.data.error_count ?? 0,
           };
           break;
         }
@@ -442,24 +462,24 @@ async function pullStoreView({
       reason: "stream_error",
     };
   }
-  if (R === null)
+  if (completeLine === null)
     return {
       ok: false,
       reason: "stream_truncated",
     };
-  if (R.memoryCount !== y.length)
+  if (completeLine.memoryCount !== entries.length)
     return {
       ok: false,
       reason: "count_mismatch",
     };
-  if (R.errorCount > 0 || w > 0)
+  if (completeLine.errorCount > 0 || errorLineCount > 0)
     return {
       ok: false,
       reason: "decrypt_errors",
     };
   return {
     ok: true,
-    entries: y,
+    entries,
   };
 }
 export { createYieldingRunner, pullStoreView, pullStoreExport };

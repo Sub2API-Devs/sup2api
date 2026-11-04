@@ -5,10 +5,10 @@
  * pieces: chunk-s82q9s4x.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../runtime/bun-runtime.js";
+import { __commonJS } from "../../runtime/bun-runtime.js";
 
 //@ chunk-s82q9s4x.js:38567-39807 cjs-fingerprint
-var require_json_schema_traverse = x(function (cjsExports, cjsModule) {
+var require_json_schema_traverse = __commonJS(function (cjsExports, cjsModule) {
   var traverse = (cjsModule.exports = function (schema, opts, cb) {
     if (typeof opts == "function") {
       cb = opts;

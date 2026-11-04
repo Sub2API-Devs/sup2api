@@ -38,26 +38,32 @@ import { onUnavailableNoop } from "./hostPaths.js";
 /**
  * 运行一个服务端下发的钩子进程，处理超时、启动失败、输出格式错误。
  */
-function runServedHookProcess(e, n, r) {
-  if (e.aborted === true) return sandboxFallbackAsk(n, "timeout", e.stderr);
-  if (e.spawnFailed === true) return sandboxFallbackAsk(n, "spawn_failed", e.stderr);
-  if (e.status === 2) return sandboxedHookBlocked(n, e.stderr, [], r);
-  if (e.status !== 0) return sandboxFallbackAsk(n, "exit", e.stderr, e.status);
-  let { json, validationError } = e.parsed;
-  if (validationError !== undefined) return sandboxFallbackAsk(n, "malformed", e.stderr);
+function runServedHookProcess(match, checkLabel, pinChanged) {
+  if (match.aborted === true) return sandboxFallbackAsk(checkLabel, "timeout", match.stderr);
+  if (match.spawnFailed === true) return sandboxFallbackAsk(checkLabel, "spawn_failed", match.stderr);
+  if (match.status === 2) return sandboxedHookBlocked(checkLabel, match.stderr, [], pinChanged);
+  if (match.status !== 0) return sandboxFallbackAsk(checkLabel, "exit", match.stderr, match.status);
+  let { json, validationError } = match.parsed;
+  if (validationError !== undefined) return sandboxFallbackAsk(checkLabel, "malformed", match.stderr);
   if (json === undefined || !isSyncHookJSONOutput(json)) return sandboxedSuccessResult([]);
   let hookSpecificOutput =
     json.hookSpecificOutput?.hookEventName === "PreToolUse" ? json.hookSpecificOutput : undefined;
   if (json.hookSpecificOutput !== undefined && hookSpecificOutput === undefined)
-    return sandboxFallbackAsk(n, "malformed", e.stderr);
+    return sandboxFallbackAsk(checkLabel, "malformed", match.stderr);
   let notes =
     hookSpecificOutput?.additionalContext === undefined || hookSpecificOutput.additionalContext === ""
       ? []
-      : [hookCheckOutputNote(n, "context", clipHookOutputText(hookSpecificOutput.additionalContext))];
+      : [
+          hookCheckOutputNote(
+            checkLabel,
+            "context",
+            clipHookOutputText(hookSpecificOutput.additionalContext),
+          ),
+        ];
   let permissionDecision = hookSpecificOutput?.permissionDecision;
-  let L = hookSpecificOutput?.permissionDecisionReason ?? json.reason ?? "";
+  let reasonText = hookSpecificOutput?.permissionDecisionReason ?? json.reason ?? "";
   if (permissionDecision === "deny" || json.decision === "block" || json.continue === false)
-    return sandboxedHookBlocked(n, L || (json.stopReason ?? ""), notes, r);
+    return sandboxedHookBlocked(checkLabel, reasonText || (json.stopReason ?? ""), notes, pinChanged);
   if (hookSpecificOutput?.updatedInput !== undefined)
     return {
       outcome: "fallback_rewrite",
@@ -79,7 +85,10 @@ function runServedHookProcess(e, n, r) {
         permissionBehavior: "ask",
         hookPermissionDecisionReason: HOOK_WANTS_CONFIRM_QUESTION,
       },
-      notes: L === "" ? notes : [...notes, hookCheckOutputNote(n, "asked", clipHookOutputText(L))],
+      notes:
+        reasonText === ""
+          ? notes
+          : [...notes, hookCheckOutputNote(checkLabel, "asked", clipHookOutputText(reasonText))],
     };
   return sandboxedSuccessResult(notes);
 }
@@ -95,14 +104,18 @@ function sandboxedSuccessResult(notes) {
   };
 }
 //@ chunk-e6aww6q8.js:915564-915761 placement
-function sandboxedHookBlocked(e, n, notes, s) {
+function sandboxedHookBlocked(checkLabel, reasonText, notes, isStale) {
   return {
     outcome: "ran_sandboxed",
     askedPerson: false,
     result: {
       outcome: "blocking",
       permissionBehavior: "deny",
-      hookPermissionDecisionReason: hookBlockedMessage(e, clipHookOutputText(n) || "it gave no reason", s),
+      hookPermissionDecisionReason: hookBlockedMessage(
+        checkLabel,
+        clipHookOutputText(reasonText) || "it gave no reason",
+        isStale,
+      ),
     },
     notes,
   };
@@ -111,39 +124,39 @@ function sandboxedHookBlocked(e, n, notes, s) {
 /**
  * 沙箱运行 hook 失败（超时、退出、格式错误等）时改为询问，并生成原因说明。
  */
-function sandboxFallbackAsk(e, n, stderr, status) {
-  let h = n === "timeout" || n === "exit" || n === "malformed" ? n : "wrap_failed";
-  let y = {
+function sandboxFallbackAsk(checkLabel, cause, stderr, status) {
+  let outcomeKind = cause === "timeout" || cause === "exit" || cause === "malformed" ? cause : "wrap_failed";
+  let causeTexts = {
     timeout: "timed out",
     exit: `exited ${status ?? 1}`,
     wrap_failed: "couldn't start",
     malformed: "gave an answer this computer could not read",
   };
-  let S = truncateToLength(printableText(getFirstLine(stderr.trim())), MAX_SEEN_HOOK_PINS);
+  let stderrLine = truncateToLength(printableText(getFirstLine(stderr.trim())), MAX_SEEN_HOOK_PINS);
   return {
-    outcome: `fallback_${h}`,
-    cause: n,
+    outcome: `fallback_${outcomeKind}`,
+    cause,
     askedPerson: true,
     result: {
       outcome: "success",
       permissionBehavior: "ask",
-      hookPermissionDecisionReason: hookCheckUnfinishedQuestion(y[h]),
+      hookPermissionDecisionReason: hookCheckUnfinishedQuestion(causeTexts[outcomeKind]),
     },
-    notes: S === "" ? [] : [hookCheckOutputNote(e, "stderr", S)],
+    notes: stderrLine === "" ? [] : [hookCheckOutputNote(checkLabel, "stderr", stderrLine)],
   };
 }
 //@ chunk-e6aww6q8.js:916187-916305 placement
-function clipHookOutputText(e) {
-  let trimmed = printableText(e.replace(/\s+/g, " ")).trim();
-  let r = truncateToLength(trimmed, MAX_PINNED_SCRIPT_BYTES);
-  return r.length < trimmed.length ? `${r}\u2026(truncated)` : r;
+function clipHookOutputText(text) {
+  let trimmed = printableText(text.replace(/\s+/g, " ")).trim();
+  let clipped = truncateToLength(trimmed, MAX_PINNED_SCRIPT_BYTES);
+  return clipped.length < trimmed.length ? `${clipped}\u2026(truncated)` : clipped;
 }
 //@ chunk-e6aww6q8.js:916305-917711 placement
 /**
  * 运行服务端下发的钩子并解释结果（问用户、改写输入、在沙箱中运行等）。
  */
-function runServedHook(e, projectHooks, r, s, mode, y, S) {
-  let { cause } = S;
+function runServedHook(request, projectHooks, hookKey, checkLabel, mode, pinChanged, outcome) {
+  let { cause } = outcome;
   if (cause !== undefined)
     logForDebugging(
       `[remote-tools] a project hook's run ended in a question to the person (fallback_cause=${cause} sandbox_mode=${mode})`,
@@ -151,66 +164,71 @@ function runServedHook(e, projectHooks, r, s, mode, y, S) {
         level: "error",
       },
     );
-  let L = y && cause !== undefined && cause !== "rewrite" && !projectHooks.declinedSetAside.has(r);
-  if (L) {
-    let q = (projectHooks.setAsideAsked.get(r) ?? 0) + 1;
-    projectHooks.setAsideAsked.set(r, q);
-    if (q >= MAX_SET_ASIDE_ASKS) projectHooks.declinedSetAside.add(r);
+  let shouldStop =
+    pinChanged && cause !== undefined && cause !== "rewrite" && !projectHooks.declinedSetAside.has(hookKey);
+  if (shouldStop) {
+    let askCount = (projectHooks.setAsideAsked.get(hookKey) ?? 0) + 1;
+    projectHooks.setAsideAsked.set(hookKey, askCount);
+    if (askCount >= MAX_SET_ASIDE_ASKS) projectHooks.declinedSetAside.add(hookKey);
   }
-  let G = [...S.notes];
-  if (y && !projectHooks.said.has("keeps_recorded_note")) {
+  let notes = [...outcome.notes];
+  if (pinChanged && !projectHooks.said.has("keeps_recorded_note")) {
     projectHooks.said.add("keeps_recorded_note");
-    G.unshift(HOOK_CHANGED_ON_DISK_NOTE);
+    notes.unshift(HOOK_CHANGED_ON_DISK_NOTE);
   }
-  logServedHookHeld_2(e, y && S.outcome === "ran_sandboxed" ? "ran_recorded_after_change" : S.outcome, {
-    cause,
-    mode,
-    ...(L && {
-      key: r,
-    }),
-  });
-  if (projectHooks.acceptedUpdated.has(r) && !projectHooks.said.has("updated_accepted_note")) {
+  logServedHookHeld_2(
+    request,
+    pinChanged && outcome.outcome === "ran_sandboxed" ? "ran_recorded_after_change" : outcome.outcome,
+    {
+      cause,
+      mode,
+      ...(shouldStop && {
+        key: hookKey,
+      }),
+    },
+  );
+  if (projectHooks.acceptedUpdated.has(hookKey) && !projectHooks.said.has("updated_accepted_note")) {
     projectHooks.said.add("updated_accepted_note");
-    G.unshift(HOOK_UPDATED_ACCEPTED_NOTE);
+    notes.unshift(HOOK_UPDATED_ACCEPTED_NOTE);
   }
-  if (S.outcome === "ran_sandboxed" && !projectHooks.said.has("sandbox_note")) {
+  if (outcome.outcome === "ran_sandboxed" && !projectHooks.said.has("sandbox_note")) {
     projectHooks.said.add("sandbox_note");
-    G.unshift(HOOKS_SANDBOXED_NOTE);
+    notes.unshift(HOOKS_SANDBOXED_NOTE);
   }
-  if (S.outcome === "ran_sandboxed" && !projectHooks.said.has("feature_ok")) {
+  if (outcome.outcome === "ran_sandboxed" && !projectHooks.said.has("feature_ok")) {
     projectHooks.said.add("feature_ok");
     logFeatureOk("remote_tool_serve_project_hook");
   }
   if (cause !== undefined && !projectHooks.said.has("feature_sad")) {
     projectHooks.said.add("feature_sad");
-    logFeatureSad("remote_tool_serve_project_hook", S.outcome);
+    logFeatureSad("remote_tool_serve_project_hook", outcome.outcome);
   }
-  if (L)
+  if (shouldStop)
     return {
-      hook: e.hook,
+      hook: request.hook,
       outcome: "success",
       permissionBehavior: "ask",
       hookPermissionDecisionReason: HOOK_STOPPED_WORKING_QUESTION,
       heldForServedCall: true,
-      ...(G.length > 0 && {
-        additionalContext: G.join(`
+      ...(notes.length > 0 && {
+        additionalContext: notes.join(`
 
 `),
       }),
     };
-  if (S.askedPerson) {
-    let q = (projectHooks.strikes.get(r) ?? 0) + 1;
-    projectHooks.strikes.set(r, q);
-    if (q >= MAX_PROJECT_PIN_STRIKES) {
-      projectHooks.stopped.add(r);
-      G.push(hookStruckOutNotice(s));
+  if (outcome.askedPerson) {
+    let strikeCount = (projectHooks.strikes.get(hookKey) ?? 0) + 1;
+    projectHooks.strikes.set(hookKey, strikeCount);
+    if (strikeCount >= MAX_PROJECT_PIN_STRIKES) {
+      projectHooks.stopped.add(hookKey);
+      notes.push(hookStruckOutNotice(checkLabel));
     }
-  } else projectHooks.strikes.delete(r);
+  } else projectHooks.strikes.delete(hookKey);
   return {
-    ...S.result,
-    hook: e.hook,
-    ...(G.length > 0 && {
-      additionalContext: G.join(`
+    ...outcome.result,
+    hook: request.hook,
+    ...(notes.length > 0 && {
+      additionalContext: notes.join(`
 
 `),
     }),
@@ -220,20 +238,20 @@ function runServedHook(e, projectHooks, r, s, mode, y, S) {
 /**
  * 上报服务端 hook 被搁置的遥测事件。
  */
-function logServedHookHeld_2(e, n, { cause, key, mode }) {
-  e.onOutcome?.(n, key);
+function logServedHookHeld_2(request, outcomeKind, { cause, key, mode }) {
+  request.onOutcome?.(outcomeKind, key);
   logEvent("tengu_remote_tool_serve_hook_held", {
     event: fromEnum("PreToolUse"),
     hook_type: fromEnum("command"),
-    reason: fromEnum(e.held),
+    reason: fromEnum(request.held),
     outcome: fromEnum(
-      n === "ran_sandboxed" ||
-        n === "ran_recorded_after_change" ||
-        n === "set_aside_after_change" ||
-        n === "held_changed_since_attach" ||
-        n === "held_changed_since_last_serve"
-        ? n
-        : n === "fallback_rewrite"
+      outcomeKind === "ran_sandboxed" ||
+        outcomeKind === "ran_recorded_after_change" ||
+        outcomeKind === "set_aside_after_change" ||
+        outcomeKind === "held_changed_since_attach" ||
+        outcomeKind === "held_changed_since_last_serve"
+        ? outcomeKind
+        : outcomeKind === "fallback_rewrite"
           ? "rewrite_refused"
           : "sandbox_fallback_ask",
     ),
@@ -246,12 +264,12 @@ function logServedHookHeld_2(e, n, { cause, key, mode }) {
   });
 }
 //@ chunk-e6aww6q8.js:918176-918322 placement
-function projectHookUnavailable(e, projectHooks, unavailable) {
+function projectHookUnavailable(request, projectHooks, unavailable) {
   if (!projectHooks.said.has("feature_sad")) {
     projectHooks.said.add("feature_sad");
     logFeatureSad("remote_tool_serve_project_hook", `unavailable_${unavailable}`);
   }
-  return onUnavailableNoop(e, unavailable);
+  return onUnavailableNoop(request, unavailable);
 }
 export {
   logServedHookHeld_2,

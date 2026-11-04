@@ -8,8 +8,15 @@
  * pieces: chunk-dg94x42s.js (22)
  * attribution: sole-consumer 17, affinity 1, fingerprint 1, layout 2, callgraph-fingerprint 1
  */
-import { init_react_production, y, P, yt, R, zt } from "../../../vendor/react/cjs/react.production.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import {
+  init_react_production,
+  useState,
+  useEffect,
+  useSyncExternalStore,
+  useRef,
+  useLayoutEffect,
+} from "../../../vendor/react/cjs/react.production.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { useTheme, useTheme_2 } from "../../components/design-system/ThemeProvider.js";
 import {
   useRateLimitState,
@@ -57,7 +64,7 @@ import {
 } from "../../services/rateLimit/rateLimitWall.js";
 import { fromEnum, lit } from "../../services/analytics/safeMetadata.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { array, tuple, string } from "../../../vendor/zod/v4/classic/schemas.js";
+import { array, tuple, stringSchema } from "../../../vendor/zod/v4/classic/schemas.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../services/analytics/growthbook.js";
 import {
   isPhaseActive,
@@ -114,8 +121,8 @@ init_react_production();
 //@ chunk-dg94x42s.js:18405-18409 sole-consumer
 init_react_production();
 //@ chunk-dg94x42s.js:18409-18449 sole-consumer
-function decrementNonNegative($i) {
-  return Math.max(0, $i - 1);
+function decrementNonNegative(count) {
+  return Math.max(0, count - 1);
 }
 //@ chunk-dg94x42s.js:18449-18491 sole-consumer
 var RESET_TIME_BUCKET_MS = 500;
@@ -123,348 +130,380 @@ var RESET_TIME_MARGIN_MS = 1000;
 var MAX_RESET_TIME_MS = 10000000000;
 var DEFAULT_RESET_SECONDS = 4000;
 //@ chunk-dg94x42s.js:18491-18589 sole-consumer
-function isOrgLevelRejectionWithBalance(k) {
-  return k.overageDisabledReason === "org_level_disabled_until" && k.balanceMinorUnits > 0;
+function isOrgLevelRejectionWithBalance(rateLimitInfo) {
+  return (
+    rateLimitInfo.overageDisabledReason === "org_level_disabled_until" && rateLimitInfo.balanceMinorUnits > 0
+  );
 }
 //@ chunk-dg94x42s.js:18589-18758 sole-consumer
-function stepCreditAmount(k, d, t = null) {
-  let g = k ?? DEFAULT_RESET_SECONDS;
-  let me =
-    d === 1
-      ? Math.floor(g / RESET_TIME_BUCKET_MS + 1) * RESET_TIME_BUCKET_MS
-      : Math.ceil(g / RESET_TIME_BUCKET_MS - 1) * RESET_TIME_BUCKET_MS;
-  let i =
-    t === null
+function stepCreditAmount(currentSeconds, direction, usedCredits = null) {
+  let baseSeconds = currentSeconds ?? DEFAULT_RESET_SECONDS;
+  let roundedBaseSeconds =
+    direction === 1
+      ? Math.floor(baseSeconds / RESET_TIME_BUCKET_MS + 1) * RESET_TIME_BUCKET_MS
+      : Math.ceil(baseSeconds / RESET_TIME_BUCKET_MS - 1) * RESET_TIME_BUCKET_MS;
+  let usedCreditsSeconds =
+    usedCredits === null
       ? RESET_TIME_BUCKET_MS
-      : d === 1
-        ? Math.ceil((t + RESET_TIME_MARGIN_MS) / RESET_TIME_BUCKET_MS) * RESET_TIME_BUCKET_MS
-        : t;
-  return Math.min(MAX_RESET_TIME_MS, Math.max(i, me));
+      : direction === 1
+        ? Math.ceil((usedCredits + RESET_TIME_MARGIN_MS) / RESET_TIME_BUCKET_MS) * RESET_TIME_BUCKET_MS
+        : usedCredits;
+  return Math.min(MAX_RESET_TIME_MS, Math.max(usedCreditsSeconds, roundedBaseSeconds));
 }
 //@ chunk-dg94x42s.js:18758-24302 sole-consumer
 /**
  * 限流选项菜单：升级、额外用量、自动恢复、等待等。
  */
 function RateLimitOptionsMenu(props) {
-  let h = w(61);
+  let $ = useMemoCache(61);
   let { balance, onDone, context } = props;
-  let [me, i] = y(null);
-  let [xe] = useTheme();
+  let [upgradeElement, setUpgradeElement] = useState(null);
+  let [theme] = useTheme();
   let rateLimitState = useRateLimitState();
-  let at;
-  if (h[0] === MEMO_CACHE_SENTINEL) {
-    at = getSubscriptionType();
-    h[0] = at;
-  } else at = h[0];
-  let Qt = at;
-  let Ri;
-  if (h[1] === MEMO_CACHE_SENTINEL) {
-    let oo = Qt === "max" && getRateLimitTier() === "default_claude_max_20x";
-    Ri = !oo && canShowUpgradeCommand();
-    h[1] = Ri;
-  } else Ri = h[1];
-  let qt = Ri;
+  let memoSubscriptionType;
+  if ($[0] === MEMO_CACHE_SENTINEL) {
+    memoSubscriptionType = getSubscriptionType();
+    $[0] = memoSubscriptionType;
+  } else memoSubscriptionType = $[0];
+  let subscriptionType = memoSubscriptionType;
+  let canUpgrade;
+  if ($[1] === MEMO_CACHE_SENTINEL) {
+    let isMax20xTier = subscriptionType === "max" && getRateLimitTier() === "default_claude_max_20x";
+    canUpgrade = !isMax20xTier && canShowUpgradeCommand();
+    $[1] = canUpgrade;
+  } else canUpgrade = $[1];
+  let showUpgradeOption = canUpgrade;
   let currency = balance.currency;
-  let [J, ve] = y(undefined);
-  let [W, ce] = y(undefined);
-  let [x, Ce] = y(false);
-  let [se, lt] = y(0);
-  let [ke, z] = y(null);
-  let dt;
-  let pe;
-  if (h[2] !== context.credentials) {
-    dt = () => {
+  let [savedLimitCents, setSavedLimitCents] = useState(undefined);
+  let [draftLimitCents, setDraftLimitCents] = useState(undefined);
+  let [isSaving, setIsSaving] = useState(false);
+  let [selectedIndex, setSelectedIndex] = useState(0);
+  let [statusMessage, setStatusMessage] = useState(null);
+  let loadLimitEffect;
+  let loadLimitDeps;
+  if ($[2] !== context.credentials) {
+    loadLimitEffect = () => {
       let lspManager = getLspManager();
       if (lspManager) {
-        ve(lspManager.spendLimitCents);
-        ce(lspManager.spendLimitCents);
+        setSavedLimitCents(lspManager.spendLimitCents);
+        setDraftLimitCents(lspManager.spendLimitCents);
         return;
       }
-      let Ie = false;
+      let isCancelled = false;
       fetchUtilization(context.credentials)
         .then((utilization) => {
-          if (Ie) {
+          if (isCancelled) {
             return;
           }
           let monthlyLimit = utilization?.extra_usage?.monthly_limit ?? null;
           let usedCredits = utilization?.extra_usage?.used_credits ?? 0;
-          let De = monthlyLimit === null ? null : Math.max(monthlyLimit, usedCredits);
-          ve(De);
-          ce(De);
+          let initialLimitCents = monthlyLimit === null ? null : Math.max(monthlyLimit, usedCredits);
+          setSavedLimitCents(initialLimitCents);
+          setDraftLimitCents(initialLimitCents);
         })
         .catch(() => {
-          if (Ie) {
+          if (isCancelled) {
             return;
           }
-          ve(null);
-          ce(null);
+          setSavedLimitCents(null);
+          setDraftLimitCents(null);
         });
       return () => {
-        Ie = true;
+        isCancelled = true;
       };
     };
-    pe = [context.credentials];
-    h[2] = context.credentials;
-    h[3] = dt;
-    h[4] = pe;
+    loadLimitDeps = [context.credentials];
+    $[2] = context.credentials;
+    $[3] = loadLimitEffect;
+    $[4] = loadLimitDeps;
   } else {
-    dt = h[3];
-    pe = h[4];
+    loadLimitEffect = $[3];
+    loadLimitDeps = $[4];
   }
-  P(dt, pe);
-  let ct;
+  useEffect(loadLimitEffect, loadLimitDeps);
+  let computedResetLabel;
   Te: {
     if (rateLimitState.resetsAt) {
-      let V;
-      if (h[5] !== rateLimitState.resetsAt) {
-        V = formatResetTime(rateLimitState.resetsAt, true);
-        h[5] = rateLimitState.resetsAt;
-        h[6] = V;
-      } else V = h[6];
-      ct = V;
+      let formattedResetTime;
+      if ($[5] !== rateLimitState.resetsAt) {
+        formattedResetTime = formatResetTime(rateLimitState.resetsAt, true);
+        $[5] = rateLimitState.resetsAt;
+        $[6] = formattedResetTime;
+      } else formattedResetTime = $[6];
+      computedResetLabel = formattedResetTime;
       break Te;
     }
-    ct = undefined;
+    computedResetLabel = undefined;
   }
-  let ji = ct;
-  let X = W !== undefined;
-  let V;
-  if (h[7] !== currency || h[8] !== X || h[9] !== W) {
-    V = !X ? "\u2026" : W === null ? "Unlimited" : formatCurrency(W, currency, "fit");
-    h[7] = currency;
-    h[8] = X;
-    h[9] = W;
-    h[10] = V;
-  } else V = h[10];
-  const label = `Adjust monthly spend limit: ${V}`;
+  let resetLabel = computedResetLabel;
+  let hasDraftLimit = draftLimitCents !== undefined;
+  let limitText;
+  if ($[7] !== currency || $[8] !== hasDraftLimit || $[9] !== draftLimitCents) {
+    limitText = !hasDraftLimit
+      ? "\u2026"
+      : draftLimitCents === null
+        ? "Unlimited"
+        : formatCurrency(draftLimitCents, currency, "fit");
+    $[7] = currency;
+    $[8] = hasDraftLimit;
+    $[9] = draftLimitCents;
+    $[10] = limitText;
+  } else limitText = $[10];
+  const label = `Adjust monthly spend limit: ${limitText}`;
   const hint =
-    J === null ? "\u2190 or \u2192 to set a limit" : "\u2190 or \u2192 to adjust \xB7 Del to remove limit";
-  let Ne;
-  if (h[11] !== label || h[12] !== hint) {
-    Ne = {
+    savedLimitCents === null
+      ? "\u2190 or \u2192 to set a limit"
+      : "\u2190 or \u2192 to adjust \xB7 Del to remove limit";
+  let adjustItem;
+  if ($[11] !== label || $[12] !== hint) {
+    adjustItem = {
       id: "adjust",
       label,
       hint,
     };
-    h[11] = label;
-    h[12] = hint;
-    h[13] = Ne;
-  } else Ne = h[13];
-  const hint_2 = ji ? `Resets ${ji}` : "";
-  let fe;
-  if (h[14] !== hint_2) {
-    fe = {
+    $[11] = label;
+    $[12] = hint;
+    $[13] = adjustItem;
+  } else adjustItem = $[13];
+  const hint_2 = resetLabel ? `Resets ${resetLabel}` : "";
+  let waitItem;
+  if ($[14] !== hint_2) {
+    waitItem = {
       id: "wait",
       label: "Wait for limit to reset",
       hint: hint_2,
     };
-    h[14] = hint_2;
-    h[15] = fe;
-  } else fe = h[15];
-  let B;
-  if (h[16] !== fe || h[17] !== Ne) {
-    B = [Ne, fe];
-    if (qt) {
-      let ro = Qt === "max" ? "Max 20x" : "Max";
-      let We;
-      if (h[19] === MEMO_CACHE_SENTINEL) {
-        We = {
+    $[14] = hint_2;
+    $[15] = waitItem;
+  } else waitItem = $[15];
+  let menuItemsDraft;
+  if ($[16] !== waitItem || $[17] !== adjustItem) {
+    menuItemsDraft = [adjustItem, waitItem];
+    if (showUpgradeOption) {
+      let maxPlanLabel = subscriptionType === "max" ? "Max 20x" : "Max";
+      let upgradeItem;
+      if ($[19] === MEMO_CACHE_SENTINEL) {
+        upgradeItem = {
           id: "upgrade",
-          label: `Upgrade to ${ro} for higher session limits every month`,
+          label: `Upgrade to ${maxPlanLabel} for higher session limits every month`,
           hint: "",
         };
-        h[19] = We;
-      } else We = h[19];
-      B.push(We);
+        $[19] = upgradeItem;
+      } else upgradeItem = $[19];
+      menuItemsDraft.push(upgradeItem);
     }
-    h[16] = fe;
-    h[17] = Ne;
-    h[18] = B;
-  } else B = h[18];
-  let G = B;
-  let We;
-  if (h[20] !== context || h[21] !== onDone) {
-    We = function Xe() {
+    $[16] = waitItem;
+    $[17] = adjustItem;
+    $[18] = menuItemsDraft;
+  } else menuItemsDraft = $[18];
+  let menuItems = menuItemsDraft;
+  let handleCancel;
+  if ($[20] !== context || $[21] !== onDone) {
+    handleCancel = function cancelAction() {
       logEvent("tengu_spend_limit_nudge_cancel", {});
       context.prefillRateLimitAutoQueueContinue?.();
       onDone(undefined, {
         display: "skip",
       });
     };
-    h[20] = context;
-    h[21] = onDone;
-    h[22] = We;
-  } else We = h[22];
-  let onCancel = We;
-  let F;
+    $[20] = context;
+    $[21] = onDone;
+    $[22] = handleCancel;
+  } else handleCancel = $[22];
+  let onCancel = handleCancel;
+  let handleSave;
   if (
-    h[23] !== context.credentials ||
-    h[24] !== currency ||
-    h[25] !== X ||
-    h[26] !== onDone ||
-    h[27] !== W ||
-    h[28] !== J ||
-    h[29] !== x ||
-    h[30] !== xe
+    $[23] !== context.credentials ||
+    $[24] !== currency ||
+    $[25] !== hasDraftLimit ||
+    $[26] !== onDone ||
+    $[27] !== draftLimitCents ||
+    $[28] !== savedLimitCents ||
+    $[29] !== isSaving ||
+    $[30] !== theme
   ) {
-    F = async function $e() {
-      if (!X || x) {
+    handleSave = async function saveLimitInternal() {
+      if (!hasDraftLimit || isSaving) {
         return;
       }
-      if (W === J) {
-        z(
-          J === null
+      if (draftLimitCents === savedLimitCents) {
+        setStatusMessage(
+          savedLimitCents === null
             ? "Press \u2190 or \u2192 to set a limit."
             : "Press \u2192 to raise the limit, or Del to remove it.",
         );
         return;
       }
-      Ce(true);
-      let H = W ?? null;
-      let D = await updateOverageSpendLimit(H, currency, context.credentials);
-      if (!D.ok) {
-        Ce(false);
-        z(
-          D.reason
-            ? `Could not update your spend limit: ${D.reason}`
+      setIsSaving(true);
+      let nextLimitCents = draftLimitCents ?? null;
+      let updateResult = await updateOverageSpendLimit(nextLimitCents, currency, context.credentials);
+      if (!updateResult.ok) {
+        setIsSaving(false);
+        setStatusMessage(
+          updateResult.reason
+            ? `Could not update your spend limit: ${updateResult.reason}`
             : "Could not update your spend limit. Press Enter to retry.",
         );
         return;
       }
-      let Zt = D.disabledUntil != null ? new Date(D.disabledUntil) : null;
-      let Ei = Zt != null && (Number.isNaN(Zt.getTime()) || Zt > new Date());
+      let disabledUntilDate =
+        updateResult.disabledUntil != null ? new Date(updateResult.disabledUntil) : null;
+      let isStillBlocked =
+        disabledUntilDate != null &&
+        (Number.isNaN(disabledUntilDate.getTime()) || disabledUntilDate > new Date());
       logEvent("tengu_spend_limit_nudge_save", {
-        removed: H === null,
-        reblocked: Ei,
+        removed: nextLimitCents === null,
+        reblocked: isStillBlocked,
       });
-      if (Ei) {
-        Ce(false);
-        let Be = D.usedCredits !== null ? Math.max(J ?? 0, D.usedCredits) : J;
-        ve(Be ?? null);
-        ce((ei) => (Be !== null && Be !== undefined && ei !== null ? Math.max(ei ?? 0, Be) : ei));
-        z(
-          D.usedCredits !== null
-            ? `You've already used ${formatCurrency(D.usedCredits, currency, "fit")} this month \u2014 set your limit above that.`
+      if (isStillBlocked) {
+        setIsSaving(false);
+        let usedCreditsValue =
+          updateResult.usedCredits !== null
+            ? Math.max(savedLimitCents ?? 0, updateResult.usedCredits)
+            : savedLimitCents;
+        setSavedLimitCents(usedCreditsValue ?? null);
+        setDraftLimitCents((previousUsedCredits) =>
+          usedCreditsValue !== null && usedCreditsValue !== undefined && previousUsedCredits !== null
+            ? Math.max(previousUsedCredits ?? 0, usedCreditsValue)
+            : previousUsedCredits,
+        );
+        setStatusMessage(
+          updateResult.usedCredits !== null
+            ? `You've already used ${formatCurrency(updateResult.usedCredits, currency, "fit")} this month \u2014 set your limit above that.`
             : "Your current spend is still over the new limit. Raise it higher or remove it.",
         );
         return;
       }
-      z(null);
+      setStatusMessage(null);
       markOverageAllowed();
-      if (H === null) onDone(color("success", xe)("Removed monthly spend limit"));
+      if (nextLimitCents === null) onDone(color("success", theme)("Removed monthly spend limit"));
       else
         onDone(
-          color("success", xe)(`Increased monthly spend limit to ${formatCurrency(H, currency, "fit")}`),
+          color(
+            "success",
+            theme,
+          )(`Increased monthly spend limit to ${formatCurrency(nextLimitCents, currency, "fit")}`),
         );
     };
-    h[23] = context.credentials;
-    h[24] = currency;
-    h[25] = X;
-    h[26] = onDone;
-    h[27] = W;
-    h[28] = J;
-    h[29] = x;
-    h[30] = xe;
-    h[31] = F;
-  } else F = h[31];
-  let $e = F;
-  let ge;
-  if (h[32] !== $e || h[33] !== context || h[34] !== onDone) {
-    ge = function Oe(Y) {
-      if (Y === "adjust" || Y === "upgrade") context.cancelRateLimitAutoQueueContinue?.();
-      else if (Y === "wait") context.prefillRateLimitAutoQueueContinue?.();
-      if (Y === "adjust") $e();
-      else if (Y === "wait") {
+    $[23] = context.credentials;
+    $[24] = currency;
+    $[25] = hasDraftLimit;
+    $[26] = onDone;
+    $[27] = draftLimitCents;
+    $[28] = savedLimitCents;
+    $[29] = isSaving;
+    $[30] = theme;
+    $[31] = handleSave;
+  } else handleSave = $[31];
+  let saveLimit = handleSave;
+  let handleSelect;
+  if ($[32] !== saveLimit || $[33] !== context || $[34] !== onDone) {
+    handleSelect = function selectItem(itemId) {
+      if (itemId === "adjust" || itemId === "upgrade") context.cancelRateLimitAutoQueueContinue?.();
+      else if (itemId === "wait") context.prefillRateLimitAutoQueueContinue?.();
+      if (itemId === "adjust") saveLimit();
+      else if (itemId === "wait") {
         logEvent("tengu_spend_limit_nudge_wait", {});
         onDone(undefined, {
           display: "skip",
         });
-      } else if (Y === "upgrade") {
+      } else if (itemId === "upgrade") {
         logEvent("tengu_spend_limit_nudge_upgrade", {});
-        import("./chunk-txp87wj5.js")
-          .then((ft) => {
-            let { callUpgradeFromSurface } = ft;
+        import("../upgrade/upgrade.js")
+          .then((upgradeModule) => {
+            let { callUpgradeFromSurface } = upgradeModule;
             return callUpgradeFromSurface(onDone, context, "spend_limit_options_menu");
           })
-          .then((ti) => {
-            if (ti) i(ti);
+          .then((upgradeElementResult) => {
+            if (upgradeElementResult) setUpgradeElement(upgradeElementResult);
           });
       }
     };
-    h[32] = $e;
-    h[33] = context;
-    h[34] = onDone;
-    h[35] = ge;
-  } else ge = h[35];
-  let Oe = ge;
-  let ft;
-  if (h[36] !== Oe || h[37] !== X || h[38] !== G || h[39] !== se || h[40] !== J || h[41] !== x) {
-    ft = function L(event) {
-      if (x) {
+    $[32] = saveLimit;
+    $[33] = context;
+    $[34] = onDone;
+    $[35] = handleSelect;
+  } else handleSelect = $[35];
+  let selectMenuItem = handleSelect;
+  let handleKeyDown;
+  if (
+    $[36] !== selectMenuItem ||
+    $[37] !== hasDraftLimit ||
+    $[38] !== menuItems ||
+    $[39] !== selectedIndex ||
+    $[40] !== savedLimitCents ||
+    $[41] !== isSaving
+  ) {
+    handleKeyDown = function onKeyDown(event) {
+      if (isSaving) {
         return;
       }
       if (event.key === "up") {
         event.preventDefault();
-        z(null);
-        lt(decrementNonNegative);
+        setStatusMessage(null);
+        setSelectedIndex(decrementNonNegative);
         return;
       }
       if (event.key === "down") {
         event.preventDefault();
-        z(null);
-        lt((Ii) => Math.min(G.length - 1, Ii + 1));
+        setStatusMessage(null);
+        setSelectedIndex((previousIndex) => Math.min(menuItems.length - 1, previousIndex + 1));
         return;
       }
       if (event.key === "return") {
         event.preventDefault();
-        let ii = G[se];
-        if (ii) Oe(ii.id);
+        let selectedItem = menuItems[selectedIndex];
+        if (selectedItem) selectMenuItem(selectedItem.id);
         return;
       }
-      if (G[se]?.id !== "adjust" || !X) {
+      if (menuItems[selectedIndex]?.id !== "adjust" || !hasDraftLimit) {
         return;
       }
       if (event.key === "left") {
         event.preventDefault();
-        z(null);
-        ce((ni) => stepCreditAmount(ni ?? null, -1, J ?? null));
+        setStatusMessage(null);
+        setDraftLimitCents((currentLimitCents) =>
+          stepCreditAmount(currentLimitCents ?? null, -1, savedLimitCents ?? null),
+        );
       } else if (event.key === "right") {
         event.preventDefault();
-        z(null);
-        ce((Ni) => stepCreditAmount(Ni ?? null, 1, J ?? null));
+        setStatusMessage(null);
+        setDraftLimitCents((currentLimitCents) =>
+          stepCreditAmount(currentLimitCents ?? null, 1, savedLimitCents ?? null),
+        );
       } else if (event.key === "delete" || event.key === "backspace") {
         event.preventDefault();
-        z(null);
-        ce(null);
+        setStatusMessage(null);
+        setDraftLimitCents(null);
       }
     };
-    h[36] = Oe;
-    h[37] = X;
-    h[38] = G;
-    h[39] = se;
-    h[40] = J;
-    h[41] = x;
-    h[42] = ft;
-  } else ft = h[42];
-  let onKeyDown = ft;
-  if (me) {
-    return me;
+    $[36] = selectMenuItem;
+    $[37] = hasDraftLimit;
+    $[38] = menuItems;
+    $[39] = selectedIndex;
+    $[40] = savedLimitCents;
+    $[41] = isSaving;
+    $[42] = handleKeyDown;
+  } else handleKeyDown = $[42];
+  let onKeyDown = handleKeyDown;
+  if (upgradeElement) {
+    return upgradeElement;
   }
-  let le;
-  if (h[43] !== balance.amount || h[44] !== currency) {
-    le = formatCurrency(balance.amount, currency);
-    h[43] = balance.amount;
-    h[44] = currency;
-    h[45] = le;
-  } else le = h[45];
-  const titleEnd = `Usage credit balance: ${le}`;
-  const isCancelActive = !x;
-  let He;
-  if (h[46] !== G || h[47] !== se) {
-    He = jsxProd_default(Box, {
+  let balanceText;
+  if ($[43] !== balance.amount || $[44] !== currency) {
+    balanceText = formatCurrency(balance.amount, currency);
+    $[43] = balance.amount;
+    $[44] = currency;
+    $[45] = balanceText;
+  } else balanceText = $[45];
+  const titleEnd = `Usage credit balance: ${balanceText}`;
+  const isCancelActive = !isSaving;
+  let menuList;
+  if ($[46] !== menuItems || $[47] !== selectedIndex) {
+    menuList = jsxProd_default(Box, {
       flexDirection: "column",
-      children: G.map((Ke, Wi) => {
-        let Xi = Wi === se;
+      children: menuItems.map((menuItem, menuItemIndex) => {
+        let isSelectedItem = menuItemIndex === selectedIndex;
         return jsxProd_default_2(
           Box,
           {
@@ -472,59 +511,59 @@ function RateLimitOptionsMenu(props) {
             gap: 2,
             children: [
               jsxProd_default_2(Text, {
-                color: Xi ? "suggestion" : undefined,
-                children: [Xi ? figures_default.pointer : " ", " ", Ke.label],
+                color: isSelectedItem ? "suggestion" : undefined,
+                children: [isSelectedItem ? figures_default.pointer : " ", " ", menuItem.label],
               }),
-              Ke.hint
+              menuItem.hint
                 ? jsxProd_default(Text, {
                     dimColor: true,
                     wrap: "truncate-end",
-                    children: Ke.hint,
+                    children: menuItem.hint,
                   })
                 : null,
             ],
           },
-          Ke.id,
+          menuItem.id,
         );
       }),
     });
-    h[46] = G;
-    h[47] = se;
-    h[48] = He;
-  } else He = h[48];
-  let Z;
-  if (h[49] !== ke || h[50] !== x) {
-    Z = x
+    $[46] = menuItems;
+    $[47] = selectedIndex;
+    $[48] = menuList;
+  } else menuList = $[48];
+  let statusView;
+  if ($[49] !== statusMessage || $[50] !== isSaving) {
+    statusView = isSaving
       ? jsxProd_default(WorkerBadge, {
           message: "Updating spend limit\u2026",
         })
-      : ke
+      : statusMessage
         ? jsxProd_default(Box, {
             children: jsxProd_default(Text, {
               color: "error",
-              children: ke,
+              children: statusMessage,
             }),
           })
         : null;
-    h[49] = ke;
-    h[50] = x;
-    h[51] = Z;
-  } else Z = h[51];
+    $[49] = statusMessage;
+    $[50] = isSaving;
+    $[51] = statusView;
+  } else statusView = $[51];
   let children;
-  if (h[52] !== onKeyDown || h[53] !== He || h[54] !== Z) {
+  if ($[52] !== onKeyDown || $[53] !== menuList || $[54] !== statusView) {
     children = jsxProd_default_2(FocusColumn, {
       gap: 1,
       onKeyDown,
-      children: [He, Z],
+      children: [menuList, statusView],
     });
-    h[52] = onKeyDown;
-    h[53] = He;
-    h[54] = Z;
-    h[55] = children;
-  } else children = h[55];
-  let Bi;
-  if (h[56] !== onCancel || h[57] !== titleEnd || h[58] !== isCancelActive || h[59] !== children) {
-    Bi = jsxProd_default(Dialog, {
+    $[52] = onKeyDown;
+    $[53] = menuList;
+    $[54] = statusView;
+    $[55] = children;
+  } else children = $[55];
+  let dialog;
+  if ($[56] !== onCancel || $[57] !== titleEnd || $[58] !== isCancelActive || $[59] !== children) {
+    dialog = jsxProd_default(Dialog, {
       title: "What do you want to do?",
       titleEnd,
       onCancel,
@@ -532,33 +571,33 @@ function RateLimitOptionsMenu(props) {
       color: "suggestion",
       children,
     });
-    h[56] = onCancel;
-    h[57] = titleEnd;
-    h[58] = isCancelActive;
-    h[59] = children;
-    h[60] = Bi;
-  } else Bi = h[60];
-  return Bi;
+    $[56] = onCancel;
+    $[57] = titleEnd;
+    $[58] = isCancelActive;
+    $[59] = children;
+    $[60] = dialog;
+  } else dialog = $[60];
+  return dialog;
 }
 //@ chunk-dg94x42s.js:24302-24339 sole-consumer
 function emitStatusChangeNow() {
   return emitStatusChange(Date.now());
 }
 //@ chunk-dg94x42s.js:24339-24379 sole-consumer
-function resetOfferPair(Ho) {
-  return [Ho.kind, resetOfferLabel(Ho)];
+function resetOfferPair(offer) {
+  return [offer.kind, resetOfferLabel(offer)];
 }
 //@ chunk-dg94x42s.js:24379-24394 sole-consumer
 function noop() {}
 //@ chunk-dg94x42s.js:24394-24409 sole-consumer
 function noop_2() {}
 //@ chunk-dg94x42s.js:24409-24441 sole-consumer
-function optionValue(ks) {
-  return ks.value;
+function optionValue(option) {
+  return option.value;
 }
 //@ chunk-dg94x42s.js:24441-24476 sole-consumer
-function enumOfOptionValue(Ds) {
-  return fromEnum(Ds.value);
+function enumOfOptionValue(option) {
+  return fromEnum(option.value);
 }
 //@ chunk-dg94x42s.js:24476-24491 sole-consumer
 function noop_3() {}
@@ -567,13 +606,13 @@ function noop_4() {}
 //@ chunk-dg94x42s.js:24506-24521 sole-consumer
 function noop_5() {}
 //@ chunk-dg94x42s.js:24521-24552 sole-consumer
-var overageOptionsSchema = DoctorLazy(() => array(tuple([string(), string()])));
+var overageOptionsSchema = DoctorLazy(() => array(tuple([stringSchema(), stringSchema()])));
 //@ chunk-dg94x42s.js:24552-24869 affinity
 /**
  * 选项是升级或额外用量。
  */
-function isUpgradeOption(k) {
-  switch (k) {
+function isUpgradeOption(value) {
+  switch (value) {
     case "upgrade":
     case "extra-usage":
       return true;
@@ -593,125 +632,142 @@ function isUpgradeOption(k) {
 }
 //@ chunk-dg94x42s.js:24869-37678 fingerprint = RateLimitOptionsMenu (0.363)
 function RateLimitOptionsMenu_2(props) {
-  let l = w(177);
+  let $ = useMemoCache(177);
   let { onDone, context } = props;
-  let [g, me] = y(null);
+  let [localJsx, setLocalJsx] = useState(null);
   let claudeAiLimits = useRateLimitState();
   let { storageV5 } = useTheme_2();
-  let h;
-  if (l[0] === MEMO_CACHE_SENTINEL) {
-    h = getSubscriptionType();
-    l[0] = h;
-  } else h = l[0];
-  let at = h;
-  let Qt;
-  if (l[1] === MEMO_CACHE_SENTINEL) {
-    Qt = getRateLimitTier();
-    l[1] = Qt;
-  } else Qt = l[1];
-  let Ri = Qt;
-  let oo = getOauthAccountInfo()?.hasExtraUsageEnabled === true;
-  let qt = getOauthAccountInfo()?.billingType === "usage_based";
-  let J = at === "max" && Ri === "default_claude_max_20x";
-  let ve = at === "team" || at === "enterprise";
-  let W;
-  if (l[2] === MEMO_CACHE_SENTINEL) {
-    W = getFeatureValue_CACHED_MAY_BE_STALE("tengu_jade_anvil_4", false);
-    l[2] = W;
-  } else W = l[2];
-  let ce = W;
+  let cachedSubscriptionType;
+  if ($[0] === MEMO_CACHE_SENTINEL) {
+    cachedSubscriptionType = getSubscriptionType();
+    $[0] = cachedSubscriptionType;
+  } else cachedSubscriptionType = $[0];
+  let subscriptionType = cachedSubscriptionType;
+  let cachedRateLimitTier;
+  if ($[1] === MEMO_CACHE_SENTINEL) {
+    cachedRateLimitTier = getRateLimitTier();
+    $[1] = cachedRateLimitTier;
+  } else cachedRateLimitTier = $[1];
+  let rateLimitTier = cachedRateLimitTier;
+  let hasExtraUsageEnabled = getOauthAccountInfo()?.hasExtraUsageEnabled === true;
+  let isUsageBasedBilling = getOauthAccountInfo()?.billingType === "usage_based";
+  let isMax20xPlan = subscriptionType === "max" && rateLimitTier === "default_claude_max_20x";
+  let isTeamOrEnterprise = subscriptionType === "team" || subscriptionType === "enterprise";
+  let cachedJadeAnvilFlag;
+  if ($[2] === MEMO_CACHE_SENTINEL) {
+    cachedJadeAnvilFlag = getFeatureValue_CACHED_MAY_BE_STALE("tengu_jade_anvil_4", false);
+    $[2] = cachedJadeAnvilFlag;
+  } else cachedJadeAnvilFlag = $[2];
+  let putUpgradeOptionsFirst = cachedJadeAnvilFlag;
   let upgradePaths = claudeAiLimits.upgradePaths;
-  let [Ce] = y(emitStatusChangeNow);
-  let se = currentLimitsOrLatest(claudeAiLimits, Ce);
-  let lt = se !== null;
-  let resetsAt = se?.resetsAt;
-  let resetReached = useResetReached(resetsAt !== undefined ? resetsAt * 1000 : null);
-  let { label } = getWaitOptionLabel(resetsAt, resetReached);
+  let [statusChangeCallback] = useState(emitStatusChangeNow);
+  let currentLimits = currentLimitsOrLatest(claudeAiLimits, statusChangeCallback);
+  let hasLimits = currentLimits !== null;
+  let resetsAt = currentLimits?.resetsAt;
+  let immediate = useResetReached(resetsAt !== undefined ? resetsAt * 1000 : null);
+  let { label } = getWaitOptionLabel(resetsAt, immediate);
   let phase = useQuotaAutoResumeState().phase;
-  let ut;
-  if (l[3] !== phase) {
-    ut = isPhaseActive(phase);
-    l[3] = phase;
-    l[4] = ut;
-  } else ut = l[4];
-  let Ie = ut;
-  let Vt;
-  if (l[5] !== claudeAiLimits) {
-    Vt = canOfferLowPriority(claudeAiLimits);
-    l[5] = claudeAiLimits;
-    l[6] = Vt;
-  } else Vt = l[6];
-  let ae = Vt;
-  let phase_2 = yt(subscribeResetChanges, getResetFlowPhase, getResetFlowPhase).phase;
-  let phase_3 = yt(onUsageCreditStateChange, currentUsageCreditState, currentUsageCreditState).phase;
-  let ct;
-  if (l[7] !== claudeAiLimits) {
-    ct = () => jsonStringify(availableResetOffers(claudeAiLimits).map(resetOfferPair));
-    l[7] = claudeAiLimits;
-    l[8] = ct;
-  } else ct = l[8];
-  let V = yt(onUsageCreditStateChange, ct);
-  let Te = V !== "[]";
-  let ji = yt(onUsageCreditStateChange, isClaimingReset);
-  let X;
-  if (l[9] !== claudeAiLimits) {
-    X = () => canArmLowPriorityReset(claudeAiLimits);
-    l[9] = claudeAiLimits;
-    l[10] = X;
-  } else X = l[10];
-  let ps = yt(subscribeResetChanges, X);
-  let pt;
-  if (l[11] !== claudeAiLimits) {
-    pt = () => resetsUsedUpLine(claudeAiLimits);
-    l[11] = claudeAiLimits;
-    l[12] = pt;
-  } else pt = l[12];
-  let Gt = yt(onUsageCreditStateChange, pt);
-  let Ne;
-  if (l[13] !== claudeAiLimits) {
-    Ne = () => usageCreditsSpentLine(claudeAiLimits);
-    l[13] = claudeAiLimits;
-    l[14] = Ne;
-  } else Ne = l[14];
-  let Yt = yt(subscribeResetChanges, Ne);
-  let phase_4 = yt(onCreditOfferPromptChange, getCreditOfferPhase, getCreditOfferPhase).phase;
-  let B = yt(onCreditOfferPromptChange, getOfferMenuSuffix, getOfferMenuSuffix);
-  let [ro, We] = y(false);
-  let G = R(false);
-  let Xe = R(false);
-  let F = !Te && !ji && ps;
-  let H = Te || F ? undefined : Gt;
-  let D = F || Te || H !== undefined ? undefined : Yt;
-  let [Zt, Ei] = y(false);
-  let Be;
-  if (l[15] === MEMO_CACHE_SENTINEL) {
-    Be = getFeatureValue_CACHED_MAY_BE_STALE(TENGU_PEWTER_SUMMIT, false);
-    l[15] = Be;
-  } else Be = l[15];
-  let ei = Be;
-  let $e;
-  if (l[16] !== claudeAiLimits.overageDisabledReason) {
-    $e =
-      ei &&
-      !ve &&
+  let isAutoResumeActiveCached;
+  if ($[3] !== phase) {
+    isAutoResumeActiveCached = isPhaseActive(phase);
+    $[3] = phase;
+    $[4] = isAutoResumeActiveCached;
+  } else isAutoResumeActiveCached = $[4];
+  let isAutoResumeActive = isAutoResumeActiveCached;
+  let canOfferLowPriorityCached;
+  if ($[5] !== claudeAiLimits) {
+    canOfferLowPriorityCached = canOfferLowPriority(claudeAiLimits);
+    $[5] = claudeAiLimits;
+    $[6] = canOfferLowPriorityCached;
+  } else canOfferLowPriorityCached = $[6];
+  let lowPriorityEnabled = canOfferLowPriorityCached;
+  let phase_2 = useSyncExternalStore(subscribeResetChanges, getResetFlowPhase, getResetFlowPhase).phase;
+  let phase_3 = useSyncExternalStore(
+    onUsageCreditStateChange,
+    currentUsageCreditState,
+    currentUsageCreditState,
+  ).phase;
+  let resetOffersJsonCached;
+  if ($[7] !== claudeAiLimits) {
+    resetOffersJsonCached = () => jsonStringify(availableResetOffers(claudeAiLimits).map(resetOfferPair));
+    $[7] = claudeAiLimits;
+    $[8] = resetOffersJsonCached;
+  } else resetOffersJsonCached = $[8];
+  let resetOffersJson = useSyncExternalStore(onUsageCreditStateChange, resetOffersJsonCached);
+  let hasResetOffers = resetOffersJson !== "[]";
+  let resetClaimInFlight = useSyncExternalStore(onUsageCreditStateChange, isClaimingReset);
+  let canArmResetCached;
+  if ($[9] !== claudeAiLimits) {
+    canArmResetCached = () => canArmLowPriorityReset(claudeAiLimits);
+    $[9] = claudeAiLimits;
+    $[10] = canArmResetCached;
+  } else canArmResetCached = $[10];
+  let canArmReset = useSyncExternalStore(subscribeResetChanges, canArmResetCached);
+  let getResetsUsedUpLine;
+  if ($[11] !== claudeAiLimits) {
+    getResetsUsedUpLine = () => resetsUsedUpLine(claudeAiLimits);
+    $[11] = claudeAiLimits;
+    $[12] = getResetsUsedUpLine;
+  } else getResetsUsedUpLine = $[12];
+  let resetsUsedUpText = useSyncExternalStore(onUsageCreditStateChange, getResetsUsedUpLine);
+  let getUsageCreditsSpentLine;
+  if ($[13] !== claudeAiLimits) {
+    getUsageCreditsSpentLine = () => usageCreditsSpentLine(claudeAiLimits);
+    $[13] = claudeAiLimits;
+    $[14] = getUsageCreditsSpentLine;
+  } else getUsageCreditsSpentLine = $[14];
+  let creditsSpentText = useSyncExternalStore(subscribeResetChanges, getUsageCreditsSpentLine);
+  let phase_4 = useSyncExternalStore(
+    onCreditOfferPromptChange,
+    getCreditOfferPhase,
+    getCreditOfferPhase,
+  ).phase;
+  let offerMenuSuffix = useSyncExternalStore(
+    onCreditOfferPromptChange,
+    getOfferMenuSuffix,
+    getOfferMenuSuffix,
+  );
+  let [isCheckingReset, setIsCheckingReset] = useState(false);
+  let resetSelectedRef = useRef(false);
+  let resetCancelledRef = useRef(false);
+  let canOfferLimitReset = !hasResetOffers && !resetClaimInFlight && canArmReset;
+  let resetsUsedUpEntry = hasResetOffers || canOfferLimitReset ? undefined : resetsUsedUpText;
+  let usageCreditsSpentEntry =
+    canOfferLimitReset || hasResetOffers || resetsUsedUpEntry !== undefined ? undefined : creditsSpentText;
+  let [isResettingLimits, setIsResettingLimits] = useState(false);
+  let cachedPewterSummitFlag;
+  if ($[15] === MEMO_CACHE_SENTINEL) {
+    cachedPewterSummitFlag = getFeatureValue_CACHED_MAY_BE_STALE(TENGU_PEWTER_SUMMIT, false);
+    $[15] = cachedPewterSummitFlag;
+  } else cachedPewterSummitFlag = $[15];
+  let pewterSummitFlag = cachedPewterSummitFlag;
+  let shouldFetchPrepaidBalanceCached;
+  if ($[16] !== claudeAiLimits.overageDisabledReason) {
+    shouldFetchPrepaidBalanceCached =
+      pewterSummitFlag &&
+      !isTeamOrEnterprise &&
       claudeAiLimits.overageDisabledReason === "org_level_disabled_until" &&
       isConsumerPlan() &&
       usageCreditsCommand.isEnabled();
-    l[16] = claudeAiLimits.overageDisabledReason;
-    l[17] = $e;
-  } else $e = l[17];
-  let ge = $e;
-  let [Y, ft] = y(null);
-  let Ji;
-  if (l[18] !== claudeAiLimits.overageDisabledReason || l[19] !== context.credentials || l[20] !== ge) {
-    Ji = () => {
-      if (!ge) {
+    $[16] = claudeAiLimits.overageDisabledReason;
+    $[17] = shouldFetchPrepaidBalanceCached;
+  } else shouldFetchPrepaidBalanceCached = $[17];
+  let shouldFetchPrepaidBalance = shouldFetchPrepaidBalanceCached;
+  let [prepaidBalance, setPrepaidBalance] = useState(null);
+  let prepaidBalanceEffect;
+  if (
+    $[18] !== claudeAiLimits.overageDisabledReason ||
+    $[19] !== context.credentials ||
+    $[20] !== shouldFetchPrepaidBalance
+  ) {
+    prepaidBalanceEffect = () => {
+      if (!shouldFetchPrepaidBalance) {
         return;
       }
-      let ti = false;
+      let isCancelled = false;
       fetchPrepaidBalance(context.credentials)
         .then((prepaidBalance) => {
-          if (ti || !prepaidBalance) {
+          if (isCancelled || !prepaidBalance) {
             return;
           }
           if (
@@ -720,266 +776,282 @@ function RateLimitOptionsMenu_2(props) {
               balanceMinorUnits: prepaidBalance.amount,
             })
           )
-            ft(prepaidBalance);
+            setPrepaidBalance(prepaidBalance);
         })
         .catch(noop);
       return () => {
-        ti = true;
+        isCancelled = true;
       };
     };
-    l[18] = claudeAiLimits.overageDisabledReason;
-    l[19] = context.credentials;
-    l[20] = ge;
-    l[21] = Ji;
-  } else Ji = l[21];
-  let M;
-  if (l[22] !== ge) {
-    M = [ge];
-    l[22] = ge;
-    l[23] = M;
-  } else M = l[23];
-  P(Ji, M);
-  let Ii;
-  if (l[24] === MEMO_CACHE_SENTINEL) {
-    Ii = ve && !isConsumerPlan();
-    l[24] = Ii;
-  } else Ii = l[24];
-  let ii = Ii;
+    $[18] = claudeAiLimits.overageDisabledReason;
+    $[19] = context.credentials;
+    $[20] = shouldFetchPrepaidBalance;
+    $[21] = prepaidBalanceEffect;
+  } else prepaidBalanceEffect = $[21];
+  let prepaidBalanceDeps;
+  if ($[22] !== shouldFetchPrepaidBalance) {
+    prepaidBalanceDeps = [shouldFetchPrepaidBalance];
+    $[22] = shouldFetchPrepaidBalance;
+    $[23] = prepaidBalanceDeps;
+  } else prepaidBalanceDeps = $[23];
+  useEffect(prepaidBalanceEffect, prepaidBalanceDeps);
+  let isOrgPlanCached;
+  if ($[24] === MEMO_CACHE_SENTINEL) {
+    isOrgPlanCached = isTeamOrEnterprise && !isConsumerPlan();
+    $[24] = isOrgPlanCached;
+  } else isOrgPlanCached = $[24];
+  let isOrgPlan = isOrgPlanCached;
   let isScreenReaderEnabled = useIsScreenReaderEnabled();
-  let Ni;
-  if (l[25] !== claudeAiLimits.overageScope || l[26] !== isScreenReaderEnabled || l[27] !== upgradePaths) {
-    Ni =
-      ii &&
+  let canOfferExtraUsageCached;
+  if ($[25] !== claudeAiLimits.overageScope || $[26] !== isScreenReaderEnabled || $[27] !== upgradePaths) {
+    canOfferExtraUsageCached =
+      isOrgPlan &&
       isAutoResumeOfferEnabled(upgradePaths) &&
       !isBgSession() &&
       !isScreenReaderEnabled &&
       claudeAiLimits.overageScope !== "group_pool" &&
       getUsageCreditsFlowConfig()?.mode === "one_step";
-    l[25] = claudeAiLimits.overageScope;
-    l[26] = isScreenReaderEnabled;
-    l[27] = upgradePaths;
-    l[28] = Ni;
-  } else Ni = l[28];
-  let L = Ni;
-  let [le, oi] = y(null);
-  let Fe = R(null);
-  let He = R(false);
-  let Ke;
-  let Wi;
-  if (l[29] !== context.credentials || l[30] !== L) {
-    Ke = () => {
-      if (!L || He.current) {
+    $[25] = claudeAiLimits.overageScope;
+    $[26] = isScreenReaderEnabled;
+    $[27] = upgradePaths;
+    $[28] = canOfferExtraUsageCached;
+  } else canOfferExtraUsageCached = $[28];
+  let canOfferExtraUsage = canOfferExtraUsageCached;
+  let [extraUsageResult, setExtraUsageResult] = useState(null);
+  let extraUsageFetchedAtRef = useRef(null);
+  let extraUsageRequestedRef = useRef(false);
+  let extraUsageEffect;
+  let extraUsageDeps;
+  if ($[29] !== context.credentials || $[30] !== canOfferExtraUsage) {
+    extraUsageEffect = () => {
+      if (!canOfferExtraUsage || extraUsageRequestedRef.current) {
         return;
       }
-      He.current = true;
+      extraUsageRequestedRef.current = true;
       runExtraUsage(
         {
           openInBrowser: false,
         },
         context.credentials,
       )
-        .then((Xi) => {
-          Fe.current = Date.now();
-          oi(Xi);
+        .then((extraUsageResponse) => {
+          extraUsageFetchedAtRef.current = Date.now();
+          setExtraUsageResult(extraUsageResponse);
         })
         .catch(noop_2);
     };
-    Wi = [L, context.credentials];
-    l[29] = context.credentials;
-    l[30] = L;
-    l[31] = Ke;
-    l[32] = Wi;
+    extraUsageDeps = [canOfferExtraUsage, context.credentials];
+    $[29] = context.credentials;
+    $[30] = canOfferExtraUsage;
+    $[31] = extraUsageEffect;
+    $[32] = extraUsageDeps;
   } else {
-    Ke = l[31];
-    Wi = l[32];
+    extraUsageEffect = $[31];
+    extraUsageDeps = $[32];
   }
-  P(Ke, Wi);
-  let Z = L && le?.type === "message" ? le.value : null;
-  let [gt, Bi] = y(false);
-  let $i = R(false);
-  let Fi = R(false);
-  let Hi = R(null);
+  useEffect(extraUsageEffect, extraUsageDeps);
+  let extraUsageMessage =
+    canOfferExtraUsage && extraUsageResult?.type === "message" ? extraUsageResult.value : null;
+  let [isSendingAdminRequest, setIsSendingAdminRequest] = useState(false);
+  let extraUsageSelectedRef = useRef(false);
+  let typedInputRef = useRef(false);
+  let lastFocusAtRef = useRef(null);
   let hasBillingAccess = useInputClock();
-  let Ki = R(null);
-  let Qi = R(null);
+  let optionsChangedAtRef = useRef(null);
+  let lastOptionsKeyRef = useRef(null);
   let { refusedWithin, noteRefused } = useRefusalTracker();
-  let Se;
-  if (l[33] !== Z || l[34] !== upgradePaths || l[35] !== B) {
-    Se = [];
-    let fs = upgradePaths !== undefined;
+  let upgradeOptions;
+  if ($[33] !== extraUsageMessage || $[34] !== upgradePaths || $[35] !== offerMenuSuffix) {
+    upgradeOptions = [];
+    let hasUpgradePaths = upgradePaths !== undefined;
     if (isAutoResumeOfferEnabled(upgradePaths)) {
-      let so = qt ? "usage" : "usage credits";
-      let Ue;
-      if (ii) Ue = "Ask your admin for more usage";
+      let creditsNoun = isUsageBasedBilling ? "usage" : "usage credits";
+      let extraUsageLabel;
+      if (isOrgPlan) extraUsageLabel = "Ask your admin for more usage";
       else {
-        Ue = oo ? `Add funds to continue with ${so}` : `Switch to ${so}`;
-        if (B !== undefined && !qt) Ue = `${Ue} \xB7 ${B}`;
+        extraUsageLabel = hasExtraUsageEnabled
+          ? `Add funds to continue with ${creditsNoun}`
+          : `Switch to ${creditsNoun}`;
+        if (offerMenuSuffix !== undefined && !isUsageBasedBilling)
+          extraUsageLabel = `${extraUsageLabel} \xB7 ${offerMenuSuffix}`;
       }
-      let he;
-      if (l[37] !== Z || l[38] !== Ue) {
-        he =
-          Z !== null
+      let extraUsageOption;
+      if ($[37] !== extraUsageMessage || $[38] !== extraUsageLabel) {
+        extraUsageOption =
+          extraUsageMessage !== null
             ? {
-                label: Z,
+                label: extraUsageMessage,
                 value: "extra-usage",
                 disabled: true,
               }
             : {
-                label: Ue,
+                label: extraUsageLabel,
                 value: "extra-usage",
               };
-        l[37] = Z;
-        l[38] = Ue;
-        l[39] = he;
-      } else he = l[39];
-      Se.push(he);
+        $[37] = extraUsageMessage;
+        $[38] = extraUsageLabel;
+        $[39] = extraUsageOption;
+      } else extraUsageOption = $[39];
+      upgradeOptions.push(extraUsageOption);
     }
     if (
-      fs
+      hasUpgradePaths
         ? upgradePaths.includes("upgrade_plan") && upgradeCommand.isEnabled()
-        : !J && !ve && upgradeCommand.isEnabled()
+        : !isMax20xPlan && !isTeamOrEnterprise && upgradeCommand.isEnabled()
     ) {
-      let he;
-      if (l[40] === MEMO_CACHE_SENTINEL) {
-        he = {
+      let upgradeOption;
+      if ($[40] === MEMO_CACHE_SENTINEL) {
+        upgradeOption = {
           label: "Upgrade your plan",
           value: "upgrade",
         };
-        l[40] = he;
-      } else he = l[40];
-      Se.push(he);
+        $[40] = upgradeOption;
+      } else upgradeOption = $[40];
+      upgradeOptions.push(upgradeOption);
     }
-    l[33] = Z;
-    l[34] = upgradePaths;
-    l[35] = B;
-    l[36] = Se;
-  } else Se = l[36];
-  let he;
-  if (l[41] === MEMO_CACHE_SENTINEL) {
-    he = {
-      label: qt ? "Stop" : "Stop and wait for limit to reset",
+    $[33] = extraUsageMessage;
+    $[34] = upgradePaths;
+    $[35] = offerMenuSuffix;
+    $[36] = upgradeOptions;
+  } else upgradeOptions = $[36];
+  let stopOption;
+  if ($[41] === MEMO_CACHE_SENTINEL) {
+    stopOption = {
+      label: isUsageBasedBilling ? "Stop" : "Stop and wait for limit to reset",
       value: "cancel",
     };
-    l[41] = he;
-  } else he = l[41];
-  let ao = he;
-  let lo;
-  if (l[42] !== label || l[43] !== lt || l[44] !== Ie) {
-    lo = Ie
+    $[41] = stopOption;
+  } else stopOption = $[41];
+  let stopEntry = stopOption;
+  let autoResumeOptionDraft;
+  if ($[42] !== label || $[43] !== hasLimits || $[44] !== isAutoResumeActive) {
+    autoResumeOptionDraft = isAutoResumeActive
       ? {
           label: "Don\u2019t continue automatically",
           value: "cancel-auto-resume",
         }
-      : lt
+      : hasLimits
         ? {
             label,
             value: "auto-resume",
           }
         : undefined;
-    l[42] = label;
-    l[43] = lt;
-    l[44] = Ie;
-    l[45] = lo;
-  } else lo = l[45];
-  let ri = lo;
-  let K;
-  if (l[46] !== ri || l[47] !== V || l[48] !== H || l[49] !== D || l[50] !== F || l[51] !== ae) {
-    K = [];
-    for (const [gs, hs] of overageOptionsSchema().parse(jsonParse(V))) {
-      let found = LIMIT_CATEGORIES.find((bs) => bs === gs);
+    $[42] = label;
+    $[43] = hasLimits;
+    $[44] = isAutoResumeActive;
+    $[45] = autoResumeOptionDraft;
+  } else autoResumeOptionDraft = $[45];
+  let autoResumeOption = autoResumeOptionDraft;
+  let resetOptions;
+  if (
+    $[46] !== autoResumeOption ||
+    $[47] !== resetOffersJson ||
+    $[48] !== resetsUsedUpEntry ||
+    $[49] !== usageCreditsSpentEntry ||
+    $[50] !== canOfferLimitReset ||
+    $[51] !== lowPriorityEnabled
+  ) {
+    resetOptions = [];
+    for (const [offerKey, offerLabel] of overageOptionsSchema().parse(jsonParse(resetOffersJson))) {
+      let found = LIMIT_CATEGORIES.find((category) => category === offerKey);
       if (found !== undefined)
-        K.push({
-          label: hs,
+        resetOptions.push({
+          label: offerLabel,
           value: `cedar-ember-${found}`,
         });
     }
-    if (V === "[]" && H !== undefined) {
-      let O;
-      if (l[53] !== H) {
-        O = {
-          label: H,
+    if (resetOffersJson === "[]" && resetsUsedUpEntry !== undefined) {
+      let spentEntryOption;
+      if ($[53] !== resetsUsedUpEntry) {
+        spentEntryOption = {
+          label: resetsUsedUpEntry,
           value: "cedar-ember-spent",
           disabled: true,
         };
-        l[53] = H;
-        l[54] = O;
-      } else O = l[54];
-      K.push(O);
+        $[53] = resetsUsedUpEntry;
+        $[54] = spentEntryOption;
+      } else spentEntryOption = $[54];
+      resetOptions.push(spentEntryOption);
     }
-    if (F) {
-      let O;
-      if (l[55] === MEMO_CACHE_SENTINEL) {
-        O = {
+    if (canOfferLimitReset) {
+      let resetOfferOption;
+      if ($[55] === MEMO_CACHE_SENTINEL) {
+        resetOfferOption = {
           label: getLimitResetCopy().label,
           value: "juniper-tide",
         };
-        l[55] = O;
-      } else O = l[55];
-      K.push(O);
-    } else if (D !== undefined) {
-      let O;
-      if (l[56] !== D) {
-        O = {
-          label: D,
+        $[55] = resetOfferOption;
+      } else resetOfferOption = $[55];
+      resetOptions.push(resetOfferOption);
+    } else if (usageCreditsSpentEntry !== undefined) {
+      let spentTideOption;
+      if ($[56] !== usageCreditsSpentEntry) {
+        spentTideOption = {
+          label: usageCreditsSpentEntry,
           value: "juniper-tide-spent",
           disabled: true,
         };
-        l[56] = D;
-        l[57] = O;
-      } else O = l[57];
-      K.push(O);
+        $[56] = usageCreditsSpentEntry;
+        $[57] = spentTideOption;
+      } else spentTideOption = $[57];
+      resetOptions.push(spentTideOption);
     }
-    if (ri) K.push(ri);
-    if (ae) {
-      let O;
-      if (l[58] === MEMO_CACHE_SENTINEL) {
-        O = {
+    if (autoResumeOption) resetOptions.push(autoResumeOption);
+    if (lowPriorityEnabled) {
+      let lowPriorityOption;
+      if ($[58] === MEMO_CACHE_SENTINEL) {
+        lowPriorityOption = {
           label: statusLineShouldDisplay().label,
           value: "low-priority",
         };
-        l[58] = O;
-      } else O = l[58];
-      K.push(O);
+        $[58] = lowPriorityOption;
+      } else lowPriorityOption = $[58];
+      resetOptions.push(lowPriorityOption);
     }
-    l[46] = ri;
-    l[47] = V;
-    l[48] = H;
-    l[49] = D;
-    l[50] = F;
-    l[51] = ae;
-    l[52] = K;
-  } else K = l[52];
-  let O;
-  if (l[59] !== Se || l[60] !== L || l[61] !== K) {
-    O = ce && !L ? [...Se, ao, ...K] : [ao, ...K, ...Se];
-    l[59] = Se;
-    l[60] = L;
-    l[61] = K;
-    l[62] = O;
-  } else O = l[62];
-  let T = O;
-  let mo;
-  let co;
-  if (l[63] !== T) {
-    mo = () => {
-      let joined = T.map(optionValue).join(" ");
-      if (Qi.current !== null && Qi.current !== joined) Ki.current = Date.now();
-      Qi.current = joined;
+    $[46] = autoResumeOption;
+    $[47] = resetOffersJson;
+    $[48] = resetsUsedUpEntry;
+    $[49] = usageCreditsSpentEntry;
+    $[50] = canOfferLimitReset;
+    $[51] = lowPriorityEnabled;
+    $[52] = resetOptions;
+  } else resetOptions = $[52];
+  let allOptions;
+  if ($[59] !== upgradeOptions || $[60] !== canOfferExtraUsage || $[61] !== resetOptions) {
+    allOptions =
+      putUpgradeOptionsFirst && !canOfferExtraUsage
+        ? [...upgradeOptions, stopEntry, ...resetOptions]
+        : [stopEntry, ...resetOptions, ...upgradeOptions];
+    $[59] = upgradeOptions;
+    $[60] = canOfferExtraUsage;
+    $[61] = resetOptions;
+    $[62] = allOptions;
+  } else allOptions = $[62];
+  let options = allOptions;
+  let trackOptionsChange;
+  let optionsDeps;
+  if ($[63] !== options) {
+    trackOptionsChange = () => {
+      let joined = options.map(optionValue).join(" ");
+      if (lastOptionsKeyRef.current !== null && lastOptionsKeyRef.current !== joined)
+        optionsChangedAtRef.current = Date.now();
+      lastOptionsKeyRef.current = joined;
     };
-    co = [T];
-    l[63] = T;
-    l[64] = mo;
-    l[65] = co;
+    optionsDeps = [options];
+    $[63] = options;
+    $[64] = trackOptionsChange;
+    $[65] = optionsDeps;
   } else {
-    mo = l[64];
-    co = l[65];
+    trackOptionsChange = $[64];
+    optionsDeps = $[65];
   }
-  zt(mo, co);
-  let fo;
-  if (l[66] !== hasBillingAccess || l[67] !== noteRefused || l[68] !== refusedWithin) {
-    fo = function Pe() {
+  useLayoutEffect(trackOptionsChange, optionsDeps);
+  let shouldRefuseInputCached;
+  if ($[66] !== hasBillingAccess || $[67] !== noteRefused || $[68] !== refusedWithin) {
+    shouldRefuseInputCached = function shouldRefuseRecentInput() {
       if (
-        (Ki.current !== null && isWithinRecentInput(hasBillingAccess, Ki.current, RECENT_INPUT_GUARD_MS)) ||
+        (optionsChangedAtRef.current !== null &&
+          isWithinRecentInput(hasBillingAccess, optionsChangedAtRef.current, RECENT_INPUT_GUARD_MS)) ||
         refusedWithin(RECENT_INPUT_GUARD_MS)
       ) {
         noteRefused();
@@ -987,262 +1059,270 @@ function RateLimitOptionsMenu_2(props) {
       }
       return false;
     };
-    l[66] = hasBillingAccess;
-    l[67] = noteRefused;
-    l[68] = refusedWithin;
-    l[69] = fo;
-  } else fo = l[69];
-  let Pe = fo;
-  let go = R(false);
-  let ho;
-  let bo;
-  if (l[70] !== claudeAiLimits || l[71] !== context.submittedFromComposer || l[72] !== T) {
-    ho = () => {
-      if (go.current) {
+    $[66] = hasBillingAccess;
+    $[67] = noteRefused;
+    $[68] = refusedWithin;
+    $[69] = shouldRefuseInputCached;
+  } else shouldRefuseInputCached = $[69];
+  let shouldRefuseInput = shouldRefuseInputCached;
+  let loggedShownRef = useRef(false);
+  let logMenuShownEffect;
+  let logMenuShownDeps;
+  if ($[70] !== claudeAiLimits || $[71] !== context.submittedFromComposer || $[72] !== options) {
+    logMenuShownEffect = () => {
+      if (loggedShownRef.current) {
         return;
       }
-      go.current = true;
+      loggedShownRef.current = true;
       logEvent("tengu_rate_limit_options_menu_shown", {
         ...getRateLimitEventProps(claudeAiLimits),
         ...getCreditOfferForRateLimit(),
         entry: isFrozenMarker(context.submittedFromComposer) ? lit("typed") : lit("not_typed"),
-        rows: T.map(enumOfOptionValue),
+        rows: options.map(enumOfOptionValue),
         blocked: isAutoResumableLimit(claudeAiLimits),
       });
     };
-    bo = [claudeAiLimits, context.submittedFromComposer, T];
-    l[70] = claudeAiLimits;
-    l[71] = context.submittedFromComposer;
-    l[72] = T;
-    l[73] = ho;
-    l[74] = bo;
+    logMenuShownDeps = [claudeAiLimits, context.submittedFromComposer, options];
+    $[70] = claudeAiLimits;
+    $[71] = context.submittedFromComposer;
+    $[72] = options;
+    $[73] = logMenuShownEffect;
+    $[74] = logMenuShownDeps;
   } else {
-    ho = l[73];
-    bo = l[74];
+    logMenuShownEffect = $[73];
+    logMenuShownDeps = $[74];
   }
-  P(ho, bo);
-  let Lo;
-  let yo;
-  if (l[75] !== claudeAiLimits || l[76] !== ae) {
-    Lo = () => {
-      if (ae) logLowPriorityShown(claudeAiLimits, "dialog");
+  useEffect(logMenuShownEffect, logMenuShownDeps);
+  let logLowPriorityEffect;
+  let logLowPriorityDeps;
+  if ($[75] !== claudeAiLimits || $[76] !== lowPriorityEnabled) {
+    logLowPriorityEffect = () => {
+      if (lowPriorityEnabled) logLowPriorityShown(claudeAiLimits, "dialog");
     };
-    yo = [ae, claudeAiLimits];
-    l[75] = claudeAiLimits;
-    l[76] = ae;
-    l[77] = Lo;
-    l[78] = yo;
+    logLowPriorityDeps = [lowPriorityEnabled, claudeAiLimits];
+    $[75] = claudeAiLimits;
+    $[76] = lowPriorityEnabled;
+    $[77] = logLowPriorityEffect;
+    $[78] = logLowPriorityDeps;
   } else {
-    Lo = l[77];
-    yo = l[78];
+    logLowPriorityEffect = $[77];
+    logLowPriorityDeps = $[78];
   }
-  P(Lo, yo);
-  let Ao;
-  let _o;
-  if (l[79] !== claudeAiLimits || l[80] !== F) {
-    Ao = () => {
-      if (F) logLimitResetOfferShown(claudeAiLimits, "dialog");
+  useEffect(logLowPriorityEffect, logLowPriorityDeps);
+  let logLimitResetEffect;
+  let logLimitResetDeps;
+  if ($[79] !== claudeAiLimits || $[80] !== canOfferLimitReset) {
+    logLimitResetEffect = () => {
+      if (canOfferLimitReset) logLimitResetOfferShown(claudeAiLimits, "dialog");
     };
-    _o = [F, claudeAiLimits];
-    l[79] = claudeAiLimits;
-    l[80] = F;
-    l[81] = Ao;
-    l[82] = _o;
+    logLimitResetDeps = [canOfferLimitReset, claudeAiLimits];
+    $[79] = claudeAiLimits;
+    $[80] = canOfferLimitReset;
+    $[81] = logLimitResetEffect;
+    $[82] = logLimitResetDeps;
   } else {
-    Ao = l[81];
-    _o = l[82];
+    logLimitResetEffect = $[81];
+    logLimitResetDeps = $[82];
   }
-  P(Ao, _o);
-  let wo;
-  let xo;
-  if (l[83] !== claudeAiLimits || l[84] !== Te) {
-    wo = () => {
-      if (Te) reportResetOfferShown(claudeAiLimits, "dialog");
+  useEffect(logLimitResetEffect, logLimitResetDeps);
+  let reportResetOfferEffect;
+  let reportResetOfferDeps;
+  if ($[83] !== claudeAiLimits || $[84] !== hasResetOffers) {
+    reportResetOfferEffect = () => {
+      if (hasResetOffers) reportResetOfferShown(claudeAiLimits, "dialog");
     };
-    xo = [Te, claudeAiLimits];
-    l[83] = claudeAiLimits;
-    l[84] = Te;
-    l[85] = wo;
-    l[86] = xo;
+    reportResetOfferDeps = [hasResetOffers, claudeAiLimits];
+    $[83] = claudeAiLimits;
+    $[84] = hasResetOffers;
+    $[85] = reportResetOfferEffect;
+    $[86] = reportResetOfferDeps;
   } else {
-    wo = l[85];
-    xo = l[86];
+    reportResetOfferEffect = $[85];
+    reportResetOfferDeps = $[86];
   }
-  P(wo, xo);
-  let vo;
-  if (l[87] !== T || l[88] !== B) {
-    vo =
-      B !== undefined &&
-      T.some((Gi) => Gi.value === "extra-usage" && typeof Gi.label === "string" && Gi.label.includes(B));
-    l[87] = T;
-    l[88] = B;
-    l[89] = vo;
-  } else vo = l[89];
-  let si = vo;
-  let Co;
-  let Do;
-  if (l[90] !== si) {
-    Co = () => {
-      if (si) logCreditOfferShown("cli_menu");
+  useEffect(reportResetOfferEffect, reportResetOfferDeps);
+  let hasCreditOfferSuffixCached;
+  if ($[87] !== options || $[88] !== offerMenuSuffix) {
+    hasCreditOfferSuffixCached =
+      offerMenuSuffix !== undefined &&
+      options.some(
+        (option) =>
+          option.value === "extra-usage" &&
+          typeof option.label === "string" &&
+          option.label.includes(offerMenuSuffix),
+      );
+    $[87] = options;
+    $[88] = offerMenuSuffix;
+    $[89] = hasCreditOfferSuffixCached;
+  } else hasCreditOfferSuffixCached = $[89];
+  let hasCreditOfferSuffix = hasCreditOfferSuffixCached;
+  let logCreditOfferEffect;
+  let logCreditOfferDeps;
+  if ($[90] !== hasCreditOfferSuffix) {
+    logCreditOfferEffect = () => {
+      if (hasCreditOfferSuffix) logCreditOfferShown("cli_menu");
     };
-    Do = [si];
-    l[90] = si;
-    l[91] = Co;
-    l[92] = Do;
+    logCreditOfferDeps = [hasCreditOfferSuffix];
+    $[90] = hasCreditOfferSuffix;
+    $[91] = logCreditOfferEffect;
+    $[92] = logCreditOfferDeps;
   } else {
-    Co = l[91];
-    Do = l[92];
+    logCreditOfferEffect = $[91];
+    logCreditOfferDeps = $[92];
   }
-  P(Co, Do);
-  let Mo = R(false);
-  let To;
-  let Oo;
-  if (l[93] !== claudeAiLimits || l[94] !== context.credentials || l[95] !== phase_2) {
-    To = () => {
-      if (Mo.current || phase_2 !== "failed") {
+  useEffect(logCreditOfferEffect, logCreditOfferDeps);
+  let openedCreditsDialogRef = useRef(false);
+  let openCreditsDialogEffect;
+  let openCreditsDialogDeps;
+  if ($[93] !== claudeAiLimits || $[94] !== context.credentials || $[95] !== phase_2) {
+    openCreditsDialogEffect = () => {
+      if (openedCreditsDialogRef.current || phase_2 !== "failed") {
         return;
       }
-      Mo.current = true;
+      openedCreditsDialogRef.current = true;
       maybeOpenUsageCreditsDialog(claudeAiLimits, context.credentials);
     };
-    Oo = [phase_2, claudeAiLimits, context.credentials];
-    l[93] = claudeAiLimits;
-    l[94] = context.credentials;
-    l[95] = phase_2;
-    l[96] = To;
-    l[97] = Oo;
+    openCreditsDialogDeps = [phase_2, claudeAiLimits, context.credentials];
+    $[93] = claudeAiLimits;
+    $[94] = context.credentials;
+    $[95] = phase_2;
+    $[96] = openCreditsDialogEffect;
+    $[97] = openCreditsDialogDeps;
   } else {
-    To = l[96];
-    Oo = l[97];
+    openCreditsDialogEffect = $[96];
+    openCreditsDialogDeps = $[97];
   }
-  P(To, Oo);
-  let Uo = R(false);
-  let Po = R(false);
-  let Ro;
-  let jo;
-  if (l[98] !== phase_3 || l[99] !== claudeAiLimits || l[100] !== context.credentials) {
-    Ro = () => {
+  useEffect(openCreditsDialogEffect, openCreditsDialogDeps);
+  let resetFailedHandledRef = useRef(false);
+  let resetAnsweredHandledRef = useRef(false);
+  let refreshResetStatusEffect;
+  let refreshResetStatusDeps;
+  if ($[98] !== phase_3 || $[99] !== claudeAiLimits || $[100] !== context.credentials) {
+    refreshResetStatusEffect = () => {
       if (phase_3 === "failed") {
-        if (Uo.current) {
+        if (resetFailedHandledRef.current) {
           return;
         }
-        Uo.current = true;
+        resetFailedHandledRef.current = true;
         refreshResetStatusForDialog(claudeAiLimits, context.credentials);
         return;
       }
-      if (phase_3 === "answered" && !Po.current) {
-        Po.current = true;
+      if (phase_3 === "answered" && !resetAnsweredHandledRef.current) {
+        resetAnsweredHandledRef.current = true;
         refreshResetStatusForDialog(claudeAiLimits, context.credentials);
       }
     };
-    jo = [phase_3, claudeAiLimits, context.credentials];
-    l[98] = phase_3;
-    l[99] = claudeAiLimits;
-    l[100] = context.credentials;
-    l[101] = Ro;
-    l[102] = jo;
+    refreshResetStatusDeps = [phase_3, claudeAiLimits, context.credentials];
+    $[98] = phase_3;
+    $[99] = claudeAiLimits;
+    $[100] = context.credentials;
+    $[101] = refreshResetStatusEffect;
+    $[102] = refreshResetStatusDeps;
   } else {
-    Ro = l[101];
-    jo = l[102];
+    refreshResetStatusEffect = $[101];
+    refreshResetStatusDeps = $[102];
   }
-  P(Ro, jo);
-  let Eo = R(false);
-  let Jo;
-  let Io;
-  if (l[103] !== claudeAiLimits || l[104] !== context.credentials || l[105] !== phase_4) {
-    Jo = () => {
-      if (Eo.current || phase_4 !== "failed") {
+  useEffect(refreshResetStatusEffect, refreshResetStatusDeps);
+  let offerPromptRetriedRef = useRef(false);
+  let retryOfferPromptEffect;
+  let retryOfferPromptDeps;
+  if ($[103] !== claudeAiLimits || $[104] !== context.credentials || $[105] !== phase_4) {
+    retryOfferPromptEffect = () => {
+      if (offerPromptRetriedRef.current || phase_4 !== "failed") {
         return;
       }
-      Eo.current = retryOfferPrompt(claudeAiLimits, context.credentials);
+      offerPromptRetriedRef.current = retryOfferPrompt(claudeAiLimits, context.credentials);
     };
-    Io = [phase_4, claudeAiLimits, context.credentials];
-    l[103] = claudeAiLimits;
-    l[104] = context.credentials;
-    l[105] = phase_4;
-    l[106] = Jo;
-    l[107] = Io;
+    retryOfferPromptDeps = [phase_4, claudeAiLimits, context.credentials];
+    $[103] = claudeAiLimits;
+    $[104] = context.credentials;
+    $[105] = phase_4;
+    $[106] = retryOfferPromptEffect;
+    $[107] = retryOfferPromptDeps;
   } else {
-    Jo = l[106];
-    Io = l[107];
+    retryOfferPromptEffect = $[106];
+    retryOfferPromptDeps = $[107];
   }
-  P(Jo, Io);
-  let ht;
-  let bt;
-  let Lt;
-  let be;
-  let At;
-  let _t;
-  let wt;
-  let xt;
+  useEffect(retryOfferPromptEffect, retryOfferPromptDeps);
+  let onAutoResume;
+  let onCancelAutoResume;
+  let onResetLimit;
+  let onCancel;
+  let onClaimReset;
+  let onLowPriority;
+  let onExtraUsage;
+  let onCancelPress;
   if (
-    l[108] !== Ce ||
-    l[109] !== phase ||
-    l[110] !== claudeAiLimits ||
-    l[111] !== context ||
-    l[112] !== onDone ||
-    l[113] !== storageV5
+    $[108] !== statusChangeCallback ||
+    $[109] !== phase ||
+    $[110] !== claudeAiLimits ||
+    $[111] !== context ||
+    $[112] !== onDone ||
+    $[113] !== storageV5
   ) {
-    ht = function ht() {
+    onAutoResume = function handleAutoResume() {
       logEvent("tengu_rate_limit_options_menu_select_auto_resume", {});
-      let vt = currentLimitsOrLatest(claudeAiLimits, Ce);
-      if (vt === null || !armQuotaAutoResumeFromDialog(vt, Date.now(), "dialog", storageV5)) {
-        ai();
+      let limitsForResume = currentLimitsOrLatest(claudeAiLimits, statusChangeCallback);
+      if (
+        limitsForResume === null ||
+        !armQuotaAutoResumeFromDialog(limitsForResume, Date.now(), "dialog", storageV5)
+      ) {
+        finishCancelled();
         return;
       }
       let { confirmationPhrase } = getWaitOptionLabel(
-        vt.resetsAt,
-        vt.resetsAt !== undefined && vt.resetsAt * 1000 <= Date.now(),
+        limitsForResume.resetsAt,
+        limitsForResume.resetsAt !== undefined && limitsForResume.resetsAt * 1000 <= Date.now(),
       );
       onDone(
         `Claude Code will continue automatically ${confirmationPhrase}. Keep this session open; it may still pause for permission prompts. Press esc to cancel the wait.`,
       );
     };
-    let Ct;
-    if (l[122] !== onDone) {
-      Ct = function _t() {
+    let lowPriorityHandler;
+    if ($[122] !== onDone) {
+      lowPriorityHandler = function handleLowPriority() {
         logEvent("tengu_rate_limit_options_menu_select_low_priority", {});
-        let No = enableLowPriorityMode("dialog");
-        if (No === "unavailable") {
+        let lowPriorityResult = enableLowPriorityMode("dialog");
+        if (lowPriorityResult === "unavailable") {
           onDone(lowPriorityUnavailableMessage());
           return;
         }
-        onDone(lowPriorityOnMessage(No));
+        onDone(lowPriorityOnMessage(lowPriorityResult));
       };
-      l[122] = onDone;
-      l[123] = Ct;
-    } else Ct = l[123];
-    _t = Ct;
-    let f;
-    if (l[124] !== context.credentials || l[125] !== onDone) {
-      f = function At() {
+      $[122] = onDone;
+      $[123] = lowPriorityHandler;
+    } else lowPriorityHandler = $[123];
+    onLowPriority = lowPriorityHandler;
+    let claimResetHandler;
+    if ($[124] !== context.credentials || $[125] !== onDone) {
+      claimResetHandler = function handleClaimReset() {
         logEvent("tengu_rate_limit_options_menu_select_juniper_tide", {});
-        Ei(true);
+        setIsResettingLimits(true);
         checkUsageCredits("dialog", context.credentials)
-          .then((ys) => {
-            onDone(ys.text);
+          .then((claimResult) => {
+            onDone(claimResult.text);
           })
           .catch(() => {
             onDone(getLimitResetCopy().unavailableLine);
           });
       };
-      l[124] = context.credentials;
-      l[125] = onDone;
-      l[126] = f;
-    } else f = l[126];
-    At = f;
-    let q;
-    if (l[127] !== context.credentials || l[128] !== onDone) {
-      q = function Lt(As) {
-        if (G.current) {
+      $[124] = context.credentials;
+      $[125] = onDone;
+      $[126] = claimResetHandler;
+    } else claimResetHandler = $[126];
+    onClaimReset = claimResetHandler;
+    let resetLimitHandler;
+    if ($[127] !== context.credentials || $[128] !== onDone) {
+      resetLimitHandler = function handleResetLimit(category) {
+        if (resetSelectedRef.current) {
           return;
         }
-        G.current = true;
+        resetSelectedRef.current = true;
         logEvent("tengu_rate_limit_options_menu_select_cedar_ember", {});
-        We(true);
-        startResetFlowSafe("dialog", context.credentials, As)
+        setIsCheckingReset(true);
+        startResetFlowSafe("dialog", context.credentials, category)
           .then((resetFlow) => {
-            if (Xe.current) {
+            if (resetCancelledRef.current) {
               return;
             }
             switch (resetFlow.kind) {
@@ -1251,24 +1331,24 @@ function RateLimitOptionsMenu_2(props) {
                 return;
               }
               case "confirm": {
-                me(
+                setLocalJsx(
                   jsxProd_default(ResetLimits, {
                     offer: resetFlow.offer,
                     entry: "dialog",
                     credentials: context.credentials,
-                    onDone: (_s) => onDone(_s.text),
+                    onDone: (resetResult) => onDone(resetResult.text),
                   }),
                 );
                 return;
               }
               case "choose": {
-                me(
+                setLocalJsx(
                   jsxProd_default(ResetLimitsOffers, {
                     offers: resetFlow.offers,
                     unusable: resetFlow.unusable,
                     entry: "dialog",
                     credentials: context.credentials,
-                    onDone: (ws) => onDone(ws.text),
+                    onDone: (resetResult) => onDone(resetResult.text),
                   }),
                 );
                 return;
@@ -1279,211 +1359,212 @@ function RateLimitOptionsMenu_2(props) {
             onDone(RESET_STATUS_MESSAGES);
           });
       };
-      l[127] = context.credentials;
-      l[128] = onDone;
-      l[129] = q;
-    } else q = l[129];
-    Lt = q;
-    let ee;
-    if (l[130] !== context || l[131] !== onDone) {
-      ee = function wt(xs) {
+      $[127] = context.credentials;
+      $[128] = onDone;
+      $[129] = resetLimitHandler;
+    } else resetLimitHandler = $[129];
+    onResetLimit = resetLimitHandler;
+    let extraUsageHandler;
+    if ($[130] !== context || $[131] !== onDone) {
+      extraUsageHandler = function handleExtraUsage(category) {
         context.cancelRateLimitAutoQueueContinue?.();
         logEvent("tengu_rate_limit_options_menu_select_extra_usage", getCreditOfferForRateLimit());
-        Bi(true);
-        fileAdminLimitRequest(xs, context.credentials)
-          .then((Wo) => {
+        setIsSendingAdminRequest(true);
+        fileAdminLimitRequest(category, context.credentials)
+          .then((adminRequestResult) => {
             logEvent("tengu_rate_limit_options_menu_admin_ask", {
-              filed: Wo.filed,
+              filed: adminRequestResult.filed,
               mode: lit("one_step"),
             });
-            withQuotaResumeFire(onDone)(Wo.value);
+            withQuotaResumeFire(onDone)(adminRequestResult.value);
           })
           .catch(() => {
             onDone();
           });
       };
-      l[130] = context;
-      l[131] = onDone;
-      l[132] = ee;
-    } else ee = l[132];
-    wt = ee;
-    let qe;
-    if (l[133] !== onDone) {
-      qe = function Dt() {
+      $[130] = context;
+      $[131] = onDone;
+      $[132] = extraUsageHandler;
+    } else extraUsageHandler = $[132];
+    onExtraUsage = extraUsageHandler;
+    let cancelAutoResumeAndFinishCached;
+    if ($[133] !== onDone) {
+      cancelAutoResumeAndFinishCached = function cancelAutoResumeAndFinish_2() {
         cancelQuotaAutoResume("dialog");
         onDone(
           "Automatic continue cancelled. Your session will wait for you instead; /rate-limit-options can arm it again.",
         );
       };
-      l[133] = onDone;
-      l[134] = qe;
-    } else qe = l[134];
-    let Dt = qe;
-    let Re;
-    if (l[135] !== Dt) {
-      Re = function bt() {
+      $[133] = onDone;
+      $[134] = cancelAutoResumeAndFinishCached;
+    } else cancelAutoResumeAndFinishCached = $[134];
+    let cancelAutoResumeAndFinish = cancelAutoResumeAndFinishCached;
+    let cancelAutoResumeHandler;
+    if ($[135] !== cancelAutoResumeAndFinish) {
+      cancelAutoResumeHandler = function handleCancelAutoResume() {
         logEvent("tengu_rate_limit_options_menu_cancel_auto_resume", {});
-        Dt();
+        cancelAutoResumeAndFinish();
       };
-      l[135] = Dt;
-      l[136] = Re;
-    } else Re = l[136];
-    bt = Re;
-    xt = function xt() {
+      $[135] = cancelAutoResumeAndFinish;
+      $[136] = cancelAutoResumeHandler;
+    } else cancelAutoResumeHandler = $[136];
+    onCancelAutoResume = cancelAutoResumeHandler;
+    onCancelPress = function handleCancelPress() {
       logEvent("tengu_rate_limit_options_menu_cancel", {});
       if (hasPendingContinuation() || phase === "stale") {
-        Dt();
+        cancelAutoResumeAndFinish();
         return;
       }
-      ai();
+      finishCancelled();
     };
-    be = function be() {
+    onCancel = function handleCancel() {
       logEvent("tengu_rate_limit_options_menu_cancel", {});
-      ai();
+      finishCancelled();
     };
-    function ai() {
+    function finishCancelled() {
       context.prefillRateLimitAutoQueueContinue?.();
       onDone(undefined, {
         display: "skip",
       });
     }
-    l[108] = Ce;
-    l[109] = phase;
-    l[110] = claudeAiLimits;
-    l[111] = context;
-    l[112] = onDone;
-    l[113] = storageV5;
-    l[114] = ht;
-    l[115] = bt;
-    l[116] = Lt;
-    l[117] = be;
-    l[118] = At;
-    l[119] = _t;
-    l[120] = wt;
-    l[121] = xt;
+    $[108] = statusChangeCallback;
+    $[109] = phase;
+    $[110] = claudeAiLimits;
+    $[111] = context;
+    $[112] = onDone;
+    $[113] = storageV5;
+    $[114] = onAutoResume;
+    $[115] = onCancelAutoResume;
+    $[116] = onResetLimit;
+    $[117] = onCancel;
+    $[118] = onClaimReset;
+    $[119] = onLowPriority;
+    $[120] = onExtraUsage;
+    $[121] = onCancelPress;
   } else {
-    ht = l[114];
-    bt = l[115];
-    Lt = l[116];
-    be = l[117];
-    At = l[118];
-    _t = l[119];
-    wt = l[120];
-    xt = l[121];
+    onAutoResume = $[114];
+    onCancelAutoResume = $[115];
+    onResetLimit = $[116];
+    onCancel = $[117];
+    onClaimReset = $[118];
+    onLowPriority = $[119];
+    onExtraUsage = $[120];
+    onCancelPress = $[121];
   }
-  let Ct;
+  let handleSelect;
   if (
-    l[137] !== le ||
-    l[138] !== context ||
-    l[139] !== ht ||
-    l[140] !== bt ||
-    l[141] !== Lt ||
-    l[142] !== At ||
-    l[143] !== _t ||
-    l[144] !== wt ||
-    l[145] !== xt ||
-    l[146] !== hasBillingAccess ||
-    l[147] !== onDone ||
-    l[148] !== L ||
-    l[149] !== Pe
+    $[137] !== extraUsageResult ||
+    $[138] !== context ||
+    $[139] !== onAutoResume ||
+    $[140] !== onCancelAutoResume ||
+    $[141] !== onResetLimit ||
+    $[142] !== onClaimReset ||
+    $[143] !== onLowPriority ||
+    $[144] !== onExtraUsage ||
+    $[145] !== onCancelPress ||
+    $[146] !== hasBillingAccess ||
+    $[147] !== onDone ||
+    $[148] !== canOfferExtraUsage ||
+    $[149] !== shouldRefuseInput
   ) {
-    Ct = function li(value) {
-      if (Pe()) {
+    handleSelect = function handleSelectOption(value) {
+      if (shouldRefuseInput()) {
         return;
       }
-      if (value === "extra-usage" && L) {
-        if ($i.current) {
+      if (value === "extra-usage" && canOfferExtraUsage) {
+        if (extraUsageSelectedRef.current) {
           return;
         }
-        $i.current = true;
+        extraUsageSelectedRef.current = true;
       }
       if (
         value === "extra-usage" &&
-        L &&
-        !Fi.current &&
-        le?.type === "confirm-admin-request" &&
-        le.checked &&
-        Hi.current !== null &&
-        Fe.current !== null &&
-        hasBillingAccess() - Math.max(Hi.current, Fe.current) >= RECENT_INPUT_GUARD_MS
+        canOfferExtraUsage &&
+        !typedInputRef.current &&
+        extraUsageResult?.type === "confirm-admin-request" &&
+        extraUsageResult.checked &&
+        lastFocusAtRef.current !== null &&
+        extraUsageFetchedAtRef.current !== null &&
+        hasBillingAccess() - Math.max(lastFocusAtRef.current, extraUsageFetchedAtRef.current) >=
+          RECENT_INPUT_GUARD_MS
       ) {
-        wt(le.extraUsage);
+        onExtraUsage(extraUsageResult.extraUsage);
         return;
       }
       if (isUpgradeOption(value)) context.cancelRateLimitAutoQueueContinue?.();
       if (value === "upgrade") {
         logEvent("tengu_rate_limit_options_menu_select_upgrade", {});
         callUpgradeFromSurface(onDone, context, "rate_limit_options_menu").then((jsx) => {
-          if (jsx) me(jsx);
+          if (jsx) setLocalJsx(jsx);
         });
       } else if (value === "extra-usage") {
         logEvent("tengu_rate_limit_options_menu_select_extra_usage", getCreditOfferForRateLimit());
         call_2(onDone, context).then((jsx_0) => {
-          if (jsx_0) me(jsx_0);
+          if (jsx_0) setLocalJsx(jsx_0);
         });
-      } else if (value === "auto-resume") ht();
-      else if (value === "cancel-auto-resume") bt();
-      else if (value === "low-priority") _t();
-      else if (value === "juniper-tide") At();
+      } else if (value === "auto-resume") onAutoResume();
+      else if (value === "cancel-auto-resume") onCancelAutoResume();
+      else if (value === "low-priority") onLowPriority();
+      else if (value === "juniper-tide") onClaimReset();
       else if (value.startsWith("cedar-ember-")) {
-        let found = LIMIT_CATEGORIES.find((vs) => value === `cedar-ember-${vs}`);
-        if (found !== undefined) Lt(found);
-      } else if (value === "cancel") xt();
+        let found = LIMIT_CATEGORIES.find((category) => value === `cedar-ember-${category}`);
+        if (found !== undefined) onResetLimit(found);
+      } else if (value === "cancel") onCancelPress();
     };
-    l[137] = le;
-    l[138] = context;
-    l[139] = ht;
-    l[140] = bt;
-    l[141] = Lt;
-    l[142] = At;
-    l[143] = _t;
-    l[144] = wt;
-    l[145] = xt;
-    l[146] = hasBillingAccess;
-    l[147] = onDone;
-    l[148] = L;
-    l[149] = Pe;
-    l[150] = Ct;
-  } else Ct = l[150];
-  let onChange = Ct;
-  if (g) {
-    return g;
+    $[137] = extraUsageResult;
+    $[138] = context;
+    $[139] = onAutoResume;
+    $[140] = onCancelAutoResume;
+    $[141] = onResetLimit;
+    $[142] = onClaimReset;
+    $[143] = onLowPriority;
+    $[144] = onExtraUsage;
+    $[145] = onCancelPress;
+    $[146] = hasBillingAccess;
+    $[147] = onDone;
+    $[148] = canOfferExtraUsage;
+    $[149] = shouldRefuseInput;
+    $[150] = handleSelect;
+  } else handleSelect = $[150];
+  let onChange = handleSelect;
+  if (localJsx) {
+    return localJsx;
   }
-  if (ro) {
-    let onCancel;
-    if (l[151] !== be) {
-      onCancel = () => {
-        Xe.current = true;
-        be();
+  if (isCheckingReset) {
+    let onCancel_2;
+    if ($[151] !== onCancel) {
+      onCancel_2 = () => {
+        resetCancelledRef.current = true;
+        onCancel();
       };
-      l[151] = be;
-      l[152] = onCancel;
-    } else onCancel = l[152];
+      $[151] = onCancel;
+      $[152] = onCancel_2;
+    } else onCancel_2 = $[152];
     let children;
-    if (l[153] === MEMO_CACHE_SENTINEL) {
+    if ($[153] === MEMO_CACHE_SENTINEL) {
       children = jsxProd_default(Text, {
         dimColor: true,
         children: CHECKING_FOR_RESET_LINE,
       });
-      l[153] = children;
-    } else children = l[153];
-    let ee;
-    if (l[154] !== onCancel) {
-      ee = jsxProd_default(Dialog, {
+      $[153] = children;
+    } else children = $[153];
+    let checkingResetDialog;
+    if ($[154] !== onCancel_2) {
+      checkingResetDialog = jsxProd_default(Dialog, {
         title: "What do you want to do?",
-        onCancel,
+        onCancel: onCancel_2,
         color: "suggestion",
         children,
       });
-      l[154] = onCancel;
-      l[155] = ee;
-    } else ee = l[155];
-    return ee;
+      $[154] = onCancel_2;
+      $[155] = checkingResetDialog;
+    } else checkingResetDialog = $[155];
+    return checkingResetDialog;
   }
-  if (Zt) {
-    let f;
-    if (l[156] === MEMO_CACHE_SENTINEL) {
-      f = jsxProd_default(Dialog, {
+  if (isResettingLimits) {
+    let resettingDialog;
+    if ($[156] === MEMO_CACHE_SENTINEL) {
+      resettingDialog = jsxProd_default(Dialog, {
         title: "What do you want to do?",
         onCancel: noop_3,
         exitOnCtrlCD: true,
@@ -1494,14 +1575,14 @@ function RateLimitOptionsMenu_2(props) {
           children: "Resetting your 5-hour limit\u2026 this usually takes a few seconds",
         }),
       });
-      l[156] = f;
-    } else f = l[156];
-    return f;
+      $[156] = resettingDialog;
+    } else resettingDialog = $[156];
+    return resettingDialog;
   }
-  if (gt) {
-    let f;
-    if (l[157] === MEMO_CACHE_SENTINEL) {
-      f = jsxProd_default(Dialog, {
+  if (isSendingAdminRequest) {
+    let adminRequestDialog;
+    if ($[157] === MEMO_CACHE_SENTINEL) {
+      adminRequestDialog = jsxProd_default(Dialog, {
         title: "What do you want to do?",
         onCancel: noop_4,
         exitOnCtrlCD: true,
@@ -1512,111 +1593,115 @@ function RateLimitOptionsMenu_2(props) {
           children: "Sending request to your admin\u2026",
         }),
       });
-      l[157] = f;
-    } else f = l[157];
-    return f;
+      $[157] = adminRequestDialog;
+    } else adminRequestDialog = $[157];
+    return adminRequestDialog;
   }
-  if (Y) {
+  if (prepaidBalance) {
     let onDone_2;
-    if (l[158] !== onDone) {
+    if ($[158] !== onDone) {
       onDone_2 = withQuotaResumeFire(onDone);
-      l[158] = onDone;
-      l[159] = onDone_2;
-    } else onDone_2 = l[159];
-    let q;
-    if (l[160] !== context || l[161] !== Y || l[162] !== onDone_2) {
-      q = jsxProd_default(RateLimitOptionsMenu, {
-        balance: Y,
+      $[158] = onDone;
+      $[159] = onDone_2;
+    } else onDone_2 = $[159];
+    let prepaidBalanceDialog;
+    if ($[160] !== context || $[161] !== prepaidBalance || $[162] !== onDone_2) {
+      prepaidBalanceDialog = jsxProd_default(RateLimitOptionsMenu, {
+        balance: prepaidBalance,
         onDone: onDone_2,
         context,
       });
-      l[160] = context;
-      l[161] = Y;
-      l[162] = onDone_2;
-      l[163] = q;
-    } else q = l[163];
-    return q;
+      $[160] = context;
+      $[161] = prepaidBalance;
+      $[162] = onDone_2;
+      $[163] = prepaidBalanceDialog;
+    } else prepaidBalanceDialog = $[163];
+    return prepaidBalanceDialog;
   }
   let onKeyDownCapture;
   let onPasteCapture;
-  if (l[164] === MEMO_CACHE_SENTINEL) {
-    onKeyDownCapture = (Mt) => {
-      if (!Mt.ctrl && !Mt.meta && (Mt.key.length === 1 || (Mt.key.length > 1 && Mt.name === "")))
-        Fi.current = true;
+  if ($[164] === MEMO_CACHE_SENTINEL) {
+    onKeyDownCapture = (event) => {
+      if (
+        !event.ctrl &&
+        !event.meta &&
+        (event.key.length === 1 || (event.key.length > 1 && event.name === ""))
+      )
+        typedInputRef.current = true;
     };
     onPasteCapture = () => {
-      Fi.current = true;
+      typedInputRef.current = true;
     };
-    l[164] = onKeyDownCapture;
-    l[165] = onPasteCapture;
+    $[164] = onKeyDownCapture;
+    $[165] = onPasteCapture;
   } else {
-    onKeyDownCapture = l[164];
-    onPasteCapture = l[165];
+    onKeyDownCapture = $[164];
+    onPasteCapture = $[165];
   }
   let onFocus;
-  if (l[166] !== L) {
-    onFocus = (Cs) => {
-      Hi.current = Cs === "extra-usage" && L ? Date.now() : null;
+  if ($[166] !== canOfferExtraUsage) {
+    onFocus = (value) => {
+      lastFocusAtRef.current = value === "extra-usage" && canOfferExtraUsage ? Date.now() : null;
     };
-    l[166] = L;
-    l[167] = onFocus;
-  } else onFocus = l[167];
-  const onUpFromFirstItem = L ? noop_5 : undefined;
+    $[166] = canOfferExtraUsage;
+    $[167] = onFocus;
+  } else onFocus = $[167];
+  const onUpFromFirstItem = canOfferExtraUsage ? noop_5 : undefined;
   let children;
   if (
-    l[168] !== onChange ||
-    l[169] !== T ||
-    l[170] !== Pe ||
-    l[171] !== onFocus ||
-    l[172] !== onUpFromFirstItem
+    $[168] !== onChange ||
+    $[169] !== options ||
+    $[170] !== shouldRefuseInput ||
+    $[171] !== onFocus ||
+    $[172] !== onUpFromFirstItem
   ) {
     children = jsxProd_default(Box, {
       flexDirection: "column",
       onKeyDownCapture,
       onPasteCapture,
       children: jsxProd_default(ModelSelector, {
-        options: T,
+        options,
         onChange,
-        refuseInput: Pe,
+        refuseInput: shouldRefuseInput,
         selectedValue: NO_COMMITTED_ROW,
         onFocus,
         onUpFromFirstItem,
-        visibleOptionCount: T.length,
+        visibleOptionCount: options.length,
       }),
     });
-    l[168] = onChange;
-    l[169] = T;
-    l[170] = Pe;
-    l[171] = onFocus;
-    l[172] = onUpFromFirstItem;
-    l[173] = children;
-  } else children = l[173];
-  let Fo;
-  if (l[174] !== be || l[175] !== children) {
-    Fo = jsxProd_default(Dialog, {
+    $[168] = onChange;
+    $[169] = options;
+    $[170] = shouldRefuseInput;
+    $[171] = onFocus;
+    $[172] = onUpFromFirstItem;
+    $[173] = children;
+  } else children = $[173];
+  let menuDialog;
+  if ($[174] !== onCancel || $[175] !== children) {
+    menuDialog = jsxProd_default(Dialog, {
       title: "What do you want to do?",
-      onCancel: be,
+      onCancel,
       color: "suggestion",
       children,
     });
-    l[174] = be;
-    l[175] = children;
-    l[176] = Fo;
-  } else Fo = l[176];
-  return Fo;
+    $[174] = onCancel;
+    $[175] = children;
+    $[176] = menuDialog;
+  } else menuDialog = $[176];
+  return menuDialog;
 }
 //@ chunk-dg94x42s.js:37678-38028 layout
-function getWaitOptionLabel(resetsAt, d) {
-  if (d)
+function getWaitOptionLabel(resetsAt, immediate) {
+  if (immediate)
     return {
       label: "Wait here, then continue automatically shortly",
       confirmationPhrase: "shortly",
     };
-  let t = formatResetTime(resetsAt);
-  if (t)
+  let resetLabel = formatResetTime(resetsAt);
+  if (resetLabel)
     return {
-      label: `Wait here, then continue automatically at ${t}`,
-      confirmationPhrase: `at ${t}`,
+      label: `Wait here, then continue automatically at ${resetLabel}`,
+      confirmationPhrase: `at ${resetLabel}`,
     };
   return {
     label: "Wait here, then continue automatically when the limit resets",
@@ -1624,9 +1709,9 @@ function getWaitOptionLabel(resetsAt, d) {
   };
 }
 //@ chunk-dg94x42s.js:38028-38095 layout
-function currentLimitsOrLatest(claudeAiLimits, d) {
+function currentLimitsOrLatest(claudeAiLimits, latestLimits) {
   if (canAutoResumeThisLimit(claudeAiLimits)) return claudeAiLimits;
-  return d !== null && canAutoResumeThisLimit(d) ? d : null;
+  return latestLimits !== null && canAutoResumeThisLimit(latestLimits) ? latestLimits : null;
 }
 //@ chunk-dg94x42s.js:38095-38152 callgraph-fingerprint = call (1)
 /**
@@ -1638,3 +1723,4 @@ async function call(onDone, context) {
     context,
   });
 }
+export { call };

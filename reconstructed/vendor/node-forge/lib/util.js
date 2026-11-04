@@ -5,12 +5,12 @@
  * pieces: chunk-fq0cr76a.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../runtime/bun-runtime.js";
 import { require_forge } from "./forge.js";
 import { require_baseN } from "./baseN.js";
 
 //@ chunk-fq0cr76a.js:4980-28471 cjs-fingerprint
-var require_util = x(function (cjsExports, cjsModule) {
+var require_util = __commonJS(function (cjsExports, cjsModule) {
   var forge = require_forge();
   var baseN = require_baseN();
   var util = (cjsModule.exports = forge.util = forge.util || {});
@@ -34,24 +34,24 @@ var require_util = x(function (cjsExports, cjsModule) {
       setTimeout(callback, 0);
     };
     if (typeof window !== "undefined" && typeof window.postMessage === "function") {
-      let S = function (event) {
+      let onMessage = function (event) {
         if (event.source === window && event.data === msg) {
           event.stopPropagation();
           var sliced = callbacks.slice();
           callbacks.length = 0;
-          sliced.forEach(function (D) {
-            D();
+          sliced.forEach(function (callback) {
+            callback();
           });
         }
       };
-      var b = S;
+      var handler = onMessage;
       var msg = "forge.setImmediate";
       var callbacks = [];
       util.setImmediate = function (callback) {
         callbacks.push(callback);
         if (callbacks.length === 1) window.postMessage(msg, "*");
       };
-      window.addEventListener("message", S, true);
+      window.addEventListener("message", onMessage, true);
     }
     if (typeof MutationObserver !== "undefined") {
       var now = Date.now();
@@ -142,16 +142,16 @@ var require_util = x(function (cjsExports, cjsModule) {
   util.ByteStringBuffer.prototype.putByte = function (b) {
     return this.putBytes(String.fromCharCode(b));
   };
-  util.ByteStringBuffer.prototype.fillWithByte = function (b, n) {
+  util.ByteStringBuffer.prototype.fillWithByte = function (b, count) {
     b = String.fromCharCode(b);
     var d = this.data;
-    while (n > 0) {
-      if (n & 1) d += b;
-      n >>>= 1;
-      if (n > 0) b += b;
+    while (count > 0) {
+      if (count & 1) d += b;
+      count >>>= 1;
+      if (count > 0) b += b;
     }
     this.data = d;
-    this._optimizeConstructedString(n);
+    this._optimizeConstructedString(count);
     return this;
   };
   util.ByteStringBuffer.prototype.putBytes = function (bytes) {
@@ -198,18 +198,18 @@ var require_util = x(function (cjsExports, cjsModule) {
         String.fromCharCode((i >> 24) & 255),
     );
   };
-  util.ByteStringBuffer.prototype.putInt = function (i, n) {
-    _checkBitsParam(n);
+  util.ByteStringBuffer.prototype.putInt = function (i, bits) {
+    _checkBitsParam(bits);
     var bytes = "";
     do {
-      n -= 8;
-      bytes += String.fromCharCode((i >> n) & 255);
-    } while (n > 0);
+      bits -= 8;
+      bytes += String.fromCharCode((i >> bits) & 255);
+    } while (bits > 0);
     return this.putBytes(bytes);
   };
-  util.ByteStringBuffer.prototype.putSignedInt = function (i, n) {
-    if (i < 0) i += 2 << (n - 1);
-    return this.putInt(i, n);
+  util.ByteStringBuffer.prototype.putSignedInt = function (i, bits) {
+    if (i < 0) i += 2 << (bits - 1);
+    return this.putInt(i, bits);
   };
   util.ByteStringBuffer.prototype.putBuffer = function (buffer) {
     return this.putBytes(buffer.getBytes());
@@ -378,9 +378,9 @@ var require_util = x(function (cjsExports, cjsModule) {
     this.data.setUint8(this.write++, b);
     return this;
   };
-  util.DataBuffer.prototype.fillWithByte = function (b, n) {
-    this.accommodate(n);
-    for (var i = 0; i < n; ++i) this.data.setUint8(b);
+  util.DataBuffer.prototype.fillWithByte = function (b, count) {
+    this.accommodate(count);
+    for (var i = 0; i < count; ++i) this.data.setUint8(b);
     return this;
   };
   util.DataBuffer.prototype.putBytes = function (bytes, encoding) {
@@ -500,20 +500,20 @@ var require_util = x(function (cjsExports, cjsModule) {
     this.write += 4;
     return this;
   };
-  util.DataBuffer.prototype.putInt = function (i, n) {
-    _checkBitsParam(n);
-    this.accommodate(n / 8);
+  util.DataBuffer.prototype.putInt = function (i, bits) {
+    _checkBitsParam(bits);
+    this.accommodate(bits / 8);
     do {
-      n -= 8;
-      this.data.setInt8(this.write++, (i >> n) & 255);
-    } while (n > 0);
+      bits -= 8;
+      this.data.setInt8(this.write++, (i >> bits) & 255);
+    } while (bits > 0);
     return this;
   };
-  util.DataBuffer.prototype.putSignedInt = function (i, n) {
-    _checkBitsParam(n);
-    this.accommodate(n / 8);
-    if (i < 0) i += 2 << (n - 1);
-    return this.putInt(i, n);
+  util.DataBuffer.prototype.putSignedInt = function (i, bits) {
+    _checkBitsParam(bits);
+    this.accommodate(bits / 8);
+    if (i < 0) i += 2 << (bits - 1);
+    return this.putInt(i, bits);
   };
   util.DataBuffer.prototype.getByte = function () {
     return this.data.getInt8(this.read++);
@@ -639,12 +639,12 @@ var require_util = x(function (cjsExports, cjsModule) {
     if (input !== undefined && encoding === "utf8") input = util.encodeUtf8(input);
     return new util.ByteBuffer(input);
   };
-  util.fillString = function (c, n) {
+  util.fillString = function (c, repeatCount) {
     var s = "";
-    while (n > 0) {
-      if (n & 1) s += c;
-      n >>>= 1;
-      if (n > 0) c += c;
+    while (repeatCount > 0) {
+      if (repeatCount & 1) s += c;
+      repeatCount >>>= 1;
+      if (repeatCount > 0) c += c;
     }
     return s;
   };

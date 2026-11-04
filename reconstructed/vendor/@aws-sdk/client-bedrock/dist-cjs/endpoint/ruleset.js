@@ -68,7 +68,7 @@ var r = [
     ["ref"]: "Region",
   },
 ];
-var Qe = {
+var ruleSetData = {
   version: "1.0",
   parameters: {
     Region: h_2,
@@ -257,5 +257,5 @@ var Qe = {
     },
   ],
 };
-var se = Qe;
-export { se };
+var ruleSet = ruleSetData;
+export { ruleSet };

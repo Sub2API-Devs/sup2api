@@ -22,3 +22,4 @@ function disableCoreDumpsForReview() {
   )
     disableCoreDumps(() => {});
 }
+export { disableCoreDumpsForReview };

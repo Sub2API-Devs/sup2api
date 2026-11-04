@@ -14,7 +14,7 @@ import { BASH_TOOL_NAME } from "../tools/BashTool/toolName.js";
 import { POWERSHELL_TOOL_NAME } from "../tools/PowerShellTool/toolName.js";
 import { formatFileSize } from "./format.js";
 import { formatOutput } from "../tools/BashTool/utils.js";
-import { Ph } from "../../vendor/@anthropic-ai/sdk/helpers/beta/mcp.mjs";
+import { sniffImageMediaType } from "../../vendor/@anthropic-ai/sdk/helpers/beta/mcp.mjs";
 import { readHandleUpTo } from "./fsOperations.js";
 
 //@ chunk-e6aww6q8.js:3150675-3150692 placement
@@ -35,7 +35,7 @@ function isValidNotebook(notebook) {
         cell === null ||
         typeof cell !== "object" ||
         (typeof cell.source !== "string" &&
-          !(Array.isArray(cell.source) && cell.source.every((s) => typeof s === "string"))),
+          !(Array.isArray(cell.source) && cell.source.every((sourceLine) => typeof sourceLine === "string"))),
     )
   );
 }
@@ -52,16 +52,16 @@ function parseCellId(cellId) {
 /**
  * 按 id 或序号找单元的源码（unparsable/cell-missing/found）。
  */
-function findNotebookCellSource(e, cellId) {
-  let r;
+function findNotebookCellSource(content, cellId) {
+  let notebook;
   try {
-    r = jsonParse(e);
+    notebook = jsonParse(content);
   } catch {
     return {
       kind: "unparsable",
     };
   }
-  if (!isValidNotebook(r) || r === null)
+  if (!isValidNotebook(notebook) || notebook === null)
     return {
       kind: "unparsable",
     };
@@ -69,16 +69,16 @@ function findNotebookCellSource(e, cellId) {
     return {
       kind: "cell-missing",
     };
-  let found = r.cells.find((cell) => cell.id === cellId);
-  let h = found === undefined ? parseCellId(cellId) : undefined;
-  let y = found ?? (h !== undefined ? r.cells[h] : undefined);
-  if (!y)
+  let found = notebook.cells.find((cell) => cell.id === cellId);
+  let index = found === undefined ? parseCellId(cellId) : undefined;
+  let cell = found ?? (index !== undefined ? notebook.cells[index] : undefined);
+  if (!cell)
     return {
       kind: "cell-missing",
     };
   return {
     kind: "found",
-    source: Array.isArray(y.source) ? y.source.join("") : y.source,
+    source: Array.isArray(cell.source) ? cell.source.join("") : cell.source,
   };
 }
 //@ chunk-e6aww6q8.js:3151363-3151375 placement
@@ -133,14 +133,14 @@ function processOutputText(text) {
 }
 //@ chunk-e6aww6q8.js:3152840-3153051 fingerprint = extractImage (0.737)
 function extractImage(data) {
-  for (let n of ["image/png", "image/jpeg"]) {
-    let r = data[n];
-    if (typeof r !== "string") continue;
-    let replaced = r.replace(/\s/g, "");
-    if (Ph(Buffer.from(replaced, "base64")) === null) return;
+  for (let mediaType of ["image/png", "image/jpeg"]) {
+    let base64Data = data[mediaType];
+    if (typeof base64Data !== "string") continue;
+    let replaced = base64Data.replace(/\s/g, "");
+    if (sniffImageMediaType(Buffer.from(replaced, "base64")) === null) return;
     return {
       image_data: replaced,
-      media_type: n,
+      media_type: mediaType,
     };
   }
   return;
@@ -182,13 +182,13 @@ function processCell(cell, index, codeLanguage, includeLargeOutputs) {
   if (cell.cell_type === "code" && cell.outputs?.length) {
     let outputs = cell.outputs.map(processOutput);
     if (!includeLargeOutputs && isLargeOutputs(outputs)) {
-      let w = isBashAvailable()
+      let inspectCommand = isBashAvailable()
         ? `${BASH_TOOL_NAME} with: cat <notebook_path> | jq '.cells[${index}].outputs'`
         : `${POWERSHELL_TOOL_NAME} with: Get-Content <notebook_path> | ConvertFrom-Json | Select-Object -ExpandProperty cells | Select-Object -Index ${index} | Select-Object -ExpandProperty outputs`;
       cellData.outputs = [
         {
           output_type: "stream",
-          text: `Outputs are too large to include. Use ${w}`,
+          text: `Outputs are too large to include. Use ${inspectCommand}`,
         },
       ];
     } else cellData.outputs = outputs;

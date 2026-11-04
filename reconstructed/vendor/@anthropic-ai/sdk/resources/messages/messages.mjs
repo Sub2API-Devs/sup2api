@@ -8,7 +8,7 @@
 import { APIResource } from "../../core/resource.mjs";
 import { Batches_2 } from "./batches.mjs";
 import { MODEL_NONSTREAMING_TOKENS } from "../../internal/constants.mjs";
-import { stainlessHelperHeader } from "../../internal/stainless-helper-header.mjs";
+import { stainlessHelperHeader_2 } from "../../internal/stainless-helper-header.mjs";
 import { buildHeaders } from "../../internal/headers.mjs";
 import { parseMessage } from "../../lib/parser.mjs";
 import { MessageStream } from "../../lib/MessageStream.mjs";
@@ -38,7 +38,7 @@ Please migrate to a newer model. Visit https://docs.anthropic.com/en/docs/resour
         let maxNonstreamingTokens = MODEL_NONSTREAMING_TOKENS[body.model] ?? undefined;
         timeout = this._client.calculateNonstreamingTimeout(body.max_tokens, maxNonstreamingTokens);
       }
-      let helperHeader = stainlessHelperHeader(body.tools, body.messages);
+      let helperHeader = stainlessHelperHeader_2(body.tools, body.messages);
       return this._client.post("/v1/messages", {
         body,
         timeout: timeout ?? 600000,

@@ -8,8 +8,9 @@
  * pieces: chunk-mjpqa6jt.js (1), chunk-p2qwpk2k.js (2)
  * attribution: placement 2, callgraph-witnessed 1
  */
+import { BASH_TOOL_NAME } from "../../../tools/BashTool/toolName.js";
 import { init_react_production } from "../../../../vendor/react/cjs/react.production.js";
-import { w } from "../../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../../vendor/react/compiler-runtime.js";
 import { EARLY_RETURN_SENTINEL } from "../../../../runtime/bun-runtime.js";
 import { Text } from "../../../ink/components/Text.js";
 import {
@@ -17,69 +18,7 @@ import {
   jsxProd_default_2,
 } from "../../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { consentRowLabel } from "../consentRows.js";
-import { BASH_TOOL_NAME } from "../../../tools/BashTool/toolName.js";
 
-//@ chunk-p2qwpk2k.js:20255-20259 placement
-init_react_production();
-//@ chunk-p2qwpk2k.js:21751-22240 callgraph-witnessed = PermissionRuleDescription (0.302)
-function PermissionRuleDescription(props) {
-  let $ = w(13);
-  let { ruleValue } = props;
-  let a;
-  let f;
-  let dimColor;
-  let v;
-  let x;
-  let C;
-  if ($[0] !== ruleValue) {
-    C = EARLY_RETURN_SENTINEL;
-    c: {
-      f = describeRuleShape(ruleValue);
-      if (!f) {
-        C = null;
-        break c;
-      }
-      a = Text;
-      dimColor = true;
-      v = f.prefix;
-      x =
-        f.emphasis !== undefined &&
-        jsxProd_default(Text, {
-          bold: true,
-          children: consentRowLabel(f.emphasis),
-        });
-    }
-    $[0] = ruleValue;
-    $[1] = a;
-    $[2] = f;
-    $[3] = dimColor;
-    $[4] = v;
-    $[5] = x;
-    $[6] = C;
-  } else {
-    a = $[1];
-    f = $[2];
-    dimColor = $[3];
-    v = $[4];
-    x = $[5];
-    C = $[6];
-  }
-  if (C !== EARLY_RETURN_SENTINEL) return C;
-  let M;
-  if ($[7] !== a || $[8] !== f.suffix || $[9] !== dimColor || $[10] !== v || $[11] !== x) {
-    M = jsxProd_default_2(a, {
-      dimColor,
-      children: [v, x, f.suffix],
-    });
-    $[7] = a;
-    $[8] = f.suffix;
-    $[9] = dimColor;
-    $[10] = v;
-    $[11] = x;
-    $[12] = M;
-  } else M = $[12];
-  return M;
-}
 //@ chunk-mjpqa6jt.js:227-617 placement
 /**
  * 生成权限规则的可读描述片段 {prefix, emphasis, suffix}：Bash 规则区分任意命令/前缀/精确命令，无内容的规则描述为"任意使用该工具"，其余返回 null。
@@ -107,5 +46,72 @@ function describeRuleShape(ruleValue) {
       suffix: " tool",
     };
   return null;
+}
+//@ chunk-p2qwpk2k.js:20255-20259 placement
+init_react_production();
+//@ chunk-p2qwpk2k.js:21751-22240 callgraph-witnessed = PermissionRuleDescription (0.302)
+function PermissionRuleDescription(props) {
+  let $ = useMemoCache(13);
+  let { ruleValue } = props;
+  let labelElement;
+  let detailElement;
+  let dimColor;
+  let childrenElement;
+  let boxElement;
+  let ruleResult;
+  if ($[0] !== ruleValue) {
+    ruleResult = EARLY_RETURN_SENTINEL;
+    c: {
+      detailElement = describeRuleShape(ruleValue);
+      if (!detailElement) {
+        ruleResult = null;
+        break c;
+      }
+      labelElement = Text;
+      dimColor = true;
+      childrenElement = detailElement.prefix;
+      boxElement =
+        detailElement.emphasis !== undefined &&
+        jsxProd_default(Text, {
+          bold: true,
+          children: consentRowLabel(detailElement.emphasis),
+        });
+    }
+    $[0] = ruleValue;
+    $[1] = labelElement;
+    $[2] = detailElement;
+    $[3] = dimColor;
+    $[4] = childrenElement;
+    $[5] = boxElement;
+    $[6] = ruleResult;
+  } else {
+    labelElement = $[1];
+    detailElement = $[2];
+    dimColor = $[3];
+    childrenElement = $[4];
+    boxElement = $[5];
+    ruleResult = $[6];
+  }
+  if (ruleResult !== EARLY_RETURN_SENTINEL) return ruleResult;
+  let labelElementElement;
+  if (
+    $[7] !== labelElement ||
+    $[8] !== detailElement.suffix ||
+    $[9] !== dimColor ||
+    $[10] !== childrenElement ||
+    $[11] !== boxElement
+  ) {
+    labelElementElement = jsxProd_default_2(labelElement, {
+      dimColor,
+      children: [childrenElement, boxElement, detailElement.suffix],
+    });
+    $[7] = labelElement;
+    $[8] = detailElement.suffix;
+    $[9] = dimColor;
+    $[10] = childrenElement;
+    $[11] = boxElement;
+    $[12] = labelElementElement;
+  } else labelElementElement = $[12];
+  return labelElementElement;
 }
 export { describeRuleShape, PermissionRuleDescription };

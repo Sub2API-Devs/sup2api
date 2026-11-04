@@ -15,15 +15,16 @@ import { HostScoped } from "../utils/hostScoped.js";
 import { getRootSession } from "../bootstrap/state.js";
 import { getProcessStartTimeAsync } from "../utils/processIdentity.js";
 import { killProcessGroup } from "../utils/auth/lockHolderLiveness.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-gg3tj8q5.js:442-618 placement
 class AdoptTicksTokenLogger {
   firedSites = new Set();
-  fire(e) {
-    if (this.firedSites.has(e)) return;
-    this.firedSites.add(e);
+  fire(site) {
+    if (this.firedSites.has(site)) return;
+    this.firedSites.add(site);
     logEvent("tengu_dead_probe_adopt_ticks_token", {
-      site: fromEnum(e),
+      site: fromEnum(site),
     });
   }
   reset() {
@@ -31,7 +32,10 @@ class AdoptTicksTokenLogger {
   }
 }
 //@ chunk-gg3tj8q5.js:618-641 placement
-var deadProbeSlot = new HostScoped(() => new AdoptTicksTokenLogger());
+var deadProbeSlot; // deferred: uses AdoptTicksTokenLogger of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-gg3tj8q5.js:618", () => {
+  deadProbeSlot = new HostScoped(() => new AdoptTicksTokenLogger());
+});
 //@ chunk-gg3tj8q5.js:641-676 placement
 function deadProbe() {
   return deadProbeSlot.of(getRootSession().host);
@@ -40,20 +44,20 @@ function deadProbe() {
 /**
  * 函数 fireDeadProbe（触发探测）。
  */
-function fireDeadProbe(e) {
-  deadProbe().fire(e);
+function fireDeadProbe(site) {
+  deadProbe().fire(site);
 }
 //@ chunk-gg3tj8q5.js:704-886 placement
 /**
  * 从 /proc/<pid>/stat 读取进程启动时刻（clock ticks），用于确认进程身份；失败返回 null。
  */
-async function readProcessStartTicks(e) {
+async function readProcessStartTicks(pid) {
   try {
-    let file = await readFile(`/proc/${e}/stat`, "utf-8");
+    let file = await readFile(`/proc/${pid}/stat`, "utf-8");
     let index = file.lastIndexOf(")");
     let parts = file.slice(index + 2).split(" ");
-    let i = Number(parts[19]);
-    return Number.isFinite(i) ? i : null;
+    let startTicks = Number(parts[19]);
+    return Number.isFinite(startTicks) ? startTicks : null;
   } catch {
     return null;
   }

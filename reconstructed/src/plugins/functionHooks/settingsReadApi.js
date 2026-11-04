@@ -14,95 +14,110 @@ import { getPluginRegistry } from "../../utils/plugins/pluginLoadState.js";
 import { computedSettings } from "./policyGate.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { uniq } from "../../utils/collections.js";
-import { En } from "../../../vendor/lodash-es/_inlinedHelpers.js";
+import { import_sortedIndex_2 } from "../../../vendor/lodash-es/_inlinedHelpers.js";
 import { SETTING_SOURCES } from "../../utils/settings/constants.js";
 import { settingsChangeDetector } from "../../utils/settings/changeDetector.js";
 import { logError } from "../../utils/log.js";
 import { toError } from "../../utils/errors.js";
 
 //@ chunk-e6aww6q8.js:4159986-4160098 placement
-function settingsReadKey(e) {
-  let n = [...e.keys()].toSorted();
-  return bunHashOf(jsonStringify([n, n.map((r) => [e.get(r)].filter((s) => s !== undefined))]));
+function settingsReadKey(answers) {
+  let keys = [...answers.keys()].toSorted();
+  return bunHashOf(
+    jsonStringify([keys, keys.map((key) => [answers.get(key)].filter((value) => value !== undefined))]),
+  );
 }
 //@ chunk-e6aww6q8.js:4160098-4162230 placement
 /**
  * 插件读取引擎合并后的设置；插件与设置都未变化时复用上次结果。
  */
-async function readMergedSettingsForPlugin(e, n) {
-  let hookedMerge = e.hookedMerge;
+async function readMergedSettingsForPlugin(state, trigger) {
+  let hookedMerge = state.hookedMerge;
   hookedMerge.queuedFor = undefined;
   try {
     let pluginRegistry = getPluginRegistry();
     await pluginRegistry.hookRegistrationInFlight?.catch(() => {});
     let answers = hookedMerge.answers;
     if (pluginRegistry.loadedModules.length === 0 && answers === null) return;
-    let y = jsonStringify(pluginRegistry.loadedModules.map((loadedModule) => loadedModule.environmentId));
-    let S = computedSettings(hookedMerge);
-    if (y === hookedMerge.askedOf && S === hookedMerge.askedAbout && hookedMerge.unsettled.size === 0) {
+    let askedOf = jsonStringify(
+      pluginRegistry.loadedModules.map((loadedModule) => loadedModule.environmentId),
+    );
+    let askedAbout = computedSettings(hookedMerge);
+    if (
+      askedOf === hookedMerge.askedOf &&
+      askedAbout === hookedMerge.askedAbout &&
+      hookedMerge.unsettled.size === 0
+    ) {
       logForDebugging(
-        `settings.read: the engine's merge is not raised again (${n}): neither the loaded plugins nor the settings changed.`,
+        `settings.read: the engine's merge is not raised again (${trigger}): neither the loaded plugins nor the settings changed.`,
       );
       return;
     }
     let startTime = performance.now();
-    let G = await import("./chunk-2xg1ep72.js");
-    let q = await G.engineMergeRead();
-    if (q === undefined && hookedMerge.visited.length === 0) hookedMerge.unsettled = new Set();
-    let Z = q ?? [];
+    let settingsModule = await import("./api/ENGINE_CALLER.lazy.js");
+    let engineMerge = await settingsModule.engineMergeRead();
+    if (engineMerge === undefined && hookedMerge.visited.length === 0) hookedMerge.unsettled = new Set();
+    let entries = engineMerge ?? [];
     logForDebugging(
-      `settings.read: the engine's merge was raised (${n}) in ${(performance.now() - startTime).toFixed(1)} ms; ${Z.length} keys answered otherwise than the files.`,
+      `settings.read: the engine's merge was raised (${trigger}) in ${(performance.now() - startTime).toFixed(1)} ms; ${entries.length} keys answered otherwise than the files.`,
     );
-    let Se = answers?.values ?? new Map();
-    let ke = new Map(Z.filter((Je) => !hookedMerge.unsettled.has(Je.key)).map((Je) => [Je.key, Je.value]));
-    let Ee = hookedMerge.visited.includes(settingsReadKey(ke))
-      ? uniq([...ke.keys(), ...Se.keys()]).filter(
-          (Je) => ke.has(Je) !== Se.has(Je) || !En(ke.get(Je), Se.get(Je)),
+    let hookedValues = answers?.values ?? new Map();
+    let engineValues = new Map(
+      entries
+        .filter((entry) => !hookedMerge.unsettled.has(entry.key))
+        .map((entry) => [entry.key, entry.value]),
+    );
+    let unsettledKeys = hookedMerge.visited.includes(settingsReadKey(engineValues))
+      ? uniq([...engineValues.keys(), ...hookedValues.keys()]).filter(
+          (key) =>
+            engineValues.has(key) !== hookedValues.has(key) ||
+            !import_sortedIndex_2(engineValues.get(key), hookedValues.get(key)),
         )
       : [];
-    if (Ee.length > 0) {
-      hookedMerge.unsettled = new Set([...hookedMerge.unsettled, ...Ee]);
+    if (unsettledKeys.length > 0) {
+      hookedMerge.unsettled = new Set([...hookedMerge.unsettled, ...unsettledKeys]);
       logForDebugging(
-        `settings.read: the merge never settles for ${Ee.join(", ")}; no hook's answer is taken for it.`,
+        `settings.read: the merge never settles for ${unsettledKeys.join(", ")}; no hook's answer is taken for it.`,
         {
           level: "warn",
         },
       );
     }
-    let filtered = Z.filter((Je) => !hookedMerge.unsettled.has(Je.key));
-    let Me =
+    let filtered = entries.filter((entry) => !hookedMerge.unsettled.has(entry.key));
+    let nextAnswers =
       filtered.length + hookedMerge.unsettled.size === 0
         ? null
         : {
-            values: new Map(filtered.map((Je) => [Je.key, Je.value])),
-            errors: [...hookedMerge.unsettled].map((Je) => ({
-              path: Je,
+            values: new Map(filtered.map((entry) => [entry.key, entry.value])),
+            errors: [...hookedMerge.unsettled].map((key) => ({
+              path: key,
               severity: "warning",
               statusOnly: true,
-              message: `${Je} never settles under a settings.read hook (one of: ${G.settingsReadPlugins().join(", ")}): taking its answer was followed by a reload of the plugins, and the plugins then loaded answered as before it. No hook's answer is taken for this key; the settings files' own value stands.`,
+              message: `${key} never settles under a settings.read hook (one of: ${settingsModule.settingsReadPlugins().join(", ")}): taking its answer was followed by a reload of the plugins, and the plugins then loaded answered as before it. No hook's answer is taken for this key; the settings files' own value stands.`,
             })),
-            source: SETTING_SOURCES.findLast((Je) => filtered.some((nt) => nt.source === Je)),
+            source: SETTING_SOURCES.findLast((source) => filtered.some((entry) => entry.source === source)),
           };
-    if (En(Me, answers)) {
+    if (import_sortedIndex_2(nextAnswers, answers)) {
       hookedMerge.visited = [];
-      hookedMerge.askedOf = y;
-      hookedMerge.askedAbout = S;
+      hookedMerge.askedOf = askedOf;
+      hookedMerge.askedAbout = askedAbout;
       return;
     }
-    hookedMerge.answers = Me;
+    hookedMerge.answers = nextAnswers;
     hookedMerge.isAnnouncing = true;
     let hookRegistration = pluginRegistry.hookRegistration;
     try {
       settingsChangeDetector.notifyChange(
-        SETTING_SOURCES.findLast((Je) => Je === Me?.source || Je === answers?.source) ?? "policySettings",
+        SETTING_SOURCES.findLast((source) => source === nextAnswers?.source || source === answers?.source) ??
+          "policySettings",
       );
     } finally {
       hookedMerge.isAnnouncing = false;
     }
-    let ze = pluginRegistry.hookRegistration !== hookRegistration;
-    hookedMerge.visited = ze ? [...hookedMerge.visited, settingsReadKey(Se)] : [];
-    let lt = await import("./chunk-7dqhgs3y.js");
-    lt.configureProxyAuthHelperFromSettings();
+    let hasReregistered = pluginRegistry.hookRegistration !== hookRegistration;
+    hookedMerge.visited = hasReregistered ? [...hookedMerge.visited, settingsReadKey(hookedValues)] : [];
+    let proxyModule = await import("../../utils/auth/proxyAuthHelperConfig.js");
+    proxyModule.configureProxyAuthHelperFromSettings();
   } catch (error) {
     logError(toError(error));
   }

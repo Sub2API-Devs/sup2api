@@ -16,76 +16,78 @@ import { INLINE_PLUGIN_MARKETPLACE } from "../telemetry/pluginTelemetry.js";
 //@ chunk-5a30rzw4.js:305-361 placement = TRUSTED_SETTING_SOURCES (1)
 var TRUSTED_SETTING_SOURCES = ["userSettings", "flagSettings", "policySettings"];
 //@ chunk-5a30rzw4.js:361-664 placement
-function trustedPluginSetting(t) {
-  let i = new Set(getEnabledSettingSources());
-  let e = pluginIdAliases(t);
-  let n;
-  let r;
-  for (let s of TRUSTED_SETTING_SOURCES) {
-    if (!i.has(s)) continue;
-    let pluginConfigs = getSettingsForSource(s)?.pluginConfigs;
-    for (let u of e) {
-      let o = pluginConfigs?.[u];
-      if (o?.options)
-        n = {
-          ...n,
-          ...o.options,
+function trustedPluginSetting(pluginId) {
+  let enabledSources = new Set(getEnabledSettingSources());
+  let aliases = pluginIdAliases(pluginId);
+  let options;
+  let mcpServers;
+  for (let source of TRUSTED_SETTING_SOURCES) {
+    if (!enabledSources.has(source)) continue;
+    let pluginConfigs = getSettingsForSource(source)?.pluginConfigs;
+    for (let alias of aliases) {
+      let config = pluginConfigs?.[alias];
+      if (config?.options)
+        options = {
+          ...options,
+          ...config.options,
         };
-      if (o?.mcpServers) {
-        r = r ?? {};
-        for (let [key, value] of Object.entries(o.mcpServers))
-          r[key] = {
-            ...r[key],
+      if (config?.mcpServers) {
+        mcpServers = mcpServers ?? {};
+        for (let [key, value] of Object.entries(config.mcpServers))
+          mcpServers[key] = {
+            ...mcpServers[key],
             ...value,
           };
       }
     }
   }
   return {
-    options: n,
-    mcpServers: r,
+    options,
+    mcpServers,
   };
 }
 //@ chunk-5a30rzw4.js:664-831 placement
-function pluginIdAliases(t) {
-  let i = legacyPluginIds(t);
-  if (i.length > 0) return [...i.toReversed(), t];
-  let e = `@${INLINE_PLUGIN_MARKETPLACE}`;
-  let n = t.endsWith(e) ? t.slice(0, -e.length) : "";
-  return n !== "" && !n.includes("@") ? [n, t] : [t];
+function pluginIdAliases(pluginId) {
+  let legacyIds = legacyPluginIds(pluginId);
+  if (legacyIds.length > 0) return [...legacyIds.toReversed(), pluginId];
+  let suffix = `@${INLINE_PLUGIN_MARKETPLACE}`;
+  let bareName = pluginId.endsWith(suffix) ? pluginId.slice(0, -suffix.length) : "";
+  return bareName !== "" && !bareName.includes("@") ? [bareName, pluginId] : [pluginId];
 }
 //@ chunk-5a30rzw4.js:831-969 placement
 function trustedEnabledPlugins(pluginId) {
-  let i = new Set(getEnabledSettingSources());
-  let e;
-  for (let n of TRUSTED_SETTING_SOURCES) {
-    if (!i.has(n)) continue;
-    let r = lookupByPluginAliases(getSettingsForSource(n)?.enabledPlugins, pluginId);
-    if (r !== undefined) e = r;
+  let enabledSources = new Set(getEnabledSettingSources());
+  let value;
+  for (let source of TRUSTED_SETTING_SOURCES) {
+    if (!enabledSources.has(source)) continue;
+    let enabledValue = lookupByPluginAliases(getSettingsForSource(source)?.enabledPlugins, pluginId);
+    if (enabledValue !== undefined) value = enabledValue;
   }
-  return e;
+  return value;
 }
 //@ chunk-5a30rzw4.js:969-1165 placement
-function pluginSettingWriteTarget(t, i) {
-  let e = canonicalPluginId(i);
-  let n = legacyPluginIds(e);
-  if (n.length === 0)
+function pluginSettingWriteTarget(record, pluginId) {
+  let canonical = canonicalPluginId(pluginId);
+  let legacyIds = legacyPluginIds(canonical);
+  if (legacyIds.length === 0)
     return {
-      deciding: i,
-      written: i,
+      deciding: pluginId,
+      written: pluginId,
       replaced: [],
     };
-  let filtered = n.filter((s) => t?.[s] !== undefined);
+  let filtered = legacyIds.filter((id) => record?.[id] !== undefined);
   return {
-    deciding: t?.[e] === undefined ? (filtered[0] ?? e) : e,
-    written: e,
+    deciding: record?.[canonical] === undefined ? (filtered[0] ?? canonical) : canonical,
+    written: canonical,
     replaced: filtered,
   };
 }
 //@ chunk-5a30rzw4.js:1165-1254 placement
-function lookupByPluginAliases(enabledPlugins, i) {
-  let e = canonicalPluginId(i);
-  return [e, ...legacyPluginIds(e), i].map((n) => enabledPlugins?.[n]).find((n) => n !== undefined);
+function lookupByPluginAliases(enabledPlugins, pluginId) {
+  let canonical = canonicalPluginId(pluginId);
+  return [canonical, ...legacyPluginIds(canonical), pluginId]
+    .map((id) => enabledPlugins?.[id])
+    .find((value) => value !== undefined);
 }
 export {
   pluginSettingWriteTarget,

@@ -5,11 +5,11 @@
  * pieces: chunk-spjgqa4y.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 import { require_utils } from "./utils.js";
 
 //@ chunk-spjgqa4y.js:2981-3101 cjs-fingerprint
-var require_finder_pattern = x(function (cjsExports) {
+var require_finder_pattern = __commonJS(function (cjsExports) {
   var getSymbolSize = require_utils().getSymbolSize;
   cjsExports.getPositions = function (version) {
     let size = getSymbolSize(version);

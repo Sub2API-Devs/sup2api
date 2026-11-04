@@ -8,7 +8,7 @@
  * pieces: chunk-14ezrfvp.js (2)
  * attribution: placement 1, fingerprint 1
  */
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { formatFileSize } from "../../utils/format.js";
 import {
   jsxProd_default,
@@ -19,7 +19,7 @@ import { MessageResponse } from "../../components/MessageResponse.js";
 
 //@ chunk-14ezrfvp.js:465-795 placement
 function renderToolUseProgressMessage(props) {
-  let $ = w(7);
+  let $ = useMemoCache(7);
   let { bytes, status } = props;
   let children;
   if ($[0] !== bytes) {
@@ -27,40 +27,40 @@ function renderToolUseProgressMessage(props) {
     $[0] = bytes;
     $[1] = children;
   } else children = $[1];
-  let t;
+  let sizeElement;
   if ($[2] !== children) {
-    t = jsxProd_default(Text, {
+    sizeElement = jsxProd_default(Text, {
       bold: true,
       children,
     });
     $[2] = children;
-    $[3] = t;
-  } else t = $[3];
-  const o = status !== undefined && ` (${status})`;
-  let c;
-  if ($[4] !== t || $[5] !== o) {
-    c = jsxProd_default(MessageResponse, {
+    $[3] = sizeElement;
+  } else sizeElement = $[3];
+  const statusSuffix = status !== undefined && ` (${status})`;
+  let element;
+  if ($[4] !== sizeElement || $[5] !== statusSuffix) {
+    element = jsxProd_default(MessageResponse, {
       height: 1,
       children: jsxProd_default_2(Text, {
-        children: ["Received ", t, o],
+        children: ["Received ", sizeElement, statusSuffix],
       }),
     });
-    $[4] = t;
-    $[5] = o;
-    $[6] = c;
-  } else c = $[6];
-  return c;
+    $[4] = sizeElement;
+    $[5] = statusSuffix;
+    $[6] = element;
+  } else element = $[6];
+  return element;
 }
 //@ chunk-14ezrfvp.js:795-1023 fingerprint = renderToolResultMessage (0.787)
 /**
  * WebFetch 结果渲染：显示字节数与状态码；verbose 时附结果文本。
  */
 function renderToolResultMessage(
-  { bytes, code, codeText, result: u },
+  { bytes, code, codeText, result: resultText },
   _progressMessagesForMessage,
   { verbose },
 ) {
-  let o = jsxProd_default(renderToolUseProgressMessage, {
+  let progressElement = jsxProd_default(renderToolUseProgressMessage, {
     bytes,
     status: `${code} ${codeText}`,
   });
@@ -68,15 +68,15 @@ function renderToolResultMessage(
     return jsxProd_default_2(Box, {
       flexDirection: "column",
       children: [
-        o,
+        progressElement,
         jsxProd_default(Box, {
           flexDirection: "column",
           children: jsxProd_default(Text, {
-            children: u,
+            children: resultText,
           }),
         }),
       ],
     });
-  return o;
+  return progressElement;
 }
 export { renderToolUseProgressMessage, renderToolResultMessage };

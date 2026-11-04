@@ -8,9 +8,9 @@
  * pieces: chunk-18hwfzwa.js (5)
  * attribution: placement 5
  */
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { useTheme_2 } from "../../components/design-system/ThemeProvider.js";
-import { y, init_react_production } from "../../../vendor/react/cjs/react.production.js";
+import { useState, init_react_production } from "../../../vendor/react/cjs/react.production.js";
 import { EARLY_RETURN_SENTINEL, MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { getRandomGoodbyeMessage, noopExitHandler } from "../../commands/exit/exit.js";
 import { ExitFlow } from "../../components/ExitFlow.js";
@@ -20,10 +20,11 @@ import { WorktreeExitDialog } from "../../components/WorktreeExitDialog.js";
 import { BackgroundAndExit, canBackgroundSession } from "../../utils/background/spawnBackgroundFork.js";
 import { ExitBackgroundWorkDialog } from "../../components/ExitBackgroundWorkDialog.js";
 import { useStoreSelector } from "../../hooks/useStoreSelector.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-18hwfzwa.js:1706461-1708386 placement
 function useExitFlow(props) {
-  let $ = w(39);
+  let $ = useMemoCache(39);
   let {
     showWorktree,
     backgroundItems,
@@ -37,120 +38,126 @@ function useExitFlow(props) {
     onBeforeExit,
   } = props;
   let { storageV5 } = useTheme_2();
-  let [rt, kt] = y(false);
-  let It;
+  let [backgroundingConfirmed, setBackgroundingConfirmed] = useState(false);
+  let getCurrentMessages;
   if ($[0] !== getMessages || $[1] !== messages) {
-    It = () => getMessages?.() ?? messages;
+    getCurrentMessages = () => getMessages?.() ?? messages;
     $[0] = getMessages;
     $[1] = messages;
-    $[2] = It;
-  } else It = $[2];
-  let Ot = It;
-  let Et;
+    $[2] = getCurrentMessages;
+  } else getCurrentMessages = $[2];
+  let readMessages = getCurrentMessages;
+  let readIsStreaming;
   if ($[3] !== getIsMidTurn || $[4] !== getIsResponseStreaming || $[5] !== isMidTurn) {
-    Et = () => ((getIsResponseStreaming ?? getIsMidTurn)?.() ?? isMidTurn) === true;
+    readIsStreaming = () => ((getIsResponseStreaming ?? getIsMidTurn)?.() ?? isMidTurn) === true;
     $[3] = getIsMidTurn;
     $[4] = getIsResponseStreaming;
     $[5] = isMidTurn;
-    $[6] = Et;
-  } else Et = $[6];
-  let Dt = Et;
-  let Lt;
+    $[6] = readIsStreaming;
+  } else readIsStreaming = $[6];
+  let isStreaming = readIsStreaming;
+  let flowResult;
   if (
     $[7] !== backgroundItems ||
-    $[8] !== rt ||
+    $[8] !== backgroundingConfirmed ||
     $[9] !== getIsMidTurn ||
-    $[10] !== Ot ||
+    $[10] !== readMessages ||
     $[11] !== isMidTurn ||
     $[12] !== onBeforeExit ||
     $[13] !== onCancel ||
     $[14] !== onDone ||
-    $[15] !== Dt ||
+    $[15] !== isStreaming ||
     $[16] !== showWorktree ||
     $[17] !== storageV5
   ) {
-    Lt = EARLY_RETURN_SENTINEL;
+    flowResult = EARLY_RETURN_SENTINEL;
     Bo: {
-      let oo = Ot();
-      let Xt;
+      let currentMessages = readMessages();
+      let midTurnFlag;
       if ($[19] !== getIsMidTurn || $[20] !== isMidTurn) {
-        Xt = getIsMidTurn?.() ?? isMidTurn;
+        midTurnFlag = getIsMidTurn?.() ?? isMidTurn;
         $[19] = getIsMidTurn;
         $[20] = isMidTurn;
-        $[21] = Xt;
-      } else Xt = $[21];
-      let io = Xt;
-      let so;
-      if ($[22] !== Ot || $[23] !== onBeforeExit || $[24] !== onDone || $[25] !== Dt || $[26] !== storageV5) {
-        so = async function bo(po, ao) {
+        $[21] = midTurnFlag;
+      } else midTurnFlag = $[21];
+      let isMidTurnNow = midTurnFlag;
+      let finishExit;
+      if (
+        $[22] !== readMessages ||
+        $[23] !== onBeforeExit ||
+        $[24] !== onDone ||
+        $[25] !== isStreaming ||
+        $[26] !== storageV5
+      ) {
+        finishExit = async function finishExitImpl(goodbyeMessage, exitOptions) {
           await onBeforeExit?.();
-          onDone(po ?? getRandomGoodbyeMessage());
-          let co = Ot();
-          if (co)
+          onDone(goodbyeMessage ?? getRandomGoodbyeMessage());
+          let messagesAtExit = readMessages();
+          if (messagesAtExit)
             await ExitFlow(
-              co,
+              messagesAtExit,
               {
-                responseStreaming: Dt(),
+                responseStreaming: isStreaming(),
               },
               storageV5,
-              ao?.removeWorktree,
+              exitOptions?.removeWorktree,
             );
-          else if (ao?.removeWorktree)
+          else if (exitOptions?.removeWorktree)
             await gracefulShutdown(0, "prompt_input_exit", {
-              removeWorktree: ao.removeWorktree,
+              removeWorktree: exitOptions.removeWorktree,
             });
           else await gracefulShutdown(0, "prompt_input_exit");
         };
-        $[22] = Ot;
+        $[22] = readMessages;
         $[23] = onBeforeExit;
         $[24] = onDone;
-        $[25] = Dt;
+        $[25] = isStreaming;
         $[26] = storageV5;
-        $[27] = so;
-      } else so = $[27];
-      let bo = so;
+        $[27] = finishExit;
+      } else finishExit = $[27];
+      let onDialogDone = finishExit;
       if (showWorktree) {
-        let Ao;
-        if ($[28] !== onCancel || $[29] !== bo) {
-          Ao = jsxProd_default(WorktreeExitDialog, {
-            onDone: bo,
+        let worktreeDialog;
+        if ($[28] !== onCancel || $[29] !== onDialogDone) {
+          worktreeDialog = jsxProd_default(WorktreeExitDialog, {
+            onDone: onDialogDone,
             onCancel,
           });
           $[28] = onCancel;
-          $[29] = bo;
-          $[30] = Ao;
-        } else Ao = $[30];
-        Lt = Ao;
+          $[29] = onDialogDone;
+          $[30] = worktreeDialog;
+        } else worktreeDialog = $[30];
+        flowResult = worktreeDialog;
         break Bo;
       }
-      if (rt && oo) {
-        Lt = jsxProd_default(BackgroundAndExit, {
-          messages: oo,
-          isMidTurn: io ?? false,
-          responseStreaming: Dt(),
+      if (backgroundingConfirmed && currentMessages) {
+        flowResult = jsxProd_default(BackgroundAndExit, {
+          messages: currentMessages,
+          isMidTurn: isMidTurnNow ?? false,
+          responseStreaming: isStreaming(),
         });
         break Bo;
       }
       if (backgroundItems.length > 0) {
         let onBackground;
-        if (oo !== undefined && canBackgroundSession(oo)) {
-          let Ao;
+        if (currentMessages !== undefined && canBackgroundSession(currentMessages)) {
+          let onBackground_2;
           if ($[31] === MEMO_CACHE_SENTINEL) {
-            Ao = () => kt(true);
-            $[31] = Ao;
-          } else Ao = $[31];
-          onBackground = Ao;
+            onBackground_2 = () => setBackgroundingConfirmed(true);
+            $[31] = onBackground_2;
+          } else onBackground_2 = $[31];
+          onBackground = onBackground_2;
         }
         let onExit;
-        if ($[32] !== bo) {
-          onExit = () => void bo();
-          $[32] = bo;
+        if ($[32] !== onDialogDone) {
+          onExit = () => void onDialogDone();
+          $[32] = onDialogDone;
           $[33] = onExit;
         } else onExit = $[33];
         const onCancel_2 = onCancel ?? noopExitHandler;
-        let Io;
+        let backgroundDialog;
         if ($[34] !== backgroundItems || $[35] !== onBackground || $[36] !== onExit || $[37] !== onCancel_2) {
-          Io = jsxProd_default(ExitBackgroundWorkDialog, {
+          backgroundDialog = jsxProd_default(ExitBackgroundWorkDialog, {
             items: backgroundItems,
             onExit,
             onCancel: onCancel_2,
@@ -160,41 +167,41 @@ function useExitFlow(props) {
           $[35] = onBackground;
           $[36] = onExit;
           $[37] = onCancel_2;
-          $[38] = Io;
-        } else Io = $[38];
-        Lt = Io;
+          $[38] = backgroundDialog;
+        } else backgroundDialog = $[38];
+        flowResult = backgroundDialog;
         break Bo;
       }
     }
     $[7] = backgroundItems;
-    $[8] = rt;
+    $[8] = backgroundingConfirmed;
     $[9] = getIsMidTurn;
-    $[10] = Ot;
+    $[10] = readMessages;
     $[11] = isMidTurn;
     $[12] = onBeforeExit;
     $[13] = onCancel;
     $[14] = onDone;
-    $[15] = Dt;
+    $[15] = isStreaming;
     $[16] = showWorktree;
     $[17] = storageV5;
-    $[18] = Lt;
-  } else Lt = $[18];
-  if (Lt !== EARLY_RETURN_SENTINEL) return Lt;
+    $[18] = flowResult;
+  } else flowResult = $[18];
+  if (flowResult !== EARLY_RETURN_SENTINEL) return flowResult;
   return null;
 }
 //@ chunk-18hwfzwa.js:1708386-1708418 placement
-function selectExit(ke) {
-  return ke.exit;
+function selectExit(chrome) {
+  return chrome.exit;
 }
 //@ chunk-18hwfzwa.js:1708418-1709241 placement
 function runExitInterstitial(props) {
-  let $ = w(9);
+  let $ = useMemoCache(9);
   let { chrome } = props;
   let storeSelector = useStoreSelector(chrome, selectExit);
   if (storeSelector.kind !== "interstitial") {
     return null;
   }
-  let ee;
+  let interstitial;
   if (
     $[0] !== chrome.cancelExit ||
     $[1] !== chrome.exitReaders.getMessages ||
@@ -205,7 +212,7 @@ function runExitInterstitial(props) {
     $[6] !== storeSelector.messages ||
     $[7] !== storeSelector.showWorktree
   ) {
-    ee = jsxProd_default(useExitFlow, {
+    interstitial = jsxProd_default(useExitFlow, {
       showWorktree: storeSelector.showWorktree,
       backgroundItems: storeSelector.backgroundItems,
       messages: storeSelector.messages,
@@ -224,12 +231,15 @@ function runExitInterstitial(props) {
     $[5] = storeSelector.isMidTurn;
     $[6] = storeSelector.messages;
     $[7] = storeSelector.showWorktree;
-    $[8] = ee;
-  } else ee = $[8];
-  return ee;
+    $[8] = interstitial;
+  } else interstitial = $[8];
+  return interstitial;
 }
 //@ chunk-18hwfzwa.js:1709241-1709257 placement
 function noopExitFlow() {}
 //@ chunk-18hwfzwa.js:1709257-1709261 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:1709257", () => {
+  init_react_production();
+});
 export { runExitInterstitial, useExitFlow };

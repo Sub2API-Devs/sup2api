@@ -26,15 +26,21 @@ import { getPlatform } from "../../utils/platform.js";
 import { isPlainObject as isPlainObject_5 } from "../../utils/isPlainObject.js";
 import { createValueSlot } from "../../utils/valueSlot.js";
 import { MAX_KEPT_TEXT_CHARS } from "./sites/siteRules.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:3731186-3731406 placement
-function resolvePluginAssetPath(root, n) {
-  let r = normalize(n);
-  if (n.trim() === "" || isAbsolute(n) || r.startsWith("..") || r.split(/[\\/]/).includes(".."))
+function resolvePluginAssetPath(root, assetPath) {
+  let normalized = normalize(assetPath);
+  if (
+    assetPath.trim() === "" ||
+    isAbsolute(assetPath) ||
+    normalized.startsWith("..") ||
+    normalized.split(/[\\/]/).includes("..")
+  )
     throw new HooksError(
-      `$.audio.play: asset must be a path inside the plugin's directory (got ${jsonStringify(n)})`,
+      `$.audio.play: asset must be a path inside the plugin's directory (got ${jsonStringify(assetPath)})`,
     );
-  return join(root, r);
+  return join(root, normalized);
 }
 //@ chunk-e6aww6q8.js:3731406-3731422 placement
 /**
@@ -42,41 +48,42 @@ function resolvePluginAssetPath(root, n) {
  */
 var MAX_AUDIO_CLIP_BYTES = 26214400;
 //@ chunk-e6aww6q8.js:3731422-3731720 placement
-async function resolveAudioAsset(e, asset, r) {
-  let root = e.root;
-  let pluginAssetPath = resolvePluginAssetPath(root, asset);
-  let y = (w) => new HooksError(`$.audio.play: could not read ${asset} in ${r}'s directory: ` + w);
-  let S;
+async function resolveAudioAsset(request, assetPath, pluginName) {
+  let root = request.root;
+  let pluginAssetPath = resolvePluginAssetPath(root, assetPath);
+  let fail = (message) =>
+    new HooksError(`$.audio.play: could not read ${assetPath} in ${pluginName}'s directory: ` + message);
+  let stat;
   try {
-    S = await checkInsidePluginRoot(pluginAssetPath, root, r);
+    stat = await checkInsidePluginRoot(pluginAssetPath, root, pluginName);
   } catch (error) {
-    logForDebugging(`$.audio.play (${r}): ${asset} refused: ${errorMessage(error)}`);
-    throw y("no such file");
+    logForDebugging(`$.audio.play (${pluginName}): ${assetPath} refused: ${errorMessage(error)}`);
+    throw fail("no such file");
   }
-  if (S.size > MAX_AUDIO_CLIP_BYTES) throw y(`the clip is over ${MAX_AUDIO_CLIP_BYTES} bytes`);
-  return S.real;
+  if (stat.size > MAX_AUDIO_CLIP_BYTES) throw fail(`the clip is over ${MAX_AUDIO_CLIP_BYTES} bytes`);
+  return stat.real;
 }
 //@ chunk-e6aww6q8.js:3731720-3731991 placement
-async function readBodyWithLimit(manualRedirect, n) {
+async function readBodyWithLimit(manualRedirect, maxBytes) {
   let reader = manualRedirect.body?.getReader();
   if (reader === undefined) return new Uint8Array();
-  let s = [];
-  let h = 0;
+  let chunks = [];
+  let total = 0;
   for (;;) {
-    let { done: y, value: S } = await reader.read();
-    if (y) break;
-    h += S.byteLength;
-    if (h > n) {
+    let { done, value: chunk } = await reader.read();
+    if (done) break;
+    total += chunk.byteLength;
+    if (total > maxBytes) {
       await reader.cancel();
-      throw new HooksError(`the clip is over ${n} bytes`);
+      throw new HooksError(`the clip is over ${maxBytes} bytes`);
     }
-    s.push(S);
+    chunks.push(chunk);
   }
-  return Buffer.concat(s);
+  return Buffer.concat(chunks);
 }
 //@ chunk-e6aww6q8.js:3731991-3732233 placement
-function audioExtensionForMime(e) {
-  switch (firstLineOf(e, ";").trim().toLowerCase()) {
+function audioExtensionForMime(mime) {
+  switch (firstLineOf(mime, ";").trim().toLowerCase()) {
     case "audio/mpeg":
     case "audio/mp3":
       return "mp3";
@@ -103,31 +110,31 @@ var AUDIO_LOAD_TIMEOUT_MS = 30000;
  */
 var MAX_AUDIO_FILE_BYTES = 4194304;
 //@ chunk-e6aww6q8.js:3739084-3739741 placement
-async function fetchAudioClip(clip, n) {
-  let { pluginName } = n;
+async function fetchAudioClip(clip, ctx) {
+  let { pluginName } = ctx;
   if (clip.url === undefined)
     return {
       bytes: Buffer.from(clip.base64, "base64"),
       extension: audioExtensionForMime(clip.mime),
       mime: clip.mime,
     };
-  let s = checkPluginFetchUrl(clip.url, n, "$.audio.play");
+  let url = checkPluginFetchUrl(clip.url, ctx, "$.audio.play");
   let now = Date.now();
   try {
-    let manualRedirect = await fetchManualRedirect(s, {
+    let manualRedirect = await fetchManualRedirect(url, {
       method: "GET",
       signal: AbortSignal.timeout(AUDIO_LOAD_TIMEOUT_MS),
     });
     if (!manualRedirect.ok) throw new HooksError(`HTTP ${manualRedirect.status}`);
     let bodyWithLimit = await readBodyWithLimit(manualRedirect, MAX_AUDIO_CLIP_BYTES);
-    let w = manualRedirect.headers.get("content-type") ?? "audio/mpeg";
+    let mime = manualRedirect.headers.get("content-type") ?? "audio/mpeg";
     logForDebugging(
-      `$.audio.play (${pluginName}): fetched ${bodyWithLimit.byteLength} bytes (${w}) in ${Date.now() - now}ms from ${describeAudioClip(clip)}`,
+      `$.audio.play (${pluginName}): fetched ${bodyWithLimit.byteLength} bytes (${mime}) in ${Date.now() - now}ms from ${describeAudioClip(clip)}`,
     );
     return {
       bytes: bodyWithLimit,
-      extension: audioExtensionForMime(w),
-      mime: w,
+      extension: audioExtensionForMime(mime),
+      mime,
     };
   } catch (error) {
     logForDebugging(`$.audio.play (${pluginName}): could not fetch ${clip.url}: ${errorMessage(error)}`, {
@@ -152,14 +159,14 @@ async function prepareAudioFile(request, pluginName) {
     pluginName,
     pluginStorageId,
   });
-  let y = await mkdtemp(join(tmpdir_2(), "claude-audio-"));
-  let S = join(y, `clip.${audioClip.extension}`);
-  await writeFile(S, audioClip.bytes);
+  let dir = await mkdtemp(join(tmpdir_2(), "claude-audio-"));
+  let filePath = join(dir, `clip.${audioClip.extension}`);
+  await writeFile(filePath, audioClip.bytes);
   return {
-    file: S,
-    what: `${S} (${audioClip.bytes.byteLength} bytes)`,
+    file: filePath,
+    what: `${filePath} (${audioClip.bytes.byteLength} bytes)`,
     cleanup: () =>
-      rm_2(y, {
+      rm_2(dir, {
         recursive: true,
         force: true,
       }).catch(() => {}),
@@ -171,17 +178,17 @@ async function prepareAudioFile(request, pluginName) {
  */
 var MAX_FORWARDED_OUTPUT_CHARS = 80;
 //@ chunk-e6aww6q8.js:3740156-3740339 placement
-function describeAudioClip(e) {
-  let n = e.asset === undefined;
-  let r = e.url === undefined;
-  let s = !r && e.url.length > MAX_FORWARDED_OUTPUT_CHARS;
-  return n
-    ? r
-      ? `${e.mime} ${e.base64.length} base64 chars`
-      : s
-        ? `${truncateToLength(e.url, MAX_FORWARDED_OUTPUT_CHARS)}...`
-        : e.url
-    : `asset ${e.asset}`;
+function describeAudioClip(clip) {
+  let hasAsset = clip.asset === undefined;
+  let hasUrl = clip.url === undefined;
+  let isLongUrl = !hasUrl && clip.url.length > MAX_FORWARDED_OUTPUT_CHARS;
+  return hasAsset
+    ? hasUrl
+      ? `${clip.mime} ${clip.base64.length} base64 chars`
+      : isLongUrl
+        ? `${truncateToLength(clip.url, MAX_FORWARDED_OUTPUT_CHARS)}...`
+        : clip.url
+    : `asset ${clip.asset}`;
 }
 //@ chunk-e6aww6q8.js:3740339-3740420 placement
 /**
@@ -234,7 +241,10 @@ function checkAudioUrlAllowed({ clip, pluginStorageId }, pluginName) {
 /**
  * 默认音频宿主
  */
-var audioHostDefault = createSerialQueue();
+var audioHostDefault; // deferred: uses createSerialQueue (./panes.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:3740912", () => {
+  audioHostDefault = createSerialQueue();
+});
 //@ chunk-e6aww6q8.js:3740926-3740936 placement
 /**
  * 4
@@ -243,33 +253,33 @@ var MAX_CONCURRENT_AUDIO = 4;
 //@ chunk-e6aww6q8.js:3740976-3741513 placement
 var spawnAudioPlayer = ({ command, args, label, what, signal }) =>
   new Promise((resolve, reject) => {
-    let w = spawn(command, args, {
+    let child = spawn(command, args, {
       stdio: "ignore",
       windowsHide: true,
       cwd: undefined,
       ...cgroupSpawnOptions("plugin"),
     });
-    logForDebugging(`${label}: ${command} ${what} (pid ${w.pid ?? "?"})`);
-    let L = false;
-    function G() {
-      L = true;
-      w.kill("SIGTERM");
+    logForDebugging(`${label}: ${command} ${what} (pid ${child.pid ?? "?"})`);
+    let stopped = false;
+    function stop() {
+      stopped = true;
+      child.kill("SIGTERM");
     }
-    let q = forwardAbort(signal, {
-      abort: G,
+    let unforward = forwardAbort(signal, {
+      abort: stop,
     });
-    w.once("error", (Z) => {
-      q();
-      logForDebugging(`${label}: ${command} failed to start: ${Z.message}`, {
+    child.once("error", (error) => {
+      unforward();
+      logForDebugging(`${label}: ${command} failed to start: ${error.message}`, {
         level: "warn",
       });
-      reject(new HooksError(`${command} failed to start: ${Z.message}`));
+      reject(new HooksError(`${command} failed to start: ${error.message}`));
     });
-    w.once("exit", (Z) => {
-      q();
-      logForDebugging(`${label}: ${command} exited ${Z ?? "by signal"}${L ? " (stopped)" : ""}`);
-      if (Z === 0 || L) resolve();
-      else reject(new HooksError(`${command} exited ${Z ?? "by signal"}`));
+    child.once("exit", (code) => {
+      unforward();
+      logForDebugging(`${label}: ${command} exited ${code ?? "by signal"}${stopped ? " (stopped)" : ""}`);
+      if (code === 0 || stopped) resolve();
+      else reject(new HooksError(`${command} exited ${code ?? "by signal"}`));
     });
   });
 //@ chunk-e6aww6q8.js:3741513-3741536 placement
@@ -287,13 +297,13 @@ async function waitForVoices(synth) {
   let voices = synth.getVoices();
   if (voices.length > 0 || synth.addEventListener === undefined) return voices;
   await new Promise((resolve) => {
-    function s() {
+    function onVoicesChanged() {
       clearTimeout(timer);
-      synth.removeEventListener?.("voiceschanged", s);
+      synth.removeEventListener?.("voiceschanged", onVoicesChanged);
       resolve();
     }
-    synth.addEventListener?.("voiceschanged", s);
-    let timer = setTimeout(s, AUDIO_START_GRACE_MS);
+    synth.addEventListener?.("voiceschanged", onVoicesChanged);
+    let timer = setTimeout(onVoicesChanged, AUDIO_START_GRACE_MS);
   });
   return synth.getVoices();
 }
@@ -301,25 +311,25 @@ async function waitForVoices(synth) {
 /**
  * 读取音频片段来源（插件目录内资源或 base64 数据）。
  */
-async function readAudioClipSource(e, { request, pluginName, signal }) {
-  let { Blob: h, URL: y, atob: S } = globalThisRef();
+async function readAudioClipSource(AudioCtor, { request, pluginName, signal }) {
+  let { Blob: BlobCtor, URL: URLCtor, atob: atobFn } = globalThisRef();
   let { clip, pluginStorageId } = request;
-  let G;
-  let q;
-  function Z({ bytes, mime }) {
-    if (h !== undefined && y !== undefined) {
-      let we = y.createObjectURL(
-        new h([bytes], {
+  let source;
+  let revoke;
+  function makeSource({ bytes, mime }) {
+    if (BlobCtor !== undefined && URLCtor !== undefined) {
+      let objectUrl = URLCtor.createObjectURL(
+        new BlobCtor([bytes], {
           type: mime,
         }),
       );
-      q = () => y.revokeObjectURL(we);
-      return we;
+      revoke = () => URLCtor.revokeObjectURL(objectUrl);
+      return objectUrl;
     }
     return `data:${mime};base64,${Buffer.from(bytes).toString("base64")}`;
   }
   if (clip.url !== undefined)
-    G = Z(
+    source = makeSource(
       await fetchAudioClip(
         {
           url: clip.url,
@@ -333,7 +343,7 @@ async function readAudioClipSource(e, { request, pluginName, signal }) {
   else if (clip.asset !== undefined) {
     let audioAsset = await resolveAudioAsset(request, clip.asset, pluginName);
     try {
-      G = Z({
+      source = makeSource({
         bytes: new Uint8Array(await readFile(audioAsset)),
         mime: mimeForAudioFile(audioAsset),
       });
@@ -342,12 +352,12 @@ async function readAudioClipSource(e, { request, pluginName, signal }) {
         `$.audio.play: could not read ${clip.asset} in ${pluginName}'s directory: ${errorMessage(error)}`,
       );
     }
-  } else if (S === undefined) G = `data:${clip.mime};base64,${clip.base64}`;
+  } else if (atobFn === undefined) source = `data:${clip.mime};base64,${clip.base64}`;
   else {
-    let Se = S(clip.base64);
-    let uint8Array = new Uint8Array(Se.length);
-    for (let idx = 0; idx < Se.length; idx++) uint8Array[idx] = Se.charCodeAt(idx);
-    G = Z({
+    let decoded = atobFn(clip.base64);
+    let uint8Array = new Uint8Array(decoded.length);
+    for (let idx = 0; idx < decoded.length; idx++) uint8Array[idx] = decoded.charCodeAt(idx);
+    source = makeSource({
       bytes: uint8Array,
       mime: clip.mime,
     });
@@ -356,31 +366,31 @@ async function readAudioClipSource(e, { request, pluginName, signal }) {
     `$.audio.play (${pluginName}): <audio> ${describeAudioClip(clip)}` + audioOptionsText(request),
   );
   return new Promise((resolve, reject) => {
-    let we = new e(G);
-    if (request.shouldLoop) we.loop = true;
-    if (request.gain !== undefined && "volume" in we) we.volume = Math.min(1, request.gain);
-    function Ee() {
-      q?.();
+    let audio = new AudioCtor(source);
+    if (request.shouldLoop) audio.loop = true;
+    if (request.gain !== undefined && "volume" in audio) audio.volume = Math.min(1, request.gain);
+    function finish() {
+      revoke?.();
       resolve();
     }
-    we.onended = Ee;
+    audio.onended = finish;
     if (signal !== undefined)
       abortedPromise(signal).then(() => {
-        we.pause?.();
-        Ee();
+        audio.pause?.();
+        finish();
       });
-    function Ae(Ie) {
-      q?.();
-      logForDebugging(`$.audio.play (${pluginName}): ${Ie}`, {
+    function fail(reason) {
+      revoke?.();
+      logForDebugging(`$.audio.play (${pluginName}): ${reason}`, {
         level: "warn",
       });
-      reject(new HooksError(`$.audio.play: ${Ie}`));
+      reject(new HooksError(`$.audio.play: ${reason}`));
     }
-    we.onerror = () =>
-      Ae(
+    audio.onerror = () =>
+      fail(
         `<audio> could not play ${clip.url ?? clip.asset ?? "the clip"} (blocked by the page's CSP, or not decodable)`,
       );
-    we.play().catch((error) => Ae(`<audio>.play() rejected: ${errorMessage(error)}`));
+    audio.play().catch((error) => fail(`<audio>.play() rejected: ${errorMessage(error)}`));
   });
 }
 //@ chunk-e6aww6q8.js:3743208-3743533 placement
@@ -389,14 +399,14 @@ async function readAudioClipSource(e, { request, pluginName, signal }) {
  */
 async function playWithAfplay({ request, pluginName, signal }) {
   let label = `$.audio.play (${pluginName})`;
-  let h = request.gain === undefined ? [] : ["-v", String(request.gain)];
+  let gainArgs = request.gain === undefined ? [] : ["-v", String(request.gain)];
   let { file, what, cleanup } = await prepareAudioFile(request, pluginName);
   try {
     do {
       if (signal?.aborted) return;
       await spawnAudioPlayer({
         command: "afplay",
-        args: [...h, file],
+        args: [...gainArgs, file],
         label,
         what,
         signal,
@@ -407,57 +417,60 @@ async function playWithAfplay({ request, pluginName, signal }) {
   }
 }
 //@ chunk-e6aww6q8.js:3743533-3743797 placement
-function playAudioClip(request, n, signal) {
+function playAudioClip(request, pluginName, signal) {
   let { Audio } = globalThisRef();
   if (typeof Audio === "function")
     return readAudioClipSource(Audio, {
       request,
-      pluginName: n,
+      pluginName,
       signal,
     });
   if (getPlatform() === "macos")
     return playWithAfplay({
       request,
-      pluginName: n,
+      pluginName,
       signal,
     });
-  logForDebugging(`$.audio.play (${n}): no audio player on ${getPlatform()}; not played`);
+  logForDebugging(`$.audio.play (${pluginName}): no audio player on ${getPlatform()}; not played`);
   return Promise.resolve();
 }
 //@ chunk-e6aww6q8.js:3743797-3745096 placement
 /**
  * 校验 $.audio.play 的片段参数：只能是 { asset }、{ url } 或 { base64 } 之一。
  */
-function validateAudioClip(e) {
-  if (!isPlainObject_5(e) || !isPlainObject_5(e.clip))
+function validateAudioClip(args) {
+  if (!isPlainObject_5(args) || !isPlainObject_5(args.clip))
     throw new HooksError("$.audio.play: clip must be { asset }, { url } or { base64, mime }");
-  let clip = e.clip;
-  let filtered = ["asset", "url", "base64"].filter((S) => clip[S] !== undefined);
-  let s = filtered[0];
-  if (s === undefined || filtered.length !== 1)
+  let clip = args.clip;
+  let filtered = ["asset", "url", "base64"].filter((key) => clip[key] !== undefined);
+  let given = filtered[0];
+  if (given === undefined || filtered.length !== 1)
     throw new HooksError(
       `$.audio.play: clip must carry exactly one of asset, url, base64 (got ${filtered.length === 0 ? "none" : filtered.join(" and ")})`,
     );
-  if (typeof clip[s] !== "string" || clip[s] === "")
-    throw new HooksError(`$.audio.play: clip.${s} must be a non-empty string`);
-  if (s === "base64") {
+  if (typeof clip[given] !== "string" || clip[given] === "")
+    throw new HooksError(`$.audio.play: clip.${given} must be a non-empty string`);
+  if (given === "base64") {
     if (typeof clip.mime !== "string")
       throw new HooksError("$.audio.play: clip.mime must accompany clip.base64");
     if (typeof clip.base64 === "string" && Buffer.byteLength(clip.base64, "base64") > MAX_AUDIO_CLIP_BYTES)
       throw new HooksError(`$.audio.play: the clip is over ${MAX_AUDIO_CLIP_BYTES} bytes`);
   }
-  if (s === "asset") {
+  if (given === "asset") {
     if (typeof clip.asset !== "string") throw new HooksError("$.audio.play: clip.asset must be a string");
-    if (typeof e.root !== "string") throw new HooksError("$.audio.play: the plugin has no directory");
-    resolvePluginAssetPath(e.root, clip.asset);
+    if (typeof args.root !== "string") throw new HooksError("$.audio.play: the plugin has no directory");
+    resolvePluginAssetPath(args.root, clip.asset);
   }
-  if (s === "url" && typeof e.pluginStorageId !== "string")
+  if (given === "url" && typeof args.pluginStorageId !== "string")
     throw new HooksError("$.audio.play: the plugin has no id");
-  if (e.shouldLoop !== undefined && typeof e.shouldLoop !== "boolean")
+  if (args.shouldLoop !== undefined && typeof args.shouldLoop !== "boolean")
     throw new HooksError("$.audio.play: options.shouldLoop must be a boolean");
   if (
-    e.gain !== undefined &&
-    (typeof e.gain !== "number" || !Number.isFinite(e.gain) || e.gain < 0 || e.gain > MAX_CONCURRENT_AUDIO)
+    args.gain !== undefined &&
+    (typeof args.gain !== "number" ||
+      !Number.isFinite(args.gain) ||
+      args.gain < 0 ||
+      args.gain > MAX_CONCURRENT_AUDIO)
   )
     throw new HooksError(`$.audio.play: options.gain must be a number from 0 to ${MAX_CONCURRENT_AUDIO}`);
 }
@@ -476,16 +489,19 @@ function createAudioOverrides() {
 /**
  * 音频覆盖配置
  */
-var audioOverrides = createAudioOverrides();
+var audioOverrides; // deferred: uses createAudioOverrides of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:3745213", () => {
+  audioOverrides = createAudioOverrides();
+});
 //@ chunk-e6aww6q8.js:3745227-3745342 placement
-function playValidatedClip(e, pluginName, r) {
+function playValidatedClip(request, pluginName, signal) {
   try {
-    validateAudioClip(e);
-    checkAudioUrlAllowed(e, pluginName);
+    validateAudioClip(request);
+    checkAudioUrlAllowed(request, pluginName);
   } catch (error) {
     return Promise.reject(error);
   }
-  return (audioOverrides.playerOverride() ?? playAudioClip)(e, pluginName, r);
+  return (audioOverrides.playerOverride() ?? playAudioClip)(request, pluginName, signal);
 }
 //@ chunk-e6aww6q8.js:3745342-3745355 placement
 /**
@@ -493,8 +509,8 @@ function playValidatedClip(e, pluginName, r) {
  */
 var STDIN_DASH = "--";
 //@ chunk-e6aww6q8.js:3745355-3745511 placement
-function describeSpeechError(e) {
-  let error = e?.error ?? "error";
+function describeSpeechError(event) {
+  let error = event?.error ?? "error";
   return `speechSynthesis failed the utterance: ${error}${error === "not-allowed" ? " (the page has had no user gesture yet)" : ""}`;
 }
 //@ chunk-e6aww6q8.js:3745511-3746409 placement
@@ -502,65 +518,65 @@ function describeSpeechError(e) {
  * 插件 $.audio.speak：用系统语音朗读文本，找不到指定语音时警告。
  */
 async function audioSpeakForPlugin({ synth, Utterance }, { request, pluginName, signal }) {
-  let y = `$.audio.speak (${pluginName})`;
-  function S(G) {
-    logForDebugging(`${y}: ${G}`, {
+  let label = `$.audio.speak (${pluginName})`;
+  function fail(reason) {
+    logForDebugging(`${label}: ${reason}`, {
       level: "warn",
     });
-    return new HooksError(`$.audio.speak: ${G}`);
+    return new HooksError(`$.audio.speak: ${reason}`);
   }
-  let w = null;
+  let voice = null;
   if (request.voice !== undefined) {
-    let G = await waitForVoices(synth);
-    w = G.find((q) => q.name === request.voice) ?? null;
-    if (w === null)
-      throw S(
-        `no system voice named "${request.voice}" among the ${G.length} the browser lists (a voice installed after the browser started is listed after a browser restart)`,
+    let voices = await waitForVoices(synth);
+    voice = voices.find((candidate) => candidate.name === request.voice) ?? null;
+    if (voice === null)
+      throw fail(
+        `no system voice named "${request.voice}" among the ${voices.length} the browser lists (a voice installed after the browser started is listed after a browser restart)`,
       );
   }
   logForDebugging(
-    `${y}: speechSynthesis, voice ${w === null ? "default" : `"${w.name}"`}, ${request.text.length} chars`,
+    `${label}: speechSynthesis, voice ${voice === null ? "default" : `"${voice.name}"`}, ${request.text.length} chars`,
   );
   let now = Date.now();
   return new Promise((resolve, reject) => {
-    let Z = new Utterance(request.text);
-    if (w !== null) Z.voice = w;
-    let Se = false;
-    Z.onend = () => {
-      Se = true;
-      logForDebugging(`${y}: ended after ${Date.now() - now}ms`);
+    let utterance = new Utterance(request.text);
+    if (voice !== null) utterance.voice = voice;
+    let settled = false;
+    utterance.onend = () => {
+      settled = true;
+      logForDebugging(`${label}: ended after ${Date.now() - now}ms`);
       resolve({
         via: "system",
       });
     };
-    Z.onerror = (ke) => {
-      Se = true;
-      reject(S(describeSpeechError(ke)));
+    utterance.onerror = (event) => {
+      settled = true;
+      reject(fail(describeSpeechError(event)));
     };
     if (signal !== undefined)
       abortedPromise(signal).then(() => {
-        if (!Se) {
+        if (!settled) {
           synth.cancel();
           reject(signal.reason);
         }
       });
     try {
-      synth.speak(Z);
+      synth.speak(utterance);
     } catch (error) {
-      reject(S(`speechSynthesis.speak threw: ${errorMessage(error)}`));
+      reject(fail(`speechSynthesis.speak threw: ${errorMessage(error)}`));
     }
   });
 }
 //@ chunk-e6aww6q8.js:3746409-3746667 placement
-async function speakWithSay(e, n, r) {
+async function speakWithSay(request, pluginName, signal) {
   await spawnAudioPlayer({
     command: "say",
-    args: [...(e.voice === undefined ? [] : ["-v", e.voice]), STDIN_DASH, e.text],
-    label: `$.audio.speak (${n})`,
-    what: `${e.voice === undefined ? "" : `-v ${e.voice} `}${e.text.length} chars`,
-    signal: r,
+    args: [...(request.voice === undefined ? [] : ["-v", request.voice]), STDIN_DASH, request.text],
+    label: `$.audio.speak (${pluginName})`,
+    what: `${request.voice === undefined ? "" : `-v ${request.voice} `}${request.text.length} chars`,
+    signal,
   });
-  r?.throwIfAborted();
+  signal?.throwIfAborted();
   return {
     via: "system",
   };
@@ -569,7 +585,7 @@ async function speakWithSay(e, n, r) {
 /**
  * 用语音合成朗读文本（有 speechSynthesis 时），否则交给后备实现。
  */
-function speakText(e, n, r) {
+function speakText(request, pluginName, signal) {
   let { speechSynthesis, SpeechSynthesisUtterance } = globalThisRef();
   if (speechSynthesis !== undefined && typeof SpeechSynthesisUtterance === "function")
     return audioSpeakForPlugin(
@@ -578,13 +594,13 @@ function speakText(e, n, r) {
         Utterance: SpeechSynthesisUtterance,
       },
       {
-        request: e,
-        pluginName: n,
-        signal: r,
+        request,
+        pluginName,
+        signal,
       },
     );
-  if (getPlatform() === "macos") return speakWithSay(e, n, r);
-  logForDebugging(`$.audio.speak (${n}): no speech synthesizer on ${getPlatform()}`, {
+  if (getPlatform() === "macos") return speakWithSay(request, pluginName, signal);
+  logForDebugging(`$.audio.speak (${pluginName}): no speech synthesizer on ${getPlatform()}`, {
     level: "warn",
   });
   return Promise.reject(new HooksError(`$.audio.speak: no speech synthesizer on ${getPlatform()}`));
@@ -593,40 +609,40 @@ function speakText(e, n, r) {
 /**
  * 截断朗读文本
  */
-function clampSpeakText(e) {
-  return e.text.length <= MAX_KEPT_TEXT_CHARS
-    ? e
+function clampSpeakText(request) {
+  return request.text.length <= MAX_KEPT_TEXT_CHARS
+    ? request
     : {
-        ...e,
-        text: truncateToLength(e.text, MAX_KEPT_TEXT_CHARS),
+        ...request,
+        text: truncateToLength(request.text, MAX_KEPT_TEXT_CHARS),
       };
 }
 //@ chunk-e6aww6q8.js:3747106-3747417 placement
 /**
  * 校验 $.audio.speak 参数：text 必须是非空字符串，其余选项类型正确。
  */
-function checkSpeakArgs(e) {
-  if (!isPlainObject_5(e)) throw new HooksError("$.audio.speak: text must be a non-empty string");
-  if (typeof e.text !== "string" || e.text.trim() === "")
+function checkSpeakArgs(args) {
+  if (!isPlainObject_5(args)) throw new HooksError("$.audio.speak: text must be a non-empty string");
+  if (typeof args.text !== "string" || args.text.trim() === "")
     throw new HooksError("$.audio.speak: text must be a non-empty string");
-  if (e.voice !== undefined && typeof e.voice !== "string")
+  if (args.voice !== undefined && typeof args.voice !== "string")
     throw new HooksError("$.audio.speak: voice must be a string when given");
 }
 //@ chunk-e6aww6q8.js:3747417-3747571 placement
 /**
  * $.audio.speak 实现：校验参数，串行执行朗读（可被覆盖的朗读器，默认系统语音）。
  */
-function audioSpeakOp(e, plugin, signal) {
+function audioSpeakOp(args, plugin, signal) {
   try {
-    checkSpeakArgs(e);
+    checkSpeakArgs(args);
   } catch (error) {
     return Promise.reject(error);
   }
-  let s = audioOverrides.speakerOverride() ?? speakText;
-  let h = clampSpeakText(e);
+  let secondPlugin = audioOverrides.speakerOverride() ?? speakText;
+  let secondSignal = clampSpeakText(args);
   return audioHostDefault(() => {
     signal?.throwIfAborted();
-    return s(h, plugin, signal);
+    return secondPlugin(secondSignal, plugin, signal);
   });
 }
 //@ chunk-e6aww6q8.js:3747571-3747586 placement
@@ -643,30 +659,32 @@ var MAX_AUDIO_PER_PLUGIN = 4;
 /**
  * 合并中止信号与超时
  */
-function withTimeoutSignal(e, n) {
-  let r = AbortSignal.timeout(n);
-  return e === undefined ? r : AbortSignal.any([e, r]);
+function withTimeoutSignal(signal, ms) {
+  let timeout = AbortSignal.timeout(ms);
+  return signal === undefined ? timeout : AbortSignal.any([signal, timeout]);
 }
 //@ chunk-e6aww6q8.js:3747686-3748037 placement
 /**
  * $.audio.play 宿主：每插件同时最多 4 个播放，循环播放有总时长上限。
  */
-function createAudioPlayer(e = MAX_LOOP_AUDIO_MS) {
-  let n = new Map();
+function createAudioPlayer(loopMs = MAX_LOOP_AUDIO_MS) {
+  let running = new Map();
   return {
-    play: async (r, s, h) => {
-      let y = n.get(s) ?? 0;
-      if (y >= MAX_AUDIO_PER_PLUGIN)
-        throw new HooksError(`${s}: $.audio.play: refused: ${MAX_AUDIO_PER_PLUGIN} plays are going at once`);
-      n.set(s, y + 1);
-      let S = r.shouldLoop ? withTimeoutSignal(h, e) : h;
+    play: async (request, pluginName, signal) => {
+      let count = running.get(pluginName) ?? 0;
+      if (count >= MAX_AUDIO_PER_PLUGIN)
+        throw new HooksError(
+          `${pluginName}: $.audio.play: refused: ${MAX_AUDIO_PER_PLUGIN} plays are going at once`,
+        );
+      running.set(pluginName, count + 1);
+      let effectiveSignal = request.shouldLoop ? withTimeoutSignal(signal, loopMs) : signal;
       try {
-        await playValidatedClip(r, s, S);
+        await playValidatedClip(request, pluginName, effectiveSignal);
       } finally {
-        n.set(s, (n.get(s) ?? 1) - 1);
+        running.set(pluginName, (running.get(pluginName) ?? 1) - 1);
       }
-      if (S?.aborted === true && h?.aborted !== true)
-        logForDebugging(`$.audio.play (${s}): the loop ended at ${e}ms`);
+      if (effectiveSignal?.aborted === true && signal?.aborted !== true)
+        logForDebugging(`$.audio.play (${pluginName}): the loop ended at ${loopMs}ms`);
     },
   };
 }

@@ -35,28 +35,29 @@ var LOOPBACK_IPV4_REGEX = /^127(?:\.\d{1,3}){3}$/;
 /**
  * 为遥测分类一个 url 参数的形状：空、子路径、合法、非规范、大小写错、桩协议、裸 id、缺协议、非 https、claude.site/claude.ai 聊天链接、查看器路径 id 错、用户内容域、回环主机、其他主机等。
  */
-function classifyArtifactUrlShape(e) {
-  if (e.trim() === "") return "empty";
-  let n = canonicalizeArtifactUrlInput(e);
-  if (artifactUrlSubPath(e) !== undefined || artifactUrlSubPath(n) !== undefined) return "subpath";
-  if (parseArtifactUrl(e) !== null) return "valid";
-  if (parseArtifactUrl(n) !== null) return "noncanonical";
-  if (parseArtifactUrlAnyCase(e) !== null) return "wrong_case";
-  if (e.startsWith(ARTIFACT_STUB_URL_PREFIX)) return "stub_scheme";
-  let s;
+function classifyArtifactUrlShape(value) {
+  if (value.trim() === "") return "empty";
+  let canonical = canonicalizeArtifactUrlInput(value);
+  if (artifactUrlSubPath(value) !== undefined || artifactUrlSubPath(canonical) !== undefined)
+    return "subpath";
+  if (parseArtifactUrl(value) !== null) return "valid";
+  if (parseArtifactUrl(canonical) !== null) return "noncanonical";
+  if (parseArtifactUrlAnyCase(value) !== null) return "wrong_case";
+  if (value.startsWith(ARTIFACT_STUB_URL_PREFIX)) return "stub_scheme";
+  let parsed;
   try {
-    s = new URL(n);
+    parsed = new URL(canonical);
   } catch {
-    if (ARTIFACT_SLUG_RE.test(e.toLowerCase()) || decodeBase58Uuid(e) !== null) return "bare_id";
-    if (parseArtifactUrlAnyCase(`https://${e}`) !== null) return "missing_scheme";
+    if (ARTIFACT_SLUG_RE.test(value.toLowerCase()) || decodeBase58Uuid(value) !== null) return "bare_id";
+    if (parseArtifactUrlAnyCase(`https://${value}`) !== null) return "missing_scheme";
     return "not_a_url";
   }
-  if (s.protocol !== "https:") return /^[a-z]:$/.test(s.protocol) ? "not_a_url" : "other_scheme";
-  let hostname = s.hostname;
+  if (parsed.protocol !== "https:") return /^[a-z]:$/.test(parsed.protocol) ? "not_a_url" : "other_scheme";
+  let hostname = parsed.hostname;
   if (hostname === "claude.site" || hostname.endsWith(".claude.site")) return "chat_artifact_link";
   if (hostname === "claude.ai" || hostname.endsWith(".claude.ai")) {
-    if (regExp.test(s.pathname)) return "viewer_path_bad_id";
-    return ARTIFACTS_PATH_REGEX.test(s.pathname) ? "chat_artifact_link" : "claude_ai_other_path";
+    if (regExp.test(parsed.pathname)) return "viewer_path_bad_id";
+    return ARTIFACTS_PATH_REGEX.test(parsed.pathname) ? "chat_artifact_link" : "claude_ai_other_path";
   }
   if (hostname === "claudeusercontent.com" || hostname.endsWith(".claudeusercontent.com"))
     return "usercontent_host";
@@ -78,33 +79,33 @@ var URL_FIELD_NAMES = ["url", "type_url", "from_url"];
 /**
  * 非 null 对象原样返回，否则空对象。
  */
-function objectOrEmpty(e) {
-  return typeof e === "object" && e !== null ? e : {};
+function objectOrEmpty(value) {
+  return typeof value === "object" && value !== null ? value : {};
 }
 //@ chunk-8wvtd8sr.js:323066-323446 placement
 /**
  * 分类 Artifact 工具输入中的 url 类字段：找出第一个格式无效的字段及其形状；url 与 from_url 指向同一 Artifact 时报 same_artifact；否则为 unexplained。
  */
-function classifyArtifactUrlInput(e) {
-  let n = objectOrEmpty(e);
-  let action = artifactActionLabel(n);
-  let r = "none";
-  for (let h of URL_FIELD_NAMES) {
-    let y = n[h];
-    if (typeof y !== "string") continue;
-    if (r === "none") r = h;
-    let p = classifyArtifactUrlShape(y);
-    if (p !== "valid")
+function classifyArtifactUrlInput(input) {
+  let record = objectOrEmpty(input);
+  let action = artifactActionLabel(record);
+  let firstField = "none";
+  for (let field of URL_FIELD_NAMES) {
+    let fieldValue = record[field];
+    if (typeof fieldValue !== "string") continue;
+    if (firstField === "none") firstField = field;
+    let shape = classifyArtifactUrlShape(fieldValue);
+    if (shape !== "valid")
       return {
-        field: h,
-        shape: p,
+        field,
+        shape,
         action,
       };
   }
   if (
-    typeof n.url === "string" &&
-    typeof n.from_url === "string" &&
-    parseArtifactUrl(n.url)?.slug === parseArtifactUrl(n.from_url)?.slug
+    typeof record.url === "string" &&
+    typeof record.from_url === "string" &&
+    parseArtifactUrl(record.url)?.slug === parseArtifactUrl(record.from_url)?.slug
   )
     return {
       field: "from_url",
@@ -112,7 +113,7 @@ function classifyArtifactUrlInput(e) {
       action,
     };
   return {
-    field: r,
+    field: firstField,
     shape: "unexplained",
     action,
   };
@@ -121,14 +122,14 @@ function classifyArtifactUrlInput(e) {
 /**
  * 输入校验因 url 不合法（errorCode 4）失败时，记录 artifact_url_input 埋点：出错字段、形状、动作、是否无人值守与路径族。
  */
-function logArtifactUrlInputError(e, n, s) {
-  if (n.errorCode !== 4) return;
-  let r;
-  let h = null;
+function logArtifactUrlInputError(input, error, context) {
+  if (error.errorCode !== 4) return;
+  let classification;
+  let parsed = null;
   try {
-    r = classifyArtifactUrlInput(e);
-    let y = r.field === "none" ? undefined : objectOrEmpty(e)[r.field];
-    h = typeof y === "string" ? parseArtifactUrl_2(y) : null;
+    classification = classifyArtifactUrlInput(input);
+    let fieldValue = classification.field === "none" ? undefined : objectOrEmpty(input)[classification.field];
+    parsed = typeof fieldValue === "string" ? parseArtifactUrl_2(fieldValue) : null;
   } catch (error) {
     logForDebugging(
       `artifact url telemetry: classifier threw: ${error instanceof Error ? error.message : typeof error}`,
@@ -136,18 +137,18 @@ function logArtifactUrlInputError(e, n, s) {
         level: "error",
       },
     );
-    r = {
+    classification = {
       field: "none",
       shape: "classifier_error",
-      action: artifactActionLabel(e),
+      action: artifactActionLabel(input),
     };
   }
-  logFeatureSad("artifact_url_input", r.shape, {
-    field: fromEnum(r.field),
-    action: fromEnum(r.action),
-    unattended: s.unattended,
-    path_family: fromEnum(h?.family ?? "none"),
-    names_artifact: h !== null && h.artifact !== null,
+  logFeatureSad("artifact_url_input", classification.shape, {
+    field: fromEnum(classification.field),
+    action: fromEnum(classification.action),
+    unattended: context.unattended,
+    path_family: fromEnum(parsed?.family ?? "none"),
+    names_artifact: parsed !== null && parsed.artifact !== null,
   });
 }
 export { logArtifactUrlInputError };

@@ -18,27 +18,27 @@ var MAX_LINES_THRESHOLD = 10;
 /**
  * 判断内容是否超过 10 行：字符串直接数换行；内容块数组中每块至少算一行，文本块再加上其中的换行。
  */
-function exceedsTenLines(content) {
-  if (typeof content === "string") return exceedsLineCount(content, 9);
-  if (!Array.isArray(content)) return false;
-  let t = 0;
-  for (let r of content) {
-    t += 1;
-    if (t > 10) return true;
-    if (!isTextBlock(r)) continue;
-    let text = r.text;
-    let o = 0;
-    while (t <= 10) {
-      o = text.indexOf(
+function exceedsTenLines(text) {
+  if (typeof text === "string") return exceedsLineCount(text, 9);
+  if (!Array.isArray(text)) return false;
+  let lineCount = 0;
+  for (let block of text) {
+    lineCount += 1;
+    if (lineCount > 10) return true;
+    if (!isTextBlock(block)) continue;
+    let text = block.text;
+    let newlineIndex = 0;
+    while (lineCount <= 10) {
+      newlineIndex = text.indexOf(
         `
 `,
-        o,
+        newlineIndex,
       );
-      if (o === -1) break;
-      o++;
-      t++;
+      if (newlineIndex === -1) break;
+      newlineIndex++;
+      lineCount++;
     }
-    if (t > 10) return true;
+    if (lineCount > 10) return true;
   }
   return false;
 }
@@ -57,16 +57,16 @@ function isTextBlock(data) {
   );
 }
 //@ chunk-rmf8afvh.js:570-667 placement
-function exceedsLineCount(e, t) {
-  let r = 0;
-  for (let i = 0; i <= t; i++) {
-    r = e.indexOf(
+function exceedsLineCount(text, maxNewlines) {
+  let newlineIndex = 0;
+  for (let i = 0; i <= maxNewlines; i++) {
+    newlineIndex = text.indexOf(
       `
 `,
-      r,
+      newlineIndex,
     );
-    if (r === -1) return false;
-    r++;
+    if (newlineIndex === -1) return false;
+    newlineIndex++;
   }
   return true;
 }

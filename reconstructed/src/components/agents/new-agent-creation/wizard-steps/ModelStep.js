@@ -8,8 +8,8 @@
  * pieces: chunk-n30mmv2p.js (3)
  * attribution: placement 1, layout 1, callgraph-witnessed 1
  */
-import { init_react_production, R } from "../../../../../vendor/react/cjs/react.production.js";
-import { w } from "../../../../../vendor/react/compiler-runtime.js";
+import { init_react_production, useRef } from "../../../../../vendor/react/cjs/react.production.js";
+import { useMemoCache } from "../../../../../vendor/react/compiler-runtime.js";
 import { truncatePathMiddle } from "../../../../utils/format.js";
 import { plural } from "../../../../utils/stringUtils.js";
 import { MEMO_CACHE_SENTINEL } from "../../../../../runtime/bun-runtime.js";
@@ -30,38 +30,39 @@ init_react_production();
 var MAX_CONSENT_PATH_WIDTH = 72;
 //@ chunk-n30mmv2p.js:13841-16519 callgraph-witnessed = ModelStep (0.158)
 function ModelStep(props) {
-  let $ = w(34);
+  let $ = useMemoCache(34);
   let { forwarded, stayed, consentLocation, onDone } = props;
-  let p = R(false);
-  let M;
+  let answeredRef = useRef(false);
+  let pathText;
   if ($[0] !== consentLocation) {
-    M = truncatePathMiddle(consentLocation.replace(/\s+/g, " "), MAX_CONSENT_PATH_WIDTH);
+    pathText = truncatePathMiddle(consentLocation.replace(/\s+/g, " "), MAX_CONSENT_PATH_WIDTH);
     $[0] = consentLocation;
-    $[1] = M;
-  } else M = $[1];
-  let children = M;
-  let T;
+    $[1] = pathText;
+  } else pathText = $[1];
+  let children = pathText;
+  let finish;
   if ($[2] !== onDone) {
-    T = function f(model) {
-      if (p.current) {
+    finish = function model(model) {
+      if (answeredRef.current) {
         return;
       }
-      p.current = true;
+      answeredRef.current = true;
       onDone(model);
     };
     $[2] = onDone;
-    $[3] = T;
-  } else T = $[3];
-  let f = T;
-  let y;
+    $[3] = finish;
+  } else finish = $[3];
+  let handleDone = finish;
+  let forwardedLines;
   if ($[4] !== forwarded) {
-    y = forwarded > 0 ? [`${forwarded} plugin ${plural(forwarded, "choice")} would be sent`] : [];
+    forwardedLines =
+      forwarded > 0 ? [`${forwarded} plugin ${plural(forwarded, "choice")} would be sent`] : [];
     $[4] = forwarded;
-    $[5] = y;
-  } else y = $[5];
-  let C;
+    $[5] = forwardedLines;
+  } else forwardedLines = $[5];
+  let stayedLines;
   if ($[6] !== forwarded || $[7] !== stayed) {
-    C =
+    stayedLines =
       stayed > 0
         ? [
             `${stayed} ${forwarded > 0 ? "" : `plugin ${plural(stayed, "choice")} `}would stay on this machine (you are told which, and why, when a session starts)`,
@@ -69,20 +70,20 @@ function ModelStep(props) {
         : [];
     $[6] = forwarded;
     $[7] = stayed;
-    $[8] = C;
-  } else C = $[8];
-  let V;
-  if ($[9] !== y || $[10] !== C) {
-    V = [...y, ...C];
-    $[9] = y;
-    $[10] = C;
-    $[11] = V;
-  } else V = $[11];
-  let joined = V.join("; ");
+    $[8] = stayedLines;
+  } else stayedLines = $[8];
+  let summaryLines;
+  if ($[9] !== forwardedLines || $[10] !== stayedLines) {
+    summaryLines = [...forwardedLines, ...stayedLines];
+    $[9] = forwardedLines;
+    $[10] = stayedLines;
+    $[11] = summaryLines;
+  } else summaryLines = $[11];
+  let joined = summaryLines.join("; ");
   let onCancel;
-  if ($[12] !== f) {
-    onCancel = () => f("not_now");
-    $[12] = f;
+  if ($[12] !== handleDone) {
+    onCancel = () => handleDone("not_now");
+    $[12] = handleDone;
     $[13] = onCancel;
   } else onCancel = $[13];
   let inputGuide;
@@ -103,40 +104,40 @@ function ModelStep(props) {
     });
     $[14] = inputGuide;
   } else inputGuide = $[14];
-  let G;
+  let explainText;
   if ($[15] === MEMO_CACHE_SENTINEL) {
-    G = jsxProd_default(Text, {
+    explainText = jsxProd_default(Text, {
       children:
         "A cloud session normally loads only the repository's and your organization's plugins. If you say yes, each cloud session you start or attach to from this machine is also told which plugins you have turned on or off here for its folder \u2014 their names, and the address of any marketplace they come from on GitHub, in a git repository or at a URL \u2014 and installs the enabled ones itself. Saying yes sends nothing else: no plugin files, no other settings, no credentials, no local paths.",
     });
-    $[15] = G;
-  } else G = $[15];
-  let v;
+    $[15] = explainText;
+  } else explainText = $[15];
+  let currentLine;
   if ($[16] !== joined) {
-    v =
+    currentLine =
       joined !== "" &&
       jsxProd_default_2(Text, {
         dimColor: true,
         children: ["Right now: ", joined, "."],
       });
     $[16] = joined;
-    $[17] = v;
-  } else v = $[17];
-  let I;
+    $[17] = currentLine;
+  } else currentLine = $[17];
+  let answerNote;
   if ($[18] === MEMO_CACHE_SENTINEL) {
-    I = jsxProd_default(Text, {
+    answerNote = jsxProd_default(Text, {
       dimColor: true,
       children:
         "Yes and No are saved for this machine; run /cloud-plugins again to change your answer. Not now decides nothing. The answer is kept in:",
     });
-    $[18] = I;
-  } else I = $[18];
-  let D;
+    $[18] = answerNote;
+  } else answerNote = $[18];
+  let answerBox;
   if ($[19] !== children) {
-    D = jsxProd_default_2(Box, {
+    answerBox = jsxProd_default_2(Box, {
       flexDirection: "column",
       children: [
-        I,
+        answerNote,
         jsxProd_default(Text, {
           dimColor: true,
           children,
@@ -144,19 +145,19 @@ function ModelStep(props) {
       ],
     });
     $[19] = children;
-    $[20] = D;
-  } else D = $[20];
-  let k;
-  if ($[21] !== D || $[22] !== v) {
-    k = jsxProd_default_2(Box, {
+    $[20] = answerBox;
+  } else answerBox = $[20];
+  let bodyBox;
+  if ($[21] !== answerBox || $[22] !== currentLine) {
+    bodyBox = jsxProd_default_2(Box, {
       flexDirection: "column",
       gap: 1,
-      children: [G, v, D],
+      children: [explainText, currentLine, answerBox],
     });
-    $[21] = D;
-    $[22] = v;
-    $[23] = k;
-  } else k = $[23];
+    $[21] = answerBox;
+    $[22] = currentLine;
+    $[23] = bodyBox;
+  } else bodyBox = $[23];
   let options;
   if ($[24] === MEMO_CACHE_SENTINEL) {
     options = [
@@ -176,37 +177,37 @@ function ModelStep(props) {
     $[24] = options;
   } else options = $[24];
   let onCancel_2;
-  if ($[25] !== f) {
-    onCancel_2 = () => f("not_now");
-    $[25] = f;
+  if ($[25] !== handleDone) {
+    onCancel_2 = () => handleDone("not_now");
+    $[25] = handleDone;
     $[26] = onCancel_2;
   } else onCancel_2 = $[26];
-  let L;
-  if ($[27] !== f || $[28] !== onCancel_2) {
-    L = jsxProd_default(ModelSelector, {
+  let selector;
+  if ($[27] !== handleDone || $[28] !== onCancel_2) {
+    selector = jsxProd_default(ModelSelector, {
       options,
       defaultFocusValue: "not_now",
-      onChange: f,
+      onChange: handleDone,
       onCancel: onCancel_2,
     });
-    $[27] = f;
+    $[27] = handleDone;
     $[28] = onCancel_2;
-    $[29] = L;
-  } else L = $[29];
-  let U;
-  if ($[30] !== k || $[31] !== L || $[32] !== onCancel) {
-    U = jsxProd_default_2(Dialog, {
+    $[29] = selector;
+  } else selector = $[29];
+  let dialog;
+  if ($[30] !== bodyBox || $[31] !== selector || $[32] !== onCancel) {
+    dialog = jsxProd_default_2(Dialog, {
       title: "Use your enabled plugins in cloud sessions you run from this machine?",
       onCancel,
       isCancelActive: false,
       inputGuide,
-      children: [k, L],
+      children: [bodyBox, selector],
     });
-    $[30] = k;
-    $[31] = L;
+    $[30] = bodyBox;
+    $[31] = selector;
     $[32] = onCancel;
-    $[33] = U;
-  } else U = $[33];
-  return U;
+    $[33] = dialog;
+  } else dialog = $[33];
+  return dialog;
 }
 export { ModelStep };

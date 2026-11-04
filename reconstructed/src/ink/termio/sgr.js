@@ -66,8 +66,8 @@ function parseParams(str) {
   let num = "";
   let inSub = false;
   for (let i = 0; i <= str.length; i++) {
-    let r = str[i];
-    if (r === ";" || r === undefined) {
+    let char = str[i];
+    if (char === ";" || char === undefined) {
       let n = num === "" ? null : parseInt(num, 10);
       if (inSub) {
         if (n !== null) current.subparams.push(n);
@@ -80,7 +80,7 @@ function parseParams(str) {
       };
       num = "";
       inSub = false;
-    } else if (r === ":") {
+    } else if (char === ":") {
       let n = num === "" ? null : parseInt(num, 10);
       if (!inSub) {
         current.value = n;
@@ -88,7 +88,7 @@ function parseParams(str) {
         inSub = true;
       } else if (n !== null) current.subparams.push(n);
       num = "";
-    } else if (r >= "0" && r <= "9") num += r;
+    } else if (char >= "0" && char <= "9") num += char;
   }
   return result;
 }
@@ -97,19 +97,19 @@ function parseParams(str) {
  * 解析 38/48/58 扩展颜色：冒号形式（5:n / 2:[cs:]r:g:b）或分号形式（;5;n / ;2;r;g;b）。
  */
 function parseExtendedColor(params, idx) {
-  let o = params[idx];
-  if (!o) return null;
-  if (o.colon && o.subparams.length >= 1) {
-    if (o.subparams[0] === 5 && o.subparams.length >= 2)
+  let param = params[idx];
+  if (!param) return null;
+  if (param.colon && param.subparams.length >= 1) {
+    if (param.subparams[0] === 5 && param.subparams.length >= 2)
       return {
-        index: o.subparams[1],
+        index: param.subparams[1],
       };
-    if (o.subparams[0] === 2 && o.subparams.length >= 4) {
-      let off = o.subparams.length >= 5 ? 1 : 0;
+    if (param.subparams[0] === 2 && param.subparams.length >= 4) {
+      let off = param.subparams.length >= 5 ? 1 : 0;
       return {
-        r: o.subparams[1 + off],
-        g: o.subparams[2 + off],
-        b: o.subparams[3 + off],
+        r: param.subparams[1 + off],
+        g: param.subparams[2 + off],
+        b: param.subparams[3 + off],
       };
     }
   }
@@ -120,14 +120,21 @@ function parseExtendedColor(params, idx) {
       index: params[idx + 2].value,
     };
   if (next.value === 2) {
-    let i = params[idx + 2]?.value;
-    let s = params[idx + 3]?.value;
-    let r = params[idx + 4]?.value;
-    if (i !== null && i !== undefined && s !== null && s !== undefined && r !== null && r !== undefined)
+    let red = params[idx + 2]?.value;
+    let green = params[idx + 3]?.value;
+    let blue = params[idx + 4]?.value;
+    if (
+      red !== null &&
+      red !== undefined &&
+      green !== null &&
+      green !== undefined &&
+      blue !== null &&
+      blue !== undefined
+    )
       return {
-        r: i,
-        g: s,
-        b: r,
+        r: red,
+        g: green,
+        b: blue,
       };
   }
   return null;
@@ -138,111 +145,111 @@ function parseExtendedColor(params, idx) {
  */
 function applySGR(paramStr, style) {
   let params = parseParams(paramStr);
-  let t = {
+  let style_2 = {
     ...style,
   };
   let idx = 0;
   while (idx < params.length) {
-    let s = params[idx];
-    let code = s.value ?? 0;
+    let param = params[idx];
+    let code = param.value ?? 0;
     if (code === 0) {
-      t = defaultStyle();
+      style_2 = defaultStyle();
       idx++;
       continue;
     }
     if (code === 1) {
-      t.bold = true;
+      style_2.bold = true;
       idx++;
       continue;
     }
     if (code === 2) {
-      t.dim = true;
+      style_2.dim = true;
       idx++;
       continue;
     }
     if (code === 3) {
-      t.italic = true;
+      style_2.italic = true;
       idx++;
       continue;
     }
     if (code === 4) {
-      t.underline = s.colon ? (UNDERLINE_STYLES[s.subparams[0]] ?? "single") : "single";
+      style_2.underline = param.colon ? (UNDERLINE_STYLES[param.subparams[0]] ?? "single") : "single";
       idx++;
       continue;
     }
     if (code === 5 || code === 6) {
-      t.blink = true;
+      style_2.blink = true;
       idx++;
       continue;
     }
     if (code === 7) {
-      t.inverse = true;
+      style_2.inverse = true;
       idx++;
       continue;
     }
     if (code === 8) {
-      t.hidden = true;
+      style_2.hidden = true;
       idx++;
       continue;
     }
     if (code === 9) {
-      t.strikethrough = true;
+      style_2.strikethrough = true;
       idx++;
       continue;
     }
     if (code === 21) {
-      t.underline = "double";
+      style_2.underline = "double";
       idx++;
       continue;
     }
     if (code === 22) {
-      t.bold = false;
-      t.dim = false;
+      style_2.bold = false;
+      style_2.dim = false;
       idx++;
       continue;
     }
     if (code === 23) {
-      t.italic = false;
+      style_2.italic = false;
       idx++;
       continue;
     }
     if (code === 24) {
-      t.underline = "none";
+      style_2.underline = "none";
       idx++;
       continue;
     }
     if (code === 25) {
-      t.blink = false;
+      style_2.blink = false;
       idx++;
       continue;
     }
     if (code === 27) {
-      t.inverse = false;
+      style_2.inverse = false;
       idx++;
       continue;
     }
     if (code === 28) {
-      t.hidden = false;
+      style_2.hidden = false;
       idx++;
       continue;
     }
     if (code === 29) {
-      t.strikethrough = false;
+      style_2.strikethrough = false;
       idx++;
       continue;
     }
     if (code === 53) {
-      t.overline = true;
+      style_2.overline = true;
       idx++;
       continue;
     }
     if (code === 55) {
-      t.overline = false;
+      style_2.overline = false;
       idx++;
       continue;
     }
     if (code >= 30 && code <= 37) {
-      t.fg = {
+      style_2.fg = {
         type: "named",
         name: NAMED_COLORS[code - 30],
       };
@@ -250,14 +257,14 @@ function applySGR(paramStr, style) {
       continue;
     }
     if (code === 39) {
-      t.fg = {
+      style_2.fg = {
         type: "default",
       };
       idx++;
       continue;
     }
     if (code >= 40 && code <= 47) {
-      t.bg = {
+      style_2.bg = {
         type: "named",
         name: NAMED_COLORS[code - 40],
       };
@@ -265,14 +272,14 @@ function applySGR(paramStr, style) {
       continue;
     }
     if (code === 49) {
-      t.bg = {
+      style_2.bg = {
         type: "default",
       };
       idx++;
       continue;
     }
     if (code >= 90 && code <= 97) {
-      t.fg = {
+      style_2.fg = {
         type: "named",
         name: NAMED_COLORS[code - 90 + 8],
       };
@@ -280,7 +287,7 @@ function applySGR(paramStr, style) {
       continue;
     }
     if (code >= 100 && code <= 107) {
-      t.bg = {
+      style_2.bg = {
         type: "named",
         name: NAMED_COLORS[code - 100 + 8],
       };
@@ -290,7 +297,7 @@ function applySGR(paramStr, style) {
     if (code === 38 || code === 48 || code === 58) {
       let extendedColor = parseExtendedColor(params, idx);
       if (extendedColor) {
-        let p =
+        let colorSpec =
           "index" in extendedColor
             ? {
                 type: "indexed",
@@ -300,16 +307,16 @@ function applySGR(paramStr, style) {
                 type: "rgb",
                 ...extendedColor,
               };
-        if (code === 38) t.fg = p;
-        else if (code === 48) t.bg = p;
-        else t.underlineColor = p;
+        if (code === 38) style_2.fg = colorSpec;
+        else if (code === 48) style_2.bg = colorSpec;
+        else style_2.underlineColor = colorSpec;
       }
-      let m = params[idx + 1]?.value;
-      idx += s.colon ? 1 : m === 5 ? 3 : m === 2 ? 5 : 1;
+      let colorKind = params[idx + 1]?.value;
+      idx += param.colon ? 1 : colorKind === 5 ? 3 : colorKind === 2 ? 5 : 1;
       continue;
     }
     if (code === 59) {
-      t.underlineColor = {
+      style_2.underlineColor = {
         type: "default",
       };
       idx++;
@@ -317,7 +324,7 @@ function applySGR(paramStr, style) {
     }
     idx++;
   }
-  return t;
+  return style_2;
 }
 export {
   SGR_BOLD,

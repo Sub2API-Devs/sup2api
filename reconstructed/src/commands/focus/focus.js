@@ -22,30 +22,31 @@ async function call(args, context) {
       value: "/focus isn't available here yet",
     };
   let lower = args.trim().toLowerCase();
-  let e;
-  if (lower === "on") e = true;
-  else if (lower === "off") e = false;
-  else if (lower === "") e = !isFocusModeFlag();
+  let commandArgs;
+  if (lower === "on") commandArgs = true;
+  else if (lower === "off") commandArgs = false;
+  else if (lower === "") commandArgs = !isFocusModeFlag();
   else
     return {
       type: "text",
       value: `Unknown argument "${lower}". Use: /focus [on|off]`,
     };
-  setViewMode(e ? "focus" : "default");
+  setViewMode(commandArgs ? "focus" : "default");
   context.onQueryEvent?.({
     type: "apply_flag_settings",
     settings: {
-      briefTranscript: e,
+      briefTranscript: commandArgs,
     },
   });
-  let s = isFocusModeFlag();
-  if (s !== e)
+  let isFocusMode = isFocusModeFlag();
+  if (isFocusMode !== commandArgs)
     return {
       type: "text",
-      value: `Focus view is set by a managed "viewMode" setting \u2014 it stays ${s ? "on" : "off"}`,
+      value: `Focus view is set by a managed "viewMode" setting \u2014 it stays ${isFocusMode ? "on" : "off"}`,
     };
   return {
     type: "text",
-    value: e ? "Focus view enabled" : "Focus view disabled",
+    value: commandArgs ? "Focus view enabled" : "Focus view disabled",
   };
 }
+export { call };

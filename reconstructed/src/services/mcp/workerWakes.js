@@ -9,7 +9,7 @@
  * attribution: placement 20
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, string } from "../../../vendor/zod/v4/classic/schemas.js";
+import { objectSchema, stringSchema } from "../../../vendor/zod/v4/classic/schemas.js";
 import {
   WORKER_WAKE_ID_RE,
   taskMetadataSchema,
@@ -49,8 +49,8 @@ var WAKE_REQUEST_OPTIONS = {
   validateStatus: () => true,
 };
 var wakeAnswerSchema = DoctorLazy(() =>
-  u({
-    wake_id: string().regex(WORKER_WAKE_ID_RE),
+  objectSchema({
+    wake_id: stringSchema().regex(WORKER_WAKE_ID_RE),
     fire_at: parseToolOutputSchema({
       offset: true,
     }),
@@ -60,11 +60,11 @@ var wakeAnswerSchema = DoctorLazy(() =>
   }),
 );
 var wakeErrorSchema = DoctorLazy(() =>
-  u({
-    error: u({
-      type: string().optional(),
-      reason: string().optional(),
-      resource_type: string().optional(),
+  objectSchema({
+    error: objectSchema({
+      type: stringSchema().optional(),
+      reason: stringSchema().optional(),
+      resource_type: stringSchema().optional(),
     }),
   }),
 );
@@ -109,8 +109,8 @@ async function scheduleWorkerWake({ task, delaySeconds, onTimer = false }) {
 }
 //@ chunk-1w450km7.js:4565-4846 placement
 async function retimeWorkerWake({ workerWakeId, delaySeconds, onTimer = false }) {
-  let a = wakePreconditionFailure("retime", onTimer) ?? wakePolicyBlock("retime", onTimer);
-  if (a !== undefined) return a;
+  let refusal = wakePreconditionFailure("retime", onTimer) ?? wakePolicyBlock("retime", onTimer);
+  if (refusal !== undefined) return refusal;
   if (!WORKER_WAKE_ID_RE.test(workerWakeId))
     return wakeFailure("retime", "rejected", "malformed_id", onTimer);
   let response = await sendWakeRequest(
@@ -135,14 +135,14 @@ async function retimeWorkerWake({ workerWakeId, delaySeconds, onTimer = false })
 async function cancelWorkerWake({ workerWakeId, onTimer = false }) {
   if (!WORKER_WAKE_ID_RE.test(workerWakeId))
     return wakeFailure("cancel", "rejected", "malformed_id", onTimer);
-  let s = await sendWakeRequest(
+  let response = await sendWakeRequest(
     "cancel",
     () => apiClient.delete(`${WORKER_WAKES_PATH}/${workerWakeId}`, undefined, WAKE_REQUEST_OPTIONS),
     onTimer,
   );
-  if (s.kind === "failed") return s;
-  if (!isHttpSuccess(s.status)) return wakeHttpFailure("cancel", s.status, onTimer);
-  if (typeof s.data !== "object" || s.data === null)
+  if (response.kind === "failed") return response;
+  if (!isHttpSuccess(response.status)) return wakeHttpFailure("cancel", response.status, onTimer);
+  if (typeof response.data !== "object" || response.data === null)
     return wakeFailure("cancel", "rejected", "malformed_answer", onTimer);
   if (!onTimer)
     logFeatureOk("mcp_task_worker_wake", {
@@ -157,8 +157,8 @@ async function cancelWorkerWake({ workerWakeId, onTimer = false }) {
  * 解析任务 worker 的唤醒记录（协议不符返回 undefined）。
  */
 function parseTaskWorkerWake(payload) {
-  let r = taskMetadataSchema(payload);
-  return r.success && r.data.protocol === "sep2663" ? r.data : undefined;
+  let parseResult = taskMetadataSchema(payload);
+  return parseResult.success && parseResult.data.protocol === "sep2663" ? parseResult.data : undefined;
 }
 //@ chunk-1w450km7.js:5352-5877 placement
 /**
@@ -167,17 +167,17 @@ function parseTaskWorkerWake(payload) {
 function readWakeAnswer(call, response, onTimer) {
   if (response.kind === "failed") return response;
   if (isHttpSuccess(response.status)) {
-    let n = wakeAnswerSchema().safeParse(response.data);
-    if (!n.success) return wakeFailure(call, "rejected", "malformed_answer", onTimer);
+    let parsed = wakeAnswerSchema().safeParse(response.data);
+    if (!parsed.success) return wakeFailure(call, "rejected", "malformed_answer", onTimer);
     if (!onTimer)
       logFeatureOk("mcp_task_worker_wake", {
         call: fromEnum(call),
       });
     return {
       kind: "scheduled",
-      workerWakeId: n.data.wake_id,
-      fireAtMs: Date.parse(n.data.fire_at),
-      expiresAtMs: Date.parse(n.data.expires_at),
+      workerWakeId: parsed.data.wake_id,
+      fireAtMs: Date.parse(parsed.data.fire_at),
+      expiresAtMs: Date.parse(parsed.data.expires_at),
     };
   }
   let refusal = wakeRefusalReason(call, response.status, response.data);
@@ -195,8 +195,8 @@ function readWakeAnswer(call, response, onTimer) {
  * 从 400/404 错误应答中识别唤醒被拒的原因（不支持的主机或会话、延迟越界、已过期、已取消、关闭、未找到）。
  */
 function wakeRefusalReason(call, status, body) {
-  let a = wakeErrorSchema().safeParse(body);
-  let error = a.success ? a.data.error : undefined;
+  let parseResult = wakeErrorSchema().safeParse(body);
+  let error = parseResult.success ? parseResult.data.error : undefined;
   switch (status === 400 ? error?.reason : undefined) {
     case "wake_unsupported_host":
       return "unsupported_host";
@@ -224,32 +224,32 @@ function wakeRefusalReason(call, status, body) {
 /**
  * 发送唤醒请求并把异常归类为未授权、超时、网络或拒绝，未发出时返回 not_sent。
  */
-async function sendWakeRequest(e, r, onTimer) {
-  let a = wakePreconditionFailure(e, onTimer);
-  if (a !== undefined) return a;
-  let n;
+async function sendWakeRequest(call, send, onTimer) {
+  let refusal = wakePreconditionFailure(call, onTimer);
+  if (refusal !== undefined) return refusal;
+  let response;
   try {
-    n = await r();
+    response = await send();
   } catch (error) {
     let { kind } = classifyAxiosError(error);
     switch (kind) {
       case "auth":
-        return wakeFailure(e, "unauthorized", undefined, onTimer);
+        return wakeFailure(call, "unauthorized", undefined, onTimer);
       case "timeout":
-        return wakeFailure(e, "timeout", undefined, onTimer);
+        return wakeFailure(call, "timeout", undefined, onTimer);
       case "network":
-        return wakeFailure(e, "network", undefined, onTimer);
+        return wakeFailure(call, "network", undefined, onTimer);
       case "http":
-        return wakeFailure(e, "network", "other", onTimer);
+        return wakeFailure(call, "network", "other", onTimer);
       case "other":
-        return wakeFailure(e, "rejected", "threw", onTimer);
+        return wakeFailure(call, "rejected", "threw", onTimer);
     }
   }
-  if (!n.ok) return wakeFailure(e, "not_sent", n.reason, onTimer);
+  if (!response.ok) return wakeFailure(call, "not_sent", response.reason, onTimer);
   return {
     kind: "answered",
-    status: n.status,
-    data: n.data,
+    status: response.status,
+    data: response.data,
   };
 }
 //@ chunk-1w450km7.js:6822-6857 placement
@@ -260,41 +260,41 @@ function isHttpSuccess(status) {
   return status >= 200 && status < 300;
 }
 //@ chunk-1w450km7.js:6857-7155 placement
-function wakeHttpFailure(e, status, onTimer) {
+function wakeHttpFailure(call, status, onTimer) {
   if (status === 404 || status === 405 || status === 501)
-    return wakeFailure(e, "not_deployed", `http_${status}`, onTimer);
-  if (status === 401 || status === 403) return wakeFailure(e, "unauthorized", `http_${status}`, onTimer);
-  if (status === 429) return wakeFailure(e, "rate_limited", undefined, onTimer);
-  if (status === 409) return wakeFailure(e, "conflict", undefined, onTimer);
-  return wakeFailure(e, status >= 500 ? "server_error" : "rejected", `http_${status}`, onTimer);
+    return wakeFailure(call, "not_deployed", `http_${status}`, onTimer);
+  if (status === 401 || status === 403) return wakeFailure(call, "unauthorized", `http_${status}`, onTimer);
+  if (status === 429) return wakeFailure(call, "rate_limited", undefined, onTimer);
+  if (status === 409) return wakeFailure(call, "conflict", undefined, onTimer);
+  return wakeFailure(call, status >= 500 ? "server_error" : "rejected", `http_${status}`, onTimer);
 }
 //@ chunk-1w450km7.js:7155-7463 placement
 /**
  * 生成唤醒失败结果并记录特性状态（可重试的失败按定时器场景区别记录）。
  */
-function wakeFailure(e, r, s, a) {
-  let n = s === undefined ? r : `${r}_${s}`;
-  let d = isRetryableWakeFailure(r);
-  if (d || r === "not_sent" || r === "not_deployed") {
-    if (!(d && a)) logWakeSad(a, n, e);
-  } else if (a)
-    logFeatureBad("mcp_task_worker_wake_timer", n, {
-      call: fromEnum(e),
+function wakeFailure(call, reason, detail, onTimer) {
+  let reasonText = detail === undefined ? reason : `${reason}_${detail}`;
+  let retryable = isRetryableWakeFailure(reason);
+  if (retryable || reason === "not_sent" || reason === "not_deployed") {
+    if (!(retryable && onTimer)) logWakeSad(onTimer, reasonText, call);
+  } else if (onTimer)
+    logFeatureBad("mcp_task_worker_wake_timer", reasonText, {
+      call: fromEnum(call),
     });
   else
-    logFeatureBad("mcp_task_worker_wake", n, {
-      call: fromEnum(e),
+    logFeatureBad("mcp_task_worker_wake", reasonText, {
+      call: fromEnum(call),
     });
-  logForDebugging(`mcpTaskWorkerWake ${e}: failed (${n})`);
+  logForDebugging(`mcpTaskWorkerWake ${call}: failed (${reasonText})`);
   return {
     kind: "failed",
-    reason: r,
-    retryable: d,
+    reason,
+    retryable,
   };
 }
 //@ chunk-1w450km7.js:7463-7691 placement
-function isRetryableWakeFailure(e) {
-  switch (e) {
+function isRetryableWakeFailure(reason) {
+  switch (reason) {
     case "rate_limited":
     case "conflict":
     case "wake_off":
@@ -321,41 +321,41 @@ function ceilAtLeastOne(delaySeconds) {
 /**
  * 缺会话地址时的唤醒失败。
  */
-function wakePreconditionFailure(e, onTimer) {
-  return hasRemoteSdkUrl() ? undefined : wakeFailure(e, "not_sent", "no_session", onTimer);
+function wakePreconditionFailure(call, onTimer) {
+  return hasRemoteSdkUrl() ? undefined : wakeFailure(call, "not_sent", "no_session", onTimer);
 }
 //@ chunk-1w450km7.js:7803-8160 placement
 /**
  * 检查组织策略是否允许 MCP 任务 worker 唤醒，被拒时返回 refused，策略未决时返回失败。
  */
-function wakePolicyBlock(e, onTimer) {
-  let s;
+function wakePolicyBlock(call, onTimer) {
+  let denyKind;
   try {
     if (commandPolicyGateAllows(ALLOW_MCP_TASK_WORKER_WAKE)) return;
-    s = policyDenyKind(ALLOW_MCP_TASK_WORKER_WAKE);
+    denyKind = policyDenyKind(ALLOW_MCP_TASK_WORKER_WAKE);
   } catch (error) {
     logError(error);
-    return wakeFailure(e, "policy_pending", "threw", onTimer);
+    return wakeFailure(call, "policy_pending", "threw", onTimer);
   }
-  if (s === "org_denied" || s === "latched" || s === "unregistered") {
-    logWakeSad(onTimer, `policy_denied_${s}`, e);
-    logForDebugging(`mcpTaskWorkerWake ${e}: withheld by the organization's policy (${s})`);
+  if (denyKind === "org_denied" || denyKind === "latched" || denyKind === "unregistered") {
+    logWakeSad(onTimer, `policy_denied_${denyKind}`, call);
+    logForDebugging(`mcpTaskWorkerWake ${call}: withheld by the organization's policy (${denyKind})`);
     return {
       kind: "refused",
       reason: "policy_denied",
     };
   }
-  return wakeFailure(e, "policy_pending", s ?? "no_deny_kind", onTimer);
+  return wakeFailure(call, "policy_pending", denyKind ?? "no_deny_kind", onTimer);
 }
 //@ chunk-1w450km7.js:8160-8274 placement
-function logWakeSad(e, r, s) {
-  if (e)
-    logFeatureSad("mcp_task_worker_wake_timer", r, {
-      call: fromEnum(s),
+function logWakeSad(onTimer, reason, call) {
+  if (onTimer)
+    logFeatureSad("mcp_task_worker_wake_timer", reason, {
+      call: fromEnum(call),
     });
   else
-    logFeatureSad("mcp_task_worker_wake", r, {
-      call: fromEnum(s),
+    logFeatureSad("mcp_task_worker_wake", reason, {
+      call: fromEnum(call),
     });
 }
 //@ chunk-1w450km7.js:8274-8311 placement
@@ -371,8 +371,8 @@ var MAX_RETRY_ROUNDS = DEFAULT_WAKE_HORIZON_MS / TICK_INTERVAL_MS;
 /**
  * 判断唤醒是否仍在推进（moving 且状态为 driving）。
  */
-function isMovingWake(e) {
-  return e.wake?.moving === true && e.state === "driving";
+function isMovingWake(task) {
+  return task.wake?.moving === true && task.state === "driving";
 }
 //@ chunk-1w450km7.js:8373-12905 placement
 /**
@@ -384,12 +384,12 @@ class WorkerWakeKeeper {
   #a = false;
   #t;
   #r;
-  hasConcluded(e) {
-    return this.#o.has(e);
+  hasConcluded(taskId) {
+    return this.#o.has(taskId);
   }
-  taskBackgrounded(e) {
+  taskBackgrounded(input) {
     try {
-      this.#c(e);
+      this.#c(input);
     } catch (error) {
       logError(error);
     }
@@ -400,9 +400,10 @@ class WorkerWakeKeeper {
       this.#a = true;
       return;
     }
-    let a = taskRegistry.get(record.taskId);
-    if (a?.type !== "mcp_task" || a.notified || a.status !== "running" || a.holdCapped === true) return;
-    let n = {
+    let task = taskRegistry.get(record.taskId);
+    if (task?.type !== "mcp_task" || task.notified || task.status !== "running" || task.holdCapped === true)
+      return;
+    let entry = {
       record,
       taskRegistry,
       storageV5,
@@ -412,191 +413,192 @@ class WorkerWakeKeeper {
       retimeSoon: false,
       state: "driving",
     };
-    this.#e.set(record.taskId, n);
-    taskRegistry.update(record.taskId, (d) => ({
-      ...d,
-      onWorkerWakeOutcome: (y) => this.taskLeftDrive(record.taskId, y),
+    this.#e.set(record.taskId, entry);
+    taskRegistry.update(record.taskId, (task) => ({
+      ...task,
+      onWorkerWakeOutcome: (outcome) => this.taskLeftDrive(record.taskId, outcome),
     }));
-    this.#i(n, false);
+    this.#i(entry, false);
   }
-  taskLeftDrive(e, r) {
+  taskLeftDrive(taskId, outcome) {
     try {
-      this.#u(e, r);
+      this.#u(taskId, outcome);
     } catch (error) {
       logError(error);
     }
   }
-  #u(e, r) {
-    if (r.kind !== "parked" && r.kind !== "capped") this.#o.add(e);
-    let s = this.#e.get(e);
-    if (s === undefined || (s.state !== "driving" && s.state !== "left_to_fire")) return;
-    switch (r.kind) {
+  #u(taskId, outcome) {
+    if (outcome.kind !== "parked" && outcome.kind !== "capped") this.#o.add(taskId);
+    let entry = this.#e.get(taskId);
+    if (entry === undefined || (entry.state !== "driving" && entry.state !== "left_to_fire")) return;
+    switch (outcome.kind) {
       case "told":
       case "stopped":
       case "capped":
-        s.state = "cancelling";
+        entry.state = "cancelling";
         break;
       case "parked":
-        s.state = r.code === "ttl_expired" ? "cancelling" : "left_to_fire";
+        entry.state = outcome.code === "ttl_expired" ? "cancelling" : "left_to_fire";
         break;
     }
-    s.scheduleRetriesLeft = 0;
-    if (!isMovingWake(s)) s.retimeSoon = false;
-    if (!s.busy) this.#s(s);
+    entry.scheduleRetriesLeft = 0;
+    if (!isMovingWake(entry)) entry.retimeSoon = false;
+    if (!entry.busy) this.#s(entry);
   }
   async tick() {
-    let e = [];
-    for (let r of this.#e.values()) {
-      if (r.busy) continue;
-      if (r.state === "cancelling") e.push(this.#s(r, true));
+    let pending = [];
+    for (let entry of this.#e.values()) {
+      if (entry.busy) continue;
+      if (entry.state === "cancelling") pending.push(this.#s(entry, true));
       else if (!isTaskWorkerWakeEnabled()) continue;
-      else if (r.wake !== undefined && isMovingWake(r)) e.push(this.#d(r, r.wake, true));
-      else if (r.wake === undefined && r.scheduleRetriesLeft > 0) {
-        r.scheduleRetriesLeft -= 1;
-        e.push(this.#i(r, true));
+      else if (entry.wake !== undefined && isMovingWake(entry))
+        pending.push(this.#d(entry, entry.wake, true));
+      else if (entry.wake === undefined && entry.scheduleRetriesLeft > 0) {
+        entry.scheduleRetriesLeft -= 1;
+        pending.push(this.#i(entry, true));
       }
     }
-    await Promise.all(e);
+    await Promise.all(pending);
   }
-  async #i(e, r) {
-    await this.#n(e, async () => {
-      let s = !r;
-      let a = await scheduleWorkerWake({
-        task: e.record,
+  async #i(entry, onTimer) {
+    await this.#n(entry, async () => {
+      let isReset = !onTimer;
+      let result = await scheduleWorkerWake({
+        task: entry.record,
         delaySeconds: DEFAULT_WAKE_HORIZON_MS / 1000,
-        onTimer: r,
+        onTimer,
       });
-      switch (a.kind) {
+      switch (result.kind) {
         case "scheduled":
-          e.wake = {
-            id: a.workerWakeId,
-            fireAtMs: a.fireAtMs,
-            expiresAtMs: a.expiresAtMs,
+          entry.wake = {
+            id: result.workerWakeId,
+            fireAtMs: result.fireAtMs,
+            expiresAtMs: result.expiresAtMs,
             moving: true,
             notRetryableRounds: 0,
           };
-          e.scheduleRetriesLeft = 0;
-          this.#l(e, a.workerWakeId);
+          entry.scheduleRetriesLeft = 0;
+          this.#l(entry, result.workerWakeId);
           break;
         case "refused":
           this.#a ||=
-            a.reason === "unsupported_host" ||
-            a.reason === "unsupported_session" ||
-            a.reason === "delay_out_of_range";
-          e.scheduleRetriesLeft = 0;
+            result.reason === "unsupported_host" ||
+            result.reason === "unsupported_session" ||
+            result.reason === "delay_out_of_range";
+          entry.scheduleRetriesLeft = 0;
           break;
         case "failed":
-          if (e.state !== "driving") e.scheduleRetriesLeft = 0;
-          else if (a.reason === "policy_pending") e.scheduleRetriesLeft = 1;
-          else if (a.reason !== "rate_limited") e.scheduleRetriesLeft = 0;
-          else if (s) e.scheduleRetriesLeft = MAX_SCHEDULE_RETRIES;
+          if (entry.state !== "driving") entry.scheduleRetriesLeft = 0;
+          else if (result.reason === "policy_pending") entry.scheduleRetriesLeft = 1;
+          else if (result.reason !== "rate_limited") entry.scheduleRetriesLeft = 0;
+          else if (isReset) entry.scheduleRetriesLeft = MAX_SCHEDULE_RETRIES;
           break;
       }
     });
-    await this.#s(e);
+    await this.#s(entry);
   }
-  async #d(e, r, s) {
-    await this.#n(e, async () => {
-      let a = {
+  async #d(entry, wake, onTimer) {
+    await this.#n(entry, async () => {
+      let expiredResult = {
         kind: "refused",
         reason: "expired",
       };
-      let n =
-        Date.now() + DEFAULT_WAKE_HORIZON_MS > r.expiresAtMs
-          ? a
+      let result =
+        Date.now() + DEFAULT_WAKE_HORIZON_MS > wake.expiresAtMs
+          ? expiredResult
           : await retimeWorkerWake({
-              workerWakeId: r.id,
+              workerWakeId: wake.id,
               delaySeconds: DEFAULT_WAKE_HORIZON_MS / 1000,
               onTimer: true,
             });
-      e.retimeSoon = false;
-      if (e.wake !== r || !r.moving) return;
-      switch (n.kind) {
+      entry.retimeSoon = false;
+      if (entry.wake !== wake || !wake.moving) return;
+      switch (result.kind) {
         case "scheduled":
-          r.fireAtMs = n.fireAtMs;
-          r.expiresAtMs = n.expiresAtMs;
-          r.notRetryableRounds = 0;
+          wake.fireAtMs = result.fireAtMs;
+          wake.expiresAtMs = result.expiresAtMs;
+          wake.notRetryableRounds = 0;
           break;
         case "refused":
-          if (n.reason === "expired") {
-            r.moving = false;
-            if (e.state === "driving") e.state = "cancelling";
-          } else if (n.reason === "policy_denied") {
-            r.moving = false;
-            e.state = "cancelling";
-          } else if (n.reason === "cancelled" || n.reason === "not_found") e.wake = undefined;
+          if (result.reason === "expired") {
+            wake.moving = false;
+            if (entry.state === "driving") entry.state = "cancelling";
+          } else if (result.reason === "policy_denied") {
+            wake.moving = false;
+            entry.state = "cancelling";
+          } else if (result.reason === "cancelled" || result.reason === "not_found") entry.wake = undefined;
           else {
-            r.moving = false;
-            if (e.state === "driving") e.state = "left_to_fire";
+            wake.moving = false;
+            if (entry.state === "driving") entry.state = "left_to_fire";
           }
           break;
         case "failed":
-          if (n.retryable) {
-            e.retimeSoon = s;
+          if (result.retryable) {
+            entry.retimeSoon = onTimer;
             break;
           }
-          if (s && n.reason !== "not_sent") r.notRetryableRounds += 1;
-          if (n.reason === "not_sent" || r.notRetryableRounds >= MAX_RETRY_ROUNDS) {
-            r.moving = false;
-            if (e.state === "driving") e.state = "left_to_fire";
+          if (onTimer && result.reason !== "not_sent") wake.notRetryableRounds += 1;
+          if (result.reason === "not_sent" || wake.notRetryableRounds >= MAX_RETRY_ROUNDS) {
+            wake.moving = false;
+            if (entry.state === "driving") entry.state = "left_to_fire";
           }
           break;
       }
     });
-    await this.#s(e);
+    await this.#s(entry);
   }
-  async #s(e, onTimer = false) {
-    if (e.busy) return;
-    let wake = e.wake;
-    if (e.state === "cancelling" && wake !== undefined)
-      await this.#n(e, async () => {
-        let d = await cancelWorkerWake({
+  async #s(entry, onTimer = false) {
+    if (entry.busy) return;
+    let wake = entry.wake;
+    if (entry.state === "cancelling" && wake !== undefined)
+      await this.#n(entry, async () => {
+        let result = await cancelWorkerWake({
           workerWakeId: wake.id,
           onTimer,
         });
         if (
-          d.kind === "cancelled" ||
-          d.reason === "not_deployed" ||
+          result.kind === "cancelled" ||
+          result.reason === "not_deployed" ||
           Date.now() >= wake.fireAtMs + TICK_INTERVAL_MS
         )
-          e.wake = undefined;
+          entry.wake = undefined;
       });
-    let taskId = e.record.taskId;
+    let taskId = entry.record.taskId;
     if (
-      e.wake === undefined &&
-      (e.scheduleRetriesLeft === 0 || e.state !== "driving") &&
-      this.#e.get(taskId) === e
+      entry.wake === undefined &&
+      (entry.scheduleRetriesLeft === 0 || entry.state !== "driving") &&
+      this.#e.get(taskId) === entry
     )
       this.#e.delete(taskId);
     this.#f();
   }
-  async #n(e, r) {
-    e.busy = true;
+  async #n(entry, work) {
+    entry.busy = true;
     try {
-      await r();
+      await work();
     } catch (error) {
       logError(error);
     } finally {
-      e.busy = false;
+      entry.busy = false;
     }
   }
-  #l(e, workerWakeId) {
-    let { record, taskRegistry, storageV5 } = e;
-    let d = taskRegistry.get(record.taskId);
-    if (d?.type !== "mcp_task" || d.notified || d.status !== "running") return;
-    let y = () => {
-      let k = taskRegistry.get(record.taskId);
+  #l(entry, workerWakeId) {
+    let { record, taskRegistry, storageV5 } = entry;
+    let task = taskRegistry.get(record.taskId);
+    if (task?.type !== "mcp_task" || task.notified || task.status !== "running") return;
+    let isSameSession = () => {
+      let task = taskRegistry.get(record.taskId);
       return (
-        k?.type === "mcp_task" &&
-        k.sidecarSessionId === getSessionId() &&
-        k.sidecarProjectDir === getMcpTaskProjectDir()
+        task?.type === "mcp_task" &&
+        task.sidecarSessionId === getSessionId() &&
+        task.sidecarProjectDir === getMcpTaskProjectDir()
       );
     };
-    let sidecarWrite = d.sidecarWrite;
-    let sidecarWrite_2 = y()
+    let sidecarWrite = task.sidecarWrite;
+    let sidecarWrite_2 = isSameSession()
       ? (async () => {
           await sidecarWrite;
-          if (!y()) return;
+          if (!isSameSession()) return;
           await writeMcpTaskMetadata(
             record.taskId,
             {
@@ -613,27 +615,27 @@ class WorkerWakeKeeper {
           logFeatureSad("mcp_task_worker_wake", "wake_id_not_saved");
         })
       : sidecarWrite;
-    taskRegistry.update(record.taskId, (k) => ({
-      ...k,
+    taskRegistry.update(record.taskId, (task) => ({
+      ...task,
       workerWakeId,
       sidecarWrite: sidecarWrite_2,
     }));
   }
   #f() {
-    let e = false;
-    let r = false;
-    for (let s of this.#e.values()) {
-      e ||= s.state === "cancelling" || isMovingWake(s) || s.scheduleRetriesLeft > 0;
-      r ||= s.retimeSoon;
+    let needsTick = false;
+    let needsRetime = false;
+    for (let entry of this.#e.values()) {
+      needsTick ||= entry.state === "cancelling" || isMovingWake(entry) || entry.scheduleRetriesLeft > 0;
+      needsRetime ||= entry.retimeSoon;
     }
-    if (e && this.#t === undefined) {
+    if (needsTick && this.#t === undefined) {
       this.#t = setInterval(() => void this.tick(), TICK_INTERVAL_MS);
       this.#t.unref();
-    } else if (!e && this.#t !== undefined) {
+    } else if (!needsTick && this.#t !== undefined) {
       clearInterval(this.#t);
       this.#t = undefined;
     }
-    if (r && this.#r === undefined) {
+    if (needsRetime && this.#r === undefined) {
       this.#r = setTimeout(() => {
         this.#r = undefined;
         this.#k();
@@ -642,12 +644,19 @@ class WorkerWakeKeeper {
     }
   }
   async #k() {
-    let e = [];
-    for (let r of this.#e.values())
-      if (r.retimeSoon && !r.busy && r.wake !== undefined && isMovingWake(r) && isTaskWorkerWakeEnabled())
-        e.push(this.#d(r, r.wake, false));
-    await Promise.all(e);
+    let pending = [];
+    for (let entry of this.#e.values())
+      if (
+        entry.retimeSoon &&
+        !entry.busy &&
+        entry.wake !== undefined &&
+        isMovingWake(entry) &&
+        isTaskWorkerWakeEnabled()
+      )
+        pending.push(this.#d(entry, entry.wake, false));
+    await Promise.all(pending);
   }
 }
 //@ chunk-1w450km7.js:12905-12930 placement
 var mcpTaskWorkerWakeKeepers = new SessionRootSlot(() => new WorkerWakeKeeper());
+export { mcpTaskWorkerWakeKeepers };

@@ -15,44 +15,45 @@ import { parseIntegerLike } from "./savedOutputPaths.js";
 /**
  * 规范 Read 工具的 offset/limit 参数（数组、负数等）。
  */
-function normalizeReadInputAliases(e) {
-  if (!isPlainObject_5(e)) return null;
-  let n = {
-    ...e,
+function normalizeReadInputAliases(rawInput) {
+  if (!isPlainObject_5(rawInput)) return null;
+  let normalizedInput = {
+    ...rawInput,
   };
-  let r = [];
-  if (Array.isArray(n.offset) && n.offset.length === 1) {
-    n.offset = n.offset[0];
-    r.push("offset_array");
+  let appliedAliases = [];
+  if (Array.isArray(normalizedInput.offset) && normalizedInput.offset.length === 1) {
+    normalizedInput.offset = normalizedInput.offset[0];
+    appliedAliases.push("offset_array");
   }
-  if (Array.isArray(n.limit) && n.limit.length === 1) {
-    n.limit = n.limit[0];
-    r.push("limit_array");
+  if (Array.isArray(normalizedInput.limit) && normalizedInput.limit.length === 1) {
+    normalizedInput.limit = normalizedInput.limit[0];
+    appliedAliases.push("limit_array");
   }
-  let integerLike = parseIntegerLike(n.offset);
+  let integerLike = parseIntegerLike(normalizedInput.offset);
   if (integerLike !== undefined && integerLike < 0) {
-    delete n.offset;
-    r.push("offset_neg");
+    delete normalizedInput.offset;
+    appliedAliases.push("offset_neg");
   }
-  let integerLike_2 = parseIntegerLike(n.limit);
+  let integerLike_2 = parseIntegerLike(normalizedInput.limit);
   if (integerLike_2 !== undefined && integerLike_2 <= 0) {
-    delete n.limit;
-    r.push("limit_dropped");
+    delete normalizedInput.limit;
+    appliedAliases.push("limit_dropped");
   }
-  if ("length" in n) {
-    let integerLike = parseIntegerLike(n.length);
-    if (!("limit" in n) && integerLike !== undefined && integerLike > 0) n.limit = integerLike;
-    delete n.length;
-    r.push("length");
+  if ("length" in normalizedInput) {
+    let integerLike = parseIntegerLike(normalizedInput.length);
+    if (!("limit" in normalizedInput) && integerLike !== undefined && integerLike > 0)
+      normalizedInput.limit = integerLike;
+    delete normalizedInput.length;
+    appliedAliases.push("length");
   }
-  if (Object.hasOwn(n, "description")) {
-    delete n.description;
-    r.push("drop_description");
+  if (Object.hasOwn(normalizedInput, "description")) {
+    delete normalizedInput.description;
+    appliedAliases.push("drop_description");
   }
-  return r.length
+  return appliedAliases.length
     ? {
-        input: n,
-        shapeClass: r.join(","),
+        input: normalizedInput,
+        shapeClass: appliedAliases.join(","),
       }
     : null;
 }

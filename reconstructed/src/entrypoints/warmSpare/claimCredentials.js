@@ -27,8 +27,8 @@ var claimContext = null;
 /**
  * 函数 setClaimContext（设置认领上下文）。
  */
-function setClaimContext(n) {
-  claimContext = n;
+function setClaimContext(context) {
+  claimContext = context;
 }
 //@ chunk-mmkhgzzy.js:456-500 placement
 /**
@@ -50,10 +50,14 @@ function claimRoadHint() {
  */
 function credentialRoad(claimLaunchEnv, launchCredential) {
   if (launchCredential === null) return "none_at_claim";
-  let t = launchCredential.kind === "bearer";
-  let i = t ? "CLAUDE_CODE_OAUTH_TOKEN" : "ANTHROPIC_API_KEY";
-  let u = t ? "CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR" : "CLAUDE_CODE_API_KEY_FILE_DESCRIPTOR";
-  return trimmedOrUndefined(claimLaunchEnv[i]) === undefined ? (getCredentialRoad(u) ?? "none") : "env_var";
+  let isBearer = launchCredential.kind === "bearer";
+  let envVarName = isBearer ? "CLAUDE_CODE_OAUTH_TOKEN" : "ANTHROPIC_API_KEY";
+  let fdEnvName = isBearer
+    ? "CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR"
+    : "CLAUDE_CODE_API_KEY_FILE_DESCRIPTOR";
+  return trimmedOrUndefined(claimLaunchEnv[envVarName]) === undefined
+    ? (getCredentialRoad(fdEnvName) ?? "none")
+    : "env_var";
 }
 //@ chunk-mmkhgzzy.js:808-1346 placement
 /**
@@ -103,12 +107,12 @@ function claimedCredential_2(env) {
  * 判断预热备用进程的认证是否不适合被认领：无认证、第三方提供商、自定义 base URL，否则返回 null。
  */
 function spareAuthIneligibility() {
-  let n = claimContext?.env();
-  if (n === undefined) return "no_auth";
-  if ([...PROVIDER_ENV_FLAGS, "CLAUDE_CODE_USE_GATEWAY"].some((i) => isEnvTruthy(n[i])))
+  let env = claimContext?.env();
+  if (env === undefined) return "no_auth";
+  if ([...PROVIDER_ENV_FLAGS, "CLAUDE_CODE_USE_GATEWAY"].some((flag) => isEnvTruthy(env[flag])))
     return "third_party_provider";
-  let t = trimmedOrUndefined(n.ANTHROPIC_BASE_URL);
-  if (t !== undefined && !isFirstPartyAnthropicHost(t)) return "custom_base_url";
+  let baseUrl = trimmedOrUndefined(env.ANTHROPIC_BASE_URL);
+  if (baseUrl !== undefined && !isFirstPartyAnthropicHost(baseUrl)) return "custom_base_url";
   return claimedCredential() === null ? "no_auth" : null;
 }
 //@ chunk-mmkhgzzy.js:1603-1710 placement
@@ -123,43 +127,43 @@ var OAUTH_OVERRIDE_ENV_VARS = [
  * 函数 envDriftDetected（当前环境与认领时不一致）。
  */
 function envDriftDetected() {
-  let n = claimContext?.env() ?? {};
-  return OAUTH_OVERRIDE_ENV_VARS.some((e) => process.env[e] !== n[e]);
+  let claimEnv = claimContext?.env() ?? {};
+  return OAUTH_OVERRIDE_ENV_VARS.some((key) => process.env[key] !== claimEnv[key]);
 }
 //@ chunk-mmkhgzzy.js:1786-1882 placement
 /**
  * 函数 claimedSubscriptionType（认领时的订阅类型）。
  */
 function claimedSubscriptionType() {
-  let n = claimContext?.env();
-  return n === undefined || _(n) ? undefined : trimmedOrUndefined(n.CLAUDE_CODE_SUBSCRIPTION_TYPE);
+  let env = claimContext?.env();
+  return env === undefined || _(env) ? undefined : trimmedOrUndefined(env.CLAUDE_CODE_SUBSCRIPTION_TYPE);
 }
 //@ chunk-mmkhgzzy.js:1882-1967 placement
-function _(n) {
+function _(env) {
   return (
     isChildSession() ||
     isClaudecodeSession() ||
-    hasNonEmptyEnv(n, "CLAUDE_CODE_CHILD_SESSION") ||
-    hasNonEmptyEnv(n, "CLAUDECODE")
+    hasNonEmptyEnv(env, "CLAUDE_CODE_CHILD_SESSION") ||
+    hasNonEmptyEnv(env, "CLAUDECODE")
   );
 }
 //@ chunk-mmkhgzzy.js:1967-2007 placement
-function hasNonEmptyEnv(env, e) {
-  return trimmedOrUndefined(env[e]) !== undefined;
+function hasNonEmptyEnv(env, name) {
+  return trimmedOrUndefined(env[name]) !== undefined;
 }
 //@ chunk-mmkhgzzy.js:2007-2063 placement
-function toKeyCredential(n) {
-  return n === undefined
+function toKeyCredential(key) {
+  return key === undefined
     ? null
     : {
         kind: "key",
-        key: n,
+        key,
       };
 }
 //@ chunk-mmkhgzzy.js:2063-2120 placement
-function trimmedOrUndefined(n) {
-  let e = n?.trim() ?? "";
-  return e === "" ? undefined : e;
+function trimmedOrUndefined(value) {
+  let trimmed = value?.trim() ?? "";
+  return trimmed === "" ? undefined : trimmed;
 }
 export {
   spareAuthIneligibility,

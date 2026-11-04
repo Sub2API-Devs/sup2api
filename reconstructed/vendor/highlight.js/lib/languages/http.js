@@ -5,10 +5,10 @@
  * pieces: chunk-egr0twnb.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:193632-194529 cjs-fingerprint
-var require_http = x(function (cjsExports, cjsModule) {
+var require_http = __commonJS(function (cjsExports, cjsModule) {
   function http(hljs) {
     let regex = hljs.regex;
     let VERSION = "HTTP/([32]|1\\.[01])";

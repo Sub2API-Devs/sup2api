@@ -8,8 +8,16 @@
  * pieces: chunk-18hwfzwa.js (16), chunk-xe7zq1p4.js (2)
  * attribution: placement 18
  */
+import {
+  useContext,
+  init_react_production,
+  useEffect,
+  useRef,
+  useSyncExternalStore,
+} from "../../../vendor/react/cjs/react.production.js";
+import { statsContext } from "../../context/stats.js";
 import { PERMISSION_CARD_KINDS } from "../../components/dialogs/dialogKinds.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import {
   unattendedNoticeRows,
   UnattendedNoticeContext,
@@ -18,10 +26,9 @@ import {
   jsxProd_default,
   jsxProd_default_2,
 } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
-import { init_react_production, P, R, yt, Se } from "../../../vendor/react/cjs/react.production.js";
 import { createSignal } from "../../utils/signal.js";
 import { logForDebugging } from "../../utils/debug.js";
-import { string } from "../../../vendor/zod/v4/classic/schemas.js";
+import { stringSchema } from "../../../vendor/zod/v4/classic/schemas.js";
 import { Text, Box } from "../../ink/components/Text.js";
 import { fromEnum } from "../../services/analytics/safeMetadata.js";
 import { env } from "../../utils/env.js";
@@ -69,8 +76,20 @@ import {
   isTaskFailedOrStopped,
 } from "../../state/teammateViewHelpers.js";
 import { useTimeout } from "../../ink/hooks/useTerminalHooks.js";
-import { statsContext } from "../../context/stats.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
+//@ chunk-xe7zq1p4.js:1971-2000 placement
+/**
+ * 导出函数 `isTerminalInterested`：返回 Se(ie)。
+ */
+function isTerminalInterested() {
+  return useContext(statsContext);
+}
+//@ chunk-xe7zq1p4.js:2000-2004 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-xe7zq1p4.js:2000", () => {
+  init_react_production();
+});
 //@ chunk-18hwfzwa.js:1624350-1624603 placement
 /**
  * 决定对话框画在窗格中还是输入框上方、是否绘制。
@@ -83,13 +102,15 @@ function resolveModalPlacement({
   dialogOverPanel,
   fullscreen,
 }) {
-  let Re = onScreenBlockingKind !== null && PERMISSION_CARD_KINDS.includes(onScreenBlockingKind);
-  let Be = Re && modalSlotActive;
-  let He = !Be && (panelHidesPrompt || pinnedConsentShowing || Re || dialogOverPanel);
+  let isPermissionCard =
+    onScreenBlockingKind !== null && PERMISSION_CARD_KINDS.includes(onScreenBlockingKind);
+  let showInPane = isPermissionCard && modalSlotActive;
+  let showAbovePrompt =
+    !showInPane && (panelHidesPrompt || pinnedConsentShowing || isPermissionCard || dialogOverPanel);
   return {
-    inPane: Be,
-    abovePrompt: He,
-    drawn: Be || (He && !(fullscreen && modalSlotActive)),
+    inPane: showInPane,
+    abovePrompt: showAbovePrompt,
+    drawn: showInPane || (showAbovePrompt && !(fullscreen && modalSlotActive)),
   };
 }
 //@ chunk-18hwfzwa.js:1624603-1624812 placement
@@ -97,43 +118,51 @@ function resolveModalPlacement({
  * 提供无人值守提示占用的行数。
  */
 function UnattendedNoticeProvider(props) {
-  let $ = w(3);
+  let $ = useMemoCache(3);
   let { drawn, hideSessionTitle, children } = props;
-  let ee = unattendedNoticeRows(hideSessionTitle);
-  const value = drawn ? ee : 0;
-  let Be;
+  let rows = unattendedNoticeRows(hideSessionTitle);
+  const value = drawn ? rows : 0;
+  let provider;
   if ($[0] !== children || $[1] !== value) {
-    Be = jsxProd_default(UnattendedNoticeContext, {
+    provider = jsxProd_default(UnattendedNoticeContext, {
       value,
       children,
     });
     $[0] = children;
     $[1] = value;
-    $[2] = Be;
-  } else Be = $[2];
-  return Be;
+    $[2] = provider;
+  } else provider = $[2];
+  return provider;
 }
 //@ chunk-18hwfzwa.js:1624812-1624816 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:1624812", () => {
+  init_react_production();
+});
 //@ chunk-18hwfzwa.js:1626009-1626052 placement
-function isExiting(h) {
-  return h.exit.kind !== "none";
+function isExiting(chrome) {
+  return chrome.exit.kind !== "none";
 }
 //@ chunk-18hwfzwa.js:1626052-1626185 placement
 /**
  * 嵌入模式相关属性键与空状态。
  */
-var EMBEDDED_PROP_KEYS = {
-  debug: true,
-  embedded: true,
-  onDetachToCaller: true,
-  hasSuppressedDialogs: true,
-  hideLoginNotice: true,
-};
-var keys = Object.keys(EMBEDDED_PROP_KEYS);
-var NO_EXIT_STATE = {
-  kind: "none",
-};
+var EMBEDDED_PROP_KEYS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var keys;
+var NO_EXIT_STATE;
+deferInit("chunk-18hwfzwa.js:1626052", () => {
+  EMBEDDED_PROP_KEYS = {
+    debug: true,
+    embedded: true,
+    onDetachToCaller: true,
+    hasSuppressedDialogs: true,
+    hideLoginNotice: true,
+  };
+  keys = Object.keys(EMBEDDED_PROP_KEYS);
+  NO_EXIT_STATE = {
+    kind: "none",
+  };
+});
 //@ chunk-18hwfzwa.js:1626185-1628696 placement
 /**
  * 输入框外围（chrome）控制器：退出流程（interstitial/shutting-down）、IDE 选区、bash 对话框、rewind 在云会话不可用提示等。
@@ -149,46 +178,46 @@ class ComposerChrome {
   #c = null;
   #i = null;
   #a = undefined;
-  constructor({ isRemoteSession, addNotification, store, storageV5, exitReaders, ...ke }) {
+  constructor({ isRemoteSession, addNotification, store, storageV5, exitReaders, ...initialView }) {
     this.#t = isRemoteSession;
     this.#o = addNotification;
     this.#n = store;
     this.#s = storageV5;
     this.exitReaders = exitReaders;
     this.#r = {
-      ...ke,
+      ...initialView,
       ideSelection: undefined,
       bashesDialog: false,
       exit: NO_EXIT_STATE,
     };
   }
-  subscribe = (h) => this.#e.subscribe(h);
+  subscribe = (listener) => this.#e.subscribe(listener);
   getSnapshot = () => this.#r;
-  #l(h) {
-    this.#r = h;
+  #l(view) {
+    this.#r = view;
     this.#e.emit();
   }
-  setView(h) {
-    let x = this.#r;
-    if (keys.every((D) => Object.is(h[D], x[D]))) return;
+  setView(next) {
+    let current = this.#r;
+    if (keys.every((key) => Object.is(next[key], current[key]))) return;
     this.#l({
-      ...x,
-      ...h,
+      ...current,
+      ...next,
     });
   }
-  setIdeSelection = (h) => {
+  setIdeSelection = (selection) => {
     this.#i = null;
     this.#a = undefined;
-    if (Object.is(h, this.#r.ideSelection)) return;
+    if (Object.is(selection, this.#r.ideSelection)) return;
     this.#l({
       ...this.#r,
-      ideSelection: h,
+      ideSelection: selection,
     });
   };
-  offerIdeSelection = (h) => {
-    if (this.#r.ideSelection?.source === "diff" && !h.text) return;
-    if (ideSelectionKey(h) === this.#i) return;
-    this.setIdeSelection(h);
+  offerIdeSelection = (selection) => {
+    if (this.#r.ideSelection?.source === "diff" && !selection.text) return;
+    if (ideSelectionKey(selection) === this.#i) return;
+    this.setIdeSelection(selection);
   };
   dismissIdeSelection = () => {
     let ideSelection = this.#r.ideSelection;
@@ -196,18 +225,18 @@ class ComposerChrome {
     this.setIdeSelection(undefined);
     this.#i = ideSelectionKey(ideSelection);
   };
-  consumeIdeSelection = (h) => {
+  consumeIdeSelection = (promptUuid) => {
     let ideSelection = this.#r.ideSelection;
     this.setIdeSelection(undefined);
-    if (ideSelection && h)
+    if (ideSelection && promptUuid)
       this.#a = {
         selection: ideSelection,
-        promptUuid: h,
+        promptUuid,
       };
   };
-  restoreIdeSelectionConsumedBy = (h, x) => {
-    if (x !== undefined) this.returnIdeSelection(x);
-    else if (this.#a?.promptUuid === h) this.returnIdeSelection(this.#a.selection);
+  restoreIdeSelectionConsumedBy = (promptUuid, replacement) => {
+    if (replacement !== undefined) this.returnIdeSelection(replacement);
+    else if (this.#a?.promptUuid === promptUuid) this.returnIdeSelection(this.#a.selection);
   };
   recordIdeSelectionConsumedBy = (promptUuid, selection) => {
     this.#a = {
@@ -215,21 +244,22 @@ class ComposerChrome {
       promptUuid,
     };
   };
-  returnIdeSelection = (h) => {
+  returnIdeSelection = (selection) => {
     let ideSelection = this.#r.ideSelection;
-    if (h !== undefined && !ideSelection?.text && ideSelection?.source !== "diff") this.setIdeSelection(h);
+    if (selection !== undefined && !ideSelection?.text && ideSelection?.source !== "diff")
+      this.setIdeSelection(selection);
   };
-  openBashesDialog = (h) => {
-    this.#d(h ?? true);
+  openBashesDialog = (open) => {
+    this.#d(open ?? true);
   };
   closeBashesDialog = () => {
     this.#d(false);
   };
-  #d(h) {
-    if (h === this.#r.bashesDialog) return;
+  #d(open) {
+    if (open === this.#r.bashesDialog) return;
     this.#l({
       ...this.#r,
-      bashesDialog: h,
+      bashesDialog: open,
     });
   }
   openMessageSelector = () => {
@@ -259,18 +289,18 @@ class ComposerChrome {
       });
       return;
     }
-    let x = getCurrentWorktreeSession() !== null;
+    let inWorktree = getCurrentWorktreeSession() !== null;
     let { tasks, mcp } = this.#n.getState();
-    let ee = backgroundTaskKindLabel(tasks, {
+    let backgroundItems = backgroundTaskKindLabel(tasks, {
       mcpClients: mcp.clients,
     });
-    if (x || ee.length > 0) {
+    if (inWorktree || backgroundItems.length > 0) {
       this.#l({
         ...this.#r,
         exit: {
           kind: "interstitial",
-          showWorktree: x,
-          backgroundItems: ee,
+          showWorktree: inWorktree,
+          backgroundItems,
           messages: this.exitReaders.getMessages(),
           isMidTurn: this.exitReaders.isMidTurn(),
         },
@@ -303,8 +333,8 @@ class ComposerChrome {
       exit: NO_EXIT_STATE,
     });
   };
-  bindHost(h) {
-    this.#c = h;
+  bindHost(host) {
+    this.#c = host;
   }
   #m() {
     if (this.#c === null) throw Error("ComposerChrome: used before its screen bound a host");
@@ -315,25 +345,27 @@ class ComposerChrome {
 /**
  * IDE 选区的去重键。
  */
-function ideSelectionKey(h) {
-  let x = `${h.source ?? "ide"}|${h.filePath ?? ""}`;
-  return h.text ? `${x}|${h.lineStart ?? ""}|${h.lineCount}|${h.text.length}` : x;
+function ideSelectionKey(selection) {
+  let head = `${selection.source ?? "ide"}|${selection.filePath ?? ""}`;
+  return selection.text
+    ? `${head}|${selection.lineStart ?? ""}|${selection.lineCount}|${selection.text.length}`
+    : head;
 }
 //@ chunk-18hwfzwa.js:1628869-1628953 placement
-function scanQueueBeforeTurn(h, x) {
+function scanQueueBeforeTurn(isBusy, queued) {
   let activeMessageQueue = getActiveMessageQueue();
-  return activeMessageQueue !== undefined && (x !== undefined || h())
-    ? awaitScanThenTurn(activeMessageQueue, h, x)
+  return activeMessageQueue !== undefined && (queued !== undefined || isBusy())
+    ? awaitScanThenTurn(activeMessageQueue, isBusy, queued)
     : undefined;
 }
 //@ chunk-18hwfzwa.js:1644111-1644605 placement
 /**
  * 标记非正常退出、注册退出前刷新；进程退出时打印费用并保存状态。
  */
-function useExitCostReport(h) {
+function useExitCostReport(enabled) {
   let isScreenReaderEnabled = useIsScreenReaderEnabled();
   let { storageV5 } = useTheme_2();
-  P(() => {
+  useEffect(() => {
     if (getIsRemoteMode()) return;
     let currentProjectConfig = getCurrentProjectConfig();
     let versionBase = getVersionBase();
@@ -342,78 +374,86 @@ function useExitCostReport(h) {
       currentProjectConfig.lastVersionBase !== versionBase
     )
       saveCurrentProjectConfig(
-        (He) => ({
-          ...He,
+        (config) => ({
+          ...config,
           lastGracefulShutdown: false,
           lastVersionBase: versionBase,
         }),
         storageV5,
       );
-    let ke = false;
-    let Re =
+    let costsFlushed = false;
+    let unregisterExitFlush =
       isStorageV5Enabled() && storageV5 !== undefined
         ? registerPreExitFlush(async () => {
-            await saveCostsAsync(h?.(), storageV5);
-            ke = true;
+            await saveCostsAsync(enabled?.(), storageV5);
+            costsFlushed = true;
           })
         : undefined;
     claimCostLedgerForCurrentSession();
     registerTranscriptExitReStamp(resetCostState_2);
-    let Be = () => {
+    let onProcessExit = () => {
       if (hasConsoleBillingAccess()) {
-        let He = isScreenReaderEnabled ? "Cost: " : "";
+        let costPrefix = isScreenReaderEnabled ? "Cost: " : "";
         process.stdout.write(
           `
 ` +
-            He +
+            costPrefix +
             formatTotalCost() +
             `
 `,
         );
       }
-      if (!ke) saveCostsOnExit(h?.());
+      if (!costsFlushed) saveCostsOnExit(enabled?.());
     };
-    process.on("exit", Be);
+    process.on("exit", onProcessExit);
     return () => {
-      Re?.();
-      if (isShuttingDown()) flushAndSaveCosts(h?.(), storageV5);
-      process.off("exit", Be);
+      unregisterExitFlush?.();
+      if (isShuttingDown()) flushAndSaveCosts(enabled?.(), storageV5);
+      process.off("exit", onProcessExit);
     };
   }, [isScreenReaderEnabled, storageV5]);
 }
 //@ chunk-18hwfzwa.js:1644605-1644609 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:1644605", () => {
+  init_react_production();
+});
 //@ chunk-18hwfzwa.js:1644609-1645075 placement = getViewedTeammateTask (0.79)
 function getViewedTeammateTask_2() {
   let setAppState = useSetAppState();
-  let x = useAppState((Be) => Be.viewingAgentTaskId);
-  let D = useAppState((Be) => (Be.viewingAgentTaskId ? Be.tasks[Be.viewingAgentTaskId] : undefined));
-  let L = D && isInProcessTeammateTask(D) ? D : undefined;
-  let ee = D !== undefined;
-  let parentAgentIdRef = R(undefined);
-  if (isLocalAgent(D)) parentAgentIdRef.current = D.parentAgentId;
-  else if (D !== undefined) parentAgentIdRef.current = undefined;
-  let Re = useAppState((Be) =>
-    parentAgentIdRef.current ? Be.tasks[parentAgentIdRef.current] !== undefined : false,
+  let viewingTaskId = useAppState((state) => state.viewingAgentTaskId);
+  let viewedTask = useAppState((state) =>
+    state.viewingAgentTaskId ? state.tasks[state.viewingAgentTaskId] : undefined,
   );
-  P(() => {
-    if (!x) return;
-    if (!ee) {
-      let Be = parentAgentIdRef.current;
+  let inProcessTask = viewedTask && isInProcessTeammateTask(viewedTask) ? viewedTask : undefined;
+  let hasTask = viewedTask !== undefined;
+  let parentAgentIdRef = useRef(undefined);
+  if (isLocalAgent(viewedTask)) parentAgentIdRef.current = viewedTask.parentAgentId;
+  else if (viewedTask !== undefined) parentAgentIdRef.current = undefined;
+  let isParentTaskPresent = useAppState((state) =>
+    parentAgentIdRef.current ? state.tasks[parentAgentIdRef.current] !== undefined : false,
+  );
+  useEffect(() => {
+    if (!viewingTaskId) return;
+    if (!hasTask) {
+      let parentAgentId = parentAgentIdRef.current;
       parentAgentIdRef.current = undefined;
-      if (Be && Re) enterTeammateView(Be, setAppState);
+      if (parentAgentId && isParentTaskPresent) enterTeammateView(parentAgentId, setAppState);
       else exitTeammateView(setAppState);
       return;
     }
-    if (!L) return;
-    if (isTaskFailedOrStopped(L)) {
+    if (!inProcessTask) return;
+    if (isTaskFailedOrStopped(inProcessTask)) {
       exitTeammateView(setAppState);
       return;
     }
-  }, [x, ee, Re, L, setAppState]);
+  }, [viewingTaskId, hasTask, isParentTaskPresent, inProcessTask, setAppState]);
 }
 //@ chunk-18hwfzwa.js:1645075-1645079 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:1645075", () => {
+  init_react_production();
+});
 //@ chunk-18hwfzwa.js:1645079-1645091 placement
 var AGENTS_HINT_TIMEOUT_MS = 1e4;
 //@ chunk-18hwfzwa.js:1645091-1645224 placement
@@ -421,15 +461,15 @@ var AGENTS_HINT_TIMEOUT_MS = 1e4;
  * 一段时间后标记 agents 提示过期。
  */
 function useAgentsHintExpiry() {
-  let h = yt(onAttacherCapsChange, hasAttacherCaps);
-  let timeout = useTimeout(AGENTS_HINT_TIMEOUT_MS, h);
+  let expired = useSyncExternalStore(onAttacherCapsChange, hasAttacherCaps);
+  let timeout = useTimeout(AGENTS_HINT_TIMEOUT_MS, expired);
   let setAppState = useSetAppState();
-  P(() => {
-    setAppState((L) =>
-      (L.agentsHintExpired ?? false) === timeout
-        ? L
+  useEffect(() => {
+    setAppState((state) =>
+      (state.agentsHintExpired ?? false) === timeout
+        ? state
         : {
-            ...L,
+            ...state,
             agentsHintExpired: timeout,
           },
     );
@@ -440,16 +480,10 @@ function hasAttacherCaps() {
   return getAttacherCaps() != null;
 }
 //@ chunk-18hwfzwa.js:1645257-1645261 placement
-init_react_production();
-//@ chunk-xe7zq1p4.js:1971-2000 placement
-/**
- * 导出函数 `isTerminalInterested`：返回 Se(ie)。
- */
-function isTerminalInterested() {
-  return Se(statsContext);
-}
-//@ chunk-xe7zq1p4.js:2000-2004 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:1645257", () => {
+  init_react_production();
+});
 export {
   ComposerChrome,
   isExiting,

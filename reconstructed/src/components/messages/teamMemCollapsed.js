@@ -8,9 +8,14 @@
  * pieces: chunk-ah34pb7m.js (13)
  * attribution: placement 11, fingerprint 2
  */
-import { init_react_production, y, R, P } from "../../../vendor/react/cjs/react.production.js";
+import {
+  init_react_production,
+  useState,
+  useRef,
+  useEffect,
+} from "../../../vendor/react/cjs/react.production.js";
 import { useClock } from "../../ink/components/ClockContext.js";
-import { io } from "../../../vendor/@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
+import { memoizeAlias } from "../../../vendor/@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
 import { urlPatternToRegex } from "../../utils/stringUtils.js";
 import { SERVER_CLASSIFIER_LABEL } from "../../utils/permissions/serverClassifier/arbiter.js";
 import { MAX_WIRE_TOOL_NAME_BYTES } from "../../utils/taggedId.js";
@@ -26,7 +31,7 @@ import {
 import { uniq } from "../../utils/collections.js";
 import { isStandardVersion, parseModelId, hasReservedTag } from "../../utils/model/modelIds.js";
 import { stripAnsiPerLine } from "../../utils/stripAnsi.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import {
   jsxProd_default,
   jsxProd_default_2,
@@ -35,178 +40,199 @@ import {
 import { Blockquote } from "../Blockquote.js";
 import { Text } from "../../ink/components/Text.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-ah34pb7m.js:148396-148400 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-ah34pb7m.js:148396", () => {
+  init_react_production();
+});
 //@ chunk-ah34pb7m.js:148433-148437 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-ah34pb7m.js:148433", () => {
+  init_react_production();
+});
 //@ chunk-ah34pb7m.js:148437-148673 placement
 /**
  * 值变为 undefined 后，保持旧值至少 d 毫秒再清除。
  */
-function useLingeringValue(m, d) {
+function useLingeringValue(value, lingerMs) {
   let clock = useClock();
-  let [g, f] = y(m);
-  let h = R(m !== undefined ? Date.now() : 0);
-  P(() => {
-    if (m !== undefined) {
-      h.current = Date.now();
-      f(m);
+  let [shown, setShown] = useState(value);
+  let sinceRef = useRef(value !== undefined ? Date.now() : 0);
+  useEffect(() => {
+    if (value !== undefined) {
+      sinceRef.current = Date.now();
+      setShown(value);
       return;
     }
-    let M = d - (Date.now() - h.current);
-    if (M <= 0) {
-      f(undefined);
+    let timer = lingerMs - (Date.now() - sinceRef.current);
+    if (timer <= 0) {
+      setShown(undefined);
       return;
     }
-    return clock.setTimeout(() => f(undefined), M);
-  }, [m, d, clock]);
-  return g;
+    return clock.setTimeout(() => setShown(undefined), timer);
+  }, [value, lingerMs, clock]);
+  return shown;
 }
 //@ chunk-ah34pb7m.js:148673-148677 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-ah34pb7m.js:148673", () => {
+  init_react_production();
+});
 //@ chunk-ah34pb7m.js:148677-148875 placement
 /**
  * 节流值更新：距上次更新不足 d 毫秒时延后到期再更新。
  */
-function useThrottledValue(latestDisplayHint, d) {
+function useThrottledValue(latestDisplayHint, delayMs) {
   let clock = useClock();
-  let [g, f] = y(latestDisplayHint);
-  let h = R(0);
-  P(() => {
-    let M = Date.now() - h.current;
-    if (M >= d) {
-      h.current = Date.now();
-      f(latestDisplayHint);
+  let [throttledValue, setThrottledValue] = useState(latestDisplayHint);
+  let timerRef = useRef(0);
+  useEffect(() => {
+    let latestRef = Date.now() - timerRef.current;
+    if (latestRef >= delayMs) {
+      timerRef.current = Date.now();
+      setThrottledValue(latestDisplayHint);
       return;
     }
     return clock.setTimeout(() => {
-      h.current = Date.now();
-      f(latestDisplayHint);
-    }, d - M);
-  }, [latestDisplayHint, d, clock]);
-  return g;
+      timerRef.current = Date.now();
+      setThrottledValue(latestDisplayHint);
+    }, delayMs - latestRef);
+  }, [latestDisplayHint, delayMs, clock]);
+  return throttledValue;
 }
 //@ chunk-ah34pb7m.js:148875-150521 placement
 /**
  * 团队记忆折叠显示使用的私有区标记字符与重试/时长描述表。
  */
-var TEAM_MEM_MARKERS = "\uE000";
-var TEAM_MEM_MARKER_2 = "\uE001";
-var TEAM_MEM_MARKER_3 = "\uE002";
-var TEAM_MEM_RETRY_STATUS = 599;
-var RETRY_STATUS_CODES = [undefined, 429, 529, TEAM_MEM_RETRY_STATUS];
-var ELAPSED_WORD_BUCKETS = [
-  {
-    ms: undefined,
-    words: undefined,
-  },
-  {
-    ms: 1000,
-    words: "about 1 second",
-  },
-  {
-    ms: 7200000,
-    words: "about 2 hours",
-  },
-];
-var HANDOFF_FLAGS = [
-  {
-    handedOff: false,
-    skippable: false,
-  },
-  {
-    handedOff: true,
-    skippable: false,
-  },
-  {
-    handedOff: false,
-    skippable: true,
-  },
-];
-var SERVER_SKIP_REASONS = [
-  undefined,
-  "wall_clock_timeout",
-  "connection_timeout",
-  "connection_error",
-  "server_not_requested",
-  "server_input_rewritten",
-  "server_unsupported",
-  "server_thread_unsupported",
-  "server_stream_ended",
-  "server_unavailable_disabled",
-  "server_unavailable_error",
-  "server_unavailable_other",
-  "server_unrecognized_result",
-  "server_no_result",
-  "server_results_not_held",
-  "server_context_stale",
-  "server_call_skipped",
-  "server_call_unavailable_timeout",
-  "server_call_unavailable_error",
-  "server_call_unavailable_refused",
-  "server_call_unavailable_input_too_long",
-  "server_call_unavailable_truncated",
-  "server_call_unavailable_other",
-];
-var TEAM_MEM_EVENT_RE = io(() => {
-  let m = `(?<model>${urlPatternToRegex(SERVER_CLASSIFIER_LABEL)}|[a-z0-9.:@\\[\\]-]{1,64})`;
-  let d = `(?<tool>[\\w-]{1,${MAX_WIRE_TOOL_NAME_BYTES}})`;
-  let c =
-    "(?:about \\d{1,3} seconds?|about \\d{1,2} minutes|about \\d{1,2}(?:\\.\\d)? hours?|more than a day)";
-  let g = urlPatternToRegex(getReadonlyNoteForTool(false));
-  let f = `(?:${getClassifierUnavailableNotes().map(urlPatternToRegex).join("|")})`;
-  let h = new Set();
-  for (let M of SERVER_SKIP_REASONS) {
-    let flattened = RETRY_STATUS_CODES.flatMap((k) =>
-      describeClassifierFailureParts(k, M).map((b) =>
-        urlPatternToRegex(b).replace(`HTTP ${TEAM_MEM_RETRY_STATUS}`, "HTTP \\d{3}"),
-      ),
-    );
-    let x = `(?:${uniq(flattened).join("|")})`;
-    for (let { ms, words } of ELAPSED_WORD_BUCKETS)
-      for (let { handedOff, skippable } of HANDOFF_FLAGS) {
-        let L = urlPatternToRegex(
-          buildClassifierUnavailableMessage(
-            TEAM_MEM_MARKER_2,
-            TEAM_MEM_MARKERS,
-            undefined,
-            M,
-            ms,
-            handedOff,
-            undefined,
-            skippable,
-            false,
-            undefined,
-            TEAM_MEM_MARKER_3,
-          ),
-        );
-        h.add(
-          (words === undefined
-            ? L
-            : L.replaceAll(
-                words,
-                "(?:about \\d{1,3} seconds?|about \\d{1,2} minutes|about \\d{1,2}(?:\\.\\d)? hours?|more than a day)",
-              )
-          )
-            .replaceAll(g, f)
-            .replaceAll(TEAM_MEM_MARKER_3, x)
-            .replaceAll(TEAM_MEM_MARKERS, m)
-            .replace(TEAM_MEM_MARKER_2, d)
-            .replaceAll(TEAM_MEM_MARKER_2, "\\k<tool>"),
-        );
-      }
-  }
-  return [...h].map((M) => new RegExp(`^${M}$`));
+var TEAM_MEM_MARKERS; // deferred: uses urlPatternToRegex (../../utils/stringUtils.js) of its import cycle while loading; runs once the cycle is complete
+var TEAM_MEM_MARKER_2;
+var TEAM_MEM_MARKER_3;
+var TEAM_MEM_RETRY_STATUS;
+var RETRY_STATUS_CODES;
+var ELAPSED_WORD_BUCKETS;
+var HANDOFF_FLAGS;
+var SERVER_SKIP_REASONS;
+var TEAM_MEM_EVENT_RE;
+deferInit("chunk-ah34pb7m.js:148875", () => {
+  TEAM_MEM_MARKERS = "\uE000";
+  TEAM_MEM_MARKER_2 = "\uE001";
+  TEAM_MEM_MARKER_3 = "\uE002";
+  TEAM_MEM_RETRY_STATUS = 599;
+  RETRY_STATUS_CODES = [undefined, 429, 529, TEAM_MEM_RETRY_STATUS];
+  ELAPSED_WORD_BUCKETS = [
+    {
+      ms: undefined,
+      words: undefined,
+    },
+    {
+      ms: 1000,
+      words: "about 1 second",
+    },
+    {
+      ms: 7200000,
+      words: "about 2 hours",
+    },
+  ];
+  HANDOFF_FLAGS = [
+    {
+      handedOff: false,
+      skippable: false,
+    },
+    {
+      handedOff: true,
+      skippable: false,
+    },
+    {
+      handedOff: false,
+      skippable: true,
+    },
+  ];
+  SERVER_SKIP_REASONS = [
+    undefined,
+    "wall_clock_timeout",
+    "connection_timeout",
+    "connection_error",
+    "server_not_requested",
+    "server_input_rewritten",
+    "server_unsupported",
+    "server_thread_unsupported",
+    "server_stream_ended",
+    "server_unavailable_disabled",
+    "server_unavailable_error",
+    "server_unavailable_other",
+    "server_unrecognized_result",
+    "server_no_result",
+    "server_results_not_held",
+    "server_context_stale",
+    "server_call_skipped",
+    "server_call_unavailable_timeout",
+    "server_call_unavailable_error",
+    "server_call_unavailable_refused",
+    "server_call_unavailable_input_too_long",
+    "server_call_unavailable_truncated",
+    "server_call_unavailable_other",
+  ];
+  TEAM_MEM_EVENT_RE = memoizeAlias(() => {
+    let modelPattern = `(?<model>${urlPatternToRegex(SERVER_CLASSIFIER_LABEL)}|[a-z0-9.:@\\[\\]-]{1,64})`;
+    let toolPattern = `(?<tool>[\\w-]{1,${MAX_WIRE_TOOL_NAME_BYTES}})`;
+    let timePattern =
+      "(?:about \\d{1,3} seconds?|about \\d{1,2} minutes|about \\d{1,2}(?:\\.\\d)? hours?|more than a day)";
+    let reasonPattern = urlPatternToRegex(getReadonlyNoteForTool(false));
+    let eventPattern = `(?:${getClassifierUnavailableNotes().map(urlPatternToRegex).join("|")})`;
+    let namePattern = new Set();
+    for (let slugPattern of SERVER_SKIP_REASONS) {
+      let flattened = RETRY_STATUS_CODES.flatMap((actorPattern) =>
+        describeClassifierFailureParts(actorPattern, slugPattern).map((messagePattern) =>
+          urlPatternToRegex(messagePattern).replace(`HTTP ${TEAM_MEM_RETRY_STATUS}`, "HTTP \\d{3}"),
+        ),
+      );
+      let regexSource = `(?:${uniq(flattened).join("|")})`;
+      for (let { ms, words } of ELAPSED_WORD_BUCKETS)
+        for (let { handedOff, skippable } of HANDOFF_FLAGS) {
+          let matcher = urlPatternToRegex(
+            buildClassifierUnavailableMessage(
+              TEAM_MEM_MARKER_2,
+              TEAM_MEM_MARKERS,
+              undefined,
+              slugPattern,
+              ms,
+              handedOff,
+              undefined,
+              skippable,
+              false,
+              undefined,
+              TEAM_MEM_MARKER_3,
+            ),
+          );
+          namePattern.add(
+            (words === undefined
+              ? matcher
+              : matcher.replaceAll(
+                  words,
+                  "(?:about \\d{1,3} seconds?|about \\d{1,2} minutes|about \\d{1,2}(?:\\.\\d)? hours?|more than a day)",
+                )
+            )
+              .replaceAll(reasonPattern, eventPattern)
+              .replaceAll(TEAM_MEM_MARKER_3, regexSource)
+              .replaceAll(TEAM_MEM_MARKERS, modelPattern)
+              .replace(TEAM_MEM_MARKER_2, toolPattern)
+              .replaceAll(TEAM_MEM_MARKER_2, "\\k<tool>"),
+          );
+        }
+    }
+    return [...namePattern].map((pattern) => new RegExp(`^${pattern}$`));
+  });
 });
 //@ chunk-ah34pb7m.js:150521-150653 placement
 /**
  * 判断拒绝文本是否属于"模型不可用"类（匹配模式里的 model 组是指定模型或已知不可用模型）。
  */
-function isModelUnavailableDenial(m) {
-  let d = stripDenialMessageSuffix(m);
-  return TEAM_MEM_EVENT_RE().some((c) => {
-    let model = c.exec(d)?.groups?.model;
+function isModelUnavailableDenial(message) {
+  let stripped = stripDenialMessageSuffix(message);
+  return TEAM_MEM_EVENT_RE().some((regex) => {
+    let model = regex.exec(stripped)?.groups?.model;
     return (
       model === SERVER_CLASSIFIER_LABEL ||
       (model !== undefined && (isStandardVersion(parseModelId(model)) || hasReservedTag(model)))
@@ -229,12 +255,12 @@ function isAutoModeBlockedResult(content, { toolDenialKind, remoteToolDenialKind
 /**
  * 远程拒绝种类为 automode-unavailable 且文本为模型不可用类时为真。
  */
-function isAutoModeUnavailableResult(content, { toolDenialKind, remoteToolDenialKind }) {
+function isAutoModeUnavailableResult(message, { toolDenialKind, remoteToolDenialKind }) {
   return (
     toolDenialKind === undefined &&
     remoteToolDenialKind === "automode-unavailable" &&
-    typeof content === "string" &&
-    isModelUnavailableDenial(content)
+    typeof message === "string" &&
+    isModelUnavailableDenial(message)
   );
 }
 //@ chunk-ah34pb7m.js:150964-151107 placement
@@ -246,7 +272,7 @@ function hasAutoModeBlockedToolResult(message) {
     message.type === "user" &&
     Array.isArray(message.message.content) &&
     message.message.content.some(
-      (d) => d.type === "tool_result" && isAutoModeBlockedResult(d.content, message),
+      (block) => block.type === "tool_result" && isAutoModeBlockedResult(block.content, message),
     )
   );
 }
@@ -255,11 +281,11 @@ function hasAutoModeBlockedToolResult(message) {
  * 以引用块显示拒绝标签与原因。
  */
 function DenialReasonQuote(props) {
-  let g = w(3);
+  let $ = useMemoCache(3);
   let { label, reason } = props;
-  let f;
-  if (g[0] !== label || g[1] !== reason) {
-    f = jsxProd_default(Blockquote, {
+  let quoteElement;
+  if ($[0] !== label || $[1] !== reason) {
+    quoteElement = jsxProd_default(Blockquote, {
       multiline: true,
       children: jsxProd_default_2(Text, {
         dimColor: true,
@@ -267,11 +293,11 @@ function DenialReasonQuote(props) {
         children: [label, reason],
       }),
     });
-    g[0] = label;
-    g[1] = reason;
-    g[2] = f;
-  } else f = g[2];
-  return f;
+    $[0] = label;
+    $[1] = reason;
+    $[2] = quoteElement;
+  } else quoteElement = $[2];
+  return quoteElement;
 }
 //@ chunk-ah34pb7m.js:151298-151411 fingerprint = checkHasTeamMemOps (1)
 function checkHasTeamMemOps(message) {
@@ -283,7 +309,7 @@ function checkHasTeamMemOps(message) {
 }
 //@ chunk-ah34pb7m.js:151411-152699 fingerprint = TeamMemCountParts (0.95)
 function TeamMemCountParts(props) {
-  let $ = w(15);
+  let $ = useMemoCache(15);
   let { message, isActiveGroup, hasPrecedingParts } = props;
   let tmReadCount = message.teamMemoryReadCount ?? 0;
   let tmSearchCount = message.teamMemorySearchCount ?? 0;

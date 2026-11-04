@@ -24,7 +24,7 @@ import { identityAgentId2 } from "../../utils/agentId.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../analytics/growthbook.js";
 import { ToolHostRegistry } from "../../remote/tools/toolHostRegistry.js";
 import { outcomeQueryEnvelope, negotiateProtocol } from "../../remote/tools/protocolSchemas.js";
-import { u, string, E } from "../../../vendor/zod/v4/classic/schemas.js";
+import { objectSchema, stringSchema, numberSchema } from "../../../vendor/zod/v4/classic/schemas.js";
 import {
   TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
   errorMessage,
@@ -52,53 +52,60 @@ import {
   PERSISTED_OUTPUT_TAG,
 } from "../../utils/toolResultStorage.js";
 import { RESULT_TOKEN_BUDGET, EVENT_TOOL_SITE_NAMES } from "../../plugins/functionHooks/sites/siteRules.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-s61vbvea.js:601196-601288 placement
 /**
  * 远程设备 MCP 服务器名，过滤工具表时按它识别来自设备的工具。
  */
-var REMOTE_DEVICES_SERVER_NAME = REMOTE_DEVICES;
-var DEVICE_PASSTHROUGH_TOOL_NAMES = new Set([
-  BASH_TOOL_NAME,
-  POWERSHELL_TOOL_NAME,
-  FILE_READ_TOOL_NAME,
-  FILE_WRITE_TOOL_NAME,
-  FILE_EDIT_TOOL_NAME,
-  GLOB_TOOL_NAME,
-  GREP_TOOL_NAME,
-]);
-var DEVICE_BASH = "device_bash";
-var DEVICE_SYNC_FILES_TOOLS = new Set(["sync_files"]);
+var REMOTE_DEVICES_SERVER_NAME; // deferred: uses REMOTE_DEVICES (../mcp/firstPartyServerIds.js) of its import cycle while loading; runs once the cycle is complete
+var DEVICE_PASSTHROUGH_TOOL_NAMES;
+var DEVICE_BASH;
+var DEVICE_SYNC_FILES_TOOLS;
+deferInit("chunk-s61vbvea.js:601196", () => {
+  REMOTE_DEVICES_SERVER_NAME = REMOTE_DEVICES;
+  DEVICE_PASSTHROUGH_TOOL_NAMES = new Set([
+    BASH_TOOL_NAME,
+    POWERSHELL_TOOL_NAME,
+    FILE_READ_TOOL_NAME,
+    FILE_WRITE_TOOL_NAME,
+    FILE_EDIT_TOOL_NAME,
+    GLOB_TOOL_NAME,
+    GREP_TOOL_NAME,
+  ]);
+  DEVICE_BASH = "device_bash";
+  DEVICE_SYNC_FILES_TOOLS = new Set(["sync_files"]);
+});
 //@ chunk-s61vbvea.js:601288-601454 placement = getToolNameForPermissionCheck (1)
 /**
  * （归属疑误：远程设备）remote-devices 服务器工具列表过滤。
  */
 function getToolNameForPermissionCheck_2(tool) {
-  return tool.filter((n) => {
-    if (n.mcpInfo?.serverName !== REMOTE_DEVICES_SERVER_NAME) return true;
-    let toolName = n.mcpInfo.toolName;
-    let s = aliasOfToolName(toolName);
+  return tool.filter((entry) => {
+    if (entry.mcpInfo?.serverName !== REMOTE_DEVICES_SERVER_NAME) return true;
+    let toolName = entry.mcpInfo.toolName;
+    let alias = aliasOfToolName(toolName);
     return (
       !DEVICE_PASSTHROUGH_TOOL_NAMES.has(toolName) &&
       toolName !== TASKSTOP &&
-      (s === undefined || !DEVICE_PASSTHROUGH_TOOL_NAMES.has(s))
+      (alias === undefined || !DEVICE_PASSTHROUGH_TOOL_NAMES.has(alias))
     );
   });
 }
 //@ chunk-s61vbvea.js:601454-601549 placement = getToolNameForPermissionCheck (1)
 function getToolNameForPermissionCheck_3(tool) {
   return tool.filter(
-    (n) =>
-      n.mcpInfo?.serverName !== REMOTE_DEVICES_SERVER_NAME ||
-      !DEVICE_SYNC_FILES_TOOLS.has(n.mcpInfo.toolName),
+    (entry) =>
+      entry.mcpInfo?.serverName !== REMOTE_DEVICES_SERVER_NAME ||
+      !DEVICE_SYNC_FILES_TOOLS.has(entry.mcpInfo.toolName),
   );
 }
 //@ chunk-s61vbvea.js:601549-601636 placement
 /**
  * 取当前代理 id：优先自身 agentId，否则用队友上下文里的 id。
  */
-function currentAgentId(e) {
-  if (e.agentId) return e.agentId;
+function currentAgentId(context) {
+  if (context.agentId) return context.agentId;
   let teammateContext = getTeammateContext();
   return teammateContext ? identityAgentId2(teammateContext.agentId) : undefined;
 }
@@ -106,16 +113,16 @@ function currentAgentId(e) {
 /**
  * 归属校验：给定 agentId 为 undefined 视为匹配，否则要求相等。
  */
-function agentIdMatches(e, agentId) {
-  if (e === undefined) return true;
-  return e === agentId;
+function agentIdMatches(candidateAgentId, agentId) {
+  if (candidateAgentId === undefined) return true;
+  return candidateAgentId === agentId;
 }
 //@ chunk-s61vbvea.js:601690-601731 placement
 /**
  * 会话显示名，undefined 时显示 "main session"。
  */
-function sessionLabel(e) {
-  return e ?? "main session";
+function sessionLabel(agentId) {
+  return agentId ?? "main session";
 }
 //@ chunk-s61vbvea.js:601731-601806 placement
 /**
@@ -141,8 +148,8 @@ var AGENT_ID_REGEX = /^[\w-]{1,64}$/;
 /**
  * 机器是否声明支持 background_shells 且后台 shell 开关打开。
  */
-function supportsBackgroundShells(e) {
-  return e.description?.capabilities?.includes("background_shells") === true && isViolinVarnishOn();
+function supportsBackgroundShells(server) {
+  return server.description?.capabilities?.includes("background_shells") === true && isViolinVarnishOn();
 }
 //@ chunk-s61vbvea.js:601962-602009 placement
 /**
@@ -157,23 +164,23 @@ function isBackgroundServerTool(name) {
  */
 class RemoteBackgroundLedger {
   #e = new Map();
-  started(e, n) {
-    this.#e.set(e, this.#e.get(e) ?? n);
-    let filtered = [...this.#e].filter(([, s]) => s.hostName === n.hostName);
-    if (filtered.length > MAX_BACKGROUND_LEDGER_PER_HOST) this.#e.delete(filtered[0]?.[0] ?? e);
+  started(taskId, record) {
+    this.#e.set(taskId, this.#e.get(taskId) ?? record);
+    let filtered = [...this.#e].filter(([, entry]) => entry.hostName === record.hostName);
+    if (filtered.length > MAX_BACKGROUND_LEDGER_PER_HOST) this.#e.delete(filtered[0]?.[0] ?? taskId);
   }
-  find(e, n) {
-    let r = this.#e.get(e);
-    return r && agentIdMatches(n, r.agentId) ? r : undefined;
+  find(taskId, agentId) {
+    let record = this.#e.get(taskId);
+    return record && agentIdMatches(agentId, record.agentId) ? record : undefined;
   }
 }
 //@ chunk-s61vbvea.js:602247-603648 placement
-async function describeRemoteBackgroundResult(taskId, n, toolState, signal) {
-  let found = toolState.get(RemoteBackgroundLedger).find(taskId, n);
+async function describeRemoteBackgroundResult(taskId, agentId, toolState, signal) {
+  let found = toolState.get(RemoteBackgroundLedger).find(taskId, agentId);
   if (found === undefined) return;
   let { hostName, callId } = found;
   let resolved = toolState.get(ToolHostRegistry).resolve(hostName);
-  let R =
+  let reply =
     resolved.kind === "remote"
       ? await resolved.host.transport
           .call(BASH_TOOL_NAME, {}, outcomeQueryEnvelope(callId), {
@@ -185,15 +192,15 @@ async function describeRemoteBackgroundResult(taskId, n, toolState, signal) {
             return;
           })
       : undefined;
-  let envelope = R?.kind === "result" ? R.envelope : undefined;
+  let envelope = reply?.kind === "result" ? reply.envelope : undefined;
   let background =
     envelope?.outcome === "completed"
-      ? u({
-          background: u({
-            state: string(),
-            exit_code: E().optional(),
-            ran_ms: E().nonnegative().max(MAX_BACKGROUND_RUNTIME_MS),
-            ended_ms_ago: E().nonnegative().max(MAX_BACKGROUND_RUNTIME_MS).optional(),
+      ? objectSchema({
+          background: objectSchema({
+            state: stringSchema(),
+            exit_code: numberSchema().optional(),
+            ran_ms: numberSchema().nonnegative().max(MAX_BACKGROUND_RUNTIME_MS),
+            ended_ms_ago: numberSchema().nonnegative().max(MAX_BACKGROUND_RUNTIME_MS).optional(),
           }),
         }).safeParse(envelope.output).data?.background
       : undefined;
@@ -203,50 +210,55 @@ async function describeRemoteBackgroundResult(taskId, n, toolState, signal) {
       "no status for a background command on an attached machine",
     );
   let { content } = envelope;
-  let G =
-    typeof content === "string" ? content : content.map((Z) => (Z.type === "text" ? Z.text : "")).join("");
-  let L = `[from ${hostName}, about background command ${taskId}]
-${truncateToLength(G, MAX_BACKGROUND_OUTPUT_CHARS)}`;
-  let q = Date.now() - (background.ended_ms_ago ?? 0);
-  let Q = {
+  let outputText =
+    typeof content === "string"
+      ? content
+      : content.map((block) => (block.type === "text" ? block.text : "")).join("");
+  let text = `[from ${hostName}, about background command ${taskId}]
+${truncateToLength(outputText, MAX_BACKGROUND_OUTPUT_CHARS)}`;
+  let endedAtMs = Date.now() - (background.ended_ms_ago ?? 0);
+  let base = {
     taskId,
-    createdAt: new Date(q - background.ran_ms).toISOString(),
-    lastUpdatedAt: new Date(q).toISOString(),
+    createdAt: new Date(endedAtMs - background.ran_ms).toISOString(),
+    lastUpdatedAt: new Date(endedAtMs).toISOString(),
   };
   return background.state === "exited"
     ? {
-        ...Q,
+        ...base,
         status: "completed",
         statusMessage: `Exited on ${hostName}.`,
         result: {
           content: [
             {
               type: "text",
-              text: L,
+              text,
             },
           ],
           isError: background.exit_code !== 0,
         },
       }
     : {
-        ...Q,
+        ...base,
         status: background.state === "running" ? "working" : "cancelled",
-        statusMessage: L,
+        statusMessage: text,
       };
 }
 //@ chunk-s61vbvea.js:603762-603803 placement
 /**
  * 每会话保存的远程工具状态槽。
  */
-var toolStateSlot = new SessionRootSlot(() => ({
-  toolState: new InstanceRegistry(),
-}));
+var toolStateSlot; // deferred: uses SessionRootSlot (../../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-s61vbvea.js:603762", () => {
+  toolStateSlot = new SessionRootSlot(() => ({
+    toolState: new InstanceRegistry(),
+  }));
+});
 //@ chunk-s61vbvea.js:603803-603843 placement
 /**
  * 写回远程工具状态。
  */
-function setToolState(e, toolState) {
-  toolStateSlot.of(e).toolState = toolState;
+function setToolState(sessionRoot, toolState) {
+  toolStateSlot.of(sessionRoot).toolState = toolState;
 }
 //@ chunk-s61vbvea.js:603843-603854 placement
 var MAX_TRACKED_TOOL_NAMES = 256;
@@ -254,9 +266,12 @@ var MAX_TRACKED_TOOL_NAMES = 256;
 /**
  * 判断工具公告是否为空（无工具、透传、管道与忽略项）。
  */
-function isEmptyAnnouncement(e) {
+function isEmptyAnnouncement(announcement) {
   return (
-    e.tools.length === 0 && e.passthrough.length === 0 && e.plumbing.length === 0 && e.ignored.length === 0
+    announcement.tools.length === 0 &&
+    announcement.passthrough.length === 0 &&
+    announcement.plumbing.length === 0 &&
+    announcement.ignored.length === 0
   );
 }
 //@ chunk-s61vbvea.js:603967-609673 placement
@@ -278,154 +293,160 @@ class RemoteBackgroundCommands {
   #g = createSignal();
   #h = createSignal();
   #d;
-  constructor(e = Date.now) {
-    this.#d = e;
+  constructor(clock = Date.now) {
+    this.#d = clock;
   }
-  accept(e, { instanceId, now, transport }) {
-    let h = e.host.name;
-    let mapped = e.tools.filter((tool) => !isBackgroundServerTool(tool.name)).map((tool) => tool.name);
-    let ignoredTools = [...e.ignored, ...mapped];
-    let mapped_2 = [...this.#e.values()].filter((G) => G.instanceId === instanceId).map((G) => G.name);
-    if (isEmptyAnnouncement(e)) {
-      this.#e = omitKeys(this.#e, mapped_2);
-      let G = this.#e.get(h);
-      let L = G !== undefined && G.instanceId !== instanceId;
-      let included = mapped_2.includes(h);
-      let leftState = parseLeftState(e.host.capabilities);
-      for (let Z of L || included ? mapped_2 : [...mapped_2, h]) {
-        if (!this.#o.has(Z) && this.#o.size < MAX_TRACKED_TOOL_NAMES)
-          this.#o.set(Z, Z !== h || included ? now : undefined);
-        let ee = this.#c.get(Z);
-        if (this.#o.has(Z) && (ee === undefined || ee === instanceId))
-          if (leftState === undefined) this.#a.delete(Z);
-          else this.#a.set(Z, leftState);
-        this.#m(Z);
+  accept(announcement, { instanceId, now, transport }) {
+    let hostName = announcement.host.name;
+    let mapped = announcement.tools
+      .filter((tool) => !isBackgroundServerTool(tool.name))
+      .map((tool) => tool.name);
+    let ignoredTools = [...announcement.ignored, ...mapped];
+    let keys = [...this.#e.values()]
+      .filter((host) => host.instanceId === instanceId)
+      .map((host) => host.name);
+    if (isEmptyAnnouncement(announcement)) {
+      this.#e = omitKeys(this.#e, keys);
+      let existing = this.#e.get(hostName);
+      let heldByOtherInstance = existing !== undefined && existing.instanceId !== instanceId;
+      let included = keys.includes(hostName);
+      let leftState = parseLeftState(announcement.host.capabilities);
+      for (let name of heldByOtherInstance || included ? keys : [...keys, hostName]) {
+        if (!this.#o.has(name) && this.#o.size < MAX_TRACKED_TOOL_NAMES)
+          this.#o.set(name, name !== hostName || included ? now : undefined);
+        let ownerInstance = this.#c.get(name);
+        if (this.#o.has(name) && (ownerInstance === undefined || ownerInstance === instanceId))
+          if (leftState === undefined) this.#a.delete(name);
+          else this.#a.set(name, leftState);
+        this.#m(name);
       }
       this.#t++;
       this.#y();
       return {
         status: "withdrawn",
         ignoredTools,
-        removed: mapped_2,
-        heldByAnother: L,
+        removed: keys,
+        heldByAnother: heldByOtherInstance,
       };
     }
-    let R = this.#e.get(h);
-    let filtered = e.tools.filter((tool) => isBackgroundServerTool(tool.name));
-    let P = negotiateProtocol(
-      (filtered[0] ?? e.tools[0])?.protocol_versions ?? [REMOTE_TOOL_PROTOCOL_VERSION],
+    let previous = this.#e.get(hostName);
+    let filtered = announcement.tools.filter((tool) => isBackgroundServerTool(tool.name));
+    let protocol = negotiateProtocol(
+      (filtered[0] ?? announcement.tools[0])?.protocol_versions ?? [REMOTE_TOOL_PROTOCOL_VERSION],
     );
-    let j = {
-      name: h,
+    let entry = {
+      name: hostName,
       instanceId,
-      description: e.host,
-      servedTools: new Set(filtered.map((G) => G.name)),
-      plumbing: e.plumbing,
-      passthrough: new Map(e.passthrough.map((G) => [G.name, G])),
-      protocol: P,
+      description: announcement.host,
+      servedTools: new Set(filtered.map((tool) => tool.name)),
+      plumbing: announcement.plumbing,
+      passthrough: new Map(announcement.passthrough.map((tool) => [tool.name, tool])),
+      protocol,
       status: "online",
       awayReason: undefined,
       asleepSince: undefined,
-      takenOverAt: R === undefined ? undefined : R.instanceId !== instanceId ? now : R.takenOverAt,
+      takenOverAt:
+        previous === undefined ? undefined : previous.instanceId !== instanceId ? now : previous.takenOverAt,
       lastHeardAt: now,
       lastStillHereAt: undefined,
       transport,
     };
-    this.#e = new Map([...omitKeys(this.#e, mapped_2), [h, j]]);
-    this.#o.delete(h);
-    this.#a.delete(h);
-    if (this.#c.has(h) || this.#c.size < MAX_TRACKED_TOOL_NAMES) this.#c.set(h, instanceId);
-    for (let G of mapped_2) if (G !== h) this.#m(G);
+    this.#e = new Map([...omitKeys(this.#e, keys), [hostName, entry]]);
+    this.#o.delete(hostName);
+    this.#a.delete(hostName);
+    if (this.#c.has(hostName) || this.#c.size < MAX_TRACKED_TOOL_NAMES) this.#c.set(hostName, instanceId);
+    for (let name of keys) if (name !== hostName) this.#m(name);
     this.#t++;
-    this.#S(h);
+    this.#S(hostName);
     this.#y();
     return {
       status: "announced",
-      served: j.servedTools.size,
-      passthroughAdopted: j.passthrough.size,
-      protocolVersion: P.kind === "compatible" ? P.version : null,
+      served: entry.servedTools.size,
+      passthroughAdopted: entry.passthrough.size,
+      protocolVersion: protocol.kind === "compatible" ? protocol.version : null,
       ignoredTools,
-      displaced: R !== undefined && R.instanceId !== instanceId ? R.instanceId : undefined,
+      displaced:
+        previous !== undefined && previous.instanceId !== instanceId ? previous.instanceId : undefined,
     };
   }
   hasAnnouncedThisLife() {
     return this.#i;
   }
-  withdrawnThisLife(e) {
-    return this.#o.has(e);
+  withdrawnThisLife(hostName) {
+    return this.#o.has(hostName);
   }
-  withdrawnAt(e) {
-    return this.#o.get(e);
+  withdrawnAt(hostName) {
+    return this.#o.get(hostName);
   }
-  withdrawnFor(e) {
-    return this.#a.get(e);
+  withdrawnFor(hostName) {
+    return this.#a.get(hostName);
   }
-  onNextAnnounce(e) {
-    this.#n.add(e);
+  onNextAnnounce(listener) {
+    this.#n.add(listener);
     return () => {
-      this.#n.delete(e);
+      this.#n.delete(listener);
     };
   }
   announceWaitExpired() {
     return this.#l;
   }
-  markAnnounceWaitExpired(e) {
-    this.#l = e;
+  markAnnounceWaitExpired(reason) {
+    this.#l = reason;
   }
   #y() {
     this.#i = true;
-    let e = [...this.#n];
+    let listeners = [...this.#n];
     this.#n.clear();
-    for (let n of e)
+    for (let listener of listeners)
       try {
-        n();
+        listener();
       } catch {}
   }
-  heard(e, lastHeardAt, r) {
-    let s = this.#p(e, (h) => ({
-      ...h,
+  heard(instanceId, lastHeardAt, epoch) {
+    let hostName = this.#p(instanceId, (entry) => ({
+      ...entry,
       status: "online",
       awayReason: undefined,
       asleepSince: undefined,
       lastHeardAt,
       lastStillHereAt: undefined,
       description:
-        r !== undefined && r !== h.description.epoch
+        epoch !== undefined && epoch !== entry.description.epoch
           ? {
-              ...h.description,
-              epoch: r,
+              ...entry.description,
+              epoch,
             }
-          : h.description,
+          : entry.description,
     }));
-    if (s !== undefined) this.#S(s);
+    if (hostName !== undefined) this.#S(hostName);
   }
-  noteStillHere(e, n) {
-    let found = this.entries().find((s) => s.instanceId === e);
+  noteStillHere(instanceId, now) {
+    let found = this.entries().find((entry) => entry.instanceId === instanceId);
     if (found === undefined || found.awayReason === "asleep") return false;
-    this.#p(e, (s) => ({
-      ...s,
-      lastStillHereAt: Math.max(s.lastStillHereAt ?? n, n),
+    this.#p(instanceId, (entry) => ({
+      ...entry,
+      lastStillHereAt: Math.max(entry.lastStillHereAt ?? now, now),
     }));
     return true;
   }
-  markAway(e, n) {
-    let r = this.#p(e, (y) => ({
-      ...y,
+  markAway(instanceId, reason) {
+    let hostName = this.#p(instanceId, (entry) => ({
+      ...entry,
       status: "offline",
-      awayReason: y.awayReason === "asleep" ? "asleep" : n,
+      awayReason: entry.awayReason === "asleep" ? "asleep" : reason,
     }));
-    if (r === undefined || this.#r.has(r)) return;
-    let toldModel = this.#s.get(r)?.toldModel ?? false;
-    this.#s.delete(r);
-    let h = this.#d();
-    this.#r.set(r, {
-      awaySince: h,
-      lastHeardAt: this.#e.get(r)?.lastHeardAt ?? h,
+    if (hostName === undefined || this.#r.has(hostName)) return;
+    let toldModel = this.#s.get(hostName)?.toldModel ?? false;
+    this.#s.delete(hostName);
+    let now = this.#d();
+    this.#r.set(hostName, {
+      awaySince: now,
+      lastHeardAt: this.#e.get(hostName)?.lastHeardAt ?? now,
       toldModel,
     });
     this.#f(() =>
       this.#u.emit({
-        name: r,
+        name: hostName,
         change: "away",
         toldModel,
       }),
@@ -434,64 +455,64 @@ class RemoteBackgroundCommands {
   now() {
     return this.#d();
   }
-  awayEpisode(e) {
-    return this.#r.get(e);
+  awayEpisode(hostName) {
+    return this.#r.get(hostName);
   }
-  noteModelToldAway(e) {
-    let n = this.#r.get(e);
-    if (n === undefined || n.toldModel) return;
-    this.#r.set(e, {
-      ...n,
+  noteModelToldAway(hostName) {
+    let episode = this.#r.get(hostName);
+    if (episode === undefined || episode.toldModel) return;
+    this.#r.set(hostName, {
+      ...episode,
       toldModel: true,
     });
-    this.#f(() => this.#g.emit(e));
+    this.#f(() => this.#g.emit(hostName));
   }
-  backNotePending(e) {
-    return this.#s.get(e)?.toldModel === true;
+  backNotePending(hostName) {
+    return this.#s.get(hostName)?.toldModel === true;
   }
-  takeBackNote(e) {
-    let n = this.#s.get(e);
-    this.#s.delete(e);
-    return n;
+  takeBackNote(hostName) {
+    let note = this.#s.get(hostName);
+    this.#s.delete(hostName);
+    return note;
   }
-  onHostStatusChange(e) {
-    return this.#u.subscribe(e);
+  onHostStatusChange(listener) {
+    return this.#u.subscribe(listener);
   }
-  onModelToldAway(e) {
-    return this.#g.subscribe(e);
+  onModelToldAway(listener) {
+    return this.#g.subscribe(listener);
   }
-  onAwayEpisodeDropped(e) {
-    return this.#h.subscribe(e);
+  onAwayEpisodeDropped(listener) {
+    return this.#h.subscribe(listener);
   }
-  #m(e) {
-    this.#s.delete(e);
-    if (!this.#r.delete(e)) return;
-    this.#f(() => this.#h.emit(e));
+  #m(hostName) {
+    this.#s.delete(hostName);
+    if (!this.#r.delete(hostName)) return;
+    this.#f(() => this.#h.emit(hostName));
   }
-  #S(e) {
-    let n = this.#r.get(e);
-    if (n === undefined) return;
-    this.#r.delete(e);
-    let r = this.#d();
-    let max = Math.max(0, r - n.awaySince);
-    let h = {
-      backAt: r,
+  #S(hostName) {
+    let episode = this.#r.get(hostName);
+    if (episode === undefined) return;
+    this.#r.delete(hostName);
+    let now = this.#d();
+    let max = Math.max(0, now - episode.awaySince);
+    let note = {
+      backAt: now,
       awayMs: max,
-      sinceHeardMs: Math.max(max, r - n.lastHeardAt),
-      toldModel: n.toldModel,
+      sinceHeardMs: Math.max(max, now - episode.lastHeardAt),
+      toldModel: episode.toldModel,
     };
-    this.#s.set(e, h);
+    this.#s.set(hostName, note);
     this.#f(() =>
       this.#u.emit({
-        name: e,
+        name: hostName,
         change: "back",
-        ...h,
+        ...note,
       }),
     );
   }
-  #f(e) {
+  #f(listener) {
     try {
-      e();
+      listener();
     } catch (error) {
       logForDebugging(`[remote-tools] an away-episode listener threw: ${errorMessage(error)}`, {
         level: "error",
@@ -510,99 +531,105 @@ class RemoteBackgroundCommands {
   entries() {
     return [...this.#e.values()];
   }
-  markAsleep(e, asleepSince) {
-    this.#p(e, (r) => ({
-      ...r,
+  markAsleep(instanceId, asleepSince) {
+    this.#p(instanceId, (entry) => ({
+      ...entry,
       awayReason: "asleep",
       asleepSince,
       lastStillHereAt: undefined,
     }));
-    this.markAway(e, "probe_missed");
+    this.markAway(instanceId, "probe_missed");
   }
-  handleFor(e) {
-    let n = this.#e.get(e);
-    if (n === undefined) return;
-    let { instanceId } = n;
+  handleFor(hostName) {
+    let entry = this.#e.get(hostName);
+    if (entry === undefined) return;
+    let { instanceId } = entry;
     return {
       instanceId,
-      hostName: e,
+      hostName,
       live: () => {
-        let s = this.#e.get(e);
-        return s !== undefined && s.instanceId === instanceId
+        let current = this.#e.get(hostName);
+        return current !== undefined && current.instanceId === instanceId
           ? {
-              status: s.status,
-              lastHeardAt: s.lastHeardAt,
-              ...(s.asleepSince !== undefined && {
-                asleepSince: s.asleepSince,
+              status: current.status,
+              lastHeardAt: current.lastHeardAt,
+              ...(current.asleepSince !== undefined && {
+                asleepSince: current.asleepSince,
               }),
-              ...(s.lastStillHereAt !== undefined && {
-                lastStillHereAt: s.lastStillHereAt,
+              ...(current.lastStillHereAt !== undefined && {
+                lastStillHereAt: current.lastStillHereAt,
               }),
             }
           : undefined;
       },
       epoch: () => {
-        let s = this.#e.get(e);
-        return s !== undefined && s.instanceId === instanceId ? s.description.epoch : undefined;
+        let current = this.#e.get(hostName);
+        return current !== undefined && current.instanceId === instanceId
+          ? current.description.epoch
+          : undefined;
       },
-      heard: (s, h) => {
-        let asleepSince = this.entries().find((S) => S.instanceId === instanceId)?.asleepSince;
-        if (asleepSince === undefined || s < asleepSince || s - asleepSince >= SLEEPING_GRACE_MS)
-          this.heard(instanceId, s, h);
+      heard: (heardAt, epoch) => {
+        let asleepSince = this.entries().find((entry) => entry.instanceId === instanceId)?.asleepSince;
+        if (asleepSince === undefined || heardAt < asleepSince || heardAt - asleepSince >= SLEEPING_GRACE_MS)
+          this.heard(instanceId, heardAt, epoch);
       },
-      markAway: (s) => this.markAway(instanceId, s),
+      markAway: (reason) => this.markAway(instanceId, reason),
     };
   }
   hostsForTable() {
-    return this.entries().map((e) => ({
+    return this.entries().map((entry) => ({
       kind: "remote",
       source: "session",
-      name: e.name,
-      status: e.status,
+      name: entry.name,
+      status: entry.status,
       enforcement: "self",
-      description: e.description,
-      servedTools: e.servedTools,
-      ...(e.plumbing.some((n) => DEVICE_SYNC_FILES_TOOLS.has(n)) && {
-        plumbingTools: new Set(e.plumbing.filter((n) => DEVICE_SYNC_FILES_TOOLS.has(n))),
+      description: entry.description,
+      servedTools: entry.servedTools,
+      ...(entry.plumbing.some((tool) => DEVICE_SYNC_FILES_TOOLS.has(tool)) && {
+        plumbingTools: new Set(entry.plumbing.filter((tool) => DEVICE_SYNC_FILES_TOOLS.has(tool))),
       }),
-      ...(e.passthrough.size > 0 && {
+      ...(entry.passthrough.size > 0 && {
         passthroughTools: new Map(
-          [...e.passthrough.values()].map((n) => [
-            n.name,
+          [...entry.passthrough.values()].map((tool) => [
+            tool.name,
             {
-              localName: n.local_name,
+              localName: tool.local_name,
             },
           ]),
         ),
       }),
-      protocol: e.protocol,
-      transport: e.transport,
-      ...(e.takenOverAt !== undefined && {
-        takenOverAt: e.takenOverAt,
+      protocol: entry.protocol,
+      transport: entry.transport,
+      ...(entry.takenOverAt !== undefined && {
+        takenOverAt: entry.takenOverAt,
       }),
-      ...(e.awayReason === "asleep" && {
+      ...(entry.awayReason === "asleep" && {
         asleep: true,
       }),
-      ...(e.status === "offline" &&
-        e.awayReason !== "asleep" &&
-        e.lastStillHereAt !== undefined &&
-        e.lastStillHereAt > e.lastHeardAt && {
+      ...(entry.status === "offline" &&
+        entry.awayReason !== "asleep" &&
+        entry.lastStillHereAt !== undefined &&
+        entry.lastStillHereAt > entry.lastHeardAt && {
           busy: true,
         }),
-      ...(e.status === "offline" && {
+      ...(entry.status === "offline" && {
         lastHeardAt:
-          e.awayReason === "asleep"
-            ? (this.#r.get(e.name)?.awaySince ?? e.asleepSince ?? e.lastHeardAt)
-            : e.lastHeardAt,
+          entry.awayReason === "asleep"
+            ? (this.#r.get(entry.name)?.awaySince ?? entry.asleepSince ?? entry.lastHeardAt)
+            : entry.lastHeardAt,
       }),
     }));
   }
-  #p(e, n) {
-    let found = this.entries().find((h) => h.instanceId === e);
+  #p(instanceId, update) {
+    let found = this.entries().find((entry) => entry.instanceId === instanceId);
     if (found === undefined) return;
-    let s = n(found);
-    this.#e = new Map([...this.#e, [found.name, s]]);
-    if (s.status !== found.status || s.awayReason !== found.awayReason || s.description !== found.description)
+    let next = update(found);
+    this.#e = new Map([...this.#e, [found.name, next]]);
+    if (
+      next.status !== found.status ||
+      next.awayReason !== found.awayReason ||
+      next.description !== found.description
+    )
       this.#t++;
     return found.name;
   }
@@ -611,17 +638,20 @@ class RemoteBackgroundCommands {
 /**
  * 复制 Map 并去掉指定键。
  */
-function omitKeys(e, n) {
-  return new Map([...e].filter(([r]) => !n.includes(r)));
+function omitKeys(map, keys) {
+  return new Map([...map].filter(([key]) => !keys.includes(key)));
 }
 //@ chunk-s61vbvea.js:609743-609755 placement
-var MAX_PREVIEW_CHARS = 2 * PREVIEW_SIZE_CHARS;
+var MAX_PREVIEW_CHARS; // deferred: uses PREVIEW_SIZE_CHARS (../../utils/toolResultStorage.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-s61vbvea.js:609743", () => {
+  MAX_PREVIEW_CHARS = 2 * PREVIEW_SIZE_CHARS;
+});
 //@ chunk-s61vbvea.js:609792-610375 placement
 async function truncateAdditionalContext({ entries, limit, event, storageV5 }) {
   let joined = entries.join(`
 
 `);
-  let y = await persistLargeHookOutput(joined, `${event}-${randomUUID()}`, "additionalContext", {
+  let persisted = await persistLargeHookOutput(joined, `${event}-${randomUUID()}`, "additionalContext", {
     threshold: limit,
     storageV5,
   }).catch((error) => {
@@ -630,14 +660,14 @@ async function truncateAdditionalContext({ entries, limit, event, storageV5 }) {
 
 [${event} context of ${joined.length} characters cut at ${limit}: writing it to disk failed]`;
   });
-  let w = entries.length === 1 ? "a context entry" : `${entries.length} context entries`;
-  let x = y.startsWith(PERSISTED_OUTPUT_TAG)
+  let entryLabel = entries.length === 1 ? "a context entry" : `${entries.length} context entries`;
+  let persistText = persisted.startsWith(PERSISTED_OUTPUT_TAG)
     ? "written to disk, its head and path kept"
     : "not written to disk (the persist failed), its head kept inline";
   logForDebugging(
-    `${event}: ${w} of ${joined.length} characters ${x} (${RESULT_TOKEN_BUDGET} an entry, ${EVENT_TOOL_SITE_NAMES} a dispatch; nothing refused)`,
+    `${event}: ${entryLabel} of ${joined.length} characters ${persistText} (${RESULT_TOKEN_BUDGET} an entry, ${EVENT_TOOL_SITE_NAMES} a dispatch; nothing refused)`,
   );
-  return y;
+  return persisted;
 }
 export {
   setToolState,

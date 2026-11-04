@@ -8,14 +8,14 @@
 import "process";
 import * as processModule_2 from "process";
 import * as osModule from "os";
-import { ha } from "../policies/redirectPolicy.js";
+import { redirectPolicy } from "../policies/redirectPolicy.js";
 
 //@ chunk-mrx6y2r5.js:55135-55166 esm-layout
-function ql(redirectOptions = {}) {
-  return ha(redirectOptions);
+function getUserAgentPlatform(options = {}) {
+  return redirectPolicy(options);
 }
 //@ chunk-mrx6y2r5.js:55215-55248 esm-fingerprint
-function Kl() {
+function getHeaderName() {
   return "User-Agent";
 }
 //@ chunk-mrx6y2r5.js:55248-55465 esm-fingerprint
@@ -28,4 +28,4 @@ async function setPlatformSpecificData(map) {
   }
   map.set("OS", `(${osModule.arch()}-${osModule.type()}-${osModule.release()})`);
 }
-export { Kl, setPlatformSpecificData, ql };
+export { getHeaderName, setPlatformSpecificData, getUserAgentPlatform };

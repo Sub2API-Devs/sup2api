@@ -23,6 +23,7 @@ import {
 } from "fs/promises";
 import { createHash, randomBytes } from "crypto";
 import { constants } from "fs";
+import { getClaudeConfigDir } from "../envUtils.js";
 import {
   MAX_PLUGIN_BINARY_BYTES,
   binaryBaseNameForTarget,
@@ -58,8 +59,18 @@ import { apiClient } from "../../services/routines/routinesApi.js";
 import { OAUTH_BETA_HEADER } from "../../constants/oauth.js";
 import { LINKMISDIRECTED, LINKUNVERIFIED } from "../fsSafety/hardenedRead.js";
 import { ATOMIC_WRITE_ERRNOS } from "./safeCopy.js";
-import { getClaudeConfigDir } from "../envUtils.js";
 
+//@ chunk-f3qhjfah.js:4072-4167 placement
+/**
+ * 若路径正是插件资源缓存目录（`<配置目录>/plugins/asset-cache`），返回存储命名空间 pluginAssetCache，否则 null。
+ */
+function assetCacheNamespace(cacheDir) {
+  return cacheDir === join(getClaudeConfigDir(), "plugins", "asset-cache")
+    ? {
+        namespace: "pluginAssetCache",
+      }
+    : null;
+}
 //@ chunk-e6aww6q8.js:4369039-4369171 placement
 var ASSET_LOG_PREFIX = "[pluginBinaryAssets]";
 var ASSET_CACHE = "asset-cache";
@@ -89,14 +100,14 @@ function pluginBinaryAssetsEnabled() {
   );
 }
 //@ chunk-e6aww6q8.js:4369393-4369572 placement
-async function provisionBinaryAssets(e, n, r) {
-  let s = r?.assetCacheDir ?? join(projectPluginsDir(), ASSET_CACHE);
-  let storageV5 = r?.storageV5;
-  let y = isStorageV5Enabled() && storageV5 !== undefined ? assetCacheNamespace(s) : null;
+async function provisionBinaryAssets(pluginPath, pluginId, options) {
+  let assetCacheDir = options?.assetCacheDir ?? join(projectPluginsDir(), ASSET_CACHE);
+  let storageV5 = options?.storageV5;
+  let namespace = isStorageV5Enabled() && storageV5 !== undefined ? assetCacheNamespace(assetCacheDir) : null;
   try {
-    await provisionPluginBinaryAssets(e, n, s, y, r);
+    await provisionPluginBinaryAssets(pluginPath, pluginId, assetCacheDir, namespace, options);
   } finally {
-    await sweepStaleTempFiles(s, storageV5, y).catch(() => {
+    await sweepStaleTempFiles(assetCacheDir, storageV5, namespace).catch(() => {
       return;
     });
   }
@@ -105,10 +116,10 @@ async function provisionBinaryAssets(e, n, r) {
 /**
  * shouldInstallBinaryAssets：官方市场插件且功能开启。
  */
-function shouldInstallBinaryAssets(e) {
+function shouldInstallBinaryAssets(pluginId) {
   return (
-    PluginIdSchema().safeParse(e).success &&
-    isOfficialMarketplaceName_3(parsePluginIdentifier(e).marketplace) &&
+    PluginIdSchema().safeParse(pluginId).success &&
+    isOfficialMarketplaceName_3(parsePluginIdentifier(pluginId).marketplace) &&
     pluginBinaryAssetsEnabled()
   );
 }
@@ -116,267 +127,298 @@ function shouldInstallBinaryAssets(e) {
 /**
  * 为插件准备二进制资源：下载、校验并放到插件目录的 bin 下。
  */
-async function provisionPluginBinaryAssets(e, n, r, s, h) {
-  if (!shouldInstallBinaryAssets(n)) return;
+async function provisionPluginBinaryAssets(pluginPath, pluginId, cacheDir, namespace, options) {
+  if (!shouldInstallBinaryAssets(pluginId)) return;
   let startTime = performance.now();
   let expectedCount = 0;
-  let w = 0;
-  let L = 0;
-  let G = 0;
-  let q = 0;
-  let Z = 0;
-  let Se = 0;
-  let ke;
-  let we;
-  let Ee;
-  let Ae = false;
-  function Ie(error, We) {
-    Ee ??=
+  let provisioned = 0;
+  let matched = 0;
+  let cacheHits = 0;
+  let downloads = 0;
+  let removed = 0;
+  let failed = 0;
+  let skippedCode;
+  let firstRemovalReason;
+  let failureCode;
+  let attempted = false;
+  function noteFailure(error, message) {
+    failureCode ??=
       error instanceof PluginAssetFetchError
         ? error.code
         : (sanitizeErrnoForTelemetry(error) ?? sanitizeErrorName_2(error) ?? "unknown");
     logForDebugging(
-      `${ASSET_LOG_PREFIX} ${n}: ${We}: ${error instanceof Error ? error.message : String(error)}`,
+      `${ASSET_LOG_PREFIX} ${pluginId}: ${message}: ${error instanceof Error ? error.message : String(error)}`,
       {
         level: "warn",
       },
     );
   }
   try {
-    let storageV5 = h?.storageV5;
-    let We = isStorageV5Enabled() && storageV5 !== undefined ? await pluginCacheBinPath(e) : null;
-    let ze = s !== null ? We : null;
-    if (!(await isDirectoryPresent(e, storageV5, We))) {
+    let storageV5 = options?.storageV5;
+    let versionSpace =
+      isStorageV5Enabled() && storageV5 !== undefined ? await pluginCacheBinPath(pluginPath) : null;
+    let binSpace = namespace !== null ? versionSpace : null;
+    if (!(await isDirectoryPresent(pluginPath, storageV5, versionSpace))) {
       logFeatureBad("plugin_binary_assets", "plugin_root_not_dir", {
         expected_count: 0,
       });
       logForDebugging(
-        `${ASSET_LOG_PREFIX} ${n}: plugin root is not a real directory; refusing to provision binaries`,
+        `${ASSET_LOG_PREFIX} ${pluginId}: plugin root is not a real directory; refusing to provision binaries`,
         {
           level: "warn",
         },
       );
       return;
     }
-    let pluginVersionFromManifest = await getPluginVersionFromManifest(e, storageV5, We);
+    let pluginVersionFromManifest = await getPluginVersionFromManifest(pluginPath, storageV5, versionSpace);
     if (!pluginVersionFromManifest) return;
-    Ae = true;
+    attempted = true;
     let entries = Object.entries(pluginVersionFromManifest);
     expectedCount = entries.length;
-    let nt = join(e, "bin");
-    let binDir = await ensureBinDir(nt, storageV5, We);
+    let binDirPath = join(pluginPath, "bin");
+    let binDir = await ensureBinDir(binDirPath, storageV5, versionSpace);
     if (binDir !== "ok") {
-      Ee = binDir;
+      failureCode = binDir;
       return;
     }
-    if (!(await resolveContainedBinDir(nt, e, storageV5, We))) {
-      Ee = "bin_outside_plugin";
+    if (!(await resolveContainedBinDir(binDirPath, pluginPath, storageV5, versionSpace))) {
+      failureCode = "bin_outside_plugin";
       return;
     }
-    let Et = [];
-    let yt = [];
-    let gt = [];
-    for (let [Yt, qt] of entries) {
+    let toFetch = [];
+    let toRetry = [];
+    let matchedEntries = [];
+    for (let [name, spec] of entries) {
       if (performance.now() - startTime > ASSET_TOTAL_BUDGET_MS) {
-        Ee ??= "pass_deadline_exceeded";
+        failureCode ??= "pass_deadline_exceeded";
         break;
       }
       try {
-        let containedBinDir = await resolveContainedBinDir(nt, e, storageV5, We);
+        let containedBinDir = await resolveContainedBinDir(binDirPath, pluginPath, storageV5, versionSpace);
         if (!containedBinDir) {
-          Ee ??= "bin_dir_race";
+          failureCode ??= "bin_dir_race";
           continue;
         }
-        let rn = join(containedBinDir, Yt);
-        let pn = We === null ? undefined : pluginBinaryStorageSpace(We, Yt);
+        let assetPath = join(containedBinDir, name);
+        let storageSpace = versionSpace === null ? undefined : pluginBinaryStorageSpace(versionSpace, name);
         switch (
           await verifyPlacedAsset(
-            rn,
-            qt.sha256,
+            assetPath,
+            spec.sha256,
             {
               ensureMode: 493,
               guestWritable: true,
             },
             storageV5,
-            pn,
+            storageSpace,
           )
         ) {
           case "match":
-            L++;
-            gt.push([Yt, qt]);
+            matched++;
+            matchedEntries.push([name, spec]);
             continue;
           case "absent":
-            Et.push([Yt, qt]);
+            toFetch.push([name, spec]);
             continue;
           case "mismatch":
           case "not_regular": {
-            we ??= "asset_present_digest_mismatch";
-            let containedBinDir = await resolveContainedBinDir(nt, e, storageV5, We);
+            firstRemovalReason ??= "asset_present_digest_mismatch";
+            let containedBinDir = await resolveContainedBinDir(
+              binDirPath,
+              pluginPath,
+              storageV5,
+              versionSpace,
+            );
             if (!containedBinDir) {
-              Ee ??= "bin_dir_race";
+              failureCode ??= "bin_dir_race";
               continue;
             }
             try {
-              await removeBinEntry(containedBinDir, Yt, storageV5, We);
+              await removeBinEntry(containedBinDir, name, storageV5, versionSpace);
             } catch (error) {
               logForDebugging(
-                `${ASSET_LOG_PREFIX} ${n}: failed to remove mismatched bin/${Yt}: ${error instanceof Error ? error.message : String(error)}`,
+                `${ASSET_LOG_PREFIX} ${pluginId}: failed to remove mismatched bin/${name}: ${error instanceof Error ? error.message : String(error)}`,
                 {
                   level: "warn",
                 },
               );
-              yt.push([Yt, qt]);
+              toRetry.push([name, spec]);
               continue;
             }
-            Z++;
+            removed++;
             logForDebugging(
-              `${ASSET_LOG_PREFIX} ${n}: removed bin/${Yt} \u2014 it is not the artifact pinned by the manifest`,
+              `${ASSET_LOG_PREFIX} ${pluginId}: removed bin/${name} \u2014 it is not the artifact pinned by the manifest`,
               {
                 level: "warn",
               },
             );
-            yt.push([Yt, qt]);
+            toRetry.push([name, spec]);
             continue;
           }
           case "unreadable":
-            Ee ??= "asset_unverifiable";
-            Et.push([Yt, qt]);
+            failureCode ??= "asset_unverifiable";
+            toFetch.push([name, spec]);
             continue;
           case "unverifiable_windows":
-            Et.push([Yt, qt]);
+            toFetch.push([name, spec]);
             continue;
         }
       } catch (error) {
-        Ie(error, `failed to verify bin/${Yt}`);
+        noteFailure(error, `failed to verify bin/${name}`);
       }
     }
-    let At = [...yt, ...Et];
+    let queued = [...toRetry, ...toFetch];
     {
-      let sliced = At.slice(0, BINARY_FETCH_CONCURRENCY);
-      if (At.length > sliced.length)
+      let sliced = queued.slice(0, BINARY_FETCH_CONCURRENCY);
+      if (queued.length > sliced.length)
         logForDebugging(
-          `${ASSET_LOG_PREFIX} ${At.length} binaries need fetching; only the first ${BINARY_FETCH_CONCURRENCY} will be`,
+          `${ASSET_LOG_PREFIX} ${queued.length} binaries need fetching; only the first ${BINARY_FETCH_CONCURRENCY} will be`,
           {
             level: "warn",
           },
         );
       if (sliced.length > 0)
         try {
-          await ensurePluginDirExists(r, storageV5, s);
+          await ensurePluginDirExists(cacheDir, storageV5, namespace);
         } catch (error) {
-          Ie(error, "failed to create the asset cache dir");
+          noteFailure(error, "failed to create the asset cache dir");
           sliced = [];
         }
-      for (let [qt, Zt] of sliced) {
+      for (let [name, spec] of sliced) {
         if (performance.now() - startTime > ASSET_TOTAL_BUDGET_MS) {
-          Ee ??= "pass_deadline_exceeded";
+          failureCode ??= "pass_deadline_exceeded";
           break;
         }
         try {
           let { cachePath, cacheHit } = await fetchAssetToCache(
-            Zt.sha256,
-            r,
+            spec.sha256,
+            cacheDir,
             storageV5,
-            s,
-            h?.retryDelaysMs ?? ASSET_RETRY_DELAYS_MS,
+            namespace,
+            options?.retryDelaysMs ?? ASSET_RETRY_DELAYS_MS,
             startTime + ASSET_TOTAL_BUDGET_MS,
-            h?.downloadTimeoutMs ?? ASSET_FETCH_TIMEOUT_MS,
-            h?.credentials,
+            options?.downloadTimeoutMs ?? ASSET_FETCH_TIMEOUT_MS,
+            options?.credentials,
           );
-          if (cacheHit) G++;
-          else q++;
-          let containedBinDir = await resolveContainedBinDir(nt, e, storageV5, We);
+          if (cacheHit) cacheHits++;
+          else downloads++;
+          let containedBinDir = await resolveContainedBinDir(binDirPath, pluginPath, storageV5, versionSpace);
           if (!containedBinDir) {
-            Ee ??= "bin_dir_race";
+            failureCode ??= "bin_dir_race";
             continue;
           }
-          await placePluginBinaryAsset(cachePath, r, containedBinDir, qt, Zt.sha256, storageV5, ze);
-          w++;
-          gt.push([qt, Zt]);
+          await placePluginBinaryAsset(
+            cachePath,
+            cacheDir,
+            containedBinDir,
+            name,
+            spec.sha256,
+            storageV5,
+            binSpace,
+          );
+          provisioned++;
+          matchedEntries.push([name, spec]);
         } catch (error) {
           if (error instanceof PluginAssetFetchError && error.code.startsWith("skipped_")) {
-            ke = error.code;
+            skippedCode = error.code;
             break;
           }
-          Ie(error, `failed to provision ${qt}`);
+          noteFailure(error, `failed to provision ${name}`);
         }
       }
     }
-    let It = isSupportedPlatform();
-    if (It !== undefined) {
-      let Yt = new Map();
-      for (let [Zt] of entries) {
-        let rn = binaryBaseNameForTarget(Zt, It);
-        if (rn !== undefined) Yt.set(rn, (Yt.get(rn) ?? 0) + 1);
+    let target = isSupportedPlatform();
+    if (target !== undefined) {
+      let baseNameCounts = new Map();
+      for (let [assetEntry] of entries) {
+        let baseName = binaryBaseNameForTarget(assetEntry, target);
+        if (baseName !== undefined) baseNameCounts.set(baseName, (baseNameCounts.get(baseName) ?? 0) + 1);
       }
       let startTime = performance.now();
-      for (let [Zt, rn] of gt) {
+      for (let [assetEntry, matchedAsset] of matchedEntries) {
         if (performance.now() - startTime > ASSET_STALL_TIMEOUT_MS) {
-          Ee ??= "pass_deadline_exceeded";
+          failureCode ??= "pass_deadline_exceeded";
           break;
         }
-        let pn = binaryBaseNameForTarget(Zt, It);
-        if (pn === undefined || Object.hasOwn(pluginVersionFromManifest, pn)) continue;
-        if ((Yt.get(pn) ?? 0) > 1) {
+        let baseName = binaryBaseNameForTarget(assetEntry, target);
+        if (baseName === undefined || Object.hasOwn(pluginVersionFromManifest, baseName)) continue;
+        if ((baseNameCounts.get(baseName) ?? 0) > 1) {
           logForDebugging(
-            `${ASSET_LOG_PREFIX} ${n}: multiple declared entries derive bin/${pn}; refusing to pick one`,
+            `${ASSET_LOG_PREFIX} ${pluginId}: multiple declared entries derive bin/${baseName}; refusing to pick one`,
             {
               level: "warn",
             },
           );
-          we ??= "asset_bare_name_collision";
+          firstRemovalReason ??= "asset_bare_name_collision";
           continue;
         }
         try {
-          let containedBinDir = await resolveContainedBinDir(nt, e, storageV5, We);
+          let containedBinDir = await resolveContainedBinDir(binDirPath, pluginPath, storageV5, versionSpace);
           if (!containedBinDir) {
-            Ee ??= "bin_dir_race";
+            failureCode ??= "bin_dir_race";
             continue;
           }
-          let hn = await linkAssetIntoBin(containedBinDir, Zt, pn, rn.sha256, storageV5, We);
-          if (hn === "placed") {
-            Se++;
+          let placement = await linkAssetIntoBin(
+            containedBinDir,
+            assetEntry,
+            baseName,
+            matchedAsset.sha256,
+            storageV5,
+            versionSpace,
+          );
+          if (placement === "placed") {
+            failed++;
             continue;
           }
-          if (hn === "exists") continue;
-          if (hn === "failed_created") {
-            let containedBinDir = await resolveContainedBinDir(nt, e, storageV5, We);
+          if (placement === "exists") continue;
+          if (placement === "failed_created") {
+            let containedBinDir = await resolveContainedBinDir(
+              binDirPath,
+              pluginPath,
+              storageV5,
+              versionSpace,
+            );
             if (containedBinDir)
-              await removeBinEntry(containedBinDir, pn, storageV5, We).catch(() => {
+              await removeBinEntry(containedBinDir, baseName, storageV5, versionSpace).catch(() => {
                 return;
               });
-            else Ee ??= "bin_dir_race";
+            else failureCode ??= "bin_dir_race";
           }
-          if (hn === "failed_created" || hn === "refused_source") we ??= "asset_bare_place_failed";
-          else Ee ??= "asset_bare_place_env_failed";
-          logForDebugging(`${ASSET_LOG_PREFIX} ${n}: bare placement bin/${pn} failed (${hn}); not placed`, {
-            level: "warn",
-          });
+          if (placement === "failed_created" || placement === "refused_source")
+            firstRemovalReason ??= "asset_bare_place_failed";
+          else failureCode ??= "asset_bare_place_env_failed";
+          logForDebugging(
+            `${ASSET_LOG_PREFIX} ${pluginId}: bare placement bin/${baseName} failed (${placement}); not placed`,
+            {
+              level: "warn",
+            },
+          );
         } catch (error) {
-          Ie(error, `failed to place bin/${pn}`);
+          noteFailure(error, `failed to place bin/${baseName}`);
         }
       }
     }
   } catch (error) {
-    Ie(error, "binary asset provisioning failed");
+    noteFailure(error, "binary asset provisioning failed");
   } finally {
-    if (Ae) {
-      let Me = {
+    if (attempted) {
+      let telemetryFields = {
         expected_count: expectedCount,
-        placed_count: w,
-        already_present_count: L,
-        cache_hit_count: G,
-        download_count: q,
-        mismatch_removed_count: Z,
-        bare_placed_count: Se,
+        placed_count: provisioned,
+        already_present_count: matched,
+        cache_hit_count: cacheHits,
+        download_count: downloads,
+        mismatch_removed_count: removed,
+        bare_placed_count: failed,
         duration_ms: Math.round(performance.now() - startTime),
       };
-      let We = we ?? Ee;
-      if (We !== undefined) {
-        if (w + L > 0) logFeatureSad("plugin_binary_assets", We, Me);
-        else logFeatureBad("plugin_binary_assets", We, Me);
-      } else if (ke !== undefined) logFeatureSad("plugin_binary_assets", ke, Me);
-      else logFeatureOk("plugin_binary_assets", Me);
+      let reason = firstRemovalReason ?? failureCode;
+      if (reason !== undefined) {
+        if (provisioned + matched > 0) logFeatureSad("plugin_binary_assets", reason, telemetryFields);
+        else logFeatureBad("plugin_binary_assets", reason, telemetryFields);
+      } else if (skippedCode !== undefined)
+        logFeatureSad("plugin_binary_assets", skippedCode, telemetryFields);
+      else logFeatureOk("plugin_binary_assets", telemetryFields);
     }
   }
 }
@@ -384,162 +426,167 @@ async function provisionPluginBinaryAssets(e, n, r, s, h) {
 /**
  * 确保插件 bin 目录存在且是目录（ok/bin_not_dir/bin_uninspectable/bin_dir_race）。
  */
-async function ensureBinDir(e, storageV5, r) {
-  if (isStorageV5Enabled() && storageV5 !== undefined && r !== null)
-    return ensureBinDirViaStorage(storageV5, r);
-  let s;
+async function ensureBinDir(binDirPath, storageV5, versionSpace) {
+  if (isStorageV5Enabled() && storageV5 !== undefined && versionSpace !== null)
+    return ensureBinDirViaStorage(storageV5, versionSpace);
+  let binStats;
   try {
-    s = await lstat(e);
+    binStats = await lstat(binDirPath);
   } catch (error) {
     if (!isENOENT(error)) return "bin_uninspectable";
-    s = null;
+    binStats = null;
   }
-  if (s && !s.isDirectory()) return "bin_not_dir";
-  if (!s)
+  if (binStats && !binStats.isDirectory()) return "bin_not_dir";
+  if (!binStats)
     try {
-      await makePrivateDir(e);
+      await makePrivateDir(binDirPath);
     } catch (error) {
       if (getErrnoCode(error) !== "EEXIST") return "bin_uninspectable";
     }
-  return (await lstat(e).catch(() => null))?.isDirectory() ? "ok" : "bin_dir_race";
+  return (await lstat(binDirPath).catch(() => null))?.isDirectory() ? "ok" : "bin_dir_race";
 }
 //@ chunk-e6aww6q8.js:4374872-4375279 placement
 /**
  * v5 存储下确保 bin 作用域存在。
  */
-async function ensureBinDirViaStorage(e, n) {
-  let r = withBinRelPath(n);
-  let s = await e.scopeKind(r);
-  if (!s.ok) return "bin_uninspectable";
-  if (s.value.kind === "link" || s.value.kind === "other") return "bin_not_dir";
-  if (s.value.kind === "absent") {
-    let h = await e.ensureScope(r, {
+async function ensureBinDirViaStorage(storageV5, versionSpace) {
+  let binScope = withBinRelPath(versionSpace);
+  let kindResult = await storageV5.scopeKind(binScope);
+  if (!kindResult.ok) return "bin_uninspectable";
+  if (kindResult.value.kind === "link" || kindResult.value.kind === "other") return "bin_not_dir";
+  if (kindResult.value.kind === "absent") {
+    let ensureResult = await storageV5.ensureScope(binScope, {
       parent: "mustExist",
     });
-    if (!h.ok) {
-      let y = storageErrorCode(h.error);
-      if (y !== "EEXIST" && y !== "ENOTDIR" && y !== "ELOOP" && y !== "UnexpectedAbsent")
+    if (!ensureResult.ok) {
+      let code = storageErrorCode(ensureResult.error);
+      if (code !== "EEXIST" && code !== "ENOTDIR" && code !== "ELOOP" && code !== "UnexpectedAbsent")
         return "bin_uninspectable";
     }
   }
-  return (await isDirectoryScope(e, r)) ? "ok" : "bin_dir_race";
+  return (await isDirectoryScope(storageV5, binScope)) ? "ok" : "bin_dir_race";
 }
 //@ chunk-e6aww6q8.js:4375279-4375320 placement
-function makePrivateDir(e) {
-  return mkdir(e, {
+function makePrivateDir(dirPath) {
+  return mkdir(dirPath, {
     mode: 493,
   });
 }
 //@ chunk-e6aww6q8.js:4375320-4375601 placement
-async function resolveContainedBinDir(e, n, storageV5, s) {
-  if (isStorageV5Enabled() && storageV5 !== undefined && s !== null)
-    return (await isDirectoryScope(storageV5, s)) &&
-      (await isDirectoryScope(storageV5, withBinRelPath(s))) &&
-      (await isBinInsideVersion(e, n, storageV5, s))
-      ? e
+async function resolveContainedBinDir(binDir, pluginRoot, storageV5, versionSpace) {
+  if (isStorageV5Enabled() && storageV5 !== undefined && versionSpace !== null)
+    return (await isDirectoryScope(storageV5, versionSpace)) &&
+      (await isDirectoryScope(storageV5, withBinRelPath(versionSpace))) &&
+      (await isBinInsideVersion(binDir, pluginRoot, storageV5, versionSpace))
+      ? binDir
       : null;
-  if (!(await lstat(n).catch(() => null))?.isDirectory()) return null;
-  if (!(await lstat(e).catch(() => null))?.isDirectory()) return null;
-  return (await isBinInsideVersion(e, n, storageV5, s)) ? e : null;
+  if (!(await lstat(pluginRoot).catch(() => null))?.isDirectory()) return null;
+  if (!(await lstat(binDir).catch(() => null))?.isDirectory()) return null;
+  return (await isBinInsideVersion(binDir, pluginRoot, storageV5, versionSpace)) ? binDir : null;
 }
 //@ chunk-e6aww6q8.js:4375601-4375763 placement
-async function isBinInsideVersion(e, n, r, s) {
-  if (isStorageV5Enabled() && r !== undefined && s !== null) return true;
+async function isBinInsideVersion(binDir, pluginRoot, storageV5, versionSpace) {
+  if (isStorageV5Enabled() && storageV5 !== undefined && versionSpace !== null) return true;
   try {
-    let [h, y] = await Promise.all([realpath(n), realpath(e)]);
-    if (!isSubpathOf(h, y, false)) return false;
+    let [realRoot, realBin] = await Promise.all([realpath(pluginRoot), realpath(binDir)]);
+    if (!isSubpathOf(realRoot, realBin, false)) return false;
   } catch {
     return false;
   }
   return true;
 }
 //@ chunk-e6aww6q8.js:4375763-4375890 placement
-async function isDirectoryPresent(e, storageV5, r) {
-  if (isStorageV5Enabled() && storageV5 !== undefined && r !== null) return isDirectoryScope(storageV5, r);
-  return (await lstat(e).catch(() => null))?.isDirectory() === true;
+async function isDirectoryPresent(pluginPath, storageV5, versionSpace) {
+  if (isStorageV5Enabled() && storageV5 !== undefined && versionSpace !== null)
+    return isDirectoryScope(storageV5, versionSpace);
+  return (await lstat(pluginPath).catch(() => null))?.isDirectory() === true;
 }
 //@ chunk-e6aww6q8.js:4375890-4375981 placement
-async function isDirectoryScope(e, n) {
-  let r = await e.scopeKind(n);
-  return r.ok && r.value.kind === "directory";
+async function isDirectoryScope(storageV5, scope) {
+  let kindResult = await storageV5.scopeKind(scope);
+  return kindResult.ok && kindResult.value.kind === "directory";
 }
 //@ chunk-e6aww6q8.js:4375981-4376074 placement
-async function pluginCacheBinPath(e) {
-  let n = projectPluginCacheDir();
-  let r = versionCacheStorageSpace(e, n);
-  if (r === null || (await hasLinkedAncestorBelow(e, n))) return null;
-  return r;
+async function pluginCacheBinPath(pluginPath) {
+  let cacheDir = projectPluginCacheDir();
+  let space = versionCacheStorageSpace(pluginPath, cacheDir);
+  if (space === null || (await hasLinkedAncestorBelow(pluginPath, cacheDir))) return null;
+  return space;
 }
 //@ chunk-e6aww6q8.js:4376074-4376119 placement
-function withBinRelPath(e) {
+function withBinRelPath(versionSpace) {
   return {
-    ...e,
+    ...versionSpace,
     relPath: ["bin"],
   };
 }
 //@ chunk-e6aww6q8.js:4376119-4376202 placement
-function pluginBinaryStorageSpace(e, n) {
-  return STORAGE_SPACES.pluginCache(e.marketplace, e.plugin, e.version, ["bin", n]);
+function pluginBinaryStorageSpace(coords, name) {
+  return STORAGE_SPACES.pluginCache(coords.marketplace, coords.plugin, coords.version, ["bin", name]);
 }
 //@ chunk-e6aww6q8.js:4376202-4376479 placement
-async function removeBinEntry(containedBinDir, n, storageV5, s) {
-  if (isStorageV5Enabled() && storageV5 !== undefined && s !== null) {
-    let h = await storageV5.delete(pluginBinaryStorageSpace(s, n));
-    if (h.ok) return;
-    if (storageErrorCode(h.error) !== "EISDIR") throw storageRemovalError(h.error);
-    let y = await storageV5.deleteScope({
-      ...s,
-      relPath: ["bin", n],
+async function removeBinEntry(containedBinDir, name, storageV5, versionSpace) {
+  if (isStorageV5Enabled() && storageV5 !== undefined && versionSpace !== null) {
+    let deleteResult = await storageV5.delete(pluginBinaryStorageSpace(versionSpace, name));
+    if (deleteResult.ok) return;
+    if (storageErrorCode(deleteResult.error) !== "EISDIR") throw storageRemovalError(deleteResult.error);
+    let scopeDelete = await storageV5.deleteScope({
+      ...versionSpace,
+      relPath: ["bin", name],
     });
-    if (!y.ok) throw storageRemovalError(y.error);
+    if (!scopeDelete.ok) throw storageRemovalError(scopeDelete.error);
     return;
   }
-  await rm_2(join(containedBinDir, n), {
+  await rm_2(join(containedBinDir, name), {
     recursive: true,
     force: true,
   });
 }
 //@ chunk-e6aww6q8.js:4376479-4376663 placement
 function storageRemovalError(error) {
-  let n = storageErrorCode(error);
+  let code = storageErrorCode(error);
   return Object.assign(
     new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
       `removal through the storage interface failed: ${formatStorageError(error)}`,
       "removal through the storage interface failed",
     ),
-    n !== undefined
+    code !== undefined
       ? {
-          code: n,
+          code,
         }
       : {},
   );
 }
 //@ chunk-e6aww6q8.js:4376663-4377497 placement
-async function verifyPlacedAsset(e, n, r, s, h) {
-  if (r?.guestWritable && getPlatform() === "windows") return "unverifiable_windows";
-  if (isStorageV5Enabled() && s !== undefined && h !== undefined)
-    return verifyAssetDigest(s, h, n, r?.ensureMode);
-  let y;
+async function verifyPlacedAsset(assetPath, expectedSha, options, storageV5, storageSpace) {
+  if (options?.guestWritable && getPlatform() === "windows") return "unverifiable_windows";
+  if (isStorageV5Enabled() && storageV5 !== undefined && storageSpace !== undefined)
+    return verifyAssetDigest(storageV5, storageSpace, expectedSha, options?.ensureMode);
+  let stat;
   try {
-    y = await lstat(e);
+    stat = await lstat(assetPath);
   } catch (error) {
     return isENOENT(error) ? "absent" : "unreadable";
   }
-  if (!y.isFile()) return "not_regular";
-  let S;
+  if (!stat.isFile()) return "not_regular";
+  let handle;
   try {
-    S = await open(e, readOnlyNoFollowFlags());
-    let stats = await S.stat();
+    handle = await open(assetPath, readOnlyNoFollowFlags());
+    let stats = await handle.stat();
     if (!stats.isFile()) return "not_regular";
     if (stats.size > MAX_ASSET_BYTES) return "mismatch";
     let hash = createHash("sha256");
-    for await (let G of S.createReadStream({
+    for await (let chunk of handle.createReadStream({
       autoClose: false,
     }))
-      hash.update(G);
-    if (hash.digest("hex") !== n) return "mismatch";
-    if (r?.ensureMode !== undefined && getPlatform() !== "windows" && (stats.mode & 511) !== r.ensureMode)
-      await S.chmod(r.ensureMode).catch(() => {
+      hash.update(chunk);
+    if (hash.digest("hex") !== expectedSha) return "mismatch";
+    if (
+      options?.ensureMode !== undefined &&
+      getPlatform() !== "windows" &&
+      (stats.mode & 511) !== options.ensureMode
+    )
+      await handle.chmod(options.ensureMode).catch(() => {
         return;
       });
     return "match";
@@ -547,10 +594,10 @@ async function verifyPlacedAsset(e, n, r, s, h) {
     let errnoCode = getErrnoCode(error);
     if (errnoCode === "ELOOP") return "not_regular";
     if (errnoCode === "EACCES" || errnoCode === "EPERM")
-      return (y.mode & 292) === 0 ? "mismatch" : "unreadable";
+      return (stat.mode & 292) === 0 ? "mismatch" : "unreadable";
     return "unreadable";
   } finally {
-    await S?.close().catch(() => {
+    await handle?.close().catch(() => {
       return;
     });
   }
@@ -559,17 +606,17 @@ async function verifyPlacedAsset(e, n, r, s, h) {
 /**
  * 经存储校验资源 sha256：match/mismatch/absent/not_regular/unreadable。
  */
-async function verifyAssetDigest(e, n, r, ensureMode) {
-  let h = await e.digest(n, {
+async function verifyAssetDigest(storageV5, space, expectedSha, ensureMode) {
+  let digestResult = await storageV5.digest(space, {
     algorithm: "sha256",
     maxBytes: MAX_ASSET_BYTES,
   });
-  if (h.ok) {
-    if (h.value.digest !== r) return "mismatch";
-    let { mode, object } = h.value;
+  if (digestResult.ok) {
+    if (digestResult.value.digest !== expectedSha) return "mismatch";
+    let { mode, object } = digestResult.value;
     if (ensureMode !== undefined && mode !== undefined && mode !== ensureMode && object !== undefined)
-      await e
-        .setMode(n, ensureMode, {
+      await storageV5
+        .setMode(space, ensureMode, {
           ifObject: object,
         })
         .catch(() => {
@@ -577,18 +624,18 @@ async function verifyAssetDigest(e, n, r, ensureMode) {
         });
     return "match";
   }
-  if (h.error.code === "NotFound") return "absent";
-  let y = storageErrorCode(h.error);
-  if (y === TOOLARGE) return "mismatch";
-  if (y === "ELOOP" || y === "ENXIO") return "not_regular";
-  let S = await e.statMeta(n);
-  if (!S.ok) {
-    if (S.error.code === "NotFound") return "absent";
-    let L = storageErrorCode(S.error);
-    return L === "ELOOP" || L === "ENXIO" ? "not_regular" : "unreadable";
+  if (digestResult.error.code === "NotFound") return "absent";
+  let code = storageErrorCode(digestResult.error);
+  if (code === TOOLARGE) return "mismatch";
+  if (code === "ELOOP" || code === "ENXIO") return "not_regular";
+  let statResult = await storageV5.statMeta(space);
+  if (!statResult.ok) {
+    if (statResult.error.code === "NotFound") return "absent";
+    let code = storageErrorCode(statResult.error);
+    return code === "ELOOP" || code === "ENXIO" ? "not_regular" : "unreadable";
   }
-  let mode = S.value.mode;
-  return (y === "EACCES" || y === "EPERM") && mode !== undefined && (mode & 292) === 0
+  let mode = statResult.value.mode;
+  return (code === "EACCES" || code === "EPERM") && mode !== undefined && (mode & 292) === 0
     ? "mismatch"
     : "unreadable";
 }
@@ -596,37 +643,46 @@ async function verifyAssetDigest(e, n, r, ensureMode) {
 /**
  * 资源缓存中已有且摘要匹配时刷新时间并返回命中；否则清掉非文件的占位，按重试策略下载到 .partial 临时文件后改名到缓存。
  */
-async function fetchAssetToCache(e, n, storageV5, s, h, y, S, credentials) {
-  let L = join(n, e);
-  if (isStorageV5Enabled() && storageV5 !== undefined && s !== null)
-    return writePluginAsset(e, L, storageV5, h, y, S, credentials);
-  if ((await verifyPlacedAsset(L, e)) === "match") {
+async function fetchAssetToCache(
+  sha,
+  cacheDir,
+  storageV5,
+  namespace,
+  retryDelays,
+  deadline,
+  timeoutMs,
+  credentials,
+) {
+  let cachePath = join(cacheDir, sha);
+  if (isStorageV5Enabled() && storageV5 !== undefined && namespace !== null)
+    return writePluginAsset(sha, cachePath, storageV5, retryDelays, deadline, timeoutMs, credentials);
+  if ((await verifyPlacedAsset(cachePath, sha)) === "match") {
     let date = new Date();
-    await utimes(L, date, date).catch(() => {
+    await utimes(cachePath, date, date).catch(() => {
       return;
     });
     return {
-      cachePath: L,
+      cachePath,
       cacheHit: true,
     };
   }
-  let G = await lstat(L).catch(() => null);
-  if (G && !G.isFile())
-    await rm_2(L, {
+  let stat = await lstat(cachePath).catch(() => null);
+  if (stat && !stat.isFile())
+    await rm_2(cachePath, {
       recursive: true,
       force: true,
     });
-  return retryTransientAssetFetch(h, y, async () => {
-    let q = join(n, `.partial-${e}-${makePidRandomId()}`);
+  return retryTransientAssetFetch(retryDelays, deadline, async () => {
+    let partialPath = join(cacheDir, `.partial-${sha}-${makePidRandomId()}`);
     try {
-      await downloadAssetToFile(e, q, S, credentials);
-      await renameReplacing(q, L);
+      await downloadAssetToFile(sha, partialPath, timeoutMs, credentials);
+      await renameReplacing(partialPath, cachePath);
       return {
-        cachePath: L,
+        cachePath,
         cacheHit: false,
       };
     } catch (error) {
-      await rm_2(q, {
+      await rm_2(partialPath, {
         force: true,
       }).catch(() => {
         return;
@@ -636,58 +692,58 @@ async function fetchAssetToCache(e, n, storageV5, s, h, y, S, credentials) {
   });
 }
 //@ chunk-e6aww6q8.js:4378673-4379523 placement
-async function writePluginAsset(e, n, r, s, h, y, S) {
-  let w = STORAGE_SPACES.pluginAssetCache(e);
-  let L = await binaryAssetDigest(r, w);
-  if (L.ok && L.value.digest === e) {
-    await r.touch(w);
+async function writePluginAsset(sha, cachePath, storageV5, retryDelays, deadline, timeoutMs, credentials) {
+  let space = STORAGE_SPACES.pluginAssetCache(sha);
+  let digestResult = await binaryAssetDigest(storageV5, space);
+  if (digestResult.ok && digestResult.value.digest === sha) {
+    await storageV5.touch(space);
     return {
-      cachePath: n,
+      cachePath,
       cacheHit: true,
     };
   }
-  await dropMismatchedCacheEntry(r, w, e, n, L);
-  return retryTransientAssetFetch(s, h, async () => {
-    let assetStream = createAssetStream(e, y, S);
-    let q = await r.writeFromStream(w, assetStream.chunks, {
+  await dropMismatchedCacheEntry(storageV5, space, sha, cachePath, digestResult);
+  return retryTransientAssetFetch(retryDelays, deadline, async () => {
+    let assetStream = createAssetStream(sha, timeoutMs, credentials);
+    let writeResult = await storageV5.writeFromStream(space, assetStream.chunks, {
       maxBytes: MAX_ASSET_BYTES,
       precondition: {
         type: "ifAbsent",
       },
       mode: 384,
       flush: true,
-      acquireTimeoutMs: Math.min(y, WRITE_LOCK_TTL_MS),
+      acquireTimeoutMs: Math.min(timeoutMs, WRITE_LOCK_TTL_MS),
     });
-    if (q.ok)
+    if (writeResult.ok)
       return {
-        cachePath: n,
+        cachePath,
         cacheHit: false,
       };
-    let Z = assetStream.failure();
-    if (Z !== undefined) throw Z;
-    if (q.error.code === "Failed" && q.error.telemetryCode === SOURCETOOLARGE)
+    let streamFailure = assetStream.failure();
+    if (streamFailure !== undefined) throw streamFailure;
+    if (writeResult.error.code === "Failed" && writeResult.error.telemetryCode === SOURCETOOLARGE)
       throw new PluginAssetFetchError("asset exceeds size cap", "asset_too_large");
-    if (q.error.code === "AlreadyExists") {
-      let Se = await binaryAssetDigest(r, w);
-      if (Se.ok && Se.value.digest === e) {
-        await r.touch(w);
+    if (writeResult.error.code === "AlreadyExists") {
+      let digestResult = await binaryAssetDigest(storageV5, space);
+      if (digestResult.ok && digestResult.value.digest === sha) {
+        await storageV5.touch(space);
         return {
-          cachePath: n,
+          cachePath,
           cacheHit: !assetStream.started(),
         };
       }
     }
-    if (q.error.code === "Unavailable" || q.error.code === "Failed")
+    if (writeResult.error.code === "Unavailable" || writeResult.error.code === "Failed")
       throw new PluginAssetFetchError(
-        `asset cache store failed (${formatStorageError(q.error)})`,
+        `asset cache store failed (${formatStorageError(writeResult.error)})`,
         "asset_transient",
       );
-    throw assetCacheStorageError(q.error);
+    throw assetCacheStorageError(writeResult.error);
   });
 }
 //@ chunk-e6aww6q8.js:4379523-4379594 placement
-function binaryAssetDigest(e, n) {
-  return e.digest(n, {
+function binaryAssetDigest(storageV5, space) {
+  return storageV5.digest(space, {
     algorithm: "sha256",
     maxBytes: MAX_ASSET_BYTES,
   });
@@ -696,13 +752,13 @@ function binaryAssetDigest(e, n) {
 /**
  * 存储中摘要不符的缓存项按版本条件删除。
  */
-async function dropMismatchedCacheEntry(e, n, r, s, h) {
-  if (h.ok) {
-    let stats = await e.stat(n);
+async function dropMismatchedCacheEntry(storageV5, space, expectedSha, cachePath, digestResult) {
+  if (digestResult.ok) {
+    let stats = await storageV5.stat(space);
     if (!stats.ok) return;
-    let w = await binaryAssetDigest(e, n);
-    if (w.ok && w.value.digest !== r)
-      await e.delete(n, {
+    let digestResult = await binaryAssetDigest(storageV5, space);
+    if (digestResult.ok && digestResult.value.digest !== expectedSha)
+      await storageV5.delete(space, {
         precondition: {
           type: "ifMatch",
           version: stats.value.version,
@@ -710,56 +766,57 @@ async function dropMismatchedCacheEntry(e, n, r, s, h) {
       });
     return;
   }
-  if (h.error.code === "NotFound") return;
-  let y = storageErrorCode(h.error);
-  if (y === "EISDIR" || y === "ENXIO") {
-    let S = await lstat(s).catch(() => null);
-    if (S && !S.isFile() && !S.isSymbolicLink())
-      await rm_2(s, {
+  if (digestResult.error.code === "NotFound") return;
+  let code = storageErrorCode(digestResult.error);
+  if (code === "EISDIR" || code === "ENXIO") {
+    let stat = await lstat(cachePath).catch(() => null);
+    if (stat && !stat.isFile() && !stat.isSymbolicLink())
+      await rm_2(cachePath, {
         recursive: true,
         force: true,
       });
     return;
   }
-  await e.delete(n);
+  await storageV5.delete(space);
 }
 //@ chunk-e6aww6q8.js:4380019-4380240 placement
 function assetCacheStorageError(error) {
   logForDebugging(`${ASSET_LOG_PREFIX} asset cache storage call failed: ${formatStorageError(error)}`, {
     level: "warn",
   });
-  let n = storageErrorCode(error);
+  let code = storageErrorCode(error);
   return Object.assign(Error("asset cache storage call failed"), {
     name: "PluginAssetCacheStorageError",
-    ...(n !== undefined && {
-      code: n,
+    ...(code !== undefined && {
+      code,
     }),
   });
 }
 //@ chunk-e6aww6q8.js:4380240-4380532 placement
-async function retryTransientAssetFetch(e, n, r) {
-  let s = 0;
+async function retryTransientAssetFetch(retryDelays, deadline, attempt) {
+  let attemptIndex = 0;
   for (;;)
     try {
-      return await r();
+      return await attempt();
     } catch (error) {
-      let y = error instanceof PluginAssetFetchError && error.code === "asset_transient";
-      let S = e[s] ?? 0;
-      if (!y || s >= e.length || performance.now() + S >= n) throw error;
-      s++;
+      let isTransient = error instanceof PluginAssetFetchError && error.code === "asset_transient";
+      let delayMs = retryDelays[attemptIndex] ?? 0;
+      if (!isTransient || attemptIndex >= retryDelays.length || performance.now() + delayMs >= deadline)
+        throw error;
+      attemptIndex++;
       logForDebugging(
-        `${ASSET_LOG_PREFIX} transient failure fetching asset (attempt ${s}); retrying in ${S}ms`,
+        `${ASSET_LOG_PREFIX} transient failure fetching asset (attempt ${attemptIndex}); retrying in ${delayMs}ms`,
         {
           level: "warn",
         },
       );
-      await sleep(S);
+      await sleep(delayMs);
     }
 }
 //@ chunk-e6aww6q8.js:4380532-4380631 placement
-async function ensurePluginDirExists(e, storageV5, r) {
-  if (isStorageV5Enabled() && storageV5 !== undefined && r !== null) return;
-  await mkdir(e, {
+async function ensurePluginDirExists(dirPath, storageV5, namespace) {
+  if (isStorageV5Enabled() && storageV5 !== undefined && namespace !== null) return;
+  await mkdir(dirPath, {
     recursive: true,
     mode: 448,
   });
@@ -768,9 +825,9 @@ async function ensurePluginDirExists(e, storageV5, r) {
 /**
  * 从组织市场下载插件二进制资源。
  */
-async function fetchPluginAsset(e, timeout, credentials) {
-  let s = await apiClient
-    .get(`/api/organizations/:orgUUID/marketplace/plugin-assets/${e}`, {
+async function fetchPluginAsset(sha, timeout, credentials) {
+  let response = await apiClient
+    .get(`/api/organizations/:orgUUID/marketplace/plugin-assets/${sha}`, {
       auth: "teleport-org",
       responseType: "stream",
       timeout,
@@ -788,72 +845,77 @@ async function fetchPluginAsset(e, timeout, credentials) {
         "asset_transient",
       );
     });
-  if (!s.ok) {
-    let y =
-      s.reason === "data-residency"
+  if (!response.ok) {
+    let skipCode =
+      response.reason === "data-residency"
         ? "skipped_data_residency"
-        : s.reason === "essential-traffic-only"
+        : response.reason === "essential-traffic-only"
           ? "skipped_essential_traffic_only"
           : "skipped_no_claude_ai_auth";
-    throw new PluginAssetFetchError(`asset fetch skipped (${y})`, y);
+    throw new PluginAssetFetchError(`asset fetch skipped (${skipCode})`, skipCode);
   }
-  let { status } = s;
+  let { status } = response;
   if (status !== 200) {
-    s.data.destroy();
+    response.data.destroy();
     if (status === 404) throw new PluginAssetFetchError("asset not found (404)", "asset_not_found", status);
     if (status === 410) throw new PluginAssetFetchError("asset denylisted (410)", "asset_denylisted", status);
     if (status >= 500)
       throw new PluginAssetFetchError(`asset fetch failed (${status})`, "asset_transient", status);
     throw new PluginAssetFetchError(`unexpected asset response (${status})`, "asset_http_error", status);
   }
-  return s.data;
+  return response.data;
 }
 //@ chunk-e6aww6q8.js:4381579-4382434 placement
 /**
  * 下载资源并校验固定的 sha256。
  */
-function downloadAssetWithDigest(pluginAsset, n, r, s) {
+function downloadAssetWithDigest(pluginAsset, expectedSha, timeoutMs, verify) {
   let hash = createHash("sha256");
-  let y = 0;
-  let S;
-  function w() {
-    clearTimeout(S);
-    S = setTimeout((we) => we.destroy(Error("asset download stream stalled")), r, pluginAsset);
+  let received = 0;
+  let stallTimer;
+  function armWatchdog() {
+    clearTimeout(stallTimer);
+    stallTimer = setTimeout(
+      (stream) => stream.destroy(Error("asset download stream stalled")),
+      timeoutMs,
+      pluginAsset,
+    );
   }
-  let L;
-  function G(we) {
-    L = we;
+  let streamError;
+  function onError(error) {
+    streamError = error;
   }
-  pluginAsset.once("error", G);
-  let q = false;
-  function Z() {
-    pluginAsset.off("error", G);
-    clearTimeout(S);
-    if (!q) pluginAsset.destroy();
+  pluginAsset.once("error", onError);
+  let finished = false;
+  function abort() {
+    pluginAsset.off("error", onError);
+    clearTimeout(stallTimer);
+    if (!finished) pluginAsset.destroy();
   }
-  function Se() {
-    if (hash.digest("hex") !== n)
+  function verifyDigest() {
+    if (hash.digest("hex") !== expectedSha)
       throw new PluginAssetFetchError(
         "downloaded bytes do not match the pinned sha256",
         "asset_digest_mismatch",
       );
   }
-  async function* ke() {
+  async function* chunks() {
     try {
-      pluginAsset.off("error", G);
-      if (L !== undefined) throw L;
-      w();
-      for await (let we of pluginAsset) {
-        w();
-        let Ee = Buffer.isBuffer(we) ? we : Buffer.from(we);
-        y += Ee.length;
-        if (y > MAX_ASSET_BYTES) throw new PluginAssetFetchError("asset exceeds size cap", "asset_too_large");
-        hash.update(Ee);
-        yield Ee;
+      pluginAsset.off("error", onError);
+      if (streamError !== undefined) throw streamError;
+      armWatchdog();
+      for await (let chunk of pluginAsset) {
+        armWatchdog();
+        let buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+        received += buf.length;
+        if (received > MAX_ASSET_BYTES)
+          throw new PluginAssetFetchError("asset exceeds size cap", "asset_too_large");
+        hash.update(buf);
+        yield buf;
       }
-      clearTimeout(S);
-      if (s) Se();
-      q = true;
+      clearTimeout(stallTimer);
+      if (verify) verifyDigest();
+      finished = true;
     } catch (error) {
       throw error instanceof PluginAssetFetchError
         ? error
@@ -862,53 +924,58 @@ function downloadAssetWithDigest(pluginAsset, n, r, s) {
             "asset_transient",
           );
     } finally {
-      Z();
+      abort();
     }
   }
   return {
-    chunks: ke(),
-    verifyDigest: Se,
-    abort: Z,
+    chunks: chunks(),
+    verifyDigest,
+    abort,
   };
 }
 //@ chunk-e6aww6q8.js:4382434-4382943 placement
 /**
  * 流式下载资源到新文件并校验摘要，失败删除。
  */
-async function downloadAssetToFile(e, n, timeout, credentials) {
-  let h = downloadAssetWithDigest(await fetchPluginAsset(e, timeout, credentials), e, timeout, false);
-  let y;
-  let S;
+async function downloadAssetToFile(sha, filePath, timeoutMs, credentials) {
+  let stream = downloadAssetWithDigest(
+    await fetchPluginAsset(sha, timeoutMs, credentials),
+    sha,
+    timeoutMs,
+    false,
+  );
+  let handle;
+  let failure;
   try {
-    y = await open(n, "wx", 384);
-    for await (let chunk of h.chunks) await y.write(chunk);
-    await y.sync().catch(() => {
+    handle = await open(filePath, "wx", 384);
+    for await (let chunk of stream.chunks) await handle.write(chunk);
+    await handle.sync().catch(() => {
       return;
     });
   } catch (error) {
-    S = error;
-    h.abort();
+    failure = error;
+    stream.abort();
   } finally {
-    await y?.close().catch(() => {
+    await handle?.close().catch(() => {
       return;
     });
   }
-  if (S !== undefined) {
-    await rm_2(n, {
+  if (failure !== undefined) {
+    await rm_2(filePath, {
       force: true,
     }).catch(() => {
       return;
     });
-    if (S instanceof PluginAssetFetchError) throw S;
+    if (failure instanceof PluginAssetFetchError) throw failure;
     throw new PluginAssetFetchError(
-      `asset download failed: ${S instanceof Error ? S.message : String(S)}`,
+      `asset download failed: ${failure instanceof Error ? failure.message : String(failure)}`,
       "asset_transient",
     );
   }
   try {
-    h.verifyDigest();
+    stream.verifyDigest();
   } catch (error) {
-    await rm_2(n, {
+    await rm_2(filePath, {
       force: true,
     }).catch(() => {
       return;
@@ -917,67 +984,76 @@ async function downloadAssetToFile(e, n, timeout, credentials) {
   }
 }
 //@ chunk-e6aww6q8.js:4382943-4383113 placement
-function createAssetStream(e, timeout, credentials) {
-  let s;
-  let h = false;
-  async function* y() {
-    h = true;
+function createAssetStream(sha, timeoutMs, credentials) {
+  let failure;
+  let started = false;
+  async function* chunks() {
+    started = true;
     try {
-      yield* downloadAssetWithDigest(await fetchPluginAsset(e, timeout, credentials), e, timeout, true)
-        .chunks;
+      yield* downloadAssetWithDigest(
+        await fetchPluginAsset(sha, timeoutMs, credentials),
+        sha,
+        timeoutMs,
+        true,
+      ).chunks;
     } catch (error) {
-      s = error;
+      failure = error;
       throw error;
     }
   }
   return {
-    chunks: y(),
-    failure: () => s,
-    started: () => h,
+    chunks: chunks(),
+    failure: () => failure,
+    started: () => started,
   };
 }
 //@ chunk-e6aww6q8.js:4383113-4384130 placement
 /**
  * 把一个二进制资源放到目标位置，经存储接口失败时报错。
  */
-async function placePluginBinaryAsset(cachePath, n, containedBinDir, s, h, storageV5, S) {
-  if (isStorageV5Enabled() && storageV5 !== undefined && S !== null && getPlatform() !== "windows") {
-    let G = await storageV5.copy(STORAGE_SPACES.pluginAssetCache(h), pluginBinaryStorageSpace(S, s), {
-      exactMode: 493,
-      parent: "mustExist",
-    });
-    if (!G.ok) {
-      let q = `placement through the storage interface failed: ${formatStorageError(G.error)}`;
-      let Z = G.error.code === "NotFound" ? "ENOENT" : errnoShapedCode(storageErrorCode(G.error));
-      if (Z === undefined) throw new PluginAssetFetchError(q, "asset_place_failed");
+async function placePluginBinaryAsset(cachePath, cacheDir, containedBinDir, name, sha, storageV5, namespace) {
+  if (isStorageV5Enabled() && storageV5 !== undefined && namespace !== null && getPlatform() !== "windows") {
+    let copyResult = await storageV5.copy(
+      STORAGE_SPACES.pluginAssetCache(sha),
+      pluginBinaryStorageSpace(namespace, name),
+      {
+        exactMode: 493,
+        parent: "mustExist",
+      },
+    );
+    if (!copyResult.ok) {
+      let message = `placement through the storage interface failed: ${formatStorageError(copyResult.error)}`;
+      let code =
+        copyResult.error.code === "NotFound" ? "ENOENT" : errnoShapedCode(storageErrorCode(copyResult.error));
+      if (code === undefined) throw new PluginAssetFetchError(message, "asset_place_failed");
       throw Object.assign(
         new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-          q,
+          message,
           "placement through the storage interface failed",
         ),
         {
-          code: Z,
+          code,
         },
       );
     }
     return;
   }
-  let w = join(containedBinDir, s);
-  let L = join(n, `.place-${s}-${makePidRandomId()}`);
+  let targetPath = join(containedBinDir, name);
+  let tempPath = join(cacheDir, `.place-${name}-${makePidRandomId()}`);
   try {
-    await copyFile(cachePath, L, constants.COPYFILE_EXCL);
+    await copyFile(cachePath, tempPath, constants.COPYFILE_EXCL);
     if (getPlatform() !== "windows") {
-      let Z = await open(L, readOnlyNoFollowFlags());
+      let handle = await open(tempPath, readOnlyNoFollowFlags());
       try {
-        await Z.chmod(493);
+        await handle.chmod(493);
       } finally {
-        await Z.close().catch(() => {
+        await handle.close().catch(() => {
           return;
         });
       }
     }
     try {
-      await renameReplacing(L, w);
+      await renameReplacing(tempPath, targetPath);
       return;
     } catch (error) {
       if (getErrnoCode(error) !== "EXDEV") throw error;
@@ -987,22 +1063,22 @@ async function placePluginBinaryAsset(cachePath, n, containedBinDir, s, h, stora
           "asset_place_exdev",
         );
     }
-    let G = join(containedBinDir, `.place-${s}-${makePidRandomId()}`);
-    let q = false;
+    let tempPath2 = join(containedBinDir, `.place-${name}-${makePidRandomId()}`);
+    let placedCopy = false;
     try {
-      await copyFile(L, G, constants.COPYFILE_EXCL);
-      await renameReplacing(G, w);
-      q = true;
+      await copyFile(tempPath, tempPath2, constants.COPYFILE_EXCL);
+      await renameReplacing(tempPath2, targetPath);
+      placedCopy = true;
     } finally {
-      if (!q)
-        await rm_2(G, {
+      if (!placedCopy)
+        await rm_2(tempPath2, {
           force: true,
         }).catch(() => {
           return;
         });
     }
   } finally {
-    await rm_2(L, {
+    await rm_2(tempPath, {
       force: true,
     }).catch(() => {
       return;
@@ -1013,33 +1089,33 @@ async function placePluginBinaryAsset(cachePath, n, containedBinDir, s, h, stora
 /**
  * 用硬链接（或存储共享复制）把缓存资源放进 bin 并校验。
  */
-async function linkAssetIntoBin(containedBinDir, n, r, s, storageV5, y) {
+async function linkAssetIntoBin(containedBinDir, sourceName, linkName, expectedSha, storageV5, namespace) {
   if (getPlatform() === "windows") return "failed_clean";
-  let S = join(containedBinDir, n);
-  let w = join(containedBinDir, r);
-  if (isStorageV5Enabled() && storageV5 !== undefined && y !== null) {
-    let G = await shareCopyAsset(storageV5, y, n, r);
-    if (G !== "created") return G;
+  let linkSource = join(containedBinDir, sourceName);
+  let linkPath = join(containedBinDir, linkName);
+  if (isStorageV5Enabled() && storageV5 !== undefined && namespace !== null) {
+    let shared = await shareCopyAsset(storageV5, namespace, sourceName, linkName);
+    if (shared !== "created") return shared;
     return (await verifyPlacedAsset(
-      w,
-      s,
+      linkPath,
+      expectedSha,
       {
         ensureMode: 493,
         guestWritable: true,
       },
       storageV5,
-      pluginBinaryStorageSpace(y, r),
+      pluginBinaryStorageSpace(namespace, linkName),
     )) === "match"
       ? "placed"
       : "failed_created";
   }
   try {
-    await link(S, w);
+    await link(linkSource, linkPath);
   } catch (error) {
     if (getErrnoCode(error) === "EEXIST") return "exists";
     return "failed_clean";
   }
-  return (await verifyPlacedAsset(w, s, {
+  return (await verifyPlacedAsset(linkPath, expectedSha, {
     ensureMode: 493,
     guestWritable: true,
   })) === "match"
@@ -1050,17 +1126,17 @@ async function linkAssetIntoBin(containedBinDir, n, r, s, storageV5, y) {
 /**
  * 存储层共享复制资源（ifAbsent），映射结果。
  */
-async function shareCopyAsset(e, n, r, s) {
-  let h = pluginBinaryStorageSpace(n, r);
-  let y = await e.copy(h, pluginBinaryStorageSpace(n, s), {
+async function shareCopyAsset(storageV5, namespace, sourceName, targetName) {
+  let sourceSpace = pluginBinaryStorageSpace(namespace, sourceName);
+  let copyResult = await storageV5.copy(sourceSpace, pluginBinaryStorageSpace(namespace, targetName), {
     precondition: {
       type: "ifAbsent",
     },
     parent: "mustExist",
     share: "require",
   });
-  if (y.ok) return y.value.shared ? "created" : "failed_created";
-  let error = y.error;
+  if (copyResult.ok) return copyResult.value.shared ? "created" : "failed_created";
+  let error = copyResult.error;
   if (error.code === "AlreadyExists") return "exists";
   if (
     error.code === "Unavailable" &&
@@ -1068,46 +1144,46 @@ async function shareCopyAsset(e, n, r, s) {
   )
     return "failed_created";
   if (error.code !== "Failed" || error.key === undefined) return "failed_clean";
-  let w = storageErrorCode(error);
-  if (isSameStorageSpace(error.key, h))
-    return w === "ELOOP" || w === "ENXIO" ? "refused_source" : "failed_clean";
-  return w === "ELOOP" || w === "EISDIR" || w === "ENXIO" ? "exists" : "failed_clean";
+  let code = storageErrorCode(error);
+  if (isSameStorageSpace(error.key, sourceSpace))
+    return code === "ELOOP" || code === "ENXIO" ? "refused_source" : "failed_clean";
+  return code === "ELOOP" || code === "EISDIR" || code === "ENXIO" ? "exists" : "failed_clean";
 }
 //@ chunk-e6aww6q8.js:4385151-4385310 placement
-async function renameReplacing(e, n) {
+async function renameReplacing(tempPath, targetPath) {
   try {
-    await rename(e, n);
+    await rename(tempPath, targetPath);
   } catch (error) {
     let errnoCode = getErrnoCode(error);
     if (errnoCode === "EXDEV" || errnoCode === undefined) throw error;
     if (!ATOMIC_WRITE_ERRNOS.has(errnoCode)) throw error;
-    await rm_2(n, {
+    await rm_2(targetPath, {
       force: true,
     });
-    await rename(e, n);
+    await rename(tempPath, targetPath);
   }
 }
 //@ chunk-e6aww6q8.js:4385310-4385619 placement = convertDirectoryToZipInPlace (0.79)
 /**
  * 清理目录中过期的临时文件（点文件与普通文件不同期限；存储后端模式走存储层）。
  */
-async function sweepStaleTempFiles(e, storageV5, r) {
-  if (isStorageV5Enabled() && storageV5 !== undefined && r !== null)
-    return sweepExpiredStorageEntries(e, storageV5, r);
-  let s;
+async function sweepStaleTempFiles(dirPath, storageV5, namespace) {
+  if (isStorageV5Enabled() && storageV5 !== undefined && namespace !== null)
+    return sweepExpiredStorageEntries(dirPath, storageV5, namespace);
+  let names;
   try {
-    s = await readdir(e);
+    names = await readdir(dirPath);
   } catch {
     return;
   }
   let now = Date.now();
-  for (let y of s) {
-    let S = join(e, y);
-    let w = await lstat(S).catch(() => null);
-    if (!w) continue;
-    let L = y.startsWith(".") ? TEMP_FILE_TTL_MS : ASSET_CACHE_TTL_MS;
-    if (now - w.mtimeMs > L)
-      await rm_2(S, {
+  for (let name of names) {
+    let entryPath = join(dirPath, name);
+    let stat = await lstat(entryPath).catch(() => null);
+    if (!stat) continue;
+    let ttlMs = name.startsWith(".") ? TEMP_FILE_TTL_MS : ASSET_CACHE_TTL_MS;
+    if (now - stat.mtimeMs > ttlMs)
+      await rm_2(entryPath, {
         recursive: true,
         force: true,
       }).catch(() => {
@@ -1116,35 +1192,35 @@ async function sweepStaleTempFiles(e, storageV5, r) {
   }
 }
 //@ chunk-e6aww6q8.js:4385619-4385888 placement
-async function sweepExpiredStorageEntries(dirPath, n, r) {
+async function sweepExpiredStorageEntries(dirPath, storageV5, namespace) {
   let now = Date.now();
-  let h;
+  let cursor;
   do {
-    let y = await n.listEntries(r, {
-      cursor: h,
+    let page = await storageV5.listEntries(namespace, {
+      cursor,
     });
-    if (!y.ok) break;
-    for (let item of y.value.items)
+    if (!page.ok) break;
+    for (let item of page.value.items)
       if (item.kind === "key" && item.mtimeMs !== undefined && now - item.mtimeMs > ASSET_CACHE_TTL_MS)
-        await n.delete(item.key);
-    h = y.value.cursor;
-  } while (h);
-  await convertDirectoryToZipInPlace_2(dirPath, (y) => y.startsWith("."));
+        await storageV5.delete(item.key);
+    cursor = page.value.cursor;
+  } while (cursor);
+  await convertDirectoryToZipInPlace_2(dirPath, (name) => name.startsWith("."));
 }
 //@ chunk-e6aww6q8.js:4385888-4386116 placement = convertDirectoryToZipInPlace (0.79)
 async function convertDirectoryToZipInPlace_2(dirPath, zipPath) {
-  let r;
+  let names;
   try {
-    r = await readdir(dirPath);
+    names = await readdir(dirPath);
   } catch {
     return;
   }
   let now = Date.now();
-  for (let h of r.filter(zipPath)) {
-    let y = join(dirPath, h);
-    let S = await lstat(y).catch(() => null);
-    if (S && now - S.mtimeMs > TEMP_FILE_TTL_MS)
-      await rm_2(y, {
+  for (let name of names.filter(zipPath)) {
+    let entryPath = join(dirPath, name);
+    let stat = await lstat(entryPath).catch(() => null);
+    if (stat && now - stat.mtimeMs > TEMP_FILE_TTL_MS)
+      await rm_2(entryPath, {
         recursive: true,
         force: true,
       }).catch(() => {
@@ -1155,16 +1231,5 @@ async function convertDirectoryToZipInPlace_2(dirPath, zipPath) {
 //@ chunk-e6aww6q8.js:4386116-4386180 placement = generatePlaceholders (0.792)
 function makePidRandomId() {
   return `${process.pid}-${randomBytes(6).toString("hex")}`;
-}
-//@ chunk-f3qhjfah.js:4072-4167 placement
-/**
- * 若路径正是插件资源缓存目录（`<配置目录>/plugins/asset-cache`），返回存储命名空间 pluginAssetCache，否则 null。
- */
-function assetCacheNamespace(e) {
-  return e === join(getClaudeConfigDir(), "plugins", "asset-cache")
-    ? {
-        namespace: "pluginAssetCache",
-      }
-    : null;
 }
 export { provisionBinaryAssets, shouldInstallBinaryAssets };

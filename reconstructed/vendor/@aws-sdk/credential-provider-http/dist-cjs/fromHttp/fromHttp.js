@@ -10,14 +10,14 @@ import { import_property_provider, checkUrl, import_node_http_handler, import_cl
 import { createGetRequest, getCredentials } from "./requestHelpers.js";
 
 //@ chunk-0c72454j.js:2461-2594 esm-layout
-var f = (e, o, n) => async () => {
-  for (let j = 0; j < o; ++j)
+var retryWrapper = (fn, maxAttempts, sleepImpl) => async () => {
+  for (let j = 0; j < maxAttempts; ++j)
     try {
-      return await e();
+      return await fn();
     } catch (error) {
-      await new Promise((resolve) => setTimeout(resolve, n));
+      await new Promise((resolve) => setTimeout(resolve, sleepImpl));
     }
-  return await e();
+  return await fn();
 };
 //@ chunk-0c72454j.js:2594-4271 esm-fingerprint
 var AWS_CONTAINER_CREDENTIALS_RELATIVE_URI = "AWS_CONTAINER_CREDENTIALS_RELATIVE_URI";
@@ -25,7 +25,7 @@ var DEFAULT_LINK_LOCAL_HOST = "http://169.254.170.2";
 var AWS_CONTAINER_CREDENTIALS_FULL_URI = "AWS_CONTAINER_CREDENTIALS_FULL_URI";
 var AWS_CONTAINER_AUTHORIZATION_TOKEN_FILE = "AWS_CONTAINER_AUTHORIZATION_TOKEN_FILE";
 var AWS_CONTAINER_AUTHORIZATION_TOKEN = "AWS_CONTAINER_AUTHORIZATION_TOKEN";
-var H = (options = {}) => {
+var fromHttp = (options = {}) => {
   options.logger?.debug("@aws-sdk/credential-provider-http - fromHttp");
   let host;
   let relative =
@@ -66,7 +66,7 @@ Set AWS_CONTAINER_CREDENTIALS_FULL_URI or AWS_CONTAINER_CREDENTIALS_RELATIVE_URI
     requestTimeout: options.timeout ?? 1000,
     connectionTimeout: options.timeout ?? 1000,
   });
-  return f(
+  return retryWrapper(
     async () => {
       let request = createGetRequest(url);
       if (token) request.headers.Authorization = token;
@@ -86,3 +86,4 @@ Set AWS_CONTAINER_CREDENTIALS_FULL_URI or AWS_CONTAINER_CREDENTIALS_RELATIVE_URI
     options.timeout ?? 1000,
   );
 };
+export { fromHttp };

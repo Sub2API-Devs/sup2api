@@ -43,61 +43,64 @@ import { readOnlyNoFollowFlags } from "../../platformTargets.js";
 import { getErrnoCode } from "../../errors.js";
 import { hasNulByte, parseGitConfig } from "../gitConfigParser.js";
 import { firstLineOf } from "../../stringUtils.js";
+import { deferInit } from "../../../../runtime/deferred-init.js";
 
 //@ chunk-s61vbvea.js:267395-270729 placement
 /**
  * 读取检出内的 git 配置与 config.worktree，判断能否安全使用
  */
-async function readInTreeGitConfig(repository, cwd, r) {
-  for (let se of ["config", "config.worktree"]) {
-    let re = join(repository, se);
-    let gitConfigFile = await readGitConfigFile(re, false);
+async function readInTreeGitConfig(repository, cwd, allowWorktreeConfig) {
+  for (let name of ["config", "config.worktree"]) {
+    let configPath = join(repository, name);
+    let gitConfigFile = await readGitConfigFile(configPath, false);
     if (gitConfigFile.kind === "unread")
       return {
         kind: "unread",
-        file: re,
+        file: configPath,
       };
     if (gitConfigFile.kind === "shared")
       return {
         kind: "second_name",
-        file: re,
+        file: configPath,
       };
     if (gitConfigFile.kind === "read" && gitConfigFile.hasInclude)
       return {
         kind: "includes",
-        file: re,
+        file: configPath,
       };
     if (gitConfigFile.kind === "read" && gitConfigFile.coreWorktree)
       return {
         kind: "work_tree",
-        file: re,
+        file: configPath,
       };
-    if (gitConfigFile.kind === "read" && r && gitConfigFile.worktreeConfigOn)
+    if (gitConfigFile.kind === "read" && allowWorktreeConfig && gitConfigFile.worktreeConfigOn)
       return {
         kind: "worktree_config",
-        file: re,
+        file: configPath,
       };
   }
-  let s = repoAncestorsBelowHome(cwd);
-  let h =
-    s.length === 0 ? [] : uniq([homedir(), ...s].flatMap((se) => [se, ...resolvePathSpellings(se, cwd)]));
+  let ancestors = repoAncestorsBelowHome(cwd);
+  let homePaths =
+    ancestors.length === 0
+      ? []
+      : uniq([homedir(), ...ancestors].flatMap((dir) => [dir, ...resolvePathSpellings(dir, cwd)]));
   let repoSettingsReachRoots = collectRepoSettingsReachRoots(cwd);
   if (repoSettingsReachRoots === "unreadable")
     return {
       kind: "settings_unreadable",
       file: join(cwd, ".claude"),
     };
-  let S = (
+  let settingsRoots = (
     await Promise.all(
-      uniq([...settingsReachRoots(cwd), ...repoSettingsReachRoots]).map(async (se) => {
+      uniq([...settingsReachRoots(cwd), ...repoSettingsReachRoots]).map(async (root) => {
         let foreignSpelling = await resolveForeignSpellingAsync(
-          await classifyPathSpelling_3(se, cwd),
+          await classifyPathSpelling_3(root, cwd),
           cwd,
           protectedHomeRoots(),
         );
         return foreignSpelling.verdict === "local"
           ? await dropSpecialFiles(
-              uniq([se, foreignSpelling.spelling, ...resolvePathSpellings(foreignSpelling.spelling, cwd)]),
+              uniq([root, foreignSpelling.spelling, ...resolvePathSpellings(foreignSpelling.spelling, cwd)]),
             )
           : spellingsToCheck(
               foreignSpelling.verdict === "foreign"
@@ -111,167 +114,173 @@ async function readInTreeGitConfig(repository, cwd, r) {
       }),
     )
   ).flat();
-  let w = uniq([
-    ...[cwd, repository, checkoutDirOfGitDir(repository)].flatMap((se) => [
-      se,
-      ...resolvePathSpellings(se, cwd),
+  let roots = uniq([
+    ...[cwd, repository, checkoutDirOfGitDir(repository)].flatMap((dir) => [
+      dir,
+      ...resolvePathSpellings(dir, cwd),
     ]),
-    ...S,
+    ...settingsRoots,
     ...(await orderLocalRootsFirst(await checkSessionTempRoot(cwd), cwd)),
-    ...h,
+    ...homePaths,
   ]);
-  let R = async (se, re) => {
-    if (hasDotDotSegment(re)) return true;
+  let isRootUnsafe = async (roots, includePath) => {
+    if (hasDotDotSegment(includePath)) return true;
     let foreignSpelling = await resolveForeignSpellingAsync(
-      await classifyPathSpelling_3(re, cwd),
+      await classifyPathSpelling_3(includePath, cwd),
       cwd,
       protectedHomeRoots(),
     );
     if (foreignSpelling.verdict !== "local") return true;
     let realPathLoose = resolveRealPathLoose(foreignSpelling.spelling, cwd);
     return (
-      realPathLoose === null || se.some((ce) => isPathInside_2(ce, re) || isPathInside_2(ce, realPathLoose))
+      realPathLoose === null ||
+      roots.some((root) => isPathInside_2(root, includePath) || isPathInside_2(root, realPathLoose))
     );
   };
-  let x = (se) => R(w, se);
-  let P = (se) => findHeldCheckout(se, cwd);
-  let j = async (includePaths) => {
-    for (let re of includePaths) if (await x(re)) return re;
+  let isCovered = (includePath) => isRootUnsafe(roots, includePath);
+  let findCheckout = (includePath) => findHeldCheckout(includePath, cwd);
+  let firstCovered = async (includePaths) => {
+    for (let includePath of includePaths) if (await isCovered(includePath)) return includePath;
     return;
   };
-  let gitEnv = buildGitEnv(undefined);
-  let L = 0;
-  let q = async (includes, re, he) => {
-    for (let Se of includes) {
-      let match = /^%\(prefix\)\/(.*)$/s.exec(Se);
-      if (match !== null && !isAbsolute(match[1] ?? "") && Se.split(/[/\\]/).includes(".."))
+  let env = buildGitEnv(undefined);
+  let includeCount = 0;
+  let scanIncludes = async (includes, includes_2, depth) => {
+    for (let includeValue of includes) {
+      let match = /^%\(prefix\)\/(.*)$/s.exec(includeValue);
+      if (match !== null && !isAbsolute(match[1] ?? "") && includeValue.split(/[/\\]/).includes(".."))
         return "includes";
-      let we = match !== null && isAbsolute(match[1] ?? "") ? (match[1] ?? Se) : Se;
-      let includePaths = resolveIncludePaths(we, re, cwd);
+      let expanded = match !== null && isAbsolute(match[1] ?? "") ? (match[1] ?? includeValue) : includeValue;
+      let includePaths = resolveIncludePaths(expanded, includes_2, cwd);
       if (
         includePaths.some(
           (includePath) => includePath.includes("\uFFFD") || isWindowsNonDrivePath(includePath),
         )
       )
         return "unread";
-      if ((await j(includePaths)) !== undefined) return "includes";
+      if ((await firstCovered(includePaths)) !== undefined) return "includes";
       for (let includePath of includePaths) {
-        let Ie = await P(includePath);
-        if (Ie?.kind === "unvouched") return "unread";
-        if (Ie !== null)
+        let checkout = await findCheckout(includePath);
+        if (checkout?.kind === "unvouched") return "unread";
+        if (checkout !== null)
           return {
             kind: "config_in_checkout",
-            checkout: Ie.checkout,
+            checkout: checkout.checkout,
           };
       }
       for (let includePath of includePaths) {
-        L++;
-        if (he >= MAX_INCLUDE_DEPTH || L > MAX_INCLUDE_FILES) return "unread";
+        includeCount++;
+        if (depth >= MAX_INCLUDE_DEPTH || includeCount > MAX_INCLUDE_FILES) return "unread";
         let gitConfigFile = await readGitConfigFile(includePath, true);
         if (gitConfigFile.kind === "unread") return "unread";
         if (gitConfigFile.kind === "shared") return "second_name";
         if (gitConfigFile.kind === "read") {
-          let ke = Z(gitConfigFile);
-          if (ke !== "clear") return ke;
-          let Me = await q(gitConfigFile.includes, `file:${includePath}`, he + 1);
-          if (Me !== "clear") return Me;
+          let hazard = classifyHazard(gitConfigFile);
+          if (hazard !== "clear") return hazard;
+          let nested = await scanIncludes(gitConfigFile.includes, `file:${includePath}`, depth + 1);
+          if (nested !== "clear") return nested;
         }
       }
     }
     return "clear";
   };
-  let Q = (se, file) =>
-    typeof se === "string"
+  let resultFor = (kind, file) =>
+    typeof kind === "string"
       ? {
-          kind: se,
+          kind,
           file,
         }
       : {
           kind: "config_in_checkout",
           file,
-          checkout: se.checkout,
+          checkout: kind.checkout,
         };
-  let Z = (gitConfigFile) =>
+  let classifyHazard = (gitConfigFile) =>
     gitConfigFile.coreWorktree
       ? "work_tree"
-      : r && gitConfigFile.worktreeConfigOn
+      : allowWorktreeConfig && gitConfigFile.worktreeConfigOn
         ? "worktree_config"
         : "clear";
-  let gitConfigFromEnv = readGitConfigFromEnv(gitEnv);
+  let gitConfigFromEnv = readGitConfigFromEnv(env);
   if (gitConfigFromEnv === null)
     return {
       kind: "unread",
       file: LAUNCH_ENV_CONFIG_NOTE,
     };
   for (let { key, value: envVar } of gitConfigFromEnv) {
-    let lower = key.toLowerCase();
-    if (lower === "core.worktree")
+    let key_2 = key.toLowerCase();
+    if (key_2 === "core.worktree")
       return {
         kind: "work_tree",
         file: LAUNCH_ENV_CONFIG_NOTE,
       };
-    if (r && lower === "extensions.worktreeconfig" && (envVar === undefined || isEnvDefinedFalsy(envVar)))
+    if (
+      allowWorktreeConfig &&
+      key_2 === "extensions.worktreeconfig" &&
+      (envVar === undefined || isEnvDefinedFalsy(envVar))
+    )
       return {
         kind: "worktree_config",
         file: LAUNCH_ENV_CONFIG_NOTE,
       };
-    if (inTreeConfigFileKeys(lower) && envVar !== undefined) {
-      let Se = await q([envVar], "command line:", 0);
-      if (Se !== "clear") return Q(Se, LAUNCH_ENV_CONFIG_NOTE);
+    if (inTreeConfigFileKeys(key_2) && envVar !== undefined) {
+      let result = await scanIncludes([envVar], "command line:", 0);
+      if (result !== "clear") return resultFor(result, LAUNCH_ENV_CONFIG_NOTE);
     }
   }
-  let ae = uniq(getGitConfigPaths([], cwd, null, gitEnv));
-  for (let se of ae) {
-    if (se.includes("\uFFFD") || isWindowsNonDrivePath(se))
+  let configPaths = uniq(getGitConfigPaths([], cwd, null, env));
+  for (let configPath of configPaths) {
+    if (configPath.includes("\uFFFD") || isWindowsNonDrivePath(configPath))
       return {
         kind: "unread",
-        file: se,
+        file: configPath,
       };
-    if (s.length > 0 && (await R(h, se)))
+    if (ancestors.length > 0 && (await isRootUnsafe(homePaths, configPath)))
       return {
         kind: "home_checkout",
-        file: se,
-        checkout: s[0],
+        file: configPath,
+        checkout: ancestors[0],
       };
-    if (await x(se))
+    if (await isCovered(configPath))
       return {
         kind: "includes",
-        file: se,
+        file: configPath,
       };
-    let re = await P(se);
-    if (re?.kind === "unvouched")
+    let checkout = await findCheckout(configPath);
+    if (checkout?.kind === "unvouched")
       return {
         kind: "unread",
-        file: se,
+        file: configPath,
       };
-    if (re !== null)
+    if (checkout !== null)
       return {
         kind: "config_in_checkout",
-        file: se,
-        checkout: re.checkout,
+        file: configPath,
+        checkout: checkout.checkout,
       };
-    if (resolveRealPathLoose(se, cwd) === se && (await readInTreeConfig(se))) continue;
-    let gitConfigFile = await readGitConfigFile(se, true);
+    if (resolveRealPathLoose(configPath, cwd) === configPath && (await readInTreeConfig(configPath)))
+      continue;
+    let gitConfigFile = await readGitConfigFile(configPath, true);
     if (gitConfigFile.kind === "device") continue;
     if (gitConfigFile.kind === "unread")
       return {
         kind: "unread",
-        file: se,
+        file: configPath,
       };
     if (gitConfigFile.kind === "shared")
       return {
         kind: "second_name",
-        file: se,
+        file: configPath,
       };
     if (gitConfigFile.kind === "read") {
-      let Se = Z(gitConfigFile);
-      if (Se !== "clear")
+      let hazard = classifyHazard(gitConfigFile);
+      if (hazard !== "clear")
         return {
-          kind: Se,
-          file: se,
+          kind: hazard,
+          file: configPath,
         };
-      let ce = await q(gitConfigFile.includes, `file:${se}`, 0);
-      if (ce !== "clear") return Q(ce, se);
+      let nested = await scanIncludes(gitConfigFile.includes, `file:${configPath}`, 0);
+      if (nested !== "clear") return resultFor(nested, configPath);
     }
   }
   return {
@@ -288,44 +297,49 @@ var MAX_INCLUDE_DEPTH = 4;
 /**
  * 判断配置键是否为 include.path / includeIf.*.path。
  */
-function inTreeConfigFileKeys(e) {
-  return e === "include.path" || (e.startsWith("includeif.") && e.endsWith(".path"));
+function inTreeConfigFileKeys(key) {
+  return key === "include.path" || (key.startsWith("includeif.") && key.endsWith(".path"));
 }
 //@ chunk-s61vbvea.js:270872-271267 placement
 /**
  * 解析 GIT_CONFIG_COUNT/KEY_n/VALUE_n 与 GIT_CONFIG_PARAMETERS。
  */
-function readGitConfigFromEnv(e) {
-  let n = [];
-  let envCaseInsensitive = getEnvCaseInsensitive(e, "GIT_CONFIG_COUNT");
+function readGitConfigFromEnv(env) {
+  let pairs = [];
+  let envCaseInsensitive = getEnvCaseInsensitive(env, "GIT_CONFIG_COUNT");
   if (envCaseInsensitive !== undefined && envCaseInsensitive !== "") {
     if (!/^\d+$/.test(envCaseInsensitive.trim())) return null;
     for (let j = 0; j < Number(envCaseInsensitive); j++) {
-      let envCaseInsensitive = getEnvCaseInsensitive(e, `GIT_CONFIG_KEY_${j}`);
-      let envCaseInsensitive_2 = getEnvCaseInsensitive(e, `GIT_CONFIG_VALUE_${j}`);
+      let envCaseInsensitive = getEnvCaseInsensitive(env, `GIT_CONFIG_KEY_${j}`);
+      let envCaseInsensitive_2 = getEnvCaseInsensitive(env, `GIT_CONFIG_VALUE_${j}`);
       if (envCaseInsensitive === undefined || envCaseInsensitive_2 === undefined) return null;
-      n.push({
+      pairs.push({
         key: envCaseInsensitive,
         value: envCaseInsensitive_2,
       });
     }
   }
-  let envCaseInsensitive_2 = getEnvCaseInsensitive(e, "GIT_CONFIG_PARAMETERS");
+  let envCaseInsensitive_2 = getEnvCaseInsensitive(env, "GIT_CONFIG_PARAMETERS");
   if (envCaseInsensitive_2 !== undefined && envCaseInsensitive_2.trim() !== "") {
     let gitConfigParameters = parseGitConfigParameters(envCaseInsensitive_2);
     if (gitConfigParameters === null) return null;
-    n.push(...gitConfigParameters);
+    pairs.push(...gitConfigParameters);
   }
-  return n;
+  return pairs;
 }
 //@ chunk-s61vbvea.js:271267-271516 placement
-async function orderLocalRootsFirst(e, n) {
+async function orderLocalRootsFirst(roots, launchDir) {
   let results = await Promise.all(
-    e.map(async (s) => ({
-      root: s,
+    roots.map(async (root) => ({
+      root,
       local:
-        (await resolveForeignSpellingAsync(await classifyPathSpelling_3(s, n), n, protectedHomeRoots()))
-          .verdict === "local",
+        (
+          await resolveForeignSpellingAsync(
+            await classifyPathSpelling_3(root, launchDir),
+            launchDir,
+            protectedHomeRoots(),
+          )
+        ).verdict === "local",
     })),
   );
   return [
@@ -334,20 +348,20 @@ async function orderLocalRootsFirst(e, n) {
   ];
 }
 //@ chunk-s61vbvea.js:271516-271727 placement
-async function dropSpecialFiles(e) {
+async function dropSpecialFiles(paths) {
   return (
     await Promise.all(
-      e.map(async (r) => {
-        if (!isAbsolute(r)) return null;
+      paths.map(async (path) => {
+        if (!isAbsolute(path)) return null;
         try {
-          let s = await lstat(r);
-          return s.isCharacterDevice() || s.isFIFO() || s.isSocket() ? null : r;
+          let stats = await lstat(path);
+          return stats.isCharacterDevice() || stats.isFIFO() || stats.isSocket() ? null : path;
         } catch {
-          return r;
+          return path;
         }
       }),
     )
-  ).filter((r) => r !== null);
+  ).filter((path) => path !== null);
 }
 //@ chunk-s61vbvea.js:271727-271746 placement
 var CONFIG_VALUE_WHITESPACE_RE = /[ \t\n\r]/;
@@ -356,85 +370,92 @@ var CONFIG_VALUE_WHITESPACE_RE = /[ \t\n\r]/;
  * 解析 GIT_CONFIG_PARAMETERS 的单引号键值列表。
  */
 function parseGitConfigParameters(envCaseInsensitive) {
-  let n = [];
-  let r = 0;
-  let s = () => {
-    if (envCaseInsensitive[r] !== "'") return null;
-    let h = "";
-    r++;
+  let pairs = [];
+  let pos = 0;
+  let readQuoted = () => {
+    if (envCaseInsensitive[pos] !== "'") return null;
+    let quoted = "";
+    pos++;
     for (;;) {
-      let index = envCaseInsensitive.indexOf("'", r);
+      let index = envCaseInsensitive.indexOf("'", pos);
       if (index === -1) return null;
-      h += envCaseInsensitive.slice(r, index);
-      r = index + 1;
+      quoted += envCaseInsensitive.slice(pos, index);
+      pos = index + 1;
       if (
-        envCaseInsensitive[r] === "\\" &&
-        r + 2 < envCaseInsensitive.length &&
-        envCaseInsensitive[r + 2] === "'"
+        envCaseInsensitive[pos] === "\\" &&
+        pos + 2 < envCaseInsensitive.length &&
+        envCaseInsensitive[pos + 2] === "'"
       ) {
-        h += envCaseInsensitive[r + 1];
-        r += 3;
+        quoted += envCaseInsensitive[pos + 1];
+        pos += 3;
         continue;
       }
-      return h;
+      return quoted;
     }
   };
-  while (r < envCaseInsensitive.length) {
-    while (r < envCaseInsensitive.length && CONFIG_VALUE_WHITESPACE_RE.test(envCaseInsensitive[r] ?? "")) r++;
-    if (r >= envCaseInsensitive.length) break;
-    let h = s();
-    if (h === null) return null;
-    if (envCaseInsensitive[r] === "=") {
-      r++;
-      if (r >= envCaseInsensitive.length || CONFIG_VALUE_WHITESPACE_RE.test(envCaseInsensitive[r] ?? "")) {
-        n.push({
-          key: h,
+  while (pos < envCaseInsensitive.length) {
+    while (pos < envCaseInsensitive.length && CONFIG_VALUE_WHITESPACE_RE.test(envCaseInsensitive[pos] ?? ""))
+      pos++;
+    if (pos >= envCaseInsensitive.length) break;
+    let key = readQuoted();
+    if (key === null) return null;
+    if (envCaseInsensitive[pos] === "=") {
+      pos++;
+      if (
+        pos >= envCaseInsensitive.length ||
+        CONFIG_VALUE_WHITESPACE_RE.test(envCaseInsensitive[pos] ?? "")
+      ) {
+        pairs.push({
+          key,
           value: undefined,
         });
         continue;
       }
-      let y = s();
-      if (y === null) return null;
-      n.push({
-        key: h,
-        value: y,
+      let value = readQuoted();
+      if (value === null) return null;
+      pairs.push({
+        key,
+        value,
       });
     } else {
-      let index = h.indexOf("=");
-      n.push(
+      let index = key.indexOf("=");
+      pairs.push(
         index === -1
           ? {
-              key: h,
+              key,
               value: undefined,
             }
           : {
-              key: h.slice(0, index).trim(),
-              value: h.slice(index + 1),
+              key: key.slice(0, index).trim(),
+              value: key.slice(index + 1),
             },
       );
     }
-    if (r < envCaseInsensitive.length && !CONFIG_VALUE_WHITESPACE_RE.test(envCaseInsensitive[r] ?? ""))
+    if (pos < envCaseInsensitive.length && !CONFIG_VALUE_WHITESPACE_RE.test(envCaseInsensitive[pos] ?? ""))
       return null;
   }
-  return n;
+  return pairs;
 }
 //@ chunk-s61vbvea.js:272399-272480 placement
-async function readInTreeConfig(e) {
+async function readInTreeConfig(filePath) {
   try {
-    return (await lstat(e)).isCharacterDevice();
+    return (await lstat(filePath)).isCharacterDevice();
   } catch {
     return false;
   }
 }
 //@ chunk-s61vbvea.js:272480-273100 placement
-async function readGitConfigFile(e, n) {
-  let r;
+async function readGitConfigFile(filePath, followLink) {
+  let handle;
   try {
-    if (!n && getPlatform_2() === "windows" && !(await lstat(e)).isFile())
+    if (!followLink && getPlatform_2() === "windows" && !(await lstat(filePath)).isFile())
       return {
         kind: "unread",
       };
-    r = await open(e, n ? constants.O_RDONLY | OPEN_CONFIG_FLAGS() : readOnlyNoFollowFlags());
+    handle = await open(
+      filePath,
+      followLink ? constants.O_RDONLY | OPEN_CONFIG_FLAGS() : readOnlyNoFollowFlags(),
+    );
   } catch (error) {
     let errnoCode = getErrnoCode(error);
     return errnoCode === "ENOENT" || errnoCode === "ENOTDIR"
@@ -446,7 +467,7 @@ async function readGitConfigFile(e, n) {
         };
   }
   try {
-    let stats = await r.stat();
+    let stats = await handle.stat();
     if (stats.isCharacterDevice())
       return {
         kind: "device",
@@ -455,28 +476,28 @@ async function readGitConfigFile(e, n) {
       return {
         kind: "unread",
       };
-    if (await isWritableSharedFile(e, stats))
+    if (await isWritableSharedFile(filePath, stats))
       return {
         kind: "shared",
       };
-    let h = Buffer.alloc(stats.size);
-    let { bytesRead } = await r.read(h, 0, stats.size, 0);
+    let buffer = Buffer.alloc(stats.size);
+    let { bytesRead } = await handle.read(buffer, 0, stats.size, 0);
     if (bytesRead !== stats.size)
       return {
         kind: "unread",
       };
-    let str = h.toString("utf8");
-    return hasNulByte(str)
+    let text = buffer.toString("utf8");
+    return hasNulByte(text)
       ? {
           kind: "unread",
         }
-      : auditWorktreeConfigKeys(str);
+      : auditWorktreeConfigKeys(text);
   } catch {
     return {
       kind: "unread",
     };
   } finally {
-    await r.close().catch(() => {});
+    await handle.close().catch(() => {});
   }
 }
 //@ chunk-s61vbvea.js:273100-273153 placement
@@ -484,57 +505,60 @@ function OPEN_CONFIG_FLAGS() {
   return getPlatform_2() === "windows" ? 0 : constants.O_NONBLOCK;
 }
 //@ chunk-s61vbvea.js:273153-273767 placement
-function auditWorktreeConfigKeys(e) {
-  let n = [];
+function auditWorktreeConfigKeys(text) {
+  let includes = [];
   let hasInclude = false;
   let coreWorktree = false;
   let worktreeConfigOn = false;
   let saysBare = false;
-  let S = true;
-  let w = false;
+  let inertKeysOnly = true;
+  let malformed = false;
   parseGitConfig(
-    e,
+    text,
     {
-      header(R) {
-        hasInclude ||= includesConfigKey(R.name);
-        S &&= R.name === "core" && !R.quoted;
+      header(section) {
+        hasInclude ||= includesConfigKey(section.name);
+        inertKeysOnly &&= section.name === "core" && !section.quoted;
       },
-      entry(R, x, envVar) {
-        S &&= R?.name === "core" && !R.quoted && KNOWN_SAFE_EXTENSIONS.has(x);
-        if (R === null) return;
-        if (includesConfigKey(R.name) && x === "path")
-          if (envVar === undefined) w = true;
-          else n.push(envVar);
-        if (R.name === "core" && !R.quoted && x === "worktree") coreWorktree = true;
-        if (R.name === "extensions" && !R.quoted && x === "worktreeconfig")
+      entry(section, key, envVar) {
+        inertKeysOnly &&= section?.name === "core" && !section.quoted && KNOWN_SAFE_EXTENSIONS.has(key);
+        if (section === null) return;
+        if (includesConfigKey(section.name) && key === "path")
+          if (envVar === undefined) malformed = true;
+          else includes.push(envVar);
+        if (section.name === "core" && !section.quoted && key === "worktree") coreWorktree = true;
+        if (section.name === "extensions" && !section.quoted && key === "worktreeconfig")
           worktreeConfigOn = envVar === undefined || isEnvDefinedFalsy(envVar);
-        if (R.name === "core" && !R.quoted && x === "bare")
+        if (section.name === "core" && !section.quoted && key === "bare")
           saysBare ||= envVar === undefined || isEnvDefinedFalsy(envVar);
       },
       malformed() {
-        w = true;
+        malformed = true;
       },
     },
     {
       maxLines: 1 / 0,
     },
   );
-  return w
+  return malformed
     ? {
         kind: "unread",
       }
     : {
         kind: "read",
-        includes: n,
+        includes,
         hasInclude,
         coreWorktree,
         worktreeConfigOn,
         saysBare,
-        inertWorktreeKeysOnly: S,
+        inertWorktreeKeysOnly: inertKeysOnly,
       };
 }
 //@ chunk-s61vbvea.js:273767-273826 placement
-var KNOWN_SAFE_EXTENSIONS = new Set(["hookspath", "untrackedcache", "longpaths"]);
+var KNOWN_SAFE_EXTENSIONS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-s61vbvea.js:273767", () => {
+  KNOWN_SAFE_EXTENSIONS = new Set(["hookspath", "untrackedcache", "longpaths"]);
+});
 //@ chunk-s61vbvea.js:273826-273947 placement = isEnvDefinedFalsy (1)
 function isEnvDefinedFalsy(envVar) {
   let lower = envVar.trim().toLowerCase();
@@ -542,8 +566,8 @@ function isEnvDefinedFalsy(envVar) {
 }
 //@ chunk-s61vbvea.js:273947-274016 placement
 function includesConfigKey(name) {
-  let n = firstLineOf(name, ".");
-  return n === "include" || n === "includeif";
+  let firstPart = firstLineOf(name, ".");
+  return firstPart === "include" || firstPart === "includeif";
 }
 export {
   readInTreeGitConfig,

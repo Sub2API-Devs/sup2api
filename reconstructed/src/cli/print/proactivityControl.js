@@ -23,18 +23,19 @@ import {
   setProactivityLevel as setProactivityLevel_2,
 } from "../../utils/permissions/proactivityCycle.js";
 import { DoctorLazy } from "../handlers/util.js";
-import { u, _enum } from "../../../vendor/zod/v4/classic/schemas.js";
+import { objectSchema, _enum } from "../../../vendor/zod/v4/classic/schemas.js";
 import { PROACTIVITY_MODES, isProactivityMode } from "../../utils/proactivityMode.js";
 import { noop as noop_2 } from "../../keybindings/cycleModeBinding.js";
 import { logFeatureBad } from "../../services/analytics/featureTelemetry.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
 import { truncateToLength } from "../../utils/stringUtils.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-tyg7f3ek.js:86501-86559 placement
 function safeCallback(onLate) {
-  return (...n) => {
+  return (...args) => {
     try {
-      onLate(...n);
+      onLate(...args);
     } catch (error) {
       logError(error);
     }
@@ -49,30 +50,30 @@ function proactivityStateStub({ proactivityLevel, toolPermissionContext }) {
   return;
 }
 //@ chunk-tyg7f3ek.js:86752-86830 placement
-function notifyProactivityChanged(sessionState, n) {
+function notifyProactivityChanged(sessionState, state) {
   if (!wasProactivityEverOn()) return;
   sessionState.notifyMetadataChanged({
-    proactivity: proactivityMetadata(n),
+    proactivity: proactivityMetadata(state),
   });
 }
 //@ chunk-tyg7f3ek.js:86830-86907 placement
-function proactivityMetadata(e) {
+function proactivityMetadata(state) {
   if (!isProactivityActive()) return null;
   return (
-    proactivityStateStub(e) ?? {
-      level: e.proactivityLevel,
+    proactivityStateStub(state) ?? {
+      level: state.proactivityLevel,
     }
   );
 }
 //@ chunk-tyg7f3ek.js:86907-86972 placement
-function makePermissionModeReader(e, n) {
-  return () => n(toExternalPermissionMode(e().toolPermissionContext.mode));
+function makePermissionModeReader(getState, notify) {
+  return () => notify(toExternalPermissionMode(getState().toolPermissionContext.mode));
 }
 //@ chunk-tyg7f3ek.js:86972-87046 placement
-function onProactivitySelectorChange(e) {
+function onProactivitySelectorChange(onChange) {
   return onProactivitySelectorGateChanged(() => {
     if (proactivityExclusionReason() === "session_excluded") return;
-    e();
+    onChange();
   });
 }
 //@ chunk-tyg7f3ek.js:87046-87439 placement
@@ -85,21 +86,21 @@ function applyProactivityOptIn({
   setAppState,
 }) {
   {
-    let S = isProactivityActive();
+    let wasActive = isProactivityActive();
     trackProactivitySelectorGate(optIn);
-    if (!isProactivityActive() || S || attaching || planModeRestoredAtBoot) return;
+    if (!isProactivityActive() || wasActive || attaching || planModeRestoredAtBoot) return;
     let proactivityLevel = getAppState().proactivityLevel;
     if (proactivityLevel === "default" || permissionModeSuppliedOnInvocation) return;
-    setAppState((w) => {
+    setAppState((state) => {
       let proactivityModeTransition = computeProactivityModeTransition(
         proactivityLevel,
-        w.toolPermissionContext,
+        state.toolPermissionContext,
         {
           offerBypass: false,
         },
       );
       return {
-        ...w,
+        ...state,
         toolPermissionContext: {
           ...proactivityModeTransition.context,
           mode: proactivityModeTransition.nextMode,
@@ -110,26 +111,29 @@ function applyProactivityOptIn({
   }
 }
 //@ chunk-tyg7f3ek.js:87439-87471 placement
-var proactivityLevelSchema = DoctorLazy(() =>
-  u({
-    level: _enum(PROACTIVITY_MODES),
-  }),
-);
+var proactivityLevelSchema; // deferred: uses DoctorLazy (../handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-tyg7f3ek.js:87439", () => {
+  proactivityLevelSchema = DoctorLazy(() =>
+    objectSchema({
+      level: _enum(PROACTIVITY_MODES),
+    }),
+  );
+});
 //@ chunk-tyg7f3ek.js:87471-87753 placement
 function setProactivityLevel(proactivity, setAppState) {
   {
     trackProactivitySelectorGate(true);
-    let r = proactivityLevelSchema().safeParse(proactivity);
-    if (!r.success || noop_2() !== undefined) return false;
-    let { level } = r.data;
-    setAppState((h) =>
-      h.proactivityLevel === level
-        ? h
+    let parsed = proactivityLevelSchema().safeParse(proactivity);
+    if (!parsed.success || noop_2() !== undefined) return false;
+    let { level } = parsed.data;
+    setAppState((state) =>
+      state.proactivityLevel === level
+        ? state
         : {
-            ...h,
+            ...state,
             proactivityLevel: level,
             toolPermissionContext: {
-              ...h.toolPermissionContext,
+              ...state.toolPermissionContext,
               startupModeDecidedByProactivityLevel: undefined,
             },
           },
@@ -139,60 +143,63 @@ function setProactivityLevel(proactivity, setAppState) {
   return false;
 }
 //@ chunk-tyg7f3ek.js:87753-87844 placement
-function notifyProactivityOptIn(e, n, r) {
-  e.notifyInternalMetadataChanged({
-    proactivity_opt_in: n ? true : null,
+function notifyProactivityOptIn(sessionState, optIn, state) {
+  sessionState.notifyInternalMetadataChanged({
+    proactivity_opt_in: optIn ? true : null,
   });
-  notifyProactivityChanged(e, r);
+  notifyProactivityChanged(sessionState, state);
 }
 //@ chunk-tyg7f3ek.js:87844-88853 placement
 /**
  * SDK 请求切换主动性等级（proactivity）：会话被排除、未启用或等级非法时返回错误，可附带绕过权限选项。
  */
-function cycleProactivityLevel(level, n, r, storageV5, { offerBypass: h, cloudOptIn: y } = {}) {
+function cycleProactivityLevel(level, getState, setAppState, context, { offerBypass, cloudOptIn } = {}) {
   {
-    let S = (w, error) => {
-      logFeatureBad("proactivity_cycle", w);
+    let refuse = (reason, error) => {
+      logFeatureBad("proactivity_cycle", reason);
       return {
         ok: false,
         error,
       };
     };
     if (proactivityExclusionReason() === "session_excluded")
-      return S(
+      return refuse(
         "session_excluded",
         `Cannot set proactivity: levels are not enabled for this session \u2014 the session is excluded (${BARE_ATTACHMENTS_REASON()})`,
       );
     if (!isProactivityMode(level))
-      return S(
+      return refuse(
         "invalid_level",
         `Cannot set proactivity: unrecognized level ${previewValue(level)} (expected one of ${PROACTIVITY_MODES.join(", ")})`,
       );
-    if (h !== undefined && typeof h !== "boolean")
-      return S(
+    if (offerBypass !== undefined && typeof offerBypass !== "boolean")
+      return refuse(
         "invalid_offer_bypass",
-        `Cannot set proactivity: offer_bypass must be a boolean when present (got ${previewValue(h, {
-          quoteStrings: true,
-        })})`,
+        `Cannot set proactivity: offer_bypass must be a boolean when present (got ${previewValue(
+          offerBypass,
+          {
+            quoteStrings: true,
+          },
+        )})`,
       );
-    if (y && proactivityExclusionReason() === "gate_off") {
+    if (cloudOptIn && proactivityExclusionReason() === "gate_off") {
       trackProactivitySelectorGate(true);
-      notifyProactivityOptIn(y, true, n());
+      notifyProactivityOptIn(cloudOptIn, true, getState());
     }
     if (proactivityExclusionReason() === "gate_off")
-      return S(
+      return refuse(
         "not_enabled",
         "Cannot set proactivity: levels are not enabled for this session (the host must send proactivity: true on initialize, with no kill switch set)",
       );
-    setProactivityLevel_2(level, r, storageV5, {
-      offerBypass: h ?? true,
+    setProactivityLevel_2(level, setAppState, context, {
+      offerBypass: offerBypass ?? true,
     });
-    let R = n();
+    let state = getState();
     return {
       ok: true,
       response: {
-        level: R.proactivityLevel,
-        permissionMode: toExternalPermissionMode(R.toolPermissionContext.mode),
+        level: state.proactivityLevel,
+        permissionMode: toExternalPermissionMode(state.toolPermissionContext.mode),
       },
     };
   }
@@ -204,18 +211,18 @@ function cycleProactivityLevel(level, n, r, storageV5, { offerBypass: h, cloudOp
 //@ chunk-tyg7f3ek.js:88853-88863 placement
 var MAX_PROACTIVITY_REASON_CHARS = 64;
 //@ chunk-tyg7f3ek.js:88863-89024 placement
-function previewValue(e, { quoteStrings: n = false } = {}) {
-  let r;
-  if (typeof e === "string" && !n) r = e;
+function previewValue(value, { quoteStrings = false } = {}) {
+  let text;
+  if (typeof value === "string" && !quoteStrings) text = value;
   else
     try {
-      r = jsonStringify(e) ?? String(e);
+      text = jsonStringify(value) ?? String(value);
     } catch {
-      r = String(e);
+      text = String(value);
     }
-  return r.length > MAX_PROACTIVITY_REASON_CHARS
-    ? `${truncateToLength(r, MAX_PROACTIVITY_REASON_CHARS)}\u2026`
-    : r;
+  return text.length > MAX_PROACTIVITY_REASON_CHARS
+    ? `${truncateToLength(text, MAX_PROACTIVITY_REASON_CHARS)}\u2026`
+    : text;
 }
 export {
   notifyProactivityChanged,

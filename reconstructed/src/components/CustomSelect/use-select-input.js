@@ -8,7 +8,12 @@
  * pieces: chunk-ey2qag4x.js (6)
  * attribution: placement 5, fingerprint 1
  */
-import { init_react_production, y, P, Q } from "../../../vendor/react/cjs/react.production.js";
+import {
+  init_react_production,
+  useState,
+  useEffect,
+  useMemo,
+} from "../../../vendor/react/cjs/react.production.js";
 import { useApp, useFocus } from "../../ink/components/Input.js";
 import { getPlatform } from "../../utils/platform.js";
 import { useKeybindingContext } from "../../keybindings/KeybindingContext.js";
@@ -16,35 +21,39 @@ import { useRegisterOverlay } from "../../context/overlayContext.js";
 import { isEscapeKey } from "./select-input-option.js";
 import { MessageActionsKeybindings } from "../messageActions.js";
 import { normalizeFullWidthDigits_2, replaceIdeographicSpace } from "../../utils/stringUtils.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-ey2qag4x.js:33451-33455 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-ey2qag4x.js:33451", () => {
+  init_react_production();
+});
 //@ chunk-ey2qag4x.js:33455-33616 placement
 /**
  * 收集粘贴事件，等目标输入项获得焦点后再派发（t 为真时）。
  */
-function useDeferredPasteForwarding(t) {
+function useDeferredPasteForwarding(forwarding) {
   let { dispatchPasteEvent } = useApp();
-  let [i, a] = y([]);
-  P(() => {
-    if (i.length === 0) return;
-    a([]);
-    if (t) for (let l of i) dispatchPasteEvent(l);
-  }, [i, t, dispatchPasteEvent]);
-  return (l) => {
-    a((f) => [...f, l]);
+  let [queue, setQueue] = useState([]);
+  useEffect(() => {
+    if (queue.length === 0) return;
+    setQueue([]);
+    if (forwarding) for (let event of queue) dispatchPasteEvent(event);
+  }, [queue, forwarding, dispatchPasteEvent]);
+  return (enqueue) => {
+    setQueue((previous) => [...previous, enqueue]);
   };
 }
 //@ chunk-ey2qag4x.js:33616-33806 placement
 /**
  * 粘贴事件未被阻止、去掉焦点尾序列后非空（macOS/WSL 允许空粘贴）且 canPaste 未否决时为真。
  */
-function isForwardablePaste(event, o) {
+function isForwardablePaste(event, guard) {
   if (event.defaultPrevented) return false;
-  let i = event.rawEndedWithFocusTail ? event.text.replace(/\[[IO]$/, "") : event.text;
+  let text = event.rawEndedWithFocusTail ? event.text.replace(/\[[IO]$/, "") : event.text;
   let platform = getPlatform();
-  let l = event.rawEmpty && (platform === "macos" || platform === "wsl");
-  return (i !== "" || l) && o?.() !== false;
+  let rawEmptyOnMac = event.rawEmpty && (platform === "macos" || platform === "wsl");
+  return (text !== "" || rawEmptyOnMac) && guard?.() !== false;
 }
 //@ chunk-ey2qag4x.js:33806-34082 placement
 /**
@@ -67,7 +76,10 @@ function usePasteIntoInputOption({ options, focusedValue, focusOption, canPaste 
   };
 }
 //@ chunk-ey2qag4x.js:34082-34086 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-ey2qag4x.js:34082", () => {
+  init_react_production();
+});
 //@ chunk-ey2qag4x.js:34086-37014 fingerprint = useSelectInput (0.738)
 /**
  * Select 按键：select:next/previous/first/last、数字直选、回车提交、输入选项内的编辑与粘贴。
@@ -90,11 +102,11 @@ var useSelectInput = ({
   let { focusDirection } = useFocus();
   let keybindingContext = useKeybindingContext();
   useRegisterOverlay("select", !!state.onCancel);
-  let isInInput = Q(
+  let isInInput = useMemo(
     () => options.find((opt) => opt.value === state.focusedValue)?.type === "input",
     [options, state.focusedValue],
   );
-  let keybindingHandlers = Q(() => {
+  let keybindingHandlers = useMemo(() => {
     let handlers = {};
     if (!isInInput) {
       handlers["select:next"] = () => {
@@ -202,8 +214,8 @@ var useSelectInput = ({
         }
         if (event.key === "up" || (event.ctrl && event.key === "p")) {
           if (onUpFromFirstItem) {
-            let M = options[0];
-            if (M && focusedValue === M.value) {
+            let firstOption = options[0];
+            if (firstOption && focusedValue === firstOption.value) {
               onUpFromFirstItem();
               event.stopImmediatePropagation();
               return;

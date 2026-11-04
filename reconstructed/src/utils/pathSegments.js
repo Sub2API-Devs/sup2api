@@ -15,24 +15,24 @@ import { isOwnTempName } from "./atomicPublishWrite.js";
 /**
  * 规范化路径段用于比较：去掉不可见字符并统一大小写，再去掉末尾的点和空格（Windows 文件名语义）。
  */
-function normalizePathSegment(e) {
-  return foldCase_2(e).replace(/[. ]+$/, "");
+function normalizePathSegment(segment) {
+  return foldCase_2(segment).replace(/[. ]+$/, "");
 }
 //@ chunk-f3qhjfah.js:4493-4588 placement
 /**
  * 判断路径段（规范化后）是否在给定集合中或与集合任一项等价。
  */
-function matchesSegmentOrTempName(name, n) {
-  let r = normalizePathSegment(name);
-  if (n.has(r)) return true;
-  for (let s of n) if (isOwnTempName(r, s)) return true;
+function matchesSegmentOrTempName(name, knownSegments) {
+  let normalized = normalizePathSegment(name);
+  if (knownSegments.has(normalized)) return true;
+  for (let knownSegment of knownSegments) if (isOwnTempName(normalized, knownSegment)) return true;
   return false;
 }
 //@ chunk-f3qhjfah.js:4588-4634 placement
 /**
  * 判断路径段规范化后是否是 node_modules。
  */
-function isNodeModulesSegment(e) {
-  return normalizePathSegment(e) === "node_modules";
+function isNodeModulesSegment(segment) {
+  return normalizePathSegment(segment) === "node_modules";
 }
 export { matchesSegmentOrTempName, isNodeModulesSegment, normalizePathSegment };

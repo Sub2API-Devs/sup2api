@@ -18,24 +18,32 @@ import { NOFOLLOW_NONBLOCK_FLAGS } from "./fsFlags.js";
 import { sleep } from "./sleep.js";
 import { isDiskless } from "../bootstrap/state.js";
 import { isRemoteSessionAvailable } from "../remote/remoteMode.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-82kqcve8.js:22866-22938 placement
-var PROBE_BUDGET_MS = 1500;
-var PROBE_REWRITE_EVERY_MS = 100;
-var PROBE_FILE_MODE = 384;
-var PROBE_CLOSE_DELAY_FACTOR = 2;
-var WATCHER_RESOURCE_ERRNOS = new Set(["EMFILE", "ENFILE", "ENOSPC"]);
+var PROBE_BUDGET_MS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var PROBE_REWRITE_EVERY_MS;
+var PROBE_FILE_MODE;
+var PROBE_CLOSE_DELAY_FACTOR;
+var WATCHER_RESOURCE_ERRNOS;
+deferInit("chunk-82kqcve8.js:22866", () => {
+  PROBE_BUDGET_MS = 1500;
+  PROBE_REWRITE_EVERY_MS = 100;
+  PROBE_FILE_MODE = 384;
+  PROBE_CLOSE_DELAY_FACTOR = 2;
+  WATCHER_RESOURCE_ERRNOS = new Set(["EMFILE", "ENFILE", "ENOSPC"]);
+});
 //@ chunk-82kqcve8.js:22938-23224 placement
-async function probeFsWatch(e = {}) {
+async function probeFsWatch(options = {}) {
   let dirPath;
   try {
-    dirPath = await mkdtemp(join(e.directory ?? claudeTempDir(), "fswatch-probe-"));
+    dirPath = await mkdtemp(join(options.directory ?? claudeTempDir(), "fswatch-probe-"));
   } catch (error) {
     logForDebugging(`[fs.watch probe] no probe dir: ${errorMessage(error)}`);
     return "unprobed";
   }
   try {
-    return await probeWatchOnFile(join(dirPath, "probe"), e);
+    return await probeWatchOnFile(join(dirPath, "probe"), options);
   } catch (error) {
     logForDebugging(`[fs.watch probe] no probe file: ${errorMessage(error)}`);
     return "unprobed";
@@ -47,41 +55,41 @@ async function probeFsWatch(e = {}) {
 /**
  * 在探测文件上建立 fs.watch 并反复写入，判断事件是否触发：fired、refused 或 unprobed。
  */
-async function probeWatchOnFile(filePath, n) {
+async function probeWatchOnFile(filePath, options) {
   let fileIdentity = await getFileIdentity(filePath);
-  let s = {
+  let probeState = {
     hasFired: false,
     wasRefused: false,
   };
-  let watch = n.watch ?? watch_2;
-  let y;
+  let watch = options.watch ?? watch_2;
+  let watcher;
   try {
-    y = watch(filePath, () => {
-      s.hasFired = true;
+    watcher = watch(filePath, () => {
+      probeState.hasFired = true;
     });
   } catch (error) {
     logForDebugging(`[fs.watch probe] watch() threw: ${errorMessage(error)}`);
     return isWatcherResourceError(error) ? "refused" : "unprobed";
   }
-  y.on("error", (S) => {
-    s.wasRefused ||= isWatcherResourceError(S);
-    logForDebugging(`[fs.watch probe] watcher error: ${errorMessage(S)}`);
+  watcher.on("error", (error) => {
+    probeState.wasRefused ||= isWatcherResourceError(error);
+    logForDebugging(`[fs.watch probe] watcher error: ${errorMessage(error)}`);
   });
   try {
-    await pokeUntilFired(fileIdentity, s, n);
+    await pokeUntilFired(fileIdentity, probeState, options);
   } finally {
-    await closeProbeFileLater(y, n);
+    await closeProbeFileLater(watcher, options);
   }
-  let w = probeOutcomeLabel(s);
-  logForDebugging(`[fs.watch probe] verdict: ${w}`);
-  return w;
+  let verdict = probeOutcomeLabel(probeState);
+  logForDebugging(`[fs.watch probe] verdict: ${verdict}`);
+  return verdict;
 }
 //@ chunk-82kqcve8.js:23616-23783 placement = getFileIdentity (0.867)
 async function getFileIdentity(filePath) {
-  let n = await open(filePath, "wx", PROBE_FILE_MODE);
+  let handle = await open(filePath, "wx", PROBE_FILE_MODE);
   try {
-    await n.write("0", 0);
-    let { dev, ino } = await n.stat({
+    await handle.write("0", 0);
+    let { dev, ino } = await handle.stat({
       bigint: true,
     });
     return {
@@ -90,56 +98,56 @@ async function getFileIdentity(filePath) {
       ino,
     };
   } finally {
-    await n.close();
+    await handle.close();
   }
 }
 //@ chunk-82kqcve8.js:23783-24041 placement
-async function writeProbeFile(e, n) {
-  let r = await open(e.path, constants.O_WRONLY | NOFOLLOW_NONBLOCK_FLAGS);
+async function writeProbeFile(identity, writeCount) {
+  let handle = await open(identity.path, constants.O_WRONLY | NOFOLLOW_NONBLOCK_FLAGS);
   try {
-    let stats = await r.stat({
+    let stats = await handle.stat({
       bigint: true,
     });
-    if (stats.dev !== e.dev || stats.ino !== e.ino || stats.nlink !== 1n)
+    if (stats.dev !== identity.dev || stats.ino !== identity.ino || stats.nlink !== 1n)
       throw Error("the probe file was replaced while the probe ran");
-    await r.write(String(n), 0);
+    await handle.write(String(writeCount), 0);
   } finally {
-    await r.close();
+    await handle.close();
   }
 }
 //@ chunk-82kqcve8.js:24041-24096 placement
-function isWatcherResourceError(e) {
-  let errnoCode = getErrnoCode(e);
+function isWatcherResourceError(error) {
+  let errnoCode = getErrnoCode(error);
   return errnoCode !== undefined && WATCHER_RESOURCE_ERRNOS.has(errnoCode);
 }
 //@ chunk-82kqcve8.js:24096-24147 placement
-async function closeProbeFileLater(e, n) {
-  await sleep(probeRewriteInterval(n) * PROBE_CLOSE_DELAY_FACTOR);
-  e.close();
+async function closeProbeFileLater(watcher, options) {
+  await sleep(probeRewriteInterval(options) * PROBE_CLOSE_DELAY_FACTOR);
+  watcher.close();
 }
 //@ chunk-82kqcve8.js:24147-24190 placement
-function probeRewriteInterval(e) {
-  return e.rewriteEveryMs ?? PROBE_REWRITE_EVERY_MS;
+function probeRewriteInterval(options) {
+  return options.rewriteEveryMs ?? PROBE_REWRITE_EVERY_MS;
 }
 //@ chunk-82kqcve8.js:24190-24334 placement
-async function pokeUntilFired(fileIdentity, n, r) {
-  let budgetMs = r.budgetMs ?? PROBE_BUDGET_MS;
-  let h = probeRewriteInterval(r);
+async function pokeUntilFired(identity, probeState, options) {
+  let budgetMs = options.budgetMs ?? PROBE_BUDGET_MS;
+  let intervalMs = probeRewriteInterval(options);
   let startTime = performance.now();
-  let w = 0;
-  while (!probeSettled(n) && performance.now() - startTime < budgetMs) {
-    w += 1;
-    await writeProbeFile(fileIdentity, w);
-    await sleep(h);
+  let writeCount = 0;
+  while (!probeSettled(probeState) && performance.now() - startTime < budgetMs) {
+    writeCount += 1;
+    await writeProbeFile(identity, writeCount);
+    await sleep(intervalMs);
   }
 }
 //@ chunk-82kqcve8.js:24334-24381 placement
-function probeSettled(e) {
-  return e.hasFired || e.wasRefused;
+function probeSettled(probeState) {
+  return probeState.hasFired || probeState.wasRefused;
 }
 //@ chunk-82kqcve8.js:24381-24457 placement
-function probeOutcomeLabel(e) {
-  return e.hasFired ? "delivers" : e.wasRefused ? "refused" : "silent";
+function probeOutcomeLabel(probeState) {
+  return probeState.hasFired ? "delivers" : probeState.wasRefused ? "refused" : "silent";
 }
 //@ chunk-82kqcve8.js:24457-24532 placement = convertDirectoryToZipInPlace (1)
 async function removeRecursiveQuietly(dirPath) {
@@ -156,17 +164,17 @@ async function removeRecursiveQuietly(dirPath) {
 /**
  * 求两个集合的差集。
  */
-function setDifference(e, pendingDirs) {
-  let r = new Set();
-  for (let s of e) if (!pendingDirs.has(s)) r.add(s);
-  return r;
+function setDifference(allDirs, pendingDirs) {
+  let missing = new Set();
+  for (let dir of allDirs) if (!pendingDirs.has(dir)) missing.add(dir);
+  return missing;
 }
 //@ chunk-82kqcve8.js:24609-24673 placement
 /**
  * 判断集合 e 是否全部包含在 n 中。
  */
-function isSubsetOf(e, n) {
-  for (let r of e) if (!n.has(r)) return false;
+function isSubsetOf(candidates, allowed) {
+  for (let dir of candidates) if (!allowed.has(dir)) return false;
   return true;
 }
 //@ chunk-82kqcve8.js:24673-24740 placement
@@ -184,8 +192,8 @@ var SETTINGS_WATCH_LAG_MS = 2000;
 /**
  * 判断是否使用原生文件监听（非无盘，或其他机器托管会话）。
  */
-function shouldUseNativeWatch({ machineServesSession: e = false } = {}) {
-  return !isDiskless() && (!isRemoteSessionAvailable() || e);
+function shouldUseNativeWatch({ machineServesSession = false } = {}) {
+  return !isDiskless() && (!isRemoteSessionAvailable() || machineServesSession);
 }
 export {
   isSubsetOf,

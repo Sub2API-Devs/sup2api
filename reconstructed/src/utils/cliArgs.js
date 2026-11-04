@@ -132,20 +132,21 @@ var ROUTINE_VALUE_FLAGS = new Set([
   "--prompt-suggestions",
 ]);
 //@ chunk-c5gdqf78.js:2660-2864 placement
-function lastValueSlot(e, n) {
-  let t = e[n];
-  if (t !== undefined && ROUTINE_VALUE_FLAGS.has(t)) {
-    let s = e[n + 1];
-    return s !== undefined && !looksLikeOption(s) ? n + 1 : n;
+function lastValueSlot(args, index) {
+  let flag = args[index];
+  if (flag !== undefined && ROUTINE_VALUE_FLAGS.has(flag)) {
+    let nextArg = args[index + 1];
+    return nextArg !== undefined && !looksLikeOption(nextArg) ? index + 1 : index;
   }
-  if (t === undefined || !EAGER_VALUE_FLAGS.has(t)) return n;
-  let o = n + 1;
-  if (VARIADIC_VALUE_FLAGS.has(t)) while (o + 1 < e.length && !looksLikeOption(e[o + 1])) o++;
-  return o;
+  if (flag === undefined || !EAGER_VALUE_FLAGS.has(flag)) return index;
+  let slot = index + 1;
+  if (VARIADIC_VALUE_FLAGS.has(flag))
+    while (slot + 1 < args.length && !looksLikeOption(args[slot + 1])) slot++;
+  return slot;
 }
 //@ chunk-c5gdqf78.js:2864-2917 placement
-function looksLikeOption(e) {
-  return e.length > 1 && e.startsWith("-");
+function looksLikeOption(arg) {
+  return arg.length > 1 && arg.startsWith("-");
 }
 //@ chunk-c5gdqf78.js:2917-2970 placement = eagerParseCliFlag (1)
 /**
@@ -155,90 +156,92 @@ function eagerParseCliFlag(flagName, argv = process.argv) {
   return eagerParseCliFlagAll(flagName, argv).at(-1);
 }
 //@ chunk-c5gdqf78.js:2970-3033 placement
-function eagerParseCliFlagAll(e, n = process.argv) {
-  return collectFlagValues(e, n).map((t) => t.value);
+function eagerParseCliFlagAll(flag, argv = process.argv) {
+  return collectFlagValues(flag, argv).map((entry) => entry.value);
 }
 //@ chunk-c5gdqf78.js:3033-3098 placement
-function eagerCliFlagHonoredIndices(e, n) {
-  return new Set(collectFlagValues(e, n).flatMap((t) => t.indices));
+function eagerCliFlagHonoredIndices(flag, argv) {
+  return new Set(collectFlagValues(flag, argv).flatMap((entry) => entry.indices));
 }
 //@ chunk-c5gdqf78.js:3098-3360 placement
 /**
  * 从 argv 收集某标志的所有取值及其所在下标（支持 --flag=value 与 --flag value，遇 -- 停止）。
  */
-function collectFlagValues(e, n) {
-  let t = [];
-  for (let i = 0; i < n.length; i++) {
-    let s = n[i];
-    if (s === "--") break;
-    if (s?.startsWith(`${e}=`)) {
-      t.push({
-        value: s.slice(e.length + 1),
+function collectFlagValues(flag, args) {
+  let values = [];
+  for (let i = 0; i < args.length; i++) {
+    let arg = args[i];
+    if (arg === "--") break;
+    if (arg?.startsWith(`${flag}=`)) {
+      values.push({
+        value: arg.slice(flag.length + 1),
         indices: [i],
       });
       continue;
     }
-    if (s === e && i + 1 < n.length) {
-      t.push({
-        value: n[i + 1],
+    if (arg === flag && i + 1 < args.length) {
+      values.push({
+        value: args[i + 1],
         indices: [i, i + 1],
       });
       i++;
       continue;
     }
-    i = lastValueSlot(n, i);
+    i = lastValueSlot(args, i);
   }
-  return t;
+  return values;
 }
 //@ chunk-c5gdqf78.js:3360-3420 placement
-function eagerHasCliFlag(e, n = process.argv) {
-  return eagerFindCliArg((t) => t === e, n) !== -1;
+function eagerHasCliFlag(flag, argv = process.argv) {
+  return eagerFindCliArg((arg) => arg === flag, argv) !== -1;
 }
 //@ chunk-c5gdqf78.js:3420-3478 placement
-function hasBackgroundFlag(e) {
-  return eagerHasCliFlag("--bg", e) || eagerHasCliFlag("--background", e);
+function hasBackgroundFlag(argv) {
+  return eagerHasCliFlag("--bg", argv) || eagerHasCliFlag("--background", argv);
 }
 //@ chunk-c5gdqf78.js:3478-3655 placement
-function detectNonInteractiveLaunch(e = process.argv.slice(2)) {
-  let n = eagerHasCliFlag("-p", e) || eagerHasCliFlag("--print", e);
-  let t = eagerHasCliFlag("--init-only", e);
-  let o = eagerFindCliArg((s) => s.startsWith("--sdk-url"), e) !== -1;
-  return n || t || o || !process.stdout.isTTY;
+function detectNonInteractiveLaunch(args = process.argv.slice(2)) {
+  let isPrint = eagerHasCliFlag("-p", args) || eagerHasCliFlag("--print", args);
+  let isInitOnly = eagerHasCliFlag("--init-only", args);
+  let hasSdkUrl = eagerFindCliArg((arg) => arg.startsWith("--sdk-url"), args) !== -1;
+  return isPrint || isInitOnly || hasSdkUrl || !process.stdout.isTTY;
 }
 //@ chunk-c5gdqf78.js:3655-3792 placement
-function eagerFindCliArg(e, n = process.argv) {
-  for (let i = 0; i < n.length; i++) {
-    let o = n[i];
-    if (o === "--") break;
-    if (o !== undefined && e(o)) return i;
-    i = lastValueSlot(n, i);
+function eagerFindCliArg(predicate, argv = process.argv) {
+  for (let i = 0; i < argv.length; i++) {
+    let arg = argv[i];
+    if (arg === "--") break;
+    if (arg !== undefined && predicate(arg)) return i;
+    i = lastValueSlot(argv, i);
   }
   return -1;
 }
 //@ chunk-c5gdqf78.js:3792-3968 placement
-function cliFlagWords(e) {
-  let index = e.indexOf("--");
-  let t = index === -1 ? e : e.slice(0, index);
-  let o = [];
-  for (let i = 0; i < t.length; i++) {
-    let r = t[i];
-    o.push(EAGER_VALUE_FLAGS.has(r) && i + 1 < t.length ? `${r}=${t[i + 1]}` : r);
-    i = lastValueSlot(t, i);
+function cliFlagWords(argv) {
+  let index = argv.indexOf("--");
+  let beforeSeparator = index === -1 ? argv : argv.slice(0, index);
+  let words = [];
+  for (let i = 0; i < beforeSeparator.length; i++) {
+    let arg = beforeSeparator[i];
+    words.push(
+      EAGER_VALUE_FLAGS.has(arg) && i + 1 < beforeSeparator.length ? `${arg}=${beforeSeparator[i + 1]}` : arg,
+    );
+    i = lastValueSlot(beforeSeparator, i);
   }
-  return o;
+  return words;
 }
 //@ chunk-c5gdqf78.js:3968-4043 placement
-function eagerFirstOperand(e = process.argv.slice(2)) {
-  let n = firstOperandIndex(e);
-  return n === -1 ? undefined : e[n];
+function eagerFirstOperand(args = process.argv.slice(2)) {
+  let operandIndex = firstOperandIndex(args);
+  return operandIndex === -1 ? undefined : args[operandIndex];
 }
 //@ chunk-c5gdqf78.js:4043-4175 placement
-function firstOperandIndex(e) {
-  for (let i = 0; i < e.length; i++) {
-    let t = e[i];
-    if (t === "--") return i + 1 < e.length ? i + 1 : -1;
-    if (!looksLikeOption(t)) return i;
-    i = lastValueSlot(e, i);
+function firstOperandIndex(args) {
+  for (let i = 0; i < args.length; i++) {
+    let arg = args[i];
+    if (arg === "--") return i + 1 < args.length ? i + 1 : -1;
+    if (!looksLikeOption(arg)) return i;
+    i = lastValueSlot(args, i);
   }
   return -1;
 }
@@ -311,57 +314,65 @@ var HELP_FLAGS = new Set([
 var KEBOOL_FLAGS = new Set(["--exec", "-m", "--handle-uri"]);
 var BACKGROUND_VERB_RE = /^[a-f0-9]{8}$/;
 //@ chunk-c5gdqf78.js:5270-5587 placement
-function backgroundSessionVerbIndex(e = process.argv.slice(2), { behindRootOptions = true } = {}) {
-  let t = firstOperandIndex(e);
-  if (t === -1 || !BACKGROUND_SUBCOMMANDS.has(e[t])) return -1;
-  if (t === 0) return 0;
-  if (!behindRootOptions || e[t - 1] === "--") return -1;
-  let o = e[t + 1];
-  let s = o;
-  if (o === undefined || !(BACKGROUND_VERB_RE.test(o) || (e[t] === "respawn" && o === "--all"))) return -1;
-  for (let r = 0; r < t; r = lastValueSlot(e, r) + 1) {
-    let i = e[r];
-    if (isNonInteractiveFlag(i) || !isEagerFlag(i)) return -1;
+function backgroundSessionVerbIndex(args = process.argv.slice(2), { behindRootOptions = true } = {}) {
+  let operandIndex = firstOperandIndex(args);
+  if (operandIndex === -1 || !BACKGROUND_SUBCOMMANDS.has(args[operandIndex])) return -1;
+  if (operandIndex === 0) return 0;
+  if (!behindRootOptions || args[operandIndex - 1] === "--") return -1;
+  let verbArg = args[operandIndex + 1];
+  let verbValue = verbArg;
+  if (
+    verbArg === undefined ||
+    !(BACKGROUND_VERB_RE.test(verbArg) || (args[operandIndex] === "respawn" && verbArg === "--all"))
+  )
+    return -1;
+  for (let argIndex = 0; argIndex < operandIndex; argIndex = lastValueSlot(args, argIndex) + 1) {
+    let arg = args[argIndex];
+    if (isNonInteractiveFlag(arg) || !isEagerFlag(arg)) return -1;
   }
-  return t;
+  return operandIndex;
 }
 //@ chunk-c5gdqf78.js:5587-5704 placement
-function isEagerFlag(e) {
-  if (HELP_FLAGS.has(e)) return true;
-  let index = e.indexOf("=");
-  let t = index === -1 ? e : e.slice(0, index);
-  return (EAGER_VALUE_FLAGS.has(t) && !KEBOOL_FLAGS.has(t)) || ROUTINE_VALUE_FLAGS.has(t);
+function isEagerFlag(flag) {
+  if (HELP_FLAGS.has(flag)) return true;
+  let index = flag.indexOf("=");
+  let flagName = index === -1 ? flag : flag.slice(0, index);
+  return (
+    (EAGER_VALUE_FLAGS.has(flagName) && !KEBOOL_FLAGS.has(flagName)) || ROUTINE_VALUE_FLAGS.has(flagName)
+  );
 }
 //@ chunk-c5gdqf78.js:5704-5789 placement
 /**
  * 判断选项是否表示非交互模式（含 --routine= 与组合短选项）。
  */
-function isNonInteractiveFlag(e) {
-  return SDI_MODE_FLAGS.has(e) || e.startsWith("--routine=") || /^-[A-Za-z]{2,}$/.test(e);
+function isNonInteractiveFlag(flag) {
+  return SDI_MODE_FLAGS.has(flag) || flag.startsWith("--routine=") || /^-[A-Za-z]{2,}$/.test(flag);
 }
 //@ chunk-c5gdqf78.js:5789-5862 placement
-function isConnectUrlArg(e) {
-  return e.startsWith("cc://") || e.startsWith("cc+unix://");
+function isConnectUrlArg(arg) {
+  return arg.startsWith("cc://") || arg.startsWith("cc+unix://");
 }
 //@ chunk-c5gdqf78.js:5862-6024 placement = isHelpCommand (0.693)
 function mayDispatchSubcommand(command = process.argv.slice(2)) {
-  if (command.some((n) => n === "--help" || /^-[^-]*h/.test(n))) return true;
-  for (let n = 0; n < command.length; n = lastValueSlot(command, n) + 1)
-    if (!isEagerFlag(command[n])) return true;
+  if (command.some((arg) => arg === "--help" || /^-[^-]*h/.test(arg))) return true;
+  for (let argIndex = 0; argIndex < command.length; argIndex = lastValueSlot(command, argIndex) + 1)
+    if (!isEagerFlag(command[argIndex])) return true;
   return false;
 }
 export {
-  detectNonInteractiveLaunch,
   eagerParseCliFlag,
   eagerHasCliFlag,
+  eagerFirstOperand,
+  detectNonInteractiveLaunch,
   eagerFindCliArg,
   isConnectUrlArg,
   mayDispatchSubcommand,
-  eagerFirstOperand,
   eagerParseCliFlagAll,
   VARIADIC_VALUE_FLAGS,
   lastValueSlot,
   looksLikeOption,
   backgroundSessionVerbIndex,
   eagerCliFlagHonoredIndices,
+  cliFlagWords,
+  hasBackgroundFlag,
 };

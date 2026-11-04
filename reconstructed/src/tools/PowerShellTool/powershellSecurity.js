@@ -28,12 +28,16 @@ import {
   DANGEROUS_SCRIPT_BLOCK_CMDLETS,
   MODULE_LOADING_CMDLETS,
 } from "../../utils/powershell/dangerousCmdlets.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-v0yfsee9.js:61629-61695 fingerprint = POWERSHELL_EXECUTABLES (1)
 /**
  * PowerShell 可执行文件名集合（pwsh/powershell 及 .exe）。
  */
-var POWERSHELL_EXECUTABLES = new Set(["pwsh", "pwsh.exe", "powershell", "powershell.exe"]);
+var POWERSHELL_EXECUTABLES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-v0yfsee9.js:61629", () => {
+  POWERSHELL_EXECUTABLES = new Set(["pwsh", "pwsh.exe", "powershell", "powershell.exe"]);
+});
 //@ chunk-v0yfsee9.js:61695-61854 callgraph-witnessed = isPowerShellExecutable (1)
 /**
  * 名字（可带路径）是否是 pwsh/powershell 可执行文件。
@@ -46,7 +50,10 @@ function isPowerShellExecutable(name) {
   return false;
 }
 //@ chunk-v0yfsee9.js:61854-61903 layout
-var PS_PARAM_PREFIX_CHARS = new Set(["/", "\u2013", "\u2014", "\u2015"]);
+var PS_PARAM_PREFIX_CHARS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-v0yfsee9.js:61854", () => {
+  PS_PARAM_PREFIX_CHARS = new Set(["/", "\u2013", "\u2014", "\u2015"]);
+});
 //@ chunk-v0yfsee9.js:61903-62040 file-local
 /**
  * pwsh.exe 参数是否包含某参数的缩写（也接受 / 和各种破折号作前缀）。
@@ -126,14 +133,17 @@ function checkPwshCommandOrFile(parsed) {
   };
 }
 //@ chunk-v0yfsee9.js:62868-62972 fingerprint = DOWNLOADER_NAMES (1)
-var DOWNLOADER_NAMES = new Set([
-  "invoke-webrequest",
-  "iwr",
-  "invoke-restmethod",
-  "irm",
-  "new-object",
-  "start-bitstransfer",
-]);
+var DOWNLOADER_NAMES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-v0yfsee9.js:62868", () => {
+  DOWNLOADER_NAMES = new Set([
+    "invoke-webrequest",
+    "iwr",
+    "invoke-restmethod",
+    "irm",
+    "new-object",
+    "start-bitstransfer",
+  ]);
+});
 //@ chunk-v0yfsee9.js:62972-63018 file-local
 function isDownloader(name) {
   return DOWNLOADER_NAMES.has(name.toLowerCase());
@@ -160,7 +170,7 @@ function checkDownloadCradles(parsed) {
       };
   }
   let all = getAllCommands(parsed);
-  if (all.some((r) => isDownloader(r.name)) && all.some((r) => isIex(r.name)))
+  if (all.some((cmd) => isDownloader(cmd.name)) && all.some((cmd) => isIex(cmd.name)))
     return {
       behavior: "ask",
       message: "Command downloads and executes remote code",
@@ -235,13 +245,13 @@ function checkComObject(parsed) {
       };
     let typeName;
     for (let i = 0; i < cmd.args.length; i++) {
-      let m = cmd.args[i];
-      let lower = m.toLowerCase();
+      let arg = cmd.args[i];
+      let lower = arg.toLowerCase();
       if (lower.startsWith("-t") && lower.includes(":")) {
-        let colonIdx = m.indexOf(":");
+        let colonIdx = arg.indexOf(":");
         let paramPart = lower.slice(0, colonIdx);
         if ("-typename".startsWith(paramPart)) {
-          typeName = m.slice(colonIdx + 1);
+          typeName = arg.slice(colonIdx + 1);
           break;
         }
       }
@@ -254,24 +264,24 @@ function checkComObject(parsed) {
       let VALUE_PARAMS = new Set(["-argumentlist", "-comobject", "-property"]);
       let SWITCH_PARAMS = new Set(["-strict"]);
       for (let i = 0; i < cmd.args.length; i++) {
-        let y = cmd.args[i];
-        if (y.startsWith("-")) {
-          let lower = y.toLowerCase();
+        let arg = cmd.args[i];
+        if (arg.startsWith("-")) {
+          let lower = arg.toLowerCase();
           if (lower.startsWith("-t") && "-typename".startsWith(lower)) {
             i++;
             continue;
           }
-          let index = y.indexOf(":");
+          let index = arg.indexOf(":");
           if (index !== -1) {
             if (
-              skipLeadingWhitespaceAndComments(y.slice(index + 1)) === "" &&
+              skipLeadingWhitespaceAndComments(arg.slice(index + 1)) === "" &&
               readFlagWithOverride(TENGU_PRANCY_LANTERN, {
                 safe: true,
               })
             )
               return {
                 behavior: "ask",
-                message: `New-Object argument '${y}' has nothing after its colon, so Claude Code cannot tell which .NET type this command would create`,
+                message: `New-Object argument '${arg}' has nothing after its colon, so Claude Code cannot tell which .NET type this command would create`,
               };
             continue;
           }
@@ -282,7 +292,7 @@ function checkComObject(parsed) {
           }
           continue;
         }
-        typeName = y;
+        typeName = arg;
         break;
       }
     }
@@ -412,16 +422,19 @@ function checkStartProcess(parsed) {
   };
 }
 //@ chunk-v0yfsee9.js:67546-67683 fingerprint = SAFE_SCRIPT_BLOCK_CMDLETS (1)
-var SAFE_SCRIPT_BLOCK_CMDLETS = new Set([
-  "where-object",
-  "sort-object",
-  "select-object",
-  "group-object",
-  "format-table",
-  "format-list",
-  "format-wide",
-  "format-custom",
-]);
+var SAFE_SCRIPT_BLOCK_CMDLETS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-v0yfsee9.js:67546", () => {
+  SAFE_SCRIPT_BLOCK_CMDLETS = new Set([
+    "where-object",
+    "sort-object",
+    "select-object",
+    "group-object",
+    "format-table",
+    "format-list",
+    "format-wide",
+    "format-custom",
+  ]);
+});
 //@ chunk-v0yfsee9.js:67683-68193 fingerprint = checkScriptBlockInjection (1)
 /**
  * 脚本块中含危险 cmdlet（不在 SAFE_SCRIPT_BLOCK_CMDLETS 中，如 Where-Object/ForEach-Object 以外）要求确认。
@@ -560,12 +573,15 @@ function checkInvokeItem(parsed) {
   };
 }
 //@ chunk-v0yfsee9.js:69387-69496 fingerprint = SCHEDULED_TASK_CMDLETS (1)
-var SCHEDULED_TASK_CMDLETS = new Set([
-  "register-scheduledtask",
-  "new-scheduledtask",
-  "new-scheduledtaskaction",
-  "set-scheduledtask",
-]);
+var SCHEDULED_TASK_CMDLETS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-v0yfsee9.js:69387", () => {
+  SCHEDULED_TASK_CMDLETS = new Set([
+    "register-scheduledtask",
+    "new-scheduledtask",
+    "new-scheduledtaskaction",
+    "set-scheduledtask",
+  ]);
+});
 //@ chunk-v0yfsee9.js:69496-69967 fingerprint = checkScheduledTask (1)
 /**
  * 创建/修改计划任务（Register-ScheduledTask 等、schtasks /create|/change）要求确认（持久化手段）。
@@ -596,24 +612,27 @@ function checkScheduledTask(parsed) {
   };
 }
 //@ chunk-v0yfsee9.js:69967-70120 fingerprint = ENV_WRITE_CMDLETS (1)
-var ENV_WRITE_CMDLETS = new Set([
-  "set-item",
-  "si",
-  "new-item",
-  "ni",
-  "remove-item",
-  "ri",
-  "del",
-  "rm",
-  "rd",
-  "rmdir",
-  "erase",
-  "clear-item",
-  "cli",
-  "set-content",
-  "add-content",
-  "ac",
-]);
+var ENV_WRITE_CMDLETS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-v0yfsee9.js:69967", () => {
+  ENV_WRITE_CMDLETS = new Set([
+    "set-item",
+    "si",
+    "new-item",
+    "ni",
+    "remove-item",
+    "ri",
+    "del",
+    "rm",
+    "rd",
+    "rmdir",
+    "erase",
+    "clear-item",
+    "cli",
+    "set-content",
+    "add-content",
+    "ac",
+  ]);
+});
 //@ chunk-v0yfsee9.js:70120-70464 fingerprint = checkEnvVarManipulation (1)
 /**
  * 修改环境变量（Set-Item env:、[Environment]::SetEnvironmentVariable 等）要求确认。
@@ -658,16 +677,19 @@ function checkModuleLoading(parsed) {
   };
 }
 //@ chunk-v0yfsee9.js:70706-70800 fingerprint = RUNTIME_STATE_CMDLETS (1)
-var RUNTIME_STATE_CMDLETS = new Set([
-  "set-alias",
-  "sal",
-  "new-alias",
-  "nal",
-  "set-variable",
-  "sv",
-  "new-variable",
-  "nv",
-]);
+var RUNTIME_STATE_CMDLETS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-v0yfsee9.js:70706", () => {
+  RUNTIME_STATE_CMDLETS = new Set([
+    "set-alias",
+    "sal",
+    "new-alias",
+    "nal",
+    "set-variable",
+    "sv",
+    "new-variable",
+    "nv",
+  ]);
+});
 //@ chunk-v0yfsee9.js:70800-71082 fingerprint = checkRuntimeStateManipulation (1)
 /**
  * Set-Alias/New-Variable 等改变后续命令解析的操作要求确认。
@@ -687,7 +709,10 @@ function checkRuntimeStateManipulation(parsed) {
   };
 }
 //@ chunk-v0yfsee9.js:71082-71152 fingerprint = WMI_SPAWN_CMDLETS (0.857)
-var WMI_SPAWN_CMDLETS = new Set(["invoke-wmimethod", "iwmi", "invoke-cimmethod", "icim"]);
+var WMI_SPAWN_CMDLETS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-v0yfsee9.js:71082", () => {
+  WMI_SPAWN_CMDLETS = new Set(["invoke-wmimethod", "iwmi", "invoke-cimmethod", "icim"]);
+});
 //@ chunk-v0yfsee9.js:71152-71668 fingerprint = checkWmiProcessSpawn (0.506)
 /**
  * Invoke-WmiMethod/Invoke-CimMethod（可 Win32_Process Create 起进程）要求确认。
@@ -701,8 +726,8 @@ function checkWmiProcessSpawn(parsed) {
         message: `${cmd.name} can spawn arbitrary processes via WMI/CIM (Win32_Process Create)`,
       };
     let max = Math.max(lower.lastIndexOf("/"), lower.lastIndexOf("\\"));
-    let m = max >= 0 ? lower.slice(max + 1) : lower;
-    if (m === "wmic" || m === "wmic.exe")
+    let baseName = max >= 0 ? lower.slice(max + 1) : lower;
+    if (baseName === "wmic" || baseName === "wmic.exe")
       return {
         behavior: "ask",
         message:

@@ -8,7 +8,7 @@
  * pieces: chunk-18hwfzwa.js (1)
  * attribution: callgraph-fingerprint 1
  */
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { useRegisterOverlay } from "../../context/overlayContext.js";
 import { useAppState, useAppStoreDirect } from "../../state/AppState.js";
 import {
@@ -19,7 +19,7 @@ import {
   renderArtifactListItem,
 } from "../artifacts/artifactFrames.js";
 import { useNotifications } from "../../context/notifications.js";
-import { P } from "../../../vendor/react/cjs/react.production.js";
+import { useEffect } from "../../../vendor/react/cjs/react.production.js";
 import {
   jsxProd_default,
   jsxProd_default_2,
@@ -34,51 +34,51 @@ import { Dialog } from "../design-system/Dialog.js";
 
 //@ chunk-18hwfzwa.js:653476-654611 callgraph-fingerprint = WizardNavigationFooter (0.258)
 function WizardNavigationFooter(props) {
-  let $ = w(22);
+  let $ = useMemoCache(22);
   let { onDone, cloudRowCheck } = props;
   useRegisterOverlay("cloud-artifacts-list");
   let frameUrls = useAppState(selectFrameUrls);
   let exitState = useAppStoreDirect();
   let notifications = useNotifications();
-  let Be;
+  let frames;
   if ($[0] !== frameUrls) {
-    Be = visibleArtifactFrames(frameUrls);
+    frames = visibleArtifactFrames(frameUrls);
     $[0] = frameUrls;
-    $[1] = Be;
-  } else Be = $[1];
-  let He = Be;
-  let We = He.length === 0;
-  let ze;
-  let Xe;
-  if ($[2] !== We || $[3] !== onDone) {
-    ze = () => {
-      if (We) onDone();
+    $[1] = frames;
+  } else frames = $[1];
+  let visibleFrames = frames;
+  let hasNoFrames = visibleFrames.length === 0;
+  let closeIfEmpty;
+  let closeIfEmptyDeps;
+  if ($[2] !== hasNoFrames || $[3] !== onDone) {
+    closeIfEmpty = () => {
+      if (hasNoFrames) onDone();
     };
-    Xe = [We, onDone];
-    $[2] = We;
+    closeIfEmptyDeps = [hasNoFrames, onDone];
+    $[2] = hasNoFrames;
     $[3] = onDone;
-    $[4] = ze;
-    $[5] = Xe;
+    $[4] = closeIfEmpty;
+    $[5] = closeIfEmptyDeps;
   } else {
-    ze = $[4];
-    Xe = $[5];
+    closeIfEmpty = $[4];
+    closeIfEmptyDeps = $[5];
   }
-  P(ze, Xe);
+  useEffect(closeIfEmpty, closeIfEmptyDeps);
   let onSelect;
   if (
-    $[6] !== He ||
+    $[6] !== visibleFrames ||
     $[7] !== cloudRowCheck ||
     $[8] !== frameUrls ||
     $[9] !== notifications ||
     $[10] !== onDone ||
     $[11] !== exitState
   ) {
-    onSelect = (kt) => {
-      let At = liveFramesForSlug(frameUrls, He[kt]?.slug);
-      if (At !== undefined) openArtifactRow(At, exitState, notifications, cloudRowCheck);
+    onSelect = (index) => {
+      let liveFrame = liveFramesForSlug(frameUrls, visibleFrames[index]?.slug);
+      if (liveFrame !== undefined) openArtifactRow(liveFrame, exitState, notifications, cloudRowCheck);
       onDone();
     };
-    $[6] = He;
+    $[6] = visibleFrames;
     $[7] = cloudRowCheck;
     $[8] = frameUrls;
     $[9] = notifications;
@@ -87,24 +87,24 @@ function WizardNavigationFooter(props) {
     $[12] = onSelect;
   } else onSelect = $[12];
   let children;
-  if ($[13] !== He) {
-    children = He.map(renderArtifactListItem);
-    $[13] = He;
+  if ($[13] !== visibleFrames) {
+    children = visibleFrames.map(renderArtifactListItem);
+    $[13] = visibleFrames;
     $[14] = children;
   } else children = $[14];
-  let Ot;
+  let listElement;
   if ($[15] !== onSelect || $[16] !== children) {
-    Ot = jsxProd_default(OrderedListWithItem, {
+    listElement = jsxProd_default(OrderedListWithItem, {
       onSelect,
       children,
     });
     $[15] = onSelect;
     $[16] = children;
-    $[17] = Ot;
-  } else Ot = $[17];
-  let Et;
+    $[17] = listElement;
+  } else listElement = $[17];
+  let hintElement;
   if ($[18] === MEMO_CACHE_SENTINEL) {
-    Et = jsxProd_default(Text, {
+    hintElement = jsxProd_default(Text, {
       dimColor: true,
       children: jsxProd_default_2(Byline, {
         children: [
@@ -121,20 +121,20 @@ function WizardNavigationFooter(props) {
         ],
       }),
     });
-    $[18] = Et;
-  } else Et = $[18];
-  let Dt;
-  if ($[19] !== onDone || $[20] !== Ot) {
-    Dt = jsxProd_default_2(Dialog, {
+    $[18] = hintElement;
+  } else hintElement = $[18];
+  let dialogElement;
+  if ($[19] !== onDone || $[20] !== listElement) {
+    dialogElement = jsxProd_default_2(Dialog, {
       title: "Artifacts in this session",
       onCancel: onDone,
       hideInputGuide: true,
-      children: [Ot, Et],
+      children: [listElement, hintElement],
     });
     $[19] = onDone;
-    $[20] = Ot;
-    $[21] = Dt;
-  } else Dt = $[21];
-  return Dt;
+    $[20] = listElement;
+    $[21] = dialogElement;
+  } else dialogElement = $[21];
+  return dialogElement;
 }
 export { WizardNavigationFooter };

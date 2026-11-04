@@ -5,7 +5,7 @@
  * pieces: chunk-mrx6y2r5.js (3)
  * attribution: esm-layout 2, esm-fingerprint 1
  */
-import { Kl, setPlatformSpecificData } from "./userAgentPlatform.js";
+import { getHeaderName, setPlatformSpecificData } from "./userAgentPlatform.js";
 import { SDK_VERSION_2 } from "../constants.js";
 
 //@ chunk-mrx6y2r5.js:55486-55579 esm-layout
@@ -18,8 +18,8 @@ function getUserAgentString(telemetryInfo) {
   return parts.join(" ");
 }
 //@ chunk-mrx6y2r5.js:55579-55605 esm-layout
-function Yl() {
-  return Kl();
+function getUserAgentHeader() {
+  return getHeaderName();
 }
 //@ chunk-mrx6y2r5.js:55605-55718 esm-fingerprint
 async function getUserAgentValue(prefix) {
@@ -29,4 +29,4 @@ async function getUserAgentValue(prefix) {
   let defaultAgent = getUserAgentString(runtimeInfo);
   return prefix ? `${prefix} ${defaultAgent}` : defaultAgent;
 }
-export { Yl, getUserAgentValue };
+export { getUserAgentHeader, getUserAgentValue };

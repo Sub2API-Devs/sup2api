@@ -5,10 +5,10 @@
  * pieces: chunk-egr0twnb.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:277786-280042 cjs-fingerprint
-var require_matlab = x(function (cjsExports, cjsModule) {
+var require_matlab = __commonJS(function (cjsExports, cjsModule) {
   function matlab(hljs) {
     let TRANSPOSE = {
       relevance: 0,

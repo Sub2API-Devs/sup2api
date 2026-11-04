@@ -35,7 +35,7 @@ import { env } from "../utils/env.js";
 import { logForDebugging } from "../utils/debug.js";
 import { HostScoped } from "../utils/hostScoped.js";
 import {
-  MAX_CHANGE_REASONS_SHOWN,
+  MAX_REASONS_SHOWN_TEXT,
   CHANGES_PANE_PREFIX,
   HINT_DIFF_FINDS_NESTED,
   DIFF_COPY_ROOT_NOT_ABSOLUTE_TEXT,
@@ -61,9 +61,35 @@ import { bindCanonicalPathToHandle, readHandleBounded } from "../utils/fsSafety/
 import { isPathAllowed } from "../utils/permissions/pathValidation.js";
 import { matchingRuleForInput } from "../utils/permissions/filesystem.js";
 import { pathVettingReason, vetPathSpellingsOrChain } from "../utils/permissions/pathVetting.js";
-import { P3 } from "../../vendor/diff/libesm/patch/create.js";
+import { structuredPatch } from "../../vendor/diff/libesm/patch/create.js";
 import { getWorkspaceDiffRoot } from "../utils/workspaceDiff.js";
 
+//@ chunk-vbr14wv4.js:191-540 placement
+/**
+ * 按 git 规则给非 ASCII 或特殊字符路径加引号转义
+ */
+function quoteGitPath(filePath) {
+  let bytes = new TextEncoder().encode(filePath);
+  if (bytes.every((byte) => byte >= 32 && byte < 127 && byte !== 34 && byte !== 92)) return filePath;
+  return `"${Array.from(bytes, (byte) => {
+    switch (byte) {
+      case 34:
+        return '\\"';
+      case 92:
+        return "\\\\";
+      case 9:
+        return "\\t";
+      case 10:
+        return "\\n";
+      case 13:
+        return "\\r";
+      default:
+        return byte >= 32 && byte <= 126
+          ? String.fromCharCode(byte)
+          : `\\${byte.toString(8).padStart(3, "0")}`;
+    }
+  }).join("")}"`;
+}
 //@ chunk-gfa3ceg6.js:1452-2776 placement
 /**
  * .git 复制的大小上限与条目处置表
@@ -206,7 +232,7 @@ var GIT_DIR_ENTRY_PLANS = new Map([
     "gc.pid",
     "description",
     "gitk.cache",
-  ].map((e) => [e, SKIP_GIT_ENTRY]),
+  ].map((entryName) => [entryName, SKIP_GIT_ENTRY]),
 ]);
 var VOLATILE_GIT_DIR_ENTRY_PATTERN = /^(?:BISECT_[A-Z_]+|fsmonitor--daemon.*|.+\.lock)$/;
 //@ chunk-gfa3ceg6.js:2776-2832 placement
@@ -239,42 +265,44 @@ var SUBMODULE_UPDATE_MODES = new Set(["checkout", "rebase", "merge", "none"]);
 /**
  * 检查并复制仓库 .git，返回可用于 diff 的副本
  */
-async function prepareRepositoryCopy(cwd, n, abortSignal) {
-  let s = standardRepoLayout(cwd);
-  if (s === null || s.workTree === null) return null;
+async function prepareRepositoryCopy(root, refusalReport, abortSignal) {
+  let layout = standardRepoLayout(root);
+  if (layout === null || layout.workTree === null) return null;
   if (
     hasRunnerDeclaredNestedRepoDiff() &&
-    normalizePathForCompare(s.workTree) !== normalizePathForCompare(cwd)
+    normalizePathForCompare(layout.workTree) !== normalizePathForCompare(root)
   )
-    return refuseDiscoveredRepository("a folder that is no longer the one that was checked", n);
-  let { gitDir, workTree } = s;
-  let u;
+    return refuseDiscoveredRepository("a folder that is no longer the one that was checked", refusalReport);
+  let { gitDir, workTree } = layout;
+  let copyDir;
   try {
-    let c = await vetGitDirEntries(gitDir);
-    if (typeof c === "string") return refuseDiscoveredRepository(c, n);
-    let f = await vetGitObjectsDir(join(gitDir, "objects"));
-    if (f !== undefined) return refuseDiscoveredRepository(f, n);
+    let vetResult = await vetGitDirEntries(gitDir);
+    if (typeof vetResult === "string") return refuseDiscoveredRepository(vetResult, refusalReport);
+    let objectsRefusal = await vetGitObjectsDir(join(gitDir, "objects"));
+    if (objectsRefusal !== undefined) return refuseDiscoveredRepository(objectsRefusal, refusalReport);
     let diffCopyRoot = await getDiffCopyRoot();
-    if (diffCopyRoot === null) return refuseDiscoveredRepository(NO_DIFF_COPY_ROOT_REFUSAL, n);
-    u = await mkdtemp(join(diffCopyRoot, "ccdiff-"));
-    let g = u;
-    let m = (await copyGitDir(gitDir, g, c)) ?? (await readUnacceptedGitConfig(g, c.has("config.worktree")));
-    if (m !== undefined) {
-      await removeRecursiveQuietly(g);
-      return refuseDiscoveredRepository(m, n);
+    if (diffCopyRoot === null) return refuseDiscoveredRepository(NO_DIFF_COPY_ROOT_REFUSAL, refusalReport);
+    copyDir = await mkdtemp(join(diffCopyRoot, "ccdiff-"));
+    let copiedGitDir = copyDir;
+    let configRefusal =
+      (await copyGitDir(gitDir, copiedGitDir, vetResult)) ??
+      (await readUnacceptedGitConfig(copiedGitDir, vetResult.has("config.worktree")));
+    if (configRefusal !== undefined) {
+      await removeRecursiveQuietly(copiedGitDir);
+      return refuseDiscoveredRepository(configRefusal, refusalReport);
     }
-    let copiedGitEnv = buildCopiedGitEnv(g, gitDir, workTree);
-    if (!(await isGitVersionSupported(cwd, copiedGitEnv, abortSignal))) {
-      await removeRecursiveQuietly(g);
-      return refuseDiscoveredRepository(GIT_VERSION_REFUSAL, n);
+    let copiedGitEnv = buildCopiedGitEnv(copiedGitDir, gitDir, workTree);
+    if (!(await isGitVersionSupported(root, copiedGitEnv, abortSignal))) {
+      await removeRecursiveQuietly(copiedGitDir);
+      return refuseDiscoveredRepository(GIT_VERSION_REFUSAL, refusalReport);
     }
     return {
       spawn: copiedGitEnv,
-      dispose: () => removeRecursiveQuietly(g),
+      dispose: () => removeRecursiveQuietly(copiedGitDir),
     };
   } catch (error) {
-    if (u !== undefined) await removeRecursiveQuietly(u);
-    return refuseDiscoveredRepository(`unexpected error (${errorMessage(error)})`, n);
+    if (copyDir !== undefined) await removeRecursiveQuietly(copyDir);
+    return refuseDiscoveredRepository(`unexpected error (${errorMessage(error)})`, refusalReport);
   }
 }
 //@ chunk-gfa3ceg6.js:4314-4366 placement
@@ -326,11 +354,11 @@ async function removeRecursiveQuietly(dirPath) {
 /**
  * 记录拒绝发现的仓库并上报进度，返回 null。
  */
-function refuseDiscoveredRepository(e, n) {
-  logForDebugging(`workspace diff: discovered repository refused (${e})`, {
+function refuseDiscoveredRepository(reason, reportTarget) {
+  logForDebugging(`workspace diff: discovered repository refused (${reason})`, {
     level: "warn",
   });
-  if (n !== undefined) reportDiffProgress(e, REPORTED_DIFF_REFUSALS_SLOT.of(n));
+  if (reportTarget !== undefined) reportDiffProgress(reason, REPORTED_DIFF_REFUSALS_SLOT.of(reportTarget));
   return null;
 }
 //@ chunk-gfa3ceg6.js:4969-5061 placement
@@ -342,52 +370,52 @@ var GIT_CONFIG_KEY_DISPLAY_PATTERN = /^[a-z0-9-]{1,40}(?:\.<\.\.\.>)?\.[a-z0-9-]
 /**
  * 调试模式下把进度写 stderr
  */
-function reportDiffProgress(e, n) {
+function reportDiffProgress(reason, reported) {
   if (!hasRunnerDeclaredNestedRepoDiff()) return;
-  let o = describeRefusalForUser(e);
-  if (n.has(o)) return;
-  if (n.size >= MAX_REPORTED_DIFF_REFUSALS) {
-    if (!n.has(LAST_REPORTED_REFUSAL)) {
-      n.add(LAST_REPORTED_REFUSAL);
-      process.stderr.write(`${MAX_CHANGE_REASONS_SHOWN}
+  let line = describeRefusalForUser(reason);
+  if (reported.has(line)) return;
+  if (reported.size >= MAX_REPORTED_DIFF_REFUSALS) {
+    if (!reported.has(LAST_REPORTED_REFUSAL)) {
+      reported.add(LAST_REPORTED_REFUSAL);
+      process.stderr.write(`${MAX_REASONS_SHOWN_TEXT}
 `);
     }
     return;
   }
-  n.add(o);
-  process.stderr.write(`${o}
+  reported.add(line);
+  process.stderr.write(`${line}
 `);
 }
 //@ chunk-gfa3ceg6.js:5243-5289 placement
-function describeRefusalForUser(e) {
-  return `${CHANGES_PANE_PREFIX} ${describeGitDirRefusal(e)} ${HINT_DIFF_FINDS_NESTED}`;
+function describeRefusalForUser(reason) {
+  return `${CHANGES_PANE_PREFIX} ${describeGitDirRefusal(reason)} ${HINT_DIFF_FINDS_NESTED}`;
 }
 //@ chunk-gfa3ceg6.js:5289-6491 placement
 /**
  * 把 .git 检查拒绝原因转成用户可读文字
  */
-function describeGitDirRefusal(e) {
-  let match = /^(config entry|config value of|multi-line value for) (.+)$/.exec(e);
+function describeGitDirRefusal(reason) {
+  let match = /^(config entry|config value of|multi-line value for) (.+)$/.exec(reason);
   if (match !== null) {
-    let s = match[2] ?? "";
-    if (!GIT_CONFIG_KEY_DISPLAY_PATTERN.test(s))
+    let key = match[2] ?? "";
+    if (!GIT_CONFIG_KEY_DISPLAY_PATTERN.test(key))
       return "Its own git settings (.git/config or .git/config.worktree) have a setting whose name is not shown: it is too long, or not plain letters, digits and dashes.";
-    let r = s.includes("<...>")
+    let howShown = key.includes("<...>")
       ? 'shown in lower case, "<...>" for the middle of its name'
       : "shown in lower case";
     if (match[1] === "config entry")
-      return `Its own git settings (.git/config or .git/config.worktree) have the setting "${s}" (${r}), which is not one Claude Code accepts there.`;
+      return `Its own git settings (.git/config or .git/config.worktree) have the setting "${key}" (${howShown}), which is not one Claude Code accepts there.`;
     return match[1] === "config value of"
-      ? `Its own git settings (.git/config or .git/config.worktree) give the setting "${s}" (${r}) a value that is not one Claude Code accepts there.`
-      : `Its own git settings (.git/config or .git/config.worktree) give the setting "${s}" (${r}) a value that runs over several lines.`;
+      ? `Its own git settings (.git/config or .git/config.worktree) give the setting "${key}" (${howShown}) a value that is not one Claude Code accepts there.`
+      : `Its own git settings (.git/config or .git/config.worktree) give the setting "${key}" (${howShown}) a value that runs over several lines.`;
   }
-  if (e === NO_DIFF_COPY_ROOT_REFUSAL) return DIFF_COPY_ROOT_NOT_ABSOLUTE_TEXT;
-  if (e === GIT_VERSION_REFUSAL) return GIT_TOO_OLD_TEXT;
-  let o = firstLineOf(e, " (");
-  if (o === "unexpected error")
+  if (reason === NO_DIFF_COPY_ROOT_REFUSAL) return DIFF_COPY_ROOT_NOT_ABSOLUTE_TEXT;
+  if (reason === GIT_VERSION_REFUSAL) return GIT_TOO_OLD_TEXT;
+  let head = firstLineOf(reason, " (");
+  if (head === "unexpected error")
     return "An unexpected error stopped the check of its .git folder; the session's debug log has the details.";
-  return matchesJoinedGitIgnorePattern(o)
-    ? `The check of its .git folder stopped at: ${o}.`
+  return matchesJoinedGitIgnorePattern(head)
+    ? `The check of its .git folder stopped at: ${head}.`
     : "The check of its .git folder stopped for a reason that is not shown.";
 }
 //@ chunk-gfa3ceg6.js:6491-6528 placement
@@ -398,15 +426,15 @@ function gitConfigPairsForCopy() {
 /**
  * 为复制的 .git 构造 git 环境变量
  */
-function buildCopiedGitEnv(e, gitDir, workTree) {
+function buildCopiedGitEnv(copiedGitDir, gitDir, workTree) {
   return {
     env: {
       ...getRemoteHostSessionCount(GIT_FILES_REF_BACKEND_ENV, {
         base: subprocessEnv(),
         repository: {
-          gitDir: e,
+          gitDir: copiedGitDir,
           workTree,
-          commonDir: e,
+          commonDir: copiedGitDir,
         },
       }),
       ...ISOLATED_GIT_CONFIG_ENV,
@@ -423,69 +451,71 @@ function buildCopiedGitEnv(e, gitDir, workTree) {
 /**
  * 检查 .git 顶层条目，返回拒绝原因
  */
-async function vetGitDirEntries(gitDir) {
-  let n = new Set();
-  let o = 0;
-  for await (let s of await opendir(gitDir)) {
-    if (++o > GIT_COPY_MAX_ENTRIES) return "oversized .git";
-    let r = gitDirEntryPlan(s.name);
-    if (r === undefined) return "unknown .git entry";
-    switch (r.disposition) {
+async function vetGitDirEntries(dir) {
+  let present = new Set();
+  let entryCount = 0;
+  for await (let entry of await opendir(dir)) {
+    if (++entryCount > GIT_COPY_MAX_ENTRIES) return "oversized .git";
+    let plan = gitDirEntryPlan(entry.name);
+    if (plan === undefined) return "unknown .git entry";
+    switch (plan.disposition) {
       case "skip":
         continue;
       case "refuse":
-        return `.git/${s.name}`;
+        return `.git/${entry.name}`;
       case "copy":
       case "in-place":
-        if (s.name === "index") {
-          let a = await lstat(join(gitDir, s.name));
-          if (!a.isFile() || a.nlink > 1) return "symlinked, hardlinked or unexpected .git/index";
-        } else if ((await classifyDirent(gitDir, s)) !== r.kind)
-          return `symlinked or unexpected .git/${s.name}`;
-        n.add(s.name);
+        if (entry.name === "index") {
+          let stat = await lstat(join(dir, entry.name));
+          if (!stat.isFile() || stat.nlink > 1) return "symlinked, hardlinked or unexpected .git/index";
+        } else if ((await classifyDirent(dir, entry)) !== plan.kind)
+          return `symlinked or unexpected .git/${entry.name}`;
+        present.add(entry.name);
     }
   }
-  if (!n.has("config") || !n.has("HEAD")) return "no .git/config or .git/HEAD";
-  return n;
+  if (!present.has("config") || !present.has("HEAD")) return "no .git/config or .git/HEAD";
+  return present;
 }
 //@ chunk-gfa3ceg6.js:7343-7618 placement
 /**
  * 检查 .git/objects 无符号链接且无 alternates
  */
-async function vetGitObjectsDir(e) {
-  let o = await listPlainSubdirs(e);
-  if (o === null) return "symlinked or oversized .git/objects entry";
-  for (let s of o)
-    if ((await listPlainSubdirs(join(e, s))) === null) return "symlinked or oversized .git/objects entry";
-  if (await isNonEmptyOrIrregularFile(join(e, "info", "alternates"))) return ".git/objects/info/alternates";
+async function vetGitObjectsDir(objectsDir) {
+  let subdirs = await listPlainSubdirs(objectsDir);
+  if (subdirs === null) return "symlinked or oversized .git/objects entry";
+  for (let subdir of subdirs)
+    if ((await listPlainSubdirs(join(objectsDir, subdir))) === null)
+      return "symlinked or oversized .git/objects entry";
+  if (await isNonEmptyOrIrregularFile(join(objectsDir, "info", "alternates")))
+    return ".git/objects/info/alternates";
   return;
 }
 //@ chunk-gfa3ceg6.js:7618-8052 placement
 /**
  * 把 .git 需要的部分复制到临时目录
  */
-async function copyGitDir(gitDir, n, o) {
-  await mkdir(join(n, "refs"), {
+async function copyGitDir(gitDir, destGitDir, present) {
+  await mkdir(join(destGitDir, "refs"), {
     recursive: true,
   });
-  let s = {
+  let counter = {
     entries: 0,
     bytes: 0,
   };
-  for (let [r, a] of GIT_DIR_ENTRY_PLANS) {
-    if (a.disposition !== "copy" || !o.has(r)) continue;
-    let u = join(gitDir, r);
-    let c = join(n, r);
-    if (a.kind === "file") {
-      if ((await copyBoundedGitFile(u, c, a.maxBytes, s)) !== "copied")
-        return `unreadable, linked or oversized .git/${r}`;
+  for (let [entryName, plan] of GIT_DIR_ENTRY_PLANS) {
+    if (plan.disposition !== "copy" || !present.has(entryName)) continue;
+    let srcPath = join(gitDir, entryName);
+    let destPath = join(destGitDir, entryName);
+    if (plan.kind === "file") {
+      if ((await copyBoundedGitFile(srcPath, destPath, plan.maxBytes, counter)) !== "copied")
+        return `unreadable, linked or oversized .git/${entryName}`;
       continue;
     }
-    await mkdir(c, {
+    await mkdir(destPath, {
       recursive: true,
     });
-    if (!(await copyGitDirEntries(u, c, a.maxFileBytes, s, a.entries)))
-      return `unreadable, linked or oversized entry under .git/${r}`;
+    if (!(await copyGitDirEntries(srcPath, destPath, plan.maxFileBytes, counter, plan.entries)))
+      return `unreadable, linked or oversized entry under .git/${entryName}`;
   }
   return;
 }
@@ -493,13 +523,13 @@ async function copyGitDir(gitDir, n, o) {
 /**
  * 列出仓库 config 中不被接受的条目
  */
-async function readUnacceptedGitConfig(e, n) {
-  let o = new Set(gitConfigPairsForCopy().map(([r]) => r.toLowerCase()));
-  let s = n ? ["config", "config.worktree"] : ["config"];
-  for (let r of s) {
-    let a = await execFileNoThrow(
+async function readUnacceptedGitConfig(gitDir, hasWorktreeConfig) {
+  let acceptedKeys = new Set(gitConfigPairsForCopy().map(([key]) => key.toLowerCase()));
+  let configFiles = hasWorktreeConfig ? ["config", "config.worktree"] : ["config"];
+  for (let fileName of configFiles) {
+    let result = await execFileNoThrow(
       gitExe(),
-      ["config", "--file", join(e, r), "--no-includes", "-z", "--list"],
+      ["config", "--file", join(gitDir, fileName), "--no-includes", "-z", "--list"],
       {
         cwd: GitStartFolderError.filesystemRoot().path,
         gitStartsIn: GitStartFolderError.filesystemRoot(),
@@ -510,27 +540,27 @@ async function readUnacceptedGitConfig(e, n) {
             base: subprocessEnv(),
           }),
           ...ISOLATED_GIT_CONFIG_ENV,
-          GIT_DIR: join(e, "no-repository-here"),
+          GIT_DIR: join(gitDir, "no-repository-here"),
           [CLAUDE_CODE_FOUND_REPOSITORY_GIT]: "1",
         },
         extendEnv: false,
         stdin: "ignore",
       },
     );
-    if (a.code !== 0) return `config ${r} unlistable`;
-    for (let u of a.stdout.split("\x00")) {
-      if (u === "") continue;
-      let index = u.indexOf(`
+    if (result.code !== 0) return `config ${fileName} unlistable`;
+    for (let record of result.stdout.split("\x00")) {
+      if (record === "") continue;
+      let index = record.indexOf(`
 `);
-      let f = index === -1 ? u : u.slice(0, index);
-      let l = index === -1 ? "" : u.slice(index + 1);
+      let key = index === -1 ? record : record.slice(0, index);
+      let value = index === -1 ? "" : record.slice(index + 1);
       if (
-        l.includes(`
+        value.includes(`
 `)
       )
-        return `multi-line value for ${abbreviateConfigKey(f)}`;
-      if (!isAcceptedGitConfigKey(f, l, o))
-        return `${isSubmoduleOrRefStorageKey(f) ? "config value of" : "config entry"} ${abbreviateConfigKey(f)}`;
+        return `multi-line value for ${abbreviateConfigKey(key)}`;
+      if (!isAcceptedGitConfigKey(key, value, acceptedKeys))
+        return `${isSubmoduleOrRefStorageKey(key) ? "config value of" : "config entry"} ${abbreviateConfigKey(key)}`;
     }
   }
   return;
@@ -538,51 +568,51 @@ async function readUnacceptedGitConfig(e, n) {
 //@ chunk-gfa3ceg6.js:8773-8806 placement
 var SUBMODULE_UPDATE_CONFIG_PATTERN = /^submodule\..+\.update$/;
 //@ chunk-gfa3ceg6.js:8806-8868 placement
-function isSubmoduleOrRefStorageKey(e) {
-  return e === "extensions.refstorage" || SUBMODULE_UPDATE_CONFIG_PATTERN.test(e);
+function isSubmoduleOrRefStorageKey(key) {
+  return key === "extensions.refstorage" || SUBMODULE_UPDATE_CONFIG_PATTERN.test(key);
 }
 //@ chunk-gfa3ceg6.js:8868-9041 placement
 /**
  * git config 键是否在可接受列表
  */
-function isAcceptedGitConfigKey(e, n, o) {
-  if (e === "extensions.refstorage") return n === "files";
-  if (SUBMODULE_UPDATE_CONFIG_PATTERN.test(e)) return SUBMODULE_UPDATE_MODES.has(n);
+function isAcceptedGitConfigKey(key, value, acceptedKeys) {
+  if (key === "extensions.refstorage") return value === "files";
+  if (SUBMODULE_UPDATE_CONFIG_PATTERN.test(key)) return SUBMODULE_UPDATE_MODES.has(value);
   return (
-    o.has(e) ||
-    ACCEPTED_GIT_CONFIG_PATTERNS.some((s) => s.test(e)) ||
-    (hasRunnerDeclaredNestedRepoDiff() && OPT_IN_GIT_CONFIG_PATTERNS.some((s) => s.test(e)))
+    acceptedKeys.has(key) ||
+    ACCEPTED_GIT_CONFIG_PATTERNS.some((pattern) => pattern.test(key)) ||
+    (hasRunnerDeclaredNestedRepoDiff() && OPT_IN_GIT_CONFIG_PATTERNS.some((pattern) => pattern.test(key)))
   );
 }
 //@ chunk-gfa3ceg6.js:9041-9124 placement
-function abbreviateConfigKey(e) {
-  let parts = e.split(".");
-  return parts.length <= 2 ? e : `${parts[0]}.<...>.${parts.at(-1)}`;
+function abbreviateConfigKey(key) {
+  let parts = key.split(".");
+  return parts.length <= 2 ? key : `${parts[0]}.<...>.${parts.at(-1)}`;
 }
 //@ chunk-gfa3ceg6.js:9124-9503 placement
 /**
  * 按白名单递归复制 .git 目录条目
  */
-async function copyGitDirEntries(e, n, o, s, r) {
-  let a;
+async function copyGitDirEntries(srcDir, destDir, maxFileBytes, counter, allowList) {
+  let dir;
   try {
-    a = await opendir(e);
+    dir = await opendir(srcDir);
   } catch (error) {
     return isENOENT(error);
   }
-  for await (let u of a) {
-    if (++s.entries > GIT_SCAN_MAX_ENTRIES) return false;
-    if (r !== "all" && !r.has(u.name)) continue;
-    let c = join(e, u.name);
-    let f = join(n, u.name);
-    let l = await classifyDirent(e, u);
-    if (l === "dir" && r === "all") {
-      await mkdir(f, {
+  for await (let entry of dir) {
+    if (++counter.entries > GIT_SCAN_MAX_ENTRIES) return false;
+    if (allowList !== "all" && !allowList.has(entry.name)) continue;
+    let srcPath = join(srcDir, entry.name);
+    let destPath = join(destDir, entry.name);
+    let kind = await classifyDirent(srcDir, entry);
+    if (kind === "dir" && allowList === "all") {
+      await mkdir(destPath, {
         recursive: true,
       });
-      if (!(await copyGitDirEntries(c, f, o, s, "all"))) return false;
-    } else if (l === "file") {
-      if ((await copyBoundedGitFile(c, f, o, s)) !== "copied") return false;
+      if (!(await copyGitDirEntries(srcPath, destPath, maxFileBytes, counter, "all"))) return false;
+    } else if (kind === "file") {
+      if ((await copyBoundedGitFile(srcPath, destPath, maxFileBytes, counter)) !== "copied") return false;
     } else return false;
   }
   return true;
@@ -591,13 +621,13 @@ async function copyGitDirEntries(e, n, o, s, r) {
 /**
  * 目录项分类 dir/file/reject（符号链接拒绝）
  */
-async function classifyDirent(e, n) {
-  if (n.isSymbolicLink()) return "reject";
-  if (n.isDirectory()) return "dir";
-  if (n.isFile()) return "file";
+async function classifyDirent(dir, entry) {
+  if (entry.isSymbolicLink()) return "reject";
+  if (entry.isDirectory()) return "dir";
+  if (entry.isFile()) return "file";
   try {
-    let o = await lstat(join(e, n.name));
-    return o.isSymbolicLink() ? "reject" : o.isDirectory() ? "dir" : o.isFile() ? "file" : "reject";
+    let stat = await lstat(join(dir, entry.name));
+    return stat.isSymbolicLink() ? "reject" : stat.isDirectory() ? "dir" : stat.isFile() ? "file" : "reject";
   } catch {
     return "reject";
   }
@@ -606,22 +636,22 @@ async function classifyDirent(e, n) {
 /**
  * 列出子目录，遇符号链接或超量返回 null
  */
-async function listPlainSubdirs(e) {
-  let n;
+async function listPlainSubdirs(dir) {
+  let handle;
   try {
-    n = await opendir(e);
+    handle = await opendir(dir);
   } catch (error) {
     return isENOENT(error) ? [] : null;
   }
-  let o = [];
-  let s = 0;
-  for await (let r of n) {
-    if (++s > GIT_SCAN_MAX_DEPTH) return null;
-    let a = await classifyDirent(e, r);
-    if (a === "reject") return null;
-    if (a === "dir") o.push(r.name);
+  let names = [];
+  let count = 0;
+  for await (let entry of handle) {
+    if (++count > GIT_SCAN_MAX_DEPTH) return null;
+    let kind = await classifyDirent(dir, entry);
+    if (kind === "reject") return null;
+    if (kind === "dir") names.push(entry.name);
   }
-  return o;
+  return names;
 }
 //@ chunk-gfa3ceg6.js:9972-10057 placement
 function readOnlyOpenFlags() {
@@ -633,32 +663,32 @@ function readOnlyOpenFlags() {
 /**
  * 有界复制 .git 中的单个文件
  */
-async function copyBoundedGitFile(e, n, o, s) {
-  let r;
+async function copyBoundedGitFile(srcPath, destPath, maxBytes, counter) {
+  let handle;
   try {
-    r = await open(e, readOnlyOpenFlags());
+    handle = await open(srcPath, readOnlyOpenFlags());
   } catch (error) {
     return isENOENT(error) ? "absent" : "refused";
   }
   try {
-    let stats = await r.stat();
-    if (!stats.isFile() || stats.nlink > 1 || stats.size > o) return "refused";
-    s.bytes += stats.size;
-    if (s.bytes > GIT_COPY_TOTAL_MAX_BYTES) return "refused";
-    let u = Buffer.alloc(stats.size);
-    let c = 0;
-    while (c < stats.size) {
-      let { bytesRead } = await r.read(u, c, stats.size - c, c);
+    let stats = await handle.stat();
+    if (!stats.isFile() || stats.nlink > 1 || stats.size > maxBytes) return "refused";
+    counter.bytes += stats.size;
+    if (counter.bytes > GIT_COPY_TOTAL_MAX_BYTES) return "refused";
+    let buffer = Buffer.alloc(stats.size);
+    let offset = 0;
+    while (offset < stats.size) {
+      let { bytesRead } = await handle.read(buffer, offset, stats.size - offset, offset);
       if (bytesRead === 0) break;
-      c += bytesRead;
+      offset += bytesRead;
     }
-    if (c !== stats.size) return "refused";
-    await writeFile(n, u);
+    if (offset !== stats.size) return "refused";
+    await writeFile(destPath, buffer);
     return "copied";
   } catch {
     return "refused";
   } finally {
-    await r.close().catch(() => {
+    await handle.close().catch(() => {
       return;
     });
   }
@@ -667,18 +697,18 @@ async function copyBoundedGitFile(e, n, o, s) {
 /**
  * 文件是否非空或非普通文件
  */
-async function isNonEmptyOrIrregularFile(e) {
-  let n;
+async function isNonEmptyOrIrregularFile(filePath) {
+  let handle;
   try {
-    n = await open(e, readOnlyOpenFlags());
+    handle = await open(filePath, readOnlyOpenFlags());
   } catch (error) {
     return !isENOENT(error);
   }
   try {
-    let stats = await n.stat();
+    let stats = await handle.stat();
     return !stats.isFile() || stats.size > 0;
   } finally {
-    await n.close().catch(() => {
+    await handle.close().catch(() => {
       return;
     });
   }
@@ -687,20 +717,20 @@ async function isNonEmptyOrIrregularFile(e) {
 /**
  * 向上找到存在的祖先再拼回路径
  */
-async function resolveMissingPath(e) {
-  let n = dirname(e);
-  let o = [basename(e)];
+async function resolveMissingPath(filePath) {
+  let current = dirname(filePath);
+  let tailParts = [basename(filePath)];
   for (let j = 0; j < 64; j++) {
     try {
-      let a = await realpath(n);
-      return join(a, ...o);
+      let realDir = await realpath(current);
+      return join(realDir, ...tailParts);
     } catch (error) {
       if (error?.code !== "ENOENT") return;
     }
-    let r = dirname(n);
-    if (r === n) return;
-    o.unshift(basename(n));
-    n = r;
+    let parent = dirname(current);
+    if (parent === current) return;
+    tailParts.unshift(basename(current));
+    current = parent;
   }
   return;
 }
@@ -718,38 +748,39 @@ var NOFOLLOW_READ_FLAGS = REMOTE_READ_OPEN_FLAGS | (constants.O_NOFOLLOW ?? 0);
 /**
  * 路径是否为可安全传给 git 的普通相对路径
  */
-function isPlainRepoPath(e) {
-  if (e.length === 0 || e.startsWith('"')) return false;
-  if (/[\u0000-\u001f\u007f\uFFFD]/.test(e)) return false;
+function isPlainRepoPath(repoPath) {
+  if (repoPath.length === 0 || repoPath.startsWith('"')) return false;
+  if (/[\u0000-\u001f\u007f\uFFFD]/.test(repoPath)) return false;
   if (
-    e.startsWith("-") ||
-    e.startsWith(":") ||
-    e.includes(" => ") ||
-    e.includes("\\") ||
-    !isSafeRelativeDiffPath(e)
+    repoPath.startsWith("-") ||
+    repoPath.startsWith(":") ||
+    repoPath.includes(" => ") ||
+    repoPath.includes("\\") ||
+    !isSafeRelativeDiffPath(repoPath)
   )
     return false;
-  return e.split("/").every((n) => n !== "" && stripTrailingDotsSpaces(n) !== ".");
+  return repoPath.split("/").every((segment) => segment !== "" && stripTrailingDotsSpaces(segment) !== ".");
 }
 //@ chunk-gfa3ceg6.js:11266-11415 placement
 /**
  * 含不安全字符的路径：去掉 git 的引号转义后重新按 git 规则加引号。
  */
-function normalizeDiffPath(e) {
-  if (!UNSAFE_PATH_CHAR_PATTERN.test(e)) return e;
-  let n = e.length > 1 && e.startsWith('"') && e.endsWith('"') && !e.includes('" => ');
-  return quoteGitPath(n ? unquoteGitPathBytes(e.slice(1, -1)) : e);
+function normalizeDiffPath(rawPath) {
+  if (!UNSAFE_PATH_CHAR_PATTERN.test(rawPath)) return rawPath;
+  let quoted =
+    rawPath.length > 1 && rawPath.startsWith('"') && rawPath.endsWith('"') && !rawPath.includes('" => ');
+  return quoteGitPath(quoted ? unquoteGitPathBytes(rawPath.slice(1, -1)) : rawPath);
 }
 //@ chunk-gfa3ceg6.js:11415-11442 placement
 var GIT_OBJECT_ID_PATTERN = /^[0-9a-f]{40,64}$/;
 //@ chunk-gfa3ceg6.js:11442-11497 placement
-function gitArgs(e) {
-  return ["--literal-pathspecs", ...GIT_SAFE_GLOBAL_ARGS, ...e];
+function gitArgs(args) {
+  return ["--literal-pathspecs", ...GIT_SAFE_GLOBAL_ARGS, ...args];
 }
 //@ chunk-gfa3ceg6.js:11497-11569 placement
-function gitExecOptions(cwd, n) {
+function gitExecOptions(cwd, options) {
   return {
-    ...n,
+    ...options,
     cwd,
     timeout: GIT_DIFF_TIMEOUT_MS,
     preserveOutputOnError: false,
@@ -759,111 +790,111 @@ function gitExecOptions(cwd, n) {
 /**
  * git ls-tree 读取提交中的文件条目
  */
-async function readTreeEntries(e, n, o, s) {
+async function readTreeEntries(cwd, rev, paths, options) {
   let { stdout, code } = await execFileNoThrowWithCwd(
     gitExe(),
-    gitArgs(["ls-tree", "-r", "-l", "-z", "--full-tree", n, "--", ...o]),
+    gitArgs(["ls-tree", "-r", "-l", "-z", "--full-tree", rev, "--", ...paths]),
     {
-      ...gitExecOptions(e, s),
+      ...gitExecOptions(cwd, options),
       maxBuffer: 1e7,
     },
   );
   if (code !== 0) return null;
-  let u = new Map();
-  for (let c of stdout.split("\x00")) {
-    if (!c) continue;
-    let match = c.match(/^(\d{6}) (\S+) ([0-9a-f]{40,64}) +(\d+|-)\t(.+)$/s);
+  let entries = new Map();
+  for (let record of stdout.split("\x00")) {
+    if (!record) continue;
+    let match = record.match(/^(\d{6}) (\S+) ([0-9a-f]{40,64}) +(\d+|-)\t(.+)$/s);
     if (!match) continue;
-    let [, l = "", g, m = "", S, v] = match;
-    if (v === undefined) continue;
-    u.set(v, {
-      mode: l,
-      oid: m,
-      size: g === "blob" && S !== "-" ? Number(S) : -1,
+    let [, mode = "", type, oid = "", sizeText, path] = match;
+    if (path === undefined) continue;
+    entries.set(path, {
+      mode,
+      oid,
+      size: type === "blob" && sizeText !== "-" ? Number(sizeText) : -1,
     });
   }
-  return u;
+  return entries;
 }
 //@ chunk-gfa3ceg6.js:11994-12372 placement
 /**
  * git ls-files --stage 读取索引条目
  */
-async function readIndexEntries(e, n, o) {
+async function readIndexEntries(cwd, paths, options) {
   let { stdout, code } = await execFileNoThrowWithCwd(
     gitExe(),
-    gitArgs(["ls-files", "--stage", "-v", "-z", "--", ...n]),
+    gitArgs(["ls-files", "--stage", "-v", "-z", "--", ...paths]),
     {
-      ...gitExecOptions(e, o),
+      ...gitExecOptions(cwd, options),
       maxBuffer: 1e7,
     },
   );
   if (code !== 0) return null;
-  let a = new Map();
-  for (let u of stdout.split("\x00")) {
-    let match = u.match(/^(\S) (\d{6}) ([0-9a-f]{40,64}) (\d)\t(.+)$/s);
+  let entries = new Map();
+  for (let record of stdout.split("\x00")) {
+    let match = record.match(/^(\S) (\d{6}) ([0-9a-f]{40,64}) (\d)\t(.+)$/s);
     if (!match) continue;
-    let [, f = "", , l = "", g, m = ""] = match;
-    a.set(m, {
-      entryIsNewSide: g === "0" && (f === "S" || /[a-z]/.test(f)),
-      oid: l,
+    let [, flags = "", , oid = "", stage, path = ""] = match;
+    entries.set(path, {
+      entryIsNewSide: stage === "0" && (flags === "S" || /[a-z]/.test(flags)),
+      oid,
     });
   }
-  return a;
+  return entries;
 }
 //@ chunk-gfa3ceg6.js:12372-12535 placement
 /**
  * 计算 git blob 哈希（sha1/sha256）
  */
-function gitBlobHash(e, n) {
-  let o = typeof e === "string" ? Buffer.from(e, "utf-8") : e;
-  return createHash(n.length === 64 ? "sha256" : "sha1")
-    .update(`blob ${o.length}\x00`)
-    .update(o)
+function gitBlobHash(content, oid) {
+  let buffer = typeof content === "string" ? Buffer.from(content, "utf-8") : content;
+  return createHash(oid.length === 64 ? "sha256" : "sha1")
+    .update(`blob ${buffer.length}\x00`)
+    .update(buffer)
     .digest("hex");
 }
 //@ chunk-gfa3ceg6.js:12535-12664 placement
 /**
  * 文本的 git blob 哈希与目标一致则返回；否则试把 CRLF 换成 LF 再比，仍不符返回 null。
  */
-function matchBlobAllowingCrlf(content, n) {
-  if (gitBlobHash(content, n) === n) return content;
+function matchBlobAllowingCrlf(content, oid) {
+  if (gitBlobHash(content, oid) === oid) return content;
   if (
     !content.includes(`\r
 `)
   )
     return null;
-  let replaced = content.replaceAll(
+  let content_2 = content.replaceAll(
     `\r
 `,
     `
 `,
   );
-  return gitBlobHash(replaced, n) === n ? replaced : null;
+  return gitBlobHash(content_2, oid) === oid ? content_2 : null;
 }
 //@ chunk-gfa3ceg6.js:12664-12940 placement
 /**
  * git cat-file 读取 blob 并核对哈希
  */
-async function readGitBlob(e, n, o) {
-  if (!GIT_OBJECT_ID_PATTERN.test(n)) return null;
-  let { stdout, code } = await execFileNoThrowWithCwd(gitExe(), gitArgs(["cat-file", "blob", n]), {
-    ...gitExecOptions(e, o),
+async function readGitBlob(cwd, oid, options) {
+  if (!GIT_OBJECT_ID_PATTERN.test(oid)) return null;
+  let { stdout, code } = await execFileNoThrowWithCwd(gitExe(), gitArgs(["cat-file", "blob", oid]), {
+    ...gitExecOptions(cwd, options),
     maxBuffer: MAX_TOTAL_DIFF_BYTES + 65536,
     stripFinalNewline: false,
     encoding: "latin1",
   });
   if (code !== 0) return null;
   let buffer = Buffer.from(stdout, "latin1");
-  return gitBlobHash(buffer, n) === n ? buffer.toString("utf-8") : null;
+  return gitBlobHash(buffer, oid) === oid ? buffer.toString("utf-8") : null;
 }
 //@ chunk-gfa3ceg6.js:12940-13757 placement
 /**
  * 有界读取工作区文件，区分缺失/受限/非普通文件
  */
-async function readWorkingFileForDiff(e, n, o) {
-  let s;
+async function readWorkingFileForDiff(filePath, canonicalPath, settings) {
+  let handle;
   try {
-    s = await open(e, NOFOLLOW_READ_FLAGS);
+    handle = await open(filePath, NOFOLLOW_READ_FLAGS);
   } catch (error) {
     return error?.code === "ENOENT"
       ? {
@@ -874,48 +905,51 @@ async function readWorkingFileForDiff(e, n, o) {
         };
   }
   try {
-    let stats = await s.stat({
+    let expectedIdentity = await handle.stat({
       bigint: true,
     });
-    if (!stats.isFile())
+    if (!expectedIdentity.isFile())
       return {
         kind: "not-regular-file",
       };
-    if (stats.nlink !== 1n || stats.dev === 0n || stats.ino === 0n)
+    if (expectedIdentity.nlink !== 1n || expectedIdentity.dev === 0n || expectedIdentity.ino === 0n)
       return {
         kind: "restricted",
       };
-    let a;
+    let resolvedPath;
     try {
-      a = await realpath(e);
+      resolvedPath = await realpath(filePath);
     } catch {
       return {
         kind: "restricted",
       };
     }
-    let u = await bindCanonicalPathToHandle(s, stats, a);
-    if (u === undefined)
+    let boundPath = await bindCanonicalPathToHandle(handle, expectedIdentity, resolvedPath);
+    if (boundPath === undefined)
       return {
         kind: "restricted",
       };
-    a = u;
-    if (!isPathAllowed(a, o, "read").allowed || matchingRuleForInput(a, o, "read", "ask") !== null)
+    resolvedPath = boundPath;
+    if (
+      !isPathAllowed(resolvedPath, settings, "read").allowed ||
+      matchingRuleForInput(resolvedPath, settings, "read", "ask") !== null
+    )
       return {
         kind: "restricted",
       };
-    if (pathVettingReason(a, o.trustedNetworkDirectories) !== undefined)
+    if (pathVettingReason(resolvedPath, settings.trustedNetworkDirectories) !== undefined)
       return {
         kind: "restricted",
       };
-    if (!(await isCanonicalPathContained(a, o)))
+    if (!(await isCanonicalPathContained(resolvedPath, settings)))
       return {
         kind: "restricted",
       };
-    if (a !== n)
+    if (resolvedPath !== canonicalPath)
       return {
         kind: "off-path",
       };
-    let handleBounded = await readHandleBounded(s, MAX_TOTAL_DIFF_BYTES, stats.size);
+    let handleBounded = await readHandleBounded(handle, MAX_TOTAL_DIFF_BYTES, expectedIdentity.size);
     if (handleBounded.overLimit)
       return {
         kind: "too-large",
@@ -929,43 +963,43 @@ async function readWorkingFileForDiff(e, n, o) {
       kind: "restricted",
     };
   } finally {
-    await s.close().catch(() => {});
+    await handle.close().catch(() => {});
   }
 }
 //@ chunk-gfa3ceg6.js:13757-13930 placement
 /**
  * 仓库根是否在受信网络目录内且通过校验
  */
-async function isTrustedRepositoryRoot(e, n) {
-  let o;
+async function isTrustedRepositoryRoot(dir, settings) {
+  let real;
   try {
-    o = await realpath(e);
+    real = await realpath(dir);
   } catch (error) {
-    o = error?.code === "ENOENT" ? await resolveMissingPath(e) : undefined;
+    real = error?.code === "ENOENT" ? await resolveMissingPath(dir) : undefined;
   }
   return (
-    o !== undefined &&
-    pathVettingReason(o, n.trustedNetworkDirectories) === undefined &&
-    (await isCanonicalPathContained(o, n))
+    real !== undefined &&
+    pathVettingReason(real, settings.trustedNetworkDirectories) === undefined &&
+    (await isCanonicalPathContained(real, settings))
   );
 }
 //@ chunk-gfa3ceg6.js:13930-14437 placement
 /**
  * git check-attr 读取各路径的 text/eol 属性
  */
-async function readGitAttributes(e, n, o) {
+async function readGitAttributes(cwd, paths, options) {
   let { stdout, code } = await execFileNoThrowWithCwd(
     gitExe(),
-    gitArgs(["check-attr", "-z", "-a", "--", ...n]),
+    gitArgs(["check-attr", "-z", "-a", "--", ...paths]),
     {
-      ...gitExecOptions(e, o),
+      ...gitExecOptions(cwd, options),
       maxBuffer: 1e7,
     },
   );
   if (code !== 0) return null;
-  let a = new Map(
-    n.map((c) => [
-      c,
+  let attributes = new Map(
+    paths.map((path) => [
+      path,
       {
         text: "unspecified",
         eol: "unspecified",
@@ -974,65 +1008,65 @@ async function readGitAttributes(e, n, o) {
     ]),
   );
   let parts = stdout.split("\x00");
-  for (let c = 0; c + 2 < parts.length; c += 3) {
-    let f = parts[c];
-    let l = parts[c + 1];
-    let g = parts[c + 2];
-    if (f === undefined || l === undefined || g === undefined) continue;
-    let m = a.get(f);
-    if (!m) continue;
-    if (l === "text") m.text = g;
-    else if (l === "eol") m.eol = g;
-    else if (l === "filter" || l === "working-tree-encoding") m.converted = true;
+  for (let index = 0; index + 2 < parts.length; index += 3) {
+    let path = parts[index];
+    let attribute = parts[index + 1];
+    let value = parts[index + 2];
+    if (path === undefined || attribute === undefined || value === undefined) continue;
+    let record = attributes.get(path);
+    if (!record) continue;
+    if (attribute === "text") record.text = value;
+    else if (attribute === "eol") record.eol = value;
+    else if (attribute === "filter" || attribute === "working-tree-encoding") record.converted = true;
   }
-  return a;
+  return attributes;
 }
 //@ chunk-gfa3ceg6.js:14437-14640 placement
 /**
  * 读取 core.autocrlf
  */
-async function readCoreAutocrlf(e, n) {
+async function readCoreAutocrlf(cwd, options) {
   let { stdout, exitCode } = await execFileNoThrowWithCwd(
     gitExe(),
     gitArgs(["config", "--get", "core.autocrlf"]),
-    gitExecOptions(e, n),
+    gitExecOptions(cwd, options),
   );
   if (exitCode !== 0) return false;
   let lower = stdout.trim().toLowerCase();
   return lower === "true" ? "true" : lower === "input" ? "input" : false;
 }
 //@ chunk-gfa3ceg6.js:14640-14695 placement
-function hasNulByte(e) {
-  return e.slice(0, 8000).includes("\x00");
+function hasNulByte(content) {
+  return content.slice(0, 8000).includes("\x00");
 }
 //@ chunk-gfa3ceg6.js:14695-15079 placement
 /**
  * 按 gitattributes text/eol 与 autocrlf 判定是否换行转换
  */
-function shouldNormalizeEol(e, n, coreAutocrlf, s) {
-  if (!n || n.converted) return "unsupported";
-  if (n.text === "unset") return e;
-  let r;
-  if (n.text === "set") r = false;
-  else if (n.text === "auto") r = true;
-  else if (n.text === "unspecified") {
-    if (coreAutocrlf === "true" || coreAutocrlf === "input") r = true;
-    else if (n.eol === "crlf" || n.eol === "lf") r = true;
-    else return e;
-  } else return e;
+function shouldNormalizeEol(content, attributes, coreAutocrlf, baseContent) {
+  if (!attributes || attributes.converted) return "unsupported";
+  if (attributes.text === "unset") return content;
+  let normalize;
+  if (attributes.text === "set") normalize = false;
+  else if (attributes.text === "auto") normalize = true;
+  else if (attributes.text === "unspecified") {
+    if (coreAutocrlf === "true" || coreAutocrlf === "input") normalize = true;
+    else if (attributes.eol === "crlf" || attributes.eol === "lf") normalize = true;
+    else return content;
+  } else return content;
   if (
-    !e.includes(`\r
+    !content.includes(`\r
 `)
   )
-    return e;
+    return content;
   if (
-    r &&
-    (hasNulByte(e) ||
-      s.includes(`\r
+    normalize &&
+    (hasNulByte(content) ||
+      baseContent.includes(`\r
 `))
   )
-    return e;
-  return e.replaceAll(
+    return content;
+  return content.replaceAll(
     `\r
 `,
     `
@@ -1043,14 +1077,14 @@ function shouldNormalizeEol(e, n, coreAutocrlf, s) {
 /**
  * 生成结构化 diff hunk
  */
-function buildDiffHunks(e, n, timeout) {
-  let s = P3("a", "b", e, n, "", "", {
+function buildDiffHunks(oldContent, newContent, timeout) {
+  let patch = structuredPatch("a", "b", oldContent, newContent, "", "", {
     context: 3,
     maxEditLength: MAX_DIFF_FILES,
     timeout,
   });
-  if (!s) return null;
-  return s.hunks
+  if (!patch) return null;
+  return patch.hunks
     .map((hunk) => ({
       oldStart: hunk.oldStart,
       oldLines: hunk.oldLines,
@@ -1058,285 +1092,267 @@ function buildDiffHunks(e, n, timeout) {
       newLines: hunk.newLines,
       lines: hunk.lines.filter((line) => !line.startsWith("\\")),
     }))
-    .filter((r) => r.lines.length > 0);
+    .filter((hunk) => hunk.lines.length > 0);
 }
 //@ chunk-gfa3ceg6.js:15369-15498 placement
 /**
  * 按全局行数上限截断 diff hunk 的行。
  */
 function capHunkLines(diffHunks) {
-  let n = MAX_HUNK_LINE_COUNT;
-  let o = [];
-  for (let s of diffHunks) {
-    if (n <= 0) break;
-    let sliced = s.lines.slice(0, n);
-    n -= sliced.length;
-    o.push({
-      ...s,
+  let remaining = MAX_HUNK_LINE_COUNT;
+  let capped = [];
+  for (let hunk of diffHunks) {
+    if (remaining <= 0) break;
+    let sliced = hunk.lines.slice(0, remaining);
+    remaining -= sliced.length;
+    capped.push({
+      ...hunk,
       lines: sliced,
     });
   }
-  return o;
+  return capped;
 }
 //@ chunk-gfa3ceg6.js:15498-15745 placement
 /**
  * 为桥接生成工作区 diff：先检查并复制 .git，再在副本上计算相对分支点的 diff。
  */
-async function buildWorkspaceDiffResponse(host, n, workspaceDiffComputeBudget = DIFF_READ_TIMEOUTS) {
+async function buildWorkspaceDiffResponse(host, settings, budget = DIFF_READ_TIMEOUTS) {
   let workspaceDiffRoot = await getWorkspaceDiffRoot();
   if (workspaceDiffRoot === null)
     return {
       diff: null,
     };
   let root = workspaceDiffRoot.nested ? workspaceDiffRoot.root : null;
-  let a = root === null ? null : await prepareRepositoryCopy(root, host);
-  if (root !== null && a === null)
+  let copy = root === null ? null : await prepareRepositoryCopy(root, host);
+  if (root !== null && copy === null)
     return {
       diff: null,
     };
   try {
-    return await computeWorkspaceDiff(
-      host,
-      n,
-      workspaceDiffComputeBudget,
-      workspaceDiffRoot.root,
-      root,
-      a?.spawn,
-    );
+    return await computeWorkspaceDiff(host, settings, budget, workspaceDiffRoot.root, root, copy?.spawn);
   } finally {
-    await a?.dispose();
+    await copy?.dispose();
   }
 }
 //@ chunk-gfa3ceg6.js:15745-18379 placement
 /**
  * 计算工作区相对分支点的 diff 与逐文件统计
  */
-async function computeWorkspaceDiff(e, n, o, root, root_2, spawn) {
-  let u = root_2 ?? undefined;
-  let c = spawn ?? {};
-  let gitDiff = await fetchGitDiff(e, undefined, "branch-point", u, spawn);
+async function computeWorkspaceDiff(host, settings, budget, root, root_2, diffOptions) {
+  let nestedRoot = root_2 ?? undefined;
+  let gitOptions = diffOptions ?? {};
+  let gitDiff = await fetchGitDiff(host, undefined, "branch-point", nestedRoot, diffOptions);
   if (gitDiff === null)
     return {
       diff: null,
     };
-  let l = root_2 ?? (await getRepoTopLevel());
-  if (l === null || l !== root)
+  let topLevel = root_2 ?? (await getRepoTopLevel());
+  if (topLevel === null || topLevel !== root)
     return {
       diff: null,
     };
-  let g = diffBaseRef(gitDiff);
-  let m = (p) => ({
+  let baseRef = diffBaseRef(gitDiff);
+  let buildResponse = (result) => ({
     diff: {
       stats: gitDiff.stats,
-      perFileStats: Array.from(gitDiff.perFileStats, ([h, _]) => ({
-        path: normalizeDiffPath(h),
-        ..._,
+      perFileStats: Array.from(gitDiff.perFileStats, ([path, stats]) => ({
+        path: normalizeDiffPath(path),
+        ...stats,
       })),
-      hunks: p.hunks.map((hunk) => ({
+      hunks: result.hunks.map((hunk) => ({
         ...hunk,
         path: normalizeDiffPath(hunk.path),
       })),
-      skippedLarge: p.skippedLarge.map(normalizeDiffPath),
-      restricted: p.restricted.map(normalizeDiffPath),
+      skippedLarge: result.skippedLarge.map(normalizeDiffPath),
+      restricted: result.restricted.map(normalizeDiffPath),
       source: gitDiff.source,
     },
   });
-  let S = [];
-  for (let [p, h] of gitDiff.perFileStats) {
-    let newPath = h.newPath ?? p;
-    let previousPath = h.previousPath ?? newPath;
+  let candidates = [];
+  for (let [key, stat] of gitDiff.perFileStats) {
+    let newPath = stat.newPath ?? key;
+    let previousPath = stat.previousPath ?? newPath;
     if (
-      h.status === undefined ||
-      h.isUntracked ||
-      h.isBinary ||
+      stat.status === undefined ||
+      stat.isUntracked ||
+      stat.isBinary ||
       !isPlainRepoPath(previousPath) ||
       !isPlainRepoPath(newPath)
     )
       continue;
-    S.push({
-      key: p,
+    candidates.push({
+      key,
       oldPath: previousPath,
       newPath,
-      removed: h.status === "removed",
+      removed: stat.status === "removed",
     });
   }
-  if (S.length === 0)
-    return m({
+  if (candidates.length === 0)
+    return buildResponse({
       hunks: [],
       skippedLarge: [],
       restricted: [],
     });
-  let v = g === "--cached";
-  if (!v && g !== "HEAD" && !GIT_OBJECT_ID_PATTERN.test(g))
-    return m({
+  let staged = baseRef === "--cached";
+  if (!staged && baseRef !== "HEAD" && !GIT_OBJECT_ID_PATTERN.test(baseRef))
+    return buildResponse({
       hunks: [],
       skippedLarge: [],
       restricted: [],
     });
-  let mapped = S.map((p) => p.newPath);
-  let [ee, indexEntries] = await Promise.all([
-    v
+  let paths = candidates.map((entry) => entry.newPath);
+  let [treeEntries, indexEntries] = await Promise.all([
+    staged
       ? new Map()
       : readTreeEntries(
-          l,
-          g,
-          S.map((p) => p.oldPath),
-          c,
+          topLevel,
+          baseRef,
+          candidates.map((entry) => entry.oldPath),
+          gitOptions,
         ),
-    readIndexEntries(l, mapped, c),
+    readIndexEntries(topLevel, paths, gitOptions),
   ]);
-  if (ee === null || indexEntries === null)
-    return m({
+  if (treeEntries === null || indexEntries === null)
+    return buildResponse({
       hunks: [],
       skippedLarge: [],
       restricted: [],
     });
-  let ne;
+  let realTopLevel;
   try {
-    ne = await realpath(l);
+    realTopLevel = await realpath(topLevel);
   } catch {
-    return m({
+    return buildResponse({
       hunks: [],
       skippedLarge: [],
       restricted: [],
     });
   }
-  let gitAttributes = await readGitAttributes(l, mapped, c);
-  let coreAutocrlf = await readCoreAutocrlf(l, c);
-  let D = [];
-  let R = [];
-  let ie = [];
-  let re = MAX_DIFF_BLOB_BYTES;
-  let totalMs = o.totalMs;
-  for (let { key, oldPath, newPath, removed } of S) {
+  let gitAttributes = await readGitAttributes(topLevel, paths, gitOptions);
+  let coreAutocrlf = await readCoreAutocrlf(topLevel, gitOptions);
+  let skippedLarge = [];
+  let restricted = [];
+  let hunks = [];
+  let remainingBytes = MAX_DIFF_BLOB_BYTES;
+  let totalMs = budget.totalMs;
+  for (let { key, oldPath, newPath, removed } of candidates) {
     await new Promise((resolve) => setImmediate(resolve));
-    let oe = join(l, newPath);
-    let U = join(l, oldPath);
-    let A = [];
-    for (let w of new Set([oe, U])) {
-      let N = vetPathSpellingsOrChain(w, w, n.trustedNetworkDirectories);
-      if (!N.ok) {
-        A = null;
+    let newFullPath = join(topLevel, newPath);
+    let oldFullPath = join(topLevel, oldPath);
+    let pathsToCheck = [];
+    for (let fullPath of new Set([newFullPath, oldFullPath])) {
+      let vet = vetPathSpellingsOrChain(fullPath, fullPath, settings.trustedNetworkDirectories);
+      if (!vet.ok) {
+        pathsToCheck = null;
         break;
       }
-      A.push(...N.pathsToCheck);
+      pathsToCheck.push(...vet.pathsToCheck);
     }
-    if (A === null) {
-      R.push(key);
+    if (pathsToCheck === null) {
+      restricted.push(key);
       continue;
     }
     if (
-      !A.every(
-        (w) => isPathAllowed(w, n, "read").allowed && matchingRuleForInput(w, n, "read", "ask") === null,
+      !pathsToCheck.every(
+        (spelling) =>
+          isPathAllowed(spelling, settings, "read").allowed &&
+          matchingRuleForInput(spelling, settings, "read", "ask") === null,
       )
     ) {
-      R.push(key);
+      restricted.push(key);
       continue;
     }
-    let y = ee.get(oldPath);
-    if (y && !REGULAR_FILE_MODES.has(y.mode)) continue;
-    if (y && (y.size < 0 || y.size > MAX_TOTAL_DIFF_BYTES)) {
-      D.push(key);
+    let oldEntry = treeEntries.get(oldPath);
+    if (oldEntry && !REGULAR_FILE_MODES.has(oldEntry.mode)) continue;
+    if (oldEntry && (oldEntry.size < 0 || oldEntry.size > MAX_TOTAL_DIFF_BYTES)) {
+      skippedLarge.push(key);
       continue;
     }
-    let j = null;
-    let b = indexEntries.get(newPath);
-    if (b === undefined && !y) {
-      R.push(key);
+    let workingContent = null;
+    let indexEntry = indexEntries.get(newPath);
+    if (indexEntry === undefined && !oldEntry) {
+      restricted.push(key);
       continue;
     }
-    let k =
-      removed || b === undefined
+    let readResult =
+      removed || indexEntry === undefined
         ? {
             kind: "missing",
           }
-        : await readWorkingFileForDiff(oe, join(ne, newPath), n);
-    if (k.kind === "restricted") {
-      R.push(key);
+        : await readWorkingFileForDiff(newFullPath, join(realTopLevel, newPath), settings);
+    if (readResult.kind === "restricted") {
+      restricted.push(key);
       continue;
     }
-    if (k.kind === "not-regular-file" || k.kind === "off-path") continue;
-    if (k.kind === "too-large") {
-      D.push(key);
+    if (readResult.kind === "not-regular-file" || readResult.kind === "off-path") continue;
+    if (readResult.kind === "too-large") {
+      skippedLarge.push(key);
       continue;
     }
-    let se = b?.entryIsNewSide && k.kind === "ok" ? matchBlobAllowingCrlf(k.content, b.oid) : null;
-    if (b?.entryIsNewSide && se === null) continue;
-    if (k.kind === "missing") {
-      if (!y) continue;
-      if (!(await isTrustedRepositoryRoot(U, n))) {
-        R.push(key);
+    let matchedBlob =
+      indexEntry?.entryIsNewSide && readResult.kind === "ok"
+        ? matchBlobAllowingCrlf(readResult.content, indexEntry.oid)
+        : null;
+    if (indexEntry?.entryIsNewSide && matchedBlob === null) continue;
+    if (readResult.kind === "missing") {
+      if (!oldEntry) continue;
+      if (!(await isTrustedRepositoryRoot(oldFullPath, settings))) {
+        restricted.push(key);
         continue;
       }
     } else {
-      j = k.content;
-      if (y && oldPath !== newPath && !(await isTrustedRepositoryRoot(U, n))) {
-        R.push(key);
+      workingContent = readResult.content;
+      if (oldEntry && oldPath !== newPath && !(await isTrustedRepositoryRoot(oldFullPath, settings))) {
+        restricted.push(key);
         continue;
       }
     }
     if (totalMs <= 0) {
-      D.push(key);
+      skippedLarge.push(key);
       continue;
     }
-    let ae = y ? await readGitBlob(l, y.oid, c) : "";
-    if (ae === null) continue;
-    let ce = ae;
-    let Y;
-    if (j === null) Y = "";
+    let oldContent = oldEntry ? await readGitBlob(topLevel, oldEntry.oid, gitOptions) : "";
+    if (oldContent === null) continue;
+    let baseContent = oldContent;
+    let newContent;
+    if (workingContent === null) newContent = "";
     else {
-      let w = shouldNormalizeEol(j, gitAttributes?.get(newPath), coreAutocrlf, ce);
-      if (w === "unsupported") continue;
-      Y = se ?? w;
+      let normalized = shouldNormalizeEol(
+        workingContent,
+        gitAttributes?.get(newPath),
+        coreAutocrlf,
+        baseContent,
+      );
+      if (normalized === "unsupported") continue;
+      newContent = matchedBlob ?? normalized;
     }
     let now = Date.now();
-    let diffHunks = buildDiffHunks(ce, Y, Math.min(o.perFileMs, totalMs));
+    let diffHunks = buildDiffHunks(baseContent, newContent, Math.min(budget.perFileMs, totalMs));
     totalMs -= Date.now() - now;
     if (diffHunks === null) {
-      D.push(key);
+      skippedLarge.push(key);
       continue;
     }
-    let K = capHunkLines(diffHunks);
-    if (K.length === 0) continue;
-    let reduced = K.reduce((acc, N) => acc + N.lines.reduce((acc, line) => acc + line.length + 1, 0), 0);
-    if (reduced > MAX_SINGLE_FILE_DIFF_BYTES || reduced > re) {
-      D.push(key);
+    let cappedHunks = capHunkLines(diffHunks);
+    if (cappedHunks.length === 0) continue;
+    let reduced = cappedHunks.reduce(
+      (acc, hunk) => acc + hunk.lines.reduce((acc, line) => acc + line.length + 1, 0),
+      0,
+    );
+    if (reduced > MAX_SINGLE_FILE_DIFF_BYTES || reduced > remainingBytes) {
+      skippedLarge.push(key);
       continue;
     }
-    re -= reduced;
-    ie.push({
+    remainingBytes -= reduced;
+    hunks.push({
       path: key,
-      hunks: K,
+      hunks: cappedHunks,
     });
   }
-  return m({
-    hunks: ie,
-    skippedLarge: D,
-    restricted: R,
+  return buildResponse({
+    hunks,
+    skippedLarge,
+    restricted,
   });
-}
-//@ chunk-vbr14wv4.js:191-540 placement
-/**
- * 按 git 规则给非 ASCII 或特殊字符路径加引号转义
- */
-function quoteGitPath(n) {
-  let e = new TextEncoder().encode(n);
-  if (e.every((r) => r >= 32 && r < 127 && r !== 34 && r !== 92)) return n;
-  return `"${Array.from(e, (r) => {
-    switch (r) {
-      case 34:
-        return '\\"';
-      case 92:
-        return "\\\\";
-      case 9:
-        return "\\t";
-      case 10:
-        return "\\n";
-      case 13:
-        return "\\r";
-      default:
-        return r >= 32 && r <= 126 ? String.fromCharCode(r) : `\\${r.toString(8).padStart(3, "0")}`;
-    }
-  }).join("")}"`;
 }
 export { buildWorkspaceDiffResponse };

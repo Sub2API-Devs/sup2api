@@ -5,10 +5,10 @@
  * pieces: chunk-k057sjda.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-k057sjda.js:226-515 cjs-fingerprint
-var require_querystring_parser = x(function (cjsExports) {
+var require_querystring_parser = __commonJS(function (cjsExports) {
   function parseQueryString(querystring) {
     let query = {};
     querystring = querystring.replace(/^\?/, "");

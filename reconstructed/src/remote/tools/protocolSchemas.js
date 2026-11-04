@@ -29,12 +29,12 @@ import { stripControlChars_2, stripControlChars } from "../../utils/stripControl
 import { truncateToLength } from "../../utils/stringUtils.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
 import {
-  string,
-  u,
+  stringSchema,
+  objectSchema,
   literal,
   _enum,
-  M,
-  E,
+  booleanSchema,
+  numberSchema,
   record,
   unknown,
   array,
@@ -61,57 +61,93 @@ import {
   identityMap,
 } from "./protocolConstants.js";
 import { toolHostInterfaceSchema, MINIMAL_INTERFACE_VERSION } from "./protocolNegotiation.js";
-import { Eo, ri, ti, ni, No_g54k, ei } from "../../../vendor/@anthropic-ai/sdk/helpers/beta/mcp.mjs";
+import {
+  toolResultContentSchema,
+  pdfPagesSchema,
+  filePolicySchema,
+  askRequestSchema,
+  toolHostTargetSchema,
+  toolInvocationRequestSchema,
+} from "../../../vendor/@anthropic-ai/sdk/helpers/beta/mcp.mjs";
 import { logForDebugging } from "../../utils/debug.js";
 import { env } from "../../utils/env.js";
 import { DEFAULTS_PLACEHOLDER } from "../../utils/permissions/autoModeRulesPrompt.js";
-import { xr } from "../../../vendor/lodash-es/_inlinedHelpers.js";
+import { import_mapValues } from "../../../vendor/lodash-es/_inlinedHelpers.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-g54kbxqw.js:13342-13632 placement
 /**
  * remote_tool_call 元数据键与别名：__remote_tool_call、协议标签 2.1、caller 字段集合，以及 anthropic/remoteToolExecution 等类型名和若干大小上限。
  */
-var REMOTE_TOOL_CALL_META = "__remote_tool_call";
-var REMOTE_TOOL_PROTOCOL_LABEL = "2.1";
-var BASE_CALLER_FIELDS = ["session_id", "trigger_id", "ccr_card_approval"];
-var CALLER_FIELDS = [...BASE_CALLER_FIELDS, "device", HOST_TOOL_INPUT_FIELD, REMOTE_TOOL_CALL_META];
-var ANTHROPIC_REMOTETOOLEXECUTION = "anthropic/remoteToolExecution";
-var CLAUDECODE_REMOTETOOLCALL = "claudecode/remoteToolCall";
-var CLAUDECODE_TOOLUSEID = "claudecode/toolUseId";
-var MAX_CALLER_BLOB_BYTES = 8192;
-var MAX_CALLER_BLOB_DEPTH = 6;
-var MAX_MESSAGE_CHARS = 8192;
-var MAX_ACCEPT_NOTES = 32;
-var MAX_TEXT_BYTES = 8192;
-var MAX_REFUSAL_NOTES = 4;
-var MAX_LIST_FIELD_LENGTH = 1024;
-var SENDER_BELOW_FLOOR = "sender_below_floor";
+var REMOTE_TOOL_CALL_META; // deferred: uses HOST_TOOL_INPUT_FIELD (../../bridge/deviceRegistration.js) of its import cycle while loading; runs once the cycle is complete
+var REMOTE_TOOL_PROTOCOL_LABEL;
+var BASE_CALLER_FIELDS;
+var CALLER_FIELDS;
+var ANTHROPIC_REMOTETOOLEXECUTION;
+var CLAUDECODE_REMOTETOOLCALL;
+var CLAUDECODE_TOOLUSEID;
+var MAX_CALLER_BLOB_BYTES;
+var MAX_CALLER_BLOB_DEPTH;
+var MAX_MESSAGE_CHARS;
+var MAX_ACCEPT_NOTES;
+var MAX_TEXT_BYTES;
+var MAX_REFUSAL_NOTES;
+var MAX_LIST_FIELD_LENGTH;
+var SENDER_BELOW_FLOOR;
+deferInit("chunk-g54kbxqw.js:13342", () => {
+  REMOTE_TOOL_CALL_META = "__remote_tool_call";
+  REMOTE_TOOL_PROTOCOL_LABEL = "2.1";
+  BASE_CALLER_FIELDS = ["session_id", "trigger_id", "ccr_card_approval"];
+  CALLER_FIELDS = [...BASE_CALLER_FIELDS, "device", HOST_TOOL_INPUT_FIELD, REMOTE_TOOL_CALL_META];
+  ANTHROPIC_REMOTETOOLEXECUTION = "anthropic/remoteToolExecution";
+  CLAUDECODE_REMOTETOOLCALL = "claudecode/remoteToolCall";
+  CLAUDECODE_TOOLUSEID = "claudecode/toolUseId";
+  MAX_CALLER_BLOB_BYTES = 8192;
+  MAX_CALLER_BLOB_DEPTH = 6;
+  MAX_MESSAGE_CHARS = 8192;
+  MAX_ACCEPT_NOTES = 32;
+  MAX_TEXT_BYTES = 8192;
+  MAX_REFUSAL_NOTES = 4;
+  MAX_LIST_FIELD_LENGTH = 1024;
+  SENDER_BELOW_FLOOR = "sender_below_floor";
+});
 //@ chunk-g54kbxqw.js:13632-13674 placement
-function isRemoteToolCallMeta(e) {
-  return isPlainRecord(e) && e[SENDER_BELOW_FLOOR] === true;
+function isRemoteToolCallMeta(value) {
+  return isPlainRecord(value) && value[SENDER_BELOW_FLOOR] === true;
 }
 //@ chunk-g54kbxqw.js:13674-14030 placement
 /**
  * 远程调用结果的大小限额与各工具保留字段：行数/行长/结果字节等上限，以及 Bash、PowerShell、Edit、Write 工具允许透传的结果字段。
  */
-var REMOTE_TOOL_LIMITS = 300;
-var MAX_TRUNCATED_LINES = 64;
-var MAX_TAIL_LINES = 16;
-var MAX_LINE_CHARS = 200;
-var MAX_RESULT_BYTES = 4063232;
-var KEPT_RESULT_FIELDS_BY_TOOL = new Map([
-  [BASH_TOOL_NAME, new Set(["stdout", "stderr", "interrupted", "timedOutAfterMs", "noOutputExpected"])],
-  [POWERSHELL_TOOL_NAME, new Set(["stdout", "stderr", "interrupted", "timedOutAfterMs"])],
-  [FILE_EDIT_TOOL_NAME, new Set(["structuredPatch", "staged", "stagedWording"])],
-  [FILE_WRITE_TOOL_NAME, new Set(["type", "structuredPatch", "staged", "stagedWording"])],
-]);
-var MAX_PERMISSION_UPDATES = 32;
-var MAX_SUGGESTIONS = 16;
-var MAX_SUGGESTION_CHARS = 256;
+var REMOTE_TOOL_LIMITS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var MAX_TRUNCATED_LINES;
+var MAX_TAIL_LINES;
+var MAX_LINE_CHARS;
+var MAX_RESULT_BYTES;
+var KEPT_RESULT_FIELDS_BY_TOOL;
+var MAX_PERMISSION_UPDATES;
+var MAX_SUGGESTIONS;
+var MAX_SUGGESTION_CHARS;
+deferInit("chunk-g54kbxqw.js:13674", () => {
+  REMOTE_TOOL_LIMITS = 300;
+  MAX_TRUNCATED_LINES = 64;
+  MAX_TAIL_LINES = 16;
+  MAX_LINE_CHARS = 200;
+  MAX_RESULT_BYTES = 4063232;
+  KEPT_RESULT_FIELDS_BY_TOOL = new Map([
+    [BASH_TOOL_NAME, new Set(["stdout", "stderr", "interrupted", "timedOutAfterMs", "noOutputExpected"])],
+    [POWERSHELL_TOOL_NAME, new Set(["stdout", "stderr", "interrupted", "timedOutAfterMs"])],
+    [FILE_EDIT_TOOL_NAME, new Set(["structuredPatch", "staged", "stagedWording"])],
+    [FILE_WRITE_TOOL_NAME, new Set(["type", "structuredPatch", "staged", "stagedWording"])],
+  ]);
+  MAX_PERMISSION_UPDATES = 32;
+  MAX_SUGGESTIONS = 16;
+  MAX_SUGGESTION_CHARS = 256;
+});
 //@ chunk-g54kbxqw.js:14030-14106 placement
-function clipText(e, n = MAX_MESSAGE_CHARS) {
-  let s = stripControlChars_2(e);
-  return s.length <= n ? s : `${truncateToLength(s, n - 1)}\u2026`;
+function clipText(text, maxChars = MAX_MESSAGE_CHARS) {
+  let stripped = stripControlChars_2(text);
+  return stripped.length <= maxChars ? stripped : `${truncateToLength(stripped, maxChars - 1)}\u2026`;
 }
 //@ chunk-g54kbxqw.js:14106-14158 placement
 /**
@@ -132,235 +168,266 @@ function clipTarget(target) {
 /**
  * 远程工具（remote tools）协议的 zod 模式：调用信封、目标、caller、协议版本等。
  */
-var REMOTE_TOOL_SCHEMAS = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,255}$/;
-var callIdSchema = DoctorLazy(() => string().regex(REMOTE_TOOL_SCHEMAS));
-var optionalSafeIdSchema = DoctorLazy(() => string().regex(SAFE_ID_PATTERN).optional().catch(undefined));
-var callRequestSchema = DoctorLazy(() =>
-  u({
-    v: literal(REMOTE_TOOL_PROTOCOL_VERSION),
-    op: literal("call").optional(),
-    call_id: callIdSchema(),
-    caller: u({
-      kind: _enum(["ccr_container", "local_process"]),
-      permission_mode: _enum(PERMISSION_MODE_WIRE_ORDER).optional(),
-      is_bypass_available: M().optional(),
-      instance_id: optionalSafeIdSchema(),
-      model: string().regex(SAFE_ID_WITH_BRACKETS_PATTERN).optional().catch(undefined),
-      conversation_id: optionalSafeIdSchema(),
-      compaction_id: optionalSafeIdSchema(),
-      tool_host_interface: toolHostInterfaceSchema().optional().catch(undefined),
-    }).transform(dropUndefined),
-    expires_in_ms: E().int().positive(),
-    approval: u({
-      ask_id: askIdSchema(),
-      decision: _enum(["allow", "deny"]),
-      updated_input: record(string(), unknown()).optional(),
-      feedback: string().max(MAX_MESSAGE_CHARS).optional(),
-      permission_updates: array(unknown()).max(MAX_PERMISSION_UPDATES).optional(),
-      attested: M().optional(),
-    }).optional(),
-    read_baseline: u({
-      sha256: string().regex(/^[0-9a-f]{64}$/),
-      bytes: E().int().nonnegative().max(1073741824),
-    })
-      .optional()
-      .catch(undefined),
-  }),
-);
-var askIdSchema = DoctorLazy(() => string().regex(REMOTE_TOOL_SCHEMAS));
-var hostEpochSchema = DoctorLazy(() => string().regex(REMOTE_TOOL_SCHEMAS));
-var MAX_SINCE_MS = 8640000000000000;
-var callOutcomeSchema = () => ({
-  replayed: M().optional(),
-  served_at: E().int().nonnegative().max(MAX_SINCE_MS).optional(),
+var REMOTE_TOOL_SCHEMAS; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var callIdSchema;
+var optionalSafeIdSchema;
+var callRequestSchema;
+var askIdSchema;
+var hostEpochSchema;
+var MAX_SINCE_MS;
+var callOutcomeSchema;
+var servedResponseSchema;
+deferInit("chunk-g54kbxqw.js:14233", () => {
+  REMOTE_TOOL_SCHEMAS = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,255}$/;
+  callIdSchema = DoctorLazy(() => stringSchema().regex(REMOTE_TOOL_SCHEMAS));
+  optionalSafeIdSchema = DoctorLazy(() => stringSchema().regex(SAFE_ID_PATTERN).optional().catch(undefined));
+  callRequestSchema = DoctorLazy(() =>
+    objectSchema({
+      v: literal(REMOTE_TOOL_PROTOCOL_VERSION),
+      op: literal("call").optional(),
+      call_id: callIdSchema(),
+      caller: objectSchema({
+        kind: _enum(["ccr_container", "local_process"]),
+        permission_mode: _enum(PERMISSION_MODE_WIRE_ORDER).optional(),
+        is_bypass_available: booleanSchema().optional(),
+        instance_id: optionalSafeIdSchema(),
+        model: stringSchema().regex(SAFE_ID_WITH_BRACKETS_PATTERN).optional().catch(undefined),
+        conversation_id: optionalSafeIdSchema(),
+        compaction_id: optionalSafeIdSchema(),
+        tool_host_interface: toolHostInterfaceSchema().optional().catch(undefined),
+      }).transform(dropUndefined),
+      expires_in_ms: numberSchema().int().positive(),
+      approval: objectSchema({
+        ask_id: askIdSchema(),
+        decision: _enum(["allow", "deny"]),
+        updated_input: record(stringSchema(), unknown()).optional(),
+        feedback: stringSchema().max(MAX_MESSAGE_CHARS).optional(),
+        permission_updates: array(unknown()).max(MAX_PERMISSION_UPDATES).optional(),
+        attested: booleanSchema().optional(),
+      }).optional(),
+      read_baseline: objectSchema({
+        sha256: stringSchema().regex(/^[0-9a-f]{64}$/),
+        bytes: numberSchema().int().nonnegative().max(1073741824),
+      })
+        .optional()
+        .catch(undefined),
+    }),
+  );
+  askIdSchema = DoctorLazy(() => stringSchema().regex(REMOTE_TOOL_SCHEMAS));
+  hostEpochSchema = DoctorLazy(() => stringSchema().regex(REMOTE_TOOL_SCHEMAS));
+  MAX_SINCE_MS = 8640000000000000;
+  callOutcomeSchema = () => ({
+    replayed: booleanSchema().optional(),
+    served_at: numberSchema().int().nonnegative().max(MAX_SINCE_MS).optional(),
+  });
+  servedResponseSchema = DoctorLazy(() =>
+    objectSchema({
+      v: literal(REMOTE_TOOL_PROTOCOL_VERSION),
+      op: literal("outcome_of"),
+      call_id: callIdSchema(),
+    }),
+  );
 });
-var servedResponseSchema = DoctorLazy(() =>
-  u({
-    v: literal(REMOTE_TOOL_PROTOCOL_VERSION),
-    op: literal("outcome_of"),
-    call_id: callIdSchema(),
-  }),
-);
 //@ chunk-g54kbxqw.js:15279-15398 placement
 function optionalBoundedIntSchema(min = 1) {
   return unknown()
-    .transform((n) =>
-      typeof n === "number" && Number.isInteger(n) && n >= min && n <= MAX_INT32 ? n : undefined,
+    .transform((value) =>
+      typeof value === "number" && Number.isInteger(value) && value >= min && value <= MAX_INT32
+        ? value
+        : undefined,
     )
     .optional();
 }
 //@ chunk-g54kbxqw.js:15398-15760 placement
-var SERVING_LIMITS_SCHEMA = DoctorLazy(() =>
-  u({
-    max_call_ms: E().int().positive(),
-    max_command_ms: optionalBoundedIntSchema(),
-    max_request_bytes: E().int().positive(),
-    max_in_flight: E().int().positive(),
-    caller_sessions_max: optionalBoundedIntSchema(),
-    pending_asks_max: optionalBoundedIntSchema(),
-    progress_interval_ms: optionalBoundedIntSchema(),
-    progress_misses: optionalBoundedIntSchema(),
-    reconcile_ms: optionalBoundedIntSchema(),
-    max_queue_ms: optionalBoundedIntSchema(SERVING_LIMIT_BOUNDS.max_queue_ms.min),
-    queue_depth: optionalBoundedIntSchema(SERVING_LIMIT_BOUNDS.queue_depth.min),
-    max_ask_ms: optionalBoundedIntSchema(),
-  }).transform(dropUndefined),
-);
+var SERVING_LIMITS_SCHEMA; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-g54kbxqw.js:15398", () => {
+  SERVING_LIMITS_SCHEMA = DoctorLazy(() =>
+    objectSchema({
+      max_call_ms: numberSchema().int().positive(),
+      max_command_ms: optionalBoundedIntSchema(),
+      max_request_bytes: numberSchema().int().positive(),
+      max_in_flight: numberSchema().int().positive(),
+      caller_sessions_max: optionalBoundedIntSchema(),
+      pending_asks_max: optionalBoundedIntSchema(),
+      progress_interval_ms: optionalBoundedIntSchema(),
+      progress_misses: optionalBoundedIntSchema(),
+      reconcile_ms: optionalBoundedIntSchema(),
+      max_queue_ms: optionalBoundedIntSchema(SERVING_LIMIT_BOUNDS.max_queue_ms.min),
+      queue_depth: optionalBoundedIntSchema(SERVING_LIMIT_BOUNDS.queue_depth.min),
+      max_ask_ms: optionalBoundedIntSchema(),
+    }).transform(dropUndefined),
+  );
+});
 //@ chunk-g54kbxqw.js:15760-15854 placement
-function dropUndefined(e) {
-  let n = {
-    ...e,
+function dropUndefined(value) {
+  let copy = {
+    ...value,
   };
-  for (let key of Object.keys(n)) if (n[key] === undefined) delete n[key];
-  return n;
+  for (let key of Object.keys(copy)) if (copy[key] === undefined) delete copy[key];
+  return copy;
 }
 //@ chunk-g54kbxqw.js:15854-15966 placement
 /**
  * 工具名 schema：匹配安全名字正则并排除危险名；另定义统一的 name/working_dir 目标 schema。
  */
-var SAFE_NAME_SCHEMA = DoctorLazy(() =>
-  string()
-    .regex(MACHINE_SLUG_PATTERN)
-    .refine((e) => !isReservedMachineNameExact(e)),
-);
-var callTargetSchema = DoctorLazy(() =>
-  u({
-    name: string().min(1).max(REMOTE_TOOL_FIELD_LIMITS),
-    working_dir: string().max(MAX_WORKING_DIR_CHARS),
-  }),
-);
+var SAFE_NAME_SCHEMA; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var callTargetSchema;
+deferInit("chunk-g54kbxqw.js:15854", () => {
+  SAFE_NAME_SCHEMA = DoctorLazy(() =>
+    stringSchema()
+      .regex(MACHINE_SLUG_PATTERN)
+      .refine((name) => !isReservedMachineNameExact(name)),
+  );
+  callTargetSchema = DoctorLazy(() =>
+    objectSchema({
+      name: stringSchema().min(1).max(REMOTE_TOOL_FIELD_LIMITS),
+      working_dir: stringSchema().max(MAX_WORKING_DIR_CHARS),
+    }),
+  );
+});
 //@ chunk-g54kbxqw.js:15966-16031 placement
 function optionalByteCount() {
-  return E().int().nonnegative().max(MAX_NONNEGATIVE_INT).optional();
+  return numberSchema().int().nonnegative().max(MAX_NONNEGATIVE_INT).optional();
 }
 //@ chunk-g54kbxqw.js:18433-18557 placement
-function optionalStringListSchema(e) {
+function optionalStringListSchema(maxEntries) {
   return unknown()
-    .transform((n) => (Array.isArray(n) ? n.filter((s) => typeof s === "string").slice(0, e) : undefined))
+    .transform((value) =>
+      Array.isArray(value)
+        ? value.filter((entry) => typeof entry === "string").slice(0, maxEntries)
+        : undefined,
+    )
     .optional();
 }
 //@ chunk-g54kbxqw.js:18557-18596 placement
-var acceptNotesSchema = DoctorLazy(() => optionalStringListSchema(MAX_ACCEPT_NOTES));
-var refusalNotesSchema = DoctorLazy(() => optionalStringListSchema(MAX_REFUSAL_NOTES));
+var acceptNotesSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var refusalNotesSchema;
+deferInit("chunk-g54kbxqw.js:18557", () => {
+  acceptNotesSchema = DoctorLazy(() => optionalStringListSchema(MAX_ACCEPT_NOTES));
+  refusalNotesSchema = DoctorLazy(() => optionalStringListSchema(MAX_REFUSAL_NOTES));
+});
 //@ chunk-g54kbxqw.js:18596-18677 placement
-function codeEnumSchema(e) {
-  return string()
+function codeEnumSchema(allowed) {
+  return stringSchema()
     .max(64)
-    .transform((n) => (e.includes(n) ? n : "unrecognized"));
+    .transform((value) => (allowed.includes(value) ? value : "unrecognized"));
 }
 //@ chunk-g54kbxqw.js:18677-18847 placement
-function optionalEnumOrUnrecognizedSchema(e, n = "dropped") {
+function optionalEnumOrUnrecognizedSchema(allowed, unknownMode = "dropped") {
   return unknown()
-    .transform((s) =>
-      typeof s === "string"
-        ? e.includes(s)
-          ? s
+    .transform((value) =>
+      typeof value === "string"
+        ? allowed.includes(value)
+          ? value
           : "unrecognized"
-        : n === "unrecognized" && s !== undefined
+        : unknownMode === "unrecognized" && value !== undefined
           ? "unrecognized"
           : undefined,
     )
     .optional();
 }
 //@ chunk-g54kbxqw.js:18847-20540 placement
-var CALL_RESULT_ENVELOPE_SCHEMA = DoctorLazy(() =>
-  discriminatedUnion("outcome", [
-    u({
-      v: literal(REMOTE_TOOL_PROTOCOL_VERSION),
-      outcome: literal("completed"),
-      call_id: callIdSchema().optional(),
-      target: callTargetSchema(),
-      is_error: M(),
-      content: Eo(),
-      documents: ri().optional(),
-      output: unknown().optional(),
-      truncated: M().optional(),
-      disposition: optionalEnumOrUnrecognizedSchema(RAN_OUTCOME_KINDS, "unrecognized"),
-      notes: acceptNotesSchema(),
-      ...callOutcomeSchema(),
-    }),
-    u({
-      v: literal(REMOTE_TOOL_PROTOCOL_VERSION),
-      outcome: literal("refused"),
-      call_id: callIdSchema().optional(),
-      target: callTargetSchema(),
-      code: codeEnumSchema(REMOTE_TOOL_REFUSAL_CODES),
-      reason: optionalEnumOrUnrecognizedSchema(WITHDRAW_REASON_CODES),
-      limit: optionalEnumOrUnrecognizedSchema(REMOTE_TOOL_ERROR_CODES),
-      message: string().max(MAX_MESSAGE_CHARS),
-      host_epoch: hostEpochSchema().optional(),
-      notes: acceptNotesSchema(),
-      ...callOutcomeSchema(),
-    }),
-    u({
-      v: literal(REMOTE_TOOL_PROTOCOL_VERSION),
-      outcome: literal("failed"),
-      call_id: callIdSchema().optional(),
-      target: callTargetSchema(),
-      code: codeEnumSchema(ERROR_OUTCOME_CODES),
-      message: string().max(MAX_MESSAGE_CHARS),
-      content: Eo().optional(),
-      output: unknown().optional(),
-      truncated: M().optional(),
-      notes: acceptNotesSchema(),
-      ...callOutcomeSchema(),
-    }),
-    u({
-      v: literal(REMOTE_TOOL_PROTOCOL_VERSION),
-      outcome: literal("in_progress"),
-      call_id: callIdSchema().optional(),
-      target: callTargetSchema(),
-      state: _enum(["admitting", "running", "awaiting_approval"]),
-      since_ms: E().int().nonnegative().max(MAX_SINCE_MS),
-      host_epoch: hostEpochSchema().optional(),
-      output_tail: u({
-        text: string().refine((e) => Buffer.byteLength(e) <= MAX_TEXT_BYTES),
-        truncated_head: M(),
-        total_bytes: E().int().nonnegative(),
-      })
-        .optional()
-        .catch(undefined),
-    }),
-    u({
-      v: literal(REMOTE_TOOL_PROTOCOL_VERSION),
-      outcome: literal("needs_approval"),
-      call_id: callIdSchema().optional(),
-      target: callTargetSchema(),
-      ask_id: askIdSchema(),
-      tool: string().min(1).max(MAX_TOOL_NAME_CHARS),
-      input: record(string(), unknown()),
-      message: string().max(MAX_MESSAGE_CHARS),
-      decision_reason: string().max(MAX_MESSAGE_CHARS).optional(),
-      suggestions: array(string().max(MAX_SUGGESTION_CHARS)).max(MAX_SUGGESTIONS).optional(),
-      classifier_eligible: M().optional(),
-      prior_answer_ok: M().optional(),
-      auto_mode: ti()
-        .optional()
-        .catch(() => {
-          logForDebugging(
-            "[remote-tools] dropped an unreadable auto_mode block from a needs_approval answer; the ask is judged without it",
-          );
-          return;
-        }),
-      elicitation: ni()
-        .optional()
-        .catch(() => {
-          logForDebugging(
-            "[remote-tools] dropped an unreadable elicitation block from a needs_approval answer; its own fields stand",
-          );
-          return;
-        }),
-      notes: refusalNotesSchema(),
-    }),
-    u({
-      v: literal(REMOTE_TOOL_PROTOCOL_VERSION),
-      outcome: literal("acknowledged"),
-      call_id: callIdSchema().optional(),
-      target: callTargetSchema(),
-      ask_id: askIdSchema(),
-    }),
-  ]),
-);
+var CALL_RESULT_ENVELOPE_SCHEMA; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-g54kbxqw.js:18847", () => {
+  CALL_RESULT_ENVELOPE_SCHEMA = DoctorLazy(() =>
+    discriminatedUnion("outcome", [
+      objectSchema({
+        v: literal(REMOTE_TOOL_PROTOCOL_VERSION),
+        outcome: literal("completed"),
+        call_id: callIdSchema().optional(),
+        target: callTargetSchema(),
+        is_error: booleanSchema(),
+        content: toolResultContentSchema(),
+        documents: pdfPagesSchema().optional(),
+        output: unknown().optional(),
+        truncated: booleanSchema().optional(),
+        disposition: optionalEnumOrUnrecognizedSchema(RAN_OUTCOME_KINDS, "unrecognized"),
+        notes: acceptNotesSchema(),
+        ...callOutcomeSchema(),
+      }),
+      objectSchema({
+        v: literal(REMOTE_TOOL_PROTOCOL_VERSION),
+        outcome: literal("refused"),
+        call_id: callIdSchema().optional(),
+        target: callTargetSchema(),
+        code: codeEnumSchema(REMOTE_TOOL_REFUSAL_CODES),
+        reason: optionalEnumOrUnrecognizedSchema(WITHDRAW_REASON_CODES),
+        limit: optionalEnumOrUnrecognizedSchema(REMOTE_TOOL_ERROR_CODES),
+        message: stringSchema().max(MAX_MESSAGE_CHARS),
+        host_epoch: hostEpochSchema().optional(),
+        notes: acceptNotesSchema(),
+        ...callOutcomeSchema(),
+      }),
+      objectSchema({
+        v: literal(REMOTE_TOOL_PROTOCOL_VERSION),
+        outcome: literal("failed"),
+        call_id: callIdSchema().optional(),
+        target: callTargetSchema(),
+        code: codeEnumSchema(ERROR_OUTCOME_CODES),
+        message: stringSchema().max(MAX_MESSAGE_CHARS),
+        content: toolResultContentSchema().optional(),
+        output: unknown().optional(),
+        truncated: booleanSchema().optional(),
+        notes: acceptNotesSchema(),
+        ...callOutcomeSchema(),
+      }),
+      objectSchema({
+        v: literal(REMOTE_TOOL_PROTOCOL_VERSION),
+        outcome: literal("in_progress"),
+        call_id: callIdSchema().optional(),
+        target: callTargetSchema(),
+        state: _enum(["admitting", "running", "awaiting_approval"]),
+        since_ms: numberSchema().int().nonnegative().max(MAX_SINCE_MS),
+        host_epoch: hostEpochSchema().optional(),
+        output_tail: objectSchema({
+          text: stringSchema().refine((text) => Buffer.byteLength(text) <= MAX_TEXT_BYTES),
+          truncated_head: booleanSchema(),
+          total_bytes: numberSchema().int().nonnegative(),
+        })
+          .optional()
+          .catch(undefined),
+      }),
+      objectSchema({
+        v: literal(REMOTE_TOOL_PROTOCOL_VERSION),
+        outcome: literal("needs_approval"),
+        call_id: callIdSchema().optional(),
+        target: callTargetSchema(),
+        ask_id: askIdSchema(),
+        tool: stringSchema().min(1).max(MAX_TOOL_NAME_CHARS),
+        input: record(stringSchema(), unknown()),
+        message: stringSchema().max(MAX_MESSAGE_CHARS),
+        decision_reason: stringSchema().max(MAX_MESSAGE_CHARS).optional(),
+        suggestions: array(stringSchema().max(MAX_SUGGESTION_CHARS)).max(MAX_SUGGESTIONS).optional(),
+        classifier_eligible: booleanSchema().optional(),
+        prior_answer_ok: booleanSchema().optional(),
+        auto_mode: filePolicySchema()
+          .optional()
+          .catch(() => {
+            logForDebugging(
+              "[remote-tools] dropped an unreadable auto_mode block from a needs_approval answer; the ask is judged without it",
+            );
+            return;
+          }),
+        elicitation: askRequestSchema()
+          .optional()
+          .catch(() => {
+            logForDebugging(
+              "[remote-tools] dropped an unreadable elicitation block from a needs_approval answer; its own fields stand",
+            );
+            return;
+          }),
+        notes: refusalNotesSchema(),
+      }),
+      objectSchema({
+        v: literal(REMOTE_TOOL_PROTOCOL_VERSION),
+        outcome: literal("acknowledged"),
+        call_id: callIdSchema().optional(),
+        target: callTargetSchema(),
+        ask_id: askIdSchema(),
+      }),
+    ]),
+  );
+});
 //@ chunk-g54kbxqw.js:20540-21094 placement
 function buildRemoteToolCallMeta({
   callId,
@@ -421,9 +488,9 @@ function modelFieldForEnvelope(model) {
 }
 //@ chunk-g54kbxqw.js:21336-21502 placement
 function sanitizeApprovalForWire(approval) {
-  let { attested, feedback, permission_updates: permissionUpdates, ...h } = approval;
+  let { attested, feedback, permission_updates: permissionUpdates, ...rest } = approval;
   return {
-    ...h,
+    ...rest,
     ...(feedback !== undefined && {
       feedback: clipText(feedback),
     }),
@@ -446,40 +513,40 @@ function wirePermissionMode(mode) {
 //@ chunk-g54kbxqw.js:21612-21641 placement
 var UNEXPECTED_VALUE_FIELDS = ["call", "outcome_of"];
 //@ chunk-g54kbxqw.js:21641-22035 placement
-function parseRemoteToolRequest(e) {
-  let op = asPlainRecord(e)?.op;
+function parseRemoteToolRequest(value) {
+  let op = asPlainRecord(value)?.op;
   if (op !== "outcome_of") {
-    let callEnvelope = parseCallEnvelope(e);
+    let callEnvelope = parseCallEnvelope(value);
     if (callEnvelope.ok)
       return {
         ...callEnvelope,
         kind: "call",
       };
-    let h =
+    let unlistedOp =
       callEnvelope.why === "malformed" && op !== undefined
         ? unexpectedValueFingerprint(op, UNEXPECTED_VALUE_FIELDS)
         : undefined;
-    return h === undefined
+    return unlistedOp === undefined
       ? callEnvelope
       : {
           ...callEnvelope,
-          unlistedOp: h,
+          unlistedOp,
         };
   }
-  if (hasDifferentProtocolVersion(e))
+  if (hasDifferentProtocolVersion(value))
     return {
       ok: false,
       why: "unsupported_protocol",
     };
-  let s = servedResponseSchema().safeParse(e);
-  return s.success
+  let parsed = servedResponseSchema().safeParse(value);
+  return parsed.success
     ? {
         ok: true,
         kind: "outcome_query",
         value: {
-          v: s.data.v,
+          v: parsed.data.v,
           op: "outcome_of",
-          call_id: s.data.call_id,
+          call_id: parsed.data.call_id,
         },
       }
     : {
@@ -501,13 +568,13 @@ function outcomeQueryEnvelope(callId) {
 //@ chunk-g54kbxqw.js:22123-22132 placement
 var MIN_COMPATIBLE_VERSION = 1;
 //@ chunk-g54kbxqw.js:22132-22336 placement
-function negotiateProtocol(e) {
-  if (e === undefined)
+function negotiateProtocol(announced) {
+  if (announced === undefined)
     return {
       kind: "compatible",
       version: MIN_COMPATIBLE_VERSION,
     };
-  let filtered = e.filter((s) => SUPPORTED_PROTOCOL_VERSIONS.includes(s));
+  let filtered = announced.filter((version) => SUPPORTED_PROTOCOL_VERSIONS.includes(version));
   return filtered.length > 0
     ? {
         kind: "compatible",
@@ -515,21 +582,23 @@ function negotiateProtocol(e) {
       }
     : {
         kind: "incompatible",
-        announced: [...e],
+        announced: [...announced],
       };
 }
 //@ chunk-g54kbxqw.js:22336-22474 placement
-function encodeCallArgs(e) {
-  let n =
-    "approval" in e && e.approval !== undefined
+function encodeCallArgs(args) {
+  let normalized =
+    "approval" in args && args.approval !== undefined
       ? {
-          ...e,
-          elicit_result: approvalToElicitResult(e.approval),
+          ...args,
+          elicit_result: approvalToElicitResult(args.approval),
         }
       : {
-          ...e,
+          ...args,
         };
-  return withinDepth(n, MAX_CALLER_BLOB_DEPTH) && byteLengthOf(n) <= MAX_CALLER_BLOB_BYTES ? n : undefined;
+  return withinDepth(normalized, MAX_CALLER_BLOB_DEPTH) && byteLengthOf(normalized) <= MAX_CALLER_BLOB_BYTES
+    ? normalized
+    : undefined;
 }
 //@ chunk-g54kbxqw.js:22474-22494 placement
 var WITHDRAWN = "withdrawn";
@@ -557,143 +626,143 @@ function approvalToElicitResult(approval) {
       };
 }
 //@ chunk-g54kbxqw.js:22713-22847 placement
-function withinDepth(e, n) {
-  let s = Array.isArray(e) ? e : isPlainRecord(e) ? Object.values(e) : undefined;
-  if (s === undefined) return true;
-  return n >= 1 && s.every((r) => withinDepth(r, n - 1));
+function withinDepth(value, depth) {
+  let children = Array.isArray(value) ? value : isPlainRecord(value) ? Object.values(value) : undefined;
+  if (children === undefined) return true;
+  return depth >= 1 && children.every((child) => withinDepth(child, depth - 1));
 }
 //@ chunk-g54kbxqw.js:22847-23237 placement
-function parseCallEnvelope(e) {
-  if (e === undefined || e === null)
+function parseCallEnvelope(value) {
+  if (value === undefined || value === null)
     return {
       ok: false,
       why: "missing",
     };
-  if (hasDifferentProtocolVersion(e))
+  if (hasDifferentProtocolVersion(value))
     return {
       ok: false,
       why: "unsupported_protocol",
     };
-  let n = callRequestSchema().safeParse(e);
-  if (!n.success)
+  let parsed = callRequestSchema().safeParse(value);
+  if (!parsed.success)
     return {
       ok: false,
       why: "malformed",
     };
-  let { approval } = n.data;
-  let r = asPlainRecord(asPlainRecord(e)?.caller);
+  let { approval } = parsed.data;
+  let caller = asPlainRecord(asPlainRecord(value)?.caller);
   return {
     ok: true,
     value:
       approval?.feedback === undefined
-        ? n.data
+        ? parsed.data
         : {
-            ...n.data,
+            ...parsed.data,
             approval: {
               ...approval,
               feedback: clipText(approval.feedback),
             },
           },
-    ...(r !== undefined &&
-      Object.hasOwn(r, SERVER_VERDICT_KEY) && {
-        serverVerdict: readServerVerdict(r[SERVER_VERDICT_KEY]),
+    ...(caller !== undefined &&
+      Object.hasOwn(caller, SERVER_VERDICT_KEY) && {
+        serverVerdict: readServerVerdict(caller[SERVER_VERDICT_KEY]),
       }),
   };
 }
 //@ chunk-g54kbxqw.js:23237-23300 placement
-function autoModeField(autoMode) {
-  let n = autoModeRulesForWire(autoMode);
-  return n === undefined
+function autoModeField(rules) {
+  let wireRules = autoModeRulesForWire(rules);
+  return wireRules === undefined
     ? {}
     : {
-        auto_mode: n,
+        auto_mode: wireRules,
       };
 }
 //@ chunk-g54kbxqw.js:23300-23764 placement
-function autoModeRulesForWire(e) {
-  if (e === undefined) return;
-  let n = (k, C) => {
-    let filtered = (k ?? [])
-      .flatMap((w) => w.split(/\r?\n/))
-      .map((w) => clipText(w.replace(/\s+/g, " "), MAX_LINE_CHARS).trim())
-      .filter((w) => w.length > 0 && w !== DEFAULTS_PLACEHOLDER);
-    let S = C === "last" ? filtered.slice(-MAX_TAIL_LINES) : filtered.slice(0, MAX_TAIL_LINES);
-    return S.length > 0 ? S : undefined;
+function autoModeRulesForWire(rules) {
+  if (rules === undefined) return;
+  let clipLines = (lines, side) => {
+    let filtered = (lines ?? [])
+      .flatMap((entry) => entry.split(/\r?\n/))
+      .map((line) => clipText(line.replace(/\s+/g, " "), MAX_LINE_CHARS).trim())
+      .filter((line) => line.length > 0 && line !== DEFAULTS_PLACEHOLDER);
+    let kept = side === "last" ? filtered.slice(-MAX_TAIL_LINES) : filtered.slice(0, MAX_TAIL_LINES);
+    return kept.length > 0 ? kept : undefined;
   };
-  let s = n(e.allow, "first");
-  let r = n(e.soft_deny, "last");
-  let h = n(e.hard_deny, "last");
-  let y = n(e.environment, "first");
-  return [s, r, h, y].some((k) => k !== undefined)
+  let allow = clipLines(rules.allow, "first");
+  let softDeny = clipLines(rules.soft_deny, "last");
+  let hardDeny = clipLines(rules.hard_deny, "last");
+  let environment = clipLines(rules.environment, "first");
+  return [allow, softDeny, hardDeny, environment].some((list) => list !== undefined)
     ? {
-        ...(s && {
-          allow: s,
+        ...(allow && {
+          allow,
         }),
-        ...(r && {
-          soft_deny: r,
+        ...(softDeny && {
+          soft_deny: softDeny,
         }),
-        ...(h && {
-          hard_deny: h,
+        ...(hardDeny && {
+          hard_deny: hardDeny,
         }),
-        ...(y && {
-          environment: y,
+        ...(environment && {
+          environment,
         }),
       }
     : undefined;
 }
 //@ chunk-g54kbxqw.js:23764-23835 placement
 function parseAnnounce(epoch) {
-  let n = hostEpochSchema().safeParse(epoch);
-  return n.success ? n.data : undefined;
+  let parsed = hostEpochSchema().safeParse(epoch);
+  return parsed.success ? parsed.data : undefined;
 }
 //@ chunk-g54kbxqw.js:23835-23909 placement
-function parseAdvert(e) {
-  let n = No_g54k().safeParse(e);
-  return n.success ? sanitizeDeep(n.data) : undefined;
+function parseAdvert(value) {
+  let parsed = toolHostTargetSchema().safeParse(value);
+  return parsed.success ? sanitizeDeep(parsed.data) : undefined;
 }
 //@ chunk-g54kbxqw.js:23909-24002 placement
 function intList(protocolVersions) {
   return Array.isArray(protocolVersions) &&
     protocolVersions.length <= 64 &&
-    protocolVersions.every((n) => Number.isInteger(n))
+    protocolVersions.every((version) => Number.isInteger(version))
     ? protocolVersions
     : [];
 }
 //@ chunk-g54kbxqw.js:24002-24151 placement
-function peerProtocolVersions(e) {
-  if (e === undefined) return;
-  let n = asPlainRecord(e);
-  if (n === undefined) return [];
-  if (n.v === CURRENT_PROTOCOL_VERSION) return;
-  return "protocol_versions" in n ? intList(n.protocol_versions) : [];
+function peerProtocolVersions(value) {
+  if (value === undefined) return;
+  let record = asPlainRecord(value);
+  if (record === undefined) return [];
+  if (record.v === CURRENT_PROTOCOL_VERSION) return;
+  return "protocol_versions" in record ? intList(record.protocol_versions) : [];
 }
 //@ chunk-g54kbxqw.js:24151-24264 placement
-function advertisedProtocolVersions(e) {
-  let n = asPlainRecord(e);
-  return n !== undefined && n.v === CURRENT_PROTOCOL_VERSION && "protocol_versions" in n
-    ? intList(n.protocol_versions)
+function advertisedProtocolVersions(value) {
+  let record = asPlainRecord(value);
+  return record !== undefined && record.v === CURRENT_PROTOCOL_VERSION && "protocol_versions" in record
+    ? intList(record.protocol_versions)
     : undefined;
 }
 //@ chunk-g54kbxqw.js:24264-24338 placement
-function parseRegistration(e) {
-  let n = ei().safeParse(e);
-  return n.success ? sanitizeDeep(n.data) : undefined;
+function parseRegistration(value) {
+  let parsed = toolInvocationRequestSchema().safeParse(value);
+  return parsed.success ? sanitizeDeep(parsed.data) : undefined;
 }
 //@ chunk-g54kbxqw.js:24338-24497 placement
-function sanitizeDeep(e) {
-  if (typeof e === "string") return stripControlChars(e);
-  if (Array.isArray(e)) return e.map(sanitizeDeep);
-  if (e !== null && typeof e === "object")
-    return xr(
-      identityMap(e, (n, s) => sanitizeDeep(s)),
+function sanitizeDeep(value) {
+  if (typeof value === "string") return stripControlChars(value);
+  if (Array.isArray(value)) return value.map(sanitizeDeep);
+  if (value !== null && typeof value === "object")
+    return import_mapValues(
+      identityMap(value, (key, item) => sanitizeDeep(item)),
       sanitizeDeep,
     );
-  return e;
+  return value;
 }
 //@ chunk-g54kbxqw.js:24497-24571 placement
-function parseResultEnvelope(e) {
-  let n = CALL_RESULT_ENVELOPE_SCHEMA().safeParse(e);
-  return n.success ? sanitizeRemoteToolEnvelope(n.data) : undefined;
+function parseResultEnvelope(value) {
+  let parsed = CALL_RESULT_ENVELOPE_SCHEMA().safeParse(value);
+  return parsed.success ? sanitizeRemoteToolEnvelope(parsed.data) : undefined;
 }
 export {
   REMOTE_TOOL_CALL_META,

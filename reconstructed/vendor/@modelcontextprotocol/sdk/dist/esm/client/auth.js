@@ -465,8 +465,8 @@ async function startAuthorization(
         `Incompatible auth server: does not support code challenge method ${AUTHORIZATION_CODE_CHALLENGE_METHOD}`,
       );
   } else authorizationUrl = new URL("/authorize", authorizationServerUrl);
-  let l = await pkceChallenge();
-  let { code_verifier: codeVerifier, code_challenge: codeChallenge } = l;
+  let pkce = await pkceChallenge();
+  let { code_verifier: codeVerifier, code_challenge: codeChallenge } = pkce;
   authorizationUrl.searchParams.set("response_type", AUTHORIZATION_CODE_RESPONSE_TYPE);
   authorizationUrl.searchParams.set("client_id", clientInformation.client_id);
   authorizationUrl.searchParams.set("code_challenge", codeChallenge);

@@ -29,8 +29,8 @@ class QueryGuard {
     this._notify();
     return true;
   }
-  markDispatchForModel(h) {
-    if (this._status === "dispatching" && h === this._generation) this._isDispatchForModel = true;
+  markDispatchForModel(generation) {
+    if (this._status === "dispatching" && generation === this._generation) this._isDispatchForModel = true;
   }
   cancelReservation() {
     if (this._status !== "dispatching") return;
@@ -73,10 +73,10 @@ class QueryGuard {
   getSnapshot = () => this._status !== "idle";
   _notify() {
     setMainLoopStatus(this._status);
-    let h = this._status !== "idle";
-    let x = this._turnKey ?? Symbol("query guard turn");
-    this._turnKey = h ? x : null;
-    setForegroundTurnBusy(h, x);
+    let busy = this._status !== "idle";
+    let turnKey = this._turnKey ?? Symbol("query guard turn");
+    this._turnKey = busy ? turnKey : null;
+    setForegroundTurnBusy(busy, turnKey);
     this._changed.emit();
   }
 }

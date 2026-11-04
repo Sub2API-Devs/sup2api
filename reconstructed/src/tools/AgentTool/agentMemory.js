@@ -65,25 +65,25 @@ function getAgentMemoryDir(agentType, scope) {
   }
 }
 //@ chunk-82kqcve8.js:152760-152793 layout
-function isNonUserMemoryScope(e) {
-  return e !== "user";
+function isNonUserMemoryScope(scope) {
+  return scope !== "user";
 }
 //@ chunk-82kqcve8.js:152793-153253 layout
 /**
  * 决定代理记忆目录的 MEMORY.md 入口如何读取：用户范围直接 follow；项目/本地范围在工作目录内或不存在时只读普通文件；指向工作目录外或无法解析时不读并记 tengu_agent_memory_entrypoint_skipped。
  */
-function resolveMemoryEntrypointMode(scope, memoryDir) {
+function resolveMemoryEntrypointMode(scope, dir) {
   if (!isNonUserMemoryScope(scope)) return "follow";
-  if (!isPathWithinDir(memoryDir, getCwd())) return "regular-file";
-  let r = classifyPathAgainstDir(memoryDir, getCwd());
-  if (r === "beneath" || r === "absent") return "regular-file";
+  if (!isPathWithinDir(dir, getCwd())) return "regular-file";
+  let pathRelation = classifyPathAgainstDir(dir, getCwd());
+  if (pathRelation === "beneath" || pathRelation === "absent") return "regular-file";
   logEvent("tengu_agent_memory_entrypoint_skipped", {
-    reason: fromEnum(r === "elsewhere" ? "folder_link" : "folder_unresolved"),
+    reason: fromEnum(pathRelation === "elsewhere" ? "folder_link" : "folder_unresolved"),
   });
   logForDebugging(
-    r === "elsewhere"
-      ? `agent memory: ${memoryDir} leads out of the working copy or through a dangling link; its MEMORY.md is not read`
-      : `agent memory: ${memoryDir} could not be resolved; its MEMORY.md is not read`,
+    pathRelation === "elsewhere"
+      ? `agent memory: ${dir} leads out of the working copy or through a dangling link; its MEMORY.md is not read`
+      : `agent memory: ${dir} could not be resolved; its MEMORY.md is not read`,
   );
   return "none";
 }
@@ -92,77 +92,79 @@ function resolveMemoryEntrypointMode(scope, memoryDir) {
  * 为回忆解析代理记忆目录：用户范围直接返回；项目/本地范围要求实路径仍在工作目录内（防软链逃逸），返回 {dir, regularFilesOnly:true, containedIn}，否则 null。
  */
 async function resolveAgentMemoryDirForRecall(agentType, scope) {
-  let agentMemoryDir = getAgentMemoryDir(agentType, scope);
+  let path = getAgentMemoryDir(agentType, scope);
   if (!isNonUserMemoryScope(scope))
     return {
-      dir: agentMemoryDir,
+      dir: path,
       regularFilesOnly: false,
     };
-  let s = await realpathForRecall(agentMemoryDir);
-  if (s === null) return null;
-  if (isPathWithinDir(agentMemoryDir, getCwd())) {
-    let h = await realpathForRecall(getCwd());
-    if (h === null || !isPathWithinDir(s, h)) return null;
+  let resolvedMemoryDir = await realpathForRecall(path);
+  if (resolvedMemoryDir === null) return null;
+  if (isPathWithinDir(path, getCwd())) {
+    let resolvedCwd = await realpathForRecall(getCwd());
+    if (resolvedCwd === null || !isPathWithinDir(resolvedMemoryDir, resolvedCwd)) return null;
   }
   return {
-    dir: agentMemoryDir,
+    dir: path,
     regularFilesOnly: true,
-    containedIn: s,
+    containedIn: resolvedMemoryDir,
   };
 }
 //@ chunk-82kqcve8.js:153496-153563 layout
-async function isRealpathWithin(filePath, containedIn) {
-  let r = await realpathForRecall(filePath);
-  return r !== null && isPathWithinDir(r, containedIn);
+async function isRealpathWithin(path, containedIn) {
+  let resolvedFilePath = await realpathForRecall(path);
+  return resolvedFilePath !== null && isPathWithinDir(resolvedFilePath, containedIn);
 }
 //@ chunk-82kqcve8.js:153563-153736 layout
-async function realpathForRecall(e) {
+async function realpathForRecall(path) {
   try {
     return await getFsImplementation()
-      .realpath(e)
-      .catch((error) => resolveOnPermissionError(e, error));
+      .realpath(path)
+      .catch((error) => resolveOnPermissionError(path, error));
   } catch (error) {
-    if (!isENOENT(error)) logForDebugging(`agent memory: ${e} could not be resolved; not read for recall`);
+    if (!isENOENT(error)) logForDebugging(`agent memory: ${path} could not be resolved; not read for recall`);
     return null;
   }
 }
 //@ chunk-82kqcve8.js:153736-153783 layout
-function isPathWithinDir(e, n) {
-  return e.startsWith(join(n, sep));
+function isPathWithinDir(path, dir) {
+  return path.startsWith(join(dir, sep));
 }
 //@ chunk-82kqcve8.js:153783-153867 layout
-function resolveOnPermissionError(e, error) {
+function resolveOnPermissionError(path, error) {
   let errnoCode = getErrnoCode(error);
   if (errnoCode !== "EPERM" && errnoCode !== "EACCES") throw error;
-  return realpathExaminedSync(getFsImplementation(), e);
+  return realpathExaminedSync(getFsImplementation(), path);
 }
 //@ chunk-82kqcve8.js:153867-154263 layout
 /**
  * 判断路径相对目录的位置：beneath（实路径在目录下）、absent（尚不存在但最近存在的祖先在目录下）、elsewhere、unresolved。
  */
-function classifyPathAgainstDir(e, cwd) {
+function classifyPathAgainstDir(dir, cwd) {
   let fsImplementation = getFsImplementation();
-  let replaced = e.replace(/[\\/]+$/, "");
-  let h;
+  let path = dir.replace(/[\\/]+$/, "");
+  let resolvedCwd;
   try {
-    h = realpathExaminedSync(fsImplementation, cwd);
+    resolvedCwd = realpathExaminedSync(fsImplementation, cwd);
   } catch {
     return "unresolved";
   }
   try {
-    return isPathWithinDir(realpathExaminedSync(fsImplementation, replaced), h) ? "beneath" : "elsewhere";
+    return isPathWithinDir(realpathExaminedSync(fsImplementation, path), resolvedCwd)
+      ? "beneath"
+      : "elsewhere";
   } catch (error) {
     if (!isMissingOrNotDirError(error)) return "unresolved";
   }
   try {
-    fsImplementation.lstatSync(replaced);
+    fsImplementation.lstatSync(path);
     return "elsewhere";
   } catch (error) {
     if (!isMissingOrNotDirError(error)) return "unresolved";
   }
-  let { existing, missing } = splitExistingPathPrefix(fsImplementation, replaced);
+  let { existing, missing } = splitExistingPathPrefix(fsImplementation, path);
   try {
-    return isPathWithinDir(join(realpathExaminedSync(fsImplementation, existing), ...missing), h)
+    return isPathWithinDir(join(realpathExaminedSync(fsImplementation, existing), ...missing), resolvedCwd)
       ? "absent"
       : "elsewhere";
   } catch (error) {
@@ -170,16 +172,17 @@ function classifyPathAgainstDir(e, cwd) {
   }
 }
 //@ chunk-82kqcve8.js:154263-154398 layout
-function splitExistingPathPrefix(e, n, r = []) {
+function splitExistingPathPrefix(fs, path, missingParts = []) {
   try {
-    e.lstatSync(n);
+    fs.lstatSync(path);
   } catch (error) {
-    let h = dirname(n);
-    if (isMissingOrNotDirError(error) && h !== n) return splitExistingPathPrefix(e, h, [basename(n), ...r]);
+    let parentPath = dirname(path);
+    if (isMissingOrNotDirError(error) && parentPath !== path)
+      return splitExistingPathPrefix(fs, parentPath, [basename(path), ...missingParts]);
   }
   return {
-    existing: n,
-    missing: r,
+    existing: path,
+    missing: missingParts,
   };
 }
 //@ chunk-82kqcve8.js:154398-154443 layout = isRealPathWithinTeamDir (1)
@@ -196,28 +199,32 @@ function isMissingOrNotDirError(realCandidate) {
 function isAgentMemoryPath(absolutePath) {
   let memoryBase = getMemoryBaseDirOrNull();
   if (memoryBase !== null) {
-    let h = join(memoryBase, "agent-memory") + sep;
-    if (absolutePath.startsWith(h)) return h;
+    let projectMemoryPrefix = join(memoryBase, "agent-memory") + sep;
+    if (absolutePath.startsWith(projectMemoryPrefix)) return projectMemoryPrefix;
   }
-  let r = join(getCwd(), ".claude", "agent-memory") + sep;
-  if (absolutePath.startsWith(r)) return r;
+  let localMemoryPrefix = join(getCwd(), ".claude", "agent-memory") + sep;
+  if (absolutePath.startsWith(localMemoryPrefix)) return localMemoryPrefix;
   if (process.env.CLAUDE_CODE_REMOTE_MEMORY_DIR) {
-    let h = join(process.env.CLAUDE_CODE_REMOTE_MEMORY_DIR, "projects") + sep;
-    if (absolutePath.includes(sep + "agent-memory-local" + sep) && absolutePath.startsWith(h)) return h;
+    let remoteProjectsPrefix = join(process.env.CLAUDE_CODE_REMOTE_MEMORY_DIR, "projects") + sep;
+    if (
+      absolutePath.includes(sep + "agent-memory-local" + sep) &&
+      absolutePath.startsWith(remoteProjectsPrefix)
+    )
+      return remoteProjectsPrefix;
     return null;
   }
-  let s = join(getCwd(), ".claude", "agent-memory-local") + sep;
-  if (absolutePath.startsWith(s)) return s;
+  let localAgentMemoryPrefix = join(getCwd(), ".claude", "agent-memory-local") + sep;
+  if (absolutePath.startsWith(localAgentMemoryPrefix)) return localAgentMemoryPrefix;
   return null;
 }
 //@ chunk-82kqcve8.js:154893-154956 layout
 /**
  * 路径位于代理记忆目录内部（权限系统据此放行记忆读写）。
  */
-function isInsideAgentMemoryDir(e) {
-  let absolutePath = normalize(e);
-  let r = isAgentMemoryPath(absolutePath);
-  return r !== null && !isProtectedDirPath(absolutePath, r);
+function isInsideAgentMemoryDir(path) {
+  let absolutePath = normalize(path);
+  let memoryRoot = isAgentMemoryPath(absolutePath);
+  return memoryRoot !== null && !isProtectedDirPath(absolutePath, memoryRoot);
 }
 //@ chunk-82kqcve8.js:154956-155665 fingerprint = loadAgentMemoryPrompt (0.929)
 /**
@@ -275,15 +282,15 @@ function getMemoryScopeDisplay(agentType, memory) {
 /**
  * 读取 agent 的记忆范围内容（自动记忆开启且 agent 配置了 memory 时），找不到时返回空串；与工作流脚本文件无关，疑似放错文件。
  */
-async function readAgentMemoryScope(e, storageV5) {
-  if (storageV5 === undefined || e.memory === undefined || !isAutoMemoryEnabled()) return;
-  let memoryScopeDisplay = getMemoryScopeDisplay(e.agentType, e.memory);
+async function readAgentMemoryScope(agent, storageV5) {
+  if (storageV5 === undefined || agent.memory === undefined || !isAutoMemoryEnabled()) return;
+  let memoryScopeDisplay = getMemoryScopeDisplay(agent.agentType, agent.memory);
   if (memoryScopeDisplay === undefined) return;
-  let s = await storageV5.readText([memoryScopeDisplay]).catch(() => {
+  let readResult = await storageV5.readText([memoryScopeDisplay]).catch(() => {
     return;
   });
-  let h = s?.ok ? s.value.items[0] : undefined;
-  return h !== undefined && h.found ? h.value : "";
+  let item = readResult?.ok ? readResult.value.items[0] : undefined;
+  return item !== undefined && item.found ? item.value : "";
 }
 export {
   readAgentMemoryScope,

@@ -8,15 +8,19 @@
  * pieces: chunk-p2qwpk2k.js (8)
  * attribution: placement 8
  */
-import { init_react_production, fo, Qr } from "../../../../vendor/react/cjs/react.production.js";
+import {
+  init_react_production,
+  suspenseTypeExport,
+  use,
+} from "../../../../vendor/react/cjs/react.production.js";
 import { DoctorLazy } from "../../../cli/handlers/util.js";
-import { array, string, u, unknown } from "../../../../vendor/zod/v4/classic/schemas.js";
+import { array, stringSchema, objectSchema, unknown } from "../../../../vendor/zod/v4/classic/schemas.js";
 import { stripInvisibleChars } from "../../../utils/invisibleChars.js";
 import { parseThinClientReply } from "../../../cli/thinClient.js";
 import { SETTING_SOURCES, getSettingSourceName } from "../../../utils/settings/constants.js";
 import { truncateToLength, plural } from "../../../utils/stringUtils.js";
 import { errorMessage } from "../../../utils/errors.js";
-import { w } from "../../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../../vendor/react/compiler-runtime.js";
 import { MEMO_CACHE_SENTINEL } from "../../../../runtime/bun-runtime.js";
 import { useKeybinding, useGlobalExitKeybindings } from "../../../keybindings/useKeybinding.js";
 import {
@@ -34,10 +38,10 @@ import { Commands } from "../../HelpV2/Commands.js";
 //@ chunk-p2qwpk2k.js:16014-16018 placement
 init_react_production();
 //@ chunk-p2qwpk2k.js:16018-16104 placement
-function toRuleOption(h, b) {
-  let { rule, source } = h;
+function toRuleOption(entry, index) {
+  let { rule, source } = entry;
   return {
-    value: String(b),
+    value: String(index),
     label: rule,
     description: source,
   };
@@ -71,15 +75,15 @@ var CLOUD_RULE_SECTIONS = [
   },
 ];
 var cloudSessionRulesResponseSchema = DoctorLazy(() => {
-  let h = array(string()).catch([]);
-  let i = u({
-    source: string(),
-    settings: u({
-      permissions: u({
-        allow: h,
-        ask: h,
-        deny: h,
-        additionalDirectories: h,
+  let ruleListSchema = array(stringSchema()).catch([]);
+  let permissionsSchema = objectSchema({
+    source: stringSchema(),
+    settings: objectSchema({
+      permissions: objectSchema({
+        allow: ruleListSchema,
+        ask: ruleListSchema,
+        deny: ruleListSchema,
+        additionalDirectories: ruleListSchema,
       })
         .optional()
         .catch(undefined),
@@ -87,15 +91,15 @@ var cloudSessionRulesResponseSchema = DoctorLazy(() => {
       permissions: undefined,
     }),
   });
-  return u({
-    sources: array(i.nullable().catch(null)),
+  return objectSchema({
+    sources: array(permissionsSchema.nullable().catch(null)),
     errors: array(unknown()).optional().catch(undefined),
   });
 });
 var ZERO_WIDTH_CHARS_RE = /[\u200b\u200e\u200f\u2060\ufeff]/g;
 //@ chunk-p2qwpk2k.js:16675-16724 placement
-function replaceControlChars(h) {
-  return stripInvisibleChars(h.replace(ZERO_WIDTH_CHARS_RE, "\uFFFD"));
+function replaceControlChars(text) {
+  return stripInvisibleChars(text.replace(ZERO_WIDTH_CHARS_RE, "\uFFFD"));
 }
 //@ chunk-p2qwpk2k.js:16724-17347 placement
 /**
@@ -120,7 +124,7 @@ async function readCloudSessionRules(remoteCaps, signal) {
         kind: "unreadable",
         reason: "the cloud session sent a reply this version can't display",
       };
-    let a = {
+    let bySection = {
       allow: [],
       ask: [],
       deny: [],
@@ -129,20 +133,20 @@ async function readCloudSessionRules(remoteCaps, signal) {
     for (let source of thinClientReply.sources) {
       if (source === null) continue;
       let { source: source_2, settings } = source;
-      let found = SETTING_SOURCES.find((c) => c === source_2);
+      let found = SETTING_SOURCES.find((matchedSource) => matchedSource === source_2);
       let source_3 = found
         ? getSettingSourceName(found)
         : replaceControlChars(truncateToLength(source_2, 40)) + (source_2.length > 40 ? "\u2026" : "");
       for (let { kind } of CLOUD_RULE_SECTIONS)
-        for (let M of settings.permissions?.[kind] ?? [])
-          a[kind].push({
-            rule: replaceControlChars(M),
+        for (let ruleText of settings.permissions?.[kind] ?? [])
+          bySection[kind].push({
+            rule: replaceControlChars(ruleText),
             source: source_3,
           });
     }
     return {
       kind: "read",
-      rules: a,
+      rules: bySection,
       skippedFiles: thinClientReply.errors?.length ?? 0,
     };
   } catch (error) {
@@ -154,39 +158,39 @@ async function readCloudSessionRules(remoteCaps, signal) {
 }
 //@ chunk-p2qwpk2k.js:17347-18952 placement
 function CloudSessionRulesTab(props) {
-  let a = w(19);
+  let $ = useMemoCache(19);
   let { onExit, rulesRead } = props;
-  let f;
-  if (a[0] !== onExit) {
-    f = () => onExit();
-    a[0] = onExit;
-    a[1] = f;
-  } else f = a[1];
-  let g;
-  if (a[2] === MEMO_CACHE_SENTINEL) {
-    g = {
+  let handleExit;
+  if ($[0] !== onExit) {
+    handleExit = () => onExit();
+    $[0] = onExit;
+    $[1] = handleExit;
+  } else handleExit = $[1];
+  let exitHint;
+  if ($[2] === MEMO_CACHE_SENTINEL) {
+    exitHint = {
       context: "Settings",
     };
-    a[2] = g;
-  } else g = a[2];
-  useKeybinding("confirm:no", f, g);
-  let v;
-  if (a[3] !== onExit) {
-    v = () => onExit();
-    a[3] = onExit;
-    a[4] = v;
-  } else v = a[4];
-  let globalExitKeybindings = useGlobalExitKeybindings(v);
+    $[2] = exitHint;
+  } else exitHint = $[2];
+  useKeybinding("confirm:no", handleExit, exitHint);
+  let dialogElement;
+  if ($[3] !== onExit) {
+    dialogElement = () => onExit();
+    $[3] = onExit;
+    $[4] = dialogElement;
+  } else dialogElement = $[4];
+  let globalExitKeybindings = useGlobalExitKeybindings(dialogElement);
   let children;
-  if (a[5] !== onExit || a[6] !== rulesRead) {
-    children = CLOUD_RULE_SECTIONS.map((c) => {
-      let { kind, title, empty } = c;
+  if ($[5] !== onExit || $[6] !== rulesRead) {
+    children = CLOUD_RULE_SECTIONS.map((section) => {
+      let { kind, title, empty } = section;
       return jsxProd_default(
         Tab,
         {
           id: kind,
           title,
-          children: jsxProd_default(fo, {
+          children: jsxProd_default(suspenseTypeExport, {
             fallback: jsxProd_default(WorkerBadge, {
               message: "Reading the cloud session's rules\u2026",
             }),
@@ -201,33 +205,33 @@ function CloudSessionRulesTab(props) {
         kind,
       );
     });
-    a[5] = onExit;
-    a[6] = rulesRead;
-    a[7] = children;
-  } else children = a[7];
-  let c;
-  if (a[8] !== children) {
-    c = jsxProd_default(Tabs, {
+    $[5] = onExit;
+    $[6] = rulesRead;
+    $[7] = children;
+  } else children = $[7];
+  let tabsElement;
+  if ($[8] !== children) {
+    tabsElement = jsxProd_default(Tabs, {
       title: "Permissions",
       color: "permission",
       navFromContent: true,
       children,
     });
-    a[8] = children;
-    a[9] = c;
-  } else c = a[9];
-  let E;
-  if (a[10] === MEMO_CACHE_SENTINEL) {
-    E = jsxProd_default(Text, {
+    $[8] = children;
+    $[9] = tabsElement;
+  } else tabsElement = $[9];
+  let textElement;
+  if ($[10] === MEMO_CACHE_SENTINEL) {
+    textElement = jsxProd_default(Text, {
       dimColor: true,
       wrap: "wrap-trim",
       children:
         "Read-only here: these are the cloud session's rules, from its settings files (rules it added for itself this session aren't listed). To change them, ask Claude to edit .claude/settings.json in the session. Commands Claude runs on this computer follow this computer's rules \u2014 /permissions in a local session edits those.",
     });
-    a[10] = E;
-  } else E = a[10];
+    $[10] = textElement;
+  } else textElement = $[10];
   let children_2;
-  if (a[11] !== globalExitKeybindings.keyName || a[12] !== globalExitKeybindings.pending) {
+  if ($[11] !== globalExitKeybindings.keyName || $[12] !== globalExitKeybindings.pending) {
     children_2 = globalExitKeybindings.pending
       ? `Press ${globalExitKeybindings.keyName} again to close`
       : jsxProd_default_2(Byline, {
@@ -246,106 +250,106 @@ function CloudSessionRulesTab(props) {
             }),
           ],
         });
-    a[11] = globalExitKeybindings.keyName;
-    a[12] = globalExitKeybindings.pending;
-    a[13] = children_2;
-  } else children_2 = a[13];
-  let k;
-  if (a[14] !== children_2) {
-    k = jsxProd_default_2(Box, {
+    $[11] = globalExitKeybindings.keyName;
+    $[12] = globalExitKeybindings.pending;
+    $[13] = children_2;
+  } else children_2 = $[13];
+  let boxElement;
+  if ($[14] !== children_2) {
+    boxElement = jsxProd_default_2(Box, {
       marginTop: 1,
       flexDirection: "column",
       children: [
-        E,
+        textElement,
         jsxProd_default(Text, {
           dimColor: true,
           children: children_2,
         }),
       ],
     });
-    a[14] = children_2;
-    a[15] = k;
-  } else k = a[15];
-  let V;
-  if (a[16] !== c || a[17] !== k) {
-    V = jsxProd_default_2(Pane, {
+    $[14] = children_2;
+    $[15] = boxElement;
+  } else boxElement = $[15];
+  let paneElement;
+  if ($[16] !== tabsElement || $[17] !== boxElement) {
+    paneElement = jsxProd_default_2(Pane, {
       color: "permission",
-      children: [c, k],
+      children: [tabsElement, boxElement],
     });
-    a[16] = c;
-    a[17] = k;
-    a[18] = V;
-  } else V = a[18];
-  return V;
+    $[16] = tabsElement;
+    $[17] = boxElement;
+    $[18] = paneElement;
+  } else paneElement = $[18];
+  return paneElement;
 }
 //@ chunk-p2qwpk2k.js:18952-19779 placement
 /**
  * 显示云会话某类规则：读取失败显示原因，部分设置文件解析失败时警告，空时显示空提示。
  */
 function CloudRulesSection(props) {
-  let v = w(11);
+  let $ = useMemoCache(11);
   let { rulesRead, kind, empty, onExit } = props;
-  let g = Qr(rulesRead);
-  if (g.kind === "unreadable") {
-    let x;
-    if (v[0] !== g.reason) {
-      x = jsxProd_default_2(Text, {
+  let rulesResult = use(rulesRead);
+  if (rulesResult.kind === "unreadable") {
+    let textElement;
+    if ($[0] !== rulesResult.reason) {
+      textElement = jsxProd_default_2(Text, {
         color: "error",
-        children: ["Couldn't read the cloud session's rules: ", g.reason],
+        children: ["Couldn't read the cloud session's rules: ", rulesResult.reason],
       });
-      v[0] = g.reason;
-      v[1] = x;
-    } else x = v[1];
-    return x;
+      $[0] = rulesResult.reason;
+      $[1] = textElement;
+    } else textElement = $[1];
+    return textElement;
   }
-  let C = g.rules[kind];
-  let x;
-  if (v[2] !== g.skippedFiles) {
-    x =
-      g.skippedFiles > 0 &&
+  let errorElement = rulesResult.rules[kind];
+  let rows;
+  if ($[2] !== rulesResult.skippedFiles) {
+    rows =
+      rulesResult.skippedFiles > 0 &&
       jsxProd_default_2(Text, {
         color: "warning",
         wrap: "wrap-trim",
         children: [
-          g.skippedFiles,
+          rulesResult.skippedFiles,
           " settings ",
-          plural(g.skippedFiles, "file"),
+          plural(rulesResult.skippedFiles, "file"),
           " in the session failed to parse; rules from",
           " ",
-          plural(g.skippedFiles, "it", "them"),
+          plural(rulesResult.skippedFiles, "it", "them"),
           " aren't listed.",
         ],
       });
-    v[2] = g.skippedFiles;
-    v[3] = x;
-  } else x = v[3];
-  let c;
-  if (v[4] !== empty || v[5] !== onExit || v[6] !== C) {
-    c =
-      C.length === 0
+    $[2] = rulesResult.skippedFiles;
+    $[3] = rows;
+  } else rows = $[3];
+  let contentElement;
+  if ($[4] !== empty || $[5] !== onExit || $[6] !== errorElement) {
+    contentElement =
+      errorElement.length === 0
         ? jsxProd_default(Text, {
             dimColor: true,
             children: empty,
           })
         : jsxProd_default(Commands, {
-            rules: C,
+            rules: errorElement,
             onExit,
           });
-    v[4] = empty;
-    v[5] = onExit;
-    v[6] = C;
-    v[7] = c;
-  } else c = v[7];
-  let M;
-  if (v[8] !== x || v[9] !== c) {
-    M = jsxProd_default_2(Box, {
+    $[4] = empty;
+    $[5] = onExit;
+    $[6] = errorElement;
+    $[7] = contentElement;
+  } else contentElement = $[7];
+  let boxElement;
+  if ($[8] !== rows || $[9] !== contentElement) {
+    boxElement = jsxProd_default_2(Box, {
       flexDirection: "column",
-      children: [x, c],
+      children: [rows, contentElement],
     });
-    v[8] = x;
-    v[9] = c;
-    v[10] = M;
-  } else M = v[10];
-  return M;
+    $[8] = rows;
+    $[9] = contentElement;
+    $[10] = boxElement;
+  } else boxElement = $[10];
+  return boxElement;
 }
 export { toRuleOption, noopRulePicker, CloudSessionRulesTab, readCloudSessionRules };

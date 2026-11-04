@@ -13,7 +13,7 @@ import { getSingleKeyActionInContexts } from "../../keybindings/resolver.js";
 import { AGENTS_GROUP_PATH, GLOBAL_CHAT_GROUP_PATH } from "../agents/utils.js";
 import { chordToDisplayString } from "../../keybindings/parser.js";
 import { getShortcutDisplayPlatform } from "../../utils/keyboardShortcuts.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { useTerminalSize } from "../../hooks/useTerminalSize.js";
 import { useStoreSelector } from "../../hooks/useStoreSelector.js";
 import {
@@ -73,7 +73,14 @@ import {
   remoteRowIdOf,
 } from "./fleetRows.js";
 import { parseNewSessionPrefix, isPasteImageKey, pasteImageFromClipboard } from "./fleetSessions.js";
-import { init_react_production, y, P, R, Kc, Oo } from "../../../vendor/react/cjs/react.production.js";
+import {
+  init_react_production,
+  useState,
+  useEffect,
+  useRef,
+  fragmentTypeExport,
+  useEffectEvent,
+} from "../../../vendor/react/cjs/react.production.js";
 import { sumByAliasField } from "../../services/artifacts/frameApi.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { useInterval } from "../../ink/components/Input.js";
@@ -112,7 +119,7 @@ import { shouldUseFullscreenByDefault } from "../../utils/fullscreen.js";
 import { keyEventToKeystroke } from "../../keybindings/match.js";
 import { LinkifiedText } from "../LinkifiedText.js";
 import { PrBadge, DiffStatCounts } from "../PrBadge.js";
-import { BOXED_DIAMOND_GLYPH } from "../../utils/permissions/autoModeRulesPrompt.js";
+import { BOXED_DIAMOND_GLYPH } from "../../constants/figures.js";
 import { expandPrUrlIfTemplate } from "../../utils/ghPrStatus.js";
 import { SearchBox } from "../SearchBox.js";
 import { isNoForceUpdateRenders } from "../../utils/Cursor.js";
@@ -133,7 +140,7 @@ import { onExit } from "../../../vendor/signal-exit/dist/mjs/index.js";
 import { createSignal } from "../../utils/signal.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { env } from "../../utils/env.js";
-import { string } from "../../../vendor/zod/v4/classic/schemas.js";
+import { stringSchema } from "../../../vendor/zod/v4/classic/schemas.js";
 import { getGlobalConfig } from "../../utils/config.js";
 import { sendControlToUdsSocket } from "../../utils/udsMessaging/udsClient.js";
 import { logFeatureOk, logFeatureBad } from "../../services/analytics/featureTelemetry.js";
@@ -141,47 +148,47 @@ import { renderListResultMessage } from "../../tools/ScheduleCronTool/UI.js";
 
 //@ chunk-93kwxas0.js:123639-123687 placement
 function matchFleetKeyAction(singleKeyActionInContexts) {
-  return FLEET_KEY_ACTIONS.find((E) => E === singleKeyActionInContexts) ?? null;
+  return FLEET_KEY_ACTIONS.find((action) => action === singleKeyActionInContexts) ?? null;
 }
 //@ chunk-93kwxas0.js:123687-123790 placement
 /**
  * 按两组快捷键上下文解析单键动作。
  */
-function resolveFleetKeyAction(h, E) {
-  if (!h) return null;
-  let singleKeyActionInContexts = getSingleKeyActionInContexts(h, AGENTS_GROUP_PATH, E);
+function resolveFleetKeyAction(key, bindings) {
+  if (!key) return null;
+  let singleKeyActionInContexts = getSingleKeyActionInContexts(key, AGENTS_GROUP_PATH, bindings);
   if (singleKeyActionInContexts !== undefined) return matchFleetKeyAction(singleKeyActionInContexts);
-  return matchFleetKeyAction(getSingleKeyActionInContexts(h, GLOBAL_CHAT_GROUP_PATH, E));
+  return matchFleetKeyAction(getSingleKeyActionInContexts(key, GLOBAL_CHAT_GROUP_PATH, bindings));
 }
 //@ chunk-93kwxas0.js:123790-123967 placement
 /**
  * 找某动作的单键快捷键显示文本。
  */
-function shortcutDisplayFor(h, fleetBindings) {
-  for (let k = fleetBindings.length - 1; k >= 0; k--) {
-    let C = fleetBindings[k];
-    if (!C || C.action !== h || C.chord.length !== 1) continue;
-    let x = C.chord[0];
-    if (x && resolveFleetKeyAction(x, fleetBindings) === h)
-      return chordToDisplayString(C.chord, getShortcutDisplayPlatform());
+function shortcutDisplayFor(action, bindings) {
+  for (let index = bindings.length - 1; index >= 0; index--) {
+    let binding = bindings[index];
+    if (!binding || binding.action !== action || binding.chord.length !== 1) continue;
+    let key = binding.chord[0];
+    if (key && resolveFleetKeyAction(key, bindings) === action)
+      return chordToDisplayString(binding.chord, getShortcutDisplayPlatform());
   }
   return "";
 }
 //@ chunk-93kwxas0.js:123967-124003 placement
-function selectCollapsedKeys(jt) {
-  return jt.collapsed;
+function selectCollapsedKeys(state) {
+  return state.collapsed;
 }
 //@ chunk-93kwxas0.js:124003-124058 placement
-function selectVoiceMode(We) {
-  return We.settings.voice?.mode ?? "hold";
+function selectVoiceMode(state) {
+  return state.settings.voice?.mode ?? "hold";
 }
 //@ chunk-93kwxas0.js:124058-124095 placement
-function selectVoiceState(Jt) {
-  return Jt.voiceState;
+function selectVoiceState(state) {
+  return state.voiceState;
 }
 //@ chunk-93kwxas0.js:124095-124136 placement
-function selectVoiceWarmingUp(qe) {
-  return qe.voiceWarmingUp;
+function selectVoiceWarmingUp(state) {
+  return state.voiceWarmingUp;
 }
 //@ chunk-93kwxas0.js:124136-124226 placement
 var EXIT_HINT_TEXT = {
@@ -193,19 +200,19 @@ var EXIT_HINT_TEXT = {
  * Agents 视图底部快捷键提示栏。
  */
 function FleetFooter(props) {
-  let W = w(6);
+  let $ = useMemoCache(6);
   let { owners, layout, simpleView, dispatchDefaults, groupInput, suggestionsOpen } = props;
   let { selection, view, editor, deleteConfirm } = owners;
   let { columns } = useTerminalSize();
   let fleetBindings = useFleetBindings();
-  let K = shortcutDisplayFor("agents:find", fleetBindings);
-  let z;
-  if (W[0] !== fleetBindings) {
-    z = shortcutDisplayFor("agents:setGroup", fleetBindings);
-    W[0] = fleetBindings;
-    W[1] = z;
-  } else z = W[1];
-  let oe = z;
+  let findHint = shortcutDisplayFor("agents:find", fleetBindings);
+  let groupHint;
+  if ($[0] !== fleetBindings) {
+    groupHint = shortcutDisplayFor("agents:setGroup", fleetBindings);
+    $[0] = fleetBindings;
+    $[1] = groupHint;
+  } else groupHint = $[1];
+  let groupHint_2 = groupHint;
   let storeSelector = useStoreSelector(selection, selectCollapsedKeys);
   let { groupMode, groupEdit, groupPickIdx, renaming, previewOpen, exitPending } = useStoreSelector(view);
   let { query, error, hint, expandHintPasteId } = useStoreSelector(editor);
@@ -229,11 +236,11 @@ function FleetFooter(props) {
     headerJobs,
   } = layout;
   let { draft, suggestions } = groupInput;
-  let Qt = enterLabel;
-  let tt = bunStringWidth(Qt) - bunStringWidth(enterLabel);
+  let enterAction = enterLabel;
+  let enterLabelExtraWidth = bunStringWidth(enterAction) - bunStringWidth(enterLabel);
   let jobId = renaming?.jobId ?? null;
-  let Rt = (group) => groupCollapseKey(groupMode, group);
-  const Vt = Box;
+  let collapseKeyFor = (group) => groupCollapseKey(groupMode, group);
+  const footerBox = Box;
   const flexShrink = 0;
   const paddingLeft = simpleView ? 1 : 2;
   const height = 1;
@@ -362,14 +369,14 @@ function FleetFooter(props) {
                                   !isBashDispatch &&
                                   jsxProd_default(KeyboardShortcutHint, {
                                     chord: "enter",
-                                    action: Qt,
+                                    action: enterAction,
                                     format: {
                                       keyCase: "lower",
                                     },
                                   }),
                                 expandHintPasteId !== null &&
                                   query !== "" &&
-                                  columns >= 90 + tt &&
+                                  columns >= 90 + enterLabelExtraWidth &&
                                   jsxProd_default(Text, {
                                     dimColor: true,
                                     children: "paste again to expand",
@@ -379,7 +386,9 @@ function FleetFooter(props) {
                                   !isOnboarding &&
                                   jsxProd_default(KeyboardShortcutHint, {
                                     chord: "enter",
-                                    action: storeSelector.has(Rt(focusedRow.group)) ? "expand" : "collapse",
+                                    action: storeSelector.has(collapseKeyFor(focusedRow.group))
+                                      ? "expand"
+                                      : "collapse",
                                     format: {
                                       keyCase: "lower",
                                     },
@@ -452,12 +461,12 @@ function FleetFooter(props) {
                                       }),
                                 hasComposedDispatch &&
                                   !isBashDispatch &&
-                                  K !== "" &&
+                                  findHint !== "" &&
                                   parseNewSessionPrefix(query) !== null &&
                                   expandHintPasteId === null &&
-                                  columns >= 43 + tt + bunStringWidth(K) &&
+                                  columns >= 43 + enterLabelExtraWidth + bunStringWidth(findHint) &&
                                   jsxProd_default_2(Text, {
-                                    children: [K, " to find"],
+                                    children: [findHint, " to find"],
                                   }),
                                 null,
                                 byGroup &&
@@ -465,30 +474,30 @@ function FleetFooter(props) {
                                   !!focused &&
                                   !focusedIsPending &&
                                   focused.state.backend === "daemon" &&
-                                  oe !== "" &&
+                                  groupHint_2 !== "" &&
                                   columns >= 111 &&
                                   jsxProd_default_2(Text, {
-                                    children: [oe, " to group"],
+                                    children: [groupHint_2, " to group"],
                                   }),
                               ],
                             }),
                           ],
                         })
                       : null;
-  let ht;
-  if (W[2] !== Vt || W[3] !== paddingLeft || W[4] !== children) {
-    ht = jsxProd_default(Vt, {
+  let footer;
+  if ($[2] !== footerBox || $[3] !== paddingLeft || $[4] !== children) {
+    footer = jsxProd_default(footerBox, {
       flexShrink,
       paddingLeft,
       height,
       children,
     });
-    W[2] = Vt;
-    W[3] = paddingLeft;
-    W[4] = children;
-    W[5] = ht;
-  } else ht = W[5];
-  return ht;
+    $[2] = footerBox;
+    $[3] = paddingLeft;
+    $[4] = children;
+    $[5] = footer;
+  } else footer = $[5];
+  return footer;
 }
 //@ chunk-93kwxas0.js:127689-127693 placement
 init_react_production();
@@ -521,46 +530,49 @@ function FleetKeyHints({
 }) {
   let fleetBindings = useFleetBindings();
   let { columns } = useTerminalSize();
-  let W = shortcutDisplayFor("agents:switchView", fleetBindings);
-  let z = shortcutDisplayFor("agents:togglePin", fleetBindings);
-  let oe = shortcutDisplayFor("agents:find", fleetBindings);
-  let ge = shortcutDisplayFor("agents:rename", fleetBindings);
-  let se = shortcutDisplayFor("agents:setGroup", fleetBindings);
-  let ne = shortcutDisplayFor("agents:previousGroup", fleetBindings);
-  let ae = shortcutDisplayFor("agents:nextGroup", fleetBindings);
-  let sliced = ne.slice(0, ne.lastIndexOf("+") + 1);
-  let Je =
-    ne && ae && ae.startsWith(sliced)
-      ? `${ne}/${ae.slice(sliced.length)}`
-      : [ne, ae].filter(Boolean).join(" and ");
-  let le = [];
-  if (canReorder) le.push(`shift+${figures_default.arrowUp + figures_default.arrowDown} to reorder`);
-  if (canRename && ge) le.push(`${ge} to rename`);
-  if (canGroup && se) le.push(`${se} to set group`);
+  let switchViewHint = shortcutDisplayFor("agents:switchView", fleetBindings);
+  let pinHint = shortcutDisplayFor("agents:togglePin", fleetBindings);
+  let findHint = shortcutDisplayFor("agents:find", fleetBindings);
+  let renameHint = shortcutDisplayFor("agents:rename", fleetBindings);
+  let groupHint = shortcutDisplayFor("agents:setGroup", fleetBindings);
+  let prevGroupHint = shortcutDisplayFor("agents:previousGroup", fleetBindings);
+  let nextGroupHint = shortcutDisplayFor("agents:nextGroup", fleetBindings);
+  let sliced = prevGroupHint.slice(0, prevGroupHint.lastIndexOf("+") + 1);
+  let jumpGroupsHint =
+    prevGroupHint && nextGroupHint && nextGroupHint.startsWith(sliced)
+      ? `${prevGroupHint}/${nextGroupHint.slice(sliced.length)}`
+      : [prevGroupHint, nextGroupHint].filter(Boolean).join(" and ");
+  let hints = [];
+  if (canReorder) hints.push(`shift+${figures_default.arrowUp + figures_default.arrowDown} to reorder`);
+  if (canRename && renameHint) hints.push(`${renameHint} to rename`);
+  if (canGroup && groupHint) hints.push(`${groupHint} to set group`);
   if (canSwitchViews) {
-    if (oe) le.push(`${oe} to find`);
-    if (Je) le.push(`${Je} to jump groups`);
-    if (W) le.push(`${W} to switch views`);
-    le.push("ctrl+j for newline");
-    if (canDispatchAndOpen) le.push("ctrl+enter to start and open");
+    if (findHint) hints.push(`${findHint} to find`);
+    if (jumpGroupsHint) hints.push(`${jumpGroupsHint} to jump groups`);
+    if (switchViewHint) hints.push(`${switchViewHint} to switch views`);
+    hints.push("ctrl+j for newline");
+    if (canDispatchAndOpen) hints.push("ctrl+enter to start and open");
   }
-  if (canMention) le.push("@ to mention");
-  if (canPin && z) le.push(`${z} to ${focusedPinned ? "unpin" : "pin to top"}`);
-  if (altOpenCount > 0) le.push(`alt+1${altOpenCount > 1 ? `-${altOpenCount}` : ""} to open`);
-  if (canDelete) le.push(`ctrl+x to ${canDelete}`);
-  if (canGoBack) le.push(`${figures_default.arrowLeft} to go back`);
-  le.push(canSwitchViews ? "esc to quit" : "esc to close \xB7 esc again quits");
-  le.push("? to close");
-  let Oe = [];
+  if (canMention) hints.push("@ to mention");
+  if (canPin && pinHint) hints.push(`${pinHint} to ${focusedPinned ? "unpin" : "pin to top"}`);
+  if (altOpenCount > 0) hints.push(`alt+1${altOpenCount > 1 ? `-${altOpenCount}` : ""} to open`);
+  if (canDelete) hints.push(`ctrl+x to ${canDelete}`);
+  if (canGoBack) hints.push(`${figures_default.arrowLeft} to go back`);
+  hints.push(canSwitchViews ? "esc to quit" : "esc to close \xB7 esc again quits");
+  hints.push("? to close");
+  let columnsOfHints = [];
   for (let idx = 3; ; idx++) {
-    Oe = [];
-    for (let Re = 0; Re < le.length; Re += idx) Oe.push(le.slice(Re, Re + idx));
+    columnsOfHints = [];
+    for (let startIndex = 0; startIndex < hints.length; startIndex += idx)
+      columnsOfHints.push(hints.slice(startIndex, startIndex + idx));
     if (
       2 * HINT_PADDING +
-        HINT_ITEM_GAP * (Oe.length - 1) +
-        sumByAliasField(Oe, (Re) => Math.max(...Re.map((je) => bunStringWidth(je)))) <=
+        HINT_ITEM_GAP * (columnsOfHints.length - 1) +
+        sumByAliasField(columnsOfHints, (columnHints) =>
+          Math.max(...columnHints.map((hint) => bunStringWidth(hint))),
+        ) <=
         columns ||
-      Oe.length === 1
+      columnsOfHints.length === 1
     )
       break;
   }
@@ -569,23 +581,23 @@ function FleetKeyHints({
     paddingX: HINT_PADDING,
     flexDirection: "row",
     gap: HINT_ITEM_GAP,
-    children: Oe.map((De, we) =>
+    children: columnsOfHints.map((columnHints, columnIndex) =>
       jsxProd_default(
         Box,
         {
           flexDirection: "column",
-          children: De.map((Re) =>
+          children: columnHints.map((hint) =>
             jsxProd_default(
               Text,
               {
                 dimColor: true,
-                children: Re,
+                children: hint,
               },
-              Re,
+              hint,
             ),
           ),
         },
-        we,
+        columnIndex,
       ),
     ),
   });
@@ -595,26 +607,26 @@ function FleetKeyHints({
  * 会话预览头部（更新时间定时刷新）。
  */
 function JobPeekHeader(props) {
-  let k = w(43);
+  let $ = useMemoCache(43);
   let { job } = props;
-  let C;
-  if (k[0] !== job) {
-    C = job ? Date.parse(job.state.updatedAt) : 0;
-    k[0] = job;
-    k[1] = C;
-  } else C = k[1];
-  let x = C;
-  let [T, A] = y(nowMs);
-  let L;
-  if (k[2] === MEMO_CACHE_SENTINEL) {
-    L = () => A(Date.now());
-    k[2] = L;
-  } else L = k[2];
-  useInterval(L, !job ? null : T - x < 60000 ? 1000 : 30000);
+  let updatedMs;
+  if ($[0] !== job) {
+    updatedMs = job ? Date.parse(job.state.updatedAt) : 0;
+    $[0] = job;
+    $[1] = updatedMs;
+  } else updatedMs = $[1];
+  let updatedMs_2 = updatedMs;
+  let [nowMsState, setNowMs] = useState(nowMs);
+  let tick;
+  if ($[2] === MEMO_CACHE_SENTINEL) {
+    tick = () => setNowMs(Date.now());
+    $[2] = tick;
+  } else tick = $[2];
+  useInterval(tick, !job ? null : nowMsState - updatedMs_2 < 60000 ? 1000 : 30000);
   if (!job) {
-    let V;
-    if (k[3] === MEMO_CACHE_SENTINEL) {
-      V = jsxProd_default(Box, {
+    let emptyState;
+    if ($[3] === MEMO_CACHE_SENTINEL) {
+      emptyState = jsxProd_default(Box, {
         flexShrink: 0,
         paddingX: 2,
         children: jsxProd_default(Text, {
@@ -622,90 +634,90 @@ function JobPeekHeader(props) {
           children: "no job focused",
         }),
       });
-      k[3] = V;
-    } else V = k[3];
-    return V;
+      $[3] = emptyState;
+    } else emptyState = $[3];
+    return emptyState;
   }
   let state = job.state;
-  const max = Math.max(0, T - x);
-  let U;
-  if (k[4] !== max) {
-    U = formatDuration(max, {
+  const max = Math.max(0, nowMsState - updatedMs_2);
+  let ageMs;
+  if ($[4] !== max) {
+    ageMs = formatDuration(max, {
       mostSignificantOnly: true,
     });
-    k[4] = max;
-    k[5] = U;
-  } else U = k[5];
-  let N = U;
-  let X;
-  if (k[6] === MEMO_CACHE_SENTINEL) {
-    X = jsxProd_default(Text, {
+    $[4] = max;
+    $[5] = ageMs;
+  } else ageMs = $[5];
+  let ageText = ageMs;
+  let backendLabel;
+  if ($[6] === MEMO_CACHE_SENTINEL) {
+    backendLabel = jsxProd_default(Text, {
       dimColor: true,
       children: "backend ",
     });
-    k[6] = X;
-  } else X = k[6];
-  let K;
-  if (k[7] !== state.backend) {
-    K = jsxProd_default_2(Text, {
-      children: [X, state.backend],
+    $[6] = backendLabel;
+  } else backendLabel = $[6];
+  let backendText;
+  if ($[7] !== state.backend) {
+    backendText = jsxProd_default_2(Text, {
+      children: [backendLabel, state.backend],
     });
-    k[7] = state.backend;
-    k[8] = K;
-  } else K = k[8];
-  let W;
-  if (k[9] === MEMO_CACHE_SENTINEL) {
-    W = jsxProd_default(Text, {
+    $[7] = state.backend;
+    $[8] = backendText;
+  } else backendText = $[8];
+  let dirLabel;
+  if ($[9] === MEMO_CACHE_SENTINEL) {
+    dirLabel = jsxProd_default(Text, {
       dimColor: true,
       children: "dir ",
     });
-    k[9] = W;
-  } else W = k[9];
-  let z;
-  if (k[10] !== job.id) {
-    z = getJobDir(job.id);
-    k[10] = job.id;
-    k[11] = z;
-  } else z = k[11];
-  let oe;
-  if (k[12] !== z) {
-    oe = jsxProd_default_2(Text, {
-      children: [W, z],
+    $[9] = dirLabel;
+  } else dirLabel = $[9];
+  let jobDir;
+  if ($[10] !== job.id) {
+    jobDir = getJobDir(job.id);
+    $[10] = job.id;
+    $[11] = jobDir;
+  } else jobDir = $[11];
+  let dirText;
+  if ($[12] !== jobDir) {
+    dirText = jsxProd_default_2(Text, {
+      children: [dirLabel, jobDir],
     });
-    k[12] = z;
-    k[13] = oe;
-  } else oe = k[13];
-  let ge;
-  if (k[14] === MEMO_CACHE_SENTINEL) {
-    ge = jsxProd_default(Text, {
+    $[12] = jobDir;
+    $[13] = dirText;
+  } else dirText = $[13];
+  let cwdLabel;
+  if ($[14] === MEMO_CACHE_SENTINEL) {
+    cwdLabel = jsxProd_default(Text, {
       dimColor: true,
       children: "cwd ",
     });
-    k[14] = ge;
-  } else ge = k[14];
-  const se = state.worktreePath ?? state.cwd;
-  let ne;
-  if (k[15] !== se) {
-    ne = jsxProd_default_2(Text, {
-      children: [ge, se],
+    $[14] = cwdLabel;
+  } else cwdLabel = $[14];
+  const workingDir = state.worktreePath ?? state.cwd;
+  let cwdText;
+  if ($[15] !== workingDir) {
+    cwdText = jsxProd_default_2(Text, {
+      children: [cwdLabel, workingDir],
     });
-    k[15] = se;
-    k[16] = ne;
-  } else ne = k[16];
-  let ae;
-  if (k[17] !== ne || k[18] !== K || k[19] !== oe) {
-    ae = jsxProd_default_2(Box, {
+    $[15] = workingDir;
+    $[16] = cwdText;
+  } else cwdText = $[16];
+  let identityBox;
+  if ($[17] !== cwdText || $[18] !== backendText || $[19] !== dirText) {
+    identityBox = jsxProd_default_2(Box, {
       flexDirection: "column",
-      children: [K, oe, ne],
+      children: [backendText, dirText, cwdText],
     });
-    k[17] = ne;
-    k[18] = K;
-    k[19] = oe;
-    k[20] = ae;
-  } else ae = k[20];
-  let me;
-  if (k[21] !== job.id || k[22] !== state.backend) {
-    me =
+    $[17] = cwdText;
+    $[18] = backendText;
+    $[19] = dirText;
+    $[20] = identityBox;
+  } else identityBox = $[20];
+  let attachHint;
+  if ($[21] !== job.id || $[22] !== state.backend) {
+    attachHint =
       state.backend === "daemon"
         ? jsxProd_default_2(Text, {
             children: [
@@ -718,38 +730,38 @@ function JobPeekHeader(props) {
             ],
           })
         : null;
-    k[21] = job.id;
-    k[22] = state.backend;
-    k[23] = me;
-  } else me = k[23];
-  let Je;
-  if (k[24] === MEMO_CACHE_SENTINEL) {
-    Je = jsxProd_default(Text, {
+    $[21] = job.id;
+    $[22] = state.backend;
+    $[23] = attachHint;
+  } else attachHint = $[23];
+  let sessionLabel;
+  if ($[24] === MEMO_CACHE_SENTINEL) {
+    sessionLabel = jsxProd_default(Text, {
       dimColor: true,
       children: "session ",
     });
-    k[24] = Je;
-  } else Je = k[24];
-  const le = state.resumeSessionId ?? state.sessionId;
-  let Oe;
-  if (k[25] !== le) {
-    Oe = jsxProd_default_2(Text, {
-      children: [Je, le],
+    $[24] = sessionLabel;
+  } else sessionLabel = $[24];
+  const sessionId = state.resumeSessionId ?? state.sessionId;
+  let sessionText;
+  if ($[25] !== sessionId) {
+    sessionText = jsxProd_default_2(Text, {
+      children: [sessionLabel, sessionId],
     });
-    k[25] = le;
-    k[26] = Oe;
-  } else Oe = k[26];
-  let De;
-  if (k[27] === MEMO_CACHE_SENTINEL) {
-    De = jsxProd_default(Text, {
+    $[25] = sessionId;
+    $[26] = sessionText;
+  } else sessionText = $[26];
+  let versionLabel;
+  if ($[27] === MEMO_CACHE_SENTINEL) {
+    versionLabel = jsxProd_default(Text, {
       dimColor: true,
       children: "version ",
     });
-    k[27] = De;
-  } else De = k[27];
-  let we;
-  if (k[28] !== state.cliVersion) {
-    we =
+    $[27] = versionLabel;
+  } else versionLabel = $[27];
+  let versionText;
+  if ($[28] !== state.cliVersion) {
+    versionText =
       state.cliVersion === undefined
         ? jsxProd_default(Text, {
             dimColor: true,
@@ -795,59 +807,59 @@ function JobPeekHeader(props) {
                 }),
               ],
             });
-    k[28] = state.cliVersion;
-    k[29] = we;
-  } else we = k[29];
-  let Re;
-  if (k[30] !== we) {
-    Re = jsxProd_default_2(Text, {
-      children: [De, we],
+    $[28] = state.cliVersion;
+    $[29] = versionText;
+  } else versionText = $[29];
+  let versionLine;
+  if ($[30] !== versionText) {
+    versionLine = jsxProd_default_2(Text, {
+      children: [versionLabel, versionText],
     });
-    k[30] = we;
-    k[31] = Re;
-  } else Re = k[31];
-  let je;
-  if (k[32] === MEMO_CACHE_SENTINEL) {
-    je = jsxProd_default(Text, {
+    $[30] = versionText;
+    $[31] = versionLine;
+  } else versionLine = $[31];
+  let updatedLabel;
+  if ($[32] === MEMO_CACHE_SENTINEL) {
+    updatedLabel = jsxProd_default(Text, {
       dimColor: true,
       children: "updated ",
     });
-    k[32] = je;
-  } else je = k[32];
-  let st;
-  if (k[33] !== N) {
-    st = jsxProd_default_2(Text, {
-      children: [je, N, " ago"],
+    $[32] = updatedLabel;
+  } else updatedLabel = $[32];
+  let updatedText;
+  if ($[33] !== ageText) {
+    updatedText = jsxProd_default_2(Text, {
+      children: [updatedLabel, ageText, " ago"],
     });
-    k[33] = N;
-    k[34] = st;
-  } else st = k[34];
-  let mt;
-  if (k[35] !== me || k[36] !== Oe || k[37] !== Re || k[38] !== st) {
-    mt = jsxProd_default_2(Box, {
+    $[33] = ageText;
+    $[34] = updatedText;
+  } else updatedText = $[34];
+  let metaBox;
+  if ($[35] !== attachHint || $[36] !== sessionText || $[37] !== versionLine || $[38] !== updatedText) {
+    metaBox = jsxProd_default_2(Box, {
       flexDirection: "column",
-      children: [me, Oe, Re, st],
+      children: [attachHint, sessionText, versionLine, updatedText],
     });
-    k[35] = me;
-    k[36] = Oe;
-    k[37] = Re;
-    k[38] = st;
-    k[39] = mt;
-  } else mt = k[39];
-  let Ye;
-  if (k[40] !== ae || k[41] !== mt) {
-    Ye = jsxProd_default_2(Box, {
+    $[35] = attachHint;
+    $[36] = sessionText;
+    $[37] = versionLine;
+    $[38] = updatedText;
+    $[39] = metaBox;
+  } else metaBox = $[39];
+  let header;
+  if ($[40] !== identityBox || $[41] !== metaBox) {
+    header = jsxProd_default_2(Box, {
       flexShrink: 0,
       paddingX: 2,
       flexDirection: "row",
       gap: 4,
-      children: [ae, mt],
+      children: [identityBox, metaBox],
     });
-    k[40] = ae;
-    k[41] = mt;
-    k[42] = Ye;
-  } else Ye = k[42];
-  return Ye;
+    $[40] = identityBox;
+    $[41] = metaBox;
+    $[42] = header;
+  } else header = $[42];
+  return header;
 }
 //@ chunk-93kwxas0.js:132789-132793 placement
 init_react_production();
@@ -857,7 +869,7 @@ init_react_production();
 /**
  * 渲染待回答问题的一个选项行（序号、标签、说明）。
  */
-function renderQuestionOption(U, N) {
+function renderQuestionOption(option, optionIndex) {
   return jsxProd_default_2(
     Box,
     {
@@ -868,7 +880,7 @@ function renderQuestionOption(U, N) {
           flexShrink: 0,
           children: jsxProd_default_2(Text, {
             dimColor: true,
-            children: [N + 1, "."],
+            children: [optionIndex + 1, "."],
           }),
         }),
         jsxProd_default(Box, {
@@ -877,18 +889,18 @@ function renderQuestionOption(U, N) {
           children: jsxProd_default_2(Text, {
             wrap: "truncate",
             children: [
-              collapseWhitespace(U.label),
-              U.description &&
+              collapseWhitespace(option.label),
+              option.description &&
                 jsxProd_default_2(Text, {
                   dimColor: true,
-                  children: [" \xB7 ", collapseWhitespace(U.description)],
+                  children: [" \xB7 ", collapseWhitespace(option.description)],
                 }),
             ],
           }),
         }),
       ],
     },
-    U.label,
+    option.label,
   );
 }
 //@ chunk-93kwxas0.js:133089-133837 placement
@@ -896,21 +908,21 @@ function renderQuestionOption(U, N) {
  * 显示会话等待中的第一个问题。
  */
 function PendingQuestionLine(props) {
-  let C = w(14);
+  let $ = useMemoCache(14);
   let { questions } = props;
-  let k = questions[0];
-  if (!k) {
+  let firstQuestion = questions[0];
+  if (!firstQuestion) {
     return null;
   }
   let children;
-  if (C[0] !== k.question) {
-    children = collapseWhitespace(k.question);
-    C[0] = k.question;
-    C[1] = children;
-  } else children = C[1];
-  let T;
-  if (C[2] !== children) {
-    T = jsxProd_default(Box, {
+  if ($[0] !== firstQuestion.question) {
+    children = collapseWhitespace(firstQuestion.question);
+    $[0] = firstQuestion.question;
+    $[1] = children;
+  } else children = $[1];
+  let questionBox;
+  if ($[2] !== children) {
+    questionBox = jsxProd_default(Box, {
       flexGrow: 1,
       width: 0,
       children: jsxProd_default(Text, {
@@ -919,12 +931,12 @@ function PendingQuestionLine(props) {
         children,
       }),
     });
-    C[2] = children;
-    C[3] = T;
-  } else T = C[3];
-  let A;
-  if (C[4] !== questions.length) {
-    A =
+    $[2] = children;
+    $[3] = questionBox;
+  } else questionBox = $[3];
+  let moreBox;
+  if ($[4] !== questions.length) {
+    moreBox =
       questions.length > 1 &&
       jsxProd_default(Box, {
         flexShrink: 0,
@@ -934,45 +946,45 @@ function PendingQuestionLine(props) {
           children: ["+", questions.length - 1, " more \xB7 enter to open"],
         }),
       });
-    C[4] = questions.length;
-    C[5] = A;
-  } else A = C[5];
-  let L;
-  if (C[6] !== T || C[7] !== A) {
-    L = jsxProd_default_2(Box, {
-      children: [T, A],
+    $[4] = questions.length;
+    $[5] = moreBox;
+  } else moreBox = $[5];
+  let titleRow;
+  if ($[6] !== questionBox || $[7] !== moreBox) {
+    titleRow = jsxProd_default_2(Box, {
+      children: [questionBox, moreBox],
     });
-    C[6] = T;
-    C[7] = A;
-    C[8] = L;
-  } else L = C[8];
-  let V;
-  if (C[9] !== k.options) {
-    V = k.options.map(renderQuestionOption);
-    C[9] = k.options;
-    C[10] = V;
-  } else V = C[10];
-  let D;
-  if (C[11] !== L || C[12] !== V) {
-    D = jsxProd_default_2(Box, {
+    $[6] = questionBox;
+    $[7] = moreBox;
+    $[8] = titleRow;
+  } else titleRow = $[8];
+  let options;
+  if ($[9] !== firstQuestion.options) {
+    options = firstQuestion.options.map(renderQuestionOption);
+    $[9] = firstQuestion.options;
+    $[10] = options;
+  } else options = $[10];
+  let line;
+  if ($[11] !== titleRow || $[12] !== options) {
+    line = jsxProd_default_2(Box, {
       flexDirection: "column",
-      children: [L, V],
+      children: [titleRow, options],
     });
-    C[11] = L;
-    C[12] = V;
-    C[13] = D;
-  } else D = C[13];
-  return D;
+    $[11] = titleRow;
+    $[12] = options;
+    $[13] = line;
+  } else line = $[13];
+  return line;
 }
 //@ chunk-93kwxas0.js:133837-133965 placement
 /**
  * 数字键 1–9 对应的第一个问题的选项标签。
  */
-function optionLabelForDigit(key, E) {
-  let k = E?.[0];
-  if (!k || key < "1" || key > "9") return null;
-  let C = Number(key) - 1;
-  return k.options[C]?.label.replace(CONTROL_CHARS_EXCEPT_WS_RE, "") ?? null;
+function optionLabelForDigit(key, questions) {
+  let question = questions?.[0];
+  if (!question || key < "1" || key > "9") return null;
+  let optionIndex = Number(key) - 1;
+  return question.options[optionIndex]?.label.replace(CONTROL_CHARS_EXCEPT_WS_RE, "") ?? null;
 }
 //@ chunk-93kwxas0.js:133965-133993 placement
 var PREVIEW_MAX_CHILD_ROWS = 8;
@@ -999,62 +1011,70 @@ function JobPeek({
   renaming,
   heldInTerminal,
 }) {
-  let W = (_e) => editor.setReplyError(job.id, _e);
-  P(() => logFleetJobAction("peek", job.state), []);
+  let setReplyError = (message) => editor.setReplyError(job.id, message);
+  useEffect(() => logFleetJobAction("peek", job.state), []);
   let timestamp = Date.parse(job.state.updatedAt);
   let { storageV5 } = useTheme_2();
-  let [ge, se] = y(() => Date.now());
-  let ne =
+  let [nowMs, setNowMs] = useState(() => Date.now());
+  let needsText =
     terminalOutcome(job.state.state) === null
       ? jobPreviewText(job.state, job.state.needs ?? "") || undefined
       : undefined;
-  let ae = returnFalse_2(job.state);
+  let isPlainText = returnFalse_2(job.state);
   let linkHref = job.state.needs?.startsWith(VERIFICATION_REQUIRED_NEEDS) ? safeVerificationUrl : undefined;
   let questions = job.state.tempo === "blocked" ? job.state.block?.questions : undefined;
-  let le = questions?.length ? questions : undefined;
-  let mapped = childRows.map((_e) => _e.row.href);
-  let De = (_e) =>
-    mapped.some((It) => {
-      let index = _e.indexOf(It);
-      return index >= 0 && !/\w/.test(_e[index + It.length] ?? "") && _e.length - It.length < 16;
+  let blockQuestions = questions?.length ? questions : undefined;
+  let mapped = childRows.map((row) => row.row.href);
+  let mentionsChildHref = (text) =>
+    mapped.some((href) => {
+      let index = text.indexOf(href);
+      return index >= 0 && !/\w/.test(text[index + href.length] ?? "") && text.length - href.length < 16;
     });
-  let we = ne ? [] : Object.entries(job.state.output ?? {}).filter(([, value]) => !De(value));
-  let Re = le ? "questions" : ne ? "needs" : we.length > 0 ? "output" : "detail";
-  let je = Re === "questions" || Re === "needs";
-  let st = useIsScreenReaderEnabled() ? DISPATCH_TIMEOUT_MS : 1000;
-  useInterval(() => se(Date.now()), je ? (ge - timestamp < 60000 ? st : 30000) : null);
-  let mt = je
-    ? formatDuration(Math.max(0, ge - timestamp), {
+  let outputEntries = needsText
+    ? []
+    : Object.entries(job.state.output ?? {}).filter(([, value]) => !mentionsChildHref(value));
+  let section = blockQuestions
+    ? "questions"
+    : needsText
+      ? "needs"
+      : outputEntries.length > 0
+        ? "output"
+        : "detail";
+  let showsWaiting = section === "questions" || section === "needs";
+  let tickMs = useIsScreenReaderEnabled() ? DISPATCH_TIMEOUT_MS : 1000;
+  useInterval(() => setNowMs(Date.now()), showsWaiting ? (nowMs - timestamp < 60000 ? tickMs : 30000) : null);
+  let waitingText = showsWaiting
+    ? formatDuration(Math.max(0, nowMs - timestamp), {
         mostSignificantOnly: true,
       })
     : "";
-  let Ye = R(false);
-  let Lt = R(null);
-  useFocusOnMount(Lt, true);
-  let dt = editor.replyDraft(job.id) ?? "";
-  let [Dt, eo] = y(getModeFromInput(dt) === "bash" ? "bash" : "prompt");
-  let Wt = R(Dt);
-  let ke = (_e) => {
-    Wt.current = _e;
-    eo(_e);
+  let submittingRef = useRef(false);
+  let boxRef = useRef(null);
+  useFocusOnMount(boxRef, true);
+  let savedDraft = editor.replyDraft(job.id) ?? "";
+  let [mode, setMode] = useState(getModeFromInput(savedDraft) === "bash" ? "bash" : "prompt");
+  let modeRef = useRef(mode);
+  let changeMode = (nextMode) => {
+    modeRef.current = nextMode;
+    setMode(nextMode);
   };
-  let Ge = Dt === "bash";
-  let yt =
+  let isBashMode = mode === "bash";
+  let suggestedReply =
     job.state.tempo === "blocked" && !job.state.block?.questions && job.state.suggestedReply
       ? collapseWhitespace(job.state.suggestedReply) || undefined
       : undefined;
   let Bt = false;
   let lt = false;
   let voiceAvailable = useVoiceAvailable();
-  let Et = useAppState((_e) => _e.settings.voice?.mode ?? "hold");
+  let voiceMode = useAppState((appState) => appState.settings.voice?.mode ?? "hold");
   let clock = useClock();
-  let Yt = R(null);
-  let Ue = R(null);
+  let peekTimerRef = useRef(null);
+  let lastEditRef = useRef(null);
   let getVoiceState = useGetVoiceState();
-  P(
+  useEffect(
     () => () => {
-      Yt.current?.();
-      Yt.current = null;
+      peekTimerRef.current?.();
+      peekTimerRef.current = null;
     },
     [],
   );
@@ -1072,114 +1092,120 @@ function JobPeek({
     multiline: true,
     honorEditorMode: true,
     backspaceExitsOnEmpty: false,
-    initialQuery: stripModePrefix(dt),
+    initialQuery: stripModePrefix(savedDraft),
     onExit: () => {
-      if (Ye.current) return;
-      let _e = Ue.current;
-      if (_e !== null && (_e.sameChunk || performance.now() - _e.at < PREVIEW_HINT_DELAY_MS)) return;
-      let It = sanitizePromptText_2(queryRef.current, "fleet_reply");
-      if (It.removedTotal > 0) {
-        let it = {
+      if (submittingRef.current) return;
+      let lastMark = lastEditRef.current;
+      if (
+        lastMark !== null &&
+        (lastMark.sameChunk || performance.now() - lastMark.at < PREVIEW_HINT_DELAY_MS)
+      )
+        return;
+      let sanitized = sanitizePromptText_2(queryRef.current, "fleet_reply");
+      if (sanitized.removedTotal > 0) {
+        let mark = {
           sameChunk: true,
           at: performance.now(),
         };
-        Ue.current = it;
+        lastEditRef.current = mark;
         queueMicrotask(() => {
-          it.sameChunk = false;
+          mark.sameChunk = false;
         });
-        let io = It.text.trim() === "";
-        setQuery(It.text);
-        W(formatInvisibleCharsRemoved(It.removedTotal, io ? "empty" : "review"));
+        let becameEmpty = sanitized.text.trim() === "";
+        setQuery(sanitized.text);
+        setReplyError(formatInvisibleCharsRemoved(sanitized.removedTotal, becameEmpty ? "empty" : "review"));
         forceRedraw();
         return;
       }
       let trimmed = queryRef.current.trim();
-      if (!trimmed && Wt.current === "prompt") {
-        Ye.current = true;
+      if (!trimmed && modeRef.current === "prompt") {
+        submittingRef.current = true;
         onAttach();
         return;
       }
       if (!trimmed) return;
-      let No = prependModeCharacterToInput_2(trimmed, Wt.current);
-      let Qo = Wt.current;
-      Ye.current = true;
+      let withMode = prependModeCharacterToInput_2(trimmed, modeRef.current);
+      let prevMode = modeRef.current;
+      submittingRef.current = true;
       setQuery("");
-      ke("prompt");
-      W(null);
+      changeMode("prompt");
+      setReplyError(null);
       editor.deleteReplyDraft(job.id);
-      let pastedRefs = parsePastedRefs(No);
-      let xe = {};
+      let pastedRefs = parsePastedRefs(withMode);
+      let pastedContents = {};
       for (let pastedRef of pastedRefs) {
-        let io = editor.pastes[pastedRef.id];
-        if (io) xe[pastedRef.id] = io;
+        let paste = editor.pastes[pastedRef.id];
+        if (paste) pastedContents[pastedRef.id] = paste;
       }
-      let qt = () => {
+      let restoreDraft = () => {
         if (queryRef.current === "" && stripModePrefix(editor.replyDraft(job.id) ?? "") === "") {
-          editor.saveReplyDraft(job.id, No);
+          editor.saveReplyDraft(job.id, withMode);
           setQuery(trimmed);
-          ke(Qo);
+          changeMode(prevMode);
           for (let pastedRef of pastedRefs) {
-            let io = xe[pastedRef.id];
-            if (io) editor.pastes[pastedRef.id] = io;
+            let paste = pastedContents[pastedRef.id];
+            if (paste) editor.pastes[pastedRef.id] = paste;
           }
         }
       };
-      if (job.state.backend === "remote" && Qo === "bash") {
-        Ye.current = false;
-        qt();
-        W("'!' commands can't be sent to a cloud session from this view; open the session to try it there");
+      if (job.state.backend === "remote" && prevMode === "bash") {
+        submittingRef.current = false;
+        restoreDraft();
+        setReplyError(
+          "'!' commands can't be sent to a cloud session from this view; open the session to try it there",
+        );
         return;
       }
       if (
         job.state.backend === "remote" &&
-        pastedRefs.some((pastedRef) => xe[pastedRef.id]?.type === "image")
+        pastedRefs.some((pastedRef) => pastedContents[pastedRef.id]?.type === "image")
       ) {
-        Ye.current = false;
-        qt();
-        W(
+        submittingRef.current = false;
+        restoreDraft();
+        setReplyError(
           "Image attachments aren't available when replying to cloud sessions yet \u2014 open the session to send images",
         );
         return;
       }
       materializePastedImages(
-        No,
-        xe,
+        withMode,
+        pastedContents,
         job.id,
         storageV5,
-        isNonPromptInput(No, null) || isExecLaunch(job.state) ? "path" : "note",
+        isNonPromptInput(withMode, null) || isExecLaunch(job.state) ? "path" : "note",
       )
         .catch((error) => {
           logError(error);
-          return No;
+          return withMode;
         })
-        .then((it) => onReply(it))
+        .then((materialized) => onReply(materialized))
         .then(
-          (it) => {
-            if (it) {
-              qt();
-              W(it);
+          (replyFailure) => {
+            if (replyFailure) {
+              restoreDraft();
+              setReplyError(replyFailure);
             } else
               editor.pruneOrphanedPastes({
                 pruneTextPastes: true,
               });
           },
           (error) => {
-            qt();
-            W(errorMessage(error));
+            restoreDraft();
+            setReplyError(errorMessage(error));
           },
         )
         .finally(() => {
-          Ye.current = false;
+          submittingRef.current = false;
         });
     },
     onCancel: onBack,
-    onSpaceOnEmpty: Ge
+    onSpaceOnEmpty: isBashMode
       ? undefined
-      : voiceAvailable && Et !== "tap"
+      : voiceAvailable && voiceMode !== "tap"
         ? () => {
-            Yt.current?.();
-            Yt.current = clock.setTimeout(() => {
-              Yt.current = null;
+            peekTimerRef.current?.();
+            peekTimerRef.current = clock.setTimeout(() => {
+              peekTimerRef.current = null;
               let voiceState = getVoiceState();
               if (voiceState.voiceState !== "idle" || voiceState.voiceWarmingUp) return;
               if (queryRef.current.trim() !== "") return;
@@ -1188,9 +1214,9 @@ function JobPeek({
           }
         : onBack,
     onTabOnEmpty:
-      yt && !Ge
+      suggestedReply && !isBashMode
         ? () => {
-            setQuery(yt);
+            setQuery(suggestedReply);
             logEvent("tengu_prompt_suggestion", {
               outcome: lit("accepted"),
               source: lit("fleetview_peek"),
@@ -1200,117 +1226,133 @@ function JobPeek({
         : undefined,
   });
   let error = replyError?.error ?? null;
-  P(() => {
-    editor.saveReplyDraft(job.id, prependModeCharacterToInput_2(query, Dt));
-  }, [query, Dt, job.id, editor]);
-  P(() => {
-    let _e = editor.registerLivePeekQuery(() => queryRef.current);
+  useEffect(() => {
+    editor.saveReplyDraft(job.id, prependModeCharacterToInput_2(query, mode));
+  }, [query, mode, job.id, editor]);
+  useEffect(() => {
+    let unregister = editor.registerLivePeekQuery(() => queryRef.current);
     return () => {
-      _e();
+      unregister();
       editor.pruneOrphanedPastes();
     };
   }, [editor, queryRef]);
-  P(() => registerPasteCarrier(() => [queryRef.current]), [queryRef]);
-  let ht = cacheImagePath(() => editor.pastes, handlePaste, {
+  useEffect(() => registerPasteCarrier(() => [queryRef.current]), [queryRef]);
+  let attachPastedImage = cacheImagePath(() => editor.pastes, handlePaste, {
     onMinted: editor.noteMintedPaste,
   });
   let { handleKeyDown: handleKeyDown_2, handlePaste: handlePaste_2 } = usePasteHandler({
     handleKeyDown,
-    onPaste: (_e) =>
+    onPaste: (text) =>
       handlePaste(
         new PasteEvent(
-          _e.replace(
+          text.replace(
             /\r\n|\r/g,
             `
 `,
           ),
         ),
       ),
-    onImagePaste: ht,
+    onImagePaste: attachPastedImage,
   });
-  let [Jt] = y(() => ({
+  let [composer] = useState(() => ({
     get value() {
       return queryRef.current;
     },
     get cursorOffset() {
       return cursorOffsetRef.current;
     },
-    setValueWithCursor: (_e, It) => {
-      setQuery(_e);
-      setCursorOffset(It);
+    setValueWithCursor: (value, cursorOffset) => {
+      setQuery(value);
+      setCursorOffset(cursorOffset);
     },
   }));
   let voiceIntegration = useVoiceIntegration({
-    composer: Jt,
+    composer,
   });
-  let He = useAppState_2((_e) => _e.voiceState);
-  let ct = useAppState_2((_e) => _e.voiceWarmingUp);
-  P(() => {
-    if (He !== "idle" && Yt.current) {
-      Yt.current();
-      Yt.current = null;
+  let voiceState = useAppState_2((appState) => appState.voiceState);
+  let voiceWarmingUp = useAppState_2((appState) => appState.voiceWarmingUp);
+  useEffect(() => {
+    if (voiceState !== "idle" && peekTimerRef.current) {
+      peekTimerRef.current();
+      peekTimerRef.current = null;
     }
-  }, [He]);
-  let vt = useAppState((_e) => isReducedMotion(_e.settings.prefersReducedMotion));
-  let rt = useAppState((_e) => _e.settings?.prUrlTemplate);
-  let Qe = He === "recording" && !vt;
+  }, [voiceState]);
+  let reducedMotion = useAppState((appState) => isReducedMotion(appState.settings.prefersReducedMotion));
+  let prUrlTemplate = useAppState((appState) => appState.settings?.prUrlTemplate);
+  let showCursor = voiceState === "recording" && !reducedMotion;
   let { handleKeyDown: handleKeyDown_3 } = useVoiceKeybindingHandler({
     voiceHandleKeyEvent: voiceIntegration.handleKeyEvent,
     voiceCancelRecording: voiceIntegration.cancelRecording,
     stripTrailing: voiceIntegration.stripTrailing,
     resetAnchor: voiceIntegration.resetAnchor,
-    isActive: (Et !== "tap" || query.trim().length > 0) && !Ge && !renaming,
-    composer: Jt,
+    isActive: (voiceMode !== "tap" || query.trim().length > 0) && !isBashMode && !renaming,
+    composer,
   });
-  let St = le ? 2 + (le[0]?.options.length ?? 0) : 0;
-  let Ne = !heldInTerminal && hasSafeModeFlag(job.state.respawnFlags);
-  let uo = je || Ne ? 1 : 0;
+  let questionRows = blockQuestions ? 2 + (blockQuestions[0]?.options.length ?? 0) : 0;
+  let isSafeMode = !heldInTerminal && hasSafeModeFlag(job.state.respawnFlags);
+  let statusRows = showsWaiting || isSafeMode ? 1 : 0;
   let { rows, columns } = useTerminalSize();
-  let fleetBindings = useFleetBindings();
-  let pt = 8;
-  let Nt = query
+  let bindings = useFleetBindings();
+  let reservedRows = 8;
+  let queryLineCount = query
     ? countCharInString(
         query,
         `
 `,
       )
     : 0;
-  let oo = Math.ceil(
+  let contentRows = Math.ceil(
     Math.max(
       1,
-      ...(Re === "needs"
-        ? [bunStringWidth(jobPreviewText(job.state, ne ?? ""))]
-        : Re === "output"
-          ? we.map(([, _e]) => bunStringWidth(jobPreviewText(job.state, _e)))
-          : Re === "detail"
+      ...(section === "needs"
+        ? [bunStringWidth(jobPreviewText(job.state, needsText ?? ""))]
+        : section === "output"
+          ? outputEntries.map(([, outputText]) => bunStringWidth(jobPreviewText(job.state, outputText)))
+          : section === "detail"
             ? [bunStringWidth(jobPreviewText(job.state, job.state.detail))]
             : []),
     ) / Math.max(40, columns - 6),
   );
-  let Ce = shouldUseFullscreenByDefault()
+  let bodyMaxRows = shouldUseFullscreenByDefault()
     ? Math.min(
-        oo,
+        contentRows,
         Math.max(
           PREVIEW_MIN_ROWS,
-          rows - pt - Math.min(childRows.length, PREVIEW_MAX_CHILD_ROWS) - St - uo - Nt - (error ? 1 : 0) - 1,
+          rows -
+            reservedRows -
+            Math.min(childRows.length, PREVIEW_MAX_CHILD_ROWS) -
+            questionRows -
+            statusRows -
+            queryLineCount -
+            (error ? 1 : 0) -
+            1,
         ),
       )
     : PREVIEW_MIN_ROWS;
-  let at = (Re === "questions" ? St : Re === "output" ? we.length * Ce : Ce) + uo + Nt + (error ? 1 : 0) + 1;
-  let max = Math.max(PREVIEW_MAX_CHILD_ROWS, rows - pt - at);
+  let fixedRows =
+    (section === "questions"
+      ? questionRows
+      : section === "output"
+        ? outputEntries.length * bodyMaxRows
+        : bodyMaxRows) +
+    statusRows +
+    queryLineCount +
+    (error ? 1 : 0) +
+    1;
+  let max = Math.max(PREVIEW_MAX_CHILD_ROWS, rows - reservedRows - fixedRows);
   let sliced = childRows.slice(0, max);
-  let Jo = childRows.length - sliced.length;
-  let max_2 = Math.max(0, ...we.map(([_e]) => bunStringWidth(_e)));
+  let hiddenChildCount = childRows.length - sliced.length;
+  let max_2 = Math.max(0, ...outputEntries.map(([outputKey]) => bunStringWidth(outputKey)));
   let minHeight = 5;
   let { color } = activityColors(job.state, job.activity, status);
   return jsxProd_default_2(Fragment, {
     children: [
       jsxProd_default_2(Box, {
-        ref: Lt,
+        ref: boxRef,
         flexDirection: "column",
         borderStyle: "round",
-        borderColor: Ge ? "bashBorder" : undefined,
-        borderDimColor: !Ge,
+        borderColor: isBashMode ? "bashBorder" : undefined,
+        borderDimColor: !isBashMode,
         paddingX: 1,
         minHeight,
         width: "100%",
@@ -1318,124 +1360,124 @@ function JobPeek({
         autoFocus: true,
         onKeyDownCapture: handleKeyDown_3,
         onKeyDown: (event) => {
-          if (event.key !== " " && Yt.current) {
-            Yt.current();
-            Yt.current = null;
+          if (event.key !== " " && peekTimerRef.current) {
+            peekTimerRef.current();
+            peekTimerRef.current = null;
           }
           if (renaming) return;
-          if (FLEET_EDITOR_SAFE_ACTIONS.has(resolveFleetKeyAction(keyEventToKeystroke(event), fleetBindings)))
+          if (FLEET_EDITOR_SAFE_ACTIONS.has(resolveFleetKeyAction(keyEventToKeystroke(event), bindings)))
             return;
           if (isPasteImageKey(event)) {
             event.preventDefault();
             event.stopImmediatePropagation();
             pasteImageFromClipboard(
-              (It) =>
-                ht(It.base64, {
-                  mediaType: It.mediaType,
-                  dimensions: It.dimensions,
+              (image) =>
+                attachPastedImage(image.base64, {
+                  mediaType: image.mediaType,
+                  dimensions: image.dimensions,
                 }),
-              (It) => editor.setReplyError(job.id, It, "paste"),
+              (message) => editor.setReplyError(job.id, message, "paste"),
             );
             return;
           }
-          if (Wt.current === "prompt") {
+          if (modeRef.current === "prompt") {
             if (event.name === "right" && !event.shift && !queryRef.current) {
               event.preventDefault();
-              if (Ye.current) return;
-              Ye.current = true;
+              if (submittingRef.current) return;
+              submittingRef.current = true;
               onAttach();
               return;
             }
             if (isBashModeChar(event.key) && !queryRef.current) {
               event.preventDefault();
-              ke("bash");
+              changeMode("bash");
               return;
             }
             if (!queryRef.current) {
-              let It = optionLabelForDigit(event.key, le);
-              if (It) {
+              let optionLabel = optionLabelForDigit(event.key, blockQuestions);
+              if (optionLabel) {
                 event.preventDefault();
-                setQuery(It);
-                setCursorOffset(It.length);
+                setQuery(optionLabel);
+                setCursorOffset(optionLabel.length);
                 return;
               }
             }
           } else if (event.name === "backspace" && !queryRef.current) {
             event.preventDefault();
-            ke("prompt");
+            changeMode("prompt");
             return;
           }
           handleKeyDown_2(event);
         },
         onPaste: renaming ? undefined : handlePaste_2,
         children: [
-          Re === "questions" && le
+          section === "questions" && blockQuestions
             ? jsxProd_default(PendingQuestionLine, {
-                questions: le,
+                questions: blockQuestions,
               })
-            : Re === "needs"
+            : section === "needs"
               ? jsxProd_default(Box, {
-                  maxHeight: Ce,
+                  maxHeight: bodyMaxRows,
                   overflowY: "hidden",
                   children: jsxProd_default(Text, {
                     wrap: "wrap",
-                    children: ae
+                    children: isPlainText
                       ? jsxProd_default(Text, {
                           dimColor: true,
-                          children: ne ?? "",
+                          children: needsText ?? "",
                         })
                       : jsxProd_default(InlineMarkup, {
-                          value: stripJobPreviewText(ne ?? ""),
+                          value: stripJobPreviewText(needsText ?? ""),
                           linkHref,
                         }),
                   }),
                 })
-              : Re === "output"
+              : section === "output"
                 ? jsxProd_default(Box, {
                     flexDirection: "column",
-                    children: we.map(([_e, It]) =>
+                    children: outputEntries.map(([outputKey, outputText]) =>
                       jsxProd_default_2(
                         Box,
                         {
                           children: [
-                            we.length > 1 &&
+                            outputEntries.length > 1 &&
                               jsxProd_default(Box, {
                                 width: max_2 + 2,
                                 flexShrink: 0,
                                 children: jsxProd_default(Text, {
                                   dimColor: true,
-                                  children: _e,
+                                  children: outputKey,
                                 }),
                               }),
                             jsxProd_default(Box, {
                               flexGrow: 1,
                               width: 0,
-                              maxHeight: Ce,
+                              maxHeight: bodyMaxRows,
                               overflowY: "hidden",
                               children: jsxProd_default(Text, {
                                 wrap: "wrap",
-                                children: ae
+                                children: isPlainText
                                   ? jsxProd_default(Text, {
                                       dimColor: true,
-                                      children: jobPreviewText(job.state, It),
+                                      children: jobPreviewText(job.state, outputText),
                                     })
                                   : jsxProd_default(InlineMarkup, {
-                                      value: stripJobPreviewText(It),
+                                      value: stripJobPreviewText(outputText),
                                     }),
                               }),
                             }),
                           ],
                         },
-                        _e,
+                        outputKey,
                       ),
                     ),
                   })
                 : jsxProd_default(Box, {
-                    maxHeight: Ce,
+                    maxHeight: bodyMaxRows,
                     overflowY: "hidden",
                     children: jsxProd_default(Text, {
                       wrap: "wrap",
-                      children: ae
+                      children: isPlainText
                         ? jobPreviewText(job.state, job.state.detail)
                         : jsxProd_default(LinkifiedText, {
                             children: stripJobPreviewText(job.state.detail),
@@ -1446,7 +1488,7 @@ function JobPeek({
             jsxProd_default_2(Box, {
               flexDirection: "column",
               children: [
-                sliced.map((_e) =>
+                sliced.map((childRow) =>
                   jsxProd_default_2(
                     Box,
                     {
@@ -1457,29 +1499,29 @@ function JobPeek({
                           children: jsxProd_default_2(Text, {
                             wrap: "truncate",
                             children: [
-                              _e.prNumber !== undefined
+                              childRow.prNumber !== undefined
                                 ? jsxProd_default(PrBadge, {
-                                    number: _e.prNumber,
-                                    url: _e.row.href,
-                                    kind: prKindOf(_e.row),
-                                    color: _e.color,
+                                    number: childRow.prNumber,
+                                    url: childRow.row.href,
+                                    kind: prKindOf(childRow.row),
+                                    color: childRow.color,
                                     underline: false,
                                     hidePrefix: true,
                                   })
                                 : jsxProd_default(Text, {
-                                    color: _e.color,
-                                    dimColor: !isFrameRow(_e),
-                                    children: isFrameRow(_e) ? BOXED_DIAMOND_GLYPH : "PR",
+                                    color: childRow.color,
+                                    dimColor: !isFrameRow(childRow),
+                                    children: isFrameRow(childRow) ? BOXED_DIAMOND_GLYPH : "PR",
                                   }),
-                              _e.label
+                              childRow.label
                                 ? jsxProd_default_2(Fragment, {
                                     children: [
                                       " ",
                                       jsxProd_default(Link, {
-                                        url: expandPrUrlIfTemplate(_e.row.href, rt),
+                                        url: expandPrUrlIfTemplate(childRow.row.href, prUrlTemplate),
                                         children: jsxProd_default_2(Text, {
-                                          color: _e.isDraft ? "inactive" : undefined,
-                                          children: [_e.label, _e.isDraft ? " (draft)" : ""],
+                                          color: childRow.isDraft ? "inactive" : undefined,
+                                          children: [childRow.label, childRow.isDraft ? " (draft)" : ""],
                                         }),
                                       }),
                                     ],
@@ -1488,75 +1530,75 @@ function JobPeek({
                             ],
                           }),
                         }),
-                        _e.diffStat &&
-                          _e.diffStat.additions + _e.diffStat.deletions > 0 &&
+                        childRow.diffStat &&
+                          childRow.diffStat.additions + childRow.diffStat.deletions > 0 &&
                           jsxProd_default(Box, {
                             flexShrink: 0,
                             paddingLeft: 1,
                             children: jsxProd_default(Link, {
-                              url: `${_e.row.href}/files`,
+                              url: `${childRow.row.href}/files`,
                               children: jsxProd_default(DiffStatCounts, {
-                                added: _e.diffStat.additions,
-                                removed: _e.diffStat.deletions,
+                                added: childRow.diffStat.additions,
+                                removed: childRow.diffStat.deletions,
                               }),
                             }),
                           }),
                         jsxProd_default(Box, {
                           flexShrink: 0,
                           paddingLeft: 1,
-                          children: _e.status.map((It, go) =>
+                          children: childRow.status.map((statusItem, statusIndex) =>
                             jsxProd_default_2(
-                              Kc,
+                              fragmentTypeExport,
                               {
                                 children: [
-                                  go > 0 &&
+                                  statusIndex > 0 &&
                                     jsxProd_default(Text, {
                                       children: " ",
                                     }),
                                   jsxProd_default(Text, {
-                                    color: It.color,
-                                    dimColor: !It.color,
-                                    children: It.text,
+                                    color: statusItem.color,
+                                    dimColor: !statusItem.color,
+                                    children: statusItem.text,
                                   }),
                                 ],
                               },
-                              go,
+                              statusIndex,
                             ),
                           ),
                         }),
                       ],
                     },
-                    _e.row.href,
+                    childRow.row.href,
                   ),
                 ),
-                Jo > 0 &&
+                hiddenChildCount > 0 &&
                   jsxProd_default(Box, {
                     paddingLeft: 2,
                     children: jsxProd_default_2(Text, {
                       dimColor: true,
-                      children: ["\u2026 ", Jo, " more"],
+                      children: ["\u2026 ", hiddenChildCount, " more"],
                     }),
                   }),
               ],
             }),
-          uo > 0 &&
+          statusRows > 0 &&
             jsxProd_default(Box, {
               paddingLeft: 2,
               children: jsxProd_default(Text, {
                 wrap: "truncate",
                 children: jsxProd_default_2(Byline, {
                   children: [
-                    je &&
+                    showsWaiting &&
                       jsxProd_default_2(Text, {
                         color,
-                        children: ["waiting ", mt],
+                        children: ["waiting ", waitingText],
                       }),
-                    Ne &&
+                    isSafeMode &&
                       jsxProd_default(Text, {
                         dimColor: true,
                         children: "safe mode",
                       }),
-                    Ne &&
+                    isSafeMode &&
                       jsxProd_default(Text, {
                         dimColor: true,
                         children: "customizations are off",
@@ -1575,20 +1617,20 @@ function JobPeek({
               cursorOffset,
               onCursorOffsetChange: setCursorOffset,
               placeholder:
-                voiceAvailable && (He !== "idle" || ct)
+                voiceAvailable && (voiceState !== "idle" || voiceWarmingUp)
                   ? ""
-                  : le
-                    ? `press 1-${le[0]?.options.length ?? 2} or type your answer`
-                    : yt && !Ge
-                      ? yt
+                  : blockQuestions
+                    ? `press 1-${blockQuestions[0]?.options.length ?? 2} or type your answer`
+                    : suggestedReply && !isBashMode
+                      ? suggestedReply
                       : "reply",
-              prefix: Ge ? "!" : figures_default.pointer,
-              prefixColor: Ge ? "bashBorder" : undefined,
+              prefix: isBashMode ? "!" : figures_default.pointer,
+              prefixColor: isBashMode ? "bashBorder" : undefined,
               prefixDim: !query.trim(),
               dimRange: voiceIntegration.interimRange
                 ? [voiceIntegration.interimRange.start, voiceIntegration.interimRange.end]
                 : undefined,
-              cursorChar: Qe ? jsxProd_default(VoiceLevelGlyph, {}) : undefined,
+              cursorChar: showCursor ? jsxProd_default(VoiceLevelGlyph, {}) : undefined,
               isFocused: !renaming,
               isTerminalFocused,
               width: "100%",
@@ -1608,11 +1650,11 @@ function JobPeek({
       jsxProd_default(Box, {
         paddingLeft: 2,
         children:
-          voiceAvailable && ct && !renaming
+          voiceAvailable && voiceWarmingUp && !renaming
             ? jsxProd_default(KeepHoldingHint, {})
-            : voiceAvailable && He !== "idle" && !renaming
+            : voiceAvailable && voiceState !== "idle" && !renaming
               ? jsxProd_default(VoiceStateIndicator, {
-                  voiceState: He,
+                  voiceState,
                 })
               : jsxProd_default(Text, {
                   dimColor: true,
@@ -1637,12 +1679,12 @@ function JobPeek({
                       })
                     : jsxProd_default_2(Byline, {
                         children: [
-                          Ge &&
+                          isBashMode &&
                             jsxProd_default(Text, {
                               color: "bashBorder",
                               children: "! for shell mode",
                             }),
-                          (query.trim() || (!Ge && !isPending)) &&
+                          (query.trim() || (!isBashMode && !isPending)) &&
                             jsxProd_default(KeyboardShortcutHint, {
                               chord: "enter",
                               action: query.trim()
@@ -1655,13 +1697,13 @@ function JobPeek({
                               },
                             }),
                           jsxProd_default(KeyboardShortcutHint, {
-                            chord: query.trim() || Ge ? "escape" : " ",
+                            chord: query.trim() || isBashMode ? "escape" : " ",
                             action: "close",
                             format: {
                               keyCase: "lower",
                             },
                           }),
-                          voiceAvailable && Et !== "tap" && !Ge && !query.trim()
+                          voiceAvailable && voiceMode !== "tap" && !isBashMode && !query.trim()
                             ? jsxProd_default(Text, {
                                 children: "hold space to speak",
                               })
@@ -1678,23 +1720,23 @@ function JobPeek({
   });
 }
 //@ chunk-93kwxas0.js:143138-143175 placement
-function selectReplyError(oo) {
-  return oo.replyError;
+function selectReplyError(editor) {
+  return editor.replyError;
 }
 //@ chunk-93kwxas0.js:143175-143212 placement
-function selectPrStatuses(Ce) {
-  return Ce.prStatuses;
+function selectPrStatuses(roster) {
+  return roster.prStatuses;
 }
 //@ chunk-93kwxas0.js:143212-143266 placement
-function isPinnedJobRow(Ke) {
-  return Ke.kind === "job" && Ke.group === SIMPLE_PINNED;
+function isPinnedJobRow(row) {
+  return row.kind === "job" && row.group === SIMPLE_PINNED;
 }
 //@ chunk-93kwxas0.js:143266-148818 placement
 /**
  * Agents 视图主体（列表、预览、标签页、云会话行）。
  */
 function FleetBody(props) {
-  let Et = w(57);
+  let $ = useMemoCache(57);
   let {
     owners,
     layout,
@@ -1723,46 +1765,46 @@ function FleetBody(props) {
     activeTab,
   } = useStoreSelector(view);
   let storeSelector = useStoreSelector(editor, selectReplyError);
-  let storeSelector_2 = useStoreSelector(roster, selectPrStatuses);
+  let statusByHref = useStoreSelector(roster, selectPrStatuses);
   let { pending } = useStoreSelector(deleteConfirm);
-  let [Ye, Lt] = y(false);
+  let [isUpdating, setIsUpdating] = useState(false);
   let showSuccessMessage = isNoForceUpdateRenders();
   let { rows, byState, byGroup, focusedRow, focused, focusedIsPending, altOpenOrigin, ageNow } = layout;
   let jobId = renaming?.jobId ?? null;
-  let Ot;
-  if (Et[0] !== roster) {
-    Ot = (Yt) => roster.liveStatus(Yt);
-    Et[0] = roster;
-    Et[1] = Ot;
-  } else Ot = Et[1];
-  let Ue = Ot;
-  let Qt = onOpen;
-  let tt;
-  if (Et[2] !== focused || Et[3] !== storeSelector_2) {
-    tt = focused?.state.children ? childFrameRows(focused.state.children, storeSelector_2) : [];
-    Et[2] = focused;
-    Et[3] = storeSelector_2;
-    Et[4] = tt;
-  } else tt = Et[4];
-  let childRows = tt;
-  let Fe;
-  if (Et[5] !== ageNow || Et[6] !== resumePicker || Et[7] !== resumePickerIdx) {
-    Fe =
+  let getLiveStatus;
+  if ($[0] !== roster) {
+    getLiveStatus = (job) => roster.liveStatus(job);
+    $[0] = roster;
+    $[1] = getLiveStatus;
+  } else getLiveStatus = $[1];
+  let liveStatus = getLiveStatus;
+  let openJob = onOpen;
+  let childRows;
+  if ($[2] !== focused || $[3] !== statusByHref) {
+    childRows = focused?.state.children ? childFrameRows(focused.state.children, statusByHref) : [];
+    $[2] = focused;
+    $[3] = statusByHref;
+    $[4] = childRows;
+  } else childRows = $[4];
+  let childRows_2 = childRows;
+  let resumePickerOverlay;
+  if ($[5] !== ageNow || $[6] !== resumePicker || $[7] !== resumePickerIdx) {
+    resumePickerOverlay =
       resumePicker !== null
         ? (() => {
-            let Rt;
+            let listBody;
             if (resumePicker.entries === null)
-              Rt = jsxProd_default(Text, {
+              listBody = jsxProd_default(Text, {
                 dimColor: true,
                 children: "Looking for past sessions\u2026",
               });
             else if (resumePicker.failed)
-              Rt = jsxProd_default(Text, {
+              listBody = jsxProd_default(Text, {
                 dimColor: true,
                 children: "Couldn't load past sessions \u2014 press esc, then try /resume again",
               });
             else if (resumePicker.entries.length === 0)
-              Rt = jsxProd_default(Text, {
+              listBody = jsxProd_default(Text, {
                 dimColor: true,
                 children: "No past sessions to resume",
               });
@@ -1770,16 +1812,16 @@ function FleetBody(props) {
               let entries = resumePicker.entries;
               let max = Math.max(0, Math.min(resumePickerIdx - 3, entries.length - 8));
               let sliced = entries.slice(max, max + 8);
-              let kt = entries.length - max - sliced.length;
-              Rt = jsxProd_default_2(Fragment, {
+              let hiddenBelow = entries.length - max - sliced.length;
+              listBody = jsxProd_default_2(Fragment, {
                 children: [
                   max > 0 &&
                     jsxProd_default_2(Text, {
                       dimColor: true,
                       children: ["  ", "\u2026 ", max, " above"],
                     }),
-                  sliced.map(($e, ht) => {
-                    let jt = max + ht === resumePickerIdx;
+                  sliced.map((entry, entryIndex) => {
+                    let isSelected = max + entryIndex === resumePickerIdx;
                     return jsxProd_default_2(
                       Box,
                       {
@@ -1789,10 +1831,10 @@ function FleetBody(props) {
                             flexShrink: 1,
                             overflow: "hidden",
                             children: jsxProd_default_2(Text, {
-                              color: jt ? "suggestion" : undefined,
-                              dimColor: !jt,
+                              color: isSelected ? "suggestion" : undefined,
+                              dimColor: !isSelected,
                               wrap: "truncate",
-                              children: [jt ? figures_default.pointer : " ", " ", $e.title],
+                              children: [isSelected ? figures_default.pointer : " ", " ", entry.title],
                             }),
                           }),
                           jsxProd_default(Box, {
@@ -1801,7 +1843,7 @@ function FleetBody(props) {
                             children: jsxProd_default(Text, {
                               dimColor: true,
                               children: formatDuration(
-                                Math.max(0, (ageNow ?? Date.now()) - $e.modified.getTime()),
+                                Math.max(0, (ageNow ?? Date.now()) - entry.modified.getTime()),
                                 {
                                   mostSignificantOnly: true,
                                 },
@@ -1810,13 +1852,13 @@ function FleetBody(props) {
                           }),
                         ],
                       },
-                      $e.sessionId,
+                      entry.sessionId,
                     );
                   }),
-                  kt > 0 &&
+                  hiddenBelow > 0 &&
                     jsxProd_default_2(Text, {
                       dimColor: true,
-                      children: ["  ", "\u2026 ", kt, " more"],
+                      children: ["  ", "\u2026 ", hiddenBelow, " more"],
                     }),
                 ],
               });
@@ -1837,7 +1879,7 @@ function FleetBody(props) {
                     bold: true,
                     children: "Resume a past session",
                   }),
-                  Rt,
+                  listBody,
                   jsxProd_default(Text, {
                     dimColor: true,
                     children:
@@ -1848,21 +1890,21 @@ function FleetBody(props) {
             });
           })()
         : null;
-    Et[5] = ageNow;
-    Et[6] = resumePicker;
-    Et[7] = resumePickerIdx;
-    Et[8] = Fe;
-  } else Fe = Et[8];
-  let We = Fe;
-  let Jt;
-  if (Et[9] !== settingPicker || Et[10] !== settingPickerIdx) {
-    Jt =
+    $[5] = ageNow;
+    $[6] = resumePicker;
+    $[7] = resumePickerIdx;
+    $[8] = resumePickerOverlay;
+  } else resumePickerOverlay = $[8];
+  let resumePickerOverlay_2 = resumePickerOverlay;
+  let settingPickerOverlay;
+  if ($[9] !== settingPicker || $[10] !== settingPickerIdx) {
+    settingPickerOverlay =
       settingPicker !== null
         ? (() => {
             let { setting, options } = settingPicker;
             let max = Math.max(0, Math.min(settingPickerIdx - 3, options.length - 8));
             let sliced = options.slice(max, max + 8);
-            let rt = options.length - max - sliced.length;
+            let hiddenBelow = options.length - max - sliced.length;
             return jsxProd_default(Box, {
               position: "absolute",
               bottom: 0,
@@ -1888,28 +1930,28 @@ function FleetBody(props) {
                       dimColor: true,
                       children: ["  ", "\u2026 ", max, " above"],
                     }),
-                  sliced.map((Qe, Xe) => {
-                    let St = max + Xe === settingPickerIdx;
+                  sliced.map((option, optionIndex) => {
+                    let isSelected = max + optionIndex === settingPickerIdx;
                     return jsxProd_default_2(
                       Text,
                       {
-                        color: St ? "suggestion" : undefined,
-                        dimColor: !St,
+                        color: isSelected ? "suggestion" : undefined,
+                        dimColor: !isSelected,
                         wrap: "truncate",
                         children: [
-                          St ? figures_default.pointer : " ",
+                          isSelected ? figures_default.pointer : " ",
                           " ",
-                          Qe.value,
-                          Qe.description ? ` \xB7 ${Qe.description}` : "",
+                          option.value,
+                          option.description ? ` \xB7 ${option.description}` : "",
                         ],
                       },
-                      Qe.value,
+                      option.value,
                     );
                   }),
-                  rt > 0 &&
+                  hiddenBelow > 0 &&
                     jsxProd_default_2(Text, {
                       dimColor: true,
-                      children: ["  ", "\u2026 ", rt, " more"],
+                      children: ["  ", "\u2026 ", hiddenBelow, " more"],
                     }),
                   jsxProd_default(Text, {
                     dimColor: true,
@@ -1920,31 +1962,31 @@ function FleetBody(props) {
             });
           })()
         : null;
-    Et[9] = settingPicker;
-    Et[10] = settingPickerIdx;
-    Et[11] = Jt;
-  } else Jt = Et[11];
-  let Ne = Jt;
-  let uo;
+    $[9] = settingPicker;
+    $[10] = settingPickerIdx;
+    $[11] = settingPickerOverlay;
+  } else settingPickerOverlay = $[11];
+  let settingPickerOverlay_2 = settingPickerOverlay;
+  let bottomArea;
   if (
-    Et[12] !== activeTab ||
-    Et[13] !== altOpenOrigin ||
-    Et[14] !== byGroup ||
-    Et[15] !== byState ||
-    Et[16] !== canMention ||
-    Et[17] !== debugOpen ||
-    Et[18] !== focused ||
-    Et[19] !== focusedIsPending ||
-    Et[20] !== focusedRow ||
-    Et[21] !== footer ||
-    Et[22] !== groupsEnabled ||
-    Et[23] !== helpOpen ||
-    Et[24] !== previewOpen ||
-    Et[25] !== rows ||
-    Et[26] !== showRemoteTabs ||
-    Et[27] !== simpleView
+    $[12] !== activeTab ||
+    $[13] !== altOpenOrigin ||
+    $[14] !== byGroup ||
+    $[15] !== byState ||
+    $[16] !== canMention ||
+    $[17] !== debugOpen ||
+    $[18] !== focused ||
+    $[19] !== focusedIsPending ||
+    $[20] !== focusedRow ||
+    $[21] !== footer ||
+    $[22] !== groupsEnabled ||
+    $[23] !== helpOpen ||
+    $[24] !== previewOpen ||
+    $[25] !== rows ||
+    $[26] !== showRemoteTabs ||
+    $[27] !== simpleView
   ) {
-    uo =
+    bottomArea =
       helpOpen && !previewOpen
         ? jsxProd_default(FleetKeyHints, {
             focusedPinned: focused?.state.pinned ?? false,
@@ -1970,7 +2012,7 @@ function FleetBody(props) {
             canDispatchAndOpen: activeTab === "local" && supportsExtendedKeys(),
             altOpenCount: Math.min(
               9,
-              count(rows, (Kt) => Kt.kind === "job" && Kt.origin === altOpenOrigin),
+              count(rows, (row) => row.kind === "job" && row.origin === altOpenOrigin),
             ),
             canDelete:
               focused && !focusedIsPending ? (isSettled(focused.state) ? "delete" : "stop") : undefined,
@@ -1981,58 +2023,58 @@ function FleetBody(props) {
               job: focused,
             })
           : footer;
-    Et[12] = activeTab;
-    Et[13] = altOpenOrigin;
-    Et[14] = byGroup;
-    Et[15] = byState;
-    Et[16] = canMention;
-    Et[17] = debugOpen;
-    Et[18] = focused;
-    Et[19] = focusedIsPending;
-    Et[20] = focusedRow;
-    Et[21] = footer;
-    Et[22] = groupsEnabled;
-    Et[23] = helpOpen;
-    Et[24] = previewOpen;
-    Et[25] = rows;
-    Et[26] = showRemoteTabs;
-    Et[27] = simpleView;
-    Et[28] = uo;
-  } else uo = Et[28];
-  let po;
-  if (Et[29] !== Ye || Et[30] !== showSuccessMessage) {
-    po = jsxProd_default(AutoUpdaterWrapper, {
-      isUpdating: Ye,
-      onChangeIsUpdating: Lt,
+    $[12] = activeTab;
+    $[13] = altOpenOrigin;
+    $[14] = byGroup;
+    $[15] = byState;
+    $[16] = canMention;
+    $[17] = debugOpen;
+    $[18] = focused;
+    $[19] = focusedIsPending;
+    $[20] = focusedRow;
+    $[21] = footer;
+    $[22] = groupsEnabled;
+    $[23] = helpOpen;
+    $[24] = previewOpen;
+    $[25] = rows;
+    $[26] = showRemoteTabs;
+    $[27] = simpleView;
+    $[28] = bottomArea;
+  } else bottomArea = $[28];
+  let autoUpdater;
+  if ($[29] !== isUpdating || $[30] !== showSuccessMessage) {
+    autoUpdater = jsxProd_default(AutoUpdaterWrapper, {
+      isUpdating,
+      onChangeIsUpdating: setIsUpdating,
       showSuccessMessage,
       verbose: false,
     });
-    Et[29] = Ye;
-    Et[30] = showSuccessMessage;
-    Et[31] = po;
-  } else po = Et[31];
-  let At;
+    $[29] = isUpdating;
+    $[30] = showSuccessMessage;
+    $[31] = autoUpdater;
+  } else autoUpdater = $[31];
+  let peekOverlay;
   if (
-    Et[32] !== attach ||
-    Et[33] !== awayLoop ||
-    Et[34] !== editor ||
-    Et[35] !== focused ||
-    Et[36] !== childRows ||
-    Et[37] !== focusedIsPending ||
-    Et[38] !== groupEdit ||
-    Et[39] !== isTerminalFocused ||
-    Et[40] !== Ue ||
-    Et[41] !== onStop ||
-    Et[42] !== Qt ||
-    Et[43] !== pending ||
-    Et[44] !== previewOpen ||
-    Et[45] !== jobId ||
-    Et[46] !== storeSelector ||
-    Et[47] !== roster ||
-    Et[48] !== storageV5 ||
-    Et[49] !== view
+    $[32] !== attach ||
+    $[33] !== awayLoop ||
+    $[34] !== editor ||
+    $[35] !== focused ||
+    $[36] !== childRows_2 ||
+    $[37] !== focusedIsPending ||
+    $[38] !== groupEdit ||
+    $[39] !== isTerminalFocused ||
+    $[40] !== liveStatus ||
+    $[41] !== onStop ||
+    $[42] !== openJob ||
+    $[43] !== pending ||
+    $[44] !== previewOpen ||
+    $[45] !== jobId ||
+    $[46] !== storeSelector ||
+    $[47] !== roster ||
+    $[48] !== storageV5 ||
+    $[49] !== view
   ) {
-    At =
+    peekOverlay =
       previewOpen &&
       focused &&
       jsxProd_default(Box, {
@@ -2049,7 +2091,7 @@ function FleetBody(props) {
             renaming: jobId !== null || groupEdit !== null,
             editor,
             replyError: storeSelector?.jobId === focused.id ? storeSelector : null,
-            status: Ue(focused),
+            status: liveStatus(focused),
             heldInTerminal: roster.terminalHolderOf(focused) !== undefined,
             isPending: focusedIsPending,
             deleteArmed:
@@ -2060,11 +2102,11 @@ function FleetBody(props) {
                 : undefined,
             onBack: () => view.setPreviewOpen(false),
             onAttach: () => {
-              Qt(focused);
+              openJob(focused);
               view.setPreviewOpen(false);
             },
-            childRows,
-            onReply: (pt) =>
+            childRows: childRows_2,
+            onReply: (replyText) =>
               replyToJob(
                 {
                   editor,
@@ -2075,7 +2117,7 @@ function FleetBody(props) {
                   stop: onStop,
                 },
                 focused,
-                pt,
+                replyText,
               ),
             onRefreshCloudRows: undefined,
             isTerminalFocused,
@@ -2083,56 +2125,62 @@ function FleetBody(props) {
           focused.id,
         ),
       });
-    Et[32] = attach;
-    Et[33] = awayLoop;
-    Et[34] = editor;
-    Et[35] = focused;
-    Et[36] = childRows;
-    Et[37] = focusedIsPending;
-    Et[38] = groupEdit;
-    Et[39] = isTerminalFocused;
-    Et[40] = Ue;
-    Et[41] = onStop;
-    Et[42] = Qt;
-    Et[43] = pending;
-    Et[44] = previewOpen;
-    Et[45] = jobId;
-    Et[46] = storeSelector;
-    Et[47] = roster;
-    Et[48] = storageV5;
-    Et[49] = view;
-    Et[50] = At;
-  } else At = Et[50];
-  let Nt;
-  if (Et[51] !== We || Et[52] !== Ne || Et[53] !== uo || Et[54] !== po || Et[55] !== At) {
-    Nt = jsxProd_default_2(Fragment, {
-      children: [uo, po, We, Ne, At],
+    $[32] = attach;
+    $[33] = awayLoop;
+    $[34] = editor;
+    $[35] = focused;
+    $[36] = childRows_2;
+    $[37] = focusedIsPending;
+    $[38] = groupEdit;
+    $[39] = isTerminalFocused;
+    $[40] = liveStatus;
+    $[41] = onStop;
+    $[42] = openJob;
+    $[43] = pending;
+    $[44] = previewOpen;
+    $[45] = jobId;
+    $[46] = storeSelector;
+    $[47] = roster;
+    $[48] = storageV5;
+    $[49] = view;
+    $[50] = peekOverlay;
+  } else peekOverlay = $[50];
+  let body;
+  if (
+    $[51] !== resumePickerOverlay_2 ||
+    $[52] !== settingPickerOverlay_2 ||
+    $[53] !== bottomArea ||
+    $[54] !== autoUpdater ||
+    $[55] !== peekOverlay
+  ) {
+    body = jsxProd_default_2(Fragment, {
+      children: [bottomArea, autoUpdater, resumePickerOverlay_2, settingPickerOverlay_2, peekOverlay],
     });
-    Et[51] = We;
-    Et[52] = Ne;
-    Et[53] = uo;
-    Et[54] = po;
-    Et[55] = At;
-    Et[56] = Nt;
-  } else Nt = Et[56];
-  return Nt;
+    $[51] = resumePickerOverlay_2;
+    $[52] = settingPickerOverlay_2;
+    $[53] = bottomArea;
+    $[54] = autoUpdater;
+    $[55] = peekOverlay;
+    $[56] = body;
+  } else body = $[56];
+  return body;
 }
 //@ chunk-93kwxas0.js:148818-148822 placement
 init_react_production();
 //@ chunk-93kwxas0.js:148822-148859 placement
-function selectVoiceState_2(Qt) {
-  return Qt.voiceState;
+function selectVoiceState_2(appState) {
+  return appState.voiceState;
 }
 //@ chunk-93kwxas0.js:148859-148900 placement
-function selectVoiceWarmingUp_2(tt) {
-  return tt.voiceWarmingUp;
+function selectVoiceWarmingUp_2(appState) {
+  return appState.voiceWarmingUp;
 }
 //@ chunk-93kwxas0.js:148900-152228 placement
 /**
  * Agents 视图搜索/派发输入框（高亮、语音、建议列表）。
  */
 function FleetSearchInput(props) {
-  let dt = w(47);
+  let $ = useMemoCache(47);
   let {
     owners,
     layout,
@@ -2154,52 +2202,52 @@ function FleetSearchInput(props) {
   let appState_2 = useAppState_2(selectVoiceWarmingUp_2);
   let { onlyOrigin, byGroup, filtered, isBashDispatch, hasDispatch, queryIsFilter } = layout;
   let jobId = renaming?.jobId ?? null;
-  let Dt;
-  if (dt[0] === MEMO_CACHE_SENTINEL) {
-    Dt = jsxProd_default(Text, {
+  let introText;
+  if ($[0] === MEMO_CACHE_SENTINEL) {
+    introText = jsxProd_default(Text, {
       dimColor: true,
       children:
         "A different way to work with Claude: hand off a bigger task than you would chat through, and Claude organizes it in the sections above so you know when it needs you.",
     });
-    dt[0] = Dt;
-  } else Dt = dt[0];
-  let children = Dt;
+    $[0] = introText;
+  } else introText = $[0];
+  let children = introText;
   const fleetBindings = useFleetBindings();
-  let ke;
-  if (dt[1] !== fleetBindings) {
-    ke = shortcutDisplayFor("agents:setGroup", fleetBindings);
-    dt[1] = fleetBindings;
-    dt[2] = ke;
-  } else ke = dt[2];
-  let Ge = ke;
-  let yt;
+  let groupHint;
+  if ($[1] !== fleetBindings) {
+    groupHint = shortcutDisplayFor("agents:setGroup", fleetBindings);
+    $[1] = fleetBindings;
+    $[2] = groupHint;
+  } else groupHint = $[2];
+  let groupHint_2 = groupHint;
+  let noGroupsNotice;
   if (
-    dt[3] !== byGroup ||
-    dt[4] !== filtered ||
-    dt[5] !== hasGroups ||
-    dt[6] !== query ||
-    dt[7] !== Ge ||
-    dt[8] !== simpleView
+    $[3] !== byGroup ||
+    $[4] !== filtered ||
+    $[5] !== hasGroups ||
+    $[6] !== query ||
+    $[7] !== groupHint_2 ||
+    $[8] !== simpleView
   ) {
-    yt =
-      !simpleView && byGroup && !hasGroups && filtered.length > 0 && !query && Ge !== ""
+    noGroupsNotice =
+      !simpleView && byGroup && !hasGroups && filtered.length > 0 && !query && groupHint_2 !== ""
         ? jsxProd_default_2(Text, {
             dimColor: true,
-            children: ["No groups yet \u2014 press ", Ge, " on a session to tag it."],
+            children: ["No groups yet \u2014 press ", groupHint_2, " on a session to tag it."],
           })
         : null;
-    dt[3] = byGroup;
-    dt[4] = filtered;
-    dt[5] = hasGroups;
-    dt[6] = query;
-    dt[7] = Ge;
-    dt[8] = simpleView;
-    dt[9] = yt;
-  } else yt = dt[9];
-  let Bt = yt;
-  let lt;
-  if (dt[10] === MEMO_CACHE_SENTINEL) {
-    lt = jsxProd_default(Box, {
+    $[3] = byGroup;
+    $[4] = filtered;
+    $[5] = hasGroups;
+    $[6] = query;
+    $[7] = groupHint_2;
+    $[8] = simpleView;
+    $[9] = noGroupsNotice;
+  } else noGroupsNotice = $[9];
+  let noGroupsNotice_2 = noGroupsNotice;
+  let toastBox;
+  if ($[10] === MEMO_CACHE_SENTINEL) {
+    toastBox = jsxProd_default(Box, {
       position: "absolute",
       marginTop: -1,
       height: 1,
@@ -2212,11 +2260,11 @@ function FleetSearchInput(props) {
       overflow: "hidden",
       children: jsxProd_default(PromptToast, {}),
     });
-    dt[10] = lt;
-  } else lt = dt[10];
-  let Tt;
-  if (dt[11] !== cloudListNotice) {
-    Tt =
+    $[10] = toastBox;
+  } else toastBox = $[10];
+  let cloudNotice;
+  if ($[11] !== cloudListNotice) {
+    cloudNotice =
       cloudListNotice &&
       jsxProd_default(Box, {
         paddingLeft: 1,
@@ -2241,12 +2289,12 @@ function FleetSearchInput(props) {
           ],
         }),
       });
-    dt[11] = cloudListNotice;
-    dt[12] = Tt;
-  } else Tt = dt[12];
-  let Et;
-  if (dt[13] !== activeTab || dt[14] !== onlyOrigin || dt[15] !== query || dt[16] !== simpleView) {
-    Et =
+    $[11] = cloudListNotice;
+    $[12] = cloudNotice;
+  } else cloudNotice = $[12];
+  let introBox;
+  if ($[13] !== activeTab || $[14] !== onlyOrigin || $[15] !== query || $[16] !== simpleView) {
+    introBox =
       onlyOrigin &&
       activeTab !== "remote" &&
       !query &&
@@ -2256,48 +2304,48 @@ function FleetSearchInput(props) {
         marginBottom: 1,
         children,
       });
-    dt[13] = activeTab;
-    dt[14] = onlyOrigin;
-    dt[15] = query;
-    dt[16] = simpleView;
-    dt[17] = Et;
-  } else Et = dt[17];
-  let Ot;
-  if (dt[18] !== Bt) {
-    Ot =
-      Bt &&
+    $[13] = activeTab;
+    $[14] = onlyOrigin;
+    $[15] = query;
+    $[16] = simpleView;
+    $[17] = introBox;
+  } else introBox = $[17];
+  let noGroupsBox;
+  if ($[18] !== noGroupsNotice_2) {
+    noGroupsBox =
+      noGroupsNotice_2 &&
       jsxProd_default(Box, {
         paddingLeft: 1,
         marginBottom: 1,
-        children: Bt,
+        children: noGroupsNotice_2,
       });
-    dt[18] = Bt;
-    dt[19] = Ot;
-  } else Ot = dt[19];
-  let Yt;
+    $[18] = noGroupsNotice_2;
+    $[19] = noGroupsBox;
+  } else noGroupsBox = $[19];
+  let searchBox;
   if (
-    dt[20] !== columns ||
-    dt[21] !== cursorOffset ||
-    dt[22] !== mode ||
-    dt[23] !== groupEdit ||
-    dt[24] !== hasDispatch ||
-    dt[25] !== highlights ||
-    dt[26] !== isBashDispatch ||
-    dt[27] !== isTerminalFocused ||
-    dt[28] !== onCursorOffsetChange ||
-    dt[29] !== previewOpen ||
-    dt[30] !== query ||
-    dt[31] !== queryIsFilter ||
-    dt[32] !== jobId ||
-    dt[33] !== resumePicker ||
-    dt[34] !== settingPicker ||
-    dt[35] !== simpleView ||
-    dt[36] !== voice ||
-    dt[37] !== voiceAvailable ||
-    dt[38] !== appState ||
-    dt[39] !== appState_2
+    $[20] !== columns ||
+    $[21] !== cursorOffset ||
+    $[22] !== mode ||
+    $[23] !== groupEdit ||
+    $[24] !== hasDispatch ||
+    $[25] !== highlights ||
+    $[26] !== isBashDispatch ||
+    $[27] !== isTerminalFocused ||
+    $[28] !== onCursorOffsetChange ||
+    $[29] !== previewOpen ||
+    $[30] !== query ||
+    $[31] !== queryIsFilter ||
+    $[32] !== jobId ||
+    $[33] !== resumePicker ||
+    $[34] !== settingPicker ||
+    $[35] !== simpleView ||
+    $[36] !== voice ||
+    $[37] !== voiceAvailable ||
+    $[38] !== appState ||
+    $[39] !== appState_2
   ) {
-    Yt = simpleView
+    searchBox = simpleView
       ? null
       : jsxProd_default(Box, {
           flexDirection: "column",
@@ -2332,175 +2380,181 @@ function FleetSearchInput(props) {
             wrapColumns: columns,
           }),
         });
-    dt[20] = columns;
-    dt[21] = cursorOffset;
-    dt[22] = mode;
-    dt[23] = groupEdit;
-    dt[24] = hasDispatch;
-    dt[25] = highlights;
-    dt[26] = isBashDispatch;
-    dt[27] = isTerminalFocused;
-    dt[28] = onCursorOffsetChange;
-    dt[29] = previewOpen;
-    dt[30] = query;
-    dt[31] = queryIsFilter;
-    dt[32] = jobId;
-    dt[33] = resumePicker;
-    dt[34] = settingPicker;
-    dt[35] = simpleView;
-    dt[36] = voice;
-    dt[37] = voiceAvailable;
-    dt[38] = appState;
-    dt[39] = appState_2;
-    dt[40] = Yt;
-  } else Yt = dt[40];
-  let Ue;
-  if (dt[41] !== suggestionList || dt[42] !== Tt || dt[43] !== Et || dt[44] !== Ot || dt[45] !== Yt) {
-    Ue = jsxProd_default_2(Box, {
+    $[20] = columns;
+    $[21] = cursorOffset;
+    $[22] = mode;
+    $[23] = groupEdit;
+    $[24] = hasDispatch;
+    $[25] = highlights;
+    $[26] = isBashDispatch;
+    $[27] = isTerminalFocused;
+    $[28] = onCursorOffsetChange;
+    $[29] = previewOpen;
+    $[30] = query;
+    $[31] = queryIsFilter;
+    $[32] = jobId;
+    $[33] = resumePicker;
+    $[34] = settingPicker;
+    $[35] = simpleView;
+    $[36] = voice;
+    $[37] = voiceAvailable;
+    $[38] = appState;
+    $[39] = appState_2;
+    $[40] = searchBox;
+  } else searchBox = $[40];
+  let inputArea;
+  if (
+    $[41] !== suggestionList ||
+    $[42] !== cloudNotice ||
+    $[43] !== introBox ||
+    $[44] !== noGroupsBox ||
+    $[45] !== searchBox
+  ) {
+    inputArea = jsxProd_default_2(Box, {
       flexShrink: 0,
       flexDirection: "column",
       marginTop: 1,
-      children: [lt, Tt, Et, Ot, suggestionList, null, Yt],
+      children: [toastBox, cloudNotice, introBox, noGroupsBox, suggestionList, null, searchBox],
     });
-    dt[41] = suggestionList;
-    dt[42] = Tt;
-    dt[43] = Et;
-    dt[44] = Ot;
-    dt[45] = Yt;
-    dt[46] = Ue;
-  } else Ue = dt[46];
-  return Ue;
+    $[41] = suggestionList;
+    $[42] = cloudNotice;
+    $[43] = introBox;
+    $[44] = noGroupsBox;
+    $[45] = searchBox;
+    $[46] = inputArea;
+  } else inputArea = $[46];
+  return inputArea;
 }
 //@ chunk-93kwxas0.js:152228-153447 placement
 /**
  * 派发模式提示行。
  */
 function DispatchModeLine(props) {
-  let V = w(30);
+  let $ = useMemoCache(30);
   let { editor, selection, query, dispatchMode, collapsed, canonicalLauncherCwd, storageV5 } = props;
-  let D;
-  if (V[0] !== canonicalLauncherCwd || V[1] !== editor || V[2] !== selection || V[3] !== storageV5) {
-    D = () => persistFleetDraft(editor, selection, canonicalLauncherCwd, storageV5);
-    V[0] = canonicalLauncherCwd;
-    V[1] = editor;
-    V[2] = selection;
-    V[3] = storageV5;
-    V[4] = D;
-  } else D = V[4];
-  let U;
+  let persistDraft;
+  if ($[0] !== canonicalLauncherCwd || $[1] !== editor || $[2] !== selection || $[3] !== storageV5) {
+    persistDraft = () => persistFleetDraft(editor, selection, canonicalLauncherCwd, storageV5);
+    $[0] = canonicalLauncherCwd;
+    $[1] = editor;
+    $[2] = selection;
+    $[3] = storageV5;
+    $[4] = persistDraft;
+  } else persistDraft = $[4];
+  let debounceDeps;
   if (
-    V[5] !== canonicalLauncherCwd ||
-    V[6] !== collapsed ||
-    V[7] !== dispatchMode ||
-    V[8] !== query ||
-    V[9] !== storageV5
+    $[5] !== canonicalLauncherCwd ||
+    $[6] !== collapsed ||
+    $[7] !== dispatchMode ||
+    $[8] !== query ||
+    $[9] !== storageV5
   ) {
-    U = [query, dispatchMode, collapsed, canonicalLauncherCwd, storageV5];
-    V[5] = canonicalLauncherCwd;
-    V[6] = collapsed;
-    V[7] = dispatchMode;
-    V[8] = query;
-    V[9] = storageV5;
-    V[10] = U;
-  } else U = V[10];
-  useTimeout(D, 300, U);
-  let N;
-  if (V[11] !== canonicalLauncherCwd || V[12] !== editor || V[13] !== selection || V[14] !== storageV5) {
-    N = () => persistFleetDraft(editor, selection, canonicalLauncherCwd, storageV5);
-    V[11] = canonicalLauncherCwd;
-    V[12] = editor;
-    V[13] = selection;
-    V[14] = storageV5;
-    V[15] = N;
-  } else N = V[15];
-  let X = Oo(N);
-  let K;
-  if (V[16] !== X) {
-    K = () => () => X();
-    V[16] = X;
-    V[17] = K;
-  } else K = V[17];
-  let W;
-  if (V[18] === MEMO_CACHE_SENTINEL) {
-    W = [];
-    V[18] = W;
-  } else W = V[18];
-  P(K, W);
-  let z = R(false);
-  let oe;
-  let ge;
-  if (V[19] !== canonicalLauncherCwd || V[20] !== editor || V[21] !== selection || V[22] !== storageV5) {
-    oe = () =>
+    debounceDeps = [query, dispatchMode, collapsed, canonicalLauncherCwd, storageV5];
+    $[5] = canonicalLauncherCwd;
+    $[6] = collapsed;
+    $[7] = dispatchMode;
+    $[8] = query;
+    $[9] = storageV5;
+    $[10] = debounceDeps;
+  } else debounceDeps = $[10];
+  useTimeout(persistDraft, 300, debounceDeps);
+  let persistNow;
+  if ($[11] !== canonicalLauncherCwd || $[12] !== editor || $[13] !== selection || $[14] !== storageV5) {
+    persistNow = () => persistFleetDraft(editor, selection, canonicalLauncherCwd, storageV5);
+    $[11] = canonicalLauncherCwd;
+    $[12] = editor;
+    $[13] = selection;
+    $[14] = storageV5;
+    $[15] = persistNow;
+  } else persistNow = $[15];
+  let stablePersist = useEffectEvent(persistNow);
+  let cleanupEffect;
+  if ($[16] !== stablePersist) {
+    cleanupEffect = () => () => stablePersist();
+    $[16] = stablePersist;
+    $[17] = cleanupEffect;
+  } else cleanupEffect = $[17];
+  let cleanupDeps;
+  if ($[18] === MEMO_CACHE_SENTINEL) {
+    cleanupDeps = [];
+    $[18] = cleanupDeps;
+  } else cleanupDeps = $[18];
+  useEffect(cleanupEffect, cleanupDeps);
+  let flushedRef = useRef(false);
+  let flushEffect;
+  let flushDeps;
+  if ($[19] !== canonicalLauncherCwd || $[20] !== editor || $[21] !== selection || $[22] !== storageV5) {
+    flushEffect = () =>
       isStorageV5Enabled() && storageV5 !== undefined
         ? registerPreExitFlush(async () => {
-            let se = editor.draftForDisk();
-            let ne = [...selection.getSnapshot().collapsed];
-            z.current =
-              se || ne.length
+            let diskDraft = editor.draftForDisk();
+            let collapsedKeys = [...selection.getSnapshot().collapsed];
+            flushedRef.current =
+              diskDraft || collapsedKeys.length
                 ? await writeJobDraft(
                     canonicalLauncherCwd,
                     {
-                      q: se,
-                      collapsed: ne,
+                      q: diskDraft,
+                      collapsed: collapsedKeys,
                     },
                     storageV5,
                   )
                 : true;
           })
         : undefined;
-    ge = [canonicalLauncherCwd, editor, selection, storageV5];
-    V[19] = canonicalLauncherCwd;
-    V[20] = editor;
-    V[21] = selection;
-    V[22] = storageV5;
-    V[23] = oe;
-    V[24] = ge;
+    flushDeps = [canonicalLauncherCwd, editor, selection, storageV5];
+    $[19] = canonicalLauncherCwd;
+    $[20] = editor;
+    $[21] = selection;
+    $[22] = storageV5;
+    $[23] = flushEffect;
+    $[24] = flushDeps;
   } else {
-    oe = V[23];
-    ge = V[24];
+    flushEffect = $[23];
+    flushDeps = $[24];
   }
-  P(oe, ge);
-  let ae;
-  let me;
-  if (V[25] !== canonicalLauncherCwd || V[26] !== editor || V[27] !== selection) {
-    ae = () =>
+  useEffect(flushEffect, flushDeps);
+  let exitFlushEffect;
+  let exitFlushDeps;
+  if ($[25] !== canonicalLauncherCwd || $[26] !== editor || $[27] !== selection) {
+    exitFlushEffect = () =>
       onExit(() => {
-        if (z.current) {
+        if (flushedRef.current) {
           return;
         }
-        let Je = editor.draftForDisk();
-        let le = [...selection.getSnapshot().collapsed];
-        if (Je || le.length)
+        let diskDraft = editor.draftForDisk();
+        let collapsedKeys = [...selection.getSnapshot().collapsed];
+        if (diskDraft || collapsedKeys.length)
           writeDraftBestEffort(canonicalLauncherCwd, {
-            q: Je,
-            collapsed: le,
+            q: diskDraft,
+            collapsed: collapsedKeys,
           });
       });
-    me = [canonicalLauncherCwd, editor, selection];
-    V[25] = canonicalLauncherCwd;
-    V[26] = editor;
-    V[27] = selection;
-    V[28] = ae;
-    V[29] = me;
+    exitFlushDeps = [canonicalLauncherCwd, editor, selection];
+    $[25] = canonicalLauncherCwd;
+    $[26] = editor;
+    $[27] = selection;
+    $[28] = exitFlushEffect;
+    $[29] = exitFlushDeps;
   } else {
-    ae = V[28];
-    me = V[29];
+    exitFlushEffect = $[28];
+    exitFlushDeps = $[29];
   }
-  P(ae, me);
+  useEffect(exitFlushEffect, exitFlushDeps);
 }
 //@ chunk-93kwxas0.js:153447-153572 placement
 /**
  * 保存或清除 Agents 视图的草稿与折叠状态。
  */
 function persistFleetDraft(editor, selection, canonicalLauncherCwd, storageV5) {
-  let x = editor.draftForDisk();
-  let T = [...selection.getSnapshot().collapsed];
-  if (x || T.length)
+  let draft = editor.draftForDisk();
+  let collapsedKeys = [...selection.getSnapshot().collapsed];
+  if (draft || collapsedKeys.length)
     sweepDraft(
       canonicalLauncherCwd,
       {
-        q: x,
-        collapsed: T,
+        q: draft,
+        collapsed: collapsedKeys,
       },
       storageV5,
     );
@@ -2521,17 +2575,17 @@ class AwayLoopStore {
   #t = 0;
   #r = new Set();
   #i;
-  constructor(h) {
-    this.#i = h.onArm;
+  constructor(options) {
+    this.#i = options.onArm;
   }
   getSnapshot = () => this.#e;
-  subscribe = (h) => this.#n.subscribe(h);
+  subscribe = (listener) => this.#n.subscribe(listener);
   attachView() {
     this.#l++;
-    let h = false;
+    let detached = false;
     return () => {
-      if (h) return;
-      h = true;
+      if (detached) return;
+      detached = true;
       this.#l--;
       if (this.#l === 0) {
         this.#r.clear();
@@ -2546,12 +2600,12 @@ class AwayLoopStore {
   get generation() {
     return this.#t;
   }
-  arm(h, justKilled = false, group, sortKey) {
+  arm(jobId, justKilled = false, group, sortKey) {
     this.#i();
-    this.#r.delete(h);
+    this.#r.delete(jobId);
     this.#e = {
       pending: {
-        id: h,
+        id: jobId,
         justKilled,
         group,
         sortKey,
@@ -2570,13 +2624,13 @@ class AwayLoopStore {
     this.#r.add(pending.id);
     this.disarm();
   }
-  isDismissed(h) {
-    return this.#r.has(h);
+  isDismissed(jobId) {
+    return this.#r.has(jobId);
   }
 }
 //@ chunk-93kwxas0.js:154228-154280 placement
-function ensureDeleteConfirmStore(h, E) {
-  return (h.deleteConfirm ??= new AwayLoopStore(E));
+function ensureDeleteConfirmStore(visit, options) {
+  return (visit.deleteConfirm ??= new AwayLoopStore(options));
 }
 //@ chunk-93kwxas0.js:154280-154486 placement
 var FLEET_VIEW_SNAPSHOT_KEYS = [
@@ -2629,32 +2683,32 @@ class FleetViewStore {
   #c = 0;
   #s = null;
   #a = new Set();
-  constructor(h) {
+  constructor(options) {
     this.#e = {
-      groupMode: h.groupMode,
-      activeTab: h.activeTab ?? "local",
+      groupMode: options.groupMode,
+      activeTab: options.activeTab ?? "local",
       ...createInitialFleetViewOverlays(),
     };
   }
   getSnapshot = () => this.#e;
-  subscribe = (h) => this.#n.subscribe(h);
-  #o(h) {
-    let E = this.#e;
-    let k = {
-      ...E,
-      ...h,
+  subscribe = (listener) => this.#n.subscribe(listener);
+  #o(patch) {
+    let previous = this.#e;
+    let next = {
+      ...previous,
+      ...patch,
     };
-    if (FLEET_VIEW_SNAPSHOT_KEYS.every((C) => Object.is(k[C], E[C]))) return;
-    this.#e = k;
+    if (FLEET_VIEW_SNAPSHOT_KEYS.every((key) => Object.is(next[key], previous[key]))) return;
+    this.#e = next;
     this.#n.emit();
   }
-  attachView(h) {
+  attachView(view) {
     this.#l++;
-    this.restrictGroupMode(h.groupsEnabled);
-    let E = false;
+    this.restrictGroupMode(view.groupsEnabled);
+    let detached = false;
     return () => {
-      if (E) return;
-      E = true;
+      if (detached) return;
+      detached = true;
       this.#l--;
       if (this.#l === 0) {
         this.#t++;
@@ -2675,19 +2729,19 @@ class FleetViewStore {
       groupMode,
     });
   }
-  restrictGroupMode(h) {
-    if (!h && this.#e.groupMode === "group")
+  restrictGroupMode(groupsEnabled) {
+    if (!groupsEnabled && this.#e.groupMode === "group")
       this.#o({
         groupMode: "state",
       });
   }
-  vouchForLink(h) {
-    this.#r = h;
+  vouchForLink(linkId) {
+    this.#r = linkId;
   }
-  takeVouchedLink(h) {
-    let E = this.#r === h;
+  takeVouchedLink(linkId) {
+    let matches = this.#r === linkId;
     this.#r = null;
-    return E;
+    return matches;
   }
   setActiveTab(activeTab) {
     this.#t++;
@@ -2722,7 +2776,7 @@ class FleetViewStore {
     });
   }
   openResumePicker() {
-    let h = ++this.#t;
+    let generation = ++this.#t;
     this.#o({
       resumePicker: {
         entries: null,
@@ -2730,7 +2784,7 @@ class FleetViewStore {
       },
       resumePickerIdx: 0,
     });
-    return h;
+    return generation;
   }
   get resumePickerGen() {
     return this.#t;
@@ -2754,11 +2808,11 @@ class FleetViewStore {
   get resumePromoteSessionId() {
     return this.#i;
   }
-  set resumePromoteSessionId(h) {
-    this.#i = h;
+  set resumePromoteSessionId(sessionId) {
+    this.#i = sessionId;
   }
-  refuseResumePick(h) {
-    this.#c = h;
+  refuseResumePick(timestamp) {
+    this.#c = timestamp;
     this.closeResumePicker();
   }
   get resumePickerRefusedAt() {
@@ -2802,18 +2856,18 @@ class FleetViewStore {
       previewOpen,
     });
   }
-  schedulePeekTap(h, E) {
+  schedulePeekTap(schedule, callback) {
     this.cancelPeekTap();
-    this.#s = h(() => {
+    this.#s = schedule(() => {
       this.#s = null;
-      E();
+      callback();
     });
   }
   cancelPeekTap() {
     if (this.#s === null) return;
-    let h = this.#s;
+    let cancel = this.#s;
     this.#s = null;
-    h();
+    cancel();
   }
   setHelpOpen(helpOpen) {
     this.#o({
@@ -2830,9 +2884,9 @@ class FleetViewStore {
       exitPending,
     });
   };
-  firstImpression(h) {
-    if (this.#a.has(h)) return false;
-    this.#a.add(h);
+  firstImpression(label) {
+    if (this.#a.has(label)) return false;
+    this.#a.add(label);
     return true;
   }
 }
@@ -2840,11 +2894,11 @@ class FleetViewStore {
 /**
  * 取或创建 FleetViewStore，分组模式取全局配置。
  */
-function ensureFleetViewStore(h, E, activeTab) {
-  if (h.view) return h.view;
+function ensureFleetViewStore(visit, groupsEnabled, activeTab) {
+  if (visit.view) return visit.view;
   let fleetViewGroupMode = getGlobalConfig().fleetViewGroupMode ?? "state";
-  return (h.view = new FleetViewStore({
-    groupMode: fleetViewGroupMode === "group" && !E ? "state" : fleetViewGroupMode,
+  return (visit.view = new FleetViewStore({
+    groupMode: fleetViewGroupMode === "group" && !groupsEnabled ? "state" : fleetViewGroupMode,
     activeTab,
   }));
 }
@@ -2852,20 +2906,20 @@ function ensureFleetViewStore(h, E, activeTab) {
 /**
  * 退出 Agents 视图时的动作：直接退出、等待启动、提示或回到来源会话。
  */
-function resolveExitAction(h) {
-  if (h.originJobId === undefined)
+function resolveExitAction(ctx) {
+  if (ctx.originJobId === undefined)
     return {
       kind: "exit",
     };
-  if (h.originSpawn !== undefined && !h.originSpawn.settled)
+  if (ctx.originSpawn !== undefined && !ctx.originSpawn.settled)
     return {
       kind: "wait-starting",
     };
-  if (h.originSpawn !== undefined && !h.originSpawn.ok)
+  if (ctx.originSpawn !== undefined && !ctx.originSpawn.ok)
     return {
       kind: "exit-with-hint",
     };
-  return h.originRowPresent
+  return ctx.originRowPresent
     ? {
         kind: "attach-origin",
       }
@@ -2880,9 +2934,9 @@ var RENAME_BUSY_TEXT = "Still saving the last rename. Try again in a moment.";
 /**
  * 提交会话重命名。
  */
-function submitRename(h) {
-  let { roster, editor, view, storageV5 } = h.submit;
-  let { simpleView, readRenameDraft, clearRename } = h;
+function submitRename(ctx) {
+  let { roster, editor, view, storageV5 } = ctx.submit;
+  let { simpleView, readRenameDraft, clearRename } = ctx;
   let { setError, setHint } = editor;
   let renaming = view.getSnapshot().renaming;
   let jobId = renaming?.jobId;
@@ -2891,14 +2945,14 @@ function submitRename(h) {
   clearRename();
   if (!jobId || !trimmed) return;
   if (sock) {
-    roster.updateAdoptedPeers((W) =>
-      W.map((z) =>
-        z.id !== jobId
-          ? z
+    roster.updateAdoptedPeers((peers) =>
+      peers.map((peer) =>
+        peer.id !== jobId
+          ? peer
           : {
-              ...z,
+              ...peer,
               state: {
-                ...z.state,
+                ...peer.state,
                 name: trimmed,
                 intent: trimmed,
                 updatedAt: new Date().toISOString(),
@@ -2923,17 +2977,17 @@ function submitRename(h) {
         logForDebugging(`[fleetview] peer rename failed: ${error}`);
         logFeatureBad("fleet_view_rename_job", "peer_uds_failed");
         setError("Couldn't rename \u2014 that session isn't responding");
-        roster.updateAdoptedPeers((z) =>
-          z.map((oe) =>
-            oe.id === jobId && oe.state.name === trimmed
+        roster.updateAdoptedPeers((peers) =>
+          peers.map((peer) =>
+            peer.id === jobId && peer.state.name === trimmed
               ? {
-                  ...oe,
+                  ...peer,
                   state: {
-                    ...oe.state,
+                    ...peer.state,
                     updatedAt: new Date(0).toISOString(),
                   },
                 }
-              : oe,
+              : peer,
           ),
         );
       });
@@ -2945,42 +2999,42 @@ function submitRename(h) {
   )
     setHint(`Another session is already named "${trimmed}"`);
   roster.bumpGen();
-  roster.updateJobs((W) =>
-    W
-      ? W.map((z) =>
-          z.id === jobId
+  roster.updateJobs((jobs) =>
+    jobs
+      ? jobs.map((job) =>
+          job.id === jobId
             ? {
-                ...z,
+                ...job,
                 state: {
-                  ...z.state,
+                  ...job.state,
                   name: trimmed,
                 },
               }
-            : z,
+            : job,
         )
-      : W,
+      : jobs,
   );
-  syncJobName(jobId, trimmed, "user", storageV5).then((W) => {
-    if (W) {
+  syncJobName(jobId, trimmed, "user", storageV5).then((ok) => {
+    if (ok) {
       logFeatureOk("fleet_view_rename_job");
       return;
     }
     setError("Couldn't rename \u2014 the job may have been removed or its state file is unwritable.");
     logFeatureBad("fleet_view_rename_job", "sync_name_failed");
-    roster.updateJobs((z) =>
-      z
-        ? z.map((oe) =>
-            oe.id === jobId && oe.state.name === trimmed
+    roster.updateJobs((jobs) =>
+      jobs
+        ? jobs.map((job) =>
+            job.id === jobId && job.state.name === trimmed
               ? {
-                  ...oe,
+                  ...job,
                   state: {
-                    ...oe.state,
+                    ...job.state,
                     name: undefined,
                   },
                 }
-              : oe,
+              : job,
           )
-        : z,
+        : jobs,
     );
   });
 }
@@ -2988,60 +3042,64 @@ function submitRename(h) {
 /**
  * 提交会话分组编辑。
  */
-function submitGroupEdit(h) {
-  let { roster, selection, editor, view, storageV5 } = h.submit;
-  let { groupSuggestions, readGroupDraft, clearGroupEdit, ck } = h;
+function submitGroupEdit(ctx) {
+  let { roster, selection, editor, view, storageV5 } = ctx.submit;
+  let { groupSuggestions, readGroupDraft, clearGroupEdit, ck } = ctx;
   let setError = editor.setError;
   let { groupEdit, groupPickIdx } = view.getSnapshot();
   if (!groupEdit) {
     clearGroupEdit();
     return;
   }
-  let K = groupEdit.kind === "assign" && groupPickIdx >= 0 ? groupSuggestions[groupPickIdx] : undefined;
-  let W = sanitizeGroupName(K ?? readGroupDraft()) || undefined;
-  if (W && isReservedGroupName(W)) return;
+  let pickedSuggestion =
+    groupEdit.kind === "assign" && groupPickIdx >= 0 ? groupSuggestions[groupPickIdx] : undefined;
+  let nextGroup = sanitizeGroupName(pickedSuggestion ?? readGroupDraft()) || undefined;
+  if (nextGroup && isReservedGroupName(nextGroup)) return;
   if (groupEdit.kind === "assign") {
-    let found = renderListResultMessage(roster).find((le) => le.id === groupEdit.jobId);
+    let found = renderListResultMessage(roster).find((job) => job.id === groupEdit.jobId);
     let group = found?.state.group;
     clearGroupEdit();
-    if (W !== group) setJobGroup(h, groupEdit.jobId, W, false);
+    if (nextGroup !== group) setJobGroup(ctx, groupEdit.jobId, nextGroup, false);
     return;
   }
   let from = groupEdit.from;
-  if (!W || W === from) {
+  if (!nextGroup || nextGroup === from) {
     clearGroupEdit();
     return;
   }
-  if (renderListResultMessage(roster).some((ae) => ae.state.group === W)) return;
+  if (renderListResultMessage(roster).some((job) => job.state.group === nextGroup)) return;
   clearGroupEdit();
   let mapped = (roster.jobs ?? [])
-    .filter((ae) => ae.state.group === from && ae.state.backend === "daemon")
-    .map((ae) => ae.id);
-  selection.followOrigin = W;
+    .filter((job) => job.state.group === from && job.state.backend === "daemon")
+    .map((jobId) => jobId.id);
+  selection.followOrigin = nextGroup;
   selection.followId = null;
   roster.bumpGen();
-  selection.renameCollapsedKey(ck(from, "group"), ck(W, "group"));
-  roster.updateJobs((ae) =>
-    ae
-      ? ae.map((me) =>
-          me.state.group === from
+  selection.renameCollapsedKey(ck(from, "group"), ck(nextGroup, "group"));
+  roster.updateJobs((jobs) =>
+    jobs
+      ? jobs.map((job) =>
+          job.state.group === from
             ? {
-                ...me,
+                ...job,
                 state: {
-                  ...me.state,
-                  group: W,
+                  ...job.state,
+                  group: nextGroup,
                 },
               }
-            : me,
+            : job,
         )
-      : ae,
+      : jobs,
   );
-  let ge = false;
-  let se = ge ? roster.regroupRemoteRows(from, W) : Promise.resolve(true);
+  let hasRemoteRows = false;
+  let regroupPromise = hasRemoteRows ? roster.regroupRemoteRows(from, nextGroup) : Promise.resolve(true);
   let mapped_2 = mapped.map(roster.holdJob);
-  Promise.all([se, ...mapped.map((ae) => writeJobGroup(getJobDir(ae), W, storageV5))])
-    .then(([ae]) => {
-      if (ae) logFeatureOk("fleet_view_group_rename");
+  Promise.all([
+    regroupPromise,
+    ...mapped.map((jobId) => writeJobGroup(getJobDir(jobId), nextGroup, storageV5)),
+  ])
+    .then(([ok]) => {
+      if (ok) logFeatureOk("fleet_view_group_rename");
       else logFleetActionFailure(setError, "fleet_view_group_rename");
     })
     .catch((error) => {
@@ -3049,29 +3107,29 @@ function submitGroupEdit(h) {
       setError(`Couldn't rename group \u2014 ${errorMessage(error)}`);
       logFeatureBad("fleet_view_group_rename", "write_group_failed");
       roster.reload();
-      if (ge) roster.regroupRemoteRows(W, from);
+      if (hasRemoteRows) roster.regroupRemoteRows(nextGroup, from);
     })
     .finally(() => {
-      for (let ae of mapped_2) ae();
+      for (let releaseHold of mapped_2) releaseHold();
     });
 }
 //@ chunk-93kwxas0.js:159980-161116 placement
 /**
  * 停止或删除会话（非 daemon 会话拒绝），带二次确认。
  */
-function stopOrDeleteJob(h, E, job, C = false) {
-  let { roster, editor } = h.submit;
-  let { deleteConfirm, actions, groupOf, simpleView } = h;
+function stopOrDeleteJob(ctx, key, job, bulk = false) {
+  let { roster, editor } = ctx.submit;
+  let { deleteConfirm, actions, groupOf, simpleView } = ctx;
   let setError = editor.setError;
   if (!job) return;
   if (job.state.backend !== "daemon") {
     setError("Can't stop or delete \u2014 this session is running in another terminal");
     return;
   }
-  let N = jobTempo(job.state);
-  let found = actions.find((action) => action.key === E && action.bands.includes(N));
+  let band = jobTempo(job.state);
+  let found = actions.find((action) => action.key === key && action.bands.includes(band));
   if (!found) return;
-  let K = (label, error) => {
+  let reportFailure = (label, error) => {
     if (error instanceof FleetActionUnconfirmedError)
       logForDebugging(`[FleetView] action '${label}' unconfirmed: ${errorMessage(error)}`, {
         level: "warn",
@@ -3083,17 +3141,17 @@ function stopOrDeleteJob(h, E, job, C = false) {
     else logError(error);
     setError(`Couldn't ${label} \u2014 ${errorMessage(error)}`);
   };
-  if (E === "x" && !C && deleteConfirm.pending?.id !== job.id) {
+  if (key === "x" && !bulk && deleteConfirm.pending?.id !== job.id) {
     let found_2 = actions.find((action) => action.label === "stop");
-    let oe = groupOf.get(job.id);
-    let ge = jobSortKey_2(job.state, oe);
+    let group = groupOf.get(job.id);
+    let sortKey = jobSortKey_2(job.state, group);
     let generation = deleteConfirm.generation;
-    deleteConfirm.arm(job.id, found.label === "stop", oe, ge);
-    let ne = !(simpleView && isSettled(job.state));
-    if (found_2 && ne)
+    deleteConfirm.arm(job.id, found.label === "stop", group, sortKey);
+    let shouldRunNow = !(simpleView && isSettled(job.state));
+    if (found_2 && shouldRunNow)
       Promise.resolve(
         found_2.run(job, {
-          bulk: C,
+          bulk,
         }),
       ).catch((error) => {
         if (
@@ -3103,154 +3161,161 @@ function stopOrDeleteJob(h, E, job, C = false) {
           (deleteConfirm.pending === null || deleteConfirm.pending.id === job.id) &&
           !deleteConfirm.isDismissed(job.id)
         )
-          deleteConfirm.arm(job.id, false, oe, ge);
-        K(found_2.label, error);
+          deleteConfirm.arm(job.id, false, group, sortKey);
+        reportFailure(found_2.label, error);
       });
     return;
   }
   deleteConfirm.disarm();
-  let W = E === "x" ? (actions.find((action) => action.label === "delete") ?? found) : found;
+  let action = key === "x" ? (actions.find((action) => action.label === "delete") ?? found) : found;
   Promise.resolve(
-    W.run(job, {
-      bulk: C,
+    action.run(job, {
+      bulk,
     }),
   ).then(
-    (z) => {
-      if (z) setError(z);
+    (failure) => {
+      if (failure) setError(failure);
     },
-    (error) => K(W.label, error),
+    (error) => reportFailure(action.label, error),
   );
 }
 //@ chunk-93kwxas0.js:161116-161403 placement
 /**
  * 按方向找下一个可聚焦的行（跳过标题或非会话行）。
  */
-function nextFocusableRow(h, focusedIdx, k) {
-  let { rows, hasComposedDispatch, byState, dispatchRepoCwd, previewOpen } = h;
-  let V = rows.length;
-  if (V === 0) return 0;
+function nextFocusableRow(ctx, focusedIdx, delta) {
+  let { rows, hasComposedDispatch, byState, dispatchRepoCwd, previewOpen } = ctx;
+  let rowCount = rows.length;
+  if (rowCount === 0) return 0;
   if (hasComposedDispatch && (byState || dispatchRepoCwd)) return focusedIdx;
-  let D = hasComposedDispatch
-    ? (N) => N?.kind !== "header" || N.group === "pinned"
+  let isSkippable = hasComposedDispatch
+    ? (row) => row?.kind !== "header" || row.group === "pinned"
     : previewOpen
-      ? (N) => N?.kind !== "job"
+      ? (row) => row?.kind !== "job"
       : null;
-  let U = (focusedIdx + k + V) % V;
-  if (D) while (U !== focusedIdx && D(rows[U])) U = (U + k + V) % V;
-  return U;
+  let nextIdx = (focusedIdx + delta + rowCount) % rowCount;
+  if (isSkippable)
+    while (nextIdx !== focusedIdx && isSkippable(rows[nextIdx]))
+      nextIdx = (nextIdx + delta + rowCount) % rowCount;
+  return nextIdx;
 }
 //@ chunk-93kwxas0.js:161403-161717 placement
 /**
  * 处理跳到上/下一个分组的快捷键。
  */
-function jumpGroupHeader(h, fleetKeyAction, focusedIdx) {
+function jumpGroupHeader(ctx, fleetKeyAction, focusedIdx) {
   if (fleetKeyAction !== "agents:nextGroup" && fleetKeyAction !== "agents:previousGroup") return null;
-  let { rows, hasComposedDispatch, previewOpen } = h;
+  let { rows, hasComposedDispatch, previewOpen } = ctx;
   if (
-    h.submit.suggestions.length > 0 ||
+    ctx.submit.suggestions.length > 0 ||
     previewOpen ||
     hasComposedDispatch ||
-    !rows.some((V) => V.kind === "header")
+    !rows.some((row) => row.kind === "header")
   )
     return null;
-  let A = fleetKeyAction === "agents:nextGroup" ? 1 : -1;
-  let L = focusedIdx + A;
-  while (rows[L] && rows[L]?.kind !== "header") L += A;
-  return rows[L] ? L : focusedIdx;
+  let step = fleetKeyAction === "agents:nextGroup" ? 1 : -1;
+  let index = focusedIdx + step;
+  while (rows[index] && rows[index]?.kind !== "header") index += step;
+  return rows[index] ? index : focusedIdx;
 }
 //@ chunk-93kwxas0.js:161717-162441 placement
 /**
  * 设置会话分组（新建/加入/取消分组）并上报。
  */
-function setJobGroup(h, jobId, k, C) {
-  let { roster, selection, editor, storageV5 } = h.submit;
-  let { ck } = h;
+function setJobGroup(ctx, jobId, group, isRemote) {
+  let { roster, selection, editor, storageV5 } = ctx.submit;
+  let { ck } = ctx;
   let setError = editor.setError;
-  let U =
-    k !== undefined && !renderListResultMessage(roster).some((K) => K.id !== jobId && K.state.group === k);
-  let N =
-    k === undefined ? "fleet_view_group_ungroup" : U ? "fleet_view_group_create" : "fleet_view_group_assign";
-  selection.followId = C
+  let isNewGroup =
+    group !== undefined &&
+    !renderListResultMessage(roster).some((job) => job.id !== jobId && job.state.group === group);
+  let featureKey =
+    group === undefined
+      ? "fleet_view_group_ungroup"
+      : isNewGroup
+        ? "fleet_view_group_create"
+        : "fleet_view_group_assign";
+  selection.followId = isRemote
     ? (roster.getSnapshot().remoteJobs.find((remoteJob) => remoteRowIdOf(remoteJob) === jobId)?.id ?? jobId)
     : jobId;
-  if (C) {
-    selection.uncollapse(ck(k ?? UNGROUPED, "group"));
+  if (isRemote) {
+    selection.uncollapse(ck(group ?? UNGROUPED, "group"));
     roster
-      .markRemoteRow(jobId, (K) => ({
-        ...K,
-        group: k,
+      .markRemoteRow(jobId, (mark) => ({
+        ...mark,
+        group,
       }))
-      .then((K) => {
-        if (K) logFeatureOk(N);
-        else logFleetActionFailure(setError, N);
+      .then((saved) => {
+        if (saved) logFeatureOk(featureKey);
+        else logFleetActionFailure(setError, featureKey);
       });
     return;
   }
   roster.bumpGen();
-  roster.updateJobs((K) =>
-    K
-      ? K.map((W) =>
-          W.id === jobId
+  roster.updateJobs((jobs) =>
+    jobs
+      ? jobs.map((job) =>
+          job.id === jobId
             ? {
-                ...W,
+                ...job,
                 state: {
-                  ...W.state,
-                  group: k,
+                  ...job.state,
+                  group,
                 },
               }
-            : W,
+            : job,
         )
-      : K,
+      : jobs,
   );
-  selection.uncollapse(ck(k ?? UNGROUPED, "group"));
-  let X = roster.holdJob(jobId);
-  writeJobGroup(getJobDir(jobId), k, storageV5)
+  selection.uncollapse(ck(group ?? UNGROUPED, "group"));
+  let releaseHold = roster.holdJob(jobId);
+  writeJobGroup(getJobDir(jobId), group, storageV5)
     .then(() => {
-      logFeatureOk(N);
+      logFeatureOk(featureKey);
     })
     .catch((error) => {
       logError(error);
       setError(`Couldn't set group \u2014 ${errorMessage(error)}`);
-      logFeatureBad(N, "write_group_failed");
+      logFeatureBad(featureKey, "write_group_failed");
       roster.reload();
     })
-    .finally(X);
+    .finally(releaseHold);
 }
 //@ chunk-93kwxas0.js:162441-163145 placement
 /**
  * 停止某分组内所有 daemon 会话。
  */
-function stopGroup(h, group) {
-  let { roster, selection, editor, storageV5 } = h.submit;
-  let { ck } = h;
+function stopGroup(ctx, group) {
+  let { roster, selection, editor, storageV5 } = ctx.submit;
+  let { ck } = ctx;
   let setError = editor.setError;
   let mapped = (roster.jobs ?? [])
-    .filter((N) => N.state.group === group && N.state.backend === "daemon")
-    .map((N) => N.id);
+    .filter((job) => job.state.group === group && job.state.backend === "daemon")
+    .map((jobId) => jobId.id);
   selection.followOrigin = UNGROUPED;
   selection.followId = null;
   roster.bumpGen();
   selection.uncollapse(ck(group, "group"), ck(UNGROUPED, "group"));
-  roster.updateJobs((N) =>
-    N
-      ? N.map((X) =>
-          X.state.group === group
+  roster.updateJobs((jobs) =>
+    jobs
+      ? jobs.map((job) =>
+          job.state.group === group
             ? {
-                ...X,
+                ...job,
                 state: {
-                  ...X.state,
+                  ...job.state,
                   group: undefined,
                 },
               }
-            : X,
+            : job,
         )
-      : N,
+      : jobs,
   );
   let resolved = Promise.resolve(true);
   let mapped_2 = mapped.map(roster.holdJob);
-  Promise.all([resolved, ...mapped.map((N) => writeJobGroup(getJobDir(N), undefined, storageV5))])
-    .then(([N]) => {
-      if (N) logFeatureOk("fleet_view_group_delete");
+  Promise.all([resolved, ...mapped.map((jobId) => writeJobGroup(getJobDir(jobId), undefined, storageV5))])
+    .then(([ok]) => {
+      if (ok) logFeatureOk("fleet_view_group_delete");
       else logFleetActionFailure(setError, "fleet_view_group_delete");
     })
     .catch((error) => {
@@ -3260,11 +3325,11 @@ function stopGroup(h, group) {
       roster.reload();
     })
     .finally(() => {
-      for (let N of mapped_2) N();
+      for (let releaseHold of mapped_2) releaseHold();
     });
 }
 //@ chunk-93kwxas0.js:163145-163163 placement
-function logFleetActionFailure(setError, E) {}
+function logFleetActionFailure(setError, featureKey) {}
 export {
   RENAME_SAVE_WAIT_MS,
   resolveFleetKeyAction,

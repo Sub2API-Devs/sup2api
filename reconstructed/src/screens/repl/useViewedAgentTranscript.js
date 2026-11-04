@@ -12,37 +12,47 @@ import { useAppState } from "../../state/AppState.js";
 import { viewedTaskId, getViewedTranscriptState } from "../../state/teammateViewHelpers.js";
 import { transcriptMessagesStore } from "./ReplEffects.js";
 import { INITIAL_IN_PROGRESS_STATE } from "../../state/inProgressToolUses.js";
-import { y, Q, init_react_production } from "../../../vendor/react/cjs/react.production.js";
+import { useState, useMemo, init_react_production } from "../../../vendor/react/cjs/react.production.js";
 import { tagCoordinatorOrigin } from "../../coordinator/coordinatorMode.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-18hwfzwa.js:223340-223741 placement
 /**
  * 取正在查看的 agent 任务的转录（消息加协调者来源标记、进行中的工具调用），合成为主界面要显示的视图。
  */
 function useViewedAgentTranscript({ mainIsBusy, mainConversationId }) {
-  let task = useAppState((Be) => (Be.viewingAgentTaskId ? Be.tasks[Be.viewingAgentTaskId] : undefined));
-  let L = viewedTaskId(task);
-  let { messages } = transcriptMessagesStore(L);
-  let ke = useAppState(
-    (Be) => Be.transcripts[L]?.inProgressToolUseIDs ?? INITIAL_IN_PROGRESS_STATE.inProgressToolUseIDs,
+  let viewedTask = useAppState((state) =>
+    state.viewingAgentTaskId ? state.tasks[state.viewingAgentTaskId] : undefined,
   );
-  let [cache] = y(() => new WeakMap());
-  return Q(
+  let taskId = viewedTaskId(viewedTask);
+  let { messages } = transcriptMessagesStore(taskId);
+  let inProgress = useAppState(
+    (state) =>
+      state.transcripts[taskId]?.inProgressToolUseIDs ?? INITIAL_IN_PROGRESS_STATE.inProgressToolUseIDs,
+  );
+  let [cache] = useState(() => new WeakMap());
+  return useMemo(
     () =>
       getViewedTranscriptState({
-        viewedTask: task,
+        viewedTask,
         transcript: {
-          messages: tagCoordinatorOrigin(messages, task, cache),
-          inProgressToolUseIDs: ke,
+          messages: tagCoordinatorOrigin(messages, viewedTask, cache),
+          inProgressToolUseIDs: inProgress,
         },
         mainIsBusy,
         mainConversationId,
       }),
-    [task, messages, ke, mainIsBusy, mainConversationId, cache],
+    [viewedTask, messages, inProgress, mainIsBusy, mainConversationId, cache],
   );
 }
 //@ chunk-18hwfzwa.js:223741-223745 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:223741", () => {
+  init_react_production();
+});
 //@ chunk-18hwfzwa.js:223745-223749 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:223745", () => {
+  init_react_production();
+});
 export { useViewedAgentTranscript };

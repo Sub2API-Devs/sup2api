@@ -34,8 +34,8 @@ import { isSystemVolumePath } from "../../utils/permissions/protectedDirs.js";
 import { writeFileAtomic } from "../../utils/file.js";
 
 //@ chunk-hddjmtjj.js:1514-1575 placement
-function isEscapingRelativePath(n) {
-  return isAbsolute(n) || n === ".." || n.startsWith(".." + sep);
+function isEscapingRelativePath(relPath) {
+  return isAbsolute(relPath) || relPath === ".." || relPath.startsWith(".." + sep);
 }
 //@ chunk-hddjmtjj.js:1575-1591 placement
 /**
@@ -46,15 +46,15 @@ var IMPORT_MAX_FILE_BYTES = 10485760;
 /**
  * 读取导入文件（超过上限时拒绝）。
  */
-async function readCappedImportFile(n) {
-  if ((await stat(n)).size > IMPORT_MAX_FILE_BYTES)
+async function readCappedImportFile(path) {
+  if ((await stat(path)).size > IMPORT_MAX_FILE_BYTES)
     throw Error("file exceeds IMPORT_MAX_FILE_BYTES; refusing to load");
-  return readFile(n, "utf8");
+  return readFile(path, "utf8");
 }
 //@ chunk-hddjmtjj.js:1724-1786 placement
-async function pathExists(n) {
+async function pathExists(path) {
   try {
-    await lstat(n);
+    await lstat(path);
     return true;
   } catch {
     return false;
@@ -64,36 +64,36 @@ async function pathExists(n) {
 /**
  * 名称清理为可用的文件名（非法字符替换、避免保留名）。
  */
-function sanitizeImportName(n) {
-  let e =
-    n
+function sanitizeImportName(name) {
+  let sanitized =
+    name
       .replace(/[^a-zA-Z0-9_-]/g, "_")
-      .replace(/-{3,}/g, (r) => "_".repeat(r.length))
+      .replace(/-{3,}/g, (dashes) => "_".repeat(dashes.length))
       .replace(/^-+/, "_") || "_";
-  return isReservedDeviceName(e) ? `_${e}` : e;
+  return isReservedDeviceName(sanitized) ? `_${sanitized}` : sanitized;
 }
 //@ chunk-hddjmtjj.js:1930-1981 placement
-function collapseDashes(n) {
-  return n.replace(/-{3,}/g, "\u2014");
+function collapseDashes(text) {
+  return text.replace(/-{3,}/g, "\u2014");
 }
 //@ chunk-hddjmtjj.js:1981-2215 placement
 function describeUnexpectedTableShape(
-  n,
+  table,
   label,
   scope,
-  l,
+  warnings,
   reason = "Has an unexpected shape (expected a table of named entries). Review it manually.",
 ) {
-  if (n === undefined) return {};
-  if (typeof n !== "object" || n === null || Array.isArray(n)) {
-    l.push({
+  if (table === undefined) return {};
+  if (typeof table !== "object" || table === null || Array.isArray(table)) {
+    warnings.push({
       scope,
       label,
       reason,
     });
     return {};
   }
-  return n;
+  return table;
 }
 //@ chunk-hddjmtjj.js:2215-2297 placement
 var CODEX_ARG_PLACEHOLDER_RE = /\$ARGUMENTS\[\d+\]|\$ARGUMENTS|\$\d+(?!\w)/g;
@@ -103,7 +103,7 @@ var NON_BANG_CHARS_RE = /[a-zA-RT-Z_).,;:'"?!>-]/;
  * 文本中是否有前面不是允许字符的 “!”（变量引用除外）。
  */
 function hasBareBang(body) {
-  let replaced = body.replace(/\$[\p{L}\p{N}_.-]+/gu, (r) => " ".repeat(r.length));
+  let replaced = body.replace(/\$[\p{L}\p{N}_.-]+/gu, (placeholder) => " ".repeat(placeholder.length));
   for (let i = 0; i < body.length; i++)
     if (body[i] === "!" && !NON_BANG_CHARS_RE.test(replaced[i - 1] ?? "")) return true;
   return false;
@@ -117,8 +117,8 @@ function findShellExecHazard(body, hasArgs) {
   if (/(?<=^|\s)!(?=`|\$)/m.test(replaced))
     return "Contains a dangling shell-exec marker that argument substitution could complete into a live command at invocation time. Port it manually.";
   if ([...body.matchAll(CODEX_ARG_PLACEHOLDER_RE)].length === 0) return null;
-  let l = replaced === body ? hasBareBang(body) : replaced.includes("!");
-  if (replaced.includes("`") || l)
+  let hasBare = replaced === body ? hasBareBang(body) : replaced.includes("!");
+  if (replaced.includes("`") || hasBare)
     return "Mixes argument placeholders with backticks or '!' outside its shell blocks \u2014 argument substitution at invocation time could assemble a live shell-exec marker from them. Port it manually.";
   if (hasArgs.some((hasArg) => hasArg.includes("!")))
     return "One of its shell blocks contains '!' while the command also has argument placeholders \u2014 a backtick in the typed arguments could re-pair the marker into executing text the block never consented to. Port it manually.";
@@ -127,54 +127,54 @@ function findShellExecHazard(body, hasArgs) {
   return null;
 }
 //@ chunk-hddjmtjj.js:3569-3658 placement
-function hasShellExecBlock(n) {
-  return n.includes("```!") || (n.includes("!`") && /(?<=^|\s)!`[^`]+`/m.test(n));
+function hasShellExecBlock(body) {
+  return body.includes("```!") || (body.includes("!`") && /(?<=^|\s)!`[^`]+`/m.test(body));
 }
 //@ chunk-hddjmtjj.js:3658-3750 placement
-function resolveWithinRoot(n, e) {
-  let r = resolve(n, e);
-  let l = relative(n, r);
-  if (l === "" || isEscapingRelativePath(l) || resolve(n, l) !== r) return null;
-  return r;
+function resolveWithinRoot(root, target) {
+  let resolved = resolve(root, target);
+  let rel = relative(root, resolved);
+  if (rel === "" || isEscapingRelativePath(rel) || resolve(root, rel) !== resolved) return null;
+  return resolved;
 }
 //@ chunk-hddjmtjj.js:3750-3921 placement
 /**
  * 解析路径且真实路径仍在根目录内，否则 null。
  */
-async function resolveInsideReal(n, e) {
-  let withinRoot = resolveWithinRoot(n, e);
+async function resolveInsideReal(root, target) {
+  let withinRoot = resolveWithinRoot(root, target);
   if (withinRoot === null) return null;
-  let l;
-  let i;
+  let realRoot;
+  let realTarget;
   try {
-    l = await realpath(n);
-    i = await realpath(withinRoot);
+    realRoot = await realpath(root);
+    realTarget = await realpath(withinRoot);
   } catch {
     return null;
   }
-  let s = relative(l, i);
-  if (s === "" || isEscapingRelativePath(s)) return null;
+  let rel = relative(realRoot, realTarget);
+  if (rel === "" || isEscapingRelativePath(rel)) return null;
   return withinRoot;
 }
 //@ chunk-hddjmtjj.js:3921-4139 placement
 /**
  * 解析路径并确认路径上各级都不是符号链接（不存在的部分允许），否则 null。
  */
-async function pinPathInside(n, e) {
-  let withinRoot = resolveWithinRoot(n, e);
+async function pinPathInside(root, target) {
+  let withinRoot = resolveWithinRoot(root, target);
   if (withinRoot === null) return null;
-  let parts = relative(n, withinRoot).split(sep);
-  let i = n;
-  for (let s of parts) {
-    i = join(i, s);
-    let c;
+  let parts = relative(root, withinRoot).split(sep);
+  let current = root;
+  for (let part of parts) {
+    current = join(current, part);
+    let stats;
     try {
-      c = await lstat(i);
+      stats = await lstat(current);
     } catch (error) {
       if (isENOENT(error)) return withinRoot;
       return null;
     }
-    if (c.isSymbolicLink()) return null;
+    if (stats.isSymbolicLink()) return null;
   }
   return withinRoot;
 }
@@ -190,98 +190,99 @@ function isEagerLighthouseEnabled() {
 /**
  * 把路径钉在根目录内（拒绝 .. 与链接替换），返回可校验的打开句柄信息。
  */
-async function pinInside(root, relPath, r, createParents = false) {
-  let i = relative(root, relPath);
-  if (i === "" || isEscapingRelativePath(i)) throw Error("pinInside: path is not strictly inside its root");
+async function pinInside(root, relPath, action, createParents = false) {
+  let rel = relative(root, relPath);
+  if (rel === "" || isEscapingRelativePath(rel))
+    throw Error("pinInside: path is not strictly inside its root");
   let fsImplementation = getFsImplementation();
-  let c = safeResolvePath(fsImplementation, root);
-  let m = c.isCanonical ? c.resolvedPath : root;
-  let f = identity(join(m, i));
-  let h = [f];
+  let rootInfo = safeResolvePath(fsImplementation, root);
+  let canonicalRoot = rootInfo.isCanonical ? rootInfo.resolvedPath : root;
+  let ioPath = identity(join(canonicalRoot, rel));
+  let allowedPaths = [ioPath];
   let platform = getPlatform();
   if (platform === "macos" || platform === "windows") {
-    let w = safeResolvePath(fsImplementation, f);
+    let targetInfo = safeResolvePath(fsImplementation, ioPath);
     if (
-      w.isCanonical &&
-      w.resolvedPath !== f &&
-      w.resolvedPath.startsWith(m + sep) &&
-      normalizeCaseForComparison(w.resolvedPath.slice(m.length).normalize("NFC")) ===
-        normalizeCaseForComparison(f.slice(m.length).normalize("NFC")) &&
-      (await pinPathInside(m, f)) !== null
+      targetInfo.isCanonical &&
+      targetInfo.resolvedPath !== ioPath &&
+      targetInfo.resolvedPath.startsWith(canonicalRoot + sep) &&
+      normalizeCaseForComparison(targetInfo.resolvedPath.slice(canonicalRoot.length).normalize("NFC")) ===
+        normalizeCaseForComparison(ioPath.slice(canonicalRoot.length).normalize("NFC")) &&
+      (await pinPathInside(canonicalRoot, ioPath)) !== null
     )
-      h.push(w.resolvedPath);
+      allowedPaths.push(targetInfo.resolvedPath);
   }
   try {
-    return await pinWriteTarget(f, h, {
+    return await pinWriteTarget(ioPath, allowedPaths, {
       createParents,
     });
   } catch (error) {
-    if (error instanceof SymlinkWriteRefusedError) throw assertStillPinned(r, relPath);
+    if (error instanceof SymlinkWriteRefusedError) throw assertStillPinned(action, relPath);
     return rethrowWithPath(
       error,
       {
-        ioPath: f,
-        canonicalPath: f,
+        ioPath,
+        canonicalPath: ioPath,
       },
       relPath,
     );
   }
 }
 //@ chunk-hddjmtjj.js:4793-5199 placement
-function assertStillPinned(n, e) {
-  let message = `Refusing to ${n} ${e}: the import could not confirm it is still the place it checked. It, or a folder on the way to it, may have been replaced (for example by a symbolic link), or a folder's name on disk may differ from this path in letter case. Make sure each folder on that path is a real folder spelled as shown, then run the import again.`;
-  return n === "read" ? new SymlinkReadRefusedError(message) : new SymlinkWriteRefusedError(message);
+function assertStillPinned(action, path) {
+  let message = `Refusing to ${action} ${path}: the import could not confirm it is still the place it checked. It, or a folder on the way to it, may have been replaced (for example by a symbolic link), or a folder's name on disk may differ from this path in letter case. Make sure each folder on that path is a real folder spelled as shown, then run the import again.`;
+  return action === "read" ? new SymlinkReadRefusedError(message) : new SymlinkWriteRefusedError(message);
 }
 //@ chunk-hddjmtjj.js:5199-5308 placement
 /**
  * 写入前复查路径未被替换为链接。
  */
-async function recheckPinned(n, e, r) {
+async function recheckPinned(pinned, action, path) {
   try {
-    await n.recheckBeforeWrite();
+    await pinned.recheckBeforeWrite();
   } catch (error) {
-    if (error instanceof SymlinkWriteRefusedError) throw assertStillPinned(e, r);
+    if (error instanceof SymlinkWriteRefusedError) throw assertStillPinned(action, path);
     throw error;
   }
 }
 //@ chunk-hddjmtjj.js:5308-5765 placement
-async function openPinnedForRead(n, e) {
-  let r = await pinInside(n, e, "read");
-  let l;
+async function openPinnedForRead(root, path) {
+  let pinned = await pinInside(root, path, "read");
+  let handle;
   try {
-    await recheckPinned(r, "read", e);
+    await recheckPinned(pinned, "read", path);
     let platform = getPlatform();
     if (platform === "windows") {
-      if ((await lstat(r.ioPath)).isSymbolicLink()) throw assertStillPinned("read", e);
-      l = await open(r.ioPath, "r");
+      if ((await lstat(pinned.ioPath)).isSymbolicLink()) throw assertStillPinned("read", path);
+      handle = await open(pinned.ioPath, "r");
     } else
-      l = await openNoFollow(
-        r.ioPath,
+      handle = await openNoFollow(
+        pinned.ioPath,
         constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK | (constants.O_NOCTTY ?? 0),
         platform,
       );
-    await recheckPinned(r, "read", e);
-    return l;
+    await recheckPinned(pinned, "read", path);
+    return handle;
   } catch (error) {
-    await l?.close();
+    await handle?.close();
     let errnoCode = getErrnoCode(error);
     if (errnoCode === "ELOOP" || errnoCode === "EMLINK" || errnoCode === "EFTYPE" || errnoCode === "ENOTDIR")
-      throw assertStillPinned("read", e);
-    return rethrowWithPath(error, r, e);
+      throw assertStillPinned("read", path);
+    return rethrowWithPath(error, pinned, path);
   } finally {
-    await r.close();
+    await pinned.close();
   }
 }
 //@ chunk-hddjmtjj.js:5765-6158 placement
 /**
  * 读取导入源文件（必须是普通文件，限制 IMPORT_MAX_FILE_BYTES）。
  */
-async function readImportFile(n, e) {
-  let pinnedForRead = await openPinnedForRead(n, e);
+async function readImportFile(root, path) {
+  let pinnedForRead = await openPinnedForRead(root, path);
   try {
     let stats = await pinnedForRead.stat();
     if (!stats.isFile())
-      throw new SymlinkReadRefusedError(`Refusing to read ${e}: it is not a regular file.`);
+      throw new SymlinkReadRefusedError(`Refusing to read ${path}: it is not a regular file.`);
     if (stats.size > IMPORT_MAX_FILE_BYTES)
       throw Error("file exceeds IMPORT_MAX_FILE_BYTES; refusing to load");
     let handleUpTo = await readHandleUpTo(pinnedForRead, IMPORT_MAX_FILE_BYTES + 1, "file");
@@ -293,269 +294,276 @@ async function readImportFile(n, e) {
   }
 }
 //@ chunk-hddjmtjj.js:6158-6217 placement
-function readImportFileChecked(scope, projectRoot, r) {
+function readImportFileChecked(scope, projectRoot, path) {
   return scope === "project" && isEagerLighthouseEnabled()
-    ? readImportFile(projectRoot, r)
-    : readCappedImportFile(r);
+    ? readImportFile(projectRoot, path)
+    : readCappedImportFile(path);
 }
 //@ chunk-hddjmtjj.js:6217-6798 placement
-async function openPinnedForReadViaFd(n, e) {
-  let r = await pinInside(n, e, "read");
-  let l;
-  let ioPath = r.ioPath;
+async function openPinnedForReadViaFd(root, path) {
+  let pinned = await pinInside(root, path, "read");
+  let dirHandle;
+  let ioPath = pinned.ioPath;
   try {
-    await recheckPinned(r, "read", e);
+    await recheckPinned(pinned, "read", path);
     let platform = getPlatform();
     if (platform === "windows") {
-      if (!(await lstat(r.ioPath)).isDirectory()) throw assertStillPinned("read", e);
+      if (!(await lstat(pinned.ioPath)).isDirectory()) throw assertStillPinned("read", path);
     } else {
-      l = await openNoFollow(
-        r.ioPath,
+      dirHandle = await openNoFollow(
+        pinned.ioPath,
         constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW,
         platform,
       );
-      if (r.ioPath.startsWith("/proc/self/fd/")) ioPath = `/proc/self/fd/${l.fd}`;
+      if (pinned.ioPath.startsWith("/proc/self/fd/")) ioPath = `/proc/self/fd/${dirHandle.fd}`;
     }
-    let c = await readdir(ioPath, {
+    let entries = await readdir(ioPath, {
       withFileTypes: true,
     });
-    await recheckPinned(r, "read", e);
-    return c;
+    await recheckPinned(pinned, "read", path);
+    return entries;
   } catch (error) {
     let errnoCode = getErrnoCode(error);
     if (errnoCode === "ELOOP" || errnoCode === "ENOTDIR" || errnoCode === "EMLINK" || errnoCode === "EFTYPE")
-      throw assertStillPinned("read", e);
+      throw assertStillPinned("read", path);
     return rethrowWithPath(
       error,
       {
         ioPath,
-        canonicalPath: r.canonicalPath,
+        canonicalPath: pinned.canonicalPath,
       },
-      e,
+      path,
     );
   } finally {
     try {
-      await l?.close();
+      await dirHandle?.close();
     } finally {
-      await r.close();
+      await pinned.close();
     }
   }
 }
 //@ chunk-hddjmtjj.js:6798-7191 placement
-async function openPinnedForWrite(n, e) {
-  let r = await pinInside(n, e, "write", true);
+async function openPinnedForWrite(root, path) {
+  let pinned = await pinInside(root, path, "write", true);
   try {
-    await recheckPinned(r, "write", e);
+    await recheckPinned(pinned, "write", path);
     let platform = getPlatform();
-    let i;
+    let handle;
     try {
-      i =
+      handle =
         platform === "windows"
-          ? await open(r.ioPath, "wx")
+          ? await open(pinned.ioPath, "wx")
           : await openNoFollow(
-              r.ioPath,
+              pinned.ioPath,
               constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW,
               platform,
             );
     } catch (error) {
       let errnoCode = getErrnoCode(error);
       if (errnoCode === "EEXIST") return null;
-      if (errnoCode === "ELOOP") throw assertStillPinned("write", e);
-      return rethrowWithPath(error, r, e);
+      if (errnoCode === "ELOOP") throw assertStillPinned("write", path);
+      return rethrowWithPath(error, pinned, path);
     }
     try {
-      await recheckPinned(r, "write", e);
+      await recheckPinned(pinned, "write", path);
     } catch (error) {
-      await i.close();
+      await handle.close();
       throw error;
     }
-    return i;
+    return handle;
   } finally {
-    await r.close();
+    await pinned.close();
   }
 }
 //@ chunk-hddjmtjj.js:7333-7542 placement
-async function createExclusive(n, e) {
-  let r = await pinInside(n, e, "write", true);
+async function createExclusive(root, path) {
+  let pinned = await pinInside(root, path, "write", true);
   try {
-    await recheckPinned(r, "write", e);
-    await mkdir(r.ioPath);
-    await recheckPinned(r, "write", e);
+    await recheckPinned(pinned, "write", path);
+    await mkdir(pinned.ioPath);
+    await recheckPinned(pinned, "write", path);
     return true;
   } catch (error) {
     if (getErrnoCode(error) === "EEXIST") return false;
-    return rethrowWithPath(error, r, e);
+    return rethrowWithPath(error, pinned, path);
   } finally {
-    await r.close();
+    await pinned.close();
   }
 }
 //@ chunk-hddjmtjj.js:7542-7687 placement
 /**
  * 拷贝时目标被他人创建的错误。
  */
-function copyRaceError(n) {
+function copyRaceError(path) {
   return new SymlinkWriteRefusedError(
-    `Refusing to copy into ${n}: something else created a file or folder with that name while the import was copying.`,
+    `Refusing to copy into ${path}: something else created a file or folder with that name while the import was copying.`,
   );
 }
 //@ chunk-hddjmtjj.js:7687-8458 placement
 /**
  * 安全拷贝文件（源不再是普通文件或写入无进展时停止）。
  */
-async function copyFileSafely(n, e, r, l, i) {
-  for (let s of l) {
-    let c = join(e, s.name);
-    let m = join(r, s.name);
-    if (s.isDirectory()) {
-      let pinnedForReadViaFd = await openPinnedForReadViaFd(n, c);
-      if (!(await createExclusive(n, m))) throw copyRaceError(m);
-      await copyFileSafely(n, c, m, pinnedForReadViaFd, i);
-    } else if (s.isFile()) {
-      let pinnedForRead = await openPinnedForRead(n, c);
+async function copyFileSafely(relPath, srcDir, destDir, entries, stats) {
+  for (let entry of entries) {
+    let fromPath = join(srcDir, entry.name);
+    let toPath = join(destDir, entry.name);
+    if (entry.isDirectory()) {
+      let entries = await openPinnedForReadViaFd(relPath, fromPath);
+      if (!(await createExclusive(relPath, toPath))) throw copyRaceError(toPath);
+      await copyFileSafely(relPath, fromPath, toPath, entries, stats);
+    } else if (entry.isFile()) {
+      let pinnedForRead = await openPinnedForRead(relPath, fromPath);
       try {
-        let stats = await pinnedForRead.stat();
-        if (!stats.isFile())
-          throw new SymlinkReadRefusedError(`Refusing to copy ${c}: it is no longer a regular file.`);
-        let pinnedForWrite = await openPinnedForWrite(n, m);
-        if (pinnedForWrite === null) throw copyRaceError(m);
+        let stats_2 = await pinnedForRead.stat();
+        if (!stats_2.isFile())
+          throw new SymlinkReadRefusedError(`Refusing to copy ${fromPath}: it is no longer a regular file.`);
+        let pinnedForWrite = await openPinnedForWrite(relPath, toPath);
+        if (pinnedForWrite === null) throw copyRaceError(toPath);
         try {
-          let w = Buffer.allocUnsafe(65536);
+          let buffer = Buffer.allocUnsafe(65536);
           for (;;) {
-            let { bytesRead } = await pinnedForRead.read(w, 0, w.length, null);
+            let { bytesRead } = await pinnedForRead.read(buffer, 0, buffer.length, null);
             if (bytesRead === 0) break;
-            for (let y = 0; y < bytesRead;) {
-              let { bytesWritten } = await pinnedForWrite.write(w, y, bytesRead - y);
+            for (let written = 0; written < bytesRead;) {
+              let { bytesWritten } = await pinnedForWrite.write(buffer, written, bytesRead - written);
               if (bytesWritten === 0) throw Error("a write made no progress; copy stopped");
-              y += bytesWritten;
+              written += bytesWritten;
             }
           }
           try {
-            await pinnedForWrite.chmod(stats.mode & 511);
+            await pinnedForWrite.chmod(stats_2.mode & 511);
           } catch (error) {
             if (!isUnsupportedFlagError(error)) throw error;
           }
-          if ((stats.mode & 3584) !== 0) i.specialBitsDropped++;
+          if ((stats_2.mode & 3584) !== 0) stats.specialBitsDropped++;
         } finally {
           await pinnedForWrite.close();
         }
       } finally {
         await pinnedForRead.close();
       }
-    } else i.notCopied++;
+    } else stats.notCopied++;
   }
 }
 //@ chunk-hddjmtjj.js:8458-8560 placement = detectTerminal (0.86)
-function detectTerminal(n, e = "linux") {
-  let r = identity(n);
-  return e === "darwin" || e === "win32" ? r.toUpperCase().toLowerCase() : r;
+function detectTerminal(path, platform = "linux") {
+  let normalized = identity(path);
+  return platform === "darwin" || platform === "win32" ? normalized.toUpperCase().toLowerCase() : normalized;
 }
 //@ chunk-hddjmtjj.js:8560-8861 placement = getReservedShortcuts (1)
-async function isOutsideDirectory(claudeConfigDir, e) {
-  if (!e) return false;
-  let r = await isUnderSymlink(resolve(claudeConfigDir));
-  if (r === null) return true;
-  let l = await isUnderSymlink(resolve(e));
-  if (l === null) return true;
-  let i;
+async function isOutsideDirectory(claudeConfigDir, otherPath) {
+  if (!otherPath) return false;
+  let configReal = await isUnderSymlink(resolve(claudeConfigDir));
+  if (configReal === null) return true;
+  let otherReal = await isUnderSymlink(resolve(otherPath));
+  if (otherReal === null) return true;
+  let canonicalize;
   switch (getPlatform()) {
     case "windows":
-      i = expandWin32ExistingLongNamesStrict;
+      canonicalize = expandWin32ExistingLongNamesStrict;
       break;
     case "macos":
-      i = isSystemVolumePath;
+      canonicalize = isSystemVolumePath;
       break;
     default:
-      i = (f) => f;
+      canonicalize = (path) => path;
   }
-  let s = i(l);
-  let c = i(r);
-  if (s === null || c === null) return true;
-  let m = relative(detectTerminal(s), detectTerminal(c));
-  return m === "" || !isEscapingRelativePath(m);
+  let otherCanonical = canonicalize(otherReal);
+  let configCanonical = canonicalize(configReal);
+  if (otherCanonical === null || configCanonical === null) return true;
+  let rel = relative(detectTerminal(otherCanonical), detectTerminal(configCanonical));
+  return rel === "" || !isEscapingRelativePath(rel);
 }
 //@ chunk-hddjmtjj.js:8861-8954 placement
 function isHomeDirMismatch() {
-  let n;
+  let homeDir;
   try {
-    n = userInfo().homedir;
+    homeDir = userInfo().homedir;
   } catch {
     return true;
   }
-  if (!n) return true;
-  return resolve(homedir()) !== resolve(n);
+  if (!homeDir) return true;
+  return resolve(homedir()) !== resolve(homeDir);
 }
 //@ chunk-hddjmtjj.js:8954-8982 placement
 function toFsSafeName(claudeConfigDir) {
   return isUncOrDevicePath(claudeConfigDir);
 }
 //@ chunk-hddjmtjj.js:8982-9358 placement
-async function isUnderSymlink(n) {
-  let root = parse(n).root;
-  let r = root;
-  let parts = relative(root, n).split(sep);
-  let i = 0;
+async function isUnderSymlink(path) {
+  let root = parse(path).root;
+  let root_2 = root;
+  let parts = relative(root, path).split(sep);
+  let depth = 0;
   while (parts.length > 0) {
-    let s = parts.shift();
-    let c = join(r, s);
-    let m;
+    let part = parts.shift();
+    let current = join(root_2, part);
+    let stats;
     try {
-      m = await lstat(c);
+      stats = await lstat(current);
     } catch (error) {
-      if (isENOENT(error)) return join(c, ...parts);
+      if (isENOENT(error)) return join(current, ...parts);
       return null;
     }
-    if (m.isSymbolicLink()) {
-      if (++i > 40) return null;
-      let f;
+    if (stats.isSymbolicLink()) {
+      if (++depth > 40) return null;
+      let linkTarget;
       try {
-        f = await readlink(c);
+        linkTarget = await readlink(current);
       } catch {
         return null;
       }
-      if (toFsSafeName(f)) return null;
-      let h = isAbsolute(f) ? f : join(dirname(c), f);
-      let g = resolve(h, ...parts);
-      r = parse(g).root;
-      parts = relative(r, g).split(sep);
+      if (toFsSafeName(linkTarget)) return null;
+      let resolvedLink = isAbsolute(linkTarget) ? linkTarget : join(dirname(current), linkTarget);
+      let nextPath = resolve(resolvedLink, ...parts);
+      root_2 = parse(nextPath).root;
+      parts = relative(root_2, nextPath).split(sep);
       continue;
     }
-    r = c;
+    root_2 = current;
   }
-  return r;
+  return root_2;
 }
 //@ chunk-hddjmtjj.js:9358-10518 placement
 /**
  * 把导入的指令追加到 CLAUDE.md（带 imported-from 标记，已导入则跳过；项目作用域拒绝符号链接）。
  */
-async function appendImportedInstructions(n, src, r, id, dryRun, containIn) {
-  if (containIn) {
-    if ((await pinPathInside(containIn, n)) === null)
+async function appendImportedInstructions(targetPath, sourcePath, sourceText, id, dryRun, containRoot) {
+  if (containRoot) {
+    if ((await pinPathInside(containRoot, targetPath)) === null)
       return {
-        skipped: `${basename(n)}: target is (or is under) a symlink \u2014 refusing project-scope write`,
+        skipped: `${basename(targetPath)}: target is (or is under) a symlink \u2014 refusing project-scope write`,
       };
-    if ((await pinPathInside(containIn, src)) === null)
+    if ((await pinPathInside(containRoot, sourcePath)) === null)
       return {
-        skipped: `${basename(n)}: source is (or is under) a symlink \u2014 refusing project-scope read`,
+        skipped: `${basename(targetPath)}: source is (or is under) a symlink \u2014 refusing project-scope read`,
       };
   }
-  let c = `<!-- imported-from: ${id} -->`;
-  let m = containIn && isEagerLighthouseEnabled() ? containIn : undefined;
-  let f = "";
+  let marker = `<!-- imported-from: ${id} -->`;
+  let containRoot_2 = containRoot && isEagerLighthouseEnabled() ? containRoot : undefined;
+  let existingText = "";
   try {
-    f = m === undefined ? await readCappedImportFile(n) : await readImportFile(m, n);
-    if (f.includes(c))
+    existingText =
+      containRoot_2 === undefined
+        ? await readCappedImportFile(targetPath)
+        : await readImportFile(containRoot_2, targetPath);
+    if (existingText.includes(marker))
       return {
-        skipped: `${basename(n)}: already imported (marker present; not re-synced)`,
+        skipped: `${basename(targetPath)}: already imported (marker present; not re-synced)`,
       };
   } catch (error) {
     if (!isENOENT(error)) throw error;
   }
-  if (dryRun) return `would append ${basename(src)} \u2192 \`${n}\``;
-  let h = r ?? (m === undefined ? await readCappedImportFile(src) : await readImportFile(m, src));
-  let w = `${
-    f
-      ? `${f}${
-          f.endsWith(`
+  if (dryRun) return `would append ${basename(sourcePath)} \u2192 \`${targetPath}\``;
+  let bodyText =
+    sourceText ??
+    (containRoot_2 === undefined
+      ? await readCappedImportFile(sourcePath)
+      : await readImportFile(containRoot_2, sourcePath));
+  let nextText = `${
+    existingText
+      ? `${existingText}${
+          existingText.endsWith(`
 `)
             ? ""
             : `
@@ -563,35 +571,35 @@ async function appendImportedInstructions(n, src, r, id, dryRun, containIn) {
         }
 `
       : ""
-  }${c}
-${h.trimEnd()}
+  }${marker}
+${bodyText.trimEnd()}
 `;
-  if (m === undefined) {
-    await mkdir(dirname(n), {
+  if (containRoot_2 === undefined) {
+    await mkdir(dirname(targetPath), {
       recursive: true,
     });
-    await writeFileAtomic(n, w, {
+    await writeFileAtomic(targetPath, nextText, {
       encoding: "utf8",
       allowSymlink: true,
     });
   } else {
-    let y = await pinInside(m, n, "write", true);
+    let pinned = await pinInside(containRoot_2, targetPath, "write", true);
     try {
-      await recheckPinned(y, "write", n);
-      await writeFileAtomic(y.ioPath, w, {
+      await recheckPinned(pinned, "write", targetPath);
+      await writeFileAtomic(pinned.ioPath, nextText, {
         encoding: "utf8",
       });
     } catch (error) {
-      return rethrowWithPath(error, y, n);
+      return rethrowWithPath(error, pinned, targetPath);
     } finally {
-      await y.close();
+      await pinned.close();
     }
   }
-  let C =
-    dirname(src) !== dirname(n) && /(?:^|\s)@(?![/~@])(?:[^\s\\]|\\ )+/.test(h)
+  let importsNote =
+    dirname(sourcePath) !== dirname(targetPath) && /(?:^|\s)@(?![/~@])(?:[^\s\\]|\\ )+/.test(bodyText)
       ? " \u2014 note: relative @imports in this file now resolve against the new location; convert them to absolute paths if they stop working"
       : "";
-  return `appended ${basename(src)} \u2192 \`${n}\`${C}`;
+  return `appended ${basename(sourcePath)} \u2192 \`${targetPath}\`${importsNote}`;
 }
 export {
   openPinnedForWrite,

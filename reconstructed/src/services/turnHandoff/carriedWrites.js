@@ -49,36 +49,40 @@ import { READ_LIMITS } from "../../utils/fsBoundRead.js";
 import { getPlatform } from "../../utils/platform.js";
 
 //@ chunk-1bmxdqa0.js:12569-13460 placement
-async function carryTurnWrites(o, l, t) {
-  let carriedWrites = o.carriedWrites ?? [];
+async function carryTurnWrites(request, tools, toolUseContext) {
+  let carriedWrites = request.carriedWrites ?? [];
   let startTime = performance.now();
-  let y = 1;
-  let s = await applyCarriedWrite(carriedWrites, l, t).catch(describeCarryError);
-  if (s.refusal === "permissions_changed" && !s.counts.taken_back && !s.counts.left_behind) {
-    y = 2;
-    s = await applyCarriedWrite(carriedWrites, l, t).catch(describeCarryError);
+  let attempts = 1;
+  let carryResult = await applyCarriedWrite(carriedWrites, tools, toolUseContext).catch(describeCarryError);
+  if (
+    carryResult.refusal === "permissions_changed" &&
+    !carryResult.counts.taken_back &&
+    !carryResult.counts.left_behind
+  ) {
+    attempts = 2;
+    carryResult = await applyCarriedWrite(carriedWrites, tools, toolUseContext).catch(describeCarryError);
   }
-  let { refusal, counts, placedBytes, lastErrorCode } = s;
-  let T = {
+  let { refusal, counts, placedBytes, lastErrorCode } = carryResult;
+  let fields = {
     at: lit("turn_start"),
     outcome: lit(refusal === undefined ? "in_place" : "refused"),
     refusal: fromEnumOpt(refusal),
     duration_ms: Math.round(performance.now() - startTime),
     files: carriedWrites.length,
     approx_placed_bytes: Number(placedBytes.toPrecision(2)),
-    ...identityMap(counts, (D, H) => `files_${H}`),
+    ...identityMap(counts, (value, key) => `files_${key}`),
     ...(lastErrorCode !== undefined && {
       last_error_code: lastErrorCode,
     }),
-    ...(y > 1 && {
-      attempts: y,
+    ...(attempts > 1 && {
+      attempts,
     }),
   };
-  logEvent("tengu_turn_handoff_carried_writes", T);
+  logEvent("tengu_turn_handoff_carried_writes", fields);
   logForDiagnosticsNoPII(
     refusal === "unexpected_error" || refusal === "write_failed" ? "warn" : "info",
     "turn_handoff_carried_writes",
-    T,
+    fields,
   );
   if (refusal === undefined) logFeatureOk("ccr_turn_handoff_carried_writes");
   else if (refusal === "unexpected_error" || refusal === "write_failed")
@@ -90,25 +94,30 @@ async function carryTurnWrites(o, l, t) {
 /**
  * 把上一轮未完成的写入带到新一轮执行，处理路径移动、home 外、无写工具等情况
  */
-async function applyCarriedWrite(carriedWrites, l, t) {
-  if (t.abortController.signal.aborted) return refusalCarryResult("aborted");
+async function applyCarriedWrite(carriedWrites, tools, toolUseContext) {
+  if (toolUseContext.abortController.signal.aborted) return refusalCarryResult("aborted");
   let homeFilesRoot = getHomeFilesRoot();
-  let [O, y, s] = await Promise.all(
-    [getCwd(), getOriginalCwd(), homeFilesRoot].map((e) =>
-      realpath(e).catch(() => {
+  let [cwdReal, originalCwdReal, homeReal] = await Promise.all(
+    [getCwd(), getOriginalCwd(), homeFilesRoot].map((dir) =>
+      realpath(dir).catch(() => {
         return;
       }),
     ),
   );
-  if (s === undefined || O !== s || y !== s) return refusalCarryResult("not_home");
-  if (carriedWrites.some((e) => expandPath(e.filePath) !== posix.join(homeFilesRoot, e.relativePath)))
+  if (homeReal === undefined || cwdReal !== homeReal || originalCwdReal !== homeReal)
+    return refusalCarryResult("not_home");
+  if (
+    carriedWrites.some(
+      (write) => expandPath(write.filePath) !== posix.join(homeFilesRoot, write.relativePath),
+    )
+  )
     return refusalCarryResult("path_moved");
-  let r = storedToolPermissionContext(t);
-  let P = carriedWritePermissionRefusal(getToolPermissionContext(t).mode);
-  if (P !== undefined) return refusalCarryResult(P);
-  let fileWriteTool = findFileWriteTool(l, t.options.toolAliases);
+  let permissionSnapshot = storedToolPermissionContext(toolUseContext);
+  let modeRefusal = carriedWritePermissionRefusal(getToolPermissionContext(toolUseContext).mode);
+  if (modeRefusal !== undefined) return refusalCarryResult(modeRefusal);
+  let fileWriteTool = findFileWriteTool(tools, toolUseContext.options.toolAliases);
   if (fileWriteTool === undefined) return refusalCarryResult("no_write_tool");
-  let v = () =>
+  let hookWouldFire = () =>
     hasModuleHookingSite("tool.call", {
       tool: fileWriteTool.name,
     }) ||
@@ -118,170 +127,201 @@ async function applyCarriedWrite(carriedWrites, l, t) {
       getLoadedModulesForSite("tool.check"),
     ) ||
     ["PermissionRequest", "PostToolBatch"].some(
-      (e) =>
-        dispatchClassicEvent(e) ||
-        hasSettingsHookForEvent(e, t.sessionHooksRegistry, registerAgent(t, e, t.session.id)),
+      (hookEvent) =>
+        dispatchClassicEvent(hookEvent) ||
+        hasSettingsHookForEvent(
+          hookEvent,
+          toolUseContext.sessionHooksRegistry,
+          registerAgent(toolUseContext, hookEvent, toolUseContext.session.id),
+        ),
     ) ||
-    carriedWrites.some((e) =>
-      ["PreToolUse", "PostToolUse"].some((i) =>
+    carriedWrites.some((write) =>
+      ["PreToolUse", "PostToolUse"].some((hookEvent) =>
         hasToolHookMatching({
-          hookEvent: i,
+          hookEvent,
           toolName: fileWriteTool.name,
           toolInput: {
-            file_path: e.filePath,
-            content: e.content,
+            file_path: write.filePath,
+            content: write.content,
           },
-          tools: t.options.tools,
-          toolAliases: t.options.toolAliases,
-          sessionHooks: t.sessionHooksRegistry,
-          sessionId: registerAgent(t, i, t.session.id),
-          exceptInternal: i === "PostToolUse",
+          tools: toolUseContext.options.tools,
+          toolAliases: toolUseContext.options.toolAliases,
+          sessionHooks: toolUseContext.sessionHooksRegistry,
+          sessionId: registerAgent(toolUseContext, hookEvent, toolUseContext.session.id),
+          exceptInternal: hookEvent === "PostToolUse",
         }),
       ),
     );
-  let T = () => {
+  let currentRefusal = () => {
     try {
-      if (storedToolPermissionContext(t) !== r) return "permissions_changed";
-      let e = carriedWritePermissionRefusal(getToolPermissionContext(t).mode);
-      if (e !== undefined) return e;
-      if (getCheckRunner(t.session, fileWriteTool.name) !== undefined) return "runs_elsewhere";
-      return v() ? "hook_would_fire" : undefined;
+      if (storedToolPermissionContext(toolUseContext) !== permissionSnapshot) return "permissions_changed";
+      let modeRefusal = carriedWritePermissionRefusal(getToolPermissionContext(toolUseContext).mode);
+      if (modeRefusal !== undefined) return modeRefusal;
+      if (getCheckRunner(toolUseContext.session, fileWriteTool.name) !== undefined) return "runs_elsewhere";
+      return hookWouldFire() ? "hook_would_fire" : undefined;
     } catch {
       return "unexpected_error";
     }
   };
-  let D = T();
-  if (D !== undefined) return refusalCarryResult(D);
-  let H = [];
-  let N = new Map();
-  for (let e of carriedWrites) {
-    let i = {
-      file_path: e.filePath,
-      content: e.content,
+  let refusal = currentRefusal();
+  if (refusal !== undefined) return refusalCarryResult(refusal);
+  let toPlace = [];
+  let mtimes = new Map();
+  for (let write of carriedWrites) {
+    let input = {
+      file_path: write.filePath,
+      content: write.content,
     };
-    let buffer = Buffer.from(e.content);
-    let h = await checkHomeTarget(homeFilesRoot, e.relativePath).catch((error) => {
+    let buffer = Buffer.from(write.content);
+    let targetCheck = await checkHomeTarget(homeFilesRoot, write.relativePath).catch((error) => {
       if (getErrnoCode(error) === "ELOOP")
         return {
           outcome: "path_occupied",
         };
       throw error;
     });
-    if (h?.outcome === "refused_name") return refusalCarryResult("refused_name");
-    let u = T();
-    if (u !== undefined) return refusalCarryResult(u);
-    let _ = await hasPermissionsToUseTool(fileWriteTool, i, t, e.assistantMessage, e.toolUseID);
-    let w = t.session.writePermissionStash.consume(e.toolUseID, expandPath(e.filePath));
-    let R = classifyCarriedWriteDecision(_, i);
-    if (R !== undefined) return refusalCarryResult(R);
-    if (w === undefined || w === PERMISSION_STASH_EVICTED_SYMBOL)
+    if (targetCheck?.outcome === "refused_name") return refusalCarryResult("refused_name");
+    let refusal = currentRefusal();
+    if (refusal !== undefined) return refusalCarryResult(refusal);
+    let decision = await hasPermissionsToUseTool(
+      fileWriteTool,
+      input,
+      toolUseContext,
+      write.assistantMessage,
+      write.toolUseID,
+    );
+    let judgedPaths = toolUseContext.session.writePermissionStash.consume(
+      write.toolUseID,
+      expandPath(write.filePath),
+    );
+    let decisionRefusal = classifyCarriedWriteDecision(decision, input);
+    if (decisionRefusal !== undefined) return refusalCarryResult(decisionRefusal);
+    if (judgedPaths === undefined || judgedPaths === PERMISSION_STASH_EVICTED_SYMBOL)
       return refusalCarryResult("unexpected_error");
-    if (hasReadDenyRuleForPath(expandPath(e.filePath), getToolPermissionContext(t), w))
+    if (
+      hasReadDenyRuleForPath(
+        expandPath(write.filePath),
+        getToolPermissionContext(toolUseContext),
+        judgedPaths,
+      )
+    )
       return refusalCarryResult("denied");
-    let all = w.every((E) => readWouldBeAutoAllowedForPath(E, getToolPermissionContext(t)));
-    if (h === undefined)
-      H.push({
-        write: e,
+    let all = judgedPaths.every((judgedPath) =>
+      readWouldBeAutoAllowedForPath(judgedPath, getToolPermissionContext(toolUseContext)),
+    );
+    if (targetCheck === undefined)
+      toPlace.push({
+        write,
         data: buffer,
-        judgedPaths: w,
+        judgedPaths,
         mayRead: all,
       });
     else {
       if (!all) return refusalCarryResult("would_ask");
-      let matchingFileMtime = await getMatchingFileMtime(homeFilesRoot, e, buffer, h.outcome, w);
+      let matchingFileMtime = await getMatchingFileMtime(
+        homeFilesRoot,
+        write,
+        buffer,
+        targetCheck.outcome,
+        judgedPaths,
+      );
       if (matchingFileMtime === undefined) return refusalCarryResult("occupied");
-      N.set(e, matchingFileMtime);
+      mtimes.set(write, matchingFileMtime);
     }
-    let W = cloneFileStateCache(t.readFileState);
-    W.set(expandPath(e.filePath), listSessionsImpl(e, Number.POSITIVE_INFINITY));
-    let L = await fileWriteTool.validateInput?.(i, {
-      ...t,
-      readFileState: W,
+    let readState = cloneFileStateCache(toolUseContext.readFileState);
+    readState.set(expandPath(write.filePath), listSessionsImpl(write, Number.POSITIVE_INFINITY));
+    let validation = await fileWriteTool.validateInput?.(input, {
+      ...toolUseContext,
+      readFileState: readState,
     });
-    if (L?.result === false) return refusalCarryResult(L.deniedByPermissionRule ? "denied" : "tool_refuses");
+    if (validation?.result === false)
+      return refusalCarryResult(validation.deniedByPermissionRule ? "denied" : "tool_refuses");
   }
-  if (t.abortController.signal.aborted) return refusalCarryResult("aborted");
+  if (toolUseContext.abortController.signal.aborted) return refusalCarryResult("aborted");
   await sweepStaleStageTmps(homeFilesRoot, STAGE_TMP_PREFIX);
-  let j = T();
-  if (j !== undefined) return refusalCarryResult(j);
-  let S = [];
+  let placeRefusal = currentRefusal();
+  if (placeRefusal !== undefined) return refusalCarryResult(placeRefusal);
+  let placed = [];
   let placedBytes = 0;
-  let B;
-  let U = [];
-  for (let { write, data: i, judgedPaths, mayRead } of H) {
-    let u = T();
-    if (u !== undefined) {
-      B = {
-        refusal: u,
+  let failure;
+  let madeDirs = [];
+  for (let { write, data, judgedPaths, mayRead } of toPlace) {
+    let refusal = currentRefusal();
+    if (refusal !== undefined) {
+      failure = {
+        refusal,
       };
       break;
     }
     try {
-      let _ = await placeBytesAsHomeFile(homeFilesRoot, write.relativePath, i, judgedPaths);
-      let { outcome } = _;
+      let placeResult = await placeBytesAsHomeFile(homeFilesRoot, write.relativePath, data, judgedPaths);
+      let { outcome } = placeResult;
       let joined = posix.join(homeFilesRoot, write.relativePath);
-      let C;
+      let mtime;
       if (outcome === "placed") {
-        placedBytes += i.length;
-        if (_.madeDirectory !== undefined)
-          U.push({
-            top: _.madeDirectory,
+        placedBytes += data.length;
+        if (placeResult.madeDirectory !== undefined)
+          madeDirs.push({
+            top: placeResult.madeDirectory,
             deepest: posix.dirname(joined),
           });
-        let W = await lstat(joined);
-        S.push({
+        let fileStats = await lstat(joined);
+        placed.push({
           path: joined,
-          file: W,
+          file: fileStats,
         });
-        C = Math.floor(W.mtimeMs);
+        mtime = Math.floor(fileStats.mtimeMs);
       } else
-        C = mayRead ? await getMatchingFileMtime(homeFilesRoot, write, i, outcome, judgedPaths) : undefined;
-      if (C === undefined) {
-        B = {
+        mtime = mayRead
+          ? await getMatchingFileMtime(homeFilesRoot, write, data, outcome, judgedPaths)
+          : undefined;
+      if (mtime === undefined) {
+        failure = {
           refusal:
-            _.outcome === "refused_name"
-              ? _.refusal === "not_as_judged"
+            placeResult.outcome === "refused_name"
+              ? placeResult.refusal === "not_as_judged"
                 ? "path_moved"
                 : "refused_name"
               : "occupied",
         };
         break;
       }
-      N.set(write, C);
+      mtimes.set(write, mtime);
     } catch (error) {
-      B = {
+      failure = {
         refusal: "write_failed",
         lastErrorCode: sanitizeErrnoForTelemetry(error) ?? lit("unknown"),
       };
       break;
     }
   }
-  if (B !== undefined) {
-    let results = await Promise.all(S.map(({ path, file }) => removeIfUnchanged(path, file)));
-    for (let { top, deepest } of U.reverse())
-      for (let u = deepest; u.length >= top.length; u = posix.dirname(u))
+  if (failure !== undefined) {
+    let results = await Promise.all(placed.map(({ path, file }) => removeIfUnchanged(path, file)));
+    for (let { top, deepest } of madeDirs.reverse())
+      for (let dirPath = deepest; dirPath.length >= top.length; dirPath = posix.dirname(dirPath))
         if (
-          !(await rmdir(u).then(
+          !(await rmdir(dirPath).then(
             () => true,
             () => false,
           ))
         )
           break;
-    let i = count(results, Boolean);
+    let takenBackCount = count(results, Boolean);
     return {
-      ...B,
+      ...failure,
       counts: {
-        taken_back: i,
-        left_behind: S.length - i,
+        taken_back: takenBackCount,
+        left_behind: placed.length - takenBackCount,
       },
       placedBytes: 0,
     };
   }
-  for (let [e, timestamp] of N) t.readFileState.set(expandPath(e.filePath), listSessionsImpl(e, timestamp));
+  for (let [write, timestamp] of mtimes)
+    toolUseContext.readFileState.set(expandPath(write.filePath), listSessionsImpl(write, timestamp));
   return {
     counts: {
-      placed: S.length,
-      already_present: carriedWrites.length - S.length,
+      placed: placed.length,
+      already_present: carriedWrites.length - placed.length,
     },
     placedBytes,
   };
@@ -298,25 +338,26 @@ function refusalCarryResult(refusal) {
   };
 }
 //@ chunk-1bmxdqa0.js:16917-17018 placement
-function describeCarryError(o) {
-  return isAbortError(o)
+function describeCarryError(error) {
+  return isAbortError(error)
     ? refusalCarryResult("aborted")
     : {
         ...refusalCarryResult("unexpected_error"),
-        lastErrorCode: sanitizeErrnoForTelemetry(o) ?? lit("unknown"),
+        lastErrorCode: sanitizeErrnoForTelemetry(error) ?? lit("unknown"),
       };
 }
 //@ chunk-1bmxdqa0.js:17018-17398 placement
 /**
  * 对交接回合中携带的写入的权限决定分类：拒绝、需询问、自动模式、其他原因允许，或输入被修改。
  */
-function classifyCarriedWriteDecision(o, l) {
-  if (o.behavior !== "allow") return o.behavior === "deny" ? "denied" : "would_ask";
-  if (o.decisionReason?.type !== "mode" && o.decisionReason?.type !== "rule") return "allowed_otherwise";
-  if (o.decisionReason?.type === "mode" && o.decisionReason.mode === "auto") return "auto_mode";
-  let updatedInput = o.updatedInput;
+function classifyCarriedWriteDecision(decision, input) {
+  if (decision.behavior !== "allow") return decision.behavior === "deny" ? "denied" : "would_ask";
+  if (decision.decisionReason?.type !== "mode" && decision.decisionReason?.type !== "rule")
+    return "allowed_otherwise";
+  if (decision.decisionReason?.type === "mode" && decision.decisionReason.mode === "auto") return "auto_mode";
+  let updatedInput = decision.updatedInput;
   return updatedInput === undefined ||
-    (updatedInput.file_path === l.file_path && updatedInput.content === l.content)
+    (updatedInput.file_path === input.file_path && updatedInput.content === input.content)
     ? undefined
     : "input_changed";
 }
@@ -324,27 +365,30 @@ function classifyCarriedWriteDecision(o, l) {
 /**
  * 文件已存在时，确认它位于允许的根目录下（经 /proc/self/fd 或 realpath）且内容与待写入字节完全相同，返回其 mtime 毫秒。
  */
-async function getMatchingFileMtime(homeFilesRoot, l, t, outcome, O) {
+async function getMatchingFileMtime(rootDir, write, data, outcome, judgedPaths) {
   if (outcome !== "already_present") return;
-  let joined = posix.join(homeFilesRoot, l.relativePath);
-  let s = await open(joined, constants.O_RDONLY | NOFOLLOW_NONBLOCK_FLAGS | READ_LIMITS).catch((error) => {
-    if (["ENOENT", "ELOOP", "ENOTDIR", "EACCES"].includes(getErrnoCode(error) ?? "")) return;
-    throw error;
-  });
-  if (s === undefined) return;
+  let joined = posix.join(rootDir, write.relativePath);
+  let handle = await open(joined, constants.O_RDONLY | NOFOLLOW_NONBLOCK_FLAGS | READ_LIMITS).catch(
+    (error) => {
+      if (["ENOENT", "ELOOP", "ENOTDIR", "EACCES"].includes(getErrnoCode(error) ?? "")) return;
+      throw error;
+    },
+  );
+  if (handle === undefined) return;
   try {
-    let r =
+    let realTarget =
       getPlatform() === "linux"
-        ? await readlink(`/proc/self/fd/${s.fd}`)
+        ? await readlink(`/proc/self/fd/${handle.fd}`)
         : await realpath(joined).catch(() => {
             return;
           });
-    if (r === undefined || !O.includes(r)) return;
-    let stats = await s.stat();
-    return stats.isFile() && stats.size === t.length && (await s.readFile()).equals(t)
+    if (realTarget === undefined || !judgedPaths.includes(realTarget)) return;
+    let stats = await handle.stat();
+    return stats.isFile() && stats.size === data.length && (await handle.readFile()).equals(data)
       ? Math.floor(stats.mtimeMs)
       : undefined;
   } finally {
-    await s.close();
+    await handle.close();
   }
 }
+export { carryTurnWrites };

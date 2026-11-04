@@ -66,7 +66,7 @@ import { isBridgeEnabled } from "../bridge/bridgeEntitlement.js";
 import { isPolicyLimitsCacheLoaded } from "../services/policyLimits/policyEvidence.js";
 import { getRemoteControlPolicyVerdict } from "../bridge/bridgeGates.js";
 import { getGlobalConfig, saveGlobalConfig } from "./config.js";
-import { w } from "../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import { useNoticeImpression, useNoticeImpressionEnabled } from "../components/LogoV2/CondensedLogo.js";
 import { MEMO_CACHE_SENTINEL, EARLY_RETURN_SENTINEL } from "../../runtime/bun-runtime.js";
 import { getClaudeAiBaseUrl } from "../constants/product.js";
@@ -129,11 +129,12 @@ import {
 } from "../components/LogoV2/FullscreenDownsell.js";
 import { createRoot } from "../ink.js";
 import { announcementState } from "../services/announcements/announcementState.js";
-import { init_react_production, Se, P } from "../../vendor/react/cjs/react.production.js";
+import { init_react_production, useContext, useEffect } from "../../vendor/react/cjs/react.production.js";
 import { appStoreContext } from "../state/AppState.js";
 import { useTerminalViewport } from "../ink/components/Input.js";
-import { kp } from "../../vendor/convert-to-spaces/dist/index.js";
+import { APP_CONTEXT } from "../../vendor/convert-to-spaces/dist/index.js";
 import { markSecurityWarningsSeen } from "./permissions/securityWarnings.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-ag5x7vhf.js:96305-96352 placement
 function oauthExpiryWarningText() {
@@ -189,14 +190,14 @@ var SAFE_MODE_NOTICE = {
 };
 var EXTRA_WARNING_NOTICES = [];
 //@ chunk-ag5x7vhf.js:96973-97006 placement
-function displayPathOf(m) {
-  return toDisplayPath(m.path);
+function displayPathOf(file) {
+  return toDisplayPath(file.path);
 }
 //@ chunk-ag5x7vhf.js:97006-97115 placement
 function toDisplayPath(path) {
   let cwdOrNull = getCwdOrNull();
-  let x = cwdOrNull !== null && path.startsWith(cwdOrNull) ? relative(cwdOrNull, path) : path;
-  return x === ".." || x.startsWith(`..${sep}`) ? path : x;
+  let relativePath = cwdOrNull !== null && path.startsWith(cwdOrNull) ? relative(cwdOrNull, path) : path;
+  return relativePath === ".." || relativePath.startsWith(`..${sep}`) ? path : relativePath;
 }
 //@ chunk-ag5x7vhf.js:97115-105242 placement
 /**
@@ -206,12 +207,12 @@ var LARGE_MEMORY_FILES_NOTICE = {
   id: "large-memory-files",
   tier: "warning",
   type: "warning",
-  isActive: (m) =>
-    getLargeMemoryFiles(m.memoryFiles).length > 0 || getOversizedMemoryWarning(m.memoryFiles) !== null,
-  render: (m) => {
-    let largeMemoryFiles = getLargeMemoryFiles(m.memoryFiles);
+  isActive: (ctx) =>
+    getLargeMemoryFiles(ctx.memoryFiles).length > 0 || getOversizedMemoryWarning(ctx.memoryFiles) !== null,
+  render: (ctx) => {
+    let largeMemoryFiles = getLargeMemoryFiles(ctx.memoryFiles);
     let maxMemoryFileChars = getMaxMemoryFileChars();
-    let oversizedMemoryWarning = getOversizedMemoryWarning(m.memoryFiles);
+    let oversizedMemoryWarning = getOversizedMemoryWarning(ctx.memoryFiles);
     return jsxProd_default_2(Fragment, {
       children: [
         oversizedMemoryWarning &&
@@ -230,7 +231,7 @@ var LARGE_MEMORY_FILES_NOTICE = {
               "-char total limit \xB7 largest:",
               " ",
               oversizedMemoryWarning.largest
-                .map((k) => `${displayPathOf(k)} (${formatNumber(k.content.length)})`)
+                .map((file) => `${displayPathOf(file)} (${formatNumber(file.content.length)})`)
                 .join(", "),
               jsxProd_default(Text, {
                 dimColor: true,
@@ -271,13 +272,13 @@ var WITHHELD_MEMORY_FILES_NOTICE = {
   id: "withheld-memory-files",
   tier: "warning",
   type: "warning",
-  isActive: (m) => !isClaudeMdLoadingDisabled() && getWithheldInstructionFiles(m.session).length > 0,
-  render: (m) => {
-    let h = takeShownInstructionFiles(getWithheldInstructionFiles(m.session));
+  isActive: (ctx) => !isClaudeMdLoadingDisabled() && getWithheldInstructionFiles(ctx.session).length > 0,
+  render: (ctx) => {
+    let withheld = takeShownInstructionFiles(getWithheldInstructionFiles(ctx.session));
     return jsxProd_default_2(Fragment, {
       children: [
-        h.shown.map(({ path, why }) => {
-          let k = withheldInstructionNotice(why, toDisplayPath(path));
+        withheld.shown.map(({ path, why }) => {
+          let notice = withheldInstructionNotice(why, toDisplayPath(path));
           return jsxProd_default_2(
             Box,
             {
@@ -285,7 +286,7 @@ var WITHHELD_MEMORY_FILES_NOTICE = {
               children: [
                 jsxProd_default(StatusRow, {
                   status: "warning",
-                  children: k.lead,
+                  children: notice.lead,
                 }),
                 jsxProd_default_2(Box, {
                   paddingLeft: 2,
@@ -295,13 +296,13 @@ var WITHHELD_MEMORY_FILES_NOTICE = {
                       flexShrink: 0,
                       marginRight: 1,
                       children: jsxProd_default(Text, {
-                        children: k.mark,
+                        children: notice.mark,
                       }),
                     }),
                     jsxProd_default(Text, {
                       bold: true,
                       wrap: "truncate-start",
-                      children: k.path,
+                      children: notice.path,
                     }),
                   ],
                 }),
@@ -310,10 +311,10 @@ var WITHHELD_MEMORY_FILES_NOTICE = {
             path,
           );
         }),
-        h.more > 0 &&
+        withheld.more > 0 &&
           jsxProd_default(StatusRow, {
             status: "warning",
-            children: moreInstructionFilesText(h),
+            children: moreInstructionFilesText(withheld),
           }),
       ],
     });
@@ -453,9 +454,9 @@ var LARGE_AGENT_DESCRIPTIONS_NOTICE = {
   id: "large-agent-descriptions",
   tier: "warning",
   type: "warning",
-  isActive: (m) => getAgentDescriptionsTotalTokens(m.agentDefinitions) > MCP_CONNECTED_TTL_MS,
-  render: (m) => {
-    let agentDescriptionsTotalTokens = getAgentDescriptionsTotalTokens(m.agentDefinitions);
+  isActive: (ctx) => getAgentDescriptionsTotalTokens(ctx.agentDefinitions) > MCP_CONNECTED_TTL_MS,
+  render: (ctx) => {
+    let agentDescriptionsTotalTokens = getAgentDescriptionsTotalTokens(ctx.agentDefinitions);
     return jsxProd_default_2(StatusRow, {
       status: "warning",
       children: [
@@ -477,22 +478,23 @@ var MODEL_SOURCE_NOTICE = {
   id: "model-source",
   tier: "info",
   type: "info",
-  isActive: (m) => m.modelRestrictedWarning === null && (getModelSourceAnnotation() !== "" || MIGRATIONS()),
+  isActive: (ctx) =>
+    ctx.modelRestrictedWarning === null && (getModelSourceAnnotation() !== "" || MIGRATIONS()),
   render: () => jsxProd_default(ModelSourceNotice, {}),
 };
 var MCP_NEEDS_AUTH_NOTICE = {
   id: "mcp-needs-auth",
   tier: "warning",
   type: "warning",
-  isActive: (m) => m.mcpNeedsAuthCount > 0,
-  render: (m) =>
+  isActive: (ctx) => ctx.mcpNeedsAuthCount > 0,
+  render: (ctx) =>
     jsxProd_default_2(StatusRow, {
       status: "warning",
       children: [
-        m.mcpNeedsAuthCount,
+        ctx.mcpNeedsAuthCount,
         " MCP",
         " ",
-        plural(m.mcpNeedsAuthCount, "server needs", "servers need"),
+        plural(ctx.mcpNeedsAuthCount, "server needs", "servers need"),
         " ",
         "authentication",
         jsxProd_default(Text, {
@@ -506,15 +508,15 @@ var CROSS_SESSION_MESSAGING_OFF_NOTICE = {
   id: "cross-session-messaging-off",
   tier: "warning",
   type: "warning",
-  isActive: (m) =>
-    messagingSocketServerSlot.of(m.session.host).lastStartFailureCause === "socket_dir_refused",
-  render: (m) =>
+  isActive: (ctx) =>
+    messagingSocketServerSlot.of(ctx.session.host).lastStartFailureCause === "socket_dir_refused",
+  render: (ctx) =>
     jsxProd_default_2(StatusRow, {
       status: "warning",
       children: [
         "Cross-session messaging is off:",
         " ",
-        messagingSocketUnavailableReason(messagingSocketServerSlot.of(m.session.host)) ??
+        messagingSocketUnavailableReason(messagingSocketServerSlot.of(ctx.session.host)) ??
           "its socket directory could not be set up",
         jsxProd_default_2(Text, {
           dimColor: true,
@@ -532,17 +534,17 @@ var MODEL_DEPRECATION_NOTICE = {
   id: "model-deprecation",
   tier: "warning",
   type: "warning",
-  isActive: (m) => m.modelDeprecationWarning !== null,
-  render: (m) =>
-    m.modelDeprecationWarning === null
+  isActive: (ctx) => ctx.modelDeprecationWarning !== null,
+  render: (ctx) =>
+    ctx.modelDeprecationWarning === null
       ? null
       : jsxProd_default_2(StatusRow, {
           status: "warning",
           children: [
-            m.modelDeprecationWarning.message,
+            ctx.modelDeprecationWarning.message,
             jsxProd_default_2(Text, {
               dimColor: true,
-              children: [" \xB7 ", m.modelDeprecationWarning.action],
+              children: [" \xB7 ", ctx.modelDeprecationWarning.action],
             }),
           ],
         }),
@@ -551,15 +553,15 @@ var MODEL_RESTRICTED_NOTICE = {
   id: "model-restricted",
   tier: "warning",
   type: "warning",
-  isActive: (m) => m.modelRestrictedWarning !== null,
-  render: (m) =>
-    m.modelRestrictedWarning === null
+  isActive: (ctx) => ctx.modelRestrictedWarning !== null,
+  render: (ctx) =>
+    ctx.modelRestrictedWarning === null
       ? null
       : jsxProd_default(StatusRow, {
           status: "warning",
           children: formatModelRestrictedNotice(
-            m.modelRestrictedWarning.requested,
-            m.modelRestrictedWarning.effective,
+            ctx.modelRestrictedWarning.requested,
+            ctx.modelRestrictedWarning.effective,
           ),
         }),
 };
@@ -567,21 +569,21 @@ var MODEL_UNRECOGNIZED_NOTICE = {
   id: "model-unrecognized",
   tier: "warning",
   type: "warning",
-  isActive: (m) => m.unknownModelWindowWarning !== null,
-  render: (m) =>
-    m.unknownModelWindowWarning === null
+  isActive: (ctx) => ctx.unknownModelWindowWarning !== null,
+  render: (ctx) =>
+    ctx.unknownModelWindowWarning === null
       ? null
       : jsxProd_default_2(StatusRow, {
           status: "warning",
           children: [
-            `Model "${displayModelName(m.unknownModelWindowWarning.model)}" isn't recognized`,
+            `Model "${displayModelName(ctx.unknownModelWindowWarning.model)}" isn't recognized`,
             jsxProd_default_2(Text, {
               dimColor: true,
               children: [
                 " \xB7 ",
                 "context assumed to be",
                 " ",
-                formatTokens(m.unknownModelWindowWarning.window),
+                formatTokens(ctx.unknownModelWindowWarning.window),
                 " tokens \xB7 update Claude Code, or see",
                 " ",
                 jsxProd_default(Link, {
@@ -598,44 +600,44 @@ var AUTO_COMPACT_WINDOW_ENV_NOTICE = {
   id: "auto-compact-window-env",
   tier: "warning",
   type: "warning",
-  isActive: (m) => m.autoCompactWindowEnvWarning !== null,
-  render: (m) =>
-    m.autoCompactWindowEnvWarning === null
+  isActive: (ctx) => ctx.autoCompactWindowEnvWarning !== null,
+  render: (ctx) =>
+    ctx.autoCompactWindowEnvWarning === null
       ? null
       : jsxProd_default(StatusRow, {
           status: "warning",
-          children: m.autoCompactWindowEnvWarning,
+          children: ctx.autoCompactWindowEnvWarning,
         }),
 };
 var UNUSABLE_MANAGED_MCP_NOTICE = {
   id: "unusable-managed-mcp",
   tier: "warning",
   type: "warning",
-  isActive: (m) => m.unusableManagedMcpConfigMessage !== null,
-  render: (m) =>
-    m.unusableManagedMcpConfigMessage === null
+  isActive: (ctx) => ctx.unusableManagedMcpConfigMessage !== null,
+  render: (ctx) =>
+    ctx.unusableManagedMcpConfigMessage === null
       ? null
       : jsxProd_default(StatusRow, {
           status: "warning",
-          children: m.unusableManagedMcpConfigMessage,
+          children: ctx.unusableManagedMcpConfigMessage,
         }),
 };
 var SANDBOX_DENIES_ON_ANOTHER_HOST_NOTICE = {
   id: "sandbox-denies-on-another-host",
   tier: "warning",
   type: "warning",
-  isActive: (m) => m.sandboxDeniesOnAnotherHostCount > 0,
-  render: (m) =>
+  isActive: (ctx) => ctx.sandboxDeniesOnAnotherHostCount > 0,
+  render: (ctx) =>
     jsxProd_default_2(StatusRow, {
       status: "warning",
       children: [
-        m.sandboxDeniesOnAnotherHostCount,
+        ctx.sandboxDeniesOnAnotherHostCount,
         " sandbox deny",
         " ",
-        plural(m.sandboxDeniesOnAnotherHostCount, "path"),
+        plural(ctx.sandboxDeniesOnAnotherHostCount, "path"),
         " on another computer",
         " ",
-        plural(m.sandboxDeniesOnAnotherHostCount, "is", "are"),
+        plural(ctx.sandboxDeniesOnAnotherHostCount, "is", "are"),
         " not enforced",
         jsxProd_default(Text, {
           dimColor: true,
@@ -648,17 +650,17 @@ var SECURITY_WARNINGS_NOTICE = {
   id: "security-warnings",
   tier: "warning",
   type: "warning",
-  isActive: (m) => m.securityWarnings.length > 0,
-  render: (m) =>
+  isActive: (ctx) => ctx.securityWarnings.length > 0,
+  render: (ctx) =>
     jsxProd_default(Fragment, {
-      children: uniq(m.securityWarnings.map((securityWarning) => securityWarning.text)).map((h) =>
+      children: uniq(ctx.securityWarnings.map((securityWarning) => securityWarning.text)).map((text) =>
         jsxProd_default(
           StatusRow,
           {
             status: "warning",
-            children: h,
+            children: text,
           },
-          h,
+          text,
         ),
       ),
     }),
@@ -692,7 +694,7 @@ var REMOTE_MANAGED_SETTINGS_FAILED_NOTICE = {
     let remoteSettingsLoadState = getRemoteSettingsLoadState();
     if (remoteSettingsLoadState?.state !== "failed" && remoteSettingsLoadState?.state !== "stale_cache")
       return null;
-    let h = describeFetchFailure(
+    let failureText = describeFetchFailure(
       remoteSettingsLoadState.failure.errorKind,
       remoteSettingsLoadState.failure.httpStatus,
     );
@@ -700,7 +702,7 @@ var REMOTE_MANAGED_SETTINGS_FAILED_NOTICE = {
       status: "warning",
       children: [
         "Remote managed settings failed to load (",
-        h,
+        failureText,
         ")",
         remoteSettingsLoadState.state === "stale_cache"
           ? remoteSettingsLoadState.transportEnvWithheld
@@ -777,9 +779,9 @@ var TMUX_SESSION_NOTICE = {
 var REMOTE_CONTROL_AUTO_ON = "remote-control-auto-on";
 var REMOTE_CONTROL_AUTO_ON_MAX_SEEN = 3;
 //@ chunk-ag5x7vhf.js:105242-105456 placement
-function shouldShowRemoteControlAutoOnNotice(m) {
+function shouldShowRemoteControlAutoOnNotice(ctx) {
   if (!getFeatureValue_CACHED_MAY_BE_STALE("tengu_cobalt_harbor_notice", true)) return false;
-  if (!m.replBridgeAutoOnByDefault) return false;
+  if (!ctx.replBridgeAutoOnByDefault) return false;
   if (!isBridgeEnabled()) return false;
   if (!isPolicyLimitsCacheLoaded()) return false;
   if (getRemoteControlPolicyVerdict() !== "allowed") return false;
@@ -789,15 +791,15 @@ function shouldShowRemoteControlAutoOnNotice(m) {
 }
 //@ chunk-ag5x7vhf.js:105456-105590 placement
 function markRemoteControlAutoOnSeen(storageV5) {
-  saveGlobalConfig((h) => {
-    let seenNotifications = h.seenNotifications ?? {};
-    let T = seenNotifications[REMOTE_CONTROL_AUTO_ON] ?? 0;
-    if (T >= REMOTE_CONTROL_AUTO_ON_MAX_SEEN) return h;
+  saveGlobalConfig((config) => {
+    let seenNotifications = config.seenNotifications ?? {};
+    let seenCount = seenNotifications[REMOTE_CONTROL_AUTO_ON] ?? 0;
+    if (seenCount >= REMOTE_CONTROL_AUTO_ON_MAX_SEEN) return config;
     return {
-      ...h,
+      ...config,
       seenNotifications: {
         ...seenNotifications,
-        [REMOTE_CONTROL_AUTO_ON]: T + 1,
+        [REMOTE_CONTROL_AUTO_ON]: seenCount + 1,
       },
     };
   }, storageV5);
@@ -807,25 +809,25 @@ function markRemoteControlAutoOnSeen(storageV5) {
  * 登录即将过期时显示的状态行：剩余天数与 /login 续期提示。
  */
 function OAuthExpiryStatusRow() {
-  let m = w(2);
+  let $ = useMemoCache(2);
   useNoticeImpression("oauth-expiry", oauthExpiryWarningText);
-  let h;
-  let x;
-  if (m[0] === MEMO_CACHE_SENTINEL) {
-    x = EARLY_RETURN_SENTINEL;
+  let row;
+  let early;
+  if ($[0] === MEMO_CACHE_SENTINEL) {
+    early = EARLY_RETURN_SENTINEL;
     k: {
-      let T = oauthExpiryWarning();
-      if (!T) {
-        x = null;
+      let expiry = oauthExpiryWarning();
+      if (!expiry) {
+        early = null;
         break k;
       }
-      h = jsxProd_default_2(StatusRow, {
+      row = jsxProd_default_2(StatusRow, {
         status: "warning",
         children: [
           "Your login expires in ",
-          T.daysLeft,
+          expiry.daysLeft,
           " ",
-          plural(T.daysLeft, "day"),
+          plural(expiry.daysLeft, "day"),
           jsxProd_default(Text, {
             dimColor: true,
             children: " \xB7 run /login to renew",
@@ -833,14 +835,14 @@ function OAuthExpiryStatusRow() {
         ],
       });
     }
-    m[0] = h;
-    m[1] = x;
+    $[0] = row;
+    $[1] = early;
   } else {
-    h = m[0];
-    x = m[1];
+    row = $[0];
+    early = $[1];
   }
-  if (x !== EARLY_RETURN_SENTINEL) return x;
-  return h;
+  if (early !== EARLY_RETURN_SENTINEL) return early;
+  return row;
 }
 //@ chunk-ag5x7vhf.js:106018-106161 fingerprint = jetbrainsPluginNotice (0.336)
 var jetbrainsPluginNotice = {
@@ -848,7 +850,7 @@ var jetbrainsPluginNotice = {
   tier: "info",
   type: "info",
   claimsFirstShow: () => (getGlobalConfig().seenNotifications?.[REMOTE_CONTROL_AUTO_ON] ?? 0) === 0,
-  isActive: (m) => shouldShowRemoteControlAutoOnNotice(m),
+  isActive: (ctx) => shouldShowRemoteControlAutoOnNotice(ctx),
   render: (ctx) =>
     jsxProd_default(RemoteControlAutoOnNotice, {
       ctx,
@@ -859,7 +861,7 @@ var jetbrainsPluginNotice = {
  * 远程控制默认开启提示：说明可在手机/桌面应用或 claude.ai 查看进度和回复会话，要只留在本终端可运行 /remote-control；挂载时记一次已看到。
  */
 function RemoteControlAutoOnNotice(props) {
-  let $ = w(10);
+  let $ = useMemoCache(10);
   let { ctx } = props;
   let { storageV5 } = ctx;
   let markSeen;
@@ -869,13 +871,13 @@ function RemoteControlAutoOnNotice(props) {
     $[1] = markSeen;
   } else markSeen = $[1];
   useNoticeImpression(REMOTE_CONTROL_AUTO_ON, markSeen);
-  let I;
+  let sessionUrl;
   if ($[2] !== ctx.replBridgeSessionUrl) {
-    I = ctx.replBridgeSessionUrl ?? `${getClaudeAiBaseUrl()}/code`;
+    sessionUrl = ctx.replBridgeSessionUrl ?? `${getClaudeAiBaseUrl()}/code`;
     $[2] = ctx.replBridgeSessionUrl;
-    $[3] = I;
-  } else I = $[3];
-  let sessionUrl = I;
+    $[3] = sessionUrl;
+  } else sessionUrl = $[3];
+  let sessionUrl_2 = sessionUrl;
   let title;
   if ($[4] === MEMO_CACHE_SENTINEL) {
     title = jsxProd_default(Text, {
@@ -885,16 +887,16 @@ function RemoteControlAutoOnNotice(props) {
     $[4] = title;
   } else title = $[4];
   let link;
-  if ($[5] !== sessionUrl) {
+  if ($[5] !== sessionUrl_2) {
     link = jsxProd_default(Text, {
       color: "text",
       children: jsxProd_default(Link, {
-        url: sessionUrl,
-        fallback: sessionUrl,
+        url: sessionUrl_2,
+        fallback: sessionUrl_2,
         children: "claude.ai",
       }),
     });
-    $[5] = sessionUrl;
+    $[5] = sessionUrl_2;
     $[6] = link;
   } else link = $[6];
   let commandText;
@@ -939,234 +941,251 @@ var POWERUP_DISCOVERY_NOTICE = {
 };
 //@ chunk-ag5x7vhf.js:107086-107214 placement
 function PowerupDiscoveryNotice() {
-  let m = w(1);
+  let $ = useMemoCache(1);
   useNoticeImpression("powerup-discovery", logPowerupDiscoveryShown);
-  let h;
-  if (m[0] === MEMO_CACHE_SENTINEL) {
-    h = jsxProd_default(InfoNotice, {
+  let element;
+  if ($[0] === MEMO_CACHE_SENTINEL) {
+    element = jsxProd_default(InfoNotice, {
       children: POWERUP_DISCOVERY_COPY.banner,
     });
-    m[0] = h;
-  } else h = m[0];
-  return h;
+    $[0] = element;
+  } else element = $[0];
+  return element;
 }
 //@ chunk-ag5x7vhf.js:107214-109962 placement
 /**
  * 紧急提示、频道、提示缓存关闭等一组 info/warning 状态提示定义。
  */
-var EMERGENCY_TIP_NOTICE = {
-  id: "emergency-tip",
-  tier: "warning",
-  type: "warning",
-  isActive: () => isEmergencyTipShown(getTipOfFeed()),
-  render: () => jsxProd_default(EmergencyTip, {}),
-};
-var CHANNELS_NOTICE = {
-  id: "channels",
-  tier: "info",
-  type: "info",
-  isActive: () => getAllowedChannels().length > 0,
-  render: () => jsxProd_default(ChannelsNotice, {}),
-};
-var PROMPT_CACHING_DISABLED_NOTICE = {
-  id: "prompt-caching-disabled",
-  tier: "warning",
-  type: "warning",
-  isActive: () => promptCachingDisabledVars().length > 0,
-  render: () => {
-    let m = promptCachingDisabledVars();
-    return jsxProd_default_2(StatusRow, {
-      status: "warning",
-      children: [
-        "Prompt caching off (",
-        m.join(", "),
-        "), requests will be slower and cost more",
-        jsxProd_default(Text, {
-          dimColor: true,
-          children: " \xB7 unset it to re-enable",
-        }),
-      ],
-    });
-  },
-};
-var AUTO_MODE_DEFAULT_NOTICE = {
-  id: AUTO_MODE_DEFAULT,
-  tier: "announcement",
-  type: "info",
-  promo: false,
-  priority: NOTICE_PRIORITIES.org,
-  claimsFirstShow: () => shouldShowAutoDefaultNotice("auto"),
-  isActive: () => shouldShowAutoDefaultNotice("auto"),
-  render: () => jsxProd_default(AutoModeDefaultNotice, {}),
-};
-var COMPANY_ANNOUNCEMENT_NOTICE = {
-  id: "company-announcement",
-  tier: "announcement",
-  type: "info",
-  promo: false,
-  priority: NOTICE_PRIORITIES.org,
-  isActive: () => hasCompanyAnnouncements(),
-  render: () => jsxProd_default(CompanyAnnouncementNotice, {}),
-};
-var SAVED_MODEL_SUCCESSOR_NOTICE = {
-  id: SAVED_MODEL_SUCCESSOR,
-  tier: "announcement",
-  type: "info",
-  promo: false,
-  priority: NOTICE_PRIORITIES.promo,
-  showAccentBar: () => false,
-  releasesSlot: () => savedModelSuccessor() === undefined,
-  heldOut: () => isModelSuccessorNoticeHidden(),
-  isActive: (m) => {
-    let h = m.isLaunchPromptPending() ? undefined : savedModelSuccessor();
-    return (
-      h !== undefined &&
-      shouldShowModelSuccessorNotice(h) &&
-      getShortcutDisplay("chat:defaultToNewerModel", "Chat", "ctrl+y") !== ""
-    );
-  },
-  render: () => jsxProd_default(ModelSuccessorNotice, {}),
-};
-var STARTUP_ANNOUNCEMENT_NOTICE = {
-  id: "startup-announcement",
-  tier: "announcement",
-  type: "info",
-  promo: false,
-  priority: NOTICE_PRIORITIES.launch,
-  isActive: () =>
-    pickStartupAnnouncement_2(false) !== undefined &&
-    !(parsePromoCampaign()?.isTopPriorityAnnouncement === true && shouldShowFotw()),
-  showAccentBar: () => pickStartupAnnouncement_2(false)?.accentBar !== false,
-  render: () => jsxProd_default(StartupAnnouncementNotice, {}),
-};
-var PROMO_CREDIT_NOTICE = {
-  id: PROMO_CREDIT_NOTICE_ID,
-  tier: "announcement",
-  type: "info",
-  promo: false,
-  priority: NOTICE_PRIORITIES.campaign,
-  isActive: (m) => shouldShowPromoCreditNotice(m.session),
-  render: () => jsxProd_default(PromoCreditNotice, {}),
-};
-var FEATURE_OF_THE_WEEK_NOTICE = {
-  id: "fotw-nudge",
-  tier: "announcement",
-  type: "info",
-  promo: false,
-  priority: NOTICE_PRIORITIES.campaign,
-  isActive: () => shouldShowFotw(),
-  render: () => jsxProd_default(FeatureOfTheWeekNotice, {}),
-};
-var CC_CE_MIGRATE_NOTICE = {
-  id: "cc-ce-migrate",
-  tier: "announcement",
-  type: "info",
-  promo: true,
-  maxImpressions: CC_CE_MIGRATE_MAX_IMPRESSIONS_LIMIT,
-  priority: NOTICE_PRIORITIES.campaign,
-  isActive: () => shouldShowCeMigrateNotice(),
-  render: () => jsxProd_default(CeMigrateNotice, {}),
-};
-var API_CREDIT_LINK_NOTICE = {
-  id: API_CREDIT_LINK,
-  tier: "announcement",
-  type: "info",
-  promo: true,
-  maxImpressions: API_CREDIT_MAX_ASKS,
-  priority: NOTICE_PRIORITIES.promo,
-  releasesSlot: () => getApiCreditLinkText() === null || !arePromoOffersAllowed(),
-  heldOut: () => shouldSuppressApiCreditLinkNotice(),
-  isActive: (m) =>
-    isPassesEligibleBeforeLaunch() &&
-    !canClaimPromoCredit() &&
-    !shouldShowPromoUpsell() &&
-    !m.isLaunchPromptPending() &&
-    !isSessionRestored(m.session.host) &&
-    !isActingAsBgJob() &&
-    !env.CLAUDE_BRIDGE_REATTACH_SESSION,
-  render: () => jsxProd_default(ApiCreditLinkNotice, {}),
-};
-var GUEST_PASSES_NOTICE = {
-  id: "guest-passes",
-  tier: "announcement",
-  type: "info",
-  promo: true,
-  maxImpressions: 3,
-  priority: NOTICE_PRIORITIES.promo,
-  isActive: (m) =>
-    shouldShowGuestPassesUpsell(m.storageV5) && !canClaimPromoCredit() && !shouldShowPromoUpsell(),
-  render: () => jsxProd_default(GuestPassesNotice, {}),
-};
-var FULLSCREEN_DOWNSELL_NOTICE = {
-  id: "fullscreen-downsell",
-  tier: "announcement",
-  type: "info",
-  promo: false,
-  priority: NOTICE_PRIORITIES.hint,
-  claimsFirstShow: () => (getGlobalConfig().fullscreenDownsellSeenCount ?? 0) === 0,
-  isActive: () => env.CLAUDE_CODE_TUI_JUST_SWITCHED === undefined && isFullscreenDownsellActive(),
-  render: () => jsxProd_default(FullscreenDownsellNotice, {}),
-};
-var SUBSCRIPTION_SWITCH_NOTICE = {
-  id: "subscription-switch",
-  tier: "announcement",
-  type: "info",
-  promo: true,
-  maxImpressions: CC_CE_MIGRATE_MAX_IMPRESSIONS,
-  priority: NOTICE_PRIORITIES.promo,
-  isActive: (m) => m.existingClaudeSubscription !== null,
-  render: (m) =>
-    m.existingClaudeSubscription === null
-      ? null
-      : jsxProd_default(SubscriptionSwitchNotice, {
-          subscriptionType: m.existingClaudeSubscription,
-        }),
-};
-var ALL_STATUS_NOTICES = [
-  SAFE_MODE_NOTICE,
-  ...EXTRA_WARNING_NOTICES,
-  LARGE_MEMORY_FILES_NOTICE,
-  WITHHELD_MEMORY_FILES_NOTICE,
-  LARGE_AGENT_DESCRIPTIONS_NOTICE,
-  CLAUDE_AI_EXTERNAL_TOKEN_NOTICE,
-  API_KEY_CONFLICT_NOTICE,
-  BOTH_AUTH_METHODS_NOTICE,
-  CHANNELS_NOTICE,
-  PROMPT_CACHING_DISABLED_NOTICE,
-  EMERGENCY_TIP_NOTICE,
-  MODEL_SOURCE_NOTICE,
-  MODEL_DEPRECATION_NOTICE,
-  MODEL_RESTRICTED_NOTICE,
-  MODEL_UNRECOGNIZED_NOTICE,
-  AUTO_COMPACT_WINDOW_ENV_NOTICE,
-  UNUSABLE_MANAGED_MCP_NOTICE,
-  SECURITY_WARNINGS_NOTICE,
-  SANDBOX_DENIES_ON_ANOTHER_HOST_NOTICE,
-  MCP_NEEDS_AUTH_NOTICE,
-  CROSS_SESSION_MESSAGING_OFF_NOTICE,
-  REMOTE_MANAGED_SETTINGS_FAILED_NOTICE,
-  HIPAA_COMPLIANCE_NOTICE,
-  MONITORING_NOTICE,
-  DEBUG_MODE_NOTICE,
-  TMUX_SESSION_NOTICE,
-  createRoot,
-  AUTO_MODE_DEFAULT_NOTICE,
-  jetbrainsPluginNotice,
-  POWERUP_DISCOVERY_NOTICE,
-  COMPANY_ANNOUNCEMENT_NOTICE,
-  STARTUP_ANNOUNCEMENT_NOTICE,
-  SAVED_MODEL_SUCCESSOR_NOTICE,
-  PROMO_CREDIT_NOTICE,
-  FEATURE_OF_THE_WEEK_NOTICE,
-  CC_CE_MIGRATE_NOTICE,
-  API_CREDIT_LINK_NOTICE,
-  GUEST_PASSES_NOTICE,
-  SUBSCRIPTION_SWITCH_NOTICE,
-  FULLSCREEN_DOWNSELL_NOTICE,
-];
+var EMERGENCY_TIP_NOTICE; // deferred: uses NOTICE_PRIORITIES of its import cycle while loading; runs once the cycle is complete
+var CHANNELS_NOTICE;
+var PROMPT_CACHING_DISABLED_NOTICE;
+var AUTO_MODE_DEFAULT_NOTICE;
+var COMPANY_ANNOUNCEMENT_NOTICE;
+var SAVED_MODEL_SUCCESSOR_NOTICE;
+var STARTUP_ANNOUNCEMENT_NOTICE;
+var PROMO_CREDIT_NOTICE;
+var FEATURE_OF_THE_WEEK_NOTICE;
+var CC_CE_MIGRATE_NOTICE;
+var API_CREDIT_LINK_NOTICE;
+var GUEST_PASSES_NOTICE;
+var FULLSCREEN_DOWNSELL_NOTICE;
+var SUBSCRIPTION_SWITCH_NOTICE;
+var ALL_STATUS_NOTICES;
+deferInit("chunk-ag5x7vhf.js:107214", () => {
+  EMERGENCY_TIP_NOTICE = {
+    id: "emergency-tip",
+    tier: "warning",
+    type: "warning",
+    isActive: () => isEmergencyTipShown(getTipOfFeed()),
+    render: () => jsxProd_default(EmergencyTip, {}),
+  };
+  CHANNELS_NOTICE = {
+    id: "channels",
+    tier: "info",
+    type: "info",
+    isActive: () => getAllowedChannels().length > 0,
+    render: () => jsxProd_default(ChannelsNotice, {}),
+  };
+  PROMPT_CACHING_DISABLED_NOTICE = {
+    id: "prompt-caching-disabled",
+    tier: "warning",
+    type: "warning",
+    isActive: () => promptCachingDisabledVars().length > 0,
+    render: () => {
+      let disabledVars = promptCachingDisabledVars();
+      return jsxProd_default_2(StatusRow, {
+        status: "warning",
+        children: [
+          "Prompt caching off (",
+          disabledVars.join(", "),
+          "), requests will be slower and cost more",
+          jsxProd_default(Text, {
+            dimColor: true,
+            children: " \xB7 unset it to re-enable",
+          }),
+        ],
+      });
+    },
+  };
+  AUTO_MODE_DEFAULT_NOTICE = {
+    id: AUTO_MODE_DEFAULT,
+    tier: "announcement",
+    type: "info",
+    promo: false,
+    priority: NOTICE_PRIORITIES.org,
+    claimsFirstShow: () => shouldShowAutoDefaultNotice("auto"),
+    isActive: () => shouldShowAutoDefaultNotice("auto"),
+    render: () => jsxProd_default(AutoModeDefaultNotice, {}),
+  };
+  COMPANY_ANNOUNCEMENT_NOTICE = {
+    id: "company-announcement",
+    tier: "announcement",
+    type: "info",
+    promo: false,
+    priority: NOTICE_PRIORITIES.org,
+    isActive: () => hasCompanyAnnouncements(),
+    render: () => jsxProd_default(CompanyAnnouncementNotice, {}),
+  };
+  SAVED_MODEL_SUCCESSOR_NOTICE = {
+    id: SAVED_MODEL_SUCCESSOR,
+    tier: "announcement",
+    type: "info",
+    promo: false,
+    priority: NOTICE_PRIORITIES.promo,
+    showAccentBar: () => false,
+    releasesSlot: () => savedModelSuccessor() === undefined,
+    heldOut: () => isModelSuccessorNoticeHidden(),
+    isActive: (ctx) => {
+      let successor = ctx.isLaunchPromptPending() ? undefined : savedModelSuccessor();
+      return (
+        successor !== undefined &&
+        shouldShowModelSuccessorNotice(successor) &&
+        getShortcutDisplay("chat:defaultToNewerModel", "Chat", "ctrl+y") !== ""
+      );
+    },
+    render: () => jsxProd_default(ModelSuccessorNotice, {}),
+  };
+  STARTUP_ANNOUNCEMENT_NOTICE = {
+    id: "startup-announcement",
+    tier: "announcement",
+    type: "info",
+    promo: false,
+    priority: NOTICE_PRIORITIES.launch,
+    isActive: () =>
+      pickStartupAnnouncement_2(false) !== undefined &&
+      !(parsePromoCampaign()?.isTopPriorityAnnouncement === true && shouldShowFotw()),
+    showAccentBar: () => pickStartupAnnouncement_2(false)?.accentBar !== false,
+    render: () => jsxProd_default(StartupAnnouncementNotice, {}),
+  };
+  PROMO_CREDIT_NOTICE = {
+    id: PROMO_CREDIT_NOTICE_ID,
+    tier: "announcement",
+    type: "info",
+    promo: false,
+    priority: NOTICE_PRIORITIES.campaign,
+    isActive: (ctx) => shouldShowPromoCreditNotice(ctx.session),
+    render: () => jsxProd_default(PromoCreditNotice, {}),
+  };
+  FEATURE_OF_THE_WEEK_NOTICE = {
+    id: "fotw-nudge",
+    tier: "announcement",
+    type: "info",
+    promo: false,
+    priority: NOTICE_PRIORITIES.campaign,
+    isActive: () => shouldShowFotw(),
+    render: () => jsxProd_default(FeatureOfTheWeekNotice, {}),
+  };
+  CC_CE_MIGRATE_NOTICE = {
+    id: "cc-ce-migrate",
+    tier: "announcement",
+    type: "info",
+    promo: true,
+    maxImpressions: CC_CE_MIGRATE_MAX_IMPRESSIONS_LIMIT,
+    priority: NOTICE_PRIORITIES.campaign,
+    isActive: () => shouldShowCeMigrateNotice(),
+    render: () => jsxProd_default(CeMigrateNotice, {}),
+  };
+  API_CREDIT_LINK_NOTICE = {
+    id: API_CREDIT_LINK,
+    tier: "announcement",
+    type: "info",
+    promo: true,
+    maxImpressions: API_CREDIT_MAX_ASKS,
+    priority: NOTICE_PRIORITIES.promo,
+    releasesSlot: () => getApiCreditLinkText() === null || !arePromoOffersAllowed(),
+    heldOut: () => shouldSuppressApiCreditLinkNotice(),
+    isActive: (ctx) =>
+      isPassesEligibleBeforeLaunch() &&
+      !canClaimPromoCredit() &&
+      !shouldShowPromoUpsell() &&
+      !ctx.isLaunchPromptPending() &&
+      !isSessionRestored(ctx.session.host) &&
+      !isActingAsBgJob() &&
+      !env.CLAUDE_BRIDGE_REATTACH_SESSION,
+    render: () => jsxProd_default(ApiCreditLinkNotice, {}),
+  };
+  GUEST_PASSES_NOTICE = {
+    id: "guest-passes",
+    tier: "announcement",
+    type: "info",
+    promo: true,
+    maxImpressions: 3,
+    priority: NOTICE_PRIORITIES.promo,
+    isActive: (ctx) =>
+      shouldShowGuestPassesUpsell(ctx.storageV5) && !canClaimPromoCredit() && !shouldShowPromoUpsell(),
+    render: () => jsxProd_default(GuestPassesNotice, {}),
+  };
+  FULLSCREEN_DOWNSELL_NOTICE = {
+    id: "fullscreen-downsell",
+    tier: "announcement",
+    type: "info",
+    promo: false,
+    priority: NOTICE_PRIORITIES.hint,
+    claimsFirstShow: () => (getGlobalConfig().fullscreenDownsellSeenCount ?? 0) === 0,
+    isActive: () => env.CLAUDE_CODE_TUI_JUST_SWITCHED === undefined && isFullscreenDownsellActive(),
+    render: () => jsxProd_default(FullscreenDownsellNotice, {}),
+  };
+  SUBSCRIPTION_SWITCH_NOTICE = {
+    id: "subscription-switch",
+    tier: "announcement",
+    type: "info",
+    promo: true,
+    maxImpressions: CC_CE_MIGRATE_MAX_IMPRESSIONS,
+    priority: NOTICE_PRIORITIES.promo,
+    isActive: (ctx) => ctx.existingClaudeSubscription !== null,
+    render: (ctx) =>
+      ctx.existingClaudeSubscription === null
+        ? null
+        : jsxProd_default(SubscriptionSwitchNotice, {
+            subscriptionType: ctx.existingClaudeSubscription,
+          }),
+  };
+  ALL_STATUS_NOTICES = [
+    SAFE_MODE_NOTICE,
+    ...EXTRA_WARNING_NOTICES,
+    LARGE_MEMORY_FILES_NOTICE,
+    WITHHELD_MEMORY_FILES_NOTICE,
+    LARGE_AGENT_DESCRIPTIONS_NOTICE,
+    CLAUDE_AI_EXTERNAL_TOKEN_NOTICE,
+    API_KEY_CONFLICT_NOTICE,
+    BOTH_AUTH_METHODS_NOTICE,
+    CHANNELS_NOTICE,
+    PROMPT_CACHING_DISABLED_NOTICE,
+    EMERGENCY_TIP_NOTICE,
+    MODEL_SOURCE_NOTICE,
+    MODEL_DEPRECATION_NOTICE,
+    MODEL_RESTRICTED_NOTICE,
+    MODEL_UNRECOGNIZED_NOTICE,
+    AUTO_COMPACT_WINDOW_ENV_NOTICE,
+    UNUSABLE_MANAGED_MCP_NOTICE,
+    SECURITY_WARNINGS_NOTICE,
+    SANDBOX_DENIES_ON_ANOTHER_HOST_NOTICE,
+    MCP_NEEDS_AUTH_NOTICE,
+    CROSS_SESSION_MESSAGING_OFF_NOTICE,
+    REMOTE_MANAGED_SETTINGS_FAILED_NOTICE,
+    HIPAA_COMPLIANCE_NOTICE,
+    MONITORING_NOTICE,
+    DEBUG_MODE_NOTICE,
+    TMUX_SESSION_NOTICE,
+    createRoot,
+    AUTO_MODE_DEFAULT_NOTICE,
+    jetbrainsPluginNotice,
+    POWERUP_DISCOVERY_NOTICE,
+    COMPANY_ANNOUNCEMENT_NOTICE,
+    STARTUP_ANNOUNCEMENT_NOTICE,
+    SAVED_MODEL_SUCCESSOR_NOTICE,
+    PROMO_CREDIT_NOTICE,
+    FEATURE_OF_THE_WEEK_NOTICE,
+    CC_CE_MIGRATE_NOTICE,
+    API_CREDIT_LINK_NOTICE,
+    GUEST_PASSES_NOTICE,
+    SUBSCRIPTION_SWITCH_NOTICE,
+    FULLSCREEN_DOWNSELL_NOTICE,
+  ];
+});
 //@ chunk-ag5x7vhf.js:109962-110014 placement
-function activeStatusNotices(m) {
-  return ALL_STATUS_NOTICES.filter((h) => h.isActive(m));
+function activeStatusNotices(ctx) {
+  return ALL_STATUS_NOTICES.filter((notice) => notice.isActive(ctx));
 }
 //@ chunk-ag5x7vhf.js:110014-110217 placement
 function promptCachingDisabledVars() {
@@ -1176,10 +1195,10 @@ function promptCachingDisabledVars() {
     "DISABLE_PROMPT_CACHING_OPUS",
     "DISABLE_PROMPT_CACHING_SONNET",
     "DISABLE_PROMPT_CACHING_FABLE",
-  ].filter((m) => isEnvTruthy(process.env[m]));
+  ].filter((envVar) => isEnvTruthy(process.env[envVar]));
 }
 //@ chunk-ag5x7vhf.js:110217-110310 placement
-function isNoticeTierShown(tier, h) {
+function isNoticeTierShown(tier, enabledTiers) {
   switch (tier) {
     case "error":
     case "warning":
@@ -1191,33 +1210,33 @@ function isNoticeTierShown(tier, h) {
 //@ chunk-ag5x7vhf.js:110310-110373 placement
 var INFO_NOTICE_ORDER = ["debug-mode", "model-source", "channels", "tmux-session"];
 //@ chunk-ag5x7vhf.js:110373-110587 placement
-function noticeSortKey(m) {
-  if (m.tier === "announcement") {
-    let priority = m.priority ?? 0;
+function noticeSortKey(notice) {
+  if (notice.tier === "announcement") {
+    let priority = notice.priority ?? 0;
     if (priority >= NOTICE_PRIORITIES.org) return [0, -priority];
     if (priority >= NOTICE_PRIORITIES.launch) return [1, -priority];
     if (priority >= NOTICE_PRIORITIES.campaign) return [2, -priority];
     return [4, -priority];
   }
-  let index = INFO_NOTICE_ORDER.indexOf(m.id);
+  let index = INFO_NOTICE_ORDER.indexOf(notice.id);
   return [3, index === -1 ? INFO_NOTICE_ORDER.length : index];
 }
 //@ chunk-ag5x7vhf.js:110587-111275 placement
 /**
  * 决定状态区公告位：首次选择时跳过 heldOut 的公告并锁定获胜者；之后始终显示同一公告（除非已释放），并修正溢出计数。
  */
-function resolveAnnouncementSlot(m, h, x) {
+function resolveAnnouncementSlot(candidates, tierVisibility, fallbackGovernance) {
   let state = announcementState();
-  let governance = state.announcementSlotGovernance ?? x;
+  let governance = state.announcementSlotGovernance ?? fallbackGovernance;
   if (state.announcementSlotWinner === null) {
-    let candidates = m;
-    let slot = selectNotices(candidates, h, governance).slot;
+    let candidates_2 = candidates;
+    let slot = selectNotices(candidates_2, tierVisibility, governance).slot;
     while (slot?.heldOut?.() === true) {
       let id = slot.id;
-      candidates = candidates.filter((candidate) => candidate.id !== id);
-      slot = selectNotices(candidates, h, governance).slot;
+      candidates_2 = candidates_2.filter((candidate) => candidate.id !== id);
+      slot = selectNotices(candidates_2, tierVisibility, governance).slot;
     }
-    let selection = selectNotices(dropHeldOutNotices(candidates, slot), h, governance);
+    let selection = selectNotices(dropHeldOutNotices(candidates_2, slot), tierVisibility, governance);
     if (selection.slot !== null) {
       state.announcementSlotWinner = selection.slot;
       state.announcementSlotGovernance = {
@@ -1227,7 +1246,11 @@ function resolveAnnouncementSlot(m, h, x) {
     return selection;
   }
   let announcementSlotWinner = state.announcementSlotWinner;
-  let current = selectNotices(dropHeldOutNotices(m, announcementSlotWinner), h, governance);
+  let current = selectNotices(
+    dropHeldOutNotices(candidates, announcementSlotWinner),
+    tierVisibility,
+    governance,
+  );
   if (state.announcementSlotReleased || announcementSlotWinner.releasesSlot?.() === true) {
     state.announcementSlotReleased = true;
     return {
@@ -1238,7 +1261,7 @@ function resolveAnnouncementSlot(m, h, x) {
   }
   if (current.slot?.id === announcementSlotWinner.id) return current;
   let overflow = current.slot === null ? 0 : current.slotOverflowCount + 1;
-  let isStillListed = m.some((L) => L.id === announcementSlotWinner.id);
+  let isStillListed = candidates.some((candidate) => candidate.id === announcementSlotWinner.id);
   return {
     ...current,
     slot: announcementSlotWinner,
@@ -1246,160 +1269,183 @@ function resolveAnnouncementSlot(m, h, x) {
   };
 }
 //@ chunk-ag5x7vhf.js:111275-111320 placement
-function selectStatusNotices(m, h, x) {
-  return selectNotices(dropHeldOutNotices(m, null), h, x);
+function selectStatusNotices(notices, tierVisibility, governance) {
+  return selectNotices(dropHeldOutNotices(notices, null), tierVisibility, governance);
 }
 //@ chunk-ag5x7vhf.js:111320-111392 placement
-function dropHeldOutNotices(m, h) {
-  return m.filter((x) => x.heldOut === undefined || x.id === h?.id);
+function dropHeldOutNotices(notices, heldNotice) {
+  return notices.filter((notice) => notice.heldOut === undefined || notice.id === heldNotice?.id);
 }
 //@ chunk-ag5x7vhf.js:111392-111905 placement
-function selectNotices(m, h, { suppressPromos }) {
-  let filtered = m.filter((A) => isNoticeTierShown(A.tier, h) && !(A.promo === true && suppressPromos));
-  let warnings = filtered.filter((A) => A.antOnly !== true && A.tier !== "info" && A.tier !== "announcement");
-  let ant = isEnvTruthy(env.IS_DEMO) ? [] : filtered.filter((A) => A.antOnly === true);
-  let filtered_2 = filtered.filter(
-    (A) => A.antOnly !== true && (A.tier === "info" || A.tier === "announcement"),
+function selectNotices(notices, tierVisibility, { suppressPromos }) {
+  let filtered = notices.filter(
+    (notice) => isNoticeTierShown(notice.tier, tierVisibility) && !(notice.promo === true && suppressPromos),
   );
-  let D = filtered_2.find((A) => A.claimsFirstShow?.() === true) ?? null;
-  if (D === null)
-    for (let A of filtered_2) {
-      if (D === null) {
-        D = A;
+  let warnings = filtered.filter(
+    (notice) => notice.antOnly !== true && notice.tier !== "info" && notice.tier !== "announcement",
+  );
+  let ant = isEnvTruthy(env.IS_DEMO) ? [] : filtered.filter((notice) => notice.antOnly === true);
+  let filtered_2 = filtered.filter(
+    (notice) => notice.antOnly !== true && (notice.tier === "info" || notice.tier === "announcement"),
+  );
+  let slotNotice = filtered_2.find((notice) => notice.claimsFirstShow?.() === true) ?? null;
+  if (slotNotice === null)
+    for (let notice of filtered_2) {
+      if (slotNotice === null) {
+        slotNotice = notice;
         continue;
       }
-      let [L, V] = noticeSortKey(A);
-      let [W, z] = noticeSortKey(D);
-      if (L < W || (L === W && V < z)) D = A;
+      let [candidateRank, candidateOrder] = noticeSortKey(notice);
+      let [slotRank, slotOrder] = noticeSortKey(slotNotice);
+      if (candidateRank < slotRank || (candidateRank === slotRank && candidateOrder < slotOrder))
+        slotNotice = notice;
     }
   return {
     warnings,
-    slot: D,
-    slotOverflowCount: D === null ? 0 : filtered_2.length - 1,
+    slot: slotNotice,
+    slotOverflowCount: slotNotice === null ? 0 : filtered_2.length - 1,
     ant,
   };
 }
 //@ chunk-ag5x7vhf.js:111905-111909 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-ag5x7vhf.js:111905", () => {
+  init_react_production();
+});
 //@ chunk-ag5x7vhf.js:111909-112284 placement
 /**
  * 不可见的触发组件：在可见视口中且有需要认证的 MCP 服务器时，触发认证提示检查。
  */
 function McpAuthNoticeTrigger(props) {
-  let D = w(9);
+  let $ = useMemoCache(9);
   let { count, storageV5 } = props;
   let noticeImpressionEnabled = useNoticeImpressionEnabled();
-  let k = Se(appStoreContext);
-  let [_, , , I] = useTerminalViewport();
-  let A;
-  let L;
-  if (D[0] !== I || D[1] !== count || D[2] !== noticeImpressionEnabled || D[3] !== storageV5 || D[4] !== k) {
-    A = () => {
-      if (!noticeImpressionEnabled || k === null || count === 0 || I() !== true) {
+  let store = useContext(appStoreContext);
+  let [viewportRef, , , isVisible] = useTerminalViewport();
+  let effect;
+  let deps;
+  if (
+    $[0] !== isVisible ||
+    $[1] !== count ||
+    $[2] !== noticeImpressionEnabled ||
+    $[3] !== storageV5 ||
+    $[4] !== store
+  ) {
+    effect = () => {
+      if (!noticeImpressionEnabled || store === null || count === 0 || isVisible() !== true) {
         return;
       }
-      needsAuthNoticeServers(k.getState().mcp.clients, MCP_CONNECTION_CHECKS, storageV5);
+      needsAuthNoticeServers(store.getState().mcp.clients, MCP_CONNECTION_CHECKS, storageV5);
     };
-    L = [noticeImpressionEnabled, k, count, storageV5, I];
-    D[0] = I;
-    D[1] = count;
-    D[2] = noticeImpressionEnabled;
-    D[3] = storageV5;
-    D[4] = k;
-    D[5] = A;
-    D[6] = L;
+    deps = [noticeImpressionEnabled, store, count, storageV5, isVisible];
+    $[0] = isVisible;
+    $[1] = count;
+    $[2] = noticeImpressionEnabled;
+    $[3] = storageV5;
+    $[4] = store;
+    $[5] = effect;
+    $[6] = deps;
   } else {
-    A = D[5];
-    L = D[6];
+    effect = $[5];
+    deps = $[6];
   }
-  P(A, L);
-  let V;
-  if (D[7] !== _) {
-    V = jsxProd_default(Box, {
-      ref: _,
+  useEffect(effect, deps);
+  let element;
+  if ($[7] !== viewportRef) {
+    element = jsxProd_default(Box, {
+      ref: viewportRef,
     });
-    D[7] = _;
-    D[8] = V;
-  } else V = D[8];
-  return V;
+    $[7] = viewportRef;
+    $[8] = element;
+  } else element = $[8];
+  return element;
 }
 //@ chunk-ag5x7vhf.js:112284-112288 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-ag5x7vhf.js:112284", () => {
+  init_react_production();
+});
 //@ chunk-ag5x7vhf.js:112288-112344 placement
-function seenKeysOf(K) {
-  return K.seenKey === undefined ? [] : [K.seenKey];
+function seenKeysOf(row) {
+  return row.seenKey === undefined ? [] : [row.seenKey];
 }
 //@ chunk-ag5x7vhf.js:112344-112777 placement
 /**
  * 不可见的跟踪组件：提示行出现在可见视口时记录已展示，未展示时订阅帧刷新直到记录成功。
  */
 function NoticeVisibilityTracker(props) {
-  let D = w(9);
+  let $ = useMemoCache(9);
   let { rows, storageV5 } = props;
   let noticeImpressionEnabled = useNoticeImpressionEnabled();
-  let { subscribeFrames } = Se(kp);
-  let [_, , , I] = useTerminalViewport();
-  let A;
-  let L;
+  let { subscribeFrames } = useContext(APP_CONTEXT);
+  let [viewportRef, , , isVisible] = useTerminalViewport();
+  let effect;
+  let deps;
   if (
-    D[0] !== I ||
-    D[1] !== noticeImpressionEnabled ||
-    D[2] !== rows ||
-    D[3] !== storageV5 ||
-    D[4] !== subscribeFrames
+    $[0] !== isVisible ||
+    $[1] !== noticeImpressionEnabled ||
+    $[2] !== rows ||
+    $[3] !== storageV5 ||
+    $[4] !== subscribeFrames
   ) {
-    A = () => {
-      let flattened = rows.flatMap(seenKeysOf);
-      if (!noticeImpressionEnabled || flattened.length === 0 || isUnattendedInteractiveSession()) {
+    effect = () => {
+      let seenKeys = rows.flatMap(seenKeysOf);
+      if (!noticeImpressionEnabled || seenKeys.length === 0 || isUnattendedInteractiveSession()) {
         return;
       }
-      if (markSecurityWarningsIfVisible(I, flattened, storageV5)) {
+      if (markSecurityWarningsIfVisible(isVisible, seenKeys, storageV5)) {
         return;
       }
-      let W = subscribeFrames(() => {
-        if (markSecurityWarningsIfVisible(I, flattened, storageV5)) W();
+      let unsubscribe = subscribeFrames(() => {
+        if (markSecurityWarningsIfVisible(isVisible, seenKeys, storageV5)) unsubscribe();
       });
-      return W;
+      return unsubscribe;
     };
-    L = [noticeImpressionEnabled, rows, storageV5, I, subscribeFrames];
-    D[0] = I;
-    D[1] = noticeImpressionEnabled;
-    D[2] = rows;
-    D[3] = storageV5;
-    D[4] = subscribeFrames;
-    D[5] = A;
-    D[6] = L;
+    deps = [noticeImpressionEnabled, rows, storageV5, isVisible, subscribeFrames];
+    $[0] = isVisible;
+    $[1] = noticeImpressionEnabled;
+    $[2] = rows;
+    $[3] = storageV5;
+    $[4] = subscribeFrames;
+    $[5] = effect;
+    $[6] = deps;
   } else {
-    A = D[5];
-    L = D[6];
+    effect = $[5];
+    deps = $[6];
   }
-  P(A, L);
-  let z;
-  if (D[7] !== _) {
-    z = jsxProd_default(Box, {
-      ref: _,
+  useEffect(effect, deps);
+  let element;
+  if ($[7] !== viewportRef) {
+    element = jsxProd_default(Box, {
+      ref: viewportRef,
     });
-    D[7] = _;
-    D[8] = z;
-  } else z = D[8];
-  return z;
+    $[7] = viewportRef;
+    $[8] = element;
+  } else element = $[8];
+  return element;
 }
 //@ chunk-ag5x7vhf.js:112777-112841 placement
-function markSecurityWarningsIfVisible(m, h, storageV5) {
-  let T = m();
-  if (T === true) markSecurityWarningsSeen(h, storageV5);
-  return T !== null;
+function markSecurityWarningsIfVisible(isVisible, seenKeys, storageV5) {
+  let visible = isVisible();
+  if (visible === true) markSecurityWarningsSeen(seenKeys, storageV5);
+  return visible !== null;
 }
 //@ chunk-ag5x7vhf.js:112841-112856 placement
 function noopMountEffect() {}
 //@ chunk-ag5x7vhf.js:112856-112894 placement
-function selectSetupIssues(ut) {
-  return ut.setupIssues;
+function selectSetupIssues(ctx) {
+  return ctx.setupIssues;
 }
 //@ chunk-ag5x7vhf.js:117948-117952 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-ag5x7vhf.js:117948", () => {
+  init_react_production();
+});
 //@ chunk-ag5x7vhf.js:117952-117956 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-ag5x7vhf.js:117952", () => {
+  init_react_production();
+});
 //@ chunk-18hwfzwa.js:312870-312946 fingerprint = getActiveNotices (0.424)
 function getActiveNotices(toolUseContext, guard) {
   return {

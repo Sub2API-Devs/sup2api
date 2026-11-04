@@ -5,15 +5,16 @@
  * pieces: chunk-egr0twnb.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:3199-5450 cjs-fingerprint
-var require_ada = x(function (cjsExports, cjsModule) {
+var require_ada = __commonJS(function (cjsExports, cjsModule) {
   function ada(hljs) {
     let INTEGER_RE = "[eE][-+]?\\d(_|\\d)*";
-    let a = "\\d(_|\\d)*(\\.\\d(_|\\d)*)?(" + INTEGER_RE + ")?";
-    let s = "\\w+";
-    let begin = "\\b(" + ("\\d(_|\\d)*#\\w+(\\.\\w+)?#(" + INTEGER_RE + ")?") + "|" + a + ")";
+    let DECIMAL_LITERAL_RE = "\\d(_|\\d)*(\\.\\d(_|\\d)*)?(" + INTEGER_RE + ")?";
+    let BASED_INTEGER_RE = "\\w+";
+    let begin =
+      "\\b(" + ("\\d(_|\\d)*#\\w+(\\.\\w+)?#(" + INTEGER_RE + ")?") + "|" + DECIMAL_LITERAL_RE + ")";
     let ID_REGEX = "[A-Za-z](_?[A-Za-z0-9.])*";
     let BAD_CHARS = `[]\\{\\}%#'"`;
     let COMMENTS = hljs.COMMENT("--", "$");

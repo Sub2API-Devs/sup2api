@@ -10,16 +10,18 @@
  */
 import { stat, readFile } from "fs/promises";
 import { readLiveServerLock } from "../../utils/daemon/daemonLock.js";
-import { daemonLogPath, daemonJsonPath, getDaemonRuntimeDir } from "../../services/daemon/paths.js";
+import {
+  daemonLogPath,
+  daemonJsonPath,
+  daemonControlSocket,
+  getDaemonRuntimeDir,
+  redactDaemonPipeKey,
+  daemonRosterFile,
+} from "../../services/daemon/paths.js";
 import { controlRequest } from "../../services/daemon/controlClient.js";
 import { BG_PROTO, LeaseClientSchema } from "../../services/daemon/leaseProtocol.js";
 import { readRoster, rosterKey } from "../../services/daemon/roster.js";
 import { daemonServiceStatus } from "../../services/daemon/serviceInstall.js";
-import {
-  daemonControlSocket,
-  redactDaemonPipeKey,
-  daemonRosterFile,
-} from "../../utils/sandbox/userNamespace.js";
 import { getPlatform } from "../../utils/platform.js";
 import { count } from "../../utils/collections.js";
 import { STORAGE_SPACES } from "../../utils/storage/storageSpaces.js";
@@ -31,10 +33,10 @@ import { plural } from "../../utils/stringUtils.js";
 /**
  * 探测守护进程是否可达（ping），返回会话、租约、作业列表。
  */
-async function pingDaemon(e) {
-  let r = await readLiveServerLock(1, e).catch(() => null);
-  let t = r?.logPath ?? daemonLogPath();
-  let [n, roster, o, i, b, daemonState] = await Promise.all([
+async function pingDaemon(storage) {
+  let lock = await readLiveServerLock(1, storage).catch(() => null);
+  let logPath = lock?.logPath ?? daemonLogPath();
+  let [ping, roster, rosterMeta, logStat, serviceInstalled, daemonState] = await Promise.all([
     controlRequest(
       {
         op: "ping",
@@ -52,27 +54,27 @@ async function pingDaemon(e) {
       {
         silent: true,
       },
-      e,
+      storage,
     ),
-    statRosterMeta(e),
-    statDaemonLog(t, e),
+    statRosterMeta(storage),
+    statDaemonLog(logPath, storage),
     daemonServiceStatus().catch(() => false),
-    readDaemonState(daemonJsonPath(), e),
+    readDaemonState(daemonJsonPath(), storage),
   ]);
-  let u;
+  let controlSock;
   try {
-    u = daemonControlSocket();
+    controlSock = daemonControlSocket();
   } catch {
-    u = getPlatform() === "windows" ? "\\\\.\\pipe\\cc-daemon-*" : "<unavailable>";
+    controlSock = getPlatform() === "windows" ? "\\\\.\\pipe\\cc-daemon-*" : "<unavailable>";
   }
   let workersLive = null;
   let workersSkewed = null;
   let leaseClients = [];
-  if (n.ok) {
-    let l = {
+  if (ping.ok) {
+    let failed = {
       ok: false,
     };
-    let [c, m] = await Promise.all([
+    let [listResponse, leasesResponse] = await Promise.all([
       controlRequest(
         {
           op: "list",
@@ -81,7 +83,7 @@ async function pingDaemon(e) {
         {
           timeoutMs: 1000,
         },
-      ).catch(() => l),
+      ).catch(() => failed),
       controlRequest(
         {
           op: "leases",
@@ -90,12 +92,12 @@ async function pingDaemon(e) {
         {
           timeoutMs: 1000,
         },
-      ).catch(() => l),
+      ).catch(() => failed),
     ]);
-    if (c.ok && "jobs" in c) {
-      workersLive = count(c.jobs, (s) => !s.outcome);
-      let f =
-        r?.version ??
+    if (listResponse.ok && "jobs" in listResponse) {
+      workersLive = count(listResponse.jobs, (job) => !job.outcome);
+      let runningVersion =
+        lock?.version ??
         {
           ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
           PACKAGE_URL: "@anthropic-ai/claude-code",
@@ -107,117 +109,126 @@ async function pingDaemon(e) {
           HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
           DD_SOURCEMAP_GROUP: "default",
         }.VERSION;
-      workersSkewed = count(c.jobs, (s) => !s.outcome && s.cliVersion !== undefined && s.cliVersion !== f);
+      workersSkewed = count(
+        listResponse.jobs,
+        (job) => !job.outcome && job.cliVersion !== undefined && job.cliVersion !== runningVersion,
+      );
     }
-    if (m.ok && "clients" in m)
-      leaseClients = m.clients.flatMap((client) => LeaseClientSchema().safeParse(client).data ?? []);
+    if (leasesResponse.ok && "clients" in leasesResponse)
+      leaseClients = leasesResponse.clients.flatMap(
+        (client) => LeaseClientSchema().safeParse(client).data ?? [],
+      );
   }
   return {
-    supervisor: r
+    supervisor: lock
       ? {
-          pid: r.pid,
-          version: r.version,
-          uptimeSec: Math.floor((Date.now() - r.startedAt) / 1000),
+          pid: lock.pid,
+          version: lock.version,
+          uptimeSec: Math.floor((Date.now() - lock.startedAt) / 1000),
         }
       : null,
     sockDir: getPlatform() === "windows" ? "\\\\.\\pipe\\cc-daemon-*" : getDaemonRuntimeDir(),
-    controlSock: u,
-    controlReachable: n.ok,
-    controlError: n.ok ? undefined : redactDaemonPipeKey(n.error),
+    controlSock,
+    controlReachable: ping.ok,
+    controlError: ping.ok ? undefined : redactDaemonPipeKey(ping.error),
     workersLive,
     workersSkewed,
     workersRoster: Object.keys(roster.workers).length,
-    rosterAgeSec: o ? Math.floor((Date.now() - o.mtimeMs) / 1000) : null,
-    bgDisabled: r?.bgDisabled === true,
-    logPath: t,
-    logSizeBytes: i?.size ?? null,
-    serviceInstalled: b,
+    rosterAgeSec: rosterMeta ? Math.floor((Date.now() - rosterMeta.mtimeMs) / 1000) : null,
+    bgDisabled: lock?.bgDisabled === true,
+    logPath,
+    logSizeBytes: logStat?.size ?? null,
+    serviceInstalled,
     configuredWorkers: daemonState,
     leaseClients,
   };
 }
 //@ chunk-czxapneg.js:5644-5795 placement
-async function statRosterMeta(e) {
-  if (e) {
-    let r = await e.statMeta(rosterKey()).catch(() => {
+async function statRosterMeta(storage) {
+  if (storage) {
+    let meta = await storage.statMeta(rosterKey()).catch(() => {
       return;
     });
-    return r?.ok
+    return meta?.ok
       ? {
-          mtimeMs: r.value.mtimeMs,
+          mtimeMs: meta.value.mtimeMs,
         }
       : null;
   }
   return stat(daemonRosterFile()).catch(() => null);
 }
 //@ chunk-czxapneg.js:5795-5967 placement
-async function statDaemonLog(e, r) {
-  if (r && e === daemonLogPath()) {
-    let t = await r.statMeta(STORAGE_SPACES.state("daemon-log")).catch(() => {
+async function statDaemonLog(logPath, storage) {
+  if (storage && logPath === daemonLogPath()) {
+    let meta = await storage.statMeta(STORAGE_SPACES.state("daemon-log")).catch(() => {
       return;
     });
-    return t?.ok
+    return meta?.ok
       ? {
-          size: t.value.size,
+          size: meta.value.size,
         }
       : null;
   }
-  return stat(e).catch(() => null);
+  return stat(logPath).catch(() => null);
 }
 //@ chunk-czxapneg.js:5967-6329 placement
-async function readDaemonState(e, r) {
-  let t;
-  if (r && e === daemonJsonPath()) {
-    let daemonConfigFromStorage = await readDaemonConfigFromStorage(r);
+async function readDaemonState(configPath, storage) {
+  let text;
+  if (storage && configPath === daemonJsonPath()) {
+    let daemonConfigFromStorage = await readDaemonConfigFromStorage(storage);
     if (daemonConfigFromStorage.kind !== "text") return 0;
-    t = daemonConfigFromStorage.text;
+    text = daemonConfigFromStorage.text;
   } else
     try {
-      let o = await stat(e);
-      if (!o.isFile() || o.size > MAX_DAEMON_CONFIG_BYTES) return 0;
-      t = await readFile(e, "utf8");
+      let stats = await stat(configPath);
+      if (!stats.isFile() || stats.size > MAX_DAEMON_CONFIG_BYTES) return 0;
+      text = await readFile(configPath, "utf8");
     } catch {
       return 0;
     }
-  let n = safeParseJSON(t, false);
-  if (n === null || typeof n !== "object") return 0;
-  let a = 0;
-  for (let [key, value] of Object.entries(n)) {
+  let parsed = safeParseJSON(text, false);
+  if (parsed === null || typeof parsed !== "object") return 0;
+  let entryCount = 0;
+  for (let [key, value] of Object.entries(parsed)) {
     if (key === "$schema") continue;
-    a += Array.isArray(value) ? value.length : 1;
+    entryCount += Array.isArray(value) ? value.length : 1;
   }
-  return a;
+  return entryCount;
 }
 //@ chunk-czxapneg.js:6329-7626 placement
-function formatDaemonStatus(e) {
-  let r = ["", "bg sessions:"];
-  r.push(`  sock dir:     ${e.sockDir}`);
-  r.push(
-    `  control.sock: ${e.controlReachable ? "reachable" : `unreachable (${e.controlError ?? "unknown"})`}`,
+function formatDaemonStatus(status) {
+  let lines = ["", "bg sessions:"];
+  lines.push(`  sock dir:     ${status.sockDir}`);
+  lines.push(
+    `  control.sock: ${status.controlReachable ? "reachable" : `unreachable (${status.controlError ?? "unknown"})`}`,
   );
-  if (e.bgDisabled)
-    r.push(
+  if (status.bgDisabled)
+    lines.push(
       "  bg sessions:  disabled (start failure \u2014 see daemon.log; restart the service after fixing)",
     );
-  if (e.workersLive !== null) {
-    r.push(`  bg workers:   ${e.workersLive} running (control.sock), ${e.workersRoster} in roster.json`);
-    if (e.workersSkewed && e.workersSkewed > 0)
-      r.push(
-        `                ${e.workersSkewed} from a different CLI version (most stay attachable and upgrade automatically once idle \u2014 exec runs never respawn)`,
+  if (status.workersLive !== null) {
+    lines.push(
+      `  bg workers:   ${status.workersLive} running (control.sock), ${status.workersRoster} in roster.json`,
+    );
+    if (status.workersSkewed && status.workersSkewed > 0)
+      lines.push(
+        `                ${status.workersSkewed} from a different CLI version (most stay attachable and upgrade automatically once idle \u2014 exec runs never respawn)`,
       );
   } else
-    r.push(
-      `  bg workers:   ${e.workersRoster} in roster.json (${e.controlReachable ? "live count unavailable" : "control unreachable"})`,
+    lines.push(
+      `  bg workers:   ${status.workersRoster} in roster.json (${status.controlReachable ? "live count unavailable" : "control unreachable"})`,
     );
-  r.push(`  roster.json:  ${e.rosterAgeSec === null ? "absent" : `updated ${e.rosterAgeSec}s ago`}`);
-  r.push(
-    `  daemon.log:   ${e.logSizeBytes === null ? "absent" : `${formatByteSize(e.logSizeBytes)} at ${e.logPath}`}`,
+  lines.push(
+    `  roster.json:  ${status.rosterAgeSec === null ? "absent" : `updated ${status.rosterAgeSec}s ago`}`,
   );
-  if (!e.supervisor && !e.controlReachable && e.workersRoster > 0)
-    r.push(
-      `  warning:      supervisor not running but ${e.workersRoster} ${plural(e.workersRoster, "worker")} in roster \u2014 running \`claude agents\` restarts the daemon and re-adopts still-running sessions; run \`claude daemon stop --any\` to reap them instead`,
+  lines.push(
+    `  daemon.log:   ${status.logSizeBytes === null ? "absent" : `${formatByteSize(status.logSizeBytes)} at ${status.logPath}`}`,
+  );
+  if (!status.supervisor && !status.controlReachable && status.workersRoster > 0)
+    lines.push(
+      `  warning:      supervisor not running but ${status.workersRoster} ${plural(status.workersRoster, "worker")} in roster \u2014 running \`claude agents\` restarts the daemon and re-adopts still-running sessions; run \`claude daemon stop --any\` to reap them instead`,
     );
-  return r.join(`
+  return lines.join(`
 `);
 }
 //@ chunk-czxapneg.js:7626-7748 placement
@@ -226,3 +237,4 @@ function formatByteSize(logSizeBytes) {
   if (logSizeBytes < 1048576) return `${(logSizeBytes / 1024).toFixed(1)}KB`;
   return `${(logSizeBytes / 1024 / 1024).toFixed(1)}MB`;
 }
+export { formatDaemonStatus, pingDaemon };

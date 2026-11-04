@@ -52,37 +52,37 @@ function isPromptProvenanceEnabled() {
 /**
  * 给计算任务文本加上 harness 来源说明框架。
  */
-function withHarnessFraming(prompt) {
+function withHarnessFraming(text) {
   return (
     WORKFLOW_HARNESS_FRAMING +
     `
 ` +
-    indentForwardedText(prompt)
+    indentForwardedText(text)
   );
 }
 //@ chunk-7mjm88gv.js:1921-2050 placement
 /**
  * 去掉工作流代理转录开头的 harness 来源说明框架。
  */
-function stripHarnessFraming(e) {
-  let t = e;
+function stripHarnessFraming(text) {
+  let rest = text;
   if (
-    t.startsWith(
+    rest.startsWith(
       AUTOMATED_TRIGGER_FRAMING +
         `
 `,
     )
   )
-    t = t.slice(AUTOMATED_TRIGGER_FRAMING.length + 1);
+    rest = rest.slice(AUTOMATED_TRIGGER_FRAMING.length + 1);
   if (
-    !t.startsWith(
+    !rest.startsWith(
       WORKFLOW_HARNESS_FRAMING +
         `
 `,
     )
   )
-    return e;
-  return t.slice(WORKFLOW_HARNESS_FRAMING.length + 1);
+    return text;
+  return rest.slice(WORKFLOW_HARNESS_FRAMING.length + 1);
 }
 //@ chunk-7mjm88gv.js:2050-2067 placement
 var MAX_REFERENT_TAIL_CHARS = 2000;
@@ -96,12 +96,12 @@ function classifyWorkflowRequestSource(messages, agentId) {
     return {
       kind: "none",
     };
-  let r = analyzeTurnTail(messages);
-  if (r.scheduledTrigger)
+  let analysis = analyzeTurnTail(messages);
+  if (analysis.scheduledTrigger)
     return {
       kind: "automated",
     };
-  let decider = r.decider;
+  let decider = analysis.decider;
   if (decider === null || !decider.strictHuman || decider.text === null)
     return {
       kind: "none",
@@ -111,9 +111,9 @@ function classifyWorkflowRequestSource(messages, agentId) {
       kind: "none",
     };
   if (decider.text.length > MAX_DECIDER_TEXT_CHARS) {
-    let o = 0;
-    for (let p of decider.text)
-      if (++o > MAX_DECIDER_TEXT_CHARS)
+    let count = 0;
+    for (let char of decider.text)
+      if (++count > MAX_DECIDER_TEXT_CHARS)
         return {
           kind: "none",
         };
@@ -122,15 +122,17 @@ function classifyWorkflowRequestSource(messages, agentId) {
     kind: "relay",
     userText: decider.text,
     referentTail:
-      r.referentTail === undefined ? undefined : takeLastChars(r.referentTail, MAX_REFERENT_TAIL_CHARS),
+      analysis.referentTail === undefined
+        ? undefined
+        : takeLastChars(analysis.referentTail, MAX_REFERENT_TAIL_CHARS),
   };
 }
 //@ chunk-7mjm88gv.js:2472-2566 placement
 /**
  * 去转义标记与反引号并把换行压成空格。
  */
-function flattenForFraming(e) {
-  return e
+function flattenForFraming(text) {
+  return text
     .replace(
       LINE_BREAK_RE,
       `
@@ -156,21 +158,21 @@ function automatedTriggerFramingWithContext(prompt) {
 /**
  * 生成用户请求的来源框架文本：用户原文及可选的引用尾部。
  */
-function userRequestFraming(e) {
-  let t =
+function userRequestFraming(request) {
+  let framed =
     USER_REQUEST_FRAMING +
     `
 ` +
-    indentForwardedTurn(e.userText);
-  if (e.referentTail === undefined) return t;
+    indentForwardedTurn(request.userText);
+  if (request.referentTail === undefined) return framed;
   return (
-    t +
+    framed +
     `
 ` +
     ASSISTANT_CONTEXT_FRAMING +
     `
 ` +
-    indentForwardedTurn(e.referentTail)
+    indentForwardedTurn(request.referentTail)
   );
 }
 //@ chunk-7mjm88gv.js:2721-2810 placement
@@ -189,37 +191,41 @@ function emptyWorkflowToolUseTracker() {
 /**
  * 在读取工作流转录时记录工具调用：结算消息只计一次，工作流工具的调用 id 记入集合。
  */
-function noteWorkflowToolUse(e, t, r) {
-  if (r) {
-    if (e.settled === undefined || e.withCalls.has(e.settled)) return false;
-    e.withCalls.add(e.settled);
+function noteWorkflowToolUse(state, block, isSettling) {
+  if (isSettling) {
+    if (state.settled === undefined || state.withCalls.has(state.settled)) return false;
+    state.withCalls.add(state.settled);
     return true;
   }
-  if (isReplToolName(t.name) && typeof t.id === "string") e.uses.add(t.id);
+  if (isReplToolName(block.name) && typeof block.id === "string") state.uses.add(block.id);
   return false;
 }
 //@ chunk-7mjm88gv.js:2996-3060 placement
 /**
  * 结算某工具调用（后续消息到达时清标记）。
  */
-function settleWorkflowToolUse(e, toolUseId, r, n) {
-  if (!r && e.uses.has(toolUseId)) e.settled = n ? undefined : toolUseId;
+function settleWorkflowToolUse(state, toolUseId, isSettling, isCleared) {
+  if (!isSettling && state.uses.has(toolUseId)) state.settled = isCleared ? undefined : toolUseId;
 }
 //@ chunk-7mjm88gv.js:3060-3524 placement
 /**
  * 简短描述工作流步骤。
  */
-function describeWorkflowStep(e, name) {
-  if (typeof e !== "object" || e === null) return "";
-  let r = e;
-  if (typeof r.code === "string" && typeof r.description === "string" && r.description.trim() !== "")
-    return truncate(r.description.replace(/\s+/g, " ").trim(), 60);
-  for (let n of ["command", "file_path", "path", "pattern", "query", "prompt"]) {
-    let o = r[n];
-    if (typeof o === "string") return truncate(o.replace(/\s+/g, " ").trim(), 60);
+function describeWorkflowStep(input, name) {
+  if (typeof input !== "object" || input === null) return "";
+  let fields = input;
+  if (
+    typeof fields.code === "string" &&
+    typeof fields.description === "string" &&
+    fields.description.trim() !== ""
+  )
+    return truncate(fields.description.replace(/\s+/g, " ").trim(), 60);
+  for (let fieldName of ["command", "file_path", "path", "pattern", "query", "prompt"]) {
+    let value = fields[fieldName];
+    if (typeof value === "string") return truncate(value.replace(/\s+/g, " ").trim(), 60);
   }
-  for (let n of Object.values(r))
-    if (typeof n === "string") return truncate(n.replace(/\s+/g, " ").trim(), 60);
+  for (let value of Object.values(fields))
+    if (typeof value === "string") return truncate(value.replace(/\s+/g, " ").trim(), 60);
   return "";
 }
 export {

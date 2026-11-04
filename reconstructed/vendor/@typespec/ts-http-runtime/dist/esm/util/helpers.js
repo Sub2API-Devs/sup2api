@@ -10,7 +10,7 @@ import { AbortError_2 } from "../restError.js";
 //@ chunk-mrx6y2r5.js:43325-43361 esm-fingerprint
 var StandardAbortMessage = "The operation was aborted.";
 //@ chunk-mrx6y2r5.js:43361-43887 esm-fingerprint
-function delay(delayInMs, value, options) {
+function delay_2(delayInMs, value, options) {
   return new Promise((resolve, reject) => {
     let timer = undefined;
     let onAborted = undefined;
@@ -54,4 +54,4 @@ function parseHeaderValueAsNumber(response, headerName) {
   if (Number.isNaN(valueAsNum)) return;
   return valueAsNum;
 }
-export { parseHeaderValueAsNumber, delay };
+export { parseHeaderValueAsNumber, delay_2 };

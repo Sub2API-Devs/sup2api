@@ -32,16 +32,16 @@ function optimize(diff) {
       let last = result[lastIdx];
       let lastType = last.type;
       if (type === "cursorMove" && lastType === "cursorMove") {
-        let A = last.x + patch.x;
-        let D = last.y + patch.y;
-        if (A === 0 && D === 0) {
+        let x = last.x + patch.x;
+        let y = last.y + patch.y;
+        if (x === 0 && y === 0) {
           result.pop();
           len--;
         } else
           result[lastIdx] = {
             type: "cursorMove",
-            x: A,
-            y: D,
+            x,
+            y,
           };
         continue;
       }

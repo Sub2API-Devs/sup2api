@@ -17,51 +17,58 @@ import {
   hasAuthorAccount,
   classifyThreadAuthors,
 } from "../../services/artifacts/comments/commentAuthorship.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-0rj0mpq7.js:386-553 placement
 /**
  * Artifact 的发布类动作名列表。
  */
-var ARTIFACT_ACTIONS = new Set([
-  "publish_version",
-  "edit_version",
-  "publish_files",
-  "copy_file",
-  "create_from_type",
-]);
-var PUBLISH_ACTION_NAMES = new Set(["publish_version", "publish_files", "authorize_upload"]);
+var ARTIFACT_ACTIONS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var PUBLISH_ACTION_NAMES;
+deferInit("chunk-0rj0mpq7.js:386", () => {
+  ARTIFACT_ACTIONS = new Set([
+    "publish_version",
+    "edit_version",
+    "publish_files",
+    "copy_file",
+    "create_from_type",
+  ]);
+  PUBLISH_ACTION_NAMES = new Set(["publish_version", "publish_files", "authorize_upload"]);
+});
 //@ chunk-0rj0mpq7.js:553-667 placement
 /**
  * 判断 MCP Artifact 动作是否为创建（create_from_type，或未带 slug 的发布类动作）。
  */
-function isCreateAction(t, e) {
+function isCreateAction(actionName, input) {
   return (
-    t === "create_from_type" ||
-    (PUBLISH_ACTION_NAMES.has(t) &&
-      !(isPlainObject(e) && e.slug !== undefined && e.slug !== null && e.slug !== ""))
+    actionName === "create_from_type" ||
+    (PUBLISH_ACTION_NAMES.has(actionName) &&
+      !(isPlainObject(input) && input.slug !== undefined && input.slug !== null && input.slug !== ""))
   );
 }
 //@ chunk-0rj0mpq7.js:667-693 placement
 var DELETE_ARTIFACT = "delete_artifact";
 //@ chunk-0rj0mpq7.js:693-884 placement
-function parseResultJson(t) {
-  let e = Array.isArray(t) ? t.find((o) => isPlainObject(o) && o.type === "text") : undefined;
-  let n = typeof t === "string" ? t : isPlainObject(e) ? e.text : undefined;
-  if (typeof n !== "string") return null;
-  let r = safeParseJSON(n, false);
-  return isPlainObject(r) ? r : null;
+function parseResultJson(result) {
+  let textBlock = Array.isArray(result)
+    ? result.find((part) => isPlainObject(part) && part.type === "text")
+    : undefined;
+  let text = typeof result === "string" ? result : isPlainObject(textBlock) ? textBlock.text : undefined;
+  if (typeof text !== "string") return null;
+  let parsed = safeParseJSON(text, false);
+  return isPlainObject(parsed) ? parsed : null;
 }
 //@ chunk-0rj0mpq7.js:884-1239 placement
 /**
  * 从 MCP 工具结果中解析出已发布 Artifact：校验 url 可解析且 slug 一致，附带清洗后的标题与合法版本号；无法解析返回 null。
  */
-function publishedArtifactFromResult(t) {
-  let resultJson = parseResultJson(t);
+function publishedArtifactFromResult(result) {
+  let resultJson = parseResultJson(result);
   if (resultJson === null || typeof resultJson.url !== "string") return null;
   let artifactUrl = parseArtifactUrl(resultJson.url);
   if (artifactUrl === null || (resultJson.slug !== undefined && resultJson.slug !== artifactUrl.slug))
     return null;
-  let r = typeof resultJson.title === "string" ? sanitizeDisplayTitle(resultJson.title) : null;
+  let title = typeof resultJson.title === "string" ? sanitizeDisplayTitle(resultJson.title) : null;
   let version =
     typeof resultJson.version === "string" && VERSIONED_NAME_RE.test(resultJson.version)
       ? resultJson.version
@@ -69,9 +76,9 @@ function publishedArtifactFromResult(t) {
   return {
     slug: artifactUrl.slug,
     env: artifactUrl.env,
-    ...(r !== null &&
-      r !== "" && {
-        title: r,
+    ...(title !== null &&
+      title !== "" && {
+        title,
       }),
     ...(version !== undefined && {
       version,
@@ -82,29 +89,35 @@ function publishedArtifactFromResult(t) {
 /**
  * 判定一条评论的作者归属：解析 author_role（非法为 degraded）、是否由 Artifact 发帖，再按线程作者分类；未知但由当前用户发出时算作 own。
  */
-function commentAuthorship(comment, viewer, trustByUser) {
-  let r =
+function commentAuthorship(comment, info, trustByUser) {
+  let authorRole =
     comment.author_role === undefined || comment.author_role === null
       ? undefined
       : typeof comment.author_role === "string" && ORIGINAL_ROLE_RE.test(comment.author_role)
         ? comment.author_role
         : "degraded";
-  let o = hasAuthorAccount(comment.source, r);
-  let u = classifyThreadAuthors(
+  let postedByArtifact = hasAuthorAccount(comment.source, authorRole);
+  let authorship = classifyThreadAuthors(
     [
       {
         account: typeof comment.author_id === "string" ? comment.author_id : "unknown",
-        ...(r !== undefined && {
-          role: r,
+        ...(authorRole !== undefined && {
+          role: authorRole,
         }),
-        ...(o && {
+        ...(postedByArtifact && {
           postedByArtifact: true,
         }),
       },
     ],
-    viewer,
+    info,
   );
-  return u === "unknown" && trustByUser && comment.by_user === true && !o && r !== "degraded" ? "own" : u;
+  return authorship === "unknown" &&
+    trustByUser &&
+    comment.by_user === true &&
+    !postedByArtifact &&
+    authorRole !== "degraded"
+    ? "own"
+    : authorship;
 }
 //@ chunk-0rj0mpq7.js:1608-2181 placement
 /**
@@ -150,8 +163,8 @@ function commentsFromResult(result, viewer, trustByUser) {
 /**
  * 从 MCP 结果中取 read 与 shared 字段（字符串才保留）。
  */
-function shareFieldsFromResult(t) {
-  let resultJson = parseResultJson(t);
+function shareFieldsFromResult(result) {
+  let resultJson = parseResultJson(result);
   return {
     read: typeof resultJson?.read === "string" ? resultJson.read : undefined,
     shared: typeof resultJson?.shared === "string" ? resultJson.shared : undefined,
@@ -161,8 +174,8 @@ function shareFieldsFromResult(t) {
 /**
  * 从删除结果中取被删除的 Artifact slug（deleted 为真且 slug 合法）。
  */
-function deletedSlugFromResult(t) {
-  let resultJson = parseResultJson(t);
+function deletedSlugFromResult(result) {
+  let resultJson = parseResultJson(result);
   return resultJson !== null &&
     resultJson.deleted === true &&
     typeof resultJson.slug === "string" &&
@@ -186,13 +199,16 @@ class LazyWritersSlot {
 /**
  * 惰性写入器注册插槽。
  */
-var lazyWritersSlot = new LazyWritersSlot();
+var lazyWritersSlot; // deferred: uses LazyWritersSlot of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-0rj0mpq7.js:2565", () => {
+  lazyWritersSlot = new LazyWritersSlot();
+});
 //@ chunk-0rj0mpq7.js:2579-2611 placement
 /**
  * 注册惰性写入器。
  */
-function registerLazyWriter(t) {
-  lazyWritersSlot.register(t);
+function registerLazyWriter(writer) {
+  lazyWritersSlot.register(writer);
 }
 //@ chunk-0rj0mpq7.js:2611-2652 placement
 /**
@@ -208,7 +224,10 @@ class WriterArmSlot {
 /**
  * 写入器钩子槽实例。
  */
-var writersArmSlot = new WriterArmSlot();
+var writersArmSlot; // deferred: uses WriterArmSlot of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-0rj0mpq7.js:2652", () => {
+  writersArmSlot = new WriterArmSlot();
+});
 //@ chunk-0rj0mpq7.js:2666-2698 placement
 /**
  * 注册写入器钩子。

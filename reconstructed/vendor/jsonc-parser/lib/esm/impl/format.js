@@ -5,7 +5,7 @@
  * pieces: chunk-kndsyy4v.js (5)
  * attribution: esm-fingerprint 4, esm-layout 1
  */
-import { K, cachedSpaces, cachedBreakLinesWithSpaces } from "./string-intern.js";
+import { EOL, cachedSpaces, cachedBreakLinesWithSpaces } from "./string-intern.js";
 import { createScanner } from "./scanner.js";
 
 //@ chunk-kndsyy4v.js:5455-7403 esm-fingerprint
@@ -32,7 +32,7 @@ function format(documentText, range, options) {
     rangeEnd = documentText.length;
   }
   let eol = getEOL(options, documentText);
-  let eolFastPathSupported = K.includes(eol);
+  let eolFastPathSupported = EOL.includes(eol);
   let numberLineBreaks = 0;
   let indentLevel = 0;
   let indentValue;

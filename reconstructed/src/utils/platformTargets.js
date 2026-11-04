@@ -46,13 +46,13 @@ var MAX_PLUGIN_BINARY_BYTES = 268435456;
 /**
  * 从 “名字-平台[.exe]” 文件名取出二进制基名。
  */
-function binaryBaseNameForTarget(r, e) {
-  if (r.endsWith(`-${e}`)) {
-    let sliced = r.slice(0, -(e.length + 1));
+function binaryBaseNameForTarget(fileName, targetSuffix) {
+  if (fileName.endsWith(`-${targetSuffix}`)) {
+    let sliced = fileName.slice(0, -(targetSuffix.length + 1));
     return BINARY_BASENAME_RE.test(sliced) ? sliced : undefined;
   }
-  if (r.endsWith(`-${e}.exe`)) {
-    let sliced = r.slice(0, -(e.length + 5));
+  if (fileName.endsWith(`-${targetSuffix}.exe`)) {
+    let sliced = fileName.slice(0, -(targetSuffix.length + 5));
     return BINARY_BASENAME_RE.test(sliced) ? `${sliced}.exe` : undefined;
   }
   return;

@@ -9,7 +9,8 @@
  * attribution: fingerprint 7, callgraph-witnessed 2, layout 2, sole-consumer 1, affinity 1, facade-exports 1
  */
 import { join } from "path";
-import { io } from "../../vendor/@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
+import { storageNameSpellings } from "./storage/storageSpaces.js";
+import { memoizeAlias } from "../../vendor/@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
 import { dateToFilename, attachErrorLogSink, errorLogBuffer, logError } from "./log.js";
 import { CACHE_PATHS, getCwdSafe } from "./cachePaths.js";
 import { logFirstInternalError } from "./telemetry/thirdPartyEventRecords.js";
@@ -22,15 +23,30 @@ import { getSessionId, onPendingLoopWakeupChange } from "../bootstrap/state.js";
 import { env } from "./env.js";
 import { isRemoteManagedEnvironment } from "./remoteEnvironment.js";
 import { BatchedLogWriter } from "./batchedLogWriter.js";
-import { storageNameSpellings } from "./storage/storageSpaces.js";
-import { string } from "../../vendor/zod/v4/classic/schemas.js";
+import { stringSchema } from "../../vendor/zod/v4/classic/schemas.js";
 import { isActingAsBgJob, getBgJobDir } from "./concurrentSessions.js";
 import { isShuttingDown } from "./gracefulShutdown.js";
 import { registerCleanup } from "./cleanupRegistry.js";
 import { writePendingWakeup } from "./scheduledWakeup.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
+//@ chunk-3g8vhh6f.js:747-809 fingerprint = getErrorsPath (1)
+function hasJsonlFiles(session) {
+  return storageNameSpellings(session).some((spelling) => spelling.endsWith(".jsonl"));
+}
+//@ chunk-7t4fmt2f.js:2483-2597 fingerprint = _clearLogWritersForTesting (0.685)
+function setDisposableInterval(callback, intervalMs, options = {}) {
+  let interval = setInterval(callback, intervalMs);
+  if (options.unref) interval.unref?.();
+  return {
+    [Symbol.dispose]: () => clearInterval(interval),
+  };
+}
 //@ chunk-k7fgdyw5.js:667-695 callgraph-witnessed = DATE (0)
-var getTodayLogDate = io(() => dateToFilename(new Date()));
+var getTodayLogDate; // deferred: uses dateToFilename (./log.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-k7fgdyw5.js:667", () => {
+  getTodayLogDate = memoizeAlias(() => dateToFilename(new Date()));
+});
 //@ chunk-k7fgdyw5.js:695-744 layout = getErrorsPath (1)
 /**
  * 错误日志文件 <缓存目录 claude-cli>/errors/<YYYY-MM-DD>.jsonl。
@@ -46,7 +62,7 @@ function getMCPLogsPath(serverName) {
   return join(CACHE_PATHS.mcpLogs(serverName), getTodayLogDate() + ".jsonl");
 }
 //@ chunk-k7fgdyw5.js:1738-1763 sole-consumer
-function logErrorSinkNoop(e, errorLogFilePath, o) {
+function logErrorSinkNoop(message, errorLogFilePath, perRuntimePath) {
   return;
 }
 //@ chunk-k7fgdyw5.js:1763-2016 affinity = extractErrorDetail (1)
@@ -69,7 +85,7 @@ function extractErrorMessage(data) {
 /**
  * 错误日志 sink：调试日志记一行 error，并把 {error} 追加到 <缓存目录>/errors/<日期>.jsonl。
  */
-function logErrorImpl(e, error) {
+function logErrorImpl(message, error) {
   logFirstInternalError(error);
   trackError(error);
   let errorStr = errorStackOrMessage(error);
@@ -84,12 +100,12 @@ function logErrorImpl(e, error) {
   logForDebugging(`${error.name}: ${context}${errorStr}`, {
     level: "error",
   });
-  logErrorSinkNoop(e, getErrorLogFilePath(), {
+  logErrorSinkNoop(message, getErrorLogFilePath(), {
     error: `${context}${errorStr}`,
   });
 }
 //@ chunk-k7fgdyw5.js:2343-2553 callgraph-witnessed = logMCPErrorImpl (0.738)
-function logMCPErrorImpl(e, serverName, error) {
+function logMCPErrorImpl(sink, serverName, error) {
   logForDebugging(`MCP server "${serverName}" ${error}`, {
     level: "error",
   });
@@ -101,7 +117,7 @@ function logMCPErrorImpl(e, serverName, error) {
     sessionId: getSessionId(),
     cwd: getCwdSafe(),
   };
-  e.writerFor(logFile).write(errorInfo);
+  sink.writerFor(logFile).write(errorInfo);
 }
 //@ chunk-k7fgdyw5.js:2553-2623 layout
 /**
@@ -111,17 +127,17 @@ function shouldSkipMcpDebugLogFiles() {
   return env.CLAUDE_CODE_SKIP_MCP_DEBUG_LOG_FILES === true && isRemoteManagedEnvironment();
 }
 //@ chunk-k7fgdyw5.js:2623-2794 fingerprint = logMCPDebugImpl (0.859)
-function logMCPDebugImpl(e, serverName, o) {
-  logForDebugging(`MCP server "${serverName}": ${o}`);
+function logMCPDebugImpl(sink, serverName, message) {
+  logForDebugging(`MCP server "${serverName}": ${message}`);
   if (shouldSkipMcpDebugLogFiles()) return;
   let logFile = getMCPLogsPath(serverName);
   let debugInfo = {
-    debug: redactSecrets(o),
+    debug: redactSecrets(message),
     timestamp: new Date().toISOString(),
     sessionId: getSessionId(),
     cwd: getCwdSafe(),
   };
-  e.writerFor(logFile).write(debugInfo);
+  sink.writerFor(logFile).write(debugInfo);
 }
 //@ chunk-k7fgdyw5.js:2794-2970 facade-exports
 function initializeErrorLogSink() {
@@ -137,17 +153,13 @@ function initializeErrorLogSink() {
 /**
  * 创建错误日志 sink：logError / logMCPError / logMCPDebug（MCP 写 <缓存目录>/mcp-logs-<server>/<日期>.jsonl）。
  */
-function initializeErrorLogSink_2(e) {
+function initializeErrorLogSink_2(options) {
   return {
-    logError: (error) => logErrorImpl(e, error),
-    logMCPError: (r, error) => logMCPErrorImpl(e, r, error),
-    logMCPDebug: (r, o) => logMCPDebugImpl(e, r, o),
+    logError: (error) => logErrorImpl(options, error),
+    logMCPError: (serverName, error) => logMCPErrorImpl(options, serverName, error),
+    logMCPDebug: (serverName, message) => logMCPDebugImpl(options, serverName, message),
     keepsMCPDebug: () => !shouldSkipMcpDebugLogFiles() || debugLogTakesLevel("debug"),
   };
-}
-//@ chunk-3g8vhh6f.js:747-809 fingerprint = getErrorsPath (1)
-function hasJsonlFiles(e) {
-  return storageNameSpellings(e).some((n) => n.endsWith(".jsonl"));
 }
 //@ chunk-425yaf76.js:1126-1477 fingerprint = createJsonlWriter (1)
 class SerialWriteQueue {
@@ -158,15 +170,15 @@ class SerialWriteQueue {
   constructor() {
     this.#i = onPendingLoopWakeupChange(this.#n);
   }
-  #n = (i) => {
+  #n = (message) => {
     try {
       if (!isActingAsBgJob()) return;
-      let bgJobDir = getBgJobDir();
-      if (bgJobDir === undefined) return;
-      if (i !== undefined && isShuttingDown()) return;
+      let dir = getBgJobDir();
+      if (dir === undefined) return;
+      if (message !== undefined && isShuttingDown()) return;
       this.#e ??= registerCleanup(() => this.#o);
-      let e = ++this.#r;
-      this.#o = this.#o.then(() => (e === this.#r ? writePendingWakeup(bgJobDir, i) : undefined));
+      let seq = ++this.#r;
+      this.#o = this.#o.then(() => (seq === this.#r ? writePendingWakeup(dir, message) : undefined));
     } catch (error) {
       logError(error);
     }
@@ -178,13 +190,5 @@ class SerialWriteQueue {
     this.#i();
     this.#o.then(() => this.#e?.());
   }
-}
-//@ chunk-7t4fmt2f.js:2483-2597 fingerprint = _clearLogWritersForTesting (0.685)
-function setDisposableInterval(e, intervalMs, options = {}) {
-  let interval = setInterval(e, intervalMs);
-  if (options.unref) interval.unref?.();
-  return {
-    [Symbol.dispose]: () => clearInterval(interval),
-  };
 }
 export { SerialWriteQueue, setDisposableInterval, initializeErrorLogSink, hasJsonlFiles };

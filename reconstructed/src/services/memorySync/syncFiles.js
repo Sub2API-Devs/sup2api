@@ -13,6 +13,7 @@ import { HostScoped } from "../../utils/hostScoped.js";
 import { getErrnoCode } from "../../utils/errors.js";
 import { getPlatform as getPlatform_2 } from "../../utils/platform.js";
 import { isAsideFileName } from "../../utils/storage/storageSpaces.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-s61vbvea.js:88942-88966 placement
 /**
@@ -24,22 +25,30 @@ var WRITE_BUFFER_LIMIT_BYTES = MAX_WRITE_BUFFER_BYTES;
 /**
  * 循环写入直到整个缓冲区写完，没有进展时抛 EIO。
  */
-async function writeFully(e, n, r) {
-  let s = 0;
-  while (s < n.byteLength) {
-    let { bytesWritten } = await e.write(n, s, n.byteLength - s, r === null ? null : r + s);
+async function writeFully(handle, buffer, position) {
+  let written = 0;
+  while (written < buffer.byteLength) {
+    let { bytesWritten } = await handle.write(
+      buffer,
+      written,
+      buffer.byteLength - written,
+      position === null ? null : position + written,
+    );
     if (bytesWritten <= 0)
       throw Object.assign(Error("write made no progress"), {
         code: "EIO",
       });
-    s += bytesWritten;
+    written += bytesWritten;
   }
 }
 //@ chunk-s61vbvea.js:89174-89232 placement
 /**
  * 不可重试的文件系统错误码。
  */
-var NON_RETRYABLE_FS_ERRORS = new Set(["EPERM", "ENOTSUP", "EOPNOTSUPP", "ENOSYS"]);
+var NON_RETRYABLE_FS_ERRORS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-s61vbvea.js:89174", () => {
+  NON_RETRYABLE_FS_ERRORS = new Set(["EPERM", "ENOTSUP", "EOPNOTSUPP", "ENOSYS"]);
+});
 //@ chunk-s61vbvea.js:89232-89309 placement
 /**
  * 只记录一次的日志器。
@@ -56,7 +65,10 @@ class OnceLogger {
 /**
  * 按宿主保存的 once 日志器。
  */
-var writeOnceLogger = new HostScoped(() => new OnceLogger());
+var writeOnceLogger; // deferred: uses OnceLogger of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-s61vbvea.js:89309", () => {
+  writeOnceLogger = new HostScoped(() => new OnceLogger());
+});
 //@ chunk-s61vbvea.js:89334-89432 placement
 /**
  * 判断错误是否不可重试。
@@ -70,7 +82,10 @@ function isNonRetryableFsError(error) {
 /**
  * 保存写入作用域的 AsyncLocalStorage。
  */
-var writeScopeStorage = new AsyncLocalStorage();
+var writeScopeStorage; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-s61vbvea.js:89432", () => {
+  writeScopeStorage = new AsyncLocalStorage();
+});
 //@ chunk-s61vbvea.js:89446-89461 placement
 /**
  * 写入锁的有效期（600000 毫秒）。
@@ -92,14 +107,23 @@ class OnceLogger2 {
 /**
  * 另一个按宿主保存的 once 日志器。
  */
-var secondOnceLogger = new HostScoped(() => new OnceLogger2());
+var secondOnceLogger; // deferred: uses OnceLogger2 of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-s61vbvea.js:89538", () => {
+  secondOnceLogger = new HostScoped(() => new OnceLogger2());
+});
 //@ chunk-s61vbvea.js:89563-89789 placement
-var PURGE_TEMP_FILE_RE = /\.purge\.[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.tmp$/;
-var HASH_TEMP_FILE_RE = /^\.[0-9a-f]{16}\.tmp$/;
-var HASH_TEMP_BACKUP_RE = /^\.[0-9a-f]{16}\.tmp~$/;
-var regExp_5 = new RegExp(
-  `(${HASH_TEMP_FILE_RE.source})|(${HASH_TEMP_BACKUP_RE.source})|(\\.tmp\\.[0-9a-f]{8}$)|(${PURGE_TEMP_FILE_RE.source})`,
-);
+var PURGE_TEMP_FILE_RE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var HASH_TEMP_FILE_RE;
+var HASH_TEMP_BACKUP_RE;
+var regExp_5;
+deferInit("chunk-s61vbvea.js:89563", () => {
+  PURGE_TEMP_FILE_RE = /\.purge\.[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.tmp$/;
+  HASH_TEMP_FILE_RE = /^\.[0-9a-f]{16}\.tmp$/;
+  HASH_TEMP_BACKUP_RE = /^\.[0-9a-f]{16}\.tmp~$/;
+  regExp_5 = new RegExp(
+    `(${HASH_TEMP_FILE_RE.source})|(${HASH_TEMP_BACKUP_RE.source})|(\\.tmp\\.[0-9a-f]{8}$)|(${PURGE_TEMP_FILE_RE.source})`,
+  );
+});
 //@ chunk-s61vbvea.js:89789-89886 placement
 /**
  * 匹配临时/锁文件的名称正则。
@@ -109,15 +133,15 @@ var TEMP_FILE_RE = /(^\..*\.tmp~?$)|(\.tmp[.~][0-9a-f]{8}$)|(\.lock$)|(\.purge\.
 /**
  * 判断是否为哈希临时文件。
  */
-function isHashTempFile(e) {
-  return HASH_TEMP_FILE_RE.test(e);
+function isHashTempFile(fileName) {
+  return HASH_TEMP_FILE_RE.test(fileName);
 }
 //@ chunk-s61vbvea.js:89920-89978 placement
 /**
  * 判断是否为噪声临时文件。
  */
-function isNoiseTempFile(name, n) {
-  return isAsideFileName(name) || (n ? regExp_5.test(name) : TEMP_FILE_RE.test(name));
+function isNoiseTempFile(name, stagingShape) {
+  return isAsideFileName(name) || (stagingShape ? regExp_5.test(name) : TEMP_FILE_RE.test(name));
 }
 //@ chunk-s61vbvea.js:89978-89992 placement
 /**
@@ -138,13 +162,16 @@ class LoaderSideHolder {
 /**
  * 全局的加载器侧持有者。
  */
-var loaderSideHolder = new LoaderSideHolder();
+var loaderSideHolder; // deferred: uses LoaderSideHolder of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-s61vbvea.js:90174", () => {
+  loaderSideHolder = new LoaderSideHolder();
+});
 //@ chunk-s61vbvea.js:90188-90219 placement
 /**
  * 注册加载器侧实现。
  */
-function registerLoaderSide(e) {
-  loaderSideHolder.register(e);
+function registerLoaderSide(loader) {
+  loaderSideHolder.register(loader);
 }
 export {
   isHashTempFile,

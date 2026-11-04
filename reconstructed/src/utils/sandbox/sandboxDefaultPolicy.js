@@ -40,7 +40,7 @@ var APPROVALS_NOTE =
   "Approvals are asked in this session. This machine's rules and hooks still apply. Commands run as they would locally in that folder (sandboxed when its settings sandbox them), foreground only, from the project directory, without credential variables, up to 45 s each.";
 var SANDBOX_OVERRIDE_INPUT_KEYS = new Set(["dangerouslyDisableSandbox", ...[]]);
 //@ chunk-5ghnps9r.js:1886-2460 placement
-function sandboxDefaultPolicy(e = {}) {
+function sandboxDefaultPolicy(options = {}) {
   return {
     name: "interim_floor",
     kind: "personal_machine",
@@ -50,7 +50,7 @@ function sandboxDefaultPolicy(e = {}) {
       mode: "session",
       honorLocalRules: true,
       onAsk: "session",
-      askOnDestructive: e.askOnDestructive ?? false,
+      askOnDestructive: options.askOnDestructive ?? false,
       unattended: "own_record",
     },
     limits: {
@@ -59,18 +59,18 @@ function sandboxDefaultPolicy(e = {}) {
       max_request_bytes: MAX_REQUEST_BYTES,
       max_in_flight: MAX_IN_FLIGHT,
     },
-    serves: (t) => DEVICE_PASSTHROUGH_TOOL_NAMES.has(t.name) && getToolRemoteExecution(t).supported,
-    constraints: (t, r) => {
-      let toolRemoteExecution = getToolRemoteExecution(t);
+    serves: (tool) => DEVICE_PASSTHROUGH_TOOL_NAMES.has(tool.name) && getToolRemoteExecution(tool).supported,
+    constraints: (tool, call) => {
+      let toolRemoteExecution = getToolRemoteExecution(tool);
       return mergeServingPolicy(
         DEFAULT_COMMAND_POLICY,
         toolRemoteExecution.supported ? toolRemoteExecution.tighten : undefined,
       );
     },
-    refusedInputFields: (t) => {
-      let toolRemoteExecution = getToolRemoteExecution(t);
+    refusedInputFields: (tool) => {
+      let toolRemoteExecution = getToolRemoteExecution(tool);
       return (toolRemoteExecution.supported ? (toolRemoteExecution.refusedInputFields ?? []) : []).filter(
-        (n) => !SANDBOX_OVERRIDE_INPUT_KEYS.has(n),
+        (field) => !SANDBOX_OVERRIDE_INPUT_KEYS.has(field),
       );
     },
     notes: () => APPROVALS_NOTE,

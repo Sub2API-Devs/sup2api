@@ -61,38 +61,39 @@ import { isLocalShellTask } from "../../tasks/LocalShellTask/guards.js";
 import { isTaskIdOfType } from "../../Task.js";
 import { tailOutputOfTask } from "../../utils/task/diskOutput.js";
 import { handleSetMaxThinkingTokens } from "./setMaxThinkingTokens.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-nkdv7dw8.js:37689-38282 placement
-async function handleGenerateSessionTitle(e, n) {
-  let o = requireSessionTitles(n);
-  if ("recordRename" in o) throw new WireSafeControlError(NO_SESSION_TITLES_ERROR);
-  let { description, persist } = e;
+async function handleGenerateSessionTitle(request, context) {
+  let titles = requireSessionTitles(context);
+  if ("recordRename" in titles) throw new WireSafeControlError(NO_SESSION_TITLES_ERROR);
+  let { description, persist } = request;
   if (typeof description !== "string")
     throw new WireSafeControlError("generate_session_title: description must be a string");
   if (persist != null && typeof persist !== "boolean")
     throw new WireSafeControlError("generate_session_title: persist must be a boolean");
   if (!persist)
     return {
-      title: await requestAndPickSessionTitle(description, o.turnAbortSignal(), o.credentials),
+      title: await requestAndPickSessionTitle(description, titles.turnAbortSignal(), titles.credentials),
     };
   let sessionId = getSessionId();
-  let S = textForResubmit({
+  let promptText = textForResubmit({
     content: description,
     origin: undefined,
-    commands: o.dispatchCommands(),
+    commands: titles.dispatchCommands(),
     dispatchesSlashCommands: true,
   });
-  let { titles } = o;
-  let C =
+  let { titles: titles_2 } = titles;
+  let currentTitle =
     getCurrentSessionTitle(sessionId) ??
     getCurrentSessionAiTitle(sessionId) ??
-    (S !== null
-      ? await saveGeneratedTitle(S, o)
-      : titles.pending?.sessionId === sessionId
-        ? await titles.pending.title
+    (promptText !== null
+      ? await saveGeneratedTitle(promptText, titles)
+      : titles_2.pending?.sessionId === sessionId
+        ? await titles_2.pending.title
         : null);
   return {
-    title: getCurrentSessionTitle(sessionId) ?? C,
+    title: getCurrentSessionTitle(sessionId) ?? currentTitle,
   };
 }
 //@ chunk-nkdv7dw8.js:38282-38414 placement
@@ -100,83 +101,84 @@ async function handleGenerateSessionTitle(e, n) {
  * 订阅会话标题变化并以 session_title_changed 系统通知发出（立即先发一次当前标题），返回取消订阅函数。
  */
 function emitSessionTitleChanges() {
-  let e = () => {
-    let n = sanitizeSessionTitle(getCurrentSessionTitle(getSessionId()) ?? "");
-    if (n)
+  let readCurrentTitle = () => {
+    let title = sanitizeSessionTitle(getCurrentSessionTitle(getSessionId()) ?? "");
+    if (title)
       enqueueTaskNotification({
         type: "system",
         subtype: "session_title_changed",
-        title: n,
+        title,
       });
   };
-  e();
-  return subscribeSessionTitleChanged(e);
+  readCurrentTitle();
+  return subscribeSessionTitleChanged(readCurrentTitle);
 }
 //@ chunk-nkdv7dw8.js:38414-38559 placement
 /**
  * 启动时（非 sdkUrl 模式）在会话注册后重新声明会话名：用当前标题或 agent 名，自动来源，保留启动名。
  */
-async function reclaimSessionNameAtStart(e) {
-  if (e.sdkUrl) return;
+async function reclaimSessionNameAtStart(context) {
+  if (context.sdkUrl) return;
   await whenSessionRegistered();
   let currentSessionTitle = getCurrentSessionTitle(getSessionId());
-  await reclaimSessionNameOnResume(currentSessionTitle || getCurrentSessionAgentName(), e.storageV5, {
+  await reclaimSessionNameOnResume(currentSessionTitle || getCurrentSessionAgentName(), context.storageV5, {
     autoOnly: !currentSessionTitle,
     source: "auto",
     keepLaunchName: true,
   });
 }
 //@ chunk-nkdv7dw8.js:38559-39258 placement
-function handleRenameSession(e, n) {
-  let o = requireSessionTitles(n);
-  if (typeof e.title !== "string") throw new WireSafeControlError("rename_session: title must be a string");
-  if (e.source != null && e.source !== "remote" && e.source !== "host")
+function handleRenameSession(request, context) {
+  let titles = requireSessionTitles(context);
+  if (typeof request.title !== "string")
+    throw new WireSafeControlError("rename_session: title must be a string");
+  if (request.source != null && request.source !== "remote" && request.source !== "host")
     throw new WireSafeControlError("rename_session: source must be 'remote' or 'host'");
-  let s = sanitizeSessionTitle(e.title);
-  if (!s) throw new WireSafeControlError("title must be non-empty");
-  if (e.session_id !== undefined && e.session_id !== getSessionId())
+  let title = sanitizeSessionTitle(request.title);
+  if (!title) throw new WireSafeControlError("title must be non-empty");
+  if (request.session_id !== undefined && request.session_id !== getSessionId())
     throw new WireSafeControlError("session_id is not the current session");
-  let r = e.source === "host" ? "user" : "remote";
+  let source = request.source === "host" ? "user" : "remote";
   let sessionId = getSessionId();
-  if ("recordRename" in o) {
-    cacheSessionTitle(s);
+  if ("recordRename" in titles) {
+    cacheSessionTitle(title);
     let materializedSessionFile = getMaterializedSessionFile();
     if (materializedSessionFile !== null)
       appendEntryToFileAsync(
         materializedSessionFile,
         {
           type: "custom-title",
-          customTitle: s,
+          customTitle: title,
           sessionId,
         },
-        n.storageV5,
+        context.storageV5,
       );
-    return o.recordRename(s, sessionId);
+    return titles.recordRename(title, sessionId);
   }
-  let S = e.source === "host";
+  let fromHost = request.source === "host";
   if (getMaterializedSessionFile())
-    return saveCustomTitle(sessionId, s, undefined, r, o.storageV5).then(() =>
-      applySessionRename(o, s, sessionId, S),
+    return saveCustomTitle(sessionId, title, undefined, source, titles.storageV5).then(() =>
+      applySessionRename(titles, title, sessionId, fromHost),
     );
-  cacheSessionTitle(s);
-  applySessionRename(o, s, sessionId, S);
+  cacheSessionTitle(title);
+  applySessionRename(titles, title, sessionId, fromHost);
 }
 //@ chunk-nkdv7dw8.js:39258-39374 placement
-function applySessionRename(e, n, sessionId, s) {
-  e.titles.attempted = true;
-  if (s && getSessionId() === sessionId) e.pushHostRenameToBridge(n, sessionId);
-  e.applyRenamedSessionName(n);
+function applySessionRename(titleChange, context, sessionId, options) {
+  titleChange.titles.attempted = true;
+  if (options && getSessionId() === sessionId) titleChange.pushHostRenameToBridge(context, sessionId);
+  titleChange.applyRenamedSessionName(context);
 }
 //@ chunk-nkdv7dw8.js:39374-39384 placement
 var NO_SESSION_TITLES_ERROR = UNSUPPORTED_CONTROL_SUBTYPE_TEXT;
 //@ chunk-nkdv7dw8.js:39384-39465 placement
-function requireSessionTitles(e) {
-  if (e.sessionTitles === null) throw new WireSafeControlError(NO_SESSION_TITLES_ERROR);
-  return e.sessionTitles;
+function requireSessionTitles(commandContext) {
+  if (commandContext.sessionTitles === null) throw new WireSafeControlError(NO_SESSION_TITLES_ERROR);
+  return commandContext.sessionTitles;
 }
 //@ chunk-nkdv7dw8.js:39465-39546 placement
-function logTitleChangeError(e, error) {
-  if (e.redactsPersistedLane()) {
+function logTitleChangeError(context, error) {
+  if (context.redactsPersistedLane()) {
     controlHandlerError(true, "auto_title", error);
     return;
   }
@@ -186,30 +188,30 @@ function logTitleChangeError(e, error) {
 /**
  * 补充的控制请求处理器：stop_task（按用户停任务，校验 task_id）、send_task_message、会话标题类请求（sessionTitles 为空即报错）。
  */
-var handleStopTask = (e, n) => {
-  let taskId = e.task_id;
+var handleStopTask = (request, context) => {
+  let taskId = request.task_id;
   if (typeof taskId !== "string") {
     logFeatureBad("task_stop_user", "invalid_task_id");
     throw new QueuedNotificationError("stop_task: task_id must be a string");
   }
   return stopTaskByUser(taskId, {
-    taskRegistry: createTaskFramework(n.engineState, n.setEngineState),
-    setAppState: n.setEngineState,
-    session: n.session,
-    getAppState: n.engineState,
+    taskRegistry: createTaskFramework(context.engineState, context.setEngineState),
+    setAppState: context.setEngineState,
+    session: context.session,
+    getAppState: context.engineState,
     source: "client",
-    storageV5: n.storageV5,
+    storageV5: context.storageV5,
   }).then(
     () => ({}),
     (error) => {
       throw new QueuedNotificationError(
-        controlHandlerError(n.redactsPersistedLane(), "stop_task", error).error,
+        controlHandlerError(context.redactsPersistedLane(), "stop_task", error).error,
       );
     },
   );
 };
-var handleBackgroundTasks = (e, n) => {
-  let optionalToolUseId = parseOptionalToolUseId(e.tool_use_id);
+var handleBackgroundTasks = (request, context) => {
+  let optionalToolUseId = parseOptionalToolUseId(request.tool_use_id);
   if (!optionalToolUseId.valid) {
     logFeatureBad("task_local_shell_background_all", "invalid_tool_use_id");
     throw new QueuedNotificationError(BACKGROUND_TASKS_TOOL_USE_ID_ERROR);
@@ -218,7 +220,7 @@ var handleBackgroundTasks = (e, n) => {
     logFeatureBad("task_local_shell_background_all", "disabled");
     throw new QueuedNotificationError(BACKGROUND_TASKS_DISABLED_MESSAGE);
   }
-  let taskRegistry = createTaskFramework(n.engineState, n.setEngineState);
+  let taskRegistry = createTaskFramework(context.engineState, context.setEngineState);
   if (optionalToolUseId.toolUseId !== undefined)
     return {
       backgrounded: backgroundTaskByToolUseId(optionalToolUseId.toolUseId, taskRegistry),
@@ -226,18 +228,21 @@ var handleBackgroundTasks = (e, n) => {
   backgroundAll(taskRegistry);
   return {};
 };
-var handleSendTaskMessage = (e, n) => {
-  if (n.redactsPersistedLane()) {
+var handleSendTaskMessage = (request, context) => {
+  if (context.redactsPersistedLane()) {
     logFeatureBad("task_output_read", "persisted_lane");
     throw new QueuedNotificationError("get_task_output is not available on this connection");
   }
-  let taskId = e.task_id;
+  let taskId = request.task_id;
   if (typeof taskId !== "string") {
     logFeatureBad("task_output_read", "invalid_task_id");
     throw new QueuedNotificationError("get_task_output: task_id must be a string");
   }
-  let s = createTaskFramework(n.engineState, n.setEngineState).get(taskId);
-  if (!(isLocalShellTask(s) && !s.elsewhere) && !(s === undefined && isTaskIdOfType("local_bash", taskId))) {
+  let task = createTaskFramework(context.engineState, context.setEngineState).get(taskId);
+  if (
+    !(isLocalShellTask(task) && !task.elsewhere) &&
+    !(task === undefined && isTaskIdOfType("local_bash", taskId))
+  ) {
     logFeatureBad("task_output_read", "not_found");
     throw new QueuedNotificationError(
       "get_task_output: no shell or Monitor task with that task_id in this session",
@@ -255,50 +260,54 @@ var handleSendTaskMessage = (e, n) => {
     },
   );
 };
-var handleSessionTitleControl = (e, n) => {
+var handleSessionTitleControl = (request, context) => {
   throw new QueuedNotificationError(`${UNSUPPORTED_CONTROL_SUBTYPE_TEXT}: send_task_message`);
 };
 //@ chunk-nkdv7dw8.js:40998-41511 placement
 /**
  * 核心控制请求处理器表：mcp_status、get_context_usage、get_usage、get_session_cost、list_models、get_binary_version、reload_output_styles 等。
  */
-var CONTROL_REQUEST_HANDLERS = {
-  mcp_status: handleMcpStatus,
-  get_context_usage: handleGetContextUsage,
-  get_usage: handleGetUsage,
-  get_session_cost: handleGetSessionCost,
-  list_models: handleListModels,
-  get_binary_version: handleGetBinaryVersion,
-  reload_output_styles: handleReloadOutputStyles,
-  set_max_thinking_tokens: handleSetMaxThinkingTokens,
-  set_mcp_permission_mode_override: clearUnknownServerOverride,
-  generate_session_title: handleGenerateSessionTitle,
-  rename_session: handleRenameSession,
-  mcp_reconnect: handleMcpReconnect,
-  mcp_toggle: handleMcpToggle,
-  mcp_read_resource: handleMcpReadResource,
-  stop_task: handleStopTask,
-  background_tasks: handleBackgroundTasks,
-  get_task_output: handleSendTaskMessage,
-  send_task_message: handleSessionTitleControl,
-  prefetch_attachments: isValidPrefetchAttachmentsRequest,
-  mcp_tasks_changed: noop,
-};
-var READ_ONLY_TASK_CONTROL_SUBTYPES = new Set([
-  "generate_session_title",
-  "get_context_usage",
-  "mcp_read_resource",
-  "get_task_output",
-]);
+var CONTROL_REQUEST_HANDLERS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var READ_ONLY_TASK_CONTROL_SUBTYPES;
+deferInit("chunk-nkdv7dw8.js:40998", () => {
+  CONTROL_REQUEST_HANDLERS = {
+    mcp_status: handleMcpStatus,
+    get_context_usage: handleGetContextUsage,
+    get_usage: handleGetUsage,
+    get_session_cost: handleGetSessionCost,
+    list_models: handleListModels,
+    get_binary_version: handleGetBinaryVersion,
+    reload_output_styles: handleReloadOutputStyles,
+    set_max_thinking_tokens: handleSetMaxThinkingTokens,
+    set_mcp_permission_mode_override: clearUnknownServerOverride,
+    generate_session_title: handleGenerateSessionTitle,
+    rename_session: handleRenameSession,
+    mcp_reconnect: handleMcpReconnect,
+    mcp_toggle: handleMcpToggle,
+    mcp_read_resource: handleMcpReadResource,
+    stop_task: handleStopTask,
+    background_tasks: handleBackgroundTasks,
+    get_task_output: handleSendTaskMessage,
+    send_task_message: handleSessionTitleControl,
+    prefetch_attachments: isValidPrefetchAttachmentsRequest,
+    mcp_tasks_changed: noop,
+  };
+  READ_ONLY_TASK_CONTROL_SUBTYPES = new Set([
+    "generate_session_title",
+    "get_context_usage",
+    "mcp_read_resource",
+    "get_task_output",
+  ]);
+});
 //@ chunk-nkdv7dw8.js:41511-41917 placement
-function handleSendTaskMessage_2(request, n) {
+function handleSendTaskMessage_2(request, taskControl) {
   if (READ_ONLY_TASK_CONTROL_SUBTYPES.has(request.subtype)) return true;
   if (request.subtype === "send_task_message")
     try {
       return (
-        n.resumeUntrackedAgent !== null &&
+        taskControl.resumeUntrackedAgent !== null &&
         typeof request.task_id === "string" &&
-        !Object.hasOwn(n.engineState().tasks, request.task_id)
+        !Object.hasOwn(taskControl.engineState().tasks, request.task_id)
       );
     } catch {
       return false;
@@ -307,11 +316,11 @@ function handleSendTaskMessage_2(request, n) {
     request.subtype !== "mcp_toggle" ||
     request.enabled !== true ||
     typeof request.serverName !== "string" ||
-    n.mcpControlLanes === null
+    taskControl.mcpControlLanes === null
   )
     return false;
   try {
-    return isUnadoptedSdkServer(n.mcpControlLanes, n.engineState(), request.serverName);
+    return isUnadoptedSdkServer(taskControl.mcpControlLanes, taskControl.engineState(), request.serverName);
   } catch {
     return false;
   }

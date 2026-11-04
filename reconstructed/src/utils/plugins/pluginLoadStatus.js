@@ -17,15 +17,15 @@ import { mergePluginRecord } from "../../plugins/functionHooks/hooksModuleLoader
 
 //@ chunk-7nse75qx.js:519-634 placement
 function mergeErrorsBySource(errors, errors_2) {
-  let filtered = errors.filter((i) => mergePluginErrors(i.source));
-  let r = new Set(errors_2.map(pluginErrorKey));
-  return [...filtered.filter((i) => !r.has(pluginErrorKey(i))), ...errors_2];
+  let filtered = errors.filter((error) => mergePluginErrors(error.source));
+  let keys = new Set(errors_2.map(pluginErrorKey));
+  return [...filtered.filter((error) => !keys.has(pluginErrorKey(error))), ...errors_2];
 }
 //@ chunk-7nse75qx.js:743-921 placement
 function mergePluginSourceErrors(warnings, warnings_2) {
-  let filtered = warnings.filter((i) => i.source.startsWith("plugin:"));
-  let r = new Set(warnings_2.map((i) => `${i.type}:${i.source}`));
-  return [...filtered.filter((i) => !r.has(`${i.type}:${i.source}`)), ...warnings_2];
+  let filtered = warnings.filter((warning) => warning.source.startsWith("plugin:"));
+  let keys = new Set(warnings_2.map((warning) => `${warning.type}:${warning.source}`));
+  return [...filtered.filter((warning) => !keys.has(`${warning.type}:${warning.source}`)), ...warnings_2];
 }
 //@ chunk-7nse75qx.js:921-2963 placement
 /**
@@ -34,116 +34,118 @@ function mergePluginSourceErrors(warnings, warnings_2) {
 class PluginsStateStore {
   #n;
   #t;
-  constructor(e) {
-    this.#n = e.getState;
-    this.#t = e.setState;
+  constructor(host) {
+    this.#n = host.getState;
+    this.#t = host.setState;
   }
-  static over(e) {
+  static over(store) {
     return new PluginsStateStore({
-      getState: e.getState,
-      setState: mergeSlicePatch(e.setState),
+      getState: store.getState,
+      setState: mergeSlicePatch(store.setState),
     });
   }
   get() {
     return this.#n().plugins;
   }
-  #e(e) {
-    this.#t((t) => {
-      let n = e(t.plugins);
-      return n === t.plugins
-        ? t
+  #e(mutate) {
+    this.#t((state) => {
+      let plugins = mutate(state.plugins);
+      return plugins === state.plugins
+        ? state
         : {
-            ...t,
-            plugins: n,
+            ...state,
+            plugins,
           };
     });
   }
-  addErrors(e) {
-    if (e.length === 0) return;
-    this.#e((t) => {
-      let n = new Set(t.errors.map((error) => getErrorKey(error)));
-      let filtered = e.filter((s) => !n.has(getErrorKey(s)));
-      if (filtered.length === 0) return t;
+  addErrors(errors) {
+    if (errors.length === 0) return;
+    this.#e((plugins) => {
+      let keys = new Set(plugins.errors.map((error) => getErrorKey(error)));
+      let filtered = errors.filter((error) => !keys.has(getErrorKey(error)));
+      if (filtered.length === 0) return plugins;
       return {
-        ...t,
-        errors: [...t.errors, ...filtered],
+        ...plugins,
+        errors: [...plugins.errors, ...filtered],
       };
     });
   }
-  removeErrorsOf(e) {
-    if (e.length === 0) return;
-    let mapped = e.map((n) => ({
-      id: n,
-      ...splitPluginId(n),
+  removeErrorsOf(pluginIds) {
+    if (pluginIds.length === 0) return;
+    let mapped = pluginIds.map((id) => ({
+      id,
+      ...splitPluginId(id),
     }));
-    this.#e((n) => {
-      let filtered = n.errors.filter((error) => {
+    this.#e((plugins) => {
+      let filtered = plugins.errors.filter((error) => {
         let marketplace = splitPluginId(error.source).marketplace;
         return !mapped.some(
-          (o) =>
-            pluginNamesEqual(error.source, o.id) ||
+          (target) =>
+            pluginNamesEqual(error.source, target.id) ||
             ("plugin" in error &&
-              error.plugin === o.name &&
+              error.plugin === target.name &&
               !hasMarketplaceAlias(error.source) &&
-              (marketplace === undefined || marketplace === o.marketplace)),
+              (marketplace === undefined || marketplace === target.marketplace)),
         );
       });
-      return filtered.length === n.errors.length
-        ? n
+      return filtered.length === plugins.errors.length
+        ? plugins
         : {
-            ...n,
+            ...plugins,
             errors: filtered,
           };
     });
   }
-  addWarnings(e) {
-    if (e.length === 0) return;
-    this.#e((t) => {
-      let n = new Set(t.warnings.map((warning) => getErrorKey(warning)));
-      let filtered = e.filter((s) => !n.has(getErrorKey(s)));
-      if (filtered.length === 0) return t;
+  addWarnings(warnings) {
+    if (warnings.length === 0) return;
+    this.#e((plugins) => {
+      let keys = new Set(plugins.warnings.map((warning) => getErrorKey(warning)));
+      let filtered = warnings.filter((warning) => !keys.has(getErrorKey(warning)));
+      if (filtered.length === 0) return plugins;
       return {
-        ...t,
-        warnings: [...t.warnings, ...filtered],
+        ...plugins,
+        warnings: [...plugins.warnings, ...filtered],
       };
     });
   }
-  markNeedsRefresh(e = "changed") {
-    this.#e((t) => {
-      if (e === "not-loaded")
-        return t.needsRefresh && t.needsRefreshToLoad === true
-          ? t
+  markNeedsRefresh(reason = "changed") {
+    this.#e((plugins) => {
+      if (reason === "not-loaded")
+        return plugins.needsRefresh && plugins.needsRefreshToLoad === true
+          ? plugins
           : {
-              ...t,
+              ...plugins,
               needsRefresh: true,
               needsRefreshToLoad: true,
             };
-      return t.needsRefresh
-        ? t
+      return plugins.needsRefresh
+        ? plugins
         : {
-            ...t,
+            ...plugins,
             needsRefresh: true,
           };
     });
   }
-  retarget(e) {
-    this.#e((t) => {
-      let index = t.enabled.findIndex((i) => i.source === e.source && i.path === e.path);
-      let r = t.enabled[index];
-      if (r === undefined) return t;
-      let s = mergePluginRecord(r, e);
-      if (s === r) return t;
+  retarget(patch) {
+    this.#e((plugins) => {
+      let index = plugins.enabled.findIndex(
+        (plugin) => plugin.source === patch.source && plugin.path === patch.path,
+      );
+      let current = plugins.enabled[index];
+      if (current === undefined) return plugins;
+      let merged = mergePluginRecord(current, patch);
+      if (merged === current) return plugins;
       return {
-        ...t,
-        enabled: t.enabled.with(index, s),
+        ...plugins,
+        enabled: plugins.enabled.with(index, merged),
       };
     });
   }
-  setPendingMarketplaces(e) {
-    this.#e((t) => ({
-      ...t,
+  setPendingMarketplaces(names) {
+    this.#e((plugins) => ({
+      ...plugins,
       installationStatus: {
-        marketplaces: e.map((name) => ({
+        marketplaces: names.map((name) => ({
           name,
           status: "pending",
         })),
@@ -151,13 +153,13 @@ class PluginsStateStore {
       },
     }));
   }
-  setMarketplaceStatus(e, status, error) {
-    this.#e((r) => ({
-      ...r,
+  setMarketplaceStatus(name, status, error) {
+    this.#e((plugins) => ({
+      ...plugins,
       installationStatus: {
-        ...r.installationStatus,
-        marketplaces: r.installationStatus.marketplaces.map((marketplace) =>
-          marketplace.name === e
+        ...plugins.installationStatus,
+        marketplaces: plugins.installationStatus.marketplaces.map((marketplace) =>
+          marketplace.name === name
             ? {
                 ...marketplace,
                 status,
@@ -168,23 +170,23 @@ class PluginsStateStore {
       },
     }));
   }
-  applyRefresh(e) {
-    this.#t((t) => ({
-      ...t,
+  applyRefresh(result) {
+    this.#t((state) => ({
+      ...state,
       plugins: {
-        ...t.plugins,
-        enabled: e.enabled,
-        disabled: e.disabled,
-        commands: e.commands,
-        errors: mergeErrorsBySource(t.plugins.errors, e.errors),
-        warnings: mergePluginSourceErrors(t.plugins.warnings, e.warnings),
+        ...state.plugins,
+        enabled: result.enabled,
+        disabled: result.disabled,
+        commands: result.commands,
+        errors: mergeErrorsBySource(state.plugins.errors, result.errors),
+        warnings: mergePluginSourceErrors(state.plugins.warnings, result.warnings),
         needsRefresh: false,
         needsRefreshToLoad: undefined,
       },
-      agentDefinitions: e.agentDefinitions,
+      agentDefinitions: result.agentDefinitions,
       mcp: {
-        ...t.mcp,
-        pluginReconnectKey: t.mcp.pluginReconnectKey + 1,
+        ...state.mcp,
+        pluginReconnectKey: state.mcp.pluginReconnectKey + 1,
       },
     }));
   }

@@ -15,15 +15,15 @@ import { watch as watch_2, unwatchFile, watchFile } from "fs";
 var DATA = "data";
 var END = "end";
 var CLOSE = "close";
-var I = () => {};
+var noop = () => {};
 //@ chunk-3gvas51j.js:4350-6739 esm-fingerprint
 var LINUX = "linux";
-var F = LINUX === "win32";
-var At = LINUX === "darwin";
-var Wt = LINUX === "linux";
-var Nt = LINUX === "freebsd";
-var it = St() === "OS400";
-var m = {
+var isWindows = LINUX === "win32";
+var isMacos = LINUX === "darwin";
+var isLinuxPlatform = LINUX === "linux";
+var isFreeBSD = LINUX === "freebsd";
+var isIBMi = St() === "OS400";
+var EV = {
   ALL: "all",
   READY: "ready",
   ADD: "add",
@@ -34,17 +34,17 @@ var m = {
   RAW: "raw",
   ERROR: "error",
 };
-var y = m;
+var EVENTS = EV;
 var WATCH = "watch";
-var kt = {
+var fsMethods = {
   lstat,
   stat: stat_2,
 };
 var LISTENERS = "listeners";
 var ERRHANDLERS = "errHandlers";
 var RAWEMITTERS = "rawEmitters";
-var Ct = [LISTENERS, ERRHANDLERS, RAWEMITTERS];
-var Ot = new Set([
+var EMITTER_KEYS = [LISTENERS, ERRHANDLERS, RAWEMITTERS];
+var BINARY_EXTENSIONS = new Set([
   "3dm",
   "3ds",
   "3g2",
@@ -307,44 +307,49 @@ var Ot = new Set([
   "zip",
   "zipx",
 ]);
-var Mt = (t) => Ot.has(pathModule_2.extname(t).slice(1).toLowerCase());
-var O = (t, e) => {
-  if (t instanceof Set) t.forEach(e);
-  else e(t);
+var isBinaryPath = (path) => BINARY_EXTENSIONS.has(pathModule_2.extname(path).slice(1).toLowerCase());
+var forEachSetOrValue = (value, callback) => {
+  if (value instanceof Set) value.forEach(callback);
+  else callback(value);
 };
-var D = (t, e, i) => {
-  let s = t[e];
-  if (!(s instanceof Set)) t[e] = s = new Set([s]);
-  s.add(i);
+var addToSet = (map, key, value) => {
+  let set = map[key];
+  if (!(set instanceof Set)) map[key] = set = new Set([set]);
+  set.add(value);
 };
-var zt = (t) => (e) => {
-  let i = t[e];
-  if (i instanceof Set) i.clear();
-  else delete t[e];
+var clearSet = (map) => (key) => {
+  let set = map[key];
+  if (set instanceof Set) set.clear();
+  else delete map[key];
 };
-var b = (t, e, i) => {
-  let s = t[e];
-  if (s instanceof Set) s.delete(i);
-  else if (s === i) delete t[e];
+var deleteFromSet = (map, key, value) => {
+  let set = map[key];
+  if (set instanceof Set) set.delete(value);
+  else if (set === value) delete map[key];
 };
-var rt = (listeners) => (listeners instanceof Set ? listeners.size === 0 : !listeners);
-var x = new Map();
+var isEmptySet = (listeners) => (listeners instanceof Set ? listeners.size === 0 : !listeners);
+var EVENT_QUEUES = new Map();
 //@ chunk-3gvas51j.js:6739-6916 affinity
-function tt(t, e, i, errHandler, r) {
-  let a = (o, n) => {
-    i(t);
-    r(o, n, {
-      watchedPath: t,
+function runThrottledEvent(watchedPath, eventType, clearThrottle, errHandler, emitEvent) {
+  let onThrottled = (error, stats) => {
+    clearThrottle(watchedPath);
+    emitEvent(error, stats, {
+      watchedPath,
     });
-    if (n && t !== n) v(pathModule_2.resolve(t, n), LISTENERS, pathModule_2.join(t, n));
+    if (stats && watchedPath !== stats)
+      delegateToSubscribers(
+        pathModule_2.resolve(watchedPath, stats),
+        LISTENERS,
+        pathModule_2.join(watchedPath, stats),
+      );
   };
   try {
     return watch_2(
-      t,
+      watchedPath,
       {
-        persistent: e.persistent,
+        persistent: eventType.persistent,
       },
-      a,
+      onThrottled,
     );
   } catch (error) {
     errHandler(error);
@@ -352,242 +357,251 @@ function tt(t, e, i, errHandler, r) {
   }
 }
 //@ chunk-3gvas51j.js:6916-8809 affinity
-var v = (t, e, i, s, r) => {
-  let a = x.get(t);
-  if (!a) return;
-  O(a[e], (o) => {
-    o(i, s, r);
+var delegateToSubscribers = (watchedPath, kind, eventName, path, stats) => {
+  let entry = EVENT_QUEUES.get(watchedPath);
+  if (!entry) return;
+  forEachSetOrValue(entry[kind], (handler) => {
+    handler(eventName, path, stats);
   });
 };
-var Ht = (t, e, i, s) => {
-  let { listener, errHandler, rawEmitter } = s;
-  let n = x.get(e);
-  let l;
-  if (!i.persistent) {
-    l = tt(t, i, listener, errHandler, rawEmitter);
-    if (!l) return;
-    l.on(y.ERROR, async (h) => {
-      if (F && h.code === "EPERM")
+var watchWithNodeFs = (path, resolvedPath, options, handlers) => {
+  let { listener, errHandler, rawEmitter } = handlers;
+  let entry = EVENT_QUEUES.get(resolvedPath);
+  let watcher;
+  if (!options.persistent) {
+    watcher = runThrottledEvent(path, options, listener, errHandler, rawEmitter);
+    if (!watcher) return;
+    watcher.on(EVENTS.ERROR, async (error) => {
+      if (isWindows && error.code === "EPERM")
         try {
-          await (await open(t, "r")).close();
-          errHandler(h);
+          await (await open(path, "r")).close();
+          errHandler(error);
         } catch (error) {}
-      else errHandler(h);
+      else errHandler(error);
     });
-    return l.close.bind(l);
+    return watcher.close.bind(watcher);
   }
-  if (n) {
-    D(n, LISTENERS, listener);
-    D(n, ERRHANDLERS, errHandler);
-    D(n, RAWEMITTERS, rawEmitter);
+  if (entry) {
+    addToSet(entry, LISTENERS, listener);
+    addToSet(entry, ERRHANDLERS, errHandler);
+    addToSet(entry, RAWEMITTERS, rawEmitter);
   } else {
-    l = tt(t, i, v.bind(null, e, LISTENERS), errHandler, v.bind(null, e, RAWEMITTERS));
-    if (!l) return;
-    l.on(y.ERROR, async (h) => {
-      let f = v.bind(null, e, ERRHANDLERS);
-      if (n) n.watcherUnusable = true;
-      if (F && h.code === "EPERM")
+    watcher = runThrottledEvent(
+      path,
+      options,
+      delegateToSubscribers.bind(null, resolvedPath, LISTENERS),
+      errHandler,
+      delegateToSubscribers.bind(null, resolvedPath, RAWEMITTERS),
+    );
+    if (!watcher) return;
+    watcher.on(EVENTS.ERROR, async (error) => {
+      let notifyError = delegateToSubscribers.bind(null, resolvedPath, ERRHANDLERS);
+      if (entry) entry.watcherUnusable = true;
+      if (isWindows && error.code === "EPERM")
         try {
-          await (await open(t, "r")).close();
-          f(h);
+          await (await open(path, "r")).close();
+          notifyError(error);
         } catch (error) {}
-      else f(h);
+      else notifyError(error);
     });
-    n = {
+    entry = {
       listeners: listener,
       errHandlers: errHandler,
       rawEmitters: rawEmitter,
-      watcher: l,
+      watcher,
     };
-    x.set(e, n);
+    EVENT_QUEUES.set(resolvedPath, entry);
   }
   return () => {
-    b(n, LISTENERS, listener);
-    b(n, ERRHANDLERS, errHandler);
-    b(n, RAWEMITTERS, rawEmitter);
-    if (rt(n.listeners) && n.watcher) {
-      n.watcher.close();
-      x.delete(e);
-      Ct.forEach(zt(n));
-      n.watcher = undefined;
-      Object.freeze(n);
+    deleteFromSet(entry, LISTENERS, listener);
+    deleteFromSet(entry, ERRHANDLERS, errHandler);
+    deleteFromSet(entry, RAWEMITTERS, rawEmitter);
+    if (isEmptySet(entry.listeners) && entry.watcher) {
+      entry.watcher.close();
+      EVENT_QUEUES.delete(resolvedPath);
+      EMITTER_KEYS.forEach(clearSet(entry));
+      entry.watcher = undefined;
+      Object.freeze(entry);
     }
   };
 };
-var S = new Map();
-var jt = (t, e, i, s) => {
-  let { listener, rawEmitter, folderStamp } = s;
-  let n = S.get(e);
-  let options = n && n.options;
-  if (options && (options.persistent < i.persistent || options.interval > i.interval)) {
-    unwatchFile(e);
-    n = undefined;
+var pollingWatchers = new Map();
+var watchWithPolling = (path, resolvedPath, options, handlers) => {
+  let { listener, rawEmitter, folderStamp } = handlers;
+  let entry = pollingWatchers.get(resolvedPath);
+  let options_2 = entry && entry.options;
+  if (options_2 && (options_2.persistent < options.persistent || options_2.interval > options.interval)) {
+    unwatchFile(resolvedPath);
+    entry = undefined;
   }
-  if (n) {
-    D(n, LISTENERS, listener);
-    D(n, RAWEMITTERS, rawEmitter);
+  if (entry) {
+    addToSet(entry, LISTENERS, listener);
+    addToSet(entry, RAWEMITTERS, rawEmitter);
   } else {
-    let h = (c) => O(n.listeners, (u) => u(t, c));
-    let f = (c, u) => {
-      O(n.rawEmitters, (E) => {
-        E(y.CHANGE, e, {
-          curr: c,
-          prev: u,
+    let notify = (stats) => forEachSetOrValue(entry.listeners, (listener) => listener(path, stats));
+    let onPoll = (curr, prev) => {
+      forEachSetOrValue(entry.rawEmitters, (rawEmitter) => {
+        rawEmitter(EVENTS.CHANGE, resolvedPath, {
+          curr,
+          prev,
         });
       });
-      let mtimeMs = c.mtimeMs;
-      if (c.size !== u.size || mtimeMs > u.mtimeMs || mtimeMs === 0) {
-        if (n.watcher && n.folderStamp !== undefined) n.folderStamp = A(c);
-        h(c);
+      let mtimeMs = curr.mtimeMs;
+      if (curr.size !== prev.size || mtimeMs > prev.mtimeMs || mtimeMs === 0) {
+        if (entry.watcher && entry.folderStamp !== undefined) entry.folderStamp = folderStampOf(curr);
+        notify(curr);
       }
     };
-    n = {
+    entry = {
       listeners: listener,
       rawEmitters: rawEmitter,
-      options: i,
-      onPoll: f,
-      notify: h,
+      options,
+      onPoll,
+      notify,
       folderStamp,
-      watcher: watchFile(e, i, f),
+      watcher: watchFile(resolvedPath, options, onPoll),
     };
-    S.set(e, n);
+    pollingWatchers.set(resolvedPath, entry);
   }
   return () => {
-    b(n, LISTENERS, listener);
-    b(n, RAWEMITTERS, rawEmitter);
-    if (rt(n.listeners) && n.watcher) {
-      S.delete(e);
-      unwatchFile(e);
-      n.options = n.watcher = undefined;
-      Object.freeze(n);
+    deleteFromSet(entry, LISTENERS, listener);
+    deleteFromSet(entry, RAWEMITTERS, rawEmitter);
+    if (isEmptySet(entry.listeners) && entry.watcher) {
+      pollingWatchers.delete(resolvedPath);
+      unwatchFile(resolvedPath);
+      entry.options = entry.watcher = undefined;
+      Object.freeze(entry);
     }
   };
 };
-var nt = (t, e) => {
-  for (let [i, s] of S) {
-    let rawEmitters = s.rawEmitters;
-    let a = rawEmitters instanceof Set && rawEmitters.size > 1;
+var setPollingInterval = (rawEmitter, interval) => {
+  for (let [resolvedPath, entry] of pollingWatchers) {
+    let rawEmitters = entry.rawEmitters;
+    let multipleEmitters = rawEmitters instanceof Set && rawEmitters.size > 1;
     if (
-      !(rawEmitters instanceof Set ? rawEmitters.has(t) : rawEmitters === t) ||
-      s.options.interval === e ||
-      (a && e > s.options.interval)
+      !(rawEmitters instanceof Set ? rawEmitters.has(rawEmitter) : rawEmitters === rawEmitter) ||
+      entry.options.interval === interval ||
+      (multipleEmitters && interval > entry.options.interval)
     )
       continue;
-    unwatchFile(i, s.onPoll);
-    s.options = {
-      ...s.options,
-      interval: e,
+    unwatchFile(resolvedPath, entry.onPoll);
+    entry.options = {
+      ...entry.options,
+      interval,
     };
-    s.watcher = watchFile(i, s.options, s.onPoll);
-    if (s.folderStamp !== undefined) Yt(i, s).catch(I);
+    entry.watcher = watchFile(resolvedPath, entry.options, entry.onPoll);
+    if (entry.folderStamp !== undefined) refreshFolderStamp(resolvedPath, entry).catch(noop);
   }
 };
-var A = (t) => `${t.mtimeMs}:${t.ctimeMs}`;
-var Yt = async (t, e) => {
-  let i;
+var folderStampOf = (stats) => `${stats.mtimeMs}:${stats.ctimeMs}`;
+var refreshFolderStamp = async (path, entry) => {
+  let stats;
   try {
-    i = await stat_2(t);
+    stats = await stat_2(path);
   } catch (error) {
     return;
   }
-  if (e.watcher && A(i) !== e.folderStamp) {
-    e.folderStamp = A(i);
-    e.notify(i);
+  if (entry.watcher && folderStampOf(stats) !== entry.folderStamp) {
+    entry.folderStamp = folderStampOf(stats);
+    entry.notify(stats);
   }
 };
 //@ chunk-3gvas51j.js:8809-13067 affinity
-class H {
-  constructor(t) {
-    this.fsw = t;
-    this._boundHandleError = (e) => t._handleError(e);
+class NodeFsHandler {
+  constructor(fsw) {
+    this.fsw = fsw;
+    this._boundHandleError = (error) => fsw._handleError(error);
   }
-  _watchWithNodeFs(t, e, folderStamp) {
+  _watchWithNodeFs(path, listener, folderStamp) {
     let options = this.fsw.options;
-    let dir = pathModule_2.dirname(t);
-    let base = pathModule_2.basename(t);
-    this.fsw._getWatchedDir(dir).add(base);
-    let resolved = pathModule_2.resolve(t);
-    let l = {
+    let dir = pathModule_2.dirname(path);
+    let path_2 = pathModule_2.basename(path);
+    this.fsw._getWatchedDir(dir).add(path_2);
+    let resolvedPath = pathModule_2.resolve(path);
+    let watchOptions = {
       persistent: options.persistent,
     };
-    if (!e) e = I;
-    let h;
+    if (!listener) listener = noop;
+    let closeWatcher;
     if (options.usePolling) {
-      let f = options.interval !== options.binaryInterval;
-      l.interval = f && Mt(base) ? options.binaryInterval : options.interval;
-      h = jt(t, resolved, l, {
-        listener: e,
+      let hasBinaryInterval = options.interval !== options.binaryInterval;
+      watchOptions.interval =
+        hasBinaryInterval && isBinaryPath(path_2) ? options.binaryInterval : options.interval;
+      closeWatcher = watchWithPolling(path, resolvedPath, watchOptions, {
+        listener,
         rawEmitter: this.fsw._emitRaw,
         folderStamp,
       });
     } else
-      h = Ht(t, resolved, l, {
-        listener: e,
+      closeWatcher = watchWithNodeFs(path, resolvedPath, watchOptions, {
+        listener,
         errHandler: this._boundHandleError,
         rawEmitter: this.fsw._emitRaw,
       });
-    return h;
+    return closeWatcher;
   }
-  _handleFile(t, e, i) {
+  _handleFile(path, stats, isInitial) {
     if (this.fsw.closed) return;
-    let dir = pathModule_2.dirname(t);
-    let base = pathModule_2.basename(t);
-    let a = this.fsw._getWatchedDir(dir);
-    let o = e;
-    if (a.has(base)) return;
-    let n = async (h, f) => {
-      if (!this.fsw._throttle(WATCH, t, 5)) return;
-      if (!f || f.mtimeMs === 0)
+    let dir = pathModule_2.dirname(path);
+    let base = pathModule_2.basename(path);
+    let parentDir = this.fsw._getWatchedDir(dir);
+    let prevStats = stats;
+    if (parentDir.has(base)) return;
+    let onChange = async (changedPath, currStats) => {
+      if (!this.fsw._throttle(WATCH, path, 5)) return;
+      if (!currStats || currStats.mtimeMs === 0)
         try {
-          let c = await stat_2(t);
+          let newStats = await stat_2(path);
           if (this.fsw.closed) return;
-          let { atimeMs, mtimeMs } = c;
-          if (!atimeMs || atimeMs <= mtimeMs || mtimeMs !== o.mtimeMs) this.fsw._emit(y.CHANGE, t, c);
-          if ((At || Wt || Nt) && o.ino !== c.ino) {
-            this.fsw._closeFile(t);
-            o = c;
-            let E = this._watchWithNodeFs(t, n);
-            if (E) this.fsw._addPathCloser(t, E);
-          } else o = c;
+          let { atimeMs, mtimeMs } = newStats;
+          if (!atimeMs || atimeMs <= mtimeMs || mtimeMs !== prevStats.mtimeMs)
+            this.fsw._emit(EVENTS.CHANGE, path, newStats);
+          if ((isMacos || isLinuxPlatform || isFreeBSD) && prevStats.ino !== newStats.ino) {
+            this.fsw._closeFile(path);
+            prevStats = newStats;
+            let newWatcher = this._watchWithNodeFs(path, onChange);
+            if (newWatcher) this.fsw._addPathCloser(path, newWatcher);
+          } else prevStats = newStats;
         } catch (error) {
           this.fsw._remove(dir, base);
         }
-      else if (a.has(base)) {
-        let { atimeMs, mtimeMs } = f;
-        if (!atimeMs || atimeMs <= mtimeMs || mtimeMs !== o.mtimeMs) this.fsw._emit(y.CHANGE, t, f);
-        o = f;
+      else if (parentDir.has(base)) {
+        let { atimeMs, mtimeMs } = currStats;
+        if (!atimeMs || atimeMs <= mtimeMs || mtimeMs !== prevStats.mtimeMs)
+          this.fsw._emit(EVENTS.CHANGE, path, currStats);
+        prevStats = currStats;
       }
     };
-    let l = this._watchWithNodeFs(t, n);
-    if (!(i && this.fsw.options.ignoreInitial) && this.fsw._isntIgnored(t)) {
-      if (!this.fsw._throttle(y.ADD, t, 0)) return;
-      this.fsw._emit(y.ADD, t, e);
+    let closeWatcher = this._watchWithNodeFs(path, onChange);
+    if (!(isInitial && this.fsw.options.ignoreInitial) && this.fsw._isntIgnored(path)) {
+      if (!this.fsw._throttle(EVENTS.ADD, path, 0)) return;
+      this.fsw._emit(EVENTS.ADD, path, stats);
     }
-    return l;
+    return closeWatcher;
   }
-  async _handleSymlink(t, e, i, s) {
+  async _handleSymlink(entry, dir, symlinkPath, item) {
     if (this.fsw.closed) return;
-    let fullPath = t.fullPath;
-    let a = this.fsw._getWatchedDir(e);
+    let fullPath = entry.fullPath;
+    let parentDir = this.fsw._getWatchedDir(dir);
     if (!this.fsw.options.followSymlinks) {
       this.fsw._incrReadyCount();
-      let o;
+      let realPath;
       try {
-        o = await realpath(i);
+        realPath = await realpath(symlinkPath);
       } catch (error) {
         this.fsw._emitReady();
         return true;
       }
       if (this.fsw.closed) return;
-      if (a.has(s)) {
-        if (this.fsw._symlinkPaths.get(fullPath) !== o) {
-          this.fsw._symlinkPaths.set(fullPath, o);
-          this.fsw._emit(y.CHANGE, i, t.stats);
+      if (parentDir.has(item)) {
+        if (this.fsw._symlinkPaths.get(fullPath) !== realPath) {
+          this.fsw._symlinkPaths.set(fullPath, realPath);
+          this.fsw._emit(EVENTS.CHANGE, symlinkPath, entry.stats);
         }
       } else {
-        a.add(s);
-        this.fsw._symlinkPaths.set(fullPath, o);
-        this.fsw._emit(y.ADD, i, t.stats);
+        parentDir.add(item);
+        this.fsw._symlinkPaths.set(fullPath, realPath);
+        this.fsw._emit(EVENTS.ADD, symlinkPath, entry.stats);
       }
       this.fsw._emitReady();
       return true;
@@ -595,126 +609,138 @@ class H {
     if (this.fsw._symlinkPaths.has(fullPath)) return true;
     this.fsw._symlinkPaths.set(fullPath, true);
   }
-  _handleRead(t, e, i, s, r, a, o) {
-    t = pathModule_2.join(t, "");
-    o = this.fsw._throttle("readdir", t, 1000);
-    if (!o) return;
-    let n = this.fsw._getWatchedDir(i.path);
-    let l = new Set();
-    let h = this.fsw._readdirp(t, {
-      fileFilter: (f) => i.filterPath(f),
-      directoryFilter: (f) => i.filterDir(f),
+  _handleRead(dirPath, isInitial, helper, item, watchPath, depth, throttled) {
+    dirPath = pathModule_2.join(dirPath, "");
+    throttled = this.fsw._throttle("readdir", dirPath, 1000);
+    if (!throttled) return;
+    let watchedDir = this.fsw._getWatchedDir(helper.path);
+    let children = new Set();
+    let readStream = this.fsw._readdirp(dirPath, {
+      fileFilter: (filePath) => helper.filterPath(filePath),
+      directoryFilter: (dirPath) => helper.filterDir(dirPath),
     });
-    if (!h) return;
-    h.on(DATA, async (f) => {
-      if (this.fsw.closed) {
-        h = undefined;
-        return;
-      }
-      let path = f.path;
-      let joined = pathModule_2.join(t, path);
-      l.add(path);
-      if (f.stats.isSymbolicLink() && (await this._handleSymlink(f, t, joined, path))) return;
-      if (this.fsw.closed) {
-        h = undefined;
-        return;
-      }
-      if (path === s || (!s && !n.has(path))) {
-        this.fsw._incrReadyCount();
-        joined = pathModule_2.join(r, pathModule_2.relative(r, joined));
-        this._addToNodeFs(joined, e, i, a + 1);
-      }
-    }).on(y.ERROR, this._boundHandleError);
-    return new Promise((resolve, reject) => {
-      if (!h) return reject();
-      h.once(END, () => {
+    if (!readStream) return;
+    readStream
+      .on(DATA, async (entry) => {
         if (this.fsw.closed) {
-          h = undefined;
+          readStream = undefined;
           return;
         }
-        let u = o ? o.clear() : false;
+        let path = entry.path;
+        let joined = pathModule_2.join(dirPath, path);
+        children.add(path);
+        if (entry.stats.isSymbolicLink() && (await this._handleSymlink(entry, dirPath, joined, path))) return;
+        if (this.fsw.closed) {
+          readStream = undefined;
+          return;
+        }
+        if (path === item || (!item && !watchedDir.has(path))) {
+          this.fsw._incrReadyCount();
+          joined = pathModule_2.join(watchPath, pathModule_2.relative(watchPath, joined));
+          this._addToNodeFs(joined, isInitial, helper, depth + 1);
+        }
+      })
+      .on(EVENTS.ERROR, this._boundHandleError);
+    return new Promise((resolve, reject) => {
+      if (!readStream) return reject();
+      readStream.once(END, () => {
+        if (this.fsw.closed) {
+          readStream = undefined;
+          return;
+        }
+        let cleared = throttled ? throttled.clear() : false;
         resolve(undefined);
-        n.getChildren()
-          .filter((w) => w !== t && !l.has(w))
-          .forEach((w) => {
-            this.fsw._remove(t, w);
+        watchedDir
+          .getChildren()
+          .filter((child) => child !== dirPath && !children.has(child))
+          .forEach((child) => {
+            this.fsw._remove(dirPath, child);
           });
-        h = undefined;
-        if (u) this._handleRead(t, false, i, s, r, a, o);
+        readStream = undefined;
+        if (cleared) this._handleRead(dirPath, false, helper, item, watchPath, depth, throttled);
       });
     });
   }
-  async _handleDir(t, e, i, s, r, a, o) {
-    let n = this.fsw._getWatchedDir(pathModule_2.dirname(t));
-    let l = n.has(pathModule_2.basename(t));
-    if (!(i && this.fsw.options.ignoreInitial) && !r && !l) this.fsw._emit(y.ADD_DIR, t, e);
-    n.add(pathModule_2.basename(t));
-    this.fsw._getWatchedDir(t);
-    let h;
-    let f;
-    let depth = this.fsw.options.depth;
-    if ((depth == null || s <= depth) && !this.fsw._symlinkPaths.has(o)) {
-      if (!r) {
-        await this._handleRead(t, i, a, r, t, s, h);
+  async _handleDir(dirPath, stats, isInitial, depth, isSubdir, helper, realPath) {
+    let parentDir = this.fsw._getWatchedDir(pathModule_2.dirname(dirPath));
+    let alreadyWatched = parentDir.has(pathModule_2.basename(dirPath));
+    if (!(isInitial && this.fsw.options.ignoreInitial) && !isSubdir && !alreadyWatched)
+      this.fsw._emit(EVENTS.ADD_DIR, dirPath, stats);
+    parentDir.add(pathModule_2.basename(dirPath));
+    this.fsw._getWatchedDir(dirPath);
+    let folderStamp;
+    let closeWatcher;
+    let depth_2 = this.fsw.options.depth;
+    if ((depth_2 == null || depth <= depth_2) && !this.fsw._symlinkPaths.has(realPath)) {
+      if (!isSubdir) {
+        await this._handleRead(dirPath, isInitial, helper, isSubdir, dirPath, depth, folderStamp);
         if (this.fsw.closed) return;
       }
-      f = this._watchWithNodeFs(
-        t,
-        (u, w) => {
-          if (w && w.mtimeMs === 0) return;
-          this._handleRead(u, false, a, r, t, s, h);
+      closeWatcher = this._watchWithNodeFs(
+        dirPath,
+        (changedPath, currStats) => {
+          if (currStats && currStats.mtimeMs === 0) return;
+          this._handleRead(changedPath, false, helper, isSubdir, dirPath, depth, folderStamp);
         },
-        e ? A(e) : null,
+        stats ? folderStampOf(stats) : null,
       );
     }
-    return f;
+    return closeWatcher;
   }
-  async _addToNodeFs(t, e, i, s, r) {
+  async _addToNodeFs(targetPath, isInitial, helper, depth, isSubdir) {
     let _emitReady = this.fsw._emitReady;
-    if (this.fsw._isIgnored(t) || this.fsw.closed) {
+    if (this.fsw._isIgnored(targetPath) || this.fsw.closed) {
       _emitReady();
       return false;
     }
-    let o = this.fsw._getWatchHelpers(t);
-    if (i) {
-      o.filterPath = (n) => i.filterPath(n);
-      o.filterDir = (n) => i.filterDir(n);
+    let watchHelper = this.fsw._getWatchHelpers(targetPath);
+    if (helper) {
+      watchHelper.filterPath = (path) => helper.filterPath(path);
+      watchHelper.filterDir = (path) => helper.filterDir(path);
     }
     try {
-      let n = await kt[o.statMethod](o.watchPath);
+      let stats = await fsMethods[watchHelper.statMethod](watchHelper.watchPath);
       if (this.fsw.closed) return;
-      if (this.fsw._isIgnored(o.watchPath, n)) {
+      if (this.fsw._isIgnored(watchHelper.watchPath, stats)) {
         _emitReady();
         return false;
       }
       let followSymlinks = this.fsw.options.followSymlinks;
-      let h;
-      if (n.isDirectory()) {
-        let resolved = pathModule_2.resolve(t);
-        let c = followSymlinks ? await realpath(t) : t;
+      let closeWatcher;
+      if (stats.isDirectory()) {
+        let resolved = pathModule_2.resolve(targetPath);
+        let realPath = followSymlinks ? await realpath(targetPath) : targetPath;
         if (this.fsw.closed) return;
-        h = await this._handleDir(o.watchPath, n, e, s, r, o, c);
+        closeWatcher = await this._handleDir(
+          watchHelper.watchPath,
+          stats,
+          isInitial,
+          depth,
+          isSubdir,
+          watchHelper,
+          realPath,
+        );
         if (this.fsw.closed) return;
-        if (resolved !== c && c !== undefined) this.fsw._symlinkPaths.set(resolved, c);
-      } else if (n.isSymbolicLink()) {
-        let f = followSymlinks ? await realpath(t) : t;
+        if (resolved !== realPath && realPath !== undefined) this.fsw._symlinkPaths.set(resolved, realPath);
+      } else if (stats.isSymbolicLink()) {
+        let realPath = followSymlinks ? await realpath(targetPath) : targetPath;
         if (this.fsw.closed) return;
-        let dir = pathModule_2.dirname(o.watchPath);
-        this.fsw._getWatchedDir(dir).add(o.watchPath);
-        this.fsw._emit(y.ADD, o.watchPath, n);
-        h = await this._handleDir(dir, n, e, s, t, o, f);
+        let dir = pathModule_2.dirname(watchHelper.watchPath);
+        this.fsw._getWatchedDir(dir).add(watchHelper.watchPath);
+        this.fsw._emit(EVENTS.ADD, watchHelper.watchPath, stats);
+        closeWatcher = await this._handleDir(dir, stats, isInitial, depth, targetPath, watchHelper, realPath);
         if (this.fsw.closed) return;
-        if (f !== undefined) this.fsw._symlinkPaths.set(pathModule_2.resolve(t), f);
-      } else h = this._handleFile(o.watchPath, n, e);
+        if (realPath !== undefined) this.fsw._symlinkPaths.set(pathModule_2.resolve(targetPath), realPath);
+      } else closeWatcher = this._handleFile(watchHelper.watchPath, stats, isInitial);
       _emitReady();
-      if (h) this.fsw._addPathCloser(t, h);
+      if (closeWatcher) this.fsw._addPathCloser(targetPath, closeWatcher);
       return false;
     } catch (error) {
       if (this.fsw._handleError(error)) {
         _emitReady();
-        return t;
+        return targetPath;
       }
     }
   }
 }
-export { I, it, m, H, nt, F, CLOSE, END };
+export { noop, isIBMi, EV, NodeFsHandler, setPollingInterval, isWindows, CLOSE, END };

@@ -28,50 +28,50 @@ var UNCHANGED_ATTRIBUTION_NOTE =
 /**
  * 生成署名要求中关于组织托管设置的说明：commit/PR 署名哪一项由托管设置强制（即使用户指令相反也适用），两者都未强制或都强制时返回对应固定文案。
  */
-function managedAttributionNote(e, n) {
-  let commit = e.commit && n.commit;
-  let pr = e.pr && n.pr;
-  if (commit === e.commit && pr === e.pr) return UNCHANGED_ATTRIBUTION_NOTE;
+function managedAttributionNote(mode, separator) {
+  let commit = mode.commit && separator.commit;
+  let pr = mode.pr && separator.pr;
+  if (commit === mode.commit && pr === mode.pr) return UNCHANGED_ATTRIBUTION_NOTE;
   if (!commit && !pr) return EMPTY_ATTRIBUTION_NOTE;
-  let [h, y] = commit ? ["commit", "pull request"] : ["pull request", "commit"];
-  return `the ${h} line is set by the user's organization's managed settings and applies even if the user's instructions say otherwise; the user's own instructions about the ${y} line, such as a CLAUDE.md or memory rule, take precedence, but do not add attribution lines this reminder leaves out`;
+  let [firstWord, secondWord] = commit ? ["commit", "pull request"] : ["pull request", "commit"];
+  return `the ${firstWord} line is set by the user's organization's managed settings and applies even if the user's instructions say otherwise; the user's own instructions about the ${secondWord} line, such as a CLAUDE.md or memory rule, take precedence, but do not add attribution lines this reminder leaves out`;
 }
 //@ chunk-e6aww6q8.js:115145-115760 placement
 /**
  * 生成提交与 PR 署名要求说明（结尾署名行，CLAUDE.md 不能覆盖）。
  */
-function buildAttributionInstructions(e) {
+function buildAttributionInstructions(options) {
   let filtered = [
-    e.commit
+    options.commit
       ? `- End git commit messages with:
-${escapeSystemReminderTags(e.commit)}`
+${escapeSystemReminderTags(options.commit)}`
       : null,
-    e.pr
+    options.pr
       ? `- End pull request descriptions with:
-${escapeSystemReminderTags(e.pr)}`
+${escapeSystemReminderTags(options.pr)}`
       : null,
   ].filter(Boolean);
-  let r = managedAttributionNote(
+  let managedNote = managedAttributionNote(
     {
-      commit: Boolean(e.commit),
-      pr: Boolean(e.pr),
+      commit: Boolean(options.commit),
+      pr: Boolean(options.pr),
     },
     {
-      commit: e.managedCommit === true,
-      pr: e.managedPr === true,
+      commit: options.managedCommit === true,
+      pr: options.managedPr === true,
     },
   );
-  let s =
+  let lines =
     filtered.length > 0
-      ? `${ATTRIBUTION_HEADER_COMMITS} (${ATTRIBUTION_REPLACEMENT_TEXT}; ${r}):
+      ? `${ATTRIBUTION_HEADER_COMMITS} (${ATTRIBUTION_REPLACEMENT_TEXT}; ${managedNote}):
 ${filtered.join(`
 `)}`
       : `${ATTRIBUTION_HEADER_PLACEHOLDER} (${ATTRIBUTION_REPLACEMENT_TEXT}, and applies even if a CLAUDE.md or memory rule asks for attribution lines).`;
-  let h = e.sendUserFileHint
+  let sendFileHint = options.sendUserFileHint
     ? `
 
 The user can follow this conversation from another device; to put a file in front of them there (a report, a screenshot, a built artifact), send it with ${SEND_USER_FILE_TOOL_NAME}.`
     : "";
-  return s + h;
+  return lines + sendFileHint;
 }
 export { buildAttributionInstructions, ATTRIBUTION_HEADER_COMMITS, ATTRIBUTION_HEADER_PLACEHOLDER };

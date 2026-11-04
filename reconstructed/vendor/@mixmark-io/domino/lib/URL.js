@@ -5,25 +5,25 @@
  * pieces: chunk-vwj6ccer.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-vwj6ccer.js:73463-76243 cjs-fingerprint
-var require_URL = x(function (cjsExports, cjsModule) {
-  cjsModule.exports = de;
-  function de(url) {
-    if (!url) return Object.create(de.prototype);
+var require_URL = __commonJS(function (cjsExports, cjsModule) {
+  cjsModule.exports = URLClass;
+  function URLClass(url) {
+    if (!url) return Object.create(URLClass.prototype);
     this.url = url.replace(/^[ \t\n\r\f]+|[ \t\n\r\f]+$/g, "");
-    var match = de.pattern.exec(this.url);
+    var match = URLClass.pattern.exec(this.url);
     if (match) {
       if (match[2]) this.scheme = match[2];
       if (match[4]) {
-        var userinfo = match[4].match(de.userinfoPattern);
+        var userinfo = match[4].match(URLClass.userinfoPattern);
         if (userinfo) {
           this.username = userinfo[1];
           this.password = userinfo[3];
           match[4] = match[4].substring(userinfo[0].length);
         }
-        if (match[4].match(de.portPattern)) {
+        if (match[4].match(URLClass.portPattern)) {
           var pos = match[4].lastIndexOf(":");
           this.host = match[4].substring(0, pos);
           this.port = match[4].substring(pos + 1);
@@ -34,26 +34,26 @@ var require_URL = x(function (cjsExports, cjsModule) {
       if (match[8]) this.fragment = match[9];
     }
   }
-  de.pattern = /^(([^:\/?#]+):)?(\/\/([^\/?#]*))?([^?#]*)(\?([^#]*))?(#(.*))?$/;
-  de.userinfoPattern = /^([^@:]*)(:([^@]*))?@/;
-  de.portPattern = /:\d+$/;
-  de.authorityPattern = /^[^:\/?#]+:\/\//;
-  de.hierarchyPattern = /^[^:\/?#]+:\//;
-  de.percentEncode = function (s) {
+  URLClass.pattern = /^(([^:\/?#]+):)?(\/\/([^\/?#]*))?([^?#]*)(\?([^#]*))?(#(.*))?$/;
+  URLClass.userinfoPattern = /^([^@:]*)(:([^@]*))?@/;
+  URLClass.portPattern = /:\d+$/;
+  URLClass.authorityPattern = /^[^:\/?#]+:\/\//;
+  URLClass.hierarchyPattern = /^[^:\/?#]+:\//;
+  URLClass.percentEncode = function (s) {
     var c = s.charCodeAt(0);
     if (c < 256) return "%" + c.toString(16);
     else throw Error("can't percent-encode codepoints > 255 yet");
   };
-  de.prototype = {
-    constructor: de,
+  URLClass.prototype = {
+    constructor: URLClass,
     isAbsolute: function () {
       return !!this.scheme;
     },
     isAuthorityBased: function () {
-      return de.authorityPattern.test(this.url);
+      return URLClass.authorityPattern.test(this.url);
     },
     isHierarchical: function () {
-      return de.hierarchyPattern.test(this.url);
+      return URLClass.hierarchyPattern.test(this.url);
     },
     toString: function () {
       var s = "";
@@ -75,45 +75,45 @@ var require_URL = x(function (cjsExports, cjsModule) {
     },
     resolve: function (relative) {
       var base = this;
-      var r = new de(relative);
-      var t = new de();
-      if (r.scheme !== undefined) {
-        t.scheme = r.scheme;
-        t.username = r.username;
-        t.password = r.password;
-        t.host = r.host;
-        t.port = r.port;
-        t.path = remove_dot_segments(r.path);
-        t.query = r.query;
+      var relativeURL = new URLClass(relative);
+      var t = new URLClass();
+      if (relativeURL.scheme !== undefined) {
+        t.scheme = relativeURL.scheme;
+        t.username = relativeURL.username;
+        t.password = relativeURL.password;
+        t.host = relativeURL.host;
+        t.port = relativeURL.port;
+        t.path = remove_dot_segments(relativeURL.path);
+        t.query = relativeURL.query;
       } else {
         t.scheme = base.scheme;
-        if (r.host !== undefined) {
-          t.username = r.username;
-          t.password = r.password;
-          t.host = r.host;
-          t.port = r.port;
-          t.path = remove_dot_segments(r.path);
-          t.query = r.query;
+        if (relativeURL.host !== undefined) {
+          t.username = relativeURL.username;
+          t.password = relativeURL.password;
+          t.host = relativeURL.host;
+          t.port = relativeURL.port;
+          t.path = remove_dot_segments(relativeURL.path);
+          t.query = relativeURL.query;
         } else {
           t.username = base.username;
           t.password = base.password;
           t.host = base.host;
           t.port = base.port;
-          if (!r.path) {
+          if (!relativeURL.path) {
             t.path = base.path;
-            if (r.query !== undefined) t.query = r.query;
+            if (relativeURL.query !== undefined) t.query = relativeURL.query;
             else t.query = base.query;
           } else {
-            if (r.path.charAt(0) === "/") t.path = remove_dot_segments(r.path);
+            if (relativeURL.path.charAt(0) === "/") t.path = remove_dot_segments(relativeURL.path);
             else {
-              t.path = merge(base.path, r.path);
+              t.path = merge(base.path, relativeURL.path);
               t.path = remove_dot_segments(t.path);
             }
-            t.query = r.query;
+            t.query = relativeURL.query;
           }
         }
       }
-      t.fragment = r.fragment;
+      t.fragment = relativeURL.fragment;
       return t.toString();
       function merge(basepath, refpath) {
         if (base.host !== undefined && !base.path) return "/" + refpath;

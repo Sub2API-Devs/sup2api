@@ -12,29 +12,29 @@ import { LOOPBACK_HOSTS, malformedError } from "./pairingErrors.js";
 
 //@ chunk-p7xf186d.js:6058-6487 placement
 function normalizeApiOrigin(apiOrigin, allowLoopbackHttp = false) {
-  let n;
+  let parsed;
   try {
-    n = new URL(apiOrigin);
+    parsed = new URL(apiOrigin);
   } catch {
     throw TypeError(`pairing apiOrigin is not a URL: ${apiOrigin}`);
   }
   if (
     !(
-      n.protocol === "https:" ||
-      (allowLoopbackHttp && n.protocol === "http:" && LOOPBACK_HOSTS.has(n.hostname))
+      parsed.protocol === "https:" ||
+      (allowLoopbackHttp && parsed.protocol === "http:" && LOOPBACK_HOSTS.has(parsed.hostname))
     ) ||
-    n.username ||
-    n.password ||
-    (n.pathname !== "/" && n.pathname !== "") ||
-    n.search ||
-    n.hash
+    parsed.username ||
+    parsed.password ||
+    (parsed.pathname !== "/" && parsed.pathname !== "") ||
+    parsed.search ||
+    parsed.hash
   )
     throw TypeError(`pairing apiOrigin must be a bare https origin: ${apiOrigin}`);
-  let i = `${n.origin}/api/oauth/local_pairing`;
+  let endpoint = `${parsed.origin}/api/oauth/local_pairing`;
   return {
-    issuer: i,
-    attest: `${i}/attest`,
-    jwks: `${i}/jwks.json`,
+    issuer: endpoint,
+    attest: `${endpoint}/attest`,
+    jwks: `${endpoint}/jwks.json`,
   };
 }
 //@ chunk-p7xf186d.js:6487-6577 placement
@@ -44,46 +44,46 @@ var textDecoder = new TextDecoder("utf-8", {
   fatal: true,
 });
 //@ chunk-p7xf186d.js:6577-6611 placement
-function utf8Encode(e) {
-  return textEncoder.encode(e);
+function utf8Encode(text) {
+  return textEncoder.encode(text);
 }
 //@ chunk-p7xf186d.js:6611-6645 placement
-function utf8Decode(e) {
-  return textDecoder.decode(e);
+function utf8Decode(bytes) {
+  return textDecoder.decode(bytes);
 }
 //@ chunk-p7xf186d.js:6645-6674 placement
-function concatBytesArgs(...e) {
-  return concatBytes(e);
+function concatBytesArgs(...parts) {
+  return concatBytes(parts);
 }
 //@ chunk-p7xf186d.js:6674-6798 placement
-function concatBytes(e) {
-  let t = 0;
-  for (let i of e) t += i.length;
-  let uint8Array = new Uint8Array(t);
-  let r = 0;
-  for (let i of e) {
-    uint8Array.set(i, r);
-    r += i.length;
+function concatBytes(parts) {
+  let totalLength = 0;
+  for (let part of parts) totalLength += part.length;
+  let uint8Array = new Uint8Array(totalLength);
+  let offset = 0;
+  for (let part of parts) {
+    uint8Array.set(part, offset);
+    offset += part.length;
   }
   return uint8Array;
 }
 //@ chunk-p7xf186d.js:6798-6942 placement
-function lengthPrefixed(e) {
-  let t = typeof e === "string" ? utf8Encode(e) : e;
-  let uint8Array = new Uint8Array(4 + t.length);
-  new DataView(uint8Array.buffer).setUint32(0, t.length, false);
-  uint8Array.set(t, 4);
+function lengthPrefixed(value) {
+  let bytes = typeof value === "string" ? utf8Encode(value) : value;
+  let uint8Array = new Uint8Array(4 + bytes.length);
+  new DataView(uint8Array.buffer).setUint32(0, bytes.length, false);
+  uint8Array.set(bytes, 4);
   return uint8Array;
 }
 //@ chunk-p7xf186d.js:6942-7014 placement
-function isNonNegativeSafeInt(e) {
-  return typeof e === "number" && Number.isSafeInteger(e) && e >= 0;
+function isNonNegativeSafeInt(value) {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
 }
 //@ chunk-p7xf186d.js:7014-7181 placement
-function u64be(e) {
-  if (!isNonNegativeSafeInt(e)) throw RangeError("u64be: not a non-negative safe integer");
+function u64be(value) {
+  if (!isNonNegativeSafeInt(value)) throw RangeError("u64be: not a non-negative safe integer");
   let uint8Array = new Uint8Array(8);
-  new DataView(uint8Array.buffer).setBigUint64(0, BigInt(e), false);
+  new DataView(uint8Array.buffer).setBigUint64(0, BigInt(value), false);
   return uint8Array;
 }
 //@ chunk-p7xf186d.js:7181-7277 placement
@@ -93,45 +93,46 @@ function u64be(e) {
 var BASE64URL_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
 var BASE64URL_RE = /^[A-Za-z0-9_-]*$/;
 //@ chunk-p7xf186d.js:7277-7650 placement
-function base64UrlDecode(e) {
-  let t = e.length % 4;
-  if (!BASE64URL_RE.test(e) || t === 1) throw SyntaxError("not unpadded base64url");
-  if (t !== 0) {
-    if ((BASE64URL_ALPHABET.indexOf(e.charAt(e.length - 1)) & (t === 2 ? 15 : 3)) !== 0)
+function base64UrlDecode(text) {
+  let remainder = text.length % 4;
+  if (!BASE64URL_RE.test(text) || remainder === 1) throw SyntaxError("not unpadded base64url");
+  if (remainder !== 0) {
+    if ((BASE64URL_ALPHABET.indexOf(text.charAt(text.length - 1)) & (remainder === 2 ? 15 : 3)) !== 0)
       throw SyntaxError("non-canonical base64url");
   }
-  let n = e.replace(/-/g, "+").replace(/_/g, "/") + "===".slice((e.length + 3) % 4);
-  let r = atob(n);
-  let uint8Array = new Uint8Array(r.length);
-  for (let idx = 0; idx < r.length; idx++) uint8Array[idx] = r.charCodeAt(idx);
+  let padded = text.replace(/-/g, "+").replace(/_/g, "/") + "===".slice((text.length + 3) % 4);
+  let binary = atob(padded);
+  let uint8Array = new Uint8Array(binary.length);
+  for (let idx = 0; idx < binary.length; idx++) uint8Array[idx] = binary.charCodeAt(idx);
   return uint8Array;
 }
 //@ chunk-p7xf186d.js:7650-7833 placement
-function bytesToBinaryString(e) {
-  let t = "";
-  for (let n = 0; n < e.length; n += 32768) t += String.fromCharCode.apply(null, e.subarray(n, n + 32768));
-  return btoa(t).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+function bytesToBinaryString(bytes) {
+  let binary = "";
+  for (let offset = 0; offset < bytes.length; offset += 32768)
+    binary += String.fromCharCode.apply(null, bytes.subarray(offset, offset + 32768));
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
 //@ chunk-p7xf186d.js:7833-7953 placement
-function constantTimeEqual(e, t) {
-  if (e.length !== t.length) return false;
-  let n = 0;
-  for (let i = 0; i < e.length; i++) n |= (e[i] ?? 0) ^ (t[i] ?? 0);
-  return n === 0;
+function constantTimeEqual(left, right) {
+  if (left.length !== right.length) return false;
+  let diff = 0;
+  for (let i = 0; i < left.length; i++) diff |= (left[i] ?? 0) ^ (right[i] ?? 0);
+  return diff === 0;
 }
 //@ chunk-p7xf186d.js:7953-8038 placement
-function randomBytes(e) {
-  let uint8Array = new Uint8Array(e);
+function randomBytes(length) {
+  let uint8Array = new Uint8Array(length);
   globalThis.crypto.getRandomValues(uint8Array);
   return uint8Array;
 }
 //@ chunk-p7xf186d.js:8038-8114 placement
-function toArrayBuffer(e) {
-  return e.buffer.slice(e.byteOffset, e.byteOffset + e.byteLength);
+function toArrayBuffer(bytes) {
+  return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
 }
 //@ chunk-p7xf186d.js:8114-8211 placement
-async function sha256(e) {
-  return new Uint8Array(await globalThis.crypto.subtle.digest("SHA-256", toArrayBuffer(e)));
+async function sha256(bytes) {
+  return new Uint8Array(await globalThis.crypto.subtle.digest("SHA-256", toArrayBuffer(bytes)));
 }
 //@ chunk-p7xf186d.js:8211-8221 placement
 /**
@@ -139,27 +140,28 @@ async function sha256(e) {
  */
 var P256_PUBLIC_KEY_CHARS = 87;
 //@ chunk-p7xf186d.js:8221-8479 placement
-function parsePublicKey(e) {
-  if (typeof e !== "string" || e.length !== P256_PUBLIC_KEY_CHARS)
+function parsePublicKey(text) {
+  if (typeof text !== "string" || text.length !== P256_PUBLIC_KEY_CHARS)
     throw malformedError("public_key must be 87 base64url chars");
-  let t;
+  let bytes;
   try {
-    t = base64UrlDecode(e);
+    bytes = base64UrlDecode(text);
   } catch {
     throw malformedError("public_key is not base64url");
   }
-  if (t.length !== 65 || t[0] !== 4) throw malformedError("public_key must be an uncompressed P-256 point");
-  return t;
+  if (bytes.length !== 65 || bytes[0] !== 4)
+    throw malformedError("public_key must be an uncompressed P-256 point");
+  return bytes;
 }
 //@ chunk-p7xf186d.js:8479-8600 placement
-function p256PointToJwkJson(e) {
-  let t = bytesToBinaryString(e.subarray(1, 33));
-  let n = bytesToBinaryString(e.subarray(33, 65));
-  return `{"crv":"P-256","kty":"EC","x":"${t}","y":"${n}"}`;
+function p256PointToJwkJson(point) {
+  let x = bytesToBinaryString(point.subarray(1, 33));
+  let y = bytesToBinaryString(point.subarray(33, 65));
+  return `{"crv":"P-256","kty":"EC","x":"${x}","y":"${y}"}`;
 }
 //@ chunk-p7xf186d.js:8600-8648 placement
-async function sha256Base64Url(e) {
-  return bytesToBinaryString(await sha256(utf8Encode(p256PointToJwkJson(e))));
+async function sha256Base64Url(point) {
+  return bytesToBinaryString(await sha256(utf8Encode(p256PointToJwkJson(point))));
 }
 //@ chunk-p7xf186d.js:8648-8825 placement
 async function importEcdhPublicKey(peerRaw) {
@@ -179,14 +181,14 @@ async function importEcdhPublicKey(peerRaw) {
   }
 }
 //@ chunk-p7xf186d.js:8825-8983 placement
-async function importEcdhJwk(e, t) {
+async function importEcdhJwk(x, y) {
   return globalThis.crypto.subtle.importKey(
     "jwk",
     {
       kty: "EC",
       crv: "P-256",
-      x: e,
-      y: t,
+      x,
+      y,
       ext: true,
     },
     {
@@ -199,7 +201,7 @@ async function importEcdhJwk(e, t) {
 }
 //@ chunk-p7xf186d.js:8983-9230 placement
 async function generateEcdhKeyPair() {
-  let e = await globalThis.crypto.subtle.generateKey(
+  let keyPair = await globalThis.crypto.subtle.generateKey(
     {
       name: "ECDH",
       namedCurve: "P-256",
@@ -207,9 +209,9 @@ async function generateEcdhKeyPair() {
     false,
     ["deriveBits"],
   );
-  let uint8Array = new Uint8Array(await globalThis.crypto.subtle.exportKey("raw", e.publicKey));
+  let uint8Array = new Uint8Array(await globalThis.crypto.subtle.exportKey("raw", keyPair.publicKey));
   return {
-    keyPair: e,
+    keyPair,
     publicKey: bytesToBinaryString(uint8Array),
     jkt: await sha256Base64Url(uint8Array),
   };

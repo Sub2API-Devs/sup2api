@@ -5,10 +5,10 @@
  * pieces: chunk-y366fgzk.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../../../../runtime/bun-runtime.js";
 
 //@ chunk-y366fgzk.js:1795-4373 cjs-fingerprint
-var require_ruleset = x(function (cjsExports) {
+var require_ruleset = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
@@ -55,7 +55,7 @@ var require_ruleset = x(function (cjsExports) {
       true,
     ],
   };
-  var n = {};
+  var emptyObject = {};
   var o = {
     [v]: "getAttr",
     [w]: [
@@ -144,8 +144,8 @@ var require_ruleset = x(function (cjsExports) {
               {
                 endpoint: {
                   url: k,
-                  properties: n,
-                  headers: n,
+                  properties: emptyObject,
+                  headers: emptyObject,
                 },
                 type: e,
               },
@@ -185,8 +185,8 @@ var require_ruleset = x(function (cjsExports) {
                     ],
                     endpoint: {
                       url: "https://{Region}.signin.aws.amazon.com",
-                      properties: n,
-                      headers: n,
+                      properties: emptyObject,
+                      headers: emptyObject,
                     },
                     type: e,
                   },
@@ -201,8 +201,8 @@ var require_ruleset = x(function (cjsExports) {
                     ],
                     endpoint: {
                       url: "https://{Region}.signin.amazonaws.cn",
-                      properties: n,
-                      headers: n,
+                      properties: emptyObject,
+                      headers: emptyObject,
                     },
                     type: e,
                   },
@@ -217,8 +217,8 @@ var require_ruleset = x(function (cjsExports) {
                     ],
                     endpoint: {
                       url: "https://{Region}.signin.amazonaws-us-gov.com",
-                      properties: n,
-                      headers: n,
+                      properties: emptyObject,
+                      headers: emptyObject,
                     },
                     type: e,
                   },
@@ -237,8 +237,8 @@ var require_ruleset = x(function (cjsExports) {
                           {
                             endpoint: {
                               url: "https://signin-fips.{Region}.{PartitionResult#dualStackDnsSuffix}",
-                              properties: n,
-                              headers: n,
+                              properties: emptyObject,
+                              headers: emptyObject,
                             },
                             type: e,
                           },
@@ -267,8 +267,8 @@ var require_ruleset = x(function (cjsExports) {
                           {
                             endpoint: {
                               url: "https://signin-fips.{Region}.{PartitionResult#dnsSuffix}",
-                              properties: n,
-                              headers: n,
+                              properties: emptyObject,
+                              headers: emptyObject,
                             },
                             type: e,
                           },
@@ -291,8 +291,8 @@ var require_ruleset = x(function (cjsExports) {
                           {
                             endpoint: {
                               url: "https://signin.{Region}.{PartitionResult#dualStackDnsSuffix}",
-                              properties: n,
-                              headers: n,
+                              properties: emptyObject,
+                              headers: emptyObject,
                             },
                             type: e,
                           },
@@ -309,8 +309,8 @@ var require_ruleset = x(function (cjsExports) {
                   {
                     endpoint: {
                       url: "https://signin.{Region}.{PartitionResult#dnsSuffix}",
-                      properties: n,
-                      headers: n,
+                      properties: emptyObject,
+                      headers: emptyObject,
                     },
                     type: e,
                   },

@@ -5,10 +5,10 @@
  * pieces: chunk-vwj6ccer.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-vwj6ccer.js:24885-26129 cjs-fingerprint
-var require_xmlnames = x(function (cjsExports) {
+var require_xmlnames = __commonJS(function (cjsExports) {
   cjsExports.isValidName = isValidName;
   cjsExports.isValidQName = isValidQName;
   var simplename = /^[_:A-Za-z][-.:\w]+$/;

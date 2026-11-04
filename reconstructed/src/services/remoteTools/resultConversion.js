@@ -10,7 +10,7 @@
  */
 import { isAwayRecheckOnCached } from "./awayRecheckFlag.js";
 import { truncateToLength } from "../../utils/stringUtils.js";
-import { vlr } from "../../../vendor/@anthropic-ai/sdk/helpers/beta/mcp.mjs";
+import { PDF_READ_MARKER_PREFIX } from "../../../vendor/@anthropic-ai/sdk/helpers/beta/mcp.mjs";
 import { hasBufferPrefix } from "../../utils/mcpOutputStorage.js";
 import { unreachableCallMessage, notAnsweringMessage } from "./targetMessages.js";
 import {
@@ -38,7 +38,7 @@ import { FILE_READ_TOOL_NAME } from "../../tools/FileReadTool/constants.js";
 import { isNonMcpShellTool } from "../../tools/shared/textSearchTools.js";
 import { supportsBackgroundShells, AGENT_ID_REGEX } from "./backgroundCommands.js";
 import { TASKSTOP } from "../../tools/TaskStopTool/prompt.js";
-import { vMe } from "../../../vendor/@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
+import { getAlias } from "../../../vendor/@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
 import { KEPT_RESULT_FIELDS_BY_TOOL } from "../../remote/tools/protocolSchemas.js";
 import { pickByHelper } from "../../utils/git/gitSafeEnv.js";
 import { FILE_EDIT_TOOL_NAME } from "../../tools/FileEditTool/constants.js";
@@ -57,12 +57,13 @@ import {
   REJECT_MESSAGE_WITH_REASON_PREFIX,
   REJECT_MESSAGE,
 } from "../../utils/messages.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-qmsrnapp.js:40968-40994 placement
 var CAP_ANNOUNCES_RETURN = "announces_return";
 //@ chunk-qmsrnapp.js:40994-41085 placement
-function hostAnnouncesReturnCap(e) {
-  return e.source === "session" && e.description?.capabilities?.includes(CAP_ANNOUNCES_RETURN) === true;
+function hostAnnouncesReturnCap(host) {
+  return host.source === "session" && host.description?.capabilities?.includes(CAP_ANNOUNCES_RETURN) === true;
 }
 //@ chunk-qmsrnapp.js:41085-41186 placement
 function isHostAwayRecheckable(host) {
@@ -82,49 +83,49 @@ var MAX_PLACED_ATTACHMENT_BYTES = 8388608;
 var MAX_REMOTE_CONTENT_BLOCKS = 100;
 //@ chunk-qmsrnapp.js:41232-41321 placement
 function capTextContent(content) {
-  let n = capRemoteContent(content);
+  let capped = capRemoteContent(content);
   return {
-    content: n.content,
+    content: capped.content,
     truncated: false,
-    ...(n.cut && {
+    ...(capped.cut && {
       cutHere: true,
     }),
   };
 }
 //@ chunk-qmsrnapp.js:41321-42048 placement
-function capRemoteContent(e) {
-  if (typeof e === "string")
-    return e.length > REMOTE_RESULT_TEXT_CAP
+function capRemoteContent(content) {
+  if (typeof content === "string")
+    return content.length > REMOTE_RESULT_TEXT_CAP
       ? {
-          content: truncateToLength(e, REMOTE_RESULT_TEXT_CAP),
+          content: truncateToLength(content, REMOTE_RESULT_TEXT_CAP),
           cut: true,
         }
       : {
-          content: e,
+          content,
           cut: false,
         };
-  let { blocks, cut } = e.slice(0, MAX_REMOTE_CONTENT_BLOCKS).reduce(
-    (acc, s) => {
-      if (s.type === "text") {
-        let i = truncateToLength(s.text, Math.max(0, acc.text));
-        if (i.trim() !== "")
+  let { blocks, cut } = content.slice(0, MAX_REMOTE_CONTENT_BLOCKS).reduce(
+    (acc, block) => {
+      if (block.type === "text") {
+        let text = truncateToLength(block.text, Math.max(0, acc.text));
+        if (text.trim() !== "")
           acc.blocks.push({
-            ...s,
-            text: i,
+            ...block,
+            text,
           });
         return {
           ...acc,
-          text: acc.text - i.length,
-          cut: acc.cut || i.length < s.text.length,
+          text: acc.text - text.length,
+          cut: acc.cut || text.length < block.text.length,
         };
       }
-      if (s.type === "image") {
-        let i = s.source.type === "base64" ? s.source.data.length : undefined;
-        if (i !== undefined && i <= acc.image) {
-          acc.blocks.push(s);
+      if (block.type === "image") {
+        let dataLength = block.source.type === "base64" ? block.source.data.length : undefined;
+        if (dataLength !== undefined && dataLength <= acc.image) {
+          acc.blocks.push(block);
           return {
             ...acc,
-            image: acc.image - i,
+            image: acc.image - dataLength,
           };
         }
         acc.blocks.push({
@@ -136,24 +137,24 @@ function capRemoteContent(e) {
           cut: true,
         };
       }
-      acc.blocks.push(s);
+      acc.blocks.push(block);
       return acc;
     },
     {
       blocks: [],
       text: REMOTE_RESULT_TEXT_CAP,
       image: MAX_REMOTE_IMAGE_BYTES,
-      cut: e.length > MAX_REMOTE_CONTENT_BLOCKS,
+      cut: content.length > MAX_REMOTE_CONTENT_BLOCKS,
     },
   );
   return {
-    content: cut || blocks.length !== e.length ? blocks : e,
+    content: cut || blocks.length !== content.length ? blocks : content,
     cut,
   };
 }
 //@ chunk-qmsrnapp.js:42048-42111 placement
-function isPlaceholderTextBlock(e) {
-  return e?.type === "text" && e.text.startsWith(vlr);
+function isPlaceholderTextBlock(block) {
+  return block?.type === "text" && block.text.startsWith(PDF_READ_MARKER_PREFIX);
 }
 //@ chunk-qmsrnapp.js:42111-42173 placement = base64URLEncode (1)
 function base64URLEncode(buffer) {
@@ -163,14 +164,14 @@ function base64URLEncode(buffer) {
 function placeDocumentAttachments(content, documents) {
   if (documents === undefined || documents.length === 0 || typeof content === "string") return content;
   let { placed } = documents.reduce(
-    (acc, s) =>
-      s.data.length <= acc.remaining &&
-      base64URLEncode(s.data) &&
-      isPlaceholderTextBlock(content[s.at]) &&
-      !acc.placed.has(s.at)
+    (acc, docEntry) =>
+      docEntry.data.length <= acc.remaining &&
+      base64URLEncode(docEntry.data) &&
+      isPlaceholderTextBlock(content[docEntry.at]) &&
+      !acc.placed.has(docEntry.at)
         ? {
-            placed: new Map([...acc.placed, [s.at, s]]),
-            remaining: acc.remaining - s.data.length,
+            placed: new Map([...acc.placed, [docEntry.at, docEntry]]),
+            remaining: acc.remaining - docEntry.data.length,
           }
         : acc,
     {
@@ -179,16 +180,16 @@ function placeDocumentAttachments(content, documents) {
     },
   );
   if (placed.size === 0) return content;
-  return content.map((r, s) => {
-    let i = placed.get(s);
-    return i === undefined
-      ? r
+  return content.map((block, index) => {
+    let placedDocument = placed.get(index);
+    return placedDocument === undefined
+      ? block
       : {
           type: "document",
           source: {
             type: "base64",
-            media_type: i.media_type,
-            data: i.data,
+            media_type: placedDocument.media_type,
+            data: placedDocument.data,
           },
         };
   });
@@ -201,17 +202,17 @@ function capStructuredOutput(output) {
       truncated: false,
     };
   let { entries, cut } = Object.entries(output).reduce(
-    (acc, [s, i]) => {
-      if (typeof i !== "string") {
-        acc.entries.push([s, i]);
+    (acc, [key, value]) => {
+      if (typeof value !== "string") {
+        acc.entries.push([key, value]);
         return acc;
       }
-      let u = truncateToLength(i, Math.max(0, acc.remaining));
-      acc.entries.push([s, u]);
+      let capped = truncateToLength(value, Math.max(0, acc.remaining));
+      acc.entries.push([key, capped]);
       return {
         ...acc,
-        remaining: acc.remaining - u.length,
-        cut: acc.cut || u.length < i.length,
+        remaining: acc.remaining - capped.length,
+        cut: acc.cut || capped.length < value.length,
       };
     },
     {
@@ -226,49 +227,49 @@ function capStructuredOutput(output) {
   };
 }
 //@ chunk-qmsrnapp.js:43030-43101 placement
-function failureSide(e) {
-  return e.machineNotAnswering === true ? "machine" : "this_side";
+function failureSide(failure) {
+  return failure.machineNotAnswering === true ? "machine" : "this_side";
 }
 //@ chunk-qmsrnapp.js:43101-45249 placement
 /**
  * 把远程机器返回的工具结果转为本地 tool_result：处理 refused/failed/error/transport_error/completed，截断大输出，附加"在哪台机器运行"说明。
  */
-function convertRemoteToolResult(tool, host, o, { afterReconnect: r = false, call: s } = {}) {
-  let i = machineIdentity(host);
-  let u = host.name;
-  switch (o.kind) {
+function convertRemoteToolResult(tool, host, transported, { afterReconnect = false, call } = {}) {
+  let identity = machineIdentity(host);
+  let hostName = host.name;
+  switch (transported.kind) {
     case "result":
-      if (o.envelope !== undefined)
+      if (transported.envelope !== undefined)
         return {
-          outcome: convertCompletedResult(tool, host, o.envelope, {
-            afterReconnect: r,
+          outcome: convertCompletedResult(tool, host, transported.envelope, {
+            afterReconnect,
             ...{},
-            call: s,
+            call,
           }),
-          responseBytes: o.responseBytes,
-          metaCopy: o.metaCopy,
-          refusalCode: o.envelope.outcome === "refused" ? o.envelope.code : undefined,
-          failureCode: o.envelope.outcome === "failed" ? o.envelope.code : undefined,
+          responseBytes: transported.responseBytes,
+          metaCopy: transported.metaCopy,
+          refusalCode: transported.envelope.outcome === "refused" ? transported.envelope.code : undefined,
+          failureCode: transported.envelope.outcome === "failed" ? transported.envelope.code : undefined,
         };
-      if (o.isError)
+      if (transported.isError)
         return {
           outcome: {
             kind: "error",
             code: "transport_error",
             message: answeredWithErrorMessage({
-              name: u,
-              detail: sanitizeForPrompt(contentToText(o.content)),
+              name: hostName,
+              detail: sanitizeForPrompt(contentToText(transported.content)),
             }),
-            host: i,
+            host: identity,
           },
-          responseBytes: o.responseBytes,
+          responseBytes: transported.responseBytes,
         };
       return {
         outcome: {
           kind: "completed",
-          host: i,
+          host: identity,
           spelledDirectory: "",
-          ...capTextContent(o.content),
+          ...capTextContent(transported.content),
           isError: false,
           output: undefined,
           patchRefused: false,
@@ -278,7 +279,7 @@ function convertRemoteToolResult(tool, host, o, { afterReconnect: r = false, cal
           envelope: "missing",
           delivery: "fresh",
         },
-        responseBytes: o.responseBytes,
+        responseBytes: transported.responseBytes,
       };
     case "unreachable":
       return {
@@ -287,21 +288,27 @@ function convertRemoteToolResult(tool, host, o, { afterReconnect: r = false, cal
           code: "unreachable",
           message:
             host.transport.kind === "session"
-              ? unreachableCallMessage(u, o.detail, failureSide(o), isHostAwayRecheckable(host), {
-                  cause: o.saidAsleep
-                    ? "asleep"
-                    : o.signedOff
-                      ? "signed_off"
-                      : o.saidBusy
-                        ? "busy"
-                        : o.lastHeardAt !== undefined
-                          ? "silent"
-                          : undefined,
-                  lastHeardAt: o.lastHeardAt,
-                  leftFor: o.leftFor,
-                })
-              : notAnsweringMessage(u, failureSide(o)),
-          host: i,
+              ? unreachableCallMessage(
+                  hostName,
+                  transported.detail,
+                  failureSide(transported),
+                  isHostAwayRecheckable(host),
+                  {
+                    cause: transported.saidAsleep
+                      ? "asleep"
+                      : transported.signedOff
+                        ? "signed_off"
+                        : transported.saidBusy
+                          ? "busy"
+                          : transported.lastHeardAt !== undefined
+                            ? "silent"
+                            : undefined,
+                    lastHeardAt: transported.lastHeardAt,
+                    leftFor: transported.leftFor,
+                  },
+                )
+              : notAnsweringMessage(hostName, failureSide(transported)),
+          host: identity,
         },
       };
     case "approval_unverified":
@@ -310,8 +317,10 @@ function convertRemoteToolResult(tool, host, o, { afterReconnect: r = false, cal
           kind: "error",
           code: "approval_unverified",
           message:
-            host.transport.kind === "session" ? approvalNotVerifiedMessage(u) : unverifiedApprovalMessage(u),
-          host: i,
+            host.transport.kind === "session"
+              ? approvalNotVerifiedMessage(hostName)
+              : unverifiedApprovalMessage(hostName),
+          host: identity,
         },
       };
     case "timed_out":
@@ -320,10 +329,10 @@ function convertRemoteToolResult(tool, host, o, { afterReconnect: r = false, cal
           kind: "error",
           code: "timed_out",
           message: callTimedOutMessage({
-            name: u,
-            capMs: o.capMs,
+            name: hostName,
+            capMs: transported.capMs,
           }),
-          host: i,
+          host: identity,
           open: "timed_out",
         },
       };
@@ -331,40 +340,40 @@ function convertRemoteToolResult(tool, host, o, { afterReconnect: r = false, cal
       return {
         outcome: {
           kind: "error",
-          code: o.takenBack ? "stalled_unsent" : "stalled",
+          code: transported.takenBack ? "stalled_unsent" : "stalled",
           message:
-            o.request === "probe"
+            transported.request === "probe"
               ? livenessCheckNotSentMessage({
-                  name: u,
-                  capMs: o.capMs,
+                  name: hostName,
+                  capMs: transported.capMs,
                 })
-              : o.takenBack
+              : transported.takenBack
                 ? nothingRanSendTimeoutMessage({
-                    name: u,
-                    capMs: o.capMs,
+                    name: hostName,
+                    capMs: transported.capMs,
                   })
                 : sendTimedOutMessage({
-                    name: u,
-                    capMs: o.capMs,
+                    name: hostName,
+                    capMs: transported.capMs,
                   }),
-          ...(o.request !== "probe" &&
-            !o.takenBack && {
+          ...(transported.request !== "probe" &&
+            !transported.takenBack && {
               open: "stalled",
             }),
-          host: i,
+          host: identity,
         },
       };
     case "host_gone":
       return {
         outcome: {
           kind: "error",
-          code: o.why === "withdrawn" ? "host_withdrawn" : "host_gone",
+          code: transported.why === "withdrawn" ? "host_withdrawn" : "host_gone",
           message: interruptedCallMessage({
-            name: u,
-            why: o.why,
-            unsent: o.unsent,
+            name: hostName,
+            why: transported.why,
+            unsent: transported.unsent,
           }),
-          host: i,
+          host: identity,
         },
       };
     case "dropped":
@@ -372,18 +381,18 @@ function convertRemoteToolResult(tool, host, o, { afterReconnect: r = false, cal
         outcome: {
           kind: "error",
           code: "dropped",
-          message: isUnverifiedRefusal(o)
-            ? unverifiedRefusalMessage(u)
-            : o.why === "write_unresolved"
-              ? maybeReachedMessage(u)
-              : disconnectedDuringCallMessage(u),
-          host: i,
+          message: isUnverifiedRefusal(transported)
+            ? unverifiedRefusalMessage(hostName)
+            : transported.why === "write_unresolved"
+              ? maybeReachedMessage(hostName)
+              : disconnectedDuringCallMessage(hostName),
+          host: identity,
           open: "delivery_unknown",
         },
       };
     case "cancelled":
       return {
-        outcome: interruptedResult(i),
+        outcome: interruptedResult(identity),
       };
     case "transport_error":
       return {
@@ -391,14 +400,14 @@ function convertRemoteToolResult(tool, host, o, { afterReconnect: r = false, cal
           kind: "error",
           code: "transport_error",
           message:
-            o.unreadableResult === true
-              ? unreadableResultMessage(u)
+            transported.unreadableResult === true
+              ? unreadableResultMessage(hostName)
               : failedInTransitMessage({
-                  name: u,
-                  detail: sanitizeForPrompt(o.detail),
+                  name: hostName,
+                  detail: sanitizeForPrompt(transported.detail),
                 }),
-          host: i,
-          ...(o.unreadableResult === true && {
+          host: identity,
+          ...(transported.unreadableResult === true && {
             unreadableResult: true,
           }),
         },
@@ -415,7 +424,7 @@ var MAX_REMOTE_NOTES = 8;
 function formatHostNotes(notes, name) {
   let mapped = notes
     .slice(0, MAX_REMOTE_NOTES)
-    .map((r) => `[note from ${name}] ${sanitizeForPrompt(r, NOTE_CHAR_CAP)}`);
+    .map((note) => `[note from ${name}] ${sanitizeForPrompt(note, NOTE_CHAR_CAP)}`);
   return notes.length > MAX_REMOTE_NOTES
     ? [...mapped, `(${notes.length - MAX_REMOTE_NOTES} more notes omitted)`]
     : mapped;
@@ -426,38 +435,41 @@ function formatHostNotes(notes, name) {
  */
 var MAX_MACHINE_MESSAGE_CHARS = 2000;
 //@ chunk-qmsrnapp.js:45424-45614 placement
-function unreadableResultMessage(e) {
-  return `${e} answered in a result format this session cannot read (Claude Code version mismatch?); the command probably ran there \u2014 check its effect before repeating it.`;
+function unreadableResultMessage(hostName) {
+  return `${hostName} answered in a result format this session cannot read (Claude Code version mismatch?); the command probably ran there \u2014 check its effect before repeating it.`;
 }
 //@ chunk-qmsrnapp.js:45614-45840 placement
-function answeredWithErrorMessage({ name: e, detail }) {
-  return `The connection to ${e} answered with an error: ${detail} \u2014 ${e}'s Claude Code did not report running the call; whether it ran there is not known, so check its effect before repeating it.`;
+function answeredWithErrorMessage({ name, detail }) {
+  return `The connection to ${name} answered with an error: ${detail} \u2014 ${name}'s Claude Code did not report running the call; whether it ran there is not known, so check its effect before repeating it.`;
 }
 //@ chunk-qmsrnapp.js:45840-45978 placement
-var REMOTE_ONLY_RESULT_KEYS = new Set([
-  "backgroundTaskId",
-  "backgroundedByUser",
-  "persistedOutputPath",
-  "persistedOutputSize",
-  "rawOutputPath",
-  "structuredContent",
-]);
+var REMOTE_ONLY_RESULT_KEYS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-qmsrnapp.js:45840", () => {
+  REMOTE_ONLY_RESULT_KEYS = new Set([
+    "backgroundTaskId",
+    "backgroundedByUser",
+    "persistedOutputPath",
+    "persistedOutputSize",
+    "rawOutputPath",
+    "structuredContent",
+  ]);
+});
 //@ chunk-qmsrnapp.js:45978-48097 placement
-function convertCompletedResult(tool, n, result, r = {}) {
-  let { afterReconnect = false, call: i } = r;
-  let u = undefined;
-  let host = {
-    name: n.name,
+function convertCompletedResult(tool, host, result, options = {}) {
+  let { afterReconnect = false, call } = options;
+  let unused = undefined;
+  let host_2 = {
+    name: host.name,
     working_dir: cleanWorkingDir(result.target.working_dir),
   };
-  let p = (_) =>
+  let withNotes = (message) =>
     (result.outcome === "refused" || result.outcome === "failed") &&
     result.notes !== undefined &&
     result.notes.length > 0
-      ? [_, ...formatHostNotes(result.notes, n.name)].join(`
+      ? [message, ...formatHostNotes(result.notes, host.name)].join(`
 `)
-      : _;
-  let y =
+      : message;
+  let deliveryNote =
     result.outcome !== "refused" && result.outcome !== "failed"
       ? ""
       : afterReconnect
@@ -467,49 +479,49 @@ function convertCompletedResult(tool, n, result, r = {}) {
           : "";
   switch (result.outcome) {
     case "completed": {
-      let _ = capRemoteContent(
+      let capped = capRemoteContent(
         tool.name === FILE_READ_TOOL_NAME
           ? placeDocumentAttachments(result.content, result.documents)
           : result.content,
       );
-      let S = convertRemoteOutput(tool, result, i);
-      let k =
-        isNonMcpShellTool(tool) && supportsBackgroundShells(n) && n.servedTools.has(TASKSTOP)
-          ? vMe(result.output, "backgroundTaskId")
+      let converted = convertRemoteOutput(tool, result, call);
+      let backgroundTaskId =
+        isNonMcpShellTool(tool) && supportsBackgroundShells(host) && host.servedTools.has(TASKSTOP)
+          ? getAlias(result.output, "backgroundTaskId")
           : undefined;
-      let E = isNonMcpShellTool(tool)
-        ? capStructuredOutput(S.output)
+      let cappedOutput = isNonMcpShellTool(tool)
+        ? capStructuredOutput(converted.output)
         : {
-            output: S.output,
+            output: converted.output,
             truncated: false,
           };
       return {
         kind: "completed",
-        host,
-        spelledDirectory: displayWorkingDir(result.target.working_dir, n.description?.home_dir),
-        content: _.content,
+        host: host_2,
+        spelledDirectory: displayWorkingDir(result.target.working_dir, host.description?.home_dir),
+        content: capped.content,
         truncated: result.truncated === true,
-        ...((_.cut || E.truncated) && {
+        ...((capped.cut || cappedOutput.truncated) && {
           cutHere: true,
         }),
         isError: result.is_error,
-        ...(E.output === undefined
+        ...(cappedOutput.output === undefined
           ? {
               output: undefined,
-              patchRefused: S.patchRefused,
+              patchRefused: converted.patchRefused,
             }
           : {
-              output: E.output,
+              output: cappedOutput.output,
             }),
-        hostLocal: S.hostLocal,
-        ...(S.spilledBytes !== undefined && {
+        hostLocal: converted.hostLocal,
+        ...(converted.spilledBytes !== undefined && {
           spilled: {
-            bytes: S.spilledBytes,
+            bytes: converted.spilledBytes,
           },
         }),
-        ...(typeof k === "string" &&
-          AGENT_ID_REGEX.test(k) && {
-            backgroundTaskId: k,
+        ...(typeof backgroundTaskId === "string" &&
+          AGENT_ID_REGEX.test(backgroundTaskId) && {
+            backgroundTaskId,
           }),
         disposition: result.disposition,
         notes: result.notes ?? [],
@@ -526,44 +538,44 @@ function convertCompletedResult(tool, n, result, r = {}) {
         return {
           kind: "error",
           code: "approval_unverified",
-          message: p(`${unverifiedApprovalMessage(n.name)}${y}`),
-          host,
+          message: withNotes(`${unverifiedApprovalMessage(host.name)}${deliveryNote}`),
+          host: host_2,
         };
-      let _ = n.transport.kind === "session" ? refusedDidNotRunLine : refusedByMachineLine;
+      let refusedLine = host.transport.kind === "session" ? refusedDidNotRunLine : refusedByMachineLine;
       return {
         kind: "error",
         code: "refused_by_host",
-        message: p(
-          `${_({
-            name: n.name,
+        message: withNotes(
+          `${refusedLine({
+            name: host.name,
             message: sanitizeForPrompt(result.message, MAX_MACHINE_MESSAGE_CHARS),
-          })}${y}`,
+          })}${deliveryNote}`,
         ),
-        host,
+        host: host_2,
       };
     }
     case "failed":
       return {
         kind: "error",
         code: "failed_on_host",
-        message: p(
+        message: withNotes(
           `${failedOnMachineLine({
-            name: n.name,
+            name: host.name,
             message: sanitizeForPrompt(result.message, MAX_MACHINE_MESSAGE_CHARS),
-          })}${y}`,
+          })}${deliveryNote}`,
         ),
-        host,
+        host: host_2,
       };
     case "in_progress":
       return {
         kind: "error",
         code: "still_running",
         message: stillRunningMessage({
-          name: n.name,
+          name: host.name,
           state: result.state,
           cause: "unasked",
         }),
-        host,
+        host: host_2,
         open: result.state === "running" ? "still_running" : "delivery_unknown",
       };
     case "needs_approval":
@@ -571,20 +583,20 @@ function convertCompletedResult(tool, n, result, r = {}) {
         kind: "error",
         code: "refused_by_host",
         message: refusedByMachineLine({
-          name: n.name,
+          name: host.name,
           message: sanitizeForPrompt(result.message, MAX_MACHINE_MESSAGE_CHARS),
         }),
-        host,
+        host: host_2,
       };
     case "acknowledged":
       return {
         kind: "error",
         code: "refused_by_host",
         message: refusedByMachineLine({
-          name: n.name,
+          name: host.name,
           message: "the machine acknowledged a decision for a call this session did not ask about",
         }),
-        host,
+        host: host_2,
       };
   }
 }
@@ -602,36 +614,39 @@ function convertRemoteOutput(tool, result, call) {
       patchRefused: false,
     };
   let keys = Object.keys(output);
-  let i = isNonMcpShellTool(tool) ? Reflect.get(output, SPILLEDOUTPUTBYTES) : undefined;
-  let spilledBytes = typeof i === "number" && Number.isSafeInteger(i) && i > 0 ? i : undefined;
+  let spilledRaw = isNonMcpShellTool(tool) ? Reflect.get(output, SPILLEDOUTPUTBYTES) : undefined;
+  let spilledBytes =
+    typeof spilledRaw === "number" && Number.isSafeInteger(spilledRaw) && spilledRaw > 0
+      ? spilledRaw
+      : undefined;
   let hostLocal = [
     ...(keys.includes("persistedOutputPath") ? ["saved_output_file"] : []),
     ...(keys.includes("backgroundTaskId") ? ["background_task"] : []),
   ];
-  if (keys.some((k) => REMOTE_ONLY_RESULT_KEYS.has(k)) || Reflect.get(output, "isImage") === true)
+  if (keys.some((key) => REMOTE_ONLY_RESULT_KEYS.has(key)) || Reflect.get(output, "isImage") === true)
     return {
       output: undefined,
       hostLocal,
       spilledBytes,
       patchRefused: false,
     };
-  let p = KEPT_RESULT_FIELDS_BY_TOOL.get(tool.name);
-  if (p === undefined)
+  let keptFields = KEPT_RESULT_FIELDS_BY_TOOL.get(tool.name);
+  if (keptFields === undefined)
     return {
       output: undefined,
       hostLocal,
       spilledBytes,
       patchRefused: false,
     };
-  let output_2 = pickByHelper(output, (k, E) => p.has(E));
-  let _ = isNonMcpShellTool(tool)
+  let output_2 = pickByHelper(output, (value, key) => keptFields.has(key));
+  let schemaInput = isNonMcpShellTool(tool)
     ? output_2
     : result.is_error || result.truncated === true
       ? undefined
       : rebuildFileToolOutput(tool.name, output_2, call);
-  let S = _ === undefined ? undefined : tool.outputSchema?.safeParse(_);
+  let parsed = schemaInput === undefined ? undefined : tool.outputSchema?.safeParse(schemaInput);
   return {
-    output: S?.success ? S.data : undefined,
+    output: parsed?.success ? parsed.data : undefined,
     hostLocal,
     spilledBytes,
     patchRefused: output_2.structuredPatch !== undefined && !isRenderablePatchList(output_2.structuredPatch),
@@ -683,10 +698,10 @@ function rebuildFileToolOutput(toolName, output, call) {
 function isRenderablePatchList(structuredPatch) {
   if (!Array.isArray(structuredPatch) || structuredPatch.length > MAX_PATCH_FILE_ENTRIES) return false;
   if (!structuredPatch.every(isValidPatchHunk)) return false;
-  let flattened = structuredPatch.flatMap((o) => o.lines);
+  let flattened = structuredPatch.flatMap((hunk) => hunk.lines);
   return (
     flattened.length <= MAX_PATCH_TOTAL_CHARS &&
-    flattened.reduce((acc, r) => acc + r.length, 0) <= REMOTE_RESULT_TEXT_CAP
+    flattened.reduce((acc, line) => acc + line.length, 0) <= REMOTE_RESULT_TEXT_CAP
   );
 }
 //@ chunk-qmsrnapp.js:49814-50221 placement = computeGutterWidth (0.842)
@@ -695,7 +710,7 @@ function isValidPatchHunk(patch) {
   let { oldStart, oldLines, newStart, newLines, lines } = patch;
   if (
     ![oldStart, oldLines, newStart, newLines].every(
-      (h) => typeof h === "number" && Number.isSafeInteger(h) && h >= 0,
+      (value) => typeof value === "number" && Number.isSafeInteger(value) && value >= 0,
     ) ||
     !Array.isArray(lines) ||
     !lines.every(
@@ -705,15 +720,15 @@ function isValidPatchHunk(patch) {
     )
   )
     return false;
-  let u = (h) => count(lines, (p) => h.includes(p[0]));
-  return u(" -") === oldLines && u(" +") === newLines;
+  let countLines = (prefixes) => count(lines, (line) => prefixes.includes(line[0]));
+  return countLines(" -") === oldLines && countLines(" +") === newLines;
 }
 //@ chunk-qmsrnapp.js:50221-50300 placement
 function machineIdentity(host) {
-  let n = leaseOfMachine(host);
+  let lease = leaseOfMachine(host);
   return {
-    name: n.name,
-    working_dir: cleanWorkingDir(n.working_dir),
+    name: lease.name,
+    working_dir: cleanWorkingDir(lease.working_dir),
   };
 }
 //@ chunk-qmsrnapp.js:50300-50335 placement
@@ -721,20 +736,22 @@ function cleanWorkingDir(workingDir) {
   return sanitizeForPrompt(workingDir).trim();
 }
 //@ chunk-qmsrnapp.js:50335-50401 placement
-function sanitizeForPrompt(e, n) {
-  return normalizeMcpServerName(e, n).replace(OPEN_BRACKETS_RE, "(").replace(CLOSE_BRACKETS_RE, ")");
+function sanitizeForPrompt(text, maxChars) {
+  return normalizeMcpServerName(text, maxChars)
+    .replace(OPEN_BRACKETS_RE, "(")
+    .replace(CLOSE_BRACKETS_RE, ")");
 }
 //@ chunk-qmsrnapp.js:50401-50567 placement
-function interruptedResult(host, { askLater: n = false, withdrawnAtAsk: o = false } = {}) {
+function interruptedResult(host, { askLater = false, withdrawnAtAsk = false } = {}) {
   return {
     kind: "error",
     code: "interrupted",
     message: INTERRUPT_MESSAGE_FOR_TOOL_USE,
     host,
-    ...(n && {
+    ...(askLater && {
       open: "interrupted",
     }),
-    ...(o && {
+    ...(withdrawnAtAsk && {
       withdrawnAtAsk: true,
     }),
   };
@@ -752,20 +769,22 @@ function cancelledResult(host) {
 /**
  * 生成远程调用被用户拒绝时的消息（子代理与主线程措辞不同，可带拒绝原因）。
  */
-function remoteRejectMessage(agentId, n) {
+function remoteRejectMessage(agentId, reason) {
   if (agentId !== undefined)
-    return n !== undefined && n.trim() !== ""
-      ? `${SUBAGENT_REJECT_MESSAGE_WITH_REASON_PREFIX}${n}`
+    return reason !== undefined && reason.trim() !== ""
+      ? `${SUBAGENT_REJECT_MESSAGE_WITH_REASON_PREFIX}${reason}`
       : SUBAGENT_REJECT_MESSAGE;
   return withMemoryCorrectionHint(
-    n !== undefined && n.trim() !== "" ? `${REJECT_MESSAGE_WITH_REASON_PREFIX}${n}` : REJECT_MESSAGE,
+    reason !== undefined && reason.trim() !== ""
+      ? `${REJECT_MESSAGE_WITH_REASON_PREFIX}${reason}`
+      : REJECT_MESSAGE,
   );
 }
 //@ chunk-qmsrnapp.js:50772-50871 placement
 function contentToText(content) {
   return typeof content === "string"
     ? content
-    : content.flatMap((n) => (n.type === "text" ? [n.text] : [])).join(`
+    : content.flatMap((block) => (block.type === "text" ? [block.text] : [])).join(`
 `);
 }
 export {

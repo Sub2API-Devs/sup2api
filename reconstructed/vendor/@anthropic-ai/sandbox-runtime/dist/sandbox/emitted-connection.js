@@ -18,27 +18,27 @@ function servesEmittedConnections() {
   return probeOverride?.() ?? createServer_2().listenerCount("connection") > 0;
 }
 //@ chunk-fq0cr76a.js:643251-643283 esm-layout
-function i3() {
+function bunVersionString() {
   return "Bun 1.4.4";
 }
 //@ chunk-fq0cr76a.js:643283-643390 esm-fingerprint
 function assertTlsTerminationSupported() {
   if (servesEmittedConnections()) return;
-  throw Error(`tlsTerminate needs Node, or Bun 1.4 or later (this is ${i3()})`);
+  throw Error(`tlsTerminate needs Node, or Bun 1.4 or later (this is ${bunVersionString()})`);
 }
 //@ chunk-fq0cr76a.js:643390-644021 esm-fingerprint
 function keepFlushedHeaderBatches(sock) {
   let parser = sock.parser;
   if (typeof parser !== "object" || parser === null) return;
   let slots = parser;
-  let s = parser.constructor;
+  let statics = parser.constructor;
   if (
-    typeof s.kOnHeaders !== "number" ||
-    typeof s.kOnHeadersComplete !== "number" ||
-    typeof s.kOnMessageComplete !== "number"
+    typeof statics.kOnHeaders !== "number" ||
+    typeof statics.kOnHeadersComplete !== "number" ||
+    typeof statics.kOnMessageComplete !== "number"
   )
     return;
-  let { kOnHeaders: onHeaders, kOnHeadersComplete, kOnMessageComplete } = s;
+  let { kOnHeaders: onHeaders, kOnHeadersComplete, kOnMessageComplete } = statics;
   let complete = slots[kOnHeadersComplete];
   let messageComplete = slots[kOnMessageComplete];
   if (
@@ -112,7 +112,7 @@ function gateSocketOnBufferedBody(req, cap, budget) {
 //@ chunk-fq0cr76a.js:644513-644532 esm-layout
 var endsGracefully = new WeakSet();
 //@ chunk-fq0cr76a.js:644532-644557 esm-layout
-function rT(socket) {
+function markEndsGracefully(socket) {
   endsGracefully.add(socket);
 }
 //@ chunk-fq0cr76a.js:644557-644729 esm-fingerprint
@@ -134,7 +134,7 @@ export {
   endRequestAfterResponse,
   runsOnBun,
   gateSocketOnBufferedBody,
-  rT,
+  markEndsGracefully,
   writeHeadsAsLatin1,
   keepFlushedHeaderBatches,
   adjustByteBudget,

@@ -27,27 +27,27 @@ var JSON_SCHEMA_2020_12 = "https://json-schema.org/draft/2020-12/schema";
 var MAX_LISTED_ISSUES = 5;
 var weakMap = new WeakMap();
 //@ chunk-1r4fv9mg.js:15035-15712 placement
-function checkMcpInputSchema(e, { tool, feature }) {
-  if (!isPlainObject(e)) return null;
-  let n = weakMap.get(e);
-  if (n !== undefined) return n;
+function checkMcpInputSchema(schema, { tool, feature }) {
+  if (!isPlainObject(schema)) return null;
+  let validator = weakMap.get(schema);
+  if (validator !== undefined) return validator;
   if (isDisklessContext()) {
     logForDebugging(
       `[${tool}] input schema not checked before the call: sessions that share a process compile no schemas, so the server checks it`,
     );
-    weakMap.set(e, null);
+    weakMap.set(schema, null);
     return null;
   }
-  let o = null;
-  let $schema = e.$schema;
+  let validate = null;
+  let $schema = schema.$schema;
   if ($schema === undefined || $schema === JSON_SCHEMA_2020_12 || $schema === `${JSON_SCHEMA_2020_12}#`)
     try {
       let { Ajv2020 } = require_2020();
-      o = new Ajv2020({
+      validate = new Ajv2020({
         allErrors: true,
         strict: false,
         validateFormats: false,
-      }).compile(e);
+      }).compile(schema);
     } catch (error) {
       logForDebugging(
         `[${tool}] input schema not checked: Ajv could not compile it: ${errorMessage(error)}`,
@@ -63,9 +63,9 @@ function checkMcpInputSchema(e, { tool, feature }) {
         level: "warn",
       },
     );
-  if (o === null) logFeatureSad(feature, "input_schema_not_checked");
-  weakMap.set(e, o);
-  return o;
+  if (validate === null) logFeatureSad(feature, "input_schema_not_checked");
+  weakMap.set(schema, validate);
+  return validate;
 }
 //@ chunk-1r4fv9mg.js:15712-15890 placement
 var COMBINATOR_KEYWORDS = new Set(["allOf", "anyOf", "contains", "if", "oneOf"]);
@@ -78,54 +78,60 @@ var TYPE_DESCRIPTIONS = {
   string: "text",
 };
 //@ chunk-1r4fv9mg.js:15890-17861 placement
-function describeSchemaViolation(e, r, a) {
-  let n = checkMcpInputSchema(r, a);
-  if (n === null || n(e)) return;
-  let o = isPlainObject(r) && isPlainObject(r.properties) ? Object.keys(r.properties) : [];
-  let i = new Set(isPlainObject(r) && Array.isArray(r.required) ? r.required : []);
-  let { ignoreInside } = a;
-  let filtered = (n.errors ?? []).filter(
-    (c) =>
+function describeSchemaViolation(input, schema, options) {
+  let validate = checkMcpInputSchema(schema, options);
+  if (validate === null || validate(input)) return;
+  let propertyNames =
+    isPlainObject(schema) && isPlainObject(schema.properties) ? Object.keys(schema.properties) : [];
+  let requiredNames = new Set(isPlainObject(schema) && Array.isArray(schema.required) ? schema.required : []);
+  let { ignoreInside } = options;
+  let filtered = (validate.errors ?? []).filter(
+    (error) =>
       ignoreInside === undefined ||
-      (!c.instancePath.startsWith(`/${ignoreInside}/`) &&
-        !(c.instancePath === `/${ignoreInside}` && COMBINATOR_KEYWORDS.has(c.keyword))),
+      (!error.instancePath.startsWith(`/${ignoreInside}/`) &&
+        !(error.instancePath === `/${ignoreInside}` && COMBINATOR_KEYWORDS.has(error.keyword))),
   );
   if (filtered.length === 0) return;
-  let flattened = filtered.flatMap((c) => {
-    let additionalProperty = c.params.additionalProperty;
-    return c.keyword === "additionalProperties" &&
-      c.instancePath === "" &&
+  let flattened = filtered.flatMap((error) => {
+    let additionalProperty = error.params.additionalProperty;
+    return error.keyword === "additionalProperties" &&
+      error.instancePath === "" &&
       typeof additionalProperty === "string"
       ? [additionalProperty]
       : [];
   });
-  let p = new Map(flattened.map((c) => [c, o.find((l) => namesLookRelated(c, l))]));
-  let g = uniq([
-    ...flattened.map((c) => {
-      let l = p.get(c);
-      return `it has no argument ${truncatedEscaped(c)}${l === undefined ? "" : ` (did you mean ${truncatedEscaped(l)}?)`}`;
+  let suggestionByUnknown = new Map(
+    flattened.map((name) => [name, propertyNames.find((candidate) => namesLookRelated(name, candidate))]),
+  );
+  let issues = uniq([
+    ...flattened.map((name) => {
+      let suggestion = suggestionByUnknown.get(name);
+      return `it has no argument ${truncatedEscaped(name)}${suggestion === undefined ? "" : ` (did you mean ${truncatedEscaped(suggestion)}?)`}`;
     }),
-    ...filtered.flatMap((c) => {
-      let jsonPointer = parseJsonPointer(c.instancePath);
-      let params = c.params;
-      switch (c.keyword) {
+    ...filtered.flatMap((error) => {
+      let jsonPointer = parseJsonPointer(error.instancePath);
+      let params = error.params;
+      switch (error.keyword) {
         case "additionalProperties":
           return jsonPointer === undefined
             ? []
             : [`${jsonPointer} has no field ${truncatedEscaped(String(params.additionalProperty))}`];
         case "required": {
-          let q = String(params.missingProperty);
-          if (jsonPointer !== undefined) return [`${jsonPointer} needs the field ${truncatedEscaped(q)}`];
-          return [...p.values()].includes(q) ? [] : [`the argument ${truncatedEscaped(q)} is required`];
+          let missing = String(params.missingProperty);
+          if (jsonPointer !== undefined)
+            return [`${jsonPointer} needs the field ${truncatedEscaped(missing)}`];
+          return [...suggestionByUnknown.values()].includes(missing)
+            ? []
+            : [`the argument ${truncatedEscaped(missing)} is required`];
         }
         case "type": {
           let filtered = (Array.isArray(params.type) ? params.type : [params.type]).filter(
-            (w) => w !== "null",
+            (type) => type !== "null",
           );
           return filtered.length === 0
             ? []
             : [
-                `${jsonPointer ?? "the arguments"} must be ${filtered.map((w) => TYPE_DESCRIPTIONS[String(w)] ?? String(w)).join(" or ")}`,
+                `${jsonPointer ?? "the arguments"} must be ${filtered.map((type) => TYPE_DESCRIPTIONS[String(type)] ?? String(type)).join(" or ")}`,
               ];
         }
         case "minLength":
@@ -145,21 +151,21 @@ function describeSchemaViolation(e, r, a) {
             ];
           break;
       }
-      return [`${jsonPointer ?? "the arguments"} ${c.message ?? "are not valid"}`];
+      return [`${jsonPointer ?? "the arguments"} ${error.message ?? "are not valid"}`];
     }),
   ]);
-  if (g.length === 0) return;
-  let h = g.length > MAX_LISTED_ISSUES ? `, and ${g.length - MAX_LISTED_ISSUES} more` : "";
-  let mapped = o.map((c) => (i.has(c) ? `${c} (required)` : c));
+  if (issues.length === 0) return;
+  let moreText = issues.length > MAX_LISTED_ISSUES ? `, and ${issues.length - MAX_LISTED_ISSUES} more` : "";
+  let mapped = propertyNames.map((name) => (requiredNames.has(name) ? `${name} (required)` : name));
   return {
-    listed: `${g.slice(0, MAX_LISTED_ISSUES).join("; ")}${h}`,
-    takes: mapped.length === 0 ? "" : ` ${a.tool} takes ${mapped.join(", ")}.`,
+    listed: `${issues.slice(0, MAX_LISTED_ISSUES).join("; ")}${moreText}`,
+    takes: mapped.length === 0 ? "" : ` ${options.tool} takes ${mapped.join(", ")}.`,
   };
 }
 //@ chunk-1r4fv9mg.js:17861-18019 placement
-function namesLookRelated(e, r) {
-  let lower = e.toLowerCase();
-  let lower_2 = r.toLowerCase();
+function namesLookRelated(nameA, nameB) {
+  let lower = nameA.toLowerCase();
+  let lower_2 = nameB.toLowerCase();
   return (
     lower === lower_2 ||
     lower_2.endsWith(`_${lower}`) ||
@@ -185,7 +191,7 @@ function validateFileEntries(entries, spec) {
       error: `${paths} takes at most ${maxFiles} files; this call has ${entries.length}. ${nothingDone}`,
       code: "too_many_files",
     };
-  let s = [];
+  let paths_2 = [];
   for (let entry of entries) {
     if (!isPlainObject(entry)) return badFileEntryError(spec);
     if (entry[ref] !== undefined)
@@ -193,16 +199,17 @@ function validateFileEntries(entries, spec) {
         error: `${paths} file entries must give a \`${local}\`; this client uploads the file and fills in the ${refWord} itself. If these ${refWord}s came from an approval given before Claude Code restarted, that approval cannot be reused: call ${paths} again with paths. ${nothingDone}`,
         code: `model_${ref}`,
       };
-    let g = entry[local];
-    if (typeof g !== "string" || g === "" || g.length > MAX_FILE_PATH_CHARS) return badFileEntryError(spec);
-    if (!isAbsolute(g))
+    let path = entry[local];
+    if (typeof path !== "string" || path === "" || path.length > MAX_FILE_PATH_CHARS)
+      return badFileEntryError(spec);
+    if (!isAbsolute(path))
       return {
-        error: `Cannot attach "${g}": ${paths} file paths must be absolute paths as this session sees them. ${nothingDone}`,
+        error: `Cannot attach "${path}": ${paths} file paths must be absolute paths as this session sees them. ${nothingDone}`,
         code: "relative_path",
       };
-    s.push(g);
+    paths_2.push(path);
   }
-  return s;
+  return paths_2;
 }
 //@ chunk-1r4fv9mg.js:18858-19089 placement
 function badFileEntryError({ tool, arg, local, nothingDone }) {

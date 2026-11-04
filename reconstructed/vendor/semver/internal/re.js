@@ -5,12 +5,12 @@
  * pieces: chunk-bwbq4xvm.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../runtime/bun-runtime.js";
 import { require_constants } from "./constants.js";
 import { require_debug } from "./debug.js";
 
 //@ chunk-bwbq4xvm.js:1947-5373 cjs-fingerprint
-var require_re = x(function (cjsExports, cjsModule) {
+var require_re = __commonJS(function (cjsExports, cjsModule) {
   var { MAX_SAFE_COMPONENT_LENGTH, MAX_SAFE_BUILD_LENGTH, MAX_LENGTH } = require_constants();
   var debug = require_debug();
   cjsExports = cjsModule.exports = {};

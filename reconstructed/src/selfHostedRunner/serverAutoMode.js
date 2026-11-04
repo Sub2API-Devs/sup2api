@@ -16,26 +16,32 @@ import {
 } from "../utils/permissions/autoModeRulesPrompt.js";
 import { jsonParse } from "../utils/slowOperations.js";
 import { DoctorLazy } from "../cli/handlers/util.js";
-import { u, union, E, string } from "../../vendor/zod/v4/classic/schemas.js";
+import { objectSchema, union, numberSchema, stringSchema } from "../../vendor/zod/v4/classic/schemas.js";
 import { claudeCodeUserAgent } from "../utils/http.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-3nztfxrw.js:1180-1263 placement
 /**
  * CCR 云端会话里 autoMode 规则应用预设：all / no-allow / none。
  */
-var AUTO_MODE_APPLY_PRESETS = {
-  all: [],
-  "no-allow": ["allow"],
-  none: AUTO_MODE_RULE_SECTIONS,
-};
-var AUTO_MODE_ENV_MAX_BYTES = 2097152;
-var CCR_AUTO_MODE_APPLY = "CCR_AUTO_MODE_APPLY";
+var AUTO_MODE_APPLY_PRESETS; // deferred: uses AUTO_MODE_RULE_SECTIONS (../utils/permissions/autoModeRulesPrompt.js) of its import cycle while loading; runs once the cycle is complete
+var AUTO_MODE_ENV_MAX_BYTES;
+var CCR_AUTO_MODE_APPLY;
+deferInit("chunk-3nztfxrw.js:1180", () => {
+  AUTO_MODE_APPLY_PRESETS = {
+    all: [],
+    "no-allow": ["allow"],
+    none: AUTO_MODE_RULE_SECTIONS,
+  };
+  AUTO_MODE_ENV_MAX_BYTES = 2097152;
+  CCR_AUTO_MODE_APPLY = "CCR_AUTO_MODE_APPLY";
+});
 //@ chunk-3nztfxrw.js:1263-1355 placement
 /**
  * CCR 会话环境变量里 CCR_AUTO_MODE_APPLY=1 时才应用宿主下发的 autoMode 规则。
  */
-function isCcrAutoModeApplySet(e) {
-  let environmentVariables = e.environment_variables ?? {};
+function isCcrAutoModeApplySet(config) {
+  let environmentVariables = config.environment_variables ?? {};
   return (
     Object.hasOwn(environmentVariables, CCR_AUTO_MODE_APPLY) &&
     environmentVariables[CCR_AUTO_MODE_APPLY] === "1"
@@ -45,8 +51,8 @@ function isCcrAutoModeApplySet(e) {
 /**
  * 读取 CCR 会话下发的 autoMode allow/environment/soft_deny 配置状态（absent/present/invalid）。
  */
-function autoModeConfigHandler(e) {
-  if (!isCcrAutoModeApplySet(e))
+function autoModeConfigHandler(config) {
+  if (!isCcrAutoModeApplySet(config))
     return {
       allow: {
         state: "absent",
@@ -58,7 +64,7 @@ function autoModeConfigHandler(e) {
         state: "absent",
       },
     };
-  let environmentVariables = e.environment_variables ?? {};
+  let environmentVariables = config.environment_variables ?? {};
   return {
     allow: readAutoModeEnvList(environmentVariables, AUTO_MODE_SECTION_ENV_VARS.allow),
     environment: readAutoModeEnvList(environmentVariables, AUTO_MODE_SECTION_ENV_VARS.environment),
@@ -71,22 +77,22 @@ var NO_ALLOW = "no-allow";
 /**
  * 按预设去掉服务端自动模式的某些规则列表，返回保留的配置与被扣下的列表名。
  */
-function applyAutoModePreset(e, serverAutoModeLists) {
-  let r = {
-    ...e,
+function applyAutoModePreset(lists, serverAutoModeLists) {
+  let next = {
+    ...lists,
   };
-  let m = [];
-  for (let a of AUTO_MODE_APPLY_PRESETS[serverAutoModeLists]) {
-    let t = e[a];
-    let i = t.state === "decoded" && Array.isArray(t.value) && t.value.length === 0;
-    if (t.state !== "absent" && !i) m.push(a);
-    r[a] = {
+  let nonEmpty = [];
+  for (let section of AUTO_MODE_APPLY_PRESETS[serverAutoModeLists]) {
+    let entry = lists[section];
+    let emptyDecoded = entry.state === "decoded" && Array.isArray(entry.value) && entry.value.length === 0;
+    if (entry.state !== "absent" && !emptyDecoded) nonEmpty.push(section);
+    next[section] = {
       state: "absent",
     };
   }
   return {
-    carried: r,
-    withheld: m,
+    carried: next,
+    withheld: nonEmpty,
   };
 }
 //@ chunk-3nztfxrw.js:1836-1990 placement
@@ -94,67 +100,67 @@ var UNDECODABLE_RULES_HINT =
   "nothing on this runner needs changing; if an admin of your organization wrote the entry, a line break, some emoji or a blank rule can cause this";
 //@ chunk-3nztfxrw.js:1990-3514 placement
 function readServerAutoModeRules(carried) {
-  let n = {};
-  for (let s of AUTO_MODE_RULE_SECTIONS) {
-    let c = carried[s];
-    if (c.state !== "absent") n[s] = c.state === "decoded" ? c.value : null;
+  let picked = {};
+  for (let section of AUTO_MODE_RULE_SECTIONS) {
+    let entry = carried[section];
+    if (entry.state !== "absent") picked[section] = entry.state === "decoded" ? entry.value : null;
   }
-  let { rules, refused, grantsWithheld } = readAutoModeRuleOverrides(n);
-  let t = [];
-  let i = {
+  let { rules, refused, grantsWithheld } = readAutoModeRuleOverrides(picked);
+  let sources = [];
+  let refusedCounts = {
     refused_entries: 0,
     unreadable_lists: 0,
   };
-  for (let s of AUTO_MODE_RULE_SECTIONS) {
-    let c = carried[s];
-    let l = refused[s];
-    if (c.state === "absent" || l === undefined) continue;
-    if (l === "unreadable") i.unreadable_lists++;
-    else i.refused_entries += l;
-    t.push(
-      l === "unreadable"
-        ? `ignoring the server's autoMode.${s} list for this session: its ${c.carrier} value ${c.state === "decoded" ? "is not an array of strings" : `is not valid JSON text, or is longer than ${AUTO_MODE_ENV_MAX_BYTES} characters`} (a server-side fault: nothing on this runner needs changing)`
-        : `ignoring ${l} of the entries in the server's autoMode.${s} list (${c.carrier}) for this session: null, blank, or containing a control character, an invisible character or markup reserved for the auto mode classifier's prompt; ${grantsWithheld && s !== "soft_deny" ? "any other entries in the list are not applied either (see below)" : "any other entries in the list still apply"} (${UNDECODABLE_RULES_HINT})`,
+  for (let section of AUTO_MODE_RULE_SECTIONS) {
+    let carriedEntry = carried[section];
+    let refusedEntry = refused[section];
+    if (carriedEntry.state === "absent" || refusedEntry === undefined) continue;
+    if (refusedEntry === "unreadable") refusedCounts.unreadable_lists++;
+    else refusedCounts.refused_entries += refusedEntry;
+    sources.push(
+      refusedEntry === "unreadable"
+        ? `ignoring the server's autoMode.${section} list for this session: its ${carriedEntry.carrier} value ${carriedEntry.state === "decoded" ? "is not an array of strings" : `is not valid JSON text, or is longer than ${AUTO_MODE_ENV_MAX_BYTES} characters`} (a server-side fault: nothing on this runner needs changing)`
+        : `ignoring ${refusedEntry} of the entries in the server's autoMode.${section} list (${carriedEntry.carrier}) for this session: null, blank, or containing a control character, an invisible character or markup reserved for the auto mode classifier's prompt; ${grantsWithheld && section !== "soft_deny" ? "any other entries in the list are not applied either (see below)" : "any other entries in the list still apply"} (${UNDECODABLE_RULES_HINT})`,
     );
   }
   if (grantsWithheld) {
     let joined = ["allow", "environment"]
-      .filter((c) => carried[c].state !== "absent")
-      .map((c) => `autoMode.${c}`)
+      .filter((section) => carried[section].state !== "absent")
+      .map((section) => `autoMode.${section}`)
       .join(" or ");
-    t.push(
+    sources.push(
       `not applying any ${joined} entries from the server for this session: part or all of its autoMode.environment or autoMode.soft_deny list was ignored (see above), and without it the ${joined} entries could allow more than the server meant. Auto mode still works but may block more actions than usual (nothing on this runner needs changing)`,
     );
   }
   return {
     autoMode: prependDefaultsToSections(rules),
-    statusLines: t,
+    statusLines: sources,
     grantsWithheld,
-    refusedCounts: i,
+    refusedCounts,
   };
 }
 //@ chunk-3nztfxrw.js:3514-3782 placement
-function readAutoModeEnvList(environmentVariables, n) {
-  let r = Object.hasOwn(environmentVariables, n) ? environmentVariables[n] : undefined;
-  if (r === undefined || r === "")
+function readAutoModeEnvList(environmentVariables, carrier) {
+  let raw = Object.hasOwn(environmentVariables, carrier) ? environmentVariables[carrier] : undefined;
+  if (raw === undefined || raw === "")
     return {
       state: "absent",
     };
-  if (typeof r !== "string" || r.length > AUTO_MODE_ENV_MAX_BYTES)
+  if (typeof raw !== "string" || raw.length > AUTO_MODE_ENV_MAX_BYTES)
     return {
       state: "undecodable",
-      carrier: n,
+      carrier,
     };
   try {
     return {
       state: "decoded",
-      carrier: n,
-      value: jsonParse(r),
+      carrier,
+      value: jsonParse(raw),
     };
   } catch {
     return {
       state: "undecodable",
-      carrier: n,
+      carrier,
     };
   }
 }
@@ -169,45 +175,57 @@ class UnreadableToolsHostError extends Error {
 /**
  * 自托管 runner 常量：配置 schema（tool_server_hosting、api_base_url、cwd）、版本号、自动模式环境变量名、标签正则与各种长度/超时上限。
  */
-var RUNNER_CONFIG_SCHEMA = DoctorLazy(() =>
-  u({
-    tool_server_hosting: union([E(), string().regex(/^\d+$/).transform(Number)]).pipe(E().int().min(1)),
-    api_base_url: string().min(1),
-    cwd: string()
-      .nullish()
-      .transform((e) => e || undefined),
-  }),
-);
-var RUNNER_CLIENT_VERSION = {
-  ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
-  PACKAGE_URL: "@anthropic-ai/claude-code",
-  README_URL: "https://code.claude.com/docs/en/overview",
-  VERSION: "2.1.316",
-  FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-  BUILD_TIME: "2026-10-30T23:28:13Z",
-  GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
-  HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
-  DD_SOURCEMAP_GROUP: "default",
-}.VERSION.replace(/^v/, "").split(/[-+]/)[0];
-var LIST_MODE_ENV_VARS = {
-  all: "SERVER_AUTO_MODE_LISTS_ALL",
-  "no-allow": "SERVER_AUTO_MODE_LISTS_NO_ALLOW",
-  none: "SERVER_AUTO_MODE_LISTS_NONE",
-};
-var ENV_TOKEN_RE = /^[a-zA-Z0-9_-]+$/;
-var ENV_DEFAULT_TIMEOUT_MS = 1e4;
-var ENV_MAX_TIMEOUT_MS = 15000;
-var MAX_ENV_TOKEN_CHARS = 256;
-var MAX_ENV_VALUE_BYTES = 65536;
+var RUNNER_CONFIG_SCHEMA; // deferred: uses DoctorLazy (../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var RUNNER_CLIENT_VERSION;
+var LIST_MODE_ENV_VARS;
+var ENV_TOKEN_RE;
+var ENV_DEFAULT_TIMEOUT_MS;
+var ENV_MAX_TIMEOUT_MS;
+var MAX_ENV_TOKEN_CHARS;
+var MAX_ENV_VALUE_BYTES;
+deferInit("chunk-3nztfxrw.js:3942", () => {
+  RUNNER_CONFIG_SCHEMA = DoctorLazy(() =>
+    objectSchema({
+      tool_server_hosting: union([numberSchema(), stringSchema().regex(/^\d+$/).transform(Number)]).pipe(
+        numberSchema().int().min(1),
+      ),
+      api_base_url: stringSchema().min(1),
+      cwd: stringSchema()
+        .nullish()
+        .transform((value) => value || undefined),
+    }),
+  );
+  RUNNER_CLIENT_VERSION = {
+    ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
+    PACKAGE_URL: "@anthropic-ai/claude-code",
+    README_URL: "https://code.claude.com/docs/en/overview",
+    VERSION: "2.1.316",
+    FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
+    BUILD_TIME: "2026-10-30T23:28:13Z",
+    GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+    HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
+    DD_SOURCEMAP_GROUP: "default",
+  }.VERSION.replace(/^v/, "").split(/[-+]/)[0];
+  LIST_MODE_ENV_VARS = {
+    all: "SERVER_AUTO_MODE_LISTS_ALL",
+    "no-allow": "SERVER_AUTO_MODE_LISTS_NO_ALLOW",
+    none: "SERVER_AUTO_MODE_LISTS_NONE",
+  };
+  ENV_TOKEN_RE = /^[a-zA-Z0-9_-]+$/;
+  ENV_DEFAULT_TIMEOUT_MS = 1e4;
+  ENV_MAX_TIMEOUT_MS = 15000;
+  MAX_ENV_TOKEN_CHARS = 256;
+  MAX_ENV_VALUE_BYTES = 65536;
+});
 //@ chunk-3nztfxrw.js:4818-4886 placement
-function isSafeEnvToken(e) {
-  return typeof e === "string" && e.length <= MAX_ENV_TOKEN_CHARS && ENV_TOKEN_RE.test(e);
+function isSafeEnvToken(value) {
+  return typeof value === "string" && value.length <= MAX_ENV_TOKEN_CHARS && ENV_TOKEN_RE.test(value);
 }
 //@ chunk-3nztfxrw.js:4886-5006 placement
-function validateRunnerLabel(e, n) {
-  if (!isSafeEnvToken(e))
-    throw Error(`Invalid ${n}: contains unsafe characters or exceeds ${MAX_ENV_TOKEN_CHARS} characters`);
-  return e;
+function validateRunnerLabel(label, field) {
+  if (!isSafeEnvToken(label))
+    throw Error(`Invalid ${field}: contains unsafe characters or exceeds ${MAX_ENV_TOKEN_CHARS} characters`);
+  return label;
 }
 //@ chunk-3nztfxrw.js:5006-5177 placement = getOAuthHeaders (0.778)
 function getOAuthHeaders(accessToken) {

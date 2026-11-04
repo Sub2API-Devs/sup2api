@@ -44,6 +44,7 @@ import {
 import { POLL, isEmptyPollText } from "../../tools/PollTool/prompt.js";
 import { uniq } from "../collections.js";
 import { storedFormSymbol } from "../messageKinds.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:169498-169522 placement
 function isPollEventsFoldEnabled() {
@@ -57,38 +58,38 @@ var EVENT_AT_PATTERN = /^<event\b[^>]*?\bat="([^"]*)"/;
  */
 function foldQueuedNotificationsIntoPollEvents(messages, foldableUuids) {
   if (foldableUuids.size === 0) return messages.slice();
-  let r = [];
-  let s = 0;
-  while (s < messages.length) {
-    if (messages[s].type !== "attachment") {
-      r.push(messages[s]);
-      s++;
+  let out = [];
+  let index = 0;
+  while (index < messages.length) {
+    if (messages[index].type !== "attachment") {
+      out.push(messages[index]);
+      index++;
       continue;
     }
-    let h = s;
-    while (h < messages.length && messages[h].type === "attachment") h++;
-    r.push(...foldAttachmentRun(messages.slice(s, h), foldableUuids));
-    s = h;
+    let runEnd = index;
+    while (runEnd < messages.length && messages[runEnd].type === "attachment") runEnd++;
+    out.push(...foldAttachmentRun(messages.slice(index, runEnd), foldableUuids));
+    index = runEnd;
   }
-  return r;
+  return out;
 }
 //@ chunk-e6aww6q8.js:169796-171080 placement
 /**
  * 把连续的轮询事件附件折叠为一条。
  */
-function foldAttachmentRun(e, foldableUuids) {
-  let r = new Map();
-  for (let Z of e) {
-    if (!foldableUuids.has(Z.uuid)) continue;
-    let pollEventEnvelope = toPollEventEnvelope(Z);
-    if (pollEventEnvelope !== undefined) r.set(Z.uuid, pollEventEnvelope);
+function foldAttachmentRun(messages, foldableUuids) {
+  let foldableEnvelopes = new Map();
+  for (let message of messages) {
+    if (!foldableUuids.has(message.uuid)) continue;
+    let pollEventEnvelope = toPollEventEnvelope(message);
+    if (pollEventEnvelope !== undefined) foldableEnvelopes.set(message.uuid, pollEventEnvelope);
   }
-  if (r.size === 0) return e.slice();
-  let found = e.find(
-    (Z) =>
-      Z.type === "attachment" &&
-      Z.attachment.type === "poll_events" &&
-      Z.attachment.deliveredVia === undefined,
+  if (foldableEnvelopes.size === 0) return messages.slice();
+  let found = messages.find(
+    (message) =>
+      message.type === "attachment" &&
+      message.attachment.type === "poll_events" &&
+      message.attachment.deliveredVia === undefined,
   );
   let attachment =
     found?.type === "attachment" && found.attachment.type === "poll_events" ? found.attachment : undefined;
@@ -97,69 +98,69 @@ function foldAttachmentRun(e, foldableUuids) {
     (collectEventNonces(attachment.envelopes).length < attachment.envelopes.length ||
       !attachment.envelopes.every(envelopeNonceMatches))
   )
-    return e.slice();
-  let y = [];
+    return messages.slice();
+  let parsed = [];
   if (attachment !== undefined)
-    attachment.envelopes.forEach((envelope, Se) => {
-      y.push({
+    attachment.envelopes.forEach((envelope, index) => {
+      parsed.push({
         envelope,
-        kind: attachment.kinds[Se] ?? "unknown",
-        provenance: attachment.provenance?.[Se] ?? null,
-        declared: attachment.declared?.[Se] ?? null,
-        media: attachment.media?.[Se] ?? [],
+        kind: attachment.kinds[index] ?? "unknown",
+        provenance: attachment.provenance?.[index] ?? null,
+        declared: attachment.declared?.[index] ?? null,
+        media: attachment.media?.[index] ?? [],
         at: EVENT_AT_PATTERN.exec(envelope)?.[1],
       });
     });
-  let S = mergeEnvelopesByTime(y, [...r.values()]);
-  let any = S.some((Z) => Z.media.length > 0);
-  let L = {
+  let merged = mergeEnvelopesByTime(parsed, [...foldableEnvelopes.values()]);
+  let any = merged.some((entry) => entry.media.length > 0);
+  let mergedAttachment = {
     ...(attachment ?? {
       type: "poll_events",
       remainingWakeCount: 0,
     }),
     type: "poll_events",
-    envelopes: S.map((Z) => remintEventNonce(Z.envelope, detectEnvelopeKind(Z.envelope))),
-    kinds: S.map((Z) => Z.kind),
-    provenance: S.map((Z) => Z.provenance),
-    ...(S.some((Z) => Z.declared !== null) && {
-      declared: S.map((Z) => Z.declared),
+    envelopes: merged.map((entry) => remintEventNonce(entry.envelope, detectEnvelopeKind(entry.envelope))),
+    kinds: merged.map((entry) => entry.kind),
+    provenance: merged.map((entry) => entry.provenance),
+    ...(merged.some((entry) => entry.declared !== null) && {
+      declared: merged.map((entry) => entry.declared),
     }),
     ...(any && {
-      media: S.map((Z) => Z.media),
+      media: merged.map((entry) => entry.media),
     }),
-    timestamp: S.at(-1)?.at ?? attachment?.timestamp,
+    timestamp: merged.at(-1)?.at ?? attachment?.timestamp,
   };
-  if (!any) delete L.media;
-  let G = found ?? e.find((Z) => r.has(Z.uuid));
-  let q = [];
-  for (let Z of e)
-    if (Z === G && Z.type === "attachment") {
-      let { rendered, renderedInHumanTurn, ...we } = Z;
-      q.push({
-        ...we,
-        attachment: L,
+  if (!any) delete mergedAttachment.media;
+  let hostMessage = found ?? messages.find((message) => foldableEnvelopes.has(message.uuid));
+  let out = [];
+  for (let message of messages)
+    if (message === hostMessage && message.type === "attachment") {
+      let { rendered, renderedInHumanTurn, ...rest } = message;
+      out.push({
+        ...rest,
+        attachment: mergedAttachment,
       });
-    } else if (Z !== found && !r.has(Z.uuid)) q.push(Z);
-  return q;
+    } else if (message !== found && !foldableEnvelopes.has(message.uuid)) out.push(message);
+  return out;
 }
 //@ chunk-e6aww6q8.js:171080-171278 placement
-function mergeEnvelopesByTime(e, n) {
-  let r = [];
-  let s = 0;
-  let h = 0;
-  while (s < e.length && h < n.length) {
-    let timestamp = Date.parse(e[s].at ?? "");
-    if (Date.parse(n[h].at ?? "") < timestamp) r.push(n[h++]);
-    else r.push(e[s++]);
+function mergeEnvelopesByTime(left, right) {
+  let merged = [];
+  let leftIndex = 0;
+  let rightIndex = 0;
+  while (leftIndex < left.length && rightIndex < right.length) {
+    let timestamp = Date.parse(left[leftIndex].at ?? "");
+    if (Date.parse(right[rightIndex].at ?? "") < timestamp) merged.push(right[rightIndex++]);
+    else merged.push(left[leftIndex++]);
   }
-  return r.concat(e.slice(s), n.slice(h));
+  return merged.concat(left.slice(leftIndex), right.slice(rightIndex));
 }
 //@ chunk-e6aww6q8.js:171278-172211 placement
-function toPollEventEnvelope(e) {
-  if (e.type !== "attachment" || e.attachment.type !== "queued_command") return;
-  let attachment = e.attachment;
-  let r = answerOf(e.uuid);
-  if (r !== undefined && r.kind !== "engine") return;
+function toPollEventEnvelope(message) {
+  if (message.type !== "attachment" || message.attachment.type !== "queued_command") return;
+  let attachment = message.attachment;
+  let answer = answerOf(message.uuid);
+  if (answer !== undefined && answer.kind !== "engine") return;
   let taskNotificationOrigin = resolveTaskNotificationOrigin(attachment.origin, attachment.commandMode);
   if (
     taskNotificationOrigin?.kind !== "task-notification" ||
@@ -172,34 +173,34 @@ function toPollEventEnvelope(e) {
   )
     return;
   let { prompt } = attachment;
-  let y =
+  let text =
     typeof prompt === "string"
       ? prompt
-      : Array.isArray(prompt) && prompt.every((q) => q?.type === "text")
-        ? prompt.map((q) => q.text).join(`
+      : Array.isArray(prompt) && prompt.every((part) => part?.type === "text")
+        ? prompt.map((part) => part.text).join(`
 `)
         : undefined;
-  let timestamp = attachment.timestamp ?? e.timestamp;
-  if (y === undefined || typeof timestamp !== "string") return;
-  let index = y.indexOf(`</${TASK_NOTIFICATION}>`);
-  if (index !== -1 && regExp_5.test(y.slice(index + `</${TASK_NOTIFICATION}>`.length))) return;
-  let L = withSystemNotificationPrefix(escapeSystemReminderClose(normalizeNewlines(y)));
-  if (containsEventTag(L)) return;
-  let G = undefined;
-  if (G?.ok === false) return;
+  let timestamp = attachment.timestamp ?? message.timestamp;
+  if (text === undefined || typeof timestamp !== "string") return;
+  let index = text.indexOf(`</${TASK_NOTIFICATION}>`);
+  if (index !== -1 && regExp_5.test(text.slice(index + `</${TASK_NOTIFICATION}>`.length))) return;
+  let content = withSystemNotificationPrefix(escapeSystemReminderClose(normalizeNewlines(text)));
+  if (containsEventTag(content)) return;
+  let declaredEnvelope = undefined;
+  if (declaredEnvelope?.ok === false) return;
   return {
     envelope:
-      G === undefined
+      declaredEnvelope === undefined
         ? withEventNonce(
             renderPollEvent({
               kind: TASK_NOTIFICATION_2,
               at: timestamp,
-              content: L,
+              content,
             }),
-            deriveEventNonce(e.uuid),
+            deriveEventNonce(message.uuid),
             "element",
           )
-        : withEventNonce(G.envelope, deriveEventNonce(e.uuid), "json"),
+        : withEventNonce(declaredEnvelope.envelope, deriveEventNonce(message.uuid), "json"),
     kind: TASK_NOTIFICATION_2,
     provenance: null,
     declared: null,
@@ -208,86 +209,101 @@ function toPollEventEnvelope(e) {
   };
 }
 //@ chunk-e6aww6q8.js:172211-172357 placement
-var TASK_NOTIFICATION_FIELD_PATTERNS = [
-  ...[TASK_ID, TOOL_USE_ID, TASK_TYPE, OUTPUT_FILE, STATUS].map((e) => [
-    e,
-    new RegExp(`\\n?<${e}>([^<\\n]*)</${e}>`, "y"),
-  ]),
-  [SUMMARY, new RegExp(`\\n?<${SUMMARY}>([\\s\\S]*?)</${SUMMARY}>`, "y")],
-];
+var TASK_NOTIFICATION_FIELD_PATTERNS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:172211", () => {
+  TASK_NOTIFICATION_FIELD_PATTERNS = [
+    ...[TASK_ID, TOOL_USE_ID, TASK_TYPE, OUTPUT_FILE, STATUS].map((tagName) => [
+      tagName,
+      new RegExp(`\\n?<${tagName}>([^<\\n]*)</${tagName}>`, "y"),
+    ]),
+    [SUMMARY, new RegExp(`\\n?<${SUMMARY}>([\\s\\S]*?)</${SUMMARY}>`, "y")],
+  ];
+});
 //@ chunk-e6aww6q8.js:172357-173402 placement
-function foldPollEventsIntoToolResult(e, assistantIndex, r) {
-  if (!isPollEventsFoldEnabled() || assistantIndex + 1 !== e.length - 1) return false;
-  let s = e[assistantIndex];
-  let h = e[assistantIndex + 1];
-  if (s?.type !== "assistant" || h?.type !== "user" || typeof h.message.content === "string") return false;
-  let y = new Set(
-    s.message.content.flatMap((Me) =>
-      Me.type === "tool_use" && Me.name === POLL && !Me.id.startsWith(POLL_2) ? [Me.id] : [],
+function foldPollEventsIntoToolResult(messages, assistantIndex, foldData) {
+  if (!isPollEventsFoldEnabled() || assistantIndex + 1 !== messages.length - 1) return false;
+  let assistantMessage = messages[assistantIndex];
+  let userMessage = messages[assistantIndex + 1];
+  if (
+    assistantMessage?.type !== "assistant" ||
+    userMessage?.type !== "user" ||
+    typeof userMessage.message.content === "string"
+  )
+    return false;
+  let pollToolUseIds = new Set(
+    assistantMessage.message.content.flatMap((block) =>
+      block.type === "tool_use" && block.name === POLL && !block.id.startsWith(POLL_2) ? [block.id] : [],
     ),
   );
-  let sliced = h.message.content.slice();
-  let index = sliced.findIndex((Me) => Me.type === "tool_result" && y.has(Me.tool_use_id));
-  let L = sliced[index];
-  if (L?.type !== "tool_result" || foldedToolResults.has(L) || L.is_error === true) return false;
-  let G =
-    typeof L.content === "string"
+  let sliced = userMessage.message.content.slice();
+  let index = sliced.findIndex(
+    (block) => block.type === "tool_result" && pollToolUseIds.has(block.tool_use_id),
+  );
+  let toolResult = sliced[index];
+  if (toolResult?.type !== "tool_result" || foldedToolResults.has(toolResult) || toolResult.is_error === true)
+    return false;
+  let contentBlocks =
+    typeof toolResult.content === "string"
       ? [
           {
             type: "text",
-            text: L.content,
+            text: toolResult.content,
           },
         ]
-      : (L.content ?? []);
-  let text = G.flatMap((Me) => (Me.type === "text" ? [Me.text] : [])).join("");
-  let filtered = G.filter((Me) => Me.type !== "text");
-  let Se = isEmptyPollText(text) ? [] : parseDeliveredPollEvents(text);
-  if (Se === undefined && isPollEventDeliveryText(text)) return false;
-  let mapped = Se?.map((Me) => remintEventNonce(Me, detectEnvelopeKind(Me)));
+      : (toolResult.content ?? []);
+  let text = contentBlocks.flatMap((block) => (block.type === "text" ? [block.text] : [])).join("");
+  let filtered = contentBlocks.filter((block) => block.type !== "text");
+  let envelopes = isEmptyPollText(text) ? [] : parseDeliveredPollEvents(text);
+  if (envelopes === undefined && isPollEventDeliveryText(text)) return false;
+  let mapped = envelopes?.map((envelope) => remintEventNonce(envelope, detectEnvelopeKind(envelope)));
   let sorted = uniq([
-    ...(Se === undefined ? [] : (parseToolsUsedBeforeSummary(text) ?? [])),
-    ...(r.toolsUsed ?? []),
+    ...(envelopes === undefined ? [] : (parseToolsUsedBeforeSummary(text) ?? [])),
+    ...(foldData.toolsUsed ?? []),
   ]).sort();
-  let Ee =
-    buildPollEventDelivery([...(mapped ?? []), ...r.envelopes], r.remainingWakeCount, sorted) +
-    (Se === undefined && text !== ""
+  let deliveryText =
+    buildPollEventDelivery([...(mapped ?? []), ...foldData.envelopes], foldData.remainingWakeCount, sorted) +
+    (envelopes === undefined && text !== ""
       ? `
 ${text}`
       : "");
-  let Ae = [...filtered, ...(r.media ?? []).flat()];
-  let Ie = {
-    ...L,
+  let mediaBlocks = [...filtered, ...(foldData.media ?? []).flat()];
+  let newResult = {
+    ...toolResult,
     content:
-      Ae.length === 0
-        ? Ee
+      mediaBlocks.length === 0
+        ? deliveryText
         : [
             {
               type: "text",
-              text: Ee,
+              text: deliveryText,
             },
-            ...Ae,
+            ...mediaBlocks,
           ],
   };
-  foldedToolResults.add(Ie);
-  sliced[index] = Ie;
-  e[assistantIndex + 1] = {
-    ...h,
+  foldedToolResults.add(newResult);
+  sliced[index] = newResult;
+  messages[assistantIndex + 1] = {
+    ...userMessage,
     message: {
-      ...h.message,
+      ...userMessage.message,
       content: sliced,
     },
   };
   return true;
 }
 //@ chunk-e6aww6q8.js:173402-173422 placement
-var foldedToolResults = new WeakSet();
+var foldedToolResults; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:173402", () => {
+  foldedToolResults = new WeakSet();
+});
 //@ chunk-e6aww6q8.js:173422-173536 placement = sanitizeFileName (1)
 /**
  * 若消息带有别名记录且 uuid 相同，返回别名消息，否则原样返回。
  */
 function resolveMessageAlias(message) {
-  let n = message.type === "user" || message.type === "attachment" ? message[storedFormSymbol] : undefined;
-  return n !== undefined && n.uuid === message.uuid ? n : message;
+  let storedMessage =
+    message.type === "user" || message.type === "attachment" ? message[storedFormSymbol] : undefined;
+  return storedMessage !== undefined && storedMessage.uuid === message.uuid ? storedMessage : message;
 }
 export {
   isPollEventsFoldEnabled,

@@ -9,7 +9,7 @@
  * attribution: placement 7
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, E } from "../../../vendor/zod/v4/classic/schemas.js";
+import { objectSchema, numberSchema } from "../../../vendor/zod/v4/classic/schemas.js";
 import { getCliOwnedState } from "./cliOwnedClients.js";
 import { REOPEN_REFETCH } from "./mcpCallConstants.js";
 import { logMCPDebug } from "../../utils/log.js";
@@ -20,57 +20,68 @@ import { toolNameForTelemetry } from "../analytics/metadata.js";
 import { lit, fromEnum, fromEnumOpt } from "../analytics/safeMetadata.js";
 import { sleep } from "../../utils/sleep.js";
 import { getConnectionTimeoutMs } from "./client.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-8t8n4kdh.js:49905-50091 placement
 /**
  * 停摆配置的 schema（windowMax、parkDelayMinutes）。
  */
-var LISTEN_REOPEN_DELAYS_MS = [1000, 2000, 4000];
-var REOPEN_BACKOFF_RESET_MS = 1e4;
-var LISTEN_RETRY_SLEEP_MS = 5000;
-var REOPEN_WINDOW_MS = 3600000;
-var DEFAULT_WINDOW_MAX = 5;
-var DEFAULT_PARK_DELAY_MS = 21600000;
-var MIN_PARK_SLEEP_MS = 5000;
-var parkConfigSchema = DoctorLazy(() =>
-  u({
-    windowMax: E().int().min(1).max(100).optional(),
-    parkDelayMinutes: E().min(1).max(1440).optional(),
-  }),
-);
+var LISTEN_REOPEN_DELAYS_MS; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var REOPEN_BACKOFF_RESET_MS;
+var LISTEN_RETRY_SLEEP_MS;
+var REOPEN_WINDOW_MS;
+var DEFAULT_WINDOW_MAX;
+var DEFAULT_PARK_DELAY_MS;
+var MIN_PARK_SLEEP_MS;
+var parkConfigSchema;
+deferInit("chunk-8t8n4kdh.js:49905", () => {
+  LISTEN_REOPEN_DELAYS_MS = [1000, 2000, 4000];
+  REOPEN_BACKOFF_RESET_MS = 1e4;
+  LISTEN_RETRY_SLEEP_MS = 5000;
+  REOPEN_WINDOW_MS = 3600000;
+  DEFAULT_WINDOW_MAX = 5;
+  DEFAULT_PARK_DELAY_MS = 21600000;
+  MIN_PARK_SLEEP_MS = 5000;
+  parkConfigSchema = DoctorLazy(() =>
+    objectSchema({
+      windowMax: numberSchema().int().min(1).max(100).optional(),
+      parkDelayMinutes: numberSchema().min(1).max(1440).optional(),
+    }),
+  );
+});
 //@ chunk-8t8n4kdh.js:50091-50181 placement
 /**
  * 记录某服务器某类列表变化的重新拉取处理器。
  */
-function recordListChangedRefetcher(e, n, r) {
+function recordListChangedRefetcher(client, kind, refetch) {
   let listChangedRefetchHandlers = getCliOwnedState().listChangedRefetchHandlers;
-  let h = listChangedRefetchHandlers.get(e) ?? {};
-  h[n] = r;
-  listChangedRefetchHandlers.set(e, h);
+  let handlers = listChangedRefetchHandlers.get(client) ?? {};
+  handlers[kind] = refetch;
+  listChangedRefetchHandlers.set(client, handlers);
 }
 //@ chunk-8t8n4kdh.js:50181-50526 placement
 /**
  * 监听流重新打开后，按服务器声明补拉工具、提示词与资源列表。
  */
 function refetchAfterReopen(client, serverName, config, filter) {
-  let h = getCliOwnedState().listChangedRefetchHandlers.get(client);
-  if (h === undefined) return;
-  let y = [
+  let handlers = getCliOwnedState().listChangedRefetchHandlers.get(client);
+  if (handlers === undefined) return;
+  let refetchKinds = [
     ["toolsListChanged", "tools"],
     ["promptsListChanged", "prompts"],
     ["resourcesListChanged", "resources"],
   ];
-  for (let [S, w] of y) {
-    let P = filter[S] ? h[w] : undefined;
-    if (P === undefined) continue;
-    (async () => P(REOPEN_REFETCH))().catch((error) => {
+  for (let [filterKey, handlerKey] of refetchKinds) {
+    let refetch = filter[filterKey] ? handlers[handlerKey] : undefined;
+    if (refetch === undefined) continue;
+    (async () => refetch(REOPEN_REFETCH))().catch((error) => {
       logMCPDebug(serverName, `post-reopen list refetch failed: ${describeConnectError(error, config)}`);
     });
   }
 }
 //@ chunk-8t8n4kdh.js:50526-50924 placement
-function ensureListenSubscription(client, serverName, config, s, discoverSource) {
-  let subscription = s ?? client.autoOpenedSubscription;
+function ensureListenSubscription(client, serverName, config, autoSubscription, discoverSource) {
+  let subscription = autoSubscription ?? client.autoOpenedSubscription;
   if (subscription === undefined && client.getProtocolEra?.() !== "modern") return;
   if (subscription === undefined)
     logMCPDebug(
@@ -102,13 +113,15 @@ async function maintainListenSubscription(client, serverName, config, subscripti
       if (Date.now() - now >= REOPEN_BACKOFF_RESET_MS) delayIndex = 0;
       trigger = closed;
       recentReopens = recentReopens.filter((recentReopen) => Date.now() - recentReopen < REOPEN_WINDOW_MS);
-      let ce = parkConfigSchema().safeParse(
+      let tuningParse = parkConfigSchema().safeParse(
         getFeatureValue_CACHED_MAY_BE_STALE("tengu_mcp_listen_reopen_park_tuning", null),
       );
-      let Q = ce.success ? ce.data : {};
-      let windowMax = Q.windowMax ?? DEFAULT_WINDOW_MAX;
-      let ge =
-        Q.parkDelayMinutes !== undefined ? Math.round(Q.parkDelayMinutes * 60000) : DEFAULT_PARK_DELAY_MS;
+      let tuning = tuningParse.success ? tuningParse.data : {};
+      let windowMax = tuning.windowMax ?? DEFAULT_WINDOW_MAX;
+      let parkDelayMs =
+        tuning.parkDelayMinutes !== undefined
+          ? Math.round(tuning.parkDelayMinutes * 60000)
+          : DEFAULT_PARK_DELAY_MS;
       if (
         recentReopens.length >= windowMax &&
         delayIndex < LISTEN_REOPEN_DELAYS_MS.length &&
@@ -125,9 +138,9 @@ async function maintainListenSubscription(client, serverName, config, subscripti
           trigger: fromEnum(trigger),
           discoverSource: fromEnumOpt(discoverSource),
         });
-        let Ie = Date.now() + Math.round(ge * (0.8 + Math.random() * 0.4));
-        while (Date.now() < Ie) {
-          await sleep(Math.min(MIN_PARK_SLEEP_MS, Ie - Date.now()));
+        let parkUntil = Date.now() + Math.round(parkDelayMs * (0.8 + Math.random() * 0.4));
+        while (Date.now() < parkUntil) {
+          await sleep(Math.min(MIN_PARK_SLEEP_MS, parkUntil - Date.now()));
           if (client.transport === undefined) return;
           if (!getFeatureValue_CACHED_MAY_BE_STALE("tengu_mcp_listen_reopen_park", true)) break;
         }
@@ -151,18 +164,25 @@ async function maintainListenSubscription(client, serverName, config, subscripti
             : "subscriptions/listen stream dropped (remote); attempting to re-listen",
         );
     }
-    let M = await reopenListenSubscription(client, serverName, config, delayIndex, trigger, discoverSource);
-    if (M === undefined) return;
+    let reopenResult = await reopenListenSubscription(
+      client,
+      serverName,
+      config,
+      delayIndex,
+      trigger,
+      discoverSource,
+    );
+    if (reopenResult === undefined) return;
     recentReopens.push(Date.now());
-    refetchAfterReopen(client, serverName, config, M.filter);
-    current = M.subscription;
-    delayIndex = M.delayIndex + 1;
+    refetchAfterReopen(client, serverName, config, reopenResult.filter);
+    current = reopenResult.subscription;
+    delayIndex = reopenResult.delayIndex + 1;
   }
 }
 //@ chunk-8t8n4kdh.js:52450-52699 placement
-function listChangedCapabilities(e) {
-  let serverCapabilities = e.getServerCapabilities();
-  let r = {
+function listChangedCapabilities(client) {
+  let serverCapabilities = client.getServerCapabilities();
+  let flags = {
     ...(serverCapabilities?.tools?.listChanged && {
       toolsListChanged: true,
     }),
@@ -173,42 +193,42 @@ function listChangedCapabilities(e) {
       resourcesListChanged: true,
     }),
   };
-  return Object.keys(r).length === 0 ? undefined : r;
+  return Object.keys(flags).length === 0 ? undefined : flags;
 }
 //@ chunk-8t8n4kdh.js:52699-53597 placement
 async function reopenListenSubscription(client, serverName, config, delayIndex, trigger, discoverSource) {
-  let S = listChangedCapabilities(client);
-  if (S === undefined) return;
-  for (let P = delayIndex; P < LISTEN_REOPEN_DELAYS_MS.length; P++) {
+  let capabilities = listChangedCapabilities(client);
+  if (capabilities === undefined) return;
+  for (let attempt = delayIndex; attempt < LISTEN_REOPEN_DELAYS_MS.length; attempt++) {
     if (client.transport === undefined) return;
-    await sleep(LISTEN_REOPEN_DELAYS_MS[P] ?? 0);
+    await sleep(LISTEN_REOPEN_DELAYS_MS[attempt] ?? 0);
     if (client.transport === undefined) return;
     try {
-      let subscription = await client.listen(S, {
+      let subscription = await client.listen(capabilities, {
         timeout: getConnectionTimeoutMs(),
       });
       logMCPDebug(
         serverName,
         trigger === "connect"
-          ? `Opened subscriptions/listen stream from zero (connect-time listen never established; attempt ${P + 1})`
-          : `Re-opened subscriptions/listen stream (attempt ${P + 1})`,
+          ? `Opened subscriptions/listen stream from zero (connect-time listen never established; attempt ${attempt + 1})`
+          : `Re-opened subscriptions/listen stream (attempt ${attempt + 1})`,
       );
       logEvent("tengu_mcp_listen_reopen", {
         mcpServerKeyHash: toolNameForTelemetry(serverName),
         outcome: trigger === "connect" ? lit("opened_from_zero") : lit("reopened"),
-        attempts: P + 1,
+        attempts: attempt + 1,
         trigger: fromEnum(trigger),
         discoverSource: fromEnumOpt(discoverSource),
       });
       return {
         subscription,
-        delayIndex: P,
-        filter: S,
+        delayIndex: attempt,
+        filter: capabilities,
       };
     } catch (error) {
       logMCPDebug(
         serverName,
-        `subscriptions/listen re-open attempt ${P + 1} failed: ${describeConnectError(error, config)}`,
+        `subscriptions/listen re-open attempt ${attempt + 1} failed: ${describeConnectError(error, config)}`,
       );
     }
   }
@@ -223,4 +243,9 @@ async function reopenListenSubscription(client, serverName, config, delayIndex, 
   });
   return;
 }
-export { listChangedCapabilities, ensureListenSubscription, recordListChangedRefetcher };
+export {
+  listChangedCapabilities,
+  ensureListenSubscription,
+  recordListChangedRefetcher,
+  LISTEN_REOPEN_DELAYS_MS,
+};

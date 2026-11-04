@@ -49,34 +49,34 @@ import { fromEnumOpt } from "../services/analytics/safeMetadata.js";
 import { sleep } from "./sleep.js";
 import { httpsOrigin, invalidHttpsUrlReason, apiClient } from "../services/routines/routinesApi.js";
 import { DoctorLazy } from "../cli/handlers/util.js";
-import { u, array, string } from "../../vendor/zod/v4/classic/schemas.js";
+import { objectSchema, array, stringSchema } from "../../vendor/zod/v4/classic/schemas.js";
 
 //@ chunk-rqpqwy1q.js:1299-1340 placement
 var MAX_TRACKED_STAGED_WRITES = 4096;
-var stagedWriteState = identity(new Map(), (e) => e.clear());
+var stagedWriteState = identity(new Map(), (state) => state.clear());
 //@ chunk-rqpqwy1q.js:1340-1482 placement
-function recordStagedWrite(dest, written, r) {
+function recordStagedWrite(dest, written, renameTick) {
   stagedWriteState.delete(dest);
   stagedWriteState.set(dest, {
     written,
-    renamedByNs: BigInt(r + 1) * 1000000n,
+    renamedByNs: BigInt(renameTick + 1) * 1000000n,
   });
   if (stagedWriteState.size > MAX_TRACKED_STAGED_WRITES) {
-    let [n] = stagedWriteState.keys();
-    if (n !== undefined) stagedWriteState.delete(n);
+    let [oldestDest] = stagedWriteState.keys();
+    if (oldestDest !== undefined) stagedWriteState.delete(oldestDest);
   }
 }
 //@ chunk-rqpqwy1q.js:1482-1698 placement
 /**
  * 已暂存文件的状态码
  */
-function stagedFileState(e, t) {
-  let r = stagedWriteState.get(e);
-  if (r === undefined) return 5;
-  let { written } = r;
-  if (written.ino !== t.ino || written.birthtimeNs !== t.birthtimeNs) return 3;
-  if (written.size !== t.size || written.mtimeNs !== t.mtimeNs) return 4;
-  return t.ctimeNs <= r.renamedByNs ? 1 : 2;
+function stagedFileState(dest, stats) {
+  let record = stagedWriteState.get(dest);
+  if (record === undefined) return 5;
+  let { written } = record;
+  if (written.ino !== stats.ino || written.birthtimeNs !== stats.birthtimeNs) return 3;
+  if (written.size !== stats.size || written.mtimeNs !== stats.mtimeNs) return 4;
+  return stats.ctimeNs <= record.renamedByNs ? 1 : 2;
 }
 //@ chunk-rqpqwy1q.js:1698-1713 placement
 var MAX_COMPARE_BYTES = 1048576;
@@ -84,42 +84,42 @@ var MAX_COMPARE_BYTES = 1048576;
 /**
  * 描述已存在的文件
  */
-async function describeExistingFile(dest, t, bytes) {
-  let n;
+async function describeExistingFile(dest, sourcePath, bytes) {
+  let standing;
   try {
-    let s = await lstat(dest, {
+    let stats = await lstat(dest, {
       bigint: true,
     });
-    if (!s.isFile())
+    if (!stats.isFile())
       return {
         replaced: "not_a_file",
       };
-    let l = Number(s.mtimeNs / 1000n) / 1000;
-    n = {
-      bytes: Number(s.size),
-      ageSeconds: Math.max(0, Math.round((Date.now() - l) / 1000)),
-      readOnly: (Number(s.mode) & 146) === 0,
-      vsPlaced: stagedFileState(dest, s),
+    let mtimeMs = Number(stats.mtimeNs / 1000n) / 1000;
+    standing = {
+      bytes: Number(stats.size),
+      ageSeconds: Math.max(0, Math.round((Date.now() - mtimeMs) / 1000)),
+      readOnly: (Number(stats.mode) & 146) === 0,
+      vsPlaced: stagedFileState(dest, stats),
     };
-    if (n.bytes !== bytes)
+    if (standing.bytes !== bytes)
       return {
         replaced: "different_contents",
-        standing: n,
+        standing,
       };
     if (bytes > MAX_COMPARE_BYTES)
       return {
         replaced: "same_size_not_compared",
-        standing: n,
+        standing,
       };
-    let [smallFile, smallFile_2] = await Promise.all([readSmallFile(dest), readSmallFile(t)]);
+    let [smallFile, smallFile_2] = await Promise.all([readSmallFile(dest), readSmallFile(sourcePath)]);
     if (smallFile === null || smallFile_2 === null)
       return {
         replaced: "unknown",
-        standing: n,
+        standing,
       };
     return {
       replaced: smallFile.equals(smallFile_2) ? "same_contents" : "different_contents",
-      standing: n,
+      standing,
     };
   } catch (error) {
     return getErrnoCode(error) === "ENOENT"
@@ -128,7 +128,7 @@ async function describeExistingFile(dest, t, bytes) {
         }
       : {
           replaced: "unknown",
-          standing: n,
+          standing,
         };
   }
 }
@@ -136,8 +136,8 @@ async function describeExistingFile(dest, t, bytes) {
 /**
  * 读取小文件
  */
-async function readSmallFile(e) {
-  let regularFileForRead = await openRegularFileForRead(e);
+async function readSmallFile(path) {
+  let regularFileForRead = await openRegularFileForRead(path);
   try {
     let stats = await regularFileForRead.stat();
     if (!stats.isFile()) return null;
@@ -175,38 +175,44 @@ function isPermanentHttpStatus(status) {
   return status < 500 && status !== 408 && status !== 429;
 }
 //@ chunk-rqpqwy1q.js:2894-3004 placement
-function stageFileWireResult(e) {
+function stageFileWireResult(result) {
   return {
     ok: true,
-    ...(e.noop !== undefined && {
-      noop: e.noop,
+    ...(result.noop !== undefined && {
+      noop: result.noop,
     }),
-    ...(e.replaced !== undefined && {
-      replaced: e.replaced,
+    ...(result.replaced !== undefined && {
+      replaced: result.replaced,
     }),
   };
 }
 //@ chunk-rqpqwy1q.js:3004-3109 placement
-function getContainedRelativePath(e, t) {
-  let r = relative(e, t);
-  if (r === "" || r === "." || r.split(posixSep).includes("..") || isAbsolute(r)) return null;
-  return r;
+function getContainedRelativePath(root, target) {
+  let relativePath = relative(root, target);
+  if (
+    relativePath === "" ||
+    relativePath === "." ||
+    relativePath.split(posixSep).includes("..") ||
+    isAbsolute(relativePath)
+  )
+    return null;
+  return relativePath;
 }
 //@ chunk-rqpqwy1q.js:3109-4095 placement
 /**
  * 校验 mount_path
  */
-function parseMountPath(e, t = false) {
-  if (e.includes("\x00")) throw Error("mount_path contains null bytes");
-  if (!isAbsolute(e)) throw Error("mount_path must be absolute");
-  if (e.split(posixSep).includes("..")) throw Error('mount_path must not contain ".." segments');
-  let r = normalize(e);
-  let containedRelativePath = getContainedRelativePath(STAGE_FILE_HOME_MOUNT_PREFIX, r);
+function parseMountPath(mountPath, vouched = false) {
+  if (mountPath.includes("\x00")) throw Error("mount_path contains null bytes");
+  if (!isAbsolute(mountPath)) throw Error("mount_path must be absolute");
+  if (mountPath.split(posixSep).includes("..")) throw Error('mount_path must not contain ".." segments');
+  let normalizedPath = normalize(mountPath);
+  let containedRelativePath = getContainedRelativePath(STAGE_FILE_HOME_MOUNT_PREFIX, normalizedPath);
   if (
     containedRelativePath !== null &&
     isClaudeAiChatOrigin() &&
     isFirstPartyRemoteSession(
-      t ? "vouched" : env.CLAUDE_CODE_REMOTE_SESSION_ID,
+      vouched ? "vouched" : env.CLAUDE_CODE_REMOTE_SESSION_ID,
       env.CLAUDE_CODE_ENVIRONMENT_KIND,
     )
   ) {
@@ -219,9 +225,9 @@ function parseMountPath(e, t = false) {
       neverReplace: true,
     };
   }
-  if (basename(r).startsWith(STAGE_TMP_PREFIX))
+  if (basename(normalizedPath).startsWith(STAGE_TMP_PREFIX))
     throw Error("mount_path names a reserved temporary-file name");
-  let containedRelativePath_2 = getContainedRelativePath(STAGE_FILE_MOUNT_PREFIX, r);
+  let containedRelativePath_2 = getContainedRelativePath(STAGE_FILE_MOUNT_PREFIX, normalizedPath);
   if (containedRelativePath_2 !== null)
     return {
       dest: join(stageFileRoot, containedRelativePath_2),
@@ -229,17 +235,17 @@ function parseMountPath(e, t = false) {
       readOnly: true,
       neverReplace: false,
     };
-  let containedRelativePath_3 = getContainedRelativePath(STAGE_FILE_OUTPUTS_MOUNT_PREFIX, r);
+  let containedRelativePath_3 = getContainedRelativePath(STAGE_FILE_OUTPUTS_MOUNT_PREFIX, normalizedPath);
   if (containedRelativePath_3 !== null) {
     if (
       !isFirstPartyRemoteSession(
-        t ? "vouched" : env.CLAUDE_CODE_REMOTE_SESSION_ID,
+        vouched ? "vouched" : env.CLAUDE_CODE_REMOTE_SESSION_ID,
         env.CLAUDE_CODE_ENVIRONMENT_KIND,
       )
     ) {
-      let d = Error("staging under /outputs/ is only supported on managed remote sessions");
-      d.code = "STAGE_OUTPUTS_UNSUPPORTED_RUNNER";
-      throw d;
+      let error = Error("staging under /outputs/ is only supported on managed remote sessions");
+      error.code = "STAGE_OUTPUTS_UNSUPPORTED_RUNNER";
+      throw error;
     }
     return {
       dest: join(outputsRoot, containedRelativePath_3),
@@ -259,22 +265,22 @@ class HomeWriteRefusedError extends Error {
   }
 }
 //@ chunk-rqpqwy1q.js:4235-4540 placement
-function addDirectoryDestFromMountPath(e) {
-  let t;
+function addDirectoryDestFromMountPath(mountPath) {
+  let parsed;
   try {
-    t = parseMountPath(e);
+    parsed = parseMountPath(mountPath);
   } catch (error) {
     if (getErrnoCode(error) === "STAGE_OUTPUTS_UNSUPPORTED_RUNNER")
       throw Error("add_directory mount_path must be under /uploads/");
     if (!(error instanceof HomeWriteRefusedError)) throw error;
   }
-  if (!t?.readOnly)
+  if (!parsed?.readOnly)
     throw Error("add_directory mount_path must be under /uploads/ and not under /uploads/.home/");
-  return t.dest;
+  return parsed.dest;
 }
 //@ chunk-rqpqwy1q.js:4540-4613 placement
-function assertDestUnderRoot(e, t) {
-  if (!isAtOrUnderRoot(e, t)) throw stageParentEscapeError("dest parent escaped stage root");
+function assertDestUnderRoot(dest, root) {
+  if (!isAtOrUnderRoot(dest, root)) throw stageParentEscapeError("dest parent escaped stage root");
 }
 //@ chunk-rqpqwy1q.js:4613-4717 placement
 function assertNoBackslashDirs(root, dest) {
@@ -282,38 +288,38 @@ function assertNoBackslashDirs(root, dest) {
     throw stageParentEscapeError("a folder on the way to dest has a backslash in its name");
 }
 //@ chunk-rqpqwy1q.js:4717-4766 placement
-function stageParentEscapeError(e) {
-  let t = Error(e);
-  t.code = STAGE_PARENT_ESCAPE;
-  return t;
+function stageParentEscapeError(message) {
+  let error = Error(message);
+  error.code = STAGE_PARENT_ESCAPE;
+  return error;
 }
 //@ chunk-rqpqwy1q.js:4766-4821 placement
-function stageTmpStem(dest) {
-  return `${STAGE_TMP_PREFIX}${computeContentHash(basename(dest)).slice(0, 16)}.`;
+function stageTmpStem(filePath) {
+  return `${STAGE_TMP_PREFIX}${computeContentHash(basename(filePath)).slice(0, 16)}.`;
 }
 //@ chunk-rqpqwy1q.js:4821-5028 placement
-async function sweepStaleStageTmps(e, t) {
-  let r = Date.now() - 2 * READ_STALL_TIMEOUT_MS;
-  let n;
+async function sweepStaleStageTmps(dir, stem) {
+  let staleBefore = Date.now() - 2 * READ_STALL_TIMEOUT_MS;
+  let names;
   try {
-    n = await readdir(e);
+    names = await readdir(dir);
   } catch {
     return;
   }
   await Promise.all(
-    n
-      .filter((s) => s.startsWith(t))
-      .map(async (s) => {
-        let l = join(e, s);
+    names
+      .filter((name) => name.startsWith(stem))
+      .map(async (name) => {
+        let tempPath = join(dir, name);
         try {
-          if ((await stat(l)).mtimeMs < r) await unlink(l);
+          if ((await stat(tempPath)).mtimeMs < staleBefore) await unlink(tempPath);
         } catch {}
       }),
   );
 }
 //@ chunk-rqpqwy1q.js:5028-5103 placement
-function isFreshFile(e, t) {
-  return e !== null && e.isFile() && (e.mtimeMs >= t || e.ctimeMs >= t);
+function isFreshFile(stats, cutoffMs) {
+  return stats !== null && stats.isFile() && (stats.mtimeMs >= cutoffMs || stats.ctimeMs >= cutoffMs);
 }
 //@ chunk-rqpqwy1q.js:5103-5173 placement
 function isReadOnlyFsError(error) {
@@ -323,12 +329,12 @@ function isReadOnlyFsError(error) {
 /**
  * 请求失败描述
  */
-function requestFailure(e, error) {
+function requestFailure(label, error) {
   let { kind, status } = classifyAxiosError(error);
   return {
     kind,
     status,
-    message: `${e} failed: ${kind}${status ? ` ${status}` : ""}`,
+    message: `${label} failed: ${kind}${status ? ` ${status}` : ""}`,
     ...(kind === "http" &&
       status !== undefined &&
       isPermanentHttpStatus(status) && {
@@ -340,19 +346,25 @@ function requestFailure(e, error) {
 /**
  * stage_file：把 filestore 中的文件暂存到 /uploads 或 /outputs，比较已有文件。
  */
-async function stageFile(e, t, r = "off", n, s = "off") {
-  if (t === undefined && !env.CLAUDE_CODE_REMOTE_SESSION_ID)
+async function stageFile(
+  request,
+  remoteSessionId,
+  homeFilesMode = "off",
+  inPlaceRequest,
+  storeCheckMode = "off",
+) {
+  if (remoteSessionId === undefined && !env.CLAUDE_CODE_REMOTE_SESSION_ID)
     return {
       ok: false,
       error: "CLAUDE_CODE_REMOTE_SESSION_ID unset",
       permanent: true,
     };
-  if (t !== undefined && e.filestore_path)
+  if (remoteSessionId !== undefined && request.filestore_path)
     return {
       ok: false,
       error: "synced documents are not staged here",
     };
-  if (e.filestore_path) {
+  if (request.filestore_path) {
     if (env.CLAUDE_CODE_ENVIRONMENT_KIND !== undefined) {
       logFeatureBad("ccr_synced_file_stage", "unsupported_runner_kind");
       logEvent("tengu_stage_file_completed", {
@@ -365,21 +377,21 @@ async function stageFile(e, t, r = "off", n, s = "off") {
         error: "synced-file staging not supported on this runner kind",
       };
     }
-    let { stageSyncedFile, SYNCED_FILE_ROOT } = await import("./chunk-2s3tfbmy.js");
+    let { stageSyncedFile, SYNCED_FILE_ROOT } = await import("../services/syncedFiles/syncedFileSyncer.js");
     return stageSyncedFile(
       {
-        mount_path: e.mount_path,
-        filestore_path: e.filestore_path,
-        content_sha256: e.content_sha256,
-        expected_local_sha256: e.expected_local_sha256,
+        mount_path: request.mount_path,
+        filestore_path: request.filestore_path,
+        content_sha256: request.content_sha256,
+        expected_local_sha256: request.expected_local_sha256,
       },
       fetchFilestoreBytes,
       SYNCED_FILE_ROOT,
     );
   }
-  let l;
+  let parsed;
   try {
-    l = parseMountPath(e.mount_path, t !== undefined);
+    parsed = parseMountPath(request.mount_path, remoteSessionId !== undefined);
   } catch (error) {
     if (getErrnoCode(error) === "STAGE_OUTPUTS_UNSUPPORTED_RUNNER") {
       logFeatureBad("ccr_stage_file_outputs", "unsupported_runner_kind");
@@ -404,42 +416,42 @@ async function stageFile(e, t, r = "off", n, s = "off") {
       permanent: true,
     };
   }
-  if (l.neverReplace && r === "off") {
+  if (parsed.neverReplace && homeFilesMode === "off") {
     logHomeStage("home_files_off", {});
     return {
       ok: true,
       noop: "home_files_off",
     };
   }
-  if (l.neverReplace && e.resync !== undefined) {
+  if (parsed.neverReplace && request.resync !== undefined) {
     logHomeStage("resent_announcement", {});
     return {
       ok: true,
       noop: "resent_announcement",
     };
   }
-  if (l.neverReplace && e.force !== false) {
+  if (parsed.neverReplace && request.force !== false) {
     logHomeStage("unchecked_announcement", {});
     return {
       ok: true,
       noop: "unchecked_announcement",
     };
   }
-  if (l.neverReplace && r === "not_loaded") {
+  if (parsed.neverReplace && homeFilesMode === "not_loaded") {
     logHomeStage("flag_not_loaded", {});
     return {
       ok: false,
       error: "the flag for home files has not loaded",
     };
   }
-  let d = l.readOnly
+  let outputFields = parsed.readOnly
     ? {}
     : {
-        outputPath: l.dest,
+        outputPath: parsed.dest,
       };
-  if (!e.force && !l.neverReplace)
+  if (!request.force && !parsed.neverReplace)
     try {
-      if ((await stat(l.dest)).isFile()) {
+      if ((await stat(parsed.dest)).isFile()) {
         logForDiagnosticsNoPII("debug", "stage_file_noop_already_present", {});
         logEvent("tengu_stage_file_completed", {
           ok: true,
@@ -449,98 +461,112 @@ async function stageFile(e, t, r = "off", n, s = "off") {
         return {
           ok: true,
           noop: "already_present",
-          ...d,
+          ...outputFields,
         };
       }
     } catch {}
   let now = Date.now();
-  return runStageForRoot(e.mount_path, l, now, t, inPlaceRequestId(e, n), e.force === true ? s : "off");
+  return runStageForRoot(
+    request.mount_path,
+    parsed,
+    now,
+    remoteSessionId,
+    inPlaceRequestId(request, inPlaceRequest),
+    request.force === true ? storeCheckMode : "off",
+  );
 }
 //@ chunk-rqpqwy1q.js:7276-7310 placement
-var stageLimitersByRoot = identity(new Map(), (e) => e.clear());
+var stageLimitersByRoot = identity(new Map(), (limiters) => limiters.clear());
 //@ chunk-rqpqwy1q.js:7310-7421 placement
-function runStageForRoot(mountPath, t, r, n, s, l) {
-  let d = stageLimitersByRoot.get(t.root);
-  if (d === undefined) {
-    d = limitConcurrency(MAX_CONCURRENT_STAGES, stageOne);
-    stageLimitersByRoot.set(t.root, d);
+function runStageForRoot(mountPath, parsed, queuedAt, remoteSessionId, inPlaceRequestId, storeCheckMode) {
+  let limiter = stageLimitersByRoot.get(parsed.root);
+  if (limiter === undefined) {
+    limiter = limitConcurrency(MAX_CONCURRENT_STAGES, stageOne);
+    stageLimitersByRoot.set(parsed.root, limiter);
   }
-  return d(mountPath, t, r, n, s, l);
+  return limiter(mountPath, parsed, queuedAt, remoteSessionId, inPlaceRequestId, storeCheckMode);
 }
 //@ chunk-rqpqwy1q.js:7421-7497 placement
-function stageOne(...e) {
-  let [t, r, n, s] = e;
-  return r.neverReplace ? stageToHome(t, r, n, s) : stageToRoot(...e);
+function stageOne(...args) {
+  let [path, parsed, queuedAt, remoteSessionId] = args;
+  return parsed.neverReplace ? stageToHome(path, parsed, queuedAt, remoteSessionId) : stageToRoot(...args);
 }
 //@ chunk-rqpqwy1q.js:7497-8769 placement
 /**
  * 与存储副本比较
  */
-async function compareWithStore(dest, t, path) {
+async function compareWithStore(path, stats, path_2) {
   let startTime = performance.now();
-  if (t === undefined || !t.isFile() || t.nlink !== 1n || t.size > BigInt(SAME_STANDING_MAX_BYTES)) return;
+  if (
+    stats === undefined ||
+    !stats.isFile() ||
+    stats.nlink !== 1n ||
+    stats.size > BigInt(SAME_STANDING_MAX_BYTES)
+  )
+    return;
   if (storeCheckPaused())
     return {
       compared: {
         storeAnswer: "not_asked_while_paused",
         verdict: "no_size_and_md5_from_store",
         checkMs: 0,
-        bytes: Number(t.size),
+        bytes: Number(stats.size),
         hashMayHaveChangedAtime: false,
       },
     };
-  let s = await fetchAndParseCredential();
-  if (!s.ok)
+  let credential = await fetchAndParseCredential();
+  if (!credential.ok)
     return {
-      minted: s,
+      minted: credential,
     };
-  let l = await askStoreWhatItHolds(s.cred, path);
-  let d;
+  let storeAnswer = await askStoreWhatItHolds(credential.cred, path_2);
+  let verdict;
   let hashMayHaveChangedAtime = false;
-  if (l.answer !== "size_and_md5") {
-    d = "no_size_and_md5_from_store";
-    if (l.answer === "credential_refused" || l.answer === "not_sent") pauseStoreCheck(l.answer, 1 / 0);
+  if (storeAnswer.answer !== "size_and_md5") {
+    verdict = "no_size_and_md5_from_store";
+    if (storeAnswer.answer === "credential_refused" || storeAnswer.answer === "not_sent")
+      pauseStoreCheck(storeAnswer.answer, 1 / 0);
     else if (
-      l.answer === "timed_out" ||
-      l.answer === "credential_expired" ||
-      l.answer === "request_error" ||
-      l.answer === "other_http_status"
+      storeAnswer.answer === "timed_out" ||
+      storeAnswer.answer === "credential_expired" ||
+      storeAnswer.answer === "request_error" ||
+      storeAnswer.answer === "other_http_status"
     )
-      pauseStoreCheck(l.answer, STORE_CHECK_PAUSE_MS);
-  } else if (BigInt(l.size) !== t.size) d = "size_differs";
-  else if ((Number(t.mode) & 4095) !== 292) d = "local_file_mode_not_0444";
+      pauseStoreCheck(storeAnswer.answer, STORE_CHECK_PAUSE_MS);
+  } else if (BigInt(storeAnswer.size) !== stats.size) verdict = "size_differs";
+  else if ((Number(stats.mode) & 4095) !== 292) verdict = "local_file_mode_not_0444";
   else {
-    let h = await hashStandingFile(dest, t);
-    if (typeof h === "string") {
-      d =
-        h === "timed_out"
+    let localHash = await hashStandingFile(path, stats);
+    if (typeof localHash === "string") {
+      verdict =
+        localHash === "timed_out"
           ? "local_file_hash_timed_out"
-          : h === "changed"
+          : localHash === "changed"
             ? "local_file_changed"
             : "local_file_unreadable";
-      if (h === "timed_out") pauseStoreCheck("local_file_hash_timed_out", 1 / 0);
+      if (localHash === "timed_out") pauseStoreCheck("local_file_hash_timed_out", 1 / 0);
     } else {
-      hashMayHaveChangedAtime = !h.withNoAtime;
-      let y = await lstat(dest, {
+      hashMayHaveChangedAtime = !localHash.withNoAtime;
+      let afterStats = await lstat(path, {
         bigint: true,
       }).catch(() => {
         return;
       });
-      d =
-        y === undefined || !sameFileUntouched(h.opened, y)
+      verdict =
+        afterStats === undefined || !sameFileUntouched(localHash.opened, afterStats)
           ? "local_file_changed"
-          : h.md5 === l.md5
+          : localHash.md5 === storeAnswer.md5
             ? "same_contents"
             : "md5_differs";
     }
   }
   return {
-    minted: s,
+    minted: credential,
     compared: {
-      storeAnswer: l.answer,
-      verdict: d,
+      storeAnswer: storeAnswer.answer,
+      verdict,
       checkMs: Math.round(performance.now() - startTime),
-      bytes: Number(t.size),
+      bytes: Number(stats.size),
       hashMayHaveChangedAtime,
     },
   };
@@ -549,47 +575,55 @@ async function compareWithStore(dest, t, path) {
 /**
  * 暂存到挂载根
  */
-async function stageToRoot(path, { dest, root, readOnly }, s, l, d, S) {
+async function stageToRoot(
+  path,
+  { dest, root, readOnly },
+  queuedAt,
+  remoteSessionId,
+  inPlaceRequestId,
+  storeCheckMode,
+) {
   let startTime = performance.now();
-  let queuedMs = Math.max(0, Date.now() - s);
-  let c = () => Math.round(performance.now() - startTime);
-  let F = d !== undefined;
-  let w = readOnly && !F && !env.CLAUDE_STAGE_FILE_ROOT;
-  let E = F
+  let queuedMs = Math.max(0, Date.now() - queuedAt);
+  let elapsedMs = () => Math.round(performance.now() - startTime);
+  let isInPlace = inPlaceRequestId !== undefined;
+  let tryReadOnlyMount = readOnly && !isInPlace && !env.CLAUDE_STAGE_FILE_ROOT;
+  let inPlaceFields = isInPlace
     ? {
         in_place: true,
       }
     : {};
-  let _ = stageTmpStem(dest);
-  let b;
-  let R = join(dirname(dest), `${_}${Date.now()}.${Math.random().toString(36).slice(2)}`);
+  let tempStem = stageTmpStem(dest);
+  let destStats;
+  let tempPath = join(dirname(dest), `${tempStem}${Date.now()}.${Math.random().toString(36).slice(2)}`);
   try {
     assertNoBackslashDirs(root, dest);
     await mkdir(dirname(dest), {
       recursive: true,
     });
-    let P = await realpath(root);
-    let D = await realpath(dirname(dest));
-    assertDestUnderRoot(P, D);
-    b = await lstat(dest, {
+    let realRoot = await realpath(root);
+    let realDestDir = await realpath(dirname(dest));
+    assertDestUnderRoot(realRoot, realDestDir);
+    destStats = await lstat(dest, {
       bigint: true,
     }).catch((error) => {
       if (getErrnoCode(error) === "ENAMETOOLONG") throw error;
       return;
     });
-    await sweepStaleStageTmps(dirname(dest), _);
+    await sweepStaleStageTmps(dirname(dest), tempStem);
   } catch (error) {
-    let D = typeof error === "object" && error !== null && "code" in error ? String(error.code) : "unknown";
-    if (w && isReadOnlyFsError(error)) {
+    let errorCode =
+      typeof error === "object" && error !== null && "code" in error ? String(error.code) : "unknown";
+    if (tryReadOnlyMount && isReadOnlyFsError(error)) {
       logEvent("tengu_stage_file_completed", {
         ok: true,
         noop: true,
-        duration_ms: c(),
+        duration_ms: elapsedMs(),
         queued_ms: queuedMs,
         bytes: 0,
       });
       logForDiagnosticsNoPII("debug", "stage_file_noop_readonly_mount", {
-        duration_ms: c(),
+        duration_ms: elapsedMs(),
       });
       return {
         ok: true,
@@ -598,38 +632,40 @@ async function stageToRoot(path, { dest, root, readOnly }, s, l, d, S) {
     }
     logEvent("tengu_stage_file_completed", {
       ok: false,
-      duration_ms: c(),
+      duration_ms: elapsedMs(),
       queued_ms: queuedMs,
-      ...E,
+      ...inPlaceFields,
     });
     logForDiagnosticsNoPII("warn", "stage_file_mkdir_failed", {
-      code: D,
-      duration_ms: c(),
+      code: errorCode,
+      duration_ms: elapsedMs(),
       queued_ms: queuedMs,
     });
     if (!readOnly) logFeatureBad("ccr_stage_file_outputs", "mkdir_failed");
     return {
       ok: false,
-      error: `mkdir failed: ${D}`,
-      ...(PERMANENT_ERRNOS.has(D) && {
+      error: `mkdir failed: ${errorCode}`,
+      ...(PERMANENT_ERRNOS.has(errorCode) && {
         permanent: true,
       }),
     };
   }
-  let O =
-    S !== "off" && readOnly && !F && l === undefined ? await compareWithStore(dest, b, path) : undefined;
-  let compared = O?.compared;
-  let I =
-    compared === undefined
+  let compared =
+    storeCheckMode !== "off" && readOnly && !isInPlace && remoteSessionId === undefined
+      ? await compareWithStore(dest, destStats, path)
+      : undefined;
+  let compared_2 = compared?.compared;
+  let comparedFields =
+    compared_2 === undefined
       ? {}
       : {
-          store_check_mode: fromEnumOpt(S),
-          store_check_answer: fromEnumOpt(compared.storeAnswer),
-          store_check_verdict: fromEnumOpt(compared.verdict),
-          store_check_ms: compared.checkMs,
+          store_check_mode: fromEnumOpt(storeCheckMode),
+          store_check_answer: fromEnumOpt(compared_2.storeAnswer),
+          store_check_verdict: fromEnumOpt(compared_2.verdict),
+          store_check_ms: compared_2.checkMs,
         };
-  if (S === "on" && compared?.verdict === "same_contents") {
-    let P = compared.hashMayHaveChangedAtime
+  if (storeCheckMode === "on" && compared_2?.verdict === "same_contents") {
+    let atimeFields = compared_2.hashMayHaveChangedAtime
       ? {
           store_check_may_have_changed_atime: true,
         }
@@ -638,20 +674,20 @@ async function stageToRoot(path, { dest, root, readOnly }, s, l, d, S) {
       ok: true,
       noop: true,
       noop_already_present: true,
-      duration_ms: c(),
+      duration_ms: elapsedMs(),
       queued_ms: queuedMs,
       bytes: 0,
       replaced: fromEnumOpt("same_contents"),
-      download_skipped_bytes: compared.bytes,
-      ...I,
-      ...P,
+      download_skipped_bytes: compared_2.bytes,
+      ...comparedFields,
+      ...atimeFields,
     });
     logForDiagnosticsNoPII("info", "stage_file_noop_matches_store", {
-      duration_ms: c(),
+      duration_ms: elapsedMs(),
       queued_ms: queuedMs,
-      download_skipped_bytes: compared.bytes,
-      store_check_ms: compared.checkMs,
-      ...P,
+      download_skipped_bytes: compared_2.bytes,
+      store_check_ms: compared_2.checkMs,
+      ...atimeFields,
     });
     return {
       ok: true,
@@ -659,19 +695,25 @@ async function stageToRoot(path, { dest, root, readOnly }, s, l, d, S) {
       replaced: "same_contents",
     };
   }
-  let M = await withFilestoreCredential(path, R, l, d, O?.minted);
-  if (!M.ok) {
-    await unlink(R).catch(() => {});
-    if (w && M.errno === "EROFS") {
+  let uploaded = await withFilestoreCredential(
+    path,
+    tempPath,
+    remoteSessionId,
+    inPlaceRequestId,
+    compared?.minted,
+  );
+  if (!uploaded.ok) {
+    await unlink(tempPath).catch(() => {});
+    if (tryReadOnlyMount && uploaded.errno === "EROFS") {
       logEvent("tengu_stage_file_completed", {
         ok: true,
         noop: true,
-        duration_ms: c(),
+        duration_ms: elapsedMs(),
         queued_ms: queuedMs,
         bytes: 0,
       });
       logForDiagnosticsNoPII("debug", "stage_file_noop_readonly_mount", {
-        duration_ms: c(),
+        duration_ms: elapsedMs(),
       });
       return {
         ok: true,
@@ -680,40 +722,40 @@ async function stageToRoot(path, { dest, root, readOnly }, s, l, d, S) {
     }
     logEvent("tengu_stage_file_completed", {
       ok: false,
-      gated: M.gated,
-      duration_ms: c(),
+      gated: uploaded.gated,
+      duration_ms: elapsedMs(),
       queued_ms: queuedMs,
-      ...E,
+      ...inPlaceFields,
     });
     if (!readOnly) logFeatureBad("ccr_stage_file_outputs", "fetch_failed");
     return {
       ok: false,
-      error: M.error,
-      ...((M.permanent === true ||
-        M.gated === true ||
-        (M.errno !== undefined && PERMANENT_ERRNOS.has(M.errno))) && {
+      error: uploaded.error,
+      ...((uploaded.permanent === true ||
+        uploaded.gated === true ||
+        (uploaded.errno !== undefined && PERMANENT_ERRNOS.has(uploaded.errno))) && {
         permanent: true,
       }),
     };
   }
-  let bytes = M.bytes;
-  let fetchMs = c();
-  let { replaced, standing } = readOnly ? await describeExistingFile(dest, R, bytes) : {};
+  let bytes = uploaded.bytes;
+  let fetchMs = elapsedMs();
+  let { replaced, standing } = readOnly ? await describeExistingFile(dest, tempPath, bytes) : {};
   try {
     if (!readOnly) {
-      let P = await stat(dest).catch(() => null);
-      if (isFreshFile(P, s)) {
-        await unlink(R).catch(() => {});
+      let destStats = await stat(dest).catch(() => null);
+      if (isFreshFile(destStats, queuedAt)) {
+        await unlink(tempPath).catch(() => {});
         logEvent("tengu_stage_file_completed", {
           ok: true,
           noop: true,
-          duration_ms: c(),
+          duration_ms: elapsedMs(),
           queued_ms: queuedMs,
           bytes: 0,
           outputs_root: true,
         });
         logForDiagnosticsNoPII("info", "stage_file_noop_newer_local", {
-          duration_ms: c(),
+          duration_ms: elapsedMs(),
         });
         logFeatureOk("ccr_stage_file_outputs");
         return {
@@ -722,70 +764,71 @@ async function stageToRoot(path, { dest, root, readOnly }, s, l, d, S) {
         };
       }
     }
-    await chmod(R, readOnly ? 292 : 420);
-    await rename(R, dest);
+    await chmod(tempPath, readOnly ? 292 : 420);
+    await rename(tempPath, dest);
   } catch (error) {
-    await unlink(R).catch(() => {});
-    if (w && isReadOnlyFsError(error)) {
+    await unlink(tempPath).catch(() => {});
+    if (tryReadOnlyMount && isReadOnlyFsError(error)) {
       logEvent("tengu_stage_file_completed", {
         ok: true,
         noop: true,
         fetch_ms: fetchMs,
-        duration_ms: c(),
+        duration_ms: elapsedMs(),
         queued_ms: queuedMs,
         bytes: 0,
       });
       logForDiagnosticsNoPII("debug", "stage_file_noop_readonly_mount", {
-        duration_ms: c(),
+        duration_ms: elapsedMs(),
       });
       return {
         ok: true,
         noop: "readonly_mount",
       };
     }
-    let D = typeof error === "object" && error !== null && "code" in error ? String(error.code) : "unknown";
+    let errorCode =
+      typeof error === "object" && error !== null && "code" in error ? String(error.code) : "unknown";
     logEvent("tengu_stage_file_completed", {
       ok: false,
       fetch_ms: fetchMs,
-      duration_ms: c(),
+      duration_ms: elapsedMs(),
       queued_ms: queuedMs,
       bytes,
-      ...E,
+      ...inPlaceFields,
     });
     logForDiagnosticsNoPII("warn", "stage_file_write_failed", {
-      code: D,
-      duration_ms: c(),
+      code: errorCode,
+      duration_ms: elapsedMs(),
       queued_ms: queuedMs,
     });
     if (!readOnly) logFeatureBad("ccr_stage_file_outputs", "write_failed");
     return {
       ok: false,
-      error: `write failed: ${D}`,
-      ...(PERMANENT_ERRNOS.has(D) && {
+      error: `write failed: ${errorCode}`,
+      ...(PERMANENT_ERRNOS.has(errorCode) && {
         permanent: true,
       }),
     };
   }
-  if (readOnly) recordStagedWrite(dest, M.written, Date.now());
+  if (readOnly) recordStagedWrite(dest, uploaded.written, Date.now());
   logEvent("tengu_stage_file_completed", {
     ok: true,
     fetch_ms: fetchMs,
-    duration_ms: c(),
+    duration_ms: elapsedMs(),
     queued_ms: queuedMs,
     bytes,
     outputs_root: !readOnly,
-    ...E,
+    ...inPlaceFields,
     replaced: fromEnumOpt(replaced),
     ...(standing !== undefined && {
       standing_vs_placed_code: standing.vsPlaced,
     }),
-    ...I,
+    ...comparedFields,
   });
   if (!readOnly) logFeatureOk("ccr_stage_file_outputs");
   logForDiagnosticsNoPII(replaced === "different_contents" ? "warn" : "info", "stage_file_ok", {
     bytes,
     fetch_ms: fetchMs,
-    duration_ms: c(),
+    duration_ms: elapsedMs(),
     queued_ms: queuedMs,
     root: readOnly ? "uploads" : "outputs",
     ...(replaced !== undefined && {
@@ -797,11 +840,11 @@ async function stageToRoot(path, { dest, root, readOnly }, s, l, d, S) {
       replaced_read_only: standing.readOnly,
       standing_vs_placed_code: standing.vsPlaced,
     }),
-    ...(compared !== undefined && {
-      store_check_mode: S,
-      store_check_answer: compared.storeAnswer,
-      store_check_verdict: compared.verdict,
-      store_check_ms: compared.checkMs,
+    ...(compared_2 !== undefined && {
+      store_check_mode: storeCheckMode,
+      store_check_answer: compared_2.storeAnswer,
+      store_check_verdict: compared_2.verdict,
+      store_check_ms: compared_2.checkMs,
     }),
   });
   return {
@@ -820,25 +863,25 @@ async function stageToRoot(path, { dest, root, readOnly }, s, l, d, S) {
 /**
  * 记录 home 暂存结果
  */
-function logHomeStage(outcome, t) {
-  let r =
+function logHomeStage(outcome, extraFields) {
+  let isFailure =
     outcome === "flag_not_loaded" ||
     outcome === "probe_failed" ||
     outcome === "fetch_failed" ||
     outcome === "place_failed";
-  logForDiagnosticsNoPII(r ? "warn" : "info", "stage_file_home", {
+  logForDiagnosticsNoPII(isFailure ? "warn" : "info", "stage_file_home", {
     outcome,
-    ...t,
+    ...extraFields,
   });
   logEvent("tengu_stage_file_completed", {
-    ok: !r,
-    noop: !r && outcome !== "placed",
+    ok: !isFailure,
+    noop: !isFailure && outcome !== "placed",
     home_root: true,
-    bytes: t.bytes ?? 0,
-    duration_ms: t.duration_ms ?? 0,
-    queued_ms: t.queued_ms ?? 0,
+    bytes: extraFields.bytes ?? 0,
+    duration_ms: extraFields.duration_ms ?? 0,
+    queued_ms: extraFields.queued_ms ?? 0,
   });
-  if (r) logFeatureBad("ccr_stage_file_home", outcome);
+  if (isFailure) logFeatureBad("ccr_stage_file_home", outcome);
   else if (outcome === "placed" || outcome === "already_present") logFeatureOk("ccr_stage_file_home");
   else logFeatureSad("ccr_stage_file_home", outcome);
 }
@@ -846,29 +889,29 @@ function logHomeStage(outcome, t) {
 /**
  * home 暂存结果
  */
-function homeStageResult(e, outputPath, r) {
-  switch (e.outcome) {
+function homeStageResult(outcomeResult, outputPath, extraFields) {
+  switch (outcomeResult.outcome) {
     case "placed":
-      logHomeStage(e.outcome, r);
+      logHomeStage(outcomeResult.outcome, extraFields);
       return {
         ok: true,
         outputPath,
       };
     case "already_present":
     case "path_occupied":
-      logHomeStage(e.outcome, r);
+      logHomeStage(outcomeResult.outcome, extraFields);
       return {
         ok: true,
-        noop: e.outcome,
+        noop: outcomeResult.outcome,
       };
     case "refused_name":
-      logHomeStage(e.outcome, {
-        refusal: e.refusal,
-        ...r,
+      logHomeStage(outcomeResult.outcome, {
+        refusal: outcomeResult.refusal,
+        ...extraFields,
       });
       return {
         ok: true,
-        noop: e.outcome,
+        noop: outcomeResult.outcome,
       };
   }
 }
@@ -876,131 +919,133 @@ function homeStageResult(e, outputPath, r) {
 /**
  * 暂存到 home 根
  */
-async function stageToHome(path, { dest, root }, n, s) {
+async function stageToHome(path, { dest, root }, queuedAt, remoteSessionId) {
   let startTime = performance.now();
-  let queuedMs = Math.max(0, Date.now() - n);
-  let S = () => ({
+  let queuedMs = Math.max(0, Date.now() - queuedAt);
+  let timingFields = () => ({
     duration_ms: Math.round(performance.now() - startTime),
     queued_ms: queuedMs,
   });
-  let h = relative(root, dest);
-  let y = join(root, `${stageTmpStem(dest)}${Date.now()}.${Math.random().toString(36).slice(2)}`);
+  let relativePath = relative(root, dest);
+  let tempPath = join(root, `${stageTmpStem(dest)}${Date.now()}.${Math.random().toString(36).slice(2)}`);
   try {
-    let c = await checkHomeTarget(root, h);
+    let earlyOutcome = await checkHomeTarget(root, relativePath);
     await sweepStaleStageTmps(root, STAGE_TMP_PREFIX);
-    if (c !== undefined) return homeStageResult(c, dest, S());
+    if (earlyOutcome !== undefined) return homeStageResult(earlyOutcome, dest, timingFields());
   } catch (error) {
-    let F = getErrnoCode(error) ?? "unknown";
+    let errnoCode = getErrnoCode(error) ?? "unknown";
     logHomeStage("probe_failed", {
-      code: F,
-      ...S(),
+      code: errnoCode,
+      ...timingFields(),
     });
     return {
       ok: false,
-      error: `mkdir failed: ${F}`,
+      error: `mkdir failed: ${errnoCode}`,
     };
   }
   try {
-    let c = await withFilestoreCredential(path, y, s);
-    if (!c.ok && !c.gated && s === undefined) {
-      await unlink(y).catch(() => {});
+    let fetched = await withFilestoreCredential(path, tempPath, remoteSessionId);
+    if (!fetched.ok && !fetched.gated && remoteSessionId === undefined) {
+      await unlink(tempPath).catch(() => {});
       await sleep(UNLINK_RETRY_DELAY_MS);
-      c = await withFilestoreCredential(path, y, s);
+      fetched = await withFilestoreCredential(path, tempPath, remoteSessionId);
     }
-    if (!c.ok) {
+    if (!fetched.ok) {
       logHomeStage("fetch_failed", {
-        code: c.errno,
-        ...S(),
+        code: fetched.errno,
+        ...timingFields(),
       });
       return {
         ok: false,
-        error: c.error,
+        error: fetched.error,
       };
     }
-    return homeStageResult(await publishHomeFile(y, root, h, undefined), dest, {
-      bytes: c.bytes,
-      ...S(),
+    return homeStageResult(await publishHomeFile(tempPath, root, relativePath, undefined), dest, {
+      bytes: fetched.bytes,
+      ...timingFields(),
     });
   } catch (error) {
-    let F = getErrnoCode(error) ?? "unknown";
+    let errnoCode = getErrnoCode(error) ?? "unknown";
     logHomeStage("place_failed", {
-      code: F,
-      ...S(),
+      code: errnoCode,
+      ...timingFields(),
     });
     return {
       ok: false,
-      error: `write failed: ${F}`,
+      error: `write failed: ${errnoCode}`,
     };
   } finally {
-    await unlink(y).catch(() => {});
+    await unlink(tempPath).catch(() => {});
   }
 }
 //@ chunk-rqpqwy1q.js:14264-14305 placement
 var CREDENTIAL_EXPIRED_TEXT = "read failed: credential expired";
 //@ chunk-rqpqwy1q.js:14305-14393 placement
-function oneShotCredentialFetcher(e) {
-  let t = false;
+function oneShotCredentialFetcher(credentialJson) {
+  let used = false;
   return async () => {
-    if (t)
+    if (used)
       return {
         ok: false,
         error: CREDENTIAL_EXPIRED_TEXT,
       };
-    t = true;
-    return parseFilestoreCredential(e);
+    used = true;
+    return parseFilestoreCredential(credentialJson);
   };
 }
 //@ chunk-rqpqwy1q.js:14393-14720 placement
 /**
  * 解析 filestore 凭据
  */
-function parseFilestoreCredential(e) {
-  let { filestore_jwt: filestoreJwt, filesystem_id: filesystemId } = e;
+function parseFilestoreCredential(response) {
+  let { filestore_jwt: filestoreJwt, filesystem_id: filesystemId } = response;
   if (!filestoreJwt || !filesystemId)
     return {
       ok: false,
       error: "list returned incomplete credential",
       permanent: true,
     };
-  let n = httpsOrigin(e.filestore_url);
-  if (e.filestore_url && !n)
+  let filestoreUrl = httpsOrigin(response.filestore_url);
+  if (response.filestore_url && !filestoreUrl)
     logForDiagnosticsNoPII("warn", "stage_file_filestore_url_rejected", {
-      reason: invalidHttpsUrlReason(e.filestore_url),
+      reason: invalidHttpsUrlReason(response.filestore_url),
     });
   return {
     ok: true,
     cred: {
       filestoreJwt,
       filesystemId,
-      filestoreUrl: n,
+      filestoreUrl,
     },
   };
 }
 //@ chunk-rqpqwy1q.js:14720-14788 placement
-async function fetchAndParseCredential(signal, t) {
-  let r = await listFilestoreCredential(signal, t);
-  return r.ok ? parseFilestoreCredential(r.data) : r;
+async function fetchAndParseCredential(signal, timeoutMs) {
+  let listed = await listFilestoreCredential(signal, timeoutMs);
+  return listed.ok ? parseFilestoreCredential(listed.data) : listed;
 }
 //@ chunk-rqpqwy1q.js:14788-14882 placement
 var FILESTORE_FILES_PATH = "/worker/files";
 var STAGE_REQUEST_ID = "stage_request_id";
 var IN_PLACE_REQUEST_ID_RE = /^stage-file-inplace-req_[0-9A-Za-z_]{1,72}$/;
 //@ chunk-rqpqwy1q.js:14882-14964 placement
-function inPlaceRequestId(e, t) {
-  return e.in_place === true && typeof t === "string" && IN_PLACE_REQUEST_ID_RE.test(t) ? t : undefined;
+function inPlaceRequestId(request, requestId) {
+  return request.in_place === true && typeof requestId === "string" && IN_PLACE_REQUEST_ID_RE.test(requestId)
+    ? requestId
+    : undefined;
 }
 //@ chunk-rqpqwy1q.js:14964-15894 placement
 /**
  * 拉取 filestore 凭据
  */
-async function listFilestoreCredential(signal, t) {
+async function listFilestoreCredential(signal, timeoutMs) {
   let startTime = performance.now();
-  let n = () => Math.round(performance.now() - startTime);
+  let elapsedMs = () => Math.round(performance.now() - startTime);
   try {
-    let s = await apiClient.get(
-      t === undefined
+    let response = await apiClient.get(
+      timeoutMs === undefined
         ? FILESTORE_FILES_PATH
-        : `${FILESTORE_FILES_PATH}?${STAGE_REQUEST_ID}=${encodeURIComponent(t)}`,
+        : `${FILESTORE_FILES_PATH}?${STAGE_REQUEST_ID}=${encodeURIComponent(timeoutMs)}`,
       {
         auth: "session-jwt",
         host: "ccr-session",
@@ -1011,34 +1056,38 @@ async function listFilestoreCredential(signal, t) {
         signal,
       },
     );
-    if (!s.ok) {
+    if (!response.ok) {
       logForDiagnosticsNoPII("warn", "stage_file_list_gated", {
-        reason: s.reason,
-        duration_ms: n(),
+        reason: response.reason,
+        duration_ms: elapsedMs(),
       });
       return {
         ok: false,
-        error: `list gated: ${s.reason}`,
+        error: `list gated: ${response.reason}`,
         gated: true,
         permanent: true,
       };
     }
-    if (s.status < 200 || s.status >= 300) {
+    if (response.status < 200 || response.status >= 300) {
       logForDiagnosticsNoPII("warn", "stage_file_list_failed", {
         kind: "http",
-        status: s.status,
-        duration_ms: n(),
+        status: response.status,
+        duration_ms: elapsedMs(),
       });
       return {
         ok: false,
-        error: `list failed: http ${s.status}`,
-        status: s.status,
-        ...(isPermanentHttpStatus(s.status) && {
+        error: `list failed: http ${response.status}`,
+        status: response.status,
+        ...(isPermanentHttpStatus(response.status) && {
           permanent: true,
         }),
       };
     }
-    let { filestore_jwt: filestoreJwt, filesystem_id: filesystemId, filestore_url: filestoreUrl } = s.data;
+    let {
+      filestore_jwt: filestoreJwt,
+      filesystem_id: filesystemId,
+      filestore_url: filestoreUrl,
+    } = response.data;
     return {
       ok: true,
       data: {
@@ -1052,7 +1101,7 @@ async function listFilestoreCredential(signal, t) {
     logForDiagnosticsNoPII("warn", "stage_file_list_failed", {
       kind,
       status,
-      duration_ms: n(),
+      duration_ms: elapsedMs(),
     });
     return {
       ok: false,
@@ -1066,28 +1115,31 @@ async function listFilestoreCredential(signal, t) {
 /**
  * 带凭据刷新的 filestore 调用
  */
-async function withFilestoreCredential(path, t, r, n, minted) {
+async function withFilestoreCredential(path, tempPath, credentialJson, timeoutMs, minted) {
   let startTime = performance.now();
-  let d = () => Math.round(performance.now() - startTime);
-  let S = r === undefined ? () => fetchAndParseCredential(undefined, n) : oneShotCredentialFetcher(r);
-  let h = minted ?? (await S());
-  if (!h.ok) return h;
-  let cred = h.cred;
+  let elapsedMs = () => Math.round(performance.now() - startTime);
+  let fetchCredential =
+    credentialJson === undefined
+      ? () => fetchAndParseCredential(undefined, timeoutMs)
+      : oneShotCredentialFetcher(credentialJson);
+  let mintedResult = minted ?? (await fetchCredential());
+  if (!mintedResult.ok) return mintedResult;
+  let cred = mintedResult.cred;
   for (let idx = 0; idx <= 1; idx++) {
     let abortController = new AbortController();
-    let w;
-    let E = () => {
-      if (w) w.refresh();
+    let stallTimer;
+    let resetStallTimer = () => {
+      if (stallTimer) stallTimer.refresh();
       else
-        w = setTimeout(
-          (_) => _.abort(Error("readFile stall: no bytes for 60s")),
+        stallTimer = setTimeout(
+          (controller) => controller.abort(Error("readFile stall: no bytes for 60s")),
           READ_STALL_TIMEOUT_MS,
           abortController,
         );
     };
-    E();
+    resetStallTimer();
     try {
-      let _ = await apiClient.post(
+      let response = await apiClient.post(
         "/v1/filestore/fs/readFile",
         {
           filesystem_id: cred.filesystemId,
@@ -1106,73 +1158,73 @@ async function withFilestoreCredential(path, t, r, n, minted) {
           validateStatus: () => true,
         },
       );
-      if (!_.ok) {
-        clearTimeout(w);
+      if (!response.ok) {
+        clearTimeout(stallTimer);
         logForDiagnosticsNoPII("warn", "stage_file_read_gated", {
-          reason: _.reason,
-          duration_ms: d(),
+          reason: response.reason,
+          duration_ms: elapsedMs(),
         });
         return {
           ok: false,
-          error: `read gated: ${_.reason}`,
+          error: `read gated: ${response.reason}`,
           gated: true,
         };
       }
-      if (_.status === 401 && idx === 0) {
-        clearTimeout(w);
-        if (_.data instanceof Readable) _.data.destroy();
+      if (response.status === 401 && idx === 0) {
+        clearTimeout(stallTimer);
+        if (response.data instanceof Readable) response.data.destroy();
         logForDiagnosticsNoPII("info", "stage_file_read_remint_jwt", {
-          duration_ms: d(),
+          duration_ms: elapsedMs(),
         });
-        h = await S();
-        if (!h.ok) return h;
-        cred = h.cred;
+        mintedResult = await fetchCredential();
+        if (!mintedResult.ok) return mintedResult;
+        cred = mintedResult.cred;
         continue;
       }
-      if (_.status < 200 || _.status >= 300) {
-        clearTimeout(w);
-        if (_.data instanceof Readable) _.data.destroy();
+      if (response.status < 200 || response.status >= 300) {
+        clearTimeout(stallTimer);
+        if (response.data instanceof Readable) response.data.destroy();
         logForDiagnosticsNoPII("warn", "stage_file_read_failed", {
           kind: "http",
-          status: _.status,
-          duration_ms: d(),
+          status: response.status,
+          duration_ms: elapsedMs(),
         });
         return {
           ok: false,
-          error: `read failed: http ${_.status}`,
-          ...(isPermanentHttpStatus(_.status) && {
+          error: `read failed: http ${response.status}`,
+          ...(isPermanentHttpStatus(response.status) && {
             permanent: true,
           }),
         };
       }
-      let b = Number(_.response?.headers["content-length"] ?? -1);
-      _.data.on("data", E);
+      let expectedBytes = Number(response.response?.headers["content-length"] ?? -1);
+      response.data.on("data", resetStallTimer);
       await pipeline(
-        _.data,
-        createWriteStream(t, {
+        response.data,
+        createWriteStream(tempPath, {
           flags: "wx",
         }),
       );
-      clearTimeout(w);
-      let R = await stat(t, {
+      clearTimeout(stallTimer);
+      let writtenStats = await stat(tempPath, {
         bigint: true,
       });
-      let O = Number(R.size);
-      if (b >= 0 && O !== b) {
+      let writtenBytes = Number(writtenStats.size);
+      if (expectedBytes >= 0 && writtenBytes !== expectedBytes) {
         logForDiagnosticsNoPII("warn", "stage_file_read_truncated", {
-          expected: b,
-          got: O,
-          duration_ms: d(),
+          expected: expectedBytes,
+          got: writtenBytes,
+          duration_ms: elapsedMs(),
         });
         return {
           ok: false,
-          error: `read truncated: got ${O} of ${b} bytes`,
+          error: `read truncated: got ${writtenBytes} of ${expectedBytes} bytes`,
         };
       }
-      let { ino, birthtimeNs, size, mtimeNs } = R;
+      let { ino, birthtimeNs, size, mtimeNs } = writtenStats;
       return {
         ok: true,
-        bytes: O,
+        bytes: writtenBytes,
         written: {
           ino,
           birthtimeNs,
@@ -1181,23 +1233,24 @@ async function withFilestoreCredential(path, t, r, n, minted) {
         },
       };
     } catch (error) {
-      clearTimeout(w);
-      let b = typeof error === "object" && error !== null && "code" in error ? String(error.code) : undefined;
-      if (b && !("isAxiosError" in error)) {
+      clearTimeout(stallTimer);
+      let errnoCode =
+        typeof error === "object" && error !== null && "code" in error ? String(error.code) : undefined;
+      if (errnoCode && !("isAxiosError" in error)) {
         logForDiagnosticsNoPII("warn", "stage_file_write_failed", {
-          code: b,
-          duration_ms: d(),
+          code: errnoCode,
+          duration_ms: elapsedMs(),
         });
         return {
           ok: false,
-          error: `write failed: ${b}`,
-          errno: b,
+          error: `write failed: ${errnoCode}`,
+          errno: errnoCode,
         };
       }
       if (abortController.signal.aborted) {
         logForDiagnosticsNoPII("warn", "stage_file_read_stalled", {
           stall_ms: READ_STALL_TIMEOUT_MS,
-          duration_ms: d(),
+          duration_ms: elapsedMs(),
         });
         return {
           ok: false,
@@ -1208,7 +1261,7 @@ async function withFilestoreCredential(path, t, r, n, minted) {
       logForDiagnosticsNoPII("warn", "stage_file_read_failed", {
         kind,
         status,
-        duration_ms: d(),
+        duration_ms: elapsedMs(),
       });
       return {
         ok: false,
@@ -1226,10 +1279,10 @@ var MAX_CLIENT_CONTENT_LENGTH = 1048576;
  * 创建 filestore 客户端
  */
 async function createFilestoreClient(signal) {
-  let t = await fetchAndParseCredential(signal);
-  if (!t.ok) return t;
-  let { filestoreJwt, filesystemId, filestoreUrl } = t.cred;
-  let l = {
+  let credential = await fetchAndParseCredential(signal);
+  if (!credential.ok) return credential;
+  let { filestoreJwt, filesystemId, filestoreUrl } = credential.cred;
+  let requestDefaults = {
     auth: "none",
     host: "api",
     baseUrl: filestoreUrl,
@@ -1238,59 +1291,59 @@ async function createFilestoreClient(signal) {
     },
     timeout: HTTP_TIMEOUT_MS,
   };
-  async function d(path, { maxBytes: y, signal: c } = {}) {
+  async function readBytes(path, { maxBytes, signal } = {}) {
     let startTime = performance.now();
-    let w = () => Math.round(performance.now() - startTime);
+    let elapsedMs = () => Math.round(performance.now() - startTime);
     try {
-      let E = await apiClient.post(
+      let response = await apiClient.post(
         "/v1/filestore/fs/readFile",
         {
           filesystem_id: filesystemId,
           path,
         },
         {
-          ...l,
+          ...requestDefaults,
           responseType: "arraybuffer",
-          maxContentLength: y ?? MAX_DOWNLOAD_BYTES,
-          signal: c,
+          maxContentLength: maxBytes ?? MAX_DOWNLOAD_BYTES,
+          signal,
         },
       );
-      if (!E.ok) {
+      if (!response.ok) {
         logForDiagnosticsNoPII("warn", "stage_file_read_gated", {
-          reason: E.reason,
-          duration_ms: w(),
+          reason: response.reason,
+          duration_ms: elapsedMs(),
         });
         return {
           ok: false,
-          error: `read gated: ${E.reason}`,
+          error: `read gated: ${response.reason}`,
           gated: true,
         };
       }
-      if (E.status < 200 || E.status >= 300) {
+      if (response.status < 200 || response.status >= 300) {
         logForDiagnosticsNoPII("warn", "stage_file_read_failed", {
           kind: "http",
-          status: E.status,
-          duration_ms: w(),
+          status: response.status,
+          duration_ms: elapsedMs(),
         });
         return {
           ok: false,
-          error: `read failed: http ${E.status}`,
-          status: E.status,
-          ...(E.status === 404 && {
+          error: `read failed: http ${response.status}`,
+          status: response.status,
+          ...(response.status === 404 && {
             notFound: true,
           }),
         };
       }
       return {
         ok: true,
-        buf: Buffer.from(E.data),
+        buf: Buffer.from(response.data),
       };
     } catch (error) {
       let { kind, status, message } = requestFailure("read", error);
       logForDiagnosticsNoPII("warn", "stage_file_read_failed", {
         kind,
         status,
-        duration_ms: w(),
+        duration_ms: elapsedMs(),
       });
       return {
         ok: false,
@@ -1305,10 +1358,10 @@ async function createFilestoreClient(signal) {
       };
     }
   }
-  async function S(path, { limit, signal }) {
+  async function listDirectory(path, { limit, signal }) {
     let startTime = performance.now();
     try {
-      let w = await apiClient.post(
+      let response = await apiClient.post(
         "/v1/filestore/fs/listDirectory",
         {
           filesystem_id: filesystemId,
@@ -1316,46 +1369,46 @@ async function createFilestoreClient(signal) {
           limit,
         },
         {
-          ...l,
+          ...requestDefaults,
           maxContentLength: MAX_CLIENT_CONTENT_LENGTH,
           signal,
         },
       );
-      if (!w.ok) {
+      if (!response.ok) {
         logStageDirectoryFailure("gated", undefined, startTime);
         return {
           ok: false,
-          error: `directory listing gated: ${w.reason}`,
+          error: `directory listing gated: ${response.reason}`,
           gated: true,
         };
       }
-      if (w.status < 200 || w.status >= 300) {
-        logStageDirectoryFailure("http", w.status, startTime);
+      if (response.status < 200 || response.status >= 300) {
+        logStageDirectoryFailure("http", response.status, startTime);
         return {
           ok: false,
-          error: `directory listing failed: http ${w.status}`,
-          status: w.status,
-          ...(w.status === 404 && {
+          error: `directory listing failed: http ${response.status}`,
+          status: response.status,
+          ...(response.status === 404 && {
             notFound: true,
           }),
         };
       }
-      let E = DIRECTORY_LISTING_SCHEMA().safeParse(w.data);
-      if (!E.success) {
-        logStageDirectoryFailure("shape", w.status, startTime);
+      let parsed = DIRECTORY_LISTING_SCHEMA().safeParse(response.data);
+      if (!parsed.success) {
+        logStageDirectoryFailure("shape", response.status, startTime);
         return {
           ok: false,
           error: "directory listing failed: unexpected answer",
-          status: w.status,
+          status: response.status,
         };
       }
-      let entries = E.data.entries ?? [];
+      let entries = parsed.data.entries ?? [];
       let sliced = entries.slice(0, limit);
       return {
         ok: true,
-        files: sliced.flatMap((R) => R.file?.path ?? []),
-        directories: sliced.flatMap((R) => R.directory?.path ?? []),
-        more: entries.length > limit || (E.data.cursor ?? "") !== "",
+        files: sliced.flatMap((entry) => entry.file?.path ?? []),
+        directories: sliced.flatMap((entry) => entry.directory?.path ?? []),
+        more: entries.length > limit || (parsed.data.cursor ?? "") !== "",
       };
     } catch (error) {
       let { kind, status, message } = requestFailure("directory listing", error);
@@ -1373,38 +1426,45 @@ async function createFilestoreClient(signal) {
   return {
     ok: true,
     reader: {
-      readBytes: d,
-      listDirectory: S,
+      readBytes,
+      listDirectory,
     },
   };
 }
 //@ chunk-rqpqwy1q.js:20148-20283 placement
-function logStageDirectoryFailure(kind, status, r) {
+function logStageDirectoryFailure(kind, status, startTime) {
   logForDiagnosticsNoPII(status === 404 ? "info" : "warn", "stage_file_directory_failed", {
     kind,
     status,
-    duration_ms: Math.round(performance.now() - r),
+    duration_ms: Math.round(performance.now() - startTime),
   });
 }
 //@ chunk-rqpqwy1q.js:20283-20416 placement
 var DIRECTORY_LISTING_SCHEMA = DoctorLazy(() =>
-  u({
+  objectSchema({
     entries: array(
-      u({
-        file: u({
-          path: string(),
+      objectSchema({
+        file: objectSchema({
+          path: stringSchema(),
         }).optional(),
-        directory: u({
-          path: string(),
+        directory: objectSchema({
+          path: stringSchema(),
         }).optional(),
       }),
     ).optional(),
-    cursor: string().optional(),
+    cursor: stringSchema().optional(),
   }),
 );
 //@ chunk-rqpqwy1q.js:20416-20506 placement
-async function fetchFilestoreBytes(e, t = {}) {
-  let filestoreClient = await createFilestoreClient(t.signal);
-  return filestoreClient.ok ? filestoreClient.reader.readBytes(e, t) : filestoreClient;
+async function fetchFilestoreBytes(path, options = {}) {
+  let filestoreClient = await createFilestoreClient(options.signal);
+  return filestoreClient.ok ? filestoreClient.reader.readBytes(path, options) : filestoreClient;
 }
-export { sweepStaleStageTmps, stageTmpStem };
+export {
+  sweepStaleStageTmps,
+  stageTmpStem,
+  addDirectoryDestFromMountPath,
+  fetchFilestoreBytes,
+  stageFile,
+  stageFileWireResult,
+};

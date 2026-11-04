@@ -40,21 +40,21 @@ function noop() {}
 class BatchedLogWriter {
   writers = new Map();
   pendingWrites = createKeyedQueue();
-  writerFor(e) {
-    let r = this.writers.get(e);
-    if (!r) {
-      let o = dirname(e);
-      let s = false;
-      r = createJsonlWriter({
-        writeFn: (n) => {
-          this.pendingWrites.run(e, async () => {
+  writerFor(filePath) {
+    let writer = this.writers.get(filePath);
+    if (!writer) {
+      let dirPath = dirname(filePath);
+      let hasLoggedDrop = false;
+      writer = createJsonlWriter({
+        writeFn: (chunk) => {
+          this.pendingWrites.run(filePath, async () => {
             try {
-              await appendToFile(o, e, n);
+              await appendToFile(dirPath, filePath, chunk);
             } catch (error) {
-              if (!s) {
-                s = true;
+              if (!hasLoggedDrop) {
+                hasLoggedDrop = true;
                 logForDebugging(
-                  `Dropping log batch for ${e}: ${error instanceof Error ? error.message : String(error)}`,
+                  `Dropping log batch for ${filePath}: ${error instanceof Error ? error.message : String(error)}`,
                 );
               }
             }
@@ -63,14 +63,14 @@ class BatchedLogWriter {
         flushIntervalMs: 1000,
         maxBufferSize: 50,
       });
-      this.writers.set(e, r);
+      this.writers.set(filePath, writer);
       registerCleanup(async () => {
-        r?.dispose();
+        writer?.dispose();
         await this.pendingWrites.settle();
       });
       registerPreExitFlush(this.flushBeforeExit);
     }
-    return r;
+    return writer;
   }
   async flush() {
     for (let writer of this.writers.values()) writer.flush();

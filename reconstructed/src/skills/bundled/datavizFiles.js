@@ -42,9 +42,10 @@ var skillText = __cc_resource_7;
 /**
  * dataviz 技能的参考文件表。
  */
-var DATAVIZ_SKILL_FILES = (e) => (typeof e === "string" ? e : e.default);
-var datavizValidatePaletteJsModule = require("./chunk-dwkc63e7.js");
-var datavizValidatePalettePyModule = require("./chunk-559xbt4k.js");
+var DATAVIZ_SKILL_FILES = (moduleValue) =>
+  typeof moduleValue === "string" ? moduleValue : moduleValue.default;
+var datavizValidatePaletteJsModule = require("./dataviz/default.lazy.js");
+var datavizValidatePalettePyModule = require("./default_5.lazy.js");
 var datavizPaletteFileContent = skillText;
 var DATAVIZ_SKILL_FILE_MAP = {
   "references/anti-patterns.md": referencesAntiPatterns,
@@ -57,3 +58,4 @@ var DATAVIZ_SKILL_FILE_MAP = {
   "scripts/validate_palette.js": DATAVIZ_SKILL_FILES(datavizValidatePaletteJsModule),
   "scripts/validate_palette.py": DATAVIZ_SKILL_FILES(datavizValidatePalettePyModule),
 };
+export { DATAVIZ_SKILL_FILE_MAP, datavizPaletteFileContent };

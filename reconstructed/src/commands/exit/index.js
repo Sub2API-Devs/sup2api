@@ -43,7 +43,7 @@ var exitNonInteractiveCommand = {
   get description() {
     return getExitDescription();
   },
-  load: () => import("./chunk-f55t9a8b.js"),
+  load: () => import("./call.lazy.js"),
 };
 var exitCommand = exitCommandDefinition;
 export { exitCommand, exitNonInteractiveCommand };

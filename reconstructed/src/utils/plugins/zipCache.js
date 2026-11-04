@@ -30,6 +30,7 @@ import { execFileNoThrow } from "../execFileNoThrow.js";
 import { logForDiagnosticsNoPII } from "../diagLogs.js";
 import { findPluginRootInExtracted } from "./commandSource.js";
 import { containsGitDirectory } from "./fileIdentity.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:608388-608444 fingerprint = isPluginZipCacheEnabled (1)
 /**
@@ -80,14 +81,14 @@ class cleanupSessionPluginCache {
   key() {
     return this.keyOf();
   }
-  existing(e) {
-    return this.statesByKey.get(e);
+  existing(key) {
+    return this.statesByKey.get(key);
   }
   current() {
-    let e = this.keyOf();
-    let n = this.statesByKey.get(e);
-    if (n) return n;
-    let r = {
+    let key = this.keyOf();
+    let state = this.statesByKey.get(key);
+    if (state) return state;
+    let newState = {
       path: null,
       promise: null,
       extractions: {
@@ -99,34 +100,37 @@ class cleanupSessionPluginCache {
       },
       cleanupHandle: null,
     };
-    this.statesByKey.set(e, r);
-    r.cleanupHandle = registerCleanup(async () => {
-      if (r.path)
+    this.statesByKey.set(key, newState);
+    newState.cleanupHandle = registerCleanup(async () => {
+      if (newState.path)
         try {
-          await rm_2(r.path, {
+          await rm_2(newState.path, {
             recursive: true,
             force: true,
           });
-          logForDebugging(`Cleaned up session plugin cache at ${r.path}`);
+          logForDebugging(`Cleaned up session plugin cache at ${newState.path}`);
         } catch (error) {
           logForDebugging(`Failed to clean up session plugin cache: ${error}`);
         }
     });
-    return r;
+    return newState;
   }
-  forget(e) {
-    let n = this.statesByKey.get(e);
-    this.statesByKey.delete(e);
-    return n;
+  forget(key) {
+    let state = this.statesByKey.get(key);
+    this.statesByKey.delete(key);
+    return state;
   }
   reset() {
-    for (let e of this.statesByKey.values()) e.cleanupHandle?.();
+    for (let state of this.statesByKey.values()) state.cleanupHandle?.();
     this.statesByKey.clear();
     this.keyOf = () => CLI_TEMP_SUBDIR;
   }
 }
 //@ chunk-e6aww6q8.js:609642-609669 layout
-var sessionPluginCacheByHost = new HostScoped(() => new cleanupSessionPluginCache());
+var sessionPluginCacheByHost; // deferred: uses cleanupSessionPluginCache of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:609642", () => {
+  sessionPluginCacheByHost = new HostScoped(() => new cleanupSessionPluginCache());
+});
 //@ chunk-e6aww6q8.js:609669-609708 layout
 function getSessionPluginCacheEntry() {
   return sessionPluginCacheByHost.of(getRootSession().host);
@@ -143,20 +147,20 @@ function getZipExtractionState() {
  * 取（必要时创建）本会话的插件解压临时目录 claude-plugin-session-<随机>，每个宿主一个。
  */
 async function getSessionPluginCachePath() {
-  let e = getSessionPluginCacheEntry().current();
-  if (e.path) return e.path;
-  if (!e.promise)
-    e.promise = (async () => {
+  let entry = getSessionPluginCacheEntry().current();
+  if (entry.path) return entry.path;
+  if (!entry.promise)
+    entry.promise = (async () => {
       let suffix = randomBytes(8).toString("hex");
       let dir = join(tmpdir(), `claude-plugin-session-${suffix}`);
       await getFsImplementation().mkdir(dir, {
         mode: 448,
       });
-      e.path = dir;
+      entry.path = dir;
       logForDebugging(`Created session plugin cache at ${dir}`);
       return dir;
     })();
-  return e.promise;
+  return entry.promise;
 }
 //@ chunk-e6aww6q8.js:610040-610106 layout
 /**
@@ -170,9 +174,9 @@ function getExistingSessionPluginCachePath() {
 /**
  * 创建父目录后原子写文件。
  */
-async function writeFileEnsuringDir(e, n) {
-  await getFsImplementation().mkdir(dirname(e));
-  await writeFileAtomic_2(e, n);
+async function writeFileEnsuringDir(filePath, data) {
+  await getFsImplementation().mkdir(dirname(filePath));
+  await writeFileAtomic_2(filePath, data);
 }
 //@ chunk-e6aww6q8.js:610169-610381 fingerprint = createZipFromDirectory (0.867)
 /**
@@ -181,7 +185,7 @@ async function writeFileEnsuringDir(e, n) {
 async function createZipFromDirectory(sourceDir) {
   let files = {};
   await collectFilesForZip(sourceDir, "", files, new Set());
-  let { zipSync } = await import("./chunk-9t1jcaah.js");
+  let { zipSync } = await import("../../../vendor/fflate/esm/index.mjs");
   let zipData = zipSync(files, {
     level: 6,
   });
@@ -245,13 +249,13 @@ async function collectFilesForZip(baseDir, relativePath, files, visited) {
 /**
  * 解压 zip 到目录（含路径安全校验与权限位恢复）。
  */
-async function extractZipToDirectory(e, targetDir, r) {
-  let files = await unzipFile(e);
-  let modes = parseZipModes(e);
+async function extractZipToDirectory(zipPath, targetDir, options) {
+  let files = await unzipFile(zipPath);
+  let modes = parseZipModes(zipPath);
   await getFsImplementation().mkdir(targetDir);
-  let y = [];
+  let writtenPaths = [];
   for (let [relPath, data] of Object.entries(files)) {
-    if (r?.skipEntry?.(relPath)) continue;
+    if (options?.skipEntry?.(relPath)) continue;
     if (relPath.endsWith("/")) {
       await getFsImplementation().mkdir(join(targetDir, relPath));
       continue;
@@ -259,17 +263,17 @@ async function extractZipToDirectory(e, targetDir, r) {
     let fullPath = join(targetDir, relPath);
     await getFsImplementation().mkdir(dirname(fullPath));
     await writeFile(fullPath, data);
-    y.push(relPath);
+    writtenPaths.push(relPath);
     let mode = modes[relPath];
     if (mode && mode & 73) await chmod(fullPath, mode & DEFAULT_FILE_MODE).catch(() => {});
   }
   logForDebugging(`Extracted ZIP to ${targetDir}: ${Object.keys(files).length} entries`);
-  return y;
+  return writtenPaths;
 }
 //@ chunk-e6aww6q8.js:611425-611593 placement
-async function publishDirectoryAsZip(sourceDir, n) {
+async function publishDirectoryAsZip(sourceDir, zipPath) {
   let zipFromDirectory = await createZipFromDirectory(sourceDir);
-  await writeFileEnsuringDir(n, zipFromDirectory);
+  await writeFileEnsuringDir(zipPath, zipFromDirectory);
   await removeDirectoryTreeNoFollow_2(sourceDir).catch((error) => {
     logForDebugging(
       `Failed to remove ${sourceDir} after publishing its zip archive: ${errorMessage(error)}`,
@@ -298,19 +302,22 @@ var MAX_ZIP_PATH_SEGMENTS = 16;
 var MAX_ZIP_PATH_LENGTH = 128;
 var MAX_ZIP_FILE_MODE = 32;
 //@ chunk-e6aww6q8.js:612985-613279 placement
-async function stripGroupOtherWrite(e, n, r) {
-  if ((n & 18) === 0) return true;
-  let s = await open(
-    e,
-    constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK | (r ? constants.O_DIRECTORY : 0),
+async function stripGroupOtherWrite(filePath, mode, isDirectory) {
+  if ((mode & 18) === 0) return true;
+  let handle = await open(
+    filePath,
+    constants.O_RDONLY |
+      constants.O_NOFOLLOW |
+      constants.O_NONBLOCK |
+      (isDirectory ? constants.O_DIRECTORY : 0),
   );
   try {
-    let stats = await s.stat();
-    if (!(r ? stats.isDirectory() : stats.isFile() && stats.nlink === 1)) return false;
-    if ((stats.mode & 18) !== 0) await s.chmod(stats.mode & DEFAULT_FILE_MODE);
+    let stats = await handle.stat();
+    if (!(isDirectory ? stats.isDirectory() : stats.isFile() && stats.nlink === 1)) return false;
+    if ((stats.mode & 18) !== 0) await handle.chmod(stats.mode & DEFAULT_FILE_MODE);
     return true;
   } finally {
-    await s.close();
+    await handle.close();
   }
 }
 //@ chunk-e6aww6q8.js:613279-613483 placement
@@ -318,12 +325,12 @@ class ModeMasker {
   inFlight = 0;
   peak = 0;
   maskEntry;
-  constructor(e) {
-    this.maskEntry = limitConcurrency(e, async (n, r, s) => {
+  constructor(concurrency) {
+    this.maskEntry = limitConcurrency(concurrency, async (filePath, mode, isDirectory) => {
       this.inFlight++;
       this.peak = Math.max(this.peak, this.inFlight);
       try {
-        return await stripGroupOtherWrite(n, r, s);
+        return await stripGroupOtherWrite(filePath, mode, isDirectory);
       } finally {
         this.inFlight--;
       }
@@ -331,7 +338,10 @@ class ModeMasker {
   }
 }
 //@ chunk-e6aww6q8.js:613483-613515 placement
-var modeMasker = new HostScoped(() => new ModeMasker(MAX_ZIP_PATH_LENGTH));
+var modeMasker; // deferred: uses ModeMasker of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:613483", () => {
+  modeMasker = new HostScoped(() => new ModeMasker(MAX_ZIP_PATH_LENGTH));
+});
 //@ chunk-e6aww6q8.js:613515-613545 placement
 function currentModeMasker() {
   return onProcessRootHost(modeMasker);
@@ -340,100 +350,103 @@ function currentModeMasker() {
 /**
  * 检查压缩包条目（过大、被篡改、符号链接、保留名）。
  */
-async function checkZipEntry(e, n = MAX_ZIP_ENTRY_SPILL_BYTES) {
-  let r = 0;
-  let s;
-  let h = limitConcurrency(MAX_ZIP_FILE_MODE, currentModeMasker().maskEntry);
-  async function y(L) {
-    for (let G = 0; G < L.length && !s; G += MAX_ZIP_ENTRIES) {
-      let sliced = L.slice(G, G + MAX_ZIP_ENTRIES);
+async function checkZipEntry(rootDir, maxBytes = MAX_ZIP_ENTRY_SPILL_BYTES) {
+  let totalBytes = 0;
+  let failure;
+  let maskEntry = limitConcurrency(MAX_ZIP_FILE_MODE, currentModeMasker().maskEntry);
+  async function checkFiles(paths) {
+    for (let index = 0; index < paths.length && !failure; index += MAX_ZIP_ENTRIES) {
+      let sliced = paths.slice(index, index + MAX_ZIP_ENTRIES);
       let results = await Promise.all(
-        sliced.map(async (ke) => ({
-          path: ke,
-          stat: await lstat(ke),
+        sliced.map(async (path) => ({
+          path,
+          stat: await lstat(path),
         })),
       );
       for (let { stat } of results) {
-        r += stat.size;
-        if (r > n) {
-          s = "oversize";
+        totalBytes += stat.size;
+        if (totalBytes > maxBytes) {
+          failure = "oversize";
           return;
         }
         if (!stat.isFile()) {
-          s = "tampered";
+          failure = "tampered";
           return;
         }
       }
       if (
         (
           await Promise.all(
-            results.map(({ path, stat }) => ((stat.mode & 18) === 0 ? true : h(path, stat.mode, false))),
+            results.map(({ path, stat }) =>
+              (stat.mode & 18) === 0 ? true : maskEntry(path, stat.mode, false),
+            ),
           )
         ).includes(false)
       ) {
-        s = "tampered";
+        failure = "tampered";
         return;
       }
     }
   }
-  async function S(L) {
-    for (let G = 0; G < L.length && !s; G += MAX_ZIP_PATH_SEGMENTS)
-      await Promise.all(L.slice(G, G + MAX_ZIP_PATH_SEGMENTS).map(w));
+  async function checkDirs(paths) {
+    for (let index = 0; index < paths.length && !failure; index += MAX_ZIP_PATH_SEGMENTS)
+      await Promise.all(paths.slice(index, index + MAX_ZIP_PATH_SEGMENTS).map(checkDir));
   }
-  async function w(L) {
-    if (s) return;
-    let [G, q] = await Promise.all([
-      lstat(L),
-      readdir(L, {
+  async function checkDir(dirPath) {
+    if (failure) return;
+    let [dirStats, dirents] = await Promise.all([
+      lstat(dirPath),
+      readdir(dirPath, {
         withFileTypes: true,
       }),
     ]);
-    if (!G.isDirectory() || !(await h(L, G.mode, true))) {
-      s = "tampered";
+    if (!dirStats.isDirectory() || !(await maskEntry(dirPath, dirStats.mode, true))) {
+      failure = "tampered";
       return;
     }
-    let Z = [];
-    let Se = [];
-    for (let ke of q) {
-      if (ke.isSymbolicLink()) {
-        s = "symlink";
+    let childDirs = [];
+    let childFiles = [];
+    for (let dirent of dirents) {
+      if (dirent.isSymbolicLink()) {
+        failure = "symlink";
         return;
       }
-      if (isGitDirName(ke.name)) {
-        s = "reserved";
+      if (isGitDirName(dirent.name)) {
+        failure = "reserved";
         return;
       }
-      if (ke.isDirectory()) Z.push(join(L, ke.name));
-      else Se.push(join(L, ke.name));
+      if (dirent.isDirectory()) childDirs.push(join(dirPath, dirent.name));
+      else childFiles.push(join(dirPath, dirent.name));
     }
-    if (s) return;
-    await Promise.all([y(Se), S(Z)]);
+    if (failure) return;
+    await Promise.all([checkFiles(childFiles), checkDirs(childDirs)]);
   }
-  await w(e);
-  return s ?? "ok";
+  await checkDir(rootDir);
+  return failure ?? "ok";
 }
 //@ chunk-e6aww6q8.js:614489-614665 placement
-async function chmodTreeOwnerOnly(e) {
-  await chmod(e, 448);
-  for (let n of await readdir(e, {
+async function chmodTreeOwnerOnly(dirPath) {
+  await chmod(dirPath, 448);
+  for (let nameBuffer of await readdir(dirPath, {
     encoding: "buffer",
   })) {
-    let buffer = Buffer.concat([e, Buffer.from(sep), n]);
+    let buffer = Buffer.concat([dirPath, Buffer.from(sep), nameBuffer]);
     if ((await lstat(buffer)).isDirectory()) await chmodTreeOwnerOnly(buffer);
   }
 }
 //@ chunk-e6aww6q8.js:614665-614880 placement
-async function removeTreeForcing(e) {
+async function removeTreeForcing(dirPath) {
   try {
-    await rm_2(e, {
+    await rm_2(dirPath, {
       recursive: true,
       force: true,
     });
   } catch (error) {
     let errnoCode = getErrnoCode(error);
-    if ((errnoCode !== "EACCES" && errnoCode !== "EPERM") || !(await lstat(e)).isDirectory()) throw error;
-    await chmodTreeOwnerOnly(Buffer.from(e));
-    await rm_2(e, {
+    if ((errnoCode !== "EACCES" && errnoCode !== "EPERM") || !(await lstat(dirPath)).isDirectory())
+      throw error;
+    await chmodTreeOwnerOnly(Buffer.from(dirPath));
+    await rm_2(dirPath, {
       recursive: true,
       force: true,
     });
@@ -443,58 +456,59 @@ async function removeTreeForcing(e) {
 /**
  * 解压插件缓存压缩包。
  */
-async function unzipPluginCache(e, n) {
-  await removeTreeForcing(n);
-  await mkdir(dirname(n), {
+async function unzipPluginCache(zipPath, targetDir) {
+  await removeTreeForcing(targetDir);
+  await mkdir(dirname(targetDir), {
     recursive: true,
   });
-  await mkdir(n, {
+  await mkdir(targetDir, {
     mode: 448,
   });
-  let r = join(n, `unzip-${randomBytes(8).toString("hex")}`);
-  await mkdir(r, {
+  let stagingDir = join(targetDir, `unzip-${randomBytes(8).toString("hex")}`);
+  await mkdir(stagingDir, {
     mode: 448,
   });
-  let s = await execFileNoThrow("unzip", ["-q", "-o", e, "-d", r], {
+  let unzipResult = await execFileNoThrow("unzip", ["-q", "-o", zipPath, "-d", stagingDir], {
     useCwd: true,
     stdin: "ignore",
     stdout: "ignore",
     stderr: "ignore",
     waitForExitAfterKill: true,
   });
-  let h = s.code === 0 ? await checkZipEntry(r).catch(() => "walk_failed") : "unzip_failed";
-  let y = r;
-  if (h !== "ok") {
+  let verdict =
+    unzipResult.code === 0 ? await checkZipEntry(stagingDir).catch(() => "walk_failed") : "unzip_failed";
+  let extractRoot = stagingDir;
+  if (verdict !== "ok") {
     logForDiagnosticsNoPII("info", "plugins_sync_unzip_fallback", {
-      code: s.code,
-      verdict: h,
+      code: unzipResult.code,
+      verdict,
     });
-    await removeTreeForcing(r).catch((error) => {
+    await removeTreeForcing(stagingDir).catch((error) => {
       logForDiagnosticsNoPII("info", "plugins_sync_unzip_dir_remove_failed", {
         code: getErrnoCode(error),
       });
     });
-    y = join(n, `fallback-${randomBytes(8).toString("hex")}`);
-    await readAndUnzipFile(e, y, {
-      skipEntry: (w) => w.split(/[\\/]/).some(isGitDirName),
+    extractRoot = join(targetDir, `fallback-${randomBytes(8).toString("hex")}`);
+    await readAndUnzipFile(zipPath, extractRoot, {
+      skipEntry: (relPath) => relPath.split(/[\\/]/).some(isGitDirName),
     });
   } else
     try {
-      await chmod(r, (await stat(dirname(n))).mode & DEFAULT_FILE_MODE);
+      await chmod(stagingDir, (await stat(dirname(targetDir))).mode & DEFAULT_FILE_MODE);
     } catch (error) {
       logForDiagnosticsNoPII("info", "plugins_sync_staging_reopen_failed", {
         code: getErrnoCode(error),
       });
     }
-  let pluginRootInExtracted = await findPluginRootInExtracted(y);
-  if (await containsGitDirectory(pluginRootInExtracted))
+  let rootDir = await findPluginRootInExtracted(extractRoot);
+  if (await containsGitDirectory(rootDir))
     return {
       ok: false,
       reason: "bare_repo_layout",
     };
   return {
     ok: true,
-    root: pluginRootInExtracted,
+    root: rootDir,
   };
 }
 export {

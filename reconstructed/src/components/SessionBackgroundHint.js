@@ -8,12 +8,12 @@
  * pieces: chunk-18hwfzwa.js (7)
  * attribution: sole-consumer 2, affinity 1, fingerprint 2, layout 2
  */
-import { w } from "../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import { useAppStoreDirect, useAppState } from "../state/AppState.js";
 import { useSetVoiceState } from "../context/voice.js";
 import { useTheme_2 } from "./design-system/ThemeProvider.js";
 import { useNotifications } from "../context/notifications.js";
-import { y, R } from "../../vendor/react/cjs/react.production.js";
+import { useState, useRef } from "../../vendor/react/cjs/react.production.js";
 import { useDoublePress } from "../keybindings/useActionHandlers.js";
 import { isBackgroundTasksOff } from "../tools/AgentTool/backgroundGates.js";
 import { getRemoteCaps, isRemoteControlChannelAvailable } from "../remote/remoteMode.js";
@@ -37,8 +37,8 @@ function selectRemoteConnectionStatus_2(s) {
   return s.remoteConnectionStatus;
 }
 //@ chunk-18hwfzwa.js:978680-978732 sole-consumer
-function selectRemoteWorkerReportedGone(No) {
-  return No.remoteWorkerReportedGone;
+function selectRemoteWorkerReportedGone(state) {
+  return state.remoteWorkerReportedGone;
 }
 //@ chunk-18hwfzwa.js:978732-978748 affinity
 function noop_5() {}
@@ -52,27 +52,28 @@ function markBackgroundTaskHintSeen(c) {
       };
 }
 //@ chunk-18hwfzwa.js:978833-978881 layout
-function selectRemoteForegroundTask(Yo) {
-  return Yo.remoteForegroundTask;
+function selectRemoteForegroundTask(state) {
+  return state.remoteForegroundTask;
 }
 //@ chunk-18hwfzwa.js:978881-978895 layout
 var BACKGROUND_TASKS_TIMEOUT_MS = 15000;
 //@ chunk-18hwfzwa.js:978895-981168 fingerprint = SessionBackgroundHint (0.451)
 function SessionBackgroundHint(props) {
-  let $ = w(23);
+  let $ = useMemoCache(23);
   let { onBackgroundSession, isLoading } = props;
   let setAppState = useAppStoreDirect();
   let appStateStore = useSetVoiceState();
   let { storageV5 } = useTheme_2();
   let { addNotification } = useNotifications();
-  let [Be, He] = y(false);
-  let We = R(false);
-  let [ze, Xe] = y(false);
+  let [isDoublePressed, setIsDoublePressed] = useState(false);
+  let inFlightRef = useRef(false);
+  let [isTasksDisabled, setIsTasksDisabled] = useState(false);
   let remoteConnectionStatus = useAppState(selectRemoteConnectionStatus_2);
   let remoteWorkerReportedGone = useAppState(selectRemoteWorkerReportedGone);
-  if (ze && (remoteConnectionStatus !== "connected" || remoteWorkerReportedGone)) Xe(false);
-  let handleDoublePress = useDoublePress(He, onBackgroundSession, noop_5);
-  let Ot;
+  if (isTasksDisabled && (remoteConnectionStatus !== "connected" || remoteWorkerReportedGone))
+    setIsTasksDisabled(false);
+  let handleDoublePress = useDoublePress(setIsDoublePressed, onBackgroundSession, noop_5);
+  let handleBackground;
   if (
     $[0] !== addNotification ||
     $[1] !== setAppState ||
@@ -81,7 +82,7 @@ function SessionBackgroundHint(props) {
     $[4] !== storageV5 ||
     $[5] !== appStateStore
   ) {
-    Ot = () => {
+    handleBackground = () => {
       if (isBackgroundTasksOff()) {
         return;
       }
@@ -89,8 +90,8 @@ function SessionBackgroundHint(props) {
       let remoteCaps = getRemoteCaps();
       if (remoteCaps === null ? hasForegroundTasks(state) : state.remoteForegroundTask !== "none") {
         if (remoteCaps === null) backgroundAll(appStateStore);
-        else if (!We.current) {
-          We.current = true;
+        else if (!inFlightRef.current) {
+          inFlightRef.current = true;
           withOutcomeTelemetry("remote_background_tasks", () =>
             remoteCaps.sendControlRequest(
               {
@@ -102,17 +103,17 @@ function SessionBackgroundHint(props) {
             ),
           )
             .catch((error) => {
-              let oo = classifyControlRequestError(error);
-              if (errorMessage(error) === BACKGROUND_TASKS_DISABLED_MESSAGE) Xe(true);
+              let failureKind = classifyControlRequestError(error);
+              if (errorMessage(error) === BACKGROUND_TASKS_DISABLED_MESSAGE) setIsTasksDisabled(true);
               addNotification({
                 key: "remote-background-failed",
                 kind: "warning",
                 color: "warning",
                 priority: "high",
                 text:
-                  oo === "timeout" || oo === "disconnected"
+                  failureKind === "timeout" || failureKind === "disconnected"
                     ? "The session didn't answer. This may still move to the background."
-                    : oo === "server_error"
+                    : failureKind === "server_error"
                       ? `Couldn't move this to the background: ${sanitizeDisplayText(errorMessage(error), {
                           maxCodeUnits: MAX_TITLE_LENGTH,
                         })}`
@@ -120,7 +121,7 @@ function SessionBackgroundHint(props) {
               });
             })
             .finally(() => {
-              We.current = false;
+              inFlightRef.current = false;
             });
         }
         if (!getGlobalConfig().hasUsedBackgroundTask) saveGlobalConfig(markBackgroundTaskHintSeen, storageV5);
@@ -132,59 +133,59 @@ function SessionBackgroundHint(props) {
     $[3] = isLoading;
     $[4] = storageV5;
     $[5] = appStateStore;
-    $[6] = Ot;
-  } else Ot = $[6];
-  let handler = Ot;
+    $[6] = handleBackground;
+  } else handleBackground = $[6];
+  let handler = handleBackground;
   let hasForeground = useAppState(hasForegroundTasks);
   let remoteForegroundTask = useAppState(selectRemoteForegroundTask);
-  let po;
+  let debugFlag;
   if ($[7] === MEMO_CACHE_SENTINEL) {
-    po = isEnvTruthy("false");
-    $[7] = po;
-  } else po = $[7];
-  let ao = po;
-  let co;
+    debugFlag = isEnvTruthy("false");
+    $[7] = debugFlag;
+  } else debugFlag = $[7];
+  let debugFlagMemo = debugFlag;
+  let isActive;
   if (
     $[8] !== hasForeground ||
     $[9] !== isLoading ||
     $[10] !== remoteForegroundTask ||
     $[11] !== remoteWorkerReportedGone ||
-    $[12] !== ze
+    $[12] !== isTasksDisabled
   ) {
-    co =
+    isActive =
       getRemoteCaps() === null
-        ? hasForeground || (ao && isLoading)
+        ? hasForeground || (debugFlagMemo && isLoading)
         : (remoteForegroundTask === "seeded" || (remoteForegroundTask === "in_turn" && isLoading)) &&
           !remoteWorkerReportedGone &&
-          !ze &&
+          !isTasksDisabled &&
           isRemoteControlChannelAvailable() &&
           !isBackgroundTasksOff();
     $[8] = hasForeground;
     $[9] = isLoading;
     $[10] = remoteForegroundTask;
     $[11] = remoteWorkerReportedGone;
-    $[12] = ze;
-    $[13] = co;
-  } else co = $[13];
-  let bo = co;
-  let Ao;
-  if ($[14] !== bo || $[15] !== handler) {
-    Ao = {
+    $[12] = isTasksDisabled;
+    $[13] = isActive;
+  } else isActive = $[13];
+  let isActiveMemo = isActive;
+  let hintProps;
+  if ($[14] !== isActiveMemo || $[15] !== handler) {
+    hintProps = {
       handler,
-      isActive: bo,
+      isActive: isActiveMemo,
     };
-    $[14] = bo;
+    $[14] = isActiveMemo;
     $[15] = handler;
-    $[16] = Ao;
-  } else Ao = $[16];
-  let { cohesionFixes, gateOnShortcut } = BackgroundTaskHint(Ao);
+    $[16] = hintProps;
+  } else hintProps = $[16];
+  let { cohesionFixes, gateOnShortcut } = BackgroundTaskHint(hintProps);
   let baseShortcut = useShortcutDisplay_2("task:background", "Task", "ctrl+b");
   let shortcut = cohesionFixes
     ? gateOnShortcut
     : env.terminal === "tmux" && baseShortcut === "ctrl+b"
       ? "ctrl+b ctrl+b"
       : baseShortcut;
-  if (getRemoteCaps() !== null && bo && shortcut !== "") {
+  if (getRemoteCaps() !== null && isActiveMemo && shortcut !== "") {
     let format;
     if ($[17] === MEMO_CACHE_SENTINEL) {
       format = {
@@ -192,9 +193,9 @@ function SessionBackgroundHint(props) {
       };
       $[17] = format;
     } else format = $[17];
-    let mn;
+    let hintBox;
     if ($[18] !== shortcut) {
-      mn = jsxProd_default(Box, {
+      hintBox = jsxProd_default(Box, {
         paddingLeft: 2,
         children: jsxProd_default(Text, {
           dimColor: true,
@@ -206,11 +207,11 @@ function SessionBackgroundHint(props) {
         }),
       });
       $[18] = shortcut;
-      $[19] = mn;
-    } else mn = $[19];
-    return mn;
+      $[19] = hintBox;
+    } else hintBox = $[19];
+    return hintBox;
   }
-  if (!isLoading || !Be || (cohesionFixes && shortcut === "")) {
+  if (!isLoading || !isDoublePressed || (cohesionFixes && shortcut === "")) {
     return null;
   }
   let format;
@@ -220,9 +221,9 @@ function SessionBackgroundHint(props) {
     };
     $[20] = format;
   } else format = $[20];
-  let mn;
+  let hintBox;
   if ($[21] !== shortcut) {
-    mn = jsxProd_default(Box, {
+    hintBox = jsxProd_default(Box, {
       paddingLeft: 2,
       children: jsxProd_default(Text, {
         dimColor: true,
@@ -234,8 +235,8 @@ function SessionBackgroundHint(props) {
       }),
     });
     $[21] = shortcut;
-    $[22] = mn;
-  } else mn = $[22];
-  return mn;
+    $[22] = hintBox;
+  } else hintBox = $[22];
+  return hintBox;
 }
 export { SessionBackgroundHint };

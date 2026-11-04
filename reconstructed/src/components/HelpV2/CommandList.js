@@ -16,7 +16,7 @@ import {
 } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Text, Box } from "../../ink/components/Text.js";
 import { OrderedListWithItem } from "../CustomSelect/selectTable.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { useIsScreenReaderEnabled } from "../../ink/components/ErrorBoundary.js";
 import { HintText } from "../design-system/HintText.js";
 import { useTabHeaderFocus } from "../design-system/Tabs.js";
@@ -27,35 +27,35 @@ init_react_production();
 //@ chunk-yxcx2jtr.js:14078-14082 placement
 init_react_production();
 //@ chunk-yxcx2jtr.js:14082-14173 placement
-function renderNumberedCommand(R, x) {
+function renderNumberedCommand(command, index) {
   return jsxProd_default_2(
     Text,
     {
-      children: [x + 1, ". ", R.label, " \u2014 ", R.description],
+      children: [index + 1, ". ", command.label, " \u2014 ", command.description],
     },
-    R.name,
+    command.name,
   );
 }
 //@ chunk-yxcx2jtr.js:14173-14255 placement
-function renderCommandItem(M) {
+function renderCommandItem(item) {
   return jsxProd_default(
     OrderedListWithItem.Item,
     {
-      label: M.label,
-      description: M.description,
+      label: item.label,
+      description: item.description,
     },
-    M.name,
+    item.name,
   );
 }
 //@ chunk-yxcx2jtr.js:14255-14336 placement
-function renderCommandItemCompact(ls) {
+function renderCommandItemCompact(item) {
   return jsxProd_default(
     OrderedListWithItem.Item,
     {
-      label: ls.label,
-      meta: [ls.description],
+      label: item.label,
+      meta: [item.description],
     },
-    ls.name,
+    item.name,
   );
 }
 //@ chunk-yxcx2jtr.js:14336-14731 placement
@@ -63,16 +63,22 @@ function renderCommandItemCompact(ls) {
  * /help 的命令标签页：无命令时显示空提示，否则显示标题与命令列表。
  */
 function CommandsTab(props) {
-  let o = w(6);
+  let $ = useMemoCache(6);
   let { commands, maxHeight, title, emptyMessage } = props;
   useIsScreenReaderEnabled();
-  let m = commands.length === 0 && emptyMessage !== undefined;
-  let l;
-  if (o[0] !== commands || o[1] !== emptyMessage || o[2] !== m || o[3] !== maxHeight || o[4] !== title) {
-    l = jsxProd_default(Box, {
+  let isEmpty = commands.length === 0 && emptyMessage !== undefined;
+  let content;
+  if (
+    $[0] !== commands ||
+    $[1] !== emptyMessage ||
+    $[2] !== isEmpty ||
+    $[3] !== maxHeight ||
+    $[4] !== title
+  ) {
+    content = jsxProd_default(Box, {
       flexDirection: "column",
       paddingY: 1,
-      children: m
+      children: isEmpty
         ? jsxProd_default(HintText, {
             children: emptyMessage,
           })
@@ -91,21 +97,21 @@ function CommandsTab(props) {
             ],
           }),
     });
-    o[0] = commands;
-    o[1] = emptyMessage;
-    o[2] = m;
-    o[3] = maxHeight;
-    o[4] = title;
-    o[5] = l;
-  } else l = o[5];
-  return l;
+    $[0] = commands;
+    $[1] = emptyMessage;
+    $[2] = isEmpty;
+    $[3] = maxHeight;
+    $[4] = title;
+    $[5] = content;
+  } else content = $[5];
+  return content;
 }
 //@ chunk-yxcx2jtr.js:14731-15314 placement
 /**
  * 命令列表：去重排序后渲染；读屏模式下为纯列表，否则为可滚动的有序列表（向上可回到标签头）。
  */
 function CommandList(props) {
-  let $ = w(13);
+  let $ = useMemoCache(13);
   let { commands, maxHeight } = props;
   let { headerFocused, focusHeader } = useTabHeaderFocus();
   let visibleCount = 2 * Math.max(1, Math.floor((maxHeight - 10) / 2));
@@ -141,9 +147,9 @@ function CommandList(props) {
     $[6] = items;
     $[7] = children;
   } else children = $[7];
-  let h;
+  let list;
   if ($[8] !== focusHeader || $[9] !== headerFocused || $[10] !== children || $[11] !== visibleCount) {
-    h = jsxProd_default(OrderedListWithItem, {
+    list = jsxProd_default(OrderedListWithItem, {
       visibleCount,
       onUpFromFirstItem: focusHeader,
       isDisabled: headerFocused,
@@ -153,24 +159,24 @@ function CommandList(props) {
     $[9] = headerFocused;
     $[10] = children;
     $[11] = visibleCount;
-    $[12] = h;
-  } else h = $[12];
-  return h;
+    $[12] = list;
+  } else list = $[12];
+  return list;
 }
 //@ chunk-yxcx2jtr.js:15314-15530 placement
 function toCommandItems(commands) {
-  let a = new Set();
+  let seenNames = new Set();
   return commands
-    .filter((t) => {
-      if (a.has(t.name)) return false;
-      a.add(t.name);
+    .filter((command) => {
+      if (seenNames.has(command.name)) return false;
+      seenNames.add(command.name);
       return true;
     })
-    .sort((t, i) => t.name.localeCompare(i.name))
-    .map((t) => ({
-      name: t.name,
-      label: `/${t.name}`,
-      description: formatDescriptionWithSource(t, getHumanFacingDescription(t)),
+    .sort((commandA, commandB) => commandA.name.localeCompare(commandB.name))
+    .map((command) => ({
+      name: command.name,
+      label: `/${command.name}`,
+      description: formatDescriptionWithSource(command, getHumanFacingDescription(command)),
     }));
 }
 export { CommandsTab };

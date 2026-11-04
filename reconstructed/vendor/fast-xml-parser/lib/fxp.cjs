@@ -5,35 +5,35 @@
  * pieces: chunk-edce4vxq.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../runtime/bun-runtime.js";
 
 //@ chunk-edce4vxq.js:26640-73699 cjs-fingerprint
-var require_fxp = x(function (cjsExports, cjsModule) {
+var require_fxp = __commonJS(function (cjsExports, cjsModule) {
   (() => {
     var __webpack_require__ = {
-      d: (n, definition) => {
+      d: (webpackRequire, definition) => {
         for (var key in definition)
-          if (__webpack_require__.o(definition, key) && !__webpack_require__.o(n, key))
-            Object.defineProperty(n, key, {
+          if (__webpack_require__.o(definition, key) && !__webpack_require__.o(webpackRequire, key))
+            Object.defineProperty(webpackRequire, key, {
               enumerable: true,
               get: definition[key],
             });
       },
       o: (obj, prop) => Object.prototype.hasOwnProperty.call(obj, prop),
-      r: (n) => {
+      r: (webpackModule) => {
         if (typeof Symbol !== "undefined" && Symbol.toStringTag)
-          Object.defineProperty(n, Symbol.toStringTag, {
+          Object.defineProperty(webpackModule, Symbol.toStringTag, {
             value: "Module",
           });
-        Object.defineProperty(n, "__esModule", {
+        Object.defineProperty(webpackModule, "__esModule", {
           value: true,
         });
       },
     };
-    var t = {};
-    __webpack_require__.r(t);
-    __webpack_require__.d(t, {
-      XMLBuilder: () => to,
+    var webpackExports = {};
+    __webpack_require__.r(webpackExports);
+    __webpack_require__.d(webpackExports, {
+      XMLBuilder: () => XMLBuilder,
       XMLParser: () => XMLParser,
       XMLValidator: () => XMLValidator,
     });
@@ -125,12 +125,12 @@ var require_fxp = x(function (cjsExports, cjsModule) {
                 i--;
               }
               if (!validateTagName(tagName)) {
-                let C;
-                C =
+                let error;
+                error =
                   tagName.trim().length === 0
                     ? "Invalid space after '<'."
                     : "Tag '" + tagName + "' is an invalid name.";
-                return getErrorObject("InvalidTag", C, getLineNumberForPosition(xmlData, i));
+                return getErrorObject("InvalidTag", error, getLineNumberForPosition(xmlData, i));
               }
               let result = readAttributeStr(xmlData, i);
               if (result === false)
@@ -265,94 +265,94 @@ var require_fxp = x(function (cjsExports, cjsModule) {
             )
         : getErrorObject("InvalidXml", "Start tag expected.", 1);
     }
-    function isWhiteSpace(n) {
+    function isWhiteSpace(char) {
       return (
-        n === " " ||
-        n === "\t" ||
-        n ===
+        char === " " ||
+        char === "\t" ||
+        char ===
           `
 ` ||
-        n === "\r"
+        char === "\r"
       );
     }
-    function readPI(xmlData, i) {
-      let start = i;
-      for (; i < xmlData.length; i++)
-        if (xmlData[i] == "?" || xmlData[i] == " ") {
-          let tagname = xmlData.substr(start, i - start);
-          if (i > 5 && tagname === "xml")
+    function readPI(xmlData, scanPos) {
+      let start = scanPos;
+      for (; scanPos < xmlData.length; scanPos++)
+        if (xmlData[scanPos] == "?" || xmlData[scanPos] == " ") {
+          let tagname = xmlData.substr(start, scanPos - start);
+          if (scanPos > 5 && tagname === "xml")
             return getErrorObject(
               "InvalidXml",
               "XML declaration allowed only at the start of the document.",
-              getLineNumberForPosition(xmlData, i),
+              getLineNumberForPosition(xmlData, scanPos),
             );
-          if (xmlData[i] == "?" && xmlData[i + 1] == ">") {
-            i++;
+          if (xmlData[scanPos] == "?" && xmlData[scanPos + 1] == ">") {
+            scanPos++;
             break;
           }
           continue;
         }
-      return i;
+      return scanPos;
     }
-    function readCommentAndCDATA(xmlData, i) {
-      if (xmlData.length > i + 5 && xmlData[i + 1] === "-" && xmlData[i + 2] === "-") {
-        for (i += 3; i < xmlData.length; i++)
-          if (xmlData[i] === "-" && xmlData[i + 1] === "-" && xmlData[i + 2] === ">") {
-            i += 2;
+    function readCommentAndCDATA(xmlData, scanPos) {
+      if (xmlData.length > scanPos + 5 && xmlData[scanPos + 1] === "-" && xmlData[scanPos + 2] === "-") {
+        for (scanPos += 3; scanPos < xmlData.length; scanPos++)
+          if (xmlData[scanPos] === "-" && xmlData[scanPos + 1] === "-" && xmlData[scanPos + 2] === ">") {
+            scanPos += 2;
             break;
           }
       } else if (
-        xmlData.length > i + 8 &&
-        xmlData[i + 1] === "D" &&
-        xmlData[i + 2] === "O" &&
-        xmlData[i + 3] === "C" &&
-        xmlData[i + 4] === "T" &&
-        xmlData[i + 5] === "Y" &&
-        xmlData[i + 6] === "P" &&
-        xmlData[i + 7] === "E"
+        xmlData.length > scanPos + 8 &&
+        xmlData[scanPos + 1] === "D" &&
+        xmlData[scanPos + 2] === "O" &&
+        xmlData[scanPos + 3] === "C" &&
+        xmlData[scanPos + 4] === "T" &&
+        xmlData[scanPos + 5] === "Y" &&
+        xmlData[scanPos + 6] === "P" &&
+        xmlData[scanPos + 7] === "E"
       ) {
         let angleBracketsCount = 1;
-        for (i += 8; i < xmlData.length; i++)
-          if (xmlData[i] === "<") angleBracketsCount++;
-          else if (xmlData[i] === ">" && (angleBracketsCount--, angleBracketsCount === 0)) break;
+        for (scanPos += 8; scanPos < xmlData.length; scanPos++)
+          if (xmlData[scanPos] === "<") angleBracketsCount++;
+          else if (xmlData[scanPos] === ">" && (angleBracketsCount--, angleBracketsCount === 0)) break;
       } else if (
-        xmlData.length > i + 9 &&
-        xmlData[i + 1] === "[" &&
-        xmlData[i + 2] === "C" &&
-        xmlData[i + 3] === "D" &&
-        xmlData[i + 4] === "A" &&
-        xmlData[i + 5] === "T" &&
-        xmlData[i + 6] === "A" &&
-        xmlData[i + 7] === "["
+        xmlData.length > scanPos + 9 &&
+        xmlData[scanPos + 1] === "[" &&
+        xmlData[scanPos + 2] === "C" &&
+        xmlData[scanPos + 3] === "D" &&
+        xmlData[scanPos + 4] === "A" &&
+        xmlData[scanPos + 5] === "T" &&
+        xmlData[scanPos + 6] === "A" &&
+        xmlData[scanPos + 7] === "["
       ) {
-        for (i += 8; i < xmlData.length; i++)
-          if (xmlData[i] === "]" && xmlData[i + 1] === "]" && xmlData[i + 2] === ">") {
-            i += 2;
+        for (scanPos += 8; scanPos < xmlData.length; scanPos++)
+          if (xmlData[scanPos] === "]" && xmlData[scanPos + 1] === "]" && xmlData[scanPos + 2] === ">") {
+            scanPos += 2;
             break;
           }
       }
-      return i;
+      return scanPos;
     }
     let doubleQuote = '"';
     let singleQuote = "'";
-    function readAttributeStr(xmlData, i) {
+    function readAttributeStr(xmlData, scanPos) {
       let attrStr = "";
       let startChar = "";
       let tagClosed = false;
-      for (; i < xmlData.length; i++) {
-        if (xmlData[i] === doubleQuote || xmlData[i] === singleQuote) {
-          if (startChar === "") startChar = xmlData[i];
-          else if (!(startChar !== xmlData[i])) startChar = "";
-        } else if (xmlData[i] === ">" && startChar === "") {
+      for (; scanPos < xmlData.length; scanPos++) {
+        if (xmlData[scanPos] === doubleQuote || xmlData[scanPos] === singleQuote) {
+          if (startChar === "") startChar = xmlData[scanPos];
+          else if (!(startChar !== xmlData[scanPos])) startChar = "";
+        } else if (xmlData[scanPos] === ">" && startChar === "") {
           tagClosed = true;
           break;
         }
-        attrStr += xmlData[i];
+        attrStr += xmlData[scanPos];
       }
       return (
         startChar === "" && {
           value: attrStr,
-          index: i,
+          index: scanPos,
           tagClosed,
         }
       );
@@ -397,9 +397,9 @@ var require_fxp = x(function (cjsExports, cjsModule) {
       }
       return true;
     }
-    function validateAmpersand(xmlData, i) {
-      if (xmlData[++i] === ";") return -1;
-      if (xmlData[i] === "#")
+    function validateAmpersand(xmlData, scanPos) {
+      if (xmlData[++scanPos] === ";") return -1;
+      if (xmlData[scanPos] === "#")
         return (function (xmlData, i) {
           let re = /\d/;
           for (xmlData[i] === "x" && (i++, (re = /[\da-fA-F]/)); i < xmlData.length; i++) {
@@ -407,14 +407,14 @@ var require_fxp = x(function (cjsExports, cjsModule) {
             if (!xmlData[i].match(re)) break;
           }
           return -1;
-        })(xmlData, ++i);
+        })(xmlData, ++scanPos);
       let count = 0;
-      for (; i < xmlData.length; i++, count++)
-        if (!(xmlData[i].match(/\w/) && count < 20)) {
-          if (xmlData[i] === ";") break;
+      for (; scanPos < xmlData.length; scanPos++, count++)
+        if (!(xmlData[scanPos].match(/\w/) && count < 20)) {
+          if (xmlData[scanPos] === ";") break;
           return -1;
         }
-      return i;
+      return scanPos;
     }
     function getErrorObject(code, message, lineNumber) {
       return {
@@ -591,47 +591,51 @@ var require_fxp = x(function (cjsExports, cjsModule) {
         return METADATA_SYMBOL;
       }
     }
-    class _r {
+    class DocTypeReader {
       constructor(options) {
         this.suppressValidationErr = !options;
         this.options = options;
       }
-      readDocType(xmlData, i) {
+      readDocType(xmlData, scanPos) {
         let entities = Object.create(null);
         let entityCount = 0;
         if (
-          xmlData[i + 3] !== "O" ||
-          xmlData[i + 4] !== "C" ||
-          xmlData[i + 5] !== "T" ||
-          xmlData[i + 6] !== "Y" ||
-          xmlData[i + 7] !== "P" ||
-          xmlData[i + 8] !== "E"
+          xmlData[scanPos + 3] !== "O" ||
+          xmlData[scanPos + 4] !== "C" ||
+          xmlData[scanPos + 5] !== "T" ||
+          xmlData[scanPos + 6] !== "Y" ||
+          xmlData[scanPos + 7] !== "P" ||
+          xmlData[scanPos + 8] !== "E"
         )
           throw Error("Invalid Tag instead of DOCTYPE");
         {
-          i += 9;
+          scanPos += 9;
           let angleBracketsCount = 1;
           let hasBody = false;
           let comment = false;
-          let g = "";
-          for (; i < xmlData.length; i++)
-            if (xmlData[i] !== "<" || comment) {
-              if (xmlData[i] === ">") {
+          let exp = "";
+          for (; scanPos < xmlData.length; scanPos++)
+            if (xmlData[scanPos] !== "<" || comment) {
+              if (xmlData[scanPos] === ">") {
                 if (comment) {
-                  if (xmlData[i - 1] === "-" && xmlData[i - 2] === "-") {
+                  if (xmlData[scanPos - 1] === "-" && xmlData[scanPos - 2] === "-") {
                     comment = false;
                     angleBracketsCount--;
                   }
                 } else angleBracketsCount--;
                 if (angleBracketsCount === 0) break;
-              } else if (xmlData[i] === "[") hasBody = true;
-              else g += xmlData[i];
+              } else if (xmlData[scanPos] === "[") hasBody = true;
+              else exp += xmlData[scanPos];
             } else {
-              if (hasBody && hasSeq(xmlData, "!ENTITY", i)) {
+              if (hasBody && hasSeq(xmlData, "!ENTITY", scanPos)) {
                 let entityName;
                 let val;
-                i += 7;
-                [entityName, val, i] = this.readEntityExp(xmlData, i + 1, this.suppressValidationErr);
+                scanPos += 7;
+                [entityName, val, scanPos] = this.readEntityExp(
+                  xmlData,
+                  scanPos + 1,
+                  this.suppressValidationErr,
+                );
                 if (val.indexOf("&") === -1) {
                   if (
                     this.options.enabled !== false &&
@@ -648,42 +652,49 @@ var require_fxp = x(function (cjsExports, cjsModule) {
                   };
                   entityCount++;
                 }
-              } else if (hasBody && hasSeq(xmlData, "!ELEMENT", i)) {
-                i += 8;
-                let { index } = this.readElementExp(xmlData, i + 1);
-                i = index;
-              } else if (hasBody && hasSeq(xmlData, "!ATTLIST", i)) i += 8;
-              else if (hasBody && hasSeq(xmlData, "!NOTATION", i)) {
-                i += 9;
-                let { index } = this.readNotationExp(xmlData, i + 1, this.suppressValidationErr);
-                i = index;
+              } else if (hasBody && hasSeq(xmlData, "!ELEMENT", scanPos)) {
+                scanPos += 8;
+                let { index } = this.readElementExp(xmlData, scanPos + 1);
+                scanPos = index;
+              } else if (hasBody && hasSeq(xmlData, "!ATTLIST", scanPos)) scanPos += 8;
+              else if (hasBody && hasSeq(xmlData, "!NOTATION", scanPos)) {
+                scanPos += 9;
+                let { index } = this.readNotationExp(xmlData, scanPos + 1, this.suppressValidationErr);
+                scanPos = index;
               } else {
-                if (!hasSeq(xmlData, "!--", i)) throw Error("Invalid DOCTYPE");
+                if (!hasSeq(xmlData, "!--", scanPos)) throw Error("Invalid DOCTYPE");
                 comment = true;
               }
               angleBracketsCount++;
-              g = "";
+              exp = "";
             }
           if (angleBracketsCount !== 0) throw Error("Unclosed DOCTYPE");
         }
         return {
           entities,
-          i,
+          i: scanPos,
         };
       }
-      readEntityExp(xmlData, i) {
-        let startIndex = (i = skipWhitespace(xmlData, i));
-        for (; i < xmlData.length && !/\s/.test(xmlData[i]) && xmlData[i] !== '"' && xmlData[i] !== "'";) i++;
-        let entityName = xmlData.substring(startIndex, i);
+      readEntityExp(xmlData, scanPos) {
+        let startIndex = (scanPos = skipWhitespace(xmlData, scanPos));
+        for (
+          ;
+          scanPos < xmlData.length &&
+          !/\s/.test(xmlData[scanPos]) &&
+          xmlData[scanPos] !== '"' &&
+          xmlData[scanPos] !== "'";
+        )
+          scanPos++;
+        let entityName = xmlData.substring(startIndex, scanPos);
         validateEntityName(entityName);
-        i = skipWhitespace(xmlData, i);
+        scanPos = skipWhitespace(xmlData, scanPos);
         if (!this.suppressValidationErr) {
-          if (xmlData.substring(i, i + 6).toUpperCase() === "SYSTEM")
+          if (xmlData.substring(scanPos, scanPos + 6).toUpperCase() === "SYSTEM")
             throw Error("External entities are not supported");
-          if (xmlData[i] === "%") throw Error("Parameter entities are not supported");
+          if (xmlData[scanPos] === "%") throw Error("Parameter entities are not supported");
         }
         let entityValue = "";
-        [i, entityValue] = this.readIdentifierVal(xmlData, i, "entity");
+        [scanPos, entityValue] = this.readIdentifierVal(xmlData, scanPos, "entity");
         if (
           this.options.enabled !== false &&
           this.options.maxEntitySize != null &&
@@ -692,28 +703,28 @@ var require_fxp = x(function (cjsExports, cjsModule) {
           throw Error(
             `Entity "${entityName}" size (${entityValue.length}) exceeds maximum allowed size (${this.options.maxEntitySize})`,
           );
-        return [entityName, entityValue, --i];
+        return [entityName, entityValue, --scanPos];
       }
-      readNotationExp(xmlData, i) {
-        let startIndex = (i = skipWhitespace(xmlData, i));
-        for (; i < xmlData.length && !/\s/.test(xmlData[i]);) i++;
-        let notationName = xmlData.substring(startIndex, i);
+      readNotationExp(xmlData, scanPos) {
+        let startIndex = (scanPos = skipWhitespace(xmlData, scanPos));
+        for (; scanPos < xmlData.length && !/\s/.test(xmlData[scanPos]);) scanPos++;
+        let notationName = xmlData.substring(startIndex, scanPos);
         if (!this.suppressValidationErr) validateEntityName(notationName);
-        i = skipWhitespace(xmlData, i);
-        let identifierType = xmlData.substring(i, i + 6).toUpperCase();
+        scanPos = skipWhitespace(xmlData, scanPos);
+        let identifierType = xmlData.substring(scanPos, scanPos + 6).toUpperCase();
         if (!this.suppressValidationErr && identifierType !== "SYSTEM" && identifierType !== "PUBLIC")
           throw Error(`Expected SYSTEM or PUBLIC, found "${identifierType}"`);
-        i += identifierType.length;
-        i = skipWhitespace(xmlData, i);
+        scanPos += identifierType.length;
+        scanPos = skipWhitespace(xmlData, scanPos);
         let publicIdentifier = null;
         let systemIdentifier = null;
         if (identifierType === "PUBLIC") {
-          [i, publicIdentifier] = this.readIdentifierVal(xmlData, i, "publicIdentifier");
-          if (!(xmlData[(i = skipWhitespace(xmlData, i))] !== '"' && xmlData[i] !== "'"))
-            [i, systemIdentifier] = this.readIdentifierVal(xmlData, i, "systemIdentifier");
+          [scanPos, publicIdentifier] = this.readIdentifierVal(xmlData, scanPos, "publicIdentifier");
+          if (!(xmlData[(scanPos = skipWhitespace(xmlData, scanPos))] !== '"' && xmlData[scanPos] !== "'"))
+            [scanPos, systemIdentifier] = this.readIdentifierVal(xmlData, scanPos, "systemIdentifier");
         } else if (
           identifierType === "SYSTEM" &&
-          (([i, systemIdentifier] = this.readIdentifierVal(xmlData, i, "systemIdentifier")),
+          (([scanPos, systemIdentifier] = this.readIdentifierVal(xmlData, scanPos, "systemIdentifier")),
           !this.suppressValidationErr && !systemIdentifier)
         )
           throw Error("Missing mandatory system identifier for SYSTEM notation");
@@ -721,99 +732,110 @@ var require_fxp = x(function (cjsExports, cjsModule) {
           notationName,
           publicIdentifier,
           systemIdentifier,
-          index: --i,
+          index: --scanPos,
         };
       }
-      readIdentifierVal(xmlData, i, type) {
+      readIdentifierVal(xmlData, scanPos, type) {
         let identifierVal = "";
-        let startChar = xmlData[i];
+        let startChar = xmlData[scanPos];
         if (startChar !== '"' && startChar !== "'")
           throw Error(`Expected quoted string, found "${startChar}"`);
-        let startIndex = ++i;
-        for (; i < xmlData.length && xmlData[i] !== startChar;) i++;
-        identifierVal = xmlData.substring(startIndex, i);
-        if (xmlData[i] !== startChar) throw Error(`Unterminated ${type} value`);
-        return [++i, identifierVal];
+        let startIndex = ++scanPos;
+        for (; scanPos < xmlData.length && xmlData[scanPos] !== startChar;) scanPos++;
+        identifierVal = xmlData.substring(startIndex, scanPos);
+        if (xmlData[scanPos] !== startChar) throw Error(`Unterminated ${type} value`);
+        return [++scanPos, identifierVal];
       }
-      readElementExp(xmlData, i) {
-        let startIndex = (i = skipWhitespace(xmlData, i));
-        for (; i < xmlData.length && !/\s/.test(xmlData[i]);) i++;
-        let elementName = xmlData.substring(startIndex, i);
+      readElementExp(xmlData, scanPos) {
+        let startIndex = (scanPos = skipWhitespace(xmlData, scanPos));
+        for (; scanPos < xmlData.length && !/\s/.test(xmlData[scanPos]);) scanPos++;
+        let elementName = xmlData.substring(startIndex, scanPos);
         if (!this.suppressValidationErr && !isName(elementName))
           throw Error(`Invalid element name: "${elementName}"`);
         let contentModel = "";
-        if (xmlData[(i = skipWhitespace(xmlData, i))] === "E" && hasSeq(xmlData, "MPTY", i)) i += 4;
-        else if (xmlData[i] === "A" && hasSeq(xmlData, "NY", i)) i += 2;
-        else if (xmlData[i] === "(") {
-          let h = ++i;
-          for (; i < xmlData.length && xmlData[i] !== ")";) i++;
-          contentModel = xmlData.substring(h, i);
-          if (xmlData[i] !== ")") throw Error("Unterminated content model");
+        if (xmlData[(scanPos = skipWhitespace(xmlData, scanPos))] === "E" && hasSeq(xmlData, "MPTY", scanPos))
+          scanPos += 4;
+        else if (xmlData[scanPos] === "A" && hasSeq(xmlData, "NY", scanPos)) scanPos += 2;
+        else if (xmlData[scanPos] === "(") {
+          let contentModelChars = ++scanPos;
+          for (; scanPos < xmlData.length && xmlData[scanPos] !== ")";) scanPos++;
+          contentModel = xmlData.substring(contentModelChars, scanPos);
+          if (xmlData[scanPos] !== ")") throw Error("Unterminated content model");
         } else if (!this.suppressValidationErr)
-          throw Error(`Invalid Element Expression, found "${xmlData[i]}"`);
+          throw Error(`Invalid Element Expression, found "${xmlData[scanPos]}"`);
         return {
           elementName,
           contentModel: contentModel.trim(),
-          index: i,
+          index: scanPos,
         };
       }
-      readAttlistExp(xmlData, i) {
-        let startIndex = (i = skipWhitespace(xmlData, i));
-        for (; i < xmlData.length && !/\s/.test(xmlData[i]);) i++;
-        let elementName = xmlData.substring(startIndex, i);
+      readAttlistExp(xmlData, scanPos) {
+        let startIndex = (scanPos = skipWhitespace(xmlData, scanPos));
+        for (; scanPos < xmlData.length && !/\s/.test(xmlData[scanPos]);) scanPos++;
+        let elementName = xmlData.substring(startIndex, scanPos);
         for (
-          validateEntityName(elementName), startIndex = i = skipWhitespace(xmlData, i);
-          i < xmlData.length && !/\s/.test(xmlData[i]);
+          validateEntityName(elementName), startIndex = scanPos = skipWhitespace(xmlData, scanPos);
+          scanPos < xmlData.length && !/\s/.test(xmlData[scanPos]);
         )
-          i++;
-        let attributeName = xmlData.substring(startIndex, i);
+          scanPos++;
+        let attributeName = xmlData.substring(startIndex, scanPos);
         if (!validateEntityName(attributeName)) throw Error(`Invalid attribute name: "${attributeName}"`);
-        i = skipWhitespace(xmlData, i);
+        scanPos = skipWhitespace(xmlData, scanPos);
         let attributeType = "";
-        if (xmlData.substring(i, i + 8).toUpperCase() === "NOTATION") {
+        if (xmlData.substring(scanPos, scanPos + 8).toUpperCase() === "NOTATION") {
           attributeType = "NOTATION";
-          if (xmlData[(i = skipWhitespace(xmlData, (i += 8)))] !== "(")
-            throw Error(`Expected '(', found "${xmlData[i]}"`);
-          i++;
+          if (xmlData[(scanPos = skipWhitespace(xmlData, (scanPos += 8)))] !== "(")
+            throw Error(`Expected '(', found "${xmlData[scanPos]}"`);
+          scanPos++;
           let allowedNotations = [];
-          for (; i < xmlData.length && xmlData[i] !== ")";) {
-            let E = i;
-            for (; i < xmlData.length && xmlData[i] !== "|" && xmlData[i] !== ")";) i++;
-            let notation = xmlData.substring(E, i);
+          for (; scanPos < xmlData.length && xmlData[scanPos] !== ")";) {
+            let notationStartIndex = scanPos;
+            for (; scanPos < xmlData.length && xmlData[scanPos] !== "|" && xmlData[scanPos] !== ")";)
+              scanPos++;
+            let notation = xmlData.substring(notationStartIndex, scanPos);
             notation = notation.trim();
             if (!validateEntityName(notation)) throw Error(`Invalid notation name: "${notation}"`);
             allowedNotations.push(notation);
-            if (xmlData[i] === "|") {
-              i++;
-              i = skipWhitespace(xmlData, i);
+            if (xmlData[scanPos] === "|") {
+              scanPos++;
+              scanPos = skipWhitespace(xmlData, scanPos);
             }
           }
-          if (xmlData[i] !== ")") throw Error("Unterminated list of notations");
-          i++;
+          if (xmlData[scanPos] !== ")") throw Error("Unterminated list of notations");
+          scanPos++;
           attributeType += " (" + allowedNotations.join("|") + ")";
         } else {
-          let startIndex = i;
-          for (; i < xmlData.length && !/\s/.test(xmlData[i]);) i++;
-          attributeType += xmlData.substring(startIndex, i);
-          let E = ["CDATA", "ID", "IDREF", "IDREFS", "ENTITY", "ENTITIES", "NMTOKEN", "NMTOKENS"];
-          if (!this.suppressValidationErr && !E.includes(attributeType.toUpperCase()))
+          let startIndex = scanPos;
+          for (; scanPos < xmlData.length && !/\s/.test(xmlData[scanPos]);) scanPos++;
+          attributeType += xmlData.substring(startIndex, scanPos);
+          let attributeTypes = [
+            "CDATA",
+            "ID",
+            "IDREF",
+            "IDREFS",
+            "ENTITY",
+            "ENTITIES",
+            "NMTOKEN",
+            "NMTOKENS",
+          ];
+          if (!this.suppressValidationErr && !attributeTypes.includes(attributeType.toUpperCase()))
             throw Error(`Invalid attribute type: "${attributeType}"`);
         }
-        i = skipWhitespace(xmlData, i);
+        scanPos = skipWhitespace(xmlData, scanPos);
         let defaultValue = "";
-        if (xmlData.substring(i, i + 8).toUpperCase() === "#REQUIRED") {
+        if (xmlData.substring(scanPos, scanPos + 8).toUpperCase() === "#REQUIRED") {
           defaultValue = "#REQUIRED";
-          i += 8;
-        } else if (xmlData.substring(i, i + 7).toUpperCase() === "#IMPLIED") {
+          scanPos += 8;
+        } else if (xmlData.substring(scanPos, scanPos + 7).toUpperCase() === "#IMPLIED") {
           defaultValue = "#IMPLIED";
-          i += 7;
-        } else [i, defaultValue] = this.readIdentifierVal(xmlData, i, "ATTLIST");
+          scanPos += 7;
+        } else [scanPos, defaultValue] = this.readIdentifierVal(xmlData, scanPos, "ATTLIST");
         return {
           elementName,
           attributeName,
           attributeType,
           defaultValue,
-          index: i,
+          index: scanPos,
         };
       }
     }
@@ -912,7 +934,7 @@ var require_fxp = x(function (cjsExports, cjsModule) {
           .join(sep);
       }
       toArray() {
-        return this.path.map((n) => n.tag);
+        return this.path.map((node) => node.tag);
       }
       reset() {
         this.path = [];
@@ -927,10 +949,10 @@ var require_fxp = x(function (cjsExports, cjsModule) {
       }
       _matchSimple(segments) {
         if (this.path.length !== segments.length) return false;
-        for (let i = 0; i < segments.length; i++) {
-          let segment = segments[i];
-          let node = this.path[i];
-          let isCurrentNode = i === this.path.length - 1;
+        for (let segmentIndex = 0; segmentIndex < segments.length; segmentIndex++) {
+          let segment = segments[segmentIndex];
+          let node = this.path[segmentIndex];
+          let isCurrentNode = segmentIndex === this.path.length - 1;
           if (!this._matchSegment(segment, node, isCurrentNode)) return false;
         }
         return true;
@@ -1362,7 +1384,7 @@ var require_fxp = x(function (cjsExports, cjsModule) {
       this.matcher.reset();
       this.entityExpansionCount = 0;
       this.currentExpandedLength = 0;
-      let docTypeReader = new _r(this.options.processEntities);
+      let docTypeReader = new DocTypeReader(this.options.processEntities);
       for (let i = 0; i < xmlData.length; i++)
         if (xmlData[i] === "<") {
           if (xmlData[i + 1] === "/") {
@@ -1476,12 +1498,12 @@ var require_fxp = x(function (cjsExports, cjsModule) {
             }
             let namespace;
             let prefixedAttrs = null;
-            let ne = {};
+            let newObj = {};
             namespace = extractNamespace(rawTagName);
             if (tagName !== xmlObj.tagname) this.matcher.push(tagName, {}, namespace);
             if (tagName !== tagExp_2 && attrExpPresent) {
               prefixedAttrs = this.buildAttributesMap(tagExp_2, this.matcher, tagName);
-              if (prefixedAttrs) ne = extractRawAttributes(prefixedAttrs, this.options);
+              if (prefixedAttrs) newObj = extractRawAttributes(prefixedAttrs, this.options);
             }
             if (tagName !== xmlObj.tagname)
               this.isCurrentNodeStopNode = this.isItStopNode(this.stopNodeExpressions, this.matcher);
@@ -1650,7 +1672,7 @@ var require_fxp = x(function (cjsExports, cjsModule) {
       if (closingIndex === -1) throw Error(errMsg);
       return closingIndex + str.length - 1;
     }
-    function readTagExp(xmlData, i, removeNSPrefix, closingChar = ">") {
+    function readTagExp(xmlData, startIndex, removeNSPrefix, closingChar = ">") {
       let result = (function (xmlData, i, closingChar = ">") {
         let attrBoundary;
         let tagExp = "";
@@ -1673,7 +1695,7 @@ var require_fxp = x(function (cjsExports, cjsModule) {
           } else if (ch === "\t") ch = " ";
           tagExp += ch;
         }
-      })(xmlData, i + 1, closingChar);
+      })(xmlData, startIndex + 1, closingChar);
       if (!result) return;
       let { data: tagExp, index } = result;
       let separatorIndex = tagExp.search(/\s/);
@@ -1956,10 +1978,13 @@ var require_fxp = x(function (cjsExports, cjsModule) {
     }
     function isLeafTag(obj, options) {
       let { textNodeName } = options;
-      let l = Object.keys(obj).length;
+      let keysLength = Object.keys(obj).length;
       return (
-        l === 0 ||
-        !(l !== 1 || (!obj[textNodeName] && typeof obj[textNodeName] != "boolean" && obj[textNodeName] !== 0))
+        keysLength === 0 ||
+        !(
+          keysLength !== 1 ||
+          (!obj[textNodeName] && typeof obj[textNodeName] != "boolean" && obj[textNodeName] !== 0)
+        )
       );
     }
     class XMLParser {
@@ -2528,8 +2553,8 @@ var require_fxp = x(function (cjsExports, cjsModule) {
     };
     Builder.prototype.checkStopNode = function (matcher) {
       if (!this.stopNodeExpressions || this.stopNodeExpressions.length === 0) return false;
-      for (let i = 0; i < this.stopNodeExpressions.length; i++)
-        if (matcher.matches(this.stopNodeExpressions[i])) return true;
+      for (let expressionIndex = 0; expressionIndex < this.stopNodeExpressions.length; expressionIndex++)
+        if (matcher.matches(this.stopNodeExpressions[expressionIndex])) return true;
       return false;
     };
     Builder.prototype.buildTextValNode = function (val, key, attrStr, level, matcher) {
@@ -2548,17 +2573,17 @@ var require_fxp = x(function (cjsExports, cjsModule) {
     };
     Builder.prototype.replaceEntitiesValue = function (textValue) {
       if (textValue && textValue.length > 0 && this.options.processEntities)
-        for (let i = 0; i < this.options.entities.length; i++) {
-          let entity = this.options.entities[i];
+        for (let entityIndex = 0; entityIndex < this.options.entities.length; entityIndex++) {
+          let entity = this.options.entities[entityIndex];
           textValue = textValue.replace(entity.regex, entity.val);
         }
       return textValue;
     };
-    let to = Builder;
+    let XMLBuilder = Builder;
     let XMLValidator = {
       validate,
     };
-    cjsModule.exports = t;
+    cjsModule.exports = webpackExports;
   })();
 });
 export { require_fxp };

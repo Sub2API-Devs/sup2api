@@ -5,10 +5,10 @@
  * pieces: chunk-vt9zk5xf.js (1)
  * attribution: native-addon 1
  */
-import { x } from "../../runtime/bun-runtime.js";
+import { __commonJS } from "../../runtime/bun-runtime.js";
 
 //@ chunk-vt9zk5xf.js:229-297 native-addon
-var srs = x(function (L, H) {
-  H.exports = require("./audio-capture.node");
+var require_audio_capture_node = __commonJS(function (cjsExports, cjsModule) {
+  cjsModule.exports = require("./audio-capture.node");
 });
-export { srs };
+export { require_audio_capture_node };

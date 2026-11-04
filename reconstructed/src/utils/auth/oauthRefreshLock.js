@@ -12,7 +12,7 @@ import { lstat, unlink, rmdir } from "fs/promises";
 import { join } from "path";
 import { mkdirSync, rmdirSync, stat as stat_2, statSync, utimes, utimesSync } from "fs";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, E, string } from "../../../vendor/zod/v4/classic/schemas.js";
+import { objectSchema, numberSchema, stringSchema } from "../../../vendor/zod/v4/classic/schemas.js";
 import {
   ownProcStartAsync,
   looksLikeFullHostProcessTable,
@@ -29,25 +29,33 @@ import { errorMessage, getErrnoCode } from "../errors.js";
 import { readSmallFileOrNull } from "../readSmallFile.js";
 import { HostScoped } from "../hostScoped.js";
 import { createSignal } from "../signal.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-aepeg2w5.js:310460-310734 placement
 /**
  * 锁持有者记录的文件名（.oauth_refresh.lock.owner）。
  */
-var TENGU_QUIET_MARTEN = "tengu_quiet_marten";
-var TENGU_ZANY_BOOK = "tengu_zany_book";
-var LOCK_OWNER_FILE_NAME = ".oauth_refresh.lock.owner";
-var MAX_LOCK_OWNER_BYTES = 4096;
-var lockOwnerSchema = DoctorLazy(() =>
-  u({
-    pid: E().int(),
-    procStart: string().max(64).optional(),
-    pidDomain: string().max(512),
-    pidSpace: string().max(512),
-    lockBirthtimeMs: E().positive(),
-    legacyLockBirthtimeMs: E().positive().optional(),
-  }),
-);
+var TENGU_QUIET_MARTEN; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var TENGU_ZANY_BOOK;
+var LOCK_OWNER_FILE_NAME;
+var MAX_LOCK_OWNER_BYTES;
+var lockOwnerSchema;
+deferInit("chunk-aepeg2w5.js:310460", () => {
+  TENGU_QUIET_MARTEN = "tengu_quiet_marten";
+  TENGU_ZANY_BOOK = "tengu_zany_book";
+  LOCK_OWNER_FILE_NAME = ".oauth_refresh.lock.owner";
+  MAX_LOCK_OWNER_BYTES = 4096;
+  lockOwnerSchema = DoctorLazy(() =>
+    objectSchema({
+      pid: numberSchema().int(),
+      procStart: stringSchema().max(64).optional(),
+      pidDomain: stringSchema().max(512),
+      pidSpace: stringSchema().max(512),
+      lockBirthtimeMs: numberSchema().positive(),
+      legacyLockBirthtimeMs: numberSchema().positive().optional(),
+    }),
+  );
+});
 //@ chunk-aepeg2w5.js:310734-310809 placement
 /**
  * OAuth 锁相关开关读取器的状态类。
@@ -64,7 +72,10 @@ class OAuthLockFlagReader {
 /**
  * 全局唯一的 OAuth 锁开关读取器。
  */
-var oauthLockFlagReader = new OAuthLockFlagReader();
+var oauthLockFlagReader; // deferred: uses OAuthLockFlagReader of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-aepeg2w5.js:310809", () => {
+  oauthLockFlagReader = new OAuthLockFlagReader();
+});
 //@ chunk-aepeg2w5.js:310823-310860 placement
 /**
  * 注册 OAuth 锁开关读取器。
@@ -76,9 +87,9 @@ function setOAuthLockFlagReader(getFeatureValue_CACHED_MAY_BE_STALE) {
 /**
  * 读取指定开关；读取异常时视为开启。
  */
-function isOAuthLockFlagOn(e) {
+function isOAuthLockFlagOn(flagName) {
   try {
-    return oauthLockFlagReader.reader?.(e, true) !== false;
+    return oauthLockFlagReader.reader?.(flagName, true) !== false;
   } catch {
     return true;
   }
@@ -89,52 +100,52 @@ function isOAuthLockFlagOn(e) {
  */
 async function writeLockOwnerRecord({ claudeDir, lockfilePath, legacyLockfilePath }) {
   try {
-    let [s, h, y, S] = await Promise.all([
+    let [lockStat, legacyStat, procStart, pidDomain] = await Promise.all([
       lstat(lockfilePath),
       legacyLockfilePath === null ? null : lstat(legacyLockfilePath),
       ownProcStartAsync(),
       ownPidDomain(),
     ]);
-    if (!(s.birthtimeMs > 0)) return null;
-    let w = {
+    if (!(lockStat.birthtimeMs > 0)) return null;
+    let record = {
       pid: process.pid,
-      ...(y !== undefined && {
-        procStart: y,
+      ...(procStart !== undefined && {
+        procStart,
       }),
-      pidDomain: S,
+      pidDomain,
       pidSpace: ownPidSpace(),
-      lockBirthtimeMs: s.birthtimeMs,
-      ...(h !== null &&
-        h.birthtimeMs > 0 && {
-          legacyLockBirthtimeMs: h.birthtimeMs,
+      lockBirthtimeMs: lockStat.birthtimeMs,
+      ...(legacyStat !== null &&
+        legacyStat.birthtimeMs > 0 && {
+          legacyLockBirthtimeMs: legacyStat.birthtimeMs,
         }),
     };
-    await writeFileAtomic(lockOwnerRecordPath(claudeDir), jsonStringify(w));
-    return s.birthtimeMs;
+    await writeFileAtomic(lockOwnerRecordPath(claudeDir), jsonStringify(record));
+    return lockStat.birthtimeMs;
   } catch (error) {
     logForDebugging(`OAuth refresh lock owner record not written: ${errorMessage(error)}`);
     return null;
   }
 }
 //@ chunk-aepeg2w5.js:311401-311517 placement
-async function removeOwnLockOwnerRecord(e, n) {
-  let lockOwnerRecord = await readLockOwnerRecord(e);
+async function removeOwnLockOwnerRecord(claudeDir, lockBirthtimeMs) {
+  let lockOwnerRecord = await readLockOwnerRecord(claudeDir);
   if (
     lockOwnerRecord === null ||
     lockOwnerRecord.pid !== process.pid ||
-    lockOwnerRecord.lockBirthtimeMs !== n
+    lockOwnerRecord.lockBirthtimeMs !== lockBirthtimeMs
   )
     return;
-  await removeLockOwnerRecord(e);
+  await removeLockOwnerRecord(claudeDir);
 }
 //@ chunk-aepeg2w5.js:311517-311752 placement
-async function checkLockStillOwned(e) {
-  let n = await checkLockOwner(e);
-  if (n === "taken_over" || n === "lock_changed" || n === "disabled") return n;
+async function checkLockStillOwned(options) {
+  let outcome = await checkLockOwner(options);
+  if (outcome === "taken_over" || outcome === "lock_changed" || outcome === "disabled") return outcome;
   try {
-    return (await lstat(e.lockfilePath)).mtimeMs === e.watchedMtimeMs ? n : "lock_changed";
+    return (await lstat(options.lockfilePath)).mtimeMs === options.watchedMtimeMs ? outcome : "lock_changed";
   } catch (error) {
-    return getErrnoCode(error) === "ENOENT" ? "lock_changed" : n;
+    return getErrnoCode(error) === "ENOENT" ? "lock_changed" : outcome;
   }
 }
 //@ chunk-aepeg2w5.js:311752-312876 placement
@@ -142,19 +153,19 @@ async function checkLockStillOwned(e) {
  * 核对锁持有者（是否已被接管、记录是否匹配）。
  */
 async function checkLockOwner({ claudeDir, lockfilePath, legacyLockfilePath, watchedMtimeMs }) {
-  let h = false;
+  let removing = false;
   try {
     if (!isOAuthLockFlagOn(TENGU_QUIET_MARTEN)) return "disabled";
     let lockOwnerRecord = await readLockOwnerRecord(claudeDir);
     if (lockOwnerRecord === null)
       return (await lstat(lockfilePath)).mtimeMs === watchedMtimeMs ? "no_owner_record" : "lock_changed";
-    let S = async () => {
-      let j = await lstat(lockfilePath);
-      if (j.mtimeMs !== watchedMtimeMs) return "lock_changed";
-      return j.birthtimeMs === lockOwnerRecord.lockBirthtimeMs ? null : "record_mismatch";
+    let recheckLock = async () => {
+      let stat = await lstat(lockfilePath);
+      if (stat.mtimeMs !== watchedMtimeMs) return "lock_changed";
+      return stat.birthtimeMs === lockOwnerRecord.lockBirthtimeMs ? null : "record_mismatch";
     };
-    let w = await S();
-    if (w !== null) return w;
+    let mismatch = await recheckLock();
+    if (mismatch !== null) return mismatch;
     if (lockOwnerRecord.pidDomain !== (await ownPidDomain()) || lockOwnerRecord.pidSpace !== ownPidSpace())
       return "foreign_pid_space";
     if (!(await looksLikeFullHostProcessTable())) return "pid_view_untrusted";
@@ -166,17 +177,18 @@ async function checkLockOwner({ claudeDir, lockfilePath, legacyLockfilePath, wat
         (procStart !== undefined && (await provenSameProcessAsync(pid, procStart)) === false))
     ))
       return "holder_not_proven_gone";
-    let F = await lstat(legacyLockfilePath).catch((error) => {
+    let legacyStat = await lstat(legacyLockfilePath).catch((error) => {
       if (getErrnoCode(error) === "ENOENT") return null;
       throw error;
     });
-    if (F !== null && F.birthtimeMs !== lockOwnerRecord.legacyLockBirthtimeMs) return "legacy_lock_held";
-    h = true;
-    if (F !== null) await removeOrIgnoreMissing(legacyLockfilePath);
-    h = false;
-    let L = await S();
-    if (L !== null) return L;
-    h = true;
+    if (legacyStat !== null && legacyStat.birthtimeMs !== lockOwnerRecord.legacyLockBirthtimeMs)
+      return "legacy_lock_held";
+    removing = true;
+    if (legacyStat !== null) await removeOrIgnoreMissing(legacyLockfilePath);
+    removing = false;
+    let mismatch_2 = await recheckLock();
+    if (mismatch_2 !== null) return mismatch_2;
+    removing = true;
     await removeOrIgnoreMissing(lockfilePath);
     let lockOwnerRecord_2 = await readLockOwnerRecord(claudeDir);
     if (
@@ -188,7 +200,7 @@ async function checkLockOwner({ claudeDir, lockfilePath, legacyLockfilePath, wat
     return "taken_over";
   } catch (error) {
     logForDebugging(`OAuth refresh lock takeover skipped: ${errorMessage(error)}`);
-    if (h) return "remove_failed";
+    if (removing) return "remove_failed";
     return getErrnoCode(error) === "ENOENT" ? "lock_changed" : "probe_failed";
   }
 }
@@ -196,26 +208,26 @@ async function checkLockOwner({ claudeDir, lockfilePath, legacyLockfilePath, wat
 /**
  * 锁持有者记录文件的路径。
  */
-function lockOwnerRecordPath(e) {
-  return join(e, LOCK_OWNER_FILE_NAME);
+function lockOwnerRecordPath(claudeDir) {
+  return join(claudeDir, LOCK_OWNER_FILE_NAME);
 }
 //@ chunk-aepeg2w5.js:312907-313066 placement
 async function readLockOwnerRecord(claudeDir) {
   let smallFileOrNull = await readSmallFileOrNull(lockOwnerRecordPath(claudeDir), MAX_LOCK_OWNER_BYTES);
   if (smallFileOrNull === null) return null;
-  let r;
+  let parsed;
   try {
-    r = jsonParse(smallFileOrNull);
+    parsed = jsonParse(smallFileOrNull);
   } catch {
     return null;
   }
-  let s = lockOwnerSchema().safeParse(r);
-  return s.success ? s.data : null;
+  let parseResult = lockOwnerSchema().safeParse(parsed);
+  return parseResult.success ? parseResult.data : null;
 }
 //@ chunk-aepeg2w5.js:313066-313194 placement
-async function removeLockOwnerRecord(e) {
+async function removeLockOwnerRecord(claudeDir) {
   try {
-    await unlink(lockOwnerRecordPath(e));
+    await unlink(lockOwnerRecordPath(claudeDir));
   } catch (error) {
     if (getErrnoCode(error) !== "ENOENT")
       logForDebugging(`OAuth refresh lock owner record not removed: ${errorMessage(error)}`);
@@ -225,9 +237,9 @@ async function removeLockOwnerRecord(e) {
 /**
  * 删除目录，ENOENT 时忽略。
  */
-async function removeOrIgnoreMissing(e) {
+async function removeOrIgnoreMissing(dirPath) {
   try {
-    await rmdir(e);
+    await rmdir(dirPath);
   } catch (error) {
     if (getErrnoCode(error) !== "ENOENT") throw error;
   }
@@ -238,43 +250,43 @@ async function removeOrIgnoreMissing(e) {
  */
 class FsSettler {
   settling = 0;
-  mkdir(e, n) {
-    this.settle(() => void mkdirSync(e), n);
+  mkdir(path, callback) {
+    this.settle(() => void mkdirSync(path), callback);
   }
-  rmdir(e, n) {
-    this.settle(() => void rmdirSync(e), n);
+  rmdir(path, callback) {
+    this.settle(() => void rmdirSync(path), callback);
   }
-  stat(e, n) {
+  stat(path, callback) {
     if (this.settling === 0) {
-      stat_2(e, n);
+      stat_2(path, callback);
       return;
     }
-    this.settle(() => statSync(e), n);
+    this.settle(() => statSync(path), callback);
   }
-  utimes(e, n, r, s) {
+  utimes(path, atime, mtime, callback) {
     if (this.settling === 0) {
-      utimes(e, n, r, s);
+      utimes(path, atime, mtime, callback);
       return;
     }
-    this.settle(() => void utimesSync(e, n, r), s);
+    this.settle(() => void utimesSync(path, atime, mtime), callback);
   }
-  rmdirSync(e) {
-    rmdirSync(e);
+  rmdirSync(path) {
+    rmdirSync(path);
   }
-  settle(e, n) {
-    let r;
+  settle(operation, callback) {
+    let result;
     try {
-      r = e();
+      result = operation();
     } catch (error) {
-      this.withinSettling(() => n(error));
+      this.withinSettling(() => callback(error));
       return;
     }
-    this.withinSettling(() => n(null, r));
+    this.withinSettling(() => callback(null, result));
   }
-  withinSettling(e) {
+  withinSettling(fn) {
     this.settling++;
     try {
-      e();
+      fn();
     } finally {
       this.settling--;
     }
@@ -284,27 +296,33 @@ class FsSettler {
 /**
  * 按目录保存的文件系统延迟结算器。
  */
-var fsSettlerByDir = new Map();
+var fsSettlerByDir; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-aepeg2w5.js:313833", () => {
+  fsSettlerByDir = new Map();
+});
 //@ chunk-aepeg2w5.js:313848-313945 placement
 /**
  * 取某目录的延迟结算器（按需创建）。
  */
-function getFsSettler(e) {
+function getFsSettler(dir) {
   if (!isOAuthLockFlagOn(TENGU_ZANY_BOOK)) return;
-  let n = fsSettlerByDir.get(e);
-  if (n === undefined) {
-    n = new FsSettler();
-    fsSettlerByDir.set(e, n);
+  let settler = fsSettlerByDir.get(dir);
+  if (settler === undefined) {
+    settler = new FsSettler();
+    fsSettlerByDir.set(dir, settler);
   }
   return {
-    fs: n,
+    fs: settler,
   };
 }
 //@ chunk-aepeg2w5.js:313945-313968 placement
 /**
  * 按宿主隔离的凭据变化信号。
  */
-var credentialSignalByHost = new HostScoped(() => createSignal());
+var credentialSignalByHost; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-aepeg2w5.js:313945", () => {
+  credentialSignalByHost = new HostScoped(() => createSignal());
+});
 export {
   getFsSettler,
   writeLockOwnerRecord,

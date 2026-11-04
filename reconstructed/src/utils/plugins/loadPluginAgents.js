@@ -50,39 +50,52 @@ import { getPluginRegistry } from "./pluginLoadState.js";
 import { pluginErrorText } from "../../types/plugin.js";
 import { pluginGrantProvenanceOf } from "../permissions/permissionsLoader.js";
 import { logFeatureBad, logFeatureOk } from "../../services/analytics/featureTelemetry.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
+//@ chunk-bfnfj4kx.js:75173-75190 fingerprint = loadAgentsFromDirectory (0.741)
+/**
+ * agents 目录名 "agents"，导出为 yos；加载 agents 文件时用它拼目录。
+ */
+var AGENTS_DIR_NAME = "agents";
 //@ chunk-e6aww6q8.js:2316979-2317099 placement
-var RENAMED_AGENT_FRONTMATTER_KEYS = new Map([
-  ["allowedtools", "tools"],
-  ["whentouse", "description"],
-  ["mode", null],
-]);
-var WHEN_TO_USE_KEY_SPELLINGS = ["when_to_use", "when-to-use"];
+var RENAMED_AGENT_FRONTMATTER_KEYS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var WHEN_TO_USE_KEY_SPELLINGS;
+deferInit("chunk-e6aww6q8.js:2316979", () => {
+  RENAMED_AGENT_FRONTMATTER_KEYS = new Map([
+    ["allowedtools", "tools"],
+    ["whentouse", "description"],
+    ["mode", null],
+  ]);
+  WHEN_TO_USE_KEY_SPELLINGS = ["when_to_use", "when-to-use"];
+});
 //@ chunk-e6aww6q8.js:2317099-2317779 placement
 function validatePluginAgentFrontmatter({ subject, filePath, frontmatter, unhintedKeys = [] }) {
   try {
     let keys = Object.keys(AgentFrontmatterSchema().shape);
-    let y = subject === "Plugin agent file" ? [...keys, ...WHEN_TO_USE_KEY_SPELLINGS] : keys;
-    let S = new Set(y);
-    let filtered = y.filter((Se) => !unhintedKeys.includes(Se));
-    let filtered_2 = Object.keys(frontmatter).filter((key) => !S.has(key));
-    let mapped = filtered_2.map((Se) => {
-      let ke = RENAMED_AGENT_FRONTMATTER_KEYS.get(normalizeKey(Se));
-      let we =
-        ke !== undefined
-          ? (ke ?? undefined)
-          : (filtered.find((Ee) => normalizeKey(Ee) === normalizeKey(Se)) ??
-            similarNames(Se, filtered, 1)[0]);
-      return we !== undefined && filtered.includes(we)
-        ? `${quotedListItem(Se)} (did you mean "${we}"?)`
-        : quotedListItem(Se);
+    let knownKeys = subject === "Plugin agent file" ? [...keys, ...WHEN_TO_USE_KEY_SPELLINGS] : keys;
+    let keySet = new Set(knownKeys);
+    let filtered = knownKeys.filter((key) => !unhintedKeys.includes(key));
+    let filtered_2 = Object.keys(frontmatter).filter((key) => !keySet.has(key));
+    let mapped = filtered_2.map((key) => {
+      let renamed = RENAMED_AGENT_FRONTMATTER_KEYS.get(normalizeKey(key));
+      let suggested =
+        renamed !== undefined
+          ? (renamed ?? undefined)
+          : (filtered.find((candidate) => normalizeKey(candidate) === normalizeKey(key)) ??
+            similarNames(key, filtered, 1)[0]);
+      return suggested !== undefined && filtered.includes(suggested)
+        ? `${quotedListItem(key)} (did you mean "${suggested}"?)`
+        : quotedListItem(key);
     });
-    let q =
+    let message =
       filtered_2.length === 0
         ? ""
         : `${subject} ${escapeControlCharsForDisplay(filePath)} has ${filtered_2.length === 1 ? "a frontmatter key" : "frontmatter keys"} Claude Code does not recognize or apply: ${formatFailureDetails_2(mapped)}`;
-    if (claimOnce().claimIfChanged(`agent-frontmatter-unknown-keys:${subject}:${filePath}`, q) && q !== "")
-      logForDebugging(q, {
+    if (
+      claimOnce().claimIfChanged(`agent-frontmatter-unknown-keys:${subject}:${filePath}`, message) &&
+      message !== ""
+    )
+      logForDebugging(message, {
         level: "warn",
       });
   } catch (error) {
@@ -90,29 +103,29 @@ function validatePluginAgentFrontmatter({ subject, filePath, frontmatter, unhint
   }
 }
 //@ chunk-e6aww6q8.js:2317809-2317970 placement
-var builtinAgentFilesFromBundle = (e, files) =>
+var builtinAgentFilesFromBundle = (pluginName, files) =>
   Object.entries(files)
-    .filter(([key]) => key.startsWith(`${loadAgentsFromDirectory}/`))
+    .filter(([key]) => key.startsWith(`${AGENTS_DIR_NAME}/`))
     .map(([key, value]) => ({
-      filePath: `builtin:${e}/${key}`,
+      filePath: `builtin:${pluginName}/${key}`,
       namespace: key.split("/").slice(1, -1),
       text: value,
     }));
 //@ chunk-e6aww6q8.js:2317970-2318132 placement
-function getBuiltinPluginAgentsSource(name) {
-  let hooksModule = getBuiltinPlugin(name)?.hooksModule;
-  let r = hooksModule !== undefined && "folder" in hooksModule;
-  let h =
+function getBuiltinPluginAgentsSource(pluginName) {
+  let hooksModule = getBuiltinPlugin(pluginName)?.hooksModule;
+  let isFolder = hooksModule !== undefined && "folder" in hooksModule;
+  let filesSource =
     hooksModule !== undefined && "files" in hooksModule
       ? {
-          files: builtinAgentFilesFromBundle(name, hooksModule.files),
+          files: builtinAgentFilesFromBundle(pluginName, hooksModule.files),
         }
       : undefined;
-  return r
+  return isFolder
     ? {
-        folder: join(hooksModule.folder, loadAgentsFromDirectory),
+        folder: join(hooksModule.folder, AGENTS_DIR_NAME),
       }
-    : h;
+    : filesSource;
 }
 //@ chunk-e6aww6q8.js:2318132-2318179 placement = isMcpServerFromProjectOrLocalSettings (1)
 var MAX_PLUGIN_AGENT_FILE_BYTES = 1048576;
@@ -128,12 +141,20 @@ async function loadAgentsFromDir(
   credentials,
   isRootOptional = false,
 ) {
-  let L = [];
+  let agents = [];
   await walkPluginMarkdown(
     rootDir,
-    async (G, namespace) => {
-      let agentFile = await loadAgentFile(G, pluginName, namespace, source, path, manifest, credentials);
-      if (agentFile) L.push(agentFile);
+    async (filePath, namespace) => {
+      let agentFile = await loadAgentFile(
+        filePath,
+        pluginName,
+        namespace,
+        source,
+        path,
+        manifest,
+        credentials,
+      );
+      if (agentFile) agents.push(agentFile);
     },
     {
       logLabel: "agents",
@@ -141,19 +162,31 @@ async function loadAgentsFromDir(
       loadedPaths,
     },
   );
-  return L;
+  return agents;
 }
 //@ chunk-e6aww6q8.js:2318359-2318755 placement
 /**
  * 读取单个插件代理 markdown（非普通文件或超过 jan 字节跳过并记 warn），交给 loadAgentFromFile 解析；出错返回 null。
  */
-async function loadAgentFile(e, pluginName, namespace, sourceName, pluginPath, pluginManifest, credentials) {
+async function loadAgentFile(
+  filePath,
+  pluginName,
+  namespace,
+  sourceName,
+  pluginPath,
+  pluginManifest,
+  credentials,
+) {
   let fsImplementation = getFsImplementation();
   try {
-    let smallFileChecked = await readSmallFileChecked(fsImplementation, e, MAX_PLUGIN_AGENT_FILE_BYTES);
+    let smallFileChecked = await readSmallFileChecked(
+      fsImplementation,
+      filePath,
+      MAX_PLUGIN_AGENT_FILE_BYTES,
+    );
     if (smallFileChecked === null) {
       logForDebugging(
-        `Skipping plugin agent ${e}: not a regular file or exceeds ${MAX_PLUGIN_AGENT_FILE_BYTES} byte limit`,
+        `Skipping plugin agent ${filePath}: not a regular file or exceeds ${MAX_PLUGIN_AGENT_FILE_BYTES} byte limit`,
         {
           level: "warn",
         },
@@ -161,7 +194,7 @@ async function loadAgentFile(e, pluginName, namespace, sourceName, pluginPath, p
       return null;
     }
     return await loadAgentFromFile({
-      filePath: e,
+      filePath,
       content: smallFileChecked,
       pluginName,
       namespace,
@@ -171,7 +204,7 @@ async function loadAgentFile(e, pluginName, namespace, sourceName, pluginPath, p
       credentials,
     });
   } catch (error) {
-    logForDebugging(`Failed to load agent from ${e}: ${error}`, {
+    logForDebugging(`Failed to load agent from ${filePath}: ${error}`, {
       level: "error",
     });
     return null;
@@ -223,9 +256,9 @@ async function loadAgentFromFile({
     model = trimmed.toLowerCase() === "inherit" ? "inherit" : trimmed;
   }
   let backgroundRaw = frontmatter.background;
-  let nt = backgroundRaw === "true" || backgroundRaw === true ? true : undefined;
+  let background = backgroundRaw === "true" || backgroundRaw === true ? true : undefined;
   let omitClaudeMd = frontmatter.omitClaudeMd;
-  let Et = omitClaudeMd === "true" || omitClaudeMd === true ? true : undefined;
+  let omitClaudeMdFlag = omitClaudeMd === "true" || omitClaudeMd === true ? true : undefined;
   let systemPrompt = substitutePluginVariables(markdownContent.trim(), {
     path: pluginPath,
     source: sourceName,
@@ -245,26 +278,26 @@ async function loadAgentFromFile({
       logForDebugging(
         `Plugin agent file ${filePath} has invalid memory value '${memoryRaw}'. Valid options: ${PLUGIN_AGENT_SCOPES.join(", ")}`,
       );
-  let Yt = frontmatter.isolation === "worktree" ? "worktree" : undefined;
+  let isolation = frontmatter.isolation === "worktree" ? "worktree" : undefined;
   let effortRaw = frontmatter.effort;
   let effort = effortRaw !== undefined ? parseEffortValue(effortRaw) : undefined;
   if (effortRaw !== undefined && effort === undefined)
     logForDebugging(
       `Plugin agent file ${filePath} has invalid effort '${effortRaw}'. Valid options: ${EFFORT_LEVELS.join(", ")} or an integer`,
     );
-  let rn = escapeControlCharsForDisplay(filePath);
+  let displayPath = escapeControlCharsForDisplay(filePath);
   for (let field of PLUGIN_AGENT_FORBIDDEN_FIELDS)
     if (frontmatter[field] !== undefined)
       logForDebugging(
-        `Plugin agent file ${rn} sets ${field}, which is ignored for plugin agents. Use .claude/agents/ for this level of control.`,
+        `Plugin agent file ${displayPath} sets ${field}, which is ignored for plugin agents. Use .claude/agents/ for this level of control.`,
         {
           level: "warn",
         },
       );
-  for (let Xn of PLUGIN_AGENT_IGNORED_FIELDS)
-    if (frontmatter[Xn] !== undefined)
+  for (let field of PLUGIN_AGENT_IGNORED_FIELDS)
+    if (frontmatter[field] !== undefined)
       logForDebugging(
-        `Plugin agent file ${rn} sets ${Xn}, which is ignored for plugin agents. Define the agent in .claude/agents/ to use ${Xn}.`,
+        `Plugin agent file ${displayPath} sets ${field}, which is ignored for plugin agents. Define the agent in .claude/agents/ to use ${field}.`,
         {
           level: "warn",
         },
@@ -291,7 +324,7 @@ async function loadAgentFromFile({
       },
     );
   let experimentalCacheTtl = parseExperimentalCacheTtl(frontmatter);
-  let Kn =
+  let disallowedTools =
     frontmatter.disallowedTools !== undefined
       ? parseAgentToolsFromFrontmatter(frontmatter.disallowedTools)
       : undefined;
@@ -304,19 +337,19 @@ async function loadAgentFromFile({
     agentType,
     whenToUse,
     tools,
-    ...(Kn !== undefined && {
-      disallowedTools: Kn,
+    ...(disallowedTools !== undefined && {
+      disallowedTools,
     }),
     ...(skills !== undefined && {
       skills,
     }),
-    getSystemPrompt: (Xn) => {
+    getSystemPrompt: (context) => {
       if (isAutoMemoryEnabled() && memory) {
         let memoryPrompt = loadAgentMemoryPrompt(
           agentType,
           memory,
-          Xn?.toolUseContext?.storageV5,
-          Xn?.primedAgentMemory,
+          context?.toolUseContext?.storageV5,
+          context?.primedAgentMemory,
         );
         return (
           systemPrompt +
@@ -342,17 +375,17 @@ async function loadAgentFromFile({
       pluginPath,
       pluginManifest,
     },
-    ...(nt && {
-      background: nt,
+    ...(background && {
+      background,
     }),
-    ...(Et && {
-      omitClaudeMd: Et,
+    ...(omitClaudeMdFlag && {
+      omitClaudeMd: omitClaudeMdFlag,
     }),
     ...(memory && {
       memory,
     }),
-    ...(Yt && {
-      isolation: Yt,
+    ...(isolation && {
+      isolation,
     }),
     ...(effort !== undefined && {
       effort,
@@ -372,19 +405,19 @@ async function loadAgentFromFile({
 /**
  * 内置插件：hooksModule 给的是目录就按目录遍历加载，给的是打包文件就逐个解析内容；失败的条目记错误并丢弃。
  */
-async function loadBuiltinPluginAgents(e, loadedPaths, r) {
-  let builtinPluginAgentsSource = getBuiltinPluginAgentsSource(e.name);
+async function loadBuiltinPluginAgents(plugin, loadedPaths, credentials) {
+  let builtinPluginAgentsSource = getBuiltinPluginAgentsSource(plugin.name);
   if (builtinPluginAgentsSource === undefined) return [];
-  let h = pluginDisplayKey(e.name, e.source);
+  let displayName = pluginDisplayKey(plugin.name, plugin.source);
   if ("folder" in builtinPluginAgentsSource)
     return loadAgentsFromDir(
       builtinPluginAgentsSource.folder,
-      h,
-      e.source,
-      e.path,
-      e.manifest,
+      displayName,
+      plugin.source,
+      plugin.path,
+      plugin.manifest,
       loadedPaths,
-      r,
+      credentials,
       true,
     );
   return (
@@ -394,12 +427,12 @@ async function loadBuiltinPluginAgents(e, loadedPaths, r) {
           return await loadAgentFromFile({
             filePath: file.filePath,
             content: file.text,
-            pluginName: h,
+            pluginName: displayName,
             namespace: file.namespace,
-            sourceName: e.source,
-            pluginPath: e.path,
-            pluginManifest: e.manifest,
-            credentials: r,
+            sourceName: plugin.source,
+            pluginPath: plugin.path,
+            pluginManifest: plugin.manifest,
+            credentials,
           });
         } catch (error) {
           logForDebugging(`Failed to load agent from ${file.filePath}: ${error}`, {
@@ -409,26 +442,28 @@ async function loadBuiltinPluginAgents(e, loadedPaths, r) {
         }
       }),
     )
-  ).filter((S) => S !== null);
+  ).filter((agent) => agent !== null);
 }
 //@ chunk-e6aww6q8.js:2322206-2323863 fingerprint = loadPluginAgents (0.827)
 /**
  * 加载所有启用插件的代理（缓存在全局 agents），扫描 agentsPath/agentsPaths 下的 markdown。
  */
-function loadPluginAgents(e, credentials) {
+function loadPluginAgents(storageV5, credentials) {
   let pluginRegistry = getPluginRegistry();
   pluginRegistry.agents ??= (async () => {
-    let { enabled, errors } = await loadAllPluginsCacheOnly(e);
+    let { enabled, errors } = await loadAllPluginsCacheOnly(storageV5);
     if (pluginRegistry.handedIn !== undefined) {
       let results = await Promise.all(
-        enabled.filter((G) => G.isBuiltin).map((G) => loadBuiltinPluginAgents(G, new Set(), credentials)),
+        enabled
+          .filter((plugin) => plugin.isBuiltin)
+          .map((plugin) => loadBuiltinPluginAgents(plugin, new Set(), credentials)),
       );
       return [...(await pluginRegistry.handedIn).agents, ...results.flat()];
     }
     if (errors.length > 0)
       logForDebugging(`Plugin loading errors: ${errors.map((e) => pluginErrorText(e)).join(", ")}`);
-    let y = null;
-    let w = (
+    let failureKind = null;
+    let agents = (
       await Promise.all(
         enabled.map(async (plugin) => {
           let loadedPaths = new Set();
@@ -450,7 +485,7 @@ function loadPluginAgents(e, credentials) {
                   `Loaded ${agents.length} agents from plugin ${plugin.name} default directory`,
                 );
             } catch (error) {
-              y = "plugin_load_agents_dir_failed";
+              failureKind = "plugin_load_agents_dir_failed";
               logForDebugging(
                 `Failed to load agents from plugin ${plugin.name} default directory: ${error}`,
                 {
@@ -497,7 +532,7 @@ function loadPluginAgents(e, credentials) {
                   }
                   return [];
                 } catch (error) {
-                  y = "plugin_load_agents_path_failed";
+                  failureKind = "plugin_load_agents_path_failed";
                   logForDebugging(
                     `Failed to load agents from plugin ${plugin.name} custom path ${agentPath}: ${error}`,
                     {
@@ -524,13 +559,11 @@ function loadPluginAgents(e, credentials) {
         }),
       )
     ).flat();
-    logForDebugging(`Total plugin agents loaded: ${w.length}`);
-    if (y) logFeatureBad("plugin_load_agents", y);
+    logForDebugging(`Total plugin agents loaded: ${agents.length}`);
+    if (failureKind) logFeatureBad("plugin_load_agents", failureKind);
     else logFeatureOk("plugin_load_agents");
-    return w;
+    return agents;
   })();
   return pluginRegistry.agents;
 }
-//@ chunk-bfnfj4kx.js:75173-75190 fingerprint = loadAgentsFromDirectory (0.741)
-var loadAgentsFromDirectory = "agents";
 export { loadPluginAgents, validatePluginAgentFrontmatter };

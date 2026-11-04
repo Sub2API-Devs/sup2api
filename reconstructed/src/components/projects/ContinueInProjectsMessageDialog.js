@@ -8,13 +8,13 @@
  * pieces: chunk-kv464nx7.js (4)
  * attribution: placement 4
  */
-import { init_react_production, y, P } from "../../../vendor/react/cjs/react.production.js";
+import { init_react_production, useState, useEffect } from "../../../vendor/react/cjs/react.production.js";
 import {
   jsxProd_default,
   jsxProd_default_2,
 } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Text, Box } from "../../ink/components/Text.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { useInputRefusalWindow, useMountTime, useRefusalTracker } from "../CustomSelect/selectTypeahead.js";
 import { DECAY_TICK_MS } from "../ResumeStaleConversationDialog.js";
 import { useRefusableAnswer } from "../../hooks/useRefusableAnswer.js";
@@ -36,14 +36,14 @@ import { Dialog } from "../design-system/Dialog.js";
 //@ chunk-kv464nx7.js:14087-14091 placement
 init_react_production();
 //@ chunk-kv464nx7.js:14091-14148 placement
-function renderDimText(Ne) {
+function renderDimText(text) {
   return jsxProd_default(
     Text,
     {
       dimColor: true,
-      children: Ne,
+      children: text,
     },
-    Ne,
+    text,
   );
 }
 //@ chunk-kv464nx7.js:14148-14255 placement
@@ -62,286 +62,293 @@ var CLOSE_ONLY_OPTIONS = [
  * 发送到 Claude 项目前的消息编辑/确认对话框。
  */
 function ContinueInProjectsMessageDialog(props) {
-  let o = w(69);
+  let $ = useMemoCache(69);
   let { payload, answer } = props;
   let inputRefusalWindow = useInputRefusalWindow();
   let inputRefusalWindow_2 = useInputRefusalWindow(DECAY_TICK_MS);
   let openedAt = useMountTime();
   let { refusedWithin, noteRefused } = useRefusalTracker();
-  let [Te, Ye] = y(false);
-  let Re;
-  if (o[0] !== answer) {
-    Re = (choice) =>
+  let [isRefusedSend, setIsRefusedSend] = useState(false);
+  let rawAnswer;
+  if ($[0] !== answer) {
+    rawAnswer = (choice) =>
       answer({
         choice,
       });
-    o[0] = answer;
-    o[1] = Re;
-  } else Re = o[1];
-  let refusableAnswer = useRefusableAnswer(Re);
+    $[0] = answer;
+    $[1] = rawAnswer;
+  } else rawAnswer = $[1];
+  let refusableAnswer = useRefusableAnswer(rawAnswer);
   let { columns, rows } = useTerminalSize();
   let isScreenReaderEnabled = useIsScreenReaderEnabled();
-  let h = isScreenReaderEnabled ? columns : null;
+  let screenReaderColumns = isScreenReaderEnabled ? columns : null;
   let proposal;
-  let ge;
-  let xe;
-  let B;
-  let i;
-  if (o[2] !== columns || o[3] !== payload || o[4] !== rows) {
-    B = messageTitle(payload.projectName, payload.creates);
-    i = Math.max(columns - MIN_DIALOG_ROWS, RESERVED_ROWS);
-    let M;
-    if (o[10] !== payload.message) {
-      M = {
+  let availableRows;
+  let headerRows;
+  let title;
+  let contentWidth;
+  if ($[2] !== columns || $[3] !== payload || $[4] !== rows) {
+    title = messageTitle(payload.projectName, payload.creates);
+    contentWidth = Math.max(columns - MIN_DIALOG_ROWS, RESERVED_ROWS);
+    let proposalValue;
+    if ($[10] !== payload.message) {
+      proposalValue = {
         summary: payload.message,
       };
-      o[10] = payload.message;
-      o[11] = M;
-    } else M = o[11];
-    proposal = M;
-    ge = rows - BULLET_GAP;
-    let I;
-    if (o[12] !== i) {
-      I = (Ue, _e) => Ue + wrapTextToWidth(_e, i).length;
-      o[12] = i;
-      o[13] = I;
-    } else I = o[13];
-    xe = [B, ...MESSAGE_DISCLOSURE].reduce(I, 0);
-    o[2] = columns;
-    o[3] = payload;
-    o[4] = rows;
-    o[5] = proposal;
-    o[6] = ge;
-    o[7] = xe;
-    o[8] = B;
-    o[9] = i;
+      $[10] = payload.message;
+      $[11] = proposalValue;
+    } else proposalValue = $[11];
+    proposal = proposalValue;
+    availableRows = rows - BULLET_GAP;
+    let countRows;
+    if ($[12] !== contentWidth) {
+      countRows = (acc, line) => acc + wrapTextToWidth(line, contentWidth).length;
+      $[12] = contentWidth;
+      $[13] = countRows;
+    } else countRows = $[13];
+    headerRows = [title, ...MESSAGE_DISCLOSURE].reduce(countRows, 0);
+    $[2] = columns;
+    $[3] = payload;
+    $[4] = rows;
+    $[5] = proposal;
+    $[6] = availableRows;
+    $[7] = headerRows;
+    $[8] = title;
+    $[9] = contentWidth;
   } else {
-    proposal = o[5];
-    ge = o[6];
-    xe = o[7];
-    B = o[8];
-    i = o[9];
+    proposal = $[5];
+    availableRows = $[6];
+    headerRows = $[7];
+    title = $[8];
+    contentWidth = $[9];
   }
-  let ke = ge - xe;
-  let max = Math.max(1, ke);
-  let ne;
-  let M;
-  if (o[14] !== max || o[15] !== payload.message || o[16] !== h || o[17] !== i) {
-    ne = wrapCardText(payload.message, i);
-    M = countItemsFittingRows(ne, max, h);
-    o[14] = max;
-    o[15] = payload.message;
-    o[16] = h;
-    o[17] = i;
-    o[18] = ne;
-    o[19] = M;
+  let bodyRows = availableRows - headerRows;
+  let max = Math.max(1, bodyRows);
+  let summaryItems;
+  let fittingCount;
+  if ($[14] !== max || $[15] !== payload.message || $[16] !== screenReaderColumns || $[17] !== contentWidth) {
+    summaryItems = wrapCardText(payload.message, contentWidth);
+    fittingCount = countItemsFittingRows(summaryItems, max, screenReaderColumns);
+    $[14] = max;
+    $[15] = payload.message;
+    $[16] = screenReaderColumns;
+    $[17] = contentWidth;
+    $[18] = summaryItems;
+    $[19] = fittingCount;
   } else {
-    ne = o[18];
-    M = o[19];
+    summaryItems = $[18];
+    fittingCount = $[19];
   }
-  let q = M < ne.length;
-  let t = ke < 1 || columns - MIN_DIALOG_ROWS < RESERVED_ROWS || q;
-  let [u, Ee] = y(t);
-  if (t && !u) Ee(true);
-  let I;
-  let Be;
-  if (o[20] !== u || o[21] !== t || o[22] !== noteRefused) {
-    I = () => {
-      if (!t && u) noteRefused();
+  let isTruncated = fittingCount < summaryItems.length;
+  let isTooSmall = bodyRows < 1 || columns - MIN_DIALOG_ROWS < RESERVED_ROWS || isTruncated;
+  let [wasTooSmall, setWasTooSmall] = useState(isTooSmall);
+  if (isTooSmall && !wasTooSmall) setWasTooSmall(true);
+  let resetRefusalEffect;
+  let resetRefusalDeps;
+  if ($[20] !== wasTooSmall || $[21] !== isTooSmall || $[22] !== noteRefused) {
+    resetRefusalEffect = () => {
+      if (!isTooSmall && wasTooSmall) noteRefused();
     };
-    Be = [t, u, noteRefused];
-    o[20] = u;
-    o[21] = t;
-    o[22] = noteRefused;
-    o[23] = I;
-    o[24] = Be;
+    resetRefusalDeps = [isTooSmall, wasTooSmall, noteRefused];
+    $[20] = wasTooSmall;
+    $[21] = isTooSmall;
+    $[22] = noteRefused;
+    $[23] = resetRefusalEffect;
+    $[24] = resetRefusalDeps;
   } else {
-    I = o[23];
-    Be = o[24];
+    resetRefusalEffect = $[23];
+    resetRefusalDeps = $[24];
   }
-  P(I, Be);
-  let z = Te && !t;
-  let Pe;
+  useEffect(resetRefusalEffect, resetRefusalDeps);
+  let showRevealNotice = isRefusedSend && !isTooSmall;
+  let refuseInput;
   if (
-    o[25] !== inputRefusalWindow ||
-    o[26] !== inputRefusalWindow_2 ||
-    o[27] !== noteRefused ||
-    o[28] !== refusedWithin
+    $[25] !== inputRefusalWindow ||
+    $[26] !== inputRefusalWindow_2 ||
+    $[27] !== noteRefused ||
+    $[28] !== refusedWithin
   ) {
-    Pe = function l(eo) {
-      if (!(eo === "send" ? inputRefusalWindow_2() : inputRefusalWindow()) && !refusedWithin()) {
+    refuseInput = function refuseInput(action) {
+      if (!(action === "send" ? inputRefusalWindow_2() : inputRefusalWindow()) && !refusedWithin()) {
         return false;
       }
       noteRefused();
       return true;
     };
-    o[25] = inputRefusalWindow;
-    o[26] = inputRefusalWindow_2;
-    o[27] = noteRefused;
-    o[28] = refusedWithin;
-    o[29] = Pe;
-  } else Pe = o[29];
-  let l = Pe;
-  let je;
-  if (o[30] !== refusableAnswer || o[31] !== l) {
-    je = function g(V) {
-      if (l(V)) {
-        Ye(V === "send");
-        refusableAnswer.refuse(V);
+    $[25] = inputRefusalWindow;
+    $[26] = inputRefusalWindow_2;
+    $[27] = noteRefused;
+    $[28] = refusedWithin;
+    $[29] = refuseInput;
+  } else refuseInput = $[29];
+  let refuseInput_2 = refuseInput;
+  let onChoice;
+  if ($[30] !== refusableAnswer || $[31] !== refuseInput_2) {
+    onChoice = function onChoice(action) {
+      if (refuseInput_2(action)) {
+        setIsRefusedSend(action === "send");
+        refusableAnswer.refuse(action);
         return;
       }
-      refusableAnswer.answer(V);
+      refusableAnswer.answer(action);
     };
-    o[30] = refusableAnswer;
-    o[31] = l;
-    o[32] = je;
-  } else je = o[32];
-  let g = je;
-  let Me;
-  if (o[33] !== answer || o[34] !== l) {
-    Me = function f() {
-      if (!l("cancel"))
+    $[30] = refusableAnswer;
+    $[31] = refuseInput_2;
+    $[32] = onChoice;
+  } else onChoice = $[32];
+  let onChoiceStable = onChoice;
+  let onCancel;
+  if ($[33] !== answer || $[34] !== refuseInput_2) {
+    onCancel = function onCancel() {
+      if (!refuseInput_2("cancel"))
         answer({
           choice: "cancel",
         });
     };
-    o[33] = answer;
-    o[34] = l;
-    o[35] = Me;
-  } else Me = o[35];
-  let onCancel = Me;
+    $[33] = answer;
+    $[34] = refuseInput_2;
+    $[35] = onCancel;
+  } else onCancel = $[35];
+  let onCancel_2 = onCancel;
   const existingProject = !payload.creates;
-  let X;
-  if (o[36] !== max || o[37] !== proposal || o[38] !== h || o[39] !== existingProject || o[40] !== i) {
-    X = jsxProd_default(ProjectProposalCard, {
+  let proposalCard;
+  if (
+    $[36] !== max ||
+    $[37] !== proposal ||
+    $[38] !== screenReaderColumns ||
+    $[39] !== existingProject ||
+    $[40] !== contentWidth
+  ) {
+    proposalCard = jsxProd_default(ProjectProposalCard, {
       proposal,
       proposalBytes: 0,
       existingProject,
-      width: i,
+      width: contentWidth,
       maxRows: max,
       marginTop: 0,
       transcriptChord: "",
-      screenReaderColumns: h,
+      screenReaderColumns,
       messageFrom: "typed",
     });
-    o[36] = max;
-    o[37] = proposal;
-    o[38] = h;
-    o[39] = existingProject;
-    o[40] = i;
-    o[41] = X;
-  } else X = o[41];
-  let Z;
-  if (o[42] !== t || o[43] !== q) {
-    Z =
-      t && !q
+    $[36] = max;
+    $[37] = proposal;
+    $[38] = screenReaderColumns;
+    $[39] = existingProject;
+    $[40] = contentWidth;
+    $[41] = proposalCard;
+  } else proposalCard = $[41];
+  let tooSmallNotice;
+  if ($[42] !== isTooSmall || $[43] !== isTruncated) {
+    tooSmallNotice =
+      isTooSmall && !isTruncated
         ? jsxProd_default(Text, {
             color: "warning",
             children: TERMINAL_TOO_SMALL_MESSAGE,
           })
         : null;
-    o[42] = t;
-    o[43] = q;
-    o[44] = Z;
-  } else Z = o[44];
-  let Ie;
-  if (o[45] === MEMO_CACHE_SENTINEL) {
-    Ie = MESSAGE_DISCLOSURE.map(renderDimText);
-    o[45] = Ie;
-  } else Ie = o[45];
-  let G;
-  if (o[46] !== z || o[47] !== isScreenReaderEnabled) {
-    G =
-      z || !isScreenReaderEnabled
+    $[42] = isTooSmall;
+    $[43] = isTruncated;
+    $[44] = tooSmallNotice;
+  } else tooSmallNotice = $[44];
+  let disclosureLines;
+  if ($[45] === MEMO_CACHE_SENTINEL) {
+    disclosureLines = MESSAGE_DISCLOSURE.map(renderDimText);
+    $[45] = disclosureLines;
+  } else disclosureLines = $[45];
+  let revealNotice;
+  if ($[46] !== showRevealNotice || $[47] !== isScreenReaderEnabled) {
+    revealNotice =
+      showRevealNotice || !isScreenReaderEnabled
         ? jsxProd_default(Text, {
             dimColor: true,
-            children: z ? MESSAGE_REVEAL_NOTICE : " ",
+            children: showRevealNotice ? MESSAGE_REVEAL_NOTICE : " ",
           })
         : null;
-    o[46] = z;
-    o[47] = isScreenReaderEnabled;
-    o[48] = G;
-  } else G = o[48];
-  let H;
+    $[46] = showRevealNotice;
+    $[47] = isScreenReaderEnabled;
+    $[48] = revealNotice;
+  } else revealNotice = $[48];
+  let selector;
   if (
-    o[49] !== onCancel ||
-    o[50] !== u ||
-    o[51] !== t ||
-    o[52] !== openedAt ||
-    o[53] !== g ||
-    o[54] !== refusableAnswer.attempts ||
-    o[55] !== refusableAnswer.refused ||
-    o[56] !== l
+    $[49] !== onCancel_2 ||
+    $[50] !== wasTooSmall ||
+    $[51] !== isTooSmall ||
+    $[52] !== openedAt ||
+    $[53] !== onChoiceStable ||
+    $[54] !== refusableAnswer.attempts ||
+    $[55] !== refusableAnswer.refused ||
+    $[56] !== refuseInput_2
   ) {
-    H = t
+    selector = isTooSmall
       ? jsxProd_default(
           ModelSelector,
           {
             hideIndexes: true,
             options: [...CLOSE_ONLY_OPTIONS],
-            onChange: () => g("cancel"),
-            onCancel,
+            onChange: () => onChoiceStable("cancel"),
+            onCancel: onCancel_2,
           },
           refusableAnswer.attempts,
         )
       : jsxProd_default(
           ConfirmSelect,
           {
-            refuseInput: () => l("send"),
+            refuseInput: () => refuseInput_2("send"),
             openedAt,
             windowMs: DECAY_TICK_MS,
-            focus: u || refusableAnswer.refused === "cancel" ? "cancel" : "confirm",
+            focus: wasTooSmall || refusableAnswer.refused === "cancel" ? "cancel" : "confirm",
             confirmLabel: "Send",
             cancelLabel: "No",
-            onConfirm: () => g("send"),
-            onCancel: () => g("cancel"),
+            onConfirm: () => onChoiceStable("send"),
+            onCancel: () => onChoiceStable("cancel"),
           },
           refusableAnswer.attempts,
         );
-    o[49] = onCancel;
-    o[50] = u;
-    o[51] = t;
-    o[52] = openedAt;
-    o[53] = g;
-    o[54] = refusableAnswer.attempts;
-    o[55] = refusableAnswer.refused;
-    o[56] = l;
-    o[57] = H;
-  } else H = o[57];
-  let J;
-  if (o[58] !== G || o[59] !== H) {
-    J = jsxProd_default_2(Box, {
+    $[49] = onCancel_2;
+    $[50] = wasTooSmall;
+    $[51] = isTooSmall;
+    $[52] = openedAt;
+    $[53] = onChoiceStable;
+    $[54] = refusableAnswer.attempts;
+    $[55] = refusableAnswer.refused;
+    $[56] = refuseInput_2;
+    $[57] = selector;
+  } else selector = $[57];
+  let footerBox;
+  if ($[58] !== revealNotice || $[59] !== selector) {
+    footerBox = jsxProd_default_2(Box, {
       flexDirection: "column",
-      children: [Ie, G, H],
+      children: [disclosureLines, revealNotice, selector],
     });
-    o[58] = G;
-    o[59] = H;
-    o[60] = J;
-  } else J = o[60];
+    $[58] = revealNotice;
+    $[59] = selector;
+    $[60] = footerBox;
+  } else footerBox = $[60];
   let children;
-  if (o[61] !== X || o[62] !== Z || o[63] !== J) {
+  if ($[61] !== proposalCard || $[62] !== tooSmallNotice || $[63] !== footerBox) {
     children = jsxProd_default_2(Box, {
       flexDirection: "column",
       gap: 1,
-      children: [X, Z, J],
+      children: [proposalCard, tooSmallNotice, footerBox],
     });
-    o[61] = X;
-    o[62] = Z;
-    o[63] = J;
-    o[64] = children;
-  } else children = o[64];
-  let be;
-  if (o[65] !== onCancel || o[66] !== children || o[67] !== B) {
-    be = jsxProd_default(Dialog, {
-      title: B,
-      onCancel,
+    $[61] = proposalCard;
+    $[62] = tooSmallNotice;
+    $[63] = footerBox;
+    $[64] = children;
+  } else children = $[64];
+  let dialog;
+  if ($[65] !== onCancel_2 || $[66] !== children || $[67] !== title) {
+    dialog = jsxProd_default(Dialog, {
+      title,
+      onCancel: onCancel_2,
       color: "suggestion",
       children,
     });
-    o[65] = onCancel;
-    o[66] = children;
-    o[67] = B;
-    o[68] = be;
-  } else be = o[68];
-  return be;
+    $[65] = onCancel_2;
+    $[66] = children;
+    $[67] = title;
+    $[68] = dialog;
+  } else dialog = $[68];
+  return dialog;
 }
+export { ContinueInProjectsMessageDialog };

@@ -25,37 +25,41 @@ import { createUserMessage, markToolSummaryMessage } from "./messages.js";
  */
 async function autoloadWorkflowAuthoringSkill(attachments, messages, context) {
   let trigger = attachments.some((attachment) =>
-    isNullRenderingAttachment(attachment, messages, (i) => i.type === "workflow_keyword_request"),
+    isNullRenderingAttachment(
+      attachment,
+      messages,
+      (attachment) => attachment.type === "workflow_keyword_request",
+    ),
   )
     ? "keyword"
     : attachments.some((attachment) =>
           isNullRenderingAttachment(
             attachment,
             messages,
-            (i) => i.type === "ultra_effort_enter" && i.reminderType === "full",
+            (attachment) => attachment.type === "ultra_effort_enter" && attachment.reminderType === "full",
           ),
         )
       ? "ultracode"
       : undefined;
   if (trigger === undefined || !isWorkflowAuthoringSkillVisible(context)) return [];
   let skillBlocks = renderWorkflowAuthoringSkillBody();
-  let joined = skillBlocks
+  let target = skillBlocks
     .filter((skillBlock) => skillBlock.type === "text")
     .map((skillBlock) => skillBlock.text).join(`
 
 `);
   let skillKey = `:${WORKFLOW_AUTHORING}`;
-  if (restoreSkillStateFromMessages(messagesSinceCompactBoundary([...(messages ?? [])]), joined) !== null) {
-    if (getInvokedSkills().get(skillKey)?.content !== joined)
-      addInvokedSkill(WORKFLOW_AUTHORING, `bundled:${WORKFLOW_AUTHORING}`, joined, null);
+  if (restoreSkillStateFromMessages(messagesSinceCompactBoundary([...(messages ?? [])]), target) !== null) {
+    if (getInvokedSkills().get(skillKey)?.content !== target)
+      addInvokedSkill(WORKFLOW_AUTHORING, `bundled:${WORKFLOW_AUTHORING}`, target, null);
     return [];
   }
-  addInvokedSkill(WORKFLOW_AUTHORING, `bundled:${WORKFLOW_AUTHORING}`, joined, null);
+  addInvokedSkill(WORKFLOW_AUTHORING, `bundled:${WORKFLOW_AUTHORING}`, target, null);
   logEvent("tengu_workflow_authoring_skill_autoload", {
     trigger: fromEnum(trigger),
   });
   logFeatureOk("workflow_authoring_autoload");
-  let { formatSkillLoadingMetadata } = await import("./chunk-jghdfw5c.js");
+  let { formatSkillLoadingMetadata } = await import("./processUserInput/processSlashCommand.js");
   return [
     createUserMessage({
       content: formatSkillLoadingMetadata(WORKFLOW_AUTHORING),
@@ -70,6 +74,11 @@ async function autoloadWorkflowAuthoringSkill(attachments, messages, context) {
   ].map(markToolSummaryMessage);
 }
 //@ chunk-70r0mv35.js:12698-12794 placement = isNullRenderingAttachment (1)
-function isNullRenderingAttachment(msg, messages, l) {
-  return msg.type === "attachment" && l(msg.attachment) && !messages?.some((r) => r.uuid === msg.uuid);
+function isNullRenderingAttachment(msg, messages, matchesTrigger) {
+  return (
+    msg.type === "attachment" &&
+    matchesTrigger(msg.attachment) &&
+    !messages?.some((existingMessage) => existingMessage.uuid === msg.uuid)
+  );
 }
+export { autoloadWorkflowAuthoringSkill };

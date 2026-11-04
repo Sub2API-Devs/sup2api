@@ -17,7 +17,7 @@ var TENGU_BUZZING_LIGHTNING = "tengu_buzzing_lightning";
 //@ chunk-djnrvf1b.js:330-432 placement
 function isArtifactReplPathEnabled() {
   let sessionFeatureValues = getSessionFeatureValues();
-  let o = undefined;
+  let unused = undefined;
   sessionFeatureValues.artifactReplPathEnabled ??= getFeatureValue_CACHED_MAY_BE_STALE(
     TENGU_BUZZING_LIGHTNING,
     false,

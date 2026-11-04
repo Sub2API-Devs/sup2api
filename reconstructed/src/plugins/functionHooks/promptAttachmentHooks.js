@@ -15,34 +15,34 @@ import { identity as identity_2 } from "../../utils/identity.js";
  * prompt.attachment 答案缓存：answerOf/pendingOf 查询，settle/resolve 写入（带代号防旧结果覆盖），可整体失效。
  */
 function createPromptAttachmentCache() {
-  let e = new Map();
-  let n = new Map();
-  let r = 0;
+  let answers = new Map();
+  let pending = new Map();
+  let generation = 0;
   return {
-    answerOf: (s) => e.get(s),
-    pendingOf: (s) => n.get(s),
-    settle: (s, h) => {
-      e.set(s, h);
+    answerOf: (key) => answers.get(key),
+    pendingOf: (key) => pending.get(key),
+    settle: (key, answer) => {
+      answers.set(key, answer);
     },
-    resolve: (s, h) => {
-      let y = r;
-      let S = h.then((w) => {
-        if (y === r) {
-          e.set(s, w);
-          n.delete(s);
+    resolve: (key, promise) => {
+      let startGeneration = generation;
+      let tracked = promise.then((value) => {
+        if (startGeneration === generation) {
+          answers.set(key, value);
+          pending.delete(key);
         }
-        return w;
+        return value;
       });
-      n.set(s, S);
-      S.catch(() => {
-        if (y === r) n.delete(s);
+      pending.set(key, tracked);
+      tracked.catch(() => {
+        if (startGeneration === generation) pending.delete(key);
       });
-      return S;
+      return tracked;
     },
     invalidatePromptAttachments: () => {
-      r += 1;
-      e.clear();
-      n.clear();
+      generation += 1;
+      answers.clear();
+      pending.clear();
     },
   };
 }
@@ -50,7 +50,9 @@ function createPromptAttachmentCache() {
 /**
  * 提示附件缓存
  */
-var promptAttachmentCache = identity_2(createPromptAttachmentCache(), (e) => e.invalidatePromptAttachments());
+var promptAttachmentCache = identity_2(createPromptAttachmentCache(), (cache) =>
+  cache.invalidatePromptAttachments(),
+);
 //@ chunk-e6aww6q8.js:86072-86092 placement
 var answerOf = promptAttachmentCache.answerOf;
 //@ chunk-e6aww6q8.js:86092-86131 placement

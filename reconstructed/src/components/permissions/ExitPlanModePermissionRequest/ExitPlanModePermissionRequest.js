@@ -11,13 +11,13 @@
 import { basename } from "path";
 import {
   init_react_production,
-  y,
-  Oo,
-  P,
-  Q,
-  R,
-  ce,
-  zt,
+  useState,
+  useEffectEvent,
+  useEffect,
+  useMemo,
+  useRef,
+  useCallback,
+  useLayoutEffect,
 } from "../../../../vendor/react/cjs/react.production.js";
 import {
   toExternalPermissionMode,
@@ -110,9 +110,13 @@ import { PermissionRuleExplanation } from "../PermissionRuleExplanation.js";
 import { KeyboardShortcutHint } from "../../design-system/KeyboardShortcutHint.js";
 import { getDisplayPath } from "../../../utils/file.js";
 import { StatusIcon } from "../../design-system/StatusIcon.js";
+import { deferInit } from "../../../../runtime/deferred-init.js";
 
 //@ chunk-18hwfzwa.js:1346542-1346546 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:1346542", () => {
+  init_react_production();
+});
 //@ chunk-18hwfzwa.js:1346580-1347178 placement
 /**
  * 选择 Ultraplan 时作为 deny 反馈发回模型的说明；同一声明还有计划显示上限与过大时的占位文字。
@@ -136,10 +140,10 @@ function buildSetCurrentModeUpdates(currentContext) {
 function autoNameSessionFromPlan(plan, setAppState, isClearContext, storageV5, credentials) {
   if (isSessionPersistenceDisabled()) return;
   if (!isClearContext && getCurrentSessionTitle(getSessionId())) return;
-  let ke;
+  let bgJobDirName;
   if (isActingAsBgJob()) {
     let bgJobDir = getBgJobDir();
-    if (bgJobDir) ke = basename(bgJobDir);
+    if (bgJobDir) bgJobDirName = basename(bgJobDir);
   }
   generateSessionName(
     [
@@ -160,7 +164,7 @@ function autoNameSessionFromPlan(plan, setAppState, isClearContext, storageV5, c
       saveAiGeneratedTitle(sessionId, name_2, storageV5);
       await saveAgentName(sessionId, name_2, fullPath, "auto", storageV5);
       updateSessionName(name_2, storageV5, "auto");
-      if (ke) await syncJobName(ke, name_2, "auto", storageV5);
+      if (bgJobDirName) await syncJobName(bgJobDirName, name_2, "auto", storageV5);
       setAppState((prev) => {
         if (prev.standaloneAgentContext?.name === name_2) return prev;
         return {
@@ -186,17 +190,17 @@ function buildPlanApprovalOptions({
   onFeedbackChange,
 }) {
   let options = [];
-  let We = {};
-  let ze = {};
+  let keepContextRows = {};
+  let keepContextModes = {};
   let usedLabel = usedPercent !== null ? ` (${usedPercent}% used)` : "";
-  let rt = Boolean(isAutoModeAvailable) && autoModeGateSnapshot;
+  let isAutoModeOffered = Boolean(isAutoModeAvailable) && autoModeGateSnapshot;
   if (!approvalsWithheld && showClearContext)
     if (isBypassPermissionsModeAvailable)
       options.push({
         label: `Yes, clear context${usedLabel} and bypass permissions`,
         value: "yes-bypass-permissions",
       });
-    else if (rt)
+    else if (isAutoModeOffered)
       options.push({
         label: `Yes, clear context${usedLabel} and use auto mode`,
         value: "yes-auto-clear-context",
@@ -208,46 +212,46 @@ function buildPlanApprovalOptions({
       });
   if (!approvalsWithheld) {
     if (isBypassPermissionsModeAvailable) {
-      let At = modeSwitchRow("bypassPermissions", {
+      let bypassRow = modeSwitchRow("bypassPermissions", {
         isBypassPermissionsModeAvailable,
       });
-      if (At !== null) {
-        We["yes-accept-edits-keep-context"] = At;
-        ze["yes-accept-edits-keep-context"] = "bypassPermissions";
+      if (bypassRow !== null) {
+        keepContextRows["yes-accept-edits-keep-context"] = bypassRow;
+        keepContextModes["yes-accept-edits-keep-context"] = "bypassPermissions";
         options.push({
-          label: At.node,
+          label: bypassRow.node,
           value: "yes-accept-edits-keep-context",
         });
       }
-    } else if (rt) {
-      let At = autoModeRow("exit-plan-resume");
-      We["yes-resume-auto-mode"] = At;
-      ze["yes-resume-auto-mode"] = "auto";
+    } else if (isAutoModeOffered) {
+      let resumeAutoModeRow = autoModeRow("exit-plan-resume");
+      keepContextRows["yes-resume-auto-mode"] = resumeAutoModeRow;
+      keepContextModes["yes-resume-auto-mode"] = "auto";
       options.push({
-        label: At.node,
+        label: resumeAutoModeRow.node,
         value: "yes-resume-auto-mode",
       });
     } else {
-      let At = modeSwitchRow("acceptEdits", {
+      let acceptEditsRow = modeSwitchRow("acceptEdits", {
         labelVariant: "plan-keep-context",
       });
-      if (At !== null) {
-        We["yes-accept-edits-keep-context"] = At;
-        ze["yes-accept-edits-keep-context"] = "acceptEdits";
+      if (acceptEditsRow !== null) {
+        keepContextRows["yes-accept-edits-keep-context"] = acceptEditsRow;
+        keepContextModes["yes-accept-edits-keep-context"] = "acceptEdits";
         options.push({
-          label: At.node,
+          label: acceptEditsRow.node,
           value: "yes-accept-edits-keep-context",
         });
       }
     }
-    let kt = modeSwitchRow("default", {
+    let defaultRow = modeSwitchRow("default", {
       labelVariant: "plan-keep-context",
     });
-    if (kt !== null) {
-      We["yes-default-keep-context"] = kt;
-      ze["yes-default-keep-context"] = "default";
+    if (defaultRow !== null) {
+      keepContextRows["yes-default-keep-context"] = defaultRow;
+      keepContextModes["yes-default-keep-context"] = "default";
       options.push({
-        label: kt.node,
+        label: defaultRow.node,
         value: "yes-default-keep-context",
       });
     }
@@ -271,14 +275,14 @@ function buildPlanApprovalOptions({
   });
   return {
     options,
-    keepContextRows: We,
-    keepContextModes: ze,
+    keepContextRows,
+    keepContextModes,
     autoModeGateSnapshot,
   };
 }
 //@ chunk-18hwfzwa.js:1349532-1349577 layout
-function announcePermissionMode(h) {
-  announce(`[${permissionModeIndicator(h)} on]`, {
+function announcePermissionMode(mode) {
+  announce(`[${permissionModeIndicator(mode)} on]`, {
     hold: true,
   });
 }
@@ -366,21 +370,22 @@ function exitPlanChoiceToResult(choice, state) {
  * 计划批准对话框：读取计划文件（缺失时提示先写计划），显示计划 Markdown 与上下文用量；选项由 buildPlanApprovalOptions 生成（清空上下文 + auto/acceptEdits/bypass、保留上下文、继续规划/反馈、ultraplan）；批准时设置模式并可清空上下文。
  */
 function ExitPlanModePermissionRequest({ payload, answer, wouldTakeAnswer }) {
-  let toolPermissionContext = useAppState((_r) => _r.toolPermissionContext);
+  let toolPermissionContext = useAppState((appState) => appState.toolPermissionContext);
   let setAppState = useSetAppState();
   let store = useAppStoreDirect();
   let { storageV5, credentials } = useTheme_2();
   let commandQueueOrDefault = useCommandQueueOrDefault();
   let session = useSession();
   let { addNotification } = useNotifications();
-  let [planFeedback, setPlanFeedback] = y("");
-  let [pastedContents, setPastedContents] = y({});
-  let nextPasteIdRef = Oo(() => [planFeedback]);
-  P(() => registerPasteCarrier(() => nextPasteIdRef()), []);
-  let Ot = Q(() => getRemoteCaps() !== null, []);
-  let Et = (useAppState((_r) => _r.settings.showClearContextOnPlanAccept) ?? false) && !Ot;
-  let ultraplanSessionUrl = useAppState((_r) => _r.ultraplanSessionUrl);
-  let ultraplanLaunching = useAppState((_r) => _r.ultraplanLaunching);
+  let [planFeedback, setPlanFeedback] = useState("");
+  let [pastedContents, setPastedContents] = useState({});
+  let nextPasteIdRef = useEffectEvent(() => [planFeedback]);
+  useEffect(() => registerPasteCarrier(() => nextPasteIdRef()), []);
+  let isRemote = useMemo(() => getRemoteCaps() !== null, []);
+  let showClearContext =
+    (useAppState((appState) => appState.settings.showClearContextOnPlanAccept) ?? false) && !isRemote;
+  let ultraplanSessionUrl = useAppState((appState) => appState.ultraplanSessionUrl);
+  let ultraplanLaunching = useAppState((appState) => appState.ultraplanLaunching);
   let mainLoopModel = useMainLoopModel_3();
   let backgroundWorkSignal = useBackgroundWorkSignal();
   let showUltraplan =
@@ -391,49 +396,58 @@ function ExitPlanModePermissionRequest({ payload, answer, wouldTakeAnswer }) {
     backgroundWorkSignal !== null;
   let { mode, isAutoModeAvailable, isBypassPermissionsModeAvailable } = toolPermissionContext;
   let { plan, planFilePath, usage } = payload;
-  let [plan_2, Ro] = y(() =>
+  let [planText, setPlanText] = useState(() =>
     plan && plan.length > 0 ? plan : "No plan found. Please write your plan to the plan file first.",
   );
-  let Ho = !plan || plan.trim() === "";
-  let options = Q(() => canPlanReturnToAutoMode(toolPermissionContext.prePlanMode), []);
-  let Wo = plan_2.length <= MAX_PLAN_DISPLAY_LENGTH;
-  let mn = Q(() => Wo && !hasSuspiciousText(plan_2), [Wo, plan_2]);
-  let Cn = Q(() => (mn ? displayText(plan_2) : null), [mn, plan_2]);
-  let No = Q(() => modeSwitchRow("default"), []);
-  let vo = Q(
+  let isPlanEmpty = !plan || plan.trim() === "";
+  let options = useMemo(() => canPlanReturnToAutoMode(toolPermissionContext.prePlanMode), []);
+  let isPlanSmall = planText.length <= MAX_PLAN_DISPLAY_LENGTH;
+  let canShowPlan = useMemo(() => isPlanSmall && !hasSuspiciousText(planText), [isPlanSmall, planText]);
+  let planDisplay = useMemo(() => (canShowPlan ? displayText(planText) : null), [canShowPlan, planText]);
+  let defaultModeRow = useMemo(() => modeSwitchRow("default"), []);
+  let approvalOptions = useMemo(
     () =>
       buildPlanApprovalOptions({
-        showClearContext: Et,
+        showClearContext,
         showUltraplan,
-        usedPercent: Et ? getContextUsedPercent(usage, mode) : null,
+        usedPercent: showClearContext ? getContextUsedPercent(usage, mode) : null,
         isAutoModeAvailable,
         isBypassPermissionsModeAvailable,
         autoModeGateSnapshot: options,
-        approvalsWithheld: !mn,
+        approvalsWithheld: !canShowPlan,
         onFeedbackChange: setPlanFeedback,
       }),
-    [Et, showUltraplan, usage, mode, isAutoModeAvailable, isBypassPermissionsModeAvailable, options, mn],
+    [
+      showClearContext,
+      showUltraplan,
+      usage,
+      mode,
+      isAutoModeAvailable,
+      isBypassPermissionsModeAvailable,
+      options,
+      canShowPlan,
+    ],
   );
-  let options_2 = vo.options;
+  let options_2 = approvalOptions.options;
   let defaultFocusValue =
-    useAppState((_r) => _r.proactivityLevel) === "ask" &&
+    useAppState((state) => state.proactivityLevel) === "ask" &&
     wasProactivityEverOn() &&
-    vo.keepContextRows["yes-default-keep-context"] !== undefined &&
-    vo.keepContextRows["yes-resume-auto-mode"] === undefined
+    approvalOptions.keepContextRows["yes-default-keep-context"] !== undefined &&
+    approvalOptions.keepContextRows["yes-resume-auto-mode"] === undefined
       ? "yes-default-keep-context"
       : undefined;
-  let bn = R(false);
-  P(() => {
-    if (bn.current) return;
-    bn.current = true;
+  let loggedRef = useRef(false);
+  useEffect(() => {
+    if (loggedRef.current) return;
+    loggedRef.current = true;
     logEvent("tengu_plan_exit_dialog_shown", {
       planLengthChars: plan?.length ?? 0,
-      isEmptyPlan: Ho,
+      isEmptyPlan: isPlanEmpty,
     });
-  }, [Ho, plan]);
-  let [Go, hn] = y(false);
-  let [Mn, Xo] = y(false);
-  useTimeout(() => hn(false), Go ? 5000 : null, [Go]);
+  }, [isPlanEmpty, plan]);
+  let [planSaved, setPlanSaved] = useState(false);
+  let [planEditedLocally, setPlanEditedLocally] = useState(false);
+  useTimeout(() => setPlanSaved(false), planSaved ? 5000 : null, [planSaved]);
   function onImagePaste(base64Image, mediaType) {
     let pasteId = mintPasteId(undefined, pastedContents);
     let newContent = {
@@ -444,15 +458,15 @@ function ExitPlanModePermissionRequest({ payload, answer, wouldTakeAnswer }) {
       filename: mediaType?.filename || "Pasted image",
       dimensions: mediaType?.dimensions,
     };
-    let Er = setSliceField(setAppState, "storedImagePaths");
-    recordImagePath(newContent, Er);
-    storeImageAndRecord(newContent, Er);
+    let recordStoredImagePath = setSliceField(setAppState, "storedImagePaths");
+    recordImagePath(newContent, recordStoredImagePath);
+    storeImageAndRecord(newContent, recordStoredImagePath);
     setPastedContents((prev) => ({
       ...prev,
       [pasteId]: newContent,
     }));
   }
-  let onRemoveImage = ce((id) => {
+  let onRemoveImage = useCallback((id) => {
     setPastedContents((prev) => {
       let next = {
         ...prev,
@@ -461,49 +475,51 @@ function ExitPlanModePermissionRequest({ payload, answer, wouldTakeAnswer }) {
       return next;
     });
   }, []);
-  let imageAttachments = Object.values(pastedContents).filter((_r) => _r.type === "image");
+  let imageAttachments = Object.values(pastedContents).filter((attachment) => attachment.type === "image");
   let hasImages = imageAttachments.length > 0;
   let scrollViewportHandle = useScrollViewportHandle();
   let claimScrollBox = useClaimScrollBox();
-  let wn = R(null);
-  let [mr, Kn] = y(0);
-  zt(() => {
-    let height = wn.current ? measureElement(wn.current).height : 0;
-    if (height !== mr) Kn(height);
+  let containerRef = useRef(null);
+  let [containerHeight, setContainerHeight] = useState(0);
+  useLayoutEffect(() => {
+    let height = containerRef.current ? measureElement(containerRef.current).height : 0;
+    if (height !== containerHeight) setContainerHeight(height);
   });
-  zt(() => {
+  useLayoutEffect(() => {
     if (!claimScrollBox) return;
-    claimScrollBox(mr);
+    claimScrollBox(containerHeight);
     return () => claimScrollBox(null);
-  }, [claimScrollBox, mr]);
+  }, [claimScrollBox, containerHeight]);
   let { rows } = useScrollViewportSize({
     rows: 0,
     columns: 0,
   });
   let terminalSize = useTerminalSize();
-  let Zn = claimScrollBox !== null && scrollViewportHandle !== null;
+  let hasScrollViewport = claimScrollBox !== null && scrollViewportHandle !== null;
   let unattendedNotice = useUnattendedNotice();
-  let dr = Zn ? Math.max(1, rows - mr - unattendedNotice) : Math.max(1, terminalSize.rows - mr - 4);
+  let contentHeight = hasScrollViewport
+    ? Math.max(1, rows - containerHeight - unattendedNotice)
+    : Math.max(1, terminalSize.rows - containerHeight - 4);
   let editorCommand = resolveEditorCommand();
-  let pr = editorCommand ? toIDEDisplayName(editorCommand) : null;
-  let plan_3 = useInputRefusalWindow();
+  let editorDisplayName = editorCommand ? toIDEDisplayName(editorCommand) : null;
+  let plan_2 = useInputRefusalWindow();
   let { refusedWithin, noteRefused } = useRefusalTracker();
-  function Pr() {
-    if (plan_3() || refusedWithin()) {
+  function refuseInput() {
+    if (plan_2() || refusedWithin()) {
       noteRefused();
       return true;
     }
     return false;
   }
-  function ts(value) {
+  function notifyStatus(value) {
     commandQueueOrDefault.enqueuePendingNotification({
       agentId: mainAgentId(),
       value,
       mode: "task-notification",
     });
   }
-  function Gn(_r) {
-    ts(_r);
+  function onUltraplanNote(message) {
+    notifyStatus(message);
     commandQueueOrDefault.enqueuePendingNotification({
       agentId: mainAgentId(),
       value:
@@ -513,62 +529,63 @@ function ExitPlanModePermissionRequest({ payload, answer, wouldTakeAnswer }) {
     });
   }
   async function handleResponse(value) {
-    if (plan_3() || refusedWithin()) {
+    if (plan_2() || refusedWithin()) {
       noteRefused();
       return;
     }
     if (!wouldTakeAnswer()) return;
     let trimmedFeedback = planFeedback.trim();
     let acceptFeedback = trimmedFeedback || undefined;
-    let Yr = (msg) =>
+    let toResult = (msg) =>
       exitPlanChoiceToResult(value, {
-        currentPlan: plan_2,
-        planEditedLocally: Mn,
+        currentPlan: planText,
+        planEditedLocally,
         acceptFeedback,
         trimmedFeedback,
         hasImages,
         imageBlocks: msg,
-        showClearContext: Et,
-        keepContextRow: vo.keepContextRows[value] ?? null,
+        showClearContext,
+        keepContextRow: approvalOptions.keepContextRows[value] ?? null,
       });
     if (value === "ultraplan" && backgroundWorkSignal) {
       logEvent("tengu_plan_exit", {
-        planLengthChars: plan_2.length,
+        planLengthChars: planText.length,
         outcome: lit_2("ultraplan"),
       });
-      answer(Yr());
+      answer(toResult());
       launchUltraplan({
         arg: "",
         source: "exit_plan_mode",
-        seedPlan: plan_2,
+        seedPlan: planText,
         getAppState: store.getState,
         setAppState: store.setState,
         signal: new AbortController().signal,
         queue: commandQueueOrDefault,
         surface: {
           ...backgroundWorkSignal,
-          note: Gn,
+          note: onUltraplanNote,
           queue: commandQueueOrDefault,
           session,
         },
-        onStatusMessage: ts,
+        onStatusMessage: notifyStatus,
         storageV5,
         credentials,
       })
-        .then(ts)
+        .then(notifyStatus)
         .catch(logError);
       return;
     }
-    let Vr =
+    let isKeepContextChoice =
       value === "yes-accept-edits-keep-context" ||
       value === "yes-default-keep-context" ||
       value === "yes-resume-auto-mode";
-    if (Vr && vo.keepContextRows[value] === undefined) {
-      answer(Yr());
+    if (isKeepContextChoice && approvalOptions.keepContextRows[value] === undefined) {
+      answer(toResult());
       return;
     }
     let goingToAuto =
-      (value === "yes-resume-auto-mode" || value === "yes-auto-clear-context") && vo.autoModeGateSnapshot;
+      (value === "yes-resume-auto-mode" || value === "yes-auto-clear-context") &&
+      approvalOptions.autoModeGateSnapshot;
     let autoWasUsedDuringPlan = isAutoModeActive();
     if (value !== "no" && !goingToAuto && autoWasUsedDuringPlan) {
       setAutoModeActive(false);
@@ -581,9 +598,10 @@ function ExitPlanModePermissionRequest({ payload, answer, wouldTakeAnswer }) {
         },
       }));
     }
-    if (value !== "no") autoNameSessionFromPlan(plan_2, setAppState, !Vr, storageV5, credentials);
+    if (value !== "no")
+      autoNameSessionFromPlan(planText, setAppState, !isKeepContextChoice, storageV5, credentials);
     if (
-      Et &&
+      showClearContext &&
       (value === "yes-bypass-permissions" ||
         value === "yes-accept-edits" ||
         value === "yes-auto-clear-context")
@@ -591,12 +609,12 @@ function ExitPlanModePermissionRequest({ payload, answer, wouldTakeAnswer }) {
       let mode = "default";
       if (value === "yes-bypass-permissions") mode = "bypassPermissions";
       else if (value === "yes-accept-edits") mode = "acceptEdits";
-      else if (value === "yes-auto-clear-context" && vo.autoModeGateSnapshot) {
+      else if (value === "yes-auto-clear-context" && approvalOptions.autoModeGateSnapshot) {
         mode = "auto";
         setAutoModeActive(true);
       }
       logEvent("tengu_plan_exit", {
-        planLengthChars: plan_2.length,
+        planLengthChars: planText.length,
         outcome: fromEnum(value),
         clearContext: true,
         hasFeedback: !!acceptFeedback,
@@ -606,33 +624,33 @@ function ExitPlanModePermissionRequest({ payload, answer, wouldTakeAnswer }) {
         to: mode,
         trigger: "exit_plan_mode",
       });
-      let oi = `
+      let transcriptHint = `
 
 If you need specific details from before exiting plan mode (like exact code snippets, error messages, or content you generated), read the full transcript at: ${getTranscriptPath()}`;
-      let Oi = teammateSpawnPlanHint(isAgentSwarmsEnabled());
-      let Hi = acceptFeedback
+      let teammateHint = teammateSpawnPlanHint(isAgentSwarmsEnabled());
+      let feedbackHint = acceptFeedback
         ? `
 
 User feedback on this plan: ${acceptFeedback}`
         : "";
-      let transcriptHint = `Implement the following plan:
+      let transcriptHint_2 = `Implement the following plan:
 
-${plan_2}${oi}${Oi}${Hi}`;
+${planText}${transcriptHint}${teammateHint}${feedbackHint}`;
       setAppState((prev) => ({
         ...prev,
         initialMessage: {
           message: {
             ...createUserMessage({
-              content: transcriptHint,
+              content: transcriptHint_2,
               origin: {
                 kind: "auto-continuation",
               },
             }),
-            planContent: plan_2,
+            planContent: planText,
             ...(getAutoModeConfigOrDefault().typedMarks === true && {
               [MESSAGE_MARK_SYMBOLS]: {
                 as: "plan",
-                texts: [transcriptHint],
+                texts: [transcriptHint_2],
               },
             }),
             queueSkipAttachments: true,
@@ -648,9 +666,9 @@ ${plan_2}${oi}${Oi}${Hi}`;
       });
       return;
     }
-    if (value === "yes-resume-auto-mode" && vo.autoModeGateSnapshot) {
+    if (value === "yes-resume-auto-mode" && approvalOptions.autoModeGateSnapshot) {
       logEvent("tengu_plan_exit", {
-        planLengthChars: plan_2.length,
+        planLengthChars: planText.length,
         outcome: fromEnum(value),
         clearContext: false,
         hasFeedback: !!acceptFeedback,
@@ -664,45 +682,45 @@ ${plan_2}${oi}${Oi}${Hi}`;
         trigger: "exit_plan_mode",
       });
       setAppState((prev) => {
-        let Ci = {
+        let nextContext = {
           ...prev.toolPermissionContext,
           mode: "auto",
           prePlanMode: undefined,
         };
-        Ci = {
-          ...Ci,
+        nextContext = {
+          ...nextContext,
           startupModeDecidedByProactivityLevel: undefined,
         };
         return {
           ...prev,
-          toolPermissionContext: stripDangerousPermissionsForAutoMode(Ci),
+          toolPermissionContext: stripDangerousPermissionsForAutoMode(nextContext),
         };
       });
-      answer(Yr());
+      answer(toResult());
       announcePermissionMode("auto");
       return;
     }
-    if (Vr) {
-      let ws = vo.keepContextRows[value] ?? null;
-      let Ci = vo.keepContextModes[value];
-      if (ws === null || Ci === undefined || !isConsentRow(ws)) {
-        answer(Yr());
+    if (isKeepContextChoice) {
+      let keepContextRow = approvalOptions.keepContextRows[value] ?? null;
+      let nextMode = approvalOptions.keepContextModes[value];
+      if (keepContextRow === null || nextMode === undefined || !isConsentRow(keepContextRow)) {
+        answer(toResult());
         return;
       }
       logPermissionModeChanged({
         from: "plan",
-        to: Ci,
+        to: nextMode,
         trigger: "exit_plan_mode",
       });
       logEvent("tengu_plan_exit", {
-        planLengthChars: plan_2.length,
+        planLengthChars: planText.length,
         outcome: fromEnum(value),
         clearContext: false,
         hasFeedback: !!acceptFeedback,
       });
       setHasExitedPlanMode(true);
       setNeedsPlanModeExitAttachment(true);
-      if (answer(Yr()) !== false) announcePermissionMode(Ci);
+      if (answer(toResult()) !== false) announcePermissionMode(nextMode);
       return;
     }
     if (value === "no") {
@@ -719,36 +737,36 @@ ${plan_2}${oi}${Oi}${Hi}`;
             return block;
           }),
         );
-      if (answer(Yr(imageBlocks)) === false) return;
+      if (answer(toResult(imageBlocks)) === false) return;
       logEvent("tengu_plan_exit", {
-        planLengthChars: plan_2.length,
+        planLengthChars: planText.length,
         outcome: lit_2("no"),
       });
       return;
     }
   }
-  let onCancel = ce(() => {
-    if (plan_3() || refusedWithin()) {
+  let onCancel = useCallback(() => {
+    if (plan_2() || refusedWithin()) {
       noteRefused();
       return;
     }
     if (!wouldTakeAnswer()) return;
     logEvent("tengu_plan_exit", {
-      planLengthChars: plan_2.length,
+      planLengthChars: planText.length,
       outcome: lit_2("no"),
     });
     answer({
       behavior: "deny",
     });
-  }, [answer, wouldTakeAnswer, plan_2.length]);
-  function wr(_r) {
-    if (plan_3() || refusedWithin()) {
+  }, [answer, wouldTakeAnswer, planText.length]);
+  function onEmptyPlanChoice(choice) {
+    if (plan_2() || refusedWithin()) {
       noteRefused();
       return;
     }
     if (!wouldTakeAnswer()) return;
-    if (_r === "yes") {
-      if (No === null || !isConsentRow(No)) {
+    if (choice === "yes") {
+      if (defaultModeRow === null || !isConsentRow(defaultModeRow)) {
         answer({
           behavior: "deny",
         });
@@ -775,7 +793,7 @@ ${plan_2}${oi}${Oi}${Hi}`;
         answer({
           behavior: "allow",
           updatedInput: {},
-          permissionUpdates: No.applies,
+          permissionUpdates: defaultModeRow.applies,
         }) !== false
       )
         announcePermissionMode("default");
@@ -792,7 +810,7 @@ ${plan_2}${oi}${Oi}${Hi}`;
   let onKeyDown = (e) => {
     if (e.ctrl && e.key === "g") {
       e.preventDefault();
-      if (plan_3() || refusedWithin()) {
+      if (plan_2() || refusedWithin()) {
         noteRefused();
         return;
       }
@@ -811,12 +829,12 @@ ${plan_2}${oi}${Oi}${Hi}`;
               priority: "high",
             });
           if (result.content !== null) {
-            if (result.content !== plan_2) Xo(true);
-            Ro(result.content);
-            hn(true);
+            if (result.content !== planText) setPlanEditedLocally(true);
+            setPlanText(result.content);
+            setPlanSaved(true);
           }
         } else {
-          let result = await editPromptInEditor(plan_2);
+          let result = await editPromptInEditor(planText);
           if (result.error)
             addNotification({
               key: "external-editor-error",
@@ -825,9 +843,9 @@ ${plan_2}${oi}${Oi}${Hi}`;
               color: "warning",
               priority: "high",
             });
-          if (result.content !== null && result.content !== plan_2) {
-            Ro(result.content);
-            hn(true);
+          if (result.content !== null && result.content !== planText) {
+            setPlanText(result.content);
+            setPlanSaved(true);
           }
         }
       })();
@@ -835,30 +853,30 @@ ${plan_2}${oi}${Oi}${Hi}`;
     }
     if (e.shift && e.key === "tab") {
       e.preventDefault();
-      if (!mn) return;
-      let fr = Et
-        ? (["yes-bypass-permissions", "yes-auto-clear-context", "yes-accept-edits"].find(($r) =>
-            options_2.some((value) => value.value === $r),
+      if (!canShowPlan) return;
+      let shortcutChoice = showClearContext
+        ? (["yes-bypass-permissions", "yes-auto-clear-context", "yes-accept-edits"].find((candidate) =>
+            options_2.some((value) => value.value === candidate),
           ) ?? null)
-        : vo.keepContextRows["yes-accept-edits-keep-context"] !== undefined
+        : approvalOptions.keepContextRows["yes-accept-edits-keep-context"] !== undefined
           ? "yes-accept-edits-keep-context"
-          : vo.keepContextRows["yes-resume-auto-mode"] !== undefined
+          : approvalOptions.keepContextRows["yes-resume-auto-mode"] !== undefined
             ? "yes-resume-auto-mode"
-            : vo.keepContextRows["yes-default-keep-context"] !== undefined
+            : approvalOptions.keepContextRows["yes-default-keep-context"] !== undefined
               ? "yes-default-keep-context"
               : null;
-      if (fr === null) return;
-      handleResponse(fr);
+      if (shortcutChoice === null) return;
+      handleResponse(shortcutChoice);
       return;
     }
   };
-  if (Ho)
+  if (isPlanEmpty)
     return jsxProd_default(PermissionDialog_2, {
       color: "planMode",
       title: "Exit plan mode?",
       requestSource: payload.requestSource,
       children: jsxProd_default_2(Box, {
-        ref: wn,
+        ref: containerRef,
         flexDirection: "column",
         paddingX: 1,
         marginTop: 1,
@@ -869,11 +887,11 @@ ${plan_2}${oi}${Oi}${Hi}`;
           jsxProd_default(Box, {
             marginTop: 1,
             children: jsxProd_default(ModelSelector, {
-              refuseInput: Pr,
+              refuseInput,
               selectedValue: NO_COMMITTED_ROW,
               options: [
                 {
-                  label: No !== null ? No.node : "Yes",
+                  label: defaultModeRow !== null ? defaultModeRow.node : "Yes",
                   value: "yes",
                 },
                 {
@@ -881,8 +899,8 @@ ${plan_2}${oi}${Oi}${Hi}`;
                   value: "no",
                 },
               ],
-              onChange: wr,
-              onCancel: () => wr("no"),
+              onChange: onEmptyPlanChoice,
+              onCancel: () => onEmptyPlanChoice("no"),
             }),
           }),
         ],
@@ -894,7 +912,7 @@ ${plan_2}${oi}${Oi}${Hi}`;
       jsxProd_default(ScrollBoxDefault, {
         ref: scrollViewportHandle?.attach,
         flexDirection: "column",
-        height: Zn ? dr : undefined,
+        height: hasScrollViewport ? contentHeight : undefined,
         stickyScroll: false,
         children: jsxProd_default(PermissionDialog_2, {
           color: "planMode",
@@ -915,9 +933,9 @@ ${plan_2}${oi}${Oi}${Hi}`;
               jsxProd_default(DiffFrame, {
                 marginBottom: 1,
                 children:
-                  Cn !== null
+                  planDisplay !== null
                     ? jsxProd_default(MarkdownText_2, {
-                        children: Cn,
+                        children: planDisplay,
                       })
                     : jsxProd_default(Text, {
                         dimColor: true,
@@ -937,7 +955,7 @@ ${plan_2}${oi}${Oi}${Hi}`;
         }),
       }),
       jsxProd_default_2(Box, {
-        ref: wn,
+        ref: containerRef,
         flexDirection: "column",
         borderStyle: "round",
         borderColor: "planMode",
@@ -954,7 +972,7 @@ ${plan_2}${oi}${Oi}${Hi}`;
           jsxProd_default(Box, {
             marginTop: 1,
             children: jsxProd_default(ModelSelector, {
-              refuseInput: Pr,
+              refuseInput,
               selectedValue: NO_COMMITTED_ROW,
               options: options_2,
               defaultFocusValue,
@@ -965,7 +983,7 @@ ${plan_2}${oi}${Oi}${Hi}`;
               onRemoveImage,
             }),
           }),
-          pr &&
+          editorDisplayName &&
             jsxProd_default(Box, {
               marginTop: 1,
               children: jsxProd_default_2(Text, {
@@ -975,12 +993,12 @@ ${plan_2}${oi}${Oi}${Hi}`;
                     children: [
                       jsxProd_default(KeyboardShortcutHint, {
                         chord: "ctrl+g",
-                        action: `edit in ${pr}`,
+                        action: `edit in ${editorDisplayName}`,
                       }),
                       planFilePath && ` \xB7 ${getDisplayPath(planFilePath)}`,
                     ],
                   }),
-                  Go &&
+                  planSaved &&
                     jsxProd_default_2(Fragment, {
                       children: [
                         jsxProd_default(Text, {

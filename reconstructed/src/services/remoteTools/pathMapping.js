@@ -17,7 +17,7 @@ import { FILE_WRITE_TOOL_NAME } from "../../tools/FileWriteTool/prompt.js";
 import { FILE_EDIT_TOOL_NAME } from "../../tools/FileEditTool/constants.js";
 import { identityMap } from "../../remote/tools/protocolConstants.js";
 import { HOST_TOOL_INPUT_FIELD } from "../../bridge/deviceRegistration.js";
-import { Uo } from "../../../vendor/@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
+import { omitAlias } from "../../../vendor/@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
 import { unsupportedFieldMessage } from "./hostRefusals.js";
 import { isNotebookPath, posixPathToWindowsPath } from "../../utils/path.js";
 import { getPlatform } from "../../utils/platform.js";
@@ -84,32 +84,33 @@ function renamedFieldCacheMap() {
 /**
  * 按映射表把输入字段改名（去掉与新名冲突的原字段）。
  */
-function renameInputFields(n, e) {
-  if (e.size === 0) return n;
-  let r = new Set(e.values());
+function renameInputFields(input, renameMap) {
+  if (renameMap.size === 0) return input;
+  let renamed = new Set(renameMap.values());
   return Object.fromEntries(
-    Object.entries(n)
-      .filter(([key]) => !r.has(key))
-      .map(([key, value]) => [e.get(key) ?? key, value]),
+    Object.entries(input)
+      .filter(([key]) => !renamed.has(key))
+      .map(([key, value]) => [renameMap.get(key) ?? key, value]),
   );
 }
 //@ chunk-gqez588q.js:1457-1572 placement
 /**
  * 把输出中的字段名按映射表改回原名。
  */
-function unrenameOutputFields(n, wireArguments) {
-  if (wireArguments.size === 0) return n;
-  let r = new Map([...wireArguments].map(([i, t]) => [t, i]));
-  return identityMap(n, (i, t) => r.get(t) ?? t);
+function unrenameOutputFields(output, wireArguments) {
+  if (wireArguments.size === 0) return output;
+  let originalName = new Map([...wireArguments].map(([original, renamed]) => [renamed, original]));
+  return identityMap(output, (value, key) => originalName.get(key) ?? key);
 }
 //@ chunk-gqez588q.js:1572-1682 placement
 /**
  * 去掉值等于目标机器名的目标字段，剩余为空时返回 undefined。
  */
-function stripTargetField(n, targetName) {
-  if (n === undefined) return;
-  let r = n[HOST_TOOL_INPUT_FIELD] === targetName ? Uo(n, [HOST_TOOL_INPUT_FIELD]) : n;
-  return Object.keys(r).length === 0 ? undefined : r;
+function stripTargetField(input, targetName) {
+  if (input === undefined) return;
+  let stripped =
+    input[HOST_TOOL_INPUT_FIELD] === targetName ? omitAlias(input, [HOST_TOOL_INPUT_FIELD]) : input;
+  return Object.keys(stripped).length === 0 ? undefined : stripped;
 }
 //@ chunk-gqez588q.js:1682-1808 placement
 /**
@@ -129,88 +130,99 @@ function unsupportedFieldRefusal(input, fields, targetName) {
 /**
  * 去掉编辑专用键后的输入副本。
  */
-function withoutEditKeys(n, e) {
-  return Uo(n, [SIMULATED_SED_EDIT_KEY, ...e]);
+function withoutEditKeys(input, extraKeys) {
+  return omitAlias(input, [SIMULATED_SED_EDIT_KEY, ...extraKeys]);
 }
 //@ chunk-gqez588q.js:1850-1961 placement
 /**
  * 只保留第二个对象中在第一个对象里也存在的键。
  */
-function pickKnownFields(evaluatedInput, e) {
+function pickKnownFields(evaluatedInput, source) {
   return Object.fromEntries(
-    Object.keys(e)
+    Object.keys(source)
       .filter((key) => Object.hasOwn(evaluatedInput, key))
-      .map((key) => [key, e[key]]),
+      .map((key) => [key, source[key]]),
   );
 }
 //@ chunk-gqez588q.js:2085-2373 placement
 /**
  * 远程写/编辑文件前，从本地读取记录中取出该文件（映射到同步目录后）的完整读取基线。
  */
-function readBaselineForRemoteWrite(n) {
-  if (n.tool.name !== FILE_WRITE_TOOL_NAME && n.tool.name !== FILE_EDIT_TOOL_NAME) return;
-  let filePath = n.input.file_path;
+function readBaselineForRemoteWrite(context) {
+  if (context.tool.name !== FILE_WRITE_TOOL_NAME && context.tool.name !== FILE_EDIT_TOOL_NAME) return;
+  let filePath = context.input.file_path;
   if (typeof filePath !== "string" || isNotebookPath(filePath)) return;
-  let r = mirroredLocalPath(filePath, n.description, n.sessionDir());
-  if (r === undefined) return;
-  let i = n.readFileState.get(r);
-  return i !== undefined && !i.isPartialView && (i.offset ?? 1) <= 1 ? i.readBaseline : undefined;
+  let localPath = mirroredLocalPath(filePath, context.description, context.sessionDir());
+  if (localPath === undefined) return;
+  let fileState = context.readFileState.get(localPath);
+  return fileState !== undefined && !fileState.isPartialView && (fileState.offset ?? 1) <= 1
+    ? fileState.readBaseline
+    : undefined;
 }
 //@ chunk-gqez588q.js:2373-2757 placement
 /**
  * 把远程机器上的绝对路径（含 ~）映射到本会话同步目录下的对应路径，仅当该机器项目为双向/仅上传同步且路径位于同步根内时。
  */
-function mirroredLocalPath(remotePath, description, sessionDir, i = path) {
+function mirroredLocalPath(remotePath, description, sessionDir, pathImpl = path) {
   if (
     description === undefined ||
     (description.project_sync !== "two_way" && description.project_sync !== "upload_only")
   )
     return;
-  let t = description.platform === "win32" ? win32 : posix;
-  let a =
+  let pathLib = description.platform === "win32" ? win32 : posix;
+  let expandedPath =
     description.home_dir !== undefined && (remotePath === "~" || remotePath.startsWith("~/"))
-      ? t.join(description.home_dir, remotePath.slice(2))
+      ? pathLib.join(description.home_dir, remotePath.slice(2))
       : remotePath;
-  let c = syncRootOf(description, t);
-  if (!t.isAbsolute(a) || !t.isAbsolute(c)) return;
-  let relativePath = t.relative(c, a);
-  if (!isContainedRelative(t, relativePath)) return;
-  let joined = posix.join(sessionDir, ...relativePath.split(t.sep));
-  return isContainedRelative(i, i.relative(sessionDir, joined)) ? joined : undefined;
+  let syncRoot = syncRootOf(description, pathLib);
+  if (!pathLib.isAbsolute(expandedPath) || !pathLib.isAbsolute(syncRoot)) return;
+  let relativePath = pathLib.relative(syncRoot, expandedPath);
+  if (!isContainedRelative(pathLib, relativePath)) return;
+  let joined = posix.join(sessionDir, ...relativePath.split(pathLib.sep));
+  return isContainedRelative(pathImpl, pathImpl.relative(sessionDir, joined)) ? joined : undefined;
 }
 //@ chunk-gqez588q.js:2757-2886 placement
-function syncRootOf(n, e) {
-  return n.sync_root !== undefined && e.isAbsolute(n.sync_root) && isPathWithin(e, n.sync_root, n.working_dir)
-    ? n.sync_root
-    : n.working_dir;
+function syncRootOf(description, pathLib) {
+  return description.sync_root !== undefined &&
+    pathLib.isAbsolute(description.sync_root) &&
+    isPathWithin(pathLib, description.sync_root, description.working_dir)
+    ? description.sync_root
+    : description.working_dir;
 }
 //@ chunk-gqez588q.js:2886-2960 placement
-function isContainedRelative(n, e) {
-  return e !== "" && e.split(n.sep)[0] !== ".." && !n.isAbsolute(e);
+function isContainedRelative(pathLib, relativePath) {
+  return (
+    relativePath !== "" && relativePath.split(pathLib.sep)[0] !== ".." && !pathLib.isAbsolute(relativePath)
+  );
 }
 //@ chunk-gqez588q.js:2960-3022 placement
-function isPathWithin(n, syncRoot, workingDir) {
-  let relativePath = n.relative(syncRoot, workingDir);
-  return relativePath === "" || isContainedRelative(n, relativePath);
+function isPathWithin(pathLib, syncRoot, workingDir) {
+  let relativePath = pathLib.relative(syncRoot, workingDir);
+  return relativePath === "" || isContainedRelative(pathLib, relativePath);
 }
 //@ chunk-gqez588q.js:3022-3138 placement
 /**
  * 比较两组输入在规范化与默认值意义下是否相同。
  */
-function sameInputsModuloDefaults(n, e, r) {
+function sameInputsModuloDefaults(left, right, platform) {
   return (
-    definedEntries(n).every(([i, t]) =>
-      isDeepStrictEqual(normalizeFileInput(i, t, r), normalizeFileInput(i, e[i], r)),
-    ) && definedEntries(e).every(([i, t]) => n[i] !== undefined || t === false)
+    definedEntries(left).every(([key, value]) =>
+      isDeepStrictEqual(
+        normalizeFileInput(key, value, platform),
+        normalizeFileInput(key, right[key], platform),
+      ),
+    ) && definedEntries(right).every(([key, value]) => left[key] !== undefined || value === false)
   );
 }
 //@ chunk-gqez588q.js:3138-3235 placement
-function normalizeFileInput(n, e, r) {
-  return n === "file_path" && typeof e === "string" && r === "darwin" ? e.normalize("NFC") : e;
+function normalizeFileInput(key, value, platform) {
+  return key === "file_path" && typeof value === "string" && platform === "darwin"
+    ? value.normalize("NFC")
+    : value;
 }
 //@ chunk-gqez588q.js:3235-3301 placement
-function definedEntries(n) {
-  return Object.entries(n).filter(([, value]) => value !== undefined);
+function definedEntries(object) {
+  return Object.entries(object).filter(([, value]) => value !== undefined);
 }
 //@ chunk-gqez588q.js:3301-3338 placement = getUnameSR (0.793)
 function getUnameSR(platform) {
@@ -220,15 +232,18 @@ function getUnameSR(platform) {
 /**
  * 从机器描述中提取路径事实：工作目录、主目录、镜像目录、平台，以及副本来源目录。
  */
-function remoteDirFacts(n) {
-  let unameSR = getUnameSR(n.platform);
-  let copyOf = n.copy_of;
-  return unameSR.isAbsolute(n.working_dir)
+function remoteDirFacts(description) {
+  let pathLib = getUnameSR(description.platform);
+  let copyOf = description.copy_of;
+  return pathLib.isAbsolute(description.working_dir)
     ? {
-        workingDir: n.working_dir,
-        homeDir: n.home_dir !== undefined && unameSR.isAbsolute(n.home_dir) ? n.home_dir : undefined,
-        mirroredDir: syncRootOf(n, unameSR),
-        platform: n.platform,
+        workingDir: description.working_dir,
+        homeDir:
+          description.home_dir !== undefined && pathLib.isAbsolute(description.home_dir)
+            ? description.home_dir
+            : undefined,
+        mirroredDir: syncRootOf(description, pathLib),
+        platform: description.platform,
         ...(copyOf !== undefined &&
           getUnameSR(copyOf.platform).isAbsolute(copyOf.dir) && {
             copyOf: {
@@ -249,12 +264,12 @@ function remoteDirFacts(n) {
  * 判断远程目录类别：无公布目录、Windows 机器、Windows 会话或位于公布目录中。
  */
 function remoteDirKind(description) {
-  let e = description === undefined ? undefined : remoteDirFacts(description);
-  if (e === undefined)
+  let facts = description === undefined ? undefined : remoteDirFacts(description);
+  if (facts === undefined)
     return {
       kind: "no_announced_dir",
     };
-  if (e.platform === "win32")
+  if (facts.platform === "win32")
     return {
       kind: "windows_machine",
     };
@@ -264,21 +279,21 @@ function remoteDirKind(description) {
       }
     : {
         kind: "in_announced_dir",
-        dir: e.workingDir,
+        dir: facts.workingDir,
       };
 }
 //@ chunk-gqez588q.js:4003-4123 placement
 /**
  * 把输入的 file_path 解析为远程机器上的绝对路径。
  */
-function resolveRemoteFilePathInput(n, dirFacts) {
-  let filePath = n.file_path;
-  if (typeof filePath !== "string") return n;
+function resolveRemoteFilePathInput(input, dirFacts) {
+  let filePath = input.file_path;
+  if (typeof filePath !== "string") return input;
   let remotePath = resolveRemotePath(filePath, dirFacts);
   return remotePath === undefined
-    ? n
+    ? input
     : {
-        ...n,
+        ...input,
         file_path: remotePath,
       };
 }
@@ -292,46 +307,48 @@ function resolveRemotePath(path, dirFacts) {
   if (trimmed === "~" || trimmed.startsWith("~/"))
     return dirFacts.homeDir === undefined ? undefined : unameSR.join(dirFacts.homeDir, trimmed.slice(2));
   if (trimmed === "") return unameSR.normalize(dirFacts.workingDir);
-  let t = normalizeWin32DrivePath(trimmed, unameSR);
-  if (unameSR.isAbsolute(t)) return unameSR.normalize(t);
-  let a = unameSR === win32 ? driveLetterOf(t) : undefined;
-  return a !== undefined && a !== driveLetterOf(dirFacts.workingDir)
+  let normalized = normalizeWin32DrivePath(trimmed, unameSR);
+  if (unameSR.isAbsolute(normalized)) return unameSR.normalize(normalized);
+  let driveLetter = unameSR === win32 ? driveLetterOf(normalized) : undefined;
+  return driveLetter !== undefined && driveLetter !== driveLetterOf(dirFacts.workingDir)
     ? undefined
-    : unameSR.resolve(dirFacts.workingDir, t);
+    : unameSR.resolve(dirFacts.workingDir, normalized);
 }
 //@ chunk-gqez588q.js:4456-4527 placement
-function driveLetterOf(workingDir) {
-  let match = /^[a-z]:/i.exec(workingDir);
+function driveLetterOf(pathText) {
+  let match = /^[a-z]:/i.exec(pathText);
   return match === null ? undefined : normalizeCaseForComparison(match[0]);
 }
 //@ chunk-gqez588q.js:4527-4667 placement
-function normalizeWin32DevicePath(n, workingDir) {
-  let replaced = n.replace(/^\\\\[?.]\\UNC\\/i, "\\\\").replace(/^\\\\[?.]\\(?=[a-z]:)/i, "");
+function normalizeWin32DevicePath(path, workingDir) {
+  let replaced = path.replace(/^\\\\[?.]\\UNC\\/i, "\\\\").replace(/^\\\\[?.]\\(?=[a-z]:)/i, "");
   return /^\\(?!\\)/.test(replaced) ? win32.resolve(workingDir, replaced) : replaced;
 }
 //@ chunk-gqez588q.js:4667-4898 placement
-function stripMacVolumePrefix(n, e) {
-  let parts = isSystemVolumePath(n).split("/");
-  if (foldCase_2(parts[1] ?? "") === "volumes" && foldCase_2(parts[2] ?? "") === e)
-    return stripMacVolumePrefix(["", ...parts.slice(3)].join("/") || "/", e);
+function stripMacVolumePrefix(path, volumeName) {
+  let parts = isSystemVolumePath(path).split("/");
+  if (foldCase_2(parts[1] ?? "") === "volumes" && foldCase_2(parts[2] ?? "") === volumeName)
+    return stripMacVolumePrefix(["", ...parts.slice(3)].join("/") || "/", volumeName);
   return ["tmp", "var", "etc"].includes(foldCase_2(parts[1] ?? ""))
     ? ["", "private", ...parts.slice(1)].join("/")
     : parts.join("/");
 }
 //@ chunk-gqez588q.js:4898-5023 placement
-function macPathVariants(n) {
-  let e = stripMacVolumePrefix(n, "macintosh hd");
-  let [r, i = ""] = e.split("/").slice(1, 3).map(foldCase_2);
-  return r === "volumes" && i !== "" ? [e, stripMacVolumePrefix(e, i)] : [e];
+function macPathVariants(path) {
+  let stripped = stripMacVolumePrefix(path, "macintosh hd");
+  let [firstSegment, volumeSegment = ""] = stripped.split("/").slice(1, 3).map(foldCase_2);
+  return firstSegment === "volumes" && volumeSegment !== ""
+    ? [stripped, stripMacVolumePrefix(stripped, volumeSegment)]
+    : [stripped];
 }
 //@ chunk-gqez588q.js:5023-5144 placement
-function stripProcRoot(n) {
-  let match = /^\/proc\/(?:self|thread-self)\/root(?=\/|$)/.exec(n);
-  return match === null ? n : stripProcRoot(n.slice(match[0].length) || "/");
+function stripProcRoot(path) {
+  let match = /^\/proc\/(?:self|thread-self)\/root(?=\/|$)/.exec(path);
+  return match === null ? path : stripProcRoot(path.slice(match[0].length) || "/");
 }
 //@ chunk-gqez588q.js:5144-5204 placement
-function normalizeWin32DrivePath(n, unameSR) {
-  return unameSR === win32 && /^\/[a-z]\//i.test(n) ? posixPathToWindowsPath(n) : n;
+function normalizeWin32DrivePath(path, unameSR) {
+  return unameSR === win32 && /^\/[a-z]\//i.test(path) ? posixPathToWindowsPath(path) : path;
 }
 export {
   unsupportedFieldRefusal,

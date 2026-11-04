@@ -25,47 +25,57 @@ import { describeGlobalConfigFile } from "../env.js";
 import { OTEL_ENV_VARS, isDangerousEnvVar, isDisablingTelemetryEnv } from "../managedEnvConstants.js";
 import { getEnabledSettingSources } from "./constants.js";
 import { getEnvAboveProjectSettings } from "../managedEnvApply.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-pr8s5wf6.js:524-1095 placement
 function formatInvalidSettingNotice() {
   let settingsWithErrors = getSettingsWithErrors_2();
-  let flattened = MCP_SETTINGS_SCOPES.flatMap((e) =>
-    getMcpConfigsByScope(e).errors.map((error) =>
+  let flattened = MCP_SETTINGS_SCOPES.flatMap((scope) =>
+    getMcpConfigsByScope(scope).errors.map((error) =>
       error.file
         ? error
         : {
             ...error,
-            file: describeMcpConfigFilePath(e),
+            file: describeMcpConfigFilePath(scope),
           },
     ),
   );
   let globalConfig = getGlobalConfig();
   let mapped = USER_INTENT_SETTING_KEYS.filter(
-    (e) =>
-      settingsWithErrors.settings[e] === undefined &&
-      globalConfig[e] !== DEFAULT_GLOBAL_CONFIG[e] &&
-      isInvalidGlobalConfigValue(e, globalConfig[e]),
-  ).map((e) => ({
+    (key) =>
+      settingsWithErrors.settings[key] === undefined &&
+      globalConfig[key] !== DEFAULT_GLOBAL_CONFIG[key] &&
+      isInvalidGlobalConfigValue(key, globalConfig[key]),
+  ).map((key) => ({
     file: describeGlobalConfigFile(),
-    path: e,
-    message: isAutoUploadFlagKey(e)
+    path: key,
+    message: isAutoUploadFlagKey(key)
       ? "Not a valid value for this setting, so it is ignored and the setting counts as off"
       : "Not a valid value for this setting, so it is ignored and the setting counts as unset",
     severity: "warning",
     suggestion: "Set it with /config, or delete the key from this file",
   }));
-  let n = formatIgnoredTelemetryEnvNotice();
+  let telemetryNotice = formatIgnoredTelemetryEnvNotice();
   return {
     settings: settingsWithErrors.settings,
-    errors: [...settingsWithErrors.errors, ...flattened, ...mapped, ...n.ignored, ...n.turnedOff],
+    errors: [
+      ...settingsWithErrors.errors,
+      ...flattened,
+      ...mapped,
+      ...telemetryNotice.ignored,
+      ...telemetryNotice.turnedOff,
+    ],
   };
 }
 //@ chunk-pr8s5wf6.js:1095-1114 placement
-var OTEL_ENV_VAR_SET = new Set(OTEL_ENV_VARS);
+var OTEL_ENV_VAR_SET; // deferred: uses OTEL_ENV_VARS (../managedEnvConstants.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-pr8s5wf6.js:1095", () => {
+  OTEL_ENV_VAR_SET = new Set(OTEL_ENV_VARS);
+});
 //@ chunk-pr8s5wf6.js:1114-2503 placement
 function formatIgnoredTelemetryEnvNotice() {
-  let t = [];
-  let i = [];
+  let ignored = [];
+  let turnedOff = [];
   let enabledSettingSources = getEnabledSettingSources();
   for (let enabledSettingSource of enabledSettingSources) {
     if (!isDangerousEnvVar(enabledSettingSource)) continue;
@@ -76,36 +86,36 @@ function formatIgnoredTelemetryEnvNotice() {
     )
       continue;
     let env = getSettingsForSource(enabledSettingSource)?.env ?? {};
-    let e = [];
-    let s = [];
+    let ignoredKeys = [];
+    let disablingKeys = [];
     for (let key of Object.keys(env)) {
       let upper = key.toUpperCase();
       if (!OTEL_ENV_VAR_SET.has(upper)) continue;
-      if (isDisablingTelemetryEnv(key, env[key], getEnvAboveProjectSettings)) s.push(key);
-      else e.push(key);
+      if (isDisablingTelemetryEnv(key, env[key], getEnvAboveProjectSettings)) disablingKeys.push(key);
+      else ignoredKeys.push(key);
     }
     let file = getSettingsFilePathForSource(enabledSettingSource);
     let relativeSettingsFilePathForSource = getRelativeSettingsFilePathForSource(enabledSettingSource);
-    if (e.length > 0)
-      t.push({
+    if (ignoredKeys.length > 0)
+      ignored.push({
         file,
         path: "env",
-        message: `Claude Code ignores these telemetry variables in ${relativeSettingsFilePathForSource}: ${e.join(", ")}. A project's settings files can only turn telemetry off: set OTEL_LOGS_EXPORTER, OTEL_METRICS_EXPORTER, or OTEL_TRACES_EXPORTER to none, or a content variable such as OTEL_LOG_USER_PROMPTS to 0, with the name in upper case. That doesn't work for a variable that managed settings, a --settings file, or the environment you start Claude Code from already sets. If you set them on purpose, set them in your shell, your user settings (~/.claude/settings.json), or managed settings instead.`,
+        message: `Claude Code ignores these telemetry variables in ${relativeSettingsFilePathForSource}: ${ignoredKeys.join(", ")}. A project's settings files can only turn telemetry off: set OTEL_LOGS_EXPORTER, OTEL_METRICS_EXPORTER, or OTEL_TRACES_EXPORTER to none, or a content variable such as OTEL_LOG_USER_PROMPTS to 0, with the name in upper case. That doesn't work for a variable that managed settings, a --settings file, or the environment you start Claude Code from already sets. If you set them on purpose, set them in your shell, your user settings (~/.claude/settings.json), or managed settings instead.`,
         severity: "warning",
         statusOnly: true,
       });
-    if (s.length > 0)
-      i.push({
+    if (disablingKeys.length > 0)
+      turnedOff.push({
         file,
         path: "env",
-        message: `${relativeSettingsFilePathForSource} turns telemetry off with these variables: ${s.join(", ")}. Claude Code uses these values unless managed settings or a --settings file sets the same variable. Your user settings don't override this file. To keep one on, set it in the environment you start Claude Code from, in a --settings file, or in managed settings.`,
+        message: `${relativeSettingsFilePathForSource} turns telemetry off with these variables: ${disablingKeys.join(", ")}. Claude Code uses these values unless managed settings or a --settings file sets the same variable. Your user settings don't override this file. To keep one on, set it in the environment you start Claude Code from, in a --settings file, or in managed settings.`,
         severity: "warning",
         statusOnly: true,
       });
   }
   return {
-    ignored: t,
-    turnedOff: i,
+    ignored,
+    turnedOff,
   };
 }
 //@ chunk-pr8s5wf6.js:2503-2563 placement
@@ -113,7 +123,7 @@ function formatIgnoredTelemetryEnvNotice() {
  * blockingLocalSettingsErrors：会阻止操作的本地设置错误。
  */
 function blockingLocalSettingsErrors() {
-  return getLocalSettingsValidationErrors().filter((t) => !t.preserveOnWrite);
+  return getLocalSettingsValidationErrors().filter((errorEntry) => !errorEntry.preserveOnWrite);
 }
 //@ chunk-pr8s5wf6.js:2563-2706 placement
 /**

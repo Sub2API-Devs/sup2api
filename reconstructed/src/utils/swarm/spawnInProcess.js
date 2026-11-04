@@ -8,35 +8,139 @@
  * pieces: chunk-5t8enyd9.js (4), chunk-v5mxhgy9.js (1)
  * attribution: placement 2, layout 1, facade-exports 1, fingerprint 1
  */
+import { withTimeout } from "../sleep.js";
+import { TEAMMATE_TEARDOWN_TIMEOUT_MS } from "../../tasks/InProcessTeammateTask/InProcessTeammateTask.js";
+import { logForDebugging } from "../debug.js";
+import { errorMessage } from "../errors.js";
+import { removeMemberByAgentId } from "./teamHelpers.js";
+import { evictTaskOutput } from "../task/diskOutput.js";
+import { emitTaskNotification } from "../task/taskNotifications.js";
+import { TASK_NOTIFICATION_DELAY_MS } from "../task/framework.js";
+import {
+  unregisterPerfettoAgent,
+  isPerfettoRecording,
+  registerPerfettoAgent,
+} from "../telemetry/perfettoTracing.js";
+import { logFeatureOk, logFeatureBad } from "../../services/analytics/featureTelemetry.js";
 import { redactAndTruncate } from "../../services/teamMemorySync/secretScanner.js";
 import { truncateToLength } from "../stringUtils.js";
 import { agentAddress } from "./teammateIds.js";
 import { generateTaskId, createTaskStateBase } from "../../Task.js";
 import { makeSaltedName } from "../agentId.js";
-import { logForDebugging } from "../debug.js";
 import { createAbortController } from "../abortController.js";
 import { getSessionId } from "../../bootstrap/state.js";
 import { createTeammateContext } from "../teammateContext.js";
 import { isTaskToolsEnabled } from "../tasks.js";
 import { toolMatchesName } from "../../Tool.js";
 import { TASK_UPDATE_TOOL_NAME } from "../../tools/TaskUpdateTool/constants.js";
-import {
-  isPerfettoRecording,
-  registerPerfettoAgent,
-  unregisterPerfettoAgent,
-} from "../telemetry/perfettoTracing.js";
 import { getToolPermissionContext } from "../permissions/toolPermissionContext.js";
 import { isLocalAgent } from "../../state/teammateViewHelpers.js";
 import { isInProcessTeammateTask } from "../../tasks/InProcessTeammateTask/types.js";
-import { logFeatureOk, logFeatureBad } from "../../services/analytics/featureTelemetry.js";
-import { withTimeout } from "../sleep.js";
-import { TEAMMATE_TEARDOWN_TIMEOUT_MS } from "../../tasks/InProcessTeammateTask/InProcessTeammateTask.js";
-import { errorMessage } from "../errors.js";
-import { removeMemberByAgentId } from "./teamHelpers.js";
-import { evictTaskOutput } from "../task/diskOutput.js";
-import { emitTaskNotification } from "../task/taskNotifications.js";
-import { TASK_NOTIFICATION_DELAY_MS } from "../task/framework.js";
 
+//@ chunk-v5mxhgy9.js:721-2171 fingerprint = killInProcessTeammate (0.504)
+/**
+ * 终止同进程 teammate：标 killed 并中止、触发 onIdle 回调；带超时等 pane 拆除；从 teamContext 与团队文件移除成员；发 stopped 通知。返回 {killed, memberRemoval, osTeardown}。
+ */
+function killInProcessTeammate(taskId, taskRegistry, setAppState, storage) {
+  let wasRunning = false;
+  let teamName = null;
+  let agentId = null;
+  let toolUseId;
+  let summary;
+  let paneTeardown;
+  taskRegistry.update(taskId, (prev) => {
+    if (prev.status !== "running") return prev;
+    teamName = prev.identity.teamName;
+    agentId = prev.identity.agentId;
+    toolUseId = prev.toolUseId;
+    summary = prev.description;
+    paneTeardown = prev.paneTeardown;
+    prev.abortController?.abort();
+    wasRunning = true;
+    prev.onIdleCallbacks?.forEach((cb) => cb());
+    return {
+      ...prev,
+      status: "killed",
+      notified: true,
+      endTime: Date.now(),
+      onIdleCallbacks: [],
+      pendingUserMessages: [],
+      abortController: undefined,
+      currentWorkAbortController: undefined,
+      paneTeardown: undefined,
+      evictAfter: undefined,
+    };
+  });
+  let osTeardown = paneTeardown
+    ? withTimeout(
+        paneTeardown(),
+        TEAMMATE_TEARDOWN_TIMEOUT_MS,
+        `pane teardown did not settle within ${TEAMMATE_TEARDOWN_TIMEOUT_MS}ms`,
+      ).then(
+        (teardownOk) => {
+          if (!teardownOk)
+            logForDebugging(
+              `[killInProcessTeammate] pane teardown for ${taskId} reported failure \u2014 the backend could not find/kill the pane; its separate \`claude --agent-id\` process may still be running`,
+              {
+                level: "warn",
+              },
+            );
+          return teardownOk;
+        },
+        (error) => {
+          logForDebugging(
+            `[killInProcessTeammate] pane teardown for ${taskId} did not complete cleanly: ${errorMessage(error)}. Not blocking the stop result on it; the backend kill continues in the background and the separate \`claude --agent-id\` process may still be running`,
+            {
+              level: "warn",
+            },
+          );
+          return false;
+        },
+      )
+    : Promise.resolve(undefined);
+  if (wasRunning && agentId)
+    setAppState((cb) => {
+      if (!cb.teamContext?.teammates?.[agentId]) return cb;
+      let { [agentId]: removed, ...remainingTeammates } = cb.teamContext.teammates;
+      return {
+        ...cb,
+        teamContext: {
+          ...cb.teamContext,
+          teammates: remainingTeammates,
+        },
+      };
+    });
+  let memberRemoval = Promise.resolve();
+  if (teamName && agentId)
+    memberRemoval = removeMemberByAgentId(
+      teamName,
+      agentId,
+      {
+        onlyIfJoinedBefore: Date.now(),
+      },
+      storage,
+    );
+  if (wasRunning) {
+    evictTaskOutput(taskId);
+    emitTaskNotification(taskId, "stopped", {
+      toolUseId,
+      summary,
+    });
+    setTimeout(
+      (registryArg, taskIdArg) => registryArg.evictTerminal(taskIdArg),
+      TASK_NOTIFICATION_DELAY_MS,
+      taskRegistry,
+      taskId,
+    );
+  }
+  if (agentId) unregisterPerfettoAgent(agentId);
+  logFeatureOk("swarm_in_process_kill");
+  return {
+    killed: wasRunning,
+    memberRemoval,
+    osTeardown,
+  };
+}
 //@ chunk-5t8enyd9.js:746-755 placement
 var MAX_DESCRIPTION_CHARS = 50;
 //@ chunk-5t8enyd9.js:755-833 placement
@@ -44,9 +148,9 @@ var MAX_DESCRIPTION_CHARS = 50;
  * 把提示文本脱敏截断成队友描述（超出补省略号）。
  */
 function clipPromptDescription(prompt) {
-  let s = redactAndTruncate(prompt, MAX_DESCRIPTION_CHARS);
-  let e = truncateToLength(s, MAX_DESCRIPTION_CHARS);
-  return e.length < s.length ? `${e}...` : e;
+  let redacted = redactAndTruncate(prompt, MAX_DESCRIPTION_CHARS);
+  let clipped = truncateToLength(redacted, MAX_DESCRIPTION_CHARS);
+  return clipped.length < redacted.length ? `${clipped}...` : clipped;
 }
 //@ chunk-5t8enyd9.js:833-921 layout
 /**
@@ -116,11 +220,11 @@ async function spawnInProcessTeammate(config, context) {
     let appState = context.getAppState();
     let existingAgentId = appState.agentNameRegistry.get(name);
     if (existingAgentId !== resumableAgentId) {
-      let p = existingAgentId !== undefined ? appState.tasks[existingAgentId] : undefined;
+      let existingTask = existingAgentId !== undefined ? appState.tasks[existingAgentId] : undefined;
       let registeredName =
         existingAgentId !== undefined &&
-        (p?.status === "running" ||
-          isLocalAgent(p) ||
+        (existingTask?.status === "running" ||
+          isLocalAgent(existingTask) ||
           Object.values(appState.tasks).some(
             (task) =>
               isInProcessTeammateTask(task) &&
@@ -155,104 +259,5 @@ async function spawnInProcessTeammate(config, context) {
       error: errorMessage,
     };
   }
-}
-//@ chunk-v5mxhgy9.js:721-2171 fingerprint = killInProcessTeammate (0.504)
-/**
- * 终止同进程 teammate：标 killed 并中止、触发 onIdle 回调；带超时等 pane 拆除；从 teamContext 与团队文件移除成员；发 stopped 通知。返回 {killed, memberRemoval, osTeardown}。
- */
-function killInProcessTeammate(taskId, taskRegistry, setAppState, storage) {
-  let wasRunning = false;
-  let teamName = null;
-  let agentId = null;
-  let toolUseId;
-  let summary;
-  let paneTeardown;
-  taskRegistry.update(taskId, (prev) => {
-    if (prev.status !== "running") return prev;
-    teamName = prev.identity.teamName;
-    agentId = prev.identity.agentId;
-    toolUseId = prev.toolUseId;
-    summary = prev.description;
-    paneTeardown = prev.paneTeardown;
-    prev.abortController?.abort();
-    wasRunning = true;
-    prev.onIdleCallbacks?.forEach((cb) => cb());
-    return {
-      ...prev,
-      status: "killed",
-      notified: true,
-      endTime: Date.now(),
-      onIdleCallbacks: [],
-      pendingUserMessages: [],
-      abortController: undefined,
-      currentWorkAbortController: undefined,
-      paneTeardown: undefined,
-      evictAfter: undefined,
-    };
-  });
-  let osTeardown = paneTeardown
-    ? withTimeout(
-        paneTeardown(),
-        TEAMMATE_TEARDOWN_TIMEOUT_MS,
-        `pane teardown did not settle within ${TEAMMATE_TEARDOWN_TIMEOUT_MS}ms`,
-      ).then(
-        (e) => {
-          if (!e)
-            logForDebugging(
-              `[killInProcessTeammate] pane teardown for ${taskId} reported failure \u2014 the backend could not find/kill the pane; its separate \`claude --agent-id\` process may still be running`,
-              {
-                level: "warn",
-              },
-            );
-          return e;
-        },
-        (error) => {
-          logForDebugging(
-            `[killInProcessTeammate] pane teardown for ${taskId} did not complete cleanly: ${errorMessage(error)}. Not blocking the stop result on it; the backend kill continues in the background and the separate \`claude --agent-id\` process may still be running`,
-            {
-              level: "warn",
-            },
-          );
-          return false;
-        },
-      )
-    : Promise.resolve(undefined);
-  if (wasRunning && agentId)
-    setAppState((cb) => {
-      if (!cb.teamContext?.teammates?.[agentId]) return cb;
-      let { [agentId]: p, ...remainingTeammates } = cb.teamContext.teammates;
-      return {
-        ...cb,
-        teamContext: {
-          ...cb.teamContext,
-          teammates: remainingTeammates,
-        },
-      };
-    });
-  let memberRemoval = Promise.resolve();
-  if (teamName && agentId)
-    memberRemoval = removeMemberByAgentId(
-      teamName,
-      agentId,
-      {
-        onlyIfJoinedBefore: Date.now(),
-      },
-      storage,
-    );
-  if (wasRunning) {
-    evictTaskOutput(taskId);
-    emitTaskNotification(taskId, "stopped", {
-      toolUseId,
-      summary,
-    });
-    setTimeout((e, p) => e.evictTerminal(p), TASK_NOTIFICATION_DELAY_MS, taskRegistry, taskId);
-  }
-  if (agentId) unregisterPerfettoAgent(agentId);
-  logFeatureOk("swarm_in_process_kill");
-  return {
-    killed: wasRunning,
-    memberRemoval,
-    osTeardown,
-  };
 }
 export { killInProcessTeammate, clipPromptDescription, spawnInProcessTeammate };

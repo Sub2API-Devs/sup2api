@@ -13,6 +13,7 @@ import { resolve, parse as parse_2, sep, join } from "path";
 import { getErrnoCode } from "../errors.js";
 import { isWritableByCurrentUser } from "../../bootstrap/stateSlices.js";
 import { getPlatform } from "../platform.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-dcmhvw5a.js:427275-427376 placement
 function writabilityFromError(error) {
@@ -29,25 +30,25 @@ function writabilityFromError(error) {
 /**
  * probeWritabilitySync：同步探测路径可写。
  */
-function probeWritabilitySync(e) {
+function probeWritabilitySync(path) {
   try {
-    accessSync(e, constants.W_OK);
+    accessSync(path, constants.W_OK);
     return "yes";
   } catch (error) {
     return writabilityFromError(error);
   }
 }
 //@ chunk-dcmhvw5a.js:427445-427574 placement
-function anyAccountCouldWrite(e, file, folder) {
-  for (let euid of e.uids) {
-    let a = isWritableByCurrentUser({
+function anyAccountCouldWrite(accountInfo, file, folder) {
+  for (let euid of accountInfo.uids) {
+    let writable = isWritableByCurrentUser({
       file,
       folder,
       posix: true,
       euid,
-      groups: e.groups,
+      groups: accountInfo.groups,
     });
-    if (a !== false) return a;
+    if (writable !== false) return writable;
   }
   return false;
 }
@@ -57,46 +58,47 @@ var MAX_MANAGED_PATH_SEGMENTS = 40;
 /**
  * 安全解析托管设置路径（逐段检查链接）。
  */
-function resolveManagedPathSafely(e, n, r) {
-  let s = resolve(e);
+function resolveManagedPathSafely(path, accountInfo, certain) {
+  let resolved = resolve(path);
   try {
     for (let j = 0; j <= MAX_MANAGED_PATH_SEGMENTS; j++) {
-      let root = parse_2(s).root;
-      let g;
-      let filtered = s.slice(root.length).split(sep).filter(Boolean);
-      let f;
-      for (let [h, y] of filtered.entries()) {
-        let b = r.get(root);
-        if (b === undefined) {
-          g ??= lstatSync(root);
-          let w = {
-            uid: g.uid,
-            gid: g.gid,
-            mode: g.mode,
+      let root = parse_2(resolved).root;
+      let stats;
+      let filtered = resolved.slice(root.length).split(sep).filter(Boolean);
+      let next;
+      for (let [index, segment] of filtered.entries()) {
+        let certainDir = certain.get(root);
+        if (certainDir === undefined) {
+          stats ??= lstatSync(root);
+          let info = {
+            uid: stats.uid,
+            gid: stats.gid,
+            mode: stats.mode,
           };
-          b = anyAccountCouldWrite(n, w, w) === false && probeWritabilitySync(root) === "no";
-          r.set(root, b);
+          certainDir =
+            anyAccountCouldWrite(accountInfo, info, info) === false && probeWritabilitySync(root) === "no";
+          certain.set(root, certainDir);
         }
-        if (!b) return true;
-        let S = join(root, y);
-        if (r.has(S)) {
-          root = S;
-          g = undefined;
+        if (!certainDir) return true;
+        let child = join(root, segment);
+        if (certain.has(child)) {
+          root = child;
+          stats = undefined;
           continue;
         }
-        let C = lstatSync(S);
-        if (C.isSymbolicLink()) {
-          let w = readlinkSync(S);
-          let filtered_2 = w.split(sep).filter((v) => v && v !== ".");
-          if (filtered_2.lastIndexOf("..") > filtered_2.findIndex((v) => v !== "..")) return true;
-          f = resolve(root, w, ...filtered.slice(h + 1));
+        let childStats = lstatSync(child);
+        if (childStats.isSymbolicLink()) {
+          let linkText = readlinkSync(child);
+          let filtered_2 = linkText.split(sep).filter((part) => part && part !== ".");
+          if (filtered_2.lastIndexOf("..") > filtered_2.findIndex((part) => part !== "..")) return true;
+          next = resolve(root, linkText, ...filtered.slice(index + 1));
           break;
         }
-        root = S;
-        g = C;
+        root = child;
+        stats = childStats;
       }
-      if (f === undefined) return false;
-      s = f;
+      if (next === undefined) return false;
+      resolved = next;
     }
   } catch {}
   return true;
@@ -128,7 +130,10 @@ class ManagedPathCache {
 /**
  * managedPathCache：托管路径缓存。
  */
-var managedPathCache = new ManagedPathCache();
+var managedPathCache; // deferred: uses ManagedPathCache of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-dcmhvw5a.js:428488", () => {
+  managedPathCache = new ManagedPathCache();
+});
 //@ chunk-dcmhvw5a.js:428502-428547 placement
 /**
  * 托管设置文件路径。

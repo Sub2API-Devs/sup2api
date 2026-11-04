@@ -5,7 +5,7 @@
  * pieces: chunk-fq0cr76a.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../../../runtime/bun-runtime.js";
 import { require_operator_const } from "../gen/dev/cel/expr/operator_const.js";
 import { require_overload_const } from "../gen/dev/cel/expr/overload_const.js";
 import { require_type } from "../type.js";
@@ -13,7 +13,7 @@ import { require_equals_2 } from "../equals.js";
 import { require_func } from "../func.js";
 
 //@ chunk-fq0cr76a.js:502006-507433 cjs-fingerprint
-var require_logic = x(function (cjsExports) {
+var require_logic = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });

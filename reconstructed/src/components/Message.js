@@ -8,7 +8,8 @@
  * pieces: chunk-ah34pb7m.js (15), chunk-e6aww6q8.js (1)
  * attribution: placement 3, sole-consumer 1, affinity 1, fingerprint 5, layout 6
  */
-import { w } from "../../vendor/react/compiler-runtime.js";
+import { claudeMdSessionState } from "../utils/claudemd.js";
+import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import { useGetToolFromMessages } from "./messages/UserToolResultMessage/utils.js";
 import { jsxProd_default } from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { actionKeysNamespace } from "./pluginUi/render/actionKeys.js";
@@ -22,7 +23,7 @@ import { CompactSummary } from "./CompactSummary.js";
 import { InsideToolResultProvider } from "./shell/OutputLine.js";
 import { interruptedByUserSignal } from "./messages/UserToolResultMessage/RejectedToolUseMessage.js";
 import { CompactBoundaryMessage } from "./messages/CompactBoundaryMessage.js";
-import { PLACED_SITE_MODULE_EXPORTS, hasStringUuid } from "../bridge/inboundMessages.js";
+import { PLACED_SITE_MODULE_EXPORTS } from "./pluginUi/renderSiteExports.js";
 import { parseSystemMessage } from "./messages/SystemNoticeMessage.js";
 import { NoticeRowMessage } from "./messages/teamMemSaved.js";
 import { Divider } from "./design-system/Divider.js";
@@ -49,89 +50,106 @@ import { AssistantRedactedThinkingMessage } from "./messages/AssistantRedactedTh
 import { hasNarrationThinking } from "../utils/messages/apiNormalization.js";
 import { AssistantThinkingMessage } from "./messages/AssistantThinkingMessage.js";
 import { AdvisorMessage } from "./messages/AdvisorMessage.js";
+import { hasStringUuid } from "../bridge/inboundMessages.js";
 import { isWeakNotified } from "../utils/queuedCommandDisplay.js";
 import { getBuiltinMcpRenderOverride } from "../utils/computerUse/common.js";
 import { GROUPED_TOOL_USE_RENDERERS } from "./messages/SkillProposalMessage.js";
-import { claudeMdSessionState } from "../utils/claudemd.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
+//@ chunk-e6aww6q8.js:1349439-1349495 fingerprint = Message (0.471)
+/**
+ * 清空某宿主的记忆文件缓存（loads/moves）。
+ */
+function clearMemoryFilesCache(session) {
+  claudeMdSessionState(session).memo = {
+    loads: new Map(),
+    moves: new Map(),
+  };
+}
 //@ chunk-ah34pb7m.js:220968-221152 placement = createUserInterruptionMessage (0.51)
 /**
  * React 组件：按 tool_use_id 在 lookups 里找到对应 tool_use 后渲染（找不到返回 null）。旧版名 createUserInterruptionMessage 为错配，应归 components/。
  */
-function ToolResultRow(m) {
-  let c = w(3);
-  let getToolFromMessages = useGetToolFromMessages(m.param.tool_use_id, m.tools, m.lookups);
+function ToolResultRow(props) {
+  let $ = useMemoCache(3);
+  let getToolFromMessages = useGetToolFromMessages(props.param.tool_use_id, props.tools, props.lookups);
   if (!getToolFromMessages) {
     return null;
   }
-  let g;
-  if (c[0] !== m || c[1] !== getToolFromMessages) {
-    g = jsxProd_default(ToolResultRequestRow, {
-      ...m,
+  let rowElement;
+  if ($[0] !== props || $[1] !== getToolFromMessages) {
+    rowElement = jsxProd_default(ToolResultRequestRow, {
+      ...props,
       toolUse: getToolFromMessages,
     });
-    c[0] = m;
-    c[1] = getToolFromMessages;
-    c[2] = g;
-  } else g = c[2];
-  return g;
+    $[0] = props;
+    $[1] = getToolFromMessages;
+    $[2] = rowElement;
+  } else rowElement = $[2];
+  return rowElement;
 }
 //@ chunk-ah34pb7m.js:221152-221816 sole-consumer
 /**
  * React（编译器产物）组件：把 tool_result 的 tool_use_id、工具名、输出、是否出错/展开作为请求参数渲染一行；只被中断消息组件使用。
  */
 function ToolResultRequestRow(props) {
-  let x = w(11);
+  let $ = useMemoCache(11);
   let { param, message, toolUse } = props;
   let toolUseResult = message.toolUseResult;
-  let h = param.is_error === true;
-  let M = toolUse.toolUse.name;
-  let T = props.verbose || props.isTranscriptMode === true;
-  let k;
-  let b;
-  if (x[0] !== h || x[1] !== T || x[2] !== toolUseResult || x[3] !== param.tool_use_id || x[4] !== M) {
-    k = () => ({
+  let isErrored = param.is_error === true;
+  let toolName = toolUse.toolUse.name;
+  let isExpanded = props.verbose || props.isTranscriptMode === true;
+  let buildInput;
+  let inputDeps;
+  if (
+    $[0] !== isErrored ||
+    $[1] !== isExpanded ||
+    $[2] !== toolUseResult ||
+    $[3] !== param.tool_use_id ||
+    $[4] !== toolName
+  ) {
+    buildInput = () => ({
       requestId: param.tool_use_id,
       props: {
         tool_use_id: param.tool_use_id,
-        tool: M,
+        tool: toolName,
         output: toolUseResult,
-        isErrored: h,
-        isExpanded: T,
+        isErrored,
+        isExpanded,
       },
     });
-    b = [param.tool_use_id, M, toolUseResult, h, T];
-    x[0] = h;
-    x[1] = T;
-    x[2] = toolUseResult;
-    x[3] = param.tool_use_id;
-    x[4] = M;
-    x[5] = k;
-    x[6] = b;
+    inputDeps = [param.tool_use_id, toolName, toolUseResult, isErrored, isExpanded];
+    $[0] = isErrored;
+    $[1] = isExpanded;
+    $[2] = toolUseResult;
+    $[3] = param.tool_use_id;
+    $[4] = toolName;
+    $[5] = buildInput;
+    $[6] = inputDeps;
   } else {
-    k = x[5];
-    b = x[6];
+    buildInput = $[5];
+    inputDeps = $[6];
   }
-  let E = actionKeysNamespace.useRenderInput("ToolResult", k, b);
-  let B;
-  if (x[7] !== message || x[8] !== toolUseResult || x[9] !== props) {
-    B = (L) =>
+  let renderInput = actionKeysNamespace.useRenderInput("ToolResult", buildInput, inputDeps);
+  let renderHook;
+  if ($[7] !== message || $[8] !== toolUseResult || $[9] !== props) {
+    renderHook = (args) =>
       jsxProd_default(UserToolResultMessage, {
         ...props,
         message:
-          L.props.output === toolUseResult
+          args.props.output === toolUseResult
             ? message
             : {
                 ...message,
-                toolUseResult: L.props.output,
+                toolUseResult: args.props.output,
               },
       });
-    x[7] = message;
-    x[8] = toolUseResult;
-    x[9] = props;
-    x[10] = B;
-  } else B = x[10];
-  return actionKeysNamespace.useRenderHook(E, B);
+    $[7] = message;
+    $[8] = toolUseResult;
+    $[9] = props;
+    $[10] = renderHook;
+  } else renderHook = $[10];
+  return actionKeysNamespace.useRenderHook(renderInput, renderHook);
 }
 //@ chunk-ah34pb7m.js:225018-225030 affinity
 var workSegmentModule = null;
@@ -140,7 +158,7 @@ var workSegmentModule = null;
  * 单条消息渲染（memo 前的实现）：按 message.type 分派——assistant 逐内容块交给 AssistantMessageBlock，user 交给 UserMessage，attachment/system/grouped_tool_use/collapsed_read_search/work_segment 等交给对应组件；处理 addMargin、verbose、transcript 模式。
  */
 function MessageImpl(props) {
-  let $ = w(174);
+  let $ = useMemoCache(174);
   let {
     message,
     lookups,
@@ -168,20 +186,20 @@ function MessageImpl(props) {
   } = props;
   let isUserContinuation_2 = isUserContinuation === undefined ? false : isUserContinuation;
   let isSplitUserContinuation_2 = isSplitUserContinuation === undefined ? false : isSplitUserContinuation;
-  let pe = followsSpeakerLabel === undefined ? false : followsSpeakerLabel;
+  let speakerLabel = followsSpeakerLabel === undefined ? false : followsSpeakerLabel;
   let followsInboundLabel_2 = followsInboundLabel === undefined ? false : followsInboundLabel;
   let hasMetadataHeader_2 = hasMetadataHeader === undefined ? false : hasMetadataHeader;
-  let ue = shouldShowNotice(verbose);
+  let showNotice = shouldShowNotice(verbose);
   switch (message.type) {
     case "attachment": {
       if (message.attachment.type === "queued_command" && isPeerOrObserver(message.attachment.origin)) {
-        let se;
+        let promptText;
         if ($[0] !== message.attachment.prompt) {
-          se = joinTextContent(message.attachment.prompt);
+          promptText = joinTextContent(message.attachment.prompt);
           $[0] = message.attachment.prompt;
-          $[1] = se;
-        } else se = $[1];
-        let text = se;
+          $[1] = promptText;
+        } else promptText = $[1];
+        let text = promptText;
         const width = containerWidth ?? "100%";
         let param;
         if ($[2] !== text) {
@@ -226,25 +244,25 @@ function MessageImpl(props) {
           $[12] = verbose;
           $[13] = children;
         } else children = $[13];
-        let Ue;
+        let peerMessage;
         if ($[14] !== children || $[15] !== width) {
-          Ue = jsxProd_default(Box, {
+          peerMessage = jsxProd_default(Box, {
             flexDirection: "column",
             width,
             children,
           });
           $[14] = children;
           $[15] = width;
-          $[16] = Ue;
-        } else Ue = $[16];
-        return Ue;
+          $[16] = peerMessage;
+        } else peerMessage = $[16];
+        return peerMessage;
       }
       const width = containerWidth ?? "100%";
       let children;
       if (
         $[17] !== addMargin ||
         $[18] !== followsInboundLabel_2 ||
-        $[19] !== pe ||
+        $[19] !== speakerLabel ||
         $[20] !== hasMetadataHeader_2 ||
         $[21] !== isTranscriptMode ||
         $[22] !== message.attachment ||
@@ -257,13 +275,13 @@ function MessageImpl(props) {
           verbose,
           isTranscriptMode,
           hasMetadataHeader: hasMetadataHeader_2,
-          followsSpeakerLabel: pe,
+          followsSpeakerLabel: speakerLabel,
           followsInboundLabel: followsInboundLabel_2,
           messageId: message.uuid,
         });
         $[17] = addMargin;
         $[18] = followsInboundLabel_2;
-        $[19] = pe;
+        $[19] = speakerLabel;
         $[20] = hasMetadataHeader_2;
         $[21] = isTranscriptMode;
         $[22] = message.attachment;
@@ -271,36 +289,36 @@ function MessageImpl(props) {
         $[24] = verbose;
         $[25] = children;
       } else children = $[25];
-      let Me;
+      let attachmentBox;
       if ($[26] !== width || $[27] !== children) {
-        Me = jsxProd_default(Box, {
+        attachmentBox = jsxProd_default(Box, {
           flexDirection: "column",
           width,
           children,
         });
         $[26] = width;
         $[27] = children;
-        $[28] = Me;
-      } else Me = $[28];
-      return Me;
+        $[28] = attachmentBox;
+      } else attachmentBox = $[28];
+      return attachmentBox;
     }
     case "assistant": {
-      let se;
+      let firstTextUuid;
       if ($[29] !== lookups.firstTextBlockUuidByMessageID || $[30] !== message.message.id) {
-        se = lookups.firstTextBlockUuidByMessageID.get(message.message.id);
+        firstTextUuid = lookups.firstTextBlockUuidByMessageID.get(message.message.id);
         $[29] = lookups.firstTextBlockUuidByMessageID;
         $[30] = message.message.id;
-        $[31] = se;
-      } else se = $[31];
-      let we = se;
+        $[31] = firstTextUuid;
+      } else firstTextUuid = $[31];
+      let firstTextUuid_2 = firstTextUuid;
       const width = containerWidth ?? "100%";
       let children;
       if (
         $[32] !== addMargin ||
         $[33] !== commands ||
         $[34] !== disableDisplayOverride ||
-        $[35] !== we ||
-        $[36] !== pe ||
+        $[35] !== firstTextUuid_2 ||
+        $[36] !== speakerLabel ||
         $[37] !== inProgressToolUseIDs ||
         $[38] !== isTranscriptMode ||
         $[39] !== lookups ||
@@ -321,13 +339,13 @@ function MessageImpl(props) {
         $[54] !== tools ||
         $[55] !== verbose
       ) {
-        let be;
+        let renderBlock;
         if (
           $[57] !== addMargin ||
           $[58] !== commands ||
           $[59] !== disableDisplayOverride ||
-          $[60] !== we ||
-          $[61] !== pe ||
+          $[60] !== firstTextUuid_2 ||
+          $[61] !== speakerLabel ||
           $[62] !== inProgressToolUseIDs ||
           $[63] !== isTranscriptMode ||
           $[64] !== lookups ||
@@ -347,13 +365,13 @@ function MessageImpl(props) {
           $[78] !== tools ||
           $[79] !== verbose
         ) {
-          be = (param, index) =>
+          renderBlock = (param, index) =>
             jsxProd_default(
               AssistantMessageBlock,
               {
                 param,
                 model: message.message.model,
-                addMargin: addMargin && !pe,
+                addMargin: addMargin && !speakerLabel,
                 tools,
                 commands,
                 verbose,
@@ -373,15 +391,15 @@ function MessageImpl(props) {
                 apiErrorKind: message.error,
                 apiMessageId: disableDisplayOverride ? undefined : message.message.id,
                 messageUuid: message.uuid,
-                isFirstTextBlock: we === undefined || we === message.uuid,
+                isFirstTextBlock: firstTextUuid_2 === undefined || firstTextUuid_2 === message.uuid,
               },
               index,
             );
           $[57] = addMargin;
           $[58] = commands;
           $[59] = disableDisplayOverride;
-          $[60] = we;
-          $[61] = pe;
+          $[60] = firstTextUuid_2;
+          $[61] = speakerLabel;
           $[62] = inProgressToolUseIDs;
           $[63] = isTranscriptMode;
           $[64] = lookups;
@@ -400,14 +418,14 @@ function MessageImpl(props) {
           $[77] = shouldShowDot;
           $[78] = tools;
           $[79] = verbose;
-          $[80] = be;
-        } else be = $[80];
-        children = message.message.content.map(be);
+          $[80] = renderBlock;
+        } else renderBlock = $[80];
+        children = message.message.content.map(renderBlock);
         $[32] = addMargin;
         $[33] = commands;
         $[34] = disableDisplayOverride;
-        $[35] = we;
-        $[36] = pe;
+        $[35] = firstTextUuid_2;
+        $[36] = speakerLabel;
         $[37] = inProgressToolUseIDs;
         $[38] = isTranscriptMode;
         $[39] = lookups;
@@ -429,58 +447,58 @@ function MessageImpl(props) {
         $[55] = verbose;
         $[56] = children;
       } else children = $[56];
-      let be;
+      let assistantBox;
       if ($[81] !== width || $[82] !== children) {
-        be = jsxProd_default(Box, {
+        assistantBox = jsxProd_default(Box, {
           flexDirection: "column",
           width,
           children,
         });
         $[81] = width;
         $[82] = children;
-        $[83] = be;
-      } else be = $[83];
-      return be;
+        $[83] = assistantBox;
+      } else assistantBox = $[83];
+      return assistantBox;
     }
     case "user": {
       if (message.isCompactSummary) {
         const screen = isTranscriptMode ? "transcript" : "prompt";
-        let Te;
+        let compactSummary;
         if ($[84] !== message || $[85] !== screen) {
-          Te = jsxProd_default(CompactSummary, {
+          compactSummary = jsxProd_default(CompactSummary, {
             message,
             screen,
           });
           $[84] = message;
           $[85] = screen;
-          $[86] = Te;
-        } else Te = $[86];
-        return Te;
+          $[86] = compactSummary;
+        } else compactSummary = $[86];
+        return compactSummary;
       }
-      let xe;
+      let imageIndexes;
       if ($[87] !== message.imagePasteIds || $[88] !== message.message.content) {
-        xe = [];
+        imageIndexes = [];
         let imagePosition = 0;
         for (const param of message.message.content) {
           if (param.type === "image") {
             let id = message.imagePasteIds?.[imagePosition];
             imagePosition++;
-            xe.push(id ?? imagePosition);
-          } else xe.push(imagePosition);
+            imageIndexes.push(id ?? imagePosition);
+          } else imageIndexes.push(imagePosition);
         }
         $[87] = message.imagePasteIds;
         $[88] = message.message.content;
-        $[89] = xe;
-      } else xe = $[89];
+        $[89] = imageIndexes;
+      } else imageIndexes = $[89];
       let isLatestBashOutput = latestBashOutputUUID === message.uuid;
       const width = containerWidth ?? "100%";
       let children;
       if (
         $[90] !== addMargin ||
         $[91] !== followsInboundLabel_2 ||
-        $[92] !== pe ||
+        $[92] !== speakerLabel ||
         $[93] !== hasMetadataHeader_2 ||
-        $[94] !== xe ||
+        $[94] !== imageIndexes ||
         $[95] !== isSplitUserContinuation_2 ||
         $[96] !== isTranscriptMode ||
         $[97] !== isUserContinuation_2 ||
@@ -502,10 +520,10 @@ function MessageImpl(props) {
               param,
               style,
               verbose,
-              imageIndex: xe[index],
+              imageIndex: imageIndexes[index],
               isUserContinuation: isUserContinuation_2,
               isSplitUserContinuation: isSplitUserContinuation_2,
-              followsSpeakerLabel: pe,
+              followsSpeakerLabel: speakerLabel,
               followsInboundLabel: followsInboundLabel_2,
               hasMetadataHeader: hasMetadataHeader_2,
               lookups,
@@ -516,9 +534,9 @@ function MessageImpl(props) {
         );
         $[90] = addMargin;
         $[91] = followsInboundLabel_2;
-        $[92] = pe;
+        $[92] = speakerLabel;
         $[93] = hasMetadataHeader_2;
-        $[94] = xe;
+        $[94] = imageIndexes;
         $[95] = isSplitUserContinuation_2;
         $[96] = isTranscriptMode;
         $[97] = isUserContinuation_2;
@@ -530,18 +548,18 @@ function MessageImpl(props) {
         $[103] = verbose;
         $[104] = children;
       } else children = $[104];
-      let Me;
+      let userBox;
       if ($[105] !== width || $[106] !== children) {
-        Me = jsxProd_default(Box, {
+        userBox = jsxProd_default(Box, {
           flexDirection: "column",
           width,
           children,
         });
         $[105] = width;
         $[106] = children;
-        $[107] = Me;
-      } else Me = $[107];
-      let content = Me;
+        $[107] = userBox;
+      } else userBox = $[107];
+      let content = userBox;
       const value = message.interruptedBySendNow === true;
       let children_2;
       if ($[108] !== content || $[109] !== isLatestBashOutput) {
@@ -554,75 +572,75 @@ function MessageImpl(props) {
         $[109] = isLatestBashOutput;
         $[110] = children_2;
       } else children_2 = $[110];
-      let Ue;
+      let providerWrapped;
       if ($[111] !== children_2 || $[112] !== value) {
-        Ue = jsxProd_default(interruptedByUserSignal.Provider, {
+        providerWrapped = jsxProd_default(interruptedByUserSignal.Provider, {
           value,
           children: children_2,
         });
         $[111] = children_2;
         $[112] = value;
-        $[113] = Ue;
-      } else Ue = $[113];
-      return Ue;
+        $[113] = providerWrapped;
+      } else providerWrapped = $[113];
+      return providerWrapped;
     }
     case "system": {
       if (message.subtype === "compact_boundary") {
-        let se;
-        if ($[114] !== message || $[115] !== ue) {
-          se = jsxProd_default(CompactBoundaryMessage, {
+        let compactBoundary;
+        if ($[114] !== message || $[115] !== showNotice) {
+          compactBoundary = jsxProd_default(CompactBoundaryMessage, {
             message,
-            transcriptV2Rows: ue,
+            transcriptV2Rows: showNotice,
           });
           $[114] = message;
-          $[115] = ue;
-          $[116] = se;
-        } else se = $[116];
-        return se;
+          $[115] = showNotice;
+          $[116] = compactBoundary;
+        } else compactBoundary = $[116];
+        return compactBoundary;
       }
       if (message.subtype === "placed") {
-        let se;
+        let placedSite;
         if ($[117] !== message) {
-          se = jsxProd_default(PLACED_SITE_MODULE_EXPORTS.PlacedSite, {
+          placedSite = jsxProd_default(PLACED_SITE_MODULE_EXPORTS.PlacedSite, {
             message,
           });
           $[117] = message;
-          $[118] = se;
-        } else se = $[118];
-        return se;
+          $[118] = placedSite;
+        } else placedSite = $[118];
+        return placedSite;
       }
       if (message.subtype === "microcompact_boundary") {
         return null;
       }
-      if (ue) {
-        let se;
+      if (showNotice) {
+        let parsed;
         if ($[119] !== message) {
-          se = parseSystemMessage(message);
+          parsed = parseSystemMessage(message);
           $[119] = message;
-          $[120] = se;
-        } else se = $[120];
-        let Xe = se;
-        if (Xe.kind === "hidden") {
+          $[120] = parsed;
+        } else parsed = $[120];
+        let parsedSystem = parsed;
+        if (parsedSystem.kind === "hidden") {
           return null;
         }
-        if (Xe.kind === "line") {
-          let Te;
-          if ($[121] !== addMargin || $[122] !== Xe.row) {
-            Te = jsxProd_default(NoticeRowMessage, {
-              row: Xe.row,
+        if (parsedSystem.kind === "line") {
+          let noticeRow;
+          if ($[121] !== addMargin || $[122] !== parsedSystem.row) {
+            noticeRow = jsxProd_default(NoticeRowMessage, {
+              row: parsedSystem.row,
               addMargin,
             });
             $[121] = addMargin;
-            $[122] = Xe.row;
-            $[123] = Te;
-          } else Te = $[123];
-          return Te;
+            $[122] = parsedSystem.row;
+            $[123] = noticeRow;
+          } else noticeRow = $[123];
+          return noticeRow;
         }
       }
       if (message.subtype === "read_divider") {
-        let se;
+        let readDivider;
         if ($[124] !== message.content) {
-          se = jsxProd_default(Box, {
+          readDivider = jsxProd_default(Box, {
             marginTop: 1,
             width: "100%",
             children: jsxProd_default(Divider, {
@@ -631,9 +649,9 @@ function MessageImpl(props) {
             }),
           });
           $[124] = message.content;
-          $[125] = se;
-        } else se = $[125];
-        return se;
+          $[125] = readDivider;
+        } else readDivider = $[125];
+        return readDivider;
       }
       if (message.subtype === "local_command") {
         let param;
@@ -645,39 +663,39 @@ function MessageImpl(props) {
           $[126] = message.content;
           $[127] = param;
         } else param = $[127];
-        let Te;
+        let commandText;
         if (
           $[128] !== addMargin ||
-          $[129] !== pe ||
+          $[129] !== speakerLabel ||
           $[130] !== isTranscriptMode ||
           $[131] !== message.commandRun ||
           $[132] !== message.uuid ||
           $[133] !== param ||
           $[134] !== verbose
         ) {
-          Te = jsxProd_default(UserTextMessage, {
+          commandText = jsxProd_default(UserTextMessage, {
             addMargin,
             param,
             verbose,
             isTranscriptMode,
             messageId: message.uuid,
             commandRun: message.commandRun,
-            followsSpeakerLabel: pe,
+            followsSpeakerLabel: speakerLabel,
           });
           $[128] = addMargin;
-          $[129] = pe;
+          $[129] = speakerLabel;
           $[130] = isTranscriptMode;
           $[131] = message.commandRun;
           $[132] = message.uuid;
           $[133] = param;
           $[134] = verbose;
-          $[135] = Te;
-        } else Te = $[135];
-        return Te;
+          $[135] = commandText;
+        } else commandText = $[135];
+        return commandText;
       }
-      let se;
+      let systemText;
       if ($[136] !== addMargin || $[137] !== isTranscriptMode || $[138] !== message || $[139] !== verbose) {
-        se = jsxProd_default(SystemTextMessage, {
+        systemText = jsxProd_default(SystemTextMessage, {
           message,
           addMargin,
           verbose,
@@ -687,12 +705,12 @@ function MessageImpl(props) {
         $[137] = isTranscriptMode;
         $[138] = message;
         $[139] = verbose;
-        $[140] = se;
-      } else se = $[140];
-      return se;
+        $[140] = systemText;
+      } else systemText = $[140];
+      return systemText;
     }
     case "grouped_tool_use": {
-      let se;
+      let groupedToolUse;
       if (
         $[141] !== addMargin ||
         $[142] !== inProgressToolUseIDs ||
@@ -701,7 +719,7 @@ function MessageImpl(props) {
         $[145] !== shouldAnimate ||
         $[146] !== tools
       ) {
-        se = jsxProd_default(GroupedToolUseContent_2, {
+        groupedToolUse = jsxProd_default(GroupedToolUseContent_2, {
           message,
           tools,
           lookups,
@@ -715,29 +733,29 @@ function MessageImpl(props) {
         $[144] = message;
         $[145] = shouldAnimate;
         $[146] = tools;
-        $[147] = se;
-      } else se = $[147];
-      return se;
+        $[147] = groupedToolUse;
+      } else groupedToolUse = $[147];
+      return groupedToolUse;
     }
     case "collapsed_read_search": {
-      let se;
+      let hasInterrupted;
       if ($[148] !== lookups || $[149] !== message) {
         const toolUseIds = collectToolUseIds(message);
-        let Me;
+        let isInterrupted;
         if ($[151] !== lookups) {
-          Me = (Ge) => {
-            let ao = lookups.toolResultByToolUseID.get(Ge);
-            return ao?.type === "user" && ao.interruptedBySendNow === true;
+          isInterrupted = (id) => {
+            let result = lookups.toolResultByToolUseID.get(id);
+            return result?.type === "user" && result.interruptedBySendNow === true;
           };
           $[151] = lookups;
-          $[152] = Me;
-        } else Me = $[152];
-        se = toolUseIds.some(Me);
+          $[152] = isInterrupted;
+        } else isInterrupted = $[152];
+        hasInterrupted = toolUseIds.some(isInterrupted);
         $[148] = lookups;
         $[149] = message;
-        $[150] = se;
-      } else se = $[150];
-      let value = se;
+        $[150] = hasInterrupted;
+      } else hasInterrupted = $[150];
+      let value = hasInterrupted;
       const verbose_2 = verbose || isTranscriptMode;
       let children;
       if (
@@ -770,9 +788,9 @@ function MessageImpl(props) {
         $[160] = tools;
         $[161] = children;
       } else children = $[161];
-      let be;
+      let frozenContent;
       if ($[162] !== value || $[163] !== children) {
-        be = jsxProd_default(FreezeWhenOffscreen, {
+        frozenContent = jsxProd_default(FreezeWhenOffscreen, {
           children: jsxProd_default(interruptedByUserSignal.Provider, {
             value,
             children,
@@ -780,27 +798,27 @@ function MessageImpl(props) {
         });
         $[162] = value;
         $[163] = children;
-        $[164] = be;
-      } else be = $[164];
-      return be;
+        $[164] = frozenContent;
+      } else frozenContent = $[164];
+      return frozenContent;
     }
     case "work_segment": {
-      let se;
+      let workSegment;
       if ($[165] !== message || $[166] !== shouldAnimate) {
-        se = jsxProd_default(WorkSegmentMessageView, {
+        workSegment = jsxProd_default(WorkSegmentMessageView, {
           message,
           shouldAnimate,
         });
         $[165] = message;
         $[166] = shouldAnimate;
-        $[167] = se;
-      } else se = $[167];
-      return se;
+        $[167] = workSegment;
+      } else workSegment = $[167];
+      return workSegment;
     }
     case "speaker_label": {
-      let se;
+      let speakerLabelRow;
       if ($[168] !== containerWidth || $[169] !== message.speaker) {
-        se =
+        speakerLabelRow =
           workSegmentModule === null
             ? null
             : jsxProd_default(Box, {
@@ -813,14 +831,14 @@ function MessageImpl(props) {
               });
         $[168] = containerWidth;
         $[169] = message.speaker;
-        $[170] = se;
-      } else se = $[170];
-      return se;
+        $[170] = speakerLabelRow;
+      } else speakerLabelRow = $[170];
+      return speakerLabelRow;
     }
     case "recap_fold": {
-      let se;
+      let recapFold;
       if ($[171] !== addMargin || $[172] !== message) {
-        se =
+        recapFold =
           workSegmentModule === null
             ? null
             : jsxProd_default(workSegmentModule.RecapFoldMessage, {
@@ -829,15 +847,15 @@ function MessageImpl(props) {
               });
         $[171] = addMargin;
         $[172] = message;
-        $[173] = se;
-      } else se = $[173];
-      return se;
+        $[173] = recapFold;
+      } else recapFold = $[173];
+      return recapFold;
     }
   }
 }
 //@ chunk-ah34pb7m.js:234162-234400 layout
 function WorkSegmentMessageView(props) {
-  let $ = w(3);
+  let $ = useMemoCache(3);
   let { message, shouldAnimate } = props;
   let prefersReducedMotion = usePrefersReducedMotion();
   let isScreenReaderEnabled = useIsScreenReaderEnabled();
@@ -845,24 +863,24 @@ function WorkSegmentMessageView(props) {
     return null;
   }
   const reducedMotion = prefersReducedMotion || isScreenReaderEnabled || !shouldAnimate;
-  let T;
+  let workSegmentElement;
   if ($[0] !== message || $[1] !== reducedMotion) {
-    T = jsxProd_default(workSegmentModule.WorkSegmentMessage, {
+    workSegmentElement = jsxProd_default(workSegmentModule.WorkSegmentMessage, {
       message,
       reducedMotion,
     });
     $[0] = message;
     $[1] = reducedMotion;
-    $[2] = T;
-  } else T = $[2];
-  return T;
+    $[2] = workSegmentElement;
+  } else workSegmentElement = $[2];
+  return workSegmentElement;
 }
 //@ chunk-ah34pb7m.js:234400-236422 fingerprint = UserMessage (0.682)
 /**
  * 用户消息分派：按内容块类型（text/image/tool_result）选择 UserTextMessage、UserImageMessage、UserToolResultMessage；coordinator 模式特殊处理。
  */
 function UserMessage(props) {
-  let $ = w(39);
+  let $ = useMemoCache(39);
   let {
     message,
     addMargin,
@@ -891,7 +909,7 @@ function UserMessage(props) {
           $[1] = fromName;
         } else fromName = $[1];
         const followsSpeakerLabel_2 = followsSpeakerLabel || followsInboundLabel;
-        let X;
+        let agentMessageElement;
         if (
           $[2] !== addMargin ||
           $[3] !== isTranscriptMode ||
@@ -902,7 +920,7 @@ function UserMessage(props) {
           $[8] !== followsSpeakerLabel_2 ||
           $[9] !== verbose
         ) {
-          X = jsxProd_default(AgentMessage, {
+          agentMessageElement = jsxProd_default(AgentMessage, {
             addMargin,
             param,
             fromName,
@@ -920,12 +938,12 @@ function UserMessage(props) {
           $[7] = fromName;
           $[8] = followsSpeakerLabel_2;
           $[9] = verbose;
-          $[10] = X;
-        } else X = $[10];
-        return X;
+          $[10] = agentMessageElement;
+        } else agentMessageElement = $[10];
+        return agentMessageElement;
       }
       const followsCoordinatorLabel = followsInboundLabel && message.origin?.kind === "coordinator";
-      let Y;
+      let userTextMessageElement;
       if (
         $[11] !== addMargin ||
         $[12] !== followsInboundLabel ||
@@ -941,7 +959,7 @@ function UserMessage(props) {
         $[22] !== followsCoordinatorLabel ||
         $[23] !== verbose
       ) {
-        Y = jsxProd_default(UserTextMessage, {
+        userTextMessageElement = jsxProd_default(UserTextMessage, {
           addMargin,
           param,
           verbose,
@@ -969,16 +987,16 @@ function UserMessage(props) {
         $[21] = param;
         $[22] = followsCoordinatorLabel;
         $[23] = verbose;
-        $[24] = Y;
-      } else Y = $[24];
-      return Y;
+        $[24] = userTextMessageElement;
+      } else userTextMessageElement = $[24];
+      return userTextMessageElement;
     }
     case "image": {
       const addMargin_2 = addMargin && !isUserContinuation;
       const startsUserTurn = hasMetadataHeader ? !isSplitUserContinuation : undefined;
-      let X;
+      let userImageMessageElement;
       if ($[25] !== imageIndex || $[26] !== addMargin_2 || $[27] !== startsUserTurn) {
-        X = jsxProd_default(UserImageMessage, {
+        userImageMessageElement = jsxProd_default(UserImageMessage, {
           imageId: imageIndex,
           addMargin: addMargin_2,
           startsUserTurn,
@@ -986,9 +1004,9 @@ function UserMessage(props) {
         $[25] = imageIndex;
         $[26] = addMargin_2;
         $[27] = startsUserTurn;
-        $[28] = X;
-      } else X = $[28];
-      return X;
+        $[28] = userImageMessageElement;
+      } else userImageMessageElement = $[28];
+      return userImageMessageElement;
     }
     case "tool_result": {
       const width = columns - 5;
@@ -1034,38 +1052,42 @@ function UserMessage(props) {
   }
 }
 //@ chunk-ah34pb7m.js:236422-236489 layout
-var TOOL_SEARCH_BLOCK_TYPES = new Set(["tool_search_tool_regex", "tool_search_tool_bm25"]);
+var TOOL_SEARCH_BLOCK_TYPES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-ah34pb7m.js:236422", () => {
+  TOOL_SEARCH_BLOCK_TYPES = new Set(["tool_search_tool_regex", "tool_search_tool_bm25"]);
+});
 //@ chunk-ah34pb7m.js:236489-236559 layout
 function allowlistedBlockName(param) {
   return "name" in param && isServerToolType(param.name) ? param.name : "non-allowlisted";
 }
 //@ chunk-ah34pb7m.js:236559-236679 layout
 function allowlistedBlockType(param) {
-  let d = "type" in param ? param.type : undefined;
-  if (typeof d !== "string") return "non-allowlisted (non-string)";
-  return allowlistedBlockType_2(d);
+  let blockType = "type" in param ? param.type : undefined;
+  if (typeof blockType !== "string") return "non-allowlisted (non-string)";
+  return allowlistedBlockType_2(blockType);
 }
 //@ chunk-ah34pb7m.js:236679-236938 layout
-function unrenderableBlockKey(m) {
-  if ("id" in m && typeof m.id === "string") return `${m.type}:${m.id}`;
-  if ("tool_use_id" in m && typeof m.tool_use_id === "string") return `${m.type}:${m.tool_use_id}`;
+function unrenderableBlockKey(block) {
+  if ("id" in block && typeof block.id === "string") return `${block.type}:${block.id}`;
+  if ("tool_use_id" in block && typeof block.tool_use_id === "string")
+    return `${block.type}:${block.tool_use_id}`;
   try {
-    return `${m.type}:${Bun.hash(jsonStringify(m)).toString(36)}`;
+    return `${block.type}:${Bun.hash(jsonStringify(block)).toString(36)}`;
   } catch {
-    return `${m.type}:unserializable`;
+    return `${block.type}:unserializable`;
   }
 }
 //@ chunk-ah34pb7m.js:236938-237019 layout
-function logUnrenderableBlockOnce(host, param, c) {
-  if (!claimOnceStore.of(host).claim(`unrenderable_block:${unrenderableBlockKey(param)}`)) return;
-  logError(c);
+function logUnrenderableBlockOnce(host, block, error) {
+  if (!claimOnceStore.of(host).claim(`unrenderable_block:${unrenderableBlockKey(block)}`)) return;
+  logError(error);
 }
 //@ chunk-ah34pb7m.js:237019-240675 fingerprint = AssistantMessageBlock (0.765)
 /**
  * 助手内容块分派：text→AssistantTextMessage，tool_use→AssistantToolUseMessage，thinking/redacted_thinking→思考组件，server_tool_use/advisor 等；无法渲染的块记一次错误日志。
  */
 function AssistantMessageBlock(props) {
-  let $ = w(65);
+  let $ = useMemoCache(65);
   let {
     param,
     model,
@@ -1092,31 +1114,31 @@ function AssistantMessageBlock(props) {
     isFirstTextBlock,
   } = props;
   let host = useHost();
-  let pe;
+  let contentSelector;
   if ($[0] !== apiMessageId || $[1] !== param.type) {
-    pe = (te) =>
+    contentSelector = (state) =>
       param.type === "text" && apiMessageId !== undefined
-        ? te.displayedMessageContent[apiMessageId]
+        ? state.displayedMessageContent[apiMessageId]
         : undefined;
     $[0] = apiMessageId;
     $[1] = param.type;
-    $[2] = pe;
-  } else pe = $[2];
-  let appStateSlice = useAppStateSlice(pe);
+    $[2] = contentSelector;
+  } else contentSelector = $[2];
+  let appStateSlice = useAppStateSlice(contentSelector);
   if (isFallbackMessage(param)) {
     return null;
   }
   switch (param.type) {
     case "tool_use": {
-      let ue;
+      let isCloudMemoryCall;
       if ($[3] !== cloudMemoryToolUseIds || $[4] !== param.id) {
-        ue = cloudMemoryToolUseIds?.includes(param.id);
+        isCloudMemoryCall = cloudMemoryToolUseIds?.includes(param.id);
         $[3] = cloudMemoryToolUseIds;
         $[4] = param.id;
-        $[5] = ue;
-      } else ue = $[5];
-      const isCloudMemoryCall = ue === true;
-      let se;
+        $[5] = isCloudMemoryCall;
+      } else isCloudMemoryCall = $[5];
+      const isCloudMemoryCall_2 = isCloudMemoryCall === true;
+      let toolUseStatusDotElement;
       if (
         $[6] !== addMargin ||
         $[7] !== commands ||
@@ -1128,11 +1150,11 @@ function AssistantMessageBlock(props) {
         $[13] !== progressMessagesForMessage ||
         $[14] !== shouldAnimate ||
         $[15] !== shouldShowDot ||
-        $[16] !== isCloudMemoryCall ||
+        $[16] !== isCloudMemoryCall_2 ||
         $[17] !== tools ||
         $[18] !== verbose
       ) {
-        se = jsxProd_default(ToolUseStatusDot, {
+        toolUseStatusDotElement = jsxProd_default(ToolUseStatusDot, {
           param,
           addMargin,
           tools,
@@ -1145,7 +1167,7 @@ function AssistantMessageBlock(props) {
           inProgressToolCallCount,
           lookups,
           isTranscriptMode,
-          isCloudMemoryCall,
+          isCloudMemoryCall: isCloudMemoryCall_2,
         });
         $[6] = addMargin;
         $[7] = commands;
@@ -1157,12 +1179,12 @@ function AssistantMessageBlock(props) {
         $[13] = progressMessagesForMessage;
         $[14] = shouldAnimate;
         $[15] = shouldShowDot;
-        $[16] = isCloudMemoryCall;
+        $[16] = isCloudMemoryCall_2;
         $[17] = tools;
         $[18] = verbose;
-        $[19] = se;
-      } else se = $[19];
-      return se;
+        $[19] = toolUseStatusDotElement;
+      } else toolUseStatusDotElement = $[19];
+      return toolUseStatusDotElement;
     }
     case "text": {
       if (appStateSlice !== undefined && !verbose) {
@@ -1178,7 +1200,7 @@ function AssistantMessageBlock(props) {
           $[20] = appStateSlice;
           $[21] = param;
         } else param = $[21];
-        let J;
+        let textBlock;
         if (
           $[22] !== addMargin ||
           $[23] !== apiErrorKind ||
@@ -1191,7 +1213,7 @@ function AssistantMessageBlock(props) {
           $[30] !== param ||
           $[31] !== verbose
         ) {
-          J = jsxProd_default(AssistantTextBlock, {
+          textBlock = jsxProd_default(AssistantTextBlock, {
             param,
             addMargin,
             shouldShowDot,
@@ -1213,11 +1235,11 @@ function AssistantMessageBlock(props) {
           $[29] = shouldShowDot;
           $[30] = param;
           $[31] = verbose;
-          $[32] = J;
-        } else J = $[32];
-        return J;
+          $[32] = textBlock;
+        } else textBlock = $[32];
+        return textBlock;
       }
-      let ue;
+      let textBlockPlain;
       if (
         $[33] !== addMargin ||
         $[34] !== apiErrorKind ||
@@ -1230,7 +1252,7 @@ function AssistantMessageBlock(props) {
         $[41] !== shouldShowDot ||
         $[42] !== verbose
       ) {
-        ue = jsxProd_default(AssistantTextBlock, {
+        textBlockPlain = jsxProd_default(AssistantTextBlock, {
           param,
           addMargin,
           shouldShowDot,
@@ -1252,9 +1274,9 @@ function AssistantMessageBlock(props) {
         $[40] = param;
         $[41] = shouldShowDot;
         $[42] = verbose;
-        $[43] = ue;
-      } else ue = $[43];
-      return ue;
+        $[43] = textBlockPlain;
+      } else textBlockPlain = $[43];
+      return textBlockPlain;
     }
     case "redacted_thinking": {
       if (!isTranscriptMode && !verbose) {
@@ -1272,7 +1294,7 @@ function AssistantMessageBlock(props) {
     }
     case "thinking": {
       if (hasNarrationThinking(param)) {
-        let ue;
+        let assistantThinkingBlockElement;
         if (
           $[46] !== addMargin ||
           $[47] !== messageUuid ||
@@ -1280,7 +1302,7 @@ function AssistantMessageBlock(props) {
           $[49] !== param ||
           $[50] !== shouldShowDot
         ) {
-          ue = jsxProd_default(AssistantThinkingBlock, {
+          assistantThinkingBlockElement = jsxProd_default(AssistantThinkingBlock, {
             param,
             model,
             addMargin,
@@ -1292,16 +1314,16 @@ function AssistantMessageBlock(props) {
           $[48] = model;
           $[49] = param;
           $[50] = shouldShowDot;
-          $[51] = ue;
-        } else ue = $[51];
-        return ue;
+          $[51] = assistantThinkingBlockElement;
+        } else assistantThinkingBlockElement = $[51];
+        return assistantThinkingBlockElement;
       }
       if (!isTranscriptMode && !verbose) {
         return null;
       }
-      let ue;
+      let assistantThinkingMessageElement;
       if ($[52] !== addMargin || $[53] !== isTranscriptMode || $[54] !== param || $[55] !== verbose) {
-        ue = jsxProd_default(AssistantThinkingMessage, {
+        assistantThinkingMessageElement = jsxProd_default(AssistantThinkingMessage, {
           addMargin,
           param,
           isTranscriptMode,
@@ -1311,9 +1333,9 @@ function AssistantMessageBlock(props) {
         $[53] = isTranscriptMode;
         $[54] = param;
         $[55] = verbose;
-        $[56] = ue;
-      } else ue = $[56];
-      return ue;
+        $[56] = assistantThinkingMessageElement;
+      } else assistantThinkingMessageElement = $[56];
+      return assistantThinkingMessageElement;
     }
     case "server_tool_use":
     case "advisor_tool_result": {
@@ -1420,29 +1442,21 @@ function areMessagePropsEqual(prev, next) {
  * 取 MCP 工具的渲染覆盖：先查内置覆盖，再按 uiTableKey 或工具名查覆盖表。
  */
 function mcpRenderOverrideFor(tool, slot) {
-  let c = tool.uiTableKey ?? tool.name;
+  let rendererKey = tool.uiTableKey ?? tool.name;
   return (
     getBuiltinMcpRenderOverride(tool, slot) ??
-    (Object.hasOwn(GROUPED_TOOL_USE_RENDERERS, c) ? GROUPED_TOOL_USE_RENDERERS[c]?.[slot] : undefined)
+    (Object.hasOwn(GROUPED_TOOL_USE_RENDERERS, rendererKey)
+      ? GROUPED_TOOL_USE_RENDERERS[rendererKey]?.[slot]
+      : undefined)
   );
 }
 //@ chunk-ah34pb7m.js:265706-265814 placement
 /**
  * 判断覆盖表中某工具是否定义了指定的渲染覆盖。
  */
-function hasMcpRenderOverride(m, d) {
-  let ownPropertyDescriptor = Object.getOwnPropertyDescriptor(GROUPED_TOOL_USE_RENDERERS, m);
-  return ownPropertyDescriptor?.value !== undefined && ownPropertyDescriptor.value[d] !== undefined;
-}
-//@ chunk-e6aww6q8.js:1349439-1349495 fingerprint = Message (0.471)
-/**
- * 清空某宿主的记忆文件缓存（loads/moves）。
- */
-function clearMemoryFilesCache(e) {
-  claudeMdSessionState(e).memo = {
-    loads: new Map(),
-    moves: new Map(),
-  };
+function hasMcpRenderOverride(toolName, slot) {
+  let ownPropertyDescriptor = Object.getOwnPropertyDescriptor(GROUPED_TOOL_USE_RENDERERS, toolName);
+  return ownPropertyDescriptor?.value !== undefined && ownPropertyDescriptor.value[slot] !== undefined;
 }
 export {
   mcpRenderOverrideFor,

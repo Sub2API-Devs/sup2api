@@ -21,3 +21,4 @@ var SYNC_HASHES_RESOURCE = __cc_resource_0;
  * 读出的同步哈希文本。
  */
 var syncHashesText = readEmbeddedTextSync(SYNC_HASHES_RESOURCE, import.meta.dirname);
+export { syncHashesText };

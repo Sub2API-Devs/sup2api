@@ -9,17 +9,22 @@
  * attribution: fingerprint 2, affinity 1, placement 3
  */
 import { join } from "path";
-import { f } from "../../vendor/env-paths/index.js";
+import { envPaths } from "../../vendor/env-paths/index.js";
 import { hashString31 } from "./pastedContent.js";
 import { getFsImplementation } from "./fsOperations.js";
 import { getOriginalCwd } from "../bootstrap/state.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-bbtre4r8.js:11586-11614 affinity = paths (1)
 /**
  * 缓存目录名的最大长度（200）。
  */
-var CLAUDE_CLI_ENV_PATHS = f("claude-cli");
-var MAX_CACHE_DIR_NAME_CHARS = 200;
+var CLAUDE_CLI_ENV_PATHS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var MAX_CACHE_DIR_NAME_CHARS;
+deferInit("chunk-bbtre4r8.js:11586", () => {
+  CLAUDE_CLI_ENV_PATHS = envPaths("claude-cli");
+  MAX_CACHE_DIR_NAME_CHARS = 200;
+});
 //@ chunk-bbtre4r8.js:11614-11746 placement
 function sanitizePathSegment(name) {
   let sanitized = name.replace(/[^a-zA-Z0-9]/g, "-");

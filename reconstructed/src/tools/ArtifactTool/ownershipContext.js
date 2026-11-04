@@ -37,32 +37,33 @@ import { resolveVerifyTarget } from "./permissions/consentStamps.js";
 var artifactHandlersModule = null;
 var weakMap_2 = new WeakMap();
 //@ chunk-8wvtd8sr.js:323960-324126 placement
-function rememberFirstContext(slug, snapshot, agentId, r) {
+function rememberFirstContext(slug, snapshot, agentId, facet) {
   let liveState = getLiveState();
-  let y = weakMap_2.get(liveState);
-  if (y === undefined) {
-    y = new Map();
-    weakMap_2.set(liveState, y);
+  let byKey = weakMap_2.get(liveState);
+  if (byKey === undefined) {
+    byKey = new Map();
+    weakMap_2.set(liveState, byKey);
   }
-  let p = `${agentId ?? ""}:${slug}:${r}`;
-  let w = y.get(p);
-  if (w === undefined) {
-    y.set(p, snapshot);
+  let key = `${agentId ?? ""}:${slug}:${facet}`;
+  let existing = byKey.get(key);
+  if (existing === undefined) {
+    byKey.set(key, snapshot);
     return true;
   }
-  return w === snapshot;
+  return existing === snapshot;
 }
 //@ chunk-8wvtd8sr.js:324126-324180 placement
 /**
  * 判断归属记录是否为可写角色。
  */
-function isWriterOwnership(e) {
-  return e.probeFailed !== true && isWriterRole(e.role);
+function isWriterOwnership(shareEntry) {
+  return shareEntry.probeFailed !== true && isWriterRole(shareEntry.role);
 }
 //@ chunk-8wvtd8sr.js:324180-324291 placement
-function ownershipRank(e) {
-  if (e.probeFailed === true || e.role === undefined || e.role === "unknown") return 1;
-  return e.role === "owner" ? 0 : 2;
+function ownershipRank(shareEntry) {
+  if (shareEntry.probeFailed === true || shareEntry.role === undefined || shareEntry.role === "unknown")
+    return 1;
+  return shareEntry.role === "owner" ? 0 : 2;
 }
 //@ chunk-8wvtd8sr.js:324291-324346 placement
 /**
@@ -79,44 +80,46 @@ var AUDIENCE_RANK = {
 /**
  * 取可见范围权重，探测失败返回 undefined。
  */
-function audienceRankOf(e) {
-  return e.probeFailed === true ? undefined : AUDIENCE_RANK[e.mode];
+function audienceRankOf(shareEntry) {
+  return shareEntry.probeFailed === true ? undefined : AUDIENCE_RANK[shareEntry.mode];
 }
 //@ chunk-8wvtd8sr.js:324405-324537 placement
-function audienceWidened(e, n) {
-  let s = audienceRankOf(e);
-  let r = audienceRankOf(n);
-  if (r === undefined) return s !== undefined;
-  if (s === undefined) return r > 0;
-  return r !== 0 && n.mode !== e.mode && !(r < s);
+function audienceWidened(snapshotEntry, current) {
+  let snapshotRank = audienceRankOf(snapshotEntry);
+  let currentRank = audienceRankOf(current);
+  if (currentRank === undefined) return snapshotRank !== undefined;
+  if (snapshotRank === undefined) return currentRank > 0;
+  return currentRank !== 0 && current.mode !== snapshotEntry.mode && !(currentRank < snapshotRank);
 }
 //@ chunk-8wvtd8sr.js:324537-324598 placement
 /**
  * 共享 live 的可见性增量。
  */
-function sharedLiveRank(e) {
-  return e.probeFailed === true || e.isSharedLive ? 1 : 0;
+function sharedLiveRank(shareEntry) {
+  return shareEntry.probeFailed === true || shareEntry.isSharedLive ? 1 : 0;
 }
 //@ chunk-8wvtd8sr.js:324598-324909 placement
 /**
  * 判断这次发布声明的连接器是否比之前存储的更多（按连接器名计数比较）；之前未知时只要声明了不在默认集合内的连接器即视为扩大。
  */
-function connectorsWidened(e, endpointConnectors) {
+function connectorsWidened(snapshotConnectors, endpointConnectors) {
   if (artifactHandlersModule === null) return false;
-  if (e === undefined)
+  if (snapshotConnectors === undefined)
     return (
       endpointConnectors !== undefined &&
       endpointConnectors.length > 0 &&
-      fitsContextLimits(endpointConnectors.map((r) => artifactHandlersModule.connectorNameForClassifier(r)))
+      fitsContextLimits(
+        endpointConnectors.map((connector) => artifactHandlersModule.connectorNameForClassifier(connector)),
+      )
     );
   if (endpointConnectors === undefined) return true;
-  let s = new Map();
-  for (let r of e) s.set(r, (s.get(r) ?? 0) + 1);
-  return endpointConnectors.some((r) => {
-    let h = artifactHandlersModule.connectorNameForClassifier(r);
-    let y = s.get(h) ?? 0;
-    s.set(h, y - 1);
-    return y <= 0;
+  let counts = new Map();
+  for (let connector of snapshotConnectors) counts.set(connector, (counts.get(connector) ?? 0) + 1);
+  return endpointConnectors.some((connector) => {
+    let name = artifactHandlersModule.connectorNameForClassifier(connector);
+    let remaining = counts.get(name) ?? 0;
+    counts.set(name, remaining - 1);
+    return remaining <= 0;
   });
 }
 //@ chunk-8wvtd8sr.js:324909-325085 placement
@@ -144,11 +147,11 @@ function staleOwnershipFacets(slug, snapshot, includeWatch = false, agentId, che
   let current = shareFactsWithheld(slug) ? undefined : getShareEntry(slug);
   let stale = [];
   if (entry?.share !== undefined && current !== undefined) {
-    let T = shareFactsFromSnapshot(entry.share);
-    if (ownershipRank(current) > ownershipRank(T)) stale.push("ownership");
-    if (audienceWidened(T, current)) stale.push("audience");
-    if (sharedLiveRank(current) > sharedLiveRank(T)) stale.push("shared-live");
-    if (current.cowritten === true && T.cowritten !== true) stale.push("co-written");
+    let snapshotShare = shareFactsFromSnapshot(entry.share);
+    if (ownershipRank(current) > ownershipRank(snapshotShare)) stale.push("ownership");
+    if (audienceWidened(snapshotShare, current)) stale.push("audience");
+    if (sharedLiveRank(current) > sharedLiveRank(snapshotShare)) stale.push("shared-live");
+    if (current.cowritten === true && snapshotShare.cowritten !== true) stale.push("co-written");
     if (checkConnectors && connectorsWidened(entry.share.endpoint_connectors, current.endpointConnectors))
       stale.push("connectors");
   } else if (snapshot !== undefined && current !== undefined) {
@@ -162,11 +165,11 @@ function staleOwnershipFacets(slug, snapshot, includeWatch = false, agentId, che
       stale.push("connectors");
   }
   let liveState = getLiveState();
-  let S = typeSlugOf(current);
+  let typeSlug = typeSlugOf(current);
   if (
     (entry?.attested !== undefined && liveState.attestedTypeArtifacts.get(slug)?.mark === undefined) ||
     (entry?.share?.type_first_party === true &&
-      (S === undefined || getAttestationKind(S) !== "first_party_type"))
+      (typeSlug === undefined || getAttestationKind(typeSlug) !== "first_party_type"))
   )
     stale.push("attested");
   let share = entry?.share;
@@ -200,41 +203,48 @@ function staleOwnershipFacets(slug, snapshot, includeWatch = false, agentId, che
 /**
  * 收集一次 Artifact 调用涉及的全部 slug：url、from_url、files 中的复制来源；无 url 的发布按 file_path 找已关联的 slug，verify 动作取其目标。
  */
-function requestArtifactSlugs(e, snapshot) {
-  if (e === null || typeof e !== "object") return [];
-  let s = e;
-  let r = new Set();
-  let h = [s.url, s.from_url];
-  let files = s.files;
+function requestArtifactSlugs(input, snapshot) {
+  if (input === null || typeof input !== "object") return [];
+  let record = input;
+  let slugs = new Set();
+  let urls = [record.url, record.from_url];
+  let files = record.files;
   if (files !== null && typeof files === "object" && !Array.isArray(files)) {
-    for (let p of Object.values(files)) if (p !== null && typeof p === "object") h.push(p.artifact);
+    for (let requestUrls of Object.values(files))
+      if (requestUrls !== null && typeof requestUrls === "object") urls.push(requestUrls.artifact);
   }
-  for (let p of h)
-    if (typeof p === "string") {
-      let artifactUrlInput = parseArtifactUrlInput(p);
-      if (artifactUrlInput !== null) r.add(artifactUrlInput.slug);
+  for (let files of urls)
+    if (typeof files === "string") {
+      let artifactUrlInput = parseArtifactUrlInput(files);
+      if (artifactUrlInput !== null) slugs.add(artifactUrlInput.slug);
     }
-  if (s.url === undefined) {
+  if (record.url === undefined) {
     if (
-      (s.action === undefined || s.action === "publish") &&
-      s.type_url === undefined &&
-      typeof s.file_path === "string"
+      (record.action === undefined || record.action === "publish") &&
+      record.type_url === undefined &&
+      typeof record.file_path === "string"
     )
       try {
-        let p = expandPath(s.file_path);
-        for (let w of [getArtifactSlugForPath(p), snapshot?.by_path[toPosixPath(p)]?.slug])
-          if (w !== undefined) r.add(w);
+        let file = expandPath(record.file_path);
+        for (let entry of [getArtifactSlugForPath(file), snapshot?.by_path[toPosixPath(file)]?.slug])
+          if (entry !== undefined) slugs.add(entry);
       } catch {}
-    if (s.action === "verify") {
-      let verifyTarget = resolveVerifyTarget(s);
-      if (verifyTarget !== null) r.add(verifyTarget.slug);
+    if (record.action === "verify") {
+      let verifyTarget = resolveVerifyTarget(record);
+      if (verifyTarget !== null) slugs.add(verifyTarget.slug);
     }
   }
-  return [...r];
+  return [...slugs];
 }
 //@ chunk-8wvtd8sr.js:326943-327047 placement
-function isOwnershipFacet(e) {
-  return e === "ownership" || e === "audience" || e === "shared-live" || e === "co-written" || e === "watch";
+function isOwnershipFacet(facet) {
+  return (
+    facet === "ownership" ||
+    facet === "audience" ||
+    facet === "shared-live" ||
+    facet === "co-written" ||
+    facet === "watch"
+  );
 }
 //@ chunk-8wvtd8sr.js:327047-327633 placement
 /**
@@ -265,84 +275,88 @@ function describeOwnershipWords(share, actions) {
  * ArtifactTool.staleServerClassifierContext 的实现：判断服务端分类器看到的归属/受众等事实是否已过期，汇总需要说明的 slug 文案、探测失败信息与连接器变化，返回给分类器的补充上下文。
  */
 function staleServerClassifierContext(input, snapshot, agentId) {
-  let r = new Set();
+  let facets = new Set();
   let action = input !== null && typeof input === "object" ? input.action : undefined;
   let includeWatch = action === "watch" || action === "resume_replies";
   let checkConnectors = artifactHandlersModule?.requestReachesConnectors(input) ?? false;
   let firstTouch = false;
-  let A = true;
-  let S;
-  let R;
-  let T = [];
-  let P = requestArtifactSlugs(input, snapshot);
-  for (let M of P) {
-    let actions = staleOwnershipFacets(M, snapshot, includeWatch, agentId, checkConnectors);
+  let allFirstTouch = true;
+  let probeFailedEntry;
+  let connectorsChange;
+  let ownershipNotes = [];
+  let slugs = requestArtifactSlugs(input, snapshot);
+  for (let slug of slugs) {
+    let actions = staleOwnershipFacets(slug, snapshot, includeWatch, agentId, checkConnectors);
     if (actions.length === 0) continue;
-    for (let we of actions) r.add(we);
-    let share = snapshot?.by_slug[M]?.share;
-    let share_2 = getShareEntry(M);
-    let Z = share === undefined && (actions.includes("ownership") || actions.includes("connectors"));
-    if (Z) firstTouch = true;
+    for (let facet of actions) facets.add(facet);
+    let share = snapshot?.by_slug[slug]?.share;
+    let share_2 = getShareEntry(slug);
+    let isFirstTouch =
+      share === undefined && (actions.includes("ownership") || actions.includes("connectors"));
+    if (isFirstTouch) firstTouch = true;
     if (
       share_2?.probeFailed === true &&
-      actions.some((we) => we === "ownership" || we === "audience" || we === "shared-live")
+      actions.some((facet) => facet === "ownership" || facet === "audience" || facet === "shared-live")
     ) {
-      S ??= share_2;
+      probeFailedEntry ??= share_2;
       continue;
     }
-    let ue =
+    let probeNowWorks =
       share?.probe_failed === true &&
       share_2?.probeFailed !== true &&
-      actions.some((we) => isOwnershipFacet(we) && we !== "watch");
-    if (!Z && !ue) A = false;
-    if (actions.includes("connectors")) R ??= share_2?.endpointConnectors === undefined ? "unknown" : "wider";
+      actions.some((facet) => isOwnershipFacet(facet) && facet !== "watch");
+    if (!isFirstTouch && !probeNowWorks) allFirstTouch = false;
+    if (actions.includes("connectors"))
+      connectorsChange ??= share_2?.endpointConnectors === undefined ? "unknown" : "wider";
     if (share_2 !== undefined && share_2.probeFailed !== true && actions.some(isOwnershipFacet))
-      T.push({
-        slug: M,
+      ownershipNotes.push({
+        slug,
         words: describeOwnershipWords(share_2, actions),
       });
   }
-  if (r.size === 0) return;
+  if (facets.size === 0) return;
   let factsNow =
-    P.length > 1 ? T.map(({ slug, words }) => `artifact ${slug}: ${words}`).join("; ") : (T[0]?.words ?? "");
-  let V;
-  if (S !== undefined) {
-    let probeErrorCode = S.probeErrorCode;
-    let x = probedOtherOrg(S)
+    slugs.length > 1
+      ? ownershipNotes.map(({ slug, words }) => `artifact ${slug}: ${words}`).join("; ")
+      : (ownershipNotes[0]?.words ?? "");
+  let cause;
+  if (probeFailedEntry !== undefined) {
+    let probeErrorCode = probeFailedEntry.probeErrorCode;
+    let answer = probedOtherOrg(probeFailedEntry)
       ? "other_organization"
       : probeErrorCode === "boot_404"
         ? "not_found"
         : undefined;
-    V = {
+    cause = {
       kind: "probe_failed",
-      ...(x !== undefined && {
-        answer: x,
+      ...(answer !== undefined && {
+        answer,
       }),
       ...(probeErrorCode !== undefined && {
         errorCode: probeErrorCode,
       }),
     };
-  } else if (A)
-    V = {
+  } else if (allFirstTouch)
+    cause = {
       kind: "first_touch",
       factsNow,
-      ...(R !== undefined && {
-        connectors: R,
+      ...(connectorsChange !== undefined && {
+        connectors: connectorsChange,
       }),
     };
   else
-    V = {
+    cause = {
       kind: "changed",
       factsNow,
-      ...(R !== undefined && {
-        connectors: R,
+      ...(connectorsChange !== undefined && {
+        connectors: connectorsChange,
       }),
     };
   return {
-    phrase: [...r].join(", "),
-    facts: [...r],
+    phrase: [...facets].join(", "),
+    facts: [...facets],
     firstTouch,
-    cause: V,
+    cause,
   };
 }
 //@ chunk-8wvtd8sr.js:328893-329066 placement = countToolCallsSince (1)

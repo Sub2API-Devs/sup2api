@@ -5,25 +5,25 @@
  * pieces: chunk-t4ksmxzx.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 import { require_ral } from "./ral.js";
 
 //@ chunk-t4ksmxzx.js:13641-15429 cjs-fingerprint
-var require_events = x(function (cjsExports) {
+var require_events = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
   cjsExports.Emitter = cjsExports.Event = undefined;
   var ral_1 = require_ral();
-  var Lr;
-  (function (e) {
+  var EventType;
+  (function (eventNamespace) {
     let _disposable = {
       dispose() {},
     };
-    e.None = function () {
+    eventNamespace.None = function () {
       return _disposable;
     };
-  })(Lr || (cjsExports.Event = Lr = {}));
+  })(EventType || (cjsExports.Event = EventType = {}));
   class CallbackList {
     add(callback, context = null, bucket) {
       if (!this._callbacks) {

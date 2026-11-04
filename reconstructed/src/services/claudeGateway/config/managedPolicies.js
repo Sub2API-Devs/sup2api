@@ -43,52 +43,56 @@ import {
   strictPluginOnlyCustomizationError,
   validateAllowedProviders,
 } from "../../../utils/settings/hooksValidation.js";
+import { deferInit, beginDeferredInits } from "../../../../runtime/deferred-init.js";
 
+// This module is the first evaluated of an import cycle of 3 modules closed by ./load.js;
+// the load-time work of the cycle's statements marked "deferred" waits until the cycle is complete (runtime/deferred-init.js).
+beginDeferredInits("src/services/claudeGateway/config/load.js");
 //@ chunk-1ny7cxrt.js:1413940-1417430 placement
 /**
  * 解析网关配置里的托管策略（含桌面版策略），生成下发给客户端的托管设置。
  */
-async function resolveManagedPolicies(gatewayConfig) {
-  let otelEnv = buildOtelEnv(gatewayConfig);
-  let n = hasManagedPolicies(gatewayConfig.managed) ? buildPricingOverrides(gatewayConfig) : null;
-  let managed = gatewayConfig.managed;
-  let r;
-  let s = [];
+async function resolveManagedPolicies(config) {
+  let otelEnv = buildOtelEnv(config);
+  let pricingOverrides = hasManagedPolicies(config.managed) ? buildPricingOverrides(config) : null;
+  let managed = config.managed;
+  let policies;
+  let sourcePolicies = [];
   if (managed?.policies) {
     let any = managed.policies.some((policy) => policy.desktop !== undefined);
-    if (gatewayConfig.listen.public_url === undefined && any)
+    if (config.listen.public_url === undefined && any)
       gatewayLog(
         "warn",
         "managed.policies: listen.public_url is not set \u2014 origin-pin hygiene is skipped at boot, so an origin-pinned overlay value would be silently dropped by desktops",
       );
     let desktop = managed.policies.find((policy) => isCatchAllPolicyMatch(policy.match))?.desktop;
-    let h = [];
-    r = managed.policies.map((policy, y) => {
-      let b = `managed.policies[${y}].${policy.underCode ? "code" : "cli"}`;
-      let { cli, aliasIssues } = applyAliasesToSettings(policy.cli, b);
+    let errors = [];
+    policies = managed.policies.map((policy, policyIndex) => {
+      let label = `managed.policies[${policyIndex}].${policy.underCode ? "code" : "cli"}`;
+      let { cli, aliasIssues } = applyAliasesToSettings(policy.cli, label);
       try {
-        validateManagedSettings(cli, b, aliasIssues);
+        validateManagedSettings(cli, label, aliasIssues);
       } catch (error) {
-        h.push(error instanceof Error ? error.message : String(error));
+        errors.push(error instanceof Error ? error.message : String(error));
       }
       if (managed.policy_mode === "layered") {
-        for (let N of POLICY_HELPER_CONFIG_KEYS)
-          if (cli[N] !== undefined)
-            h.push(
-              `${b}.${N} can't be used with policy_mode: layered. A policy helper's output replaces the settings served here or adds to them, so it could drop another matching policy's deny rules. Remove it, or remove policy_mode.`,
+        for (let helperKey of POLICY_HELPER_CONFIG_KEYS)
+          if (cli[helperKey] !== undefined)
+            errors.push(
+              `${label}.${helperKey} can't be used with policy_mode: layered. A policy helper's output replaces the settings served here or adds to them, so it could drop another matching policy's deny rules. Remove it, or remove policy_mode.`,
             );
-        for (let N of isCatchAllPolicyMatch(policy.match) ? [] : HOOK_SETTING_KEYS)
-          if (cli[N] !== undefined)
-            h.push(
-              `${b}.${N} can't be used in this policy with policy_mode: layered. It limits every hook that a person is served, so it could switch off another matching policy's hooks. Move it to a match: {} policy, or remove policy_mode.`,
+        for (let hookKey of isCatchAllPolicyMatch(policy.match) ? [] : HOOK_SETTING_KEYS)
+          if (cli[hookKey] !== undefined)
+            errors.push(
+              `${label}.${hookKey} can't be used in this policy with policy_mode: layered. It limits every hook that a person is served, so it could switch off another matching policy's hooks. Move it to a match: {} policy, or remove policy_mode.`,
             );
         let permissions = isPlainObject_3(cli.permissions) ? cli.permissions : {};
-        for (let N of PERMISSION_LIST_KEYS) {
-          let Z = permissions[N];
-          for (let F of Array.isArray(Z) ? Z : [])
-            if (typeof F === "string" && PATH_RULE_CARVE_OUT_RE.test(F))
-              h.push(
-                `${b}.permissions.${N}: "${F}" can't be used with policy_mode: layered. A rule whose path starts with "!" takes paths back out of the rules before it, and under layered those can be another matching policy's rules. Remove it and narrow the rule it carved out of, or remove policy_mode.`,
+        for (let permissionKey of PERMISSION_LIST_KEYS) {
+          let rules = permissions[permissionKey];
+          for (let rule of Array.isArray(rules) ? rules : [])
+            if (typeof rule === "string" && PATH_RULE_CARVE_OUT_RE.test(rule))
+              errors.push(
+                `${label}.permissions.${permissionKey}: "${rule}" can't be used with policy_mode: layered. A rule whose path starts with "!" takes paths back out of the rules before it, and under layered those can be another matching policy's rules. Remove it and narrow the rule it carved out of, or remove policy_mode.`,
               );
         }
       }
@@ -97,8 +101,8 @@ async function resolveManagedPolicies(gatewayConfig) {
         try {
           desktop_2 = parseDesktopSettingsOverlay(
             policy.desktop,
-            `managed.policies[${y}].desktop`,
-            gatewayConfig.listen.public_url,
+            `managed.policies[${policyIndex}].desktop`,
+            config.listen.public_url,
             isPlainObject_3(desktop) && !isCatchAllPolicyMatch(policy.match) ? desktop : undefined,
             [
               ...Object.keys(policy),
@@ -108,7 +112,7 @@ async function resolveManagedPolicies(gatewayConfig) {
             ],
           );
         } catch (error) {
-          h.push(error instanceof Error ? error.message : String(error));
+          errors.push(error instanceof Error ? error.message : String(error));
         }
       return {
         match: policy.match,
@@ -118,44 +122,47 @@ async function resolveManagedPolicies(gatewayConfig) {
         serve_to_desktop: policy.serve_to_desktop,
       };
     });
-    if (h.length > 0)
+    if (errors.length > 0)
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        h.join(`
+        errors.join(`
 `),
         "managed policies invalid: one or more policies failed validation",
       );
-    s = r;
-    r = mergeCatchAllPolicy(r);
-    for (let [m, y] of r.entries())
-      if (y.desktop !== undefined && y.desktop.coworkEgressAllowedHosts === undefined)
-        checkCoworkEgressHosts(y.cli, `managed.policies[${m}].${y.underCode ? "code" : "cli"}`);
+    sourcePolicies = policies;
+    policies = mergeCatchAllPolicy(policies);
+    for (let [policyIndex, policyEntry] of policies.entries())
+      if (policyEntry.desktop !== undefined && policyEntry.desktop.coworkEgressAllowedHosts === undefined)
+        checkCoworkEgressHosts(
+          policyEntry.cli,
+          `managed.policies[${policyIndex}].${policyEntry.underCode ? "code" : "cli"}`,
+        );
   } else if (managed?.settings) {
     let { cli, aliasIssues } = applyAliasesToSettings(
       await readManagedSettingsFile(managed.settings),
       "managed settings",
     );
     validateManagedSettings(cli, "managed settings", aliasIssues);
-    r = [
+    policies = [
       {
         match: {},
         cli,
       },
     ];
   } else if (otelEnv)
-    r = [
+    policies = [
       {
         match: {},
         cli: {},
       },
     ];
   else return null;
-  let a = 0;
-  let l = (u) => {
-    let { match, cli, underCode, desktop, serve_to_desktop: serveToDesktop } = u;
-    let w = cli;
+  let pricedPolicyCount = 0;
+  let toServedPolicy = (policyEntry) => {
+    let { match, cli, underCode, desktop, serve_to_desktop: serveToDesktop } = policyEntry;
+    let settings = cli;
     if (otelEnv)
-      w = {
-        ...w,
+      settings = {
+        ...settings,
         env: {
           ...otelEnv,
           ...(isPlainObject_3(cli.env) ? cli.env : {}),
@@ -163,67 +170,73 @@ async function resolveManagedPolicies(gatewayConfig) {
       };
     let modelPricing = cli.modelPricing;
     if (
-      n &&
+      pricingOverrides &&
       (modelPricing === undefined ||
         (isPlainObject_3(modelPricing) &&
           Object.keys(modelPricing).length > 0 &&
           modelPricing.multiplier === undefined &&
           modelPricing.overrides === undefined))
     ) {
-      w = {
-        ...w,
+      settings = {
+        ...settings,
         modelPricing: {
           ...modelPricing,
-          ...n,
+          ...pricingOverrides,
         },
       };
-      a++;
+      pricedPolicyCount++;
     }
-    let checksum = computeChecksum(w);
-    let M = {
+    let checksum = computeChecksum(settings);
+    let payload = {
       uuid: checksum,
       checksum,
-      settings: w,
+      settings,
     };
-    let N = hasEffectivePolicyContent(cli);
-    let availableModelsMatch = w.availableModelsMatch;
+    let hasContent = hasEffectivePolicyContent(cli);
+    let availableModelsMatch = settings.availableModelsMatch;
     let availableModelsMatch_2 =
       availableModelsMatch === "prefix" || availableModelsMatch === "exact"
         ? availableModelsMatch
         : undefined;
     return {
       match,
-      payload: M,
-      availableModels: readStringListField(w, "availableModels"),
+      payload,
+      availableModels: readStringListField(settings, "availableModels"),
       availableModelsMatch: availableModelsMatch_2,
-      deniedModels: readStringListField(w, "deniedModels"),
+      deniedModels: readStringListField(settings, "deniedModels"),
       underCode,
       desktop,
       serveToDesktop,
-      desktopSessionPayload: (underCode ? N : serveToDesktop === true && Object.keys(w).length > 0)
-        ? M
+      desktopSessionPayload: (
+        underCode ? hasContent : serveToDesktop === true && Object.keys(settings).length > 0
+      )
+        ? payload
         : undefined,
     };
   };
-  let mapped = r.map(l);
+  let mapped = policies.map(toServedPolicy);
   if (managed?.policy_mode === "layered") {
-    let u = new Map();
-    for (let f of mapped.filter((h) => !isCatchAllPolicyMatch(h.match)))
-      f.layered = (h) => {
-        let joined = h.join();
-        let y = u.get(joined);
-        if (!y) {
-          if (u.size >= 1024) u.clear();
-          y = l(h.map((b) => s[b]).reduceRight((b, w) => mergePolicy(b, w)));
-          u.set(joined, y);
+    let layeredCache = new Map();
+    for (let policyEntry of mapped.filter((policyEntry) => !isCatchAllPolicyMatch(policyEntry.match)))
+      policyEntry.layered = (indexes) => {
+        let joined = indexes.join();
+        let layered = layeredCache.get(joined);
+        if (!layered) {
+          if (layeredCache.size >= 1024) layeredCache.clear();
+          layered = toServedPolicy(
+            indexes
+              .map((index) => sourcePolicies[index])
+              .reduceRight((merged, overlay) => mergePolicy(merged, overlay)),
+          );
+          layeredCache.set(joined, layered);
         }
-        return y;
+        return layered;
       };
   }
-  if (n)
+  if (pricingOverrides)
     gatewayLog(
       "info",
-      `pricing: pushing modelPricing (${Object.keys(n.overrides ?? {}).length} model(s), multiplier ${n.multiplier ?? 1}) to clients in ${a} of ${r.length} managed policies`,
+      `pricing: pushing modelPricing (${Object.keys(pricingOverrides.overrides ?? {}).length} model(s), multiplier ${pricingOverrides.multiplier ?? 1}) to clients in ${pricedPolicyCount} of ${policies.length} managed policies`,
     );
   return mapped;
 }
@@ -238,93 +251,94 @@ function isCatchAllPolicyMatch(match) {
 /**
  * 把 catch-all 策略（match: {}）合并进其他策略；catch-all 不在最后时警告。
  */
-function mergeCatchAllPolicy(e) {
-  let index = e.findIndex((o) => isCatchAllPolicyMatch(o.match));
-  if (index === -1) return e;
-  if (index !== e.length - 1)
+function mergeCatchAllPolicy(policies) {
+  let index = policies.findIndex((policy) => isCatchAllPolicyMatch(policy.match));
+  if (index === -1) return policies;
+  if (index !== policies.length - 1)
     gatewayLog(
       "warn",
       `managed.policies[${index}] is a catch-all (match: {}) but is not the ` +
         "last entry \u2014 policies after it will never match. Move it to the end.",
     );
-  let n = e[index];
-  return e.map((o, r) => {
-    if (r === index) return o;
-    let s = mergePolicy(n, o);
-    logChangedKeys(`managed.policies[${r}] after merge with catch-all base`, s.cli, o.cli);
-    if (s.desktop !== undefined)
+  let policyIndex = policies[index];
+  return policies.map((base, mergedIndex) => {
+    if (mergedIndex === index) return base;
+    let merged = mergePolicy(policyIndex, base);
+    logChangedKeys(`managed.policies[${mergedIndex}] after merge with catch-all base`, merged.cli, base.cli);
+    if (merged.desktop !== undefined)
       logChangedKeys(
-        `managed.policies[${r}] desktop overlay after merge with catch-all base`,
-        s.desktop,
-        o.desktop,
+        `managed.policies[${mergedIndex}] desktop overlay after merge with catch-all base`,
+        merged.desktop,
+        base.desktop,
       );
-    return s;
+    return merged;
   });
 }
 //@ chunk-1ny7cxrt.js:1418006-1418204 placement
 /**
  * 合并两条托管策略（cli、desktop 覆盖层、serve_to_desktop）。
  */
-function mergePolicy(e, t) {
+function mergePolicy(base, override) {
   return {
-    ...t,
-    cli: mergeCliSettings(e.cli, t.cli),
+    ...override,
+    cli: mergeCliSettings(base.cli, override.cli),
     desktop:
-      e.desktop || t.desktop
+      base.desktop || override.desktop
         ? {
-            ...e.desktop,
-            ...t.desktop,
-            ...mergeDesktopToolPolicy(e.desktop, t.desktop),
+            ...base.desktop,
+            ...override.desktop,
+            ...mergeDesktopToolPolicy(base.desktop, override.desktop),
           }
         : undefined,
-    serve_to_desktop: t.serve_to_desktop ?? e.serve_to_desktop,
+    serve_to_desktop: override.serve_to_desktop ?? base.serve_to_desktop,
   };
 }
 //@ chunk-1ny7cxrt.js:1418204-1418433 placement
 /**
  * 合并 CLI 托管设置：对象键浅合并、列表键去重并集，permissions/hooks 特殊处理。
  */
-function mergeCliSettings(e, t) {
-  let n = {
-    ...e,
-    ...t,
+function mergeCliSettings(base, override) {
+  let merged = {
+    ...base,
+    ...override,
   };
-  for (let o of MERGED_OBJECT_KEYS) {
-    let r = e[o];
-    let s = t[o];
-    if (isPlainObject_3(r) && isPlainObject_3(s))
-      n[o] = {
-        ...r,
-        ...s,
+  for (let key of MERGED_OBJECT_KEYS) {
+    let baseValue = base[key];
+    let overrideValue = override[key];
+    if (isPlainObject_3(baseValue) && isPlainObject_3(overrideValue))
+      merged[key] = {
+        ...baseValue,
+        ...overrideValue,
       };
   }
-  for (let o of UNION_LIST_KEYS) n[o] = unionLists(e[o], t[o]);
-  n.permissions = mergeListGroups(e.permissions, t.permissions, PERMISSION_LIST_KEYS);
-  n.hooks = mergeListGroups(e.hooks, t.hooks);
-  return dropUndefinedValues(n);
+  for (let key of UNION_LIST_KEYS) merged[key] = unionLists(base[key], override[key]);
+  merged.permissions = mergeListGroups(base.permissions, override.permissions, PERMISSION_LIST_KEYS);
+  merged.hooks = mergeListGroups(base.hooks, override.hooks);
+  return dropUndefinedValues(merged);
 }
 //@ chunk-1ny7cxrt.js:1418433-1418598 placement
 /**
  * 合并含列表的对象（指定键或全部键做去重并集）。
  */
-function mergeListGroups(e, t, n) {
-  let o = isPlainObject_3(e) ? e : undefined;
-  let r = isPlainObject_3(t) ? t : undefined;
-  if (!o && !r) return;
-  let s = {
-    ...(o ?? {}),
-    ...(r ?? {}),
+function mergeListGroups(base, override, keys) {
+  let baseObject = isPlainObject_3(base) ? base : undefined;
+  let overrideObject = isPlainObject_3(override) ? override : undefined;
+  if (!baseObject && !overrideObject) return;
+  let merged = {
+    ...(baseObject ?? {}),
+    ...(overrideObject ?? {}),
   };
-  for (let a of n ?? Object.keys(s)) s[a] = unionLists(o?.[a], r?.[a]);
-  return dropUndefinedValues(s);
+  for (let key of keys ?? Object.keys(merged))
+    merged[key] = unionLists(baseObject?.[key], overrideObject?.[key]);
+  return dropUndefinedValues(merged);
 }
 //@ chunk-1ny7cxrt.js:1418598-1418679 placement
 /**
  * 删除对象中值为 undefined 的键。
  */
-function dropUndefinedValues(e) {
-  for (let key of Object.keys(e)) if (e[key] === undefined) delete e[key];
-  return e;
+function dropUndefinedValues(obj) {
+  for (let key of Object.keys(obj)) if (obj[key] === undefined) delete obj[key];
+  return obj;
 }
 //@ chunk-1ny7cxrt.js:1418679-1418905 placement
 /**
@@ -338,35 +352,36 @@ var HOOK_SETTING_KEYS = ["disableAllHooks", "allowedHttpHookUrls", "httpHookAllo
 /**
  * 两个列表按 JSON 去重求并集（都不是数组时 undefined）。
  */
-function unionLists(e, t) {
-  let n = Array.isArray(e) ? e : [];
-  let o = Array.isArray(t) ? t : [];
-  if (n.length === 0 && o.length === 0) return Array.isArray(e) || Array.isArray(t) ? [] : undefined;
-  let r = new Set();
-  let s = [];
-  for (let a of [...n, ...o]) {
-    let l = jsonStringify(a);
-    if (!r.has(l)) {
-      r.add(l);
-      s.push(a);
+function unionLists(left, right) {
+  let leftList = Array.isArray(left) ? left : [];
+  let rightList = Array.isArray(right) ? right : [];
+  if (leftList.length === 0 && rightList.length === 0)
+    return Array.isArray(left) || Array.isArray(right) ? [] : undefined;
+  let seen = new Set();
+  let merged = [];
+  for (let item of [...leftList, ...rightList]) {
+    let serialized = jsonStringify(item);
+    if (!seen.has(serialized)) {
+      seen.add(serialized);
+      merged.push(item);
     }
   }
-  return s;
+  return merged;
 }
 //@ chunk-1ny7cxrt.js:1419152-1420031 placement
 /**
  * 根据 telemetry.forward_to 与 public_url 生成下发给客户端的 OTEL 环境变量。
  */
-function buildOtelEnv(e) {
-  if (e.telemetry.forward_to.length === 0) {
-    if (Object.keys(e.telemetry.resource_attributes ?? {}).length > 0)
+function buildOtelEnv(config) {
+  if (config.telemetry.forward_to.length === 0) {
+    if (Object.keys(config.telemetry.resource_attributes ?? {}).length > 0)
       gatewayLog(
         "warn",
         "telemetry.resource_attributes is set but telemetry.forward_to is empty, so the labels are not applied",
       );
     return null;
   }
-  let publicUrl = e.listen.public_url;
+  let publicUrl = config.listen.public_url;
   if (!publicUrl) {
     gatewayLog(
       "warn",
@@ -375,8 +390,8 @@ function buildOtelEnv(e) {
     );
     return null;
   }
-  let forwardTo = e.telemetry.forward_to;
-  let entries = Object.entries(e.telemetry.resource_attributes ?? {});
+  let forwardTo = config.telemetry.forward_to;
+  let entries = Object.entries(config.telemetry.resource_attributes ?? {});
   return {
     CLAUDE_CODE_ENABLE_TELEMETRY: "1",
     OTEL_METRICS_EXPORTER: otlpExporterSetting(forwardTo, "metrics"),
@@ -385,7 +400,7 @@ function buildOtelEnv(e) {
     OTEL_EXPORTER_OTLP_ENDPOINT: publicUrl,
     OTEL_EXPORTER_OTLP_PROTOCOL: "http/protobuf",
     ...(entries.length > 0 && {
-      OTEL_RESOURCE_ATTRIBUTES: entries.map(([r, s]) => `${r}=${s}`).join(","),
+      OTEL_RESOURCE_ATTRIBUTES: entries.map(([attrKey, attrValue]) => `${attrKey}=${attrValue}`).join(","),
     }),
   };
 }
@@ -393,56 +408,60 @@ function buildOtelEnv(e) {
 /**
  * 根据 forward_to 列表决定 OTEL_*_EXPORTER 的值："otlp" 或 "none"。
  */
-function otlpExporterSetting(forwardTo, t) {
-  return forwardTo.some((n) => n[t]) ? "otlp" : "none";
+function otlpExporterSetting(forwardTo, signalKind) {
+  return forwardTo.some((target) => target[signalKind]) ? "otlp" : "none";
 }
 //@ chunk-1ny7cxrt.js:1420087-1420423 placement
 /**
  * 记录合并后发生变化的设置键。
  */
-function logChangedKeys(e, t, n) {
-  let o = (s) => {
-    if (Array.isArray(s)) {
-      let mapped = s.map(o);
-      return mapped.every((l) => typeof l === "string") ? uniq(mapped).sort() : mapped;
+function logChangedKeys(label, after, before) {
+  let normalize = (value) => {
+    if (Array.isArray(value)) {
+      let mapped = value.map(normalize);
+      return mapped.every((item) => typeof item === "string") ? uniq(mapped).sort() : mapped;
     }
-    if (isPlainObject_3(s))
+    if (isPlainObject_3(value))
       return Object.fromEntries(
-        Object.keys(s)
+        Object.keys(value)
           .sort()
-          .map((key) => [key, o(s[key])]),
+          .map((key) => [key, normalize(value[key])]),
       );
-    return s;
+    return value;
   };
-  let filtered = Object.keys(t).filter((key) => jsonStringify(o(t[key])) !== jsonStringify(o(n?.[key])));
-  if (filtered.length > 0) gatewayLog("info", `${e} \u2014 changed keys: ${filtered.join(", ")}`);
+  let filtered = Object.keys(after).filter(
+    (key) => jsonStringify(normalize(after[key])) !== jsonStringify(normalize(before?.[key])),
+  );
+  if (filtered.length > 0) gatewayLog("info", `${label} \u2014 changed keys: ${filtered.join(", ")}`);
 }
 //@ chunk-1ny7cxrt.js:1420423-1420907 placement
 /**
  * 按组与邮箱域名匹配托管策略（支持分层策略叠加）。
  */
-function matchPolicy(managedPolicies, t) {
-  if (t.cri === true) return null;
-  let groups = t.groups ?? [];
-  let o = t.email?.includes("@") ? t.email.slice(t.email.lastIndexOf("@") + 1).toLowerCase() : undefined;
-  let r = [];
-  for (let [c, u] of managedPolicies.entries()) {
-    let { groups: groups_2, email_domain: emailDomain } = u.match;
+function matchPolicy(managedPolicies, principal) {
+  if (principal.cri === true) return null;
+  let groups = principal.groups ?? [];
+  let emailDomain = principal.email?.includes("@")
+    ? principal.email.slice(principal.email.lastIndexOf("@") + 1).toLowerCase()
+    : undefined;
+  let matches = [];
+  for (let [index, policy] of managedPolicies.entries()) {
+    let { groups: groups_2, email_domain: emailDomain_2 } = policy.match;
     if (groups_2 && !groups_2.some((group) => groups.includes(group))) continue;
-    if (emailDomain && o !== emailDomain) continue;
-    r.push({
-      index: c,
-      policy: u,
+    if (emailDomain_2 && emailDomain !== emailDomain_2) continue;
+    matches.push({
+      index,
+      policy,
     });
-    if (!u.layered) break;
+    if (!policy.layered) break;
   }
-  let [s, a] = r;
-  if (!s?.policy.layered || !a?.policy.layered) return s ?? null;
-  let mapped = r.map((c) => c.index);
+  let [firstMatch, secondMatch] = matches;
+  if (!firstMatch?.policy.layered || !secondMatch?.policy.layered) return firstMatch ?? null;
+  let mapped = matches.map((match) => match.index);
   return {
-    index: s.index,
+    index: firstMatch.index,
     indexes: mapped,
-    policy: s.policy.layered(mapped),
+    policy: firstMatch.policy.layered(mapped),
   };
 }
 //@ chunk-1ny7cxrt.js:1420907-1420982 placement
@@ -456,9 +475,14 @@ function hasManagedPolicies(managed) {
 /**
  * 找第一个可服务该模型且不按组限制的上游。
  */
-function firstUpstreamForModel(e, t) {
-  for (let upstream of e.upstreams) {
-    let upstreamModel = resolveUpstreamModel(t, upstream, e.models, e.auto_include_builtin_models);
+function firstUpstreamForModel(config, modelId) {
+  for (let upstream of config.upstreams) {
+    let upstreamModel = resolveUpstreamModel(
+      modelId,
+      upstream,
+      config.models,
+      config.auto_include_builtin_models,
+    );
     if (upstreamModel.ok)
       return upstream.groups
         ? undefined
@@ -473,31 +497,32 @@ function firstUpstreamForModel(e, t) {
 /**
  * 生成下发给客户端的价格覆盖（倍率与各模型单价）。
  */
-function buildPricingOverrides(e) {
-  let pricing = e.pricing;
+function buildPricingOverrides(config) {
+  let pricing = config.pricing;
   if (!pricing) return null;
-  let n = [];
-  for (let o of pricingModelIds(e)) {
-    let r = firstUpstreamForModel(e, o);
-    let s = r && findPricingOverride(pricing, r.upstream.name, r.model, o);
-    if (s)
-      n.push([
-        o,
+  let overrides = [];
+  for (let modelId of pricingModelIds(config)) {
+    let upstreamInfo = firstUpstreamForModel(config, modelId);
+    let override =
+      upstreamInfo && findPricingOverride(pricing, upstreamInfo.upstream.name, upstreamInfo.model, modelId);
+    if (override)
+      overrides.push([
+        modelId,
         {
-          input: s.input,
-          output: s.output,
-          cacheRead: s.cache_read,
-          cacheWrite: s.cache_write,
+          input: override.input,
+          output: override.output,
+          cacheRead: override.cache_read,
+          cacheWrite: override.cache_write,
         },
       ]);
   }
-  if (n.length === 0 && pricing.multiplier === 1) return null;
+  if (overrides.length === 0 && pricing.multiplier === 1) return null;
   return {
     ...(pricing.multiplier !== 1 && {
       multiplier: pricing.multiplier,
     }),
-    ...(n.length > 0 && {
-      overrides: Object.fromEntries(n),
+    ...(overrides.length > 0 && {
+      overrides: Object.fromEntries(overrides),
     }),
   };
 }
@@ -505,46 +530,51 @@ function buildPricingOverrides(e) {
 /**
  * 需要计算价格的模型 id 列表（去重）。
  */
-function pricingModelIds(e) {
-  let t = new Set();
-  let n = [];
-  for (let o of [
-    ...(e.pricing?.overrides ?? []).map((r) => findModelConfigById(r.model)?.firstParty ?? r.model),
-    ...e.models.map((model) => model.id),
+function pricingModelIds(config) {
+  let seen = new Set();
+  let ids = [];
+  for (let modelId of [
+    ...(config.pricing?.overrides ?? []).map(
+      (override) => findModelConfigById(override.model)?.firstParty ?? override.model,
+    ),
+    ...config.models.map((model) => model.id),
   ]) {
-    let r = modelCanonicalKey(o);
-    if (!t.has(r)) {
-      t.add(r);
-      n.push(o);
+    let canonicalKey = modelCanonicalKey(modelId);
+    if (!seen.has(canonicalKey)) {
+      seen.add(canonicalKey);
+      ids.push(modelId);
     }
   }
-  return n;
+  return ids;
 }
 //@ chunk-1ny7cxrt.js:1421724-1421778 placement
 /**
  * 懒加载的完整设置 schema（用于列出现有配置键）。
  */
-var wholeSettingsSchema = DoctorLazy(() =>
-  buildWholeSettingsSchema(enabledSettingsFeatureGroups(), {
-    strictPolicyHelperKeys: true,
-  }),
-);
+var wholeSettingsSchema; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-1ny7cxrt.js:1421724", () => {
+  wholeSettingsSchema = DoctorLazy(() =>
+    buildWholeSettingsSchema(enabledSettingsFeatureGroups(), {
+      strictPolicyHelperKeys: true,
+    }),
+  );
+});
 //@ chunk-1ny7cxrt.js:1421778-1422018 placement
 /**
  * 规范化设置别名，报告同时设置别名与正名的问题。
  */
-function applyAliasesToSettings(e, t) {
-  let n = {
-    ...e,
+function applyAliasesToSettings(cli, aliasMap) {
+  let copy = {
+    ...cli,
   };
-  let o = applySettingAliases(n, t, {
+  let issues = applySettingAliases(copy, aliasMap, {
     loneNullAlias: "rename",
   });
   return {
-    cli: n,
-    aliasIssues: o.map(
-      (r) =>
-        `  ${r.alias}: this document sets both "${r.alias}" and "${r.canonical}", which are the same setting \u2014 keep only "${r.canonical}"`,
+    cli: copy,
+    aliasIssues: issues.map(
+      (issue) =>
+        `  ${issue.alias}: this document sets both "${issue.alias}" and "${issue.canonical}", which are the same setting \u2014 keep only "${issue.canonical}"`,
     ),
   };
 }
@@ -552,35 +582,39 @@ function applyAliasesToSettings(e, t) {
 /**
  * 校验托管设置文档：schema、规则、跨会话入站、插件定制、允许的提供方、未知键；有问题时抛错。
  */
-function validateManagedSettings(e, t, aliasIssues) {
-  let o = wholeSettingsSchema();
-  let r = o.safeParse(e);
-  let s = [...aliasIssues];
-  if (!r.success) s.push(...r.error.issues.map((issue) => `  ${issue.path.join(".")}: ${issue.message}`));
-  s.push(...staticPayloadWarnings(e).map((u) => `  ${u}`));
-  s.push(...collectRuleWarnings(e).map((u) => `  ${u}`));
-  let a = crossSessionInboundError(e);
-  if (a !== undefined) s.push(`  crossSessionInbound: ${a} \u2014 fix the value`);
-  let l = strictPluginOnlyCustomizationError(e);
-  if (l !== undefined) s.push(`  strictPluginOnlyCustomization: ${l} \u2014 fix the value`);
-  let c = validateAllowedProviders(e);
-  if (c !== undefined) s.push(`  allowedProviders: ${c} \u2014 fix the value`);
-  if (e !== null && typeof e === "object") {
-    let u = new Set(Object.keys(o.shape));
-    for (let [key, value] of Object.entries(e))
+function validateManagedSettings(settings, label, aliasIssues) {
+  let schema = wholeSettingsSchema();
+  let parsed = schema.safeParse(settings);
+  let issues = [...aliasIssues];
+  if (!parsed.success)
+    issues.push(...parsed.error.issues.map((issue) => `  ${issue.path.join(".")}: ${issue.message}`));
+  issues.push(...staticPayloadWarnings(settings).map((warning) => `  ${warning}`));
+  issues.push(...collectRuleWarnings(settings).map((warning) => `  ${warning}`));
+  let crossSessionError = crossSessionInboundError(settings);
+  if (crossSessionError !== undefined)
+    issues.push(`  crossSessionInbound: ${crossSessionError} \u2014 fix the value`);
+  let strictPluginError = strictPluginOnlyCustomizationError(settings);
+  if (strictPluginError !== undefined)
+    issues.push(`  strictPluginOnlyCustomization: ${strictPluginError} \u2014 fix the value`);
+  let allowedProvidersError = validateAllowedProviders(settings);
+  if (allowedProvidersError !== undefined)
+    issues.push(`  allowedProviders: ${allowedProvidersError} \u2014 fix the value`);
+  if (settings !== null && typeof settings === "object") {
+    let knownKeys = new Set(Object.keys(schema.shape));
+    for (let [key, value] of Object.entries(settings))
       if (key === "mcpServers") {
         if (value !== undefined)
-          s.push(
+          issues.push(
             '  mcpServers: not a managed-settings key \u2014 use "managedMcpServers" (http/sse servers only; same entry shape as .mcp.json)',
           );
-      } else if (!u.has(key))
-        s.push(
+      } else if (!knownKeys.has(key))
+        issues.push(
           `  ${key}: unknown settings key \u2014 fix the typo, upgrade the gateway if this key was added in a newer CLI, or set the gateway's matching env/build gate if the key is gated (e.g. CLAUDE_CODE_ENABLE_XAA for xaaIdp)`,
         );
   }
-  if (s.length > 0)
-    throw Error(`${t} invalid:
-${s.join(`
+  if (issues.length > 0)
+    throw Error(`${label} invalid:
+${issues.join(`
 `)}`);
 }
 //@ chunk-1ny7cxrt.js:1423077-1423359 placement
@@ -589,18 +623,18 @@ ${s.join(`
  */
 async function readManagedSettingsFile(settings) {
   if (!settings) return {};
-  let t;
+  let text;
   try {
-    t = await readFile(settings, "utf8");
+    text = await readFile(settings, "utf8");
   } catch (error) {
     if (isENOENT(error)) return {};
     throw error;
   }
-  let n = jsonParse(t);
-  if (typeof n !== "object" || n === null || Array.isArray(n))
+  let parsed = jsonParse(text);
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed))
     throw Error(
-      `Managed settings file ${settings}: expected a JSON object, got ${Array.isArray(n) ? "array" : typeof n}`,
+      `Managed settings file ${settings}: expected a JSON object, got ${Array.isArray(parsed) ? "array" : typeof parsed}`,
     );
-  return n;
+  return parsed;
 }
 export { hasManagedPolicies, resolveManagedPolicies, matchPolicy, firstUpstreamForModel };

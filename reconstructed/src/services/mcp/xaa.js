@@ -10,6 +10,10 @@
  */
 import { resolve } from "path";
 import { pathToFileURL } from "url";
+import { toUncLongPath } from "../../utils/windowsUncPaths.js";
+import { isUntouchableSpelling } from "../../utils/networkPaths.js";
+import { isUncOrDevicePath } from "../../utils/pathClassification.js";
+import { isNetworkPathAfterNormalize, isUnsafeFileUrl } from "../../utils/pathSanitize.js";
 import { getProxyFetchOptions } from "../../utils/proxy.js";
 import { rethrowRedactedFetchError } from "./auth.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
@@ -25,13 +29,86 @@ import { redactUrlSecrets } from "../../utils/urlRedaction.js";
 import { getPresentedCredentialLog } from "./discoveryIdentity.js";
 import { JwtBearerResponseSchema } from "../../../vendor/@modelcontextprotocol/core/dist/auth-CUe6YdwF.mjs";
 import { logMCPDebug } from "../../utils/log.js";
-import { qe } from "../../../vendor/@modelcontextprotocol/client/dist/index.mjs";
-import { toUncLongPath } from "../../utils/windowsUncPaths.js";
-import { isUntouchableSpelling } from "../../utils/networkPaths.js";
-import { isUncOrDevicePath } from "../../utils/pathClassification.js";
-import { isNetworkPathAfterNormalize, isUnsafeFileUrl } from "../../utils/pathSanitize.js";
+import { exchangeIdTokenForJag } from "../../../vendor/@modelcontextprotocol/client/dist/index.mjs";
 import { CALLER_GONE_SIGNAL } from "../../entrypoints/mcp.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
+//@ chunk-6vnxsn99.js:72542-72708 fingerprint = normalizeUrl (0.683)
+/**
+ * toSafeFileUrl：本地路径转 file:// URL，拒绝 UNC、设备路径与带主机名的结果。
+ */
+function toSafeFileUrl(url) {
+  try {
+    let uncLongPath = toUncLongPath(url);
+    let uncLongPath_2 = toUncLongPath(resolve(uncLongPath));
+    if (
+      isUntouchableSpelling(uncLongPath) ||
+      isUncOrDevicePath(uncLongPath_2) ||
+      isNetworkPathAfterNormalize(uncLongPath) ||
+      isNetworkPathAfterNormalize(uncLongPath_2)
+    )
+      return null;
+    let fileUrl = pathToFileURL(uncLongPath);
+    return fileUrl.hostname !== "" || isUnsafeFileUrl(fileUrl.href) ? null : fileUrl.href;
+  } catch {
+    return null;
+  }
+}
+//@ chunk-n1aavqzh.js:1813-2020 callgraph-witnessed = JWT_BEARER_GRANT (0.385)
+var XAA_REQUEST_TIMEOUT_MS_2 = 30000;
+var TOKEN_EXCHANGE_GRANT_2 = "urn:ietf:params:oauth:grant-type:token-exchange";
+var JWT_BEARER_GRANT_2 = "urn:ietf:params:oauth:grant-type:jwt-bearer";
+var ID_JAG_TOKEN_TYPE_2 = "urn:ietf:params:oauth:token-type:id-jag";
+var ID_TOKEN_TYPE_2 = "urn:ietf:params:oauth:token-type:id_token";
+//@ chunk-n1aavqzh.js:2020-2184 placement
+/**
+ * makeXaaFetch（v2 副本）。
+ */
+function makeXaaFetch_2(abortSignal) {
+  return (input, init) => {
+    let timeout = AbortSignal.timeout(XAA_REQUEST_TIMEOUT_MS_2);
+    let signal = abortSignal ? AbortSignal.any([timeout, abortSignal]) : timeout;
+    return fetch(input, {
+      ...init,
+      ...getProxyFetchOptions({
+        url: String(input),
+      }),
+      signal,
+    }).catch((error) => rethrowRedactedFetchError(error, input));
+  };
+}
+//@ chunk-n1aavqzh.js:2184-2196 placement
+var defaultXaaFetch_2; // deferred: uses makeXaaFetch_2 of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-n1aavqzh.js:2184", () => {
+  defaultXaaFetch_2 = makeXaaFetch_2();
+});
+//@ chunk-n1aavqzh.js:2196-2290 placement
+function normalizeUrl_2(url) {
+  try {
+    return new URL(url).href.replace(/\/$/, "");
+  } catch {
+    return url.replace(/\/$/, "");
+  }
+}
+//@ chunk-n1aavqzh.js:2290-2418 placement = XaaTokenExchangeError (1)
+class XaaTokenExchangeError_2 extends Error {
+  shouldClearIdToken;
+  constructor(message, shouldClearIdToken) {
+    super(message);
+    this.name = "XaaTokenExchangeError";
+    this.shouldClearIdToken = shouldClearIdToken;
+  }
+}
+//@ chunk-n1aavqzh.js:2418-2520 placement
+var SENSITIVE_TOKEN_FIELD_PATTERN_2 =
+  /"(access_token|refresh_token|id_token|assertion|subject_token|client_secret)"\s*:\s*"[^"]*"/g;
+//@ chunk-n1aavqzh.js:2520-2611 placement = redactTokens (1)
+function redactTokens_2(raw) {
+  return (typeof raw === "string" ? raw : jsonStringify(raw)).replace(
+    SENSITIVE_TOKEN_FIELD_PATTERN_2,
+    (match, k) => `"${k}":"[REDACTED]"`,
+  );
+}
 //@ chunk-1kaj6e83.js:1766-1973 fingerprint = ID_JAG_TOKEN_TYPE (0.408)
 var XAA_REQUEST_TIMEOUT_MS = 30000;
 var TOKEN_EXCHANGE_GRANT = "urn:ietf:params:oauth:grant-type:token-exchange";
@@ -43,20 +120,23 @@ var ID_TOKEN_TYPE = "urn:ietf:params:oauth:token-type:id_token";
  * makeXaaFetch：带 30 秒超时、可选中止信号与代理设置的 fetch。
  */
 function makeXaaFetch(abortSignal) {
-  return (t, init) => {
+  return (input, init) => {
     let timeout = AbortSignal.timeout(XAA_REQUEST_TIMEOUT_MS);
     let signal = abortSignal ? AbortSignal.any([timeout, abortSignal]) : timeout;
-    return fetch(t, {
+    return fetch(input, {
       ...init,
       ...getProxyFetchOptions({
-        url: String(t),
+        url: String(input),
       }),
       signal,
-    }).catch((error) => rethrowRedactedFetchError(error, t));
+    }).catch((error) => rethrowRedactedFetchError(error, input));
   };
 }
 //@ chunk-1kaj6e83.js:2137-2149 layout
-var defaultXaaFetch = makeXaaFetch();
+var defaultXaaFetch; // deferred: uses makeXaaFetch of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-1kaj6e83.js:2137", () => {
+  defaultXaaFetch = makeXaaFetch();
+});
 //@ chunk-1kaj6e83.js:2149-2243 layout
 function normalizeUrl(url) {
   try {
@@ -81,7 +161,7 @@ var SENSITIVE_TOKEN_FIELD_PATTERN =
 function redactTokens(raw) {
   return (typeof raw === "string" ? raw : jsonStringify(raw)).replace(
     SENSITIVE_TOKEN_FIELD_PATTERN,
-    (r, k) => `"${k}":"[REDACTED]"`,
+    (match, k) => `"${k}":"[REDACTED]"`,
   );
 }
 //@ chunk-1kaj6e83.js:2843-3457 fingerprint = discoverProtectedResource (0.828)
@@ -98,9 +178,9 @@ async function discoverProtectedResource(serverUrl, opts) {
     );
   } catch (error) {
     if (isAbortError(error)) throw error;
-    let s = error instanceof Error ? /^HTTP (\d{3}) /.exec(error.message)?.[1] : undefined;
+    let status = error instanceof Error ? /^HTTP (\d{3}) /.exec(error.message)?.[1] : undefined;
     throw Error(
-      `XAA: PRM discovery failed for ${redactUrlSecrets(serverUrl)} (${s ? `HTTP ${s}` : error instanceof Error ? error.name : typeof error})`,
+      `XAA: PRM discovery failed for ${redactUrlSecrets(serverUrl)} (${status ? `HTTP ${status}` : error instanceof Error ? error.name : typeof error})`,
     );
   }
   if (!prm.resource || !prm.authorization_servers?.[0])
@@ -126,9 +206,9 @@ async function discoverAuthorizationServer(asUrl, opts) {
     });
   } catch (error) {
     if (isAbortError(error)) throw error;
-    let s = error instanceof Error ? /^HTTP (\d{3}) /.exec(error.message)?.[1] : undefined;
+    let status = error instanceof Error ? /^HTTP (\d{3}) /.exec(error.message)?.[1] : undefined;
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `XAA: AS metadata discovery failed (${s ? `HTTP ${s}` : error instanceof Error ? error.name : typeof error})`,
+      `XAA: AS metadata discovery failed (${status ? `HTTP ${status}` : error instanceof Error ? error.name : typeof error})`,
       "XAA: AS metadata discovery failed",
     );
   }
@@ -211,21 +291,21 @@ async function performCrossAppAccess_2(serverUrl, config, serverName = "xaa", ab
     `XAA: discovered resource=${redactUrlSecrets(prm.resource)} ASes=[${prm.authorization_servers.map(redactUrlSecrets).join(", ")}]`,
   );
   let pinnedAuthorizationServer = config.pinnedAuthorizationServer;
-  let S =
+  let candidateServers =
     pinnedAuthorizationServer === undefined
       ? prm.authorization_servers
       : prm.authorization_servers.filter(
           (authorizationServer) =>
             normalizeUrl(authorizationServer) === normalizeUrl(pinnedAuthorizationServer),
         );
-  if (pinnedAuthorizationServer !== undefined && S.length === 0)
+  if (pinnedAuthorizationServer !== undefined && candidateServers.length === 0)
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
       `XAA: authorization server changed: signed in with ${redactUrlSecrets(pinnedAuthorizationServer)}, server now names [${prm.authorization_servers.map(redactUrlSecrets).join(", ")}]. If this move is expected, run \`claude mcp remove\` for this server and add it again with its client secret.`,
       "XAA: authorization server changed",
     );
   let asMeta;
   let asErrors = [];
-  for (let asUrl of S) {
+  for (let asUrl of candidateServers) {
     let candidate;
     try {
       candidate = await discoverAuthorizationServer(asUrl, {
@@ -248,7 +328,7 @@ async function performCrossAppAccess_2(serverUrl, config, serverName = "xaa", ab
   if (!asMeta)
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
       `XAA: no authorization server supports jwt-bearer. Tried: ${asErrors.join("; ")}`,
-      `XAA: no authorization server supports jwt-bearer (tried ${S.length})`,
+      `XAA: no authorization server supports jwt-bearer (tried ${candidateServers.length})`,
     );
   let authMethods = asMeta.token_endpoint_auth_methods_supported;
   let authMethod =
@@ -260,7 +340,7 @@ async function performCrossAppAccess_2(serverUrl, config, serverName = "xaa", ab
     `XAA: AS issuer=${redactUrlSecrets(asMeta.issuer)} token_endpoint=${redactUrlSecrets(asMeta.token_endpoint)} auth_method=${authMethod}`,
   );
   logMCPDebug(serverName, "XAA: exchanging id_token for ID-JAG at IdP");
-  let jag = await qe({
+  let jag = await exchangeIdTokenForJag({
     tokenEndpoint: config.idpTokenEndpoint,
     audience: asMeta.issuer,
     resource: prm.resource,
@@ -285,100 +365,27 @@ async function performCrossAppAccess_2(serverUrl, config, serverName = "xaa", ab
     authorizationServerUrl: asMeta.issuer,
   };
 }
-//@ chunk-n1aavqzh.js:1813-2020 callgraph-witnessed = JWT_BEARER_GRANT (0.385)
-var XAA_REQUEST_TIMEOUT_MS_2 = 30000;
-var TOKEN_EXCHANGE_GRANT_2 = "urn:ietf:params:oauth:grant-type:token-exchange";
-var JWT_BEARER_GRANT_2 = "urn:ietf:params:oauth:grant-type:jwt-bearer";
-var ID_JAG_TOKEN_TYPE_2 = "urn:ietf:params:oauth:token-type:id-jag";
-var ID_TOKEN_TYPE_2 = "urn:ietf:params:oauth:token-type:id_token";
-//@ chunk-n1aavqzh.js:2020-2184 placement
-/**
- * makeXaaFetch（v2 副本）。
- */
-function makeXaaFetch_2(abortSignal) {
-  return (t, init) => {
-    let timeout = AbortSignal.timeout(XAA_REQUEST_TIMEOUT_MS_2);
-    let signal = abortSignal ? AbortSignal.any([timeout, abortSignal]) : timeout;
-    return fetch(t, {
-      ...init,
-      ...getProxyFetchOptions({
-        url: String(t),
-      }),
-      signal,
-    }).catch((error) => rethrowRedactedFetchError(error, t));
-  };
-}
-//@ chunk-n1aavqzh.js:2184-2196 placement
-var defaultXaaFetch_2 = makeXaaFetch_2();
-//@ chunk-n1aavqzh.js:2196-2290 placement
-function normalizeUrl_2(url) {
-  try {
-    return new URL(url).href.replace(/\/$/, "");
-  } catch {
-    return url.replace(/\/$/, "");
-  }
-}
-//@ chunk-n1aavqzh.js:2290-2418 placement = XaaTokenExchangeError (1)
-class XaaTokenExchangeError_2 extends Error {
-  shouldClearIdToken;
-  constructor(message, shouldClearIdToken) {
-    super(message);
-    this.name = "XaaTokenExchangeError";
-    this.shouldClearIdToken = shouldClearIdToken;
-  }
-}
-//@ chunk-n1aavqzh.js:2418-2520 placement
-var SENSITIVE_TOKEN_FIELD_PATTERN_2 =
-  /"(access_token|refresh_token|id_token|assertion|subject_token|client_secret)"\s*:\s*"[^"]*"/g;
-//@ chunk-n1aavqzh.js:2520-2611 placement = redactTokens (1)
-function redactTokens_2(raw) {
-  return (typeof raw === "string" ? raw : jsonStringify(raw)).replace(
-    SENSITIVE_TOKEN_FIELD_PATTERN_2,
-    (n, k) => `"${k}":"[REDACTED]"`,
-  );
-}
-//@ chunk-6vnxsn99.js:72542-72708 fingerprint = normalizeUrl (0.683)
-/**
- * toSafeFileUrl：本地路径转 file:// URL，拒绝 UNC、设备路径与带主机名的结果。
- */
-function toSafeFileUrl(url) {
-  try {
-    let uncLongPath = toUncLongPath(url);
-    let uncLongPath_2 = toUncLongPath(resolve(uncLongPath));
-    if (
-      isUntouchableSpelling(uncLongPath) ||
-      isUncOrDevicePath(uncLongPath_2) ||
-      isNetworkPathAfterNormalize(uncLongPath) ||
-      isNetworkPathAfterNormalize(uncLongPath_2)
-    )
-      return null;
-    let o = pathToFileURL(uncLongPath);
-    return o.hostname !== "" || isUnsafeFileUrl(o.href) ? null : o.href;
-  } catch {
-    return null;
-  }
-}
 //@ chunk-hjesqqfw.js:13845-13941 fingerprint = makeXaaFetch (0.648)
 /**
  * 把请求 extra 中的 CALLERGONE 中止信号并入给定信号。
  */
 function combineWithCallerGoneSignal(signal, authInfo) {
-  let o = authInfo?.extra?.[CALLER_GONE_SIGNAL];
-  return o instanceof AbortSignal ? AbortSignal.any([signal, o]) : signal;
+  let callerSignal = authInfo?.extra?.[CALLER_GONE_SIGNAL];
+  return callerSignal instanceof AbortSignal ? AbortSignal.any([signal, callerSignal]) : signal;
 }
 export {
-  defaultXaaFetch,
-  TOKEN_EXCHANGE_GRANT,
-  ID_JAG_TOKEN_TYPE,
-  ID_TOKEN_TYPE,
-  redactTokens,
-  XaaTokenExchangeError,
   defaultXaaFetch_2,
   TOKEN_EXCHANGE_GRANT_2,
   ID_JAG_TOKEN_TYPE_2,
   ID_TOKEN_TYPE_2,
   redactTokens_2,
   XaaTokenExchangeError_2,
+  defaultXaaFetch,
+  TOKEN_EXCHANGE_GRANT,
+  ID_JAG_TOKEN_TYPE,
+  ID_TOKEN_TYPE,
+  redactTokens,
+  XaaTokenExchangeError,
   normalizeUrl_2,
   JWT_BEARER_GRANT_2,
   makeXaaFetch_2,

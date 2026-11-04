@@ -38,68 +38,71 @@ import {
 } from "../modelCatalog.js";
 import { DoctorLazy } from "../../../cli/handlers/util.js";
 import {
-  u,
+  objectSchema,
   literal,
-  E,
-  string,
+  numberSchema,
+  stringSchema,
   array,
   record,
   unknown,
-  M,
+  booleanSchema,
 } from "../../../../vendor/zod/v4/classic/schemas.js";
 import { safeParseJSON } from "../../json.js";
 import { logForDebugging } from "../../debug.js";
 import { uniq } from "../../collections.js";
 import { logError } from "../../log.js";
 import { MODEL_KEY_BY_FIRST_PARTY_ID } from "../configs.js";
+import { deferInit } from "../../../../runtime/deferred-init.js";
 
 //@ chunk-aepeg2w5.js:143350-143420 placement = modelMatchesVersionPrefix (1)
 /**
  * 含 claude- 且可解析为版本化模型。
  */
-function isVersionedClaudeModelSpec(e) {
-  let n = normalizeModelId(e);
-  return n.includes("claude-") && parseModelId(n) !== null;
+function isVersionedClaudeModelSpec(modelSpec) {
+  let normalized = normalizeModelId(modelSpec);
+  return normalized.includes("claude-") && parseModelId(normalized) !== null;
 }
 //@ chunk-aepeg2w5.js:143420-143564 placement
 /**
  * 对字段值（字符串或数组）中的模型 id 做遮盖，无变化时返回原值。
  */
-function maskModelFieldValue(e, n, r) {
-  if (typeof e === "string") return maskModelIdList(e, n, r);
-  let mapped = e.map((h) => (typeof h === "string" ? maskModelIdList(h, n, r) : h));
-  return mapped.some((h, y) => h !== e[y]) ? mapped : e;
+function maskModelFieldValue(value, maskAll, isModelField) {
+  if (typeof value === "string") return maskModelIdList(value, maskAll, isModelField);
+  let mapped = value.map((item) =>
+    typeof item === "string" ? maskModelIdList(item, maskAll, isModelField) : item,
+  );
+  return mapped.some((item, index) => item !== value[index]) ? mapped : value;
 }
 //@ chunk-aepeg2w5.js:143564-143813 placement
-function maskModelIdList(e, n, r) {
-  let s = (S) => {
-    if (n && (r ? /[-0-9]/.test(S) : isVersionedClaudeModelSpec(S)))
-      return maskModelIdForTelemetry(S) === CONFIDENTIAL_MODEL_ID ? CONFIDENTIAL_MODEL_ID : S;
-    return containsMaskedId(S, getMaskedModelIds()) || (r && isConfidentialShorthand(S))
+function maskModelIdList(value, maskAll, shorthandOk) {
+  let maskPart = (part) => {
+    if (maskAll && (shorthandOk ? /[-0-9]/.test(part) : isVersionedClaudeModelSpec(part)))
+      return maskModelIdForTelemetry(part) === CONFIDENTIAL_MODEL_ID ? CONFIDENTIAL_MODEL_ID : part;
+    return containsMaskedId(part, getMaskedModelIds()) || (shorthandOk && isConfidentialShorthand(part))
       ? CONFIDENTIAL_MODEL_ID
-      : S;
+      : part;
   };
-  if (!e.includes(",")) return s(e);
-  let h = false;
-  let mapped = e.split(",").map((S) => {
-    let w = s(S);
-    if (w !== S) h = true;
-    return w;
+  if (!value.includes(",")) return maskPart(value);
+  let changed = false;
+  let mapped = value.split(",").map((part) => {
+    let masked = maskPart(part);
+    if (masked !== part) changed = true;
+    return masked;
   });
-  return h ? mapped.join(",") : e;
+  return changed ? mapped.join(",") : value;
 }
 //@ chunk-aepeg2w5.js:143813-143904 placement
 /**
  * 判断字符串是否为需遮盖的保密模型简写。
  */
-function isConfidentialShorthand(e) {
-  let n = normalizeModelId(e);
+function isConfidentialShorthand(value) {
+  let normalized = normalizeModelId(value);
   return (
     masksEveryId() &&
-    !/[-0-9,]/.test(e) &&
-    n.length > 0 &&
-    !MODEL_PLACEHOLDER_VALUES.has(n) &&
-    !isPublicModelId(n)
+    !/[-0-9,]/.test(value) &&
+    normalized.length > 0 &&
+    !MODEL_PLACEHOLDER_VALUES.has(normalized) &&
+    !isPublicModelId(normalized)
   );
 }
 //@ chunk-aepeg2w5.js:143904-143959 placement
@@ -138,8 +141,8 @@ function catalogSourceAllowed(source) {
  * 返回生效的服务端目录（激活的目录，或第一方后端下保留的停用行）。
  */
 function getEffectiveServedCatalog() {
-  let e = activeServedCatalog();
-  if (e !== null) return e;
+  let catalog = activeServedCatalog();
+  if (catalog !== null) return catalog;
   let providerState = getProviderState();
   let servedCatalogDeactivatedRows = providerState.servedCatalogDeactivatedRows;
   if (
@@ -183,18 +186,18 @@ function isEffectiveCatalogActive() {
  * 取生效目录中的模型行列表。
  */
 function activeCatalogModels() {
-  let e = activeServedCatalog();
-  return e === null ? [] : catalogModels(e);
+  let catalog = activeServedCatalog();
+  return catalog === null ? [] : catalogModels(catalog);
 }
 //@ chunk-aepeg2w5.js:144686-144798 placement
 /**
  * 在抑制目录的状态下执行。
  */
-function withCatalogSuppressed(e) {
+function withCatalogSuppressed(fn) {
   let providerState = getProviderState();
   providerState.servedCatalogSuppressDepth++;
   try {
-    return e();
+    return fn();
   } finally {
     providerState.servedCatalogSuppressDepth--;
   }
@@ -210,63 +213,63 @@ function isCatalogSuppressed() {
 /**
  * 在生效目录中查找模型条目。
  */
-function findEffectiveServedEntry(...e) {
-  return findServedEntry(getEffectiveServedCatalog(), e);
+function findEffectiveServedEntry(...modelIds) {
+  return findServedEntry(getEffectiveServedCatalog(), modelIds);
 }
 //@ chunk-aepeg2w5.js:144890-144926 placement
 /**
  * 在服务端目录中查找模型。
  */
-function findServedModel(...e) {
-  return findServedEntry(activeServedCatalog(), e);
+function findServedModel(...modelIds) {
+  return findServedEntry(activeServedCatalog(), modelIds);
 }
 //@ chunk-aepeg2w5.js:144926-144996 placement
 /**
  * 按 id 或身份拼写在生效目录中查模型条目。
  */
-function findActiveServedByIdentity(e) {
-  let n = activeServedCatalog();
-  if (n === null) return;
-  return findServedCatalogRow(n, e) ?? findByIdentitySpelling(n, e);
+function findActiveServedByIdentity(identity) {
+  let catalog = activeServedCatalog();
+  if (catalog === null) return;
+  return findServedCatalogRow(catalog, identity) ?? findByIdentitySpelling(catalog, identity);
 }
 //@ chunk-aepeg2w5.js:144996-145265 placement
-function findServedEntry(e, n) {
-  if (e === null) return;
-  let [r, ...s] = n;
-  let h =
-    r !== undefined &&
+function findServedEntry(catalog, modelIds) {
+  if (catalog === null) return;
+  let [first, ...rest] = modelIds;
+  let isOverrideValue =
+    first !== undefined &&
     isPublishedCatalogInUse() &&
-    getCatalogState().modelKnowledge?.isModelOverrideValue(r) === true;
-  if (r !== undefined && !h) {
-    let y = findServedCatalogRow(e, r) ?? findByIdentitySpelling(e, r);
-    if (y !== undefined) return y;
+    getCatalogState().modelKnowledge?.isModelOverrideValue(first) === true;
+  if (first !== undefined && !isOverrideValue) {
+    let row = findServedCatalogRow(catalog, first) ?? findByIdentitySpelling(catalog, first);
+    if (row !== undefined) return row;
   }
-  for (let y of s) {
-    if (y === undefined) continue;
-    let servedCatalogRow = findServedCatalogRow(e, y);
+  for (let modelId of rest) {
+    if (modelId === undefined) continue;
+    let servedCatalogRow = findServedCatalogRow(catalog, modelId);
     if (servedCatalogRow !== undefined) return servedCatalogRow;
   }
   return;
 }
 //@ chunk-aepeg2w5.js:145265-145467 placement
-function findByIdentitySpelling(e, n) {
+function findByIdentitySpelling(catalog, modelId) {
   let identitySpelling = getCatalogState().modelKnowledge?.identitySpelling;
   if (identitySpelling === undefined) return;
-  let s = normalizeModelId(identitySpelling(n));
-  if (s !== normalizeModelId(n)) {
-    let servedCatalogRow = findServedCatalogRow(e, s);
+  let identity = normalizeModelId(identitySpelling(modelId));
+  if (identity !== normalizeModelId(modelId)) {
+    let servedCatalogRow = findServedCatalogRow(catalog, identity);
     if (servedCatalogRow !== undefined) return servedCatalogRow;
   }
-  return catalogModels(e).find(
-    (h) => normalizeModelId(h.id) !== s && normalizeModelId(identitySpelling(h.id)) === s,
+  return catalogModels(catalog).find(
+    (row) => normalizeModelId(row.id) !== identity && normalizeModelId(identitySpelling(row.id)) === identity,
   );
 }
 //@ chunk-aepeg2w5.js:145467-145511 placement
 /**
  * 取生效目录中某模型的 runtime 信息。
  */
-function servedRuntime(...e) {
-  return findEffectiveServedEntry(...e)?.runtime;
+function servedRuntime(...modelIds) {
+  return findEffectiveServedEntry(...modelIds)?.runtime;
 }
 //@ chunk-aepeg2w5.js:145511-145562 placement
 /**
@@ -284,8 +287,8 @@ var OUTPUT_TOKEN_RANGE = {
 /**
  * 取生效目录模型的 max_input_tokens（限制在合法区间）。
  */
-function servedMaxInputTokens(...e) {
-  return clampInputTokens(findEffectiveServedEntry(...e));
+function servedMaxInputTokens(...modelIds) {
+  return clampInputTokens(findEffectiveServedEntry(...modelIds));
 }
 //@ chunk-aepeg2w5.js:145601-145679 placement
 /**
@@ -301,46 +304,46 @@ function clampInputTokens(effectiveServedEntry) {
 /**
  * 取生效目录模型的 max_output_tokens。
  */
-function servedMaxOutputTokens(...e) {
-  return clampInRange(servedRuntime(...e)?.max_output_tokens, OUTPUT_TOKEN_RANGE);
+function servedMaxOutputTokens(...modelIds) {
+  return clampInRange(servedRuntime(...modelIds)?.max_output_tokens, OUTPUT_TOKEN_RANGE);
 }
 //@ chunk-aepeg2w5.js:145741-145807 placement
 /**
  * 取生效目录模型的 default_output_tokens。
  */
-function servedDefaultOutputTokens(...e) {
-  return clampInRange(servedRuntime(...e)?.default_output_tokens, OUTPUT_TOKEN_RANGE);
+function servedDefaultOutputTokens(...modelIds) {
+  return clampInRange(servedRuntime(...modelIds)?.default_output_tokens, OUTPUT_TOKEN_RANGE);
 }
 //@ chunk-aepeg2w5.js:145807-145891 placement
 /**
  * 模型支持的 effort 级别。
  */
-function modelEffortLevels(...e) {
-  return servedRuntime(...e)?.effort_levels?.map((effortLevel) => effortLevel.trim().toLowerCase());
+function modelEffortLevels(...modelIds) {
+  return servedRuntime(...modelIds)?.effort_levels?.map((effortLevel) => effortLevel.trim().toLowerCase());
 }
 //@ chunk-aepeg2w5.js:145891-145989 placement
 /**
  * 取生效目录模型的默认 effort 级别（小写）。
  */
-function servedDefaultEffort(...e) {
-  let defaultEffort = servedRuntime(...e)?.default_effort;
+function servedDefaultEffort(...modelIds) {
+  let defaultEffort = servedRuntime(...modelIds)?.default_effort;
   return defaultEffort === undefined ? undefined : defaultEffort.trim().toLowerCase();
 }
 //@ chunk-aepeg2w5.js:145989-146038 placement
 /**
  * 取生效目录模型的能力列表。
  */
-function servedCapabilities(...e) {
-  return servedRuntime(...e)?.capabilities;
+function servedCapabilities(...modelIds) {
+  return servedRuntime(...modelIds)?.capabilities;
 }
 //@ chunk-aepeg2w5.js:146038-146221 placement
 /**
  * 判断名字是否在目录列表中（以 - 前缀表示显式排除），未列出返回 undefined。
  */
-function matchesCatalogList(e, ...n) {
-  let mapped = servedCapabilities(...n)?.map((h) => h.trim().toLowerCase());
+function matchesCatalogList(name, ...modelIds) {
+  let mapped = servedCapabilities(...modelIds)?.map((capability) => capability.trim().toLowerCase());
   if (mapped === undefined) return;
-  let lower = e.trim().toLowerCase();
+  let lower = name.trim().toLowerCase();
   if (mapped.includes(lower)) return true;
   return mapped.includes(`-${lower}`) ? false : undefined;
 }
@@ -348,8 +351,8 @@ function matchesCatalogList(e, ...n) {
 /**
  * 取生效目录模型所属的模型族。
  */
-function servedRowFamily(...e) {
-  let effectiveServedEntry = findEffectiveServedEntry(...e);
+function servedRowFamily(...modelIds) {
+  let effectiveServedEntry = findEffectiveServedEntry(...modelIds);
   return effectiveServedEntry === undefined ? undefined : getRowFamily(effectiveServedEntry);
 }
 //@ chunk-aepeg2w5.js:146287-146702 placement
@@ -369,22 +372,24 @@ function orgDefaultModelState() {
     };
   let trimmed_2 = state.model?.trim();
   if (!trimmed_2) return;
-  let s =
+  let orgConfigured =
     state.selection_source === "org_configuration" || state.selection_source === "custom_role_configuration";
   let trimmed_3 = state.selection_source?.trim();
   return {
     model: trimmed_2,
-    orgConfigured: s,
+    orgConfigured,
     enforced: false,
-    accountResolved: s || (!!trimmed_3 && trimmed_3 !== "global_default"),
+    accountResolved: orgConfigured || (!!trimmed_3 && trimmed_3 !== "global_default"),
   };
 }
 //@ chunk-aepeg2w5.js:146702-146788 placement
 /**
  * 整数且在区间内时返回原值，否则 undefined。
  */
-function clampInRange(e, n) {
-  return e !== undefined && Number.isInteger(e) && e >= n.min && e <= n.max ? e : undefined;
+function clampInRange(value, range) {
+  return value !== undefined && Number.isInteger(value) && value >= range.min && value <= range.max
+    ? value
+    : undefined;
 }
 //@ chunk-aepeg2w5.js:146788-210373 placement
 /**
@@ -5159,47 +5164,52 @@ function clientDataSchema(pathname) {
   return `${CLIENT_DATA_CACHE_PREFIX}${pathname}\x00`;
 }
 //@ chunk-aepeg2w5.js:210484-210746 placement
-var CLIENT_DATA_SCHEMA_VERSIONS = [1, 2];
-var SEMVER_RE_2 = /^\d{1,9}\.\d{1,9}\.\d{1,9}$/;
-var clientDataConfigSchema = DoctorLazy(() =>
-  u({
-    schema_version: literal(CLIENT_DATA_SCHEMA_VERSIONS),
-    version: E().int().nonnegative(),
-    min_claude_code_version: string().regex(SEMVER_RE_2).optional(),
-    configs: array(
-      u({
-        model_pattern: string().min(1).max(200),
-        client_data: record(string(), unknown()),
-      }).loose(),
-    ).max(50),
-  }).loose(),
-);
+var CLIENT_DATA_SCHEMA_VERSIONS; // deferred: uses DoctorLazy (../../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var SEMVER_RE_2;
+var clientDataConfigSchema;
+deferInit("chunk-aepeg2w5.js:210484", () => {
+  CLIENT_DATA_SCHEMA_VERSIONS = [1, 2];
+  SEMVER_RE_2 = /^\d{1,9}\.\d{1,9}\.\d{1,9}$/;
+  clientDataConfigSchema = DoctorLazy(() =>
+    objectSchema({
+      schema_version: literal(CLIENT_DATA_SCHEMA_VERSIONS),
+      version: numberSchema().int().nonnegative(),
+      min_claude_code_version: stringSchema().regex(SEMVER_RE_2).optional(),
+      configs: array(
+        objectSchema({
+          model_pattern: stringSchema().min(1).max(200),
+          client_data: record(stringSchema(), unknown()),
+        }).loose(),
+      ).max(50),
+    }).loose(),
+  );
+});
 //@ chunk-aepeg2w5.js:210746-211370 placement
 /**
  * 解析目录文档字节。
  */
 function parseCatalogDocument(documentBytes) {
-  let n = safeParseJSON(Buffer.from(documentBytes).toString("utf8"), false);
-  if (n === null || typeof n !== "object" || !("schema_version" in n))
+  let parsed = safeParseJSON(Buffer.from(documentBytes).toString("utf8"), false);
+  if (parsed === null || typeof parsed !== "object" || !("schema_version" in parsed))
     return {
       ok: false,
       reason: "parse_failed",
     };
-  if (!CLIENT_DATA_SCHEMA_VERSIONS.some((h) => h === n.schema_version))
+  if (!CLIENT_DATA_SCHEMA_VERSIONS.some((version) => version === parsed.schema_version))
     return {
       ok: false,
-      reason: typeof n.schema_version === "number" ? "unsupported_schema" : "parse_failed",
+      reason: typeof parsed.schema_version === "number" ? "unsupported_schema" : "parse_failed",
     };
-  let r = clientDataConfigSchema().safeParse(n);
-  if (!r.success)
+  let validated = clientDataConfigSchema().safeParse(parsed);
+  if (!validated.success)
     return {
       ok: false,
       reason: "parse_failed",
     };
-  let s = [];
-  for (let config of r.data.configs)
+  let entries = [];
+  for (let config of validated.data.configs)
     try {
-      s.push({
+      entries.push({
         pattern: new RegExp(config.model_pattern),
         clientData: config.client_data,
       });
@@ -5212,9 +5222,9 @@ function parseCatalogDocument(documentBytes) {
   return {
     ok: true,
     document: {
-      version: r.data.version,
-      minClaudeCodeVersion: r.data.min_claude_code_version,
-      entries: s,
+      version: validated.data.version,
+      minClaudeCodeVersion: validated.data.min_claude_code_version,
+      entries,
     },
   };
 }
@@ -5222,233 +5232,250 @@ function parseCatalogDocument(documentBytes) {
 /**
  * 匹配模型的客户端数据。
  */
-function clientDataForModel(e, n) {
-  return e.entries.find((entry) => entry.pattern.test(n))?.clientData ?? null;
+function clientDataForModel(catalog, modelId) {
+  return catalog.entries.find((entry) => entry.pattern.test(modelId))?.clientData ?? null;
 }
 //@ chunk-aepeg2w5.js:211452-211532 placement
 /**
- * 目录表面（cc/ccr/ccd）名单与文档体积、ETag 格式常量。
+ * 目录表面的名单与体量常量：Rpr = ["cc","ccr","ccd"]；M3t 响应体上限 2 MiB（作 maxContentLength）；aN 是 ETag 格式正则；uN 是 ETag 字符上限 256。
  */
 var SURFACE_NAMES = ["cc", "ccr", "ccd"];
-var ETAG_RE = 2097152;
-var MAX_ETAG_CHARS = /^(?:W\/)?"[!#-~\x80-\xff]*"$/;
-var catalogRowSchema = 256;
+var MAX_CATALOG_RESPONSE_BYTES = 2097152;
+var ETAG_PATTERN = /^(?:W\/)?"[!#-~\x80-\xff]*"$/;
+var MAX_ETAG_CHARS = 256;
 //@ chunk-aepeg2w5.js:211532-211612 placement
 /**
  * 是否为合法 ETag。
  */
 function isValidEtag(etag) {
   return (
-    typeof etag === "string" &&
-    etag.length > 0 &&
-    etag.length <= catalogRowSchema &&
-    MAX_ETAG_CHARS.test(etag)
+    typeof etag === "string" && etag.length > 0 && etag.length <= MAX_ETAG_CHARS && ETAG_PATTERN.test(etag)
   );
 }
 //@ chunk-aepeg2w5.js:211612-213697 placement
 /**
- * 目录通知（标题、文本、按钮）schema。
+ * 目录（catalog）的 schema 组：gb 是目录通知 notice schema；_b 单个选项 schema；lN 选项组 schema；dN 价格 schema；cN 运行时（token 上限、effort 等级）schema；fN 模型行 schema；hb 是解析目录行时的行数上限 64。
  */
-var CatalogNoticeSchema = DoctorLazy(() =>
-  u({
-    title: string().nullish(),
-    text: string().nullish(),
-    cta: u({
-      copy: string().nullish(),
-      intent: string().nullish(),
-      redirect_hint: string().nullish(),
-    })
-      .loose()
-      .nullish(),
-    is_dismissible: M().nullish(),
-  }).loose(),
-);
-var optionSchema = DoctorLazy(() =>
-  u({
-    id: string().optional(),
-    name: string().optional(),
-    description: string().optional(),
-  }).loose(),
-);
-var optionGroupSchema = DoctorLazy(() =>
-  u({
-    type: string().optional(),
-    description: string().optional(),
-    effort_options: array(optionSchema()).optional(),
-    mode_options: array(optionSchema()).optional(),
-    always_on: M().optional(),
-  }).loose(),
-);
-var pricingSchema = DoctorLazy(() => {
-  let e = E().min(0.005).max(1e4);
-  let n = {
-    input: e,
-    output: e,
-    cache_write_5m: e,
-    cache_write_1h: e,
-    cache_read: e,
-  };
-  return u({
-    ...n,
-    web_search: e,
-    long_prompt: u({
-      above_prompt_tokens: E().int().positive(),
-      ...n,
-    }).optional(),
-  }).loose();
+var CatalogNoticeSchema; // deferred: uses DoctorLazy (../../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var optionSchema;
+var optionGroupSchema;
+var pricingSchema;
+var runtimeSchema;
+var modelRowSchema;
+var MAX_CATALOG_ROWS;
+deferInit("chunk-aepeg2w5.js:211612", () => {
+  CatalogNoticeSchema = DoctorLazy(() =>
+    objectSchema({
+      title: stringSchema().nullish(),
+      text: stringSchema().nullish(),
+      cta: objectSchema({
+        copy: stringSchema().nullish(),
+        intent: stringSchema().nullish(),
+        redirect_hint: stringSchema().nullish(),
+      })
+        .loose()
+        .nullish(),
+      is_dismissible: booleanSchema().nullish(),
+    }).loose(),
+  );
+  optionSchema = DoctorLazy(() =>
+    objectSchema({
+      id: stringSchema().optional(),
+      name: stringSchema().optional(),
+      description: stringSchema().optional(),
+    }).loose(),
+  );
+  optionGroupSchema = DoctorLazy(() =>
+    objectSchema({
+      type: stringSchema().optional(),
+      description: stringSchema().optional(),
+      effort_options: array(optionSchema()).optional(),
+      mode_options: array(optionSchema()).optional(),
+      always_on: booleanSchema().optional(),
+    }).loose(),
+  );
+  pricingSchema = DoctorLazy(() => {
+    let tokenPrice = numberSchema().min(0.005).max(1e4);
+    let basePrices = {
+      input: tokenPrice,
+      output: tokenPrice,
+      cache_write_5m: tokenPrice,
+      cache_write_1h: tokenPrice,
+      cache_read: tokenPrice,
+    };
+    return objectSchema({
+      ...basePrices,
+      web_search: tokenPrice,
+      long_prompt: objectSchema({
+        above_prompt_tokens: numberSchema().int().positive(),
+        ...basePrices,
+      }).optional(),
+    }).loose();
+  });
+  runtimeSchema = DoctorLazy(() =>
+    objectSchema({
+      max_input_tokens: numberSchema().optional(),
+      max_output_tokens: numberSchema().optional(),
+      default_output_tokens: numberSchema().optional(),
+      effort_levels: array(stringSchema()).optional(),
+      default_effort: stringSchema().optional(),
+      capabilities: array(stringSchema()).optional(),
+      family: stringSchema().optional(),
+      knowledge_cutoff: stringSchema().optional(),
+      default_for_family: stringSchema().optional(),
+      fast_default_for_family: stringSchema().optional(),
+      image_limits: objectSchema({
+        max_width: numberSchema().optional().catch(undefined),
+        max_height: numberSchema().optional().catch(undefined),
+      })
+        .loose()
+        .nullish()
+        .catch(undefined),
+      eager_input_streaming: objectSchema({
+        bedrock: booleanSchema().optional().catch(undefined),
+        vertex: booleanSchema().optional().catch(undefined),
+      })
+        .loose()
+        .nullish()
+        .catch(undefined),
+      pricing: pricingSchema().nullish().catch(undefined),
+    }).loose(),
+  );
+  modelRowSchema = DoctorLazy(() =>
+    objectSchema({
+      id: stringSchema(),
+      name: stringSchema().optional(),
+      short_name: stringSchema().optional(),
+      description: stringSchema().optional(),
+      section: stringSchema().optional(),
+      disabled: booleanSchema().optional(),
+      confidential: booleanSchema().optional(),
+      early_access: booleanSchema().optional().catch(true),
+      notice: CatalogNoticeSchema().nullish(),
+      selection_notice: CatalogNoticeSchema().nullish(),
+      badge: objectSchema({
+        message: stringSchema().optional(),
+        variant: stringSchema().optional(),
+      })
+        .loose()
+        .nullish(),
+      tooltip: objectSchema({
+        content: stringSchema().optional(),
+      })
+        .loose()
+        .nullish(),
+      capabilities: record(stringSchema(), booleanSchema()).optional(),
+      thinking: optionGroupSchema().optional(),
+      fast_mode: objectSchema({}).loose().optional(),
+      hard_limit: numberSchema().optional(),
+      context_window: numberSchema().optional(),
+      quick_select: booleanSchema().optional(),
+      runtime: runtimeSchema().optional(),
+      behaves_as: stringSchema().nullish(),
+      provider_ids: record(stringSchema(), stringSchema().nullish()).nullish(),
+      offered_on: array(stringSchema()).nullish().catch(undefined),
+      min_claude_code_version: stringSchema().regex(SEMVER_RE_2).nullish().catch(null),
+    }).loose(),
+  );
+  MAX_CATALOG_ROWS = 64;
 });
-var runtimeSchema = DoctorLazy(() =>
-  u({
-    max_input_tokens: E().optional(),
-    max_output_tokens: E().optional(),
-    default_output_tokens: E().optional(),
-    effort_levels: array(string()).optional(),
-    default_effort: string().optional(),
-    capabilities: array(string()).optional(),
-    family: string().optional(),
-    knowledge_cutoff: string().optional(),
-    default_for_family: string().optional(),
-    fast_default_for_family: string().optional(),
-    image_limits: u({
-      max_width: E().optional().catch(undefined),
-      max_height: E().optional().catch(undefined),
-    })
-      .loose()
-      .nullish()
-      .catch(undefined),
-    eager_input_streaming: u({
-      bedrock: M().optional().catch(undefined),
-      vertex: M().optional().catch(undefined),
-    })
-      .loose()
-      .nullish()
-      .catch(undefined),
-    pricing: pricingSchema().nullish().catch(undefined),
-  }).loose(),
-);
-var modelRowSchema = DoctorLazy(() =>
-  u({
-    id: string(),
-    name: string().optional(),
-    short_name: string().optional(),
-    description: string().optional(),
-    section: string().optional(),
-    disabled: M().optional(),
-    confidential: M().optional(),
-    early_access: M().optional().catch(true),
-    notice: CatalogNoticeSchema().nullish(),
-    selection_notice: CatalogNoticeSchema().nullish(),
-    badge: u({
-      message: string().optional(),
-      variant: string().optional(),
-    })
-      .loose()
-      .nullish(),
-    tooltip: u({
-      content: string().optional(),
-    })
-      .loose()
-      .nullish(),
-    capabilities: record(string(), M()).optional(),
-    thinking: optionGroupSchema().optional(),
-    fast_mode: u({}).loose().optional(),
-    hard_limit: E().optional(),
-    context_window: E().optional(),
-    quick_select: M().optional(),
-    runtime: runtimeSchema().optional(),
-    behaves_as: string().nullish(),
-    provider_ids: record(string(), string().nullish()).nullish(),
-    offered_on: array(string()).nullish().catch(undefined),
-    min_claude_code_version: string().regex(SEMVER_RE_2).nullish().catch(null),
-  }).loose(),
-);
-var parseCatalogRows = 64;
 //@ chunk-aepeg2w5.js:213697-214096 placement
 /**
  * 把目录模型分为有效、部分有效、无效。
  */
 function partitionCatalogModels(models) {
-  let n = modelRowSchema();
-  let r = idOnlySchema();
-  let s = confidentialMarkerSchema();
-  let h = [];
-  let y = [];
-  let S = [];
+  let rowSchema = modelRowSchema();
+  let idOnly = idOnlySchema();
+  let confidentialMarker = confidentialMarkerSchema();
+  let rows = [];
+  let droppedIds = [];
+  let droppedConfidentialIds = [];
   let unidentifiedDropCount = 0;
-  for (let R of models) {
-    let x = n.safeParse(R);
-    if (x.success) {
-      h.push(x.data);
+  for (let model of models) {
+    let rowResult = rowSchema.safeParse(model);
+    if (rowResult.success) {
+      rows.push(rowResult.data);
       continue;
     }
-    let P = r.safeParse(R);
-    if (!P.success || normalizeModelId(P.data.id).length === 0 || y.length >= parseCatalogRows) {
+    let idResult = idOnly.safeParse(model);
+    if (
+      !idResult.success ||
+      normalizeModelId(idResult.data.id).length === 0 ||
+      droppedIds.length >= MAX_CATALOG_ROWS
+    ) {
       unidentifiedDropCount += 1;
       continue;
     }
-    y.push(P.data.id);
-    if (s.safeParse(R).success) S.push(P.data.id);
+    droppedIds.push(idResult.data.id);
+    if (confidentialMarker.safeParse(model).success) droppedConfidentialIds.push(idResult.data.id);
   }
   return {
-    rows: h,
-    invalidCount: models.length - h.length,
-    droppedModelIds: y,
-    droppedConfidentialIds: S,
+    rows,
+    invalidCount: models.length - rows.length,
+    droppedModelIds: droppedIds,
+    droppedConfidentialIds,
     unidentifiedDropCount,
   };
 }
 //@ chunk-aepeg2w5.js:214096-214288 placement
-var idOnlySchema = DoctorLazy(() =>
-  u({
-    id: string(),
-  }),
-);
-var confidentialMarkerSchema = DoctorLazy(() =>
-  u({
-    confidential: literal(true),
-  }),
-);
-var aliasEntrySchema = DoctorLazy(() =>
-  u({
-    default: string().nullish().catch(undefined),
-    per_provider: record(string(), string().nullish().catch(undefined)).nullish().catch(undefined),
-  }).loose(),
-);
+var idOnlySchema; // deferred: uses DoctorLazy (../../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var confidentialMarkerSchema;
+var aliasEntrySchema;
+deferInit("chunk-aepeg2w5.js:214096", () => {
+  idOnlySchema = DoctorLazy(() =>
+    objectSchema({
+      id: stringSchema(),
+    }),
+  );
+  confidentialMarkerSchema = DoctorLazy(() =>
+    objectSchema({
+      confidential: literal(true),
+    }),
+  );
+  aliasEntrySchema = DoctorLazy(() =>
+    objectSchema({
+      default: stringSchema().nullish().catch(undefined),
+      per_provider: record(stringSchema(), stringSchema().nullish().catch(undefined))
+        .nullish()
+        .catch(undefined),
+    }).loose(),
+  );
+});
 //@ chunk-aepeg2w5.js:214288-215471 placement
 /**
  * 目录模型 schema（wire/stored 两种）。
  */
-function catalogModelSchema(e) {
-  let n = () =>
+function catalogModelSchema(mode) {
+  let absentField = () =>
     unknown()
       .optional()
       .transform(() => {
         return;
       });
-  let r = e === "stored" ? array(string()).optional() : n();
-  let droppedUnidentifiedRows = e === "stored" ? M().optional() : n();
-  return u({
-    id: string(),
+  let droppedIdsField = mode === "stored" ? array(stringSchema()).optional() : absentField();
+  let droppedUnidentifiedRows = mode === "stored" ? booleanSchema().optional() : absentField();
+  return objectSchema({
+    id: stringSchema(),
     models: array(unknown()).optional(),
-    description: string().optional(),
-    auto_compact_window: E().optional(),
-    provider_alias_targets: record(string(), aliasEntrySchema().nullish().catch(undefined))
+    description: stringSchema().optional(),
+    auto_compact_window: numberSchema().optional(),
+    provider_alias_targets: record(stringSchema(), aliasEntrySchema().nullish().catch(undefined))
       .nullish()
       .catch(undefined),
-    dropped_model_ids: r,
-    dropped_confidential_ids: r,
+    dropped_model_ids: droppedIdsField,
+    dropped_confidential_ids: droppedIdsField,
     dropped_unidentified_rows: droppedUnidentifiedRows,
   })
     .loose()
-    .transform((h) => {
+    .transform((value) => {
       let {
         dropped_model_ids: droppedModelIds,
         dropped_confidential_ids: droppedConfidentialIds,
         dropped_unidentified_rows: droppedUnidentifiedRows,
-        ...R
-      } = h;
-      let x =
-        e === "stored"
+        ...rest
+      } = value;
+      let drops =
+        mode === "stored"
           ? {
               ids: droppedModelIds ?? [],
               confidentialIds: droppedConfidentialIds ?? [],
@@ -5459,27 +5486,30 @@ function catalogModelSchema(e) {
               confidentialIds: [],
               unidentified: false,
             };
-      let P = R.models === undefined ? undefined : partitionCatalogModels(R.models);
-      if (P !== undefined && P.invalidCount > 0)
+      let partition = rest.models === undefined ? undefined : partitionCatalogModels(rest.models);
+      if (partition !== undefined && partition.invalidCount > 0)
         logForDebugging(
-          `[servedCatalog] surface ${R.id}: ${P.invalidCount} of ${R.models?.length ?? 0} served rows failed row validation`,
+          `[servedCatalog] surface ${rest.id}: ${partition.invalidCount} of ${rest.models?.length ?? 0} served rows failed row validation`,
         );
-      let F = uniq([...x.ids, ...(P?.droppedModelIds ?? [])]);
-      let sliced = F.slice(0, parseCatalogRows);
-      let filtered = uniq([...x.confidentialIds, ...(P?.droppedConfidentialIds ?? [])]).filter((ee) =>
-        sliced.includes(ee),
+      let allDropped = uniq([...drops.ids, ...(partition?.droppedModelIds ?? [])]);
+      let sliced = allDropped.slice(0, MAX_CATALOG_ROWS);
+      let filtered = uniq([...drops.confidentialIds, ...(partition?.droppedConfidentialIds ?? [])]).filter(
+        (id) => sliced.includes(id),
       );
-      let j = x.unidentified || (P?.unidentifiedDropCount ?? 0) > 0 || F.length > sliced.length;
+      let unidentified =
+        drops.unidentified ||
+        (partition?.unidentifiedDropCount ?? 0) > 0 ||
+        allDropped.length > sliced.length;
       return {
-        ...R,
-        models: P?.rows,
+        ...rest,
+        models: partition?.rows,
         ...(sliced.length > 0 && {
           dropped_model_ids: sliced,
         }),
         ...(filtered.length > 0 && {
           dropped_confidential_ids: filtered,
         }),
-        ...(j && {
+        ...(unidentified && {
           dropped_unidentified_rows: true,
         }),
       };
@@ -5489,45 +5519,52 @@ function catalogModelSchema(e) {
 /**
  * 目录模型 wire/stored schema 实例。
  */
-var CatalogModelWireSchema = DoctorLazy(() => catalogModelSchema("wire"));
-var storedRowSchema = DoctorLazy(() => catalogModelSchema("stored"));
-var selectorStateSchema = DoctorLazy(() =>
-  u({
-    id: string(),
-    model: string().optional(),
-    selection_source: string().optional(),
-    org_enforced_default_model: string().optional(),
-    thinking: unknown().optional(),
-    thinking_by_model: unknown().optional(),
-  }).loose(),
-);
-var ACCOUNT_KIND_VALUES = [
-  "token_org",
-  "membership",
-  "api_key_org",
-  "console_org",
-  "federation_org",
-  "service_key_org",
-  "public",
-];
-var catalogDocumentSchema = DoctorLazy(() =>
-  u({
-    model_selector_state: array(selectorStateSchema()).optional(),
-    model_selector_config: array(CatalogModelWireSchema()).optional(),
-    organization_uuid: string().optional(),
-    resolution: string().optional(),
-  }).loose(),
-);
+var CatalogModelWireSchema; // deferred: uses DoctorLazy (../../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var storedRowSchema;
+var selectorStateSchema;
+var ACCOUNT_KIND_VALUES;
+var catalogDocumentSchema;
+deferInit("chunk-aepeg2w5.js:215471", () => {
+  CatalogModelWireSchema = DoctorLazy(() => catalogModelSchema("wire"));
+  storedRowSchema = DoctorLazy(() => catalogModelSchema("stored"));
+  selectorStateSchema = DoctorLazy(() =>
+    objectSchema({
+      id: stringSchema(),
+      model: stringSchema().optional(),
+      selection_source: stringSchema().optional(),
+      org_enforced_default_model: stringSchema().optional(),
+      thinking: unknown().optional(),
+      thinking_by_model: unknown().optional(),
+    }).loose(),
+  );
+  ACCOUNT_KIND_VALUES = [
+    "token_org",
+    "membership",
+    "api_key_org",
+    "console_org",
+    "federation_org",
+    "service_key_org",
+    "public",
+  ];
+  catalogDocumentSchema = DoctorLazy(() =>
+    objectSchema({
+      model_selector_state: array(selectorStateSchema()).optional(),
+      model_selector_config: array(CatalogModelWireSchema()).optional(),
+      organization_uuid: stringSchema().optional(),
+      resolution: stringSchema().optional(),
+    }).loose(),
+  );
+});
 //@ chunk-aepeg2w5.js:215973-216153 placement
 /**
  * 取目录中某选择器界面的配置与状态。
  */
-function getSelectorSurface(e, n) {
-  let found = e.model_selector_config?.find((h) => h.id === n);
+function getSelectorSurface(catalog, surface) {
+  let found = catalog.model_selector_config?.find((config) => config.id === surface);
   if (!found) return null;
-  let found_2 = e.model_selector_state?.find((h) => h.id === n);
+  let found_2 = catalog.model_selector_state?.find((state) => state.id === surface);
   return {
-    surface: n,
+    surface,
     config: found,
     ...(found_2 && {
       state: found_2,
@@ -5538,21 +5575,31 @@ function getSelectorSurface(e, n) {
 /**
  * 已发布目录常量：schema 版本、全部保留标记、大小上限、签名 schema 与时间戳正则。
  */
-var CATALOG_SCHEMA_VERSION = 1;
-var HOLD_ALL = "*";
-var CATALOG_SCHEMA = ETAG_RE;
-var MAX_DOCUMENT_CHARS = 16384;
-var SIGNATURE_SCHEMA_VERSION = 1;
-var RSASSA_PKCS1_V1_5_SHA512 = "RSASSA-PKCS1-v1_5-SHA512";
-var catalogSignatureSchema = DoctorLazy(() =>
-  u({
-    schema: literal(SIGNATURE_SCHEMA_VERSION),
-    algorithm: literal(RSASSA_PKCS1_V1_5_SHA512),
-    signature: string().min(1),
-    publicKeySha256: string().regex(/^[0-9a-f]{64}$/),
-  }).loose(),
-);
-var ISO_TIMESTAMP_RE_2 = /^\d{4}-\d{2}-\d{2}[Tt ]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:[Zz]|[+-]\d{2}:\d{2})$/;
+var CATALOG_SCHEMA_VERSION; // deferred: uses DoctorLazy (../../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var HOLD_ALL;
+var CATALOG_SCHEMA;
+var MAX_DOCUMENT_CHARS;
+var SIGNATURE_SCHEMA_VERSION;
+var RSASSA_PKCS1_V1_5_SHA512;
+var catalogSignatureSchema;
+var ISO_TIMESTAMP_RE_2;
+deferInit("chunk-aepeg2w5.js:216153", () => {
+  CATALOG_SCHEMA_VERSION = 1;
+  HOLD_ALL = "*";
+  CATALOG_SCHEMA = MAX_CATALOG_RESPONSE_BYTES;
+  MAX_DOCUMENT_CHARS = 16384;
+  SIGNATURE_SCHEMA_VERSION = 1;
+  RSASSA_PKCS1_V1_5_SHA512 = "RSASSA-PKCS1-v1_5-SHA512";
+  catalogSignatureSchema = DoctorLazy(() =>
+    objectSchema({
+      schema: literal(SIGNATURE_SCHEMA_VERSION),
+      algorithm: literal(RSASSA_PKCS1_V1_5_SHA512),
+      signature: stringSchema().min(1),
+      publicKeySha256: stringSchema().regex(/^[0-9a-f]{64}$/),
+    }).loose(),
+  );
+  ISO_TIMESTAMP_RE_2 = /^\d{4}-\d{2}-\d{2}[Tt ]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:[Zz]|[+-]\d{2}:\d{2})$/;
+});
 //@ chunk-aepeg2w5.js:216422-216527 placement
 /**
  * 解析 ISO 时间戳字符串为毫秒。
@@ -5566,64 +5613,72 @@ function parseIsoTimestamp(expiresAt) {
 /**
  * 目录文档 schema。
  */
-var CatalogDocumentSchema = DoctorLazy(() =>
-  u({
-    $schema: string().optional(),
-    schema_version: literal(CATALOG_SCHEMA_VERSION),
-    version: E().int().nonnegative(),
-    issued_at: string().optional(),
-    expires_at: string().optional(),
-    key_id: string().optional(),
-    hold: array(string()).optional().catch([HOLD_ALL]),
-    surfaces: record(string(), catalogDocumentSchema()),
-  }).loose(),
-);
+var CatalogDocumentSchema; // deferred: uses DoctorLazy (../../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-aepeg2w5.js:216527", () => {
+  CatalogDocumentSchema = DoctorLazy(() =>
+    objectSchema({
+      $schema: stringSchema().optional(),
+      schema_version: literal(CATALOG_SCHEMA_VERSION),
+      version: numberSchema().int().nonnegative(),
+      issued_at: stringSchema().optional(),
+      expires_at: stringSchema().optional(),
+      key_id: stringSchema().optional(),
+      hold: array(stringSchema()).optional().catch([HOLD_ALL]),
+      surfaces: record(stringSchema(), catalogDocumentSchema()),
+    }).loose(),
+  );
+});
 //@ chunk-aepeg2w5.js:216763-216863 placement
 /**
  * 判断条目是否对某模型（或全部）保留。
  */
-function isHeldForModel(e, n) {
-  return (e.hold ?? []).some((r) => {
-    let lower = r.trim().toLowerCase();
-    return lower === HOLD_ALL || lower === n;
+function isHeldForModel(entry, modelId) {
+  return (entry.hold ?? []).some((value) => {
+    let lower = value.trim().toLowerCase();
+    return lower === HOLD_ALL || lower === modelId;
   });
 }
 //@ chunk-aepeg2w5.js:216863-217003 placement
 /**
  * 读取文档的 schema_version 数字。
  */
-function getSchemaVersion(e) {
-  if (e === null || typeof e !== "object" || !("schema_version" in e)) return;
-  let schemaVersion = e.schema_version;
+function getSchemaVersion(catalogDocument) {
+  if (
+    catalogDocument === null ||
+    typeof catalogDocument !== "object" ||
+    !("schema_version" in catalogDocument)
+  )
+    return;
+  let schemaVersion = catalogDocument.schema_version;
   return typeof schemaVersion === "number" ? schemaVersion : undefined;
 }
 //@ chunk-aepeg2w5.js:217003-217348 placement
 /**
  * 取指定界面（cc/ccr/ccd）的目录状态。
  */
-function surfaceStateFor(e, n) {
-  for (let [r, s] of [
-    [n, e.surfaces[n]],
-    ["cc", e.surfaces.cc],
+function surfaceStateFor(catalog, surface) {
+  for (let [surfaceName, surfaceDoc] of [
+    [surface, catalog.surfaces[surface]],
+    ["cc", catalog.surfaces.cc],
   ]) {
-    if (s === undefined) continue;
-    let selectorSurface = getSelectorSurface(s, r);
+    if (surfaceDoc === undefined) continue;
+    let selectorSurface = getSelectorSurface(surfaceDoc, surfaceName);
     if (selectorSurface === null) continue;
     if (selectorSurface.state === undefined)
       return {
-        surface: n,
+        surface,
         config: selectorSurface.config,
         origin: "published",
       };
     let {
       org_enforced_default_model: orgEnforcedDefaultModel,
       selection_source: selectionSource,
-      ...w
+      ...stateRest
     } = selectorSurface.state;
     return {
-      surface: n,
+      surface,
       config: selectorSurface.config,
-      state: w,
+      state: stateRest,
       origin: "published",
     };
   }
@@ -5633,18 +5688,21 @@ function surfaceStateFor(e, n) {
 /**
  * 列出文档所有界面选择器配置中的模型。
  */
-function listSurfaceModels(e) {
-  return Object.values(e.surfaces).flatMap((surface) =>
-    (surface.model_selector_config ?? []).flatMap((r) => r.models ?? []),
+function listSurfaceModels(catalog) {
+  return Object.values(catalog.surfaces).flatMap((surface) =>
+    (surface.model_selector_config ?? []).flatMap((config) => config.models ?? []),
   );
 }
 //@ chunk-aepeg2w5.js:217467-217618 placement
-var bundledCatalogSeed = DoctorLazy(() => {
-  let e = CatalogDocumentSchema().safeParse(BUNDLED_MODEL_CATALOG);
-  if (!e.success) logError(Error("published model-catalog seed does not parse"));
-  return {
-    document: e.success ? e.data : null,
-  };
+var bundledCatalogSeed; // deferred: uses DoctorLazy (../../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-aepeg2w5.js:217467", () => {
+  bundledCatalogSeed = DoctorLazy(() => {
+    let parsed = CatalogDocumentSchema().safeParse(BUNDLED_MODEL_CATALOG);
+    if (!parsed.success) logError(Error("published model-catalog seed does not parse"));
+    return {
+      document: parsed.success ? parsed.data : null,
+    };
+  });
 });
 //@ chunk-aepeg2w5.js:217618-217654 placement
 /**
@@ -5664,31 +5722,31 @@ function bundledCatalogVersion() {
 /**
  * 取内置目录在某表面下的状态。
  */
-function bundledSurfaceState(e) {
-  let n = bundledCatalogDocument();
-  return n === null ? null : surfaceStateFor(n, e);
+function bundledSurfaceState(surface) {
+  let cachedDocument = bundledCatalogDocument();
+  return cachedDocument === null ? null : surfaceStateFor(cachedDocument, surface);
 }
 //@ chunk-aepeg2w5.js:217752-217802 placement
-function stripDateSuffixFromId(e) {
-  return normalizeModelId(e).replace(/-\d{8}$/, "");
+function stripDateSuffixFromId(id) {
+  return normalizeModelId(id).replace(/-\d{8}$/, "");
 }
 //@ chunk-aepeg2w5.js:217802-218052 placement
 /**
  * 查找目录中缺少的族默认模型（种子有、编译期有但目录没有）。
  */
 function findMissingFamilyDefault(catalog) {
-  let n = new Set(catalogModels(catalog).map((s) => stripDateSuffixFromId(s.id)));
-  let r = familyDefaultMap(catalog);
-  for (let s of MODEL_FAMILY_NAMES) {
-    let h = r[s];
-    let catalogAlias = resolveCatalogAlias(s, "first_party");
-    if (h === undefined || catalogAlias === undefined) continue;
-    if (n.has(catalogAlias)) continue;
-    if (getCatalogEntry(stripDateSuffixFromId(h)) === undefined) continue;
+  let ids = new Set(catalogModels(catalog).map((row) => stripDateSuffixFromId(row.id)));
+  let defaults = familyDefaultMap(catalog);
+  for (let family of MODEL_FAMILY_NAMES) {
+    let compiledDefault = defaults[family];
+    let catalogAlias = resolveCatalogAlias(family, "first_party");
+    if (compiledDefault === undefined || catalogAlias === undefined) continue;
+    if (ids.has(catalogAlias)) continue;
+    if (getCatalogEntry(stripDateSuffixFromId(compiledDefault)) === undefined) continue;
     return {
-      family: s,
+      family,
       compiled: catalogAlias,
-      seed: h,
+      seed: compiledDefault,
     };
   }
   return null;
@@ -5697,8 +5755,8 @@ function findMissingFamilyDefault(catalog) {
 /**
  * 判断后端是否属于目录表面（firstParty/gateway）。
  */
-function isCatalogSurfaceBackend(e) {
-  return e === "firstParty" || e === "gateway";
+function isCatalogSurfaceBackend(provider) {
+  return provider === "firstParty" || provider === "gateway";
 }
 //@ chunk-aepeg2w5.js:218106-218152 placement
 var PROVIDER_MODEL_ID_RE = /^[A-Za-z0-9][A-Za-z0-9._:@-]{0,255}$/;
@@ -5706,8 +5764,8 @@ var PROVIDER_MODEL_ID_RE = /^[A-Za-z0-9][A-Za-z0-9._:@-]{0,255}$/;
 /**
  * 取目录条目在指定提供商下的模型 id（不合法时返回 undefined）。
  */
-function getProviderModelIdForEntry(e, n) {
-  let trimmed = e.provider_ids?.[providerCatalogKey(n)]?.trim();
+function getProviderModelIdForEntry(entry, provider) {
+  let trimmed = entry.provider_ids?.[providerCatalogKey(provider)]?.trim();
   if (trimmed !== undefined && !PROVIDER_MODEL_ID_RE.test(trimmed)) return;
   return trimmed ? trimmed : undefined;
 }
@@ -5716,27 +5774,27 @@ function getProviderModelIdForEntry(e, n) {
  * 取目录条目的模型键（按 firstParty id 查表）。
  */
 function entryModelKey(id) {
-  let n = firstPartyIdFromCatalog(id);
-  return n !== undefined && Object.hasOwn(MODEL_KEY_BY_FIRST_PARTY_ID, n)
-    ? MODEL_KEY_BY_FIRST_PARTY_ID[n]
+  let firstPartyId = firstPartyIdFromCatalog(id);
+  return firstPartyId !== undefined && Object.hasOwn(MODEL_KEY_BY_FIRST_PARTY_ID, firstPartyId)
+    ? MODEL_KEY_BY_FIRST_PARTY_ID[firstPartyId]
     : undefined;
 }
 //@ chunk-aepeg2w5.js:218340-218439 placement
 /**
  * 从目录解析模型的 firstParty id。
  */
-function firstPartyIdFromCatalog(e) {
-  let n = catalogIdForProviderModelId(normalizeModelId(e));
-  if (n === undefined) return;
-  return getCatalogEntry(n)?.provider_ids.first_party ?? undefined;
+function firstPartyIdFromCatalog(id) {
+  let catalogId = catalogIdForProviderModelId(normalizeModelId(id));
+  if (catalogId === undefined) return;
+  return getCatalogEntry(catalogId)?.provider_ids.first_party ?? undefined;
 }
 //@ chunk-aepeg2w5.js:218439-218511 placement
 /**
  * 生成模型的身份键（有模型键用 key:，否则 id:）。
  */
-function modelIdentityKey(e) {
-  let n = entryModelKey(e);
-  return n === undefined ? `id:${normalizeModelId(e)}` : `key:${n}`;
+function modelIdentityKey(id) {
+  let key = entryModelKey(id);
+  return key === undefined ? `id:${normalizeModelId(id)}` : `key:${key}`;
 }
 export {
   findServedModel,
@@ -5793,7 +5851,7 @@ export {
   SURFACE_NAMES,
   storedRowSchema,
   selectorStateSchema,
-  ETAG_RE,
+  MAX_CATALOG_RESPONSE_BYTES,
   catalogDocumentSchema,
   getSelectorSurface,
   MAX_DOCUMENT_CHARS,

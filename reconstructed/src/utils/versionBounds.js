@@ -8,17 +8,24 @@
  * pieces: chunk-29ccbp5f.js (5)
  * attribution: placement 5
  */
-import { Re } from "../../runtime/bun-runtime.js";
+import { __toESM } from "../../runtime/bun-runtime.js";
 import { require_semver_3 } from "../../vendor/semver/index.js";
 import { logForDebugging } from "./debug.js";
 import { semverGt, semverLt } from "./semver.js";
 import { getSettingsForSource } from "./settings/settings.js";
 import { logError } from "./log.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-29ccbp5f.js:409-426 placement
-var semver = Re(require_semver_3(), 1);
+var semver; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-29ccbp5f.js:409", () => {
+  semver = __toESM(require_semver_3(), 1);
+});
 //@ chunk-29ccbp5f.js:426-471 placement = doctor (0.368)
-var doctor = new Set(["update", "install", "doctor"]);
+var doctor; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-29ccbp5f.js:426", () => {
+  doctor = new Set(["update", "install", "doctor"]);
+});
 //@ chunk-29ccbp5f.js:471-1477 placement
 /**
  * 按组织策略的最低/最高版本检查当前版本，doctor 类命令跳过；版本号非法时记日志忽略；不满足时返回提示文本，否则 null。

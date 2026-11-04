@@ -15,10 +15,10 @@
  */
 function serializeCalls(preparePluginsBucket) {
   let resolved = Promise.resolve();
-  return (...i) => {
-    let o = resolved.then(() => preparePluginsBucket(...i));
-    resolved = o.catch(() => {});
-    return o;
+  return (...args) => {
+    let result = resolved.then(() => preparePluginsBucket(...args));
+    resolved = result.catch(() => {});
+    return result;
   };
 }
 //@ chunk-kk3qtrqx.js:299-424 placement
@@ -29,13 +29,13 @@ function createMutex() {
   let resolved = Promise.resolve();
   return {
     acquire() {
-      let e = () => {};
+      let release = () => {};
       let promise = new Promise((resolve) => {
-        e = resolve;
+        release = resolve;
       });
-      let o = resolved;
+      let previous = resolved;
       resolved = promise;
-      return o.then(() => e);
+      return previous.then(() => release);
     },
   };
 }
@@ -46,38 +46,38 @@ var MAX_QUEUE_BATCH = 5;
  * 按键串行执行的队列。
  */
 function createKeyedQueue() {
-  let r = new Map();
+  let queues = new Map();
   return {
-    run(e, i) {
-      let t = (r.get(e) ?? Promise.resolve()).then(() => i());
-      let s = t.then(
+    run(key, task) {
+      let promise = (queues.get(key) ?? Promise.resolve()).then(() => task());
+      let settledPromise = promise.then(
         () => {},
         () => {},
       );
-      r.set(e, s);
-      s.then(() => {
-        if (r.get(e) === s) r.delete(e);
+      queues.set(key, settledPromise);
+      settledPromise.then(() => {
+        if (queues.get(key) === settledPromise) queues.delete(key);
       });
-      return t;
+      return promise;
     },
-    has(e) {
-      return r.has(e);
+    has(key) {
+      return queues.has(key);
     },
     get size() {
-      return r.size;
+      return queues.size;
     },
     async settle() {
-      await Promise.all([...r.values()]);
+      await Promise.all([...queues.values()]);
     },
     async drain() {
       for (let j = 0; j < MAX_QUEUE_BATCH; j++) {
-        let i = [...r.values()];
-        if (i.length === 0) return;
-        await Promise.all(i);
+        let pending = [...queues.values()];
+        if (pending.length === 0) return;
+        await Promise.all(pending);
       }
     },
     clearForTest() {
-      r.clear();
+      queues.clear();
     },
   };
 }

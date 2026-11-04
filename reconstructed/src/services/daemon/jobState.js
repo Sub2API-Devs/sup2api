@@ -5,21 +5,23 @@
  *
  * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
  * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-y162pn60.js (91)
- * attribution: placement 91
+ * pieces: chunk-aepeg2w5.js (3), chunk-y162pn60.js (91)
+ * attribution: placement 94
  */
-import { isAbsolute, basename, join, dirname, relative } from "path";
+import { join, basename, isAbsolute, dirname, relative } from "path";
 import { lstat, readFile, rm, mkdir, readdir } from "fs/promises";
+import { getClaudeConfigDir } from "../../utils/envUtils.js";
+import { isValidKeySegment, STORAGE_SPACES } from "../../utils/storage/storageSpaces.js";
 import { stripIgnorables } from "../../utils/sanitization.js";
 import { logForDebugging } from "../../utils/debug.js";
 import {
-  string,
-  u,
+  stringSchema,
+  objectSchema,
   _enum,
-  E,
+  numberSchema,
   array,
   literal,
-  M,
+  booleanSchema,
   record,
   unknown,
 } from "../../../vendor/zod/v4/classic/schemas.js";
@@ -36,12 +38,10 @@ import {
   keepForwardableEnv,
   resolveForwardedEnvPaths,
 } from "../../cli/forwardedFlags.js";
-import { xr } from "../../../vendor/lodash-es/_inlinedHelpers.js";
+import { import_mapValues } from "../../../vendor/lodash-es/_inlinedHelpers.js";
 import { isUuidShaped } from "../../utils/sessionStoragePortable.js";
-import { jobsDir, jobStorageSpace } from "../analytics/metadata.js";
 import { getBgTakeover } from "../../utils/concurrentSessions.js";
 import { getSessionId, getRootSession } from "../../bootstrap/state.js";
-import { isValidKeySegment, STORAGE_SPACES } from "../../utils/storage/storageSpaces.js";
 import { currentSessionStatusState } from "../sessionStatus/sessionStateClassifier.js";
 import { isSessionCronOnlyWake } from "./sessionCron.js";
 import { jsonStringify, jsonParse } from "../../utils/slowOperations.js";
@@ -69,22 +69,50 @@ import { redactSecrets } from "../teamMemorySync/secretScanner.js";
 import { getEffectiveAgentColor } from "../../tools/AgentTool/agentColorManager.js";
 import { readRoster } from "./roster.js";
 import { checkProcessLiveness } from "./processLiveness.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
+//@ chunk-aepeg2w5.js:834319-834357 placement
+/**
+ * 导出函数 `jobsDir`：返回 join_11(getClaudeConfigDir(), "jobs")。
+ */
+function jobsDir() {
+  return join(getClaudeConfigDir(), "jobs");
+}
+//@ chunk-aepeg2w5.js:834357-834393 placement
+/**
+ * 导出常量或表 `JOB_PARENT_TRANSCRIPT_FILE`：值为 ["parent-transcript.jsonl"]。
+ */
+var JOB_PARENT_TRANSCRIPT_FILE = ["parent-transcript.jsonl"];
+//@ chunk-aepeg2w5.js:834393-834476 placement
+/**
+ * 导出函数 `jobStorageSpace`：参数 e, n，返回 STORAGE_SPACES.job(r, n)。
+ */
+function jobStorageSpace(jobDirPath, channel) {
+  let jobId = basename(jobDirPath);
+  if (!isValidKeySegment(jobId) || jobDirPath !== join(jobsDir(), jobId)) return;
+  return STORAGE_SPACES.job(jobId, channel);
+}
 //@ chunk-y162pn60.js:21307-21397 placement
 /**
  * 保留的分组名（pinned/ungrouped/past 及带括号显示名）。
  */
-var UNGROUPED = "(ungrouped)";
-var EARLIER = "(earlier)";
-var MAX_GROUP_NAME_CHARS = 64;
-var RESERVED_GROUP_NAMES = new Set(["pinned", "ungrouped", UNGROUPED, "past", EARLIER]);
+var UNGROUPED; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var EARLIER;
+var MAX_GROUP_NAME_CHARS;
+var RESERVED_GROUP_NAMES;
+deferInit("chunk-y162pn60.js:21307", () => {
+  UNGROUPED = "(ungrouped)";
+  EARLIER = "(earlier)";
+  MAX_GROUP_NAME_CHARS = 64;
+  RESERVED_GROUP_NAMES = new Set(["pinned", "ungrouped", UNGROUPED, "past", EARLIER]);
+});
 //@ chunk-y162pn60.js:21397-21444 placement
-function isReservedGroupName(e) {
-  return RESERVED_GROUP_NAMES.has(e.toLowerCase());
+function isReservedGroupName(name) {
+  return RESERVED_GROUP_NAMES.has(name.toLowerCase());
 }
 //@ chunk-y162pn60.js:21444-21485 placement
-function sanitizeGroupName(e) {
-  return stripIgnorables(e).slice(0, MAX_GROUP_NAME_CHARS);
+function sanitizeGroupName(name) {
+  return stripIgnorables(name).slice(0, MAX_GROUP_NAME_CHARS);
 }
 //@ chunk-y162pn60.js:21485-21561 placement
 /**
@@ -92,8 +120,8 @@ function sanitizeGroupName(e) {
  */
 function sanitizeGroupOrDefault(group) {
   if (group === undefined) return;
-  let n = sanitizeGroupName(group);
-  return n && !isReservedGroupName(n) ? n : undefined;
+  let rawGroup = sanitizeGroupName(group);
+  return rawGroup && !isReservedGroupName(rawGroup) ? rawGroup : undefined;
 }
 //@ chunk-y162pn60.js:21561-22443 placement
 /**
@@ -106,64 +134,64 @@ class JobStateReadCache {
   #r = new Set();
   #o = new Set();
   #i = new Set();
-  peek(e) {
-    return this.#e.get(e);
+  peek(pathKey) {
+    return this.#e.get(pathKey);
   }
-  invalidate(e) {
-    this.#e.delete(e);
+  invalidate(pathKey) {
+    this.#e.delete(pathKey);
   }
-  noteAbsent(e) {
-    this.#e.delete(e);
-    this.#t.delete(e);
-    this.#n.delete(e);
+  noteAbsent(pathKey) {
+    this.#e.delete(pathKey);
+    this.#t.delete(pathKey);
+    this.#n.delete(pathKey);
   }
-  noteRejected(e, mtimeKey) {
-    this.#e.set(e, {
+  noteRejected(pathKey, mtimeKey) {
+    this.#e.set(pathKey, {
       mtimeKey,
       state: null,
     });
   }
-  noteParsed(e, mtimeKey, state) {
+  noteParsed(pathKey, mtimeKey, state) {
     if (this.#e.size > 1000) this.#e.clear();
-    this.#e.set(e, {
+    this.#e.set(pathKey, {
       mtimeKey,
       state,
     });
-    this.#t.delete(e);
-    this.#n.delete(e);
+    this.#t.delete(pathKey);
+    this.#n.delete(pathKey);
   }
-  noteHit(e) {
-    this.#t.delete(e);
+  noteHit(pathKey) {
+    this.#t.delete(pathKey);
   }
-  shouldReportTransient(e) {
-    if (this.#t.has(e)) return false;
-    this.#t.add(e);
+  shouldReportTransient(pathKey) {
+    if (this.#t.has(pathKey)) return false;
+    this.#t.add(pathKey);
     return true;
   }
-  shouldReportRejected(e) {
-    if (this.#n.has(e)) return false;
-    this.#n.add(e);
+  shouldReportRejected(pathKey) {
+    if (this.#n.has(pathKey)) return false;
+    this.#n.add(pathKey);
     return true;
   }
-  shouldReportRecovered(e) {
-    if (this.#r.has(e)) return false;
-    this.#r.add(e);
+  shouldReportRecovered(pathKey) {
+    if (this.#r.has(pathKey)) return false;
+    this.#r.add(pathKey);
     return true;
   }
-  noteCleanRead(e) {
-    this.#r.delete(e);
+  noteCleanRead(pathKey) {
+    this.#r.delete(pathKey);
   }
-  shouldReportPruned(e) {
-    if (this.#o.has(e)) return false;
-    this.#o.add(e);
+  shouldReportPruned(pathKey) {
+    if (this.#o.has(pathKey)) return false;
+    this.#o.add(pathKey);
     return true;
   }
-  notePruneCandidateLive(e) {
-    this.#o.delete(e);
+  notePruneCandidateLive(pathKey) {
+    this.#o.delete(pathKey);
   }
-  shouldLogSidecarFallback(e) {
-    if (this.#i.has(e)) return false;
-    this.#i.add(e);
+  shouldLogSidecarFallback(pathKey) {
+    if (this.#i.has(pathKey)) return false;
+    this.#i.add(pathKey);
     return true;
   }
 }
@@ -171,7 +199,10 @@ class JobStateReadCache {
 /**
  * 按宿主保存的作业状态读取缓存。
  */
-var jobStateReadCache = new HostScoped(() => new JobStateReadCache());
+var jobStateReadCache; // deferred: uses JobStateReadCache of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-y162pn60.js:22443", () => {
+  jobStateReadCache = new HostScoped(() => new JobStateReadCache());
+});
 //@ chunk-y162pn60.js:22468-22505 placement
 /**
  * 按会话保存的作业 pin/draft 表。
@@ -184,30 +215,33 @@ class JobPins {
 /**
  * 作业 pin 状态的宿主作用域单例。
  */
-var jobPinsState = new HostScoped(() => new JobPins());
+var jobPinsState; // deferred: uses JobPins of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-y162pn60.js:22505", () => {
+  jobPinsState = new HostScoped(() => new JobPins());
+});
 //@ chunk-y162pn60.js:22531-22993 placement
 /**
  * 从存储读取不超过上限的文本：首次先查元数据（不存在、出错或超限时标记并可修复），读取失败清除标记；超限返回 null。
  */
-async function readCappedStorageText(e, n, { cap, screens, screenKey, heal }) {
+async function readCappedStorageText(storage, key, { cap, screens, screenKey, heal }) {
   if (screens.get(screenKey) !== "ok") {
-    let y = await e.statMeta(n);
-    if (!y.ok) {
-      if (y.error.code !== "NotFound") {
+    let stat = await storage.statMeta(key);
+    if (!stat.ok) {
+      if (stat.error.code !== "NotFound") {
         screens.set(screenKey, "refused");
         await heal?.();
       }
       return null;
     }
-    if (y.value.size > cap) {
+    if (stat.value.size > cap) {
       screens.set(screenKey, "refused");
       return null;
     }
     screens.set(screenKey, "ok");
   }
-  let text = await e.readText([
+  let text = await storage.readText([
     {
-      key: n,
+      key,
       offset: 0,
       length: cap + 1,
     },
@@ -217,26 +251,26 @@ async function readCappedStorageText(e, n, { cap, screens, screenKey, heal }) {
     await heal?.();
     return null;
   }
-  let S = text.value.items[0];
-  if (!S.found) return null;
-  if (S.totalBytes > cap) {
+  let item = text.value.items[0];
+  if (!item.found) return null;
+  if (item.totalBytes > cap) {
     screens.set(screenKey, "refused");
     return null;
   }
-  return S.value;
+  return item.value;
 }
 //@ chunk-y162pn60.js:22993-23084 placement
 /**
  * 桥接会话 id 的正则（cse_/session_ 前缀）。
  */
-var pathStringSchema = () => string().transform(stripLongPathPrefixes);
+var pathStringSchema = () => stringSchema().transform(stripLongPathPrefixes);
 var SHORT_ID_RE = /^[a-f0-9]{8}$/;
 var BRIDGE_SESSION_ID_RE = /^(cse_|session_)[A-Za-z0-9_-]{1,128}$/;
 //@ chunk-y162pn60.js:23084-23213 placement
-function makeFieldValidator(e, n) {
-  return (r) => {
-    if (n(r)) return r;
-    logForDebugging(`[jobs] dropped malformed ${e} from persisted job state`, {
+function makeFieldValidator(field, isValid) {
+  return (value) => {
+    if (isValid(value)) return value;
+    logForDebugging(`[jobs] dropped malformed ${field} from persisted job state`, {
       level: "warn",
     });
     return;
@@ -246,194 +280,219 @@ function makeFieldValidator(e, n) {
 /**
  * 单个作业状态文件的最大字节数（10000）。
  */
-var jobStateSchema = DoctorLazy(() =>
-  u({
-    state: string(),
-    detail: string(),
-    tempo: _enum(["active", "idle", "blocked"]).optional().catch(undefined),
-    inFlight: u({
-      tasks: E(),
-      queued: E(),
-      kinds: array(string()),
-      drainableMonitors: E().int().nonnegative().optional(),
-      wake: u({
-        at: E().optional(),
-        reason: string().optional(),
-        fires: E().int().nonnegative(),
-        keepalive: literal(true).optional(),
-      })
-        .optional()
-        .catch(undefined),
-    }).optional(),
-    selfWake: M().optional().catch(undefined),
-    fan: array(
-      u({
-        id: string().optional(),
-        kind: _enum(["agent", "workflow", "shell", "monitor", "mcp", "todo"]).optional().catch(undefined),
-        label: string(),
-        startedAt: E().optional(),
-        doneAt: E().optional(),
-        failed: M().optional(),
-        group: string().optional(),
-      }),
-    ).optional(),
-    tokens: E().optional(),
-    needs_you: M().optional(),
-    needs: string().optional(),
-    block: u({
-      questions: array(
-        u({
-          question: string(),
-          options: array(
-            u({
-              label: string(),
-              description: string(),
-            }),
-          ),
+var jobStateSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var STATE_JSON;
+var MAX_STATE_BYTES;
+deferInit("chunk-y162pn60.js:23213", () => {
+  jobStateSchema = DoctorLazy(() =>
+    objectSchema({
+      state: stringSchema(),
+      detail: stringSchema(),
+      tempo: _enum(["active", "idle", "blocked"]).optional().catch(undefined),
+      inFlight: objectSchema({
+        tasks: numberSchema(),
+        queued: numberSchema(),
+        kinds: array(stringSchema()),
+        drainableMonitors: numberSchema().int().nonnegative().optional(),
+        wake: objectSchema({
+          at: numberSchema().optional(),
+          reason: stringSchema().optional(),
+          fires: numberSchema().int().nonnegative(),
+          keepalive: literal(true).optional(),
+        })
+          .optional()
+          .catch(undefined),
+      }).optional(),
+      selfWake: booleanSchema().optional().catch(undefined),
+      fan: array(
+        objectSchema({
+          id: stringSchema().optional(),
+          kind: _enum(["agent", "workflow", "shell", "monitor", "mcp", "todo"]).optional().catch(undefined),
+          label: stringSchema(),
+          startedAt: numberSchema().optional(),
+          doneAt: numberSchema().optional(),
+          failed: booleanSchema().optional(),
+          group: stringSchema().optional(),
         }),
-      ),
-    }).optional(),
-    suggestedReply: string().optional(),
-    needsOverlay: string().optional(),
-    output: record(string(), string()).nullable().default(null),
-    structuredResult: record(string(), unknown()).optional(),
-    children: array(
-      u({
-        id: string(),
-        href: string(),
-        kind: _enum(["pr", "frame"]).optional().catch(undefined),
-        title: string().optional().catch(undefined),
-      }),
-    )
-      .nullable()
-      .default(null),
-    linkScanOffset: E().default(0),
-    linkScanPath: pathStringSchema()
-      .transform(
-        makeFieldValidator(
-          "linkScanPath",
-          (e) => isAbsolute(e) && e.endsWith(".jsonl") && normalizeUuidOrNull(basename(e, ".jsonl")) !== null,
+      ).optional(),
+      tokens: numberSchema().optional(),
+      needs_you: booleanSchema().optional(),
+      needs: stringSchema().optional(),
+      block: objectSchema({
+        questions: array(
+          objectSchema({
+            question: stringSchema(),
+            options: array(
+              objectSchema({
+                label: stringSchema(),
+                description: stringSchema(),
+              }),
+            ),
+          }),
         ),
-      )
-      .optional(),
-    template: string(),
-    routine: string().optional(),
-    respawnFlags: array(string())
-      .default([])
-      .transform((e) => stripForwardedFlags(dropOverriddenSkipPermissions(splitForwardableArgs(e)))),
-    bgIsolation: _enum(["none", "worktree"]).optional().catch(undefined),
-    providerEnv: record(string(), string())
-      .transform((e) => {
-        let n = filterBackgroundEnv(xr(e, stripLongPathPrefixes));
-        return n && keepForwardableEnv(n, "the saved job state (state.json providerEnv)");
-      })
-      .optional(),
-    sessionPermissionRules: u({
-      allow: array(string()),
-      deny: array(string()),
-      addDirs: array(pathStringSchema()).optional(),
-    }).optional(),
-    memoryToggledOff: M().optional(),
-    autoMemoryOffThisSession: M().optional(),
-    forkSourceAlive: M().optional(),
-    forkBoundaryAt: string().optional(),
-    forkSessionId: string().optional(),
-    forkParentSessionId: string().optional(),
-    interactiveLineage: M().optional(),
-    intent: string(),
-    displayIntent: string().optional(),
-    initialPrompt: string().optional(),
-    queuedPrompt: string().optional(),
-    name: string().optional(),
-    nameSource: _enum(["user", "auto", "collision"]).optional().catch(undefined),
-    color: string().optional(),
-    sessionId: pathStringSchema(),
-    resumeSessionId: string()
-      .transform(makeFieldValidator("resumeSessionId", (e) => normalizeUuidOrNull(e) !== null))
-      .optional(),
-    daemonShort: string()
-      .transform(makeFieldValidator("daemonShort", (e) => SHORT_ID_RE.test(e)))
-      .optional(),
-    cliVersion: string().optional(),
-    cwd: pathStringSchema(),
-    createdAt: string(),
-    updatedAt: string(),
-    firstTerminalAt: string().nullable().default(null),
-    lastTerminalAt: string().optional(),
-    worktreePath: pathStringSchema().optional(),
-    worktreeBranch: string().optional(),
-    worktreeHookBased: M().optional(),
-    originCwd: pathStringSchema().optional(),
-    bridgeSessionId: string()
-      .transform(makeFieldValidator("bridgeSessionId", (e) => BRIDGE_SESSION_ID_RE.test(e)))
-      .optional(),
-    bridgeOwnerAccountUuid: string().optional(),
-    bridgeOwnerOrganizationUuid: string().optional(),
-    bridgeNoHistoryBackfill: M().optional(),
-    bridgeOutboundOnly: M().optional(),
-    bridgeSessionGroupingId: string()
-      .transform(makeFieldValidator("bridgeSessionGroupingId", (e) => /^sgrp_[A-Za-z0-9_]{1,128}$/.test(e)))
-      .optional(),
-    bridgeSessionSeq: E()
-      .transform(makeFieldValidator("bridgeSessionSeq", (e) => Number.isInteger(e) && e >= 0))
-      .optional(),
-    backend: _enum(["daemon", "peer", "remote"])
-      .catch("daemon")
-      .default("daemon")
-      .transform((e) => {
-        if (e === "daemon") return e;
-        logForDebugging(
-          `[jobs] coerced persisted backend '${e}' to 'daemon' \u2014 peer/remote rows are never written to disk`,
-          {
-            level: "warn",
-          },
-        );
-        return "daemon";
-      }),
-    sock: string().optional(),
-    pid: E().optional(),
-    keptBy: u({
-      pid: E().int().positive(),
-      procStart: string().max(64).optional(),
-    }).optional(),
-    sortOrder: E().optional(),
-    stateSortOrder: E().optional(),
-    group: string().optional(),
-    pinned: M().optional(),
-    reapedMidWorkAt: string().optional(),
-    reapedUnsettledAt: string().optional(),
-    deadEpochReapedAt: string().optional(),
-    sessionIdTaken: M().optional().catch(undefined),
-    replayOwed: M().optional().catch(undefined),
-  }).transform(({ needs_you: needsYou, ...n }) => {
-    let r =
-      (n.bridgeOwnerAccountUuid !== undefined && !isUuidShaped(n.bridgeOwnerAccountUuid)) ||
-      (n.bridgeOwnerOrganizationUuid !== undefined && !isUuidShaped(n.bridgeOwnerOrganizationUuid));
-    let s = n.tempo ?? (needsYou ? "blocked" : "idle");
-    return {
-      ...n,
-      ...(r && {
-        bridgeOwnerAccountUuid: undefined,
-        bridgeOwnerOrganizationUuid: undefined,
-      }),
-      tempo: s,
-      ...(n.lastTerminalAt === undefined &&
-        terminalOutcome(n.state) !== null &&
-        s !== "active" && {
-          lastTerminalAt: n.firstTerminalAt || n.updatedAt,
+      }).optional(),
+      suggestedReply: stringSchema().optional(),
+      needsOverlay: stringSchema().optional(),
+      output: record(stringSchema(), stringSchema()).nullable().default(null),
+      structuredResult: record(stringSchema(), unknown()).optional(),
+      children: array(
+        objectSchema({
+          id: stringSchema(),
+          href: stringSchema(),
+          kind: _enum(["pr", "frame"]).optional().catch(undefined),
+          title: stringSchema().optional().catch(undefined),
         }),
-    };
-  }),
-);
-var STATE_JSON = "state.json";
-var MAX_STATE_BYTES = 8388608;
+      )
+        .nullable()
+        .default(null),
+      linkScanOffset: numberSchema().default(0),
+      linkScanPath: pathStringSchema()
+        .transform(
+          makeFieldValidator(
+            "linkScanPath",
+            (value) =>
+              isAbsolute(value) &&
+              value.endsWith(".jsonl") &&
+              normalizeUuidOrNull(basename(value, ".jsonl")) !== null,
+          ),
+        )
+        .optional(),
+      template: stringSchema(),
+      routine: stringSchema().optional(),
+      respawnFlags: array(stringSchema())
+        .default([])
+        .transform((respawnFlags) =>
+          stripForwardedFlags(dropOverriddenSkipPermissions(splitForwardableArgs(respawnFlags))),
+        ),
+      bgIsolation: _enum(["none", "worktree"]).optional().catch(undefined),
+      providerEnv: record(stringSchema(), stringSchema())
+        .transform((providerEnv) => {
+          let filteredEnv = filterBackgroundEnv(import_mapValues(providerEnv, stripLongPathPrefixes));
+          return (
+            filteredEnv && keepForwardableEnv(filteredEnv, "the saved job state (state.json providerEnv)")
+          );
+        })
+        .optional(),
+      sessionPermissionRules: objectSchema({
+        allow: array(stringSchema()),
+        deny: array(stringSchema()),
+        addDirs: array(pathStringSchema()).optional(),
+      }).optional(),
+      memoryToggledOff: booleanSchema().optional(),
+      autoMemoryOffThisSession: booleanSchema().optional(),
+      forkSourceAlive: booleanSchema().optional(),
+      forkBoundaryAt: stringSchema().optional(),
+      forkSessionId: stringSchema().optional(),
+      forkParentSessionId: stringSchema().optional(),
+      interactiveLineage: booleanSchema().optional(),
+      intent: stringSchema(),
+      displayIntent: stringSchema().optional(),
+      initialPrompt: stringSchema().optional(),
+      queuedPrompt: stringSchema().optional(),
+      name: stringSchema().optional(),
+      nameSource: _enum(["user", "auto", "collision"]).optional().catch(undefined),
+      color: stringSchema().optional(),
+      sessionId: pathStringSchema(),
+      resumeSessionId: stringSchema()
+        .transform(
+          makeFieldValidator(
+            "resumeSessionId",
+            (resumeSessionId) => normalizeUuidOrNull(resumeSessionId) !== null,
+          ),
+        )
+        .optional(),
+      daemonShort: stringSchema()
+        .transform(makeFieldValidator("daemonShort", (daemonShort) => SHORT_ID_RE.test(daemonShort)))
+        .optional(),
+      cliVersion: stringSchema().optional(),
+      cwd: pathStringSchema(),
+      createdAt: stringSchema(),
+      updatedAt: stringSchema(),
+      firstTerminalAt: stringSchema().nullable().default(null),
+      lastTerminalAt: stringSchema().optional(),
+      worktreePath: pathStringSchema().optional(),
+      worktreeBranch: stringSchema().optional(),
+      worktreeHookBased: booleanSchema().optional(),
+      originCwd: pathStringSchema().optional(),
+      bridgeSessionId: stringSchema()
+        .transform(
+          makeFieldValidator("bridgeSessionId", (bridgeSessionId) =>
+            BRIDGE_SESSION_ID_RE.test(bridgeSessionId),
+          ),
+        )
+        .optional(),
+      bridgeOwnerAccountUuid: stringSchema().optional(),
+      bridgeOwnerOrganizationUuid: stringSchema().optional(),
+      bridgeNoHistoryBackfill: booleanSchema().optional(),
+      bridgeOutboundOnly: booleanSchema().optional(),
+      bridgeSessionGroupingId: stringSchema()
+        .transform(
+          makeFieldValidator("bridgeSessionGroupingId", (groupingId) =>
+            /^sgrp_[A-Za-z0-9_]{1,128}$/.test(groupingId),
+          ),
+        )
+        .optional(),
+      bridgeSessionSeq: numberSchema()
+        .transform(makeFieldValidator("bridgeSessionSeq", (seq) => Number.isInteger(seq) && seq >= 0))
+        .optional(),
+      backend: _enum(["daemon", "peer", "remote"])
+        .catch("daemon")
+        .default("daemon")
+        .transform((backend) => {
+          if (backend === "daemon") return backend;
+          logForDebugging(
+            `[jobs] coerced persisted backend '${backend}' to 'daemon' \u2014 peer/remote rows are never written to disk`,
+            {
+              level: "warn",
+            },
+          );
+          return "daemon";
+        }),
+      sock: stringSchema().optional(),
+      pid: numberSchema().optional(),
+      keptBy: objectSchema({
+        pid: numberSchema().int().positive(),
+        procStart: stringSchema().max(64).optional(),
+      }).optional(),
+      sortOrder: numberSchema().optional(),
+      stateSortOrder: numberSchema().optional(),
+      group: stringSchema().optional(),
+      pinned: booleanSchema().optional(),
+      reapedMidWorkAt: stringSchema().optional(),
+      reapedUnsettledAt: stringSchema().optional(),
+      deadEpochReapedAt: stringSchema().optional(),
+      sessionIdTaken: booleanSchema().optional().catch(undefined),
+      replayOwed: booleanSchema().optional().catch(undefined),
+    }).transform(({ needs_you: needsYou, ...rest }) => {
+      let badBridgeOwners =
+        (rest.bridgeOwnerAccountUuid !== undefined && !isUuidShaped(rest.bridgeOwnerAccountUuid)) ||
+        (rest.bridgeOwnerOrganizationUuid !== undefined && !isUuidShaped(rest.bridgeOwnerOrganizationUuid));
+      let tempo = rest.tempo ?? (needsYou ? "blocked" : "idle");
+      return {
+        ...rest,
+        ...(badBridgeOwners && {
+          bridgeOwnerAccountUuid: undefined,
+          bridgeOwnerOrganizationUuid: undefined,
+        }),
+        tempo,
+        ...(rest.lastTerminalAt === undefined &&
+          terminalOutcome(rest.state) !== null &&
+          tempo !== "active" && {
+            lastTerminalAt: rest.firstTerminalAt || rest.updatedAt,
+          }),
+      };
+    }),
+  );
+  STATE_JSON = "state.json";
+  MAX_STATE_BYTES = 8388608;
+});
 //@ chunk-y162pn60.js:27221-27248 placement
 function getJobsDir() {
   return jobsDir();
 }
 //@ chunk-y162pn60.js:27248-27280 placement
-function getJobDir(e) {
-  return join(getJobsDir(), e);
+function getJobDir(shortId) {
+  return join(getJobsDir(), shortId);
 }
 //@ chunk-y162pn60.js:27280-27391 placement
 function getOwnJobShortId() {
@@ -447,108 +506,108 @@ function getOwnJobShortId() {
 /**
  * 某作业某文件的存储路径（key 不合法时返回 undefined）。
  */
-function jobStoragePath(e, n) {
-  return isValidKeySegment(e) ? STORAGE_SPACES.job(e, n) : undefined;
+function jobStoragePath(jobId, relPath) {
+  return isValidKeySegment(jobId) ? STORAGE_SPACES.job(jobId, relPath) : undefined;
 }
 //@ chunk-y162pn60.js:27440-27474 placement
-function jobKeyFor(e, n) {
-  return jobStorageSpace(e, n);
+function jobKeyFor(jobId, relPath) {
+  return jobStorageSpace(jobId, relPath);
 }
 //@ chunk-y162pn60.js:27474-27512 placement
 function jobStateKey(jobId) {
   return STORAGE_SPACES.job(jobId, [STATE_JSON]);
 }
 //@ chunk-y162pn60.js:27512-27821 placement
-function watchJobDirOnce(e, n) {
-  let r = join(getJobDir(e), STATE_JSON);
-  let s = false;
-  let f = Number.NaN;
-  function m(mtimeMs) {
-    if (s) return;
-    if (Number.isNaN(f)) {
-      f = mtimeMs;
+function watchJobDirOnce(jobId, onChange) {
+  let statePath = join(getJobDir(jobId), STATE_JSON);
+  let stopped = false;
+  let lastMtimeMs = Number.NaN;
+  function checkMtime(mtimeMs) {
+    if (stopped) return;
+    if (Number.isNaN(lastMtimeMs)) {
+      lastMtimeMs = mtimeMs;
       return;
     }
-    if (mtimeMs === f) return;
-    h();
-    n();
+    if (mtimeMs === lastMtimeMs) return;
+    stop();
+    onChange();
   }
-  function g() {
-    lstat(r).then(
-      (w) => m(w.mtimeMs),
-      () => m(-1),
+  function poll() {
+    lstat(statePath).then(
+      (stats) => checkMtime(stats.mtimeMs),
+      () => checkMtime(-1),
     );
   }
-  g();
-  let interval = setInterval(g, 200);
-  let timer = setTimeout(h, 1e4);
-  function h() {
-    if (s) return;
-    s = true;
+  poll();
+  let interval = setInterval(poll, 200);
+  let timer = setTimeout(stop, 1e4);
+  function stop() {
+    if (stopped) return;
+    stopped = true;
     clearInterval(interval);
     clearTimeout(timer);
   }
-  return h;
+  return stop;
 }
 //@ chunk-y162pn60.js:27821-27869 placement
 function isOwnStateWriteInFlight() {
   return currentSessionStatusState().ownStateWriteDepth > 0;
 }
 //@ chunk-y162pn60.js:27869-28586 placement
-async function writeStateAtomic(jobDir, n, r) {
-  let s = n.inFlight?.kinds.includes("session_cron") === true;
-  let f =
-    s && !n.selfWake && isSessionCronOnlyWake(n.inFlight)
+async function writeStateAtomic(jobDir, jobState, storageV5) {
+  let hasSessionCron = jobState.inFlight?.kinds.includes("session_cron") === true;
+  let withSelfWake =
+    hasSessionCron && !jobState.selfWake && isSessionCronOnlyWake(jobState.inFlight)
       ? {
-          ...n,
+          ...jobState,
           selfWake: true,
         }
-      : !s && n.selfWake && isSettled(n)
+      : !hasSessionCron && jobState.selfWake && isSettled(jobState)
         ? {
-            ...n,
+            ...jobState,
             selfWake: undefined,
           }
-        : n;
-  let g = isSettled(f)
-    ? f.lastTerminalAt
-      ? f
+        : jobState;
+  let normalized = isSettled(withSelfWake)
+    ? withSelfWake.lastTerminalAt
+      ? withSelfWake
       : {
-          ...f,
-          lastTerminalAt: f.updatedAt,
+          ...withSelfWake,
+          lastTerminalAt: withSelfWake.updatedAt,
         }
-    : f.lastTerminalAt !== undefined
+    : withSelfWake.lastTerminalAt !== undefined
       ? {
-          ...f,
+          ...withSelfWake,
           lastTerminalAt: undefined,
         }
-      : f;
-  let { pinned, sortOrder, stateSortOrder, group, ...x } = g;
-  let F = r ? jobKeyFor(jobDir, [STATE_JSON]) : undefined;
-  let O = currentSessionStatusState();
-  O.ownStateWriteDepth++;
+      : withSelfWake;
+  let { pinned, sortOrder, stateSortOrder, group, ...persisted } = normalized;
+  let stateKey = storageV5 ? jobKeyFor(jobDir, [STATE_JSON]) : undefined;
+  let statusState = currentSessionStatusState();
+  statusState.ownStateWriteDepth++;
   try {
-    if (r && F) {
-      let P = await r.write(F, jsonStringify(x, null, 2), {
+    if (storageV5 && stateKey) {
+      let writeResult = await storageV5.write(stateKey, jsonStringify(persisted, null, 2), {
         mode: 384,
         parent: "mustExist",
       });
-      if (!P.ok) {
-        let v = storageErrorCode(P.error);
+      if (!writeResult.ok) {
+        let errorCode = storageErrorCode(writeResult.error);
         throw Object.assign(
           new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-            `[jobs] v5 state write failed: ${formatStorageError(P.error)}`,
+            `[jobs] v5 state write failed: ${formatStorageError(writeResult.error)}`,
             "[jobs] v5 state write failed",
           ),
-          v !== undefined
+          errorCode !== undefined
             ? {
-                code: v,
+                code: errorCode,
               }
             : {},
         );
       }
-    } else await writeFileAtomic(join(jobDir, STATE_JSON), jsonStringify(x, null, 2), 384);
+    } else await writeFileAtomic(join(jobDir, STATE_JSON), jsonStringify(persisted, null, 2), 384);
   } finally {
-    O.ownStateWriteDepth--;
+    statusState.ownStateWriteDepth--;
     invalidateJobStateCache(jobDir);
   }
 }
@@ -565,30 +624,31 @@ function logJobWriteError(error) {
 }
 //@ chunk-y162pn60.js:28721-28972 placement
 function resolveBridgeHandoffIdentity(replBridgeHandle, currentSessionBridge) {
-  let r = currentSessionBridge !== undefined && currentSessionBridge.id === replBridgeHandle?.bridgeSessionId;
+  let handle =
+    currentSessionBridge !== undefined && currentSessionBridge.id === replBridgeHandle?.bridgeSessionId;
   return {
-    ownerAccountUuid: r ? currentSessionBridge.ownerAccountUuid : undefined,
-    ownerOrganizationUuid: r ? currentSessionBridge.ownerOrganizationUuid : undefined,
+    ownerAccountUuid: handle ? currentSessionBridge.ownerAccountUuid : undefined,
+    ownerOrganizationUuid: handle ? currentSessionBridge.ownerOrganizationUuid : undefined,
     noHistoryBackfill:
       replBridgeHandle?.noHistoryBackfill ||
-      (currentSessionBridge !== undefined && !r ? true : currentSessionBridge?.noHistoryBackfill),
+      (currentSessionBridge !== undefined && !handle ? true : currentSessionBridge?.noHistoryBackfill),
   };
 }
 //@ chunk-y162pn60.js:28972-29441 placement
-function buildBridgeReattachEnv(bridgeSessionId, n, r, s, bridgeHandoffIdentity) {
+function buildBridgeReattachEnv(bridgeSessionId, seq, outboundOnly, groupingId, bridgeHandoffIdentity) {
   if (!bridgeSessionId) return;
-  let m = {
+  let env = {
     CLAUDE_BRIDGE_REATTACH_SESSION: bridgeSessionId,
   };
-  if (n !== undefined && n > 0) m.CLAUDE_BRIDGE_REATTACH_SEQ = String(n);
-  if (s) m.CLAUDE_BRIDGE_REATTACH_GROUPING = s;
+  if (seq !== undefined && seq > 0) env.CLAUDE_BRIDGE_REATTACH_SEQ = String(seq);
+  if (groupingId) env.CLAUDE_BRIDGE_REATTACH_GROUPING = groupingId;
   if (bridgeHandoffIdentity?.ownerAccountUuid)
-    m.CLAUDE_BRIDGE_REATTACH_OWNER_ACCT = bridgeHandoffIdentity.ownerAccountUuid;
+    env.CLAUDE_BRIDGE_REATTACH_OWNER_ACCT = bridgeHandoffIdentity.ownerAccountUuid;
   if (bridgeHandoffIdentity?.ownerOrganizationUuid)
-    m.CLAUDE_BRIDGE_REATTACH_OWNER_ORG = bridgeHandoffIdentity.ownerOrganizationUuid;
-  if (bridgeHandoffIdentity?.noHistoryBackfill) m.CLAUDE_BRIDGE_REATTACH_NO_BACKFILL = "1";
-  if (r !== false) m.CLAUDE_BRIDGE_REATTACH_OUTBOUND_ONLY = "1";
-  return m;
+    env.CLAUDE_BRIDGE_REATTACH_OWNER_ORG = bridgeHandoffIdentity.ownerOrganizationUuid;
+  if (bridgeHandoffIdentity?.noHistoryBackfill) env.CLAUDE_BRIDGE_REATTACH_NO_BACKFILL = "1";
+  if (outboundOnly !== false) env.CLAUDE_BRIDGE_REATTACH_OUTBOUND_ONLY = "1";
+  return env;
 }
 //@ chunk-y162pn60.js:29441-29477 placement
 /**
@@ -601,15 +661,19 @@ function getJobStateReadCache() {
 /**
  * 取缓存的状态对象，读失败策略为 null 时返回 null。
  */
-function stateOrNull(e, options) {
-  return options?.onReadFailure === "null" ? null : (e?.state ?? null);
+function stateOrNull(loaded, loadOptions) {
+  return loadOptions?.onReadFailure === "null" ? null : (loaded?.state ?? null);
 }
 //@ chunk-y162pn60.js:29547-29601 placement
 /**
  * 表示“不是普通文件”的错误码集合。
  */
-var RETRY_BACKOFF_MS = [15, 45];
-var NON_REGULAR_ERROR_CODES = new Set(["ELOOP", "ENXIO", "EISDIR"]);
+var RETRY_BACKOFF_MS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var NON_REGULAR_ERROR_CODES;
+deferInit("chunk-y162pn60.js:29547", () => {
+  RETRY_BACKOFF_MS = [15, 45];
+  NON_REGULAR_ERROR_CODES = new Set(["ELOOP", "ENXIO", "EISDIR"]);
+});
 //@ chunk-y162pn60.js:29601-29768 placement
 function classifyStorageRejection(error) {
   if (error.code !== "Failed" || error.telemetryCode === undefined) return;
@@ -617,16 +681,22 @@ function classifyStorageRejection(error) {
   return NON_REGULAR_ERROR_CODES.has(error.telemetryCode) ? "non-regular" : undefined;
 }
 //@ chunk-y162pn60.js:29768-29872 placement
-function isSidecarReadFailure(e) {
+function isSidecarReadFailure(error) {
   return (
-    e.code === "Failed" && e.key !== undefined && e.key.namespace === "job" && e.key.relPath[0] !== STATE_JSON
+    error.code === "Failed" &&
+    error.key !== undefined &&
+    error.key.namespace === "job" &&
+    error.key.relPath[0] !== STATE_JSON
   );
 }
 //@ chunk-y162pn60.js:29872-29929 placement
 /**
  * 不计入失败统计的失败分类（invariant、permission、environment）。
  */
-var NON_COUNTED_FAILURE_CLASSES = new Set(["invariant", "permission", "environment"]);
+var NON_COUNTED_FAILURE_CLASSES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-y162pn60.js:29872", () => {
+  NON_COUNTED_FAILURE_CLASSES = new Set(["invariant", "permission", "environment"]);
+});
 //@ chunk-y162pn60.js:29929-30053 placement
 function isTransientStorageError(error) {
   if (error.code === "Unavailable") return true;
@@ -641,32 +711,32 @@ function isTransientStorageError(error) {
 /**
  * 对瞬时存储错误按退避重试读取；首次成功记干净读取，重试后成功记 tengu_bg_state_read_recovered（只一次）。
  */
-async function retryStorageRead(e, n) {
-  let r = await n();
-  let s = 1;
-  for (let f of RETRY_BACKOFF_MS) {
-    if (r.ok || !isTransientStorageError(r.error)) break;
-    await sleep(f);
-    r = await n();
-    s++;
+async function retryStorageRead(jobDir, read) {
+  let result = await read();
+  let attempts = 1;
+  for (let delay of RETRY_BACKOFF_MS) {
+    if (result.ok || !isTransientStorageError(result.error)) break;
+    await sleep(delay);
+    result = await read();
+    attempts++;
   }
-  if (r.ok) {
-    if (s === 1) getJobStateReadCache().noteCleanRead(e);
-    else if (getJobStateReadCache().shouldReportRecovered(e))
+  if (result.ok) {
+    if (attempts === 1) getJobStateReadCache().noteCleanRead(jobDir);
+    else if (getJobStateReadCache().shouldReportRecovered(jobDir))
       logEvent("tengu_bg_state_read_recovered", {
-        attempts: s,
+        attempts,
       });
   }
-  return r;
+  return result;
 }
 //@ chunk-y162pn60.js:30301-30508 placement
-function rejectJobState(e, n, r) {
-  let s = getJobStateReadCache().peek(e);
-  if (!(s?.mtimeKey.startsWith("rejected:") && s.state === null))
-    logForDebugging(`[jobs] skipping ${basename(e)}: state.json is ${r}`, {
+function rejectJobState(jobDir, reasonCode, detail) {
+  let cached = getJobStateReadCache().peek(jobDir);
+  if (!(cached?.mtimeKey.startsWith("rejected:") && cached.state === null))
+    logForDebugging(`[jobs] skipping ${basename(jobDir)}: state.json is ${detail}`, {
       level: "warn",
     });
-  getJobStateReadCache().noteRejected(e, `rejected:${n}`);
+  getJobStateReadCache().noteRejected(jobDir, `rejected:${reasonCode}`);
   return null;
 }
 //@ chunk-y162pn60.js:30508-30541 placement
@@ -677,26 +747,30 @@ function invalidateJobStateCache(jobDir) {
 /**
  * 从存储 v5 读取作业 state.json 及 order/stateOrder/group sidecar：检查大小与类型，瞬时失败用缓存，版本未变命中缓存，否则解析。
  */
-async function readJobStateFromStorage(storage, jobDir, options) {
+async function readJobStateFromStorage(storage, jobDir, storage_2) {
   let jobId = basename(jobDir);
-  let f = getJobStateReadCache().peek(jobDir);
-  if (f === undefined || f.mtimeKey.startsWith("rejected:")) {
-    let R = await storage.statMeta(jobStateKey(jobId));
-    if (!R.ok) {
-      if (R.error.code === "NotFound") return noteStateAbsent(jobDir, options);
-      let L = classifyStorageRejection(R.error);
-      if (L !== undefined)
-        return rejectJobState(jobDir, L, L === "oversize" ? "too large" : "not a regular file");
-    } else if (R.value.size > MAX_STATE_BYTES) {
-      let L = `rejected:${R.value.mtimeMs}:${R.value.size}`;
-      if (getJobStateReadCache().peek(jobDir)?.mtimeKey !== L) {
+  let cached = getJobStateReadCache().peek(jobDir);
+  if (cached === undefined || cached.mtimeKey.startsWith("rejected:")) {
+    let statResult = await storage.statMeta(jobStateKey(jobId));
+    if (!statResult.ok) {
+      if (statResult.error.code === "NotFound") return noteStateAbsent(jobDir, storage_2);
+      let rejection = classifyStorageRejection(statResult.error);
+      if (rejection !== undefined)
+        return rejectJobState(
+          jobDir,
+          rejection,
+          rejection === "oversize" ? "too large" : "not a regular file",
+        );
+    } else if (statResult.value.size > MAX_STATE_BYTES) {
+      let mtimeKey = `rejected:${statResult.value.mtimeMs}:${statResult.value.size}`;
+      if (getJobStateReadCache().peek(jobDir)?.mtimeKey !== mtimeKey) {
         logForDebugging(
-          `[jobs] skipping ${basename(jobDir)}: state.json is too large (${R.value.size} bytes)`,
+          `[jobs] skipping ${basename(jobDir)}: state.json is too large (${statResult.value.size} bytes)`,
           {
             level: "warn",
           },
         );
-        getJobStateReadCache().noteRejected(jobDir, L);
+        getJobStateReadCache().noteRejected(jobDir, mtimeKey);
       }
       return null;
     }
@@ -715,13 +789,13 @@ async function readJobStateFromStorage(storage, jobDir, options) {
       logForDebugging(
         `[jobs] ${basename(jobDir)}: a sidecar could not be read as a regular file; using state.json alone`,
       );
-    let R = await storage.read([stateKey]);
-    readResult = R.ok
+    let stateRead = await storage.read([stateKey]);
+    readResult = stateRead.ok
       ? {
           ok: true,
           value: {
             items: [
-              R.value.items[0],
+              stateRead.value.items[0],
               {
                 found: false,
               },
@@ -734,67 +808,77 @@ async function readJobStateFromStorage(storage, jobDir, options) {
             ],
           },
         }
-      : R;
+      : stateRead;
   }
-  let cached = getJobStateReadCache().peek(jobDir);
+  let cached_2 = getJobStateReadCache().peek(jobDir);
   if (!readResult.ok) {
-    let R = classifyStorageRejection(readResult.error);
-    if (R !== undefined)
-      return rejectJobState(jobDir, R, R === "oversize" ? "too large" : "not a regular file");
+    let rejection = classifyStorageRejection(readResult.error);
+    if (rejection !== undefined)
+      return rejectJobState(jobDir, rejection, rejection === "oversize" ? "too large" : "not a regular file");
     logForDebugging(`[jobs] ${basename(jobDir)}: v5 state read failed \u2014 ${readResult.error.code}`, {
       level: "warn",
     });
     if (getJobStateReadCache().shouldReportTransient(jobDir))
       logEvent("tengu_bg_state_read_transient", {
         errno: fromEnum(readResult.error.code),
-        had_cache: cached !== undefined,
+        had_cache: cached_2 !== undefined,
       });
-    return stateOrNull(cached, options);
+    return stateOrNull(cached_2, storage_2);
   }
   let [stateItem, orderItem, stateOrderItem, groupItem] = readResult.value.items;
-  if (!stateItem.found) return noteStateAbsent(jobDir, options);
+  if (!stateItem.found) return noteStateAbsent(jobDir, storage_2);
   if (stateItem.totalBytes > MAX_STATE_BYTES) {
-    let R = `rejected:${stateItem.mtimeMs}:${stateItem.totalBytes}`;
-    if (cached?.mtimeKey === R) return null;
+    let mtimeKey = `rejected:${stateItem.mtimeMs}:${stateItem.totalBytes}`;
+    if (cached_2?.mtimeKey === mtimeKey) return null;
     logForDebugging(
       `[jobs] skipping ${basename(jobDir)}: state.json is too large (${stateItem.totalBytes} bytes)`,
       {
         level: "warn",
       },
     );
-    getJobStateReadCache().noteRejected(jobDir, R);
+    getJobStateReadCache().noteRejected(jobDir, mtimeKey);
     return null;
   }
-  let O = (R) => Buffer.from(R.value.buffer, R.value.byteOffset, R.value.byteLength).toString("utf-8");
-  let P = (R) => (R.found && R.totalBytes <= MAX_STATE_BYTES ? O(R) : null);
-  let v = (R) => (R.found && R.totalBytes <= MAX_STATE_BYTES ? R.version : 0);
-  let versionKey = `v5:${stateItem.version}:${v(orderItem)}:${v(stateOrderItem)}:${v(groupItem)}`;
-  if (cached?.mtimeKey === versionKey) {
+  let toText = (item) =>
+    Buffer.from(item.value.buffer, item.value.byteOffset, item.value.byteLength).toString("utf-8");
+  let sidecarText = (item) => (item.found && item.totalBytes <= MAX_STATE_BYTES ? toText(item) : null);
+  let sidecarVersion = (item) => (item.found && item.totalBytes <= MAX_STATE_BYTES ? item.version : 0);
+  let versionKey = `v5:${stateItem.version}:${sidecarVersion(orderItem)}:${sidecarVersion(stateOrderItem)}:${sidecarVersion(groupItem)}`;
+  if (cached_2?.mtimeKey === versionKey) {
     getJobStateReadCache().noteHit(jobDir);
-    return cached.state;
+    return cached_2.state;
   }
   return parseJobStateText(
     jobDir,
     versionKey,
-    O(stateItem),
-    P(orderItem),
-    P(stateOrderItem),
-    P(groupItem),
-    cached,
-    options,
+    toText(stateItem),
+    sidecarText(orderItem),
+    sidecarText(stateOrderItem),
+    sidecarText(groupItem),
+    cached_2,
+    storage_2,
   );
 }
 //@ chunk-y162pn60.js:32339-33301 placement
 /**
  * 解析作业 state.json：schema 校验失败记 tengu_bg_state_read_rejected 并缓存拒绝；保留未知字段，合并排序与分组 sidecar，结果写入缓存；解析异常时回退缓存。
  */
-function parseJobStateText(jobDir, cacheKey, stateText, orderText, stateOrderText, groupText, cached, S) {
+function parseJobStateText(
+  jobDir,
+  cacheKey,
+  stateText,
+  orderText,
+  stateOrderText,
+  groupText,
+  cached,
+  storage,
+) {
   try {
     let raw = jsonParse(stateText);
-    let h = jobStateSchema().safeParse(raw);
-    if (!h.success) {
+    let parsed = jobStateSchema().safeParse(raw);
+    if (!parsed.success) {
       logForDebugging(
-        `[jobs] skipping ${basename(jobDir)}: state.json schema validation failed \u2014 ${h.error.message}`,
+        `[jobs] skipping ${basename(jobDir)}: state.json schema validation failed \u2014 ${parsed.error.message}`,
         {
           level: "warn",
         },
@@ -812,7 +896,7 @@ function parseJobStateText(jobDir, cacheKey, stateText, orderText, stateOrderTex
         : [];
     let state = {
       ...Object.fromEntries(extraFields),
-      ...h.data,
+      ...parsed.data,
     };
     if (Number.isFinite(sortOrder))
       state = {
@@ -848,7 +932,7 @@ function parseJobStateText(jobDir, cacheKey, stateText, orderText, stateOrderTex
         errno: sanitizeErrnoForTelemetry(error) ?? lit("unknown"),
         had_cache: cached !== undefined,
       });
-    return stateOrNull(cached, S);
+    return stateOrNull(cached, storage);
   }
 }
 //@ chunk-y162pn60.js:33301-33364 placement
@@ -872,15 +956,15 @@ async function readJobState(jobDir, storage) {
 }
 //@ chunk-y162pn60.js:33471-33585 placement
 async function readJobStateOrAbsent(jobDir, storage) {
-  let r = {
+  let flag = {
     absent: false,
   };
   let jobState = await loadJobState(jobDir, storage, {
     onAbsent: () => {
-      r.absent = true;
+      flag.absent = true;
     },
   });
-  return r.absent ? "absent" : jobState;
+  return flag.absent ? "absent" : jobState;
 }
 //@ chunk-y162pn60.js:33585-35825 placement
 /**
@@ -896,31 +980,31 @@ async function loadJobState(jobDir, storage, options) {
   let mtimeKey;
   let sidecarsUsable;
   try {
-    let [w, x, F, O] = await Promise.all([
+    let [stateStats, orderStats, stateOrderStats, groupStats] = await Promise.all([
       lstat(statePath),
       lstat(orderPath).catch(() => null),
       lstat(stateOrderPath).catch(() => null),
       lstat(groupPath).catch(() => null),
     ]);
-    if (!w.isFile() || w.size > MAX_STATE_BYTES) {
-      let v = `rejected:${w.mtimeMs}:${w.size}`;
-      if (getJobStateReadCache().peek(jobDir)?.mtimeKey === v) return null;
+    if (!stateStats.isFile() || stateStats.size > MAX_STATE_BYTES) {
+      let mtimeKey = `rejected:${stateStats.mtimeMs}:${stateStats.size}`;
+      if (getJobStateReadCache().peek(jobDir)?.mtimeKey === mtimeKey) return null;
       logForDebugging(
-        `[jobs] skipping ${basename(jobDir)}: state.json is ${w.isFile() ? `too large (${w.size} bytes)` : "not a regular file"}`,
+        `[jobs] skipping ${basename(jobDir)}: state.json is ${stateStats.isFile() ? `too large (${stateStats.size} bytes)` : "not a regular file"}`,
         {
           level: "warn",
         },
       );
-      getJobStateReadCache().noteRejected(jobDir, v);
+      getJobStateReadCache().noteRejected(jobDir, mtimeKey);
       return null;
     }
-    let P = (v) => v !== null && v.isFile() && v.size <= MAX_STATE_BYTES;
+    let isUsableSidecar = (stats) => stats !== null && stats.isFile() && stats.size <= MAX_STATE_BYTES;
     sidecarsUsable = {
-      order: P(x),
-      stateOrder: P(F),
-      group: P(O),
+      order: isUsableSidecar(orderStats),
+      stateOrder: isUsableSidecar(stateOrderStats),
+      group: isUsableSidecar(groupStats),
     };
-    mtimeKey = `${w.mtimeMs}:${sidecarsUsable.order ? x.mtimeMs : 0}:${sidecarsUsable.stateOrder ? F.mtimeMs : 0}:${sidecarsUsable.group ? O.mtimeMs : 0}`;
+    mtimeKey = `${stateStats.mtimeMs}:${sidecarsUsable.order ? orderStats.mtimeMs : 0}:${sidecarsUsable.stateOrder ? stateOrderStats.mtimeMs : 0}:${sidecarsUsable.group ? groupStats.mtimeMs : 0}`;
   } catch (error) {
     if (isENOENT(error)) return noteStateAbsent(jobDir, options);
     logForDebugging(
@@ -929,31 +1013,31 @@ async function loadJobState(jobDir, storage, options) {
         level: "warn",
       },
     );
-    let x = getJobStateReadCache().peek(jobDir);
+    let cached = getJobStateReadCache().peek(jobDir);
     if (getJobStateReadCache().shouldReportTransient(jobDir))
       logEvent("tengu_bg_state_read_transient", {
         errno: sanitizeErrnoForTelemetry(error) ?? lit("unknown"),
-        had_cache: x !== undefined,
+        had_cache: cached !== undefined,
       });
-    return stateOrNull(x, options);
+    return stateOrNull(cached, options);
   }
-  let h = getJobStateReadCache().peek(jobDir);
-  if (h?.mtimeKey === mtimeKey) {
+  let cached = getJobStateReadCache().peek(jobDir);
+  if (cached?.mtimeKey === mtimeKey) {
     getJobStateReadCache().noteHit(jobDir);
-    return h.state;
+    return cached.state;
   }
   try {
-    let [file, x, F, O] = await Promise.all([
+    let [file, orderText, stateOrderText, groupText] = await Promise.all([
       readFile(statePath, "utf-8"),
       sidecarsUsable.order ? readFile(orderPath, "utf-8").catch(() => null) : Promise.resolve(null),
       sidecarsUsable.stateOrder ? readFile(stateOrderPath, "utf-8").catch(() => null) : Promise.resolve(null),
       sidecarsUsable.group ? readFile(groupPath, "utf-8").catch(() => null) : Promise.resolve(null),
     ]);
-    let P = jsonParse(file);
-    let v = jobStateSchema().safeParse(P);
-    if (!v.success) {
+    let parsed = jsonParse(file);
+    let validated = jobStateSchema().safeParse(parsed);
+    if (!validated.success) {
       logForDebugging(
-        `[jobs] skipping ${basename(jobDir)}: state.json schema validation failed \u2014 ${v.error.message}`,
+        `[jobs] skipping ${basename(jobDir)}: state.json schema validation failed \u2014 ${validated.error.message}`,
         {
           level: "warn",
         },
@@ -962,39 +1046,39 @@ async function loadJobState(jobDir, storage, options) {
       getJobStateReadCache().noteRejected(jobDir, mtimeKey);
       return null;
     }
-    let D = x !== null ? Number(x) : undefined;
-    let R = F !== null ? Number(F) : undefined;
+    let sortOrder = orderText !== null ? Number(orderText) : undefined;
+    let stateSortOrder = stateOrderText !== null ? Number(stateOrderText) : undefined;
     let shape = jobStateSchema().in.shape;
-    let j =
-      P !== null && typeof P === "object"
-        ? Object.entries(P).filter(([key]) => !Object.hasOwn(shape, key))
+    let unknownEntries =
+      parsed !== null && typeof parsed === "object"
+        ? Object.entries(parsed).filter(([key]) => !Object.hasOwn(shape, key))
         : [];
-    let G = {
-      ...Object.fromEntries(j),
-      ...v.data,
+    let merged = {
+      ...Object.fromEntries(unknownEntries),
+      ...validated.data,
     };
-    if (Number.isFinite(D))
-      G = {
-        ...G,
-        sortOrder: D,
+    if (Number.isFinite(sortOrder))
+      merged = {
+        ...merged,
+        sortOrder,
       };
-    if (Number.isFinite(R))
-      G = {
-        ...G,
-        stateSortOrder: R,
+    if (Number.isFinite(stateSortOrder))
+      merged = {
+        ...merged,
+        stateSortOrder,
       };
-    if (O !== null && O.trim())
-      G = {
-        ...G,
-        group: O.trim(),
+    if (groupText !== null && groupText.trim())
+      merged = {
+        ...merged,
+        group: groupText.trim(),
       };
-    if (G.group !== undefined)
-      G = {
-        ...G,
-        group: sanitizeGroupOrDefault(G.group),
+    if (merged.group !== undefined)
+      merged = {
+        ...merged,
+        group: sanitizeGroupOrDefault(merged.group),
       };
-    getJobStateReadCache().noteParsed(jobDir, mtimeKey, G);
-    return G;
+    getJobStateReadCache().noteParsed(jobDir, mtimeKey, merged);
+    return merged;
   } catch (error) {
     if (isENOENT(error)) return noteStateAbsent(jobDir, options);
     logForDebugging(
@@ -1006,27 +1090,27 @@ async function loadJobState(jobDir, storage, options) {
     if (getJobStateReadCache().shouldReportTransient(jobDir))
       logEvent("tengu_bg_state_read_transient", {
         errno: sanitizeErrnoForTelemetry(error) ?? lit("unknown"),
-        had_cache: h !== undefined,
+        had_cache: cached !== undefined,
       });
-    return stateOrNull(h, options);
+    return stateOrNull(cached, options);
   }
 }
 //@ chunk-y162pn60.js:35825-36045 placement
-async function readJobStateAfterSettle(jobDir, n) {
+async function readJobStateAfterSettle(jobDir, storage) {
   invalidateJobStateCache(jobDir);
-  let r = await readJobState(jobDir, n).catch(() => null);
+  let state = await readJobState(jobDir, storage).catch(() => null);
   if (
-    r !== null &&
-    r.state !== "done" &&
-    r.state !== "stopped" &&
-    r.state !== "blocked" &&
-    r.state !== "failed"
+    state !== null &&
+    state.state !== "done" &&
+    state.state !== "stopped" &&
+    state.state !== "blocked" &&
+    state.state !== "failed"
   ) {
     await sleep(50);
     invalidateJobStateCache(jobDir);
-    r = (await readJobState(jobDir, n).catch(() => null)) ?? r;
+    state = (await readJobState(jobDir, storage).catch(() => null)) ?? state;
   }
-  return r;
+  return state;
 }
 //@ chunk-y162pn60.js:36045-36085 placement
 /**
@@ -1044,12 +1128,12 @@ var PIN_STALE_MS = 5000;
 /**
  * 读取 MCP 认证缓存（v5 存储）条目。
  */
-async function readPinnedJobIds(storageV5) {
-  if (storageV5) return readJobPinsFromStorage(storageV5);
+async function readPinnedJobIds(storage) {
+  if (storage) return readJobPinsFromStorage(storage);
   try {
-    let n = await lstat(pinsFilePath());
-    if (!n.isFile() || n.size > MAX_STATE_BYTES) {
-      if (!n.isFile()) await removeBadPinsFile();
+    let stats = await lstat(pinsFilePath());
+    if (!stats.isFile() || stats.size > MAX_STATE_BYTES) {
+      if (!stats.isFile()) await removeBadPinsFile();
       return new Set();
     }
     return parsePinnedIds(await readFile(pinsFilePath(), "utf-8"));
@@ -1064,8 +1148,8 @@ async function readPinnedJobIds(storageV5) {
   }
 }
 //@ chunk-y162pn60.js:36358-36475 placement
-async function readJobPinsFromStorage(e) {
-  let cappedStorageText = await readCappedStorageText(e, STORAGE_SPACES.jobPins(), {
+async function readJobPinsFromStorage(storage) {
+  let cappedStorageText = await readCappedStorageText(storage, STORAGE_SPACES.jobPins(), {
     cap: MAX_STATE_BYTES,
     screens: getJobPins(),
     screenKey: pinsFilePath(),
@@ -1081,23 +1165,24 @@ function getJobPins() {
   return jobPinsState.of(getRootSession().host).pins;
 }
 //@ chunk-y162pn60.js:36518-36700 placement
-function parsePinnedIds(e) {
-  if (e === undefined || e.length > MAX_STATE_BYTES) return new Set();
-  let n;
+function parsePinnedIds(text) {
+  if (text === undefined || text.length > MAX_STATE_BYTES) return new Set();
+  let parsed;
   try {
-    n = jsonParse(e);
+    parsed = jsonParse(text);
   } catch {
     return new Set();
   }
-  if (!Array.isArray(n)) return new Set();
-  return new Set(n.filter((r) => typeof r === "string"));
+  if (!Array.isArray(parsed)) return new Set();
+  return new Set(parsed.filter((id) => typeof id === "string"));
 }
 //@ chunk-y162pn60.js:36700-36887 placement
-async function removeBadPinsFile(e) {
-  let n = await lstat(pinsFilePath()).catch(() => {
+async function removeBadPinsFile(options) {
+  let stats = await lstat(pinsFilePath()).catch(() => {
     return;
   });
-  if (n === undefined || (n.isFile() && !(e?.evenRegular && n.size > MAX_STATE_BYTES))) return false;
+  if (stats === undefined || (stats.isFile() && !(options?.evenRegular && stats.size > MAX_STATE_BYTES)))
+    return false;
   await rm(pinsFilePath(), {
     recursive: true,
     force: true,
@@ -1105,21 +1190,21 @@ async function removeBadPinsFile(e) {
   return true;
 }
 //@ chunk-y162pn60.js:36887-37197 placement
-async function syncJobName(e, n, r, storageV5, f) {
-  let jobDir = getJobDir(e);
+async function syncJobName(shortId, name, source, storageV5, matcher) {
+  let jobDir = getJobDir(shortId);
   let jobState = await readJobState(jobDir, storageV5);
   if (!jobState) return false;
-  if (jobState.name === n) return true;
+  if (jobState.name === name) return true;
   invalidateJobStateCache(jobDir);
-  let S = (await readJobState(jobDir, storageV5)) ?? jobState;
-  if (S.name === n || (r === "auto" && S.name)) return true;
-  if (!isAutoOrMatchingName(S, f)) return false;
+  let current = (await readJobState(jobDir, storageV5)) ?? jobState;
+  if (current.name === name || (source === "auto" && current.name)) return true;
+  if (!isAutoOrMatchingName(current, matcher)) return false;
   return writeStateAtomic(
     jobDir,
     {
-      ...S,
-      name: n,
-      nameSource: r,
+      ...current,
+      name,
+      nameSource: source,
       updatedAt: new Date().toISOString(),
     },
     storageV5,
@@ -1138,12 +1223,12 @@ async function syncJobColor(ownJobShortId, effectiveAgentColor, storageV5) {
   if (!jobState) return false;
   if (jobState.color === effectiveAgentColor) return true;
   invalidateJobStateCache(jobDir);
-  let m = (await readJobState(jobDir, storageV5)) ?? jobState;
-  if (m.color === effectiveAgentColor) return true;
+  let current = (await readJobState(jobDir, storageV5)) ?? jobState;
+  if (current.color === effectiveAgentColor) return true;
   return writeStateAtomic(
     jobDir,
     {
-      ...m,
+      ...current,
       color: effectiveAgentColor,
       updatedAt: new Date().toISOString(),
     },
@@ -1161,25 +1246,25 @@ function getBgRelocatedCwd() {
   return currentSessionStatusState().relocatedCwd;
 }
 //@ chunk-y162pn60.js:37492-37865 placement
-async function relocateBgSessionCwd(e, n) {
+async function relocateBgSessionCwd(cwd, storageV5) {
   let CLAUDE_JOB_DIR = env.CLAUDE_JOB_DIR;
   if (!CLAUDE_JOB_DIR || env.CLAUDE_CODE_SESSION_KIND !== "bg") return;
-  currentSessionStatusState().relocatedCwd = e;
+  currentSessionStatusState().relocatedCwd = cwd;
   invalidateJobStateCache(CLAUDE_JOB_DIR);
-  let jobState = await readJobState(CLAUDE_JOB_DIR, n);
-  let f = jobState?.worktreePath ? jobState.originCwd : e;
-  if (!jobState || (jobState.cwd === e && jobState.originCwd === f)) return;
+  let jobState = await readJobState(CLAUDE_JOB_DIR, storageV5);
+  let originCwd = jobState?.worktreePath ? jobState.originCwd : cwd;
+  if (!jobState || (jobState.cwd === cwd && jobState.originCwd === originCwd)) return;
   invalidateJobStateCache(CLAUDE_JOB_DIR);
-  let m = (await readJobState(CLAUDE_JOB_DIR, n)) ?? jobState;
+  let current = (await readJobState(CLAUDE_JOB_DIR, storageV5)) ?? jobState;
   await writeStateAtomic(
     CLAUDE_JOB_DIR,
     {
-      ...m,
-      cwd: e,
-      originCwd: m.worktreePath ? m.originCwd : e,
+      ...current,
+      cwd,
+      originCwd: current.worktreePath ? current.originCwd : cwd,
       updatedAt: new Date().toISOString(),
     },
-    n,
+    storageV5,
   ).catch((error) => {
     if (!isENOENT(error)) logJobWriteError(error);
   });
@@ -1193,11 +1278,11 @@ async function syncJobResumeSessionId(sessionId, transcriptPath, storageV5) {
   if (!jobState || (jobState.resumeSessionId === sessionId && jobState.linkScanPath === transcriptPath))
     return;
   invalidateJobStateCache(CLAUDE_JOB_DIR);
-  let m = (await readJobState(CLAUDE_JOB_DIR, storageV5)) ?? jobState;
+  let current = (await readJobState(CLAUDE_JOB_DIR, storageV5)) ?? jobState;
   await writeStateAtomic(
     CLAUDE_JOB_DIR,
     {
-      ...m,
+      ...current,
       resumeSessionId: sessionId,
       linkScanPath: transcriptPath,
       linkScanOffset: 0,
@@ -1209,19 +1294,20 @@ async function syncJobResumeSessionId(sessionId, transcriptPath, storageV5) {
   });
 }
 //@ chunk-y162pn60.js:38208-38877 placement
-async function syncLiveInFlightSnapshot(e, storageV5, { includeSettled: r = false } = {}) {
+async function syncLiveInFlightSnapshot(rows, storageV5, { includeSettled = false } = {}) {
   let CLAUDE_JOB_DIR = env.CLAUDE_JOB_DIR;
   if (!CLAUDE_JOB_DIR || env.CLAUDE_CODE_SESSION_KIND !== "bg") return;
   await withOwnJobStateWrite(async () => {
     invalidateJobStateCache(CLAUDE_JOB_DIR);
     let jobState = await readJobState(CLAUDE_JOB_DIR, storageV5);
-    if (!jobState?.inFlight || (isSettled(jobState) && !r) || jobState.tempo === "active") return;
+    if (!jobState?.inFlight || (isSettled(jobState) && !includeSettled) || jobState.tempo === "active")
+      return;
     let inFlight = jobState.inFlight;
     if (
-      e.count === inFlight.tasks &&
-      (e.drainableMonitors ?? 0) === (inFlight.drainableMonitors ?? 0) &&
-      e.kinds.length === inFlight.kinds.length &&
-      e.kinds.every((kind) => inFlight.kinds.includes(kind))
+      rows.count === inFlight.tasks &&
+      (rows.drainableMonitors ?? 0) === (inFlight.drainableMonitors ?? 0) &&
+      rows.kinds.length === inFlight.kinds.length &&
+      rows.kinds.every((kind) => inFlight.kinds.includes(kind))
     )
       return;
     await writeStateAtomic(
@@ -1229,12 +1315,12 @@ async function syncLiveInFlightSnapshot(e, storageV5, { includeSettled: r = fals
       {
         ...jobState,
         inFlight: {
-          tasks: e.count,
+          tasks: rows.count,
           queued: inFlight.queued,
-          kinds: [...e.kinds],
-          ...(e.drainableMonitors !== undefined &&
-            e.drainableMonitors > 0 && {
-              drainableMonitors: e.drainableMonitors,
+          kinds: [...rows.kinds],
+          ...(rows.drainableMonitors !== undefined &&
+            rows.drainableMonitors > 0 && {
+              drainableMonitors: rows.drainableMonitors,
             }),
           ...(inFlight.wake !== undefined && {
             wake: inFlight.wake,
@@ -1249,74 +1335,77 @@ async function syncLiveInFlightSnapshot(e, storageV5, { includeSettled: r = fals
   });
 }
 //@ chunk-y162pn60.js:38877-39018 placement
-function isAutoOrMatchingName(e, n) {
-  if (n === undefined || !e.name) return true;
-  if (e.nameSource === "auto" || e.nameSource === "collision") return true;
-  return n.includes(sanitizeSessionTitle(e.name));
+function isAutoOrMatchingName(state, name) {
+  if (name === undefined || !state.name) return true;
+  if (state.nameSource === "auto" || state.nameSource === "collision") return true;
+  return name.includes(sanitizeSessionTitle(state.name));
 }
 //@ chunk-y162pn60.js:39018-39765 placement
-async function syncRespawnFlag(e, n, r, s, f, m, g) {
-  let CLAUDE_JOB_DIR = env.CLAUDE_JOB_DIR;
-  if (!CLAUDE_JOB_DIR || env.CLAUDE_CODE_SESSION_KIND !== "bg") return;
-  await withOwnJobStateWrite(async () => {
-    invalidateJobStateCache(CLAUDE_JOB_DIR);
-    let jobState = await readJobState(CLAUDE_JOB_DIR, f);
-    if (!jobState?.respawnFlags) return;
-    if (g && !g(jobState.respawnFlags)) return;
-    let h = [e, ...n];
-    let w = (respawnFlags) => {
-      let D = [];
-      for (let idx = 0; idx < respawnFlags.length; idx++) {
-        let L = respawnFlags[idx];
-        if (h.some((j) => L === j || L.startsWith(`${j}=`))) {
-          if (L.indexOf("=") === -1 && respawnFlags[idx + 1] !== undefined) idx++;
-          continue;
-        }
-        D.push(L);
-      }
-      if (r === null) return D;
-      return [...D, ...flagArgs(e, r)];
-    };
-    let x = w(jobState.respawnFlags);
-    if (x.length === jobState.respawnFlags.length && x.every((v, D) => v === jobState.respawnFlags[D]))
-      return;
-    invalidateJobStateCache(CLAUDE_JOB_DIR);
-    let F = (await readJobState(CLAUDE_JOB_DIR, f)) ?? jobState;
-    let respawnFlags = F.respawnFlags ?? jobState.respawnFlags;
-    if (g && !g(respawnFlags)) return;
-    let P = isAutoOrMatchingName(F, m);
-    await writeStateAtomic(
-      CLAUDE_JOB_DIR,
-      {
-        ...F,
-        ...(P ? s : {}),
-        respawnFlags: w(respawnFlags),
-        updatedAt: new Date().toISOString(),
-      },
-      f,
-    ).catch((error) => {
-      if (!isENOENT(error)) logJobWriteError(error);
-    });
-  });
-}
-//@ chunk-y162pn60.js:39765-40207 placement
-async function appendRespawnFlag(e, n, storageV5) {
+async function syncRespawnFlag(flagName, extraFlags, flagValue, statePatch, storageV5, draftName, filter) {
   let CLAUDE_JOB_DIR = env.CLAUDE_JOB_DIR;
   if (!CLAUDE_JOB_DIR || env.CLAUDE_CODE_SESSION_KIND !== "bg") return;
   await withOwnJobStateWrite(async () => {
     invalidateJobStateCache(CLAUDE_JOB_DIR);
     let jobState = await readJobState(CLAUDE_JOB_DIR, storageV5);
     if (!jobState?.respawnFlags) return;
-    let m = flagArgs(e, n);
-    for (let j = 0; j <= jobState.respawnFlags.length - m.length; j++)
-      if (m.every((y, h) => jobState.respawnFlags[j + h] === y)) return;
+    if (filter && !filter(jobState.respawnFlags)) return;
+    let removedPrefixes = [flagName, ...extraFlags];
+    let rebuildFlags = (respawnFlags) => {
+      let kept = [];
+      for (let idx = 0; idx < respawnFlags.length; idx++) {
+        let flag = respawnFlags[idx];
+        if (removedPrefixes.some((prefix) => flag === prefix || flag.startsWith(`${prefix}=`))) {
+          if (flag.indexOf("=") === -1 && respawnFlags[idx + 1] !== undefined) idx++;
+          continue;
+        }
+        kept.push(flag);
+      }
+      if (flagValue === null) return kept;
+      return [...kept, ...flagArgs(flagName, flagValue)];
+    };
+    let nextFlags = rebuildFlags(jobState.respawnFlags);
+    if (
+      nextFlags.length === jobState.respawnFlags.length &&
+      nextFlags.every((flag, index) => flag === jobState.respawnFlags[index])
+    )
+      return;
     invalidateJobStateCache(CLAUDE_JOB_DIR);
-    let g = (await readJobState(CLAUDE_JOB_DIR, storageV5)) ?? jobState;
+    let fresh = (await readJobState(CLAUDE_JOB_DIR, storageV5)) ?? jobState;
+    let respawnFlags = fresh.respawnFlags ?? jobState.respawnFlags;
+    if (filter && !filter(respawnFlags)) return;
+    let renameAllowed = isAutoOrMatchingName(fresh, draftName);
     await writeStateAtomic(
       CLAUDE_JOB_DIR,
       {
-        ...g,
-        respawnFlags: [...(g.respawnFlags ?? []), ...m],
+        ...fresh,
+        ...(renameAllowed ? statePatch : {}),
+        respawnFlags: rebuildFlags(respawnFlags),
+        updatedAt: new Date().toISOString(),
+      },
+      storageV5,
+    ).catch((error) => {
+      if (!isENOENT(error)) logJobWriteError(error);
+    });
+  });
+}
+//@ chunk-y162pn60.js:39765-40207 placement
+async function appendRespawnFlag(flag, value, storageV5) {
+  let CLAUDE_JOB_DIR = env.CLAUDE_JOB_DIR;
+  if (!CLAUDE_JOB_DIR || env.CLAUDE_CODE_SESSION_KIND !== "bg") return;
+  await withOwnJobStateWrite(async () => {
+    invalidateJobStateCache(CLAUDE_JOB_DIR);
+    let jobState = await readJobState(CLAUDE_JOB_DIR, storageV5);
+    if (!jobState?.respawnFlags) return;
+    let pair = flagArgs(flag, value);
+    for (let j = 0; j <= jobState.respawnFlags.length - pair.length; j++)
+      if (pair.every((item, index) => jobState.respawnFlags[j + index] === item)) return;
+    invalidateJobStateCache(CLAUDE_JOB_DIR);
+    let current = (await readJobState(CLAUDE_JOB_DIR, storageV5)) ?? jobState;
+    await writeStateAtomic(
+      CLAUDE_JOB_DIR,
+      {
+        ...current,
+        respawnFlags: [...(current.respawnFlags ?? []), ...pair],
         updatedAt: new Date().toISOString(),
       },
       storageV5,
@@ -1326,84 +1415,84 @@ async function appendRespawnFlag(e, n, storageV5) {
   });
 }
 //@ chunk-y162pn60.js:40207-40346 placement
-async function replaceFileExclusive(e, n) {
-  await rm(e, {
+async function replaceFileExclusive(path, content) {
+  await rm(path, {
     force: true,
   });
-  let r = await writeIfMissing(e, n);
+  let tmpPath = await writeIfMissing(path, content);
   try {
-    await retryFsOp(r, e);
+    await retryFsOp(tmpPath, path);
   } catch (error) {
-    await rm(r, {
+    await rm(tmpPath, {
       force: true,
     }).catch(() => {});
     throw error;
   }
 }
 //@ chunk-y162pn60.js:40346-40605 placement
-async function writeJobSidecarToStorage(e, n, r) {
-  let s = await e.write(n, r, {
+async function writeJobSidecarToStorage(storage, key, content) {
+  let result = await storage.write(key, content, {
     parent: "mustExist",
     mode: 438 & ~process.umask(),
   });
-  if (!s.ok) {
-    let f = storageErrorCode(s.error);
+  if (!result.ok) {
+    let code = storageErrorCode(result.error);
     throw Object.assign(
       new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        `[jobs] v5 sidecar write failed: ${formatStorageError(s.error)}`,
+        `[jobs] v5 sidecar write failed: ${formatStorageError(result.error)}`,
         "[jobs] v5 sidecar write failed",
       ),
-      f !== undefined
+      code !== undefined
         ? {
-            code: f,
+            code,
           }
         : {},
     );
   }
 }
 //@ chunk-y162pn60.js:40605-40744 placement
-async function writeSortOrder(jobDir, n, r) {
-  let s = isStorageV5Enabled() && r ? jobKeyFor(jobDir, ["order"]) : undefined;
-  if (r && s) await writeJobSidecarToStorage(r, s, String(n));
-  else await replaceFileExclusive(join(jobDir, "order"), String(n));
+async function writeSortOrder(jobDir, sortOrder, storage) {
+  let key = isStorageV5Enabled() && storage ? jobKeyFor(jobDir, ["order"]) : undefined;
+  if (storage && key) await writeJobSidecarToStorage(storage, key, String(sortOrder));
+  else await replaceFileExclusive(join(jobDir, "order"), String(sortOrder));
   invalidateJobStateCache(jobDir);
 }
 //@ chunk-y162pn60.js:40744-40893 placement
-async function writeStateSortOrder(jobDir, n, r) {
-  let s = isStorageV5Enabled() && r ? jobKeyFor(jobDir, ["stateOrder"]) : undefined;
-  if (r && s) await writeJobSidecarToStorage(r, s, String(n));
-  else await replaceFileExclusive(join(jobDir, "stateOrder"), String(n));
+async function writeStateSortOrder(jobDir, order, storage) {
+  let key = isStorageV5Enabled() && storage ? jobKeyFor(jobDir, ["stateOrder"]) : undefined;
+  if (storage && key) await writeJobSidecarToStorage(storage, key, String(order));
+  else await replaceFileExclusive(join(jobDir, "stateOrder"), String(order));
   invalidateJobStateCache(jobDir);
 }
 //@ chunk-y162pn60.js:40893-41202 placement
-async function writeJobGroup(jobDir, n, storageV5) {
-  let s = join(jobDir, "group");
-  let f = sanitizeGroupOrDefault(n);
-  let m = isStorageV5Enabled() && storageV5 ? jobKeyFor(jobDir, ["group"]) : undefined;
-  if (storageV5 && m) {
-    if (f) await writeJobSidecarToStorage(storageV5, m, f);
+async function writeJobGroup(jobDir, group, storageV5) {
+  let groupPath = join(jobDir, "group");
+  let sanitized = sanitizeGroupOrDefault(group);
+  let storageKey = isStorageV5Enabled() && storageV5 ? jobKeyFor(jobDir, ["group"]) : undefined;
+  if (storageV5 && storageKey) {
+    if (sanitized) await writeJobSidecarToStorage(storageV5, storageKey, sanitized);
     else {
-      let g = await storageV5.delete(m);
-      if (!g.ok)
+      let result = await storageV5.delete(storageKey);
+      if (!result.ok)
         throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-          `[jobs] v5 sidecar delete failed: ${g.error.code}`,
+          `[jobs] v5 sidecar delete failed: ${result.error.code}`,
           "[jobs] v5 sidecar delete failed",
         );
     }
-  } else if (f) await replaceFileExclusive(s, f);
+  } else if (sanitized) await replaceFileExclusive(groupPath, sanitized);
   else
-    await rm(s, {
+    await rm(groupPath, {
       force: true,
     });
   invalidateJobStateCache(jobDir);
 }
 //@ chunk-y162pn60.js:41202-41490 placement = immediateFlushHistory (0.302)
-async function withSortOrderLock(e) {
-  let n = join(getJobsDir(), ".order");
+async function withSortOrderLock(fn) {
+  let lockPath = join(getJobsDir(), ".order");
   await mkdir(getJobsDir(), {
     recursive: true,
   });
-  await using r = await lock(n, {
+  await using lockHandle = await lock(lockPath, {
     realpath: false,
     stale: 5000,
     retries: {
@@ -1415,77 +1504,80 @@ async function withSortOrderLock(e) {
         level: "error",
       }),
   });
-  return await e();
+  return await fn();
 }
 //@ chunk-y162pn60.js:41490-41502 placement
 /**
  * 作业状态/pin 写入的串行队列。
  */
-var pinsWriteQueue = createKeyedQueue();
+var pinsWriteQueue; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-y162pn60.js:41490", () => {
+  pinsWriteQueue = createKeyedQueue();
+});
 //@ chunk-y162pn60.js:41502-41552 placement
-function withOwnJobStateWrite(e) {
-  return pinsWriteQueue.run("own-state.json", e);
+function withOwnJobStateWrite(fn) {
+  return pinsWriteQueue.run("own-state.json", fn);
 }
 //@ chunk-y162pn60.js:41552-42047 placement
-function writeJobPinned(id, n, r) {
+function writeJobPinned(jobId, pinned, storageV5) {
   return pinsWriteQueue.run("pins.json", async () => {
-    if (isStorageV5Enabled() && r) return setJobPinnedInStorage(id, n, r);
-    let s = pinsFilePath();
-    await mkdir(dirname(s), {
+    if (isStorageV5Enabled() && storageV5) return setJobPinnedInStorage(jobId, pinned, storageV5);
+    let pinsPath = pinsFilePath();
+    await mkdir(dirname(pinsPath), {
       recursive: true,
     });
-    await using f = await lock(s, {
+    await using lockHandle = await lock(pinsPath, {
       realpath: false,
       stale: PIN_STALE_MS,
       retries: {
         retries: 5,
         minTimeout: 20,
       },
-      onCompromised: (g) =>
-        logForDebugging(`pins.json lock compromised (likely process suspend or slow fs): ${g}`, {
+      onCompromised: (err) =>
+        logForDebugging(`pins.json lock compromised (likely process suspend or slow fs): ${err}`, {
           level: "error",
         }),
     });
     let pinnedJobIds = await readPinnedJobIds();
-    if (n ? pinnedJobIds.has(id) : !pinnedJobIds.has(id)) return;
-    if (n) pinnedJobIds.add(id);
+    if (pinned ? pinnedJobIds.has(jobId) : !pinnedJobIds.has(jobId)) return;
+    if (pinned) pinnedJobIds.add(jobId);
     else {
-      pinnedJobIds.delete(id);
-      await rm(join(getJobDir(id), "order")).catch((error) => {
+      pinnedJobIds.delete(jobId);
+      await rm(join(getJobDir(jobId), "order")).catch((error) => {
         if (!isENOENT(error)) throw error;
       });
-      invalidateJobStateCache(getJobDir(id));
+      invalidateJobStateCache(getJobDir(jobId));
     }
-    await writeFileAtomic(s, jsonStringify([...pinnedJobIds], null, 2));
+    await writeFileAtomic(pinsPath, jsonStringify([...pinnedJobIds], null, 2));
   });
 }
 //@ chunk-y162pn60.js:42047-42973 placement
 /**
  * 在存储中更新置顶作业列表（加入或移除）；文件异常时先清理；取消置顶后删除该作业的 order sidecar 并使状态缓存失效。
  */
-async function setJobPinnedInStorage(e, n, r) {
-  let updatePins = (y) => {
-    let pinnedIds = parsePinnedIds(y?.value);
-    if (n ? pinnedIds.has(e) : !pinnedIds.has(e))
+async function setJobPinnedInStorage(jobId, pinned, storage) {
+  let updatePins = (current) => {
+    let pinnedIds = parsePinnedIds(current?.value);
+    if (pinned ? pinnedIds.has(jobId) : !pinnedIds.has(jobId))
       return {
         skip: true,
         result: false,
       };
-    if (n) pinnedIds.add(e);
-    else pinnedIds.delete(e);
+    if (pinned) pinnedIds.add(jobId);
+    else pinnedIds.delete(jobId);
     return {
       write: jsonStringify([...pinnedIds], null, 2),
       result: true,
     };
   };
   let jobPins = getJobPins();
-  let m = await r.statMeta(STORAGE_SPACES.jobPins());
-  if (m.ok && m.value.size > MAX_STATE_BYTES) {
+  let statResult = await storage.statMeta(STORAGE_SPACES.jobPins());
+  if (statResult.ok && statResult.value.size > MAX_STATE_BYTES) {
     await removeBadPinsFile({
       evenRegular: true,
     });
     jobPins.delete(pinsFilePath());
-  } else if (!m.ok && classifyStorageRejection(m.error) !== undefined) {
+  } else if (!statResult.ok && classifyStorageRejection(statResult.error) !== undefined) {
     await removeBadPinsFile();
     jobPins.delete(pinsFilePath());
   }
@@ -1493,102 +1585,102 @@ async function setJobPinnedInStorage(e, n, r) {
     publishDiscipline: "atomic",
     mode: 438 & ~process.umask(),
   };
-  let S = await r.updateText(STORAGE_SPACES.jobPins(), updatePins, writeOptions);
-  if (!S.ok && (await removeBadPinsFile()))
-    S = await r.updateText(STORAGE_SPACES.jobPins(), updatePins, writeOptions);
-  if (!S.ok)
+  let updateResult = await storage.updateText(STORAGE_SPACES.jobPins(), updatePins, writeOptions);
+  if (!updateResult.ok && (await removeBadPinsFile()))
+    updateResult = await storage.updateText(STORAGE_SPACES.jobPins(), updatePins, writeOptions);
+  if (!updateResult.ok)
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `[jobs] v5 pins update failed: ${S.error.code}`,
+      `[jobs] v5 pins update failed: ${updateResult.error.code}`,
       "[jobs] v5 pins update failed",
     );
-  if (!n && S.value.result === true) {
-    let y = jobStoragePath(e, ["order"]);
-    if (y) {
-      let h = await r.delete(y);
-      if (!h.ok)
-        logForDebugging(`[jobs] v5 order sidecar release failed after unpin: ${h.error.code}`, {
+  if (!pinned && updateResult.value.result === true) {
+    let orderKey = jobStoragePath(jobId, ["order"]);
+    if (orderKey) {
+      let deleteResult = await storage.delete(orderKey);
+      if (!deleteResult.ok)
+        logForDebugging(`[jobs] v5 order sidecar release failed after unpin: ${deleteResult.error.code}`, {
           level: "warn",
         });
     } else
-      await rm(join(getJobDir(e), "order")).catch((error) => {
+      await rm(join(getJobDir(jobId), "order")).catch((error) => {
         if (!isENOENT(error))
           logForDebugging(`[jobs] order sidecar release failed after unpin: ${errorMessage(error)}`, {
             level: "warn",
           });
       });
-    invalidateJobStateCache(getJobDir(e));
+    invalidateJobStateCache(getJobDir(jobId));
   }
 }
 //@ chunk-y162pn60.js:42973-43370 placement
-async function listJobs(e, n, r) {
-  if (n) return listJobsFromStorage(n, e, r);
-  let s;
+async function listJobs(crashed, storage, onUnavailable) {
+  if (storage) return listJobsFromStorage(storage, crashed, onUnavailable);
+  let entries;
   try {
-    s = await readdir(getJobsDir(), {
+    entries = await readdir(getJobsDir(), {
       withFileTypes: true,
     });
   } catch (error) {
-    if (isUnavailableErrorCode(getErrnoCode(error))) r?.();
+    if (isUnavailableErrorCode(getErrnoCode(error))) onUnavailable?.();
     return [];
   }
-  let [pinnedJobIds, m] = await Promise.all([
+  let [pinnedJobIds, jobs] = await Promise.all([
     readPinnedJobIds(),
     Promise.all(
-      s
-        .filter((S) => S.isDirectory())
-        .map(async (S) => {
-          let jobState = await readJobState(join(getJobsDir(), S.name));
+      entries
+        .filter((entry) => entry.isDirectory())
+        .map(async (entry) => {
+          let jobState = await readJobState(join(getJobsDir(), entry.name));
           return jobState
             ? {
-                id: S.name,
+                id: entry.name,
                 state: jobState,
               }
             : null;
         }),
     ),
   ]);
-  let mapped = m
-    .filter((S) => S !== null)
-    .map((S) =>
-      pinnedJobIds.has(S.id)
+  let mapped = jobs
+    .filter((job) => job !== null)
+    .map((job) =>
+      pinnedJobIds.has(job.id)
         ? {
-            ...S,
+            ...job,
             state: {
-              ...S.state,
+              ...job.state,
               pinned: true,
             },
           }
-        : S,
+        : job,
     );
-  return e ? markCrashed(mapped, e) : mapped;
+  return crashed ? markCrashed(mapped, crashed) : mapped;
 }
 //@ chunk-y162pn60.js:43370-43767 placement
 /**
  * 分页列出存储中所有任务的 id。
  */
-async function listStoredJobIds(e) {
-  let n = [];
-  let r;
+async function listStoredJobIds(storage) {
+  let ids = [];
+  let cursor;
   do {
-    let s = await e.listEntries(
+    let page = await storage.listEntries(
       {
         namespace: "job",
       },
-      r === undefined
+      cursor === undefined
         ? {
             skipScopeStats: true,
           }
         : {
-            cursor: r,
+            cursor,
             skipScopeStats: true,
           },
     );
-    if (!s.ok)
+    if (!page.ok)
       return {
         ok: false,
-        error: s.error,
+        error: page.error,
       };
-    for (let item of s.value.items)
+    for (let item of page.value.items)
       if (
         item.kind === "scope" &&
         item.scope.namespace === "job" &&
@@ -1596,30 +1688,30 @@ async function listStoredJobIds(e) {
         item.scope.relPath === undefined &&
         isValidKeySegment(item.scope.jobId)
       )
-        n.push(item.scope.jobId);
-    r = s.value.cursor;
-  } while (r !== undefined);
+        ids.push(item.scope.jobId);
+    cursor = page.value.cursor;
+  } while (cursor !== undefined);
   return {
     ok: true,
-    ids: n,
+    ids,
   };
 }
 //@ chunk-y162pn60.js:43767-44088 placement
 /**
  * 列出存储中的全部作业及其状态，标记置顶；存储不可用时回调并返回空；需要时标记崩溃的作业。
  */
-async function listJobsFromStorage(e, n, r) {
-  let s = await listStoredJobIds(e);
-  if (!s.ok) {
-    if (isUnavailableError(s.error)) r?.();
+async function listJobsFromStorage(storage, crashed, onUnavailable) {
+  let listing = await listStoredJobIds(storage);
+  if (!listing.ok) {
+    if (isUnavailableError(listing.error)) onUnavailable?.();
     return [];
   }
-  let ids = s.ids;
-  let [pinnedJobIds, g] = await Promise.all([
-    readPinnedJobIds(e),
+  let ids = listing.ids;
+  let [pinnedJobIds, states] = await Promise.all([
+    readPinnedJobIds(storage),
     Promise.all(
       ids.map(async (id) => {
-        let jobState = await readJobState(getJobDir(id), e);
+        let jobState = await readJobState(getJobDir(id), storage);
         return jobState
           ? {
               id,
@@ -1629,32 +1721,32 @@ async function listJobsFromStorage(e, n, r) {
       }),
     ),
   ]);
-  let mapped = g
-    .filter((y) => y !== null)
-    .map((y) =>
-      pinnedJobIds.has(y.id)
+  let mapped = states
+    .filter((entry) => entry !== null)
+    .map((entry) =>
+      pinnedJobIds.has(entry.id)
         ? {
-            ...y,
+            ...entry,
             state: {
-              ...y.state,
+              ...entry.state,
               pinned: true,
             },
           }
-        : y,
+        : entry,
     );
-  return n ? markCrashed(mapped, n) : mapped;
+  return crashed ? markCrashed(mapped, crashed) : mapped;
 }
 //@ chunk-y162pn60.js:44088-44319 placement
-function markCrashed(e, n) {
+function markCrashed(rows, crashedIds) {
   let now = Date.now();
-  return e.map((s) => {
-    if (isSettled(s.state)) return s;
-    if (n.has(s.id)) return s;
-    if (s.state.keptBy !== undefined && isKeptIdleBlocked(s.state)) return s;
-    if (now - Date.parse(s.state.createdAt) < PIN_GUARD_MS) return s;
+  return rows.map((row) => {
+    if (isSettled(row.state)) return row;
+    if (crashedIds.has(row.id)) return row;
+    if (row.state.keptBy !== undefined && isKeptIdleBlocked(row.state)) return row;
+    if (now - Date.parse(row.state.createdAt) < PIN_GUARD_MS) return row;
     return {
-      ...s,
-      state: markJobFailedOrBlocked(s.state),
+      ...row,
+      state: markJobFailedOrBlocked(row.state),
     };
   });
 }
@@ -1685,8 +1777,8 @@ function markJobFailedOrBlocked(state) {
 var SEED_DETAIL = "starting\u2026";
 var IDLE_NEEDS = "send a prompt to start";
 //@ chunk-y162pn60.js:44572-44638 placement
-function isOverlayNeeds(e) {
-  return e.needs !== undefined && e.needsOverlay === e.needs;
+function isOverlayNeeds(row) {
+  return row.needs !== undefined && row.needsOverlay === row.needs;
 }
 //@ chunk-y162pn60.js:44638-44778 placement
 /**
@@ -1697,97 +1789,102 @@ var PRE_BOOT_STATES = ["starting", "resuming", "adopted", "crashed"];
 var ABANDONED_WORKER_MS = 172800000;
 var SERVICE_OFF_END_DETAIL = "ended while the background service was off";
 //@ chunk-y162pn60.js:44778-45957 placement
-function makeInitialState(e) {
+function makeInitialState(seed) {
   let iso = new Date().toISOString();
   return {
     state: "working",
-    detail: e.detail !== undefined ? redactSecrets(e.detail) : SEED_DETAIL,
-    tempo: e.tempo ?? "active",
-    needs: e.needs,
-    inFlight: e.inFlight,
+    detail: seed.detail !== undefined ? redactSecrets(seed.detail) : SEED_DETAIL,
+    tempo: seed.tempo ?? "active",
+    needs: seed.needs,
+    inFlight: seed.inFlight,
     output: null,
     children: null,
     linkScanOffset: 0,
-    linkScanPath: e.linkScanPath,
-    template: e.template.name,
-    routine: e.routine,
-    respawnFlags: e.respawnFlags ?? [],
-    bgIsolation: e.bgIsolation,
-    providerEnv: e.providerEnv && resolveForwardedEnvPaths(e.providerEnv, e.cwd),
-    sessionPermissionRules: e.sessionPermissionRules,
-    memoryToggledOff: e.memoryToggledOff,
-    autoMemoryOffThisSession: e.autoMemoryOffThisSession,
-    forkSourceAlive: e.forkSourceAlive,
-    forkBoundaryAt: e.forkBoundaryAt,
-    forkSessionId: e.forkSessionId,
-    forkParentSessionId: e.forkParentSessionId,
-    interactiveLineage: e.interactiveLineage,
-    intent: e.intent,
-    displayIntent: e.displayIntent,
-    name: e.name,
-    nameSource: e.nameSource,
+    linkScanPath: seed.linkScanPath,
+    template: seed.template.name,
+    routine: seed.routine,
+    respawnFlags: seed.respawnFlags ?? [],
+    bgIsolation: seed.bgIsolation,
+    providerEnv: seed.providerEnv && resolveForwardedEnvPaths(seed.providerEnv, seed.cwd),
+    sessionPermissionRules: seed.sessionPermissionRules,
+    memoryToggledOff: seed.memoryToggledOff,
+    autoMemoryOffThisSession: seed.autoMemoryOffThisSession,
+    forkSourceAlive: seed.forkSourceAlive,
+    forkBoundaryAt: seed.forkBoundaryAt,
+    forkSessionId: seed.forkSessionId,
+    forkParentSessionId: seed.forkParentSessionId,
+    interactiveLineage: seed.interactiveLineage,
+    intent: seed.intent,
+    displayIntent: seed.displayIntent,
+    name: seed.name,
+    nameSource: seed.nameSource,
     color: getEffectiveAgentColor({
-      userOverride: e.color,
-      agentDefinitionColor: e.template.color,
+      userOverride: seed.color,
+      agentDefinitionColor: seed.template.color,
     }),
-    initialPrompt: e.template.initialPrompt,
-    sessionId: e.sessionId,
-    resumeSessionId: e.sessionId,
-    daemonShort: e.sessionId.slice(0, 8),
-    cwd: e.cwd,
+    initialPrompt: seed.template.initialPrompt,
+    sessionId: seed.sessionId,
+    resumeSessionId: seed.sessionId,
+    daemonShort: seed.sessionId.slice(0, 8),
+    cwd: seed.cwd,
     createdAt: iso,
     updatedAt: iso,
     firstTerminalAt: null,
-    worktreePath: e.worktreePath,
-    worktreeBranch: e.worktreeBranch,
-    worktreeHookBased: e.worktreeHookBased,
-    originCwd: e.originCwd,
+    worktreePath: seed.worktreePath,
+    worktreeBranch: seed.worktreeBranch,
+    worktreeHookBased: seed.worktreeHookBased,
+    originCwd: seed.originCwd,
     backend: "daemon",
   };
 }
 //@ chunk-y162pn60.js:45957-47688 placement
-async function adoptRosterOrphans(e, n, r) {
-  if (n.length === 0) return e;
-  let s = new Set(e.map((h) => h.id));
-  let filtered = n.filter(
-    (h) => SHORT_ID_RE.test(h.short) && !s.has(h.short) && h.source !== "spare" && !h.dying,
+async function adoptRosterOrphans(jobs, rosterOrphans, storageV5) {
+  if (rosterOrphans.length === 0) return jobs;
+  let knownIds = new Set(jobs.map((job) => job.id));
+  let filtered = rosterOrphans.filter(
+    (orphan) =>
+      SHORT_ID_RE.test(orphan.short) &&
+      !knownIds.has(orphan.short) &&
+      orphan.source !== "spare" &&
+      !orphan.dying,
   );
-  if (filtered.length === 0) return e;
+  if (filtered.length === 0) return jobs;
   let roster = await readRoster(
     {
       silent: true,
     },
-    r,
+    storageV5,
   );
   let results = await Promise.all(
-    filtered.map((h) => {
-      let w = roster.workers[h.short];
-      return checkProcessLiveness(h.pid, w?.pid === h.pid ? w.procStart : undefined);
+    filtered.map((orphan) => {
+      let worker = roster.workers[orphan.short];
+      return checkProcessLiveness(orphan.pid, worker?.pid === orphan.pid ? worker.procStart : undefined);
     }),
   );
-  for (let [h, w] of filtered.entries())
-    if (results[h] !== "live") {
-      logForDebugging(`[adoptRosterOrphans] pruned dead record ${w.short} (${results[h]})`);
-      if (getJobStateReadCache().shouldReportPruned(w.short))
+  for (let [index, orphan] of filtered.entries())
+    if (results[index] !== "live") {
+      logForDebugging(`[adoptRosterOrphans] pruned dead record ${orphan.short} (${results[index]})`);
+      if (getJobStateReadCache().shouldReportPruned(orphan.short))
         logEvent("tengu_bg_roster_orphan_pruned", {
-          reason: fromEnum(results[h] ?? "dead_pid"),
+          reason: fromEnum(results[index] ?? "dead_pid"),
         });
-    } else getJobStateReadCache().notePruneCandidateLive(w.short);
-  let filtered_2 = filtered.filter((h, w) => results[w] === "live");
-  if (filtered_2.length === 0) return e;
-  let mapped = filtered_2.map((h) => {
-    let w = {
+    } else getJobStateReadCache().notePruneCandidateLive(orphan.short);
+  let filtered_2 = filtered.filter((orphan, index) => results[index] === "live");
+  if (filtered_2.length === 0) return jobs;
+  let mapped = filtered_2.map((orphan) => {
+    let state = {
       ...makeInitialState({
         template: {
-          name: h.agent ?? "bg",
+          name: orphan.agent ?? "bg",
           description: "",
         },
-        routine: h.routine,
-        intent: h.intent,
-        name: h.name,
-        detail: h.detail,
-        ...(h.tempo === "active" && (h.state === "running" || PRE_BOOT_STATES.includes(h.state))
-          ? h.routine
+        routine: orphan.routine,
+        intent: orphan.intent,
+        name: orphan.name,
+        detail: orphan.detail,
+        ...(orphan.tempo === "active" &&
+        (orphan.state === "running" || PRE_BOOT_STATES.includes(orphan.state))
+          ? orphan.routine
             ? {
                 tempo: "idle",
               }
@@ -1796,17 +1893,18 @@ async function adoptRosterOrphans(e, n, r) {
                 needs: IDLE_NEEDS,
               }
           : {
-              tempo: h.tempo,
-              needs: h.needs,
+              tempo: orphan.tempo,
+              needs: orphan.needs,
             }),
-        sessionId: stripLongPathPrefixes(h.sessionId),
-        cwd: stripLongPathPrefixes(h.cwd),
-        worktreePath: h.worktreePath === undefined ? undefined : stripLongPathPrefixes(h.worktreePath),
+        sessionId: stripLongPathPrefixes(orphan.sessionId),
+        cwd: stripLongPathPrefixes(orphan.cwd),
+        worktreePath:
+          orphan.worktreePath === undefined ? undefined : stripLongPathPrefixes(orphan.worktreePath),
       }),
-      createdAt: new Date(h.createdAt ?? h.startedAt).toISOString(),
-      daemonShort: h.short,
-      state: PRE_BOOT_STATES.includes(h.state) ? "working" : h.state,
-      ...(isTerminal(h.state) && {
+      createdAt: new Date(orphan.createdAt ?? orphan.startedAt).toISOString(),
+      daemonShort: orphan.short,
+      state: PRE_BOOT_STATES.includes(orphan.state) ? "working" : orphan.state,
+      ...(isTerminal(orphan.state) && {
         inFlight: {
           tasks: 0,
           queued: 0,
@@ -1814,39 +1912,41 @@ async function adoptRosterOrphans(e, n, r) {
         },
       }),
     };
-    let jobDir = getJobDir(h.short);
-    let F = r ? jobStoragePath(h.short, [STATE_JSON]) : undefined;
-    if (r && F)
-      r.write(F, jsonStringify(w), {
-        precondition: {
-          type: "ifAbsent",
-        },
-        mode: 384,
-      }).then((O) => {
-        if (O.ok) logEvent("tengu_bg_roster_orphan_adopted", {});
-        else if (O.error.code !== "AlreadyExists")
-          logJobWriteError(
-            new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-              `[jobs] v5 orphan seed write failed: ${O.error.code}`,
-              "[jobs] v5 orphan seed write failed",
-            ),
-          );
-      });
+    let jobDir = getJobDir(orphan.short);
+    let stateKey = storageV5 ? jobStoragePath(orphan.short, [STATE_JSON]) : undefined;
+    if (storageV5 && stateKey)
+      storageV5
+        .write(stateKey, jsonStringify(state), {
+          precondition: {
+            type: "ifAbsent",
+          },
+          mode: 384,
+        })
+        .then((writeResult) => {
+          if (writeResult.ok) logEvent("tengu_bg_roster_orphan_adopted", {});
+          else if (writeResult.error.code !== "AlreadyExists")
+            logJobWriteError(
+              new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
+                `[jobs] v5 orphan seed write failed: ${writeResult.error.code}`,
+                "[jobs] v5 orphan seed write failed",
+              ),
+            );
+        });
     else
       mkdir(jobDir, {
         recursive: true,
       })
-        .then(() => writeNewFile(join(jobDir, "state.json"), jsonStringify(w), 384))
+        .then(() => writeNewFile(join(jobDir, "state.json"), jsonStringify(state), 384))
         .then(() => logEvent("tengu_bg_roster_orphan_adopted", {}))
         .catch((error) => {
           if (getErrnoCode(error) !== "EEXIST") logJobWriteError(error);
         });
     return {
-      id: h.short,
-      state: w,
+      id: orphan.short,
+      state,
     };
   });
-  return [...e, ...mapped];
+  return [...jobs, ...mapped];
 }
 //@ chunk-y162pn60.js:47688-47810 placement = fetchInstallCountsFromGitHub (0.627)
 /**
@@ -1863,8 +1963,8 @@ function isTerminal(state) {
   return terminalOutcome(state) !== null;
 }
 //@ chunk-y162pn60.js:47845-47899 placement
-function isSettled(e) {
-  return isTerminal(e.state) && e.tempo !== "active";
+function isSettled(state) {
+  return isTerminal(state.state) && state.tempo !== "active";
 }
 //@ chunk-y162pn60.js:47899-47978 placement
 /**
@@ -1874,12 +1974,12 @@ function isKeptIdleBlocked(state) {
   return state.intent === "" && state.needs === IDLE_NEEDS && state.tempo === "blocked" && !isSettled(state);
 }
 //@ chunk-y162pn60.js:47978-48047 placement
-function isExecLaunch(e) {
-  return e.template === "exec" && e.respawnFlags.length === 0;
+function isExecLaunch(state) {
+  return state.template === "exec" && state.respawnFlags.length === 0;
 }
 //@ chunk-y162pn60.js:48047-48098 placement
-function hasOutstandingAsk(e) {
-  return e.state === "blocked" && !isExecLaunch(e);
+function hasOutstandingAsk(state) {
+  return state.state === "blocked" && !isExecLaunch(state);
 }
 //@ chunk-y162pn60.js:48098-48150 placement
 function isLocalDaemonAgent(state) {
@@ -1887,77 +1987,79 @@ function isLocalDaemonAgent(state) {
 }
 //@ chunk-y162pn60.js:48150-48266 placement
 function spawnOrigin(state) {
-  let n = state.originCwd || (state.cwd.match(/^(.+?)[/\\]\.claude[/\\]worktrees[/\\]/)?.[1] ?? state.cwd);
-  return stripLongPathPrefixes(n);
+  let origin =
+    state.originCwd || (state.cwd.match(/^(.+?)[/\\]\.claude[/\\]worktrees[/\\]/)?.[1] ?? state.cwd);
+  return stripLongPathPrefixes(origin);
 }
 //@ chunk-y162pn60.js:48266-48380 placement
 function jobMatchesCwd(state, cwdFilter) {
   if (state.backend === "remote") return true;
-  let r = relative(cwdFilter, spawnOrigin(state));
-  return r.split(/[/\\]/, 1)[0] !== ".." && !isAbsolute(r);
+  let rel = relative(cwdFilter, spawnOrigin(state));
+  return rel.split(/[/\\]/, 1)[0] !== ".." && !isAbsolute(rel);
 }
 //@ chunk-y162pn60.js:48380-48494 placement
 function isLoopJob(state) {
-  let n = (r) => r?.trim().toLowerCase().startsWith("/loop") ?? false;
-  return n(state.intent) || n(state.initialPrompt);
+  let isLoop = (text) => text?.trim().toLowerCase().startsWith("/loop") ?? false;
+  return isLoop(state.intent) || isLoop(state.initialPrompt);
 }
 //@ chunk-y162pn60.js:48494-48610 placement
-function isSelfDriving(e) {
+function isSelfDriving(state) {
   return (
-    e.routine !== undefined ||
-    e.selfWake === true ||
-    (e.inFlight?.kinds.includes("session_cron") ?? false) ||
-    isLoopJob(e)
+    state.routine !== undefined ||
+    state.selfWake === true ||
+    (state.inFlight?.kinds.includes("session_cron") ?? false) ||
+    isLoopJob(state)
   );
 }
 //@ chunk-y162pn60.js:48610-49379 placement
-function writeReapedTerminalState(e, n, r, s, storageV5) {
-  let jobDir = getJobDir(e);
+function writeReapedTerminalState(shortId, kind, detail, options, storageV5) {
+  let jobDir = getJobDir(shortId);
   return readJobState(jobDir, storageV5)
     .then(async (jobState) => {
-      if (!jobState || isSettled(jobState) || (n === "failed" && hasOutstandingAsk(jobState))) return "none";
+      if (!jobState || isSettled(jobState) || (kind === "failed" && hasOutstandingAsk(jobState)))
+        return "none";
       let now = Date.now();
       let iso = new Date(now).toISOString();
-      let h =
-        s?.resumable === "auto-resume" &&
-        n === "failed" &&
+      let deadEpoch =
+        options?.resumable === "auto-resume" &&
+        kind === "failed" &&
         !isExecLaunch(jobState) &&
         now - Date.parse(jobState.updatedAt) > ABANDONED_WORKER_MS;
       await writeStateAtomic(
         jobDir,
         {
           ...jobState,
-          state: h ? "stopped" : n === "crashed" ? "failed" : n,
-          detail: h
+          state: deadEpoch ? "stopped" : kind === "crashed" ? "failed" : kind,
+          detail: deadEpoch
             ? SERVICE_OFF_END_DETAIL
-            : n === "stopped"
+            : kind === "stopped"
               ? "stopped"
-              : n === "failed"
-                ? stripSuffix(jobState.detail || r, "; respawning")
-                : r,
+              : kind === "failed"
+                ? stripSuffix(jobState.detail || detail, "; respawning")
+                : detail,
           tempo: "idle",
           inFlight: undefined,
           needs: undefined,
           updatedAt: iso,
-          firstTerminalAt: jobState.firstTerminalAt ?? (h ? jobState.updatedAt : iso),
-          lastTerminalAt: h ? jobState.updatedAt : iso,
-          ...(s?.resumable === "auto-resume" &&
-            n === "failed" &&
-            (h
+          firstTerminalAt: jobState.firstTerminalAt ?? (deadEpoch ? jobState.updatedAt : iso),
+          lastTerminalAt: deadEpoch ? jobState.updatedAt : iso,
+          ...(options?.resumable === "auto-resume" &&
+            kind === "failed" &&
+            (deadEpoch
               ? {
                   deadEpochReapedAt: iso,
                 }
               : {
                   reapedMidWorkAt: jobState.updatedAt,
                 })),
-          ...(s?.resumable === "wake-only" &&
-            n === "failed" && {
+          ...(options?.resumable === "wake-only" &&
+            kind === "failed" && {
               reapedUnsettledAt: jobState.updatedAt,
             }),
         },
         storageV5,
       );
-      return h ? "dead-epoch" : "settled";
+      return deadEpoch ? "dead-epoch" : "settled";
     })
     .catch((error) => {
       logJobWriteError(error);
@@ -1973,6 +2075,7 @@ export {
   writeStateAtomic,
   listJobs,
   syncJobName,
+  JOB_PARENT_TRANSCRIPT_FILE,
   buildBridgeReattachEnv,
   resolveBridgeHandoffIdentity,
   jobStateKey,
@@ -1993,6 +2096,7 @@ export {
   IDLE_NEEDS,
   terminalOutcome,
   isSelfDriving,
+  jobStorageSpace,
   ABANDONED_WORKER_MS,
   writeJobPinned,
   UNGROUPED,

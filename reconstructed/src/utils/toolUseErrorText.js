@@ -15,8 +15,8 @@ var NESTED_TOOL_USE_ERROR_RE = /<\/?tool_use_error\b/i;
 /**
  * 从 `<tool_use_error>` 包裹中取错误正文，嵌套时返回 undefined。
  */
-function unwrapToolUseErrorText(n) {
-  let e = TOOL_USE_ERROR_WRAPPER_RE.exec(n)?.[1];
-  return e !== undefined && !NESTED_TOOL_USE_ERROR_RE.test(e) ? e : undefined;
+function unwrapToolUseErrorText(text) {
+  let inner = TOOL_USE_ERROR_WRAPPER_RE.exec(text)?.[1];
+  return inner !== undefined && !NESTED_TOOL_USE_ERROR_RE.test(inner) ? inner : undefined;
 }
 export { unwrapToolUseErrorText };

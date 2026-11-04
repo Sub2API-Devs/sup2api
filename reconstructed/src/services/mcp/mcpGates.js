@@ -36,13 +36,13 @@ function isSortedOtterOn() {
  * 读取"未加载工具"策略开关：everywhere 或（cowork 场景下的）hosted 时生效，附带开关来源。
  */
 function notLoadedToolPolicy() {
-  let { value: e, source } = getFeatureValueWithSource_CACHED_MAY_BE_STALE("tengu_precious_koala", "off");
-  let r = typeof e === "string" ? e.trim().toLowerCase() : e;
-  let n = isCoworkAny();
+  let { value, source } = getFeatureValueWithSource_CACHED_MAY_BE_STALE("tengu_precious_koala", "off");
+  let mode = typeof value === "string" ? value.trim().toLowerCase() : value;
+  let coworkSurface = isCoworkAny();
   return {
-    inForce: r === "everywhere" || (r === "hosted" && n),
+    inForce: mode === "everywhere" || (mode === "hosted" && coworkSurface),
     flagSource: source,
-    coworkSurface: n,
+    coworkSurface,
   };
 }
 export { isSortedOtterOn, notLoadedToolPolicy, isSurfaceFailedServersEnabled };

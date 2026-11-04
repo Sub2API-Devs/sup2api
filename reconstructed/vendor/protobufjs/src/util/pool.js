@@ -5,10 +5,10 @@
  * pieces: chunk-798ashq9.js (1)
  * attribution: cjs-require-graph 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-798ashq9.js:25666-25873 cjs-require-graph
-var require_pool = x(function (cjsExports, cjsModule) {
+var require_pool = __commonJS(function (cjsExports, cjsModule) {
   cjsModule.exports = pool;
   function pool(alloc, slice, size) {
     var SIZE = size || 8192;

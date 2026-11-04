@@ -46,3 +46,4 @@ var COMMENT_ANALYST_AGENT_DEF = {
   omitClaudeMd: true,
   getSystemPrompt: () => commentAnalystPrompt(),
 };
+export { COMMENT_ANALYST_AGENT_DEF };

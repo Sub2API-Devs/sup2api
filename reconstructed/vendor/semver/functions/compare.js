@@ -5,11 +5,11 @@
  * pieces: chunk-bwbq4xvm.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../runtime/bun-runtime.js";
 import { require_semver } from "../classes/semver.js";
 
 //@ chunk-bwbq4xvm.js:11583-11679 cjs-fingerprint
-var require_compare = x(function (cjsExports, cjsModule) {
+var require_compare = __commonJS(function (cjsExports, cjsModule) {
   var SemVer = require_semver();
   var compare = (a, b, loose) => new SemVer(a, loose).compare(new SemVer(b, loose));
   cjsModule.exports = compare;

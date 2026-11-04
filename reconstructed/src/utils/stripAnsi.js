@@ -14,21 +14,21 @@ import { toWellFormedString } from "./stringUtils.js";
 /**
  * 去掉 ANSI 转义（Bun.stripANSI）。
  */
-function stripAnsi(r) {
-  return Bun.stripANSI(r);
+function stripAnsi(text) {
+  return Bun.stripANSI(text);
 }
 //@ chunk-58wc6nbw.js:266-311 placement
 /**
  * 先转良构再除 ANSI，用于云端文本。
  */
-function sanitizeAnsiText(r) {
-  return toWellFormedString(stripAnsi(toWellFormedString(String(r))));
+function sanitizeAnsiText(value) {
+  return toWellFormedString(stripAnsi(toWellFormedString(String(value))));
 }
 //@ chunk-58wc6nbw.js:311-387 placement
 /**
  * 逐段除 ANSI，保留换行与分隔符。
  */
-function stripAnsiPerLine(r) {
-  return r.replace(/[^\n\r\v\f\x85\u2028\u2029]+/g, (n) => stripAnsi(n));
+function stripAnsiPerLine(text) {
+  return text.replace(/[^\n\r\v\f\x85\u2028\u2029]+/g, (line) => stripAnsi(line));
 }
 export { stripAnsi, stripAnsiPerLine, sanitizeAnsiText };

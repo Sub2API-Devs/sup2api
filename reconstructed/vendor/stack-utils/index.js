@@ -5,19 +5,19 @@
  * pieces: chunk-bzr73sfg.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x, importMetaRequire } from "../../runtime/bun-runtime.js";
+import { __commonJS, importMetaRequire } from "../../runtime/bun-runtime.js";
 import { require_escape_string_regexp } from "../escape-string-regexp/index.js";
 
 //@ chunk-bzr73sfg.js:126279-129747 cjs-fingerprint
-var require_stack_utils = x(function (cjsExports, cjsModule) {
+var require_stack_utils = __commonJS(function (cjsExports, cjsModule) {
   var escapeStringRegexp = require_escape_string_regexp();
   var cwd = typeof process === "object" && process && typeof process.cwd === "function" ? process.cwd() : ".";
   var natives = []
     .concat(importMetaRequire("module").builtinModules, "bootstrap_node", "node")
     .map(
-      (n) =>
+      (moduleName) =>
         new RegExp(
-          `(?:\\((?:node:)?${n}(?:\\.js)?:\\d+:\\d+\\)$|^\\s*at (?:node:)?${n}(?:\\.js)?:\\d+:\\d+$)`,
+          `(?:\\((?:node:)?${moduleName}(?:\\.js)?:\\d+:\\d+\\)$|^\\s*at (?:node:)?${moduleName}(?:\\.js)?:\\d+:\\d+$)`,
         ),
     );
   natives.push(

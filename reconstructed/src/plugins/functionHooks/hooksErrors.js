@@ -14,15 +14,15 @@ import { isPlainObject } from "../../utils/isPlainObject.js";
 /**
  * AbortSignal 的中止原因文本（Error 取 message，无原因用默认）。
  */
-function abortReasonText(r, o = "aborted") {
-  let { reason } = r;
-  return reason instanceof Error ? reason.message : reason === undefined ? o : String(reason);
+function abortReasonText(signal, fallback = "aborted") {
+  let { reason } = signal;
+  return reason instanceof Error ? reason.message : reason === undefined ? fallback : String(reason);
 }
 //@ chunk-ga3g4pve.js:329-379 placement
 /**
  * 答案不是纯数据
  */
-var answerNotPlainData = (r) => `the answer is not plain data: ${r}`;
+var answerNotPlainData = (detail) => `the answer is not plain data: ${detail}`;
 //@ chunk-ga3g4pve.js:379-525 placement
 class HooksError extends Error {
   name = "HooksError";
@@ -33,42 +33,42 @@ class HooksError extends Error {
 /**
  * next() 的参数必须是普通对象，否则抛说明用法的 HooksError。
  */
-function requireEventArgument(r, o) {
-  if (!isPlainObject(r))
+function requireEventArgument(value, name) {
+  if (!isPlainObject(value))
     throw new HooksError(
-      `${o}: next() takes the event's argument: next(e) passes it on, next({ ...e, x }) rewrites it`,
+      `${name}: next() takes the event's argument: next(e) passes it on, next({ ...e, x }) rewrites it`,
     );
-  return r;
+  return value;
 }
 //@ chunk-ga3g4pve.js:670-768 placement
 /**
  * 取错误的字符串 cause
  */
-function causeString(r) {
-  if (!(r instanceof Error)) return;
-  let cause = r.cause;
+function causeString(error) {
+  if (!(error instanceof Error)) return;
+  let cause = error.cause;
   return typeof cause === "string" ? cause : undefined;
 }
 //@ chunk-ga3g4pve.js:768-911 placement
 /**
  * 判断值是否像 AbortSignal（有 aborted 与事件监听方法）。
  */
-var isAbortSignalLike = (r) =>
-  typeof r === "object" &&
-  r !== null &&
-  "aborted" in r &&
-  typeof r.addEventListener === "function" &&
-  typeof r.removeEventListener === "function";
+var isAbortSignalLike = (value) =>
+  typeof value === "object" &&
+  value !== null &&
+  "aborted" in value &&
+  typeof value.addEventListener === "function" &&
+  typeof value.removeEventListener === "function";
 //@ chunk-ga3g4pve.js:911-966 placement
 /**
  * next() 参数不是纯数据
  */
-var nextNotPlainData = (r) => `next() argument is not plain data: ${r}`;
+var nextNotPlainData = (detail) => `next() argument is not plain data: ${detail}`;
 //@ chunk-ga3g4pve.js:966-1024 placement
 /**
  * 参数不是纯数据
  */
-var argsNotPlainData = (r, o) => `${r}: arguments are not plain data: ${o}`;
+var argsNotPlainData = (label, detail) => `${label}: arguments are not plain data: ${detail}`;
 //@ chunk-ga3g4pve.js:1024-1046 placement
 /**
  * 纯数据校验错误类
@@ -78,7 +78,7 @@ class PlainDataError extends HooksError {}
 /**
  * 是否该类错误
  */
-var isPlainDataError = (r) => r.reason instanceof PlainDataError;
+var isPlainDataError = (signal) => signal.reason instanceof PlainDataError;
 //@ chunk-ga3g4pve.js:1083-1126 placement
 /**
  * 按标志选错误类
@@ -99,30 +99,31 @@ var settledIfPlainData = (signal) =>
 /**
  * 转回 HooksError
  */
-var unwrapPlainDataError = (r) => (r instanceof PlainDataError ? new HooksError(r.message) : r);
+var unwrapPlainDataError = (error) =>
+  error instanceof PlainDataError ? new HooksError(error.message) : error;
 //@ chunk-ga3g4pve.js:1231-1249 placement
 var weakMap = new WeakMap();
 //@ chunk-ga3g4pve.js:1249-1320 placement
 /**
  * 用 WeakMap 打标
  */
-function tagWeak(r, o) {
-  if (typeof r === "object" && r !== null) weakMap.set(r, o);
-  return r;
+function tagWeak(value, tag) {
+  if (typeof value === "object" && value !== null) weakMap.set(value, tag);
+  return value;
 }
 //@ chunk-ga3g4pve.js:1320-1379 placement
 /**
  * 读弱标记
  */
-var readWeakTag = (r) => (typeof r === "object" && r !== null ? weakMap.get(r) : undefined);
+var readWeakTag = (value) => (typeof value === "object" && value !== null ? weakMap.get(value) : undefined);
 //@ chunk-ga3g4pve.js:1379-1446 placement
 /**
  * 询问被拒错误类
  */
 class AskRefusedError extends HooksError {
   asked;
-  constructor(r, asked) {
-    super(r);
+  constructor(message, asked) {
+    super(message);
     this.asked = asked;
   }
 }
@@ -132,25 +133,25 @@ var weakSet = new WeakSet();
 /**
  * 是否在弱集合中
  */
-var hasWeakSetTag = (r) => typeof r === "object" && r !== null && weakSet.has(r);
+var hasWeakSetTag = (value) => typeof value === "object" && value !== null && weakSet.has(value);
 //@ chunk-ga3g4pve.js:1517-1584 placement
 /**
  * 加入弱集合
  */
-function addWeakSetTag(r) {
-  if (typeof r === "object" && r !== null) weakSet.add(r);
-  return r;
+function addWeakSetTag(value) {
+  if (typeof value === "object" && value !== null) weakSet.add(value);
+  return value;
 }
 //@ chunk-ga3g4pve.js:1584-1759 placement
 function createWeakTagger() {
   let weakMap = new WeakMap();
   return {
-    mark(o, t) {
-      if (typeof o === "object" && o !== null && t !== undefined) weakMap.set(o, t);
-      return o;
+    mark(value, tag) {
+      if (typeof value === "object" && value !== null && tag !== undefined) weakMap.set(value, tag);
+      return value;
     },
-    of(o) {
-      return typeof o === "object" && o !== null ? weakMap.get(o) : undefined;
+    of(value) {
+      return typeof value === "object" && value !== null ? weakMap.get(value) : undefined;
     },
   };
 }
@@ -163,7 +164,7 @@ var weakTagger = createWeakTagger();
 /**
  * 打标
  */
-var tagError = (error, o) => weakTagger.mark(error, o);
+var tagError = (error, tag) => weakTagger.mark(error, tag);
 //@ chunk-ga3g4pve.js:1796-1854 placement
 /**
  * 环境已卸载错误
@@ -182,15 +183,15 @@ var tagPayload = (plugin, op, message) => ({
 /**
  * 带标记的卸载错误
  */
-function envUnloadedTagged(plugin, o) {
-  let t = envUnloadedError(plugin);
-  return tagError(t, tagPayload(plugin, o, t.message));
+function envUnloadedTagged(plugin, op) {
+  let error = envUnloadedError(plugin);
+  return tagError(error, tagPayload(plugin, op, error.message));
 }
 //@ chunk-ga3g4pve.js:1963-1984 placement
 /**
  * 读标记
  */
-var readTag = (r) => weakTagger.of(r);
+var readTag = (value) => weakTagger.of(value);
 export {
   HooksError,
   addWeakSetTag,

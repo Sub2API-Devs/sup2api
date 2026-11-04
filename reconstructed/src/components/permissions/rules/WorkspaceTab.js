@@ -8,9 +8,9 @@
  * pieces: chunk-p2qwpk2k.js (6)
  * attribution: placement 1, layout 2, fingerprint 2, file-local 1
  */
-import { init_react_production, P } from "../../../../vendor/react/cjs/react.production.js";
+import { init_react_production, useEffect } from "../../../../vendor/react/cjs/react.production.js";
 import { stripInvisibleChars } from "../../../utils/invisibleChars.js";
-import { w } from "../../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../../vendor/react/compiler-runtime.js";
 import { useTabHeaderFocus } from "../../design-system/Tabs.js";
 import { useProject } from "../../../context/session.js";
 import { uniqueLabels } from "../../../utils/permissions/approvalPayloadSerialization.js";
@@ -26,8 +26,8 @@ import { ModelSelector } from "../../agents/ModelSelector.js";
 //@ chunk-p2qwpk2k.js:33366-33370 placement
 init_react_production();
 //@ chunk-p2qwpk2k.js:33370-33408 layout
-function selectOriginalCwd(Ve) {
-  return Ve.originalCwd;
+function selectOriginalCwd(state) {
+  return state.originalCwd;
 }
 //@ chunk-p2qwpk2k.js:33408-33468 fingerprint = _temp (1)
 function toWorkspaceDirRow(path) {
@@ -42,12 +42,12 @@ function dirPath(dir) {
   return dir.path;
 }
 //@ chunk-p2qwpk2k.js:33499-33529 layout
-function displayDirPath($e) {
-  return stripInvisibleChars($e);
+function displayDirPath(dirPath) {
+  return stripInvisibleChars(dirPath);
 }
 //@ chunk-p2qwpk2k.js:33529-35210 fingerprint = WorkspaceTab (0.849)
 function WorkspaceTab(props) {
-  let $ = w(29);
+  let $ = useMemoCache(29);
   let {
     onCancel,
     toolPermissionContext,
@@ -72,36 +72,36 @@ function WorkspaceTab(props) {
     t1 = $[2];
     t2 = $[3];
   }
-  P(t1, t2);
+  useEffect(t1, t2);
   let t3;
   if ($[4] !== toolPermissionContext.additionalWorkingDirectories) {
     t3 = Array.from(toolPermissionContext.additionalWorkingDirectories.keys()).map(toWorkspaceDirRow);
     $[4] = toolPermissionContext.additionalWorkingDirectories;
     $[5] = t3;
   } else t3 = $[5];
-  let E = t3;
+  let directories = t3;
   let t4;
-  if ($[6] !== E || $[7] !== onRequestAddDirectory || $[8] !== onRequestRemoveDirectory) {
+  if ($[6] !== directories || $[7] !== onRequestAddDirectory || $[8] !== onRequestRemoveDirectory) {
     t4 = (selectedValue) => {
       if (selectedValue === "add-directory") {
         onRequestAddDirectory();
         return;
       }
-      let directory = E.find((V) => V.path === selectedValue);
+      let directory = directories.find((state) => state.path === selectedValue);
       if (directory && directory.isDeletable) onRequestRemoveDirectory(directory.path);
     };
-    $[6] = E;
+    $[6] = directories;
     $[7] = onRequestAddDirectory;
     $[8] = onRequestRemoveDirectory;
     $[9] = t4;
   } else t4 = $[9];
   let onChange = t4;
   let t5;
-  if ($[10] !== E) {
-    let se = uniqueLabels(E.map(dirPath), displayDirPath);
-    let mapped = E.map((Re, le) => ({
-      label: se[le],
-      value: Re.path,
+  if ($[10] !== directories) {
+    let dirLabels = uniqueLabels(directories.map(dirPath), displayDirPath);
+    let mapped = directories.map((directory, index) => ({
+      label: dirLabels[index],
+      value: directory.path,
     }));
     t5 =
       (mapped.push({
@@ -109,57 +109,57 @@ function WorkspaceTab(props) {
         value: "add-directory",
       }),
       mapped);
-    $[10] = E;
+    $[10] = directories;
     $[11] = t5;
   } else t5 = $[11];
-  let K = t5;
-  let ye;
+  let options = t5;
+  let cwdLabel;
   if ($[12] !== originalCwd) {
-    ye = stripInvisibleChars(originalCwd);
+    cwdLabel = stripInvisibleChars(originalCwd);
     $[12] = originalCwd;
-    $[13] = ye;
-  } else ye = $[13];
-  const children = `-  ${ye}`;
-  let ee;
+    $[13] = cwdLabel;
+  } else cwdLabel = $[13];
+  const children = `-  ${cwdLabel}`;
+  let cwdText;
   if ($[14] !== children) {
-    ee = jsxProd_default(Text, {
+    cwdText = jsxProd_default(Text, {
       children,
     });
     $[14] = children;
-    $[15] = ee;
-  } else ee = $[15];
-  let ce;
+    $[15] = cwdText;
+  } else cwdText = $[15];
+  let originalNote;
   if ($[16] === MEMO_CACHE_SENTINEL) {
-    ce = jsxProd_default(Text, {
+    originalNote = jsxProd_default(Text, {
       dimColor: true,
       children: "(Original working directory)",
     });
-    $[16] = ce;
-  } else ce = $[16];
-  let te;
-  if ($[17] !== ee) {
-    te = jsxProd_default_2(Box, {
+    $[16] = originalNote;
+  } else originalNote = $[16];
+  let cwdRow;
+  if ($[17] !== cwdText) {
+    cwdRow = jsxProd_default_2(Box, {
       flexDirection: "row",
       marginTop: 1,
       marginLeft: 2,
       gap: 1,
-      children: [ee, ce],
+      children: [cwdText, originalNote],
     });
-    $[17] = ee;
-    $[18] = te;
-  } else te = $[18];
-  const visibleOptionCount = Math.min(10, K.length);
-  let de;
+    $[17] = cwdText;
+    $[18] = cwdRow;
+  } else cwdRow = $[18];
+  const visibleOptionCount = Math.min(10, options.length);
+  let modelSelectorElement;
   if (
     $[19] !== focusHeader ||
     $[20] !== onChange ||
     $[21] !== headerFocused ||
     $[22] !== onCancel ||
-    $[23] !== K ||
+    $[23] !== options ||
     $[24] !== visibleOptionCount
   ) {
-    de = jsxProd_default(ModelSelector, {
-      options: K,
+    modelSelectorElement = jsxProd_default(ModelSelector, {
+      options,
       onChange,
       onCancel,
       visibleOptionCount,
@@ -171,21 +171,21 @@ function WorkspaceTab(props) {
     $[20] = onChange;
     $[21] = headerFocused;
     $[22] = onCancel;
-    $[23] = K;
+    $[23] = options;
     $[24] = visibleOptionCount;
-    $[25] = de;
-  } else de = $[25];
-  let X;
-  if ($[26] !== te || $[27] !== de) {
-    X = jsxProd_default_2(Box, {
+    $[25] = modelSelectorElement;
+  } else modelSelectorElement = $[25];
+  let column;
+  if ($[26] !== cwdRow || $[27] !== modelSelectorElement) {
+    column = jsxProd_default_2(Box, {
       flexDirection: "column",
       marginBottom: 1,
-      children: [te, de],
+      children: [cwdRow, modelSelectorElement],
     });
-    $[26] = te;
-    $[27] = de;
-    $[28] = X;
-  } else X = $[28];
-  return X;
+    $[26] = cwdRow;
+    $[27] = modelSelectorElement;
+    $[28] = column;
+  } else column = $[28];
+  return column;
 }
 export { WorkspaceTab };

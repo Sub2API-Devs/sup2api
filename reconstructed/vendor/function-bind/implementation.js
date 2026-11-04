@@ -5,10 +5,10 @@
  * pieces: chunk-h6b7mazd.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../runtime/bun-runtime.js";
+import { __commonJS } from "../../runtime/bun-runtime.js";
 
 //@ chunk-h6b7mazd.js:9877-10856 cjs-fingerprint
-var require_implementation = x(function (cjsExports, cjsModule) {
+var require_implementation = __commonJS(function (cjsExports, cjsModule) {
   var ERROR_MESSAGE = "Function.prototype.bind called on incompatible ";
   var toStr = Object.prototype.toString;
   var max = Math.max;

@@ -5,11 +5,11 @@
  * pieces: chunk-b7dyevzy.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../runtime/bun-runtime.js";
 import { require_error } from "./error.js";
 
 //@ chunk-b7dyevzy.js:6481-8871 cjs-fingerprint
-var require_option = x(function (cjsExports) {
+var require_option = __commonJS(function (cjsExports) {
   var { InvalidArgumentError } = require_error();
   class Option {
     constructor(flags, description) {

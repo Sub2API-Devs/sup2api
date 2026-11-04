@@ -16,9 +16,9 @@ var activeFeatureReader = null;
  * 临时替换功能读取器（返回恢复函数），用于策略探测。
  */
 function swapFeatureReader(getFeatureValue_SESSION_PINNED) {
-  let n = activeFeatureReader;
+  let previous = activeFeatureReader;
   activeFeatureReader = getFeatureValue_SESSION_PINNED;
-  return n;
+  return previous;
 }
 //@ chunk-yxnffbzs.js:967-1031 placement
 /**
@@ -99,17 +99,17 @@ var weakMap = new WeakMap();
 /**
  * 给对象打标记（弱映射）。
  */
-function tagObject(e, n) {
-  weakMap.set(e, n);
-  return e;
+function tagObject(object, tag) {
+  weakMap.set(object, tag);
+  return object;
 }
 //@ chunk-yxnffbzs.js:1803-1875 placement
 /**
  * 取对象上带类型标记的字段。
  */
-function getTaggedObject(e) {
-  if (e === null || typeof e !== "object") return;
-  return weakMap.get(e);
+function getTaggedObject(object) {
+  if (object === null || typeof object !== "object") return;
+  return weakMap.get(object);
 }
 export {
   CAPABILITY_BLOCK_KINDS,

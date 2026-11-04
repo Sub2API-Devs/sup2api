@@ -14,51 +14,51 @@ import { basename, join } from "path";
 /**
  * 判断字符串是否是 git 远程地址（http(s)://、ssh:// 或 user@host: 形式）。
  */
-function isGitRemoteUrl(url) {
+function isGitRemoteUrl(remoteUrl) {
   return (
-    url.startsWith("https://") ||
-    url.startsWith("http://") ||
-    url.startsWith("ssh://") ||
-    (!url.includes("://") && /^[A-Za-z0-9][A-Za-z0-9._-]*@[^:]+:/.test(url))
+    remoteUrl.startsWith("https://") ||
+    remoteUrl.startsWith("http://") ||
+    remoteUrl.startsWith("ssh://") ||
+    (!remoteUrl.includes("://") && /^[A-Za-z0-9][A-Za-z0-9._-]*@[^:]+:/.test(remoteUrl))
   );
 }
 //@ chunk-t3sg9e26.js:32615-33106 placement
 /**
  * 创建一个超时或外部信号中止时都会中止的 AbortSignal，返回 {signal, dispose}（可用于 using），dispose 清定时器并解除外部监听。
  */
-function createTimeoutSignal(signal, n) {
+function createTimeoutSignal(signal, ms) {
   let abortController = new AbortController();
-  let timer = setTimeout((a) => a.abort(), n, abortController);
+  let timer = setTimeout((controller) => controller.abort(), ms, abortController);
   if (typeof timer === "object" && "unref" in timer) timer.unref();
-  let s;
+  let onAbort;
   if (signal) {
     if (signal.aborted) {
       clearTimeout(timer);
       abortController.abort();
-      let a = () => {};
+      let noop = () => {};
       return {
         signal: abortController.signal,
-        dispose: a,
-        [Symbol.dispose]: a,
+        dispose: noop,
+        [Symbol.dispose]: noop,
       };
     }
-    s = () => {
+    onAbort = () => {
       clearTimeout(timer);
       abortController.abort();
     };
-    signal.addEventListener("abort", s, {
+    signal.addEventListener("abort", onAbort, {
       once: true,
     });
   }
   abortController.signal.addEventListener("abort", () => clearTimeout(timer));
-  let o = () => {
+  let dispose = () => {
     clearTimeout(timer);
-    if (signal && s) signal.removeEventListener("abort", s);
+    if (signal && onAbort) signal.removeEventListener("abort", onAbort);
   };
   return {
     signal: abortController.signal,
-    dispose: o,
-    [Symbol.dispose]: o,
+    dispose,
+    [Symbol.dispose]: dispose,
   };
 }
 //@ chunk-t3sg9e26.js:33106-33562 placement
@@ -85,44 +85,44 @@ function resolveRepositoryUrl(source) {
 /**
  * 把访问令牌写入 HTTPS 仓库地址（ccsr 令牌作为密码，其他作为用户名），SSH 地址与非 HTTPS 保持原样。
  */
-function withTokenInUrl(e, token) {
-  if (!token) return e;
-  if (e.startsWith("git@") || e.startsWith("ssh://")) return e;
-  let t;
+function withTokenInUrl(url, token) {
+  if (!token) return url;
+  if (url.startsWith("git@") || url.startsWith("ssh://")) return url;
+  let parsed;
   try {
-    t = new URL(e);
+    parsed = new URL(url);
   } catch {
-    return e;
+    return url;
   }
-  if (t.protocol !== "https:") return e;
+  if (parsed.protocol !== "https:") return url;
   if (token.startsWith("sk-ant-ccsr-")) {
-    t.username = "unused";
-    t.password = token;
-  } else t.username = token;
-  return t.toString();
+    parsed.username = "unused";
+    parsed.password = token;
+  } else parsed.username = token;
+  return parsed.toString();
 }
 //@ chunk-t3sg9e26.js:33827-34070 placement
 /**
  * 计算仓库在工作目录下的检出路径（test-file 类型取 basename），含 ./.. 段时返回空串。
  */
-function repoCheckoutDir(e, n) {
-  if (n.type === "test-file") {
-    let r = basename(n.repo);
-    if (!r || r === "." || r === "..") return "";
-    return join(e, r);
+function repoCheckoutDir(baseDir, source) {
+  if (source.type === "test-file") {
+    let dirName = basename(source.repo);
+    if (!dirName || dirName === "." || dirName === "..") return "";
+    return join(baseDir, dirName);
   }
-  let filtered = n.repo.split("/").filter((r) => r.length > 0);
+  let filtered = source.repo.split("/").filter((part) => part.length > 0);
   if (filtered.length === 0) return "";
-  for (let r of filtered) if (r === "." || r === "..") return "";
-  return join(e, ...filtered);
+  for (let part of filtered) if (part === "." || part === "..") return "";
+  return join(baseDir, ...filtered);
 }
 //@ chunk-t3sg9e26.js:34070-34198 placement
 /**
  * 把仓库路径转成目录名片段（各段以 - 连接），含 ./.. 段时返回空串。
  */
-function repoDirSlug(e) {
-  let filtered = e.repo.split("/").filter((t) => t.length > 0);
-  for (let t of filtered) if (t === "." || t === "..") return "";
+function repoDirSlug(source) {
+  let filtered = source.repo.split("/").filter((part) => part.length > 0);
+  for (let part of filtered) if (part === "." || part === "..") return "";
   return filtered.join("-");
 }
 export {

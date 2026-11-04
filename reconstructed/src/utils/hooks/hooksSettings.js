@@ -9,6 +9,8 @@
  * attribution: fingerprint 6, placement 5, layout 5
  */
 import { resolve } from "path";
+import { defaultShellKind } from "../shell/shellToolUtils.js";
+import { jsonStringify } from "../slowOperations.js";
 import { stableStringifySafe } from "./hookSerialization.js";
 import { isManagedOrAllowlistedHook } from "./managedHooksOnly.js";
 import { hookSourceOf } from "./sessionHooks.js";
@@ -20,54 +22,96 @@ import { EDITABLE_SETTING_SOURCES, isSettingSourceEnabled, SOURCES } from "../se
 import { getSessionId } from "../../bootstrap/state.js";
 import { uniq } from "../collections.js";
 import { getDisplayPath } from "../file.js";
-import { defaultShellKind } from "../shell/shellToolUtils.js";
-import { jsonStringify } from "../slowOperations.js";
 
+//@ chunk-f9asxqh1.js:4192-4888 fingerprint = isHookEqual (0.737)
+/**
+ * 判断两个钩子配置是否相同（按类型比较 command/args/shell/prompt/url/server/tool/input/script/file 与 if）；function 钩子永不相等。
+ */
+function isHookEqual(a, b) {
+  if (a.type !== b.type) return false;
+  let sameIf = (x, y) => (x.if ?? "") === (y.if ?? "");
+  switch (a.type) {
+    case "command": {
+      let shell = defaultShellKind();
+      return (
+        b.type === "command" &&
+        a.command === b.command &&
+        jsonStringify(a.args ?? null) === jsonStringify(b.args ?? null) &&
+        (a.shell ?? shell) === (b.shell ?? shell) &&
+        sameIf(a, b)
+      );
+    }
+    case "prompt":
+      return b.type === "prompt" && a.prompt === b.prompt && sameIf(a, b);
+    case "agent":
+      return b.type === "agent" && a.prompt === b.prompt && sameIf(a, b);
+    case "http":
+      return b.type === "http" && a.url === b.url && sameIf(a, b);
+    case "mcp_tool":
+      return (
+        b.type === "mcp_tool" &&
+        a.server === b.server &&
+        a.tool === b.tool &&
+        jsonStringify(a.input ?? {}) === jsonStringify(b.input ?? {}) &&
+        sameIf(a, b)
+      );
+    case "script":
+      return (
+        b.type === "script" &&
+        (a.script ?? null) === (b.script ?? null) &&
+        (a.file ?? null) === (b.file ?? null) &&
+        sameIf(a, b)
+      );
+    case "function":
+      return false;
+  }
+}
 //@ chunk-s61vbvea.js:200006-200126 placement
-var isInternalCallbackHookMatcher = (e) =>
-  e.pluginRoot === undefined &&
-  e.deviceOwner === undefined &&
-  e.hooks.every((hook) => hook.type === "callback" || hook.type === "function");
+var isInternalCallbackHookMatcher = (matcher) =>
+  matcher.pluginRoot === undefined &&
+  matcher.deviceOwner === undefined &&
+  matcher.hooks.every((hook) => hook.type === "callback" || hook.type === "function");
 //@ chunk-s61vbvea.js:200126-200256 placement
-function isManagedHookMatcher(e, n) {
-  let r = () => e.deviceOwner === undefined && n.managedKeys.has(stableStringifySafe(e));
-  return e.pluginId !== undefined
-    ? isManagedOrAllowlistedHook(e.pluginId)
-    : isInternalCallbackHookMatcher(e) || r();
+function isManagedHookMatcher(matcher, holdState) {
+  let isManagedKey = () =>
+    matcher.deviceOwner === undefined && holdState.managedKeys.has(stableStringifySafe(matcher));
+  return matcher.pluginId !== undefined
+    ? isManagedOrAllowlistedHook(matcher.pluginId)
+    : isInternalCallbackHookMatcher(matcher) || isManagedKey();
 }
 //@ chunk-s61vbvea.js:200256-200312 placement
-function isManagedHookMatcherSafe(e, n) {
+function isManagedHookMatcherSafe(matcher, holdState) {
   try {
-    return isManagedHookMatcher(e, n);
+    return isManagedHookMatcher(matcher, holdState);
   } catch {
-    return isInternalCallbackHookMatcher(e);
+    return isInternalCallbackHookMatcher(matcher);
   }
 }
 //@ chunk-s61vbvea.js:200312-200387 placement
 /**
  * 判断单个钩子条目能否解析出所属插件且该插件满足条件（解析出错视为否），用于按插件过滤钩子设置。
  */
-function isHookPluginSatisfied(e) {
+function isHookPluginSatisfied(hook) {
   try {
-    let n = hookSourceOf(e);
-    return n !== undefined && isVouchedMarketplaceRef(n);
+    let source = hookSourceOf(hook);
+    return source !== undefined && isVouchedMarketplaceRef(source);
   } catch {
     return false;
   }
 }
 //@ chunk-s61vbvea.js:200387-200618 placement = getAutoUpdatedPluginNames (0.672)
 /**
- * 按托管键过滤会话 hooks 集合（名字配错，与自动更新无关，见 lead 建议）。
+ * 按“钩子是否来自托管/可更新插件”过滤一组钩子：整组都满足时返回该组或空数组，混合时返回只含满足条目的新组。被 filterHooksByManagedHold 使用。
  */
-function getAutoUpdatedPluginNames(e, managedHooksHoldState, r) {
-  if (!(e.pluginId === undefined && e.hooks.some((hook) => hookSourceOf(hook) !== undefined)))
-    return isManagedHookMatcherSafe(e, managedHooksHoldState) === r ? [] : [e];
-  let filtered = e.hooks.filter((hook) => isHookPluginSatisfied(hook) !== r);
-  let y = filtered.length === e.hooks.length;
-  if (y || filtered.length === 0) return y ? [e] : [];
+function filterHooksByPluginHold(matcher, holdState, wanted) {
+  if (!(matcher.pluginId === undefined && matcher.hooks.some((hook) => hookSourceOf(hook) !== undefined)))
+    return isManagedHookMatcherSafe(matcher, holdState) === wanted ? [] : [matcher];
+  let filtered = matcher.hooks.filter((hook) => isHookPluginSatisfied(hook) !== wanted);
+  let allMatch = filtered.length === matcher.hooks.length;
+  if (allMatch || filtered.length === 0) return allMatch ? [matcher] : [];
   return [
     {
-      ...e,
+      ...matcher,
       hooks: filtered,
     },
   ];
@@ -102,11 +146,13 @@ function getHookDisplayText(hook) {
 /**
  * 钩子进度显示：{command 显示文本, statusMessage}。
  */
-function getHookProgressDisplay(e) {
+function getHookProgressDisplay(hook) {
   return {
-    command: escapeControlCharsForDisplay(getHookDisplayText(e)),
+    command: escapeControlCharsForDisplay(getHookDisplayText(hook)),
     statusMessage:
-      "statusMessage" in e && e.statusMessage ? escapeControlCharsForDisplay(e.statusMessage) : undefined,
+      "statusMessage" in hook && hook.statusMessage
+        ? escapeControlCharsForDisplay(hook.statusMessage)
+        : undefined,
   };
 }
 //@ chunk-s61vbvea.js:375244-375329 layout
@@ -230,9 +276,9 @@ function sortMatchersByPriority(matchers, hooksByEventAndMatcher, selectedEvent)
     acc[source] = index;
     return acc;
   }, {});
-  return [...matchers].sort((h, y) => {
-    let aHooks = hooksByEventAndMatcher[selectedEvent]?.[h] || [];
-    let bHooks = hooksByEventAndMatcher[selectedEvent]?.[y] || [];
+  return [...matchers].sort((a, b) => {
+    let aHooks = hooksByEventAndMatcher[selectedEvent]?.[a] || [];
+    let bHooks = hooksByEventAndMatcher[selectedEvent]?.[b] || [];
     let aSources = uniq(aHooks.map((aHook) => aHook.source));
     let bSources = uniq(bHooks.map((bHook) => bHook.source));
     let getSourcePriority = (source) =>
@@ -240,7 +286,7 @@ function sortMatchersByPriority(matchers, hooksByEventAndMatcher, selectedEvent)
     let aHighestPriority = Math.min(...aSources.map(getSourcePriority));
     let bHighestPriority = Math.min(...bSources.map(getSourcePriority));
     if (aHighestPriority !== bHighestPriority) return aHighestPriority - bHighestPriority;
-    return h.localeCompare(y);
+    return a.localeCompare(b);
   });
 }
 //@ chunk-bajxb7bf.js:47171-47988 fingerprint = hookSourceInlineDisplayString (0.375)
@@ -267,49 +313,6 @@ function getHookSourceEditHint(source) {
       return "This hook is set by your organization's managed settings and can't be changed here.";
   }
 }
-//@ chunk-f9asxqh1.js:4192-4888 fingerprint = isHookEqual (0.737)
-/**
- * 判断两个钩子配置是否相同（按类型比较 command/args/shell/prompt/url/server/tool/input/script/file 与 if）；function 钩子永不相等。
- */
-function isHookEqual(a, b) {
-  if (a.type !== b.type) return false;
-  let sameIf = (x, y) => (x.if ?? "") === (y.if ?? "");
-  switch (a.type) {
-    case "command": {
-      let r = defaultShellKind();
-      return (
-        b.type === "command" &&
-        a.command === b.command &&
-        jsonStringify(a.args ?? null) === jsonStringify(b.args ?? null) &&
-        (a.shell ?? r) === (b.shell ?? r) &&
-        sameIf(a, b)
-      );
-    }
-    case "prompt":
-      return b.type === "prompt" && a.prompt === b.prompt && sameIf(a, b);
-    case "agent":
-      return b.type === "agent" && a.prompt === b.prompt && sameIf(a, b);
-    case "http":
-      return b.type === "http" && a.url === b.url && sameIf(a, b);
-    case "mcp_tool":
-      return (
-        b.type === "mcp_tool" &&
-        a.server === b.server &&
-        a.tool === b.tool &&
-        jsonStringify(a.input ?? {}) === jsonStringify(b.input ?? {}) &&
-        sameIf(a, b)
-      );
-    case "script":
-      return (
-        b.type === "script" &&
-        (a.script ?? null) === (b.script ?? null) &&
-        (a.file ?? null) === (b.file ?? null) &&
-        sameIf(a, b)
-      );
-    case "function":
-      return false;
-  }
-}
 export {
   getAllHooks,
   sortMatchersByPriority,
@@ -321,6 +324,6 @@ export {
   hookSourceDescriptionDisplayString,
   getHookSourceEditHint,
   isHookEqual,
-  getAutoUpdatedPluginNames,
+  filterHooksByPluginHold,
   isHookPluginSatisfied,
 };

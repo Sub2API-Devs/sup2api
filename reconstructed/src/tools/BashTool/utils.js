@@ -8,6 +8,7 @@
  * pieces: chunk-e6aww6q8.js (7), chunk-qz53w8v8.js (1)
  * attribution: affinity 1, fingerprint 5, layout 2
  */
+import { isObjectBlock } from "../../utils/toolResultStorage.js";
 import { openTaskOutputForRead } from "../../utils/task/diskOutput.js";
 import { parseDataUri, isBase64DataUri } from "../../utils/task/shellOutputPersist.js";
 import { maybeResizeAndDownsampleImageBuffer } from "../../utils/imageResizer.js";
@@ -34,33 +35,41 @@ import { shouldMaintainProjectWorkingDir } from "../../utils/envUtils.js";
 import { pathInAllowedWorkingPath } from "../../utils/permissions/filesystem.js";
 import { setCwd } from "../../utils/Shell.js";
 import { logEvent } from "../../services/analytics/index.js";
-import { isObjectBlock } from "../../utils/toolResultStorage.js";
 
+//@ chunk-qz53w8v8.js:4223-4368 fingerprint = buildImageToolResult (1)
+function describeImageAttachment({ source }) {
+  let sourceBlock = isObjectBlock(source) ? source : undefined;
+  let mediaType = sourceBlock?.type === "base64" ? sourceBlock.media_type : undefined;
+  return {
+    type: "image",
+    mediaType: typeof mediaType === "string" ? mediaType : undefined,
+  };
+}
 //@ chunk-e6aww6q8.js:3100560-3100577 affinity
 var MAX_SHELL_IMAGE_OUTPUT_BYTES = 20971520;
 //@ chunk-e6aww6q8.js:3100577-3101182 fingerprint = resizeShellImageOutput (0.84)
 /**
  * 把 shell 输出的 data:image base64（或输出文件，≤20MB）解析、按模型限制缩放后重新编码为 data URI；失败返回 null。
  */
-async function resizeShellImageOutput(stdout, outputFilePath, r, s) {
+async function resizeShellImageOutput(stdout, outputFilePath, knownSize, imageLimits) {
   let source = stdout;
   if (outputFilePath) {
-    if (r !== undefined && r > MAX_SHELL_IMAGE_OUTPUT_BYTES) return null;
+    if (knownSize !== undefined && knownSize > MAX_SHELL_IMAGE_OUTPUT_BYTES) return null;
     let taskOutputForRead = await openTaskOutputForRead(outputFilePath);
     if (taskOutputForRead === null) return null;
     try {
       if ((await taskOutputForRead.stat()).size > MAX_SHELL_IMAGE_OUTPUT_BYTES) return null;
-      let q = [];
-      let Z = 0;
-      while (Z <= MAX_SHELL_IMAGE_OUTPUT_BYTES) {
-        let Se = Buffer.allocUnsafe(65536);
-        let { bytesRead } = await taskOutputForRead.read(Se, 0, Se.length, null);
+      let chunks = [];
+      let totalBytes = 0;
+      while (totalBytes <= MAX_SHELL_IMAGE_OUTPUT_BYTES) {
+        let chunk = Buffer.allocUnsafe(65536);
+        let { bytesRead } = await taskOutputForRead.read(chunk, 0, chunk.length, null);
         if (bytesRead === 0) break;
-        q.push(Se.subarray(0, bytesRead));
-        Z += bytesRead;
+        chunks.push(chunk.subarray(0, bytesRead));
+        totalBytes += bytesRead;
       }
-      if (Z > MAX_SHELL_IMAGE_OUTPUT_BYTES) return null;
-      source = Buffer.concat(q, Z).toString("utf8");
+      if (totalBytes > MAX_SHELL_IMAGE_OUTPUT_BYTES) return null;
+      source = Buffer.concat(chunks, totalBytes).toString("utf8");
     } finally {
       await taskOutputForRead.close();
     }
@@ -68,8 +77,8 @@ async function resizeShellImageOutput(stdout, outputFilePath, r, s) {
   let parsed = parseDataUri(source);
   if (!parsed) return null;
   let buf = Buffer.from(parsed.data, "base64");
-  let w = parsed.mediaType.split("/")[1] || "png";
-  let resized = await maybeResizeAndDownsampleImageBuffer(buf, buf.length, w, s);
+  let format = parsed.mediaType.split("/")[1] || "png";
+  let resized = await maybeResizeAndDownsampleImageBuffer(buf, buf.length, format, imageLimits);
   return `data:image/${resized.mediaType};base64,${resized.buffer.toString("base64")}`;
 }
 //@ chunk-e6aww6q8.js:3101182-3101488 fingerprint = formatOutput (1)
@@ -158,7 +167,7 @@ function formatBackgroundTaskMessage({
   readToolName,
 }) {
   let max = Math.max(1, Math.round((timedOutAfterMs ?? 0) / 1000));
-  let Se = backgroundedByUser
+  let intro = backgroundedByUser
     ? `Command was manually backgrounded by user with ID: ${backgroundTaskId}. Output is being written to: ${outputPath}.`
     : backgroundedToDeliverMessage
       ? `Command was moved to the background (ID: ${backgroundTaskId}) so that a message that arrived while it was running can reach you; it was not interrupted. Output is being written to: ${outputPath}.`
@@ -167,14 +176,14 @@ function formatBackgroundTaskMessage({
           ? `Command was moved to the background (ID: ${backgroundTaskId}) after running for ${max}s. Output is being written to: ${outputPath}.`
           : `Command did not complete within its ${max}s timeout and was moved to the background (ID: ${backgroundTaskId}). Output is being written to: ${outputPath}.`
         : `Command running in background with ID: ${backgroundTaskId}. Output is being written to: ${outputPath}.`;
-  let ke =
+  let expectsNotification =
     !backgroundedByUser &&
     !backgroundedToDeliverMessage &&
     !backgroundedByTurnAbort &&
     timedOutAfterMs === undefined &&
     !reapedAtFinalResponse &&
     shouldMentionBackgroundNotice();
-  let we = reapedAtFinalResponse
+  let notificationNote = reapedAtFinalResponse
     ? "If it exits while you are still working you will be notified, but it is terminated when you give your final response and no notification can follow that \u2014 so do not end your turn to wait for it; if you need its result, wait for it before giving your final response."
     : wakesItsOwner
       ? "You will be notified when it completes, even after your final response, unless this session goes idle first, so if you need its result, wait for it before you reply."
@@ -182,39 +191,39 @@ function formatBackgroundTaskMessage({
         ? "If it exits while you are still working you will be notified. After your reply you may not hear of it until the user writes again, and it will likely be stopped a few minutes later, so if you need its result, wait for it before you reply."
         : backgroundedByUser
           ? undefined
-          : ke
+          : expectsNotification
             ? "You will be notified when it completes \u2014 do not poll that file or sleep while waiting."
             : "You will be notified when it completes.";
-  let Ee =
+  let isRunningNow =
     timedOutAfterMs !== undefined ||
     backgroundedByUser ||
     backgroundedToDeliverMessage ||
     backgroundedByTurnAbort;
-  let Ae =
-    Ee && !backgroundedByUser
+  let duplicateNote =
+    isRunningNow && !backgroundedByUser
       ? `It is running now: do not start a second copy while it runs. If it is no longer needed, stop it with ${TASKSTOP}.`
       : undefined;
-  let Ie = Ee && !reapedAtFinalResponse ? getBackgroundTimeoutNote(undefined) : undefined;
-  let Me =
-    Ie !== undefined
-      ? `If it is still running after ${formatDuration(Ie, {
+  let timeoutMs = isRunningNow && !reapedAtFinalResponse ? getBackgroundTimeoutNote(undefined) : undefined;
+  let timeoutNote =
+    timeoutMs !== undefined
+      ? `If it is still running after ${formatDuration(timeoutMs, {
           hideTrailingZeros: true,
         })} in the background, it will be stopped${hasBackgroundBashStopAfterReply() ? "" : " and you will be notified"}.`
       : undefined;
-  let We = backgroundedByUser
+  let pollNote = backgroundedByUser
     ? undefined
-    : ke
+    : expectsNotification
       ? `${readToolName} the file only if the user asks for progress, or if you need a line it prints before you can go on, such as a server's ready line or port.`
       : `To check interim output, use ${readToolName} on that file path.`;
   return [
-    Se,
-    we,
-    Me,
-    Ae,
+    intro,
+    notificationNote,
+    timeoutNote,
+    duplicateNote,
     noOutputSeenAtTimeout && !backgroundedByUser
       ? "No output had been read from it when it was moved. A program that buffers its output, or a pipe into one such as tail, can keep the output file empty until the command finishes."
       : undefined,
-    We,
+    pollNote,
   ]
     .filter(Boolean)
     .join(" ");
@@ -230,11 +239,11 @@ var CWD_RESET_WARNING_RE = /(?:^|\n)(Shell cwd was reset to .+)$/;
 /**
  * 命令执行后若 cwd 跑出项目允许目录（或设置要求保持项目目录），把 cwd 重置回原始目录；返回是否重置。
  */
-function resetCwdIfOutsideProject(session, n) {
+function resetCwdIfOutsideProject(session, allowedDirs) {
   let cwd = getSessionProject(session).cwd;
   let originalCwd = getOriginalCwd();
   let shouldMaintain = shouldMaintainProjectWorkingDir();
-  if (shouldMaintain || (cwd !== originalCwd && !pathInAllowedWorkingPath(cwd, n))) {
+  if (shouldMaintain || (cwd !== originalCwd && !pathInAllowedWorkingPath(cwd, allowedDirs))) {
     try {
       setCwd(originalCwd, session);
     } catch {
@@ -246,15 +255,6 @@ function resetCwdIfOutsideProject(session, n) {
     }
   }
   return false;
-}
-//@ chunk-qz53w8v8.js:4223-4368 fingerprint = buildImageToolResult (1)
-function describeImageAttachment({ source }) {
-  let t = isObjectBlock(source) ? source : undefined;
-  let mediaType = t?.type === "base64" ? t.media_type : undefined;
-  return {
-    type: "image",
-    mediaType: typeof mediaType === "string" ? mediaType : undefined,
-  };
 }
 export {
   formatBackgroundTaskMessage,

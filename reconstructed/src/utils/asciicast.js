@@ -17,6 +17,7 @@ import { getProjectKeyIfRepresentable, getProjectsDir } from "./sessionStorage.j
 import { isStorageV5Enabled } from "./hoverRest.js";
 import { logForDebugging } from "./debug.js";
 import { unwrapResult } from "./resultError.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-08s5p3av.js:3102-3334 file-local
 class _resetRecordingStateForTesting {
@@ -57,52 +58,55 @@ function recordingKey(projectKey, sessionId, timestamp) {
 /**
  * 按会话根保存的录制状态。
  */
-var recordingStateByRoot = new SessionRootSlot(() => new _resetRecordingStateForTesting());
+var recordingStateByRoot; // deferred: uses SessionRootSlot (../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-08s5p3av.js:3424", () => {
+  recordingStateByRoot = new SessionRootSlot(() => new _resetRecordingStateForTesting());
+});
 //@ chunk-08s5p3av.js:3449-4215 facade-exports = renameRecordingForSession (0.754)
-async function renameRecordingForSession(session, storageV5) {
-  let o = recordingStateByRoot.of(session);
-  let oldPath = o.filePath;
-  if (!oldPath || o.timestamp === 0) return;
+async function renameRecordingForSession(session, storage) {
+  let recordingState = recordingStateByRoot.of(session);
+  let oldPath = recordingState.filePath;
+  if (!oldPath || recordingState.timestamp === 0) return;
   let projectDir = getProjectDir(getOriginalCwd());
-  let key = o.key;
+  let key = recordingState.key;
   let projectKey = getProjectKeyIfRepresentable(projectDir);
-  if (isStorageV5Enabled() && storageV5 !== undefined && key !== undefined && projectKey !== undefined) {
-    if (o.failed) return;
+  if (isStorageV5Enabled() && storage !== undefined && key !== undefined && projectKey !== undefined) {
+    if (recordingState.failed) return;
     let sessionId = getSessionId();
-    let g = join(projectDir, sessionId, `${o.timestamp}.cast`);
-    if (oldPath === g) return;
-    let h = recordingKey(projectKey, sessionId, o.timestamp);
-    let M = relative(projectDir, oldPath);
-    let projectDir_2 = relative(projectDir, g);
-    let v = async () => {
-      if (o.failed) return;
+    let nextPath = join(projectDir, sessionId, `${recordingState.timestamp}.cast`);
+    if (oldPath === nextPath) return;
+    let nextStorageKey = recordingKey(projectKey, sessionId, recordingState.timestamp);
+    let oldRelativePath = relative(projectDir, oldPath);
+    let projectDir_2 = relative(projectDir, nextPath);
+    let doRename = async () => {
+      if (recordingState.failed) return;
       try {
-        await moveSessionRecording(storageV5, key, h);
-        o.setFilePath(g, h);
-        logForDebugging(`[asciicast] Renamed recording: ${M} \u2192 ${projectDir_2}`);
+        await moveSessionRecording(storage, key, nextStorageKey);
+        recordingState.setFilePath(nextPath, nextStorageKey);
+        logForDebugging(`[asciicast] Renamed recording: ${oldRelativePath} \u2192 ${projectDir_2}`);
       } catch {
-        logForDebugging(`[asciicast] Failed to rename recording from ${M} to ${projectDir_2}`);
+        logForDebugging(`[asciicast] Failed to rename recording from ${oldRelativePath} to ${projectDir_2}`);
       }
     };
-    await (o.recorder?.park(v) ?? v());
+    await (recordingState.recorder?.park(doRename) ?? doRename());
     return;
   }
-  let newPath = join(projectDir, `${getSessionId()}-${o.timestamp}.cast`);
+  let newPath = join(projectDir, `${getSessionId()}-${recordingState.timestamp}.cast`);
   if (oldPath === newPath) return;
-  await o.recorder?.flush();
+  await recordingState.recorder?.flush();
   let oldName = basename(oldPath);
   let newName = basename(newPath);
   try {
     await rename(oldPath, newPath);
-    o.setFilePath(newPath);
+    recordingState.setFilePath(newPath);
     logForDebugging(`[asciicast] Renamed recording: ${oldName} \u2192 ${newName}`);
   } catch {
     logForDebugging(`[asciicast] Failed to rename recording from ${oldName} to ${newName}`);
   }
 }
 //@ chunk-08s5p3av.js:4215-4320 placement
-async function moveSessionRecording(e, key, o) {
-  unwrapResult(await e.move(key, o));
+async function moveSessionRecording(storage, key, nextKey) {
+  unwrapResult(await storage.move(key, nextKey));
   await rmdir(join(getProjectsDir(), key.projectKey, key.sessionId)).catch(() => {});
 }
 export { renameRecordingForSession };

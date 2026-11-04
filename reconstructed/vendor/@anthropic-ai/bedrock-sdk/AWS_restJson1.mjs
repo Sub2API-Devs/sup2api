@@ -7,11 +7,11 @@
  */
 
 //@ chunk-h87x8cg3.js:6808-6863 esm-layout
-var R = (e) => {
+var tryParseJson = (body) => {
   try {
-    return JSON.parse(e);
+    return JSON.parse(body);
   } catch (error) {
     return;
   }
 };
-export { R };
+export { tryParseJson };

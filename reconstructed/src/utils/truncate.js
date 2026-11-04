@@ -22,68 +22,69 @@ function truncateToWidth(text, offset, offset_2) {
 /**
  * 按显示宽度截断文本（不加省略号）。
  */
-function truncateToWidthNoEllipsis(text, offset, isInner, n) {
-  let s = [];
+function truncateToWidthNoEllipsis(text, offset, isInner, maxWidth) {
+  let segments = [];
   for (let { segment, index } of getGraphemeSegmenter().segment(text))
-    s.push({
+    segments.push({
       segment,
       index,
     });
-  if (s.length === 0) return null;
-  let o = s.length - 1;
-  for (let width = 0; width < s.length; width++) {
-    let O = s[width];
-    let I = width + 1 < s.length ? s[width + 1].index : text.length;
-    if (offset >= O.index && offset < I) {
-      o = width;
+  if (segments.length === 0) return null;
+  let anchorIndex = segments.length - 1;
+  for (let width = 0; width < segments.length; width++) {
+    let entry = segments[width];
+    let nextIndex = width + 1 < segments.length ? segments[width + 1].index : text.length;
+    if (offset >= entry.index && offset < nextIndex) {
+      anchorIndex = width;
       break;
     }
   }
-  let i = (b) => s[b]?.segment ?? "";
-  let u = (b) => (b < s.length ? s[b].index : text.length);
-  let f = (b) =>
-    i(b) !==
+  let segmentAt = (index) => segments[index]?.segment ?? "";
+  let offsetAt = (index) => (index < segments.length ? segments[index].index : text.length);
+  let isInlineWhitespaceAt = (index) =>
+    segmentAt(index) !==
       `
-` && isWhitespaceChar(i(b));
-  let d = (b) => n(i(b));
-  let p = (b) => isPunctuationChar(i(b));
-  let h = o;
-  let x = o;
-  if (d(o)) {
-    while (h > 0 && d(h - 1)) h--;
-    while (x < s.length && d(x)) x++;
-  } else if (isWhitespaceChar(i(o))) {
-    let b = (K) => isWhitespaceChar(i(K));
-    let O = offset >= text.length;
-    let I = isInner && !O ? f : b;
-    while (x < s.length && I(x)) x++;
-    let F = !isInner && x === s.length;
-    let D = O || F ? b : f;
-    while (h > 0 && D(h - 1)) h--;
+` && isWhitespaceChar(segmentAt(index));
+  let segmentWidthAt = (index) => maxWidth(segmentAt(index));
+  let isPunctuationAt = (index) => isPunctuationChar(segmentAt(index));
+  let startIndex = anchorIndex;
+  let endIndex = anchorIndex;
+  if (segmentWidthAt(anchorIndex)) {
+    while (startIndex > 0 && segmentWidthAt(startIndex - 1)) startIndex--;
+    while (endIndex < segments.length && segmentWidthAt(endIndex)) endIndex++;
+  } else if (isWhitespaceChar(segmentAt(anchorIndex))) {
+    let isWhitespaceAt = (idx) => isWhitespaceChar(segmentAt(idx));
+    let offsetAtTextEnd = offset >= text.length;
+    let shouldExpand = isInner && !offsetAtTextEnd ? isInlineWhitespaceAt : isWhitespaceAt;
+    while (endIndex < segments.length && shouldExpand(endIndex)) endIndex++;
+    let atTextEnd = !isInner && endIndex === segments.length;
+    let isWhitespace = offsetAtTextEnd || atTextEnd ? isWhitespaceAt : isInlineWhitespaceAt;
+    while (startIndex > 0 && isWhitespace(startIndex - 1)) startIndex--;
     return {
-      start: u(h),
-      end: u(x),
+      start: offsetAt(startIndex),
+      end: offsetAt(endIndex),
     };
-  } else if (p(o)) {
-    while (h > 0 && p(h - 1)) h--;
-    while (x < s.length && p(x)) x++;
+  } else if (isPunctuationAt(anchorIndex)) {
+    while (startIndex > 0 && isPunctuationAt(startIndex - 1)) startIndex--;
+    while (endIndex < segments.length && isPunctuationAt(endIndex)) endIndex++;
   }
   if (!isInner)
-    if (x < s.length && f(x)) while (x < s.length && f(x)) x++;
+    if (endIndex < segments.length && isInlineWhitespaceAt(endIndex))
+      while (endIndex < segments.length && isInlineWhitespaceAt(endIndex)) endIndex++;
     else {
-      let b = h;
-      while (b > 0 && f(b - 1)) b--;
+      let wordStart = startIndex;
+      while (wordStart > 0 && isInlineWhitespaceAt(wordStart - 1)) wordStart--;
       if (
-        b > 0 &&
-        i(b - 1) !==
+        wordStart > 0 &&
+        segmentAt(wordStart - 1) !==
           `
 `
       )
-        h = b;
+        startIndex = wordStart;
     }
   return {
-    start: u(h),
-    end: u(x),
+    start: offsetAt(startIndex),
+    end: offsetAt(endIndex),
   };
 }
 export { truncateToWidth, truncateToWidthNoEllipsis };

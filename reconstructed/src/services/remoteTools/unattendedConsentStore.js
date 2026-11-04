@@ -11,7 +11,7 @@
 import { join, dirname } from "path";
 import { homedir, hostname } from "os";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, literal, _enum, string } from "../../../vendor/zod/v4/classic/schemas.js";
+import { objectSchema, literal, _enum, stringSchema } from "../../../vendor/zod/v4/classic/schemas.js";
 import { shortLabel } from "../../utils/permissions/approvalPayloadSerialization.js";
 import { tildify } from "../../utils/path.js";
 import { getFileReader } from "../../utils/fileStore.js";
@@ -29,10 +29,11 @@ import {
   getSettingsForSource,
   getSettingsForSourceTightenOnly,
 } from "../../utils/settings/settings.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-dw613xrm.js:731-825 placement
-function normalizeHostname(e) {
-  return e
+function normalizeHostname(hostname) {
+  return hostname
     .trim()
     .toLowerCase()
     .replace(/(\.(local|lan|home|localdomain))+$/, "");
@@ -41,18 +42,24 @@ function normalizeHostname(e) {
 /**
  * 无人值守服务同意记录文件的名、版本、条款串与 schema。
  */
-var UNATTENDED_SERVING_CONSENT_VERSION = 1;
-var UNATTENDED_SERVING_CONSENT_TERMS = "unattended-serving:v1:auto-arm-classifier";
-var UNATTENDED_SERVING_CONSENT_JSON = "unattended-serving-consent.json";
-var unattendedConsentRecordSchema = DoctorLazy(() =>
-  u({
-    version: literal(UNATTENDED_SERVING_CONSENT_VERSION),
-    choice: _enum(["accepted", "declined"]),
-    terms: string(),
-    decidedAt: string(),
-    hostname: string(),
-  }),
-);
+var UNATTENDED_SERVING_CONSENT_VERSION; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var UNATTENDED_SERVING_CONSENT_TERMS;
+var UNATTENDED_SERVING_CONSENT_JSON;
+var unattendedConsentRecordSchema;
+deferInit("chunk-dw613xrm.js:825", () => {
+  UNATTENDED_SERVING_CONSENT_VERSION = 1;
+  UNATTENDED_SERVING_CONSENT_TERMS = "unattended-serving:v1:auto-arm-classifier";
+  UNATTENDED_SERVING_CONSENT_JSON = "unattended-serving-consent.json";
+  unattendedConsentRecordSchema = DoctorLazy(() =>
+    objectSchema({
+      version: literal(UNATTENDED_SERVING_CONSENT_VERSION),
+      choice: _enum(["accepted", "declined"]),
+      terms: stringSchema(),
+      decidedAt: stringSchema(),
+      hostname: stringSchema(),
+    }),
+  );
+});
 //@ chunk-dw613xrm.js:1019-1066 placement
 /**
  * 同意记录文件的完整路径（~/.claude/state/unattended-serving-consent.json）。
@@ -61,8 +68,8 @@ function unattendedConsentFilePath() {
   return join(homedir(), ".claude", "state", UNATTENDED_SERVING_CONSENT_JSON);
 }
 //@ chunk-dw613xrm.js:1066-1104 placement
-function unattendedServingMachineName(e = hostname()) {
-  return shortLabel(normalizeHostname(e));
+function unattendedServingMachineName(host = hostname()) {
+  return shortLabel(normalizeHostname(host));
 }
 //@ chunk-dw613xrm.js:1104-1188 placement
 function unattendedServingConsentRevokeHint() {
@@ -82,43 +89,44 @@ function defaultConsentStore() {
         throw error;
       }
     },
-    writeText: async (e) => {
-      let n = unattendedConsentFilePath();
-      await getFileReader().mkdir(dirname(n), 448);
-      await getFileReader().atomicWrite(n, e, 384);
+    writeText: async (text) => {
+      let path = unattendedConsentFilePath();
+      await getFileReader().mkdir(dirname(path), 448);
+      await getFileReader().atomicWrite(path, text, 384);
     },
     now: () => new Date(),
     hostname,
   };
 }
 //@ chunk-dw613xrm.js:1413-1820 placement
-async function readUnattendedServingConsent(e) {
-  let n = e === undefined ? currentUnattendedConsentCache() : undefined;
+async function readUnattendedServingConsent(store) {
+  let cache = store === undefined ? currentUnattendedConsentCache() : undefined;
   let now = Date.now();
-  let writes = n?.writes;
-  let { choice, unreadable, staleYes } = await readConsentRecord(e ?? defaultConsentStore());
-  let f = n !== undefined && isStoredLoginPinned() && (await unattendedRunGrantStands(hostUnattendedGrant()));
+  let writes = cache?.writes;
+  let { choice, unreadable, staleYes } = await readConsentRecord(store ?? defaultConsentStore());
+  let grantOutsideSandbox =
+    cache !== undefined && isStoredLoginPinned() && (await unattendedRunGrantStands(hostUnattendedGrant()));
   let confined =
-    f &&
+    grantOutsideSandbox &&
     (
       await commandSandboxPosture({
         start: true,
       })
     ).confined;
   if (
-    n !== undefined &&
-    writes === n.writes &&
-    (n.view === undefined || !isConsentViewFresh(n) || now >= n.view.readAt)
+    cache !== undefined &&
+    writes === cache.writes &&
+    (cache.view === undefined || !isConsentViewFresh(cache) || now >= cache.view.readAt)
   ) {
-    n.view = {
+    cache.view = {
       choice,
       readAt: now,
       unreadable,
       staleYes: staleYes === true,
       hostAllows: confined,
-      grantOutsideSandbox: f && !confined,
+      grantOutsideSandbox: grantOutsideSandbox && !confined,
     };
-    if (isConsentViewFresh(n)) n.staleUnresolved = false;
+    if (isConsentViewFresh(cache)) cache.staleUnresolved = false;
   }
   return choice;
 }
@@ -126,10 +134,10 @@ async function readUnattendedServingConsent(e) {
 /**
  * 读无人值守服务同意记录
  */
-async function readConsentRecord(e) {
-  let n;
+async function readConsentRecord(store) {
+  let text;
   try {
-    n = await e.readText();
+    text = await store.readText();
   } catch (error) {
     logForDebugging(`unattended-serving consent: store unreadable (${errorMessage(error)})`, {
       level: "warn",
@@ -139,26 +147,26 @@ async function readConsentRecord(e) {
       unreadable: true,
     };
   }
-  if (n === undefined)
+  if (text === undefined)
     return {
       choice: "unset",
       unreadable: false,
     };
   try {
-    let r = unattendedConsentRecordSchema().safeParse(jsonParse(n));
-    if (!r.success)
+    let parsed = unattendedConsentRecordSchema().safeParse(jsonParse(text));
+    if (!parsed.success)
       return {
         choice: "unset",
         unreadable: true,
       };
-    let a =
-      r.data.choice === "declined" ||
-      (normalizeHostname(r.data.hostname) === normalizeHostname(e.hostname()) &&
-        r.data.terms === UNATTENDED_SERVING_CONSENT_TERMS);
+    let applies =
+      parsed.data.choice === "declined" ||
+      (normalizeHostname(parsed.data.hostname) === normalizeHostname(store.hostname()) &&
+        parsed.data.terms === UNATTENDED_SERVING_CONSENT_TERMS);
     return {
-      choice: a ? r.data.choice : "unset",
+      choice: applies ? parsed.data.choice : "unset",
       unreadable: false,
-      staleYes: !a && r.data.choice === "accepted",
+      staleYes: !applies && parsed.data.choice === "accepted",
     };
   } catch {
     return {
@@ -171,8 +179,8 @@ async function readConsentRecord(e) {
 /**
  * 写入无人值守服务同意（unattended-serving-consent.json）；本模块还负责读取、缓存与托管设置禁止判断。
  */
-async function writeUnattendedServingConsent(e, n) {
-  if (e === "accepted" && managedSettingsForbidUnattendedServing()) {
+async function writeUnattendedServingConsent(choice, store) {
+  if (choice === "accepted" && managedSettingsForbidUnattendedServing()) {
     logForDebugging(
       "unattended-serving consent: a Yes while settings turn unattended serving off is not stored",
       {
@@ -181,17 +189,17 @@ async function writeUnattendedServingConsent(e, n) {
     );
     return false;
   }
-  let r = n === undefined ? currentUnattendedConsentCache() : undefined;
-  let a = n ?? defaultConsentStore();
+  let cache = store === undefined ? currentUnattendedConsentCache() : undefined;
+  let target = store ?? defaultConsentStore();
   try {
-    await a.writeText(
+    await target.writeText(
       jsonStringify(
         {
           version: UNATTENDED_SERVING_CONSENT_VERSION,
-          choice: e,
+          choice,
           terms: UNATTENDED_SERVING_CONSENT_TERMS,
-          decidedAt: a.now().toISOString(),
-          hostname: normalizeHostname(a.hostname()),
+          decidedAt: target.now().toISOString(),
+          hostname: normalizeHostname(target.hostname()),
         },
         null,
         2,
@@ -199,17 +207,17 @@ async function writeUnattendedServingConsent(e, n) {
         `
 `,
     );
-    if (r !== undefined) {
-      r.writes += 1;
-      r.view = {
-        choice: e,
+    if (cache !== undefined) {
+      cache.writes += 1;
+      cache.view = {
+        choice,
         readAt: Date.now(),
         unreadable: false,
         staleYes: false,
-        hostAllows: r.view?.hostAllows === true,
-        grantOutsideSandbox: r.view?.grantOutsideSandbox === true,
+        hostAllows: cache.view?.hostAllows === true,
+        grantOutsideSandbox: cache.view?.grantOutsideSandbox === true,
       };
-      r.staleUnresolved = false;
+      cache.staleUnresolved = false;
     }
     return true;
   } catch (error) {
@@ -220,15 +228,19 @@ async function writeUnattendedServingConsent(e, n) {
   }
 }
 //@ chunk-dw613xrm.js:2991-3115 placement
-var CONSENT_REFRESH_TIMEOUT_MS = 3000;
-var unattendedConsentCache = new HostScoped(() => ({
-  view: undefined,
-  refresh: undefined,
-  refreshStartedAt: undefined,
-  abandoned: undefined,
-  staleUnresolved: false,
-  writes: 0,
-}));
+var CONSENT_REFRESH_TIMEOUT_MS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var unattendedConsentCache;
+deferInit("chunk-dw613xrm.js:2991", () => {
+  CONSENT_REFRESH_TIMEOUT_MS = 3000;
+  unattendedConsentCache = new HostScoped(() => ({
+    view: undefined,
+    refresh: undefined,
+    refreshStartedAt: undefined,
+    abandoned: undefined,
+    staleUnresolved: false,
+    writes: 0,
+  }));
+});
 //@ chunk-dw613xrm.js:3115-3141 placement
 /**
  * 当前进程根下的同意记录缓存（含视图与写入计数）。
@@ -238,61 +250,61 @@ function currentUnattendedConsentCache() {
 }
 //@ chunk-dw613xrm.js:3141-3210 placement
 function unattendedServingConsentView() {
-  let e = currentUnattendedConsentCache();
-  if (!isConsentViewFresh(e)) refreshConsentView(e);
-  return e.view?.choice ?? "unset";
+  let cache = currentUnattendedConsentCache();
+  if (!isConsentViewFresh(cache)) refreshConsentView(cache);
+  return cache.view?.choice ?? "unset";
 }
 //@ chunk-dw613xrm.js:3210-3305 placement
 /**
  * 缓存的同意视图是否仍在刷新时限内（未被超时视为有效）。
  */
-function isConsentViewFresh(e, n = Date.now()) {
-  if (e.view === undefined) return false;
-  let r = n - e.view.readAt;
-  return r >= 0 && r <= CONSENT_REFRESH_TIMEOUT_MS;
+function isConsentViewFresh(cache, nowMs = Date.now()) {
+  if (cache.view === undefined) return false;
+  let ageMs = nowMs - cache.view.readAt;
+  return ageMs >= 0 && ageMs <= CONSENT_REFRESH_TIMEOUT_MS;
 }
 //@ chunk-dw613xrm.js:3305-3348 placement
-function unattendedServingConsentViewIsFresh(e = Date.now()) {
-  return isConsentViewFresh(currentUnattendedConsentCache(), e);
+function unattendedServingConsentViewIsFresh(nowMs = Date.now()) {
+  return isConsentViewFresh(currentUnattendedConsentCache(), nowMs);
 }
 //@ chunk-dw613xrm.js:3348-3359 placement
 var CONSENT_REFRESH_GIVE_UP_MS = 1500;
 //@ chunk-dw613xrm.js:3359-3709 placement
 async function freshUnattendedServingConsent(signal) {
-  let n = currentUnattendedConsentCache();
-  if (isConsentViewFresh(n)) return;
-  let r = refreshConsentView(n);
-  let a;
-  let s;
-  let g =
+  let cache = currentUnattendedConsentCache();
+  if (isConsentViewFresh(cache)) return;
+  let refresh = refreshConsentView(cache);
+  let timer;
+  let onAbort;
+  let giveUp =
     signal?.aborted === true
       ? Promise.resolve("gave_up")
       : new Promise((resolve) => {
-          a = setTimeout((f) => f("gave_up"), CONSENT_REFRESH_GIVE_UP_MS, resolve);
-          s = () => resolve("gave_up");
-          signal?.addEventListener("abort", s, {
+          timer = setTimeout((finish) => finish("gave_up"), CONSENT_REFRESH_GIVE_UP_MS, resolve);
+          onAbort = () => resolve("gave_up");
+          signal?.addEventListener("abort", onAbort, {
             once: true,
           });
         });
-  await Promise.race([r, g]);
-  clearTimeout(a);
-  if (s !== undefined) signal?.removeEventListener("abort", s);
-  if (!isConsentViewFresh(n)) {
-    n.staleUnresolved = true;
-    abandonConsentRefresh(n, r);
+  await Promise.race([refresh, giveUp]);
+  clearTimeout(timer);
+  if (onAbort !== undefined) signal?.removeEventListener("abort", onAbort);
+  if (!isConsentViewFresh(cache)) {
+    cache.staleUnresolved = true;
+    abandonConsentRefresh(cache, refresh);
   }
 }
 //@ chunk-dw613xrm.js:3709-3895 placement
 /**
  * 放弃超时的同意刷新
  */
-function abandonConsentRefresh(e, n) {
-  if (e.refresh !== n || e.abandoned !== undefined) return false;
-  e.refresh = undefined;
-  e.refreshStartedAt = undefined;
-  e.abandoned = n;
-  n.finally(() => {
-    if (e.abandoned === n) e.abandoned = undefined;
+function abandonConsentRefresh(cache, refresh) {
+  if (cache.refresh !== refresh || cache.abandoned !== undefined) return false;
+  cache.refresh = undefined;
+  cache.refreshStartedAt = undefined;
+  cache.abandoned = refresh;
+  refresh.finally(() => {
+    if (cache.abandoned === refresh) cache.abandoned = undefined;
   });
   return true;
 }
@@ -300,28 +312,28 @@ function abandonConsentRefresh(e, n) {
 /**
  * 刷新同意视图
  */
-function refreshConsentView(e) {
-  if (e.refresh !== undefined) {
+function refreshConsentView(cache) {
+  if (cache.refresh !== undefined) {
     if (
-      (e.refreshStartedAt !== undefined &&
-        performance.now() - e.refreshStartedAt <= CONSENT_REFRESH_GIVE_UP_MS) ||
-      !abandonConsentRefresh(e, e.refresh)
+      (cache.refreshStartedAt !== undefined &&
+        performance.now() - cache.refreshStartedAt <= CONSENT_REFRESH_GIVE_UP_MS) ||
+      !abandonConsentRefresh(cache, cache.refresh)
     )
-      return e.refresh;
+      return cache.refresh;
   }
-  e.refreshStartedAt = performance.now();
-  let n = readUnattendedServingConsent()
+  cache.refreshStartedAt = performance.now();
+  let refresh = readUnattendedServingConsent()
     .catch(() => {
       return;
     })
     .finally(() => {
-      if (e.refresh === n) {
-        e.refresh = undefined;
-        e.refreshStartedAt = undefined;
+      if (cache.refresh === refresh) {
+        cache.refresh = undefined;
+        cache.refreshStartedAt = undefined;
       }
     });
-  e.refresh = n;
-  return n;
+  cache.refresh = refresh;
+  return refresh;
 }
 //@ chunk-dw613xrm.js:4203-4243 placement
 function unattendedServingConsented() {
@@ -333,12 +345,12 @@ function managedSettingsForbidUnattendedServing() {
 }
 //@ chunk-dw613xrm.js:4279-4455 placement
 function unattendedServingForbiddenBy() {
-  let e = (n) => n?.remoteTools?.allowUnattendedServing === false;
-  return getAllPolicyTierSettings().some(e) ||
-    getDurablePolicyTierSettings().some(e) ||
-    e(getSettingsForSource("policySettings"))
+  let forbids = (settings) => settings?.remoteTools?.allowUnattendedServing === false;
+  return getAllPolicyTierSettings().some(forbids) ||
+    getDurablePolicyTierSettings().some(forbids) ||
+    forbids(getSettingsForSource("policySettings"))
     ? "managed"
-    : e(getSettingsForSourceTightenOnly("userSettings"))
+    : forbids(getSettingsForSourceTightenOnly("userSettings"))
       ? "user"
       : undefined;
 }
@@ -359,7 +371,7 @@ function unattendedServingConsentUnreadable() {
 async function commandSandboxPosture({ start }) {
   try {
     let { classifyDeviceSandboxPosture, ensureDeviceSandboxPosture, readDeviceSandboxSnapshot } =
-      await import("./chunk-g33cj79a.js");
+      await import("../../remote/tools/deviceSandboxPosture.js");
     return start
       ? await ensureDeviceSandboxPosture()
       : classifyDeviceSandboxPosture(readDeviceSandboxSnapshot(), {
@@ -387,38 +399,38 @@ function hostAllowsUnattended() {
 }
 //@ chunk-dw613xrm.js:5034-5118 placement
 function hostGrantOutsideSandbox() {
-  let e = currentUnattendedConsentCache();
-  return !e.staleUnresolved && e.view?.grantOutsideSandbox === true;
+  let cache = currentUnattendedConsentCache();
+  return !cache.staleUnresolved && cache.view?.grantOutsideSandbox === true;
 }
 //@ chunk-dw613xrm.js:5118-5205 placement
 /**
  * 视图尚未被读坏、选择为 unset 且 hostAllows 为真时，允许保守地按「是」处理。
  */
-function mayHoldUnansweredConsent(e, n) {
-  return n && e.view !== undefined && e.view.choice === "unset" && !e.view.unreadable;
+function mayHoldUnansweredConsent(cache, hostAllows) {
+  return hostAllows && cache.view !== undefined && cache.view.choice === "unset" && !cache.view.unreadable;
 }
 //@ chunk-dw613xrm.js:5205-5312 placement
 function unattendedServingAllowedByHostFlag() {
   try {
-    let e = currentUnattendedConsentCache();
+    let cache = currentUnattendedConsentCache();
     return (
       !managedSettingsForbidUnattendedServing() &&
-      !e.staleUnresolved &&
-      mayHoldUnansweredConsent(e, e.view?.hostAllows === true)
+      !cache.staleUnresolved &&
+      mayHoldUnansweredConsent(cache, cache.view?.hostAllows === true)
     );
   } catch {
     return false;
   }
 }
 //@ chunk-dw613xrm.js:5312-5518 placement
-function unattendedServingConsentPending(e) {
+function unattendedServingConsentPending(hostAllows) {
   try {
-    let n = unattendedServingConsented();
-    let r = currentUnattendedConsentCache();
+    let consented = unattendedServingConsented();
+    let cache = currentUnattendedConsentCache();
     return (
       managedSettingsForbidUnattendedServing() ||
-      r.staleUnresolved ||
-      (!n && !mayHoldUnansweredConsent(r, e ?? hostAllowsUnattended()))
+      cache.staleUnresolved ||
+      (!consented && !mayHoldUnansweredConsent(cache, hostAllows ?? hostAllowsUnattended()))
     );
   } catch (error) {
     logForDebugging(

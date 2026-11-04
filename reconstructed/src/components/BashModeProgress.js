@@ -8,9 +8,9 @@
  * pieces: chunk-18hwfzwa.js (2)
  * attribution: affinity 1, fingerprint 1
  */
-import { w } from "../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import { useTerminalSize } from "../hooks/useTerminalSize.js";
-import { y } from "../../vendor/react/cjs/react.production.js";
+import { useState } from "../../vendor/react/cjs/react.production.js";
 import { isShellOutputClipped } from "./shell/shellOutputClip.js";
 import {
   jsxProd_default,
@@ -23,59 +23,59 @@ import { BashTool } from "../tools/BashTool/BashTool.js";
 import { textSignal, Box } from "../ink/components/Text.js";
 
 //@ chunk-18hwfzwa.js:1667009-1667036 affinity
-function negate_2(po) {
-  return !po;
+function negate_2(value) {
+  return !value;
 }
 //@ chunk-18hwfzwa.js:1667036-1668638 fingerprint = BashModeProgress (0.63)
 function BashModeProgress(props) {
-  let $ = w(29);
+  let $ = useMemoCache(29);
   let { input, progress, verbose } = props;
   let { columns } = useTerminalSize();
-  let [ke, Re] = y(false);
-  let [Be, He] = y(false);
-  let ze;
-  if ($[0] !== columns || $[1] !== ke || $[2] !== progress || $[3] !== verbose) {
-    ze = !verbose && progress !== null && (ke || isShellOutputClipped(progress, columns));
+  let [expanded, setExpanded] = useState(false);
+  let [hovered, setHovered] = useState(false);
+  let isClipped;
+  if ($[0] !== columns || $[1] !== expanded || $[2] !== progress || $[3] !== verbose) {
+    isClipped = !verbose && progress !== null && (expanded || isShellOutputClipped(progress, columns));
     $[0] = columns;
-    $[1] = ke;
+    $[1] = expanded;
     $[2] = progress;
     $[3] = verbose;
-    $[4] = ze;
-  } else ze = $[4];
-  let Xe = ze;
-  const backgroundColor = ke ? "userMessageBackgroundHover" : undefined;
+    $[4] = isClipped;
+  } else isClipped = $[4];
+  let clippable = isClipped;
+  const backgroundColor = expanded ? "userMessageBackgroundHover" : undefined;
   let onClick;
-  if ($[5] !== Xe || $[6] !== ke) {
-    onClick = Xe
-      ? (At) => {
-          if (At.hyperlinkUrl) {
-            return At.allowDefault();
+  if ($[5] !== clippable || $[6] !== expanded) {
+    onClick = clippable
+      ? (mouseEvent) => {
+          if (mouseEvent.hyperlinkUrl) {
+            return mouseEvent.allowDefault();
           }
-          if (ke || !At.cellIsBlank) Re(negate_2);
+          if (expanded || !mouseEvent.cellIsBlank) setExpanded(negate_2);
         }
       : undefined;
-    $[5] = Xe;
-    $[6] = ke;
+    $[5] = clippable;
+    $[6] = expanded;
     $[7] = onClick;
   } else onClick = $[7];
   let onMouseEnter;
-  if ($[8] !== Xe) {
-    onMouseEnter = Xe ? () => He(true) : undefined;
-    $[8] = Xe;
+  if ($[8] !== clippable) {
+    onMouseEnter = clippable ? () => setHovered(true) : undefined;
+    $[8] = clippable;
     $[9] = onMouseEnter;
   } else onMouseEnter = $[9];
   let onMouseLeave;
-  if ($[10] !== Xe) {
-    onMouseLeave = Xe ? () => He(false) : undefined;
-    $[10] = Xe;
+  if ($[10] !== clippable) {
+    onMouseLeave = clippable ? () => setHovered(false) : undefined;
+    $[10] = clippable;
     $[11] = onMouseLeave;
   } else onMouseLeave = $[11];
-  const hoverIgnoresBlankCells = !ke;
-  const value = Xe && Be && !ke;
+  const hoverIgnoresBlankCells = !expanded;
+  const value = clippable && hovered && !expanded;
   const text = `<bash-input>${input}</bash-input>`;
-  let oo;
+  let inputMessage;
   if ($[12] !== text) {
-    oo = jsxProd_default(UserBashInputMessage, {
+    inputMessage = jsxProd_default(UserBashInputMessage, {
       addMargin: false,
       param: {
         text,
@@ -83,40 +83,40 @@ function BashModeProgress(props) {
       },
     });
     $[12] = text;
-    $[13] = oo;
-  } else oo = $[13];
-  let Xt;
-  if ($[14] !== ke || $[15] !== progress || $[16] !== verbose) {
-    Xt = progress
+    $[13] = inputMessage;
+  } else inputMessage = $[13];
+  let progressMessage;
+  if ($[14] !== expanded || $[15] !== progress || $[16] !== verbose) {
+    progressMessage = progress
       ? jsxProd_default(ShellProgressMessage, {
           fullOutput: progress.fullOutput,
           output: progress.output,
           elapsedTimeSeconds: progress.elapsedTimeSeconds,
           totalLines: progress.totalLines,
-          verbose: verbose || ke,
+          verbose: verbose || expanded,
         })
       : mcpRenderOverrideFor(BashTool, "renderToolUseProgressMessage")?.([], {
           verbose,
           tools: [],
           terminalSize: undefined,
         });
-    $[14] = ke;
+    $[14] = expanded;
     $[15] = progress;
     $[16] = verbose;
-    $[17] = Xt;
-  } else Xt = $[17];
+    $[17] = progressMessage;
+  } else progressMessage = $[17];
   let children;
-  if ($[18] !== Xt || $[19] !== value || $[20] !== oo) {
+  if ($[18] !== progressMessage || $[19] !== value || $[20] !== inputMessage) {
     children = jsxProd_default_2(textSignal.Provider, {
       value,
-      children: [oo, Xt],
+      children: [inputMessage, progressMessage],
     });
-    $[18] = Xt;
+    $[18] = progressMessage;
     $[19] = value;
-    $[20] = oo;
+    $[20] = inputMessage;
     $[21] = children;
   } else children = $[21];
-  let so;
+  let container;
   if (
     $[22] !== children ||
     $[23] !== backgroundColor ||
@@ -125,7 +125,7 @@ function BashModeProgress(props) {
     $[26] !== onMouseLeave ||
     $[27] !== hoverIgnoresBlankCells
   ) {
-    so = jsxProd_default(Box, {
+    container = jsxProd_default(Box, {
       flexDirection: "column",
       marginTop: 1,
       backgroundColor,
@@ -141,8 +141,8 @@ function BashModeProgress(props) {
     $[25] = onMouseEnter;
     $[26] = onMouseLeave;
     $[27] = hoverIgnoresBlankCells;
-    $[28] = so;
-  } else so = $[28];
-  return so;
+    $[28] = container;
+  } else container = $[28];
+  return container;
 }
 export { BashModeProgress };

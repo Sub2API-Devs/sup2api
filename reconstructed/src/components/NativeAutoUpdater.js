@@ -8,7 +8,12 @@
  * pieces: chunk-tzghj6zv.js (8)
  * attribution: placement 1, fingerprint 2, layout 5
  */
-import { init_react_production, y, Oo, P } from "../../vendor/react/cjs/react.production.js";
+import {
+  init_react_production,
+  useState,
+  useEffectEvent,
+  useEffect,
+} from "../../vendor/react/cjs/react.production.js";
 import {
   ManifestSignatureError,
   StallTimeoutError,
@@ -45,9 +50,13 @@ import {
 } from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Box, Text } from "../ink/components/Text.js";
 import { StatusIcon } from "./design-system/StatusIcon.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-tzghj6zv.js:31073-31077 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-tzghj6zv.js:31073", () => {
+  init_react_production();
+});
 //@ chunk-tzghj6zv.js:31077-32357 fingerprint = getErrorType (0.508)
 /**
  * 把更新错误分类（signature_verification、checksum_mismatch、超时、网络等）。
@@ -55,25 +64,26 @@ init_react_production();
 function getErrorType(errorMessage) {
   if (errorMessage instanceof ManifestSignatureError) return "signature_verification";
   if (errorMessage instanceof StagedBinaryChecksumError) return "checksum_mismatch";
-  let h = errorMessage instanceof Error ? errorMessage.message : String(errorMessage);
+  let message = errorMessage instanceof Error ? errorMessage.message : String(errorMessage);
   let errnoCode = getErrnoCode(errorMessage);
   if (
     errorMessage instanceof StallTimeoutError ||
     errnoCode === "ETIMEDOUT" ||
     errnoCode === "ECONNABORTED" ||
-    h.includes("Download timed out") ||
-    h.includes("timeout")
+    message.includes("Download timed out") ||
+    message.includes("timeout")
   )
     return "timeout";
-  if (h.includes("Checksum mismatch")) return "checksum_mismatch";
-  if (h.includes("ENOENT") || h.includes("not found")) return "not_found";
-  if (h.includes("EACCES") || h.includes("permission")) return "permission_denied";
-  if (h.includes("ENOSPC")) return "disk_full";
-  if (h.includes("npm")) return "npm_error";
-  if (h.includes("network") || h.includes("ECONNREFUSED") || h.includes("ENOTFOUND")) return "network_error";
-  let lower = h.toLowerCase();
+  if (message.includes("Checksum mismatch")) return "checksum_mismatch";
+  if (message.includes("ENOENT") || message.includes("not found")) return "not_found";
+  if (message.includes("EACCES") || message.includes("permission")) return "permission_denied";
+  if (message.includes("ENOSPC")) return "disk_full";
+  if (message.includes("npm")) return "npm_error";
+  if (message.includes("network") || message.includes("ECONNREFUSED") || message.includes("ENOTFOUND"))
+    return "network_error";
+  let lower = message.toLowerCase();
   if (
-    h.includes("ENOEXEC") ||
+    message.includes("ENOEXEC") ||
     lower.includes("exec format error") ||
     lower.includes("bad cpu type") ||
     lower.includes("cannot execute binary") ||
@@ -90,9 +100,9 @@ function getErrorType(errorMessage) {
   )
     return "av_quarantine";
   if (
-    h.includes("EXDEV") ||
-    h.includes("EEXIST") ||
-    h.includes("EBUSY") ||
+    message.includes("EXDEV") ||
+    message.includes("EEXIST") ||
+    message.includes("EBUSY") ||
     lower.includes("rename") ||
     lower.includes("move failed") ||
     lower.includes("cross-device")
@@ -101,9 +111,9 @@ function getErrorType(errorMessage) {
   return "unknown";
 }
 //@ chunk-tzghj6zv.js:32357-32566 layout
-function getAutoUpdaterResultEvent(d) {
-  if (d.wasUpdated) return "tengu_native_auto_updater_success";
-  if (d.skippedUnverifiedRelease) return "tengu_native_auto_updater_skipped_unverified_release";
+function getAutoUpdaterResultEvent(result) {
+  if (result.wasUpdated) return "tengu_native_auto_updater_success";
+  if (result.skippedUnverifiedRelease) return "tengu_native_auto_updater_skipped_unverified_release";
   return "tengu_native_auto_updater_up_to_date";
 }
 //@ chunk-tzghj6zv.js:32566-32643 layout
@@ -141,9 +151,9 @@ function NativeAutoUpdater({
   atPrompt,
 }) {
   let { storageV5 } = useTheme_2();
-  let autoUpdaterResult = useAppState((te) => te.autoUpdaterResult);
+  let autoUpdaterResult = useAppState((state) => state.autoUpdaterResult);
   let setAppState = useSetAppState();
-  let [versions, setVersions] = y({
+  let [versions, setVersions] = useState({
     current: {
       ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
       PACKAGE_URL: "@anthropic-ai/claude-code",
@@ -156,10 +166,10 @@ function NativeAutoUpdater({
       DD_SOURCEMAP_GROUP: "default",
     }.VERSION,
   });
-  let [maxVersionIssue, setMaxVersionIssue] = y(null);
+  let [maxVersionIssue, setMaxVersionIssue] = useState(null);
   let isUpdatingRef = useChangedVersion(autoUpdaterResult?.version);
   let channelOrVersion = autoUpdatesChannel();
-  async function z() {
+  async function upgrade() {
     if (isUpdating) return;
     if (autoUpdaterResult?.status === "success") return;
     if (isAutoUpdaterDisabled()) return;
@@ -189,7 +199,7 @@ function NativeAutoUpdater({
     let now = Date.now();
     logEvent("tengu_native_auto_updater_start", {});
     try {
-      let X = await installLatest(channelOrVersion, false, storageV5);
+      let installResult = await installLatest(channelOrVersion, false, storageV5);
       let currentVersion = {
         ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
         PACKAGE_URL: "@anthropic-ai/claude-code",
@@ -202,7 +212,7 @@ function NativeAutoUpdater({
         DD_SOURCEMAP_GROUP: "default",
       }.VERSION;
       let latencyMs = Date.now() - now;
-      if (X.lockFailed) {
+      if (installResult.lockFailed) {
         logEvent("tengu_native_auto_updater_lock_contention", {
           latency_ms: latencyMs,
         });
@@ -210,12 +220,12 @@ function NativeAutoUpdater({
       }
       setVersions({
         current: currentVersion,
-        latest: X.latestVersion,
+        latest: installResult.latestVersion,
       });
-      logEvent(getAutoUpdaterResultEvent(X), {
+      logEvent(getAutoUpdaterResultEvent(installResult), {
         latency_ms: latencyMs,
       });
-      if (X.wasUpdated) {
+      if (installResult.wasUpdated) {
         resetInstalledVersionCache();
         recordUpdateResult(
           {
@@ -224,19 +234,22 @@ function NativeAutoUpdater({
             outcome: "success",
             status: "success",
             version_from: currentVersion,
-            version_to: X.latestVersion ?? null,
+            version_to: installResult.latestVersion ?? null,
             error_code: null,
           },
           storageV5,
         );
-        setAppState((H) => {
-          let autoUpdaterResult = H.autoUpdaterResult;
-          if (autoUpdaterResult?.version === X.latestVersion && autoUpdaterResult?.status === "success")
-            return H;
+        setAppState((state) => {
+          let autoUpdaterResult = state.autoUpdaterResult;
+          if (
+            autoUpdaterResult?.version === installResult.latestVersion &&
+            autoUpdaterResult?.status === "success"
+          )
+            return state;
           return {
-            ...H,
+            ...state,
             autoUpdaterResult: {
-              version: X.latestVersion,
+              version: installResult.latestVersion,
               status: "success",
             },
           };
@@ -244,17 +257,17 @@ function NativeAutoUpdater({
       }
     } catch (error) {
       let latencyMs = Date.now() - now;
-      let re = error instanceof Error ? error.message : String(error);
-      logForDebugging(`Native auto-updater failed: ${re}`, {
+      let errorText = error instanceof Error ? error.message : String(error);
+      logForDebugging(`Native auto-updater failed: ${errorText}`, {
         level: "error",
       });
-      let H = error instanceof ReleaseManifestError ? "registry_session_refused" : undefined;
+      let failureHint = error instanceof ReleaseManifestError ? "registry_session_refused" : undefined;
       recordUpdateResult(
         {
           timestamp: new Date().toISOString(),
           path: "native",
           outcome: "failed",
-          status: H === undefined ? "install_failed" : "session_refused",
+          status: failureHint === undefined ? "install_failed" : "session_refused",
           version_from: {
             ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
             PACKAGE_URL: "@anthropic-ai/claude-code",
@@ -267,7 +280,7 @@ function NativeAutoUpdater({
             DD_SOURCEMAP_GROUP: "default",
           }.VERSION,
           version_to: null,
-          error_code: updateApplyErrorKey(H),
+          error_code: updateApplyErrorKey(failureHint),
         },
         storageV5,
       );
@@ -288,20 +301,20 @@ function NativeAutoUpdater({
         error_exec_format: errorType === "exec_format",
         error_av_quarantine: errorType === "av_quarantine",
       });
-      setAppState((K) => {
-        let autoUpdaterResult = K.autoUpdaterResult;
+      setAppState((state) => {
+        let autoUpdaterResult = state.autoUpdaterResult;
         if (
           autoUpdaterResult?.version === null &&
           autoUpdaterResult?.status === "install_failed" &&
-          autoUpdaterResult.failureHint === H
+          autoUpdaterResult.failureHint === failureHint
         )
-          return K;
+          return state;
         return {
-          ...K,
+          ...state,
           autoUpdaterResult: {
             version: null,
             status: "install_failed",
-            failureHint: H,
+            failureHint,
           },
         };
       });
@@ -309,11 +322,11 @@ function NativeAutoUpdater({
       onChangeIsUpdating(false);
     }
   }
-  let we = Oo(z);
-  P(() => {
-    we();
+  let runUpgrade = useEffectEvent(upgrade);
+  useEffect(() => {
+    runUpgrade();
   }, [channelOrVersion]);
-  useInterval(() => void z(), 1800000);
+  useInterval(() => void upgrade(), 1800000);
   let hasUpdateResult = !!autoUpdaterResult?.status;
   let hasVersionInfo = !!versions.current && !!versions.latest;
   if (!(

@@ -17,7 +17,7 @@ import { Sha256 } from "../../../@aws-crypto/sha256-js/build/module/jsSha256.js"
 
 //@ chunk-h87x8cg3.js:1564-3110 esm-fingerprint
 var DEFAULT_PROVIDER_CHAIN_RESOLVER = (logger) =>
-  import("./chunk-thwbpw6e.js")
+  import("../../../@aws-sdk/credential-providers/dist-cjs/createCredentialChain.lazy.js")
     .then(({ createCredentialChain, fromEnv, fromNodeProviderChain }) =>
       createCredentialChain(
         fromEnv(
@@ -96,7 +96,7 @@ var getAuthHeaders = async (req, props) => {
   let query = Object.fromEntries(
     [...new Set(url.searchParams.keys())].map((key) => [key, url.searchParams.getAll(key)]),
   );
-  let a = new import_protocol_http.HttpRequest({
+  let request = new import_protocol_http.HttpRequest({
     method: req.method.toUpperCase(),
     protocol: url.protocol,
     path: url.pathname,
@@ -104,6 +104,6 @@ var getAuthHeaders = async (req, props) => {
     headers,
     body: req.body,
   });
-  return (await signer.sign(a)).headers;
+  return (await signer.sign(request)).headers;
 };
 export { getAuthHeaders };

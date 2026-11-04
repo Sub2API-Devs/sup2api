@@ -5,10 +5,10 @@
  * pieces: chunk-egr0twnb.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:436855-437512 cjs-fingerprint
-var require_smalltalk = x(function (cjsExports, cjsModule) {
+var require_smalltalk = __commonJS(function (cjsExports, cjsModule) {
   function smalltalk(hljs) {
     let CHAR = {
       className: "string",

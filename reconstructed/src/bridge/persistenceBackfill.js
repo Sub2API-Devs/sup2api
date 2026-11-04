@@ -154,12 +154,12 @@ function createBearerOwnerVouch({ login, bearer, attributions }) {
       revoked = true;
       return false;
     }
-    let A = attributions.get(bridgeAccessToken);
-    if (A !== undefined && !sameOwnerAccount(A, login)) {
+    let attribution = attributions.get(bridgeAccessToken);
+    if (attribution !== undefined && !sameOwnerAccount(attribution, login)) {
       revoked = true;
       return false;
     }
-    if (A !== undefined) {
+    if (attribution !== undefined) {
       vouchedBearer = bridgeAccessToken;
       pendingBearer = undefined;
       return true;
@@ -167,13 +167,13 @@ function createBearerOwnerVouch({ login, bearer, attributions }) {
     pendingBearer = bridgeAccessToken;
     if (!inFlight && Date.now() >= nextAttemptAt) {
       inFlight = true;
-      attributeTokenOwner(bridgeAccessToken).then((T) => {
+      attributeTokenOwner(bridgeAccessToken).then((attribution) => {
         inFlight = false;
-        if (T !== undefined) {
-          attributions.set(bridgeAccessToken, T);
+        if (attribution !== undefined) {
+          attributions.set(bridgeAccessToken, attribution);
           pendingBearer = undefined;
           backoffMs = OWNER_VOUCH_INITIAL_BACKOFF_MS;
-          if (!sameOwnerAccount(T, login)) revoked = true;
+          if (!sameOwnerAccount(attribution, login)) revoked = true;
         } else if (backoffMs > OWNER_VOUCH_MAX_BACKOFF_MS) revoked = true;
         else {
           nextAttemptAt = Date.now() + backoffMs;
@@ -196,39 +196,44 @@ function createBearerOwnerVouch({ login, bearer, attributions }) {
 //@ chunk-cg2r2hy6.js:15022-15034 placement
 var TOKEN_ABSENCE_VERDICT_TIMEOUT_MS = 3000;
 //@ chunk-cg2r2hy6.js:15034-15122 placement
-async function createTokenAbsenceClassifier(storageV5, credentials) {
-  if (!(await isStoreBackedFirstPartyLogin(credentials)) || !getStoredOauthAccountInfo()?.accountUuid) return;
-  return (site) => classifyBridgeTokenAbsence(site, storageV5, credentials);
+async function createTokenAbsenceClassifier(credentials, credentials_2) {
+  if (!(await isStoreBackedFirstPartyLogin(credentials_2)) || !getStoredOauthAccountInfo()?.accountUuid)
+    return;
+  return (site) => classifyBridgeTokenAbsence(site, credentials, credentials_2);
 }
 //@ chunk-cg2r2hy6.js:15122-15351 placement
 /**
  * 桥接拿不到 token 时判断原因（带超时），记录 tengu_bridge_token_absence_classified 并返回结论字符串。
  */
-async function classifyBridgeTokenAbsence(site, u, p) {
-  let o = await withDeadline(readTokenAbsenceVerdict(u, p), TOKEN_ABSENCE_VERDICT_TIMEOUT_MS).then(
-    (y) => y ?? "unknown_timeout",
+async function classifyBridgeTokenAbsence(site, credentials, storageV5) {
+  let verdict = await withDeadline(
+    readTokenAbsenceVerdict(credentials, storageV5),
+    TOKEN_ABSENCE_VERDICT_TIMEOUT_MS,
+  ).then(
+    (result) => result ?? "unknown_timeout",
     () => "unknown_error",
   );
-  logForDebugging(`[bridge:signed-out] site=${site} verdict=${o}`);
+  logForDebugging(`[bridge:signed-out] site=${site} verdict=${verdict}`);
   logEvent("tengu_bridge_token_absence_classified", {
     site: fromEnum(site),
-    verdict: fromEnum(o),
+    verdict: fromEnum(verdict),
   });
-  return o;
+  return verdict;
 }
 //@ chunk-cg2r2hy6.js:15351-15871 placement
 /**
  * 读磁盘 OAuth 账号与安全存储，区分 refresh_token_dead / unknown_identity_* / unknown_store_unreadable / signed_out 等情况。
  */
-async function readTokenAbsenceVerdict(s, u) {
+async function readTokenAbsenceVerdict(storageV5, credentials) {
   let secureStorage = getSecureStorage();
-  let diskAccount = await readFreshOauthAccountFromDisk(s);
-  let y = !diskAccount?.accountUuid && Boolean(getStoredOauthAccountInfo()?.accountUuid);
-  if (diskAccount?.accountUuid || y) {
-    if ((await secureStorage.readAsync(u))?.claudeAiOauth?.refreshToken === "") return "refresh_token_dead";
-    return y ? "unknown_identity_cached_only" : "unknown_identity_present";
+  let diskAccount = await readFreshOauthAccountFromDisk(storageV5);
+  let cachedOnly = !diskAccount?.accountUuid && Boolean(getStoredOauthAccountInfo()?.accountUuid);
+  if (diskAccount?.accountUuid || cachedOnly) {
+    if ((await secureStorage.readAsync(credentials))?.claudeAiOauth?.refreshToken === "")
+      return "refresh_token_dead";
+    return cachedOnly ? "unknown_identity_cached_only" : "unknown_identity_present";
   }
-  let asyncStrict = await secureStorage.readAsyncStrict?.(u);
+  let asyncStrict = await secureStorage.readAsyncStrict?.(credentials);
   if (asyncStrict === undefined || asyncStrict === READ_FAILED) return "unknown_store_unreadable";
   if (asyncStrict?.claudeAiOauth?.refreshToken === "") return "refresh_token_dead";
   if (asyncStrict?.claudeAiOauth !== undefined) return "unknown_identity_absent_token_present";
@@ -254,8 +259,8 @@ async function findLiveBridgeSessionHolder(reattachTarget) {
       sessionIdBody(record.bridgeSessionId) !== sessionBody
     )
       continue;
-    let y = record.procStartFt ?? record.procStart;
-    if (y === undefined || !isProcessRunning(record.pid)) continue;
+    let procStart = record.procStartFt ?? record.procStart;
+    if (procStart === undefined || !isProcessRunning(record.pid)) continue;
     let processStartTime = await getProcessStartTimeAsync(record.pid, {
       skipCache: true,
     });
@@ -265,7 +270,7 @@ async function findLiveBridgeSessionHolder(reattachTarget) {
       );
       continue;
     }
-    if (processStartTime === y)
+    if (processStartTime === procStart)
       return {
         pid: record.pid,
         startedAt: record.startedAt,
@@ -328,10 +333,10 @@ async function runPersistenceBackfill(
   );
   if (mainRows === "aborted" || mainRows === "too-many-rows") return "rows_owed";
   if (mainRows === "budget-exhausted") {
-    let P = isPrecautionarySuppressionHeldFor(pinSessionId(sessionId));
+    let alreadyHeld = isPrecautionarySuppressionHeldFor(pinSessionId(sessionId));
     holdPrecautionarySuppressionFor(pinSessionId(sessionId));
     markPrecautionClearResilientFor(pinSessionId(sessionId));
-    if (!P) markScanUncertaintyHoldFor(pinSessionId(sessionId));
+    if (!alreadyHeld) markScanUncertaintyHoldFor(pinSessionId(sessionId));
     logForDebugging(
       "[persistence-sync] Taint sweep budget exhausted: refusing this backfill (precautionary hold, no durable stamp)",
     );
@@ -351,8 +356,8 @@ async function runPersistenceBackfill(
     logForDebugging("[persistence-sync] Main server read failed: nothing uploaded, subagents included");
     return "read_failed";
   }
-  let N = undefined;
-  if (N !== undefined) return N;
+  let unreachable = undefined;
+  if (unreachable !== undefined) return unreachable;
   forwardTranscriptMessages(uploadRows, mainRows, serverUuids);
   if (sessionId !== getSessionId()) {
     logForDebugging(
@@ -361,19 +366,22 @@ async function runPersistenceBackfill(
     return "rows_owed";
   }
   let subagentFiles = await listSubagentTranscriptsForBackfill(subagentIds, storageBackend);
-  let [W, ...ke] = subagentFiles;
-  let se = W ? await serverReader.readSubagent(W.agentId, signal) : null;
-  for (let P of compactBoundaryUuids(se?.events)) serverUuids.add(P);
-  let failedSubagents = new Set(se === null ? subagentFiles.map(({ agentId }) => agentId) : []);
+  let [firstSubagent, ...otherSubagents] = subagentFiles;
+  let firstServerRead = firstSubagent ? await serverReader.readSubagent(firstSubagent.agentId, signal) : null;
+  for (let uuid of compactBoundaryUuids(firstServerRead?.events)) serverUuids.add(uuid);
+  let failedSubagents = new Set(firstServerRead === null ? subagentFiles.map(({ agentId }) => agentId) : []);
   let subagentBoundaries = new Map();
-  if (W && se?.events.every((event) => event.session_agent_id === W.agentId)) {
-    subagentBoundaries.set(W.agentId, isCompactBoundaryMessage(se.events));
+  if (
+    firstSubagent &&
+    firstServerRead?.events.every((event) => event.session_agent_id === firstSubagent.agentId)
+  ) {
+    subagentBoundaries.set(firstSubagent.agentId, isCompactBoundaryMessage(firstServerRead.events));
     await Promise.all(
-      ke.map(async ({ agentId }) => {
+      otherSubagents.map(async ({ agentId }) => {
         let subagent = await serverReader.readSubagent(agentId, signal);
         if (subagent === null) failedSubagents.add(agentId);
         else subagentBoundaries.set(agentId, isCompactBoundaryMessage(subagent.events));
-        for (let Z of compactBoundaryUuids(subagent?.events)) serverUuids.add(Z);
+        for (let uuid of compactBoundaryUuids(subagent?.events)) serverUuids.add(uuid);
       }),
     );
   }
@@ -395,7 +403,7 @@ async function runPersistenceBackfill(
   let uploadedSubagents = 0;
   for (let { agentId, path } of subagentFiles) {
     if (failedSubagents.has(agentId)) continue;
-    let Z = await scanTranscriptForBackfill(
+    let subagentRows = await scanTranscriptForBackfill(
       path,
       serverUuids,
       false,
@@ -407,20 +415,20 @@ async function runPersistenceBackfill(
         signal,
       },
     );
-    if (Z === "aborted" || Z === "too-many-rows") return "rows_owed";
-    if (Z === "budget-exhausted") {
-      let ve = isPrecautionarySuppressionHeldFor(pinSessionId(sessionId));
+    if (subagentRows === "aborted" || subagentRows === "too-many-rows") return "rows_owed";
+    if (subagentRows === "budget-exhausted") {
+      let alreadyHeld = isPrecautionarySuppressionHeldFor(pinSessionId(sessionId));
       holdPrecautionarySuppressionFor(pinSessionId(sessionId));
       markPrecautionClearResilientFor(pinSessionId(sessionId));
-      if (!ve) markScanUncertaintyHoldFor(pinSessionId(sessionId));
+      if (!alreadyHeld) markScanUncertaintyHoldFor(pinSessionId(sessionId));
       return "rows_owed";
     }
-    if (Z === "tainted") {
+    if (subagentRows === "tainted") {
       holdSessionHistorySuppressionFor(pinSessionId(sessionId));
       break;
     }
-    forwardTranscriptMessages(uploadRows, Z, serverUuids, agentId);
-    uploadedSubagents += Z.length;
+    forwardTranscriptMessages(uploadRows, subagentRows, serverUuids, agentId);
+    uploadedSubagents += subagentRows.length;
   }
   logForDebugging(
     `[persistence-sync] Uploaded ${mainRows.length} main + ${uploadedSubagents} subagent entries; ${failedSubagents.size} subagent server reads failed`,
@@ -445,11 +453,11 @@ function createPersistenceCatchUp({
   random = Math.random,
 }) {
   let writtenKeys = new Set();
-  let dedupWriter = (T, v, F) => {
-    let I = `${F?.agentId ?? ""}/${String(v.uuid)}`;
-    if (signal.aborted || writtenKeys.has(I)) return Promise.resolve();
-    writtenKeys.add(I);
-    return writer(T, v, F);
+  let dedupWriter = (session, message, options) => {
+    let key = `${options?.agentId ?? ""}/${String(message.uuid)}`;
+    if (signal.aborted || writtenKeys.has(key)) return Promise.resolve();
+    writtenKeys.add(key);
+    return writer(session, message, options);
   };
   let sleepAbort;
   let deferred = Promise.withResolvers();
@@ -486,10 +494,11 @@ function createPersistenceCatchUp({
         }
       } catch (error) {
         if (signal.aborted) return "abandoned";
-        let F = getErrnoCode(error) ?? String(error);
-        if (F === lastErrorCode) logForDebugging(`[persistence-sync] Catch-up threw again: ${F}`);
+        let errorCode = getErrnoCode(error) ?? String(error);
+        if (errorCode === lastErrorCode)
+          logForDebugging(`[persistence-sync] Catch-up threw again: ${errorCode}`);
         else logError(error);
-        lastErrorCode = F;
+        lastErrorCode = errorCode;
       }
       if (j + 1 === CAUGHT_UP_AFTER_RETRY_MAX_ATTEMPTS && !signal.aborted)
         await Promise.resolve().then(onFallenBehind).catch(logError);
@@ -501,7 +510,7 @@ function createPersistenceCatchUp({
     outcome: outcomePromise,
     runNow: () => {
       sleepAbort?.abort();
-      return Promise.race([deferred.promise, outcomePromise.then((T) => T !== "abandoned")]);
+      return Promise.race([deferred.promise, outcomePromise.then((outcome) => outcome !== "abandoned")]);
     },
   };
 }
@@ -513,15 +522,17 @@ async function listSubagentTranscriptsForBackfill(agentIds, storageBackend) {
   let filtered = (
     storageBackend !== undefined
       ? await statSubagentTranscriptsViaBackend(storageBackend, agentIds)
-      : await Promise.all(agentIds.map((_) => statSubagentTranscript(_)))
-  ).filter((_) => _ !== null);
-  let filtered_2 = filtered.filter((_) => _.size <= SKIP_PRECOMPACT_THRESHOLD);
-  let sliced = filtered_2.sort((_, b) => b.mtimeMs - _.mtimeMs).slice(0, MAX_BACKFILL_SUBAGENT_TRANSCRIPTS);
-  let w = filtered.length - filtered_2.length;
-  let B = filtered_2.length - sliced.length;
-  if (w > 0 || B > 0)
+      : await Promise.all(agentIds.map((agentId) => statSubagentTranscript(agentId)))
+  ).filter((entry) => entry !== null);
+  let filtered_2 = filtered.filter((entry) => entry.size <= SKIP_PRECOMPACT_THRESHOLD);
+  let sliced = filtered_2
+    .sort((left, right) => right.mtimeMs - left.mtimeMs)
+    .slice(0, MAX_BACKFILL_SUBAGENT_TRANSCRIPTS);
+  let overSize = filtered.length - filtered_2.length;
+  let overCount = filtered_2.length - sliced.length;
+  if (overSize > 0 || overCount > 0)
     logForDebugging(
-      `[persistence-sync] Subagent backfill capped: ${w} over ${SKIP_PRECOMPACT_THRESHOLD}B, ${B} beyond ${MAX_BACKFILL_SUBAGENT_TRANSCRIPTS}-agent limit (live stream unaffected)`,
+      `[persistence-sync] Subagent backfill capped: ${overSize} over ${SKIP_PRECOMPACT_THRESHOLD}B, ${overCount} beyond ${MAX_BACKFILL_SUBAGENT_TRANSCRIPTS}-agent limit (live stream unaffected)`,
     );
   return sliced;
 }
@@ -537,11 +548,12 @@ async function scanTranscriptForBackfill(
   bridgeSessionId,
   onRow,
   boundaryUuids = null,
-  { signal: B, budget: _ } = {},
+  { signal, budget } = {},
 ) {
-  let b = storageBackend ? getAgentTranscriptPath_2(transcriptPath) : null;
+  let backendKey = storageBackend ? getAgentTranscriptPath_2(transcriptPath) : null;
   let scanBudget =
-    _ ?? (storageBackend && b ? SuppressionScanBudget.forBackendRead() : new SuppressionScanBudget());
+    budget ??
+    (storageBackend && backendKey ? SuppressionScanBudget.forBackendRead() : new SuppressionScanBudget());
   let rows = [];
   let seenUuids = new Set();
   let pastBoundary = false;
@@ -553,27 +565,27 @@ async function scanTranscriptForBackfill(
   let lineCount = 0;
   let charsRead = 0;
   let outcome = "clean";
-  let he;
+  let firstLine;
   try {
-    let ne =
-      storageBackend && b
-        ? openTranscriptStream(storageBackend, b)
+    let lines =
+      storageBackend && backendKey
+        ? openTranscriptStream(storageBackend, backendKey)
         : readLinesReverse(transcriptPath, SUPPRESSION_SCAN_CHUNK_BYTES, {
-            onOpen: (P) => {
-              fileBytes = P;
+            onOpen: (handle) => {
+              fileBytes = handle;
             },
           });
-    for await (let P of ne) {
-      he ??= P;
+    for await (let line of lines) {
+      firstLine ??= line;
       lineCount++;
-      charsRead += P.length + 1;
-      if (matchesHistorySuppressionLine(P)) {
+      charsRead += line.length + 1;
+      if (matchesHistorySuppressionLine(line)) {
         logForDebugging("[persistence-sync] Refusing backfill: history-suppression entry in transcript");
         outcome = "found";
         return "tainted";
       }
       if (pastBoundary || tooManyRows) {
-        if (sweepTaint && scanBudget.spend(P)) {
+        if (sweepTaint && scanBudget.spend(line)) {
           logForDebugging(
             "[persistence-sync] Refusing backfill: pre-boundary taint sweep exhausted its budget without a verdict",
           );
@@ -582,26 +594,30 @@ async function scanTranscriptForBackfill(
         }
         if (tooManyRows || neededUuids.size === 0) continue;
       }
-      let L;
+      let parsed;
       try {
-        L = jsonParse(P);
+        parsed = jsonParse(line);
       } catch {
         continue;
       }
-      if (!isSyncedTranscriptEntry(L)) continue;
-      if (isRowForeignToBridgeSession(L, bridgeSessionId)) continue;
-      if (!pastBoundary) seenUuids.add(L.uuid);
-      else if (!neededUuids.delete(L.uuid)) continue;
-      onRow?.(L);
-      if (!serverUuids.has(L.uuid)) rows.push(L);
-      if (!pastBoundary && isCompactBoundaryMessage_2(L)) {
+      if (!isSyncedTranscriptEntry(parsed)) continue;
+      if (isRowForeignToBridgeSession(parsed, bridgeSessionId)) continue;
+      if (!pastBoundary) seenUuids.add(parsed.uuid);
+      else if (!neededUuids.delete(parsed.uuid)) continue;
+      onRow?.(parsed);
+      if (!serverUuids.has(parsed.uuid)) rows.push(parsed);
+      if (!pastBoundary && isCompactBoundaryMessage_2(parsed)) {
         pastBoundary = true;
         boundaryIndex = rows.length;
-        let uuids = L.compactMetadata?.preservedMessages?.uuids;
+        let uuids = parsed.compactMetadata?.preservedMessages?.uuids;
         let filtered = (Array.isArray(uuids) ? uuids : [])
           .slice(-MAX_PRESERVED_MESSAGE_UUIDS)
-          .filter((De) => !seenUuids.has(De));
-        if (boundaryUuids !== null && !serverUuids.has(L.uuid) && filtered.some((De) => !serverUuids.has(De)))
+          .filter((uuid) => !seenUuids.has(uuid));
+        if (
+          boundaryUuids !== null &&
+          !serverUuids.has(parsed.uuid) &&
+          filtered.some((uuid) => !serverUuids.has(uuid))
+        )
           neededUuids = new Set([...filtered, ...boundaryUuids]);
       }
       if (pastBoundary && !sweepTaint && neededUuids.size === 0) break;
@@ -621,7 +637,7 @@ async function scanTranscriptForBackfill(
     if (sweepTaint)
       logSuppressionScan({
         leg: "backfill-read",
-        throughBackend: Boolean(storageBackend && b),
+        throughBackend: Boolean(storageBackend && backendKey),
         outcome,
         lines: lineCount,
         charsRead,
@@ -665,14 +681,14 @@ function recheckBackfillPreconditions(sessionId) {
 /**
  * stat 一个子代理 transcript，返回 {agentId, path, size, mtimeMs}，失败返回 null。
  */
-async function statSubagentTranscript(s, path = getAgentTranscriptPath(s)) {
+async function statSubagentTranscript(agentId, path = getAgentTranscriptPath(agentId)) {
   try {
-    let p = await stat(path);
+    let fileStat = await stat(path);
     return {
-      agentId: s,
+      agentId,
       path,
-      size: p.size,
-      mtimeMs: p.mtimeMs,
+      size: fileStat.size,
+      mtimeMs: fileStat.mtimeMs,
     };
   } catch {
     return null;
@@ -693,59 +709,62 @@ async function statSubagentTranscriptsViaBackend(storageBackend, agentIds) {
   });
   let asTranscriptKey = (key) =>
     key !== null && key.namespace === "transcript" && key.agentId !== undefined ? key : null;
-  let folderKeyOf = (_) => [_.projectKey, _.sessionId, ...(_.agentRelPath ?? [])].join("/");
+  let folderKeyOf = (key) => [key.projectKey, key.sessionId, ...(key.agentRelPath ?? [])].join("/");
   let folders = new Map();
   for (let { key } of entries) {
-    let b = asTranscriptKey(key);
-    if (b !== null)
-      folders.set(folderKeyOf(b), {
-        projectKey: b.projectKey,
-        sessionId: b.sessionId,
-        ...(b.agentRelPath !== undefined && {
-          agentRelPath: b.agentRelPath,
+    let transcriptKey = asTranscriptKey(key);
+    if (transcriptKey !== null)
+      folders.set(folderKeyOf(transcriptKey), {
+        projectKey: transcriptKey.projectKey,
+        sessionId: transcriptKey.sessionId,
+        ...(transcriptKey.agentRelPath !== undefined && {
+          agentRelPath: transcriptKey.agentRelPath,
         }),
       });
   }
   let listings = new Map();
   let budget = createPageBudget();
   await Promise.all(
-    [...folders].map(async ([_, { projectKey: b, sessionId: E, agentRelPath: A }]) => {
-      let T = new Map();
-      listings.set(_, T);
-      let v = () => listings.delete(_);
-      let F = A === undefined ? `session ${E}` : `session ${E} subtree ${A.join("/")}`;
+    [...folders].map(async ([folderKey, { projectKey, sessionId, agentRelPath }]) => {
+      let listing = new Map();
+      listings.set(folderKey, listing);
+      let dropListing = () => listings.delete(folderKey);
+      let folderLabel =
+        agentRelPath === undefined
+          ? `session ${sessionId}`
+          : `session ${sessionId} subtree ${agentRelPath.join("/")}`;
       try {
         let allPages = await readAllPages(
-          (N) =>
+          (cursor) =>
             storageBackend.listEntries(
               {
                 namespace: "transcript",
-                projectKey: b,
-                sessionId: E,
-                ...(A !== undefined && {
-                  agentRelPath: A,
+                projectKey,
+                sessionId,
+                ...(agentRelPath !== undefined && {
+                  agentRelPath,
                 }),
               },
               {
                 skipScopeStats: true,
-                ...(N !== undefined && {
-                  cursor: N,
+                ...(cursor !== undefined && {
+                  cursor,
                 }),
               },
             ),
-          (N) => {
-            for (let x of N)
+          (items) => {
+            for (let item of items)
               if (
-                x.kind === "key" &&
-                x.key.namespace === "transcript" &&
-                x.key.agentId !== undefined &&
-                folderKeyOf(x.key) === _ &&
-                x.size !== undefined &&
-                x.mtimeMs !== undefined
+                item.kind === "key" &&
+                item.key.namespace === "transcript" &&
+                item.key.agentId !== undefined &&
+                folderKeyOf(item.key) === folderKey &&
+                item.size !== undefined &&
+                item.mtimeMs !== undefined
               )
-                T.set(x.key.agentId, {
-                  size: x.size,
-                  mtimeMs: x.mtimeMs,
+                listing.set(item.key.agentId, {
+                  size: item.size,
+                  mtimeMs: item.mtimeMs,
                 });
           },
           {
@@ -754,32 +773,32 @@ async function statSubagentTranscriptsViaBackend(storageBackend, agentIds) {
         );
         if (allPages.status !== "done") {
           logForDebugging(
-            `[persistence-sync] subagent listing for ${F} ${allPages.status === "error" ? `failed: ${formatStorageError(allPages.error)}` : "was capped"} \u2014 its subagents are skipped`,
+            `[persistence-sync] subagent listing for ${folderLabel} ${allPages.status === "error" ? `failed: ${formatStorageError(allPages.error)}` : "was capped"} \u2014 its subagents are skipped`,
           );
-          v();
+          dropListing();
         }
       } catch (error) {
         logForDebugging(
-          `[persistence-sync] subagent listing for ${F} threw: ${errorMessage(error)} \u2014 its subagents are skipped`,
+          `[persistence-sync] subagent listing for ${folderLabel} threw: ${errorMessage(error)} \u2014 its subagents are skipped`,
         );
-        v();
+        dropListing();
       }
     }),
   );
   return Promise.all(
     entries.map(async ({ agentId, path, key }) => {
-      let A = asTranscriptKey(key);
-      if (A === null) return statSubagentTranscript(agentId, path);
-      let T = listings.get(folderKeyOf(A));
-      let v = T?.get(A.agentId);
-      if (v === undefined && T !== undefined)
+      let transcriptKey = asTranscriptKey(key);
+      if (transcriptKey === null) return statSubagentTranscript(agentId, path);
+      let listing = listings.get(folderKeyOf(transcriptKey));
+      let entry = listing?.get(transcriptKey.agentId);
+      if (entry === undefined && listing !== undefined)
         logForDebugging(`[persistence-sync] subagent ${agentId} not in its folder's listing \u2014 skipped`);
-      return v === undefined
+      return entry === undefined
         ? null
         : {
             agentId,
             path,
-            ...v,
+            ...entry,
           };
     }),
   );

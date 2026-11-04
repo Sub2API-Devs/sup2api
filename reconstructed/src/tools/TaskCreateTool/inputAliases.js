@@ -10,49 +10,57 @@
  */
 import { getFirstLine } from "../../utils/stringUtils.js";
 import { isPlainObject as isPlainObject_5 } from "../../utils/isPlainObject.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:1776548-1776808 placement
 /**
  * TaskCreate 输入的规范字段与可接受的别名（title/name → subject、content → description、active_form → activeForm），以及会被忽略的其他字段名。
  */
-var TASK_INPUT_FIELDS = new Set(["subject", "description", "activeForm", "metadata"]);
-var SUBJECT_ALIASES = ["title", "name"];
-var DESCRIPTION_ALIASES = ["content"];
-var ACTIVE_FORM_ALIASES_2 = ["active_form"];
-var IGNORED_TASK_FIELDS = new Set([
-  "status",
-  "state",
-  "priority",
-  "prompt",
-  "subagent_type",
-  "id",
-  "type",
-  "owner",
-  "blocks",
-  "blockedBy",
-  "addBlocks",
-  "addBlockedBy",
-]);
+var TASK_INPUT_FIELDS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var SUBJECT_ALIASES;
+var DESCRIPTION_ALIASES;
+var ACTIVE_FORM_ALIASES_2;
+var IGNORED_TASK_FIELDS;
+deferInit("chunk-e6aww6q8.js:1776548", () => {
+  TASK_INPUT_FIELDS = new Set(["subject", "description", "activeForm", "metadata"]);
+  SUBJECT_ALIASES = ["title", "name"];
+  DESCRIPTION_ALIASES = ["content"];
+  ACTIVE_FORM_ALIASES_2 = ["active_form"];
+  IGNORED_TASK_FIELDS = new Set([
+    "status",
+    "state",
+    "priority",
+    "prompt",
+    "subagent_type",
+    "id",
+    "type",
+    "owner",
+    "blocks",
+    "blockedBy",
+    "addBlocks",
+    "addBlockedBy",
+  ]);
+});
 //@ chunk-e6aww6q8.js:1776808-1776865 placement
 /**
  * 判断值是非空字符串（去空白后）。
  */
-function isNonEmptyString(e) {
-  return typeof e === "string" && e.trim() !== "";
+function isNonEmptyString(value) {
+  return typeof value === "string" && value.trim() !== "";
 }
 //@ chunk-e6aww6q8.js:1776865-1776912 placement
 /**
  * 判断输入含 tasks 或 todos 字段（是待办列表）。
  */
-function isTodoListInput(e) {
-  return "tasks" in e || "todos" in e;
+function isTodoListInput(input) {
+  return "tasks" in input || "todos" in input;
 }
 //@ chunk-e6aww6q8.js:1776912-1776968 placement
 /**
  * 判断输入含 prompt 或 subagent_type 字段（是 Agent 调用）。
  */
-function isSubagentTaskInput(e) {
-  return "prompt" in e || "subagent_type" in e;
+function isSubagentTaskInput(input) {
+  return "prompt" in input || "subagent_type" in input;
 }
 //@ chunk-e6aww6q8.js:1776968-1777129 placement
 function deriveTaskSubject(description) {
@@ -70,18 +78,18 @@ function deriveTaskSubject(description) {
 function coerceTaskCreateInput(rawInput) {
   if (!isPlainObject_5(rawInput)) return null;
   if (isTodoListInput(rawInput)) return null;
-  let n = [];
-  let r = {
+  let appliedAliases = [];
+  let input = {
     ...rawInput,
   };
-  if (isSubagentTaskInput(r) && !(isNonEmptyString(r.subject) && isNonEmptyString(r.description)))
+  if (isSubagentTaskInput(input) && !(isNonEmptyString(input.subject) && isNonEmptyString(input.description)))
     return null;
-  if (!("subject" in r) && !("description" in r) && "task" in r) {
-    let task = r.task;
+  if (!("subject" in input) && !("description" in input) && "task" in input) {
+    let task = input.task;
     if (isNonEmptyString(task)) {
-      delete r.task;
-      r.description = task;
-      n.push("task_wrapper_string");
+      delete input.task;
+      input.description = task;
+      appliedAliases.push("task_wrapper_string");
     } else if (isPlainObject_5(task)) {
       if (isTodoListInput(task)) return null;
       if (
@@ -89,49 +97,49 @@ function coerceTaskCreateInput(rawInput) {
         !(isNonEmptyString(task.subject) && isNonEmptyString(task.description))
       )
         return null;
-      delete r.task;
-      Object.assign(r, task);
-      n.push("task_wrapper_object");
+      delete input.task;
+      Object.assign(input, task);
+      appliedAliases.push("task_wrapper_object");
     } else return null;
   }
-  let s = [
+  let aliasGroups = [
     [SUBJECT_ALIASES, "subject"],
     [DESCRIPTION_ALIASES, "description"],
     [ACTIVE_FORM_ALIASES_2, "activeForm"],
   ];
-  for (let [h, y] of s)
-    for (let S of h)
-      if (S in r && !(y in r) && isNonEmptyString(r[S])) {
-        r[y] = r[S];
-        delete r[S];
-        n.push(`alias_${S}`);
+  for (let [aliases, canonicalField] of aliasGroups)
+    for (let alias of aliases)
+      if (alias in input && !(canonicalField in input) && isNonEmptyString(input[alias])) {
+        input[canonicalField] = input[alias];
+        delete input[alias];
+        appliedAliases.push(`alias_${alias}`);
       }
-  if (isNonEmptyString(r.subject) && !("description" in r)) {
-    r.description = r.subject;
-    n.push("backfill_description");
-  } else if (isNonEmptyString(r.description) && !("subject" in r)) {
-    r.subject = deriveTaskSubject(r.description);
-    n.push("backfill_subject");
+  if (isNonEmptyString(input.subject) && !("description" in input)) {
+    input.description = input.subject;
+    appliedAliases.push("backfill_description");
+  } else if (isNonEmptyString(input.description) && !("subject" in input)) {
+    input.subject = deriveTaskSubject(input.description);
+    appliedAliases.push("backfill_subject");
   }
-  if (isNonEmptyString(r.subject) && isNonEmptyString(r.description)) {
-    for (let key of Object.keys(r))
+  if (isNonEmptyString(input.subject) && isNonEmptyString(input.description)) {
+    for (let key of Object.keys(input))
       if (!TASK_INPUT_FIELDS.has(key)) {
-        delete r[key];
-        n.push(`strip_${IGNORED_TASK_FIELDS.has(key) ? key : "other"}`);
+        delete input[key];
+        appliedAliases.push(`strip_${IGNORED_TASK_FIELDS.has(key) ? key : "other"}`);
       }
-    if ("activeForm" in r && typeof r.activeForm !== "string") {
-      delete r.activeForm;
-      n.push("drop_invalid_activeForm");
+    if ("activeForm" in input && typeof input.activeForm !== "string") {
+      delete input.activeForm;
+      appliedAliases.push("drop_invalid_activeForm");
     }
-    if ("metadata" in r && !isPlainObject_5(r.metadata)) {
-      delete r.metadata;
-      n.push("drop_invalid_metadata");
+    if ("metadata" in input && !isPlainObject_5(input.metadata)) {
+      delete input.metadata;
+      appliedAliases.push("drop_invalid_metadata");
     }
   }
-  if (n.length === 0) return null;
+  if (appliedAliases.length === 0) return null;
   return {
-    input: r,
-    shapeClass: n.join("+"),
+    input,
+    shapeClass: appliedAliases.join("+"),
   };
 }
 export { coerceTaskCreateInput, isTodoListInput, isSubagentTaskInput, isNonEmptyString };

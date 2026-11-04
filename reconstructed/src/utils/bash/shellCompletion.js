@@ -8,14 +8,36 @@
  * pieces: chunk-18hwfzwa.js (8), chunk-wj577vf9.js (1)
  * attribution: callgraph-witnessed 1, layout 1, fingerprint 7
  */
-import { exec } from "../Shell.js";
-import { getShellType } from "../localInstaller.js";
-import { logForDebugging } from "../debug.js";
 import { findLastContentTokenIndex, findTokenSplitOffset } from "../../components/Markdown.js";
 import { isBlankToken_2 } from "../markdownHeadings.js";
 import { MAX_WINDOW_BLOCKS } from "../doctorContextWarnings.js";
 import { countCharInString } from "../stringUtils.js";
+import { exec } from "../Shell.js";
+import { getShellType } from "../localInstaller.js";
+import { logForDebugging } from "../debug.js";
 
+//@ chunk-wj577vf9.js:5608-5806 fingerprint = findLastStringToken (0.53)
+/**
+ * 在 token 序列中从末尾向前，在换行数预算内找可用的起始位置（不早于最后一个空白 token 之后），返回满足条件的下标。旧版名 findLastStringToken 存疑，与 shell 补全无直接关系。
+ */
+function findLastStringToken(tokens, text) {
+  let lastContentTokenIndex = findLastContentTokenIndex(tokens);
+  let searchStart =
+    tokens.findLastIndex((token, index) => index < lastContentTokenIndex && isBlankToken_2(token)) + 1;
+  let windowStart = lastContentTokenIndex;
+  let newlineCount = 0;
+  for (let k = tokens.length - 1; k >= searchStart && newlineCount <= MAX_WINDOW_BLOCKS; k--) {
+    newlineCount += countCharInString(
+      tokens[k]?.raw ?? "",
+      `
+`,
+    );
+    windowStart = newlineCount <= MAX_WINDOW_BLOCKS ? Math.min(windowStart, k) : windowStart;
+  }
+  return (
+    [searchStart, windowStart].find((splitIndex) => findTokenSplitOffset(tokens, splitIndex, text) > 0) ?? 0
+  );
+}
 //@ chunk-18hwfzwa.js:548341-548361 callgraph-witnessed = MAX_SHELL_COMPLETIONS (0)
 var MAX_SHELL_COMPLETIONS = 15;
 var SHELL_COMPLETION_TIMEOUT_MS = 1000;
@@ -43,11 +65,11 @@ function parseInputContext(input, cursorOffset) {
     };
   let tokens = beforeCursor.split(/\s+/);
   let prefix = tokens.at(-1) || "";
-  let Re = tokens.length === 1 && !beforeCursor.includes(" ");
+  let isFirstToken = tokens.length === 1 && !beforeCursor.includes(" ");
   let lastToken = getCompletionTypeFromPrefix(prefix);
   return {
     prefix,
-    completionType: lastToken !== "command" ? lastToken : Re ? "command" : "file",
+    completionType: lastToken !== "command" ? lastToken : isFirstToken ? "command" : "file",
   };
 }
 //@ chunk-18hwfzwa.js:548842-549134 fingerprint = getBashCompletionCommand (1)
@@ -72,14 +94,14 @@ function getZshCompletionCommand(prefix, completionType) {
 /**
  * 按 shell 类型生成补全命令并通过 Shell.exec 运行，截取前 15 行转换成补全项。
  */
-async function getCompletionsForShell(host, shellType, prefix, completionType, ee, sessionEnvVars) {
+async function getCompletionsForShell(host, shellType, prefix, completionType, signal, sessionEnvVars) {
   let command;
   if (shellType === "bash") command = getBashCompletionCommand(prefix, completionType);
   else if (shellType === "zsh") command = getZshCompletionCommand(prefix, completionType);
   else return [];
   return (
     await (
-      await exec(command, ee, "bash", {
+      await exec(command, signal, "bash", {
         host,
         timeout: SHELL_COMPLETION_TIMEOUT_MS,
         sessionEnvVars,
@@ -106,11 +128,11 @@ async function getCompletionsForShell(host, shellType, prefix, completionType, e
 /**
  * Prompt 输入框的 shell 补全：仅 bash/zsh；从光标前文本判断前缀与类型（变量/文件/命令），执行 compgen 或 zsh 参数展开命令（超时 1000ms，最多 15 条），返回补全项。
  */
-async function getShellCompletions(host, x, cursorOffset, signal, sessionEnvVars) {
+async function getShellCompletions(host, input, cursorOffset, signal, sessionEnvVars) {
   let shellType = getShellType();
   if (shellType !== "bash" && shellType !== "zsh") return [];
   try {
-    let { prefix, completionType } = parseInputContext(x, cursorOffset);
+    let { prefix, completionType } = parseInputContext(input, cursorOffset);
     if (!prefix) return [];
     return (
       await getCompletionsForShell(host, shellType, prefix, completionType, signal, sessionEnvVars)
@@ -118,31 +140,12 @@ async function getShellCompletions(host, x, cursorOffset, signal, sessionEnvVars
       ...suggestion,
       metadata: {
         ...suggestion.metadata,
-        inputSnapshot: x,
+        inputSnapshot: input,
       },
     }));
   } catch (error) {
     logForDebugging(`Shell completion failed: ${error}`);
     return [];
   }
-}
-//@ chunk-wj577vf9.js:5608-5806 fingerprint = findLastStringToken (0.53)
-/**
- * 在 token 序列中从末尾向前，在换行数预算内找可用的起始位置（不早于最后一个空白 token 之后），返回满足条件的下标。旧版名 findLastStringToken 存疑，与 shell 补全无直接关系。
- */
-function findLastStringToken(e, t) {
-  let lastContentTokenIndex = findLastContentTokenIndex(e);
-  let r = e.findLastIndex((l, a) => a < lastContentTokenIndex && isBlankToken_2(l)) + 1;
-  let o = lastContentTokenIndex;
-  let s = 0;
-  for (let k = e.length - 1; k >= r && s <= MAX_WINDOW_BLOCKS; k--) {
-    s += countCharInString(
-      e[k]?.raw ?? "",
-      `
-`,
-    );
-    o = s <= MAX_WINDOW_BLOCKS ? Math.min(o, k) : o;
-  }
-  return [r, o].find((l) => findTokenSplitOffset(e, l, t) > 0) ?? 0;
 }
 export { getShellCompletions, findLastStringToken };

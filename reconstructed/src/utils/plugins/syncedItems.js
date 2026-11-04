@@ -18,6 +18,7 @@ import { replaceControlChars } from "../resultError.js";
 import { PLUGIN_META_SUFFIX } from "./pluginAttribution.js";
 import { env } from "../env.js";
 import { getStoredOauthAccountInfo, getClaudeAIOAuthTokenOriginAsync, getAuthTokenSource } from "../auth.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-f3qhjfah.js:39940-40016 placement
 /**
@@ -33,16 +34,16 @@ function isTaggedMarketplaceId(marketplaceId) {
 //@ chunk-f3qhjfah.js:40050-40073 placement
 var MARKETPLACE_DIR_PREFIX = ".marketplace-";
 //@ chunk-f3qhjfah.js:40073-40182 placement
-function claudeAiMarketplaceFile(e) {
-  if (!isTaggedMarketplaceId(e)) throw Error("claude.ai marketplace id is not a tagged id");
-  return `${MARKETPLACE_DIR_PREFIX}${e}.json`;
+function claudeAiMarketplaceFile(id) {
+  if (!isTaggedMarketplaceId(id)) throw Error("claude.ai marketplace id is not a tagged id");
+  return `${MARKETPLACE_DIR_PREFIX}${id}.json`;
 }
 //@ chunk-f3qhjfah.js:40182-40271 placement
-function isClaudeAiMarketplaceFile(e) {
+function isClaudeAiMarketplaceFile(name) {
   return (
-    e.startsWith(MARKETPLACE_DIR_PREFIX) &&
-    e.endsWith(".json") &&
-    isTaggedMarketplaceId(e.slice(MARKETPLACE_DIR_PREFIX.length, -5))
+    name.startsWith(MARKETPLACE_DIR_PREFIX) &&
+    name.endsWith(".json") &&
+    isTaggedMarketplaceId(name.slice(MARKETPLACE_DIR_PREFIX.length, -5))
   );
 }
 //@ chunk-f3qhjfah.js:40271-40302 placement
@@ -52,35 +53,35 @@ var LAST_COMPLETE_ROUND_FILE = ".last-complete-round";
  * syncKeyOf：pid:procStart/路径 形式的同步键。
  */
 function syncKeyOf(
-  e,
-  n = {
+  itemName,
+  owner = {
     pid: process.pid,
     procStart: undefined,
   },
 ) {
-  return `${n.pid}:${n.procStart ?? ""}/${e}`;
+  return `${owner.pid}:${owner.procStart ?? ""}/${itemName}`;
 }
 //@ chunk-f3qhjfah.js:40396-40687 placement
 /**
  * 解析 pid:procStart/名字 形式的认领。
  */
-function parsePendingClaim(e) {
-  let index = e.indexOf("/");
+function parsePendingClaim(key) {
+  let index = key.indexOf("/");
   if (index === -1)
     return {
-      name: e,
+      name: key,
       ownerPid: undefined,
       ownerProcStart: undefined,
     };
-  let sliced = e.slice(0, index);
+  let sliced = key.slice(0, index);
   let index_2 = sliced.indexOf(":");
-  let a = index_2 === -1 ? sliced : sliced.slice(0, index_2);
-  let c = index_2 === -1 ? "" : sliced.slice(index_2 + 1);
-  let l = Number(a);
+  let pidText = index_2 === -1 ? sliced : sliced.slice(0, index_2);
+  let procStart = index_2 === -1 ? "" : sliced.slice(index_2 + 1);
+  let pid = Number(pidText);
   return {
-    name: e.slice(index + 1),
-    ownerPid: Number.isInteger(l) && l > 0 ? l : undefined,
-    ownerProcStart: c || undefined,
+    name: key.slice(index + 1),
+    ownerPid: Number.isInteger(pid) && pid > 0 ? pid : undefined,
+    ownerProcStart: procStart || undefined,
   };
 }
 //@ chunk-f3qhjfah.js:40687-40829 placement
@@ -103,21 +104,27 @@ var UNBOUND_BUCKET = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i;
 /**
  * isUuid：是否为 UUID。
  */
-function isUuid(e) {
-  return UNBOUND_BUCKET.test(e);
+function isUuid(value) {
+  return UNBOUND_BUCKET.test(value);
 }
 //@ chunk-f3qhjfah.js:40972-41039 placement
-function syncBucketKey(e, n) {
-  return `${e.toLowerCase()}_${n?.toLowerCase() ?? UNBOUND}`;
+function syncBucketKey(org, account) {
+  return `${org.toLowerCase()}_${account?.toLowerCase() ?? UNBOUND}`;
 }
 //@ chunk-f3qhjfah.js:41039-41183 placement
-function parseSyncBucketName(e) {
-  let [n, r, ...s] = e.split("_");
-  if (s.length > 0 || n === undefined || r === undefined || !isUuid(n) || !(r === UNBOUND || isUuid(r)))
+function parseSyncBucketName(name) {
+  let [org, account, ...rest] = name.split("_");
+  if (
+    rest.length > 0 ||
+    org === undefined ||
+    account === undefined ||
+    !isUuid(org) ||
+    !(account === UNBOUND || isUuid(account))
+  )
     return null;
   return {
-    org: n,
-    account: r,
+    org,
+    account,
   };
 }
 //@ chunk-f3qhjfah.js:41183-41219 placement
@@ -131,8 +138,8 @@ function isSyncBucketName(name) {
 /**
  * bucketOrg：桶名对应的组织。
  */
-function bucketOrg(syncBucket) {
-  return parseSyncBucketName(syncBucket)?.org ?? null;
+function bucketOrg(name) {
+  return parseSyncBucketName(name)?.org ?? null;
 }
 //@ chunk-f3qhjfah.js:41259-41277 placement
 var BUCKET_DIR_PREFIX = ".bucket-";
@@ -140,15 +147,15 @@ var BUCKET_DIR_PREFIX = ".bucket-";
 /**
  * bucketDirPath：桶目录路径。
  */
-function bucketDirPath(e, n) {
-  return join(e, `${BUCKET_DIR_PREFIX}${n}`);
+function bucketDirPath(root, bucketName) {
+  return join(root, `${BUCKET_DIR_PREFIX}${bucketName}`);
 }
 //@ chunk-f3qhjfah.js:41319-41427 placement
 /**
  * 桶名的脱敏形状。
  */
-function syncBucketShape(e) {
-  let syncBucketName = parseSyncBucketName(e);
+function syncBucketShape(name) {
+  let syncBucketName = parseSyncBucketName(name);
   if (syncBucketName === null) return null;
   return syncBucketName.account === UNBOUND ? "<org>_unbound" : "<org>_<account>";
 }
@@ -158,30 +165,30 @@ var GENERATION_SUFFIX_RE = /~g(?:[2-9]|[1-9]\d+)$/;
 /**
  * stripGenerationSuffix：去掉代次后缀。
  */
-function stripGenerationSuffix(e) {
-  return e.replace(GENERATION_SUFFIX_RE, "");
+function stripGenerationSuffix(name) {
+  return name.replace(GENERATION_SUFFIX_RE, "");
 }
 //@ chunk-f3qhjfah.js:41498-41544 placement
-function trimTrailingDotsSpaces(e) {
-  return e.replace(/[. ]+$/, "");
+function trimTrailingDotsSpaces(name) {
+  return name.replace(/[. ]+$/, "");
 }
 //@ chunk-f3qhjfah.js:41544-41670 placement
-function sanitizeSyncedItemName(e) {
-  let n = trimTrailingDotsSpaces(e.replace(/[<>:"|?*\\/]/g, "_"));
-  if (!n) throw Error("synced item name resolves to sync root");
-  return n;
+function sanitizeSyncedItemName(name) {
+  let sanitized = trimTrailingDotsSpaces(name.replace(/[<>:"|?*\\/]/g, "_"));
+  if (!sanitized) throw Error("synced item name resolves to sync root");
+  return sanitized;
 }
 //@ chunk-f3qhjfah.js:41670-41821 placement
-function joinInsideSyncRoot(e, n) {
-  let r = join(n, e);
-  let s = relative(n, r);
-  if (!s || isAbsolute(s) || s === ".." || s.startsWith(`..${sep}`))
+function joinInsideSyncRoot(name, root) {
+  let fullPath = join(root, name);
+  let rel = relative(root, fullPath);
+  if (!rel || isAbsolute(rel) || rel === ".." || rel.startsWith(`..${sep}`))
     throw Error("synced item name escapes the sync root");
-  return r;
+  return fullPath;
 }
 //@ chunk-f3qhjfah.js:41821-41979 placement
-function stripInvisibleChars(e) {
-  return e
+function stripInvisibleChars(name) {
+  return name
     .replace(/[\u200c-\u200f\u202a-\u202e\u206a-\u206f\ufeff]/g, "")
     .replace(/\u1e9e/g, "\xDF")
     .normalize("NFD")
@@ -201,28 +208,29 @@ var foldNameCache;
 /**
  * 名字折叠（NFKC、去不可见字符、统一连字符与冒号；带缓存）。
  */
-function foldName(e) {
-  if (PRINTABLE_NAME_RE.test(e)) return e.toLowerCase();
-  if (e.length < MIN_FOLDABLE_NAME_LENGTH || e.length > MAX_FOLDABLE_NAME_LENGTH) return foldNameUncached(e);
-  let n = (foldNameCache ??= retainCacheKey(
+function foldName(name) {
+  if (PRINTABLE_NAME_RE.test(name)) return name.toLowerCase();
+  if (name.length < MIN_FOLDABLE_NAME_LENGTH || name.length > MAX_FOLDABLE_NAME_LENGTH)
+    return foldNameUncached(name);
+  let cache = (foldNameCache ??= retainCacheKey(
     new LRUCache({
       max: 8192,
       maxSize: FOLD_CACHE_MAX_BYTES,
-      sizeCalculation: (s, a) => a.length + s.length,
+      sizeCalculation: (value, key) => key.length + value.length,
     }),
   ));
-  let r = n.get(e);
-  if (r === undefined) {
-    r = foldNameUncached(e);
-    n.set(repairUtf16(e), r);
+  let folded = cache.get(name);
+  if (folded === undefined) {
+    folded = foldNameUncached(name);
+    cache.set(repairUtf16(name), folded);
   }
-  return r;
+  return folded;
 }
 //@ chunk-f3qhjfah.js:42264-42460 placement
-function foldNameUncached(e) {
+function foldNameUncached(name) {
   return stripInvisibleChars(
     reorderLongCombiningRuns(
-      normalizeNfkc(toWellFormedString(e))
+      normalizeNfkc(toWellFormedString(name))
         .replace(/[\p{Z}\p{Cc}\p{Cf}\p{Default_Ignorable_Code_Point}\u2800]/gu, "")
         .replace(/[\p{Pd}\u2212]/gu, "-")
         .replace(/[\ua789\u2236\u0589\u05c3\u02d0]/g, ":"),
@@ -233,8 +241,8 @@ function foldNameUncached(e) {
 /**
  * isHiddenFoldName：折叠后以点开头。
  */
-function isHiddenFoldName(e) {
-  return foldName_2(e).startsWith(".");
+function isHiddenFoldName(name) {
+  return foldName_2(name).startsWith(".");
 }
 //@ chunk-f3qhjfah.js:42504-42542 placement
 function isGitDirName(name) {
@@ -244,112 +252,126 @@ function isGitDirName(name) {
 /**
  * isSyncedDirName：名称为 synced 目录。
  */
-function isSyncedDirName(e) {
-  return stripInvisibleChars(trimTrailingDotsSpaces(e)) === SYNCED_DIR;
+function isSyncedDirName(name) {
+  return stripInvisibleChars(trimTrailingDotsSpaces(name)) === SYNCED_DIR;
 }
 //@ chunk-f3qhjfah.js:42580-43001 placement
 /**
  * 由同步条目名得到 synced 根下的路径：去除不可见/显示危险字符，拒绝逃逸同步根与保留名。
  */
-function syncedItemPath(e, n) {
-  let r = sanitizeSyncedItemName(e);
-  if (replaceControlChars(r) !== r) throw Error("synced item name contains display-hazard characters");
-  if (isHiddenFoldName(r)) throw Error("synced item name resolves to reserved path");
-  if (stripInvisibleChars(r).endsWith(PLUGIN_META_SUFFIX))
+function syncedItemPath(name, root) {
+  let sanitized = sanitizeSyncedItemName(name);
+  if (replaceControlChars(sanitized) !== sanitized)
+    throw Error("synced item name contains display-hazard characters");
+  if (isHiddenFoldName(sanitized)) throw Error("synced item name resolves to reserved path");
+  if (stripInvisibleChars(sanitized).endsWith(PLUGIN_META_SUFFIX))
     throw Error("synced item name resolves to reserved path");
-  if (GENERATION_SUFFIX_RE.test(stripInvisibleChars(r)))
+  if (GENERATION_SUFFIX_RE.test(stripInvisibleChars(sanitized)))
     throw Error("synced item name resolves to reserved path");
-  if (isSyncBucketName(stripInvisibleChars(r))) throw Error("synced item name resolves to reserved path");
-  return syncedItemPath_2(e, n);
+  if (isSyncBucketName(stripInvisibleChars(sanitized)))
+    throw Error("synced item name resolves to reserved path");
+  return syncedItemPath_2(name, root);
 }
 //@ chunk-f3qhjfah.js:43001-43071 placement
 /**
  * syncedItemPathForGeneration：带代次后缀的同步条目路径。
  */
-function syncedItemPathForGeneration(name, n, r) {
-  let s = syncedItemPath(name, r);
-  return n <= 1 ? s : join(r, `${basename(s)}~g${n}`);
+function syncedItemPathForGeneration(name, generation, root) {
+  let basePath = syncedItemPath(name, root);
+  return generation <= 1 ? basePath : join(root, `${basename(basePath)}~g${generation}`);
 }
 //@ chunk-f3qhjfah.js:43071-43366 placement
 /**
  * 同步条目路径（拒绝保留名与旧保留写法）。
  */
-function syncedItemPath_2(e, n) {
-  let r = sanitizeSyncedItemName(e);
-  let s = stripInvisibleChars(foldName_2(r));
-  if (s === SYNCED_MANIFEST_FILE || s === TRASH_SUBDIR) {
-    let lower = r.toLowerCase();
+function syncedItemPath_2(name, root) {
+  let sanitized = sanitizeSyncedItemName(name);
+  let folded = stripInvisibleChars(foldName_2(sanitized));
+  if (folded === SYNCED_MANIFEST_FILE || folded === TRASH_SUBDIR) {
+    let lower = sanitized.toLowerCase();
     if (lower === SYNCED_MANIFEST_FILE || lower === TRASH_SUBDIR)
       throw Error("synced item name resolves to reserved path");
     throw new LegacyReservedSpellingError();
   }
-  if (isReservedGeneratedName(s)) {
-    if (isReservedGeneratedName(r.toLowerCase())) throw Error("synced item name resolves to reserved path");
+  if (isReservedGeneratedName(folded)) {
+    if (isReservedGeneratedName(sanitized.toLowerCase()))
+      throw Error("synced item name resolves to reserved path");
     throw new LegacyReservedSpellingError();
   }
-  return joinInsideSyncRoot(r, n);
+  return joinInsideSyncRoot(sanitized, root);
 }
 //@ chunk-f3qhjfah.js:43366-43448 placement
-function isReservedGeneratedName(e) {
-  let replaced = firstLineOf(e, ".").replace(/ +$/, "");
-  return /~\d/.test(e) || WINDOWS_RESERVED_NAME_RE.test(replaced);
+function isReservedGeneratedName(name) {
+  let replaced = firstLineOf(name, ".").replace(/ +$/, "");
+  return /~\d/.test(name) || WINDOWS_RESERVED_NAME_RE.test(replaced);
 }
 //@ chunk-f3qhjfah.js:43448-44023 placement
 /**
  * 读技能同步清单，返回被认领的名字集合或 claim-all。
  */
-function parseSkillsSyncManifest(e, n) {
-  let r;
+function parseSkillsSyncManifest(text, root) {
+  let parsed;
   try {
-    r = JSON.parse(e);
+    parsed = JSON.parse(text);
   } catch {
     return "claim-all";
   }
-  if (!Array.isArray(r?.skills)) return "claim-all";
-  if (r.staleDirs !== undefined && !Array.isArray(r.staleDirs)) return "claim-all";
-  if (r.pendingClaims !== undefined && !Array.isArray(r.pendingClaims)) return "claim-all";
-  let s = new Set();
-  let flattened = r.skills.flatMap((skill) =>
+  if (!Array.isArray(parsed?.skills)) return "claim-all";
+  if (parsed.staleDirs !== undefined && !Array.isArray(parsed.staleDirs)) return "claim-all";
+  if (parsed.pendingClaims !== undefined && !Array.isArray(parsed.pendingClaims)) return "claim-all";
+  let names = new Set();
+  let flattened = parsed.skills.flatMap((skill) =>
     typeof skill === "object" && skill !== null && typeof skill.name === "string" ? [skill.name] : [],
   );
-  let flattened_2 = (r.pendingClaims ?? []).flatMap((l) =>
-    typeof l === "string" ? [parsePendingClaim(l).name] : [],
+  let flattened_2 = (parsed.pendingClaims ?? []).flatMap((claim) =>
+    typeof claim === "string" ? [parsePendingClaim(claim).name] : [],
   );
-  for (let l of [flattened, r.staleDirs, flattened_2])
-    if (Array.isArray(l)) {
-      for (let g of l) if (typeof g === "string") for (let f of foldedNameCandidates(g, n)) s.add(f);
+  for (let list of [flattened, parsed.staleDirs, flattened_2])
+    if (Array.isArray(list)) {
+      for (let entry of list)
+        if (typeof entry === "string")
+          for (let candidate of foldedNameCandidates(entry, root)) names.add(candidate);
     }
-  return s;
+  return names;
 }
 //@ chunk-f3qhjfah.js:44023-44101 placement
-function foldedNameCandidates(e, n) {
-  let r = [foldNameForSync(e)];
+function foldedNameCandidates(name, root) {
+  let candidates = [foldNameForSync(name)];
   try {
-    r.push(foldNameForSync(basename(syncedItemPath_2(e, n))));
+    candidates.push(foldNameForSync(basename(syncedItemPath_2(name, root))));
   } catch {}
-  return r;
+  return candidates;
 }
 //@ chunk-f3qhjfah.js:44101-44134 placement
 /**
  * foldNameForSync：去掉不可见字符后折叠。
  */
-function foldNameForSync(e) {
-  return stripInvisibleChars(foldName_2(e));
+function foldNameForSync(name) {
+  return stripInvisibleChars(foldName_2(name));
 }
 //@ chunk-f3qhjfah.js:44134-44264 placement
 /**
  * SKILLS_SYNC_DIR：技能同步目录；SKILLS_TRASH_DIR：技能回收站目录；SKILLS_STAGING_DIR：技能暂存目录（同一声明共 6 个绑定）。
  */
-var SKILLS_SYNC_DIR_2 = join("skills", SYNCED_DIR);
-var SKILLS_SYNC_DIR = join("skills", SYNCED_SUBDIR);
-var SKILLS_TRASH_DIR = join("skills", TRASH_SUBDIR);
-var SKILLS_STAGING_DIR = join(SKILLS_SYNC_DIR_2, TRASH_SUBDIR);
-var SKILLS_SYNCED_STAGING = join("plugins", SYNCED_DIR);
-var PLUGINS_SYNC_DIR = join("plugins", SYNCED_SUBDIR);
-var PLUGINS_STAGING_DIR = join(SKILLS_SYNCED_STAGING, TRASH_SUBDIR);
+var SKILLS_SYNC_DIR_2; // deferred: uses SYNCED_DIR of its import cycle while loading; runs once the cycle is complete
+var SKILLS_SYNC_DIR;
+var SKILLS_TRASH_DIR;
+var SKILLS_STAGING_DIR;
+var SKILLS_SYNCED_STAGING;
+var PLUGINS_SYNC_DIR;
+var PLUGINS_STAGING_DIR;
+deferInit("chunk-f3qhjfah.js:44134", () => {
+  SKILLS_SYNC_DIR_2 = join("skills", SYNCED_DIR);
+  SKILLS_SYNC_DIR = join("skills", SYNCED_SUBDIR);
+  SKILLS_TRASH_DIR = join("skills", TRASH_SUBDIR);
+  SKILLS_STAGING_DIR = join(SKILLS_SYNC_DIR_2, TRASH_SUBDIR);
+  SKILLS_SYNCED_STAGING = join("plugins", SYNCED_DIR);
+  PLUGINS_SYNC_DIR = join("plugins", SYNCED_SUBDIR);
+  PLUGINS_STAGING_DIR = join(SKILLS_SYNCED_STAGING, TRASH_SUBDIR);
+});
 //@ chunk-f3qhjfah.js:44264-44311 placement
-function _(e) {
-  return e !== undefined && isUuid(e) ? e : null;
+function _(value) {
+  return value !== undefined && isUuid(value) ? value : null;
 }
 //@ chunk-f3qhjfah.js:44311-44391 placement
 function orgUuidFromEnvOrAccount() {
@@ -363,18 +385,18 @@ function currentOrgUuid() {
 /**
  * 当前账号的同步桶（按 OAuth 令牌来源）。
  */
-async function getSyncBucket(e) {
-  let n = orgUuidFromEnvOrAccount();
-  if (n === null) return null;
-  switch (await getClaudeAIOAuthTokenOriginAsync(e)) {
+async function getSyncBucket(credentials) {
+  let orgUuid = orgUuidFromEnvOrAccount();
+  if (orgUuid === null) return null;
+  switch (await getClaudeAIOAuthTokenOriginAsync(credentials)) {
     case "store":
       return getStoredAccountBucket();
     case "none":
       if (getAuthTokenSource().source === "claude.ai") return null;
-      return syncBucketKey(n, _(env.CLAUDE_CODE_ACCOUNT_UUID) ?? undefined);
+      return syncBucketKey(orgUuid, _(env.CLAUDE_CODE_ACCOUNT_UUID) ?? undefined);
     case "env":
     case "fd":
-      return syncBucketKey(n, _(env.CLAUDE_CODE_ACCOUNT_UUID) ?? undefined);
+      return syncBucketKey(orgUuid, _(env.CLAUDE_CODE_ACCOUNT_UUID) ?? undefined);
   }
 }
 //@ chunk-f3qhjfah.js:44711-44853 placement
@@ -383,9 +405,9 @@ async function getSyncBucket(e) {
  */
 function getStoredAccountBucket() {
   let storedOauthAccountInfo = getStoredOauthAccountInfo();
-  let n = _(env.CLAUDE_CODE_ORGANIZATION_UUID ?? storedOauthAccountInfo?.organizationUuid);
-  let r = _(storedOauthAccountInfo?.accountUuid);
-  return n === null || r === null ? null : syncBucketKey(n, r);
+  let orgUuid = _(env.CLAUDE_CODE_ORGANIZATION_UUID ?? storedOauthAccountInfo?.organizationUuid);
+  let accountUuid = _(storedOauthAccountInfo?.accountUuid);
+  return orgUuid === null || accountUuid === null ? null : syncBucketKey(orgUuid, accountUuid);
 }
 //@ chunk-f3qhjfah.js:44853-44912 placement
 /**

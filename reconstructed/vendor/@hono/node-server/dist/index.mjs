@@ -17,14 +17,14 @@ var RequestError = class extends Error {
     this.name = "RequestError";
   }
 };
-var toRequestError = (e) => {
-  if (e instanceof RequestError) return e;
-  return new RequestError(e.message, {
-    cause: e,
+var toRequestError = (error) => {
+  if (error instanceof RequestError) return error;
+  return new RequestError(error.message, {
+    cause: error,
   });
 };
 var GlobalRequest = global.Request;
-var P = class extends GlobalRequest {
+var CachedRequest = class extends GlobalRequest {
   constructor(input, options) {
     if (typeof input === "object" && getRequestCache in input) input = input[getRequestCache]();
     if (typeof options?.body?.getReader !== "undefined") options.duplex ??= "half";
@@ -49,7 +49,7 @@ var newRequestFromIncoming = (method, url, headers, incoming, abortController) =
   };
   if (method === "TRACE") {
     init.method = "GET";
-    let req = new P(url, init);
+    let req = new CachedRequest(url, init);
     Object.defineProperty(req, "method", {
       get() {
         return "TRACE";
@@ -80,7 +80,7 @@ var newRequestFromIncoming = (method, url, headers, incoming, abortController) =
         },
       });
     } else init.body = Readable.toWeb(incoming);
-  return new P(url, init);
+  return new CachedRequest(url, init);
 };
 var getRequestCache = Symbol("getRequestCache");
 var requestCache = Symbol("requestCache");
@@ -159,7 +159,7 @@ Object.defineProperty(requestPrototype, Symbol.for("nodejs.util.inspect.custom")
   },
 });
 //@ chunk-k26nnqnx.js:18506-18543 esm-fingerprint
-Object.setPrototypeOf(requestPrototype, P.prototype);
+Object.setPrototypeOf(requestPrototype, CachedRequest.prototype);
 //@ chunk-k26nnqnx.js:18543-19981 esm-fingerprint
 var newRequest = (incoming, defaultHostname) => {
   let req = Object.create(requestPrototype);
@@ -376,21 +376,23 @@ var handleRequestError = () =>
   new Response(null, {
     status: 400,
   });
-var handleFetchError = (e) =>
+var handleFetchError = (error) =>
   new Response(null, {
     status:
-      e instanceof Error && (e.name === "TimeoutError" || e.constructor.name === "TimeoutError") ? 504 : 500,
+      error instanceof Error && (error.name === "TimeoutError" || error.constructor.name === "TimeoutError")
+        ? 504
+        : 500,
   });
-var handleResponseError = (e, outgoing) => {
+var handleResponseError = (error, outgoing) => {
   let err =
-    e instanceof Error
-      ? e
+    error instanceof Error
+      ? error
       : Error("unknown error", {
-          cause: e,
+          cause: error,
         });
   if (err.code === "ERR_STREAM_PREMATURE_CLOSE") console.info("The user aborted a request.");
   else {
-    console.error(e);
+    console.error(error);
     if (!outgoing.headersSent)
       outgoing.writeHead(500, {
         "Content-Type": "text/plain",
@@ -499,9 +501,9 @@ var responseViaResponseObject = async (res, outgoing, options = {}) => {
 };
 var getRequestListener = (fetchCallback, options = {}) => {
   let autoCleanupIncoming = options.autoCleanupIncoming ?? true;
-  if (options.overrideGlobalObjects !== false && global.Request !== P) {
+  if (options.overrideGlobalObjects !== false && global.Request !== CachedRequest) {
     Object.defineProperty(global, "Request", {
-      value: P,
+      value: CachedRequest,
     });
     Object.defineProperty(global, "Response", {
       value: Response2,

@@ -56,58 +56,62 @@ import { BRIEF_TOOL_NAME } from "../tools/BriefTool/prompt.js";
 /**
  * 排空工具结果流，等待未完成工具和唤醒。
  */
-async function* drainToolResults(e, n, r) {
-  let s = Symbol.asyncIterator in e ? e[Symbol.asyncIterator]() : e[Symbol.iterator]();
-  let h;
-  let y = n();
-  let S = 0;
+async function* drainToolResults(source, getExecutor, takePlainDelta) {
+  let iterator = Symbol.asyncIterator in source ? source[Symbol.asyncIterator]() : source[Symbol.iterator]();
+  let pendingStream;
+  let executor = getExecutor();
+  let drainGeneration = 0;
   try {
     while (true) {
-      let M = n();
-      if (M !== y) {
-        y = M;
-        S = 0;
+      let currentExecutor = getExecutor();
+      if (currentExecutor !== executor) {
+        executor = currentExecutor;
+        drainGeneration = 0;
       }
-      if (h === undefined && !M.hasUnfinishedTools() && !M.hasWakeSince(S)) {
-        let T = await s.next();
+      if (
+        pendingStream === undefined &&
+        !currentExecutor.hasUnfinishedTools() &&
+        !currentExecutor.hasWakeSince(drainGeneration)
+      ) {
+        let step = await iterator.next();
         while (
-          r !== undefined &&
-          !T.done &&
-          isTextOrJsonDeltaEvent(T.value) &&
-          n() === M &&
-          !M.hasUnfinishedTools() &&
-          !M.hasWakeSince(S) &&
-          r(T.value)
+          takePlainDelta !== undefined &&
+          !step.done &&
+          isTextOrJsonDeltaEvent(step.value) &&
+          getExecutor() === currentExecutor &&
+          !currentExecutor.hasUnfinishedTools() &&
+          !currentExecutor.hasWakeSince(drainGeneration) &&
+          takePlainDelta(step.value)
         )
-          T = await s.next();
-        if (T.done) return;
-        yield T.value;
+          step = await iterator.next();
+        if (step.done) return;
+        yield step.value;
         continue;
       }
-      h ??= Promise.resolve(s.next()).then((T) => ({
+      pendingStream ??= Promise.resolve(iterator.next()).then((step) => ({
         kind: "stream",
-        r: T,
+        r: step,
       }));
       let winner = await Promise.race([
-        h,
-        M.waitForDrainable(S).then((gen) => ({
+        pendingStream,
+        currentExecutor.waitForDrainable(drainGeneration).then((gen) => ({
           kind: "drain",
           gen,
         })),
       ]);
       if (winner.kind === "drain") {
-        S = winner.gen;
+        drainGeneration = winner.gen;
         yield {
           type: "tool_drain_tick",
         };
         continue;
       }
-      h = undefined;
+      pendingStream = undefined;
       if (winner.r.done) return;
       yield winner.r.value;
     }
   } finally {
-    Promise.resolve(s.return?.(undefined)).catch(() => {});
+    Promise.resolve(iterator.return?.(undefined)).catch(() => {});
   }
 }
 //@ chunk-ha3km179.js:69853-69923 placement
@@ -141,17 +145,17 @@ async function awaitBgConsentGate() {
   }
 }
 //@ chunk-ha3km179.js:70258-70366 placement
-function createDisposableGuard(e) {
-  let n = true;
+function createDisposableGuard(onDispose) {
+  let armed = true;
   return {
     disarm() {
-      n = false;
+      armed = false;
     },
     [Symbol.dispose]() {
-      if (!n) return;
-      n = false;
+      if (!armed) return;
+      armed = false;
       try {
-        e();
+        onDispose();
       } catch (error) {
         logError(error);
       }
@@ -159,11 +163,11 @@ function createDisposableGuard(e) {
   };
 }
 //@ chunk-ha3km179.js:70366-70566 placement
-function shouldBypassPtlPreempt(attemptModelFacts, autoCompactWindow, querySource, compactFailure) {
+function shouldBypassPtlPreempt(model, autoCompactWindow, querySource, compactFailure) {
   try {
-    if (!isPlainHeronEnabled() || !shouldEnforceUnknownModelWindow(attemptModelFacts)) return false;
+    if (!isPlainHeronEnabled() || !shouldEnforceUnknownModelWindow(model)) return false;
     logEvent("tengu_ptl_preempt_bypassed", {
-      windowSource: fromEnum(windowSource(attemptModelFacts, autoCompactWindow)),
+      windowSource: fromEnum(windowSource(model, autoCompactWindow)),
       querySource: agentTypeForTelemetry(querySource),
       compactFailureReason: fromEnumOpt(compactFailure?.reason),
     });
@@ -192,7 +196,7 @@ function compactCheckFacts({ outcome, compactionCheckFacts, blockingCheck, confi
   }
 }
 //@ chunk-ha3km179.js:70867-71166 placement
-function isCompactNotNeededAtLimit(autocompactOutcome, attemptModelFacts, r) {
+function isCompactNotNeededAtLimit(autocompactOutcome, attemptModelFacts, logPayload) {
   try {
     if (
       autocompactOutcome.kind !== "not_needed" ||
@@ -202,7 +206,7 @@ function isCompactNotNeededAtLimit(autocompactOutcome, attemptModelFacts, r) {
       !isGentleAnchorEnabled()
     )
       return false;
-    logFeatureOk("compact_not_needed_at_blocking_limit", r);
+    logFeatureOk("compact_not_needed_at_blocking_limit", logPayload);
     return true;
   } catch (error) {
     logFeatureBad("compact_not_needed_at_blocking_limit", "check_threw");
@@ -214,34 +218,34 @@ function isCompactNotNeededAtLimit(autocompactOutcome, attemptModelFacts, r) {
 /**
  * 是否应排空工具
  */
-function canDrainTools(e) {
-  return !e.foldSuspended && (!e.isMainThread || !e.lastIteration);
+function canDrainTools(state) {
+  return !state.foldSuspended && (!state.isMainThread || !state.lastIteration);
 }
 //@ chunk-ha3km179.js:71241-71267 placement
 /**
  * 空实现
  */
-async function noopAsyncDrain(toolUseContext, queueFilterForThread, r) {}
+async function noopAsyncDrain(toolUseContext, queueFilterForThread, getCommands) {}
 //@ chunk-ha3km179.js:71267-71727 placement
 /**
  * 是否在发送前预防提示过长。
  */
-function shouldPreemptPromptTooLong(e, mainLoopModel, effortValue, deps) {
+function shouldPreemptPromptTooLong(commands, model, appState, deps) {
   try {
     if (!(
-      shouldUltrathinkRaiseEffort(mainLoopModel, effortValue) &&
-      e.some(
-        (S) =>
-          S.mode === "prompt" &&
-          !S.isMeta &&
-          S.shouldQuery !== false &&
-          isHumanOrigin(S.origin) &&
-          !S.textNotTyped &&
+      shouldUltrathinkRaiseEffort(model, appState) &&
+      commands.some(
+        (command) =>
+          command.mode === "prompt" &&
+          !command.isMeta &&
+          command.shouldQuery !== false &&
+          isHumanOrigin(command.origin) &&
+          !command.textNotTyped &&
           hasUltrathinkKeyword({
-            composerEnter: S.composerEnter,
-            preExpansion: S.preExpansionValue,
-            localStdinOrigin: S.localStdinOrigin,
-            input: S.value,
+            composerEnter: command.composerEnter,
+            preExpansion: command.preExpansionValue,
+            localStdinOrigin: command.localStdinOrigin,
+            input: command.value,
           }),
       )
     ))
@@ -277,28 +281,28 @@ var MCP_SETTLE_WAIT_MS = 1500;
  * 等待 MCP 连接稳定（tengu_deep_shore）。
  */
 async function awaitMcpSettle(
-  e,
+  model,
   { storageV5, credentials, abortController: { signal } },
-  h = MCP_SETTLE_WAIT_MS,
+  timeoutMs = MCP_SETTLE_WAIT_MS,
 ) {
   try {
     let clientDataFetch = ensureClientDataFetch(storageV5, credentials);
     if (clientDataFetch !== undefined && getFeatureValue_CACHED_MAY_BE_STALE("tengu_deep_shore", true)) {
       let startTime = performance.now();
-      let M = await withDeadline(
+      let settled = await withDeadline(
         raceWithAbortSignal(clientDataFetch, signal, () => Error("interrupted")).then(
           () => true,
           () => false,
         ),
-        h,
+        timeoutMs,
       );
       let waitedMs = Math.round(performance.now() - startTime);
-      if (M === undefined) {
+      if (settled === undefined) {
         markClientDataFetchOver(clientDataFetch);
         logFeatureSad("model_client_data_wait", "timeout", {
           waited_ms: waitedMs,
         });
-      } else if (!M)
+      } else if (!settled)
         logFeatureSad("model_client_data_wait", "interrupted", {
           waited_ms: waitedMs,
         });
@@ -310,7 +314,7 @@ async function awaitMcpSettle(
   } catch (error) {
     logError(error);
   }
-  return getModelContextInfo(e);
+  return getModelContextInfo(model);
 }
 //@ chunk-ha3km179.js:72230-72338 placement
 function runBookkeepingSafe(onThrow) {
@@ -341,20 +345,22 @@ function shouldRunMcpStopHooks({ requested, lastIteration }) {
  * 安全运行 stop hooks（异常时上报并结束）。
  */
 async function* runStopHooksSafely({ throughStopHooks, onThrow, queryChainId, queryDepth }) {
-  let h;
+  let outcome;
   try {
-    h = yield* throughStopHooks();
+    outcome = yield* throughStopHooks();
   } catch (error) {
-    let S = isAbortError(error);
-    if (!S) logError(error);
-    runBookkeepingSafe(() => logFeatureSad("query_mcp_end_turn_stop_hooks", S ? "aborted" : "pass_threw"));
+    let aborted = isAbortError(error);
+    if (!aborted) logError(error);
+    runBookkeepingSafe(() =>
+      logFeatureSad("query_mcp_end_turn_stop_hooks", aborted ? "aborted" : "pass_threw"),
+    );
     runBookkeepingSafe(onThrow);
     return {
       reason: "completed",
     };
   }
   runBookkeepingSafe(() => {
-    if (typeof h === "string")
+    if (typeof outcome === "string")
       logEvent("tengu_mcp_end_turn_overridden_by_stop_hook", {
         queryChainId,
         queryDepth,
@@ -364,11 +370,11 @@ async function* runStopHooksSafely({ throughStopHooks, onThrow, queryChainId, qu
         queryChainId,
         queryDepth,
         source: lit("mcp_meta_blockable"),
-        terminalReason: fromEnum(h.reason),
+        terminalReason: fromEnum(outcome.reason),
       });
     logFeatureOk("query_mcp_end_turn_stop_hooks");
   });
-  return h;
+  return outcome;
 }
 //@ chunk-ha3km179.js:73053-73133 placement
 /**
@@ -382,8 +388,8 @@ var REPLY_GATE_SILENT_REASONS = {
 /**
  * 记录策略失败
  */
-function logReplyGatePolicy(e, n) {
-  logFeatureBad("projects_reply_gate_policy", e, n);
+function logReplyGatePolicy(reason, fields) {
+  logFeatureBad("projects_reply_gate_policy", reason, fields);
 }
 //@ chunk-ha3km179.js:73186-73214 placement
 var TENGU_JOYFUL_GLOBE = "tengu_joyful_globe";
@@ -404,71 +410,74 @@ function isResilientGalaxyOn() {
 //@ chunk-ha3km179.js:73338-73480 placement
 function endsWithReminder(messagesForQuery) {
   if (!isResilientGalaxyOn()) return false;
-  let last = messagesForQuery.findLast(
-    (r) =>
-      r.type === "assistant" ||
-      isQueuedCommandAttachment(r) ||
-      isReminderMessage(r) ||
-      (r.type === "user" && !isTurnCompanion(r)),
+  let message = messagesForQuery.findLast(
+    (message) =>
+      message.type === "assistant" ||
+      isQueuedCommandAttachment(message) ||
+      isReminderMessage(message) ||
+      (message.type === "user" && !isTurnCompanion(message)),
   );
-  return last !== undefined && isReminderMessage(last);
+  return message !== undefined && isReminderMessage(message);
 }
 //@ chunk-ha3km179.js:73480-74891 placement
 /**
  * 判断上一回合的提醒状态。
  */
 function lastTurnReminderState(messages) {
-  let sliced = messages.slice(
+  let messages_2 = messages.slice(
     messages.findLastIndex(
-      (M) =>
-        isQueuedCommandAttachment(M) || (M.type === "user" && !isToolResultMessage(M) && !isTurnCompanion(M)),
+      (message) =>
+        isQueuedCommandAttachment(message) ||
+        (message.type === "user" && !isToolResultMessage(message) && !isTurnCompanion(message)),
     ) + 1,
   );
-  let lastIndex = sliced.findLastIndex(isReminderMessage);
+  let lastIndex = messages_2.findLastIndex(isReminderMessage);
   if (lastIndex !== -1) {
-    let messages = sliced.slice(lastIndex + 1);
+    let messages = messages_2.slice(lastIndex + 1);
     return {
       kind: "reminded",
       sent: hasSuccessfulToolCall(messages, SEND_USER_FILE_TOOL_NAME),
       textLength: collectUserFacingTexts(messages).join("").trim().length,
     };
   }
-  let s = [getOutputsRoot(), getHomeFilesRoot(), "/tmp"];
+  let roots = [getOutputsRoot(), getHomeFilesRoot(), "/tmp"];
   let regExp = new RegExp(
-    `\\]\\(<?(?:computer://|file://)?((?:${s.map(urlPatternToRegex).join("|")})/[^\\s)>]{1,500})`,
+    `\\]\\(<?(?:computer://|file://)?((?:${roots.map(urlPatternToRegex).join("|")})/[^\\s)>]{1,500})`,
     "g",
   );
-  let y = new Map();
-  for (let M of collectUserFacingTexts(sliced)) {
-    let R = replaceInlineCode(M.replace(/(```|~~~)[\s\S]*?(?:\1|$)/g, ""), () => "");
-    for (let [, T = ""] of R.matchAll(regExp)) {
-      let w = T;
+  let linkedFiles = new Map();
+  for (let text of collectUserFacingTexts(messages_2)) {
+    let stripped = replaceInlineCode(text.replace(/(```|~~~)[\s\S]*?(?:\1|$)/g, ""), () => "");
+    for (let [, path = ""] of stripped.matchAll(regExp)) {
+      let decoded = path;
       try {
-        w = decodeURIComponent(T);
+        decoded = decodeURIComponent(path);
       } catch {}
-      if (!w.includes("/.") && /\.[a-z0-9]+$/i.test(w)) y.set(posix.basename(w), T);
+      if (!decoded.includes("/.") && /\.[a-z0-9]+$/i.test(decoded))
+        linkedFiles.set(posix.basename(decoded), path);
     }
   }
-  for (let M of y.size > 0 ? messages : []) {
-    if (M.type !== "assistant") continue;
-    for (let R of M.message.content) {
+  for (let message of linkedFiles.size > 0 ? messages : []) {
+    if (message.type !== "assistant") continue;
+    for (let block of message.message.content) {
       if (
-        R.type !== "tool_use" ||
-        R.name !== SEND_USER_FILE_TOOL_NAME ||
-        typeof R.input !== "object" ||
-        R.input === null ||
-        !("files" in R.input)
+        block.type !== "tool_use" ||
+        block.name !== SEND_USER_FILE_TOOL_NAME ||
+        typeof block.input !== "object" ||
+        block.input === null ||
+        !("files" in block.input)
       )
         continue;
-      let T = readUntrustedArray(R.input.files) ?? [R.input.files];
-      for (let w of T === UNREADABLE_ARRAY ? [] : T) if (typeof w === "string") y.delete(posix.basename(w));
+      let files = readUntrustedArray(block.input.files) ?? [block.input.files];
+      for (let file of files === UNREADABLE_ARRAY ? [] : files)
+        if (typeof file === "string") linkedFiles.delete(posix.basename(file));
     }
   }
-  if (y.size === 0)
+  if (linkedFiles.size === 0)
     return {
       kind: "skip",
     };
-  let joined = [...y.values()].slice(0, 5).map(escapeForTag).join(", ");
+  let joined = [...linkedFiles.values()].slice(0, 5).map(escapeForTag).join(", ");
   return {
     kind: "remind",
     text: `${LINKED_BUT_NOT_SENT_PREFIX} ${joined}. The user did not write this note and cannot see it. It is about your reply above only. A link to a file that you did not send may not open for them. If they should have a file, call ${SEND_USER_FILE_TOOL_NAME} with it now, then say in one short line that you sent it, or that the send failed. If they should have none, end your turn with no text. Do not repeat your reply, and do not mention this note.`,
@@ -479,24 +488,24 @@ function isQueuedCommandAttachment(message) {
   return message.type === "attachment" && message.attachment.type === "queued_command";
 }
 //@ chunk-ha3km179.js:74973-75098 placement
-function isReminderMessage(e) {
+function isReminderMessage(message) {
   return (
-    e.type === "user" &&
-    e.isMeta === true &&
-    typeof e.message.content === "string" &&
-    e.message.content.startsWith(LINKED_BUT_NOT_SENT_PREFIX)
+    message.type === "user" &&
+    message.isMeta === true &&
+    typeof message.message.content === "string" &&
+    message.message.content.startsWith(LINKED_BUT_NOT_SENT_PREFIX)
   );
 }
 //@ chunk-ha3km179.js:75098-75409 placement = collectRecentSuccessfulTools (0.869)
 /**
  * 收集助手文本块与 SendUserMessage 调用的 message 文本。旧版名 collectRecentSuccessfulTools 为错配；归属存疑。
  */
-function collectUserFacingTexts(e) {
-  let n = [];
-  for (let r of e) {
-    if (r.type !== "assistant") continue;
-    for (let block of r.message.content)
-      if (block.type === "text") n.push(block.text);
+function collectUserFacingTexts(messages) {
+  let texts = [];
+  for (let message of messages) {
+    if (message.type !== "assistant") continue;
+    for (let block of message.message.content)
+      if (block.type === "text") texts.push(block.text);
       else if (
         block.type === "tool_use" &&
         block.name === BRIEF_TOOL_NAME &&
@@ -505,9 +514,9 @@ function collectUserFacingTexts(e) {
         "message" in block.input &&
         typeof block.input.message === "string"
       )
-        n.push(block.input.message);
+        texts.push(block.input.message);
   }
-  return n;
+  return texts;
 }
 export {
   awaitMcpSettle,

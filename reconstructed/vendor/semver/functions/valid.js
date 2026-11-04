@@ -5,11 +5,11 @@
  * pieces: chunk-bwbq4xvm.js (1)
  * attribution: cjs-require-graph 1
  */
-import { x } from "../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../runtime/bun-runtime.js";
 import { require_parse } from "./parse.js";
 
 //@ chunk-bwbq4xvm.js:10304-10407 cjs-require-graph
-var require_valid_2 = x(function (cjsExports, cjsModule) {
+var require_valid_2 = __commonJS(function (cjsExports, cjsModule) {
   var parse = require_parse();
   var valid = (version, options) => {
     let v = parse(version, options);

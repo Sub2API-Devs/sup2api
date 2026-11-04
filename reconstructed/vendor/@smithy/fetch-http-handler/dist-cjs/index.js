@@ -5,15 +5,15 @@
  * pieces: chunk-wr8v03d0.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 import { require_protocol_http } from "../../protocol-http/dist-cjs/index.js";
 import { require_querystring_builder } from "../../querystring-builder/dist-cjs/index.js";
 import { base64Module } from "../../../@aws-sdk/credential-provider-web-identity/dist-cjs/index.js";
 
 //@ chunk-wr8v03d0.js:2765-5955 cjs-fingerprint
-var require_fetch_http_handler = x(function (cjsExports) {
+var require_fetch_http_handler = __commonJS(function (cjsExports) {
   var HttpResponse = require_protocol_http();
-  var ie = require_querystring_builder();
+  var querystringBuilder = require_querystring_builder();
   var fromBase64 = base64Module();
   function createRequest(url, requestOptions) {
     return new Request(url, requestOptions);
@@ -61,7 +61,7 @@ var require_fetch_http_handler = x(function (cjsExports) {
         return Promise.reject(abortError);
       }
       let path = request.path;
-      let queryString = ie.buildQueryString(request.query || {});
+      let queryString = querystringBuilder.buildQueryString(request.query || {});
       if (queryString) path += `?${queryString}`;
       if (request.fragment) path += `#${request.fragment}`;
       let auth = "";

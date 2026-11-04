@@ -5,12 +5,12 @@
  * pieces: chunk-9q5xd4yn.js (2)
  * attribution: placement 2
  */
-import { mao } from "./_inlinedHelpers.js";
+import { baseEachInline2Alias } from "./_inlinedHelpers.js";
 
 //@ chunk-9q5xd4yn.js:308-388 placement
 function baseFilter(collection, predicate) {
   var result = [];
-  mao(collection, function (value, index, collection) {
+  baseEachInline2Alias(collection, function (value, index, collection) {
     if (predicate(value, index, collection)) result.push(value);
   });
   return result;

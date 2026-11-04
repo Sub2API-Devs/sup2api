@@ -5,10 +5,10 @@
  * pieces: chunk-vwj6ccer.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-vwj6ccer.js:2402-5284 cjs-fingerprint
-var require_DOMException = x(function (cjsExports, cjsModule) {
+var require_DOMException = __commonJS(function (cjsExports, cjsModule) {
   cjsModule.exports = DOMException;
   var INDEX_SIZE_ERR = 1;
   var HIERARCHY_REQUEST_ERR = 3;

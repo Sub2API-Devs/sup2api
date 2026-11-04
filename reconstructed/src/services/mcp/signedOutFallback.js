@@ -39,32 +39,32 @@ var CLOCK_SKEW_MS = 60000;
  */
 function isFreshTimestamp(tokenlessRejectedAt) {
   if (tokenlessRejectedAt === undefined) return false;
-  let r = Date.now() - tokenlessRejectedAt;
-  return r > -CLOCK_SKEW_MS && r <= MAX_TOKENLESS_REJECTION_AGE_MS;
+  let ageMs = Date.now() - tokenlessRejectedAt;
+  return ageMs > -CLOCK_SKEW_MS && ageMs <= MAX_TOKENLESS_REJECTION_AGE_MS;
 }
 //@ chunk-g2rygg7v.js:1213-1418 placement
 /**
  * 判断是否尝试无令牌连接：服务器需要客户端注册，且未记录近期的无令牌拒绝或注册不可用。
  */
-function shouldTryTokenless(e, r, mcpOAuthStore) {
-  if (!needsClientRegistration(e, r, mcpOAuthStore)) return false;
+function shouldTryTokenless(serverName, serverRef, store) {
+  if (!needsClientRegistration(serverName, serverRef, store)) return false;
   if (!isSignedOutFallbackEnabled()) return true;
-  let serverKey = getServerKey(e, r);
-  let tokenlessRejectedAt = mcpOAuthStore?.[serverKey]?.discoveryState?.tokenlessRejectedAt;
+  let serverKey = getServerKey(serverName, serverRef);
+  let tokenlessRejectedAt = store?.[serverKey]?.discoveryState?.tokenlessRejectedAt;
   if (tokenlessRejectedAt !== undefined && isFreshTimestamp(tokenlessRejectedAt)) {
     getCliOwnedState().tokenlessRejections.set(serverKey, tokenlessRejectedAt);
     return true;
   }
-  return registrationNotOffered_2(e, r, mcpOAuthStore);
+  return registrationNotOffered_2(serverName, serverRef, store);
 }
 //@ chunk-g2rygg7v.js:1418-1521 placement
 /**
  * 去掉 OAuth 发现状态中的无令牌拒绝时间。
  */
-function withoutTokenlessRejection(e) {
-  if (e?.tokenlessRejectedAt === undefined) return e;
-  let { tokenlessRejectedAt, ...n } = e;
-  return n;
+function withoutTokenlessRejection(state) {
+  if (state?.tokenlessRejectedAt === undefined) return state;
+  let { tokenlessRejectedAt, ...rest } = state;
+  return rest;
 }
 //@ chunk-g2rygg7v.js:1521-1533 placement
 /**
@@ -88,11 +88,12 @@ function recordSavedAccessToken(serverKey, accessToken) {
 /**
  * 取服务器最近一次无令牌连接被拒的时间（已有令牌时不适用）。
  */
-function tokenlessRejectedAt(serverKey, r) {
-  if (r?.discoveryState?.tokenlessRejectedAt !== undefined) return r.discoveryState.tokenlessRejectedAt;
-  if (r?.accessToken || r?.refreshToken) return;
-  let n = getCliOwnedState().tokenlessRejections.get(serverKey);
-  return isFreshTimestamp(n) ? n : undefined;
+function tokenlessRejectedAt(serverKey, entry) {
+  if (entry?.discoveryState?.tokenlessRejectedAt !== undefined)
+    return entry.discoveryState.tokenlessRejectedAt;
+  if (entry?.accessToken || entry?.refreshToken) return;
+  let rejectedAt = getCliOwnedState().tokenlessRejections.get(serverKey);
+  return isFreshTimestamp(rejectedAt) ? rejectedAt : undefined;
 }
 //@ chunk-g2rygg7v.js:1903-1972 placement
 /**
@@ -107,7 +108,7 @@ function isTokenRejected(serverKey, accessToken) {
 /**
  * 记录无令牌请求被拒（需要登录）。
  */
-async function recordTokenlessRejection(e, serverRef, authProvider) {
+async function recordTokenlessRejection(serverName, serverRef, authProvider) {
   let lastAuthRejection = authProvider?.lastAuthRejection;
   if (
     lastAuthRejection === undefined ||
@@ -116,30 +117,30 @@ async function recordTokenlessRejection(e, serverRef, authProvider) {
     !isSignedOutFallbackEnabled()
   )
     return;
-  let serverKey = getServerKey(e, serverRef);
+  let serverKey = getServerKey(serverName, serverRef);
   let now = Date.now();
   getCliOwnedState().tokenlessRejections.set(serverKey, now);
-  function l(i) {
+  function shouldClear(entry) {
     return (
-      i?.discoveryState !== undefined &&
-      !i.refreshToken &&
-      (!i.accessToken || isTokenRejected(serverKey, i.accessToken)) &&
-      !isFreshTimestamp(i.discoveryState.tokenlessRejectedAt)
+      entry?.discoveryState !== undefined &&
+      !entry.refreshToken &&
+      (!entry.accessToken || isTokenRejected(serverKey, entry.accessToken)) &&
+      !isFreshTimestamp(entry.discoveryState.tokenlessRejectedAt)
     );
   }
   try {
-    if (!l((await getSecureStorage().readAsync())?.mcpOAuth?.[serverKey])) return;
-    await getSecureStorage().mutate((i) => {
-      let h = i.mcpOAuth?.[serverKey];
-      if (h?.discoveryState === undefined || !l(h)) return i;
+    if (!shouldClear((await getSecureStorage().readAsync())?.mcpOAuth?.[serverKey])) return;
+    await getSecureStorage().mutate((storage) => {
+      let entry = storage.mcpOAuth?.[serverKey];
+      if (entry?.discoveryState === undefined || !shouldClear(entry)) return storage;
       return {
-        ...i,
+        ...storage,
         mcpOAuth: {
-          ...i.mcpOAuth,
+          ...storage.mcpOAuth,
           [serverKey]: {
-            ...h,
+            ...entry,
             discoveryState: {
-              ...h.discoveryState,
+              ...entry.discoveryState,
               tokenlessRejectedAt: now,
             },
           },
@@ -147,14 +148,20 @@ async function recordTokenlessRejection(e, serverRef, authProvider) {
       };
     });
   } catch (error) {
-    logMCPDebug(e, `Recording that the server requires a sign-in failed: ${errorMessage(error)}`);
+    logMCPDebug(serverName, `Recording that the server requires a sign-in failed: ${errorMessage(error)}`);
   }
 }
 //@ chunk-g2rygg7v.js:2658-3257 placement
 /**
  * 访问令牌被拒绝时删除并尝试无令牌连接。
  */
-async function handleRejectedToken({ name: e, serverRef, authProvider, isRefreshPath401, needsAuth }) {
+async function handleRejectedToken({
+  name: serverName,
+  serverRef,
+  authProvider,
+  isRefreshPath401,
+  needsAuth,
+}) {
   let lastAuthRejection = authProvider?.lastAuthRejection;
   let accessToken = lastAuthRejection?.accessToken;
   if (
@@ -166,95 +173,96 @@ async function handleRejectedToken({ name: e, serverRef, authProvider, isRefresh
     !isSignedOutFallbackEnabled()
   )
     return;
-  let serverKey = getServerKey(e, serverRef);
+  let serverKey = getServerKey(serverName, serverRef);
   let cliOwnedState = getCliOwnedState();
-  let M = cliOwnedState.savedAccessTokens.get(serverKey);
-  if (M?.accessToken === accessToken && Date.now() - M.savedAt < SAVED_TOKEN_GRACE_MS) return;
+  let saved = cliOwnedState.savedAccessTokens.get(serverKey);
+  if (saved?.accessToken === accessToken && Date.now() - saved.savedAt < SAVED_TOKEN_GRACE_MS) return;
   let secureStorageForMcp = await readSecureStorageForMcp();
-  let p = secureStorageForMcp === READ_FAILED ? undefined : secureStorageForMcp?.mcpOAuth?.[serverKey];
+  let entry = secureStorageForMcp === READ_FAILED ? undefined : secureStorageForMcp?.mcpOAuth?.[serverKey];
   if (
     secureStorageForMcp === READ_FAILED ||
-    p?.refreshToken ||
-    isFreshTimestamp(p?.discoveryState?.tokenlessRejectedAt)
+    entry?.refreshToken ||
+    isFreshTimestamp(entry?.discoveryState?.tokenlessRejectedAt)
   )
     return;
   cliOwnedState.rejectedStoredTokens.set(serverKey, accessToken);
-  let y = {
-    name: e,
+  let row = {
+    name: serverName,
     type: "needs-auth",
     config: serverRef,
   };
-  cliOwnedState.connectsToRedialWithoutToken.set(y, needsAuth);
-  return y;
+  cliOwnedState.connectsToRedialWithoutToken.set(row, needsAuth);
+  return row;
 }
 //@ chunk-g2rygg7v.js:3257-4433 placement
 /**
  * 带"已登出回退"的 MCP 连接（无令牌重连）。
  */
-async function connectWithSignedOutFallback(e, r, n, o) {
-  let s = identityEpoch();
-  let u = await e();
+async function connectWithSignedOutFallback(connect, shouldFallBack, serverName, config) {
+  let epochAtStart = identityEpoch();
+  let firstResult = await connect();
   let cliOwnedState = getCliOwnedState();
-  if (o.type !== "http" && o.type !== "sse") return u;
-  let serverKey = getServerKey(n, o);
-  let h = cliOwnedState.connectsToRedialWithoutToken.get(u);
-  if (h === undefined) {
-    if (u.type === "connected") cliOwnedState.tokenlessRejections.delete(serverKey);
-    return u;
+  if (config.type !== "http" && config.type !== "sse") return firstResult;
+  let serverKey = getServerKey(serverName, config);
+  let redialWithoutToken = cliOwnedState.connectsToRedialWithoutToken.get(firstResult);
+  if (redialWithoutToken === undefined) {
+    if (firstResult.type === "connected") cliOwnedState.tokenlessRejections.delete(serverKey);
+    return firstResult;
   }
-  if (!r() || identityEpoch() !== s) {
+  if (!shouldFallBack() || identityEpoch() !== epochAtStart) {
     cliOwnedState.rejectedStoredTokens.delete(serverKey);
-    return r() ? h() : u;
+    return shouldFallBack() ? redialWithoutToken() : firstResult;
   }
   logMCPDebug(
-    n,
+    serverName,
     "The server rejected the stored access token and no refresh token is stored; connecting again without a token",
   );
-  let M = await e();
-  let S = cliOwnedState.rejectedStoredTokens.get(serverKey);
-  if (M.type !== "connected") {
+  let secondResult = await connect();
+  let rejectedToken = cliOwnedState.rejectedStoredTokens.get(serverKey);
+  if (secondResult.type !== "connected") {
     cliOwnedState.rejectedStoredTokens.delete(serverKey);
-    let p = M.type === "needs-auth" && !cliOwnedState.connectsToRedialWithoutToken.has(M);
-    logFeatureSad("mcp_signed_out_fallback", p ? "sign_in_required" : "not_connected");
-    if (p) return M;
-    return r() ? h() : u;
+    let signInRequired =
+      secondResult.type === "needs-auth" && !cliOwnedState.connectsToRedialWithoutToken.has(secondResult);
+    logFeatureSad("mcp_signed_out_fallback", signInRequired ? "sign_in_required" : "not_connected");
+    if (signInRequired) return secondResult;
+    return shouldFallBack() ? redialWithoutToken() : firstResult;
   }
-  logMCPDebug(n, "Connected without the rejected access token");
+  logMCPDebug(serverName, "Connected without the rejected access token");
   logFeatureOk("mcp_signed_out_fallback");
   cliOwnedState.tokenlessRejections.delete(serverKey);
   try {
-    await getSecureStorage().mutate((p) => {
-      let y = p.mcpOAuth?.[serverKey];
-      if (y === undefined || y.refreshToken) return p;
-      let _ = !!y.accessToken && y.accessToken === S;
-      let C = withoutTokenlessRejection(y.discoveryState);
-      if (!_ && C === y.discoveryState) return p;
+    await getSecureStorage().mutate((storage) => {
+      let entry = storage.mcpOAuth?.[serverKey];
+      if (entry === undefined || entry.refreshToken) return storage;
+      let isRejectedToken = !!entry.accessToken && entry.accessToken === rejectedToken;
+      let discoveryState = withoutTokenlessRejection(entry.discoveryState);
+      if (!isRejectedToken && discoveryState === entry.discoveryState) return storage;
       return {
-        ...p,
+        ...storage,
         mcpOAuth: {
-          ...p.mcpOAuth,
+          ...storage.mcpOAuth,
           [serverKey]: {
-            ...y,
-            ...(_ && {
+            ...entry,
+            ...(isRejectedToken && {
               accessToken: "",
               expiresAt: 0,
             }),
-            discoveryState: C,
+            discoveryState,
           },
         },
       };
     });
   } catch (error) {
-    logMCPDebug(n, `Deleting the rejected access token failed: ${errorMessage(error)}`);
+    logMCPDebug(serverName, `Deleting the rejected access token failed: ${errorMessage(error)}`);
   }
-  return M;
+  return secondResult;
 }
 //@ chunk-g2rygg7v.js:4433-4552 placement
 function httpOrigin(authorizationServerUrl) {
   try {
-    let r = new URL(authorizationServerUrl);
-    if (r.protocol !== "https:" && r.protocol !== "http:") return;
-    return r.origin;
+    let parsed = new URL(authorizationServerUrl);
+    if (parsed.protocol !== "https:" && parsed.protocol !== "http:") return;
+    return parsed.origin;
   } catch {
     return;
   }
@@ -316,14 +324,16 @@ function mergeDiscoveredAuth({ previous, discovered, servedMetadataUrl }) {
 //@ chunk-g2rygg7v.js:5437-5629 placement
 function withServedMetadataUrl(previous, { servedMetadataUrl, interactiveSignIn }) {
   if (!hasAuthServer(previous)) return previous;
-  let o = servedMetadataUrl ?? null;
+  let nextUrl = servedMetadataUrl ?? null;
   return (
-    interactiveSignIn ? previous.authServerMetadataUrl === o : previous.authServerMetadataUrl !== undefined
+    interactiveSignIn
+      ? previous.authServerMetadataUrl === nextUrl
+      : previous.authServerMetadataUrl !== undefined
   )
     ? previous
     : {
         ...previous,
-        authServerMetadataUrl: o,
+        authServerMetadataUrl: nextUrl,
       };
 }
 //@ chunk-g2rygg7v.js:5629-6448 placement
@@ -337,18 +347,18 @@ function mergeSignInAuth({ previous, signIn, servedMetadataUrl, interactiveSignI
     httpOrigin(signIn.authorizationServerUrl) !== undefined &&
     (interactiveSignIn || !hasAuthServer(previous))
   ) {
-    let { authServerMetadataUrl, xaaPinned, ...l } = previous ?? {
+    let { authServerMetadataUrl, xaaPinned, ...nextUrl } = previous ?? {
       authorizationServerUrl: "",
     };
     return interactiveSignIn || signIn.oauthMetadataFound
       ? {
-          ...l,
+          ...nextUrl,
           authorizationServerUrl: signIn.authorizationServerUrl,
           oauthMetadataFound: signIn.oauthMetadataFound,
           authServerMetadataUrl: servedMetadataUrl ?? null,
         }
       : {
-          ...l,
+          ...nextUrl,
           authorizationServerUrl: signIn.authorizationServerUrl,
           oauthMetadataFound: signIn.oauthMetadataFound,
         };

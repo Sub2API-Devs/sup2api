@@ -11,36 +11,12 @@
 import { execFileNoThrow } from "../execFileNoThrow.js";
 import { getUsername, getMacOsKeychainStorageServiceName } from "./macOsKeychainHelpers.js";
 
-//@ chunk-b29hdd5e.js:2006-2017 sole-consumer
-var KEYCHAIN_PROBE_TIMEOUT_MS = 2000;
-//@ chunk-b29hdd5e.js:2017-2026 affinity
-var KEYCHAIN_ITEM_NOT_FOUND_EXIT = 44;
-//@ chunk-b29hdd5e.js:2026-2212 fingerprint = doReadAsync (1)
-/**
- * 用 security find-generic-password 探测钥匙串项是否不存在（退出码等于“未找到”）；出错返回 false。不是旧版的 doReadAsync。
- */
-async function isKeychainItemMissing() {
-  try {
-    let { code } = await execFileNoThrow(
-      "security",
-      ["find-generic-password", "-a", getUsername(), "-w", "-s", getMacOsKeychainStorageServiceName()],
-      {
-        useCwd: false,
-        preserveOutputOnError: false,
-        timeout: KEYCHAIN_PROBE_TIMEOUT_MS,
-      },
-    );
-    return code === KEYCHAIN_ITEM_NOT_FOUND_EXIT;
-  } catch {
-    return false;
-  }
-}
 //@ chunk-gwwacf44.js:1689-1751 placement
 /**
  * 在代次一致时记录钥匙串是否已持有该项。
  */
-function setKeychainHoldsItem(e, keychainHoldsItem, t) {
-  if (e.generation === t) e.keychainHoldsItem = keychainHoldsItem;
+function setKeychainHoldsItem(state, keychainHoldsItem, generation) {
+  if (state.generation === generation) state.keychainHoldsItem = keychainHoldsItem;
 }
 //@ chunk-gwwacf44.js:1751-2673 placement
 /**
@@ -75,5 +51,29 @@ function classifyKeychainError(stderr) {
     return "auth_failed";
   if (lower.includes("locked") || lower.includes("unlock")) return "keychain_locked";
   return "other";
+}
+//@ chunk-b29hdd5e.js:2006-2017 sole-consumer
+var KEYCHAIN_PROBE_TIMEOUT_MS = 2000;
+//@ chunk-b29hdd5e.js:2017-2026 affinity
+var KEYCHAIN_ITEM_NOT_FOUND_EXIT = 44;
+//@ chunk-b29hdd5e.js:2026-2212 fingerprint = doReadAsync (1)
+/**
+ * 用 security find-generic-password 探测钥匙串项是否不存在（退出码等于“未找到”）；出错返回 false。不是旧版的 doReadAsync。
+ */
+async function isKeychainItemMissing() {
+  try {
+    let { code } = await execFileNoThrow(
+      "security",
+      ["find-generic-password", "-a", getUsername(), "-w", "-s", getMacOsKeychainStorageServiceName()],
+      {
+        useCwd: false,
+        preserveOutputOnError: false,
+        timeout: KEYCHAIN_PROBE_TIMEOUT_MS,
+      },
+    );
+    return code === KEYCHAIN_ITEM_NOT_FOUND_EXIT;
+  } catch {
+    return false;
+  }
 }
 export { classifyKeychainError, isKeychainItemMissing };

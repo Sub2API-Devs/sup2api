@@ -8,7 +8,7 @@
  * pieces: chunk-4v9zy7gn.js (2)
  * attribution: placement 2
  */
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { useIsScreenReaderEnabled } from "../../ink/components/ErrorBoundary.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import {
@@ -23,7 +23,7 @@ import { ModelSelector } from "../../components/agents/ModelSelector.js";
 
 //@ chunk-4v9zy7gn.js:37793-39822 placement
 function OAuthStatusPanel(props) {
-  let _ = w(26);
+  let $ = useMemoCache(26);
   let {
     oauthStatus,
     showPastePrompt,
@@ -37,39 +37,39 @@ function OAuthStatusPanel(props) {
   let showCursor = useIsScreenReaderEnabled();
   switch (oauthStatus.state) {
     case "starting": {
-      let k;
-      if (_[0] === MEMO_CACHE_SENTINEL) {
-        k = jsxProd_default(WorkerBadge, {
+      let codeInput;
+      if ($[0] === MEMO_CACHE_SENTINEL) {
+        codeInput = jsxProd_default(WorkerBadge, {
           message: "Starting authentication\u2026",
         });
-        _[0] = k;
-      } else k = _[0];
-      return k;
+        $[0] = codeInput;
+      } else codeInput = $[0];
+      return codeInput;
     }
     case "waiting_for_login": {
-      let k;
-      if (_[1] !== showPastePrompt) {
-        k =
+      let statusLine;
+      if ($[1] !== showPastePrompt) {
+        statusLine =
           !showPastePrompt &&
           jsxProd_default(WorkerBadge, {
             message: "Opening browser to sign in with your Claude account\u2026",
           });
-        _[1] = showPastePrompt;
-        _[2] = k;
-      } else k = _[2];
-      let E;
+        $[1] = showPastePrompt;
+        $[2] = statusLine;
+      } else statusLine = $[2];
+      let footer;
       if (
-        _[3] !== cursorOffset ||
-        _[4] !== showCursor ||
-        _[5] !== oauthStatus.url ||
-        _[6] !== onSubmitCode ||
-        _[7] !== pastedCode ||
-        _[8] !== setCursorOffset ||
-        _[9] !== setPastedCode ||
-        _[10] !== showPastePrompt ||
-        _[11] !== textInputColumns
+        $[3] !== cursorOffset ||
+        $[4] !== showCursor ||
+        $[5] !== oauthStatus.url ||
+        $[6] !== onSubmitCode ||
+        $[7] !== pastedCode ||
+        $[8] !== setCursorOffset ||
+        $[9] !== setPastedCode ||
+        $[10] !== showPastePrompt ||
+        $[11] !== textInputColumns
       ) {
-        E =
+        footer =
           showPastePrompt &&
           jsxProd_default_2(Box, {
             children: [
@@ -79,7 +79,7 @@ function OAuthStatusPanel(props) {
               jsxProd_default(TextInput, {
                 value: pastedCode,
                 onChange: setPastedCode,
-                onSubmit: (x) => onSubmitCode(x, oauthStatus.url),
+                onSubmit: (code) => onSubmitCode(code, oauthStatus.url),
                 cursorOffset,
                 onChangeCursorOffset: setCursorOffset,
                 columns: textInputColumns,
@@ -88,44 +88,44 @@ function OAuthStatusPanel(props) {
               }),
             ],
           });
-        _[3] = cursorOffset;
-        _[4] = showCursor;
-        _[5] = oauthStatus.url;
-        _[6] = onSubmitCode;
-        _[7] = pastedCode;
-        _[8] = setCursorOffset;
-        _[9] = setPastedCode;
-        _[10] = showPastePrompt;
-        _[11] = textInputColumns;
-        _[12] = E;
-      } else E = _[12];
-      let T;
-      if (_[13] !== k || _[14] !== E) {
-        T = jsxProd_default_2(Box, {
+        $[3] = cursorOffset;
+        $[4] = showCursor;
+        $[5] = oauthStatus.url;
+        $[6] = onSubmitCode;
+        $[7] = pastedCode;
+        $[8] = setCursorOffset;
+        $[9] = setPastedCode;
+        $[10] = showPastePrompt;
+        $[11] = textInputColumns;
+        $[12] = footer;
+      } else footer = $[12];
+      let hint;
+      if ($[13] !== statusLine || $[14] !== footer) {
+        hint = jsxProd_default_2(Box, {
           flexDirection: "column",
           gap: 1,
-          children: [k, E],
+          children: [statusLine, footer],
         });
-        _[13] = k;
-        _[14] = E;
-        _[15] = T;
-      } else T = _[15];
-      return T;
+        $[13] = statusLine;
+        $[14] = footer;
+        $[15] = hint;
+      } else hint = $[15];
+      return hint;
     }
     case "processing": {
-      let k;
-      if (_[16] === MEMO_CACHE_SENTINEL) {
-        k = jsxProd_default(WorkerBadge, {
+      let altHint;
+      if ($[16] === MEMO_CACHE_SENTINEL) {
+        altHint = jsxProd_default(WorkerBadge, {
           message: "Processing authentication\u2026",
         });
-        _[16] = k;
-      } else k = _[16];
-      return k;
+        $[16] = altHint;
+      } else altHint = $[16];
+      return altHint;
     }
     case "success": {
-      let k;
-      if (_[17] === MEMO_CACHE_SENTINEL) {
-        k = jsxProd_default_2(Box, {
+      let errorLine;
+      if ($[17] === MEMO_CACHE_SENTINEL) {
+        errorLine = jsxProd_default_2(Box, {
           flexDirection: "column",
           gap: 1,
           children: [
@@ -139,24 +139,24 @@ function OAuthStatusPanel(props) {
             }),
           ],
         });
-        _[17] = k;
-      } else k = _[17];
-      return k;
+        $[17] = errorLine;
+      } else errorLine = $[17];
+      return errorLine;
     }
     case "error": {
       const children = oauthStatus.verbatim ? oauthStatus.message : `OAuth error: ${oauthStatus.message}`;
-      let E;
-      if (_[18] !== children) {
-        E = jsxProd_default(Text, {
+      let helpBox;
+      if ($[18] !== children) {
+        helpBox = jsxProd_default(Text, {
           color: "error",
           children,
         });
-        _[18] = children;
-        _[19] = E;
-      } else E = _[19];
-      let T;
-      if (_[20] !== oauthStatus.toRetry) {
-        T = oauthStatus.toRetry
+        $[18] = children;
+        $[19] = helpBox;
+      } else helpBox = $[19];
+      let retryHint;
+      if ($[20] !== oauthStatus.toRetry) {
+        retryHint = oauthStatus.toRetry
           ? jsxProd_default(Text, {
               dimColor: true,
               children: "Press Enter to try again, or any other key to cancel",
@@ -165,26 +165,26 @@ function OAuthStatusPanel(props) {
               dimColor: true,
               children: "Press any key to return to API key selection",
             });
-        _[20] = oauthStatus.toRetry;
-        _[21] = T;
-      } else T = _[21];
-      let W;
-      if (_[22] !== E || _[23] !== T) {
-        W = jsxProd_default_2(Box, {
+        $[20] = oauthStatus.toRetry;
+        $[21] = retryHint;
+      } else retryHint = $[21];
+      let header;
+      if ($[22] !== helpBox || $[23] !== retryHint) {
+        header = jsxProd_default_2(Box, {
           flexDirection: "column",
           gap: 1,
-          children: [E, T],
+          children: [helpBox, retryHint],
         });
-        _[22] = E;
-        _[23] = T;
-        _[24] = W;
-      } else W = _[24];
-      return W;
+        $[22] = helpBox;
+        $[23] = retryHint;
+        $[24] = header;
+      } else header = $[24];
+      return header;
     }
     case "about_to_retry": {
-      let k;
-      if (_[25] === MEMO_CACHE_SENTINEL) {
-        k = jsxProd_default(Box, {
+      let footer;
+      if ($[25] === MEMO_CACHE_SENTINEL) {
+        footer = jsxProd_default(Box, {
           flexDirection: "column",
           gap: 1,
           children: jsxProd_default(Text, {
@@ -192,9 +192,9 @@ function OAuthStatusPanel(props) {
             children: "Retrying\u2026",
           }),
         });
-        _[25] = k;
-      } else k = _[25];
-      return k;
+        $[25] = footer;
+      } else footer = $[25];
+      return footer;
     }
     default: {
       return null;
@@ -203,11 +203,11 @@ function OAuthStatusPanel(props) {
 }
 //@ chunk-4v9zy7gn.js:39822-40689 placement
 function OptionalActionsSetupStep(props) {
-  let f = w(8);
+  let $ = useMemoCache(8);
   let { onSelect, onCancel } = props;
-  let C;
-  if (f[0] === MEMO_CACHE_SENTINEL) {
-    C = [
+  let content;
+  if ($[0] === MEMO_CACHE_SENTINEL) {
+    content = [
       {
         label: "Set up GitHub Actions workflows",
         value: "setup",
@@ -217,32 +217,32 @@ function OptionalActionsSetupStep(props) {
         value: "skip",
       },
     ];
-    f[0] = C;
-  } else C = f[0];
-  let options = C;
-  let o;
-  if (f[1] !== onSelect) {
-    o = (v) => {
-      onSelect(v);
+    $[0] = content;
+  } else content = $[0];
+  let options = content;
+  let onDone;
+  if ($[1] !== onSelect) {
+    onDone = (value) => {
+      onSelect(value);
     };
-    f[1] = onSelect;
-    f[2] = o;
-  } else o = f[2];
-  let onChange = o;
-  let g;
-  if (f[3] === MEMO_CACHE_SENTINEL) {
-    g = jsxProd_default(Box, {
+    $[1] = onSelect;
+    $[2] = onDone;
+  } else onDone = $[2];
+  let onChange = onDone;
+  let title;
+  if ($[3] === MEMO_CACHE_SENTINEL) {
+    title = jsxProd_default(Box, {
       marginBottom: 1,
       children: jsxProd_default(Text, {
         bold: true,
         children: "GitHub App installed!",
       }),
     });
-    f[3] = g;
-  } else g = f[3];
-  let _;
-  if (f[4] === MEMO_CACHE_SENTINEL) {
-    _ = jsxProd_default(Box, {
+    $[3] = title;
+  } else title = $[3];
+  let description;
+  if ($[4] === MEMO_CACHE_SENTINEL) {
+    description = jsxProd_default(Box, {
       flexDirection: "column",
       marginBottom: 1,
       children: jsxProd_default(Text, {
@@ -250,15 +250,15 @@ function OptionalActionsSetupStep(props) {
           "The Claude GitHub App is now installed. You can optionally set up GitHub Actions workflows so Claude responds to @claude mentions in issues and PRs.",
       }),
     });
-    f[4] = _;
-  } else _ = f[4];
-  let k;
-  if (f[5] !== onChange || f[6] !== onCancel) {
-    k = jsxProd_default_2(Box, {
+    $[4] = description;
+  } else description = $[4];
+  let footer;
+  if ($[5] !== onChange || $[6] !== onCancel) {
+    footer = jsxProd_default_2(Box, {
       flexDirection: "column",
       children: [
-        g,
-        _,
+        title,
+        description,
         jsxProd_default(Box, {
           flexDirection: "column",
           children: jsxProd_default(ModelSelector, {
@@ -269,10 +269,10 @@ function OptionalActionsSetupStep(props) {
         }),
       ],
     });
-    f[5] = onChange;
-    f[6] = onCancel;
-    f[7] = k;
-  } else k = f[7];
-  return k;
+    $[5] = onChange;
+    $[6] = onCancel;
+    $[7] = footer;
+  } else footer = $[7];
+  return footer;
 }
 export { OAuthStatusPanel, OptionalActionsSetupStep };

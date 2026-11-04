@@ -28,31 +28,32 @@ function getParsedSandboxViolations(toolUseId) {
 }
 //@ chunk-e6aww6q8.js:3097712-3097903 placement
 function parseViolations(violationsForCommand) {
-  let n = [];
-  let r = new Set();
+  let violations = [];
+  let seen = new Set();
   for (let { line } of violationsForCommand) {
     let violationLine = parseViolationLine(line);
-    let y = violationLine.kind === "network" ? `n ${violationLine.host} ${violationLine.port}` : "o";
-    if (r.has(y)) continue;
-    r.add(y);
-    n.push(violationLine);
-    if (n.length === MAX_VIOLATIONS) break;
+    let dedupeKey = violationLine.kind === "network" ? `n ${violationLine.host} ${violationLine.port}` : "o";
+    if (seen.has(dedupeKey)) continue;
+    seen.add(dedupeKey);
+    violations.push(violationLine);
+    if (violations.length === MAX_VIOLATIONS) break;
   }
-  return n;
+  return violations;
 }
 //@ chunk-e6aww6q8.js:3097903-3098115 placement
 function parseViolationLine(line) {
   let match = DENY_NETWORK_OUTBOUND_RE.exec(line);
   if (match) return networkViolation(match[1], Number(match[2]));
   let match_2 = DENY_HTTP_REQUEST_RE.exec(line);
-  let s = match_2 ? URL.parse(match_2[1]) : null;
-  if (s && s.hostname !== "") return networkViolation(s.hostname, s.port === "" ? undefined : Number(s.port));
+  let parsedUrl = match_2 ? URL.parse(match_2[1]) : null;
+  if (parsedUrl && parsedUrl.hostname !== "")
+    return networkViolation(parsedUrl.hostname, parsedUrl.port === "" ? undefined : Number(parsedUrl.port));
   return {
     kind: "other",
   };
 }
 //@ chunk-e6aww6q8.js:3098115-3098294 placement
-function networkViolation(hostname, n) {
+function networkViolation(hostname, port) {
   if (!HOST_TOKEN_RE.test(hostname))
     return {
       kind: "other",
@@ -60,10 +61,10 @@ function networkViolation(hostname, n) {
   return {
     kind: "network",
     host: truncateToLength(hostname.replace(/^\[(.*)\]$/, "$1"), MAX_VIOLATION_HOST_LENGTH),
-    ...(n !== undefined &&
-      Number.isSafeInteger(n) &&
-      n <= 65535 && {
-        port: n,
+    ...(port !== undefined &&
+      Number.isSafeInteger(port) &&
+      port <= 65535 && {
+        port,
       }),
   };
 }
@@ -85,19 +86,19 @@ var MAX_REPORTED_VIOLATIONS = 5000;
 /**
  * 在集合达到上限时循环删除最旧元素（Map 迭代顺序）。
  */
-function evictOldestUntil(e, n) {
-  while (e.size >= n) {
-    let r = e.values().next().value;
-    if (r === undefined) return;
-    e.delete(r);
+function evictOldestUntil(set, maxSize) {
+  while (set.size >= maxSize) {
+    let oldest = set.values().next().value;
+    if (oldest === undefined) return;
+    set.delete(oldest);
   }
 }
 //@ chunk-e6aww6q8.js:3098521-3098582 placement
 /**
  * 用会话 id、命令与输出计算违规报告的去重哈希。
  */
-function violationReportKey(e, n) {
-  return computeContentHash(`${getSessionId()}\x00${e}\x00${n.trim()}`);
+function violationReportKey(toolName, command) {
+  return computeContentHash(`${getSessionId()}\x00${toolName}\x00${command.trim()}`);
 }
 //@ chunk-e6aww6q8.js:3098582-3098606 placement
 /**
@@ -110,25 +111,25 @@ function isViolationReportingEnabled() {
 /**
  * 取出工具状态里已上报过的违规键集合。
  */
-function claimedViolationKeys(e) {
-  return e.get(SandboxViolationState).attempts;
+function claimedViolationKeys(toolState) {
+  return toolState.get(SandboxViolationState).attempts;
 }
 //@ chunk-e6aww6q8.js:3098649-3098819 placement
 /**
  * 认领一次沙箱违规报告（同一命令只报一次），返回释放函数；未启用时返回 null。
  */
-function claimViolationReport(e, command, toolState, s) {
-  if (!isViolationReportingEnabled() || !s.useSandbox) return null;
-  let h = claimedViolationKeys(toolState);
-  let y = violationReportKey(e, command);
-  if (h.has(y)) return null;
-  evictOldestUntil(h, MAX_REPORTED_VIOLATIONS);
-  h.add(y);
-  let S = true;
+function claimViolationReport(toolName, command, toolState, options) {
+  if (!isViolationReportingEnabled() || !options.useSandbox) return null;
+  let claimed = claimedViolationKeys(toolState);
+  let key = violationReportKey(toolName, command);
+  if (claimed.has(key)) return null;
+  evictOldestUntil(claimed, MAX_REPORTED_VIOLATIONS);
+  claimed.add(key);
+  let isActive = true;
   return () => {
-    if (S) {
-      S = false;
-      h.delete(y);
+    if (isActive) {
+      isActive = false;
+      claimed.delete(key);
     }
   };
 }
@@ -136,8 +137,8 @@ function claimViolationReport(e, command, toolState, s) {
 /**
  * 占位的工具使用钩子，不做任何事。
  */
-function noopToolUseHook(e) {
-  let { toolName, input, context } = e;
+function noopToolUseHook(hookInput) {
+  let { toolName, input, context } = hookInput;
   return;
 }
 export { noopToolUseHook, getParsedSandboxViolations, claimViolationReport };

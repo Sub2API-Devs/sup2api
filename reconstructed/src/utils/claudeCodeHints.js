@@ -16,18 +16,28 @@ import { parsePluginIdentifier, isOfficialMarketplaceName_3 } from "./plugins/pl
 import { logEvent } from "../services/analytics/index.js";
 import { fromEnum } from "../services/analytics/safeMetadata.js";
 import { pluginIdHash } from "./telemetry/pluginTelemetry.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-fym4r1th.js:7769-8004 callgraph-fingerprint = SUPPORTED_TYPES (0.501)
 /**
  * 支持的 hint 载荷类型（目前只有 plugin）。
  */
-var SUPPORTED_HINT_VERSIONS = new Set([1]);
-var HINT_PAYLOAD_KINDS = new Set(["plugin"]);
-var STANDALONE_HINT_RE = /^[ \t]*<claude-code-hint[ \t][^>\r\n]*\/>[ \t]*$/;
-var MAX_HINT_CHARS = 1024;
-var PLUGIN_NAME_AT_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}@[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
-var HTML_ATTRIBUTE_RE = /(\w+)=(?:"([^"]*)"|([^\s/>]+))/g;
-var CLAUDE_CODE_HINT_TAG = "<claude-code-hint";
+var SUPPORTED_HINT_VERSIONS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var HINT_PAYLOAD_KINDS;
+var STANDALONE_HINT_RE;
+var MAX_HINT_CHARS;
+var PLUGIN_NAME_AT_RE;
+var HTML_ATTRIBUTE_RE;
+var CLAUDE_CODE_HINT_TAG;
+deferInit("chunk-fym4r1th.js:7769", () => {
+  SUPPORTED_HINT_VERSIONS = new Set([1]);
+  HINT_PAYLOAD_KINDS = new Set(["plugin"]);
+  STANDALONE_HINT_RE = /^[ \t]*<claude-code-hint[ \t][^>\r\n]*\/>[ \t]*$/;
+  MAX_HINT_CHARS = 1024;
+  PLUGIN_NAME_AT_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}@[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
+  HTML_ATTRIBUTE_RE = /(\w+)=(?:"([^"]*)"|([^\s/>]+))/g;
+  CLAUDE_CODE_HINT_TAG = "<claude-code-hint";
+});
 //@ chunk-fym4r1th.js:8004-8697 fingerprint = extractClaudeCodeHints (0.722)
 function extractClaudeCodeHints_2(output, command) {
   if (!output.includes(CLAUDE_CODE_HINT_TAG))
@@ -37,8 +47,8 @@ function extractClaudeCodeHints_2(output, command) {
     };
   let sourceCommand = firstCommandToken(command);
   let hints = [];
-  let stripped = extractClaudeCodeHints(output, (f, tagBody) => {
-    if (f.length > MAX_HINT_CHARS) {
+  let stripped = extractClaudeCodeHints(output, (matchText, tagBody) => {
+    if (matchText.length > MAX_HINT_CHARS) {
       logForDebugging("[claudeCodeHints] dropped over-long hint line");
       return;
     }
@@ -86,9 +96,9 @@ function extractClaudeCodeHints_2(output, command) {
 /**
  * 去掉命令输出中的 <claude-code-hint .../> 行并把三个以上连续空行压成两个。
  */
-function stripClaudeCodeHints(e) {
-  if (!e.includes(CLAUDE_CODE_HINT_TAG)) return e;
-  return extractClaudeCodeHints(e).replace(
+function stripClaudeCodeHints(text) {
+  if (!text.includes(CLAUDE_CODE_HINT_TAG)) return text;
+  return extractClaudeCodeHints(text).replace(
     /\n{3,}/g,
     `
 
@@ -99,14 +109,14 @@ function stripClaudeCodeHints(e) {
 /**
  * 一行是否是完整的 claude-code-hint 自闭合标签（长度不超过 1024）。
  */
-function isClaudeCodeHintLine(e) {
-  if (e.length > MAX_HINT_CHARS || !e.includes(CLAUDE_CODE_HINT_TAG)) return false;
-  return STANDALONE_HINT_RE.test(e);
+function isClaudeCodeHintLine(line) {
+  if (line.length > MAX_HINT_CHARS || !line.includes(CLAUDE_CODE_HINT_TAG)) return false;
+  return STANDALONE_HINT_RE.test(line);
 }
 //@ chunk-fym4r1th.js:8851-8952 layout
-function removeClaudeCodeHintLines(e) {
-  if (!e.includes(CLAUDE_CODE_HINT_TAG)) return e;
-  return e
+function removeClaudeCodeHintLines(text) {
+  if (!text.includes(CLAUDE_CODE_HINT_TAG)) return text;
+  return text
     .split(
       `
 `,
@@ -115,89 +125,92 @@ function removeClaudeCodeHintLines(e) {
 `);
 }
 //@ chunk-fym4r1th.js:8952-8988 layout
-function isSpaceOrTab(e) {
-  return e === 32 || e === 9;
+function isSpaceOrTab(char) {
+  return char === 32 || char === 9;
 }
 //@ chunk-fym4r1th.js:8988-9029 layout
-function isLineOrParagraphSeparator(e) {
-  return e === 8232 || e === 8233;
+function isLineOrParagraphSeparator(char) {
+  return char === 8232 || char === 8233;
 }
 //@ chunk-fym4r1th.js:9029-9462 layout
-function findClaudeCodeHintTags(e) {
-  let s = [];
-  let index = e.indexOf(CLAUDE_CODE_HINT_TAG);
+function findClaudeCodeHintTags(text) {
+  let tags = [];
+  let index = text.indexOf(CLAUDE_CODE_HINT_TAG);
   while (index !== -1) {
-    let index_2 = e.indexOf(">", index);
+    let index_2 = text.indexOf(">", index);
     if (index_2 === -1) break;
-    let r = index_2 + 1;
-    while (isSpaceOrTab(e.charCodeAt(r))) r++;
-    if (e[index_2 - 1] === "/" && (r === e.length || isLineOrParagraphSeparator(e.charCodeAt(r))))
+    let searchStart = index_2 + 1;
+    while (isSpaceOrTab(text.charCodeAt(searchStart))) searchStart++;
+    if (
+      text[index_2 - 1] === "/" &&
+      (searchStart === text.length || isLineOrParagraphSeparator(text.charCodeAt(searchStart)))
+    )
       for (
-        let d = index;
-        d !== -1 && d < index_2;
-        d = e.indexOf(CLAUDE_CODE_HINT_TAG, d + CLAUDE_CODE_HINT_TAG.length)
+        let openIndex = index;
+        openIndex !== -1 && openIndex < index_2;
+        openIndex = text.indexOf(CLAUDE_CODE_HINT_TAG, openIndex + CLAUDE_CODE_HINT_TAG.length)
       ) {
-        let f = d + CLAUDE_CODE_HINT_TAG.length + 1;
-        let m = d;
-        while (isSpaceOrTab(e.charCodeAt(m - 1))) m--;
+        let bodyStart = openIndex + CLAUDE_CODE_HINT_TAG.length + 1;
+        let closeIndex = openIndex;
+        while (isSpaceOrTab(text.charCodeAt(closeIndex - 1))) closeIndex--;
         if (
-          isSpaceOrTab(e.charCodeAt(f - 1)) &&
-          f < index_2 &&
-          (m === 0 || isLineOrParagraphSeparator(e.charCodeAt(m - 1)))
+          isSpaceOrTab(text.charCodeAt(bodyStart - 1)) &&
+          bodyStart < index_2 &&
+          (closeIndex === 0 || isLineOrParagraphSeparator(text.charCodeAt(closeIndex - 1)))
         ) {
-          s.push({
-            start: m,
-            end: r,
-            body: e.slice(f, index_2 - 1),
+          tags.push({
+            start: closeIndex,
+            end: searchStart,
+            body: text.slice(bodyStart, index_2 - 1),
           });
           break;
         }
       }
-    index = e.indexOf(CLAUDE_CODE_HINT_TAG, index_2 + 1);
+    index = text.indexOf(CLAUDE_CODE_HINT_TAG, index_2 + 1);
   }
-  return s;
+  return tags;
 }
 //@ chunk-fym4r1th.js:9462-9876 layout
 /**
  * 扫描文本中的 claude-code-hint 标签（插件安装提示等），返回去掉这些行后的文本，可选收集解析出的提示。
  */
-function extractClaudeCodeHints(e, s) {
+function extractClaudeCodeHints(text, onMatch) {
   let output = "";
-  let a = 0;
-  let r = 0;
-  let d = -2;
-  let f = -2;
+  let lastEnd = 0;
+  let offset = 0;
+  let prevOpen = -2;
+  let prevClose = -2;
   for (
-    let index = e.indexOf(CLAUDE_CODE_HINT_TAG);
+    let index = text.indexOf(CLAUDE_CODE_HINT_TAG);
     index !== -1;
-    index = e.indexOf(CLAUDE_CODE_HINT_TAG, r)
+    index = text.indexOf(CLAUDE_CODE_HINT_TAG, offset)
   ) {
-    let sliced = e.slice(r, index);
-    let g =
-      r +
+    let sliced = text.slice(offset, index);
+    let body =
+      offset +
       Math.max(
         sliced.lastIndexOf(`
 `),
         sliced.lastIndexOf("\r"),
       ) +
       1;
-    if (d !== -1 && d < index)
-      d = e.indexOf(
+    if (prevOpen !== -1 && prevOpen < index)
+      prevOpen = text.indexOf(
         `
 `,
         index,
       );
-    if (f !== -1 && f < index) f = e.indexOf("\r", index);
-    let min = Math.min(d === -1 ? e.length : d, f === -1 ? e.length : f);
-    let sliced_2 = e.slice(g, min);
-    for (let x of findClaudeCodeHintTags(sliced_2)) {
-      output += e.slice(a, g + x.start);
-      a = g + x.end;
-      s?.(sliced_2.slice(x.start, x.end), x.body);
+    if (prevClose !== -1 && prevClose < index) prevClose = text.indexOf("\r", index);
+    let min = Math.min(prevOpen === -1 ? text.length : prevOpen, prevClose === -1 ? text.length : prevClose);
+    let text_2 = text.slice(body, min);
+    for (let tag of findClaudeCodeHintTags(text_2)) {
+      output += text.slice(lastEnd, body + tag.start);
+      lastEnd = body + tag.end;
+      onMatch?.(text_2.slice(tag.start, tag.end), tag.body);
     }
-    r = min;
+    offset = min;
   }
-  return output + e.slice(a);
+  return output + text.slice(lastEnd);
 }
 //@ chunk-fym4r1th.js:9876-9960 callgraph-fingerprint = parseAttrs (1)
 function parseAttrs(tagBody) {
@@ -224,17 +237,17 @@ function consumeClaudeCodeHints(output, { command, pendingHint, isMainThread, su
   return stripped;
 }
 //@ chunk-e6aww6q8.js:3033456-3033720 placement
-function logPluginHintSeen(e, surface) {
+function logPluginHintSeen(pluginId, surface) {
   if (isFirstPartyTelemetryBlocked()) return;
   let { seenHintPluginIds } = getPluginRegistry();
-  if (seenHintPluginIds.has(e) || seenHintPluginIds.size >= MAX_SEEN_PLUGIN_HINTS) return;
-  seenHintPluginIds.add(e);
-  let { name: s, marketplace } = parsePluginIdentifier(e);
+  if (seenHintPluginIds.has(pluginId) || seenHintPluginIds.size >= MAX_SEEN_PLUGIN_HINTS) return;
+  seenHintPluginIds.add(pluginId);
+  let { name, marketplace } = parsePluginIdentifier(pluginId);
   logEvent("tengu_plugin_hint_seen", {
     surface: fromEnum(surface),
-    ...(s && marketplace
+    ...(name && marketplace
       ? {
-          plugin_id_hash: pluginIdHash(s, marketplace),
+          plugin_id_hash: pluginIdHash(name, marketplace),
           claims_official_marketplace: isOfficialMarketplaceName_3(marketplace),
         }
       : {

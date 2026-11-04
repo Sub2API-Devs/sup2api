@@ -42,40 +42,40 @@ var WAKE_RELEASE_TIMEOUT_MS = WAKE_TIMEOUT_MS;
  * 唤醒路由：把 poll/monitor/artifact 等外部事件派发给对应代理（delivered_to_agent）或主线程，超时释放 inFlight，hook 可丢弃(dropped_by_hook)。
  */
 function WakeRouter({ clock, store, queue, taskRegistry, dispatchWake }) {
-  let ke = false;
-  let Re = new Set();
-  let Be = new Map();
-  let He = new Map();
-  let We = new Map();
+  let dispatched = false;
+  let inFlight = new Set();
+  let wakeTimers = new Map();
+  let failureCounts = new Map();
+  let unsubscribes = new Map();
   let deliveredResultsTracker = createDeliveredResultsTracker();
-  let Xe = (kt) => {
-    Be.delete(kt);
-    if (ke || Re.has(kt)) return;
-    let commandQueueSnapshot = queue.getCommandQueueSnapshot();
-    let found = buildTaskNotificationText(commandQueueSnapshot, store.getState().tasks).find(
-      (Lt) => Lt.agentId === kt,
+  let dispatchForAgent = (agentId) => {
+    wakeTimers.delete(agentId);
+    if (dispatched || inFlight.has(agentId)) return;
+    let allMessages = queue.getCommandQueueSnapshot();
+    let found = buildTaskNotificationText(allMessages, store.getState().tasks).find(
+      (entry) => entry.agentId === agentId,
     );
-    if (!found || deliveredResultsTracker.holds(commandQueueSnapshot, found)) return;
-    Re.add(kt);
-    let Ot = clock.setTimeout(() => {
+    if (!found || deliveredResultsTracker.holds(allMessages, found)) return;
+    inFlight.add(agentId);
+    let timeoutHandle = clock.setTimeout(() => {
       logForDebugging(
-        `[wakeRouter] dispatch for ${kt} exceeded ${WAKE_TIMEOUT_MS}ms; releasing inFlight reservation`,
+        `[wakeRouter] dispatch for ${agentId} exceeded ${WAKE_TIMEOUT_MS}ms; releasing inFlight reservation`,
         {
           level: "warn",
         },
       );
-      Re.delete(kt);
+      inFlight.delete(agentId);
     }, WAKE_TIMEOUT_MS);
-    let Et = () => {
+    let consumeDelivered = () => {
       queue.consume(found.consumedCommands, {
         reason: "delivered_to_agent",
       });
     };
-    let Dt = "delivered";
+    let outcome = "delivered";
     dispatchWake(
-      kt,
+      agentId,
       found.prompt,
-      Et,
+      consumeDelivered,
       found.resultsOnly,
       found.origin,
       found.noticeLengths,
@@ -83,88 +83,90 @@ function WakeRouter({ clock, store, queue, taskRegistry, dispatchWake }) {
       found.noticeRunIds,
       found.toolsUsed,
     )
-      .then((Lt) => {
-        if (!isResumeDenied(Lt)) return;
-        Dt = "dropped";
+      .then((dispatchResult) => {
+        if (!isResumeDenied(dispatchResult)) return;
+        outcome = "dropped";
         try {
           queue.remove(found.consumedCommands, {
             reason: "dropped_by_hook",
           });
-          deliveredResultsTracker.note(commandQueueSnapshot, kt);
+          deliveredResultsTracker.note(allMessages, agentId);
           logForDebugging(
-            `[wakeRouter] dropping ${found.consumedCommands.length} event(s) for ${kt}: ${Lt.deniedByPlugin}`,
+            `[wakeRouter] dropping ${found.consumedCommands.length} event(s) for ${agentId}: ${dispatchResult.deniedByPlugin}`,
           );
         } catch (error) {
           logError(error);
         }
       })
       .catch((error) => {
-        let oo =
+        let permanent =
           error instanceof AgentStoppedByUserError || error instanceof AgentResumePermanentlyRefusedError;
-        let Xt = !isRetryableAgentError(error) && (He.get(kt) ?? 0) + 1 >= MAX_TRANSIENT_RESUME_RETRIES;
-        Dt = oo || Xt ? "dropped" : "retry";
-        if (Dt === "dropped") {
+        let exhausted =
+          !isRetryableAgentError(error) &&
+          (failureCounts.get(agentId) ?? 0) + 1 >= MAX_TRANSIENT_RESUME_RETRIES;
+        outcome = permanent || exhausted ? "dropped" : "retry";
+        if (outcome === "dropped") {
           queue.remove(found.consumedCommands, {
-            reason: oo ? "agent_stopped" : "resume_failed",
+            reason: permanent ? "agent_stopped" : "resume_failed",
           });
-          pruneSettledChildWork(kt, taskRegistry);
-          releaseMainThreadContext(kt);
+          pruneSettledChildWork(agentId, taskRegistry);
+          releaseMainThreadContext(agentId);
           logForDebugging(
-            `[wakeRouter] dropping ${found.consumedCommands.length} event(s) for ${kt}: ${errorMessage(error)}`,
+            `[wakeRouter] dropping ${found.consumedCommands.length} event(s) for ${agentId}: ${errorMessage(error)}`,
           );
         } else if (error instanceof ResumeAgentStateError)
-          logForDebugging(`[wakeRouter] resume state error for ${kt}: ${errorMessage(error)}`);
+          logForDebugging(`[wakeRouter] resume state error for ${agentId}: ${errorMessage(error)}`);
         else logError(error);
       })
       .finally(() => {
-        Ot();
-        if (Dt !== "retry" || ke) {
-          He.delete(kt);
-          Re.delete(kt);
-          if (Dt === "delivered") queue.recheckCommandQueue();
+        timeoutHandle();
+        if (outcome !== "retry" || dispatched) {
+          failureCounts.delete(agentId);
+          inFlight.delete(agentId);
+          if (outcome === "delivered") queue.recheckCommandQueue();
           return;
         }
-        let Lt = (He.get(kt) ?? 0) + 1;
-        He.set(kt, Lt);
-        We.set(
-          kt,
+        let attempts = (failureCounts.get(agentId) ?? 0) + 1;
+        failureCounts.set(agentId, attempts);
+        unsubscribes.set(
+          agentId,
           clock.setTimeout(() => {
-            We.delete(kt);
-            Re.delete(kt);
+            unsubscribes.delete(agentId);
+            inFlight.delete(agentId);
             queue.recheckCommandQueue();
-          }, jitteredBackoffMs(Lt)),
+          }, jitteredBackoffMs(attempts)),
         );
       });
   };
   let dependencyWatcher = createDependencyWatcher(
     [queue, store],
     () => [queue.getCommandQueueSnapshot(), store.getState().tasks],
-    (kt, At) => {
-      if (kt.length === 0) return;
-      let Ot = kt.some(
-        (Et) =>
-          Et.agentId &&
-          !isMainAgentCommand(Et) &&
-          (Et.mode === "task-notification" || isResultOnlyTaskNotification(Et)),
+    (entries, tasks) => {
+      if (entries.length === 0) return;
+      let holdsAny = entries.some(
+        (entry) =>
+          entry.agentId &&
+          !isMainAgentCommand(entry) &&
+          (entry.mode === "task-notification" || isResultOnlyTaskNotification(entry)),
       )
         ? clock.setTimeout(() => {
             queue.recheckCommandQueue();
           }, WAKE_RELEASE_TIMEOUT_MS)
         : undefined;
-      for (let { agentId } of buildTaskNotificationText(kt, At)) {
-        if (Re.has(agentId) || Be.has(agentId)) continue;
-        Be.set(agentId, setTimeout(Xe, 0, agentId));
+      for (let { agentId } of buildTaskNotificationText(entries, tasks)) {
+        if (inFlight.has(agentId) || wakeTimers.has(agentId)) continue;
+        wakeTimers.set(agentId, setTimeout(dispatchForAgent, 0, agentId));
       }
-      return Ot;
+      return holdsAny;
     },
   );
   return () => {
-    ke = true;
+    dispatched = true;
     dependencyWatcher();
-    for (let kt of Be.values()) clearTimeout(kt);
-    Be.clear();
-    for (let kt of We.values()) kt();
-    We.clear();
+    for (let handle of wakeTimers.values()) clearTimeout(handle);
+    wakeTimers.clear();
+    for (let unsubscribe of unsubscribes.values()) unsubscribe();
+    unsubscribes.clear();
   };
 }
 //@ chunk-18hwfzwa.js:347706-348364 placement
@@ -177,36 +179,37 @@ function resumeStrandedAgent({
 }) {
   let strandedResumeRetrier = createStrandedResumeRetrier({
     taskRegistry,
-    resume: async (Be, He, userInitiated) => {
-      let ze = await resumeAgentBackground({
-        agentId: Be,
-        prompt: He.text,
-        promptOrigin: He.origin,
-        promptToolsUsed: He.toolsUsed,
-        promptIsMeta: He.isMeta,
+    resume: async (agent, args, userInitiated) => {
+      let resumeResult = await resumeAgentBackground({
+        agentId: agent,
+        prompt: args.text,
+        promptOrigin: args.origin,
+        promptToolsUsed: args.toolsUsed,
+        promptIsMeta: args.isMeta,
         toolUseContext: getToolUseContext(),
         liveTranscript,
         canUseTool: getCanUseTool(),
         userInitiated,
       });
-      if (isResumeDenied(ze)) addNotification(strandedResumeFailedNotification(Be, ze.deniedByPlugin));
-      return ze;
+      if (isResumeDenied(resumeResult))
+        addNotification(strandedResumeFailedNotification(agent, resumeResult.deniedByPlugin));
+      return resumeResult;
     },
-    onFailed: (Be, He) => {
-      if (isRetryableAgentError(He) || He instanceof AgentStoppedByUserError) return;
-      if (He instanceof ResumeAgentStateError)
-        logForDebugging(`stranded resume of ${Be} failed: ${errorMessage(He)}`, {
+    onFailed: (agentId, error) => {
+      if (isRetryableAgentError(error) || error instanceof AgentStoppedByUserError) return;
+      if (error instanceof ResumeAgentStateError)
+        logForDebugging(`stranded resume of ${agentId} failed: ${errorMessage(error)}`, {
           level: "warn",
         });
-      else logError(He);
-      addNotification(strandedResumeFailedNotification(Be, errorMessage(He)));
+      else logError(error);
+      addNotification(strandedResumeFailedNotification(agentId, errorMessage(error)));
     },
   });
-  let Re = getTaskRunState().agentStrandedMessages.subscribe((Be) => {
-    strandedResumeRetrier.dispatch(Be);
+  let unsubscribe = getTaskRunState().agentStrandedMessages.subscribe((messages) => {
+    strandedResumeRetrier.dispatch(messages);
   });
   return () => {
-    Re();
+    unsubscribe();
     strandedResumeRetrier.dispose();
   };
 }

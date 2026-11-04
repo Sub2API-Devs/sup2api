@@ -5,7 +5,7 @@
  * pieces: chunk-fq0cr76a.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../../../runtime/bun-runtime.js";
 import { require_error_2 } from "../../cjs/reflect/error.js";
 import { require_names } from "../../cjs/reflect/names.js";
 import { require_nested_types } from "../../cjs/reflect/nested-types.js";
@@ -16,7 +16,7 @@ import { require_path } from "./path.js";
 import { require_guard } from "../../cjs/reflect/guard.js";
 
 //@ chunk-fq0cr76a.js:358179-359141 cjs-fingerprint
-var require_reflect_2 = x(function (cjsExports) {
+var require_reflect_2 = __commonJS(function (cjsExports) {
   var __createBinding =
     (cjsExports && cjsExports.__createBinding) ||
     (Object.create
@@ -38,9 +38,10 @@ var require_reflect_2 = x(function (cjsExports) {
         });
   var __exportStar =
     (cjsExports && cjsExports.__exportStar) ||
-    function (m, n) {
+    function (m, exportTarget) {
       for (var p in m)
-        if (p !== "default" && !Object.prototype.hasOwnProperty.call(n, p)) __createBinding(n, m, p);
+        if (p !== "default" && !Object.prototype.hasOwnProperty.call(exportTarget, p))
+          __createBinding(exportTarget, m, p);
     };
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,

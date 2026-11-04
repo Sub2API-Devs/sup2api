@@ -15,7 +15,7 @@ import { logForDebugging as logForDebugging_2 } from "../utils/debug.js";
 var JAVA_PROXY_AGENT_JAR_NAME = "srt-proxy-agent.jar";
 var jarPathCache = new Map();
 //@ chunk-fq0cr76a.js:722669-722786 esm-fingerprint
-async function HR(explicitPath) {
+async function getJavaProxyAgentJarPathAsync(explicitPath) {
   let key = explicitPath ?? "";
   let cached = jarPathCache.get(key);
   if (cached !== undefined) return cached;
@@ -68,4 +68,4 @@ function javaAgentFlag(jarPath) {
   let flag = `-javaagent:${jarPath}`;
   return /\s/.test(jarPath) ? `"${flag}"` : flag;
 }
-export { HR, buildJavaToolOptions };
+export { getJavaProxyAgentJarPathAsync, buildJavaToolOptions };

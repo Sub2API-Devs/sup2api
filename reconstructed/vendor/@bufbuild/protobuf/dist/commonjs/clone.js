@@ -5,13 +5,13 @@
  * pieces: chunk-fq0cr76a.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../../runtime/bun-runtime.js";
 import { require_descriptors } from "../cjs/descriptors.js";
 import { require_reflect } from "../cjs/reflect/reflect.js";
 import { require_guard } from "../cjs/reflect/guard.js";
 
 //@ chunk-fq0cr76a.js:359538-360236 cjs-fingerprint
-var require_clone = x(function (cjsExports) {
+var require_clone = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });

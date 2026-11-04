@@ -8,7 +8,7 @@
  * pieces: chunk-s5p7fp0c.js (1)
  * attribution: callgraph-fingerprint 1
  */
-import { w } from "../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import { MEMO_CACHE_SENTINEL } from "../../runtime/bun-runtime.js";
 import { useKeybinding } from "../keybindings/useKeybinding.js";
 import {
@@ -20,53 +20,53 @@ import { Box, Text } from "../ink/components/Text.js";
 
 //@ chunk-s5p7fp0c.js:11644-12107 callgraph-fingerprint = AutoRunIssueNotification (0.382)
 function AutoRunIssueNotification(props) {
-  let M = w(7);
+  let $ = useMemoCache(7);
   let { label, onCancel } = props;
-  let L;
-  if (M[0] === MEMO_CACHE_SENTINEL) {
-    L = {
+  let keyHandlerConfig;
+  if ($[0] === MEMO_CACHE_SENTINEL) {
+    keyHandlerConfig = {
       context: "Confirmation",
     };
-    M[0] = L;
-  } else L = M[0];
-  useKeybinding("confirm:no", onCancel, L);
-  let W;
-  if (M[1] === MEMO_CACHE_SENTINEL) {
-    W = jsxProd_default(Spinner, {});
-    M[1] = W;
-  } else W = M[1];
-  let F;
-  if (M[2] !== label) {
-    F = jsxProd_default_2(Box, {
+    $[0] = keyHandlerConfig;
+  } else keyHandlerConfig = $[0];
+  useKeybinding("confirm:no", onCancel, keyHandlerConfig);
+  let spinner;
+  if ($[1] === MEMO_CACHE_SENTINEL) {
+    spinner = jsxProd_default(Spinner, {});
+    $[1] = spinner;
+  } else spinner = $[1];
+  let labelRow;
+  if ($[2] !== label) {
+    labelRow = jsxProd_default_2(Box, {
       gap: 1,
       children: [
-        W,
+        spinner,
         jsxProd_default(Text, {
           children: label,
         }),
       ],
     });
-    M[2] = label;
-    M[3] = F;
-  } else F = M[3];
+    $[2] = label;
+    $[3] = labelRow;
+  } else labelRow = $[3];
   let t5;
-  if (M[4] === MEMO_CACHE_SENTINEL) {
+  if ($[4] === MEMO_CACHE_SENTINEL) {
     t5 = jsxProd_default(Text, {
       dimColor: true,
       children: "Press Esc to cancel",
     });
-    M[4] = t5;
-  } else t5 = M[4];
+    $[4] = t5;
+  } else t5 = $[4];
   let t6;
-  if (M[5] !== F) {
+  if ($[5] !== labelRow) {
     t6 = jsxProd_default_2(Box, {
       flexDirection: "column",
       gap: 1,
-      children: [F, t5],
+      children: [labelRow, t5],
     });
-    M[5] = F;
-    M[6] = t6;
-  } else t6 = M[6];
+    $[5] = labelRow;
+    $[6] = t6;
+  } else t6 = $[6];
   return t6;
 }
 export { AutoRunIssueNotification };

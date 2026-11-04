@@ -42,8 +42,8 @@ var API_KEY_HELPER_BLOCKS_LOGIN_TEXT =
 //@ chunk-ja1jtv44.js:1012-1119 placement
 class SelfHostedRunnerApiError extends Error {
   status;
-  constructor(status, t) {
-    super(t);
+  constructor(status, message) {
+    super(message);
     this.name = "SelfHostedRunnerApiError";
     this.status = status;
   }
@@ -55,7 +55,7 @@ class SelfHostedRunnerApiError extends Error {
 var DEFAULT_RUNNER_PORT = 8080;
 //@ chunk-ja1jtv44.js:1132-1330 placement
 function assertFirstPartyRunnerApi() {
-  let { getAPIProvider } = require("./chunk-hzephfq7.js");
+  let { getAPIProvider } = require("../../utils/model/providers.js");
   if (getAPIProvider() !== "firstParty")
     throw new SelfHostedRunnerApiError(
       403,
@@ -85,24 +85,24 @@ function claudeAiOrigin() {
 /**
  * 获取 runner 管理用的访问令牌。
  */
-async function runnerAccessToken(e, t = runnerApiBaseUrl()) {
+async function runnerAccessToken(credentials, baseUrl = runnerApiBaseUrl()) {
   assertFirstPartyRunnerApi();
-  let n = require("./chunk-6phxatm7.js");
-  if (n.isConsoleProfileSessionsCredential()) {
-    let a = await n.sessionsApiAccessToken(true);
-    if (!a) throw new SelfHostedRunnerApiError(401, n.cloudSessionsSignInRefusal());
-    return a;
+  let oauth = require("../../utils/teleport/api.js");
+  if (oauth.isConsoleProfileSessionsCredential()) {
+    let token = await oauth.sessionsApiAccessToken(true);
+    if (!token) throw new SelfHostedRunnerApiError(401, oauth.cloudSessionsSignInRefusal());
+    return token;
   }
   await checkAndRefreshOAuthTokenIfNeeded({
-    credentials: e,
+    credentials,
   }).catch(() => {});
   let accessToken =
-    isStorageV5Enabled() && e !== undefined
-      ? (await getClaudeAIOAuthTokensAsync(e))?.accessToken
+    isStorageV5Enabled() && credentials !== undefined
+      ? (await getClaudeAIOAuthTokensAsync(credentials))?.accessToken
       : getClaudeAIOAuthTokens()?.accessToken;
   if (!accessToken) throw new SelfHostedRunnerApiError(401, NOT_LOGGED_IN_RUNNER_TEXT);
-  if (isStoredLoginRefused(t, true)) {
-    let claudeAIOAuthTokenOrigin = await getClaudeAIOAuthTokenOriginAsync(e);
+  if (isStoredLoginRefused(baseUrl, true)) {
+    let claudeAIOAuthTokenOrigin = await getClaudeAIOAuthTokenOriginAsync(credentials);
     if (
       (claudeAIOAuthTokenOrigin === "env" || claudeAIOAuthTokenOrigin === "fd") &&
       !isOauthTokenFromBgSnapshot() &&
@@ -110,10 +110,12 @@ async function runnerAccessToken(e, t = runnerApiBaseUrl()) {
       getClaudeAIOAuthTokens()?.accessToken === accessToken
     )
       return accessToken;
-    let d = storedLoginRefusalReason();
+    let refusalReason = storedLoginRefusalReason();
     throw new SelfHostedRunnerApiError(
       403,
-      d === "admin" ? API_KEY_HELPER_BLOCKS_LOGIN_TEXT : new StoredLoginHeldBackError(d).message,
+      refusalReason === "admin"
+        ? API_KEY_HELPER_BLOCKS_LOGIN_TEXT
+        : new StoredLoginHeldBackError(refusalReason).message,
     );
   }
   return accessToken;
@@ -131,65 +133,66 @@ function withUi(ui) {
 /**
  * 调用自托管 runner 管理 API（base URL 变化时重试）。
  */
-async function runnerApiRequest(e, t, n, signal, credentials) {
+async function runnerApiRequest(method, path, body, signal, credentials) {
   await settleStoredLoginRefusal({
     url: runnerApiBaseUrl(),
     signal,
   });
   assertFirstPartyRunnerApi();
-  let d = runnerApiBaseUrl();
-  let c = await runnerAccessToken(credentials, d);
-  if (runnerApiBaseUrl() !== d) return runnerApiRequest(e, t, n, signal, credentials);
-  if (isLauncherHostLoginRefusedNow(c)) throw new SelfHostedRunnerApiError(401, NOT_LOGGED_IN_RUNNER_TEXT);
-  let r = await axios_default
+  let baseUrl = runnerApiBaseUrl();
+  let token = await runnerAccessToken(credentials, baseUrl);
+  if (runnerApiBaseUrl() !== baseUrl) return runnerApiRequest(method, path, body, signal, credentials);
+  if (isLauncherHostLoginRefusedNow(token))
+    throw new SelfHostedRunnerApiError(401, NOT_LOGGED_IN_RUNNER_TEXT);
+  let response = await axios_default
     .request({
-      method: e,
-      url: `${runnerApiBaseUrl()}${t}`,
-      data: n,
+      method,
+      url: `${runnerApiBaseUrl()}${path}`,
+      data: body,
       headers: {
-        Authorization: `Bearer ${c}`,
+        Authorization: `Bearer ${token}`,
         "anthropic-version": "2023-06-01",
         "content-type": "application/json",
       },
       timeout: 20000,
       signal,
-      validateStatus: (s) => s < 500,
+      validateStatus: (status) => status < 500,
     })
     .catch((error) => {
       if (axios_default.isAxiosError(error) && !axios_default.isCancel(error) && error.response === undefined)
-        throw new SelfHostedRunnerApiError(0, `${e} ${t}: ${error.message}`);
+        throw new SelfHostedRunnerApiError(0, `${method} ${path}: ${error.message}`);
       throw error;
     });
-  if (r.status >= 400) {
-    let s = r.data?.error?.message ?? jsonStringify(r.data);
-    let l = `HTTP ${r.status} ${e} ${t}: ${s}`;
-    if ([401, 403, 404, 409, 429].includes(r.status)) {
-      let m = r.status === 401 || r.status === 403 ? RUNNER_AUTH_HINT : "";
-      throw new SelfHostedRunnerApiError(r.status, l + m);
+  if (response.status >= 400) {
+    let message = response.data?.error?.message ?? jsonStringify(response.data);
+    let text = `HTTP ${response.status} ${method} ${path}: ${message}`;
+    if ([401, 403, 404, 409, 429].includes(response.status)) {
+      let hint = response.status === 401 || response.status === 403 ? RUNNER_AUTH_HINT : "";
+      throw new SelfHostedRunnerApiError(response.status, text + hint);
     }
-    throw Error(l);
+    throw Error(text);
   }
-  return r.data;
+  return response.data;
 }
 //@ chunk-ja1jtv44.js:2958-3033 placement
 /**
  * 生成 tool_result 块。
  */
-function toolResultBlock(toolUseId, t) {
+function toolResultBlock(toolUseId, result) {
   return {
     tool_use_id: toolUseId,
     type: "tool_result",
-    content: redactSecretsInText(jsonStringify(t)),
+    content: redactSecretsInText(jsonStringify(result)),
   };
 }
 //@ chunk-ja1jtv44.js:3033-3194 placement
 /**
  * 把参数对象格式化为 key=value。
  */
-function describeArgs(e) {
-  let t = describeUnparsedInput(e);
-  if (t !== null) return t;
-  return Object.entries(e)
+function describeArgs(args) {
+  let problem = describeUnparsedInput(args);
+  if (problem !== null) return problem;
+  return Object.entries(args)
     .filter(([, value]) => value !== undefined)
     .map(([key, value]) => `${key}=${typeof value === "string" ? value : jsonStringify(value)}`)
     .join(" ");

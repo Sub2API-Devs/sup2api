@@ -15,14 +15,14 @@ import {
   REDUCED_MOTION_CSS,
   embeddedFontFaces,
 } from "./callbackPageAssets.js";
-import { xHe } from "../../../vendor/es-toolkit/dist/string/escape.mjs";
+import { escapeHtml } from "../../../vendor/es-toolkit/dist/string/escape.mjs";
 
 //@ chunk-cq05wh48.js:14403-14474 placement
 /**
  * 用统一颜色与尺寸渲染像素动画 SVG。
  */
-function renderAnimatedSvg(e) {
-  return renderPixelgramSvg(e, {
+function renderAnimatedSvg(animation) {
+  return renderPixelgramSvg(animation, {
     cell: 4,
     color: "#D97757",
     passes: "indefinite",
@@ -50,23 +50,26 @@ h1{font-family:"anthropic-serif",ui-serif,Charter,"Iowan Old Style",Georgia,seri
 .detail{margin-top:24px;background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px 14px;font:12.5px/1.55 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color:var(--ink2);text-align:left;overflow-wrap:anywhere}
 @media (max-width:520px){h1{font-size:27px}body{padding:32px 20px 14vh}}`;
 //@ chunk-cq05wh48.js:15810-16015 placement
-function callbackPageBody(e) {
-  let { ok, heading, message, detail } = e;
-  let a = ok ? checkmarkSvg() : brokenLinkSvg();
-  let o = detail ? `<div class="detail">${xHe(detail)}</div>` : "";
-  return renderCallbackPage(`${a}<h1>${xHe(heading)}</h1><p class="sub">${xHe(message)}</p>${o}`, {
-    closeTab: ok ? {} : false,
-  });
+function callbackPageBody(page) {
+  let { ok, heading, message, detail } = page;
+  let icon = ok ? checkmarkSvg() : brokenLinkSvg();
+  let detailHtml = detail ? `<div class="detail">${escapeHtml(detail)}</div>` : "";
+  return renderCallbackPage(
+    `${icon}<h1>${escapeHtml(heading)}</h1><p class="sub">${escapeHtml(message)}</p>${detailHtml}`,
+    {
+      closeTab: ok ? {} : false,
+    },
+  );
 }
 //@ chunk-cq05wh48.js:16015-16431 placement
 /**
  * OAuth 回调落地页 HTML：内嵌字体与像素动画、结果标题与说明，可选 nonce 脚本自动关闭标签页。
  */
-function renderCallbackPage(e, t) {
-  let r = t.closeTab
-    ? `<script${t.closeTab.nonce ? ` nonce="${t.closeTab.nonce}"` : ""}>setTimeout(function(){try{window.close()}catch(e){}},1500)</script>`
+function renderCallbackPage(bodyHtml, options) {
+  let closeScript = options.closeTab
+    ? `<script${options.closeTab.nonce ? ` nonce="${options.closeTab.nonce}"` : ""}>setTimeout(function(){try{window.close()}catch(e){}},1500)</script>`
     : "";
   return `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Claude Code</title><style>${embeddedFontFaces()}
-${CALLBACK_PAGE_CSS}${t.css ?? ""}</style></head><body><main>${e}</main>${r}</body></html>`;
+${CALLBACK_PAGE_CSS}${options.css ?? ""}</style></head><body><main>${bodyHtml}</main>${closeScript}</body></html>`;
 }
 export { callbackPageBody, renderCallbackPage, brokenLinkSvg, checkmarkSvg };

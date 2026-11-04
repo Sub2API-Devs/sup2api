@@ -5,13 +5,13 @@
  * pieces: chunk-vwj6ccer.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 import { require_URL } from "./URL.js";
 import { require_URLUtils } from "./URLUtils.js";
 
 //@ chunk-vwj6ccer.js:234995-235461 cjs-fingerprint
-var require_Location = x(function (cjsExports, cjsModule) {
-  var bf = require_URL();
+var require_Location = __commonJS(function (cjsExports, cjsModule) {
+  var URLModule = require_URL();
   var URLUtils = require_URLUtils();
   cjsModule.exports = Location;
   function Location(_window, href) {
@@ -32,7 +32,7 @@ var require_Location = x(function (cjsExports, cjsModule) {
     },
     assign: {
       value: function (url) {
-        var current = new bf(this._href);
+        var current = new URLModule(this._href);
         var newurl = current.resolve(url);
         this._href = newurl;
       },

@@ -13,6 +13,7 @@ import { resolveSetting } from "../../utils/settings/userIntentSettings.js";
 import { isSettingSourceEnabled } from "../../utils/settings/constants.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../analytics/growthbook.js";
 import { env } from "../../utils/env.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-9m4wzd68.js:621-692 placement
 /**
@@ -66,7 +67,10 @@ class RemoteReactiveCompactLatch {
 /**
  * 远程会话的响应式压缩闩锁。
  */
-var remoteReactiveCompactLatch = new RemoteReactiveCompactLatch();
+var remoteReactiveCompactLatch; // deferred: uses RemoteReactiveCompactLatch of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-9m4wzd68.js:1136", () => {
+  remoteReactiveCompactLatch = new RemoteReactiveCompactLatch();
+});
 //@ chunk-9m4wzd68.js:1148-1220 placement
 /**
  * 远程会话中能否压缩。
@@ -153,14 +157,14 @@ var TENGU_WISE_COMET = "tengu_wise_comet";
 /**
  * 压缩时是否剥离保留的思考块（环境变量、思考类型、开关）。
  */
-function keptThinkingStripDecision(e) {
+function keptThinkingStripDecision(thinkingType) {
   let CLAUDE_CODE_WISE_COMET = env.CLAUDE_CODE_WISE_COMET;
   if (CLAUDE_CODE_WISE_COMET !== undefined)
     return {
       strip: CLAUDE_CODE_WISE_COMET,
       source: "env",
     };
-  if (e !== "adaptive")
+  if (thinkingType !== "adaptive")
     return {
       strip: false,
       source: "thinking_type",
@@ -174,12 +178,10 @@ function keptThinkingStripDecision(e) {
 /**
  * 不属于压缩类的查询来源集合。
  */
-var NON_COMPACT_QUERY_SOURCES = new Set([
-  "prompt_suggestion",
-  "away_summary",
-  "agent_summary",
-  "hook_prompt",
-]);
+var NON_COMPACT_QUERY_SOURCES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-9m4wzd68.js:1924", () => {
+  NON_COMPACT_QUERY_SOURCES = new Set(["prompt_suggestion", "away_summary", "agent_summary", "hook_prompt"]);
+});
 //@ chunk-9m4wzd68.js:2006-2050 placement
 /**
  * 查询来源是否属于压缩类。
@@ -191,13 +193,16 @@ function isCompactQuerySource(querySource) {
 /**
  * 侧查询来源集合（side_question、extract_memories）。
  */
-var SIDE_QUERY_SOURCES = new Set(["side_question", "extract_memories"]);
+var SIDE_QUERY_SOURCES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-9m4wzd68.js:2050", () => {
+  SIDE_QUERY_SOURCES = new Set(["side_question", "extract_memories"]);
+});
 //@ chunk-9m4wzd68.js:2102-2146 placement
 /**
  * 查询来源是否属于侧查询（不压缩）。
  */
-function isSideQuerySource(e) {
-  return e !== undefined && SIDE_QUERY_SOURCES.has(e);
+function isSideQuerySource(querySource) {
+  return querySource !== undefined && SIDE_QUERY_SOURCES.has(querySource);
 }
 //@ chunk-9m4wzd68.js:2146-2195 placement
 /**

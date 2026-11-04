@@ -19,7 +19,7 @@ import {
   shouldListPastSessions,
   listPastSessions,
   parseDispatchInput,
-  MAX_SPAWN_RETRIES,
+  MIN_SPAWN_INTENT_LENGTH,
   STILL_STARTING_MESSAGE,
   safeRespawnBgSession,
   TRANSIENT_SOCKET_ERRORS,
@@ -101,7 +101,7 @@ import { init_react_production } from "../../../vendor/react/cjs/react.productio
 /**
  * 提交派发输入：解析模板/技能/仓库/模型，创建后台会话或执行命令。
  */
-function submitDispatch(submit, event) {
+function submitDispatch(services, event) {
   let {
     editor,
     roster,
@@ -145,14 +145,14 @@ function submitDispatch(submit, event) {
     openEarlier,
     openNewSessionRow,
     openOrRespawn,
-  } = submit;
-  let Ot = () => {
+  } = services;
+  let stopEvent = () => {
     event.preventDefault();
     event.stopImmediatePropagation();
   };
-  let Yt = (gt) => {
+  let setEditorQuery = (value) => {
     editor.beginProgrammaticChange();
-    editor.setQuery(gt);
+    editor.setQuery(value);
     view.setHelpOpen(false);
   };
   let ctrl = event.ctrl;
@@ -160,26 +160,29 @@ function submitDispatch(submit, event) {
     searchKeyDown(event);
     return;
   }
-  Ot();
+  stopEvent();
   if (isRecentDispatchMark(editor)) return;
   let query_2 = editor.getSnapshot().query;
-  let tt = expandPastedTextRefs(query_2, editor.pastes);
-  if (tt.removed.removedTotal > 0) {
-    stripInvisiblePromptChars(tt.removed, "fleet_dispatch");
+  let expanded = expandPastedTextRefs(query_2, editor.pastes);
+  if (expanded.removed.removedTotal > 0) {
+    stripInvisiblePromptChars(expanded.removed, "fleet_dispatch");
     markDispatchChunk(editor);
-    let gt = tt.input.trim() === "";
-    if (tt.input !== query_2) {
+    let isNowEmpty = expanded.input.trim() === "";
+    if (expanded.input !== query_2) {
       editor.beginProgrammaticChange();
-      editor.setQuery(tt.input);
+      editor.setQuery(expanded.input);
     }
-    if (tt.pastedContents !== editor.pastes) editor.replacePastes(tt.pastedContents);
+    if (expanded.pastedContents !== editor.pastes) editor.replacePastes(expanded.pastedContents);
     editor.setError(null);
-    editor.setHint(formatInvisibleCharsRemoved(tt.removed.removedTotal, gt ? "empty" : "review"));
+    editor.setHint(
+      formatInvisibleCharsRemoved(expanded.removed.removedTotal, isNowEmpty ? "empty" : "review"),
+    );
     forceRedraw();
     return;
   }
-  let ze = editor.getSnapshot().mode === "bash" ? "!" : editor.getSnapshot().query.trim().toLowerCase();
-  let Fe = () => {
+  let commandInput =
+    editor.getSnapshot().mode === "bash" ? "!" : editor.getSnapshot().query.trim().toLowerCase();
+  let resetInput = () => {
     editor.beginProgrammaticChange();
     editor.setQuery("");
     sweepDraft(
@@ -191,21 +194,21 @@ function submitDispatch(submit, event) {
       storageV5,
     );
   };
-  if (EXIT_COMMAND_WORDS.includes(ze)) {
-    Fe();
+  if (EXIT_COMMAND_WORDS.includes(commandInput)) {
+    resetInput();
     exit();
     return;
   }
-  if (ze.startsWith("/")) {
-    let [gt = "", kt = ""] = editor
+  if (commandInput.startsWith("/")) {
+    let [commandName = "", commandArgs = ""] = editor
       .getSnapshot()
       .query.trim()
       .slice(1)
       .split(/\s+(.*)/, 2);
-    let command = findCommand(gt.toLowerCase(), getBuiltinCommands());
+    let command = findCommand(commandName.toLowerCase(), getBuiltinCommands());
     if (command && isCommandEnabled(command) && meetsAvailabilityRequirement(command)) {
       if (command.fleetHostCall) {
-        Fe();
+        resetInput();
         command
           .fleetHostCall(
             {
@@ -219,7 +222,7 @@ function submitDispatch(submit, event) {
               setInfo: editor.setHint,
               storageV5,
             },
-            kt,
+            commandArgs,
           )
           .catch((error) => {
             logError(error);
@@ -228,19 +231,19 @@ function submitDispatch(submit, event) {
         return;
       }
       if (command.type !== "prompt" && command.name !== "model") {
-        let lower = gt.toLowerCase();
-        let jt = pickSuggestion();
+        let lower = commandName.toLowerCase();
+        let suggestion = pickSuggestion();
         if (
           !skills.some(
             (skill) => skill.kind !== "command" && (skill.name === lower || skill.aliases?.includes(lower)),
           ) &&
-          (!jt || jt.name === command.name || command.isHidden)
+          (!suggestion || suggestion.name === command.name || command.isHidden)
         ) {
           if (command.name === "effort") {
-            let trimmed = kt.trim();
-            let effortLevel = parseEffortLevel(trimmed);
-            if (/^(default|auto)$/i.test(trimmed) || isReservedEffortKeyword(trimmed)) {
-              Fe();
+            let keyword = commandArgs.trim();
+            let effortLevel = parseEffortLevel(keyword);
+            if (/^(default|auto)$/i.test(keyword) || isReservedEffortKeyword(keyword)) {
+              resetInput();
               setDispatchWindowValue(
                 editor,
                 dispatchDefaults,
@@ -249,7 +252,7 @@ function submitDispatch(submit, event) {
                 view.getSnapshot().activeTab === "remote",
               );
             } else if (effortLevel) {
-              Fe();
+              resetInput();
               setDispatchWindowValue(
                 editor,
                 dispatchDefaults,
@@ -257,15 +260,16 @@ function submitDispatch(submit, event) {
                 effortLevel,
                 view.getSnapshot().activeTab === "remote",
               );
-            } else if (!trimmed) {
-              Fe();
-              buildDispatchValueOptions(submit, "effort");
+            } else if (!keyword) {
+              resetInput();
+              buildDispatchValueOptions(services, "effort");
             } else {
-              let [vt, rt] = trimmed.split(/\s+/);
-              let Qe = parseEffortKeyword(vt) !== undefined && rt?.toLowerCase() === "off";
+              let [effortWord, suffixWord] = keyword.split(/\s+/);
+              let isUltracodeOff =
+                parseEffortKeyword(effortWord) !== undefined && suffixWord?.toLowerCase() === "off";
               editor.setError(null);
               editor.setHint(
-                Qe
+                isUltracodeOff
                   ? !resolveDispatchDefaults({
                       launch: dispatchDefaults,
                       window: dispatchDefaultsFromJob(editor.getSnapshot()),
@@ -274,20 +278,20 @@ function submitDispatch(submit, event) {
                     : getInitialSettings_2().ultracode === true
                       ? "New sessions start in ultracode because ultracode is on in your settings"
                       : "Ultracode is on from --effort ultracode; /effort <level> turns it off"
-                  : parseEffortKeyword(vt) !== undefined
+                  : parseEffortKeyword(effortWord) !== undefined
                     ? "Ultracode can't be set for new sessions here \u2014 start agent view with claude agents --effort ultracode, or turn it on in a session with /effort ultracode"
-                    : `Unknown effort '${trimmed}' \u2014 use ${EFFORT_LEVELS.join(", ")} or default`,
+                    : `Unknown effort '${keyword}' \u2014 use ${EFFORT_LEVELS.join(", ")} or default`,
               );
             }
             return;
           }
           if (command.name === "fast") {
-            let lower = kt.trim().toLowerCase();
+            let lower = commandArgs.trim().toLowerCase();
             if (!isFastModeEnabled()) {
               editor.setError(null);
               editor.setHint(getFastModeUnavailableMessage() ?? "Fast mode is not available");
             } else if (lower === "default" || lower === "on" || lower === "off") {
-              Fe();
+              resetInput();
               setDispatchWindowValue(
                 editor,
                 dispatchDefaults,
@@ -296,8 +300,8 @@ function submitDispatch(submit, event) {
                 view.getSnapshot().activeTab === "remote",
               );
             } else if (!lower) {
-              Fe();
-              buildDispatchValueOptions(submit, "fast");
+              resetInput();
+              buildDispatchValueOptions(services, "fast");
             } else {
               editor.setError(null);
               editor.setHint(`Unknown /fast option '${lower}' \u2014 use on, off or default`);
@@ -306,22 +310,22 @@ function submitDispatch(submit, event) {
           }
           if (
             command.name === "resume" &&
-            !kt.trim() &&
+            !commandArgs.trim() &&
             view.getSnapshot().activeTab !== "remote" &&
             !cwdFilter &&
             canLoadPastSessions()
           ) {
-            Fe();
+            resetInput();
             editor.setError(null);
             editor.setHint(null);
-            let He = view.openResumePicker();
-            let ct = new Set(jobSessionIds);
+            let pickerGeneration = view.openResumePicker();
+            let knownSessionIds = new Set(jobSessionIds);
             if (shouldListPastSessions()) {
-              for (let rt of builtRows) if (rt.kind === "earlier") ct.add(rt.entry.sessionId);
+              for (let row of builtRows) if (row.kind === "earlier") knownSessionIds.add(row.entry.sessionId);
             }
-            listPastSessions(ct, true, storageV5).then((rt) => {
-              if (He !== view.resumePickerGen) return;
-              if (rt === null) {
+            listPastSessions(knownSessionIds, true, storageV5).then((pastSessions) => {
+              if (pickerGeneration !== view.resumePickerGen) return;
+              if (pastSessions === null) {
                 logFeatureBad("fleet_view_resume_picker", "load_failed");
                 view.setResumePicker({
                   entries: [],
@@ -329,9 +333,10 @@ function submitDispatch(submit, event) {
                 });
                 return;
               }
-              let filtered = rt.filter(
-                (Xe) =>
-                  !roster.isDeleting(Xe.sessionId.slice(0, 8)) && !roster.isDeletingSession(Xe.sessionId),
+              let filtered = pastSessions.filter(
+                (session) =>
+                  !roster.isDeleting(session.sessionId.slice(0, 8)) &&
+                  !roster.isDeletingSession(session.sessionId),
               );
               logFeatureOk("fleet_view_resume_picker", {
                 count: filtered.length,
@@ -368,29 +373,29 @@ function submitDispatch(submit, event) {
       }
     }
   }
-  if (ze === "/model" || ze.startsWith("/model ")) {
-    let gt = pickSuggestion();
-    if (!modelArgMatch && gt && gt.kind !== "model");
+  if (commandInput === "/model" || commandInput.startsWith("/model ")) {
+    let suggestion = pickSuggestion();
+    if (!modelArgMatch && suggestion && suggestion.kind !== "model");
     else {
       let trimmed = editor.getSnapshot().query.trim().slice(6).trim();
       let lower = trimmed.toLowerCase();
       let mapped = modelSuggestions.map((modelSuggestion) => modelSuggestion.name);
-      let found = mapped.find((He) => He.toLowerCase() === lower);
-      let filtered = mapped.filter((He) => He.toLowerCase().startsWith(lower));
-      let Jt = modelArgMatch ? gt?.name : undefined;
-      let qe = found ?? (filtered.length === 1 ? filtered[0] : undefined) ?? Jt;
-      if (qe) {
-        Fe();
+      let found = mapped.find((modelName) => modelName.toLowerCase() === lower);
+      let filtered = mapped.filter((modelName) => modelName.toLowerCase().startsWith(lower));
+      let matchedName = modelArgMatch ? suggestion?.name : undefined;
+      let chosenModel = found ?? (filtered.length === 1 ? filtered[0] : undefined) ?? matchedName;
+      if (chosenModel) {
+        resetInput();
         setDispatchWindowValue(
           editor,
           dispatchDefaults,
           "model",
-          qe,
+          chosenModel,
           view.getSnapshot().activeTab === "remote",
         );
       } else if (!trimmed) {
-        Fe();
-        buildDispatchValueOptions(submit, "model");
+        resetInput();
+        buildDispatchValueOptions(services, "model");
       } else editor.setHint(`Unknown model '${trimmed}' \u2014 type /model  to see options`);
       return;
     }
@@ -400,71 +405,82 @@ function submitDispatch(submit, event) {
     closeAgentBrowse();
     return;
   }
-  let Rt = query_2;
-  let Vt = editor.getSnapshot().mode === "bash";
-  let Be =
-    Rt === query && !Vt ? dispatch : parseDispatchInput(Vt ? `!${Rt}` : Rt, templates, allRepos, routines);
-  if (Be?.intent || Be?.routine || Be?.matched) {
-    let gt = addPastedEntry(Be.intent, editor.pastes);
-    if (!Be.routine && !Be.matched && gt.trim().length < MAX_SPAWN_RETRIES) {
+  let trimmedQuery = query_2;
+  let isBashMode = editor.getSnapshot().mode === "bash";
+  let parsed =
+    trimmedQuery === query && !isBashMode
+      ? dispatch
+      : parseDispatchInput(isBashMode ? `!${trimmedQuery}` : trimmedQuery, templates, allRepos, routines);
+  if (parsed?.intent || parsed?.routine || parsed?.matched) {
+    let intentText = addPastedEntry(parsed.intent, editor.pastes);
+    if (!parsed.routine && !parsed.matched && intentText.trim().length < MIN_SPAWN_INTENT_LENGTH) {
       editor.setError(null);
       editor.setHint("Too short \u2014 describe the task");
       return;
     }
-    let cwd = Be.cwd ?? effectiveCwd;
-    let $e = templateCache.get(cwd);
-    if (Be.matched && !Be.exec && !(Be.template.name.includes(":") && cwd !== effectiveCwd)) {
-      if ($e && !$e.some((pt) => pt.name === Be.template.name || pt.name.endsWith(`:${Be.template.name}`))) {
-        editor.setError(`@${Be.template.name} isn't available in ${basename(cwd)}`);
+    let cwd = parsed.cwd ?? effectiveCwd;
+    let cachedTemplates = templateCache.get(cwd);
+    if (parsed.matched && !parsed.exec && !(parsed.template.name.includes(":") && cwd !== effectiveCwd)) {
+      if (
+        cachedTemplates &&
+        !cachedTemplates.some(
+          (cachedTemplate) =>
+            cachedTemplate.name === parsed.template.name ||
+            cachedTemplate.name.endsWith(`:${parsed.template.name}`),
+        )
+      ) {
+        editor.setError(`@${parsed.template.name} isn't available in ${basename(cwd)}`);
         return;
       }
     }
-    let ht = applyDispatchOverrides(dispatchDefaults, dispatchDefaultsFromJob(editor.getSnapshot()));
-    let jt = takeSpareHandle();
-    let Jt =
-      !parsePastedRefs(gt).some((pt) => editor.pastes[pt.id]?.type === "image") &&
-      gt.length <= PASTE_THRESHOLD &&
-      !gt.includes(`
+    let defaults = applyDispatchOverrides(dispatchDefaults, dispatchDefaultsFromJob(editor.getSnapshot()));
+    let spareHandle = takeSpareHandle();
+    let canReuseSpare =
+      !parsePastedRefs(intentText).some((pasteRef) => editor.pastes[pasteRef.id]?.type === "image") &&
+      intentText.length <= PASTE_THRESHOLD &&
+      !intentText.includes(`
 `);
-    let qe =
-      !!jt &&
-      jt.ready &&
-      !Be.matched &&
-      !Be.routine &&
-      cwd === jt.cwd &&
-      shallowEqualRecords(jt.defaults, ht) &&
-      Jt;
-    let He = qe ? jt.sessionId : randomUUID();
-    let sliced = He.slice(0, 8);
-    selection.followId = sliced;
+    let useSpare =
+      !!spareHandle &&
+      spareHandle.ready &&
+      !parsed.matched &&
+      !parsed.routine &&
+      cwd === spareHandle.cwd &&
+      shallowEqualRecords(spareHandle.defaults, defaults) &&
+      canReuseSpare;
+    let sessionId = useSpare ? spareHandle.sessionId : randomUUID();
+    let short = sessionId.slice(0, 8);
+    selection.followId = short;
     editor.beginProgrammaticChange();
-    let vt = Be.matched && !Be.exec ? Be.template.name : null;
-    let rt = Be.matched ? Be.template : resolveBgAgentTemplate(dispatchDefaults, $e);
+    let matchedTemplateName = parsed.matched && !parsed.exec ? parsed.template.name : null;
+    let template = parsed.matched
+      ? parsed.template
+      : resolveBgAgentTemplate(dispatchDefaults, cachedTemplates);
     let pastes = editor.pastes;
-    let Xe = Be.exec ? addPastedEntry(Be.exec, pastes) : undefined;
-    let St = {
-      id: sliced,
+    let execIntent = parsed.exec ? addPastedEntry(parsed.exec, pastes) : undefined;
+    let pendingEntry = {
+      id: short,
       state: makeInitialState({
-        template: Xe
+        template: execIntent
           ? {
               name: "exec",
               description: "",
             }
-          : Be.routine
+          : parsed.routine
             ? {
-                name: Be.routine,
+                name: parsed.routine,
                 description: "",
               }
-            : rt,
-        intent: Xe ?? gt,
-        sessionId: He,
+            : template,
+        intent: execIntent ?? intentText,
+        sessionId,
         cwd,
         originCwd: cwd,
       }),
       activity: "flowing",
     };
-    roster.updatePendings((pt) => [...pt, St]);
-    let Ne = Rt;
+    roster.updatePendings((pendings) => [...pendings, pendingEntry]);
+    let restoredQuery = trimmedQuery;
     let mode = editor.getSnapshot().mode;
     let { savedFocusJobId, followOrigin } = selection;
     selection.savedFocusJobId = null;
@@ -485,49 +501,49 @@ function submitDispatch(submit, event) {
     editor.pruneOrphanedPastes({
       pruneTextPastes: true,
     });
-    let At = (pt) => {
-      roster.updatePendings((Nt) => {
-        let filtered = Nt.filter((Ce) => Ce.id !== sliced);
+    let handleDispatchError = (errorText) => {
+      roster.updatePendings((entries) => {
+        let filtered = entries.filter((entry) => entry.id !== short);
         if (!editor.getSnapshot().query && filtered.length === 0) {
           editor.mergeRestoredPastes(pastes);
           selection.savedFocusJobId = savedFocusJobId;
           selection.followOrigin = followOrigin;
           editor.setMode(mode);
-          Yt(Ne);
+          setEditorQuery(restoredQuery);
         }
         return filtered;
       });
-      editor.setError(pt);
+      editor.setError(errorText);
     };
     (async () => {
-      let pt =
-        Xe || Be.matched || $e || !dispatchDefaults?.agent
-          ? rt
+      let resolvedTemplate =
+        execIntent || parsed.matched || cachedTemplates || !dispatchDefaults?.agent
+          ? template
           : resolveBgAgentTemplate(
               dispatchDefaults,
               await listUserAgentTemplates(cwd, storageV5).catch(() => []),
             );
-      return Xe
-        ? dispatchFromFleetView(Xe, He, cwd, storageV5)
-        : qe
-          ? claimSpare(gt, pt, storageV5)
-          : materializePastedImages(gt, pastes, sliced, storageV5).then((Nt) =>
+      return execIntent
+        ? dispatchFromFleetView(execIntent, sessionId, cwd, storageV5)
+        : useSpare
+          ? claimSpare(intentText, resolvedTemplate, storageV5)
+          : materializePastedImages(intentText, pastes, short, storageV5).then((materializedIntent) =>
               dispatchBgSessionTracked(
-                pt,
-                Nt,
+                resolvedTemplate,
+                materializedIntent,
                 {
-                  sessionId: He,
+                  sessionId,
                   targetCwd: cwd,
-                  routine: Be.routine,
-                  defaults: ht,
-                  displayIntent: Nt !== gt ? gt : undefined,
+                  routine: parsed.routine,
+                  defaults,
+                  displayIntent: materializedIntent !== intentText ? intentText : undefined,
                 },
                 storageV5,
               ),
             );
     })().then(
-      (pt) => {
-        if (qe)
+      (dispatchResult) => {
+        if (useSpare)
           claimSpareFromPool(
             scopedFallbackOrigin,
             false,
@@ -535,51 +551,53 @@ function submitDispatch(submit, event) {
             templateCache.get(scopedFallbackOrigin),
             storageV5,
           );
-        if (!pt.ok) return At(pt.error);
-        if (qe && pt.jobId !== sliced) {
-          selection.followId = pt.jobId;
-          St = {
-            ...St,
-            id: pt.jobId,
+        if (!dispatchResult.ok) return handleDispatchError(dispatchResult.error);
+        if (useSpare && dispatchResult.jobId !== short) {
+          selection.followId = dispatchResult.jobId;
+          pendingEntry = {
+            ...pendingEntry,
+            id: dispatchResult.jobId,
             state: {
-              ...St.state,
-              sessionId: pt.sessionId,
+              ...pendingEntry.state,
+              sessionId: dispatchResult.sessionId,
             },
           };
-          roster.updatePendings((Nt) => Nt.map((oo) => (oo.id === sliced ? St : oo)));
+          roster.updatePendings((entries) =>
+            entries.map((entry) => (entry.id === short ? pendingEntry : entry)),
+          );
         }
-        if (qe) roster.kick(pt.sessionId, pt.jobId);
-        if (vt) {
-          let Nt = false;
-          saveGlobalConfig((oo) => {
+        if (useSpare) roster.kick(dispatchResult.sessionId, dispatchResult.jobId);
+        if (matchedTemplateName) {
+          let didRecord = false;
+          saveGlobalConfig((config) => {
             let now = Date.now();
-            let Ke = oo.agentLastUsed?.[vt];
-            if (Ke !== undefined && now - Ke < 60000) return oo;
-            Nt = true;
+            let lastUsed = config.agentLastUsed?.[matchedTemplateName];
+            if (lastUsed !== undefined && now - lastUsed < 60000) return config;
+            didRecord = true;
             return {
-              ...oo,
+              ...config,
               agentLastUsed: {
-                ...(oo.agentLastUsed ?? {}),
-                [vt]: now,
+                ...(config.agentLastUsed ?? {}),
+                [matchedTemplateName]: now,
               },
             };
           }, storageV5);
-          if (Nt) bumpSuggGen();
+          if (didRecord) bumpSuggGen();
         }
         if (ctrl) {
-          attach.arm(St.id, null);
+          attach.arm(pendingEntry.id, null);
           onAction({
             type: "open",
-            job: St,
+            job: pendingEntry,
             freshDispatch: true,
           });
         } else {
           roster.reload();
-          if (!qe) roster.watchPendingJobDir(sliced);
+          if (!useSpare) roster.watchPendingJobDir(short);
         }
       },
       (error) => {
-        if (qe)
+        if (useSpare)
           claimSpareFromPool(
             scopedFallbackOrigin,
             false,
@@ -587,11 +605,11 @@ function submitDispatch(submit, event) {
             templateCache.get(scopedFallbackOrigin),
             storageV5,
           );
-        At(errorMessage(error));
+        handleDispatchError(errorMessage(error));
       },
     );
-  } else if (!Be?.cwd && Be?.exec === undefined) {
-    if (Be === null && Rt !== query) return;
+  } else if (!parsed?.cwd && parsed?.exec === undefined) {
+    if (parsed === null && trimmedQuery !== query) return;
     if (focusedRow?.kind === "fold") {
       selection.followOrigin = null;
       selection.followId = null;
@@ -601,7 +619,7 @@ function submitDispatch(submit, event) {
         ms_since_mount: Date.now() - mountAt,
       });
     } else if (focusedRow?.kind === "header") {
-      if (isOnboarding || Be === null) return;
+      if (isOnboarding || parsed === null) return;
       selection.followOrigin = focusedRow.group;
       selection.followId = null;
       toggleCollapse(focusedRow.group);
@@ -614,29 +632,29 @@ function submitDispatch(submit, event) {
 /**
  * 处理粘贴到派发输入框的内容。
  */
-function handlePasteIntoDispatch(h, E) {
-  let { editor, dispatchInputActive, insertAtCursor } = h;
-  let replaced = E.replace(
+function handlePasteIntoDispatch(context, pasteText) {
+  let { editor, dispatchInputActive, insertAtCursor } = context;
+  let replaced = pasteText.replace(
     /\r\n|\r/g,
     `
 `,
   );
-  let A = editor.lastMintedPasteId ?? -1;
-  let L = editor.pastes[A];
-  if (dispatchInputActive && L?.type === "text" && L.content === replaced) {
-    let D = expandLastPaste(editor.getSnapshot().query, editor.pastes);
-    if (D?.id === A) {
-      delete editor.pastes[A];
-      editor.setQueryAndCursor(D.expanded, D.cursorOffset);
+  let lastPasteId = editor.lastMintedPasteId ?? -1;
+  let lastPaste = editor.pastes[lastPasteId];
+  if (dispatchInputActive && lastPaste?.type === "text" && lastPaste.content === replaced) {
+    let expanded = expandLastPaste(editor.getSnapshot().query, editor.pastes);
+    if (expanded?.id === lastPasteId) {
+      delete editor.pastes[lastPasteId];
+      editor.setQueryAndCursor(expanded.expanded, expanded.cursorOffset);
       editor.setExpandHintPasteId(null);
       return;
     }
   }
   let pastedTextRefNumLines = getPastedTextRefNumLines(replaced);
   if (dispatchInputActive && (replaced.length > PASTE_THRESHOLD || pastedTextRefNumLines > 2)) {
-    let D = editor.mintTextPaste(replaced);
-    insertAtCursor(formatPastedTextRef(D, pastedTextRefNumLines));
-    if (replaced.length <= MAX_HISTORY_ENTRIES) editor.setExpandHintPasteId(D);
+    let pasteId = editor.mintTextPaste(replaced);
+    insertAtCursor(formatPastedTextRef(pasteId, pastedTextRefNumLines));
+    if (replaced.length <= MAX_HISTORY_ENTRIES) editor.setExpandHintPasteId(pasteId);
     return;
   }
   insertAtCursor(replaced);
@@ -645,14 +663,14 @@ function handlePasteIntoDispatch(h, E) {
 /**
  * 向会话发送回复（支持 /stop）。
  */
-async function replyToJob(h, focused, k) {
-  let { editor, roster, attach, awayLoop, storageV5 } = h;
+async function replyToJob(context, focused, replyText) {
+  let { editor, roster, attach, awayLoop, storageV5 } = context;
   if (focused.id.startsWith("remote-pending-")) return STILL_STARTING_MESSAGE;
-  if (k.trim() === "/stop" && isLocalDaemonAgent(focused.state) && !isSettled(focused.state)) {
+  if (replyText.trim() === "/stop" && isLocalDaemonAgent(focused.state) && !isSettled(focused.state)) {
     if (roster.getSnapshot().pendings.some((pending) => pending.id === focused.id))
       return STILL_STARTING_MESSAGE;
     try {
-      await h.stop(focused);
+      await context.stop(focused);
       return null;
     } catch (error) {
       logForDebugging(`[fleetview] /stop from the peek failed: ${errorMessage(error)}`, {
@@ -661,104 +679,132 @@ async function replyToJob(h, focused, k) {
       return `Couldn't stop \u2014 ${errorMessage(error)}`;
     }
   }
-  let V = roster.holdJob(focused.id);
-  let D = focused.state.resumeSessionId ?? focused.state.sessionId;
-  let U = roster.kick(D, focused.id);
-  roster.updateJobs((oe) => {
-    if (!oe?.some((ge) => ge.id === focused.id)) return oe;
-    return oe.map((ge) => {
-      if (ge.id !== focused.id) return ge;
-      let se = applyReplyPatch(ge.state, k);
+  let releaseHold = roster.holdJob(focused.id);
+  let jobKey = focused.state.resumeSessionId ?? focused.state.sessionId;
+  let resumeKick = roster.kick(jobKey, focused.id);
+  roster.updateJobs((jobs) => {
+    if (!jobs?.some((job) => job.id === focused.id)) return jobs;
+    return jobs.map((job) => {
+      if (job.id !== focused.id) return job;
+      let patchedState = applyReplyPatch(job.state, replyText);
       return {
-        ...ge,
-        state: se,
-        activity: jobOutcome(se),
+        ...job,
+        state: patchedState,
+        activity: jobOutcome(patchedState),
       };
     });
   });
-  let N;
-  let X;
-  let K = false;
-  let W = false;
-  let z = false;
+  let errorText;
+  let errorCode;
+  let respawnFailed = false;
+  let wasQueued = false;
+  let transcriptGone = false;
   try {
-    let oe = () => takeNotificationLatency(awayLoop, focused.state.sessionId, Date.now());
-    let ge = await replyToJob_2(focused.id, k, focused.state, undefined, oe, storageV5);
-    N = ge?.err ?? null;
-    X = ge?.code;
-    if (N === REPLY_ENOJOB_MSG) {
+    let consumeLatency = () => takeNotificationLatency(awayLoop, focused.state.sessionId, Date.now());
+    let result = await replyToJob_2(
+      focused.id,
+      replyText,
+      focused.state,
+      undefined,
+      consumeLatency,
+      storageV5,
+    );
+    errorText = result?.err ?? null;
+    errorCode = result?.code;
+    if (errorText === REPLY_ENOJOB_MSG) {
       let warming = attach.getWarming(focused.id);
       if (warming) {
         await warming;
-        let ne = await replyToJob_2(focused.id, k, focused.state, undefined, oe, storageV5);
-        N = ne?.err ?? null;
-        X = ne?.code;
+        let retryResult = await replyToJob_2(
+          focused.id,
+          replyText,
+          focused.state,
+          undefined,
+          consumeLatency,
+          storageV5,
+        );
+        errorText = retryResult?.err ?? null;
+        errorCode = retryResult?.code;
       }
     }
-    if (N === REPLY_ENOJOB_MSG && getModeFromInput(k) === "prompt") {
-      let se = await safeRespawnBgSession(
+    if (errorText === REPLY_ENOJOB_MSG && getModeFromInput(replyText) === "prompt") {
+      let respawnResult = await safeRespawnBgSession(
         focused.id,
         {
           knownState: focused.state,
-          initialPrompt: k,
+          initialPrompt: replyText,
         },
         storageV5,
       );
-      if (!se.ok && se.alive) {
-        let ne = await replyToJob_2(focused.id, k, focused.state, undefined, oe, storageV5);
-        N = ne?.err ?? null;
-        X = ne?.code;
+      if (!respawnResult.ok && respawnResult.alive) {
+        let retryResult = await replyToJob_2(
+          focused.id,
+          replyText,
+          focused.state,
+          undefined,
+          consumeLatency,
+          storageV5,
+        );
+        errorText = retryResult?.err ?? null;
+        errorCode = retryResult?.code;
       } else {
-        K = !se.ok;
-        W = !se.ok && se.queued === true;
-        z = !se.ok && "errorCode" in se && se.errorCode === "dead_epoch_transcript_gone";
-        N = se.ok ? null : W ? "Reply queued \u2014 will be sent when this session restarts" : se.error;
+        respawnFailed = !respawnResult.ok;
+        wasQueued = !respawnResult.ok && respawnResult.queued === true;
+        transcriptGone =
+          !respawnResult.ok &&
+          "errorCode" in respawnResult &&
+          respawnResult.errorCode === "dead_epoch_transcript_gone";
+        errorText = respawnResult.ok
+          ? null
+          : wasQueued
+            ? "Reply queued \u2014 will be sent when this session restarts"
+            : respawnResult.error;
       }
-      if (se.ok) oe();
+      if (respawnResult.ok) consumeLatency();
     }
-    if (N) U();
+    if (errorText) resumeKick();
   } finally {
-    V();
+    releaseHold();
   }
-  if (N === null) {
+  if (errorText === null) {
     logFeatureOk("fleet_view_reply");
-    editor.clearReplyFailure(D);
-  } else if (N === REPLY_PEER_NO_SOCK_MSG) {
+    editor.clearReplyFailure(jobKey);
+  } else if (errorText === REPLY_PEER_NO_SOCK_MSG) {
     logFeatureOk("fleet_view_reply");
-    editor.clearReplyFailure(D);
+    editor.clearReplyFailure(jobKey);
   } else {
-    if (K) logForDebugging(`[fleetview] peek-reply respawn failed: ${N}`);
+    if (respawnFailed) logForDebugging(`[fleetview] peek-reply respawn failed: ${errorText}`);
     let now = Date.now();
-    if (editor.isRetryOfRecentReplyFailure(D, now))
+    if (editor.isRetryOfRecentReplyFailure(jobKey, now))
       logFeatureSad("fleet_view_reply", "retry_of_recent_failure");
-    else if (N === REPLY_ENOJOB_MSG) logFeatureSad("fleet_view_reply", "not_running_no_respawn");
-    else if (K && W) logFeatureSad("fleet_view_reply", "queued_for_later");
-    else if (z) logFeatureSad("fleet_view_reply", "dead_epoch_transcript_gone");
-    else if (K) logFeatureBad("fleet_view_reply", "respawn_failed");
-    else if (isReplyDaemonRestartingMsg(N)) logFeatureSad("fleet_view_reply", "daemon_restarting");
+    else if (errorText === REPLY_ENOJOB_MSG) logFeatureSad("fleet_view_reply", "not_running_no_respawn");
+    else if (respawnFailed && wasQueued) logFeatureSad("fleet_view_reply", "queued_for_later");
+    else if (transcriptGone) logFeatureSad("fleet_view_reply", "dead_epoch_transcript_gone");
+    else if (respawnFailed) logFeatureBad("fleet_view_reply", "respawn_failed");
+    else if (isReplyDaemonRestartingMsg(errorText)) logFeatureSad("fleet_view_reply", "daemon_restarting");
     else {
-      let ge = N;
-      let se = [...ge.matchAll(/\bE[A-Z]{2,14}\b/g)].find(
-        (me) => !"/\\".includes(ge[me.index - 1] ?? "."),
+      let errorMessage = errorText;
+      let errnoToken = [...errorMessage.matchAll(/\bE[A-Z]{2,14}\b/g)].find(
+        (match) => !"/\\".includes(errorMessage[match.index - 1] ?? "."),
       )?.[0];
-      logForDebugging(`[fleetview] peek-reply send failed: ${ge}`);
-      let ne =
-        !X &&
-        se !== undefined &&
-        TRANSIENT_SOCKET_ERRORS.has(se) &&
-        (await queuePromptForJob(getJobDir(focused.id), focused.state, k, storageV5));
-      let ae = {
-        errno: sanitizeErrnoTokenForTelemetry(X ?? se) ?? lit("unknown"),
+      logForDebugging(`[fleetview] peek-reply send failed: ${errorMessage}`);
+      let queued =
+        !errorCode &&
+        errnoToken !== undefined &&
+        TRANSIENT_SOCKET_ERRORS.has(errnoToken) &&
+        (await queuePromptForJob(getJobDir(focused.id), focused.state, replyText, storageV5));
+      let telemetryFields = {
+        errno: sanitizeErrnoTokenForTelemetry(errorCode ?? errnoToken) ?? lit("unknown"),
       };
-      if (ne) {
-        N = "Reply queued \u2014 will be sent when this session restarts";
-        logFeatureSad("fleet_view_reply", "queued_for_later", ae);
-      } else logFeatureBad("fleet_view_reply", "send_failed", ae);
+      if (queued) {
+        errorText = "Reply queued \u2014 will be sent when this session restarts";
+        logFeatureSad("fleet_view_reply", "queued_for_later", telemetryFields);
+      } else logFeatureBad("fleet_view_reply", "send_failed", telemetryFields);
     }
-    editor.noteReplyFailure(D, now);
+    editor.noteReplyFailure(jobKey, now);
   }
   roster.reload();
-  return N;
+  return errorText;
 }
 //@ chunk-93kwxas0.js:72623-72627 placement
 init_react_production();

@@ -5,13 +5,13 @@
  * pieces: chunk-spjgqa4y.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../../runtime/bun-runtime.js";
 
 //@ chunk-spjgqa4y.js:54100-54879 cjs-fingerprint
-var qrTerminalSmallRenderer = x(function (cjsExports) {
-  var vs = "\x1B[47m\x1B[30m";
-  var Vs = "\x1B[40m\x1B[37m";
-  var Ks = function (lineSetup, foregroundWhite, foregroundBlack) {
+var qrTerminalSmallRenderer = __commonJS(function (cjsExports) {
+  var NORMAL_BACKGROUND = "\x1B[47m\x1B[30m";
+  var INVERSE_BACKGROUND = "\x1B[40m\x1B[37m";
+  var paletteFor = function (lineSetup, foregroundWhite, foregroundBlack) {
     return {
       "00": "\x1B[0m " + lineSetup,
       "01": "\x1B[0m" + foregroundWhite + "\u2584" + lineSetup,
@@ -37,9 +37,9 @@ var qrTerminalSmallRenderer = x(function (cjsExports) {
   cjsExports.render = function (qrData, options, cb) {
     let size = qrData.modules.size;
     let data = qrData.modules.data;
-    let o = !!(options && options.inverse);
-    let lineSetup = options && options.inverse ? Vs : vs;
-    let palette = Ks(lineSetup, o ? "\x1B[30m" : "\x1B[37m", o ? "\x1B[37m" : "\x1B[30m");
+    let inverse = !!(options && options.inverse);
+    let lineSetup = options && options.inverse ? INVERSE_BACKGROUND : NORMAL_BACKGROUND;
+    let palette = paletteFor(lineSetup, inverse ? "\x1B[30m" : "\x1B[37m", inverse ? "\x1B[37m" : "\x1B[30m");
     let newLine =
       `\x1B[0m
 ` + lineSetup;

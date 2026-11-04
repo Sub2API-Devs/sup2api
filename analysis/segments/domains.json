@@ -320,7 +320,6 @@
    "services/mcp/normalization.ts",
    "services/mcp/oauthPort.ts",
    "services/mcp/officialPluginPromptOverrides.ts",
-   "services/mcp/officialRegistry.ts",
    "services/mcp/orgMcpPolicyLockout.ts",
    "services/mcp/readMcpDirectory.ts",
    "services/mcp/reconnectHandles.ts",
@@ -740,8 +739,8 @@
    "utils/plugins/zipCacheAdapters.ts",
    "utils/skills/skillChangeDetector.ts"
   ],
-  "bytes": 4948005,
-  "decls": 14537
+  "bytes": 4947787,
+  "decls": 14536
  },
  "query": {
   "modules": [
@@ -1056,8 +1055,8 @@
    "utils/toolResultStorage.ts",
    "utils/userPromptKeywords.ts"
   ],
-  "bytes": 2454571,
-  "decls": 6958
+  "bytes": 2456655,
+  "decls": 6979
  },
  "state": {
   "modules": [
@@ -1500,7 +1499,6 @@
    "services/pluginEval/runToolRules.ts",
    "services/pluginEval/runTrace.ts",
    "services/pluginEval/safeFiles.ts",
-   "services/pluginTest/claudeTestPlugin.ts",
    "services/policyLimits/PolicyLimitsClient.ts",
    "services/policyLimits/cacheStamp.ts",
    "services/policyLimits/capabilityBlocks.ts",
@@ -1971,6 +1969,7 @@
    "utils/managedEnvApply.ts",
    "utils/managedEnvConstants.ts",
    "utils/managedEnvSafety.ts",
+   "utils/mediaLimits.ts",
    "utils/memoize.ts",
    "utils/memory/types.ts",
    "utils/memoryFileDetection.ts",
@@ -2119,6 +2118,7 @@
    "utils/settings/envSources.ts",
    "utils/settings/holdSettings.ts",
    "utils/settings/hooksValidation.ts",
+   "utils/settings/hostEnvWrites.ts",
    "utils/settings/managedEnvKeys.ts",
    "utils/settings/managedFileSettings.ts",
    "utils/settings/managedPath.ts",
@@ -2128,6 +2128,7 @@
    "utils/settings/managedSettingsKeys.ts",
    "utils/settings/marketplaceSettingsAliases.ts",
    "utils/settings/mdm/constants.ts",
+   "utils/settings/mdm/mdmLoader.ts",
    "utils/settings/mdm/rawRead.ts",
    "utils/settings/mdm/settings.ts",
    "utils/settings/mdm/wslRegistry.ts",
@@ -2237,6 +2238,7 @@
    "utils/telemetry/betaSessionTracing.ts",
    "utils/telemetry/bigqueryExporter.ts",
    "utils/telemetry/ccrTraceContext.ts",
+   "utils/telemetry/clientEventUploader.ts",
    "utils/telemetry/cooAttributes.ts",
    "utils/telemetry/errorClassNames.ts",
    "utils/telemetry/events.ts",
@@ -2383,8 +2385,8 @@
    "utils/yaml.ts",
    "utils/zodStartup.ts"
   ],
-  "bytes": 8319555,
-  "decls": 22316
+  "bytes": 8320441,
+  "decls": 22335
  },
  "ui": {
   "modules": [
@@ -2916,6 +2918,7 @@
    "components/pluginUi/render/actionKeys.ts",
    "components/pluginUi/render/elements.tsx",
    "components/pluginUi/render/terminalImages.tsx",
+   "components/pluginUi/renderSiteExports.ts",
    "components/pluginUi/toastStack.ts",
    "components/pluginUi/uiLog.ts",
    "components/projects/ContinueInProjectsMessageDialog.tsx",
@@ -3122,6 +3125,7 @@
    "screens/repl/TurnController.ts",
    "screens/repl/WorkerPendingPermissions.tsx",
    "screens/repl/backgroundConfirm.ts",
+   "screens/repl/bridgeChannelSlot.ts",
    "screens/repl/commandDialogLoaders.ts",
    "screens/repl/engineTurnReader.ts",
    "screens/repl/exitFlow.ts",
@@ -3178,8 +3182,8 @@
    "utils/textHighlighting.ts",
    "utils/theme.ts"
   ],
-  "bytes": 3759947,
-  "decls": 7387
+  "bytes": 3760272,
+  "decls": 7392
  },
  "commands": {
   "modules": [
@@ -3494,8 +3498,8 @@
    "commands/workflows/index.ts",
    "commands/workflows/workflows.tsx"
   ],
-  "bytes": 1244980,
-  "decls": 2034
+  "bytes": 1245360,
+  "decls": 2035
  },
  "agents": {
   "modules": [
@@ -3860,8 +3864,8 @@
    "utils/ultraplan/keyword.ts",
    "voice/voiceModeEnabled.ts"
   ],
-  "bytes": 2564511,
-  "decls": 4831
+  "bytes": 2564491,
+  "decls": 4829
  },
  "ink": {
   "modules": [
@@ -3886,6 +3890,7 @@
    "ink/components/TerminalFocusContext.tsx",
    "ink/components/Text.tsx",
    "ink/dom.ts",
+   "ink/eventLoopLag.ts",
    "ink/events/click-event.ts",
    "ink/events/dispatcher.ts",
    "ink/events/emitter.ts",
@@ -3937,6 +3942,7 @@
    "ink/selection.ts",
    "ink/setRawModeSafe.ts",
    "ink/squash-text-nodes.ts",
+   "ink/stdinReader.ts",
    "ink/stringWidth.ts",
    "ink/styles.ts",
    "ink/supports-hyperlinks.ts",
@@ -3995,7 +4001,7 @@
    "vim/transitions.ts",
    "vim/types.ts"
   ],
-  "bytes": 470983,
+  "bytes": 471393,
   "decls": 1409
  },
  "permissions": {
@@ -4127,6 +4133,7 @@
    "utils/sandbox/sandbox-adapter.ts",
    "utils/sandbox/sandboxDefaultPolicy.ts",
    "utils/sandbox/sandboxErrors.ts",
+   "utils/sandbox/sandboxRuntimeStubs.ts",
    "utils/sandbox/sandboxSettingsSources.ts",
    "utils/sandbox/userNamespace.ts",
    "utils/sandbox/userTempRoot.ts",
@@ -4165,8 +4172,8 @@
    "utils/shell/windowsShellLauncher.ts",
    "utils/shellConfig.ts"
   ],
-  "bytes": 1189415,
-  "decls": 3522
+  "bytes": 1184536,
+  "decls": 3468
  },
  "bootstrap": {
   "modules": [
@@ -4250,7 +4257,6 @@
    "cli/ndjsonSafeStringify.ts",
    "cli/permissionModeFlags.ts",
    "cli/print.ts",
-   "cli/print/_new/elicitationRegistrar.helpers-tyg7.ts",
    "cli/print/adminRequestFrames.ts",
    "cli/print/agentResume.ts",
    "cli/print/applyFlagSettings.ts",
@@ -4269,6 +4275,7 @@
    "cli/print/followUpPreempt.ts",
    "cli/print/forkConversation.ts",
    "cli/print/headlessCensus.ts",
+   "cli/print/hostOtelEvents.ts",
    "cli/print/hostSettingsClaims.ts",
    "cli/print/hostTelemetryProxy.ts",
    "cli/print/immediateCommands.ts",
@@ -4462,8 +4469,8 @@
    "utils/startupTiming.ts",
    "utils/warningHandler.ts"
   ],
-  "bytes": 2888043,
-  "decls": 5507
+  "bytes": 2888232,
+  "decls": 5509
  },
  "tools": {
   "modules": [
@@ -4946,8 +4953,8 @@
    "utils/truncate.ts",
    "utils/truncateGraphemes.ts"
   ],
-  "bytes": 3599695,
-  "decls": 6181
+  "bytes": 3599436,
+  "decls": 6178
  },
  "misc": {
   "modules": [

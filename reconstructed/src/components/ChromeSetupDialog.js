@@ -8,7 +8,7 @@
  * pieces: chunk-18hwfzwa.js (7)
  * attribution: placement 7
  */
-import { R, init_react_production, P } from "../../vendor/react/cjs/react.production.js";
+import { useRef, init_react_production, useEffect } from "../../vendor/react/cjs/react.production.js";
 import { useInputClock } from "../ink/components/Input.js";
 import { useRefusalTracker, settleKey } from "./CustomSelect/selectTypeahead.js";
 import {
@@ -26,8 +26,9 @@ import { HTTPS_CLAUDE_AI_CHROME } from "../commands/chrome/chrome.js";
 import { ModelSelector } from "./agents/ModelSelector.js";
 import { NO_COMMITTED_ROW } from "./CustomSelect/select.js";
 import { logEvent } from "../services/analytics/index.js";
-import { w } from "../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import { MEMO_CACHE_SENTINEL } from "../../runtime/bun-runtime.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-18hwfzwa.js:1340424-1340532 placement
 var CHROME_SETUP_SKIP_OPTION = {
@@ -38,17 +39,17 @@ var CHROME_SETUP_SKIP_OPTION = {
 //@ chunk-18hwfzwa.js:1340532-1342499 placement
 function ChromeInstallFlow({ payload, answer }) {
   let { phase, installPageOpened } = payload;
-  let phaseRef = R(phase);
+  let phaseRef = useRef(phase);
   let inputClock = useInputClock();
-  let Re = R(Date.now());
+  let phaseStartedAtRef = useRef(Date.now());
   let { refusedWithin, noteRefused } = useRefusalTracker();
   if (phaseRef.current !== phase) {
     phaseRef.current = phase;
-    Re.current = Date.now();
+    phaseStartedAtRef.current = Date.now();
   }
-  function We() {
+  function refuseInput() {
     if (
-      isWithinRecentInput(inputClock, Re.current, RECENT_INPUT_GUARD_MS_3) ||
+      isWithinRecentInput(inputClock, phaseStartedAtRef.current, RECENT_INPUT_GUARD_MS_3) ||
       refusedWithin(RECENT_INPUT_GUARD_MS_3)
     ) {
       noteRefused();
@@ -56,12 +57,13 @@ function ChromeInstallFlow({ payload, answer }) {
     }
     return false;
   }
-  function ze(At) {
-    if (We()) return;
-    answer(At);
+  function handleAnswer(value) {
+    if (refuseInput()) return;
+    answer(value);
   }
-  let Xe = phase !== "waiting_install";
-  let status = phase === "connected" ? "success" : phase === "failed" ? "error" : Xe ? "loading" : "pending";
+  let installDone = phase !== "waiting_install";
+  let status =
+    phase === "connected" ? "success" : phase === "failed" ? "error" : installDone ? "loading" : "pending";
   let options =
     phase === "connected"
       ? [
@@ -104,13 +106,13 @@ function ChromeInstallFlow({ payload, answer }) {
             jsxProd_default_2(Text, {
               children: [
                 jsxProd_default(StatusIcon, {
-                  status: Xe ? "success" : "loading",
+                  status: installDone ? "success" : "loading",
                   withSpace: true,
                 }),
                 "Install the extension",
               ],
             }),
-            !Xe &&
+            !installDone &&
               jsxProd_default(Box, {
                 paddingLeft: 3,
                 children: jsxProd_default(Text, {
@@ -163,9 +165,9 @@ function ChromeInstallFlow({ payload, answer }) {
             hideIndexes: true,
             selectedValue: NO_COMMITTED_ROW,
             options,
-            refuseInput: We,
-            onChange: ze,
-            onCancel: () => ze("cancelled"),
+            refuseInput,
+            onChange: handleAnswer,
+            onCancel: () => handleAnswer("cancelled"),
           },
           phase,
         ),
@@ -174,7 +176,10 @@ function ChromeInstallFlow({ payload, answer }) {
   });
 }
 //@ chunk-18hwfzwa.js:1342499-1342503 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:1342499", () => {
+  init_react_production();
+});
 //@ chunk-18hwfzwa.js:1342503-1342560 placement
 function logChromeUpsellShown() {
   logEvent("tengu_chrome_install_upsell_shown", {});
@@ -199,27 +204,27 @@ var CHROME_EXTENSION_PROMPT_OPTIONS = [
 ];
 //@ chunk-18hwfzwa.js:1342832-1344083 placement
 function ChromeSetupDialog(props) {
-  let $ = w(17);
+  let $ = useMemoCache(17);
   let { answer } = props;
-  let L;
+  let shownDeps;
   if ($[0] === MEMO_CACHE_SENTINEL) {
-    L = [];
-    $[0] = L;
-  } else L = $[0];
-  P(logChromeUpsellShown, L);
+    shownDeps = [];
+    $[0] = shownDeps;
+  } else shownDeps = $[0];
+  useEffect(logChromeUpsellShown, shownDeps);
   let inputClock = useInputClock();
-  let ke;
+  let shownAt;
   if ($[1] === MEMO_CACHE_SENTINEL) {
-    ke = Date.now();
-    $[1] = ke;
-  } else ke = $[1];
-  let Re = R(ke);
+    shownAt = Date.now();
+    $[1] = shownAt;
+  } else shownAt = $[1];
+  let shownAtRef = useRef(shownAt);
   let { refusedWithin, noteRefused, epoch } = useRefusalTracker();
-  let ze;
+  let refuseInput;
   if ($[2] !== inputClock || $[3] !== noteRefused || $[4] !== refusedWithin) {
-    ze = function Xe() {
+    refuseInput = function refuseInputFn() {
       if (
-        isWithinRecentInput(inputClock, Re.current, RECENT_INPUT_GUARD_MS_3) ||
+        isWithinRecentInput(inputClock, shownAtRef.current, RECENT_INPUT_GUARD_MS_3) ||
         refusedWithin(RECENT_INPUT_GUARD_MS_3)
       ) {
         noteRefused();
@@ -230,40 +235,40 @@ function ChromeSetupDialog(props) {
     $[2] = inputClock;
     $[3] = noteRefused;
     $[4] = refusedWithin;
-    $[5] = ze;
-  } else ze = $[5];
-  let Xe = ze;
-  let rt;
-  if ($[6] !== answer || $[7] !== Xe) {
-    rt = function At(kt) {
-      if (Xe()) {
+    $[5] = refuseInput;
+  } else refuseInput = $[5];
+  let isRefusing = refuseInput;
+  let handleAnswer;
+  if ($[6] !== answer || $[7] !== isRefusing) {
+    handleAnswer = function value(value) {
+      if (isRefusing()) {
         return;
       }
-      answer(kt);
+      answer(value);
     };
     $[6] = answer;
-    $[7] = Xe;
-    $[8] = rt;
-  } else rt = $[8];
-  let At = rt;
-  let It = settleKey(epoch, RECENT_INPUT_GUARD_MS_3);
-  let Ot;
+    $[7] = isRefusing;
+    $[8] = handleAnswer;
+  } else handleAnswer = $[8];
+  let answerValue = handleAnswer;
+  let settled = settleKey(epoch, RECENT_INPUT_GUARD_MS_3);
+  let introText;
   if ($[9] === MEMO_CACHE_SENTINEL) {
-    Ot = jsxProd_default(Text, {
+    introText = jsxProd_default(Text, {
       children:
         "This task could use your Chrome browser. The Claude in Chrome extension lets Claude navigate sites, click buttons, and fill forms in your existing session.",
     });
-    $[9] = Ot;
-  } else Ot = $[9];
+    $[9] = introText;
+  } else introText = $[9];
   let onCancel;
-  if ($[10] !== At) {
-    onCancel = () => At("cancelled");
-    $[10] = At;
+  if ($[10] !== answerValue) {
+    onCancel = () => answerValue("cancelled");
+    $[10] = answerValue;
     $[11] = onCancel;
   } else onCancel = $[11];
-  let Dt;
-  if ($[12] !== At || $[13] !== It.remountKey || $[14] !== Xe || $[15] !== onCancel) {
-    Dt = jsxProd_default(PermissionDialog_2, {
+  let dialog;
+  if ($[12] !== answerValue || $[13] !== settled.remountKey || $[14] !== isRefusing || $[15] !== onCancel) {
+    dialog = jsxProd_default(PermissionDialog_2, {
       color: "permission",
       title: "Claude wants to use your browser",
       children: jsxProd_default_2(Box, {
@@ -271,7 +276,7 @@ function ChromeSetupDialog(props) {
         marginTop: 1,
         paddingX: 1,
         children: [
-          Ot,
+          introText,
           jsxProd_default(Box, {
             marginTop: 1,
             children: jsxProd_default(
@@ -279,26 +284,29 @@ function ChromeSetupDialog(props) {
               {
                 hideIndexes: true,
                 selectedValue: NO_COMMITTED_ROW,
-                refuseInput: Xe,
+                refuseInput: isRefusing,
                 defaultFocusValue: "not_now",
                 options: CHROME_EXTENSION_PROMPT_OPTIONS,
-                onChange: At,
+                onChange: answerValue,
                 onCancel,
               },
-              It.remountKey,
+              settled.remountKey,
             ),
           }),
         ],
       }),
     });
-    $[12] = At;
-    $[13] = It.remountKey;
-    $[14] = Xe;
+    $[12] = answerValue;
+    $[13] = settled.remountKey;
+    $[14] = isRefusing;
     $[15] = onCancel;
-    $[16] = Dt;
-  } else Dt = $[16];
-  return Dt;
+    $[16] = dialog;
+  } else dialog = $[16];
+  return dialog;
 }
 //@ chunk-18hwfzwa.js:1344083-1344087 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:1344083", () => {
+  init_react_production();
+});
 export { ChromeSetupDialog, ChromeInstallFlow };

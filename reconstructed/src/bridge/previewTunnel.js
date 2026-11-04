@@ -22,31 +22,31 @@ import { getWebSocketTLSOptions } from "../utils/mtls.js";
 var NO_BODY_HTTP_STATUSES = new Set([204, 205, 304]);
 var ALLOWED_TUNNEL_METHODS = new Set(["POST", "GET", "DELETE"]);
 //@ chunk-e1rh8jg7.js:494-542 placement
-function relayPreviewRequestNoRetry(port, path, l) {
-  return relayPreviewRequestToHost("127.0.0.1", port, path, l);
+function relayPreviewRequestNoRetry(port, path, request) {
+  return relayPreviewRequestToHost("127.0.0.1", port, path, request);
 }
 //@ chunk-e1rh8jg7.js:542-593 placement
-function relayPreviewRequestWithRetry(port, path, l) {
-  return relayPreviewRequest("127.0.0.1", port, path, l, true);
+function relayPreviewRequestWithRetry(port, path, request) {
+  return relayPreviewRequest("127.0.0.1", port, path, request, true);
 }
 //@ chunk-e1rh8jg7.js:593-636 placement
-function relayPreviewRequestToHost(host, port, path, p) {
-  return relayPreviewRequest(host, port, path, p, false);
+function relayPreviewRequestToHost(host, port, path, request) {
+  return relayPreviewRequest(host, port, path, request, false);
 }
 //@ chunk-e1rh8jg7.js:636-1282 placement
 /**
  * 经预览隧道转发一次 HTTP 请求：只允许 POST/GET/DELETE，拒绝 CONNECT，剥离逐跳头。
  */
-function relayPreviewRequest(host, port, path, { method, headers, body, signal }, N) {
+function relayPreviewRequest(host, port, path, { method, headers, body, signal }, allowAnyMethod) {
   let upper = method.toUpperCase();
-  if (!N && !ALLOWED_TUNNEL_METHODS.has(upper))
+  if (!allowAnyMethod && !ALLOWED_TUNNEL_METHODS.has(upper))
     return Promise.reject(Error("only POST, GET and DELETE are relayed"));
   if (upper === "CONNECT") return Promise.reject(Error("CONNECT is not relayed"));
-  for (let A of ["content-length", "transfer-encoding", "connection"]) headers.delete(A);
-  let v = N || upper === "POST" ? body : undefined;
-  if (N && v !== undefined) headers.set("content-length", String(v.length));
+  for (let headerName of ["content-length", "transfer-encoding", "connection"]) headers.delete(headerName);
+  let requestBody = allowAnyMethod || upper === "POST" ? body : undefined;
+  if (allowAnyMethod && requestBody !== undefined) headers.set("content-length", String(requestBody.length));
   return new Promise((resolve, reject) => {
-    let k = request(
+    let tunnelRequest = request(
       {
         host,
         port,
@@ -56,48 +56,49 @@ function relayPreviewRequest(host, port, path, { method, headers, body, signal }
         signal,
         agent: false,
       },
-      (x) => {
+      (reply) => {
         try {
-          resolve(responseFromTunnelReply(x));
+          resolve(responseFromTunnelReply(reply));
         } catch (error) {
-          x.destroy();
+          reply.destroy();
           reject(error);
         }
       },
     );
-    k.once("error", reject);
-    k.once("close", () => reject(Error("closed unanswered")));
-    k.end(v);
+    tunnelRequest.once("error", reject);
+    tunnelRequest.once("close", () => reject(Error("closed unanswered")));
+    tunnelRequest.end(requestBody);
   });
 }
 //@ chunk-e1rh8jg7.js:1282-1617 placement
 /**
  * 把隧道返回的原始响应（状态码、rawHeaders、body 流）组装成 fetch Response。
  */
-function responseFromTunnelReply(n) {
-  if (n.statusCode === undefined || n.statusCode < 200) throw Error("no final status");
+function responseFromTunnelReply(reply) {
+  if (reply.statusCode === undefined || reply.statusCode < 200) throw Error("no final status");
   let headers = new Headers();
-  for (let h = 0; h + 1 < n.rawHeaders.length; h += 2) headers.append(n.rawHeaders[h], n.rawHeaders[h + 1]);
-  let l = NO_BODY_HTTP_STATUSES.has(n.statusCode ?? 0);
-  let response = new Response(l ? null : asyncIterableToStream(n), {
-    status: n.statusCode,
-    statusText: n.statusMessage,
+  for (let index = 0; index + 1 < reply.rawHeaders.length; index += 2)
+    headers.append(reply.rawHeaders[index], reply.rawHeaders[index + 1]);
+  let bodyless = NO_BODY_HTTP_STATUSES.has(reply.statusCode ?? 0);
+  let response = new Response(bodyless ? null : asyncIterableToStream(reply), {
+    status: reply.statusCode,
+    statusText: reply.statusMessage,
     headers,
   });
-  if (l) n.resume();
+  if (bodyless) reply.resume();
   return response;
 }
 //@ chunk-e1rh8jg7.js:1617-1808 placement
-function asyncIterableToStream(n) {
-  let u = n[Symbol.asyncIterator]();
+function asyncIterableToStream(iterable) {
+  let iterator = iterable[Symbol.asyncIterator]();
   return new ReadableStream({
-    async pull(l) {
-      let p = await u.next();
-      if (p.done) l.close();
-      else l.enqueue(p.value);
+    async pull(controller) {
+      let step = await iterator.next();
+      if (step.done) controller.close();
+      else controller.enqueue(step.value);
     },
     async cancel() {
-      await u.return?.();
+      await iterator.return?.();
     },
   });
 }
@@ -112,9 +113,9 @@ var STREAM_WINDOW_MS = 30000;
 var IDLE_TIMEOUT_MS = 75000;
 var WINDOW_BYTE_BUDGET = 7168 * (STREAM_WINDOW_MS / 1000);
 //@ chunk-e1rh8jg7.js:1950-2072 placement
-function parseDecimalBytes(n) {
-  let u = n instanceof Uint8Array ? Buffer.from(n).toString("latin1") : "";
-  return /^\d{1,15}$/.test(u) ? Number(u) : -1;
+function parseDecimalBytes(bytes) {
+  let text = bytes instanceof Uint8Array ? Buffer.from(bytes).toString("latin1") : "";
+  return /^\d{1,15}$/.test(text) ? Number(text) : -1;
 }
 //@ chunk-e1rh8jg7.js:2072-2288 placement
 var PREVIEW_TUNNEL_LIVENESS_WOULD_HAVE_FIRED = "preview_tunnel_liveness_would_have_fired";
@@ -135,15 +136,15 @@ function tunnelProxyUrl(apiBaseUrl) {
 }
 //@ chunk-e1rh8jg7.js:2356-2520 placement
 function getTokenSessionId(accessToken, sessionId) {
-  let l = decodeJwtPayload(accessToken);
+  let payload = decodeJwtPayload(accessToken);
   if (
-    l !== null &&
-    typeof l === "object" &&
-    "session_id" in l &&
-    typeof l.session_id === "string" &&
-    l.session_id.length > 0
+    payload !== null &&
+    typeof payload === "object" &&
+    "session_id" in payload &&
+    typeof payload.session_id === "string" &&
+    payload.session_id.length > 0
   )
-    return l.session_id;
+    return payload.session_id;
   return sessionId;
 }
 //@ chunk-e1rh8jg7.js:2520-2656 placement
@@ -153,13 +154,15 @@ var TOKEN_SESSION_MISMATCH_MESSAGE =
 //@ chunk-e1rh8jg7.js:2656-2832 placement
 function hasLoopbackHostHeader(headers, port) {
   if (!Array.isArray(headers)) return false;
-  let filtered = headers.filter((p) => typeof p?.name === "string" && p.name.toLowerCase() === "host");
+  let filtered = headers.filter(
+    (header) => typeof header?.name === "string" && header.name.toLowerCase() === "host",
+  );
   return filtered.length === 1 && filtered[0].value === `127.0.0.1:${port}`;
 }
 //@ chunk-e1rh8jg7.js:2832-2920 placement
-function sameSessionTail(n, sessionId) {
-  let l = (p) => p.slice(p.lastIndexOf("_") + 1);
-  return l(n) !== "" && l(n) === l(sessionId);
+function sameSessionTail(tokenSessionId, id) {
+  let tailOf = (id) => id.slice(id.lastIndexOf("_") + 1);
+  return tailOf(tokenSessionId) !== "" && tailOf(tokenSessionId) === tailOf(id);
 }
 //@ chunk-e1rh8jg7.js:2920-3187 placement
 function validateTunnelTarget(port, path, allowedPorts) {
@@ -176,14 +179,17 @@ function cleanCloseReason(reason) {
   return replaceControlChars(reason ?? "").trim();
 }
 //@ chunk-e1rh8jg7.js:3264-3351 placement
-function isNoLivePreviewMessage(n) {
-  return n.includes("does not have live preview enabled") || n.includes(TUNNEL_PREVIEW);
+function isNoLivePreviewMessage(message) {
+  return message.includes("does not have live preview enabled") || message.includes(TUNNEL_PREVIEW);
 }
 //@ chunk-e1rh8jg7.js:3351-3375 placement
 var TUNNEL_PREVIEW = "tunnel:preview";
 //@ chunk-e1rh8jg7.js:3375-3495 placement
-function replaceControlChars(n) {
-  return n.replace(/[\u0000-\u001f\u007f-\u009f\u200e\u200f\u2028\u2029\u202a-\u202e\u2066-\u2069]+/g, " ");
+function replaceControlChars(text) {
+  return text.replace(
+    /[\u0000-\u001f\u007f-\u009f\u200e\u200f\u2028\u2029\u202a-\u202e\u2066-\u2069]+/g,
+    " ",
+  );
 }
 //@ chunk-e1rh8jg7.js:3495-3581 placement
 function usableCloseCode(code) {
@@ -199,85 +205,89 @@ function closeReasonWithinLimit(reason) {
 //@ chunk-e1rh8jg7.js:3656-3898 placement
 function probeLocalPort(port) {
   return new Promise((resolve) => {
-    let l = false;
-    let p = (R) => {
-      if (l) return;
-      l = true;
+    let settled = false;
+    let finish = (reachable) => {
+      if (settled) return;
+      settled = true;
       connection.destroy();
-      resolve(R);
+      resolve(reachable);
     };
     let connection = net.createConnection({
       host: "127.0.0.1",
       port,
     });
     connection.setTimeout(TUNNEL_CONNECT_TIMEOUT_MS);
-    connection.once("connect", () => p(true));
-    connection.once("error", () => p(false));
-    connection.once("timeout", () => p(false));
+    connection.once("connect", () => finish(true));
+    connection.once("error", () => finish(false));
+    connection.once("timeout", () => finish(false));
   });
 }
 //@ chunk-e1rh8jg7.js:3898-15570 placement
 /**
  * 建立到 CCR TunnelService 的预览隧道（gRPC 流），管理重连、请求表与日志前缀 [bridge:preview-tunnel]。
  */
-function createPreviewTunnel(n) {
-  let u = tunnelProxyUrl(n.apiBaseUrl);
-  let { accessToken, sessionId } = n;
-  let h = false;
-  let R = false;
-  let w = null;
-  let N = null;
-  let P = null;
-  let v = null;
-  let A = RECONNECT_BASE_DELAY_MS;
-  let C = 0;
-  let k = 0;
-  let x = false;
-  let M = 0;
-  let U = 0;
-  let K = 0;
-  let j = 0;
-  let V = false;
-  let F = 0;
-  let H = false;
-  let X = false;
-  let L = new Map();
-  let S = new Map();
-  let g = (r, level = "info") =>
-    logForDebugging(`[bridge:preview-tunnel] ${r}`, {
+function createPreviewTunnel(options) {
+  let relayUrl = tunnelProxyUrl(options.apiBaseUrl);
+  let { accessToken, sessionId } = options;
+  let wrongSessionReported = false;
+  let stopped = false;
+  let socket = null;
+  let livenessTimer = null;
+  let reconnectTimer = null;
+  let openTimer = null;
+  let reconnectDelayMs = RECONNECT_BASE_DELAY_MS;
+  let connectedAt = 0;
+  let lastPeerActivityAt = 0;
+  let sawPong = false;
+  let unansweredPings = 0;
+  let bytesSent = 0;
+  let bytesAtWindowStart = 0;
+  let bestPeerAckBytes = 0;
+  let wouldHaveFiredLogged = false;
+  let consecutiveFailures = 0;
+  let peerActive = false;
+  let policyStopLogged = false;
+  let inflightHttp = new Map();
+  let wsTunnels = new Map();
+  let log = (message, level = "info") =>
+    logForDebugging(`[bridge:preview-tunnel] ${message}`, {
       level,
     });
-  function O(r) {
-    let e = w;
-    if (!e || e.readyState !== WebSocket.OPEN) return;
+  function sendFrame(frame) {
+    let activeSocket = socket;
+    if (!activeSocket || activeSocket.readyState !== WebSocket.OPEN) return;
     try {
-      let o = jsonStringify(r);
-      e.send(o);
-      U += o.length;
+      let json = jsonStringify(frame);
+      activeSocket.send(json);
+      bytesSent += json.length;
     } catch (error) {
-      g(`send failed: ${errorMessage(error)}`, "error");
+      log(`send failed: ${errorMessage(error)}`, "error");
     }
   }
-  function G(requestId, errorMessage) {
-    O({
+  function sendHttpError(requestId, errorMessage) {
+    sendFrame({
       httpError: {
         requestId,
         errorMessage,
       },
     });
   }
-  function re(signal) {
-    let e = w;
-    if (!e || e.readyState !== WebSocket.OPEN || e.bufferedAmount <= TUNNEL_MAX_BUFFERED_BYTES)
+  function awaitBackpressure(signal) {
+    let activeSocket = socket;
+    if (
+      !activeSocket ||
+      activeSocket.readyState !== WebSocket.OPEN ||
+      activeSocket.bufferedAmount <= TUNNEL_MAX_BUFFERED_BYTES
+    )
       return Promise.resolve();
     return new Promise((resolve) => {
       let interval = setInterval(() => {
         if (
-          R ||
+          stopped ||
           signal.aborted ||
-          w !== e ||
-          e.readyState !== WebSocket.OPEN ||
-          e.bufferedAmount <= TUNNEL_BACKPRESSURE_BYTES
+          socket !== activeSocket ||
+          activeSocket.readyState !== WebSocket.OPEN ||
+          activeSocket.bufferedAmount <= TUNNEL_BACKPRESSURE_BYTES
         ) {
           clearInterval(interval);
           resolve();
@@ -285,19 +295,22 @@ function createPreviewTunnel(n) {
       }, TUNNEL_LIVENESS_INTERVAL_MS);
     });
   }
-  async function Se(requestId, e, o) {
+  async function handleControlStatus(requestId, httpRequest, unlistedPortProbe) {
     let port = 0;
     try {
-      let T = e.body !== undefined && e.body !== "" ? Buffer.from(e.body, "base64").toString("utf8") : "{}";
-      let b = jsonParse(T);
-      if (b !== null && typeof b.port === "number") port = b.port;
+      let rawBody =
+        httpRequest.body !== undefined && httpRequest.body !== ""
+          ? Buffer.from(httpRequest.body, "base64").toString("utf8")
+          : "{}";
+      let parsed = jsonParse(rawBody);
+      if (parsed !== null && typeof parsed.port === "number") port = parsed.port;
     } catch (error) {
-      g(`control/status: bad body: ${errorMessage(error)}`, "error");
+      log(`control/status: bad body: ${errorMessage(error)}`, "error");
     }
-    let i = Number.isInteger(port) && port >= 1024 && port <= 65535 && n.allowedPorts.has(port);
-    let E = i ? await probeLocalPort(port) : false;
-    g(`control/status port=${port} permitted=${i} listening=${E}`);
-    O({
+    let permitted = Number.isInteger(port) && port >= 1024 && port <= 65535 && options.allowedPorts.has(port);
+    let listening = permitted ? await probeLocalPort(port) : false;
+    log(`control/status port=${port} permitted=${permitted} listening=${listening}`);
+    sendFrame({
       httpHeaders: {
         requestId,
         statusCode: 200,
@@ -311,79 +324,82 @@ function createPreviewTunnel(n) {
         sequenceNumber: 0,
       },
     });
-    let q =
+    let resultLine =
       jsonStringify({
         type: "result",
         status: 200,
         data: {
-          listening: E,
+          listening,
           port,
         },
       }) +
       `
 `;
-    O({
+    sendFrame({
       httpChunk: {
         requestId,
-        data: Buffer.from(q, "utf8").toString("base64"),
+        data: Buffer.from(resultLine, "utf8").toString("base64"),
         isFinal: true,
         sequenceNumber: 1,
       },
     });
-    if (!i && o && Number.isInteger(port) && port >= 1024 && port <= 65535)
+    if (!permitted && unlistedPortProbe && Number.isInteger(port) && port >= 1024 && port <= 65535)
       Promise.resolve()
-        .then(() => (R ? undefined : n.onUnlistedPortProbed?.(port)))
-        .catch((error) => g(`control/status: onUnlistedPortProbed failed: ${errorMessage(error)}`, "error"));
+        .then(() => (stopped ? undefined : options.onUnlistedPortProbed?.(port)))
+        .catch((error) =>
+          log(`control/status: onUnlistedPortProbed failed: ${errorMessage(error)}`, "error"),
+        );
   }
-  async function Te(httpRequest, e) {
+  async function handleHttpRequest(httpRequest, unlistedPortProbe) {
     let requestId = httpRequest.requestId;
     if (!requestId) return;
     if (
-      n.toolServer === undefined &&
+      options.toolServer === undefined &&
       httpRequest.port === 0 &&
       httpRequest.path === TUNNEL_CONTROL_STATUS_PATH &&
       (httpRequest.method ?? "").toUpperCase() === "POST"
     ) {
-      await Se(requestId, httpRequest, e);
+      await handleControlStatus(requestId, httpRequest, unlistedPortProbe);
       return;
     }
-    let s = validateTunnelTarget(httpRequest.port, httpRequest.path, n.allowedPorts);
-    if (s) {
-      G(requestId, s);
+    let refusal = validateTunnelTarget(httpRequest.port, httpRequest.path, options.allowedPorts);
+    if (refusal) {
+      sendHttpError(requestId, refusal);
       return;
     }
     let { port, path } = httpRequest;
     let method = httpRequest.method ?? "GET";
-    if (port === n.toolServer?.port && !hasLoopbackHostHeader(httpRequest.headers, port)) {
-      G(requestId, `Host is not 127.0.0.1:${port}, which CCR's route to the tool server sends`);
+    if (port === options.toolServer?.port && !hasLoopbackHostHeader(httpRequest.headers, port)) {
+      sendHttpError(requestId, `Host is not 127.0.0.1:${port}, which CCR's route to the tool server sends`);
       return;
     }
     let abortController = new AbortController();
-    L.set(requestId, abortController);
-    let timer = setTimeout((f) => f.abort(), TUNNEL_ABORT_TIMEOUT_MS, abortController);
-    let W;
+    inflightHttp.set(requestId, abortController);
+    let timer = setTimeout((controller) => controller.abort(), TUNNEL_ABORT_TIMEOUT_MS, abortController);
+    let response;
     try {
       let headers = new Headers();
-      for (let I of httpRequest.headers ?? []) {
-        if (!I.name || SENSITIVE_HEADER_NAMES.has(I.name.toLowerCase())) continue;
-        headers.append(I.name, I.value ?? "");
+      for (let header of httpRequest.headers ?? []) {
+        if (!header.name || SENSITIVE_HEADER_NAMES.has(header.name.toLowerCase())) continue;
+        headers.append(header.name, header.value ?? "");
       }
       headers.set("Host", `127.0.0.1:${port}`);
-      if (port === n.toolServer?.port) headers.set("Authorization", `Bearer ${n.toolServer.authToken}`);
+      if (port === options.toolServer?.port)
+        headers.set("Authorization", `Bearer ${options.toolServer.authToken}`);
       let body =
         httpRequest.body !== undefined && httpRequest.body !== ""
           ? Buffer.from(httpRequest.body, "base64")
           : undefined;
-      if (port === n.toolServer?.port)
-        W = await relayPreviewRequestNoRetry(port, path, {
+      if (port === options.toolServer?.port)
+        response = await relayPreviewRequestNoRetry(port, path, {
           method,
           headers,
           body,
           signal: abortController.signal,
         });
       else {
-        let I = new URL(`http://127.0.0.1:${port}${path}`);
-        W = await relayPreviewRequestWithRetry(port, I.pathname + I.search, {
+        let url = new URL(`http://127.0.0.1:${port}${path}`);
+        response = await relayPreviewRequestWithRetry(port, url.pathname + url.search, {
           method,
           headers,
           body,
@@ -392,140 +408,140 @@ function createPreviewTunnel(n) {
       }
     } catch (error) {
       clearTimeout(timer);
-      L.delete(requestId);
-      G(requestId, errorMessage(error));
+      inflightHttp.delete(requestId);
+      sendHttpError(requestId, errorMessage(error));
       return;
     }
     clearTimeout(timer);
-    let m = [];
-    W.headers.forEach((value, name) => {
-      m.push({
+    let responseHeaders = [];
+    response.headers.forEach((value, name) => {
+      responseHeaders.push({
         name,
         value,
       });
     });
-    let c = 0;
-    O({
+    let sequenceNumber = 0;
+    sendFrame({
       httpHeaders: {
         requestId,
-        statusCode: W.status,
-        statusText: W.statusText || String(W.status),
-        headers: m,
-        sequenceNumber: c,
+        statusCode: response.status,
+        statusText: response.statusText || String(response.status),
+        headers: responseHeaders,
+        sequenceNumber,
       },
     });
-    c++;
+    sequenceNumber++;
     try {
-      if (W.body) {
-        let reader = W.body.getReader();
+      if (response.body) {
+        let reader = response.body.getReader();
         for (;;) {
-          await re(abortController.signal);
+          await awaitBackpressure(abortController.signal);
           if (abortController.signal.aborted) {
             await reader.cancel();
             break;
           }
-          let y = await reader.read();
-          if (y.value && y.value.length > 0)
-            for (let I = 0; I < y.value.length; I += TUNNEL_READ_CHUNK_BYTES) {
-              let chunk = y.value.subarray(I, I + TUNNEL_READ_CHUNK_BYTES);
-              O({
+          let read = await reader.read();
+          if (read.value && read.value.length > 0)
+            for (let offset = 0; offset < read.value.length; offset += TUNNEL_READ_CHUNK_BYTES) {
+              let chunk = read.value.subarray(offset, offset + TUNNEL_READ_CHUNK_BYTES);
+              sendFrame({
                 httpChunk: {
                   requestId,
                   data: Buffer.from(chunk).toString("base64"),
                   isFinal: false,
-                  sequenceNumber: c,
+                  sequenceNumber,
                 },
               });
-              c++;
+              sequenceNumber++;
             }
-          if (y.done) break;
+          if (read.done) break;
           if (abortController.signal.aborted) {
             await reader.cancel();
             break;
           }
         }
       }
-      O({
+      sendFrame({
         httpChunk: {
           requestId,
           data: "",
           isFinal: true,
-          sequenceNumber: c,
+          sequenceNumber,
         },
       });
     } catch (error) {
-      G(requestId, `error reading response body: ${errorMessage(error)}`);
+      sendHttpError(requestId, `error reading response body: ${errorMessage(error)}`);
     } finally {
-      L.delete(requestId);
+      inflightHttp.delete(requestId);
     }
   }
-  function B(tunnelId, errorMessage) {
-    O({
+  function sendWsError(tunnelId, errorMessage) {
+    sendFrame({
       wsError: {
         tunnelId,
         errorMessage,
       },
     });
   }
-  function D(tunnelId, e) {
-    let o = S.get(tunnelId);
-    if (!o) return;
-    S.delete(tunnelId);
-    if (o.dialTimer) {
-      clearTimeout(o.dialTimer);
-      o.dialTimer = null;
+  function closeTunnel(tunnelId, outcome) {
+    let tunnel = wsTunnels.get(tunnelId);
+    if (!tunnel) return;
+    wsTunnels.delete(tunnelId);
+    if (tunnel.dialTimer) {
+      clearTimeout(tunnel.dialTimer);
+      tunnel.dialTimer = null;
     }
-    o.abort.abort();
-    o.pending.length = 0;
-    if (!o.terminated && e) {
-      o.terminated = true;
-      if ("error" in e) B(tunnelId, e.error);
+    tunnel.abort.abort();
+    tunnel.pending.length = 0;
+    if (!tunnel.terminated && outcome) {
+      tunnel.terminated = true;
+      if ("error" in outcome) sendWsError(tunnelId, outcome.error);
       else
-        O({
+        sendFrame({
           wsClose: {
             tunnelId,
-            ...e.close,
+            ...outcome.close,
           },
         });
     }
     try {
-      o.sock.close();
+      tunnel.sock.close();
     } catch {}
   }
-  async function we(tunnelId) {
-    let e = S.get(tunnelId);
-    if (!e || e.flushing) return;
-    e.flushing = true;
+  async function flushTunnel(tunnelId) {
+    let tunnel = wsTunnels.get(tunnelId);
+    if (!tunnel || tunnel.flushing) return;
+    tunnel.flushing = true;
     try {
-      while (e.pending.length > 0 && S.get(tunnelId) === e) {
-        await re(e.abort.signal);
-        if (e.abort.signal.aborted || S.get(tunnelId) !== e) return;
-        let o = e.pending.shift();
-        if (o) O(o);
+      while (tunnel.pending.length > 0 && wsTunnels.get(tunnelId) === tunnel) {
+        await awaitBackpressure(tunnel.abort.signal);
+        if (tunnel.abort.signal.aborted || wsTunnels.get(tunnelId) !== tunnel) return;
+        let frame = tunnel.pending.shift();
+        if (frame) sendFrame(frame);
       }
     } finally {
-      e.flushing = false;
+      tunnel.flushing = false;
     }
   }
-  function _e(wsOpen) {
+  function openTunnel(wsOpen) {
     let tunnelId = wsOpen.tunnelId;
     if (!tunnelId) return;
-    if (!n.isHmrEnabled?.()) {
-      B(tunnelId, "WebSocket tunnel is not enabled for this session");
+    if (!options.isHmrEnabled?.()) {
+      sendWsError(tunnelId, "WebSocket tunnel is not enabled for this session");
       return;
     }
-    D(tunnelId);
-    if (S.size >= MAX_TUNNEL_RECONNECT_ATTEMPTS) {
-      B(tunnelId, `too many concurrent WebSocket tunnels (max ${MAX_TUNNEL_RECONNECT_ATTEMPTS})`);
+    closeTunnel(tunnelId);
+    if (wsTunnels.size >= MAX_TUNNEL_RECONNECT_ATTEMPTS) {
+      sendWsError(tunnelId, `too many concurrent WebSocket tunnels (max ${MAX_TUNNEL_RECONNECT_ATTEMPTS})`);
       return;
     }
-    let o = validateTunnelTarget(wsOpen.port, wsOpen.path, n.allowedPorts);
-    if (o) {
-      B(tunnelId, o);
+    let refusal = validateTunnelTarget(wsOpen.port, wsOpen.path, options.allowedPorts);
+    if (refusal) {
+      sendWsError(tunnelId, refusal);
       return;
     }
     let { port, path } = wsOpen;
-    let E = new Set([
+    let skippedHeaders = new Set([
       "host",
       "connection",
       "upgrade",
@@ -534,30 +550,30 @@ function createPreviewTunnel(n) {
       "sec-websocket-protocol",
       "sec-websocket-extensions",
     ]);
-    let q = {};
-    for (let c of wsOpen.headers ?? []) {
-      if (!c.name) continue;
-      let f = c.value ?? "";
-      if (/[\r\n\0]/.test(c.name) || /[\r\n\0]/.test(f)) continue;
-      let lower = c.name.toLowerCase();
-      if (SENSITIVE_HEADER_NAMES.has(lower) || E.has(lower)) continue;
-      q[c.name] = f;
+    let dialHeaders = {};
+    for (let header of wsOpen.headers ?? []) {
+      if (!header.name) continue;
+      let value = header.value ?? "";
+      if (/[\r\n\0]/.test(header.name) || /[\r\n\0]/.test(value)) continue;
+      let lower = header.name.toLowerCase();
+      if (SENSITIVE_HEADER_NAMES.has(lower) || skippedHeaders.has(lower)) continue;
+      dialHeaders[header.name] = value;
     }
-    let protocols = (wsOpen.protocols ?? []).filter((c) => !/[\r\n\0]/.test(c));
-    let b;
+    let protocols = (wsOpen.protocols ?? []).filter((protocol) => !/[\r\n\0]/.test(protocol));
+    let socket;
     try {
-      b = new globalThis.WebSocket(`ws://127.0.0.1:${port}${path}`, {
-        headers: q,
+      socket = new globalThis.WebSocket(`ws://127.0.0.1:${port}${path}`, {
+        headers: dialHeaders,
         protocols,
       });
     } catch (error) {
-      B(tunnelId, `WebSocket dial failed: ${errorMessage(error)}`);
+      sendWsError(tunnelId, `WebSocket dial failed: ${errorMessage(error)}`);
       return;
     }
-    b.binaryType = "arraybuffer";
+    socket.binaryType = "arraybuffer";
     let abortController = new AbortController();
-    let m = {
-      sock: b,
+    let tunnel = {
+      sock: socket,
       abort: abortController,
       dialTimer: null,
       nextSeq: 0,
@@ -565,23 +581,23 @@ function createPreviewTunnel(n) {
       flushing: false,
       terminated: false,
     };
-    S.set(tunnelId, m);
-    m.dialTimer = setTimeout(
-      (c) => {
-        c.abort.abort();
+    wsTunnels.set(tunnelId, tunnel);
+    tunnel.dialTimer = setTimeout(
+      (tunnel) => {
+        tunnel.abort.abort();
         try {
-          c.sock.close();
+          tunnel.sock.close();
         } catch {}
       },
       TUNNEL_REQUEST_TIMEOUT_MS,
-      m,
+      tunnel,
     );
     abortController.signal.addEventListener(
       "abort",
       () => {
-        if (S.get(tunnelId) !== m) return;
-        b.onopen = b.onmessage = b.onerror = b.onclose = null;
-        D(tunnelId, {
+        if (wsTunnels.get(tunnelId) !== tunnel) return;
+        socket.onopen = socket.onmessage = socket.onerror = socket.onclose = null;
+        closeTunnel(tunnelId, {
           error: `WebSocket dial to 127.0.0.1:${port} timed out`,
         });
       },
@@ -589,243 +605,248 @@ function createPreviewTunnel(n) {
         once: true,
       },
     );
-    b.onopen = () => {
-      if (m.dialTimer) {
-        clearTimeout(m.dialTimer);
-        m.dialTimer = null;
+    socket.onopen = () => {
+      if (tunnel.dialTimer) {
+        clearTimeout(tunnel.dialTimer);
+        tunnel.dialTimer = null;
       }
-      if (S.get(tunnelId) !== m) return;
-      O({
+      if (wsTunnels.get(tunnelId) !== tunnel) return;
+      sendFrame({
         wsOpened: {
           tunnelId,
-          protocol: b.protocol ?? "",
+          protocol: socket.protocol ?? "",
         },
       });
-      g(`ws tunnel opened id=${tunnelId} port=${port}`);
+      log(`ws tunnel opened id=${tunnelId} port=${port}`);
     };
-    b.onmessage = (c) => {
-      if (S.get(tunnelId) !== m || m.terminated) return;
-      let f;
-      let y;
-      if (typeof c.data === "string") {
-        f = Buffer.from(c.data, "utf8").toString("base64");
-        y = false;
-      } else if (c.data instanceof ArrayBuffer) {
-        f = Buffer.from(c.data).toString("base64");
-        y = true;
+    socket.onmessage = (event) => {
+      if (wsTunnels.get(tunnelId) !== tunnel || tunnel.terminated) return;
+      let dataB64;
+      let isBinary;
+      if (typeof event.data === "string") {
+        dataB64 = Buffer.from(event.data, "utf8").toString("base64");
+        isBinary = false;
+      } else if (event.data instanceof ArrayBuffer) {
+        dataB64 = Buffer.from(event.data).toString("base64");
+        isBinary = true;
       } else {
-        g(`ws tunnel ${tunnelId}: dropping unsupported message type`, "error");
+        log(`ws tunnel ${tunnelId}: dropping unsupported message type`, "error");
         return;
       }
-      m.nextSeq++;
-      m.pending.push({
+      tunnel.nextSeq++;
+      tunnel.pending.push({
         wsMessage: {
           tunnelId,
-          data: f,
-          isBinary: y,
-          sequenceNumber: m.nextSeq,
+          data: dataB64,
+          isBinary,
+          sequenceNumber: tunnel.nextSeq,
         },
       });
-      if (m.pending.length > MAX_TUNNEL_HEADER_BYTES) {
-        D(tunnelId, {
+      if (tunnel.pending.length > MAX_TUNNEL_HEADER_BYTES) {
+        closeTunnel(tunnelId, {
           error: "backpressure queue overflow; closing WebSocket tunnel",
         });
         return;
       }
-      we(tunnelId).catch((error) => g(`ws flush failed: ${errorMessage(error)}`, "error"));
+      flushTunnel(tunnelId).catch((error) => log(`ws flush failed: ${errorMessage(error)}`, "error"));
     };
-    b.onerror = () => {};
-    b.onclose = (c) => {
-      let f = m.dialTimer != null;
-      if (m.dialTimer) {
-        clearTimeout(m.dialTimer);
-        m.dialTimer = null;
+    socket.onerror = () => {};
+    socket.onclose = (closeEvent) => {
+      let dialPending = tunnel.dialTimer != null;
+      if (tunnel.dialTimer) {
+        clearTimeout(tunnel.dialTimer);
+        tunnel.dialTimer = null;
       }
-      if (S.get(tunnelId) !== m) return;
-      if (f) {
-        D(tunnelId, {
-          error: `WebSocket dial to 127.0.0.1:${port} failed (close code ${c.code})`,
+      if (wsTunnels.get(tunnelId) !== tunnel) return;
+      if (dialPending) {
+        closeTunnel(tunnelId, {
+          error: `WebSocket dial to 127.0.0.1:${port} failed (close code ${closeEvent.code})`,
         });
         return;
       }
-      D(tunnelId, {
+      closeTunnel(tunnelId, {
         close: {
-          code: usableCloseCode(c.code),
-          reason: closeReasonWithinLimit(c.reason),
+          code: usableCloseCode(closeEvent.code),
+          reason: closeReasonWithinLimit(closeEvent.reason),
         },
       });
     };
   }
-  function ve(wsMessage) {
+  function wsMessage(wsMessage) {
     let tunnelId = wsMessage.tunnelId;
     if (!tunnelId) return;
-    let o = S.get(tunnelId);
-    if (!o || o.sock.readyState !== WebSocket.OPEN) return;
+    let tunnel = wsTunnels.get(tunnelId);
+    if (!tunnel || tunnel.sock.readyState !== WebSocket.OPEN) return;
     try {
       let buffer = Buffer.from(wsMessage.data ?? "", "base64");
-      if (wsMessage.isBinary) o.sock.send(buffer);
-      else o.sock.send(buffer.toString("utf8"));
+      if (wsMessage.isBinary) tunnel.sock.send(buffer);
+      else tunnel.sock.send(buffer.toString("utf8"));
     } catch (error) {
-      D(tunnelId, {
+      closeTunnel(tunnelId, {
         error: `write to local WebSocket failed: ${errorMessage(error)}`,
       });
     }
   }
-  function Ee(wsClose) {
+  function wsClose(wsClose) {
     let tunnelId = wsClose.tunnelId;
     if (!tunnelId) return;
-    let o = S.get(tunnelId);
-    if (!o) return;
-    o.terminated = true;
-    S.delete(tunnelId);
-    if (o.dialTimer) {
-      clearTimeout(o.dialTimer);
-      o.dialTimer = null;
+    let tunnel = wsTunnels.get(tunnelId);
+    if (!tunnel) return;
+    tunnel.terminated = true;
+    wsTunnels.delete(tunnelId);
+    if (tunnel.dialTimer) {
+      clearTimeout(tunnel.dialTimer);
+      tunnel.dialTimer = null;
     }
-    o.abort.abort();
-    o.pending.length = 0;
+    tunnel.abort.abort();
+    tunnel.pending.length = 0;
     try {
-      o.sock.close(usableCloseCode(wsClose.code), closeReasonWithinLimit(wsClose.reason));
+      tunnel.sock.close(usableCloseCode(wsClose.code), closeReasonWithinLimit(wsClose.reason));
     } catch {
       try {
-        o.sock.close();
+        tunnel.sock.close();
       } catch {}
     }
   }
-  function oe() {
-    for (let key of [...S.keys()]) D(key);
+  function closeAllTunnels() {
+    for (let key of [...wsTunnels.keys()]) closeTunnel(key);
   }
-  function Ie(r) {
-    let e;
+  function handleRequest(raw) {
+    let request;
     try {
-      e = jsonParse(r);
+      request = jsonParse(raw);
     } catch (error) {
-      g(`failed to parse tunnel request: ${errorMessage(error)}`, "error");
+      log(`failed to parse tunnel request: ${errorMessage(error)}`, "error");
       return;
     }
-    if (typeof e !== "object" || e === null) {
-      g("tunnel request is not an object", "error");
+    if (typeof request !== "object" || request === null) {
+      log("tunnel request is not an object", "error");
       return;
     }
-    let o = n.toolServer !== undefined || n.refusesOtherSessions === true;
-    let s = typeof e.sessionId === "string" && sameSessionTail(e.sessionId, sessionId);
-    if (!s) {
-      if (!h) {
-        h = true;
-        g(`${WRONG_SESSION_MESSAGE}; ${o ? "refused" : "served all the same"}`, "error");
+    let enforceSession = options.toolServer !== undefined || options.refusesOtherSessions === true;
+    let sameSession = typeof request.sessionId === "string" && sameSessionTail(request.sessionId, sessionId);
+    if (!sameSession) {
+      if (!wrongSessionReported) {
+        wrongSessionReported = true;
+        log(`${WRONG_SESSION_MESSAGE}; ${enforceSession ? "refused" : "served all the same"}`, "error");
         logEvent("tengu_preview_tunnel_other_session", {
-          enforce: o,
+          enforce: enforceSession,
         });
       }
-      if (o) {
-        if (e.httpRequest?.requestId) G(e.httpRequest.requestId, WRONG_SESSION_MESSAGE);
-        else if (e.wsOpen?.tunnelId) B(e.wsOpen.tunnelId, WRONG_SESSION_MESSAGE);
+      if (enforceSession) {
+        if (request.httpRequest?.requestId)
+          sendHttpError(request.httpRequest.requestId, WRONG_SESSION_MESSAGE);
+        else if (request.wsOpen?.tunnelId) sendWsError(request.wsOpen.tunnelId, WRONG_SESSION_MESSAGE);
         return;
       }
     }
-    if (e.httpRequest)
-      Te(e.httpRequest, s).catch((error) => g(`handleHttpRequest failed: ${errorMessage(error)}`, "error"));
-    else if (e.httpCancel) {
-      let requestId = e.httpCancel.requestId;
+    if (request.httpRequest)
+      handleHttpRequest(request.httpRequest, sameSession).catch((error) =>
+        log(`handleHttpRequest failed: ${errorMessage(error)}`, "error"),
+      );
+    else if (request.httpCancel) {
+      let requestId = request.httpCancel.requestId;
       if (requestId) {
-        L.get(requestId)?.abort();
-        L.delete(requestId);
+        inflightHttp.get(requestId)?.abort();
+        inflightHttp.delete(requestId);
       }
-    } else if (e.wsOpen) _e(e.wsOpen);
-    else if (e.wsMessage) ve(e.wsMessage);
-    else if (e.wsClose) Ee(e.wsClose);
-    else if (e.ptyOpen)
-      O({
+    } else if (request.wsOpen) openTunnel(request.wsOpen);
+    else if (request.wsMessage) wsMessage(request.wsMessage);
+    else if (request.wsClose) wsClose(request.wsClose);
+    else if (request.ptyOpen)
+      sendFrame({
         ptyError: {
-          tunnelId: e.ptyOpen.tunnelId ?? "",
+          tunnelId: request.ptyOpen.tunnelId ?? "",
           errorMessage: "PTY tunnel not supported by bridge worker",
         },
       });
   }
-  function J(r, e) {
-    if (R) return;
-    R = true;
-    if (P) {
-      clearTimeout(P);
-      P = null;
+  function failPermanently(message, kind) {
+    if (stopped) return;
+    stopped = true;
+    if (reconnectTimer) {
+      clearTimeout(reconnectTimer);
+      reconnectTimer = null;
     }
-    g(`permanent failure (${e}): ${r}`, "error");
+    log(`permanent failure (${kind}): ${message}`, "error");
     logEvent("tengu_preview_tunnel_permanent_failure", {
-      consecutive_failures: F,
-      policy_refusal: e === "policy" && r !== TOKEN_SESSION_MISMATCH_MESSAGE,
-      own_refusal: r === TOKEN_SESSION_MISMATCH_MESSAGE,
+      consecutive_failures: consecutiveFailures,
+      policy_refusal: kind === "policy" && message !== TOKEN_SESSION_MISMATCH_MESSAGE,
+      own_refusal: message === TOKEN_SESSION_MISMATCH_MESSAGE,
     });
-    n.onPermanentFailure?.(r, e);
+    options.onPermanentFailure?.(message, kind);
   }
-  function Q() {
-    F++;
-    if (n.onPermanentFailure && F >= MAX_RECONNECT_ATTEMPTS) {
-      J(
-        `${F} consecutive failed or short-lived ` + "connections \u2014 relay unreachable or refusing",
+  function noteFailure() {
+    consecutiveFailures++;
+    if (options.onPermanentFailure && consecutiveFailures >= MAX_RECONNECT_ATTEMPTS) {
+      failPermanently(
+        `${consecutiveFailures} consecutive failed or short-lived ` +
+          "connections \u2014 relay unreachable or refusing",
         "exhausted",
       );
       return true;
     }
     return false;
   }
-  function Y() {
-    if (R) return;
-    if (C > 0 && Date.now() - C > RECONNECT_MAX_DELAY_MS) A = RECONNECT_BASE_DELAY_MS;
-    C = 0;
-    H = false;
-    let r = A + Math.floor(Math.random() * (A / 2));
-    g(`reconnecting in ${r}ms`);
-    P = setTimeout(ie, r);
-    A = Math.min(A * 2, RECONNECT_MAX_DELAY_MS);
+  function scheduleReconnect() {
+    if (stopped) return;
+    if (connectedAt > 0 && Date.now() - connectedAt > RECONNECT_MAX_DELAY_MS)
+      reconnectDelayMs = RECONNECT_BASE_DELAY_MS;
+    connectedAt = 0;
+    peerActive = false;
+    let delayMs = reconnectDelayMs + Math.floor(Math.random() * (reconnectDelayMs / 2));
+    log(`reconnecting in ${delayMs}ms`);
+    reconnectTimer = setTimeout(connect, delayMs);
+    reconnectDelayMs = Math.min(reconnectDelayMs * 2, RECONNECT_MAX_DELAY_MS);
   }
-  function se(r) {
-    if (v) {
-      clearTimeout(v);
-      v = null;
+  function teardownSocket(closingSocket) {
+    if (openTimer) {
+      clearTimeout(openTimer);
+      openTimer = null;
     }
-    if (N) {
-      clearInterval(N);
-      N = null;
+    if (livenessTimer) {
+      clearInterval(livenessTimer);
+      livenessTimer = null;
     }
-    for (let e of L.values()) e.abort();
-    L.clear();
-    oe();
-    if (w === r) w = null;
+    for (let controller of inflightHttp.values()) controller.abort();
+    inflightHttp.clear();
+    closeAllTunnels();
+    if (socket === closingSocket) socket = null;
   }
-  function Z(r, e) {
-    g(`${e}; forcing reconnect`, "error");
-    r.onopen = r.onmessage = r.onerror = r.onclose = null;
-    se(r);
+  function forceReconnectSocket(socket, reason) {
+    log(`${reason}; forcing reconnect`, "error");
+    socket.onopen = socket.onmessage = socket.onerror = socket.onclose = null;
+    teardownSocket(socket);
     try {
-      let terminate = r.terminate;
-      if (typeof terminate === "function") terminate.call(r);
-      else r.close();
+      let terminate = socket.terminate;
+      if (typeof terminate === "function") terminate.call(socket);
+      else socket.close();
     } catch {}
-    Y();
+    scheduleReconnect();
   }
-  function ie() {
-    if (R) return;
-    P = null;
-    let tokenSessionId = getTokenSessionId(accessToken, n.sessionId);
-    if (n.refusesOtherSessions === true && !sameSessionTail(tokenSessionId, n.sessionId)) {
-      J(TOKEN_SESSION_MISMATCH_MESSAGE, "policy");
+  function connect() {
+    if (stopped) return;
+    reconnectTimer = null;
+    let tokenSessionId = getTokenSessionId(accessToken, options.sessionId);
+    if (options.refusesOtherSessions === true && !sameSessionTail(tokenSessionId, options.sessionId)) {
+      failPermanently(TOKEN_SESSION_MISMATCH_MESSAGE, "policy");
       return;
     }
     sessionId = tokenSessionId;
     let headers = {
       Authorization: `Bearer ${accessToken}`,
       "x-session-id": sessionId,
-      ...(n.toolServer && {
+      ...(options.toolServer && {
         "x-tunnel-peer": "tool-server",
       }),
     };
-    let o;
+    let newSocket;
     try {
-      o = new globalThis.WebSocket(u, {
+      newSocket = new globalThis.WebSocket(relayUrl, {
         headers,
-        proxy: getWebSocketProxyUrl(u),
+        proxy: getWebSocketProxyUrl(relayUrl),
         tls:
-          n.toolServer || n.refusesOtherSessions === true
+          options.toolServer || options.refusesOtherSessions === true
             ? {
                 ...getWebSocketTLSOptions(undefined),
                 rejectUnauthorized: true,
@@ -833,136 +854,146 @@ function createPreviewTunnel(n) {
             : getWebSocketTLSOptions(undefined) || undefined,
       });
     } catch (error) {
-      g(`WebSocket construct failed: ${errorMessage(error)}`, "error");
-      if (Q()) return;
-      Y();
+      log(`WebSocket construct failed: ${errorMessage(error)}`, "error");
+      if (noteFailure()) return;
+      scheduleReconnect();
       return;
     }
-    w = o;
-    v = setTimeout(
-      (s) => {
-        g("open timeout; retrying", "error");
-        s.onopen = s.onmessage = s.onerror = s.onclose = null;
+    socket = newSocket;
+    openTimer = setTimeout(
+      (timedOutSocket) => {
+        log("open timeout; retrying", "error");
+        timedOutSocket.onopen =
+          timedOutSocket.onmessage =
+          timedOutSocket.onerror =
+          timedOutSocket.onclose =
+            null;
         try {
-          s.close();
+          timedOutSocket.close();
         } catch {}
-        if (w === s) w = null;
-        if (Q()) return;
-        Y();
+        if (socket === timedOutSocket) socket = null;
+        if (noteFailure()) return;
+        scheduleReconnect();
       },
       REQUEST_TIMEOUT_MS,
-      o,
+      newSocket,
     );
-    o.onopen = () => {
-      if (v) {
-        clearTimeout(v);
-        v = null;
+    newSocket.onopen = () => {
+      if (openTimer) {
+        clearTimeout(openTimer);
+        openTimer = null;
       }
-      g(`connected session=${n.sessionId}`);
-      C = Date.now();
-      k = Date.now();
-      x = false;
-      M = 0;
-      U = 0;
-      K = 0;
-      j = 0;
-      V = false;
-      H = false;
-      let s = o;
-      s.addEventListener?.("ping", () => {
-        k = Date.now();
-        H = true;
+      log(`connected session=${options.sessionId}`);
+      connectedAt = Date.now();
+      lastPeerActivityAt = Date.now();
+      sawPong = false;
+      unansweredPings = 0;
+      bytesSent = 0;
+      bytesAtWindowStart = 0;
+      bestPeerAckBytes = 0;
+      wouldHaveFiredLogged = false;
+      peerActive = false;
+      let socket = newSocket;
+      socket.addEventListener?.("ping", () => {
+        lastPeerActivityAt = Date.now();
+        peerActive = true;
       });
-      s.addEventListener?.("pong", (i) => {
-        k = Date.now();
-        H = true;
-        x = true;
-        M = 0;
-        let decimalBytes = parseDecimalBytes(i?.data);
-        if (decimalBytes > j && decimalBytes <= U) j = decimalBytes;
+      socket.addEventListener?.("pong", (event) => {
+        lastPeerActivityAt = Date.now();
+        peerActive = true;
+        sawPong = true;
+        unansweredPings = 0;
+        let decimalBytes = parseDecimalBytes(event?.data);
+        if (decimalBytes > bestPeerAckBytes && decimalBytes <= bytesSent) bestPeerAckBytes = decimalBytes;
       });
-      N = setInterval(() => {
-        if (o.readyState !== WebSocket.OPEN) return;
+      livenessTimer = setInterval(() => {
+        if (newSocket.readyState !== WebSocket.OPEN) return;
         if (
-          n.livenessEnforce &&
-          n.quietLivenessPings !== undefined &&
-          (x || n.toolServer !== undefined) &&
-          M >=
+          options.livenessEnforce &&
+          options.quietLivenessPings !== undefined &&
+          (sawPong || options.toolServer !== undefined) &&
+          unansweredPings >=
             Math.max(
-              n.quietLivenessPings,
-              n.toolServer === undefined || Date.now() - k < STREAM_WINDOW_MS
-                ? (K - j) / WINDOW_BYTE_BUDGET
+              options.quietLivenessPings,
+              options.toolServer === undefined || Date.now() - lastPeerActivityAt < STREAM_WINDOW_MS
+                ? (bytesAtWindowStart - bestPeerAckBytes) / WINDOW_BYTE_BUDGET
                 : 0,
             )
         ) {
           logEvent("tengu_preview_tunnel_liveness_enforced_reconnect", {
-            idle_ms: M * STREAM_WINDOW_MS,
+            idle_ms: unansweredPings * STREAM_WINDOW_MS,
             quiet: true,
           });
-          Z(o, `${M} pings in a row unanswered (liveness deadline exceeded)`);
+          forceReconnectSocket(
+            newSocket,
+            `${unansweredPings} pings in a row unanswered (liveness deadline exceeded)`,
+          );
           return;
         }
-        if (Date.now() - k > (n.livenessDeadlineMs ?? IDLE_TIMEOUT_MS)) {
-          if (n.livenessEnforce) {
-            let i = Date.now() - k;
+        if (Date.now() - lastPeerActivityAt > (options.livenessDeadlineMs ?? IDLE_TIMEOUT_MS)) {
+          if (options.livenessEnforce) {
+            let idleMs = Date.now() - lastPeerActivityAt;
             logEvent("tengu_preview_tunnel_liveness_enforced_reconnect", {
-              idle_ms: i,
+              idle_ms: idleMs,
             });
-            Z(o, `no peer activity for ${i}ms (liveness deadline exceeded)`);
+            forceReconnectSocket(newSocket, `no peer activity for ${idleMs}ms (liveness deadline exceeded)`);
             return;
           }
-          if (!V) {
-            let i = Date.now() - k;
-            g(
-              `${PREVIEW_TUNNEL_LIVENESS_WOULD_HAVE_FIRED}: no peer activity for ${i}ms (liveness deadline exceeded; observe-only, not reconnecting)`,
+          if (!wouldHaveFiredLogged) {
+            let idleMs = Date.now() - lastPeerActivityAt;
+            log(
+              `${PREVIEW_TUNNEL_LIVENESS_WOULD_HAVE_FIRED}: no peer activity for ${idleMs}ms (liveness deadline exceeded; observe-only, not reconnecting)`,
               "error",
             );
             logEvent("tengu_preview_tunnel_liveness_would_have_fired", {
-              idle_ms: i,
+              idle_ms: idleMs,
               enforce: false,
             });
-            V = true;
+            wouldHaveFiredLogged = true;
           }
-        } else V = false;
-        if (n.quietLivenessPings === undefined) {
-          s.ping?.();
+        } else wouldHaveFiredLogged = false;
+        if (options.quietLivenessPings === undefined) {
+          socket.ping?.();
           return;
         }
-        if (M === 0) K = U;
-        M++;
-        s.ping?.(String(U));
+        if (unansweredPings === 0) bytesAtWindowStart = bytesSent;
+        unansweredPings++;
+        socket.ping?.(String(bytesSent));
       }, STREAM_WINDOW_MS);
     };
-    o.onmessage = (s) => {
-      k = Date.now();
-      H = true;
-      let i = typeof s.data === "string" ? s.data : Buffer.from(s.data).toString("utf8");
-      Ie(i);
+    newSocket.onmessage = (event) => {
+      lastPeerActivityAt = Date.now();
+      peerActive = true;
+      let text = typeof event.data === "string" ? event.data : Buffer.from(event.data).toString("utf8");
+      handleRequest(text);
     };
-    o.onerror = (s) => {
-      g(`error: ${"message" in s && typeof s.message === "string" ? s.message : "unknown"}`, "error");
+    newSocket.onerror = (event) => {
+      log(
+        `error: ${"message" in event && typeof event.message === "string" ? event.message : "unknown"}`,
+        "error",
+      );
     };
-    o.onclose = (s) => {
-      let i = cleanCloseReason(s.reason);
-      g(`closed code=${s.code} reason=${i || "(none)"}`);
-      se(o);
-      let E = H || (C > 0 && Date.now() - C >= CONNECT_TIMEOUT_MS);
-      if (E) {
-        F = 0;
-        X = false;
+    newSocket.onclose = (event) => {
+      let closeReason = cleanCloseReason(event.reason);
+      log(`closed code=${event.code} reason=${closeReason || "(none)"}`);
+      teardownSocket(newSocket);
+      let wasHealthy = peerActive || (connectedAt > 0 && Date.now() - connectedAt >= CONNECT_TIMEOUT_MS);
+      if (wasHealthy) {
+        consecutiveFailures = 0;
+        policyStopLogged = false;
       }
-      if (s.code === 1008 && isNoLivePreviewMessage(i)) {
-        if (n.policyStopEnforce) {
-          J(
-            `relay refused with close code 1008 (policy violation): ${i || "(no reason)"} \u2014 not retrying`,
+      if (event.code === 1008 && isNoLivePreviewMessage(closeReason)) {
+        if (options.policyStopEnforce) {
+          failPermanently(
+            `relay refused with close code 1008 (policy violation): ${closeReason || "(no reason)"} \u2014 not retrying`,
             "policy",
           );
           return;
         }
-        if (!X) {
-          X = true;
-          g(
-            `POLICY_STOP_WOULD_HAVE_FIRED: capability-refusal 1008 (${i || "(no reason)"}); observe-only, retrying`,
+        if (!policyStopLogged) {
+          policyStopLogged = true;
+          log(
+            `POLICY_STOP_WOULD_HAVE_FIRED: capability-refusal 1008 (${closeReason || "(no reason)"}); observe-only, retrying`,
             "error",
           );
           logEvent("tengu_preview_tunnel_policy_stop_would_have_fired", {
@@ -970,43 +1001,43 @@ function createPreviewTunnel(n) {
           });
         }
       }
-      if (!E && Q()) return;
-      Y();
+      if (!wasHealthy && noteFailure()) return;
+      scheduleReconnect();
     };
   }
-  g(`starting session=${n.sessionId} url=${u}`);
-  ie();
+  log(`starting session=${options.sessionId} url=${relayUrl}`);
+  connect();
   return {
-    updateAccessToken(r) {
-      accessToken = r;
+    updateAccessToken(token) {
+      accessToken = token;
     },
     forceReconnect() {
-      if (R || w === null) return;
-      Z(w, "caller requested");
+      if (stopped || socket === null) return;
+      forceReconnectSocket(socket, "caller requested");
     },
     stop() {
-      if (R) return;
-      R = true;
-      if (P) {
-        clearTimeout(P);
-        P = null;
+      if (stopped) return;
+      stopped = true;
+      if (reconnectTimer) {
+        clearTimeout(reconnectTimer);
+        reconnectTimer = null;
       }
-      if (v) {
-        clearTimeout(v);
-        v = null;
+      if (openTimer) {
+        clearTimeout(openTimer);
+        openTimer = null;
       }
-      if (N) {
-        clearInterval(N);
-        N = null;
+      if (livenessTimer) {
+        clearInterval(livenessTimer);
+        livenessTimer = null;
       }
-      for (let r of L.values()) r.abort();
-      L.clear();
-      oe();
+      for (let controller of inflightHttp.values()) controller.abort();
+      inflightHttp.clear();
+      closeAllTunnels();
       try {
-        w?.close();
+        socket?.close();
       } catch {}
-      w = null;
-      g(`stopped session=${n.sessionId}`);
+      socket = null;
+      log(`stopped session=${options.sessionId}`);
     },
   };
 }

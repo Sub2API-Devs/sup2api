@@ -29,53 +29,53 @@ import { writeFileAtomic } from "../../utils/atomicPublishWrite.js";
 var PLUGIN_SCHEMA_URL = "https://anthropic.com/claude-code/plugin.schema.json";
 var PLUGIN_COMPONENT_KINDS = ["skills", "agents", "hooks", "mcp", "lsp", "output-style", "channel"];
 //@ chunk-12wyw8h8.js:26413-26881 placement
-function pluginNameProblem(e) {
-  let n = PluginManifestSchema().shape.name.safeParse(e);
-  if (!n.success) return n.error.issues[0]?.message ?? null;
-  if (e.includes("/") || e.includes("\\") || e.includes("..") || e === ".")
+function pluginNameProblem(name) {
+  let parsed = PluginManifestSchema().shape.name.safeParse(name);
+  if (!parsed.success) return parsed.error.issues[0]?.message ?? null;
+  if (name.includes("/") || name.includes("\\") || name.includes("..") || name === ".")
     return 'Plugin name cannot contain path separators (/ or \\), ".." sequences, or be "."';
-  if (!trimTrailingDotsSpaces(e) || isSyncedDirName(e) || isHiddenFoldName(e))
+  if (!trimTrailingDotsSpaces(name) || isSyncedDirName(name) || isHiddenFoldName(name))
     return `Plugin name cannot be "${SYNCED_DIR}" or start with "." \u2014 those directories are never loaded as plugin adoptions`;
-  let p = checkReservedPluginName(e);
-  if (p?.severity === "error") return p.message;
+  let reserved = checkReservedPluginName(name);
+  if (reserved?.severity === "error") return reserved.message;
   return null;
 }
 //@ chunk-12wyw8h8.js:26881-28004 placement
-function pluginManifestTemplate(e) {
-  let { name, description, author } = e;
-  let f = e.with ?? [];
-  let o = [];
-  let m = {
+function pluginManifestTemplate(options) {
+  let { name, description, author } = options;
+  let components = options.with ?? [];
+  let files = [];
+  let manifest = {
     $schema: PLUGIN_SCHEMA_URL,
     name,
     version: "0.1.0",
     description: description ?? "TODO: describe what this plugin provides",
   };
-  if (author) m.author = author;
-  m.skills = ["./"];
-  o.push({
+  if (author) manifest.author = author;
+  manifest.skills = ["./"];
+  files.push({
     relPath: join(".claude-plugin", "plugin.json"),
     contents:
-      jsonStringify(m, null, 2) +
+      jsonStringify(manifest, null, 2) +
       `
 `,
   });
-  o.push({
+  files.push({
     relPath: "SKILL.md",
     contents: skillTemplate(name),
   });
-  if (f.includes("skills"))
-    o.push({
+  if (components.includes("skills"))
+    files.push({
       relPath: join("skills", "example", "SKILL.md"),
       contents: skillTemplate("example"),
     });
-  if (f.includes("agents"))
-    o.push({
+  if (components.includes("agents"))
+    files.push({
       relPath: join("agents", "example.md"),
       contents: agentTemplate(),
     });
-  if (f.includes("hooks"))
-    o.push(
+  if (components.includes("hooks"))
+    files.push(
       {
         relPath: join("hooks", "hooks.json"),
         contents: hooksJsonTemplate(),
@@ -86,29 +86,29 @@ function pluginManifestTemplate(e) {
         mode: 493,
       },
     );
-  if (f.includes("mcp") && !f.includes("channel"))
-    o.push({
+  if (components.includes("mcp") && !components.includes("channel"))
+    files.push({
       relPath: ".mcp.json",
       contents: mcpJsonTemplate(),
     });
-  if (f.includes("lsp"))
-    o.push({
+  if (components.includes("lsp"))
+    files.push({
       relPath: ".lsp.json",
       contents: lspJsonTemplate(),
     });
-  if (f.includes("output-style"))
-    o.push({
+  if (components.includes("output-style"))
+    files.push({
       relPath: join("output-styles", `${name}.md`),
       contents: outputStyleTemplate(name),
     });
-  if (f.includes("channel")) {
-    m.channels = [
+  if (components.includes("channel")) {
+    manifest.channels = [
       {
         server: name,
         displayName: name,
       },
     ];
-    o.push(
+    files.push(
       {
         relPath: ".mcp.json",
         contents: channelMcpJsonTemplate(name),
@@ -123,71 +123,71 @@ function pluginManifestTemplate(e) {
       },
     );
   }
-  o[0].contents =
-    jsonStringify(m, null, 2) +
+  files[0].contents =
+    jsonStringify(manifest, null, 2) +
     `
 `;
-  return o;
+  return files;
 }
 //@ chunk-12wyw8h8.js:28004-28600 placement
 /**
  * `claude plugin` 脚手架：生成插件目录、manifest、示例技能/命令与 bun 脚本模板。
  */
-async function scaffoldPlugin(e, n, r) {
-  let p = resolve(e);
-  if (!r.force)
+async function scaffoldPlugin(dir, files, options) {
+  let rootDir = resolve(dir);
+  if (!options.force)
     try {
-      await mkdir(join(p, ".claude-plugin"));
+      await mkdir(join(rootDir, ".claude-plugin"));
     } catch (error) {
       if (getErrnoCode(error) === "EEXIST")
         return {
           ok: false,
-          error: `${join(p, ".claude-plugin")} already exists. Use --force to overwrite.`,
+          error: `${join(rootDir, ".claude-plugin")} already exists. Use --force to overwrite.`,
         };
       if (getErrnoCode(error) !== "ENOENT") throw error;
     }
-  let f = [];
-  for (let o of n) {
-    let m = resolve(p, o.relPath);
-    let u = relative(p, m);
-    if (u.startsWith(".." + sep) || u === "..")
+  let skipped = [];
+  for (let file of files) {
+    let path = resolve(rootDir, file.relPath);
+    let relativePath = relative(rootDir, path);
+    if (relativePath.startsWith(".." + sep) || relativePath === "..")
       return {
         ok: false,
-        error: `Refusing to write outside ${p}: ${o.relPath}`,
+        error: `Refusing to write outside ${rootDir}: ${file.relPath}`,
       };
-    await mkdir(dirname(m), {
+    await mkdir(dirname(path), {
       recursive: true,
     });
-    if (r.force) await writeFileAtomic(m, o.contents, o.mode);
+    if (options.force) await writeFileAtomic(path, file.contents, file.mode);
     else
       try {
-        await writeFile(m, o.contents, {
+        await writeFile(path, file.contents, {
           flag: "wx",
-          mode: o.mode,
+          mode: file.mode,
         });
       } catch (error) {
         if (getErrnoCode(error) !== "EEXIST") throw error;
-        f.push(o.relPath);
+        skipped.push(file.relPath);
       }
   }
   return {
     ok: true,
-    skipped: f,
+    skipped,
   };
 }
 //@ chunk-12wyw8h8.js:28600-28931 placement
 /**
  * 生成插件技能 SKILL.md 模板。
  */
-function skillTemplate(e) {
+function skillTemplate(name) {
   return `---
-name: ${e}
+name: ${name}
 description: TODO \u2014 describe WHEN Claude should use this. Include trigger phrases users
   might say ("do X", "set up Y", "review Z"). Be specific; this string is what Claude
   matches the user's request against.
 ---
 
-# ${e}
+# ${name}
 
 TODO: what this skill does, and the steps Claude should take.
 `;
@@ -291,9 +291,9 @@ function lspJsonTemplate() {
 /**
  * 生成插件输出样式模板。
  */
-function outputStyleTemplate(e) {
+function outputStyleTemplate(name) {
   return `---
-name: ${e}
+name: ${name}
 description: TODO \u2014 one line shown in the Output style picker in /config
 force-for-plugin: true
 keep-coding-instructions: true
@@ -305,12 +305,12 @@ when this plugin is enabled.
 `;
 }
 //@ chunk-12wyw8h8.js:30314-30463 placement
-function channelMcpJsonTemplate(e) {
+function channelMcpJsonTemplate(name) {
   return (
     jsonStringify(
       {
         mcpServers: {
-          [e]: {
+          [name]: {
             command: "bun",
             args: ["run", "--cwd", "${CLAUDE_PLUGIN_ROOT}", "--shell=bun", "--silent", "start"],
           },
@@ -324,11 +324,11 @@ function channelMcpJsonTemplate(e) {
   );
 }
 //@ chunk-12wyw8h8.js:30463-30670 placement
-function channelPackageJsonTemplate(e) {
+function channelPackageJsonTemplate(name) {
   return (
     jsonStringify(
       {
-        name: `claude-channel-${e}`,
+        name: `claude-channel-${name}`,
         version: "0.1.0",
         type: "module",
         scripts: {

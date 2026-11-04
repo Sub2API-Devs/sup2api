@@ -9,7 +9,10 @@
  * attribution: placement 17
  */
 import { RUNNER_ERROR_CATEGORIES } from "../../selfHostedRunner/runnerApiErrors.js";
-import { xe, Fe } from "../../../vendor/@opentelemetry/otlp-transformer/build/esm/common/internal.js";
+import {
+  findAttributeValue,
+  attributeValueToString,
+} from "../../../vendor/@opentelemetry/otlp-transformer/build/esm/common/internal.js";
 import { BACKOFF_SCHEDULE } from "./scmConnector.js";
 
 //@ chunk-3nztfxrw.js:17958-18005 placement
@@ -37,9 +40,9 @@ function sanitizeMetricLabel(clientPlatform) {
 /**
  * 转义指标标签值：保留字母数字与 _.-，其他字符转成 \\u{...}，最多 128 个字符。
  */
-function escapeMetricValue(e) {
-  return Array.from(e.slice(0, 128))
-    .map((n) => (/[A-Za-z0-9_.-]/.test(n) ? n : `\\u{${n.codePointAt(0).toString(16)}}`))
+function escapeMetricValue(value) {
+  return Array.from(value.slice(0, 128))
+    .map((part) => (/[A-Za-z0-9_.-]/.test(part) ? part : `\\u{${part.codePointAt(0).toString(16)}}`))
     .join("");
 }
 //@ chunk-3nztfxrw.js:18248-18294 placement
@@ -69,12 +72,12 @@ function observeHistogram(sessionInitDurations, durationSec) {
 /**
  * 函数 escapeLabelValue（转义标签值）。
  */
-function escapeLabelValue(e) {
-  return e.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\n/g, "\\n");
+function escapeLabelValue(value) {
+  return value.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\n/g, "\\n");
 }
 //@ chunk-3nztfxrw.js:18535-18613 placement
-function sanitizeMetricName(e) {
-  return e.replace(/[^a-zA-Z0-9_]/g, "_").replace(/^[0-9]/, "_$&");
+function sanitizeMetricName(name) {
+  return name.replace(/[^a-zA-Z0-9_]/g, "_").replace(/^[0-9]/, "_$&");
 }
 //@ chunk-3nztfxrw.js:18613-18653 placement
 var CLAUDE_CODE_SELF_HOSTED_RUNNER = "claude_code_self_hosted_runner";
@@ -82,173 +85,181 @@ var CLAUDE_CODE_SELF_HOSTED_RUNNER = "claude_code_self_hosted_runner";
 /**
  * 以 Prometheus 文本格式输出自托管 runner 指标（runner_id、version、client_label）
  */
-function renderRunnerMetrics(e, n = Date.now()) {
-  let r = e.lastPollAt > 0 ? (n - e.lastPollAt) / 1000 : 0;
-  let m = `runner_id="${escapeLabelValue(e.runnerId)}",version="${escapeLabelValue(e.version)}",client_label="${escapeLabelValue(e.clientLabel)}"`;
-  let a = CLAUDE_CODE_SELF_HOSTED_RUNNER;
-  let t = "";
-  t += `# HELP ${a}_info Self-hosted runner identity (info-style gauge; value is always 1).
+function renderRunnerMetrics(state, now = Date.now()) {
+  let pollAgeSec = state.lastPollAt > 0 ? (now - state.lastPollAt) / 1000 : 0;
+  let labels = `runner_id="${escapeLabelValue(state.runnerId)}",version="${escapeLabelValue(state.version)}",client_label="${escapeLabelValue(state.clientLabel)}"`;
+  let prefix = CLAUDE_CODE_SELF_HOSTED_RUNNER;
+  let out = "";
+  out += `# HELP ${prefix}_info Self-hosted runner identity (info-style gauge; value is always 1).
 `;
-  t += `# TYPE ${a}_info gauge
+  out += `# TYPE ${prefix}_info gauge
 `;
-  t += `${a}_info{${m}} 1
+  out += `${prefix}_info{${labels}} 1
 `;
-  t += `# HELP ${a}_capacity Max concurrent sessions this runner accepts (--capacity).
+  out += `# HELP ${prefix}_capacity Max concurrent sessions this runner accepts (--capacity).
 `;
-  t += `# TYPE ${a}_capacity gauge
+  out += `# TYPE ${prefix}_capacity gauge
 `;
-  t += `${a}_capacity ${e.capacity}
+  out += `${prefix}_capacity ${state.capacity}
 `;
-  t += `# HELP ${a}_active_sessions Sessions currently being handled by this runner.
+  out += `# HELP ${prefix}_active_sessions Sessions currently being handled by this runner.
 `;
-  t += `# TYPE ${a}_active_sessions gauge
+  out += `# TYPE ${prefix}_active_sessions gauge
 `;
-  t += `${a}_active_sessions ${e.activeSessions}
+  out += `${prefix}_active_sessions ${state.activeSessions}
 `;
-  for (let [s, c] of [
-    ["sessions_started_total", e.sessionsStarted],
-    ["sessions_completed_total", e.sessionsCompleted],
-    ["sessions_failed_total", e.sessionsFailed],
-    ["sessions_interrupted_total", e.sessionsInterrupted],
+  for (let [category, values] of [
+    ["sessions_started_total", state.sessionsStarted],
+    ["sessions_completed_total", state.sessionsCompleted],
+    ["sessions_failed_total", state.sessionsFailed],
+    ["sessions_interrupted_total", state.sessionsInterrupted],
   ]) {
-    t += `# HELP ${a}_${s} ${s === "sessions_started_total" ? "Session child processes spawned over the runner's lifetime. One increment per child spawn; a session that is re-spawned (runner restart, re-assignment) counts again. NOT comparable to the orchestrator's spawn_hooks_total (which counts orchestrator spawn-runner hook runs, including warm hints)." : s === "sessions_completed_total" ? "Session child processes that ended cleanly over the runner's lifetime: child exited 0, the server closed the session (archive/delete), or the runner released the slot as a clean handoff (idle release, startup timeout, retire / max-session-age release, server deassign). Drain/SIGTERM and the max-lifetime hard-cap kill are NOT counted (those increment sessions_interrupted_total instead)." : s === "sessions_failed_total" ? "Session child processes that exited with a non-zero code over the runner's lifetime (crash, OOM, spawn error). Does NOT include idle-release or a server deassign the poll loop observed first (those count as completed); a deassign the child notices first via its epoch-409 exit still lands here." : "Session child processes that were terminated for a non-session-outcome reason over its lifetime (drain/SIGTERM, max-lifetime hard-cap kill, released=false backstop, or an external signal). Watchdog and external-signal kills are additionally reported to the server as session failures. Closes the accounting: started - (completed + failed + interrupted) equals the number of session children currently running."}
+    out += `# HELP ${prefix}_${category} ${category === "sessions_started_total" ? "Session child processes spawned over the runner's lifetime. One increment per child spawn; a session that is re-spawned (runner restart, re-assignment) counts again. NOT comparable to the orchestrator's spawn_hooks_total (which counts orchestrator spawn-runner hook runs, including warm hints)." : category === "sessions_completed_total" ? "Session child processes that ended cleanly over the runner's lifetime: child exited 0, the server closed the session (archive/delete), or the runner released the slot as a clean handoff (idle release, startup timeout, retire / max-session-age release, server deassign). Drain/SIGTERM and the max-lifetime hard-cap kill are NOT counted (those increment sessions_interrupted_total instead)." : category === "sessions_failed_total" ? "Session child processes that exited with a non-zero code over the runner's lifetime (crash, OOM, spawn error). Does NOT include idle-release or a server deassign the poll loop observed first (those count as completed); a deassign the child notices first via its epoch-409 exit still lands here." : "Session child processes that were terminated for a non-session-outcome reason over its lifetime (drain/SIGTERM, max-lifetime hard-cap kill, released=false backstop, or an external signal). Watchdog and external-signal kills are additionally reported to the server as session failures. Closes the accounting: started - (completed + failed + interrupted) equals the number of session children currently running."}
 `;
-    t += `# TYPE ${a}_${s} counter
+    out += `# TYPE ${prefix}_${category} counter
 `;
-    for (let [b, w] of c)
-      t += `${a}_${s}{client_platform="${escapeLabelValue(b)}"} ${w}
+    for (let [bucket, count] of values)
+      out += `${prefix}_${category}{client_platform="${escapeLabelValue(bucket)}"} ${count}
 `;
   }
-  t += `# HELP ${a}_locked_account Present (value 1) once the runner is locked to an account; absent while fungible.
+  out += `# HELP ${prefix}_locked_account Present (value 1) once the runner is locked to an account; absent while fungible.
 `;
-  t += `# TYPE ${a}_locked_account gauge
+  out += `# TYPE ${prefix}_locked_account gauge
 `;
-  if (e.lockedAccountEmail !== null)
-    t += `${a}_locked_account{email="${escapeLabelValue(e.lockedAccountEmail)}"} 1
+  if (state.lockedAccountEmail !== null)
+    out += `${prefix}_locked_account{email="${escapeLabelValue(state.lockedAccountEmail)}"} 1
 `;
-  t += `# HELP ${a}_last_poll_age_seconds Seconds since the last successful pollWork return.
+  out += `# HELP ${prefix}_last_poll_age_seconds Seconds since the last successful pollWork return.
 `;
-  t += `# TYPE ${a}_last_poll_age_seconds gauge
+  out += `# TYPE ${prefix}_last_poll_age_seconds gauge
 `;
-  t += `${a}_last_poll_age_seconds ${r}
+  out += `${prefix}_last_poll_age_seconds ${pollAgeSec}
 `;
-  t += `# HELP ${a}_poll_errors_total PollWork request failures by error kind (transport=no HTTP response; timeout=client deadline; 5xx/429/4xx by status). All five series present from process start so rate() works and absent() means process-down.
+  out += `# HELP ${prefix}_poll_errors_total PollWork request failures by error kind (transport=no HTTP response; timeout=client deadline; 5xx/429/4xx by status). All five series present from process start so rate() works and absent() means process-down.
 `;
-  t += `# TYPE ${a}_poll_errors_total counter
+  out += `# TYPE ${prefix}_poll_errors_total counter
 `;
-  for (let s of RUNNER_ERROR_CATEGORIES)
-    t += `${a}_poll_errors_total{error_kind="${s}"} ${e.pollErrors[s]}
+  for (let category of RUNNER_ERROR_CATEGORIES)
+    out += `${prefix}_poll_errors_total{error_kind="${category}"} ${state.pollErrors[category]}
 `;
-  t += `# HELP ${a}_initializing_sessions Sessions currently in the init phase (handleSession entry to child system/init).
+  out += `# HELP ${prefix}_initializing_sessions Sessions currently in the init phase (handleSession entry to child system/init).
 `;
-  t += `# TYPE ${a}_initializing_sessions gauge
+  out += `# TYPE ${prefix}_initializing_sessions gauge
 `;
-  t += `${a}_initializing_sessions ${e.initializingSessions}
+  out += `${prefix}_initializing_sessions ${state.initializingSessions}
 `;
-  t += `# HELP ${a}_session_init_errors_total Sessions that exited as failed before the child reached init (checkout hook / git prep / token issue / pre-init child crash).
+  out += `# HELP ${prefix}_session_init_errors_total Sessions that exited as failed before the child reached init (checkout hook / git prep / token issue / pre-init child crash).
 `;
-  t += `# TYPE ${a}_session_init_errors_total counter
+  out += `# TYPE ${prefix}_session_init_errors_total counter
 `;
-  t += `${a}_session_init_errors_total ${e.sessionInitErrors}
+  out += `${prefix}_session_init_errors_total ${state.sessionInitErrors}
 `;
-  t += `# HELP ${a}_session_init_duration_seconds Wall-clock seconds from session assignment to child init (successful inits only).
+  out += `# HELP ${prefix}_session_init_duration_seconds Wall-clock seconds from session assignment to child init (successful inits only).
 `;
-  t += `# TYPE ${a}_session_init_duration_seconds histogram
+  out += `# TYPE ${prefix}_session_init_duration_seconds histogram
 `;
-  let sessionInitDurations = e.sessionInitDurations;
+  let sessionInitDurations = state.sessionInitDurations;
   for (let idx = 0; idx < LATENCY_BUCKETS.length; idx++)
-    t += `${a}_session_init_duration_seconds_bucket{le="${LATENCY_BUCKETS[idx]}"} ${sessionInitDurations.buckets[idx]}
+    out += `${prefix}_session_init_duration_seconds_bucket{le="${LATENCY_BUCKETS[idx]}"} ${sessionInitDurations.buckets[idx]}
 `;
-  t += `${a}_session_init_duration_seconds_bucket{le="+Inf"} ${sessionInitDurations.count}
+  out += `${prefix}_session_init_duration_seconds_bucket{le="+Inf"} ${sessionInitDurations.count}
 `;
-  t += `${a}_session_init_duration_seconds_sum ${sessionInitDurations.sum}
+  out += `${prefix}_session_init_duration_seconds_sum ${sessionInitDurations.sum}
 `;
-  t += `${a}_session_init_duration_seconds_count ${sessionInitDurations.count}
+  out += `${prefix}_session_init_duration_seconds_count ${sessionInitDurations.count}
 `;
-  t += `# HELP ${a}_session_start_hook_errors_total SessionStart hooks that reported an error outcome (nonzero exit, validation/spawn failure, or HTTP/MCP error; one per failing hook execution).
+  out += `# HELP ${prefix}_session_start_hook_errors_total SessionStart hooks that reported an error outcome (nonzero exit, validation/spawn failure, or HTTP/MCP error; one per failing hook execution).
 `;
-  t += `# TYPE ${a}_session_start_hook_errors_total counter
+  out += `# TYPE ${prefix}_session_start_hook_errors_total counter
 `;
-  t += `${a}_session_start_hook_errors_total ${e.sessionStartHookErrors}
+  out += `${prefix}_session_start_hook_errors_total ${state.sessionStartHookErrors}
 `;
-  t += `# HELP ${a}_session_idle_seconds Seconds since the session went idle (turn-end or awaiting-action); 0 while a turn is running, background work is pending, or the session is initializing. One series per active session; disappears at session end.
+  out += `# HELP ${prefix}_session_idle_seconds Seconds since the session went idle (turn-end or awaiting-action); 0 while a turn is running, background work is pending, or the session is initializing. One series per active session; disappears at session end.
 `;
-  t += `# TYPE ${a}_session_idle_seconds gauge
+  out += `# TYPE ${prefix}_session_idle_seconds gauge
 `;
-  for (let [s, c] of e.sessionIdle) {
-    let l = c === null ? 0 : ((n - c) / 1000).toFixed(3);
-    let b = e.sessionClientPlatform.get(s) ?? UNKNOWN;
-    t += `${a}_session_idle_seconds{session_id="${escapeLabelValue(s)}",client_platform="${escapeLabelValue(b)}"} ${l}
-`;
-  }
-  for (let [s, c] of e.childMetrics ?? []) {
-    let replaced = c.help.replace(/\\/g, "\\\\").replace(/\n/g, "\\n");
-    t += `# HELP ${s} ${replaced}
-`;
-    t += `# TYPE ${s} ${c.type}
-`;
-    for (let [b, w] of c.points)
-      t += `${s}${b} ${w}
+  for (let [sessionId, idleSince] of state.sessionIdle) {
+    let idleSeconds = idleSince === null ? 0 : ((now - idleSince) / 1000).toFixed(3);
+    let platform = state.sessionClientPlatform.get(sessionId) ?? UNKNOWN;
+    out += `${prefix}_session_idle_seconds{session_id="${escapeLabelValue(sessionId)}",client_platform="${escapeLabelValue(platform)}"} ${idleSeconds}
 `;
   }
-  return t;
+  for (let [childId, histogram] of state.childMetrics ?? []) {
+    let replaced = histogram.help.replace(/\\/g, "\\\\").replace(/\n/g, "\\n");
+    out += `# HELP ${childId} ${replaced}
+`;
+    out += `# TYPE ${childId} ${histogram.type}
+`;
+    for (let [bucket, count] of histogram.points)
+      out += `${childId}${bucket} ${count}
+`;
+  }
+  return out;
 }
 //@ chunk-3nztfxrw.js:23942-25109 placement
-function recordRunnerCounter(e, n) {
-  let r = (e.childMetrics ??= new Map());
-  let m = n;
-  for (let a of m.resourceMetrics ?? []) {
-    let t = xe(a.resource?.attributes, "session.id");
-    let i = xe(a.resource?.attributes, "client.platform");
-    for (let s of a.scopeMetrics ?? [])
-      for (let c of s.metrics ?? []) {
-        if (typeof c.name !== "string" || c.name === "") continue;
-        let l = sanitizeMetricName(c.name);
-        let b;
-        let w;
-        let S;
-        if (c.sum) {
-          b = c.sum.isMonotonic ? "counter" : "gauge";
-          w = c.sum.isMonotonic && !l.endsWith("_total") ? `${l}_total` : l;
-          S = c.sum.dataPoints;
-        } else if (c.gauge) {
-          b = "gauge";
-          w = l;
-          S = c.gauge.dataPoints;
+function recordRunnerCounter(state, payload) {
+  let childMetrics = (state.childMetrics ??= new Map());
+  let metrics = payload;
+  for (let resourceMetric of metrics.resourceMetrics ?? []) {
+    let sessionId = findAttributeValue(resourceMetric.resource?.attributes, "session.id");
+    let clientPlatform = findAttributeValue(resourceMetric.resource?.attributes, "client.platform");
+    for (let scopeMetric of resourceMetric.scopeMetrics ?? [])
+      for (let metric of scopeMetric.metrics ?? []) {
+        if (typeof metric.name !== "string" || metric.name === "") continue;
+        let metricName = sanitizeMetricName(metric.name);
+        let childKey;
+        let histogram;
+        let points;
+        if (metric.sum) {
+          childKey = metric.sum.isMonotonic ? "counter" : "gauge";
+          histogram =
+            metric.sum.isMonotonic && !metricName.endsWith("_total") ? `${metricName}_total` : metricName;
+          points = metric.sum.dataPoints;
+        } else if (metric.gauge) {
+          childKey = "gauge";
+          histogram = metricName;
+          points = metric.gauge.dataPoints;
         } else continue;
-        if (w.startsWith(CLAUDE_CODE_SELF_HOSTED_RUNNER)) continue;
-        let T = r.get(w) ?? {
-          help: c.description ?? "",
-          type: b,
+        if (histogram.startsWith(CLAUDE_CODE_SELF_HOSTED_RUNNER)) continue;
+        let histogram_2 = childMetrics.get(histogram) ?? {
+          help: metric.description ?? "",
+          type: childKey,
           points: new Map(),
         };
-        for (let N of S ?? []) {
-          let D = [];
-          let R = new Set();
-          if (t !== undefined) {
-            D.push(["session_id", t]);
-            R.add("session_id");
+        for (let point of points ?? []) {
+          let labelPairs = [];
+          let seenKeys = new Set();
+          if (sessionId !== undefined) {
+            labelPairs.push(["session_id", sessionId]);
+            seenKeys.add("session_id");
           }
-          if (i !== undefined) {
-            D.push(["client_platform", i]);
-            R.add("client_platform");
+          if (clientPlatform !== undefined) {
+            labelPairs.push(["client_platform", clientPlatform]);
+            seenKeys.add("client_platform");
           }
-          for (let K of N.attributes ?? []) {
-            if (typeof K.key !== "string") continue;
-            let X = Fe(K.value);
-            if (X === undefined) continue;
-            let V = sanitizeMetricName(K.key);
-            if (V === "" || R.has(V)) continue;
-            R.add(V);
-            D.push([V, X]);
+          for (let attribute of point.attributes ?? []) {
+            if (typeof attribute.key !== "string") continue;
+            let labelValue = attributeValueToString(attribute.value);
+            if (labelValue === undefined) continue;
+            let labelName = sanitizeMetricName(attribute.key);
+            if (labelName === "" || seenKeys.has(labelName)) continue;
+            seenKeys.add(labelName);
+            labelPairs.push([labelName, labelValue]);
           }
-          let A = D.length > 0 ? `{${D.map(([K, X]) => `${K}="${escapeLabelValue(X)}"`).join(",")}}` : "";
-          let F =
-            typeof N.asDouble === "number" ? N.asDouble : N.asInt !== undefined ? Number(N.asInt) : undefined;
-          if (F === undefined || !Number.isFinite(F)) continue;
-          T.points.set(A, F);
+          let suffix =
+            labelPairs.length > 0
+              ? `{${labelPairs.map(([name, value]) => `${name}="${escapeLabelValue(value)}"`).join(",")}}`
+              : "";
+          let line =
+            typeof point.asDouble === "number"
+              ? point.asDouble
+              : point.asInt !== undefined
+                ? Number(point.asInt)
+                : undefined;
+          if (line === undefined || !Number.isFinite(line)) continue;
+          histogram_2.points.set(suffix, line);
         }
-        r.set(w, T);
+        childMetrics.set(histogram, histogram_2);
       }
   }
 }
@@ -256,13 +267,13 @@ function recordRunnerCounter(e, n) {
 /**
  * 从子进程指标中删除某个会话 id 的所有数据点，删空的指标一并移除。
  */
-function dropSessionMetrics(healthState, n) {
+function dropSessionMetrics(healthState, sessionId) {
   let childMetrics = healthState.childMetrics;
   if (childMetrics === undefined) return;
-  let m = `session_id="${escapeLabelValue(n)}"`;
-  for (let [a, t] of childMetrics) {
-    for (let key of t.points.keys()) if (key.includes(m)) t.points.delete(key);
-    if (t.points.size === 0) childMetrics.delete(a);
+  let label = `session_id="${escapeLabelValue(sessionId)}"`;
+  for (let [childKey, entry] of childMetrics) {
+    for (let key of entry.points.keys()) if (key.includes(label)) entry.points.delete(key);
+    if (entry.points.size === 0) childMetrics.delete(childKey);
   }
 }
 //@ chunk-2cbdmxy9.js:19707-19765 placement
@@ -274,11 +285,11 @@ function newDurationHistogram() {
   };
 }
 //@ chunk-2cbdmxy9.js:19765-19857 placement
-function observeDuration(spawnHookDurations, t) {
-  spawnHookDurations.sum += t;
+function observeDuration(spawnHookDurations, durationMs) {
+  spawnHookDurations.sum += durationMs;
   spawnHookDurations.count += 1;
   for (let j = 0; j < BACKOFF_SCHEDULE.length; j++)
-    if (t <= BACKOFF_SCHEDULE[j]) spawnHookDurations.buckets[j]++;
+    if (durationMs <= BACKOFF_SCHEDULE[j]) spawnHookDurations.buckets[j]++;
 }
 //@ chunk-2cbdmxy9.js:19857-19917 placement
 var SPAWN_SECONDS_BUCKETS = [0.5, 1, 2.5, 5, 10, 20, 40, 80, 160, 320, 640, 1280, 2560, 5120];
@@ -291,8 +302,8 @@ function newSpawnHistogram() {
   };
 }
 //@ chunk-2cbdmxy9.js:19975-20087 placement
-function observeSpawnSeconds(sessionQueueWaits, t) {
-  let max = Math.max(0, t);
+function observeSpawnSeconds(sessionQueueWaits, seconds) {
+  let max = Math.max(0, seconds);
   sessionQueueWaits.sum += max;
   sessionQueueWaits.count += 1;
   for (let j = 0; j < SPAWN_SECONDS_BUCKETS.length; j++)

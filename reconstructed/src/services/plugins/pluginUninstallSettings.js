@@ -72,15 +72,15 @@ var READBACK_LEVELS = ["off", "not-read-here", "unreadable", "on"];
 /**
  * 判断路径是否像可疑的符号链接（父目录链异常）。
  */
-function isSuspectLink(e) {
-  let n = join(e);
-  let r = dirname(n);
-  return pathTraversesFromTrustedRoot(dirname(r), join(basename(r), basename(n)));
+function isSuspectLink(filePath) {
+  let normalized = join(filePath);
+  let parent = dirname(normalized);
+  return pathTraversesFromTrustedRoot(dirname(parent), join(basename(parent), basename(normalized)));
 }
 //@ chunk-e6aww6q8.js:4206991-4207101 placement
 function vetRefusalKind(error) {
-  let n = repoSettingsRefusalReason(error);
-  return n === "network" ? "vet-network" : n === "unexamined" ? "vet-unexamined" : "vet-other";
+  let reason = repoSettingsRefusalReason(error);
+  return reason === "network" ? "vet-network" : reason === "unexamined" ? "vet-unexamined" : "vet-other";
 }
 //@ chunk-e6aww6q8.js:4207101-4208563 placement
 /**
@@ -130,9 +130,15 @@ async function readRepoSettingsBytes(filePath) {
         kind: "refused",
         why: "crossing",
       };
-    let L;
+    let content;
     try {
-      L = openBoundRead(linkTarget, true, MAX_SETTINGS_JSON_BYTES, linkTarget !== filePath, vetted?.identity);
+      content = openBoundRead(
+        linkTarget,
+        true,
+        MAX_SETTINGS_JSON_BYTES,
+        linkTarget !== filePath,
+        vetted?.identity,
+      );
     } catch (error) {
       if (isENOENT(error) || getErrnoCode(error) === "ENOTDIR")
         return {
@@ -141,14 +147,14 @@ async function readRepoSettingsBytes(filePath) {
         };
       throw error;
     }
-    return L === null || vetted?.noFileSeen === true
+    return content === null || vetted?.noFileSeen === true
       ? {
           kind: "refused",
           why: "unbound",
         }
       : {
           kind: "bytes",
-          content: L,
+          content,
           route: linkTarget,
         };
   }
@@ -168,33 +174,33 @@ async function readRepoSettingsBytes(filePath) {
           kind: "refused",
           why: "unbound",
         };
-      let G = isBoundReadError(error);
-      let q = vetted;
-      if (!G && q.absentAt?.fromLinkTarget !== true)
+      let isBoundError = isBoundReadError(error);
+      let vetting = vetted;
+      if (!isBoundError && vetting.absentAt?.fromLinkTarget !== true)
         try {
-          q = await vetRepoSettingsPathAsync(getFsImplementation(), filePath);
+          vetting = await vetRepoSettingsPathAsync(getFsImplementation(), filePath);
         } catch (error) {
           return {
             kind: "refused",
             why: vetRefusalKind(error),
           };
         }
-      if (q.absentAt !== undefined)
+      if (vetting.absentAt !== undefined)
         return {
           kind: "absent",
-          belowALinkToNothing: q.absentAt.fromLinkTarget || G,
-          ...(q.absentAt.notAFolder && {
+          belowALinkToNothing: vetting.absentAt.fromLinkTarget || isBoundError,
+          ...(vetting.absentAt.notAFolder && {
             notAFolder: true,
           }),
         };
-      return q.linksResolvedPath !== undefined
+      return vetting.linksResolvedPath !== undefined
         ? {
             kind: "refused",
             why: "unbound",
           }
         : {
             kind: "absent",
-            belowALinkToNothing: G,
+            belowALinkToNothing: isBoundError,
           };
     }
     throw error;
@@ -216,18 +222,18 @@ async function readRepoSettingsBytes(filePath) {
 /**
  * 该设置来源是否受工作区限制。
  */
-function isWorkspaceRestrictedSource(e) {
-  return isWorkspaceRestricted() && REPO_DIR_SETTING_SOURCES.has(e);
+function isWorkspaceRestrictedSource(source) {
+  return isWorkspaceRestricted() && REPO_DIR_SETTING_SOURCES.has(source);
 }
 //@ chunk-e6aww6q8.js:4208602-4208670 placement
 /**
  * 仓库设置里是否有可疑符号链接。
  */
-function hasSuspectSettingsLink(e) {
+function hasSuspectSettingsLink(source) {
   return (
-    REPO_DIR_SETTING_SOURCES.has(e) &&
-    !isWorkspaceRestrictedSource(e) &&
-    settingsPathsForSource(e).some((n) => isSuspectLink(n))
+    REPO_DIR_SETTING_SOURCES.has(source) &&
+    !isWorkspaceRestrictedSource(source) &&
+    settingsPathsForSource(source).some((path) => isSuspectLink(path))
   );
 }
 //@ chunk-e6aww6q8.js:4208670-4208757 placement = _temp8 (1)
@@ -238,37 +244,37 @@ function settingsPathsForSource(a_3) {
   return [
     getSettingsFilePathForSource(a_3),
     ...(a_3 === "localSettings" ? [getLegacyLocalSettingsFilePath()] : []),
-  ].filter((n) => n !== undefined);
+  ].filter((path) => path !== undefined);
 }
 //@ chunk-e6aww6q8.js:4208757-4208961 placement = isRealPathWithinTeamDir (0.785)
 async function isRealPathWithinTeamDir_3(realCandidate) {
-  for (let n = dirname(realCandidate); ; n = dirname(n))
+  for (let dir = dirname(realCandidate); ; dir = dirname(dir))
     try {
-      if (!(await lstat(n)).isSymbolicLink()) return false;
-      return await stat(n).then(
+      if (!(await lstat(dir)).isSymbolicLink()) return false;
+      return await stat(dir).then(
         () => false,
         () => true,
       );
     } catch (error) {
       if (!isENOENT(error) && getErrnoCode(error) !== "ENOTDIR") return true;
-      if (dirname(n) === n) return false;
+      if (dirname(dir) === dir) return false;
     }
 }
 //@ chunk-e6aww6q8.js:4208961-4209347 placement
 /**
  * 读取用户设置文件里某插件的启用状态：缓存解析失败时安全地重新读取文件，返回 on/off/unreadable。
  */
-async function userSettingsEnablement(e, n, r) {
-  let settings = parseSettingsFile(e).settings;
+async function userSettingsEnablement(filePath, pluginId, exclude) {
+  let settings = parseSettingsFile(filePath).settings;
   if (settings === null) {
-    let h;
+    let readablePath;
     try {
-      h = isInClaudeConfigHome(e)
-        ? e
-        : (await vetRepoSettingsPathAsync(getFsImplementation(), e)).resolvedPath;
+      readablePath = isInClaudeConfigHome(filePath)
+        ? filePath
+        : (await vetRepoSettingsPathAsync(getFsImplementation(), filePath)).resolvedPath;
     } catch (error) {
       logForDebugging(
-        `Did not read settings file ${e}, so it counts as one that may still switch ${n} on: ${errorMessage(error)}`,
+        `Did not read settings file ${filePath}, so it counts as one that may still switch ${pluginId} on: ${errorMessage(error)}`,
         {
           level: "error",
         },
@@ -276,26 +282,26 @@ async function userSettingsEnablement(e, n, r) {
       return "unreadable";
     }
     try {
-      let { content } = await readFileChecked(h, MAX_SETTINGS_JSON_BYTES);
+      let { content } = await readFileChecked(readablePath, MAX_SETTINGS_JSON_BYTES);
       settings = safeParseJSON(content, false);
     } catch (error) {
-      return missingFileEnablement(h, error);
+      return missingFileEnablement(readablePath, error);
     }
   }
   if (!isPlainObject_5(settings)) return "unreadable";
-  return enabledPluginsState(settings.enabledPlugins, n, r);
+  return enabledPluginsState(settings.enabledPlugins, pluginId, exclude);
 }
 //@ chunk-e6aww6q8.js:4209347-4209482 placement
-async function settingsFileEnablement(e, n, r, s, h) {
-  if (r)
+async function settingsFileEnablement(source, filePath, notReadHere, pluginId, exclude) {
+  if (notReadHere)
     return {
       readsBack: "not-read-here",
     };
-  return e === "userSettings"
+  return source === "userSettings"
     ? {
-        readsBack: await userSettingsEnablement(n, s, h),
+        readsBack: await userSettingsEnablement(filePath, pluginId, exclude),
       }
-    : repoSettingsEnablement(n, s, h);
+    : repoSettingsEnablement(filePath, pluginId, exclude);
 }
 //@ chunk-e6aww6q8.js:4209482-4209613 placement
 async function missingFileEnablement(realCandidate, error) {
@@ -309,9 +315,9 @@ async function missingFileEnablement(realCandidate, error) {
 /**
  * 读取仓库内设置文件里某插件的启用状态：路径审查不通过返回 notRead 原因，文件不存在视为 off，并附带实际读取路径。
  */
-async function repoSettingsEnablement(filePath, n, r) {
-  let s;
-  let h;
+async function repoSettingsEnablement(filePath, pluginId, exclude) {
+  let content;
+  let route;
   try {
     let repoSettingsBytes = await readRepoSettingsBytes(filePath);
     if (repoSettingsBytes.kind === "refused") {
@@ -324,27 +330,30 @@ async function repoSettingsEnablement(filePath, n, r) {
       return {
         readsBack: repoSettingsBytes.belowALinkToNothing ? "unreadable" : "off",
       };
-    s = repoSettingsBytes.content;
-    h = repoSettingsBytes.route;
+    content = repoSettingsBytes.content;
+    route = repoSettingsBytes.route;
   } catch (error) {
     return {
       readsBack: await missingFileEnablement(filePath, error),
     };
   }
-  let y = parseSettingsContent(s, filePath).settings ?? safeParseJSON(s, false);
+  let settings = parseSettingsContent(content, filePath).settings ?? safeParseJSON(content, false);
   return {
-    readsBack: !isPlainObject_5(y) ? "unreadable" : enabledPluginsState(y.enabledPlugins, n, r),
-    ...(h !== undefined && {
-      route: h,
+    readsBack: !isPlainObject_5(settings)
+      ? "unreadable"
+      : enabledPluginsState(settings.enabledPlugins, pluginId, exclude),
+    ...(route !== undefined && {
+      route,
     }),
   };
 }
 //@ chunk-e6aww6q8.js:4210046-4210198 placement
-function enabledPluginsState(enabledPlugins, n, r) {
+function enabledPluginsState(enabledPlugins, pluginId, exclude) {
   if (enabledPlugins === undefined) return "off";
   if (!isPlainObject_5(enabledPlugins)) return "unreadable";
-  return enabledPluginKeys(enabledPlugins, n, r).some(
-    (s) => enabledPlugins[s] !== undefined && enabledPlugins[s] !== null && enabledPlugins[s] !== false,
+  return enabledPluginKeys(enabledPlugins, pluginId, exclude).some(
+    (key) =>
+      enabledPlugins[key] !== undefined && enabledPlugins[key] !== null && enabledPlugins[key] !== false,
   )
     ? "on"
     : "off";
@@ -353,26 +362,26 @@ function enabledPluginsState(enabledPlugins, n, r) {
 /**
  * 取更严重的回读状态。
  */
-function maxReadback(e, n) {
-  return READBACK_LEVELS.indexOf(n) > READBACK_LEVELS.indexOf(e) ? n : e;
+function maxReadback(left, right) {
+  return READBACK_LEVELS.indexOf(right) > READBACK_LEVELS.indexOf(left) ? right : left;
 }
 //@ chunk-e6aww6q8.js:4210257-4210520 placement
-function flagSettingsEnablement(e, n, settingsFilePathForSource) {
+function flagSettingsEnablement(pluginId, exclude, filePath) {
   let flagSettingsExpectedContent = getFlagSettingsExpectedContent();
   let flagSettingsFilePinnedContent = getFlagSettingsFilePinnedContent();
-  let y = (G) => (isPlainObject_5(G) ? enabledPluginsState(G.enabledPlugins, e, n) : "unreadable");
-  let S = flagSettingsExpectedContent ?? flagSettingsFilePinnedContent;
-  let w =
-    S === undefined ||
-    S.trim() === "" ||
+  let stateOf = (content) =>
+    isPlainObject_5(content) ? enabledPluginsState(content.enabledPlugins, pluginId, exclude) : "unreadable";
+  let expectedContent = flagSettingsExpectedContent ?? flagSettingsFilePinnedContent;
+  let fileState =
+    expectedContent === undefined ||
+    expectedContent.trim() === "" ||
     (flagSettingsExpectedContent === undefined &&
-      (settingsFilePathForSource === undefined ||
-        parseSettingsFile(settingsFilePathForSource, S).settings === null))
+      (filePath === undefined || parseSettingsFile(filePath, expectedContent).settings === null))
       ? "off"
-      : y(safeParseJSON(S, false));
-  let flagSettingsInline = getFlagSettingsInline();
+      : stateOf(safeParseJSON(expectedContent, false));
+  let content = getFlagSettingsInline();
   return {
-    readsBack: maxReadback(w, flagSettingsInline !== null ? y(flagSettingsInline) : "off"),
+    readsBack: maxReadback(fileState, content !== null ? stateOf(content) : "off"),
     isJson: flagSettingsExpectedContent !== undefined,
   };
 }
@@ -380,50 +389,57 @@ function flagSettingsEnablement(e, n, settingsFilePathForSource) {
 /**
  * 在某设置来源的所有文件中找出启用该插件的状态最"强"的文件；有文件未能读取时返回未读文件列表与原因。
  */
-async function findEnablingSettingsFile(settingSource, n, r = []) {
+async function findEnablingSettingsFile(source, pluginId, exclude = []) {
   invalidateCommandNames();
-  let s = {
+  let worst = {
     readsBack: "off",
   };
-  let h = [];
-  let y;
-  for (let S of settingsPathsForSource(settingSource)) {
-    let w = await settingsFileEnablement(settingSource, S, isWorkspaceRestrictedSource(settingSource), n, r);
-    if ("notRead" in w) {
-      h.push(S);
-      y ??= w.notRead;
+  let notReadPaths = [];
+  let notReadWhy;
+  for (let path of settingsPathsForSource(source)) {
+    let result = await settingsFileEnablement(
+      source,
+      path,
+      isWorkspaceRestrictedSource(source),
+      pluginId,
+      exclude,
+    );
+    if ("notRead" in result) {
+      notReadPaths.push(path);
+      notReadWhy ??= result.notRead;
       continue;
     }
-    if (READBACK_LEVELS.indexOf(w.readsBack) > READBACK_LEVELS.indexOf(s.readsBack))
-      s = {
-        readsBack: w.readsBack,
-        file: S,
+    if (READBACK_LEVELS.indexOf(result.readsBack) > READBACK_LEVELS.indexOf(worst.readsBack))
+      worst = {
+        readsBack: result.readsBack,
+        file: path,
       };
   }
-  return y !== undefined
+  return notReadWhy !== undefined
     ? {
-        notRead: h,
-        why: y,
+        notRead: notReadPaths,
+        why: notReadWhy,
       }
-    : s;
+    : worst;
 }
 //@ chunk-e6aww6q8.js:4210813-4210957 placement
 /**
  * 找出 enabledPlugins 中与插件 id 对应的所有键（含大小写/别名变体），排除属于其他已安装插件的键。
  */
-function enabledPluginKeys(e, n, r = []) {
-  let keys = Object.keys(e ?? {});
-  let pluginName = findPluginName(keys, n);
-  return uniq([...findBindingKeysFor(keys, n), ...(pluginName === undefined ? [] : [pluginName])]).filter(
-    (y) => y === n || !r.some((S) => pluginNamesEqual(S, y)),
-  );
+function enabledPluginKeys(enabledPlugins, pluginId, exclude = []) {
+  let keys = Object.keys(enabledPlugins ?? {});
+  let pluginName = findPluginName(keys, pluginId);
+  return uniq([
+    ...findBindingKeysFor(keys, pluginId),
+    ...(pluginName === undefined ? [] : [pluginName]),
+  ]).filter((key) => key === pluginId || !exclude.some((excludedId) => pluginNamesEqual(excludedId, key)));
 }
 //@ chunk-e6aww6q8.js:4210957-4211007 placement
 /**
  * 判断路径是否已不存在。
  */
-async function isPathGone(e) {
-  return (await pathPresence(e)) === "gone";
+async function isPathGone(path) {
+  return (await pathPresence(path)) === "gone";
 }
 //@ chunk-e6aww6q8.js:4211007-4211066 placement
 /**
@@ -491,56 +507,58 @@ function networkPathRetryHint(entries, action) {
   }. Then ${step}${linkEntries.length < networkEntries.length ? ". If you see this again with no such link, a path cannot be checked, and trying again will not help" : ""}`;
 }
 //@ chunk-e6aww6q8.js:4213599-4213777 placement
-function isBlockingPolicyLoadError(e) {
-  if (e.file === PARENT_MANAGED_SETTINGS_SOURCE_LABEL) return false;
+function isBlockingPolicyLoadError(loadError) {
+  if (loadError.file === PARENT_MANAGED_SETTINGS_SOURCE_LABEL) return false;
   return (
-    e.severity !== "warning" ||
-    (e.userWritable !== true &&
-      e.wslIgnored !== true &&
-      (e.path === "enabledPlugins" || e.path.startsWith("enabledPlugins.")))
+    loadError.severity !== "warning" ||
+    (loadError.userWritable !== true &&
+      loadError.wslIgnored !== true &&
+      (loadError.path === "enabledPlugins" || loadError.path.startsWith("enabledPlugins.")))
   );
 }
 //@ chunk-e6aww6q8.js:4213777-4213910 placement
-function projectSettingsIdentity(e) {
-  if (basename(dirname(e)) !== ".claude") return;
-  let n = dirname(dirname(e));
-  let r = safeResolvePath(getFsImplementation(), n);
-  return `${r.isCanonical ? r.resolvedPath : n}\x00${basename(e)}`;
+function projectSettingsIdentity(filePath) {
+  if (basename(dirname(filePath)) !== ".claude") return;
+  let projectDir = dirname(dirname(filePath));
+  let resolved = safeResolvePath(getFsImplementation(), projectDir);
+  return `${resolved.isCanonical ? resolved.resolvedPath : projectDir}\x00${basename(filePath)}`;
 }
 //@ chunk-e6aww6q8.js:4213910-4214383 placement
 /**
  * 计算某设置来源对插件的启用状态条目：合并内存中的设置、flag 设置与磁盘内容，策略设置加载出错时视为不可读；未启用返回 undefined。
  */
-async function sourceEnablementEntry(e, n, r = []) {
-  let settingsForSource = getSettingsForSource(e);
-  let settingsFilePathForSource = getSettingsFilePathForSource(e);
-  let y =
+async function sourceEnablementEntry(source, pluginId, exclude = []) {
+  let settingsForSource = getSettingsForSource(source);
+  let filePath = getSettingsFilePathForSource(source);
+  let memoryState =
     settingsForSource !== null && settingsForSource !== undefined
-      ? enabledPluginsState(settingsForSource.enabledPlugins, n, r)
+      ? enabledPluginsState(settingsForSource.enabledPlugins, pluginId, exclude)
       : "off";
-  let S = e === "flagSettings" ? flagSettingsEnablement(n, r, settingsFilePathForSource) : undefined;
-  let w =
-    S !== undefined && !S.isJson && settingsFilePathForSource !== undefined
-      ? await userSettingsEnablement(settingsFilePathForSource, n, r)
+  let flagState = source === "flagSettings" ? flagSettingsEnablement(pluginId, exclude, filePath) : undefined;
+  let pinnedFileState =
+    flagState !== undefined && !flagState.isJson && filePath !== undefined
+      ? await userSettingsEnablement(filePath, pluginId, exclude)
       : "off";
-  let L =
-    y === "off" && e === "policySettings" && getPolicySettingsLoadErrors().some(isBlockingPolicyLoadError)
+  let adjustedMemoryState =
+    memoryState === "off" &&
+    source === "policySettings" &&
+    getPolicySettingsLoadErrors().some(isBlockingPolicyLoadError)
       ? "unreadable"
-      : y;
-  let G = maxReadback(L, S?.readsBack ?? "off");
-  let q = maxReadback(G, w);
-  return q === "off"
+      : memoryState;
+  let withFlag = maxReadback(adjustedMemoryState, flagState?.readsBack ?? "off");
+  let worst = maxReadback(withFlag, pinnedFileState);
+  return worst === "off"
     ? undefined
     : {
-        source: e,
-        file: settingsFilePathForSource ?? e,
-        readsBack: q,
-        ...(q !== G && {
+        source,
+        file: filePath ?? source,
+        readsBack: worst,
+        ...(worst !== withFlag && {
           onDiskNow: true,
         }),
-        ...(S?.readsBack === "unreadable" &&
-          q === "unreadable" &&
-          w !== "unreadable" && {
+        ...(flagState?.readsBack === "unreadable" &&
+          worst === "unreadable" &&
+          pinnedFileState !== "unreadable" && {
             fromMemory: true,
           }),
       };
@@ -549,211 +567,246 @@ async function sourceEnablementEntry(e, n, r = []) {
 /**
  * 列出卸载时需要检查的设置文件（settings.json、settings.local.json、附加目录）。
  */
-async function listUninstallSettingsFiles(e, n = [], r = []) {
+async function listUninstallSettingsFiles(pluginId, exclude = [], otherFolders = []) {
   invalidateCommandNames();
-  let s = isWorkspaceRestricted() ? [] : r.filter((ke) => realpathAllowMissing_2(ke));
-  let h = [
-    ...UNINSTALL_SETTING_SOURCES.flatMap((ke) =>
-      settingsPathsForSource(ke).map((we) => [ke, we, isWorkspaceRestrictedSource(ke)]),
+  let launchFolders = isWorkspaceRestricted()
+    ? []
+    : otherFolders.filter((folder) => realpathAllowMissing_2(folder));
+  let candidates = [
+    ...UNINSTALL_SETTING_SOURCES.flatMap((source) =>
+      settingsPathsForSource(source).map((path) => [source, path, isWorkspaceRestrictedSource(source)]),
     ),
-    ...getAdditionalDirectoriesForClaudeMd().flatMap((ke) =>
-      ["settings.json", "settings.local.json"].map((we) => ["addDir", join(ke, ".claude", we), false]),
+    ...getAdditionalDirectoriesForClaudeMd().flatMap((dir) =>
+      ["settings.json", "settings.local.json"].map((fileName) => [
+        "addDir",
+        join(dir, ".claude", fileName),
+        false,
+      ]),
     ),
-    ...r
-      .filter((ke) => !s.includes(ke))
-      .flatMap((ke) =>
-        ["settings.json", "settings.local.json"].map((we) => [
+    ...otherFolders
+      .filter((folder) => !launchFolders.includes(folder))
+      .flatMap((folder) =>
+        ["settings.json", "settings.local.json"].map((fileName) => [
           "otherFolder",
-          join(ke, ".claude", we),
+          join(folder, ".claude", fileName),
           isWorkspaceRestricted(),
         ]),
       ),
   ];
-  let y = [];
-  let S = new Set();
-  let w = new Set();
-  let L = new Set();
-  let G = new Set();
-  let q = [];
-  let Z = [];
-  for (let [ke, we, Ee] of h) {
-    if (ke === "otherFolder" && !Ee && realpathAllowMissing_2(we)) {
-      q.push(we);
+  let entries = [];
+  let seenNormal = new Set();
+  let seenRestricted = new Set();
+  let seenRoutes = new Set();
+  let seenFiles = new Set();
+  let extraFolders = [];
+  let normalFiles = [];
+  for (let [source, path, restricted] of candidates) {
+    if (source === "otherFolder" && !restricted && realpathAllowMissing_2(path)) {
+      extraFolders.push(path);
       continue;
     }
-    if (S.has(we) || L.has(we) || (Ee && w.has(we))) continue;
-    if (Ee) w.add(we);
-    else S.add(we);
-    if (ke === "userSettings" && r.length > 0) {
-      let Ie = safeResolvePath(getFsImplementation(), we);
-      if (Ie.isCanonical) L.add(Ie.resolvedPath);
+    if (seenNormal.has(path) || seenRoutes.has(path) || (restricted && seenRestricted.has(path))) continue;
+    if (restricted) seenRestricted.add(path);
+    else seenNormal.add(path);
+    if (source === "userSettings" && otherFolders.length > 0) {
+      let resolved = safeResolvePath(getFsImplementation(), path);
+      if (resolved.isCanonical) seenRoutes.add(resolved.resolvedPath);
     }
-    let Ae = await settingsFileEnablement(ke, we, Ee, e, n);
-    if ("notRead" in Ae) {
-      G.add(we);
-      y.push({
-        source: ke,
-        file: we,
+    let state = await settingsFileEnablement(source, path, restricted, pluginId, exclude);
+    if ("notRead" in state) {
+      seenFiles.add(path);
+      entries.push({
+        source,
+        file: path,
         readsBack: "not-read-here",
         notReadBecause: "network-path",
-        notReadWhy: Ae.notRead,
+        notReadWhy: state.notRead,
       });
       continue;
     }
-    if (ke !== "otherFolder") Z.push(we);
-    if (Ae.route !== undefined) {
-      if (L.has(Ae.route)) continue;
-      L.add(Ae.route);
+    if (source !== "otherFolder") normalFiles.push(path);
+    if (state.route !== undefined) {
+      if (seenRoutes.has(state.route)) continue;
+      seenRoutes.add(state.route);
     }
-    G.add(we);
-    if (Ae.readsBack !== "off")
-      y.push({
-        source: ke,
-        file: we,
-        readsBack: Ae.readsBack,
+    seenFiles.add(path);
+    if (state.readsBack !== "off")
+      entries.push({
+        source,
+        file: path,
+        readsBack: state.readsBack,
       });
   }
-  let Se = q.length > 0 ? new Set(Z.flatMap((ke) => projectSettingsIdentity(ke) ?? [])) : undefined;
-  for (let ke of [
-    ...s.flatMap((we) => ["settings.json", "settings.local.json"].map((Ee) => join(we, ".claude", Ee))),
-    ...q.filter((we) => {
-      let Ee = projectSettingsIdentity(we);
-      return Ee === undefined || !Se?.has(Ee);
+  let excludedIdentities =
+    extraFolders.length > 0
+      ? new Set(normalFiles.flatMap((path) => projectSettingsIdentity(path) ?? []))
+      : undefined;
+  for (let path of [
+    ...launchFolders.flatMap((folder) =>
+      ["settings.json", "settings.local.json"].map((fileName) => join(folder, ".claude", fileName)),
+    ),
+    ...extraFolders.filter((folder) => {
+      let identity = projectSettingsIdentity(folder);
+      return identity === undefined || !excludedIdentities?.has(identity);
     }),
   ]) {
-    if (G.has(ke) || L.has(ke)) continue;
-    G.add(ke);
-    y.push({
+    if (seenFiles.has(path) || seenRoutes.has(path)) continue;
+    seenFiles.add(path);
+    entries.push({
       source: "otherFolder",
-      file: ke,
+      file: path,
       readsBack: "not-read-here",
       notReadBecause: "network-path",
     });
   }
-  for (let ke of ["policySettings", "flagSettings"]) {
-    let we = await sourceEnablementEntry(ke, e, n);
-    if (we !== undefined) y.push(we);
+  for (let source of ["policySettings", "flagSettings"]) {
+    let entry = await sourceEnablementEntry(source, pluginId, exclude);
+    if (entry !== undefined) entries.push(entry);
   }
-  return y;
+  return entries;
 }
 //@ chunk-e6aww6q8.js:4215921-4218439 placement
 /**
  * 卸载插件时扫描各设置源（本地、项目、用户、附加目录）中对该插件的启用项。
  */
-async function scanSettingsForPluginUninstall(e, installedOthers, r, s) {
-  let h = s.theSessions === undefined ? undefined : join(s.theSessions);
-  let y = join(s.byAFreshWalk);
-  let S = uniq([...(h === undefined ? [] : [h]), y]);
-  let w = uniq([...r, ...S.map((At) => join(At, "..", ".."))]);
-  let L = await listUninstallSettingsFiles(e, installedOthers, w);
-  let G = isWorkspaceRestricted();
-  let q = new Map();
-  let Z = (At) => {
-    let It = q.get(At);
-    if (It === undefined) {
-      It = realpathAllowMissing_2(At);
-      q.set(At, It);
+async function scanSettingsForPluginUninstall(pluginId, exclude, folders, walk) {
+  let sessionFolder = walk.theSessions === undefined ? undefined : join(walk.theSessions);
+  let walkFolder = join(walk.byAFreshWalk);
+  let launchFolders = uniq([...(sessionFolder === undefined ? [] : [sessionFolder]), walkFolder]);
+  let candidateFolders = uniq([
+    ...folders,
+    ...launchFolders.map((launchFolder) => join(launchFolder, "..", "..")),
+  ]);
+  let settingsFiles = await listUninstallSettingsFiles(pluginId, exclude, candidateFolders);
+  let workspaceRestricted = isWorkspaceRestricted();
+  let realpathCache = new Map();
+  let realpathOf = (path) => {
+    let real = realpathCache.get(path);
+    if (real === undefined) {
+      real = realpathAllowMissing_2(path);
+      realpathCache.set(path, real);
     }
-    return It;
+    return real;
   };
-  let Se = new Map();
-  let ke = (At) => {
-    let It = Se.get(At);
-    if (It === undefined) {
-      let Yt = safeResolvePath(getFsImplementation(), At);
-      It = Yt.isCanonical ? Yt.resolvedPath : At;
-      Se.set(At, It);
+  let resolveCache = new Map();
+  let resolvedPathOf = (path) => {
+    let resolved = resolveCache.get(path);
+    if (resolved === undefined) {
+      let resolution = safeResolvePath(getFsImplementation(), path);
+      resolved = resolution.isCanonical ? resolution.resolvedPath : path;
+      resolveCache.set(path, resolved);
     }
-    return It;
+    return resolved;
   };
-  let we = new Set(L.filter((At) => At.readsBack === "not-read-here").map((At) => At.file));
-  let Ee = new Map();
-  let Ae = (At) => {
-    if (G) return ke(At);
-    if (Z(dirname(dirname(At)))) return At;
-    if (Z(At)) {
-      let It = projectSettingsIdentity(At);
-      return It === undefined ? At : (Ee.get(It) ?? It);
+  let notReadFiles = new Set(
+    settingsFiles
+      .filter((settingsFile) => settingsFile.readsBack === "not-read-here")
+      .map((settingsFile) => settingsFile.file),
+  );
+  let identityCache = new Map();
+  let canonicalOf = (path) => {
+    if (workspaceRestricted) return resolvedPathOf(path);
+    if (realpathOf(dirname(dirname(path)))) return path;
+    if (realpathOf(path)) {
+      let identity = projectSettingsIdentity(path);
+      return identity === undefined ? path : (identityCache.get(identity) ?? identity);
     }
-    return ke(At);
+    return resolvedPathOf(path);
   };
-  if (!G)
-    for (let At of [...L.filter((It) => It.source !== "otherFolder").map((It) => It.file), ...S]) {
-      if (we.has(At) || Z(dirname(dirname(At)))) continue;
-      let It = projectSettingsIdentity(At);
-      if (It !== undefined && !Ee.has(It)) Ee.set(It, Ae(At));
+  if (!workspaceRestricted)
+    for (let path of [
+      ...settingsFiles
+        .filter((settingsFile) => settingsFile.source !== "otherFolder")
+        .map((settingsFile) => settingsFile.file),
+      ...launchFolders,
+    ]) {
+      if (notReadFiles.has(path) || realpathOf(dirname(dirname(path)))) continue;
+      let identity = projectSettingsIdentity(path);
+      if (identity !== undefined && !identityCache.has(identity))
+        identityCache.set(identity, canonicalOf(path));
     }
-  let Ie = "\x00not read\x00";
-  let Me = (At) => (At.readsBack === "not-read-here" ? Ie + At.file : Ae(At.file));
-  let We = (At) => (we.has(At) ? Ie + At : Ae(At));
-  let ze = new Set(S.map(We));
-  let lt = h === undefined ? undefined : We(h);
-  let Je = We(y);
-  let nt = new Map();
-  let pt = new Map();
-  for (let At of L) {
-    let It = Me(At);
-    let Yt = {
-      said: At,
-      ...(ze.has(It)
+  let NOT_READ_PREFIX = "\x00not read\x00";
+  let keyOf = (settingsFile) =>
+    settingsFile.readsBack === "not-read-here"
+      ? NOT_READ_PREFIX + settingsFile.file
+      : canonicalOf(settingsFile.file);
+  let keyOfPath = (path) => (notReadFiles.has(path) ? NOT_READ_PREFIX + path : canonicalOf(path));
+  let launchKeys = new Set(launchFolders.map(keyOfPath));
+  let sessionKey = sessionFolder === undefined ? undefined : keyOfPath(sessionFolder);
+  let walkKey = keyOfPath(walkFolder);
+  let byKey = new Map();
+  let byFile = new Map();
+  for (let settingsFile of settingsFiles) {
+    let key = keyOf(settingsFile);
+    let record = {
+      said: settingsFile,
+      ...(launchKeys.has(key)
         ? {
             alsoThisLaunchs: "localSettings",
           }
-        : At.source === "localSettings"
+        : settingsFile.source === "localSettings"
           ? {
               alsoThisLaunchs: "legacyLocalSettings",
             }
-          : At.source === "projectSettings"
+          : settingsFile.source === "projectSettings"
             ? {
                 alsoThisLaunchs: "projectSettings",
               }
             : {}),
     };
-    if (!nt.has(It)) nt.set(It, Yt);
-    if (At.readsBack !== "not-read-here" && !pt.has(At.file)) pt.set(At.file, Yt);
+    if (!byKey.has(key)) byKey.set(key, record);
+    if (settingsFile.readsBack !== "not-read-here" && !byFile.has(settingsFile.file))
+      byFile.set(settingsFile.file, record);
   }
-  let Et = (At, It) => {
-    let Yt = nt.get(Ie + It);
-    if (G) return nt.get(It) ?? pt.get(It) ?? Yt;
-    if (Z(At)) return Yt ?? pt.get(It) ?? nt.get(It);
-    if (Z(It)) return Yt ?? nt.get(Ae(It));
+  let lookup = (folder, file) => {
+    let byPath = byKey.get(NOT_READ_PREFIX + file);
+    if (workspaceRestricted) return byKey.get(file) ?? byFile.get(file) ?? byPath;
+    if (realpathOf(folder)) return byPath ?? byFile.get(file) ?? byKey.get(file);
+    if (realpathOf(file)) return byPath ?? byKey.get(canonicalOf(file));
     if (
-      Yt === undefined ||
-      (Yt.said.notReadBecause === "network-path" &&
-        Yt.said.notReadWhy === undefined &&
-        w.some((qt) => qt !== At && Z(qt) && join(qt, ".claude", basename(It)) === It))
+      byPath === undefined ||
+      (byPath.said.notReadBecause === "network-path" &&
+        byPath.said.notReadWhy === undefined &&
+        candidateFolders.some(
+          (candidate) =>
+            candidate !== folder &&
+            realpathOf(candidate) &&
+            join(candidate, ".claude", basename(file)) === file,
+        ))
     )
-      return nt.get(ke(It));
-    return Yt;
+      return byKey.get(resolvedPathOf(file));
+    return byPath;
   };
-  let yt = new Map();
-  for (let At of r)
-    yt.set(
-      At,
-      ["settings.json", "settings.local.json"].flatMap((It) => {
-        let Yt = join(At, ".claude", It);
-        let qt = Et(At, Yt);
-        return qt === undefined
+  let byFolder = new Map();
+  for (let folder of folders)
+    byFolder.set(
+      folder,
+      ["settings.json", "settings.local.json"].flatMap((fileName) => {
+        let filePath = join(folder, ".claude", fileName);
+        let resolved = lookup(folder, filePath);
+        return resolved === undefined
           ? []
           : [
               {
-                file: Yt,
-                readsBack: qt.said.readsBack,
-                ...(qt.said.notReadBecause !== undefined && {
-                  notReadBecause: qt.said.notReadBecause,
+                file: filePath,
+                readsBack: resolved.said.readsBack,
+                ...(resolved.said.notReadBecause !== undefined && {
+                  notReadBecause: resolved.said.notReadBecause,
                 }),
-                ...(qt.alsoThisLaunchs !== undefined && {
-                  alsoThisLaunchs: qt.alsoThisLaunchs,
+                ...(resolved.alsoThisLaunchs !== undefined && {
+                  alsoThisLaunchs: resolved.alsoThisLaunchs,
                 }),
               },
             ];
       }),
     );
-  let found = L.find((At) => At.source === "localSettings" && !ze.has(Me(At)));
+  let found = settingsFiles.find(
+    (settingsFile) => settingsFile.source === "localSettings" && !launchKeys.has(keyOf(settingsFile)),
+  );
   return {
-    byFolder: yt,
-    thisLaunchsLocalFile: lt === undefined ? undefined : nt.get(lt)?.said.readsBack,
-    thisLaunchsLocalFileByAFreshWalk: Je === lt ? undefined : nt.get(Je)?.said.readsBack,
+    byFolder,
+    thisLaunchsLocalFile: sessionKey === undefined ? undefined : byKey.get(sessionKey)?.said.readsBack,
+    thisLaunchsLocalFileByAFreshWalk: walkKey === sessionKey ? undefined : byKey.get(walkKey)?.said.readsBack,
     thisLaunchsLegacyLocalFile:
       found === undefined
         ? undefined
@@ -764,7 +817,9 @@ async function scanSettingsForPluginUninstall(e, installedOthers, r, s) {
               notReadBecause: found.notReadBecause,
             }),
           },
-    thisLaunchsProjectFileOn: L.find((At) => At.source === "projectSettings" && At.readsBack === "on")?.file,
+    thisLaunchsProjectFileOn: settingsFiles.find(
+      (settingsFile) => settingsFile.source === "projectSettings" && settingsFile.readsBack === "on",
+    )?.file,
   };
 }
 //@ chunk-e6aww6q8.js:4218439-4219767 placement
@@ -774,160 +829,163 @@ async function scanSettingsForPluginUninstall(e, installedOthers, r, s) {
 async function decideUninstallDataAction(
   pluginId,
   { deleteDataDir, installedIds, storageV5, credentials },
-  y,
+  options,
 ) {
-  let S = false;
-  S = isOfficialPluginDirectoryId(pluginId);
-  let w = [];
-  let L = (Se) => deletePluginOptions(Se, storageV5, credentials, w);
-  let G;
-  if (S && installedIds !== "unknown") {
-    let Se = new Set(installedIds);
-    G = Se.has(pluginId) ? pluginId : [...Se].find((ke) => isSamePluginDirName(ke, pluginId));
+  let isDirectoryId = false;
+  isDirectoryId = isOfficialPluginDirectoryId(pluginId);
+  let failedOptionKeys = [];
+  let deleteOptions = (key) => deletePluginOptions(key, storageV5, credentials, failedOptionKeys);
+  let liveHolder;
+  if (isDirectoryId && installedIds !== "unknown") {
+    let installedSet = new Set(installedIds);
+    liveHolder = installedSet.has(pluginId)
+      ? pluginId
+      : [...installedSet].find((installedId) => isSamePluginDirName(installedId, pluginId));
   }
-  let q = {
+  let plan = {
     kind: "options-and-folder",
   };
-  q = decideDirectoryReleasePlan({
-    isDirectoryId: S,
-    ...y,
+  plan = decideDirectoryReleasePlan({
+    isDirectoryId,
+    ...options,
     installs:
       installedIds === "unknown"
         ? "unknown"
         : {
-            thisIdHasRecord: G === pluginId,
-            otherInstalledIdNamesFolder: G !== undefined && G !== pluginId,
+            thisIdHasRecord: liveHolder === pluginId,
+            otherInstalledIdNamesFolder: liveHolder !== undefined && liveHolder !== pluginId,
           },
   });
-  if (q.kind === "nothing")
+  if (plan.kind === "nothing")
     return {
       optionsGone: false,
       dataGone: false,
-      optionsNotGoneBecause: w,
-      ...(q.reason === "installs-unknown" && {
+      optionsNotGoneBecause: failedOptionKeys,
+      ...(plan.reason === "installs-unknown" && {
         installsUnknown: true,
       }),
-      ...(q.reason === "record-reappeared" &&
-        G !== undefined && {
-          liveHolder: G,
+      ...(plan.reason === "record-reappeared" &&
+        liveHolder !== undefined && {
+          liveHolder,
         }),
-      plan: q,
+      plan,
     };
-  let Z = await L(pluginId);
-  if (q.kind === "own-options-only")
+  let optionsGone = await deleteOptions(pluginId);
+  if (plan.kind === "own-options-only")
     return {
-      optionsGone: Z,
+      optionsGone,
       dataGone: false,
-      optionsNotGoneBecause: w,
-      ...(G !== undefined && {
-        liveHolder: G,
+      optionsNotGoneBecause: failedOptionKeys,
+      ...(liveHolder !== undefined && {
+        liveHolder,
       }),
-      plan: q,
+      plan,
     };
-  if (q.kind === "everything-of-the-name") {
-    let Se = true;
-    let ke = await listStoredPluginOptionKeys(credentials);
-    if (ke.unreadable.length > 0) {
-      Z = false;
-      for (let Ae of ke.unreadable) if (!w.includes(Ae)) w.push(Ae);
+  if (plan.kind === "everything-of-the-name") {
+    let dataGone = true;
+    let stored = await listStoredPluginOptionKeys(credentials);
+    if (stored.unreadable.length > 0) {
+      optionsGone = false;
+      for (let key of stored.unreadable) if (!failedOptionKeys.includes(key)) failedOptionKeys.push(key);
     }
-    for (let Ae of findBindingKeysFor(ke.ids, pluginId)) if (Ae !== pluginId) Z = (await L(Ae)) && Z;
+    for (let key of findBindingKeysFor(stored.ids, pluginId))
+      if (key !== pluginId) optionsGone = (await deleteOptions(key)) && optionsGone;
     let pluginDataDirs = await findPluginDataDirs(pluginId);
-    let Ee = pluginDataDirPath(pluginId);
-    for (let Ae of deleteDataDir ? uniq([Ee, ...(pluginDataDirs ?? [])]) : [])
-      await removeDirectoryTreeNoFollow_2(Ae).catch((error) => {
-        logForDebugging(`Failed to delete plugin data dir ${Ae}: ${errorMessage(error)}`, {
+    let dataDir = pluginDataDirPath(pluginId);
+    for (let dir of deleteDataDir ? uniq([dataDir, ...(pluginDataDirs ?? [])]) : [])
+      await removeDirectoryTreeNoFollow_2(dir).catch((error) => {
+        logForDebugging(`Failed to delete plugin data dir ${dir}: ${errorMessage(error)}`, {
           level: "warn",
         });
       });
-    Se = pluginDataDirs !== undefined && (await isMarketplaceGone(pluginId));
-    for (let Ae of pluginDataDirs ?? []) Se = (await isPathGone(Ae)) && Se;
+    dataGone = pluginDataDirs !== undefined && (await isMarketplaceGone(pluginId));
+    for (let dir of pluginDataDirs ?? []) dataGone = (await isPathGone(dir)) && dataGone;
     return {
-      optionsGone: Z,
-      dataGone: Se,
-      optionsNotGoneBecause: w,
-      plan: q,
+      optionsGone,
+      dataGone,
+      optionsNotGoneBecause: failedOptionKeys,
+      plan,
     };
   }
   return {
-    optionsGone: Z,
+    optionsGone,
     dataGone: !deleteDataDir || (await deletePluginDataDir(pluginId)) !== "failed",
-    optionsNotGoneBecause: w,
-    plan: q,
+    optionsNotGoneBecause: failedOptionKeys,
+    plan,
   };
 }
 //@ chunk-e6aww6q8.js:4219767-4219859 placement
 /**
  * 按允许列表过滤（unknown 表示不过滤）。
  */
-function filterByList(installedOthers, n) {
-  if (n === "unknown") return installedOthers;
-  let r = new Set(n);
-  return installedOthers.filter((s) => r.has(s));
+function filterByList(installedOthers, ids) {
+  if (ids === "unknown") return installedOthers;
+  let idSet = new Set(ids);
+  return installedOthers.filter((id) => idSet.has(id));
 }
 //@ chunk-e6aww6q8.js:4219859-4220320 placement
 /**
  * 规划卸载后的清理：列出仍启用该插件的设置文件与目录名绑定状态，决定选项/数据目录的删除计划，并在需要时释放目录绑定。
  */
 async function planUninstallCleanup(
-  e,
+  pluginId,
   { deleteDataDir, installedIds, installedOthers = [], storageV5, credentials },
 ) {
-  let S = [];
-  let w = "none";
-  let L = installedIds === "unknown" ? installedIds : [...installedIds];
-  if (isOfficialPluginDirectoryId(e)) {
-    S = await listUninstallSettingsFiles(e, filterByList(installedOthers, L));
-    if (S.length > 0) w = await releaseDirectoryBinding(e, false);
+  let stillOn = [];
+  let entry = "none";
+  let ids = installedIds === "unknown" ? installedIds : [...installedIds];
+  if (isOfficialPluginDirectoryId(pluginId)) {
+    stillOn = await listUninstallSettingsFiles(pluginId, filterByList(installedOthers, ids));
+    if (stillOn.length > 0) entry = await releaseDirectoryBinding(pluginId, false);
   }
-  let G = await decideUninstallDataAction(
-    e,
+  let decision = await decideUninstallDataAction(
+    pluginId,
     {
       deleteDataDir,
-      installedIds: L,
+      installedIds: ids,
       storageV5,
       credentials,
     },
     {
-      stillSwitchedOn: S.length > 0,
-      entry: w,
+      stillSwitchedOn: stillOn.length > 0,
+      entry,
     },
   );
-  let entry =
-    G.plan.kind === "nothing" && G.plan.reason === "still-switched-on"
-      ? w
-      : await releaseDirectoryBinding(e, G.optionsGone && G.dataGone);
+  let entry_2 =
+    decision.plan.kind === "nothing" && decision.plan.reason === "still-switched-on"
+      ? entry
+      : await releaseDirectoryBinding(pluginId, decision.optionsGone && decision.dataGone);
   return {
-    ...G,
-    stillOn: S,
-    entry,
+    ...decision,
+    stillOn,
+    entry: entry_2,
   };
 }
 //@ chunk-e6aww6q8.js:4220320-4220767 placement
 /**
  * 根据插件安装状态决定卸载时可删除的范围：仅选项与目录、什么都不删（仍启用、安装记录未知或重新出现）、只删自己的选项，或删除该名下的全部内容。
  */
-function decideDirectoryReleasePlan(e) {
-  if (!e.isDirectoryId)
+function decideDirectoryReleasePlan(input) {
+  if (!input.isDirectoryId)
     return {
       kind: "options-and-folder",
     };
-  if (e.stillSwitchedOn && e.entry !== "none")
+  if (input.stillSwitchedOn && input.entry !== "none")
     return {
       kind: "nothing",
       reason: "still-switched-on",
     };
-  if (e.installs === "unknown")
+  if (input.installs === "unknown")
     return {
       kind: "nothing",
       reason: "installs-unknown",
     };
-  if (e.installs.thisIdHasRecord)
+  if (input.installs.thisIdHasRecord)
     return {
       kind: "nothing",
       reason: "record-reappeared",
     };
-  if (e.installs.otherInstalledIdNamesFolder)
+  if (input.installs.otherInstalledIdNamesFolder)
     return {
       kind: "own-options-only",
       reason: "live-holder",

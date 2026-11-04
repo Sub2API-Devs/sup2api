@@ -66,48 +66,62 @@ import { logFeatureOkAsync, logFeatureSadAsync, logFeatureBadAsync } from "../an
 import { isPendingNotOver } from "../../utils/toolErrors.js";
 import { currentFetchHold } from "../../utils/plugins/hooksModulesRollout.js";
 import { EVENT_LOGGING_FLAG_WAIT_MS } from "../../utils/startupFlagWait.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-c18v4hz4.js:5344-5407 placement
 /**
  * 状态为 dead 且认证拒绝与组织无关时视为凭据拒绝。
  */
-function isCredentialRefusalNotOrg(e, n, r) {
-  return e === "dead" && classifyAuthDenial(n, r) !== "organization";
+function isCredentialRefusalNotOrg(credentialState, serverErrorCode, serverAuthDenial) {
+  return (
+    credentialState === "dead" && classifyAuthDenial(serverErrorCode, serverAuthDenial) !== "organization"
+  );
 }
 //@ chunk-c18v4hz4.js:5407-5723 placement
-function refusalForOrgSubscription(e, n, r, o) {
-  if (knownOrUndefined(n) === undefined) return;
-  let a = classifyAuthDenial(r, o);
-  if (a === "organization") return "refused_not_entitled";
-  if (a === "credential") return "refused_credential";
-  if (e === 404) return "none_configured";
-  if (e === 401 || e === undefined) return;
-  if (e === 403) return "refused_not_entitled";
-  if (isRetryableHttpStatus(e) || e >= 500) return;
+function refusalForOrgSubscription(status, serverErrorType, serverErrorCode, serverAuthDenial) {
+  if (knownOrUndefined(serverErrorType) === undefined) return;
+  let denial = classifyAuthDenial(serverErrorCode, serverAuthDenial);
+  if (denial === "organization") return "refused_not_entitled";
+  if (denial === "credential") return "refused_credential";
+  if (status === 404) return "none_configured";
+  if (status === 401 || status === undefined) return;
+  if (status === 403) return "refused_not_entitled";
+  if (isRetryableHttpStatus(status) || status >= 500) return;
   return "unavailable_server";
 }
 //@ chunk-c18v4hz4.js:5723-6656 placement
-function policyRefusalReason(e, n, r, o, a, d) {
-  if (isCredentialRefusalNotOrg(n, a, d)) return "refused_credential";
-  let u = knownOrUndefined(o);
-  let s = refusalForOrgSubscription(r, u, a, d);
-  if (s !== undefined && (e === "auth_failed" || e === "request_failed")) return s;
-  switch (e) {
+function policyRefusalReason(
+  credentialState,
+  serverErrorCode,
+  httpStatus,
+  serverErrorType,
+  denialCodes,
+  tokenDenialCodes,
+) {
+  if (isCredentialRefusalNotOrg(serverErrorCode, denialCodes, tokenDenialCodes)) return "refused_credential";
+  let errorType = knownOrUndefined(serverErrorType);
+  let subscriptionRefusal = refusalForOrgSubscription(httpStatus, errorType, denialCodes, tokenDenialCodes);
+  if (
+    subscriptionRefusal !== undefined &&
+    (credentialState === "auth_failed" || credentialState === "request_failed")
+  )
+    return subscriptionRefusal;
+  switch (credentialState) {
     case "auth_failed":
-      if (n === "dead") return "refused_credential";
-      if (r === 401) return "unavailable_credential_refresh";
-      if (r === 403) return "blocked_by_intermediary";
-      if (r === undefined && u === undefined)
-        return n === undefined ? "client_no_credentials" : "unavailable_credential_refresh";
+      if (serverErrorCode === "dead") return "refused_credential";
+      if (httpStatus === 401) return "unavailable_credential_refresh";
+      if (httpStatus === 403) return "blocked_by_intermediary";
+      if (httpStatus === undefined && errorType === undefined)
+        return serverErrorCode === undefined ? "client_no_credentials" : "unavailable_credential_refresh";
       return "refused_not_entitled";
     case "timeout":
       return "unavailable_timeout";
     case "network_error":
       return "unavailable_connect";
     case "request_failed":
-      if (isRetryableHttpStatus(r)) return "unavailable_rate_limited";
-      if (r === 304 || r === 404) return "blocked_by_intermediary";
-      return r === undefined ? "unavailable_connect" : "unavailable_server";
+      if (isRetryableHttpStatus(httpStatus)) return "unavailable_rate_limited";
+      if (httpStatus === 304 || httpStatus === 404) return "blocked_by_intermediary";
+      return httpStatus === undefined ? "unavailable_connect" : "unavailable_server";
     case "spurious_304":
     case "stale_tunnel_credential":
       return "unavailable_server";
@@ -124,97 +138,111 @@ function policyRefusalReason(e, n, r, o, a, d) {
 /**
  * 读取同步时间的默认实现，与保存它的插槽。
  */
-var syncAgeReader = () => remoteSettingsAgeMs();
-var syncAgeReaderSlot = identity(
-  {
-    read: syncAgeReader,
-  },
-  (e) => {
-    e.read = syncAgeReader;
-  },
-);
+var syncAgeReader; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var syncAgeReaderSlot;
+deferInit("chunk-c18v4hz4.js:6656", () => {
+  syncAgeReader = () => remoteSettingsAgeMs();
+  syncAgeReaderSlot = identity(
+    {
+      read: syncAgeReader,
+    },
+    (slot) => {
+      slot.read = syncAgeReader;
+    },
+  );
+});
 //@ chunk-c18v4hz4.js:6704-6827 placement
 function storedSettingsState() {
-  let e = false;
+  let present = false;
   try {
-    e = getRemoteManagedSettingsSyncFromCache() !== null;
+    present = getRemoteManagedSettingsSyncFromCache() !== null;
   } catch {
-    e = false;
+    present = false;
   }
-  let n;
+  let ageMs;
   try {
-    n = e ? syncAgeReaderSlot.read() : undefined;
+    ageMs = present ? syncAgeReaderSlot.read() : undefined;
   } catch {
-    n = undefined;
+    ageMs = undefined;
   }
   return {
-    present: e,
-    ageMs: n,
+    present,
+    ageMs,
   };
 }
 //@ chunk-c18v4hz4.js:6827-6907 placement
 /**
  * 视为「无需组织配置」的排除原因集合。
  */
-var NOT_REQUIRED_REASONS = new Set(["sandboxed_entrypoint", "claude_tag", "hermetic_remote_session"]);
+var NOT_REQUIRED_REASONS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-c18v4hz4.js:6827", () => {
+  NOT_REQUIRED_REASONS = new Set(["sandboxed_entrypoint", "claude_tag", "hermetic_remote_session"]);
+});
 //@ chunk-c18v4hz4.js:6907-7842 placement
 function settingsOutcome(
-  e,
-  n,
-  r,
-  o = {
+  policy,
+  lastLoad,
+  ineligibleReason,
+  storedSettings = {
     present: false,
     ageMs: undefined,
   },
-  a = false,
+  required = false,
 ) {
-  let d = o.present || e?.hadCache === true || e?.source === "cache" || n?.state === "stale_cache";
-  let u = {
-    hasAdmittedCache: d,
-    admittedCacheAgeMs: d ? o.ageMs : undefined,
+  let hadCache =
+    storedSettings.present ||
+    policy?.hadCache === true ||
+    policy?.source === "cache" ||
+    lastLoad?.state === "stale_cache";
+  let cacheFacts = {
+    hasAdmittedCache: hadCache,
+    admittedCacheAgeMs: hadCache ? storedSettings.ageMs : undefined,
   };
-  let s = r ?? (n?.state === "ineligible" ? n.reason : undefined);
-  if (s !== undefined || e?.source === "ineligible")
+  let reason = ineligibleReason ?? (lastLoad?.state === "ineligible" ? lastLoad.reason : undefined);
+  if (reason !== undefined || policy?.source === "ineligible")
     return {
-      ...u,
-      reason: s !== undefined && NOT_REQUIRED_REASONS.has(s) && !a ? "not_required" : "not_attempted",
+      ...cacheFacts,
+      reason:
+        reason !== undefined && NOT_REQUIRED_REASONS.has(reason) && !required
+          ? "not_required"
+          : "not_attempted",
     };
-  if (n?.state === "ok")
+  if (lastLoad?.state === "ok")
     return {
-      ...u,
-      reason: n.hasSettings ? "ok" : "none_configured",
+      ...cacheFacts,
+      reason: lastLoad.hasSettings ? "ok" : "none_configured",
     };
-  if (e?.source === "fetch")
+  if (policy?.source === "fetch")
     return {
-      ...u,
+      ...cacheFacts,
       reason: "ok",
     };
-  if (e?.source === "none")
+  if (policy?.source === "none")
     return {
-      ...u,
+      ...cacheFacts,
       reason: "none_configured",
     };
-  if (n?.state === "failed" || n?.state === "stale_cache")
+  if (lastLoad?.state === "failed" || lastLoad?.state === "stale_cache")
     return {
-      ...u,
+      ...cacheFacts,
       reason: settingsRefusalReason(
-        n.failure.errorKind,
-        n.failure.httpStatus,
-        n.failure.serverErrorType,
-        n.failure.credentialState,
-        n.failure.serverErrorCode,
-        n.failure.serverAuthDenial,
-        n.failure.noResponse,
+        lastLoad.failure.errorKind,
+        lastLoad.failure.httpStatus,
+        lastLoad.failure.serverErrorType,
+        lastLoad.failure.credentialState,
+        lastLoad.failure.serverErrorCode,
+        lastLoad.failure.serverAuthDenial,
+        lastLoad.failure.noResponse,
       ),
-      httpStatus: n.failure.httpStatus,
+      httpStatus: lastLoad.failure.httpStatus,
     };
-  if (e?.source === "error" || e?.source === "rejected")
+  if (policy?.source === "error" || policy?.source === "rejected")
     return {
-      ...u,
+      ...cacheFacts,
       reason: "client_error",
     };
   return {
-    ...u,
+    ...cacheFacts,
     reason: "unavailable_pending",
   };
 }
@@ -222,7 +250,7 @@ function settingsOutcome(
 function settingsRefusalReason(
   errorKind,
   httpStatus,
-  serverErrorType,
+  errorType,
   credentialState,
   serverErrorCode,
   serverAuthDenial,
@@ -230,15 +258,18 @@ function settingsRefusalReason(
 ) {
   if (isCredentialRefusalNotOrg(credentialState, serverErrorCode, serverAuthDenial))
     return "refused_credential";
-  let s = knownOrUndefined(serverErrorType);
-  let f = refusalForOrgSubscription(
+  let errorType_2 = knownOrUndefined(errorType);
+  let subscriptionRefusal = refusalForOrgSubscription(
     httpStatus ?? (errorKind === "http_401" ? 401 : errorKind === "http_403" ? 403 : undefined),
-    s,
+    errorType_2,
     serverErrorCode,
     serverAuthDenial,
   );
-  if (f !== undefined && (errorKind === "http_401" || errorKind === "http_403" || errorKind === "http_4xx"))
-    return f;
+  if (
+    subscriptionRefusal !== undefined &&
+    (errorKind === "http_401" || errorKind === "http_403" || errorKind === "http_4xx")
+  )
+    return subscriptionRefusal;
   switch (errorKind) {
     case "http_401":
       return credentialState === "dead" ? "refused_credential" : "unavailable_credential_refresh";
@@ -282,79 +313,79 @@ function gateSurface() {
  */
 function evaluateOrgConfigGate(
   flag,
-  n,
-  r,
-  lastLoadStatus,
+  inputs,
+  state,
+  lastLoad,
   ineligibleReason,
   source = "fallback",
-  u = {
+  storedSettings = {
     present: false,
     ageMs: undefined,
   },
-  s = false,
-  readSignatureFacts,
+  required = false,
+  readFacts,
 ) {
-  let f = orgConfigCandidacy(flag, n);
-  let m = orgConfigCandidacy(
+  let candidacy = orgConfigCandidacy(flag, inputs);
+  let armedCandidacy = orgConfigCandidacy(
     {
       ...flag,
       enabled: true,
       plans: ["team", "enterprise"],
       percent: 100,
     },
-    n,
+    inputs,
   );
-  let _ = policyOutcomeSummary(r.policy, r.policyGateFields);
-  let v = settingsOutcome(r.settings, lastLoadStatus, ineligibleReason, u, s);
-  let P = {
+  let policyOutcome = policyOutcomeSummary(state.policy, state.policyGateFields);
+  let settingsFacts = settingsOutcome(state.settings, lastLoad, ineligibleReason, storedSettings, required);
+  let armedInput = {
     flag: {
       ...flag,
       enabled: true,
       plans: ["team", "enterprise"],
       percent: 100,
     },
-    candidacy: m,
-    policy: _,
-    settings: v,
+    candidacy: armedCandidacy,
+    policy: policyOutcome,
+    settings: settingsFacts,
     surface: gateSurface(),
   };
-  let G = orgConfigGateDecision(P);
+  let decision = orgConfigGateDecision(armedInput);
   return {
-    decision: fromEnum(G.verdict),
-    decision_reason: fromEnumOpt(G.reason),
-    decision_resource: fromEnumOpt(G.resource),
-    surface: fromEnum(G.surface),
+    decision: fromEnum(decision.verdict),
+    decision_reason: fromEnumOpt(decision.reason),
+    decision_resource: fromEnumOpt(decision.resource),
+    surface: fromEnum(decision.surface),
     blocked_ms: 0,
-    candidate_if_armed: m.candidate,
-    exclusion_if_armed: fromEnumOpt(m.candidate ? undefined : m.exclusion),
-    candidate_now: f.candidate,
-    exclusion_now: fromEnumOpt(f.candidate ? undefined : f.exclusion),
+    candidate_if_armed: armedCandidacy.candidate,
+    exclusion_if_armed: fromEnumOpt(armedCandidacy.candidate ? undefined : armedCandidacy.exclusion),
+    candidate_now: candidacy.candidate,
+    exclusion_now: fromEnumOpt(candidacy.candidate ? undefined : candidacy.exclusion),
     flag_enabled: flag.enabled,
     flag_source: fromEnum(source),
     flag_percent: flag.percent,
     grace_ttl_hours: flag.graceTtlHours,
-    tier: fromEnumOpt(hasOpusAccess(n.tier)),
-    credential_shape: fromEnum(n.credentialShape),
-    policy_reason: fromEnum(_.reason),
-    policy_has_cache: _.hasAdmittedCache,
-    policy_cache_age_ms: _.admittedCacheAgeMs,
-    settings_reason: fromEnum(v.reason),
-    settings_has_cache: v.hasAdmittedCache,
-    settings_cache_age_ms: v.admittedCacheAgeMs,
-    ...storedCopyFields(P, readSignatureFacts),
+    tier: fromEnumOpt(hasOpusAccess(inputs.tier)),
+    credential_shape: fromEnum(inputs.credentialShape),
+    policy_reason: fromEnum(policyOutcome.reason),
+    policy_has_cache: policyOutcome.hasAdmittedCache,
+    policy_cache_age_ms: policyOutcome.admittedCacheAgeMs,
+    settings_reason: fromEnum(settingsFacts.reason),
+    settings_has_cache: settingsFacts.hasAdmittedCache,
+    settings_cache_age_ms: settingsFacts.admittedCacheAgeMs,
+    ...storedCopyFields(armedInput, readFacts),
   };
 }
 //@ chunk-c18v4hz4.js:9886-10285 placement
-function storedCopyFields(e, n) {
-  if (n === undefined) return {};
+function storedCopyFields(armedInput, readFacts) {
+  if (readFacts === undefined) return {};
   try {
-    let r = n();
+    let facts = readFacts();
     return {
-      settings_stored_copy: fromEnum(r.settings.storedCopy),
-      policy_stored_copy: fromEnum(r.policy.storedCopy),
-      settings_live_signed: fromEnum(r.settings.liveSigned),
-      policy_live_signed: fromEnum(r.policy.liveSigned),
-      decision_if_strict: fromEnum(resolveCacheTrustVerdict(e, r)),
+      settings_stored_copy: fromEnum(facts.settings.storedCopy),
+      policy_stored_copy: fromEnum(facts.policy.storedCopy),
+      settings_live_signed: fromEnum(facts.settings.liveSigned),
+      policy_live_signed: fromEnum(facts.policy.liveSigned),
+      decision_if_strict: fromEnum(resolveCacheTrustVerdict(armedInput, facts)),
     };
   } catch (error) {
     logError(
@@ -370,63 +401,63 @@ function storedCopyFields(e, n) {
 /**
  * 分别按“信任缓存/不信任缓存”两种假设求 verdict，相同则返回，否则 pending。旧版名 orgStatus 为错配，与 fast mode 无关（远程桥接门控）。
  */
-function resolveCacheTrustVerdict(e, n) {
-  let r = evaluateVerdictWithCacheTrust(e, n, true);
-  let o = evaluateVerdictWithCacheTrust(e, n, false);
-  return r === o ? r : "pending";
+function resolveCacheTrustVerdict(armedInput, signatureFacts) {
+  let strictVerdict = evaluateVerdictWithCacheTrust(armedInput, signatureFacts, true);
+  let lenientVerdict = evaluateVerdictWithCacheTrust(armedInput, signatureFacts, false);
+  return strictVerdict === lenientVerdict ? strictVerdict : "pending";
 }
 //@ chunk-c18v4hz4.js:10355-10466 placement
 /**
  * 按是否信任存储副本调整 policy/settings 后调用 eQe 求 verdict。
  */
-function evaluateVerdictWithCacheTrust(e, n, r) {
+function evaluateVerdictWithCacheTrust(armedInput, signatureFacts, trustAnyway) {
   return orgConfigGateDecision({
-    ...e,
-    policy: maskUntrustedAdmittedCache(e.policy, n.policy, r),
-    settings: maskUntrustedAdmittedCache(e.settings, n.settings, r),
+    ...armedInput,
+    policy: maskUntrustedAdmittedCache(armedInput.policy, signatureFacts.policy, trustAnyway),
+    settings: maskUntrustedAdmittedCache(armedInput.settings, signatureFacts.settings, trustAnyway),
   }).verdict;
 }
 //@ chunk-c18v4hz4.js:10466-10607 placement
 /**
  * 存储副本不可信时去掉 hasAdmittedCache/admittedCacheAgeMs。
  */
-function maskUntrustedAdmittedCache(e, { storedCopy }, r) {
-  return storedCopy === "trusted" || storedCopy === "not_read" || (storedCopy === "pending" && r)
-    ? e
+function maskUntrustedAdmittedCache(outcome, { storedCopy }, trustPending) {
+  return storedCopy === "trusted" || storedCopy === "not_read" || (storedCopy === "pending" && trustPending)
+    ? outcome
     : {
-        ...e,
+        ...outcome,
         hasAdmittedCache: false,
         admittedCacheAgeMs: undefined,
       };
 }
 //@ chunk-c18v4hz4.js:10607-10766 placement
-function registerOrgConfigGate(e) {
+function registerOrgConfigGate(options) {
   setOrgGateShadow(
-    (n) => {
+    (signatureFacts) => {
       let { flag, source } = readOrgConfigRequiredFlagWithSource();
       return evaluateOrgConfigGate(
         flag,
-        orgConfigInputs(e),
-        n,
+        orgConfigInputs(options),
+        signatureFacts,
         getLastLoadStatus(),
         getIneligibleReason(),
         source,
         storedSettingsState(),
         isOAuthEffective(),
-        e.readSignatureFacts,
+        options.readSignatureFacts,
       );
     },
-    e.settle === undefined ? undefined : withTimeout(e.settle, GATE_SETTLE_TIMEOUT_MS),
+    options.settle === undefined ? undefined : withTimeout(options.settle, GATE_SETTLE_TIMEOUT_MS),
   );
 }
 //@ chunk-c18v4hz4.js:10766-10779 placement
 var GATE_SETTLE_TIMEOUT_MS = 35000;
 //@ chunk-c18v4hz4.js:10779-10863 placement = withTimeout (0.805)
-function withTimeout(settle, n) {
+function withTimeout(settle, timeoutMs) {
   return () =>
     Promise.race([
       settle().catch(() => {}),
-      sleep(n, undefined, {
+      sleep(timeoutMs, undefined, {
         unref: true,
       }),
     ]);
@@ -453,15 +484,15 @@ function isGateRefusalFinal(decision) {
  * 等待下一次设置加载结果的观察器（promise + dispose）。
  */
 function nextSettingsOutcomeWatcher() {
-  let e = () => {};
+  let unsubscribe = () => {};
   return {
     recorded: new Promise((resolve) => {
-      e = onLastLoadStatusChanged(() => {
-        e();
+      unsubscribe = onLastLoadStatusChanged(() => {
+        unsubscribe();
         resolve();
       });
     }),
-    dispose: e,
+    dispose: unsubscribe,
   };
 }
 //@ chunk-c18v4hz4.js:16873-17067 placement
@@ -479,10 +510,10 @@ var DEFAULT_GATE_DEPS = {
 /**
  * 执行组织配置门控：拉取策略与设置，等待结果并记录事件，必要时阻止会话。
  */
-async function runOrgConfigGate(e, n = DEFAULT_GATE_DEPS) {
-  let r = n.now();
+async function runOrgConfigGate(options, deps = DEFAULT_GATE_DEPS) {
+  let startedAt = deps.now();
   try {
-    n.kickPolicy();
+    deps.kickPolicy();
   } catch (error) {
     logError(
       new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
@@ -492,7 +523,7 @@ async function runOrgConfigGate(e, n = DEFAULT_GATE_DEPS) {
     );
   }
   try {
-    n.kickSettings();
+    deps.kickSettings();
   } catch (error) {
     logError(
       new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
@@ -503,77 +534,91 @@ async function runOrgConfigGate(e, n = DEFAULT_GATE_DEPS) {
   }
   await withDeadline(
     Promise.all([
-      n.policySettled().catch(() => {}),
-      n.settingsSettled().catch(() => {}),
-      n.planReverified?.().catch(() => {}),
+      deps.policySettled().catch(() => {}),
+      deps.settingsSettled().catch(() => {}),
+      deps.planReverified?.().catch(() => {}),
     ]),
-    e,
+    options,
   );
-  let o = n.pendingConsentDialog();
-  if (o !== null) {
-    let a = n.nextSettingsOutcome();
+  let consentDialog = deps.pendingConsentDialog();
+  if (consentDialog !== null) {
+    let nextOutcome = deps.nextSettingsOutcome();
     try {
-      await o.catch(() => {});
-      await withDeadline(Promise.all([n.settingsSettled().catch(() => {}), a.recorded]), e);
+      await consentDialog.catch(() => {});
+      await withDeadline(
+        Promise.all([deps.settingsSettled().catch(() => {}), nextOutcome.recorded]),
+        options,
+      );
     } finally {
-      a.dispose();
+      nextOutcome.dispose();
     }
   }
-  return Math.max(0, Math.round(n.now() - r));
+  return Math.max(0, Math.round(deps.now() - startedAt));
 }
 //@ chunk-c18v4hz4.js:17737-17792 placement
 /**
  * 视为凭据门槛未通过的排除原因集合。
  */
-var CREDENTIAL_GATE_MISS_REASONS = new Set(["no_auth", "unsupported_subscription"]);
+var CREDENTIAL_GATE_MISS_REASONS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-c18v4hz4.js:17737", () => {
+  CREDENTIAL_GATE_MISS_REASONS = new Set(["no_auth", "unsupported_subscription"]);
+});
 //@ chunk-c18v4hz4.js:17792-18085 placement
-function isStoredLoginRefusal(e, n) {
-  if (n.storedLoginOrigin !== true) return false;
-  if (n.credentialShape !== "stored_login" && n.credentialShape !== "untiered_login") return false;
-  switch (e) {
+function isStoredLoginRefusal(reason, inputs) {
+  if (inputs.storedLoginOrigin !== true) return false;
+  if (inputs.credentialShape !== "stored_login" && inputs.credentialShape !== "untiered_login") return false;
+  switch (reason) {
     case "no_auth":
       return true;
     case "unsupported_subscription":
-      return n.credentialShape === "untiered_login" || n.tier === null || isOrgConfigPlan(n.tier);
+      return (
+        inputs.credentialShape === "untiered_login" || inputs.tier === null || isOrgConfigPlan(inputs.tier)
+      );
     default:
       return false;
   }
 }
 //@ chunk-c18v4hz4.js:18085-18232 placement
-var ELIGIBILITY_DEPS = {
-  memoizedReason: getIneligibleReason,
-  inputs: () => ({
-    credentialShape: credentialShapeInputs(),
-    storedLoginOrigin: isOAuthEffective(),
-    tier: getStoredOAuthSubscriptionType(),
-  }),
-  reset: resetEligibilityMemo,
-};
-var seenGateKeys = identity(
-  {
-    seen: new Set(),
-  },
-  (e) => {
-    e.seen = new Set();
-  },
-);
+var ELIGIBILITY_DEPS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var seenGateKeys;
+deferInit("chunk-c18v4hz4.js:18085", () => {
+  ELIGIBILITY_DEPS = {
+    memoizedReason: getIneligibleReason,
+    inputs: () => ({
+      credentialShape: credentialShapeInputs(),
+      storedLoginOrigin: isOAuthEffective(),
+      tier: getStoredOAuthSubscriptionType(),
+    }),
+    reset: resetEligibilityMemo,
+  };
+  seenGateKeys = identity(
+    {
+      seen: new Set(),
+    },
+    (slot) => {
+      slot.seen = new Set();
+    },
+  );
+});
 //@ chunk-c18v4hz4.js:18232-18533 placement
-function shouldRecheckStoredLogin(e = ELIGIBILITY_DEPS) {
-  let n = e.memoizedReason();
-  if (!CREDENTIAL_GATE_MISS_REASONS.has(n ?? "")) return false;
-  let r = e.inputs();
-  if (!isStoredLoginRefusal(n, r)) return false;
-  let o = `${n}|${r.credentialShape}|${r.tier}`;
-  if (seenGateKeys.seen.has(o)) return false;
-  seenGateKeys.seen.add(o);
-  e.reset();
-  logForDebugging(`org-config gate: settings eligibility (${n}) predates the stored login; re-evaluating`);
+function shouldRecheckStoredLogin(deps = ELIGIBILITY_DEPS) {
+  let reason = deps.memoizedReason();
+  if (!CREDENTIAL_GATE_MISS_REASONS.has(reason ?? "")) return false;
+  let candidateInputs = deps.inputs();
+  if (!isStoredLoginRefusal(reason, candidateInputs)) return false;
+  let gateKey = `${reason}|${candidateInputs.credentialShape}|${candidateInputs.tier}`;
+  if (seenGateKeys.seen.has(gateKey)) return false;
+  seenGateKeys.seen.add(gateKey);
+  deps.reset();
+  logForDebugging(
+    `org-config gate: settings eligibility (${reason}) predates the stored login; re-evaluating`,
+  );
   return true;
 }
 //@ chunk-c18v4hz4.js:18533-18701 placement
-function kickSettingsLoad(e = ELIGIBILITY_DEPS, n = () => loadRemoteManagedSettings()) {
-  if (!shouldRecheckStoredLogin(e)) return;
-  n().catch((error) =>
+function kickSettingsLoad(deps = ELIGIBILITY_DEPS, load = () => loadRemoteManagedSettings()) {
+  if (!shouldRecheckStoredLogin(deps)) return;
+  load().catch((error) =>
     logError(
       new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
         `org-config gate: the settings load threw (${errorKindForTelemetry(error)})`,
@@ -583,11 +628,11 @@ function kickSettingsLoad(e = ELIGIBILITY_DEPS, n = () => loadRemoteManagedSetti
   );
 }
 //@ chunk-c18v4hz4.js:18701-18817 placement
-function readGateFlag(e) {
-  if (e.readFlag !== undefined)
+function readGateFlag(options) {
+  if (options.readFlag !== undefined)
     return {
-      flag: e.readFlag(),
-      source: e.readFlagSource?.() ?? "override",
+      flag: options.readFlag(),
+      source: options.readFlagSource?.() ?? "override",
     };
   return readOrgConfigRequiredFlagWithSource();
 }
@@ -619,83 +664,87 @@ var DEFAULT_GATE_DECISION = {
   exclusion: "flag_off",
 };
 //@ chunk-c18v4hz4.js:19053-19106 placement
-function isFallbackFlagUsable(source, n, r) {
-  return source !== "fallback" || !r() || n();
+function isFallbackFlagUsable(source, isFetchHeld, isCacheEmpty) {
+  return source !== "fallback" || !isCacheEmpty() || isFetchHeld();
 }
 //@ chunk-c18v4hz4.js:19106-19442 placement
-function orgConfigGateQuick(e) {
-  let { flag, source } = readGateFlag(e);
+function orgConfigGateQuick(options) {
+  let { flag, source } = readGateFlag(options);
   if (
     !flag.enabled &&
     isFallbackFlagUsable(
       source,
-      e.isFlagFetchHeld ?? isFlagFetchHeld_2,
-      e.isFlagCacheEmpty ?? isGrowthBookCacheEmpty,
+      options.isFlagFetchHeld ?? isFlagFetchHeld_2,
+      options.isFlagCacheEmpty ?? isGrowthBookCacheEmpty,
     )
   )
-    return passDecision(flag, source, DEFAULT_GATE_DECISION, e.surface);
+    return passDecision(flag, source, DEFAULT_GATE_DECISION, options.surface);
   let candidacy = orgConfigCandidacy(
     flag,
-    (e.readCandidateInputs ?? orgConfigInputs)({
-      authRecoveryCommand: e.authRecoveryCommand,
+    (options.readCandidateInputs ?? orgConfigInputs)({
+      authRecoveryCommand: options.authRecoveryCommand,
     }),
   );
-  if (!flag.enabled || !candidacy.candidate) return passDecision(flag, source, candidacy, e.surface);
-  return gateDecisionFromOutcomes(e, flag, source, candidacy, 0, 0, {
+  if (!flag.enabled || !candidacy.candidate) return passDecision(flag, source, candidacy, options.surface);
+  return gateDecisionFromOutcomes(options, flag, source, candidacy, 0, 0, {
     report: false,
     decidedWithoutWaiting: true,
   });
 }
 //@ chunk-c18v4hz4.js:19442-20214 placement
-async function awaitOrgConfigGate(e) {
-  let isFlagFetchHeld = e.isFlagFetchHeld ?? isFlagFetchHeld_2;
-  let isFlagCacheEmpty = e.isFlagCacheEmpty ?? isGrowthBookCacheEmpty;
-  if (e.afterSignIn === true) await refreshFlagIfStale(e);
-  let o = orgConfigGateQuick(e);
-  if (isUnarmedFallback(o, isFlagFetchHeld, isFlagCacheEmpty)) {
-    await growthBookReady(e.fetchFlag);
-    o = orgConfigGateQuick(e);
+async function awaitOrgConfigGate(options) {
+  let isFlagFetchHeld = options.isFlagFetchHeld ?? isFlagFetchHeld_2;
+  let isFlagCacheEmpty = options.isFlagCacheEmpty ?? isGrowthBookCacheEmpty;
+  if (options.afterSignIn === true) await refreshFlagIfStale(options);
+  let evaluation = orgConfigGateQuick(options);
+  if (isUnarmedFallback(evaluation, isFlagFetchHeld, isFlagCacheEmpty)) {
+    await growthBookReady(options.fetchFlag);
+    evaluation = orgConfigGateQuick(options);
   }
-  if (!o.armed || o.outcomes === undefined) return o;
-  o = await retryGateAfterOutcomes(o, () => orgConfigGateQuick(e), e.primeSettingsCacheAge);
-  if (!o.armed || o.outcomes === undefined) return o;
-  if (!isGateBlocking(o.decision)) {
-    await (e.report ?? logOrgConfigGate)(o, o.outcomes);
-    return o;
+  if (!evaluation.armed || evaluation.outcomes === undefined) return evaluation;
+  evaluation = await retryGateAfterOutcomes(
+    evaluation,
+    () => orgConfigGateQuick(options),
+    options.primeSettingsCacheAge,
+  );
+  if (!evaluation.armed || evaluation.outcomes === undefined) return evaluation;
+  if (!isGateBlocking(evaluation.decision)) {
+    await (options.report ?? logOrgConfigGate)(evaluation, evaluation.outcomes);
+    return evaluation;
   }
-  let { flag, flagSource } = o;
+  let { flag, flagSource } = evaluation;
   let [blockedMs] = await Promise.all([
-    (e.settle ?? runOrgConfigGate)(flag.budgetMs),
+    (options.settle ?? runOrgConfigGate)(flag.budgetMs),
     isFlagSourceUntrusted(flagSource, isFlagFetchHeld, isFlagCacheEmpty)
-      ? initGrowthBookWithDeadline(flag.budgetMs, e.fetchFlag)
+      ? initGrowthBookWithDeadline(flag.budgetMs, options.fetchFlag)
       : undefined,
   ]);
-  let gateFlag = readGateFlag(e);
+  let gateFlag = readGateFlag(options);
   if (!gateFlag.flag.enabled)
-    return passDecision(gateFlag.flag, gateFlag.source, DEFAULT_GATE_DECISION, e.surface);
+    return passDecision(gateFlag.flag, gateFlag.source, DEFAULT_GATE_DECISION, options.surface);
   let candidacy = orgConfigCandidacy(
     gateFlag.flag,
-    (e.readCandidateInputs ?? orgConfigInputs)({
-      authRecoveryCommand: e.authRecoveryCommand,
+    (options.readCandidateInputs ?? orgConfigInputs)({
+      authRecoveryCommand: options.authRecoveryCommand,
     }),
   );
-  if (!candidacy.candidate) return passDecision(gateFlag.flag, gateFlag.source, candidacy, e.surface);
-  return gateDecisionFromOutcomes(e, gateFlag.flag, gateFlag.source, candidacy, blockedMs, 0, {
+  if (!candidacy.candidate) return passDecision(gateFlag.flag, gateFlag.source, candidacy, options.surface);
+  return gateDecisionFromOutcomes(options, gateFlag.flag, gateFlag.source, candidacy, blockedMs, 0, {
     report: true,
     decidedWithoutWaiting: false,
   });
 }
 //@ chunk-c18v4hz4.js:20214-20340 placement
-async function retryGateAfterOutcomes(e, n, primeSettingsCacheAge = awaitSyncAge) {
+async function retryGateAfterOutcomes(decision, reevaluate, primeSettingsCacheAge = awaitSyncAge) {
   if (
-    !e.armed ||
-    e.outcomes === undefined ||
-    !isGateBlocking(e.decision) ||
-    !hasAdmittedCacheWithoutAge(e.outcomes)
+    !decision.armed ||
+    decision.outcomes === undefined ||
+    !isGateBlocking(decision.decision) ||
+    !hasAdmittedCacheWithoutAge(decision.outcomes)
   )
-    return e;
+    return decision;
   await primeSettingsCacheAge();
-  return n();
+  return reevaluate();
 }
 //@ chunk-c18v4hz4.js:20340-20430 placement
 /**
@@ -719,63 +768,63 @@ async function awaitSyncAge() {
   );
 }
 //@ chunk-c18v4hz4.js:20494-20770 placement
-function orgConfigGateSync(e, blockedMs, attempt = 1) {
-  let { flag, source } = readGateFlag(e);
-  if (!flag.enabled) return passDecision(flag, source, DEFAULT_GATE_DECISION, e.surface);
+function orgConfigGateSync(options, blockedMs, attempt = 1) {
+  let { flag, source } = readGateFlag(options);
+  if (!flag.enabled) return passDecision(flag, source, DEFAULT_GATE_DECISION, options.surface);
   let candidacy = orgConfigCandidacy(
     flag,
-    (e.readCandidateInputs ?? orgConfigInputs)({
-      authRecoveryCommand: e.authRecoveryCommand,
+    (options.readCandidateInputs ?? orgConfigInputs)({
+      authRecoveryCommand: options.authRecoveryCommand,
     }),
   );
-  if (!candidacy.candidate) return passDecision(flag, source, candidacy, e.surface);
-  return gateDecisionFromOutcomes(e, flag, source, candidacy, blockedMs, attempt, {
+  if (!candidacy.candidate) return passDecision(flag, source, candidacy, options.surface);
+  return gateDecisionFromOutcomes(options, flag, source, candidacy, blockedMs, attempt, {
     report: true,
     decidedWithoutWaiting: false,
   });
 }
 //@ chunk-c18v4hz4.js:20770-21145 placement
-function gateDecisionFromOutcomes(e, flag, flagSource, candidacy, blockedMs, attempt, u) {
-  let s = (e.readOutcomes ?? currentGateOutcomes)();
-  let g = orgConfigGateDecision({
+function gateDecisionFromOutcomes(options, flag, flagSource, candidacy, blockedMs, attempt, flags) {
+  let outcomes = (options.readOutcomes ?? currentGateOutcomes)();
+  let decision = orgConfigGateDecision({
     flag,
     candidacy,
-    policy: s.policy,
-    settings: s.settings,
-    surface: e.surface,
+    policy: outcomes.policy,
+    settings: outcomes.settings,
+    surface: options.surface,
     blockedMs,
   });
-  let f = (e.readContext ?? orgConfigContext)(s, g.resource);
-  let m = {
-    decision: g,
-    message: orgConfigGateMessage(g, f),
+  let context = (options.readContext ?? orgConfigContext)(outcomes, decision.resource);
+  let evaluation = {
+    decision,
+    message: orgConfigGateMessage(decision, context),
     flag,
     flagSource,
     candidacy,
     armed: true,
-    context: f,
+    context,
     attempt,
-    decidedWithoutWaiting: u.decidedWithoutWaiting,
-    outcomes: s,
+    decidedWithoutWaiting: flags.decidedWithoutWaiting,
+    outcomes,
   };
-  if (u.report) (e.report ?? logOrgConfigGate)(m, s);
-  return m;
+  if (flags.report) (options.report ?? logOrgConfigGate)(evaluation, outcomes);
+  return evaluation;
 }
 //@ chunk-c18v4hz4.js:21145-22408 placement
-function logOrgConfigGate(orgConfigDecision, outcomes, r) {
-  let { decision, flag, candidacy } = orgConfigDecision;
-  let u = logEventAsync("tengu_org_config_gate", {
+function logOrgConfigGate(gateAttempt, outcomes, outcome) {
+  let { decision, flag, candidacy } = gateAttempt;
+  let decisionLog = logEventAsync("tengu_org_config_gate", {
     decision: fromEnum(decision.verdict),
     decision_reason: fromEnumOpt(decision.reason),
     decision_resource: fromEnumOpt(decision.resource),
     surface: fromEnum(decision.surface),
     blocked_ms: decision.blockedMs,
-    attempt: orgConfigDecision.attempt,
-    decided_without_waiting: orgConfigDecision.decidedWithoutWaiting,
-    final_outcome: fromEnumOpt(r?.outcome),
-    recovered_after_ms: r?.recoveredAfterMs,
+    attempt: gateAttempt.attempt,
+    decided_without_waiting: gateAttempt.decidedWithoutWaiting,
+    final_outcome: fromEnumOpt(outcome?.outcome),
+    recovered_after_ms: outcome?.recoveredAfterMs,
     tier: fromEnumOpt(candidacy.candidate ? candidacy.tier : undefined),
-    flag_source: fromEnum(orgConfigDecision.flagSource),
+    flag_source: fromEnum(gateAttempt.flagSource),
     flag_percent: flag.percent,
     grace_ttl_hours: flag.graceTtlHours,
     budget_ms: flag.budgetMs,
@@ -785,57 +834,61 @@ function logOrgConfigGate(orgConfigDecision, outcomes, r) {
     settings_reason: fromEnumOpt(outcomes?.settings.reason),
     settings_has_cache: outcomes?.settings.hasAdmittedCache,
     settings_cache_age_ms: outcomes?.settings.admittedCacheAgeMs,
-    http_status: orgConfigDecision.context.httpStatus,
+    http_status: gateAttempt.context.httpStatus,
   }).catch(() => {});
-  let s =
+  let shouldReport =
     !gateDecisionLogged.done &&
-    (r !== undefined || (orgConfigDecision.attempt === 0 && !isGateBlocking(decision)));
-  if (s) gateDecisionLogged.done = true;
-  let g = !s
+    (outcome !== undefined || (gateAttempt.attempt === 0 && !isGateBlocking(decision)));
+  if (shouldReport) gateDecisionLogged.done = true;
+  let badLog = !shouldReport
     ? undefined
     : decision.verdict === "pass"
       ? logFeatureOkAsync("org_config_gate")
       : decision.verdict === "pass_cached" || decision.verdict === "pass_exempt"
         ? logFeatureSadAsync("org_config_gate", decision.verdict)
         : logFeatureBadAsync("org_config_gate", decision.reason ?? decision.verdict);
-  let f = Promise.all([u, g]).then(() => {
+  let pending = Promise.all([decisionLog, badLog]).then(() => {
     return;
   });
-  pendingGateLogs.set.add(f);
-  f.finally(() => pendingGateLogs.set.delete(f));
+  pendingGateLogs.set.add(pending);
+  pending.finally(() => pendingGateLogs.set.delete(pending));
   logForDebugging(
     `org-config gate: ${decision.verdict}${decision.reason ? ` (${decision.resource} ${decision.reason})` : ""} on ${decision.surface} after ${decision.blockedMs}ms`,
   );
-  return f;
+  return pending;
 }
 //@ chunk-c18v4hz4.js:22408-22486 placement
 /**
  * 本次门控判定是否已记录（可重置）。
  */
-var gateDecisionLogged = identity(
-  {
-    done: false,
-  },
-  (e) => {
-    e.done = false;
-  },
-);
-var pendingGateLogs = identity(
-  {
-    set: new Set(),
-  },
-  (e) => {
-    e.set = new Set();
-  },
-);
+var gateDecisionLogged; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var pendingGateLogs;
+deferInit("chunk-c18v4hz4.js:22408", () => {
+  gateDecisionLogged = identity(
+    {
+      done: false,
+    },
+    (slot) => {
+      slot.done = false;
+    },
+  );
+  pendingGateLogs = identity(
+    {
+      set: new Set(),
+    },
+    (slot) => {
+      slot.set = new Set();
+    },
+  );
+});
 //@ chunk-c18v4hz4.js:22486-22544 placement
 async function settlePendingGateWork() {
   await Promise.allSettled([...pendingGateLogs.set]);
 }
 //@ chunk-c18v4hz4.js:22544-23165 placement
-async function reevaluateSettingsGate(e = shouldRecheckStoredLogin) {
+async function reevaluateSettingsGate(recheck = shouldRecheckStoredLogin) {
   try {
-    e();
+    recheck();
   } catch (error) {
     logError(
       new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
@@ -886,24 +939,24 @@ async function reevaluateSettingsGate(e = shouldRecheckStoredLogin) {
 var FLAG_REFRESH_TIMEOUT_MS = 3000;
 //@ chunk-c18v4hz4.js:23177-23262 placement
 function isFlagSourceUntrusted(
-  e,
+  flagSource,
   isFlagFetchHeld = isFlagFetchHeld_2,
   isFlagCacheEmpty = isGrowthBookCacheEmpty,
 ) {
-  if (e === "disk") return !isFlagFetchHeld();
-  return e === "fallback" && isFlagCacheEmpty() && !isFlagFetchHeld();
+  if (flagSource === "disk") return !isFlagFetchHeld();
+  return flagSource === "fallback" && isFlagCacheEmpty() && !isFlagFetchHeld();
 }
 //@ chunk-c18v4hz4.js:23262-23402 placement
 function isUnarmedFallback(
-  e,
+  state,
   isFlagFetchHeld = isFlagFetchHeld_2,
   isFlagCacheEmpty = isGrowthBookCacheEmpty,
 ) {
   return (
-    !e.armed &&
-    e.flagSource === "fallback" &&
-    !e.candidacy.candidate &&
-    e.candidacy.exclusion === "flag_off" &&
+    !state.armed &&
+    state.flagSource === "fallback" &&
+    !state.candidacy.candidate &&
+    state.candidacy.exclusion === "flag_off" &&
     isFlagCacheEmpty() &&
     !isFlagFetchHeld()
   );
@@ -931,32 +984,35 @@ async function initGrowthBookWithDeadline(budgetMs, fetchFlag = initializeGrowth
   );
 }
 //@ chunk-c18v4hz4.js:23551-23691 placement
-async function refreshFlagIfStale(e) {
-  let { source } = readGateFlag(e);
+async function refreshFlagIfStale(options) {
+  let { source } = readGateFlag(options);
   if (source !== "disk" && source !== "fallback") return;
-  if ((e.isFlagFetchHeld ?? isFlagFetchHeld_2)()) return;
-  await initGrowthBookWithDeadline(EVENT_LOGGING_FLAG_WAIT_MS, e.fetchFlag);
+  if ((options.isFlagFetchHeld ?? isFlagFetchHeld_2)()) return;
+  await initGrowthBookWithDeadline(EVENT_LOGGING_FLAG_WAIT_MS, options.fetchFlag);
 }
 //@ chunk-c18v4hz4.js:23691-23756 placement
 /**
  * 按 fetcher 缓存 GrowthBook 初始化 Promise。
  */
-var growthBookReadyByFetcher = identity(
-  {
-    byFetcher: new WeakMap(),
-  },
-  (e) => {
-    e.byFetcher = new WeakMap();
-  },
-);
+var growthBookReadyByFetcher; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-c18v4hz4.js:23691", () => {
+  growthBookReadyByFetcher = identity(
+    {
+      byFetcher: new WeakMap(),
+    },
+    (slot) => {
+      slot.byFetcher = new WeakMap();
+    },
+  );
+});
 //@ chunk-c18v4hz4.js:23756-23856 placement
 function growthBookReady(fetchFlag = initializeGrowthBook) {
-  let n = growthBookReadyByFetcher.byFetcher.get(fetchFlag);
-  if (n === undefined) {
-    n = initGrowthBookWithDeadline(EVENT_LOGGING_FLAG_WAIT_MS, fetchFlag);
-    growthBookReadyByFetcher.byFetcher.set(fetchFlag, n);
+  let ready = growthBookReadyByFetcher.byFetcher.get(fetchFlag);
+  if (ready === undefined) {
+    ready = initGrowthBookWithDeadline(EVENT_LOGGING_FLAG_WAIT_MS, fetchFlag);
+    growthBookReadyByFetcher.byFetcher.set(fetchFlag, ready);
   }
-  return n;
+  return ready;
 }
 //@ chunk-c18v4hz4.js:23856-23910 placement
 /**
@@ -966,10 +1022,10 @@ var GATE_RETRY_DELAYS_MS = [15000, 15000, 30000, 60000, 180000, 600000];
 var GATE_RETRY_JITTER_RATIO = 0.3;
 //@ chunk-c18v4hz4.js:23910-24034 placement
 function jitteredRetryMs(rung, random = Math.random) {
-  let r = GATE_RETRY_DELAYS_MS[rung];
-  if (r === undefined) return;
-  let o = (random() * 2 - 1) * GATE_RETRY_JITTER_RATIO;
-  return Math.max(1000, Math.round(r * (1 + o)));
+  let baseMs = GATE_RETRY_DELAYS_MS[rung];
+  if (baseMs === undefined) return;
+  let jitter = (random() * 2 - 1) * GATE_RETRY_JITTER_RATIO;
+  return Math.max(1000, Math.round(baseMs * (1 + jitter)));
 }
 export {
   registerOrgConfigGate,

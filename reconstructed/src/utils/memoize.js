@@ -11,63 +11,64 @@
 import { jsonStringify } from "./slowOperations.js";
 import { logForDebugging } from "./debug.js";
 import { LRUCache } from "../../vendor/lru-cache/dist/esm/index.min.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-02nm3ce0.js:17038-17853 fingerprint = memoizeWithTTL (0.683)
 /**
  * 带 TTL 的 memoize：过期后返回旧值并后台刷新。
  */
-function memoizeWithTTL(e, i = 300000, s) {
-  let n = (o) => (typeof i === "function" ? i(o) : i);
+function memoizeWithTTL(fn, ttl = 300000, shouldRefresh) {
+  let lifetimeFor = (value) => (typeof ttl === "function" ? ttl(value) : ttl);
   let cache = new Map();
-  let h = new Map();
+  let inFlight = new Map();
   let memoized = async (...args) => {
     let key = jsonStringify(args);
     let cached = cache.get(key);
-    if (cached && s && !s(cached.value, cached.timestamp)) {
+    if (cached && shouldRefresh && !shouldRefresh(cached.value, cached.timestamp)) {
       if (cached.refreshPromise) return cached.refreshPromise;
       cache.delete(key);
       cached = undefined;
     }
     let now = Date.now();
     if (!cached) {
-      let g = h.get(key);
-      if (g) return g;
-      let value = e(...args);
-      h.set(key, value);
+      let pending = inFlight.get(key);
+      if (pending) return pending;
+      let value = fn(...args);
+      inFlight.set(key, value);
       try {
-        let w = await value;
-        if (h.get(key) === value)
+        let resolvedValue = await value;
+        if (inFlight.get(key) === value)
           cache.set(key, {
-            value: w,
+            value: resolvedValue,
             timestamp: Date.now(),
             refreshing: false,
-            lifetimeMs: n(w),
+            lifetimeMs: lifetimeFor(resolvedValue),
           });
-        return w;
+        return resolvedValue;
       } finally {
-        if (h.get(key) === value) h.delete(key);
+        if (inFlight.get(key) === value) inFlight.delete(key);
       }
     }
     if (cached && now - cached.timestamp > cached.lifetimeMs && !cached.refreshing) {
       cached.refreshing = true;
-      let g = cached;
-      let newValue = e(...args);
-      g.refreshPromise = newValue;
+      let staleEntry = cached;
+      let newValue = fn(...args);
+      staleEntry.refreshPromise = newValue;
       newValue
-        .then((w) => {
-          if (cache.get(key) === g)
+        .then((nextValue) => {
+          if (cache.get(key) === staleEntry)
             cache.set(key, {
-              value: w,
+              value: nextValue,
               timestamp: Date.now(),
               refreshing: false,
-              lifetimeMs: n(w),
+              lifetimeMs: lifetimeFor(nextValue),
             });
         })
         .catch((e) => {
           logForDebugging(String(e), {
             level: "error",
           });
-          if (cache.get(key) === g) cache.delete(key);
+          if (cache.get(key) === staleEntry) cache.delete(key);
         });
       return cached.value;
     }
@@ -76,7 +77,7 @@ function memoizeWithTTL(e, i = 300000, s) {
   memoized.cache = {
     clear: () => {
       cache.clear();
-      h.clear();
+      inFlight.clear();
     },
   };
   return memoized;
@@ -103,7 +104,7 @@ function memoizeWithLRU(f, cacheFn, maxCacheSize = 100) {
     delete: (key) => cache.delete(key),
     get: (key) => cache.peek(key),
     has: (key) => cache.has(key),
-    set: (h, l) => void cache.set(h, l),
+    set: (key, value) => void cache.set(key, value),
   };
   return memoized;
 }
@@ -111,27 +112,30 @@ function memoizeWithLRU(f, cacheFn, maxCacheSize = 100) {
 /**
  * 需要保留键的缓存集合（清理时不清这些）。
  */
-var retainedCacheKeys = new Set();
+var retainedCacheKeys; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-02nm3ce0.js:18135", () => {
+  retainedCacheKeys = new Set();
+});
 //@ chunk-02nm3ce0.js:18149-18182 placement
 /**
  * 把对象登记为"保留键"缓存并返回它。
  */
-function retainCacheKey(e) {
-  retainedCacheKeys.add(e);
-  return e;
+function retainCacheKey(key) {
+  retainedCacheKeys.add(key);
+  return key;
 }
 //@ chunk-02nm3ce0.js:18182-18306 placement
 /**
  * 清空 Map 缓存，但保留指定键的条目。
  */
-function retainCacheKeys(e, i) {
-  let s = [];
-  for (let n of i) {
-    let r = e.get(n);
-    if (r !== undefined) s.push([n, r]);
+function retainCacheKeys(cache, keepKeys) {
+  let keptEntries = [];
+  for (let key of keepKeys) {
+    let value = cache.get(key);
+    if (value !== undefined) keptEntries.push([key, value]);
   }
-  e.clear();
-  for (let [n, r] of s) e.set(n, r);
+  cache.clear();
+  for (let [key, value] of keptEntries) cache.set(key, value);
 }
 //@ chunk-02nm3ce0.js:18306-18316 placement
 /**
@@ -139,24 +143,24 @@ function retainCacheKeys(e, i) {
  */
 var DEFAULT_LRU_MAX_SIZE = 128;
 //@ chunk-02nm3ce0.js:18316-18579 placement
-function memoizeWithTTLAsync(e, i, s) {
-  let maxSize = s?.maxSize ?? DEFAULT_LRU_MAX_SIZE;
+function memoizeWithTTLAsync(fn, keyFn, options) {
+  let maxSize = options?.maxSize ?? DEFAULT_LRU_MAX_SIZE;
   let cache = new Map();
   retainedCacheKeys.add(cache);
-  function h(...l) {
-    let o = i ? i(...l) : l[0];
-    let cached = cache.get(o);
+  function memoized(...args) {
+    let key = keyFn ? keyFn(...args) : args[0];
+    let cached = cache.get(key);
     if (cached) return cached;
-    let promise = e(...l);
+    let promise = fn(...args);
     if (cache.size >= maxSize) cache.delete(cache.keys().next().value);
-    cache.set(o, promise);
+    cache.set(key, promise);
     promise.catch(() => {
-      if (cache.get(o) === promise) cache.delete(o);
+      if (cache.get(key) === promise) cache.delete(key);
     });
     return promise;
   }
-  h.cache = cache;
-  return h;
+  memoized.cache = cache;
+  return memoized;
 }
 export {
   retainedCacheKeys,

@@ -15,30 +15,30 @@ var DEFAULT_MAX_PAGES = 1e4;
 /**
  * 按页读取直到结束或达到最大页数，支持中止。
  */
-async function readAllPages(e, r, t) {
-  let max = Math.max(1, Math.floor(t?.maxPages ?? 1e4));
-  let u;
+async function readAllPages(fetchPage, onPage, options) {
+  let max = Math.max(1, Math.floor(options?.maxPages ?? 1e4));
+  let cursor;
   for (let i = 0; i < max; i++) {
-    if (t?.budget !== undefined) {
-      if (t.budget.pagesLeft < 1)
+    if (options?.budget !== undefined) {
+      if (options.budget.pagesLeft < 1)
         return {
           status: "capped",
         };
-      t.budget.pagesLeft--;
+      options.budget.pagesLeft--;
     }
-    let n = await e(u);
-    if (!n.ok)
+    let page = await fetchPage(cursor);
+    if (!page.ok)
       return {
         status: "error",
-        error: n.error,
+        error: page.error,
       };
-    await r(n.value.items);
-    if (t?.until?.())
+    await onPage(page.value.items);
+    if (options?.until?.())
       return {
         status: "done",
       };
-    u = n.value.cursor;
-    if (!u)
+    cursor = page.value.cursor;
+    if (!cursor)
       return {
         status: "done",
       };

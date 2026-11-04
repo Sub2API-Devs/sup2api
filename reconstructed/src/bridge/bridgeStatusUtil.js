@@ -22,14 +22,14 @@ var BRIDGE_FAILED = "bridge-failed";
 var BRIDGE_FAILED_FOOTER_TEXT = "disabled after repeated failures \xB7 restart to retry";
 var REMOTE_CONTROL_NOT_STARTED_TEXT = "Remote Control not started here";
 //@ chunk-p55d7smm.js:468-876 placement
-function bridgeStatusLines(t, { crossSessionMessaging }, r = new Date()) {
-  let n =
-    t.startedAt > 0 && t.startedAt <= r.getTime()
-      ? ` (started ${formatRelativeTimeAgo(new Date(t.startedAt), {
-          now: r,
+function bridgeStatusLines(bridge, { crossSessionMessaging }, now = new Date()) {
+  let startedSuffix =
+    bridge.startedAt > 0 && bridge.startedAt <= now.getTime()
+      ? ` (started ${formatRelativeTimeAgo(new Date(bridge.startedAt), {
+          now,
         })})`
       : "";
-  return `${REMOTE_CONTROL_NOT_STARTED_TEXT} \xB7 another Claude Code on this machine${n} already has Remote Control for this conversation${crossSessionMessaging ? ", so this terminal can't see your sessions on other machines and they can't reach it" : ""} \xB7 run /remote-control to move it to this terminal`;
+  return `${REMOTE_CONTROL_NOT_STARTED_TEXT} \xB7 another Claude Code on this machine${startedSuffix} already has Remote Control for this conversation${crossSessionMessaging ? ", so this terminal can't see your sessions on other machines and they can't reach it" : ""} \xB7 run /remote-control to move it to this terminal`;
 }
 //@ chunk-p55d7smm.js:876-888 placement
 var BRIDGE_STATUS_MAX_WIDTH = 150;
@@ -125,8 +125,8 @@ function getBridgeStatus({ error, connected, sessionActive, reconnecting }) {
 /**
  * 空闲时页脚提示："Code anywhere with the Claude mobile app or <链接>"。
  */
-function buildIdleFooterText(t) {
-  return `Code anywhere with the Claude mobile app or ${t}`;
+function buildIdleFooterText(url) {
+  return `Code anywhere with the Claude mobile app or ${url}`;
 }
 //@ chunk-p55d7smm.js:1803-1882 layout
 /**
@@ -137,8 +137,8 @@ var PROJECTS_HINT_TEXT = "Or ask Claude to work in this folder from your project
 /**
  * 活动时页脚提示："Continue coding in the Claude mobile app or <链接>"。
  */
-function buildActiveFooterText(t) {
-  return `Continue coding in the Claude mobile app or ${t}`;
+function buildActiveFooterText(url) {
+  return `Continue coding in the Claude mobile app or ${url}`;
 }
 //@ chunk-p55d7smm.js:1955-1994 layout
 /**
@@ -154,11 +154,11 @@ function wrapWithOsc8Link(text, url) {
 }
 //@ chunk-18hwfzwa.js:107652-107833 fingerprint = timestamp (1)
 function formatClockTime(now) {
-  let x = now.getHours() % 12 || 12;
+  let hour12 = now.getHours() % 12 || 12;
   let m = String(now.getMinutes()).padStart(2, "0");
   let padded = String(now.getSeconds()).padStart(2, "0");
-  let ee = now.getHours() < 12 ? "am" : "pm";
-  return `${x}:${m}:${padded}${ee}`;
+  let meridiem = now.getHours() < 12 ? "am" : "pm";
+  return `${hour12}:${m}:${padded}${meridiem}`;
 }
 export {
   formatClockTime,

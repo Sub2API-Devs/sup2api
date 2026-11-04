@@ -8,6 +8,8 @@
  * pieces: chunk-55w3ydvj.js (14), chunk-rtnapjwv.js (1)
  * attribution: placement 1, fingerprint 3, layout 9, callgraph-fingerprint 1, file-local 1
  */
+import { getSandboxBwrapPath } from "../../utils/subprocessEnv.js";
+import { bunWhichSync } from "../../utils/which.js";
 import { init_react_production } from "../../../vendor/react/cjs/react.production.js";
 import {
   jsxProd_default,
@@ -23,26 +25,37 @@ import {
 import { describeWindowsSandboxRemedy, rgRunner } from "../../utils/sandbox/windowsSandbox.js";
 import { errorMessage } from "../../utils/errors.js";
 import { checkWindowsSandboxStatusAsync } from "../../../vendor/@anthropic-ai/sandbox-runtime/dist/sandbox/windows-sandbox-utils.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { getPlatform } from "../../utils/platform.js";
 import { SandboxDepCheckLine } from "./WindowsSandboxStatus.js";
-import { getSandboxBwrapPath } from "../../utils/subprocessEnv.js";
-import { bunWhichSync } from "../../utils/which.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
+//@ chunk-rtnapjwv.js:2100-2164 fingerprint = _temp2 (1)
+/**
+ * 函数 sandboxBinaryPath（取沙箱二进制路径）；位于「/sandbox 依赖检查：ripgrep、bubblewrap、socat、seatbelt、Windows WFP 等是否就绪与安装提示」模块。
+ */
+function sandboxBinaryPath() {
+  let sandboxBwrapPath = getSandboxBwrapPath();
+  if (sandboxBwrapPath) return bunWhichSync(sandboxBwrapPath);
+  return bunWhichSync("bwrap");
+}
 //@ chunk-55w3ydvj.js:16494-16498 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-55w3ydvj.js:16494", () => {
+  init_react_production();
+});
 //@ chunk-55w3ydvj.js:16498-16542 fingerprint = _temp (1)
 function hasRipgrep(e) {
   return e.includes("ripgrep");
 }
 //@ chunk-55w3ydvj.js:16542-16589 layout
-function isBubblewrapMissing(q) {
-  return q.startsWith(`${BWRAP_LABEL}not `);
+function isBubblewrapMissing(output) {
+  return output.startsWith(`${BWRAP_LABEL}not `);
 }
 //@ chunk-55w3ydvj.js:16589-16638 layout
-function isSocatMissing(ne) {
-  return ne.startsWith(`${SOCAT_LABEL}not `);
+function isSocatMissing(output) {
+  return output.startsWith(`${SOCAT_LABEL}not `);
 }
 //@ chunk-55w3ydvj.js:16638-16736 callgraph-fingerprint = _temp4 (0.413)
 function isOtherMissingDep(e_2) {
@@ -62,23 +75,24 @@ function renderErrorLine(err) {
   );
 }
 //@ chunk-55w3ydvj.js:16792-16955 layout
-function withWindowsTlsCaStatus(i) {
+function withWindowsTlsCaStatus(state) {
   let caTrusted = null;
   let caManaged = true;
   if (willSandboxTlsTerminate()) {
-    caTrusted = i.user.caCertThumb !== undefined && isInstalledWindowsTlsCaCurrent(i.user.caCertThumb);
+    caTrusted =
+      state.user.caCertThumb !== undefined && isInstalledWindowsTlsCaCurrent(state.user.caCertThumb);
     caManaged = resolveWindowsTlsTerminateCaSource().source === "managed";
   }
   return {
-    ...i,
+    ...state,
     caTrusted,
     caManaged,
   };
 }
 //@ chunk-55w3ydvj.js:16955-17016 layout
-function probeErrorResult(c) {
+function probeErrorResult(error) {
   return {
-    probeError: describeWindowsSandboxRemedy(errorMessage(c), {
+    probeError: describeWindowsSandboxRemedy(errorMessage(error), {
       omitCcRemedy: true,
     }),
   };
@@ -92,12 +106,14 @@ function probeSandboxDependencies() {
     .catch(probeErrorResult);
 }
 //@ chunk-55w3ydvj.js:17075-17189 layout
-function isWindowsSandboxBlockingError(c) {
-  return !c.startsWith("Sandbox user is not provisioned") && !c.startsWith("WFP filters not installed");
+function isWindowsSandboxBlockingError(message) {
+  return (
+    !message.startsWith("Sandbox user is not provisioned") && !message.startsWith("WFP filters not installed")
+  );
 }
 //@ chunk-55w3ydvj.js:17189-17217 layout
-function describeProbeResult(C) {
-  return describeWindowsSandboxRemedy(C);
+function describeProbeResult(output) {
+  return describeWindowsSandboxRemedy(output);
 }
 //@ chunk-55w3ydvj.js:17217-17273 layout
 function renderProbeError(err) {
@@ -116,7 +132,7 @@ var SOCAT_LABEL = "socat ";
 var NOT_INSTALLED_LABEL = "not installed";
 //@ chunk-55w3ydvj.js:17331-19789 fingerprint = SandboxDependenciesTab (0.369)
 function SandboxDependenciesTab(props) {
-  let $ = w(26);
+  let $ = useMemoCache(26);
   let { depCheck } = props;
   let t1;
   if ($[0] === MEMO_CACHE_SENTINEL) {
@@ -142,7 +158,7 @@ function SandboxDependenciesTab(props) {
     $[3] = depCheck.errors;
     $[4] = t3;
   } else t3 = $[4];
-  let p = t3;
+  let socatLine = t3;
   let t4;
   if ($[5] !== depCheck.errors) {
     t4 = depCheck.errors.find(isBubblewrapMissing)?.slice(BWRAP_LABEL.length);
@@ -150,19 +166,19 @@ function SandboxDependenciesTab(props) {
     $[6] = t4;
   } else t4 = $[6];
   let bwrapMissing = t4;
-  let C;
+  let socatReason;
   if ($[7] !== depCheck.errors) {
-    C = depCheck.errors.find(isSocatMissing)?.slice(SOCAT_LABEL.length);
+    socatReason = depCheck.errors.find(isSocatMissing)?.slice(SOCAT_LABEL.length);
     $[7] = depCheck.errors;
-    $[8] = C;
-  } else C = $[8];
-  let socatMissing = C;
+    $[8] = socatReason;
+  } else socatReason = $[8];
+  let socatMissing = socatReason;
   let seccompMissing = depCheck.warnings.length > 0;
   let t5;
   if (
     $[9] !== bwrapMissing ||
     $[10] !== depCheck.errors ||
-    $[11] !== p ||
+    $[11] !== socatLine ||
     $[12] !== seccompMissing ||
     $[13] !== socatMissing
   ) {
@@ -188,12 +204,12 @@ function SandboxDependenciesTab(props) {
     } else t6 = $[15];
     let t7;
     let t8;
-    if ($[16] !== p) {
+    if ($[16] !== socatLine) {
       t7 = jsxProd_default_2(Text, {
         children: [
           "ripgrep (rg):",
           " ",
-          p
+          socatLine
             ? jsxProd_default(Text, {
                 color: "error",
                 children: "not found",
@@ -205,12 +221,12 @@ function SandboxDependenciesTab(props) {
         ],
       });
       t8 =
-        p &&
+        socatLine &&
         jsxProd_default_2(Text, {
           dimColor: true,
           children: ["  ", "\xB7 ", rgInstallHint],
         });
-      $[16] = p;
+      $[16] = socatLine;
       $[17] = t7;
       $[18] = t8;
     } else {
@@ -340,21 +356,12 @@ function SandboxDependenciesTab(props) {
     });
     $[9] = bwrapMissing;
     $[10] = depCheck.errors;
-    $[11] = p;
+    $[11] = socatLine;
     $[12] = seccompMissing;
     $[13] = socatMissing;
     $[14] = t5;
   } else t5 = $[14];
   return t5;
-}
-//@ chunk-rtnapjwv.js:2100-2164 fingerprint = _temp2 (1)
-/**
- * 函数 sandboxBinaryPath（取沙箱二进制路径）；位于「/sandbox 依赖检查：ripgrep、bubblewrap、socat、seatbelt、Windows WFP 等是否就绪与安装提示」模块。
- */
-function sandboxBinaryPath() {
-  let sandboxBwrapPath = getSandboxBwrapPath();
-  if (sandboxBwrapPath) return bunWhichSync(sandboxBwrapPath);
-  return bunWhichSync("bwrap");
 }
 export {
   sandboxBinaryPath,

@@ -17,29 +17,37 @@ import { lock } from "../lockfile.js";
 import { logForDebugging } from "../debug.js";
 import { errorMessage } from "../errors.js";
 import { logFeatureSad } from "../../services/analytics/featureTelemetry.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-b29hdd5e.js:764-807 placement
-var READ_FAILED = Symbol("secureStorage.READ_FAILED");
+var READ_FAILED; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-b29hdd5e.js:764", () => {
+  READ_FAILED = Symbol("secureStorage.READ_FAILED");
+});
 //@ chunk-b29hdd5e.js:883-915 placement
-var secureStorageWriteContext = new AsyncLocalStorage();
-var resolved = Promise.resolve();
+var secureStorageWriteContext; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var resolved;
+deferInit("chunk-b29hdd5e.js:883", () => {
+  secureStorageWriteContext = new AsyncLocalStorage();
+  resolved = Promise.resolve();
+});
 //@ chunk-b29hdd5e.js:915-1422 placement
 /**
  * 串行化安全存储的写操作（同一异步上下文可重入）。
  */
-async function withStorageWriteLock(e) {
-  if (secureStorageWriteContext.getStore()) return e();
-  let r = resolved;
-  let a;
+async function withStorageWriteLock(fn) {
+  if (secureStorageWriteContext.getStore()) return fn();
+  let previous = resolved;
+  let release;
   resolved = new Promise((resolve) => {
-    a = resolve;
+    release = resolve;
   });
   try {
-    await r;
-    if (isDiskless()) return await secureStorageWriteContext.run(true, e);
+    await previous;
+    if (isDiskless()) return await secureStorageWriteContext.run(true, fn);
     let projectDirsUpToHome = getProjectDirsUpToHome();
     await getFsImplementation().mkdir(projectDirsUpToHome);
-    let o = await lock(join(projectDirsUpToHome, ".storage-write"), {
+    let releaseLock = await lock(join(projectDirsUpToHome, ".storage-write"), {
       realpath: false,
       retries: {
         retries: 10,
@@ -47,65 +55,68 @@ async function withStorageWriteLock(e) {
         maxTimeout: 1000,
       },
       stale: 15000,
-      onCompromised: (s) =>
-        logForDebugging(`[secureStorage] write lock compromised: ${errorMessage(s)}`, {
+      onCompromised: (error) =>
+        logForDebugging(`[secureStorage] write lock compromised: ${errorMessage(error)}`, {
           level: "warn",
         }),
     });
     try {
-      return await secureStorageWriteContext.run(true, e);
+      return await secureStorageWriteContext.run(true, fn);
     } finally {
-      await o().catch((error) =>
+      await releaseLock().catch((error) =>
         logForDebugging(`[secureStorage] write lock release failed: ${errorMessage(error)}`, {
           level: "warn",
         }),
       );
     }
   } finally {
-    a();
+    release();
   }
 }
 //@ chunk-b29hdd5e.js:1422-1463 placement
-async function runInsideWriteLock(e) {
-  return secureStorageWriteContext.run(true, e);
+async function runInsideWriteLock(fn) {
+  return secureStorageWriteContext.run(true, fn);
 }
 //@ chunk-b29hdd5e.js:1463-1787 placement
-function mutateSecureStorage(plainTextStorage, r, a) {
+function mutateSecureStorage(plainTextStorage, mutate, options) {
   return withStorageWriteLock(async () => {
     plainTextStorage.invalidateCache?.();
-    let n = await (plainTextStorage.readAsyncStrict?.(a, {
+    let current = await (plainTextStorage.readAsyncStrict?.(options, {
       inaccessibleAs: "failureIfTransient",
-    }) ?? plainTextStorage.readAsync(a));
-    if (n === READ_FAILED) {
+    }) ?? plainTextStorage.readAsync(options));
+    if (current === READ_FAILED) {
       logFeatureSad("secure_storage_credentials_write", "read_failed_skip_write");
       return {
         success: false,
         transient: true,
       };
     }
-    let o = n ?? {};
-    let s = r(o);
-    return s === o
+    let base = current ?? {};
+    let next = mutate(base);
+    return next === base
       ? {
           success: true,
         }
-      : await plainTextStorage.update(s, a);
+      : await plainTextStorage.update(next, options);
   });
 }
 //@ chunk-b29hdd5e.js:1787-1830 placement
-var FALLBACK_LEGS_SYMBOL = Symbol("secureStorage.fallbackLegs");
+var FALLBACK_LEGS_SYMBOL; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-b29hdd5e.js:1787", () => {
+  FALLBACK_LEGS_SYMBOL = Symbol("secureStorage.fallbackLegs");
+});
 //@ chunk-b29hdd5e.js:1830-1858 placement
-function storageMarker(e) {
-  return e[FALLBACK_LEGS_SYMBOL];
+function storageMarker(marker) {
+  return marker[FALLBACK_LEGS_SYMBOL];
 }
 //@ chunk-b29hdd5e.js:1858-2006 placement
-function stripSlackBinding(e) {
-  let slackTag = e?.slackTag;
-  if (typeof slackTag !== "object" || slackTag === null || !("lastBinding" in slackTag)) return e;
-  let { lastBinding, ...n } = slackTag;
+function stripSlackBinding(value) {
+  let slackTag = value?.slackTag;
+  if (typeof slackTag !== "object" || slackTag === null || !("lastBinding" in slackTag)) return value;
+  let { lastBinding, ...rest } = slackTag;
   return {
-    ...e,
-    slackTag: n,
+    ...value,
+    slackTag: rest,
   };
 }
 export {

@@ -5,10 +5,10 @@
  * pieces: chunk-spjgqa4y.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-spjgqa4y.js:50618-52033 cjs-fingerprint
-var require_utils_2 = x(function (cjsExports) {
+var require_utils_2 = __commonJS(function (cjsExports) {
   function hex2rgba(hex) {
     if (typeof hex === "number") hex = hex.toString();
     if (typeof hex !== "string") throw Error("Color should be defined as hex string");

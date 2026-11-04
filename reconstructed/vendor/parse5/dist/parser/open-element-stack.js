@@ -5,8 +5,8 @@
  * pieces: chunk-6ja29j2n.js (2)
  * attribution: esm-fingerprint 2
  */
-import { TAG_ID, H } from "../common/html.js";
-import { E } from "../../lib/common/html.js";
+import { TAG_ID, HEADING_ELEMENTS } from "../common/html.js";
+import { NAMESPACES } from "../../lib/common/html.js";
 
 //@ chunk-6ja29j2n.js:117020-117587 esm-fingerprint
 var IMPLICIT_END_TAG_REQUIRED = new Set([
@@ -63,7 +63,7 @@ class OpenElementStack {
   get currentTmplContentOrNode() {
     return this._isInTemplate() ? this.treeAdapter.getTemplateContent(this.current) : this.current;
   }
-  constructor(e, treeAdapter, handler) {
+  constructor(documentNode, treeAdapter, handler) {
     this.treeAdapter = treeAdapter;
     this.handler = handler;
     this.items = [];
@@ -71,13 +71,16 @@ class OpenElementStack {
     this.stackTop = -1;
     this.tmplCount = 0;
     this.currentTagId = TAG_ID.UNKNOWN;
-    this.current = e;
+    this.current = documentNode;
   }
   _indexOf(element) {
     return this.items.lastIndexOf(element, this.stackTop);
   }
   _isInTemplate() {
-    return this.currentTagId === TAG_ID.TEMPLATE && this.treeAdapter.getNamespaceURI(this.current) === E.HTML;
+    return (
+      this.currentTagId === TAG_ID.TEMPLATE &&
+      this.treeAdapter.getNamespaceURI(this.current) === NAMESPACES.HTML
+    );
   }
   _updateCurrentElement() {
     this.current = this.items[this.stackTop];
@@ -115,7 +118,7 @@ class OpenElementStack {
   popUntilTagNamePopped(tagName) {
     let targetIdx = this.stackTop + 1;
     do targetIdx = this.tagIDs.lastIndexOf(tagName, targetIdx - 1);
-    while (targetIdx > 0 && this.treeAdapter.getNamespaceURI(this.items[targetIdx]) !== E.HTML);
+    while (targetIdx > 0 && this.treeAdapter.getNamespaceURI(this.items[targetIdx]) !== NAMESPACES.HTML);
     this.shortenToLength(targetIdx < 0 ? 0 : targetIdx);
   }
   shortenToLength(idx) {
@@ -136,10 +139,10 @@ class OpenElementStack {
     this.shortenToLength(idx < 0 ? 0 : idx);
   }
   popUntilNumberedHeaderPopped() {
-    this.popUntilPopped(H, E.HTML);
+    this.popUntilPopped(HEADING_ELEMENTS, NAMESPACES.HTML);
   }
   popUntilTableCellPopped() {
-    this.popUntilPopped(TABLE_CELLS, E.HTML);
+    this.popUntilPopped(TABLE_CELLS, NAMESPACES.HTML);
   }
   popAllUpToHtmlElement() {
     this.tmplCount = 0;
@@ -156,13 +159,13 @@ class OpenElementStack {
     this.shortenToLength(idx + 1);
   }
   clearBackToTableContext() {
-    this.clearBackTo(TABLE_CONTEXT, E.HTML);
+    this.clearBackTo(TABLE_CONTEXT, NAMESPACES.HTML);
   }
   clearBackToTableBodyContext() {
-    this.clearBackTo(TABLE_BODY_CONTEXT, E.HTML);
+    this.clearBackTo(TABLE_BODY_CONTEXT, NAMESPACES.HTML);
   }
   clearBackToTableRowContext() {
-    this.clearBackTo(TABLE_ROW_CONTEXT, E.HTML);
+    this.clearBackTo(TABLE_ROW_CONTEXT, NAMESPACES.HTML);
   }
   remove(element) {
     let idx = this._indexOf(element);
@@ -193,16 +196,16 @@ class OpenElementStack {
     for (let i = this.stackTop; i >= 0; i--) {
       let tn = this.tagIDs[i];
       switch (this.treeAdapter.getNamespaceURI(this.items[i])) {
-        case E.HTML: {
+        case NAMESPACES.HTML: {
           if (tn === tagName) return true;
           if (htmlScope.has(tn)) return false;
           break;
         }
-        case E.SVG: {
+        case NAMESPACES.SVG: {
           if (SCOPING_ELEMENTS_SVG.has(tn)) return false;
           break;
         }
-        case E.MATHML: {
+        case NAMESPACES.MATHML: {
           if (SCOPING_ELEMENTS_MATHML.has(tn)) return false;
           break;
         }
@@ -223,16 +226,16 @@ class OpenElementStack {
     for (let i = this.stackTop; i >= 0; i--) {
       let tn = this.tagIDs[i];
       switch (this.treeAdapter.getNamespaceURI(this.items[i])) {
-        case E.HTML: {
-          if (H.has(tn)) return true;
+        case NAMESPACES.HTML: {
+          if (HEADING_ELEMENTS.has(tn)) return true;
           if (SCOPING_ELEMENTS_HTML.has(tn)) return false;
           break;
         }
-        case E.SVG: {
+        case NAMESPACES.SVG: {
           if (SCOPING_ELEMENTS_SVG.has(tn)) return false;
           break;
         }
-        case E.MATHML: {
+        case NAMESPACES.MATHML: {
           if (SCOPING_ELEMENTS_MATHML.has(tn)) return false;
           break;
         }
@@ -242,7 +245,7 @@ class OpenElementStack {
   }
   hasInTableScope(tagName) {
     for (let i = this.stackTop; i >= 0; i--) {
-      if (this.treeAdapter.getNamespaceURI(this.items[i]) !== E.HTML) continue;
+      if (this.treeAdapter.getNamespaceURI(this.items[i]) !== NAMESPACES.HTML) continue;
       switch (this.tagIDs[i]) {
         case tagName:
           return true;
@@ -255,7 +258,7 @@ class OpenElementStack {
   }
   hasTableBodyContextInTableScope() {
     for (let i = this.stackTop; i >= 0; i--) {
-      if (this.treeAdapter.getNamespaceURI(this.items[i]) !== E.HTML) continue;
+      if (this.treeAdapter.getNamespaceURI(this.items[i]) !== NAMESPACES.HTML) continue;
       switch (this.tagIDs[i]) {
         case TAG_ID.TBODY:
         case TAG_ID.THEAD:
@@ -270,7 +273,7 @@ class OpenElementStack {
   }
   hasInSelectScope(tagName) {
     for (let i = this.stackTop; i >= 0; i--) {
-      if (this.treeAdapter.getNamespaceURI(this.items[i]) !== E.HTML) continue;
+      if (this.treeAdapter.getNamespaceURI(this.items[i]) !== NAMESPACES.HTML) continue;
       switch (this.tagIDs[i]) {
         case tagName:
           return true;

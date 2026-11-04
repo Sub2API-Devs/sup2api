@@ -15,27 +15,27 @@ import { getActiveSpanId } from "./telemetry/sessionTracing.js";
 import { env } from "./env.js";
 
 //@ chunk-s61vbvea.js:309947-310287 placement
-function claudeSubprocessEnv(e) {
-  let n = {
+function claudeSubprocessEnv(context) {
+  let env = {
     CLAUDECODE: "1",
-    CLAUDE_CODE_SESSION_ID: e.sessionId,
+    CLAUDE_CODE_SESSION_ID: context.sessionId,
     CLAUDE_CODE_CHILD_SESSION: "1",
     CLAUDE_CODE_SESSION_ATTENDED: envSessionKind() ? "1" : "0",
     CLAUDE_PID: String(process.pid),
   };
-  if (e.source === "agent") n.AI_AGENT = aiAgentEnvValue("agent");
-  if (e.effortLevel !== undefined) n.CLAUDE_EFFORT = e.effortLevel;
+  if (context.source === "agent") env.AI_AGENT = aiAgentEnvValue("agent");
+  if (context.effortLevel !== undefined) env.CLAUDE_EFFORT = context.effortLevel;
   if (shouldPropagateTraceContext()) {
     let activeSpanId = getActiveSpanId();
-    if (activeSpanId !== undefined) n.TRACEPARENT = activeSpanId;
+    if (activeSpanId !== undefined) env.TRACEPARENT = activeSpanId;
   }
-  return n;
+  return env;
 }
 //@ chunk-s61vbvea.js:310287-310379 placement
-function claudeEnvContextFrom(e) {
+function claudeEnvContextFrom(context) {
   return {
-    sessionId: e.session_id,
-    effortLevel: e.effort?.level,
+    sessionId: context.session_id,
+    effortLevel: context.effort?.level,
     source: "harness",
   };
 }

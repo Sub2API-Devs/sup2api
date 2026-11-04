@@ -10,6 +10,7 @@
  */
 import { HostScoped } from "../hostScoped.js";
 import { getRootSession } from "../../bootstrap/state.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-hwmsct5x.js:251627-252406 placement
 /**
@@ -51,7 +52,10 @@ class ComputerUseSession {
   }
 }
 //@ chunk-hwmsct5x.js:252406-252431 placement
-var computerUseSessionByHost = new HostScoped(() => new ComputerUseSession());
+var computerUseSessionByHost; // deferred: uses ComputerUseSession of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-hwmsct5x.js:252406", () => {
+  computerUseSessionByHost = new HostScoped(() => new ComputerUseSession());
+});
 //@ chunk-hwmsct5x.js:252431-252468 placement
 /**
  * 返回当前宿主的 ComputerUseSession。

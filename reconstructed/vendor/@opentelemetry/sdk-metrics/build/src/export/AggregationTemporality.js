@@ -1,0 +1,24 @@
+/**
+ * @opentelemetry/sdk-metrics/build/src/export/AggregationTemporality.js
+ * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * third-party: @opentelemetry/sdk-metrics@2.7.1
+ * pieces: chunk-wrv5s6k4.js (1)
+ * attribution: cjs-fingerprint 1
+ */
+import { __commonJS } from "../../../../../../runtime/bun-runtime.js";
+
+//@ chunk-wrv5s6k4.js:269-511 cjs-fingerprint
+var require_AggregationTemporality = __commonJS(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.AggregationTemporality = undefined;
+  var AggregationTemporality;
+  (function (AggregationTemporality) {
+    AggregationTemporality[(AggregationTemporality.DELTA = 0)] = "DELTA";
+    AggregationTemporality[(AggregationTemporality.CUMULATIVE = 1)] = "CUMULATIVE";
+  })(
+    (AggregationTemporality = cjsExports.AggregationTemporality || (cjsExports.AggregationTemporality = {})),
+  );
+});
+export { require_AggregationTemporality };

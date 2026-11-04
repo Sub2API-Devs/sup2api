@@ -12,7 +12,7 @@ import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime
 import { OrderedListWithItem } from "../CustomSelect/selectTable.js";
 import { getHookStatusText, hookSourceHeaderDisplayString } from "../../utils/hooks/hooksSettings.js";
 import { escapeControlCharsForDisplay } from "../../utils/stringUtils.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { KeyboardShortcutHint } from "../design-system/KeyboardShortcutHint.js";
 import { HintText } from "../design-system/HintText.js";
@@ -35,21 +35,21 @@ function renderHookItem(hook, index) {
 }
 //@ chunk-bajxb7bf.js:42023-43222 fingerprint = SelectHookMode (0.67)
 function SelectHookMode(props) {
-  let $ = w(23);
+  let $ = useMemoCache(23);
   let { selectedEvent, selectedMatcher, hooksForSelectedMatcher, hookEventMetadata, onSelect, onCancel } =
     props;
-  let k;
+  let title;
   if ($[0] !== hookEventMetadata.matcherMetadata || $[1] !== selectedEvent || $[2] !== selectedMatcher) {
-    k =
+    title =
       hookEventMetadata.matcherMetadata !== undefined
         ? `${selectedEvent} - Matcher: ${selectedMatcher ? escapeControlCharsForDisplay(selectedMatcher) : "(all)"}`
         : selectedEvent;
     $[0] = hookEventMetadata.matcherMetadata;
     $[1] = selectedEvent;
     $[2] = selectedMatcher;
-    $[3] = k;
-  } else k = $[3];
-  let title = k;
+    $[3] = title;
+  } else title = $[3];
+  let title_2 = title;
   if (hooksForSelectedMatcher.length === 0) {
     let inputGuide;
     let children;
@@ -69,9 +69,9 @@ function SelectHookMode(props) {
       children = $[5];
     }
     let t2;
-    if ($[6] !== hookEventMetadata.description || $[7] !== onCancel || $[8] !== title) {
+    if ($[6] !== hookEventMetadata.description || $[7] !== onCancel || $[8] !== title_2) {
       t2 = jsxProd_default(Dialog, {
-        title,
+        title: title_2,
         subtitle: hookEventMetadata.description,
         onCancel,
         inputGuide,
@@ -79,7 +79,7 @@ function SelectHookMode(props) {
       });
       $[6] = hookEventMetadata.description;
       $[7] = onCancel;
-      $[8] = title;
+      $[8] = title_2;
       $[9] = t2;
     } else t2 = $[9];
     return t2;
@@ -116,10 +116,10 @@ function SelectHookMode(props) {
     $[18] !== hookEventMetadata.description ||
     $[19] !== onCancel ||
     $[20] !== children_2 ||
-    $[21] !== title
+    $[21] !== title_2
   ) {
     t5 = jsxProd_default(Dialog, {
-      title,
+      title: title_2,
       subtitle,
       onCancel,
       children: children_2,
@@ -127,17 +127,17 @@ function SelectHookMode(props) {
     $[18] = hookEventMetadata.description;
     $[19] = onCancel;
     $[20] = children_2;
-    $[21] = title;
+    $[21] = title_2;
     $[22] = t5;
   } else t5 = $[22];
   return t5;
 }
 //@ chunk-bajxb7bf.js:48480-48528 fingerprint = _temp2 (0.844)
-function isPluginHook(Ai) {
-  return Ai.source === "pluginHook";
+function isPluginHook(hook) {
+  return hook.source === "pluginHook";
 }
 //@ chunk-bajxb7bf.js:48528-48563 affinity
-function hasAnyPluginHook(Li) {
-  return Li.some(isPluginHook);
+function hasAnyPluginHook(hooks) {
+  return hooks.some(isPluginHook);
 }
 export { hasAnyPluginHook, SelectHookMode };

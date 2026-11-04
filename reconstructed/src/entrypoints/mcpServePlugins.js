@@ -32,26 +32,30 @@ var pluginsEnabledSchema = DoctorLazy(() =>
 async function resolveMcpServeEnabledPlugins() {
   let mcpServeEnabledPluginsEnv = readMcpServeEnabledPluginsEnv();
   if (mcpServeEnabledPluginsEnv.kind !== "named") return mcpServeEnabledPluginsEnv;
-  let a = new Set(
-    mcpServeEnabledPluginsEnv.ids.length === 0 ? [] : (await registerSeedMarketplaces()).map(([n]) => n),
+  let seededMarketplaces = new Set(
+    mcpServeEnabledPluginsEnv.ids.length === 0
+      ? []
+      : (await registerSeedMarketplaces()).map(([marketplace]) => marketplace),
   );
   let filtered = mcpServeEnabledPluginsEnv.ids.filter((id) => {
     let { marketplace } = parsePluginIdentifier(id);
     return (
-      marketplace !== undefined && a.has(marketplace) && !isReservedMarketplaceName(marketplace.toLowerCase())
+      marketplace !== undefined &&
+      seededMarketplaces.has(marketplace) &&
+      !isReservedMarketplaceName(marketplace.toLowerCase())
     );
   });
   if (filtered.length > 0) {
-    let n = getFlagSettingsInline() ?? {};
-    let enabledPlugins = n.enabledPlugins;
-    let d = {
-      ...n,
+    let flagSettings = getFlagSettingsInline() ?? {};
+    let enabledPlugins = flagSettings.enabledPlugins;
+    let nextSettings = {
+      ...flagSettings,
       enabledPlugins: {
         ...(typeof enabledPlugins === "object" && enabledPlugins !== null ? enabledPlugins : {}),
-        ...Object.fromEntries(filtered.map((o) => [o, true])),
+        ...Object.fromEntries(filtered.map((id) => [id, true])),
       },
     };
-    setFlagSettingsInline(d);
+    setFlagSettingsInline(nextSettings);
     invalidateCommandNames();
   }
   return {
@@ -72,13 +76,13 @@ function readMcpServeEnabledPluginsEnv() {
     return {
       kind: "hermetic",
     };
-  let a =
+  let parsed =
     CLAUDE_CODE_MCP_SERVE_ENABLED_PLUGINS.length > MAX_PLUGINS_JSON_BYTES
       ? undefined
       : safeParseJSON(CLAUDE_CODE_MCP_SERVE_ENABLED_PLUGINS, false);
-  let enabledPlugins = pluginsEnabledSchema().safeParse(a).data?.enabledPlugins;
+  let enabledPlugins = pluginsEnabledSchema().safeParse(parsed).data?.enabledPlugins;
   let keys = Object.keys(enabledPlugins ?? {});
-  return enabledPlugins === undefined || hasProtoKeys(a) || keys.length > MAX_PLUGIN_ID
+  return enabledPlugins === undefined || hasProtoKeys(parsed) || keys.length > MAX_PLUGIN_ID
     ? {
         kind: "unreadable",
       }
@@ -87,3 +91,4 @@ function readMcpServeEnabledPluginsEnv() {
         ids: keys,
       };
 }
+export { resolveMcpServeEnabledPlugins };

@@ -29,10 +29,10 @@ var processStartTuningState = identity(
     namesSet: undefined,
     purgeDelayMs: undefined,
   },
-  (n) => {
-    n.isNoted = false;
-    n.namesSet = undefined;
-    n.purgeDelayMs = undefined;
+  (state) => {
+    state.isNoted = false;
+    state.namesSet = undefined;
+    state.purgeDelayMs = undefined;
   },
 );
 //@ chunk-xjnjbame.js:551-809 placement
@@ -44,7 +44,8 @@ function noteProcessStartTuning() {
   processStartTuningState.isNoted = true;
   try {
     let namesSet = 0;
-    for (let [r, s] of PROCESS_START_TUNING_ENV.entries()) if (process.env[s]) namesSet |= 1 << r;
+    for (let [index, name] of PROCESS_START_TUNING_ENV.entries())
+      if (process.env[name]) namesSet |= 1 << index;
     let envMimallocPurgeDelay = process.env.MIMALLOC_PURGE_DELAY;
     processStartTuningState.purgeDelayMs =
       envMimallocPurgeDelay !== undefined && /^\d{1,7}$/.test(envMimallocPurgeDelay)
@@ -63,4 +64,4 @@ function processStartTuning() {
 function processStartPurgeDelayMs() {
   return processStartTuningState.purgeDelayMs;
 }
-export { processStartTuning, processStartPurgeDelayMs };
+export { processStartTuning, processStartPurgeDelayMs, noteProcessStartTuning };

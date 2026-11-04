@@ -6,7 +6,7 @@
  * attribution: esm-fingerprint 1
  */
 import { default as Mr } from "process";
-import { Xt } from "../../human-signals/build/src/main.js";
+import { signalsByName } from "../../human-signals/build/src/main.js";
 
 //@ chunk-m4p5zn6n.js:14620-15759 esm-fingerprint
 var getErrorPrefix = ({ timedOut, timeout, errorCode, signal, signalDescription, exitCode, isCanceled }) => {
@@ -35,7 +35,7 @@ var makeError = ({
 }) => {
   exitCode = exitCode === null ? undefined : exitCode;
   signal = signal === null ? undefined : signal;
-  let signalDescription = signal === undefined ? undefined : Xt[signal].description;
+  let signalDescription = signal === undefined ? undefined : signalsByName[signal].description;
   let errorCode = error && error.code;
   let execaMessage = `Command ${getErrorPrefix({
     timedOut,

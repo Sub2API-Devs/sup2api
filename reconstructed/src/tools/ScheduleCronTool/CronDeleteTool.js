@@ -9,7 +9,7 @@
  * attribution: fingerprint 1
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { zodStrictObject, string, u } from "../../../vendor/zod/v4/classic/schemas.js";
+import { zodStrictObject, stringSchema, objectSchema } from "../../../vendor/zod/v4/classic/schemas.js";
 import { buildTool } from "../../services/tools/permissionCheckGuard.js";
 import {
   CRON_DELETE_TOOL_NAME,
@@ -27,12 +27,12 @@ import { getTeammateContext } from "../../utils/teammate.js";
  */
 var cronDeleteInputSchema = DoctorLazy(() =>
   zodStrictObject({
-    id: string().describe("Job ID returned by CronCreate."),
+    id: stringSchema().describe("Job ID returned by CronCreate."),
   }),
 );
 var cronDeleteOutputSchema = DoctorLazy(() =>
-  u({
-    id: string(),
+  objectSchema({
+    id: stringSchema(),
   }),
 );
 var CronDeleteTool = buildTool({
@@ -100,7 +100,8 @@ var CronDeleteTool = buildTool({
       content: `Cancelled job ${output.id}.`,
     };
   },
-  renderToolUseMessage(e) {
-    return e.id ?? "";
+  renderToolUseMessage(input) {
+    return input.id ?? "";
   },
 });
+export { CronDeleteTool };

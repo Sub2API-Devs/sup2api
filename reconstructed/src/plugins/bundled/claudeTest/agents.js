@@ -18,7 +18,7 @@ var HELPER_READ_RULES = Object.freeze([
   "Read(//**/claude-test/**/storageState.json)",
   "Read(//**/claude-test/scratch/**)",
 ]);
-var Kn = Object.freeze(HELPER_READ_RULES.map((e) => e.replace(/^Read\(/, "Edit(")));
+var HELPER_EDIT_RULES = Object.freeze(HELPER_READ_RULES.map((rule) => rule.replace(/^Read\(/, "Edit(")));
 //@ chunk-ae5g0zb5.js:116368-117398 placement
 /**
  * 测试代理不得编辑的文件规则（CLAUDE.md、AGENTS.md 等）。
@@ -128,7 +128,7 @@ var DRAFT_AGENT_DEFINITION = Object.freeze({
     "Edit(//**/.claude-test/runs/*/decisions.json/**)",
     ...PROTECTED_EDIT_RULES,
     ...HELPER_READ_RULES,
-    ...Kn,
+    ...HELPER_EDIT_RULES,
     "Read(**/.git/**)",
     "Read(**/.env)",
     "Read(**/.env.*)",
@@ -210,7 +210,7 @@ var EXECUTE_AGENT_DEFINITION = Object.freeze({
     "Edit(//**/.claude-test/skills/**)",
     ...PROTECTED_EDIT_RULES,
     ...HELPER_READ_RULES,
-    ...Kn,
+    ...HELPER_EDIT_RULES,
     "mcp__plugin_claude-test_browser__claude_test_allow",
     "mcp__plugin_claude-test_browser__claude_test_app_up",
     "mcp__plugin_claude-test_browser__claude_test_show_run",

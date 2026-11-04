@@ -59,7 +59,7 @@ import {
   isSensitiveNameOrVariant,
   getPathNormalizationVariants,
   DECORATION_LEAD_CHARS,
-  EDITOR_BACKUP_SUFFIX_REGEX,
+  EDITOR_BACKUP_SUFFIX_SOURCE,
   SYNC_CONFLICT_SUFFIX_PATTERN,
   MAX_NAME_READING_LENGTH,
   expandNameReadings,
@@ -81,6 +81,7 @@ import { getFirstLine, truncateCodePoints, firstLineOf } from "../stringUtils.js
 import { readOnlyNoFollowFlags } from "../platformTargets.js";
 import { readJunction } from "../fsJunctions.js";
 import { sleep } from "../sleep.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-gjx0rh1b.js:14008-14041 placement
 var MAX_CONCURRENT_FILE_READS = 8;
@@ -90,109 +91,110 @@ var DARWIN_NOFOLLOW_FLAG = 536870912;
 /**
  * 读取变更文件内容（只接受 git 会写的路径、累计大小上限、硬链接/变化检测）。
  */
-async function readChangedFilesForStash(workTree, n, r, o, s) {
-  let found = r.find((R) => !isPlainRelativePath(R));
+async function readChangedFilesForStash(workTree, names, entries, sizeCap, ioHooks) {
+  let found = entries.find((found) => !isPlainRelativePath(found));
   if (found !== undefined)
     return {
       refused: `${found}: not a path git writes`,
       tooLarge: false,
       momentary: false,
     };
-  let h = 0;
-  let u = null;
-  let p = missingGitattributesPaths(r);
-  let w = new Set(r);
-  let _ = limitConcurrency(MAX_CONCURRENT_FILE_READS, async (R) => {
-    await s.beforeOpen?.(R);
-    let B = false;
-    let x = await lstatOrAbsent(workTree, R);
-    if (x === "symlink")
+  let totalBytes = 0;
+  let largestFile = null;
+  let gitattributesPaths = missingGitattributesPaths(entries);
+  let entrySet = new Set(entries);
+  let readOneFile = limitConcurrency(MAX_CONCURRENT_FILE_READS, async (relativePath) => {
+    await ioHooks.beforeOpen?.(relativePath);
+    let isEntryMoved = false;
+    let statKind = await lstatOrAbsent(workTree, relativePath);
+    if (statKind === "symlink")
       return {
         kind: "absent",
-        path: R,
+        path: relativePath,
       };
-    if (x === "unreadable")
+    if (statKind === "unreadable")
       return {
-        refused: `${R}: a directory above it could not be inspected`,
+        refused: `${relativePath}: a directory above it could not be inspected`,
         tooLarge: false,
         momentary: true,
       };
-    await s.beforeRead?.(R);
-    let worktreeFile = await readWorktreeFileSafely(workTree, R, s.ntfsRules);
-    let z = (worktreeFile) => compareFileIdentity(workTree, R, worktreeFile);
+    await ioHooks.beforeRead?.(relativePath);
+    let worktreeFile = await readWorktreeFileSafely(workTree, relativePath, ioHooks.ntfsRules);
+    let checkIdentity = (expected) => compareFileIdentity(workTree, relativePath, expected);
     switch (worktreeFile.kind) {
       case "absent":
         return {
           kind: "absent",
-          path: R,
+          path: relativePath,
         };
       case "refused":
-        return w.has(R)
+        return entrySet.has(relativePath)
           ? {
-              refused: `${R}: ${worktreeFile.why}`,
+              refused: `${relativePath}: ${worktreeFile.why}`,
               tooLarge: false,
               momentary: worktreeFile.momentary,
             }
           : {
               kind: "absent",
-              path: R,
+              path: relativePath,
             };
       case "hardlinked":
         return {
           kind: "hardlinked",
-          path: R,
+          path: relativePath,
         };
       case "moved":
         return {
           kind: "changed",
-          path: R,
+          path: relativePath,
         };
       case "not_read":
-        return (worktreeFile.why === "name_not_plain" || worktreeFile.why === "beyond_a_link") && !w.has(R)
+        return (worktreeFile.why === "name_not_plain" || worktreeFile.why === "beyond_a_link") &&
+          !entrySet.has(relativePath)
           ? {
               kind: "absent",
-              path: R,
+              path: relativePath,
             }
           : {
               kind: "not_read",
-              path: R,
+              path: relativePath,
               why: worktreeFile.why,
             };
       case "symlink":
         return {
           kind: "symlink",
-          path: R,
+          path: relativePath,
           target: worktreeFile.target,
         };
       case "file":
         try {
-          h += worktreeFile.size;
-          if (u === null || worktreeFile.size > u.size)
-            u = {
-              path: R,
+          totalBytes += worktreeFile.size;
+          if (largestFile === null || worktreeFile.size > largestFile.size)
+            largestFile = {
+              path: relativePath,
               size: worktreeFile.size,
             };
-          if (h > o)
+          if (totalBytes > sizeCap)
             return {
-              refused: `${u.path} (largest, ${u.size} bytes): ${h} bytes of changed files exceed the ${o}-byte cap`,
+              refused: `${largestFile.path} (largest, ${largestFile.size} bytes): ${totalBytes} bytes of changed files exceed the ${sizeCap}-byte cap`,
               tooLarge: true,
               momentary: false,
             };
-          let L = join(n, R);
-          await mkdir(dirname(L), {
+          let targetPath = join(names, relativePath);
+          await mkdir(dirname(targetPath), {
             recursive: true,
           });
-          let U;
+          let targetHandle;
           try {
-            U = await open(
-              L,
+            targetHandle = await open(
+              targetPath,
               constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | READ_LIMITS,
               worktreeFile.executable ? 493 : 420,
             );
           } catch (error) {
             if (getErrnoCode(error) === "EEXIST")
               return {
-                refused: `${R}: collides with another changed path that differs only in case or normalization`,
+                refused: `${relativePath}: collides with another changed path that differs only in case or normalization`,
                 tooLarge: false,
                 momentary: false,
               };
@@ -203,107 +205,113 @@ async function readChangedFilesForStash(workTree, n, r, o, s) {
               bigint: true,
             });
             if (
-              s.notOlderThanNs !== undefined &&
-              stats.ctimeNs >= s.notOlderThanNs &&
+              ioHooks.notOlderThanNs !== undefined &&
+              stats.ctimeNs >= ioHooks.notOlderThanNs &&
               stats.ctimeNs < (BigInt(Date.now()) + 1n) * 1000000n
             ) {
-              await U.close();
-              await unlink(L).catch(() => {});
+              await targetHandle.close();
+              await unlink(targetPath).catch(() => {});
               return {
                 kind: "changed",
-                path: R,
+                path: relativePath,
                 sincePassStart: true,
               };
             }
             let hash = createHash("sha256");
-            let X =
-              s.objectFormat === undefined
+            let blobHasher =
+              ioHooks.objectFormat === undefined
                 ? null
-                : createHash(s.objectFormat).update(`blob ${stats.size}\x00`);
-            let Te = 0;
-            let le = false;
-            let ve = Buffer.allocUnsafe(Math.min(worktreeFile.size, MAX_FILE_READ_CHUNK_BYTES));
-            let ie = 0;
-            while (ie < worktreeFile.size) {
+                : createHash(ioHooks.objectFormat).update(`blob ${stats.size}\x00`);
+            let crlfCount = 0;
+            let lastWasCr = false;
+            let chunkBuffer = Buffer.allocUnsafe(Math.min(worktreeFile.size, MAX_FILE_READ_CHUNK_BYTES));
+            let bytesCopied = 0;
+            while (bytesCopied < worktreeFile.size) {
               let { bytesRead } = await worktreeFile.handle.read(
-                ve,
+                chunkBuffer,
                 0,
-                Math.min(ve.length, worktreeFile.size - ie),
-                ie,
+                Math.min(chunkBuffer.length, worktreeFile.size - bytesCopied),
+                bytesCopied,
               );
               if (bytesRead === 0) break;
-              hash.update(ve.subarray(0, bytesRead));
-              if (X !== null) {
-                let chunk = ve.subarray(0, bytesRead);
-                X.update(chunk);
-                Te += countCrlf(chunk, le);
-                le = chunk.at(-1) === 13;
+              hash.update(chunkBuffer.subarray(0, bytesRead));
+              if (blobHasher !== null) {
+                let content = chunkBuffer.subarray(0, bytesRead);
+                blobHasher.update(content);
+                crlfCount += countCrlf(content, lastWasCr);
+                lastWasCr = content.at(-1) === 13;
               }
-              let $e = 0;
-              while ($e < bytesRead) {
-                let { bytesWritten } = await U.write(ve, $e, bytesRead - $e);
-                $e += bytesWritten;
+              let writeOffset = 0;
+              while (writeOffset < bytesRead) {
+                let { bytesWritten } = await targetHandle.write(
+                  chunkBuffer,
+                  writeOffset,
+                  bytesRead - writeOffset,
+                );
+                writeOffset += bytesWritten;
               }
-              ie += bytesRead;
+              bytesCopied += bytesRead;
             }
-            await s.afterRead?.(R);
+            await ioHooks.afterRead?.(relativePath);
             let stats_2 = await worktreeFile.handle.stat({
               bigint: true,
             });
-            let _e =
-              s.objectFormat !== undefined && Te > 0 ? createLfBlobHasher(s.objectFormat, ie, Te) : null;
+            let lfHasher =
+              ioHooks.objectFormat !== undefined && crlfCount > 0
+                ? createLfBlobHasher(ioHooks.objectFormat, bytesCopied, crlfCount)
+                : null;
             if (
-              BigInt(ie) !== stats.size ||
+              BigInt(bytesCopied) !== stats.size ||
               stats_2.size !== stats.size ||
               stats_2.mtimeNs !== stats.mtimeNs ||
               stats_2.ctimeNs !== stats.ctimeNs ||
-              !(await hashFileWithinLimit(worktreeFile.handle, ie, hash.digest(), _e?.update))
+              !(await hashFileWithinLimit(worktreeFile.handle, bytesCopied, hash.digest(), lfHasher?.update))
             ) {
-              await U.close();
-              await unlink(L).catch(() => {});
+              await targetHandle.close();
+              await unlink(targetPath).catch(() => {});
               return {
                 kind: "changed",
-                path: R,
+                path: relativePath,
               };
             }
-            let Ce = await z(worktreeFile);
-            if (Ce !== "same") {
-              await U.close();
-              await unlink(L).catch(() => {});
+            let identityChange = await checkIdentity(worktreeFile);
+            if (identityChange !== "same") {
+              await targetHandle.close();
+              await unlink(targetPath).catch(() => {});
               return {
-                kind: Ce,
-                path: R,
+                kind: identityChange,
+                path: relativePath,
               };
             }
-            await U.utimes(worktreeFile.atime, worktreeFile.mtime);
-            let filePath = await U.stat({
+            await targetHandle.utimes(worktreeFile.atime, worktreeFile.mtime);
+            let filePath = await targetHandle.stat({
               bigint: true,
             });
             return {
               kind: "file",
-              path: R,
-              bytes: ie,
+              path: relativePath,
+              bytes: bytesCopied,
               copy: {
                 ino: Number(filePath.ino),
                 dev: Number(filePath.dev),
                 ctimeNs: filePath.ctimeNs,
                 size: Number(filePath.size),
                 identity: getFileIdentity(filePath),
-                ...(X !== null && {
-                  blobId: X.digest("hex"),
-                  ...(_e !== null && {
-                    lfBlobId: _e.digest(),
+                ...(blobHasher !== null && {
+                  blobId: blobHasher.digest("hex"),
+                  ...(lfHasher !== null && {
+                    lfBlobId: lfHasher.digest(),
                   }),
                 }),
               },
             };
           } finally {
-            await U.close().catch(() => {});
+            await targetHandle.close().catch(() => {});
           }
         } catch (error) {
           let errnoCode = getErrnoCode(error);
           return {
-            refused: `${R}: could not be staged (${errnoCode ?? errorMessage(error)})`,
+            refused: `${relativePath}: could not be staged (${errnoCode ?? errorMessage(error)})`,
             tooLarge: false,
             momentary: errnoCode === undefined || !TRANSIENT_STAT_ERRNOS.has(errnoCode),
           };
@@ -312,29 +320,33 @@ async function readChangedFilesForStash(workTree, n, r, o, s) {
         }
     }
   });
-  let results = await Promise.all([...r, ...p].map(_));
-  let found_2 = results.find((R) => "refused" in R);
+  let results = await Promise.all([...entries, ...gitattributesPaths].map(readOneFile));
+  let found_2 = results.find((result) => "refused" in result);
   if (found_2 !== undefined)
     return found_2.tooLarge
       ? {
           ...found_2,
-          claimedBytes: h,
+          claimedBytes: totalBytes,
         }
       : found_2;
-  let filtered = results.filter((R) => !("refused" in R));
-  let flattened = filtered.flatMap((R) => (R.kind === "not_read" ? [R.why] : []));
+  let filtered = results.filter((result) => !("refused" in result));
+  let flattened = filtered.flatMap((result) => (result.kind === "not_read" ? [result.why] : []));
   return {
     entries: filtered.filter(
-      (R) => w.has(R.path) || R.kind === "hardlinked" || R.kind === "changed" || R.kind === "not_read",
+      (result) =>
+        entrySet.has(result.path) ||
+        result.kind === "hardlinked" ||
+        result.kind === "changed" ||
+        result.kind === "not_read",
     ),
-    copies: filtered.flatMap((R) =>
-      R.kind === "file"
-        ? [R]
-        : isGitattributesPath(R.path)
+    copies: filtered.flatMap((result) =>
+      result.kind === "file"
+        ? [result]
+        : isGitattributesPath(result.path)
           ? [
               {
                 kind: "absent",
-                path: R.path,
+                path: result.path,
               },
             ]
           : [],
@@ -345,31 +357,31 @@ async function readChangedFilesForStash(workTree, n, r, o, s) {
 /**
  * 确认暂存副本在 git 读取期间未被改动（比较 inode、大小、ctime 等）。
  */
-async function stagedCopiesUnchanged(e, copies) {
+async function stagedCopiesUnchanged(workTree, copies) {
   return (
     await Promise.all(
-      copies.map(async (o) => {
-        if (o.kind === "absent")
-          return lstat(join(e, o.path)).then(
+      copies.map(async (copy) => {
+        if (copy.kind === "absent")
+          return lstat(join(workTree, copy.path)).then(
             () => false,
             (error) => {
               let errnoCode = getErrnoCode(error);
               return errnoCode === "ENOENT" || errnoCode === "ENOTDIR";
             },
           );
-        if (o.kind !== "file") return true;
+        if (copy.kind !== "file") return true;
         try {
-          let filePath = await lstat(join(e, o.path), {
+          let filePath = await lstat(join(workTree, copy.path), {
             bigint: true,
           });
           return (
             filePath.isFile() &&
             filePath.nlink === 1n &&
-            Number(filePath.ino) === o.copy.ino &&
-            Number(filePath.dev) === o.copy.dev &&
-            getFileIdentity(filePath) === o.copy.identity &&
-            filePath.ctimeNs === o.copy.ctimeNs &&
-            Number(filePath.size) === o.copy.size
+            Number(filePath.ino) === copy.copy.ino &&
+            Number(filePath.dev) === copy.copy.dev &&
+            getFileIdentity(filePath) === copy.copy.identity &&
+            filePath.ctimeNs === copy.copy.ctimeNs &&
+            Number(filePath.size) === copy.copy.size
           );
         } catch {
           return false;
@@ -383,43 +395,45 @@ function getFileIdentity(filePath) {
   return filePath.dev === 0n || filePath.ino === 0n ? null : `${filePath.dev}:${filePath.ino}`;
 }
 //@ chunk-gjx0rh1b.js:18020-18228 placement
-async function compareFileIdentity(e, n, r) {
-  let o = await lstat(join(e, n), {
+async function compareFileIdentity(workTree, path, expected) {
+  let stats = await lstat(join(workTree, path), {
     bigint: true,
   }).catch(() => null);
-  if (o !== null && o.isFile() && o.nlink > 1n) return "hardlinked";
-  return o === null || !o.isFile() || o.ino !== r.ino || o.dev !== r.dev ? "changed" : "same";
+  if (stats !== null && stats.isFile() && stats.nlink > 1n) return "hardlinked";
+  return stats === null || !stats.isFile() || stats.ino !== expected.ino || stats.dev !== expected.dev
+    ? "changed"
+    : "same";
 }
 //@ chunk-gjx0rh1b.js:18228-18489 placement
-async function hashFileWithinLimit(handle, n, r, update) {
+async function hashFileWithinLimit(handle, maxBytes, limit, update) {
   let hash = createHash("sha256");
-  let l = Buffer.allocUnsafe(Math.min(n + 1, MAX_FILE_READ_CHUNK_BYTES));
-  let h = 0;
+  let buffer = Buffer.allocUnsafe(Math.min(maxBytes + 1, MAX_FILE_READ_CHUNK_BYTES));
+  let offset = 0;
   for (;;) {
-    let { bytesRead } = await handle.read(l, 0, l.length, h);
+    let { bytesRead } = await handle.read(buffer, 0, buffer.length, offset);
     if (bytesRead === 0) break;
-    hash.update(l.subarray(0, bytesRead));
-    update?.(l.subarray(0, bytesRead));
-    h += bytesRead;
-    if (h > n) return false;
+    hash.update(buffer.subarray(0, bytesRead));
+    update?.(buffer.subarray(0, bytesRead));
+    offset += bytesRead;
+    if (offset > maxBytes) return false;
   }
-  return h === n && hash.digest().equals(r);
+  return offset === maxBytes && hash.digest().equals(limit);
 }
 //@ chunk-gjx0rh1b.js:18489-18816 placement
 /**
  * 创建计算 blob 哈希的流式哈希器，把 CRLF 转为 LF 计算。
  */
-function createLfBlobHasher(e, n, r) {
-  let o = createHash(e).update(`blob ${n - r}\x00`);
-  let s = false;
+function createLfBlobHasher(algorithm, size, headerLength) {
+  let hash = createHash(algorithm).update(`blob ${size - headerLength}\x00`);
+  let keepOpen = false;
   return {
-    update(l) {
-      if (l.length === 0) return;
-      if (s && l[0] !== 10) o.update(Buffer.from([13]));
-      s = l.at(-1) === 13;
-      let h = s ? l.subarray(0, l.length - 1) : l;
-      o.update(
-        h.toString("latin1").replaceAll(
+    update(chunk) {
+      if (chunk.length === 0) return;
+      if (keepOpen && chunk[0] !== 10) hash.update(Buffer.from([13]));
+      keepOpen = chunk.at(-1) === 13;
+      let lineChunk = keepOpen ? chunk.subarray(0, chunk.length - 1) : chunk;
+      hash.update(
+        lineChunk.toString("latin1").replaceAll(
           `\r
 `,
           `
@@ -429,92 +443,97 @@ function createLfBlobHasher(e, n, r) {
       );
     },
     digest() {
-      if (s) o.update(Buffer.from([13]));
-      return o.digest("hex");
+      if (keepOpen) hash.update(Buffer.from([13]));
+      return hash.digest("hex");
     },
   };
 }
 //@ chunk-gjx0rh1b.js:18816-18961 placement
 function isGitattributesPath(path) {
   let platform = getPlatform();
-  let r = splitPathSegments(path).at(-1) ?? "";
+  let segment = splitPathSegments(path).at(-1) ?? "";
   return platform === "macos" || platform === "windows" || platform === "wsl"
-    ? r.toLowerCase() === ".gitattributes"
-    : r === ".gitattributes";
+    ? segment.toLowerCase() === ".gitattributes"
+    : segment === ".gitattributes";
 }
 //@ chunk-gjx0rh1b.js:18961-19101 placement
-function missingGitattributesPaths(e) {
-  let n = new Set(e);
+function missingGitattributesPaths(paths) {
+  let seen = new Set(paths);
   return (
-    e.length === 0 ? [] : [".gitattributes", ...listAncestorDirs(e).map((r) => `${r}/.gitattributes`)]
-  ).filter((r) => !n.has(r));
+    paths.length === 0
+      ? []
+      : [".gitattributes", ...listAncestorDirs(paths).map((rel) => `${rel}/.gitattributes`)]
+  ).filter((attributesPath) => !seen.has(attributesPath));
 }
 //@ chunk-gjx0rh1b.js:19101-19170 placement
-var TRANSIENT_STAT_ERRNOS = new Set(["ENAMETOOLONG", "ENOTDIR", "EISDIR", "EINVAL", "ELOOP"]);
+var TRANSIENT_STAT_ERRNOS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-gjx0rh1b.js:19101", () => {
+  TRANSIENT_STAT_ERRNOS = new Set(["ENAMETOOLONG", "ENOTDIR", "EISDIR", "EINVAL", "ELOOP"]);
+});
 //@ chunk-gjx0rh1b.js:19170-19186 placement
 var BACKSLASH_BYTE = 92;
 var SLASH_BYTE = 47;
 //@ chunk-gjx0rh1b.js:19186-19267 placement
-function normalizeSymlinkBytes(viaProcFd, n = getPlatform()) {
-  return n === "windows"
-    ? Buffer.from(viaProcFd.map((r) => (r === BACKSLASH_BYTE ? SLASH_BYTE : r)))
+function normalizeSymlinkBytes(viaProcFd, platform = getPlatform()) {
+  return platform === "windows"
+    ? Buffer.from(viaProcFd.map((segment) => (segment === BACKSLASH_BYTE ? SLASH_BYTE : segment)))
     : viaProcFd;
 }
 //@ chunk-gjx0rh1b.js:19267-19558 placement
-async function openViaProcFd(e, n) {
-  if (n !== "linux")
-    return readlink(e, {
+async function openViaProcFd(path, platform) {
+  if (platform !== "linux")
+    return readlink(path, {
       encoding: "buffer",
     });
-  let r = await open(dirname(e), O_NOFOLLOW_ANY | constants.O_DIRECTORY | READ_LIMITS);
+  let handle = await open(dirname(path), O_NOFOLLOW_ANY | constants.O_DIRECTORY | READ_LIMITS);
   try {
-    let o = `/proc/self/fd/${r.fd}`;
-    let s = await readlink(o);
-    return s === dirname(e)
-      ? await readlink(join(o, basename(e)), {
+    let dirHandle = `/proc/self/fd/${handle.fd}`;
+    let dirTarget = await readlink(dirHandle);
+    return dirTarget === dirname(path)
+      ? await readlink(join(dirHandle, basename(path)), {
           encoding: "buffer",
         })
-      : s === `${dirname(e)} (deleted)`
+      : dirTarget === `${dirname(path)} (deleted)`
         ? "moved"
         : "elsewhere";
   } finally {
-    await r.close();
+    await handle.close();
   }
 }
 //@ chunk-gjx0rh1b.js:19558-21423 placement
 /**
  * 以不跟随链接方式读取工作树文件，检测被替换、硬链接、变化。
  */
-async function readWorktreeFileSafely(e, n, r) {
-  if (!isSafeRepoRelativePath(n, r))
+async function readWorktreeFileSafely(workTree, relPath, entry) {
+  if (!isSafeRepoRelativePath(relPath, entry))
     return {
       kind: "refused",
       why: "not a path git writes",
       momentary: false,
     };
-  let o = join(e, n);
-  let s = "linux";
-  let l =
+  let absPath = join(workTree, relPath);
+  let platform = "linux";
+  let openFlags =
     constants.O_RDONLY |
-    (s === "darwin" ? DARWIN_NOFOLLOW_FLAG : constants.O_NOFOLLOW) |
+    (platform === "darwin" ? DARWIN_NOFOLLOW_FLAG : constants.O_NOFOLLOW) |
     (constants.O_NONBLOCK ?? 0) |
     (constants.O_NOCTTY ?? 0);
-  let h;
+  let handle;
   try {
-    if (s === "win32") {
-      let u = await lstat(o);
-      if (u.isSymbolicLink())
+    if (platform === "win32") {
+      let linkStat = await lstat(absPath);
+      if (linkStat.isSymbolicLink())
         throw Object.assign(Error("symbolic link"), {
           code: "ELOOP",
         });
-      if (!u.isFile())
+      if (!linkStat.isFile())
         return {
           kind: "refused",
           why: "not a regular file",
           momentary: false,
         };
     }
-    h = await open(o, s === "win32" ? "r" : l);
+    handle = await open(absPath, platform === "win32" ? "r" : openFlags);
   } catch (error) {
     let errnoCode = getErrnoCode(error);
     if (errnoCode === "ENOENT" || errnoCode === "ENOTDIR")
@@ -523,17 +542,17 @@ async function readWorktreeFileSafely(e, n, r) {
       };
     if (errnoCode === "ELOOP" || errnoCode === "EMLINK" || errnoCode === "EFTYPE")
       try {
-        let viaProcFd = await openViaProcFd(o, s);
+        let viaProcFd = await openViaProcFd(absPath, platform);
         if (viaProcFd === "moved")
           return {
             kind: "moved",
           };
-        let E = await lstatOrAbsent(e, n);
-        if (E === "symlink")
+        let statKind = await lstatOrAbsent(workTree, relPath);
+        if (statKind === "symlink")
           return {
             kind: "absent",
           };
-        if (E === "unreadable")
+        if (statKind === "unreadable")
           return {
             kind: "refused",
             why: "a directory above it could not be inspected",
@@ -557,20 +576,20 @@ async function readWorktreeFileSafely(e, n, r) {
           momentary: true,
         };
       }
-    let w = s === "win32" ? null : await lstat(o).catch(() => null);
-    let _ = w !== null && !w.isFile() && !w.isSymbolicLink();
+    let fileStat = platform === "win32" ? null : await lstat(absPath).catch(() => null);
+    let isSpecialFile = fileStat !== null && !fileStat.isFile() && !fileStat.isSymbolicLink();
     return {
       kind: "refused",
       why: `could not be opened (${errnoCode ?? "unknown"})`,
-      momentary: !_ && (errnoCode === undefined || !TRANSIENT_STAT_ERRNOS.has(errnoCode)),
+      momentary: !isSpecialFile && (errnoCode === undefined || !TRANSIENT_STAT_ERRNOS.has(errnoCode)),
     };
   }
   try {
-    let stats = await h.stat({
+    let stats = await handle.stat({
       bigint: true,
     });
     if (!stats.isFile()) {
-      await h.close();
+      await handle.close();
       return {
         kind: "refused",
         why: "not a regular file",
@@ -578,16 +597,16 @@ async function readWorktreeFileSafely(e, n, r) {
       };
     }
     if (stats.nlink > 1n) {
-      await h.close();
+      await handle.close();
       return {
         kind: "hardlinked",
       };
     }
-    if (s === "linux") {
-      let p = await readlink(`/proc/self/fd/${h.fd}`);
-      if (p !== o) {
-        await h.close();
-        return p === `${o} (deleted)` || dirname(p) === dirname(o)
+    if (platform === "linux") {
+      let resolvedPath = await readlink(`/proc/self/fd/${handle.fd}`);
+      if (resolvedPath !== absPath) {
+        await handle.close();
+        return resolvedPath === `${absPath} (deleted)` || dirname(resolvedPath) === dirname(absPath)
           ? {
               kind: "moved",
             }
@@ -600,7 +619,7 @@ async function readWorktreeFileSafely(e, n, r) {
     }
     return {
       kind: "file",
-      handle: h,
+      handle,
       size: Number(stats.size),
       ino: stats.ino,
       dev: stats.dev,
@@ -609,7 +628,7 @@ async function readWorktreeFileSafely(e, n, r) {
       mtime: stats.mtime,
     };
   } catch (error) {
-    await h.close().catch(() => {});
+    await handle.close().catch(() => {});
     let errnoCode = getErrnoCode(error);
     return {
       kind: "refused",
@@ -619,16 +638,16 @@ async function readWorktreeFileSafely(e, n, r) {
   }
 }
 //@ chunk-gjx0rh1b.js:21423-21498 placement
-function splitPathSegments(e) {
-  return (getPlatform() === "windows" ? e.replaceAll("\\", "/") : e).split("/");
+function splitPathSegments(path) {
+  return (getPlatform() === "windows" ? path.replaceAll("\\", "/") : path).split("/");
 }
 //@ chunk-gjx0rh1b.js:21498-21724 placement
-async function lstatOrAbsent(e, n) {
-  let r = e;
-  for (let o of splitPathSegments(n).slice(0, -1)) {
-    r = join(r, o);
+async function lstatOrAbsent(workTree, relPath) {
+  let current = workTree;
+  for (let segment of splitPathSegments(relPath).slice(0, -1)) {
+    current = join(current, segment);
     try {
-      if ((await lstat(r)).isSymbolicLink()) return "symlink";
+      if ((await lstat(current)).isSymbolicLink()) return "symlink";
     } catch (error) {
       let errnoCode = getErrnoCode(error);
       if (errnoCode === "ENOENT" || errnoCode === "ENOTDIR") return "clear";
@@ -641,9 +660,9 @@ async function lstatOrAbsent(e, n) {
 /**
  * 安全地读取工作树内小文件（确认未被替换、无硬链接），计算它可能对应的 blob id 集合（含 CRLF、ident 变体）。
  */
-async function readWorktreeBlobIds(workTree, relPath, oidLength, maxBytes, s) {
+async function readWorktreeBlobIds(workTree, relPath, oidLength, maxBytes, runGit) {
   if ((await lstatOrAbsent(workTree, relPath)) !== "clear") return null;
-  let opened = await readWorktreeFileSafely(workTree, relPath, s);
+  let opened = await readWorktreeFileSafely(workTree, relPath, runGit);
   if (opened.kind !== "file") return null;
   try {
     if (opened.size > maxBytes) return null;
@@ -655,10 +674,16 @@ async function readWorktreeBlobIds(workTree, relPath, oidLength, maxBytes, s) {
       offset += bytesRead;
     }
     if (offset !== opened.size) return null;
-    let p = await lstat(join(workTree, relPath), {
+    let fileStat = await lstat(join(workTree, relPath), {
       bigint: true,
     }).catch(() => null);
-    if (p === null || !p.isFile() || p.nlink > 1n || p.ino !== opened.ino || p.dev !== opened.dev)
+    if (
+      fileStat === null ||
+      !fileStat.isFile() ||
+      fileStat.nlink > 1n ||
+      fileStat.ino !== opened.ino ||
+      fileStat.dev !== opened.dev
+    )
       return null;
     return candidateBlobIds(buffer.subarray(0, opened.size), oidLength);
   } catch {
@@ -668,84 +693,97 @@ async function readWorktreeBlobIds(workTree, relPath, oidLength, maxBytes, s) {
   }
 }
 //@ chunk-gjx0rh1b.js:22254-22359 placement
-function candidateBlobIds(e, oidLength) {
-  let r = oidLength === 64 ? "sha256" : "sha1";
-  let o = collapseIdentKeywords(e);
-  return [e, ...(o === null ? [] : [o])].flatMap((s) => blobIdsForContent(s, r));
+function candidateBlobIds(content, oidLength) {
+  let algorithm = oidLength === 64 ? "sha256" : "sha1";
+  let ids = collapseIdentKeywords(content);
+  return [content, ...(ids === null ? [] : [ids])].flatMap((extra) => blobIdsForContent(extra, algorithm));
 }
 //@ chunk-gjx0rh1b.js:22359-22575 placement
-function blobIdsForContent(e, n) {
-  let r = createHash(n).update(`blob ${e.length}\x00`).update(e).digest("hex");
-  let o = countCrlf(e, false);
-  if (o === 0) return [r];
-  let lfBlobHasher = createLfBlobHasher(n, e.length, o);
-  for (let l = 0; l < e.length; l += MAX_FILE_READ_CHUNK_BYTES)
-    lfBlobHasher.update(e.subarray(l, l + MAX_FILE_READ_CHUNK_BYTES));
-  return [r, lfBlobHasher.digest()];
+function blobIdsForContent(content, algorithm) {
+  let sha = createHash(algorithm).update(`blob ${content.length}\x00`).update(content).digest("hex");
+  let crlf = countCrlf(content, false);
+  if (crlf === 0) return [sha];
+  let lfBlobHasher = createLfBlobHasher(algorithm, content.length, crlf);
+  for (let offset = 0; offset < content.length; offset += MAX_FILE_READ_CHUNK_BYTES)
+    lfBlobHasher.update(content.subarray(offset, offset + MAX_FILE_READ_CHUNK_BYTES));
+  return [sha, lfBlobHasher.digest()];
 }
 //@ chunk-gjx0rh1b.js:22575-22631 placement
-var DOLLAR_CHAR_CODE = 36;
-var buffer_3 = Buffer.from("$Id:");
-var buffer_4 = Buffer.from("$Id$");
+var DOLLAR_CHAR_CODE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var buffer_3;
+var buffer_4;
+deferInit("chunk-gjx0rh1b.js:22575", () => {
+  DOLLAR_CHAR_CODE = 36;
+  buffer_3 = Buffer.from("$Id:");
+  buffer_4 = Buffer.from("$Id$");
+});
 //@ chunk-gjx0rh1b.js:22631-23004 placement
 /**
  * 把展开的 $Id$ 关键字还原为未展开形式，无变化返回 null。
  */
-function collapseIdentKeywords(e) {
-  let index = e.indexOf(buffer_3);
+function collapseIdentKeywords(content) {
+  let index = content.indexOf(buffer_3);
   if (index === -1) return null;
-  let r = Buffer.allocUnsafe(e.length);
-  let o = e.copy(r, 0, 0, index);
-  let s = index;
-  while (s < e.length) {
-    let l = -1;
+  let index_2 = Buffer.allocUnsafe(content.length);
+  let keyword = content.copy(index_2, 0, 0, index);
+  let cursor = index;
+  while (cursor < content.length) {
+    let closingDollar = -1;
     if (
-      e[s] === DOLLAR_CHAR_CODE &&
-      e[s + 1] === buffer_3[1] &&
-      e[s + 2] === buffer_3[2] &&
-      e[s + 3] === buffer_3[3]
+      content[cursor] === DOLLAR_CHAR_CODE &&
+      content[cursor + 1] === buffer_3[1] &&
+      content[cursor + 2] === buffer_3[2] &&
+      content[cursor + 3] === buffer_3[3]
     ) {
-      let h = s + buffer_3.length;
-      while (h < e.length && e[h] !== DOLLAR_CHAR_CODE && e[h] !== 10) h++;
-      l = e[h] === DOLLAR_CHAR_CODE ? h : -1;
+      let scan = cursor + buffer_3.length;
+      while (scan < content.length && content[scan] !== DOLLAR_CHAR_CODE && content[scan] !== 10) scan++;
+      closingDollar = content[scan] === DOLLAR_CHAR_CODE ? scan : -1;
     }
-    if (l === -1) r[o++] = e[s++];
+    if (closingDollar === -1) index_2[keyword++] = content[cursor++];
     else {
-      o += buffer_4.copy(r, o);
-      s = l + 1;
+      keyword += buffer_4.copy(index_2, keyword);
+      cursor = closingDollar + 1;
     }
   }
-  return o === e.length ? null : r.subarray(0, o);
+  return keyword === content.length ? null : index_2.subarray(0, keyword);
 }
 //@ chunk-gjx0rh1b.js:23004-23138 placement
-function countCrlf(e, n) {
-  let r = n && e[0] === 10 ? 1 : 0;
-  if (!e.includes(13)) return r;
-  for (let idx = 1; idx < e.length; idx++) if (e[idx] === 10 && e[idx - 1] === 13) r++;
-  return r;
+function countCrlf(content, startsAtFirstLine) {
+  let count = startsAtFirstLine && content[0] === 10 ? 1 : 0;
+  if (!content.includes(13)) return count;
+  for (let idx = 1; idx < content.length; idx++) if (content[idx] === 10 && content[idx - 1] === 13) count++;
+  return count;
 }
 //@ chunk-gjx0rh1b.js:23576-23731 placement
-var SEED_READ_PROBLEMS = {
-  failed: "unreadable",
-};
-var TREE_READ_TAMPERED = {
-  failed: "tampered",
-};
-var TREE_READ_MISSING = {
-  failed: "missing",
-};
-var MAX_OBJECT_BYTES = 67108864;
-var MAX_OBJECT_ENTRIES = 4000000;
-var KNOWN_TREE_MODES = new Set(["100644", "100755", "120000", "40000", "160000"]);
+var SEED_READ_PROBLEMS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var TREE_READ_TAMPERED;
+var TREE_READ_MISSING;
+var MAX_OBJECT_BYTES;
+var MAX_OBJECT_ENTRIES;
+var KNOWN_TREE_MODES;
+deferInit("chunk-gjx0rh1b.js:23576", () => {
+  SEED_READ_PROBLEMS = {
+    failed: "unreadable",
+  };
+  TREE_READ_TAMPERED = {
+    failed: "tampered",
+  };
+  TREE_READ_MISSING = {
+    failed: "missing",
+  };
+  MAX_OBJECT_BYTES = 67108864;
+  MAX_OBJECT_ENTRIES = 4000000;
+  KNOWN_TREE_MODES = new Set(["100644", "100755", "120000", "40000", "160000"]);
+});
 //@ chunk-gjx0rh1b.js:23731-23865 placement
-function isTreeReadFailure(e) {
+function isTreeReadFailure(value) {
   return (
-    typeof e === "object" &&
-    e !== null &&
-    !Array.isArray(e) &&
-    !(e instanceof Map) &&
-    "failed" in e &&
-    typeof e.failed === "string"
+    typeof value === "object" &&
+    value !== null &&
+    !Array.isArray(value) &&
+    !(value instanceof Map) &&
+    "failed" in value &&
+    typeof value.failed === "string"
   );
 }
 //@ chunk-gjx0rh1b.js:23865-23976 placement
@@ -756,35 +794,35 @@ var padFileMode = (mode) => mode.padStart(6, "0");
 var entryKindForMode = (mode) =>
   mode === GITLINK_MODE_2 ? "gitlink" : mode === SYMLINK_MODE ? "link" : "file";
 //@ chunk-gjx0rh1b.js:23976-24497 placement
-function batchCatFile(e, n) {
-  return async (r) => {
-    let o = null;
+function batchCatFile(runGit, dir) {
+  return async (paths) => {
+    let tempDir = null;
     try {
-      o = await mkdtemp(join(n, "claude-seed-reads-"));
-      let s = await open(
-        join(o, "batch"),
+      tempDir = await mkdtemp(join(dir, "claude-seed-reads-"));
+      let batchFile = await open(
+        join(tempDir, "batch"),
         constants.O_RDWR | constants.O_CREAT | constants.O_EXCL | READ_LIMITS,
         384,
       );
       try {
-        let l = await e(["cat-file", "--batch"], undefined, r, undefined, s.fd);
-        let { size } = await s.stat();
-        if (l.code !== 0 || size > MAX_OBJECT_BYTES) return null;
-        let u = Buffer.alloc(size);
-        for (let p = 0; p < size;) {
-          let { bytesRead } = await s.read(u, p, size - p, p);
+        let batchResult = await runGit(["cat-file", "--batch"], undefined, paths, undefined, batchFile.fd);
+        let { size } = await batchFile.stat();
+        if (batchResult.code !== 0 || size > MAX_OBJECT_BYTES) return null;
+        let output = Buffer.alloc(size);
+        for (let offset = 0; offset < size;) {
+          let { bytesRead } = await batchFile.read(output, offset, size - offset, offset);
           if (bytesRead === 0) return null;
-          p += bytesRead;
+          offset += bytesRead;
         }
-        return u;
+        return output;
       } finally {
-        await s.close().catch(() => {});
+        await batchFile.close().catch(() => {});
       }
     } catch {
       return null;
     } finally {
-      if (o !== null)
-        await rm(o, {
+      if (tempDir !== null)
+        await rm(tempDir, {
           recursive: true,
           force: true,
         }).catch(() => {});
@@ -801,165 +839,170 @@ class GitObjectReader {
   bodies = new Map();
   algorithm;
   idLength;
-  constructor(e, n) {
-    this.fetch = e;
-    this.algorithm = n.length === 64 ? "sha256" : "sha1";
-    this.idLength = n.length;
+  constructor(runGit, options) {
+    this.fetch = runGit;
+    this.algorithm = options.length === 64 ? "sha256" : "sha1";
+    this.idLength = options.length;
   }
-  hashes(e, n, r) {
-    return createHash(this.algorithm).update(`${e} ${n.length}\x00`).update(n).digest("hex") === r;
+  hashes(type, body, expectedId) {
+    return (
+      createHash(this.algorithm).update(`${type} ${body.length}\x00`).update(body).digest("hex") ===
+      expectedId
+    );
   }
-  async trees(e) {
-    let n = uniq(e.filter((o) => !this.listings.has(o)));
-    if (n.length === 0) return true;
-    let r = await this.read("tree", n);
-    if (isTreeReadFailure(r)) return r;
-    for (let [o, s] of r) {
-      let treeEntries = parseTreeEntries(s, this.idLength / 2);
+  async trees(treeIds) {
+    let pending = uniq(treeIds.filter((treeId) => !this.listings.has(treeId)));
+    if (pending.length === 0) return true;
+    let readResult = await this.read("tree", pending);
+    if (isTreeReadFailure(readResult)) return readResult;
+    for (let [treeId, body] of readResult) {
+      let treeEntries = parseTreeEntries(body, this.idLength / 2);
       if (treeEntries === null) return TREE_READ_TAMPERED;
       if (treeEntries === "malformed")
         return {
           failed: "malformed",
-          tree: o,
+          tree: treeId,
         };
-      this.listings.set(o, treeEntries);
+      this.listings.set(treeId, treeEntries);
     }
     return true;
   }
-  listing(e) {
-    return this.listings.get(e);
+  listing(treeId) {
+    return this.listings.get(treeId);
   }
-  async commit(e) {
-    let n = await this.commits([e]);
-    return isTreeReadFailure(n) ? n : n.get(e);
+  async commit(commitId) {
+    let commitInfo = await this.commits([commitId]);
+    return isTreeReadFailure(commitInfo) ? commitInfo : commitInfo.get(commitId);
   }
-  async commits(e) {
-    let n = uniq([...e]);
-    let r = n.length === 0 ? new Map() : await this.read("commit", n);
-    if (isTreeReadFailure(r)) return r;
-    let o = new Map();
-    for (let [s, l] of r) {
-      let lines = l
+  async commits(commitIds) {
+    let pending = uniq([...commitIds]);
+    let readResult = pending.length === 0 ? new Map() : await this.read("commit", pending);
+    if (isTreeReadFailure(readResult)) return readResult;
+    let parsed = new Map();
+    for (let [commitId, body] of readResult) {
+      let lines = body
         .subarray(
           0,
           Math.max(
             0,
-            l.indexOf(`
+            body.indexOf(`
 
 `),
           ),
         )
         .toString("latin1").split(`
 `);
-      let u = /^tree ([0-9a-f]{40,64})$/.exec(lines[0] ?? "")?.[1];
-      let p = [];
+      let treeId = /^tree ([0-9a-f]{40,64})$/.exec(lines[0] ?? "")?.[1];
+      let parentIds = [];
       for (let line of lines.slice(1)) {
-        let _ = /^parent ([0-9a-f]{40,64})$/.exec(line)?.[1];
-        if (_ === undefined) break;
-        p.push(_);
+        let parentId = /^parent ([0-9a-f]{40,64})$/.exec(line)?.[1];
+        if (parentId === undefined) break;
+        parentIds.push(parentId);
       }
-      if (u === undefined || [u, ...p].some((w) => w.length !== this.idLength)) return TREE_READ_TAMPERED;
-      o.set(s, {
-        tree: u,
-        parents: p,
+      if (treeId === undefined || [treeId, ...parentIds].some((id) => id.length !== this.idLength))
+        return TREE_READ_TAMPERED;
+      parsed.set(commitId, {
+        tree: treeId,
+        parents: parentIds,
       });
     }
-    return o;
+    return parsed;
   }
-  async blobs(e) {
-    return e.length === 0 ? new Map() : this.read("blob", uniq([...e]));
+  async blobs(blobIds) {
+    return blobIds.length === 0 ? new Map() : this.read("blob", uniq([...blobIds]));
   }
-  async read(e, n) {
+  async read(type, ids) {
     let response = await this.fetch(
-      n
+      ids
         .map(
-          (l) => `${l}
+          (id) => `${id}
 `,
         )
         .join(""),
     );
     if (response === null) return SEED_READ_PROBLEMS;
     if (isTreeReadFailure(response)) return response;
-    let o = new Map();
-    let s = 0;
-    for (let l of n) {
-      let index = response.indexOf(10, s);
+    let bodies = new Map();
+    let offset = 0;
+    for (let id of ids) {
+      let index = response.indexOf(10, offset);
       if (index === -1) return SEED_READ_PROBLEMS;
-      let str = response.subarray(s, index).toString("latin1");
-      if (str === `${l} missing`) return TREE_READ_MISSING;
+      let str = response.subarray(offset, index).toString("latin1");
+      if (str === `${id} missing`) return TREE_READ_MISSING;
       let match = /^([0-9a-f]{40,64}) (\w+) (\d+)$/.exec(str);
-      if (match === null || match[1] !== l) return SEED_READ_PROBLEMS;
-      if (match[2] !== e) return TREE_READ_TAMPERED;
-      let w = Number(match[3]);
-      let buffer = Buffer.from(response.subarray(index + 1, index + 1 + w));
-      if (buffer.length !== w) return SEED_READ_PROBLEMS;
-      if (!this.hashes(e, buffer, l)) return TREE_READ_TAMPERED;
-      if (e !== "blob") this.bodies.set(l, buffer);
-      o.set(l, buffer);
-      s = index + 1 + w + 1;
+      if (match === null || match[1] !== id) return SEED_READ_PROBLEMS;
+      if (match[2] !== type) return TREE_READ_TAMPERED;
+      let size = Number(match[3]);
+      let buffer = Buffer.from(response.subarray(index + 1, index + 1 + size));
+      if (buffer.length !== size) return SEED_READ_PROBLEMS;
+      if (!this.hashes(type, buffer, id)) return TREE_READ_TAMPERED;
+      if (type !== "blob") this.bodies.set(id, buffer);
+      bodies.set(id, buffer);
+      offset = index + 1 + size + 1;
     }
-    return o;
+    return bodies;
   }
 }
 //@ chunk-gjx0rh1b.js:26246-26718 placement
-function parseTreeEntries(e, n) {
-  let r = new Map();
-  let o = 0;
-  let s = null;
-  let l = false;
-  while (o < e.length) {
-    let index = e.indexOf(32, o);
-    let u = index === -1 ? -1 : e.indexOf(0, index + 1);
-    if (index === -1 || u === -1 || u + 1 + n > e.length) return null;
-    let chunk = e.subarray(index + 1, u);
-    let str = e.subarray(o, index).toString("latin1");
-    if (!isOctalNumber(str)) return null;
-    let _ = GIT_FILE_MODES(str);
-    let y = {
-      name: chunk,
-      isTree: _ === TREE_MODE,
+function parseTreeEntries(buffer, hashLength) {
+  let entries = new Map();
+  let offset = 0;
+  let current = null;
+  let invalid = false;
+  while (offset < buffer.length) {
+    let index = buffer.indexOf(32, offset);
+    let spaceIndex = index === -1 ? -1 : buffer.indexOf(0, index + 1);
+    if (index === -1 || spaceIndex === -1 || spaceIndex + 1 + hashLength > buffer.length) return null;
+    let name = buffer.subarray(index + 1, spaceIndex);
+    let octal = buffer.subarray(offset, index).toString("latin1");
+    if (!isOctalNumber(octal)) return null;
+    let mode = GIT_FILE_MODES(octal);
+    let entry = {
+      name,
+      isTree: mode === TREE_MODE,
     };
-    let str_2 = chunk.toString("latin1");
-    if (!isValidTreeEntryName(chunk) || r.has(str_2)) return null;
-    if (!KNOWN_TREE_MODES.has(_) || (s !== null && compareTreeEntries(s, y) >= 0)) l = true;
-    s = y;
-    r.set(str_2, {
-      mode: _,
-      id: e.subarray(u + 1, u + 1 + n).toString("hex"),
+    let str = name.toString("latin1");
+    if (!isValidTreeEntryName(name) || entries.has(str)) return null;
+    if (!KNOWN_TREE_MODES.has(mode) || (current !== null && compareTreeEntries(current, entry) >= 0))
+      invalid = true;
+    current = entry;
+    entries.set(str, {
+      mode,
+      id: buffer.subarray(spaceIndex + 1, spaceIndex + 1 + hashLength).toString("hex"),
     });
-    o = u + 1 + n;
+    offset = spaceIndex + 1 + hashLength;
   }
-  return l ? "malformed" : r;
+  return invalid ? "malformed" : entries;
 }
 //@ chunk-gjx0rh1b.js:26718-26835 placement
-function isValidTreeEntryName(e) {
+function isValidTreeEntryName(name) {
   return (
-    e.length > 0 &&
-    !e.includes(47) &&
-    !(e.length === 1 && e[0] === 46) &&
-    !(e.length === 2 && e[0] === 46 && e[1] === 46)
+    name.length > 0 &&
+    !name.includes(47) &&
+    !(name.length === 1 && name[0] === 46) &&
+    !(name.length === 2 && name[0] === 46 && name[1] === 46)
   );
 }
 //@ chunk-gjx0rh1b.js:26835-27035 placement
-function compareTreeEntries(e, n) {
-  let min = Math.min(e.name.length, n.name.length);
-  let o = e.name.subarray(0, min).compare(n.name.subarray(0, min));
-  if (o !== 0) return o;
-  let s = (l) => (l.name.length > min ? l.name[min] : l.isTree ? 47 : 0);
-  return s(e) - s(n);
+function compareTreeEntries(left, right) {
+  let min = Math.min(left.name.length, right.name.length);
+  let limit = left.name.subarray(0, min).compare(right.name.subarray(0, min));
+  if (limit !== 0) return limit;
+  let nextByte = (entry) => (entry.name.length > min ? entry.name[min] : entry.isTree ? 47 : 0);
+  return nextByte(left) - nextByte(right);
 }
 //@ chunk-gjx0rh1b.js:27035-27075 placement
-function isOctalNumber(e) {
-  return /^[0-7]+$/.test(e);
+function isOctalNumber(value) {
+  return /^[0-7]+$/.test(value);
 }
 //@ chunk-gjx0rh1b.js:27075-27328 placement
-function GIT_FILE_MODES(e) {
-  let n = isOctalNumber(e)
-    ? Array.from(e.slice(-11)).reduce((acc, o) => ((acc << 3) | Number(o)) >>> 0, 0)
+function GIT_FILE_MODES(octal) {
+  let digits = isOctalNumber(octal)
+    ? Array.from(octal.slice(-11)).reduce((acc, digit) => ((acc << 3) | Number(digit)) >>> 0, 0)
     : 0;
-  switch (n & 61440) {
+  switch (digits & 61440) {
     case 32768:
-      return n & 64 ? "100755" : "100644";
+      return digits & 64 ? "100755" : "100644";
     case 40960:
       return "120000";
     case 16384:
@@ -967,90 +1010,96 @@ function GIT_FILE_MODES(e) {
     case 57344:
       return GITLINK_MODE_2;
     default:
-      return e.replace(/^0+/, "");
+      return octal.replace(/^0+/, "");
   }
 }
 //@ chunk-gjx0rh1b.js:27328-28517 placement
-async function parseIndexEntries(reader, n, r) {
-  let o = "0".repeat(reader.idLength);
-  let s = [];
-  let l =
-    n === r
+async function parseIndexEntries(reader, baseId, otherId) {
+  let zeroId = "0".repeat(reader.idLength);
+  let entries = [];
+  let queue =
+    baseId === otherId
       ? []
       : [
           {
             prefix: Buffer.alloc(0),
-            base: n,
-            other: r,
+            base: baseId,
+            other: otherId,
           },
         ];
-  let h = 0;
-  while (l.length > 0) {
-    let filtered = l.flatMap(({ base, other }) => [base, other]).filter((_) => _ !== null);
-    let p = await reader.trees(filtered);
-    if (p !== true) {
-      if (p.failed !== "malformed") return p;
-      let found = l.find(({ base, other }) => base === p.tree || other === p.tree);
+  let entryCount = 0;
+  while (queue.length > 0) {
+    let filtered = queue.flatMap(({ base, other }) => [base, other]).filter((treeId) => treeId !== null);
+    let treeRead = await reader.trees(filtered);
+    if (treeRead !== true) {
+      if (treeRead.failed !== "malformed") return treeRead;
+      let found = queue.find(({ base, other }) => base === treeRead.tree || other === treeRead.tree);
       return found === undefined
-        ? p
+        ? treeRead
         : {
-            ...p,
+            ...treeRead,
             dir: found.prefix.toString("utf8").replace(/\/$/, ""),
           };
     }
-    let w = [];
-    for (let { prefix, base, other } of l) {
-      let C = base === null ? new Map() : reader.listing(base);
-      let A = other === null ? new Map() : reader.listing(other);
-      let sorted = uniq([...C.keys(), ...A.keys()]).sort();
-      h += sorted.length;
-      if (h > MAX_OBJECT_ENTRIES) return TREE_READ_TAMPERED;
-      for (let B of sorted) {
-        let x = C.get(B);
-        let S = A.get(B);
-        if (x !== undefined && S !== undefined && x.id === S.id && x.mode === S.mode) continue;
-        let buffer = Buffer.concat([prefix, Buffer.from(B, "latin1")]);
-        let Y = x?.mode === TREE_MODE;
-        let L = S?.mode === TREE_MODE;
-        if (Y || L)
-          w.push({
+    let childQueue = [];
+    for (let { prefix, base, other } of queue) {
+      let baseListing = base === null ? new Map() : reader.listing(base);
+      let otherListing = other === null ? new Map() : reader.listing(other);
+      let sorted = uniq([...baseListing.keys(), ...otherListing.keys()]).sort();
+      entryCount += sorted.length;
+      if (entryCount > MAX_OBJECT_ENTRIES) return TREE_READ_TAMPERED;
+      for (let name of sorted) {
+        let baseEntry = baseListing.get(name);
+        let otherEntry = otherListing.get(name);
+        if (
+          baseEntry !== undefined &&
+          otherEntry !== undefined &&
+          baseEntry.id === otherEntry.id &&
+          baseEntry.mode === otherEntry.mode
+        )
+          continue;
+        let buffer = Buffer.concat([prefix, Buffer.from(name, "latin1")]);
+        let baseIsTree = baseEntry?.mode === TREE_MODE;
+        let otherIsTree = otherEntry?.mode === TREE_MODE;
+        if (baseIsTree || otherIsTree)
+          childQueue.push({
             prefix: Buffer.concat([buffer, Buffer.from("/")]),
-            base: Y ? x.id : null,
-            other: L ? S.id : null,
+            base: baseIsTree ? baseEntry.id : null,
+            other: otherIsTree ? otherEntry.id : null,
           });
-        let U = x !== undefined && !Y ? x : undefined;
-        let D = S !== undefined && !L ? S : undefined;
-        if (U === undefined && D === undefined) continue;
-        s.push({
+        let oldEntry = baseEntry !== undefined && !baseIsTree ? baseEntry : undefined;
+        let newEntry = otherEntry !== undefined && !otherIsTree ? otherEntry : undefined;
+        if (oldEntry === undefined && newEntry === undefined) continue;
+        entries.push({
           path: buffer.toString("utf8"),
           pathBytes: buffer,
           status:
-            U === undefined
+            oldEntry === undefined
               ? "A"
-              : D === undefined
+              : newEntry === undefined
                 ? "D"
-                : entryKindForMode(U.mode) !== entryKindForMode(D.mode)
+                : entryKindForMode(oldEntry.mode) !== entryKindForMode(newEntry.mode)
                   ? "T"
                   : "M",
-          oldMode: U === undefined ? "000000" : padFileMode(U.mode),
-          newMode: D === undefined ? "000000" : padFileMode(D.mode),
-          oldId: U?.id ?? o,
-          newId: D?.id ?? o,
+          oldMode: oldEntry === undefined ? "000000" : padFileMode(oldEntry.mode),
+          newMode: newEntry === undefined ? "000000" : padFileMode(newEntry.mode),
+          oldId: oldEntry?.id ?? zeroId,
+          newId: newEntry?.id ?? zeroId,
         });
       }
     }
-    l = w;
+    queue = childQueue;
   }
-  return s;
+  return entries;
 }
 //@ chunk-gjx0rh1b.js:28517-29099 placement
 /**
  * 在 git 树中按路径逐段下钻，批量读取树对象，解析出给定路径对应的 blob/树 id 与模式。
  */
 async function resolveTreePaths(reader, rootTree, paths) {
-  let o = new Map();
-  let s = await reader.trees([rootTree]);
-  if (s !== true) return s;
+  let byPath = new Map();
+  let loaded = await reader.trees([rootTree]);
+  if (loaded !== true) return loaded;
   let mapped = paths.map((path) => ({
     name: path,
     segments: path.split("/"),
@@ -1058,35 +1107,37 @@ async function resolveTreePaths(reader, rootTree, paths) {
     tree: rootTree,
   }));
   while (mapped.length > 0) {
-    let h = await reader.trees(mapped.map(({ tree }) => tree));
-    if (h !== true) return h;
-    let u = [];
-    let p = [];
-    for (let w of mapped) {
-      let _ = reader.listing(w.tree)?.get(Buffer.from(w.segments[w.at], "utf8").toString("latin1"));
-      if (_ === undefined) continue;
-      let y = w.at === w.segments.length - 1;
-      if (_.mode === TREE_MODE) {
-        if (y) p.push(_.id);
+    let treeRead = await reader.trees(mapped.map(({ tree }) => tree));
+    if (treeRead !== true) return treeRead;
+    let nextQueue = [];
+    let treeIds = [];
+    for (let entry of mapped) {
+      let treeEntry = reader
+        .listing(entry.tree)
+        ?.get(Buffer.from(entry.segments[entry.at], "utf8").toString("latin1"));
+      if (treeEntry === undefined) continue;
+      let isLastSegment = entry.at === entry.segments.length - 1;
+      if (treeEntry.mode === TREE_MODE) {
+        if (isLastSegment) treeIds.push(treeEntry.id);
         else
-          u.push({
-            ...w,
-            at: w.at + 1,
-            tree: _.id,
+          nextQueue.push({
+            ...entry,
+            at: entry.at + 1,
+            tree: treeEntry.id,
           });
-      } else if (y)
-        o.set(w.name, {
-          id: _.id,
-          mode: _.mode,
+      } else if (isLastSegment)
+        byPath.set(entry.name, {
+          id: treeEntry.id,
+          mode: treeEntry.mode,
         });
     }
-    if (p.length > 0) {
-      let w = await reader.trees(p);
-      if (w !== true) return w;
+    if (treeIds.length > 0) {
+      let treeRead = await reader.trees(treeIds);
+      if (treeRead !== true) return treeRead;
     }
-    mapped = u;
+    mapped = nextQueue;
   }
-  return o;
+  return byPath;
 }
 //@ chunk-gjx0rh1b.js:29099-29147 placement
 var BOM_BYTES = {
@@ -1095,74 +1146,81 @@ var BOM_BYTES = {
 };
 var pendingFilterCheck;
 //@ chunk-gjx0rh1b.js:29147-29612 placement
-function writeProbeBlob(e, n) {
-  let r = (pendingFilterCheck ??= (async () => {
+function writeProbeBlob(runGit, extra) {
+  let check = (pendingFilterCheck ??= (async () => {
     let buffer = Buffer.from([65, 233, 128, 255, 195, 40, 66]);
-    let s = await e(["hash-object", "-w", "--stdin"], n, buffer);
-    if (s.code !== 0) throw Error("probe blob not written");
-    let l = await e(
+    let hashResult = await runGit(["hash-object", "-w", "--stdin"], extra, buffer);
+    if (hashResult.code !== 0) throw Error("probe blob not written");
+    let readResult = await runGit(
       ["cat-file", "--batch"],
-      n,
-      `${s.stdout.trim()}
+      extra,
+      `${hashResult.stdout.trim()}
 `,
       "latin1",
     );
-    if (l.code !== 0) throw Error("probe blob not read");
-    let sliced = l.stdout.slice(
-      l.stdout.indexOf(`
+    if (readResult.code !== 0) throw Error("probe blob not read");
+    let sliced = readResult.stdout.slice(
+      readResult.stdout.indexOf(`
 `) + 1,
     );
     return Buffer.from(sliced, "latin1").equals(buffer) ? "latin1" : "utf8";
   })());
-  return r.catch(() => {
-    if (pendingFilterCheck === r) pendingFilterCheck = undefined;
+  return check.catch(() => {
+    if (pendingFilterCheck === check) pendingFilterCheck = undefined;
     return "utf8";
   });
 }
 //@ chunk-gjx0rh1b.js:29612-29626 placement
-var deflateAsync = promisify(deflate);
+var deflateAsync; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-gjx0rh1b.js:29612", () => {
+  deflateAsync = promisify(deflate);
+});
 //@ chunk-gjx0rh1b.js:29626-29676 placement
 var FILTER_ATTRIBUTES = ["filter", "working-tree-encoding", "ident"];
 //@ chunk-gjx0rh1b.js:29676-31456 placement
 /**
  * 用 read-tree/ls-files 读取指定路径在 HEAD 中的条目（老版本 git 兼容）。
  */
-async function readTreeForPaths(e, n, r, o, s) {
-  if (n.length === 0) return [];
-  let l = new Set(n.filter((E) => r.get(E) === null));
-  let h = (E) => [E, ...(r.get(E) ?? [])];
-  let u = (E) =>
-    h(E).flatMap((C) => (s.normalizationBlind ? uniq([C, C.normalize("NFC"), C.normalize("NFD")]) : [C]));
-  let p = uniq(n.flatMap(u));
-  if (o?.prepareIndexAndStore !== undefined) {
-    let E = await o.prepareIndexAndStore(p, o);
-    if (E !== true) return E;
-  } else if (o !== null) {
+async function readTreeForPaths(runGit, paths, dirsByPath, indexOptions, options) {
+  if (paths.length === 0) return [];
+  let directories = new Set(paths.filter((path) => dirsByPath.get(path) === null));
+  let selfAndParents = (path) => [path, ...(dirsByPath.get(path) ?? [])];
+  let variantsOf = (path) =>
+    selfAndParents(path).flatMap((dirPath) =>
+      options.normalizationBlind
+        ? uniq([dirPath, dirPath.normalize("NFC"), dirPath.normalize("NFD")])
+        : [dirPath],
+    );
+  let probePaths = uniq(paths.flatMap(variantsOf));
+  if (indexOptions?.prepareIndexAndStore !== undefined) {
+    let prepared = await indexOptions.prepareIndexAndStore(probePaths, indexOptions);
+    if (prepared !== true) return prepared;
+  } else if (indexOptions !== null) {
     if (
       (
-        await e(["-c", "core.splitIndex=false", "read-tree", o.commit ?? o.tree], {
-          GIT_INDEX_FILE: o.indexPath,
+        await runGit(["-c", "core.splitIndex=false", "read-tree", indexOptions.commit ?? indexOptions.tree], {
+          GIT_INDEX_FILE: indexOptions.indexPath,
         })
       ).code !== 0
     )
       return null;
-    await mkdir(o.objectsDir, {
+    await mkdir(indexOptions.objectsDir, {
       recursive: true,
       mode: 448,
     });
-    let C = {
-      GIT_INDEX_FILE: o.indexPath,
-      GIT_OBJECT_DIRECTORY: o.objectsDir,
+    let indexEnv = {
+      GIT_INDEX_FILE: indexOptions.indexPath,
+      GIT_OBJECT_DIRECTORY: indexOptions.objectsDir,
       GIT_ALTERNATE_OBJECT_DIRECTORIES: "",
     };
-    let A = await writeProbeBlob(e, C);
+    let probeText = await writeProbeBlob(runGit, indexEnv);
     let gitattributesForPaths = await readGitattributesForPaths(
-      e,
-      o,
-      o.indexPath,
-      p,
-      A,
-      o.refusesGitlinkedRules === true,
+      runGit,
+      indexOptions,
+      indexOptions.indexPath,
+      probePaths,
+      probeText,
+      indexOptions.refusesGitlinkedRules === true,
     );
     if (
       gitattributesForPaths === null ||
@@ -1170,18 +1228,22 @@ async function readTreeForPaths(e, n, r, o, s) {
       gitattributesForPaths === "tampered"
     )
       return gitattributesForPaths;
-    for (let { name: B, id, text, markStripped } of gitattributesForPaths.blobs) {
-      let Y = await e(["hash-object", "-w", "--stdin"], C, Buffer.from(text, A));
-      let trimmed = Y.stdout.trim();
-      if (Y.code !== 0 || (trimmed !== id && !markStripped)) return null;
+    for (let { name, id, text, markStripped } of gitattributesForPaths.blobs) {
+      let blobWrite = await runGit(["hash-object", "-w", "--stdin"], indexEnv, Buffer.from(text, probeText));
+      let trimmed = blobWrite.stdout.trim();
+      if (blobWrite.code !== 0 || (trimmed !== id && !markStripped)) return null;
       if (trimmed !== id) {
-        let U = await e(["hash-object", "-w", "--stdin"], C, Buffer.from(BOM_BYTES[A] + text, A));
-        if (U.code !== 0 || U.stdout.trim() !== id) return null;
+        let bomWrite = await runGit(
+          ["hash-object", "-w", "--stdin"],
+          indexEnv,
+          Buffer.from(BOM_BYTES[probeText] + text, probeText),
+        );
+        if (bomWrite.code !== 0 || bomWrite.stdout.trim() !== id) return null;
         if (
           (
-            await e(
-              ["-c", "core.splitIndex=false", "update-index", "--cacheinfo", `100644,${trimmed},${B}`],
-              C,
+            await runGit(
+              ["-c", "core.splitIndex=false", "update-index", "--cacheinfo", `100644,${trimmed},${name}`],
+              indexEnv,
             )
           ).code !== 0
         )
@@ -1189,158 +1251,183 @@ async function readTreeForPaths(e, n, r, o, s) {
       }
     }
   }
-  let w = await e(
+  let attrResult = await runGit(
     [
-      ...(s.caseBlind ? ["-c", "core.ignorecase=true"] : []),
+      ...(options.caseBlind ? ["-c", "core.ignorecase=true"] : []),
       "-c",
       "core.sparseCheckout=false",
       "check-attr",
-      ...(o === null ? [] : ["--cached"]),
+      ...(indexOptions === null ? [] : ["--cached"]),
       "-z",
       "--stdin",
       ...FILTER_ATTRIBUTES,
     ],
-    o === null
+    indexOptions === null
       ? undefined
       : {
-          GIT_INDEX_FILE: o.indexPath,
-          GIT_OBJECT_DIRECTORY: o.objectsDir,
+          GIT_INDEX_FILE: indexOptions.indexPath,
+          GIT_OBJECT_DIRECTORY: indexOptions.objectsDir,
           GIT_ALTERNATE_OBJECT_DIRECTORIES: "",
         },
-    p.map((E) => `${E}\x00`).join(""),
+    probePaths.map((path) => `${path}\x00`).join(""),
   );
-  if (w.maxBufferExceeded) return "overflow";
-  if (w.code !== 0) return null;
-  let parts = w.stdout.split("\x00");
-  let y = new Set();
-  for (let E = 0; E + 2 < parts.length; E += 3) {
-    let [C, A] = [parts[E + 1], parts[E + 2]];
-    if (!(A === "unspecified" || A === "unset" || (C === "ident" && A === "false"))) y.add(parts[E]);
+  if (attrResult.maxBufferExceeded) return "overflow";
+  if (attrResult.code !== 0) return null;
+  let parts = attrResult.stdout.split("\x00");
+  let filteredPaths = new Set();
+  for (let index = 0; index + 2 < parts.length; index += 3) {
+    let [side, value] = [parts[index + 1], parts[index + 2]];
+    if (!(value === "unspecified" || value === "unset" || (side === "ident" && value === "false")))
+      filteredPaths.add(parts[index]);
   }
-  return n.filter((E) => l.has(E) || u(E).some((C) => y.has(C)));
+  return paths.filter(
+    (path) => directories.has(path) || variantsOf(path).some((variant) => filteredPaths.has(variant)),
+  );
 }
 //@ chunk-gjx0rh1b.js:31456-33266 placement
 /**
  * 读取影响变更路径的 .gitattributes（检测篡改、子模块）。
  */
-async function readGitattributesForPaths(e, n, indexPath, o, s, l) {
-  let h = uniq([
-    ...missingGitattributesPaths(o),
-    ...o.filter((B) => B.split("/").at(-1) === ".gitattributes"),
+async function readGitattributesForPaths(
+  runGit,
+  paths,
+  indexFile,
+  missingPaths,
+  textEncoding,
+  refusesGitlinkedRules,
+) {
+  let wantedPaths = uniq([
+    ...missingGitattributesPaths(missingPaths),
+    ...missingPaths.filter((path) => path.split("/").at(-1) === ".gitattributes"),
   ]);
-  let u = await listIndexEntriesNamed(e, indexPath, new Set(h), dirname(indexPath));
-  if (u === null) return null;
-  let p =
-    n.commit !== undefined ? await readCommitTree(e, n.commit, h, s) : await buildTreeObject(e, n.tree, h);
-  if (p === null || p === "tampered") return p;
-  if (l && [...p.values()].some(({ mode }) => mode === "160000")) return null;
-  let w = (B) => {
-    let x = p.get(B);
-    let S = u.get(B);
-    return x === undefined
-      ? S === undefined
-      : S !== undefined && splitArgsIntoSlices(S) && S.id === x.id && GIT_FILE_MODES(S.mode) === x.mode;
+  let indexEntries = await listIndexEntriesNamed(runGit, indexFile, new Set(wantedPaths), dirname(indexFile));
+  if (indexEntries === null) return null;
+  let treeEntries =
+    paths.commit !== undefined
+      ? await readCommitTree(runGit, paths.commit, wantedPaths, textEncoding)
+      : await buildTreeObject(runGit, paths.tree, wantedPaths);
+  if (treeEntries === null || treeEntries === "tampered") return treeEntries;
+  if (refusesGitlinkedRules && [...treeEntries.values()].some(({ mode }) => mode === "160000")) return null;
+  let matchesIndex = (path) => {
+    let treeEntry = treeEntries.get(path);
+    let indexEntry = indexEntries.get(path);
+    return treeEntry === undefined
+      ? indexEntry === undefined
+      : indexEntry !== undefined &&
+          splitArgsIntoSlices(indexEntry) &&
+          indexEntry.id === treeEntry.id &&
+          GIT_FILE_MODES(indexEntry.mode) === treeEntry.mode;
   };
-  if (h.some((B) => !w(B))) return "tampered";
-  let _ = [...p];
-  let reduced = await chunkArgsByBytes(_.map(([B]) => `:0:${B}`)).reduce(async (acc, x) => {
-    let S = await acc;
-    if (S === "tampered" || S === null) return S;
-    let z = await e(["-c", "core.precomposeUnicode=false", "rev-parse", ...x], {
-      GIT_INDEX_FILE: indexPath,
-    });
-    return z.code === 0
-      ? [
-          ...S,
-          ...z.stdout
-            .split(
-              `
+  if (wantedPaths.some((path) => !matchesIndex(path))) return "tampered";
+  let treeEntryPairs = [...treeEntries];
+  let reduced = await chunkArgsByBytes(treeEntryPairs.map(([path]) => `:0:${path}`)).reduce(
+    async (acc, chunk) => {
+      let previous = await acc;
+      if (previous === "tampered" || previous === null) return previous;
+      let revParse = await runGit(["-c", "core.precomposeUnicode=false", "rev-parse", ...chunk], {
+        GIT_INDEX_FILE: indexFile,
+      });
+      return revParse.code === 0
+        ? [
+            ...previous,
+            ...revParse.stdout
+              .split(
+                `
 `,
-            )
-            .filter((line) => line !== ""),
-        ]
-      : z.exitCode === 128
-        ? "tampered"
-        : null;
-  }, Promise.resolve([]));
+              )
+              .filter((line) => line !== ""),
+          ]
+        : revParse.exitCode === 128
+          ? "tampered"
+          : null;
+    },
+    Promise.resolve([]),
+  );
   if (reduced === null) return null;
-  if (reduced === "tampered" || reduced.length !== _.length || _.some(([, B], x) => reduced[x] !== B.id))
+  if (
+    reduced === "tampered" ||
+    reduced.length !== treeEntryPairs.length ||
+    treeEntryPairs.some(([, treeEntry], index) => reduced[index] !== treeEntry.id)
+  )
     return "tampered";
-  let E;
-  let C = new Map();
-  let A = async (B) => {
-    let x = C.get(B);
-    if (x !== undefined) return x;
-    let S = await e(
+  let text;
+  let blobCache = new Map();
+  let readBlob = async (blobId) => {
+    let cached = blobCache.get(blobId);
+    if (cached !== undefined) return cached;
+    let result = await runGit(
       ["cat-file", "--batch"],
       undefined,
-      `${B}
+      `${blobId}
 `,
-      s === "latin1" ? "latin1" : undefined,
+      textEncoding === "latin1" ? "latin1" : undefined,
     );
-    let index = S.stdout.indexOf(`
+    let index = result.stdout.indexOf(`
 `);
-    let Y = index === -1 ? S.stdout : S.stdout.slice(0, index);
-    let L = index === -1 ? "" : S.stdout.slice(index + 1);
-    let U = B.length === 64 ? "sha256" : "sha1";
-    let D =
-      S.code !== 0
+    let header = index === -1 ? result.stdout : result.stdout.slice(0, index);
+    let body = index === -1 ? "" : result.stdout.slice(index + 1);
+    let algorithm = blobId.length === 64 ? "sha256" : "sha1";
+    let text =
+      result.code !== 0
         ? null
-        : !new RegExp(`^${B} blob [0-9]+$`).test(Y)
-          ? /^[0-9a-f]{40,64} [a-z]+ [0-9]+$/.test(Y)
+        : !new RegExp(`^${blobId} blob [0-9]+$`).test(header)
+          ? /^[0-9a-f]{40,64} [a-z]+ [0-9]+$/.test(header)
             ? "tampered"
             : null
-          : ([L, `${L}\r`].find((pe) => {
-              let buffer = Buffer.from(pe, s);
-              return createHash(U).update(`blob ${buffer.length}\x00`).update(buffer).digest("hex") === B;
-            }) ?? (s === "latin1" ? "tampered" : null));
-    C.set(B, D);
-    return D;
+          : ([body, `${body}\r`].find((candidate) => {
+              let buffer = Buffer.from(candidate, textEncoding);
+              return (
+                createHash(algorithm).update(`blob ${buffer.length}\x00`).update(buffer).digest("hex") ===
+                blobId
+              );
+            }) ?? (textEncoding === "latin1" ? "tampered" : null));
+    blobCache.set(blobId, text);
+    return text;
   };
-  let R = [];
-  for (let [B, { id: x, mode: S }] of p) {
-    let z = await A(x);
-    if (z === "tampered") return "tampered";
-    let Y = z === null ? null : decodeGitattributesBlob(z, S, s);
-    if (Y === null) return null;
-    if (Y.isLink) {
-      E ??= supportsGit232(e);
-      if (!(await E)) return "old_git";
+  let blobs = [];
+  for (let [name, { id, mode }] of treeEntries) {
+    let text_2 = await readBlob(id);
+    if (text_2 === "tampered") return "tampered";
+    let decoded = text_2 === null ? null : decodeGitattributesBlob(text_2, mode, textEncoding);
+    if (decoded === null) return null;
+    if (decoded.isLink) {
+      text ??= supportsGit232(runGit);
+      if (!(await text)) return "old_git";
     }
-    if (Y.text === null) return null;
-    R.push({
-      name: B,
-      id: x,
-      text: Y.text,
-      markStripped: Y.markStripped,
+    if (decoded.text === null) return null;
+    blobs.push({
+      name,
+      id,
+      text: decoded.text,
+      markStripped: decoded.markStripped,
     });
   }
   return {
-    blobs: R,
+    blobs,
   };
 }
 //@ chunk-gjx0rh1b.js:33266-33607 placement
 /**
  * 按 git 模式解码 gitattributes 内容：符号链接、去 BOM 与非法输入判断。
  */
-function decodeGitattributesBlob(e, n, r) {
-  if (e.includes("\x00")) return null;
-  if (n !== "100644" && n !== "100755" && n !== "120000") return null;
-  let o = e.startsWith(BOM_BYTES[r]);
-  if (n === "120000")
+function decodeGitattributesBlob(content, mode, textEncoding) {
+  if (content.includes("\x00")) return null;
+  if (mode !== "100644" && mode !== "100755" && mode !== "120000") return null;
+  let hasBom = content.startsWith(BOM_BYTES[textEncoding]);
+  if (mode === "120000")
     return {
       isLink: true,
-      text: o ? null : e,
+      text: hasBom ? null : content,
       markStripped: false,
     };
-  if (!o)
+  if (!hasBom)
     return {
       isLink: false,
-      text: e,
+      text: content,
       markStripped: false,
     };
-  let sliced = e.slice(BOM_BYTES[r].length);
-  return sliced.startsWith(BOM_BYTES[r])
+  let sliced = content.slice(BOM_BYTES[textEncoding].length);
+  return sliced.startsWith(BOM_BYTES[textEncoding])
     ? null
     : {
         isLink: false,
@@ -1352,9 +1439,9 @@ function decodeGitattributesBlob(e, n, r) {
 /**
  * 解码 git 加引号的路径（处理八进制与转义字符）。
  */
-function unquoteGitPath(e) {
-  if (!(e.startsWith('"') && e.endsWith('"'))) return Buffer.from(e, "utf8");
-  let n = {
+function unquoteGitPath(quoted) {
+  if (!(quoted.startsWith('"') && quoted.endsWith('"'))) return Buffer.from(quoted, "utf8");
+  let result = {
     a: 7,
     b: 8,
     t: 9,
@@ -1365,76 +1452,80 @@ function unquoteGitPath(e) {
     "\\": 92,
     '"': 34,
   };
-  let sliced = e.slice(1, -1);
-  let o = [];
-  for (let s = 0; s < sliced.length; s += 1) {
-    let l = sliced[s] ?? "";
-    if (l !== "\\") {
-      o.push(...Buffer.from(l, "utf8"));
+  let sliced = quoted.slice(1, -1);
+  let bytes = [];
+  for (let index = 0; index < sliced.length; index += 1) {
+    let char = sliced[index] ?? "";
+    if (char !== "\\") {
+      bytes.push(...Buffer.from(char, "utf8"));
       continue;
     }
-    let h = sliced[s + 1] ?? "";
-    if (/^[0-3][0-7]{2}$/.test(sliced.slice(s + 1, s + 4))) {
-      o.push(parseInt(sliced.slice(s + 1, s + 4), 8));
-      s += 3;
+    let escapedChar = sliced[index + 1] ?? "";
+    if (/^[0-3][0-7]{2}$/.test(sliced.slice(index + 1, index + 4))) {
+      bytes.push(parseInt(sliced.slice(index + 1, index + 4), 8));
+      index += 3;
     } else {
-      o.push(n[h] ?? h.charCodeAt(0));
-      s += 1;
+      bytes.push(result[escapedChar] ?? escapedChar.charCodeAt(0));
+      index += 1;
     }
   }
-  return Buffer.from(o);
+  return Buffer.from(bytes);
 }
 //@ chunk-gjx0rh1b.js:34032-34167 placement
-async function supportsGit232(e) {
-  let n = await e(["version"]);
-  let r = n.code === 0 ? parseGitVersion(n.stdout) : null;
-  return r !== null && (r.major > 2 || (r.major === 2 && r.minor >= 32));
+async function supportsGit232(runGit) {
+  let result = await runGit(["version"]);
+  let version = result.code === 0 ? parseGitVersion(result.stdout) : null;
+  return version !== null && (version.major > 2 || (version.major === 2 && version.minor >= 32));
 }
 //@ chunk-gjx0rh1b.js:34167-34774 placement
 /**
  * 读取 commit 对象并校验其哈希，判定是否被篡改。
  */
-async function readObjectForTree(runGit, oid, r) {
-  let o = r ?? (await writeProbeBlob(runGit, {}));
-  let s = oid.length === 64 ? "sha256" : "sha1";
-  let l = (_, y, E) => createHash(s).update(`${_} ${y.length}\x00`).update(y).digest("hex") === E;
-  let h = await runGit(
+async function readObjectForTree(runGit, oid, oid_2) {
+  let probe = oid_2 ?? (await writeProbeBlob(runGit, {}));
+  let algorithm = oid.length === 64 ? "sha256" : "sha1";
+  let verifyHash = (objectType, content, expectedId) =>
+    createHash(algorithm).update(`${objectType} ${content.length}\x00`).update(content).digest("hex") ===
+    expectedId;
+  let result = await runGit(
     ["cat-file", "--batch"],
     undefined,
     `${oid}
 `,
-    o === "latin1" ? "latin1" : undefined,
+    probe === "latin1" ? "latin1" : undefined,
   );
-  if (h.code !== 0) return null;
-  let index = h.stdout.indexOf(`
+  if (result.code !== 0) return null;
+  let index = result.stdout.indexOf(`
 `);
-  let p = index === -1 ? "" : h.stdout.slice(index + 1);
-  if (!h.stdout.startsWith(`${oid} commit `))
-    return /^[0-9a-f]{40,64} [a-z]+ /.test(h.stdout) ? "tampered" : null;
-  if (![p, `${p}\r`].some((_) => l("commit", Buffer.from(_, o), oid)))
-    return o === "latin1" ? "tampered" : null;
-  let w = /^tree ([0-9a-f]{40,64})\n/.exec(p)?.[1];
-  if (w === undefined) return "tampered";
-  return w;
+  let body = index === -1 ? "" : result.stdout.slice(index + 1);
+  if (!result.stdout.startsWith(`${oid} commit `))
+    return /^[0-9a-f]{40,64} [a-z]+ /.test(result.stdout) ? "tampered" : null;
+  if (![body, `${body}\r`].some((candidate) => verifyHash("commit", Buffer.from(candidate, probe), oid)))
+    return probe === "latin1" ? "tampered" : null;
+  let treeId = /^tree ([0-9a-f]{40,64})\n/.exec(body)?.[1];
+  if (treeId === undefined) return "tampered";
+  return treeId;
 }
 //@ chunk-gjx0rh1b.js:34774-34884 placement
-async function readCommitTree(runGit, commit, r, o = "utf8") {
-  let objectForTree = await readObjectForTree(runGit, commit, o);
-  if (objectForTree === null || objectForTree === "tampered") return objectForTree;
-  return buildTreeObject(runGit, objectForTree, r);
+async function readCommitTree(runGit, commit, oid, encoding = "utf8") {
+  let entries = await readObjectForTree(runGit, commit, encoding);
+  if (entries === null || entries === "tampered") return entries;
+  return buildTreeObject(runGit, entries, oid);
 }
 //@ chunk-gjx0rh1b.js:34884-34905 placement
 var YIELD_EVERY_OBJECTS = 512;
 var YIELD_EVERY_BYTES = 262144;
 //@ chunk-gjx0rh1b.js:34905-36996 placement
-async function verifyObjectsByHash(e, n) {
-  let r = n.length === 64 ? "sha256" : "sha1";
-  let o = (w, _, y) => createHash(r).update(`${w} ${_.length}\x00`).update(_).digest("hex") === y;
-  let s = new Map();
-  let l = (w) => {
-    if (!w.every(({ nameBytes }) => isValidTreeEntryName(nameBytes))) return null;
-    let _ = new Map(
-      w.map(({ nameBytes, mode, id }) => [
+async function verifyObjectsByHash(objects, ids) {
+  let algorithm = ids.length === 64 ? "sha256" : "sha1";
+  let verify = (kind, content, expectedId) =>
+    createHash(algorithm).update(`${kind} ${content.length}\x00`).update(content).digest("hex") ===
+    expectedId;
+  let listings = new Map();
+  let toListing = (entries) => {
+    if (!entries.every(({ nameBytes }) => isValidTreeEntryName(nameBytes))) return null;
+    let listing = new Map(
+      entries.map(({ nameBytes, mode, id }) => [
         nameBytes.toString("latin1"),
         {
           mode,
@@ -1442,79 +1533,79 @@ async function verifyObjectsByHash(e, n) {
         },
       ]),
     );
-    return _.size === w.length ? _ : null;
+    return listing.size === entries.length ? listing : null;
   };
-  let h = (await writeProbeBlob(e, {})) === "latin1";
-  let listingsOf = async (w) => {
-    let _ = uniq(w.filter((B) => !s.has(B)));
-    if (_.length === 0) return true;
-    if (!h) {
-      for (let B of _) {
-        let x = await p(B);
-        if (x === null || x === "tampered") return x;
+  let readsInOneRun = (await writeProbeBlob(objects, {})) === "latin1";
+  let listingsOf = async (treeIds) => {
+    let missing = uniq(treeIds.filter((treeId) => !listings.has(treeId)));
+    if (missing.length === 0) return true;
+    if (!readsInOneRun) {
+      for (let treeId of missing) {
+        let listing = await readOneTree(treeId);
+        if (listing === null || listing === "tampered") return listing;
       }
       return true;
     }
-    let y = await e(
+    let batch = await objects(
       ["cat-file", "--batch"],
       undefined,
-      [..._, _[0]]
+      [...missing, missing[0]]
         .map(
-          (B) => `${B}
+          (treeId) => `${treeId}
 `,
         )
         .join(""),
       "latin1",
     );
-    if (y.code !== 0) return null;
-    let buffer = Buffer.from(y.stdout, "latin1");
-    let C = n.length / 2;
-    let A = 0;
-    let R = 0;
-    for (let [B, x] of _.entries()) {
-      if ((B > 0 && B % YIELD_EVERY_OBJECTS === 0) || R >= YIELD_EVERY_BYTES) {
+    if (batch.code !== 0) return null;
+    let buffer = Buffer.from(batch.stdout, "latin1");
+    let idBytes = ids.length / 2;
+    let cursor = 0;
+    let bytesSinceYield = 0;
+    for (let [index, treeId] of missing.entries()) {
+      if ((index > 0 && index % YIELD_EVERY_OBJECTS === 0) || bytesSinceYield >= YIELD_EVERY_BYTES) {
         await yieldToEventLoop();
-        R = 0;
+        bytesSinceYield = 0;
       }
-      let index = buffer.indexOf(10, A);
-      if (index === -1) return null;
-      let str = buffer.subarray(A, index).toString("latin1");
+      let index_2 = buffer.indexOf(10, cursor);
+      if (index_2 === -1) return null;
+      let str = buffer.subarray(cursor, index_2).toString("latin1");
       let match = /^([0-9a-f]{40,64}) tree (\d+)$/.exec(str);
-      if (match === null || match[1] !== x)
+      if (match === null || match[1] !== treeId)
         return /^[0-9a-f]{40,64} [a-z]+ \d+$/.test(str) ? "tampered" : null;
-      let L = Number(match[2]);
-      R += L;
-      let chunk = buffer.subarray(index + 1, index + 1 + L);
-      if (chunk.length !== L) return null;
-      if (!o("tree", chunk, x)) return "tampered";
-      A = index + 1 + L + 1;
-      let D = [];
-      let pe = 0;
-      while (pe < chunk.length) {
-        let index = chunk.indexOf(32, pe);
-        let index_2 = chunk.indexOf(0, index + 1);
-        if (index === -1 || index_2 === -1 || index_2 + 1 + C > chunk.length) return "tampered";
-        let str = chunk.subarray(pe, index).toString("latin1");
-        if (!isOctalNumber(str)) return "tampered";
-        D.push({
-          mode: GIT_FILE_MODES(str),
-          nameBytes: Buffer.from(chunk.subarray(index + 1, index_2)),
-          id: chunk.subarray(index_2 + 1, index_2 + 1 + C).toString("hex"),
+      let size = Number(match[2]);
+      bytesSinceYield += size;
+      let content = buffer.subarray(index_2 + 1, index_2 + 1 + size);
+      if (content.length !== size) return null;
+      if (!verify("tree", content, treeId)) return "tampered";
+      cursor = index_2 + 1 + size + 1;
+      let entries = [];
+      let offset = 0;
+      while (offset < content.length) {
+        let index = content.indexOf(32, offset);
+        let index_2 = content.indexOf(0, index + 1);
+        if (index === -1 || index_2 === -1 || index_2 + 1 + idBytes > content.length) return "tampered";
+        let octal = content.subarray(offset, index).toString("latin1");
+        if (!isOctalNumber(octal)) return "tampered";
+        entries.push({
+          mode: GIT_FILE_MODES(octal),
+          nameBytes: Buffer.from(content.subarray(index + 1, index_2)),
+          id: content.subarray(index_2 + 1, index_2 + 1 + idBytes).toString("hex"),
         });
-        pe = index_2 + 1 + C;
+        offset = index_2 + 1 + idBytes;
       }
-      let X = l(D);
-      if (X === null) return "tampered";
-      s.set(x, X);
+      let listing = toListing(entries);
+      if (listing === null) return "tampered";
+      listings.set(treeId, listing);
     }
     return true;
   };
-  let p = async (w) => {
-    let _ = s.get(w);
-    if (_ !== undefined) return _;
-    let y = await e(["-c", "core.quotePath=true", "ls-tree", w]);
-    if (y.code !== 0) return null;
-    let mapped = y.stdout
+  let readOneTree = async (treeId) => {
+    let cached = listings.get(treeId);
+    if (cached !== undefined) return cached;
+    let result = await objects(["-c", "core.quotePath=true", "ls-tree", treeId]);
+    if (result.code !== 0) return null;
+    let entries = result.stdout
       .split(
         `
 `,
@@ -1522,76 +1613,76 @@ async function verifyObjectsByHash(e, n) {
       .filter((line) => line !== "")
       .map((line) => {
         let index = line.indexOf("\t");
-        let [x, , S] = line.slice(0, index).split(" ");
+        let [mode, , id] = line.slice(0, index).split(" ");
         let nameBytes = unquoteGitPath(line.slice(index + 1));
         return {
-          mode: (x ?? "").replace(/^0+/, ""),
-          id: S ?? "",
+          mode: (mode ?? "").replace(/^0+/, ""),
+          id: id ?? "",
           nameBytes,
         };
       });
     let buffer = Buffer.concat(
-      mapped.map(({ mode, id, nameBytes }) =>
+      entries.map(({ mode, id, nameBytes }) =>
         Buffer.concat([Buffer.from(`${mode} `, "utf8"), nameBytes, Buffer.from([0]), Buffer.from(id, "hex")]),
       ),
     );
-    if (!o("tree", buffer, w)) return null;
-    let A = l(mapped);
-    if (A === null) return "tampered";
-    s.set(w, A);
-    return A;
+    if (!verify("tree", buffer, treeId)) return null;
+    let listing = toListing(entries);
+    if (listing === null) return "tampered";
+    listings.set(treeId, listing);
+    return listing;
   };
   return {
     listingsOf,
-    listing: (w) => s.get(w),
-    readsManyTreesInOneRun: h,
+    listing: (treeId) => listings.get(treeId),
+    readsManyTreesInOneRun: readsInOneRun,
   };
 }
 //@ chunk-gjx0rh1b.js:36996-37651 placement
-async function buildTreeObject(e, n, r) {
-  let { listingsOf, listing } = await verifyObjectsByHash(e, n);
-  let l = new Map();
-  let h = await listingsOf([n]);
-  if (h !== true) return h;
-  let mapped = r.map((p) => ({
-    name: p,
-    segments: p.split("/"),
+async function buildTreeObject(runGit, entries, paths) {
+  let { listingsOf, listing } = await verifyObjectsByHash(runGit, entries);
+  let found = new Map();
+  let listingResult = await listingsOf([entries]);
+  if (listingResult !== true) return listingResult;
+  let mapped = paths.map((path) => ({
+    name: path,
+    segments: path.split("/"),
     at: 0,
-    tree: n,
+    tree: entries,
   }));
   while (mapped.length > 0) {
-    let p = await listingsOf(mapped.map(({ tree }) => tree));
-    if (p !== true) return p;
-    let w = [];
-    let _ = [];
-    for (let y of mapped) {
-      let E = listing(y.tree);
-      if (E === undefined) return null;
-      let C = y.segments[y.at];
-      let A = E.get(Buffer.from(C, "utf8").toString("latin1"));
-      if (A === undefined) continue;
-      let R = y.at === y.segments.length - 1;
-      if (R && A.mode !== "40000")
-        l.set(y.name, {
-          id: A.id,
-          mode: A.mode,
+    let listingResult = await listingsOf(mapped.map(({ tree }) => tree));
+    if (listingResult !== true) return listingResult;
+    let nextQueue = [];
+    let subTreeIds = [];
+    for (let entry of mapped) {
+      let treeListing = listing(entry.tree);
+      if (treeListing === undefined) return null;
+      let segment = entry.segments[entry.at];
+      let treeEntry = treeListing.get(Buffer.from(segment, "utf8").toString("latin1"));
+      if (treeEntry === undefined) continue;
+      let isLastSegment = entry.at === entry.segments.length - 1;
+      if (isLastSegment && treeEntry.mode !== "40000")
+        found.set(entry.name, {
+          id: treeEntry.id,
+          mode: treeEntry.mode,
         });
-      else if (A.mode === "40000")
-        if (!R)
-          w.push({
-            ...y,
-            at: y.at + 1,
-            tree: A.id,
+      else if (treeEntry.mode === "40000")
+        if (!isLastSegment)
+          nextQueue.push({
+            ...entry,
+            at: entry.at + 1,
+            tree: treeEntry.id,
           });
-        else _.push(A.id);
+        else subTreeIds.push(treeEntry.id);
     }
-    if (_.length > 0) {
-      let y = await listingsOf(_);
-      if (y !== true) return y;
+    if (subTreeIds.length > 0) {
+      let listingResult = await listingsOf(subTreeIds);
+      if (listingResult !== true) return listingResult;
     }
-    mapped = w;
+    mapped = nextQueue;
   }
-  return l;
+  return found;
 }
 //@ chunk-gjx0rh1b.js:37651-38108 placement
 /**
@@ -1613,8 +1704,8 @@ var GIT_SIGPIPE_EXIT_CODE = 129;
 var TREE_READBACK_MISMATCH = "the trees just built could not be read back as what their ids name";
 var COMMIT_READBACK_MISMATCH = "a commit just made could not be read back as what its id names";
 //@ chunk-gjx0rh1b.js:38108-38196 placement
-function blobSha1(e) {
-  return createHash("sha1").update(`blob ${e.length}\x00`).update(e).digest("hex");
+function blobSha1(content) {
+  return createHash("sha1").update(`blob ${content.length}\x00`).update(content).digest("hex");
 }
 //@ chunk-gjx0rh1b.js:38196-38421 placement
 var MAX_STASH_FILE_BYTES = 1048576;
@@ -1628,30 +1719,34 @@ var STASH_IDENTITY_ENV = {
 };
 var withLongPathsGit =
   (hardenedGitRunner) =>
-  (n, ...r) =>
-    hardenedGitRunner(["-c", "core.longpaths=true", ...n], ...r);
+  (args, ...rest) =>
+    hardenedGitRunner(["-c", "core.longpaths=true", ...args], ...rest);
 //@ chunk-gjx0rh1b.js:38421-54648 placement
 /**
  * 捕获未提交修改为 stash 提交：读索引与工作树、处理 Windows 不能保存的名字、构造种子引用（约 16 KB）。
  */
-async function captureWipStash(e, layout, r = {}) {
-  let o = r.probes ?? currentGitBinaryState();
-  let hardenedGitRunner = createHardenedGitRunner(e, layout, r.signal, undefined, o);
-  let l = (ee, De, ce, Fe, St) =>
+async function captureWipStash(options, layout, opts = {}) {
+  let probes = opts.probes ?? currentGitBinaryState();
+  let hardenedGitRunner = createHardenedGitRunner(options, layout, opts.signal, undefined, probes);
+  let runHardenedGit = (args, env, input, encoding, stdoutFd) =>
     hardenedGitRunner(
-      De?.GIT_INDEX_FILE === undefined ? [...ee] : ["-c", "core.splitIndex=false", ...ee],
-      De,
-      ce,
-      Fe,
-      St,
+      env?.GIT_INDEX_FILE === undefined ? [...args] : ["-c", "core.splitIndex=false", ...args],
+      env,
+      input,
+      encoding,
+      stdoutFd,
     );
-  let h = (ee) => (r.neverRead ?? r.alsoLeaveOut)?.(ee) ?? false;
-  let filtered = uniq([toPosixSpelling(e), layout.workTree]).filter((ee) =>
-    CREDENTIAL_CONFIG_PATHS.some(([, De]) => isCredentialConfigPathActive(`${ee}/${De}`)),
+  let shouldLeaveOut = (name) => (opts.neverRead ?? opts.alsoLeaveOut)?.(name) ?? false;
+  let filtered = uniq([toPosixSpelling(options), layout.workTree]).filter((root) =>
+    CREDENTIAL_CONFIG_PATHS.some(([, relativePath]) =>
+      isCredentialConfigPathActive(`${root}/${relativePath}`),
+    ),
   );
-  let p = (ee) => filtered.some((De) => isCredentialConfigPathActive(`${De}/${ee}`));
-  let w = (ee) => isSensitiveNameOrVariant(ee) || p(ee) || (r.alsoLeaveOut?.(ee) ?? false);
-  let headState = await resolveHeadState(l, layout.adminDir ?? resolveTempDir());
+  let isActiveCredentialPath = (name) =>
+    filtered.some((root) => isCredentialConfigPathActive(`${root}/${name}`));
+  let shouldSkipName = (name) =>
+    isSensitiveNameOrVariant(name) || isActiveCredentialPath(name) || (opts.alsoLeaveOut?.(name) ?? false);
+  let headState = await resolveHeadState(runHardenedGit, layout.adminDir ?? resolveTempDir());
   if (headState.kind !== "inspected") return headState;
   let { gitDir, workTree } = layout;
   let { base, baseTree, iTree, reader, namesWindowsCannotHold } = headState.inspection;
@@ -1659,179 +1754,208 @@ async function captureWipStash(e, layout, r = {}) {
     logForDebugging(
       `[wipStash] tracked names that Windows cannot hold, listed as deleted and passed over: ${namesWindowsCannotHold}`,
     );
-    r.onNamesWindowsCannotHold?.(namesWindowsCannotHold);
+    opts.onNamesWindowsCannotHold?.(namesWindowsCannotHold);
   }
-  let S =
+  let caseFolding =
     (layout.bound === true && getPlatform() === "wsl") ||
     (await isCaseFoldingFileSystem(workTree)) ||
     (await isCaseFoldingFileSystem(layout.adminDir ?? resolveTempDir()));
-  let suspiciousChangedPaths = findSuspiciousChangedPaths(headState.inspection, S);
+  let suspiciousChangedPaths = findSuspiciousChangedPaths(headState.inspection, caseFolding);
   if (suspiciousChangedPaths.length > 0)
     return {
       kind: "refused",
       refused: suspiciousChangedPaths,
       decidedOn: "listing",
     };
-  let Y = r.leaveOutUncommittedCredentialFiles
-    ? await classifyIndexEntry(workTree, headState.inspection, w, S, h)
+  let leftOutCredentialFiles = opts.leaveOutUncommittedCredentialFiles
+    ? await classifyIndexEntry(workTree, headState.inspection, shouldSkipName, caseFolding, shouldLeaveOut)
     : [];
-  let L = new Set(Y.map(({ path }) => path));
-  let U = new Set(headState.inspection.staged.map(({ path }) => path));
-  let D = new Set(headState.inspection.staged.flatMap(({ path, status }) => (status === "D" ? [path] : [])));
-  let now = Date.now();
-  let X = limitConcurrency(GIT_READ_CONCURRENCY, (ee) =>
-    r.signal?.aborted === true || L.has(ee.path) || U.has(ee.path)
-      ? Promise.resolve("changed")
-      : compareWorktreeEntry(workTree, ee, S, MAX_COMPARE_BYTES, r.signal),
+  let leftOutPaths = new Set(leftOutCredentialFiles.map(({ path }) => path));
+  let stagedPaths = new Set(headState.inspection.staged.map(({ path }) => path));
+  let stagedDeletedPaths = new Set(
+    headState.inspection.staged.flatMap(({ path, status }) => (status === "D" ? [path] : [])),
   );
-  let results = await Promise.all(headState.inspection.working.map(X));
-  let filtered_2 = headState.inspection.working.filter((ee, De) => results[De] !== "unchanged");
-  let ve = count(results, (ee) => ee === "open_refused");
-  if (ve > 0) r.onOpenRefusedAtTheLook?.(ve);
-  let ie = headState.inspection.working.length - filtered_2.length;
-  if (ie > 0)
+  let now = Date.now();
+  let compareEntry = limitConcurrency(GIT_READ_CONCURRENCY, (workingEntry) =>
+    opts.signal?.aborted === true || leftOutPaths.has(workingEntry.path) || stagedPaths.has(workingEntry.path)
+      ? Promise.resolve("changed")
+      : compareWorktreeEntry(workTree, workingEntry, caseFolding, MAX_COMPARE_BYTES, opts.signal),
+  );
+  let results = await Promise.all(headState.inspection.working.map(compareEntry));
+  let filtered_2 = headState.inspection.working.filter(
+    (entry, entryIndex) => results[entryIndex] !== "unchanged",
+  );
+  let openRefusedCount = count(results, (status) => status === "open_refused");
+  if (openRefusedCount > 0) opts.onOpenRefusedAtTheLook?.(openRefusedCount);
+  let unchangedCount = headState.inspection.working.length - filtered_2.length;
+  if (unchangedCount > 0)
     logForDebugging(
-      `[wipStash] ${ie} of ${headState.inspection.working.length} stat-dirty tracked files were unchanged (${Date.now() - now}ms)`,
+      `[wipStash] ${unchangedCount} of ${headState.inspection.working.length} stat-dirty tracked files were unchanged (${Date.now() - now}ms)`,
     );
   if (filtered_2.length === 0 && iTree === baseTree)
     return {
       kind: "none",
-      leftOut: Y,
+      leftOut: leftOutCredentialFiles,
     };
   await pruneStaleSeedIndexes(gitDir);
   if (layout.adminDir === undefined) await pruneStaleProcessDirs(resolveTempDir());
-  let K = join(layout.adminDir ?? gitDir, `ccr-seed-${process.pid}-${randomBytes(6).toString("hex")}.index`);
-  let _e = null;
-  let Ce = null;
-  let ge = null;
-  let Re = [];
-  let $e = new Set();
-  let W = [];
-  let ct = new Map();
-  let ft = [];
-  let Qe = new Map();
-  let Le = null;
+  let scratchIndexPath = join(
+    layout.adminDir ?? gitDir,
+    `ccr-seed-${process.pid}-${randomBytes(6).toString("hex")}.index`,
+  );
+  let tempIndexDir = null;
+  let stageDir = null;
+  let attrsDir = null;
+  let intentToAddPaths = [];
+  let stagedBlobIds = new Set();
+  let laidFiles = [];
+  let laidEntries = new Map();
+  let skipWorktreePaths = [];
+  let stagedIndexEntries = new Map();
+  let replayIndexPath = null;
   try {
-    let ee = await l(["read-tree", "--no-recurse-submodules", `--index-output=${K}`, "-m", iTree]);
-    if (ee.code !== 0) return stepFailure("read-tree", ee.stderr, ee);
+    let readTreeResult = await runHardenedGit([
+      "read-tree",
+      "--no-recurse-submodules",
+      `--index-output=${scratchIndexPath}`,
+      "-m",
+      iTree,
+    ]);
+    if (readTreeResult.code !== 0) return stepFailure("read-tree", readTreeResult.stderr, readTreeResult);
     if (layout.adminDir === undefined) {
-      _e = await mkdtemp(join(resolveTempDir(), `claude-seed-index-${process.pid}-`));
-      let P = join(_e, "index");
-      let V = await lstatNoFollow(K, P);
-      if (V !== null) {
-        await unlink(K).catch(() => {});
-        return stepFailure(V.kind === "disk" ? "scratch-index" : "rewritten", V.detail);
+      tempIndexDir = await mkdtemp(join(resolveTempDir(), `claude-seed-index-${process.pid}-`));
+      let tempIndexPath = join(tempIndexDir, "index");
+      let moveVerdict = await lstatNoFollow(scratchIndexPath, tempIndexPath);
+      if (moveVerdict !== null) {
+        await unlink(scratchIndexPath).catch(() => {});
+        return stepFailure(moveVerdict.kind === "disk" ? "scratch-index" : "rewritten", moveVerdict.detail);
       }
-      let se = await unlinkWithRetry(K);
-      if (se !== null)
+      let unlinkError = await unlinkWithRetry(scratchIndexPath);
+      if (unlinkError !== null)
         logForDebugging(
-          `[wipStash] the scratch index read-tree wrote could not be removed after it was carried off (${se}); left for the sweep`,
+          `[wipStash] the scratch index read-tree wrote could not be removed after it was carried off (${unlinkError}); left for the sweep`,
         );
-      K = P;
+      scratchIndexPath = tempIndexPath;
     }
-    let De = await listSparseCheckout(l, K, layout.adminDir ?? resolveTempDir(), reader, iTree, S);
-    if (De.kind === "failed") return De;
-    if (De.kind === "differ")
+    let sparseCheck = await listSparseCheckout(
+      runHardenedGit,
+      scratchIndexPath,
+      layout.adminDir ?? resolveTempDir(),
+      reader,
+      iTree,
+      caseFolding,
+    );
+    if (sparseCheck.kind === "failed") return sparseCheck;
+    if (sparseCheck.kind === "differ")
       return stepFailure(
         "read-tree",
         "the index changed while it was read, or its trees do not list what it holds (an object is not what its id names) \u2014 retry",
       );
-    let ce = await l(["write-tree", "--ignore-cache-tree"]);
-    if (ce.code !== 0) return stepFailure("write-tree", ce.stderr || ce.stdout, ce);
-    if (ce.stdout.trim() !== iTree)
+    let writeTreeResult = await runHardenedGit(["write-tree", "--ignore-cache-tree"]);
+    if (writeTreeResult.code !== 0)
+      return stepFailure("write-tree", writeTreeResult.stderr || writeTreeResult.stdout, writeTreeResult);
+    if (writeTreeResult.stdout.trim() !== iTree)
       return stepFailure(
         "read-tree",
         "the index changed while the uncommitted changes were being read \u2014 retry",
       );
-    let Fe = iTree;
-    if (L.size > 0) {
-      let P = await restoreIndexEntries(l, reader, K, baseTree, [...L]);
-      if (P !== null)
+    let indexTree = iTree;
+    if (leftOutPaths.size > 0) {
+      let restoreFailure = await restoreIndexEntries(runHardenedGit, reader, scratchIndexPath, baseTree, [
+        ...leftOutPaths,
+      ]);
+      if (restoreFailure !== null)
         return {
           kind: "failed",
-          ...P,
+          ...restoreFailure,
         };
-      let V = await l(["write-tree", "--ignore-cache-tree"], {
-        GIT_INDEX_FILE: K,
+      let writeTreeAgain = await runHardenedGit(["write-tree", "--ignore-cache-tree"], {
+        GIT_INDEX_FILE: scratchIndexPath,
       });
-      if (V.code !== 0) return stepFailure("write-tree", V.stderr || V.stdout, V);
-      Fe = V.stdout.trim();
+      if (writeTreeAgain.code !== 0)
+        return stepFailure("write-tree", writeTreeAgain.stderr || writeTreeAgain.stdout, writeTreeAgain);
+      indexTree = writeTreeAgain.stdout.trim();
     }
-    let St = r.leaveOutUncommittedCredentialFiles
+    let deletedCredentialPaths = opts.leaveOutUncommittedCredentialFiles
       ? filtered_2
-          .filter(({ status, path }) => status === "D" && !L.has(path) && w(path))
+          .filter(({ status, path }) => status === "D" && !leftOutPaths.has(path) && shouldSkipName(path))
           .map(({ path }) => path)
       : [];
-    let et = (path) => !L.has(path) && (!r.leaveOutUncommittedCredentialFiles || !w(path));
-    let ht = uniq(
+    let isIncludedPath = (path) =>
+      !leftOutPaths.has(path) && (!opts.leaveOutUncommittedCredentialFiles || !shouldSkipName(path));
+    let changedPaths = uniq(
       filtered_2.flatMap(({ path, status, newMode, newId }) =>
         status === "D" || newMode === GITLINK_MODE_VALUE || !ZERO_OID_RE.test(newId) ? [path] : [],
       ),
     );
-    let Nt = new Set(await listDirectoriesAmong(workTree, ht));
-    let Fn = new Set(ht.filter((P) => !Nt.has(P)));
-    let filtered = uniq(filtered_2.map(({ path }) => path)).filter((P) => !Fn.has(P) && et(P));
-    let filtered_3 = [...U].filter(et);
+    let directoryPaths = new Set(await listDirectoriesAmong(workTree, changedPaths));
+    let filePaths = new Set(changedPaths.filter((path) => !directoryPaths.has(path)));
+    let filtered = uniq(filtered_2.map(({ path }) => path)).filter(
+      (path) => !filePaths.has(path) && isIncludedPath(path),
+    );
+    let filtered_3 = [...stagedPaths].filter(isIncludedPath);
     let filtered_4 = headState.inspection.staged.filter(({ status }) => status !== "D");
-    let tt = checkCredentialLikePaths();
-    let M =
-      filtered_4.length === 0 && !r.leaveOutUncommittedCredentialFiles
+    let isCredentialLikePath = checkCredentialLikePaths();
+    let indexListing =
+      filtered_4.length === 0 && !opts.leaveOutUncommittedCredentialFiles
         ? {
             elsewhere: [],
             withheldTracked: new Map(),
           }
         : await listIndexIds(
-            l,
-            K,
+            runHardenedGit,
+            scratchIndexPath,
             new Map(filtered_4.map(({ newId, path }) => [newId, path])),
-            r.leaveOutUncommittedCredentialFiles ? (P) => tt(P) || p(P) : () => false,
+            opts.leaveOutUncommittedCredentialFiles
+              ? (path) => isCredentialLikePath(path) || isActiveCredentialPath(path)
+              : () => false,
             layout.adminDir ?? resolveTempDir(),
-            S,
-            r.signal,
+            caseFolding,
+            opts.signal,
           );
-    if (M === null)
+    if (indexListing === null)
       return stepFailure(
         "ls-files",
-        r.signal?.aborted
+        opts.signal?.aborted
           ? "cancelled, or out of time, before the index was listed and its names judged"
           : "could not list the index",
       );
-    let { elsewhere, withheldTracked } = M;
-    let Ke = uniq([...filtered_2.map(({ path }) => path), ...U, ...elsewhere]);
-    let Xe = new Set();
-    let xt = new Set();
-    let nt;
-    if (Ke.length > 0) {
-      ge = await mkdtemp(join(layout.adminDir ?? resolveTempDir(), "claude-seed-attrs-"));
-      nt = await findGitDirCaseVariants(l, workTree);
-      let P = await checkAlternatesFile(ge, {
-        caseBlind: nt.caseBlind,
+    let { elsewhere, withheldTracked } = indexListing;
+    let attrsPaths = uniq([...filtered_2.map(({ path }) => path), ...stagedPaths, ...elsewhere]);
+    let attrPaths = new Set();
+    let verifiedAttrPaths = new Set();
+    let caseVariants;
+    if (attrsPaths.length > 0) {
+      attrsDir = await mkdtemp(join(layout.adminDir ?? resolveTempDir(), "claude-seed-attrs-"));
+      caseVariants = await findGitDirCaseVariants(runHardenedGit, workTree);
+      let alternatesProblem = await checkAlternatesFile(attrsDir, {
+        caseBlind: caseVariants.caseBlind,
         objectFormat: base.length === 64 ? "sha256" : "sha1",
         objectsDir: join(layout.commonDir, "objects"),
       });
-      if (P !== null) return stepFailure("check-attr", P);
-      let hardenedGitRunner = createHardenedGitRunner(
-        e,
+      if (alternatesProblem !== null) return stepFailure("check-attr", alternatesProblem);
+      let runGit = createHardenedGitRunner(
+        options,
         {
-          gitDir: ge,
-          commonDir: ge,
+          gitDir: attrsDir,
+          commonDir: attrsDir,
           workTree,
           configPins: layout.configPins,
         },
-        r.signal,
+        opts.signal,
         reachForBoundSession(layout),
-        o,
+        probes,
       );
       let treeForPaths = await readTreeForPaths(
-        hardenedGitRunner,
-        Ke,
-        new Map(Ke.map((Z) => [Z, getPathNormalizationVariants(Z)])),
+        runGit,
+        attrsPaths,
+        new Map(attrsPaths.map((path) => [path, getPathNormalizationVariants(path)])),
         {
           commit: base,
-          indexPath: join(ge, "head.index"),
-          objectsDir: join(ge, "verified"),
+          indexPath: join(attrsDir, "head.index"),
+          objectsDir: join(attrsDir, "verified"),
         },
-        nt,
+        caseVariants,
       );
       if (treeForPaths === "overflow")
         return stepFailure("check-attr", "too many changed files to read the attributes of");
@@ -1846,64 +1970,78 @@ async function captureWipStash(e, layout, r = {}) {
           "HEAD's commit, a tree on the way to a committed .gitattributes, or that file's blob is not the object its id names",
         );
       if (treeForPaths === null) return stepFailure("check-attr", HEAD_UNVERIFIABLE_TEXT);
-      Xe = new Set(treeForPaths);
-      let me = uniq([...Ke.filter((Z) => Xe.has(Z)), ...L]);
-      if (me.length > 0 || withheldTracked.size > 0) {
-        let treePaths = await resolveTreePaths(reader, baseTree, me);
+      attrPaths = new Set(treeForPaths);
+      let treePathsToCheck = uniq([...attrsPaths.filter((path) => attrPaths.has(path)), ...leftOutPaths]);
+      if (treePathsToCheck.length > 0 || withheldTracked.size > 0) {
+        let treePaths = await resolveTreePaths(reader, baseTree, treePathsToCheck);
         if (isTreeReadFailure(treePaths))
           return treeReadFailure(
             treePaths,
             "cat-file",
             "HEAD's trees to the changed files could not be read back as what their ids name",
           );
-        xt = new Set(Xe);
-        let he = new Set([...Xe, ...L]);
-        let Ge = limitConcurrency(GIT_READ_CONCURRENCY, async (relPath) => {
+        verifiedAttrPaths = new Set(attrPaths);
+        let wantedPathSet = new Set([...attrPaths, ...leftOutPaths]);
+        let readBlobIds = limitConcurrency(GIT_READ_CONCURRENCY, async (relPath) => {
           let worktreeBlobIds = await readWorktreeBlobIds(
             workTree,
             relPath,
             baseTree.length,
             MAX_STASH_FILE_BYTES,
-            S,
+            caseFolding,
           );
-          let Tt = withheldTracked.get(relPath);
-          return worktreeBlobIds !== null && (he.has(relPath) || !worktreeBlobIds.includes(Tt ?? ""))
+          let withheldId = withheldTracked.get(relPath);
+          return worktreeBlobIds !== null &&
+            (wantedPathSet.has(relPath) || !worktreeBlobIds.includes(withheldId ?? ""))
             ? worktreeBlobIds
             : [];
         });
-        let Qt = (
+        let blobIdLists = (
           await Promise.all(
-            uniq([...he, ...withheldTracked.keys()])
-              .filter((xe) => !h(xe))
-              .map(Ge),
+            uniq([...wantedPathSet, ...withheldTracked.keys()])
+              .filter((path) => !shouldLeaveOut(path))
+              .map(readBlobIds),
           )
         ).flat();
-        let gt = (xe) => xe !== EMPTY_BLOB_IDS.sha1 && xe !== EMPTY_BLOB_IDS.sha256;
-        let mt = new Set([
-          ...[...treePaths.values()].map(({ id }) => id).filter(gt),
+        let isNonEmptyBlob = (id) => id !== EMPTY_BLOB_IDS.sha1 && id !== EMPTY_BLOB_IDS.sha256;
+        let verifiedBlobIds = new Set([
+          ...[...treePaths.values()].map(({ id }) => id).filter(isNonEmptyBlob),
           ...filtered_4
-            .filter(({ path }) => he.has(path))
+            .filter(({ path }) => wantedPathSet.has(path))
             .map(({ newId }) => newId)
-            .filter(gt),
-          ...Qt.filter(gt),
+            .filter(isNonEmptyBlob),
+          ...blobIdLists.filter(isNonEmptyBlob),
         ]);
-        $e = mt;
-        filtered_4.filter(({ path, newId }) => mt.has(newId) && et(path)).forEach(({ path }) => Xe.add(path));
+        stagedBlobIds = verifiedBlobIds;
+        filtered_4
+          .filter(({ path, newId }) => verifiedBlobIds.has(newId) && isIncludedPath(path))
+          .forEach(({ path }) => attrPaths.add(path));
       }
-      let filtered = filtered_3.filter((Z) => Xe.has(Z));
+      let filtered = filtered_3.filter((path) => attrPaths.has(path));
       if (filtered.length > 0) {
-        let Z = await restoreIndexEntries(l, reader, K, baseTree, filtered);
-        if (Z !== null)
+        let restoreError = await restoreIndexEntries(
+          runHardenedGit,
+          reader,
+          scratchIndexPath,
+          baseTree,
+          filtered,
+        );
+        if (restoreError !== null)
           return {
             kind: "failed",
-            ...Z,
+            ...restoreError,
           };
-        let he = await l(["write-tree", "--ignore-cache-tree"], {
-          GIT_INDEX_FILE: K,
+        let writeTreeOnceMore = await runHardenedGit(["write-tree", "--ignore-cache-tree"], {
+          GIT_INDEX_FILE: scratchIndexPath,
         });
-        if (he.code !== 0) return stepFailure("write-tree", he.stderr || he.stdout, he);
-        Fe = he.stdout.trim();
-        Y.push(
+        if (writeTreeOnceMore.code !== 0)
+          return stepFailure(
+            "write-tree",
+            writeTreeOnceMore.stderr || writeTreeOnceMore.stdout,
+            writeTreeOnceMore,
+          );
+        indexTree = writeTreeOnceMore.stdout.trim();
+        leftOutCredentialFiles.push(
           ...filtered.map((path) => ({
             path,
             why: "filtered",
@@ -1911,74 +2049,87 @@ async function captureWipStash(e, layout, r = {}) {
         );
       }
     }
-    let ze = new Set(Y.flatMap(({ path, why }) => (why === "filtered" ? [path] : [])));
-    let G = new Set(filtered);
-    let flattened = filtered_4.flatMap(({ path, newMode }) =>
-      newMode !== GITLINK_MODE_VALUE && et(path) && !G.has(path) ? [path] : [],
+    let filteredPaths = new Set(
+      leftOutCredentialFiles.flatMap(({ path, why }) => (why === "filtered" ? [path] : [])),
     );
-    let te = [...filtered, ...(await listDirectoriesAmong(workTree, flattened))];
-    if (te.length > 0 || flattened.length > 0) {
-      let P = await mkdtemp(join(layout.adminDir ?? resolveTempDir(), "claude-seed-stage-"));
-      Ce = P;
+    let attrPathSet = new Set(filtered);
+    let paths = filtered_4.flatMap(({ path, newMode }) =>
+      newMode !== GITLINK_MODE_VALUE && isIncludedPath(path) && !attrPathSet.has(path) ? [path] : [],
+    );
+    let stagePaths = [...filtered, ...(await listDirectoriesAmong(workTree, paths))];
+    if (stagePaths.length > 0 || paths.length > 0) {
+      let bareStageDir = await mkdtemp(join(layout.adminDir ?? resolveTempDir(), "claude-seed-stage-"));
+      stageDir = bareStageDir;
       let objectFormat = baseTree.length === 64 ? "sha256" : "sha1";
       let changedFilesForStash = await readChangedFilesForStash(
         workTree,
-        P,
-        te,
-        r.maxStagedBytes ?? MAX_STASH_BYTES,
+        bareStageDir,
+        stagePaths,
+        opts.maxStagedBytes ?? MAX_STASH_BYTES,
         {
-          ...r.stageHooks,
+          ...opts.stageHooks,
           objectFormat,
-          ntfsRules: S,
+          ntfsRules: caseFolding,
         },
       );
       if ("refused" in changedFilesForStash) return stepFailure("stage", changedFilesForStash.refused);
-      let me = await listFilesNoPrecompose(
-        l,
+      let indexFiles = await listFilesNoPrecompose(
+        runHardenedGit,
         {
-          GIT_INDEX_FILE: K,
+          GIT_INDEX_FILE: scratchIndexPath,
         },
         changedFilesForStash.entries.flatMap((entry) => (entry.kind === "absent" ? [entry.path] : [])),
       );
-      if (me === null) return stepFailure("ls-files", "could not list the index entries");
-      let ne = await describeStashEntryChange(
+      if (indexFiles === null) return stepFailure("ls-files", "could not list the index entries");
+      let stashChange = await describeStashEntryChange(
         changedFilesForStash,
-        new Set(te),
+        new Set(stagePaths),
         new Set(
-          filtered_2.flatMap(({ path, status }) => (status === "D" || me.unseen.has(path) ? [] : [path])),
+          filtered_2.flatMap(({ path, status }) =>
+            status === "D" || indexFiles.unseen.has(path) ? [] : [path],
+          ),
         ),
-        P,
-        (T) =>
-          readChangedFilesForStash(workTree, P, T, r.maxStagedBytes ?? MAX_STASH_BYTES, {
-            ...r.stageHooks,
+        bareStageDir,
+        (paths) =>
+          readChangedFilesForStash(workTree, bareStageDir, paths, opts.maxStagedBytes ?? MAX_STASH_BYTES, {
+            ...opts.stageHooks,
             objectFormat,
-            ntfsRules: S,
+            ntfsRules: caseFolding,
           }),
       );
-      if ("refused" in ne) return stepFailure("stage", ne.refused);
-      let found = ne.entries.find(
-        (entry) => entry.kind === "changed" && (!te.includes(entry.path) || isGitattributesPath(entry.path)),
+      if ("refused" in stashChange) return stepFailure("stage", stashChange.refused);
+      let found = stashChange.entries.find(
+        (entry) =>
+          entry.kind === "changed" && (!stagePaths.includes(entry.path) || isGitattributesPath(entry.path)),
       );
       if (found !== undefined) return stepFailure("stage", `${found.path} changed while it was being read`);
-      let he = withLongPathsGit(
+      let stageGit = withLongPathsGit(
         createHardenedGitRunner(
-          e,
+          options,
           {
             ...layout,
-            workTree: Ce,
+            workTree: stageDir,
           },
-          r.signal,
+          opts.signal,
           reachForBoundSession(layout),
-          o,
+          probes,
         ),
       );
-      let Ge = (T, ye, wt, rn, Dt) =>
-        he(ye?.GIT_INDEX_FILE === undefined ? [...T] : ["-c", "core.splitIndex=false", ...T], ye, wt, rn, Dt);
-      let Qt = new Set(te);
-      let gt = uniq([
-        ...ne.entries.flatMap((entry) => (entry.kind !== "absent" && Qt.has(entry.path) ? [entry.path] : [])),
+      let stageRun = (args, env, stdin, encoding, extra) =>
+        stageGit(
+          env?.GIT_INDEX_FILE === undefined ? [...args] : ["-c", "core.splitIndex=false", ...args],
+          env,
+          stdin,
+          encoding,
+          extra,
+        );
+      let stagePathSet = new Set(stagePaths);
+      let attrsCandidates = uniq([
+        ...stashChange.entries.flatMap((entry) =>
+          entry.kind !== "absent" && stagePathSet.has(entry.path) ? [entry.path] : [],
+        ),
         ...filtered_4.flatMap(({ path, newMode }) =>
-          newMode !== GITLINK_MODE_VALUE && et(path) ? [path] : [],
+          newMode !== GITLINK_MODE_VALUE && isIncludedPath(path) ? [path] : [],
         ),
       ]);
       let infoAttributes = await readInfoAttributes(layout.commonDir);
@@ -1989,24 +2140,24 @@ async function captureWipStash(e, layout, r = {}) {
             ? ".git/info/attributes sets or unsets filter attributes (or defines a macro, quotes a pattern, or holds a line of 2,048 bytes or more)"
             : ".git/info/attributes could not be read as a plain file",
         );
-      let xe = withLongPathsGit(
+      let attrsGit = withLongPathsGit(
         createHardenedGitRunner(
-          e,
+          options,
           {
-            gitDir: ge,
-            commonDir: ge,
-            workTree: Ce,
+            gitDir: attrsDir,
+            commonDir: attrsDir,
+            workTree: stageDir,
             configPins: layout.configPins,
           },
-          r.signal,
+          opts.signal,
           reachForBoundSession(layout),
-          o,
+          probes,
         ),
       );
-      let st = new Map(gt.map((T) => [T, getPathNormalizationVariants(T)]));
+      let variantsById = new Map(attrsCandidates.map((path) => [path, getPathNormalizationVariants(path)]));
       let [treeForPaths, treeForPaths_2] = await Promise.all([
-        readTreeForPaths(Ge, gt, st, null, nt),
-        readTreeForPaths(xe, gt, st, null, nt),
+        readTreeForPaths(stageRun, attrsCandidates, variantsById, null, caseVariants),
+        readTreeForPaths(attrsGit, attrsCandidates, variantsById, null, caseVariants),
       ]);
       if (treeForPaths === "overflow" || treeForPaths_2 === "overflow")
         return stepFailure("check-attr", "too many changed files to read the attributes of");
@@ -2014,46 +2165,65 @@ async function captureWipStash(e, layout, r = {}) {
         return stepFailure("check-attr", "could not read the attributes in force");
       if (treeForPaths_2 === null || !Array.isArray(treeForPaths_2))
         return stepFailure("check-attr", "could not read the staged .gitattributes on their own");
-      let Dr = treeForPaths;
-      let Pr = treeForPaths_2;
-      let nn = new Set([...Dr, ...Pr].filter((T) => !xt.has(T)));
-      let $o = (T) => T !== EMPTY_BLOB_IDS.sha1 && T !== EMPTY_BLOB_IDS.sha256;
-      let Do = limitConcurrency(GIT_READ_CONCURRENCY, (relPath) =>
-        readWorktreeBlobIds(workTree, relPath, baseTree.length, MAX_STASH_FILE_BYTES, S),
+      let liveAttrPaths = treeForPaths;
+      let stagedAttrPaths = treeForPaths_2;
+      let newAttrPaths = new Set(
+        [...liveAttrPaths, ...stagedAttrPaths].filter((path) => !verifiedAttrPaths.has(path)),
       );
-      let flattened = (await Promise.all([...nn].filter((T) => !h(T)).map(Do))).flatMap((T) => T ?? []);
-      let Fr = new Set(
-        [...filtered_4.filter(({ path }) => nn.has(path)).map(({ newId }) => newId), ...flattened].filter($o),
+      let nonEmptyBlob = (id) => id !== EMPTY_BLOB_IDS.sha1 && id !== EMPTY_BLOB_IDS.sha256;
+      let readIds = limitConcurrency(GIT_READ_CONCURRENCY, (relPath) =>
+        readWorktreeBlobIds(workTree, relPath, baseTree.length, MAX_STASH_FILE_BYTES, caseFolding),
+      );
+      let flattened = (
+        await Promise.all([...newAttrPaths].filter((path) => !shouldLeaveOut(path)).map(readIds))
+      ).flatMap((ids) => ids ?? []);
+      let newBlobIds = new Set(
+        [
+          ...filtered_4.filter(({ path }) => newAttrPaths.has(path)).map(({ newId }) => newId),
+          ...flattened,
+        ].filter(nonEmptyBlob),
       );
       let mapped = filtered_4
-        .filter(({ path, newId }) => Fr.has(newId) && et(path) && !nn.has(path) && !Xe.has(path))
+        .filter(
+          ({ path, newId }) =>
+            newBlobIds.has(newId) && isIncludedPath(path) && !newAttrPaths.has(path) && !attrPaths.has(path),
+        )
         .map(({ path }) => path);
-      $e = new Set([...$e, ...Fr]);
-      let Mr = uniq([
-        ...Dr,
-        ...Pr,
-        ...ne.entries.flatMap((entry) => (Xe.has(entry.path) ? [entry.path] : [])),
+      stagedBlobIds = new Set([...stagedBlobIds, ...newBlobIds]);
+      let attrPathList = uniq([
+        ...liveAttrPaths,
+        ...stagedAttrPaths,
+        ...stashChange.entries.flatMap((entry) => (attrPaths.has(entry.path) ? [entry.path] : [])),
         ...mapped,
       ]);
       let infoAttributes_2 = await readInfoAttributes(layout.commonDir);
       if (!infoAttributesUnchanged(infoAttributes, infoAttributes_2))
         return stepFailure("check-attr", ".git/info/attributes changed while the attributes were read");
-      let Gr = uniq([...filtered_3.filter((T) => nn.has(T)), ...mapped]);
-      if (Gr.length > 0) {
-        let T = await restoreIndexEntries(l, reader, K, baseTree, Gr);
-        if (T !== null)
+      let restorePaths = uniq([...filtered_3.filter((path) => newAttrPaths.has(path)), ...mapped]);
+      if (restorePaths.length > 0) {
+        let restoreProblem = await restoreIndexEntries(
+          runHardenedGit,
+          reader,
+          scratchIndexPath,
+          baseTree,
+          restorePaths,
+        );
+        if (restoreProblem !== null)
           return {
             kind: "failed",
-            ...T,
+            ...restoreProblem,
           };
-        let ye = await l(["write-tree", "--ignore-cache-tree"], {
-          GIT_INDEX_FILE: K,
+        let writeTreeFifth = await runHardenedGit(["write-tree", "--ignore-cache-tree"], {
+          GIT_INDEX_FILE: scratchIndexPath,
         });
-        if (ye.code !== 0) return stepFailure("write-tree", ye.stderr || ye.stdout, ye);
-        Fe = ye.stdout.trim();
+        if (writeTreeFifth.code !== 0)
+          return stepFailure("write-tree", writeTreeFifth.stderr || writeTreeFifth.stdout, writeTreeFifth);
+        indexTree = writeTreeFifth.stdout.trim();
       }
-      let flattened_2 = ne.entries.flatMap((entry) =>
-        (entry.kind === "hardlinked" || entry.kind === "changed") && Qt.has(entry.path) && !ze.has(entry.path)
+      let flattened_2 = stashChange.entries.flatMap((entry) =>
+        (entry.kind === "hardlinked" || entry.kind === "changed") &&
+        stagePathSet.has(entry.path) &&
+        !filteredPaths.has(entry.path)
           ? [
               {
                 path: entry.path,
@@ -2062,36 +2232,38 @@ async function captureWipStash(e, layout, r = {}) {
             ]
           : [],
       );
-      let Lo = new Set([...ze, ...flattened_2.map(({ path }) => path)]);
-      let Hr = [
+      let excludedPaths = new Set([...filteredPaths, ...flattened_2.map(({ path }) => path)]);
+      let leftOutEntries = [
         ...flattened_2,
-        ...Mr.filter((T) => !Lo.has(T)).map((path) => ({
-          path,
-          why: "filtered",
-        })),
+        ...attrPathList
+          .filter((path) => !excludedPaths.has(path))
+          .map((path) => ({
+            path,
+            why: "filtered",
+          })),
       ];
-      let Ln = new Set([...Hr.map(({ path }) => path), ...Mr]);
-      Y.push(...Hr);
-      let flattened_3 = ne.entries.flatMap((entry) =>
+      let leftOutSet = new Set([...leftOutEntries.map(({ path }) => path), ...attrPathList]);
+      leftOutCredentialFiles.push(...leftOutEntries);
+      let flattened_3 = stashChange.entries.flatMap((entry) =>
         entry.kind === "file" || entry.kind === "symlink" ? [entry.path] : [],
       );
-      let Gn = await listFilesNoPrecompose(l, undefined, flattened_3);
-      if (Gn === null) return stepFailure("ls-files", "could not list the index entries");
-      let filtered = flattened_3.filter((T) => !Ln.has(T));
-      let Wr = await listFilesNoPrecompose(
-        l,
+      let unseenListing = await listFilesNoPrecompose(runHardenedGit, undefined, flattened_3);
+      if (unseenListing === null) return stepFailure("ls-files", "could not list the index entries");
+      let filtered = flattened_3.filter((path) => !leftOutSet.has(path));
+      let scratchListing = await listFilesNoPrecompose(
+        runHardenedGit,
         {
-          GIT_INDEX_FILE: K,
+          GIT_INDEX_FILE: scratchIndexPath,
         },
         filtered,
       );
-      if (Wr === null) return stepFailure("ls-files", "could not list the index entries");
-      if (filtered.some((T) => Gn.unseen.has(T) !== Wr.unseen.has(T)))
+      if (scratchListing === null) return stepFailure("ls-files", "could not list the index entries");
+      if (filtered.some((path) => unseenListing.unseen.has(path) !== scratchListing.unseen.has(path)))
         return stepFailure(
           "rewritten",
           "an entry this upload read was marked assume-unchanged or skip-worktree in one copy of the index and not the other since the build began",
         );
-      Qe = new Map(
+      stagedIndexEntries = new Map(
         filtered_4.map(({ path, newId, newMode }) => [
           path,
           {
@@ -2100,62 +2272,76 @@ async function captureWipStash(e, layout, r = {}) {
           },
         ]),
       );
-      let Mo = new Set(filtered_2.flatMap(({ path, newId }) => (/^0+$/.test(newId) ? [path] : [])));
-      ft = flattened_3.filter((T) => Gn.unseen.has(T) && Qe.has(T) && !Mo.has(T) && !Ln.has(T));
-      let jn = new Set([...Ln, ...ft]);
+      let zeroIdPaths = new Set(filtered_2.flatMap(({ path, newId }) => (/^0+$/.test(newId) ? [path] : [])));
+      skipWorktreePaths = flattened_3.filter(
+        (path) =>
+          unseenListing.unseen.has(path) &&
+          stagedIndexEntries.has(path) &&
+          !zeroIdPaths.has(path) &&
+          !leftOutSet.has(path),
+      );
+      let leftOutAll = new Set([...leftOutSet, ...skipWorktreePaths]);
       let symlinkTarget = await readSymlinkTarget(
-        l,
-        K,
-        ne.entries.filter((entry) => !jn.has(entry.path)),
+        runHardenedGit,
+        scratchIndexPath,
+        stashChange.entries.filter((entry) => !leftOutAll.has(entry.path)),
       );
       if (symlinkTarget.kind === "failed") return symlinkTarget;
-      let flattened_4 = ne.entries.flatMap((entry) =>
-        entry.kind === "absent" && G.has(entry.path) && !me.skipWorktree.has(entry.path) ? [entry.path] : [],
+      let paths = stashChange.entries.flatMap((entry) =>
+        entry.kind === "absent" && attrPathSet.has(entry.path) && !indexFiles.skipWorktree.has(entry.path)
+          ? [entry.path]
+          : [],
       );
-      Re = flattened_4.filter((T) => !D.has(T));
-      let Un = await markPathsIntentToAdd(
-        l,
+      intentToAddPaths = paths.filter((path) => !stagedDeletedPaths.has(path));
+      let markAdded = await markPathsIntentToAdd(
+        runHardenedGit,
         {
-          GIT_INDEX_FILE: K,
+          GIT_INDEX_FILE: scratchIndexPath,
         },
         baseTree,
-        flattened_4,
+        paths,
       );
-      if (Un.code !== 0) return stepFailure("update-index", Un.stderr, Un);
-      let flattened_5 = ne.entries.flatMap((entry) =>
-        entry.kind === "file" && !jn.has(entry.path) ? [entry.path] : [],
+      if (markAdded.code !== 0) return stepFailure("update-index", markAdded.stderr, markAdded);
+      let skippedPaths = stashChange.entries.flatMap((entry) =>
+        entry.kind === "file" && !leftOutAll.has(entry.path) ? [entry.path] : [],
       );
-      W = ne.entries.flatMap((entry) =>
-        (entry.kind === "file" || entry.kind === "symlink") && !jn.has(entry.path) ? [entry.path] : [],
+      laidFiles = stashChange.entries.flatMap((entry) =>
+        (entry.kind === "file" || entry.kind === "symlink") && !leftOutAll.has(entry.path)
+          ? [entry.path]
+          : [],
       );
-      ct = new Map(
-        [...symlinkTarget.ids].map(([T, ye]) => [
-          T,
+      laidEntries = new Map(
+        [...symlinkTarget.ids].map(([path, id]) => [
+          path,
           {
             mode: SYMLINK_MODE_VALUE,
-            id: ye,
+            id,
           },
         ]),
       );
-      if (flattened_5.length > 0) {
-        Le = join(dirname(K), `replay-${randomBytes(6).toString("hex")}.index`);
-        let T = await lstatNoFollow(K, Le);
-        if (T !== null) return stepFailure(T.kind === "disk" ? "scratch-index" : "rewritten", T.detail);
-        let ye = await listFilesNoPrecompose(
-          Ge,
+      if (skippedPaths.length > 0) {
+        replayIndexPath = join(dirname(scratchIndexPath), `replay-${randomBytes(6).toString("hex")}.index`);
+        let replayVerdict = await lstatNoFollow(scratchIndexPath, replayIndexPath);
+        if (replayVerdict !== null)
+          return stepFailure(
+            replayVerdict.kind === "disk" ? "scratch-index" : "rewritten",
+            replayVerdict.detail,
+          );
+        let replayListing = await listFilesNoPrecompose(
+          stageRun,
           {
-            GIT_INDEX_FILE: Le,
+            GIT_INDEX_FILE: replayIndexPath,
           },
-          flattened_5,
+          skippedPaths,
         );
-        if (ye === null) return stepFailure("update-index", "the laid paths could not be listed");
-        if (ye.unseen.size > 0)
+        if (replayListing === null) return stepFailure("update-index", "the laid paths could not be listed");
+        if (replayListing.unseen.size > 0)
           return stepFailure(
             "rewritten",
             "an entry this upload is about to lay was marked assume-unchanged or skip-worktree in the scratch index since it was written",
           );
-        let wt = (Ae, Ne = K) =>
-          Ge(
+        let layIndex = (args, indexPath = scratchIndexPath) =>
+          stageRun(
             [
               "-c",
               "core.bigFileThreshold=512m",
@@ -2164,36 +2350,37 @@ async function captureWipStash(e, layout, r = {}) {
               "-c",
               "core.trustctime=true",
               "update-index",
-              ...Ae,
+              ...args,
               "-z",
               "--add",
               "--stdin",
             ],
             {
-              GIT_INDEX_FILE: Ne,
+              GIT_INDEX_FILE: indexPath,
             },
-            flattened_5.map((Pt) => `${Pt}\x00`).join(""),
+            skippedPaths.map((path) => `${path}\x00`).join(""),
           );
-        let rn = await wt(["--ignore-skip-worktree-entries"]);
-        let Dt = rn.exitCode === GIT_SIGPIPE_EXIT_CODE ? await wt([]) : rn;
-        if (Dt.code !== 0) return stepFailure("update-index", Dt.stderr, Dt);
-        let on = await listSkipWorktreeEntries(Ge, Le, wt, flattened_5);
-        if (on === null)
+        let layResult = await layIndex(["--ignore-skip-worktree-entries"]);
+        let layRetryResult = layResult.exitCode === GIT_SIGPIPE_EXIT_CODE ? await layIndex([]) : layResult;
+        if (layRetryResult.code !== 0)
+          return stepFailure("update-index", layRetryResult.stderr, layRetryResult);
+        let laidIndex = await listSkipWorktreeEntries(stageRun, replayIndexPath, layIndex, skippedPaths);
+        if (laidIndex === null)
           return stepFailure("update-index", "the lay could not be replayed to learn the laid entries");
-        let Go = new Map(
-          ne.entries.flatMap((entry) => (entry.kind === "file" ? [[entry.path, entry.copy]] : [])),
+        let copiesByPath = new Map(
+          stashChange.entries.flatMap((entry) => (entry.kind === "file" ? [[entry.path, entry.copy]] : [])),
         );
-        let jo = new Map([
+        let knownModes = new Map([
           ...filtered_2.map(({ path, oldMode }) => [path, oldMode]),
           ...headState.inspection.staged.map(({ path, newMode }) => [path, newMode]),
         ]);
         if (
-          flattened_5.find((Ae) => {
-            let mode = on.get(Ae)?.mode;
+          skippedPaths.find((path) => {
+            let mode = laidIndex.get(path)?.mode;
             return !(
               mode !== undefined &&
               (REGULAR_FILE_MODES.includes(mode) ||
-                (mode === SYMLINK_MODE_VALUE && jo.get(Ae) === SYMLINK_MODE_VALUE))
+                (mode === SYMLINK_MODE_VALUE && knownModes.get(path) === SYMLINK_MODE_VALUE))
             );
           }) !== undefined
         )
@@ -2202,105 +2389,124 @@ async function captureWipStash(e, layout, r = {}) {
             "an entry this upload laid as a file is recorded as something else in the scratch index",
           );
         if (
-          flattened_5.find((Ae) => {
-            let id = on.get(Ae)?.id;
-            let Pt = Go.get(Ae);
-            return Pt === undefined || (id !== Pt.blobId && id !== Pt.lfBlobId);
+          skippedPaths.find((path) => {
+            let id = laidIndex.get(path)?.id;
+            let copy = copiesByPath.get(path);
+            return copy === undefined || (id !== copy.blobId && id !== copy.lfBlobId);
           }) !== undefined
         )
           return stepFailure("rewritten", "an entry this upload laid does not hold the bytes staged for it");
-        for (let Ae of [K, Le]) {
-          let Ne = await listFilesNoPrecompose(
-            Ge,
+        for (let indexPath of [scratchIndexPath, replayIndexPath]) {
+          let listing = await listFilesNoPrecompose(
+            stageRun,
             {
-              GIT_INDEX_FILE: Ae,
+              GIT_INDEX_FILE: indexPath,
             },
-            flattened_5,
+            skippedPaths,
           );
-          if (Ne === null) return stepFailure("update-index", "the laid paths could not be listed");
-          if (Ne.unseen.size > 0 || Ne.absent.size > 0)
+          if (listing === null) return stepFailure("update-index", "the laid paths could not be listed");
+          if (listing.unseen.size > 0 || listing.absent.size > 0)
             return stepFailure(
               "rewritten",
               "an entry this upload laid is marked assume-unchanged or skip-worktree in the scratch index, or is no longer there by its name",
             );
         }
-        if (!(await stagedCopiesUnchanged(Ce, ne.copies)))
+        if (!(await stagedCopiesUnchanged(stageDir, stashChange.copies)))
           return stepFailure("stage", "the staged copies changed while git read them");
         if (!infoAttributesUnchanged(infoAttributes, await readInfoAttributes(layout.commonDir)))
           return stepFailure("check-attr", ".git/info/attributes changed while the changes were hashed");
-        on.forEach((Ae, Ne) => ct.set(Ne, Ae));
+        laidIndex.forEach((entry, path) => laidEntries.set(path, entry));
       }
     }
-    let ue = await markPathsIntentToAdd(
-      l,
+    let intentResult = await markPathsIntentToAdd(
+      runHardenedGit,
       {
-        GIT_INDEX_FILE: K,
+        GIT_INDEX_FILE: scratchIndexPath,
       },
       baseTree,
-      St,
+      deletedCredentialPaths,
     );
-    if (ue.code !== 0) return stepFailure("update-index", ue.stderr, ue);
-    let q = await l(["write-tree", "--ignore-cache-tree"], {
-      GIT_INDEX_FILE: K,
+    if (intentResult.code !== 0) return stepFailure("update-index", intentResult.stderr, intentResult);
+    let writeTreeFinal = await runHardenedGit(["write-tree", "--ignore-cache-tree"], {
+      GIT_INDEX_FILE: scratchIndexPath,
     });
-    if (q.code !== 0) return stepFailure("write-tree", q.stderr || q.stdout, q);
-    let trimmed = q.stdout.trim();
-    if (r.leaveOutUncommittedCredentialFiles) {
-      let P = await describeIndexEntryChange(reader, baseTree, trimmed, w, S);
-      if (isTreeReadFailure(P)) return treeReadFailure(P, "cat-file", TREE_READBACK_MISMATCH);
-      let filtered = P.filter(({ why }) => why !== "forged" && why !== "alias");
+    if (writeTreeFinal.code !== 0)
+      return stepFailure("write-tree", writeTreeFinal.stderr || writeTreeFinal.stdout, writeTreeFinal);
+    let iTree_2 = writeTreeFinal.stdout.trim();
+    if (opts.leaveOutUncommittedCredentialFiles) {
+      let indexChange = await describeIndexEntryChange(
+        reader,
+        baseTree,
+        iTree_2,
+        shouldSkipName,
+        caseFolding,
+      );
+      if (isTreeReadFailure(indexChange))
+        return treeReadFailure(indexChange, "cat-file", TREE_READBACK_MISMATCH);
+      let filtered = indexChange.filter(({ why }) => why !== "forged" && why !== "alias");
       if (filtered.length > 0) {
-        let Z = await restoreIndexEntries(
-          l,
+        let restoreGap = await restoreIndexEntries(
+          runHardenedGit,
           reader,
-          K,
+          scratchIndexPath,
           baseTree,
           filtered.map(({ path }) => path),
         );
-        if (Z !== null)
+        if (restoreGap !== null)
           return {
             kind: "failed",
-            ...Z,
+            ...restoreGap,
           };
-        let he = await l(["write-tree", "--ignore-cache-tree"], {
-          GIT_INDEX_FILE: K,
+        let writeTreeNinth = await runHardenedGit(["write-tree", "--ignore-cache-tree"], {
+          GIT_INDEX_FILE: scratchIndexPath,
         });
-        if (he.code !== 0) return stepFailure("write-tree", he.stderr || he.stdout, he);
-        trimmed = he.stdout.trim();
-        Y.push(...filtered);
+        if (writeTreeNinth.code !== 0)
+          return stepFailure("write-tree", writeTreeNinth.stderr || writeTreeNinth.stdout, writeTreeNinth);
+        iTree_2 = writeTreeNinth.stdout.trim();
+        leftOutCredentialFiles.push(...filtered);
       }
       let results = await Promise.all(
-        uniq([trimmed, Fe]).map((Z) => describeIndexEntryChange(reader, baseTree, Z, w, S)),
+        uniq([iTree_2, indexTree]).map((treeId) =>
+          describeIndexEntryChange(reader, baseTree, treeId, shouldSkipName, caseFolding),
+        ),
       );
       let found = results.find(isTreeReadFailure);
       if (found !== undefined) return treeReadFailure(found, "cat-file", TREE_READBACK_MISMATCH);
-      let ne = [
-        ...new Map(results.flatMap((Z) => (isTreeReadFailure(Z) ? [] : Z)).map((Z) => [Z.path, Z])).values(),
+      let refusedEntries = [
+        ...new Map(
+          results
+            .flatMap((change) => (isTreeReadFailure(change) ? [] : change))
+            .map((change) => [change.path, change]),
+        ).values(),
       ];
-      if (ne.length > 0)
+      if (refusedEntries.length > 0)
         return {
           kind: "refused",
-          refused: ne,
+          refused: refusedEntries,
           decidedOn: "tree",
         };
     }
-    let indexEntries = await parseIndexEntries(reader, baseTree, Fe);
+    let indexEntries = await parseIndexEntries(reader, baseTree, indexTree);
     if (isTreeReadFailure(indexEntries))
       return treeReadFailure(indexEntries, "cat-file", TREE_READBACK_MISMATCH);
-    let filtered_5 = indexEntries.filter(({ status, newId }) => status !== "D" && $e.has(newId));
-    if (filtered_5.length > 0) return sameBytesRefusal(filtered_5);
-    let qe = trimmed === Fe ? indexEntries : await parseIndexEntries(reader, baseTree, trimmed);
-    if (isTreeReadFailure(qe)) return treeReadFailure(qe, "cat-file", TREE_READBACK_MISMATCH);
-    if (trimmed !== Fe) {
-      let P = new Set(W);
-      let filtered = qe.filter(({ path, status, newId }) => status !== "D" && !P.has(path) && $e.has(newId));
-      if (filtered.length > 0) return sameBytesRefusal(filtered);
+    let paths_2 = indexEntries.filter(({ status, newId }) => status !== "D" && stagedBlobIds.has(newId));
+    if (paths_2.length > 0) return sameBytesRefusal(paths_2);
+    let finalEntries =
+      iTree_2 === indexTree ? indexEntries : await parseIndexEntries(reader, baseTree, iTree_2);
+    if (isTreeReadFailure(finalEntries))
+      return treeReadFailure(finalEntries, "cat-file", TREE_READBACK_MISMATCH);
+    if (iTree_2 !== indexTree) {
+      let laidSet = new Set(laidFiles);
+      let paths = finalEntries.filter(
+        ({ path, status, newId }) => status !== "D" && !laidSet.has(path) && stagedBlobIds.has(newId),
+      );
+      if (paths.length > 0) return sameBytesRefusal(paths);
     }
-    if (ft.length > 0) {
-      let mapped = [indexEntries, qe].map(
-        (se) =>
+    if (skipWorktreePaths.length > 0) {
+      let mapped = [indexEntries, finalEntries].map(
+        (entries) =>
           new Map(
-            se.map(({ path, status, newId, newMode }) => [
+            entries.map(({ path, status, newId, newMode }) => [
               path,
               status === "D"
                 ? null
@@ -2312,11 +2518,17 @@ async function captureWipStash(e, layout, r = {}) {
           ),
       );
       if (
-        ft.find((se) =>
-          mapped.some((me) => {
-            let ne = me.get(se);
-            let Z = Qe.get(se);
-            return ne === undefined || ne === null || Z === undefined || ne.id !== Z.id || ne.mode !== Z.mode;
+        skipWorktreePaths.find((path) =>
+          mapped.some((entryMap) => {
+            let entry = entryMap.get(path);
+            let laid = stagedIndexEntries.get(path);
+            return (
+              entry === undefined ||
+              entry === null ||
+              laid === undefined ||
+              entry.id !== laid.id ||
+              entry.mode !== laid.mode
+            );
           }),
         ) !== undefined
       )
@@ -2325,9 +2537,9 @@ async function captureWipStash(e, layout, r = {}) {
           "a staged entry this upload left as the index had it was replaced in the scratch index before the trees were written",
         );
     }
-    if (W.length > 0) {
-      let P = new Map(
-        qe.map(({ path, status, newId, newMode }) => [
+    if (laidFiles.length > 0) {
+      let entryMap2 = new Map(
+        finalEntries.map(({ path, status, newId, newMode }) => [
           path,
           status === "D"
             ? null
@@ -2337,14 +2549,20 @@ async function captureWipStash(e, layout, r = {}) {
               },
         ]),
       );
-      let filtered = W.filter((ne) => !P.has(ne));
-      let se = filtered.length > 0 ? await resolveTreePaths(reader, baseTree, filtered) : new Map();
-      if (isTreeReadFailure(se)) return treeReadFailure(se, "cat-file", TREE_READBACK_MISMATCH);
+      let filtered = laidFiles.filter((path) => !entryMap2.has(path));
+      let treePaths = filtered.length > 0 ? await resolveTreePaths(reader, baseTree, filtered) : new Map();
+      if (isTreeReadFailure(treePaths)) return treeReadFailure(treePaths, "cat-file", TREE_READBACK_MISMATCH);
       if (
-        W.find((ne) => {
-          let Z = P.has(ne) ? P.get(ne) : se.get(ne);
-          let he = ct.get(ne);
-          return Z === null || Z === undefined || he === undefined || Z.id !== he.id || Z.mode !== he.mode;
+        laidFiles.find((path) => {
+          let entry = entryMap2.has(path) ? entryMap2.get(path) : treePaths.get(path);
+          let laid = laidEntries.get(path);
+          return (
+            entry === null ||
+            entry === undefined ||
+            laid === undefined ||
+            entry.id !== laid.id ||
+            entry.mode !== laid.mode
+          );
         }) !== undefined
       )
         return stepFailure(
@@ -2352,66 +2570,86 @@ async function captureWipStash(e, layout, r = {}) {
           "an entry this upload laid was replaced in the scratch index before the work tree was written",
         );
     }
-    if (trimmed === baseTree && Fe === baseTree)
+    if (iTree_2 === baseTree && indexTree === baseTree)
       return {
         kind: "none",
-        leftOut: Y,
+        leftOut: leftOutCredentialFiles,
       };
-    let Me = await describeStashBase(l, base);
-    let He = await l(["commit-tree", Fe, "-p", base, "-m", `index on ${Me}`], STASH_IDENTITY_ENV);
-    if (He.code !== 0) return stepFailure("commit-tree", He.stderr, He);
-    let re = await l(
-      ["commit-tree", trimmed, "-p", base, "-p", He.stdout.trim(), "-m", `WIP on ${Me}`],
+    let baseDescription = await describeStashBase(runHardenedGit, base);
+    let indexCommit = await runHardenedGit(
+      ["commit-tree", indexTree, "-p", base, "-m", `index on ${baseDescription}`],
       STASH_IDENTITY_ENV,
     );
-    if (re.code !== 0) return stepFailure("commit-tree", re.stderr, re);
-    let we = [
+    if (indexCommit.code !== 0) return stepFailure("commit-tree", indexCommit.stderr, indexCommit);
+    let wipCommit = await runHardenedGit(
+      [
+        "commit-tree",
+        iTree_2,
+        "-p",
+        base,
+        "-p",
+        indexCommit.stdout.trim(),
+        "-m",
+        `WIP on ${baseDescription}`,
+      ],
+      STASH_IDENTITY_ENV,
+    );
+    if (wipCommit.code !== 0) return stepFailure("commit-tree", wipCommit.stderr, wipCommit);
+    let commits = [
       {
-        id: He.stdout.trim(),
-        tree: Fe,
+        id: indexCommit.stdout.trim(),
+        tree: indexTree,
         parents: [base],
       },
       {
-        id: re.stdout.trim(),
-        tree: trimmed,
-        parents: [base, He.stdout.trim()],
+        id: wipCommit.stdout.trim(),
+        tree: iTree_2,
+        parents: [base, indexCommit.stdout.trim()],
       },
     ];
-    for (let { id, tree, parents } of we) {
-      let me = await reader.commit(id);
-      if (isTreeReadFailure(me)) return treeReadFailure(me, "commit-tree", COMMIT_READBACK_MISMATCH);
+    for (let { id, tree, parents } of commits) {
+      let commitInfo = await reader.commit(id);
+      if (isTreeReadFailure(commitInfo))
+        return treeReadFailure(commitInfo, "commit-tree", COMMIT_READBACK_MISMATCH);
       if (
-        me.tree !== tree ||
-        me.parents.length !== parents.length ||
-        me.parents.some((parent, Z) => parent !== parents[Z])
+        commitInfo.tree !== tree ||
+        commitInfo.parents.length !== parents.length ||
+        commitInfo.parents.some((parent, parentIndex) => parent !== parents[parentIndex])
       )
         return stepFailure("verify", COMMIT_READBACK_MISMATCH);
     }
     return {
       kind: "created",
-      commit: re.stdout.trim(),
-      leftOut: Y,
-      deletedUnstaged: [...Re],
+      commit: wipCommit.stdout.trim(),
+      leftOut: leftOutCredentialFiles,
+      deletedUnstaged: [...intentToAddPaths],
     };
   } catch (error) {
     return stepFailure("scratch-index", errorMessage(error));
   } finally {
     await Promise.all([
-      ...[K, `${K}.lock`, ...(Le === null ? [] : [Le, `${Le}.lock`])].map((ee) => unlink(ee).catch(() => {})),
-      ...[...(_e === null ? [] : [_e]), ...(Ce === null ? [] : [Ce]), ...(ge === null ? [] : [ge])].map(
-        (ee) =>
-          rm(ee, {
-            recursive: true,
-            force: true,
-          }).catch(() => {}),
+      ...[
+        scratchIndexPath,
+        `${scratchIndexPath}.lock`,
+        ...(replayIndexPath === null ? [] : [replayIndexPath, `${replayIndexPath}.lock`]),
+      ].map((path) => unlink(path).catch(() => {})),
+      ...[
+        ...(tempIndexDir === null ? [] : [tempIndexDir]),
+        ...(stageDir === null ? [] : [stageDir]),
+        ...(attrsDir === null ? [] : [attrsDir]),
+      ].map((dir) =>
+        rm(dir, {
+          recursive: true,
+          force: true,
+        }).catch(() => {}),
       ),
     ]);
   }
 }
 //@ chunk-gjx0rh1b.js:54648-55353 placement
-async function createStashCommit(e, n, signal, pinnedIndexFile) {
-  let s = await listGitRefs(
-    e,
+async function createStashCommit(runGit, ref, signal, pinnedIndexFile) {
+  let result = await listGitRefs(
+    runGit,
     [...GIT_READ_CONFIG_ARGS, ...splitIndexOffArgs(pinnedIndexFile), ...SAFECRLF_ARGS, "stash", "create"],
     {
       hardened: false,
@@ -2422,8 +2660,8 @@ async function createStashCommit(e, n, signal, pinnedIndexFile) {
       },
     },
   );
-  if (s.code === 0) {
-    let trimmed = s.stdout.trim();
+  if (result.code === 0) {
+    let trimmed = result.stdout.trim();
     return trimmed === ""
       ? {
           kind: "none",
@@ -2436,74 +2674,74 @@ async function createStashCommit(e, n, signal, pinnedIndexFile) {
           deletedUnstaged: [],
         };
   }
-  let l = seenStderr(s).trim() === "";
-  if (s.exitCode === 1 && l) {
+  let isSilent = seenStderr(result).trim() === "";
+  if (result.exitCode === 1 && isSilent) {
     logForDebugging(
-      `[gitBundle] git stash create exited ${s.code} with no output \u2014 treating as no uncommitted changes`,
+      `[gitBundle] git stash create exited ${result.code} with no output \u2014 treating as no uncommitted changes`,
     );
     return {
       kind: "none",
       leftOut: [],
     };
   }
-  return !n
+  return !ref
     ? {
         kind: "none",
         leftOut: [],
       }
-    : l
+    : isSilent
       ? {
           ...stepFailure(
             "stash create",
-            s.exitCode === undefined
+            result.exitCode === undefined
               ? "it was stopped, ran out of time or could not start, and left no message"
-              : `it ended with exit status ${s.exitCode} and left no message`,
+              : `it ended with exit status ${result.exitCode} and left no message`,
           ),
-          silent: l,
+          silent: isSilent,
         }
-      : stepFailure("stash create", s.stderr, s);
+      : stepFailure("stash create", result.stderr, result);
 }
 //@ chunk-gjx0rh1b.js:55353-56266 placement
-async function restoreIndexEntries(e, reader, r, baseTree, s) {
-  let treePaths = await resolveTreePaths(reader, baseTree, s);
+async function restoreIndexEntries(runGit, reader, opts, baseTree, indexIds) {
+  let treePaths = await resolveTreePaths(reader, baseTree, indexIds);
   if (isTreeReadFailure(treePaths))
     return treeReadFailure(
       treePaths,
       "cat-file",
       "the trees holding the entries to restore could not be read back as what their ids name",
     );
-  let h = `0 ${"0".repeat(baseTree.length)}`;
-  let u = await e(
+  let absentEntry = `0 ${"0".repeat(baseTree.length)}`;
+  let updateResult = await runGit(
     ["update-index", "-z", "--index-info"],
     {
-      GIT_INDEX_FILE: r,
+      GIT_INDEX_FILE: opts,
     },
-    s
-      .map((_) => {
-        let y = treePaths.get(_);
-        return `${y === undefined ? h : `${y.mode.padStart(6, "0")} ${y.id}`}	${_}\x00`;
+    indexIds
+      .map((path) => {
+        let pathEntry = treePaths.get(path);
+        return `${pathEntry === undefined ? absentEntry : `${pathEntry.mode.padStart(6, "0")} ${pathEntry.id}`}	${path}\x00`;
       })
       .join(""),
   );
-  if (u.code !== 0) return stepFailure("update-index", u.stderr, u);
-  let p = ignoredPathLines(seenStderr(u), s);
-  if (p.length > 0)
+  if (updateResult.code !== 0) return stepFailure("update-index", updateResult.stderr, updateResult);
+  let ignoredNames = ignoredPathLines(seenStderr(updateResult), indexIds);
+  if (ignoredNames.length > 0)
     return {
       step: "refused-name",
-      detail: `git refuses a name it was asked to restore: ${p.slice(0, 3).join(", ")}`,
+      detail: `git refuses a name it was asked to restore: ${ignoredNames.slice(0, 3).join(", ")}`,
     };
-  let w = await listIndexEntriesNamed(e, r, new Set(s), dirname(r));
-  if (w === null)
+  let indexEntries = await listIndexEntriesNamed(runGit, opts, new Set(indexIds), dirname(opts));
+  if (indexEntries === null)
     return {
       step: "ls-files",
       detail: "could not list the index entries",
     };
-  return s.some((_) => {
-    let y = w.get(_);
+  return indexIds.some((path) => {
+    let indexEntry = indexEntries.get(path);
     return (
-      (y !== undefined && !splitArgsIntoSlices(y)) ||
-      y?.id !== treePaths.get(_)?.id ||
-      y?.mode !== treePaths.get(_)?.mode.padStart(6, "0")
+      (indexEntry !== undefined && !splitArgsIntoSlices(indexEntry)) ||
+      indexEntry?.id !== treePaths.get(path)?.id ||
+      indexEntry?.mode !== treePaths.get(path)?.mode.padStart(6, "0")
     );
   })
     ? {
@@ -2513,10 +2751,10 @@ async function restoreIndexEntries(e, reader, r, baseTree, s) {
     : null;
 }
 //@ chunk-gjx0rh1b.js:56266-56361 placement
-async function sha256OfFile(e) {
+async function sha256OfFile(path) {
   let hash = createHash("sha256");
-  await readFileChunks(e, (r) => {
-    hash.update(r);
+  await readFileChunks(path, (chunk) => {
+    hash.update(chunk);
   });
   return hash.digest("hex");
 }
@@ -2525,72 +2763,79 @@ function readTreeFailure({ detail, run }) {
   return stepFailure("read-tree", detail, run);
 }
 //@ chunk-gjx0rh1b.js:56417-57801 placement
-async function listSparseCheckout(e, n, r, reader, iTree, l) {
-  let h = await mkdtemp(join(r, "claude-seed-listings-"));
+async function listSparseCheckout(cwd, indexPath, dir, reader, iTree, root) {
+  let listingsDir = await mkdtemp(join(dir, "claude-seed-listings-"));
   try {
-    let u = 0;
-    let p = async (B, x, S) => {
-      let z = S.length === 0 ? [] : ["--", ".", ...S.map((Y) => `:(exclude,literal)${Y}`)];
-      for (let Y of [["--sparse"], []]) {
-        let L = await open(join(h, `${B}.${u++}`), GIT_STDOUT_CAPTURE_FLAGS, 384);
+    let fileCounter = 0;
+    let listOnce = async (label, extraEnv, excludedPaths) => {
+      let pathspecs =
+        excludedPaths.length === 0
+          ? []
+          : ["--", ".", ...excludedPaths.map((excludedPath) => `:(exclude,literal)${excludedPath}`)];
+      for (let sparseFlags of [["--sparse"], []]) {
+        let listResult = await open(
+          join(listingsDir, `${label}.${fileCounter++}`),
+          GIT_STDOUT_CAPTURE_FLAGS,
+          384,
+        );
         try {
-          let U = await e(
-            ["ls-files", ...Y, "-s", "-z", ...z],
+          let runResult = await cwd(
+            ["ls-files", ...sparseFlags, "-s", "-z", ...pathspecs],
             {
               GIT_GLOB_PATHSPECS: "0",
               GIT_ICASE_PATHSPECS: "0",
-              ...x,
+              ...extraEnv,
             },
             undefined,
             undefined,
-            L.fd,
+            listResult.fd,
           );
-          if (U.code === 0) return await sha256OfFile(L);
-          if (U.exitCode !== GIT_SIGPIPE_EXIT_CODE || Y.length === 0)
+          if (runResult.code === 0) return await sha256OfFile(listResult);
+          if (runResult.exitCode !== GIT_SIGPIPE_EXIT_CODE || sparseFlags.length === 0)
             return {
-              detail: U.stderr || "could not list the index",
-              run: U,
+              detail: runResult.stderr || "could not list the index",
+              run: runResult,
             };
         } finally {
-          await L.close();
+          await listResult.close();
         }
       }
       return {
         detail: "could not list the index",
       };
     };
-    let w = async (B) => {
-      let [x, S] = await Promise.all([
-        p(
+    let compareListings = async (excludedPaths) => {
+      let [treesDigest, indexDigest] = await Promise.all([
+        listOnce(
           "trees",
           {
-            GIT_INDEX_FILE: n,
+            GIT_INDEX_FILE: indexPath,
           },
           [],
         ),
-        p("index", undefined, B),
+        listOnce("index", undefined, excludedPaths),
       ]);
-      if (typeof x !== "string") return x;
-      if (typeof S !== "string") return S;
-      return x === S ? "agree" : "differ";
+      if (typeof treesDigest !== "string") return treesDigest;
+      if (typeof indexDigest !== "string") return indexDigest;
+      return treesDigest === indexDigest ? "agree" : "differ";
     };
-    let _ = await w([]);
-    if (_ !== "differ")
-      return _ === "agree"
+    let listingComparison = await compareListings([]);
+    if (listingComparison !== "differ")
+      return listingComparison === "agree"
         ? {
             kind: "agree",
           }
-        : readTreeFailure(_);
-    let y = await e(
+        : readTreeFailure(listingComparison);
+    let diffResult = await cwd(
       ["diff-files", "-z", "--name-only", "--diff-filter=AD", "--ignore-submodules=dirty"],
       LITERAL_PATHSPEC_ENV,
     );
-    if (y.code !== 0)
+    if (diffResult.code !== 0)
       return readTreeFailure({
-        detail: y.stderr,
-        run: y,
+        detail: diffResult.stderr,
+        run: diffResult,
       });
-    let filtered = y.stdout.split("\x00").filter((B) => B !== "");
+    let filtered = diffResult.stdout.split("\x00").filter((path) => path !== "");
     let treePaths = await resolveTreePaths(reader, iTree, filtered);
     if (isTreeReadFailure(treePaths))
       return treeReadFailure(
@@ -2598,79 +2843,79 @@ async function listSparseCheckout(e, n, r, reader, iTree, l) {
         "cat-file",
         "the index's trees could not be read back as what their ids name",
       );
-    let filtered_2 = filtered.filter((B) => !treePaths.has(B));
-    if (filtered_2.length === 0 || filtered_2.some((B) => !isSafeRepoRelativePath(B, l)))
+    let excludedPaths = filtered.filter((path) => !treePaths.has(path));
+    if (excludedPaths.length === 0 || excludedPaths.some((path) => !isSafeRepoRelativePath(path, root)))
       return {
         kind: "differ",
       };
-    let R = await w(filtered_2);
-    return R === "agree"
+    let refinedVerdict = await compareListings(excludedPaths);
+    return refinedVerdict === "agree"
       ? {
           kind: "agree",
         }
-      : R === "differ"
+      : refinedVerdict === "differ"
         ? {
             kind: "differ",
           }
-        : readTreeFailure(R);
+        : readTreeFailure(refinedVerdict);
   } finally {
-    await rm(h, {
+    await rm(listingsDir, {
       recursive: true,
       force: true,
     }).catch(() => {});
   }
 }
 //@ chunk-gjx0rh1b.js:57801-58623 placement
-async function listIndexIds(e, n, r, o, s, l, signal) {
-  let u = await mkdtemp(join(s, "claude-seed-ids-"));
+async function listIndexIds(cwd, indexPath, dir, shouldWithhold, tempRoot, root, signal) {
+  let idsDir = await mkdtemp(join(tempRoot, "claude-seed-ids-"));
   try {
-    let p = 0;
-    for (let w of [["--sparse"], []]) {
-      let _ = await open(join(u, `index.${p++}`), GIT_STDOUT_CAPTURE_FLAGS, 384);
+    let fileCounter = 0;
+    for (let sparseFlags of [["--sparse"], []]) {
+      let indexHandle = await open(join(idsDir, `index.${fileCounter++}`), GIT_STDOUT_CAPTURE_FLAGS, 384);
       try {
-        let y = await e(
-          ["ls-files", ...w, "-s", "-z"],
+        let listResult = await cwd(
+          ["ls-files", ...sparseFlags, "-s", "-z"],
           {
-            GIT_INDEX_FILE: n,
+            GIT_INDEX_FILE: indexPath,
           },
           undefined,
           undefined,
-          _.fd,
+          indexHandle.fd,
         );
-        if (y.code === 0) {
-          let E = [];
-          let C = new Map();
-          let A = "";
-          await readFileChunks(_, (R) => {
+        if (listResult.code === 0) {
+          let elsewhere = [];
+          let withheldTracked = new Map();
+          let rest = "";
+          await readFileChunks(indexHandle, (chunk) => {
             if (signal?.aborted) return;
-            let parts = (A + R.toString("latin1")).split("\x00");
-            A = parts.pop() ?? "";
-            for (let x of parts) {
-              let index = x.indexOf("\t");
-              let [, z = "", Y = ""] = x.slice(0, index).split(" ");
-              let str = Buffer.from(x.slice(index + 1), "latin1").toString("utf8");
-              if (!isSafeRepoRelativePath(str, l) || hasDosShortNameSegment(str)) continue;
-              if (Y === "0" && o(str)) C.set(str, z);
-              let U = r.get(z);
-              if (U !== undefined && str !== U) E.push(str);
+            let parts = (rest + chunk.toString("latin1")).split("\x00");
+            rest = parts.pop() ?? "";
+            for (let line of parts) {
+              let index = line.indexOf("\t");
+              let [, id = "", stage = ""] = line.slice(0, index).split(" ");
+              let str = Buffer.from(line.slice(index + 1), "latin1").toString("utf8");
+              if (!isSafeRepoRelativePath(str, root) || hasDosShortNameSegment(str)) continue;
+              if (stage === "0" && shouldWithhold(str)) withheldTracked.set(str, id);
+              let expectedPath = dir.get(id);
+              if (expectedPath !== undefined && str !== expectedPath) elsewhere.push(str);
             }
           });
           if (signal?.aborted) return null;
-          return A === ""
+          return rest === ""
             ? {
-                elsewhere: E,
-                withheldTracked: C,
+                elsewhere,
+                withheldTracked,
               }
             : null;
         }
-        if (y.exitCode !== GIT_SIGPIPE_EXIT_CODE) return null;
+        if (listResult.exitCode !== GIT_SIGPIPE_EXIT_CODE) return null;
       } finally {
-        await _.close();
+        await indexHandle.close();
       }
     }
     return null;
   } finally {
-    await rm(u, {
+    await rm(idsDir, {
       recursive: true,
       force: true,
     }).catch(() => {});
@@ -2685,42 +2930,46 @@ var NO_GIT_DIR_TEXT =
  * 创建在加固模式下运行 git 的执行函数；链接工作树缺少管理目录时直接返回拒绝结果。
  */
 function createHardenedGitRunner(
-  e,
-  n,
+  runGit,
+  workTree,
   signal,
-  o,
-  s = currentGitBinaryState(),
-  { hardenedMaxBuffer: l } = {},
+  indexFile,
+  probes = currentGitBinaryState(),
+  { hardenedMaxBuffer: maxBuffer } = {},
 ) {
-  if (n.checkout === "linked" && n.adminDir === undefined && n.runsInOwnDirectories !== true)
+  if (
+    workTree.checkout === "linked" &&
+    workTree.adminDir === undefined &&
+    workTree.runsInOwnDirectories !== true
+  )
     return () =>
       Promise.resolve({
         stdout: "",
         stderr: NO_GIT_DIR_TEXT,
         code: 126,
       });
-  let h = o ?? reachForBoundSession(n);
-  let screenMemo = s.screenMemo ?? createReachCollector();
-  return (p, env, input, y, E) =>
-    listGitRefs(e, p, {
+  let reachRoots = indexFile ?? reachForBoundSession(workTree);
+  let screenMemo = probes.screenMemo ?? createReachCollector();
+  return (args, env, input, encoding, stdoutFd) =>
+    listGitRefs(runGit, args, {
       hardened: true,
-      layout: n,
+      layout: workTree,
       signal,
-      probes: s,
+      probes,
       env,
       input,
-      ...(y !== undefined && {
-        encoding: y,
+      ...(encoding !== undefined && {
+        encoding,
       }),
-      ...(E !== undefined && {
-        stdoutFd: E,
+      ...(stdoutFd !== undefined && {
+        stdoutFd,
       }),
-      ...(h !== undefined && {
-        reachRoots: h,
+      ...(reachRoots !== undefined && {
+        reachRoots,
         screenMemo,
       }),
-      ...(l !== undefined && {
-        hardenedMaxBuffer: l,
+      ...(maxBuffer !== undefined && {
+        hardenedMaxBuffer: maxBuffer,
       }),
     });
 }
@@ -2728,47 +2977,56 @@ function createHardenedGitRunner(
 /**
  * 解析 HEAD（无提交、分离、分支），列出被省略的内容。
  */
-async function resolveHeadState(e, n) {
-  let r = await e(["rev-parse", "-q", "--verify", "HEAD"]);
-  if (r.code !== 0)
-    return r.exitCode === 1
+async function resolveHeadState(runGit, opts) {
+  let result = await runGit(["rev-parse", "-q", "--verify", "HEAD"]);
+  if (result.code !== 0)
+    return result.exitCode === 1
       ? {
           kind: "none",
           leftOut: [],
         }
-      : stepFailure("rev-parse", r.stderr, r);
-  let o = await e(["rev-parse", "-q", "--verify", `${r.stdout.trim()}^{commit}`]);
-  if (o.code !== 0) {
-    let S = await e(["cat-file", "-t", r.stdout.trim()]);
-    return S.code === 0 && ["tree", "blob"].includes(S.stdout.trim())
+      : stepFailure("rev-parse", result.stderr, result);
+  let commitCheck = await runGit(["rev-parse", "-q", "--verify", `${result.stdout.trim()}^{commit}`]);
+  if (commitCheck.code !== 0) {
+    let typeCheck = await runGit(["cat-file", "-t", result.stdout.trim()]);
+    return typeCheck.code === 0 && ["tree", "blob"].includes(typeCheck.stdout.trim())
       ? stepFailure("verify", "HEAD names a tree or blob, not a commit")
-      : stepFailure("rev-parse", o.stderr || "HEAD is not a commit");
+      : stepFailure("rev-parse", commitCheck.stderr || "HEAD is not a commit");
   }
-  let trimmed = o.stdout.trim();
-  let l = new GitObjectReader(batchCatFile(e, n), trimmed);
-  let [h, u] = await Promise.all([l.commit(trimmed), e(["write-tree", "--ignore-cache-tree"])]);
-  if (isTreeReadFailure(h))
-    return treeReadFailure(h, "rev-parse", "HEAD could not be read back as the commit its id names");
-  if (u.code !== 0) return stepFailure("write-tree", u.stderr || u.stdout, u);
-  let tree = h.tree;
-  let trimmed_2 = u.stdout.trim();
-  let indexEntries = await parseIndexEntries(l, tree, trimmed_2);
+  let options = commitCheck.stdout.trim();
+  let reader = new GitObjectReader(batchCatFile(runGit, opts), options);
+  let [commit, writeTree] = await Promise.all([
+    reader.commit(options),
+    runGit(["write-tree", "--ignore-cache-tree"]),
+  ]);
+  if (isTreeReadFailure(commit))
+    return treeReadFailure(commit, "rev-parse", "HEAD could not be read back as the commit its id names");
+  if (writeTree.code !== 0) return stepFailure("write-tree", writeTree.stderr || writeTree.stdout, writeTree);
+  let tree = commit.tree;
+  let trimmed = writeTree.stdout.trim();
+  let indexEntries = await parseIndexEntries(reader, tree, trimmed);
   if (isTreeReadFailure(indexEntries))
     return treeReadFailure(
       indexEntries,
       "cat-file",
       "HEAD's or the index's trees could not be read back as what their ids name",
     );
-  let y = indexEntries;
-  let E = await e(["--no-optional-locks", "diff-files", "-z", "--no-renames", "--ignore-submodules=dirty"]);
-  let C = E.code === 0 ? parseDiffRawZ(E.stdout) : null;
-  if (C === null) return stepFailure("diff-files", E.stderr, E);
-  if ([...C, ...y].some(({ path }) => path.includes("\uFFFD")))
+  let staged = indexEntries;
+  let diffResult = await runGit([
+    "--no-optional-locks",
+    "diff-files",
+    "-z",
+    "--no-renames",
+    "--ignore-submodules=dirty",
+  ]);
+  let changedEntries = diffResult.code === 0 ? parseDiffRawZ(diffResult.stdout) : null;
+  if (changedEntries === null) return stepFailure("diff-files", diffResult.stderr, diffResult);
+  if ([...changedEntries, ...staged].some(({ path }) => path.includes("\uFFFD")))
     return stepFailure("path-encoding", "a changed path is not valid UTF-8");
   let treePaths = await resolveTreePaths(
-    l,
+    reader,
     tree,
-    C.map(({ path }) => path),
+    changedEntries.map(({ path }) => path),
   );
   if (isTreeReadFailure(treePaths))
     return treeReadFailure(
@@ -2776,33 +3034,33 @@ async function resolveHeadState(e, n) {
       "cat-file",
       "HEAD's trees to the changed files could not be read back as what their ids name",
     );
-  let R = "0".repeat(tree.length);
-  let B = new Set(C.map(({ path }) => path));
+  let zeroId = "0".repeat(tree.length);
+  let changedPaths = new Set(changedEntries.map(({ path }) => path));
   let working = [
-    ...y.filter(({ path }) => !B.has(path)),
-    ...C.flatMap((S) => {
-      let z = treePaths.get(S.path);
-      if (S.status === "D")
-        return z === undefined || isWindowsUnholdableDeletion(S, treePaths)
+    ...staged.filter(({ path }) => !changedPaths.has(path)),
+    ...changedEntries.flatMap((entry) => {
+      let treeEntry = treePaths.get(entry.path);
+      if (entry.status === "D")
+        return treeEntry === undefined || isWindowsUnholdableDeletion(entry, treePaths)
           ? []
           : [
               {
-                path: S.path,
+                path: entry.path,
                 status: "D",
-                oldMode: z.mode.padStart(6, "0"),
+                oldMode: treeEntry.mode.padStart(6, "0"),
                 newMode: "000000",
-                oldId: z.id,
-                newId: R,
+                oldId: treeEntry.id,
+                newId: zeroId,
               },
             ];
       return [
         {
-          path: S.path,
-          status: z === undefined ? "A" : "M",
-          oldMode: z === undefined ? "000000" : z.mode.padStart(6, "0"),
-          newMode: S.newMode,
-          oldId: z?.id ?? R,
-          newId: R,
+          path: entry.path,
+          status: treeEntry === undefined ? "A" : "M",
+          oldMode: treeEntry === undefined ? "000000" : treeEntry.mode.padStart(6, "0"),
+          newMode: entry.newMode,
+          oldId: treeEntry?.id ?? zeroId,
+          newId: zeroId,
         },
       ];
     }),
@@ -2810,44 +3068,44 @@ async function resolveHeadState(e, n) {
   return {
     kind: "inspected",
     inspection: {
-      base: trimmed,
+      base: options,
       baseTree: tree,
-      iTree: trimmed_2,
-      staged: y,
+      iTree: trimmed,
+      staged,
       working,
-      reader: l,
-      namesWindowsCannotHold: count(C, (S) => isWindowsUnholdableDeletion(S, treePaths)),
+      reader,
+      namesWindowsCannotHold: count(changedEntries, (entry) => isWindowsUnholdableDeletion(entry, treePaths)),
     },
   };
 }
 //@ chunk-gjx0rh1b.js:61137-61273 placement
-function isWindowsUnholdableDeletion(e, treePaths) {
+function isWindowsUnholdableDeletion(entry, treePaths) {
   return (
     getPlatform() === "windows" &&
-    e.status === "D" &&
-    treePaths.has(e.path) &&
-    hasUnsafeCharSegment(e.path) &&
-    !e.path.includes("\\") &&
-    isSafeRepoRelativePath(e.path, true) &&
-    !hasDosShortNameSegment(e.path)
+    entry.status === "D" &&
+    treePaths.has(entry.path) &&
+    hasUnsafeCharSegment(entry.path) &&
+    !entry.path.includes("\\") &&
+    isSafeRepoRelativePath(entry.path, true) &&
+    !hasDosShortNameSegment(entry.path)
   );
 }
 //@ chunk-gjx0rh1b.js:61273-61436 placement
-function findSuspiciousChangedPaths({ staged, working }, r) {
+function findSuspiciousChangedPaths({ staged, working }, state) {
   return uniq([...staged, ...working].map(({ path }) => path))
     .sort()
-    .flatMap((s) =>
-      !isSafeRepoRelativePath(s, r)
+    .flatMap((path) =>
+      !isSafeRepoRelativePath(path, state)
         ? [
             {
-              path: s,
+              path,
               why: "forged",
             },
           ]
-        : hasDosShortNameSegment(s)
+        : hasDosShortNameSegment(path)
           ? [
               {
-                path: s,
+                path,
                 why: "alias",
               },
             ]
@@ -2855,31 +3113,47 @@ function findSuspiciousChangedPaths({ staged, working }, r) {
     );
 }
 //@ chunk-gjx0rh1b.js:61436-62405 placement
-async function classifyIndexEntry(workTree, { staged, working }, o, s, l = () => false) {
-  let h = uniq([...staged, ...working].map(({ path }) => path));
-  let filtered = h.filter((D) => !isSafeRepoRelativePath(D, s));
-  let filtered_2 = h.filter((D) => isSafeRepoRelativePath(D, s) && hasDosShortNameSegment(D));
-  let w = new Set([...filtered, ...filtered_2]);
-  let _ = ({ path }) => !w.has(path) && o(path);
-  let filtered_3 = staged.filter(_);
-  let E = new Set(filtered_3.map(({ path }) => path));
-  let C = limitConcurrency(GIT_READ_CONCURRENCY, async (D) =>
-    !E.has(D.path) && !l(D.path) && (await compareWorktreeEntry(workTree, D, s)) === "unchanged" ? [] : [D],
+async function classifyIndexEntry(
+  workTree,
+  { staged, working },
+  shouldLeaveOut,
+  root,
+  isAlreadyLeftOut = () => false,
+) {
+  let allPaths = uniq([...staged, ...working].map(({ path }) => path));
+  let filtered = allPaths.filter((path) => !isSafeRepoRelativePath(path, root));
+  let filtered_2 = allPaths.filter(
+    (path) => isSafeRepoRelativePath(path, root) && hasDosShortNameSegment(path),
   );
-  let A = (await Promise.all(working.filter(_).map(C))).flat();
-  let R = uniq([...filtered_3, ...A].filter(({ status }) => status === "A").map(({ path }) => path));
-  let B = new Set(R);
-  let x = uniq(
-    [...filtered_3, ...A]
-      .filter(({ path, status }) => status !== "D" && !B.has(path))
+  let unsafePaths = new Set([...filtered, ...filtered_2]);
+  let shouldKeepStagedPath = ({ path }) => !unsafePaths.has(path) && shouldLeaveOut(path);
+  let filtered_3 = staged.filter(shouldKeepStagedPath);
+  let leftOutAddedPaths = new Set(filtered_3.map(({ path }) => path));
+  let compareWorking = limitConcurrency(GIT_READ_CONCURRENCY, async (entry) =>
+    !leftOutAddedPaths.has(entry.path) &&
+    !isAlreadyLeftOut(entry.path) &&
+    (await compareWorktreeEntry(workTree, entry, root)) === "unchanged"
+      ? []
+      : [entry],
+  );
+  let changedWorking = (await Promise.all(working.filter(shouldKeepStagedPath).map(compareWorking))).flat();
+  let addedPaths = uniq(
+    [...filtered_3, ...changedWorking].filter(({ status }) => status === "A").map(({ path }) => path),
+  );
+  let addedPathSet = new Set(addedPaths);
+  let changedPaths = uniq(
+    [...filtered_3, ...changedWorking]
+      .filter(({ path, status }) => status !== "D" && !addedPathSet.has(path))
       .map(({ path }) => path),
   );
-  let S = new Set([...R, ...x]);
-  let z = uniq([...filtered_3, ...A].map(({ path }) => path).filter((D) => !S.has(D)));
-  let Y = limitConcurrency(GIT_READ_CONCURRENCY, async (D) =>
-    (await isNotPlainDirectory(workTree, D)) ? [D] : [],
+  let keptPaths = new Set([...addedPaths, ...changedPaths]);
+  let remainingPaths = uniq(
+    [...filtered_3, ...changedWorking].map(({ path }) => path).filter((path) => !keptPaths.has(path)),
   );
-  let L = (await Promise.all(z.map(Y))).flat();
+  let probeDirectory = limitConcurrency(GIT_READ_CONCURRENCY, async (path) =>
+    (await isNotPlainDirectory(workTree, path)) ? [path] : [],
+  );
+  let resurrected = (await Promise.all(remainingPaths.map(probeDirectory))).flat();
   return [
     ...filtered.map((path) => ({
       path,
@@ -2889,38 +3163,39 @@ async function classifyIndexEntry(workTree, { staged, working }, o, s, l = () =>
       path,
       why: "alias",
     })),
-    ...R.map((path) => ({
+    ...addedPaths.map((path) => ({
       path,
       why: "added",
     })),
-    ...x.map((path) => ({
+    ...changedPaths.map((path) => ({
       path,
       why: "changed",
     })),
-    ...L.map((path) => ({
+    ...resurrected.map((path) => ({
       path,
       why: "resurrected",
     })),
-  ].sort((D, pe) => (D.path < pe.path ? -1 : D.path > pe.path ? 1 : 0));
+  ].sort((left, right) => (left.path < right.path ? -1 : left.path > right.path ? 1 : 0));
 }
 //@ chunk-gjx0rh1b.js:62405-62717 placement
-async function describeIndexEntryChange(reader, baseTree, r, o, s) {
-  let indexEntries = await parseIndexEntries(reader, baseTree, r);
+async function describeIndexEntryChange(reader, baseTree, iTree, shouldLeaveOut, root) {
+  let indexEntries = await parseIndexEntries(reader, baseTree, iTree);
   if (isTreeReadFailure(indexEntries)) return indexEntries;
   let filtered = indexEntries.filter(
     ({ path, status }) =>
-      status !== "D" && (!isSafeRepoRelativePath(path, s) || hasDosShortNameSegment(path) || o(path)),
+      status !== "D" &&
+      (!isSafeRepoRelativePath(path, root) || hasDosShortNameSegment(path) || shouldLeaveOut(path)),
   );
-  let u = new Map(filtered.map(({ path, status }) => [path, status]));
+  let statusByPath = new Map(filtered.map(({ path, status }) => [path, status]));
   return uniq(filtered.map(({ path }) => path))
     .sort()
-    .map((p) => ({
-      path: p,
-      why: !isSafeRepoRelativePath(p, s)
+    .map((path) => ({
+      path,
+      why: !isSafeRepoRelativePath(path, root)
         ? "forged"
-        : hasDosShortNameSegment(p)
+        : hasDosShortNameSegment(path)
           ? "alias"
-          : u.get(p) === "A"
+          : statusByPath.get(path) === "A"
             ? "added"
             : "changed",
     }));
@@ -2930,8 +3205,8 @@ var MISSING_OBJECT_RE_2 =
   /invalid object \d+ [0-9a-f]+ for|could not fetch [0-9a-f]+ from promisor remote|lazy fetching disabled|missing blob/;
 var UNMERGED_INDEX_RE = /needs merge|you need to resolve your current index first|unmerged/i;
 //@ chunk-gjx0rh1b.js:62914-63057 placement
-function INDEX_PROBLEM_KINDS(e) {
-  let firstLine = getFirstLine(seenStderr(e).trim());
+function INDEX_PROBLEM_KINDS(stderr) {
+  let firstLine = getFirstLine(seenStderr(stderr).trim());
   return MISSING_OBJECT_RE_2.test(firstLine)
     ? "object_missing"
     : UNMERGED_INDEX_RE.test(firstLine)
@@ -2941,22 +3216,22 @@ function INDEX_PROBLEM_KINDS(e) {
         : undefined;
 }
 //@ chunk-gjx0rh1b.js:63057-63163 placement
-function stepFailure(step, n, r) {
-  let o = r && INDEX_PROBLEM_KINDS(r);
+function stepFailure(step, detail, result) {
+  let problem = result && INDEX_PROBLEM_KINDS(result);
   return {
     kind: "failed",
     step,
-    detail: getFirstLine(n.trim()),
-    ...(o !== undefined && {
-      said: o,
+    detail: getFirstLine(detail.trim()),
+    ...(problem !== undefined && {
+      said: problem,
     }),
   };
 }
 //@ chunk-gjx0rh1b.js:63163-63273 placement
-function sameBytesRefusal(e) {
+function sameBytesRefusal(paths) {
   return {
     kind: "refused",
-    refused: e.map(({ path }) => ({
+    refused: paths.map(({ path }) => ({
       path,
       why: "same-bytes",
     })),
@@ -2964,20 +3239,20 @@ function sameBytesRefusal(e) {
   };
 }
 //@ chunk-gjx0rh1b.js:63273-63368 placement
-function ignoredPathLines(e, n) {
-  let r = new Set(
-    e.split(`
+function ignoredPathLines(stdout, names) {
+  let line = new Set(
+    stdout.split(`
 `),
   );
-  return n.filter((o) => r.has(`Ignoring path ${o}`));
+  return names.filter((name) => line.has(`Ignoring path ${name}`));
 }
 //@ chunk-gjx0rh1b.js:63368-63490 placement
-function treeReadFailure(e, n, r) {
-  return e.failed === "tampered"
-    ? stepFailure("verify", r)
-    : e.failed === "malformed"
-      ? stepFailure("malformed-tree", e.dir ?? "")
-      : stepFailure(n, r);
+function treeReadFailure(result, step, message) {
+  return result.failed === "tampered"
+    ? stepFailure("verify", message)
+    : result.failed === "malformed"
+      ? stepFailure("malformed-tree", result.dir ?? "")
+      : stepFailure(step, message);
 }
 //@ chunk-gjx0rh1b.js:63490-63617 placement
 function formatDirectoryLabel(detail) {
@@ -2993,11 +3268,11 @@ function parseDiffRawZ(stdout) {
     {
       length: parts.length / 2,
     },
-    (o, s) => {
-      let match = DIFF_RAW_LINE_RE.exec(parts[2 * s]);
+    (entry, index) => {
+      let match = DIFF_RAW_LINE_RE.exec(parts[2 * index]);
       return match
         ? {
-            path: parts[2 * s + 1],
+            path: parts[2 * index + 1],
             oldMode: match[1],
             newMode: match[2],
             oldId: match[3],
@@ -3007,7 +3282,7 @@ function parseDiffRawZ(stdout) {
         : null;
     },
   );
-  return list.every((o) => o !== null) ? list : null;
+  return list.every((entry) => entry !== null) ? list : null;
 }
 //@ chunk-gjx0rh1b.js:63894-64051 placement
 function infoAttributesUnchanged(infoAttributes, infoAttributes_2) {
@@ -3030,18 +3305,18 @@ function sameFileStamp(stamp, stamp_2) {
         stamp.ctimeMs === stamp_2.ctimeMs;
 }
 //@ chunk-gjx0rh1b.js:64177-64290 placement
-function fileStampFromBigStats(e) {
+function fileStampFromBigStats(stats) {
   return {
-    size: Number(e.size),
-    mtimeMs: Number(e.mtimeNs) / 1e6,
-    ctimeMs: Number(e.ctimeNs) / 1e6,
-    ino: e.ino,
+    size: Number(stats.size),
+    mtimeMs: Number(stats.mtimeNs) / 1e6,
+    ctimeMs: Number(stats.ctimeNs) / 1e6,
+    ino: stats.ino,
   };
 }
 //@ chunk-gjx0rh1b.js:64290-64417 placement = isRealPathWithinTeamDir (0.77)
-async function lstatBigintOrNull(e, stat = lstat) {
+async function lstatBigintOrNull(path, stat = lstat) {
   try {
-    return await stat(e, {
+    return await stat(path, {
       bigint: true,
     });
   } catch (error) {
@@ -3054,8 +3329,8 @@ var FILTER_ATTRIBUTE_RE = /(?:^|\s|")[-!]?(?:filter|working-tree-encoding|ident)
 var MACRO_OR_QUOTED_ATTR_RE = /^[ \t\r]*(?:\[attr\]|")/;
 var MAX_ATTRIBUTE_LINE_BYTES = 2048;
 //@ chunk-gjx0rh1b.js:64527-64598 placement
-function hasOverlongAttributeLine(e) {
-  return e
+function hasOverlongAttributeLine(text) {
+  return text
     .split(
       `
 `,
@@ -3063,20 +3338,20 @@ function hasOverlongAttributeLine(e) {
     .some((line) => Buffer.byteLength(line) >= MAX_ATTRIBUTE_LINE_BYTES);
 }
 //@ chunk-gjx0rh1b.js:64598-64713 placement
-function attributeLines(e) {
-  return e
+function attributeLines(text) {
+  return text
     .replace(/^\uFEFF/, "")
     .split(
       `
 `,
     )
     .map((line) => firstLineOf(line, "\x00"))
-    .filter((n) => !/^[ \t\r]*#/.test(n));
+    .filter((nonEmpty) => !/^[ \t\r]*#/.test(nonEmpty));
 }
 //@ chunk-gjx0rh1b.js:64713-65080 placement
-async function findGitDirCaseVariants(e, workTree) {
+async function findGitDirCaseVariants(gitRoot, workTree) {
   let platform = getPlatform();
-  let [o, s] = await Promise.all([
+  let [dotGit, dotGitUpper] = await Promise.all([
     lstat(join(workTree, ".git"), {
       bigint: true,
     }).catch(() => null),
@@ -3084,47 +3359,54 @@ async function findGitDirCaseVariants(e, workTree) {
       bigint: true,
     }).catch(() => null),
   ]);
-  let l = o !== null && s !== null && o.ino === s.ino && o.dev === s.dev;
-  let h = await e(["config", "--bool", "core.ignorecase"]);
+  let sameInode =
+    dotGit !== null &&
+    dotGitUpper !== null &&
+    dotGit.ino === dotGitUpper.ino &&
+    dotGit.dev === dotGitUpper.dev;
+  let ignoreCase = await gitRoot(["config", "--bool", "core.ignorecase"]);
   return {
     caseBlind:
-      platform === "macos" || platform === "windows" || l || (h.code === 0 && h.stdout.trim() === "true"),
+      platform === "macos" ||
+      platform === "windows" ||
+      sameInode ||
+      (ignoreCase.code === 0 && ignoreCase.stdout.trim() === "true"),
     normalizationBlind: platform === "macos",
   };
 }
 //@ chunk-gjx0rh1b.js:65080-66184 placement
 async function readInfoAttributes(
   commonDir,
-  { shouldStampAbove: n = false, shouldStopAtLink: r = false } = {},
+  { shouldStampAbove: options = false, shouldStopAtLink: stopAtLink = false } = {},
 ) {
-  let o = join(commonDir, "info");
-  let s = join(o, "attributes");
-  let l = await openGitInfoDir(o, n, r).catch(() => {
+  let infoDir = join(commonDir, "info");
+  let attributesPath = join(infoDir, "attributes");
+  let infoDirHandle = await openGitInfoDir(infoDir, options, stopAtLink).catch(() => {
     return;
   });
-  if (l === undefined)
+  if (infoDirHandle === undefined)
     return {
       kind: "unreadable",
       bytes: null,
       stamp: null,
     };
-  if (r && l.link)
+  if (stopAtLink && infoDirHandle.link)
     return {
       kind: "none",
       bytes: null,
       stamp: null,
-      dir: l,
+      dir: infoDirHandle,
     };
   try {
-    if (getPlatform() === "windows" && !(await lstat(s)).isFile())
+    if (getPlatform() === "windows" && !(await lstat(attributesPath)).isFile())
       return {
         kind: "unreadable",
         bytes: null,
         stamp: null,
       };
-    let h = await open(s, readOnlyNoFollowFlags());
+    let fileHandle = await open(attributesPath, readOnlyNoFollowFlags());
     try {
-      let stats = await h.stat({
+      let stats = await fileHandle.stat({
         bigint: true,
       });
       if (!stats.isFile() || stats.size > MAX_INFO_ATTRIBUTES_BYTES)
@@ -3134,47 +3416,47 @@ async function readInfoAttributes(
           stamp: null,
         };
       let stamp = fileStampFromBigStats(stats);
-      let w = Number(stats.size);
-      if (w === 0)
+      let size = Number(stats.size);
+      if (size === 0)
         return {
           kind: "none",
           bytes: Buffer.alloc(0),
           stamp,
-          dir: l,
+          dir: infoDirHandle,
         };
-      let _ = Buffer.alloc(w);
-      let { bytesRead } = await h.read(_, 0, w, 0);
-      if (bytesRead !== w)
+      let attributesBuffer = Buffer.alloc(size);
+      let { bytesRead } = await fileHandle.read(attributesBuffer, 0, size, 0);
+      if (bytesRead !== size)
         return {
           kind: "unreadable",
           bytes: null,
           stamp: null,
         };
-      let str = _.toString("utf8");
-      let C = attributeLines(str);
-      let A = hasOverlongAttributeLine(str)
+      let text = attributesBuffer.toString("utf8");
+      let lines = attributeLines(text);
+      let touchesBy = hasOverlongAttributeLine(text)
         ? "overlong_line"
-        : C.some((R) => MACRO_OR_QUOTED_ATTR_RE.test(R))
+        : lines.some((line) => MACRO_OR_QUOTED_ATTR_RE.test(line))
           ? "macro_or_quoted"
-          : C.some((R) => FILTER_ATTRIBUTE_RE.test(R))
+          : lines.some((line) => FILTER_ATTRIBUTE_RE.test(line))
             ? "rule"
             : undefined;
-      return A === undefined
+      return touchesBy === undefined
         ? {
             kind: "none",
-            bytes: _,
+            bytes: attributesBuffer,
             stamp,
-            dir: l,
+            dir: infoDirHandle,
           }
         : {
             kind: "touches",
-            by: A,
-            bytes: _,
+            by: touchesBy,
+            bytes: attributesBuffer,
             stamp,
-            dir: l,
+            dir: infoDirHandle,
           };
     } finally {
-      await h.close();
+      await fileHandle.close();
     }
   } catch (error) {
     return getErrnoCode(error) === "ENOENT" || getErrnoCode(error) === "ENOTDIR"
@@ -3182,7 +3464,7 @@ async function readInfoAttributes(
           kind: "none",
           bytes: null,
           stamp: null,
-          dir: l,
+          dir: infoDirHandle,
         }
       : {
           kind: "unreadable",
@@ -3192,147 +3474,159 @@ async function readInfoAttributes(
   }
 }
 //@ chunk-gjx0rh1b.js:66184-66532 placement
-async function openGitInfoDir(e, n, r) {
-  let o = await lstatBigintOrNull(e);
-  let s = n && o === null ? await lstatBigintOrNull(dirname(e)) : null;
-  let l = !o?.isSymbolicLink() ? o : r ? null : await lstatBigintOrNull(e, stat);
-  let h = getPlatform() === "windows" && o?.isDirectory() === true ? await readJunction(e) : null;
-  let u = h !== null && h.kind !== "directory" && !(h.kind === "error" && h.code === "EISDIR");
+async function openGitInfoDir(gitDir, stopAtLink, followLink) {
+  let stats = await lstatBigintOrNull(gitDir);
+  let aboveStats = stopAtLink && stats === null ? await lstatBigintOrNull(dirname(gitDir)) : null;
+  let targetStats = !stats?.isSymbolicLink()
+    ? stats
+    : followLink
+      ? null
+      : await lstatBigintOrNull(gitDir, stat);
+  let junction =
+    getPlatform() === "windows" && stats?.isDirectory() === true ? await readJunction(gitDir) : null;
+  let isLinkTarget =
+    junction !== null &&
+    junction.kind !== "directory" &&
+    !(junction.kind === "error" && junction.code === "EISDIR");
   return {
-    node: o && fileStampFromBigStats(o),
-    link: (o?.isSymbolicLink() ?? false) || u,
-    target: l && fileStampFromBigStats(l),
-    ...(s && {
-      above: fileStampFromBigStats(s),
+    node: stats && fileStampFromBigStats(stats),
+    link: (stats?.isSymbolicLink() ?? false) || isLinkTarget,
+    target: targetStats && fileStampFromBigStats(targetStats),
+    ...(aboveStats && {
+      above: fileStampFromBigStats(aboveStats),
     }),
   };
 }
 //@ chunk-gjx0rh1b.js:66532-67173 placement
-async function checkAlternatesFile(e, n) {
-  if (!isAbsolute(n.objectsDir) || /[\r\n]/.test(n.objectsDir) || /^["#]/.test(n.objectsDir))
+async function checkAlternatesFile(gitDir, layout) {
+  if (!isAbsolute(layout.objectsDir) || /[\r\n]/.test(layout.objectsDir) || /^["#]/.test(layout.objectsDir))
     return "the objects directory cannot be named in an alternates file";
-  let r = {
+  let writeOptions = {
     flag: GIT_STDERR_CAPTURE_FLAGS,
     mode: 384,
   };
-  await mkdir(join(e, "objects", "info"), {
+  await mkdir(join(gitDir, "objects", "info"), {
     recursive: true,
     mode: 448,
   });
   await Promise.all([
-    mkdir(join(e, "refs"), {
+    mkdir(join(gitDir, "refs"), {
       mode: 448,
     }),
     writeFile(
-      join(e, "HEAD"),
+      join(gitDir, "HEAD"),
       `ref: refs/heads/attributes-view
 `,
-      r,
+      writeOptions,
     ),
     writeFile(
-      join(e, "config"),
+      join(gitDir, "config"),
       [
         "[core]",
-        `	repositoryformatversion = ${n.objectFormat === "sha256" ? 1 : 0}`,
-        `	ignorecase = ${n.caseBlind}`,
-        ...(n.objectFormat === "sha256" ? ["[extensions]", "\tobjectformat = sha256"] : []),
+        `	repositoryformatversion = ${layout.objectFormat === "sha256" ? 1 : 0}`,
+        `	ignorecase = ${layout.caseBlind}`,
+        ...(layout.objectFormat === "sha256" ? ["[extensions]", "\tobjectformat = sha256"] : []),
         "",
       ].join(`
 `),
-      r,
+      writeOptions,
     ),
     writeFile(
-      join(e, "objects", "info", "alternates"),
-      `${n.objectsDir}
+      join(gitDir, "objects", "info", "alternates"),
+      `${layout.objectsDir}
 `,
-      r,
+      writeOptions,
     ),
   ]);
   return null;
 }
 //@ chunk-gjx0rh1b.js:67173-67819 placement
-async function readSymlinkTarget(e, n, r) {
-  let filtered = r.filter((u) => u.kind === "symlink");
-  let s = [];
-  let l = new Map();
-  for (let u of filtered) {
-    let str = u.target.toString("utf8");
-    if (!Buffer.from(str, "utf8").equals(u.target))
-      return stepFailure("path-encoding", `${u.path}: link target is not valid UTF-8`);
-    let w = await e(["hash-object", "-w", "--stdin"], undefined, str);
-    if (w.code !== 0) return stepFailure("hash-object", w.stderr, w);
-    s.push(`${SYMLINK_MODE_VALUE} ${w.stdout.trim()}	${u.path}`);
-    l.set(u.path, w.stdout.trim().toLowerCase());
+async function readSymlinkTarget(root, indexPath, entries) {
+  let filtered = entries.filter((entry) => entry.kind === "symlink");
+  let targets = [];
+  let targetById = new Map();
+  for (let entry of filtered) {
+    let str = entry.target.toString("utf8");
+    if (!Buffer.from(str, "utf8").equals(entry.target))
+      return stepFailure("path-encoding", `${entry.path}: link target is not valid UTF-8`);
+    let hashResult = await root(["hash-object", "-w", "--stdin"], undefined, str);
+    if (hashResult.code !== 0) return stepFailure("hash-object", hashResult.stderr, hashResult);
+    targets.push(`${SYMLINK_MODE_VALUE} ${hashResult.stdout.trim()}	${entry.path}`);
+    targetById.set(entry.path, hashResult.stdout.trim().toLowerCase());
   }
-  if (s.length === 0)
+  if (targets.length === 0)
     return {
       kind: "laid",
-      ids: l,
+      ids: targetById,
     };
-  let h = await e(
+  let updateResult = await root(
     ["update-index", "-z", "--index-info"],
     {
-      GIT_INDEX_FILE: n,
+      GIT_INDEX_FILE: indexPath,
     },
-    s.map((u) => `${u}\x00`).join(""),
+    targets.map((targetLine) => `${targetLine}\x00`).join(""),
   );
-  return h.code === 0
+  return updateResult.code === 0
     ? {
         kind: "laid",
-        ids: l,
+        ids: targetById,
       }
-    : stepFailure("update-index", h.stderr, h);
+    : stepFailure("update-index", updateResult.stderr, updateResult);
 }
 //@ chunk-gjx0rh1b.js:67819-68548 placement
-async function listSkipWorktreeEntries(e, n, r, o) {
-  let s = await r(["--ignore-skip-worktree-entries"], n);
-  if ((s.exitCode === GIT_SIGPIPE_EXIT_CODE ? await r([], n) : s).code !== 0) return null;
-  let h = new Set(o);
-  let u = new Map();
-  let p = await open(`${n}.listing`, GIT_STDOUT_CAPTURE_FLAGS, 384);
+async function listSkipWorktreeEntries(dir, indexPath, runGit, skippedPaths) {
+  let skipWorktreeResult = await runGit(["--ignore-skip-worktree-entries"], indexPath);
+  if (
+    (skipWorktreeResult.exitCode === GIT_SIGPIPE_EXIT_CODE ? await runGit([], indexPath) : skipWorktreeResult)
+      .code !== 0
+  )
+    return null;
+  let skippedPathSet = new Set(skippedPaths);
+  let entries = new Map();
+  let listingHandle = await open(`${indexPath}.listing`, GIT_STDOUT_CAPTURE_FLAGS, 384);
   try {
     if (
       (
-        await e(
+        await dir(
           ["ls-files", "-s", "-z"],
           {
-            GIT_INDEX_FILE: n,
+            GIT_INDEX_FILE: indexPath,
           },
           undefined,
           undefined,
-          p.fd,
+          listingHandle.fd,
         )
       ).code !== 0
     )
       return null;
-    let _ = "";
-    await readFileChunks(p, (y) => {
-      let parts = (_ + y.toString("latin1")).split("\x00");
-      _ = parts.pop() ?? "";
-      for (let C of parts) {
-        let index = C.indexOf("\t");
-        let [R, B, x] = index === -1 ? [] : C.slice(0, index).split(" ");
-        let str = Buffer.from(C.slice(index + 1), "latin1").toString("utf8");
-        if (R !== undefined && B !== undefined && x === "0" && h.has(str))
-          u.set(str, {
-            mode: R,
-            id: B.toLowerCase(),
+    let carryOver = "";
+    await readFileChunks(listingHandle, (chunk) => {
+      let parts = (carryOver + chunk.toString("latin1")).split("\x00");
+      carryOver = parts.pop() ?? "";
+      for (let line of parts) {
+        let index = line.indexOf("\t");
+        let [mode, id, stage] = index === -1 ? [] : line.slice(0, index).split(" ");
+        let str = Buffer.from(line.slice(index + 1), "latin1").toString("utf8");
+        if (mode !== undefined && id !== undefined && stage === "0" && skippedPathSet.has(str))
+          entries.set(str, {
+            mode,
+            id: id.toLowerCase(),
           });
       }
     });
   } finally {
-    await p.close().catch(() => {});
-    await rm(`${n}.listing`, {
+    await listingHandle.close().catch(() => {});
+    await rm(`${indexPath}.listing`, {
       force: true,
     }).catch(() => {});
   }
-  return o.every((w) => u.has(w)) ? u : null;
+  return skippedPaths.every((path) => entries.has(path)) ? entries : null;
 }
 //@ chunk-gjx0rh1b.js:68548-68730 placement
-async function isNotPlainDirectory(e, n) {
-  if (n.includes("\uFFFD") || (await lstatOrAbsent(e, n)) !== "clear") return true;
+async function isNotPlainDirectory(workTree, relPath) {
+  if (relPath.includes("\uFFFD") || (await lstatOrAbsent(workTree, relPath)) !== "clear") return true;
   try {
-    return !(await lstat(join(e, n))).isDirectory();
+    return !(await lstat(join(workTree, relPath))).isDirectory();
   } catch (error) {
     let errnoCode = getErrnoCode(error);
     return errnoCode !== "ENOENT" && errnoCode !== "ENOTDIR";
@@ -3340,10 +3634,10 @@ async function isNotPlainDirectory(e, n) {
 }
 //@ chunk-gjx0rh1b.js:68730-69762 placement
 async function compareWorktreeEntry(
-  e,
+  workTree,
   { path, status, oldMode, newMode, oldId, newId },
-  u,
-  p = MAX_STASH_FILE_BYTES,
+  ntfsRules,
+  maxBytes = MAX_STASH_FILE_BYTES,
   signal,
 ) {
   if (
@@ -3354,15 +3648,15 @@ async function compareWorktreeEntry(
     path.includes("\uFFFD")
   )
     return "changed";
-  if ((await lstatOrAbsent(e, path)) !== "clear") return "changed";
+  if ((await lstatOrAbsent(workTree, path)) !== "clear") return "changed";
   try {
-    let worktreeFile = await readWorktreeFileSafely(e, path, u);
+    let worktreeFile = await readWorktreeFileSafely(workTree, path, ntfsRules);
     if (worktreeFile.kind === "symlink")
       return newMode === SYMLINK_MODE_VALUE &&
         (blobSha1(worktreeFile.target) === oldId ||
           (getPlatform() === "windows" &&
             blobSha1(
-              await readlink(join(e, path), {
+              await readlink(join(workTree, path), {
                 encoding: "buffer",
               }),
             ) === oldId))
@@ -3371,21 +3665,21 @@ async function compareWorktreeEntry(
     if (worktreeFile.kind !== "file") return worktreeFile.kind === "refused" ? "open_refused" : "changed";
     let { handle, size } = worktreeFile;
     try {
-      if (!REGULAR_FILE_MODES.includes(newMode) || size > p) return "changed";
+      if (!REGULAR_FILE_MODES.includes(newMode) || size > maxBytes) return "changed";
       let stats = await handle.stat({
         bigint: true,
       });
-      let A = createHash("sha1").update(`blob ${size}\x00`);
-      let R = Buffer.allocUnsafe(Math.min(size, 1048576));
-      let B = 0;
-      while (B < size) {
+      let hash = createHash("sha1").update(`blob ${size}\x00`);
+      let buffer = Buffer.allocUnsafe(Math.min(size, 1048576));
+      let offset = 0;
+      while (offset < size) {
         if (signal?.aborted) return "changed";
-        let { bytesRead } = await handle.read(R, 0, Math.min(R.length, size - B), B);
+        let { bytesRead } = await handle.read(buffer, 0, Math.min(buffer.length, size - offset), offset);
         if (bytesRead === 0) return "changed";
-        A.update(R.subarray(0, bytesRead));
-        B += bytesRead;
+        hash.update(buffer.subarray(0, bytesRead));
+        offset += bytesRead;
       }
-      if (A.digest("hex") !== oldId) return "changed";
+      if (hash.digest("hex") !== oldId) return "changed";
       let stats_2 = await handle.stat({
         bigint: true,
       });
@@ -3407,128 +3701,150 @@ async function compareWorktreeEntry(
 /**
  * 种子索引文件名模式与疑似凭据文件名模式（env、netrc、credential、密钥等）。
  */
-var SEED_INDEX_NAME_PATTERN = /^ccr-seed-([0-9]+)-[0-9a-f]{12}\.index(?:\.lock)?$/;
-var CREDENTIAL_NAME_RE =
-  /env|netrc|npmrc|yarnrc|pypirc|pgpass|\.cnf|terraform|tfvars|tfstate|boto|s3cfg|credential|gitconfig|mcp|claude|config|bash|profile|zsh|zlog|fish|history|consolehost|\.(?:pem|key|p12|pfx|keystore|jks|kdbx|ovpn|vars|ssh|aws|azure|gnupg|kube|docker|git)|_(?:rsa|dsa|ecdsa|ed25519)|secret|settings|gradle\.properties|device-keys|service.?account|deploy_key|htpasswd|htdigest|vault[-_](?:token|pass)|dockercfg|msmtprc|fetchmailrc|sentryclirc|clasprc|transifexrc|databrickscfg|remote-sync|wakatime/i;
-var DRIVE_NAME_PREFIX_RE = `[${DECORATION_LEAD_CHARS.replace(/[\\\]^-]/g, "\\$&")}]|_${EDITOR_BACKUP_SUFFIX_REGEX}_`;
-var credentialConfigPathSpellings = uniq(CREDENTIAL_CONFIG_PATHS.map(([e]) => e));
-var regExp = new RegExp(
-  `(?:^|/)(?:(?:${DRIVE_NAME_PREFIX_RE})[^/]*)?(?:\\.(?:ssh|aws|azure|gnupg|kube|docker|config|cargo|gem|m2|gradle|claude)|documents|appdata|library|(?:${credentialConfigPathSpellings.join("|")})(?![a-z0-9-]))|\\.git`,
-  "i",
-);
-var replaced = DECORATION_LEAD_CHARS.replace(/[\\\]^-]/g, "\\$&");
-var regExp_2 = new RegExp(`(?:[${replaced}][^/${replaced}]*){4}|${SYNC_CONFLICT_SUFFIX_PATTERN}`, "i");
-var regExp_3 = new RegExp(`(?:^|/)[^/]{${MAX_NAME_READING_LENGTH + 1}}`);
+var SEED_INDEX_NAME_PATTERN; // deferred: uses DECORATION_LEAD_CHARS (../permissions/sensitivePaths.js) of its import cycle while loading; runs once the cycle is complete
+var CREDENTIAL_NAME_RE;
+var DRIVE_NAME_PREFIX_RE;
+var credentialConfigPathSpellings;
+var regExp;
+var replaced;
+var regExp_2;
+var regExp_3;
+deferInit("chunk-gjx0rh1b.js:69762", () => {
+  SEED_INDEX_NAME_PATTERN = /^ccr-seed-([0-9]+)-[0-9a-f]{12}\.index(?:\.lock)?$/;
+  CREDENTIAL_NAME_RE =
+    /env|netrc|npmrc|yarnrc|pypirc|pgpass|\.cnf|terraform|tfvars|tfstate|boto|s3cfg|credential|gitconfig|mcp|claude|config|bash|profile|zsh|zlog|fish|history|consolehost|\.(?:pem|key|p12|pfx|keystore|jks|kdbx|ovpn|vars|ssh|aws|azure|gnupg|kube|docker|git)|_(?:rsa|dsa|ecdsa|ed25519)|secret|settings|gradle\.properties|device-keys|service.?account|deploy_key|htpasswd|htdigest|vault[-_](?:token|pass)|dockercfg|msmtprc|fetchmailrc|sentryclirc|clasprc|transifexrc|databrickscfg|remote-sync|wakatime/i;
+  DRIVE_NAME_PREFIX_RE = `[${DECORATION_LEAD_CHARS.replace(/[\\\]^-]/g, "\\$&")}]|_${EDITOR_BACKUP_SUFFIX_SOURCE}_`;
+  credentialConfigPathSpellings = uniq(CREDENTIAL_CONFIG_PATHS.map(([configPath]) => configPath));
+  regExp = new RegExp(
+    `(?:^|/)(?:(?:${DRIVE_NAME_PREFIX_RE})[^/]*)?(?:\\.(?:ssh|aws|azure|gnupg|kube|docker|config|cargo|gem|m2|gradle|claude)|documents|appdata|library|(?:${credentialConfigPathSpellings.join("|")})(?![a-z0-9-]))|\\.git`,
+    "i",
+  );
+  replaced = DECORATION_LEAD_CHARS.replace(/[\\\]^-]/g, "\\$&");
+  regExp_2 = new RegExp(`(?:[${replaced}][^/${replaced}]*){4}|${SYNC_CONFLICT_SUFFIX_PATTERN}`, "i");
+  regExp_3 = new RegExp(`(?:^|/)[^/]{${MAX_NAME_READING_LENGTH + 1}}`);
+});
 //@ chunk-gjx0rh1b.js:70712-71692 placement
 function checkCredentialLikePaths() {
-  let e = new Map();
-  let n = new Map();
-  let r = new Map();
-  return (o) => {
-    if (!isPlainRelativePath(o) || o.includes("\\") || (o.includes(":") && getPlatform() === "windows"))
-      return isSensitiveNameOrVariant(o);
-    let s = ASCII_ONLY_RE.test(o)
-      ? o
-      : o
+  let rules = new Map();
+  let nameVerdicts = new Map();
+  let leafVerdicts = new Map();
+  return (path) => {
+    if (
+      !isPlainRelativePath(path) ||
+      path.includes("\\") ||
+      (path.includes(":") && getPlatform() === "windows")
+    )
+      return isSensitiveNameOrVariant(path);
+    let foldedPath = ASCII_ONLY_RE.test(path)
+      ? path
+      : path
           .replaceAll("\u0131", "i")
           .replaceAll("\u017F", "s")
           .replaceAll("\u212A", "k")
           .replace(NON_ASCII_RE, "");
-    let index = s.lastIndexOf("/");
-    let h = index === -1 ? "" : s.slice(0, index);
-    let index_2 = o.lastIndexOf("/");
-    let p = index_2 === -1 ? "" : o.slice(0, index_2);
-    let w = e.get(p);
-    if (w === undefined) {
-      let C = index !== -1 && looksLikeCredentialPath(p, h);
-      let A = C ? h.split("/") : [];
-      let R = C
-        ? p.split("/").map((B, x) => {
-            let S = A[x];
-            if (S !== undefined && !looksLikeCredentialPath(B, S)) return "passed";
-            let z =
-              n.get(B) ??
-              ((S !== undefined && !hasAlternateCredentialSpelling(B, S)) ||
-              !isSensitiveNameOrVariant(`${B}/.bak`)
+    let index = foldedPath.lastIndexOf("/");
+    let foldedDir = index === -1 ? "" : foldedPath.slice(0, index);
+    let index_2 = path.lastIndexOf("/");
+    let dir = index_2 === -1 ? "" : path.slice(0, index_2);
+    let dirVerdict = rules.get(dir);
+    if (dirVerdict === undefined) {
+      let dirIsCredentialLike = index !== -1 && looksLikeCredentialPath(dir, foldedDir);
+      let foldedSegments = dirIsCredentialLike ? foldedDir.split("/") : [];
+      let segmentVerdicts = dirIsCredentialLike
+        ? dir.split("/").map((segment, index) => {
+            let foldedSegment = foldedSegments[index];
+            if (foldedSegment !== undefined && !looksLikeCredentialPath(segment, foldedSegment))
+              return "passed";
+            let verdict =
+              nameVerdicts.get(segment) ??
+              ((foldedSegment !== undefined && !hasAlternateCredentialSpelling(segment, foldedSegment)) ||
+              !isSensitiveNameOrVariant(`${segment}/.bak`)
                 ? "passed"
-                : isSensitiveNameOrVariant(`${B}/x`)
+                : isSensitiveNameOrVariant(`${segment}/x`)
                   ? "withheld"
                   : "asked");
-            n.set(B, z);
-            return z;
+            nameVerdicts.set(segment, verdict);
+            return verdict;
           })
         : [];
-      w = R.includes("withheld")
+      dirVerdict = segmentVerdicts.includes("withheld")
         ? "withheld"
-        : R.includes("asked") ||
-            (index !== -1 && (regExp.test(h) || hasConfusableCredentialSegment(regExp, p)))
+        : segmentVerdicts.includes("asked") ||
+            (index !== -1 && (regExp.test(foldedDir) || hasConfusableCredentialSegment(regExp, dir)))
           ? "asked"
           : "passed";
-      e.set(p, w);
+      rules.set(dir, dirVerdict);
     }
-    if (w !== "passed") return w === "withheld" || isSensitiveNameOrVariant(o);
-    let sliced = s.slice(index + 1);
-    let sliced_2 = o.slice(index_2 + 1);
+    if (dirVerdict !== "passed") return dirVerdict === "withheld" || isSensitiveNameOrVariant(path);
+    let extra = foldedPath.slice(index + 1);
+    let path_2 = path.slice(index_2 + 1);
     if (
       index !== -1 &&
-      (regExp_4.test(sliced) || regExp_4.test(sliced_2)) &&
-      (CREDENTIAL_NAME_RE.test(h) || hasConfusableCredentialSegment(CREDENTIAL_NAME_RE, p))
+      (regExp_4.test(extra) || regExp_4.test(path_2)) &&
+      (CREDENTIAL_NAME_RE.test(foldedDir) || hasConfusableCredentialSegment(CREDENTIAL_NAME_RE, dir))
     )
-      return isSensitiveNameOrVariant(o);
+      return isSensitiveNameOrVariant(path);
     if (
-      !CREDENTIAL_NAME_RE.test(sliced) &&
-      !hasAlternateCredentialSpelling(sliced_2, sliced) &&
-      !hasConfusableCredentialSegment(CREDENTIAL_NAME_RE, sliced_2)
+      !CREDENTIAL_NAME_RE.test(extra) &&
+      !hasAlternateCredentialSpelling(path_2, extra) &&
+      !hasConfusableCredentialSegment(CREDENTIAL_NAME_RE, path_2)
     )
       return false;
-    let E = r.get(sliced_2);
-    if (E === undefined) {
-      E = isSensitiveNameOrVariant(sliced_2);
-      r.set(sliced_2, E);
+    let leafSensitive = leafVerdicts.get(path_2);
+    if (leafSensitive === undefined) {
+      leafSensitive = isSensitiveNameOrVariant(path_2);
+      leafVerdicts.set(path_2, leafSensitive);
     }
-    return E;
+    return leafSensitive;
   };
 }
 //@ chunk-gjx0rh1b.js:71692-71852 placement
-function hasConfusableCredentialSegment(regExp, n) {
+function hasConfusableCredentialSegment(regExp, value) {
   return (
-    n.includes(":") &&
-    n
+    value.includes(":") &&
+    value
       .split("/")
-      .filter((r) => r.includes(":"))
-      .some((r) => {
-        let o = expandNameReadings(r);
-        return nameReadingFns(r).some((s) => o.some((l) => regExp.test(s(l))));
+      .filter((segment) => segment.includes(":"))
+      .some((segment) => {
+        let readings = expandNameReadings(segment);
+        return nameReadingFns(segment).some((reader) =>
+          readings.some((reading) => regExp.test(reader(reading))),
+        );
       })
   );
 }
 //@ chunk-gjx0rh1b.js:71852-71942 placement
-function looksLikeCredentialPath(e, n) {
+function looksLikeCredentialPath(path, extra) {
   return (
-    (e.length > MAX_NAME_READING_LENGTH && regExp_3.test(e)) ||
-    regExp_2.test(e) ||
-    (n !== e && regExp_2.test(n)) ||
-    hasConfusableCredentialSegment(regExp_2, e)
+    (path.length > MAX_NAME_READING_LENGTH && regExp_3.test(path)) ||
+    regExp_2.test(path) ||
+    (extra !== path && regExp_2.test(extra)) ||
+    hasConfusableCredentialSegment(regExp_2, path)
   );
 }
 //@ chunk-gjx0rh1b.js:71942-72045 placement
-function hasAlternateCredentialSpelling(e, n) {
+function hasAlternateCredentialSpelling(path, extra) {
   return (
-    looksLikeCredentialPath(e, n) &&
-    (e.length > MAX_NAME_READING_LENGTH ||
-      expandNameReadings(e).length > 1 ||
-      nameReadingFns(e).some((r) => expandNameReadings(r(e)).length > 1))
+    looksLikeCredentialPath(path, extra) &&
+    (path.length > MAX_NAME_READING_LENGTH ||
+      expandNameReadings(path).length > 1 ||
+      nameReadingFns(path).some((reader) => expandNameReadings(reader(path)).length > 1))
   );
 }
 //@ chunk-gjx0rh1b.js:72045-72121 placement
-var NON_ASCII_RE = /[^\x20-\x7e]/gu;
-var ASCII_ONLY_RE = /^[\x20-\x7e]*$/;
-var regExp_4 = new RegExp(`^(?:${DRIVE_NAME_PREFIX_RE})`, "i");
+var NON_ASCII_RE; // deferred: uses SEED_INDEX_NAME_PATTERN of its import cycle while loading; runs once the cycle is complete
+var ASCII_ONLY_RE;
+var regExp_4;
+deferInit("chunk-gjx0rh1b.js:72045", () => {
+  NON_ASCII_RE = /[^\x20-\x7e]/gu;
+  ASCII_ONLY_RE = /^[\x20-\x7e]*$/;
+  regExp_4 = new RegExp(`^(?:${DRIVE_NAME_PREFIX_RE})`, "i");
+});
 //@ chunk-gjx0rh1b.js:72121-73074 placement
-async function lstatNoFollow(e, n) {
-  let r;
+async function lstatNoFollow(path, destinationPath) {
+  let handle;
   try {
-    r = await open(e, readOnlyNoFollowFlags());
+    handle = await open(path, readOnlyNoFollowFlags());
   } catch (error) {
     let errnoCode = getErrnoCode(error);
     return errnoCode === "ELOOP" || errnoCode === "ENOENT" || errnoCode === "ENOTDIR"
@@ -3542,28 +3858,33 @@ async function lstatNoFollow(e, n) {
         };
   }
   try {
-    let stats = await r.stat();
+    let stats = await handle.stat();
     if (!stats.isFile() || stats.nlink !== 1)
       return {
         kind: "tamper",
         detail: "something other than the scratch index this build wrote stands at its name",
       };
-    let s = await open(n, GIT_STDERR_CAPTURE_FLAGS, 384);
+    let destinationHandle = await open(destinationPath, GIT_STDERR_CAPTURE_FLAGS, 384);
     try {
-      let l = Buffer.allocUnsafe(1048576);
-      for (let h = 0; h < stats.size;) {
-        let { bytesRead } = await r.read(l, 0, Math.min(l.length, stats.size - h), h);
+      let buffer = Buffer.allocUnsafe(1048576);
+      for (let offset = 0; offset < stats.size;) {
+        let { bytesRead } = await handle.read(
+          buffer,
+          0,
+          Math.min(buffer.length, stats.size - offset),
+          offset,
+        );
         if (bytesRead === 0)
           return {
             kind: "tamper",
             detail: "the scratch index changed while it was carried off",
           };
-        await s.write(l, 0, bytesRead);
-        h += bytesRead;
+        await destinationHandle.write(buffer, 0, bytesRead);
+        offset += bytesRead;
       }
-      await s.utimes(stats.atime, stats.mtime);
+      await destinationHandle.utimes(stats.atime, stats.mtime);
     } finally {
-      await s.close().catch(() => {});
+      await destinationHandle.close().catch(() => {});
     }
     return null;
   } catch (error) {
@@ -3572,17 +3893,17 @@ async function lstatNoFollow(e, n) {
       detail: `the scratch index could not be carried off (${getErrnoCode(error) ?? errorMessage(error)})`,
     };
   } finally {
-    await r.close().catch(() => {});
+    await handle.close().catch(() => {});
   }
 }
 //@ chunk-gjx0rh1b.js:73074-73122 placement
 var STALE_SEED_MAX_AGE_MS = 600000;
 var SEED_INDEX_PROCESS_RE = /^claude-seed-index-([0-9]+)-/;
 //@ chunk-gjx0rh1b.js:73122-73312 placement
-async function unlinkWithRetry(e) {
+async function unlinkWithRetry(path) {
   for (let idx = 0; ; idx++)
     try {
-      await unlink(e);
+      await unlink(path);
       return null;
     } catch (error) {
       let errnoCode = getErrnoCode(error);
@@ -3599,17 +3920,17 @@ async function unlinkWithRetry(e) {
 async function pruneStaleProcessDirs(tempDir) {
   try {
     await Promise.all(
-      (await readdir(tempDir)).map(async (n) => {
-        let r = SEED_INDEX_PROCESS_RE.exec(n)?.[1];
-        if (r === undefined) return;
-        let o = join(tempDir, n);
-        let zipData = await lstat(o);
+      (await readdir(tempDir)).map(async (name) => {
+        let indexName = SEED_INDEX_PROCESS_RE.exec(name)?.[1];
+        if (indexName === undefined) return;
+        let pid = join(tempDir, name);
+        let zipData = await lstat(pid);
         if (
           zipData.isDirectory() &&
           Date.now() - zipData.mtimeMs > STALE_SEED_MAX_AGE_MS &&
-          !isProcessAlive(Number(r))
+          !isProcessAlive(Number(indexName))
         )
-          await rm(o, {
+          await rm(pid, {
             recursive: true,
             force: true,
           });
@@ -3624,12 +3945,15 @@ async function pruneStaleProcessDirs(tempDir) {
 async function pruneStaleSeedIndexes(gitDir) {
   try {
     await Promise.all(
-      (await readdir(gitDir)).map(async (n) => {
-        let r = SEED_INDEX_NAME_PATTERN.exec(n)?.[1];
-        if (r === undefined) return;
-        let o = join(gitDir, n);
-        if (Date.now() - (await lstat(o)).mtimeMs > STALE_SEED_MAX_AGE_MS && !isProcessAlive(Number(r)))
-          await rm(o, {
+      (await readdir(gitDir)).map(async (name) => {
+        let indexName = SEED_INDEX_NAME_PATTERN.exec(name)?.[1];
+        if (indexName === undefined) return;
+        let pid = join(gitDir, name);
+        if (
+          Date.now() - (await lstat(pid)).mtimeMs > STALE_SEED_MAX_AGE_MS &&
+          !isProcessAlive(Number(indexName))
+        )
+          await rm(pid, {
             force: true,
           });
       }),
@@ -3637,48 +3961,48 @@ async function pruneStaleSeedIndexes(gitDir) {
   } catch {}
 }
 //@ chunk-gjx0rh1b.js:73780-73859 placement
-function isProcessAlive(e) {
+function isProcessAlive(pid) {
   try {
-    process.kill(e, 0);
+    process.kill(pid, 0);
     return true;
   } catch (error) {
     return getErrnoCode(error) === "EPERM";
   }
 }
 //@ chunk-gjx0rh1b.js:73859-73919 placement
-async function listDirectoriesAmong(workTree, n) {
-  return (await classifyPathsAsDirectories(workTree, n)).notDirectories;
+async function listDirectoriesAmong(workTree, paths) {
+  return (await classifyPathsAsDirectories(workTree, paths)).notDirectories;
 }
 //@ chunk-gjx0rh1b.js:73919-74140 placement
-async function classifyPathsAsDirectories(e, n) {
-  let r = limitConcurrency(GIT_READ_CONCURRENCY, async (s) =>
-    (await lstatOrAbsent(e, s)) === "clear" ? classifyDirEntry(join(e, s)) : "other",
+async function classifyPathsAsDirectories(workTree, paths) {
+  let limit = limitConcurrency(GIT_READ_CONCURRENCY, async (path) =>
+    (await lstatOrAbsent(workTree, path)) === "clear" ? classifyDirEntry(join(workTree, path)) : "other",
   );
-  let results = await Promise.all(n.map(r));
+  let results = await Promise.all(paths.map(limit));
   return {
-    notDirectories: n.filter((s, l) => results[l] !== "directory"),
-    special: n.filter((s, l) => results[l] === "special"),
+    notDirectories: paths.filter((path, index) => results[index] !== "directory"),
+    special: paths.filter((path, index) => results[index] === "special"),
   };
 }
 //@ chunk-gjx0rh1b.js:74140-74288 placement
-async function classifyDirEntry(e) {
+async function classifyDirEntry(path) {
   try {
-    let n = await lstat(e);
-    return n.isDirectory() ? "directory" : n.isFile() || n.isSymbolicLink() ? "other" : "special";
+    let stats = await lstat(path);
+    return stats.isDirectory() ? "directory" : stats.isFile() || stats.isSymbolicLink() ? "other" : "special";
   } catch {
     return "other";
   }
 }
 //@ chunk-gjx0rh1b.js:74288-74574 placement
-async function describeStashBase(e, base) {
-  let [r, o] = await Promise.all([
-    e(["symbolic-ref", "-q", "HEAD"]),
-    e(["rev-list", "--max-count=1", "--format=%h %s", base, "--"]),
+async function describeStashBase(runGit, base) {
+  let [branch, commitLine] = await Promise.all([
+    runGit(["symbolic-ref", "-q", "HEAD"]),
+    runGit(["rev-list", "--max-count=1", "--format=%h %s", base, "--"]),
   ]);
-  let s = r.code === 0 ? r.stdout.trim().replace(/^refs\/heads\//, "") : "(no branch)";
-  let l =
-    o.code === 0
-      ? (o.stdout
+  let branchName = branch.code === 0 ? branch.stdout.trim().replace(/^refs\/heads\//, "") : "(no branch)";
+  let subject =
+    commitLine.code === 0
+      ? (commitLine.stdout
           .trim()
           .split(
             `
@@ -3686,46 +4010,58 @@ async function describeStashBase(e, base) {
           )
           .at(-1) ?? "")
       : "";
-  return `${s}: ${l}`;
+  return `${branchName}: ${subject}`;
 }
 //@ chunk-gjx0rh1b.js:74574-75644 placement
-async function describeStashEntryChange(changedFilesForStash, n, r, o, s) {
-  let mapped = changedFilesForStash.entries
-    .filter((entry) => (entry.kind === "changed" || entry.kind === "absent") && n.has(entry.path))
+async function describeStashEntryChange(
+  changedFilesForStash,
+  changedFiles,
+  deletedStaged,
+  stageDir,
+  restage,
+) {
+  let paths = changedFilesForStash.entries
+    .filter((entry) => (entry.kind === "changed" || entry.kind === "absent") && changedFiles.has(entry.path))
     .map(({ path }) => path);
-  if (mapped.length === 0) return changedFilesForStash;
-  let h = new Set(
+  if (paths.length === 0) return changedFilesForStash;
+  let absentPaths = new Set(
     changedFilesForStash.entries.flatMap((entry) =>
-      entry.kind === "absent" && n.has(entry.path) ? [entry.path] : [],
+      entry.kind === "absent" && changedFiles.has(entry.path) ? [entry.path] : [],
     ),
   );
-  let u = missingGitattributesPaths(mapped);
-  let p = [...mapped, ...u.filter((x) => n.has(x))];
-  let w = new Set(
+  let attrPaths = missingGitattributesPaths(paths);
+  let restagePaths = [...paths, ...attrPaths.filter((path) => changedFiles.has(path))];
+  let changedPaths = new Set(
     changedFilesForStash.entries.flatMap((entry) => (entry.kind === "changed" ? [entry.path] : [])),
   );
-  let results = await Promise.all(u.map((x) => hashFileOrAbsent(join(o, x))));
-  await Promise.all(u.map((x) => unlink(join(o, x)).catch(() => {})));
-  let y = await s(p);
-  if ("refused" in y) return y;
-  let results_2 = await Promise.all(u.map((x) => hashFileOrAbsent(join(o, x))));
-  let C = new Set(y.copies.flatMap((copy) => (copy.kind === "file" ? [copy.path] : [])));
-  let found = u.find((x, S) => (w.has(x) ? !C.has(x) : results[S] === null || results[S] !== results_2[S]));
+  let results = await Promise.all(attrPaths.map((path) => hashFileOrAbsent(join(stageDir, path))));
+  await Promise.all(attrPaths.map((path) => unlink(join(stageDir, path)).catch(() => {})));
+  let restaged = await restage(restagePaths);
+  if ("refused" in restaged) return restaged;
+  let results_2 = await Promise.all(attrPaths.map((path) => hashFileOrAbsent(join(stageDir, path))));
+  let copiedPaths = new Set(restaged.copies.flatMap((copy) => (copy.kind === "file" ? [copy.path] : [])));
+  let found = attrPaths.find((path, index) =>
+    changedPaths.has(path)
+      ? !copiedPaths.has(path)
+      : results[index] === null || results[index] !== results_2[index],
+  );
   if (found !== undefined)
     return {
       refused: `${found}: changed while it was being read`,
       tooLarge: false,
       momentary: true,
     };
-  let R = new Set([...mapped, ...u]);
-  let B = new Set(mapped);
+  let restagedSet = new Set([...paths, ...attrPaths]);
+  let changedSet = new Set(paths);
   return {
     entries: [
-      ...changedFilesForStash.entries.filter((entry) => !R.has(entry.path)),
-      ...y.entries
-        .filter((entry) => R.has(entry.path))
+      ...changedFilesForStash.entries.filter((entry) => !restagedSet.has(entry.path)),
+      ...restaged.entries
+        .filter((entry) => restagedSet.has(entry.path))
         .map((entry) =>
-          entry.kind === "absent" && B.has(entry.path) && (!h.has(entry.path) || r.has(entry.path))
+          entry.kind === "absent" &&
+          changedSet.has(entry.path) &&
+          (!absentPaths.has(entry.path) || deletedStaged.has(entry.path))
             ? {
                 kind: "changed",
                 path: entry.path,
@@ -3733,61 +4069,66 @@ async function describeStashEntryChange(changedFilesForStash, n, r, o, s) {
             : entry,
         ),
     ],
-    copies: [...changedFilesForStash.copies.filter((copy) => !R.has(copy.path)), ...y.copies],
+    copies: [
+      ...changedFilesForStash.copies.filter((copy) => !restagedSet.has(copy.path)),
+      ...restaged.copies,
+    ],
   };
 }
 //@ chunk-gjx0rh1b.js:75644-75810 placement
-async function markPathsIntentToAdd(e, n, baseTree, o) {
-  return o.length === 0
+async function markPathsIntentToAdd(runGit, indexFile, baseTree, paths) {
+  return paths.length === 0
     ? {
         code: 0,
         stderr: "",
       }
-    : e(
+    : runGit(
         ["update-index", "-z", "--index-info"],
-        n,
-        o.map((s) => `0 ${"0".repeat(baseTree.length)}	${s}\x00`).join(""),
+        indexFile,
+        paths.map((result) => `0 ${"0".repeat(baseTree.length)}	${result}\x00`).join(""),
       );
 }
 //@ chunk-gjx0rh1b.js:75810-76346 placement
-async function listFilesNoPrecompose(e, n, r) {
+async function listFilesNoPrecompose(runGit, indexFile, args) {
   let results = await Promise.all(
-    chunkArgsByBytes(r).map((u) =>
-      e(["-c", "core.precomposeUnicode=false", "ls-files", "-z", "-v", "--", ...u], {
+    chunkArgsByBytes(args).map((chunk) =>
+      runGit(["-c", "core.precomposeUnicode=false", "ls-files", "-z", "-v", "--", ...chunk], {
         ...LITERAL_PATHSPEC_ENV,
-        ...n,
+        ...indexFile,
       }),
     ),
   );
-  if (results.some((u) => u.code !== 0)) return null;
+  if (results.some((result) => result.code !== 0)) return null;
   let flattened = results
-    .flatMap((u) => u.stdout.split("\x00"))
-    .flatMap((u) =>
-      u.length > 2
+    .flatMap((result) => result.stdout.split("\x00"))
+    .flatMap((record) =>
+      record.length > 2
         ? [
             {
-              tag: u[0],
-              path: u.slice(2),
+              tag: record[0],
+              path: record.slice(2),
             },
           ]
         : [],
     );
-  let l = new Set(flattened.flatMap(({ tag, path }) => (tag === "S" || tag === "s" ? [path] : [])));
-  let h = new Set(flattened.map(({ path }) => path));
+  let skipWorktree = new Set(
+    flattened.flatMap(({ tag, path }) => (tag === "S" || tag === "s" ? [path] : [])),
+  );
+  let seenPaths = new Set(flattened.map(({ path }) => path));
   return {
-    skipWorktree: l,
+    skipWorktree,
     unseen: new Set([
-      ...l,
+      ...skipWorktree,
       ...flattened.flatMap(({ tag, path }) => (tag !== tag.toUpperCase() ? [path] : [])),
     ]),
-    absent: new Set(r.filter((u) => !h.has(u))),
+    absent: new Set(args.filter((path) => !seenPaths.has(path))),
   };
 }
 //@ chunk-gjx0rh1b.js:76346-76493 placement
-async function hashFileOrAbsent(e) {
+async function hashFileOrAbsent(path) {
   try {
     return createHash("sha1")
-      .update(await readFile(e))
+      .update(await readFile(path))
       .digest("hex");
   } catch (error) {
     let errnoCode = getErrnoCode(error);

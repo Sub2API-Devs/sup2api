@@ -35,7 +35,7 @@ async function hostedWorkerFetch(url, init = {}) {
   let currentTls = getTLSFetchOptions(undefined).tls;
   if (isDeepStrictEqual(init.tls, currentTls)) return proxyAwareFetch(String(url), init, () => true);
   let allowedCas = new Set([currentTls?.ca ?? []].flat());
-  let sharedCas = [init.tls?.ca ?? []].flat().filter((s) => allowedCas.has(s));
+  let sharedCas = [init.tls?.ca ?? []].flat().filter((ca) => allowedCas.has(ca));
   if (sharedCas.length === 0)
     throw Error(
       "MCP request not sent: its list of trusted CA certificates has nothing in common with the one Claude Code uses now, most likely because Claude Code's TLS settings changed after the server connected. Reconnect the server to use the new settings.",

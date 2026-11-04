@@ -12,8 +12,8 @@ import { validateIngressOrigin } from "../../utils/teleport/relayEnv.js";
 import { checkSdkUrl } from "../transports/sdkUrlValidation.js";
 import { isLoopbackHost } from "../../utils/localhost.js";
 import { DoctorLazy } from "./util.js";
-import { u, literal, string, E } from "../../../vendor/zod/v4/classic/schemas.js";
-import { bY } from "../../../vendor/zod/v4/core/core.js";
+import { objectSchema, literal, stringSchema, numberSchema } from "../../../vendor/zod/v4/classic/schemas.js";
+import { INVALID } from "../../../vendor/zod/v4/core/core.js";
 import { jsonParse } from "../../utils/slowOperations.js";
 import { isFirstPartyProvider } from "../../utils/model/providers.js";
 import { isEssentialTrafficOnly } from "../../utils/privacyLevel.js";
@@ -32,11 +32,13 @@ var TUNNEL_LIVENESS_DEADLINE_MS = 600000;
 var TUNNEL_QUIET_LIVENESS_PINGS = 1;
 //@ chunk-e6a6pbbv.js:12083-12278 placement
 function parseTunnelApiOrigin(url) {
-  let t = validateIngressOrigin(url);
-  if (t.ok) return checkSdkUrl(t.origin) === null ? t.origin : undefined;
-  let n = URL.parse(url);
-  return n?.protocol === "http:" && isLoopbackHost(n.hostname) && (url === n.origin || url === `${n.origin}/`)
-    ? n.origin
+  let validated = validateIngressOrigin(url);
+  if (validated.ok) return checkSdkUrl(validated.origin) === null ? validated.origin : undefined;
+  let parsed = URL.parse(url);
+  return parsed?.protocol === "http:" &&
+    isLoopbackHost(parsed.hostname) &&
+    (url === parsed.origin || url === `${parsed.origin}/`)
+    ? parsed.origin
     : undefined;
 }
 //@ chunk-e6a6pbbv.js:12278-12593 placement
@@ -44,32 +46,32 @@ function parseTunnelApiOrigin(url) {
  * 会话隧道从 stdin 读取的参数结构：会话 id 与令牌、API 地址、令牌过期时间、上传路径。
  */
 var TUNNEL_STDIN_SCHEMA = DoctorLazy(() =>
-  u({
+  objectSchema({
     v: literal(1),
-    session_id: string().min(1),
-    session_token: string().min(1),
-    api_base_url: string().transform((url, t) => {
+    session_id: stringSchema().min(1),
+    session_token: stringSchema().min(1),
+    api_base_url: stringSchema().transform((url, ctx) => {
       let tunnelApiOrigin = parseTunnelApiOrigin(url);
       if (tunnelApiOrigin === undefined) {
-        t.addIssue({
+        ctx.addIssue({
           code: "custom",
         });
-        return bY;
+        return INVALID;
       }
       return tunnelApiOrigin;
     }),
-    session_token_expires_at: E().int().min(1e9).optional().catch(undefined),
-    file_upload_path: string()
+    session_token_expires_at: numberSchema().int().min(1e9).optional().catch(undefined),
+    file_upload_path: stringSchema()
       .regex(/^\/(?!\/)/)
       .optional()
       .catch(undefined),
   }),
 );
 //@ chunk-e6a6pbbv.js:12593-12679 placement
-function parseTunnelStdin(e) {
-  if (e === undefined) return;
+function parseTunnelStdin(raw) {
+  if (raw === undefined) return;
   try {
-    return TUNNEL_STDIN_SCHEMA().safeParse(jsonParse(e)).data;
+    return TUNNEL_STDIN_SCHEMA().safeParse(jsonParse(raw)).data;
   } catch {
     return;
   }
@@ -91,37 +93,37 @@ function sessionTunnelUsageProblem(transport, port, stdinLine) {
     : undefined;
 }
 //@ chunk-e6a6pbbv.js:13142-13852 placement
-function runSessionTunnel(e, t, n = (i) => void gracefulShutdown(i)) {
+function runSessionTunnel(toolServer, spec, onStop = (code) => void gracefulShutdown(code)) {
   let previewTunnelWithRedial = startPreviewTunnelWithRedial(
     {
-      sessionId: t.session_id,
-      apiBaseUrl: t.api_base_url,
-      accessToken: t.session_token,
-      allowedPorts: new Set([e.boundPort]),
+      sessionId: spec.session_id,
+      apiBaseUrl: spec.api_base_url,
+      accessToken: spec.session_token,
+      allowedPorts: new Set([toolServer.boundPort]),
       policyStopEnforce: true,
       livenessEnforce: true,
       livenessDeadlineMs: TUNNEL_LIVENESS_DEADLINE_MS,
       quietLivenessPings: TUNNEL_QUIET_LIVENESS_PINGS,
       toolServer: {
-        port: e.boundPort,
-        authToken: e.authToken,
+        port: toolServer.boundPort,
+        authToken: toolServer.authToken,
       },
     },
-    t.session_token_expires_at,
-    (s, r) => {
-      let d =
-        r === "stated_expiry_passed"
+    spec.session_token_expires_at,
+    (detail, reason) => {
+      let why =
+        reason === "stated_expiry_passed"
           ? "the session_token_expires_at it was started with has passed"
           : "the token has expired";
       process.stderr.write(
-        r === "policy"
-          ? `--session-tunnel: ${s}
+        reason === "policy"
+          ? `--session-tunnel: ${detail}
 `
-          : `--session-tunnel: ${d} (${s}); start another server with a fresh token
+          : `--session-tunnel: ${why} (${detail}); start another server with a fresh token
 `,
       );
-      logFeatureBad("cli_mcp_serve_session_tunnel", r === "policy" ? "relay_refused" : r);
-      n(r === "policy" ? EXIT_CONFIG : _);
+      logFeatureBad("cli_mcp_serve_session_tunnel", reason === "policy" ? "relay_refused" : reason);
+      onStop(reason === "policy" ? EXIT_CONFIG : _);
     },
   );
   logFeatureOk("cli_mcp_serve_session_tunnel");
@@ -132,33 +134,41 @@ function runSessionTunnel(e, t, n = (i) => void gracefulShutdown(i)) {
  * 启动预览隧道，永久失败时：策略拒绝或令牌已过期则回调 onFatal，否则在 stderr 提示后重新拨号；返回带 stop 的句柄。
  */
 function startPreviewTunnelWithRedial(options, statedExpiry, onFatal) {
-  let i = decodeJwtExpiry(options.accessToken);
-  let s = i ?? statedExpiry ?? null;
-  let r = false;
-  let d = l();
-  function l() {
+  let tokenExpiry = decodeJwtExpiry(options.accessToken);
+  let expiry = tokenExpiry ?? statedExpiry ?? null;
+  let isStopped = false;
+  let tunnel = dial();
+  function dial() {
     return createPreviewTunnel({
       ...options,
-      onPermanentFailure: (a, f) => {
-        if (r) return;
-        if (f === "policy") {
-          onFatal(a, "policy");
+      onPermanentFailure: (detail, reason) => {
+        if (isStopped) return;
+        if (reason === "policy") {
+          onFatal(detail, "policy");
           return;
         }
-        if (s !== null && s * 1000 < Date.now()) {
-          onFatal(a, i === null ? "stated_expiry_passed" : "token_expired");
+        if (expiry !== null && expiry * 1000 < Date.now()) {
+          onFatal(detail, tokenExpiry === null ? "stated_expiry_passed" : "token_expired");
           return;
         }
-        process.stderr.write(`--session-tunnel: cannot reach the relay (${a}); dialing again
+        process.stderr.write(`--session-tunnel: cannot reach the relay (${detail}); dialing again
 `);
-        d = l();
+        tunnel = dial();
       },
     });
   }
   return {
     stop() {
-      r = true;
-      d.stop();
+      isStopped = true;
+      tunnel.stop();
     },
   };
 }
+export {
+  EXIT_CONFIG,
+  EXIT_UNAVAILABLE,
+  SessionTunnelError,
+  parseTunnelStdin,
+  sessionTunnelUsageProblem,
+  runSessionTunnel,
+};

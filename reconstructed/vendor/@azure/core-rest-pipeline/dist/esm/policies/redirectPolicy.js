@@ -9,13 +9,13 @@
 //@ chunk-mrx6y2r5.js:54403-54425 esm-fingerprint
 var allowedRedirect = ["GET", "HEAD"];
 //@ chunk-mrx6y2r5.js:54425-54554 esm-layout
-function ha(e = {}) {
-  let { maxRetries = 20 } = e;
+function redirectPolicy(options = {}) {
+  let { maxRetries = 20 } = options;
   return {
     name: "redirectPolicy",
-    async sendRequest(r, n) {
-      let response = await n(r);
-      return handleRedirect(n, response, maxRetries);
+    async sendRequest(request, next) {
+      let response = await next(request);
+      return handleRedirect(next, response, maxRetries);
     },
   };
 }
@@ -45,4 +45,4 @@ async function handleRedirect(next, response, maxRetries, currentRetries = 0) {
   }
   return response;
 }
-export { ha };
+export { redirectPolicy };

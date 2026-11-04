@@ -5,7 +5,7 @@
  * pieces: chunk-y366fgzk.js (2)
  * attribution: cjs-fingerprint 1, affinity 1
  */
-import { x } from "../../../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../../../runtime/bun-runtime.js";
 import {
   require_middleware_host_header,
   require_middleware_host_header_2,
@@ -25,7 +25,7 @@ import { require_region_config_resolver } from "../../../../region-config-resolv
 import { require_protocol_http } from "../../../../../@smithy/protocol-http/dist-cjs/index.js";
 
 //@ chunk-y366fgzk.js:7546-13429 cjs-fingerprint
-var require_signin = x(function (cjsExports) {
+var require_signin = __commonJS(function (cjsExports) {
   var middlewareHostHeader = require_middleware_host_header();
   var middlewareLogger = require_middleware_logger();
   var middlewareRecursionDetection = require_middleware_recursion_detection();

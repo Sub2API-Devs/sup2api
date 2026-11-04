@@ -5,10 +5,10 @@
  * pieces: chunk-egr0twnb.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:123534-124117 cjs-fingerprint
-var require_dsconfig = x(function (cjsExports, cjsModule) {
+var require_dsconfig = __commonJS(function (cjsExports, cjsModule) {
   function dsconfig(hljs) {
     return {
       keywords: "dsconfig",

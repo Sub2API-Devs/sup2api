@@ -27,53 +27,54 @@ import { logError } from "../../utils/log.js";
 import { compareNumericPrefix } from "../../utils/textNormalize.js";
 
 //@ chunk-q84dhc5d.js:806-897 placement
-function versionHeldBy(artifactReadObservation, ver, n) {
+function versionHeldBy(artifactReadObservation, version, agentId) {
   return (
-    artifactReadObservation.ver === ver &&
-    (artifactReadObservation.observers === undefined || Object.hasOwn(artifactReadObservation.observers, n))
+    artifactReadObservation.ver === version &&
+    (artifactReadObservation.observers === undefined ||
+      Object.hasOwn(artifactReadObservation.observers, agentId))
   );
 }
 //@ chunk-q84dhc5d.js:897-1000 placement
-function isVersionHeldWithSource(e, slug, ver) {
+function isVersionHeldWithSource(agentId, slug, ver) {
   return (
-    versionHeldBy(e.getArtifactReadObservation(slug), ver, e.agentId ?? "main") &&
-    !observedWithoutSource(e.agentId, slug, ver)
+    versionHeldBy(agentId.getArtifactReadObservation(slug), ver, agentId.agentId ?? "main") &&
+    !observedWithoutSource(agentId.agentId, slug, ver)
   );
 }
 //@ chunk-q84dhc5d.js:1000-1070 placement = validateContentTokens (0.63)
 /**
  * 取有效的 Read token 上限：调用上下文的 fileReadingLimits.maxTokens，否则默认值。
  */
-function readableLineChars(e) {
-  return e.fileReadingLimits?.maxTokens ?? getDefaultFileReadingLimits().maxTokens;
+function readableLineChars(context) {
+  return context.fileReadingLimits?.maxTokens ?? getDefaultFileReadingLimits().maxTokens;
 }
 //@ chunk-q84dhc5d.js:1070-1306 placement
 function sourceShape(html, context) {
-  let n = readableLineChars(context);
-  let t = [];
-  let d = 0;
-  let r = 0;
-  while (r <= html.length) {
-    let index = html.indexOf(
+  let chars = readableLineChars(context);
+  let out = [];
+  let count = 0;
+  let index = 0;
+  while (index <= html.length) {
+    let index_2 = html.indexOf(
       `
 `,
-      r,
+      index,
     );
-    let u = index === -1 ? html.length : index;
-    d++;
-    if (roughTokenCountEstimationForFileType(html.slice(r, u), "html") > n / 4)
-      t.push({
-        line: d,
-        start: r,
-        end: u,
+    let end = index_2 === -1 ? html.length : index_2;
+    count++;
+    if (roughTokenCountEstimationForFileType(html.slice(index, end), "html") > chars / 4)
+      out.push({
+        line: count,
+        start: index,
+        end,
       });
-    r = u + 1;
+    index = end + 1;
   }
   return {
-    lines: d,
+    lines: count,
     unterminated: !html.endsWith(`
 `),
-    overlong: t,
+    overlong: out,
   };
 }
 //@ chunk-q84dhc5d.js:1306-1323 placement
@@ -85,59 +86,59 @@ var MAX_OVERLONG_LINES = 32;
  * 描述 artifact 交接来源；本模块负责交接读取的覆盖检查与副本管理。
  */
 function describeHandoverSource({ html, ver, shape, sent, recorded, lineCount = true }) {
-  let o = (s) => s.toLocaleString("en-US");
-  let u = shape.unterminated ? shape.lines : shape.lines - 1;
-  let b = `version ${ver}: ${o(Buffer.byteLength(html))} bytes${lineCount ? `, ${o(u)} ${plural(u, "line")}` : ""}`;
+  let formatNum = (value) => value.toLocaleString("en-US");
+  let lines = shape.unterminated ? shape.lines : shape.lines - 1;
+  let headline = `version ${ver}: ${formatNum(Buffer.byteLength(html))} bytes${lineCount ? `, ${formatNum(lines)} ${plural(lines, "line")}` : ""}`;
   if (shape.overlong.length === 0)
-    return `${b}, ${lineCount ? "each" : "every line"} short enough to Read with offset/limit`;
-  let replaced = (
+    return `${headline}, ${lineCount ? "each" : "every line"} short enough to Read with offset/limit`;
+  let html_2 = (
     sent !== undefined && shape.overlong.length <= MAX_OVERLONG_LINES ? sent : undefined
   )?.replace(
     /\r\n/g,
     `
 `,
   );
-  let C;
+  let stripped;
   try {
-    C = replaced === undefined ? undefined : strippedAuthorBody(replaced);
+    stripped = html_2 === undefined ? undefined : strippedAuthorBody(html_2);
   } catch (error) {
     if (!(error instanceof StripUnsettledError)) throw error;
   }
-  let P =
-    replaced === undefined
+  let sentLines =
+    html_2 === undefined
       ? undefined
       : new Set([
-          ...replaced.split(`
+          ...html_2.split(`
 `),
-          ...(C?.split(`
+          ...(stripped?.split(`
 `) ?? []),
         ]);
-  let mapped = shape.overlong.map((s) => {
-    let replaced = html.slice(s.start, s.end).replace(/\r$/, "");
-    let verdict = P === undefined ? undefined : P.has(replaced) ? "same" : "differs";
+  let mapped = shape.overlong.map((line) => {
+    let replaced = html.slice(line.start, line.end).replace(/\r$/, "");
+    let verdict = sentLines === undefined ? undefined : sentLines.has(replaced) ? "same" : "differs";
     return {
-      line: s.line,
-      chars: s.end - s.start,
+      line: line.line,
+      chars: line.end - line.start,
       verdict,
     };
   });
   let sliced = mapped.slice(0, MAX_LISTED_ITEMS);
   let sliced_2 = mapped.slice(MAX_LISTED_ITEMS);
-  let v = sliced_2.length;
-  let filtered = sliced_2.filter((s) => s.verdict === "differs");
-  let H = v > 0 && sliced_2.every((s) => s.verdict === "same");
-  let mapped_2 = filtered.slice(0, MAX_OTHER_ITEMS).map((s) => o(s.line));
-  let m = filtered.length - mapped_2.length;
-  let S =
+  let restCount = sliced_2.length;
+  let filtered = sliced_2.filter((line) => line.verdict === "differs");
+  let allSame = restCount > 0 && sliced_2.every((line) => line.verdict === "same");
+  let mapped_2 = filtered.slice(0, MAX_OTHER_ITEMS).map((line) => formatNum(line.line));
+  let moreCount = filtered.length - mapped_2.length;
+  let diffSummary =
     filtered.length === 0
-      ? H
+      ? allSame
         ? ", none differing from what you sent"
         : ""
-      : `, of which ${plural(filtered.length, "line")} ${mapped_2.join(", ")}${m > 0 ? ` and ${o(m)} more` : ""} ${filtered.length === 1 ? "differs" : "differ"} from what you sent`;
-  let w = (s) =>
-    `line ${o(s.line)} (${o(s.chars)} characters${s.verdict === "differs" ? ", which differs from the content you sent" : s.verdict === "same" ? ", identical to a line you sent" : ""})`;
+      : `, of which ${plural(filtered.length, "line")} ${mapped_2.join(", ")}${moreCount > 0 ? ` and ${formatNum(moreCount)} more` : ""} ${filtered.length === 1 ? "differs" : "differ"} from what you sent`;
+  let describeLine = (line) =>
+    `line ${formatNum(line.line)} (${formatNum(line.chars)} characters${line.verdict === "differs" ? ", which differs from the content you sent" : line.verdict === "same" ? ", identical to a line you sent" : ""})`;
   return (
-    `${b}; a single Read may not return ${sliced.map(w).join(", or ")}${v > 0 ? `, or ${o(v)} more such ${plural(v, "line")}${S}` : ""}` +
+    `${headline}; a single Read may not return ${sliced.map(describeLine).join(", or ")}${restCount > 0 ? `, or ${formatNum(restCount)} more such ${plural(restCount, "line")}${diffSummary}` : ""}` +
     (recorded
       ? " \u2014 no whole Read of it is needed: Read the lines you need with offset/limit, and take those long lines from the saved file, never from your own copy"
       : "")
@@ -146,80 +147,86 @@ function describeHandoverSource({ html, ver, shape, sent, recorded, lineCount = 
 //@ chunk-q84dhc5d.js:2865-4099 placement
 async function registerHandoverRead(
   { filepath, persistId, html, slug, ver, confirmsResend, batch, heldSkipsRead },
-  b,
+  context,
 ) {
-  let agentId = b.agentId ?? "main";
-  let { lines, overlong } = sourceShape(html, b);
-  let P = overlong.length === 0;
-  let y = isVersionHeldWithSource(b, slug, ver);
-  let x = y && heldSkipsRead ? "held" : "unverifiable";
-  let R = expandPath(filepath);
-  let v;
+  let agentId = context.agentId ?? "main";
+  let { lines, overlong } = sourceShape(html, context);
+  let noOverlong = overlong.length === 0;
+  let heldVersion = isVersionHeldWithSource(context, slug, ver);
+  let heldKind = heldVersion && heldSkipsRead ? "held" : "unverifiable";
+  let absPath = expandPath(filepath);
+  let mtimeMs;
   if (isDiskless()) reportOnce("handover_read");
   else
-    v = await getFileModificationTimeAsync(R).catch(() => {
+    mtimeMs = await getFileModificationTimeAsync(absPath).catch(() => {
       return;
     });
-  if (v === undefined) return x === "held" ? "held" : "unexaminable";
-  let a = createHash("sha256").update(html).digest("hex");
+  if (mtimeMs === undefined) return heldKind === "held" ? "held" : "unexaminable";
+  let contentHash = createHash("sha256").update(html).digest("hex");
   let pendingHandoverReads = getLiveState().pendingHandoverReads;
-  let h = pendingHandoverReads.get(R);
-  let m = h !== undefined && h.slug === slug && h.ver === ver && h.contentHash === a ? h : undefined;
-  if (m !== undefined) m.mtimeMs = v;
-  if (!P) return x;
-  let S = y && heldSkipsRead;
-  if (m !== undefined) {
-    m.handedTo.add(agentId);
-    if (S) {
-      m.completedBy.add(agentId);
+  let pending = pendingHandoverReads.get(absPath);
+  let match =
+    pending !== undefined &&
+    pending.slug === slug &&
+    pending.ver === ver &&
+    pending.contentHash === contentHash
+      ? pending
+      : undefined;
+  if (match !== undefined) match.mtimeMs = mtimeMs;
+  if (!noOverlong) return heldKind;
+  let verification = heldVersion && heldSkipsRead;
+  if (match !== undefined) {
+    match.handedTo.add(agentId);
+    if (verification) {
+      match.completedBy.add(agentId);
       return "held";
     }
-    if (confirmsResend) m.confirmsResendFor.set(agentId, batch ?? "");
-    else m.confirmsResendFor.delete(agentId);
-    m.completedBy.delete(agentId);
-    return m.unrecordableBy.has(agentId) ? "unverifiable" : "pending";
+    if (confirmsResend) match.confirmsResendFor.set(agentId, batch ?? "");
+    else match.confirmsResendFor.delete(agentId);
+    match.completedBy.delete(agentId);
+    return match.unrecordableBy.has(agentId) ? "unverifiable" : "pending";
   }
-  let w = new Set();
-  for (let [_, A] of pendingHandoverReads)
-    if (A.slug === slug) {
-      for (let q of A.unrecordableBy) w.add(q);
-      pendingHandoverReads.delete(_);
+  let carriedUnrecordable = new Set();
+  for (let [key, record] of pendingHandoverReads)
+    if (record.slug === slug) {
+      for (let agentId of record.unrecordableBy) carriedUnrecordable.add(agentId);
+      pendingHandoverReads.delete(key);
     }
-  let s = !html.endsWith(`
+  let unterminated = !html.endsWith(`
 `);
-  pendingHandoverReads.set(R, {
+  pendingHandoverReads.set(absPath, {
     slug,
     ver,
-    mtimeMs: v,
+    mtimeMs,
     totalLines: lines,
-    unterminated: s,
-    contentHash: a,
+    unterminated,
+    contentHash,
     bytes: Buffer.byteLength(html),
-    requiredLines: s ? lines : lines - 1,
+    requiredLines: unterminated ? lines : lines - 1,
     linesReturned: new Map(),
     linesPrepared: new Map(),
-    completedBy: new Set(S ? [agentId] : []),
+    completedBy: new Set(verification ? [agentId] : []),
     handedTo: new Set([agentId]),
-    unrecordableBy: w,
+    unrecordableBy: carriedUnrecordable,
     persistId,
     confirmsResendFor: new Map(confirmsResend ? [[agentId, batch ?? ""]] : []),
   });
-  return S ? "held" : w.has(agentId) ? "unverifiable" : "pending";
+  return verification ? "held" : carriedUnrecordable.has(agentId) ? "unverifiable" : "pending";
 }
 //@ chunk-q84dhc5d.js:4099-4366 placement
-async function handoverPersistTarget(e, ver, artifactPersistId) {
-  for (let [t, d] of getLiveState().pendingHandoverReads)
-    if (d.slug === e && d.ver === ver) {
-      let r = await getFileModificationTimeAsync(t).catch(() => {
+async function handoverPersistTarget(ver, ver_2, artifactPersistId) {
+  for (let [path, entry] of getLiveState().pendingHandoverReads)
+    if (entry.slug === ver && entry.ver === ver_2) {
+      let mtime = await getFileModificationTimeAsync(path).catch(() => {
         return;
       });
-      return r !== undefined && r !== d.mtimeMs
+      return mtime !== undefined && mtime !== entry.mtimeMs
         ? {
             persistId: `${artifactPersistId}-${Date.now().toString(36)}`,
-            editedCopy: t,
+            editedCopy: path,
           }
         : {
-            persistId: d.persistId,
+            persistId: entry.persistId,
           };
     }
   return {
@@ -228,134 +235,138 @@ async function handoverPersistTarget(e, ver, artifactPersistId) {
 }
 //@ chunk-q84dhc5d.js:4366-4601 placement
 async function refreshHandoverCopy(filepath, html) {
-  let n = expandPath(filepath);
+  let filePath = expandPath(filepath);
   let pendingHandoverReads = getLiveState().pendingHandoverReads;
-  let d = pendingHandoverReads.get(n);
-  if (d === undefined) return;
-  if (createHash("sha256").update(html).digest("hex") !== d.contentHash) {
-    pendingHandoverReads.delete(n);
+  let item = pendingHandoverReads.get(filePath);
+  if (item === undefined) return;
+  if (createHash("sha256").update(html).digest("hex") !== item.contentHash) {
+    pendingHandoverReads.delete(filePath);
     return;
   }
-  let r = await getFileModificationTimeAsync(n).catch(() => {
+  let mtime = await getFileModificationTimeAsync(filePath).catch(() => {
     return;
   });
-  if (r !== undefined) d.mtimeMs = r;
+  if (mtime !== undefined) item.mtimeMs = mtime;
 }
 //@ chunk-q84dhc5d.js:4601-4786 placement
 /**
  * 找待完成的交接读取
  */
-function findPendingHandoverRead(e, i, n) {
-  for (let [t, d] of getLiveState().pendingHandoverReads)
+function findPendingHandoverRead(context, slug, ver) {
+  for (let [key, entry] of getLiveState().pendingHandoverReads)
     if (
-      d.slug === i &&
-      (n === undefined || d.ver === n) &&
-      d.handedTo.has(e) &&
-      !d.completedBy.has(e) &&
-      !d.unrecordableBy.has(e)
+      entry.slug === slug &&
+      (ver === undefined || entry.ver === ver) &&
+      entry.handedTo.has(context) &&
+      !entry.completedBy.has(context) &&
+      !entry.unrecordableBy.has(context)
     )
-      return [t, d];
+      return [key, entry];
   return;
 }
 //@ chunk-q84dhc5d.js:4786-4839 placement
-function readPendingFor(agentId, slug, liveVer) {
-  return findPendingHandoverRead(agentId ?? "main", slug, liveVer) !== undefined;
+function readPendingFor(agentId, slug, ver) {
+  return findPendingHandoverRead(agentId ?? "main", slug, ver) !== undefined;
 }
 //@ chunk-q84dhc5d.js:4839-4970 placement
-function findHandoverRead(e, i, n, t = false) {
-  let agentId = e.agentId ?? "main";
-  let pendingHandoverRead = findPendingHandoverRead(agentId, i, n);
+function findHandoverRead(context, slug, ver, ignoreHold = false) {
+  let agentId = context.agentId ?? "main";
+  let pendingHandoverRead = findPendingHandoverRead(agentId, slug, ver);
   if (pendingHandoverRead === undefined) return;
-  let o = pendingHandoverRead[1];
-  return isHandoverSuperseded(o, e) || (!t && isVersionHeldWithSource(e, i, o.ver))
+  let body = pendingHandoverRead[1];
+  return isHandoverSuperseded(body, context) ||
+    (!ignoreHold && isVersionHeldWithSource(context, slug, body.ver))
     ? undefined
     : pendingHandoverRead;
 }
 //@ chunk-q84dhc5d.js:4970-5076 placement
-function handoverCoverage(e, i, n, { ignoreHold: t = false } = {}) {
-  let handoverRead = findHandoverRead(e, i, n, t);
+function handoverCoverage(context, slug, ver, { ignoreHold = false } = {}) {
+  let handoverRead = findHandoverRead(context, slug, ver, ignoreHold);
   return handoverRead === undefined
     ? undefined
-    : handoverCoverageOf(handoverRead[0], handoverRead[1], e.agentId);
+    : handoverCoverageOf(handoverRead[0], handoverRead[1], context.agentId);
 }
 //@ chunk-q84dhc5d.js:5076-5271 placement
-async function checkedHandoverCoverage(e, i, live) {
-  let handoverRead = findHandoverRead(e, i, live);
+async function checkedHandoverCoverage(context, slug, live) {
+  let handoverRead = findHandoverRead(context, slug, live);
   if (handoverRead === undefined) return;
-  let [path, r] = handoverRead;
-  let o;
+  let [path, readPath] = handoverRead;
+  let result;
   try {
-    o = (await getFileModificationTimeAsync(path)) === r.mtimeMs ? "intact" : "changed";
+    result = (await getFileModificationTimeAsync(path)) === readPath.mtimeMs ? "intact" : "changed";
   } catch (error) {
-    o = isENOENT(error) ? "changed" : "unknown";
+    result = isENOENT(error) ? "changed" : "unknown";
   }
   return {
-    ...handoverCoverageOf(path, r, e.agentId),
-    file: o,
+    ...handoverCoverageOf(path, readPath, context.agentId),
+    file: result,
   };
 }
 //@ chunk-q84dhc5d.js:5271-5437 placement
 /**
  * 交接读取覆盖情况
  */
-function handoverCoverageOf(path, i, agentId) {
+function handoverCoverageOf(path, agentId, agentId_2) {
   return {
     path,
-    slug: i.slug,
-    ver: i.ver,
-    lines: i.requiredLines,
-    unterminated: i.unterminated,
-    unread: getUncoveredLineRanges(i.linesReturned.get(agentId ?? "main") ?? [], i.requiredLines),
+    slug: agentId.slug,
+    ver: agentId.ver,
+    lines: agentId.requiredLines,
+    unterminated: agentId.unterminated,
+    unread: getUncoveredLineRanges(
+      agentId.linesReturned.get(agentId_2 ?? "main") ?? [],
+      agentId.requiredLines,
+    ),
   };
 }
 //@ chunk-q84dhc5d.js:5437-5536 placement
-function handoverReadConfirmsResend(e, i, live) {
-  let handoverRead = findHandoverRead(e, i, live);
+function handoverReadConfirmsResend(context, slug, live) {
+  let handoverRead = findHandoverRead(context, slug, live);
   return (
     handoverRead !== undefined &&
-    refusedBodyFor(handoverRead[1], e.agentId, e.agentId ?? "main") === undefined
+    refusedBodyFor(handoverRead[1], context.agentId, context.agentId ?? "main") === undefined
   );
 }
 //@ chunk-q84dhc5d.js:5536-5615 placement
-function vouchHandoverReadConfirmsResend(e, i, live, t) {
-  findHandoverRead(e, i, live)?.[1].confirmsResendFor.set(e.agentId ?? "main", t);
+function vouchHandoverReadConfirmsResend(context, slug, live, response) {
+  findHandoverRead(context, slug, live)?.[1].confirmsResendFor.set(context.agentId ?? "main", response);
 }
 //@ chunk-q84dhc5d.js:5615-5969 placement
 function describeHandoverCoverage({ lines, unterminated, unread }) {
-  let reduced = unread.reduce((acc, [r, o]) => acc + o - r + 1, 0);
+  let reduced = unread.reduce((acc, [start, end]) => acc + end - start + 1, 0);
   return (
     `${lines} ${plural(lines, "line")}` +
     (unterminated
       ? `; the last has no trailing newline, so \`wc -l\` reports ${lines - 1} \u2014 Read through line ${lines} and leave the file as it is`
       : "") +
     (reduced > 0 && reduced < lines
-      ? `; you have not yet Read ${plural(reduced, "line")} ${unread.map(([d, r]) => (d === r ? `${d}` : `${d}-${r}`)).join(", ")}`
+      ? `; you have not yet Read ${plural(reduced, "line")} ${unread.map(([start, end]) => (start === end ? `${start}` : `${start}-${end}`)).join(", ")}`
       : "")
   );
 }
 //@ chunk-q84dhc5d.js:5969-6046 placement
-function handoverCoverageNote(context, slug, ver, t) {
-  let d = handoverCoverage(context, slug, ver, t);
-  return d === undefined ? "" : ` (${describeHandoverCoverage(d)})`;
+function handoverCoverageNote(context, slug, ver, options) {
+  let coverage = handoverCoverage(context, slug, ver, options);
+  return coverage === undefined ? "" : ` (${describeHandoverCoverage(coverage)})`;
 }
 //@ chunk-q84dhc5d.js:6046-6193 placement
-function getUncoveredLineRanges(e, requiredLines) {
-  let n = [];
-  let t = 0;
-  for (let [d, r] of mergeLineRanges(e)) {
-    if (d > t) n.push([t + 1, Math.min(d, requiredLines)]);
-    t = Math.max(t, r);
-    if (t >= requiredLines) break;
+function getUncoveredLineRanges(read, requiredLines) {
+  let out = [];
+  let cursor = 0;
+  for (let [from, to] of mergeLineRanges(read)) {
+    if (from > cursor) out.push([cursor + 1, Math.min(from, requiredLines)]);
+    cursor = Math.max(cursor, to);
+    if (cursor >= requiredLines) break;
   }
-  if (t < requiredLines) n.push([t + 1, requiredLines]);
-  return n;
+  if (cursor < requiredLines) out.push([cursor + 1, requiredLines]);
+  return out;
 }
 //@ chunk-q84dhc5d.js:6193-6326 placement
-async function discardHandoverCopy(filepath, persistedToolResultFiles) {
-  getLiveState().pendingHandoverReads.delete(expandPath(filepath));
-  forgetSavedFilePath(persistedToolResultFiles, filepath);
+async function discardHandoverCopy(filePath, savedFiles) {
+  getLiveState().pendingHandoverReads.delete(expandPath(filePath));
+  forgetSavedFilePath(savedFiles, filePath);
   if (isDiskless()) reportOnce("handover_discard");
-  else await unlink(filepath).catch(() => {});
+  else await unlink(filePath).catch(() => {});
 }
 //@ chunk-q84dhc5d.js:6326-6391 placement
 var EMPTY_HANDOVER_READ = {
@@ -366,53 +377,69 @@ var EMPTY_HANDOVER_READ = {
   },
 };
 //@ chunk-q84dhc5d.js:6391-7811 placement
-async function prepareHandoverRead(path, i, n, t) {
+async function prepareHandoverRead(artifactKey, context, messageId, range) {
   try {
     let pendingHandoverReads = getLiveState().pendingHandoverReads;
-    let r = pendingHandoverReads.get(path);
-    let agentId = i.agentId ?? "main";
-    if (r === undefined || n === undefined || t.lineCount <= 0 || r.completedBy.has(agentId))
+    let pending = pendingHandoverReads.get(artifactKey);
+    let agentId = context.agentId ?? "main";
+    if (
+      pending === undefined ||
+      messageId === undefined ||
+      range.lineCount <= 0 ||
+      pending.completedBy.has(agentId)
+    )
       return EMPTY_HANDOVER_READ;
-    if (Math.floor(t.mtimeMs) !== r.mtimeMs || t.totalLines !== r.totalLines) {
+    if (Math.floor(range.mtimeMs) !== pending.mtimeMs || range.totalLines !== pending.totalLines) {
       logFeatureSad("artifact_handover_read", "file_changed");
       return EMPTY_HANDOVER_READ;
     }
-    if (dropSupersededHandover(r, path, i)) return EMPTY_HANDOVER_READ;
-    let u = [t.firstLine, t.firstLine + t.lineCount];
-    let b = await checkHandoverCopy(path, r.bytes, r.contentHash);
-    if (b === "changed") {
-      pendingHandoverReads.delete(path);
+    if (dropSupersededHandover(pending, artifactKey, context)) return EMPTY_HANDOVER_READ;
+    let requestedRange = [range.firstLine, range.firstLine + range.lineCount];
+    let copyState = await checkHandoverCopy(artifactKey, pending.bytes, pending.contentHash);
+    if (copyState === "changed") {
+      pendingHandoverReads.delete(artifactKey);
       logFeatureSad("artifact_handover_read", "file_changed");
       return EMPTY_HANDOVER_READ;
     }
-    if (b === "unreadable") logFeatureSad("artifact_handover_read", "file_unreadable");
-    let c = b === "holds";
-    let filtered = (r.linesPrepared.get(agentId) ?? []).filter((a) => a.messageId === n);
-    let C = mergeLineRanges([...(r.linesReturned.get(agentId) ?? []), ...filtered.map((a) => a.range), u]);
-    let P = coversRequiredLines(C, r.requiredLines);
-    let y = {
-      messageId: n,
-      range: u,
+    if (copyState === "unreadable") logFeatureSad("artifact_handover_read", "file_unreadable");
+    let copyHolds = copyState === "holds";
+    let filtered = (pending.linesPrepared.get(agentId) ?? []).filter(
+      (entry) => entry.messageId === messageId,
+    );
+    let covered = mergeLineRanges([
+      ...(pending.linesReturned.get(agentId) ?? []),
+      ...filtered.map((entry) => entry.range),
+      requestedRange,
+    ]);
+    let coversAll = coversRequiredLines(covered, pending.requiredLines);
+    let prepared = {
+      messageId,
+      range: requestedRange,
     };
-    r.linesPrepared.set(agentId, [...filtered, y]);
+    pending.linesPrepared.set(agentId, [...filtered, prepared]);
     let commit = () => {
       try {
-        let a = r.linesPrepared.get(agentId) ?? [];
-        if (pendingHandoverReads.get(path) !== r || r.completedBy.has(agentId) || !a.includes(y)) return;
-        let filtered = a.filter((m) => m !== y);
-        if (filtered.length > 0) r.linesPrepared.set(agentId, filtered);
-        else r.linesPrepared.delete(agentId);
-        let h = mergeLineRanges([...(r.linesReturned.get(agentId) ?? []), u]);
-        if (!c || !coversRequiredLines(h, r.requiredLines)) {
-          r.linesReturned.set(agentId, h);
+        let preparedList = pending.linesPrepared.get(agentId) ?? [];
+        if (
+          pendingHandoverReads.get(artifactKey) !== pending ||
+          pending.completedBy.has(agentId) ||
+          !preparedList.includes(prepared)
+        )
+          return;
+        let filtered = preparedList.filter((entry) => entry !== prepared);
+        if (filtered.length > 0) pending.linesPrepared.set(agentId, filtered);
+        else pending.linesPrepared.delete(agentId);
+        let merged = mergeLineRanges([...(pending.linesReturned.get(agentId) ?? []), requestedRange]);
+        if (!copyHolds || !coversRequiredLines(merged, pending.requiredLines)) {
+          pending.linesReturned.set(agentId, merged);
           return;
         }
-        r.linesReturned.delete(agentId);
-        r.completedBy.add(agentId);
-        return recordHandoverReadVersion(r, path, i, n, agentId)
+        pending.linesReturned.delete(agentId);
+        pending.completedBy.add(agentId);
+        return recordHandoverReadVersion(pending, artifactKey, context, messageId, agentId)
           ? {
-              slug: r.slug,
-              ver: r.ver,
+              slug: pending.slug,
+              ver: pending.ver,
             }
           : undefined;
       } catch (error) {
@@ -420,22 +447,25 @@ async function prepareHandoverRead(path, i, n, t) {
         return;
       }
     };
-    let R = !r.unrecordableBy.has(agentId);
-    let v = R && r.handedTo.has(agentId) && !isVersionHeldWithSource(i, r.slug, r.ver);
+    let recordable = !pending.unrecordableBy.has(agentId);
+    let remaining =
+      recordable &&
+      pending.handedTo.has(agentId) &&
+      !isVersionHeldWithSource(context, pending.slug, pending.ver);
     return {
       artifactRead:
-        P && c && R
+        coversAll && copyHolds && recordable
           ? {
-              slug: r.slug,
-              ver: r.ver,
+              slug: pending.slug,
+              ver: pending.ver,
             }
           : undefined,
       remaining:
-        P || !v
+        coversAll || !remaining
           ? undefined
           : {
-              ...handoverCoverageOf(path, r, i.agentId),
-              unread: getUncoveredLineRanges(C, r.requiredLines),
+              ...handoverCoverageOf(artifactKey, pending, context.agentId),
+              unread: getUncoveredLineRanges(covered, pending.requiredLines),
             },
       commit,
     };
@@ -445,14 +475,14 @@ async function prepareHandoverRead(path, i, n, t) {
   }
 }
 //@ chunk-q84dhc5d.js:7811-7923 placement
-function isHandoverSuperseded(e, i) {
-  let ver = i.getArtifactReadObservation(e.slug).ver;
-  return ver !== undefined && ver !== e.ver && (compareNumericPrefix(ver, e.ver) ?? 0) > 0;
+function isHandoverSuperseded(context, slug) {
+  let ver = slug.getArtifactReadObservation(context.slug).ver;
+  return ver !== undefined && ver !== context.ver && (compareNumericPrefix(ver, context.ver) ?? 0) > 0;
 }
 //@ chunk-q84dhc5d.js:7923-8047 placement
-function dropSupersededHandover(e, i, n) {
-  if (isHandoverSuperseded(e, n)) {
-    getLiveState().pendingHandoverReads.delete(i);
+function dropSupersededHandover(context, slug, ver) {
+  if (isHandoverSuperseded(context, ver)) {
+    getLiveState().pendingHandoverReads.delete(slug);
     logFeatureSad("artifact_handover_read", "superseded");
     return true;
   }
@@ -462,50 +492,50 @@ function dropSupersededHandover(e, i, n) {
 /**
  * 合并重叠的行区间
  */
-function mergeLineRanges(e) {
-  let sorted = e.map((t) => [t[0], t[1]]).sort((t, d) => t[0] - d[0]);
-  let n = [];
-  for (let t of sorted) {
-    let last = n.at(-1);
-    if (last !== undefined && t[0] <= last[1]) last[1] = Math.max(last[1], t[1]);
-    else n.push(t);
+function mergeLineRanges(ranges) {
+  let sorted = ranges.map((pair) => [pair[0], pair[1]]).sort((a, b) => a[0] - b[0]);
+  let out = [];
+  for (let range of sorted) {
+    let last = out.at(-1);
+    if (last !== undefined && range[0] <= last[1]) last[1] = Math.max(last[1], range[1]);
+    else out.push(range);
   }
-  return n;
+  return out;
 }
 //@ chunk-q84dhc5d.js:8225-8288 placement
-function coversRequiredLines(e, requiredLines) {
-  let n = e[0];
-  return n !== undefined && n[0] <= 0 && n[1] >= requiredLines;
+function coversRequiredLines(range, requiredLines) {
+  let start = range[0];
+  return start !== undefined && start[0] <= 0 && start[1] >= requiredLines;
 }
 //@ chunk-q84dhc5d.js:8288-8439 placement
 /**
  * 取被拒绝的发布正文记录
  */
-function refusedBodyFor(e, agentId, n) {
-  let t = getLiveState().refusedPublishBodies.get(replicaKey(agentId, e.slug));
-  let d = e.confirmsResendFor.get(n);
-  return d !== undefined && (t === undefined || t.batch !== d) ? undefined : t;
+function refusedBodyFor(refusal, agentId, slug) {
+  let body = getLiveState().refusedPublishBodies.get(replicaKey(agentId, refusal.slug));
+  let confirms = refusal.confirmsResendFor.get(slug);
+  return confirms !== undefined && (body === undefined || body.batch !== confirms) ? undefined : body;
 }
 //@ chunk-q84dhc5d.js:8439-8836 placement
 /**
  * 记录交接读取的版本
  */
-function recordHandoverReadVersion(e, i, n, t, agentId) {
-  if (dropSupersededHandover(e, i, n)) return false;
-  let r = refusedBodyFor(e, n.agentId, agentId);
-  let observedFrom = r?.observedFrom;
+function recordHandoverReadVersion(context, slug, ver, msgId, slug_2) {
+  if (dropSupersededHandover(context, slug, ver)) return false;
+  let body = refusedBodyFor(context, ver.agentId, slug_2);
+  let observedFrom = body?.observedFrom;
   try {
-    n.setArtifactReadVersion(e.slug, e.ver, observationStamp(n.agentId, t));
+    ver.setArtifactReadVersion(context.slug, context.ver, observationStamp(ver.agentId, msgId));
   } finally {
-    if (r !== undefined)
-      if (observedFrom === undefined) delete r.observedFrom;
-      else r.observedFrom = observedFrom;
+    if (body !== undefined)
+      if (observedFrom === undefined) delete body.observedFrom;
+      else body.observedFrom = observedFrom;
   }
-  if (versionHeldBy(n.getArtifactReadObservation(e.slug), e.ver, agentId)) {
+  if (versionHeldBy(ver.getArtifactReadObservation(context.slug), context.ver, slug_2)) {
     logFeatureOk("artifact_handover_read");
     return true;
   }
-  e.unrecordableBy.add(agentId);
+  context.unrecordableBy.add(slug_2);
   logFeatureSad("artifact_handover_read", "seed_not_persisted");
   return false;
 }
@@ -513,11 +543,11 @@ function recordHandoverReadVersion(e, i, n, t, agentId) {
 /**
  * 核对交接副本大小与哈希是否不变
  */
-async function checkHandoverCopy(e, bytes, contentHash) {
+async function checkHandoverCopy(path, bytes, contentHash) {
   try {
-    return (await stat(e)).size === bytes &&
+    return (await stat(path)).size === bytes &&
       createHash("sha256")
-        .update(await readFile(e))
+        .update(await readFile(path))
         .digest("hex") === contentHash
       ? "holds"
       : "changed";
@@ -541,4 +571,5 @@ export {
   describeHandoverCoverage,
   handoverCoverage,
   readPendingFor,
+  prepareHandoverRead,
 };

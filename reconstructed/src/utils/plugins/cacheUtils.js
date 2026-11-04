@@ -10,6 +10,7 @@
  */
 import { join, sep, resolve as resolve_2 } from "path";
 import { unlink, lstat, readdir, mkdir, copyFile } from "fs/promises";
+import { PLUGIN_LINK_FILE } from "./pluginLinks.js";
 import {
   clearPluginCache,
   anchoredPluginCachePath,
@@ -59,17 +60,30 @@ import { safeResolvePath_2 } from "../fsOperations.js";
 import { pluginCacheStorageScope } from "./pluginVersioning.js";
 import { isProcessRunning as isProcessRunning_2 } from "../genericProcessUtils.js";
 import { getProcessCreationTimeMsAsync } from "../processIdentity.js";
-import { PLUGIN_LINK_FILE_2 } from "./pluginLinks.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
+//@ chunk-f3qhjfah.js:2620-2695 fingerprint = ORPHANED_AT_FILENAME (0.405)
+/**
+ * ORPHAN_MARKER_FILE：版本目录的孤儿标记文件名；IN_USE_MARKER_FILE：使用中标记文件名；GCS_SHA_MARKER_FILE：GCS sha 标记文件名（同一声明共 4 个绑定）。
+ */
+var ORPHAN_MARKER_FILE = ".orphaned_at";
+var IN_USE_MARKER_FILE = ".in_use";
+var GCS_SHA_MARKER_FILE = ".gcs-sha";
+var LINKS_MATERIALIZED_MARKER = ".links_materialized";
+//@ chunk-f3qhjfah.js:4415-4444 placement
+var CACHE_META_FILES; // deferred: uses PLUGIN_LINK_FILE (./pluginLinks.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-f3qhjfah.js:4415", () => {
+  CACHE_META_FILES = new Set([PLUGIN_LINK_FILE, IN_USE_MARKER_FILE, ORPHAN_MARKER_FILE]);
+});
 //@ chunk-e6aww6q8.js:4180809-4180828 placement
 var ORPHANED_VERSION_TTL_MS = 1209600000;
 //@ chunk-e6aww6q8.js:4180828-4180967 placement
-function clearPluginCachesAfterChange(e, n, r = "clear") {
+function clearPluginCachesAfterChange(storageV5, credentials, mode = "clear") {
   clearPluginCache();
   clearPluginCommands();
   clearPluginAgents();
   clearPluginHookCache();
-  if (r === "clear") pruneRemovedPluginHooks(e, n).catch((error) => logError(error));
+  if (mode === "clear") pruneRemovedPluginHooks(storageV5, credentials).catch((error) => logError(error));
   clearPluginOptionsCache();
   clearCachedOutputStyles();
   getHostState().allOutputStyles.clear();
@@ -79,8 +93,8 @@ function clearPluginCachesAfterChange(e, n, r = "clear") {
 /**
  * refreshPluginCaches：刷新活动插件前清空派生缓存。
  */
-function refreshPluginCaches(storageV5, credentials, r = "clear") {
-  clearPluginCachesAfterChange(storageV5, credentials, r);
+function refreshPluginCaches(storageV5, credentials, mode = "clear") {
+  clearPluginCachesAfterChange(storageV5, credentials, mode);
   clearPluginDerivedState();
 }
 //@ chunk-e6aww6q8.js:4181011-4181217 placement
@@ -104,19 +118,19 @@ function clearPluginDerivedState() {
 //@ chunk-e6aww6q8.js:4181217-4181423 placement
 function getCacheRootComparable() {
   let pluginRegistry = getPluginRegistry();
-  let n = anchoredPluginCachePath();
+  let rootPath = anchoredPluginCachePath();
   let cacheRootComparableMemo = pluginRegistry.cacheRootComparableMemo;
   if (
-    cacheRootComparableMemo?.root !== n ||
+    cacheRootComparableMemo?.root !== rootPath ||
     !isFreshTimestamp_2(cacheRootComparableMemo.at, CACHE_CLEAR_THROTTLE_MS)
   ) {
-    let s = {
-      root: n,
-      comparable: toComparablePath(n),
+    let memo = {
+      root: rootPath,
+      comparable: toComparablePath(rootPath),
       at: Date.now(),
     };
-    pluginRegistry.cacheRootComparableMemo = s;
-    return s.comparable;
+    pluginRegistry.cacheRootComparableMemo = memo;
+    return memo.comparable;
   }
   return cacheRootComparableMemo.comparable;
 }
@@ -126,8 +140,8 @@ var CACHE_CLEAR_THROTTLE_MS = 30000;
 /**
  * 给不再被任何安装记录引用的版本缓存目录写 .orphaned_at 时间戳（拒绝符号链接与缓存根之外的路径）。
  */
-async function markPluginVersionOrphaned(e, n) {
-  let { absolute, suspect } = classifyMarketplacePath(e);
+async function markPluginVersionOrphaned(versionPath, storageV5) {
+  let { absolute, suspect } = classifyMarketplacePath(versionPath);
   if (suspect) {
     logForDebugging(`Not marking an unclassifiable plugin version path: ${absolute}`);
     return;
@@ -150,16 +164,17 @@ async function markPluginVersionOrphaned(e, n) {
     logForDebugging(`Not writing .orphaned_at outside the plugin cache root: ${absolute}`);
     return;
   }
-  let h = orphanMarkerCoordsV5(absolute, n);
-  if (n !== undefined && h !== null) {
-    let y = await n.write(
-      STORAGE_SPACES.pluginCache(h.marketplace, h.plugin, h.version, [ORPHAN_MARKER_FILE]),
+  let coords = orphanMarkerCoordsV5(absolute, storageV5);
+  if (storageV5 !== undefined && coords !== null) {
+    let writeResult = await storageV5.write(
+      STORAGE_SPACES.pluginCache(coords.marketplace, coords.plugin, coords.version, [ORPHAN_MARKER_FILE]),
       `${Date.now()}`,
       {
         publishDiscipline: "inPlace",
       },
     );
-    if (!y.ok) logForDebugging(`Failed to write .orphaned_at: ${absolute}: ${formatStorageError(y.error)}`);
+    if (!writeResult.ok)
+      logForDebugging(`Failed to write .orphaned_at: ${absolute}: ${formatStorageError(writeResult.error)}`);
     return;
   }
   try {
@@ -181,18 +196,18 @@ async function cleanupOrphanedPluginVersionsInBackground(storageV5) {
   if (isPluginZipCacheEnabled()) return;
   try {
     let installedVersions = anchoredPluginCachePath();
-    let r = wslWalkRootOf(installedVersions);
-    if (r === "undeterminable") {
+    let walkRoot = wslWalkRootOf(installedVersions);
+    if (walkRoot === "undeterminable") {
       logForDebugging(
         "Skipping the orphaned-version sweep: the cache root volume could not be read to map its WSL companion views",
       );
       return;
     }
-    let s =
+    let installed =
       isStorageV5Enabled() && storageV5 !== undefined
-        ? await getInstalledVersionPathsAsync(storageV5, r)
-        : getInstalledVersionPaths(r);
-    if (!s || s.records.length === 0) return;
+        ? await getInstalledVersionPathsAsync(storageV5, walkRoot)
+        : getInstalledVersionPaths(walkRoot);
+    if (!installed || installed.records.length === 0) return;
     let budget = {
       pagesLeft: DEFAULT_MAX_PAGES,
     };
@@ -200,25 +215,25 @@ async function cleanupOrphanedPluginVersionsInBackground(storageV5) {
     let comparablePath = toComparablePath(installedVersions, {
       foldCase: true,
     });
-    let mapped = s.records
+    let mapped = installed.records
       .map((record) => classifyMarketplacePath(record))
-      .filter((L) => !L.suspect)
-      .map((L) => ({
-        absolute: L.absolute,
-        comparable: toComparablePath(L.absolute, {
+      .filter((classified) => !classified.suspect)
+      .map((classified) => ({
+        absolute: classified.absolute,
+        comparable: toComparablePath(classified.absolute, {
           foldCase: true,
           knownNotSuspect: true,
         }),
       }));
-    for (let L of mapped) s.keys.add(normalizePathForPlatform(L.comparable));
+    for (let mappedPath of mapped) installed.keys.add(normalizePathForPlatform(mappedPath.comparable));
     await Promise.all(
       mapped
-        .filter((L) =>
-          isPathWithin_2(comparablePath, L.comparable, {
+        .filter((mappedPath) =>
+          isPathWithin_2(comparablePath, mappedPath.comparable, {
             alreadyComparable: true,
           }),
         )
-        .map((L) => removeOrphanedAtMarker(L.absolute, storageV5)),
+        .map((mappedPath) => removeOrphanedAtMarker(mappedPath.absolute, storageV5)),
     );
     for (let marketplace of await listPluginCacheForCleanup(
       installedVersions,
@@ -228,13 +243,16 @@ async function cleanupOrphanedPluginVersionsInBackground(storageV5) {
     )) {
       let match = regExp_18.exec(marketplace);
       if (match) {
-        let Z = Date.now() - Number(match[1]);
+        let ageMs = Date.now() - Number(match[1]);
         if (
-          Z > -ORPHAN_GRACE_PERIOD_MS &&
-          Z < ORPHANED_VERSION_TTL_MS &&
-          !anyStartsWith(s.keys, normalizePathForPlatform(join(installedVersions, marketplace) + sep)) &&
+          ageMs > -ORPHAN_GRACE_PERIOD_MS &&
+          ageMs < ORPHANED_VERSION_TTL_MS &&
           !anyStartsWith(
-            s.keys,
+            installed.keys,
+            normalizePathForPlatform(join(installedVersions, marketplace) + sep),
+          ) &&
+          !anyStartsWith(
+            installed.keys,
             normalizePathForPlatform(
               toComparablePath(join(installedVersions, marketplace), {
                 foldCase: true,
@@ -260,8 +278,8 @@ async function cleanupOrphanedPluginVersionsInBackground(storageV5) {
         )) {
           let versionPath = join(pluginPath, version);
           if (
-            s.keys.has(normalizePathForPlatform(versionPath)) ||
-            s.keys.has(
+            installed.keys.has(normalizePathForPlatform(versionPath)) ||
+            installed.keys.has(
               normalizePathForPlatform(
                 toComparablePath(versionPath, {
                   foldCase: true,
@@ -283,119 +301,128 @@ async function cleanupOrphanedPluginVersionsInBackground(storageV5) {
   }
 }
 //@ chunk-e6aww6q8.js:4183321-4183353 layout
-function getOrphanedAtPath(e) {
-  return join(e, ORPHAN_MARKER_FILE);
+function getOrphanedAtPath(versionPath) {
+  return join(versionPath, ORPHAN_MARKER_FILE);
 }
 //@ chunk-e6aww6q8.js:4183353-4183697 fingerprint = removeOrphanedAtMarker (0.74)
-async function removeOrphanedAtMarker(absolute, n) {
-  if (await isSymlinkOrFalse(absolute)) return;
-  let orphanedAtPath = getOrphanedAtPath(absolute);
-  let s = orphanMarkerCoordsV5(absolute, n);
-  if (n !== undefined && s !== null) {
-    let h = await n.delete(
-      STORAGE_SPACES.pluginCache(s.marketplace, s.plugin, s.version, [ORPHAN_MARKER_FILE]),
+async function removeOrphanedAtMarker(versionPath, storageV5) {
+  if (await isSymlinkOrFalse(versionPath)) return;
+  let orphanedAtPath = getOrphanedAtPath(versionPath);
+  let coords = orphanMarkerCoordsV5(versionPath, storageV5);
+  if (storageV5 !== undefined && coords !== null) {
+    let deleteResult = await storageV5.delete(
+      STORAGE_SPACES.pluginCache(coords.marketplace, coords.plugin, coords.version, [ORPHAN_MARKER_FILE]),
     );
-    if (!h.ok) logForDebugging(`Failed to remove .orphaned_at: ${absolute}: ${formatStorageError(h.error)}`);
+    if (!deleteResult.ok)
+      logForDebugging(
+        `Failed to remove .orphaned_at: ${versionPath}: ${formatStorageError(deleteResult.error)}`,
+      );
     return;
   }
   try {
     await unlink(orphanedAtPath);
   } catch (error) {
     if (getErrnoCode(error) === "ENOENT") return;
-    logForDebugging(`Failed to remove .orphaned_at: ${absolute}: ${error}`);
+    logForDebugging(`Failed to remove .orphaned_at: ${versionPath}: ${error}`);
   }
 }
 //@ chunk-e6aww6q8.js:4183697-4183802 fingerprint = getInstalledVersionPaths (0.744)
-function getInstalledVersionPaths(e) {
+function getInstalledVersionPaths(walkRoot) {
   try {
-    return collectInstallRecordPaths(loadInstalledPluginsSync(), e);
+    return collectInstallRecordPaths(loadInstalledPluginsSync(), walkRoot);
   } catch (error) {
     logForDebugging(`Failed to load installed plugins: ${error}`);
     return null;
   }
 }
 //@ chunk-e6aww6q8.js:4183802-4183922 layout
-async function getInstalledVersionPathsAsync(e, n) {
+async function getInstalledVersionPathsAsync(storageV5, walkRoot) {
   try {
-    return collectInstallRecordPaths(await loadInstalledPlugins(e), n);
+    return collectInstallRecordPaths(await loadInstalledPlugins(storageV5), walkRoot);
   } catch (error) {
     logForDebugging(`Failed to load installed plugins: ${error}`);
     return null;
   }
 }
 //@ chunk-e6aww6q8.js:4183922-4183992 layout
-function anyStartsWith(keys, n) {
-  for (let r of keys) if (r.startsWith(n)) return true;
+function anyStartsWith(keys, prefix) {
+  for (let key of keys) if (key.startsWith(prefix)) return true;
   return false;
 }
 //@ chunk-e6aww6q8.js:4183992-4184293 layout
 /**
  * 遍历 installed_plugins 的所有安装记录，收集去重后的 installPath（及其解析目标）和归一化后的路径键集合， 供孤儿版本清理判断哪些目录仍被引用。
  */
-function collectInstallRecordPaths(installedPlugins, n) {
-  let r = [];
-  let s = new Set();
-  let h = new Set();
+function collectInstallRecordPaths(installedPlugins, walkRoot) {
+  let records = [];
+  let seenPaths = new Set();
+  let keys = new Set();
   for (let plugin of Object.values(installedPlugins.plugins))
-    for (let S of plugin) {
-      let w = resolve_2(getOriginalCwd(), S.installPath);
-      if (!s.has(w)) {
-        s.add(w);
-        r.push(S.installPath);
+    for (let record of plugin) {
+      let absolutePath = resolve_2(getOriginalCwd(), record.installPath);
+      if (!seenPaths.has(absolutePath)) {
+        seenPaths.add(absolutePath);
+        records.push(record.installPath);
       }
-      h.add(normalizePathForPlatform(w));
-      let alternatePlatformPath = toAlternatePlatformPath(S.installPath, n);
+      keys.add(normalizePathForPlatform(absolutePath));
+      let alternatePlatformPath = toAlternatePlatformPath(record.installPath, walkRoot);
       if (alternatePlatformPath !== undefined) {
-        h.add(normalizePathForPlatform(alternatePlatformPath));
-        if (!s.has(alternatePlatformPath)) {
-          s.add(alternatePlatformPath);
-          r.push(alternatePlatformPath);
+        keys.add(normalizePathForPlatform(alternatePlatformPath));
+        if (!seenPaths.has(alternatePlatformPath)) {
+          seenPaths.add(alternatePlatformPath);
+          records.push(alternatePlatformPath);
         }
       }
     }
   return {
-    records: r,
-    keys: h,
+    records,
+    keys,
   };
 }
 //@ chunk-e6aww6q8.js:4184293-4185266 fingerprint = processOrphanedPluginVersion (0.389)
-async function processOrphanedPluginVersion(versionPath, now, r) {
+async function processOrphanedPluginVersion(versionPath, now, storageV5) {
   if (await isSymlinkOrFalse(versionPath)) return;
   let orphanedAtPath = getOrphanedAtPath(versionPath);
   let orphanedAt;
-  let y = orphanMarkerCoordsV5(versionPath, r);
-  if (r !== undefined && y !== null) {
-    let S = STORAGE_SPACES.pluginCache(y.marketplace, y.plugin, y.version, [ORPHAN_MARKER_FILE]);
-    let w = await r.statMeta(S);
-    if (!w.ok) {
-      if (w.error.code === "NotFound") {
-        await markPluginVersionOrphaned(versionPath, r);
+  let coords = orphanMarkerCoordsV5(versionPath, storageV5);
+  if (storageV5 !== undefined && coords !== null) {
+    let storageKey = STORAGE_SPACES.pluginCache(coords.marketplace, coords.plugin, coords.version, [
+      ORPHAN_MARKER_FILE,
+    ]);
+    let statResult = await storageV5.statMeta(storageKey);
+    if (!statResult.ok) {
+      if (statResult.error.code === "NotFound") {
+        await markPluginVersionOrphaned(versionPath, storageV5);
         return;
       }
-      if (isNonRegularError("telemetryCode" in w.error ? w.error.telemetryCode : undefined)) {
+      if (
+        isNonRegularError("telemetryCode" in statResult.error ? statResult.error.telemetryCode : undefined)
+      ) {
         try {
-          if (!(await r.delete(S)).ok) await removeLinkOrDir(orphanedAtPath);
-          await markPluginVersionOrphaned(versionPath, r);
+          if (!(await storageV5.delete(storageKey)).ok) await removeLinkOrDir(orphanedAtPath);
+          await markPluginVersionOrphaned(versionPath, storageV5);
         } catch (error) {
           logForDebugging(`Failed to replace a non-regular ${ORPHAN_MARKER_FILE}: ${versionPath}: ${error}`);
         }
         return;
       }
-      logForDebugging(`Failed to stat orphaned marker: ${versionPath}: ${formatStorageError(w.error)}`);
+      logForDebugging(
+        `Failed to stat orphaned marker: ${versionPath}: ${formatStorageError(statResult.error)}`,
+      );
       return;
     }
-    orphanedAt = w.value.mtimeMs;
+    orphanedAt = statResult.value.mtimeMs;
   } else
     try {
-      let S = await lstat(orphanedAtPath);
-      if (!S.isFile()) {
-        await markPluginVersionOrphaned(versionPath, r);
+      let markerStat = await lstat(orphanedAtPath);
+      if (!markerStat.isFile()) {
+        await markPluginVersionOrphaned(versionPath, storageV5);
         return;
       }
-      orphanedAt = S.mtimeMs;
+      orphanedAt = markerStat.mtimeMs;
     } catch (error) {
       if (getErrnoCode(error) === "ENOENT") {
-        await markPluginVersionOrphaned(versionPath, r);
+        await markPluginVersionOrphaned(versionPath, storageV5);
         return;
       }
       logForDebugging(`Failed to stat orphaned marker: ${versionPath}: ${error}`);
@@ -403,7 +430,7 @@ async function processOrphanedPluginVersion(versionPath, now, r) {
     }
   if (now - orphanedAt > ORPHANED_VERSION_TTL_MS) {
     try {
-      if (await isPluginVersionInUse(versionPath, undefined, r)) {
+      if (await isPluginVersionInUse(versionPath, undefined, storageV5)) {
         logForDebugging(`Skipping orphan cleanup, in use by live session: ${versionPath}`);
         return;
       }
@@ -412,7 +439,7 @@ async function processOrphanedPluginVersion(versionPath, now, r) {
       return;
     }
     try {
-      await evictCachedVersionDir(versionPath, r);
+      await evictCachedVersionDir(versionPath, storageV5);
     } catch (error) {
       logForDebugging(`Failed to delete orphaned version: ${versionPath}: ${error}`);
     }
@@ -420,11 +447,11 @@ async function processOrphanedPluginVersion(versionPath, now, r) {
 }
 //@ chunk-e6aww6q8.js:4185266-4185783 fingerprint = removeIfEmpty (0.302)
 async function removeIfEmpty(dirPath) {
-  let n;
+  let entries;
   try {
     if (!(await lstat(dirPath)).isDirectory()) return;
     if (getPlatform() === "windows" && (await readJunction(dirPath)).kind !== "directory") return;
-    n = await readdir(dirPath, {
+    entries = await readdir(dirPath, {
       withFileTypes: true,
     });
   } catch (error) {
@@ -432,12 +459,12 @@ async function removeIfEmpty(dirPath) {
     return;
   }
   if (
-    n.some(
-      (r) =>
-        r.isDirectory() ||
-        r.isSymbolicLink() ||
-        safeResolvePath_2(r) ||
-        (r.isFile() && /\.zip$/i.test(r.name)),
+    entries.some(
+      (entry) =>
+        entry.isDirectory() ||
+        entry.isSymbolicLink() ||
+        safeResolvePath_2(entry) ||
+        (entry.isFile() && /\.zip$/i.test(entry.name)),
     )
   ) {
     logForDebugging(
@@ -452,31 +479,34 @@ async function removeIfEmpty(dirPath) {
   }
 }
 //@ chunk-e6aww6q8.js:4185783-4186343 placement
-async function listPluginCacheForCleanup(e, n, installedVersions, budget) {
-  let h = isStorageV5Enabled() && n !== undefined ? pluginCacheStorageScope(e, installedVersions) : null;
-  if (n === undefined || h === null) return listSubdirectoriesSafe(e);
-  let y = [];
+async function listPluginCacheForCleanup(dirPath, storageV5, installedVersions, budget) {
+  let scope =
+    isStorageV5Enabled() && storageV5 !== undefined
+      ? pluginCacheStorageScope(dirPath, installedVersions)
+      : null;
+  if (storageV5 === undefined || scope === null) return listSubdirectoriesSafe(dirPath);
+  let names = [];
   switch (
     (
       await readAllPages(
         (cursor) =>
-          n.listEntries(h, {
+          storageV5.listEntries(scope, {
             cursor,
             skipKeyStats: true,
             skipScopeStats: true,
           }),
-        (w) => {
-          for (let L of w) {
-            if (L.kind !== "scope") continue;
-            let scope = L.scope;
-            if (scope.namespace !== "pluginCache") continue;
-            let q =
-              h.marketplace === undefined
-                ? scope.marketplace
-                : h.plugin === undefined
-                  ? scope.plugin
-                  : scope.version;
-            if (q !== undefined) y.push(q);
+        (entries) => {
+          for (let entry of entries) {
+            if (entry.kind !== "scope") continue;
+            let scope_2 = entry.scope;
+            if (scope_2.namespace !== "pluginCache") continue;
+            let name =
+              scope.marketplace === undefined
+                ? scope_2.marketplace
+                : scope.plugin === undefined
+                  ? scope_2.plugin
+                  : scope_2.version;
+            if (name !== undefined) names.push(name);
           }
         },
         {
@@ -488,35 +518,35 @@ async function listPluginCacheForCleanup(e, n, installedVersions, budget) {
     case "error":
       return [];
     case "capped":
-      logForDebugging(`Plugin cache cleanup: listing of ${e} truncated at the page cap`);
-      return y;
+      logForDebugging(`Plugin cache cleanup: listing of ${dirPath} truncated at the page cap`);
+      return names;
     case "done":
-      return y;
+      return names;
   }
 }
 //@ chunk-e6aww6q8.js:4186343-4186581 placement
-async function listSubdirectoriesSafe(e) {
+async function listSubdirectoriesSafe(dirPath) {
   try {
-    let n = await readdir(e, {
+    let entries = await readdir(dirPath, {
       withFileTypes: true,
     });
-    let r = [];
-    for (let s of n)
+    let names = [];
+    for (let entry of entries)
       try {
-        if ((await classifyDirEntrySafe(e, s))?.isDirectory) r.push(s.name);
+        if ((await classifyDirEntrySafe(dirPath, entry))?.isDirectory) names.push(entry.name);
       } catch (error) {
-        logForDebugging(`Orphan sweep: skipping ${join(e, s.name)}: ${errorMessage(error)}`, {
+        logForDebugging(`Orphan sweep: skipping ${join(dirPath, entry.name)}: ${errorMessage(error)}`, {
           level: "warn",
         });
       }
-    return r;
+    return names;
   } catch {
     return [];
   }
 }
 //@ chunk-e6aww6q8.js:4186581-4186787 placement = isRealPathWithinTeamDir (0.775)
-async function isNotFoundCause(versionPath, n) {
-  if (!(n === 1 || isProcessRunning_2(n))) return false;
+async function isNotFoundCause(versionPath, pid) {
+  if (!(pid === 1 || isProcessRunning_2(pid))) return false;
   let realTeamDir;
   try {
     realTeamDir = (await lstat(versionPath)).mtimeMs;
@@ -525,36 +555,26 @@ async function isNotFoundCause(versionPath, n) {
     return code !== "ENOENT" && code !== "ENOTDIR";
   }
   if (!isFreshTimestamp_2(realTeamDir, ORPHAN_SWEEP_INTERVAL_MS)) return false;
-  let processCreationTimeMs = await getProcessCreationTimeMsAsync(n);
+  let processCreationTimeMs = await getProcessCreationTimeMsAsync(pid);
   return processCreationTimeMs === null || processCreationTimeMs <= realTeamDir;
 }
-//@ chunk-f3qhjfah.js:2620-2695 fingerprint = ORPHANED_AT_FILENAME (0.405)
-/**
- * ORPHAN_MARKER_FILE：版本目录的孤儿标记文件名；IN_USE_MARKER_FILE：使用中标记文件名；GCS_SHA_MARKER_FILE：GCS sha 标记文件名（同一声明共 4 个绑定）。
- */
-var ORPHAN_MARKER_FILE = ".orphaned_at";
-var IN_USE_MARKER_FILE = ".in_use";
-var GCS_SHA_MARKER_FILE = ".gcs-sha";
-var LINKS_MATERIALIZED_MARKER = ".links_materialized";
-//@ chunk-f3qhjfah.js:4415-4444 placement
-var CACHE_META_FILES = new Set([PLUGIN_LINK_FILE_2, IN_USE_MARKER_FILE, ORPHAN_MARKER_FILE]);
 //@ chunk-hddjmtjj.js:10518-10744 fingerprint = readSubdirs (0.703)
 /**
  * 递归复制目录（可按名字过滤）。名字配错，见 lead 建议。
  */
-async function copyDirRecursive(n, e, r) {
-  await mkdir(e, {
+async function copyDirRecursive(sourceDir, targetDir, shouldSkip) {
+  await mkdir(targetDir, {
     recursive: true,
   });
-  let entries = await readdir(n, {
+  let entries = await readdir(sourceDir, {
     withFileTypes: true,
   });
   for (let entry of entries) {
-    if (r?.(entry.name)) continue;
-    let s = join(n, entry.name);
-    let c = join(e, entry.name);
-    if (entry.isDirectory()) await copyDirRecursive(s, c);
-    else if (entry.isFile()) await copyFile(s, c);
+    if (shouldSkip?.(entry.name)) continue;
+    let sourcePath = join(sourceDir, entry.name);
+    let targetPath = join(targetDir, entry.name);
+    if (entry.isDirectory()) await copyDirRecursive(sourcePath, targetPath);
+    else if (entry.isFile()) await copyFile(sourcePath, targetPath);
   }
 }
 export {

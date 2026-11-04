@@ -20,18 +20,18 @@ var DEFAULT_MAX_IN_FLIGHT = 4;
 /**
  * 创建简单的并发计数器：tryAcquire 在未满时占位并返回只能调用一次的释放函数。
  */
-function createConcurrencyLimiter(e) {
-  let o = 0;
+function createConcurrencyLimiter(limit) {
+  let active = 0;
   return {
-    limit: e,
+    limit,
     tryAcquire() {
-      if (o >= e) return;
-      o++;
-      let r = false;
+      if (active >= limit) return;
+      active++;
+      let released = false;
       return () => {
-        if (!r) {
-          r = true;
-          o--;
+        if (!released) {
+          released = true;
+          active--;
         }
       };
     },
@@ -44,42 +44,43 @@ function createConcurrencyLimiter(e) {
 function createAdmissionGate(options) {
   let readPosture = options.readPosture ?? ensureDeviceSandboxPosture;
   return {
-    async admitWithoutSlot(toolName, s, t) {
+    async admitWithoutSlot(toolName, request, outcome) {
       try {
-        if (s.signal.aborted) return t.cancelled();
-        let reason = admissionRefusal(options, s);
-        if (reason !== undefined) return t.refuse(reason, admissionRefusalText(toolName, options, reason));
-        return await t.serve();
+        if (request.signal.aborted) return outcome.cancelled();
+        let reason = admissionRefusal(options, request);
+        if (reason !== undefined)
+          return outcome.refuse(reason, admissionRefusalText(toolName, options, reason));
+        return await outcome.serve();
       } catch (error) {
-        return s.signal.aborted || isAbortError(error) ? t.cancelled() : t.fail(error);
+        return request.signal.aborted || isAbortError(error) ? outcome.cancelled() : outcome.fail(error);
       }
     },
-    async run(toolName, s, t) {
-      let n = (reason) => t.refuse(reason, admissionRefusalText(toolName, options, reason));
-      let a;
+    async run(toolName, request, outcome) {
+      let refuse = (reason) => outcome.refuse(reason, admissionRefusalText(toolName, options, reason));
+      let releaseSlot;
       try {
-        if (s.signal.aborted) return t.cancelled();
-        let i = admissionRefusal(options, s);
-        if (i !== undefined) return n(i);
-        a = options.limiter.tryAcquire();
-        if (a === undefined) return n("too_many_concurrent");
+        if (request.signal.aborted) return outcome.cancelled();
+        let earlyReason = admissionRefusal(options, request);
+        if (earlyReason !== undefined) return refuse(earlyReason);
+        releaseSlot = options.limiter.tryAcquire();
+        if (releaseSlot === undefined) return refuse("too_many_concurrent");
         let posture = await readPosture();
-        if (!posture.confined) return n(posture.reason);
-        let u = admissionRefusal(options, s);
-        if (u !== undefined) return n(u);
-        if (s.signal.aborted) return t.cancelled();
-        return await t.serve();
+        if (!posture.confined) return refuse(posture.reason);
+        let lateReason = admissionRefusal(options, request);
+        if (lateReason !== undefined) return refuse(lateReason);
+        if (request.signal.aborted) return outcome.cancelled();
+        return await outcome.serve();
       } catch (error) {
-        return s.signal.aborted || isAbortError(error) ? t.cancelled() : t.fail(error);
+        return request.signal.aborted || isAbortError(error) ? outcome.cancelled() : outcome.fail(error);
       } finally {
-        a?.();
+        releaseSlot?.();
       }
     },
   };
 }
 //@ chunk-3qz57b12.js:1090-1244 placement
-function admissionRefusal(options, o) {
-  if (o.sessionId === undefined) return "no_session";
+function admissionRefusal(options, request) {
+  if (request.sessionId === undefined) return "no_session";
   if (!options.getDeviceId()) return "unbound_device";
   if (!options.isModeCurrent()) return "mode_withdrawn";
   return;

@@ -40,32 +40,33 @@ import { retryFsOp } from "../atomicPublishWrite.js";
 import { getFsImplementation } from "../fsOperations.js";
 import { swapVersionDir } from "./versionDirSwap.js";
 import { isPluginZipCacheEnabled } from "./zipCache.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:4483311-4483405 placement
 /**
  * orphanMarkerMove：孤儿标记的移动计划。
  */
-function orphanMarkerMove(stagingScope, versionedCachePath) {
+function orphanMarkerMove(stagingScope, cachePath) {
   if (stagingScope === undefined) return;
-  let r = versionCacheStorageSpace(versionedCachePath, anchoredPluginCachePath());
-  return r === null
+  let toSpace = versionCacheStorageSpace(cachePath, anchoredPluginCachePath());
+  return toSpace === null
     ? undefined
     : {
         from: stagingScope,
-        to: r,
+        to: toSpace,
       };
 }
 //@ chunk-e6aww6q8.js:4483405-4483610 placement
 /**
  * 通过 v5 存储后端删除暂存插件版本目录里残留的孤儿标记（R1），失败只记 warn。
  */
-async function dropStagedOrphanMarkerV5(e, from) {
-  let r = await e.delete(
+async function dropStagedOrphanMarkerV5(storageV5, from) {
+  let deleteResult = await storageV5.delete(
     STORAGE_SPACES.pluginCache(from.marketplace, from.plugin, from.version, [ORPHAN_MARKER_FILE]),
   );
-  if (!r.ok)
+  if (!deleteResult.ok)
     logForDebugging(
-      `Could not drop a stray orphan marker from the staged plugin: ${formatStorageError(r.error)}`,
+      `Could not drop a stray orphan marker from the staged plugin: ${formatStorageError(deleteResult.error)}`,
       {
         level: "warn",
       },
@@ -90,16 +91,16 @@ function getAsideStrandedCleanup(error) {
   if (typeof path !== "string") return;
   if (entry === undefined) return;
   if (entry !== "occupant") return;
-  let h = "folderError" in cause && cause.folderError !== undefined;
+  let folderError = "folderError" in cause && cause.folderError !== undefined;
   return {
     aside: path,
-    remove: !h,
+    remove: !folderError,
   };
 }
 //@ chunk-e6aww6q8.js:4484001-4484736 placement
-async function removeReplacedVersionAside(aside, n) {
-  let r = basename(aside);
-  if (aside !== join(dirname(n), r) || !isAsideFileName(r)) {
+async function removeReplacedVersionAside(aside, publishedPath) {
+  let asideName = basename(aside);
+  if (aside !== join(dirname(publishedPath), asideName) || !isAsideFileName(asideName)) {
     logForDebugging(
       `A publish that stood named a set-aside at ${aside}; it is not an aside name beside the published version, so it is left in place`,
       {
@@ -109,20 +110,20 @@ async function removeReplacedVersionAside(aside, n) {
     return;
   }
   try {
-    let [s, h] = await Promise.all([
+    let [asideStat, publishedStat] = await Promise.all([
       lstat(aside, {
         bigint: true,
       }),
-      lstat(n, {
+      lstat(publishedPath, {
         bigint: true,
       }),
     ]);
     if (!(
-      s.isDirectory() &&
-      h.isDirectory() &&
-      s.ino !== 0n &&
-      h.ino !== 0n &&
-      (s.dev !== h.dev || s.ino !== h.ino)
+      asideStat.isDirectory() &&
+      publishedStat.isDirectory() &&
+      asideStat.ino !== 0n &&
+      publishedStat.ino !== 0n &&
+      (asideStat.dev !== publishedStat.dev || asideStat.ino !== publishedStat.ino)
     )) {
       logForDebugging(
         `A publish that stood left the replaced plugin version set aside at ${aside}; it could not be proven distinct from the published version, so it is left in place`,
@@ -165,14 +166,14 @@ function isTargetOccupiedError(error) {
   );
 }
 //@ chunk-e6aww6q8.js:4485103-4485702 placement
-function refuseSymlinkedCacheTarget(error, n) {
+function refuseSymlinkedCacheTarget(error, cachePath) {
   if (error.code === "Failed" && error.cause instanceof Error) {
     let cause = error.cause;
     let path = "path" in cause ? cause.path : undefined;
     if (getErrnoCode(cause) === "ELOOP" && typeof path === "string")
       return Object.assign(
         new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-          `Cannot install into ${n}: ${path} is a symbolic link, and the plugin cache is not written through symbolic links`,
+          `Cannot install into ${cachePath}: ${path} is a symbolic link, and the plugin cache is not written through symbolic links`,
           "refused to publish a staged plugin through a symlinked cache folder (v5 backend)",
         ),
         {
@@ -185,7 +186,7 @@ function refuseSymlinkedCacheTarget(error, n) {
   }
   return Object.assign(
     new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `Failed to move the staged plugin into ${n}: ${formatStorageError(error)}`,
+      `Failed to move the staged plugin into ${cachePath}: ${formatStorageError(error)}`,
       "failed to move the staged plugin into its versioned cache (v5 backend error)",
     ),
     {
@@ -194,9 +195,9 @@ function refuseSymlinkedCacheTarget(error, n) {
   );
 }
 //@ chunk-e6aww6q8.js:4485702-4485893 placement
-async function dropStagedOrphanMarker(e) {
+async function dropStagedOrphanMarker(stagingPath) {
   try {
-    await rm_2(join(e, ORPHAN_MARKER_FILE), {
+    await rm_2(join(stagingPath, ORPHAN_MARKER_FILE), {
       force: true,
     });
   } catch (error) {
@@ -209,12 +210,12 @@ async function dropStagedOrphanMarker(e) {
   }
 }
 //@ chunk-e6aww6q8.js:4485893-4486097 placement
-function toProbeError(error, n) {
+function toProbeError(error, targetPath) {
   return error.code === "Failed" && error.cause instanceof Error
     ? error.cause
     : Object.assign(
         new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-          `Failed to probe ${n}: ${formatStorageError(error)}`,
+          `Failed to probe ${targetPath}: ${formatStorageError(error)}`,
           "failed to probe an installed plugin path (v5 backend error)",
         ),
         {
@@ -230,18 +231,18 @@ function isCrossDeviceRename(error) {
 /**
  * 把暂存的插件发布到缓存版本目录，处理替换旧版本与存储接口失败。
  */
-async function publishStagedPlugin(path, versionedCachePath, r, s, h) {
-  if (isStorageV5Enabled() && s !== undefined && h !== undefined) {
-    if (!(await hasLinkedAncestorBelow(versionedCachePath, anchoredPluginCachePath()))) {
-      await dropStagedOrphanMarkerV5(s, h.from);
-      let Se = await s.moveScope(h.from, h.to, {
+async function publishStagedPlugin(stagingPath, targetPath, options, storageV5, orphanMarkerMoveInfo) {
+  if (isStorageV5Enabled() && storageV5 !== undefined && orphanMarkerMoveInfo !== undefined) {
+    if (!(await hasLinkedAncestorBelow(targetPath, anchoredPluginCachePath()))) {
+      await dropStagedOrphanMarkerV5(storageV5, orphanMarkerMoveInfo.from);
+      let moveResult = await storageV5.moveScope(orphanMarkerMoveInfo.from, orphanMarkerMoveInfo.to, {
         replace: true,
       });
-      if (Se.ok) return "published";
-      let asideStrandedCleanup = getAsideStrandedCleanup(Se.error);
+      if (moveResult.ok) return "published";
+      let asideStrandedCleanup = getAsideStrandedCleanup(moveResult.error);
       if (asideStrandedCleanup !== undefined) {
         if (asideStrandedCleanup.remove)
-          await removeReplacedVersionAside(asideStrandedCleanup.aside, versionedCachePath);
+          await removeReplacedVersionAside(asideStrandedCleanup.aside, targetPath);
         else
           logForDebugging(
             `A publish that stood left the replaced plugin version set aside at ${asideStrandedCleanup.aside}; its folder was found changed, so it is left in place`,
@@ -251,106 +252,110 @@ async function publishStagedPlugin(path, versionedCachePath, r, s, h) {
           );
         return "published";
       }
-      if (!isUnsupportedSwapError(Se.error)) throw refuseSymlinkedCacheTarget(Se.error, versionedCachePath);
+      if (!isUnsupportedSwapError(moveResult.error))
+        throw refuseSymlinkedCacheTarget(moveResult.error, targetPath);
       logForDebugging(
-        `The storage interface could not publish into ${versionedCachePath} (${formatStorageError(Se.error)}); moving the staged plugin with today's file calls instead`,
+        `The storage interface could not publish into ${targetPath} (${formatStorageError(moveResult.error)}); moving the staged plugin with today's file calls instead`,
         {
           level: "debug",
         },
       );
     }
   }
-  await dropStagedOrphanMarker(path);
-  let y = path.endsWith(sep) ? path : path + sep;
-  let S = versionedCachePath.startsWith(y);
-  let w = join(dirname(path), `.claude-plugin-temp-${Date.now()}-${randomBytes(4).toString("hex")}`);
-  if (!r.strictCache) {
-    await removeDirectoryTreeNoFollow_2(join(path, ".git")).catch((error) => {
+  await dropStagedOrphanMarker(stagingPath);
+  let stagingPrefix = stagingPath.endsWith(sep) ? stagingPath : stagingPath + sep;
+  let isStagingInsideCache = targetPath.startsWith(stagingPrefix);
+  let tempPath = join(
+    dirname(stagingPath),
+    `.claude-plugin-temp-${Date.now()}-${randomBytes(4).toString("hex")}`,
+  );
+  if (!options.strictCache) {
+    await removeDirectoryTreeNoFollow_2(join(stagingPath, ".git")).catch((error) => {
       logForDebugging(
-        `Could not drop the staged clone's .git before publishing ${versionedCachePath}; this install replaces any installed copy instead of keeping it: ${errorMessage(error)}`,
+        `Could not drop the staged clone's .git before publishing ${targetPath}; this install replaces any installed copy instead of keeping it: ${errorMessage(error)}`,
         {
           level: "warn",
         },
       );
     });
-    if (S) await retryFsOp(path, w);
-    await getFsImplementation().mkdir(dirname(versionedCachePath));
-    return swapVersionDir(S ? w : path, versionedCachePath, {
+    if (isStagingInsideCache) await retryFsOp(stagingPath, tempPath);
+    await getFsImplementation().mkdir(dirname(targetPath));
+    return swapVersionDir(isStagingInsideCache ? tempPath : stagingPath, targetPath, {
       keepIdentical: !isPluginZipCacheEnabled(),
-      binariesHook: r.binariesHook,
+      binariesHook: options.binariesHook,
     });
   }
-  let L = (Se = "before move", ke) =>
-    requireVersionParentContained(versionedCachePath, r.pluginId, r.version, "cache", Se, ke);
-  let G = await versionParentState(versionedCachePath);
-  if (G === "refused") await L("before move", G);
-  await getFsImplementation().mkdir(dirname(versionedCachePath));
-  await L();
-  let q;
-  if ((await clearOccupantForReplace(versionedCachePath, r.pluginId, r.version)) === "recurse") {
-    let tempSiblingName = makeTempSiblingName(versionedCachePath);
+  let assertVersionParent = (phase = "before move", state) =>
+    requireVersionParentContained(targetPath, options.pluginId, options.version, "cache", phase, state);
+  let parentState = await versionParentState(targetPath);
+  if (parentState === "refused") await assertVersionParent("before move", parentState);
+  await getFsImplementation().mkdir(dirname(targetPath));
+  await assertVersionParent();
+  let asidePath;
+  if ((await clearOccupantForReplace(targetPath, options.pluginId, options.version)) === "recurse") {
+    let tempSiblingName = makeTempSiblingName(targetPath);
     try {
-      await retryFsOp(versionedCachePath, tempSiblingName);
-      q = tempSiblingName;
+      await retryFsOp(targetPath, tempSiblingName);
+      asidePath = tempSiblingName;
       let date = new Date();
       await lutimes(tempSiblingName, date, date).catch(() => {});
     } catch (error) {
       if (isCrossDeviceRename(error)) {
         logForDebugging(
-          `The occupant of ${versionedCachePath} cannot be renamed aside (${getErrnoCode(error)}); removing it in place instead`,
+          `The occupant of ${targetPath} cannot be renamed aside (${getErrnoCode(error)}); removing it in place instead`,
           {
             level: "debug",
           },
         );
-        await removeDirectoryTreeNoFollow_2(versionedCachePath);
+        await removeDirectoryTreeNoFollow_2(targetPath);
       } else if (!isPathAbsent(error)) throw error;
     }
   }
-  let Z = path;
+  let sourcePath = stagingPath;
   try {
-    if (S) {
-      await retryFsOp(path, w);
-      await getFsImplementation().mkdir(dirname(versionedCachePath));
-      Z = w;
+    if (isStagingInsideCache) {
+      await retryFsOp(stagingPath, tempPath);
+      await getFsImplementation().mkdir(dirname(targetPath));
+      sourcePath = tempPath;
     }
-    await L("during move");
-    await retryFsOp(Z, versionedCachePath);
+    await assertVersionParent("during move");
+    await retryFsOp(sourcePath, targetPath);
   } catch (error) {
-    if (q !== undefined) await retryFsOp(q, versionedCachePath).catch(() => {});
+    if (asidePath !== undefined) await retryFsOp(asidePath, targetPath).catch(() => {});
     throw error;
   }
-  if (q !== undefined) await removeDirectoryTreeNoFollow_2(q).catch(() => {});
+  if (asidePath !== undefined) await removeDirectoryTreeNoFollow_2(asidePath).catch(() => {});
   return "published";
 }
 //@ chunk-e6aww6q8.js:4487907-4488691 placement
-async function adoptStagedPlugin(path, versionedCachePath, r, s, h) {
-  if (isStorageV5Enabled() && s !== undefined && h !== undefined)
-    if (await hasLinkedAncestorBelow(versionedCachePath, anchoredPluginCachePath()))
-      await dropStagedOrphanMarker(path);
+async function adoptStagedPlugin(stagingPath, cachePath, strictCache, storageV5, orphanMarkerMoveInfo) {
+  if (isStorageV5Enabled() && storageV5 !== undefined && orphanMarkerMoveInfo !== undefined)
+    if (await hasLinkedAncestorBelow(cachePath, anchoredPluginCachePath()))
+      await dropStagedOrphanMarker(stagingPath);
     else {
-      await dropStagedOrphanMarkerV5(s, h.from);
-      let y = await s.moveScope(h.from, h.to);
-      if (y.ok) return y.value.published;
-      if (!isUnsupportedSwapError(y.error) && !isTargetOccupiedError(y.error))
-        throw refuseSymlinkedCacheTarget(y.error, versionedCachePath);
+      await dropStagedOrphanMarkerV5(storageV5, orphanMarkerMoveInfo.from);
+      let moveResult = await storageV5.moveScope(orphanMarkerMoveInfo.from, orphanMarkerMoveInfo.to);
+      if (moveResult.ok) return moveResult.value.published;
+      if (!isUnsupportedSwapError(moveResult.error) && !isTargetOccupiedError(moveResult.error))
+        throw refuseSymlinkedCacheTarget(moveResult.error, cachePath);
       logForDebugging(
-        `The storage interface could not adopt into ${versionedCachePath} (${formatStorageError(y.error)}); deciding with today's file calls instead`,
+        `The storage interface could not adopt into ${cachePath} (${formatStorageError(moveResult.error)}); deciding with today's file calls instead`,
         {
           level: "debug",
         },
       );
     }
-  if (r && (await versionParentState(versionedCachePath)) === "refused") return false;
-  await getFsImplementation().mkdir(dirname(versionedCachePath));
-  if (r) {
-    if (!(await versionParentContained(versionedCachePath))) return false;
+  if (strictCache && (await versionParentState(cachePath)) === "refused") return false;
+  await getFsImplementation().mkdir(dirname(cachePath));
+  if (strictCache) {
+    if (!(await versionParentContained(cachePath))) return false;
     if (
-      await lstat(versionedCachePath).then(
+      await lstat(cachePath).then(
         () => true,
         (error) => {
           if (isPathAbsent(error)) return false;
           throw versionPathOccupantError(
-            `Could not move the staged plugin into ${versionedCachePath}: what occupies that cache path could not be examined; retry the install.`,
+            `Could not move the staged plugin into ${cachePath}: what occupies that cache path could not be examined; retry the install.`,
           );
         },
       )
@@ -358,7 +363,7 @@ async function adoptStagedPlugin(path, versionedCachePath, r, s, h) {
       return false;
   }
   try {
-    await retryFsOp(path, versionedCachePath);
+    await retryFsOp(stagingPath, cachePath);
     return true;
   } catch (error) {
     let errnoCode = getErrnoCode(error);
@@ -376,13 +381,18 @@ async function adoptStagedPlugin(path, versionedCachePath, r, s, h) {
 /**
  * PluginCachePublishError：插件缓存发布错误类。
  */
-class PluginCachePublishError extends TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS {
-  reason;
-  constructor(reason, n, r) {
-    super(n, r);
-    this.reason = reason;
-  }
-}
+let PluginCachePublishError; // deferred: uses TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS (../errors.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:4488691", () => {
+  PluginCachePublishError = class PluginCachePublishError extends (
+    TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
+  ) {
+    reason;
+    constructor(reason, message, telemetryCode) {
+      super(message, telemetryCode);
+      this.reason = reason;
+    }
+  };
+});
 //@ chunk-e6aww6q8.js:4488762-4488909 placement
 /**
  * 安装依赖时，钉住的版本不满足要求的版本范围抛出；manifestVersion 记录实际 manifest 版本。

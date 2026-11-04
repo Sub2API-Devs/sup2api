@@ -32,9 +32,9 @@ function setShellIfWindows() {
 }
 //@ chunk-648vry02.js:1300-1392 layout
 function getGitBashPathCached() {
-  let e = shellPaths();
-  if (e.gitBashPath === undefined) e.gitBashPath = findGitBashPath();
-  return e.gitBashPath;
+  let paths = shellPaths();
+  if (paths.gitBashPath === undefined) paths.gitBashPath = findGitBashPath();
+  return paths.gitBashPath;
 }
 //@ chunk-648vry02.js:1392-2015 fingerprint = findGitBashPath (0.392)
 /**
@@ -53,8 +53,11 @@ function findGitBashPath() {
       },
     );
   }
-  let r = ["C:\\Program Files\\Git\\bin\\bash.exe", "C:\\Program Files (x86)\\Git\\bin\\bash.exe"];
-  for (let o of r) if (existsSync(o)) return o;
+  let candidatePaths = [
+    "C:\\Program Files\\Git\\bin\\bash.exe",
+    "C:\\Program Files (x86)\\Git\\bin\\bash.exe",
+  ];
+  for (let candidatePath of candidatePaths) if (existsSync(candidatePath)) return candidatePath;
   let gitPath = findExecutableWindows("git");
   if (gitPath) {
     let bashPath = pathWin32Module.join(gitPath, "..", "..", "bin", "bash.exe");
@@ -63,9 +66,9 @@ function findGitBashPath() {
   return null;
 }
 //@ chunk-e6aww6q8.js:3096725-3096813 fingerprint = checkPathExists (0.784)
-function checkPathExists(stdin, usePipeMode, r, stdinFd) {
-  let h = usePipeMode ? [stdin, "pipe", "pipe"] : [stdin, r, r];
-  if (stdinFd !== undefined) h[APPLY_SECCOMP_FD] = stdinFd;
-  return h;
+function checkPathExists(stdin, usePipeMode, outputMode, stdinFd) {
+  let stdioConfig = usePipeMode ? [stdin, "pipe", "pipe"] : [stdin, outputMode, outputMode];
+  if (stdinFd !== undefined) stdioConfig[APPLY_SECCOMP_FD] = stdinFd;
+  return stdioConfig;
 }
 export { getGitBashPathCached, setShellIfWindows, checkPathExists };

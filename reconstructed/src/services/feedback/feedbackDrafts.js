@@ -19,7 +19,15 @@ import { stripCombiningRepeated } from "../../utils/sanitization.js";
 import { truncateUtf8Bytes } from "../../utils/stringUtils.js";
 import { isSessionsToken } from "../oauth/sessionsBearerHooks.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, zJt, string, array, _enum, E, tuple } from "../../../vendor/zod/v4/classic/schemas.js";
+import {
+  objectSchema,
+  uuidSchema,
+  stringSchema,
+  array,
+  _enum,
+  numberSchema,
+  tuple,
+} from "../../../vendor/zod/v4/classic/schemas.js";
 import { getClaudeConfigDir } from "../../utils/envUtils.js";
 import { STORAGE_SPACES, isValidKeySegment } from "../../utils/storage/storageSpaces.js";
 import { readAllPages } from "../../utils/pagedRead.js";
@@ -39,12 +47,16 @@ import { fromEnum, fromNumber } from "../analytics/safeMetadata.js";
 import { validateStorageKey } from "../../utils/storage/storageKeys.js";
 import { count } from "../../utils/collections.js";
 import { uiSignals } from "../../state/uiSignals.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-kxyd0g16.js:67217-67237 placement
 /**
  * 反馈草稿关联的记忆类工具列表。
  */
-var MEMORY_TOOLS = [MemoryListTool, MemoryReadTool, MemoryWriteTool];
+var MEMORY_TOOLS; // deferred: uses MemoryListTool (../../tools/MemoryTool/MemoryListTool.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-kxyd0g16.js:67217", () => {
+  MEMORY_TOOLS = [MemoryListTool, MemoryReadTool, MemoryWriteTool];
+});
 //@ chunk-kxyd0g16.js:67237-67264 placement
 /**
  * 提示次数上限的最大可配置值（20）。
@@ -64,8 +76,10 @@ function feedbackRelayConfig() {
 /**
  * 把值限制成范围内的整数，不合格用默认值。
  */
-function clampIntInRange(e, r, n, s) {
-  return typeof e === "number" && Number.isInteger(e) && e >= n && e <= s ? e : r;
+function clampIntInRange(value, fallback, min, max) {
+  return typeof value === "number" && Number.isInteger(value) && value >= min && value <= max
+    ? value
+    : fallback;
 }
 //@ chunk-kxyd0g16.js:67406-67467 placement
 /**
@@ -139,8 +153,8 @@ function sanitizeDetails(details) {
 /**
  * 清洗短文本并限制长度。
  */
-function sanitizeShortText(e, r) {
-  return truncateChars(replaceControlChars(stripCombiningRepeated(e)).trim(), r);
+function sanitizeShortText(text, maxLen) {
+  return truncateChars(replaceControlChars(stripCombiningRepeated(text)).trim(), maxLen);
 }
 //@ chunk-kxyd0g16.js:67909-67941 placement
 /**
@@ -160,8 +174,8 @@ function sanitizeModel(model) {
  */
 function sanitizeArea(area) {
   if (area === undefined) return;
-  let r = sanitizeShortText(area, MAX_AREA_LENGTH);
-  return r === "" ? undefined : r;
+  let sanitized = sanitizeShortText(area, MAX_AREA_LENGTH);
+  return sanitized === "" ? undefined : sanitized;
 }
 //@ chunk-kxyd0g16.js:68064-68111 placement
 /**
@@ -249,8 +263,8 @@ var MAX_EFFORT_CHARS = 16;
  */
 function sanitizeEffort(effort) {
   if (effort === undefined) return;
-  let r = sanitizeShortText(effort, MAX_EFFORT_CHARS);
-  return r === "" ? undefined : r;
+  let sanitized = sanitizeShortText(effort, MAX_EFFORT_CHARS);
+  return sanitized === "" ? undefined : sanitized;
 }
 //@ chunk-kxyd0g16.js:68951-68962 placement
 /**
@@ -261,52 +275,57 @@ var MAX_TOKEN_COUNT = 1e6;
 /**
  * 校验 token 数量（非负整数且不超过上限）。
  */
-function asTokenCount(e) {
-  return e !== undefined && Number.isInteger(e) && e >= 0 && e <= MAX_TOKEN_COUNT ? e : undefined;
+function asTokenCount(value) {
+  return value !== undefined && Number.isInteger(value) && value >= 0 && value <= MAX_TOKEN_COUNT
+    ? value
+    : undefined;
 }
 //@ chunk-kxyd0g16.js:69039-70198 placement
 /**
  * 反馈草稿 schema。
  */
-var FeedbackDraftSchema = DoctorLazy(() =>
-  u({
-    draft_id: zJt(),
-    created_at: string()
-      .refine((e) => Number.isFinite(Date.parse(e)))
-      .transform((e) => new Date(Date.parse(e)).toISOString()),
-    source_session_id: string().regex(SESSION_ID_RE),
-    cwd: string().transform((e) => sanitizeShortText(e, MAX_CWD_LENGTH)),
-    model: string().transform((e) => sanitizeModel(e)),
-    cli_version: string().transform((e) => sanitizeShortText(e, MAX_CLI_VERSION_LENGTH)),
-    os: string().transform((e) => sanitizeShortText(e, MAX_OS_LENGTH)),
-    request_ids: array(string()).transform((e) => recentEntries(e)),
-    type: _enum(FEEDBACK_TYPES),
-    title: string()
-      .min(1)
-      .transform((e) => sanitizeTitle(e)),
-    details: string().transform((e) => sanitizeDetails(e)),
-    area: string()
-      .optional()
-      .transform((e) => sanitizeArea(e)),
-    trigger: _enum(FEEDBACK_TRIGGERS),
-    failure_mode: _enum(FEEDBACK_FAILURE_MODES).optional().catch(undefined),
-    task_category: _enum(FEEDBACK_TASK_CATEGORIES).optional().catch(undefined),
-    effort: string().optional().catch(undefined).transform(sanitizeEffort),
-    thinking_type: _enum(THINKING_TYPES).optional().catch(undefined),
-    thinking_budget: E().optional().catch(undefined).transform(asTokenCount),
-    message_count: E().optional().catch(undefined).transform(asTokenCount),
-    assistant_turn_count: E().optional().catch(undefined).transform(asTokenCount),
-    subagent_count: E().optional().catch(undefined).transform(asTokenCount),
-    transcript_ref: u({
-      session_file: string(),
-      message_range: tuple([E(), E()]).nullable(),
-      project_dir_key: string()
+var FeedbackDraftSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-kxyd0g16.js:69039", () => {
+  FeedbackDraftSchema = DoctorLazy(() =>
+    objectSchema({
+      draft_id: uuidSchema(),
+      created_at: stringSchema()
+        .refine((value) => Number.isFinite(Date.parse(value)))
+        .transform((value) => new Date(Date.parse(value)).toISOString()),
+      source_session_id: stringSchema().regex(SESSION_ID_RE),
+      cwd: stringSchema().transform((value) => sanitizeShortText(value, MAX_CWD_LENGTH)),
+      model: stringSchema().transform((value) => sanitizeModel(value)),
+      cli_version: stringSchema().transform((value) => sanitizeShortText(value, MAX_CLI_VERSION_LENGTH)),
+      os: stringSchema().transform((value) => sanitizeShortText(value, MAX_OS_LENGTH)),
+      request_ids: array(stringSchema()).transform((value) => recentEntries(value)),
+      type: _enum(FEEDBACK_TYPES),
+      title: stringSchema()
+        .min(1)
+        .transform((value) => sanitizeTitle(value)),
+      details: stringSchema().transform((value) => sanitizeDetails(value)),
+      area: stringSchema()
         .optional()
-        .transform((e) => (e !== undefined && PROJECT_DIR_KEY_RE.test(e) ? e : undefined)),
-    }).nullable(),
-    status: _enum(["queued", "submitted", "discarded", "expired"]),
-  }),
-);
+        .transform((value) => sanitizeArea(value)),
+      trigger: _enum(FEEDBACK_TRIGGERS),
+      failure_mode: _enum(FEEDBACK_FAILURE_MODES).optional().catch(undefined),
+      task_category: _enum(FEEDBACK_TASK_CATEGORIES).optional().catch(undefined),
+      effort: stringSchema().optional().catch(undefined).transform(sanitizeEffort),
+      thinking_type: _enum(THINKING_TYPES).optional().catch(undefined),
+      thinking_budget: numberSchema().optional().catch(undefined).transform(asTokenCount),
+      message_count: numberSchema().optional().catch(undefined).transform(asTokenCount),
+      assistant_turn_count: numberSchema().optional().catch(undefined).transform(asTokenCount),
+      subagent_count: numberSchema().optional().catch(undefined).transform(asTokenCount),
+      transcript_ref: objectSchema({
+        session_file: stringSchema(),
+        message_range: tuple([numberSchema(), numberSchema()]).nullable(),
+        project_dir_key: stringSchema()
+          .optional()
+          .transform((value) => (value !== undefined && PROJECT_DIR_KEY_RE.test(value) ? value : undefined)),
+      }).nullable(),
+      status: _enum(["queued", "submitted", "discarded", "expired"]),
+    }),
+  );
+});
 //@ chunk-kxyd0g16.js:70198-70248 placement
 /**
  * 反馈草稿目录（configDir/feedback/drafts）。
@@ -322,17 +341,17 @@ var PROJECT_DIR_KEY_RE = /^[A-Za-z0-9-]{1,255}$/;
 /**
  * 由草稿 id 得到本地文件路径（id 非法时抛错）。
  */
-function draftFilePath(e) {
-  if (!DRAFT_ID_RE.test(e)) throw Error("invalid feedback draft id");
-  return join(feedbackDraftsDir(), `${e}.json`);
+function draftFilePath(id) {
+  if (!DRAFT_ID_RE.test(id)) throw Error("invalid feedback draft id");
+  return join(feedbackDraftsDir(), `${id}.json`);
 }
 //@ chunk-kxyd0g16.js:70489-70587 placement
 /**
  * 由草稿 id 得到存储 v5 的键（id 非法时抛错）。
  */
-function draftStorageKey(e) {
-  if (!DRAFT_ID_RE.test(e)) throw Error("invalid feedback draft id");
-  return STORAGE_SPACES.feedbackDraft(e);
+function draftStorageKey(id) {
+  if (!DRAFT_ID_RE.test(id)) throw Error("invalid feedback draft id");
+  return STORAGE_SPACES.feedbackDraft(id);
 }
 //@ chunk-kxyd0g16.js:70587-70651 placement
 /**
@@ -346,18 +365,18 @@ function telemetryCodeOf(error) {
  * 把存储错误描述成 “code telemetryCode”。
  */
 function describeStorageError(error) {
-  let r = telemetryCodeOf(error);
-  return r === undefined ? error.code : `${error.code} ${r}`;
+  let code = telemetryCodeOf(error);
+  return code === undefined ? error.code : `${error.code} ${code}`;
 }
 //@ chunk-kxyd0g16.js:70720-71303 placement
 /**
  * 列出存储中的反馈草稿键。
  */
-async function listFeedbackDraftKeys(e) {
-  let r = [];
+async function listFeedbackDraftKeys(storage) {
+  let keys = [];
   let allPages = await readAllPages(
     (cursor) =>
-      e.listEntries(
+      storage.listEntries(
         {
           namespace: "feedbackDraft",
         },
@@ -366,11 +385,12 @@ async function listFeedbackDraftKeys(e) {
           skipKeyStats: true,
         },
       ),
-    (s) => {
-      for (let f of s) if (f.kind === "key" && f.key.namespace === "feedbackDraft") r.push(f.key);
+    (items) => {
+      for (let item of items)
+        if (item.kind === "key" && item.key.namespace === "feedbackDraft") keys.push(item.key);
     },
   );
-  if (allPages.status === "done") return r;
+  if (allPages.status === "done") return keys;
   if (allPages.status === "capped") {
     logForDebugging(
       "feedbackDrafts: draft listing kept offering cursors past the page cap; treating it as failed",
@@ -400,28 +420,28 @@ var TAIL_READ_BLOCK_CHARS = 8;
 /**
  * 创建转录尾部读取器。
  */
-function createTranscriptTailReader(e, r, tail) {
-  let s = (k) => (k.found ? Buffer.from(k.value) : null);
-  let f = async (key) => {
+function createTranscriptTailReader(storage, keys, tail) {
+  let toBuffer = (item) => (item.found ? Buffer.from(item.value) : null);
+  let readOne = async (key) => {
     try {
-      let w = await e.read([
+      let result = await storage.read([
         {
           key,
           tail,
         },
       ]);
-      return w.ok ? s(w.value.items[0]) : null;
+      return result.ok ? toBuffer(result.value.items[0]) : null;
     } catch {
       return null;
     }
   };
-  let h = -1;
-  let y = [];
-  return async (k) => {
-    let w = k - (k % TAIL_READ_BLOCK_CHARS);
-    if (w !== h) {
-      let sliced = r.slice(w, w + TAIL_READ_BLOCK_CHARS);
-      let R = await e
+  let blockStart = -1;
+  let block = [];
+  return async (keyIndex) => {
+    let nextStart = keyIndex - (keyIndex % TAIL_READ_BLOCK_CHARS);
+    if (nextStart !== blockStart) {
+      let sliced = keys.slice(nextStart, nextStart + TAIL_READ_BLOCK_CHARS);
+      let batchResult = await storage
         .read(
           sliced.map((key) => ({
             key,
@@ -431,31 +451,32 @@ function createTranscriptTailReader(e, r, tail) {
         .catch(() => {
           return;
         });
-      y = [];
-      if (R?.ok && R.value.items.length === sliced.length) y = R.value.items.map(s);
-      else for (let I of sliced) y.push(await f(I));
-      h = w;
+      block = [];
+      if (batchResult?.ok && batchResult.value.items.length === sliced.length)
+        block = batchResult.value.items.map(toBuffer);
+      else for (let key of sliced) block.push(await readOne(key));
+      blockStart = nextStart;
     }
-    return y[k - w] ?? null;
+    return block[keyIndex - nextStart] ?? null;
   };
 }
 //@ chunk-kxyd0g16.js:71759-72280 placement
 /**
  * 定位草稿对应的转录。
  */
-async function resolveDraftTranscript(e) {
-  if (!e.transcript_ref) return null;
-  if (!SESSION_ID_RE.test(e.source_session_id)) return null;
-  let { getSessionId } = await import("./chunk-nj7t53r7.js");
-  if (e.source_session_id === getSessionId()) {
-    let { getTranscriptPathForSession } = await import("./chunk-hs5khexj.js");
-    return getTranscriptPathForSession(e.source_session_id);
+async function resolveDraftTranscript(draft) {
+  if (!draft.transcript_ref) return null;
+  if (!SESSION_ID_RE.test(draft.source_session_id)) return null;
+  let { getSessionId } = await import("../../bootstrap/state.js");
+  if (draft.source_session_id === getSessionId()) {
+    let { getTranscriptPathForSession } = await import("../../utils/sessionStorage.lazy.js");
+    return getTranscriptPathForSession(draft.source_session_id);
   }
-  let { getProjectDir, getProjectsDir } = await import("./chunk-m7ezatv1.js");
-  let projectDirKey = e.transcript_ref.project_dir_key;
+  let { getProjectDir, getProjectsDir } = await import("../../utils/sessionStoragePortable.js");
+  let projectDirKey = draft.transcript_ref.project_dir_key;
   if (projectDirKey !== undefined && PROJECT_DIR_KEY_RE.test(projectDirKey))
-    return join(getProjectsDir(), projectDirKey, `${e.source_session_id}.jsonl`);
-  return join(getProjectDir(e.cwd), `${e.source_session_id}.jsonl`);
+    return join(getProjectsDir(), projectDirKey, `${draft.source_session_id}.jsonl`);
+  return join(getProjectDir(draft.cwd), `${draft.source_session_id}.jsonl`);
 }
 //@ chunk-kxyd0g16.js:72280-72294 placement
 /**
@@ -466,19 +487,25 @@ var MAX_CORROBORATION_TAIL_CHARS = 262144;
 /**
  * 检查转录内容是否能佐证反馈草稿（逐行解析 JSONL 查找对应记录）。
  */
-function transcriptCorroboratesDraft(e, r) {
-  using n = slowLogging`transcriptContentCorroboratesDraft(${e.length})`;
-  for (let line of e.split(`
+function transcriptCorroboratesDraft(jsonl, draft) {
+  using size = slowLogging`transcriptContentCorroboratesDraft(${jsonl.length})`;
+  for (let line of jsonl.split(`
 `)) {
     if (!line) continue;
-    let f;
+    let entry;
     try {
-      f = jsonParseRaw(line);
+      entry = jsonParseRaw(line);
     } catch {
       continue;
     }
-    if (typeof f !== "object" || f === null) continue;
-    if ("sessionId" in f && "cwd" in f && f.sessionId === r.source_session_id && f.cwd === r.cwd) return true;
+    if (typeof entry !== "object" || entry === null) continue;
+    if (
+      "sessionId" in entry &&
+      "cwd" in entry &&
+      entry.sessionId === draft.source_session_id &&
+      entry.cwd === draft.cwd
+    )
+      return true;
   }
   return false;
 }
@@ -486,41 +513,41 @@ function transcriptCorroboratesDraft(e, r) {
 /**
  * 按字符截断（不切开代理对）。
  */
-function truncateChars(e, r) {
-  let list = Array.from(e);
-  return list.length <= r ? e : list.slice(0, r).join("");
+function truncateChars(text, maxLen) {
+  let list = Array.from(text);
+  return list.length <= maxLen ? text : list.slice(0, maxLen).join("");
 }
 //@ chunk-kxyd0g16.js:72667-73413 placement
 /**
  * 生成反馈草稿对象。
  */
-function createFeedbackDraft(e, r = new Date()) {
-  let projectDirKey = e.transcriptFile ? projectDirKey_2(e.transcriptFile) : undefined;
+function createFeedbackDraft(input, now = new Date()) {
+  let projectDirKey = input.transcriptFile ? projectDirKey_2(input.transcriptFile) : undefined;
   return {
     draft_id: randomUUID(),
-    created_at: r.toISOString(),
-    source_session_id: e.sessionId,
-    cwd: sanitizeShortText(e.cwd, MAX_CWD_LENGTH),
-    model: sanitizeModel(e.model),
-    cli_version: sanitizeShortText(e.cliVersion, MAX_CLI_VERSION_LENGTH),
-    os: sanitizeShortText(e.os, MAX_OS_LENGTH),
-    request_ids: recentEntries(e.requestIds),
-    type: e.type,
-    title: sanitizeTitle(e.title),
-    details: sanitizeDetails(e.details),
-    area: sanitizeArea(e.area),
-    failure_mode: e.failureMode,
-    task_category: e.taskCategory,
-    trigger: e.trigger,
-    effort: sanitizeEffort(e.effort),
-    thinking_type: e.thinkingType,
-    thinking_budget: asTokenCount(e.thinkingBudget),
-    message_count: asTokenCount(e.messageCount),
-    assistant_turn_count: asTokenCount(e.assistantTurnCount),
-    subagent_count: asTokenCount(e.subagentCount),
-    transcript_ref: e.transcriptFile
+    created_at: now.toISOString(),
+    source_session_id: input.sessionId,
+    cwd: sanitizeShortText(input.cwd, MAX_CWD_LENGTH),
+    model: sanitizeModel(input.model),
+    cli_version: sanitizeShortText(input.cliVersion, MAX_CLI_VERSION_LENGTH),
+    os: sanitizeShortText(input.os, MAX_OS_LENGTH),
+    request_ids: recentEntries(input.requestIds),
+    type: input.type,
+    title: sanitizeTitle(input.title),
+    details: sanitizeDetails(input.details),
+    area: sanitizeArea(input.area),
+    failure_mode: input.failureMode,
+    task_category: input.taskCategory,
+    trigger: input.trigger,
+    effort: sanitizeEffort(input.effort),
+    thinking_type: input.thinkingType,
+    thinking_budget: asTokenCount(input.thinkingBudget),
+    message_count: asTokenCount(input.messageCount),
+    assistant_turn_count: asTokenCount(input.assistantTurnCount),
+    subagent_count: asTokenCount(input.subagentCount),
+    transcript_ref: input.transcriptFile
       ? {
-          session_file: e.transcriptFile,
+          session_file: input.transcriptFile,
           message_range: null,
           project_dir_key: projectDirKey,
         }
@@ -533,24 +560,24 @@ function createFeedbackDraft(e, r = new Date()) {
  * 从转写文件路径取项目目录键。
  */
 function projectDirKey_2(transcriptFile) {
-  let r = basename(dirname(transcriptFile));
-  return PROJECT_DIR_KEY_RE.test(r) ? r : undefined;
+  let dirName = basename(dirname(transcriptFile));
+  return PROJECT_DIR_KEY_RE.test(dirName) ? dirName : undefined;
 }
 //@ chunk-kxyd0g16.js:73471-74630 placement
 /**
  * 保存反馈草稿（大小上限）。
  */
-async function saveFeedbackDraft(e, now = new Date(), storageV5) {
-  let s = jsonStringify(e, null, 2);
-  if (s === undefined || Buffer.byteLength(s, "utf8") > MAX_TRANSCRIPT_TAIL_BYTES)
+async function saveFeedbackDraft(draft, now = new Date(), storageV5) {
+  let text = jsonStringify(draft, null, 2);
+  if (text === undefined || Buffer.byteLength(text, "utf8") > MAX_TRANSCRIPT_TAIL_BYTES)
     return {
       success: false,
       reason: "too_large",
     };
   if (storageV5) {
-    let h;
+    let writeResult;
     try {
-      h = await storageV5.write(draftStorageKey(e.draft_id), s, {
+      writeResult = await storageV5.write(draftStorageKey(draft.draft_id), text, {
         mode: 384,
       });
     } catch (error) {
@@ -565,8 +592,8 @@ async function saveFeedbackDraft(e, now = new Date(), storageV5) {
         reason: "write_failed",
       };
     }
-    if (!h.ok) {
-      logForDebugging(`feedbackDrafts: draft write failed: ${describeStorageError(h.error)}`, {
+    if (!writeResult.ok) {
+      logForDebugging(`feedbackDrafts: draft write failed: ${describeStorageError(writeResult.error)}`, {
         level: "error",
       });
       return {
@@ -585,7 +612,7 @@ async function saveFeedbackDraft(e, now = new Date(), storageV5) {
     let fileReader = getFileReader();
     try {
       await fileReader.mkdir(feedbackDraftsDir());
-      await fileReader.atomicWrite(draftFilePath(e.draft_id), s, 384);
+      await fileReader.atomicWrite(draftFilePath(draft.draft_id), text, 384);
     } catch (error) {
       logForDebugging(
         `feedbackDrafts: draft write failed: ${error instanceof Error ? error.name : "unknown"}`,
@@ -599,7 +626,7 @@ async function saveFeedbackDraft(e, now = new Date(), storageV5) {
       };
     }
   }
-  let f = [];
+  let evicted = [];
   try {
     let { queued } = await listFeedbackDrafts(
       {
@@ -609,10 +636,10 @@ async function saveFeedbackDraft(e, now = new Date(), storageV5) {
       storageV5,
     );
     if (queued.length > MAX_QUEUED_DRAFTS) {
-      let sorted = queued.slice().sort((k, w) => k.created_at.localeCompare(w.created_at));
-      for (let k of sorted.slice(0, queued.length - MAX_QUEUED_DRAFTS)) {
-        await deleteFeedbackDraft(k.draft_id, storageV5);
-        f.push(k);
+      let sorted = queued.slice().sort((left, right) => left.created_at.localeCompare(right.created_at));
+      for (let oldDraft of sorted.slice(0, queued.length - MAX_QUEUED_DRAFTS)) {
+        await deleteFeedbackDraft(oldDraft.draft_id, storageV5);
+        evicted.push(oldDraft);
       }
     }
   } catch (error) {
@@ -625,39 +652,39 @@ async function saveFeedbackDraft(e, now = new Date(), storageV5) {
   }
   return {
     success: true,
-    draft: e,
-    evicted: f,
+    draft,
+    evicted,
   };
 }
 //@ chunk-kxyd0g16.js:74630-76006 placement
 /**
  * 列出排队/过期的反馈草稿。
  */
-async function listFeedbackDrafts(e, storageV5) {
-  let n = e?.now ?? new Date();
-  let s = e?.lightweight === true;
-  let f = s || e?.skipTranscriptCheck === true;
-  let h;
-  let y;
-  let k = storageV5 ? undefined : getFileReader();
-  if (storageV5) {
-    let j = await listFeedbackDraftKeys(storageV5);
-    if (j === null)
+async function listFeedbackDrafts(options, storage) {
+  let now = options?.now ?? new Date();
+  let lightweight = options?.lightweight === true;
+  let skipTranscriptCheck = lightweight || options?.skipTranscriptCheck === true;
+  let fileNames;
+  let readDraftTail;
+  let fileReader = storage ? undefined : getFileReader();
+  if (storage) {
+    let draftKeys = await listFeedbackDraftKeys(storage);
+    if (draftKeys === null)
       return {
         queued: [],
         expired: [],
       };
-    h = j.map((x) => `${x.draftId}.json`);
-    y = createTranscriptTailReader(storageV5, j, MAX_TRANSCRIPT_TAIL_BYTES + 1);
+    fileNames = draftKeys.map((key) => `${key.draftId}.json`);
+    readDraftTail = createTranscriptTailReader(storage, draftKeys, MAX_TRANSCRIPT_TAIL_BYTES + 1);
   } else {
     if (isDiskless())
       return {
         queued: [],
         expired: [],
       };
-    let j;
+    let entries;
     try {
-      j = await k.list(feedbackDraftsDir());
+      entries = await fileReader.list(feedbackDraftsDir());
     } catch (error) {
       if (isFsInaccessible(error))
         return {
@@ -666,112 +693,112 @@ async function listFeedbackDrafts(e, storageV5) {
         };
       throw error;
     }
-    h = j.filter((x) => x.endsWith(".json"));
+    fileNames = entries.filter((name) => name.endsWith(".json"));
   }
-  let w = [];
-  let S = [];
-  let R = 0;
-  let I = 0;
-  for (let [j, x] of h.entries()) {
-    let B;
+  let queued = [];
+  let expired = [];
+  let invalidCount = 0;
+  let oversizedCount = 0;
+  for (let [index, name] of fileNames.entries()) {
+    let draft;
     try {
-      let q =
-        y === undefined
-          ? await k.readTail(join(feedbackDraftsDir(), x), MAX_TRANSCRIPT_TAIL_BYTES + 1)
-          : await y(j);
-      if (q === null) continue;
-      if (q.length > MAX_TRANSCRIPT_TAIL_BYTES) {
-        I++;
+      let tail =
+        readDraftTail === undefined
+          ? await fileReader.readTail(join(feedbackDraftsDir(), name), MAX_TRANSCRIPT_TAIL_BYTES + 1)
+          : await readDraftTail(index);
+      if (tail === null) continue;
+      if (tail.length > MAX_TRANSCRIPT_TAIL_BYTES) {
+        oversizedCount++;
         continue;
       }
-      using P = slowLogging`listFeedbackDrafts parse(${q.length})`;
-      let L = jsonParseRaw(q.toString("utf8"));
-      let W = FeedbackDraftSchema().safeParse(L);
-      if (!W.success) {
-        let draftId = L?.draft_id;
-        if (typeof draftId === "string" && !DRAFT_ID_RE.test(draftId)) R++;
+      using size = slowLogging`listFeedbackDrafts parse(${tail.length})`;
+      let parsed = jsonParseRaw(tail.toString("utf8"));
+      let validated = FeedbackDraftSchema().safeParse(parsed);
+      if (!validated.success) {
+        let draftId = parsed?.draft_id;
+        if (typeof draftId === "string" && !DRAFT_ID_RE.test(draftId)) invalidCount++;
         continue;
       }
-      B = W.data;
+      draft = validated.data;
     } catch {
       continue;
     }
-    if (x !== `${B.draft_id}.json`) {
-      R++;
+    if (name !== `${draft.draft_id}.json`) {
+      invalidCount++;
       continue;
     }
-    if (B.status !== "queued") continue;
-    let timestamp = Date.parse(B.created_at);
-    if (Number.isFinite(timestamp) && n.getTime() - timestamp > DRAFT_RETENTION_MS) {
-      if (s) continue;
-      if (await deleteFeedbackDraft(B.draft_id, storageV5).catch(() => false)) {
-        S.push(B);
+    if (draft.status !== "queued") continue;
+    let timestamp = Date.parse(draft.created_at);
+    if (Number.isFinite(timestamp) && now.getTime() - timestamp > DRAFT_RETENTION_MS) {
+      if (lightweight) continue;
+      if (await deleteFeedbackDraft(draft.draft_id, storage).catch(() => false)) {
+        expired.push(draft);
         logEvent("tengu_feedback_draft_expired", {
-          type: fromEnum(B.type),
-          trigger: fromEnum(B.trigger),
-          age_days: fromNumber(Math.round((n.getTime() - timestamp) / 86400000)),
+          type: fromEnum(draft.type),
+          trigger: fromEnum(draft.trigger),
+          age_days: fromNumber(Math.round((now.getTime() - timestamp) / 86400000)),
         });
       }
       continue;
     }
-    w.push({
-      ...B,
-      transcriptAvailable: f ? false : await verifyDraftTranscript(B, storageV5),
+    queued.push({
+      ...draft,
+      transcriptAvailable: skipTranscriptCheck ? false : await verifyDraftTranscript(draft, storage),
     });
   }
-  w.sort((j, x) => x.created_at.localeCompare(j.created_at));
-  if (R > 0)
+  queued.sort((left, right) => right.created_at.localeCompare(left.created_at));
+  if (invalidCount > 0)
     logEvent("tengu_feedback_draft_invalid_id", {
-      count: fromNumber(R),
+      count: fromNumber(invalidCount),
     });
-  if (I > 0)
+  if (oversizedCount > 0)
     logEvent("tengu_feedback_draft_oversized_file", {
-      count: fromNumber(I),
+      count: fromNumber(oversizedCount),
     });
   return {
-    queued: w,
-    expired: S,
+    queued,
+    expired,
   };
 }
 //@ chunk-kxyd0g16.js:76006-76187 placement = getErrorsPath (0.79)
 function parseTranscriptPathUnder(draftTranscript, projectsDir) {
   if (!draftTranscript.endsWith(".jsonl")) return;
-  let n = dirname(draftTranscript);
-  let s = basename(n);
+  let dir = dirname(draftTranscript);
+  let dirName = basename(dir);
   let sliced = basename(draftTranscript).slice(0, -6);
-  if (dirname(n) !== projectsDir || !isValidKeySegment(s) || !isValidKeySegment(sliced)) return;
-  let h = STORAGE_SPACES.transcript(s, sliced);
-  return validateStorageKey(h) === undefined ? h : undefined;
+  if (dirname(dir) !== projectsDir || !isValidKeySegment(dirName) || !isValidKeySegment(sliced)) return;
+  let parts = STORAGE_SPACES.transcript(dirName, sliced);
+  return validateStorageKey(parts) === undefined ? parts : undefined;
 }
 //@ chunk-kxyd0g16.js:76187-76756 placement
 /**
  * 核对草稿的转录。
  */
-async function verifyDraftTranscript(e, r) {
-  let draftTranscript = await resolveDraftTranscript(e);
+async function verifyDraftTranscript(draft, storage) {
+  let draftTranscript = await resolveDraftTranscript(draft);
   if (draftTranscript === null) return false;
-  let { getSessionId } = await import("./chunk-nj7t53r7.js");
-  let f = e.source_session_id === getSessionId();
-  if (r) {
-    let { getProjectsDir } = await import("./chunk-m7ezatv1.js");
+  let { getSessionId } = await import("../../bootstrap/state.js");
+  let fromThisSession = draft.source_session_id === getSessionId();
+  if (storage) {
+    let { getProjectsDir } = await import("../../utils/sessionStoragePortable.js");
     let transcriptPathUnder = parseTranscriptPathUnder(draftTranscript, getProjectsDir());
     if (transcriptPathUnder !== undefined)
       try {
-        if (f) return (await r.statMeta(transcriptPathUnder)).ok;
-        let k = await r.read([
+        if (fromThisSession) return (await storage.statMeta(transcriptPathUnder)).ok;
+        let readResult = await storage.read([
           {
             key: transcriptPathUnder,
             tail: MAX_CORROBORATION_TAIL_CHARS,
           },
         ]);
-        if (!k.ok) return false;
-        let [w] = k.value.items;
-        return w.found && transcriptCorroboratesDraft(Buffer.from(w.value).toString("utf8"), e);
+        if (!readResult.ok) return false;
+        let [item] = readResult.value.items;
+        return item.found && transcriptCorroboratesDraft(Buffer.from(item.value).toString("utf8"), draft);
       } catch {
         return false;
       }
   }
-  if (f)
+  if (fromThisSession)
     try {
       await getFileReader().stat(draftTranscript);
       return true;
@@ -780,7 +807,7 @@ async function verifyDraftTranscript(e, r) {
     }
   try {
     let tail = await getFileReader().readTail(draftTranscript, MAX_CORROBORATION_TAIL_CHARS);
-    return transcriptCorroboratesDraft(tail.toString("utf8"), e);
+    return transcriptCorroboratesDraft(tail.toString("utf8"), draft);
   } catch {
     return false;
   }
@@ -789,21 +816,21 @@ async function verifyDraftTranscript(e, r) {
 /**
  * 删除反馈草稿。
  */
-async function deleteFeedbackDraft(draftId, r) {
-  if (r) {
-    let n = await r.delete(draftStorageKey(draftId));
-    if (!n.ok) {
-      if (isFsInaccessibleCode(telemetryCodeOf(n.error))) return false;
+async function deleteFeedbackDraft(id, storage) {
+  if (storage) {
+    let result = await storage.delete(draftStorageKey(id));
+    if (!result.ok) {
+      if (isFsInaccessibleCode(telemetryCodeOf(result.error))) return false;
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        `feedback draft delete failed: ${describeStorageError(n.error)}`,
+        `feedback draft delete failed: ${describeStorageError(result.error)}`,
         "feedback draft delete failed",
       );
     }
-    return n.value.existed;
+    return result.value.existed;
   }
   if (isDiskless()) return false;
   try {
-    await getFileReader().delete(draftFilePath(draftId));
+    await getFileReader().delete(draftFilePath(id));
     return true;
   } catch (error) {
     if (!isENOENT(error) && !isFsInaccessible(error)) throw error;
@@ -821,7 +848,7 @@ async function countSessionQueuedDrafts(sessionId, storageV5) {
     },
     storageV5,
   );
-  return count(queued, (s) => s.source_session_id === sessionId);
+  return count(queued, (draft) => draft.source_session_id === sessionId);
 }
 //@ chunk-kxyd0g16.js:77174-77203 placement
 /**
@@ -836,56 +863,56 @@ var MAX_NOTICE_MODEL_CHARS = 6;
  * 记录新草稿并决定是否提示用户。
  */
 function noteFeedbackDraft(notice) {
-  let r = "silent";
-  uiSignals.feedbackNotice.setState((n) => {
-    let s = {
-      ...n,
-      sessionDraftCount: n.sessionDraftCount + 1,
+  let kind = "silent";
+  uiSignals.feedbackNotice.setState((state) => {
+    let next = {
+      ...state,
+      sessionDraftCount: state.sessionDraftCount + 1,
     };
-    if (n.notice !== null) {
-      r = "notice_pending";
-      s.notice = notice;
-      return s;
+    if (state.notice !== null) {
+      kind = "notice_pending";
+      next.notice = notice;
+      return next;
     }
-    if (n.promptedCount >= getMaxDraftPromptsPerSession()) {
-      r = "silent";
-      return s;
+    if (state.promptedCount >= getMaxDraftPromptsPerSession()) {
+      kind = "silent";
+      return next;
     }
-    s.promptedCount = n.promptedCount + 1;
-    r = "notice_pending";
-    s.notice = notice;
-    return s;
+    next.promptedCount = state.promptedCount + 1;
+    kind = "notice_pending";
+    next.notice = notice;
+    return next;
   });
-  return r;
+  return kind;
 }
 //@ chunk-kxyd0g16.js:77506-77658 placement
 /**
  * 在未达上限时把反馈工具调用计数加一，返回是否计数成功。
  */
 function tryCountFeedbackToolCall() {
-  let e = false;
-  uiSignals.feedbackNotice.setState((r) => {
-    if (r.toolCallCount >= getMaxToolCallsPerSession()) return r;
-    e = true;
+  let counted = false;
+  uiSignals.feedbackNotice.setState((state) => {
+    if (state.toolCallCount >= getMaxToolCallsPerSession()) return state;
+    counted = true;
     return {
-      ...r,
-      toolCallCount: r.toolCallCount + 1,
+      ...state,
+      toolCallCount: state.toolCallCount + 1,
     };
   });
-  return e;
+  return counted;
 }
 //@ chunk-kxyd0g16.js:77658-77750 placement
 /**
  * 关闭指定草稿的提示。
  */
 function dismissFeedbackNotice_2(draftId) {
-  uiSignals.feedbackNotice.setState((r) =>
-    r.notice?.draftId === draftId
+  uiSignals.feedbackNotice.setState((state) =>
+    state.notice?.draftId === draftId
       ? {
-          ...r,
+          ...state,
           notice: null,
         }
-      : r,
+      : state,
   );
 }
 //@ chunk-kxyd0g16.js:77750-77835 placement
@@ -893,11 +920,11 @@ function dismissFeedbackNotice_2(draftId) {
  * 关闭反馈提示。
  */
 function dismissFeedbackNotice() {
-  uiSignals.feedbackNotice.setState((e) =>
-    e.notice === null
-      ? e
+  uiSignals.feedbackNotice.setState((state) =>
+    state.notice === null
+      ? state
       : {
-          ...e,
+          ...state,
           notice: null,
         },
   );
@@ -907,25 +934,25 @@ function dismissFeedbackNotice() {
  * 标记某草稿的提示已记录过遥测，首次标记返回 true。
  */
 function markDraftNoticeLogged(draftId) {
-  let r = false;
-  uiSignals.feedbackNotice.setState((n) => {
-    if (n.shownLoggedForDraftId === draftId) return n;
-    r = true;
+  let logged = false;
+  uiSignals.feedbackNotice.setState((state) => {
+    if (state.shownLoggedForDraftId === draftId) return state;
+    logged = true;
     return {
-      ...n,
+      ...state,
       shownLoggedForDraftId: draftId,
     };
   });
-  return r;
+  return logged;
 }
 //@ chunk-kxyd0g16.js:77987-78099 placement
 /**
  * 把会话草稿计数减少指定数量（不低于 0）。
  */
-function decrementSessionDraftCount(e = 1) {
-  uiSignals.feedbackNotice.setState((r) => ({
-    ...r,
-    sessionDraftCount: Math.max(0, r.sessionDraftCount - e),
+function decrementSessionDraftCount(amount = 1) {
+  uiSignals.feedbackNotice.setState((state) => ({
+    ...state,
+    sessionDraftCount: Math.max(0, state.sessionDraftCount - amount),
   }));
 }
 //@ chunk-kxyd0g16.js:78099-78245 placement
@@ -933,28 +960,28 @@ function decrementSessionDraftCount(e = 1) {
  * 尝试开始从磁盘初始化草稿计数，仅首次返回 true。
  */
 function tryStartDraftSeed() {
-  let e = false;
-  uiSignals.feedbackNotice.setState((r) => {
-    if (r.seedStarted || r.seededFromDisk) return r;
-    e = true;
+  let started = false;
+  uiSignals.feedbackNotice.setState((state) => {
+    if (state.seedStarted || state.seededFromDisk) return state;
+    started = true;
     return {
-      ...r,
+      ...state,
       seedStarted: true,
     };
   });
-  return e;
+  return started;
 }
 //@ chunk-kxyd0g16.js:78245-78406 placement
 /**
  * 用磁盘上的草稿数初始化会话草稿计数（只做一次，取较大值）。
  */
-function seedSessionDraftCount(e) {
-  uiSignals.feedbackNotice.setState((r) => {
-    if (r.seededFromDisk) return r;
+function seedSessionDraftCount(count) {
+  uiSignals.feedbackNotice.setState((state) => {
+    if (state.seededFromDisk) return state;
     return {
-      ...r,
+      ...state,
       seededFromDisk: true,
-      sessionDraftCount: Math.max(r.sessionDraftCount, e),
+      sessionDraftCount: Math.max(state.sessionDraftCount, count),
     };
   });
 }
@@ -962,14 +989,14 @@ function seedSessionDraftCount(e) {
 /**
  * 直接设置会话草稿计数并标记已从磁盘初始化。
  */
-function setSessionDraftCount(e) {
-  uiSignals.feedbackNotice.setState((r) =>
-    r.sessionDraftCount === e && r.seededFromDisk
-      ? r
+function setSessionDraftCount(count) {
+  uiSignals.feedbackNotice.setState((state) =>
+    state.sessionDraftCount === count && state.seededFromDisk
+      ? state
       : {
-          ...r,
+          ...state,
           seededFromDisk: true,
-          sessionDraftCount: e,
+          sessionDraftCount: count,
         },
   );
 }

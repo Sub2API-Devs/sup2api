@@ -5,11 +5,11 @@
  * pieces: chunk-1ny7cxrt.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 import { require_core } from "./core.cjs";
 
 //@ chunk-1ny7cxrt.js:89659-104048 cjs-fingerprint
-var require_util = x(function (cjsExports) {
+var require_util = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
@@ -303,8 +303,8 @@ var require_util = x(function (cjsExports) {
     return keyCount;
   }
   var getParsedType = (data) => {
-    let t = typeof data;
-    switch (t) {
+    let dataType = typeof data;
+    switch (dataType) {
       case "undefined":
         return "undefined";
       case "string":
@@ -330,7 +330,7 @@ var require_util = x(function (cjsExports) {
         if (typeof File !== "undefined" && data instanceof File) return "file";
         return "object";
       default:
-        throw Error(`Unknown data type: ${t}`);
+        throw Error(`Unknown data type: ${dataType}`);
     }
   };
   cjsExports.getParsedType = getParsedType;
@@ -638,8 +638,8 @@ var require_util = x(function (cjsExports) {
     return "unknown";
   }
   function parsedType(data) {
-    let t = typeof data;
-    switch (t) {
+    let dataType = typeof data;
+    switch (dataType) {
       case "number":
         return Number.isNaN(data) ? "nan" : "number";
       case "object": {
@@ -650,7 +650,7 @@ var require_util = x(function (cjsExports) {
           return obj.constructor.name;
       }
     }
-    return t;
+    return dataType;
   }
   function issue(...args) {
     let [iss, input, inst] = args;

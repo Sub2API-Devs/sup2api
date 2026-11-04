@@ -49,39 +49,49 @@ function resolveAdvisorState(
   { querySource, resumeActive, configuredRuntimeModel, runtimeOptionsModel, carrier, toolChangesRide },
 ) {
   try {
-    let r = typeof toolChangesRide === "function" ? toolChangesRide : () => toolChangesRide;
-    let b = classifyQuerySource(querySource);
+    let toolChangesRideFn = typeof toolChangesRide === "function" ? toolChangesRide : () => toolChangesRide;
+    let querySourceKind = classifyQuerySource(querySource);
     let advisorSetting = toolUseContext.getAdvisorSetting();
-    let s = b === "main" ? configuredRuntimeModel : runtimeOptionsModel;
-    let m = r(runtimeOptionsModel);
-    let advisorToolAttachment = buildAdvisorToolAttachment(messages);
-    if (resumeActive || b === "auxiliary") {
-      let p =
+    let effectiveModel = querySourceKind === "main" ? configuredRuntimeModel : runtimeOptionsModel;
+    let toolChangeAllowed = toolChangesRideFn(runtimeOptionsModel);
+    let toolAttachment = buildAdvisorToolAttachment(messages);
+    if (resumeActive || querySourceKind === "auxiliary") {
+      let heldAdvisor =
         carrier?.advisorHeld ??
-        advisorAttachmentToHeld(advisorToolAttachment) ??
-        chooseAdvisorModel(advisorSetting, s, configuredRuntimeModel, r(s));
-      let h =
-        p.model === undefined && m && !p.refused
+        advisorAttachmentToHeld(toolAttachment) ??
+        chooseAdvisorModel(
+          advisorSetting,
+          effectiveModel,
+          configuredRuntimeModel,
+          toolChangesRideFn(effectiveModel),
+        );
+      let heldWithToolChange =
+        heldAdvisor.model === undefined && toolChangeAllowed && !heldAdvisor.refused
           ? {
-              model: resolveAdvisorModelFor(advisorSetting, s, configuredRuntimeModel),
+              model: resolveAdvisorModelFor(advisorSetting, effectiveModel, configuredRuntimeModel),
               viaToolChange: true,
             }
-          : p;
+          : heldAdvisor;
       return finalizeAdvisorState(
-        clearToolChangeFlag(h, m),
-        advisorToolAttachment,
-        s,
+        clearToolChangeFlag(heldWithToolChange, toolChangeAllowed),
+        toolAttachment,
+        effectiveModel,
         configuredRuntimeModel,
       );
     }
     let held = carrier?.advisorHeld;
     if (held === undefined) {
       held =
-        advisorAttachmentToHeld(advisorToolAttachment) ??
-        chooseAdvisorModel(advisorSetting, s, configuredRuntimeModel, r(s));
+        advisorAttachmentToHeld(toolAttachment) ??
+        chooseAdvisorModel(
+          advisorSetting,
+          effectiveModel,
+          configuredRuntimeModel,
+          toolChangesRideFn(effectiveModel),
+        );
       if (carrier !== undefined) carrier.advisorHeld = held;
-    } else if (held.model === undefined && m && !held.refused) {
-      let advisorModelFor = resolveAdvisorModelFor(advisorSetting, s, configuredRuntimeModel);
+    } else if (held.model === undefined && toolChangeAllowed && !held.refused) {
+      let advisorModelFor = resolveAdvisorModelFor(advisorSetting, effectiveModel, configuredRuntimeModel);
       if (advisorModelFor !== undefined) {
         held = {
           model: advisorModelFor,
@@ -90,33 +100,33 @@ function resolveAdvisorState(
         if (carrier !== undefined) carrier.advisorHeld = held;
       }
     }
-    let F = clearToolChangeFlag(held, m);
-    let q = held.viaToolChange && !m && held.inFallback !== true;
+    let heldCleared = clearToolChangeFlag(held, toolChangeAllowed);
+    let isToolChangePending = held.viaToolChange && !toolChangeAllowed && held.inFallback !== true;
     let advisorAnnouncement = buildAdvisorAnnouncement(
       messages,
       advisorSetting,
-      s,
+      effectiveModel,
       configuredRuntimeModel,
-      F,
-      q,
+      heldCleared,
+      isToolChangePending,
     );
-    let N =
+    let canActivateAdvisor =
       held.model === undefined ||
-      advisorToolAttachment !== undefined ||
-      canUseAdvisorFor(held.model, s, configuredRuntimeModel);
-    let B = m ? false : held.inFallback === true || N;
-    if (carrier !== undefined && held.viaToolChange && (held.inFallback === true) !== B) {
-      let { inFallback, ...h } = held;
-      carrier.advisorHeld = B
+      toolAttachment !== undefined ||
+      canUseAdvisorFor(held.model, effectiveModel, configuredRuntimeModel);
+    let inFallback = toolChangeAllowed ? false : held.inFallback === true || canActivateAdvisor;
+    if (carrier !== undefined && held.viaToolChange && (held.inFallback === true) !== inFallback) {
+      let { inFallback: inFallback_2, ...heldRest } = held;
+      carrier.advisorHeld = inFallback
         ? {
-            ...h,
+            ...heldRest,
             inFallback: true,
           }
-        : h;
+        : heldRest;
     }
-    let O =
+    let effectiveAttachment =
       advisorAnnouncement === undefined
-        ? advisorToolAttachment
+        ? toolAttachment
         : advisorAnnouncement.available
           ? {
               available: true,
@@ -131,7 +141,7 @@ function resolveAdvisorState(
               byBase: advisorAnnouncement.byBase === true,
             };
     return {
-      ...finalizeAdvisorState(F, O, s, configuredRuntimeModel),
+      ...finalizeAdvisorState(heldCleared, effectiveAttachment, effectiveModel, configuredRuntimeModel),
       announcement: advisorAnnouncement,
     };
   } catch (error) {
@@ -140,34 +150,44 @@ function resolveAdvisorState(
   }
 }
 //@ chunk-mw4q1ac2.js:1628-1747 placement
-function advisorStateResult(model, o, i) {
+function advisorStateResult(model, isDeferred, isActive) {
   return {
     announcement: undefined,
     advisorModel: model,
-    advisorDeferred: model !== undefined && o,
-    advisorActive: model !== undefined && i,
+    advisorDeferred: model !== undefined && isDeferred,
+    advisorActive: model !== undefined && isActive,
   };
 }
 //@ chunk-mw4q1ac2.js:1747-1991 placement
-function finalizeAdvisorState(e, o, i, configuredRuntimeModel) {
-  if (e.model === undefined || !canUseAdvisorFor(e.model, i, configuredRuntimeModel))
+function finalizeAdvisorState(heldAdvisor, toolAttachment, effectiveModel, configuredRuntimeModel) {
+  if (
+    heldAdvisor.model === undefined ||
+    !canUseAdvisorFor(heldAdvisor.model, effectiveModel, configuredRuntimeModel)
+  )
     return EMPTY_ADVISOR_STATE;
-  if (e.viaToolChange) return advisorStateResult(e.model, true, o?.available === true);
-  if (e.standby && o === undefined) return EMPTY_ADVISOR_STATE;
-  if (o !== undefined && !o.available && o.toolChange && !o.byBase) return EMPTY_ADVISOR_STATE;
-  return advisorStateResult(e.model, false, true);
+  if (heldAdvisor.viaToolChange)
+    return advisorStateResult(heldAdvisor.model, true, toolAttachment?.available === true);
+  if (heldAdvisor.standby && toolAttachment === undefined) return EMPTY_ADVISOR_STATE;
+  if (
+    toolAttachment !== undefined &&
+    !toolAttachment.available &&
+    toolAttachment.toolChange &&
+    !toolAttachment.byBase
+  )
+    return EMPTY_ADVISOR_STATE;
+  return advisorStateResult(heldAdvisor.model, false, true);
 }
 //@ chunk-mw4q1ac2.js:1991-2060 placement
 /**
  * 不需要工具变更时清掉 viaToolChange 标记。
  */
-function clearToolChangeFlag(e, o) {
-  return e.viaToolChange && !o
+function clearToolChangeFlag(heldAdvisor, toolChangeAllowed) {
+  return heldAdvisor.viaToolChange && !toolChangeAllowed
     ? {
-        ...e,
+        ...heldAdvisor,
         viaToolChange: false,
       }
-    : e;
+    : heldAdvisor;
 }
 //@ chunk-mw4q1ac2.js:2060-2146 placement
 /**
@@ -181,14 +201,14 @@ function advisorAttachmentToHeld(advisorToolAttachment) {
   };
 }
 //@ chunk-mw4q1ac2.js:2146-2335 placement
-function chooseAdvisorModel(e, o, configuredRuntimeModel, u) {
-  let advisorModelFor = resolveAdvisorModelFor(e, o, configuredRuntimeModel);
-  if (advisorModelFor !== undefined || !u || e)
+function chooseAdvisorModel(advisorSetting, effectiveModel, configuredRuntimeModel, toolChangeAllowed) {
+  let advisorModelFor = resolveAdvisorModelFor(advisorSetting, effectiveModel, configuredRuntimeModel);
+  if (advisorModelFor !== undefined || !toolChangeAllowed || advisorSetting)
     return {
       model: advisorModelFor,
-      viaToolChange: u,
+      viaToolChange: toolChangeAllowed,
     };
-  let standbyAdvisorModel = findStandbyAdvisorModel(o, configuredRuntimeModel);
+  let standbyAdvisorModel = findStandbyAdvisorModel(effectiveModel, configuredRuntimeModel);
   return standbyAdvisorModel === undefined
     ? {
         model: undefined,
@@ -201,16 +221,16 @@ function chooseAdvisorModel(e, o, configuredRuntimeModel, u) {
       };
 }
 //@ chunk-mw4q1ac2.js:2335-2624 placement
-function findStandbyAdvisorModel(e, o) {
-  if (!isFirstPartyApiBackend() || !isAdvisorToolEnabled() || !baseModelSupportsAdvisor(e)) return;
+function findStandbyAdvisorModel(baseModel, configuredRuntimeModel) {
+  if (!isFirstPartyApiBackend() || !isAdvisorToolEnabled() || !baseModelSupportsAdvisor(baseModel)) return;
   let validAdvisorAliases = getValidAdvisorAliases();
-  let u = [
+  let orderedAliases = [
     ...validAdvisorAliases.filter((validAdvisorAlias) => !isCreditsOnlyModel(validAdvisorAlias)),
     ...validAdvisorAliases.filter((validAdvisorAlias) => isCreditsOnlyModel(validAdvisorAlias)),
   ];
-  for (let d of u) {
-    let advisorModelFor = resolveAdvisorModelFor(d, e, o);
-    if (advisorModelFor === undefined || !canAdviseModelStrict(e, advisorModelFor)) continue;
+  for (let alias of orderedAliases) {
+    let advisorModelFor = resolveAdvisorModelFor(alias, baseModel, configuredRuntimeModel);
+    if (advisorModelFor === undefined || !canAdviseModelStrict(baseModel, advisorModelFor)) continue;
     if (isModelKnownServedToOrg(advisorModelFor)) return advisorModelFor;
     logForDebugging(
       `[AdvisorTool] No standby advisor entry - this org is not known to serve ${advisorModelFor}`,
@@ -230,28 +250,35 @@ function isCreditsOnlyModel(validAdvisorAlias) {
 /**
  * 根据当前 advisor 选择与上一条 advisor_tool 附件，决定是否需要发出新的 advisor_tool 附件（可用/不可用、add/remove 工具变更、简略形式），无变化时返回 undefined。
  */
-function buildAdvisorAnnouncement(messages, o, i, configuredRuntimeModel, d, f = false) {
+function buildAdvisorAnnouncement(
+  messages,
+  advisorSetting,
+  effectiveModel,
+  configuredRuntimeModel,
+  heldOverride,
+  forcedToolChange = false,
+) {
   let advisorToolAttachment = buildAdvisorToolAttachment(messages);
-  let g = d ??
+  let heldAdvisor = heldOverride ??
     advisorAttachmentToHeld(advisorToolAttachment) ?? {
-      model: resolveAdvisorModelFor(o, i, configuredRuntimeModel),
+      model: resolveAdvisorModelFor(advisorSetting, effectiveModel, configuredRuntimeModel),
       viaToolChange: false,
     };
-  let model = g.model;
-  let b = lastAdvisorToolChange(messages) === "add";
-  if (model === undefined || !canUseAdvisorFor(model, i, configuredRuntimeModel)) {
-    let viaToolChange = g.viaToolChange || f;
-    let a = isAdvisorToolEnabled() && Boolean(o);
+  let model = heldAdvisor.model;
+  let isLastToolChangeAdd = lastAdvisorToolChange(messages) === "add";
+  if (model === undefined || !canUseAdvisorFor(model, effectiveModel, configuredRuntimeModel)) {
+    let viaToolChange = heldAdvisor.viaToolChange || forcedToolChange;
+    let advisorEnabledForSetting = isAdvisorToolEnabled() && Boolean(advisorSetting);
     if (advisorToolAttachment?.available !== true) {
       if (!viaToolChange || model === undefined || advisorToolAttachment === undefined) return;
-      if (advisorToolAttachment.byBase && !a)
+      if (advisorToolAttachment.byBase && !advisorEnabledForSetting)
         return {
           type: "advisor_tool",
           available: false,
           model,
           toolChange: "remove",
         };
-      if (advisorToolAttachment.toolChange && !advisorToolAttachment.byBase && a)
+      if (advisorToolAttachment.toolChange && !advisorToolAttachment.byBase && advisorEnabledForSetting)
         return {
           type: "advisor_tool",
           available: false,
@@ -273,7 +300,7 @@ function buildAdvisorAnnouncement(messages, o, i, configuredRuntimeModel, d, f =
         model,
         byBase: true,
       };
-    return a
+    return advisorEnabledForSetting
       ? {
           type: "advisor_tool",
           available: false,
@@ -288,10 +315,10 @@ function buildAdvisorAnnouncement(messages, o, i, configuredRuntimeModel, d, f =
           toolChange: "remove",
         };
   }
-  let v = hasFullAdvisorNotice(messages);
-  if (g.viaToolChange) {
-    if (resolveAdvisorModel(o, i) === undefined)
-      return b || advisorToolAttachment?.available === true
+  let hasFullNotice = hasFullAdvisorNotice(messages);
+  if (heldAdvisor.viaToolChange) {
+    if (resolveAdvisorModel(advisorSetting, effectiveModel) === undefined)
+      return isLastToolChangeAdd || advisorToolAttachment?.available === true
         ? {
             type: "advisor_tool",
             available: false,
@@ -299,8 +326,8 @@ function buildAdvisorAnnouncement(messages, o, i, configuredRuntimeModel, d, f =
             toolChange: "remove",
           }
         : undefined;
-    if (b && advisorToolAttachment?.available !== false)
-      return v
+    if (isLastToolChangeAdd && advisorToolAttachment?.available !== false)
+      return hasFullNotice
         ? undefined
         : {
             type: "advisor_tool",
@@ -308,7 +335,7 @@ function buildAdvisorAnnouncement(messages, o, i, configuredRuntimeModel, d, f =
             model,
             toolChange: "add",
           };
-    return v
+    return hasFullNotice
       ? {
           type: "advisor_tool",
           available: true,
@@ -323,20 +350,20 @@ function buildAdvisorAnnouncement(messages, o, i, configuredRuntimeModel, d, f =
           toolChange: "add",
         };
   }
-  let s = {
+  let fullAnnouncement = {
     type: "advisor_tool",
     available: true,
     model,
   };
-  let m = {
-    ...s,
+  let abbreviatedAnnouncement = {
+    ...fullAnnouncement,
     abbreviated: true,
   };
-  if (f) {
-    if (resolveAdvisorModel(o, i) === undefined)
+  if (forcedToolChange) {
+    if (resolveAdvisorModel(advisorSetting, effectiveModel) === undefined)
       return advisorToolAttachment?.available === true ||
         (advisorToolAttachment !== undefined && advisorToolAttachment.byBase) ||
-        (advisorToolAttachment === undefined && g.standby !== true)
+        (advisorToolAttachment === undefined && heldAdvisor.standby !== true)
         ? {
             type: "advisor_tool",
             available: false,
@@ -344,24 +371,24 @@ function buildAdvisorAnnouncement(messages, o, i, configuredRuntimeModel, d, f =
             toolChange: "remove",
           }
         : undefined;
-    if (advisorToolAttachment?.available === true) return v ? undefined : s;
-    return v ? m : s;
+    if (advisorToolAttachment?.available === true) return hasFullNotice ? undefined : fullAnnouncement;
+    return hasFullNotice ? abbreviatedAnnouncement : fullAnnouncement;
   }
-  if (advisorToolAttachment === undefined) return g.standby ? undefined : s;
-  if (advisorToolAttachment.available) return v ? undefined : s;
+  if (advisorToolAttachment === undefined) return heldAdvisor.standby ? undefined : fullAnnouncement;
+  if (advisorToolAttachment.available) return hasFullNotice ? undefined : fullAnnouncement;
   if (advisorToolAttachment.toolChange && !advisorToolAttachment.byBase) return;
-  return v ? m : s;
+  return hasFullNotice ? abbreviatedAnnouncement : fullAnnouncement;
 }
 //@ chunk-mw4q1ac2.js:4176-4365 placement
 function lastAdvisorToolChange(messages) {
   for (let j = messages.length - 1; j >= 0; j--) {
-    let i = messages[j];
+    let message = messages[j];
     if (
-      i.type === "attachment" &&
-      i.attachment.type === "advisor_tool" &&
-      i.attachment.toolChange !== undefined
+      message.type === "attachment" &&
+      message.attachment.type === "advisor_tool" &&
+      message.attachment.toolChange !== undefined
     )
-      return i.attachment.toolChange;
+      return message.attachment.toolChange;
   }
   return;
 }
@@ -369,21 +396,25 @@ function lastAdvisorToolChange(messages) {
 /**
  * 给定基础模型与顾问模型能否启用顾问（家族相同用严格判断，否则宽松）。
  */
-function canUseAdvisorFor(model, o, i) {
+function canUseAdvisorFor(model, baseModel, configuredRuntimeModel) {
   return (
     isAdvisorEnabled() &&
     canUseAsAdvisor(model) &&
-    baseModelSupportsAdvisor(o) &&
-    (isSameModelFamilyId(o, i) ? canAdviseModel(o, model) : canAdviseModelLenient(o, model))
+    baseModelSupportsAdvisor(baseModel) &&
+    (isSameModelFamilyId(baseModel, configuredRuntimeModel)
+      ? canAdviseModel(baseModel, model)
+      : canAdviseModelLenient(baseModel, model))
   );
 }
 //@ chunk-mw4q1ac2.js:4441-4523 placement
 /**
  * 解析可用的顾问模型（家族相同或宽松判断通过）。
  */
-function resolveAdvisorModelFor(e, o, i) {
-  let advisorModel = resolveAdvisorModel(e, o);
-  return advisorModel !== undefined && (isSameModelFamilyId(o, i) || canAdviseModelLenient(o, advisorModel))
+function resolveAdvisorModelFor(advisorSetting, effectiveModel, configuredRuntimeModel) {
+  let advisorModel = resolveAdvisorModel(advisorSetting, effectiveModel);
+  return advisorModel !== undefined &&
+    (isSameModelFamilyId(effectiveModel, configuredRuntimeModel) ||
+      canAdviseModelLenient(effectiveModel, advisorModel))
     ? advisorModel
     : undefined;
 }

@@ -35,16 +35,17 @@ import { checkHasTrustDialogAccepted } from "../../utils/config.js";
 import { logFeatureSad, logFeatureOk } from "../../services/analytics/featureTelemetry.js";
 import { createAttachmentMessage } from "../../utils/attachments.js";
 import { plural, getFirstLine } from "../../utils/stringUtils.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-bnwcqde4.js:685-790 placement
 function isOrganizationHookPolicyPending() {
-  let t = false;
+  let updated = false;
   try {
-    t = hasManagedSettings();
+    updated = hasManagedSettings();
   } catch (error) {
     logError(error);
   }
-  if (!t) return false;
+  if (!updated) return false;
   try {
     return managedMarketplaceAnswerFlag();
   } catch (error) {
@@ -80,39 +81,43 @@ function buildGoalSentinelAttachment(met, condition) {
   };
 }
 //@ chunk-bnwcqde4.js:1020-1306 placement
-function findActiveGoalCondition(t) {
-  if (!t) return null;
-  for (let i = t.length - 1; i >= 0; i--) {
-    let r = t[i];
-    if (r?.type !== "attachment" || r.attachment.type !== "goal_status") continue;
-    if (r.attachment.met || r.attachment.failed) return null;
-    let condition = r.attachment.condition;
+function findActiveGoalCondition(messages) {
+  if (!messages) return null;
+  for (let i = messages.length - 1; i >= 0; i--) {
+    let message = messages[i];
+    if (message?.type !== "attachment" || message.attachment.type !== "goal_status") continue;
+    if (message.attachment.met || message.attachment.failed) return null;
+    let condition = message.attachment.condition;
     return typeof condition === "string" && condition.length > 0 ? condition : null;
   }
   return null;
 }
 //@ chunk-bnwcqde4.js:1306-1436 placement
-function logGoalCleared(t, o) {
+function logGoalCleared(condition, reason) {
   logEvent("tengu_goal_cleared", {
-    reason: fromEnum(o),
-    iterations: t.iterations,
-    durationMs: Date.now() - t.setAt,
-    origin: fromEnumOpt(t.origin),
+    reason: fromEnum(reason),
+    iterations: condition.iterations,
+    durationMs: Date.now() - condition.setAt,
+    origin: fromEnumOpt(condition.origin),
   });
 }
 //@ chunk-bnwcqde4.js:1436-1507 placement
-var MAX_GOAL_CONDITION_CHARS = 4000;
-var GOAL_CLEAR_WORDS = new Set(["clear", "stop", "off", "reset", "none", "cancel"]);
+var MAX_GOAL_CONDITION_CHARS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var GOAL_CLEAR_WORDS;
+deferInit("chunk-bnwcqde4.js:1436", () => {
+  MAX_GOAL_CONDITION_CHARS = 4000;
+  GOAL_CLEAR_WORDS = new Set(["clear", "stop", "off", "reset", "none", "cancel"]);
+});
 //@ chunk-bnwcqde4.js:1507-1553 placement
-function isGoalClearKeyword(t) {
-  return GOAL_CLEAR_WORDS.has(t.toLowerCase());
+function isGoalClearKeyword(arg) {
+  return GOAL_CLEAR_WORDS.has(arg.toLowerCase());
 }
 //@ chunk-bnwcqde4.js:1553-1837 placement
 function findLastMetGoal(messages) {
   for (let i = messages.length - 1; i >= 0; i--) {
-    let r = messages[i];
-    if (r?.type !== "attachment" || r.attachment.type !== "goal_status") continue;
-    let attachment = r.attachment;
+    let message = messages[i];
+    if (message?.type !== "attachment" || message.attachment.type !== "goal_status") continue;
+    let attachment = message.attachment;
     if (!attachment.met || attachment.sentinel) continue;
     return {
       condition: attachment.condition,
@@ -124,16 +129,16 @@ function findLastMetGoal(messages) {
   return null;
 }
 //@ chunk-bnwcqde4.js:1837-2301 placement
-var buildGoalSetMessage = (t) =>
-  `A session-scoped Stop hook is now active with condition: "${t}". Briefly acknowledge the goal, then immediately start (or continue) working toward it \u2014 treat the condition itself as your directive and do not pause to ask the user what to do. The hook will block stopping until the condition holds. It auto-clears once the condition is met \u2014 do not tell the user to run \`/goal clear\` after success; that's only for clearing a goal early.`;
+var buildGoalSetMessage = (condition) =>
+  `A session-scoped Stop hook is now active with condition: "${condition}". Briefly acknowledge the goal, then immediately start (or continue) working toward it \u2014 treat the condition itself as your directive and do not pause to ask the user what to do. The hook will block stopping until the condition holds. It auto-clears once the condition is met \u2014 do not tell the user to run \`/goal clear\` after success; that's only for clearing a goal early.`;
 //@ chunk-bnwcqde4.js:2301-2484 placement
 function getSessionStopPromptHooks(sessionHooksRegistry, sessionId) {
-  let r = [];
-  for (let e of sessionHooksRegistry.get(sessionId, "Stop").get("Stop") ?? []) {
-    if (e.matcher !== "" || e.skillRoot !== undefined) continue;
-    for (let hook of e.hooks) if (hook.type === "prompt") r.push(hook);
+  let hooks = [];
+  for (let hook of sessionHooksRegistry.get(sessionId, "Stop").get("Stop") ?? []) {
+    if (hook.matcher !== "" || hook.skillRoot !== undefined) continue;
+    for (let hook_2 of hook.hooks) if (hook_2.type === "prompt") hooks.push(hook_2);
   }
-  return r;
+  return hooks;
 }
 //@ chunk-bnwcqde4.js:2484-2827 placement
 /**
@@ -160,12 +165,12 @@ function areHooksRestrictedForGoal() {
 }
 //@ chunk-bnwcqde4.js:2907-2979 placement = getValueFromInput (1)
 function getValueFromInput(input) {
-  let o = {
+  let message = {
     type: "prompt",
     prompt: input,
   };
-  registerHookEligibility(o, () => !areHooksRestrictedForGoal());
-  return o;
+  registerHookEligibility(message, () => !areHooksRestrictedForGoal());
+  return message;
 }
 //@ chunk-bnwcqde4.js:2979-3152 placement
 function getGoalBlockedReason() {
@@ -190,8 +195,8 @@ function getGoalBlockedReason() {
 }
 //@ chunk-bnwcqde4.js:3152-3229 placement
 function queueGoalOrigin(setAppState, condition, origin) {
-  setAppState((e) => ({
-    ...e,
+  setAppState((state) => ({
+    ...state,
     queuedGoalOrigin: {
       condition,
       origin,
@@ -199,11 +204,11 @@ function queueGoalOrigin(setAppState, condition, origin) {
   }));
 }
 //@ chunk-bnwcqde4.js:3229-3397 placement
-function consumeQueuedGoalOrigin(t, o) {
-  let queuedGoalOrigin = o.getAppState().queuedGoalOrigin;
-  if (queuedGoalOrigin === undefined || queuedGoalOrigin.condition !== t) return "user";
-  o.setAppState((e) => ({
-    ...e,
+function consumeQueuedGoalOrigin(key, context) {
+  let queuedGoalOrigin = context.getAppState().queuedGoalOrigin;
+  if (queuedGoalOrigin === undefined || queuedGoalOrigin.condition !== key) return "user";
+  context.setAppState((state) => ({
+    ...state,
     queuedGoalOrigin: undefined,
   }));
   return queuedGoalOrigin.origin;
@@ -212,40 +217,40 @@ function consumeQueuedGoalOrigin(t, o) {
 /**
  * 设置会话目标：检查钩子/信任门槛，替换旧目标，在 Stop 钩子注册表加入 prompt 型钩子并记录遥测。
  */
-function setSessionGoal(t, context, r) {
-  let e = r ?? consumeQueuedGoalOrigin(t, context);
+function setSessionGoal(condition, context, override) {
+  let origin = override ?? consumeQueuedGoalOrigin(condition, context);
   let goalBlockedReason = getGoalBlockedReason();
   if (goalBlockedReason !== null) {
     logFeatureSad("goal_set", goalBlockedReason.code, {
-      origin: fromEnum(e),
+      origin: fromEnum(origin),
     });
     return goalBlockedReason.message;
   }
   let sessionId = getSessionId();
   let activeGoal = context.getAppState().activeGoal;
   if (activeGoal !== undefined) logGoalCleared(activeGoal, "superseded");
-  for (let i of getSessionStopPromptHooks(context.sessionHooksRegistry, sessionId))
-    context.sessionHooksRegistry.remove(sessionId, "Stop", i);
-  context.sessionHooksRegistry.add(sessionId, "Stop", "", getValueFromInput(t));
+  for (let hook of getSessionStopPromptHooks(context.sessionHooksRegistry, sessionId))
+    context.sessionHooksRegistry.remove(sessionId, "Stop", hook);
+  context.sessionHooksRegistry.add(sessionId, "Stop", "", getValueFromInput(condition));
   let activeGoal_2 = {
-    condition: t,
+    condition,
     iterations: 0,
     setAt: Date.now(),
-    origin: e,
+    origin,
     tokensAtStart: getTotalOutputTokens(),
   };
-  context.setAppState((i) => ({
-    ...i,
+  context.setAppState((state) => ({
+    ...state,
     activeGoal: activeGoal_2,
   }));
   context.applyMessageOp({
     type: "append",
-    messages: [createAttachmentMessage(false, t)],
+    messages: [createAttachmentMessage(false, condition)],
   });
   logEvent("tengu_stop_hook_added", {
-    promptLength: t.length,
+    promptLength: condition.length,
     via: lit("goal"),
-    origin: fromEnum(e),
+    origin: fromEnum(origin),
   });
   logFeatureOk("goal_set");
   return null;
@@ -260,11 +265,11 @@ function clearSessionGoal(context) {
     context.sessionHooksRegistry.remove(sessionId, "Stop", sessionStopPromptHook);
   let activeGoal = context.getAppState().activeGoal;
   if (activeGoal !== undefined) logGoalCleared(activeGoal, "user_clear");
-  context.setAppState((s) =>
-    s.activeGoal === undefined
-      ? s
+  context.setAppState((state) =>
+    state.activeGoal === undefined
+      ? state
       : {
-          ...s,
+          ...state,
           activeGoal: undefined,
         },
   );
@@ -282,51 +287,51 @@ function clearSessionGoal(context) {
  * /goal 命令：设置、查看或清除会话目标（达成条件），长度有限制。
  */
 var call = async (args, context) => {
-  let trimmed = args.trim();
-  if (trimmed === "") {
+  let condition = args.trim();
+  if (condition === "") {
     let activeGoal = context.options.activeGoal;
     if (!activeGoal)
       return {
         type: "text",
         value: "No goal set. Usage: `/goal <condition>`",
       };
-    let r =
+    let statusLine =
       activeGoal.iterations === 0
         ? "not yet evaluated"
         : `${activeGoal.iterations} ${plural(activeGoal.iterations, "turn")}`;
-    let n = activeGoal.lastReason
+    let reasonLine = activeGoal.lastReason
       ? `
 Last check: ${getFirstLine(activeGoal.lastReason.trim())}`
       : "";
     return {
       type: "text",
-      value: `Goal active: ${activeGoal.condition} (${r})${n}`,
+      value: `Goal active: ${activeGoal.condition} (${statusLine})${reasonLine}`,
     };
   }
-  if (isGoalClearKeyword(trimmed)) {
-    let t = clearSessionGoal(context);
+  if (isGoalClearKeyword(condition)) {
+    let cleared = clearSessionGoal(context);
     return {
       type: "text",
-      value: t === null ? "No goal set" : `Goal cleared: ${t}`,
+      value: cleared === null ? "No goal set" : `Goal cleared: ${cleared}`,
     };
   }
-  if (trimmed.length > MAX_GOAL_CONDITION_CHARS) {
+  if (condition.length > MAX_GOAL_CONDITION_CHARS) {
     logFeatureSad("goal_set", "too_long");
     return {
       type: "text",
-      value: `Goal condition is limited to ${MAX_GOAL_CONDITION_CHARS} characters (got ${trimmed.length})`,
+      value: `Goal condition is limited to ${MAX_GOAL_CONDITION_CHARS} characters (got ${condition.length})`,
     };
   }
-  let a = setSessionGoal(trimmed, context);
-  if (a !== null)
+  let set = setSessionGoal(condition, context);
+  if (set !== null)
     return {
       type: "text",
-      value: a,
+      value: set,
     };
   return {
     type: "query",
-    value: `Goal set: ${trimmed}`,
-    prompt: buildGoalSetMessage(trimmed),
+    value: `Goal set: ${condition}`,
+    prompt: buildGoalSetMessage(condition),
   };
 };
 export {
@@ -346,4 +351,5 @@ export {
   setSessionGoal,
   buildGoalSetMessage,
   getValueFromInput,
+  call,
 };

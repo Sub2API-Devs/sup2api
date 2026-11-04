@@ -55,33 +55,33 @@ function isBuiltInTipId(tipId) {
 /**
  * 记录提示已展示：本次启动序号写入 tipsHistory、累计展示次数加一，可记下由哪个命令触发；同一次启动重复调用不重复计数。
  */
-function recordTipShown(t, o, advertisedCommand) {
+function recordTipShown(tipId, storageV5, advertisedCommand) {
   let numStartups = getGlobalConfig().numStartups;
-  saveGlobalConfig((e) => {
-    let tipsHistory = e.tipsHistory ?? {};
-    if (tipsHistory[t] === numStartups) return e;
-    let tipLifetimeShownCounts = e.tipLifetimeShownCounts ?? {};
+  saveGlobalConfig((config) => {
+    let tipsHistory = config.tipsHistory ?? {};
+    if (tipsHistory[tipId] === numStartups) return config;
+    let tipLifetimeShownCounts = config.tipLifetimeShownCounts ?? {};
     return {
-      ...e,
+      ...config,
       tipsHistory: {
         ...tipsHistory,
-        [t]: numStartups,
+        [tipId]: numStartups,
       },
       tipLifetimeShownCounts: {
         ...tipLifetimeShownCounts,
-        [t]: (tipLifetimeShownCounts[t] ?? 0) + 1,
+        [tipId]: (tipLifetimeShownCounts[tipId] ?? 0) + 1,
       },
       ...(advertisedCommand !== undefined && {
         tipsHistoryByCommand: {
-          ...e.tipsHistoryByCommand,
+          ...config.tipsHistoryByCommand,
           [advertisedCommand]: {
-            tipId: t,
+            tipId,
             numStartups,
           },
         },
       }),
     };
-  }, o);
+  }, storageV5);
 }
 //@ chunk-jv3bzw2x.js:1193-1203 placement
 var MAX_LAUNCHES_AGO = 100;
@@ -91,15 +91,15 @@ var MAX_LAUNCHES_AGO = 100;
  */
 function getTipAttribution(name) {
   let globalConfig = getGlobalConfig();
-  let n = globalConfig.tipsHistoryByCommand?.[name];
-  if (typeof n !== "object" || n === null) return {};
-  let i = globalConfig.numStartups - n.numStartups;
-  if (!(i >= 0)) return {};
+  let attribution = globalConfig.tipsHistoryByCommand?.[name];
+  if (typeof attribution !== "object" || attribution === null) return {};
+  let launchesAgo = globalConfig.numStartups - attribution.numStartups;
+  if (!(launchesAgo >= 0)) return {};
   return {
     via_tip: true,
-    tip_launches_ago: Math.min(i, MAX_LAUNCHES_AGO),
-    ...(isBuiltInTipId(n.tipId) && {
-      tip_id: fromEnum(n.tipId),
+    tip_launches_ago: Math.min(launchesAgo, MAX_LAUNCHES_AGO),
+    ...(isBuiltInTipId(attribution.tipId) && {
+      tip_id: fromEnum(attribution.tipId),
     }),
   };
 }
@@ -107,8 +107,8 @@ function getTipAttribution(name) {
 /**
  * 读取某提示在全局配置里的累计展示次数。
  */
-function tipLifetimeShownCount(t) {
-  return getGlobalConfig().tipLifetimeShownCounts?.[t] ?? 0;
+function tipLifetimeShownCount(tipId) {
+  return getGlobalConfig().tipLifetimeShownCounts?.[tipId] ?? 0;
 }
 //@ chunk-jv3bzw2x.js:1500-1564 placement
 /**
@@ -121,25 +121,26 @@ function pluginSuggestionShownCount(pluginId) {
 /**
  * 读取某插件建议在发现页的累计展示次数。
  */
-function pluginSuggestionDiscoverShownCount(t) {
-  return getGlobalConfig().pluginSuggestionDiscoverShownCounts?.[t] ?? 0;
+function pluginSuggestionDiscoverShownCount(pluginId) {
+  return getGlobalConfig().pluginSuggestionDiscoverShownCounts?.[pluginId] ?? 0;
 }
 //@ chunk-jv3bzw2x.js:1723-1959 placement
 /**
  * 记录插件建议在发现页已展示（每个插件计数加一，全部已展示过时不再写）。
  */
-function recordPluginSuggestionShown(t, storageV5) {
-  if (t.length === 0) return;
-  saveGlobalConfig((n) => {
-    let pluginSuggestionDiscoverShownCounts = n.pluginSuggestionDiscoverShownCounts ?? {};
-    if (t.every((s) => (pluginSuggestionDiscoverShownCounts[s] ?? 0) > 0)) return n;
-    let e = {
+function recordPluginSuggestionShown(pluginIds, storageV5) {
+  if (pluginIds.length === 0) return;
+  saveGlobalConfig((config) => {
+    let pluginSuggestionDiscoverShownCounts = config.pluginSuggestionDiscoverShownCounts ?? {};
+    if (pluginIds.every((pluginId) => (pluginSuggestionDiscoverShownCounts[pluginId] ?? 0) > 0))
+      return config;
+    let counts = {
       ...pluginSuggestionDiscoverShownCounts,
     };
-    for (let s of t) e[s] = (e[s] ?? 0) + 1;
+    for (let pluginId of pluginIds) counts[pluginId] = (counts[pluginId] ?? 0) + 1;
     return {
-      ...n,
-      pluginSuggestionDiscoverShownCounts: e,
+      ...config,
+      pluginSuggestionDiscoverShownCounts: counts,
     };
   }, storageV5);
 }

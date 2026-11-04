@@ -31,40 +31,48 @@ import { isInterruptionOnlyMessage, INTERRUPTION_TEXT_PREFIXES } from "../utils/
 /**
  * 归档远程桥接会话；teleport 过来的、owner 已变更、被接替或已归档的会话不归档并记录原因。
  */
-async function archiveRemoteBridgeSession(sessionId, baseUrl, w, orgUUID, N, x, storageV5) {
+async function archiveRemoteBridgeSession(
+  sessionId,
+  baseUrl,
+  accessToken,
+  orgUUID,
+  httpTimeoutMs,
+  suppressionReason,
+  storageV5,
+) {
   if (isTeleportedSession(sessionId)) {
     logForDebugging(`[remote-bridge] Archive suppressed for teleported session ${sessionId}`);
     removeBridgePlaceholdersFor(sessionId, storageV5);
     return 200;
   }
-  if (x === "owner_changed") {
+  if (suppressionReason === "owner_changed") {
     logForDebugging(`[remote-bridge] Archive suppressed for owner-changed session ${sessionId}`);
     logForDiagnosticsNoPII("info", "bridge_repl_archive_suppressed_owner_changed");
     return "skipped_owner_changed";
   }
-  if (x !== undefined) {
-    logForDebugging(`[remote-bridge] Archive suppressed for ${x} session ${sessionId}`);
+  if (suppressionReason !== undefined) {
+    logForDebugging(`[remote-bridge] Archive suppressed for ${suppressionReason} session ${sessionId}`);
     logForDiagnosticsNoPII(
       "info",
-      x === "superseded"
+      suppressionReason === "superseded"
         ? "bridge_repl_archive_suppressed_superseded"
-        : x === "session_archived"
+        : suppressionReason === "session_archived"
           ? "bridge_repl_archive_suppressed_archived"
           : "bridge_repl_archive_suppressed_superseded_unknown",
     );
     return "skipped_superseded";
   }
-  if (!w) return "no_token";
+  if (!accessToken) return "no_token";
   let trustedDeviceToken = await getTrustedDeviceToken().catch(() => {
     return;
   });
-  let A = await archiveCodeSession(baseUrl, w, sessionId, N, {
+  let outcome = await archiveCodeSession(baseUrl, accessToken, sessionId, httpTimeoutMs, {
     useV2: isCcrV2SessionCrudEnabled(),
     orgUUID,
     trustedDeviceToken,
   });
-  if (isFinalArchiveOutcome(A)) removeBridgePlaceholdersFor(sessionId, storageV5);
-  return A;
+  if (isFinalArchiveOutcome(outcome)) removeBridgePlaceholdersFor(sessionId, storageV5);
+  return outcome;
 }
 //@ chunk-4cm44bmp.js:99549-99574 placement
 var ARCHIVE_RETRY_ATTEMPTS = 8;
@@ -74,7 +82,7 @@ var ARCHIVE_RETRY_FLOOR_MS = 2000;
 /**
  * 重试归档被放弃的远程会话，成功或设备不受信任时停止，每次失败记日志。
  */
-async function retryArchiveAbandonedSession(sessionId, h) {
+async function retryArchiveAbandonedSession(sessionId, archiveOnce) {
   for (let i = 0; i < ARCHIVE_RETRY_ATTEMPTS; i++) {
     if (i > 0)
       await sleep(
@@ -88,10 +96,10 @@ async function retryArchiveAbandonedSession(sessionId, h) {
           unref: true,
         },
       );
-    let C = await h();
-    if (isFinalArchiveOutcome(C) || C === "untrusted_device") return;
+    let outcome = await archiveOnce();
+    if (isFinalArchiveOutcome(outcome) || outcome === "untrusted_device") return;
     logForDebugging(
-      `[remote-bridge] Archive of abandoned session ${sessionId} not confirmed (attempt ${i + 1}/${ARCHIVE_RETRY_ATTEMPTS}, status=${C})`,
+      `[remote-bridge] Archive of abandoned session ${sessionId} not confirmed (attempt ${i + 1}/${ARCHIVE_RETRY_ATTEMPTS}, status=${outcome})`,
     );
   }
 }
@@ -99,45 +107,57 @@ async function retryArchiveAbandonedSession(sessionId, h) {
 /**
  * 重新激活（取消归档）远程桥接会话，处理 v2 接口与可信设备令牌，返回结果。
  */
-async function unarchiveRemoteBridgeSession(sessionId, baseUrl, w, orgUUID, httpTimeoutMs, x, credentials) {
-  if (!w)
+async function unarchiveRemoteBridgeSession(
+  sessionId,
+  baseUrl,
+  accessToken,
+  orgUUID,
+  httpTimeoutMs,
+  onUnauthorized,
+  credentials,
+) {
+  if (!accessToken)
     return {
       outcome: "ok",
     };
   let refusedToken = await getTrustedDeviceToken().catch(() => {
     return;
   });
-  let A = await unarchiveCodeSession(baseUrl, w, sessionId, httpTimeoutMs, {
+  let outcome = await unarchiveCodeSession(baseUrl, accessToken, sessionId, httpTimeoutMs, {
     useV2: isCcrV2SessionCrudEnabled(),
     orgUUID,
     trustedDeviceToken: refusedToken,
   });
-  if (A === "invalid") {
+  if (outcome === "invalid") {
     logForDiagnosticsNoPII("info", "bridge_repl_v2_unarchive_invalid_id");
     return {
       outcome: "gone",
       status: "invalid",
     };
   }
-  if (A === "untrusted_device" || A === "untrusted_device_no_enroll" || A === "session_stale_relogin") {
-    if (A === "untrusted_device") {
-      let Y = await withUntrustedDeviceRecovery(
+  if (
+    outcome === "untrusted_device" ||
+    outcome === "untrusted_device_no_enroll" ||
+    outcome === "session_stale_relogin"
+  ) {
+    if (outcome === "untrusted_device") {
+      let recoveryOutcome = await withUntrustedDeviceRecovery(
         refusedToken,
         (trustedDeviceToken) =>
-          unarchiveCodeSession(baseUrl, w, sessionId, httpTimeoutMs, {
+          unarchiveCodeSession(baseUrl, accessToken, sessionId, httpTimeoutMs, {
             useV2: isCcrV2SessionCrudEnabled(),
             orgUUID,
             trustedDeviceToken,
           }),
         credentials,
       );
-      if (typeof Y === "number" && (Y < 300 || Y === 409)) {
+      if (typeof recoveryOutcome === "number" && (recoveryOutcome < 300 || recoveryOutcome === 409)) {
         logForDiagnosticsNoPII("info", "bridge_repl_v2_unarchive_ok");
         return {
           outcome: "ok",
         };
       }
-      if (Y === "untrusted_device_no_enroll") {
+      if (recoveryOutcome === "untrusted_device_no_enroll") {
         logForDiagnosticsNoPII("info", "bridge_repl_v2_unarchive_elevated_auth");
         return {
           outcome: "elevated_auth",
@@ -147,7 +167,7 @@ async function unarchiveRemoteBridgeSession(sessionId, baseUrl, w, orgUUID, http
       }
     }
     logForDiagnosticsNoPII("info", "bridge_repl_v2_unarchive_elevated_auth");
-    if (A === "untrusted_device_no_enroll") {
+    if (outcome === "untrusted_device_no_enroll") {
       logRefusalWithoutEnrollment("[remote-bridge]", REFUSAL_BEHIND_NO_ENROLL);
       clearTrustedDeviceTokenCache();
       return {
@@ -158,76 +178,81 @@ async function unarchiveRemoteBridgeSession(sessionId, baseUrl, w, orgUUID, http
     }
     return {
       outcome: "elevated_auth",
-      reason: A,
+      reason: outcome,
     };
   }
-  if (typeof A !== "number") {
+  if (typeof outcome !== "number") {
     logForDiagnosticsNoPII("info", "bridge_repl_v2_unarchive_failed");
     return null;
   }
-  let Z = A < 300 || A === 409;
-  logForDiagnosticsNoPII("info", Z ? "bridge_repl_v2_unarchive_ok" : "bridge_repl_v2_unarchive_failed");
-  if (Z)
+  let isSuccess = outcome < 300 || outcome === 409;
+  logForDiagnosticsNoPII(
+    "info",
+    isSuccess ? "bridge_repl_v2_unarchive_ok" : "bridge_repl_v2_unarchive_failed",
+  );
+  if (isSuccess)
     return {
       outcome: "ok",
     };
-  if (A === 400 || A === 403 || A === 404)
+  if (outcome === 400 || outcome === 403 || outcome === 404)
     return {
       outcome: "gone",
-      status: A,
+      status: outcome,
     };
-  if (A === 401) x?.();
+  if (outcome === 401) onUnauthorized?.();
   return null;
 }
 //@ chunk-4cm44bmp.js:101108-101251 placement
 /**
  * 只保留最后 h 条消息，但截断点落在某个分组区间内时前移到区间起点。
  */
-function sliceTailKeepingGroups(messages, h) {
-  if (h <= 0 || messages.length <= h) return messages;
-  let w = messages.length - h;
+function sliceTailKeepingGroups(messages, keepCount) {
+  if (keepCount <= 0 || messages.length <= keepCount) return messages;
+  let startIdx = messages.length - keepCount;
   for (let { fromIdx, toIdx } of findResumedThinkingRanges(messages))
-    if (w > fromIdx && w <= toIdx) {
-      w = fromIdx;
+    if (startIdx > fromIdx && startIdx <= toIdx) {
+      startIdx = fromIdx;
       break;
     }
-  return messages.slice(w);
+  return messages.slice(startIdx);
 }
 //@ chunk-4cm44bmp.js:101251-101399 placement
 /**
  * 真实用户输入、不是中断消息、也不含 tool_result。
  */
-function isPlainUserPrompt(n) {
-  if (n.type !== "user" || !isRealUserTurn(n) || isInterruptionMessage(n)) return false;
-  let content = n.message.content;
-  return typeof content === "string" || !content.some((w) => w.type === "tool_result");
+function isPlainUserPrompt(message) {
+  if (message.type !== "user" || !isRealUserTurn(message) || isInterruptionMessage(message)) return false;
+  let content = message.message.content;
+  return typeof content === "string" || !content.some((block) => block.type === "tool_result");
 }
 //@ chunk-4cm44bmp.js:101399-101602 placement
 /**
  * 带 parent_tool_use_id 的子代理消息，且不是发起 Agent/Task 工具调用的助手消息。
  */
-function isSubagentStreamMessage(frame) {
+function isSubagentStreamMessage(message) {
   if (
-    (frame.type !== "assistant" && frame.type !== "user") ||
-    frame.parent_tool_use_id == null ||
-    !isTaskLifecycleMessage(frame)
+    (message.type !== "assistant" && message.type !== "user") ||
+    message.parent_tool_use_id == null ||
+    !isTaskLifecycleMessage(message)
   )
     return false;
   return (
-    frame.type === "user" ||
-    !frame.message.content.some((h) => h.type === "tool_use" && (h.name === AGENT || h.name === TASK))
+    message.type === "user" ||
+    !message.message.content.some(
+      (block) => block.type === "tool_use" && (block.name === AGENT || block.name === TASK),
+    )
   );
 }
 //@ chunk-4cm44bmp.js:101602-101772 placement
 /**
  * 只含中断提示文本的用户消息。
  */
-function isInterruptionMessage(n) {
-  if (n.type !== "user" || !isInterruptionOnlyMessage(n)) return false;
-  let content = n.message.content;
+function isInterruptionMessage(message) {
+  if (message.type !== "user" || !isInterruptionOnlyMessage(message)) return false;
+  let content = message.message.content;
   return typeof content === "string"
     ? INTERRUPTION_TEXT_PREFIXES.includes(content)
-    : content.every((w) => w.type !== "text" || INTERRUPTION_TEXT_PREFIXES.includes(w.text));
+    : content.every((block) => block.type !== "text" || INTERRUPTION_TEXT_PREFIXES.includes(block.text));
 }
 export {
   unarchiveRemoteBridgeSession,

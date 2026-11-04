@@ -5,10 +5,10 @@
  * pieces: chunk-egr0twnb.js (2)
  * attribution: cjs-fingerprint 2
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:139720-140381 cjs-fingerprint
-var require_flix = x(function (cjsExports, cjsModule) {
+var require_flix = __commonJS(function (cjsExports, cjsModule) {
   function flix(hljs) {
     let CHAR = {
       className: "string",
@@ -23,7 +23,7 @@ var require_flix = x(function (cjsExports, cjsModule) {
         },
       ],
     };
-    let s = {
+    let functionMode = {
       className: "function",
       beginKeywords: "def",
       end: /[:={\[(\n;]/,
@@ -62,14 +62,21 @@ var require_flix = x(function (cjsExports, cjsModule) {
         ],
         literal: ["true", "false"],
       },
-      contains: [hljs.C_LINE_COMMENT_MODE, hljs.C_BLOCK_COMMENT_MODE, CHAR, STRING, s, hljs.C_NUMBER_MODE],
+      contains: [
+        hljs.C_LINE_COMMENT_MODE,
+        hljs.C_BLOCK_COMMENT_MODE,
+        CHAR,
+        STRING,
+        functionMode,
+        hljs.C_NUMBER_MODE,
+      ],
     };
   }
   cjsModule.exports = flix;
 });
 //@ chunk-egr0twnb.js:168007-176324 cjs-fingerprint
-var require_flix_2 = x(function (cjsExports, cjsModule) {
-  function Ed(e) {
+var require_flix_2 = __commonJS(function (cjsExports, cjsModule) {
+  function glsl(hljs) {
     return {
       name: "GLSL",
       keywords: {
@@ -82,9 +89,9 @@ var require_flix_2 = x(function (cjsExports, cjsModule) {
       },
       illegal: '"',
       contains: [
-        e.C_LINE_COMMENT_MODE,
-        e.C_BLOCK_COMMENT_MODE,
-        e.C_NUMBER_MODE,
+        hljs.C_LINE_COMMENT_MODE,
+        hljs.C_BLOCK_COMMENT_MODE,
+        hljs.C_NUMBER_MODE,
         {
           className: "meta",
           begin: "#",
@@ -93,6 +100,6 @@ var require_flix_2 = x(function (cjsExports, cjsModule) {
       ],
     };
   }
-  cjsModule.exports = Ed;
+  cjsModule.exports = glsl;
 });
 export { require_flix, require_flix_2 };

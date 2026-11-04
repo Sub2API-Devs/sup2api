@@ -28,6 +28,7 @@ var stopNonInteractiveCommand = {
   supportsNonInteractive: true,
   description: "Stop this background session; transcript and worktree are kept",
   isEnabled: isBgSession,
-  load: () => import("./chunk-zsxk930s.js"),
+  load: () => import("./call.lazy.js"),
 };
 var stopCommand = stopCommandDefinition;
+export { stopCommand, stopNonInteractiveCommand };

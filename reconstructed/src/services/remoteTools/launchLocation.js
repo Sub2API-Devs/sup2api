@@ -21,8 +21,8 @@ import { toError } from "../../utils/errors.js";
 /**
  * 从主目录启动时，收集与 Windows 卷挂载相关的启动位置事实，用于遥测。
  */
-function launchLocationFacts(e, cwd) {
-  if (e !== "launched_from_home") return {};
+function launchLocationFacts(launchLocation, cwd) {
+  if (launchLocation !== "launched_from_home") return {};
   try {
     return {
       ...(refusedOnlyAsProfileOnMountWithoutDrive(cwd) && {

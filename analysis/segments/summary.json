@@ -1,22 +1,17 @@
 {
- "modules": 6941,
+ "modules": 6946,
  "decls": 81667,
  "bytes": 38921647,
  "byKind": {
   "vendor": {
-   "modules": 2002,
-   "decls": 6487,
-   "bytes": 7233640
+   "modules": 2004,
+   "decls": 6504,
+   "bytes": 7235528
   },
   "first-party": {
-   "modules": 4934,
-   "decls": 75164,
-   "bytes": 31686189
-  },
-  "unattributed": {
-   "modules": 4,
-   "decls": 5,
-   "bytes": 786
+   "modules": 4941,
+   "decls": 75152,
+   "bytes": 31685087
   },
   "runtime": {
    "modules": 1,
@@ -25,13 +20,13 @@
   }
  },
  "byMethod": {
-  "placement": 58405,
-  "affinity": 559,
-  "fingerprint": 5104,
+  "placement": 58421,
+  "affinity": 554,
+  "fingerprint": 5097,
   "callgraph-witnessed": 233,
-  "layout": 6472,
+  "layout": 6479,
   "callgraph-fingerprint": 345,
-  "sole-consumer": 1202,
+  "sole-consumer": 1197,
   "file-local": 437,
   "esm-fingerprint": 3373,
   "esm-layout": 1183,
@@ -40,7 +35,6 @@
   "shared-adjacent": 14,
   "facade-majority": 1696,
   "cjs-fingerprint": 1236,
-  "leftover": 5,
   "cjs-require-graph": 132,
   "cjs-unmatched+string-clue": 66,
   "cjs-fingerprint+context": 13,
@@ -49,7 +43,6 @@
   "native-addon": 2,
   "resource-wrapper": 9,
   "embedded-runtime": 1,
-  "helper:bun-runtime": 11,
-  "sole-consumer-new": 1
+  "helper:bun-runtime": 11
  }
 }

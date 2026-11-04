@@ -9,19 +9,31 @@
  * attribution: callgraph-fingerprint 1, sole-consumer 8, file-local 3, layout 1, fingerprint 1
  */
 import { dirname } from "path";
-import { init_react_production, y, Q, R, P, ce } from "../../vendor/react/cjs/react.production.js";
+import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
+import {
+  useAppStoreDirect,
+  useAppState,
+  useSetAppState,
+  useSessionHooksRegistry,
+} from "../state/AppState.js";
+import { useNotifications } from "../context/notifications.js";
+import { visibleFrameUrls, openArtifactRow } from "../components/artifacts/artifactFrames.js";
+import { MEMO_CACHE_SENTINEL } from "../../runtime/bun-runtime.js";
+import { useKeybinding } from "../keybindings/useKeybinding.js";
+import {
+  init_react_production,
+  useState,
+  useMemo,
+  useRef,
+  useEffect,
+  useCallback,
+} from "../../vendor/react/cjs/react.production.js";
 import { gracefulShutdown } from "../utils/gracefulShutdown.js";
 import { getSessionProject } from "../bootstrap/sessionSlices.js";
 import { useTheme_2 } from "../components/design-system/ThemeProvider.js";
 import { useSession } from "../context/session.js";
 import { useTerminalSize } from "../hooks/useTerminalSize.js";
 import { isCloudSessionsDeniedByOrg } from "../services/cloudSessions/cloudSessionsPolicy.js";
-import {
-  useAppState,
-  useSetAppState,
-  useSessionHooksRegistry,
-  useAppStoreDirect,
-} from "../state/AppState.js";
 import { noopTrialEffect } from "../components/FullscreenUpsellTrial.js";
 import {
   isCustomTitleEnabled,
@@ -110,7 +122,6 @@ import { REPL } from "./REPL.js";
 import { applyAgentModelOverride } from "../utils/model/modelOverrideNotices.js";
 import { WorkerBadge } from "../components/permissions/WorkerBadge.js";
 import { LogSelector } from "../components/LogSelector.js";
-import { w } from "../../vendor/react/compiler-runtime.js";
 import { useIsFullscreen } from "../ink/renderModeContext.js";
 import { useSelection } from "../ink/components/Input.js";
 import { useCopyOnSelect, useSelectionBgColor } from "../hooks/useCopyOnSelect.js";
@@ -119,18 +130,48 @@ import {
   shouldClearSelectionOnKey,
 } from "../components/ScrollKeybindingHandler.js";
 import { usePreDispatchKeyHandler } from "../keybindings/useActionHandlers.js";
-import { MEMO_CACHE_SENTINEL } from "../../runtime/bun-runtime.js";
 import { isMouseTrackingEnabled } from "../utils/fullscreen.js";
 import { AlternateScreen } from "../ink/components/AlternateScreen.js";
 import { Text, Box } from "../ink/components/Text.js";
 import { isSafeIdSegment_2 } from "../utils/agentId.js";
 import { shellQuoteArgs } from "../utils/bash/bashPipeCommand.js";
-import { useNotifications } from "../context/notifications.js";
-import { visibleFrameUrls, openArtifactRow } from "../components/artifacts/artifactFrames.js";
-import { useKeybinding } from "../keybindings/useKeybinding.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
+//@ chunk-18hwfzwa.js:651055-651381 callgraph-fingerprint = NoConversationsMessage (0.241)
+function NoConversationsMessage(props) {
+  let $ = useMemoCache(5);
+  let { cloudRowCheck } = props;
+  let store = useAppStoreDirect();
+  let notifications = useNotifications();
+  let check;
+  if ($[0] !== cloudRowCheck || $[1] !== notifications || $[2] !== store) {
+    check = () => {
+      let urls = visibleFrameUrls(store.getState().frameUrls);
+      if (!urls) {
+        return false;
+      }
+      openArtifactRow(urls, store, notifications, cloudRowCheck);
+    };
+    $[0] = cloudRowCheck;
+    $[1] = notifications;
+    $[2] = store;
+    $[3] = check;
+  } else check = $[3];
+  let keybindingOptions;
+  if ($[4] === MEMO_CACHE_SENTINEL) {
+    keybindingOptions = {
+      context: "Global",
+    };
+    $[4] = keybindingOptions;
+  } else keybindingOptions = $[4];
+  useKeybinding("app:openArtifact", check, keybindingOptions);
+  return null;
+}
 //@ chunk-jde8wnzx.js:27371-27375 sole-consumer
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-jde8wnzx.js:27371", () => {
+  init_react_production();
+});
 //@ chunk-jde8wnzx.js:27407-27427 sole-consumer
 function shutdownOnTimeout() {
   gracefulShutdown(1);
@@ -150,8 +191,8 @@ function exitNowB() {
   process.exit(0);
 }
 //@ chunk-jde8wnzx.js:27539-27581 layout
-function selectOriginalCwd(Fe) {
-  return getSessionProject(Fe).originalCwd;
+function selectOriginalCwd(session) {
+  return getSessionProject(session).originalCwd;
 }
 //@ chunk-jde8wnzx.js:27581-27790 file-local
 function parsePrIdentifier(value) {
@@ -192,34 +233,34 @@ function ResumeConversation({
 }) {
   let { storageV5, credentials } = useTheme_2();
   let session = useSession();
-  let id = useSession((t) => t.id);
+  let id = useSession((session) => session.id);
   let { rows } = useTerminalSize();
-  let [io] = y(() => startsInCloudByDefault && !isCloudSessionsDeniedByOrg());
-  let footerNote = Q(() => {
+  let [startsInCloud] = useState(() => startsInCloudByDefault && !isCloudSessionsDeniedByOrg());
+  let footerNote = useMemo(() => {
     return;
-  }, [io]);
-  let agentDefinitions = useAppState((t) => t.agentDefinitions);
-  let standaloneAgentContext = useAppState((t) => t.standaloneAgentContext);
-  let mainLoopModel = useAppState((t) => t.mainLoopModel);
-  let xe = useAppState((t) => t.initialMessage !== null);
+  }, [startsInCloud]);
+  let agentDefinitions = useAppState((state) => state.agentDefinitions);
+  let standaloneAgentContext = useAppState((state) => state.standaloneAgentContext);
+  let mainLoopModel = useAppState((state) => state.mainLoopModel);
+  let hasInitialMessage = useAppState((state) => state.initialMessage !== null);
   let setAppState = useSetAppState();
   let sessionHooksRegistry = useSessionHooksRegistry();
   noopTrialEffect();
-  let [logs, setLogs] = y([]);
-  let [loading, setLoading] = y(true);
-  let [resuming, setResuming] = y(false);
-  let Ee = R(false);
-  let [He, Be] = y(null);
-  let [showAllProjects, setShowAllProjects] = y(false);
-  let [x, go] = y(null);
-  let [te, Oe] = y(null);
-  let [Ge, ho] = y(null);
-  let [We, So] = y(null);
-  let resultRef = R(null);
-  let [Ro, Co] = y(0);
-  let he = R(0);
-  let Se = R(0);
-  let filteredLogs = Q(() => {
+  let [logs, setLogs] = useState([]);
+  let [loading, setLoading] = useState(true);
+  let [resuming, setResuming] = useState(false);
+  let resumeInFlight = useRef(false);
+  let [crossProjectNotice, setCrossProjectNotice] = useState(null);
+  let [showAllProjects, setShowAllProjects] = useState(false);
+  let [titleOverride, setTitleOverride] = useState(null);
+  let [backgroundNotice, setBackgroundNotice] = useState(null);
+  let [reloadNotice, setReloadNotice] = useState(null);
+  let [errorNotice, setErrorNotice] = useState(null);
+  let resumeResultRef = useRef(null);
+  let [reloadGeneration, bumpReloadGeneration] = useState(0);
+  let nextLogIndex = useRef(0);
+  let loadGeneration = useRef(0);
+  let filteredLogs = useMemo(() => {
     let result = logs.filter((log) => !log.isSidechain);
     if (filterByPr !== undefined) {
       if (filterByPr === true) result = result.filter((l_0) => l_0.prNumber !== undefined);
@@ -232,13 +273,13 @@ function ResumeConversation({
     return result;
   }, [logs, filterByPr]);
   let isResumeWithRenameEnabled = isCustomTitleEnabled();
-  let bo = Q(() => env.CLAUDE_CODE_DISABLE_TERMINAL_TITLE, []);
-  useTerminalTitle(x || bo ? null : "claude \xB7 resume");
-  P(() => {
+  let disableTerminalTitle = useMemo(() => env.CLAUDE_CODE_DISABLE_TERMINAL_TITLE, []);
+  useTerminalTitle(titleOverride || disableTerminalTitle ? null : "claude \xB7 resume");
+  useEffect(() => {
     loadSameRepoMessageLogsProgressive(worktreePaths, undefined, undefined, storageV5)
       .then((result) => {
-        resultRef.current = result;
-        he.current = result.logs.length;
+        resumeResultRef.current = result;
+        nextLogIndex.current = result.logs.length;
         setLogs(result.logs);
         setLoading(false);
         logFeatureOk("screen_resume_conversation");
@@ -249,65 +290,65 @@ function ResumeConversation({
         setLoading(false);
       });
   }, [worktreePaths, storageV5]);
-  let ve = R(false);
-  let Ue = ce(
+  let enrichInFlight = useRef(false);
+  let loadMore = useCallback(
     (count) => {
-      if (ve.current) return;
-      let ref = resultRef.current;
+      if (enrichInFlight.current) return;
+      let ref = resumeResultRef.current;
       if (!ref || ref.nextIndex >= ref.allStatLogs.length) return;
-      ve.current = true;
-      let E = false;
+      enrichInFlight.current = true;
+      let morePending = false;
       enrichLogs(ref.allStatLogs, ref.nextIndex, count, storageV5)
         .then((result) => {
-          if (resultRef.current !== ref) return;
+          if (resumeResultRef.current !== ref) return;
           ref.nextIndex = result.nextIndex;
           if (result.logs.length > 0) {
-            let offset = he.current;
+            let offset = nextLogIndex.current;
             sortLogs(result.logs).forEach((log, i) => {
               log.value = offset + i;
             });
             setLogs((prev) => prev.concat(result.logs));
-            he.current += result.logs.length;
-          } else if (ref.nextIndex < ref.allStatLogs.length) E = true;
+            nextLogIndex.current += result.logs.length;
+          } else if (ref.nextIndex < ref.allStatLogs.length) morePending = true;
         })
         .finally(() => {
-          ve.current = false;
-          if (E) Ue(count);
+          enrichInFlight.current = false;
+          if (morePending) loadMore(count);
         });
     },
     [storageV5],
   );
-  let loadLogs = ce(
+  let loadLogs = useCallback(
     (allProjects) => {
       setLoading(true);
-      let k = ++Se.current;
-      let E = resultRef.current;
-      resultRef.current = null;
-      Co((L) => L + 1);
+      let loadToken = ++loadGeneration.current;
+      let previousResult = resumeResultRef.current;
+      resumeResultRef.current = null;
+      bumpReloadGeneration((generation) => generation + 1);
       (allProjects
         ? loadAllProjectsMessageLogsProgressive(undefined, undefined, storageV5)
         : loadSameRepoMessageLogsProgressive(worktreePaths, undefined, undefined, storageV5)
       )
         .then((result) => {
-          if (Se.current !== k) return;
-          resultRef.current = result;
-          he.current = result.logs.length;
+          if (loadGeneration.current !== loadToken) return;
+          resumeResultRef.current = result;
+          nextLogIndex.current = result.logs.length;
           setLogs(result.logs);
         })
         .catch((error) => {
-          if (Se.current !== k) return;
-          if (E !== null) resultRef.current = E;
+          if (loadGeneration.current !== loadToken) return;
+          if (previousResult !== null) resumeResultRef.current = previousResult;
           setLogs((error_0) => error_0.slice());
           logError(error);
         })
         .finally(() => {
-          if (Se.current !== k) return;
+          if (loadGeneration.current !== loadToken) return;
           setLoading(false);
         });
     },
     [worktreePaths, storageV5],
   );
-  let handleToggleAllProjects = ce(() => {
+  let handleToggleAllProjects = useCallback(() => {
     let newValue = !showAllProjects;
     setShowAllProjects(newValue);
     loadLogs(newValue);
@@ -316,8 +357,8 @@ function ResumeConversation({
     process.exit(1);
   }
   async function onSelect(log_0) {
-    if (Ee.current) return;
-    Ee.current = true;
+    if (resumeInFlight.current) return;
+    resumeInFlight.current = true;
     setResuming(true);
     let resumeStart = performance.now();
     try {
@@ -325,30 +366,30 @@ function ResumeConversation({
       if (crossProjectCheck) {
         let raw = await setClipboard(crossProjectCheck);
         if (raw) process.stdout.write(raw);
-        ho(crossProjectCheck);
+        setReloadNotice(crossProjectCheck);
         return;
       }
       if (!forkSession) {
         let sessionIdFromLog = getSessionIdFromLog(log_0);
-        let Re = sessionIdFromLog ? await findBackgroundSessionHolder(sessionIdFromLog, storageV5) : null;
-        if (sessionIdFromLog && Re) {
-          let ne = xe
+        let holder = sessionIdFromLog ? await findBackgroundSessionHolder(sessionIdFromLog, storageV5) : null;
+        if (sessionIdFromLog && holder) {
+          let jobId = hasInitialMessage
             ? undefined
-            : liveBackgroundJobId(Re, {
+            : liveBackgroundJobId(holder, {
                 replacesProcess: true,
               });
-          if (ne !== undefined)
+          if (jobId !== undefined)
             try {
-              await attachToBackgroundSession(ne, "picker", storageV5);
+              await attachToBackgroundSession(jobId, "picker", storageV5);
               return;
             } catch (error) {
               logFeatureSad("resume_live_background_open", "open_failed", {
                 entrypoint: lit("picker"),
               });
-              Oe({
+              setBackgroundNotice({
                 sessionId: sessionIdFromLog,
                 log: log_0,
-                jobId: ne,
+                jobId,
                 handoff: {
                   reason: "open_failed",
                   detail: errorMessage(error),
@@ -357,29 +398,33 @@ function ResumeConversation({
               });
               return;
             }
-          logFeatureSad("resume_live_background_open", xe ? "launch_prompt_pending" : "not_openable", {
-            entrypoint: lit("picker"),
-          });
-          Oe({
+          logFeatureSad(
+            "resume_live_background_open",
+            hasInitialMessage ? "launch_prompt_pending" : "not_openable",
+            {
+              entrypoint: lit("picker"),
+            },
+          );
+          setBackgroundNotice({
             sessionId: sessionIdFromLog,
             log: log_0,
-            jobId: Re.jobId,
+            jobId: holder.jobId,
           });
           return;
         }
       }
     } catch (error) {
       logError(withTelemetryMessage(toError(error), "resume picker: pre-load failed"));
-      Be({
+      setCrossProjectNotice({
         sessionId: getSessionIdFromLog(log_0) ?? undefined,
       });
       return;
     }
-    let E = false;
-    let B = "load_error";
-    let L;
+    let notFound = false;
+    let failureReason = "load_error";
+    let sessionStartHooks;
     try {
-      let conversationForResume = await loadConversationForResume(log_0, undefined, {
+      let meta = await loadConversationForResume(log_0, undefined, {
         forkSession: forkSession ?? false,
         storageV5,
         credentials,
@@ -388,27 +433,27 @@ function ResumeConversation({
         }),
         beforeUse: noopModelPinSubscriber("store"),
       });
-      if (!conversationForResume) {
+      if (!meta) {
         logEvent("tengu_session_resumed", {
           entrypoint: lit("picker"),
           success: false,
           failure_reason: lit("not_found_picker"),
         });
-        E = true;
+        notFound = true;
         throw Error("Failed to load conversation");
       }
-      L = conversationForResume.sessionStartHooks;
-      B = "processing_error";
-      let A = noModelPin(
+      sessionStartHooks = meta.sessionStartHooks;
+      failureReason = "processing_error";
+      let resumePlan = noModelPin(
         {
-          ...conversationForResume,
+          ...meta,
           source: "store",
         },
-        (u) => conversationForResume.messages.push(createSystemMessage(u, "warning")),
+        (warning) => meta.messages.push(createSystemMessage(warning, "warning")),
       );
-      assertResumeNotRefused(A);
-      let ne = require("./chunk-yxywkh50.js").matchSessionMode(conversationForResume.mode);
-      if (ne) {
+      assertResumeNotRefused(resumePlan);
+      let modeWarning = require("../coordinator/coordinatorMode.js").matchSessionMode(meta.mode);
+      if (modeWarning) {
         let agentDefinitions = await reloadAgentDefinitionsForModeSwitch(
           getSessionProject(session).originalCwd,
           [],
@@ -418,51 +463,50 @@ function ResumeConversation({
           ...prev,
           agentDefinitions,
         }));
-        conversationForResume.messages.push(createSystemMessage(ne, "warning"));
+        meta.messages.push(createSystemMessage(modeWarning, "warning"));
       }
       resetObserverPairings(session);
-      let { adoptedSessionId, effectiveFork } = resolveResumeSessionAdoption(
-        conversationForResume.sessionId,
-        !!forkSession,
-      );
-      let $e = adoptedSessionId ? pinSessionId(adoptedSessionId) : pinSessionId(getSessionId());
+      let { adoptedSessionId, effectiveFork } = resolveResumeSessionAdoption(meta.sessionId, !!forkSession);
+      let destSid = adoptedSessionId ? pinSessionId(adoptedSessionId) : pinSessionId(getSessionId());
       if (adoptedSessionId) {
         switchSession(adoptedSessionId, "resume", log_0.fullPath ? dirname(log_0.fullPath) : null);
         await renameRecordingForSession(session, storageV5);
         await resetSessionFilePointer();
-        let u = isAgentSwarmsEnabled()
-          ? await (await import("./chunk-6cc2zqkz.js")).rekeySessionTeamAtStartup(storageV5)
+        let swarmsEnabled = isAgentSwarmsEnabled()
+          ? await (
+              await import("../tools/TeamCreateTool/initializeSessionTeam.lazy.js")
+            ).rekeySessionTeamAtStartup(storageV5)
           : undefined;
-        if (u)
-          setAppState((V) => ({
-            ...V,
-            teamContext: u.teamContext,
-            teammateColors: u.teammateColors,
+        if (swarmsEnabled)
+          setAppState((state) => ({
+            ...state,
+            teamContext: swarmsEnabled.teamContext,
+            teammateColors: swarmsEnabled.teammateColors,
           }));
       } else if (effectiveFork) {
-        await adoptForkSessionMetadata(conversationForResume, {
+        await adoptForkSessionMetadata(meta, {
           stripWorktreeSession: true,
           stripRelocatedCwd: true,
-          destSid: $e,
+          destSid,
           storageV5,
         });
-        if (conversationForResume.contentReplacements?.length)
-          await recordContentReplacement(conversationForResume.contentReplacements, undefined, storageV5);
+        if (meta.contentReplacements?.length)
+          await recordContentReplacement(meta.contentReplacements, undefined, storageV5);
       }
-      setCostStateForRestore(conversationForResume);
+      setCostStateForRestore(meta);
       recordResumeSource({
-        sourceSessionId: conversationForResume.sessionId,
+        sourceSessionId: meta.sessionId,
         transcriptPath: log_0.fullPath,
       });
       let result_3 = await loadAgentDefinitionsForSessionCwd(log_0.projectPath, storageV5);
       let { agentDefinition: resolvedAgentDef } = restoreAgentFromSession(
-        conversationForResume.agentSetting,
+        meta.agentSetting,
         mainThreadAgentDefinition,
         agentDefinitions,
         {
           sessionAgentDefinitions: result_3,
           sessionCwd: log_0.projectPath,
-          onResolveMiss: (u) => conversationForResume.messages.push(createSystemMessage(u, "warning")),
+          onResolveMiss: (warning) => meta.messages.push(createSystemMessage(warning, "warning")),
         },
       );
       if (resolvedAgentDef?.mcpServers?.length) await awaitPolicyColdStartWaiter();
@@ -470,88 +514,85 @@ function ResumeConversation({
         ...prev,
         agent: resolvedAgentDef?.agentType,
       }));
-      if (effectiveFork) neutralizeForkFallbackBanners(conversationForResume.messages);
-      rearmRefusalFallbackHeaderFromTranscript(conversationForResume.messages, effectiveFork);
-      let ze = await restoreModelFromSession(
-        conversationForResume.messages,
+      if (effectiveFork) neutralizeForkFallbackBanners(meta.messages);
+      rearmRefusalFallbackHeaderFromTranscript(meta.messages, effectiveFork);
+      let restoredModel = await restoreModelFromSession(
+        meta.messages,
         mainLoopModel,
-        (u) => conversationForResume.messages.push(createSystemMessage(u, "warning")),
+        (warning) => meta.messages.push(createSystemMessage(warning, "warning")),
         {
           storageV5,
           credentials,
         },
       );
-      let Ce = ze
-        ? installRestoredModel(conversationForResume.messages, ze, effectiveFork, storageV5, credentials)
+      let nextModel = restoredModel
+        ? installRestoredModel(meta.messages, restoredModel, effectiveFork, storageV5, credentials)
         : undefined;
-      if (Ce)
-        setAppState((u) => {
-          if (u.mainLoopModel === Ce) return u;
-          recordSwitchIfChanged(session, u, Ce, "resume");
+      if (nextModel)
+        setAppState((state) => {
+          if (state.mainLoopModel === nextModel) return state;
+          recordSwitchIfChanged(session, state, nextModel, "resume");
           return {
-            ...u,
-            mainLoopModel: Ce,
+            ...state,
+            mainLoopModel: nextModel,
           };
         });
-      appendSlackTagResumeRecords(conversationForResume.messages, {
+      appendSlackTagResumeRecords(meta.messages, {
         fork: effectiveFork,
         startup: true,
       });
       let freshAgentDefs = await preparePlanModeRestoreOnInteractiveResume({
-        storedPermissionMode: conversationForResume.permissionMode,
-        messages: conversationForResume.messages,
+        storedPermissionMode: meta.permissionMode,
+        messages: meta.messages,
         forkSession: effectiveFork,
         permissionModeSuppliedOnInvocation,
         lane: "interactive_picker",
       });
       setAppState((prev_0) => {
-        let V = freshAgentDefs(prev_0.toolPermissionContext);
-        return V
+        let agentDefs = freshAgentDefs(prev_0.toolPermissionContext);
+        return agentDefs
           ? {
               ...prev_0,
-              toolPermissionContext: V,
+              toolPermissionContext: agentDefs,
             }
           : prev_0;
       });
-      let { isCoordinatorMode } = require("./chunk-yxywkh50.js");
+      let { isCoordinatorMode } = require("../coordinator/coordinatorMode.js");
       saveMode(isCoordinatorMode() ? "coordinator" : "normal");
-      recordModelPinSwitch(A);
-      let standaloneAgentContext_2 = computeStandaloneAgentContext(
-        conversationForResume.agentName,
-        conversationForResume.agentColor,
-      );
-      let _e = standaloneAgentContext
+      recordModelPinSwitch(resumePlan);
+      let standaloneAgentContext_2 = computeStandaloneAgentContext(meta.agentName, meta.agentColor);
+      let standaloneContext = standaloneAgentContext
         ? {
             ...standaloneAgentContext_2,
             ...standaloneAgentContext,
           }
         : standaloneAgentContext_2;
-      if (_e)
+      if (standaloneContext)
         setAppState((prev) => ({
           ...prev,
-          standaloneAgentContext: _e,
+          standaloneAgentContext: standaloneContext,
         }));
-      reclaimSessionNameOnResume(_e?.name, storageV5, {
-        autoOnly: !conversationForResume.customTitle && !standaloneAgentContext?.name,
+      reclaimSessionNameOnResume(standaloneContext?.name, storageV5, {
+        autoOnly: !meta.customTitle && !standaloneAgentContext?.name,
       });
       restoreSessionMetadata(
         effectiveFork
-          ? buildForkAdoptionMeta(conversationForResume, {
+          ? buildForkAdoptionMeta(meta, {
               stripWorktreeSession: true,
               stripRelocatedCwd: true,
             })
-          : conversationForResume,
+          : meta,
         {
-          taintSid: $e,
+          taintSid: destSid,
           storageV5,
         },
       );
-      noopModelPinReset(A.declined === true);
-      pushRestoredMemoryPauseNotice(conversationForResume.messages);
-      applyEndedByModelOnResume(getEndedByModel(conversationForResume), setAppState);
-      restoreGoalFromTranscript(conversationForResume.messages, setAppState, sessionHooksRegistry);
+      noopModelPinReset(resumePlan.declined === true);
+      pushRestoredMemoryPauseNotice(meta.messages);
+      applyEndedByModelOnResume(getEndedByModel(meta), setAppState);
+      restoreGoalFromTranscript(meta.messages, setAppState, sessionHooksRegistry);
       markSessionRestored(session.host);
-      if (!effectiveFork && conversationForResume.bridgeSessionId)
+      if (!effectiveFork && meta.bridgeSessionId)
         setAppState((prev_2) =>
           prev_2.replBridgeEnabled && !prev_2.replBridgeOutboundOnly
             ? prev_2
@@ -562,15 +603,16 @@ function ResumeConversation({
               },
         );
       if (!effectiveFork) {
-        let u = restoreWorktreeForResume(
+        let worktreeResult = restoreWorktreeForResume(
           lastResumeRecordRegistry.of(session.host),
-          conversationForResume.worktreeSession,
+          meta.worktreeSession,
           undefined,
           {
             storageV5,
           },
         );
-        if (u) conversationForResume.messages.push(createSystemMessage(worktreeResumeNotice(u), "warning"));
+        if (worktreeResult)
+          meta.messages.push(createSystemMessage(worktreeResumeNotice(worktreeResult), "warning"));
         switchToConversationTab(session.host, setAppState);
         if (adoptedSessionId)
           if (isStorageV5Enabled() && storageV5 !== undefined) await adoptResumedSessionFileAsync(storageV5);
@@ -582,74 +624,77 @@ function ResumeConversation({
         resume_duration_ms: Math.round(performance.now() - resumeStart),
       });
       setLogs([]);
-      go({
-        messages: conversationForResume.messages,
-        fileHistorySnapshots: conversationForResume.fileHistorySnapshots,
-        contentReplacements: conversationForResume.contentReplacements,
-        agentName: conversationForResume.agentName,
-        agentColor:
-          conversationForResume.agentColor === "default" ? undefined : conversationForResume.agentColor,
+      setTitleOverride({
+        messages: meta.messages,
+        fileHistorySnapshots: meta.fileHistorySnapshots,
+        contentReplacements: meta.contentReplacements,
+        agentName: meta.agentName,
+        agentColor: meta.agentColor === "default" ? undefined : meta.agentColor,
         mainThreadAgentDefinition: resolvedAgentDef,
-        pendingHookMessages: conversationForResume.sessionStartHooks,
+        pendingHookMessages: meta.sessionStartHooks,
       });
     } catch (error) {
-      if (!E) {
-        let A = B;
+      if (!notFound) {
+        let failureReasonCopy = failureReason;
         logEvent("tengu_session_resumed", {
           entrypoint: lit("picker"),
           success: false,
-          failure_reason: fromEnum(A),
+          failure_reason: fromEnum(failureReasonCopy),
           error_name: sanitizedErrorNameForTelemetry(toError(error)),
         });
       }
       if (error instanceof ResumeRefusedError) {
-        L?.abort();
-        So(error.message);
+        sessionStartHooks?.abort();
+        setErrorNotice(error.message);
         return;
       }
       logError(withTelemetryMessage(toError(error), "resume picker: onSelect failed"));
-      L?.abort();
-      Be({
+      sessionStartHooks?.abort();
+      setCrossProjectNotice({
         sessionId: getSessionIdFromLog(log_0) ?? undefined,
       });
     }
   }
-  if (te)
+  if (backgroundNotice)
     return jsxProd_default(BackgroundSessionResumeMessage, {
-      sessionId: te.sessionId,
-      title: getLogDisplayTitle(te.log),
-      jobId: te.jobId,
-      projectPath: te.log.projectPath,
-      handoff: te.handoff,
+      sessionId: backgroundNotice.sessionId,
+      title: getLogDisplayTitle(backgroundNotice.log),
+      jobId: backgroundNotice.jobId,
+      projectPath: backgroundNotice.log.projectPath,
+      handoff: backgroundNotice.handoff,
     });
-  if (Ge)
+  if (reloadNotice)
     return jsxProd_default(DifferentDirectoryResumeMessage, {
-      command: Ge,
+      command: reloadNotice,
     });
-  if (We !== null)
+  if (errorNotice !== null)
     return jsxProd_default(ResumeExitMessage, {
-      message: We,
+      message: errorNotice,
     });
-  if (x)
+  if (titleOverride)
     return jsxProd_default(REPL, {
       debug,
       commands,
       initialTools,
-      initialMessages: x.messages,
-      pendingHookMessages: x.pendingHookMessages,
-      initialFileHistorySnapshots: x.fileHistorySnapshots,
-      initialContentReplacements: x.contentReplacements,
-      initialAgentName: x.agentName,
-      initialAgentColor: x.agentColor,
+      initialMessages: titleOverride.messages,
+      pendingHookMessages: titleOverride.pendingHookMessages,
+      initialFileHistorySnapshots: titleOverride.fileHistorySnapshots,
+      initialContentReplacements: titleOverride.contentReplacements,
+      initialAgentName: titleOverride.agentName,
+      initialAgentColor: titleOverride.agentColor,
       mcpClients,
-      dynamicMcpConfig: applyAgentModelOverride(dynamicMcpConfig ?? {}, x.mainThreadAgentDefinition, {
-        strictMcpConfig,
-      }),
+      dynamicMcpConfig: applyAgentModelOverride(
+        dynamicMcpConfig ?? {},
+        titleOverride.mainThreadAgentDefinition,
+        {
+          strictMcpConfig,
+        },
+      ),
       strictMcpConfig,
       systemPrompt,
       appendSystemPrompt,
       systemPromptSnapshot,
-      mainThreadAgentDefinition: x.mainThreadAgentDefinition,
+      mainThreadAgentDefinition: titleOverride.mainThreadAgentDefinition,
       autoConnectIdeFlag,
       disableSlashCommands,
       thinkingConfig,
@@ -665,9 +710,9 @@ function ResumeConversation({
         message: "Loading conversations\u2026",
       }),
     });
-  if (He)
+  if (crossProjectNotice)
     return jsxProd_default(ResumeFailedMessage, {
-      sessionId: He.sessionId,
+      sessionId: crossProjectNotice.sessionId,
     });
   if (resuming)
     return jsxProd_default(FullscreenSelectionScreen, {
@@ -683,10 +728,10 @@ function ResumeConversation({
       onCancel,
       onSelect,
       onLogsChanged: isResumeWithRenameEnabled ? () => loadLogs(showAllProjects) : undefined,
-      onLoadMore: Ue,
+      onLoadMore: loadMore,
       initialSearchQuery,
       isLoading: loading,
-      reloadGeneration: Ro,
+      reloadGeneration,
       showAllProjects,
       onToggleAllProjects: handleToggleAllProjects,
       footerNote,
@@ -698,7 +743,7 @@ function ResumeConversation({
  * 全屏模式下的选择处理外壳：Ctrl/Cmd+C 复制或清除选区，其他按键按需清除选区，并用备用屏幕承载子元素。
  */
 function FullscreenSelectionScreen(props) {
-  let $ = w(8);
+  let $ = useMemoCache(8);
   let { children } = props;
   let isFullscreen = useIsFullscreen();
   let selection = useSelection();
@@ -755,68 +800,68 @@ function FullscreenSelectionScreen(props) {
  * 恢复会话失败的提示：给出重试或新建会话的命令，稍后退出。
  */
 function ResumeFailedMessage(props) {
-  let h = w(4);
+  let $ = useMemoCache(4);
   let { sessionId } = props;
-  let p;
-  if (h[0] === MEMO_CACHE_SENTINEL) {
-    p = [];
-    h[0] = p;
-  } else p = h[0];
-  useTimeout(shutdownOnTimeout, 100, p);
-  let T;
-  if (h[1] === MEMO_CACHE_SENTINEL) {
-    T = jsxProd_default(Text, {
+  let deps;
+  if ($[0] === MEMO_CACHE_SENTINEL) {
+    deps = [];
+    $[0] = deps;
+  } else deps = $[0];
+  useTimeout(shutdownOnTimeout, 100, deps);
+  let text;
+  if ($[1] === MEMO_CACHE_SENTINEL) {
+    text = jsxProd_default(Text, {
       children: "Failed to resume the conversation.",
     });
-    h[1] = T;
-  } else T = h[1];
+    $[1] = text;
+  } else text = $[1];
   const children = isSafeIdSegment_2(sessionId)
     ? `Run claude --resume ${sessionId} to retry, or claude to start a new session.`
     : "Run claude to start a new session.";
-  let I;
-  if (h[2] !== children) {
-    I = jsxProd_default_2(Box, {
+  let noticeBox;
+  if ($[2] !== children) {
+    noticeBox = jsxProd_default_2(Box, {
       flexDirection: "column",
       gap: 1,
       children: [
-        T,
+        text,
         jsxProd_default(Text, {
           dimColor: true,
           children,
         }),
       ],
     });
-    h[2] = children;
-    h[3] = I;
-  } else I = h[3];
-  return I;
+    $[2] = children;
+    $[3] = noticeBox;
+  } else noticeBox = $[3];
+  return noticeBox;
 }
 //@ chunk-jde8wnzx.js:36721-36885 sole-consumer
 function ResumeExitMessage(props) {
-  let h = w(3);
+  let $ = useMemoCache(3);
   let { message } = props;
-  let p;
-  if (h[0] === MEMO_CACHE_SENTINEL) {
-    p = [];
-    h[0] = p;
-  } else p = h[0];
-  useTimeout(shutdownWithoutResumeHint, 100, p);
-  let T;
-  if (h[1] !== message) {
-    T = jsxProd_default(Text, {
+  let deps;
+  if ($[0] === MEMO_CACHE_SENTINEL) {
+    deps = [];
+    $[0] = deps;
+  } else deps = $[0];
+  useTimeout(shutdownWithoutResumeHint, 100, deps);
+  let text;
+  if ($[1] !== message) {
+    text = jsxProd_default(Text, {
       children: message,
     });
-    h[1] = message;
-    h[2] = T;
-  } else T = h[2];
-  return T;
+    $[1] = message;
+    $[2] = text;
+  } else text = $[2];
+  return text;
 }
 //@ chunk-jde8wnzx.js:36885-37475 sole-consumer
 /**
  * 会话来自其他目录时的提示：显示恢复命令并说明已复制到剪贴板，稍后退出。
  */
 function DifferentDirectoryResumeMessage(props) {
-  let $ = w(8);
+  let $ = useMemoCache(8);
   let { command } = props;
   let deps;
   if ($[0] === MEMO_CACHE_SENTINEL) {
@@ -877,7 +922,7 @@ function DifferentDirectoryResumeMessage(props) {
  * 会话正在后台运行时的提示：给出 attach/stop 命令或用 claude agents 查找，并给出 --fork-session 分叉命令。
  */
 function BackgroundSessionResumeMessage(props) {
-  let $ = w(29);
+  let $ = useMemoCache(29);
   let { sessionId, title, jobId, projectPath, handoff } = props;
   let deps;
   if ($[0] === MEMO_CACHE_SENTINEL) {
@@ -1008,34 +1053,4 @@ function BackgroundSessionResumeMessage(props) {
   } else content = $[28];
   return content;
 }
-//@ chunk-18hwfzwa.js:651055-651381 callgraph-fingerprint = NoConversationsMessage (0.241)
-function NoConversationsMessage(props) {
-  let $ = w(5);
-  let { cloudRowCheck } = props;
-  let appStoreDirect = useAppStoreDirect();
-  let notifications = useNotifications();
-  let ke;
-  if ($[0] !== cloudRowCheck || $[1] !== notifications || $[2] !== appStoreDirect) {
-    ke = () => {
-      let Re = visibleFrameUrls(appStoreDirect.getState().frameUrls);
-      if (!Re) {
-        return false;
-      }
-      openArtifactRow(Re, appStoreDirect, notifications, cloudRowCheck);
-    };
-    $[0] = cloudRowCheck;
-    $[1] = notifications;
-    $[2] = appStoreDirect;
-    $[3] = ke;
-  } else ke = $[3];
-  let Be;
-  if ($[4] === MEMO_CACHE_SENTINEL) {
-    Be = {
-      context: "Global",
-    };
-    $[4] = Be;
-  } else Be = $[4];
-  useKeybinding("app:openArtifact", ke, Be);
-  return null;
-}
-export { NoConversationsMessage };
+export { NoConversationsMessage, ResumeConversation };

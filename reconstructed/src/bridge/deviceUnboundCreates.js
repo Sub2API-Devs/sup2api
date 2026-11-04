@@ -10,7 +10,7 @@
  */
 import { join, dirname } from "path";
 import { DoctorLazy } from "../cli/handlers/util.js";
-import { u, literal, array, string } from "../../vendor/zod/v4/classic/schemas.js";
+import { objectSchema, literal, array, stringSchema } from "../../vendor/zod/v4/classic/schemas.js";
 import { getClaudeConfigDir } from "../utils/envUtils.js";
 import { jsonParse, jsonStringify } from "../utils/slowOperations.js";
 import { sessionIdBody } from "./sessionIdCompat.js";
@@ -19,22 +19,28 @@ import { errorMessage, isENOENT } from "../utils/errors.js";
 import { isStorageV5Enabled } from "../utils/hoverRest.js";
 import { STORAGE_SPACES } from "../utils/storage/storageSpaces.js";
 import { getFileReader } from "../utils/fileStore.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-8rjqe6hb.js:564-669 placement
-var MAX_UNBOUND_CREATES = 50;
-var unboundCreatesFileSchema = DoctorLazy(() =>
-  u({
-    version: literal(1),
-    sessions: array(
-      u({
-        id: string(),
-        reason: string(),
-        at: string(),
-      }),
-    ),
-  }),
-);
-var DEVICE_UNBOUND_CREATES = "device-unbound-creates";
+var MAX_UNBOUND_CREATES; // deferred: uses DoctorLazy (../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var unboundCreatesFileSchema;
+var DEVICE_UNBOUND_CREATES;
+deferInit("chunk-8rjqe6hb.js:564", () => {
+  MAX_UNBOUND_CREATES = 50;
+  unboundCreatesFileSchema = DoctorLazy(() =>
+    objectSchema({
+      version: literal(1),
+      sessions: array(
+        objectSchema({
+          id: stringSchema(),
+          reason: stringSchema(),
+          at: stringSchema(),
+        }),
+      ),
+    }),
+  );
+  DEVICE_UNBOUND_CREATES = "device-unbound-creates";
+});
 //@ chunk-8rjqe6hb.js:669-717 placement
 function unboundCreatesFilePath() {
   return join(getClaudeConfigDir(), "state", `${DEVICE_UNBOUND_CREATES}.json`);
@@ -43,20 +49,20 @@ function unboundCreatesFilePath() {
 /**
  * 读未绑定创建记录并按保留期过滤
  */
-async function readUnboundCreates(r) {
-  let text = await r.readText();
+async function readUnboundCreates(store) {
+  let text = await store.readText();
   if (text === undefined) return [];
   let unboundCreatesFile = parseUnboundCreatesFile(text);
   if (!unboundCreatesFile.success) return [];
-  let e = await r.retentionCutoff();
-  return e === null
+  let cutoff = await store.retentionCutoff();
+  return cutoff === null
     ? unboundCreatesFile.data.sessions
-    : unboundCreatesFile.data.sessions.filter((session) => !isOlderThanCutoff(session.at, e));
+    : unboundCreatesFile.data.sessions.filter((session) => !isOlderThanCutoff(session.at, cutoff));
 }
 //@ chunk-8rjqe6hb.js:923-995 placement
-function parseUnboundCreatesFile(r) {
+function parseUnboundCreatesFile(text) {
   try {
-    return unboundCreatesFileSchema().safeParse(jsonParse(r));
+    return unboundCreatesFileSchema().safeParse(jsonParse(text));
   } catch {
     return {
       success: false,
@@ -64,23 +70,23 @@ function parseUnboundCreatesFile(r) {
   }
 }
 //@ chunk-8rjqe6hb.js:995-1069 placement
-function isOlderThanCutoff(r, i) {
-  let timestamp = Date.parse(r);
-  return Number.isNaN(timestamp) || timestamp < i.getTime();
+function isOlderThanCutoff(isoTimestamp, cutoffDate) {
+  let timestamp = Date.parse(isoTimestamp);
+  return Number.isNaN(timestamp) || timestamp < cutoffDate.getTime();
 }
 //@ chunk-8rjqe6hb.js:1069-1330 placement
-async function rememberUnboundCreate(r, reason, n) {
+async function rememberUnboundCreate(sessionId, reason, store) {
   try {
-    let e = sessionIdBody(r);
+    let body = sessionIdBody(sessionId);
     let sessions = [
-      ...(await readUnboundCreates(n)).filter((g) => sessionIdBody(g.id) !== e),
+      ...(await readUnboundCreates(store)).filter((entry) => sessionIdBody(entry.id) !== body),
       {
-        id: e,
+        id: body,
         reason,
-        at: n.now().toISOString(),
+        at: store.now().toISOString(),
       },
     ].slice(-MAX_UNBOUND_CREATES);
-    await n.writeText(
+    await store.writeText(
       jsonStringify(
         {
           version: 1,
@@ -97,10 +103,10 @@ async function rememberUnboundCreate(r, reason, n) {
   }
 }
 //@ chunk-8rjqe6hb.js:1330-1536 placement
-async function unboundCreateReason(r, isKnownDeviceBindingRefusal, n) {
+async function unboundCreateReason(sessionId, isKnownDeviceBindingRefusal, store) {
   try {
-    let e = sessionIdBody(r);
-    let found = (await readUnboundCreates(n)).find((a) => sessionIdBody(a.id) === e);
+    let body = sessionIdBody(sessionId);
+    let found = (await readUnboundCreates(store)).find((entry) => sessionIdBody(entry.id) === body);
     return found !== undefined && isKnownDeviceBindingRefusal(found.reason) ? found.reason : undefined;
   } catch (error) {
     logForDebugging(`[deviceBind] unbound-create record unreadable (${errorMessage(error)})`);
@@ -112,15 +118,15 @@ async function unboundCreateReason(r, isKnownDeviceBindingRefusal, n) {
  * 未绑定设备创建会话的记录读写依赖。
  */
 function productionUnboundCreatesDeps(storageV5) {
-  let i = isStorageV5Enabled() && storageV5 !== undefined ? storageV5 : undefined;
-  let n = STORAGE_SPACES.state(DEVICE_UNBOUND_CREATES);
+  let storage = isStorageV5Enabled() && storageV5 !== undefined ? storageV5 : undefined;
+  let storeKey = STORAGE_SPACES.state(DEVICE_UNBOUND_CREATES);
   return {
     readText: async () => {
-      if (i) {
-        let text = await i.readText([n]);
+      if (storage) {
+        let text = await storage.readText([storeKey]);
         if (!text.ok) throw Error("device unbound-creates read failed");
-        let s = text.value.items[0];
-        return s.found ? s.value : undefined;
+        let item = text.value.items[0];
+        return item.found ? item.value : undefined;
       }
       try {
         return await getFileReader().read(unboundCreatesFilePath());
@@ -129,11 +135,11 @@ function productionUnboundCreatesDeps(storageV5) {
         throw error;
       }
     },
-    writeText: async (e) => {
-      if (i) {
+    writeText: async (text) => {
+      if (storage) {
         if (
           !(
-            await i.write(n, e, {
+            await storage.write(storeKey, text, {
               mode: 384,
             })
           ).ok
@@ -141,15 +147,17 @@ function productionUnboundCreatesDeps(storageV5) {
           throw Error("device unbound-creates write failed");
         return;
       }
-      let s = unboundCreatesFilePath();
-      await getFileReader().mkdir(dirname(s), 448);
-      await getFileReader().atomicWrite(s, e, 384);
+      let path = unboundCreatesFilePath();
+      await getFileReader().mkdir(dirname(path), 448);
+      await getFileReader().atomicWrite(path, text, 384);
     },
     now: () => new Date(),
     retentionCutoff: async () => {
-      let e = await import("./chunk-xdz4h5jb.js");
-      return (await e.isRetentionCleanupSafe(storageV5, 0)) ? e.getCutoffDate() : null;
+      let retentionModule = await import("../utils/cleanup.js");
+      return (await retentionModule.isRetentionCleanupSafe(storageV5, 0))
+        ? retentionModule.getCutoffDate()
+        : null;
     },
   };
 }
-export { unboundCreateReason, productionUnboundCreatesDeps };
+export { unboundCreateReason, productionUnboundCreatesDeps, rememberUnboundCreate };

@@ -36,7 +36,7 @@ Next, ask the user for their role. Something like: "Let's get you set up \u2014 
 
 If the ShowOnboardingRolePicker tool is not available in this session, ask in plain text instead and offer these options as a short list they can reply to (they can also answer in their own words):
 
-${SETUP_COWORK_PROMPT.map((e) => `- ${e}`).join(`
+${SETUP_COWORK_PROMPT.map((role) => `- ${role}`).join(`
 `)}
 
 In the plain-text case, end your turn after asking. Their reply \u2014 one of the options or a free-form answer \u2014 is their role for the rest of setup.`;
@@ -126,3 +126,4 @@ If they don't have a voice profile by the wrap, add one clause and no more: "\u2
 - The user trying a skill mid-flow is expected. Help with it, then return to where you left off. Don't let a skill invocation end the setup. This applies to Step 5 too: \`setup-writing-style\` is a long flow, and when it ends \u2014 however it ends \u2014 the user still needs the Step 6 wrap.
 - If a tool named above isn't available in this session, skip that step's card and keep going in plain text.
 `;
+export { SETUP_COWORK_GUIDED_PROMPT };

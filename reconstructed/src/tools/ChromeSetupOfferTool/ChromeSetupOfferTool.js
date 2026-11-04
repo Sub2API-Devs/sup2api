@@ -38,9 +38,15 @@ import { fromEnum } from "../../services/analytics/safeMetadata.js";
 import { env } from "../../utils/env.js";
 import { entrypointForTelemetry } from "../../services/api/logging.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { zodStrictObject, string, u, _enum } from "../../../vendor/zod/v4/classic/schemas.js";
+import {
+  zodStrictObject,
+  stringSchema,
+  objectSchema,
+  _enum,
+} from "../../../vendor/zod/v4/classic/schemas.js";
 import { buildTool } from "../../services/tools/permissionCheckGuard.js";
 import { checkChromeSetupAnswer } from "../RolePickerTool/RolePickerTool.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-kxyd0g16.js:13687-13740 placement
 var TENGU_BRASS_KITE = "tengu_brass_kite";
@@ -68,23 +74,26 @@ function isChromeSetupOfferEnabled() {
 }
 //@ chunk-kxyd0g16.js:13832-14104 placement
 function isChromeSetupOfferArmed() {
-  let e = claudeInChromeSession();
-  if (e.chromeSetupOfferArm !== undefined) return e.chromeSetupOfferArm;
-  if (e.chromeSetupOfferStateUnread || !isClientPlatformEligible()) return false;
-  let { value: r, source } = getFeatureValueWithSource_CACHED_MAY_BE_STALE(chromeSetupOfferFlagName(), false);
+  let sessionSlot = claudeInChromeSession();
+  if (sessionSlot.chromeSetupOfferArm !== undefined) return sessionSlot.chromeSetupOfferArm;
+  if (sessionSlot.chromeSetupOfferStateUnread || !isClientPlatformEligible()) return false;
+  let { value: flagValue, source } = getFeatureValueWithSource_CACHED_MAY_BE_STALE(
+    chromeSetupOfferFlagName(),
+    false,
+  );
   if (source === "fallback" || source === "disabled") return false;
-  e.chromeSetupOfferArm = r === true;
-  return e.chromeSetupOfferArm;
+  sessionSlot.chromeSetupOfferArm = flagValue === true;
+  return sessionSlot.chromeSetupOfferArm;
 }
 //@ chunk-kxyd0g16.js:14104-14264 placement
 /**
  * 记录本回合客户端平台（用于决定是否提供 Chrome 设置），未知时记为 null。
  */
 function noteTurnClientPlatform(session, clientPlatform) {
-  let n = CLAUDE_IN_CHROME_SESSION_SLOT.of(session.host);
+  let sessionSlot = CLAUDE_IN_CHROME_SESSION_SLOT.of(session.host);
   if (clientPlatform !== undefined && isDefinedHumanClientPlatform(clientPlatform))
-    n.lastTurnClientPlatform = clientPlatform;
-  else if (n.lastTurnClientPlatform === undefined) n.lastTurnClientPlatform = null;
+    sessionSlot.lastTurnClientPlatform = clientPlatform;
+  else if (sessionSlot.lastTurnClientPlatform === undefined) sessionSlot.lastTurnClientPlatform = null;
 }
 //@ chunk-kxyd0g16.js:14264-14352 placement
 /**
@@ -143,16 +152,19 @@ function hasChromeToolBeenAttempted() {
 /**
  * 按会话根记录 Chrome 设置提议已出现的次数，用于遥测。
  */
-var chromeSetupOfferCallsByRoot = new SessionRootSlot(() => ({
-  calls: 0,
-}));
+var chromeSetupOfferCallsByRoot; // deferred: uses SessionRootSlot (../../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-kxyd0g16.js:14616", () => {
+  chromeSetupOfferCallsByRoot = new SessionRootSlot(() => ({
+    calls: 0,
+  }));
+});
 //@ chunk-kxyd0g16.js:14647-14898 placement
-function logChromeSetupOffered(session, r, messageClientPlatform) {
-  let s = chromeSetupOfferCallsByRoot.of(session);
-  s.calls++;
+function logChromeSetupOffered(session, outcome, messageClientPlatform) {
+  let offerCalls = chromeSetupOfferCallsByRoot.of(session);
+  offerCalls.calls++;
   logEvent("tengu_chrome_setup_offered", {
-    outcome: fromEnum(r),
-    nth_call: s.calls,
+    outcome: fromEnum(outcome),
+    nth_call: offerCalls.calls,
     chrome_tool_attempted: getChromeAvailabilityStagesLogged().has("tool_attempted"),
     isRemoteSession: Boolean(env.CLAUDE_CODE_REMOTE_SESSION_ID),
     ...(messageClientPlatform && {
@@ -161,25 +173,29 @@ function logChromeSetupOffered(session, r, messageClientPlatform) {
   });
 }
 //@ chunk-kxyd0g16.js:14898-15098 placement
-var chromeSetupOfferInputSchema = DoctorLazy(() =>
-  zodStrictObject({
-    reason: string()
-      .max(200)
-      .optional()
-      .describe("A short phrase naming what the task needs the user's own browser for."),
-  }),
-);
-var chromeSetupOfferOutputSchema = DoctorLazy(() =>
-  u({
-    outcome: _enum(["connected", "not_now", "no_attempt_yet"]),
-  }),
-);
+var chromeSetupOfferInputSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var chromeSetupOfferOutputSchema;
+deferInit("chunk-kxyd0g16.js:14898", () => {
+  chromeSetupOfferInputSchema = DoctorLazy(() =>
+    zodStrictObject({
+      reason: stringSchema()
+        .max(200)
+        .optional()
+        .describe("A short phrase naming what the task needs the user's own browser for."),
+    }),
+  );
+  chromeSetupOfferOutputSchema = DoctorLazy(() =>
+    objectSchema({
+      outcome: _enum(["connected", "not_now", "no_attempt_yet"]),
+    }),
+  );
+});
 //@ chunk-kxyd0g16.js:15098-15161 placement
 /**
  * 把工具输入规整成只含 reason 的对象。
  */
-function chromeSetupUpdatedInput(e) {
-  let { reason } = e;
+function chromeSetupUpdatedInput(input) {
+  let { reason } = input;
   return reason === undefined
     ? {}
     : {
@@ -190,91 +206,96 @@ function chromeSetupUpdatedInput(e) {
 /**
  * 向用户提供 Claude in Chrome 设置的工具。
  */
-var ChromeSetupOfferTool = buildTool({
-  name: OFFER_CHROME_SETUP_TOOL_NAME,
-  searchHint: "offer the user Claude in Chrome setup for their own browser",
-  shouldDefer: true,
-  whenToUse: OFFER_CHROME_SETUP_SHORT_DESCRIPTION,
-  backgrounding: "never",
-  maxResultSizeChars: 2000,
-  get inputSchema() {
-    return chromeSetupOfferInputSchema();
-  },
-  get outputSchema() {
-    return chromeSetupOfferOutputSchema();
-  },
-  isEnabled: isChromeSetupOfferEnabled,
-  isConcurrencySafe() {
-    return false;
-  },
-  isReadOnly() {
-    return true;
-  },
-  requiresUserInteraction() {
-    return true;
-  },
-  admitCardAnswer: checkChromeSetupAnswer,
-  async description() {
-    return OFFER_CHROME_SETUP_DESCRIPTION;
-  },
-  async prompt() {
-    return OFFER_CHROME_SETUP_PROMPT;
-  },
-  toAutoClassifierInput(e) {
-    return e.reason ? `offer Claude in Chrome setup: ${e.reason}` : "offer Claude in Chrome setup";
-  },
-  create({ messageClientPlatform, session }) {
-    return {
-      async validateInput() {
-        if (isCoworkChatMode() && isPhoneClientTurn(session, messageClientPlatform)) {
-          logChromeSetupOffered(session, "phone", messageClientPlatform);
+var ChromeSetupOfferTool; // deferred: uses buildTool (../../services/tools/permissionCheckGuard.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-kxyd0g16.js:15161", () => {
+  ChromeSetupOfferTool = buildTool({
+    name: OFFER_CHROME_SETUP_TOOL_NAME,
+    searchHint: "offer the user Claude in Chrome setup for their own browser",
+    shouldDefer: true,
+    whenToUse: OFFER_CHROME_SETUP_SHORT_DESCRIPTION,
+    backgrounding: "never",
+    maxResultSizeChars: 2000,
+    get inputSchema() {
+      return chromeSetupOfferInputSchema();
+    },
+    get outputSchema() {
+      return chromeSetupOfferOutputSchema();
+    },
+    isEnabled: isChromeSetupOfferEnabled,
+    isConcurrencySafe() {
+      return false;
+    },
+    isReadOnly() {
+      return true;
+    },
+    requiresUserInteraction() {
+      return true;
+    },
+    admitCardAnswer: checkChromeSetupAnswer,
+    async description() {
+      return OFFER_CHROME_SETUP_DESCRIPTION;
+    },
+    async prompt() {
+      return OFFER_CHROME_SETUP_PROMPT;
+    },
+    toAutoClassifierInput(input) {
+      return input.reason ? `offer Claude in Chrome setup: ${input.reason}` : "offer Claude in Chrome setup";
+    },
+    create({ messageClientPlatform, session }) {
+      return {
+        async validateInput() {
+          if (isCoworkChatMode() && isPhoneClientTurn(session, messageClientPlatform)) {
+            logChromeSetupOffered(session, "phone", messageClientPlatform);
+            return {
+              result: false,
+              message: OFFER_CHROME_SETUP_PHONE_REFUSAL,
+              errorCode: 2,
+            };
+          }
+          if (hasChromeToolBeenTriedOrAvailable())
+            return {
+              result: true,
+            };
+          logChromeSetupOffered(session, "no_attempt_yet", messageClientPlatform);
           return {
             result: false,
-            message: OFFER_CHROME_SETUP_PHONE_REFUSAL,
-            errorCode: 2,
+            message: OFFER_CHROME_SETUP_NOT_ATTEMPTED,
+            errorCode: 1,
           };
-        }
-        if (hasChromeToolBeenTriedOrAvailable())
+        },
+        async checkPermissions(input) {
           return {
-            result: true,
+            behavior: "ask",
+            message: "Set up Claude in Chrome?",
+            suppressAlwaysAllowRule: true,
+            updatedInput: chromeSetupUpdatedInput(input),
           };
-        logChromeSetupOffered(session, "no_attempt_yet", messageClientPlatform);
-        return {
-          result: false,
-          message: OFFER_CHROME_SETUP_NOT_ATTEMPTED,
-          errorCode: 1,
-        };
-      },
-      async checkPermissions(n) {
-        return {
-          behavior: "ask",
-          message: "Set up Claude in Chrome?",
-          suppressAlwaysAllowRule: true,
-          updatedInput: chromeSetupUpdatedInput(n),
-        };
-      },
-      async call(n) {
-        let { outcome } = n;
-        let f = outcome === "connected" ? "connected" : "not_now";
-        logChromeSetupOffered(session, f, messageClientPlatform);
-        return {
-          data: {
-            outcome: f,
-          },
-        };
-      },
-    };
-  },
-  mapToolResultToToolResultBlockParam(e, toolUseId) {
-    return {
-      tool_use_id: toolUseId,
-      type: "tool_result",
-      content:
-        e.outcome === "connected" ? OFFER_CHROME_SETUP_CONNECTED_TEXT : OFFER_CHROME_SETUP_NOT_NOW_TEXT,
-    };
-  },
-  renderToolUseMessage(e) {
-    return e.reason ?? null;
-  },
+        },
+        async call(input) {
+          let { outcome } = input;
+          let normalizedOutcome = outcome === "connected" ? "connected" : "not_now";
+          logChromeSetupOffered(session, normalizedOutcome, messageClientPlatform);
+          return {
+            data: {
+              outcome: normalizedOutcome,
+            },
+          };
+        },
+      };
+    },
+    mapToolResultToToolResultBlockParam(result, toolUseId) {
+      return {
+        tool_use_id: toolUseId,
+        type: "tool_result",
+        content:
+          result.outcome === "connected"
+            ? OFFER_CHROME_SETUP_CONNECTED_TEXT
+            : OFFER_CHROME_SETUP_NOT_NOW_TEXT,
+      };
+    },
+    renderToolUseMessage(input) {
+      return input.reason ?? null;
+    },
+  });
 });
 export { noteTurnClientPlatform, ChromeSetupOfferTool, isChromeSetupOfferEnabled };

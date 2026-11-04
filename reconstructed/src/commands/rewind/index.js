@@ -20,7 +20,7 @@ var rewindCommandDefinition = {
   type: "local",
   supportsNonInteractive: false,
   thinClientDispatch: "control-request",
-  load: () => import("./chunk-ye0hzrsv.js"),
+  load: () => import("./call.lazy.js"),
 };
 var rewindCommand = rewindCommandDefinition;
 export { rewindCommand };

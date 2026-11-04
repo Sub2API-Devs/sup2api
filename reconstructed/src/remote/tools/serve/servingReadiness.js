@@ -28,17 +28,17 @@ var FIRST_FLAG_FETCH_WAIT_MS = 3000;
 /**
  * 远程工具服务就绪闸：等待插件 hook、托管设置、策略限制与首次开关拉取。
  */
-function createServingReadiness(e = {}) {
-  let firstFlagFetchWaitMs = e.firstFlagFetchWaitMs ?? FIRST_FLAG_FETCH_WAIT_MS;
-  let o = false;
-  let i;
+function createServingReadiness(options = {}) {
+  let firstFlagFetchWaitMs = options.firstFlagFetchWaitMs ?? FIRST_FLAG_FETCH_WAIT_MS;
+  let readyFlag = false;
+  let waitPromise;
   return {
     get ready() {
-      return o;
+      return readyFlag;
     },
     whenReady: () =>
-      (i ??= awaitServingReadiness(firstFlagFetchWaitMs).then(() => {
-        o = true;
+      (waitPromise ??= awaitServingReadiness(firstFlagFetchWaitMs).then(() => {
+        readyFlag = true;
         warnMissingPluginHooks();
       })),
   };
@@ -54,8 +54,8 @@ async function awaitServingReadiness(budgetMs) {
   } catch (error) {
     logError(toError(error));
   }
-  let o = false;
-  let [i, a, m, g] = await Promise.all([
+  let flagFetchLanded = false;
+  let [pluginHookMs, managedSettingsMs, policyLimitsMs, flagFetchMs] = await Promise.all([
     timedWait("the plugin-hook registration pass", async () => {
       await pendingPluginHookRegistration();
     }),
@@ -66,23 +66,23 @@ async function awaitServingReadiness(budgetMs) {
         initialize: initializeGrowthBook,
         budgetMs,
       });
-      o = !timedOut;
+      flagFetchLanded = !timedOut;
     }),
   ]);
   logForDebugging(
-    `[remote-tools] ready to judge calls after ${Math.round(performance.now() - startTime)}ms: waited ${i}ms for plugin hooks, ${a}ms for remote managed settings, ${m}ms for policy limits, ${g}ms for the first flag fetch (${o ? "landed" : "not heard in time"})`,
+    `[remote-tools] ready to judge calls after ${Math.round(performance.now() - startTime)}ms: waited ${pluginHookMs}ms for plugin hooks, ${managedSettingsMs}ms for remote managed settings, ${policyLimitsMs}ms for policy limits, ${flagFetchMs}ms for the first flag fetch (${flagFetchLanded ? "landed" : "not heard in time"})`,
   );
 }
 //@ chunk-t28c2dsj.js:1252-1456 placement
 /**
  * 计时等待一个前置步骤，失败继续
  */
-async function timedWait(e, r) {
+async function timedWait(label, wait) {
   let startTime = performance.now();
   try {
-    await r();
+    await wait();
   } catch (error) {
-    logForDebugging(`[remote-tools] waiting for ${e} failed; serving goes on without it`, {
+    logForDebugging(`[remote-tools] waiting for ${label} failed; serving goes on without it`, {
       level: "error",
     });
     logError(toError(error));
@@ -95,10 +95,10 @@ async function timedWait(e, r) {
  */
 async function warnMissingPluginHooks() {
   try {
-    let e = (await pluginHooksUnknownCause(false)) ?? (await failedPluginHookRegistration());
-    if (e !== undefined)
+    let cause = (await pluginHooksUnknownCause(false)) ?? (await failedPluginHookRegistration());
+    if (cause !== undefined)
       logForDebugging(
-        `[remote-tools] plugin-delivered hooks are missing from the calls this machine serves, as from its own: ${e}`,
+        `[remote-tools] plugin-delivered hooks are missing from the calls this machine serves, as from its own: ${cause}`,
         {
           level: "error",
         },

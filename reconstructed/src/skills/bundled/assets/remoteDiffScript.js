@@ -18,3 +18,4 @@ var remoteDiffPath = __cc_resource_0;
  * remote-diff 技能附带的脚本资源文本。
  */
 var remoteDiff = readEmbeddedTextSync(remoteDiffPath, import.meta.dirname);
+export { remoteDiff };

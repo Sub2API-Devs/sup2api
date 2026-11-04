@@ -148,15 +148,15 @@ import {
   getAccountSetPermissionMode,
   isAutoClassifierActive,
 } from "../../utils/permissions/autoModeState.js";
-import { xr } from "../../../vendor/lodash-es/_inlinedHelpers.js";
+import { import_mapValues } from "../../../vendor/lodash-es/_inlinedHelpers.js";
 import { logRemoteTools } from "./remoteToolsDebug.js";
 import { isAskOnMutationTool } from "../../utils/permissions/permissions.js";
 
 //@ chunk-dtv8x2hx.js:24606-24866 placement
-function collectAskRules(e) {
-  let decisionReason = e.decisionReason;
+function collectAskRules(decision) {
+  let decisionReason = decision.decisionReason;
   return [
-    ...(e.matchedAskRule !== undefined ? [e.matchedAskRule] : []),
+    ...(decision.matchedAskRule !== undefined ? [decision.matchedAskRule] : []),
     ...(decisionReason?.type === "rule" && decisionReason.rule.ruleBehavior === "ask"
       ? [decisionReason.rule]
       : []),
@@ -181,28 +181,28 @@ var DEFAULT_RECONNECT_HOLD_MS = 90000;
 /**
  * 宿主断线时按 reconnect_hold 等待其回来，超时放弃。
  */
-async function holdForReconnect({ tool, host, call: o, signal, onStatus, holdMs }) {
+async function holdForReconnect({ tool, host, call: card, signal, onStatus, holdMs }) {
   if (!isViolinWaistOn()) return;
-  let { name: p } = host;
-  let i = {
+  let { name: hostName } = host;
+  let status = {
     ended: "inconclusive",
   };
   try {
-    let h = await host.transport
+    let reply = await host.transport
       .checkLive?.({
         signal,
-        ...(o.reconnectHoldMs === undefined && {
+        ...(card.reconnectHoldMs === undefined && {
           hold: {
             ms: holdMs,
-            notify: (k) => {
-              if (k === "back") {
-                i.ended = "back";
+            notify: (event) => {
+              if (event === "back") {
+                status.ended = "back";
                 return;
               }
-              i.stopTiming = o.beginReconnectHold();
+              status.stopTiming = card.beginReconnectHold();
               onStatus?.(
                 ASK_FIRST_REASON_TEXTS["reconnect_hold.waiting"]({
-                  name: p,
+                  name: hostName,
                   holdMs,
                 }),
                 holdMs,
@@ -213,32 +213,32 @@ async function holdForReconnect({ tool, host, call: o, signal, onStatus, holdMs 
       })
       ?.catch((error) => {
         if (!isAbortError(error)) logError(error);
-        i.ended = "failed";
+        status.ended = "failed";
         return;
       });
-    if (signal.aborted) i.ended = "interrupted";
-    else if (h !== undefined) i.ended = "still_away";
-    if (i.stopTiming !== undefined) {
-      i.stopTiming();
+    if (signal.aborted) status.ended = "interrupted";
+    else if (reply !== undefined) status.ended = "still_away";
+    if (status.stopTiming !== undefined) {
+      status.stopTiming();
       onStatus?.(
-        i.ended === "back"
-          ? ASK_FIRST_REASON_TEXTS["ask_seat.sending"](p)
-          : ASK_FIRST_REASON_TEXTS["reconnect_hold.ended"](p),
+        status.ended === "back"
+          ? ASK_FIRST_REASON_TEXTS["ask_seat.sending"](hostName)
+          : ASK_FIRST_REASON_TEXTS["reconnect_hold.ended"](hostName),
       );
-      if (i.ended === "back") logFeatureOk("remote_tool_reconnect_hold");
-      else if (i.ended === "still_away") logFeatureBad("remote_tool_reconnect_hold", i.ended);
-      else logFeatureSad("remote_tool_reconnect_hold", i.ended);
+      if (status.ended === "back") logFeatureOk("remote_tool_reconnect_hold");
+      else if (status.ended === "still_away") logFeatureBad("remote_tool_reconnect_hold", status.ended);
+      else logFeatureSad("remote_tool_reconnect_hold", status.ended);
     }
-    if (h === undefined || signal.aborted) return;
-    let w = convertRemoteToolResult(tool, host, h);
-    return i.stopTiming === undefined || w.outcome.kind !== "error"
-      ? w
+    if (reply === undefined || signal.aborted) return;
+    let result = convertRemoteToolResult(tool, host, reply);
+    return status.stopTiming === undefined || result.outcome.kind !== "error"
+      ? result
       : {
-          ...w,
+          ...result,
           outcome: {
-            ...w.outcome,
-            message: `${w.outcome.message} ${ASK_FIRST_REASON_TEXTS["reconnect_hold.gave_up"]({
-              name: p,
+            ...result.outcome,
+            message: `${result.outcome.message} ${ASK_FIRST_REASON_TEXTS["reconnect_hold.gave_up"]({
+              name: hostName,
               holdMs,
             })}`,
           },
@@ -258,14 +258,14 @@ var VERSION_COMPARISON_LABELS = {
 /**
  * 记录远程调用结果遥测（completed/completed_no_envelope/错误、决定者来源、耗时）。
  */
-function logRemoteToolCallOutcome(tool, host, entry, r, s, toolUseContext, callerGate) {
-  let { outcome } = r;
-  let elapsedMs = s.elapsedMs;
-  let w = analyzeTurnTail(toolUseContext.messages);
-  let decider = w.decider;
+function logRemoteToolCallOutcome(tool, host, entry, result, card, toolUseContext, callerGate) {
+  let { outcome } = result;
+  let elapsedMs = card.elapsedMs;
+  let turnTail = analyzeTurnTail(toolUseContext.messages);
+  let decider = turnTail.decider;
   let origin = decider?.origin;
-  let A = decider == null ? undefined : toolUseContext.messages[decider.index];
-  let R =
+  let deciderMessage = decider == null ? undefined : toolUseContext.messages[decider.index];
+  let outcomeLabel =
     outcome.kind === "completed"
       ? outcome.envelope !== "present"
         ? "completed_no_envelope"
@@ -283,9 +283,9 @@ function logRemoteToolCallOutcome(tool, host, entry, r, s, toolUseContext, calle
     tool: analyticsToolName(tool),
     transport: fromEnum(host.transport.kind),
     entry: fromEnum(entry),
-    outcome: fromEnum(R),
-    refusal_code: fromEnumOpt(r.refusalCode),
-    failure_code: fromEnumOpt(r.failureCode),
+    outcome: fromEnum(outcomeLabel),
+    refusal_code: fromEnumOpt(result.refusalCode),
+    failure_code: fromEnumOpt(result.failureCode),
     disposition: fromEnumOpt(outcome.kind === "completed" ? outcome.disposition : undefined),
     envelope: outcome.kind === "completed" ? fromEnum(outcome.envelope) : undefined,
     output_parsed: outcome.kind === "completed" ? outcome.output !== undefined : undefined,
@@ -300,12 +300,12 @@ function logRemoteToolCallOutcome(tool, host, entry, r, s, toolUseContext, calle
       ? fromEnum(remoteDirKind(host.description).kind)
       : undefined,
     protocol_version: host.protocol.kind === "compatible" ? host.protocol.version : undefined,
-    approval: fromEnumOpt(r.approval),
-    claimed_mode: fromEnumOpt(s.claimedMode),
+    approval: fromEnumOpt(result.approval),
+    claimed_mode: fromEnumOpt(card.claimedMode),
     turn_opened_by: fromEnum(
-      decider?.strictHuman === true && A !== undefined && isHumanTurn(A)
+      decider?.strictHuman === true && deciderMessage !== undefined && isHumanTurn(deciderMessage)
         ? "own_words"
-        : w.scheduledTrigger
+        : turnTail.scheduledTrigger
           ? "routine"
           : decider === null
             ? "unknown"
@@ -314,9 +314,9 @@ function logRemoteToolCallOutcome(tool, host, entry, r, s, toolUseContext, calle
               : getOriginKindLabel(origin),
     ),
     from_agent: toolUseContext.agentId !== undefined,
-    standing_row: fromEnumOpt(s.card?.standingRow),
-    standing_row_chosen: s.card?.chosen,
-    repeat_in_session: toolUseContext.toolState.get(RemoteAskSeat).askedAboutBefore(s),
+    standing_row: fromEnumOpt(card.card?.standingRow),
+    standing_row_chosen: card.card?.chosen,
+    repeat_in_session: toolUseContext.toolState.get(RemoteAskSeat).askedAboutBefore(card),
     wait_announced: host.description?.limits.max_ask_ms !== undefined,
     host_version_vs_worker: fromEnum(
       compareSemverOrDefaultUnknown(
@@ -347,73 +347,73 @@ function logRemoteToolCallOutcome(tool, host, entry, r, s, toolUseContext, calle
       ),
     ),
     caller_gate: fromEnumOpt(callerGate),
-    approved_by: fromEnumOpt(s.approvedBy),
-    refusal_reason: fromEnumOpt(r.askEndReason),
+    approved_by: fromEnumOpt(card.approvedBy),
+    refusal_reason: fromEnumOpt(result.askEndReason),
     delivery: fromEnumOpt(outcome.kind === "completed" ? outcome.delivery : undefined),
-    adoption: fromEnumOpt(r.adoption),
-    inherited_withdrawn: s.inheritedRequestId === undefined ? undefined : s.inheritedWithdrawn,
-    reconcile_trigger: fromEnumOpt(r.reconcile?.trigger),
-    reconcile_leg: r.reconcile?.leg,
-    reconcile_result: fromEnumOpt(r.reconcile?.result),
-    reconcile_attempts: r.reconcile?.attempts,
-    checkin_misses: r.reconcile?.misses,
-    held: r.reconcile?.held,
-    epoch_changed: r.reconcile?.epochChanged,
-    reconcile_leg1_result: fromEnumOpt(r.reconcileLeg1?.result),
+    adoption: fromEnumOpt(result.adoption),
+    inherited_withdrawn: card.inheritedRequestId === undefined ? undefined : card.inheritedWithdrawn,
+    reconcile_trigger: fromEnumOpt(result.reconcile?.trigger),
+    reconcile_leg: result.reconcile?.leg,
+    reconcile_result: fromEnumOpt(result.reconcile?.result),
+    reconcile_attempts: result.reconcile?.attempts,
+    checkin_misses: result.reconcile?.misses,
+    held: result.reconcile?.held,
+    epoch_changed: result.reconcile?.epochChanged,
+    reconcile_leg1_result: fromEnumOpt(result.reconcileLeg1?.result),
     duration_ms: elapsedMs,
-    time_to_terminal_ms: elapsedMs - s.askingMs,
-    asking_ms: s.askingMs,
-    queued_ms: s.queuedMs,
-    ask_seat_wait_ms: s.askSeatWaitMs,
-    reconnect_hold_ms: s.reconnectHoldMs,
-    sent_without_ask_seat: s.sentWithoutAskSeat,
-    ...buildTimingFields("leg1", s.legTransit(1)),
-    ...buildTimingFields("leg2", s.legTransit(2)),
-    request_bytes: r.requestBytes,
-    response_bytes: r.responseBytes,
-    meta_copy: fromEnumOpt(r.metaCopy),
-    read_baseline_sent: r.readBaselineSent === true,
-    call_id: sanitizeMarkName(s.callId),
-    tool_use_id: sanitizeMarkName(s.callId),
-    host_epoch: sanitizeMarkName(s.sentUnderEpoch),
+    time_to_terminal_ms: elapsedMs - card.askingMs,
+    asking_ms: card.askingMs,
+    queued_ms: card.queuedMs,
+    ask_seat_wait_ms: card.askSeatWaitMs,
+    reconnect_hold_ms: card.reconnectHoldMs,
+    sent_without_ask_seat: card.sentWithoutAskSeat,
+    ...buildTimingFields("leg1", card.legTransit(1)),
+    ...buildTimingFields("leg2", card.legTransit(2)),
+    request_bytes: result.requestBytes,
+    response_bytes: result.responseBytes,
+    meta_copy: fromEnumOpt(result.metaCopy),
+    read_baseline_sent: result.readBaselineSent === true,
+    call_id: sanitizeMarkName(card.callId),
+    tool_use_id: sanitizeMarkName(card.callId),
+    host_epoch: sanitizeMarkName(card.sentUnderEpoch),
     handle_hash: host.description === undefined ? undefined : shortHash(host.description.name),
     host_device_id: sanitizeMarkName(host.description?.device_id),
     criteria_version: lit(REMOTE_TOOL_PROTOCOL_LABEL),
   });
-  classifyCompletion(R);
+  classifyCompletion(outcomeLabel);
 }
 //@ chunk-dtv8x2hx.js:29905-30277 placement
-function classifyCompletion(e) {
+function classifyCompletion(label) {
   switch (
-    e === "completed" || e === "completed_error"
+    label === "completed" || label === "completed_error"
       ? SERVED_OUTCOME_TABLE.ran.bucket
-      : e === "completed_no_envelope"
+      : label === "completed_no_envelope"
         ? "sad"
-        : e === "not_run_on_host"
+        : label === "not_run_on_host"
           ? SERVED_OUTCOME_TABLE.denied_by_rule.bucket
-          : e === "unreadable_result"
+          : label === "unreadable_result"
             ? SERVED_OUTCOME_TABLE.transport_error.bucket
-            : SERVED_OUTCOME_TABLE[e].bucket
+            : SERVED_OUTCOME_TABLE[label].bucket
   ) {
     case "ok":
       logFeatureOk("remote_tool_forward");
       return;
     case "sad":
-      logFeatureSad("remote_tool_forward", e);
+      logFeatureSad("remote_tool_forward", label);
       return;
     case "bad":
-      logFeatureBad("remote_tool_forward", e);
+      logFeatureBad("remote_tool_forward", label);
       return;
     case "none":
       return;
   }
 }
 //@ chunk-dtv8x2hx.js:30277-30663 placement
-function logRemoteToolForward(e, host, o, toolUseId, verdict) {
+function logRemoteToolForward(tool, host, entry, toolUseId, verdict) {
   logEvent("tengu_remote_tool_forward", {
-    tool: analyticsToolName(e),
+    tool: analyticsToolName(tool),
     transport: fromEnum(host.transport.kind),
-    entry: fromEnum(o),
+    entry: fromEnum(entry),
     outcome: fromEnum("rejected_in_session"),
     caller_gate: fromEnum(verdict),
     host_kind: fromEnumOpt(host.description?.kind),
@@ -426,38 +426,40 @@ function logRemoteToolForward(e, host, o, toolUseId, verdict) {
   classifyCompletion("rejected_in_session");
 }
 //@ chunk-dtv8x2hx.js:30663-30814 placement
-function logRemoteForward(tool, n, code, r) {
+function logRemoteForward(tool, entry, label, toolUseId) {
   logEvent("tengu_remote_tool_forward", {
     tool: analyticsToolName(tool),
-    entry: fromEnum(n),
-    outcome: fromEnum(code),
-    call_id: sanitizeMarkName(r),
-    tool_use_id: sanitizeMarkName(r),
+    entry: fromEnum(entry),
+    outcome: fromEnum(label),
+    call_id: sanitizeMarkName(toolUseId),
+    tool_use_id: sanitizeMarkName(toolUseId),
     criteria_version: lit(REMOTE_TOOL_PROTOCOL_LABEL),
   });
-  classifyCompletion(code);
+  classifyCompletion(label);
 }
 //@ chunk-dtv8x2hx.js:30814-30884 placement
-function compareSemverOrDefaultUnknown(claudeCodeVersion, n) {
-  return isSemverString(claudeCodeVersion) && isSemverString(n)
-    ? VERSION_COMPARISON_LABELS[compareVersions(splitOnDash(claudeCodeVersion), splitOnDash(n))]
+function compareSemverOrDefaultUnknown(claudeCodeVersion, thisVersion) {
+  return isSemverString(claudeCodeVersion) && isSemverString(thisVersion)
+    ? VERSION_COMPARISON_LABELS[compareVersions(splitOnDash(claudeCodeVersion), splitOnDash(thisVersion))]
     : "unknown";
 }
 //@ chunk-dtv8x2hx.js:30884-31066 placement
-function buildTimingFields(e, n) {
-  return n === undefined
+function buildTimingFields(leg, timing) {
+  return timing === undefined
     ? {}
     : {
-        [`${e}_queue_ms`]: n.queueMs,
-        [`${e}_post_ms`]: n.postMs,
-        [`${e}_reply_wait_ms`]: n.replyWaitMs,
-        [`${e}_total_ms`]: n.totalMs,
-        [`${e}_posts`]: n.posts,
+        [`${leg}_queue_ms`]: timing.queueMs,
+        [`${leg}_post_ms`]: timing.postMs,
+        [`${leg}_reply_wait_ms`]: timing.replyWaitMs,
+        [`${leg}_total_ms`]: timing.totalMs,
+        [`${leg}_posts`]: timing.posts,
       };
 }
 //@ chunk-dtv8x2hx.js:31066-31128 placement
-function analyticsToolName(e) {
-  return e.isMcp === true ? sanitizeToolNameForAnalytics("mcp__tool") : sanitizeToolNameForAnalytics(e.name);
+function analyticsToolName(tool) {
+  return tool.isMcp === true
+    ? sanitizeToolNameForAnalytics("mcp__tool")
+    : sanitizeToolNameForAnalytics(tool.name);
 }
 //@ chunk-dtv8x2hx.js:31128-31202 placement
 function isViolinCornerOn() {
@@ -481,15 +483,15 @@ var MAX_STANDING_ASK_DEADLINE_MS = 1e4;
 var regExp = new RegExp(`[${withConfusables("<")}]`, "gu");
 var regExp_2 = new RegExp(`[${withConfusables(">")}]`, "gu");
 //@ chunk-dtv8x2hx.js:31342-31438 placement
-function escapeForPrompt(e) {
+function escapeForPrompt(text) {
   return redactSecrets(
-    replaceControlChars(e.normalize("NFKC")).replace(regExp, "&lt;").replace(regExp_2, "&gt;").trim(),
+    replaceControlChars(text.normalize("NFKC")).replace(regExp, "&lt;").replace(regExp_2, "&gt;").trim(),
   );
 }
 //@ chunk-dtv8x2hx.js:31438-31501 placement
-function promptSafeTruncated(e) {
+function promptSafeTruncated(text) {
   return escapeForPrompt(
-    truncateToLength(redactSecrets(replaceControlChars(e.normalize("NFKC"))), MAX_LINE_CHARS),
+    truncateToLength(redactSecrets(replaceControlChars(text.normalize("NFKC"))), MAX_LINE_CHARS),
   );
 }
 //@ chunk-dtv8x2hx.js:31501-32654 placement
@@ -516,9 +518,9 @@ async function waitForAskAnswer({
   reconnectHoldMs,
   callerGate,
 }) {
-  let E = toolUseContext.toolState.get(RemoteAskSeat);
-  let D = askLapseMs ?? clampedHostLimit(route.host, "max_ask_ms");
-  let X = E.begin({
+  let seat = toolUseContext.toolState.get(RemoteAskSeat);
+  let askLapseMs_2 = askLapseMs ?? clampedHostLimit(route.host, "max_ask_ms");
+  let card = seat.begin({
     callId: toolUseId,
     toolName: tool.name,
     hostName: route.host.name,
@@ -529,20 +531,20 @@ async function waitForAskAnswer({
           name: route.host.name,
           toolName: tool.name,
           reason,
-          afterMs: D,
+          afterMs: askLapseMs_2,
         }),
       ),
   });
-  let L = UNEXPECTED_FORWARD_ERROR;
+  let result = UNEXPECTED_FORWARD_ERROR;
   try {
-    L = await resolveEarlyCheck({
+    result = await resolveEarlyCheck({
       tool,
       entry,
       host: route.host,
       input: route.input,
       rawInput,
       toolUseContext,
-      call: X,
+      call: card,
       signal,
       approve,
       speculation,
@@ -550,14 +552,14 @@ async function waitForAskAnswer({
       checkInTiming: checkInTiming ?? progressCheckTiming(route.host),
       earlyCheckTiming: earlyCheckTiming ?? PROGRESS_WATCH_TIMING,
       silentCallTiming: silentCallTiming ?? SILENT_CALL_TIMING,
-      askLapseMs: D,
+      askLapseMs: askLapseMs_2,
       askSeatWaitMs: askSeatWaitMs ?? DEFAULT_ASK_SEAT_WAIT_MS,
       reconnectHoldMs: reconnectHoldMs ?? DEFAULT_RECONNECT_HOLD_MS,
       callerGate,
     });
     if (
-      L.outcome.kind === "error" &&
-      (L.outcome.code === "unreachable" || L.outcome.code === "host_unresponsive")
+      result.outcome.kind === "error" &&
+      (result.outcome.code === "unreachable" || result.outcome.code === "host_unresponsive")
     )
       toolUseContext.toolState
         .get(AwayEpisodeTracker)
@@ -566,15 +568,15 @@ async function waitForAskAnswer({
           toolUseContext.agentId,
           route.host.name,
         );
-    return L.outcome;
+    return result.outcome;
   } catch (error) {
-    if (error instanceof AbortError || signal.aborted) L = INTERRUPTED_FORWARD;
+    if (error instanceof AbortError || signal.aborted) result = INTERRUPTED_FORWARD;
     throw error;
   } finally {
     speculation?.abandon();
-    E.settle(X, L.outcome);
-    logRemoteToolCallOutcome(tool, route.host, entry, L, X, toolUseContext, callerGate);
-    describeAskSeat(L, X, {
+    seat.settle(card, result.outcome);
+    logRemoteToolCallOutcome(tool, route.host, entry, result, card, toolUseContext, callerGate);
+    describeAskSeat(result, card, {
       tool,
       route,
       rawInput,
@@ -583,39 +585,39 @@ async function waitForAskAnswer({
   }
 }
 //@ chunk-dtv8x2hx.js:32654-33567 placement
-function describeAskSeat(e, n, { tool, route, rawInput, toolUseContext }) {
+function describeAskSeat(result, card, { tool, route, rawInput, toolUseContext }) {
   if (route.host.transport.kind !== "session") return;
   try {
-    let p = toolUseContext.toolState.get(RemoteCallLedger);
-    let open = e.outcome.kind === "error" ? e.outcome.open : undefined;
+    let ledger = toolUseContext.toolState.get(RemoteCallLedger);
+    let open = result.outcome.kind === "error" ? result.outcome.open : undefined;
     if (open === undefined) {
-      p.forget(n.callId);
+      ledger.forget(card.callId);
       return;
     }
-    let held = n.held;
-    let w = e.journalHost !== undefined && e.journalHost !== route.host.name;
-    p.gaveUp({
-      callId: n.callId,
+    let held = card.held;
+    let otherHost = result.journalHost !== undefined && result.journalHost !== route.host.name;
+    ledger.gaveUp({
+      callId: card.callId,
       agentId: toolUseContext.agentId,
-      hostName: e.journalHost ?? route.host.name,
+      hostName: result.journalHost ?? route.host.name,
       toolName: tool.name,
-      wireToolName: n.wireName ?? tool.name,
+      wireToolName: card.wireName ?? tool.name,
       spelled: primaryInputPath(rawInput),
       toldAs: open,
       machineHadCall:
-        e.approval !== undefined ||
-        e.reconcile?.trigger === "in_progress" ||
-        e.adoption === "ask_in_flight" ||
-        e.adoption === "interrupted",
-      transport: w ? undefined : route.host.transport,
-      dispatchEpoch: e.adoption === undefined ? n.sentUnderEpoch : e.journalEpoch,
+        result.approval !== undefined ||
+        result.reconcile?.trigger === "in_progress" ||
+        result.adoption === "ask_in_flight" ||
+        result.adoption === "interrupted",
+      transport: otherHost ? undefined : route.host.transport,
+      dispatchEpoch: result.adoption === undefined ? card.sentUnderEpoch : result.journalEpoch,
       standing: held !== undefined,
       ...(held !== undefined && {
         withdraw: held.withdraw,
       }),
       givenUpAt: Date.now(),
     });
-    held?.late.then((k) => p.answeredLate(n.callId, k)).catch(() => {});
+    held?.late.then((late) => ledger.answeredLate(card.callId, late)).catch(() => {});
   } catch (error) {
     logForDebugging(
       `[remote-tools] could not record a given-up call for a later correction: ${errorMessage(error)}`,
@@ -625,8 +627,8 @@ function describeAskSeat(e, n, { tool, route, rawInput, toolUseContext }) {
 //@ chunk-dtv8x2hx.js:33567-33804 placement
 function primaryInputPath(rawInput) {
   let found = ["command", "file_path", "path", "notebook_path"]
-    .map((o) => rawInput[o])
-    .find((o) => typeof o === "string" && o !== "");
+    .map((key) => rawInput[key])
+    .find((value) => typeof value === "string" && value !== "");
   return found === undefined
     ? "its input as sent"
     : `"${truncateToLength(escapeForPrompt(truncateToLength(found, 480)).replace(/[`"]/g, " ").replace(/\s+/g, " ").trim(), 120)}"`;
@@ -651,97 +653,106 @@ var UNEXPECTED_FORWARD_ERROR = {
 /**
  * 描述投递失败（交付未知、宿主重启、中断）。
  */
-async function describeDeliveryFailure(e, n, o) {
-  let { tool, host, signal } = e;
-  let callId = e.call.callId;
-  let i = machineIdentity(host);
-  let h = {
-    host: n.host,
+async function describeDeliveryFailure(context, parked, runWithPendingAsk) {
+  let { tool, host, signal } = context;
+  let callId = context.call.callId;
+  let identity = machineIdentity(host);
+  let noticeArgs = {
+    host: parked.host,
   };
-  let w = {
-    journalHost: n.host,
-    ...(n.host_epoch !== undefined && {
-      journalEpoch: n.host_epoch,
+  let journalFields = {
+    journalHost: parked.host,
+    ...(parked.host_epoch !== undefined && {
+      journalEpoch: parked.host_epoch,
     }),
   };
-  let k = (code, message, adoption, y, I) => ({
+  let fail = (code, message, adoption, reconcileInfo, openReason) => ({
     outcome: {
       kind: "error",
       code,
       message,
-      host: i,
-      ...(I !== undefined && {
-        open: I,
+      host: identity,
+      ...(openReason !== undefined && {
+        open: openReason,
       }),
     },
     adoption,
-    ...w,
-    ...(y !== undefined && {
-      reconcile: y,
+    ...journalFields,
+    ...(reconcileInfo !== undefined && {
+      reconcile: reconcileInfo,
     }),
   });
-  let S = n.parkedAtRestart ? undefined : "delivery_unknown";
-  if (!isSameHostEpoch(n, host))
-    return k("host_restarted", restartNoticeFor(h, n), "instance_gone", undefined, S);
-  let A = remoteToolNames(tool, host);
-  if (A === undefined) return k("unreachable", restartNoticeFor(h, n), "unknown", undefined, S);
-  let requestId = n.request_id;
+  let unknownOpen = parked.parkedAtRestart ? undefined : "delivery_unknown";
+  if (!isSameHostEpoch(parked, host))
+    return fail(
+      "host_restarted",
+      restartNoticeFor(noticeArgs, parked),
+      "instance_gone",
+      undefined,
+      unknownOpen,
+    );
+  let names = remoteToolNames(tool, host);
+  if (names === undefined)
+    return fail("unreachable", restartNoticeFor(noticeArgs, parked), "unknown", undefined, unknownOpen);
+  let requestId = parked.request_id;
   if (requestId !== undefined && host.transport.withdrawStanding !== undefined) {
-    if (n.instance_id !== undefined) e.call.recordAddressee(n.instance_id, n.host_epoch);
-    e.call.inherit(requestId, () => host.transport.withdrawStanding?.(requestId));
+    if (parked.instance_id !== undefined) context.call.recordAddressee(parked.instance_id, parked.host_epoch);
+    context.call.inherit(requestId, () => host.transport.withdrawStanding?.(requestId));
   }
-  let checkInTiming = e.checkInTiming;
-  let O = formatRemoteOutputFence({
+  let checkInTiming = context.checkInTiming;
+  let fence = formatRemoteOutputFence({
     name: host.name,
     showForMs: 2 * checkInTiming.intervalMs,
-    onStatus: e.onStatus,
-    waiting: (D) =>
-      D ? ASK_FIRST_REASON_TEXTS["in_progress.checkin"](host.name) : reconnectingStatus(host.name),
+    onStatus: context.onStatus,
+    waiting: (waitingForAsk) =>
+      waitingForAsk
+        ? ASK_FIRST_REASON_TEXTS["in_progress.checkin"](host.name)
+        : reconnectingStatus(host.name),
     standing: undefined,
   });
-  let x = await awaitRemoteCallWithProgress({
+  let outcome = await awaitRemoteCallWithProgress({
     host,
     held: undefined,
-    dispatchEpoch: n.host_epoch,
-    toolName: A.wire,
+    dispatchEpoch: parked.host_epoch,
+    toolName: names.wire,
     callId,
     signal,
     timing: checkInTiming,
-    onAttempt: O.onAttempt,
-    onOutput: O.onOutput,
+    onAttempt: fence.onAttempt,
+    onOutput: fence.onOutput,
   });
-  let { verdict } = x;
+  let { verdict } = outcome;
   let reconcile = {
     trigger: "resumed",
     leg: 1,
     result: verdict.kind === "unknown" ? `unknown_${verdict.why}` : verdict.kind,
-    attempts: x.attempts,
-    misses: x.misses,
+    attempts: outcome.attempts,
+    misses: outcome.misses,
     held: false,
-    epochChanged: x.epochChanged,
+    epochChanged: outcome.epochChanged,
   };
   switch (verdict.kind) {
     case "late":
     case "answer": {
       let { transported } = verdict;
       if (transported.kind !== "result")
-        return k("unreachable", restartNoticeFor(h, n), "unknown", reconcile, S);
+        return fail("unreachable", restartNoticeFor(noticeArgs, parked), "unknown", reconcile, unknownOpen);
       let { envelope } = transported;
       if (envelope?.outcome === "needs_approval") {
-        let L =
+        let carried =
           host.description?.limits.max_ask_ms !== undefined &&
-          Date.now() - n.dispatched_at <= SYNC_ANSWER_TTL_MS &&
+          Date.now() - parked.dispatched_at <= SYNC_ANSWER_TTL_MS &&
           isViolinCornerOn()
-            ? await o(transported)
+            ? await runWithPendingAsk(transported)
             : undefined;
-        if (L?.approval !== undefined)
+        if (carried?.approval !== undefined)
           return {
-            ...L,
+            ...carried,
             adoption: "ask_carried_over",
-            ...w,
+            ...journalFields,
             reconcileLeg1: reconcile,
           };
-        return toolResultForInterruption(e, n, A.wire, envelope.ask_id, reconcile);
+        return toolResultForInterruption(context, parked, names.wire, envelope.ask_id, reconcile);
       }
       return {
         reconcile,
@@ -760,15 +771,27 @@ async function describeDeliveryFailure(e, n, o) {
       };
     }
     case "ask_lost":
-      return k("still_running", pendingPermissionNotice(h), "ask_in_flight", reconcile, "delivery_unknown");
+      return fail(
+        "still_running",
+        pendingPermissionNotice(noticeArgs),
+        "ask_in_flight",
+        reconcile,
+        "delivery_unknown",
+      );
     case "not_received":
-      return k("not_received", neverReceivedNotice(h), "never_received", reconcile);
+      return fail("not_received", neverReceivedNotice(noticeArgs), "never_received", reconcile);
     case "host_restarted":
     case "gone":
-      return k("host_restarted", restartNoticeFor(h, n), "instance_gone", reconcile, S);
+      return fail(
+        "host_restarted",
+        restartNoticeFor(noticeArgs, parked),
+        "instance_gone",
+        reconcile,
+        unknownOpen,
+      );
     case "host_unresponsive":
       if (!verdict.stillConnected) host.transport.markUnresponsive?.();
-      return k(
+      return fail(
         "host_unresponsive",
         ASK_FIRST_REASON_TEXTS.host_unresponsive({
           name: host.name,
@@ -777,66 +800,66 @@ async function describeDeliveryFailure(e, n, o) {
           whileRunning: verdict.whileRunning,
           stillConnected: verdict.stillConnected,
           returnNoted: isHostAwayRecheckable(host),
-        }) + O.outputNote(),
+        }) + fence.outputNote(),
         "unknown",
         reconcile,
         "host_unresponsive",
       );
     case "host_asleep":
       host.transport.markUnresponsive?.();
-      return k(
+      return fail(
         "host_unresponsive",
         ASK_FIRST_REASON_TEXTS.host_asleep({
           name: host.name,
           whileRunning: verdict.whileRunning,
           withdrawn: false,
           returnNoted: hostAnnouncesReturn(host),
-        }) + O.outputNote(),
+        }) + fence.outputNote(),
         "unknown",
         reconcile,
         "host_asleep",
       );
     case "unbound":
       host.transport.markUnresponsive?.();
-      return k(
+      return fail(
         "host_unresponsive",
         ASK_FIRST_REASON_TEXTS["unverified_refusal.call_phase"]({
           name: host.name,
           whileRunning: verdict.whileRunning,
-        }) + O.outputNote(),
+        }) + fence.outputNote(),
         "unknown",
         reconcile,
         "host_unresponsive",
       );
     case "cancelled":
-      e.call.withdrawInherited();
+      context.call.withdrawInherited();
       return {
-        outcome: interruptedResult(i, {
+        outcome: interruptedResult(identity, {
           askLater: true,
         }),
         adoption: "interrupted",
-        ...w,
+        ...journalFields,
         reconcile,
       };
     case "unreachable":
     case "unknown":
-      return k("unreachable", restartNoticeFor(h, n), "unknown", reconcile, S);
+      return fail("unreachable", restartNoticeFor(noticeArgs, parked), "unknown", reconcile, unknownOpen);
   }
 }
 //@ chunk-dtv8x2hx.js:36883-38086 placement
-async function toolResultForInterruption(e, n, wire, askId, reconcile) {
-  let { tool, host, toolUseContext } = e;
-  let callId = e.call.callId;
-  let w = machineIdentity(host);
-  let k = {
-    host: n.host,
+async function toolResultForInterruption(context, parked, wire, askId, reconcile) {
+  let { tool, host, toolUseContext } = context;
+  let callId = context.call.callId;
+  let identity = machineIdentity(host);
+  let noticeArgs = {
+    host: parked.host,
   };
   let defaultDeadlineMs = host.transport.limits.defaultDeadlineMs;
-  let A = await raceWithAbortSignal(
+  let reply = await raceWithAbortSignal(
     host.transport
       .call(
         wire,
-        e.input,
+        context.input,
         buildRemoteToolCallMeta({
           callId,
           expiresInMs: Math.max(1, defaultDeadlineMs - ASK_DEADLINE_SLACK_MS),
@@ -856,20 +879,20 @@ async function toolResultForInterruption(e, n, wire, askId, reconcile) {
       .catch(() => {
         return;
       }),
-    e.signal,
+    context.signal,
     () => new AbortError(),
   ).catch(() => {
     return;
   });
-  if (e.signal.aborted)
+  if (context.signal.aborted)
     return {
-      outcome: interruptedResult(w),
+      outcome: interruptedResult(identity),
       adoption: "interrupted",
       reconcile,
     };
-  let envelope = A?.kind === "result" ? A.envelope : undefined;
+  let envelope = reply?.kind === "result" ? reply.envelope : undefined;
   if (
-    A?.kind === "result" &&
+    reply?.kind === "result" &&
     envelope !== undefined &&
     envelope.outcome !== "acknowledged" &&
     envelope.outcome !== "needs_approval" &&
@@ -883,7 +906,7 @@ async function toolResultForInterruption(e, n, wire, askId, reconcile) {
         tool,
         host,
         {
-          ...A,
+          ...reply,
           metaCopy: undefined,
         },
         {
@@ -892,7 +915,7 @@ async function toolResultForInterruption(e, n, wire, askId, reconcile) {
       ),
     };
   if (
-    A?.kind === "result" &&
+    reply?.kind === "result" &&
     (envelope?.outcome === "in_progress" ||
       (envelope?.outcome === "completed" && envelope.disposition === "duplicate_call"))
   )
@@ -900,60 +923,62 @@ async function toolResultForInterruption(e, n, wire, askId, reconcile) {
       outcome: {
         kind: "error",
         code: "still_running",
-        message: stillRunningNotice(k),
-        host: w,
+        message: stillRunningNotice(noticeArgs),
+        host: identity,
       },
       adoption: "still_running",
       reconcile,
     };
-  let T = envelope?.outcome === "acknowledged" && envelope.ask_id === askId;
+  let withdrawn = envelope?.outcome === "acknowledged" && envelope.ask_id === askId;
   return {
     outcome: {
       kind: "error",
       code: "approval_not_received",
-      message: T ? approvalWithdrawnNotice(k) : approvalWithdrawUnconfirmedNotice(k),
-      host: w,
+      message: withdrawn
+        ? approvalWithdrawnNotice(noticeArgs)
+        : approvalWithdrawUnconfirmedNotice(noticeArgs),
+      host: identity,
     },
-    adoption: T ? "ask_withdrawn" : "unknown",
+    adoption: withdrawn ? "ask_withdrawn" : "unknown",
     reconcile,
   };
 }
 //@ chunk-dtv8x2hx.js:38086-39430 placement
-async function resolveEarlyCheck(e) {
-  let n;
-  let o = false;
-  let r = e.toolUseContext.toolState.get(ServedCallRegistry);
-  let s;
-  let u = (A) => {
-    if (A === undefined) return;
-    let R = s !== undefined;
-    s = A;
-    if (R) return;
+async function resolveEarlyCheck(context) {
+  let syncInfo;
+  let readBaselineSent = false;
+  let registry = context.toolUseContext.toolState.get(ServedCallRegistry);
+  let lastServed;
+  let publishServed = (served) => {
+    if (served === undefined) return;
+    let hadValue = lastServed !== undefined;
+    lastServed = served;
+    if (hadValue) return;
     queueMicrotask(() => {
-      let T = s;
-      s = undefined;
-      if (T !== undefined)
-        e.toolUseContext.sessionState?.notifyInternalMetadataChanged({
-          in_flight_served_calls: T,
+      let latest = lastServed;
+      lastServed = undefined;
+      if (latest !== undefined)
+        context.toolUseContext.sessionState?.notifyInternalMetadataChanged({
+          in_flight_served_calls: latest,
         });
     });
   };
-  let p = r.adopted(e.call.callId);
-  r.takeAdopted(e.call.callId);
-  let i;
-  let h = () => {
-    let { sentUnderEpoch, carryingRequestId, instanceId } = e.call;
+  let adopted = registry.adopted(context.call.callId);
+  registry.takeAdopted(context.call.callId);
+  let entry;
+  let noteEntry = () => {
+    let { sentUnderEpoch, carryingRequestId, instanceId } = context.call;
     if (
-      i !== undefined &&
-      i.host_epoch === sentUnderEpoch &&
-      i.request_id === carryingRequestId &&
-      i.instance_id === instanceId
+      entry !== undefined &&
+      entry.host_epoch === sentUnderEpoch &&
+      entry.request_id === carryingRequestId &&
+      entry.instance_id === instanceId
     )
       return;
-    i = {
-      tool_use_id: e.call.callId,
-      tool: e.tool.name,
-      host: e.host.name,
+    entry = {
+      tool_use_id: context.call.callId,
+      tool: context.tool.name,
+      host: context.host.name,
       ...(sentUnderEpoch !== undefined && {
         host_epoch: sentUnderEpoch,
       }),
@@ -963,63 +988,64 @@ async function resolveEarlyCheck(e) {
       ...(instanceId !== undefined && {
         instance_id: instanceId,
       }),
-      dispatched_at: i?.dispatched_at ?? Date.now(),
+      dispatched_at: entry?.dispatched_at ?? Date.now(),
     };
-    u(r.add(i));
+    publishServed(registry.add(entry));
   };
-  let w;
+  let result;
   try {
-    let A = {
-      ...e,
-      noteSync: (R) => {
-        n = R;
+    let extended = {
+      ...context,
+      noteSync: (info) => {
+        syncInfo = info;
       },
       noteReadBaselineSent: () => {
-        o = true;
+        readBaselineSent = true;
       },
-      onFirstSend: h,
-      onAddressed: h,
+      onFirstSend: noteEntry,
+      onAddressed: noteEntry,
     };
-    w =
-      p !== undefined
-        ? await describeDeliveryFailure(e, p, (pendingAsk) =>
+    result =
+      adopted !== undefined
+        ? await describeDeliveryFailure(context, adopted, (pendingAsk) =>
             runRemoteToolCall({
-              ...A,
+              ...extended,
               pendingAsk,
             }),
           )
-        : await runRemoteToolCall(A);
+        : await runRemoteToolCall(extended);
   } finally {
-    if (!isTerminalShutdown()) r.remove(e.call.callId);
+    if (!isTerminalShutdown()) registry.remove(context.call.callId);
   }
-  let k = o
+  let finalResult = readBaselineSent
     ? {
-        ...w,
-        readBaselineSent: o,
+        ...result,
+        readBaselineSent,
       }
-    : w;
-  if (k.outcome.kind !== "completed" || !isRanOutcome(k.outcome.disposition)) return k;
-  if (k.outcome.dirSync !== undefined) await countAfterDeviceCommand(k.outcome.dirSync);
-  let S =
-    e.call.approvedBy ??
-    (p === undefined &&
-    e.callerGate === undefined &&
-    k.outcome.delivery === "fresh" &&
-    k.outcome.disposition === "ran"
+    : result;
+  if (finalResult.outcome.kind !== "completed" || !isRanOutcome(finalResult.outcome.disposition))
+    return finalResult;
+  if (finalResult.outcome.dirSync !== undefined) await countAfterDeviceCommand(finalResult.outcome.dirSync);
+  let approvedBy =
+    context.call.approvedBy ??
+    (adopted === undefined &&
+    context.callerGate === undefined &&
+    finalResult.outcome.delivery === "fresh" &&
+    finalResult.outcome.disposition === "ran"
       ? "unasked"
       : undefined);
   return {
-    ...k,
+    ...finalResult,
     outcome: {
-      ...k.outcome,
-      ...(S !== undefined && {
-        permittedBy: S,
+      ...finalResult.outcome,
+      ...(approvedBy !== undefined && {
+        permittedBy: approvedBy,
       }),
-      ...(n !== undefined && {
+      ...(syncInfo !== undefined && {
         sessionNotes: [
-          ...(k.outcome.sessionNotes ?? []),
+          ...(finalResult.outcome.sessionNotes ?? []),
           {
-            text: n,
+            text: syncInfo,
           },
         ],
       }),
@@ -1037,7 +1063,7 @@ async function runRemoteToolCall({
   input,
   rawInput,
   toolUseContext,
-  call: p,
+  call,
   signal,
   approve,
   speculation,
@@ -1055,20 +1081,20 @@ async function runRemoteToolCall({
   pendingAsk,
 }) {
   let host_2 = machineIdentity(host);
-  let callId = p.callId;
-  let { dispatchEpoch } = p;
-  let Y = tool.inputSchema.safeParse(input);
-  if (!Y.success)
+  let callId = call.callId;
+  let { dispatchEpoch } = call;
+  let parsed = tool.inputSchema.safeParse(input);
+  if (!parsed.success)
     return {
       outcome: {
         kind: "error",
         code: "invalid_input",
-        message: formatZodValidationError(tool.name, Y.error),
+        message: formatZodValidationError(tool.name, parsed.error),
         host: host_2,
       },
     };
-  let te = remoteToolNames(tool, host);
-  if (te === undefined)
+  let toolNames = remoteToolNames(tool, host);
+  if (toolNames === undefined)
     return {
       outcome: {
         kind: "error",
@@ -1080,125 +1106,136 @@ async function runRemoteToolCall({
         host: host_2,
       },
     };
-  let ee;
-  let se;
-  let ue = (transported, approval) =>
+  let standingLine;
+  let silentSince;
+  let collectResult = (transported, approval) =>
     collectRemoteResult({
       transported,
       host,
-      call: p,
+      call,
       dispatchEpoch,
-      toolName: te.wire,
+      toolName: toolNames.wire,
       callId,
       signal,
       timing: checkInTiming,
-      silentSince: se,
+      silentSince,
       silentCallTiming,
       onStatus,
-      standingLine: ee,
+      standingLine,
       approval,
     });
-  let oe = Y.data;
-  let ro = oe;
-  let we = input;
+  let parsedInput = parsed.data;
+  let concurrencyInput = parsedInput;
+  let rawCallInput = input;
   let editedByApproval = false;
-  let dirFacts = host.description === undefined ? undefined : remoteDirFacts(host.description);
-  let pe = (C) =>
-    tool.backfillObservableInput === undefined || dirFacts === undefined
-      ? C
-      : resolveRemoteFilePathInput(C, dirFacts);
+  let remoteDir = host.description === undefined ? undefined : remoteDirFacts(host.description);
+  let withLocalPaths = (parsedInput) =>
+    tool.backfillObservableInput === undefined || remoteDir === undefined
+      ? parsedInput
+      : resolveRemoteFilePathInput(parsedInput, remoteDir);
   let ruleContentField = tool.getPath === undefined ? undefined : tool.ruleContentField;
-  let Nn = (C) =>
-    tool.name === GLOB_TOOL_NAME && dirFacts !== undefined && typeof C.pattern === "string"
-      ? splitGlobRoot(C.pattern, dirFacts)
+  let globRoot = (parsedInput) =>
+    tool.name === GLOB_TOOL_NAME && remoteDir !== undefined && typeof parsedInput.pattern === "string"
+      ? splitGlobRoot(parsedInput.pattern, remoteDir)
       : undefined;
-  let Hn = (C, P, G) => {
-    let V = ruleContentField === undefined ? undefined : C[ruleContentField];
-    if (ruleContentField === undefined || dirFacts === undefined || typeof V !== "string") return C;
-    if (V === P[ruleContentField] && typeof G[ruleContentField] === "string")
+  let restateRuleValue = (parsedInput, before, after) => {
+    let ruleValue = ruleContentField === undefined ? undefined : parsedInput[ruleContentField];
+    if (ruleContentField === undefined || remoteDir === undefined || typeof ruleValue !== "string")
+      return parsedInput;
+    if (ruleValue === before[ruleContentField] && typeof after[ruleContentField] === "string")
       return {
-        ...C,
-        [ruleContentField]: G[ruleContentField],
+        ...parsedInput,
+        [ruleContentField]: after[ruleContentField],
       };
-    let displayPath = toDisplayPath(V, dirFacts);
+    let displayPath = toDisplayPath(ruleValue, remoteDir);
     return displayPath === undefined
-      ? C
+      ? parsedInput
       : {
-          ...C,
+          ...parsedInput,
           [ruleContentField]: displayPath,
         };
   };
-  let ge = oe;
-  let io = (C) => {
-    let P = Nn(C);
-    let path = P?.root ?? (ruleContentField === undefined ? undefined : (C[ruleContentField] ?? "."));
-    if (ruleContentField === undefined || dirFacts === undefined || typeof path !== "string") return [];
-    return remotePathSpellings(path, dirFacts)
-      .filter((V) => P !== undefined || (V !== ge[ruleContentField] && V !== C[ruleContentField]))
-      .map((V) =>
-        P === undefined
+  let beforeInput = parsedInput;
+  let spellingVariants = (parsedInput) => {
+    let glob = globRoot(parsedInput);
+    let path =
+      glob?.root ?? (ruleContentField === undefined ? undefined : (parsedInput[ruleContentField] ?? "."));
+    if (ruleContentField === undefined || remoteDir === undefined || typeof path !== "string") return [];
+    return remotePathSpellings(path, remoteDir)
+      .filter(
+        (spelling) =>
+          glob !== undefined ||
+          (spelling !== beforeInput[ruleContentField] && spelling !== parsedInput[ruleContentField]),
+      )
+      .map((spelling) =>
+        glob === undefined
           ? {
-              ...C,
-              [ruleContentField]: V,
+              ...parsedInput,
+              [ruleContentField]: spelling,
             }
           : {
-              ...C,
-              [ruleContentField]: V,
-              pattern: P.rest,
+              ...parsedInput,
+              [ruleContentField]: spelling,
+              pattern: glob.rest,
             },
       );
   };
-  let ao = (C) => {
-    let P =
-      ruleContentField === undefined || dirFacts === undefined
+  let checkUnsafeSpelling = (spellings) => {
+    let unsafe =
+      ruleContentField === undefined || remoteDir === undefined
         ? undefined
-        : C.map((G) => {
-            let V = Nn(G);
-            return V === undefined ? [G[ruleContentField], G[ruleContentField]] : [G.pattern, V.root];
-          })
-            .flatMap(([G, V]) =>
-              typeof G === "string" && typeof V === "string"
-                ? [[G, checkWindowsPathSafety(V, dirFacts)]]
+        : spellings
+            .map((spelling) => {
+              let glob = globRoot(spelling);
+              return glob === undefined
+                ? [spelling[ruleContentField], spelling[ruleContentField]]
+                : [spelling.pattern, glob.root];
+            })
+            .flatMap(([ruleValue, root]) =>
+              typeof ruleValue === "string" && typeof root === "string"
+                ? [[ruleValue, checkWindowsPathSafety(root, remoteDir)]]
                 : [],
             )
-            .find(([, G]) => G !== undefined);
-    return P?.[1] === undefined
+            .find(([, reason]) => reason !== undefined);
+    return unsafe?.[1] === undefined
       ? undefined
       : {
           kind: "refuse",
-          code: P[1] === "magic_link" ? "declined_magic_link" : "declined_spelling",
+          code: unsafe[1] === "magic_link" ? "declined_magic_link" : "declined_spelling",
           message: unmatchedPathSpellingMessage({
             name: host.name,
             toolName: tool.name,
-            path: P[0],
-            spellingIs: UNSAFE_PATH_REASON_TEXT[P[1]],
+            path: unsafe[0],
+            spellingIs: UNSAFE_PATH_REASON_TEXT[unsafe[1]],
           }),
         };
   };
-  let Fn = SHELL_TOOL_NAMES.includes(tool.name) ? remoteDirKind(host.description) : undefined;
-  let Ae = async (C, requestBytes) => {
-    let G = ao([ge, C]);
-    if (G !== undefined) return G;
-    let flattened = uniq([ge, ...io(C), C]).flatMap((parsedInput) => [
-      {
-        parsedInput,
-        machineDir: undefined,
-      },
-      ...(Fn?.kind === "in_announced_dir"
-        ? [
-            {
-              parsedInput,
-              machineDir: Fn.dir,
-            },
-          ]
-        : []),
-    ]);
-    let Q = {
+  let shellDir = SHELL_TOOL_NAMES.includes(tool.name) ? remoteDirKind(host.description) : undefined;
+  let checkPermission = async (parsedInput, requestBytes) => {
+    let refusal = checkUnsafeSpelling([beforeInput, parsedInput]);
+    if (refusal !== undefined) return refusal;
+    let flattened = uniq([beforeInput, ...spellingVariants(parsedInput), parsedInput]).flatMap(
+      (parsedInput) => [
+        {
+          parsedInput,
+          machineDir: undefined,
+        },
+        ...(shellDir?.kind === "in_announced_dir"
+          ? [
+              {
+                parsedInput,
+                machineDir: shellDir.dir,
+              },
+            ]
+          : []),
+      ],
+    );
+    let verdict = {
       kind: "proceed",
     };
     for (let { parsedInput, machineDir } of flattened) {
-      if (Q.kind === "refuse") break;
-      let Z = () =>
+      if (verdict.kind === "refuse") break;
+      let checkOnce = () =>
         checkRemoteToolPermission({
           tool,
           parsedInput,
@@ -1206,14 +1243,14 @@ async function runRemoteToolCall({
           toolUseContext,
           host,
         });
-      Q = isProceedVerdict(
-        Q,
+      verdict = isProceedVerdict(
+        verdict,
         machineDir === undefined
-          ? await Z()
-          : await runWithoutTelemetry(() => runInRemoteCallFrameMain(machineDir, Z)),
+          ? await checkOnce()
+          : await runWithoutTelemetry(() => runInRemoteCallFrameMain(machineDir, checkOnce)),
       );
     }
-    return Q;
+    return verdict;
   };
   let defaultDeadlineMs = host.transport.limits.defaultDeadlineMs;
   let expiresInMs = Math.max(1, defaultDeadlineMs - ASK_DEADLINE_SLACK_MS);
@@ -1221,135 +1258,136 @@ async function runRemoteToolCall({
     toolUseContext.agentId === undefined
       ? toolUseContext.messages.findLast(isCompactBoundaryMessage)?.uuid
       : undefined;
-  let Re;
-  let he = (C) => {
-    let P = wirePermissionState(toolUseContext, tool.name);
-    if (C === undefined) {
-      Re = P.permissionMode;
-      p.claimedMode = Re;
+  let claimedMode;
+  let buildMeta = (approval) => {
+    let permissionState = wirePermissionState(toolUseContext, tool.name);
+    if (approval === undefined) {
+      claimedMode = permissionState.permissionMode;
+      call.claimedMode = claimedMode;
     }
     return buildRemoteToolCallMeta({
       callId,
       expiresInMs,
-      ...P,
+      ...permissionState,
       model: getMainLoopModel(toolUseContext),
       conversationId: getSessionId(),
       compactionId,
-      ...(C !== undefined && {
-        approval: C,
+      ...(approval !== undefined && {
+        approval,
       }),
-      ...(C === undefined && {
-        readBaseline: co(),
+      ...(approval === undefined && {
+        readBaseline: readBaseline(),
       }),
     });
   };
-  let co = () =>
+  let readBaseline = () =>
     readBaselineForRemoteWrite({
       tool,
-      input: oe,
+      input: parsedInput,
       description: host.description,
       readFileState: toolUseContext.readFileState,
       sessionDir: () => taskCwd(toolUseContext.session),
     });
-  let Je = (C) =>
+  let measureRequest = (meta) =>
     byteLengthOf({
-      name: te.wire,
+      name: toolNames.wire,
       arguments: {
-        ...we,
-        [REMOTE_TOOL_CALL_META]: C,
+        ...rawCallInput,
+        [REMOTE_TOOL_CALL_META]: meta,
       },
     });
-  let Dn = (C, P = we) => {
-    p.sent({
-      wireName: te.wire,
-      input: P,
+  let sendCall = (meta, callInput = rawCallInput) => {
+    call.sent({
+      wireName: toolNames.wire,
+      input: callInput,
     });
-    p.hold(undefined);
+    call.hold(undefined);
     toolUseContext.markToolCallRunning?.(callId);
-    let G;
-    let V = false;
-    let Q = toolUseContext.toolState.get(RemoteCallState);
-    let re = watchRemoteCallProgress({
+    let epoch;
+    let hasRecord = false;
+    let remoteCallState = toolUseContext.toolState.get(RemoteCallState);
+    let progressWatch = watchRemoteCallProgress({
       host,
-      toolName: te.wire,
+      toolName: toolNames.wire,
       callId,
       signal,
       onStatus,
       timing: earlyCheckTiming,
-      mayCheck: () => SHELL_TOOL_NAMES.includes(tool.name) && V && Q.has(host.name, G),
-      onNoRecord: () => Q.forget(host.name, G),
+      mayCheck: () =>
+        SHELL_TOOL_NAMES.includes(tool.name) && hasRecord && remoteCallState.has(host.name, epoch),
+      onNoRecord: () => remoteCallState.forget(host.name, epoch),
     });
-    let B = watchSilentCall({
+    let silentWatch = watchSilentCall({
       host,
       signal,
       checkMisses: checkInTiming.misses,
       timing: silentCallTiming,
     });
     return host.transport
-      .call(te.wire, P, C, {
+      .call(toolNames.wire, callInput, meta, {
         signal,
         deadlineMs: defaultDeadlineMs,
         toolUseId: callId,
-        onSent: (Z) => {
-          G = Z.epoch;
-          V = Q.has(host.name, Z.epoch);
-          p.recordAddressee(Z.instanceId, Z.epoch, Z.requestId);
+        onSent: (addressed) => {
+          epoch = addressed.epoch;
+          hasRecord = remoteCallState.has(host.name, addressed.epoch);
+          call.recordAddressee(addressed.instanceId, addressed.epoch, addressed.requestId);
           onAddressed?.();
         },
-        ...(B.onAccepted === undefined
-          ? re.onAccepted !== undefined && {
-              onAccepted: re.onAccepted,
+        ...(silentWatch.onAccepted === undefined
+          ? progressWatch.onAccepted !== undefined && {
+              onAccepted: progressWatch.onAccepted,
             }
           : {
               onAccepted: () => {
-                B.onAccepted?.();
-                re.onAccepted?.();
+                silentWatch.onAccepted?.();
+                progressWatch.onAccepted?.();
               },
             }),
-        onTransit: (Z) => p.recordLegTransit(C.approval === undefined ? 1 : 2, Z),
+        onTransit: (leg) => call.recordLegTransit(meta.approval === undefined ? 1 : 2, leg),
         ...(hostSupportsProgressChecks(host) && {
-          onHeldAtDeadline: (Z) => p.hold(Z),
+          onHeldAtDeadline: (heldInfo) => call.hold(heldInfo),
         }),
       })
-      .then((Z) => {
-        ee = re.stop();
-        B.stop();
-        se = B.acceptedAt();
-        noteDirSyncAnswer(host, Z);
-        Q.note(host.name, G, Z);
-        return Z;
+      .then((transported) => {
+        standingLine = progressWatch.stop();
+        silentWatch.stop();
+        silentSince = silentWatch.acceptedAt();
+        noteDirSyncAnswer(host, transported);
+        remoteCallState.note(host.name, epoch, transported);
+        return transported;
       })
       .catch((error) => {
-        ee = re.stop();
-        B.stop();
-        se = undefined;
+        standingLine = progressWatch.stop();
+        silentWatch.stop();
+        silentSince = undefined;
         return {
           kind: "transport_error",
           detail: `send failed: ${normalizeMcpServerName(errorMessage(error))}`,
         };
       });
   };
-  let $n = (C) => {
+  let sendAnswer = (answer) => {
     host.transport
-      .call(te.wire, we, he(C), {
+      .call(toolNames.wire, rawCallInput, buildMeta(answer), {
         signal: new AbortController().signal,
         deadlineMs: Math.min(defaultDeadlineMs, MAX_STANDING_ASK_DEADLINE_MS),
         toolUseId: callId,
       })
       .catch(() => {});
   };
-  let le = (askId) =>
-    $n({
+  let withdrawAsk = (askId) =>
+    sendAnswer({
       ask_id: askId,
       decision: "deny",
       feedback: WITHDRAWN,
     });
-  let mo = (askId) =>
+  let withdrawAskCall = (askId) =>
     host.transport
       .call(
-        te.wire,
-        we,
-        he({
+        toolNames.wire,
+        rawCallInput,
+        buildMeta({
           ask_id: askId,
           decision: "deny",
           feedback: WITHDRAWN,
@@ -1363,78 +1401,78 @@ async function runRemoteToolCall({
       .catch(() => {
         return;
       });
-  let fo = (askId) =>
-    raceWithAbortSignal(mo(askId), signal, () => new AbortError()).catch(() => {
+  let withdrawAskAndWait = (askId) =>
+    raceWithAbortSignal(withdrawAskCall(askId), signal, () => new AbortError()).catch(() => {
       return;
     });
-  let Bn = toolUseContext.toolState.get(KeyedSemaphore);
+  let sendSemaphore = toolUseContext.toolState.get(KeyedSemaphore);
   let maxInFlight = host.description?.limits.max_in_flight ?? DEFAULT_MAX_IN_FLIGHT_CALLS;
   let semaphore = toolUseContext.toolState.get(KeyedSemaphoreSubclass);
   let limit =
     clampServingLimit("pending_asks_max", host.description?.limits.pending_asks_max) ?? SANDBOX_MAX_DEPTH;
-  let U = Je(he());
-  let _e =
+  let requestBytes = measureRequest(buildMeta());
+  let firstVerdict =
     pendingAsk === undefined
-      ? await Ae(pe(oe), U)
+      ? await checkPermission(withLocalPaths(parsedInput), requestBytes)
       : {
           kind: "proceed",
         };
-  if (_e.kind === "refuse")
+  if (firstVerdict.kind === "refuse")
     return {
-      requestBytes: U,
+      requestBytes,
       outcome: {
         kind: "error",
-        code: _e.code,
-        message: _e.message,
+        code: firstVerdict.code,
+        message: firstVerdict.message,
         host: host_2,
       },
     };
-  let ke;
-  let Qe = false;
-  if (_e.kind === "ask_first") {
+  let approvedRule;
+  let planModeAtAsk = false;
+  if (firstVerdict.kind === "ask_first") {
     if (approve === undefined)
       return {
-        requestBytes: U,
+        requestBytes,
         outcome: {
           kind: "error",
           code: "denied_by_session_rule",
-          message: `${_e.message} This session asks before running this call and could not raise its prompt here; ${host.name} was not contacted.`,
+          message: `${firstVerdict.message} This session asks before running this call and could not raise its prompt here; ${host.name} was not contacted.`,
           host: host_2,
         },
       };
     if (signal.aborted)
       return {
         outcome: cancelledResult(host_2),
-        requestBytes: U,
+        requestBytes,
       };
-    Qe = getToolPermissionContext(toolUseContext).mode === "plan";
-    ge = oe;
-    oe = pe(oe);
-    we = pe(we);
-    U = Je(he());
-    let C = false;
-    let P = await waitWhileAsking(p, SESSION_ASK_RULE, askLapseMs, (ended, patience) =>
+    planModeAtAsk = getToolPermissionContext(toolUseContext).mode === "plan";
+    beforeInput = parsedInput;
+    parsedInput = withLocalPaths(parsedInput);
+    rawCallInput = withLocalPaths(rawCallInput);
+    requestBytes = measureRequest(buildMeta());
+    let promptFailed = false;
+    let sessionAnswer = await waitWhileAsking(call, SESSION_ASK_RULE, askLapseMs, (ended, patience) =>
       approve({
         askId: SESSION_ASK_RULE,
         ended,
         host: host_2,
         tool: tool.name,
-        input: oe,
-        message: _e.message,
+        input: parsedInput,
+        message: firstVerdict.message,
         decisionReason: undefined,
         suggestions: [],
         classifierEligible: false,
         keepsStandingApprovals: false,
         offeredStandingRules: [],
         patience,
-        askEnded: () => p.askEnded !== undefined,
+        askEnded: () => call.askEnded !== undefined,
         noteCard: (card) => {
-          p.card = card;
+          call.card = card;
         },
       }).catch((error) => {
         if (error instanceof AbortError && !signal.aborted) throw error;
         if (!signal.aborted) {
-          C = true;
+          promptFailed = true;
           logForDebugging(
             `remote tool call: this session's own permission prompt failed: ${errorMessage(error)}`,
             {
@@ -1445,17 +1483,17 @@ async function runRemoteToolCall({
         return;
       }),
     );
-    if (P !== undefined && "ended" in P)
+    if (sessionAnswer !== undefined && "ended" in sessionAnswer)
       return {
-        requestBytes: U,
-        ...describeNoAnswer(host, host_2, P.ended, askLapseMs),
+        requestBytes,
+        ...describeNoAnswer(host, host_2, sessionAnswer.ended, askLapseMs),
       };
-    Qe &&= getToolPermissionContext(toolUseContext).mode === "plan";
-    if (P === undefined)
+    planModeAtAsk &&= getToolPermissionContext(toolUseContext).mode === "plan";
+    if (sessionAnswer === undefined)
       return {
-        requestBytes: U,
-        approval: C ? "prompt_failed" : "withdrawn",
-        outcome: C
+        requestBytes,
+        approval: promptFailed ? "prompt_failed" : "withdrawn",
+        outcome: promptFailed
           ? {
               kind: "error",
               code: "prompt_failed",
@@ -1464,42 +1502,44 @@ async function runRemoteToolCall({
             }
           : cancelledResult(host_2),
       };
-    if (signal.aborted && P.decision !== "deny")
+    if (signal.aborted && sessionAnswer.decision !== "deny")
       return {
         outcome: cancelledResult(host_2),
-        requestBytes: U,
+        requestBytes,
       };
-    if (P.decision === "unanswerable")
+    if (sessionAnswer.decision === "unanswerable")
       return {
-        requestBytes: U,
+        requestBytes,
         approval: "prompt_failed",
         outcome: {
           kind: "error",
           code: "prompt_failed",
-          message: `${P.message} ${host.name} was not contacted.`,
+          message: `${sessionAnswer.message} ${host.name} was not contacted.`,
           host: host_2,
         },
       };
-    if (P.decision === "deny")
+    if (sessionAnswer.decision === "deny")
       return {
-        requestBytes: U,
-        approval: P.insteadOfRejection === undefined ? "denied" : "blocked",
+        requestBytes,
+        approval: sessionAnswer.insteadOfRejection === undefined ? "denied" : "blocked",
         outcome: {
           kind: "error",
           code: "rejected_in_session",
-          message: P.insteadOfRejection?.message ?? remoteRejectMessage(toolUseContext.agentId, P.feedback),
-          ...(P.insteadOfRejection !== undefined && {
-            denialKind: P.insteadOfRejection.denialKind,
+          message:
+            sessionAnswer.insteadOfRejection?.message ??
+            remoteRejectMessage(toolUseContext.agentId, sessionAnswer.feedback),
+          ...(sessionAnswer.insteadOfRejection !== undefined && {
+            denialKind: sessionAnswer.insteadOfRejection.denialKind,
           }),
           host: host_2,
         },
       };
-    if (P.decidedBy !== undefined) p.recordApprovedBy(P.decidedBy);
-    if (P.updatedInput !== undefined) {
-      let G = tool.inputSchema.safeParse(P.updatedInput);
-      if (!G.success)
+    if (sessionAnswer.decidedBy !== undefined) call.recordApprovedBy(sessionAnswer.decidedBy);
+    if (sessionAnswer.updatedInput !== undefined) {
+      let editedParsed = tool.inputSchema.safeParse(sessionAnswer.updatedInput);
+      if (!editedParsed.success)
         return {
-          requestBytes: U,
+          requestBytes,
           approval: "withdrawn",
           outcome: {
             kind: "error",
@@ -1508,125 +1548,125 @@ async function runRemoteToolCall({
             host: host_2,
           },
         };
-      ge = Hn(G.data, oe, ge);
-      oe = G.data;
-      we = P.updatedInput;
+      beforeInput = restateRuleValue(editedParsed.data, parsedInput, beforeInput);
+      parsedInput = editedParsed.data;
+      rawCallInput = sessionAnswer.updatedInput;
       editedByApproval = true;
-      U = Je(he());
-      let V = await Ae(pe(oe), U);
-      if (V.kind === "refuse")
+      requestBytes = measureRequest(buildMeta());
+      let recheck = await checkPermission(withLocalPaths(parsedInput), requestBytes);
+      if (recheck.kind === "refuse")
         return {
-          requestBytes: U,
+          requestBytes,
           approval: "withdrawn",
           outcome: {
             kind: "error",
-            code: V.code,
-            message: V.message,
+            code: recheck.code,
+            message: recheck.message,
             host: host_2,
           },
         };
-      ke = V.kind === "ask_first" ? V.rule : _e.rule;
-    } else ke = _e.rule;
+      approvedRule = recheck.kind === "ask_first" ? recheck.rule : firstVerdict.rule;
+    } else approvedRule = firstVerdict.rule;
   }
-  let Wn = () =>
+  let holdUntilReconnect = () =>
     holdForReconnect({
       tool,
       host,
-      call: p,
+      call,
       signal,
       onStatus,
       holdMs: reconnectHoldMs,
     });
-  let Kn = await Wn();
-  if (Kn !== undefined)
+  let holdOutcome = await holdUntilReconnect();
+  if (holdOutcome !== undefined)
     return {
-      requestBytes: U,
-      ...Kn,
+      requestBytes,
+      ...holdOutcome,
     };
-  let _o = p.beginAskSeatWait();
-  let Un = false;
-  using Oe = areAskSeatsOn()
+  let endSeatWait = call.beginAskSeatWait();
+  let seatWaiting = false;
+  using seat = areAskSeatsOn()
     ? await acquireSeat(semaphore, host.name, limit, signal, {
         waitLimitMs: pendingAsk === undefined ? askSeatWaitMs : 0,
         onWait: () => {
           if (pendingAsk !== undefined) return;
-          Un = true;
+          seatWaiting = true;
           onStatus?.(ASK_FIRST_REASON_TEXTS["ask_seat.waiting"](host.name), askSeatWaitMs);
         },
       })
     : RELEASED_SLOT;
-  _o();
-  if (Oe === undefined)
+  endSeatWait();
+  if (seat === undefined)
     return {
       outcome: cancelledResult(host_2),
-      requestBytes: U,
+      requestBytes,
     };
-  if (!Oe.seated && pendingAsk === undefined) p.noteSentWithoutAskSeat();
-  if (Un) onStatus?.(ASK_FIRST_REASON_TEXTS["ask_seat.sending"](host.name));
-  let transported = pendingAsk ?? (await ko());
-  async function ko() {
-    let C = p.beginQueuedWait();
-    return runWithSlot(Bn, host.name, maxInFlight, signal, async () => {
-      C();
+  if (!seat.seated && pendingAsk === undefined) call.noteSentWithoutAskSeat();
+  if (seatWaiting) onStatus?.(ASK_FIRST_REASON_TEXTS["ask_seat.sending"](host.name));
+  let transported = pendingAsk ?? (await sendAfterSeating());
+  async function sendAfterSeating() {
+    let endQueuedWait = call.beginQueuedWait();
+    return runWithSlot(sendSemaphore, host.name, maxInFlight, signal, async () => {
+      endQueuedWait();
       if (isTerminalShutdown() && !signal.aborted) await heldUntilExit();
-      let P = await Wn();
-      if (P !== undefined)
+      let secondHold = await holdUntilReconnect();
+      if (secondHold !== undefined)
         return {
-          requestBytes: U,
-          ...P,
+          requestBytes,
+          ...secondHold,
         };
       let readOnly = false;
       try {
-        readOnly = tool.isReadOnly(oe);
+        readOnly = tool.isReadOnly(parsedInput);
       } catch {}
-      let V = false;
+      let concurrencySafe = false;
       try {
-        V = tool.isConcurrencySafe(ro);
+        concurrencySafe = tool.isConcurrencySafe(concurrencyInput);
       } catch {}
-      let Q = await clearForwardToDevice({
+      let syncOutcome = await clearForwardToDevice({
         host,
         readOnly,
-        runsBesideOthers: toolUseContext.agentId !== undefined || entry === "repl" || V,
+        runsBesideOthers: toolUseContext.agentId !== undefined || entry === "repl" || concurrencySafe,
         signal,
         onStatus,
       });
-      if (Q.kind === "hold")
+      if (syncOutcome.kind === "hold")
         return {
           outcome: {
             kind: "error",
             code: "sync_failed",
-            message: Q.message,
+            message: syncOutcome.message,
             host: host_2,
           },
-          requestBytes: U,
+          requestBytes,
         };
-      if (Q.kind === "away")
+      if (syncOutcome.kind === "away")
         return {
-          requestBytes: U,
-          ...convertRemoteToolResult(tool, host, Q.outcome),
+          requestBytes,
+          ...convertRemoteToolResult(tool, host, syncOutcome.outcome),
         };
-      if (Q.kind === "go_with_note") noteSync(Q.note);
-      let re = await Ae(pe(oe), U);
-      if (re.kind === "refuse")
+      if (syncOutcome.kind === "go_with_note") noteSync(syncOutcome.note);
+      let verdict = await checkPermission(withLocalPaths(parsedInput), requestBytes);
+      if (verdict.kind === "refuse")
         return {
           outcome: {
             kind: "error",
-            code: re.code,
-            message: re.message,
+            code: verdict.code,
+            message: verdict.message,
             host: host_2,
           },
-          requestBytes: U,
+          requestBytes,
         };
-      if (re.kind === "ask_first" && !isSameHostName(re.rule, ke))
-        return ke === undefined
+      if (verdict.kind === "ask_first" && !isSameHostName(verdict.rule, approvedRule))
+        return approvedRule === undefined
           ? {
               outcome: {
                 kind: "error",
                 code: "denied_by_session_rule",
-                message: `${re.message} ${host.name} was not contacted.`,
+                message: `${verdict.message} ${host.name} was not contacted.`,
                 host: host_2,
               },
-              requestBytes: U,
+              requestBytes,
             }
           : {
               approval: "withdrawn",
@@ -1636,43 +1676,43 @@ async function runRemoteToolCall({
                 message: ASK_FIRST_REASON_TEXTS.approval_no_longer_covers(host.name),
                 host: host_2,
               },
-              requestBytes: U,
+              requestBytes,
             };
       if (signal.aborted)
         return {
           outcome: cancelledResult(host_2),
-          requestBytes: U,
+          requestBytes,
         };
       if (isTerminalShutdown()) await heldUntilExit();
       onFirstSend?.();
-      if (ke === undefined)
+      if (approvedRule === undefined)
         speculation?.begin({
           host: host_2,
-          input: pe(oe),
+          input: withLocalPaths(parsedInput),
         });
-      let B = he();
-      if (B.read_baseline !== undefined) noteReadBaselineSent();
-      return Dn(B);
-    }).then((P) => {
-      if (P === undefined) C();
-      return P;
+      let meta = buildMeta();
+      if (meta.read_baseline !== undefined) noteReadBaselineSent();
+      return sendCall(meta);
+    }).then((result) => {
+      if (result === undefined) endQueuedWait();
+      return result;
     });
   }
   if (transported === undefined)
     return {
       outcome: cancelledResult(host_2),
-      requestBytes: U,
+      requestBytes,
     };
   if ("outcome" in transported) return transported;
-  if (!(transported.kind === "result" && transported.envelope?.outcome === "needs_approval")) Oe.release();
-  let fe = await ue(transported);
-  if (fe.kind === "ended")
+  if (!(transported.kind === "result" && transported.envelope?.outcome === "needs_approval")) seat.release();
+  let collected = await collectResult(transported);
+  if (collected.kind === "ended")
     return {
-      requestBytes: U,
-      reconcile: fe.trace,
-      outcome: fe.outcome,
+      requestBytes,
+      reconcile: collected.trace,
+      outcome: collected.outcome,
     };
-  let transported_2 = fe.transported;
+  let transported_2 = collected.transported;
   let envelope =
     transported_2.kind === "result" && transported_2.envelope?.outcome === "needs_approval"
       ? transported_2.envelope
@@ -1680,39 +1720,39 @@ async function runRemoteToolCall({
   if (envelope === undefined) {
     speculation?.abandon();
     return {
-      requestBytes: U,
-      reconcile: fe.trace,
+      requestBytes,
+      reconcile: collected.trace,
       ...convertRemoteToolResult(tool, host, transported_2, {
-        afterReconnect: fe.kind === "answered",
+        afterReconnect: collected.kind === "answered",
         call: {
-          input: oe,
+          input: parsedInput,
           editedByApproval,
         },
       }),
     };
   }
-  Oe.retake();
+  seat.retake();
   toolUseContext.markToolCallRunning?.(callId, false);
-  p.questionRaised();
-  let Ze = await (async () => {
+  call.questionRaised();
+  let askHandling = await (async () => {
     if (approve === undefined) {
-      le(envelope.ask_id);
+      withdrawAsk(envelope.ask_id);
       return {
-        requestBytes: U,
+        requestBytes,
         approval: "no_handler",
         ...convertRemoteToolResult(tool, host, transported_2),
       };
     }
-    let C =
+    let askParsed =
       byteLengthOf(envelope.input) <= maxRequestBytes(host)
         ? tool.inputSchema.safeParse(envelope.input)
         : {
             success: false,
           };
-    if (envelope.tool !== te.ask || !C.success) {
-      le(envelope.ask_id);
+    if (envelope.tool !== toolNames.ask || !askParsed.success) {
+      withdrawAsk(envelope.ask_id);
       return {
-        requestBytes: U,
+        requestBytes,
         approval: "unreadable_ask",
         outcome: {
           kind: "error",
@@ -1725,51 +1765,51 @@ async function runRemoteToolCall({
         },
       };
     }
-    let P = await Ae(C.data, U).catch((error) => {
-      le(envelope.ask_id);
+    let askVerdict = await checkPermission(askParsed.data, requestBytes).catch((error) => {
+      withdrawAsk(envelope.ask_id);
       throw error;
     });
-    if (P.kind === "refuse") {
-      le(envelope.ask_id);
+    if (askVerdict.kind === "refuse") {
+      withdrawAsk(envelope.ask_id);
       return {
-        requestBytes: U,
+        requestBytes,
         approval: "withdrawn",
-        outcome: describeWithdrawnAsk(P, host.name, host_2),
+        outcome: describeWithdrawnAsk(askVerdict, host.name, host_2),
       };
     }
-    let G = false;
-    let V =
-      ke !== undefined &&
-      (P.kind !== "ask_first" || isSameHostName(P.rule, ke)) &&
+    let promptFailed = false;
+    let reusedAnswer =
+      approvedRule !== undefined &&
+      (askVerdict.kind !== "ask_first" || isSameHostName(askVerdict.rule, approvedRule)) &&
       envelope.prior_answer_ok === true &&
-      sameInputsModuloDefaults(C.data, pe(oe), undefined);
-    let Q =
+      sameInputsModuloDefaults(askParsed.data, withLocalPaths(parsedInput), undefined);
+    let classifierEligible =
       envelope.classifier_eligible === true &&
-      P.kind !== "ask_first" &&
-      (Re === "auto" || (Re === "plan" && isAutoModeCapableHost(host))) &&
-      Re === wirePermissionState(toolUseContext, tool.name).permissionMode;
-    if (envelope.classifier_eligible === true && Re === "plan" && !Q)
+      askVerdict.kind !== "ask_first" &&
+      (claimedMode === "auto" || (claimedMode === "plan" && isAutoModeCapableHost(host))) &&
+      claimedMode === wirePermissionState(toolUseContext, tool.name).permissionMode;
+    if (envelope.classifier_eligible === true && claimedMode === "plan" && !classifierEligible)
       logForDebugging(
         `[remoteCall] plan-mode ask ${envelope.ask_id} goes to a person: host accepts plan answers=${hasCapability(host)}, account-set mode=${getAccountSetPermissionMode() ?? "unknown"}, reached over ${host.transport.kind}`,
       );
-    if (V) p.answeredWithoutPrompt();
-    let re = getToolPermissionContext(toolUseContext).mode === "plan";
-    let B = V
-      ? p.askEnded === undefined
+    if (reusedAnswer) call.answeredWithoutPrompt();
+    let planModeNow = getToolPermissionContext(toolUseContext).mode === "plan";
+    let answer = reusedAnswer
+      ? call.askEnded === undefined
         ? {
             decision: "allow",
           }
         : {
-            ended: p.askEnded,
+            ended: call.askEnded,
           }
-      : await waitWhileAsking(p, envelope.ask_id, askLapseMs, (ended, patience) =>
+      : await waitWhileAsking(call, envelope.ask_id, askLapseMs, (ended, patience) =>
           approve({
             askId: envelope.ask_id,
             ended,
             patience,
-            askEnded: () => p.askEnded !== undefined,
+            askEnded: () => call.askEnded !== undefined,
             noteCard: (card) => {
-              p.card = card;
+              call.card = card;
             },
             host: host_2,
             tool: tool.name,
@@ -1779,30 +1819,32 @@ async function runRemoteToolCall({
               envelope.decision_reason === undefined
                 ? undefined
                 : sanitizeForPrompt(envelope.decision_reason, MAX_MACHINE_MESSAGE_CHARS),
-            suggestions: (envelope.suggestions ?? []).map((j) => sanitizeForPrompt(j, MAX_PROMPT_TEXT_CHARS)),
-            classifierEligible: Q,
+            suggestions: (envelope.suggestions ?? []).map((suggestion) =>
+              sanitizeForPrompt(suggestion, MAX_PROMPT_TEXT_CHARS),
+            ),
+            classifierEligible,
             keepsStandingApprovals: hasSessionCapability(host),
             offeredStandingRules: hasSessionCapabilityPair(host) ? (envelope.suggestions ?? []) : [],
             ...(pendingAsk !== undefined && {
               pendingBeforeRestart: true,
             }),
-            ...(Q &&
+            ...(classifierEligible &&
               envelope.auto_mode !== undefined && {
-                hostRules: xr(envelope.auto_mode, (j) =>
-                  j?.map((Se) => promptSafeTruncated(Se)).filter((Se) => Se !== ""),
+                hostRules: import_mapValues(envelope.auto_mode, (rules) =>
+                  rules?.map((rule) => promptSafeTruncated(rule)).filter((ruleText) => ruleText !== ""),
                 ),
               }),
           }).catch((error) => {
             if (error instanceof AbortError && !signal.aborted) {
-              if (p.askEnded !== undefined) {
+              if (call.askEnded !== undefined) {
                 toolUseContext.abortController.abort(error);
                 return;
               }
-              le(envelope.ask_id);
+              withdrawAsk(envelope.ask_id);
               throw error;
             }
-            G = !signal.aborted;
-            if (G)
+            promptFailed = !signal.aborted;
+            if (promptFailed)
               logForDebugging(
                 `remote tool call: the session's permission prompt failed: ${errorMessage(error)}`,
                 {
@@ -1812,18 +1854,18 @@ async function runRemoteToolCall({
             return;
           }),
         );
-    if (B !== undefined && "ended" in B) {
-      le(envelope.ask_id);
+    if (answer !== undefined && "ended" in answer) {
+      withdrawAsk(envelope.ask_id);
       return {
-        requestBytes: U,
-        ...describeNoAnswer(host, host_2, B.ended, askLapseMs),
+        requestBytes,
+        ...describeNoAnswer(host, host_2, answer.ended, askLapseMs),
       };
     }
-    if (B === undefined || (signal.aborted && B.decision !== "deny")) {
-      le(envelope.ask_id);
-      if (G && !signal.aborted)
+    if (answer === undefined || (signal.aborted && answer.decision !== "deny")) {
+      withdrawAsk(envelope.ask_id);
+      if (promptFailed && !signal.aborted)
         return {
-          requestBytes: U,
+          requestBytes,
           approval: "prompt_failed",
           outcome: {
             kind: "error",
@@ -1836,70 +1878,76 @@ async function runRemoteToolCall({
         outcome: interruptedResult(host_2, {
           withdrawnAtAsk: true,
         }),
-        requestBytes: U,
+        requestBytes,
         approval: "withdrawn",
       };
     }
-    if (B.decision === "unanswerable") {
-      le(envelope.ask_id);
+    if (answer.decision === "unanswerable") {
+      withdrawAsk(envelope.ask_id);
       return {
-        requestBytes: U,
+        requestBytes,
         approval: "prompt_failed",
         outcome: {
           kind: "error",
           code: "prompt_failed",
-          message: `${B.message} The call did not run on ${host.name}.`,
+          message: `${answer.message} The call did not run on ${host.name}.`,
           host: host_2,
         },
       };
     }
-    let Z = B.feedback === undefined ? undefined : truncateToLength(B.feedback, MAX_MESSAGE_CHARS);
-    let nn = {
+    let feedback =
+      answer.feedback === undefined ? undefined : truncateToLength(answer.feedback, MAX_MESSAGE_CHARS);
+    let reply = {
       ask_id: envelope.ask_id,
-      decision: B.decision,
-      ...(B.decision === "allow" &&
-        B.updatedInput !== undefined && {
-          updated_input: B.updatedInput,
+      decision: answer.decision,
+      ...(answer.decision === "allow" &&
+        answer.updatedInput !== undefined && {
+          updated_input: answer.updatedInput,
         }),
-      ...(Z !== undefined && {
-        feedback: Z,
+      ...(feedback !== undefined && {
+        feedback,
       }),
-      ...(B.decision === "allow" &&
-        B.permissionUpdates !== undefined &&
-        B.permissionUpdates.length > 0 && {
-          permission_updates: B.permissionUpdates.slice(0, MAX_REMEMBERED_ASKS),
+      ...(answer.decision === "allow" &&
+        answer.permissionUpdates !== undefined &&
+        answer.permissionUpdates.length > 0 && {
+          permission_updates: answer.permissionUpdates.slice(0, MAX_REMEMBERED_ASKS),
         }),
     };
-    if (B.decision === "allow" && !V && B.decidedBy !== undefined) p.recordApprovedBy(B.decidedBy);
-    let Ie = B.decision === "allow" && B.decidedBy === "classifier";
-    let yo =
-      (B.decision === "allow" && B.raisedInPlanMode !== undefined ? B.raisedInPlanMode : re) &&
+    if (answer.decision === "allow" && !reusedAnswer && answer.decidedBy !== undefined)
+      call.recordApprovedBy(answer.decidedBy);
+    let byClassifier = answer.decision === "allow" && answer.decidedBy === "classifier";
+    let raisedInPlanMode =
+      (answer.decision === "allow" && answer.raisedInPlanMode !== undefined
+        ? answer.raisedInPlanMode
+        : planModeNow) &&
       getToolPermissionContext(toolUseContext).mode === "plan" &&
-      (!Ie || Re === "plan");
-    if (B.decision === "deny") {
-      $n(nn);
+      (!byClassifier || claimedMode === "plan");
+    if (answer.decision === "deny") {
+      sendAnswer(reply);
       return {
-        requestBytes: U,
-        approval: B.insteadOfRejection === undefined ? "denied" : "blocked",
+        requestBytes,
+        approval: answer.insteadOfRejection === undefined ? "denied" : "blocked",
         outcome: {
           kind: "error",
           code: "rejected_in_session",
-          message: B.insteadOfRejection?.message ?? remoteRejectMessage(toolUseContext.agentId, Z),
-          ...(B.insteadOfRejection !== undefined && {
-            denialKind: B.insteadOfRejection.denialKind,
+          message:
+            answer.insteadOfRejection?.message ?? remoteRejectMessage(toolUseContext.agentId, feedback),
+          ...(answer.insteadOfRejection !== undefined && {
+            denialKind: answer.insteadOfRejection.denialKind,
           }),
           host: host_2,
         },
       };
     }
-    let ve = B.updatedInput === undefined ? undefined : tool.inputSchema.safeParse(B.updatedInput);
-    if (ve?.success) ge = Hn(ve.data, C.data, ge);
-    let Be =
-      ve === undefined
+    let editedParsed =
+      answer.updatedInput === undefined ? undefined : tool.inputSchema.safeParse(answer.updatedInput);
+    if (editedParsed?.success) beforeInput = restateRuleValue(editedParsed.data, askParsed.data, beforeInput);
+    let editedVerdict =
+      editedParsed === undefined
         ? undefined
-        : ve.success
-          ? await Ae(pe(ve.data), U).catch((error) => {
-              le(envelope.ask_id);
+        : editedParsed.success
+          ? await checkPermission(withLocalPaths(editedParsed.data), requestBytes).catch((error) => {
+              withdrawAsk(envelope.ask_id);
               throw error;
             })
           : {
@@ -1907,69 +1955,69 @@ async function runRemoteToolCall({
               code: "invalid_input",
               message: `The edited ${tool.name} input from this session's prompt does not parse; it was not sent.`,
             };
-    if (Be?.kind === "refuse") {
-      le(envelope.ask_id);
+    if (editedVerdict?.kind === "refuse") {
+      withdrawAsk(envelope.ask_id);
       return {
-        requestBytes: U,
+        requestBytes,
         approval: "withdrawn",
-        outcome: describeWithdrawnAsk(Be, host.name, host_2),
+        outcome: describeWithdrawnAsk(editedVerdict, host.name, host_2),
       };
     }
-    let Ro = he(nn);
+    let meta = buildMeta(reply);
     let input = envelope.input;
-    let ce = byteLengthOf({
-      name: te.wire,
+    let editedBytes = byteLengthOf({
+      name: toolNames.wire,
       arguments: {
         ...input,
-        [REMOTE_TOOL_CALL_META]: Ro,
+        [REMOTE_TOOL_CALL_META]: meta,
       },
     });
-    let Gn = maxRequestBytes(host);
-    if (ce > Gn) {
-      le(envelope.ask_id);
+    let requestCap = maxRequestBytes(host);
+    if (editedBytes > requestCap) {
+      withdrawAsk(envelope.ask_id);
       return {
-        requestBytes: ce,
+        requestBytes: editedBytes,
         approval: "withdrawn",
         outcome: {
           kind: "error",
           code: "request_too_large",
           message: inputTooLargeMessage({
             name: host.name,
-            requestBytes: ce,
-            capBytes: Gn,
+            requestBytes: editedBytes,
+            capBytes: requestCap,
           }),
           host: host_2,
         },
       };
     }
-    let qn = B.updatedInput ?? C.data;
-    let call = ve?.success
+    let finalInput = answer.updatedInput ?? askParsed.data;
+    let call_2 = editedParsed?.success
       ? {
-          input: ve.data,
+          input: editedParsed.data,
           editedByApproval: true,
         }
-      : sameInputsModuloDefaults(C.data, pe(oe), undefined)
+      : sameInputsModuloDefaults(askParsed.data, withLocalPaths(parsedInput), undefined)
         ? {
-            input: oe,
+            input: parsedInput,
             editedByApproval,
           }
         : undefined;
-    let vo = () => {
-      let q = p.beginQueuedWait();
-      return runWithSlot(Bn, host.name, maxInFlight, signal, async () => {
-        q();
+    let sendApproved = () => {
+      let endQueuedWait = call.beginQueuedWait();
+      return runWithSlot(sendSemaphore, host.name, maxInFlight, signal, async () => {
+        endQueuedWait();
         if (isTerminalShutdown() && !signal.aborted) await heldUntilExit();
-        let z = await Ae(pe(qn), ce);
-        if (z.kind === "refuse")
+        let recheck = await checkPermission(withLocalPaths(finalInput), editedBytes);
+        if (recheck.kind === "refuse")
           return {
             kind: "late_refusal",
-            verdict: z,
+            verdict: recheck,
           };
         if (
-          z.kind === "ask_first" &&
-          !isSameHostName(z.rule, ke) &&
-          !(P.kind === "ask_first" && isSameHostName(z.rule, P.rule)) &&
-          !(Be?.kind === "ask_first" && isSameHostName(z.rule, Be.rule))
+          recheck.kind === "ask_first" &&
+          !isSameHostName(recheck.rule, approvedRule) &&
+          !(askVerdict.kind === "ask_first" && isSameHostName(recheck.rule, askVerdict.rule)) &&
+          !(editedVerdict?.kind === "ask_first" && isSameHostName(recheck.rule, editedVerdict.rule))
         )
           return {
             kind: "late_refusal",
@@ -1978,13 +2026,17 @@ async function runRemoteToolCall({
               message: `A permission rule of this session now asks before this ${tool.name} call; it appeared after the approval. ${host.name} was not contacted.`,
             },
           };
-        let j = !Ie || isAutoClassifierActive(getToolPermissionContext(toolUseContext).mode);
-        if (!(V ? Qe : yo && j) && getToolPermissionContext(toolUseContext).mode === "plan") {
-          let Xn = false;
+        let classifierStillActive =
+          !byClassifier || isAutoClassifierActive(getToolPermissionContext(toolUseContext).mode);
+        if (
+          !(reusedAnswer ? planModeAtAsk : raisedInPlanMode && classifierStillActive) &&
+          getToolPermissionContext(toolUseContext).mode === "plan"
+        ) {
+          let readOnlyNow = false;
           try {
-            Xn = tool.isReadOnly(qn, toolUseContext);
+            readOnlyNow = tool.isReadOnly(finalInput, toolUseContext);
           } catch {}
-          if (!Xn)
+          if (!readOnlyNow)
             return {
               kind: "late_refusal",
               verdict: {
@@ -1998,35 +2050,35 @@ async function runRemoteToolCall({
             kind: "cancelled",
           };
         if (isTerminalShutdown()) await heldUntilExit();
-        let Ao = Dn(he(nn), input);
-        Oe.release();
-        return Ao;
+        let sent = sendCall(buildMeta(reply), input);
+        seat.release();
+        return sent;
       }).then(
-        (z) => {
-          if (z === undefined) q();
-          return z;
+        (result) => {
+          if (result === undefined) endQueuedWait();
+          return result;
         },
         (error) => {
-          le(envelope.ask_id);
+          withdrawAsk(envelope.ask_id);
           throw error;
         },
       );
     };
-    let approval = V ? "pre_approved" : "allowed";
-    let To = (q, trigger) => {
-      let envelope_2 = q?.kind === "result" ? q.envelope : undefined;
+    let approval = reusedAnswer ? "pre_approved" : "allowed";
+    let interpretAnswered = (transported, reason) => {
+      let envelope_2 = transported?.kind === "result" ? transported.envelope : undefined;
       if (envelope_2?.outcome === "acknowledged" && envelope_2.ask_id === envelope.ask_id)
         return {
           approval: "withdrawn",
           outcome: {
             kind: "error",
             code: "approval_not_received",
-            message: approvalDroppedMessage(host.name, trigger, true),
+            message: approvalDroppedMessage(host.name, reason, true),
             host: host_2,
           },
         };
       if (
-        q?.kind === "result" &&
+        transported?.kind === "result" &&
         envelope_2 !== undefined &&
         (envelope_2.outcome === "in_progress" ||
           (envelope_2.outcome !== "needs_approval" &&
@@ -2036,9 +2088,9 @@ async function runRemoteToolCall({
       )
         return {
           approval,
-          ...convertRemoteToolResult(tool, host, q, {
+          ...convertRemoteToolResult(tool, host, transported, {
             afterReconnect: true,
-            call,
+            call: call_2,
           }),
         };
       return {
@@ -2046,7 +2098,7 @@ async function runRemoteToolCall({
         outcome: {
           kind: "error",
           code: "approval_not_received",
-          message: approvalDroppedMessage(host.name, trigger, false),
+          message: approvalDroppedMessage(host.name, reason, false),
           host: host_2,
           open: "delivery_unknown",
         },
@@ -2054,9 +2106,9 @@ async function runRemoteToolCall({
     };
     return (async (transported) => {
       if (transported?.kind === "late_refusal") {
-        le(envelope.ask_id);
+        withdrawAsk(envelope.ask_id);
         return {
-          requestBytes: ce,
+          requestBytes: editedBytes,
           approval: "withdrawn",
           outcome: describeWithdrawnAsk(transported.verdict, host.name, host_2),
         };
@@ -2068,10 +2120,10 @@ async function runRemoteToolCall({
         transported.kind === "stalled" ||
         transported.kind === "approval_unverified"
       ) {
-        le(envelope.ask_id);
+        withdrawAsk(envelope.ask_id);
         if (transported?.kind === "stalled")
           return {
-            requestBytes: ce,
+            requestBytes: editedBytes,
             approval: "withdrawn",
             outcome: {
               kind: "error",
@@ -2098,9 +2150,9 @@ async function runRemoteToolCall({
               host: host_2,
             },
           };
-        if (transported?.kind === "approval_unverified" && Ie)
+        if (transported?.kind === "approval_unverified" && byClassifier)
           return {
-            requestBytes: ce,
+            requestBytes: editedBytes,
             approval: "withdrawn",
             outcome: {
               kind: "error",
@@ -2111,41 +2163,42 @@ async function runRemoteToolCall({
           };
         return transported?.kind === "unreachable" || transported?.kind === "approval_unverified"
           ? {
-              requestBytes: ce,
+              requestBytes: editedBytes,
               approval: "withdrawn",
               ...convertRemoteToolResult(tool, host, transported, {
-                call,
+                call: call_2,
               }),
             }
           : {
               outcome: interruptedResult(host_2, {
                 withdrawnAtAsk: true,
               }),
-              requestBytes: U,
+              requestBytes,
               approval: "withdrawn",
             };
       }
-      let z = await ue(transported, {
-        byClassifier: Ie,
-        releaseAsk: () => le(envelope.ask_id),
+      let collected = await collectResult(transported, {
+        byClassifier,
+        releaseAsk: () => withdrawAsk(envelope.ask_id),
       });
-      if (z.kind === "ended") {
-        if (z.outcome.kind === "error" && z.outcome.code === "interrupted") le(envelope.ask_id);
+      if (collected.kind === "ended") {
+        if (collected.outcome.kind === "error" && collected.outcome.code === "interrupted")
+          withdrawAsk(envelope.ask_id);
         return {
-          requestBytes: ce,
+          requestBytes: editedBytes,
           approval,
-          reconcile: z.trace,
-          outcome: z.outcome,
+          reconcile: collected.trace,
+          outcome: collected.outcome,
         };
       }
-      let transported_2 = z.transported;
+      let transported_2 = collected.transported;
       if (transported_2.kind !== "result" || transported_2.envelope?.outcome === "refused")
-        le(envelope.ask_id);
+        withdrawAsk(envelope.ask_id);
       if (transported_2.kind === "stalled" && transported_2.takenBack)
         return {
-          requestBytes: ce,
+          requestBytes: editedBytes,
           approval: "withdrawn",
-          reconcile: z.trace,
+          reconcile: collected.trace,
           outcome: {
             kind: "error",
             code: "stalled_unsent",
@@ -2162,28 +2215,28 @@ async function runRemoteToolCall({
         (transported_2.envelope.code === "withdrawn" ||
           transported_2.envelope.code === "stale" ||
           transported_2.envelope.reason === "stale_answer") &&
-        !Ie &&
-        !V
+        !byClassifier &&
+        !reusedAnswer
       )
-        p.endAsk(
+        call.endAsk(
           normalizeWithdrawReason(
             transported_2.envelope.reason ?? (transported_2.envelope.code === "stale" ? "stale_answer" : ""),
           ),
         );
       if (transported_2.kind === "result" && transported_2.envelope?.outcome === "needs_approval") {
-        if (z.kind === "answered" && transported_2.envelope.ask_id === envelope.ask_id) {
-          let Se = await fo(envelope.ask_id);
+        if (collected.kind === "answered" && transported_2.envelope.ask_id === envelope.ask_id) {
+          let answerResult = await withdrawAskAndWait(envelope.ask_id);
           return {
-            requestBytes: ce,
-            reconcile: z.trace,
-            ...To(Se, z.trace.trigger),
+            requestBytes: editedBytes,
+            reconcile: collected.trace,
+            ...interpretAnswered(answerResult, collected.trace.trigger),
           };
         }
-        le(transported_2.envelope.ask_id);
+        withdrawAsk(transported_2.envelope.ask_id);
         return {
-          requestBytes: ce,
+          requestBytes: editedBytes,
           approval: "asked_again",
-          reconcile: z.trace,
+          reconcile: collected.trace,
           outcome: {
             kind: "error",
             code: "refused_by_host",
@@ -2194,9 +2247,9 @@ async function runRemoteToolCall({
       }
       if (transported_2.kind === "dropped" && transported_2.why === "write_unresolved")
         return {
-          requestBytes: ce,
+          requestBytes: editedBytes,
           approval,
-          reconcile: z.trace,
+          reconcile: collected.trace,
           outcome: {
             kind: "error",
             code: "dropped",
@@ -2206,28 +2259,28 @@ async function runRemoteToolCall({
           },
         };
       return {
-        requestBytes: ce,
+        requestBytes: editedBytes,
         approval,
-        reconcile: z.trace,
+        reconcile: collected.trace,
         ...convertRemoteToolResult(tool, host, transported_2, {
-          afterReconnect: z.kind === "answered",
-          call,
+          afterReconnect: collected.kind === "answered",
+          call: call_2,
         }),
       };
-    })(await vo());
+    })(await sendApproved());
   })();
-  return fe.trace !== undefined && Ze.reconcile !== fe.trace
+  return collected.trace !== undefined && askHandling.reconcile !== collected.trace
     ? {
-        ...Ze,
-        reconcileLeg1: fe.trace,
+        ...askHandling,
+        reconcileLeg1: collected.trace,
       }
-    : Ze;
+    : askHandling;
 }
 //@ chunk-dtv8x2hx.js:57316-61083 placement
 async function collectRemoteResult({
   transported,
   host,
-  call: o,
+  call,
   dispatchEpoch,
   toolName,
   callId,
@@ -2239,77 +2292,77 @@ async function collectRemoteResult({
   standingLine,
   approval,
 }) {
-  let R = approval === undefined ? 1 : 2;
+  let leg = approval === undefined ? 1 : 2;
   let envelope =
-    R === 1 && transported.kind === "result" && transported.envelope?.outcome === "in_progress"
+    leg === 1 && transported.kind === "result" && transported.envelope?.outcome === "in_progress"
       ? transported.envelope
       : undefined;
-  let O = transported.kind === "dropped" || transported.kind === "timed_out" ? transported : undefined;
-  if (O === undefined && envelope === undefined)
+  let lost = transported.kind === "dropped" || transported.kind === "timed_out" ? transported : undefined;
+  if (lost === undefined && envelope === undefined)
     return {
       kind: "as_is",
       transported,
       trace: undefined,
     };
-  let x =
+  let dispatchEpochUsed =
     envelope !== undefined
       ? (envelope.host_epoch ?? dispatchEpoch)
-      : R === 1
-        ? (O?.sentUnderEpoch ?? dispatchEpoch)
+      : leg === 1
+        ? (lost?.sentUnderEpoch ?? dispatchEpoch)
         : dispatchEpoch;
-  let held = transported.kind === "timed_out" ? o.held : undefined;
-  let E = (why) => {
+  let held = transported.kind === "timed_out" ? call.held : undefined;
+  let dropHeld = (why) => {
     if (held === undefined) return;
     logRemoteTools(callId, "standing request withdrawn", {
-      leg: R,
+      leg,
       why,
     });
     held.withdraw();
-    o.hold(undefined);
+    call.hold(undefined);
   };
-  if (x === undefined) {
-    E("no_epoch");
+  if (dispatchEpochUsed === undefined) {
+    dropHeld("no_epoch");
     return {
       kind: "as_is",
       transported,
       trace: undefined,
     };
   }
-  let D = machineIdentity(host);
-  let X = O === undefined ? "in_progress" : describeClassifierRefusal(O, approval);
-  let L = formatRemoteOutputFence({
+  let identity = machineIdentity(host);
+  let trigger = lost === undefined ? "in_progress" : describeClassifierRefusal(lost, approval);
+  let fence = formatRemoteOutputFence({
     name: host.name,
     showForMs: 2 * timing.intervalMs,
     onStatus,
-    waiting: (Y) =>
-      held === undefined && envelope === undefined && !Y
+    waiting: (waitingForAsk) =>
+      held === undefined && envelope === undefined && !waitingForAsk
         ? reconnectingStatus(host.name)
         : ASK_FIRST_REASON_TEXTS["in_progress.checkin"](host.name),
     standing: held === undefined ? undefined : standingLine,
   });
-  let y = await awaitRemoteCallWithProgress({
+  let outcome = await awaitRemoteCallWithProgress({
     host,
     held,
-    dispatchEpoch: x,
+    dispatchEpoch: dispatchEpochUsed,
     toolName,
     callId,
     signal,
     timing,
     ranBefore: envelope?.state === "running",
-    onAttempt: L.onAttempt,
-    onOutput: L.onOutput,
+    onAttempt: fence.onAttempt,
+    onOutput: fence.onOutput,
     silentSince,
     silentCallTiming,
   });
-  let { verdict } = y;
+  let { verdict } = outcome;
   let trace = {
-    trigger: X,
-    leg: R,
+    trigger,
+    leg,
     result: verdict.kind === "unknown" ? `unknown_${verdict.why}` : verdict.kind,
-    attempts: y.attempts,
-    misses: y.misses,
+    attempts: outcome.attempts,
+    misses: outcome.misses,
     held: held !== undefined,
-    epochChanged: y.epochChanged,
+    epochChanged: outcome.epochChanged,
   };
   switch (verdict.kind) {
     case "late":
@@ -2321,7 +2374,7 @@ async function collectRemoteResult({
       };
     case "answer":
       noteDirSyncAnswer(host, verdict.transported);
-      E(verdict.kind);
+      dropHeld(verdict.kind);
       return {
         kind: "answered",
         transported: {
@@ -2331,20 +2384,20 @@ async function collectRemoteResult({
         trace,
       };
     case "host_restarted":
-      E(verdict.kind);
+      dropHeld(verdict.kind);
       return {
         kind: "ended",
         trace,
         outcome: {
           kind: "error",
           code: "host_restarted",
-          message: hostRestartedLostMessage(host.name, X),
-          host: D,
+          message: hostRestartedLostMessage(host.name, trigger),
+          host: identity,
         },
       };
     case "not_received":
-      E(verdict.kind);
-      return R === 2 || envelope !== undefined
+      dropHeld(verdict.kind);
+      return leg === 2 || envelope !== undefined
         ? {
             kind: "as_is",
             transported,
@@ -2356,12 +2409,12 @@ async function collectRemoteResult({
             outcome: {
               kind: "error",
               code: "not_received",
-              message: neverReceivedMessage(host.name, X),
-              host: D,
+              message: neverReceivedMessage(host.name, trigger),
+              host: identity,
             },
           };
     case "ask_lost":
-      E(verdict.kind);
+      dropHeld(verdict.kind);
       return {
         kind: "ended",
         trace,
@@ -2371,9 +2424,9 @@ async function collectRemoteResult({
           message: stillRunningMessage({
             name: host.name,
             state: "awaiting_approval",
-            cause: X,
+            cause: trigger,
           }),
-          host: D,
+          host: identity,
         },
       };
     case "unbound":
@@ -2389,16 +2442,16 @@ async function collectRemoteResult({
             ASK_FIRST_REASON_TEXTS["unverified_refusal.call_phase"]({
               name: host.name,
               whileRunning: verdict.whileRunning,
-            }) + L.outputNote(),
-          host: D,
+            }) + fence.outputNote(),
+          host: identity,
           open: "host_unresponsive",
         },
       };
     case "host_unresponsive":
       if (!verdict.stillConnected) host.transport.markUnresponsive?.();
       if (verdict.intervalMs !== undefined)
-        held?.late.then((Y) => {
-          if (Y.kind === "result") logFeatureSad("rtc_silent_call", "answered_late");
+        held?.late.then((value) => {
+          if (value.kind === "result") logFeatureSad("rtc_silent_call", "answered_late");
         });
       return {
         kind: "ended",
@@ -2414,8 +2467,8 @@ async function collectRemoteResult({
               whileRunning: verdict.whileRunning,
               stillConnected: verdict.stillConnected,
               returnNoted: isHostAwayRecheckable(host),
-            }) + L.outputNote(),
-          host: D,
+            }) + fence.outputNote(),
+          host: identity,
           open: "host_unresponsive",
         },
       };
@@ -2431,19 +2484,19 @@ async function collectRemoteResult({
             ASK_FIRST_REASON_TEXTS.host_asleep({
               name: host.name,
               whileRunning: verdict.whileRunning,
-              withdrawn: O?.kind === "timed_out" && held === undefined,
+              withdrawn: lost?.kind === "timed_out" && held === undefined,
               returnNoted: hostAnnouncesReturn(host),
-            }) + L.outputNote(),
-          host: D,
+            }) + fence.outputNote(),
+          host: identity,
           open: "host_asleep",
         },
       };
     case "cancelled":
-      E(verdict.kind);
+      dropHeld(verdict.kind);
       return {
         kind: "ended",
         trace,
-        outcome: interruptedResult(D, {
+        outcome: interruptedResult(identity, {
           askLater: envelope !== undefined,
         }),
       };
@@ -2457,7 +2510,7 @@ async function collectRemoteResult({
     case "unknown":
       if (held?.takeBack() === true) {
         logRemoteTools(callId, "standing request taken back unsent", {
-          leg: R,
+          leg,
         });
         return {
           kind: "as_is",
@@ -2477,7 +2530,7 @@ async function collectRemoteResult({
           trace,
         };
       if (verdict.kind === "unreachable" && !held.accepted()) {
-        E("unreachable_unaccepted");
+        dropHeld("unreachable_unaccepted");
         return {
           kind: "as_is",
           transported,
@@ -2495,32 +2548,35 @@ async function collectRemoteResult({
               name: host.name,
               capMs: transported.capMs,
               left: true,
-            }) + L.outputNote(),
-          host: D,
+            }) + fence.outputNote(),
+          host: identity,
           open: "timed_out",
         },
       };
   }
 }
 //@ chunk-dtv8x2hx.js:61083-61320 placement
-function waitWhileAsking(e, askId, afterMs, r) {
+function waitWhileAsking(card, askId, afterMs, waitForAnswer) {
   let abortController = new AbortController();
-  let u;
+  let resolveEnded;
   let promise = new Promise((resolve) => {
-    u = (ended) =>
+    resolveEnded = (ended) =>
       resolve({
         ended,
       });
   });
-  return e.whileAsking(
+  return card.whileAsking(
     {
       askId,
-      end: (i) => {
-        abortController.abort(i);
-        u(i);
+      end: (reason) => {
+        abortController.abort(reason);
+        resolveEnded(reason);
       },
     },
-    (i) => (abortController.signal.aborted ? promise : Promise.race([promise, r(abortController.signal, i)])),
+    (helpers) =>
+      abortController.signal.aborted
+        ? promise
+        : Promise.race([promise, waitForAnswer(abortController.signal, helpers)]),
     {
       afterMs,
       reason: "no_answer",
@@ -2556,20 +2612,23 @@ function describeNoAnswer(host, host_2, ended, afterMs) {
   };
 }
 //@ chunk-dtv8x2hx.js:61662-61883 placement
-function describeClassifierRefusal(e, approval) {
-  if (isUnverifiedRefusal(e)) return approval?.byClassifier ? "classifier_refused" : "unverified_refusal";
-  if (e.kind === "dropped" && e.why === "write_unresolved")
+function describeClassifierRefusal(failure, approval) {
+  if (isUnverifiedRefusal(failure))
+    return approval?.byClassifier ? "classifier_refused" : "unverified_refusal";
+  if (failure.kind === "dropped" && failure.why === "write_unresolved")
     return approval !== undefined ? "approval_write_unresolved" : "write_unresolved";
-  return e.kind;
+  return failure.kind;
 }
 //@ chunk-dtv8x2hx.js:61883-62138 placement
-function describeWithdrawnAsk(e, name, host) {
-  let r = ` ${name} was not contacted.`;
-  let s = e.message.endsWith(r) ? e.message.slice(0, -r.length) : e.message;
+function describeWithdrawnAsk(decision, name, host) {
+  let suffix = ` ${name} was not contacted.`;
+  let trimmed = decision.message.endsWith(suffix)
+    ? decision.message.slice(0, -suffix.length)
+    : decision.message;
   return {
     kind: "error",
-    code: e.code,
-    message: `${s} ${name} had already been asked; its suspended call was withdrawn and nothing ran there.`,
+    code: decision.code,
+    message: `${trimmed} ${name} had already been asked; its suspended call was withdrawn and nothing ran there.`,
     host,
   };
 }
@@ -2600,12 +2659,12 @@ function remoteToolNames(tool, host) {
       ask: tool.name,
     };
   let toolName = tool.mcpInfo?.toolName;
-  let r = toolName === undefined ? undefined : host.passthroughTools?.get(toolName);
-  return toolName === undefined || r === undefined
+  let mapped = toolName === undefined ? undefined : host.passthroughTools?.get(toolName);
+  return toolName === undefined || mapped === undefined
     ? undefined
     : {
         wire: toolName,
-        ask: r.localName,
+        ask: mapped.localName,
       };
 }
 export { collectAskRules, logRemoteToolForward, waitForAskAnswer, logRemoteForward, primaryInputPath };

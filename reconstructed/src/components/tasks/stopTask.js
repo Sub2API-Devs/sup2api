@@ -42,80 +42,87 @@ import { isTeammateWorking } from "../../utils/inProcessTeammateHelpers.js";
 import { emitTaskNotification } from "../../utils/task/taskNotifications.js";
 
 //@ chunk-18hwfzwa.js:463038-463486 placement
-function stopAllTasks(h, taskRegistry, D) {
-  let killedBy = D.killedBy ?? "user";
+function stopAllTasks(agentTask, taskRegistry, options) {
+  let killedBy = options.killedBy ?? "user";
   let allTasks = taskRegistry.all();
   let sparedAgentIds = [];
-  for (let Re of Object.values(allTasks)) {
-    if (!isLocalAgent(Re) || Re.id === h.id || (Re.status !== "running" && !hasCompletedWithFindings(Re)))
+  for (let task of Object.values(allTasks)) {
+    if (
+      !isLocalAgent(task) ||
+      task.id === agentTask.id ||
+      (task.status !== "running" && !hasCompletedWithFindings(task))
+    )
       continue;
-    if (isSparedFromCascadeStop(Re, h.agentId, allTasks)) {
-      sparedAgentIds.push(Re.agentId);
+    if (isSparedFromCascadeStop(task, agentTask.agentId, allTasks)) {
+      sparedAgentIds.push(task.agentId);
       continue;
     }
-    if (isTaskOwnedBy(Re, h.agentId, allTasks, isCascadeStopExempt)) {
-      if (D.source === "user" && isObserverAgentTask(Re))
+    if (isTaskOwnedBy(task, agentTask.agentId, allTasks, isCascadeStopExempt)) {
+      if (options.source === "user" && isObserverAgentTask(task))
         stopObserverPairing(
-          D.session,
-          Re.id,
+          options.session,
+          task.id,
           {
-            agentType: Re.agentType,
+            agentType: task.agentType,
           },
-          D.storageV5,
+          options.storageV5,
         );
-      markAgentNotified(Re.id, taskRegistry);
-      if (killedBy === "user" && (D.source === "user" || !isObserverAgentTask(Re)))
-        markStoppedByUser(Re.id, taskRegistry, D.storageV5);
-      killAsyncAgent(Re.id, taskRegistry, killedBy);
+      markAgentNotified(task.id, taskRegistry);
+      if (killedBy === "user" && (options.source === "user" || !isObserverAgentTask(task)))
+        markStoppedByUser(task.id, taskRegistry, options.storageV5);
+      killAsyncAgent(task.id, taskRegistry, killedBy);
     }
   }
-  emitCascadeSpared(h.agentId, sparedAgentIds, killedBy, taskRegistry);
+  emitCascadeSpared(agentTask.agentId, sparedAgentIds, killedBy, taskRegistry);
 }
 //@ chunk-18hwfzwa.js:463486-464254 placement
-function stopTask(h, taskRegistry, setAppState, L) {
-  let { session, source, storageV5 } = L;
-  if (h.type === "in_process_teammate") {
-    if (h.status === "running") {
-      killInProcessTeammate(h.id, taskRegistry, setAppState, storageV5);
-      taskRegistry.update(h.id, (We) =>
-        We.status === "killed" && We.evictAfter === undefined
+function stopTask(task, taskRegistry, setAppState, options) {
+  let { session, source, storageV5 } = options;
+  if (task.type === "in_process_teammate") {
+    if (task.status === "running") {
+      killInProcessTeammate(task.id, taskRegistry, setAppState, storageV5);
+      taskRegistry.update(task.id, (task) =>
+        task.status === "killed" && task.evictAfter === undefined
           ? {
-              ...We,
+              ...task,
               evictAfter: Date.now() + TASK_NOTIFICATION_DELAY_MS,
             }
-          : We,
+          : task,
       );
       return "killed";
     }
-    taskRegistry.remove(h.id);
+    taskRegistry.remove(task.id);
     return "dismissed";
   }
-  if (h.isObserver) {
-    stopTask_2(h.id, {
+  if (task.isObserver) {
+    stopTask_2(task.id, {
       taskRegistry,
       setAppState,
       session,
       source,
       storageV5,
     }).catch(() => {});
-    if (source === "user" && h.status !== "running" && !hasCompletedWithFindings(h))
-      stopOrDismissAgent(h.id, setAppState);
+    if (source === "user" && task.status !== "running" && !hasCompletedWithFindings(task))
+      stopOrDismissAgent(task.id, setAppState);
     return "killed";
   }
-  let Be = taskRegistry.get(h.id);
-  if (source !== "user" && Be !== undefined && isIdleCompletedAgent(Be)) {
+  let registeredTask = taskRegistry.get(task.id);
+  if (source !== "user" && registeredTask !== undefined && isIdleCompletedAgent(registeredTask)) {
     exitTeammateView(setAppState);
     return "dismissed";
   }
-  if (h.status !== "running" && !hasCompletedWithFindings(h)) {
-    stopOrDismissAgent(h.id, setAppState);
+  if (task.status !== "running" && !hasCompletedWithFindings(task)) {
+    stopOrDismissAgent(task.id, setAppState);
     return "dismissed";
   }
-  let He = taskRegistry.get(h.id);
-  if (isLocalAgent(He) && (He.status === "running" || hasCompletedWithFindings(He)))
-    markStoppedByUser(h.id, taskRegistry, storageV5);
-  killAsyncAgent(h.id, taskRegistry, "user");
-  stopAllTasks(h, taskRegistry, {
+  let registeredTask_ = taskRegistry.get(task.id);
+  if (
+    isLocalAgent(registeredTask_) &&
+    (registeredTask_.status === "running" || hasCompletedWithFindings(registeredTask_))
+  )
+    markStoppedByUser(task.id, taskRegistry, storageV5);
+  killAsyncAgent(task.id, taskRegistry, "user");
+  stopAllTasks(task, taskRegistry, {
     session,
     source,
     storageV5,
@@ -130,20 +137,21 @@ function stopWorkflowTask({ taskId, taskStatus, taskRegistry, setAppState }) {
     return "killed";
   }
   if (isTerminalTaskStatus_2(status) && !isTaskLoopSettled(taskId)) {
-    for (let ke of liveAgentControllers(taskId)) ke.abort(new DOMException("workflow-abort", "AbortError"));
-    for (let ke of taskAgentIds(taskId)) trackExitProcessSweep(killAgentProcessGroups(ke));
+    for (let controller of liveAgentControllers(taskId))
+      controller.abort(new DOMException("workflow-abort", "AbortError"));
+    for (let agentId of taskAgentIds(taskId)) trackExitProcessSweep(killAgentProcessGroups(agentId));
     scheduleKillEscalation(taskId);
     return "killed";
   }
-  setAppState((ke) => {
-    if (ke.tasks[taskId]?.type !== "local_workflow") return ke;
-    let Re = {
-      ...ke.tasks,
+  setAppState((prevState) => {
+    if (prevState.tasks[taskId]?.type !== "local_workflow") return prevState;
+    let nextTasks = {
+      ...prevState.tasks,
     };
-    delete Re[taskId];
+    delete nextTasks[taskId];
     return {
-      ...ke,
-      tasks: Re,
+      ...prevState,
+      tasks: nextTasks,
     };
   });
   return "dismissed";
@@ -185,8 +193,8 @@ function isAgentPanelTask(task) {
  * 从 UI 停止子代理：属主不是本地代理时先标已通知，记录停止、kill，并发 stopped 通知。
  */
 function stopAgentFromUi(taskId, task, taskRegistry, storageV5) {
-  let ee = isLocalAgent(task) ? taskRegistry.get(task.ownerAgentId) : undefined;
-  if (!isLocalAgent(ee)) markAgentNotified(taskId, taskRegistry);
+  let ownerAgent = isLocalAgent(task) ? taskRegistry.get(task.ownerAgentId) : undefined;
+  if (!isLocalAgent(ownerAgent)) markAgentNotified(taskId, taskRegistry);
   markStoppedByUser(taskId, taskRegistry, storageV5);
   killAsyncAgent(taskId, taskRegistry, "user");
   emitTaskNotification(taskId, "stopped", {

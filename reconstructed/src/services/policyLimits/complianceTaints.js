@@ -17,13 +17,24 @@ import { hasDisplayUnsafeChar } from "../../utils/permissions/approvalPayloadSer
 import { truncateToLength } from "../../utils/stringUtils.js";
 import { stripInvisibleChars } from "../../utils/sanitization.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, record, string, M, array, unknown } from "../../../vendor/zod/v4/classic/schemas.js";
+import {
+  objectSchema,
+  record,
+  stringSchema,
+  booleanSchema,
+  array,
+  unknown,
+} from "../../../vendor/zod/v4/classic/schemas.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-1rckdhfn.js:332-357 placement
 /**
  * 合规污点状态判定用的 hipaa 集合。
  */
-var HIPAA_TAINTS = new Set(["hipaa"]);
+var HIPAA_TAINTS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-1rckdhfn.js:332", () => {
+  HIPAA_TAINTS = new Set(["hipaa"]);
+});
 //@ chunk-1rckdhfn.js:357-1215 placement
 class ComplianceTaintState {
   latched = new Set();
@@ -32,26 +43,27 @@ class ComplianceTaintState {
   current = [];
   changed = createSignal();
   verdict = undefined;
-  replaceTaints(t) {
-    this.current = uniq(t).sort();
-    for (let r of t) if (HIPAA_TAINTS.has(r)) this.latched.add(r);
+  replaceTaints(taints) {
+    this.current = uniq(taints).sort();
+    for (let taint of taints) if (HIPAA_TAINTS.has(taint)) this.latched.add(taint);
     if (this.latched.size !== this.latchedTaints.length) this.latchedTaints = Array.from(this.latched).sort();
     return this.refreshEffectiveTaints();
   }
-  latchTaints(t) {
-    let r = false;
-    for (let i of t)
-      if (HIPAA_TAINTS.has(i) && !this.latched.has(i)) {
-        this.latched.add(i);
-        r = true;
+  latchTaints(taints) {
+    let changed = false;
+    for (let taint of taints)
+      if (HIPAA_TAINTS.has(taint) && !this.latched.has(taint)) {
+        this.latched.add(taint);
+        changed = true;
       }
-    if (!r) return false;
+    if (!changed) return false;
     this.latchedTaints = Array.from(this.latched).sort();
     return this.refreshEffectiveTaints();
   }
   refreshEffectiveTaints() {
     let sorted = uniq([...this.latchedTaints, ...this.current]).sort();
-    if (sorted.length === this.taints.length && sorted.every((r, i) => r === this.taints[i])) return false;
+    if (sorted.length === this.taints.length && sorted.every((taint, index) => taint === this.taints[index]))
+      return false;
     this.taints = sorted;
     this.changed.emit(this.taints);
     return true;
@@ -70,26 +82,29 @@ class ComplianceTaintState {
 /**
  * 按 host 保存的合规污点状态容器。
  */
-var complianceTaintStateSlots = new HostScoped(() => new ComplianceTaintState());
+var complianceTaintStateSlots; // deferred: uses ComplianceTaintState of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-1rckdhfn.js:1215", () => {
+  complianceTaintStateSlots = new HostScoped(() => new ComplianceTaintState());
+});
 //@ chunk-1rckdhfn.js:1238-1273 placement
 function complianceTaintState() {
   return complianceTaintStateSlots.of(getRootSession().host);
 }
 //@ chunk-1rckdhfn.js:1273-1317 placement
-function replaceComplianceTaints(t) {
-  return complianceTaintState().replaceTaints(t);
+function replaceComplianceTaints(taints) {
+  return complianceTaintState().replaceTaints(taints);
 }
 //@ chunk-1rckdhfn.js:1317-1359 placement
-function latchComplianceTaints(t) {
-  return complianceTaintState().latchTaints(t);
+function latchComplianceTaints(taints) {
+  return complianceTaintState().latchTaints(taints);
 }
 //@ chunk-1rckdhfn.js:1359-1391 placement
 function isKnownTaint(complianceTaint) {
   return HIPAA_TAINTS.has(complianceTaint);
 }
 //@ chunk-1rckdhfn.js:1391-1436 placement
-function hasComplianceTaint(t) {
-  return complianceTaintState().taints.includes(t);
+function hasComplianceTaint(taint) {
+  return complianceTaintState().taints.includes(taint);
 }
 //@ chunk-1rckdhfn.js:1436-1468 placement
 function getComplianceTaints() {
@@ -104,21 +119,21 @@ function getLatchedTaints() {
   return complianceTaintState().latchedTaints;
 }
 //@ chunk-1rckdhfn.js:1542-1589 placement
-function onComplianceTaintsChanged(t) {
-  return complianceTaintState().changed.subscribe(t);
+function onComplianceTaintsChanged(listener) {
+  return complianceTaintState().changed.subscribe(listener);
 }
 //@ chunk-4eww0w8n.js:261-445 placement
 /**
  * 合规标记显示名（HIPAA、ZDR），未知时记 warn。
  */
-function complianceTaintLabel(n) {
-  switch (n) {
+function complianceTaintLabel(taint) {
+  switch (taint) {
     case "hipaa":
       return "HIPAA";
     case "zdr":
       return "ZDR (Zero Data Retention)";
     default:
-      logForDebugging(`Unknown compliance_taint '${n}' from policyLimits`, {
+      logForDebugging(`Unknown compliance_taint '${taint}' from policyLimits`, {
         level: "warn",
       });
       return ORGANIZATION_POLICY_LABEL;
@@ -128,26 +143,32 @@ function complianceTaintLabel(n) {
 /**
  * 组织策略标签、提示文案与已知合规标记集合。
  */
-var ORGANIZATION_POLICY_LABEL = "Organization policy";
-var POLICY_LIMITED_NOTICE = "Per your organization's policy, some features are limited";
-var HIPAA_CONFIGURED_LABEL = "HIPAA configured";
-var KNOWN_COMPLIANCE_TAINTS = new Set(["hipaa", "zdr"]);
+var ORGANIZATION_POLICY_LABEL; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var POLICY_LIMITED_NOTICE;
+var HIPAA_CONFIGURED_LABEL;
+var KNOWN_COMPLIANCE_TAINTS;
+deferInit("chunk-4eww0w8n.js:445", () => {
+  ORGANIZATION_POLICY_LABEL = "Organization policy";
+  POLICY_LIMITED_NOTICE = "Per your organization's policy, some features are limited";
+  HIPAA_CONFIGURED_LABEL = "HIPAA configured";
+  KNOWN_COMPLIANCE_TAINTS = new Set(["hipaa", "zdr"]);
+});
 //@ chunk-4eww0w8n.js:587-623 placement
 /**
  * 判断是否属于已知合规污点（hipaa/zdr）。
  */
-function isKnownComplianceTaint(n) {
-  return KNOWN_COMPLIANCE_TAINTS.has(n) || false;
+function isKnownComplianceTaint(taint) {
+  return KNOWN_COMPLIANCE_TAINTS.has(taint) || false;
 }
 //@ chunk-4eww0w8n.js:623-807 placement
 /**
  * 去重合规标记，未知值归为“组织策略”。
  */
 function normalizeComplianceTaints(complianceTaints) {
-  let e = uniq(complianceTaints);
-  let filtered = e.filter(isKnownComplianceTaint);
-  if (filtered.length === e.length) return filtered;
-  logForDebugging(`Unknown compliance_taint values from policyLimits (${e.length - filtered.length})`, {
+  let unique = uniq(complianceTaints);
+  let filtered = unique.filter(isKnownComplianceTaint);
+  if (filtered.length === unique.length) return filtered;
+  logForDebugging(`Unknown compliance_taint values from policyLimits (${unique.length - filtered.length})`, {
     level: "warn",
   });
   return [...filtered, ORGANIZATION_POLICY_LABEL];
@@ -156,27 +177,30 @@ function normalizeComplianceTaints(complianceTaints) {
 /**
  * 只含 hipaa 的污点集合（用于「HIPAA 未配置」这类判定）。
  */
-var HIPAA_ONLY_TAINTS = new Set(["hipaa"]);
+var HIPAA_ONLY_TAINTS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-4eww0w8n.js:807", () => {
+  HIPAA_ONLY_TAINTS = new Set(["hipaa"]);
+});
 //@ chunk-4eww0w8n.js:832-882 placement
 /**
  * 去重后只保留 hipaa 污点。
  */
-function hipaaTaintsOnly(n) {
-  return uniq(n).filter((e) => HIPAA_ONLY_TAINTS.has(e));
+function hipaaTaintsOnly(taints) {
+  return uniq(taints).filter((taint) => HIPAA_ONLY_TAINTS.has(taint));
 }
 //@ chunk-55ht3bcx.js:5413-5482 placement
 /**
  * 是否含控制字符或双向字符。
  */
-function hasControlChars(e) {
-  return /[\u0000-\u001f\u007f-\u009f]/.test(e) || hasDisplayUnsafeChar(e);
+function hasControlChars(text) {
+  return /[\u0000-\u001f\u007f-\u009f]/.test(text) || hasDisplayUnsafeChar(text);
 }
 //@ chunk-55ht3bcx.js:5482-5574 placement
 /**
  * 规范化制度名：去不可见字符、转小写、截断到 64 并只留合法字符。
  */
-function normalizeRegimeName(e) {
-  let trimmed = truncateToLength(stripInvisibleChars(e, "").toLowerCase(), 64).trim();
+function normalizeRegimeName(name) {
+  let trimmed = truncateToLength(stripInvisibleChars(name, "").toLowerCase(), 64).trim();
   return /^[a-z0-9_-]+$/.test(trimmed) ? trimmed : "";
 }
 //@ chunk-55ht3bcx.js:5574-5585 placement
@@ -188,137 +212,150 @@ var MAX_COMPLIANCE_TAINTS = 16;
 /**
  * 响应中被丢弃（非字符串/空/超上限）的合规标记数。
  */
-function countDroppedComplianceTaints(e) {
+function countDroppedComplianceTaints(body) {
   let complianceTaints =
-    typeof e === "object" && e !== null && "compliance_taints" in e ? e.compliance_taints : undefined;
+    typeof body === "object" && body !== null && "compliance_taints" in body
+      ? body.compliance_taints
+      : undefined;
   if (!Array.isArray(complianceTaints)) return 0;
-  let r = count(complianceTaints, (l) => typeof l !== "string" || normalizeRegimeName(l) === "");
-  let s = uniq(
+  let invalidCount = count(
+    complianceTaints,
+    (entry) => typeof entry !== "string" || normalizeRegimeName(entry) === "",
+  );
+  let normalized = uniq(
     complianceTaints
       .filter((complianceTaint) => typeof complianceTaint === "string")
       .map(normalizeRegimeName)
-      .filter((l) => l.length > 0),
+      .filter((name) => name.length > 0),
   );
-  return r + Math.max(0, s.length - MAX_COMPLIANCE_TAINTS);
+  return invalidCount + Math.max(0, normalized.length - MAX_COMPLIANCE_TAINTS);
 }
 //@ chunk-55ht3bcx.js:5871-7634 placement
 /**
  * 策略限制响应 schema（restrictions、compliance_taints）。
  */
-var PolicyLimitsResponseSchema = DoctorLazy(() =>
-  u({
-    restrictions: record(
-      string(),
-      u({
-        allowed: M(),
-      }),
-    ),
-    compliance_taints: array(unknown())
-      .default([])
-      .transform((e, n) => {
-        let sliced = uniq(
-          e
-            .filter((s) => typeof s === "string")
-            .map(normalizeRegimeName)
-            .filter((s) => s.length > 0),
-        ).slice(0, MAX_COMPLIANCE_TAINTS);
-        if (e.length > 0 && sliced.length === 0)
-          n.addIssue({
-            code: "custom",
-            message: "compliance_taints had entries but none were well-formed regime names",
-          });
-        return sliced;
-      }),
-    monitoring_notice: u({
-      text: string()
-        .max(500)
-        .transform((e) =>
-          stripInvisibleChars(e, "", {
-            keepEmojiJoiners: true,
-          }),
-        ),
-      url: string()
-        .max(2048)
-        .url()
-        .startsWith("https://")
-        .refine((e) => !hasControlChars(e))
-        .nullish()
+var PolicyLimitsResponseSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var EMPTY_POLICY_RESPONSE;
+var CACHE_IO_ERRNOS;
+var SERVER_ERROR_TYPES;
+var POLICY_AUTH_DENIAL_CODES;
+var POLICY_TOKEN_DENIAL_CODES;
+deferInit("chunk-55ht3bcx.js:5871", () => {
+  PolicyLimitsResponseSchema = DoctorLazy(() =>
+    objectSchema({
+      restrictions: record(
+        stringSchema(),
+        objectSchema({
+          allowed: booleanSchema(),
+        }),
+      ),
+      compliance_taints: array(unknown())
+        .default([])
+        .transform((entries, ctx) => {
+          let sliced = uniq(
+            entries
+              .filter((entry) => typeof entry === "string")
+              .map(normalizeRegimeName)
+              .filter((name) => name.length > 0),
+          ).slice(0, MAX_COMPLIANCE_TAINTS);
+          if (entries.length > 0 && sliced.length === 0)
+            ctx.addIssue({
+              code: "custom",
+              message: "compliance_taints had entries but none were well-formed regime names",
+            });
+          return sliced;
+        }),
+      monitoring_notice: objectSchema({
+        text: stringSchema()
+          .max(500)
+          .transform((text) =>
+            stripInvisibleChars(text, "", {
+              keepEmojiJoiners: true,
+            }),
+          ),
+        url: stringSchema()
+          .max(2048)
+          .url()
+          .startsWith("https://")
+          .refine((url) => !hasControlChars(url))
+          .nullish()
+          .catch(null),
+      })
+        .nullable()
+        .default(null)
         .catch(null),
-    })
-      .nullable()
-      .default(null)
-      .catch(null),
-    defaults: record(string(), unknown()).default({}).catch({}),
-    core_skills: array(string().max(128)).max(256).optional().catch([]),
-    artifact_create_notice: u({
-      text: string()
-        .transform((e) =>
-          stripInvisibleChars(truncateToLength(e, 500), " ", {
-            keepEmojiJoiners: true,
-          })
-            .replace(/\s+/g, " ")
-            .trim(),
-        )
-        .pipe(string().min(1)),
-    })
-      .nullish()
-      .catch({
-        text: "Your organization requires a person to approve each new artifact.",
-      }),
-  }),
-);
-var EMPTY_POLICY_RESPONSE = {
-  restrictions: {},
-  compliance_taints: [],
-  monitoring_notice: null,
-  defaults: {},
-};
-var CACHE_IO_ERRNOS = [
-  "ENOTFOUND",
-  "EAI_AGAIN",
-  "ECONNREFUSED",
-  "ECONNRESET",
-  "ETIMEDOUT",
-  "EHOSTUNREACH",
-  "ENETUNREACH",
-  "EPIPE",
-  "CERT_ERROR",
-  "ABORTED",
-  "OTHER",
-];
-var SERVER_ERROR_TYPES = [
-  "invalid_request_error",
-  "authentication_error",
-  "permission_error",
-  "not_found_error",
-  "rate_limit_error",
-];
-var POLICY_AUTH_DENIAL_CODES = [
-  "ip_not_in_allowed_range",
-  "claude_code_key_creator_not_member",
-  "organization_disabled",
-  "organization_on_hold",
-  "restricted_regime_endpoint",
-  "oauth_not_allowed_for_organization",
-  "oauth_scope_insufficient",
-  "token_expired",
-  "oauth_application_deactivated",
-  "oauth_token_no_organization",
-  "oauth_token_no_account",
-  "oauth_account_not_member",
-];
-var POLICY_TOKEN_DENIAL_CODES = [
-  "token_expired",
-  "token_revoked",
-  "token_invalid",
-  "credential_invalid",
-  "org_access_revoked",
-  "workspace_revoked",
-  "application_deactivated",
-  "token_no_organization",
-  "token_no_account",
-  "account_not_member",
-];
+      defaults: record(stringSchema(), unknown()).default({}).catch({}),
+      core_skills: array(stringSchema().max(128)).max(256).optional().catch([]),
+      artifact_create_notice: objectSchema({
+        text: stringSchema()
+          .transform((text) =>
+            stripInvisibleChars(truncateToLength(text, 500), " ", {
+              keepEmojiJoiners: true,
+            })
+              .replace(/\s+/g, " ")
+              .trim(),
+          )
+          .pipe(stringSchema().min(1)),
+      })
+        .nullish()
+        .catch({
+          text: "Your organization requires a person to approve each new artifact.",
+        }),
+    }),
+  );
+  EMPTY_POLICY_RESPONSE = {
+    restrictions: {},
+    compliance_taints: [],
+    monitoring_notice: null,
+    defaults: {},
+  };
+  CACHE_IO_ERRNOS = [
+    "ENOTFOUND",
+    "EAI_AGAIN",
+    "ECONNREFUSED",
+    "ECONNRESET",
+    "ETIMEDOUT",
+    "EHOSTUNREACH",
+    "ENETUNREACH",
+    "EPIPE",
+    "CERT_ERROR",
+    "ABORTED",
+    "OTHER",
+  ];
+  SERVER_ERROR_TYPES = [
+    "invalid_request_error",
+    "authentication_error",
+    "permission_error",
+    "not_found_error",
+    "rate_limit_error",
+  ];
+  POLICY_AUTH_DENIAL_CODES = [
+    "ip_not_in_allowed_range",
+    "claude_code_key_creator_not_member",
+    "organization_disabled",
+    "organization_on_hold",
+    "restricted_regime_endpoint",
+    "oauth_not_allowed_for_organization",
+    "oauth_scope_insufficient",
+    "token_expired",
+    "oauth_application_deactivated",
+    "oauth_token_no_organization",
+    "oauth_token_no_account",
+    "oauth_account_not_member",
+  ];
+  POLICY_TOKEN_DENIAL_CODES = [
+    "token_expired",
+    "token_revoked",
+    "token_invalid",
+    "credential_invalid",
+    "org_access_revoked",
+    "workspace_revoked",
+    "application_deactivated",
+    "token_no_organization",
+    "token_no_account",
+    "account_not_member",
+  ];
+});
 export {
   onComplianceTaintsChanged,
   hasComplianceTaint,

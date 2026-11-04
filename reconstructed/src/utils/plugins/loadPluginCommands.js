@@ -16,7 +16,7 @@ import {
   extractDescriptionFromMarkdown,
 } from "../markdownConfigLoader.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, array, string, M } from "../../../vendor/zod/v4/classic/schemas.js";
+import { objectSchema, array, stringSchema, booleanSchema } from "../../../vendor/zod/v4/classic/schemas.js";
 import { sleep } from "../sleep.js";
 import { getMcpAuthCache as getMcpAuthCache_2 } from "./safeFileRead.js";
 import { getErrnoCode, errorMessage, isENOENT } from "../errors.js";
@@ -106,15 +106,16 @@ import { logFeatureBad, logFeatureOk } from "../../services/analytics/featureTel
 import { isSkillAttributionEnabled } from "../telemetry/skillAttribution.js";
 import { desktopSkillSwitches } from "../sessionShape.js";
 import { isStorageV5Enabled } from "../hoverRest.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:1663434-1663518 placement
 /**
  * memoizeLastValue：记录并复用同一键的上次结果。
  */
-function memoizeLastValue(skillContentIntern, n, content) {
-  let s = skillContentIntern.get(n);
-  if (s !== undefined && s === content) return s;
-  skillContentIntern.set(n, content);
+function memoizeLastValue(skillContentIntern, key, content) {
+  let cachedContent = skillContentIntern.get(key);
+  if (cachedContent !== undefined && cachedContent === content) return cachedContent;
+  skillContentIntern.set(key, content);
   return content;
 }
 //@ chunk-e6aww6q8.js:1663518-1663586 placement
@@ -131,13 +132,13 @@ var SKILL_NAME_LETTER_RE = /[\p{Lu}\p{Ll}\p{Lt}\p{Lm}\p{Lo}\p{Nl}\p{Mn}\p{Mc}\p{
 var CONNECTOR_PUNCTUATION_RE = /\p{Pc}/u;
 var SKILL_NAMESPACE_PREFIXES = ["anthropic-skills:", "claude-ai:"];
 //@ chunk-e6aww6q8.js:1663707-1663931 placement
-function normalizeSkillName(e) {
-  let n = "";
-  for (let r of e.normalize("NFKC"))
-    for (let s of r.normalize("NFKC"))
-      if (s === " " || CONNECTOR_PUNCTUATION_RE.test(s)) n += "-";
-      else if (s === "-" || SKILL_NAME_LETTER_RE.test(s)) n += s;
-  return n
+function normalizeSkillName(input) {
+  let normalized = "";
+  for (let char of input.normalize("NFKC"))
+    for (let codePoint of char.normalize("NFKC"))
+      if (codePoint === " " || CONNECTOR_PUNCTUATION_RE.test(codePoint)) normalized += "-";
+      else if (codePoint === "-" || SKILL_NAME_LETTER_RE.test(codePoint)) normalized += codePoint;
+  return normalized
     .toLowerCase()
     .replace(/-{2,}/g, "-")
     .replace(/^-+|-+$/g, "");
@@ -146,71 +147,77 @@ function normalizeSkillName(e) {
 /**
  * 去掉开头的 / 与 anthropic-skills:/claude-ai: 前缀。
  */
-function stripSkillNamespacePrefix(e) {
-  let trimmed = e.trim();
-  let r = trimmed.startsWith("/") ? trimmed.slice(1) : trimmed;
-  let found = SKILL_NAMESPACE_PREFIXES.find((h) => r.startsWith(h));
-  return found === undefined ? r : r.slice(found.length);
+function stripSkillNamespacePrefix(raw) {
+  let trimmed = raw.trim();
+  let withoutSlash = trimmed.startsWith("/") ? trimmed.slice(1) : trimmed;
+  let found = SKILL_NAMESPACE_PREFIXES.find((prefix) => withoutSlash.startsWith(prefix));
+  return found === undefined ? withoutSlash : withoutSlash.slice(found.length);
 }
 //@ chunk-e6aww6q8.js:1664066-1664236 placement
 /**
  * 技能名相等（含 name:name 形式）或规范化后相等。
  */
-function skillNameMatches(e, n, r) {
-  let lower = n.trim().toLowerCase();
+function skillNameMatches(name, candidate, allowDouble) {
+  let lower = candidate.trim().toLowerCase();
   if (!lower) return false;
-  let lower_2 = e.trim().toLowerCase();
-  if (lower_2 === lower || (r && `${lower_2}:${lower_2}` === lower)) return true;
-  let y = normalizeSkillName(n);
-  return y !== "" && normalizeSkillName(lower_2) === y;
+  let lower_2 = name.trim().toLowerCase();
+  if (lower_2 === lower || (allowDouble && `${lower_2}:${lower_2}` === lower)) return true;
+  let normalizedCandidate = normalizeSkillName(candidate);
+  return normalizedCandidate !== "" && normalizeSkillName(lower_2) === normalizedCandidate;
 }
 //@ chunk-e6aww6q8.js:1664266-1664362 placement
-var MAX_PLUGIN_SKILLS_FILE_BYTES = 8388608;
-var pluginSkillsConfigSchema = DoctorLazy(() =>
-  u({
-    skills: array(
-      u({
-        name: string(),
-        enabled: M(),
-      }),
-    ),
-  }),
-);
-var ALL_SKILLS_ON = {
-  kind: "all-on",
-};
-var MAX_PLUGIN_COMMAND_VARIANTS = 100;
+var MAX_PLUGIN_SKILLS_FILE_BYTES; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var pluginSkillsConfigSchema;
+var ALL_SKILLS_ON;
+var MAX_PLUGIN_COMMAND_VARIANTS;
+deferInit("chunk-e6aww6q8.js:1664266", () => {
+  MAX_PLUGIN_SKILLS_FILE_BYTES = 8388608;
+  pluginSkillsConfigSchema = DoctorLazy(() =>
+    objectSchema({
+      skills: array(
+        objectSchema({
+          name: stringSchema(),
+          enabled: booleanSchema(),
+        }),
+      ),
+    }),
+  );
+  ALL_SKILLS_ON = {
+    kind: "all-on",
+  };
+  MAX_PLUGIN_COMMAND_VARIANTS = 100;
+});
 //@ chunk-e6aww6q8.js:1664362-1664502 placement
 async function listPluginSkillFilesSettled(path) {
-  let n = join(path, "manifest.json");
-  let r = await listPluginSkillFiles(n);
-  if (!r.maybeMidWrite) return r.list;
+  let manifestPath = join(path, "manifest.json");
+  let first = await listPluginSkillFiles(manifestPath);
+  if (!first.maybeMidWrite) return first.list;
   await sleep(MAX_PLUGIN_COMMAND_VARIANTS);
-  return (await listPluginSkillFiles(n)).list;
+  return (await listPluginSkillFiles(manifestPath)).list;
 }
 //@ chunk-e6aww6q8.js:1664502-1664672 placement
-function computeDisabledSkills(e, n) {
-  if (e.kind === "all-on") return new Set();
-  let r = new Set(n);
-  let any = [...e.off].some((h) => !r.has(h));
-  return new Set(n.filter((h) => e.off.has(h) || (any && !e.listed.has(h))));
+function computeDisabledSkills(config, names) {
+  if (config.kind === "all-on") return new Set();
+  let listedNames = new Set(names);
+  let any = [...config.off].some((offName) => !listedNames.has(offName));
+  return new Set(names.filter((name) => config.off.has(name) || (any && !config.listed.has(name))));
 }
 //@ chunk-e6aww6q8.js:1664672-1665667 placement
-async function listPluginSkillFiles(e) {
-  let n;
+async function listPluginSkillFiles(manifestPath) {
+  let fileInfo;
   try {
-    n = await getMcpAuthCache_2(e, MAX_PLUGIN_SKILLS_FILE_BYTES);
+    fileInfo = await getMcpAuthCache_2(manifestPath, MAX_PLUGIN_SKILLS_FILE_BYTES);
   } catch (error) {
-    let errnoCode = getErrnoCode(error);
+    let code = getErrnoCode(error);
     return {
-      list: skillListReadFailure(errnoCode),
-      maybeMidWrite: errnoCode === "ENOENT" || isUnavailableErrorCode(errnoCode),
+      list: skillListReadFailure(code),
+      maybeMidWrite: code === "ENOENT" || isUnavailableErrorCode(code),
     };
   }
-  switch (n.kind) {
+  switch (fileInfo.kind) {
     case "absent":
       return {
-        list: n.code === "ENOENT" ? ALL_SKILLS_ON : skillListReadFailure(n.code),
+        list: fileInfo.code === "ENOENT" ? ALL_SKILLS_ON : skillListReadFailure(fileInfo.code),
         maybeMidWrite: false,
       };
     case "refused":
@@ -234,9 +241,9 @@ async function listPluginSkillFiles(e) {
     case "ok":
       break;
   }
-  let r;
+  let parsed;
   try {
-    r = jsonParse(n.content);
+    parsed = jsonParse(fileInfo.content);
   } catch {
     return {
       list: {
@@ -247,8 +254,8 @@ async function listPluginSkillFiles(e) {
       maybeMidWrite: true,
     };
   }
-  let s = pluginSkillsConfigSchema().safeParse(r);
-  if (!s.success)
+  let parseResult = pluginSkillsConfigSchema().safeParse(parsed);
+  if (!parseResult.success)
     return {
       list: {
         kind: "unusable",
@@ -257,30 +264,30 @@ async function listPluginSkillFiles(e) {
       },
       maybeMidWrite: false,
     };
-  let h = new Set();
-  let y = new Set();
-  for (let skill of s.data.skills) {
-    y.add(skill.name);
-    if (!skill.enabled) h.add(skill.name);
+  let offSkills = new Set();
+  let allSkills = new Set();
+  for (let skill of parseResult.data.skills) {
+    allSkills.add(skill.name);
+    if (!skill.enabled) offSkills.add(skill.name);
   }
   return {
     list:
-      h.size === 0
+      offSkills.size === 0
         ? ALL_SKILLS_ON
         : {
             kind: "some-off",
-            off: h,
-            listed: y,
+            off: offSkills,
+            listed: allSkills,
           },
     maybeMidWrite: false,
   };
 }
 //@ chunk-e6aww6q8.js:1665667-1665792 placement
-function skillListReadFailure(e) {
+function skillListReadFailure(code) {
   return {
     kind: "unusable",
     code: "plugin_skill_list_read_failed",
-    why: `could not be read (${e ?? "no error code"})`,
+    why: `could not be read (${code ?? "no error code"})`,
   };
 }
 //@ chunk-e6aww6q8.js:1665792-1665808 placement
@@ -289,7 +296,7 @@ function skillListReadFailure(e) {
  */
 var MAX_PLUGIN_COMMAND_FILE_BYTES = 1048576;
 //@ chunk-e6aww6q8.js:1665808-1666717 placement
-function validatePluginCommandAllowedTools(source, text, r) {
+function validatePluginCommandAllowedTools(source, text, pluginDataDir) {
   let { frontmatter, frontmatterAsWritten, asWrittenProblem, content, parseError } = parseFrontmatter(
     text,
     source.filePath,
@@ -299,69 +306,70 @@ function validatePluginCommandAllowedTools(source, text, r) {
     },
   );
   if (parseError !== undefined) return null;
-  let L = applyCommandMetadataOverrides(frontmatter, source.config.metadata);
-  let joined = [L["allowed-tools"]]
+  let mergedFrontmatter = applyCommandMetadataOverrides(frontmatter, source.config.metadata);
+  let joined = [mergedFrontmatter["allowed-tools"]]
     .flat()
-    .filter((we) => typeof we === "string")
+    .filter((value) => typeof value === "string")
     .join();
-  let q = {
+  let substitutionContext = {
     path: source.pluginPath,
     source: source.sourceName,
-    dataDir: r,
+    dataDir: pluginDataDir,
   };
-  let Z =
-    joined.length + estimateSubstitutedGrowth(joined, q, source.filePath) > MAX_UNTRUSTED_FRONTMATTER_BYTES;
-  let Se = Z || needsUnknownDataDir(joined, q);
-  if (Se)
+  let tooLong =
+    joined.length + estimateSubstitutedGrowth(joined, substitutionContext, source.filePath) >
+    MAX_UNTRUSTED_FRONTMATTER_BYTES;
+  let shouldDrop = tooLong || needsUnknownDataDir(joined, substitutionContext);
+  if (shouldDrop)
     logForDebugging(
-      `Plugin command ${source.commandName}: its allowed-tools are dropped: ${Z ? "filled in, they could be too long, or a folder they name holds a variable or a $" : "they name the plugin's data folder, which did not come with the plugin"}`,
+      `Plugin command ${source.commandName}: its allowed-tools are dropped: ${tooLong ? "filled in, they could be too long, or a folder they name holds a variable or a $" : "they name the plugin's data folder, which did not come with the plugin"}`,
       {
         level: "warn",
       },
     );
-  let ke = {
+  let file = {
     filePath: source.filePath,
     baseDir: source.baseDir,
-    frontmatter: Se
+    frontmatter: shouldDrop
       ? {
-          ...L,
+          ...mergedFrontmatter,
           "allowed-tools": "",
         }
-      : L,
+      : mergedFrontmatter,
     skillFile: buildFrontmatterResult(frontmatterAsWritten, undefined, asWrittenProblem),
     content: memoizeLastValue(getHostState().skillContentIntern, source.filePath, content),
   };
   return createPluginCommand(
     source.commandName,
-    ke,
+    file,
     source.sourceName,
     source.pluginManifest,
     source.pluginPath,
     source.provenance ?? {},
     source.isSkill,
     source.config,
-    r,
+    pluginDataDir,
   );
 }
 //@ chunk-e6aww6q8.js:1666717-1666959 layout
 /**
  * 把 manifest commands 对象形式里的元数据（description、argumentHint、model、allowedTools）覆盖到 markdown frontmatter 上。
  */
-function applyCommandMetadataOverrides(frontmatter, n) {
-  if (n === undefined) return frontmatter;
+function applyCommandMetadataOverrides(frontmatter, metadata) {
+  if (metadata === undefined) return frontmatter;
   return {
     ...frontmatter,
-    ...(n.description && {
-      description: n.description,
+    ...(metadata.description && {
+      description: metadata.description,
     }),
-    ...(n.argumentHint && {
-      "argument-hint": n.argumentHint,
+    ...(metadata.argumentHint && {
+      "argument-hint": metadata.argumentHint,
     }),
-    ...(n.model && {
-      model: n.model,
+    ...(metadata.model && {
+      model: metadata.model,
     }),
-    ...(n.allowedTools && {
-      "allowed-tools": n.allowedTools.join(","),
+    ...(metadata.allowedTools && {
+      "allowed-tools": metadata.allowedTools.join(","),
     }),
   };
 }
@@ -454,7 +462,7 @@ async function collectMarkdownFiles(dirPath, baseDir, loadedPaths) {
       loadedPaths,
     },
   );
-  return files.sort((y, S) => y.filePath.localeCompare(S.filePath));
+  return files.sort((left, right) => left.filePath.localeCompare(right.filePath));
 }
 //@ chunk-e6aww6q8.js:1668487-1668700 fingerprint = loadCommandsFromDirectory (1)
 async function loadCommandsFromDirectory(
@@ -464,7 +472,7 @@ async function loadCommandsFromDirectory(
   pluginManifest,
   pluginPath,
   pluginTrustContext,
-  S = {
+  config = {
     isSkillMode: false,
   },
   loadedPaths = new Set(),
@@ -482,7 +490,7 @@ async function loadCommandsFromDirectory(
       pluginPath,
       pluginTrustContext,
       isSkillFile_2(file.filePath),
-      S,
+      config,
     );
     if (command) commands.push(command);
   }
@@ -493,77 +501,77 @@ async function loadCommandsFromDirectory(
  * 由插件的 markdown 文件构造斜杠命令：命令名 <插件>:<相对路径>（技能目录用目录名），解析 frontmatter（description、allowed-tools、argument-hint、model、disable-model-invocation…），正文在调用时替换 $ARGUMENTS、${CLAUDE_PLUGIN_ROOT}、${user_config.X}。
  */
 function createPluginCommand(
-  source,
+  commandName,
   file,
-  r,
-  s,
-  h,
-  y,
-  S,
-  w = {
+  sourceName,
+  pluginManifest,
+  pluginPath,
+  provenance,
+  isSkill,
+  config = {
     isSkillMode: false,
   },
-  L,
+  pluginDataDir,
 ) {
-  if (y.marketplaceSource !== undefined) {
-    let G = redactMarketplaceSource(y.marketplaceSource);
-    if (G === null) {
-      let { marketplaceSource, ...Z } = y;
-      y = Z;
+  if (provenance.marketplaceSource !== undefined) {
+    let redactedSource = redactMarketplaceSource(provenance.marketplaceSource);
+    if (redactedSource === null) {
+      let { marketplaceSource, ...withoutMarketplace } = provenance;
+      provenance = withoutMarketplace;
     } else
-      y = {
-        ...y,
-        marketplaceSource: G,
+      provenance = {
+        ...provenance,
+        marketplaceSource: redactedSource,
       };
   }
-  if (y.npmResolution !== undefined) {
-    let G = redactNpmTarball(y.npmResolution);
-    if (G === null) {
-      let { npmResolution, ...Z } = y;
-      y = Z;
-    } else if (G !== y.npmResolution)
-      y = {
-        ...y,
-        npmResolution: G,
+  if (provenance.npmResolution !== undefined) {
+    let redactedNpm = redactNpmTarball(provenance.npmResolution);
+    if (redactedNpm === null) {
+      let { npmResolution, ...withoutNpm } = provenance;
+      provenance = withoutNpm;
+    } else if (redactedNpm !== provenance.npmResolution)
+      provenance = {
+        ...provenance,
+        npmResolution: redactedNpm,
       };
   }
   try {
-    if (!isSkillFilePathOrIdentifier(source)) {
-      reportRefusedSkillName(source, "is not offered");
+    if (!isSkillFilePathOrIdentifier(commandName)) {
+      reportRefusedSkillName(commandName, "is not offered");
       return null;
     }
     let { frontmatter, content } = file;
-    let validatedDescription = coerceDescriptionToString(frontmatter.description, source);
-    let ke = dirname(file.filePath);
-    let we = (yo) => {
-      let Ho = substitutePluginVariables(yo, {
-        path: h,
-        source: r,
-        dataDir: L,
+    let validatedDescription = coerceDescriptionToString(frontmatter.description, commandName);
+    let fileDir = dirname(file.filePath);
+    let substitute = (text) => {
+      let substituted = substitutePluginVariables(text, {
+        path: pluginPath,
+        source: sourceName,
+        dataDir: pluginDataDir,
         ...(getToolsMachine() && {
           projectDir: null,
         }),
       });
-      if (w.isSkillMode) Ho = Ho.replace(/\$\{CLAUDE_SKILL_DIR\}/g, () => ke);
-      return Ho;
+      if (config.isSkillMode) substituted = substituted.replace(/\$\{CLAUDE_SKILL_DIR\}/g, () => fileDir);
+      return substituted;
     };
-    let Ee = frontmatter["allowed-tools"];
+    let rawAllowedTools = frontmatter["allowed-tools"];
     let toolsValue =
-      typeof Ee === "string"
-        ? we(Ee)
-        : Array.isArray(Ee)
-          ? Ee.map((tool) => (typeof tool === "string" ? we(tool) : tool))
-          : Ee;
+      typeof rawAllowedTools === "string"
+        ? substitute(rawAllowedTools)
+        : Array.isArray(rawAllowedTools)
+          ? rawAllowedTools.map((tool) => (typeof tool === "string" ? substitute(tool) : tool))
+          : rawAllowedTools;
     let allowedTools = parseSlashCommandToolsFromFrontmatter(toolsValue);
     let filtered = allowedTools.filter((allowedTool) => !allowedTool.includes(PROJECT_DIR_PLACEHOLDER));
     if (filtered.length < allowedTools.length)
       logForDebugging(
-        `Plugin command ${source}: loaded without ${allowedTools.length - filtered.length} of its allowed-tools entries, which name CLAUDE_PROJECT_DIR, because this process has no folder where the tools run`,
+        `Plugin command ${commandName}: loaded without ${allowedTools.length - filtered.length} of its allowed-tools entries, which name CLAUDE_PROJECT_DIR, because this process has no folder where the tools run`,
         {
           level: "warn",
         },
       );
-    let We = frontmatterDisallowedTools(frontmatter);
+    let disallowedTools = frontmatterDisallowedTools(frontmatter);
     let argumentNames = normalizeArgumentNames(frontmatter.arguments);
     let {
       description,
@@ -573,57 +581,59 @@ function createPluginCommand(
     } = displaySkillFields({
       description:
         validatedDescription ??
-        extractDescriptionFromMarkdown(content, S ? "Plugin skill" : "Plugin command"),
+        extractDescriptionFromMarkdown(content, isSkill ? "Plugin skill" : "Plugin command"),
       argumentHint: frontmatter["argument-hint"] != null ? String(frontmatter["argument-hint"]) : undefined,
       argumentNames,
       whenToUse: frontmatter.when_to_use != null ? String(frontmatter.when_to_use) : undefined,
     });
     let version = frontmatter.version != null ? String(frontmatter.version) : undefined;
-    let frontmatterName = parseFrontmatterName(frontmatter.name, `plugin command ${source}`);
-    let sliced = source.slice(0, source.lastIndexOf(":") + 1);
-    let At = frontmatterName
-      ? frontmatterName.startsWith(sliced)
-        ? frontmatterName
-        : `${sliced}${frontmatterName}`
-      : source;
-    let It =
-      frontmatterName && !frontmatterName.includes(":")
-        ? /\s/.test(frontmatterName) && areSkillsConvertedAsPlugins()
-          ? [frontmatterName, source.slice(sliced.length)]
-          : [frontmatterName]
+    let name = parseFrontmatterName(frontmatter.name, `plugin command ${commandName}`);
+    let sliced = commandName.slice(0, commandName.lastIndexOf(":") + 1);
+    let displayName = name ? (name.startsWith(sliced) ? name : `${sliced}${name}`) : commandName;
+    let aliasNames =
+      name && !name.includes(":")
+        ? /\s/.test(name) && areSkillsConvertedAsPlugins()
+          ? [name, commandName.slice(sliced.length)]
+          : [name]
         : undefined;
-    let Yt = !!frontmatterName && !(isSkillPathEligible(frontmatterName) && isSkillPathEligible(At));
+    let aliasesRefused = !!name && !(isSkillPathEligible(name) && isSkillPathEligible(displayName));
     let model = frontmatter.model;
-    let Zt;
+    let resolvedModel;
     if (typeof model === "string" && model.trim().length > 0) {
       let trimmed = model.trim();
-      Zt = trimmed.toLowerCase() === "inherit" ? "inherit" : parseUserSpecifiedModel(trimmed);
+      resolvedModel = trimmed.toLowerCase() === "inherit" ? "inherit" : parseUserSpecifiedModel(trimmed);
     }
     let effort = frontmatter.effort;
-    let pn = effort !== undefined ? parseEffortValue(effort) : undefined;
-    if (effort !== undefined && pn === undefined)
+    let parsedEffort = effort !== undefined ? parseEffortValue(effort) : undefined;
+    if (effort !== undefined && parsedEffort === undefined)
       logForDebugging(
-        `Plugin command ${source} has invalid effort '${effort}'. Valid options: ${EFFORT_LEVELS.join(", ")} or an integer`,
+        `Plugin command ${commandName} has invalid effort '${effort}'. Valid options: ${EFFORT_LEVELS.join(", ")} or an integer`,
       );
     let disableModelInvocation = parseBooleanFrontmatter(frontmatter["disable-model-invocation"]);
-    let hn = frontmatter["user-invocable"];
-    let ho = hn === undefined ? true : parseBooleanFrontmatter(hn);
-    let yn;
-    let shell = directoryPluginFallbackName(h, SYNCED);
-    if (ho && !(S && Yt) && marketplaceSuffix(r) === SYNCED && isUuid(shell)) {
-      let yo = dirname(file.filePath);
-      let Ho = S
-        ? normalizeSkillName(frontmatterName?.trim() || (yo === h ? shell : basename(yo)))
-        : source.slice(source.indexOf(":") + 1);
-      let rr = `${shell}:${Ho}`;
-      if (Ho !== "" && rr !== source && rr !== At) yn = rr;
+    let rawUserInvocable = frontmatter["user-invocable"];
+    let userInvocable = rawUserInvocable === undefined ? true : parseBooleanFrontmatter(rawUserInvocable);
+    let listingName;
+    let shell = directoryPluginFallbackName(pluginPath, SYNCED);
+    if (
+      userInvocable &&
+      !(isSkill && aliasesRefused) &&
+      marketplaceSuffix(sourceName) === SYNCED &&
+      isUuid(shell)
+    ) {
+      let fileDir = dirname(file.filePath);
+      let skillName = isSkill
+        ? normalizeSkillName(name?.trim() || (fileDir === pluginPath ? shell : basename(fileDir)))
+        : commandName.slice(commandName.indexOf(":") + 1);
+      let candidateName = `${shell}:${skillName}`;
+      if (skillName !== "" && candidateName !== commandName && candidateName !== displayName)
+        listingName = candidateName;
     }
-    let shellFrontmatter = parseShellFrontmatter(frontmatter.shell, source);
-    let fo;
-    let To = false;
-    let bo = hasNestedHooks(frontmatter, PLUGIN_NON_HOOK_KEYS);
-    let vn =
-      !(S || w.isSkillMode) &&
+    let shellFrontmatter = parseShellFrontmatter(frontmatter.shell, commandName);
+    let hooks;
+    let unloadable = false;
+    let hasTopLevelGuards = hasNestedHooks(frontmatter, PLUGIN_NON_HOOK_KEYS);
+    let invalidHooks =
+      !(isSkill || config.isSkillMode) &&
       frontmatter.hooks !== undefined &&
       frontmatter.hooks !== null &&
       (typeof frontmatter.hooks !== "object" ||
@@ -631,189 +641,192 @@ function createPluginCommand(
           frontmatter.hooks.some((hook) => !hook || typeof hook !== "object")) ||
         hasGuardHooks_2(frontmatter.hooks) ||
         containsHooks(frontmatter.hooks));
-    if (bo || vn) {
-      To = true;
+    if (hasTopLevelGuards || invalidHooks) {
+      unloadable = true;
       logForDebugging(
-        `Plugin skill '${source}': PreToolUse/PermissionRequest is declared at the frontmatter top level, outside "hooks" \u2014 ${UNLOADABLE_GUARD_NOTE} (the skill loads with no hooks and no allowed-tools)`,
+        `Plugin skill '${commandName}': PreToolUse/PermissionRequest is declared at the frontmatter top level, outside "hooks" \u2014 ${UNLOADABLE_GUARD_NOTE} (the skill loads with no hooks and no allowed-tools)`,
         {
           level: "error",
         },
       );
-    } else if ((S || w.isSkillMode) && frontmatter.hooks) {
+    } else if ((isSkill || config.isSkillMode) && frontmatter.hooks) {
       let rawSkillDir = validateHooksSetting(frontmatter.hooks);
       for (let note of rawSkillDir.notes)
-        logForDebugging(`Plugin skill '${source}': ${note}`, {
+        logForDebugging(`Plugin skill '${commandName}': ${note}`, {
           level: "warn",
         });
-      let Ho = HooksSchema().safeParse(frontmatter.hooks);
-      if (rawSkillDir.unloadableGuards.length > 0 || !Ho.success) {
-        To = true;
+      let hooksParse = HooksSchema().safeParse(frontmatter.hooks);
+      if (rawSkillDir.unloadableGuards.length > 0 || !hooksParse.success) {
+        unloadable = true;
         logForDebugging(
-          `Plugin skill '${source}': ${rawSkillDir.unloadableGuards.join("; ") || Ho.error?.message || "hooks unreadable"} \u2014 ${UNLOADABLE_GUARD_NOTE} (the skill loads with no hooks and no allowed-tools)`,
+          `Plugin skill '${commandName}': ${rawSkillDir.unloadableGuards.join("; ") || hooksParse.error?.message || "hooks unreadable"} \u2014 ${UNLOADABLE_GUARD_NOTE} (the skill loads with no hooks and no allowed-tools)`,
           {
             level: "error",
           },
         );
-      } else fo = Ho.data;
+      } else hooks = hooksParse.data;
     }
-    let co = fo !== undefined && hasGuardHooks_2(fo) && shouldSkipSessionHooksByPolicy();
-    let So = !To && !co;
-    let allowedTools_2 = So ? filtered : [];
-    let un = false;
-    let ao = () => {
-      let yo = shouldLoadPermissionRules(fo, r) ? [] : ($o.allowedTools ?? []);
-      let Ho =
-        yo.length === 0
+    let guardsSkippedByPolicy =
+      hooks !== undefined && hasGuardHooks_2(hooks) && shouldSkipSessionHooksByPolicy();
+    let usable = !unloadable && !guardsSkippedByPolicy;
+    let allowedTools_2 = usable ? filtered : [];
+    let grantReported = false;
+    let getAllowedTools = () => {
+      let grants = shouldLoadPermissionRules(hooks, sourceName) ? [] : (command.allowedTools ?? []);
+      let withheldReason =
+        grants.length === 0
           ? undefined
           : frontmatterToolGrantWithheldReason("plugin", {
-              id: r,
-              ...y,
+              id: sourceName,
+              ...provenance,
             });
-      if (Ho === undefined) {
-        un = false;
-        return yo;
+      if (withheldReason === undefined) {
+        grantReported = false;
+        return grants;
       }
-      if (!un) {
-        un = true;
+      if (!grantReported) {
+        grantReported = true;
         reportIgnoredFrontmatterToolGrants(
-          source,
+          commandName,
           {
-            pluginId: r,
+            pluginId: sourceName,
           },
-          yo,
-          Ho,
+          grants,
+          withheldReason,
         );
       }
       return [];
     };
-    let $o = {
+    let command = {
       type: "prompt",
-      name: source,
+      name: commandName,
       description,
       hasUserSpecifiedDescription: validatedDescription !== null,
       allowedTools: allowedTools_2,
-      ...(So &&
+      ...(usable &&
         allowedTools.length > 0 && {
-          getAllowedTools: async () => ao(),
+          getAllowedTools: async () => getAllowedTools(),
         }),
-      disallowedTools: We.length > 0 ? We : undefined,
+      disallowedTools: disallowedTools.length > 0 ? disallowedTools : undefined,
       argumentHint,
       argNames: argumentNames_2.length > 0 ? argumentNames_2 : undefined,
       whenToUse,
       version,
-      model: Zt,
-      effort: pn,
+      model: resolvedModel,
+      effort: parsedEffort,
       context: frontmatter.context === "fork" ? "fork" : undefined,
       agent: frontmatter.agent != null ? String(frontmatter.agent) : undefined,
       background: parseBooleanishFrontmatter(frontmatter.background),
       disableModelInvocation,
-      userInvocable: ho,
+      userInvocable,
       declaredFields: getDeclaredFrontmatterFields(frontmatter),
       metadata: isPlainObject_5(frontmatter.metadata) ? frontmatter.metadata : undefined,
       contentLength: content.length,
       source: "plugin",
-      loadedFrom: S || w.isSkillMode ? "plugin" : undefined,
-      hooks: fo,
-      skillRoot: (S || w.isSkillMode) && fo ? h : undefined,
-      skillDir: S || w.isSkillMode ? dirname(file.filePath) : undefined,
+      loadedFrom: isSkill || config.isSkillMode ? "plugin" : undefined,
+      hooks,
+      skillRoot: (isSkill || config.isSkillMode) && hooks ? pluginPath : undefined,
+      skillDir: isSkill || config.isSkillMode ? dirname(file.filePath) : undefined,
       skillFile: file.skillFile,
       pluginInfo: {
-        pluginManifest: s,
-        repository: r,
-        ...(y.officiallyAttested && {
+        pluginManifest,
+        repository: sourceName,
+        ...(provenance.officiallyAttested && {
           officiallyAttested: true,
         }),
-        ...(y.marketplaceSource && {
-          marketplaceSource: y.marketplaceSource,
+        ...(provenance.marketplaceSource && {
+          marketplaceSource: provenance.marketplaceSource,
         }),
-        ...(y.npmResolution && {
-          npmResolution: y.npmResolution,
+        ...(provenance.npmResolution && {
+          npmResolution: provenance.npmResolution,
         }),
-        ...(y.home !== undefined && {
-          home: y.home,
+        ...(provenance.home !== undefined && {
+          home: provenance.home,
         }),
       },
       pluginSource: {
-        commandName: source,
+        commandName,
         filePath: file.filePath,
         baseDir: file.baseDir,
-        sourceName: r,
-        pluginManifest: s,
-        pluginPath: h,
-        provenance: y,
-        isSkill: S,
-        config: w,
+        sourceName,
+        pluginManifest,
+        pluginPath,
+        provenance,
+        isSkill,
+        config,
       },
-      serverAttribution: w.serverAttribution,
-      isHidden: !ho,
-      progressMessage: S || w.isSkillMode ? "loading" : "running",
+      serverAttribution: config.serverAttribution,
+      isHidden: !userInvocable,
+      progressMessage: isSkill || config.isSkillMode ? "loading" : "running",
       userFacingName() {
-        return At;
+        return displayName;
       },
-      aliases: Yt ? undefined : It,
-      shedAliases: Yt ? It : undefined,
-      ...(yn !== undefined && {
-        directoryListingName: yn,
+      aliases: aliasesRefused ? undefined : aliasNames,
+      shedAliases: aliasesRefused ? aliasNames : undefined,
+      ...(listingName !== undefined && {
+        directoryListingName: listingName,
       }),
       async getPromptForCommand(args, context) {
-        let rr = w.isSkillMode
+        let promptText = config.isSkillMode
           ? `Base directory for this skill: ${dirname(file.filePath)}
 
 ${content}`
           : content;
-        let br = skillWatchStateSlot.get();
-        if (br !== undefined)
-          rr = await br(rr, {
+        let watcher = skillWatchStateSlot.get();
+        if (watcher !== undefined)
+          promptText = await watcher(promptText, {
             isPreload: context.options.isSkillPreload === true,
           });
-        let options = s.userConfig ? await loadPluginOptions(r, context.credentials) : undefined;
+        let options = pluginManifest.userConfig
+          ? await loadPluginOptions(sourceName, context.credentials)
+          : undefined;
         let effortLevel = getEffortLevelOrHigh(
-          inlineSkillModelOverride(Zt) ?? context.options.mainLoopModel,
+          inlineSkillModelOverride(resolvedModel) ?? context.options.mainLoopModel,
           getEffortValue(context),
-          pn ?? getEffortLayerOverride(context.permissionLayers),
+          parsedEffort ?? getEffortLayerOverride(context.permissionLayers),
         );
-        let cs = {
-          pluginPath: h,
-          sourceName: r,
-          pluginDataDir: L,
-          userConfig: s.userConfig,
+        let skillContext = {
+          pluginPath,
+          sourceName,
+          pluginDataDir,
+          userConfig: pluginManifest.userConfig,
           options,
-          skillDir: w.isSkillMode ? ke : undefined,
+          skillDir: config.isSkillMode ? fileDir : undefined,
           effortLevel,
         };
-        rr = substituteArguments(
-          rr,
+        promptText = substituteArguments(
+          promptText,
           args,
           true,
           argumentNames,
-          (_r) => escapeShellBangs(substituteSkillVariables(_r, cs)),
-          (_r, Cr) => substituteSkillVariables(_r, cs, Cr),
+          (arg) => escapeShellBangs(substituteSkillVariables(arg, skillContext)),
+          (value, argRef) => substituteSkillVariables(value, skillContext, argRef),
         );
-        if (isSkillShellExecutionDisabled()) rr = replacePromptShellCommands(rr);
+        if (isSkillShellExecutionDisabled()) promptText = replacePromptShellCommands(promptText);
         else
-          rr = await executeShellCommandsInPrompt(
-            rr,
+          promptText = await executeShellCommandsInPrompt(
+            promptText,
             {
               ...context,
-              getAppState: withCommandAllowRules(context, ao()),
+              getAppState: withCommandAllowRules(context, getAllowedTools()),
             },
-            `/${source}`,
+            `/${commandName}`,
             shellFrontmatter,
-            r,
+            sourceName,
           );
         return [
           {
             type: "text",
-            text: rr,
+            text: promptText,
           },
         ];
       },
     };
-    if (Yt) {
-      reportRefusedSkillName(At, `is not shown for ${source}`);
-      clearUserFacingName($o);
+    if (aliasesRefused) {
+      reportRefusedSkillName(displayName, `is not shown for ${commandName}`);
+      clearUserFacingName(command);
     }
-    return $o;
+    return command;
   } catch (error) {
     logForDebugging(`Failed to create command from ${file.filePath}: ${error}`, {
       level: "error",
@@ -833,7 +846,7 @@ function copySyncedSkillFlags(pluginInfo, plugin) {
 /**
  * 加载所有启用插件的命令（commands/ 目录与 manifest.commands），结果缓存在全局 commands。
  */
-function getPluginCommands(e) {
+function getPluginCommands(storageV5) {
   let pluginRegistry = getPluginRegistry();
   pluginRegistry.commands ??= (async () => {
     if (
@@ -847,10 +860,10 @@ function getPluginCommands(e) {
     )
       return [];
     if (pluginRegistry.handedIn !== undefined) return (await pluginRegistry.handedIn).commands;
-    let { enabled, errors } = await loadAllPluginsCacheOnly(e);
+    let { enabled, errors } = await loadAllPluginsCacheOnly(storageV5);
     if (errors.length > 0)
       logForDebugging(`Plugin loading errors: ${errors.map((e) => pluginErrorText(e)).join(", ")}`);
-    let h = null;
+    let failureKind = null;
     let allCommands = (
       await Promise.all(
         enabled.map(async (plugin) => {
@@ -876,7 +889,7 @@ function getPluginCommands(e) {
                   `Loaded ${commands.length} commands from plugin ${plugin.name} default directory`,
                 );
             } catch (error) {
-              h = "plugin_load_commands_dir_failed";
+              failureKind = "plugin_load_commands_dir_failed";
               logForDebugging(
                 `Failed to load commands from plugin ${plugin.name} default directory: ${error}`,
                 {
@@ -954,7 +967,7 @@ function getPluginCommands(e) {
                     }
                     if (!commandName)
                       commandName = `${plugin.name}:${basename(commandPath).replace(/\.md$/, "")}`;
-                    let lt = {
+                    let file = {
                       filePath: commandPath,
                       baseDir: dirname(commandPath),
                       frontmatter: applyCommandMetadataOverrides(frontmatter, metadataOverride),
@@ -963,7 +976,7 @@ function getPluginCommands(e) {
                     };
                     let command = createPluginCommand(
                       commandName,
-                      lt,
+                      file,
                       plugin.source,
                       plugin.manifest,
                       plugin.path,
@@ -983,7 +996,7 @@ function getPluginCommands(e) {
                   }
                   return [];
                 } catch (error) {
-                  h = "plugin_load_commands_path_failed";
+                  failureKind = "plugin_load_commands_path_failed";
                   logForDebugging(
                     `Failed to load commands from plugin ${plugin.name} custom path ${commandPath}: ${error}`,
                     {
@@ -1009,7 +1022,7 @@ function getPluginCommands(e) {
                   );
                   let commandName = `${plugin.name}:${name}`;
                   let commandName_2 = `<inline:${commandName}>`;
-                  let Me = {
+                  let inlineCommandData = {
                     filePath: commandName_2,
                     baseDir: plugin.path,
                     frontmatter: applyCommandMetadataOverrides(frontmatter, metadata),
@@ -1018,7 +1031,7 @@ function getPluginCommands(e) {
                   };
                   let command = createPluginCommand(
                     commandName,
-                    Me,
+                    inlineCommandData,
                     plugin.source,
                     plugin.manifest,
                     plugin.path,
@@ -1036,7 +1049,7 @@ function getPluginCommands(e) {
                     );
                   }
                 } catch (error) {
-                  h = "plugin_load_commands_inline_failed";
+                  failureKind = "plugin_load_commands_inline_failed";
                   logForDebugging(
                     `Failed to load inline content command ${name} from plugin ${plugin.name}: ${error}`,
                     {
@@ -1059,19 +1072,19 @@ function getPluginCommands(e) {
       )
     ).flat();
     logForDebugging(`Total plugin commands loaded: ${allCommands.length}`);
-    if (h) logFeatureBad("plugin_load_commands", h);
+    if (failureKind) logFeatureBad("plugin_load_commands", failureKind);
     else logFeatureOk("plugin_load_commands");
     return allCommands;
   })();
   return pluginRegistry.commands;
 }
 //@ chunk-e6aww6q8.js:1677759-1677969 layout
-async function realpathForDedupe(e) {
+async function realpathForDedupe(targetPath) {
   try {
-    return await realpath(e);
+    return await realpath(targetPath);
   } catch (error) {
     logForDebugging(
-      `Could not resolve ${e} to de-duplicate it across plugins (${errorMessage(error)}); keeping the skill without cross-plugin de-duplication`,
+      `Could not resolve ${targetPath} to de-duplicate it across plugins (${errorMessage(error)}); keeping the skill without cross-plugin de-duplication`,
       {
         level: "warn",
       },
@@ -1091,11 +1104,11 @@ async function loadSkillsFromDirectory(
   pluginPath,
   pluginTrustContext,
   loadedPaths,
-  w,
+  skillSwitches,
 ) {
   let fs = getFsImplementation();
   let skills = [];
-  let q = isSkillAttributionEnabled();
+  let attributionFor = isSkillAttributionEnabled();
   let directSkillPath = join(skillsPath, "SKILL.md");
   let directSkillContent = null;
   try {
@@ -1117,7 +1130,7 @@ async function loadSkillsFromDirectory(
   }
   if (directSkillContent !== null) {
     if (
-      computeDisabledSkills(w, [basename(skillsPath)]).size > 0 ||
+      computeDisabledSkills(skillSwitches, [basename(skillsPath)]).size > 0 ||
       isDuplicatePath(fs, directSkillPath, loadedPaths)
     )
       return skills;
@@ -1129,9 +1142,10 @@ async function loadSkillsFromDirectory(
           normalizeKeys: true,
         },
       );
-      let ze = typeof frontmatter.name === "string" ? frontmatter.name.trim() : "";
+      let rawName = typeof frontmatter.name === "string" ? frontmatter.name.trim() : "";
       let replaced = (
-        (ze.startsWith(`${pluginName}:`) ? ze.slice(pluginName.length + 1) : ze) || basename(skillsPath)
+        (rawName.startsWith(`${pluginName}:`) ? rawName.slice(pluginName.length + 1) : rawName) ||
+        basename(skillsPath)
       ).replace(/[^a-zA-Z0-9_-]/g, "-");
       let skillName = `${pluginName}:${replaced}`;
       let file = {
@@ -1151,7 +1165,7 @@ async function loadSkillsFromDirectory(
         true,
         {
           isSkillMode: true,
-          serverAttribution: q(file.baseDir),
+          serverAttribution: attributionFor(file.baseDir),
         },
       );
       if (skill)
@@ -1166,9 +1180,9 @@ async function loadSkillsFromDirectory(
     }
     return skills;
   }
-  let ke;
+  let dirEntries;
   try {
-    ke = await fs.readdir(skillsPath);
+    dirEntries = await fs.readdir(skillsPath);
   } catch (e) {
     if (!isENOENT(e))
       logForDebugging(`Failed to load skills from directory ${skillsPath}: ${e}`, {
@@ -1176,10 +1190,10 @@ async function loadSkillsFromDirectory(
       });
     return skills;
   }
-  let filtered = ke.filter((entry) => entry.isDirectory() || entry.isSymbolicLink());
+  let filtered = dirEntries.filter((entry) => entry.isDirectory() || entry.isSymbolicLink());
   let skillDirPath = computeDisabledSkills(
-    w,
-    filtered.map((Ae) => Ae.name),
+    skillSwitches,
+    filtered.map((entry) => entry.name),
   );
   if (skillDirPath.size > 0)
     logForDebugging(
@@ -1190,7 +1204,7 @@ async function loadSkillsFromDirectory(
       if (skillDirPath.has(entry.name)) return;
       let skillDirPath_2 = join(skillsPath, entry.name);
       let skillFilePath = join(skillDirPath_2, "SKILL.md");
-      let We;
+      let content;
       try {
         let smallFileChecked = await readSmallFileChecked(fs, skillFilePath, MAX_PLUGIN_COMMAND_FILE_BYTES);
         if (smallFileChecked === null) {
@@ -1202,7 +1216,7 @@ async function loadSkillsFromDirectory(
           );
           return;
         }
-        We = smallFileChecked;
+        content = smallFileChecked;
       } catch (e) {
         if (!isENOENT(e))
           logForDebugging(`Failed to load skill from ${skillFilePath}: ${e}`, {
@@ -1212,20 +1226,21 @@ async function loadSkillsFromDirectory(
       }
       if (isDuplicatePath(fs, skillFilePath, loadedPaths)) return;
       try {
-        let { frontmatter, frontmatterAsWritten, asWrittenProblem, content } = parseFrontmatter(
-          We,
-          skillFilePath,
-          {
-            normalizeKeys: true,
-          },
-        );
+        let {
+          frontmatter,
+          frontmatterAsWritten,
+          asWrittenProblem,
+          content: content_2,
+        } = parseFrontmatter(content, skillFilePath, {
+          normalizeKeys: true,
+        });
         let skillName = `${pluginName}:${entry.name.replace(/[^a-zA-Z0-9_-]/g, "-")}`;
         let file = {
           filePath: skillFilePath,
           baseDir: dirname(skillFilePath),
           frontmatter,
           skillFile: buildFrontmatterResult(frontmatterAsWritten, skillFilePath, asWrittenProblem),
-          content: memoizeLastValue(getHostState().skillContentIntern, skillFilePath, content),
+          content: memoizeLastValue(getHostState().skillContentIntern, skillFilePath, content_2),
         };
         let skill = createPluginCommand(
           skillName,
@@ -1237,7 +1252,7 @@ async function loadSkillsFromDirectory(
           true,
           {
             isSkillMode: true,
-            serverAttribution: q(file.baseDir),
+            serverAttribution: attributionFor(file.baseDir),
           },
         );
         if (skill)
@@ -1252,19 +1267,19 @@ async function loadSkillsFromDirectory(
       }
     }),
   );
-  return skills.sort((Ae, Ie) => Ae.skill.name.localeCompare(Ie.skill.name));
+  return skills.sort((left, right) => left.skill.name.localeCompare(right.skill.name));
 }
 //@ chunk-e6aww6q8.js:1680227-1682147 fingerprint = getPluginSkills (0.792)
 /**
  * 加载所有启用插件的技能（skills/ 与 manifest.skills），按真实路径跨插件去重。
  */
-async function getPluginSkills(e) {
-  let { enabled, errors } = await loadAllPluginsCacheOnly(e);
+async function getPluginSkills(storageV5) {
+  let { enabled, errors } = await loadAllPluginsCacheOnly(storageV5);
   if (errors.length > 0)
     logForDebugging(`Plugin loading errors: ${errors.map((e) => pluginErrorText(e)).join(", ")}`);
   logForDebugging(`getPluginSkills: Processing ${enabled.length} enabled plugins`);
-  let s = null;
-  let h = new Map();
+  let failureKind = null;
+  let unusableByPlugin = new Map();
   let perPluginSkills = await Promise.all(
     enabled.map(async (plugin) => {
       let loadedPaths = new Set();
@@ -1272,14 +1287,14 @@ async function getPluginSkills(e) {
       logForDebugging(
         `Checking plugin ${plugin.name}: skillsPath=${plugin.skillsPath ? "exists" : "none"}, skillsPaths=${plugin.skillsPaths ? plugin.skillsPaths.length : 0} paths`,
       );
-      let q =
+      let switches =
         plugin.accountSkillsWrapper && desktopSkillSwitches()
           ? await listPluginSkillFilesSettled(plugin.path)
           : ALL_SKILLS_ON;
-      if (q.kind === "unusable") {
-        h.set(plugin, q.code);
+      if (switches.kind === "unusable") {
+        unusableByPlugin.set(plugin, switches.code);
         logForDebugging(
-          `Loading no skills from plugin ${plugin.name}: the manifest.json at its root ${q.why}, so it does not say which skills are switched off`,
+          `Loading no skills from plugin ${plugin.name}: the manifest.json at its root ${switches.why}, so it does not say which skills are switched off`,
           {
             level: "warn",
           },
@@ -1299,12 +1314,12 @@ async function getPluginSkills(e) {
             plugin.path,
             getPluginTrustContext(plugin),
             loadedPaths,
-            q,
+            switches,
           );
           pluginSkills.push(...skills);
           logForDebugging(`Loaded ${skills.length} skills from plugin ${plugin.name} default directory`);
         } catch (error) {
-          s = "plugin_load_skills_dir_failed";
+          failureKind = "plugin_load_skills_dir_failed";
           logForDebugging(`Failed to load skills from plugin ${plugin.name} default directory: ${error}`, {
             level: "error",
           });
@@ -1326,14 +1341,14 @@ async function getPluginSkills(e) {
                 plugin.path,
                 getPluginTrustContext(plugin),
                 loadedPaths,
-                q,
+                switches,
               );
               logForDebugging(
                 `Loaded ${skills.length} skills from plugin ${plugin.name} custom path: ${skillPath}`,
               );
               return skills;
             } catch (error) {
-              s = "plugin_load_skills_path_failed";
+              failureKind = "plugin_load_skills_path_failed";
               logForDebugging(
                 `Failed to load skills from plugin ${plugin.name} custom path ${skillPath}: ${error}`,
                 {
@@ -1359,17 +1374,17 @@ async function getPluginSkills(e) {
       return pluginSkills;
     }),
   );
-  let found = enabled.map((w) => h.get(w)).find((w) => w !== undefined);
+  let found = enabled.map((plugin) => unusableByPlugin.get(plugin)).find((code) => code !== undefined);
   return {
     entries: perPluginSkills.flat(),
-    hadErrorCode: found ?? s,
+    hadErrorCode: found ?? failureKind,
   };
 }
 //@ chunk-e6aww6q8.js:1682147-1683072 placement
-function loadPluginSkills(storage) {
+function loadPluginSkills(storageV5) {
   let pluginRegistry = getPluginRegistry();
-  let r = isStorageV5Enabled() && storage !== undefined ? "skillsV5" : "skills";
-  pluginRegistry[r] ??= (async () => {
+  let cacheKey = isStorageV5Enabled() && storageV5 !== undefined ? "skillsV5" : "skills";
+  pluginRegistry[cacheKey] ??= (async () => {
     if (
       isCustomizationDisabled("plugins", {
         explicitlyRequested:
@@ -1381,68 +1396,70 @@ function loadPluginSkills(storage) {
     )
       return [];
     if (pluginRegistry.handedIn !== undefined) return (await pluginRegistry.handedIn).skills;
-    let [{ entries: s, hadErrorCode: h }, userSkillFileIds] = await Promise.all([
-      getPluginSkills(storage),
-      getUserSkillFileIds(storage),
+    let [{ entries, hadErrorCode: errorCode }, userSkillFileIds] = await Promise.all([
+      getPluginSkills(storageV5),
+      getUserSkillFileIds(storageV5),
     ]);
-    let S = new Map();
-    let w = [];
-    for (let L of s) {
-      let realpath = L.realpath;
+    let byRealpath = new Map();
+    let skills = [];
+    for (let entry of entries) {
+      let realpath = entry.realpath;
       if (realpath === null) {
-        w.push(L.skill);
+        skills.push(entry.skill);
         continue;
       }
       if (userSkillFileIds !== null && userSkillFileIds.has(realpath)) {
         logForDebugging(
-          `Skipping plugin skill '${L.skill.name}' \u2014 ${realpath} is a user-level skill already surfaced by the skills directory loader`,
+          `Skipping plugin skill '${entry.skill.name}' \u2014 ${realpath} is a user-level skill already surfaced by the skills directory loader`,
         );
         continue;
       }
-      let q = S.get(realpath);
-      if (q !== undefined) {
+      let existingName = byRealpath.get(realpath);
+      if (existingName !== undefined) {
         logForDebugging(
-          `Skipping duplicate plugin skill '${L.skill.name}' \u2014 ${realpath} already loaded as '${q}'`,
+          `Skipping duplicate plugin skill '${entry.skill.name}' \u2014 ${realpath} already loaded as '${existingName}'`,
         );
         continue;
       }
-      S.set(realpath, L.skill.name);
-      w.push(L.skill);
+      byRealpath.set(realpath, entry.skill.name);
+      skills.push(entry.skill);
     }
     logForDebugging(
-      `Total plugin skills loaded: ${w.length} (${s.length - w.length} duplicate/user-owned entries skipped)`,
+      `Total plugin skills loaded: ${skills.length} (${entries.length - skills.length} duplicate/user-owned entries skipped)`,
     );
-    if (h) logFeatureBad("plugin_load_skills", h);
+    if (errorCode) logFeatureBad("plugin_load_skills", errorCode);
     else logFeatureOk("plugin_load_skills");
-    return w;
+    return skills;
   })();
-  return pluginRegistry[r];
+  return pluginRegistry[cacheKey];
 }
 //@ chunk-e6aww6q8.js:1683072-1683472 placement
 /**
  * 替换命令/技能内容里的变量：插件路径/来源/数据目录、${CLAUDE_SKILL_DIR}、${CLAUDE_SESSION_ID}、${CLAUDE_EFFORT}， 有用户配置时再替换 user_config 值。r 用于对替换值转义。
  */
-function substituteSkillVariables(e, n, r = (s) => s) {
-  let content = substitutePluginVariables(
-    e,
+function substituteSkillVariables(content, context, escapeValue = (value) => value) {
+  let content_2 = substitutePluginVariables(
+    content,
     {
-      path: n.pluginPath,
-      source: n.sourceName,
-      dataDir: n.pluginDataDir,
+      path: context.pluginPath,
+      source: context.sourceName,
+      dataDir: context.pluginDataDir,
     },
-    r,
+    escapeValue,
   );
-  if (n.skillDir !== undefined) {
-    let S = r(n.skillDir);
-    content = content.replace(/\$\{CLAUDE_SKILL_DIR\}/g, () => S);
+  if (context.skillDir !== undefined) {
+    let skillDir = escapeValue(context.skillDir);
+    content_2 = content_2.replace(/\$\{CLAUDE_SKILL_DIR\}/g, () => skillDir);
   }
-  let h = r(getSessionId());
-  content = content.replace(/\$\{CLAUDE_SESSION_ID\}/g, () => h);
-  let y = r(n.effortLevel);
-  content = content.replaceAll("${CLAUDE_EFFORT}", () => y);
-  if (n.userConfig && n.options)
-    content = substituteUserConfigInContent(content, n.options, n.userConfig, (S) => r(escapeShellBangs(S)));
-  return content;
+  let sessionId = escapeValue(getSessionId());
+  content_2 = content_2.replace(/\$\{CLAUDE_SESSION_ID\}/g, () => sessionId);
+  let effortLevel = escapeValue(context.effortLevel);
+  content_2 = content_2.replaceAll("${CLAUDE_EFFORT}", () => effortLevel);
+  if (context.userConfig && context.options)
+    content_2 = substituteUserConfigInContent(content_2, context.options, context.userConfig, (value) =>
+      escapeValue(escapeShellBangs(value)),
+    );
+  return content_2;
 }
 export {
   getPluginCommands,

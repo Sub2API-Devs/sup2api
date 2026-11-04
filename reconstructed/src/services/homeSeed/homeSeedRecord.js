@@ -10,7 +10,13 @@
  */
 import { createHash } from "crypto";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, E, string, array, literal } from "../../../vendor/zod/v4/classic/schemas.js";
+import {
+  objectSchema,
+  numberSchema,
+  stringSchema,
+  array,
+  literal,
+} from "../../../vendor/zod/v4/classic/schemas.js";
 import { sessionIdBody } from "../../bridge/sessionIdCompat.js";
 import { getGlobalConfig, saveGlobalConfigDurably } from "../../utils/config.js";
 import { logEvent } from "../analytics/index.js";
@@ -19,31 +25,31 @@ import { logForDebugging } from "../../utils/debug.js";
 //@ chunk-fznepy1n.js:450-564 placement
 var MAX_SEED_RECORDS = 64;
 var seedRecordSchema = DoctorLazy(() =>
-  u({
-    generation: E().int().min(1),
-    etag: string().optional(),
-    allow: array(string()),
-    at: E(),
+  objectSchema({
+    generation: numberSchema().int().min(1),
+    etag: stringSchema().optional(),
+    allow: array(stringSchema()),
+    at: numberSchema(),
     tried: literal(true).optional(),
   }),
 );
 //@ chunk-fznepy1n.js:564-642 placement
-function shortSha256(n) {
-  return createHash("sha256").update(n, "utf8").digest("hex").slice(0, 32);
+function shortSha256(value) {
+  return createHash("sha256").update(value, "utf8").digest("hex").slice(0, 32);
 }
 //@ chunk-fznepy1n.js:642-669 placement
 /**
  * 取会话 id 主体作为记录键。
  */
-function homeSeedRecordKey(n) {
-  return sessionIdBody(n);
+function homeSeedRecordKey(sessionId) {
+  return sessionIdBody(sessionId);
 }
 //@ chunk-fznepy1n.js:669-802 placement
 function readHomeSeedRecord(sessionId) {
-  let e = getGlobalConfig().remoteHomeSettingsSent?.[homeSeedRecordKey(sessionId)];
-  if (e === undefined) return;
-  let r = seedRecordSchema().safeParse(e);
-  return r.success ? r.data : undefined;
+  let record = getGlobalConfig().remoteHomeSettingsSent?.[homeSeedRecordKey(sessionId)];
+  if (record === undefined) return;
+  let reason = seedRecordSchema().safeParse(record);
+  return reason.success ? reason.data : undefined;
 }
 //@ chunk-fznepy1n.js:802-863 placement
 function hasUntriedHomeSeed(sessionId) {
@@ -51,15 +57,15 @@ function hasUntriedHomeSeed(sessionId) {
   return homeSeedRecord !== undefined && homeSeedRecord.tried !== true;
 }
 //@ chunk-fznepy1n.js:863-1150 placement
-async function writeHomeSeedRecord(sessionId, e, storageV5) {
-  let i = homeSeedRecordKey(sessionId);
+async function writeHomeSeedRecord(sessionId, record, storageV5) {
+  let key = homeSeedRecordKey(sessionId);
   if (
     !(await saveGlobalConfigDurably(
-      (d) => ({
-        ...d,
+      (saved) => ({
+        ...saved,
         remoteHomeSettingsSent: pruneSeedRecords({
-          ...d.remoteHomeSettingsSent,
-          [i]: mergeSeedRecord(d.remoteHomeSettingsSent?.[i], e),
+          ...saved.remoteHomeSettingsSent,
+          [key]: mergeSeedRecord(saved.remoteHomeSettingsSent?.[key], record),
         }),
       }),
       storageV5,
@@ -72,25 +78,27 @@ async function writeHomeSeedRecord(sessionId, e, storageV5) {
   }
 }
 //@ chunk-fznepy1n.js:1150-1382 placement
-function mergeSeedRecord(n, e) {
-  let r = seedRecordSchema().safeParse(n).data;
-  let { tried, ...s } = e;
-  let d = !e.etag && (r ? r.tried : e.tried);
+function mergeSeedRecord(prior, next) {
+  let existing = seedRecordSchema().safeParse(prior).data;
+  let { tried, ...rest } = next;
+  let carryTried = !next.etag && (existing ? existing.tried : next.tried);
   return {
-    ...s,
-    ...(d && {
+    ...rest,
+    ...(carryTried && {
       tried: true,
     }),
-    generation: Math.max(e.generation, r?.generation ?? 0),
-    allow: e.allow.filter((g) => e.etag || !r || r.allow.includes(g)),
+    generation: Math.max(next.generation, existing?.generation ?? 0),
+    allow: next.allow.filter((allow) => next.etag || !existing || existing.allow.includes(allow)),
   };
 }
 //@ chunk-fznepy1n.js:1382-1597 placement
-function pruneSeedRecords(n) {
-  let flattened = Object.entries(n).flatMap(([key, value]) => {
-    let s = seedRecordSchema().safeParse(value);
-    return s.success && Number.isFinite(s.data.at) ? [[key, s.data]] : [];
+function pruneSeedRecords(records) {
+  let flattened = Object.entries(records).flatMap(([key, value]) => {
+    let parsed = seedRecordSchema().safeParse(value);
+    return parsed.success && Number.isFinite(parsed.data.at) ? [[key, parsed.data]] : [];
   });
-  return Object.fromEntries(flattened.toSorted(([, r], [, i]) => i.at - r.at).slice(0, MAX_SEED_RECORDS));
+  return Object.fromEntries(
+    flattened.toSorted(([, left], [, right]) => right.at - left.at).slice(0, MAX_SEED_RECORDS),
+  );
 }
 export { hasUntriedHomeSeed, readHomeSeedRecord, writeHomeSeedRecord, shortSha256 };

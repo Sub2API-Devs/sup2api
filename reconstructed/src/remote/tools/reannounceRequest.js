@@ -13,8 +13,8 @@
 class ReannounceRequester {
   #e = undefined;
   #n = false;
-  provide(e) {
-    this.#e = e;
+  provide(send) {
+    this.#e = send;
   }
   canAsk() {
     return this.#e !== undefined;

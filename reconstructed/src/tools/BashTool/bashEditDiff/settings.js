@@ -30,11 +30,11 @@ import { logFeatureOk, logFeatureSad } from "../../../services/analytics/feature
  */
 function isBashEditDiffEnabled(mode) {
   if (env.CLAUDE_CODE_BASH_EDIT_DIFF !== undefined) return env.CLAUDE_CODE_BASH_EDIT_DIFF;
-  let n =
+  let enabledSetting =
     getSecuritySensitiveSetting("bashEditDiffEnabled")[0] ??
     (getSettingsForSourceTightenOnly("userSettings")?.bashEditDiffEnabled === false ? false : undefined);
-  if (n === false || getInitialSettings_2().bashEditDiffEnabled === false) return false;
-  if (n === true) return true;
+  if (enabledSetting === false || getInitialSettings_2().bashEditDiffEnabled === false) return false;
+  if (enabledSetting === true) return true;
   if (mode !== "auto" && mode !== "bypassPermissions") return false;
   if (isThriftySonicEnabled()) return true;
   let mainLoopModel = getMainLoopModel();
@@ -44,7 +44,7 @@ function isBashEditDiffEnabled(mode) {
 /**
  * 判断 Bash 编辑差异功能为何跳过：未开启（非无头/开关关）、已显式开启、Claude Code 客户端自己发的提示、读取方未知或监视运行中。
  */
-function getEditDiffSkipReason(e, n, r) {
+function getEditDiffSkipReason(toolState, outsideResultReader, isWatchRunning) {
   if (
     !isRemoteManagedEnvironment() ||
     isOnClaudeCodeSessionSurface() ||
@@ -57,15 +57,18 @@ function getEditDiffSkipReason(e, n, r) {
     getSecuritySensitiveSetting("bashEditDiffEnabled")[0] === true
   )
     return "turned_on";
-  if (e.get(OwnClientPromptState).ownClientSentPrompt) return "claude_code_client";
-  return (n === undefined ? "readers_unknown" : n()) ?? (r ? "watch_running" : undefined);
+  if (toolState.get(OwnClientPromptState).ownClientSentPrompt) return "claude_code_client";
+  return (
+    (outsideResultReader === undefined ? "readers_unknown" : outsideResultReader()) ??
+    (isWatchRunning ? "watch_running" : undefined)
+  );
 }
 //@ chunk-e6aww6q8.js:4773355-4773548 placement
 /**
  * 判断是否跳过 Bash 编辑差异，并按原因上报一次遥测。
  */
-function shouldSkipEditDiff(toolState, outsideResultReader, r) {
-  let editDiffSkipReason = getEditDiffSkipReason(toolState, outsideResultReader, r);
+function shouldSkipEditDiff(toolState, outsideResultReader, isWatchRunning) {
+  let editDiffSkipReason = getEditDiffSkipReason(toolState, outsideResultReader, isWatchRunning);
   let { countedReasons } = toolState.get(OwnClientPromptState);
   if (editDiffSkipReason === undefined) logFeatureOk("bash_edit_diff_skip");
   else if (editDiffSkipReason !== "ungated" && !countedReasons.has(editDiffSkipReason)) {

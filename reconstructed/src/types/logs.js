@@ -14,8 +14,8 @@ import { COMMON_INFO_ARGS } from "../constants/xml.js";
 /**
  * 判断参数是否属于常见 info 级参数。
  */
-function isCommonInfoArg(t) {
-  return COMMON_INFO_ARGS.some((e) => e === t);
+function isCommonInfoArg(arg) {
+  return COMMON_INFO_ARGS.some((commonArg) => commonArg === arg);
 }
 //@ chunk-bbtre4r8.js:10377-10396 placement
 /**
@@ -25,10 +25,10 @@ var MAX_LOG_LINE_CHARS = 64;
 var MAX_LOGS = 100;
 //@ chunk-bbtre4r8.js:10396-10549 fingerprint = sortLogs (1)
 function sortLogs(logs) {
-  return logs.sort((e, r) => {
-    let modifiedDiff = r.modified.getTime() - e.modified.getTime();
+  return logs.sort((left, right) => {
+    let modifiedDiff = right.modified.getTime() - left.modified.getTime();
     if (modifiedDiff !== 0) return modifiedDiff;
-    return r.created.getTime() - e.created.getTime();
+    return right.created.getTime() - left.created.getTime();
   });
 }
 export { MAX_LOGS, sortLogs, isCommonInfoArg, MAX_LOG_LINE_CHARS };

@@ -10,8 +10,9 @@
  */
 import { getOauthConfig } from "../../constants/oauth.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, _enum, literal, unknown } from "../../../vendor/zod/v4/classic/schemas.js";
+import { objectSchema, _enum, literal, unknown } from "../../../vendor/zod/v4/classic/schemas.js";
 import { jsonParse } from "../../utils/slowOperations.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-640x3zn9.js:575-625 placement
 /**
@@ -22,8 +23,8 @@ var URL_IN_TEXT_RE = /https?:\/\/[^\s"'<>\\\u2026\x00-\x1f]+/g;
 /**
  * 判断字符串整体是否为 http(s) URL。
  */
-function isUrlString(e) {
-  return /^https?:\/\/[^\s"'<>\\\u2026\x00-\x1f]+$/.test(e);
+function isUrlString(text) {
+  return /^https?:\/\/[^\s"'<>\\\u2026\x00-\x1f]+$/.test(text);
 }
 //@ chunk-640x3zn9.js:696-728 placement
 /**
@@ -35,31 +36,31 @@ var CLOSING_TO_OPENING = {
   "}": "{",
 };
 //@ chunk-640x3zn9.js:728-951 placement
-function trimTrailingPunctuation(e) {
-  while (e.length > 0) {
-    let last = e.at(-1);
+function trimTrailingPunctuation(text) {
+  while (text.length > 0) {
+    let last = text.at(-1);
     if (".,;:!?".includes(last)) {
-      e = e.slice(0, -1);
+      text = text.slice(0, -1);
       continue;
     }
-    let r = CLOSING_TO_OPENING[last];
-    if (!r) break;
-    let s = 0;
-    let c = 0;
-    for (let a of e)
-      if (a === r) s++;
-      else if (a === last) c++;
-    if (c > s) e = e.slice(0, -1);
+    let opening = CLOSING_TO_OPENING[last];
+    if (!opening) break;
+    let openingCount = 0;
+    let closingCount = 0;
+    for (let char of text)
+      if (char === opening) openingCount++;
+      else if (char === last) closingCount++;
+    if (closingCount > openingCount) text = text.slice(0, -1);
     else break;
   }
-  return e;
+  return text;
 }
 //@ chunk-640x3zn9.js:951-1020 placement
 /**
  * 取文本里第一个 URL 并去掉尾部标点。
  */
-function firstUrlInText(e) {
-  for (let n of e.matchAll(URL_IN_TEXT_RE)) return trimTrailingPunctuation(n[0]);
+function firstUrlInText(text) {
+  for (let match of text.matchAll(URL_IN_TEXT_RE)) return trimTrailingPunctuation(match[0]);
   return;
 }
 //@ chunk-640x3zn9.js:1020-1048 placement
@@ -80,7 +81,10 @@ class ReaderHolder {
 /**
  * 全局的错误读取器持有者。
  */
-var readerHolder = new ReaderHolder();
+var readerHolder; // deferred: uses ReaderHolder of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-640x3zn9.js:1122", () => {
+  readerHolder = new ReaderHolder();
+});
 //@ chunk-640x3zn9.js:1134-1171 placement
 /**
  * 注册错误读取器。
@@ -112,26 +116,29 @@ var ON_HOLD_PREFIX = "Your account is on hold and can't use Claude Code. View de
 /**
  * 拼出带详情地址的冻结提示。
  */
-function withOnHoldDetails(e) {
-  return `${ON_HOLD_PREFIX}${e}`;
+function withOnHoldDetails(url) {
+  return `${ON_HOLD_PREFIX}${url}`;
 }
 //@ chunk-640x3zn9.js:1430-1541 placement
-function formatAccountOnHoldSignInError(e) {
-  return `Your account is on hold and can't sign in to Claude Code. View details or appeal: ${e}`;
+function formatAccountOnHoldSignInError(url) {
+  return `Your account is on hold and can't sign in to Claude Code. View details or appeal: ${url}`;
 }
 //@ chunk-640x3zn9.js:1541-1557 placement
 /**
  * 默认的受限说明地址。
  */
-var DEFAULT_RESTRICTED_URL = withOnHoldDetails(HTTPS_CLAUDE_AI_RESTRICTED);
+var DEFAULT_RESTRICTED_URL; // deferred: uses withOnHoldDetails of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-640x3zn9.js:1541", () => {
+  DEFAULT_RESTRICTED_URL = withOnHoldDetails(HTTPS_CLAUDE_AI_RESTRICTED);
+});
 //@ chunk-640x3zn9.js:1557-1658 placement
 /**
  * 判断链接是否为指向 claude.ai 的站内链接。
  */
 function isClaudeAiOriginLink(text) {
   if (!isRestrictedLinksEnabled() || !text.startsWith(ON_HOLD_PREFIX)) return false;
-  let sliced = text.slice(ON_HOLD_PREFIX.length);
-  return isUrlString(sliced) && isClaudeAiOrigin(sliced) === sliced;
+  let text_2 = text.slice(ON_HOLD_PREFIX.length);
+  return isUrlString(text_2) && isClaudeAiOrigin(text_2) === text_2;
 }
 //@ chunk-640x3zn9.js:1658-1752 placement
 /**
@@ -156,49 +163,58 @@ function isClaudeAiOriginUrl(origin) {
  */
 function isClaudeAiOrigin(errorUri) {
   if (typeof errorUri !== "string" || errorUri.length > MAX_LINK_CHARS) return HTTPS_CLAUDE_AI_RESTRICTED;
-  let n;
+  let parsedUrl;
   try {
-    n = new URL(errorUri);
+    parsedUrl = new URL(errorUri);
   } catch {
     return HTTPS_CLAUDE_AI_RESTRICTED;
   }
-  if (n.protocol !== "https:" || n.username || n.password || n.port || n.hash)
+  if (
+    parsedUrl.protocol !== "https:" ||
+    parsedUrl.username ||
+    parsedUrl.password ||
+    parsedUrl.port ||
+    parsedUrl.hash
+  )
     return HTTPS_CLAUDE_AI_RESTRICTED;
-  let hostname = n.hostname;
+  let hostname = parsedUrl.hostname;
   return (hostname === "claude.ai" ||
     hostname.endsWith(".claude.ai") ||
     hostname === "anthropic.com" ||
     hostname.endsWith(".anthropic.com") ||
-    isClaudeAiOriginUrl(n.origin)) &&
-    n.href.length <= MAX_LINK_CHARS &&
-    SAFE_LINK_RE.test(n.href)
-    ? n.href
+    isClaudeAiOriginUrl(parsedUrl.origin)) &&
+    parsedUrl.href.length <= MAX_LINK_CHARS &&
+    SAFE_LINK_RE.test(parsedUrl.href)
+    ? parsedUrl.href
     : HTTPS_CLAUDE_AI_RESTRICTED;
 }
 //@ chunk-640x3zn9.js:2189-2302 placement
-var OAUTH_DENIAL_ERRORS = DoctorLazy(() =>
-  u({
-    error: _enum(["invalid_grant", "access_denied"]),
-    error_description: literal(ACCOUNT_ON_HOLD),
-    error_uri: unknown().optional(),
-  }),
-);
+var OAUTH_DENIAL_ERRORS; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-640x3zn9.js:2189", () => {
+  OAUTH_DENIAL_ERRORS = DoctorLazy(() =>
+    objectSchema({
+      error: _enum(["invalid_grant", "access_denied"]),
+      error_description: literal(ACCOUNT_ON_HOLD),
+      error_uri: unknown().optional(),
+    }),
+  );
+});
 //@ chunk-640x3zn9.js:2302-2509 placement
-function classifyOAuthErrorResponse(e) {
+function classifyOAuthErrorResponse(body) {
   if (!isRestrictedLinksEnabled()) return null;
-  let n = e;
-  if (typeof n === "string") {
-    if (!n.includes(ACCOUNT_ON_HOLD)) return null;
+  let value = body;
+  if (typeof value === "string") {
+    if (!value.includes(ACCOUNT_ON_HOLD)) return null;
     try {
-      n = jsonParse(n);
+      value = jsonParse(value);
     } catch {
       return null;
     }
   }
-  let r = OAUTH_DENIAL_ERRORS().safeParse(n);
-  return r.success
+  let parsed = OAUTH_DENIAL_ERRORS().safeParse(value);
+  return parsed.success
     ? {
-        url: isClaudeAiOrigin(r.data.error_uri),
+        url: isClaudeAiOrigin(parsed.data.error_uri),
       }
     : null;
 }
@@ -217,18 +233,18 @@ class OAuthCallbackError extends Error {
   errorDescription;
   errorUri;
   displayMessage;
-  constructor(e, n, errorUri) {
+  constructor(error, description, errorUri) {
     super("OAuth authorization was denied or failed");
-    this.error = e;
-    this.errorDescription = n;
+    this.error = error;
+    this.errorDescription = description;
     this.errorUri = errorUri;
     this.name = "OAuthCallbackError";
-    this.displayMessage = n ? `${e}: ${n}` : e;
+    this.displayMessage = description ? `${error}: ${description}` : error;
   }
 }
 //@ chunk-640x3zn9.js:2896-2962 placement
-function isOAuthCallbackError(e) {
-  return e instanceof OAuthCallbackError && e.errorDescription === ACCOUNT_ON_HOLD;
+function isOAuthCallbackError(error) {
+  return error instanceof OAuthCallbackError && error.errorDescription === ACCOUNT_ON_HOLD;
 }
 export {
   URL_IN_TEXT_RE,

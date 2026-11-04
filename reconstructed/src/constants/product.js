@@ -10,6 +10,15 @@
  */
 import { getArtifactHostOverride, claudeAiEnvironment } from "./claudeAiOrigin.js";
 
+//@ chunk-yxnffbzs.js:26395-26471 fingerprint = CLAUDE_AI_BASE_URL (1)
+/**
+ * 当前会话匹配时返回覆盖的 claude.ai 源，否则 https://claude.ai。
+ */
+function getClaudeAiOrigin_2(env) {
+  let artifactHostOverride = getArtifactHostOverride();
+  if (artifactHostOverride && env === claudeAiEnvironment()) return artifactHostOverride;
+  return "https://claude.ai";
+}
 //@ chunk-jcnpfn31.js:13050-13115 fingerprint = PRODUCT_URL (0.681)
 /**
  * https://claude.com/claude-code 与 https://claude.ai。
@@ -43,26 +52,17 @@ function getClaudeAiBaseUrl(sessionId, ingressUrl) {
 /**
  * 远程会话网页 URL：<claude.ai 基址>/code/<兼容会话 id>[?query]。
  */
-function getRemoteSessionUrl(sessionId, ingressUrl, r) {
-  let { toCompatSessionId } = require("./chunk-q9tb4ez8.js");
+function getRemoteSessionUrl(sessionId, ingressUrl, queryParams) {
+  let { toCompatSessionId } = require("../bridge/sessionIdCompat.js");
   let compatId = toCompatSessionId(sessionId);
   let baseUrl = `${getClaudeAiBaseUrl(compatId, ingressUrl)}/code/${compatId}`;
-  return r ? `${baseUrl}?${new URLSearchParams(r)}` : baseUrl;
-}
-//@ chunk-yxnffbzs.js:26395-26471 fingerprint = CLAUDE_AI_BASE_URL (1)
-/**
- * 当前会话匹配时返回覆盖的 claude.ai 源，否则 https://claude.ai。
- */
-function getClaudeAiOrigin_2(env) {
-  let artifactHostOverride = getArtifactHostOverride();
-  if (artifactHostOverride && env === claudeAiEnvironment()) return artifactHostOverride;
-  return "https://claude.ai";
+  return queryParams ? `${baseUrl}?${new URLSearchParams(queryParams)}` : baseUrl;
 }
 export {
   getRemoteSessionUrl,
   getClaudeAiBaseUrl,
   HTTPS_CLAUDE_COM_CLAUDE_CODE,
   HTTPS_CLAUDE_AI,
-  isRemoteSessionLocal,
   getClaudeAiOrigin_2,
+  isRemoteSessionLocal,
 };

@@ -5,18 +5,22 @@
  * pieces: chunk-3wydcdvj.js (5)
  * attribution: esm-fingerprint 5
  */
-import { loadConfigWithSource, S, gAn } from "../../core/credentials.mjs";
+import {
+  loadConfigWithSource,
+  getRootConfigPath,
+  CREDENTIALS_FILE_VERSION,
+} from "../../core/credentials.mjs";
 import {
   WorkloadIdentityError,
   checkCredentialsFileSafety,
-  hMt,
+  MAX_FEDERATION_TOKEN_TTL_SECONDS,
   writeCredentialsFileAtomic,
 } from "./types.mjs";
 import { oidcFederationProvider } from "./oidc-federation.mjs";
 import { userOAuthProvider } from "./user-oauth.mjs";
 import { identityTokenFromFile, identityTokenFromValue } from "./identity-token.mjs";
 import { readEnv } from "../../internal/utils/env.mjs";
-import { y } from "./token-cache.mjs";
+import { nowSeconds } from "./token-cache.mjs";
 
 //@ chunk-3wydcdvj.js:11752-12040 esm-fingerprint
 function resolveCredentialsFromConfig(config, options) {
@@ -44,7 +48,7 @@ async function defaultCredentials(options, profile) {
           ...config,
           authentication: {
             ...config.authentication,
-            credentials_path: (await S(config, profile)) ?? undefined,
+            credentials_path: (await getRootConfigPath(config, profile)) ?? undefined,
           },
         };
   return resolveCredentialsFromConfig(withPath, options);
@@ -127,7 +131,7 @@ function resolveIdentityTokenProvider(auth) {
 //@ chunk-3wydcdvj.js:14061-14566 esm-fingerprint
 function cachedExchangeProvider(exchange, credentialsPath, onCacheWriteError, onSafetyWarning) {
   return async (opts) => {
-    let { fs } = await import("./chunk-a60jm9e8.js");
+    let { fs } = await import("../../../../../src/child_process.lazy.js");
     await checkCredentialsFileSafety(credentialsPath, onSafetyWarning);
     let existing;
     try {
@@ -136,7 +140,7 @@ function cachedExchangeProvider(exchange, credentialsPath, onCacheWriteError, on
       let token = existing?.access_token;
       if (token && !opts?.forceRefresh) {
         let expiresAt = existing?.expires_at;
-        if (expiresAt == null || y() < expiresAt - hMt)
+        if (expiresAt == null || nowSeconds() < expiresAt - MAX_FEDERATION_TOKEN_TTL_SECONDS)
           return {
             token,
             expiresAt: expiresAt ?? null,
@@ -149,7 +153,7 @@ function cachedExchangeProvider(exchange, credentialsPath, onCacheWriteError, on
     try {
       await writeCredentialsFileAtomic(credentialsPath, {
         ...(existing ?? {}),
-        version: gAn,
+        version: CREDENTIALS_FILE_VERSION,
         type: "oauth_token",
         access_token: result.token,
         expires_at: result.expiresAt,

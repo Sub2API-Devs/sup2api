@@ -14,10 +14,10 @@ import { sleep } from "./sleep.js";
 /**
  * 生成指数退避等待函数（第 n 次等待 base·2^(n-1)，50%–100% 抖动）。
  */
-function createJitteredBackoff(e) {
-  return function (r) {
-    let t = e * 2 ** (r - 1);
-    let rounded = Math.round(t * (0.5 + Math.random() / 2));
+function createJitteredBackoff(baseMs) {
+  return function (attempt) {
+    let delayMs = baseMs * 2 ** (attempt - 1);
+    let rounded = Math.round(delayMs * (0.5 + Math.random() / 2));
     return sleep(rounded);
   };
 }

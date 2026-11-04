@@ -44,26 +44,27 @@ function filterTurnDisallowedTools(names, turnDisallowed, getTools, isAlwaysAllo
           },
         ) || !name.includes("__", 5)
       );
-    let any = filtered.some((G) => name === getToolNameForPermissionCheck_4(G));
-    return filtered.every((G) => {
-      if (isAlwaysAllowed(G.name)) return true;
-      let q = costOf(G, tools);
-      return q === "free" || (q === "costly" && !any);
+    let any = filtered.some((tool) => name === getToolNameForPermissionCheck_4(tool));
+    return filtered.every((tool) => {
+      if (isAlwaysAllowed(tool.name)) return true;
+      let cost = costOf(tool, tools);
+      return cost === "free" || (cost === "costly" && !any);
     });
   });
 }
 //@ chunk-e6aww6q8.js:3261126-3261171 placement
-function turnDisallowRuleMatchesTool(e, n) {
-  return e === getToolNameForPermissionCheck_4(n) || mcpRuleMatchesToolAny(e, n);
+function turnDisallowRuleMatchesTool(rule, toolName) {
+  return rule === getToolNameForPermissionCheck_4(toolName) || mcpRuleMatchesToolAny(rule, toolName);
 }
 //@ chunk-e6aww6q8.js:3261171-3261243 placement
 /**
  * 判断某工具是否被本回合禁用（turnDisallowedTools 里任一规则命中）。
  */
-function isToolDisallowedThisTurn(e, n) {
+function isToolDisallowedThisTurn(toolName, disallowed) {
   return (
-    e.turnDisallowedTools?.some((turnDisallowedTool) => turnDisallowRuleMatchesTool(turnDisallowedTool, n)) ??
-    false
+    toolName.turnDisallowedTools?.some((turnDisallowedTool) =>
+      turnDisallowRuleMatchesTool(turnDisallowedTool, disallowed),
+    ) ?? false
   );
 }
 //@ chunk-e6aww6q8.js:3261243-3261557 placement
@@ -71,23 +72,23 @@ function isToolDisallowedThisTurn(e, n) {
  * 把回合级禁用工具写进 AppState：替换 turnDisallowedTools，并在 alwaysDenyRules.command 里去掉旧的、加上新的；未变化时不更新。
  */
 function applyTurnDisallowedTools(setAppState, toolNames) {
-  setAppState((r) => {
-    let turnDisallowedTools = r.turnDisallowedTools ?? [];
+  setAppState((state) => {
+    let turnDisallowedTools = state.turnDisallowedTools ?? [];
     if (
       turnDisallowedTools.length === toolNames.length &&
-      turnDisallowedTools.every((turnDisallowedTool, S) => turnDisallowedTool === toolNames[S])
+      turnDisallowedTools.every((turnDisallowedTool, index) => turnDisallowedTool === toolNames[index])
     )
-      return r;
-    let h = [
-      ...(r.alwaysDenyRules.command ?? []).filter((y) => !turnDisallowedTools.includes(y)),
+      return state;
+    let remaining = [
+      ...(state.alwaysDenyRules.command ?? []).filter((toolName) => !turnDisallowedTools.includes(toolName)),
       ...toolNames,
     ];
     return {
-      ...r,
+      ...state,
       turnDisallowedTools: toolNames.length > 0 ? toolNames : undefined,
       alwaysDenyRules: {
-        ...r.alwaysDenyRules,
-        command: h.length > 0 ? h : undefined,
+        ...state.alwaysDenyRules,
+        command: remaining.length > 0 ? remaining : undefined,
       },
     };
   });

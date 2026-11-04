@@ -5,10 +5,10 @@
  * pieces: chunk-1r4fv9mg.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../../../runtime/bun-runtime.js";
 
 //@ chunk-1r4fv9mg.js:8621-9050 cjs-fingerprint
-var require_unevaluated = x(function (cjsExports, cjsModule) {
+var require_unevaluated = __commonJS(function (cjsExports, cjsModule) {
   cjsModule.exports = {
     $schema: "https://json-schema.org/draft/2020-12/schema",
     $id: "https://json-schema.org/draft/2020-12/meta/unevaluated",

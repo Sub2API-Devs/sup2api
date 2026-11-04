@@ -6,7 +6,7 @@
  * attribution: esm-fingerprint 1
  */
 import {
-  Jao,
+  requireSecureTokenEndpoint,
   WorkloadIdentityError,
   GRANT_TYPE_JWT_BEARER,
   TOKEN_ENDPOINT,
@@ -16,12 +16,12 @@ import {
   parseTokenResponse,
 } from "./types.mjs";
 import { VERSION } from "../../version.mjs";
-import { y } from "./token-cache.mjs";
+import { nowSeconds } from "./token-cache.mjs";
 
 //@ chunk-3wydcdvj.js:8473-10007 esm-fingerprint
 function oidcFederationProvider(config) {
   return async () => {
-    Jao(config.baseURL);
+    requireSecureTokenEndpoint(config.baseURL);
     let jwt = await config.identityTokenProvider();
     if (jwt.length > 16384)
       throw new WorkloadIdentityError(
@@ -75,7 +75,7 @@ function oidcFederationProvider(config) {
       );
     return {
       token: data.access_token,
-      expiresAt: y() + expiresIn,
+      expiresAt: nowSeconds() + expiresIn,
     };
   };
 }

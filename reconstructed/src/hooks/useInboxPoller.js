@@ -11,13 +11,13 @@
 import { randomUUID } from "crypto";
 import { isTeamLead, hasNonLeadTeammate, isTeammate, isPlanModeRequired } from "../utils/teammate.js";
 import { conversationSnapshot, InboxVerdictCache } from "../utils/inboxClassification.js";
-import { INVALID_TOOL_NAME_TEXT } from "../utils/deepFreezePlainData.js";
+import { INVALID_TOOL_NAME_TEXT } from "../components/permissions/consentRows.js";
 import {
   jsxProd_default,
   jsxProd_default_2,
 } from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { logForDebugging } from "../utils/debug.js";
-import { string, u, literal } from "../../vendor/zod/v4/classic/schemas.js";
+import { stringSchema, objectSchema, literal } from "../../vendor/zod/v4/classic/schemas.js";
 import { Text, Box } from "../ink/components/Text.js";
 import { fromEnum, lit as lit_2 } from "../services/analytics/safeMetadata.js";
 import { env } from "../utils/env.js";
@@ -31,9 +31,9 @@ import {
 import { logFeatureBad, logFeatureSad, logFeatureOk } from "../services/analytics/featureTelemetry.js";
 import { DoctorLazy } from "../cli/handlers/util.js";
 import { MEMO_CACHE_SENTINEL } from "../../runtime/bun-runtime.js";
-import { y, P, init_react_production } from "../../vendor/react/cjs/react.production.js";
+import { useState, useEffect, init_react_production } from "../../vendor/react/cjs/react.production.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../services/analytics/growthbook.js";
-import { w } from "../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import { dedupeMailboxMessages } from "../utils/swarm/teammateMessageRepair.js";
 import {
   getInboxPath,
@@ -112,18 +112,19 @@ import {
   hasPendingSandboxPermission,
   processSandboxPermissionResponse,
 } from "./useSwarmPermissionPoller.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-18hwfzwa.js:1670156-1670399 fingerprint = getAgentNameToPoll (0.644)
-function getAgentNameToPoll(identity, x) {
+function getAgentNameToPoll(identity, store) {
   switch (identity.kind) {
     case "in-process":
       return;
     case "teammate":
       return identity.agentName;
     case "session": {
-      if (isTeamLead(x.teamContext)) {
-        if (!hasNonLeadTeammate(x.teamContext)) return;
-        let { leadAgentId, teammates } = x.teamContext;
+      if (isTeamLead(store.teamContext)) {
+        if (!hasNonLeadTeammate(store.teamContext)) return;
+        let { leadAgentId, teammates } = store.teamContext;
         return teammates[leadAgentId]?.name || "team-lead";
       }
       return;
@@ -131,24 +132,28 @@ function getAgentNameToPoll(identity, x) {
   }
 }
 //@ chunk-18hwfzwa.js:1670399-1670424 layout
-var INBOX_POLL_DEBOUNCE_MS = 1000;
-var emptyConversationSnapshot = conversationSnapshot([]);
+var INBOX_POLL_DEBOUNCE_MS; // deferred: uses conversationSnapshot (../utils/inboxClassification.js) of its import cycle while loading; runs once the cycle is complete
+var emptyConversationSnapshot;
+deferInit("chunk-18hwfzwa.js:1670399", () => {
+  INBOX_POLL_DEBOUNCE_MS = 1000;
+  emptyConversationSnapshot = conversationSnapshot([]);
+});
 //@ chunk-18hwfzwa.js:1670424-1670708 layout
 /**
  * 为 inbox 中引用的未知工具名生成最小工具桩（名字、显示名、只能渲染无参数的调用），MCP 工具名带 "(MCP)" 后缀。
  */
 function createUnknownToolStub(toolName) {
-  let x = typeof toolName === "string" ? toolName : INVALID_TOOL_NAME_TEXT;
-  let D = x.startsWith("mcp__");
+  let displayName = typeof toolName === "string" ? toolName : INVALID_TOOL_NAME_TEXT;
+  let isMcp = displayName.startsWith("mcp__");
   return {
-    name: x,
-    userFacingName: () => (D ? `${x} (MCP)` : x),
-    renderToolUseMessage: (L) => {
-      if (L !== null && typeof L === "object" && Object.keys(L).length > 0)
+    name: displayName,
+    userFacingName: () => (isMcp ? `${displayName} (MCP)` : displayName),
+    renderToolUseMessage: (input) => {
+      if (input !== null && typeof input === "object" && Object.keys(input).length > 0)
         throw Error("unknown-tool stub cannot render parameters");
-      return x;
+      return displayName;
     },
-    isMcp: D,
+    isMcp,
   };
 }
 //@ chunk-18hwfzwa.js:1670708-1686214 fingerprint = useInboxPoller (0.503)
@@ -171,8 +176,8 @@ class useInboxPoller {
   #p = new Map();
   #u = 0;
   #f = false;
-  constructor(h, props) {
-    this.#e = h;
+  constructor(deps, props) {
+    this.#e = deps;
     this.#t = props;
   }
   start() {
@@ -193,17 +198,17 @@ class useInboxPoller {
     this.#b();
     this.#i = false;
   }
-  setInputs(h) {
-    let x = this.#t;
-    this.#t = h;
+  setInputs(inputs) {
+    let current = this.#t;
+    this.#t = inputs;
     if (!this.#o) return;
-    let D =
-      h.enabled !== x.enabled ||
-      h.isLoading !== x.isLoading ||
-      h.visibleDialogKind !== x.visibleDialogKind ||
-      h.onSubmitMessage !== x.onSubmitMessage;
-    if (!D && h.requestDialog === x.requestDialog) return;
-    if (D) this.#x();
+    let next =
+      inputs.enabled !== current.enabled ||
+      inputs.isLoading !== current.isLoading ||
+      inputs.visibleDialogKind !== current.visibleDialogKind ||
+      inputs.onSubmitMessage !== current.onSubmitMessage;
+    if (!next && inputs.requestDialog === current.requestDialog) return;
+    if (next) this.#x();
     this.#h();
     this.#g();
   }
@@ -216,23 +221,23 @@ class useInboxPoller {
     this.#h();
   };
   #h() {
-    let h = this.#t.enabled && !!getAgentNameToPoll(this.#e.identity, this.#e.store.getState());
-    if (h && this.#r === null) this.#y();
-    else if (!h && this.#r !== null) this.#b();
+    let canPoll = this.#t.enabled && !!getAgentNameToPoll(this.#e.identity, this.#e.store.getState());
+    if (canPoll && this.#r === null) this.#y();
+    else if (!canPoll && this.#r !== null) this.#b();
   }
   #y() {
-    let h = ++this.#c;
-    let x = () => {
+    let generation = ++this.#c;
+    let tick = () => {
       this.#r = this.#e.setTimeout(() => {
-        if (h !== this.#c) return;
+        if (generation !== this.#c) return;
         try {
           this.#v();
         } finally {
-          if (h === this.#c) x();
+          if (generation === this.#c) tick();
         }
       }, INBOX_POLL_DEBOUNCE_MS);
     };
-    x();
+    tick();
   }
   #b() {
     this.#c++;
@@ -253,46 +258,52 @@ class useInboxPoller {
   #C() {
     return Object.values(this.#e.store.getState().teamContext?.teammates ?? {});
   }
-  async #w(h, x) {
-    if (!((await h()) || (await h())))
-      logForDebugging(x(), {
+  async #w(unreadMessages, requestedAt) {
+    if (!((await unreadMessages()) || (await unreadMessages())))
+      logForDebugging(requestedAt(), {
         level: "error",
       });
   }
   async #T() {
-    let h = this.#e;
-    let { store, storageV5, credentials, terminal } = h;
+    let deps = this.#e;
+    let { store, storageV5, credentials, terminal } = deps;
     let setState = store.setState;
     let { enabled, isLoading, visibleDialogKind, onSubmitMessage, requestDialog } = this.#t;
     if (!enabled) return;
-    let Xe = this.#n;
-    let state = store.getState();
-    let agentNameToPoll = getAgentNameToPoll(h.identity, state);
+    let snapshot = this.#n;
+    let appState = store.getState();
+    let agentNameToPoll = getAgentNameToPoll(deps.identity, appState);
     if (!agentNameToPoll) return;
-    let unreadMessages = await h.readUnreadMessages(agentNameToPoll, state.teamContext?.teamName, storageV5);
-    if (Xe !== this.#n) return;
+    let unreadMessages = await deps.readUnreadMessages(
+      agentNameToPoll,
+      appState.teamContext?.teamName,
+      storageV5,
+    );
+    if (snapshot !== this.#n) return;
     if (unreadMessages.length === 0) {
       this.#f = false;
       return;
     }
     logForDebugging(`[InboxPoller] Found ${unreadMessages.length} unread message(s)`);
-    let It = dedupeMailboxMessages(
+    let provenanceByText = dedupeMailboxMessages(
       unreadMessages,
-      getInboxPath(agentNameToPoll, state.teamContext?.teamName),
+      getInboxPath(agentNameToPoll, appState.teamContext?.teamName),
       {
-        roster: state.teamContext?.teammates,
-        isPaneTeammate: h.identity.kind === "teammate",
+        roster: appState.teamContext?.teammates,
+        isPaneTeammate: deps.identity.kind === "teammate",
       },
     );
-    let Ot = (No) => It.get(No) === "forged";
-    let Et = new Set();
-    let Dt = new Map();
+    let isForged = (key) => provenanceByText.get(key) === "forged";
+    let seen = new Set();
+    let dedupe = new Map();
     if (isTeammate() && isPlanModeRequired())
-      for (let No of unreadMessages) {
-        let response = isPlanApprovalResponse(No.text);
-        if (!response) continue;
-        if (No.from !== TEAM_LEAD || Ot(No)) {
-          logForDebugging(`[InboxPoller] Ignoring plan approval response from non-team-lead: ${No.from}`);
+      for (let message of unreadMessages) {
+        let approvalResponse = isPlanApprovalResponse(message.text);
+        if (!approvalResponse) continue;
+        if (message.from !== TEAM_LEAD || isForged(message)) {
+          logForDebugging(
+            `[InboxPoller] Ignoring plan approval response from non-team-lead: ${message.from}`,
+          );
           continue;
         }
         if (store.getState().toolPermissionContext.mode !== "plan") {
@@ -301,10 +312,10 @@ class useInboxPoller {
         }
         let swarmPermissions = swarmHostState().swarmPermissions;
         let pendingPlanApproval = swarmPermissions.pendingPlanApproval;
-        let Fn = planVerdictBinding(pendingPlanApproval, response);
-        if (Fn === "already_answered") {
+        let verdict = planVerdictBinding(pendingPlanApproval, approvalResponse);
+        if (verdict === "already_answered") {
           logForDebugging(
-            `[InboxPoller] Ignoring plan approval response ${jsonStringify(response.requestId)}: the pending request ${jsonStringify(pendingPlanApproval?.requestId)} was already answered`,
+            `[InboxPoller] Ignoring plan approval response ${jsonStringify(approvalResponse.requestId)}: the pending request ${jsonStringify(pendingPlanApproval?.requestId)} was already answered`,
           );
           continue;
         }
@@ -313,59 +324,64 @@ class useInboxPoller {
             ...pendingPlanApproval,
             answered: true,
           };
-        if (Fn === "mismatch") {
+        if (verdict === "mismatch") {
           logForDebugging(
-            `[InboxPoller] Plan approval response ${jsonStringify(response.requestId)} does not name the pending plan request ${jsonStringify(pendingPlanApproval?.requestId)}; resolving the wait as a rejection`,
+            `[InboxPoller] Plan approval response ${jsonStringify(approvalResponse.requestId)} does not name the pending plan request ${jsonStringify(pendingPlanApproval?.requestId)}; resolving the wait as a rejection`,
             {
               level: "warn",
             },
           );
           logFeatureSad("plan_approval", "request_binding_mismatch");
-          Dt.set(No, planVerdictMismatchRejection(response));
+          dedupe.set(message, planVerdictMismatchRejection(approvalResponse));
           continue;
         }
-        if (Fn === "unbound") logFeatureSad("plan_approval", "verdict_unbound");
+        if (verdict === "unbound") logFeatureSad("plan_approval", "verdict_unbound");
         else logFeatureOk("plan_approval");
-        Dt.set(No, response);
+        dedupe.set(message, approvalResponse);
         logForDebugging(
-          `[InboxPoller] Received plan approval response from team-lead: approved=${response.approved}`,
+          `[InboxPoller] Received plan approval response from team-lead: approved=${approvalResponse.approved}`,
         );
-        if (!response.approved) {
+        if (!approvalResponse.approved) {
           logForDebugging(
-            `[InboxPoller] Plan rejected by team lead: ${response.feedback || "No feedback provided"}`,
+            `[InboxPoller] Plan rejected by team lead: ${approvalResponse.feedback || "No feedback provided"}`,
           );
           continue;
         }
-        let permissionMode = response.permissionMode ?? "default";
-        let Go = applyStartupPermissionMode(permissionMode, state.toolPermissionContext, setState);
-        if (!Go.ok) {
+        let permissionMode = approvalResponse.permissionMode ?? "default";
+        let modeResult = applyStartupPermissionMode(permissionMode, appState.toolPermissionContext, setState);
+        if (!modeResult.ok) {
           logForDebugging(
-            `[InboxPoller] Refusing inherited mode ${permissionMode} from plan approval: ${Go.error}; exiting plan mode to default`,
+            `[InboxPoller] Refusing inherited mode ${permissionMode} from plan approval: ${modeResult.error}; exiting plan mode to default`,
             {
               level: "warn",
             },
           );
-          applyStartupPermissionMode("default", state.toolPermissionContext, setState);
+          applyStartupPermissionMode("default", appState.toolPermissionContext, setState);
         }
-        await syncTeammateMode(Go.ok ? Go.mode : "default", state.teamContext?.teamName, storageV5);
+        await syncTeammateMode(
+          modeResult.ok ? modeResult.mode : "default",
+          appState.teamContext?.teamName,
+          storageV5,
+        );
         logForDebugging(
-          `[InboxPoller] Plan approved by team lead, exited plan mode to ${Go.ok ? Go.mode : "default"}`,
+          `[InboxPoller] Plan approved by team lead, exited plan mode to ${modeResult.ok ? modeResult.mode : "default"}`,
         );
       }
-    let Lt = ++this.#u;
-    let oo;
-    let Xt = () =>
-      (oo ??= new Promise((resolve) => {
-        this.#p.set(Lt, resolve);
+    let generation = ++this.#u;
+    let state;
+    let nextState = () =>
+      (state ??= new Promise((resolve) => {
+        this.#p.set(generation, resolve);
       }));
-    let io = () => {
-      h.markMessagesAsRead(agentNameToPoll, state.teamContext?.teamName, unreadMessages, storageV5)
+    let onTick = () => {
+      deps
+        .markMessagesAsRead(agentNameToPoll, appState.teamContext?.teamName, unreadMessages, storageV5)
         .catch((error) => {
           logError(error);
           return false;
         })
-        .then((No) => {
-          if (!No) {
+        .then((value) => {
+          if (!value) {
             logForDebugging(
               `[InboxPoller] Could not mark ${unreadMessages.length} inbox message(s) read; they stay unread and are retried next poll`,
               {
@@ -379,115 +395,116 @@ class useInboxPoller {
             return;
           }
           this.#f = false;
-          for (let [vo, Yo] of this.#p)
-            if (vo <= Lt) {
-              Yo();
-              this.#p.delete(vo);
+          for (let [timestamp, counter] of this.#p)
+            if (timestamp <= generation) {
+              counter();
+              this.#p.delete(timestamp);
             }
         });
     };
-    let so = [];
-    let po = [];
-    let ao = [];
-    let co = [];
-    let bo = [];
-    let Ao = [];
-    let Bo = [];
-    let Ro = [];
-    for (let No of unreadMessages) {
-      if (this.#m.has(messageIdentityKey(No))) continue;
-      if (Ot(No)) {
-        Ro.push(No);
+    let permissionRequests = [];
+    let permissionResponses = [];
+    let sandboxRequests = [];
+    let sandboxResponses = [];
+    let shutdownRequests = [];
+    let shutdownApprovals = [];
+    let modeSetRequests = [];
+    let leftover = [];
+    for (let message of unreadMessages) {
+      if (this.#m.has(messageIdentityKey(message))) continue;
+      if (isForged(message)) {
+        leftover.push(message);
         continue;
       }
-      let vo = isPermissionRequest(No.text);
-      let Yo = isPermissionResponse(No.text);
-      let kn = isSandboxPermissionRequest(No.text);
-      let Fn = isSandboxPermissionResponse(No.text);
-      let bn = isShutdownRequest(No.text);
-      let Go = isShutdownApproved(No.text);
-      let hn = Go?.from === No.from ? Go : null;
-      let Mn = isModeSetRequest(No.text);
-      let Xo = isPlanApprovalRequest(No.text);
-      if (vo) so.push(No);
-      else if (Yo) po.push(No);
-      else if (kn) ao.push(No);
-      else if (Fn) co.push(No);
-      else if (bn) bo.push(No);
-      else if (hn) Ao.push(No);
-      else if (isTeamPermissionUpdate(No.text))
+      let permissionRequest = isPermissionRequest(message.text);
+      let permissionResponse = isPermissionResponse(message.text);
+      let sandboxRequest = isSandboxPermissionRequest(message.text);
+      let sandboxResponse = isSandboxPermissionResponse(message.text);
+      let shutdownRequest = isShutdownRequest(message.text);
+      let shutdownApproved = isShutdownApproved(message.text);
+      let matchingApproval = shutdownApproved?.from === message.from ? shutdownApproved : null;
+      let modeSetRequest = isModeSetRequest(message.text);
+      let planApprovalRequest = isPlanApprovalRequest(message.text);
+      if (permissionRequest) permissionRequests.push(message);
+      else if (permissionResponse) permissionResponses.push(message);
+      else if (sandboxRequest) sandboxRequests.push(message);
+      else if (sandboxResponse) sandboxResponses.push(message);
+      else if (shutdownRequest) shutdownRequests.push(message);
+      else if (matchingApproval) shutdownApprovals.push(message);
+      else if (isTeamPermissionUpdate(message.text))
         logForDebugging(
           "[InboxPoller] Dropping team_permission_update message: permission rules are never accepted from the inbox",
           {
             level: "warn",
           },
         );
-      else if (Mn)
+      else if (modeSetRequest)
         logForDebugging(
           "[InboxPoller] Dropping mode_set_request message: permission mode changes are never accepted from the inbox",
           {
             level: "warn",
           },
         );
-      else if (Xo) Bo.push(No);
-      else if (isStructuredProtocolMessage(No.text)) {
-        let content = Dt.get(No);
+      else if (planApprovalRequest) modeSetRequests.push(message);
+      else if (isStructuredProtocolMessage(message.text)) {
+        let content = dedupe.get(message);
         if (content) {
-          let $n = {
-            ...No,
+          let resumeMessage = {
+            ...message,
             text: planApprovalResumeText(content),
           };
-          Et.add($n);
-          Ro.push($n);
+          seen.add(resumeMessage);
+          leftover.push(resumeMessage);
         } else
           logForDebugging(
-            `[InboxPoller] Dropping unrouted protocol frame from ${jsonStringify(No.from)}: ${jsonStringify(No.text.substring(0, 80))}`,
+            `[InboxPoller] Dropping unrouted protocol frame from ${jsonStringify(message.from)}: ${jsonStringify(message.text.substring(0, 80))}`,
             {
               level: "warn",
             },
           );
-      } else Ro.push(No);
+      } else leftover.push(message);
     }
-    if (so.length > 0 && isTeamLead(state.teamContext)) {
-      logForDebugging(`[InboxPoller] Found ${so.length} permission request(s)`);
-      let teamName = state.teamContext?.teamName;
-      let vo;
-      for (let Yo of so) {
-        let kn = isPermissionRequest(Yo.text);
-        if (!kn) continue;
-        if (kn.agent_id !== Yo.from) {
+    if (permissionRequests.length > 0 && isTeamLead(appState.teamContext)) {
+      logForDebugging(`[InboxPoller] Found ${permissionRequests.length} permission request(s)`);
+      let teamName = appState.teamContext?.teamName;
+      let items;
+      for (let message of permissionRequests) {
+        let request_ = isPermissionRequest(message.text);
+        if (!request_) continue;
+        if (request_.agent_id !== message.from) {
           logForDebugging(
-            `[InboxPoller] Dropping permission request ${jsonStringify(kn.request_id)}: agent_id ${jsonStringify(kn.agent_id)} does not match sender ${jsonStringify(Yo.from)}`,
+            `[InboxPoller] Dropping permission request ${jsonStringify(request_.request_id)}: agent_id ${jsonStringify(request_.agent_id)} does not match sender ${jsonStringify(message.from)}`,
             {
               level: "warn",
             },
           );
           continue;
         }
-        let Fn = findTool(getAllBaseTools(), kn.tool_name) ?? createUnknownToolStub(kn.tool_name);
-        let bn = typeof kn.tool_name === "string" ? kn.tool_name : Fn.name;
-        let Go = hostValidationCacheKey(
+        let placeholderTool =
+          findTool(getAllBaseTools(), request_.tool_name) ?? createUnknownToolStub(request_.tool_name);
+        let toolName = typeof request_.tool_name === "string" ? request_.tool_name : placeholderTool.name;
+        let hostKey = hostValidationCacheKey(
           "tool",
-          Yo.from,
-          kn.request_id,
-          typeof kn.tool_use_id === "string" ? kn.tool_use_id : undefined,
+          message.from,
+          request_.request_id,
+          typeof request_.tool_use_id === "string" ? request_.tool_use_id : undefined,
         );
-        if (this.#d.has(Go)) continue;
-        this.#d.add(Go);
-        let hn = Xt();
-        let Mn = knownHostNameOrUndefined(kn.agent_id, Yo.from, this.#C());
-        let Xo;
-        let Sn;
+        if (this.#d.has(hostKey)) continue;
+        this.#d.add(hostKey);
+        let setState = nextState();
+        let hostLabel = knownHostNameOrUndefined(request_.agent_id, message.from, this.#C());
+        let dialog;
+        let descriptor;
         try {
-          Xo = stableHashOfJson(bn, kn.input);
-          Sn = await buildForwardedPermissionDialog({
-            tool: Fn,
-            input: kn.input,
-            description: kn.description,
-            toolUseID: kn.tool_use_id,
+          dialog = stableHashOfJson(toolName, request_.input);
+          descriptor = await buildForwardedPermissionDialog({
+            tool: placeholderTool,
+            input: request_.input,
+            description: request_.description,
+            toolUseID: request_.tool_use_id,
             permissionResult: {
               behavior: "ask",
-              message: kn.description,
+              message: request_.description,
             },
             assistantMessage: createAssistantMessage({
               content: "",
@@ -495,72 +512,72 @@ class useInboxPoller {
             theme: "dark",
             requestSource: {
               type: "subagent",
-              agentName: Mn,
+              agentName: hostLabel,
             },
-            toolPermissionContext: state.toolPermissionContext,
+            toolPermissionContext: appState.toolPermissionContext,
           });
         } catch (error) {
           logError(error);
-          let mr =
-            Xo === undefined
+          let digest =
+            dialog === undefined
               ? undefined
               : {
-                  tool_use_id: kn.tool_use_id,
-                  tool_name: bn,
-                  input_digest: Xo,
+                  tool_use_id: request_.tool_use_id,
+                  tool_name: toolName,
+                  input_digest: dialog,
                 };
-          let Kn = mr === undefined ? "input could not be digested" : "dialog build failed";
+          let failureReason = digest === undefined ? "input could not be digested" : "dialog build failed";
           this.#w(
             () =>
               sendPermissionResponseViaMailbox(
-                Yo.from,
+                message.from,
                 {
                   decision: "rejected",
                   resolvedBy: "leader",
-                  approvedRequest: mr,
+                  approvedRequest: digest,
                 },
-                kn.request_id,
+                request_.request_id,
                 teamName,
                 storageV5,
-                kn.tool_use_id,
+                request_.tool_use_id,
               ),
             () =>
-              `[InboxPoller] Rejection for permission request ${jsonStringify(kn.request_id)} (${Kn}) could not be delivered to ${jsonStringify(Yo.from)} after a retry; the worker stays parked`,
+              `[InboxPoller] Rejection for permission request ${jsonStringify(request_.request_id)} (${failureReason}) could not be delivered to ${jsonStringify(message.from)} after a retry; the worker stays parked`,
           )
-            .then(() => hn)
-            .finally(() => this.#d.delete(Go))
+            .then(() => setState)
+            .finally(() => this.#d.delete(hostKey))
             .catch(logError);
           continue;
         }
-        let { dialog, descriptor } = Sn;
-        let _o = new CountedAsk();
+        let { dialog: dialog_2, descriptor: descriptor_2 } = descriptor;
+        let countedAsk = new CountedAsk();
         let approvedRequest = {
-          tool_use_id: kn.tool_use_id,
-          tool_name: bn,
-          input_digest: Xo,
+          tool_use_id: request_.tool_use_id,
+          tool_name: toolName,
+          input_digest: dialog,
         };
-        if (!vo)
-          vo = {
-            name: Mn,
-            tool: kn.tool_name,
+        if (!items)
+          items = {
+            name: hostLabel,
+            tool: request_.tool_name,
           };
-        let Dn = requestDialog(dialog, descriptor, {
+        let answerPromise = requestDialog(dialog_2, descriptor_2, {
           place: "under",
           armInputGrace: true,
-          ...(isNotAskUserQuestionCard(dialog.kind) && {
-            countedAsk: _o,
+          ...(isNotAskUserQuestionCard(dialog_2.kind) && {
+            countedAsk,
           }),
         });
-        _o.settleWhen(Dn);
-        Dn.then((wn) => {
+        countedAsk.settleWhen(answerPromise);
+        answerPromise.then((answer) => {
           let resolution;
-          switch (wn.behavior) {
+          switch (answer.behavior) {
             case "allow":
               resolution = {
                 decision: "approved",
                 resolvedBy: "leader",
-                updatedInput: wn.updatedInput,
-                permissionUpdates: wn.permissionUpdates ? [...wn.permissionUpdates] : undefined,
+                updatedInput: answer.updatedInput,
+                permissionUpdates: answer.permissionUpdates ? [...answer.permissionUpdates] : undefined,
                 approvedRequest,
               };
               break;
@@ -568,7 +585,7 @@ class useInboxPoller {
               resolution = {
                 decision: "rejected",
                 resolvedBy: "leader",
-                feedback: wn.feedback,
+                feedback: answer.feedback,
                 approvedRequest,
               };
               break;
@@ -580,29 +597,29 @@ class useInboxPoller {
               };
               break;
           }
-          let Kn = () =>
+          let settle = () =>
             sendPermissionResponseViaMailbox(
-              Yo.from,
+              message.from,
               resolution,
-              kn.request_id,
+              request_.request_id,
               teamName,
               storageV5,
-              kn.tool_use_id,
+              request_.tool_use_id,
             );
           this.#w(
-            Kn,
+            settle,
             () =>
-              `[InboxPoller] ${resolution.decision === "approved" ? "Approval" : "Rejection"} for permission request ${jsonStringify(kn.request_id)} could not be delivered to ${jsonStringify(Yo.from)} after a retry; the worker stays parked`,
+              `[InboxPoller] ${resolution.decision === "approved" ? "Approval" : "Rejection"} for permission request ${jsonStringify(request_.request_id)} could not be delivered to ${jsonStringify(message.from)} after a retry; the worker stays parked`,
           )
-            .then(() => hn)
-            .finally(() => this.#d.delete(Go))
+            .then(() => setState)
+            .finally(() => this.#d.delete(hostKey))
             .catch(logError);
         });
       }
-      if (vo && !isLoading && !visibleDialogKind)
+      if (items && !isLoading && !visibleDialogKind)
         notifyAsync(
           {
-            message: `${describeApprovalSubject(vo.name)} needs permission for ${typeof vo.tool === "string" ? displayLabelOrUnnamedTool(vo.tool) : "(unnamed tool)"}`,
+            message: `${describeApprovalSubject(items.name)} needs permission for ${typeof items.tool === "string" ? displayLabelOrUnnamedTool(items.tool) : "(unnamed tool)"}`,
             notificationType: "worker_permission_prompt",
           },
           terminal,
@@ -612,49 +629,49 @@ class useInboxPoller {
           },
         );
     }
-    if (po.length > 0 && isTeammate()) {
-      logForDebugging(`[InboxPoller] Found ${po.length} permission response(s)`);
-      for (let No of po) {
-        let vo = isPermissionResponse(No.text);
-        if (!vo) continue;
-        if (No.from !== TEAM_LEAD) {
+    if (permissionResponses.length > 0 && isTeammate()) {
+      logForDebugging(`[InboxPoller] Found ${permissionResponses.length} permission response(s)`);
+      for (let message of permissionResponses) {
+        let response = isPermissionResponse(message.text);
+        if (!response) continue;
+        if (message.from !== TEAM_LEAD) {
           logForDebugging(
-            `[InboxPoller] Ignoring permission response from non-team-lead: ${jsonStringify(No.from)}`,
+            `[InboxPoller] Ignoring permission response from non-team-lead: ${jsonStringify(message.from)}`,
             {
               level: "warn",
             },
           );
           continue;
         }
-        if (h.hasPermissionCallback(vo.request_id)) {
+        if (deps.hasPermissionCallback(response.request_id)) {
           logForDebugging(
-            `[InboxPoller] Processing permission response for ${jsonStringify(vo.request_id)}: ${jsonStringify(vo.subtype)}`,
+            `[InboxPoller] Processing permission response for ${jsonStringify(response.request_id)}: ${jsonStringify(response.subtype)}`,
           );
-          if (vo.subtype === "success")
-            h.processMailboxPermissionResponse({
-              requestId: vo.request_id,
+          if (response.subtype === "success")
+            deps.processMailboxPermissionResponse({
+              requestId: response.request_id,
               decision: "approved",
-              updatedInput: vo.response?.updated_input,
-              permissionUpdates: vo.response?.permission_updates,
-              toolUseId: vo.tool_use_id,
-              approvedRequest: vo.approved_request,
+              updatedInput: response.response?.updated_input,
+              permissionUpdates: response.response?.permission_updates,
+              toolUseId: response.tool_use_id,
+              approvedRequest: response.approved_request,
             });
           else
-            h.processMailboxPermissionResponse({
-              requestId: vo.request_id,
+            deps.processMailboxPermissionResponse({
+              requestId: response.request_id,
               decision: "rejected",
-              feedback: vo.error,
-              toolUseId: vo.tool_use_id,
-              approvedRequest: vo.approved_request,
+              feedback: response.error,
+              toolUseId: response.tool_use_id,
+              approvedRequest: response.approved_request,
             });
         }
       }
     }
-    if (ao.length > 0 && isTeamLead(state.teamContext)) {
-      logForDebugging(`[InboxPoller] Found ${ao.length} sandbox permission request(s)`);
-      let teamName = state.teamContext?.teamName;
-      let vo = this.#l;
-      async function Yo(host) {
+    if (sandboxRequests.length > 0 && isTeamLead(appState.teamContext)) {
+      logForDebugging(`[InboxPoller] Found ${sandboxRequests.length} sandbox permission request(s)`);
+      let teamName = appState.teamContext?.teamName;
+      let props = this.#l;
+      async function runSandboxRequests(host) {
         let toolPermissionContext = store.getState().toolPermissionContext;
         let modeBaseBehavior = getModeBaseBehavior(
           toolPermissionContext.mode,
@@ -679,7 +696,7 @@ class useInboxPoller {
                 mode,
               };
             return {
-              resolved: await vo.getOrClassify(host, undefined, emptyConversationSnapshot, () =>
+              resolved: await props.getOrClassify(host, undefined, emptyConversationSnapshot, () =>
                 classifySandboxNetworkHost(
                   host,
                   undefined,
@@ -703,128 +720,133 @@ class useInboxPoller {
             };
         }
       }
-      let kn = false;
-      for (let Fn of ao) {
-        let bn = isSandboxPermissionRequest(Fn.text);
-        if (!bn) continue;
-        if (typeof bn.hostPattern?.host !== "string" || !bn.hostPattern.host) {
+      let cancelled = false;
+      for (let message of sandboxRequests) {
+        let request = isSandboxPermissionRequest(message.text);
+        if (!request) continue;
+        if (typeof request.hostPattern?.host !== "string" || !request.hostPattern.host) {
           logForDebugging(
             "[InboxPoller] Invalid sandbox permission request: missing or non-string hostPattern.host",
           );
           continue;
         }
-        if (bn.workerName !== Fn.from) {
+        if (request.workerName !== message.from) {
           logForDebugging(
-            `[InboxPoller] Dropping sandbox request ${jsonStringify(bn.requestId)}: workerName ${jsonStringify(bn.workerName)} does not match sender ${jsonStringify(Fn.from)}`,
+            `[InboxPoller] Dropping sandbox request ${jsonStringify(request.requestId)}: workerName ${jsonStringify(request.workerName)} does not match sender ${jsonStringify(message.from)}`,
             {
               level: "warn",
             },
           );
           continue;
         }
-        if (typeof bn.workerName !== "string" || !bn.workerName) {
+        if (typeof request.workerName !== "string" || !request.workerName) {
           logForDebugging(
             "[InboxPoller] Invalid sandbox permission request: missing or non-string workerName",
           );
           continue;
         }
-        let Go = hostValidationCacheKey("sandbox", Fn.from, bn.requestId, bn.hostPattern.host);
-        let hn = describeInvalidHost(bn.hostPattern.host);
-        if (hn !== null) {
-          if (this.#d.has(Go)) continue;
+        let hostKey = hostValidationCacheKey(
+          "sandbox",
+          message.from,
+          request.requestId,
+          request.hostPattern.host,
+        );
+        let invalidHost = describeInvalidHost(request.hostPattern.host);
+        if (invalidHost !== null) {
+          if (this.#d.has(hostKey)) continue;
           logForDebugging(
-            `[InboxPoller] Denying sandbox request ${jsonStringify(bn.requestId)}: ${hn} (${toApprovalLabel(bn.hostPattern.host) ?? "(unshowable)"})`,
+            `[InboxPoller] Denying sandbox request ${jsonStringify(request.requestId)}: ${invalidHost} (${toApprovalLabel(request.hostPattern.host) ?? "(unshowable)"})`,
             {
               level: "warn",
             },
           );
-          this.#d.add(Go);
-          let _o = Xt();
-          let cn = () =>
+          this.#d.add(hostKey);
+          let setState = nextState();
+          let onAllow = () =>
             sendSandboxPermissionResponseViaMailbox(
-              Fn.from,
-              bn.requestId,
-              bn.hostPattern.host,
+              message.from,
+              request.requestId,
+              request.hostPattern.host,
               false,
               teamName,
               storageV5,
             );
           this.#w(
-            cn,
+            onAllow,
             () =>
-              `[InboxPoller] Deny for sandbox request ${jsonStringify(bn.requestId)} (${hn}) could not be delivered to ${jsonStringify(Fn.from)} after a retry; the worker stays parked`,
+              `[InboxPoller] Deny for sandbox request ${jsonStringify(request.requestId)} (${invalidHost}) could not be delivered to ${jsonStringify(message.from)} after a retry; the worker stays parked`,
           )
-            .then(() => _o)
-            .finally(() => this.#d.delete(Go))
+            .then(() => setState)
+            .finally(() => this.#d.delete(hostKey))
             .catch(logError);
           continue;
         }
-        if (this.#d.has(Go)) continue;
-        let { resolved, mode } = await Yo(bn.hostPattern.host);
+        if (this.#d.has(hostKey)) continue;
+        let { resolved, mode } = await runSandboxRequests(request.hostPattern.host);
         if (resolved !== null) {
-          if (this.#d.has(Go)) continue;
-          this.#d.add(Go);
-          let _o = Xt();
+          if (this.#d.has(hostKey)) continue;
+          this.#d.add(hostKey);
+          let setState = nextState();
           logForDebugging(
-            `[InboxPoller] Auto-resolving sandbox request ${jsonStringify(bn.requestId)} (mode=${mode}, allow=${resolved})`,
+            `[InboxPoller] Auto-resolving sandbox request ${jsonStringify(request.requestId)} (mode=${mode}, allow=${resolved})`,
           );
-          let cn = () =>
+          let onDeny = () =>
             sendSandboxPermissionResponseViaMailbox(
-              Fn.from,
-              bn.requestId,
-              bn.hostPattern.host,
+              message.from,
+              request.requestId,
+              request.hostPattern.host,
               resolved,
               teamName,
               storageV5,
             );
           this.#w(
-            cn,
+            onDeny,
             () =>
-              `[InboxPoller] Auto-resolved verdict for sandbox request ${jsonStringify(bn.requestId)} (allow=${resolved}) could not be delivered to ${jsonStringify(Fn.from)} after a retry; the worker stays parked`,
+              `[InboxPoller] Auto-resolved verdict for sandbox request ${jsonStringify(request.requestId)} (allow=${resolved}) could not be delivered to ${jsonStringify(message.from)} after a retry; the worker stays parked`,
           )
-            .then(() => _o)
-            .finally(() => this.#d.delete(Go))
+            .then(() => setState)
+            .finally(() => this.#d.delete(hostKey))
             .catch(logError);
           continue;
         }
-        let host = bn.hostPattern.host;
-        if (this.#d.has(Go)) continue;
-        this.#d.add(Go);
-        let $n = Xt();
-        let on = knownHostNameOrUndefined(bn.workerName, Fn.from, this.#C());
+        let host = request.hostPattern.host;
+        if (this.#d.has(hostKey)) continue;
+        this.#d.add(hostKey);
+        let setState_2 = nextState();
+        let workerLabel = knownHostNameOrUndefined(request.workerName, message.from, this.#C());
         askSandboxNetworkFromWorker(
           {
             host,
-            workerName: on,
-            requestId: bn.requestId,
+            workerName: workerLabel,
+            requestId: request.requestId,
           },
           {
             requestDialog,
             sendResponse: (allow) =>
               sendSandboxPermissionResponseViaMailbox(
-                Fn.from,
-                bn.requestId,
+                message.from,
+                request.requestId,
                 host,
                 allow,
                 store.getState().teamContext?.teamName,
                 storageV5,
               ),
-            applyPermissionUpdate: (_o) =>
-              setState((cn) => ({
-                ...cn,
-                toolPermissionContext: applyValidatedPermissionUpdate(cn.toolPermissionContext, _o),
+            applyPermissionUpdate: (update) =>
+              setState((prev) => ({
+                ...prev,
+                toolPermissionContext: applyValidatedPermissionUpdate(prev.toolPermissionContext, update),
               })),
           },
         )
-          .then(() => $n)
-          .finally(() => this.#d.delete(Go))
+          .then(() => setState_2)
+          .finally(() => this.#d.delete(hostKey))
           .catch(logError);
-        if (!kn && !isLoading && !visibleDialogKind) {
-          kn = true;
-          let _o = bunStringWidth(host) <= SHORT_LABEL_WIDTH ? labelOr(host, "a host") : "a host";
+        if (!cancelled && !isLoading && !visibleDialogKind) {
+          cancelled = true;
+          let hostText = bunStringWidth(host) <= SHORT_LABEL_WIDTH ? labelOr(host, "a host") : "a host";
           notifyAsync(
             {
-              message: `${describeApprovalSubject(on)} needs network access to ${_o}`,
+              message: `${describeApprovalSubject(workerLabel)} needs network access to ${hostText}`,
               notificationType: "worker_permission_prompt",
             },
             terminal,
@@ -836,69 +858,69 @@ class useInboxPoller {
         }
       }
     }
-    if (co.length > 0 && isTeammate()) {
-      logForDebugging(`[InboxPoller] Found ${co.length} sandbox permission response(s)`);
-      for (let No of co) {
-        let vo = isSandboxPermissionResponse(No.text);
-        if (!vo) continue;
-        if (No.from !== TEAM_LEAD) {
+    if (sandboxResponses.length > 0 && isTeammate()) {
+      logForDebugging(`[InboxPoller] Found ${sandboxResponses.length} sandbox permission response(s)`);
+      for (let message of sandboxResponses) {
+        let response = isSandboxPermissionResponse(message.text);
+        if (!response) continue;
+        if (message.from !== TEAM_LEAD) {
           logForDebugging(
-            `[InboxPoller] Ignoring sandbox permission response from non-team-lead: ${jsonStringify(No.from)}`,
+            `[InboxPoller] Ignoring sandbox permission response from non-team-lead: ${jsonStringify(message.from)}`,
             {
               level: "warn",
             },
           );
           continue;
         }
-        if (h.hasSandboxPermissionCallback(vo.requestId)) {
+        if (deps.hasSandboxPermissionCallback(response.requestId)) {
           logForDebugging(
-            `[InboxPoller] Processing sandbox permission response for ${jsonStringify(vo.requestId)}: allow=${jsonStringify(vo.allow)}`,
+            `[InboxPoller] Processing sandbox permission response for ${jsonStringify(response.requestId)}: allow=${jsonStringify(response.allow)}`,
           );
           if (
-            h.processSandboxPermissionResponse({
-              requestId: vo.requestId,
-              host: vo.host,
-              allow: vo.allow,
+            deps.processSandboxPermissionResponse({
+              requestId: response.requestId,
+              host: response.host,
+              allow: response.allow,
             })
           )
-            setState((kn) => ({
-              ...kn,
+            setState((prev) => ({
+              ...prev,
               pendingSandboxRequest: null,
             }));
         }
       }
     }
-    if (Bo.length > 0 && isTeamLead(state.teamContext)) {
-      logForDebugging(`[InboxPoller] Found ${Bo.length} plan approval request(s)`);
-      let teamName = state.teamContext?.teamName;
-      for (let vo of Bo) {
-        let Yo = isPlanApprovalRequest(vo.text);
-        if (!Yo) continue;
-        if (!isTeammateAwaitingPlan(vo.from, store.getState().tasks)) {
-          Ro.push(vo);
+    if (modeSetRequests.length > 0 && isTeamLead(appState.teamContext)) {
+      logForDebugging(`[InboxPoller] Found ${modeSetRequests.length} plan approval request(s)`);
+      let teamName = appState.teamContext?.teamName;
+      for (let message of modeSetRequests) {
+        let request = isPlanApprovalRequest(message.text);
+        if (!request) continue;
+        if (!isTeammateAwaitingPlan(message.from, store.getState().tasks)) {
+          leftover.push(message);
           continue;
         }
         let state = store.getState();
         let permissionMode = teammateModeAfterPlan({
-          recipientName: vo.from,
+          recipientName: message.from,
           leaderMode: state.toolPermissionContext.mode,
           leaderAutoPickedByLevel: hasLeftProactivityBaseline(state.toolPermissionContext),
           proactivityLevel: state.proactivityLevel,
           tasks: state.tasks,
         });
-        let bn = {
+        let label = {
           type: "plan_approval_response",
-          requestId: Yo.requestId,
+          requestId: request.requestId,
           approved: true,
           timestamp: new Date().toISOString(),
           permissionMode,
         };
         if (
-          (await h.writeToMailbox(
-            vo.from,
+          (await deps.writeToMailbox(
+            message.from,
             {
               from: TEAM_LEAD,
-              text: jsonStringify(bn),
+              text: jsonStringify(label),
               timestamp: new Date().toISOString(),
             },
             teamName,
@@ -906,84 +928,89 @@ class useInboxPoller {
           )) === undefined
         ) {
           logForDebugging(
-            `[InboxPoller] FAILED to write plan approval response to ${jsonStringify(vo.from)} (request ${jsonStringify(Yo.requestId)}) \u2014 the teammate is still awaiting approval`,
+            `[InboxPoller] FAILED to write plan approval response to ${jsonStringify(message.from)} (request ${jsonStringify(request.requestId)}) \u2014 the teammate is still awaiting approval`,
             {
               level: "error",
             },
           );
-          Ro.push(vo);
+          leftover.push(message);
           continue;
         }
         logForDebugging(
-          `[InboxPoller] Auto-approved plan from ${jsonStringify(vo.from)} (request ${jsonStringify(Yo.requestId)})`,
+          `[InboxPoller] Auto-approved plan from ${jsonStringify(message.from)} (request ${jsonStringify(request.requestId)})`,
         );
-        Ro.push(vo);
+        leftover.push(message);
       }
     }
-    if (bo.length > 0 && isTeammate()) {
-      logForDebugging(`[InboxPoller] Found ${bo.length} shutdown request(s)`);
-      for (let No of bo) Ro.push(No);
+    if (shutdownRequests.length > 0 && isTeammate()) {
+      logForDebugging(`[InboxPoller] Found ${shutdownRequests.length} shutdown request(s)`);
+      for (let message of shutdownRequests) leftover.push(message);
     }
-    if (Ao.length > 0 && isTeamLead(state.teamContext)) {
-      logForDebugging(`[InboxPoller] Found ${Ao.length} shutdown approval(s)`);
-      for (let No of Ao) {
-        let vo = isShutdownApproved(No.text);
-        if (!vo) continue;
-        let tmuxPaneId = Object.values(state.teamContext?.teammates ?? {}).find(
-          (kn) => kn.name === vo.from,
+    if (shutdownApprovals.length > 0 && isTeamLead(appState.teamContext)) {
+      logForDebugging(`[InboxPoller] Found ${shutdownApprovals.length} shutdown approval(s)`);
+      for (let message of shutdownApprovals) {
+        let approval = isShutdownApproved(message.text);
+        if (!approval) continue;
+        let tmuxPaneId = Object.values(appState.teamContext?.teammates ?? {}).find(
+          (backend) => backend.name === approval.from,
         )?.tmuxPaneId;
-        if (vo.paneId && vo.backendType && vo.paneId === tmuxPaneId)
+        if (approval.paneId && approval.backendType && approval.paneId === tmuxPaneId)
           (async () => {
             try {
               await ensureBackendsRegistered();
               let insideTmux = await isInsideTmux();
-              let bn = await getBackendByType(vo.backendType)?.killPane(vo.paneId, !insideTmux);
+              let killResult = await getBackendByType(approval.backendType)?.killPane(
+                approval.paneId,
+                !insideTmux,
+              );
               logForDebugging(
-                `[InboxPoller] Killed pane ${jsonStringify(vo.paneId)} for ${jsonStringify(vo.from)}: ${bn}`,
+                `[InboxPoller] Killed pane ${jsonStringify(approval.paneId)} for ${jsonStringify(approval.from)}: ${killResult}`,
               );
             } catch (error) {
-              logForDebugging(`[InboxPoller] Failed to kill pane for ${jsonStringify(vo.from)}: ${error}`);
+              logForDebugging(
+                `[InboxPoller] Failed to kill pane for ${jsonStringify(approval.from)}: ${error}`,
+              );
             }
           })();
-        await killTeammate(vo.from, state, setState, storageV5);
-        Ro.push(No);
+        await killTeammate(approval.from, appState, setState, storageV5);
+        leftover.push(message);
       }
     }
-    let mapped = Ro.map((No) => messageIdentityKey(No));
-    for (let No of mapped) this.#m.add(No);
-    let Io = () => {
-      for (let No of mapped) this.#m.delete(No);
+    let mapped = leftover.map((message) => messageIdentityKey(message));
+    for (let key of mapped) this.#m.add(key);
+    let markSeen = () => {
+      for (let key of mapped) this.#m.delete(key);
     };
-    Xt().then(Io);
-    let Wo;
+    nextState().then(markSeen);
+    let passedThrough;
     try {
-      Wo = await filterMailboxThroughReceiveHooks(Ro, {
-        provenanceOf: (No) => It.get(No) ?? "unverifiable",
+      passedThrough = await filterMailboxThroughReceiveHooks(leftover, {
+        provenanceOf: (key) => provenanceByText.get(key) ?? "unverifiable",
         agentId: undefined,
-        isPassedThrough: (No) => !Ot(No) && (Et.has(No) || isStructuredProtocolMessage(No.text)),
+        isPassedThrough: (key) => !isForged(key) && (seen.has(key) || isStructuredProtocolMessage(key.text)),
       });
     } catch (error) {
-      Io();
+      markSeen();
       throw error;
     }
-    if (Xe !== this.#n) {
-      Io();
+    if (snapshot !== this.#n) {
+      markSeen();
       return;
     }
-    if (Wo.length === 0) {
-      io();
+    if (passedThrough.length === 0) {
+      onTick();
       return;
     }
-    let mn = formatTeammateMessages(Wo, {
-      recipientIsLead: isTeamLead(state.teamContext),
+    let text = formatTeammateMessages(passedThrough, {
+      recipientIsLead: isTeamLead(appState.teamContext),
     });
-    let Cn = () => {
-      setState((No) => ({
-        ...No,
+    let cleanup = () => {
+      setState((prev) => ({
+        ...prev,
         inbox: {
           messages: [
-            ...No.inbox.messages,
-            ...Wo.map((m) => ({
+            ...prev.inbox.messages,
+            ...passedThrough.map((m) => ({
               id: randomUUID(),
               from: m.from,
               text: m.text,
@@ -1001,15 +1028,15 @@ class useInboxPoller {
     };
     if (!isLoading && !visibleDialogKind) {
       logForDebugging("[InboxPoller] Session idle, submitting immediately");
-      if (!onSubmitMessage(mn)) {
+      if (!onSubmitMessage(text)) {
         logForDebugging("[InboxPoller] Submission rejected, queuing for later delivery");
-        Cn();
+        cleanup();
       }
     } else {
       logForDebugging("[InboxPoller] Session busy, queuing for later delivery");
-      Cn();
+      cleanup();
     }
-    io();
+    onTick();
   }
   #x() {
     let { store } = this.#e;
@@ -1035,10 +1062,10 @@ class useInboxPoller {
     }
     if (pendingMessages.length === 0) return;
     logForDebugging(`[InboxPoller] Session idle, delivering ${pendingMessages.length} pending message(s)`);
-    let ze = formatTeammateMessages(pendingMessages, {
+    let text = formatTeammateMessages(pendingMessages, {
       recipientIsLead: isTeamLead(currentAppState.teamContext),
     });
-    if (onSubmitMessage(ze)) {
+    if (onSubmitMessage(text)) {
       let submittedIds = new Set(pendingMessages.map((m) => m.id));
       setAppState((prev) => ({
         ...prev,
@@ -1060,7 +1087,7 @@ function useInboxPollerHook(props) {
   let terminal = useTerminalNotification();
   let clock = useClock();
   let { storageV5, credentials } = useTheme_2();
-  let [Xe] = y(
+  let [initial] = useState(
     () =>
       new useInboxPoller(
         {
@@ -1069,10 +1096,10 @@ function useInboxPollerHook(props) {
           terminal,
           storageV5,
           credentials,
-          setTimeout: (rt, kt) => clock.setTimeout(rt, kt),
-          readUnreadMessages: (...rt) => readUnreadMessages(...rt),
-          markMessagesAsRead: (...rt) => markMessagesAsRead(...rt),
-          writeToMailbox: (...rt) => writeToMailbox(...rt),
+          setTimeout: (fn, ms) => clock.setTimeout(fn, ms),
+          readUnreadMessages: (...args) => readUnreadMessages(...args),
+          markMessagesAsRead: (...args) => markMessagesAsRead(...args),
+          writeToMailbox: (...args) => writeToMailbox(...args),
           hasPermissionCallback: hasPendingSwarmPermission,
           processMailboxPermissionResponse,
           hasSandboxPermissionCallback: hasPendingSandboxPermission,
@@ -1081,20 +1108,23 @@ function useInboxPollerHook(props) {
         props,
       ),
   );
-  P(() => {
-    Xe.start();
-    return () => Xe.stop();
-  }, [Xe]);
-  P(() => {
-    Xe.setInputs({
+  useEffect(() => {
+    initial.start();
+    return () => initial.stop();
+  }, [initial]);
+  useEffect(() => {
+    initial.setInputs({
       enabled,
       isLoading,
       visibleDialogKind,
       onSubmitMessage,
       requestDialog,
     });
-  }, [Xe, enabled, isLoading, visibleDialogKind, onSubmitMessage, requestDialog]);
+  }, [initial, enabled, isLoading, visibleDialogKind, onSubmitMessage, requestDialog]);
 }
 //@ chunk-18hwfzwa.js:1688778-1688782 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:1688778", () => {
+  init_react_production();
+});
 export { useInboxPollerHook };

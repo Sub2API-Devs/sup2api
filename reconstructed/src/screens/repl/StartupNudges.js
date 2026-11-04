@@ -10,7 +10,7 @@
  */
 import { withHideWhile } from "../../components/dialogs/dialogRequests.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, hu, _enum, string } from "../../../vendor/zod/v4/classic/schemas.js";
+import { objectSchema, custom, _enum, stringSchema } from "../../../vendor/zod/v4/classic/schemas.js";
 import {
   setSecurityDialogRequester,
   isConsentHandoffReveal,
@@ -40,24 +40,28 @@ import { shouldOfferAutoModeEnvOnboarding } from "../../components/AutoModeEnvOn
 import { isBgSession, isUnattendedInteractiveSession } from "../../utils/concurrentSessions.js";
 import { waitForTrue } from "../../commands/terminalSetup/index.js";
 import { getMainLoopModel } from "../../utils/model/model.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-18hwfzwa.js:171289-171612 placement
-var managedSettingsSecurityDialogDef = withHideWhile({
-  kind: "managed_settings_security",
-  payload: DoctorLazy(() =>
-    u({
-      settings: hu((h) => typeof h === "object" && h !== null),
-      baseline: hu((h) => h === null || typeof h === "object"),
-      reveal: _enum(["login_handoff", "prompt_line", "default"]),
-    }),
-  ),
-  result: DoctorLazy(() => _enum(["approved", "rejected", "deferred_no_consent_surface"])),
-  default: "deferred_no_consent_surface",
+var managedSettingsSecurityDialogDef; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-18hwfzwa.js:171289", () => {
+  managedSettingsSecurityDialogDef = withHideWhile({
+    kind: "managed_settings_security",
+    payload: DoctorLazy(() =>
+      objectSchema({
+        settings: custom((value) => typeof value === "object" && value !== null),
+        baseline: custom((value) => value === null || typeof value === "object"),
+        reveal: _enum(["login_handoff", "prompt_line", "default"]),
+      }),
+    ),
+    result: DoctorLazy(() => _enum(["approved", "rejected", "deferred_no_consent_surface"])),
+    default: "deferred_no_consent_surface",
+  });
 });
 //@ chunk-18hwfzwa.js:171612-171696 placement
 function installSecurityDialogRequester(requestDialog) {
-  setSecurityDialogRequester((settings, baseline, L) =>
-    requestDialog(managedSettingsSecurityDialogDef, withRevealMode(settings, baseline, L), {
+  setSecurityDialogRequester((settings, baseline, revealEvents) =>
+    requestDialog(managedSettingsSecurityDialogDef, withRevealMode(settings, baseline, revealEvents), {
       place: "under",
     }),
   );
@@ -67,19 +71,23 @@ function installSecurityDialogRequester(requestDialog) {
 /**
  * 给启动提示设置流补上显示方式（登录交接/输入行/默认）。
  */
-async function* withRevealMode(settings, baseline, D) {
-  let L = isConsentHandoffReveal() ? "login_handoff" : wasEarlyInputFieldOpened() ? "prompt_line" : "default";
+async function* withRevealMode(settings, baseline, revealEvents) {
+  let reveal = isConsentHandoffReveal()
+    ? "login_handoff"
+    : wasEarlyInputFieldOpened()
+      ? "prompt_line"
+      : "default";
   yield {
     settings,
     baseline,
-    reveal: L,
+    reveal,
   };
-  for await (let ee of D) {
-    if (L !== "login_handoff" && isConsentHandoffReveal()) L = "login_handoff";
+  for await (let event of revealEvents) {
+    if (reveal !== "login_handoff" && isConsentHandoffReveal()) reveal = "login_handoff";
     yield {
-      settings: ee.settings,
-      baseline: ee.baseline,
-      reveal: L,
+      settings: event.settings,
+      baseline: event.baseline,
+      reveal,
     };
   }
 }
@@ -95,47 +103,47 @@ class StartupNudges {
   #o;
   #n;
   #s;
-  constructor(h) {
-    this.#e = h;
+  constructor(options) {
+    this.#e = options;
     this.#t = alwaysFalseStartupNudges();
     this.#o = shouldOfferFullscreenUpsell();
-    let x = effortMediumNudgeCandidate({
-      model: h.mainLoopModel,
-      effortValue: resolveEffortLevel(h.store.getState()),
+    let effortNudge = effortMediumNudgeCandidate({
+      model: options.mainLoopModel,
+      effortValue: resolveEffortLevel(options.store.getState()),
     });
-    this.#n = x && {
-      model: h.mainLoopModel,
-      copy: x,
+    this.#n = effortNudge && {
+      model: options.mainLoopModel,
+      copy: effortNudge,
     };
-    this.#s = h.store.getState().initialMessage !== null;
+    this.#s = options.store.getState().initialMessage !== null;
   }
   start() {
     let { store, requestDialog, addNotification } = this.#e;
     let abortController = createAbortController();
     if (this.#e.presentation === "fullscreen")
       maybeGetTmuxMouseHint()
-        .then((ke) => {
-          if (ke)
+        .then((mouseHint) => {
+          if (mouseHint)
             addNotification({
               key: "tmux-mouse-hint",
               kind: "contextual",
-              text: ke,
+              text: mouseHint,
               priority: "low",
             });
         })
         .catch(logError);
     maybeGetTmuxFocusHint()
-      .then((ke) => {
-        if (ke)
+      .then((focusHint) => {
+        if (focusHint)
           addNotification({
             key: "tmux-focus-hint",
             kind: "contextual",
-            text: ke,
+            text: focusHint,
             priority: "low",
           });
       })
       .catch(logError);
-    let ee = installSecurityDialogRequester(requestDialog);
+    let uninstallRequester = installSecurityDialogRequester(requestDialog);
     this.#r(abortController).catch(logError);
     if (getAutoModeEnvOnboardingEligible() === undefined)
       setAutoModeEnvOnboardingEligible(
@@ -143,10 +151,10 @@ class StartupNudges {
       );
     return () => {
       abortController.abort();
-      ee();
+      uninstallRequester();
     };
   }
-  async #r(h) {
+  async #r(abortController) {
     let {
       session,
       store,
@@ -159,11 +167,13 @@ class StartupNudges {
       turnActivity,
     } = this.#e;
     if (isBgSession()) return;
-    let ze = this.#s ? waitForTrue(turnActivity, h.signal) : Promise.resolve();
-    let Xe = isUnattendedInteractiveSession()
+    let activityWait = this.#s ? waitForTrue(turnActivity, abortController.signal) : Promise.resolve();
+    let autoDefaultCandidate = isUnattendedInteractiveSession()
       ? Promise.resolve(null)
-      : import("./chunk-jra2kd7f.js")
-          .then((It) => It.shouldShowAutoDefaultNudge(store.getState().toolPermissionContext))
+      : import("../../cli/print/autoDefaultNudge.js")
+          .then((nudgeModule) =>
+            nudgeModule.shouldShowAutoDefaultNudge(store.getState().toolPermissionContext),
+          )
           .catch((error) => {
             logError(error);
             return null;
@@ -176,37 +186,37 @@ class StartupNudges {
         addNotification,
         storageV5,
       }).catch(logError);
-      if (h.signal.aborted) return;
+      if (abortController.signal.aborted) return;
     }
-    let rt = await Xe;
-    let kt = false;
-    if (rt === null && !this.#n && !kt) return;
-    await ze;
-    if (h.signal.aborted) return;
-    let At = {
+    let autoDefaultNudge = await autoDefaultCandidate;
+    let suppressNudges = false;
+    if (autoDefaultNudge === null && !this.#n && !suppressNudges) return;
+    await activityWait;
+    if (abortController.signal.aborted) return;
+    let dialogOptions = {
       activity: turnActivity,
-      signal: h.signal,
+      signal: abortController.signal,
     };
-    if (rt !== null) {
-      await openAutoDefaultNudge(requestDialog, rt, At, {
+    if (autoDefaultNudge !== null) {
+      await openAutoDefaultNudge(requestDialog, autoDefaultNudge, dialogOptions, {
         getToolPermissionContext: () => store.getState().toolPermissionContext,
-        setToolPermissionContext: (It) =>
-          setAppState((Ot) => {
-            let Et = It(Ot.toolPermissionContext);
-            return Et === Ot.toolPermissionContext
-              ? Ot
+        setToolPermissionContext: (update) =>
+          setAppState((state) => {
+            let nextContext = update(state.toolPermissionContext);
+            return nextContext === state.toolPermissionContext
+              ? state
               : {
-                  ...Ot,
-                  toolPermissionContext: Et,
+                  ...state,
+                  toolPermissionContext: nextContext,
                 };
           }),
         addNotification,
         storageV5,
       }).catch(logError);
-      if (h.signal.aborted) return;
+      if (abortController.signal.aborted) return;
     }
     if (this.#n)
-      await showEffortMediumNudge(requestDialog, this.#n, At, {
+      await showEffortMediumNudge(requestDialog, this.#n, dialogOptions, {
         setAppState,
         addNotification,
         storageV5,

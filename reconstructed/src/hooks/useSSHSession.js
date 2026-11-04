@@ -8,22 +8,22 @@
  * pieces: chunk-18hwfzwa.js (1)
  * attribution: fingerprint 1
  */
-import { Q } from "../../vendor/react/cjs/react.production.js";
+import { useMemo } from "../../vendor/react/cjs/react.production.js";
 import { gracefulShutdown } from "../utils/gracefulShutdown.js";
 import { useRemoteTransportCore } from "../remote/useRemoteTransportCore.js";
 
 //@ chunk-18hwfzwa.js:309217-309809 fingerprint = useSSHSession (0.434)
 function useSSHSession({ session, sink, requestDialog, toolPermissionContext, tools }) {
-  let converted = Q(() => {
+  let converted = useMemo(() => {
     if (!session) return;
     return {
       label: "ssh",
       createManager: (prev) => session.createManager(prev),
-      onDisconnected: (Re) => {
+      onDisconnected: (connected) => {
         let stderr = session.getStderrTail().trim();
         let exitCode = session.proc.exitCode;
-        let msg = Re ? "Remote session ended." : "SSH session failed before connecting.";
-        if (stderr && (!Re || exitCode !== 0))
+        let msg = connected ? "Remote session ended." : "SSH session failed before connecting.";
+        if (stderr && (!connected || exitCode !== 0))
           msg += `
 Remote stderr (exit ${exitCode ?? "signal " + session.proc.signalCode}):
 ${stderr}`;

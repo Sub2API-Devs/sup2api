@@ -27,72 +27,83 @@ import { uniq } from "./collections.js";
 /**
  * 脱敏 URL 用于日志：用户名/密码替换为 REDACTED，查询参数与片段中名称看似秘密的键值、令牌形状的值替换为 REDACTED；无法解析时返回 [unparseable url]。
  */
-function redactUrlSecrets(t) {
-  let e;
+function redactUrlSecrets(url) {
+  let parsedUrl;
   try {
-    e = new URL(t);
+    parsedUrl = new URL(url);
   } catch {
     return "[unparseable url]";
   }
-  let n = e.host === "" && !e.href.startsWith(`${e.protocol}//`);
-  if (e.username !== "") e.username = "REDACTED";
-  if (e.password !== "") e.password = "REDACTED";
-  let o = (s) => {
-    let index = s.indexOf("=");
-    if (index === -1 || /^=*$/.test(s.slice(index + 1))) return anySegmentTokenLike(s) ? "REDACTED" : s;
-    let sliced = s.slice(0, index);
-    return `${anySegmentTokenLike(sliced) || (anySegmentTokenLike(s) && looksRandomToken(sliced)) ? "REDACTED" : sliced}=REDACTED`;
+  let isRelativeUrl = parsedUrl.host === "" && !parsedUrl.href.startsWith(`${parsedUrl.protocol}//`);
+  if (parsedUrl.username !== "") parsedUrl.username = "REDACTED";
+  if (parsedUrl.password !== "") parsedUrl.password = "REDACTED";
+  let redactPair = (pair) => {
+    let index = pair.indexOf("=");
+    if (index === -1 || /^=*$/.test(pair.slice(index + 1)))
+      return anySegmentTokenLike(pair) ? "REDACTED" : pair;
+    let segment = pair.slice(0, index);
+    return `${anySegmentTokenLike(segment) || (anySegmentTokenLike(pair) && looksRandomToken(segment)) ? "REDACTED" : segment}=REDACTED`;
   };
-  let r = (s) =>
-    s
+  let redactSeparated = (segment) =>
+    segment
       .split(SEPARATOR_SPLIT_RE)
-      .map((i, a) => (a % 2 === 1 ? i : o(i)))
+      .map((part, partIndex) => (partIndex % 2 === 1 ? part : redactPair(part)))
       .join("");
-  let c = (s) => {
-    let i = r(s);
-    if (isEncodedUrl(i) || hasEmbeddedSecret(i)) return "REDACTED";
-    let a = i;
+  let redactPathSegment = (segment) => {
+    let redacted = redactSeparated(segment);
+    if (isEncodedUrl(redacted) || hasEmbeddedSecret(redacted)) return "REDACTED";
+    let decoded = redacted;
     for (let idx = 0; idx < 3; idx++) {
-      let u = safeDecodeURIComponent(a);
-      if (u === a) break;
-      if (r(u) !== u || userinfoAtIndex(u) !== -1 || hasEmbeddedSecret(u)) return "REDACTED";
-      a = u;
+      let nextDecoded = safeDecodeURIComponent(decoded);
+      if (nextDecoded === decoded) break;
+      if (
+        redactSeparated(nextDecoded) !== nextDecoded ||
+        userinfoAtIndex(nextDecoded) !== -1 ||
+        hasEmbeddedSecret(nextDecoded)
+      )
+        return "REDACTED";
+      decoded = nextDecoded;
     }
-    return i;
+    return redacted;
   };
-  let D = `${n ? e.protocol : ""}${e.pathname}`;
-  let M = userinfoAtIndex(D);
-  let f;
-  if (looksLikeUrlWithScheme(e.pathname, true)) {
-    let index = e.pathname.indexOf("/");
-    let i = `${e.protocol}${index === -1 ? e.pathname : e.pathname.slice(0, index)}`;
-    f =
-      n && userinfoAtIndex(i) !== -1
+  let pathForUserinfo = `${isRelativeUrl ? parsedUrl.protocol : ""}${parsedUrl.pathname}`;
+  let userinfoIndex = userinfoAtIndex(pathForUserinfo);
+  let redactedPath;
+  if (looksLikeUrlWithScheme(parsedUrl.pathname, true)) {
+    let index = parsedUrl.pathname.indexOf("/");
+    let schemePrefix = `${parsedUrl.protocol}${index === -1 ? parsedUrl.pathname : parsedUrl.pathname.slice(0, index)}`;
+    redactedPath =
+      isRelativeUrl && userinfoAtIndex(schemePrefix) !== -1
         ? "REDACTED"
-        : `${n ? e.protocol : ""}${e.pathname.startsWith("/") ? "/" : ""}REDACTED`;
+        : `${isRelativeUrl ? parsedUrl.protocol : ""}${parsedUrl.pathname.startsWith("/") ? "/" : ""}REDACTED`;
   } else {
-    let mapped = e.pathname.split("/").map(c);
-    if (n) mapped[0] = `${e.protocol}${mapped[0] ?? ""}`;
-    if (M !== -1) {
-      let i = (B) => countCharInString(D.slice(0, B), "/");
-      let a = i(D.indexOf(":"));
-      let g = i(M);
-      let u = mapped[g] ?? "";
-      let U = u.includes("@") ? u.slice(u.lastIndexOf("@")) : "";
-      mapped.splice(a, g - a + 1, `REDACTED${U}`);
+    let mapped = parsedUrl.pathname.split("/").map(redactPathSegment);
+    if (isRelativeUrl) mapped[0] = `${parsedUrl.protocol}${mapped[0] ?? ""}`;
+    if (userinfoIndex !== -1) {
+      let slashCountBefore = (index) => countCharInString(pathForUserinfo.slice(0, index), "/");
+      let schemeSlashCount = slashCountBefore(pathForUserinfo.indexOf(":"));
+      let userinfoSegmentIndex = slashCountBefore(userinfoIndex);
+      let userinfoSegment = mapped[userinfoSegmentIndex] ?? "";
+      let atSuffix = userinfoSegment.includes("@")
+        ? userinfoSegment.slice(userinfoSegment.lastIndexOf("@"))
+        : "";
+      mapped.splice(schemeSlashCount, userinfoSegmentIndex - schemeSlashCount + 1, `REDACTED${atSuffix}`);
     }
-    f = mapped.join("/");
+    redactedPath = mapped.join("/");
   }
-  if (!n) {
-    e.pathname = f;
-    if (HEADER_SEPARATOR_RE.test(e.hostname)) e.hostname = "REDACTED";
+  if (!isRelativeUrl) {
+    parsedUrl.pathname = redactedPath;
+    if (HEADER_SEPARATOR_RE.test(parsedUrl.hostname)) parsedUrl.hostname = "REDACTED";
   }
-  let z = uniq(e.searchParams.keys());
-  let j = new Set([...e.searchParams.entries()].filter(([, s]) => s === "").map(([s]) => s));
+  let paramNames = uniq(parsedUrl.searchParams.keys());
+  let emptyParamNames = new Set(
+    [...parsedUrl.searchParams.entries()].filter(([, value]) => value === "").map(([name]) => name),
+  );
   let uRLSearchParams = new URLSearchParams();
-  for (let s of z) uRLSearchParams.append(redactUnlessSafe(s, !j.has(s)), "REDACTED");
-  e.search = uRLSearchParams.toString();
-  e.hash = "";
-  return n ? `${f}${e.search}` : e.href;
+  for (let paramName of paramNames)
+    uRLSearchParams.append(redactUnlessSafe(paramName, !emptyParamNames.has(paramName)), "REDACTED");
+  parsedUrl.search = uRLSearchParams.toString();
+  parsedUrl.hash = "";
+  return isRelativeUrl ? `${redactedPath}${parsedUrl.search}` : parsedUrl.href;
 }
 export { redactUrlSecrets };

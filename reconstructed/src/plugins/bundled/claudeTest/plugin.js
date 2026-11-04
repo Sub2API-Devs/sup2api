@@ -21,19 +21,17 @@ import { isSettingSourceEnabled } from "../../../utils/settings/constants.js";
 import { loadInstalledFiles } from "./nodeEnvironment.js";
 import {
   claudeTestInstalledRoot,
-  TEST_PLUGIN_ID,
-  TEST_PLUGIN_VERSION,
-} from "../../../services/pluginTest/claudeTestPlugin.js";
-import { parseFrontmatter } from "../../../utils/frontmatterParser.js";
-import {
   portedCommandNames,
   expandSkillDirPlaceholders,
-  $e,
+  SKILL_NAMES,
   CLAUDE_TEST_RUNNER,
+  TEST_PLUGIN_ID,
   CC_PLUGIN_CLAUDE_TEST,
+  TEST_PLUGIN_VERSION,
   buildHelperServerConfig,
   emptyExportsSecond,
 } from "./constants.js";
+import { parseFrontmatter } from "../../../utils/frontmatterParser.js";
 import {
   rememberComposerMark,
   hasAllTestAgents,
@@ -90,13 +88,14 @@ import { pluginDataDirPath } from "../../../utils/plugins/pluginDirectories.js";
 import { registerBuiltinPlugin, builtinHooksModuleRef } from "../../builtinPlugins.js";
 import { getSessionId, getIsInteractive } from "../../../bootstrap/state.js";
 import { CLAUDE_TEST_HOOK_SCAN } from "./hookScan.js";
+import { deferInit } from "../../../../runtime/deferred-init.js";
 
 //@ chunk-ae5g0zb5.js:124247-124285 placement
 /**
  * 从命令文本取运行目录
  */
-function runDirFromCommand(e) {
-  return RUN_DIR_COMMAND_RE.exec(e)?.[1];
+function runDirFromCommand(command) {
+  return RUN_DIR_COMMAND_RE.exec(command)?.[1];
 }
 //@ chunk-ae5g0zb5.js:124285-124378 placement
 /**
@@ -129,23 +128,23 @@ function checkSandboxLocalBinding() {
   return isSettingSourceEnabled("userSettings") ? "refused" : "refused-fixed";
 }
 //@ chunk-ae5g0zb5.js:124995-125293 placement
-async function readSkillFrontmatter(e) {
+async function readSkillFrontmatter(skillName) {
   let { SKILL_MD } = await loadInstalledFiles();
-  let r = claudeTestInstalledRoot();
+  let skillDir = claudeTestInstalledRoot();
   let { frontmatter, content } = parseFrontmatter(
-    portedCommandNames(SKILL_MD[e]).replace(
+    portedCommandNames(SKILL_MD[skillName]).replace(
       /\r\n/g,
       `
 `,
     ),
   );
-  let a = frontmatter["allowed-tools"];
+  let allowedToolsValue = frontmatter["allowed-tools"];
   return {
-    allowedTools: (Array.isArray(a) ? a : [])
-      .filter((i) => typeof i === "string")
-      .map((i) => expandSkillDirPlaceholders(i, r)),
+    allowedTools: (Array.isArray(allowedToolsValue) ? allowedToolsValue : [])
+      .filter((tool) => typeof tool === "string")
+      .map((tool) => expandSkillDirPlaceholders(tool, skillDir)),
     body:
-      `Base directory for this skill: ${r}/skills/run
+      `Base directory for this skill: ${skillDir}/skills/run
 
 ` + content.trim(),
   };
@@ -154,80 +153,85 @@ async function readSkillFrontmatter(e) {
 /**
  * 创建 Claude Test 的 skill 命令对象（工具白名单、提示词生成、用户参数）。
  */
-function createClaudeTestSkill(e, n) {
+function createClaudeTestSkill(skillName, skill) {
   return {
-    ...n,
-    name: $e[e],
+    ...skill,
+    name: SKILL_NAMES[skillName],
     requires: {
       workspace: true,
     },
-    ...(e === "run" && {
+    ...(skillName === "run" && {
       onUserTypedArgs: rememberComposerMark,
     }),
     getAllowedTools: async () =>
-      describeUnavailableReason(e, false, []) === undefined &&
-      (e !== "run" ||
+      describeUnavailableReason(skillName, false, []) === undefined &&
+      (skillName !== "run" ||
         claudeTestState.seatOwnAgents === undefined ||
         hasAllTestAgents(getActiveAgentDefinitions()))
-        ? (await readSkillFrontmatter(e)).allowedTools
+        ? (await readSkillFrontmatter(skillName)).allowedTools
         : [],
-    async getPromptForCommand(r, o) {
-      let s = e === "run" && consumeComposerMark(r, o);
-      let agentsCheckedFor = e === "run" ? claudeTestState.agentsCheckedFor : undefined;
-      if (e === "run") claudeTestState.agentsCheckedFor = undefined;
-      if (s) claudeTestState.typedArgs = r;
-      let i = s && !claudeTestState.isModuleLoaded ? await ensureClaudeTestReloaded(o) : undefined;
-      let c = describeUnavailableReason(
-        e,
-        o.options.isNonInteractiveSession,
-        o.options.commands,
-        i,
-        n.agent === undefined ||
-          o.options.agentDefinitions.activeAgents.some((activeAgent) => activeAgent.agentType === n.agent),
+    async getPromptForCommand(args, context) {
+      let isComposerSubmit = skillName === "run" && consumeComposerMark(args, context);
+      let agentsCheckedFor = skillName === "run" ? claudeTestState.agentsCheckedFor : undefined;
+      if (skillName === "run") claudeTestState.agentsCheckedFor = undefined;
+      if (isComposerSubmit) claudeTestState.typedArgs = args;
+      let reloadOutcome =
+        isComposerSubmit && !claudeTestState.isModuleLoaded
+          ? await ensureClaudeTestReloaded(context)
+          : undefined;
+      let unavailableReason = describeUnavailableReason(
+        skillName,
+        context.options.isNonInteractiveSession,
+        context.options.commands,
+        reloadOutcome,
+        skill.agent === undefined ||
+          context.options.agentDefinitions.activeAgents.some(
+            (activeAgent) => activeAgent.agentType === skill.agent,
+          ),
       );
-      if (c !== undefined)
+      if (unavailableReason !== undefined)
         return [
           {
             type: "text",
-            text: tellPersonAndStop(c),
+            text: tellPersonAndStop(unavailableReason),
           },
         ];
-      let _ =
-        e === "run"
+      let seatMessage =
+        skillName === "run"
           ? await checkOwnAgentsSeated(
-              o.options.agentDefinitions.activeAgents,
-              s ||
+              context.options.agentDefinitions.activeAgents,
+              isComposerSubmit ||
                 (agentsCheckedFor !== undefined &&
-                  agentsCheckedFor.args === r &&
+                  agentsCheckedFor.args === args &&
                   Date.now() - agentsCheckedFor.at <= LOAD_MARK_TTL_MS),
             )
           : undefined;
-      if (_ !== undefined)
+      if (seatMessage !== undefined)
         return [
           {
             type: "text",
-            text: tellPersonAndStop(_),
+            text: tellPersonAndStop(seatMessage),
           },
         ];
-      if (e === "execute" && o.options.isSkillPreload !== true) {
-        let O = runDirFromCommand(r);
-        if (O !== undefined) rememberRunFolder(O);
+      if (skillName === "execute" && context.options.isSkillPreload !== true) {
+        let runDir = runDirFromCommand(args);
+        if (runDir !== undefined) rememberRunFolder(runDir);
       }
-      let S = "may-leave";
-      let w = "allowed";
-      let f = "none";
-      let b = "~/.claude/settings.json";
-      if (e === "run") {
+      let networkReach = "may-leave";
+      let localBinding = "allowed";
+      let backgroundPolicy = "none";
+      let settingsPath = "~/.claude/settings.json";
+      if (skillName === "run") {
         try {
-          S = describeNetworkReach();
-          w = checkSandboxLocalBinding();
+          networkReach = describeNetworkReach();
+          localBinding = checkSandboxLocalBinding();
         } catch (error) {
           logForDebugging(`claude-test: sandbox not read for the run skill: ${errorMessage(error)}`, {
             level: "error",
           });
         }
         try {
-          f = backgroundShellPolicy(o);
+          backgroundPolicy = backgroundShellPolicy(context);
         } catch (error) {
           logForDebugging(
             `claude-test: background commands not read for the run skill: ${errorMessage(error)}`,
@@ -237,7 +241,7 @@ function createClaudeTestSkill(e, n) {
           );
         }
         try {
-          b = getSettingsFilePathForSource("userSettings") ?? b;
+          settingsPath = getSettingsFilePathForSource("userSettings") ?? settingsPath;
         } catch (error) {
           logForDebugging(
             `claude-test: user settings path not read for the run skill: ${errorMessage(error)}`,
@@ -247,17 +251,17 @@ function createClaudeTestSkill(e, n) {
           );
         }
       }
-      let { body } = await readSkillFrontmatter(e);
-      let F = expandSkillDirPlaceholders(
+      let { body } = await readSkillFrontmatter(skillName);
+      let prompt = expandSkillDirPlaceholders(
         substituteArguments(
-          e === "run"
+          skillName === "run"
             ? body
-                .replaceAll(CLAUDE_TEST_SANDBOX_MARK, S)
-                .replaceAll(CLAUDE_TEST_LISTEN, w)
-                .replaceAll(CLAUDE_TEST_BACKGROUND, f)
-                .replaceAll(CLAUDE_TEST_USER_SETTINGS, () => b)
+                .replaceAll(CLAUDE_TEST_SANDBOX_MARK, networkReach)
+                .replaceAll(CLAUDE_TEST_LISTEN, localBinding)
+                .replaceAll(CLAUDE_TEST_BACKGROUND, backgroundPolicy)
+                .replaceAll(CLAUDE_TEST_USER_SETTINGS, () => settingsPath)
             : body,
-          r,
+          args,
           true,
           [],
           escapeShellBangs,
@@ -267,7 +271,10 @@ function createClaudeTestSkill(e, n) {
       return [
         {
           type: "text",
-          text: e === "run" ? issueLoadMark(F, i === "loaded" ? isAbortableAndEnabled(o) : undefined) : F,
+          text:
+            skillName === "run"
+              ? issueLoadMark(prompt, reloadOutcome === "loaded" ? isAbortableAndEnabled(context) : undefined)
+              : prompt,
         },
       ];
     },
@@ -277,14 +284,14 @@ function createClaudeTestSkill(e, n) {
 /**
  * 检查 Claude Test 自带 agent 是否已加载，返回对应提示。
  */
-async function checkOwnAgentsSeated(activeAgents, n) {
+async function checkOwnAgentsSeated(activeAgents, agentsJustLoaded) {
   let seatOwnAgents = claudeTestState.seatOwnAgents;
   if (seatOwnAgents === undefined) return;
-  let o = hasAllTestAgents(activeAgents);
-  if (!n && o) return;
+  let hasAll = hasAllTestAgents(activeAgents);
+  if (!agentsJustLoaded && hasAll) return;
   switch (await seatOwnAgents()) {
     case "listed":
-      return n ? undefined : AGENTS_JUST_LOADED_TEXT;
+      return agentsJustLoaded ? undefined : AGENTS_JUST_LOADED_TEXT;
     case "reading":
       return AGENTS_STILL_LOADING_TEXT;
     case "missing":
@@ -301,18 +308,18 @@ var MAX_LOAD_MARKS = 16;
 /**
  * 生成加载标记（UUID）并登记，返回带标记前缀的提示词；只保留最近若干个。
  */
-function issueLoadMark(e, n) {
+function issueLoadMark(promptText, mayStillStart) {
   let { loads } = claudeTestState;
-  let o = randomUUID();
-  for (let [s, a] of loads)
-    if (a.isTyped)
-      loads.set(s, {
-        issuedAt: a.issuedAt,
+  let markId = randomUUID();
+  for (let [id, mark] of loads)
+    if (mark.isTyped)
+      loads.set(id, {
+        issuedAt: mark.issuedAt,
         isTyped: false,
       });
   loads.set(
-    o,
-    n === undefined
+    markId,
+    mayStillStart === undefined
       ? {
           issuedAt: Date.now(),
           isTyped: false,
@@ -320,26 +327,27 @@ function issueLoadMark(e, n) {
       : {
           issuedAt: Date.now(),
           isTyped: true,
-          mayStillStart: n,
+          mayStillStart,
         },
   );
   for (let key of [...loads.keys()].slice(0, -MAX_LOAD_MARKS)) loads.delete(key);
-  return `${LOAD_MARK_PREFIX}${o}
-${e}`;
+  return `${LOAD_MARK_PREFIX}${markId}
+${promptText}`;
 }
 //@ chunk-ae5g0zb5.js:127298-127679 placement
-function describeUnavailableReason(e, n, r, o, s = true) {
+function describeUnavailableReason(skillName, isNonInteractive, commands, reloadOutcome, agentsReady = true) {
   if (!claudeTestState.isModuleLoaded) {
-    let claudeTestRepository = findClaudeTestRepository(r);
+    let claudeTestRepository = findClaudeTestRepository(commands);
     if (claudeTestRepository !== undefined) return formatConflictingPluginText(claudeTestRepository);
-    if (n) return CLI_ONLY_TEXT;
-    if (o === "slow" || (o === undefined && isClaudeTestReloadOutstanding())) return STILL_READYING_TEXT;
-    return o !== undefined || isClaudeTestReloadPending() || hasPluginSkill(r)
+    if (isNonInteractive) return CLI_ONLY_TEXT;
+    if (reloadOutcome === "slow" || (reloadOutcome === undefined && isClaudeTestReloadOutstanding()))
+      return STILL_READYING_TEXT;
+    return reloadOutcome !== undefined || isClaudeTestReloadPending() || hasPluginSkill(commands)
       ? RELOAD_PART_MISSING_TEXT
       : START_HINT_TEXT;
   }
-  if (e === "run") return;
-  if (n) return CLI_ONLY_TEXT;
+  if (skillName === "run") return;
+  if (isNonInteractive) return CLI_ONLY_TEXT;
   if (!claudeTestState.hasStartedServer) return HELPER_NOT_READY_TEXT;
   switch (claudeTestState.mayRun?.()) {
     case "yes":
@@ -351,31 +359,34 @@ function describeUnavailableReason(e, n, r, o, s = true) {
     default:
       return LOGIN_CHECK_FAILED_TEXT;
   }
-  return s ? undefined : AGENT_START_FAILED_TEXT;
+  return agentsReady ? undefined : AGENT_START_FAILED_TEXT;
 }
 //@ chunk-ae5g0zb5.js:127679-127892 placement
 /**
  * Claude Test 的三个技能：run（用户可调用）、execute 与 draft（fork 到内部 agent）。
  */
-var CLAUDE_TEST_SKILLS = [
-  createClaudeTestSkill("run", {
-    ...RUN_SKILL_DEFINITION,
-    userInvocable: true,
-    getArgumentCompletions: completeSpecArgs,
-  }),
-  createClaudeTestSkill("execute", {
-    ...EXECUTE_AGENT_DEFINITION,
-    userInvocable: false,
-    context: "fork",
-    agent: CLAUDE_TEST_RUNNER,
-  }),
-  createClaudeTestSkill("draft", {
-    ...DRAFT_AGENT_DEFINITION,
-    userInvocable: false,
-    context: "fork",
-    agent: "claude-test:author",
-  }),
-];
+var CLAUDE_TEST_SKILLS; // deferred: uses createClaudeTestSkill of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-ae5g0zb5.js:127679", () => {
+  CLAUDE_TEST_SKILLS = [
+    createClaudeTestSkill("run", {
+      ...RUN_SKILL_DEFINITION,
+      userInvocable: true,
+      getArgumentCompletions: completeSpecArgs,
+    }),
+    createClaudeTestSkill("execute", {
+      ...EXECUTE_AGENT_DEFINITION,
+      userInvocable: false,
+      context: "fork",
+      agent: CLAUDE_TEST_RUNNER,
+    }),
+    createClaudeTestSkill("draft", {
+      ...DRAFT_AGENT_DEFINITION,
+      userInvocable: false,
+      context: "fork",
+      agent: "claude-test:author",
+    }),
+  ];
+});
 //@ chunk-ae5g0zb5.js:127892-128550 placement
 /**
  * 把运行状态、报告、登录监视等挂到共享状态并注册内置插件。
@@ -389,10 +400,10 @@ function registerClaudeTestPlugin() {
   claudeTestState.takeOut = browserHelperHooks.takeOut;
   claudeTestState.isPaneOn = () => isFlagOnWithInternalOverride(TENGU_VELVET_HARROW);
   claudeTestState.seatOwnAgents = () => seatOwnAgents();
-  claudeTestState.reportHref = async (e, n) =>
-    supportsHyperlinks() ? writeLiveReport(pluginDataDirPath(TEST_PLUGIN_ID), e, n) : undefined;
+  claudeTestState.reportHref = async (dir, runId) =>
+    supportsHyperlinks() ? writeLiveReport(pluginDataDirPath(TEST_PLUGIN_ID), dir, runId) : undefined;
   claudeTestState.installNoteText = () => writeInstallProgress(pluginDataDirPath(TEST_PLUGIN_ID));
-  claudeTestState.isMadeHere = (e) => isMadeHereMarker(pluginDataDirPath(TEST_PLUGIN_ID), e);
+  claudeTestState.isMadeHere = (marker) => isMadeHereMarker(pluginDataDirPath(TEST_PLUGIN_ID), marker);
   registerBuiltinPlugin({
     name: CC_PLUGIN_CLAUDE_TEST,
     description: LOCAL_RUN_DESCRIPTION,
@@ -401,10 +412,10 @@ function registerClaudeTestPlugin() {
     skills: CLAUDE_TEST_SKILLS,
     get mcpServers() {
       if (!claudeTestState.wantedSessions.has(getSessionId())) return;
-      let e = getIsInteractive() && isFlagOnWithInternalOverride(TENGU_AMBER_QUILLWORT);
-      claudeTestState.consentPreview = (claudeTestState.consentPreview ?? e) && e;
-      let n = getIsInteractive() && isFlagOnWithInternalOverride(TENGU_VELVET_HARROW);
-      claudeTestState.panePreview = (claudeTestState.panePreview ?? n) && n;
+      let consentPreview = getIsInteractive() && isFlagOnWithInternalOverride(TENGU_AMBER_QUILLWORT);
+      claudeTestState.consentPreview = (claudeTestState.consentPreview ?? consentPreview) && consentPreview;
+      let panePreview = getIsInteractive() && isFlagOnWithInternalOverride(TENGU_VELVET_HARROW);
+      claudeTestState.panePreview = (claudeTestState.panePreview ?? panePreview) && panePreview;
       return buildHelperServerConfig(claudeTestState.consentPreview, claudeTestState.panePreview);
     },
     mayConnectMcpServer: browserHelperHooks.mayConnectMcpServer,

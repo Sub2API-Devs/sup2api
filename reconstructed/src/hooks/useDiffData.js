@@ -12,24 +12,24 @@ import { DIFF_DEBOUNCE_MS } from "./useWorkspaceDiff.js";
 
 //@ chunk-qwh6zcf0.js:3841-4330 fingerprint = useDiffData (0.786)
 function useDiffData(diff) {
-  let r = new Set(diff.skippedLarge);
-  let o = new Set(diff.restricted);
+  let skippedLargeSet = new Set(diff.skippedLarge);
+  let restrictedSet = new Set(diff.restricted);
   let files = diff.perFileStats
     .map((perFileStat) => {
-      let a = r.has(perFileStat.path);
+      let isLargeFile = skippedLargeSet.has(perFileStat.path);
       return {
         path: perFileStat.path,
         linesAdded: perFileStat.added,
         linesRemoved: perFileStat.removed,
         isBinary: perFileStat.isBinary,
-        isLargeFile: a,
+        isLargeFile,
         isTruncated:
-          !a && !perFileStat.isBinary && perFileStat.added + perFileStat.removed > DIFF_DEBOUNCE_MS,
+          !isLargeFile && !perFileStat.isBinary && perFileStat.added + perFileStat.removed > DIFF_DEBOUNCE_MS,
         isUntracked: perFileStat.isUntracked,
-        isRestricted: o.has(perFileStat.path),
+        isRestricted: restrictedSet.has(perFileStat.path),
       };
     })
-    .sort((i, a) => i.path.localeCompare(a.path));
+    .sort((left, right) => left.path.localeCompare(right.path));
   return {
     stats: diff.stats,
     files,

@@ -12,7 +12,7 @@ import { dirname, join } from "path";
 import { randomBytes } from "crypto";
 import { chmod } from "fs/promises";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { looseObject, string, record, unknown } from "../../../vendor/zod/v4/classic/schemas.js";
+import { looseObject, stringSchema, record, unknown } from "../../../vendor/zod/v4/classic/schemas.js";
 import { READ_FAILED } from "./storageWriteLock.js";
 import { jsonParse, jsonStringify } from "../slowOperations.js";
 import { getFsImplementation } from "../fsOperations.js";
@@ -24,59 +24,80 @@ import { logFeatureSad } from "../../services/analytics/featureTelemetry.js";
 import { execFileNoThrow } from "../execFileNoThrow.js";
 import { getUsername } from "./macOsKeychainHelpers.js";
 import { safeExecFile } from "../safeSpawn.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-x58vpmpd.js:1198-1294 placement
-var devicePrivateKeySchema = DoctorLazy(() =>
-  looseObject({
-    privateKeyPkcs8B64: string(),
-    rowPk: string().optional(),
-  }),
-);
-var deviceKeyRecordSchema = DoctorLazy(() =>
-  looseObject({
-    keys: record(string(), unknown()),
-  }),
-);
+var devicePrivateKeySchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var deviceKeyRecordSchema;
+deferInit("chunk-x58vpmpd.js:1198", () => {
+  devicePrivateKeySchema = DoctorLazy(() =>
+    looseObject({
+      privateKeyPkcs8B64: stringSchema(),
+      rowPk: stringSchema().optional(),
+    }),
+  );
+  deviceKeyRecordSchema = DoctorLazy(() =>
+    looseObject({
+      keys: record(stringSchema(), unknown()),
+    }),
+  );
+});
 //@ chunk-x58vpmpd.js:1294-1402 placement
-function deviceKeyEntry(e, r) {
-  let n = e?.keys[r];
-  if (n === undefined) return;
-  let i = devicePrivateKeySchema().safeParse(n);
-  return i.success ? i.data : undefined;
+function deviceKeyEntry(record, keyId) {
+  let value = record?.keys[keyId];
+  if (value === undefined) return;
+  let parsed = devicePrivateKeySchema().safeParse(value);
+  return parsed.success ? parsed.data : undefined;
 }
 //@ chunk-x58vpmpd.js:1402-1445 placement
-var NO_KEYCHAIN = Symbol("deviceKeyStore.NO_KEYCHAIN");
+var NO_KEYCHAIN; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-x58vpmpd.js:1402", () => {
+  NO_KEYCHAIN = Symbol("deviceKeyStore.NO_KEYCHAIN");
+});
 //@ chunk-x58vpmpd.js:1445-1480 placement
-function isStorageUnavailable(e) {
-  return e === READ_FAILED || e === NO_KEYCHAIN;
+function isStorageUnavailable(value) {
+  return value === READ_FAILED || value === NO_KEYCHAIN;
 }
 //@ chunk-x58vpmpd.js:1480-1552 placement
-var DEVICE_KEY_SERVICE = "Claude Code-device-keys";
-var DEVICE_KEY_SERVICE_NAME = 2000;
-var DEVICE_KEY_CACHE_TTL_MS = 4032;
-var MAX_DEVICE_KEY_CHUNK_BYTES = 44;
-var DEVICE_KEY_CHUNK_OVERHEAD = new Set([37, 50]);
+/**
+ * 设备密钥存储的常量组：b 是钥匙串服务名 "Claude Code-device-keys"；T 是 security 命令超时 2000 ms；U 是改用 -i 传参数的命令行长度上限 4032；ee 是“项不存在”的退出码 44；re 是无钥匙串的退出码集合 {37,50}。
+ */
+var DEVICE_KEY_SERVICE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var KEYCHAIN_TIMEOUT_MS;
+var KEYCHAIN_PASSWORD_ARG_LIMIT;
+var KEYCHAIN_ITEM_NOT_FOUND_EXIT;
+var KEYCHAIN_NO_CERT_EXIT_CODES;
+deferInit("chunk-x58vpmpd.js:1480", () => {
+  DEVICE_KEY_SERVICE = "Claude Code-device-keys";
+  KEYCHAIN_TIMEOUT_MS = 2000;
+  KEYCHAIN_PASSWORD_ARG_LIMIT = 4032;
+  KEYCHAIN_ITEM_NOT_FOUND_EXIT = 44;
+  KEYCHAIN_NO_CERT_EXIT_CODES = new Set([37, 50]);
+});
 //@ chunk-x58vpmpd.js:1552-1642 placement
-function parseDeviceKeyFile(e) {
+function parseDeviceKeyFile(text) {
   try {
-    let r = deviceKeyRecordSchema().safeParse(jsonParse(e));
-    return r.success ? r.data : undefined;
+    let parsed = deviceKeyRecordSchema().safeParse(jsonParse(text));
+    return parsed.success ? parsed.data : undefined;
   } catch {
     return;
   }
 }
 //@ chunk-x58vpmpd.js:1642-1666 placement
-var resolved = Promise.resolve();
+var resolved; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-x58vpmpd.js:1642", () => {
+  resolved = Promise.resolve();
+});
 //@ chunk-x58vpmpd.js:1666-2074 placement
-async function withDeviceKeyLock(e, r) {
-  let n = resolved;
+async function withDeviceKeyLock(getPath, fn) {
+  let previous = resolved;
   let deferred = Promise.withResolvers();
   resolved = deferred.promise;
   try {
-    await n;
-    let s = dirname(e());
-    await getFsImplementation().mkdir(s);
-    let a = await lock(join(s, ".device-keys"), {
+    await previous;
+    let dir = dirname(getPath());
+    await getFsImplementation().mkdir(dir);
+    let releaseLock = await lock(join(dir, ".device-keys"), {
       realpath: false,
       retries: {
         retries: 10,
@@ -84,15 +105,15 @@ async function withDeviceKeyLock(e, r) {
         maxTimeout: 1000,
       },
       stale: 15000,
-      onCompromised: (c) =>
-        logForDebugging(`[deviceKeyStore] write lock compromised: ${errorMessage(c)}`, {
+      onCompromised: (error) =>
+        logForDebugging(`[deviceKeyStore] write lock compromised: ${errorMessage(error)}`, {
           level: "warn",
         }),
     });
     try {
-      return await r();
+      return await fn();
     } finally {
-      await releaseLockQuietly(a, "[deviceKeyStore] write lock");
+      await releaseLockQuietly(releaseLock, "[deviceKeyStore] write lock");
     }
   } finally {
     deferred.resolve();
@@ -102,14 +123,14 @@ async function withDeviceKeyLock(e, r) {
 /**
  * 设备密钥的文件后端：读取、写入（带锁）与删除。
  */
-function fileDeviceKeyBackend(getDeviceKeysFilePath) {
+function fileDeviceKeyBackend(getPath) {
   return {
     name: "file",
     async read() {
-      let r = getDeviceKeysFilePath();
-      let n;
+      let path = getPath();
+      let text;
       try {
-        n = await getFsImplementation().readFile(r, {
+        text = await getFsImplementation().readFile(path, {
           encoding: "utf8",
         });
       } catch (error) {
@@ -120,12 +141,12 @@ function fileDeviceKeyBackend(getDeviceKeysFilePath) {
         });
         return READ_FAILED;
       }
-      if (!n.trim()) return null;
-      let deviceKeyFile = parseDeviceKeyFile(n);
+      if (!text.trim()) return null;
+      let deviceKeyFile = parseDeviceKeyFile(text);
       if (deviceKeyFile) return deviceKeyFile;
-      let s = `${r}.corrupt-${Date.now()}-${process.pid}-${randomBytes(3).toString("hex")}`;
+      let quarantinePath = `${path}.corrupt-${Date.now()}-${process.pid}-${randomBytes(3).toString("hex")}`;
       try {
-        await retryFsOp(r, s);
+        await retryFsOp(path, quarantinePath);
       } catch (error) {
         logForDebugging(
           `[deviceKeyStore] device-key file is not a device-key document and could not be set aside: ${getErrnoCode(error) ?? "unknown"}`,
@@ -136,7 +157,7 @@ function fileDeviceKeyBackend(getDeviceKeysFilePath) {
         return READ_FAILED;
       }
       logForDebugging(
-        `[deviceKeyStore] device-key file was not a device-key document; set aside as ${s} and starting fresh`,
+        `[deviceKeyStore] device-key file was not a device-key document; set aside as ${quarantinePath} and starting fresh`,
         {
           level: "warn",
         },
@@ -144,12 +165,12 @@ function fileDeviceKeyBackend(getDeviceKeysFilePath) {
       logFeatureSad("device_key_store", "corrupt_quarantined");
       return null;
     },
-    async write(r) {
-      let n = getDeviceKeysFilePath();
+    async write(data) {
+      let path = getPath();
       try {
-        await getFsImplementation().mkdir(dirname(n));
-        await writeFileAtomic(n, jsonStringify(r), 384);
-        await chmod(n, 384);
+        await getFsImplementation().mkdir(dirname(path));
+        await writeFileAtomic(path, jsonStringify(data), 384);
+        await chmod(path, 384);
         return true;
       } catch (error) {
         logForDebugging(`[deviceKeyStore] file write failed: ${getErrnoCode(error) ?? "unknown"}`, {
@@ -158,8 +179,8 @@ function fileDeviceKeyBackend(getDeviceKeysFilePath) {
         return false;
       }
     },
-    withWriteLock(r) {
-      return withDeviceKeyLock(getDeviceKeysFilePath, r);
+    withWriteLock(fn) {
+      return withDeviceKeyLock(getPath, fn);
     },
   };
 }
@@ -167,7 +188,7 @@ function fileDeviceKeyBackend(getDeviceKeysFilePath) {
 /**
  * 设备密钥的 macOS 钥匙串后端：read 用 security 读出并解析设备密钥文档（无登录钥匙串、读失败、格式不对分别处理），write 以十六进制写入（短命令走 security -i），带写锁。属于 deviceKeyStore，不是 macOsKeychainStorage。
  */
-function createDeviceKeyKeychainStore(getDeviceKeysFilePath) {
+function createDeviceKeyKeychainStore(getPath) {
   return {
     name: "keychain",
     async read() {
@@ -177,11 +198,11 @@ function createDeviceKeyKeychainStore(getDeviceKeysFilePath) {
         {
           useCwd: false,
           preserveOutputOnError: false,
-          timeout: DEVICE_KEY_SERVICE_NAME,
+          timeout: KEYCHAIN_TIMEOUT_MS,
         },
       );
-      if (code === MAX_DEVICE_KEY_CHUNK_BYTES) return null;
-      if (DEVICE_KEY_CHUNK_OVERHEAD.has(code)) {
+      if (code === KEYCHAIN_ITEM_NOT_FOUND_EXIT) return null;
+      if (KEYCHAIN_NO_CERT_EXIT_CODES.has(code)) {
         logForDebugging(
           `[deviceKeyStore] this account has no login keychain (security exited ${code}); it holds no device key`,
         );
@@ -193,9 +214,9 @@ function createDeviceKeyKeychainStore(getDeviceKeysFilePath) {
         });
         return READ_FAILED;
       }
-      let trimmed = stdout.trim();
-      if (!trimmed) return null;
-      let deviceKeyFile = parseDeviceKeyFile(trimmed);
+      let text = stdout.trim();
+      if (!text) return null;
+      let deviceKeyFile = parseDeviceKeyFile(text);
       if (!deviceKeyFile) {
         logForDebugging("[deviceKeyStore] keychain item is not a device-key document", {
           level: "warn",
@@ -211,12 +232,12 @@ function createDeviceKeyKeychainStore(getDeviceKeysFilePath) {
 `;
       try {
         return (
-          (command.length <= DEVICE_KEY_CACHE_TTL_MS
+          (command.length <= KEYCHAIN_PASSWORD_ARG_LIMIT
             ? await safeExecFile("security", ["-i"], {
                 input: command,
                 stdio: ["pipe", "pipe", "pipe"],
                 reject: false,
-                timeout: DEVICE_KEY_SERVICE_NAME,
+                timeout: KEYCHAIN_TIMEOUT_MS,
               })
             : await safeExecFile(
                 "security",
@@ -224,7 +245,7 @@ function createDeviceKeyKeychainStore(getDeviceKeysFilePath) {
                 {
                   stdio: ["ignore", "pipe", "pipe"],
                   reject: false,
-                  timeout: DEVICE_KEY_SERVICE_NAME,
+                  timeout: KEYCHAIN_TIMEOUT_MS,
                 },
               )
           ).exitCode === 0
@@ -233,8 +254,8 @@ function createDeviceKeyKeychainStore(getDeviceKeysFilePath) {
         return false;
       }
     },
-    withWriteLock(r) {
-      return withDeviceKeyLock(getDeviceKeysFilePath, r);
+    withWriteLock(fn) {
+      return withDeviceKeyLock(getPath, fn);
     },
   };
 }

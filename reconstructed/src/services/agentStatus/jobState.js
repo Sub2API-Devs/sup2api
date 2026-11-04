@@ -57,22 +57,25 @@ import { isSessionActive } from "../../utils/sessionActivity.js";
 /**
  * 生成工具活动的简短描述（问题、描述或回退文本），去掉密钥并压缩空白、截断。
  */
-function describeToolActivity(e, n) {
+function describeToolActivity(input, fallbackText) {
   let question =
-    Array.isArray(e?.questions) && typeof e.questions[0]?.question === "string"
-      ? e.questions[0].question
+    Array.isArray(input?.questions) && typeof input.questions[0]?.question === "string"
+      ? input.questions[0].question
       : undefined;
-  let description = typeof e?.description === "string" ? e.description : "";
-  let o = question ?? inflectKnownVerbText(description)?.running ?? (description || (n() ?? ""));
-  return o ? truncateWithEllipsis(redactSecrets(o).replace(/\s+/g, " ").trim(), MAX_HEADLINE_LENGTH) : "";
+  let description = typeof input?.description === "string" ? input.description : "";
+  let verbText =
+    question ?? inflectKnownVerbText(description)?.running ?? (description || (fallbackText() ?? ""));
+  return verbText
+    ? truncateWithEllipsis(redactSecrets(verbText).replace(/\s+/g, " ").trim(), MAX_HEADLINE_LENGTH)
+    : "";
 }
 //@ chunk-wd9kxbpn.js:13102-13199 placement
-async function writeStateAndBroadcast(jobDir, n, r, storageV5) {
-  await writeStateAtomic(jobDir, n, storageV5);
-  if (Object.keys(r).length > 0)
+async function writeStateAndBroadcast(jobDir, state, patch, storageV5) {
+  await writeStateAtomic(jobDir, state, storageV5);
+  if (Object.keys(patch).length > 0)
     sendRv({
       type: "state",
-      patch: r,
+      patch,
     });
 }
 //@ chunk-wd9kxbpn.js:13199-13245 placement
@@ -86,10 +89,10 @@ function setPendingStructuredResult(pendingStructuredResult) {
 /**
  * 创建后台作业分类器的运行时状态（上次状态、累积输出、意图、在途分类、最近请求、桥写入链、中途 LLM 节流等）。
  */
-function createJobClassifierState(e = {}) {
+function createJobClassifierState(options = {}) {
   return {
-    storageV5: e.storageV5,
-    credentials: e.credentials,
+    storageV5: options.storageV5,
+    credentials: options.credentials,
     prevState: "",
     prevStateSince: Date.now(),
     accumulatedOutputs: {},
@@ -140,7 +143,7 @@ function getBgClassifierConfig() {
 /**
  * 读取开关中的线程回顾提示词，为空时用默认值。
  */
-function getThreadRecapPrompt(e) {
+function getThreadRecapPrompt(defaultPrompt) {
   let featureValue_CACHED_MAY_BE_STALE = getFeatureValue_CACHED_MAY_BE_STALE(
     "tengu_projects_thread_recap_prompt",
     "",
@@ -148,7 +151,7 @@ function getThreadRecapPrompt(e) {
   return typeof featureValue_CACHED_MAY_BE_STALE === "string" &&
     featureValue_CACHED_MAY_BE_STALE.trim() !== ""
     ? featureValue_CACHED_MAY_BE_STALE
-    : e;
+    : defaultPrompt;
 }
 //@ chunk-wd9kxbpn.js:14054-14108 placement
 function isShimmeringFireflyEnabled() {
@@ -193,136 +196,149 @@ function isResumeLaunch() {
   );
 }
 //@ chunk-wd9kxbpn.js:14566-14635 placement
-function surfaceFlags(e) {
-  let n = {};
-  for (let r of e) n[`surface_${r}`] = true;
-  return n;
+function surfaceFlags(surfaces) {
+  let flags = {};
+  for (let surface of surfaces) flags[`surface_${surface}`] = true;
+  return flags;
 }
 //@ chunk-wd9kxbpn.js:14635-14703 placement
-function agentKindForDispatch(e) {
-  return e === undefined || e.agentType === "bg" ? lit("bg") : agentTypeForAnalyticsFromDefinition(e);
+function agentKindForDispatch(agentDefinition) {
+  return agentDefinition === undefined || agentDefinition.agentType === "bg"
+    ? lit("bg")
+    : agentTypeForAnalyticsFromDefinition(agentDefinition);
 }
 //@ chunk-wd9kxbpn.js:14703-14959 placement
 /**
  * 后台会话首次派发代理时上报 tengu_bg_agent_dispatch（代理与来源），每个任务只报一次。
  */
-function logBgAgentDispatch(e, n, r) {
-  if (!isBgSession() || e.dispatchEmitted) return;
-  e.dispatchEmitted = true;
+function logBgAgentDispatch(classifier, agentDefinition, surfaces) {
+  if (!isBgSession() || classifier.dispatchEmitted) return;
+  classifier.dispatchEmitted = true;
   if (isResumeLaunch()) return;
   let CLAUDE_BG_SOURCE = env.CLAUDE_BG_SOURCE;
   logEvent("tengu_bg_agent_dispatch", {
-    agent: agentKindForDispatch(n),
+    agent: agentKindForDispatch(agentDefinition),
     source:
       CLAUDE_BG_SOURCE === undefined
         ? lit("shell")
         : isLeaseSource(CLAUDE_BG_SOURCE)
           ? fromEnum(CLAUDE_BG_SOURCE)
           : lit("other"),
-    intentLength: e.capturedIntent.length,
-    ...surfaceFlags(r),
+    intentLength: classifier.capturedIntent.length,
+    ...surfaceFlags(surfaces),
   });
 }
 //@ chunk-wd9kxbpn.js:14959-15089 placement
-function captureJobIntent(e, n) {
-  if (e.capturedIntent || !n) return e.capturedIntent;
-  e.capturedIntent = truncateCodePoints(redactAndTruncate(SYSTEM_REMINDER_CLOSE(n), 1000), 500);
-  return e.capturedIntent;
+function captureJobIntent(classifier, prompt) {
+  if (classifier.capturedIntent || !prompt) return classifier.capturedIntent;
+  classifier.capturedIntent = truncateCodePoints(redactAndTruncate(SYSTEM_REMINDER_CLOSE(prompt), 1000), 500);
+  return classifier.capturedIntent;
 }
 //@ chunk-wd9kxbpn.js:15089-15358 placement
-function findLastUserPrompt(e) {
-  let last = e.findLast(
-    (r) =>
-      r.type === "user" &&
-      !r.isMeta &&
-      r.isCompactSummary !== true &&
-      typeof r.message.content === "string" &&
-      !isLocalCommandMarkup(r.message.content) &&
-      !inputStartsWithMatchingCommand(r.message.content, () => true),
+function findLastUserPrompt(messages) {
+  let last = messages.findLast(
+    (message) =>
+      message.type === "user" &&
+      !message.isMeta &&
+      message.isCompactSummary !== true &&
+      typeof message.message.content === "string" &&
+      !isLocalCommandMarkup(message.message.content) &&
+      !inputStartsWithMatchingCommand(message.message.content, () => true),
   );
   return last?.type === "user" && typeof last.message.content === "string" ? last.message.content : undefined;
 }
 //@ chunk-wd9kxbpn.js:15358-15515 placement
-function captureLatestAsk(e, n) {
-  if (!n) return;
-  let lastCapturedAsk = e.lastCapturedAsk;
-  if (lastCapturedAsk?.text !== n) {
+function captureLatestAsk(classifier, askText) {
+  if (!askText) return;
+  let lastCapturedAsk = classifier.lastCapturedAsk;
+  if (lastCapturedAsk?.text !== askText) {
     lastCapturedAsk = {
-      text: n,
-      latestAsk: truncateCodePoints(redactAndTruncate(SYSTEM_REMINDER_CLOSE(n), 600), 300),
+      text: askText,
+      latestAsk: truncateCodePoints(redactAndTruncate(SYSTEM_REMINDER_CLOSE(askText), 600), 300),
     };
-    e.lastCapturedAsk = lastCapturedAsk;
+    classifier.lastCapturedAsk = lastCapturedAsk;
   }
-  e.latestAsk = lastCapturedAsk.latestAsk;
+  classifier.latestAsk = lastCapturedAsk.latestAsk;
 }
 //@ chunk-wd9kxbpn.js:15608-15801 placement
-function kickJobOnTurnStart(e, n, r) {
-  classifyJobCleanliness(e);
+function kickJobOnTurnStart(classifier, jobId, bridgeJob) {
+  classifyJobCleanliness(classifier);
   disarmStartupWedgeWatchdog();
-  if (e.kicked) return;
-  e.kicked = true;
-  e.bridgeWriteChain = e.bridgeWriteChain
-    .then(() => markJobActive(n, r, e.storageV5, e.lastBridgeNeeds))
-    .then(() => parsePermissionModeFlag(e.storageV5))
+  if (classifier.kicked) return;
+  classifier.kicked = true;
+  classifier.bridgeWriteChain = classifier.bridgeWriteChain
+    .then(() => markJobActive(jobId, bridgeJob, classifier.storageV5, classifier.lastBridgeNeeds))
+    .then(() => parsePermissionModeFlag(classifier.storageV5))
     .catch(logJobWriteError);
-  syncPermissionNeeds(e, n);
+  syncPermissionNeeds(classifier, jobId);
 }
 //@ chunk-wd9kxbpn.js:15801-16069 placement
 /**
  * 作为后台任务运行时，把当前的权限需求串行同步到 bridge。
  */
-function syncPermissionNeeds(e, n) {
+function syncPermissionNeeds(classifier, jobId) {
   if (!isActingAsBgJob()) return;
-  let r = attentionRegistryStore.current();
-  if (!r) return;
-  e.bridgeWriteChain = e.bridgeWriteChain
-    .then(() => e.inFlight ?? undefined)
+  let needs = attentionRegistryStore.current();
+  if (!needs) return;
+  classifier.bridgeWriteChain = classifier.bridgeWriteChain
+    .then(() => classifier.inFlight ?? undefined)
     .catch(() => {})
     .then(() => {
-      let lastBridgeNeeds = e.lastBridgeNeeds;
-      e.lastBridgeNeeds = r.text;
-      return writeJobNeeds(n, r, e.storageV5, lastBridgeNeeds, true).catch((error) => {
+      let lastBridgeNeeds = classifier.lastBridgeNeeds;
+      classifier.lastBridgeNeeds = needs.text;
+      return writeJobNeeds(jobId, needs, classifier.storageV5, lastBridgeNeeds, true).catch((error) => {
         if (!isENOENT(error)) logJobWriteError(error);
       });
     });
 }
 //@ chunk-wd9kxbpn.js:16069-16367 placement
-function maybeClassifyJob(e, n, r, u, o, d, s) {
-  if (isActingAsBgJob() && !e.kicked) {
-    e.kicked = true;
+function maybeClassifyJob(classifier, jobId, agentDefinition, messages, sessions, asks, surfaces) {
+  if (isActingAsBgJob() && !classifier.kicked) {
+    classifier.kicked = true;
     markJobActive(
-      n,
+      jobId,
       {
         userText: undefined,
         isTurnStart: false,
       },
-      e.storageV5,
-      e.lastBridgeNeeds,
+      classifier.storageV5,
+      classifier.lastBridgeNeeds,
     ).catch(logJobWriteError);
   }
   let now = Date.now();
-  let p = s.has("repl") ? REPL_THROTTLE_MS : DEFAULT_THROTTLE_MS;
-  if (now - e.lastClassifyAt < p) return;
-  if (e.inFlight) return;
-  e.lastClassifyAt = now;
-  runJobClassification(e, n, r, e.capturedIntent, u, o, d, s, true, false).catch(logJobWriteError);
+  let throttleMs = surfaces.has("repl") ? REPL_THROTTLE_MS : DEFAULT_THROTTLE_MS;
+  if (now - classifier.lastClassifyAt < throttleMs) return;
+  if (classifier.inFlight) return;
+  classifier.lastClassifyAt = now;
+  runJobClassification(
+    classifier,
+    jobId,
+    agentDefinition,
+    classifier.capturedIntent,
+    messages,
+    sessions,
+    asks,
+    surfaces,
+    true,
+    false,
+  ).catch(logJobWriteError);
 }
 //@ chunk-wd9kxbpn.js:16367-16742 placement
-function appendJobTimeline(storageV5, n, r) {
-  let u =
-    jsonStringify(r) +
+function appendJobTimeline(storageV5, jobId, record) {
+  let line =
+    jsonStringify(record) +
     `
 `;
-  if (storageV5 !== undefined && isValidKeySegment(n)) {
+  if (storageV5 !== undefined && isValidKeySegment(jobId)) {
     storageV5
-      .append(STORAGE_SPACES.jobTimeline(n), [
+      .append(STORAGE_SPACES.jobTimeline(jobId), [
         {
-          data: u,
+          data: line,
         },
       ])
-      .then((o) => {
-        if (!o.ok) {
-          let error = o.error;
+      .then((result) => {
+        if (!result.ok) {
+          let error = result.error;
           logJobWriteError(
             Object.assign(
               new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
@@ -343,37 +359,37 @@ function appendJobTimeline(storageV5, n, r) {
       .catch(logJobWriteError);
     return;
   }
-  appendFile(join(getJobDir(n), "timeline.jsonl"), u, "utf-8").catch(logJobWriteError);
+  appendFile(join(getJobDir(jobId), "timeline.jsonl"), line, "utf-8").catch(logJobWriteError);
 }
 //@ chunk-wd9kxbpn.js:16742-17412 placement
 /**
  * 回合开始或用户输入时把作业置为 active：清除需要处理的提示与阻塞，用户文本不同于意图时作为新 detail 写入并追加时间线。
  */
-async function markJobActive(e, { userText, isTurnStart }, storageV5, lastBridgeNeeds) {
-  let jobDir = getJobDir(e);
+async function markJobActive(jobId, { userText, isTurnStart }, storageV5, lastBridgeNeeds) {
+  let jobDir = getJobDir(jobId);
   let jobState = await readJobState(jobDir, storageV5);
   if (!jobState) return;
   if (jobState.tempo === "active") return;
   if (isSettled(jobState) && !userText && !isTurnStart) return;
-  let h = attentionRegistryStore.current();
+  let attention = attentionRegistryStore.current();
   if (
     jobState.tempo === "blocked" &&
-    h !== null &&
-    (h.text === jobState.needs || lastBridgeNeeds === jobState.needs)
+    attention !== null &&
+    (attention.text === jobState.needs || lastBridgeNeeds === jobState.needs)
   )
     return;
   let iso = new Date().toISOString();
-  let w = userText ? redactSecrets(SYSTEM_REMINDER_CLOSE(userText)).replace(/\s+/g, " ").trim() : "";
+  let headline = userText ? redactSecrets(SYSTEM_REMINDER_CLOSE(userText)).replace(/\s+/g, " ").trim() : "";
   let any = [jobState.intent, jobState.initialPrompt].some(
-    (A) => !!A && redactSecrets(A).replace(/\s+/g, " ").trim() === w,
+    (existing) => !!existing && redactSecrets(existing).replace(/\s+/g, " ").trim() === headline,
   );
-  let y = w && !any ? truncateWithEllipsis(w, MAX_HEADLINE_LENGTH) : undefined;
+  let detail = headline && !any ? truncateWithEllipsis(headline, MAX_HEADLINE_LENGTH) : undefined;
   await writeStateAndBroadcast(
     jobDir,
     {
       ...jobState,
-      ...(y !== undefined && {
-        detail: y,
+      ...(detail !== undefined && {
+        detail,
         output: null,
       }),
       tempo: "active",
@@ -386,17 +402,17 @@ async function markJobActive(e, { userText, isTurnStart }, storageV5, lastBridge
     {
       tempo: "active",
       needs: "",
-      ...(y !== undefined && {
-        detail: y,
+      ...(detail !== undefined && {
+        detail,
       }),
     },
     storageV5,
   );
-  if (y)
-    appendJobTimeline(storageV5, e, {
+  if (detail)
+    appendJobTimeline(storageV5, jobId, {
       at: iso,
       state: jobState.state,
-      detail: y,
+      detail,
       text: "",
     });
 }
@@ -404,42 +420,43 @@ async function markJobActive(e, { userText, isTurnStart }, storageV5, lastBridge
 /**
  * 根据当前权限请求把作业置为 blocked（写入 needs/overlay/questions），或在请求消失时恢复为 active/idle；读两次状态以避免覆盖更新。
  */
-async function writeJobNeeds(e, n, storageV5, lastBridgeNeeds, o = false) {
-  let jobDir = getJobDir(e);
-  let text = n?.text ?? null;
-  let h = n?.overlay === true;
-  let jobState = await readJobState(jobDir, storageV5);
-  if (!jobState) return;
-  let w = (O) =>
-    O.tempo === "blocked" &&
-    O.needs !== undefined &&
-    O.needs !== IDLE_NEEDS &&
-    !isOverlayNeeds(O) &&
-    O.needs !== lastBridgeNeeds;
-  let E = (O) => O.tempo !== "blocked" || (lastBridgeNeeds !== undefined && O.needs !== lastBridgeNeeds);
+async function writeJobNeeds(jobId, needs, storageV5, lastBridgeNeeds, fromSweep = false) {
+  let jobDir = getJobDir(jobId);
+  let text = needs?.text ?? null;
+  let isOverlay = needs?.overlay === true;
+  let state = await readJobState(jobDir, storageV5);
+  if (!state) return;
+  let isOverlayBlocked = (state) =>
+    state.tempo === "blocked" &&
+    state.needs !== undefined &&
+    state.needs !== IDLE_NEEDS &&
+    !isOverlayNeeds(state) &&
+    state.needs !== lastBridgeNeeds;
+  let isStaleUnblocked = (state) =>
+    state.tempo !== "blocked" || (lastBridgeNeeds !== undefined && state.needs !== lastBridgeNeeds);
   if (text) {
-    if (isTerminal(jobState.state)) return;
-    if (jobState.tempo === "blocked" && jobState.needs === text) return;
-    if ((h || o) && w(jobState)) return;
-  } else if (E(jobState)) return;
-  let y = (await readJobState(jobDir, storageV5)) ?? jobState;
+    if (isTerminal(state.state)) return;
+    if (state.tempo === "blocked" && state.needs === text) return;
+    if ((isOverlay || fromSweep) && isOverlayBlocked(state)) return;
+  } else if (isStaleUnblocked(state)) return;
+  let latest = (await readJobState(jobDir, storageV5)) ?? state;
   if (text) {
-    if (isTerminal(y.state)) return;
-    if (y.tempo === "blocked" && y.needs === text) return;
-    if ((h || o) && w(y)) return;
-  } else if (E(y)) return;
+    if (isTerminal(latest.state)) return;
+    if (latest.tempo === "blocked" && latest.needs === text) return;
+    if ((isOverlay || fromSweep) && isOverlayBlocked(latest)) return;
+  } else if (isStaleUnblocked(latest)) return;
   let tempo = text ? "blocked" : isSessionActive() ? "active" : "idle";
   await writeStateAndBroadcast(
     jobDir,
     {
-      ...y,
+      ...latest,
       tempo,
       inFlight: getInFlightSnapshot(),
       needs: text ?? undefined,
-      needsOverlay: text && h ? text : undefined,
-      block: n?.questions
+      needsOverlay: text && isOverlay ? text : undefined,
+      block: needs?.questions
         ? {
-            questions: n.questions,
+            questions: needs.questions,
           }
         : undefined,
       suggestedReply: undefined,
@@ -471,4 +488,11 @@ export {
   isVelvetyAuroraEnabled,
   isShimmeringFireflyEnabled,
   getThreadRecapPrompt,
+  captureJobIntent,
+  captureLatestAsk,
+  maybeClassifyJob,
+  createJobClassifierState,
+  findLastUserPrompt,
+  kickJobOnTurnStart,
+  setPendingStructuredResult,
 };

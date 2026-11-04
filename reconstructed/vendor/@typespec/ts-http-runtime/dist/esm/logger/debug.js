@@ -11,8 +11,8 @@ import util from "util";
 import { EOL } from "os";
 
 //@ chunk-mrx6y2r5.js:24430-24495 esm-layout
-function Jc(e, ...t) {
-  processModule_2.stderr.write(`${util.format(e, ...t)}${EOL}`);
+function log(message, ...args) {
+  processModule_2.stderr.write(`${util.format(message, ...args)}${EOL}`);
 }
 //@ chunk-mrx6y2r5.js:24495-24582 esm-fingerprint
 var debugEnvVariable = (typeof process !== "undefined" && process.env && process.env.DEBUG) || undefined;
@@ -27,7 +27,7 @@ var debugObj = Object.assign((namespace) => createDebugger(namespace), {
   enable,
   enabled,
   disable,
-  log: Jc,
+  log,
 });
 //@ chunk-mrx6y2r5.js:24669-24917 esm-fingerprint
 function enable(namespaces) {

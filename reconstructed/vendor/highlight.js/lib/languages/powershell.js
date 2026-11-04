@@ -5,10 +5,10 @@
  * pieces: chunk-egr0twnb.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:363481-367903 cjs-fingerprint
-var require_powershell = x(function (cjsExports, cjsModule) {
+var require_powershell = __commonJS(function (cjsExports, cjsModule) {
   function powershell(hljs) {
     let TYPES = [
       "string",

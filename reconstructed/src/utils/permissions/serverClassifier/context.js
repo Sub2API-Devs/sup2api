@@ -30,6 +30,7 @@ import { lit as lit_2 } from "../../../services/analytics/safeMetadata.js";
 import { logForDebugging } from "../../debug.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../../services/analytics/growthbook.js";
 import { TENGU_SNUG_WALL } from "../../../services/api/withRetry.js";
+import { deferInit } from "../../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:129356-129404 placement
 /**
@@ -43,21 +44,24 @@ function metaJsonLine(meta) {
 //@ chunk-e6aww6q8.js:129404-129556 placement
 class ServerClassifierContextLines {
   lines = new Map();
-  record(e, n) {
-    this.lines.set(e, n);
+  record(key, lines) {
+    this.lines.set(key, lines);
   }
-  linesFor(e) {
-    return this.lines.get(e);
+  linesFor(key) {
+    return this.lines.get(key);
   }
-  forget(e) {
-    this.lines.delete(e);
+  forget(key) {
+    this.lines.delete(key);
   }
   reset() {
     this.lines.clear();
   }
 }
 //@ chunk-e6aww6q8.js:129556-129583 placement
-var classifierContextLinesSlot = new HostScoped(() => new ServerClassifierContextLines());
+var classifierContextLinesSlot; // deferred: uses ServerClassifierContextLines of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:129556", () => {
+  classifierContextLinesSlot = new HostScoped(() => new ServerClassifierContextLines());
+});
 //@ chunk-e6aww6q8.js:129583-129622 placement
 function classifierContextLines() {
   return classifierContextLinesSlot.of(getRootSession().host);
@@ -66,8 +70,8 @@ function classifierContextLines() {
 /**
  * recordClassifierContext：记录分类器上下文中。
  */
-function recordClassifierContext(e, n) {
-  classifierContextLines().record(e, n);
+function recordClassifierContext(key, lines) {
+  classifierContextLines().record(key, lines);
 }
 //@ chunk-e6aww6q8.js:129658-129690 placement
 /**
@@ -80,8 +84,8 @@ function forgetClassifierContext(toolUseId) {
 /**
  * classifierContextLinesFor：取某请求的上下文行。
  */
-function classifierContextLinesFor(e) {
-  return classifierContextLines().linesFor(e);
+function classifierContextLinesFor(key) {
+  return classifierContextLines().linesFor(key);
 }
 //@ chunk-e6aww6q8.js:129730-129764 placement
 function classifierOverlapEnabled() {
@@ -106,34 +110,37 @@ var MAX_QUEUED_CLASSIFIER_SLOTS = 4;
 /**
  * 分类器结果提交的排队位：place 设定前序位置与放弃回调，runInTurn 等前序完成后执行并释放；未交接时 dispose 释放。
  */
-class CommitTurnSlot {
-  earlierPlaces;
-  giveUpPlace;
-  handedOff = false;
-  place(earlierPlaces, giveUpPlace) {
-    this.earlierPlaces = earlierPlaces;
-    this.giveUpPlace = giveUpPlace;
-  }
-  reached() {
-    return this.earlierPlaces;
-  }
-  runInTurn(e) {
-    let earlierPlaces = this.earlierPlaces;
-    let giveUpPlace = this.giveUpPlace;
-    if (earlierPlaces === undefined || giveUpPlace === undefined) {
-      e();
-      return;
+let CommitTurnSlot; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:129910", () => {
+  CommitTurnSlot = class CommitTurnSlot {
+    earlierPlaces;
+    giveUpPlace;
+    handedOff = false;
+    place(earlierPlaces, giveUpPlace) {
+      this.earlierPlaces = earlierPlaces;
+      this.giveUpPlace = giveUpPlace;
     }
-    this.handedOff = true;
-    earlierPlaces.then(e).then(giveUpPlace, (error) => {
-      giveUpPlace();
-      logError(toError(error));
-    });
-  }
-  [Symbol.dispose]() {
-    if (!this.handedOff) this.giveUpPlace?.();
-  }
-}
+    reached() {
+      return this.earlierPlaces;
+    }
+    runInTurn(commit) {
+      let earlierPlaces = this.earlierPlaces;
+      let giveUpPlace = this.giveUpPlace;
+      if (earlierPlaces === undefined || giveUpPlace === undefined) {
+        commit();
+        return;
+      }
+      this.handedOff = true;
+      earlierPlaces.then(commit).then(giveUpPlace, (error) => {
+        giveUpPlace();
+        logError(toError(error));
+      });
+    }
+    [Symbol.dispose]() {
+      if (!this.handedOff) this.giveUpPlace?.();
+    }
+  };
+});
 //@ chunk-e6aww6q8.js:130256-130318 placement
 var CLASSIFIER_QUEUE_NOOP_HOOKS = {
   transcriptStatePublished: () => {},
@@ -192,115 +199,116 @@ class ClassifierRequestQueue {
         },
       )
       .then(() => {
-        let L = (this.pending.get(key) ?? 1) - 1;
-        if (L <= 0) {
+        let remaining = (this.pending.get(key) ?? 1) - 1;
+        if (remaining <= 0) {
           this.pending.delete(key);
           if (this.lanes.get(key) === lane) this.lanes.delete(key);
-        } else this.pending.set(key, L);
+        } else this.pending.set(key, remaining);
       });
     return result;
   }
-  runOverlapping(e, n, r, s, h) {
-    let cachePrefix = h?.cachePrefix ?? "";
+  runOverlapping(lane, run, telemetry, queueInfo, options) {
+    let cachePrefix = options?.cachePrefix ?? "";
     let promise = new Promise((resolve, reject) => {
-      e.waiting.push({
+      lane.waiting.push({
         cachePrefix,
-        start: () => this.startCall(e, cachePrefix, n, r, s, resolve, reject),
+        start: () => this.startCall(lane, cachePrefix, run, telemetry, queueInfo, resolve, reject),
       });
     });
-    let commitLine = e.commitLine;
-    let L = () => {};
+    let commitLine = lane.commitLine;
+    let releaseCommit = () => {};
     let promise_2 = new Promise((resolve) => {
-      L = resolve;
+      releaseCommit = resolve;
     });
-    e.commitLine = commitLine.then(() => promise_2);
-    if (h?.commitTurn === undefined) promise.then(L, L);
-    else h.commitTurn.place(commitLine, L);
-    this.startReadySoon(e);
+    lane.commitLine = commitLine.then(() => promise_2);
+    if (options?.commitTurn === undefined) promise.then(releaseCommit, releaseCommit);
+    else options.commitTurn.place(commitLine, releaseCommit);
+    this.startReadySoon(lane);
     return promise;
   }
-  startCall(e, cachePrefix, r, s, h, y, S) {
-    callSafely(s, {
-      queueDepth: h.queueDepth,
-      queueWaitMs: Date.now() - h.enqueuedAt,
+  startCall(lane, cachePrefix, run, telemetry, queueInfo, resolve, reject) {
+    callSafely(telemetry, {
+      queueDepth: queueInfo.queueDepth,
+      queueWaitMs: Date.now() - queueInfo.enqueuedAt,
       overlap: {
-        inFlightAtStart: e.running,
-        overlapped: e.running > 0,
-        releasedByEscalation: e.pastStageOne > 0,
+        inFlightAtStart: lane.running,
+        overlapped: lane.running > 0,
+        releasedByEscalation: lane.pastStageOne > 0,
       },
     });
-    let w = {
-      lane: e,
+    let call = {
+      lane,
       cachePrefix,
       published: false,
       inStageOne: true,
       pastStageOne: false,
     };
-    e.running++;
-    e.unpublished++;
-    e.inStageOne++;
+    lane.running++;
+    lane.unpublished++;
+    lane.inStageOne++;
     let promise = new Promise((resolve) =>
       resolve(
-        r({
-          transcriptStatePublished: () => this.reportPublished(w),
-          stageOneDone: () => this.reportStageOneDone(w),
+        run({
+          transcriptStatePublished: () => this.reportPublished(call),
+          stageOneDone: () => this.reportStageOneDone(call),
         }),
       ),
     );
-    promise.then(y, S);
-    let G = () => this.settle(w);
-    promise.then(G, G);
+    promise.then(resolve, reject);
+    let settle = () => this.settle(call);
+    promise.then(settle, settle);
   }
-  reportPublished(e) {
-    this.publish(e);
-    this.startReadySoon(e.lane);
+  reportPublished(call) {
+    this.publish(call);
+    this.startReadySoon(call.lane);
   }
-  reportStageOneDone(e) {
-    this.leaveStageOne(e, true);
-    this.startReadySoon(e.lane);
+  reportStageOneDone(call) {
+    this.leaveStageOne(call, true);
+    this.startReadySoon(call.lane);
   }
-  settle(e) {
-    this.leaveStageOne(e, false);
-    if (e.pastStageOne) e.lane.pastStageOne--;
-    e.lane.running--;
-    this.startReady(e.lane);
+  settle(call) {
+    this.leaveStageOne(call, false);
+    if (call.pastStageOne) call.lane.pastStageOne--;
+    call.lane.running--;
+    this.startReady(call.lane);
   }
-  publish(e) {
-    if (!e.published) {
-      e.published = true;
-      e.lane.unpublished--;
+  publish(call) {
+    if (!call.published) {
+      call.published = true;
+      call.lane.unpublished--;
     }
   }
-  leaveStageOne(e, n) {
-    this.publish(e);
-    if (e.inStageOne) {
-      e.inStageOne = false;
-      e.lane.inStageOne--;
-      if (n) {
-        e.pastStageOne = true;
-        e.lane.pastStageOne++;
-        e.lane.warmPrefixes.add(e.cachePrefix);
+  leaveStageOne(call, stageOneFinished) {
+    this.publish(call);
+    if (call.inStageOne) {
+      call.inStageOne = false;
+      call.lane.inStageOne--;
+      if (stageOneFinished) {
+        call.pastStageOne = true;
+        call.lane.pastStageOne++;
+        call.lane.warmPrefixes.add(call.cachePrefix);
       }
     }
   }
-  startReadySoon(e) {
-    Promise.resolve().then(() => this.startReady(e));
+  startReadySoon(lane) {
+    Promise.resolve().then(() => this.startReady(lane));
   }
-  startReady(e) {
-    while (this.headMayStart(e)) e.waiting.shift()?.start();
+  startReady(lane) {
+    while (this.headMayStart(lane)) lane.waiting.shift()?.start();
   }
-  headMayStart(e) {
-    let n = e.waiting[0];
-    if (n === undefined || e.unpublished > 0) return false;
+  headMayStart(lane) {
+    let head = lane.waiting[0];
+    if (head === undefined || lane.unpublished > 0) return false;
     return (
-      e.inStageOne === 0 || (e.warmPrefixes.has(n.cachePrefix) && e.inStageOne < MAX_QUEUED_CLASSIFIER_SLOTS)
+      lane.inStageOne === 0 ||
+      (lane.warmPrefixes.has(head.cachePrefix) && lane.inStageOne < MAX_QUEUED_CLASSIFIER_SLOTS)
     );
   }
-  recordClassifiedCall(e) {
-    this.classifiedCallIds.add(e);
+  recordClassifiedCall(toolUseId) {
+    this.classifiedCallIds.add(toolUseId);
   }
-  isRecordedClassifiedCall(e) {
-    return this.classifiedCallIds.has(e);
+  isRecordedClassifiedCall(toolUseId) {
+    return this.classifiedCallIds.has(toolUseId);
   }
   get size() {
     return this.serializer.size + this.lanes.size;
@@ -313,7 +321,10 @@ class ClassifierRequestQueue {
   }
 }
 //@ chunk-e6aww6q8.js:132869-132896 placement
-var classifierRequestQueueSlot = new HostScoped(() => new ClassifierRequestQueue());
+var classifierRequestQueueSlot; // deferred: uses ClassifierRequestQueue of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:132869", () => {
+  classifierRequestQueueSlot = new HostScoped(() => new ClassifierRequestQueue());
+});
 //@ chunk-e6aww6q8.js:132896-132935 placement
 function classifierRequestQueue() {
   return classifierRequestQueueSlot.of(getRootSession().host);
@@ -322,8 +333,8 @@ function classifierRequestQueue() {
 /**
  * enqueueClassifierRequest：入队分类器请求。
  */
-function enqueueClassifierRequest(e, n, r, s) {
-  return classifierRequestQueue().enqueue(e, n, r, s);
+function enqueueClassifierRequest(key, run, telemetry, options) {
+  return classifierRequestQueue().enqueue(key, run, telemetry, options);
 }
 //@ chunk-e6aww6q8.js:132987-133033 placement
 /**
@@ -336,8 +347,8 @@ function recordClassifiedCall(id) {
 /**
  * isClassifiedCall：该调用是否已分类。
  */
-function isClassifiedCall(e) {
-  return classifierRequestQueue().isRecordedClassifiedCall(e);
+function isClassifiedCall(call) {
+  return classifierRequestQueue().isRecordedClassifiedCall(call);
 }
 //@ chunk-e6aww6q8.js:133090-133150 placement
 function classifierOverlapEnabledSafe() {
@@ -349,18 +360,19 @@ function classifierOverlapEnabledSafe() {
   }
 }
 //@ chunk-e6aww6q8.js:133150-133187 placement
-function callSafely(e, n) {
+function callSafely(fn, payload) {
   try {
-    e?.(n);
+    fn?.(payload);
   } catch {}
 }
 //@ chunk-e6aww6q8.js:135297-135360 placement
 /**
  * fitsContextLimits：上下文行数与长度是否超限。
  */
-function fitsContextLimits(e) {
+function fitsContextLimits(artifacts) {
   return (
-    e.length <= MAX_ARTIFACT_SLUG_LENGTH && e.every((n) => countCodePoints(n) <= MAX_ARTIFACT_TEXT_LENGTH)
+    artifacts.length <= MAX_ARTIFACT_SLUG_LENGTH &&
+    artifacts.every((artifactText) => countCodePoints(artifactText) <= MAX_ARTIFACT_TEXT_LENGTH)
   );
 }
 //@ chunk-e6aww6q8.js:143633-144004 placement
@@ -370,24 +382,24 @@ function fitsContextLimits(e) {
 class ClassifierRequestHistory {
   inFlight = new Map();
   judged = new Map();
-  recordRequest(e, n) {
-    this.inFlight.set(e, n);
+  recordRequest(request, context) {
+    this.inFlight.set(request, context);
   }
-  settleRequest(e, n) {
-    let r = this.inFlight.get(e);
-    if (r === undefined) return;
-    this.inFlight.delete(e);
-    let s = {
-      request: e,
-      context: r,
+  settleRequest(request, callIds) {
+    let context = this.inFlight.get(request);
+    if (context === undefined) return;
+    this.inFlight.delete(request);
+    let entry = {
+      request,
+      context,
     };
-    for (let h of n) this.judged.set(h, s);
+    for (let callId of callIds) this.judged.set(callId, entry);
   }
-  forgetRequest(e) {
-    this.inFlight.delete(e);
+  forgetRequest(request) {
+    this.inFlight.delete(request);
   }
-  historyFor(e) {
-    return this.judged.get(e);
+  historyFor(callId) {
+    return this.judged.get(callId);
   }
   reset() {
     this.inFlight.clear();
@@ -395,7 +407,10 @@ class ClassifierRequestHistory {
   }
 }
 //@ chunk-e6aww6q8.js:144004-144031 placement
-var classifierHistorySlot = new HostScoped(() => new ClassifierRequestHistory());
+var classifierHistorySlot; // deferred: uses ClassifierRequestHistory of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:144004", () => {
+  classifierHistorySlot = new HostScoped(() => new ClassifierRequestHistory());
+});
 //@ chunk-e6aww6q8.js:144031-144070 placement
 function classifierHistory() {
   return classifierHistorySlot.of(getRootSession().host);
@@ -404,15 +419,15 @@ function classifierHistory() {
 /**
  * recordClassifierRequest：记录分类请求。
  */
-function recordClassifierRequest(key, n) {
-  classifierHistory().recordRequest(key, n);
+function recordClassifierRequest(key, entry) {
+  classifierHistory().recordRequest(key, entry);
 }
 //@ chunk-e6aww6q8.js:144113-144156 placement
 /**
  * settleClassifierRequest：结算分类请求。
  */
-function settleClassifierRequest(key, n) {
-  classifierHistory().settleRequest(key, n);
+function settleClassifierRequest(key, outcome) {
+  classifierHistory().settleRequest(key, outcome);
 }
 //@ chunk-e6aww6q8.js:144156-144195 placement
 /**
@@ -435,13 +450,16 @@ function classifierHistoryFor(toolUseId) {
 function collectPriorServerContexts(messages) {
   let groups = [];
   let byRequest = new Map();
-  for (let s of messages) {
-    if (s.type !== "user") continue;
-    let serverClassifierContext = s.serverClassifierContext;
+  for (let message of messages) {
+    if (message.type !== "user") continue;
+    let serverClassifierContext = message.serverClassifierContext;
     if (serverClassifierContext === undefined) continue;
-    let content = s.message.content;
+    let content = message.message.content;
     if (!Array.isArray(content)) continue;
-    let filtered = content.filter((q) => typeof q === "object" && q !== null && q.type === "tool_result");
+    let filtered = content.filter(
+      (contentBlock) =>
+        typeof contentBlock === "object" && contentBlock !== null && contentBlock.type === "tool_result",
+    );
     if (filtered.length !== 1) continue;
     let toolUseId = filtered[0].tool_use_id;
     if (typeof toolUseId !== "string" || toolUseId.length > MAX_CONTEXT_ENTRY_LENGTH) continue;
@@ -469,16 +487,16 @@ var STRUCTURED_OUTPUT_IS_HANDBACK = "structured_output_is_handback";
 var JUDGE_ONLY_TOOLS = "judge_only_tools";
 var MAX_JUDGE_ONLY_TOOL_NAME_LENGTH = 200;
 //@ chunk-e6aww6q8.js:2512721-2512906 placement
-function pickPriorTurnContext(e) {
+function pickPriorTurnContext(context) {
   return {
-    git_state: e.git_state,
-    ...(e.chrome_navigation !== undefined && {
-      chrome_navigation: e.chrome_navigation,
+    git_state: context.git_state,
+    ...(context.chrome_navigation !== undefined && {
+      chrome_navigation: context.chrome_navigation,
     }),
-    ...(e.live_cwd !== undefined && {
-      live_cwd: e.live_cwd,
+    ...(context.live_cwd !== undefined && {
+      live_cwd: context.live_cwd,
     }),
-    platform: e.platform,
+    platform: context.platform,
   };
 }
 //@ chunk-e6aww6q8.js:2512906-2513380 placement
@@ -491,10 +509,14 @@ function buildServerClassifierRequestContext({
   systemReminders,
   textProvenance,
 }) {
-  let h =
+  let judgeOnlyTools =
     autoModeServerContext.judgeOnlyTools &&
     uniq([...autoModeServerContext.judgeOnlyTools].map(wireName)).sort();
-  if (h?.length === 0 || h?.some((w) => w.length > MAX_JUDGE_ONLY_TOOL_NAME_LENGTH)) return;
+  if (
+    judgeOnlyTools?.length === 0 ||
+    judgeOnlyTools?.some((toolName) => toolName.length > MAX_JUDGE_ONLY_TOOL_NAME_LENGTH)
+  )
+    return;
   let serverClassifierContext = buildServerClassifierContext(
     autoModeServerContext.context,
     autoModeServerContext.git,
@@ -503,14 +525,14 @@ function buildServerClassifierRequestContext({
     autoModeServerContext.artifacts,
     autoModeServerContext.computerAttached === true,
     autoModeServerContext.structuredOutputIsHandback === true,
-    h,
+    judgeOnlyTools,
   );
   if (textProvenance !== undefined) serverClassifierContext.text_provenance = textProvenance;
-  let S = jsonByteLength(serverClassifierContext);
-  if (S > SERVER_CONTEXT_MAX_BYTES) {
+  let contextByteLength = jsonByteLength(serverClassifierContext);
+  if (contextByteLength > SERVER_CONTEXT_MAX_BYTES) {
     logEvent("tengu_auto_mode_context_withheld", {
       reason: lit_2("field_over_ceiling"),
-      bytes: S,
+      bytes: contextByteLength,
     });
     return;
   }
@@ -520,14 +542,23 @@ function buildServerClassifierRequestContext({
 /**
  * 构造发给服务端分类器的上下文（上一轮、浏览器标签、git 状态、系统提醒等）。
  */
-function buildServerClassifierContext(context, n, r, s, artifacts, y, S, w) {
-  let L = (gitState, Me, We, ze, lt, Je) => {
+function buildServerClassifierContext(
+  context,
+  gitState,
+  priorTurnContext,
+  systemReminders,
+  artifacts,
+  hostAttached,
+  structuredOutputHandback,
+  judgeOnlyTools,
+) {
+  let buildView = (gitState, keepNavigation, priorTurns, reminders, artifactState, shed) => {
     let chromeNavigation = context.chrome_navigation;
     return {
       v: 1,
       ...context,
       ...(chromeNavigation !== undefined && {
-        chrome_navigation: Me
+        chrome_navigation: keepNavigation
           ? chromeNavigation
           : {
               enabled: chromeNavigation.enabled,
@@ -535,103 +566,177 @@ function buildServerClassifierContext(context, n, r, s, artifacts, y, S, w) {
             },
       }),
       git_state: gitState,
-      ...(We.length > 0 && {
-        prior_turn_context: We,
+      ...(priorTurns.length > 0 && {
+        prior_turn_context: priorTurns,
       }),
-      ...(ze.length > 0 && {
-        system_reminders: ze,
+      ...(reminders.length > 0 && {
+        system_reminders: reminders,
       }),
-      ...(lt !== undefined && {
-        artifacts: lt,
+      ...(artifactState !== undefined && {
+        artifacts: artifactState,
       }),
-      ...(Je.length > 0 && {
-        shed: Je,
+      ...(shed.length > 0 && {
+        shed,
       }),
-      ...(y && {
+      ...(hostAttached && {
         [TOOL_HOST_ATTACHED]: true,
       }),
-      ...(S && {
+      ...(structuredOutputHandback && {
         [STRUCTURED_OUTPUT_IS_HANDBACK]: true,
       }),
-      ...(w !== undefined && {
-        [JUDGE_ONLY_TOOLS]: w,
+      ...(judgeOnlyTools !== undefined && {
+        [JUDGE_ONLY_TOOLS]: judgeOnlyTools,
       }),
     };
   };
-  let G = n;
-  let q = context.chrome_navigation?.tabs !== undefined;
-  let Z = r;
-  let Se = s;
-  let ke = artifacts;
-  let we = [];
-  let Ee = () => jsonByteLength(L(G, q, Z, Se, ke, we)) <= SERVER_CONTEXT_FIELD_MAX_BYTES;
-  if (Ee()) return L(G, q, Z, Se, ke, we);
-  if (Z.length > 0) {
-    let Ie = Z.length;
-    while (Ie > 0) {
-      Ie = Math.floor(Ie / 2);
-      Z = Ie > 0 ? r.slice(r.length - Ie) : [];
-      if (Ie === 0) we.push("prior_turn_context");
-      if (Ee()) return L(G, q, Z, Se, ke, we);
+  let currentGitState = gitState;
+  let keepNavigation = context.chrome_navigation?.tabs !== undefined;
+  let currentPriorTurns = priorTurnContext;
+  let currentReminders = systemReminders;
+  let currentArtifacts = artifacts;
+  let shedFields = [];
+  let fits = () =>
+    jsonByteLength(
+      buildView(
+        currentGitState,
+        keepNavigation,
+        currentPriorTurns,
+        currentReminders,
+        currentArtifacts,
+        shedFields,
+      ),
+    ) <= SERVER_CONTEXT_FIELD_MAX_BYTES;
+  if (fits())
+    return buildView(
+      currentGitState,
+      keepNavigation,
+      currentPriorTurns,
+      currentReminders,
+      currentArtifacts,
+      shedFields,
+    );
+  if (currentPriorTurns.length > 0) {
+    let keepCount = currentPriorTurns.length;
+    while (keepCount > 0) {
+      keepCount = Math.floor(keepCount / 2);
+      currentPriorTurns = keepCount > 0 ? priorTurnContext.slice(priorTurnContext.length - keepCount) : [];
+      if (keepCount === 0) shedFields.push("prior_turn_context");
+      if (fits())
+        return buildView(
+          currentGitState,
+          keepNavigation,
+          currentPriorTurns,
+          currentReminders,
+          currentArtifacts,
+          shedFields,
+        );
     }
   }
-  if (q) {
-    q = false;
-    we.push("chrome_navigation.tabs");
-    if (Ee()) return L(G, q, Z, Se, ke, we);
+  if (keepNavigation) {
+    keepNavigation = false;
+    shedFields.push("chrome_navigation.tabs");
+    if (fits())
+      return buildView(
+        currentGitState,
+        keepNavigation,
+        currentPriorTurns,
+        currentReminders,
+        currentArtifacts,
+        shedFields,
+      );
   }
-  if (G.visibility !== null && G.visibility.visibility_cache.length > 0) {
-    G = {
-      ...G,
+  if (currentGitState.visibility !== null && currentGitState.visibility.visibility_cache.length > 0) {
+    currentGitState = {
+      ...currentGitState,
       visibility: {
-        ...G.visibility,
+        ...currentGitState.visibility,
         visibility_cache: [],
       },
       truncated: true,
     };
-    we.push("git_state.visibility.visibility_cache");
-    if (Ee()) return L(G, q, Z, Se, ke, we);
+    shedFields.push("git_state.visibility.visibility_cache");
+    if (fits())
+      return buildView(
+        currentGitState,
+        keepNavigation,
+        currentPriorTurns,
+        currentReminders,
+        currentArtifacts,
+        shedFields,
+      );
   }
-  if (G.visibility !== null && G.visibility.remotes.length > 0) {
-    G = {
-      ...G,
+  if (currentGitState.visibility !== null && currentGitState.visibility.remotes.length > 0) {
+    currentGitState = {
+      ...currentGitState,
       visibility: {
-        ...G.visibility,
+        ...currentGitState.visibility,
         remotes: [],
       },
       truncated: true,
     };
-    we.push("git_state.visibility.remotes");
-    if (Ee()) return L(G, q, Z, Se, ke, we);
+    shedFields.push("git_state.visibility.remotes");
+    if (fits())
+      return buildView(
+        currentGitState,
+        keepNavigation,
+        currentPriorTurns,
+        currentReminders,
+        currentArtifacts,
+        shedFields,
+      );
   }
-  if (G.status !== null && G.status.porcelain !== null) {
-    G = {
-      ...G,
+  if (currentGitState.status !== null && currentGitState.status.porcelain !== null) {
+    currentGitState = {
+      ...currentGitState,
       status: {
-        ...G.status,
+        ...currentGitState.status,
         porcelain: null,
         truncated: false,
       },
       truncated: true,
     };
-    we.push("git_state.status.porcelain");
-    if (Ee()) return L(G, q, Z, Se, ke, we);
+    shedFields.push("git_state.status.porcelain");
+    if (fits())
+      return buildView(
+        currentGitState,
+        keepNavigation,
+        currentPriorTurns,
+        currentReminders,
+        currentArtifacts,
+        shedFields,
+      );
   }
-  if (Se.length > 0) {
-    let Ie = Se.length;
-    while (Ie > 0) {
-      Ie = Math.floor(Ie / 2);
-      Se = Ie > 0 ? s.slice(s.length - Ie) : [];
-      if (Ie === 0) we.push("system_reminders");
-      if (Ee()) return L(G, q, Z, Se, ke, we);
+  if (currentReminders.length > 0) {
+    let reminderCount = currentReminders.length;
+    while (reminderCount > 0) {
+      reminderCount = Math.floor(reminderCount / 2);
+      currentReminders =
+        reminderCount > 0 ? systemReminders.slice(systemReminders.length - reminderCount) : [];
+      if (reminderCount === 0) shedFields.push("system_reminders");
+      if (fits())
+        return buildView(
+          currentGitState,
+          keepNavigation,
+          currentPriorTurns,
+          currentReminders,
+          currentArtifacts,
+          shedFields,
+        );
     }
   }
-  if (ke !== undefined) {
-    ke = undefined;
-    we.push("artifacts");
+  if (currentArtifacts !== undefined) {
+    currentArtifacts = undefined;
+    shedFields.push("artifacts");
   }
-  let Ae = L(G, q, Z, Se, ke, we);
-  if (jsonByteLength(Ae) > SERVER_CONTEXT_FIELD_MAX_BYTES) {
+  let builtContext = buildView(
+    currentGitState,
+    keepNavigation,
+    currentPriorTurns,
+    currentReminders,
+    currentArtifacts,
+    shedFields,
+  );
+  if (jsonByteLength(builtContext) > SERVER_CONTEXT_FIELD_MAX_BYTES) {
     logForDebugging(
       `[server-classifier] the permission rule lists alone exceed the auto-mode context budget (${SERVER_CONTEXT_FIELD_MAX_BYTES} bytes): every variable part (git state, repository visibility, Chrome tabs, prior-turn history, system-reminder ids, artifact state) was left out of this request's classifier context \u2014 trim the deny/ask rules or settings.autoMode entries`,
       {
@@ -639,13 +744,13 @@ function buildServerClassifierContext(context, n, r, s, artifacts, y, S, w) {
       },
     );
     logEvent("tengu_auto_mode_context_static_over_budget", {
-      bytes: jsonByteLength(Ae),
+      bytes: jsonByteLength(builtContext),
       deny_rules: context.rules.deny.length,
       ask_rules: context.rules.ask.length,
       auto_mode_entries: context.auto_mode.soft_deny.length + context.auto_mode.hard_deny.length,
     });
   }
-  return Ae;
+  return builtContext;
 }
 //@ chunk-e6aww6q8.js:2515609-2515646 placement
 /**

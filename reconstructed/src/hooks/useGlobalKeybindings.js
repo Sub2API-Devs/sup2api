@@ -9,7 +9,7 @@
  * attribution: placement 1, layout 5, fingerprint 1
  */
 import { getSecondRootError } from "../ink/terminal.js";
-import { w } from "../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import { useAppState, useSetAppState } from "../state/AppState.js";
 import { selectExpandedView } from "../components/tasks/BackgroundTaskStatus.js";
 import { useNotifications } from "../context/notifications.js";
@@ -18,39 +18,39 @@ import { useSession } from "../context/session.js";
 import { logEvent } from "../services/analytics/index.js";
 import { logFeatureOk } from "../services/analytics/featureTelemetry.js";
 import { onGrowthBookRefresh } from "../services/analytics/growthbook.js";
-import { P } from "../../vendor/react/cjs/react.production.js";
+import { useEffect } from "../../vendor/react/cjs/react.production.js";
 import { lit as lit_2 } from "../services/analytics/safeMetadata.js";
 import { MEMO_CACHE_SENTINEL } from "../../runtime/bun-runtime.js";
 import { useKeybinding } from "../keybindings/useKeybinding.js";
 
 //@ chunk-18hwfzwa.js:133882-133967 placement = useTasksV2WithCollapseEffect (1)
-function useTasksV2WithCollapseEffect(Wo) {
+function useTasksV2WithCollapseEffect(appState) {
   return {
-    ...Wo,
-    expandedView: Wo.expandedView === "tasks" ? "none" : "tasks",
+    ...appState,
+    expandedView: appState.expandedView === "tasks" ? "none" : "tasks",
   };
 }
 //@ chunk-18hwfzwa.js:133967-134006 layout
-function selectIsBriefOnly(mn) {
-  return mn.isBriefOnly;
+function selectIsBriefOnly(appState) {
+  return appState.isBriefOnly;
 }
 //@ chunk-18hwfzwa.js:134006-134082 layout
-function clearBriefOnly(Cn) {
-  if (!Cn.isBriefOnly) {
-    return Cn;
+function clearBriefOnly(appState) {
+  if (!appState.isBriefOnly) {
+    return appState;
   }
   return {
-    ...Cn,
+    ...appState,
     isBriefOnly: false,
   };
 }
 //@ chunk-18hwfzwa.js:134082-134158 layout
-function clearBriefOnlyOnToggle(No) {
-  if (!No.isBriefOnly) {
-    return No;
+function clearBriefOnlyOnToggle(appState) {
+  if (!appState.isBriefOnly) {
+    return appState;
   }
   return {
-    ...No,
+    ...appState,
     isBriefOnly: false,
   };
 }
@@ -65,7 +65,7 @@ function forceRedraw() {
  * 全局快捷键处理：ctrl+o 切换 transcript（tengu_toggle_transcript）、ctrl+t 任务/todo 面板（tengu_toggle_todos）、brief 视图切换等；只在 prompt 屏挂载。
  */
 function GlobalKeybindingHandlers(props) {
-  let $ = w(22);
+  let $ = useMemoCache(22);
   let { screen, onToggleTranscript, showAllInTranscript, messageCount } = props;
   let showAll = showAllInTranscript === undefined ? false : showAllInTranscript;
   let expandedView = useAppState(selectExpandedView);
@@ -73,9 +73,9 @@ function GlobalKeybindingHandlers(props) {
   useNotifications();
   let setAppState_2 = useDialogStore();
   useSession();
-  let ze;
+  let toggleTasks;
   if ($[0] !== expandedView || $[1] !== setAppState) {
-    ze = () => {
+    toggleTasks = () => {
       logEvent("tengu_toggle_todos", {
         is_expanded: expandedView === "tasks",
       });
@@ -84,35 +84,35 @@ function GlobalKeybindingHandlers(props) {
     };
     $[0] = expandedView;
     $[1] = setAppState;
-    $[2] = ze;
-  } else ze = $[2];
-  let Xe = ze;
+    $[2] = toggleTasks;
+  } else toggleTasks = $[2];
+  let toggleTasks_ = toggleTasks;
   let isBriefOnly = useAppState(selectIsBriefOnly);
-  let kt;
-  let At;
+  let clearBriefOnlyEffect;
+  let clearBriefOnlyDeps;
   if ($[3] !== setAppState) {
-    kt = () => {
-      let { isBriefEnabled } = require("./chunk-cv3kgbt2.js");
-      let Ot = isBriefEnabled;
-      let Et = () => {
-        if (Ot()) {
+    clearBriefOnlyEffect = () => {
+      let { isBriefEnabled } = require("../tools/BriefTool/BriefTool.js");
+      let isBriefEnabledFn = isBriefEnabled;
+      let clearIfDisabled = () => {
+        if (isBriefEnabledFn()) {
           return;
         }
         setAppState(clearBriefOnly);
       };
-      Et();
-      return onGrowthBookRefresh(Et);
+      clearIfDisabled();
+      return onGrowthBookRefresh(clearIfDisabled);
     };
-    At = [setAppState];
+    clearBriefOnlyDeps = [setAppState];
     $[3] = setAppState;
-    $[4] = kt;
-    $[5] = At;
+    $[4] = clearBriefOnlyEffect;
+    $[5] = clearBriefOnlyDeps;
   } else {
-    kt = $[4];
-    At = $[5];
+    clearBriefOnlyEffect = $[4];
+    clearBriefOnlyDeps = $[5];
   }
-  P(kt, At);
-  let It;
+  useEffect(clearBriefOnlyEffect, clearBriefOnlyDeps);
+  let handler;
   if (
     $[6] !== setAppState_2 ||
     $[7] !== isBriefOnly ||
@@ -122,8 +122,8 @@ function GlobalKeybindingHandlers(props) {
     $[11] !== setAppState ||
     $[12] !== showAll
   ) {
-    It = () => {
-      let { isBriefEnabled } = require("./chunk-cv3kgbt2.js");
+    handler = () => {
+      let { isBriefEnabled } = require("../tools/BriefTool/BriefTool.js");
       if (!isBriefEnabled() && isBriefOnly && screen !== "transcript") {
         setAppState(clearBriefOnlyOnToggle);
         return;
@@ -143,13 +143,13 @@ function GlobalKeybindingHandlers(props) {
     $[10] = screen;
     $[11] = setAppState;
     $[12] = showAll;
-    $[13] = It;
-  } else It = $[13];
-  let Lt = It;
-  let oo;
+    $[13] = handler;
+  } else handler = $[13];
+  let handler_ = handler;
+  let handlerA;
   if ($[14] !== isBriefOnly || $[15] !== setAppState) {
-    oo = () => {
-      let { isBriefEnabled } = require("./chunk-cv3kgbt2.js");
+    handlerA = () => {
+      let { isBriefEnabled } = require("../tools/BriefTool/BriefTool.js");
       if (!isBriefEnabled() && !isBriefOnly) {
         return;
       }
@@ -171,51 +171,51 @@ function GlobalKeybindingHandlers(props) {
     };
     $[14] = isBriefOnly;
     $[15] = setAppState;
-    $[16] = oo;
-  } else oo = $[16];
-  let po = oo;
-  let ao;
+    $[16] = handlerA;
+  } else handlerA = $[16];
+  let handlerB = handlerA;
+  let deps;
   if ($[17] === MEMO_CACHE_SENTINEL) {
-    ao = {
+    deps = {
       context: "Global",
     };
-    $[17] = ao;
-  } else ao = $[17];
-  useKeybinding("app:toggleTodos", Xe, ao);
-  let co;
+    $[17] = deps;
+  } else deps = $[17];
+  useKeybinding("app:toggleTodos", toggleTasks_, deps);
+  let handlerC;
   if ($[18] === MEMO_CACHE_SENTINEL) {
-    co = {
+    handlerC = {
       context: "Global",
     };
-    $[18] = co;
-  } else co = $[18];
-  useKeybinding("app:toggleTranscript", Lt, co);
-  let bo;
+    $[18] = handlerC;
+  } else handlerC = $[18];
+  useKeybinding("app:toggleTranscript", handler_, handlerC);
+  let handlerD;
   if ($[19] === MEMO_CACHE_SENTINEL) {
-    bo = {
+    handlerD = {
       context: "Global",
     };
-    $[19] = bo;
-  } else bo = $[19];
-  useKeybinding("app:toggleBrief", po, bo);
-  let Ao = noop;
-  let Bo;
+    $[19] = handlerD;
+  } else handlerD = $[19];
+  useKeybinding("app:toggleBrief", handlerB, handlerD);
+  let handlerE = noop;
+  let handlerF;
   if ($[20] === MEMO_CACHE_SENTINEL) {
-    Bo = {
+    handlerF = {
       context: "Global",
     };
-    $[20] = Bo;
-  } else Bo = $[20];
-  useKeybinding("app:toggleTerminal", Ao, Bo);
-  let Ro = forceRedraw;
-  let Ho;
+    $[20] = handlerF;
+  } else handlerF = $[20];
+  useKeybinding("app:toggleTerminal", handlerE, handlerF);
+  let handlerG = forceRedraw;
+  let handlerH;
   if ($[21] === MEMO_CACHE_SENTINEL) {
-    Ho = {
+    handlerH = {
       context: "Global",
     };
-    $[21] = Ho;
-  } else Ho = $[21];
-  useKeybinding("app:redraw", Ro, Ho);
+    $[21] = handlerH;
+  } else handlerH = $[21];
+  useKeybinding("app:redraw", handlerG, handlerH);
   return null;
 }
 export { GlobalKeybindingHandlers };

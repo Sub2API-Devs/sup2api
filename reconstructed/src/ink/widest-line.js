@@ -11,6 +11,7 @@
 import { HostScoped } from "../utils/hostScoped.js";
 import { getRootSession } from "../bootstrap/state.js";
 import { lineWidth } from "./line-width-cache.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-bzr73sfg.js:290208-290219 placement
 var MAX_SCROLL_TRACE_EVENTS = 256;
@@ -33,17 +34,17 @@ class ScrollTrace {
   demoRuler = false;
   liveState = null;
   liveListeners = new Set();
-  setLiveWatching(n, u) {
-    let f = n && (u?.demoRuler ?? true);
-    if (this.liveWatching === n && this.demoRuler === f) return;
-    this.liveWatching = n;
-    this.demoRuler = f;
-    if (!n) this.liveState = null;
+  setLiveWatching(watching, options) {
+    let demoRulerValue = watching && (options?.demoRuler ?? true);
+    if (this.liveWatching === watching && this.demoRuler === demoRulerValue) return;
+    this.liveWatching = watching;
+    this.demoRuler = demoRulerValue;
+    if (!watching) this.liveState = null;
     for (let liveListener of this.liveListeners) liveListener();
   }
-  subscribeLive(n) {
-    this.liveListeners.add(n);
-    return () => this.liveListeners.delete(n);
+  subscribeLive(listener) {
+    this.liveListeners.add(listener);
+    return () => this.liveListeners.delete(listener);
   }
   getLiveState() {
     return this.liveState;
@@ -54,9 +55,9 @@ class ScrollTrace {
   isDemoRulerEnabled() {
     return this.demoRuler;
   }
-  subscribe(n) {
-    this.listeners.add(n);
-    return () => this.listeners.delete(n);
+  subscribe(listener) {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
   }
   getSnapshot() {
     return this.snapshot;
@@ -64,37 +65,37 @@ class ScrollTrace {
   isEnabled() {
     return this.enabled;
   }
-  setEnabled(n) {
-    if (this.enabled === n) return;
-    this.enabled = n;
-    if (!n) {
+  setEnabled(enabled) {
+    if (this.enabled === enabled) return;
+    this.enabled = enabled;
+    if (!enabled) {
       this.events = [];
       this.lastInputTs = 0;
       this.position = null;
     }
     this.bump();
   }
-  recordInput(dir, u, f, m) {
+  recordInput(dir, step, inputMeta, inputTs) {
     if (this.liveWatching) {
       this.liveState = {
-        wheelMode: f.wheelMode,
+        wheelMode: inputMeta.wheelMode,
       };
       for (let liveListener of this.liveListeners) liveListener();
     }
     if (!this.enabled) return;
-    let gap = this.lastInputTs === 0 ? 1 / 0 : m - this.lastInputTs;
-    this.lastInputTs = m;
+    let gap = this.lastInputTs === 0 ? 1 / 0 : inputTs - this.lastInputTs;
+    this.lastInputTs = inputTs;
     this.push({
       kind: "in",
-      ts: m,
+      ts: inputTs,
       dir,
-      step: u,
-      flip: f.pendingFlip && u === 0,
+      step,
+      flip: inputMeta.pendingFlip && step === 0,
       gap,
-      mult: f.mult,
-      wheelMode: f.wheelMode,
-      burst: f.burstCount,
-      jbBypass: f.jbBypass,
+      mult: inputMeta.mult,
+      wheelMode: inputMeta.wheelMode,
+      burst: inputMeta.burstCount,
+      jbBypass: inputMeta.jbBypass,
     });
   }
   recordOut(applied, remaining, algo) {
@@ -107,19 +108,19 @@ class ScrollTrace {
       algo,
     });
   }
-  recordPosition(n) {
+  recordPosition(viewportMetrics) {
     if (!this.enabled) return;
     this.position = {
-      top: n.getScrollTop(),
-      height: n.getScrollHeight(),
-      viewport: n.getViewportHeight(),
+      top: viewportMetrics.getScrollTop(),
+      height: viewportMetrics.getScrollHeight(),
+      viewport: viewportMetrics.getViewportHeight(),
     };
   }
-  push(n) {
+  push(event) {
     this.events =
       this.events.length >= MAX_SCROLL_TRACE_EVENTS
-        ? [...this.events.slice(1 - MAX_SCROLL_TRACE_EVENTS), n]
-        : [...this.events, n];
+        ? [...this.events.slice(1 - MAX_SCROLL_TRACE_EVENTS), event]
+        : [...this.events, event];
     this.bump();
   }
   bump() {
@@ -132,21 +133,24 @@ class ScrollTrace {
   }
 }
 //@ chunk-bzr73sfg.js:291919-291944 placement
-var scrollTraceByHost = new HostScoped(() => new ScrollTrace());
+var scrollTraceByHost; // deferred: uses ScrollTrace of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-bzr73sfg.js:291919", () => {
+  scrollTraceByHost = new HostScoped(() => new ScrollTrace());
+});
 //@ chunk-bzr73sfg.js:291944-291981 placement
 function getScrollTrace() {
   return scrollTraceByHost.of(getRootSession().host);
 }
 //@ chunk-bzr73sfg.js:291981-292025 placement
-function setScrollTraceLiveWatching(n, u) {
-  getScrollTrace().setLiveWatching(n, u);
+function setScrollTraceLiveWatching(enabled, liveWatching) {
+  getScrollTrace().setLiveWatching(enabled, liveWatching);
 }
 //@ chunk-bzr73sfg.js:292025-292070 placement
 /**
  * 订阅滚轮实时状态的辅助函数组。
  */
-function subscribeScrollTraceLive(n) {
-  return getScrollTrace().subscribeLive(n);
+function subscribeScrollTraceLive(listener) {
+  return getScrollTrace().subscribeLive(listener);
 }
 //@ chunk-bzr73sfg.js:292070-292112 placement
 function getScrollTraceLiveState() {
@@ -161,16 +165,16 @@ function isScrollTraceDemoRuler() {
   return getScrollTrace().isDemoRulerEnabled();
 }
 //@ chunk-bzr73sfg.js:292204-292252 placement
-function recordScrollInput(n, rows, state, m) {
-  getScrollTrace().recordInput(n, rows, state, m);
+function recordScrollInput(dir, rows, state, inputTs) {
+  getScrollTrace().recordInput(dir, rows, state, inputTs);
 }
 //@ chunk-bzr73sfg.js:292252-292293 placement
-function recordScrollOut(n, u, f) {
-  getScrollTrace().recordOut(n, u, f);
+function recordScrollOut(delta, pending, mode) {
+  getScrollTrace().recordOut(delta, pending, mode);
 }
 //@ chunk-bzr73sfg.js:292293-292332 placement
-function recordScrollPosition(n) {
-  getScrollTrace().recordPosition(n);
+function recordScrollPosition(viewportMetrics) {
+  getScrollTrace().recordPosition(viewportMetrics);
 }
 //@ chunk-bzr73sfg.js:292332-292494 callgraph-fingerprint = widestLine (1)
 /**

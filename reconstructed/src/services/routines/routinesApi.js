@@ -5,8 +5,8 @@
  *
  * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
  * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-aepeg2w5.js (46)
- * attribution: placement 46
+ * pieces: chunk-aepeg2w5.js (45)
+ * attribution: placement 45
  */
 import { Agent as Agent_3 } from "http";
 import { Readable } from "stream";
@@ -73,13 +73,14 @@ import { lit } from "../analytics/safeMetadata.js";
 import { logFeatureOk, logFeatureSad } from "../analytics/featureTelemetry.js";
 import { logEvent } from "../analytics/index.js";
 import { isSameOriginAsCcr } from "../mcp/ccrMcpUrls.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-aepeg2w5.js:802953-803044 placement
 /**
  * 校验请求路径只含安全字符且不含 .. 或 //。
  */
-function isSafeRelativePath(e) {
-  return /^[A-Za-z0-9_\-/.:]+$/.test(e) && !/(?:^|\/)\.\.?(?:\/|$)|\/\//.test(e);
+function isSafeRelativePath(relativePath) {
+  return /^[A-Za-z0-9_\-/.:]+$/.test(relativePath) && !/(?:^|\/)\.\.?(?:\/|$)|\/\//.test(relativePath);
 }
 //@ chunk-aepeg2w5.js:803044-803260 placement
 var CONSOLE_PROFILE_UNSUPPORTED_MESSAGE =
@@ -88,114 +89,124 @@ var CONSOLE_PROFILE_UNSUPPORTED_MESSAGE =
 /**
  * 判断请求路径对应的 routine/session 操作。
  */
-function classifyRoutineRequest(e, n, r) {
-  let index = n.indexOf("?");
-  let h = index < 0 ? n : n.slice(0, index);
-  if (!isSafeRelativePath(h)) return null;
-  if (h.startsWith(CODE_SESSIONS_PATH)) return "session";
-  if (!CODE_TRIGGERS_PATH_PATTERN.test(n)) return null;
-  if (!h.startsWith("/v1/code/triggers/")) return e === "GET" ? "routine_list" : null;
-  return e === "POST" &&
-    typeof r === "object" &&
-    r !== null &&
-    !Array.isArray(r) &&
-    Object.keys(r).length === 1 &&
-    "enabled" in r &&
-    r.enabled === false
+function classifyRoutineRequest(method, requestPath, body) {
+  let index = requestPath.indexOf("?");
+  let pathWithoutQuery = index < 0 ? requestPath : requestPath.slice(0, index);
+  if (!isSafeRelativePath(pathWithoutQuery)) return null;
+  if (pathWithoutQuery.startsWith(CODE_SESSIONS_PATH)) return "session";
+  if (!CODE_TRIGGERS_PATH_PATTERN.test(requestPath)) return null;
+  if (!pathWithoutQuery.startsWith("/v1/code/triggers/")) return method === "GET" ? "routine_list" : null;
+  return method === "POST" &&
+    typeof body === "object" &&
+    body !== null &&
+    !Array.isArray(body) &&
+    Object.keys(body).length === 1 &&
+    "enabled" in body &&
+    body.enabled === false
     ? "routine_pause"
     : null;
 }
 //@ chunk-aepeg2w5.js:803629-803745 placement
-function isSessionsApiPath(e, n, r) {
-  let index = n.indexOf("?");
-  let h = index < 0 ? n : n.slice(0, index);
-  if (!isSafeRelativePath(h)) return false;
-  return SESSIONS_PATH_RE.test(h) || classifyRoutineRequest(e, n, r) !== null;
+function isSessionsApiPath(method, requestPath, body) {
+  let index = requestPath.indexOf("?");
+  let pathWithoutQuery = index < 0 ? requestPath : requestPath.slice(0, index);
+  if (!isSafeRelativePath(pathWithoutQuery)) return false;
+  return (
+    SESSIONS_PATH_RE.test(pathWithoutQuery) || classifyRoutineRequest(method, requestPath, body) !== null
+  );
 }
 //@ chunk-aepeg2w5.js:803745-803968 placement
 /**
  * sessions 路径正则、上传超时、敏感头与官方源。
  */
-var SESSIONS_PATH_RE = /^\/v1\/(?:code\/)?sessions(?:\/|$)/;
-var UPLOAD_TIMEOUT_MS = 15000;
-var SENSITIVE_HEADERS = new Set([
-  "authorization",
-  "proxy-authorization",
-  "x-authorization",
-  "x-api-key",
-  "cookie",
-]);
-var OFFICIAL_API_ORIGINS = new Set(["https://api.anthropic.com", "https://api-staging.anthropic.com"]);
+var SESSIONS_PATH_RE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var UPLOAD_TIMEOUT_MS;
+var SENSITIVE_HEADERS;
+var OFFICIAL_API_ORIGINS;
+deferInit("chunk-aepeg2w5.js:803745", () => {
+  SESSIONS_PATH_RE = /^\/v1\/(?:code\/)?sessions(?:\/|$)/;
+  UPLOAD_TIMEOUT_MS = 15000;
+  SENSITIVE_HEADERS = new Set([
+    "authorization",
+    "proxy-authorization",
+    "x-authorization",
+    "x-api-key",
+    "cookie",
+  ]);
+  OFFICIAL_API_ORIGINS = new Set(["https://api.anthropic.com", "https://api-staging.anthropic.com"]);
+});
 //@ chunk-aepeg2w5.js:803968-804136 placement
-function isOfficialApiOrigin(e) {
-  let n;
+function isOfficialApiOrigin(url) {
+  let baseOrigin;
   try {
-    n = new URL(getOauthConfig().BASE_API_URL).origin;
+    baseOrigin = new URL(getOauthConfig().BASE_API_URL).origin;
   } catch {
     return false;
   }
-  if (e.origin === n) return true;
+  if (url.origin === baseOrigin) return true;
   if (env.CLAUDE_CODE_CUSTOM_OAUTH_URL) return false;
-  return OFFICIAL_API_ORIGINS.has(e.origin);
+  return OFFICIAL_API_ORIGINS.has(url.origin);
 }
 //@ chunk-aepeg2w5.js:804136-804192 placement
 /**
  * 校验为合法 https 地址时返回其 origin。
  */
-function httpsOrigin(e) {
-  let n = validateHttpsUrl(e);
-  return n.ok ? n.origin : undefined;
+function httpsOrigin(url) {
+  let validation = validateHttpsUrl(url);
+  return validation.ok ? validation.origin : undefined;
 }
 //@ chunk-aepeg2w5.js:804192-804524 placement
 /**
  * 校验 URL 为不带凭据和端口的 https。
  */
-function validateHttpsUrl(e) {
-  if (!e)
+function validateHttpsUrl(rawUrl) {
+  if (!rawUrl)
     return {
       ok: false,
       reason: "unparseable",
     };
-  let n;
+  let url;
   try {
-    n = new URL(e);
+    url = new URL(rawUrl);
   } catch {
     return {
       ok: false,
       reason: "unparseable",
     };
   }
-  if (n.protocol !== "https:")
+  if (url.protocol !== "https:")
     return {
       ok: false,
       reason: "not_https",
     };
-  if (n.username || n.password || n.port)
+  if (url.username || url.password || url.port)
     return {
       ok: false,
       reason: "userinfo_or_port",
     };
-  if (!isOfficialApiOrigin(n))
+  if (!isOfficialApiOrigin(url))
     return {
       ok: false,
       reason: "untrusted_origin",
     };
   return {
     ok: true,
-    origin: n.origin,
+    origin: url.origin,
   };
 }
 //@ chunk-aepeg2w5.js:804524-804580 placement
 /**
  * 非法 https 地址时返回原因。
  */
-function invalidHttpsUrlReason(filestoreUrl) {
-  let n = validateHttpsUrl(filestoreUrl);
-  return n.ok ? undefined : n.reason;
+function invalidHttpsUrlReason(rawUrl) {
+  let validation = validateHttpsUrl(rawUrl);
+  return validation.ok ? undefined : validation.reason;
 }
 //@ chunk-aepeg2w5.js:804580-804680 placement
-function baseUrlForRequest(e, n) {
-  return n.auth === "none" && n.host !== "frame" && n.host !== "memory" && n.baseUrl ? n.baseUrl : e;
+function baseUrlForRequest(defaultBaseUrl, options) {
+  return options.auth === "none" && options.host !== "frame" && options.host !== "memory" && options.baseUrl
+    ? options.baseUrl
+    : defaultBaseUrl;
 }
 //@ chunk-aepeg2w5.js:804680-804702 placement
 /**
@@ -215,9 +226,9 @@ function frameBaseUrl() {
 /**
  * 按主机类别（api、claude-ai、mcp-proxy、frame、memory…）取基础 URL。
  */
-function apiHostUrl(e) {
+function apiHostUrl(hostKind) {
   let oauthConfig = getOauthConfig();
-  switch (e) {
+  switch (hostKind) {
     case "api":
       return oauthConfig.BASE_API_URL;
     case "claude-ai":
@@ -229,42 +240,42 @@ function apiHostUrl(e) {
     case "memory":
       return memoryApiOverride() ?? oauthConfig.BASE_API_URL;
     case "ccr-session":
-      return ccrHostUrl(e).href.replace(/\/$/, "");
+      return ccrHostUrl(hostKind).href.replace(/\/$/, "");
     case "ccr-gateway":
-      return ccrHostUrl(e).origin;
+      return ccrHostUrl(hostKind).origin;
   }
 }
 //@ chunk-aepeg2w5.js:805061-805529 placement
 /**
  * ccr-session/ccr-gateway 主机 URL（需要 --sdk-url）。
  */
-function ccrHostUrl(e) {
-  let n = e === "ccr-gateway" ? resolveRemoteSdkUrl() : resolveSdkUrl();
-  switch (n.status) {
+function ccrHostUrl(hostKind) {
+  let sdkUrl = hostKind === "ccr-gateway" ? resolveRemoteSdkUrl() : resolveSdkUrl();
+  switch (sdkUrl.status) {
     case "absent":
-      throw e === "ccr-session"
+      throw hostKind === "ccr-session"
         ? Error("ccr-session host requires --sdk-url")
         : Error("ccr-gateway host requires --sdk-url");
     case "rejected":
-      throw e === "ccr-session"
+      throw hostKind === "ccr-session"
         ? new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-            `ccr-session --sdk-url rejected: ${n.reason}`,
+            `ccr-session --sdk-url rejected: ${sdkUrl.reason}`,
             "ccr-session --sdk-url rejected by allowlist",
           )
         : new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-            `ccr-gateway --sdk-url rejected: ${n.reason}`,
+            `ccr-gateway --sdk-url rejected: ${sdkUrl.reason}`,
             "ccr-gateway --sdk-url rejected by allowlist",
           );
     case "ok":
-      return getTransportForUrl(new URL(n.url));
+      return getTransportForUrl(new URL(sdkUrl.url));
   }
 }
 //@ chunk-aepeg2w5.js:805529-805558 placement
 /**
  * 凭据摘要。
  */
-function hashCredential(e) {
-  return computeContentHash(e);
+function hashCredential(credential) {
+  return computeContentHash(credential);
 }
 //@ chunk-aepeg2w5.js:805558-805654 placement
 /**
@@ -294,20 +305,21 @@ async function getClaudeAiAccessToken() {
 /**
  * 公开插件目录请求的快捷判断。
  */
-function publicCatalogShortcut(e, n) {
+function publicCatalogShortcut(options, request) {
   if (
-    e.publicPluginDirectoryCatalog === true &&
-    e.auth === "none" &&
-    (e.host === undefined || e.host === "api") &&
-    e.baseUrl === undefined &&
-    e.headers === undefined &&
-    n?.method === "GET" &&
-    firstLineOf(n.path, "?") === PLUGIN_DIRECTORY_API_PATH &&
-    !new URLSearchParams(n.path.slice(PLUGIN_DIRECTORY_API_PATH.length)).has("q")
+    options.publicPluginDirectoryCatalog === true &&
+    options.auth === "none" &&
+    (options.host === undefined || options.host === "api") &&
+    options.baseUrl === undefined &&
+    options.headers === undefined &&
+    request?.method === "GET" &&
+    firstLineOf(request.path, "?") === PLUGIN_DIRECTORY_API_PATH &&
+    !new URLSearchParams(request.path.slice(PLUGIN_DIRECTORY_API_PATH.length)).has("q")
   )
     return;
-  let r = false;
-  if (!e.bypassEssentialTrafficOnly && !r && isEssentialTrafficOnly()) return "essential-traffic-only";
+  let isEssentialTrafficOverride = false;
+  if (!options.bypassEssentialTrafficOnly && !isEssentialTrafficOverride && isEssentialTrafficOnly())
+    return "essential-traffic-only";
   if (getAPIProvider() !== "firstParty") return "data-residency";
   return;
 }
@@ -325,32 +337,32 @@ var NO_CLAUDE_AI_LOGIN = "no claude.ai login";
 /**
  * 统一的 Anthropic API 请求：选主机与认证、OAuth 刷新、重试、上传超时、frame 隧道。
  */
-async function apiRequest(e, n, r, s = {}, h = false) {
-  let y = r;
+async function apiRequest(method, requestPath, body, options = {}, isRetry = false) {
+  let requestBody = body;
   noteExternalHttpUse();
-  let S = publicCatalogShortcut(s, {
-    method: e,
-    path: n,
+  let shortcutReason = publicCatalogShortcut(options, {
+    method,
+    path: requestPath,
   });
-  if (S !== undefined)
+  if (shortcutReason !== undefined)
     return {
       ok: false,
-      reason: S,
+      reason: shortcutReason,
     };
-  if (s.frameTunnel && (s.host !== "frame" || s.auth !== "session-jwt"))
+  if (options.frameTunnel && (options.host !== "frame" || options.auth !== "session-jwt"))
     throw Error("frameTunnel requires host 'frame' and auth 'session-jwt'");
-  let w = {};
+  let authHeaders = {};
   let Authorization;
-  let x = n;
-  let P = null;
-  let F = false;
-  let L = false;
-  let G;
-  if (s.auth === "teleport-org") {
-    let Z;
+  let urlPath = requestPath;
+  let refreshableAccessToken = null;
+  let isConsoleProfile = false;
+  let isSessionsApi = false;
+  let earlyAnswerAdapter;
+  if (options.auth === "teleport-org") {
+    let credentialInfo;
     if (isConsoleProfileSessionsCredential()) {
-      let fe = classifyRoutineRequest(e, n, y);
-      if (fe === null)
+      let routineKind = classifyRoutineRequest(method, requestPath, requestBody);
+      if (routineKind === null)
         return {
           ok: false,
           reason: "no-auth",
@@ -360,13 +372,13 @@ async function apiRequest(e, n, r, s = {}, h = false) {
               ? "The organization's policy has not been read yet; a Console-profile sign-in is in use"
               : "A Console-profile sign-in is in use; this needs a claude.ai sign-in",
         };
-      if (fe === "routine_pause")
-        y = {
+      if (routineKind === "routine_pause")
+        requestBody = {
           enabled: false,
         };
-      let Ae;
+      let preparedRequest;
       try {
-        Ae = await prepareApiRequest(s.credentials);
+        preparedRequest = await prepareApiRequest(options.credentials);
       } catch (error) {
         if (error instanceof CloudSessionAccessError)
           return {
@@ -376,20 +388,20 @@ async function apiRequest(e, n, r, s = {}, h = false) {
           };
         throw error;
       }
-      P = Ae.accessToken;
-      Z = Ae;
-      F = true;
-      w = {
-        ...getOAuthHeaders(Ae.accessToken),
-        "x-organization-uuid": Ae.orgUUID,
+      refreshableAccessToken = preparedRequest.accessToken;
+      credentialInfo = preparedRequest;
+      isConsoleProfile = true;
+      authHeaders = {
+        ...getOAuthHeaders(preparedRequest.accessToken),
+        "x-organization-uuid": preparedRequest.orgUUID,
       };
-      x = n.replace(":orgUUID", Ae.orgUUID);
+      urlPath = requestPath.replace(":orgUUID", preparedRequest.orgUUID);
     } else {
       await checkAndRefreshOAuthTokenIfNeeded({
-        credentials: s.credentials,
-        storageV5: s.storageV5,
+        credentials: options.credentials,
+        storageV5: options.storageV5,
       });
-      if (await isOAuthRefreshKnownDeadAsync(s.credentials))
+      if (await isOAuthRefreshKnownDeadAsync(options.credentials))
         return {
           ok: false,
           reason: "no-auth",
@@ -401,41 +413,41 @@ async function apiRequest(e, n, r, s = {}, h = false) {
           reason: "no-auth",
           detail: "No OAuth token in keychain",
         };
-      L = isSessionsApiPath(e, n, y);
-      let { accessToken, orgUUID } = await prepareApiRequest(s.credentials, L);
-      P = accessToken;
-      Z = {
+      isSessionsApi = isSessionsApiPath(method, requestPath, requestBody);
+      let { accessToken, orgUUID } = await prepareApiRequest(options.credentials, isSessionsApi);
+      refreshableAccessToken = accessToken;
+      credentialInfo = {
         accessToken,
         orgUUID,
       };
-      w = {
+      authHeaders = {
         ...getOAuthHeaders(accessToken),
         "x-organization-uuid": orgUUID,
       };
-      x = n.replace(":orgUUID", orgUUID);
+      urlPath = requestPath.replace(":orgUUID", orgUUID);
     }
-    let { earlyAnswer } = s;
-    if (earlyAnswer !== undefined && e === "GET") {
-      let { accessToken, orgUUID } = Z;
-      G = async (Me) => {
-        let xe = await earlyAnswer({
-          path: n,
-          baseUrl: apiHostUrl(s.host ?? "api"),
+    let { earlyAnswer } = options;
+    if (earlyAnswer !== undefined && method === "GET") {
+      let { accessToken, orgUUID } = credentialInfo;
+      earlyAnswerAdapter = async (config) => {
+        let earlyAnswerResult = await earlyAnswer({
+          path: requestPath,
+          baseUrl: apiHostUrl(options.host ?? "api"),
           orgUuid: orgUUID,
           authFingerprint: hashCredential(`Bearer ${accessToken}`),
         });
-        return xe === undefined
-          ? axios_default.getAdapter(axios_default.defaults.adapter)(Me)
+        return earlyAnswerResult === undefined
+          ? axios_default.getAdapter(axios_default.defaults.adapter)(config)
           : {
-              data: xe.body,
-              status: xe.status,
+              data: earlyAnswerResult.body,
+              status: earlyAnswerResult.status,
               statusText: "",
               headers: {},
-              config: Me,
+              config,
             };
       };
     }
-  } else if (s.auth === "session-jwt") {
+  } else if (options.auth === "session-jwt") {
     let sessionIngressAuthToken = getSessionIngressAuthToken();
     if (!sessionIngressAuthToken)
       return {
@@ -443,12 +455,12 @@ async function apiRequest(e, n, r, s = {}, h = false) {
         reason: "no-auth",
         detail: "No session access token",
       };
-    w = {
+    authHeaders = {
       Authorization: `Bearer ${sessionIngressAuthToken}`,
     };
-    Authorization = w.Authorization;
-  } else if (s.auth === "claude-ai-oauth") {
-    await refreshOAuthIfRequested(s);
+    Authorization = authHeaders.Authorization;
+  } else if (options.auth === "claude-ai-oauth") {
+    await refreshOAuthIfRequested(options);
     let claudeAIOAuthTokens = getClaudeAIOAuthTokens();
     let accessToken = claudeAIOAuthTokens?.accessToken;
     if (!isUsableClaudeAILoginRecord(claudeAIOAuthTokens) || !accessToken)
@@ -457,229 +469,255 @@ async function apiRequest(e, n, r, s = {}, h = false) {
         reason: "no-auth",
         detail: NO_CLAUDE_AI_LOGIN,
       };
-    w = {
+    authHeaders = {
       Authorization: `Bearer ${accessToken}`,
       "anthropic-beta": OAUTH_BETA_HEADER,
     };
-    if (s.recoverOAuth401 && (claudeAIOAuthTokens?.refreshToken || getSdkOAuthTokenRefreshCallback()))
-      P = accessToken;
-  } else if (s.auth !== "none") {
-    await refreshOAuthIfRequested(s);
-    let Z = s.auth === "async" ? await getAuthHeadersAsync() : getAuthHeaders();
-    let ce = Z.headers["x-api-key"];
-    let fe =
-      Z.error ??
-      (ce && !apiKeyForHost(ce)
+    if (options.recoverOAuth401 && (claudeAIOAuthTokens?.refreshToken || getSdkOAuthTokenRefreshCallback()))
+      refreshableAccessToken = accessToken;
+  } else if (options.auth !== "none") {
+    await refreshOAuthIfRequested(options);
+    let authHeadersResult = options.auth === "async" ? await getAuthHeadersAsync() : getAuthHeaders();
+    let apiKey = authHeadersResult.headers["x-api-key"];
+    let apiKeyProblem =
+      authHeadersResult.error ??
+      (apiKey && !apiKeyForHost(apiKey)
         ? "API key not sent: ANTHROPIC_BASE_URL is not an Anthropic host"
         : undefined);
-    if (fe && s.auth !== "optional")
+    if (apiKeyProblem && options.auth !== "optional")
       return {
         ok: false,
         reason: "no-auth",
-        detail: fe,
+        detail: apiKeyProblem,
       };
-    w = fe ? {} : Z.headers;
+    authHeaders = apiKeyProblem ? {} : authHeadersResult.headers;
   }
-  if (s.host === "frame" && getFrameHostOverride() !== undefined) {
+  if (options.host === "frame" && getFrameHostOverride() !== undefined) {
     if (env.CLAUDE_CODE_ARTIFACTS_API_TOKEN)
-      w = {
+      authHeaders = {
         Authorization: `Bearer ${env.CLAUDE_CODE_ARTIFACTS_API_TOKEN}`,
       };
-    P = null;
+    refreshableAccessToken = null;
   }
-  if (s.host === "memory") {
-    let Z = memoryApiTarget();
-    if (Z.auth === "none") {
-      w = Z.headers ?? {};
-      P = null;
+  if (options.host === "memory") {
+    let memoryTarget = memoryApiTarget();
+    if (memoryTarget.auth === "none") {
+      authHeaders = memoryTarget.headers ?? {};
+      refreshableAccessToken = null;
     }
   }
-  let j = {
+  let headers = {
     "User-Agent": getUserAgent(),
-    ...w,
-    ...s.headers,
+    ...authHeaders,
+    ...options.headers,
   };
-  if (F) {
-    for (let key of Object.keys(j)) if (key.toLowerCase() === "x-trusted-device-token") delete j[key];
+  if (isConsoleProfile) {
+    for (let key of Object.keys(headers))
+      if (key.toLowerCase() === "x-trusted-device-token") delete headers[key];
   }
-  if (s.frameTunnel) {
-    for (let key of Object.keys(j)) if (SENSITIVE_HEADERS.has(key.toLowerCase())) delete j[key];
-    j.Authorization = Authorization;
+  if (options.frameTunnel) {
+    for (let key of Object.keys(headers)) if (SENSITIVE_HEADERS.has(key.toLowerCase())) delete headers[key];
+    headers.Authorization = Authorization;
   }
   let sentAuthFingerprint = null;
-  if (s.reportSentAuth) {
-    let Z;
-    for (let [key, value] of Object.entries(j)) if (key.toLowerCase() === "authorization") Z = value;
-    sentAuthFingerprint = Z === undefined ? null : hashCredential(Z);
+  if (options.reportSentAuth) {
+    let authorizationHeader;
+    for (let [key, value] of Object.entries(headers))
+      if (key.toLowerCase() === "authorization") authorizationHeader = value;
+    sentAuthFingerprint = authorizationHeader === undefined ? null : hashCredential(authorizationHeader);
   }
-  let q = s.maxRedirects ?? (s.host === "frame" ? 0 : undefined);
-  let Q = y;
-  let timeout = s.timeout ?? UPLOAD_TIMEOUT_MS;
-  let se;
-  if (s.streamUpload !== undefined && y !== undefined) {
-    let buffer = toBuffer(y);
-    let ce = typeof y !== "string" && !isPlainJsonBody(y);
-    if (s.maxBodyLength !== undefined && buffer.length > s.maxBodyLength)
+  let maxRedirects = options.maxRedirects ?? (options.host === "frame" ? 0 : undefined);
+  let sentBody = requestBody;
+  let timeout = options.timeout ?? UPLOAD_TIMEOUT_MS;
+  let uploadProgress;
+  if (options.streamUpload !== undefined && requestBody !== undefined) {
+    let buffer = toBuffer(requestBody);
+    let bodyIsPlainObject = typeof requestBody !== "string" && !isPlainJsonBody(requestBody);
+    if (options.maxBodyLength !== undefined && buffer.length > options.maxBodyLength)
       throw new AxiosError("Request body larger than maxBodyLength limit", AxiosError.ERR_BAD_REQUEST);
-    let stallMs = s.streamUpload.stallMs ?? DEFAULT_STALL_MS;
-    let Ae = s.streamUpload.tailFloorMs?.(buffer.length);
+    let stallMs = options.streamUpload.stallMs ?? DEFAULT_STALL_MS;
+    let tailFloorMs = options.streamUpload.tailFloorMs?.(buffer.length);
     if (isZodVersionCompatible()) {
-      se = uploadBufferWithProgress(buffer, {
+      uploadProgress = uploadBufferWithProgress(buffer, {
         stallMs,
-        ...(Ae !== undefined && {
-          tailFloorMs: Ae,
+        ...(tailFloorMs !== undefined && {
+          tailFloorMs,
         }),
-        signal: s.signal,
+        signal: options.signal,
       });
-      Q = se.body;
+      sentBody = uploadProgress.body;
     } else {
-      Q = buffer;
-      timeout = Math.max(maxAllowedStallMs(buffer.length, stallMs), Ae ?? 0);
+      sentBody = buffer;
+      timeout = Math.max(maxAllowedStallMs(buffer.length, stallMs), tailFloorMs ?? 0);
     }
-    if (!hasHeaderIgnoringCase(j, "content-type") && !ce)
-      j["Content-Type"] = typeof y === "string" ? "text/plain" : "application/json";
-    j["Content-Length"] = String(buffer.length);
+    if (!hasHeaderIgnoringCase(headers, "content-type") && !bodyIsPlainObject)
+      headers["Content-Type"] = typeof requestBody === "string" ? "text/plain" : "application/json";
+    headers["Content-Length"] = String(buffer.length);
   }
-  let Se =
-    s.streamUpload !== undefined && y !== undefined && q === 0 ? createUploadWireTransport() : undefined;
-  let ae = s.frameTunnel
-    ? `https://${s.frameTunnel.host}`
-    : baseUrlForRequest(apiHostUrl(s.host ?? "api"), s);
-  let ie;
+  let wireTransport =
+    options.streamUpload !== undefined && requestBody !== undefined && maxRedirects === 0
+      ? createUploadWireTransport()
+      : undefined;
+  let baseUrl = options.frameTunnel
+    ? `https://${options.frameTunnel.host}`
+    : baseUrlForRequest(apiHostUrl(options.host ?? "api"), options);
+  let response;
   try {
     try {
-      ie = await axios_default.request({
-        method: e,
-        baseURL: ae,
-        url: x,
-        data: Q,
-        timeout: se ? 0 : timeout,
-        signal: se ? se.signal : s.signal,
-        responseType: s.responseType,
-        validateStatus: s.validateStatus,
+      response = await axios_default.request({
+        method,
+        baseURL: baseUrl,
+        url: urlPath,
+        data: sentBody,
+        timeout: uploadProgress ? 0 : timeout,
+        signal: uploadProgress ? uploadProgress.signal : options.signal,
+        responseType: options.responseType,
+        validateStatus: options.validateStatus,
         skipSessionsBearerReport: true,
-        maxContentLength: s.maxContentLength,
-        maxBodyLength: s.maxBodyLength,
-        ...(q !== undefined && {
-          maxRedirects: q,
+        maxContentLength: options.maxContentLength,
+        maxBodyLength: options.maxBodyLength,
+        ...(maxRedirects !== undefined && {
+          maxRedirects,
         }),
-        ...(q !== 0 && {
-          beforeRedirect: (Z) => {
-            if (!sameOrigin(urlFromRequestOptions(Z), ae))
+        ...(maxRedirects !== 0 && {
+          beforeRedirect: (redirectOptions) => {
+            if (!sameOrigin(urlFromRequestOptions(redirectOptions), baseUrl))
               throw Error("first-party request redirected to another origin");
           },
         }),
-        ...(Se && {
-          transport: Se.transport,
+        ...(wireTransport && {
+          transport: wireTransport.transport,
         }),
-        ...(G && {
-          adapter: G,
+        ...(earlyAnswerAdapter && {
+          adapter: earlyAnswerAdapter,
         }),
-        ...(s.freshConnection &&
-          !s.frameTunnel && {
+        ...(options.freshConnection &&
+          !options.frameTunnel && {
             httpsAgent: createOneOffHttpsAgent(),
             httpAgent: new Agent_3({
               keepAlive: false,
             }),
           }),
-        ...(s.noEnvProxy && {
+        ...(options.noEnvProxy && {
           proxy: false,
         }),
-        ...(s.frameTunnel && {
-          httpsAgent: s.frameTunnel.agent,
+        ...(options.frameTunnel && {
+          httpsAgent: options.frameTunnel.agent,
           proxy: false,
         }),
-        headers: j,
+        headers,
       });
     } catch (error) {
-      throw se ? uploadStallError(error, se) : error;
+      throw uploadProgress ? uploadStallError(error, uploadProgress) : error;
     } finally {
-      if (se) {
-        se.dispose();
-        s.streamUpload?.onSettled?.({
-          ...se.seen(),
-          ...Se?.seen(true),
+      if (uploadProgress) {
+        uploadProgress.dispose();
+        options.streamUpload?.onSettled?.({
+          ...uploadProgress.seen(),
+          ...wireTransport?.seen(true),
         });
-      } else if (s.streamUpload && Buffer.isBuffer(Q))
-        s.streamUpload.onSettled?.({
-          body_bytes: Q.length,
-          bytes_handed: Q.length,
+      } else if (options.streamUpload && Buffer.isBuffer(sentBody))
+        options.streamUpload.onSettled?.({
+          body_bytes: sentBody.length,
+          bytes_handed: sentBody.length,
           stalled: false,
-          ...Se?.seen(false),
+          ...wireTransport?.seen(false),
         });
     }
   } catch (error) {
     if (
-      (h || s.isBackground) &&
-      L &&
-      P !== null &&
+      (isRetry || options.isBackground) &&
+      isSessionsApi &&
+      refreshableAccessToken !== null &&
       axios_default.isAxiosError(error) &&
       error.response?.status === 401 &&
-      !s.isRouteOwned401?.(error.response.data)
+      !options.isRouteOwned401?.(error.response.data)
     )
       recoverHostSessionsBearer(
-        bearerHeaderOrFallback(P, error.config, L),
+        bearerHeaderOrFallback(refreshableAccessToken, error.config, isSessionsApi),
         lacksAuthorizationHeader(error.config) ? "withheld" : "refused",
       ).catch(() => {});
     if (
-      P !== null &&
-      !h &&
-      !s.isBackground &&
+      refreshableAccessToken !== null &&
+      !isRetry &&
+      !options.isBackground &&
       axios_default.isAxiosError(error) &&
       error.response?.status === 401 &&
-      !s.isRouteOwned401?.(error.response.data)
+      !options.isRouteOwned401?.(error.response.data)
     ) {
-      let ce = bearerHeaderOrFallback(P, error.config, L);
-      let fe = F
-        ? await recoverConsoleProfileAuth(ce)
-        : await recoverAuthFailure(ce, s, L, lacksAuthorizationHeader(error.config));
-      if (fe === "retry") {
+      let bearerHeader = bearerHeaderOrFallback(refreshableAccessToken, error.config, isSessionsApi);
+      let recoveryOutcome = isConsoleProfile
+        ? await recoverConsoleProfileAuth(bearerHeader)
+        : await recoverAuthFailure(
+            bearerHeader,
+            options,
+            isSessionsApi,
+            lacksAuthorizationHeader(error.config),
+          );
+      if (recoveryOutcome === "retry") {
         destroyIfStream(error.response.data);
-        return apiRequest(e, n, y, s, true);
+        return apiRequest(method, requestPath, requestBody, options, true);
       }
-      if (fe !== null) {
+      if (recoveryOutcome !== null) {
         destroyIfStream(error.response.data);
-        return fe;
+        return recoveryOutcome;
       }
     }
     throw error;
   }
-  if ((h || s.isBackground) && L && P !== null && ie.status === 401 && !s.isRouteOwned401?.(ie.data))
+  if (
+    (isRetry || options.isBackground) &&
+    isSessionsApi &&
+    refreshableAccessToken !== null &&
+    response.status === 401 &&
+    !options.isRouteOwned401?.(response.data)
+  )
     recoverHostSessionsBearer(
-      bearerHeaderOrFallback(P, ie.config, L),
-      lacksAuthorizationHeader(ie.config) ? "withheld" : "refused",
+      bearerHeaderOrFallback(refreshableAccessToken, response.config, isSessionsApi),
+      lacksAuthorizationHeader(response.config) ? "withheld" : "refused",
     ).catch(() => {});
-  if (P !== null && ie.status === 401 && !h && !s.isBackground && !s.isRouteOwned401?.(ie.data)) {
-    let Z = bearerHeaderOrFallback(P, ie.config, L);
-    let ce = F
-      ? await recoverConsoleProfileAuth(Z)
-      : await recoverAuthFailure(Z, s, L, lacksAuthorizationHeader(ie.config));
-    if (ce === "retry") {
-      destroyIfStream(ie.data);
-      return apiRequest(e, n, y, s, true);
+  if (
+    refreshableAccessToken !== null &&
+    response.status === 401 &&
+    !isRetry &&
+    !options.isBackground &&
+    !options.isRouteOwned401?.(response.data)
+  ) {
+    let bearerHeader = bearerHeaderOrFallback(refreshableAccessToken, response.config, isSessionsApi);
+    let recoveryOutcome = isConsoleProfile
+      ? await recoverConsoleProfileAuth(bearerHeader)
+      : await recoverAuthFailure(
+          bearerHeader,
+          options,
+          isSessionsApi,
+          lacksAuthorizationHeader(response.config),
+        );
+    if (recoveryOutcome === "retry") {
+      destroyIfStream(response.data);
+      return apiRequest(method, requestPath, requestBody, options, true);
     }
-    if (ce !== null) {
-      destroyIfStream(ie.data);
-      return ce;
+    if (recoveryOutcome !== null) {
+      destroyIfStream(response.data);
+      return recoveryOutcome;
     }
   }
   return {
     ok: true,
-    data: ie.data,
-    status: ie.status,
-    response: ie,
-    ...(s.reportSentAuth && {
+    data: response.data,
+    status: response.status,
+    response,
+    ...(options.reportSentAuth && {
       sentAuthFingerprint,
     }),
   };
 }
 //@ chunk-aepeg2w5.js:811894-812121 placement
-async function refreshOAuthIfRequested(e) {
-  if (!e.refreshOAuth) return;
+async function refreshOAuthIfRequested(options) {
+  if (!options.refreshOAuth) return;
   try {
     await checkAndRefreshOAuthTokenIfNeeded({
-      credentials: e.credentials,
-      storageV5: e.storageV5,
+      credentials: options.credentials,
+      storageV5: options.storageV5,
     });
   } catch (error) {
     logForDebugging(
@@ -691,15 +729,16 @@ async function refreshOAuthIfRequested(e) {
 /**
  * 上传停滞时转换错误信息。
  */
-function uploadStallError(error, n) {
-  let r = n.seen();
-  if (!(axios_default.isCancel(error) && r.stalled)) return error;
-  let reason = n.signal.reason;
-  let h = reason instanceof UploadStalledError ? `${Math.round(reason.waitedMs / 1000)}s` : "the allowance";
+function uploadStallError(error, progress) {
+  let snapshot = progress.seen();
+  if (!(axios_default.isCancel(error) && snapshot.stalled)) return error;
+  let reason = progress.signal.reason;
+  let waitText =
+    reason instanceof UploadStalledError ? `${Math.round(reason.waitedMs / 1000)}s` : "the allowance";
   return new AxiosError(
-    r.bytes_handed === r.body_bytes
-      ? `upload stalled: no answer within ${h} of the body being handed over`
-      : `upload stalled: nothing moved for ${h}`,
+    snapshot.bytes_handed === snapshot.body_bytes
+      ? `upload stalled: no answer within ${waitText} of the body being handed over`
+      : `upload stalled: nothing moved for ${waitText}`,
     AxiosError.ECONNABORTED,
   );
 }
@@ -707,54 +746,54 @@ function uploadStallError(error, n) {
 /**
  * 把各种数据转为 Buffer。
  */
-function toBuffer(e) {
-  if (Buffer.isBuffer(e)) return e;
-  if (isArrayBufferView(e)) return Buffer.from(e.buffer, e.byteOffset, e.byteLength);
-  if (e instanceof ArrayBuffer) return Buffer.from(e);
-  if (typeof e === "string") return Buffer.from(e);
-  if (isPlainJsonBody(e)) return Buffer.from(jsonStringify(e));
+function toBuffer(body) {
+  if (Buffer.isBuffer(body)) return body;
+  if (isArrayBufferView(body)) return Buffer.from(body.buffer, body.byteOffset, body.byteLength);
+  if (body instanceof ArrayBuffer) return Buffer.from(body);
+  if (typeof body === "string") return Buffer.from(body);
+  if (isPlainJsonBody(body)) return Buffer.from(jsonStringify(body));
   throw TypeError("streamUpload: unsupported request body type");
 }
 //@ chunk-aepeg2w5.js:812761-812916 placement
-function isPlainJsonBody(e) {
-  if (Array.isArray(e)) return true;
-  if (typeof e !== "object" || e === null) return false;
-  let prototypeOf = Object.getPrototypeOf(e);
+function isPlainJsonBody(value) {
+  if (Array.isArray(value)) return true;
+  if (typeof value !== "object" || value === null) return false;
+  let prototypeOf = Object.getPrototypeOf(value);
   return prototypeOf === Object.prototype || prototypeOf === null;
 }
 //@ chunk-aepeg2w5.js:812916-813008 placement
 /**
  * 大小写不敏感地判断对象是否已有某个头。
  */
-function hasHeaderIgnoringCase(e, n) {
-  let lower = n.toLowerCase();
-  return Object.keys(e).some((key) => key.toLowerCase() === lower);
+function hasHeaderIgnoringCase(headers, headerName) {
+  let lower = headerName.toLowerCase();
+  return Object.keys(headers).some((key) => key.toLowerCase() === lower);
 }
 //@ chunk-aepeg2w5.js:813008-813052 placement
 /**
  * 判断值是否为 ArrayBuffer 视图（TypedArray/DataView）。
  */
-function isArrayBufferView(e) {
-  return ArrayBuffer.isView(e);
+function isArrayBufferView(value) {
+  return ArrayBuffer.isView(value);
 }
 //@ chunk-aepeg2w5.js:813052-813098 placement
 /**
  * 若响应数据是流则销毁，避免连接泄漏。
  */
-function destroyIfStream(e) {
-  if (e instanceof Readable) e.destroy();
+function destroyIfStream(body) {
+  if (body instanceof Readable) body.destroy();
 }
 //@ chunk-aepeg2w5.js:813098-813182 placement
 /**
  * 重试时若新请求带了 Authorization 头，用它替换原来的 bearer。
  */
-function bearerHeaderOrFallback(e, config, r) {
-  if (!r) return e;
-  return bearerOf(config?.headers?.get?.("Authorization")) ?? e;
+function bearerHeaderOrFallback(fallback, config, isSessionsApi) {
+  if (!isSessionsApi) return fallback;
+  return bearerOf(config?.headers?.get?.("Authorization")) ?? fallback;
 }
 //@ chunk-aepeg2w5.js:813182-813347 placement
-async function recoverConsoleProfileAuth(e) {
-  switch (await recoverConsoleProfileBearerOutcome(e)) {
+async function recoverConsoleProfileAuth(bearerHeader) {
+  switch (await recoverConsoleProfileBearerOutcome(bearerHeader)) {
     case "recovered":
       return "retry";
     case "needs_sign_in":
@@ -771,24 +810,28 @@ async function recoverConsoleProfileAuth(e) {
 /**
  * 认证失败后尝试恢复（刷新令牌）并决定是否重试。
  */
-async function recoverAuthFailure(e, n, r, s) {
-  let h = n.auth === "claude-ai-oauth";
+async function recoverAuthFailure(bearerHeader, options, isSessionsApi, headerWithheld) {
+  let isClaudeAiAuth = options.auth === "claude-ai-oauth";
   try {
-    if (r) {
-      let y = await recoverHostSessionsBearer(e, s ? "withheld" : "refused");
-      if (y !== "not_held") return y === "recovered" || hasClaudeAISignInToken() ? "retry" : null;
+    if (isSessionsApi) {
+      let recoveryResult = await recoverHostSessionsBearer(
+        bearerHeader,
+        headerWithheld ? "withheld" : "refused",
+      );
+      if (recoveryResult !== "not_held")
+        return recoveryResult === "recovered" || hasClaudeAISignInToken() ? "retry" : null;
       if ((await ensureHostSessionsBearer()) !== null) return "retry";
     }
-    if (await handleOAuth401Error(e, n.credentials, n.storageV5)) return "retry";
-    if (await isOAuthRefreshKnownDeadAsync(n.credentials))
+    if (await handleOAuth401Error(bearerHeader, options.credentials, options.storageV5)) return "retry";
+    if (await isOAuthRefreshKnownDeadAsync(options.credentials))
       return {
         ok: false,
         reason: "no-auth",
-        detail: h ? NO_CLAUDE_AI_LOGIN : REFRESH_TOKEN_INVALID_MESSAGE,
+        detail: isClaudeAiAuth ? NO_CLAUDE_AI_LOGIN : REFRESH_TOKEN_INVALID_MESSAGE,
       };
     return null;
   } catch (error) {
-    if (!h) throw error;
+    if (!isClaudeAiAuth) throw error;
     logError(error);
     return null;
   }
@@ -798,20 +841,20 @@ async function recoverAuthFailure(e, n, r, s) {
  * API 客户端（get/post/put/patch/delete）。
  */
 var apiClient = {
-  get(e, n) {
-    return apiRequest("GET", e, undefined, n);
+  get(path, options) {
+    return apiRequest("GET", path, undefined, options);
   },
-  post(e, n, r) {
-    return apiRequest("POST", e, n, r);
+  post(path, body, options) {
+    return apiRequest("POST", path, body, options);
   },
-  put(e, n, r) {
-    return apiRequest("PUT", e, n, r);
+  put(path, body, options) {
+    return apiRequest("PUT", path, body, options);
   },
-  patch(e, n, r) {
-    return apiRequest("PATCH", e, n, r);
+  patch(path, body, options) {
+    return apiRequest("PATCH", path, body, options);
   },
-  delete(e, n, r) {
-    return apiRequest("DELETE", e, n, r);
+  delete(path, body, options) {
+    return apiRequest("DELETE", path, body, options);
   },
 };
 //@ chunk-aepeg2w5.js:813934-814114 placement
@@ -828,31 +871,41 @@ var DEFAULT_PORTS = {
 /**
  * 严格解析 URL（拒绝控制字符与不一致的协议）。
  */
-function parseStrictUrl(e) {
-  if (URL_CONTROL_CHARS_RE.test(e)) return null;
-  let match = STRICT_URL_RE.exec(e);
+function parseStrictUrl(rawUrl) {
+  if (URL_CONTROL_CHARS_RE.test(rawUrl)) return null;
+  let match = STRICT_URL_RE.exec(rawUrl);
   if (!match) return null;
-  let r;
+  let parsedUrl;
   try {
-    r = new URL(e);
+    parsedUrl = new URL(rawUrl);
   } catch {
     return null;
   }
-  let [, s = "", h = "", y = "", S = ""] = match;
-  if (r.protocol !== `${s.toLowerCase()}:`) return null;
-  let index = h.lastIndexOf("@");
-  let R = h.slice(0, index + 1) + h.slice(index + 1).replace(/[A-Z]/g, (L) => L.toLowerCase());
-  let P = `${r.username || r.password ? `${r.username}${r.password ? `:${r.password}` : ""}@` : ""}${r.host}`;
-  let F = DEFAULT_PORTS[r.protocol];
-  if (R !== P && !(r.port === "" && F !== undefined && R === `${P}:${F}`)) return null;
-  if (r.pathname !== y && !(y === "" && r.pathname === "/")) return null;
-  if (r.search !== (S === "?" ? "" : S)) return null;
-  return r;
+  let [, scheme = "", authority = "", pathPart = "", queryPart = ""] = match;
+  if (parsedUrl.protocol !== `${scheme.toLowerCase()}:`) return null;
+  let index = authority.lastIndexOf("@");
+  let expectedAuthority =
+    authority.slice(0, index + 1) +
+    authority.slice(index + 1).replace(/[A-Z]/g, (letter) => letter.toLowerCase());
+  let actualAuthority = `${parsedUrl.username || parsedUrl.password ? `${parsedUrl.username}${parsedUrl.password ? `:${parsedUrl.password}` : ""}@` : ""}${parsedUrl.host}`;
+  let defaultPort = DEFAULT_PORTS[parsedUrl.protocol];
+  if (
+    expectedAuthority !== actualAuthority &&
+    !(
+      parsedUrl.port === "" &&
+      defaultPort !== undefined &&
+      expectedAuthority === `${actualAuthority}:${defaultPort}`
+    )
+  )
+    return null;
+  if (parsedUrl.pathname !== pathPart && !(pathPart === "" && parsedUrl.pathname === "/")) return null;
+  if (parsedUrl.search !== (queryPart === "?" ? "" : queryPart)) return null;
+  return parsedUrl;
 }
 //@ chunk-aepeg2w5.js:814687-814852 placement
-function normalizeServerUrl(e) {
-  let strictUrl = parseStrictUrl(e);
-  if (!strictUrl) return e.replace(/\/$/, "");
+function normalizeServerUrl(serverUrl) {
+  let strictUrl = parseStrictUrl(serverUrl);
+  if (!strictUrl) return serverUrl.replace(/\/$/, "");
   strictUrl.search = "";
   strictUrl.hash = "";
   strictUrl.pathname = strictUrl.pathname.replace(/\/$/, "") || "/";
@@ -862,9 +915,9 @@ function normalizeServerUrl(e) {
 /**
  * 去片段与尾斜杠（保留查询）。
  */
-function normalizeMcpServerUrl(e) {
-  let strictUrl = parseStrictUrl(e);
-  if (!strictUrl) return e.includes("?") ? e : e.replace(/\/$/, "");
+function normalizeMcpServerUrl(serverUrl) {
+  let strictUrl = parseStrictUrl(serverUrl);
+  if (!strictUrl) return serverUrl.includes("?") ? serverUrl : serverUrl.replace(/\/$/, "");
   strictUrl.hash = "";
   if (!strictUrl.search) strictUrl.search = "";
   strictUrl.pathname = strictUrl.pathname.replace(/\/$/, "") || "/";
@@ -883,10 +936,10 @@ var MAX_MCP_DIRECTORY_PAGES = 20;
  */
 function stripUrlCredentials(url) {
   try {
-    let n = new URL(url);
-    n.username = "";
-    n.password = "";
-    return normalizeServerUrl(n.toString());
+    let parsedUrl = new URL(url);
+    parsedUrl.username = "";
+    parsedUrl.password = "";
+    return normalizeServerUrl(parsedUrl.toString());
   } catch {
     return;
   }
@@ -898,70 +951,70 @@ function mcpDirectoryVisibility() {
     DEFAULT_MCP_DIRECTORY_KINDS,
   );
   return Array.isArray(featureValue_CACHED_MAY_BE_STALE) &&
-    featureValue_CACHED_MAY_BE_STALE.every((n) => typeof n === "string")
-    ? featureValue_CACHED_MAY_BE_STALE.filter((n) => n.length > 0)
+    featureValue_CACHED_MAY_BE_STALE.every((kind) => typeof kind === "string")
+    ? featureValue_CACHED_MAY_BE_STALE.filter((kind) => kind.length > 0)
     : DEFAULT_MCP_DIRECTORY_KINDS;
 }
 //@ chunk-aepeg2w5.js:815376-815786 placement
 /**
  * 分页获取 MCP 注册表服务器 URL。
  */
-async function fetchRegistryServerUrls(e) {
-  let n = new Set();
-  let visibility = e.join(",");
-  let s;
+async function fetchRegistryServerUrls(visibilityKinds) {
+  let serverUrls = new Set();
+  let visibility = visibilityKinds.join(",");
+  let cursor;
   for (let j = 0; j < MAX_MCP_DIRECTORY_PAGES; j++) {
     let uRLSearchParams = new URLSearchParams({
       version: "latest",
       limit: "100",
       visibility,
     });
-    if (s) uRLSearchParams.set("cursor", s);
-    let S = await apiClient.get(`/mcp-registry/v0/servers?${uRLSearchParams}`, {
+    if (cursor) uRLSearchParams.set("cursor", cursor);
+    let response = await apiClient.get(`/mcp-registry/v0/servers?${uRLSearchParams}`, {
       auth: "none",
       timeout: 5000,
     });
-    if (!S.ok) break;
-    for (let w of S.data.servers ?? [])
-      for (let R of w.server?.remotes ?? []) {
-        let x = stripUrlCredentials(R.url);
-        if (x) n.add(x);
+    if (!response.ok) break;
+    for (let server of response.data.servers ?? [])
+      for (let remote of server.server?.remotes ?? []) {
+        let normalizedUrl = stripUrlCredentials(remote.url);
+        if (normalizedUrl) serverUrls.add(normalizedUrl);
       }
-    s = S.data.metadata?.nextCursor;
-    if (!s) break;
+    cursor = response.data.metadata?.nextCursor;
+    if (!cursor) break;
   }
-  return n;
+  return serverUrls;
 }
 //@ chunk-aepeg2w5.js:815786-816202 placement
 /**
  * 分页获取目录服务器 URL（BFF）。
  */
-async function fetchDirectoryServerUrls(e) {
-  let n = new Set();
-  let visibility = e.join(",");
-  let s;
+async function fetchDirectoryServerUrls(visibilityKinds) {
+  let serverUrls = new Set();
+  let visibility = visibilityKinds.join(",");
+  let cursor;
   for (let j = 0; j < MAX_MCP_DIRECTORY_PAGES; j++) {
     let uRLSearchParams = new URLSearchParams({
       limit: "500",
       visibility,
     });
-    if (s) uRLSearchParams.set("cursor", s);
-    let S = await apiClient.get(`/api/directory/servers?${uRLSearchParams}`, {
+    if (cursor) uRLSearchParams.set("cursor", cursor);
+    let response = await apiClient.get(`/api/directory/servers?${uRLSearchParams}`, {
       auth: "none",
       timeout: 5000,
     });
-    if (!S.ok) break;
-    for (let w of S.data.servers ?? []) {
-      if (w.type !== "remote") continue;
-      let url = w.remote?.url;
+    if (!response.ok) break;
+    for (let server of response.data.servers ?? []) {
+      if (server.type !== "remote") continue;
+      let url = server.remote?.url;
       if (!url) continue;
-      let x = stripUrlCredentials(url);
-      if (x) n.add(x);
+      let normalizedUrl = stripUrlCredentials(url);
+      if (normalizedUrl) serverUrls.add(normalizedUrl);
     }
-    s = S.data.next_cursor ?? undefined;
-    if (!s) break;
+    cursor = response.data.next_cursor ?? undefined;
+    if (!cursor) break;
   }
-  return n;
+  return serverUrls;
 }
 //@ chunk-aepeg2w5.js:816202-816376 placement
 /**
@@ -1005,8 +1058,8 @@ async function refreshOfficialMcpUrls() {
     false,
   );
   let source = lit(featureValue_CACHED_MAY_BE_STALE ? "bff" : "legacy");
-  let r = mcpDirectoryVisibility();
-  if (r.length === 0) {
+  let visibilityKinds = mcpDirectoryVisibility();
+  if (visibilityKinds.length === 0) {
     getCliOwnedState().officialUrls = new Set();
     logFeatureOk("mcp_registry_fetch");
     logEvent("tengu_mcp_registry_fetch", {
@@ -1020,18 +1073,18 @@ async function refreshOfficialMcpUrls() {
   }
   let now = Date.now();
   try {
-    let h = featureValue_CACHED_MAY_BE_STALE
-      ? await fetchDirectoryServerUrls(r)
-      : await fetchRegistryServerUrls(r);
-    getCliOwnedState().officialUrls = h;
+    let urls = featureValue_CACHED_MAY_BE_STALE
+      ? await fetchDirectoryServerUrls(visibilityKinds)
+      : await fetchRegistryServerUrls(visibilityKinds);
+    getCliOwnedState().officialUrls = urls;
     logForDebugging(
-      `[mcp-registry] Loaded ${h.size} official MCP URLs (${featureValue_CACHED_MAY_BE_STALE ? "bff" : "legacy"})`,
+      `[mcp-registry] Loaded ${urls.size} official MCP URLs (${featureValue_CACHED_MAY_BE_STALE ? "bff" : "legacy"})`,
     );
     logFeatureOk("mcp_registry_fetch");
     logEvent("tengu_mcp_registry_fetch", {
       source,
       success: true,
-      url_count: h.size,
+      url_count: urls.size,
       duration_ms: Date.now() - now,
     });
   } catch (error) {
@@ -1051,30 +1104,22 @@ async function refreshOfficialMcpUrls() {
 /**
  * URL 是否为官方 MCP 服务器。
  */
-function isOfficialMcpUrl(e) {
+function isOfficialMcpUrl(url) {
   let cliOwnedState = getCliOwnedState();
-  if (cliOwnedState.officialUrls !== undefined) return cliOwnedState.officialUrls.has(e);
-  if (cliOwnedState.listableUrlLookedUp || cliOwnedState.urlsRegistryCannotList.has(e)) return false;
-  if (e.startsWith("https://") && !isFirstPartyAnthropicHost(e) && !isSameOriginAsCcr(e)) {
+  if (cliOwnedState.officialUrls !== undefined) return cliOwnedState.officialUrls.has(url);
+  if (cliOwnedState.listableUrlLookedUp || cliOwnedState.urlsRegistryCannotList.has(url)) return false;
+  if (url.startsWith("https://") && !isFirstPartyAnthropicHost(url) && !isSameOriginAsCcr(url)) {
     cliOwnedState.listableUrlLookedUp = true;
     if (cliOwnedState.officialUrlsFetchAwaitsLookup) fetchOfficialMcpUrlsOnce();
-  } else cliOwnedState.urlsRegistryCannotList.add(e);
+  } else cliOwnedState.urlsRegistryCannotList.add(url);
   return false;
 }
-//@ chunk-aepeg2w5.js:817603-817674 placement
-/**
- * 两个移动设备模拟器连接的显示名（iOS Simulator、Android Emulator）。
- */
-var IOS_SIMULATOR_DISPLAY_NAME = "Claude Code iOS Simulator";
-var ANDROID_EMULATOR_DISPLAY_NAME = "Claude Code Android Emulator";
 export {
   apiClient,
   httpsOrigin,
   normalizeMcpServerUrl,
   hashCredential,
   hasApiClient,
-  IOS_SIMULATOR_DISPLAY_NAME,
-  ANDROID_EMULATOR_DISPLAY_NAME,
   isOfficialMcpUrl,
   claudeAiBearerDigest,
   prefetchOfficialMcpUrls,

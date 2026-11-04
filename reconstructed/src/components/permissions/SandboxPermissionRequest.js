@@ -9,7 +9,7 @@
  * attribution: placement 1, layout 1, fingerprint 1
  */
 import { init_react_production } from "../../../vendor/react/cjs/react.production.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import {
   sandboxHostGrantDestination,
@@ -35,93 +35,100 @@ import { DiffFrame } from "../FileEditToolDiff.js";
 import { Blockquote } from "../Blockquote.js";
 import { ModelSelector } from "../agents/ModelSelector.js";
 import { PermissionDialog_2 } from "./PermissionDialog.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-18hwfzwa.js:1248685-1248689 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:1248685", () => {
+  init_react_production();
+});
 //@ chunk-18hwfzwa.js:1248689-1248719 layout
-var SANDBOX_RULE_UPDATE_TYPES = new Set(["addRules"]);
+var SANDBOX_RULE_UPDATE_TYPES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:1248689", () => {
+  SANDBOX_RULE_UPDATE_TYPES = new Set(["addRules"]);
+});
 //@ chunk-18hwfzwa.js:1248719-1252276 fingerprint = SandboxPermissionRequest (0.396)
 /**
  * 沙箱网络请求：显示请求访问的主机，选项允许一次 / 永久允许该域名（写 userSettings 的 sandbox 规则）/ 拒绝。
  */
 function SandboxPermissionRequest(props) {
-  let $ = w(44);
+  let $ = useMemoCache(44);
   let { hostPattern, requestSource, onUserResponse } = props;
   let { host } = hostPattern;
-  let Re;
+  let grantDestination;
   if ($[0] === MEMO_CACHE_SENTINEL) {
-    Re = sandboxHostGrantDestination();
-    $[0] = Re;
-  } else Re = $[0];
-  let Be = Re;
-  let He;
+    grantDestination = sandboxHostGrantDestination();
+    $[0] = grantDestination;
+  } else grantDestination = $[0];
+  let destination = grantDestination;
+  let hostPayload;
   if ($[1] !== host) {
-    He = serializeApprovalPayload(host, {
+    hostPayload = serializeApprovalPayload(host, {
       maxUnits: hostnameLengthAllowance(host),
     });
     $[1] = host;
-    $[2] = He;
-  } else He = $[2];
-  let We = He;
-  let ze;
+    $[2] = hostPayload;
+  } else hostPayload = $[2];
+  let hostPayload_2 = hostPayload;
+  let consentRow;
   Xe: {
-    if (Be === null) {
-      ze = null;
+    if (destination === null) {
+      consentRow = null;
       break Xe;
     }
     if (isMisleadingConsentHost(host)) {
-      ze = null;
+      consentRow = null;
       break Xe;
     }
-    if (We.kind !== "full") {
-      ze = null;
+    if (hostPayload_2.kind !== "full") {
+      consentRow = null;
       break Xe;
     }
-    let rt;
+    let plainHost;
     if ($[3] !== host) {
-      rt = plainDisplay(host);
+      plainHost = plainDisplay(host);
       $[3] = host;
-      $[4] = rt;
-    } else rt = $[4];
-    let kt = rt;
-    if (kt === null) {
-      ze = null;
+      $[4] = plainHost;
+    } else plainHost = $[4];
+    let plainHost_2 = plainHost;
+    if (plainHost_2 === null) {
+      consentRow = null;
       break Xe;
     }
-    let At;
-    if ($[5] !== host || $[6] !== kt) {
-      let It;
+    let parsedSuggestions;
+    if ($[5] !== host || $[6] !== plainHost_2) {
+      let hostEntry;
       if ($[8] !== host) {
-        It = consentHostEntry(host);
+        hostEntry = consentHostEntry(host);
         $[8] = host;
-        $[9] = It;
-      } else It = $[9];
-      At = parseConsentSuggestions(
+        $[9] = hostEntry;
+      } else hostEntry = $[9];
+      parsedSuggestions = parseConsentSuggestions(
         [
           {
             type: "addRules",
             rules: [
               {
                 toolName: WEBFETCH,
-                ruleContent: `domain:${It}`,
+                ruleContent: `domain:${hostEntry}`,
               },
             ],
             behavior: "allow",
-            destination: Be,
+            destination,
           },
         ],
         {
           displayedTypes: SANDBOX_RULE_UPDATE_TYPES,
-          displayedDestinations: new Set([Be]),
+          displayedDestinations: new Set([destination]),
           renderLabel: (value) => {
-            let Et = value.length === 1 ? value[0] : undefined;
+            let update = value.length === 1 ? value[0] : undefined;
             if (
-              Et === undefined ||
-              Et.type !== "addRules" ||
-              Et.destination !== Be ||
-              Et.rules.length !== 1 ||
-              Et.rules[0]?.toolName !== WEBFETCH ||
-              Et.rules[0]?.ruleContent !== `domain:${consentHostEntry(host)}`
+              update === undefined ||
+              update.type !== "addRules" ||
+              update.destination !== destination ||
+              update.rules.length !== 1 ||
+              update.rules[0]?.toolName !== WEBFETCH ||
+              update.rules[0]?.ruleContent !== `domain:${consentHostEntry(host)}`
             ) {
               return null;
             }
@@ -131,35 +138,35 @@ function SandboxPermissionRequest(props) {
                 " ",
                 jsxProd_default(Text, {
                   bold: true,
-                  children: kt.display,
+                  children: plainHost_2.display,
                 }),
-                Et.destination === "userSettings" ? " in any project (user settings)" : "",
+                update.destination === "userSettings" ? " in any project (user settings)" : "",
               ],
             });
           },
         },
       );
       $[5] = host;
-      $[6] = kt;
-      $[7] = At;
-    } else At = $[7];
-    ze = At;
+      $[6] = plainHost_2;
+      $[7] = parsedSuggestions;
+    } else parsedSuggestions = $[7];
+    consentRow = parsedSuggestions;
   }
-  let Dt = ze;
-  let rt;
+  let consentRow_2 = consentRow;
+  let rawAnswer;
   if ($[10] !== onUserResponse) {
-    rt = (At) => {
-      let { response } = At;
+    rawAnswer = (event) => {
+      let { response } = event;
       return onUserResponse(response);
     };
     $[10] = onUserResponse;
-    $[11] = rt;
-  } else rt = $[11];
-  let refusableAnswer = useRefusableAnswer(rt);
+    $[11] = rawAnswer;
+  } else rawAnswer = $[11];
+  let refusableAnswer = useRefusableAnswer(rawAnswer);
   let timeout = useTimeout(RECENT_INPUT_GUARD_MS_3);
-  let At;
+  let answerWithTimeout;
   if ($[12] !== timeout || $[13] !== refusableAnswer) {
-    At = function po(result, response) {
+    answerWithTimeout = function answerWithTimeoutImpl(result, response) {
       if (!timeout) {
         return;
       }
@@ -174,74 +181,74 @@ function SandboxPermissionRequest(props) {
     };
     $[12] = timeout;
     $[13] = refusableAnswer;
-    $[14] = At;
-  } else At = $[14];
-  let po = At;
+    $[14] = answerWithTimeout;
+  } else answerWithTimeout = $[14];
+  let answerWithTimeoutFn = answerWithTimeout;
   let defaultFocusValue =
     refusableAnswer.refused === null ? undefined : refusableAnswer.refused.result === "yes" ? "yes" : "no";
-  let It;
-  if ($[15] !== Dt || $[16] !== po) {
-    It = function onSelect(value) {
+  let onSelect;
+  if ($[15] !== consentRow_2 || $[16] !== answerWithTimeoutFn) {
+    onSelect = function onSelect(value) {
       bo: switch (value) {
         case "yes": {
-          po("yes", {
+          answerWithTimeoutFn("yes", {
             allow: true,
             persistToSettings: false,
           });
           break bo;
         }
         case "yes-dont-ask-again": {
-          if (Dt !== null)
-            po("yes-dont-ask-again", {
+          if (consentRow_2 !== null)
+            answerWithTimeoutFn("yes-dont-ask-again", {
               allow: true,
               persistToSettings: true,
-              persistRow: Dt,
+              persistRow: consentRow_2,
             });
           else
-            po("yes", {
+            answerWithTimeoutFn("yes", {
               allow: true,
               persistToSettings: false,
             });
           break bo;
         }
         case "no": {
-          po("no", {
+          answerWithTimeoutFn("no", {
             allow: false,
             persistToSettings: false,
           });
         }
       }
     };
-    $[15] = Dt;
-    $[16] = po;
-    $[17] = It;
-  } else It = $[17];
-  let onChange = It;
-  let Bo;
+    $[15] = consentRow_2;
+    $[16] = answerWithTimeoutFn;
+    $[17] = onSelect;
+  } else onSelect = $[17];
+  let onChange = onSelect;
+  let yesOption;
   if ($[18] === MEMO_CACHE_SENTINEL) {
-    Bo = {
+    yesOption = {
       label: "Yes",
       value: "yes",
     };
-    $[18] = Bo;
-  } else Bo = $[18];
-  let Ro;
-  if ($[19] !== Dt) {
-    Ro =
-      Dt !== null
+    $[18] = yesOption;
+  } else yesOption = $[18];
+  let dontAskOption;
+  if ($[19] !== consentRow_2) {
+    dontAskOption =
+      consentRow_2 !== null
         ? [
             {
-              label: Dt.node,
+              label: consentRow_2.node,
               value: "yes-dont-ask-again",
             },
           ]
         : [];
-    $[19] = Dt;
-    $[20] = Ro;
-  } else Ro = $[20];
-  let Ho;
+    $[19] = consentRow_2;
+    $[20] = dontAskOption;
+  } else dontAskOption = $[20];
+  let noOption;
   if ($[21] === MEMO_CACHE_SENTINEL) {
-    Ho = {
+    noOption = {
       label: jsxProd_default_2(Text, {
         children: [
           "No, and tell Claude what to do differently ",
@@ -253,39 +260,39 @@ function SandboxPermissionRequest(props) {
       }),
       value: "no",
     };
-    $[21] = Ho;
-  } else Ho = $[21];
-  let Io;
-  if ($[22] !== Ro) {
-    Io = [Bo, ...Ro, Ho];
-    $[22] = Ro;
-    $[23] = Io;
-  } else Io = $[23];
-  let options = Io;
-  let mn;
+    $[21] = noOption;
+  } else noOption = $[21];
+  let options;
+  if ($[22] !== dontAskOption) {
+    options = [yesOption, ...dontAskOption, noOption];
+    $[22] = dontAskOption;
+    $[23] = options;
+  } else options = $[23];
+  let options_2 = options;
+  let hostLabel;
   if ($[24] === MEMO_CACHE_SENTINEL) {
-    mn = jsxProd_default(Text, {
+    hostLabel = jsxProd_default(Text, {
       dimColor: true,
       children: "Host:",
     });
-    $[24] = mn;
-  } else mn = $[24];
-  const multiline = We.kind === "full" && We.needsGutter;
-  const No = We.kind === "full" ? We.text : We.marker;
+    $[24] = hostLabel;
+  } else hostLabel = $[24];
+  const multiline = hostPayload_2.kind === "full" && hostPayload_2.needsGutter;
+  const hostText = hostPayload_2.kind === "full" ? hostPayload_2.text : hostPayload_2.marker;
   let children;
-  if ($[25] !== No) {
+  if ($[25] !== hostText) {
     children = jsxProd_default_2(Text, {
-      children: [" ", No],
+      children: [" ", hostText],
     });
-    $[25] = No;
+    $[25] = hostText;
     $[26] = children;
   } else children = $[26];
-  let Yo;
+  let hostBlock;
   if ($[27] !== multiline || $[28] !== children) {
-    Yo = jsxProd_default(DiffFrame, {
+    hostBlock = jsxProd_default(DiffFrame, {
       children: jsxProd_default_2(Box, {
         children: [
-          mn,
+          hostLabel,
           jsxProd_default(Blockquote, {
             multiline,
             children,
@@ -295,47 +302,47 @@ function SandboxPermissionRequest(props) {
     });
     $[27] = multiline;
     $[28] = children;
-    $[29] = Yo;
-  } else Yo = $[29];
-  let kn;
+    $[29] = hostBlock;
+  } else hostBlock = $[29];
+  let question;
   if ($[30] === MEMO_CACHE_SENTINEL) {
-    kn = jsxProd_default(Text, {
+    question = jsxProd_default(Text, {
       children: "Do you want to allow this connection?",
     });
-    $[30] = kn;
-  } else kn = $[30];
+    $[30] = question;
+  } else question = $[30];
   const isDisabled = !timeout;
   let onCancel;
-  if ($[31] !== po) {
+  if ($[31] !== answerWithTimeoutFn) {
     onCancel = () =>
-      po("cancel", {
+      answerWithTimeoutFn("cancel", {
         allow: false,
         persistToSettings: false,
       });
-    $[31] = po;
+    $[31] = answerWithTimeoutFn;
     $[32] = onCancel;
   } else onCancel = $[32];
-  let Go;
+  let promptBox;
   if (
     $[33] !== onChange ||
-    $[34] !== options ||
+    $[34] !== options_2 ||
     $[35] !== refusableAnswer.attempts ||
     $[36] !== defaultFocusValue ||
     $[37] !== isDisabled ||
     $[38] !== onCancel
   ) {
-    Go = jsxProd_default_2(Box, {
+    promptBox = jsxProd_default_2(Box, {
       flexDirection: "column",
       paddingX: 1,
       paddingBottom: 1,
       children: [
-        kn,
+        question,
         jsxProd_default(Box, {
           children: jsxProd_default(
             ModelSelector,
             {
               defaultFocusValue,
-              options,
+              options: options_2,
               isDisabled,
               onChange,
               onCancel,
@@ -346,26 +353,26 @@ function SandboxPermissionRequest(props) {
       ],
     });
     $[33] = onChange;
-    $[34] = options;
+    $[34] = options_2;
     $[35] = refusableAnswer.attempts;
     $[36] = defaultFocusValue;
     $[37] = isDisabled;
     $[38] = onCancel;
-    $[39] = Go;
-  } else Go = $[39];
-  let hn;
-  if ($[40] !== requestSource || $[41] !== Yo || $[42] !== Go) {
-    hn = jsxProd_default_2(PermissionDialog_2, {
+    $[39] = promptBox;
+  } else promptBox = $[39];
+  let dialog;
+  if ($[40] !== requestSource || $[41] !== hostBlock || $[42] !== promptBox) {
+    dialog = jsxProd_default_2(PermissionDialog_2, {
       title: "Network request outside of sandbox",
       innerPaddingX: 0,
       requestSource,
-      children: [Yo, Go],
+      children: [hostBlock, promptBox],
     });
     $[40] = requestSource;
-    $[41] = Yo;
-    $[42] = Go;
-    $[43] = hn;
-  } else hn = $[43];
-  return hn;
+    $[41] = hostBlock;
+    $[42] = promptBox;
+    $[43] = dialog;
+  } else dialog = $[43];
+  return dialog;
 }
 export { SandboxPermissionRequest };

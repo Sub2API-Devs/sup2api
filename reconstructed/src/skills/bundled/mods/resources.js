@@ -16,7 +16,7 @@ import __cc_resource_4 from "../../../../assets/pane.test.tsx-ee55mcxg.txt" with
 import __cc_resource_5 from "../../../../assets/tool-call.ts-tv29hdsd.txt" with { type: "text" };
 import __cc_resource_6 from "../../../../assets/reference-d80c0885.md.zst" with { type: "file" };
 import __cc_resource_7 from "../../../../assets/SKILL-aa0d9c2d.md.zst" with { type: "file" };
-import { Ar } from "../../../../runtime/bun-runtime.js";
+import { __export } from "../../../../runtime/bun-runtime.js";
 import { readEmbeddedTextSync } from "../../../utils/embeddedAssets.js";
 
 //@ chunk-z88hz9c9.js:908-917 placement
@@ -25,7 +25,7 @@ import { readEmbeddedTextSync } from "../../../utils/embeddedAssets.js";
  */
 var modsExampleExports = {};
 //@ chunk-z88hz9c9.js:917-1109 placement
-Ar(modsExampleExports, {
+__export(modsExampleExports, {
   EXAMPLE_BAND: () => band,
   EXAMPLE_BAND_STATE: () => bandState,
   EXAMPLE_PANE: () => pane,
@@ -96,3 +96,4 @@ var skill = readEmbeddedTextSync(skillPath, import.meta.dirname);
  * mod 技能附带的第二份 SKILL.md 资源。
  */
 var skill2 = skill;
+export { band, bandState, pane, paneState, paneTest, toolCall, reference2, skill2, modsExampleExports };

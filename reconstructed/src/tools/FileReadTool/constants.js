@@ -21,8 +21,8 @@ var IMAGE_EXTENSIONS = new Set(["png", "jpg", "jpeg", "gif", "webp"]);
 /**
  * 判断扩展名是否为受支持的图片格式或 pdf（大小写不敏感）。
  */
-function isImageOrPdfExtension(t) {
-  let sliced = path.extname(t).toLowerCase().slice(1);
+function isImageOrPdfExtension(filePath) {
+  let sliced = path.extname(filePath).toLowerCase().slice(1);
   return IMAGE_EXTENSIONS.has(sliced) || sliced === "pdf";
 }
 export { FILE_READ_TOOL_NAME, ALLOW_LARGE_PARAM, isImageOrPdfExtension, IMAGE_EXTENSIONS };

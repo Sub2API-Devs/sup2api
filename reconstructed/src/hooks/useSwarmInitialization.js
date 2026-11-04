@@ -11,7 +11,7 @@
 import { useSession } from "../context/session.js";
 import { useSetAppState, useSessionHooksRegistry } from "../state/AppState.js";
 import { useTheme_2 } from "../components/design-system/ThemeProvider.js";
-import { P } from "../../vendor/react/cjs/react.production.js";
+import { useEffect } from "../../vendor/react/cjs/react.production.js";
 import { isAgentSwarmsEnabled } from "../utils/agentSwarmsEnabled.js";
 import { initializeTeammateContextFromSession } from "../utils/swarm/reconnection.js";
 import { readTeamFileAsync } from "../utils/swarm/teamHelpers.js";
@@ -24,7 +24,7 @@ function useSwarmInitialization(initialMessages, { enabled = true } = {}) {
   let setAppState = useSetAppState();
   let hookRegistry = useSessionHooksRegistry();
   let { storageV5 } = useTheme_2();
-  P(() => {
+  useEffect(() => {
     if (!enabled) return;
     (async () => {
       if (!isAgentSwarmsEnabled()) return;

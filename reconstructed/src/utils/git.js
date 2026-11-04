@@ -51,7 +51,7 @@ import { execFileNoThrowWithCwd, execFileNoThrow } from "./execFileNoThrow.js";
 import {
   GIT_SAFE_GLOBAL_ARGS,
   IGNORE_SUBMODULES_DIRTY_FLAG,
-  BMt,
+  SAFE_GIT_REPO_ARGS,
   GIT_CONFIG_PARAMETERS_LIMIT,
 } from "./git/gitSafeEnv.js";
 import { stripCheckoutBaseRule, bashAndPowerShellRules } from "./permissions/gitCommandRules.js";
@@ -64,6 +64,17 @@ import { logFeatureOk, logFeatureBad, logFeatureSad } from "../services/analytic
 import { env, antEnv } from "./env.js";
 import { isSelfAddressableSessionId } from "../bridge/sessionIdCompat.js";
 import { getFsImplementation } from "./fsOperations.js";
+import { getPlatform } from "./platform.js";
+import {
+  foldWindowsPathComponent,
+  SHORT_WINDOWS_PATH_CHARS,
+  stripWin32DevicePrefix,
+  WIN32_DEVICE_NAMESPACE_RE,
+  POSIX_SEP,
+  WIN32_UNC_HOST_RE,
+  caseFoldKey,
+  normalizeWindowsPathForCompare,
+} from "./hooks/hookCommandAnalysis.js";
 import { getOwn } from "./objectSafety.js";
 import {
   GIT_SUBCOMMAND_EXCLUSIONS,
@@ -79,7 +90,6 @@ import {
 import { withGitNoPromptEnv, readSshCommandConfig } from "./gitSafeExec.js";
 import { withPinnedGitDirEnv } from "./git/gitDirResolution.js";
 import { TTY_ACQUIRE_TIMEOUT_MS, hasControllingTty } from "./bgControllingTty.js";
-import { getPlatform } from "./platform.js";
 import { getAutoModeConfigOrDefault } from "./permissions/permissionSetup.js";
 import { BASH_TOOL_NAME } from "../tools/BashTool/toolName.js";
 import { POWERSHELL_TOOL_NAME } from "../tools/PowerShellTool/toolName.js";
@@ -88,20 +98,11 @@ import { getDestructiveTargetCategory } from "../tools/BashTool/destructiveTarge
 import { getPowerShellDestructiveCategory } from "../tools/PowerShellTool/destructiveCommandWarning.js";
 import { runGitInWorktree } from "./worktree.js";
 import {
-  foldWindowsPathComponent,
-  SHORT_WINDOWS_PATH_CHARS,
-  stripWin32DevicePrefix,
-  WIN32_DEVICE_NAMESPACE_RE,
-  POSIX_SEP,
-  WIN32_UNC_HOST_RE,
-  caseFoldKey,
-  normalizeWindowsPathForCompare,
-} from "./hooks/hookCommandAnalysis.js";
-import {
   NO_OPTIONAL_LOCKS,
   isWholeAnswer,
   buildUntrackedFileEntries,
 } from "../plugins/bundled/diffPane/gitDiffRead.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-t0gq9gyw.js:71536-72067 fingerprint = findGitRootImpl (0.914)
 /**
@@ -149,9 +150,9 @@ function findGitRootImpl(startPath) {
 /**
  * findGitRoot：带 rootByPath 缓存的 git 根查找，未找到返回 null。
  */
-function findGitRoot(e) {
-  let n = memoizeMap(getGitRepoCache().rootByPath, e, findGitRootImpl);
-  return n === REPO_NEGATIVE_RESULT ? null : n;
+function findGitRoot(startPath) {
+  let root = memoizeMap(getGitRepoCache().rootByPath, startPath, findGitRootImpl);
+  return root === REPO_NEGATIVE_RESULT ? null : root;
 }
 //@ chunk-t0gq9gyw.js:72136-72185 facade-exports
 function findGitRootUncached(startPath) {
@@ -164,35 +165,35 @@ async function findGitRootThroughBackendUncached(hostFiles, startPath) {
     return {
       gitRoot: null,
     };
-  let r = resolve(startPath);
-  let o = r.substring(0, r.indexOf(sep) + 1) || sep;
+  let absolutePath = resolve(startPath);
+  let stopPath = absolutePath.substring(0, absolutePath.indexOf(sep) + 1) || sep;
   for (;;) {
-    let stats = await hostFiles.stat(PathSpace.workspace(join(r, ".git")), {
+    let stats = await hostFiles.stat(PathSpace.workspace(join(absolutePath, ".git")), {
       follow: false,
     });
     if (!stats.ok || stats.value.kind === "link") return;
     if (stats.value.kind === "directory" || stats.value.kind === "file")
       return {
-        gitRoot: identity(r),
+        gitRoot: identity(absolutePath),
         entry: stats.value.kind,
       };
-    if (r === o)
+    if (absolutePath === stopPath)
       return {
         gitRoot: null,
       };
-    let a = dirname(r);
-    r = a === r ? o : a;
+    let parentPath = dirname(absolutePath);
+    absolutePath = parentPath === absolutePath ? stopPath : parentPath;
   }
 }
 //@ chunk-t0gq9gyw.js:72540-72621 facade-exports
-function findGitRootRecheckingNegative(e) {
+function findGitRootRecheckingNegative(startPath) {
   let rootByPath = getGitRepoCache().rootByPath;
-  if (rootByPath.peek(e) === REPO_NEGATIVE_RESULT) rootByPath.delete(e);
-  return findGitRoot(e);
+  if (rootByPath.peek(startPath) === REPO_NEGATIVE_RESULT) rootByPath.delete(startPath);
+  return findGitRoot(startPath);
 }
 //@ chunk-t0gq9gyw.js:72621-72817 facade-exports
-async function findGitRootVerifyingPositive(e) {
-  let gitRootRecheckingNegative = findGitRootRecheckingNegative(e);
+async function findGitRootVerifyingPositive(startPath) {
+  let gitRootRecheckingNegative = findGitRootRecheckingNegative(startPath);
   if (gitRootRecheckingNegative === null) return null;
   try {
     await lstat(join(gitRootRecheckingNegative, ".git"));
@@ -200,18 +201,18 @@ async function findGitRootVerifyingPositive(e) {
   } catch (error) {
     let code = error?.code;
     if (code !== "ENOENT" && code !== "ENOTDIR") return gitRootRecheckingNegative;
-    getGitRepoCache().rootByPath.delete(e);
-    return findGitRootRecheckingNegative(e);
+    getGitRepoCache().rootByPath.delete(startPath);
+    return findGitRootRecheckingNegative(startPath);
   }
 }
 //@ chunk-t0gq9gyw.js:72817-73139 facade-exports
 /**
  * 删除位于某目录下的所有 git 相关缓存（git 根、canonical 根、remote slug、monorepo 判定、gitDir、repository 等），在目录被移动/删除后调用。
  */
-function forgetGitRootsUnder(e) {
-  let n = identity(resolve(e));
+function forgetGitRootsUnder(dirPath) {
+  let resolvedDir = identity(resolve(dirPath));
   let gitRepoCache = getGitRepoCache();
-  for (let o of [
+  for (let cacheMap of [
     gitRepoCache.rootByPath,
     gitRepoCache.canonicalRootByRoot,
     gitRepoCache.remoteSlugByRoot,
@@ -224,7 +225,8 @@ function forgetGitRootsUnder(e) {
     gitRepoCache.wcRootByPath,
     gitRepoCache.wcWorktreesByRoot,
   ])
-    for (let key of [...o.keys()]) if (isPathWithin(n, identity(resolve(key)))) o.delete(key);
+    for (let key of [...cacheMap.keys()])
+      if (isPathWithin(resolvedDir, identity(resolve(key)))) cacheMap.delete(key);
 }
 //@ chunk-t0gq9gyw.js:73139-73211 layout
 function getCanonicalRootUncached(gitRoot) {
@@ -238,33 +240,35 @@ function getCanonicalRootUncached(gitRoot) {
 /**
  * 解析 worktree 的 `.git` 文件内容（gitdir:），校验 commondir、worktrees/<name>/gitdir 回指与 realpath 一致后返回主仓库根；任何一步不可信都退回原根，防止伪造 .git 文件把路径引到别处。
  */
-function resolveCanonicalRoot(e, n) {
+function resolveCanonicalRoot(gitRoot, gitContent) {
   try {
-    let gitContent = n.trim();
-    if (!gitContent.startsWith("gitdir:")) return e;
-    let trimmed = gitContent.slice(7).trim();
-    if (isOnForeignMount(trimmed, e)) return e;
-    if (rawPointerPathIsUnsafe(trimmed, e)) return e;
-    let worktreeGitDir = resolve(e, trimmed);
-    if (pointerFileIsSuspect(join(worktreeGitDir, "commondir"), worktreeGitDir)) return e;
+    let gitContent_2 = gitContent.trim();
+    if (!gitContent_2.startsWith("gitdir:")) return gitRoot;
+    let trimmed = gitContent_2.slice(7).trim();
+    if (isOnForeignMount(trimmed, gitRoot)) return gitRoot;
+    if (rawPointerPathIsUnsafe(trimmed, gitRoot)) return gitRoot;
+    let worktreeGitDir = resolve(gitRoot, trimmed);
+    if (pointerFileIsSuspect(join(worktreeGitDir, "commondir"), worktreeGitDir)) return gitRoot;
     let trimmed_2 = readFileSync(join(worktreeGitDir, "commondir"), "utf-8").trim();
-    if (isOnForeignMount(trimmed_2, worktreeGitDir)) return e;
-    if (rawPointerPathIsUnsafe(trimmed_2, worktreeGitDir)) return e;
+    if (isOnForeignMount(trimmed_2, worktreeGitDir)) return gitRoot;
+    if (rawPointerPathIsUnsafe(trimmed_2, worktreeGitDir)) return gitRoot;
     let commonDir = resolve(worktreeGitDir, trimmed_2);
-    if (resolve(dirname(worktreeGitDir)) !== join(commonDir, "worktrees")) return e;
-    if (pointerFileIsSuspect(join(worktreeGitDir, "gitdir"), worktreeGitDir)) return e;
+    if (resolve(dirname(worktreeGitDir)) !== join(commonDir, "worktrees")) return gitRoot;
+    if (pointerFileIsSuspect(join(worktreeGitDir, "gitdir"), worktreeGitDir)) return gitRoot;
     let trimmed_3 = readFileSync(join(worktreeGitDir, "gitdir"), "utf-8").trim();
-    if (isOnForeignMount(trimmed_3, e)) return e;
-    if (rawPointerPathIsUnsafe(trimmed_3, worktreeGitDir, e)) return e;
-    if (sep === "/" && [e, worktreeGitDir, trimmed_3, commonDir].some((y) => y.includes("\\"))) return e;
-    if (realpathSync(resolve(worktreeGitDir, trimmed_3)) !== join(realpathSync(e), ".git")) return e;
+    if (isOnForeignMount(trimmed_3, gitRoot)) return gitRoot;
+    if (rawPointerPathIsUnsafe(trimmed_3, worktreeGitDir, gitRoot)) return gitRoot;
+    if (sep === "/" && [gitRoot, worktreeGitDir, trimmed_3, commonDir].some((path) => path.includes("\\")))
+      return gitRoot;
+    if (realpathSync(resolve(worktreeGitDir, trimmed_3)) !== join(realpathSync(gitRoot), ".git"))
+      return gitRoot;
     if (basename(commonDir) !== ".git") {
-      if (isUsableGitEntry(join(commonDir, ".git"), commonDir)) return e;
+      if (isUsableGitEntry(join(commonDir, ".git"), commonDir)) return gitRoot;
       return identity(commonDir);
     }
     return identity(dirname(commonDir));
   } catch {
-    return e;
+    return gitRoot;
   }
 }
 //@ chunk-t0gq9gyw.js:73844-73976 layout
@@ -277,32 +281,32 @@ async function resolveCanonicalRootOnHost(hostFiles, gitRoot) {
 /**
  * findCanonicalGitRoot：git 根若是 linked worktree，则经 .git 文件的 gitdir/commondir 解析出主仓库根；结果缓存在 canonicalRootByRoot。
  */
-function findCanonicalGitRoot(e) {
-  let gitRoot = findGitRoot(e);
+function findCanonicalGitRoot(startPath) {
+  let gitRoot = findGitRoot(startPath);
   if (!gitRoot) return null;
   return memoizeMap(getGitRepoCache().canonicalRootByRoot, gitRoot, getCanonicalRootUncached);
 }
 //@ chunk-t0gq9gyw.js:74063-74121 facade-exports
-function findCanonicalGitRootUncached(e) {
-  let gitRoot = findGitRootUncached(e);
+function findCanonicalGitRootUncached(startPath) {
+  let gitRoot = findGitRootUncached(startPath);
   if (!gitRoot) return null;
   return getCanonicalRootUncached(gitRoot);
 }
 //@ chunk-t0gq9gyw.js:74121-74592 facade-exports
-async function primeGitRootMemo(e, startPath) {
-  if (e.hostFiles.serving("workspace") !== "host") return;
+async function primeGitRootMemo(context, startPath) {
+  if (context.hostFiles.serving("workspace") !== "host") return;
   let gitRepoCache = getGitRepoCache();
-  let o = gitRepoCache.rootByPath.peek(startPath);
-  if (o !== undefined) {
-    let c = o === REPO_NEGATIVE_RESULT ? null : o;
+  let cachedRoot = gitRepoCache.rootByPath.peek(startPath);
+  if (cachedRoot !== undefined) {
+    let gitRoot = cachedRoot === REPO_NEGATIVE_RESULT ? null : cachedRoot;
     return {
-      gitRoot: c,
-      canonicalRoot: c === null ? null : gitRepoCache.canonicalRootByRoot.peek(c),
+      gitRoot,
+      canonicalRoot: gitRoot === null ? null : gitRepoCache.canonicalRootByRoot.peek(gitRoot),
     };
   }
-  let gitRootThroughBackendUncached = await findGitRootThroughBackendUncached(e.hostFiles, startPath);
+  let gitRootThroughBackendUncached = await findGitRootThroughBackendUncached(context.hostFiles, startPath);
   if (gitRootThroughBackendUncached === undefined) return;
-  let a =
+  let seeded =
     gitRootThroughBackendUncached.gitRoot === null
       ? {
           gitRoot: null,
@@ -313,21 +317,21 @@ async function primeGitRootMemo(e, startPath) {
           canonicalRoot:
             gitRootThroughBackendUncached.entry === "directory"
               ? gitRootThroughBackendUncached.gitRoot
-              : await resolveCanonicalRootOnHost(e.hostFiles, gitRootThroughBackendUncached.gitRoot),
+              : await resolveCanonicalRootOnHost(context.hostFiles, gitRootThroughBackendUncached.gitRoot),
         };
-  seedGitRootMemo(startPath, a.gitRoot, a.canonicalRoot);
-  return a;
+  seedGitRootMemo(startPath, seeded.gitRoot, seeded.canonicalRoot);
+  return seeded;
 }
 //@ chunk-t0gq9gyw.js:74592-75090 facade-exports
 /**
  * 用已知结果预填 git 根缓存（findGitRoot 与 canonical 根）；已有不同答案时保留旧值并告警。
  */
-function seedGitRootMemo(e, gitRoot, canonicalRoot) {
+function seedGitRootMemo(startPath, gitRoot, canonicalRoot) {
   let gitRepoCache = getGitRepoCache();
-  let s = gitRoot ?? REPO_NEGATIVE_RESULT;
-  let a = gitRepoCache.rootByPath.peek(e);
-  if (a === undefined) gitRepoCache.rootByPath.set(e, s);
-  else if (a !== s) {
+  let cachedValue = gitRoot ?? REPO_NEGATIVE_RESULT;
+  let existing = gitRepoCache.rootByPath.peek(startPath);
+  if (existing === undefined) gitRepoCache.rootByPath.set(startPath, cachedValue);
+  else if (existing !== cachedValue) {
     logForDebugging(
       "git root prime: findGitRoot already holds a different answer for the start path; keeping the first",
       {
@@ -337,9 +341,9 @@ function seedGitRootMemo(e, gitRoot, canonicalRoot) {
     return;
   }
   if (gitRoot === null || canonicalRoot === undefined || canonicalRoot === null) return;
-  let c = gitRepoCache.canonicalRootByRoot.peek(gitRoot);
-  if (c === undefined) gitRepoCache.canonicalRootByRoot.set(gitRoot, canonicalRoot);
-  else if (c !== canonicalRoot)
+  let existingCanonical = gitRepoCache.canonicalRootByRoot.peek(gitRoot);
+  if (existingCanonical === undefined) gitRepoCache.canonicalRootByRoot.set(gitRoot, canonicalRoot);
+  else if (existingCanonical !== canonicalRoot)
     logForDebugging(
       "git root prime: findCanonicalGitRoot already holds a different answer for the root; keeping the first",
       {
@@ -351,9 +355,9 @@ function seedGitRootMemo(e, gitRoot, canonicalRoot) {
 /**
  * 当前路径是否在 linked worktree 中（git 根与 canonical 根不同）。
  */
-function isLinkedWorktree(e) {
-  let gitRoot = findGitRoot(e);
-  return gitRoot !== null && findCanonicalGitRoot(e) !== gitRoot;
+function isLinkedWorktree(startPath) {
+  let gitRoot = findGitRoot(startPath);
+  return gitRoot !== null && findCanonicalGitRoot(startPath) !== gitRoot;
 }
 //@ chunk-t0gq9gyw.js:75144-75199 facade-exports
 function isLinkedWorktreeUncached(canonical) {
@@ -364,9 +368,9 @@ function isLinkedWorktreeUncached(canonical) {
 /**
  * 若 git dir 位于 <common>/worktrees/<name> 下，返回 worktree 名。
  */
-async function getGitWorktreeName(e) {
+async function getGitWorktreeName(startPath) {
   if (isRemoteSessionAvailable()) return null;
-  let gitDir = await resolveGitDir(e);
+  let gitDir = await resolveGitDir(startPath);
   if (!gitDir || basename(gitDir) === ".git" || basename(dirname(gitDir)) !== "worktrees") return null;
   return basename(gitDir);
 }
@@ -383,14 +387,14 @@ function gitExe() {
   gitRepoCache.gitExecutable ??= bunWhichSync("git") || "git";
   if (gitRepoCache.gitLauncherProbe === null) {
     let gitExecutable = gitRepoCache.gitExecutable;
-    let o = probeGitLauncher(gitExecutable).then((s) => {
-      if (s !== null && gitRepoCache.gitLauncherProbe === o)
+    let probePromise = probeGitLauncher(gitExecutable).then((programPath) => {
+      if (programPath !== null && gitRepoCache.gitLauncherProbe === probePromise)
         gitRepoCache.gitBehindLauncher = {
           launcher: gitExecutable,
-          program: s,
+          program: programPath,
         };
     }, logError);
-    gitRepoCache.gitLauncherProbe = o;
+    gitRepoCache.gitLauncherProbe = probePromise;
   }
   let gitBehindLauncher = gitRepoCache.gitBehindLauncher;
   return gitBehindLauncher?.launcher === gitRepoCache.gitExecutable && process.env.MSYSTEM === undefined
@@ -404,7 +408,10 @@ async function probeGitLauncher(gitExecutable) {
   return null;
 }
 //@ chunk-t0gq9gyw.js:75882-75909 layout
-var isGitCacheBySession = new SessionRootSlot(() => new Map());
+var isGitCacheBySession; // deferred: uses SessionRootSlot (../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-t0gq9gyw.js:75882", () => {
+  isGitCacheBySession = new SessionRootSlot(() => new Map());
+});
 //@ chunk-t0gq9gyw.js:75909-76095 fingerprint = getIsGit (1)
 /**
  * 当前 cwd 是否在 git 仓库内（基于 findGitRoot，不 spawn），打 is_git_check_* 诊断日志。
@@ -413,12 +420,12 @@ async function getIsGit_2() {
   let startTime = Date.now();
   logForDiagnosticsNoPII("info", "is_git_check_started");
   let cwdOrNull = getCwdOrNull();
-  let r = cwdOrNull !== null && findGitRoot(cwdOrNull) !== null;
+  let isGit = cwdOrNull !== null && findGitRoot(cwdOrNull) !== null;
   logForDiagnosticsNoPII("info", "is_git_check_completed", {
     duration_ms: Date.now() - startTime,
-    is_git: r,
+    is_git: isGit,
   });
-  return r;
+  return isGit;
 }
 //@ chunk-t0gq9gyw.js:76095-76120 layout
 function getCurrentHost() {
@@ -429,17 +436,17 @@ function getCurrentHost() {
  * 按会话缓存 getIsGit() 的 promise。
  */
 function getIsGit() {
-  let e = isGitCacheBySession.of(getCurrentHost());
+  let cache = isGitCacheBySession.of(getCurrentHost());
   let sessionId = getSessionId();
-  let r = e.get(sessionId);
-  if (r !== undefined) return r;
+  let cached = cache.get(sessionId);
+  if (cached !== undefined) return cached;
   let isGit = getIsGit_2();
-  e.set(sessionId, isGit);
+  cache.set(sessionId, isGit);
   return isGit;
 }
 //@ chunk-t0gq9gyw.js:76223-76288 facade-exports
-function clearIsGitMemoFor(e) {
-  isGitCacheBySession.of(e).clear();
+function clearIsGitMemoFor(host) {
+  isGitCacheBySession.of(host).clear();
   getGitRepoCache().diffCheckoutIsRepo.clear();
 }
 //@ chunk-t0gq9gyw.js:76288-76313 facade-exports
@@ -447,8 +454,8 @@ function clearIsGitMemo() {
   clearIsGitMemoFor(getCurrentHost());
 }
 //@ chunk-t0gq9gyw.js:76313-76341 facade-exports
-function getGitDir(e) {
-  return resolveGitDir(e);
+function getGitDir(startPath) {
+  return resolveGitDir(startPath);
 }
 //@ chunk-t0gq9gyw.js:76341-76599 facade-exports = preserveGitStateForIssue (0.512)
 /**
@@ -457,19 +464,19 @@ function getGitDir(e) {
 var dirIsInGitRepo = async (cwd) => findGitRoot(cwd) !== null;
 var getHead = async () => getCachedHead();
 var getBranch = async (
-  e,
-  n = {
+  cwd,
+  execOptions = {
     env: getRemoteHostSessionCount(),
   },
 ) => {
-  if (e === undefined) return getCachedBranch();
+  if (cwd === undefined) return getCachedBranch();
   let { stdout, code } = await execFileNoThrowWithCwd(
     gitExe(),
     [...GIT_SAFE_GLOBAL_ARGS, "rev-parse", "--abbrev-ref", "HEAD"],
     {
-      cwd: e,
+      cwd,
       preserveOutputOnError: false,
-      ...n,
+      ...execOptions,
     },
   );
   return code === 0 ? stdout.trim() || "HEAD" : "HEAD";
@@ -495,34 +502,34 @@ async function isBranchOnOrigin(branch, cwd) {
  * getDefaultBranch：先读 refs/remotes/origin/HEAD 指向的分支并确认存在，否则依次尝试 main/master 的远程分支，最后默认 "main"。不带目录时读 GitFileWatcher 的缓存。
  */
 var getDefaultBranch = async (
-  e,
-  n = {
+  cwd,
+  execOptions = {
     env: getRemoteHostSessionCount(),
   },
 ) => {
-  if (e === undefined) return getCachedDefaultBranch();
-  let defaultBranchIfKnown = await getDefaultBranchIfKnown(e, n);
+  if (cwd === undefined) return getCachedDefaultBranch();
+  let defaultBranchIfKnown = await getDefaultBranchIfKnown(cwd, execOptions);
   if (defaultBranchIfKnown) return defaultBranchIfKnown;
-  for (let o of CONVENTIONAL_DEFAULT_BRANCH_NAMES)
+  for (let branchName of CONVENTIONAL_DEFAULT_BRANCH_NAMES)
     if (
       (
         await execFileNoThrowWithCwd(
           gitExe(),
-          [...GIT_SAFE_GLOBAL_ARGS, "show-ref", "--verify", "--quiet", `refs/remotes/origin/${o}`],
+          [...GIT_SAFE_GLOBAL_ARGS, "show-ref", "--verify", "--quiet", `refs/remotes/origin/${branchName}`],
           {
-            cwd: e,
+            cwd,
             preserveOutputOnError: false,
-            ...n,
+            ...execOptions,
           },
         )
       ).code === 0
     )
-      return o;
+      return branchName;
   return "main";
 };
 var getDefaultBranchIfKnown = async (
-  e,
-  n = {
+  cwd,
+  execOptions = {
     env: getRemoteHostSessionCount(),
   },
 ) => {
@@ -530,9 +537,9 @@ var getDefaultBranchIfKnown = async (
     gitExe(),
     [...GIT_SAFE_GLOBAL_ARGS, "symbolic-ref", "--short", "refs/remotes/origin/HEAD"],
     {
-      cwd: e ?? getCwd(),
+      cwd: cwd ?? getCwd(),
       preserveOutputOnError: false,
-      ...n,
+      ...execOptions,
     },
   );
   if (code !== 0) return null;
@@ -543,9 +550,9 @@ var getDefaultBranchIfKnown = async (
       gitExe(),
       [...GIT_SAFE_GLOBAL_ARGS, "show-ref", "--verify", "--quiet", `refs/remotes/origin/${replaced}`],
       {
-        cwd: e ?? getCwd(),
+        cwd: cwd ?? getCwd(),
         preserveOutputOnError: false,
-        ...n,
+        ...execOptions,
       },
     )
   ).code === 0
@@ -557,8 +564,8 @@ var BRANCH_NAME_RE = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
 /**
  * git config --get <key>（cwd 仓库），无值返回 null。
  */
-async function readGitConfigValue(e) {
-  let { stdout, code } = await execFileNoThrow(gitExe(), [...GIT_SAFE_GLOBAL_ARGS, "config", "--get", e], {
+async function readGitConfigValue(key) {
+  let { stdout, code } = await execFileNoThrow(gitExe(), [...GIT_SAFE_GLOBAL_ARGS, "config", "--get", key], {
     preserveOutputOnError: false,
     useCwd: true,
     env: getRemoteHostSessionCount(),
@@ -571,10 +578,10 @@ async function readGitConfigValue(e) {
 /**
  * git config --global --includes --get <key>。
  */
-async function readGlobalGitConfigValue(e, cwd) {
+async function readGlobalGitConfigValue(key, cwd) {
   let { stdout, code } = await execFileNoThrow(
     gitExe(),
-    [...GIT_SAFE_GLOBAL_ARGS, "config", "--global", "--includes", "--get", e],
+    [...GIT_SAFE_GLOBAL_ARGS, "config", "--global", "--includes", "--get", key],
     {
       preserveOutputOnError: false,
       cwd,
@@ -585,10 +592,10 @@ async function readGlobalGitConfigValue(e, cwd) {
   return code === 0 && trimmed.length > 0 ? trimmed : null;
 }
 //@ chunk-t0gq9gyw.js:77856-77990 layout
-async function getPushRemote(e) {
+async function getPushRemote(remotes) {
   let gitConfigValue = await readGitConfigValue("remote.pushDefault");
-  if (gitConfigValue && e.includes(gitConfigValue)) return gitConfigValue;
-  if (e.length === 1) return e[0] ?? null;
+  if (gitConfigValue && remotes.includes(gitConfigValue)) return gitConfigValue;
+  if (remotes.length === 1) return remotes[0] ?? null;
   return null;
 }
 //@ chunk-t0gq9gyw.js:77990-78289 facade-exports
@@ -602,29 +609,31 @@ async function getGitPushRemotes() {
     env: getRemoteHostSessionCount(),
   });
   if (code !== 0) return [];
-  let filtered = stdout
+  let remotes = stdout
     .split(
       `
 `,
     )
     .map((line) => line.trim())
     .filter(Boolean);
-  let o = new Set();
-  if (filtered.includes("origin")) o.add("origin");
-  let pushRemote = await getPushRemote(filtered);
-  if (pushRemote && BRANCH_NAME_RE.test(pushRemote)) o.add(pushRemote);
-  return [...o];
+  let result = new Set();
+  if (remotes.includes("origin")) result.add("origin");
+  let pushRemote = await getPushRemote(remotes);
+  if (pushRemote && BRANCH_NAME_RE.test(pushRemote)) result.add(pushRemote);
+  return [...result];
 }
 //@ chunk-t0gq9gyw.js:78289-78369 facade-exports
 /**
  * 为远程生成 `git push <r> *`、`git push -u <r> *` 权限规则模式。
  */
 function gitPushShellPatternsForRemotes(gitPushRemotes) {
-  return gitPushRemotes.flatMap((n) => [`git push ${n} *`, `git push -u ${n} *`]);
+  return gitPushRemotes.flatMap((remote) => [`git push ${remote} *`, `git push -u ${remote} *`]);
 }
 //@ chunk-t0gq9gyw.js:78369-78444 facade-exports
-function toPowerShellRules(e) {
-  return stripCheckoutBaseRule(bashAndPowerShellRules(e)).filter((n) => n.startsWith("PowerShell("));
+function toPowerShellRules(rules) {
+  return stripCheckoutBaseRule(bashAndPowerShellRules(rules)).filter((rule) =>
+    rule.startsWith("PowerShell("),
+  );
 }
 //@ chunk-t0gq9gyw.js:78444-78566 facade-exports
 /**
@@ -633,28 +642,28 @@ function toPowerShellRules(e) {
 var getRemoteUrl = async () => getCachedRemoteUrl();
 var getRemoteUrlForBridge = async () => {
   let cwdOrNull = getCwdOrNull();
-  let n = cwdOrNull === null ? null : findGitRoot(cwdOrNull);
-  if (n === null || (await isHomeDirectoryGitRoot(n))) return null;
+  let gitRoot = cwdOrNull === null ? null : findGitRoot(cwdOrNull);
+  if (gitRoot === null || (await isHomeDirectoryGitRoot(gitRoot))) return null;
   return getCachedRemoteUrl();
 };
 //@ chunk-t0gq9gyw.js:78566-78728 facade-exports
 /**
  * 路径是否就是 home 目录（含 realpath 比较）。
  */
-async function isHomeDirectoryGitRoot(e) {
-  let n;
+async function isHomeDirectoryGitRoot(gitRoot) {
+  let homeDir;
   try {
-    n = homedir();
+    homeDir = homedir();
   } catch {
     return false;
   }
-  if (!n) return false;
-  if (e === identity(resolve(n))) return true;
-  let r = await realpath(n).then(
-    (o) => identity(o),
+  if (!homeDir) return false;
+  if (gitRoot === identity(resolve(homeDir))) return true;
+  let realHome = await realpath(homeDir).then(
+    (realPath) => identity(realPath),
     () => null,
   );
-  return r !== null && e === r;
+  return realHome !== null && gitRoot === realHome;
 }
 //@ chunk-t0gq9gyw.js:78728-78842 facade-exports
 var snapshotGitEvidenceForBridge = async () => {
@@ -707,18 +716,18 @@ function normalizeGitRemoteUrl(url) {
 /**
  * 按远程 URL 的主机名把 git 托管平台归类为 github、ghe、gitlab、bitbucket、azure、other 或 none。
  */
-function classifyGitHost(e) {
-  let n = e ? firstLineOf(e, ":").toLowerCase() : null;
-  if (!n) return "none";
-  if (isGithubDotCom(n) || n.endsWith(`.${GITHUB_HOST}`)) return "github";
-  if (n.endsWith(".ghe.com") || n.includes("github")) return "ghe";
-  if (n === "gitlab.com" || n.includes("gitlab")) return "gitlab";
-  if (n === "bitbucket.org" || n.includes("bitbucket")) return "bitbucket";
+function classifyGitHost(remoteUrl) {
+  let host = remoteUrl ? firstLineOf(remoteUrl, ":").toLowerCase() : null;
+  if (!host) return "none";
+  if (isGithubDotCom(host) || host.endsWith(`.${GITHUB_HOST}`)) return "github";
+  if (host.endsWith(".ghe.com") || host.includes("github")) return "ghe";
+  if (host === "gitlab.com" || host.includes("gitlab")) return "gitlab";
+  if (host === "bitbucket.org" || host.includes("bitbucket")) return "bitbucket";
   if (
-    n === "dev.azure.com" ||
-    n === "ssh.dev.azure.com" ||
-    n.endsWith(".visualstudio.com") ||
-    n.endsWith(".azure.com")
+    host === "dev.azure.com" ||
+    host === "ssh.dev.azure.com" ||
+    host.endsWith(".visualstudio.com") ||
+    host.endsWith(".azure.com")
   )
     return "azure";
   return "other";
@@ -726,35 +735,35 @@ function classifyGitHost(e) {
 //@ chunk-t0gq9gyw.js:79888-80083 facade-exports
 async function getGitPresenceForAnalytics() {
   if (isRemoteSessionAvailable()) return null;
-  let [e, n] = await Promise.all([getIsGit(), getRemoteUrl()]).catch(() => [false, null]);
-  let r = n ? normalizeGitRemoteUrl(n) : null;
+  let [isGit, remoteUrl] = await Promise.all([getIsGit(), getRemoteUrl()]).catch(() => [false, null]);
+  let normalizedRemote = remoteUrl ? normalizeGitRemoteUrl(remoteUrl) : null;
   return {
-    is_git: e,
-    has_remote: r !== null,
-    remote_host_class: classifyGitHost(r ? firstLineOf(r, "/") : null),
+    is_git: isGit,
+    has_remote: normalizedRemote !== null,
+    remote_host_class: classifyGitHost(normalizedRemote ? firstLineOf(normalizedRemote, "/") : null),
   };
 }
 //@ chunk-t0gq9gyw.js:80537-80591 sole-consumer
-function getRemoteUrlForDirCached(e) {
-  return memoizeMap(getGitRepoCache().remoteSlugByRoot, e, getRemoteUrlForDir_2);
+function getRemoteUrlForDirCached(dirPath) {
+  return memoizeMap(getGitRepoCache().remoteSlugByRoot, dirPath, getRemoteUrlForDir_2);
 }
 //@ chunk-t0gq9gyw.js:80591-80653 facade-exports
-function findRepoRemoteSlug(canonicalGitRoot) {
-  let remoteUrlForDir = getRemoteUrlForDirCached(canonicalGitRoot);
+function findRepoRemoteSlug(dirPath) {
+  let remoteUrlForDir = getRemoteUrlForDirCached(dirPath);
   return typeof remoteUrlForDir === "string" ? remoteUrlForDir : null;
 }
 //@ chunk-t0gq9gyw.js:80653-80687 facade-exports
-function isRepoConfigUnreadable(e) {
-  return getRemoteUrlForDirCached(e) === REPO_UNREADABLE_RESULT;
+function isRepoConfigUnreadable(dirPath) {
+  return getRemoteUrlForDirCached(dirPath) === REPO_UNREADABLE_RESULT;
 }
 //@ chunk-t0gq9gyw.js:80687-80701 layout
 var MAX_REPO_CONFIG_BYTES = 128000;
 //@ chunk-t0gq9gyw.js:80701-80973 facade-exports
-function readRepoConfig(e, n) {
+function readRepoConfig(gitRoot, maxBytes) {
   try {
-    let r = true;
+    let useDotGitDir = true;
     try {
-      if (lstatSync(join(e, ".git")).isFile())
+      if (lstatSync(join(gitRoot, ".git")).isFile())
         return {
           ok: false,
           cause: "pointer_file",
@@ -765,14 +774,14 @@ function readRepoConfig(e, n) {
           ok: false,
           cause: "read_failed",
         };
-      r = false;
+      useDotGitDir = false;
     }
-    let o = r ? join(e, ".git") : e;
-    let smallTextFile = readSmallTextFile(join(o, "config"), e, n);
+    let gitDirPath = useDotGitDir ? join(gitRoot, ".git") : gitRoot;
+    let smallTextFile = readSmallTextFile(join(gitDirPath, "config"), gitRoot, maxBytes);
     return smallTextFile.ok
       ? {
           ...smallTextFile,
-          gitDir: o,
+          gitDir: gitDirPath,
         }
       : smallTextFile;
   } catch {
@@ -783,24 +792,24 @@ function readRepoConfig(e, n) {
   }
 }
 //@ chunk-t0gq9gyw.js:80973-81214 layout
-function readSmallTextFile(e, n, r) {
-  if (readPositionIsUnsafe(e, n))
+function readSmallTextFile(filePath, gitRoot, maxBytes) {
+  if (readPositionIsUnsafe(filePath, gitRoot))
     return {
       ok: false,
       cause: "unsafe_path",
     };
-  let o = statSync(e);
-  if (!o.isFile())
+  let stats = statSync(filePath);
+  if (!stats.isFile())
     return {
       ok: false,
       cause: "not_a_file",
     };
-  if (o.size > r)
+  if (stats.size > maxBytes)
     return {
       ok: false,
       cause: "oversize",
     };
-  let file = readFileSync(e, "utf-8");
+  let file = readFileSync(filePath, "utf-8");
   return hasNulByte(file)
     ? {
         ok: false,
@@ -812,8 +821,8 @@ function readSmallTextFile(e, n, r) {
       };
 }
 //@ chunk-t0gq9gyw.js:81214-81296 facade-exports
-function readRepoConfigText(e) {
-  let repoConfig = readRepoConfig(e, MAX_REPO_CONFIG_BYTES);
+function readRepoConfigText(gitRoot) {
+  let repoConfig = readRepoConfig(gitRoot, MAX_REPO_CONFIG_BYTES);
   return repoConfig.ok && !repoConfig.text.includes("\x00") ? repoConfig.text : null;
 }
 //@ chunk-t0gq9gyw.js:81296-81444 facade-exports = getServerKey (1)
@@ -844,16 +853,16 @@ var hasUnpushedCommits = async (cwd) => {
   );
   return code === 0 && parseInt(stdout.trim(), 10) > 0;
 };
-var getIsClean = async (e) => {
-  let n = [
+var getIsClean = async (options) => {
+  let args = [
     ...GIT_SAFE_GLOBAL_ARGS,
     "--no-optional-locks",
     "status",
     "--porcelain",
     IGNORE_SUBMODULES_DIRTY_FLAG,
   ];
-  if (e?.ignoreUntracked) n.push("-uno");
-  let { stdout } = await execFileNoThrow(gitExe(), n, {
+  if (options?.ignoreUntracked) args.push("-uno");
+  let { stdout } = await execFileNoThrow(gitExe(), args, {
     preserveOutputOnError: false,
     env: getRemoteHostSessionCount(undefined, {
       userLocale: true,
@@ -862,12 +871,12 @@ var getIsClean = async (e) => {
   return stdout.trim().length === 0;
 };
 var getFileStatus = async (
-  e,
+  cwd,
   env = getRemoteHostSessionCount(undefined, {
     userLocale: true,
   }),
 ) => {
-  let r = [
+  let args = [
     ...GIT_SAFE_GLOBAL_ARGS,
     "--no-optional-locks",
     "status",
@@ -875,30 +884,30 @@ var getFileStatus = async (
     IGNORE_SUBMODULES_DIRTY_FLAG,
   ];
   let { stdout } =
-    e === undefined
-      ? await execFileNoThrow(gitExe(), r, {
+    cwd === undefined
+      ? await execFileNoThrow(gitExe(), args, {
           preserveOutputOnError: false,
           env,
         })
-      : await execFileNoThrowWithCwd(gitExe(), r, {
-          cwd: e,
+      : await execFileNoThrowWithCwd(gitExe(), args, {
+          cwd,
           preserveOutputOnError: false,
           env,
         });
-  let s = [];
-  let a = [];
+  let tracked = [];
+  let untracked = [];
   stdout
     .split(/\r?\n/)
     .filter((line) => line.length > 0)
     .forEach((line) => {
-      let u = line.substring(0, 2);
-      let p = line.substring(3);
-      if (u === "??") a.push(p);
-      else if (p) s.push(p);
+      let statusCode = line.substring(0, 2);
+      let filePath = line.substring(3);
+      if (statusCode === "??") untracked.push(filePath);
+      else if (filePath) tracked.push(filePath);
     });
   return {
-    tracked: s,
-    untracked: a,
+    tracked,
+    untracked,
   };
 };
 var getWorktreeCount = async () => getWorktreeCountFromFs();
@@ -935,7 +944,7 @@ async function getGitState() {
  * 从 origin URL 解析 GitHub owner/repo，非 GitHub 返回 null。
  */
 async function getGithubRepo() {
-  let { parseGitRemote } = await import("./chunk-zqrznfbt.js");
+  let { parseGitRemote } = await import("./detectRepository.js");
   let remoteUrl = await getRemoteUrl();
   if (!remoteUrl) {
     logForDebugging("Local GitHub repo: unknown");
@@ -961,10 +970,10 @@ function isCcrGitProxySession() {
 //@ chunk-t0gq9gyw.js:83093-83283 facade-exports = isLocalHost (1)
 function isLocalHost(host) {
   let index = host.indexOf(":");
-  let r = index === -1 ? host : host.slice(0, index);
-  let o = index === -1 ? "" : host.slice(index + 1);
-  if (o !== "" && !/^\d+$/.test(o)) return false;
-  return r === "localhost" || /^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(r);
+  let hostPart = index === -1 ? host : host.slice(0, index);
+  let portPart = index === -1 ? "" : host.slice(index + 1);
+  if (portPart !== "" && !/^\d+$/.test(portPart)) return false;
+  return hostPart === "localhost" || /^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(hostPart);
 }
 //@ chunk-t0gq9gyw.js:83283-83295 layout
 var MAX_LINK_TARGET_BYTES = 4096;
@@ -1023,14 +1032,14 @@ function resolvePathWithoutSymlinks(fs, path, roots) {
 function isCurrentDirectoryBareGitRepo() {
   let fsImplementation = getFsImplementation();
   let cwd = getCwd();
-  let r = resolvePathWithoutSymlinks(fsImplementation, cwd, cwd) ?? cwd;
-  r = r.normalize("NFC").toLowerCase();
-  let o = r.endsWith(sep) ? r : r + sep;
-  let s = (h) => {
-    let lower = h.toLowerCase();
-    return lower === r || lower.startsWith(o);
+  let canonicalCwd = resolvePathWithoutSymlinks(fsImplementation, cwd, cwd) ?? cwd;
+  canonicalCwd = canonicalCwd.normalize("NFC").toLowerCase();
+  let cwdWithSep = canonicalCwd.endsWith(sep) ? canonicalCwd : canonicalCwd + sep;
+  let isUnderCwd = (path) => {
+    let lower = path.toLowerCase();
+    return lower === canonicalCwd || lower.startsWith(cwdWithSep);
   };
-  function a(path) {
+  function canonicalize(path) {
     if (isForeignMountPath(path, cwd)) return null;
     if (isUncOrDevicePath(path)) {
       if (!isWslUncPath(path)) return null;
@@ -1047,36 +1056,37 @@ function isCurrentDirectoryBareGitRepo() {
       crossOs: false,
     };
   }
-  function c(canonical, crossOs) {
-    if (!crossOs && s(canonical)) return true;
-    for (let v of canonical.split(crossOs ? /[\\/]+/ : sep)) if (v.toLowerCase() === ".git") return false;
+  function hasNoGitSegment(path, crossOs) {
+    if (!crossOs && isUnderCwd(path)) return true;
+    for (let segment of path.split(crossOs ? /[\\/]+/ : sep))
+      if (segment.toLowerCase() === ".git") return false;
     return true;
   }
-  function u(canonical) {
+  function isTrustedPointerTarget(canonical) {
     try {
-      let b = fsImplementation.lstatSync(join(canonical, "HEAD"));
-      if (!b.isFile() || b.size > 4096) return false;
+      let headStats = fsImplementation.lstatSync(join(canonical, "HEAD"));
+      if (!headStats.isFile() || headStats.size > 4096) return false;
       let sliced = readFileSync(join(canonical, "HEAD"), "utf8").slice(0, 255);
       return /^ref:[ \t]*refs\//.test(sliced) || /^[0-9a-f]{40}([0-9a-f]{24})?[ \t\n\r]*$/.test(sliced);
     } catch {
       return false;
     }
   }
-  function p(h) {
+  function isBareGitDir(dirPath) {
     try {
-      let b = join(h, "HEAD");
-      let v = fsImplementation.lstatSync(b);
-      if (!v.isFile() || v.size > 4096) return false;
-      let sliced = readFileSync(b, "utf8").slice(0, 255);
+      let headPath = join(dirPath, "HEAD");
+      let headStats = fsImplementation.lstatSync(headPath);
+      if (!headStats.isFile() || headStats.size > 4096) return false;
+      let sliced = readFileSync(headPath, "utf8").slice(0, 255);
       if (!/^ref:[ \t]*refs\//.test(sliced) && !/^[0-9a-f]{40}([0-9a-f]{24})?[ \t\n\r]*$/.test(sliced))
         return false;
-      for (let R of ["objects", "refs"]) {
-        let L = join(h, R);
-        if (!fsImplementation.statSync(L).isDirectory()) return false;
-        accessSync(L, constants.X_OK);
+      for (let subDirName of ["objects", "refs"]) {
+        let subDirPath = join(dirPath, subDirName);
+        if (!fsImplementation.statSync(subDirPath).isDirectory()) return false;
+        accessSync(subDirPath, constants.X_OK);
       }
       try {
-        fsImplementation.statSync(join(h, "commondir"));
+        fsImplementation.statSync(join(dirPath, "commondir"));
         return false;
       } catch {}
       return true;
@@ -1084,59 +1094,59 @@ function isCurrentDirectoryBareGitRepo() {
       return false;
     }
   }
-  function y(h) {
+  function hasBareIndicators(dirPath) {
     try {
-      let b = fsImplementation.lstatSync(join(h, "HEAD"));
-      if (b.isFile() || b.isSymbolicLink()) return true;
+      let headStats = fsImplementation.lstatSync(join(dirPath, "HEAD"));
+      if (headStats.isFile() || headStats.isSymbolicLink()) return true;
     } catch {}
-    for (let b of ["objects", "refs"])
+    for (let subDirName of ["objects", "refs"])
       try {
-        fsImplementation.statSync(join(h, b));
+        fsImplementation.statSync(join(dirPath, subDirName));
         return true;
       } catch {}
     return false;
   }
-  function w(h) {
-    let b = (v) => {
-      let _ = a(v);
-      if (_ === null) {
+  function classifyGitRedirect(dirPath) {
+    let classifyTarget = (targetPath) => {
+      let canonical = canonicalize(targetPath);
+      if (canonical === null) {
         logFeatureSad("git_bare_repo_gate", "gitdir_target_uncanonical");
         return "plantable";
       }
-      if (c(_.canonical, _.crossOs)) {
+      if (hasNoGitSegment(canonical.canonical, canonical.crossOs)) {
         logFeatureSad("git_bare_repo_gate", "gitdir_target_plantable");
         return "plantable";
       }
-      return u(_.canonical) ? "trusted" : "none";
+      return isTrustedPointerTarget(canonical.canonical) ? "trusted" : "none";
     };
     try {
-      let v = fsImplementation.lstatSync(join(h, ".git"));
-      if (v.isSymbolicLink()) {
-        let _;
+      let dotGitStats = fsImplementation.lstatSync(join(dirPath, ".git"));
+      if (dotGitStats.isSymbolicLink()) {
+        let linkTarget;
         try {
-          _ = fsImplementation.readlinkSync(join(h, ".git"));
+          linkTarget = fsImplementation.readlinkSync(join(dirPath, ".git"));
         } catch {
           return "plantable";
         }
-        return b(isAbsolute(_) ? _ : h + sep + _);
+        return classifyTarget(isAbsolute(linkTarget) ? linkTarget : dirPath + sep + linkTarget);
       }
-      if (v.isFile()) {
-        if (v.size > MAX_LINK_TARGET_BYTES) return "oversized";
+      if (dotGitStats.isFile()) {
+        if (dotGitStats.size > MAX_LINK_TARGET_BYTES) return "oversized";
         try {
-          let file = readFileSync(join(h, ".git"), "utf8");
+          let file = readFileSync(join(dirPath, ".git"), "utf8");
           if (file.includes("\x00")) return "plantable";
           if (!file.startsWith("gitdir: ")) return "none";
           let replaced = file.slice(8).replace(/[\r\n]+$/, "");
-          return b(isAbsolute(replaced) ? replaced : h + sep + replaced);
+          return classifyTarget(isAbsolute(replaced) ? replaced : dirPath + sep + replaced);
         } catch {
           return "none";
         }
       }
-      if (v.isDirectory()) return p(join(h, ".git")) ? "trusted" : "none";
+      if (dotGitStats.isDirectory()) return isBareGitDir(join(dirPath, ".git")) ? "trusted" : "none";
     } catch {}
     return "none";
   }
-  switch (w(cwd)) {
+  switch (classifyGitRedirect(cwd)) {
     case "plantable":
       return "gitdir-redirect-plantable";
     case "oversized":
@@ -1147,15 +1157,15 @@ function isCurrentDirectoryBareGitRepo() {
     case "none":
       break;
   }
-  let E = cwd;
+  let currentPath = cwd;
   for (;;) {
-    if (y(E)) {
+    if (hasBareIndicators(currentPath)) {
       logFeatureSad("git_bare_repo_gate", "bare_indicators");
       return "bare-indicators";
     }
-    let h = dirname(E);
-    if (h === E) break;
-    switch (w(h)) {
+    let parentPath = dirname(currentPath);
+    if (parentPath === currentPath) break;
+    switch (classifyGitRedirect(parentPath)) {
       case "trusted":
         logFeatureOk("git_bare_repo_gate");
         return false;
@@ -1166,89 +1176,171 @@ function isCurrentDirectoryBareGitRepo() {
       case "none":
         break;
     }
-    E = h;
+    currentPath = parentPath;
   }
   logFeatureOk("git_bare_repo_gate");
   return false;
 }
-//@ chunk-e6aww6q8.js:1257182-1257363 affinity
-function getGitSubcommandPath(e) {
-  let n = [];
-  let sliced = e.slice(1);
-  for (let [s, h] of sliced.entries()) {
-    if (h.startsWith("-")) continue;
-    let y = s === 0 ? undefined : sliced[s - 1];
-    n.push(h);
-    if (y === undefined || !y.startsWith("-")) break;
+//@ chunk-qmzcskz6.js:7821-8135 fingerprint = isLocalHost (1)
+/**
+ * 判断主机名是否指向本机（localhost、127.x、本机 hostname 及其短名、本机网卡 IP/ipv6-literal.net 形式）。
+ */
+function isLocalHost_2(hostnameCandidate, allowShortNames = true) {
+  let replaced = hostnameCandidate.toLowerCase().replace(/\.$/, "");
+  let isWindows = getPlatform() === "windows";
+  let fold = isWindows && allowShortNames ? foldWindowsPathComponent : (value) => value.toLowerCase();
+  let localHost = fold(hostname());
+  let localShortName = firstLineOf(localHost, ".");
+  return (
+    replaced === "localhost" ||
+    /^127(?:\.\d{1,3}){3}$/.test(replaced) ||
+    replaced === localHost ||
+    (isWindows &&
+      (replaced === localShortName ||
+        (allowShortNames &&
+          (replaced === localShortName.slice(0, SHORT_WINDOWS_PATH_CHARS) ||
+            replaced === fold(firstLineOf(hostname(), ".").slice(0, SHORT_WINDOWS_PATH_CHARS)))))) ||
+    replaced.startsWith(`${localShortName}.`) ||
+    (IP_LITERAL_PATTERN.test(replaced) && (getLocalInterfaceAddresses()?.has(replaced) ?? allowShortNames))
+  );
+}
+//@ chunk-qmzcskz6.js:8135-8191 layout
+var IP_LITERAL_PATTERN = /^\d{1,3}(?:\.\d{1,3}){3}$|\.ipv6-literal\.net$/;
+//@ chunk-qmzcskz6.js:8191-8416 placement
+function getLocalInterfaceAddresses() {
+  let networkInterfaces = getNetworkInterfacesSafe();
+  if (networkInterfaces === null) return null;
+  return new Set(
+    Object.values(networkInterfaces).flatMap((interfaces) =>
+      (interfaces ?? []).flatMap(({ address }) => [
+        address.toLowerCase(),
+        `${address.toLowerCase().replaceAll(":", "-").replaceAll("%", "s")}.ipv6-literal.net`,
+      ]),
+    ),
+  );
+}
+//@ chunk-qmzcskz6.js:8416-8465 placement
+function getNetworkInterfacesSafe() {
+  try {
+    return networkInterfaces();
+  } catch {
+    return null;
   }
-  return n;
+}
+//@ chunk-qmzcskz6.js:8465-8581 placement
+/**
+ * 判断路径在当前平台是否为绝对路径（Windows 下识别盘符与 UNC 形式）。
+ */
+function isAbsolutePlatformPath(filePath) {
+  if (getPlatform() !== "windows") return filePath.startsWith("/");
+  let strippedPath = stripWin32DevicePrefix(filePath);
+  return (
+    !WIN32_DEVICE_NAMESPACE_RE.test(strippedPath) &&
+    (POSIX_SEP.test(strippedPath) || WIN32_UNC_HOST_RE.test(strippedPath))
+  );
+}
+//@ chunk-qmzcskz6.js:8581-8678 placement = getReservedShortcuts (1)
+function normalizeCommandForPlatform(cwd) {
+  switch (getPlatform()) {
+    case "macos":
+      return caseFoldKey(cwd);
+    case "windows":
+      return normalizeWindowsPathForCompare(cwd);
+    default:
+      return cwd;
+  }
+}
+//@ chunk-e6aww6q8.js:1257182-1257363 affinity
+function getGitSubcommandPath(args) {
+  let subcommandPath = [];
+  let sliced = args.slice(1);
+  for (let [index, arg] of sliced.entries()) {
+    if (arg.startsWith("-")) continue;
+    let previousArg = index === 0 ? undefined : sliced[index - 1];
+    subcommandPath.push(arg);
+    if (previousArg === undefined || !previousArg.startsWith("-")) break;
+  }
+  return subcommandPath;
 }
 //@ chunk-e6aww6q8.js:1257363-1257695 fingerprint = gitExe (1)
-function isGitArgMatchingFlagRule(e, n) {
-  let r = getOwn(GIT_SUBCOMMAND_EXCLUSIONS, e);
-  if (r === undefined) return false;
-  let s = e === "git" && isSubcommandExclusionEnabled() ? [...r, PYTHON_SUBCOMMAND_EXCLUSIONS] : r;
-  let mapped = getGitSubcommandPath(n).map(normalizeConfigKey);
-  let y = SUBCOMMAND_PROGRAMS_2.has(e);
-  return s.some(([S, w]) => {
-    let found = mapped.find((Z) => w.includes(Z));
+function isGitArgMatchingFlagRule(programName, args) {
+  let exclusions = getOwn(GIT_SUBCOMMAND_EXCLUSIONS, programName);
+  if (exclusions === undefined) return false;
+  let activeExclusions =
+    programName === "git" && isSubcommandExclusionEnabled()
+      ? [...exclusions, PYTHON_SUBCOMMAND_EXCLUSIONS]
+      : exclusions;
+  let mapped = getGitSubcommandPath(args).map(normalizeConfigKey);
+  let isSubcommandProgram = SUBCOMMAND_PROGRAMS_2.has(programName);
+  return activeExclusions.some(([flag, subcommands]) => {
+    let found = mapped.find((subcommand) => subcommands.includes(subcommand));
     if (found === undefined) return false;
-    let matches = /^-[A-Za-z]$/.test(S);
-    let q = getOwn(GIT_UNSAFE_CONFIG_KEYS, found) ?? [];
-    return n.some(
-      (Z) =>
-        Z === S || (S.startsWith("-") && (Z.startsWith(S) || optionMatchesRule(Z, S, false, matches, q, y))),
+    let isCodeFlag = /^-[A-Za-z]$/.test(flag);
+    let unsafeConfigKeys = getOwn(GIT_UNSAFE_CONFIG_KEYS, found) ?? [];
+    return args.some(
+      (arg) =>
+        arg === flag ||
+        (flag.startsWith("-") &&
+          (arg.startsWith(flag) ||
+            optionMatchesRule(arg, flag, false, isCodeFlag, unsafeConfigKeys, isSubcommandProgram))),
     );
   });
 }
 //@ chunk-e6aww6q8.js:1260478-1260686 fingerprint = getIsHeadOnRemote (0.489)
-function hasDangerousGitGlobalOption(e, n) {
-  let gitSubcommandIndex = findGitSubcommandIndex(e);
+function hasDangerousGitGlobalOption(args, commandText) {
+  let gitSubcommandIndex = findGitSubcommandIndex(args);
   return (
-    e[gitSubcommandIndex] === "rev-parse" &&
-    getGitSubcommandPath(e)[0] === "rev-parse" &&
-    e.slice(1, gitSubcommandIndex).every((y) => SAFE_GIT_GLOBAL_FLAGS.has(y)) &&
-    !/[$`]/.test(n)
-      ? e.slice(1, gitSubcommandIndex)
-      : e.slice(1)
-  ).some((y) => GIT_LONG_GLOBAL_OPTIONS.some((S) => optionMatchesRule(y, S, false, false, [], true)));
+    args[gitSubcommandIndex] === "rev-parse" &&
+    getGitSubcommandPath(args)[0] === "rev-parse" &&
+    args.slice(1, gitSubcommandIndex).every((globalFlag) => SAFE_GIT_GLOBAL_FLAGS.has(globalFlag)) &&
+    !/[$`]/.test(commandText)
+      ? args.slice(1, gitSubcommandIndex)
+      : args.slice(1)
+  ).some((globalArg) =>
+    GIT_LONG_GLOBAL_OPTIONS.some((longOption) =>
+      optionMatchesRule(globalArg, longOption, false, false, [], true),
+    ),
+  );
 }
 //@ chunk-e6aww6q8.js:1260686-1260971 placement
-var SAFE_GIT_GLOBAL_FLAGS = new Set([
-  "-p",
-  "-P",
-  "--paginate",
-  "--no-pager",
-  "--bare",
-  "--no-replace-objects",
-  "--literal-pathspecs",
-  "--glob-pathspecs",
-  "--noglob-pathspecs",
-  "--icase-pathspecs",
-  "--no-optional-locks",
-  "--no-lazy-fetch",
-  "--no-advice",
-  "--html-path",
-  "--man-path",
-  "--info-path",
-  "--version",
-  "--help",
-]);
+var SAFE_GIT_GLOBAL_FLAGS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:1260686", () => {
+  SAFE_GIT_GLOBAL_FLAGS = new Set([
+    "-p",
+    "-P",
+    "--paginate",
+    "--no-pager",
+    "--bare",
+    "--no-replace-objects",
+    "--literal-pathspecs",
+    "--glob-pathspecs",
+    "--noglob-pathspecs",
+    "--icase-pathspecs",
+    "--no-optional-locks",
+    "--no-lazy-fetch",
+    "--no-advice",
+    "--html-path",
+    "--man-path",
+    "--info-path",
+    "--version",
+    "--help",
+  ]);
+});
 //@ chunk-e6aww6q8.js:1874180-1874593 placement
 /**
  * 为 git 网络操作构建环境：固定 git 目录、读取 sshCommand 配置；非 Windows 且未显式设置时禁止 SSH_ASKPASS，始终脱离控制终端。
  */
-async function getGitSshEnv(e) {
+async function getGitSshEnv(cwd) {
   if (isDiskless())
     return {
       env: withGitNoPromptEnv(),
       withoutControllingTerminal: true,
     };
-  let n = withPinnedGitDirEnv(withGitNoPromptEnv(), e);
-  let sshCommandConfig = await readSshCommandConfig(n, async (y) => {
-    let { code, stdout } = await execFileNoThrowWithCwd(gitExe(), [...GIT_SAFE_GLOBAL_ARGS, ...y], {
-      cwd: e,
-      env: n,
+  let baseEnv = withPinnedGitDirEnv(withGitNoPromptEnv(), cwd);
+  let sshCommandConfig = await readSshCommandConfig(baseEnv, async (args) => {
+    let { code, stdout } = await execFileNoThrowWithCwd(gitExe(), [...GIT_SAFE_GLOBAL_ARGS, ...args], {
+      cwd,
+      env: baseEnv,
       stdin: "ignore",
       timeout: TTY_ACQUIRE_TIMEOUT_MS,
     });
@@ -1283,17 +1375,21 @@ async function runGitReadOnly(cwd, args, { abortSignal, userLocale } = {}) {
       overflowed: false,
     };
   try {
-    let result = await execFileNoThrowWithCwd(gitExe(), [...BMt, "--no-optional-locks", ...args], {
-      cwd,
-      env: getRemoteHostSessionCount(undefined, {
-        userLocale,
-      }),
-      timeout: GIT_CONFIG_PARAMETERS_LIMIT,
-      abortSignal,
-      maxBuffer: 1e6,
-      preserveOutputOnError: false,
-      useToolMemoryCgroup: false,
-    });
+    let result = await execFileNoThrowWithCwd(
+      gitExe(),
+      [...SAFE_GIT_REPO_ARGS, "--no-optional-locks", ...args],
+      {
+        cwd,
+        env: getRemoteHostSessionCount(undefined, {
+          userLocale,
+        }),
+        timeout: GIT_CONFIG_PARAMETERS_LIMIT,
+        abortSignal,
+        maxBuffer: 1e6,
+        preserveOutputOnError: false,
+        useToolMemoryCgroup: false,
+      },
+    );
     return result.code === 0
       ? {
           ok: true,
@@ -1395,118 +1491,130 @@ function getAutoModeGitStatusLimit() {
       };
 }
 //@ chunk-e6aww6q8.js:2834632-2834908 layout
-var DESTRUCTIVE_COMMAND_KINDS = new Set([
-  "git_reset_hard",
-  "git_checkout_dot",
-  "git_restore_dot",
-  "git_clean_force",
-  "rm_recursive_force",
-  "rm_recursive",
-  "rm_force",
-  "remove_item_recursive_force",
-  "remove_item_recursive",
-  "remove_item_force",
-  "clear_content_glob",
-]);
-var GIT_STAGE_COMMIT_PUSH_PATTERN = /\bgit\s+(?:add|stage|commit|push)\b/i;
+var DESTRUCTIVE_COMMAND_KINDS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var GIT_STAGE_COMMIT_PUSH_PATTERN;
+deferInit("chunk-e6aww6q8.js:2834632", () => {
+  DESTRUCTIVE_COMMAND_KINDS = new Set([
+    "git_reset_hard",
+    "git_checkout_dot",
+    "git_restore_dot",
+    "git_clean_force",
+    "rm_recursive_force",
+    "rm_recursive",
+    "rm_force",
+    "remove_item_recursive_force",
+    "remove_item_recursive",
+    "remove_item_force",
+    "clear_content_glob",
+  ]);
+  GIT_STAGE_COMMIT_PUSH_PATTERN = /\bgit\s+(?:add|stage|commit|push)\b/i;
+});
 //@ chunk-e6aww6q8.js:2834908-2834979 layout
 function isGitStageCommitPushCommand(command) {
-  let n = command.length > 1e4 ? command.slice(0, 1e4) : command;
-  return GIT_STAGE_COMMIT_PUSH_PATTERN.test(n);
+  let head = command.length > 1e4 ? command.slice(0, 1e4) : command;
+  return GIT_STAGE_COMMIT_PUSH_PATTERN.test(head);
 }
 //@ chunk-e6aww6q8.js:2834979-2835192 layout
 /**
  * 统计 porcelain 输出中的 staged、modified、untracked 文件数。
  */
 function countPorcelainStatus(stdout) {
-  let n = 0;
-  let r = 0;
-  let s = 0;
+  let stagedCount = 0;
+  let modifiedCount = 0;
+  let untrackedCount = 0;
   for (let line of stdout.split(`
 `)) {
     if (line.length < 2) continue;
-    let y = line[0];
-    let S = line[1];
-    if (y === "?" && S === "?") {
-      s++;
+    let indexStatus = line[0];
+    let worktreeStatus = line[1];
+    if (indexStatus === "?" && worktreeStatus === "?") {
+      untrackedCount++;
       continue;
     }
-    if (y !== " " && y !== "?") n++;
-    if (S !== " ") r++;
+    if (indexStatus !== " " && indexStatus !== "?") stagedCount++;
+    if (worktreeStatus !== " ") modifiedCount++;
   }
   return {
-    staged: n,
-    modified: r,
-    untracked: s,
+    staged: stagedCount,
+    modified: modifiedCount,
+    untracked: untrackedCount,
   };
 }
 //@ chunk-e6aww6q8.js:2835192-2835471 layout
-function truncateLinesToChars(e, n) {
-  let filtered = e
+function truncateLinesToChars(text, maxChars) {
+  let filtered = text
     .split(
       `
 `,
     )
     .filter((line) => line.length > 0);
-  if (n <= 0)
+  if (maxChars <= 0)
     return filtered.join(`
 `);
-  let s = "";
-  let h = 0;
-  for (; h < filtered.length; h++) {
-    let w =
-      (s === ""
+  let kept = "";
+  let index = 0;
+  for (; index < filtered.length; index++) {
+    let lineWithNewline =
+      (kept === ""
         ? ""
         : `
-`) + filtered[h];
-    if (s.length + w.length > n) break;
-    s += w;
+`) + filtered[index];
+    if (kept.length + lineWithNewline.length > maxChars) break;
+    kept += lineWithNewline;
   }
-  let y = filtered.length - h;
-  if (y === 0) return s;
-  let S = `\u2026[+${y} more lines]`;
-  return s === ""
-    ? S
-    : `${s}
-${S}`;
+  let remainingLines = filtered.length - index;
+  if (remainingLines === 0) return kept;
+  let moreMarker = `\u2026[+${remainingLines} more lines]`;
+  return kept === ""
+    ? moreMarker
+    : `${kept}
+${moreMarker}`;
 }
 //@ chunk-e6aww6q8.js:2835471-2836366 fingerprint = getFileStatus (0.353)
 /**
  * Bash/PowerShell 工具执行破坏性命令（git reset --hard、rm -rf 等）或 git add/commit/push 时，取 git status --porcelain 摘要（clean / staged+modified+untracked 计数 / 截断的 porcelain 文本），随工具结果一起给模型；受两个开关控制。
  */
-async function getGitStatusForDestructiveCommand(name, n, abortSignal) {
+async function getGitStatusForDestructiveCommand(name, toolInput, abortSignal) {
   try {
-    let s = autoModeGitStatusSettingValue();
-    let h = autoModeGitStatusUploadsValue();
-    if (!s && !h) return null;
-    let y = name === BASH_TOOL_NAME;
-    if ((!y && name !== POWERSHELL_TOOL_NAME) || isRemoteOnlyCheck(name)) return null;
-    if (n === null || typeof n !== "object" || !("command" in n) || typeof n.command !== "string")
+    let statusEnabled = autoModeGitStatusSettingValue();
+    let uploadsEnabled = autoModeGitStatusUploadsValue();
+    if (!statusEnabled && !uploadsEnabled) return null;
+    let isBash = name === BASH_TOOL_NAME;
+    if ((!isBash && name !== POWERSHELL_TOOL_NAME) || isRemoteOnlyCheck(name)) return null;
+    if (
+      toolInput === null ||
+      typeof toolInput !== "object" ||
+      !("command" in toolInput) ||
+      typeof toolInput.command !== "string"
+    )
       return null;
-    let S = y ? getDestructiveTargetCategory(n.command) : getPowerShellDestructiveCategory(n.command);
-    let w = s && S !== null && DESTRUCTIVE_COMMAND_KINDS.has(S);
-    let L = h && isGitStageCommitPushCommand(n.command);
-    if (!w && !L) return null;
+    let destructiveKind = isBash
+      ? getDestructiveTargetCategory(toolInput.command)
+      : getPowerShellDestructiveCategory(toolInput.command);
+    let wantsStatus =
+      statusEnabled && destructiveKind !== null && DESTRUCTIVE_COMMAND_KINDS.has(destructiveKind);
+    let wantsUpload = uploadsEnabled && isGitStageCommitPushCommand(toolInput.command);
+    if (!wantsStatus && !wantsUpload) return null;
     let cwd = getCwd();
     if (findGitRoot(cwd) === null) return null;
-    let q = await runGitReadOnly(
+    let statusResult = await runGitReadOnly(
       cwd,
       [
         "status",
         "--porcelain",
         IGNORE_SUBMODULES_DIRTY_FLAG,
-        L ? "--untracked-files=all" : "--untracked-files=normal",
+        wantsUpload ? "--untracked-files=all" : "--untracked-files=normal",
       ],
       {
         abortSignal,
         userLocale: true,
       },
     );
-    if (!q.ok) return null;
-    let stdout = q.stdout;
-    if (L) {
+    if (!statusResult.ok) return null;
+    let stdout = statusResult.stdout;
+    if (wantsUpload) {
       if (stdout.trim() === "")
-        return w
+        return wantsStatus
           ? {
               clean: true,
             }
@@ -1517,13 +1625,13 @@ async function getGitStatusForDestructiveCommand(name, n, abortSignal) {
 `,
         )
         .filter((line) => line.length > 0);
-      let joined = [
+      let text = [
         ...filtered.filter((line) => line.startsWith("??")),
         ...filtered.filter((line) => !line.startsWith("??")),
       ].join(`
 `);
       return {
-        porcelain: truncateLinesToChars(joined, autoModeGitStatusLimitValue()),
+        porcelain: truncateLinesToChars(text, autoModeGitStatusLimitValue()),
       };
     }
     let { staged, modified, untracked } = countPorcelainStatus(stdout);
@@ -1544,100 +1652,66 @@ async function getGitStatusForDestructiveCommand(name, n, abortSignal) {
 /**
  * git rev-list --count <refs> ^<bases>，返回提交数或 null。
  */
-async function hasUnpushedCommits_2(worktreePath, n, r) {
-  let s = await runGitInWorktree(worktreePath, ["rev-list", "--count", ...n, ...r.map((y) => `^${y}`), "--"]);
-  let trimmed = s.stdout.trim();
-  return s.code === 0 && /^\d+$/.test(trimmed) ? Number(trimmed) : null;
-}
-//@ chunk-qmzcskz6.js:7821-8135 fingerprint = isLocalHost (1)
-/**
- * 判断主机名是否指向本机（localhost、127.x、本机 hostname 及其短名、本机网卡 IP/ipv6-literal.net 形式）。
- */
-function isLocalHost_2(e, t = true) {
-  let replaced = e.toLowerCase().replace(/\.$/, "");
-  let r = getPlatform() === "windows";
-  let l = r && t ? foldWindowsPathComponent : (i) => i.toLowerCase();
-  let s = l(hostname());
-  let o = firstLineOf(s, ".");
-  return (
-    replaced === "localhost" ||
-    /^127(?:\.\d{1,3}){3}$/.test(replaced) ||
-    replaced === s ||
-    (r &&
-      (replaced === o ||
-        (t &&
-          (replaced === o.slice(0, SHORT_WINDOWS_PATH_CHARS) ||
-            replaced === l(firstLineOf(hostname(), ".").slice(0, SHORT_WINDOWS_PATH_CHARS)))))) ||
-    replaced.startsWith(`${o}.`) ||
-    (IP_LITERAL_PATTERN.test(replaced) && (getLocalInterfaceAddresses()?.has(replaced) ?? t))
-  );
-}
-//@ chunk-qmzcskz6.js:8135-8191 layout
-var IP_LITERAL_PATTERN = /^\d{1,3}(?:\.\d{1,3}){3}$|\.ipv6-literal\.net$/;
-//@ chunk-qmzcskz6.js:8191-8416 placement
-function getLocalInterfaceAddresses() {
-  let networkInterfaces = getNetworkInterfacesSafe();
-  if (networkInterfaces === null) return null;
-  return new Set(
-    Object.values(networkInterfaces).flatMap((t) =>
-      (t ?? []).flatMap(({ address }) => [
-        address.toLowerCase(),
-        `${address.toLowerCase().replaceAll(":", "-").replaceAll("%", "s")}.ipv6-literal.net`,
-      ]),
-    ),
-  );
-}
-//@ chunk-qmzcskz6.js:8416-8465 placement
-function getNetworkInterfacesSafe() {
-  try {
-    return networkInterfaces();
-  } catch {
-    return null;
-  }
-}
-//@ chunk-qmzcskz6.js:8465-8581 placement
-/**
- * 判断路径在当前平台是否为绝对路径（Windows 下识别盘符与 UNC 形式）。
- */
-function isAbsolutePlatformPath(e) {
-  if (getPlatform() !== "windows") return e.startsWith("/");
-  let t = stripWin32DevicePrefix(e);
-  return !WIN32_DEVICE_NAMESPACE_RE.test(t) && (POSIX_SEP.test(t) || WIN32_UNC_HOST_RE.test(t));
-}
-//@ chunk-qmzcskz6.js:8581-8678 placement = getReservedShortcuts (1)
-function normalizeCommandForPlatform(cwd) {
-  switch (getPlatform()) {
-    case "macos":
-      return caseFoldKey(cwd);
-    case "windows":
-      return normalizeWindowsPathForCompare(cwd);
-    default:
-      return cwd;
-  }
+async function hasUnpushedCommits_2(worktreePath, baseRefs, excludeRefs) {
+  let countResult = await runGitInWorktree(worktreePath, [
+    "rev-list",
+    "--count",
+    ...baseRefs,
+    ...excludeRefs.map((ref) => `^${ref}`),
+    "--",
+  ]);
+  let trimmed = countResult.stdout.trim();
+  return countResult.code === 0 && /^\d+$/.test(trimmed) ? Number(trimmed) : null;
 }
 //@ chunk-0sfjpx19.js:132639-132835 fingerprint = getIsClean (0.581)
-var GIT_STATUS_CLEAN_ARGS = [
-  "--no-optional-locks",
-  "status",
-  "--porcelain",
-  "-z",
-  "-uno",
-  "--no-renames",
-  "--ignore-submodules=all",
-];
-var GIT_STATUS_CLEAN_IGNORING_DIRTY_ARGS = [
-  ...GIT_STATUS_CLEAN_ARGS.filter((e) => !e.startsWith("--ignore-submodules")),
-  "--ignore-submodules=dirty",
-];
+var GIT_STATUS_CLEAN_ARGS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var GIT_STATUS_CLEAN_IGNORING_DIRTY_ARGS;
+deferInit("chunk-0sfjpx19.js:132639", () => {
+  GIT_STATUS_CLEAN_ARGS = [
+    "--no-optional-locks",
+    "status",
+    "--porcelain",
+    "-z",
+    "-uno",
+    "--no-renames",
+    "--ignore-submodules=all",
+  ];
+  GIT_STATUS_CLEAN_IGNORING_DIRTY_ARGS = [
+    ...GIT_STATUS_CLEAN_ARGS.filter((arg) => !arg.startsWith("--ignore-submodules")),
+    "--ignore-submodules=dirty",
+  ];
+});
+//@ chunk-wyqg6m3h.js:21370-21570 fingerprint = captureUntrackedFiles (0.54)
+/**
+ * git ls-files --others --exclude-standard 列未跟踪文件，生成 diff 条目（区分会话前已存在的文件）。
+ */
+async function untrackedFiles(gitRunner, limits) {
+  if (limits.slots <= 0) return [];
+  let result = await gitRunner.run([
+    NO_OPTIONAL_LOCKS,
+    "ls-files",
+    "-z",
+    "--others",
+    "--exclude-standard",
+    "--full-name",
+  ]);
+  return isWholeAnswer(result)
+    ? buildUntrackedFileEntries(
+        gitRunner,
+        result.stdout.split("\x00").filter((name) => name !== ""),
+        limits,
+      )
+    : null;
+}
 //@ chunk-1r5nz6dk.js:2902-3074 fingerprint = isCurrentDirectoryBareGitRepo (0.807)
 async function isCurrentDirectoryBareGitRepo_2(gitDir) {
   try {
-    let [r, n, o] = await Promise.all([
+    let [headStats, objectsStats, refsStats] = await Promise.all([
       lstat(join(gitDir, "HEAD")),
       lstat(join(gitDir, "objects")),
       lstat(join(gitDir, "refs")),
     ]);
-    return r.isFile() && n.isDirectory() && o.isDirectory();
+    return headStats.isFile() && objectsStats.isDirectory() && refsStats.isDirectory();
   } catch {
     return false;
   }
@@ -1646,9 +1720,9 @@ async function isCurrentDirectoryBareGitRepo_2(gitDir) {
 /**
  * git status --porcelain 限定给定路径，返回变更文件列表。
  */
-async function getChangedFiles(gitRoot, n) {
-  let mapped = n.map((s) => relative(gitRoot, s) || ".");
-  let a = await execFileNoThrow(
+async function getChangedFiles(gitRoot, paths) {
+  let mapped = paths.map((path) => relative(gitRoot, path) || ".");
+  let result = await execFileNoThrow(
     gitExe(),
     [
       "-C",
@@ -1667,29 +1741,14 @@ async function getChangedFiles(gitRoot, n) {
       useCwd: true,
     },
   );
-  if (a.code !== 0) return [];
-  return a.stdout
+  if (result.code !== 0) return [];
+  return result.stdout
     .split(
       `
 `,
     )
     .map((line) => line.slice(3).trim())
     .filter((line) => line.length > 0);
-}
-//@ chunk-wyqg6m3h.js:21370-21570 fingerprint = captureUntrackedFiles (0.54)
-/**
- * git ls-files --others --exclude-standard 列未跟踪文件，生成 diff 条目（区分会话前已存在的文件）。
- */
-async function untrackedFiles(e, o) {
-  if (o.slots <= 0) return [];
-  let r = await e.run([NO_OPTIONAL_LOCKS, "ls-files", "-z", "--others", "--exclude-standard", "--full-name"]);
-  return isWholeAnswer(r)
-    ? buildUntrackedFileEntries(
-        e,
-        r.stdout.split("\x00").filter((s) => s !== ""),
-        o,
-      )
-    : null;
 }
 export {
   getBranch,
@@ -1702,9 +1761,9 @@ export {
   findCanonicalGitRoot,
   isBranchOnOrigin,
   gitExe,
+  getGitPresenceForAnalytics,
   getIsGit,
   getWorktreeCount,
-  getGitPresenceForAnalytics,
   isLinkedWorktree,
   getGitWorktreeName,
   getRemoteUrl,
@@ -1761,4 +1820,8 @@ export {
   isCcrGitProxySession,
   isLocalHost,
   untrackedFiles,
+  getIsHeadOnRemote,
+  isRepoConfigUnreadable,
+  readRepoConfig,
+  readRepoConfigText,
 };

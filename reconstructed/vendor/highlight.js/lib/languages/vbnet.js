@@ -5,10 +5,10 @@
  * pieces: chunk-egr0twnb.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:507954-510589 cjs-fingerprint
-var require_vbnet = x(function (cjsExports, cjsModule) {
+var require_vbnet = __commonJS(function (cjsExports, cjsModule) {
   function vbnet(hljs) {
     let regex = hljs.regex;
     let CHARACTER = {
@@ -87,7 +87,7 @@ var require_vbnet = x(function (cjsExports, cjsModule) {
         },
       ],
     });
-    let p = hljs.COMMENT(null, /$/, {
+    let COMMENT = hljs.COMMENT(null, /$/, {
       variants: [
         {
           begin: /'/,
@@ -120,7 +120,7 @@ var require_vbnet = x(function (cjsExports, cjsModule) {
         NUMBER,
         LABEL,
         DOC_COMMENT,
-        p,
+        COMMENT,
         {
           className: "meta",
           begin: /[\t ]*#(const|disable|else|elseif|enable|end|externalsource|if|region)\b/,
@@ -128,7 +128,7 @@ var require_vbnet = x(function (cjsExports, cjsModule) {
           keywords: {
             keyword: "const disable else elseif enable end externalsource if region then",
           },
-          contains: [p],
+          contains: [COMMENT],
         },
       ],
     };

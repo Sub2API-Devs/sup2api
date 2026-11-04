@@ -229,27 +229,29 @@ async function initReplBridge(options) {
   setBridgeStateFramesGate(isBridgeStateFramesEnabled);
   setAttestationFilterPolicy(getAttestationFilterPolicy);
   let boundSessionKey = pinSessionId(getSessionId());
-  let dt = getMaterializedSessionFile() ?? undefined;
+  let materializedFile = getMaterializedSessionFile() ?? undefined;
   let tornEntryPair =
-    dt !== undefined && boundSessionKey !== undefined && !isOwnTranscriptFile(boundSessionKey, dt);
-  let lt = tornEntryPair ? undefined : dt;
+    materializedFile !== undefined &&
+    boundSessionKey !== undefined &&
+    !isOwnTranscriptFile(boundSessionKey, materializedFile);
+  let ownTranscriptPath = tornEntryPair ? undefined : materializedFile;
   let ownerVetoed = false;
-  let _e;
-  let ct;
-  let Qe;
+  let deferredVeto;
+  let deferredVouch;
+  let vouch;
   let attributions = new Map();
   let historyBackfillSuppressed =
     Boolean(suppressHistoryBackfill) ||
     isSessionHistorySuppressed() ||
     isPrecautionarySuppressionHeldFor(boundSessionKey) ||
     isSessionHistorySuppressedFor(boundSessionKey);
-  let Ae = () => isRemoteEgressSuppressedFor(pinSessionId(getSessionId()));
-  let Ue = (e) => {
-    if (historyBackfillSuppressed || isBridgeBindingForeign() || Ae()) return;
+  let isEgressSuppressed = () => isRemoteEgressSuppressedFor(pinSessionId(getSessionId()));
+  let withCurrentSession = (take) => {
+    if (historyBackfillSuppressed || isBridgeBindingForeign() || isEgressSuppressed()) return;
     let cfg = getSessionId();
-    return cfg ? e(cfg) : undefined;
+    return cfg ? take(cfg) : undefined;
   };
-  async function applyOwnerVeto(e, n, r) {
+  async function applyOwnerVeto(cause, label, againstAccountUuid) {
     historyBackfillSuppressed = true;
     ownerVetoed = true;
     if (tornEntryPair) logFeatureSad("rc_cross_account_suppression", "torn_entry_pair");
@@ -258,44 +260,53 @@ async function initReplBridge(options) {
       holdPrecautionarySuppressionFor(boundSessionKey);
       claimPrecautionHoldForObservedCause(boundSessionKey);
       logForDebugging(
-        `[bridge:repl] ${n} veto under a TORN entry pair (mid-/resume window): precautionary suppression only, no permanent taint write`,
+        `[bridge:repl] ${label} veto under a TORN entry pair (mid-/resume window): precautionary suppression only, no permanent taint write`,
         {
           level: "warn",
         },
       );
-    } else await writeHistorySuppression(boundSessionKey, lt, e, r, storageV5);
+    } else
+      await writeHistorySuppression(boundSessionKey, ownTranscriptPath, cause, againstAccountUuid, storageV5);
   }
   function applyDeferredOwnerVeto() {
-    if (!_e) return;
-    if (Qe?.holds()) return;
-    let { cause, againstAccountUuid } = _e;
-    _e = undefined;
-    let r = cause === "env_owner_mismatch" ? "Env-handoff" : "Restored-pointer";
+    if (!deferredVeto) return;
+    if (vouch?.holds()) return;
+    let { cause, againstAccountUuid } = deferredVeto;
+    deferredVeto = undefined;
+    let label = cause === "env_owner_mismatch" ? "Env-handoff" : "Restored-pointer";
     logEvent("tengu_bridge_owner_veto_after_dead_pointer", {
       cause: fromEnum(cause),
       permanent: !tornEntryPair,
     });
     logForDebugging(
-      `[bridge:repl] ${r} pointer is dead and nothing shows this login to be the recorded owner \u2014 applying the owner veto`,
+      `[bridge:repl] ${label} pointer is dead and nothing shows this login to be the recorded owner \u2014 applying the owner veto`,
       {
         level: "warn",
       },
     );
-    applyOwnerVeto(cause, r, againstAccountUuid).catch(logError);
+    applyOwnerVeto(cause, label, againstAccountUuid).catch(logError);
   }
-  let ft;
+  let persistenceAbort;
   let persistenceHooks = {
-    onTransportPersistenceReady: (e, serverReader, bridgeSessionId, serverKnownEmpty, R, O, ee = e) => {
-      ft?.abort();
+    onTransportPersistenceReady: (
+      writer,
+      serverReader,
+      persistenceSessionId,
+      serverKnownEmpty,
+      onCaughtUp,
+      onLocalRows,
+      internalWriter = writer,
+    ) => {
+      persistenceAbort?.abort();
       let abortController = new AbortController();
-      ft = abortController;
+      persistenceAbort = abortController;
       let { signal } = abortController;
-      let Ze = false;
-      let ge;
-      let me = false;
-      let er = (async () => {
-        ge = createPersistenceCatchUp({
-          writer: e,
+      let cleanCaughtUp = false;
+      let catchUp;
+      let rowsOwed = false;
+      let installWriter = (async () => {
+        catchUp = createPersistenceCatchUp({
+          writer,
           signal,
           onFallenBehind: () => {
             logFeatureBad("bridge_transcript_catch_up", "fell_behind");
@@ -305,35 +316,37 @@ async function initReplBridge(options) {
                 level: "error",
               },
             );
-            R?.(false);
+            onCaughtUp?.(false);
           },
           attemptSync: async (uploadRows) => {
-            if (historyBackfillSuppressed || Ae()) {
+            if (historyBackfillSuppressed || isEgressSuppressed()) {
               logForDebugging(
                 "[bridge:repl] Persistence backfill suppressed (cross-account veto or foreign binding) \u2014 installing live writer only",
               );
-              me = Be?.uncertaintyOnly === true || isScanUncertaintyHoldFor(pinSessionId(getSessionId()));
+              rowsOwed =
+                uncertainty?.uncertaintyOnly === true ||
+                isScanUncertaintyHoldFor(pinSessionId(getSessionId()));
               return {
                 uploadedMain: 0,
                 uploadedSubagents: 0,
               };
             }
             let subagentIds = await listSubagentIdsFromDisk(storageV5);
-            let et = await runPersistenceBackfill(
+            let outcome = await runPersistenceBackfill(
               uploadRows,
               serverReader,
               subagentIds,
               serverKnownEmpty,
               signal,
               storageV5,
-              bridgeSessionId,
-              O && ((kt) => O([kt])),
+              persistenceSessionId,
+              onLocalRows && ((row) => onLocalRows([row])),
             );
-            me = et === "rows_owed";
-            return et;
+            rowsOwed = outcome === "rows_owed";
+            return outcome;
           },
         });
-        let outcome = await ge.outcome;
+        let outcome = await catchUp.outcome;
         if (outcome === "abandoned" || signal.aborted) {
           logForDebugging("[bridge:repl] Transport torn down during sync \u2014 skipping writer install");
           return;
@@ -349,32 +362,32 @@ async function initReplBridge(options) {
             logForDiagnosticsNoPII("info", "bridge_repl_transcript_catch_up_late");
             break;
         }
-        setInternalEventWriter((St, wt, et) => {
-          ee(St, wt, et).catch((error) => {
+        setInternalEventWriter((session, message, options) => {
+          internalWriter(session, message, options).catch((error) => {
             logEvent("tengu_session_persistence_failed", {});
             logForDebugging(`[bridge:repl] Internal event write failed: ${errorMessage(error)}`, {
               level: "error",
             });
           });
           return Promise.resolve();
-        }, bridgeSessionId);
+        }, persistenceSessionId);
         setInternalEventReader(() => serverReader.readMain(), serverReader.readSubagents);
         logForDebugging(
           "[bridge:repl] Session persistence enabled \u2014 transcript writer + hydrate readers registered",
         );
-        Ze = !me;
+        cleanCaughtUp = !rowsOwed;
       })()
         .catch(logError)
-        .finally(() => R?.(Ze));
+        .finally(() => onCaughtUp?.(cleanCaughtUp));
       return {
         runNow: async () => {
-          if (await ge?.runNow()) await er;
+          if (await catchUp?.runNow()) await installWriter;
         },
         end: () => abortController.abort(),
       };
     },
     onTransportPersistenceTeardown: () => {
-      ft?.abort();
+      persistenceAbort?.abort();
       clearInternalEventWriter();
     },
   };
@@ -401,39 +414,42 @@ async function initReplBridge(options) {
     : reattachSequenceNum;
   let mustReattach = reattachOrFail;
   let reattachOriginLabel = envClaudeBridgeReattachSession ? "env" : reattachSessionId ? "option" : undefined;
-  let Ut = false;
-  let pt;
+  let adoptedFromPointer = false;
+  let deferredClaim;
   let isSameSessionId = (reattachTarget, id) =>
     reattachTarget !== undefined && id !== undefined && sessionIdBody(reattachTarget) === sessionIdBody(id);
   let pointerRecord =
     recordAtEnable === undefined ? getCurrentSessionBridge() : (recordAtEnable ?? undefined);
   if (!envClaudeBridgeReattachSession) {
     if (pointerRecord) {
-      let e = Boolean(pointerRecord.ownerAccountUuid);
-      let n = {
+      let hasOwner = Boolean(pointerRecord.ownerAccountUuid);
+      let recordedOwner = {
         accountUuid: pointerRecord.ownerAccountUuid,
         organizationUuid: pointerRecord.ownerOrganizationUuid,
       };
-      let r = e
+      let fileLogin = hasOwner
         ? await readFreshOauthAccountFromDisk(storageV5).catch(() => {
             return;
           })
         : undefined;
       let ownerCheckIdentity = await resolveOwnerCheckIdentity({
         site: "restored",
-        fileLogin: r,
-        owner: n,
+        fileLogin,
+        owner: recordedOwner,
         attributions,
         writerHonorsVouch: recordWriterHonorsServerVouch,
       });
-      let R =
+      let ownerUnconfirmed =
         ownerCheckIdentity.source === "unconfirmed" &&
         workSecret === undefined &&
         (!reattachTarget || isSameSessionId(reattachTarget, pointerRecord.id));
-      let O = ownerCheckIdentity.source === "unconfirmed" && !R ? r : ownerCheckIdentity.login;
-      if (ownerCheckIdentity.source === "server" && r) {
-        Qe = {
-          claim: n,
+      let login =
+        ownerCheckIdentity.source === "unconfirmed" && !ownerUnconfirmed
+          ? fileLogin
+          : ownerCheckIdentity.login;
+      if (ownerCheckIdentity.source === "server" && fileLogin) {
+        vouch = {
+          claim: recordedOwner,
           login: ownerCheckIdentity.login,
           holds: createBearerOwnerVouch({
             login: ownerCheckIdentity.login,
@@ -441,17 +457,17 @@ async function initReplBridge(options) {
             attributions,
           }),
         };
-        _e = {
+        deferredVeto = {
           cause: "restored_owner_mismatch",
-          againstAccountUuid: r.accountUuid ?? "",
+          againstAccountUuid: fileLogin.accountUuid ?? "",
         };
       }
-      let ee = e && sameOwnerAccount(O, n);
-      if (e && O?.accountUuid && !ee) {
+      let ownerMatches = hasOwner && sameOwnerAccount(login, recordedOwner);
+      if (hasOwner && login?.accountUuid && !ownerMatches) {
         await applyOwnerVeto(
           "restored_owner_mismatch",
           reattachTarget ? "Host-directed" : "Restored-pointer",
-          O.accountUuid,
+          login.accountUuid,
         );
         logForDebugging(
           `[bridge:repl] ${reattachTarget ? "Host-directed" : "Restored-pointer"} reattach vetoed: the credential store account changed since this conversation's pointer was persisted \u2014 minting fresh, history channels suppressed`,
@@ -463,29 +479,29 @@ async function initReplBridge(options) {
         reattachSeq = undefined;
         reattachOriginLabel = undefined;
       } else {
-        let pe = e && sameOwnerAccount(O, n);
+        let sameOwner = hasOwner && sameOwnerAccount(login, recordedOwner);
         if (pointerRecord.noHistoryBackfill) historyBackfillSuppressed = true;
         if (reattachTarget && isSameSessionId(reattachTarget, pointerRecord.id))
           reattachTarget = pointerRecord.id;
         if (!reattachTarget) {
           reattachTarget = pointerRecord.id;
           reattachSeq = pointerRecord.seq;
-          if (!pe || !isBridgeRestoredMatchMintEnabled()) mustReattach = true;
-          reattachOriginLabel = pe
+          if (!sameOwner || !isBridgeRestoredMatchMintEnabled()) mustReattach = true;
+          reattachOriginLabel = sameOwner
             ? mustReattach
               ? "restored_owner_match_pinned"
               : "restored_owner_match"
-            : R
+            : ownerUnconfirmed
               ? "restored_owner_unconfirmed"
-              : e
+              : hasOwner
                 ? "restored_identity_unreadable"
                 : "restored_owner_unknown";
-          Ut = true;
+          adoptedFromPointer = true;
           logForDebugging(
             `[bridge:repl] Reattaching to persisted bridge session ${pointerRecord.id} at seq ${pointerRecord.seq} (${mustReattach ? "reattach-or-fail" : "fresh-mint fallback"}, ${reattachOriginLabel})`,
           );
-        } else if (pe) {
-          if (!isSameSessionId(reattachTarget, pointerRecord.id)) pt = n;
+        } else if (sameOwner) {
+          if (!isSameSessionId(reattachTarget, pointerRecord.id)) deferredClaim = recordedOwner;
         } else if (isSameSessionId(reattachTarget, pointerRecord.id)) {
           mustReattach = true;
           logForDebugging(
@@ -502,13 +518,13 @@ async function initReplBridge(options) {
             },
           );
         }
-        if (ownerCheckIdentity.source === "unconfirmed" && R) {
-          _e = {
+        if (ownerCheckIdentity.source === "unconfirmed" && ownerUnconfirmed) {
+          deferredVeto = {
             cause: "restored_owner_mismatch",
             againstAccountUuid: ownerCheckIdentity.mismatchAgainst,
           };
-          ct = {
-            claim: n,
+          deferredVouch = {
+            claim: recordedOwner,
             login: ownerCheckIdentity.attributed,
             holds: createBearerOwnerVouch({
               login: ownerCheckIdentity.attributed,
@@ -526,25 +542,27 @@ async function initReplBridge(options) {
       holdPrecautionarySuppressionFor(boundSessionKey);
       claimPrecautionHoldForObservedCause(boundSessionKey);
     }
-    let e = {
+    let envOwner = {
       accountUuid: CLAUDE_BRIDGE_REATTACH_OWNER_ACCT,
       organizationUuid,
     };
-    let n = await readFreshOauthAccountFromDisk(storageV5).catch(() => {
+    let fileLogin = await readFreshOauthAccountFromDisk(storageV5).catch(() => {
       return;
     });
     let ownerCheckIdentity = await resolveOwnerCheckIdentity({
       site: "env_handoff",
-      fileLogin: n,
-      owner: e,
+      fileLogin,
+      owner: envOwner,
       attributions,
       writerHonorsVouch: recordWriterHonorsServerVouch,
     });
-    let h =
-      ownerCheckIdentity.source === "unconfirmed" && workSecret !== undefined ? n : ownerCheckIdentity.login;
-    if (ownerCheckIdentity.source === "server" && n) {
-      Qe = {
-        claim: e,
+    let login =
+      ownerCheckIdentity.source === "unconfirmed" && workSecret !== undefined
+        ? fileLogin
+        : ownerCheckIdentity.login;
+    if (ownerCheckIdentity.source === "server" && fileLogin) {
+      vouch = {
+        claim: envOwner,
         login: ownerCheckIdentity.login,
         holds: createBearerOwnerVouch({
           login: ownerCheckIdentity.login,
@@ -552,17 +570,17 @@ async function initReplBridge(options) {
           attributions,
         }),
       };
-      _e = {
+      deferredVeto = {
         cause: "env_owner_mismatch",
-        againstAccountUuid: n.accountUuid ?? "",
+        againstAccountUuid: fileLogin.accountUuid ?? "",
       };
     }
-    if (CLAUDE_BRIDGE_REATTACH_OWNER_ACCT && h?.accountUuid) {
-      if (!sameOwnerAccount(h, e)) {
+    if (CLAUDE_BRIDGE_REATTACH_OWNER_ACCT && login?.accountUuid) {
+      if (!sameOwnerAccount(login, envOwner)) {
         reattachTarget = undefined;
         reattachSeq = undefined;
         reattachOriginLabel = undefined;
-        await applyOwnerVeto("env_owner_mismatch", "Env-handoff", h.accountUuid);
+        await applyOwnerVeto("env_owner_mismatch", "Env-handoff", login.accountUuid);
         logForDebugging(
           "[bridge:repl] Env-handoff reattach vetoed: the credential store account changed since the handoff was recorded \u2014 minting fresh, history channels suppressed",
           {
@@ -574,11 +592,11 @@ async function initReplBridge(options) {
       mustReattach = true;
       reattachOriginLabel = "env_or_fail";
       if (ownerCheckIdentity.source === "unconfirmed") {
-        _e = {
+        deferredVeto = {
           cause: "env_owner_mismatch",
           againstAccountUuid: ownerCheckIdentity.mismatchAgainst,
         };
-        ct = {
+        deferredVouch = {
           claim: undefined,
           login: ownerCheckIdentity.attributed,
           holds: createBearerOwnerVouch({
@@ -598,8 +616,8 @@ async function initReplBridge(options) {
     if (pointerRecord?.noHistoryBackfill) historyBackfillSuppressed = true;
     reattachSeq ??= pointerRecord?.seq;
   }
-  let Be;
-  let xt = () =>
+  let uncertainty;
+  let suppressionUncertainty = () =>
     isScanUncertaintyHoldFor(boundSessionKey) &&
     !suppressHistoryBackfill &&
     !ownerVetoed &&
@@ -612,11 +630,11 @@ async function initReplBridge(options) {
         }
       : undefined;
   if (historyBackfillSuppressed) {
-    Be = xt();
-    onHistoryBackfillSuppressed?.(Be);
+    uncertainty = suppressionUncertainty();
+    onHistoryBackfillSuppressed?.(uncertainty);
   }
-  let Lt = ownerVetoed ? [] : sanitizeStringList(pointerRecord?.declaredDialogKinds);
-  if (Lt.length > 0) onDialogKindsDeclared?.(Lt, "restored");
+  let declaredKinds = ownerVetoed ? [] : sanitizeStringList(pointerRecord?.declaredDialogKinds);
+  if (declaredKinds.length > 0) onDialogKindsDeclared?.(declaredKinds, "restored");
   let groupingId;
   if (reattachTarget)
     groupingId = envClaudeBridgeReattachSession
@@ -639,11 +657,11 @@ async function initReplBridge(options) {
       bridgeBlockedCode !== null &&
       !FLAG_UNAVAILABLE_CAUSES.has(bridgeBlockedCode)
     ) {
-      let n = await getBridgeDisabledDiagnosis().catch((error) => {
+      let diagnosis = await getBridgeDisabledDiagnosis().catch((error) => {
         logError(error);
         return null;
       });
-      if (n !== null) onStateChange?.("failed", n.reason);
+      if (diagnosis !== null) onStateChange?.("failed", diagnosis.reason);
     }
     return null;
   }
@@ -653,18 +671,18 @@ async function initReplBridge(options) {
     onStateChange?.("failed", BRIDGE_LOGIN_HINT, "auth");
     return null;
   }
-  let recheckOwnerIdentity = async (e, reason, debugMsg) => {
+  let recheckOwnerIdentity = async (expected, reason, debugMsg) => {
     let fileLogin = await readFreshOAuthCredentialSnapshot(storageV5, credentials).catch(() => {
       return;
     });
     let { login } = await resolveOwnerCheckIdentity({
       site: "recheck",
       fileLogin,
-      owner: e,
+      owner: expected,
       attributions,
       writerHonorsVouch: recordWriterHonorsServerVouch,
     });
-    if (sameOwnerAccount(login, e)) return true;
+    if (sameOwnerAccount(login, expected)) return true;
     logBridgeSkip(reason, debugMsg);
     onStateChange?.("failed", BRIDGE_ACCOUNT_UNVERIFIED_HINT, "terminal");
     return false;
@@ -723,7 +741,7 @@ async function initReplBridge(options) {
     return null;
   }
   let takingOverLocalHolder = false;
-  if (localHolderGuard && Ut && reattachTarget && isBridgeResumeRespectsLocalOwnerEnabled()) {
+  if (localHolderGuard && adoptedFromPointer && reattachTarget && isBridgeResumeRespectsLocalOwnerEnabled()) {
     let liveBridgeSessionHolder = await findLiveBridgeSessionHolder(reattachTarget);
     if (liveBridgeSessionHolder) {
       if (localHolderGuard.mode === "decline") {
@@ -741,11 +759,11 @@ async function initReplBridge(options) {
       takingOverLocalHolder = true;
     }
   }
-  let Ie = pinSessionId(getSessionId());
+  let sessionKey = pinSessionId(getSessionId());
   if (!isSessionHistorySuppressed()) {
     let historySuppressionFromDisk = await readHistorySuppressionFromDisk(storageV5);
-    if (historySuppressionFromDisk === "found") holdSessionHistorySuppressionFor(Ie);
-    else if (historySuppressionFromDisk === "clean") releaseScanUncertaintyHoldFor(Ie);
+    if (historySuppressionFromDisk === "found") holdSessionHistorySuppressionFor(sessionKey);
+    else if (historySuppressionFromDisk === "clean") releaseScanUncertaintyHoldFor(sessionKey);
     else if (historySuppressionFromDisk === "torn")
       logFeatureSad("rc_cross_account_suppression", "scan_torn");
     else {
@@ -753,10 +771,10 @@ async function initReplBridge(options) {
         "rc_cross_account_suppression",
         historySuppressionFromDisk === "budget-exhausted" ? "scan_budget_exhausted" : "scan_read_error",
       );
-      let n = isPrecautionarySuppressionHeldFor(Ie);
-      holdPrecautionarySuppressionFor(Ie);
-      markPrecautionClearResilientFor(Ie);
-      if (!n) markScanUncertaintyHoldFor(Ie);
+      let alreadyHeld = isPrecautionarySuppressionHeldFor(sessionKey);
+      holdPrecautionarySuppressionFor(sessionKey);
+      markPrecautionClearResilientFor(sessionKey);
+      if (!alreadyHeld) markScanUncertaintyHoldFor(sessionKey);
     }
   }
   if (
@@ -767,8 +785,8 @@ async function initReplBridge(options) {
       getSessionId() !== boundSessionKey)
   ) {
     historyBackfillSuppressed = true;
-    Be = xt();
-    onHistoryBackfillSuppressed?.(Be);
+    uncertainty = suppressionUncertainty();
+    onHistoryBackfillSuppressed?.(uncertainty);
   }
   if (!getBridgeTokenOverride()) {
     let tokens = getGlobalConfig();
@@ -793,13 +811,13 @@ async function initReplBridge(options) {
         "[bridge:repl] Skipping: OAuth token expired and refresh failed (re-login required)",
       );
       onStateChange?.("failed", BRIDGE_LOGIN_HINT, "auth");
-      let r = storedOAuthTokenExpiresAt;
+      let expiresAt = storedOAuthTokenExpiresAt;
       await saveGlobalConfig(
-        (h) => ({
-          ...h,
-          bridgeOauthDeadExpiresAt: r,
+        (config) => ({
+          ...config,
+          bridgeOauthDeadExpiresAt: expiresAt,
           bridgeOauthDeadFailCount:
-            h.bridgeOauthDeadExpiresAt === r ? (h.bridgeOauthDeadFailCount ?? 0) + 1 : 1,
+            config.bridgeOauthDeadExpiresAt === expiresAt ? (config.bridgeOauthDeadFailCount ?? 0) + 1 : 1,
         }),
         storageV5,
       );
@@ -827,14 +845,14 @@ async function initReplBridge(options) {
     hasTitle = true;
     titleIsExplicit = true;
   } else if (!historyBackfillSuppressed) {
-    let e = Ue(getCurrentSessionTitle);
-    let n = Ue(getCurrentSessionAiTitle);
-    if (e) {
-      title = e;
+    let currentTitle = withCurrentSession(getCurrentSessionTitle);
+    let currentAiTitle = withCurrentSession(getCurrentSessionAiTitle);
+    if (currentTitle) {
+      title = currentTitle;
       hasTitle = true;
       titleIsExplicit = true;
-    } else if (n) {
-      title = n;
+    } else if (currentAiTitle) {
+      title = currentAiTitle;
       hasTitle = true;
     } else if (initialMessages && initialMessages.length > 0)
       for (let idx = initialMessages.length - 1; idx >= 0; idx--) {
@@ -850,47 +868,49 @@ async function initReplBridge(options) {
       }
   }
   let userMessageCount = 0;
-  let Xe;
-  let ce = null;
-  let mt = 0;
+  let lastTitleSessionId;
+  let handle = null;
+  let titleGeneration = 0;
   let ownerChangedTornDown = false;
-  let ht = false;
-  let bt;
-  let Hn = (bridgeSessionId) => bt?.bridgeSessionId === bridgeSessionId && bt.sessionId === getSessionId();
+  let tornDown = false;
+  let adoptedAiTitle;
+  let isAdoptedAiTitle = (bridgeSessionId) =>
+    adoptedAiTitle?.bridgeSessionId === bridgeSessionId && adoptedAiTitle.sessionId === getSessionId();
   let titleWriter = createTitleWriteCoalescer({
-    isOwnTitle: (e, n) => be.has(n),
-    onRemoteTitleAdopted: (e, n) => {
-      setSelfBridgeTitle(e, n);
-      we = e;
+    isOwnTitle: (bridgeSessionId, title) => knownTitles.has(title),
+    onRemoteTitleAdopted: (bridgeSessionId, title) => {
+      setSelfBridgeTitle(bridgeSessionId, title);
+      remoteTitleSessionId = bridgeSessionId;
     },
   });
-  let $e = (bridgeSessionId, title) => be.has(title) || titleWriter.hasSent(bridgeSessionId, title);
-  let we;
-  let Wt = `${getBridgeSessionNamePrefix()}-${randomWordSlug()}`;
-  let be = new Set([title]);
-  let jt;
+  let isTitleKnown = (bridgeSessionId, titleText) =>
+    knownTitles.has(titleText) || titleWriter.hasSent(bridgeSessionId, titleText);
+  let remoteTitleSessionId;
+  let fallbackTitle = `${getBridgeSessionNamePrefix()}-${randomWordSlug()}`;
+  let knownTitles = new Set([title]);
+  let originalLocalTitle;
   if (historyBackfillSuppressed) {
     let sessionId = getSessionId();
-    let n = sessionId ? getCurrentSessionAiTitle(sessionId) : undefined;
-    if (n) be.add(n);
-    jt = sessionId ? getCurrentSessionTitle(sessionId) : undefined;
+    let aiTitle = sessionId ? getCurrentSessionAiTitle(sessionId) : undefined;
+    if (aiTitle) knownTitles.add(aiTitle);
+    originalLocalTitle = sessionId ? getCurrentSessionTitle(sessionId) : undefined;
   }
   let resolved = Promise.resolve();
-  let applyDerivedTitle = (e, bridgeSessionId, r, h) => {
-    let R = () => h && (isBridgeBindingForeign() || Ae());
-    let O = () => !ht;
-    if (ownerChangedTornDown || R() || isTeleportedSession(bridgeSessionId)) return false;
+  let applyDerivedTitle = (derivedTitle, bridgeSessionId, fromMessageIndex, fromAutomation) => {
+    let egressBarred = () => fromAutomation && (isBridgeBindingForeign() || isEgressSuppressed());
+    let stillLive = () => !tornDown;
+    if (ownerChangedTornDown || egressBarred() || isTeleportedSession(bridgeSessionId)) return false;
     hasTitle = true;
-    title = e;
-    be.add(e);
-    setSelfBridgeTitle(bridgeSessionId, e);
-    logForDebugging(`[bridge:repl] derived title from message ${r}: ${e}`);
+    title = derivedTitle;
+    knownTitles.add(derivedTitle);
+    setSelfBridgeTitle(bridgeSessionId, derivedTitle);
+    logForDebugging(`[bridge:repl] derived title from message ${fromMessageIndex}: ${derivedTitle}`);
     titleWriter
-      .update(bridgeSessionId, e, {
+      .update(bridgeSessionId, derivedTitle, {
         baseUrl,
         getAccessToken: getBridgeSessionsAccessToken,
         shouldSend: () => {
-          if (ownerChangedTornDown || R() || !O()) return false;
+          if (ownerChangedTornDown || egressBarred() || !stillLive()) return false;
           return !isTeleportedSession(bridgeSessionId);
         },
       })
@@ -899,76 +919,82 @@ async function initReplBridge(options) {
   };
   let generateTitleFromText = (derived, bridgeSessionId, atCount) => {
     if (ownerChangedTornDown) return;
-    let gen = ++mt;
-    let R = userMessageCount;
-    let O = AbortSignal.timeout(15000);
-    requestAndPickSessionTitle(derived, O, credentials).then(async (generated) => {
-      let pe = () => {
+    let gen = ++titleGeneration;
+    let messageCount = userMessageCount;
+    let timeoutSignal = AbortSignal.timeout(15000);
+    requestAndPickSessionTitle(derived, timeoutSignal, credentials).then(async (generated) => {
+      let localAiTitlePending = () => {
         let currentSessionAiTitle = getCurrentSessionAiTitle(getSessionId());
-        return Boolean(currentSessionAiTitle && !be.has(currentSessionAiTitle));
+        return Boolean(currentSessionAiTitle && !knownTitles.has(currentSessionAiTitle));
       };
-      let Me = () => {
+      let isStale = () => {
         let currentSessionTitle = getCurrentSessionTitle(getSessionId());
         return (
           ownerChangedTornDown ||
-          gen !== mt ||
-          Xe !== bridgeSessionId ||
+          gen !== titleGeneration ||
+          lastTitleSessionId !== bridgeSessionId ||
           titleIsExplicit ||
-          Boolean(currentSessionTitle && currentSessionTitle !== jt) ||
-          pe()
+          Boolean(currentSessionTitle && currentSessionTitle !== originalLocalTitle) ||
+          localAiTitlePending()
         );
       };
-      if (!generated || Me()) return;
-      let Ze = usesCredentialStore ? await getBridgeSessionsAccessTokenAsync(credentials) : undefined;
-      let ge = await getBridgeSession(bridgeSessionId, {
+      if (!generated || isStale()) return;
+      let bridgeToken = usesCredentialStore
+        ? await getBridgeSessionsAccessTokenAsync(credentials)
+        : undefined;
+      let session = await getBridgeSession(bridgeSessionId, {
         baseUrl,
-        getAccessToken: usesCredentialStore ? () => Ze : getBridgeSessionsAccessToken,
+        getAccessToken: usesCredentialStore ? () => bridgeToken : getBridgeSessionsAccessToken,
         credentials,
       }).catch(() => null);
-      if (Me()) return;
-      if (ge === null) return;
-      if (ge.title && !$e(bridgeSessionId, ge.title)) {
-        setSelfBridgeTitle(bridgeSessionId, ge.title);
-        titleWriter.noteRemoteTitle(bridgeSessionId, ge.title);
-        we = bridgeSessionId;
+      if (isStale()) return;
+      if (session === null) return;
+      if (session.title && !isTitleKnown(bridgeSessionId, session.title)) {
+        setSelfBridgeTitle(bridgeSessionId, session.title);
+        titleWriter.noteRemoteTitle(bridgeSessionId, session.title);
+        remoteTitleSessionId = bridgeSessionId;
         return;
       }
-      applyDerivedTitle(generated, bridgeSessionId, R, atCount);
+      applyDerivedTitle(generated, bridgeSessionId, messageCount, atCount);
     });
   };
-  let handleRemoteRename = (e) => {
-    let n = sanitizeSessionTitle(e);
-    if (!n)
+  let handleRemoteRename = (requestedTitle) => {
+    let cleanTitle = sanitizeSessionTitle(requestedTitle);
+    if (!cleanTitle)
       return {
         ok: false,
         error: "title must be non-empty",
       };
-    title = n;
+    title = cleanTitle;
     hasTitle = true;
     titleIsExplicit = true;
-    be.add(n);
-    be.add(e);
-    if (ce) {
-      ce.selfTitle = n;
-      titleWriter.noteRemoteTitle(ce.bridgeSessionId, n);
-      if (e !== n) titleWriter.noteRemoteTitle(ce.bridgeSessionId, e);
+    knownTitles.add(cleanTitle);
+    knownTitles.add(requestedTitle);
+    if (handle) {
+      handle.selfTitle = cleanTitle;
+      titleWriter.noteRemoteTitle(handle.bridgeSessionId, cleanTitle);
+      if (requestedTitle !== cleanTitle) titleWriter.noteRemoteTitle(handle.bridgeSessionId, requestedTitle);
     }
-    let r = isBridgeBindingForeign();
-    let h = r ? getBridgeBoundConversationSid() : getSessionId();
-    if (h)
-      saveCustomTitle(h, n, r ? getDerivedTranscriptPathForSession(h) : undefined, "remote", storageV5).catch(
-        (error) => {
-          logForDebugging(`saveCustomTitle: transcript append failed: ${errorMessage(error)}`);
-        },
-      );
+    let bindingForeign = isBridgeBindingForeign();
+    let titleOwnerSid = bindingForeign ? getBridgeBoundConversationSid() : getSessionId();
+    if (titleOwnerSid)
+      saveCustomTitle(
+        titleOwnerSid,
+        cleanTitle,
+        bindingForeign ? getDerivedTranscriptPathForSession(titleOwnerSid) : undefined,
+        "remote",
+        storageV5,
+      ).catch((error) => {
+        logForDebugging(`saveCustomTitle: transcript append failed: ${errorMessage(error)}`);
+      });
     else
       logForDebugging(
         "[bridge:repl] Dropping inbound rename mirror: foreign binding with no bound-sid exposure \u2014 the live conversation is not the one the phone renamed",
       );
-    if (!isTeammate() && !r)
+    if (!isTeammate() && !bindingForeign)
       resolved = resolved.then(async () => {
         try {
-          await saveSessionAgentName(n, "user", storageV5);
+          await saveSessionAgentName(cleanTitle, "user", storageV5);
         } catch (error) {
           logForDebugging(`onRenameSession: name propagation failed: ${errorMessage(error)}`);
         }
@@ -977,29 +1003,34 @@ async function initReplBridge(options) {
       ok: true,
     };
   };
-  let zt = (bridgeSessionId) => {
+  let adoptAiTitleFor = (bridgeSessionId) => {
     let sessionId = getSessionId();
-    let r = Ue(getCurrentSessionAiTitle);
-    if (!r || $e(bridgeSessionId, r)) return false;
-    let h = userMessageCount;
+    let aiTitle = withCurrentSession(getCurrentSessionAiTitle);
+    if (!aiTitle || isTitleKnown(bridgeSessionId, aiTitle)) return false;
+    let messageCount = userMessageCount;
     getBridgeSession(bridgeSessionId, {
       baseUrl,
       getAccessToken: getBridgeSessionsAccessToken,
     })
       .catch(() => null)
-      .then((R) => {
-        if (titleIsExplicit || we === bridgeSessionId || getCurrentSessionTitle(getSessionId())) return;
-        if (R === null) return;
-        if (R.title && !$e(bridgeSessionId, R.title)) {
-          setSelfBridgeTitle(bridgeSessionId, R.title);
-          titleWriter.noteRemoteTitle(bridgeSessionId, R.title);
-          we = bridgeSessionId;
+      .then((session) => {
+        if (
+          titleIsExplicit ||
+          remoteTitleSessionId === bridgeSessionId ||
+          getCurrentSessionTitle(getSessionId())
+        )
+          return;
+        if (session === null) return;
+        if (session.title && !isTitleKnown(bridgeSessionId, session.title)) {
+          setSelfBridgeTitle(bridgeSessionId, session.title);
+          titleWriter.noteRemoteTitle(bridgeSessionId, session.title);
+          remoteTitleSessionId = bridgeSessionId;
           return;
         }
-        if (getSessionId() !== sessionId || Ue(getCurrentSessionAiTitle) !== r) return;
-        mt++;
-        if (applyDerivedTitle(r, bridgeSessionId, h, true))
-          bt = {
+        if (getSessionId() !== sessionId || withCurrentSession(getCurrentSessionAiTitle) !== aiTitle) return;
+        titleGeneration++;
+        if (applyDerivedTitle(aiTitle, bridgeSessionId, messageCount, true))
+          adoptedAiTitle = {
             bridgeSessionId,
             sessionId,
           };
@@ -1007,19 +1038,19 @@ async function initReplBridge(options) {
     return true;
   };
   let adoptLocalAiTitle = () => {
-    let bridgeSessionId = ce?.bridgeSessionId;
+    let bridgeSessionId = handle?.bridgeSessionId;
     if (
       !bridgeSessionId ||
       ownerChangedTornDown ||
-      ht ||
+      tornDown ||
       titleIsExplicit ||
-      we === bridgeSessionId ||
+      remoteTitleSessionId === bridgeSessionId ||
       getCurrentSessionTitle(getSessionId())
     )
       return;
-    zt(bridgeSessionId);
+    adoptAiTitleFor(bridgeSessionId);
   };
-  let qt = () => {
+  let logAutoTitleSkipped = () => {
     logEvent("tengu_bridge_auto_title_skipped", {
       user_message_count: userMessageCount,
       has_title: hasTitle,
@@ -1027,22 +1058,23 @@ async function initReplBridge(options) {
   };
   let onUserMessage = (text, bridgeSessionId) => {
     if (ownerChangedTornDown) return true;
-    if (titleIsExplicit || Hn(bridgeSessionId) || we === bridgeSessionId) return true;
-    let placeholder = Ue(getCurrentSessionTitle);
+    if (titleIsExplicit || isAdoptedAiTitle(bridgeSessionId) || remoteTitleSessionId === bridgeSessionId)
+      return true;
+    let placeholder = withCurrentSession(getCurrentSessionTitle);
     if (placeholder) {
-      if (!$e(bridgeSessionId, placeholder))
+      if (!isTitleKnown(bridgeSessionId, placeholder))
         getBridgeSession(bridgeSessionId, {
           baseUrl,
           getAccessToken: getBridgeSessionsAccessToken,
         })
           .catch(() => null)
-          .then((h) => {
+          .then((session) => {
             if (titleIsExplicit || getCurrentSessionTitle(getSessionId()) !== placeholder) return;
-            if (h === null) return;
-            if (h.title && !$e(bridgeSessionId, h.title)) {
-              setSelfBridgeTitle(bridgeSessionId, h.title);
-              titleWriter.noteRemoteTitle(bridgeSessionId, h.title);
-              we = bridgeSessionId;
+            if (session === null) return;
+            if (session.title && !isTitleKnown(bridgeSessionId, session.title)) {
+              setSelfBridgeTitle(bridgeSessionId, session.title);
+              titleWriter.noteRemoteTitle(bridgeSessionId, session.title);
+              remoteTitleSessionId = bridgeSessionId;
               return;
             }
             applyDerivedTitle(placeholder, bridgeSessionId, userMessageCount, true);
@@ -1050,18 +1082,21 @@ async function initReplBridge(options) {
           });
       return true;
     }
-    if (zt(bridgeSessionId)) return true;
-    if (Xe !== undefined && Xe !== bridgeSessionId) userMessageCount = 0;
-    Xe = bridgeSessionId;
+    if (adoptAiTitleFor(bridgeSessionId)) return true;
+    if (lastTitleSessionId !== undefined && lastTitleSessionId !== bridgeSessionId) userMessageCount = 0;
+    lastTitleSessionId = bridgeSessionId;
     userMessageCount++;
     if (userMessageCount === 1 && !hasTitle) {
-      if (skipAutoTitle) qt();
+      if (skipAutoTitle) logAutoTitleSkipped();
       else generateTitleFromText(text, bridgeSessionId, false);
-    } else if (userMessageCount === 3 && skipAutoTitle) qt();
+    } else if (userMessageCount === 3 && skipAutoTitle) logAutoTitleSkipped();
     else if (userMessageCount === 3) {
-      let h = historyBackfillSuppressed || isBridgeBindingForeign() || Ae() ? undefined : getMessages?.();
-      let derived = h ? extractConversationText(messagesSinceCompactBoundary(h)) : text;
-      generateTitleFromText(derived, bridgeSessionId, h !== undefined);
+      let history =
+        historyBackfillSuppressed || isBridgeBindingForeign() || isEgressSuppressed()
+          ? undefined
+          : getMessages?.();
+      let derived = history ? extractConversationText(messagesSinceCompactBoundary(history)) : text;
+      generateTitleFromText(derived, bridgeSessionId, history !== undefined);
     }
     return (userMessageCount >= 3 && (hasTitle || titleIsExplicit)) || userMessageCount >= 8;
   };
@@ -1072,9 +1107,9 @@ async function initReplBridge(options) {
     onStateChange?.("failed", BRIDGE_LOGIN_HINT, "auth");
     return null;
   }
-  let jn = usesCredentialStore ? await getBridgeAccessTokenAsync(credentials) : undefined;
+  let bridgeToken = usesCredentialStore ? await getBridgeAccessTokenAsync(credentials) : undefined;
   let ownerPin = await resolveBridgeOwnerPinOnly({
-    getAccessToken: usesCredentialStore ? () => jn : getBridgeAccessToken,
+    getAccessToken: usesCredentialStore ? () => bridgeToken : getBridgeAccessToken,
     storageV5,
     credentials,
   });
@@ -1087,21 +1122,21 @@ async function initReplBridge(options) {
     return null;
   }
   let { branch, gitRepoUrl, defaultBranch } = await snapshotGitEvidenceForBridge();
-  let We;
+  let presencePulse;
   let versionError_2 = createAbortController();
   function teardownOnOwnerChange() {
     ownerChangedTornDown = true;
     versionError_2.abort();
-    We?.teardown();
-    if (ce) {
-      titleWriter.forget(ce.bridgeSessionId);
-      retireBridgeHandle(ce, storageV5);
+    presencePulse?.teardown();
+    if (handle) {
+      titleWriter.forget(handle.bridgeSessionId);
+      retireBridgeHandle(handle, storageV5);
     }
   }
-  if (pt) {
+  if (deferredClaim) {
     if (
       !(await recheckOwnerIdentity(
-        pt,
+        deferredClaim,
         "host_target_owner_recheck_failed",
         "[bridge:repl] Skipping: the login changed (or became unreadable) between adjudicating this conversation\u2019s owner and connecting \u2014 not attaching it to the host\u2019s session",
       ))
@@ -1144,28 +1179,31 @@ async function initReplBridge(options) {
       return null;
     }
     if (machineLaneVersionRefusal() !== null) {
-      let e = () =>
+      let readTags = () =>
         readBridgeSessionTags(reattachTarget, {
           baseUrl,
           credentials,
         });
-      let branch = await e();
+      let branch = await readTags();
       if (branch === null) {
         await sleep(2000);
-        branch = await e();
+        branch = await readTags();
       }
-      let r = machineLaneVersionRefusal();
-      if (r !== null && isMachineLaneWork(branch, r)) {
-        let h =
+      let tags = machineLaneVersionRefusal();
+      if (tags !== null && isMachineLaneWork(branch, tags)) {
+        let refusalMessage =
           branch === null
-            ? `Remote Control could not attach: the session's record could not be read. ${r.message}`
-            : `Remote Control could not attach: ${r.message}`;
-        logForDebugging(`[bridge:repl] Skipping: ${h}`, {
+            ? `Remote Control could not attach: the session's record could not be read. ${tags.message}`
+            : `Remote Control could not attach: ${tags.message}`;
+        logForDebugging(`[bridge:repl] Skipping: ${refusalMessage}`, {
           level: "error",
         });
         logBridgeSkip("machine_lane_floor", undefined, true);
-        logFeatureBad("bridge_machine_lane_floor", branch === null ? `session_unread_${r.reason}` : r.reason);
-        onStateChange?.("failed", h, "terminal");
+        logFeatureBad(
+          "bridge_machine_lane_floor",
+          branch === null ? `session_unread_${tags.reason}` : tags.reason,
+        );
+        onStateChange?.("failed", refusalMessage, "terminal");
         return null;
       }
     }
@@ -1174,17 +1212,17 @@ async function initReplBridge(options) {
     );
   }
   if (takingOverLocalHolder) logEvent("tengu_bridge_restored_pointer_takeover", {});
-  let Je;
-  let Xn = 0;
+  let inflightDiff;
+  let diffSequence = 0;
   let emptyToolPermissionContext = getEmptyToolPermissionContext();
-  let Ke;
-  let Zn = limitConcurrency(1, readFileForRemote);
-  let bridgeHandle = (ce = await initEnvLessBridgeCore({
+  let lastDiff;
+  let readFileLimited = limitConcurrency(1, readFileForRemote);
+  let bridgeHandle = (handle = await initEnvLessBridgeCore({
     titleWriter,
-    noHistoryBackfill: historyBackfillSuppressed && Be?.uncertaintyOnly !== true,
-    neutralFallbackTitle: Wt,
+    noHistoryBackfill: historyBackfillSuppressed && uncertainty?.uncertaintyOnly !== true,
+    neutralFallbackTitle: fallbackTitle,
     onReattachGoneBounce: () => {
-      be.add(Wt);
+      knownTitles.add(fallbackTitle);
       historyBackfillSuppressed = true;
       onHistoryBackfillSuppressed?.();
       holdPrecautionarySuppressionFor(boundSessionKey);
@@ -1207,8 +1245,8 @@ async function initReplBridge(options) {
       if (!tornEntryPair)
         clearBridgeSession(
           boundSessionKey,
-          lt,
-          lt
+          ownTranscriptPath,
+          ownTranscriptPath
             ? {
                 targetExists: true,
               }
@@ -1224,7 +1262,7 @@ async function initReplBridge(options) {
     fixedCredentialNow,
     onOwnerChanged: teardownOnOwnerChange,
     getAccessToken: getBridgeSessionsAccessToken,
-    onAuth401: (e, n) => recoverCloudSessionsBearer(e, credentials, storageV5, n),
+    onAuth401: (token, options) => recoverCloudSessionsBearer(token, credentials, storageV5, options),
     classifyFailedOAuthRefresh,
     onReadFreshOAuthToken: async () => {
       let freshOAuthAccessToken = await readFreshOAuthAccessToken(credentials);
@@ -1246,8 +1284,10 @@ async function initReplBridge(options) {
     initialMessages: historyBackfillSuppressed ? undefined : initialMessages,
     conversationForPairing: () => getMessages?.() ?? initialMessages ?? [],
     remoteControlOrigin: historyBackfillSuppressed ? undefined : remoteControlOrigin,
-    getBackfillMessages: (e) =>
-      historyBackfillSuppressed || isBridgeBindingForeign() || Ae() ? undefined : getBackfillMessages?.(e),
+    getBackfillMessages: (sessionId) =>
+      historyBackfillSuppressed || isBridgeBindingForeign() || isEgressSuppressed()
+        ? undefined
+        : getBackfillMessages?.(sessionId),
     gitRepoUrl,
     branch,
     defaultBranch,
@@ -1255,10 +1295,10 @@ async function initReplBridge(options) {
     onInboundMessage,
     onQueuedNotification,
     onUserMessage,
-    onSessionEstablished: (e) => {
-      We?.teardown();
-      We = startClientPresencePulse(
-        toInfraSessionId(e),
+    onSessionEstablished: (bridgeSessionId) => {
+      presencePulse?.teardown();
+      presencePulse = startClientPresencePulse(
+        toInfraSessionId(bridgeSessionId),
         baseUrl,
         () => {
           let bridgeSessionsAccessToken = getBridgeSessionsAccessToken();
@@ -1267,18 +1307,19 @@ async function initReplBridge(options) {
             Authorization: `Bearer ${bridgeSessionsAccessToken}`,
           };
         },
-        async (r) =>
-          (await recoverHostSessionsBearer(r.Authorization?.replace(/^Bearer /, "") ?? "")) === "recovered",
+        async (authHeader) =>
+          (await recoverHostSessionsBearer(authHeader.Authorization?.replace(/^Bearer /, "") ?? "")) ===
+          "recovered",
       );
       if (isKairosPushEnabled() && !isEssentialTrafficOnly()) hydrateNotificationPreferences(storageV5);
       let currentSessionAgentColor = getCurrentSessionAgentColor();
       if (currentSessionAgentColor && currentSessionAgentColor !== "default")
-        updateBridgeSessionColorTag(e, currentSessionAgentColor, AGENT_COLOR_NAMES, {
+        updateBridgeSessionColorTag(bridgeSessionId, currentSessionAgentColor, AGENT_COLOR_NAMES, {
           baseUrl,
           getAccessToken: getBridgeSessionsAccessToken,
         });
     },
-    onBeforePushTriggeringState: () => We?.pulseIfClientPresent(),
+    onBeforePushTriggeringState: () => presencePulse?.pulseIfClientPresent(),
     onPermissionResponse,
     onInterrupt,
     onStopTask,
@@ -1295,71 +1336,77 @@ async function initReplBridge(options) {
     onApplyFlagSettings,
     onRenameSession: handleRemoteRename,
     onSetColor,
-    async onFileSuggestions(e) {
-      return (await generateFileSuggestions(globalFileIndexCache, e, true, storageV5)).map((r) => ({
-        path: r.displayText,
-      }));
+    async onFileSuggestions(query) {
+      return (await generateFileSuggestions(globalFileIndexCache, query, true, storageV5)).map(
+        (suggestion) => ({
+          path: suggestion.displayText,
+        }),
+      );
     },
-    onReadFile: (e, n, encoding, h) =>
-      (h === undefined ? readFileForRemote : Zn)(
-        e,
-        n,
+    onReadFile: (filePath, maxBytes, encoding, anchor) =>
+      (anchor === undefined ? readFileForRemote : readFileLimited)(
+        filePath,
+        maxBytes,
         () => getToolPermissionContext?.() ?? getEmptyToolPermissionContext(),
         {
           encoding,
-          anchor: h,
+          anchor,
           telemetrySource: "repl_bridge",
         },
       ),
     onGetWorkspaceDiff: host
       ? (opts) => {
-          let n = getToolPermissionContext?.() ?? emptyToolPermissionContext;
-          let r = Ke;
-          Ke = undefined;
-          if (r && r.permissionContext === n && Date.now() - r.settledAt <= WORK_SECRET_REFRESH_WINDOW_MS)
-            return Promise.resolve(r.result);
-          let h = Je;
-          if (!h || h.permissionContext !== n) {
-            let O = {
-              sequence: ++Xn,
-              permissionContext: n,
+          let permissionContext = getToolPermissionContext?.() ?? emptyToolPermissionContext;
+          let cachedDiff = lastDiff;
+          lastDiff = undefined;
+          if (
+            cachedDiff &&
+            cachedDiff.permissionContext === permissionContext &&
+            Date.now() - cachedDiff.settledAt <= WORK_SECRET_REFRESH_WINDOW_MS
+          )
+            return Promise.resolve(cachedDiff.result);
+          let current = inflightDiff;
+          if (!current || current.permissionContext !== permissionContext) {
+            let entry = {
+              sequence: ++diffSequence,
+              permissionContext,
               pendingWaiters: 0,
-              promise: buildWorkspaceDiffResponse(host, n, workspaceDiffComputeBudget)
+              promise: buildWorkspaceDiffResponse(host, permissionContext, workspaceDiffComputeBudget)
                 .then((sessionId) => {
-                  if (O.pendingWaiters === 0 && !(Ke && Ke.sequence > O.sequence))
-                    Ke = {
-                      sequence: O.sequence,
+                  if (entry.pendingWaiters === 0 && !(lastDiff && lastDiff.sequence > entry.sequence))
+                    lastDiff = {
+                      sequence: entry.sequence,
                       settledAt: Date.now(),
-                      permissionContext: n,
+                      permissionContext,
                       result: sessionId,
                     };
                   return sessionId;
                 })
                 .finally(() => {
-                  if (Je === O) Je = undefined;
+                  if (inflightDiff === entry) inflightDiff = undefined;
                 }),
             };
-            Je = O;
-            h = O;
+            inflightDiff = entry;
+            current = entry;
           }
-          let R = h;
+          let seq = current;
           if (!opts.aborted) {
-            R.pendingWaiters++;
+            seq.pendingWaiters++;
             opts.addEventListener(
               "abort",
               () => {
-                R.pendingWaiters--;
+                seq.pendingWaiters--;
               },
               {
                 once: true,
               },
             );
           }
-          return R.promise;
+          return seq.promise;
         }
       : undefined,
     async onSideQuestion({ question, history }, { signal, onProgress }) {
-      if (historyBackfillSuppressed || isBridgeBindingForeign() || Ae()) {
+      if (historyBackfillSuppressed || isBridgeBindingForeign() || isEgressSuppressed()) {
         logForDebugging("[bridge:repl] side_question refused: current conversation egress is barred");
         return {
           response: null,
@@ -1367,16 +1414,16 @@ async function initReplBridge(options) {
         };
       }
       let abortController = createAbortController();
-      let O = () => abortController.abort();
-      if (signal.aborted || versionError_2.signal.aborted) O();
-      signal.addEventListener("abort", O, {
+      let abort = () => abortController.abort();
+      if (signal.aborted || versionError_2.signal.aborted) abort();
+      signal.addEventListener("abort", abort, {
         once: true,
       });
-      versionError_2.signal.addEventListener("abort", O, {
+      versionError_2.signal.addEventListener("abort", abort, {
         once: true,
       });
       try {
-        let ee = await runSideQuestionWithProgress({
+        let result = await runSideQuestionWithProgress({
           question,
           history,
           parentController: abortController,
@@ -1384,11 +1431,11 @@ async function initReplBridge(options) {
           getLiveMessages: getMessages,
           isTurnInProgress: isTurnActive,
         });
-        if (ee.cancelled) throw new AbortError("Side question cancelled");
-        return ee.response;
+        if (result.cancelled) throw new AbortError("Side question cancelled");
+        return result.response;
       } finally {
-        signal.removeEventListener("abort", O);
-        versionError_2.signal.removeEventListener("abort", O);
+        signal.removeEventListener("abort", abort);
+        versionError_2.signal.removeEventListener("abort", abort);
       }
     },
     onMcpAuthenticate,
@@ -1411,25 +1458,25 @@ async function initReplBridge(options) {
     ...(enableSessionPersistence ? persistenceHooks : {}),
   }));
   if (bridgeHandle) {
-    let e = bridgeHandle.detachForHandoff?.bind(bridgeHandle);
+    let originalDetach = bridgeHandle.detachForHandoff?.bind(bridgeHandle);
     bridgeHandle.detachForHandoff = () => {
       teardownOnOwnerChange();
-      e?.();
+      originalDetach?.();
     };
-    let n = bridgeHandle.teardown.bind(bridgeHandle);
+    let originalTeardown = bridgeHandle.teardown.bind(bridgeHandle);
     bridgeHandle.teardown = async (err) => {
-      ht = true;
+      tornDown = true;
       versionError_2.abort();
       titleWriter.forget(bridgeHandle.bridgeSessionId);
-      await n(err);
+      await originalTeardown(err);
     };
     if (ownerChangedTornDown) retireBridgeHandle(bridgeHandle, storageV5);
     bridgeHandle.selfTitle = title;
     bridgeHandle.adoptLocalAiTitle = adoptLocalAiTitle;
     bridgeHandle.ownerVetoed = ownerVetoed;
-    bridgeHandle.serverVouch = Qe ?? (_e ? ct : undefined);
+    bridgeHandle.serverVouch = vouch ?? (deferredVeto ? deferredVouch : undefined);
   }
-  return wrapTeardownWithPresence(bridgeHandle, () => We);
+  return wrapTeardownWithPresence(bridgeHandle, () => presencePulse);
 }
 //@ chunk-cg2r2hy6.js:48738-48748 placement
 var FIRST_SENTENCE_MAX_CHARS = 50;
@@ -1445,3 +1492,4 @@ function firstSentenceSnippet(raw) {
     ? flat.slice(0, FIRST_SENTENCE_MAX_CHARS - 1) + "\u2026"
     : flat;
 }
+export { initReplBridge };

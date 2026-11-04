@@ -12,15 +12,15 @@ import { logError } from "../log.js";
 import { withTelemetryMessage, toError } from "../errors.js";
 import { isManagedConfigScope } from "../../services/mcp/types.js";
 import { isManagedOrPolicyBlocked } from "./managedPlugins.js";
-import { withHostEnvRestored } from "../settings/managedSettingsFiles.js";
+import { withHostEnvRestored } from "../settings/hostEnvWrites.js";
 import { nfcLower } from "../stringUtils.js";
 
 //@ chunk-mt0bfz4z.js:376-408 placement
 /**
  * logPluginScopedError：记录托管作用域插件错误。
  */
-function logPluginScopedError(r, o) {
-  logError(withTelemetryMessage(toError(r), o));
+function logPluginScopedError(error, message) {
+  logError(withTelemetryMessage(toError(error), message));
 }
 //@ chunk-mt0bfz4z.js:408-518 placement
 /**
@@ -34,15 +34,15 @@ function isManagedPluginScope(config) {
 /**
  * 受管插件时在限定写权限的作用域中执行。
  */
-function runWithPluginWriteScope(r, o) {
-  if (!isManagedPluginScope(r)) return o();
-  let { pluginSource } = r;
+function runWithPluginWriteScope(scope, fn) {
+  if (!isManagedPluginScope(scope)) return fn();
+  let { pluginSource } = scope;
   return withHostEnvRestored(
-    o,
+    fn,
     pluginSource === undefined
       ? {}
       : {
-          keepsWrite: (n) => nfcLower(n) === nfcLower(pluginSource),
+          keepsWrite: (name) => nfcLower(name) === nfcLower(pluginSource),
         },
   );
 }

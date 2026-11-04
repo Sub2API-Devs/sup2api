@@ -8,7 +8,7 @@
  * pieces: chunk-jr1te1aj.js (14)
  * attribution: placement 14
  */
-import { x, Ar } from "../../../runtime/bun-runtime.js";
+import { __commonJS, __export } from "../../../runtime/bun-runtime.js";
 import {
   RESPONSIVE_MODE_PLUGIN,
   shouldUseResponsiveMode,
@@ -21,8 +21,8 @@ import { isRemoteSessionAvailable } from "../../remote/remoteMode.js";
 import { isRemoteEntrypoint } from "../../utils/entrypointKinds.js";
 
 //@ chunk-jr1te1aj.js:3810-3937 placement
-var RESPONSIVE_MODE_HOOKS_MANIFEST = x(function (ce, y) {
-  y.exports = {
+var RESPONSIVE_MODE_HOOKS_MANIFEST = __commonJS(function (manifestModule, manifestExports) {
+  manifestExports.exports = {
     scan: {
       hooks: ["prompt.section", "prompt.submit", "ui.render"],
       calls: ["turn.abort"],
@@ -36,7 +36,7 @@ var RESPONSIVE_MODE_HOOKS_MANIFEST = x(function (ce, y) {
  */
 var responsiveModeExports = {};
 //@ chunk-jr1te1aj.js:3946-4258 placement
-Ar(responsiveModeExports, {
+__export(responsiveModeExports, {
   DRAFT_HINT: () => DRAFT_HINT_TEXT,
   FOCUS_MODE: () => FOCUS_MODE,
   PLUGIN_LISTING: () => RESPONSIVE_MODE_PLUGIN,
@@ -58,14 +58,17 @@ Ar(responsiveModeExports, {
 /**
  * 输入来自 composer、无附件且是用户键入的词。
  */
-function isTypedComposerText(e) {
-  return e.origin.kind === "composer" && e.attachments === undefined && isRealUserPrompt(e.text);
+function isTypedComposerText(prompt) {
+  return (
+    prompt.origin.kind === "composer" && prompt.attachments === undefined && isRealUserPrompt(prompt.text)
+  );
 }
 //@ chunk-jr1te1aj.js:4343-4387 placement
 /**
  * 键入词、已有回合 id 且不在等待（提交会打断当前回合）。
  */
-var cutsTheTurnOnSubmit = (e) => isTypedComposerText(e) && e.turnId !== undefined && !e.wait;
+var cutsTheTurnOnSubmit = (prompt) =>
+  isTypedComposerText(prompt) && prompt.turnId !== undefined && !prompt.wait;
 //@ chunk-jr1te1aj.js:4387-4455 placement
 /**
  * 草稿提示文案：enter 打断并发送、ctrl+x 再 enter 排队。
@@ -122,56 +125,56 @@ Avoid these patterns and their cousins:
 - Emoji, and exclamation-mark enthusiasm in general.
 Say what you found, what you did, what you need, and stop.`;
 //@ chunk-jr1te1aj.js:7130-7663 placement
-function registerResponsiveModePrompt(e, l, T, k) {
-  e(
+function registerResponsiveModePrompt(registerHook, isRemote, getSpliceHint, isHintSuppressed) {
+  registerHook(
     "prompt.section",
     {
       name: FOCUS_MODE,
     },
-    async (i, t, r) => {
-      let { text } = await r(t);
+    async (ctx, section, next) => {
+      let { text } = await next(section);
       return {
         text: text === null ? RESPONSIVE_MODE_SECTION : text,
       };
     },
   );
-  e("prompt.submit", async (i, t, r) => {
-    if (!isTypedComposerText(t)) return r(t);
-    let o = await r({
-      ...t,
-      context: [...(t.context ?? []), RESPONSIVE_MODE_REMINDER],
+  registerHook("prompt.submit", async (ctx, event, next) => {
+    if (!isTypedComposerText(event)) return next(event);
+    let result = await next({
+      ...event,
+      context: [...(event.context ?? []), RESPONSIVE_MODE_REMINDER],
     });
-    if (o.drop === undefined && cutsTheTurnOnSubmit(t) && !l())
-      await i.turn
+    if (result.drop === undefined && cutsTheTurnOnSubmit(event) && !isRemote())
+      await ctx.turn
         .abort({
-          turnId: t.turnId,
+          turnId: event.turnId,
         })
         .catch(() => {
           return;
         });
-    return o;
+    return result;
   });
-  e(
+  registerHook(
     "ui.render",
     {
       component: "PromptHint",
     },
-    async (i, t, r) => {
-      if (!(t.props.isDraft && t.props.isWorking) || k()) return r(t);
-      let o = l() ? T() : DRAFT_HINT_TEXT;
-      let b =
-        t.surface === "terminal"
+    async (ctx, render, next) => {
+      if (!(render.props.isDraft && render.props.isWorking) || isHintSuppressed()) return next(render);
+      let hintText = isRemote() ? getSpliceHint() : DRAFT_HINT_TEXT;
+      let patch =
+        render.surface === "terminal"
           ? {
-              tail: o,
+              tail: hintText,
             }
           : {
-              hint: o,
+              hint: hintText,
             };
-      return r({
-        ...t,
+      return next({
+        ...render,
         props: {
-          ...t.props,
-          ...b,
+          ...render.props,
+          ...patch,
         },
       });
     },
@@ -181,9 +184,9 @@ function registerResponsiveModePrompt(e, l, T, k) {
 /**
  * 注册简化版的响应式模式提示注入。
  */
-function registerResponsiveModePromptSimple(e) {
+function registerResponsiveModePromptSimple(registerHook) {
   registerResponsiveModePrompt(
-    e,
+    registerHook,
     () => false,
     () => "",
     () => false,
@@ -196,9 +199,9 @@ var registerResponsiveModePlugin = () =>
     hooksModule: builtinHooksModuleRef(
       import.meta.dir,
       {
-        register: (e) =>
+        register: (api) =>
           registerResponsiveModePrompt(
-            e,
+            api,
             isRemoteEntrypoint_2,
             noSpliceHint,
             () => isRemoteSessionAvailable() || isRemoteEntrypoint(),
@@ -217,3 +220,16 @@ function isRemoteEntrypoint_2() {
  * 不拼接草稿提示（返回空串）。
  */
 var noSpliceHint = () => "";
+export {
+  DRAFT_HINT_TEXT,
+  FOCUS_MODE,
+  RESPONSIVE_MODE_REMINDER,
+  RESPONSIVE_MODE_SECTION,
+  cutsTheTurnOnSubmit,
+  responsiveModeExports,
+  registerResponsiveModePromptSimple,
+  registerResponsiveModePrompt,
+  registerResponsiveModePlugin,
+  noSpliceHint,
+  isTypedComposerText,
+};

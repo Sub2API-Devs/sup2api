@@ -5,29 +5,30 @@
  * pieces: chunk-2tyrgda4.js (4)
  * attribution: esm-layout 1, esm-fingerprint 3
  */
-import { Xa } from "../../../../../runtime/bun-runtime.js";
-import { init_content_encryption_2, k } from "../../webapi/lib/content_encryption.js";
-import { p, g } from "../../webapi/lib/buffer_utils.js";
+import { __esm } from "../../../../../runtime/bun-runtime.js";
+import { init_content_encryption_2, generateCek } from "../../webapi/lib/content_encryption.js";
+import { cryptoModule, isCryptoKey } from "../../webapi/lib/buffer_utils.js";
 import { checkEncCryptoKey } from "../../node/esm/lib/crypto_key.js";
-import { A } from "../../node/esm/lib/invalid_key_input.js";
-import { m } from "./is_key_like.js";
+import { keyMustBeTypeError } from "../../node/esm/lib/invalid_key_input.js";
+import { keyObjectTypes } from "./is_key_like.js";
 import { checkP2s } from "../../node/esm/lib/check_p2s.js";
 import { p2s } from "../../node/esm/lib/buffer_utils.js";
 import { wrap, unwrap } from "./aeskw.js";
 import { encode } from "./base64url.js";
 
 //@ chunk-2tyrgda4.js:11526-11547 esm-layout
-var init_pbes2kw = Xa(() => {
+var init_pbes2kw = __esm(() => {
   init_content_encryption_2();
 });
 //@ chunk-2tyrgda4.js:11547-11742 esm-fingerprint
 function getCryptoKey_2(key, alg) {
-  if (key instanceof Uint8Array) return p.subtle.importKey("raw", key, "PBKDF2", false, ["deriveBits"]);
-  if (g(key)) {
+  if (key instanceof Uint8Array)
+    return cryptoModule.subtle.importKey("raw", key, "PBKDF2", false, ["deriveBits"]);
+  if (isCryptoKey(key)) {
     checkEncCryptoKey(key, alg, "deriveBits", "deriveKey");
     return key;
   }
-  throw TypeError(A(key, ...m, "Uint8Array"));
+  throw TypeError(keyMustBeTypeError(key, ...keyObjectTypes, "Uint8Array"));
 }
 //@ chunk-2tyrgda4.js:11742-12193 esm-fingerprint
 async function deriveKey_2(p2s_2, alg, p2c, key) {
@@ -46,22 +47,22 @@ async function deriveKey_2(p2s_2, alg, p2c, key) {
   };
   let cryptoKey = await getCryptoKey_2(key, alg);
   if (cryptoKey.usages.includes("deriveBits"))
-    return new Uint8Array(await p.subtle.deriveBits(subtleAlg, cryptoKey, keylen));
+    return new Uint8Array(await cryptoModule.subtle.deriveBits(subtleAlg, cryptoKey, keylen));
   if (cryptoKey.usages.includes("deriveKey"))
-    return p.subtle.deriveKey(subtleAlg, cryptoKey, wrapAlg, false, ["wrapKey", "unwrapKey"]);
+    return cryptoModule.subtle.deriveKey(subtleAlg, cryptoKey, wrapAlg, false, ["wrapKey", "unwrapKey"]);
   throw TypeError('PBKDF2 key "usages" must include "deriveBits" or "deriveKey"');
 }
 //@ chunk-2tyrgda4.js:12193-12407 esm-fingerprint
-var encrypt = async (alg, key, r, p2c = 2048, p2s = k(new Uint8Array(16))) => {
+var encrypt = async (alg, key, plaintext, p2c = 2048, p2s = generateCek(new Uint8Array(16))) => {
   let derived = await deriveKey_2(p2s, alg, p2c, key);
   return {
-    encryptedKey: await wrap(alg.slice(-6), derived, r),
+    encryptedKey: await wrap(alg.slice(-6), derived, plaintext),
     p2c,
     p2s: encode(p2s),
   };
 };
-var Ht = async (alg, key, encryptedKey, o, joseHeader) => {
-  let key_2 = await deriveKey_2(joseHeader, alg, o, key);
+var cekBitsForAlg = async (alg, key, encryptedKey, p2c, joseHeader) => {
+  let key_2 = await deriveKey_2(joseHeader, alg, p2c, key);
   return unwrap(alg.slice(-6), key_2, encryptedKey);
 };
-export { init_pbes2kw, Ht, encrypt };
+export { init_pbes2kw, cekBitsForAlg, encrypt };

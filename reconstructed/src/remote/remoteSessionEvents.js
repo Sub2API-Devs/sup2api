@@ -17,7 +17,15 @@ import { count } from "../utils/collections.js";
 import { isTerminalTaskStatus } from "../tasks/taskStatus.js";
 import { sanitizeLabel, sameBackgroundTaskList } from "../services/homeSeed/firstSend.js";
 import { DoctorLazy } from "../cli/handlers/util.js";
-import { u, E, _enum, string, discriminatedUnion, literal, M } from "../../vendor/zod/v4/classic/schemas.js";
+import {
+  objectSchema,
+  numberSchema,
+  _enum,
+  stringSchema,
+  discriminatedUnion,
+  literal,
+  booleanSchema,
+} from "../../vendor/zod/v4/classic/schemas.js";
 import {
   sanitizeDisplayText,
   MAX_TITLE_LENGTH,
@@ -28,6 +36,7 @@ import { parseArtifactUrl } from "../tools/ArtifactTool/constants.js";
 import { artifactViewerUrlFor } from "../tools/ArtifactTool/artifactUrls.js";
 import { truncateToLength } from "../utils/stringUtils.js";
 import { OPENED } from "../tools/ArtifactTool/artifactResumeCarry.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-3xdfvx0n.js:13943-13984 placement = _temp (1)
 /**
@@ -51,33 +60,38 @@ function isValidMessageUuid(userMessageUuid) {
 /**
  * 拒答撤回事件中的用户消息 uuid 列表。
  */
-function retractedUserMessageUuids(e) {
-  let userMessageUuids = "user_message_uuids" in e ? e.user_message_uuids : null;
-  let r = Array.isArray(userMessageUuids)
+function retractedUserMessageUuids(event) {
+  let userMessageUuids = "user_message_uuids" in event ? event.user_message_uuids : null;
+  let uuids = Array.isArray(userMessageUuids)
     ? userMessageUuids.filter(isValidMessageUuid).slice(0, MAX_RETRACTED_UUIDS)
     : [];
-  if (r.length > 0) return r;
-  let userMessageUuid = "user_message_uuid" in e ? e.user_message_uuid : undefined;
+  if (uuids.length > 0) return uuids;
+  let userMessageUuid = "user_message_uuid" in event ? event.user_message_uuid : undefined;
   return isValidMessageUuid(userMessageUuid) ? [userMessageUuid] : undefined;
 }
 //@ chunk-3xdfvx0n.js:14289-14382 placement
 /**
  * 导出函数 `shouldDeliverEvent`：参数 e, n, r，返回 r.taskWake || (s === void 0 ? r.sent : s.some((i) => n.has(i)))。
  */
-function shouldDeliverEvent(request, n, r) {
-  let s = retractedUserMessageUuids(request);
-  return r.taskWake || (s === undefined ? r.sent : s.some((i) => n.has(i)));
+function shouldDeliverEvent(event, sentUuids, state) {
+  let retracted = retractedUserMessageUuids(event);
+  return (
+    state.taskWake || (retracted === undefined ? state.sent : retracted.some((uuid) => sentUuids.has(uuid)))
+  );
 }
 //@ chunk-3xdfvx0n.js:14382-14734 placement
 function dropRemoteRateLimitFrame(rateLimitInfo) {
-  let n = RateLimitInfoSchema();
-  let r = new Map(Object.entries(n.shape));
-  let s =
+  let schema = RateLimitInfoSchema();
+  let shapeNames = new Map(Object.entries(schema.shape));
+  let knownOnly =
     typeof rateLimitInfo === "object" && rateLimitInfo !== null && !Array.isArray(rateLimitInfo)
-      ? pickByHelper(rateLimitInfo, (m, g) => g === "status" || (r.get(g)?.safeParse(m).success ?? false))
+      ? pickByHelper(
+          rateLimitInfo,
+          (value, key) => key === "status" || (shapeNames.get(key)?.safeParse(value).success ?? false),
+        )
       : rateLimitInfo;
-  let i = n.safeParse(s);
-  if (i.success) return i.data;
+  let parsed = schema.safeParse(knownOnly);
+  if (parsed.success) return parsed.data;
   if (claimOnce().claim("remote_rate_limit_frame_drop"))
     logEvent("tengu_remote_rate_limits_dropped", {
       reason: lit("invalid_frame"),
@@ -101,29 +115,29 @@ function createRetractionState() {
 /**
  * 导出函数 `recordNestedUuidAliases`：参数 e, n, r。
  */
-function recordNestedUuidAliases(e, uuid, r) {
-  let filtered = r.filter((i) => i !== uuid);
-  if (filtered.length > 0) e.nestedUuidAliases.set(uuid, filtered);
+function recordNestedUuidAliases(aliases, uuid, aliasUuids) {
+  let filtered = aliasUuids.filter((aliasUuid) => aliasUuid !== uuid);
+  if (filtered.length > 0) aliases.nestedUuidAliases.set(uuid, filtered);
 }
 //@ chunk-3xdfvx0n.js:14942-15303 placement
-function isModelRefusalFallback(payload) {
-  if (typeof payload !== "object" || payload === null) return null;
-  let n = payload;
-  let uuid = typeof n.uuid === "string" ? n.uuid : null;
-  if (n.type === "system" && n.subtype === "model_refusal_fallback") {
-    let s = otherStrings(n.retracted_message_uuids, uuid);
-    return s
+function isModelRefusalFallback(value) {
+  if (typeof value !== "object" || value === null) return null;
+  let record = value;
+  let uuid = typeof record.uuid === "string" ? record.uuid : null;
+  if (record.type === "system" && record.subtype === "model_refusal_fallback") {
+    let uuids = otherStrings(record.retracted_message_uuids, uuid);
+    return uuids
       ? {
-          uuids: s,
+          uuids,
           source: "retraction_banner",
         }
       : null;
   }
-  if (n.type === "assistant") {
-    let s = otherStrings(n.supersedes, uuid);
-    return s
+  if (record.type === "assistant") {
+    let uuids = otherStrings(record.supersedes, uuid);
+    return uuids
       ? {
-          uuids: s,
+          uuids,
           source: "supersedes",
         }
       : null;
@@ -134,120 +148,122 @@ function isModelRefusalFallback(payload) {
 /**
  * 数组中不等于 n 的字符串（没有则 null）。
  */
-function otherStrings(e, uuid) {
-  if (!Array.isArray(e)) return null;
-  let filtered = e.filter((s) => typeof s === "string" && s !== uuid);
+function otherStrings(uuids, uuid) {
+  if (!Array.isArray(uuids)) return null;
+  let filtered = uuids.filter((value) => typeof value === "string" && value !== uuid);
   return filtered.length > 0 ? filtered : null;
 }
 //@ chunk-3xdfvx0n.js:15425-15532 placement
 /**
  * 去掉 uuid 在集合中的消息。
  */
-function dropMessagesByUuid(e, retracted) {
-  if (retracted.size === 0) return e;
-  let filtered = e.filter((s) => !retracted.has(s.uuid));
-  return filtered.length === e.length ? e : filtered;
+function dropMessagesByUuid(messages, retracted) {
+  if (retracted.size === 0) return messages;
+  let filtered = messages.filter((message) => !retracted.has(message.uuid));
+  return filtered.length === messages.length ? messages : filtered;
 }
 //@ chunk-3xdfvx0n.js:15532-15597 placement
 /**
  * 导出函数 `recordInProgressToolUses`：参数 e, n, r。
  */
-function recordInProgressToolUses(e, uuid, r) {
-  for (let s of r) e.inProgressToolUses.set(s, uuid);
+function recordInProgressToolUses(index, uuid, toolUseIds) {
+  for (let toolUseId of toolUseIds) index.inProgressToolUses.set(toolUseId, uuid);
 }
 //@ chunk-3xdfvx0n.js:15597-15661 placement
 /**
  * 导出函数 `clearInProgressToolUses`：参数 e, n。
  */
-function clearInProgressToolUses(e, n) {
-  for (let r of n) e.inProgressToolUses.delete(r);
+function clearInProgressToolUses(index, toolUseIds) {
+  for (let toolUseId of toolUseIds) index.inProgressToolUses.delete(toolUseId);
 }
 //@ chunk-3xdfvx0n.js:15661-16247 placement
-function evictRefusalRetraction(e) {
-  let { index, signal, surface, setMessages, setInProgressToolUseIDs } = e;
-  let newlyRetractedCount = count(signal.uuids, (d) => !index.retracted.has(d));
+function evictRefusalRetraction(runtime) {
+  let { index, signal, surface, setMessages, setInProgressToolUseIDs } = runtime;
+  let newlyRetractedCount = count(signal.uuids, (uuid) => !index.retracted.has(uuid));
   for (let uuid of signal.uuids) {
     index.retracted.add(uuid);
-    for (let S of index.nestedUuidAliases.get(uuid) ?? []) index.retracted.add(S);
+    for (let aliasUuid of index.nestedUuidAliases.get(uuid) ?? []) index.retracted.add(aliasUuid);
   }
-  let mapped = [...index.inProgressToolUses].filter(([, d]) => index.retracted.has(d)).map(([d]) => d);
-  clearInProgressToolUses(index, mapped);
-  for (let d of mapped) index.evictedToolUses.add(d);
-  if (mapped.length > 0 && setInProgressToolUseIDs)
+  let toolUseIds = [...index.inProgressToolUses]
+    .filter(([, toolUseId]) => index.retracted.has(toolUseId))
+    .map(([toolUseId]) => toolUseId);
+  clearInProgressToolUses(index, toolUseIds);
+  for (let toolUseId of toolUseIds) index.evictedToolUses.add(toolUseId);
+  if (toolUseIds.length > 0 && setInProgressToolUseIDs)
     setInProgressToolUseIDs({
       action: "remove",
-      ids: mapped,
+      ids: toolUseIds,
     });
-  setMessages((d) => dropMessagesByUuid(d, index.retracted));
+  setMessages((messages) => dropMessagesByUuid(messages, index.retracted));
   logEvent("tengu_refusal_retraction_evicted", {
     surface: fromEnum(surface),
     source: fromEnum(signal.source),
     uuid_count: signal.uuids.length,
     newly_retracted_count: newlyRetractedCount,
-    tool_use_cleared_count: mapped.length,
+    tool_use_cleared_count: toolUseIds.length,
   });
 }
 //@ chunk-3xdfvx0n.js:16247-16439 placement
 /**
  * 统计撤回后孤立的工具结果并上报。
  */
-function countOrphanToolResults(e, n, r, s) {
-  if (s !== null && e.retracted.has(s)) return 0;
-  let i = count(n, (m) => e.evictedToolUses.has(m));
-  if (i > 0)
+function countOrphanToolResults(index, toolUseIds, surface, uuid) {
+  if (uuid !== null && index.retracted.has(uuid)) return 0;
+  let orphanCount = count(toolUseIds, (toolUseId) => index.evictedToolUses.has(toolUseId));
+  if (orphanCount > 0)
     logEvent("tengu_refusal_retraction_orphan_tool_result", {
-      surface: fromEnum(r),
-      count: i,
+      surface: fromEnum(surface),
+      count: orphanCount,
     });
-  return i;
+  return orphanCount;
 }
 //@ chunk-3xdfvx0n.js:16439-16976 placement
-function checkRefusalRetractionSource(e) {
-  let { index, events, surface, setMessages, setInProgressToolUseIDs } = e;
-  let g = 0;
-  let y = 0;
-  let d = 0;
+function checkRefusalRetractionSource(runtime) {
+  let { index, events, surface, setMessages, setInProgressToolUseIDs } = runtime;
+  let evictedCount = 0;
+  let mismatchCount = 0;
+  let missingSourceCount = 0;
   for (let event of events) {
     if (event.source !== "worker") {
       if (isModelRefusalFallback(event.payload))
-        if (event.source === undefined) d++;
-        else y++;
+        if (event.source === undefined) missingSourceCount++;
+        else mismatchCount++;
       continue;
     }
-    let h = isModelRefusalFallback(event.payload);
-    if (h) {
-      g++;
+    let signal = isModelRefusalFallback(event.payload);
+    if (signal) {
+      evictedCount++;
       evictRefusalRetraction({
         index,
-        signal: h,
+        signal,
         surface,
         setMessages,
         setInProgressToolUseIDs,
       });
     }
   }
-  if (y > 0)
+  if (mismatchCount > 0)
     logEvent("tengu_refusal_retraction_unauthenticated_signal", {
       surface: fromEnum(surface),
       reason: lit("source_mismatch"),
-      count: y,
+      count: mismatchCount,
     });
-  if (d > 0)
+  if (missingSourceCount > 0)
     logEvent("tengu_refusal_retraction_unauthenticated_signal", {
       surface: fromEnum(surface),
       reason: lit("source_missing"),
-      count: d,
+      count: missingSourceCount,
     });
-  return g;
+  return evictedCount;
 }
 //@ chunk-3xdfvx0n.js:16976-17093 placement
 /**
  * 已撤回消息的迟到帧：丢弃并上报。
  */
-function dropLateRetracted(retraction, uuid, r) {
-  if (!retraction.retracted.has(uuid)) return false;
+function dropLateRetracted(refusalState, uuid, surface) {
+  if (!refusalState.retracted.has(uuid)) return false;
   logEvent("tengu_refusal_retraction_late_drop", {
-    surface: fromEnum(r),
+    surface: fromEnum(surface),
   });
   return true;
 }
@@ -260,81 +276,83 @@ var MAX_RUNTIME_PROGRESS_TASKS = 20;
 var MAX_TASK_DURATION_MS = 2592000000;
 var MAX_DISPLAY_TEXT_LINES = 40;
 //@ chunk-3xdfvx0n.js:17141-18738 placement
-function applyRemoteTaskEvent(e, n, startTime) {
-  if (n.type !== "system") return;
-  switch (n.subtype) {
+function applyRemoteTaskEvent(tasks, event, startTime) {
+  if (event.type !== "system") return;
+  switch (event.subtype) {
     case "task_started": {
-      if (typeof n.task_id !== "string" || n.task_type !== LOCAL_WORKFLOW) return;
-      let s = e.get(n.task_id);
-      let i =
-        s !== undefined && !isTerminalTaskStatus(s.status) ? s : newRemoteWorkflowTask(n.task_id, startTime);
-      e.set(i.id, {
-        ...i,
-        runId: typeof n.run_id === "string" ? n.run_id : i.runId,
-        description: sanitizeLabel(n.description) || i.description,
-        workflowName: sanitizeLabel(n.workflow_name) || i.workflowName,
+      if (typeof event.task_id !== "string" || event.task_type !== LOCAL_WORKFLOW) return;
+      let existing = tasks.get(event.task_id);
+      let task =
+        existing !== undefined && !isTerminalTaskStatus(existing.status)
+          ? existing
+          : newRemoteWorkflowTask(event.task_id, startTime);
+      tasks.set(task.id, {
+        ...task,
+        runId: typeof event.run_id === "string" ? event.run_id : task.runId,
+        description: sanitizeLabel(event.description) || task.description,
+        workflowName: sanitizeLabel(event.workflow_name) || task.workflowName,
       });
       return;
     }
     case "task_progress": {
-      if (typeof n.task_id !== "string" || !Array.isArray(n.workflow_progress)) return;
-      let s = e.get(n.task_id);
-      if (s !== undefined && isTerminalTaskStatus(s.status)) return;
-      let i = s ?? {
-        ...newRemoteWorkflowTask(n.task_id, startTime),
+      if (typeof event.task_id !== "string" || !Array.isArray(event.workflow_progress)) return;
+      let existing = tasks.get(event.task_id);
+      if (existing !== undefined && isTerminalTaskStatus(existing.status)) return;
+      let task = existing ?? {
+        ...newRemoteWorkflowTask(event.task_id, startTime),
         presence: "reported",
       };
-      e.set(i.id, {
-        ...applyTaskUsage(i, n.usage, startTime),
-        runId: i.runId ?? (typeof n.run_id === "string" ? n.run_id : undefined),
-        wireProgress: n.workflow_progress,
-        presence: i.presence === "unlisted" ? "reported" : i.presence,
+      tasks.set(task.id, {
+        ...applyTaskUsage(task, event.usage, startTime),
+        runId: task.runId ?? (typeof event.run_id === "string" ? event.run_id : undefined),
+        wireProgress: event.workflow_progress,
+        presence: task.presence === "unlisted" ? "reported" : task.presence,
       });
       return;
     }
     case "background_tasks_changed": {
-      if (!Array.isArray(n.tasks)) return;
-      let s = new Set(n.tasks.map((task) => task?.task_id));
-      for (let i of e.values())
-        if (i.presence === "reported" && !s.has(i.id))
-          e.set(i.id, {
-            ...i,
+      if (!Array.isArray(event.tasks)) return;
+      let listedIds = new Set(event.tasks.map((task) => task?.task_id));
+      for (let task of tasks.values())
+        if (task.presence === "reported" && !listedIds.has(task.id))
+          tasks.set(task.id, {
+            ...task,
             presence: "unlisted",
           });
       return;
     }
     case "task_updated": {
-      let s = typeof n.task_id === "string" ? e.get(n.task_id) : undefined;
-      let i = TASK_STATUS_SCHEMA().safeParse(n.patch?.status).data;
-      if (s === undefined || i === undefined || isTerminalTaskStatus(s.status)) return;
-      e.set(s.id, {
-        ...s,
-        status: i,
-        endTime: isTerminalTaskStatus(i) ? startTime : s.endTime,
+      let existing = typeof event.task_id === "string" ? tasks.get(event.task_id) : undefined;
+      let nextStatus = TASK_STATUS_SCHEMA().safeParse(event.patch?.status).data;
+      if (existing === undefined || nextStatus === undefined || isTerminalTaskStatus(existing.status)) return;
+      tasks.set(existing.id, {
+        ...existing,
+        status: nextStatus,
+        endTime: isTerminalTaskStatus(nextStatus) ? startTime : existing.endTime,
       });
       return;
     }
     case "task_notification": {
-      let s = typeof n.task_id === "string" ? e.get(n.task_id) : undefined;
-      if (s === undefined) return;
-      let i =
-        n.status === "completed"
+      let existing = typeof event.task_id === "string" ? tasks.get(event.task_id) : undefined;
+      if (existing === undefined) return;
+      let nextStatus =
+        event.status === "completed"
           ? "completed"
-          : n.status === "failed"
+          : event.status === "failed"
             ? "failed"
-            : n.status === "stopped"
+            : event.status === "stopped"
               ? "killed"
               : undefined;
-      let m = isTerminalTaskStatus(s.status);
-      if (i === undefined) {
-        if (!m) e.delete(s.id);
+      let wasTerminal = isTerminalTaskStatus(existing.status);
+      if (nextStatus === undefined) {
+        if (!wasTerminal) tasks.delete(existing.id);
         return;
       }
-      if (m && s.status !== i) return;
-      e.set(s.id, {
-        ...applyTaskUsage(s, n.usage, startTime),
-        status: i,
-        endTime: s.endTime ?? startTime,
+      if (wasTerminal && existing.status !== nextStatus) return;
+      tasks.set(existing.id, {
+        ...applyTaskUsage(existing, event.usage, startTime),
+        status: nextStatus,
+        endTime: existing.endTime ?? startTime,
       });
       return;
     }
@@ -346,81 +364,84 @@ function applyRemoteTaskEvent(e, n, startTime) {
 /**
  * 合并远程任务列表：补齐工作流任务、标记未列出的、按上限淘汰已结束的。
  */
-function reconcileRemoteTasks(e, n, startTime) {
-  for (let y of n.values()) {
-    if (y.taskType !== LOCAL_WORKFLOW) continue;
-    let d = e.get(y.id);
-    if (d === undefined)
-      e.set(y.id, {
-        ...newRemoteWorkflowTask(y.id, startTime),
-        description: y.description,
+function reconcileRemoteTasks(remoteTasks, runningTasks, startTime) {
+  for (let running of runningTasks.values()) {
+    if (running.taskType !== LOCAL_WORKFLOW) continue;
+    let existing = remoteTasks.get(running.id);
+    if (existing === undefined)
+      remoteTasks.set(running.id, {
+        ...newRemoteWorkflowTask(running.id, startTime),
+        description: running.description,
       });
-    else if (d.description === "" && y.description !== "")
-      e.set(y.id, {
-        ...d,
-        description: y.description,
+    else if (existing.description === "" && running.description !== "")
+      remoteTasks.set(running.id, {
+        ...existing,
+        description: running.description,
       });
   }
-  let s = [];
-  let i = [];
-  let m = [];
-  for (let y of e.values()) {
-    let d = n.get(y.id);
-    let S = isTerminalTaskStatus(y.status);
-    if (!S && d?.taskType !== undefined && d.taskType !== LOCAL_WORKFLOW) {
-      e.delete(y.id);
+  let keptTasks = [];
+  let terminalTasks = [];
+  let unlistedTasks = [];
+  for (let task of remoteTasks.values()) {
+    let running = runningTasks.get(task.id);
+    let isTerminal = isTerminalTaskStatus(task.status);
+    if (!isTerminal && running?.taskType !== undefined && running.taskType !== LOCAL_WORKFLOW) {
+      remoteTasks.delete(task.id);
       continue;
     }
-    let h = d !== undefined ? "listed" : y.presence === "listed" ? "unlisted" : y.presence;
-    let _ =
-      S || h === y.presence
-        ? y
+    let nextPresence =
+      running !== undefined ? "listed" : task.presence === "listed" ? "unlisted" : task.presence;
+    let updatedTask =
+      isTerminal || nextPresence === task.presence
+        ? task
         : {
-            ...y,
-            presence: h,
+            ...task,
+            presence: nextPresence,
           };
-    if (_ !== y) e.set(_.id, _);
-    if (S) i.push(_);
-    else if (_.presence === "unlisted") {
-      m.push(_);
+    if (updatedTask !== task) remoteTasks.set(updatedTask.id, updatedTask);
+    if (isTerminal) terminalTasks.push(updatedTask);
+    else if (updatedTask.presence === "unlisted") {
+      unlistedTasks.push(updatedTask);
       continue;
     }
-    s.push(_);
+    keptTasks.push(updatedTask);
   }
-  let g = new Set([
-    ...i
-      .toSorted((y, d) => (y.endTime ?? 0) - (d.endTime ?? 0))
-      .slice(0, Math.max(0, i.length - MAX_RUNTIME_PROGRESS_TASKS)),
-    ...m.slice(0, Math.max(0, m.length - MAX_RUNTIME_PROGRESS_TASKS)),
+  let overflowTasks = new Set([
+    ...terminalTasks
+      .toSorted((left, right) => (left.endTime ?? 0) - (right.endTime ?? 0))
+      .slice(0, Math.max(0, terminalTasks.length - MAX_RUNTIME_PROGRESS_TASKS)),
+    ...unlistedTasks.slice(0, Math.max(0, unlistedTasks.length - MAX_RUNTIME_PROGRESS_TASKS)),
   ]);
-  for (let y of g) e.delete(y.id);
-  return g.size === 0 ? s : s.filter((y) => !g.has(y));
+  for (let task of overflowTasks) remoteTasks.delete(task.id);
+  return overflowTasks.size === 0 ? keptTasks : keptTasks.filter((task) => !overflowTasks.has(task));
 }
 //@ chunk-3xdfvx0n.js:19556-19867 placement
 /**
  * 把前台任务、后台任务与工作流运行写回应用状态（未变则原样返回）。
  */
-function applyRemoteTaskState(e, n, r, s) {
-  let i = sameBackgroundTaskList(e.remoteBackgroundTasks, n);
-  let m = e.remoteWorkflowRuns.length === r.length && r.every((g, y) => g === e.remoteWorkflowRuns[y]);
-  return i && m && e.remoteForegroundTask === s
-    ? e
+function applyRemoteTaskState(state, backgroundTasks, workflowRuns, foregroundTask) {
+  let sameBackground = sameBackgroundTaskList(state.remoteBackgroundTasks, backgroundTasks);
+  let sameRuns =
+    state.remoteWorkflowRuns.length === workflowRuns.length &&
+    workflowRuns.every((run, index) => run === state.remoteWorkflowRuns[index]);
+  return sameBackground && sameRuns && state.remoteForegroundTask === foregroundTask
+    ? state
     : {
-        ...e,
-        remoteForegroundTask: s,
-        remoteBackgroundTasks: i ? e.remoteBackgroundTasks : n,
-        remoteWorkflowRuns: m ? e.remoteWorkflowRuns : r,
+        ...state,
+        remoteForegroundTask: foregroundTask,
+        remoteBackgroundTasks: sameBackground ? state.remoteBackgroundTasks : backgroundTasks,
+        remoteWorkflowRuns: sameRuns ? state.remoteWorkflowRuns : workflowRuns,
       };
 }
 //@ chunk-3xdfvx0n.js:19867-19988 placement
 /**
  * 把所有未结束任务标记为未列出。
  */
-function markTasksUnlisted(e) {
-  for (let n of e.values())
-    if (!isTerminalTaskStatus(n.status) && n.presence !== "unlisted")
-      e.set(n.id, {
-        ...n,
+function markTasksUnlisted(tasks) {
+  for (let task of tasks.values())
+    if (!isTerminalTaskStatus(task.status) && task.presence !== "unlisted")
+      tasks.set(task.id, {
+        ...task,
         presence: "unlisted",
       });
 }
@@ -429,9 +450,9 @@ function markTasksUnlisted(e) {
  * 导出函数 `parseWorkflowProgressList`：参数 e，返回 e.flatMap((n) => { let safeParse = WORKFLOW_PROGRESS_SCHEMA().safeParse(n); return safeParse.success ? [safePa…。
  */
 function parseWorkflowProgressList(wireProgress) {
-  return wireProgress.flatMap((n) => {
-    let r = WORKFLOW_PROGRESS_SCHEMA().safeParse(n);
-    return r.success ? [r.data] : [];
+  return wireProgress.flatMap((entry) => {
+    let parsed = WORKFLOW_PROGRESS_SCHEMA().safeParse(entry);
+    return parsed.success ? [parsed.data] : [];
   });
 }
 //@ chunk-3xdfvx0n.js:20082-20268 placement
@@ -457,86 +478,91 @@ function newRemoteWorkflowTask(id, startTime) {
 /**
  * 用任务用量更新 token、工具调用与开始时间。
  */
-function applyTaskUsage(e, usage, r) {
-  let s = TASK_USAGE_SCHEMA().safeParse(usage).data;
-  if (s === undefined) return e;
+function applyTaskUsage(task, usage, nowMs) {
+  let parsedUsage = TASK_USAGE_SCHEMA().safeParse(usage).data;
+  if (parsedUsage === undefined) return task;
   return {
-    ...e,
-    totalTokens: s.total_tokens,
-    totalToolCalls: s.tool_uses,
-    startTime: Math.min(e.startTime, r - s.duration_ms),
+    ...task,
+    totalTokens: parsedUsage.total_tokens,
+    totalToolCalls: parsedUsage.tool_uses,
+    startTime: Math.min(task.startTime, nowMs - parsedUsage.duration_ms),
   };
 }
 //@ chunk-3xdfvx0n.js:20453-20501 placement
-function optionalSchema(e) {
-  return e.optional().catch(undefined);
+function optionalSchema(schema) {
+  return schema.optional().catch(undefined);
 }
 //@ chunk-3xdfvx0n.js:20501-21480 placement
 /**
  * 远程任务事件 schema：用量、状态、工作流进度。
  */
-var TASK_USAGE_SCHEMA = DoctorLazy(() =>
-  u({
-    total_tokens: E(),
-    tool_uses: E(),
-    duration_ms: E().nonnegative().max(MAX_TASK_DURATION_MS).catch(0),
-  }),
-);
-var TASK_STATUS_SCHEMA = DoctorLazy(() =>
-  _enum(["pending", "running", "completed", "failed", "killed", "paused"]),
-);
-var WORKFLOW_PROGRESS_SCHEMA = DoctorLazy(() => {
-  let e = string().transform((r) =>
-    sanitizeDisplayText(r, {
-      maxCodeUnits: MAX_TITLE_LENGTH,
+var TASK_USAGE_SCHEMA; // deferred: uses DoctorLazy (../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var TASK_STATUS_SCHEMA;
+var WORKFLOW_PROGRESS_SCHEMA;
+deferInit("chunk-3xdfvx0n.js:20501", () => {
+  TASK_USAGE_SCHEMA = DoctorLazy(() =>
+    objectSchema({
+      total_tokens: numberSchema(),
+      tool_uses: numberSchema(),
+      duration_ms: numberSchema().nonnegative().max(MAX_TASK_DURATION_MS).catch(0),
     }),
   );
-  let n = string().transform(
-    (r) =>
-      clipDisplayText(r, {
-        maxCodeUnits: MAX_MARKDOWN_SAFE_LENGTH,
-        maxLines: MAX_DISPLAY_TEXT_LINES,
-      }).text,
+  TASK_STATUS_SCHEMA = DoctorLazy(() =>
+    _enum(["pending", "running", "completed", "failed", "killed", "paused"]),
   );
-  return discriminatedUnion("type", [
-    u({
-      type: literal("workflow_agent"),
-      index: E().int(),
-      label: e,
-      state: _enum(["start", "progress", "done", "error"]),
-      phaseIndex: optionalSchema(E().int()),
-      phaseTitle: optionalSchema(e),
-      agentId: optionalSchema(e),
-      agentType: optionalSchema(e),
-      isolation: optionalSchema(_enum(["worktree", "remote"])),
-      remoteSessionId: optionalSchema(e),
-      model: optionalSchema(e),
-      fallbackModel: optionalSchema(e),
-      tokens: optionalSchema(E()),
-      toolCalls: optionalSchema(E()),
-      durationMs: optionalSchema(E()),
-      error: optionalSchema(n),
-      startedAt: optionalSchema(E()),
-      lastProgressAt: optionalSchema(E()),
-      queuedAt: optionalSchema(E()),
-      attempt: optionalSchema(E()),
-      lastAttemptReason: optionalSchema(_enum(["stalled", "throttled", "user-retry"])),
-      skipped: optionalSchema(M()),
-      blocked: optionalSchema(M()),
-      cached: optionalSchema(M()),
-      lastToolName: optionalSchema(e),
-      lastToolSummary: optionalSchema(e),
-      resultPreview: optionalSchema(n),
-      promptPreview: optionalSchema(n),
-      promptFramed: optionalSchema(M()),
-    }),
-    u({
-      type: literal("workflow_phase"),
-      index: E().int(),
-      title: e,
-      kind: optionalSchema(literal("child")),
-    }),
-  ]);
+  WORKFLOW_PROGRESS_SCHEMA = DoctorLazy(() => {
+    let label = stringSchema().transform((value) =>
+      sanitizeDisplayText(value, {
+        maxCodeUnits: MAX_TITLE_LENGTH,
+      }),
+    );
+    let longText = stringSchema().transform(
+      (value) =>
+        clipDisplayText(value, {
+          maxCodeUnits: MAX_MARKDOWN_SAFE_LENGTH,
+          maxLines: MAX_DISPLAY_TEXT_LINES,
+        }).text,
+    );
+    return discriminatedUnion("type", [
+      objectSchema({
+        type: literal("workflow_agent"),
+        index: numberSchema().int(),
+        label,
+        state: _enum(["start", "progress", "done", "error"]),
+        phaseIndex: optionalSchema(numberSchema().int()),
+        phaseTitle: optionalSchema(label),
+        agentId: optionalSchema(label),
+        agentType: optionalSchema(label),
+        isolation: optionalSchema(_enum(["worktree", "remote"])),
+        remoteSessionId: optionalSchema(label),
+        model: optionalSchema(label),
+        fallbackModel: optionalSchema(label),
+        tokens: optionalSchema(numberSchema()),
+        toolCalls: optionalSchema(numberSchema()),
+        durationMs: optionalSchema(numberSchema()),
+        error: optionalSchema(longText),
+        startedAt: optionalSchema(numberSchema()),
+        lastProgressAt: optionalSchema(numberSchema()),
+        queuedAt: optionalSchema(numberSchema()),
+        attempt: optionalSchema(numberSchema()),
+        lastAttemptReason: optionalSchema(_enum(["stalled", "throttled", "user-retry"])),
+        skipped: optionalSchema(booleanSchema()),
+        blocked: optionalSchema(booleanSchema()),
+        cached: optionalSchema(booleanSchema()),
+        lastToolName: optionalSchema(label),
+        lastToolSummary: optionalSchema(label),
+        resultPreview: optionalSchema(longText),
+        promptPreview: optionalSchema(longText),
+        promptFramed: optionalSchema(booleanSchema()),
+      }),
+      objectSchema({
+        type: literal("workflow_phase"),
+        index: numberSchema().int(),
+        title: label,
+        kind: optionalSchema(literal("child")),
+      }),
+    ]);
+  });
 });
 //@ chunk-3xdfvx0n.js:21480-21498 placement
 /**
@@ -548,9 +574,9 @@ var MAX_TITLE_CHARS_EVENTS = 256;
 /**
  * session_metadata 事件里的 artifacts 列表。
  */
-function sessionMetadataArtifacts(e) {
-  if (e.type !== "system" || e.subtype !== "session_metadata") return;
-  let { metadata } = e;
+function sessionMetadataArtifacts(message) {
+  if (message.type !== "system" || message.subtype !== "session_metadata") return;
+  let { metadata } = message;
   if (typeof metadata !== "object" || metadata === null) return;
   let artifacts = "artifacts" in metadata ? metadata.artifacts : undefined;
   return artifacts === null || Array.isArray(artifacts) ? artifacts : undefined;
@@ -559,85 +585,90 @@ function sessionMetadataArtifacts(e) {
 /**
  * 把云会话 artifacts 合并进 frameUrls（未变化则原样返回）。
  */
-function mergeCloudArtifactFrames(e, n) {
-  let r = cloudArtifactFrames(n ?? []);
-  let filtered = Object.entries(e.frameUrls).filter(([, value]) => value.fromCloudSession !== true);
-  if (r.length === 0 && filtered.length === Object.keys(e.frameUrls).length) return e;
-  let i = new Set(filtered.map(([S]) => S));
-  let m = Object.fromEntries([...filtered, ...r.filter(([S]) => !i.has(S))]);
-  let entries = Object.entries(e.frameUrls);
-  let entries_2 = Object.entries(m);
+function mergeCloudArtifactFrames(state, urls) {
+  let cloudFrames = cloudArtifactFrames(urls ?? []);
+  let filtered = Object.entries(state.frameUrls).filter(([, value]) => value.fromCloudSession !== true);
+  if (cloudFrames.length === 0 && filtered.length === Object.keys(state.frameUrls).length) return state;
+  let remoteKeys = new Set(filtered.map(([key]) => key));
+  let merged = Object.fromEntries([...filtered, ...cloudFrames.filter(([key]) => !remoteKeys.has(key))]);
+  let entries = Object.entries(state.frameUrls);
+  let entries_2 = Object.entries(merged);
   return entries.length === entries_2.length &&
-    entries.every(([S, h], _) => {
-      let [w, R] = entries_2[_];
-      let entries = Object.entries(h);
-      let entries_3 = Object.entries(R);
+    entries.every(([key, before], index) => {
+      let [afterKey, after] = entries_2[index];
+      let entries = Object.entries(before);
+      let entries_3 = Object.entries(after);
       return (
-        S === w &&
+        key === afterKey &&
         entries.length === entries_3.length &&
-        entries.every(([L, z]) => entries_3.some(([N, j]) => N === L && j === z))
+        entries.every(([field, value]) =>
+          entries_3.some(([field_2, value_2]) => field_2 === field && value_2 === value),
+        )
       );
     })
-    ? e
+    ? state
     : {
-        ...e,
-        frameUrls: m,
+        ...state,
+        frameUrls: merged,
       };
 }
 //@ chunk-3xdfvx0n.js:22237-22339 placement
-var ARTIFACT_ENTRY_SCHEMA = DoctorLazy(() =>
-  u({
-    url: string(),
-    title: string().optional().catch(undefined),
-    updated_at: string().optional().catch(undefined),
-  }),
-);
+var ARTIFACT_ENTRY_SCHEMA; // deferred: uses DoctorLazy (../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-3xdfvx0n.js:22237", () => {
+  ARTIFACT_ENTRY_SCHEMA = DoctorLazy(() =>
+    objectSchema({
+      url: stringSchema(),
+      title: stringSchema().optional().catch(undefined),
+      updated_at: stringSchema().optional().catch(undefined),
+    }),
+  );
+});
 //@ chunk-3xdfvx0n.js:22339-22810 placement
 /**
  * 解析云会话 artifacts，按 slug 取最新并转为 frameUrls 条目。
  */
-function cloudArtifactFrames(e) {
-  let n = new Map();
-  for (let r of e) {
-    let s = ARTIFACT_ENTRY_SCHEMA().safeParse(r);
-    if (!s.success) continue;
-    let { url, title, updated_at: updatedAt } = s.data;
+function cloudArtifactFrames(entries) {
+  let bySlug = new Map();
+  for (let entry of entries) {
+    let parsed = ARTIFACT_ENTRY_SCHEMA().safeParse(entry);
+    if (!parsed.success) continue;
+    let { url, title, updated_at: updatedAt } = parsed.data;
     let artifactUrl = parseArtifactUrl(url);
     if (artifactUrl === null) continue;
-    let d = updatedAt !== undefined ? Date.parse(updatedAt) : NaN;
-    let S = {
+    let updatedAtMs = updatedAt !== undefined ? Date.parse(updatedAt) : NaN;
+    let frame = {
       url: artifactViewerUrlFor(artifactUrl),
-      updatedAt: Number.isFinite(d) ? d : 0,
+      updatedAt: Number.isFinite(updatedAtMs) ? updatedAtMs : 0,
       ...(title !== undefined &&
         title !== "" && {
           title: truncateToLength(title, MAX_TITLE_CHARS_EVENTS),
         }),
       fromCloudSession: true,
     };
-    let h = n.get(artifactUrl.slug);
-    if (h === undefined || S.updatedAt >= h.updatedAt) n.set(artifactUrl.slug, S);
+    let existing = bySlug.get(artifactUrl.slug);
+    if (existing === undefined || frame.updatedAt >= existing.updatedAt) bySlug.set(artifactUrl.slug, frame);
   }
-  return [...n]
-    .sort(([, r], [, s]) => r.updatedAt - s.updatedAt)
+  return [...bySlug]
+    .sort(([, left], [, right]) => left.updatedAt - right.updatedAt)
     .slice(-MAX_ARTIFACT_LIST_ITEMS)
-    .map(([r, s]) => [`${OPENED}${r}`, s]);
+    .map(([slug, frame]) => [`${OPENED}${slug}`, frame]);
 }
 //@ chunk-3xdfvx0n.js:22810-23036 placement
 /**
  * 合并会话的技能、插件、工具与命令列表。
  */
-function mergeSessionCapabilities(e, n) {
-  if (n.skills === undefined && n.plugins === undefined) return e;
-  let tools = n.tools ?? e?.tools;
-  let s = n.slashCommands ?? e?.commands;
+function mergeSessionCapabilities(capabilities, next) {
+  if (next.skills === undefined && next.plugins === undefined) return capabilities;
+  let tools = next.tools ?? capabilities?.tools;
+  let commands = next.slashCommands ?? capabilities?.commands;
   return {
-    skills: n.skills ?? [],
-    plugins: n.plugins ?? [],
+    skills: next.skills ?? [],
+    plugins: next.plugins ?? [],
     ...(tools !== undefined && {
       tools,
     }),
-    ...(s !== undefined && {
-      commands: s,
+    ...(commands !== undefined && {
+      commands,
     }),
   };
 }

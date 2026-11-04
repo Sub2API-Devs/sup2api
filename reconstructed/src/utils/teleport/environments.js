@@ -9,7 +9,13 @@
  * attribution: placement 3, fingerprint 2, layout 2
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, array, hu, M, string } from "../../../vendor/zod/v4/classic/schemas.js";
+import {
+  objectSchema,
+  array,
+  custom,
+  booleanSchema,
+  stringSchema,
+} from "../../../vendor/zod/v4/classic/schemas.js";
 import {
   TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
   toError,
@@ -31,6 +37,7 @@ import { axios_default } from "../../../vendor/axios/dist/esm/axios.js";
 import { logForDebugging } from "../debug.js";
 import { getGlobalConfig, saveGlobalConfig } from "../config.js";
 import { logError } from "../log.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-f25sswmp.js:15653-15750 placement
 function environmentSelector(environmentId) {
@@ -43,23 +50,30 @@ function environmentSelector(environmentId) {
       };
 }
 //@ chunk-f25sswmp.js:15750-15942 placement
-var environmentsPageSchema = DoctorLazy(() =>
-  u({
-    environments: array(hu((e) => typeof e === "object" && e !== null && !Array.isArray(e))),
-    has_more: M().optional().catch(undefined),
-    last_id: string().nullable().optional().catch(undefined),
-  }),
-);
-var ENVIRONMENTS_PAGE_LIMIT = 100;
-var MAX_ENVIRONMENT_PAGES = 10;
+var environmentsPageSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var ENVIRONMENTS_PAGE_LIMIT;
+var MAX_ENVIRONMENT_PAGES;
+deferInit("chunk-f25sswmp.js:15750", () => {
+  environmentsPageSchema = DoctorLazy(() =>
+    objectSchema({
+      environments: array(
+        custom((entry) => typeof entry === "object" && entry !== null && !Array.isArray(entry)),
+      ),
+      has_more: booleanSchema().optional().catch(undefined),
+      last_id: stringSchema().nullable().optional().catch(undefined),
+    }),
+  );
+  ENVIRONMENTS_PAGE_LIMIT = 100;
+  MAX_ENVIRONMENT_PAGES = 10;
+});
 //@ chunk-f25sswmp.js:15942-16728 placement
-function parseEnvironmentsResponse(e) {
-  if (typeof e === "string" && e.trim().length === 0)
+function parseEnvironmentsResponse(body) {
+  if (typeof body === "string" && body.trim().length === 0)
     return new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
       "The cloud environments service returned an empty response (HTTP 200 with no body). This is usually temporary \u2014 try again in a moment.",
       "fetchEnvironments: HTTP 200 with an empty body",
     );
-  if (typeof e === "string")
+  if (typeof body === "string")
     return new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
       "The cloud environments service returned a response in an unexpected format (HTTP 200 with a non-JSON body). This is usually temporary \u2014 try again in a moment.",
       "fetchEnvironments: HTTP 200 with a non-JSON body",
@@ -73,76 +87,80 @@ function parseEnvironmentsResponse(e) {
 /**
  * GET /v1/environment_providers 列出可用的云端环境（仅第一方）。
  */
-async function fetchEnvironments(e, storageV5, credentials) {
+async function fetchEnvironments(options, storageV5, credentials) {
   return withFeatureTelemetry(
     "teleport_environments_list",
     async () => {
       if (getAPIProvider() !== "firstParty")
         throw Error("Remote environments are only available on the first-party Anthropic API provider.");
-      let i = isConsoleProfileSessionsCredential();
-      let y = e ?? (await sessionsApiAccessToken(i));
-      if (!y)
+      let withScope = isConsoleProfileSessionsCredential();
+      let accessToken = options ?? (await sessionsApiAccessToken(withScope));
+      if (!accessToken)
         throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
           cloudSessionsSignInRefusal(),
           "cloud sessions need a sign-in",
         );
-      let h = await sessionsApiOrganizationUUID(i);
-      if (!h) throw Error("Unable to get organization UUID");
+      let orgUUID = await sessionsApiOrganizationUUID(withScope);
+      if (!orgUUID) throw Error("Unable to get organization UUID");
       let url = `${getOauthConfig().BASE_API_URL}/v1/environment_providers`;
       try {
-        let I = [];
-        let w;
+        let environments = [];
+        let afterId;
         for (let j = 0; j < MAX_ENVIRONMENT_PAGES; j++) {
-          let S = await withSessionsApiBearer401Retry(
-            (x) =>
+          let response = await withSessionsApiBearer401Retry(
+            (bearerToken) =>
               axios_default.get(url, {
                 headers: {
-                  ...getOAuthRequestHeaders(x),
-                  "x-organization-uuid": h,
+                  ...getOAuthRequestHeaders(bearerToken),
+                  "x-organization-uuid": orgUUID,
                 },
                 params: {
                   limit: ENVIRONMENTS_PAGE_LIMIT,
-                  ...(w !== undefined && {
-                    after_id: w,
+                  ...(afterId !== undefined && {
+                    after_id: afterId,
                   }),
                 },
                 timeout: 15000,
               }),
             {
-              profile: i,
-              fallbackToken: y,
+              profile: withScope,
+              fallbackToken: accessToken,
               credentials,
             },
           );
-          if (S.status !== 200) throw Error(`Failed to fetch environments: HTTP ${S.status}`);
-          let v = environmentsPageSchema().safeParse(S.data);
-          if (!v.success) throw parseEnvironmentsResponse(S.data);
-          I.push(...v.data.environments);
-          let lastId = v.data.last_id;
-          if (v.data.has_more !== true || v.data.environments.length === 0 || typeof lastId !== "string")
+          if (response.status !== 200) throw Error(`Failed to fetch environments: HTTP ${response.status}`);
+          let page = environmentsPageSchema().safeParse(response.data);
+          if (!page.success) throw parseEnvironmentsResponse(response.data);
+          environments.push(...page.data.environments);
+          let lastId = page.data.last_id;
+          if (
+            page.data.has_more !== true ||
+            page.data.environments.length === 0 ||
+            typeof lastId !== "string"
+          )
             break;
           if (j === MAX_ENVIRONMENT_PAGES - 1)
             logForDebugging(
-              `fetchEnvironments: stopped after ${MAX_ENVIRONMENT_PAGES} pages (${I.length} environments) although the server reports more; the rest are not listed`,
+              `fetchEnvironments: stopped after ${MAX_ENVIRONMENT_PAGES} pages (${environments.length} environments) although the server reports more; the rest are not listed`,
               {
                 level: "warn",
               },
             );
-          w = lastId;
+          afterId = lastId;
         }
-        let R = I.length > 0;
-        if (getGlobalConfig().hasRemoteEnvironment !== R)
+        let hasEnvironments = environments.length > 0;
+        if (getGlobalConfig().hasRemoteEnvironment !== hasEnvironments)
           await saveGlobalConfig(
-            (T) =>
-              T.hasRemoteEnvironment === R
-                ? T
+            (config) =>
+              config.hasRemoteEnvironment === hasEnvironments
+                ? config
                 : {
-                    ...T,
-                    hasRemoteEnvironment: R,
+                    ...config,
+                    hasRemoteEnvironment: hasEnvironments,
                   },
             storageV5,
           );
-        return I;
+        return environments;
       } catch (error) {
         let err = toError(error);
         if (isExpectedApiError(error, isCloudSessionAccessError))
@@ -157,12 +175,12 @@ async function fetchEnvironments(e, storageV5, credentials) {
   );
 }
 //@ chunk-f25sswmp.js:18042-18080 layout
-function isCloudSessionAccessError(e) {
-  return e instanceof CloudSessionAccessError;
+function isCloudSessionAccessError(value) {
+  return value instanceof CloudSessionAccessError;
 }
 //@ chunk-f25sswmp.js:18080-18146 layout
-function classifyEnvironmentError(e) {
-  return e instanceof TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
+function classifyEnvironmentError(value) {
+  return value instanceof TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
     ? "malformed_response"
     : "error";
 }
@@ -170,14 +188,14 @@ function classifyEnvironmentError(e) {
 /**
  * POST /v1/environment_providers/cloud/create 创建默认云环境。
  */
-async function createDefaultCloudEnvironment(name = "Default", signal, r) {
+async function createDefaultCloudEnvironment(name = "Default", signal, accessToken) {
   return withFeatureTelemetry("teleport_default_environment_create", async () => {
     if (getAPIProvider() !== "firstParty")
       throw Error("Remote environments are only available on the first-party Anthropic API provider.");
-    let s = isConsoleProfileSessionsCredential();
-    let i = r ?? (await sessionsApiAccessToken(s));
-    if (!i) throw Error("No access token available");
-    let orgUUID = await sessionsApiOrganizationUUID(s);
+    let withScope = isConsoleProfileSessionsCredential();
+    let token = accessToken ?? (await sessionsApiAccessToken(withScope));
+    if (!token) throw Error("No access token available");
+    let orgUUID = await sessionsApiOrganizationUUID(withScope);
     if (!orgUUID) throw Error("Unable to get organization UUID");
     let url = `${getOauthConfig().BASE_API_URL}/v1/environment_providers/cloud/create`;
     return (
@@ -210,7 +228,7 @@ async function createDefaultCloudEnvironment(name = "Default", signal, r) {
         },
         {
           headers: {
-            ...getOAuthRequestHeaders(i),
+            ...getOAuthRequestHeaders(token),
             "anthropic-beta": "ccr-byoc-2025-07-29",
             "x-organization-uuid": orgUUID,
           },

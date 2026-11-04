@@ -12,7 +12,7 @@ import { join } from "path";
 import { writeFile, open, unlink, opendir, mkdir, lstat } from "fs/promises";
 import { randomUUID } from "crypto";
 import { constants } from "fs";
-import { string } from "../../../vendor/zod/v4/classic/schemas.js";
+import { stringSchema } from "../../../vendor/zod/v4/classic/schemas.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { getErrnoCode, errorMessage } from "../../utils/errors.js";
 import { logEvent } from "../analytics/index.js";
@@ -33,7 +33,11 @@ import { chunk_default } from "../../../vendor/lodash-es/chunk.js";
 import { safeParseJSON } from "../../utils/json.js";
 import { count } from "../../utils/collections.js";
 import { createRemoteFileState, READ_FILE_STATE_CACHE_SIZE } from "../../utils/remoteFileState.js";
+import { beginDeferredInits } from "../../../runtime/deferred-init.js";
 
+// This module is the first evaluated of an import cycle of 3 modules closed by ./readCalls.js;
+// the load-time work of the cycle's statements marked "deferred" waits until the cycle is complete (runtime/deferred-init.js).
+beginDeferredInits("src/services/mcpServe/readCalls.js");
 //@ chunk-m8aeec95.js:3042-6963 placement
 /**
  * mcp serve：在 /dev/shm 记录容器启动标记，判断工具调用是否发生在当前容器生命周期内。
@@ -57,28 +61,31 @@ class ContainerStartRecord {
   }
   #n() {
     this.#r ??= (async () => {
-      let e = this.#e;
-      await writeFile(e, randomUUID(), {
+      let startFilePath = this.#e;
+      await writeFile(startFilePath, randomUUID(), {
         flag: "wx",
         mode: 384,
       }).catch((error) => {
         if (getErrnoCode(error) !== "EEXIST") throw error;
       });
-      let n = await open(e, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+      let handle = await open(
+        startFilePath,
+        constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK,
+      );
       try {
-        let stats = await n.stat();
+        let stats = await handle.stat();
         if (!stats.isFile() || stats.uid !== process.getuid?.())
           throw Error(
             "The file that identifies this container start is not a regular file owned by this user.",
           );
-        let { buffer, bytesRead } = await n.read({
+        let { buffer, bytesRead } = await handle.read({
           buffer: Buffer.alloc(64),
         });
         let trimmed = buffer.subarray(0, bytesRead).toString("utf8").trim();
         if (trimmed.length === 0) throw Error("The file that identifies this container start is empty.");
         return trimmed;
       } finally {
-        await n.close();
+        await handle.close();
       }
     })().catch((error) => {
       this.#r = undefined;
@@ -86,13 +93,13 @@ class ContainerStartRecord {
     });
     return this.#r;
   }
-  write(e) {
-    this.#a(e.listed.taskId, async (n, containerStart) => {
+  write(record) {
+    this.#a(record.listed.taskId, async (folder, containerStart) => {
       await publishWriteAtomic(
-        join(n, e.listed.taskId + CALL_RECORD_EXT),
+        join(folder, record.listed.taskId + CALL_RECORD_EXT),
         jsonStringify({
           v: 1,
-          ...e,
+          ...record,
           container_start: containerStart,
         }),
         {
@@ -100,27 +107,27 @@ class ContainerStartRecord {
           mode: 384,
         },
       );
-      if (e.ended !== undefined) await fsyncDirectory(n);
+      if (record.ended !== undefined) await fsyncDirectory(folder);
     });
   }
-  remove(e) {
-    this.#a(e, async (n) => {
-      await unlink(join(n, e + CALL_RECORD_EXT)).catch((error) => {
+  remove(taskId) {
+    this.#a(taskId, async (folder) => {
+      await unlink(join(folder, taskId + CALL_RECORD_EXT)).catch((error) => {
         if (getErrnoCode(error) !== "ENOENT") throw error;
       });
     });
   }
-  async settled(e) {
-    await this.#t.get(e);
+  async settled(taskId) {
+    await this.#t.get(taskId);
   }
   async settledAll() {
     while (this.#t.size > 0) await Promise.all(this.#t.values());
     await this.#i()
-      .then((e) => (e === undefined ? undefined : fsyncDirectory(e)))
+      .then((folder) => (folder === undefined ? undefined : fsyncDirectory(folder)))
       .catch(this.#s);
   }
   async readEarlier() {
-    let e = await this.#n().catch((error) => {
+    let containerStart = await this.#n().catch((error) => {
       logForDebugging(
         `mcp serve: could not read or make the file that identifies this container start, so commands that earlier daemons started are not listed: ${errorMessage(error)}`,
         {
@@ -129,8 +136,8 @@ class ContainerStartRecord {
       );
       return;
     });
-    let n =
-      e === undefined
+    let recordsFolder =
+      containerStart === undefined
         ? undefined
         : await this.#i().catch((error) => {
             logForDebugging(
@@ -141,21 +148,21 @@ class ContainerStartRecord {
             );
             return;
           });
-    let r = [];
-    if (n !== undefined) {
-      let h = 0;
+    let recordFiles = [];
+    if (recordsFolder !== undefined) {
+      let scannedCount = 0;
       try {
-        for await (let w of await opendir(n)) {
-          h++;
+        for await (let dirEntry of await opendir(recordsFolder)) {
+          scannedCount++;
           if (
-            w.name.endsWith(CALL_RECORD_EXT) &&
-            isTaskIdOfType("local_bash", w.name.slice(0, -CALL_RECORD_EXT.length))
+            dirEntry.name.endsWith(CALL_RECORD_EXT) &&
+            isTaskIdOfType("local_bash", dirEntry.name.slice(0, -CALL_RECORD_EXT.length))
           )
-            r.push({
-              name: w.name,
-              path: join(n, w.name),
+            recordFiles.push({
+              name: dirEntry.name,
+              path: join(recordsFolder, dirEntry.name),
             });
-          if (h >= MAX_CALL_RECORD_SCAN || r.length >= MAX_CALL_RECORDS) break;
+          if (scannedCount >= MAX_CALL_RECORD_SCAN || recordFiles.length >= MAX_CALL_RECORDS) break;
         }
       } catch (error) {
         logForDebugging(
@@ -167,46 +174,48 @@ class ContainerStartRecord {
       }
     }
     let now = Date.now();
-    let y = [];
-    for (let h of chunk_default(r, MAX_CALL_RECORD_BATCH))
-      y.push(
+    let fates = [];
+    for (let batch of chunk_default(recordFiles, MAX_CALL_RECORD_BATCH))
+      fates.push(
         ...(await Promise.all(
-          h.map(async ({ name: w, path }) => {
-            let S = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK)
-              .then(async (R) => {
+          batch.map(async ({ name: fileName, path }) => {
+            let raw = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK)
+              .then(async (fileHandle) => {
                 try {
-                  let stats = await R.stat();
+                  let stats = await fileHandle.stat();
                   if (!stats.isFile() || stats.size > MAX_CALL_RECORD_BYTES) return;
-                  let { buffer, bytesRead } = await R.read({
+                  let { buffer, bytesRead } = await fileHandle.read({
                     buffer: Buffer.alloc(MAX_CALL_RECORD_BYTES),
                   });
                   return buffer.subarray(0, bytesRead).toString("utf8");
                 } finally {
-                  await R.close();
+                  await fileHandle.close();
                 }
               })
               .catch(() => {
                 return;
               });
-            let x = callRecordSchema().safeParse(S === undefined ? undefined : safeParseJSON(S, false));
-            if (!x.success || x.data.listed.taskId + CALL_RECORD_EXT !== w)
+            let parsed = callRecordSchema().safeParse(
+              raw === undefined ? undefined : safeParseJSON(raw, false),
+            );
+            if (!parsed.success || parsed.data.listed.taskId + CALL_RECORD_EXT !== fileName)
               return {
                 fate: "unreadable",
               };
             let {
-              container_start: containerStart,
+              container_start: containerStart_2,
               listed,
               started_at: startedAt,
               written_at: writtenAt,
               ended,
-            } = x.data;
+            } = parsed.data;
             if (now - writtenAt > CALL_RECORD_RETENTION_MS) {
               this.remove(listed.taskId);
               return {
                 fate: "too_old",
               };
             }
-            if (containerStart === e && ended === undefined)
+            if (containerStart_2 === containerStart && ended === undefined)
               return {
                 fate: "maybe_still_running",
               };
@@ -237,57 +246,57 @@ class ContainerStartRecord {
         )),
       );
     return {
-      commands: y
-        .flatMap((h) => ("command" in h ? [h.command] : []))
-        .toSorted((h, w) => h.ended.at - w.ended.at),
+      commands: fates
+        .flatMap((fate) => ("command" in fate ? [fate.command] : []))
+        .toSorted((left, right) => left.ended.at - right.ended.at),
       counted: {
-        with_end: count(y, ({ fate }) => fate === "with_end"),
-        container_stopped: count(y, ({ fate }) => fate === "container_stopped"),
-        maybe_still_running: count(y, ({ fate }) => fate === "maybe_still_running"),
-        too_old: count(y, ({ fate }) => fate === "too_old"),
-        unreadable: count(y, ({ fate }) => fate === "unreadable"),
+        with_end: count(fates, ({ fate }) => fate === "with_end"),
+        container_stopped: count(fates, ({ fate }) => fate === "container_stopped"),
+        maybe_still_running: count(fates, ({ fate }) => fate === "maybe_still_running"),
+        too_old: count(fates, ({ fate }) => fate === "too_old"),
+        unreadable: count(fates, ({ fate }) => fate === "unreadable"),
       },
     };
   }
-  async #i(e = false) {
-    let n = this.#o();
-    if (e)
-      await mkdir(n, {
+  async #i(create = false) {
+    let folder = this.#o();
+    if (create)
+      await mkdir(folder, {
         recursive: true,
         mode: 448,
       });
-    let r = await lstat(n).catch((error) => {
+    let stats = await lstat(folder).catch((error) => {
       if (getErrnoCode(error) !== "ENOENT") throw error;
       return;
     });
-    if (r === undefined) return;
-    if (!r.isDirectory() || r.uid !== process.getuid?.())
+    if (stats === undefined) return;
+    if (!stats.isDirectory() || stats.uid !== process.getuid?.())
       throw Error(
         "The folder for background command records is a symbolic link or not a directory owned by this user.",
       );
-    return n;
+    return folder;
   }
-  #a(e, n) {
-    let r = (this.#t.get(e) ?? Promise.resolve())
+  #a(taskId, run) {
+    let queued = (this.#t.get(taskId) ?? Promise.resolve())
       .then(async () => {
-        let s = await this.#n();
-        let y = s === undefined ? undefined : await this.#i(true);
-        if (s !== undefined && y !== undefined) await n(y, s);
+        let containerStart = await this.#n();
+        let folder = containerStart === undefined ? undefined : await this.#i(true);
+        if (containerStart !== undefined && folder !== undefined) await run(folder, containerStart);
       })
       .catch(this.#s);
-    this.#t.set(e, r);
-    r.then(() => {
-      if (this.#t.get(e) === r) this.#t.delete(e);
+    this.#t.set(taskId, queued);
+    queued.then(() => {
+      if (this.#t.get(taskId) === queued) this.#t.delete(taskId);
     });
   }
 }
 //@ chunk-m8aeec95.js:6963-7083 placement
-async function fsyncDirectory(e) {
-  let n = await open(e, constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW);
+async function fsyncDirectory(dirPath) {
+  let handle = await open(dirPath, constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW);
   try {
-    await n.sync();
+    await handle.sync();
   } finally {
-    await n.close();
+    await handle.close();
   }
 }
 //@ chunk-m8aeec95.js:7120-7172 placement

@@ -5,15 +5,16 @@
  * pieces: chunk-egr0twnb.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:518625-520619 cjs-fingerprint
-var require_vhdl = x(function (cjsExports, cjsModule) {
+var require_vhdl = __commonJS(function (cjsExports, cjsModule) {
   function vhdl(hljs) {
     let INTEGER_RE = "[eE][-+]?\\d(_|\\d)*";
-    let a = "\\d(_|\\d)*(\\.\\d(_|\\d)*)?(" + INTEGER_RE + ")?";
-    let s = "\\w+";
-    let begin = "\\b(" + ("\\d(_|\\d)*#\\w+(\\.\\w+)?#(" + INTEGER_RE + ")?") + "|" + a + ")";
+    let DECIMAL_LITERAL_RE = "\\d(_|\\d)*(\\.\\d(_|\\d)*)?(" + INTEGER_RE + ")?";
+    let BASED_INTEGER_RE = "\\w+";
+    let begin =
+      "\\b(" + ("\\d(_|\\d)*#\\w+(\\.\\w+)?#(" + INTEGER_RE + ")?") + "|" + DECIMAL_LITERAL_RE + ")";
     return {
       name: "VHDL",
       case_insensitive: true,

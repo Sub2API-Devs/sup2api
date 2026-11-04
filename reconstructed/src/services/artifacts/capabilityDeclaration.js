@@ -37,7 +37,7 @@ import { firstLineOf, plural } from "../../utils/stringUtils.js";
 import { uniq } from "../../utils/collections.js";
 import { SessionRootSlot } from "../../bootstrap/sessionSlices.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, literal, array, string } from "../../../vendor/zod/v4/classic/schemas.js";
+import { objectSchema, literal, array, stringSchema } from "../../../vendor/zod/v4/classic/schemas.js";
 import {
   readUntrustedArray,
   UNREADABLE_ARRAY,
@@ -55,54 +55,60 @@ import {
   isDecisionSurfaceControl,
   INVISIBLE_BLANKS,
 } from "../../tools/ArtifactTool/artifactUrls.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-99h01h55.js:4881-4919 placement
-function getUserScopes(e) {
-  return arrayField(e, "scopes");
+function getUserScopes(user) {
+  return arrayField(user, "scopes");
 }
 //@ chunk-99h01h55.js:4919-5011 placement
-function isValidScopeList(e) {
-  return e.every((n) => typeof n === "string" && /^[a-z][a-z0-9_-]{0,31}$/.test(n));
+function isValidScopeList(scopes) {
+  return scopes.every((scope) => typeof scope === "string" && /^[a-z][a-z0-9_-]{0,31}$/.test(scope));
 }
 //@ chunk-99h01h55.js:5011-5140 placement
-function isValidUserCapability(e) {
-  if (!isPlainObjectConnector(e)) return false;
-  let { scopes, ...t } = e;
+function isValidUserCapability(user) {
+  if (!isPlainObjectConnector(user)) return false;
+  let { scopes, ...rest } = user;
   return (
-    Object.keys(t).length === 0 &&
+    Object.keys(rest).length === 0 &&
     (scopes === undefined || (Array.isArray(scopes) && isValidScopeList(scopes)))
   );
 }
 //@ chunk-99h01h55.js:5140-5218 placement
-function arrayField(e, n) {
-  if (!isPlainObjectConnector(e)) return;
-  let t = e[n];
-  return Array.isArray(t) ? t : undefined;
+function arrayField(obj, key) {
+  if (!isPlainObjectConnector(obj)) return;
+  let value = obj[key];
+  return Array.isArray(value) ? value : undefined;
 }
 //@ chunk-99h01h55.js:5218-5358 placement
 /**
  * 数据库规则路径正则（允许 {self} 段）与可用作用域集合（view/interact/admin/owner/self）。
  */
-var DB_RULE_PATH_REGEX = /^(?:[A-Za-z0-9_.~:@+-]+|\{self\})(?:\/(?:[A-Za-z0-9_.~:@+-]+|\{self\}))*$/;
-var DB_RULE_SCOPES = new Set(["view", "interact", "admin", "owner", "self"]);
+var DB_RULE_PATH_REGEX; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var DB_RULE_SCOPES;
+deferInit("chunk-99h01h55.js:5218", () => {
+  DB_RULE_PATH_REGEX = /^(?:[A-Za-z0-9_.~:@+-]+|\{self\})(?:\/(?:[A-Za-z0-9_.~:@+-]+|\{self\}))*$/;
+  DB_RULE_SCOPES = new Set(["view", "interact", "admin", "owner", "self"]);
+});
 //@ chunk-99h01h55.js:5358-5573 placement
-function isValidDbCapability(e) {
-  if (!isPlainObjectConnector(e)) return false;
-  let { rules, wake, ...r } = e;
+function isValidDbCapability(db) {
+  if (!isPlainObjectConnector(db)) return false;
+  let { rules, wake, ...rest } = db;
   return (
-    Object.keys(r).length === 0 &&
+    Object.keys(rest).length === 0 &&
     (rules === undefined || (Array.isArray(rules) && isValidDbRules(rules))) &&
     (wake === undefined ||
-      (Array.isArray(wake) && wake.every((s) => typeof s === "string" && DB_RULE_PATH_REGEX.test(s))))
+      (Array.isArray(wake) &&
+        wake.every((path) => typeof path === "string" && DB_RULE_PATH_REGEX.test(path))))
   );
 }
 //@ chunk-99h01h55.js:5573-5836 placement
-function isValidDbRules(e) {
-  return e.every((n) => {
-    if (!isPlainObjectConnector(n)) return false;
-    let { path, read, write, ...i } = n;
+function isValidDbRules(rules) {
+  return rules.every((rule) => {
+    if (!isPlainObjectConnector(rule)) return false;
+    let { path, read, write, ...rest } = rule;
     return (
-      Object.keys(i).length === 0 &&
+      Object.keys(rest).length === 0 &&
       typeof path === "string" &&
       (path === "" || DB_RULE_PATH_REGEX.test(path)) &&
       (read === undefined || (typeof read === "string" && DB_RULE_SCOPES.has(read))) &&
@@ -111,34 +117,34 @@ function isValidDbRules(e) {
   });
 }
 //@ chunk-99h01h55.js:5836-5895 placement
-function serverConfigOrUndefined(e) {
+function serverConfigOrUndefined(value) {
   try {
-    return isPlainObjectConnector(e) ? e : undefined;
+    return isPlainObjectConnector(value) ? value : undefined;
   } catch {
     return null;
   }
 }
 //@ chunk-99h01h55.js:5895-5969 placement
-function isStringArray(e) {
-  return Array.isArray(e) && e.every((n) => typeof n === "string");
+function isStringArray(value) {
+  return Array.isArray(value) && value.every((item) => typeof item === "string");
 }
 //@ chunk-99h01h55.js:5969-6004 placement
 function stringListOrNull(tools) {
   return isStringArray(tools) ? tools : null;
 }
 //@ chunk-99h01h55.js:6004-6056 placement
-function safeIds(e) {
-  return [...e].filter((n) => SAFE_ID_RE.test(n));
+function safeIds(ids) {
+  return [...ids].filter((id) => SAFE_ID_RE.test(id));
 }
 //@ chunk-99h01h55.js:6056-6108 placement
-function normalizedOrLower(e) {
-  return normalizeUuidOrNull(e) === null ? e : e.toLowerCase();
+function normalizedOrLower(value) {
+  return normalizeUuidOrNull(value) === null ? value : value.toLowerCase();
 }
 //@ chunk-99h01h55.js:6108-11482 placement
 /**
  * 规范化页面声明的 mcp 能力（servers 列表、dynamic、改名），返回规范结果、警告与被重命名的服务器。
  */
-function normalizeMcpCapability(capabilities, connectorNames, serverNames, r = {}) {
+function normalizeMcpCapability(capabilities, connectors, serverNames, options = {}) {
   let mcp = capabilities.mcp;
   if (mcp === undefined)
     return {
@@ -191,257 +197,286 @@ function normalizeMcpCapability(capabilities, connectorNames, serverNames, r = {
       ],
     };
   }
-  let l = new Map(connectorNames.map((g) => [normalizedOrLower(g.toolPrefix), g]));
-  let c = new Map(connectorNames.map((g) => [g.server, g]));
-  let d = [];
-  let m = [];
-  let a = [];
-  let b = [];
-  let y = new Map();
-  let C = new Map();
-  let R = [];
-  let P = [];
-  for (let [g, h] of servers.entries()) {
-    let serverField = getServerField(h);
-    let f = serverField?.startsWith("host:") ? `host:${internalKey(serverField.slice(5))}` : serverField;
-    if (f === undefined) {
+  let byPrefix = new Map(connectors.map((connector) => [normalizedOrLower(connector.toolPrefix), connector]));
+  let byServer = new Map(connectors.map((connector) => [connector.server, connector]));
+  let unresolved = [];
+  let internal = [];
+  let malformed = [];
+  let resolvedServers = [];
+  let renamedServers = new Map();
+  let suggestedNames = new Map();
+  let renamedTools = [];
+  let unknownToolNotes = [];
+  for (let [index, entry] of servers.entries()) {
+    let serverField = getServerField(entry);
+    let serverFieldName = serverField?.startsWith("host:")
+      ? `host:${internalKey(serverField.slice(5))}`
+      : serverField;
+    if (serverFieldName === undefined) {
       let wrongKey =
-        h !== null && typeof h === "object" ? (CONNECTOR_NAME_FIELDS.find((M) => M in h) ?? null) : null;
-      a.push({
+        entry !== null && typeof entry === "object"
+          ? (CONNECTOR_NAME_FIELDS.find((fieldName) => fieldName in entry) ?? null)
+          : null;
+      malformed.push({
         kind: "entry_shape",
-        index: g,
+        index,
         wrongKey,
       });
       continue;
     }
-    let E = l.get(normalizedOrLower(internalKey(f)));
-    let tools = isPlainObjectConnector(h) ? h.tools : undefined;
-    let N = stringListOrNull(tools);
-    if (tools === undefined || N?.length === 0) {
-      let w = E ?? c.get(f);
-      a.push({
+    let byPrefixMatch = byPrefix.get(normalizedOrLower(internalKey(serverFieldName)));
+    let tools = isPlainObjectConnector(entry) ? entry.tools : undefined;
+    let toolNames = stringListOrNull(tools);
+    if (tools === undefined || toolNames?.length === 0) {
+      let known = byPrefixMatch ?? byServer.get(serverFieldName);
+      malformed.push({
         kind: "no_tools",
-        server: f,
-        display: E !== undefined && isDeclarableServer(E) ? E.server : null,
-        available: safeIds(w?.toolNames ?? []),
+        server: serverFieldName,
+        display:
+          byPrefixMatch !== undefined && isDeclarableServer(byPrefixMatch) ? byPrefixMatch.server : null,
+        available: safeIds(known?.toolNames ?? []),
       });
-    } else if (N === null)
-      a.push({
+    } else if (toolNames === null)
+      malformed.push({
         kind: "tools_shape",
-        server: f,
+        server: serverFieldName,
       });
-    let localServerName = getLocalServerName(f);
-    let Q = localServerName === undefined ? undefined : l.get(normalizedOrLower(localServerName));
-    let W = localServerName === undefined ? null : hostCapabilityServer(localServerName);
-    let x = null;
-    let pe = c.get(f);
-    if (E !== undefined) {
-      if (!isDeclarableServer(E))
-        a.push({
+    let localServerName = getLocalServerName(serverFieldName);
+    let localConnector =
+      localServerName === undefined ? undefined : byPrefix.get(normalizedOrLower(localServerName));
+    let hostServer = localServerName === undefined ? null : hostCapabilityServer(localServerName);
+    let resolvedName = null;
+    let byServerMatch = byServer.get(serverFieldName);
+    if (byPrefixMatch !== undefined) {
+      if (!isDeclarableServer(byPrefixMatch))
+        malformed.push({
           kind: "undeclarable_name",
-          server: f,
-          name: E.server,
+          server: serverFieldName,
+          name: byPrefixMatch.server,
         });
-      else if (normalizeUuidOrNull(f) !== null)
-        a.push({
+      else if (normalizeUuidOrNull(serverFieldName) !== null)
+        malformed.push({
           kind: "known_id",
-          server: f,
-          display: E.server,
+          server: serverFieldName,
+          display: byPrefixMatch.server,
         });
       else {
-        x = E.server;
-        if (f !== E.server) y.set(f, E.server);
+        resolvedName = byPrefixMatch.server;
+        if (serverFieldName !== byPrefixMatch.server)
+          renamedServers.set(serverFieldName, byPrefixMatch.server);
       }
-    } else if (pe !== undefined) {
-      if (isDeclarableServer(pe)) x = f;
+    } else if (byServerMatch !== undefined) {
+      if (isDeclarableServer(byServerMatch)) resolvedName = serverFieldName;
       else
-        a.push({
+        malformed.push({
           kind: "undeclarable_name",
-          server: f,
-          name: f,
+          server: serverFieldName,
+          name: serverFieldName,
         });
-    } else if (f.startsWith(CLAUDE_AI)) d.push(f);
-    else if (f.startsWith("mcp__")) {
-      let w = l.get(normalizedOrLower(firstLineOf(f.slice(5), "__")));
-      a.push({
+    } else if (serverFieldName.startsWith(CLAUDE_AI)) unresolved.push(serverFieldName);
+    else if (serverFieldName.startsWith("mcp__")) {
+      let toolNameMatch = byPrefix.get(normalizedOrLower(firstLineOf(serverFieldName.slice(5), "__")));
+      malformed.push({
         kind: "tool_name",
-        server: f,
-        display: w !== undefined && isDeclarableServer(w) ? w.server : null,
+        server: serverFieldName,
+        display:
+          toolNameMatch !== undefined && isDeclarableServer(toolNameMatch) ? toolNameMatch.server : null,
       });
-    } else if (normalizeUuidOrNull(f) !== null)
-      a.push({
+    } else if (normalizeUuidOrNull(serverFieldName) !== null)
+      malformed.push({
         kind: "opaque_id",
-        server: f,
+        server: serverFieldName,
       });
-    else if (Q !== undefined)
-      a.push(
-        isDeclarableServer(Q)
+    else if (localConnector !== undefined)
+      malformed.push(
+        isDeclarableServer(localConnector)
           ? {
               kind: "connector_as_host",
-              server: f,
-              display: Q.server,
+              server: serverFieldName,
+              display: localConnector.server,
             }
           : {
               kind: "undeclarable_name",
-              server: f,
-              name: Q.server,
+              server: serverFieldName,
+              name: localConnector.server,
             },
       );
     else if (localServerName !== undefined && normalizeUuidOrNull(localServerName) !== null)
-      a.push({
+      malformed.push({
         kind: "opaque_id",
-        server: f,
+        server: serverFieldName,
       });
-    else if (localServerName !== undefined && r.hostServers === false)
-      a.push({
+    else if (localServerName !== undefined && options.hostServers === false)
+      malformed.push({
         kind: "host_unavailable",
-        server: f,
+        server: serverFieldName,
       });
-    else if (W !== null) {
-      let w = (server) =>
-        sameNormalizedServer(server, W) ||
-        sameNormalizedServer(firstLineOf(`${normalizeNameForMCP(server)}__`, "__"), W) ||
-        sameNormalizedServer(normalizeConnectorName(server), W);
-      let M = serverNames.find(w) ?? connectorNames.find((k) => w(k.server))?.server;
-      if (M === undefined) x = `host:${W}`;
+    else if (hostServer !== null) {
+      let matchesHost = (server) =>
+        sameNormalizedServer(server, hostServer) ||
+        sameNormalizedServer(firstLineOf(`${normalizeNameForMCP(server)}__`, "__"), hostServer) ||
+        sameNormalizedServer(normalizeConnectorName(server), hostServer);
+      let localName =
+        serverNames.find(matchesHost) ??
+        connectors.find((connector) => matchesHost(connector.server))?.server;
+      if (localName === undefined) resolvedName = `host:${hostServer}`;
       else
-        a.push({
+        malformed.push({
           kind: "local_server_as_first_party",
-          server: f,
-          local: M,
+          server: serverFieldName,
+          local: localName,
         });
-    } else if (isHostCapabilityServer(localServerName ?? "")) m.push(f);
+    } else if (isHostCapabilityServer(localServerName ?? "")) internal.push(serverFieldName);
     else {
-      x = f;
-      let w = localServerName === undefined ? suggestConnectorName(f, connectorNames) : undefined;
-      if (w !== undefined && !C.has(f)) C.set(f, w);
+      resolvedName = serverFieldName;
+      let suggested =
+        localServerName === undefined ? suggestConnectorName(serverFieldName, connectors) : undefined;
+      if (suggested !== undefined && !suggestedNames.has(serverFieldName))
+        suggestedNames.set(serverFieldName, suggested);
     }
-    if (x !== null && serverField !== f && !y.has(f)) y.set(serverField ?? f, x);
-    if (x !== null && N !== null && N.length > 0 && isPlainObjectConnector(h)) {
-      let w = new Set(
-        connectorNames.flatMap((k) => (k.server === x && isDeclarableServer(k) ? (k.toolNames ?? []) : [])),
+    if (resolvedName !== null && serverField !== serverFieldName && !renamedServers.has(serverFieldName))
+      renamedServers.set(serverField ?? serverFieldName, resolvedName);
+    if (
+      resolvedName !== null &&
+      toolNames !== null &&
+      toolNames.length > 0 &&
+      isPlainObjectConnector(entry)
+    ) {
+      let knownTools = new Set(
+        connectors.flatMap((connector) =>
+          connector.server === resolvedName && isDeclarableServer(connector)
+            ? (connector.toolNames ?? [])
+            : [],
+        ),
       );
-      let M = N;
-      if (w.size > 0) {
-        M = N.map((j) => {
-          if (w.has(j)) return j;
-          let filtered = [...w].filter((Le) => normalizeNameForMCP(Le) === j);
-          if (filtered.length !== 1 || !SAFE_ID_RE.test(filtered[0])) return j;
-          R.push([j, filtered[0]]);
+      let toolsToKeep = toolNames;
+      if (knownTools.size > 0) {
+        toolsToKeep = toolNames.map((declaredTool) => {
+          if (knownTools.has(declaredTool)) return declaredTool;
+          let filtered = [...knownTools].filter(
+            (candidate) => normalizeNameForMCP(candidate) === declaredTool,
+          );
+          if (filtered.length !== 1 || !SAFE_ID_RE.test(filtered[0])) return declaredTool;
+          renamedTools.push([declaredTool, filtered[0]]);
           return filtered[0];
         });
-        let k = uniq(M.filter((j) => !w.has(j)));
-        if (k.length > 0 && k.length === uniq(M).length) {
-          a.push({
+        let unknown = uniq(toolsToKeep.filter((tool) => !knownTools.has(tool)));
+        if (unknown.length > 0 && unknown.length === uniq(toolsToKeep).length) {
+          malformed.push({
             kind: "unknown_tools",
-            server: f,
-            display: f === x ? null : x,
-            unknown: k,
-            available: safeIds(w),
+            server: serverFieldName,
+            display: serverFieldName === resolvedName ? null : resolvedName,
+            unknown,
+            available: safeIds(knownTools),
           });
           continue;
         }
-        if (k.length > 0)
-          P.push({
-            server: x,
-            unknown: k,
-            known: safeIds(w),
+        if (unknown.length > 0)
+          unknownToolNotes.push({
+            server: resolvedName,
+            unknown,
+            known: safeIds(knownTools),
           });
       }
-      b.push({
-        ...h,
-        server: x,
-        tools: M,
+      resolvedServers.push({
+        ...entry,
+        server: resolvedName,
+        tools: toolsToKeep,
       });
     }
   }
-  if (d.length > 0 || m.length > 0 || a.length > 0)
+  if (unresolved.length > 0 || internal.length > 0 || malformed.length > 0)
     return {
       ...emptyConnectorResolution(),
-      unresolved: d,
-      internal: m,
-      malformed: a,
+      unresolved,
+      internal,
+      malformed,
     };
-  let S = [];
-  let z = new Map();
-  for (let g of b) {
-    let h = z.get(g.server);
-    if (h === undefined) {
-      z.set(g.server, {
-        idx: S.length,
+  let mergedServers = [];
+  let indexByName = new Map();
+  for (let entry of resolvedServers) {
+    let slot = indexByName.get(entry.server);
+    if (slot === undefined) {
+      indexByName.set(entry.server, {
+        idx: mergedServers.length,
         from: 1,
       });
-      S.push(g);
+      mergedServers.push(entry);
     } else {
-      h.from++;
-      let _ = S[h.idx];
-      S[h.idx] = {
-        ..._,
-        tools: uniq([..._.tools, ...g.tools]),
+      slot.from++;
+      let existing = mergedServers[slot.idx];
+      mergedServers[slot.idx] = {
+        ...existing,
+        tools: uniq([...existing.tools, ...entry.tools]),
       };
     }
   }
-  let F = [];
-  if (y.size > 0) {
+  let warnings = [];
+  if (renamedServers.size > 0) {
     let joined = capListForDisplay(
-      [...y],
+      [...renamedServers],
       8,
-      ([h, _]) => `"${sanitizeDisplayText(h)}" \u2192 "${sanitizeConnectorName(_)}"`,
+      ([from, to]) => `"${sanitizeDisplayText(from)}" \u2192 "${sanitizeConnectorName(to)}"`,
     ).join(", ");
-    F.push(
-      `resolved ${plural(y.size, "a connector name", "connector names")} to the display ${plural(y.size, "name")} viewers match \u2014 ${joined}; the page must pass exactly ${y.size === 1 ? "that name" : "those names"} to callTool(\u2026) / watchTool(\u2026).`,
+    warnings.push(
+      `resolved ${plural(renamedServers.size, "a connector name", "connector names")} to the display ${plural(renamedServers.size, "name")} viewers match \u2014 ${joined}; the page must pass exactly ${renamedServers.size === 1 ? "that name" : "those names"} to callTool(\u2026) / watchTool(\u2026).`,
     );
   }
-  if (C.size > 0) {
+  if (suggestedNames.size > 0) {
     let joined = capListForDisplay(
-      [...C],
+      [...suggestedNames],
       8,
-      ([h, _]) => `"${sanitizeConnectorName(h)}" (closest here: "${sanitizeConnectorName(_)}")`,
+      ([declared, closest]) =>
+        `"${sanitizeConnectorName(declared)}" (closest here: "${sanitizeConnectorName(closest)}")`,
     ).join(", ");
-    F.push(
+    warnings.push(
       `no connector in this session is named ${joined} \u2014 if the closest name is the one you meant, declare it with exactly that spelling; viewers' connectors are matched by name (ignoring at most letter case and separators), so a name none of them carries works for no viewer.`,
     );
   }
-  if (R.length > 0) {
-    let g = uniq(R.map(([h, _]) => `"${sanitizeConnectorName(h)}" \u2192 "${sanitizeConnectorName(_)}"`));
-    F.push(
-      `rewrote mcp tool ${plural(g.length, "name")} to the upstream ${plural(g.length, "spelling")} viewers call \u2014 ${capListForDisplay(g, 8, (h) => h).join(", ")}; the page must pass exactly ${g.length === 1 ? "that name" : "those names"} to callTool(\u2026) / watchTool(\u2026).`,
+  if (renamedTools.length > 0) {
+    let renames = uniq(
+      renamedTools.map(
+        ([from, to]) => `"${sanitizeConnectorName(from)}" \u2192 "${sanitizeConnectorName(to)}"`,
+      ),
+    );
+    warnings.push(
+      `rewrote mcp tool ${plural(renames.length, "name")} to the upstream ${plural(renames.length, "spelling")} viewers call \u2014 ${capListForDisplay(renames, 8, (text) => text).join(", ")}; the page must pass exactly ${renames.length === 1 ? "that name" : "those names"} to callTool(\u2026) / watchTool(\u2026).`,
     );
   }
-  for (let { server, unknown, known } of P) {
-    let joined = capListForDisplay(unknown, 8, (N) => `"${sanitizeConnectorName(N)}"`).join(", ");
-    let E = unknown.length === 1 ? "it" : "them";
-    let I =
+  for (let { server, unknown, known } of unknownToolNotes) {
+    let joined = capListForDisplay(unknown, 8, (name) => `"${sanitizeConnectorName(name)}"`).join(", ");
+    let pronoun = unknown.length === 1 ? "it" : "them";
+    let knownNote =
       known.length === 0
         ? ""
-        : ` (its tools here: ${capListForDisplay(known, 12, (N) => `"${sanitizeConnectorName(N)}"`).join(", ")})`;
-    F.push(
-      `connector "${sanitizeConnectorName(server)}" has no ${plural(unknown.length, "tool")} named ${joined} in this session${I}, so the page's calls to ${E} fail for any viewer whose "${sanitizeConnectorName(server)}" lacks ${E} too \u2014 "tools" takes the connector's own top-level tool names; if ${E === "it" ? "that name is" : "those names are"} wrong, fix "tools" and publish again.`,
+        : ` (its tools here: ${capListForDisplay(known, 12, (name) => `"${sanitizeConnectorName(name)}"`).join(", ")})`;
+    warnings.push(
+      `connector "${sanitizeConnectorName(server)}" has no ${plural(unknown.length, "tool")} named ${joined} in this session${knownNote}, so the page's calls to ${pronoun} fail for any viewer whose "${sanitizeConnectorName(server)}" lacks ${pronoun} too \u2014 "tools" takes the connector's own top-level tool names; if ${pronoun === "it" ? "that name is" : "those names are"} wrong, fix "tools" and publish again.`,
     );
   }
-  let ie = [];
-  for (let [g, h] of z) {
-    let _ = S[h.idx].tools.length;
-    let f = hostCapabilityServer(getLocalServerName(g) ?? "") !== null;
-    if (h.from > 1 && !f) {
-      let E = sanitizeConnectorName(g);
-      let I = describeServerKind(g);
-      F.push(
-        `${h.from} manifest entries resolve to ${I} "${E}" and were merged into one (${_} ${plural(_, "tool")}). A viewer with more than one ${I} named "${E}" gets server_ambiguous on every call until the duplicates are renamed or removed.`,
+  let oversized = [];
+  for (let [server, slot] of indexByName) {
+    let toolCount = mergedServers[slot.idx].tools.length;
+    let isHost = hostCapabilityServer(getLocalServerName(server) ?? "") !== null;
+    if (slot.from > 1 && !isHost) {
+      let displayName = sanitizeConnectorName(server);
+      let kindLabel = describeServerKind(server);
+      warnings.push(
+        `${slot.from} manifest entries resolve to ${kindLabel} "${displayName}" and were merged into one (${toolCount} ${plural(toolCount, "tool")}). A viewer with more than one ${kindLabel} named "${displayName}" gets server_ambiguous on every call until the duplicates are renamed or removed.`,
       );
     }
-    if (_ > MAX_SANITIZED_TEXT)
-      ie.push({
-        server: g,
-        toolCount: _,
+    if (toolCount > MAX_SANITIZED_TEXT)
+      oversized.push({
+        server,
+        toolCount,
       });
   }
-  let fe = S.length > MAX_LISTED_MCP_SERVERS ? S.length : null;
-  if (ie.length > 0 || fe !== null)
+  let serverCount = mergedServers.length > MAX_LISTED_MCP_SERVERS ? mergedServers.length : null;
+  if (oversized.length > 0 || serverCount !== null)
     return {
       ...emptyConnectorResolution(),
-      oversized: ie,
-      serverCount: fe,
+      oversized,
+      serverCount,
     };
   return {
     ok: true,
@@ -449,29 +484,29 @@ function normalizeMcpCapability(capabilities, connectorNames, serverNames, r = {
       ...capabilities,
       mcp: {
         ...mcp,
-        servers: S,
+        servers: mergedServers,
       },
     },
-    warnings: F,
-    servers: S.map((g) => g.server),
-    renamed: [...y],
+    warnings,
+    servers: mergedServers.map((server) => server.server),
+    renamed: [...renamedServers],
   };
 }
 //@ chunk-99h01h55.js:11482-11761 placement
-function findUndeclaredMcpToolCalls(e, n, t = 8) {
-  let r = new Set(n);
-  let s = new Set();
-  let i = [];
-  let l = /\.(?:callTool|watchTool)\(\s*(?:'([^'\\\n]{1,200})'|"([^"\\\n]{1,200})")\s*,/g;
-  for (let c of e)
-    for (let d of c.matchAll(l)) {
-      let m = d[1] ?? d[2];
-      if (r.has(m) || s.has(m)) continue;
-      s.add(m);
-      i.push(m);
-      if (i.length >= t) return i;
+function findUndeclaredMcpToolCalls(chunks, declaredTools, maxResults = 8) {
+  let declared = new Set(declaredTools);
+  let seen = new Set();
+  let undeclared = [];
+  let callPattern = /\.(?:callTool|watchTool)\(\s*(?:'([^'\\\n]{1,200})'|"([^"\\\n]{1,200})")\s*,/g;
+  for (let chunk of chunks)
+    for (let match of chunk.matchAll(callPattern)) {
+      let toolName = match[1] ?? match[2];
+      if (declared.has(toolName) || seen.has(toolName)) continue;
+      seen.add(toolName);
+      undeclared.push(toolName);
+      if (undeclared.length >= maxResults) return undeclared;
     }
-  return i;
+  return undeclared;
 }
 //@ chunk-99h01h55.js:11761-11841 placement
 function foldName(server) {
@@ -481,88 +516,110 @@ function foldName(server) {
     .trim();
 }
 //@ chunk-99h01h55.js:11841-12342 placement
-function suggestConnectorName(e, n) {
-  let filtered = n.filter(isDeclarableServer);
-  let r = foldName(e);
-  if (filtered.some((a) => foldName(a.server) === r)) return;
-  let s = (a) => a.replace(/[^\p{L}\p{N}]/gu, "");
-  let i = (a) => a.split(/[^\p{L}\p{N}]+/u).filter((b) => b.length >= 3);
-  let l = s(r);
-  if (l.length < 3) return;
-  let found = filtered.find((a) => s(foldName(a.server)) === l);
+function suggestConnectorName(name, connectors) {
+  let filtered = connectors.filter(isDeclarableServer);
+  let folded = foldName(name);
+  if (filtered.some((connector) => foldName(connector.server) === folded)) return;
+  let stripPunct = (value) => value.replace(/[^\p{L}\p{N}]/gu, "");
+  let words = (value) => value.split(/[^\p{L}\p{N}]+/u).filter((word) => word.length >= 3);
+  let compact = stripPunct(folded);
+  if (compact.length < 3) return;
+  let found = filtered.find((connector) => stripPunct(foldName(connector.server)) === compact);
   if (found !== undefined) return found.server;
-  let d = i(r);
-  let m;
-  for (let a of filtered) {
-    let b = i(foldName(a.server));
-    let [y, C] = b.length <= d.length ? [b, d] : [d, b];
-    if (y.length > 0 && y.every((R) => C.includes(R)) && (m === undefined || y.length > m.shared))
-      m = {
-        server: a.server,
-        shared: y.length,
+  let queryWords = words(folded);
+  let best;
+  for (let connector of filtered) {
+    let connectorWords = words(foldName(connector.server));
+    let [smaller, larger] =
+      connectorWords.length <= queryWords.length
+        ? [connectorWords, queryWords]
+        : [queryWords, connectorWords];
+    if (
+      smaller.length > 0 &&
+      smaller.every((word) => larger.includes(word)) &&
+      (best === undefined || smaller.length > best.shared)
+    )
+      best = {
+        server: connector.server,
+        shared: smaller.length,
       };
   }
-  return m?.server;
+  return best?.server;
 }
 //@ chunk-99h01h55.js:12342-12453 placement
-function findMentionedTools(e, renamed) {
-  return renamed.filter(([t]) => e.some((r) => [`'${t}'`, `"${t}"`, `\`${t}\``].some((s) => r.includes(s))));
+function findMentionedTools(texts, renamed) {
+  return renamed.filter(([pair]) =>
+    texts.some((text) => [`'${pair}'`, `"${pair}"`, `\`${pair}\``].some((quoted) => text.includes(quoted))),
+  );
 }
 //@ chunk-99h01h55.js:12453-12566 placement
 function listLocalServerDeclarations(capabilities) {
   let mcp = capabilities.mcp;
   if (!hasDeclaredServers(mcp)) return [];
-  return mcp.servers.map(getServerField).filter((t) => t !== undefined && t.startsWith(CLAUDE_AI));
+  return mcp.servers
+    .map(getServerField)
+    .filter((server) => server !== undefined && server.startsWith(CLAUDE_AI));
 }
 //@ chunk-99h01h55.js:12566-13394 placement
-function findUnservedMcpServers(e, n, t) {
-  let mcp = e.mcp;
-  let s = isDynamicMcp(mcp) ? [DYNAMIC_CONNECTOR_NOTICE] : [];
-  if (!hasDeclaredServers(mcp)) return s;
-  let i = uniq(mcp.servers.map(getServerField).filter((c) => c !== undefined));
-  let l = (c) => t.has(c) && !HOST_CAPABILITY_SERVERS.has(c) && !n.some((d) => d.toolPrefix === c);
-  return i
-    .filter((c) => {
-      let localServerName = getLocalServerName(c);
-      if (localServerName !== undefined) {
-        let m = hostCapabilityServer(localServerName);
-        return m === null ? !l(localServerName) : ![...t].some((a) => hostCapabilityServer(a) === m && l(a));
+function findUnservedMcpServers(capabilities, connectors, referencedTools) {
+  let mcp = capabilities.mcp;
+  let notices = isDynamicMcp(mcp) ? [DYNAMIC_CONNECTOR_NOTICE] : [];
+  if (!hasDeclaredServers(mcp)) return notices;
+  let declaredServers = uniq(mcp.servers.map(getServerField).filter((field) => field !== undefined));
+  let isUnserved = (server) =>
+    referencedTools.has(server) &&
+    !HOST_CAPABILITY_SERVERS.has(server) &&
+    !connectors.some((connector) => connector.toolPrefix === server);
+  return declaredServers
+    .filter((server) => {
+      let server_2 = getLocalServerName(server);
+      if (server_2 !== undefined) {
+        let hostMatch = hostCapabilityServer(server_2);
+        return hostMatch === null
+          ? !isUnserved(server_2)
+          : ![...referencedTools].some(
+              (candidate) => hostCapabilityServer(candidate) === hostMatch && isUnserved(candidate),
+            );
       }
       return (
-        !t.has(c) && !l(normalizeConnectorName(c)) && !n.some((m) => m.server === c && t.has(m.toolPrefix))
+        !referencedTools.has(server) &&
+        !isUnserved(normalizeConnectorName(server)) &&
+        !connectors.some(
+          (connector) => connector.server === server && referencedTools.has(connector.toolPrefix),
+        )
       );
     })
-    .map((c) => {
-      let d = sanitizeConnectorName(c);
-      return `This page declares ${describeServerKind(c)} "${d}" but no successful call to it was observed in this session, so the page is published against an unobserved interface. Check the page's argument names against each tool's input schema if this session has the tool. The result fields the page reads stay unverified unless you can safely make one real call; otherwise tell the user the page's "${d}" integration is unverified.`;
+    .map((server) => {
+      let display = sanitizeConnectorName(server);
+      return `This page declares ${describeServerKind(server)} "${display}" but no successful call to it was observed in this session, so the page is published against an unobserved interface. Check the page's argument names against each tool's input schema if this session has the tool. The result fields the page reads stay unverified unless you can safely make one real call; otherwise tell the user the page's "${display}" integration is unverified.`;
     })
-    .concat(s);
+    .concat(notices);
 }
 //@ chunk-99h01h55.js:13394-13492 placement
-function normalizeConnectorName(e) {
-  return normalizeNameForMCP(e).replace(/_+/g, "_").replace(/^_|_$/g, "").slice(0, 64).replace(/_+$/, "");
+function normalizeConnectorName(value) {
+  return normalizeNameForMCP(value).replace(/_+/g, "_").replace(/^_|_$/g, "").slice(0, 64).replace(/_+$/, "");
 }
 //@ chunk-99h01h55.js:13492-13593 placement
-function getServerField(e) {
-  let server = e != null && typeof e === "object" ? e.server : undefined;
-  return typeof server === "string" ? server : undefined;
+function getServerField(server) {
+  let server_2 = server != null && typeof server === "object" ? server.server : undefined;
+  return typeof server_2 === "string" ? server_2 : undefined;
 }
 //@ chunk-99h01h55.js:13593-13646 placement
 function isNonEmptyObject(capabilities) {
   return isPlainObjectCapability(capabilities) && Object.keys(capabilities).length > 0;
 }
 //@ chunk-99h01h55.js:13646-13717 placement
-function isPlainObjectCapability(e) {
-  return typeof e === "object" && e !== null && !Array.isArray(e);
+function isPlainObjectCapability(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 //@ chunk-99h01h55.js:13717-13761 placement
-function foldSelfConfig(e) {
-  let n = foldSelfCapability(e);
-  return isPlainObjectCapability(n) ? n : e;
+function foldSelfConfig(capability) {
+  let folded = foldSelfCapability(capability);
+  return isPlainObjectCapability(folded) ? folded : capability;
 }
 //@ chunk-99h01h55.js:13761-13858 placement
-function defineValue(e, n, value) {
-  Object.defineProperty(e, n, {
+function defineValue(target, key, value) {
+  Object.defineProperty(target, key, {
     value,
     enumerable: true,
     writable: true,
@@ -570,23 +627,23 @@ function defineValue(e, n, value) {
   });
 }
 //@ chunk-99h01h55.js:13858-14061 placement
-function mergeCapabilities(e, n) {
-  let t = foldSelfConfig(e ?? {});
-  let r = foldSelfConfig(n ?? {});
-  let s = {
-    ...t,
+function mergeCapabilities(below, above) {
+  let folded = foldSelfConfig(below ?? {});
+  let folded2 = foldSelfConfig(above ?? {});
+  let out = {
+    ...folded,
   };
-  let i = false;
+  let changed = false;
   let conflict = false;
-  for (let [key, value] of Object.entries(r))
-    if (Object.hasOwn(t, key)) conflict ||= !sameCapabilityValue(t[key], value);
+  for (let [key, value] of Object.entries(folded2))
+    if (Object.hasOwn(folded, key)) conflict ||= !sameCapabilityValue(folded[key], value);
     else {
-      defineValue(s, key, value);
-      i = true;
+      defineValue(out, key, value);
+      changed = true;
     }
   return {
-    capabilities: i ? s : e,
-    widened: i,
+    capabilities: changed ? out : below,
+    widened: changed,
     conflict,
   };
 }
@@ -597,7 +654,10 @@ class ServedCapabilityState {
   served = undefined;
 }
 //@ chunk-99h01h55.js:14100-14126 placement
-var servedCapabilitySlot = new SessionRootSlot(() => new ServedCapabilityState());
+var servedCapabilitySlot; // deferred: uses SessionRootSlot (../../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-99h01h55.js:14100", () => {
+  servedCapabilitySlot = new SessionRootSlot(() => new ServedCapabilityState());
+});
 //@ chunk-99h01h55.js:14126-14162 placement
 function setServedCapabilities(session, served) {
   servedCapabilitySlot.of(session).served = served;
@@ -613,15 +673,17 @@ function clearServedCapabilities(rootSession) {
 //@ chunk-99h01h55.js:14243-14258 placement
 var HOST = "host";
 //@ chunk-99h01h55.js:14258-14360 placement
-function hasFeatureFlag(e, n, t) {
-  let features = e.features;
-  return features !== undefined && Object.hasOwn(features, n) && Object.hasOwn(features[n] ?? {}, t);
+function hasFeatureFlag(caps, feature, on) {
+  let features = caps.features;
+  return (
+    features !== undefined && Object.hasOwn(features, feature) && Object.hasOwn(features[feature] ?? {}, on)
+  );
 }
 //@ chunk-99h01h55.js:14360-14398 placement
 var HOST_GRANT_SERVER_RE = /^host:([A-Za-z0-9_-]{1,64})$/;
 //@ chunk-99h01h55.js:14398-14437 placement
-function getLocalServerName(e) {
-  return HOST_GRANT_SERVER_RE.exec(e)?.[1];
+function getLocalServerName(server) {
+  return HOST_GRANT_SERVER_RE.exec(server)?.[1];
 }
 //@ chunk-99h01h55.js:14437-14503 placement
 function describeServerKind(server) {
@@ -631,55 +693,59 @@ function describeServerKind(server) {
 /**
  * CLAUDE_ARTIFACT_HOST_GRANT 环境变量的 schema：本机允许 artifact 调用的 MCP 服务器与工具。
  */
-var CLAUDE_ARTIFACT_HOST_GRANT_ENV = "CLAUDE_ARTIFACT_HOST_GRANT";
-var hostGrantSchema = DoctorLazy(() =>
-  u({
-    v: literal(1),
-    servers: array(
-      u({
-        server: string().regex(HOST_GRANT_SERVER_RE),
-        tools: array(string()),
-      }),
-    ),
-  }),
-);
+var CLAUDE_ARTIFACT_HOST_GRANT_ENV; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var hostGrantSchema;
+deferInit("chunk-99h01h55.js:14503", () => {
+  CLAUDE_ARTIFACT_HOST_GRANT_ENV = "CLAUDE_ARTIFACT_HOST_GRANT";
+  hostGrantSchema = DoctorLazy(() =>
+    objectSchema({
+      v: literal(1),
+      servers: array(
+        objectSchema({
+          server: stringSchema().regex(HOST_GRANT_SERVER_RE),
+          tools: array(stringSchema()),
+        }),
+      ),
+    }),
+  );
+});
 //@ chunk-99h01h55.js:14612-14939 placement
 /**
  * 读取 CLAUDE_ARTIFACT_HOST_GRANT（本机允许 artifact 调用的本地 MCP 服务器与工具），解析失败返回 unreadable。
  */
-function readHostGrant(e) {
-  if (e === undefined)
+function readHostGrant(raw) {
+  if (raw === undefined)
     return {
       kind: "absent",
     };
-  let n;
+  let value;
   try {
-    n = JSON.parse(e);
+    value = JSON.parse(raw);
   } catch {
     return {
       kind: "unreadable",
     };
   }
-  let t = hostGrantSchema().safeParse(n);
-  if (!t.success)
+  let parsed = hostGrantSchema().safeParse(value);
+  if (!parsed.success)
     return {
       kind: "unreadable",
     };
-  let r = new Map();
-  for (let server of t.data.servers) {
-    let i = r.get(server.server) ?? new Set();
-    for (let tool of server.tools) i.add(tool);
-    r.set(server.server, i);
+  let out = new Map();
+  for (let server of parsed.data.servers) {
+    let serverEntry = out.get(server.server) ?? new Set();
+    for (let tool of server.tools) serverEntry.add(tool);
+    out.set(server.server, serverEntry);
   }
   return {
     kind: "granted",
-    tools: r,
+    tools: out,
   };
 }
 //@ chunk-99h01h55.js:14939-15014 placement
 function serverNames(servers) {
-  return servers.flatMap((n) => {
-    let serverField = getServerField(n);
+  return servers.flatMap((server) => {
+    let serverField = getServerField(server);
     return serverField === undefined ? [] : [serverField];
   });
 }
@@ -687,100 +753,100 @@ function serverNames(servers) {
 /**
  * 按本机 host grant 过滤页面声明的本地 MCP 服务器，返回保留与丢弃的服务器。
  */
-function applyHostGrant(e, n) {
-  let mcp = e.mcp;
+function applyHostGrant(caps, grant) {
+  let mcp = caps.mcp;
   if (!isPlainObjectConnector(mcp) || !Array.isArray(mcp.servers))
     return {
       ok: true,
-      caps: e,
+      caps,
       dropped: [],
       servers: [],
     };
   let servers = mcp.servers;
-  if (n.kind === "absent")
+  if (grant.kind === "absent")
     return {
       ok: true,
-      caps: e,
+      caps,
       dropped: [],
       servers: serverNames(servers),
     };
-  let s = uniq(serverNames(servers).filter((c) => getLocalServerName(c) !== undefined));
-  if (s.length === 0)
+  let localServers = uniq(serverNames(servers).filter((server) => getLocalServerName(server) !== undefined));
+  if (localServers.length === 0)
     return {
       ok: true,
-      caps: e,
+      caps,
       dropped: [],
       servers: serverNames(servers),
     };
-  if (n.kind === "unreadable")
+  if (grant.kind === "unreadable")
     return {
       ok: false,
-      refused: s,
+      refused: localServers,
     };
-  let i = [];
-  let l = [];
+  let refused = [];
+  let dropped = [];
   for (let server of servers) {
     let serverField = getServerField(server);
     if (serverField === undefined || getLocalServerName(serverField) === undefined) {
-      l.push(server);
+      dropped.push(server);
       continue;
     }
-    let m = n.tools.get(serverField);
-    if (m === undefined || !isPlainObjectConnector(server)) {
-      i.push({
+    let tools = grant.tools.get(serverField);
+    if (tools === undefined || !isPlainObjectConnector(server)) {
+      refused.push({
         server: serverField,
         tool: null,
       });
       continue;
     }
-    let tools = server.tools;
-    if (!isStringArray(tools)) {
-      i.push({
+    let tools_2 = server.tools;
+    if (!isStringArray(tools_2)) {
+      refused.push({
         server: serverField,
         tool: null,
       });
       continue;
     }
-    let filtered = tools.filter((tool) => m.has(tool));
-    for (let tool of tools)
-      if (!m.has(tool))
-        i.push({
+    let filtered = tools_2.filter((tool) => tools.has(tool));
+    for (let tool of tools_2)
+      if (!tools.has(tool))
+        refused.push({
           server: serverField,
           tool,
         });
     if (filtered.length > 0)
-      l.push({
+      dropped.push({
         ...server,
         tools: filtered,
       });
   }
-  if (i.length === 0)
+  if (refused.length === 0)
     return {
       ok: true,
-      caps: e,
-      dropped: i,
+      caps,
+      dropped: refused,
       servers: serverNames(servers),
     };
-  if (l.length === 0) {
-    let { mcp, ...d } = e;
+  if (dropped.length === 0) {
+    let { mcp, ...rest } = caps;
     return {
       ok: true,
-      caps: d,
-      dropped: i,
+      caps: rest,
+      dropped: refused,
       servers: [],
     };
   }
   return {
     ok: true,
     caps: {
-      ...e,
+      ...caps,
       mcp: {
         ...mcp,
-        servers: l,
+        servers: dropped,
       },
     },
-    dropped: i,
-    servers: serverNames(l),
+    dropped: refused,
+    servers: serverNames(dropped),
   };
 }
 //@ chunk-99h01h55.js:15924-15988 placement
@@ -804,90 +870,93 @@ function parseContractVersion(contract) {
     : null;
 }
 //@ chunk-99h01h55.js:16263-16384 placement
-function listUnknownCapabilities(e, n) {
-  if (n.version === UNVERSIONED_CONTRACT) return [];
-  let t = new Set(n.capabilities);
-  return Object.keys(e).filter((key) => !t.has(key));
+function listUnknownCapabilities(caps, declared) {
+  if (declared.version === UNVERSIONED_CONTRACT) return [];
+  let known = new Set(declared.capabilities);
+  return Object.keys(caps).filter((key) => !known.has(key));
 }
 //@ chunk-99h01h55.js:16384-16412 placement
 var ARTIFACT_CAPABILITY_KEY = "artifact";
 var SELF = "self";
 //@ chunk-99h01h55.js:16412-16778 placement
-function canonicalizeCapabilityValue(e) {
-  let untrustedArray = readUntrustedArray(e);
+function canonicalizeCapabilityValue(value) {
+  let untrustedArray = readUntrustedArray(value);
   if (untrustedArray === UNREADABLE_ARRAY) return;
   if (untrustedArray !== undefined) {
     let mapped = untrustedArray.map((untrusted) => canonicalizeCapabilityValue(untrusted));
     return mapped.includes(undefined) ? undefined : `[${mapped.join(",")}]`;
   }
-  if (e !== null && typeof e === "object") {
-    let t = e;
-    let mapped = Object.keys(t)
+  if (value !== null && typeof value === "object") {
+    let current = value;
+    let mapped = Object.keys(current)
       .sort()
       .map((key) => {
-        let i = canonicalizeCapabilityValue(t[key]);
-        return i === undefined ? undefined : `${JSON.stringify(key)}:${i}`;
+        let value = canonicalizeCapabilityValue(current[key]);
+        return value === undefined ? undefined : `${JSON.stringify(key)}:${value}`;
       });
     return mapped.includes(undefined) ? undefined : `{${mapped.join(",")}}`;
   }
-  return JSON.stringify(e) ?? "null";
+  return JSON.stringify(value) ?? "null";
 }
 //@ chunk-99h01h55.js:16778-16836 placement
-function sameCapabilityValue(e, n) {
-  let t = canonicalizeCapabilityValue(e);
-  return t !== undefined && t === canonicalizeCapabilityValue(n);
+function sameCapabilityValue(a, b) {
+  let left = canonicalizeCapabilityValue(a);
+  return left !== undefined && left === canonicalizeCapabilityValue(b);
 }
 //@ chunk-99h01h55.js:16836-17078 placement
 function renameArtifactCapabilityToSelf(capabilities) {
   if (!Object.hasOwn(capabilities, ARTIFACT_CAPABILITY_KEY)) return capabilities;
   if (Object.hasOwn(capabilities, SELF)) {
     if (!sameCapabilityValue(capabilities[ARTIFACT_CAPABILITY_KEY], capabilities[SELF])) return capabilities;
-    let t = {};
+    let out = {};
     for (let [key, value] of Object.entries(capabilities))
-      if (key !== ARTIFACT_CAPABILITY_KEY) defineValue(t, key, value);
-    return t;
+      if (key !== ARTIFACT_CAPABILITY_KEY) defineValue(out, key, value);
+    return out;
   }
-  let n = {};
+  let entry = {};
   for (let [key, value] of Object.entries(capabilities))
-    defineValue(n, key === ARTIFACT_CAPABILITY_KEY ? SELF : key, value);
-  return n;
+    defineValue(entry, key === ARTIFACT_CAPABILITY_KEY ? SELF : key, value);
+  return entry;
 }
 //@ chunk-99h01h55.js:17078-17359 placement
 /**
  * 规范化能力声明：把 SELF 键改写成 artifact 能力键（两者都在且不一致时原样返回）。
  */
-function foldSelfCapability(e) {
-  if (e === null || typeof e !== "object" || Array.isArray(e)) return e;
-  let n = e;
-  if (!Object.hasOwn(n, SELF)) return e;
-  if (Object.hasOwn(n, ARTIFACT_CAPABILITY_KEY) && !sameCapabilityValue(n[ARTIFACT_CAPABILITY_KEY], n[SELF]))
-    return e;
-  let t = {};
-  for (let [key, value] of Object.entries(n)) {
+function foldSelfCapability(capability) {
+  if (capability === null || typeof capability !== "object" || Array.isArray(capability)) return capability;
+  let rest = capability;
+  if (!Object.hasOwn(rest, SELF)) return capability;
+  if (
+    Object.hasOwn(rest, ARTIFACT_CAPABILITY_KEY) &&
+    !sameCapabilityValue(rest[ARTIFACT_CAPABILITY_KEY], rest[SELF])
+  )
+    return capability;
+  let folded = {};
+  for (let [key, value] of Object.entries(rest)) {
     if (key === SELF) {
-      if (!Object.hasOwn(n, ARTIFACT_CAPABILITY_KEY)) defineValue(t, ARTIFACT_CAPABILITY_KEY, value);
+      if (!Object.hasOwn(rest, ARTIFACT_CAPABILITY_KEY)) defineValue(folded, ARTIFACT_CAPABILITY_KEY, value);
       continue;
     }
-    defineValue(t, key, value);
+    defineValue(folded, key, value);
   }
-  return t;
+  return folded;
 }
 //@ chunk-99h01h55.js:17359-17906 placement
-function reconcileSelfCapability(e, n) {
-  let t = Object.hasOwn(e, ARTIFACT_CAPABILITY_KEY);
-  let r = Object.hasOwn(e, SELF);
-  if ((!t && !r) || n.version === UNVERSIONED_CONTRACT)
+function reconcileSelfCapability(caps, next) {
+  let hasArtifact = Object.hasOwn(caps, ARTIFACT_CAPABILITY_KEY);
+  let hasSelf = Object.hasOwn(caps, SELF);
+  if ((!hasArtifact && !hasSelf) || next.version === UNVERSIONED_CONTRACT)
     return {
-      caps: e,
+      caps,
     };
-  let s = new Set(n.capabilities);
-  let i = s.has(ARTIFACT_CAPABILITY_KEY) ? ARTIFACT_CAPABILITY_KEY : s.has(SELF) ? SELF : null;
-  if (i === null)
+  let known = new Set(next.capabilities);
+  let hasKnown = known.has(ARTIFACT_CAPABILITY_KEY) ? ARTIFACT_CAPABILITY_KEY : known.has(SELF) ? SELF : null;
+  if (hasKnown === null)
     return {
-      caps: e,
+      caps,
     };
-  if (t && r) {
-    if (!sameCapabilityValue(e[ARTIFACT_CAPABILITY_KEY], e[SELF]))
+  if (hasArtifact && hasSelf) {
+    if (!sameCapabilityValue(caps[ARTIFACT_CAPABILITY_KEY], caps[SELF]))
       return {
         errMsg:
           "capabilities declares both `artifact` and `self` \u2014 two " +
@@ -895,45 +964,51 @@ function reconcileSelfCapability(e, n) {
           "Declare it once (canonically `artifact: {}`).",
       };
   }
-  let l = {};
-  for (let [key, value] of Object.entries(e)) {
+  let out = {};
+  for (let [key, value] of Object.entries(caps)) {
     if (key === ARTIFACT_CAPABILITY_KEY || key === SELF) {
-      if (!Object.hasOwn(l, i)) defineValue(l, i, value);
+      if (!Object.hasOwn(out, hasKnown)) defineValue(out, hasKnown, value);
       continue;
     }
-    defineValue(l, key, value);
+    defineValue(out, key, value);
   }
   return {
-    caps: l,
+    caps: out,
   };
 }
 //@ chunk-99h01h55.js:17906-17969 placement
-function getDeclaredCapabilities(e) {
-  return "capabilities" in e ? e.capabilities : undefined;
+function getDeclaredCapabilities(value) {
+  return "capabilities" in value ? value.capabilities : undefined;
 }
 //@ chunk-99h01h55.js:17969-18044 placement
 /**
  * artifact 能力声明的已知键（artifact/self/downloads/comments/room/db/assets/user 等）及其扩展集合 mcp/flags。
  */
-var BASIC_CAPABILITY_KEYS = new Set([
-  ARTIFACT_CAPABILITY_KEY,
-  SELF,
-  "downloads",
-  "comments",
-  "room",
-  "db",
-  "assets",
-  "user",
-]);
+var BASIC_CAPABILITY_KEYS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-99h01h55.js:17969", () => {
+  BASIC_CAPABILITY_KEYS = new Set([
+    ARTIFACT_CAPABILITY_KEY,
+    SELF,
+    "downloads",
+    "comments",
+    "room",
+    "db",
+    "assets",
+    "user",
+  ]);
+});
 //@ chunk-99h01h55.js:18044-18076 placement
 /**
  * 导出函数 `isKnownCapabilityObject`：参数 e，返回 de(e, oe)。
  */
-function isKnownCapabilityObject(e) {
-  return onlyKeysIn(e, BASIC_CAPABILITY_KEYS);
+function isKnownCapabilityObject(value) {
+  return onlyKeysIn(value, BASIC_CAPABILITY_KEYS);
 }
 //@ chunk-99h01h55.js:18076-18134 placement
-var REMOTE_CAPABILITY_KEYS = new Set(["downloads", "room", "db", "assets", "user"]);
+var REMOTE_CAPABILITY_KEYS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-99h01h55.js:18076", () => {
+  REMOTE_CAPABILITY_KEYS = new Set(["downloads", "room", "db", "assets", "user"]);
+});
 //@ chunk-99h01h55.js:18134-18413 placement
 function isValidCapabilitiesObject(declaredCapabilities) {
   return (
@@ -947,7 +1022,9 @@ function isValidCapabilitiesObject(declaredCapabilities) {
         case "db":
           return !("wake" in value) && isValidDbCapability(value);
         case "user":
-          return isValidUserCapability(value) && (getUserScopes(value) ?? []).every((r) => r === "profile");
+          return (
+            isValidUserCapability(value) && (getUserScopes(value) ?? []).every((scope) => scope === "profile")
+          );
         default:
           return Object.keys(value).length === 0;
       }
@@ -955,89 +1032,97 @@ function isValidCapabilitiesObject(declaredCapabilities) {
   );
 }
 //@ chunk-99h01h55.js:18413-18451 placement
-var ALL_CAPABILITY_KEYS = new Set([...BASIC_CAPABILITY_KEYS, "mcp", "flags"]);
+var ALL_CAPABILITY_KEYS; // deferred: uses BASIC_CAPABILITY_KEYS of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-99h01h55.js:18413", () => {
+  ALL_CAPABILITY_KEYS = new Set([...BASIC_CAPABILITY_KEYS, "mcp", "flags"]);
+});
 //@ chunk-99h01h55.js:18451-18483 placement
 /**
  * 导出函数 `isFullCapabilityObject`：参数 e，返回 de(e, xe)。
  */
-function isFullCapabilityObject(e) {
-  return onlyKeysIn(e, ALL_CAPABILITY_KEYS);
+function isFullCapabilityObject(value) {
+  return onlyKeysIn(value, ALL_CAPABILITY_KEYS);
 }
 //@ chunk-99h01h55.js:18483-18530 placement
 /**
  * 导出函数 `allKnownCapabilityKeys`：参数 e，返回 e.every((n) => xe.has(n))。
  */
-function allKnownCapabilityKeys(e) {
-  return e.every((n) => ALL_CAPABILITY_KEYS.has(n));
+function allKnownCapabilityKeys(keys) {
+  return keys.every((key) => ALL_CAPABILITY_KEYS.has(key));
 }
 //@ chunk-99h01h55.js:18530-18606 placement
-function onlyKeysIn(e, n) {
-  return e == null || (isPlainObjectCapability(e) && Object.keys(e).every((key) => n.has(key)));
+function onlyKeysIn(value, allowed) {
+  return (
+    value == null || (isPlainObjectCapability(value) && Object.keys(value).every((key) => allowed.has(key)))
+  );
 }
 //@ chunk-99h01h55.js:18606-18646 placement
-var regExp = new RegExp(`^${QUOTE_HOMOGLYPHS.source}$`, "u");
+var regExp; // deferred: uses QUOTE_HOMOGLYPHS (../../tools/ArtifactTool/artifactUrls.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-99h01h55.js:18606", () => {
+  regExp = new RegExp(`^${QUOTE_HOMOGLYPHS.source}$`, "u");
+});
 //@ chunk-99h01h55.js:18646-18761 placement
-function isStrippablePunctuation(e) {
+function isStrippablePunctuation(char) {
   return (
-    MODEL_TEXT_PUNCT_CODE_POINT.test(e) &&
-    !/^[\p{P}\p{M}]$/u.test(e) &&
-    !regExp.test(e) &&
-    !isJoinerOrEmojiSelector(e.codePointAt(0) ?? 0) &&
-    !ESCAPE_CHAR_RE.test(e)
+    MODEL_TEXT_PUNCT_CODE_POINT.test(char) &&
+    !/^[\p{P}\p{M}]$/u.test(char) &&
+    !regExp.test(char) &&
+    !isJoinerOrEmojiSelector(char.codePointAt(0) ?? 0) &&
+    !ESCAPE_CHAR_RE.test(char)
   );
 }
 //@ chunk-99h01h55.js:18761-19159 placement
-function maskConfusableChars(e) {
-  let sliced = Array.from(e).slice(0, MAX_NAME_LENGTH + 1);
-  let t = sliced.length;
+function maskConfusableChars(text) {
+  let sliced = Array.from(text).slice(0, MAX_NAME_LENGTH + 1);
+  let length = sliced.length;
   let mapped = sliced.map(isStrippablePunctuation);
   let mapped_2 = sliced.map(
-    (a, b) => mapped[b] || /^\p{M}$/u.test(a) || isJoinerOrEmojiSelector(a.codePointAt(0) ?? 0),
+    (ch, index) => mapped[index] || /^\p{M}$/u.test(ch) || isJoinerOrEmojiSelector(ch.codePointAt(0) ?? 0),
   );
-  let mapped_3 = sliced.map((a, b) => !mapped[b] && /^[\p{L}\p{N}]$/u.test(a));
-  let l = Array(t).fill(false);
-  let c = Array(t).fill(false);
-  let d = false;
-  for (let j = 0; j < t; j++) {
-    l[j] = d;
-    d = mapped_3[j] || (mapped_2[j] && d);
+  let mapped_3 = sliced.map((ch, index) => !mapped[index] && /^[\p{L}\p{N}]$/u.test(ch));
+  let insideBefore = Array(length).fill(false);
+  let insideAfter = Array(length).fill(false);
+  let seenWord = false;
+  for (let j = 0; j < length; j++) {
+    insideBefore[j] = seenWord;
+    seenWord = mapped_3[j] || (mapped_2[j] && seenWord);
   }
-  d = false;
-  for (let j = t - 1; j >= 0; j--) {
-    c[j] = d;
-    d = mapped_3[j] || (mapped_2[j] && d);
+  seenWord = false;
+  for (let j = length - 1; j >= 0; j--) {
+    insideAfter[j] = seenWord;
+    seenWord = mapped_3[j] || (mapped_2[j] && seenWord);
   }
-  let m = new Set();
-  for (let j = 0; j < t; j++) if (mapped[j] && l[j] && c[j]) m.add(j);
-  return m;
+  let masked = new Set();
+  for (let j = 0; j < length; j++) if (mapped[j] && insideBefore[j] && insideAfter[j]) masked.add(j);
+  return masked;
 }
 //@ chunk-99h01h55.js:19159-19415 placement
-function makeMaskPredicate(e) {
-  let n = maskConfusableChars(e);
-  let edgeSpaceMasker = makeEdgeSpaceMasker(e);
-  let r = "none";
-  let s = -1;
-  return (i) => {
-    s++;
-    let l = i.codePointAt(0) ?? 0;
-    if (edgeSpaceMasker(i, s)) {
-      r = "none";
+function makeMaskPredicate(text) {
+  let mask = maskConfusableChars(text);
+  let edgeSpaceMasker = makeEdgeSpaceMasker(text);
+  let prevKind = "none";
+  let prevIndex = -1;
+  return (char) => {
+    prevIndex++;
+    let cp = char.codePointAt(0) ?? 0;
+    if (edgeSpaceMasker(char, prevIndex)) {
+      prevKind = "none";
       return true;
     }
-    if (n.has(s)) {
-      r = "none";
+    if (mask.has(prevIndex)) {
+      prevKind = "none";
       return true;
     }
-    if (isJoinerOrEmojiSelector(l)) {
-      let c = selectorOrJoinerRides(l, r);
-      r = c.after;
-      return !c.rides;
+    if (isJoinerOrEmojiSelector(cp)) {
+      let rides = selectorOrJoinerRides(cp, prevKind);
+      prevKind = rides.after;
+      return !rides.rides;
     }
-    if (ESCAPE_CHAR_RE.test(i)) {
-      r = "none";
+    if (ESCAPE_CHAR_RE.test(char)) {
+      prevKind = "none";
       return true;
     }
-    r = rideStateAfter(i);
+    prevKind = rideStateAfter(char);
     return false;
   };
 }
@@ -1045,22 +1130,22 @@ function makeMaskPredicate(e) {
 /**
  * 逐字符拼接文本，需要转义的字符替换为转义串，累计长度超过上限时截断并标记 cut。
  */
-function truncateWithEscapes(e, n, t) {
-  let r = [];
-  let s = 0;
-  for (let i of e) {
-    let l = n(i) ? escapeChar(i) : i;
-    let c = l === i ? 1 : l.length;
-    if (s + c > t)
+function truncateWithEscapes(text, isMasked, limit) {
+  let out = [];
+  let used = 0;
+  for (let ch of text) {
+    let piece = isMasked(ch) ? escapeChar(ch) : ch;
+    let width = piece === ch ? 1 : piece.length;
+    if (used + width > limit)
       return {
-        text: r.join(""),
+        text: out.join(""),
         cut: true,
       };
-    r.push(l);
-    s += c;
+    out.push(piece);
+    used += width;
   }
   return {
-    text: r.join(""),
+    text: out.join(""),
     cut: false,
   };
 }
@@ -1068,83 +1153,89 @@ function truncateWithEscapes(e, n, t) {
 /**
  * 把能力/服务器名清洗成可安全展示的短文本：转义可疑字符、截断、去除标记同形字与 ;,(){}，空则为 "?"，截断时加省略号。
  */
-function sanitizeCapabilityName(server) {
-  let n = server;
-  let t = false;
-  if (typeof server === "string")
-    ({ text: n, cut: t } = truncateWithEscapes(server, makeMaskPredicate(server), MAX_NAME_LENGTH));
-  let r =
+function sanitizeCapabilityName(text) {
+  let name = text;
+  let seen = false;
+  if (typeof text === "string")
+    ({ text: name, cut: seen } = truncateWithEscapes(text, makeMaskPredicate(text), MAX_NAME_LENGTH));
+  let out =
     sweepMarkerLookalikes(
       (
         sweepAskCopy(
-          sanitizeDisplayText(n, {
+          sanitizeDisplayText(name, {
             max: MAX_NAME_LENGTH,
           }),
         ) ?? "?"
       ).replace(/[;,(){}]/g, " "),
     ).trim() || "?";
-  return t ? `${r}\u2026` : r;
+  return seen ? `${out}\u2026` : out;
 }
 //@ chunk-99h01h55.js:19766-20766 placement
 /**
  * 把能力声明（mcp 服务器/工具、db、user…）格式化成给用户/模型看的简短列表文本。
  */
-function describeCapabilities(e) {
-  if (!e) return "";
-  let n = [];
-  let t = [];
-  let r;
-  for (let [key, value] of Object.entries(e)) {
-    let y = key === "mcp" ? declaredServersOrUnreadable(value) : undefined;
-    let C = key === "mcp" && isDynamicMcp(value);
-    if (y === UNREADABLE_ARRAY) {
-      r = C ? `${VIEWER_APPROVED_CONNECTOR_TEXT} + ${UNREADABLE_LIST_TEXT}` : UNREADABLE_LIST_TEXT;
-      n.unshift("mcp");
-    } else if (y !== undefined && y.length > 0) {
-      let joined = capListForDisplay(y, 8, (P) => {
-        let S = serverConfigOrUndefined(P);
-        let z = S === null ? UNREADABLE_ARRAY : readUntrustedArray(S?.tools);
-        let F = declaredServerCount(z) ?? 0;
-        return `${sanitizeCapabilityName(S?.server)}[${z === UNREADABLE_ARRAY ? "?" : F} ${plural(F, "tool")}]`;
+function describeCapabilities(caps) {
+  if (!caps) return "";
+  let leadingKeys = [];
+  let otherParts = [];
+  let mcpPart;
+  for (let [key, value] of Object.entries(caps)) {
+    let mcpServers = key === "mcp" ? declaredServersOrUnreadable(value) : undefined;
+    let isDynamic = key === "mcp" && isDynamicMcp(value);
+    if (mcpServers === UNREADABLE_ARRAY) {
+      mcpPart = isDynamic
+        ? `${VIEWER_APPROVED_CONNECTOR_TEXT} + ${UNREADABLE_LIST_TEXT}`
+        : UNREADABLE_LIST_TEXT;
+      leadingKeys.unshift("mcp");
+    } else if (mcpServers !== undefined && mcpServers.length > 0) {
+      let joined = capListForDisplay(mcpServers, 8, (entry) => {
+        let config = serverConfigOrUndefined(entry);
+        let tools = config === null ? UNREADABLE_ARRAY : readUntrustedArray(config?.tools);
+        let toolCount = declaredServerCount(tools) ?? 0;
+        return `${sanitizeCapabilityName(config?.server)}[${tools === UNREADABLE_ARRAY ? "?" : toolCount} ${plural(toolCount, "tool")}]`;
       }).join(", ");
-      r = C ? `${VIEWER_APPROVED_CONNECTOR_TEXT} + ${joined}` : joined;
-      n.unshift("mcp");
-    } else if (C) {
-      r = VIEWER_APPROVED_CONNECTOR_TEXT;
-      n.unshift("mcp");
+      mcpPart = isDynamic ? `${VIEWER_APPROVED_CONNECTOR_TEXT} + ${joined}` : joined;
+      leadingKeys.unshift("mcp");
+    } else if (isDynamic) {
+      mcpPart = VIEWER_APPROVED_CONNECTOR_TEXT;
+      leadingKeys.unshift("mcp");
     } else if (BASIC_CAPABILITY_KEYS.has(key)) {
-      let R = serverConfigOrUndefined(value);
-      let P = R === null ? UNREADABLE_ARRAY : readUntrustedArray(R?.rules);
-      let S = declaredServerCount(P);
-      t.push(P === undefined ? key : `${key}[${P === UNREADABLE_ARRAY ? "?" : S} ${plural(S ?? 0, "rule")}]`);
-    } else n.push(CAPABILITY_NAME_REGEX.test(key) ? key : INVALID_CAPABILITY_NAME);
+      let config = serverConfigOrUndefined(value);
+      let rules = config === null ? UNREADABLE_ARRAY : readUntrustedArray(config?.rules);
+      let ruleCount = declaredServerCount(rules);
+      otherParts.push(
+        rules === undefined
+          ? key
+          : `${key}[${rules === UNREADABLE_ARRAY ? "?" : ruleCount} ${plural(ruleCount ?? 0, "rule")}]`,
+      );
+    } else leadingKeys.push(CAPABILITY_NAME_REGEX.test(key) ? key : INVALID_CAPABILITY_NAME);
   }
-  let s = n.length + t.length;
-  if (s === 0) return "";
-  let i = [...n, ...t.slice(0, Math.max(0, 8 - n.length))];
-  let l = s > 8 ? `[${s} total]; ` : "";
-  let c = l + i.join("; ");
-  if (r !== undefined) {
-    let joined = i.slice(1).join("; ");
-    let b = joined === "" ? "" : "; ";
-    let max = Math.max(16, 400 - Array.from(l + joined + b).length - 6);
-    let list = Array.from(r);
-    let R = list.length > max ? list.slice(0, max).join("") + "\u2026" : r;
-    c = `${l}mcp: ${R}${b}${joined}`;
+  let total = leadingKeys.length + otherParts.length;
+  if (total === 0) return "";
+  let parts = [...leadingKeys, ...otherParts.slice(0, Math.max(0, 8 - leadingKeys.length))];
+  let totalPrefix = total > 8 ? `[${total} total]; ` : "";
+  let text = totalPrefix + parts.join("; ");
+  if (mcpPart !== undefined) {
+    let joined = parts.slice(1).join("; ");
+    let separator = joined === "" ? "" : "; ";
+    let max = Math.max(16, 400 - Array.from(totalPrefix + joined + separator).length - 6);
+    let list = Array.from(mcpPart);
+    let trimmed = list.length > max ? list.slice(0, max).join("") + "\u2026" : mcpPart;
+    text = `${totalPrefix}mcp: ${trimmed}${separator}${joined}`;
   }
-  let list = Array.from(c);
+  let list = Array.from(text);
   return ` (${list.length > 400 ? list.slice(0, 400).join("") + "\u2026" : list.join("")})`;
 }
 //@ chunk-99h01h55.js:20766-21059 placement
 function describeCapabilityWidening(capabilities, declaredCapabilities) {
-  let t = foldSelfConfig(capabilities ?? {});
+  let folded = foldSelfConfig(capabilities ?? {});
   let filtered = Object.keys(foldSelfConfig(declaredCapabilities ?? {})).filter(
-    (key) => !Object.hasOwn(t, key),
+    (key) => !Object.hasOwn(folded, key),
   );
-  let s = (l) => (l === "mcp" ? 0 : BASIC_CAPABILITY_KEYS.has(l) ? 2 : 1);
+  let rank = (key) => (key === "mcp" ? 0 : BASIC_CAPABILITY_KEYS.has(key) ? 2 : 1);
   let mapped = filtered
-    .sort((l, c) => s(l) - s(c))
-    .map((l) => (CAPABILITY_NAME_REGEX.test(l) ? l : INVALID_CAPABILITY_NAME));
+    .sort((a, b) => rank(a) - rank(b))
+    .map((name) => (CAPABILITY_NAME_REGEX.test(name) ? name : INVALID_CAPABILITY_NAME));
   if (!filtered.includes("mcp")) {
     if (isDynamicMcp(declaredCapabilities?.mcp) && !isDynamicMcp(capabilities?.mcp))
       mapped.unshift(MCP_APPROVED_CONNECTOR_LABEL);
@@ -1164,63 +1255,72 @@ var MCP_APPROVED_CONNECTOR_LABEL = `mcp (${VIEWER_APPROVED_CONNECTOR_TEXT})`;
 var DYNAMIC_CONNECTOR_NOTICE =
   "This page's connector declaration is dynamic: beyond any servers it lists, the page can ask each viewer for any connector by name at call time, and the viewer approves each at first use. Connectors and tools the page calls without listing them were not checked against this session. Tell the user which connectors and tools the page calls, and that those integrations are unverified unless one real call was made.";
 //@ chunk-99h01h55.js:21591-21633 placement
-function isDynamicMcp(e) {
-  return serverConfigOrUndefined(e)?.dynamic === true;
+function isDynamicMcp(mcp) {
+  return serverConfigOrUndefined(mcp)?.dynamic === true;
 }
 //@ chunk-99h01h55.js:21633-21981 placement
-function widensMcpAccess(e, n) {
-  if (n === undefined) return false;
-  let t = declaredServers(n);
-  if (t === undefined) return true;
-  let r = new Map();
-  for (let s of declaredServers(e) ?? []) {
-    let i = serverConfigOrUndefined(s);
-    let server = i?.server;
-    if (typeof server === "string") r.set(server, new Set(readUntrustedArrayOrUndefined(i?.tools) ?? []));
+function widensMcpAccess(previous, next) {
+  if (next === undefined) return false;
+  let nextServers = declaredServers(next);
+  if (nextServers === undefined) return true;
+  let previousTools = new Map();
+  for (let entry of declaredServers(previous) ?? []) {
+    let config = serverConfigOrUndefined(entry);
+    let server = config?.server;
+    if (typeof server === "string")
+      previousTools.set(server, new Set(readUntrustedArrayOrUndefined(config?.tools) ?? []));
   }
-  return t.some((s) => {
-    let i = serverConfigOrUndefined(s);
-    let server = i?.server;
-    let c = typeof server === "string" ? r.get(server) : undefined;
-    let untrustedArrayOrUndefined = readUntrustedArrayOrUndefined(i?.tools);
+  return nextServers.some((entry) => {
+    let config = serverConfigOrUndefined(entry);
+    let server = config?.server;
+    let previousSet = typeof server === "string" ? previousTools.get(server) : undefined;
+    let untrustedArrayOrUndefined = readUntrustedArrayOrUndefined(config?.tools);
     return (
-      c === undefined ||
+      previousSet === undefined ||
       untrustedArrayOrUndefined === undefined ||
-      untrustedArrayOrUndefined.some((m) => !c.has(m))
+      untrustedArrayOrUndefined.some((tool) => !previousSet.has(tool))
     );
   });
 }
 //@ chunk-99h01h55.js:21981-22058 placement
-function declaredServersOrUnreadable(e) {
-  let n = serverConfigOrUndefined(e);
-  return n === null ? UNREADABLE_ARRAY : n === undefined ? undefined : readUntrustedArray(n.servers);
+function declaredServersOrUnreadable(value) {
+  let config = serverConfigOrUndefined(value);
+  return config === null
+    ? UNREADABLE_ARRAY
+    : config === undefined
+      ? undefined
+      : readUntrustedArray(config.servers);
 }
 //@ chunk-99h01h55.js:22058-22108 placement
-function declaredServers(e) {
-  let n = declaredServersOrUnreadable(e);
-  return n === UNREADABLE_ARRAY ? undefined : n;
+function declaredServers(value) {
+  let config = declaredServersOrUnreadable(value);
+  return config === UNREADABLE_ARRAY ? undefined : config;
 }
 //@ chunk-99h01h55.js:22108-22165 placement
-function declaredServerCount(e) {
-  return e === undefined || e === UNREADABLE_ARRAY ? undefined : e.length;
+function declaredServerCount(value) {
+  return value === undefined || value === UNREADABLE_ARRAY ? undefined : value.length;
 }
 //@ chunk-99h01h55.js:22165-22268 placement
-function capListForDisplay(e, n, t) {
-  if (e.length <= n) return e.map(t);
-  return [`[${e.length} total]`, ...e.slice(0, n).map(t)];
+function capListForDisplay(list, limit, render) {
+  if (list.length <= limit) return list.map(render);
+  return [`[${list.length} total]`, ...list.slice(0, limit).map(render)];
 }
 //@ chunk-99h01h55.js:22268-22380 placement
-function hasDeclaredServers(e) {
+function hasDeclaredServers(value) {
   return (
-    e != null && typeof e === "object" && "servers" in e && Array.isArray(e.servers) && e.servers.length > 0
+    value != null &&
+    typeof value === "object" &&
+    "servers" in value &&
+    Array.isArray(value.servers) &&
+    value.servers.length > 0
   );
 }
 //@ chunk-99h01h55.js:22380-22594 placement
-function sanitizeDisplayText(e, n) {
-  if (typeof e !== "string") return "?";
-  let max = n?.max ?? 64;
-  let replaced = Array.from(e.slice(0, 2 * max), (s) =>
-    isDecisionSurfaceControl(s.codePointAt(0) ?? 0) ? " " : s,
+function sanitizeDisplayText(text, options) {
+  if (typeof text !== "string") return "?";
+  let max = options?.max ?? 64;
+  let replaced = Array.from(text.slice(0, 2 * max), (char) =>
+    isDecisionSurfaceControl(char.codePointAt(0) ?? 0) ? " " : char,
   )
     .slice(0, max)
     .join("")
@@ -1229,8 +1329,8 @@ function sanitizeDisplayText(e, n) {
   return replaced.trim() === "" ? "?" : replaced;
 }
 //@ chunk-99h01h55.js:22594-22687 placement
-function sanitizeDisplayTextOrUndefined(e, max) {
-  let trimmed = sanitizeDisplayText(e, {
+function sanitizeDisplayTextOrUndefined(value, max) {
+  let trimmed = sanitizeDisplayText(value, {
     max,
   })
     .replace(INVISIBLE_BLANKS, " ")

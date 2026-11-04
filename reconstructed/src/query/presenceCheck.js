@@ -91,13 +91,14 @@ import { expandPathOrNull } from "../utils/path.js";
 import { isFileUnchangedStub } from "../tools/FileReadTool/prompt.js";
 import { SHELL_TOOL_NAMES } from "../utils/shell/shellToolUtils.js";
 import { extractReadOnlyFileReads } from "../tools/BashTool/BashTool.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-ha3km179.js:14651-15143 placement
 /**
  * 判断用户文本是否是"解释一下"类请求。
  */
-function isExplainRequest(e) {
-  let trimmed = e
+function isExplainRequest(promptText) {
+  let trimmed = promptText
     .toLowerCase()
     .replace(/\u2019/g, "'")
     .replace(/\s+/g, " ")
@@ -118,76 +119,79 @@ function isSleepCheckPhrase(text) {
 /**
  * "你在吗"类在场确认短语集合。
  */
-var PRESENCE_PINGS = new Set([
-  "ping",
-  "u there",
-  "you there",
-  "are you there",
-  "r u there",
-  "u here",
-  "you here",
-  "are you here",
-  "you back",
-  "are you back",
-  "u back",
-  "anyone there",
-  "anybody there",
-  "still there",
-  "you still there",
-  "are you still there",
-  "still working",
-  "you still working",
-  "are you still working",
-  "you stuck",
-  "are you stuck",
-  "u stuck",
-  "\u5582",
-  "\u5728\u5417",
-  "\u5728\u55CE",
-  "\u8FD8\u5728\u5417",
-  "\u9084\u5728\u55CE",
-  "\u5728\u4E0D\u5728",
-  "\u3082\u3057\u3082\u3057",
-  "\u304A\u3044",
-  "\u304A\u30FC\u3044",
-  "\u3044\u307E\u3059\u304B",
-  "\uC5EC\uBCF4\uC138\uC694",
-  "\uC57C",
-  "\uC788\uC5B4\uC694",
-  "hola",
-  "oye",
-  "est\xE1s ah\xED",
-  "estas ahi",
-  "sigues ah\xED",
-  "sigues ahi",
-  "oi",
-  "ol\xE1",
-  "ola",
-  "al\xF4",
-  "alo",
-  "t\xE1 a\xED",
-  "ta ai",
-  "est\xE1 a\xED",
-  "esta ai",
-  "allo",
-  "all\xF4",
-  "salut",
-  "coucou",
-  "t'es l\xE0",
-  "t'es la",
-  "tu es l\xE0",
-  "tu es la",
-  "hallo",
-  "bist du da",
-  "noch da",
-  "\u043F\u0440\u0438\u0432\u0435\u0442",
-  "\u044D\u0439",
-  "\u0430\u043B\u043B\u043E",
-  "\u0442\u044B \u0442\u0443\u0442",
-  "ciao",
-  "ehi",
-  "ci sei",
-]);
+var PRESENCE_PINGS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-ha3km179.js:15218", () => {
+  PRESENCE_PINGS = new Set([
+    "ping",
+    "u there",
+    "you there",
+    "are you there",
+    "r u there",
+    "u here",
+    "you here",
+    "are you here",
+    "you back",
+    "are you back",
+    "u back",
+    "anyone there",
+    "anybody there",
+    "still there",
+    "you still there",
+    "are you still there",
+    "still working",
+    "you still working",
+    "are you still working",
+    "you stuck",
+    "are you stuck",
+    "u stuck",
+    "\u5582",
+    "\u5728\u5417",
+    "\u5728\u55CE",
+    "\u8FD8\u5728\u5417",
+    "\u9084\u5728\u55CE",
+    "\u5728\u4E0D\u5728",
+    "\u3082\u3057\u3082\u3057",
+    "\u304A\u3044",
+    "\u304A\u30FC\u3044",
+    "\u3044\u307E\u3059\u304B",
+    "\uC5EC\uBCF4\uC138\uC694",
+    "\uC57C",
+    "\uC788\uC5B4\uC694",
+    "hola",
+    "oye",
+    "est\xE1s ah\xED",
+    "estas ahi",
+    "sigues ah\xED",
+    "sigues ahi",
+    "oi",
+    "ol\xE1",
+    "ola",
+    "al\xF4",
+    "alo",
+    "t\xE1 a\xED",
+    "ta ai",
+    "est\xE1 a\xED",
+    "esta ai",
+    "allo",
+    "all\xF4",
+    "salut",
+    "coucou",
+    "t'es l\xE0",
+    "t'es la",
+    "tu es l\xE0",
+    "tu es la",
+    "hallo",
+    "bist du da",
+    "noch da",
+    "\u043F\u0440\u0438\u0432\u0435\u0442",
+    "\u044D\u0439",
+    "\u0430\u043B\u043B\u043E",
+    "\u0442\u044B \u0442\u0443\u0442",
+    "ciao",
+    "ehi",
+    "ci sei",
+  ]);
+});
 //@ chunk-ha3km179.js:16200-16471 placement
 /**
  * 判断用户输入是否只是"在吗"类试探（问号、省略号、hi/hello 或常见问候短语，最长 40 字）。
@@ -204,32 +208,32 @@ function isPresencePing(userPromptText) {
   return PRESENCE_PINGS.has(trimmed_2);
 }
 //@ chunk-ha3km179.js:16471-16506 placement = getValueFromInput (1)
-var getValueFromInput = (e, n) => n && e.mode === "prompt";
+var getValueFromInput = (command, waited) => waited && command.mode === "prompt";
 //@ chunk-ha3km179.js:16506-16601 placement
 /**
  * 内联通知模式下可查询
  */
-var isInlineNotificationCandidate = (e) =>
-  isInlineNotificationMode(e) &&
-  e.promptSubmitted === undefined &&
-  e.shouldQuery !== false &&
-  e.skipSubmissionHooks !== true;
+var isInlineNotificationCandidate = (command) =>
+  isInlineNotificationMode(command) &&
+  command.promptSubmitted === undefined &&
+  command.shouldQuery !== false &&
+  command.skipSubmissionHooks !== true;
 //@ chunk-ha3km179.js:16601-16684 placement
 /**
  * 队列里的可投递项
  */
-function queuedDeliverable(e, n) {
-  let r = new Set(n.getCommandQueue());
-  return e.filter((s) => r.has(s));
+function queuedDeliverable(commands, messageQueue) {
+  let queued = new Set(messageQueue.getCommandQueue());
+  return commands.filter((command) => queued.has(command));
 }
 //@ chunk-ha3km179.js:16684-16786 placement
-function filterPromptSubmissions(e, messageQueue) {
-  let r = false;
-  let s = [];
-  for (let h of e)
-    if (isInlineNotificationCandidate(h)) r = true;
-    else if (!getValueFromInput(h, r)) s.push(h);
-  return queuedDeliverable(s, messageQueue);
+function filterPromptSubmissions(commands, messageQueue) {
+  let waited = false;
+  let deliverable = [];
+  for (let command of commands)
+    if (isInlineNotificationCandidate(command)) waited = true;
+    else if (!getValueFromInput(command, waited)) deliverable.push(command);
+  return queuedDeliverable(deliverable, messageQueue);
 }
 //@ chunk-ha3km179.js:16786-16861 placement = processQueuedCommands (1)
 var processQueuedCommands = (queuedCommands) =>
@@ -239,11 +243,11 @@ var processQueuedCommands = (queuedCommands) =>
       }
     : undefined;
 //@ chunk-ha3km179.js:16861-16974 placement
-var submissionPayload = (e) => ({
-  text: getContentText(e.value) ?? "",
-  input: e.value,
-  pastedContents: e.pastedContents,
-  ...(e.isMeta === true && {
+var submissionPayload = (command) => ({
+  text: getContentText(command.value) ?? "",
+  input: command.value,
+  pastedContents: command.pastedContents,
+  ...(command.isMeta === true && {
     isMeta: true,
   }),
 });
@@ -251,33 +255,33 @@ var submissionPayload = (e) => ({
 /**
  * 描述一次输入提交（来源、模式、是否等待、上下文）。
  */
-function describeSubmission(queuedCommands, n, result) {
-  let s = normalizeTaskNotificationOrigin(queuedCommands.origin) ?? processQueuedCommands(queuedCommands);
-  let h = queuedCommands.isMeta === true || !isHumanOrUnset(s);
+function describeSubmission(command, toolUseContext, result) {
+  let origin = normalizeTaskNotificationOrigin(command.origin) ?? processQueuedCommands(command);
+  let isSystemOrigin = command.isMeta === true || !isHumanOrUnset(origin);
   return {
-    submission: submissionPayload(queuedCommands),
-    origin: s,
-    bridgeOrigin: queuedCommands.bridgeOrigin,
-    mode: queuedCommands.mode,
+    submission: submissionPayload(command),
+    origin,
+    bridgeOrigin: command.bridgeOrigin,
+    mode: command.mode,
     turnId: currentTurn()?.turnId,
-    shouldWait: queuedCommands.wait === true,
-    context: n,
+    shouldWait: command.wait === true,
+    context: toolUseContext,
     result,
     promptSource: resolvePromptSource({
-      isNonInteractive: n.options.isNonInteractiveSession,
-      isMeta: queuedCommands.isMeta,
-      callerSource: h ? "system" : (queuedCommands.inputSource ?? "queued"),
+      isNonInteractive: toolUseContext.options.isNonInteractiveSession,
+      isMeta: command.isMeta,
+      callerSource: isSystemOrigin ? "system" : (command.inputSource ?? "queued"),
     }),
-    wakeupSource: queuedCommands.wakeupSource,
-    isStartInput: isGoalIdleCheckinPaused(queuedCommands.uuid),
+    wakeupSource: command.wakeupSource,
+    isStartInput: isGoalIdleCheckinPaused(command.uuid),
   };
 }
 //@ chunk-ha3km179.js:17369-17403 placement
 /**
  * 投递去向
  */
-var settleFate = (e, n) => ({
-  fate: e ? n : "left",
+var settleFate = (settled, fate) => ({
+  fate: settled ? fate : "left",
 });
 //@ chunk-ha3km179.js:17403-17632 placement
 function submissionOutcome({ outcome, scratch, under, text, isHidden }) {
@@ -300,60 +304,60 @@ var getActiveMessageQueue = () => (submitMarksSlot.get() ? commandSetSignalA.get
 /**
  * 有活动消息队列
  */
-var hasActiveQueue = (e) => !e.isStartInput && getActiveMessageQueue() !== undefined;
+var hasActiveQueue = (submission) => !submission.isStartInput && getActiveMessageQueue() !== undefined;
 //@ chunk-ha3km179.js:17711-18620 placement
 /**
  * 决定提交的去向（立即处理、等待、浮出）。
  */
-async function routeSubmission(e, n) {
-  let messageQueue = n.messageQueue;
+async function routeSubmission(command, toolUseContext) {
+  let messageQueue = toolUseContext.messageQueue;
   let result = {
     messages: [],
     shouldQuery: true,
   };
-  let h = describeSubmission(e, n, result);
-  let y = () =>
+  let submission = describeSubmission(command, toolUseContext, result);
+  let settleAsWaiting = () =>
     settleFate(
-      messageQueue.settleSurfaced(e, {
+      messageQueue.settleSurfaced(command, {
         promptSubmitted: undefined,
         drainOnly: true,
       }),
       "waits",
     );
-  if (hasActiveQueue(h)) return y();
-  let S;
-  let M;
-  let R;
-  function T(Q) {
-    if (!Q || !S || Q.wasCancelled)
+  if (hasActiveQueue(submission)) return settleAsWaiting();
+  let hooksSnapshot;
+  let submitOutcome;
+  let hookedFate;
+  function settleFromHookOutcome(hookOutcome) {
+    if (!hookOutcome || !hooksSnapshot || hookOutcome.wasCancelled)
       return settleFate(
-        messageQueue.settleSurfaced(e, {
+        messageQueue.settleSurfaced(command, {
           promptSubmitted: undefined,
           drainOnly: true,
         }),
         "waits",
       );
-    let D = Q.ended !== undefined;
+    let ended = hookOutcome.ended !== undefined;
     return settleFate(
-      messageQueue.settleSurfaced(e, {
+      messageQueue.settleSurfaced(command, {
         promptSubmitted: submissionOutcome({
-          outcome: Q,
+          outcome: hookOutcome,
           scratch: result,
-          under: S,
-          text: h.submission.text,
-          isHidden: e.isMeta === true && isAutoContinuationOrigin(h.origin),
+          under: hooksSnapshot,
+          text: submission.submission.text,
+          isHidden: command.isMeta === true && isAutoContinuationOrigin(submission.origin),
         }),
-        drainOnly: D ? true : undefined,
+        drainOnly: ended ? true : undefined,
       }),
-      D ? "waits" : "surfaces",
+      ended ? "waits" : "surfaces",
     );
   }
   try {
-    S = hooksSnapshotKey(n);
-    M = await submitPromptWithHooks({
-      ...h,
-      enter: async (Q) => {
-        R = T(Q);
+    hooksSnapshot = hooksSnapshotKey(toolUseContext);
+    submitOutcome = await submitPromptWithHooks({
+      ...submission,
+      enter: async (hookOutcome) => {
+        hookedFate = settleFromHookOutcome(hookOutcome);
       },
     });
   } catch (error) {
@@ -365,56 +369,56 @@ async function routeSubmission(e, n) {
         },
       );
   }
-  if (R) return R;
-  let ended = M?.ended && M.stopped === undefined ? M.ended : undefined;
-  function P(ended) {
+  if (hookedFate) return hookedFate;
+  let ended = submitOutcome?.ended && submitOutcome.stopped === undefined ? submitOutcome.ended : undefined;
+  function settleDropped(ended) {
     if (
-      !messageQueue.settleSurfaced(e, {
+      !messageQueue.settleSurfaced(command, {
         dropped: true,
       })
     )
       return {
         fate: "left",
       };
-    messageQueue.handTypedBack([e]);
+    messageQueue.handTypedBack([command]);
     return {
       fate: "dropped",
       notices: ended.messages,
     };
   }
-  return ended ? P(ended) : T(M);
+  return ended ? settleDropped(ended) : settleFromHookOutcome(submitOutcome);
 }
 //@ chunk-ha3km179.js:18620-19073 placement
 /**
  * 批量路由排队的提交。
  */
-async function routeSubmissions(e, updatedToolUseContext) {
-  let r = [];
-  let s = [];
-  let h = [];
-  let y = false;
-  let S = false;
-  let M;
+async function routeSubmissions(commands, updatedToolUseContext) {
+  let deliverable = [];
+  let notices = [];
+  let dropped = [];
+  let waited = false;
+  let routedAny = false;
+  let hasSubmitHooks;
   try {
-    for (let R of e) {
-      if (getValueFromInput(R, y)) continue;
-      M ??= hasPromptSubmitHooks(updatedToolUseContext);
-      if (!isInlineNotificationCandidate(R) || !M) {
-        r.push(R);
+    for (let command of commands) {
+      if (getValueFromInput(command, waited)) continue;
+      hasSubmitHooks ??= hasPromptSubmitHooks(updatedToolUseContext);
+      if (!isInlineNotificationCandidate(command) || !hasSubmitHooks) {
+        deliverable.push(command);
         continue;
       }
-      S = true;
-      let w = await routeSubmission(R, updatedToolUseContext);
-      switch (w.fate) {
+      routedAny = true;
+      let route = await routeSubmission(command, updatedToolUseContext);
+      switch (route.fate) {
         case "surfaces":
-          r.push(R);
+          deliverable.push(command);
           break;
         case "waits":
-          y = true;
+          waited = true;
           break;
         case "dropped":
-          s.push(...w.notices);
-          h.push(R);
+          notices.push(...route.notices);
+          dropped.push(command);
           break;
         case "left":
           break;
@@ -423,47 +427,47 @@ async function routeSubmissions(e, updatedToolUseContext) {
   } catch (error) {
     if (!isAbortError(error)) logError(error);
     return {
-      deliverable: filterPromptSubmissions(e, updatedToolUseContext.messageQueue),
-      notices: s,
-      dropped: h,
+      deliverable: filterPromptSubmissions(commands, updatedToolUseContext.messageQueue),
+      notices,
+      dropped,
     };
   }
   return {
-    deliverable: S ? queuedDeliverable(r, updatedToolUseContext.messageQueue) : r,
-    notices: s,
-    dropped: h,
+    deliverable: routedAny ? queuedDeliverable(deliverable, updatedToolUseContext.messageQueue) : deliverable,
+    notices,
+    dropped,
   };
 }
 //@ chunk-ha3km179.js:19073-19485 placement
 /**
  * 包装 callModel，在调用前解析 prompt.attachment hook 的附件。
  */
-function wrapCallModelWithAttachments(e, toolUseContext) {
+function wrapCallModelWithAttachments(deps, toolUseContext) {
   let { agentContext, hookOrigin, options } = toolUseContext;
   return isDelegatedObservationContext(agentContext) || options?.settingsHooksOff === true
-    ? e
+    ? deps
     : {
-        ...e,
-        callModel: async function* (S) {
+        ...deps,
+        callModel: async function* (params) {
           try {
             if (
               hasModuleHookingSite("prompt.attachment", undefined, canShortcutAppend("prompt.attachment"))
             ) {
-              let { resolveAttachments } = await import("./chunk-6mt8vha1.js");
+              let { resolveAttachments } = await import("../engine/answerAuthorOf.lazy.js");
               await resolveAttachments(
-                S.messages,
+                params.messages,
                 {
-                  signal: S.signal,
+                  signal: params.signal,
                   origin: hookOrigin,
                 },
-                S.options.agentId,
+                params.options.agentId,
               );
             }
           } catch (error) {
-            if (S.signal.aborted) throw error;
+            if (params.signal.aborted) throw error;
             if (!isAbortError(error)) logError(error);
           }
-          return yield* e.callModel(S);
+          return yield* deps.callModel(params);
         },
       };
 }
@@ -492,10 +496,11 @@ function parseArtifactPatchConfig(featureValue_CACHED_MAY_BE_STALE) {
       models: ARTIFACT_PATCH_MODELS,
     };
   let { enabled, models, sideCallClass } = featureValue_CACHED_MAY_BE_STALE;
-  let h = Array.isArray(models) && models.length > 0 && models.every((model) => typeof model === "string");
+  let modelsOk =
+    Array.isArray(models) && models.length > 0 && models.every((model) => typeof model === "string");
   return {
-    on: enabled === true && (models === undefined || h),
-    models: h ? models : ARTIFACT_PATCH_MODELS,
+    on: enabled === true && (models === undefined || modelsOk),
+    models: modelsOk ? models : ARTIFACT_PATCH_MODELS,
     sideCallClass: sideCallClass === "side_reply" ? "side_reply" : undefined,
   };
 }
@@ -503,246 +508,257 @@ function parseArtifactPatchConfig(featureValue_CACHED_MAY_BE_STALE) {
 /**
  * 补丁回合（artifact patch）可以忽略的附件种类集合：这些系统注入的附件不会单独触发一次补丁请求；同组还有一个默认关闭的开关。
  */
-var ARTIFACT_PATCH_IGNORABLE_ATTACHMENTS_2 = false;
-var ARTIFACT_PATCH_IGNORABLE_ATTACHMENTS = new Set([
-  "advisor_tool",
-  "agent_listing_delta",
-  "artifact_opening_prefetch",
-  "attention_budget",
-  "auto_mode",
-  "auto_mode_exit",
-  "bash_output_audience_note",
-  "batching_reminder",
-  "batching_reminder_sent",
-  "budget_usd",
-  "command_permissions",
-  "context_efficiency",
-  "credential_org",
-  "date",
-  "date_change",
-  "deferred_tools_delta",
-  "deferred_tools_record",
-  "diagnostics",
-  "dynamic_skill",
-  "elapsed_time_reminder",
-  "environment",
-  "invoked_skills",
-  "mcp_dropped_tools_delta",
-  "mcp_instructions_delta",
-  "model",
-  "nested_memory",
-  "output_limit_note",
-  "output_token_usage",
-  "plan_mode_exit",
-  "prefix_delta",
-  "prompt_render_point",
-  "prompt_snapshot",
-  "read_truncation_notice",
-  "relevant_memories",
-  "remote_session_change",
-  "secondary_reminder",
-  "secondary_reminder_sent",
-  "session_settings",
-  "silent_turn_reminder",
-  "skill_listing",
-  "task_reminder",
-  "team_context",
-  "thinking_drop",
-  "thinking_stripped",
-  "thread_state",
-  "todo_reminder",
-  "token_usage",
-  "tool_hosts_correction",
-  "tool_hosts_notice",
-  "tool_search_usage_reminder",
-  "total_tokens_reminder",
-  "ultra_effort_exit",
-  "withheld_memory",
-  "workflow_size_guideline_change",
-]);
-var ARTIFACT_PATCH_LIMITS = true;
-var ARTIFACT_PATCH_FLAGS = new Set([
-  "async_hook_response_batch",
-  "hook_cancelled",
-  "hook_error_during_execution",
-  "hook_non_blocking_error",
-  "hook_permission_decision",
-  "hook_system_message",
-]);
+var ARTIFACT_PATCH_IGNORABLE_ATTACHMENTS_2; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var ARTIFACT_PATCH_IGNORABLE_ATTACHMENTS;
+var ARTIFACT_PATCH_LIMITS;
+var ARTIFACT_PATCH_FLAGS;
+deferInit("chunk-ha3km179.js:19844", () => {
+  ARTIFACT_PATCH_IGNORABLE_ATTACHMENTS_2 = false;
+  ARTIFACT_PATCH_IGNORABLE_ATTACHMENTS = new Set([
+    "advisor_tool",
+    "agent_listing_delta",
+    "artifact_opening_prefetch",
+    "attention_budget",
+    "auto_mode",
+    "auto_mode_exit",
+    "bash_output_audience_note",
+    "batching_reminder",
+    "batching_reminder_sent",
+    "budget_usd",
+    "command_permissions",
+    "context_efficiency",
+    "credential_org",
+    "date",
+    "date_change",
+    "deferred_tools_delta",
+    "deferred_tools_record",
+    "diagnostics",
+    "dynamic_skill",
+    "elapsed_time_reminder",
+    "environment",
+    "invoked_skills",
+    "mcp_dropped_tools_delta",
+    "mcp_instructions_delta",
+    "model",
+    "nested_memory",
+    "output_limit_note",
+    "output_token_usage",
+    "plan_mode_exit",
+    "prefix_delta",
+    "prompt_render_point",
+    "prompt_snapshot",
+    "read_truncation_notice",
+    "relevant_memories",
+    "remote_session_change",
+    "secondary_reminder",
+    "secondary_reminder_sent",
+    "session_settings",
+    "silent_turn_reminder",
+    "skill_listing",
+    "task_reminder",
+    "team_context",
+    "thinking_drop",
+    "thinking_stripped",
+    "thread_state",
+    "todo_reminder",
+    "token_usage",
+    "tool_hosts_correction",
+    "tool_hosts_notice",
+    "tool_search_usage_reminder",
+    "total_tokens_reminder",
+    "ultra_effort_exit",
+    "withheld_memory",
+    "workflow_size_guideline_change",
+  ]);
+  ARTIFACT_PATCH_LIMITS = true;
+  ARTIFACT_PATCH_FLAGS = new Set([
+    "async_hook_response_batch",
+    "hook_cancelled",
+    "hook_error_during_execution",
+    "hook_non_blocking_error",
+    "hook_permission_decision",
+    "hook_system_message",
+  ]);
+});
 //@ chunk-ha3km179.js:21092-21457 placement
 /**
  * 开关打开时把 callModel 包装为 Artifact 补丁回合。
  */
-function wrapArtifactPatchTurn(e, toolUseContext) {
+function wrapArtifactPatchTurn(deps, toolUseContext) {
   try {
     let artifactPatchConfig = parseArtifactPatchConfig(
       getFeatureValue_CACHED_MAY_BE_STALE(TENGU_COBALT_PLINTH_ORPINE, false),
     );
-    if (!artifactPatchConfig.on) return e;
-    let artifactPatchTurn = createArtifactPatchTurn(e.callModel, toolUseContext, {
-      compose: async (h) => (await import("./chunk-eavynfj6.js")).composePatch(h),
-      uuid: e.uuid,
+    if (!artifactPatchConfig.on) return deps;
+    let artifactPatchTurn = createArtifactPatchTurn(deps.callModel, toolUseContext, {
+      compose: async (composeInput) =>
+        (await import("../services/artifacts/comments/composePatch.lazy.js")).composePatch(composeInput),
+      uuid: deps.uuid,
       now: () => Date.now(),
       models: artifactPatchConfig.models,
       sideCallClass: artifactPatchConfig.sideCallClass,
     });
     return {
-      ...e,
-      callModel: (h) => artifactPatchTurn.step(h),
+      ...deps,
+      callModel: (params) => artifactPatchTurn.step(params),
     };
   } catch (error) {
     logError(artifactPatchError(error, "while setting up; the loop runs without the patch turn"));
-    return e;
+    return deps;
   }
-  return e;
+  return deps;
 }
 //@ chunk-ha3km179.js:21457-21660 placement
 /**
  * 跳过补丁回合的原因
  */
-var ARTIFACT_PATCH_SKIP_REASONS_2 = new Set([
-  "plan_mode",
-  "brief_mode",
-  "tools_missing",
-  "model_not_listed",
-  "thinking_budgeted",
-  "not_person_turn",
-  "not_plain_text",
-  "has_attachments",
-]);
-var ARTIFACT_PATCH_SKIP_REASONS = new SessionRootSlot(() => ({
-  sessionId: undefined,
-  reasons: new Set(),
-}));
+var ARTIFACT_PATCH_SKIP_REASONS_2; // deferred: uses SessionRootSlot (../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
+var ARTIFACT_PATCH_SKIP_REASONS;
+deferInit("chunk-ha3km179.js:21457", () => {
+  ARTIFACT_PATCH_SKIP_REASONS_2 = new Set([
+    "plan_mode",
+    "brief_mode",
+    "tools_missing",
+    "model_not_listed",
+    "thinking_budgeted",
+    "not_person_turn",
+    "not_plain_text",
+    "has_attachments",
+  ]);
+  ARTIFACT_PATCH_SKIP_REASONS = new SessionRootSlot(() => ({
+    sessionId: undefined,
+    reasons: new Set(),
+  }));
+});
 //@ chunk-ha3km179.js:21660-24530 placement
 /**
  * Artifact 补丁回合：判断资格、组合补丁请求并记录结果。
  */
-function createArtifactPatchTurn(callModel, n, r) {
-  let s = {
+function createArtifactPatchTurn(callModel, toolUseContext, options) {
+  let phase = {
     kind: "fresh",
   };
-  let h;
-  let y = 0;
-  let log = r.log ?? reportArtifactPatchTurn;
-  let M = (D) => {
+  let abortTarget;
+  let requestIndex = 0;
+  let log = options.log ?? reportArtifactPatchTurn;
+  let report = (event) => {
     logForDebugging(
-      `artifact patch turn: ${D.outcome}${D.reason === undefined ? "" : ` (${D.reason})`} at request ${y} of the turn`,
+      `artifact patch turn: ${event.outcome}${event.reason === undefined ? "" : ` (${event.reason})`} at request ${requestIndex} of the turn`,
     );
-    log(D);
+    log(event);
   };
-  let R = (reason) => {
+  let shouldReportSkip = (reason) => {
     if (reason === "not_main_thread" || reason === "subagent" || reason === "not_first_request") return false;
     if (!ARTIFACT_PATCH_SKIP_REASONS_2.has(reason)) return true;
-    let L = ARTIFACT_PATCH_SKIP_REASONS.of(n.session);
+    let skipState = ARTIFACT_PATCH_SKIP_REASONS.of(toolUseContext.session);
     let sessionId = getSessionId();
-    if (L.sessionId !== sessionId) {
-      L.sessionId = sessionId;
-      L.reasons.clear();
+    if (skipState.sessionId !== sessionId) {
+      skipState.sessionId = sessionId;
+      skipState.reasons.clear();
     }
-    if (L.reasons.has(reason)) return false;
-    L.reasons.add(reason);
+    if (skipState.reasons.has(reason)) return false;
+    skipState.reasons.add(reason);
     return true;
   };
-  let T = () => {
-    if (s.kind === "edits_sent" || s.kind === "publish_sent") {
+  let onAbort = () => {
+    if (phase.kind === "edits_sent" || phase.kind === "publish_sent") {
       try {
-        M({
-          ...s.event,
+        report({
+          ...phase.event,
           outcome: "canceled",
-          reason: s.kind === "edits_sent" ? "during_write" : "during_publish",
+          reason: phase.kind === "edits_sent" ? "during_write" : "during_publish",
         });
       } catch (error) {
         logError(artifactPatchError(error, "while recording a canceled turn"));
       }
-      s = {
+      phase = {
         kind: "done",
       };
     }
   };
-  async function* w(D) {
-    y++;
-    let L;
+  async function* step(params) {
+    requestIndex++;
+    let patchMessage;
     try {
-      L = await P(D);
+      patchMessage = await advance(params);
     } catch (error) {
       logError(artifactPatchError(error, "before a step; the model takes the turn"));
-      M({
+      report({
         outcome: "error",
       });
-      s = {
+      phase = {
         kind: "done",
       };
     }
-    if (s.kind === "done" && h !== undefined) {
-      h.removeEventListener("abort", T);
-      h = undefined;
+    if (phase.kind === "done" && abortTarget !== undefined) {
+      abortTarget.removeEventListener("abort", onAbort);
+      abortTarget = undefined;
     }
-    if (L === undefined) return yield* callModel(D);
-    yield L;
+    if (patchMessage === undefined) return yield* callModel(params);
+    yield patchMessage;
   }
-  async function P(D) {
-    let L = s;
+  async function advance(params) {
+    let previous = phase;
     switch (
-      ((s = {
+      ((phase = {
         kind: "done",
       }),
-      L.kind)
+      previous.kind)
     ) {
       case "fresh":
-        return D.signal.aborted ? undefined : await Q(D);
+        return params.signal.aborted ? undefined : await startFresh(params);
       case "edits_sent": {
-        let { ids, editsSent, reply, sideCallMessageId, target, event } = L;
-        let Z = count(ids, (se) => toolResultStatus(D.messages, se) === "ok");
-        let re = {
+        let { ids, editsSent, reply, sideCallMessageId, target, event } = previous;
+        let okCount = count(ids, (id) => toolResultStatus(params.messages, id) === "ok");
+        let patchEvent = {
           ...event,
-          editsWritten: Z,
+          editsWritten: okCount,
         };
-        if (Z !== ids.length) {
-          M({
-            ...re,
+        if (okCount !== ids.length) {
+          report({
+            ...patchEvent,
             outcome: "write_failed",
           });
           return;
         }
-        if (toolResultsAnswered(D.messages, ids)) {
-          M({
-            ...re,
+        if (toolResultsAnswered(params.messages, ids)) {
+          report({
+            ...patchEvent,
             outcome: "unpublished",
             reason: "interjected",
           });
           return;
         }
-        let id = patchToolUseId(r.uuid);
-        s = {
+        let id = patchToolUseId(options.uuid);
+        phase = {
           kind: "publish_sent",
           ids: [id],
           editsSent,
           reply,
           sideCallMessageId,
           target,
-          event: re,
+          event: patchEvent,
         };
         return hasMemoryFileRead(target.path, id);
       }
       case "publish_sent": {
-        let { ids, editsSent, reply, sideCallMessageId, target, event } = L;
-        if (toolResultStatus(D.messages, ids[0]) !== "ok") {
-          M({
+        let { ids, editsSent, reply, sideCallMessageId, target, event } = previous;
+        if (toolResultStatus(params.messages, ids[0]) !== "ok") {
+          report({
             ...event,
             outcome: "publish_failed",
           });
           return;
         }
-        if (toolResultsAnswered(D.messages, ids)) {
-          M({
+        if (toolResultsAnswered(params.messages, ids)) {
+          report({
             ...event,
             outcome: "published",
             reason: "interjected",
           });
           return;
         }
-        M({
+        report({
           ...event,
           outcome: "published",
         });
@@ -752,128 +768,130 @@ function createArtifactPatchTurn(callModel, n, r) {
         return;
     }
   }
-  async function Q(D) {
-    let L = checkArtifactPatchEligibility(D, n, r.models);
-    if (!L.ok) {
-      if (R(L.reason))
-        M({
+  async function startFresh(params) {
+    let eligibility = checkArtifactPatchEligibility(params, toolUseContext, options.models);
+    if (!eligibility.ok) {
+      if (shouldReportSkip(eligibility.reason))
+        report({
           outcome: "ineligible",
-          reason: L.reason,
+          reason: eligibility.reason,
         });
       return;
     }
-    let model = getMainLoopModel_2(n);
-    let G = await r.compose({
-      request: L.request,
-      path: L.target.path,
-      slug: L.target.slug,
-      observedVer: L.target.observedVer,
+    let model = getMainLoopModel_2(toolUseContext);
+    let patchResult = await options.compose({
+      request: eligibility.request,
+      path: eligibility.target.path,
+      slug: eligibility.target.slug,
+      observedVer: eligibility.target.observedVer,
       model,
-      thinkingConfig: D.thinkingConfig,
-      sideCallClass: r.sideCallClass,
-      permissions: () => getToolPermissionContext(n),
-      context: n,
-      now: r.now,
+      thinkingConfig: params.thinkingConfig,
+      sideCallClass: options.sideCallClass,
+      permissions: () => getToolPermissionContext(toolUseContext),
+      context: toolUseContext,
+      now: options.now,
     });
-    let ee = {
-      outcome: G.kind === "patched" ? "published" : G.kind,
-      reason: G.kind === "patched" ? undefined : G.reason,
-      retried: G.retried,
-      pageBytes: G.pageBytes,
-      requestChars: L.request.length,
-      readMs: G.timings.readMs,
-      callMs: G.timings.callMs,
-      retryMs: G.timings.retryMs,
+    let event = {
+      outcome: patchResult.kind === "patched" ? "published" : patchResult.kind,
+      reason: patchResult.kind === "patched" ? undefined : patchResult.reason,
+      retried: patchResult.retried,
+      pageBytes: patchResult.pageBytes,
+      requestChars: eligibility.request.length,
+      readMs: patchResult.timings.readMs,
+      callMs: patchResult.timings.callMs,
+      retryMs: patchResult.timings.retryMs,
       model,
-      ...(G.kind === "patched" && {
-        edits: G.editCount,
+      ...(patchResult.kind === "patched" && {
+        edits: patchResult.editCount,
       }),
-      ...(G.kind !== "patched" && {
-        failingEdit: G.failingEdit,
+      ...(patchResult.kind !== "patched" && {
+        failingEdit: patchResult.failingEdit,
       }),
     };
-    if (G.kind !== "patched") {
-      M(ee);
+    if (patchResult.kind !== "patched") {
+      report(event);
       return;
     }
-    if (D.signal.aborted) {
-      M({
-        ...ee,
+    if (params.signal.aborted) {
+      report({
+        ...event,
         outcome: "canceled",
         reason: "before_write",
       });
       return;
     }
-    G.seedReadState();
-    D.signal.addEventListener("abort", T, {
+    patchResult.seedReadState();
+    params.signal.addEventListener("abort", onAbort, {
       once: true,
     });
-    h = D.signal;
-    let mapped = G.edits.map(() => patchToolUseId(r.uuid));
-    s = {
+    abortTarget = params.signal;
+    let toolUseIds = patchResult.edits.map(() => patchToolUseId(options.uuid));
+    phase = {
       kind: "edits_sent",
-      ids: mapped,
-      editsSent: G.edits.length,
-      reply: G.reply,
-      sideCallMessageId: G.sideCallMessageId,
-      target: L.target,
-      event: ee,
+      ids: toolUseIds,
+      editsSent: patchResult.edits.length,
+      reply: patchResult.reply,
+      sideCallMessageId: patchResult.sideCallMessageId,
+      target: eligibility.target,
+      event,
     };
-    return buildEditToolUses(L.target.path, G.edits, mapped);
+    return buildEditToolUses(eligibility.target.path, patchResult.edits, toolUseIds);
   }
   return {
-    step: w,
+    step,
   };
 }
 //@ chunk-ha3km179.js:24530-25885 placement
 /**
  * 判断能否走 Artifact 补丁回合（主线程、非子代理、非计划模式等）。
  */
-function checkArtifactPatchEligibility(e, n, models = ARTIFACT_PATCH_MODELS) {
-  let s = (reason) => ({
+function checkArtifactPatchEligibility(params, toolUseContext, models = ARTIFACT_PATCH_MODELS) {
+  let reject = (reason) => ({
     ok: false,
     reason,
   });
-  if (classifyQuerySource(e.options.querySource) !== "main") return s("not_main_thread");
-  if (n.agentId !== undefined) return s("subagent");
-  if (getToolPermissionContext(n).mode === "plan") return s("plan_mode");
-  if (isBriefEnabled()) return s("brief_mode");
+  if (classifyQuerySource(params.options.querySource) !== "main") return reject("not_main_thread");
+  if (toolUseContext.agentId !== undefined) return reject("subagent");
+  if (getToolPermissionContext(toolUseContext).mode === "plan") return reject("plan_mode");
+  if (isBriefEnabled()) return reject("brief_mode");
   if (
-    !e.tools.some((tool) => toolMatchesName(tool, FILE_EDIT_TOOL_NAME)) ||
-    !e.tools.some((tool) => toolMatchesName(tool, ARTIFACT_TOOL_NAME))
+    !params.tools.some((tool) => toolMatchesName(tool, FILE_EDIT_TOOL_NAME)) ||
+    !params.tools.some((tool) => toolMatchesName(tool, ARTIFACT_TOOL_NAME))
   )
-    return s("tools_missing");
-  let mainLoopModel = getMainLoopModel_2(n);
-  if (!models.includes(getCanonicalName(mainLoopModel))) return s("model_not_listed");
-  if (!usesAdaptiveThinking(e.thinkingConfig, mainLoopModel)) return s("thinking_budgeted");
-  let { messages } = e;
-  let S = strictHumanDeciderTurn(messages);
-  if (S === undefined || S.type !== "user" || S.isMeta) return s("not_person_turn");
-  let sliced = messages.slice(messages.lastIndexOf(S) + 1);
-  if (sliced.some((L) => L.type !== "attachment")) return s("not_first_request");
-  let R = plainPromptText(S);
-  if (R === undefined) return s("not_plain_text");
-  if (sliced.some((L) => !isIgnorableAttachment(L, "opener"))) return s("has_attachments");
-  let T = n.artifactRegistries.recordedPages.heldSourcePages();
-  if (T.length === 0) return s("no_artifact");
-  let w = artifactSlugsInText(R);
-  let P;
-  if (w === "unreadable" || w.length > 1) return s(w === "unreadable" ? "url_not_held" : "several_artifacts");
-  else if (w.length === 1) {
-    P = T.find((L) => L.slug === w[0]);
-    if (P === undefined) return s("url_not_held");
-  } else if (T.length === 1) P = T[0];
-  else return s("several_artifacts");
-  if (P.unasked) return s("unasked_republish");
-  let { ver, observers } = n.getArtifactReadObservation(P.slug);
-  if (ver === undefined || !hasMainKey(observers)) return s("no_observed_version");
+    return reject("tools_missing");
+  let mainLoopModel = getMainLoopModel_2(toolUseContext);
+  if (!models.includes(getCanonicalName(mainLoopModel))) return reject("model_not_listed");
+  if (!usesAdaptiveThinking(params.thinkingConfig, mainLoopModel)) return reject("thinking_budgeted");
+  let { messages } = params;
+  let deciderTurn = strictHumanDeciderTurn(messages);
+  if (deciderTurn === undefined || deciderTurn.type !== "user" || deciderTurn.isMeta)
+    return reject("not_person_turn");
+  let sliced = messages.slice(messages.lastIndexOf(deciderTurn) + 1);
+  if (sliced.some((message) => message.type !== "attachment")) return reject("not_first_request");
+  let promptText = plainPromptText(deciderTurn);
+  if (promptText === undefined) return reject("not_plain_text");
+  if (sliced.some((message) => !isIgnorableAttachment(message, "opener"))) return reject("has_attachments");
+  let heldPages = toolUseContext.artifactRegistries.recordedPages.heldSourcePages();
+  if (heldPages.length === 0) return reject("no_artifact");
+  let slugs = artifactSlugsInText(promptText);
+  let targetPage;
+  if (slugs === "unreadable" || slugs.length > 1)
+    return reject(slugs === "unreadable" ? "url_not_held" : "several_artifacts");
+  else if (slugs.length === 1) {
+    targetPage = heldPages.find((page) => page.slug === slugs[0]);
+    if (targetPage === undefined) return reject("url_not_held");
+  } else if (heldPages.length === 1) targetPage = heldPages[0];
+  else return reject("several_artifacts");
+  if (targetPage.unasked) return reject("unasked_republish");
+  let { ver, observers } = toolUseContext.getArtifactReadObservation(targetPage.slug);
+  if (ver === undefined || !hasMainKey(observers)) return reject("no_observed_version");
   return {
     ok: true,
-    request: R,
+    request: promptText,
     target: {
-      path: P.path,
-      slug: P.slug,
-      url: P.url,
+      path: targetPage.path,
+      slug: targetPage.slug,
+      url: targetPage.url,
       observedVer: ver,
     },
   };
@@ -893,65 +911,70 @@ function usesAdaptiveThinking(thinkingConfig, mainLoopModel) {
 /**
  * 附件是否可在补丁回合中忽略。
  */
-function isIgnorableAttachment(e, n) {
-  if (e.type !== "attachment") return false;
-  let attachment = e.attachment;
+function isIgnorableAttachment(message, position) {
+  if (message.type !== "attachment") return false;
+  let attachment = message.attachment;
   if (ARTIFACT_PATCH_IGNORABLE_ATTACHMENTS.has(attachment.type) || ARTIFACT_PATCH_FLAGS.has(attachment.type))
     return true;
-  let s = n === "opener" && ARTIFACT_PATCH_LIMITS;
-  if (attachment.type === "hook_additional_context") return s;
+  let openerOnly = position === "opener" && ARTIFACT_PATCH_LIMITS;
+  if (attachment.type === "hook_additional_context") return openerOnly;
   if (attachment.type === "async_hook_response") {
     let response = attachment.response ?? {};
     let additionalContext =
       typeof response.hookSpecificOutput === "object" && response.hookSpecificOutput !== null
         ? response.hookSpecificOutput.additionalContext
         : undefined;
-    return (!response.systemMessage && !additionalContext) || s;
+    return (!response.systemMessage && !additionalContext) || openerOnly;
   }
   return (
     attachment.type === "hook_success" &&
     (attachment.content === "" ||
-      s ||
+      openerOnly ||
       (attachment.hookEvent !== "SessionStart" &&
         attachment.hookEvent !== "UserPromptSubmit" &&
         attachment.hookEvent !== "UserPromptExpansion"))
   );
 }
 //@ chunk-ha3km179.js:26559-26781 placement
-function plainPromptText(e) {
-  let { content } = e.message;
-  let r;
-  if (typeof content === "string") r = content;
-  else if (content.every((h) => h.type === "text"))
-    r = content.map((h) => (h.type === "text" ? h.text : "")).join(`
+function plainPromptText(message) {
+  let { content } = message.message;
+  let text;
+  if (typeof content === "string") text = content;
+  else if (content.every((block) => block.type === "text"))
+    text = content.map((block) => (block.type === "text" ? block.text : "")).join(`
 `);
   else return;
-  let trimmed = r.trim();
+  let trimmed = text.trim();
   if (trimmed === "" || SYSTEM_TAG_PROMPT_RE.test(trimmed)) return;
-  return r;
+  return text;
 }
 //@ chunk-ha3km179.js:26781-26888 placement
-var SYSTEM_TAG_PROMPT_RE = /^<(command-|bash-|local-command|system-reminder|task-notification|user-prompt)/;
-var regExp = new RegExp(VIEWER_PREFIX_RE);
+var SYSTEM_TAG_PROMPT_RE; // deferred: uses UUID_PATTERN (../tools/ArtifactTool/constants.js) of its import cycle while loading; runs once the cycle is complete
+var regExp;
+deferInit("chunk-ha3km179.js:26781", () => {
+  SYSTEM_TAG_PROMPT_RE = /^<(command-|bash-|local-command|system-reminder|task-notification|user-prompt)/;
+  regExp = new RegExp(VIEWER_PREFIX_RE);
+});
 //@ chunk-ha3km179.js:26888-27108 placement
-function artifactSlugsInText(e) {
-  let n = new Set();
-  let r = false;
-  for (let s of e.matchAll(/https?:\/\/[^\s<>"'\]]+/g)) {
-    let replaced = s[0].replace(/[.,;:!?)\]}>'"`*_]+$/, "");
+function artifactSlugsInText(text) {
+  let slugs = new Set();
+  let sawUnreadable = false;
+  for (let match of text.matchAll(/https?:\/\/[^\s<>"'\]]+/g)) {
+    let replaced = match[0].replace(/[.,;:!?)\]}>'"`*_]+$/, "");
     let artifactUrl = parseArtifactUrl(replaced);
-    if (artifactUrl !== null) n.add(artifactUrl.slug);
-    else if (regExp.test(replaced)) r = true;
+    if (artifactUrl !== null) slugs.add(artifactUrl.slug);
+    else if (regExp.test(replaced)) sawUnreadable = true;
   }
-  return r ? "unreadable" : [...n];
+  return sawUnreadable ? "unreadable" : [...slugs];
 }
 //@ chunk-ha3km179.js:27108-27361 placement
-function toolResultStatus(messages, n) {
+function toolResultStatus(messages, toolUseId) {
   for (let j = messages.length - 1; j >= 0; j--) {
-    let s = messages[j];
-    if (s?.type !== "user" || typeof s.message.content === "string") continue;
-    for (let h of s.message.content)
-      if (h.type === "tool_result" && h.tool_use_id === n) return h.is_error === true ? "error" : "ok";
+    let message = messages[j];
+    if (message?.type !== "user" || typeof message.message.content === "string") continue;
+    for (let block of message.message.content)
+      if (block.type === "tool_result" && block.tool_use_id === toolUseId)
+        return block.is_error === true ? "error" : "ok";
   }
   return "missing";
 }
@@ -959,16 +982,20 @@ function toolResultStatus(messages, n) {
 /**
  * 指定工具调用之后是否已有回复。
  */
-function toolResultsAnswered(messages, n) {
-  let r = new Set(n);
+function toolResultsAnswered(messages, toolUseIds) {
+  let wantedIds = new Set(toolUseIds);
   let lastIndex = messages.findLastIndex(
-    (h) => h.type === "assistant" && h.message.content.some((y) => y.type === "tool_use" && r.has(y.id)),
+    (message) =>
+      message.type === "assistant" &&
+      message.message.content.some((block) => block.type === "tool_use" && wantedIds.has(block.id)),
   );
   if (lastIndex === -1) return true;
-  return messages.slice(lastIndex + 1).some((h) => {
-    if (h.type === "user" && typeof h.message.content !== "string")
-      return !h.message.content.every((y) => y.type === "tool_result" && r.has(y.tool_use_id));
-    return !isIgnorableAttachment(h, "after_step");
+  return messages.slice(lastIndex + 1).some((message) => {
+    if (message.type === "user" && typeof message.message.content !== "string")
+      return !message.message.content.every(
+        (block) => block.type === "tool_result" && wantedIds.has(block.tool_use_id),
+      );
+    return !isIgnorableAttachment(message, "after_step");
   });
 }
 //@ chunk-ha3km179.js:27719-27780 placement
@@ -991,16 +1018,16 @@ function synthesizedAssistantMessage(content) {
   return assistantMessage;
 }
 //@ chunk-ha3km179.js:27871-28032 placement
-function buildEditToolUses(filePath, edits, r) {
+function buildEditToolUses(filePath, edits, toolUseIds) {
   return synthesizedAssistantMessage(
-    edits.map((s, h) => ({
+    edits.map((edit, index) => ({
       type: "tool_use",
-      id: r[h],
+      id: toolUseIds[index],
       name: FILE_EDIT_TOOL_NAME,
       input: {
         file_path: filePath,
-        old_string: s.oldString,
-        new_string: s.newString,
+        old_string: edit.oldString,
+        new_string: edit.newString,
         replace_all: false,
       },
     })),
@@ -1020,9 +1047,9 @@ function hasMemoryFileRead(filePath, id) {
   ]);
 }
 //@ chunk-ha3km179.js:28113-28238 placement
-function artifactPatchError(error, n) {
+function artifactPatchError(error, stage) {
   return new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-    `artifact patch turn: ${error instanceof Error ? error.name : typeof error} ${n}`,
+    `artifact patch turn: ${error instanceof Error ? error.name : typeof error} ${stage}`,
     "artifact patch turn error",
   );
 }
@@ -1033,7 +1060,7 @@ function artifactPatchError(error, n) {
 var MESSAGE_ID_RE = /^msg_[A-Za-z0-9_]{1,60}$/;
 //@ chunk-ha3km179.js:28272-28387 placement
 function buildPatchTextMessage(text, sideCallMessageId) {
-  let r = synthesizedAssistantMessage([
+  let message = synthesizedAssistantMessage([
     {
       type: "text",
       text,
@@ -1041,8 +1068,8 @@ function buildPatchTextMessage(text, sideCallMessageId) {
     },
   ]);
   if (sideCallMessageId !== undefined && MESSAGE_ID_RE.test(sideCallMessageId))
-    r.message.id = sideCallMessageId;
-  return r;
+    message.message.id = sideCallMessageId;
+  return message;
 }
 //@ chunk-ha3km179.js:28387-28522 placement
 function patchSummaryText(editsSent, url, reply) {
@@ -1053,43 +1080,55 @@ function patchSummaryText(editsSent, url, reply) {
 /**
  * 上报 tengu_artifact_patch_turn。
  */
-function reportArtifactPatchTurn(e) {
+function reportArtifactPatchTurn(event) {
   logEvent("tengu_artifact_patch_turn", {
-    outcome: fromEnum(e.outcome),
-    reason: fromEnumOpt(e.reason),
-    retried: e.retried,
-    edits: e.edits,
-    failing_edit: e.failingEdit,
-    edits_written: e.editsWritten,
-    page_bytes: e.pageBytes,
-    request_chars: e.requestChars,
-    read_ms: e.readMs,
-    call_ms: e.callMs,
-    retry_ms: e.retryMs,
-    model: e.model === undefined ? undefined : telemetrySafeModelName(e.model),
+    outcome: fromEnum(event.outcome),
+    reason: fromEnumOpt(event.reason),
+    retried: event.retried,
+    edits: event.edits,
+    failing_edit: event.failingEdit,
+    edits_written: event.editsWritten,
+    page_bytes: event.pageBytes,
+    request_chars: event.requestChars,
+    read_ms: event.readMs,
+    call_ms: event.callMs,
+    retry_ms: event.retryMs,
+    model: event.model === undefined ? undefined : telemetrySafeModelName(event.model),
   });
 }
 //@ chunk-ha3km179.js:28846-28887 placement
 /**
  * 惰性加载补丁模块
  */
-var lazyPatchModule = () => import("./chunk-1nk4j4sn.js");
+var lazyPatchModule = () => import("../plugins/functionHooks/api/BLOCK_SCHEMA.lazy.js");
 //@ chunk-ha3km179.js:28887-28899 placement
-TEXT_PASSTHROUGH_CORES.set(lazyPatchModule);
+// deferred: uses TEXT_PASSTHROUGH_CORES (../plugins/functionHooks/coreHandlers.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-ha3km179.js:28887", () => {
+  TEXT_PASSTHROUGH_CORES.set(lazyPatchModule);
+});
 //@ chunk-ha3km179.js:28899-29158 placement
 /**
  * 可进时间线的类型
  */
-var TIMELINE_MESSAGE_TYPES_2 = new Set(["user", "assistant", "attachment", "system"]);
-var TIMELINE_MESSAGE_TYPES = (e) =>
-  typeof e === "object" && e !== null && "uuid" in e && "type" in e && TIMELINE_MESSAGE_TYPES_2.has(e.type);
-var logAppendKeepFailure = (e, error) =>
-  logForDebugging(
-    `session.append at the loop's keep point: ${e} failed, the row is kept as made: ${errorMessage(error)}`,
-    {
-      level: "error",
-    },
-  );
+var TIMELINE_MESSAGE_TYPES_2; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var TIMELINE_MESSAGE_TYPES;
+var logAppendKeepFailure;
+deferInit("chunk-ha3km179.js:28899", () => {
+  TIMELINE_MESSAGE_TYPES_2 = new Set(["user", "assistant", "attachment", "system"]);
+  TIMELINE_MESSAGE_TYPES = (value) =>
+    typeof value === "object" &&
+    value !== null &&
+    "uuid" in value &&
+    "type" in value &&
+    TIMELINE_MESSAGE_TYPES_2.has(value.type);
+  logAppendKeepFailure = (label, error) =>
+    logForDebugging(
+      `session.append at the loop's keep point: ${label} failed, the row is kept as made: ${errorMessage(error)}`,
+      {
+        level: "error",
+      },
+    );
+});
 //@ chunk-ha3km179.js:29158-29252 placement
 /**
  * 是否在运行中的回合
@@ -1105,41 +1144,45 @@ function isTurnLive(agentId) {
 function observeRunningTurn(toolUseContext, messages) {
   TEXT_PASSTHROUGH_CORES.set(lazyPatchModule);
   let { agentId } = toolUseContext;
-  let s =
+  let observationOff =
     isDelegatedObservationContext(toolUseContext.agentContext) ||
     toolUseContext.options.settingsHooksOff === true;
   let weakSet = new WeakSet();
   let weakSet_2 = new WeakSet();
-  let S = [];
-  let M;
-  let R = false;
+  let pendingRows = [];
+  let conversation;
+  let turnLive = false;
   try {
-    M = currentSurfaceBinding()?.conversation?.(agentId);
-    R = isTurnLive(agentId);
+    conversation = currentSurfaceBinding()?.conversation?.(agentId);
+    turnLive = isTurnLive(agentId);
   } catch (error) {
     logAppendKeepFailure("reading the running turn", error);
   }
-  let T = R && !s;
-  let w = orderedRowSource({
+  let hookable = turnLive && !observationOff;
+  let rowSource = orderedRowSource({
     ...(agentId !== undefined && {
       agentId,
     }),
     keep: () => {},
-    rows: () => [...(M?.rows() ?? messages), ...S],
-    isHookable: T,
+    rows: () => [...(conversation?.rows() ?? messages), ...pendingRows],
+    isHookable: hookable,
   });
-  let P = T ? M?.attachLoop() : undefined;
-  function Q(D) {
-    if (!T || !TIMELINE_MESSAGE_TYPES(D) || weakSet.has(D)) return;
-    if (D.type === "assistant" && D.message.content.some((z) => z.type === "tool_use") && !weakSet_2.has(D)) {
-      weakSet_2.add(D);
-      S.push(D);
+  let loopAttachment = hookable ? conversation?.attachLoop() : undefined;
+  function appendIfLive(message) {
+    if (!hookable || !TIMELINE_MESSAGE_TYPES(message) || weakSet.has(message)) return;
+    if (
+      message.type === "assistant" &&
+      message.message.content.some((block) => block.type === "tool_use") &&
+      !weakSet_2.has(message)
+    ) {
+      weakSet_2.add(message);
+      pendingRows.push(message);
     }
     if (!appendHookableFastPath()) return;
-    weakSet.add(D);
+    weakSet.add(message);
     try {
       return Promise.resolve(
-        appendRowsWithHooks(w, [D], {
+        appendRowsWithHooks(rowSource, [message], {
           fills: true,
         }),
       ).catch((error) => logAppendKeepFailure("an append", error));
@@ -1149,43 +1192,43 @@ function observeRunningTurn(toolUseContext, messages) {
     }
   }
   return {
-    through: async function* (L) {
-      let z = false;
+    through: async function* (iterator) {
+      let done = false;
       try {
         while (true) {
-          let G = await L.next();
-          if (G.done) {
-            z = true;
-            return G.value;
+          let step = await iterator.next();
+          if (step.done) {
+            done = true;
+            return step.value;
           }
-          let ee = Q(G.value);
-          if (ee !== undefined) await ee;
-          yield G.value;
+          let appendPromise = appendIfLive(step.value);
+          if (appendPromise !== undefined) await appendPromise;
+          yield step.value;
         }
       } finally {
-        if (!z) await L.return(undefined);
+        if (!done) await iterator.return(undefined);
       }
     },
-    appended: async (D) => {
-      await Q(D);
+    appended: async (message) => {
+      await appendIfLive(message);
     },
-    answeredAs: (D, L) => {
-      if (weakSet.has(L)) weakSet.add(D);
+    answeredAs: (replacement, original) => {
+      if (weakSet.has(original)) weakSet.add(replacement);
     },
-    withArrivedRows: (D) => {
+    withArrivedRows: (rows) => {
       try {
-        let L = P?.taken() ?? [];
-        if (L.length === 0) return D;
-        let z = new Set(D.map((ee) => ee.uuid));
-        let filtered = L.filter((ee) => !z.has(ee.uuid));
-        return filtered.length === 0 ? D : [...D, ...filtered];
+        let arrived = loopAttachment?.taken() ?? [];
+        if (arrived.length === 0) return rows;
+        let knownUuids = new Set(rows.map((row) => row.uuid));
+        let filtered = arrived.filter((row) => !knownUuids.has(row.uuid));
+        return filtered.length === 0 ? rows : [...rows, ...filtered];
       } catch (error) {
         logAppendKeepFailure("taking the rows that arrived", error);
-        return D;
+        return rows;
       }
     },
     [Symbol.dispose]: () => {
-      P?.[Symbol.dispose]();
+      loopAttachment?.[Symbol.dispose]();
     },
   };
 }
@@ -1200,47 +1243,57 @@ function buildArmedObserverAttachment({ querySource, toolUseContext, messages, t
     if (classifyQuerySource(querySource) === "auxiliary") return null;
     let session = toolUseContext.session;
     let agentId = toolUseContext.agentId ?? MAIN_OBSERVED_KEY;
-    let S = pairingForObserver(session, agentId);
-    if (!S || S.state !== "armed") return null;
+    let pairing = pairingForObserver(session, agentId);
+    if (!pairing || pairing.state !== "armed") return null;
     let lastIndex = messages.findLastIndex(
       (message) =>
         (message.type === "assistant" && !isVirtualConversationMessage(message)) ||
         (message.type === "user" && message.isCompactSummary === true),
     );
     let sliced = messages.slice(Math.max(turnStartIndex, lastIndex + 1));
-    let w =
-      sliced.some((Z) => Z.type === "user" && Z.toolUseResult !== undefined) &&
-      !sliced.some((Z) => Z.type === "user" && joinNonEmptyText(Z.message.content) !== undefined)
+    let candidateMessages =
+      sliced.some((message) => message.type === "user" && message.toolUseResult !== undefined) &&
+      !sliced.some(
+        (message) => message.type === "user" && joinNonEmptyText(message.message.content) !== undefined,
+      )
         ? messages.slice(turnStartIndex)
         : sliced;
-    let P = mapUserOrigins(w);
-    let filtered = w.filter((Z) => Z.type === "user" && !P.has(Z));
-    let D = joinUserTexts(filtered);
-    if (D !== undefined) S.lastTrigger = truncateObserverText(D, MAX_TRIGGER_TEXT_CHARS);
-    if (w.some((Z) => Z.type === "user" && isReportedOrigin(Z.origin, S))) return null;
-    let trigger = D;
-    let triggerRelay = filtered.some((Z) => Z.type === "user" && isVerifiedSlackHuman(Z));
+    let originByMessage = mapUserOrigins(candidateMessages);
+    let messages_2 = candidateMessages.filter(
+      (message) => message.type === "user" && !originByMessage.has(message),
+    );
+    let triggerText = joinUserTexts(messages_2);
+    if (triggerText !== undefined)
+      pairing.lastTrigger = truncateObserverText(triggerText, MAX_TRIGGER_TEXT_CHARS);
+    if (
+      candidateMessages.some(
+        (message) => message.type === "user" && isReportedOrigin(message.origin, pairing),
+      )
+    )
+      return null;
+    let trigger = triggerText;
+    let triggerRelay = messages_2.some((message) => message.type === "user" && isVerifiedSlackHuman(message));
     let opensTurn = true;
-    let ee = false;
-    let V = [];
-    for (let Z of w) {
-      let re = P.get(Z);
-      let Re = Z.type === "user" ? joinNonEmptyText(Z.message.content) : undefined;
-      if (re !== undefined && Re !== undefined)
-        V.push({
+    let sawSegmentStart = false;
+    let activities = [];
+    for (let message of candidateMessages) {
+      let source = originByMessage.get(message);
+      let text = message.type === "user" ? joinNonEmptyText(message.message.content) : undefined;
+      if (source !== undefined && text !== undefined)
+        activities.push({
           type: "non_user_message",
-          source: re,
-          text: truncateObserverText(Re, MAX_TRIGGER_TEXT_CHARS),
+          source,
+          text: truncateObserverText(text, MAX_TRIGGER_TEXT_CHARS),
         });
     }
-    let fe = false;
-    let ie = (Z) => {
-      let re = Z ? [...V, Z] : V;
-      V = [];
-      if (re.length === 0) return;
+    let finished = false;
+    let flush = (lastEvent) => {
+      let events = lastEvent ? [...activities, lastEvent] : activities;
+      activities = [];
+      if (events.length === 0) return;
       enqueueObserverActivity(session, {
         observedKey: agentId,
-        activity: re,
+        activity: events,
         trigger,
         triggerRelay,
         opensTurn,
@@ -1249,31 +1302,31 @@ function buildArmedObserverAttachment({ querySource, toolUseContext, messages, t
       opensTurn = false;
     };
     return {
-      capture(Z) {
+      capture(event) {
         try {
-          let timelineEvents = toTimelineEvents(Z, S);
-          if (timelineEvents) V.push(...timelineEvents);
+          let timelineEvents = toTimelineEvents(event, pairing);
+          if (timelineEvents) activities.push(...timelineEvents);
         } catch (error) {
           logForDebugging(`[agentObserver] capture failed: ${errorMessage(error)}`);
         }
       },
       flushSegment() {
         try {
-          if (fe) return;
-          if (!ee) {
-            ee = true;
+          if (finished) return;
+          if (!sawSegmentStart) {
+            sawSegmentStart = true;
             return;
           }
-          ie();
+          flush();
         } catch (error) {
           logForDebugging(`[agentObserver] flush failed: ${errorMessage(error)}`);
         }
       },
       finish(reason) {
         try {
-          if (fe) return;
-          fe = true;
-          ie({
+          if (finished) return;
+          finished = true;
+          flush({
             type: "turn_ended",
             reason,
           });
@@ -1291,8 +1344,8 @@ function buildArmedObserverAttachment({ querySource, toolUseContext, messages, t
 /**
  * 来源是否已上报
  */
-function isReportedOrigin(origin, n) {
-  return origin !== undefined && n.reportOrigins.has(origin);
+function isReportedOrigin(origin, pairing) {
+  return origin !== undefined && pairing.reportOrigins.has(origin);
 }
 //@ chunk-ha3km179.js:31949-32044 placement
 /**
@@ -1306,34 +1359,35 @@ function originKindOf(origin, isMeta) {
 /**
  * 建立用户消息到来源的映射。
  */
-function mapUserOrigins(e) {
-  let n = new Map();
-  let r;
-  for (let s of e)
-    if (s.type === "user") {
-      r = s;
-      let h = originKindOf(s.origin, s.isMeta);
-      if (h !== undefined) n.set(s, h);
+function mapUserOrigins(messages) {
+  let origins = new Map();
+  let lastUserMessage;
+  for (let message of messages)
+    if (message.type === "user") {
+      lastUserMessage = message;
+      let originKind = originKindOf(message.origin, message.isMeta);
+      if (originKind !== undefined) origins.set(message, originKind);
     } else if (
-      s.type === "attachment" &&
-      s.attachment.type === "poll_events" &&
-      s.attachment.deliveredVia === "value_dispatch" &&
-      r !== undefined
+      message.type === "attachment" &&
+      message.attachment.type === "poll_events" &&
+      message.attachment.deliveredVia === "value_dispatch" &&
+      lastUserMessage !== undefined
     )
-      if (s.attachment.provenance?.[0]?.authority === "human-principal") n.delete(r);
-      else n.set(r, POLL_EVENT);
-  return n;
+      if (message.attachment.provenance?.[0]?.authority === "human-principal")
+        origins.delete(lastUserMessage);
+      else origins.set(lastUserMessage, POLL_EVENT);
+  return origins;
 }
 //@ chunk-ha3km179.js:32391-32545 placement
-function joinUserTexts(e) {
-  let n = [];
-  for (let r of e) {
-    if (r.type !== "user") continue;
-    let s = joinNonEmptyText(r.message.content);
-    if (s) n.push(s);
+function joinUserTexts(messages) {
+  let texts = [];
+  for (let message of messages) {
+    if (message.type !== "user") continue;
+    let text = joinNonEmptyText(message.message.content);
+    if (text) texts.push(text);
   }
-  if (n.length === 0) return;
-  return n.join(`
+  if (texts.length === 0) return;
+  return texts.join(`
 
 `);
 }
@@ -1341,56 +1395,56 @@ function joinUserTexts(e) {
 /**
  * 把消息转换为时间线事件。
  */
-function toTimelineEvents(e, n) {
-  if (!e || typeof e !== "object" || !("type" in e)) return null;
-  let r = e;
-  if (isVirtualConversationMessage(r)) return null;
-  if (r.type === "attachment") return attachmentToTimelineEvents(r.attachment, n);
-  if (r.type === "assistant") {
-    let s = [];
-    let content = r.message.content;
-    for (let y of content)
-      if (y.type === "text") {
-        if (y.text.trim())
-          s.push({
+function toTimelineEvents(row, pairing) {
+  if (!row || typeof row !== "object" || !("type" in row)) return null;
+  let message = row;
+  if (isVirtualConversationMessage(message)) return null;
+  if (message.type === "attachment") return attachmentToTimelineEvents(message.attachment, pairing);
+  if (message.type === "assistant") {
+    let events = [];
+    let content = message.message.content;
+    for (let block of content)
+      if (block.type === "text") {
+        if (block.text.trim())
+          events.push({
             type: "assistant_text",
-            text: truncateObserverText(y.text, MAX_DELIVERY_CHARS),
+            text: truncateObserverText(block.text, MAX_DELIVERY_CHARS),
           });
-      } else if (y.type === "tool_use")
-        s.push({
+      } else if (block.type === "tool_use")
+        events.push({
           type: "tool_call",
-          name: y.name,
-          input: jsonTextOrFallback(y.input),
+          name: block.name,
+          input: jsonTextOrFallback(block.input),
         });
-    return s;
+    return events;
   }
-  if (r.type === "user") {
-    let content = r.message.content;
+  if (message.type === "user") {
+    let content = message.message.content;
     if (Array.isArray(content)) {
-      let S = [];
-      for (let M of content)
-        if (M.type === "tool_result")
-          S.push({
+      let events = [];
+      for (let block of content)
+        if (block.type === "tool_result")
+          events.push({
             type: "tool_result",
-            content: truncateObserverText(joinNonEmptyText(M.content) ?? ""),
+            content: truncateObserverText(joinNonEmptyText(block.content) ?? ""),
           });
-      if (S.length > 0) return S;
+      if (events.length > 0) return events;
     }
-    if (isReportedOrigin(r.origin, n)) return null;
-    let h = joinNonEmptyText(content);
-    if (!h) return null;
-    let y = originKindOf(r.origin, r.isMeta);
+    if (isReportedOrigin(message.origin, pairing)) return null;
+    let text = joinNonEmptyText(content);
+    if (!text) return null;
+    let originKind = originKindOf(message.origin, message.isMeta);
     return [
-      y === undefined
+      originKind === undefined
         ? {
             type: "user_message",
-            text: truncateObserverText(h, MAX_TRIGGER_TEXT_CHARS),
-            relay: isVerifiedSlackHuman(r),
+            text: truncateObserverText(text, MAX_TRIGGER_TEXT_CHARS),
+            relay: isVerifiedSlackHuman(message),
           }
         : {
             type: "non_user_message",
-            source: y,
-            text: truncateObserverText(h),
+            source: originKind,
+            text: truncateObserverText(text),
           },
     ];
   }
@@ -1400,7 +1454,7 @@ function toTimelineEvents(e, n) {
 /**
  * 把附件转换为时间线事件（记忆加载、技能发现等）。
  */
-function attachmentToTimelineEvents(attachment, n) {
+function attachmentToTimelineEvents(attachment, pairing) {
   switch (attachment.type) {
     case "nested_memory":
       return [
@@ -1420,39 +1474,39 @@ function attachmentToTimelineEvents(attachment, n) {
       ];
     case "queued_command": {
       let taskNotificationOrigin = resolveTaskNotificationOrigin(attachment.origin, attachment.commandMode);
-      if (isReportedOrigin(taskNotificationOrigin, n)) return null;
-      let s = joinNonEmptyText(attachment.prompt);
-      if (!s) return null;
-      let h = truncateObserverText(s, MAX_TRIGGER_TEXT_CHARS);
-      let y = classifyNonUserMessageSource(h, taskNotificationOrigin, {
+      if (isReportedOrigin(taskNotificationOrigin, pairing)) return null;
+      let text = joinNonEmptyText(attachment.prompt);
+      if (!text) return null;
+      let truncatedText = truncateObserverText(text, MAX_TRIGGER_TEXT_CHARS);
+      let deliveredText = classifyNonUserMessageSource(truncatedText, taskNotificationOrigin, {
         verifiedSlackHumanTurn: attachment.verifiedSlackHumanTurn,
         isMeta: attachment.isMeta,
         hearthServerEnvelope: hasHearthRelay(attachment),
         hearthJoinedTextBlocks:
-          Array.isArray(attachment.prompt) && count(attachment.prompt, (R) => R.type === "text") > 1,
+          Array.isArray(attachment.prompt) && count(attachment.prompt, (block) => block.type === "text") > 1,
         sendMessageToolAbsent: attachment.sendMessageToolAbsent,
       });
-      let S = originKindOf(taskNotificationOrigin, attachment.isMeta);
-      if (S !== undefined)
+      let originKind = originKindOf(taskNotificationOrigin, attachment.isMeta);
+      if (originKind !== undefined)
         return [
           {
             type: "non_user_message",
-            source: S,
-            text: y,
+            source: originKind,
+            text: deliveredText,
           },
         ];
-      let M = isVerifiedSlackHuman(attachment);
+      let relay = isVerifiedSlackHuman(attachment);
       return [
         {
           type: "user_message",
-          text: M ? y : h,
-          relay: M,
+          text: relay ? deliveredText : truncatedText,
+          relay,
         },
       ];
     }
     case "poll_events": {
-      let flattened = attachment.envelopes.flatMap((envelope, h) => {
-        switch (attachment.kinds[h]) {
+      let flattened = attachment.envelopes.flatMap((envelope, index) => {
+        switch (attachment.kinds[index]) {
           case REPL_EVAL:
             return [];
           case REPL_STATUS:
@@ -1460,7 +1514,7 @@ function attachmentToTimelineEvents(attachment, n) {
           default: {
             let text = truncateObserverText(envelope, MAX_TRIGGER_TEXT_CHARS);
             return [
-              attachment.provenance?.[h]?.authority === "human-principal"
+              attachment.provenance?.[index]?.authority === "human-principal"
                 ? {
                     type: "user_message",
                     text,
@@ -1486,7 +1540,9 @@ function joinNonEmptyText(data) {
   if (typeof data === "string") return data.trim() ? data : undefined;
   if (Array.isArray(data)) {
     let filtered = data
-      .map((r) => (r && typeof r === "object" && "type" in r && r.type === "text" ? r.text : ""))
+      .map((block) =>
+        block && typeof block === "object" && "type" in block && block.type === "text" ? block.text : "",
+      )
       .filter(Boolean);
     return filtered.length > 0
       ? filtered.join(`
@@ -1499,9 +1555,9 @@ function joinNonEmptyText(data) {
 /**
  * JSON 文本或占位
  */
-function jsonTextOrFallback(e) {
+function jsonTextOrFallback(value) {
   try {
-    return JSON.stringify(e) ?? String(e);
+    return JSON.stringify(value) ?? String(value);
   } catch {
     return "[unserializable]";
   }
@@ -1510,111 +1566,129 @@ function jsonTextOrFallback(e) {
 /**
  * 按编辑规则排除工具的结果（off/shadow 模式下不执行）。
  */
-function applyToolExclusionEdit(messages, querySource, attemptModel, agentId, forkPointUuid, readFileState) {
+function applyToolExclusionEdit(
+  messages,
+  querySource,
+  capabilities,
+  toolUseState,
+  anchorUuid,
+  readFileState,
+) {
   try {
-    let S = idleClearingMode();
-    if (S === "off" || S === "shadow") return;
-    let M = planToolResultClearingAfterIdle(
+    let mode = idleClearingMode();
+    if (mode === "off" || mode === "shadow") return;
+    let plan = planToolResultClearingAfterIdle(
       messages,
       querySource,
-      attemptModel,
-      agentId,
+      capabilities,
+      toolUseState,
       undefined,
-      forkPointUuid,
+      anchorUuid,
     );
-    if (!M) return;
-    let R = new Set(M.edit.exclude_tools);
-    let T = new Map();
-    let w = [];
-    let P = new Set();
-    let Q = new Map();
-    let D = 0;
-    for (let Z of messages) {
+    if (!plan) return;
+    let excludedTools = new Set(plan.edit.exclude_tools);
+    let toolUsesById = new Map();
+    let answeredToolUses = [];
+    let seenResults = new Set();
+    let countByReply = new Map();
+    let maxPerReply = 0;
+    for (let message of messages) {
       if (
-        (Z.type !== "assistant" && Z.type !== "user") ||
-        isNonConversationMessage(Z) ||
-        !Array.isArray(Z.message.content)
+        (message.type !== "assistant" && message.type !== "user") ||
+        isNonConversationMessage(message) ||
+        !Array.isArray(message.message.content)
       )
         continue;
-      let re = Z.type === "assistant" ? (Z.batchToolUses ?? []).map((Re) => `${Re.id}_`) : [];
-      for (let Re of Z.message.content)
-        if (Z.type === "assistant" && Re?.type === "tool_use" && typeof Re.name === "string") {
-          let se = canonicalToolName(Re.name);
-          if (!T.has(Re.id) && !R.has(se) && !re.some((Te) => Re.id.startsWith(Te)))
-            T.set(Re.id, {
-              sentName: se,
-              input: Re.input,
-              replyId: Z.message.id,
+      let batchPrefixes =
+        message.type === "assistant"
+          ? (message.batchToolUses ?? []).map((batchToolUse) => `${batchToolUse.id}_`)
+          : [];
+      for (let block of message.message.content)
+        if (message.type === "assistant" && block?.type === "tool_use" && typeof block.name === "string") {
+          let toolName = canonicalToolName(block.name);
+          if (
+            !toolUsesById.has(block.id) &&
+            !excludedTools.has(toolName) &&
+            !batchPrefixes.some((prefix) => block.id.startsWith(prefix))
+          )
+            toolUsesById.set(block.id, {
+              sentName: toolName,
+              input: block.input,
+              replyId: message.message.id,
             });
-        } else if (Re?.type === "tool_result") {
-          let se = T.get(Re.tool_use_id);
-          if (se && !P.has(Re.tool_use_id)) {
-            P.add(Re.tool_use_id);
-            w.push({
-              ...se,
-              result: Re,
+        } else if (block?.type === "tool_result") {
+          let toolUse = toolUsesById.get(block.tool_use_id);
+          if (toolUse && !seenResults.has(block.tool_use_id)) {
+            seenResults.add(block.tool_use_id);
+            answeredToolUses.push({
+              ...toolUse,
+              result: block,
             });
-            let Te = (Q.get(se.replyId) ?? 0) + 1;
-            Q.set(se.replyId, Te);
-            D = Math.max(D, Te);
+            let count = (countByReply.get(toolUse.replyId) ?? 0) + 1;
+            countByReply.set(toolUse.replyId, count);
+            maxPerReply = Math.max(maxPerReply, count);
           }
         }
     }
-    let L = M.edit.keep.value;
-    let z = M.edit.trigger.value;
-    let G = z + 1 - L;
-    let ee = w.length + Math.max(L, D);
-    let V = ee > z ? 1 + Math.floor((ee - z - 1) / G) : 0;
-    let max = Math.max(V * G, Math.min(M.returnAfterIdle.toolUsesClearedSinceIdle, w.length - L));
-    let ie = new Set();
-    for (let { sentName, input, result: Re } of w) {
-      let se = max > 0;
-      let { content } = Re;
-      let U =
+    let keep = plan.edit.keep.value;
+    let trigger = plan.edit.trigger.value;
+    let windowSpan = trigger + 1 - keep;
+    let effectiveCount = answeredToolUses.length + Math.max(keep, maxPerReply);
+    let fullWindows =
+      effectiveCount > trigger ? 1 + Math.floor((effectiveCount - trigger - 1) / windowSpan) : 0;
+    let max = Math.max(
+      fullWindows * windowSpan,
+      Math.min(plan.returnAfterIdle.toolUsesClearedSinceIdle, answeredToolUses.length - keep),
+    );
+    let clearedPaths = new Set();
+    for (let { sentName, input, result } of answeredToolUses) {
+      let counted = max > 0;
+      let { content } = result;
+      let resultBytes =
         typeof content === "string"
           ? content.length
           : Array.isArray(content)
             ? content.reduce(
-                (acc, bt) =>
-                  bt?.type === "text" && typeof bt.text === "string" ? acc + bt.text.length : acc,
+                (acc, block) =>
+                  block?.type === "text" && typeof block.text === "string" ? acc + block.text.length : acc,
                 0,
               )
             : 0;
-      if (se && U >= SMALL_RESULT_BYTES) max--;
-      if (Re.is_error === true || typeof input !== "object" || !input) continue;
+      if (counted && resultBytes >= SMALL_RESULT_BYTES) max--;
+      if (result.is_error === true || typeof input !== "object" || !input) continue;
       if (
         (sentName === FILE_READ_TOOL_NAME || sentName === FILE_WRITE_TOOL_NAME) &&
         "file_path" in input &&
         typeof input.file_path === "string"
       ) {
-        let nt = expandPathOrNull(input.file_path);
-        if (nt === null) continue;
+        let readPath = expandPathOrNull(input.file_path);
+        if (readPath === null) continue;
         if (
           sentName === FILE_WRITE_TOOL_NAME ||
-          (!se &&
+          (!counted &&
             !("offset" in input) &&
             !("limit" in input) &&
             typeof content === "string" &&
             !isFileUnchangedStub(content))
         )
-          ie.delete(nt);
-        else if (se) ie.add(nt);
+          clearedPaths.delete(readPath);
+        else if (counted) clearedPaths.add(readPath);
       } else if (
-        se &&
+        counted &&
         SHELL_TOOL_NAMES.includes(sentName) &&
         "command" in input &&
         typeof input.command === "string"
       )
-        for (let nt of extractReadOnlyFileReads(input.command)) {
-          let bt = expandPathOrNull(nt.filePath);
-          if (bt !== null) ie.add(bt);
+        for (let read of extractReadOnlyFileReads(input.command)) {
+          let expandedPath = expandPathOrNull(read.filePath);
+          if (expandedPath !== null) clearedPaths.add(expandedPath);
         }
     }
-    for (let Z of ie) {
-      let re = readFileState.get(Z);
-      if (re && !re.contentNotInModelContext)
-        readFileState.set(Z, {
-          ...re,
+    for (let path of clearedPaths) {
+      let readState = readFileState.get(path);
+      if (readState && !readState.contentNotInModelContext)
+        readFileState.set(path, {
+          ...readState,
           contentNotInModelContext: true,
         });
     }

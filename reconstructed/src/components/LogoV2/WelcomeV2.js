@@ -8,7 +8,7 @@
  * pieces: chunk-n1nr1qar.js (3)
  * attribution: affinity 1, fingerprint 2
  */
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { useTheme } from "../design-system/ThemeProvider.js";
 import { useIsScreenReaderEnabled } from "../../ink/components/ErrorBoundary.js";
 import { useTerminalSize } from "../../hooks/useTerminalSize.js";
@@ -25,24 +25,24 @@ var WELCOME_MAX_COLUMNS = 58;
 var WELCOME_MAX_ROWS = 30;
 //@ chunk-n1nr1qar.js:459-8150 fingerprint = WelcomeV2 (0.836)
 function WelcomeV2() {
-  let $ = w(39);
+  let $ = useMemoCache(39);
   let [theme] = useTheme();
   let isScreenReaderEnabled = useIsScreenReaderEnabled();
   let { rows } = useTerminalSize();
   if (isScreenReaderEnabled || rows < WELCOME_MAX_ROWS) {
-    let o;
+    let title;
     if ($[0] === MEMO_CACHE_SENTINEL) {
-      o = jsxProd_default_2(Text, {
+      title = jsxProd_default_2(Text, {
         color: "claude",
         children: ["Welcome to Claude Code", " "],
       });
-      $[0] = o;
-    } else o = $[0];
-    let d;
+      $[0] = title;
+    } else title = $[0];
+    let header;
     if ($[1] === MEMO_CACHE_SENTINEL) {
-      d = jsxProd_default_2(Text, {
+      header = jsxProd_default_2(Text, {
         children: [
-          o,
+          title,
           jsxProd_default_2(Text, {
             dimColor: true,
             children: [
@@ -63,9 +63,9 @@ function WelcomeV2() {
           }),
         ],
       });
-      $[1] = d;
-    } else d = $[1];
-    return d;
+      $[1] = header;
+    } else header = $[1];
+    return header;
   }
   if (env.terminal === "Apple_Terminal") {
     let t0;
@@ -80,27 +80,27 @@ function WelcomeV2() {
     return t0;
   }
   if (["light", "light-daltonized", "light-ansi"].includes(theme)) {
-    let o;
+    let title;
     if ($[4] === MEMO_CACHE_SENTINEL) {
-      o = jsxProd_default_2(Text, {
+      title = jsxProd_default_2(Text, {
         color: "claude",
         children: ["Welcome to Claude Code", " "],
       });
-      $[4] = o;
-    } else o = $[4];
-    let d;
-    let a;
-    let c;
-    let t;
-    let m;
-    let b;
-    let g;
-    let C;
-    let u;
+      $[4] = title;
+    } else title = $[4];
+    let headerRow;
+    let ruleRow;
+    let blankRow1;
+    let blankRow2;
+    let blankRow3;
+    let cloudRow1;
+    let cloudRow2;
+    let cloudRow3;
+    let blankRow4;
     if ($[5] === MEMO_CACHE_SENTINEL) {
-      d = jsxProd_default_2(Text, {
+      headerRow = jsxProd_default_2(Text, {
         children: [
-          o,
+          title,
           jsxProd_default_2(Text, {
             dimColor: true,
             children: [
@@ -122,51 +122,51 @@ function WelcomeV2() {
           }),
         ],
       });
-      a = jsxProd_default(Text, {
+      ruleRow = jsxProd_default(Text, {
         children: "..........................................................",
       });
-      c = jsxProd_default(Text, {
+      blankRow1 = jsxProd_default(Text, {
         children: "                                                          ",
       });
-      t = jsxProd_default(Text, {
+      blankRow2 = jsxProd_default(Text, {
         children: "                                                          ",
       });
-      m = jsxProd_default(Text, {
+      blankRow3 = jsxProd_default(Text, {
         children: "                                                          ",
       });
-      b = jsxProd_default(Text, {
+      cloudRow1 = jsxProd_default(Text, {
         children: "            \u2591\u2591\u2591\u2591\u2591\u2591                                        ",
       });
-      g = jsxProd_default(Text, {
+      cloudRow2 = jsxProd_default(Text, {
         children:
           "    \u2591\u2591\u2591   \u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591                                      ",
       });
-      C = jsxProd_default(Text, {
+      cloudRow3 = jsxProd_default(Text, {
         children:
           "   \u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591                                    ",
       });
-      u = jsxProd_default(Text, {
+      blankRow4 = jsxProd_default(Text, {
         children: "                                                          ",
       });
-      $[5] = d;
-      $[6] = a;
-      $[7] = c;
-      $[8] = t;
-      $[9] = m;
-      $[10] = b;
-      $[11] = g;
-      $[12] = C;
-      $[13] = u;
+      $[5] = headerRow;
+      $[6] = ruleRow;
+      $[7] = blankRow1;
+      $[8] = blankRow2;
+      $[9] = blankRow3;
+      $[10] = cloudRow1;
+      $[11] = cloudRow2;
+      $[12] = cloudRow3;
+      $[13] = blankRow4;
     } else {
-      d = $[5];
-      a = $[6];
-      c = $[7];
-      t = $[8];
-      m = $[9];
-      b = $[10];
-      g = $[11];
-      C = $[12];
-      u = $[13];
+      headerRow = $[5];
+      ruleRow = $[6];
+      blankRow1 = $[7];
+      blankRow2 = $[8];
+      blankRow3 = $[9];
+      cloudRow1 = $[10];
+      cloudRow2 = $[11];
+      cloudRow3 = $[12];
+      blankRow4 = $[13];
     }
     let t9;
     if ($[14] === MEMO_CACHE_SENTINEL) {
@@ -256,15 +256,15 @@ function WelcomeV2() {
         children: jsxProd_default_2(Box, {
           flexDirection: "column",
           children: [
-            d,
-            a,
-            c,
-            t,
-            m,
-            b,
-            g,
-            C,
-            u,
+            headerRow,
+            ruleRow,
+            blankRow1,
+            blankRow2,
+            blankRow3,
+            cloudRow1,
+            cloudRow2,
+            cloudRow3,
+            blankRow4,
             t9,
             t10,
             t11,
@@ -288,15 +288,15 @@ function WelcomeV2() {
     } else t15 = $[20];
     return t15;
   }
-  let o;
+  let title;
   if ($[21] === MEMO_CACHE_SENTINEL) {
-    o = jsxProd_default_2(Text, {
+    title = jsxProd_default_2(Text, {
       color: "claude",
       children: ["Welcome to Claude Code", " "],
     });
-    $[21] = o;
-  } else o = $[21];
-  let d;
+    $[21] = title;
+  } else title = $[21];
+  let header;
   let t1;
   let t2;
   let t3;
@@ -304,9 +304,9 @@ function WelcomeV2() {
   let t5;
   let t6;
   if ($[22] === MEMO_CACHE_SENTINEL) {
-    d = jsxProd_default_2(Text, {
+    header = jsxProd_default_2(Text, {
       children: [
-        o,
+        title,
         jsxProd_default_2(Text, {
           dimColor: true,
           children: [
@@ -349,7 +349,7 @@ function WelcomeV2() {
       children:
         "    \u2591\u2591\u2591   \u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591                      \u2588\u2588\u2588\u2593\u2591           ",
     });
-    $[22] = d;
+    $[22] = header;
     $[23] = t1;
     $[24] = t2;
     $[25] = t3;
@@ -357,7 +357,7 @@ function WelcomeV2() {
     $[27] = t5;
     $[28] = t6;
   } else {
-    d = $[22];
+    header = $[22];
     t1 = $[23];
     t2 = $[24];
     t3 = $[25];
@@ -365,13 +365,13 @@ function WelcomeV2() {
     t5 = $[27];
     t6 = $[28];
   }
-  let y;
-  let _;
-  let h;
-  let C;
-  let u;
+  let starsRow1;
+  let starsRow2;
+  let starsRow3;
+  let cloudRow;
+  let groundRow;
   if ($[29] === MEMO_CACHE_SENTINEL) {
-    C = jsxProd_default_2(Text, {
+    cloudRow = jsxProd_default_2(Text, {
       children: [
         jsxProd_default(Text, {
           children:
@@ -386,35 +386,35 @@ function WelcomeV2() {
         }),
       ],
     });
-    u = jsxProd_default(Text, {
+    groundRow = jsxProd_default(Text, {
       children:
         "                                             \u2591\u2593\u2593\u2588\u2588\u2588\u2593\u2593\u2591    ",
     });
-    y = jsxProd_default(Text, {
+    starsRow1 = jsxProd_default(Text, {
       dimColor: true,
       children: " *                                 \u2591\u2591\u2591\u2591                   ",
     });
-    _ = jsxProd_default(Text, {
+    starsRow2 = jsxProd_default(Text, {
       dimColor: true,
       children:
         "                                 \u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591                 ",
     });
-    h = jsxProd_default(Text, {
+    starsRow3 = jsxProd_default(Text, {
       dimColor: true,
       children:
         "                               \u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591           ",
     });
-    $[29] = y;
-    $[30] = _;
-    $[31] = h;
-    $[32] = C;
-    $[33] = u;
+    $[29] = starsRow1;
+    $[30] = starsRow2;
+    $[31] = starsRow3;
+    $[32] = cloudRow;
+    $[33] = groundRow;
   } else {
-    y = $[29];
-    _ = $[30];
-    h = $[31];
-    C = $[32];
-    u = $[33];
+    starsRow1 = $[29];
+    starsRow2 = $[30];
+    starsRow3 = $[31];
+    cloudRow = $[32];
+    groundRow = $[33];
   }
   let t12;
   if ($[34] === MEMO_CACHE_SENTINEL) {
@@ -486,18 +486,18 @@ function WelcomeV2() {
       children: jsxProd_default_2(Box, {
         flexDirection: "column",
         children: [
-          d,
+          header,
           t1,
           t2,
           t3,
           t4,
           t5,
           t6,
-          C,
-          u,
-          y,
-          _,
-          h,
+          cloudRow,
+          groundRow,
+          starsRow1,
+          starsRow2,
+          starsRow3,
           t13,
           t14,
           t15,
@@ -520,7 +520,7 @@ function WelcomeV2() {
 }
 //@ chunk-n1nr1qar.js:8150-15429 fingerprint = AppleTerminalWelcomeV2 (0.832)
 function AppleTerminalWelcomeV2(props) {
-  let $ = w(44);
+  let $ = useMemoCache(44);
   let { theme, welcomeMessage } = props;
   if (["light", "light-daltonized", "light-ansi"].includes(theme)) {
     let t1;

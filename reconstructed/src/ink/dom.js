@@ -26,6 +26,27 @@ import { textWrapStyle } from "./components/Text.js";
 import { isEmptyCellAt, cellAt, softWrapStartCol, cellAtIndex, setCellStyleId } from "./screen.js";
 import { hitTest } from "./hit-test.js";
 
+//@ chunk-24t3dkzb.js:6720-6874 placement
+/**
+ * 把 aria-* 属性收成 accessibility 对象（全空返回 undefined）。
+ */
+function buildAccessibility(hidden, label, role, state, preserveWhitespace) {
+  if (
+    hidden === undefined &&
+    label === undefined &&
+    role === undefined &&
+    state === undefined &&
+    preserveWhitespace === undefined
+  )
+    return;
+  return {
+    hidden,
+    label,
+    role,
+    state,
+    preserveWhitespace,
+  };
+}
 //@ chunk-bzr73sfg.js:182451-183635 fingerprint = createNode (0.457)
 /**
  * 创建 DOM 元素节点：除 ink-virtual-text/ink-link/ink-progress 外都建 yoga 节点；ink-text 和 ink-raw-ansi 挂测量函数。316 的节点比 2.1.88 多了大量滚动（scrollTop/pendingScrollDelta/stickyScroll/scrollAnchor…）、渲染缓存（cachedLayout/paintsPastRect/childrenOverlap/pendingClears）、原始模式引用与无障碍字段。
@@ -140,7 +161,7 @@ function collectRemovedRects(parent, removed, underAbsolute) {
     element.cachedLayout = undefined;
     hadAbsolute = isAbsolute;
   }
-  for (let T of element.pendingClears ?? []) queuePendingClear(parent, T);
+  for (let clear of element.pendingClears ?? []) queuePendingClear(parent, clear);
   for (let child of element.childNodes)
     if (collectRemovedRects(parent, child, isAbsolute)) hadAbsolute = true;
   return hadAbsolute;
@@ -160,34 +181,34 @@ var setAccessibility = (node, accessibility) => {
 };
 var setStyle = (node, style) => {
   if (stylesEqual(node.style, style)) return;
-  let f = style.position === "absolute" && node.style.position !== "absolute";
+  let becameAbsolute = style.position === "absolute" && node.style.position !== "absolute";
   node.style = style;
-  if (f && node.parentNode) markHasAbsoluteDescendant(node.parentNode);
+  if (becameAbsolute && node.parentNode) markHasAbsoluteDescendant(node.parentNode);
   markDirty(node);
 };
 var setStyleAndApplyLayout = (node, style) => {
-  let f = diffProps(node.style, style);
+  let diff = diffProps(node.style, style);
   setStyle(node, style);
-  if (f && node.yogaNode) applyAllStylesAlias(node.yogaNode, f, style);
+  if (diff && node.yogaNode) applyAllStylesAlias(node.yogaNode, diff, style);
 };
 var diffProps = (prev, next) => {
   if (prev === next) return;
   if (!prev) return next;
-  let f = {};
-  let m = false;
+  let changed = {};
+  let hasChange = false;
   for (let key of Object.keys(prev))
     if (next ? !Object.hasOwn(next, key) : true) {
-      f[key] = undefined;
-      m = true;
+      changed[key] = undefined;
+      hasChange = true;
     }
   if (next) {
     for (let key of Object.keys(next))
       if (next[key] !== prev[key]) {
-        f[key] = next[key];
-        m = true;
+        changed[key] = next[key];
+        hasChange = true;
       }
   }
-  return m ? f : undefined;
+  return hasChange ? changed : undefined;
 };
 var setTextStyles = (node, textStyles) => {
   if (shallowEqual(node.textStyles, textStyles)) return;
@@ -231,14 +252,14 @@ var measureTextNode = function (node, width, widthMode) {
   let textWrap = node.style?.textWrap ?? "wrap";
   let lines = squashTextOf(
     node.nodeName !== "#text" && hasControlSequences(text)
-      ? squashTextNodesToSegments(node).map((T) => T.text)
+      ? squashTextNodesToSegments(node).map((segment) => segment.text)
       : [text],
   );
   if (textWrap === "wrap-stream") {
-    let T = measureWrappedText(lines, width, widthMode, "wrap");
+    let wrapped = measureWrappedText(lines, width, widthMode, "wrap");
     return {
-      width: T.width,
-      height: Math.max(0, T.height - 1),
+      width: wrapped.width,
+      height: Math.max(0, wrapped.height - 1),
     };
   }
   let size = measureTextAlias(lines, width);
@@ -385,21 +406,21 @@ class ImperativeTree {
   constructor(mount) {
     this.mount = mount;
   }
-  box(n = {}) {
+  box(style = {}) {
     return this.create("ink-box", {
       ...DEFAULT_TREE_BOX_STYLE,
-      ...n,
+      ...style,
     });
   }
-  text(text, u = {}) {
+  text(text, textStyles = {}) {
     let parent = this.create("ink-text", textWrapStyle("wrap"));
-    setTextStyles(parent, u);
+    setTextStyles(parent, textStyles);
     appendChildNode(parent, createTextNode(text));
     return parent;
   }
-  span(text, u = {}) {
+  span(text, textStyles = {}) {
     let parent = this.create("ink-virtual-text", {});
-    setTextStyles(parent, u);
+    setTextStyles(parent, textStyles);
     appendChildNode(parent, createTextNode(text));
     return parent;
   }
@@ -426,31 +447,31 @@ class ImperativeTree {
     for (let childNode of this.mount.childNodes.slice())
       if (childNode.nodeName !== "#text" && this.own.has(childNode)) this.remove(childNode);
   }
-  setStyle(n, u) {
-    this.mustBeOwn(n);
-    setStyleAndApplyLayout(n, {
+  setStyle(node, style) {
+    this.mustBeOwn(node);
+    setStyleAndApplyLayout(node, {
       ...DEFAULT_TREE_BOX_STYLE,
-      ...u,
+      ...style,
     });
-    this.changed(n);
+    this.changed(node);
   }
-  setTextStyles(n, u) {
-    this.mustBeOwn(n);
-    setTextStyles(n, u);
-    this.changed(n);
+  setTextStyles(node, textStyles) {
+    this.mustBeOwn(node);
+    setTextStyles(node, textStyles);
+    this.changed(node);
   }
-  setText(n, u) {
-    setTextNodeValue(this.textOf(n), u);
-    this.changed(n);
+  setText(node, text) {
+    setTextNodeValue(this.textOf(node), text);
+    this.changed(node);
   }
-  appendText(n, u) {
-    let f = this.textOf(n);
-    setTextNodeValue(f, f.nodeValue + u);
-    this.changed(n);
+  appendText(node, text) {
+    let textNode = this.textOf(node);
+    setTextNodeValue(textNode, textNode.nodeValue + text);
+    this.changed(node);
   }
-  rect(n) {
-    this.mustBeOwn(n);
-    let cachedLayout = n.cachedLayout;
+  rect(node) {
+    this.mustBeOwn(node);
+    let cachedLayout = node.cachedLayout;
     if (!cachedLayout) return;
     return {
       x: cachedLayout.x,
@@ -459,9 +480,9 @@ class ImperativeTree {
       height: cachedLayout.height,
     };
   }
-  create(nodeName, u) {
+  create(nodeName, style) {
     let node = createNode(nodeName, this.mount.yogaNode?.config);
-    setStyleAndApplyLayout(node, u);
+    setStyleAndApplyLayout(node, style);
     this.own.add(node);
     return node;
   }
@@ -470,27 +491,31 @@ class ImperativeTree {
     while (cur && cur !== this.mount) cur = cur.parentNode;
     if (cur) scheduleLayoutFrom(this.mount);
   }
-  textOf(n) {
-    this.mustBeOwn(n);
-    let u = n.childNodes[0];
-    if (u?.nodeName !== "#text") throw Error("Tree: only a text or a span has text");
-    return u;
+  textOf(node) {
+    this.mustBeOwn(node);
+    let textNode = node.childNodes[0];
+    if (textNode?.nodeName !== "#text") throw Error("Tree: only a text or a span has text");
+    return textNode;
   }
-  mustBeOwn(n) {
-    if (!this.own.has(n)) throw Error("Tree: that node is not this tree\u2019s");
+  mustBeOwn(node) {
+    if (!this.own.has(node)) throw Error("Tree: that node is not this tree\u2019s");
   }
-  mustHold(n, u) {
-    if (n !== this.mount) this.mustBeOwn(n);
-    this.mustBeOwn(u);
-    let f = n.nodeName === "ink-text" || n.nodeName === "ink-virtual-text" || n.nodeName === "ink-link";
-    if (f && u.nodeName !== "ink-virtual-text")
+  mustHold(parent, child) {
+    if (parent !== this.mount) this.mustBeOwn(parent);
+    this.mustBeOwn(child);
+    let isTextNode =
+      parent.nodeName === "ink-text" ||
+      parent.nodeName === "ink-virtual-text" ||
+      parent.nodeName === "ink-link";
+    if (isTextNode && child.nodeName !== "ink-virtual-text")
       throw Error("Tree: a box or a text can\u2019t go inside text, only a span");
-    if (!f && u.nodeName === "ink-virtual-text") throw Error("Tree: a span only goes inside text");
+    if (!isTextNode && child.nodeName === "ink-virtual-text")
+      throw Error("Tree: a span only goes inside text");
   }
-  forget(n) {
-    this.own.delete(n);
-    if (n.nodeName === "#text") return;
-    for (let childNode of n.childNodes) this.forget(childNode);
+  forget(node) {
+    this.own.delete(node);
+    if (node.nodeName === "#text") return;
+    for (let childNode of node.childNodes) this.forget(childNode);
   }
 }
 //@ chunk-bzr73sfg.js:256529-256809 placement
@@ -513,7 +538,8 @@ function isOverBlankCell(root, screen, target, col, row) {
 }
 //@ chunk-bzr73sfg.js:256809-256887 placement
 function findInkCol(screen, row, fromCol, stopCol, step) {
-  for (let g = fromCol + step; g !== stopCol; g += step) if (!isEmptyCellAt(screen, g, row)) return g;
+  for (let col = fromCol + step; col !== stopCol; col += step)
+    if (!isEmptyCellAt(screen, col, row)) return col;
   return;
 }
 //@ chunk-bzr73sfg.js:256887-257019 placement
@@ -541,26 +567,32 @@ function underlineHyperlinkAt(screen, col, row, url, stylePool) {
   if (url === undefined || hyperlinkAt(screen, col, row) !== url) return [];
   let span = hyperlinkSpanInRow(screen, col, row, url);
   let spans = [span];
-  let T = span;
+  let currentSpan = span;
   for (let idx = row + 1; idx < screen.height; idx++) {
-    let O = screen.softWrap[idx];
-    let col = softWrapStartCol(O);
-    if (O === 0 || T.to + 1 !== O >>> 16 || hyperlinkAt(screen, col, idx) !== url) break;
-    T = hyperlinkSpanInRow(screen, col, idx, url);
-    spans.push(T);
+    let softWrap = screen.softWrap[idx];
+    let col = softWrapStartCol(softWrap);
+    if (softWrap === 0 || currentSpan.to + 1 !== softWrap >>> 16 || hyperlinkAt(screen, col, idx) !== url)
+      break;
+    currentSpan = hyperlinkSpanInRow(screen, col, idx, url);
+    spans.push(currentSpan);
   }
-  let A = span;
-  for (let D = row; D > 0; D--) {
-    let O = screen.softWrap[D];
-    let col = (O >>> 16) - 1;
-    if (O === 0 || A.from !== softWrapStartCol(O) || hyperlinkAt(screen, col, D - 1) !== url) break;
-    A = hyperlinkSpanInRow(screen, col, D - 1, url);
-    spans.push(A);
+  let previousSpan = span;
+  for (let rowIndex = row; rowIndex > 0; rowIndex--) {
+    let softWrap_ = screen.softWrap[rowIndex];
+    let col = (softWrap_ >>> 16) - 1;
+    if (
+      softWrap_ === 0 ||
+      previousSpan.from !== softWrapStartCol(softWrap_) ||
+      hyperlinkAt(screen, col, rowIndex - 1) !== url
+    )
+      break;
+    previousSpan = hyperlinkSpanInRow(screen, col, rowIndex - 1, url);
+    spans.push(previousSpan);
   }
   for (let span of spans)
     for (let from = span.from; from <= span.to; from++) {
-      let _ = cellAtIndex(screen, span.row * screen.width + from);
-      setCellStyleId(screen, from, span.row, stylePool.withUnderline(_.styleId));
+      let cell = cellAtIndex(screen, span.row * screen.width + from);
+      setCellStyleId(screen, from, span.row, stylePool.withUnderline(cell.styleId));
     }
   return spans;
 }
@@ -569,14 +601,14 @@ function underlineHyperlinkAt(screen, col, row, url, stylePool) {
  * 在终端网格某行内向左右扩展同值单元格，返回 {row, from, to}（Ink 选择相关，归属错误）。
  */
 function hyperlinkSpanInRow(screen, col, row, url) {
-  let p = col;
-  while (hyperlinkAt(screen, p - 1, row) === url) p--;
-  let g = col;
-  while (hyperlinkAt(screen, g + 1, row) === url) g++;
+  let from = col;
+  while (hyperlinkAt(screen, from - 1, row) === url) from--;
+  let to = col;
+  while (hyperlinkAt(screen, to + 1, row) === url) to++;
   return {
     row,
-    from: p,
-    to: g,
+    from,
+    to,
   };
 }
 //@ chunk-bzr73sfg.js:258541-258557 placement
@@ -585,70 +617,47 @@ var domStack = [];
 //@ chunk-bzr73sfg.js:258557-258754 placement
 function countFibers(root) {
   if (!root) return 0;
-  let u = 0;
-  let f = fiberStack;
-  f.length = 0;
-  f.push(root);
-  while (f.length > 0) {
-    let m = f.pop();
-    u++;
-    if (m.alternate) u++;
-    if (m.sibling) f.push(m.sibling);
-    if (m.child) f.push(m.child);
+  let count = 0;
+  let stack = fiberStack;
+  stack.length = 0;
+  stack.push(root);
+  while (stack.length > 0) {
+    let fiber = stack.pop();
+    count++;
+    if (fiber.alternate) count++;
+    if (fiber.sibling) stack.push(fiber.sibling);
+    if (fiber.child) stack.push(fiber.child);
   }
-  f.length = 0;
-  return u;
+  stack.length = 0;
+  return count;
 }
 //@ chunk-bzr73sfg.js:258754-258955 placement = clearYogaNodeReferences (0.804)
 function countDomNodes(root) {
   if (!root) return 0;
-  let u = 0;
-  let f = domStack;
-  f.length = 0;
-  f.push(root);
-  while (f.length > 0) {
-    let m = f.pop();
-    u++;
-    if ("childNodes" in m) {
-      let childNodes = m.childNodes;
-      for (let idx = 0; idx < childNodes.length; idx++) f.push(childNodes[idx]);
+  let count = 0;
+  let stack = domStack;
+  stack.length = 0;
+  stack.push(root);
+  while (stack.length > 0) {
+    let node = stack.pop();
+    count++;
+    if ("childNodes" in node) {
+      let childNodes = node.childNodes;
+      for (let idx = 0; idx < childNodes.length; idx++) stack.push(childNodes[idx]);
     }
   }
-  f.length = 0;
-  return u;
+  stack.length = 0;
+  return count;
 }
 //@ chunk-bzr73sfg.js:310990-311083 fingerprint = setStyle (0.644)
 function isDegenerateBorderBox(node, width, height) {
   return node.style.borderStyle !== undefined && (Math.floor(width) < 2 || Math.floor(height) === 0);
-}
-//@ chunk-24t3dkzb.js:6720-6874 placement
-/**
- * 把 aria-* 属性收成 accessibility 对象（全空返回 undefined）。
- */
-function buildAccessibility(hidden, label, role, state, preserveWhitespace) {
-  if (
-    hidden === undefined &&
-    label === undefined &&
-    role === undefined &&
-    state === undefined &&
-    preserveWhitespace === undefined
-  )
-    return;
-  return {
-    hidden,
-    label,
-    role,
-    state,
-    preserveWhitespace,
-  };
 }
 export {
   markDirty,
   markScrollCommitStart,
   scheduleRenderFrom,
   buildAccessibility,
-  isDegenerateBorderBox,
-  isDOMElement,
   clearYogaNodeReferences,
   setStyleAndApplyLayout,
   setAccessibility,
@@ -661,6 +670,8 @@ export {
   removeChildAndCleanup,
   diffProps,
   setTextStyles,
+  isDegenerateBorderBox,
+  isDOMElement,
   isOverBlankCell,
   acceptsHover,
   underlineHyperlinkAt,

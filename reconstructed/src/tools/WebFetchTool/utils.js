@@ -9,6 +9,7 @@
  * attribution: fingerprint 11, placement 3, sole-consumer 1, affinity 2, layout 13, facade-majority 10
  */
 import { randomUUID } from "crypto";
+import { getCcrProxyTargetUrl, BRIDGE_HOSTS, BRIDGE_DEVICES_PATH } from "../../services/mcp/ccrMcpUrls.js";
 import {
   fetchViaCcrWorker,
   WORKER_FETCH_RESPONSE_SCHEMA,
@@ -48,8 +49,43 @@ import { MAX_REJECT_KEY_CHARS } from "../../services/artifacts/rejectBreaker.js"
 import { queryHaikuWithFallback } from "../../services/api/claude.js";
 import { asSystemPrompt } from "../../utils/systemPromptType.js";
 import { extractTextContent_2 } from "../../utils/messages.js";
-import { getCcrProxyTargetUrl, BRIDGE_HOSTS, BRIDGE_DEVICES_PATH } from "../../services/mcp/ccrMcpUrls.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
+//@ chunk-1wpnxx5r.js:15809-15931 fingerprint = isPreapprovedUrl (1)
+/**
+ * 解包 CCR 代理 URL 后判断是否为某个已知端点（主机在集合内且路径相符）；被 MCP 配置使用。
+ */
+function isKnownProxyEndpointUrl(url) {
+  let ccrProxyTargetUrl = getCcrProxyTargetUrl(url);
+  if (!ccrProxyTargetUrl) return false;
+  try {
+    let parsedUrl = new URL(ccrProxyTargetUrl);
+    return BRIDGE_HOSTS.has(parsedUrl.hostname) && parsedUrl.pathname === BRIDGE_DEVICES_PATH;
+  } catch {
+    return false;
+  }
+}
+//@ chunk-aepeg2w5.js:251114-251301 fingerprint = isPermittedRedirect (0.842)
+/**
+ * 只有 https、无凭证、无端口的 URL 才返回主机名（去掉末尾点），否则 undefined。
+ */
+function getHttpsHostname(canonical) {
+  if (canonical === undefined) return;
+  let parsedUrl;
+  try {
+    parsedUrl = new URL(canonical);
+  } catch {
+    return;
+  }
+  if (
+    parsedUrl.protocol !== "https:" ||
+    parsedUrl.username !== "" ||
+    parsedUrl.password !== "" ||
+    parsedUrl.port !== ""
+  )
+    return;
+  return parsedUrl.hostname.replace(/\.$/, "");
+}
 //@ chunk-e6aww6q8.js:2155694-2156079 placement
 /**
  * 经云会话 worker 的 web-fetch 路由代抓 URL，把响应映射为正文、内容类型、最终地址与抓取时间。
@@ -86,40 +122,40 @@ var RETIRED_INPUT_FIELDS = [
   "web_fetch_pdf_extract_text",
 ];
 //@ chunk-e6aww6q8.js:2156170-2156378 placement
-function stripRetiredInputFields(e) {
-  if (!isPlainObject_5(e)) return null;
-  let filtered = RETIRED_INPUT_FIELDS.filter((s) => Object.hasOwn(e, s));
+function stripRetiredInputFields(input) {
+  if (!isPlainObject_5(input)) return null;
+  let filtered = RETIRED_INPUT_FIELDS.filter((fieldName) => Object.hasOwn(input, fieldName));
   if (filtered.length === 0) return null;
-  let r = {
-    ...e,
+  let cleaned = {
+    ...input,
   };
-  for (let s of filtered) delete r[s];
+  for (let fieldName of filtered) delete cleaned[fieldName];
   return {
-    input: r,
-    shapeClass: filtered.map((s) => `drop_${s}`).join(","),
+    input: cleaned,
+    shapeClass: filtered.map((fieldName) => `drop_${fieldName}`).join(","),
   };
 }
 //@ chunk-e6aww6q8.js:2167829-2167993 sole-consumer
-function isAllowedAnthropicRepoPath(e, n) {
-  return e === "raw.githubusercontent.com"
-    ? /^\/[^/]+\/[^/]+\/refs\/heads\/main\/./.test(n)
-    : /^\/[^/]+\/[^/]+(\/?|\/(tree|blob)\/main(\/.*)?)$/.test(n);
+function isAllowedAnthropicRepoPath(hostname, pathname) {
+  return hostname === "raw.githubusercontent.com"
+    ? /^\/[^/]+\/[^/]+\/refs\/heads\/main\/./.test(pathname)
+    : /^\/[^/]+\/[^/]+(\/?|\/(tree|blob)\/main(\/.*)?)$/.test(pathname);
 }
 //@ chunk-e6aww6q8.js:2167993-2168190 affinity
 /**
  * 预批准判断核心：HOSTNAME_ONLY 直接放行；PATH_PREFIXES 要求路径等于或在前缀之下，且拒绝 %2f/%5c/%2e 编码；github.com 与 raw.githubusercontent.com 还要求是 anthropics 组织或仓库根/main 分支路径。
  */
-function isPreapprovedHostPath(e, pathname) {
-  if (HOSTNAME_ONLY.has(e)) return true;
-  let r = PATH_PREFIXES.get(e);
-  if (r) {
+function isPreapprovedHostPath(hostname, pathname) {
+  if (HOSTNAME_ONLY.has(hostname)) return true;
+  let prefixes = PATH_PREFIXES.get(hostname);
+  if (prefixes) {
     if (/%(25)*(2f|5c|2e)/i.test(pathname)) return false;
-    for (let s of r)
-      if (pathname === s || pathname.startsWith(s + "/"))
+    for (let prefix of prefixes)
+      if (pathname === prefix || pathname.startsWith(prefix + "/"))
         return (
-          !PATH_RESTRICTED_HOSTS.has(e) ||
-          e + s === GITHUB_COM_ANTHROPICS ||
-          isAllowedAnthropicRepoPath(e, pathname)
+          !PATH_RESTRICTED_HOSTS.has(hostname) ||
+          hostname + prefix === GITHUB_COM_ANTHROPICS ||
+          isAllowedAnthropicRepoPath(hostname, pathname)
         );
   }
   return false;
@@ -134,14 +170,14 @@ class DomainBlockedError extends Error {
 //@ chunk-e6aww6q8.js:2168311-2168933 fingerprint = DomainCheckFailedError (0.599)
 class DomainCheckFailedError extends Error {
   code;
-  constructor(domain, n) {
+  constructor(domain, code) {
     super(
-      n === "ERATELIMIT_PREFLIGHT"
+      code === "ERATELIMIT_PREFLIGHT"
         ? `The safety check for domain ${domain} is rate-limited (too many domain checks from this network; the limit is shared and can stay exhausted for minutes). Do not retry ${WEBFETCH} in a loop or sleep to wait it out; continue without this page and report that its safety check was rate-limited. A single later attempt is fine; if that is rate-limited too, stop.`
         : `Unable to verify if domain ${domain} is safe to fetch. This may be due to network restrictions or enterprise security policies blocking claude.ai.`,
     );
     this.name = "DomainCheckFailedError";
-    this.code = n;
+    this.code = code;
   }
 }
 //@ chunk-e6aww6q8.js:2168933-2169139 fingerprint = EgressBlockedError (0.973)
@@ -161,8 +197,8 @@ class EgressBlockedError extends Error {
 }
 //@ chunk-e6aww6q8.js:2169139-2169257 layout
 class TooManyRedirectsError extends Error {
-  constructor(e) {
-    super(`Too many redirects (exceeded ${e})`);
+  constructor(maxRedirects) {
+    super(`Too many redirects (exceeded ${maxRedirects})`);
     this.name = "TooManyRedirectsError";
   }
 }
@@ -197,12 +233,12 @@ class WebFetchCache {
     max: 1024,
     ttl: 300000,
   });
-  setUrl(e, n, r) {
-    this.urls.set(e, n, {
-      size: Math.max(1, r),
+  setUrl(url, entry, size) {
+    this.urls.set(url, entry, {
+      size: Math.max(1, size),
     });
     setTimeout(
-      (s) => s.deref()?.purgeStale(),
+      (urlsRef) => urlsRef.deref()?.purgeStale(),
       Math.min(this.urls.ttl + 1, MAX_TIMER_DELAY_MS),
       new WeakRef(this.urls),
     ).unref();
@@ -217,10 +253,10 @@ class WebFetchCache {
 var turndownServicePromise;
 //@ chunk-e6aww6q8.js:2169755-2169904 layout
 function getTurndownService() {
-  return (turndownServicePromise ??= import("./chunk-vwj6ccer.js").then((m) => {
-    let r = new m.default();
-    r.remove(["style", "script", "noscript", "iframe"]);
-    return r;
+  return (turndownServicePromise ??= import("../../../vendor/turndown/lib/default.lazy.js").then((m) => {
+    let service = new m.default();
+    service.remove(["style", "script", "noscript", "iframe"]);
+    return service;
   }));
 }
 //@ chunk-e6aww6q8.js:2169904-2169977 layout
@@ -237,12 +273,12 @@ var MAX_HTML_FOR_MARKDOWN = 1048576;
  */
 async function convertHtmlToMarkdown(htmlContent) {
   try {
-    let n = (await getTurndownService()).turndown(htmlContent.slice(0, MAX_HTML_FOR_MARKDOWN));
+    let markdown = (await getTurndownService()).turndown(htmlContent.slice(0, MAX_HTML_FOR_MARKDOWN));
     if (htmlContent.length > MAX_HTML_FOR_MARKDOWN)
-      n += `
+      markdown += `
 
 [Content truncated due to length...]`;
-    return n;
+    return markdown;
   } catch (error) {
     logForDebugging(
       `Turndown failed, falling back to raw HTML: ${error instanceof Error ? error.message : String(error)}`,
@@ -344,19 +380,19 @@ async function checkDomainBlocklist(domain, cache, signal) {
  */
 function isPermittedRedirect(originalUrl, redirectUrl) {
   try {
-    let r = new URL(originalUrl);
+    let parsedOriginal = new URL(originalUrl);
     let parsedRedirect = new URL(redirectUrl);
-    if (parsedRedirect.protocol !== r.protocol) return false;
-    let h = stripWww(r.hostname);
-    let y = uniq([r.hostname, h, `www.${h}`]);
+    if (parsedRedirect.protocol !== parsedOriginal.protocol) return false;
+    let bareHost = stripWww(parsedOriginal.hostname);
+    let originalHosts = uniq([parsedOriginal.hostname, bareHost, `www.${bareHost}`]);
     if (
-      y.some((S) => isPreapprovedHostPath(S, r.pathname)) &&
-      !y.some((S) => isPreapprovedHostPath(S, parsedRedirect.pathname))
+      originalHosts.some((host) => isPreapprovedHostPath(host, parsedOriginal.pathname)) &&
+      !originalHosts.some((host) => isPreapprovedHostPath(host, parsedRedirect.pathname))
     )
       return false;
-    if (parsedRedirect.port !== r.port) return false;
+    if (parsedRedirect.port !== parsedOriginal.port) return false;
     if (parsedRedirect.username || parsedRedirect.password) return false;
-    return stripWww(parsedRedirect.hostname) === h;
+    return stripWww(parsedRedirect.hostname) === bareHost;
   } catch (_error) {
     return false;
   }
@@ -366,20 +402,24 @@ function stripWww(hostname) {
   return hostname.replace(/^www\./, "");
 }
 //@ chunk-e6aww6q8.js:2171620-2171659 layout
-var REDIRECT_STATUS_CODES = new Set([301, 302, 303, 307, 308]);
+var REDIRECT_STATUS_CODES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:2171620", () => {
+  REDIRECT_STATUS_CODES = new Set([301, 302, 303, 307, 308]);
+});
 //@ chunk-e6aww6q8.js:2171659-2171900 layout
 /**
  * 给抓取加整体 deadline（nte() 毫秒，0 表示不限），调用 getWithPermittedRedirects。
  */
-async function getWithDeadline(upgradedUrl, signal, isPermittedRedirect, s = 0, h) {
-  if (h !== undefined) return getWithPermittedRedirects(upgradedUrl, signal, isPermittedRedirect, s, h);
+async function getWithDeadline(upgradedUrl, signal, isPermittedRedirect, depth = 0, deadlineSignal) {
+  if (deadlineSignal !== undefined)
+    return getWithPermittedRedirects(upgradedUrl, signal, isPermittedRedirect, depth, deadlineSignal);
   let webFetchDeadlineMs = getWebFetchDeadlineMs();
   if (webFetchDeadlineMs === 0)
     return getWithPermittedRedirects(
       upgradedUrl,
       signal,
       isPermittedRedirect,
-      s,
+      depth,
       new AbortController().signal,
     );
   let combinedAbortSignal = createCombinedAbortSignal(undefined, {
@@ -391,7 +431,7 @@ async function getWithDeadline(upgradedUrl, signal, isPermittedRedirect, s = 0, 
       upgradedUrl,
       signal,
       isPermittedRedirect,
-      s,
+      depth,
       combinedAbortSignal.signal,
     );
   } finally {
@@ -458,13 +498,13 @@ async function getWithPermittedRedirects(url, signal, redirectChecker, depth, de
         };
   }
   if (isAllowlistBlockedResponse(status, headers)) throw new EgressBlockedError(new URL(url).hostname);
-  let L = headers["retry-after"];
+  let retryAfter = headers["retry-after"];
   return {
     type: "http_error",
     statusCode: status,
-    ...(typeof L === "string" &&
-      /^[0-9]{1,6}$/.test(L) && {
-        retryAfter: L,
+    ...(typeof retryAfter === "string" &&
+      /^[0-9]{1,6}$/.test(retryAfter) && {
+        retryAfter,
       }),
   };
 }
@@ -477,49 +517,60 @@ function isHttpErrorInfo(response) {
   return "type" in response && response.type === "http_error";
 }
 //@ chunk-e6aww6q8.js:2173480-2174461 layout
-var PROXY_ERROR_EVENT_CODES = {
-  transport: "web_fetch_proxy_transport",
-  deadline: "web_fetch_proxy_deadline",
-  badResponse: "web_fetch_proxy_bad_response",
-  rateLimited: "web_fetch_proxy_rate_limited",
-  unavailable: "web_fetch_proxy_unavailable",
-  rejected: "web_fetch_proxy_rejected",
-};
-var TARGET_ERROR_EVENT_CODES = new Map([
-  ["invalid_url", "web_fetch_target_invalid_url"],
-  ["url_too_long", "web_fetch_target_url_too_long"],
-  ["url_not_found", "web_fetch_target_url_not_found"],
-  ["client_error", "web_fetch_target_client_error"],
-  ["server_error", "web_fetch_target_server_error"],
-  ["robots_disallowed", "web_fetch_target_robots_disallowed"],
-  ["site_blocked", "web_fetch_target_site_blocked"],
-  ["permissions_error", "web_fetch_target_permissions_error"],
-  ["rate_limit_exceeded", "web_fetch_target_rate_limit_exceeded"],
-  ["unknown_error", "web_fetch_target_unknown_error"],
-]);
-var REMEMBERED_TARGET_ERRORS = [
-  "invalid_url",
-  "url_too_long",
-  "url_not_found",
-  "client_error",
-  "server_error",
-  "robots_disallowed",
-  "site_blocked",
-  "permissions_error",
-];
-var SITE_ANSWER_ERRORS = ["url_not_found", "client_error", "robots_disallowed"];
+var PROXY_ERROR_EVENT_CODES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var TARGET_ERROR_EVENT_CODES;
+var REMEMBERED_TARGET_ERRORS;
+var SITE_ANSWER_ERRORS;
+deferInit("chunk-e6aww6q8.js:2173480", () => {
+  PROXY_ERROR_EVENT_CODES = {
+    transport: "web_fetch_proxy_transport",
+    deadline: "web_fetch_proxy_deadline",
+    badResponse: "web_fetch_proxy_bad_response",
+    rateLimited: "web_fetch_proxy_rate_limited",
+    unavailable: "web_fetch_proxy_unavailable",
+    rejected: "web_fetch_proxy_rejected",
+  };
+  TARGET_ERROR_EVENT_CODES = new Map([
+    ["invalid_url", "web_fetch_target_invalid_url"],
+    ["url_too_long", "web_fetch_target_url_too_long"],
+    ["url_not_found", "web_fetch_target_url_not_found"],
+    ["client_error", "web_fetch_target_client_error"],
+    ["server_error", "web_fetch_target_server_error"],
+    ["robots_disallowed", "web_fetch_target_robots_disallowed"],
+    ["site_blocked", "web_fetch_target_site_blocked"],
+    ["permissions_error", "web_fetch_target_permissions_error"],
+    ["rate_limit_exceeded", "web_fetch_target_rate_limit_exceeded"],
+    ["unknown_error", "web_fetch_target_unknown_error"],
+  ]);
+  REMEMBERED_TARGET_ERRORS = [
+    "invalid_url",
+    "url_too_long",
+    "url_not_found",
+    "client_error",
+    "server_error",
+    "robots_disallowed",
+    "site_blocked",
+    "permissions_error",
+  ];
+  SITE_ANSWER_ERRORS = ["url_not_found", "client_error", "robots_disallowed"];
+});
 //@ chunk-e6aww6q8.js:2174461-2174561 facade-majority
-class SiteAnswerError extends TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS {
-  errorType;
-  constructor(e, n, errorType) {
-    super(e, "web-fetch-ccr-proxy", n);
-    this.errorType = errorType;
-  }
-}
+let SiteAnswerError; // deferred: uses TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS (../../utils/errors.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:2174461", () => {
+  SiteAnswerError = class SiteAnswerError extends (
+    TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
+  ) {
+    errorType;
+    constructor(message, eventCode, errorType) {
+      super(message, "web-fetch-ccr-proxy", eventCode);
+      this.errorType = errorType;
+    }
+  };
+});
 //@ chunk-e6aww6q8.js:2174561-2174614 facade-majority
-function siteAnswerAsValue(e) {
-  if (e instanceof SiteAnswerError) return e;
-  throw e;
+function siteAnswerAsValue(error) {
+  if (error instanceof SiteAnswerError) return error;
+  throw error;
 }
 //@ chunk-e6aww6q8.js:2174614-2174673 facade-majority = getCurrentRepoHttpsUrl (0.803)
 /**
@@ -587,37 +638,37 @@ async function getURLMarkdownContent(
     };
   }
   if (canFetchViaCcrWorker(session)) {
-    let Je = upgradeToHttps(url);
-    let nt = timing?.mark("external");
-    let proxyResult = await fetchViaWorkerProxy(session, Je, abortHolder.signal).finally(nt);
-    cache.targetFailures.delete(Je);
+    let httpsUrl = upgradeToHttps(url);
+    let markExternal = timing?.mark("external");
+    let proxyResult = await fetchViaWorkerProxy(session, httpsUrl, abortHolder.signal).finally(markExternal);
+    cache.targetFailures.delete(httpsUrl);
     if (!proxyResult.ok) {
       if (proxyResult.source === "target" && proxyResult.errorType === PROVENANCE_REQUIRED)
         return {
           type: "provenance_denied",
-          url: Je,
+          url: httpsUrl,
           errorMessage: proxyResult.errorMessage,
         };
       let lower = proxyResult.errorType?.toLowerCase();
-      let At =
-        proxyResult.source === "target" ? REMEMBERED_TARGET_ERRORS.find((qt) => qt === lower) : undefined;
-      if (At)
-        cache.targetFailures.set(Je, {
-          errorType: At,
+      let rememberedKind =
+        proxyResult.source === "target" ? REMEMBERED_TARGET_ERRORS.find((kind) => kind === lower) : undefined;
+      if (rememberedKind)
+        cache.targetFailures.set(httpsUrl, {
+          errorType: rememberedKind,
           failedAt: Date.now(),
           told: new Set(),
         });
-      let It = jsonStringify({
+      let errorJson = jsonStringify({
         error_type: proxyResult.errorType,
         source: proxyResult.source,
         message: proxyResult.errorMessage,
       });
       let errorType =
-        proxyResult.source === "target" ? SITE_ANSWER_ERRORS.find((qt) => qt === lower) : undefined;
+        proxyResult.source === "target" ? SITE_ANSWER_ERRORS.find((kind) => kind === lower) : undefined;
       throw errorType
-        ? new SiteAnswerError(It, proxyErrorEventCode(proxyResult), errorType)
+        ? new SiteAnswerError(errorJson, proxyErrorEventCode(proxyResult), errorType)
         : new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-            It,
+            errorJson,
             "web-fetch-ccr-proxy",
             proxyErrorEventCode(proxyResult),
           );
@@ -634,44 +685,44 @@ async function getURLMarkdownContent(
           "web-fetch-ccr-proxy",
           PROXY_ERROR_EVENT_CODES.badResponse,
         );
-      if (!isPermittedRedirect(Je, redirectUrl))
+      if (!isPermittedRedirect(httpsUrl, redirectUrl))
         return {
           type: "redirect",
-          originalUrl: Je,
+          originalUrl: httpsUrl,
           redirectUrl,
           statusCode: 302,
         };
     }
-    let Et = Buffer.byteLength(proxyResult.content, "utf8");
-    let yt = {
+    let byteSize = Buffer.byteLength(proxyResult.content, "utf8");
+    let entry = {
       content: proxyResult.content,
-      bytes: Et,
+      bytes: byteSize,
       code: 200,
       codeText: "OK",
       contentType: proxyResult.contentType,
       isExtractedText: true,
       retrievedAt: proxyResult.retrievedAt,
     };
-    cache.setUrl(url, yt, Et);
-    return yt;
+    cache.setUrl(url, entry, byteSize);
+    return entry;
   }
   if (session.host.launchOptions.ccrSessionUrl() !== undefined)
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
       "WebFetch on claude-code-server needs the CCR web-fetch proxy",
       "web-fetch-ccs-direct",
     );
-  let L;
+  let parsedUrl;
   let upgradedUrl = url;
   try {
-    L = new URL(url);
-    if (L.protocol === "http:") {
-      L.protocol = "https:";
-      upgradedUrl = L.toString();
+    parsedUrl = new URL(url);
+    if (parsedUrl.protocol === "http:") {
+      parsedUrl.protocol = "https:";
+      upgradedUrl = parsedUrl.toString();
     }
-    let hostname = L.hostname;
+    let hostname = parsedUrl.hostname;
     if (!getSettings_DEPRECATED().skipWebFetchPreflight) {
-      let pt = await checkDomainBlocklist(hostname, cache, abortHolder.signal);
-      switch (pt.status) {
+      let domainCheck = await checkDomainBlocklist(hostname, cache, abortHolder.signal);
+      switch (domainCheck.status) {
         case "allowed":
           break;
         case "blocked":
@@ -679,9 +730,9 @@ async function getURLMarkdownContent(
         case "check_failed":
           throw new DomainCheckFailedError(
             hostname,
-            axios_default.isCancel(pt.error)
+            axios_default.isCancel(domainCheck.error)
               ? "EDEADLINE_PREFLIGHT"
-              : pt.httpStatus === 429
+              : domainCheck.httpStatus === 429
                 ? "ERATELIMIT_PREFLIGHT"
                 : undefined,
           );
@@ -693,10 +744,12 @@ async function getURLMarkdownContent(
     logError(e);
   }
   let now = Date.now();
-  let Z = timing?.mark("external");
+  let transportResult = timing?.mark("external");
   let response;
   try {
-    response = await getWithDeadline(upgradedUrl, abortHolder.signal, isPermittedRedirect).finally(Z);
+    response = await getWithDeadline(upgradedUrl, abortHolder.signal, isPermittedRedirect).finally(
+      transportResult,
+    );
   } catch (error) {
     if (!axios_default.isCancel(error))
       logEvent("tengu_web_fetch_transport", {
@@ -763,8 +816,8 @@ async function getURLMarkdownContent(
 /**
  * 把 markdown 截到 Tnr 字符上限（次级模型输入上限）。
  */
-function secondaryModelHead(e) {
-  return truncateToLength(e, MAX_REJECT_KEY_CHARS);
+function secondaryModelHead(text) {
+  return truncateToLength(text, MAX_REJECT_KEY_CHARS);
 }
 //@ chunk-e6aww6q8.js:2178386-2179237 facade-majority = applyPromptToMarkdown (0.616)
 /**
@@ -842,19 +895,12 @@ function createDomainCache() {
     ttl: DOMAIN_CACHE_TTL_MS,
   });
 }
-//@ chunk-1wpnxx5r.js:15809-15931 fingerprint = isPreapprovedUrl (1)
+//@ chunk-4j20twbf.js:1240-1330 fingerprint = URL_CACHE (0.376)
 /**
- * 解包 CCR 代理 URL 后判断是否为某个已知端点（主机在集合内且路径相符）；被 MCP 配置使用。
+ * 大小与待清理量是否都在上限内。
  */
-function isKnownProxyEndpointUrl(url) {
-  let ccrProxyTargetUrl = getCcrProxyTargetUrl(url);
-  if (!ccrProxyTargetUrl) return false;
-  try {
-    let parsedUrl = new URL(ccrProxyTargetUrl);
-    return BRIDGE_HOSTS.has(parsedUrl.hostname) && parsedUrl.pathname === BRIDGE_DEVICES_PATH;
-  } catch {
-    return false;
-  }
+function isWithinSanitizeBudget(budget) {
+  return budget.size <= budget.maxSize && budget.sixteenthsToSanitize <= budget.maxSixteenthsToSanitize;
 }
 //@ chunk-2a8yx6fc.js:24186-24598 fingerprint = validateURL (1)
 /**
@@ -878,28 +924,6 @@ function extractSafeHostname(url) {
       return null;
   }
   return parsed.hostname && /^[a-zA-Z0-9.][a-zA-Z0-9.-]*$/.test(parsed.hostname) ? parsed.hostname : null;
-}
-//@ chunk-4j20twbf.js:1240-1330 fingerprint = URL_CACHE (0.376)
-/**
- * 大小与待清理量是否都在上限内。
- */
-function isWithinSanitizeBudget(e) {
-  return e.size <= e.maxSize && e.sixteenthsToSanitize <= e.maxSixteenthsToSanitize;
-}
-//@ chunk-aepeg2w5.js:251114-251301 fingerprint = isPermittedRedirect (0.842)
-/**
- * 只有 https、无凭证、无端口的 URL 才返回主机名（去掉末尾点），否则 undefined。
- */
-function getHttpsHostname(canonical) {
-  if (canonical === undefined) return;
-  let n;
-  try {
-    n = new URL(canonical);
-  } catch {
-    return;
-  }
-  if (n.protocol !== "https:" || n.username !== "" || n.password !== "" || n.port !== "") return;
-  return n.hostname.replace(/\.$/, "");
 }
 export {
   isKnownProxyEndpointUrl,

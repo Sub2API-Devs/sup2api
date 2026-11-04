@@ -31,7 +31,7 @@ import {
   MAX_URL_COST_CHARS,
   REDACTED_FIELD_TEXT,
 } from "../../utils/mcp/elicitationValidation.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { usePrefersReducedMotion } from "../Spinner/spinnerFlags.js";
 import { useIsScreenReaderEnabled } from "../../ink/components/ErrorBoundary.js";
 import { useAnimationFrame, useInputClock } from "../../ink/components/Input.js";
@@ -44,10 +44,19 @@ import { Text, Box } from "../../ink/components/Text.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { errorMessage } from "../../utils/errors.js";
-import { y, Se, R, NSe, zt, Q, P, ce } from "../../../vendor/react/cjs/react.production.js";
+import {
+  useState,
+  useContext,
+  useRef,
+  useInsertionEffect,
+  useLayoutEffect,
+  useMemo,
+  useEffect,
+  useCallback,
+} from "../../../vendor/react/cjs/react.production.js";
 import { isWithinRecentInput, INPUT_SETTLE_MS } from "../../hooks/useRecentInputGuard.js";
 import { useClock } from "../../ink/components/ClockContext.js";
-import { kp } from "../../../vendor/convert-to-spaces/dist/index.js";
+import { APP_CONTEXT } from "../../../vendor/convert-to-spaces/dist/index.js";
 import { useTheme_2, useStdin } from "../design-system/ThemeProvider.js";
 import {
   labelOrEmpty as labelOrEmpty_2,
@@ -100,6 +109,11 @@ import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { Blockquote } from "../Blockquote.js";
 import { TextInput } from "../TextInput.js";
 
+//@ chunk-tn4j580p.js:17770-17833 fingerprint = resetTypeahead (0.475)
+function resetTypeahead(ta) {
+  ta.writers.delete(ta.signal);
+  clearTimeout(ta.timer);
+}
 //@ chunk-18hwfzwa.js:1204791-1204824 placement
 function getNowMs() {
   return Date.now();
@@ -111,8 +125,8 @@ function getNowMs() {
 function getDeclaredRequiredFields(requestedSchema) {
   let required = requestedSchema?.required;
   if (!Array.isArray(required)) return [];
-  let D = new Set(objectFieldEntries(requestedSchema?.properties).map(([L]) => L));
-  return required.filter((L) => typeof L === "string" && D.has(L));
+  let propertyNames = new Set(objectFieldEntries(requestedSchema?.properties).map(([name]) => name));
+  return required.filter((name) => typeof name === "string" && propertyNames.has(name));
 }
 //@ chunk-18hwfzwa.js:1206341-1206411 fingerprint = RESOLVING_SPINNER_CHARS (1)
 var RESOLVING_SPINNER_CHARS = "\u280B\u2819\u2839\u2838\u283C\u2834\u2826\u2827\u2807\u280F";
@@ -121,12 +135,12 @@ var RESOLVING_SPINNER_CHARS = "\u280B\u2819\u2839\u2838\u283C\u2834\u2826\u2827\
  * 解析中的旋转指示（减少动态效果或读屏时静止）。
  */
 function ResolvingSpinner() {
-  let $ = w(5);
+  let $ = useMemoCache(5);
   let prefersReducedMotion = usePrefersReducedMotion();
   let isScreenReaderEnabled = useIsScreenReaderEnabled();
-  let [D, L] = useAnimationFrame(prefersReducedMotion || isScreenReaderEnabled ? null : 80);
-  let ee = Math.floor(L / 80) % RESOLVING_SPINNER_CHARS.length;
-  const children = RESOLVING_SPINNER_CHARS[ee];
+  let [ref, frame] = useAnimationFrame(prefersReducedMotion || isScreenReaderEnabled ? null : 80);
+  let charIndex = Math.floor(frame / 80) % RESOLVING_SPINNER_CHARS.length;
+  const children = RESOLVING_SPINNER_CHARS[charIndex];
   let children_2;
   if ($[0] !== children) {
     children_2 = jsxProd_default(Text, {
@@ -136,17 +150,17 @@ function ResolvingSpinner() {
     $[0] = children;
     $[1] = children_2;
   } else children_2 = $[1];
-  let He;
-  if ($[2] !== D || $[3] !== children_2) {
-    He = jsxProd_default(Box, {
-      ref: D,
+  let spinner;
+  if ($[2] !== ref || $[3] !== children_2) {
+    spinner = jsxProd_default(Box, {
+      ref,
       children: children_2,
     });
-    $[2] = D;
+    $[2] = ref;
     $[3] = children_2;
-    $[4] = He;
-  } else He = $[4];
-  return He;
+    $[4] = spinner;
+  } else spinner = $[4];
+  return spinner;
 }
 //@ chunk-18hwfzwa.js:1206722-1207211 fingerprint = formatDateDisplay (1)
 function formatDateDisplay(isoValue, schema) {
@@ -181,7 +195,7 @@ function formatDateDisplay(isoValue, schema) {
  * MCP elicitation：form 模式按 requestedSchema 渲染字段（校验、日期格式化），URL 模式打开链接并等待；结果 accept/decline/cancel 回传服务器。
  */
 function ElicitationDialog(props) {
-  let $ = w(28);
+  let $ = useMemoCache(28);
   let {
     serverName,
     pluginSource,
@@ -194,7 +208,7 @@ function ElicitationDialog(props) {
     wouldTakeAnswer,
   } = props;
   let inputClock = useInputClock();
-  let Xe;
+  let dedupeKey;
   if (
     $[0] !== params.elicitationId ||
     $[1] !== params.message ||
@@ -204,21 +218,21 @@ function ElicitationDialog(props) {
   ) {
     kt: {
       if (params.mode === "url") {
-        Xe = `url
+        dedupeKey = `url
 ${params.elicitationId}
 ${params.url}
 ${params.message}`;
         break kt;
       }
       try {
-        Xe = `form
+        dedupeKey = `form
 ${params.message}
 ${jsonStringify(params.requestedSchema)}`;
       } catch (error) {
-        let It = error;
-        Xe =
+        let error_2 = error;
+        dedupeKey =
           (logForDebugging(
-            `MCP elicitation requestedSchema could not be turned into JSON; each new payload counts as a new question: ${errorMessage(It)}`,
+            `MCP elicitation requestedSchema could not be turned into JSON; each new payload counts as a new question: ${errorMessage(error_2)}`,
           ),
           `form
 ${randomUUID()}`);
@@ -229,48 +243,48 @@ ${randomUUID()}`);
     $[2] = params.mode;
     $[3] = params.requestedSchema;
     $[4] = params.url;
-    $[5] = Xe;
-  } else Xe = $[5];
-  let Ot = Xe;
-  let At;
-  if ($[6] !== Ot) {
-    At = () => ({
-      key: Ot,
+    $[5] = dedupeKey;
+  } else dedupeKey = $[5];
+  let dedupeKey_2 = dedupeKey;
+  let makeInitial;
+  if ($[6] !== dedupeKey_2) {
+    makeInitial = () => ({
+      key: dedupeKey_2,
       at: Date.now(),
       generation: 0,
     });
-    $[6] = Ot;
-    $[7] = At;
-  } else At = $[7];
-  let [Et, Dt] = y(At);
-  if (Et.key !== Ot)
-    Dt({
-      key: Ot,
+    $[6] = dedupeKey_2;
+    $[7] = makeInitial;
+  } else makeInitial = $[7];
+  let [attemptState, setAttemptState] = useState(makeInitial);
+  if (attemptState.key !== dedupeKey_2)
+    setAttemptState({
+      key: dedupeKey_2,
       at: Date.now(),
-      generation: Et.generation + 1,
+      generation: attemptState.generation + 1,
     });
-  let at = Et.at;
-  let oo;
+  let at = attemptState.at;
+  let onResponseOnce;
   if ($[8] !== inputClock || $[9] !== at || $[10] !== onResponse) {
-    oo = (...Xt) => {
-      let io = Xt;
-      if (io[0] !== "cancel" && isWithinRecentInput(inputClock, at)) {
+    onResponseOnce = (...args) => {
+      let args_2 = args;
+      if (args_2[0] !== "cancel" && isWithinRecentInput(inputClock, at)) {
         return false;
       }
-      return onResponse(...io);
+      return onResponse(...args_2);
     };
     $[8] = inputClock;
     $[9] = at;
     $[10] = onResponse;
-    $[11] = oo;
-  } else oo = $[11];
-  let onResponse_2 = oo;
+    $[11] = onResponseOnce;
+  } else onResponseOnce = $[11];
+  let onResponse_2 = onResponseOnce;
   if (params.mode === "url") {
     const initialPhase_2 = initialPhase ?? "prompt";
     const userConfirmsCompletion_2 = userConfirmsCompletion ?? false;
-    let ao;
+    let urlDialog;
     if (
-      $[12] !== Et.generation ||
+      $[12] !== attemptState.generation ||
       $[13] !== onResponse_2 ||
       $[14] !== onWaitingDismiss ||
       $[15] !== params ||
@@ -280,7 +294,7 @@ ${randomUUID()}`);
       $[19] !== waitingState ||
       $[20] !== wouldTakeAnswer
     ) {
-      ao = jsxProd_default(
+      urlDialog = jsxProd_default(
         ElicitationURLDialog,
         {
           serverName,
@@ -292,9 +306,9 @@ ${randomUUID()}`);
           userConfirmsCompletion: userConfirmsCompletion_2,
           wouldTakeAnswer,
         },
-        Et.generation,
+        attemptState.generation,
       );
-      $[12] = Et.generation;
+      $[12] = attemptState.generation;
       $[13] = onResponse_2;
       $[14] = onWaitingDismiss;
       $[15] = params;
@@ -303,19 +317,19 @@ ${randomUUID()}`);
       $[18] = userConfirmsCompletion_2;
       $[19] = waitingState;
       $[20] = wouldTakeAnswer;
-      $[21] = ao;
-    } else ao = $[21];
-    return ao;
+      $[21] = urlDialog;
+    } else urlDialog = $[21];
+    return urlDialog;
   }
-  let Xt;
+  let formDialog;
   if (
-    $[22] !== Et.generation ||
+    $[22] !== attemptState.generation ||
     $[23] !== onResponse_2 ||
     $[24] !== params ||
     $[25] !== pluginSource ||
     $[26] !== serverName
   ) {
-    Xt = jsxProd_default(
+    formDialog = jsxProd_default(
       ElicitationFormDialog,
       {
         serverName,
@@ -323,64 +337,65 @@ ${randomUUID()}`);
         params,
         onResponse: onResponse_2,
       },
-      Et.generation,
+      attemptState.generation,
     );
-    $[22] = Et.generation;
+    $[22] = attemptState.generation;
     $[23] = onResponse_2;
     $[24] = params;
     $[25] = pluginSource;
     $[26] = serverName;
-    $[27] = Xt;
-  } else Xt = $[27];
-  return Xt;
+    $[27] = formDialog;
+  } else formDialog = $[27];
+  return formDialog;
 }
 //@ chunk-18hwfzwa.js:1209040-1209724 sole-consumer
 /**
  * 防误触：对话框刚出现或用户刚在打字时，短时间内拒绝按键提交；返回 {arrived, typed, refuses}。
  */
-function useInputGuard(h) {
+function useInputGuard(prefilled) {
   let inputClock = useInputClock();
   let clock = useClock();
-  let { subscribeFrames } = Se(kp);
-  let ee = R(null);
-  let ke = R(false);
-  let Re = R(false);
-  let Be = R(null);
-  let He = R(() => {
-    if (ke.current || !Re.current) return;
-    ke.current = true;
-    We.current?.();
-    if (h || ee.current !== null) ee.current = Date.now();
+  let { subscribeFrames } = useContext(APP_CONTEXT);
+  let arrivedAtRef = useRef(null);
+  let armedRef = useRef(false);
+  let mountedRef = useRef(false);
+  let typedAtRef = useRef(null);
+  let markArrived = useRef(() => {
+    if (armedRef.current || !mountedRef.current) return;
+    armedRef.current = true;
+    unsubscribeRef.current?.();
+    if (prefilled || arrivedAtRef.current !== null) arrivedAtRef.current = Date.now();
   });
-  let We = R(null);
-  if (We.current === null && !ke.current) We.current = subscribeFrames(() => He.current());
-  NSe(() => {
-    Re.current = true;
+  let unsubscribeRef = useRef(null);
+  if (unsubscribeRef.current === null && !armedRef.current)
+    unsubscribeRef.current = subscribeFrames(() => markArrived.current());
+  useInsertionEffect(() => {
+    mountedRef.current = true;
   }, []);
-  zt(() => {
-    let ze = clock.setTimeout(He.current, MAX_URL_FIELD_CHARS);
+  useLayoutEffect(() => {
+    let cancelTimer = clock.setTimeout(markArrived.current, MAX_URL_FIELD_CHARS);
     return () => {
-      ze();
-      We.current?.();
+      cancelTimer();
+      unsubscribeRef.current?.();
     };
   }, [clock]);
   return {
     arrived: () => {
-      ee.current = Date.now();
+      arrivedAtRef.current = Date.now();
     },
     typed: () => {
-      Be.current = Date.now();
+      typedAtRef.current = Date.now();
     },
     refuses: () => {
-      if (!ke.current) return true;
-      let ze = Be.current;
-      if (ze !== null && isWithinRecentInput(inputClock, ze, INPUT_SETTLE_MS)) {
-        Be.current = Date.now();
+      if (!armedRef.current) return true;
+      let typedAt = typedAtRef.current;
+      if (typedAt !== null && isWithinRecentInput(inputClock, typedAt, INPUT_SETTLE_MS)) {
+        typedAtRef.current = Date.now();
         return true;
       }
-      let Xe = ee.current;
-      if (Xe === null || !isWithinRecentInput(inputClock, Xe)) return false;
-      ee.current = Date.now();
+      let arrivedAt = arrivedAtRef.current;
+      if (arrivedAt === null || !isWithinRecentInput(inputClock, arrivedAt)) return false;
+      arrivedAtRef.current = Date.now();
       return true;
     },
   };
@@ -389,40 +404,41 @@ function useInputGuard(h) {
 function ElicitationFormDialog({ serverName, pluginSource, params, onResponse }) {
   let { message, requestedSchema } = params;
   let { credentials } = useTheme_2();
-  let { parseRelatedTaskMetadata } = require("./chunk-asne9cp8.js").mcpElicitationHandlerModule();
+  let { parseRelatedTaskMetadata } =
+    require("../../services/mcp/emitTripwireEvent.lazy.js").mcpElicitationHandlerModule();
   let relatedTaskMetadata = parseRelatedTaskMetadata(params._meta);
-  let We = relatedTaskMetadata
+  let taskSuffix = relatedTaskMetadata
     ? ` (task ${labelOrEmpty_2(truncateToLength(relatedTaskMetadata.taskId, 8))})`
     : "";
   let hasFields = objectFieldEntries(requestedSchema?.properties).length > 0;
   let CLAUDE_CODE_CONSENT_POINTERLESS =
     !hasFields && hasPluginUserConfig(serverName, pluginSource) && env.CLAUDE_CODE_CONSENT_POINTERLESS;
-  let [focusedButton, kt, At] = useLatestState(
+  let [focusedButton, setFocusedButton, getFocusedButton] = useLatestState(
     hasFields || CLAUDE_CODE_CONSENT_POINTERLESS ? null : "accept",
   );
   let inputGuard = useInputGuard(!hasFields && !CLAUDE_CODE_CONSENT_POINTERLESS);
-  let Ot = Q(() => {
-    let kr = {};
-    let ls = {};
+  let initialForm = useMemo(() => {
+    let values = {};
+    let errors = {};
     for (let [propName, propSchema] of objectFieldEntries(requestedSchema?.properties)) {
       let validation = restoreElicitationValue(propSchema, propSchema.default);
       if (validation === undefined) continue;
-      kr[propName] = validation.value;
-      if (validation.error !== undefined) ls[propName] = validation.error;
+      values[propName] = validation.value;
+      if (validation.error !== undefined) errors[propName] = validation.error;
     }
     return {
-      values: kr,
-      errors: ls,
+      values,
+      errors,
     };
   }, [requestedSchema]);
-  let [formValues, setFormValues] = y(() => Ot.values);
-  let [validationErrors, setValidationErrors] = y(() => Ot.errors);
+  let [formValues, setFormValues] = useState(() => initialForm.values);
+  let [validationErrors, setValidationErrors] = useState(() => initialForm.errors);
   let { setRawMode } = useStdin();
-  zt(() => {
+  useLayoutEffect(() => {
     setRawMode(true);
     return () => setRawMode(false);
   }, [setRawMode]);
-  let schemaFields = Q(() => {
+  let schemaFields = useMemo(() => {
     let requiredFields = getDeclaredRequiredFields(requestedSchema);
     return objectFieldEntries(requestedSchema?.properties).map(([name, schema]) => ({
       name,
@@ -430,8 +446,8 @@ function ElicitationFormDialog({ serverName, pluginSource, params, onResponse })
       isRequired: requiredFields.includes(name),
     }));
   }, [requestedSchema]);
-  let [currentFieldIndex, setCurrentFieldIndex] = y(hasFields ? 0 : undefined);
-  let [textInputValue, setTextInputValue] = y(() => {
+  let [currentFieldIndex, setCurrentFieldIndex] = useState(hasFields ? 0 : undefined);
+  let [textInputValue, setTextInputValue] = useState(() => {
     let firstField = schemaFields[0];
     if (firstField && isScalarSchemaType(firstField.schema)) {
       let val = formValues[firstField.name];
@@ -440,18 +456,18 @@ function ElicitationFormDialog({ serverName, pluginSource, params, onResponse })
     }
     return "";
   });
-  let [textInputCursorOffset, setTextInputCursorOffset] = y(textInputValue.length);
-  let [resolvingFields, setResolvingFields] = y(() => new Set());
-  let [expandedAccordion, setExpandedAccordion] = y();
-  let [accordionOptionIndex, setAccordionOptionIndex] = y(0);
+  let [textInputCursorOffset, setTextInputCursorOffset] = useState(textInputValue.length);
+  let [resolvingFields, setResolvingFields] = useState(() => new Set());
+  let [expandedAccordion, setExpandedAccordion] = useState();
+  let [accordionOptionIndex, setAccordionOptionIndex] = useState(0);
   let clock = useClock();
-  let dateDebounceRef = R(undefined);
-  let resolveAbortRef = R(new Map());
-  let enumTypeaheadRef = R({
+  let dateDebounceRef = useRef(undefined);
+  let resolveAbortRef = useRef(new Map());
+  let enumTypeaheadRef = useRef({
     buffer: "",
     timer: undefined,
   });
-  P(
+  useEffect(
     () => () => {
       if (dateDebounceRef.current !== undefined) dateDebounceRef.current();
       let ta = enumTypeaheadRef.current;
@@ -465,13 +481,13 @@ function ElicitationFormDialog({ serverName, pluginSource, params, onResponse })
   let { columns } = terminalSize;
   let { rows } = useScrollViewportSize(terminalSize);
   let currentField = currentFieldIndex !== undefined ? schemaFields[currentFieldIndex] : undefined;
-  let Mn =
+  let isTextInputActive =
     currentField !== undefined &&
     isScalarSchemaType(currentField.schema) &&
     !isEnumSchema(currentField.schema) &&
     !focusedButton;
   useRegisterOverlay("elicitation");
-  let syncTextInput = ce(
+  let syncTextInput = useCallback(
     (fieldIndex) => {
       if (fieldIndex === undefined) {
         setTextInputValue("");
@@ -503,14 +519,14 @@ function ElicitationFormDialog({ serverName, pluginSource, params, onResponse })
         currentField.name,
         currentField.schema,
         (() => {
-          let es = formValues[currentField.name];
-          return Array.isArray(es) ? es : [];
+          let selected = formValues[currentField.name];
+          return Array.isArray(selected) ? selected : [];
         })(),
         currentField.isRequired,
       );
       setExpandedAccordion(undefined);
     } else if (currentField && isEnumSchema(currentField.schema)) setExpandedAccordion(undefined);
-    if (Mn && currentField) {
+    if (isTextInputActive && currentField) {
       commitTextField(currentField.name, currentField.schema, textInputValue);
       if (dateDebounceRef.current !== undefined) {
         dateDebounceRef.current();
@@ -524,7 +540,7 @@ function ElicitationFormDialog({ serverName, pluginSource, params, onResponse })
         resolveFieldAsync(currentField.name, currentField.schema, textInputValue);
     }
     let itemCount = schemaFields.length + 2;
-    let focusedButton = At();
+    let focusedButton = getFocusedButton();
     let index =
       currentFieldIndex ??
       (focusedButton === "accept"
@@ -535,13 +551,13 @@ function ElicitationFormDialog({ serverName, pluginSource, params, onResponse })
     let nextIndex = index !== undefined ? (index + (direction === "up" ? itemCount - 1 : 1)) % itemCount : 0;
     if (nextIndex < schemaFields.length) {
       setCurrentFieldIndex(nextIndex);
-      kt(null);
+      setFocusedButton(null);
       syncTextInput(nextIndex);
     } else {
-      let es = nextIndex === schemaFields.length ? "accept" : "decline";
-      if (es === "accept") inputGuard.arrived();
+      let nextButton = nextIndex === schemaFields.length ? "accept" : "decline";
+      if (nextButton === "accept") inputGuard.arrived();
       setCurrentFieldIndex(undefined);
-      kt(es);
+      setFocusedButton(nextButton);
       setTextInputValue("");
     }
   }
@@ -663,7 +679,7 @@ function ElicitationFormDialog({ serverName, pluginSource, params, onResponse })
   useKeybinding(
     "confirm:no",
     () => {
-      if (Mn && currentField) {
+      if (isTextInputActive && currentField) {
         let val = formValues[currentField.name];
         setTextInputValue(val !== undefined ? String(val) : "");
         setTextInputCursorOffset(0);
@@ -675,10 +691,10 @@ function ElicitationFormDialog({ serverName, pluginSource, params, onResponse })
       isActive: !!currentField && !focusedButton && !expandedAccordion,
     },
   );
-  function Fr(event) {
+  function onKeyDown(event) {
     let _input = event.key.length === 1 && event.key !== " " && !event.ctrl && !event.meta ? event.key : "";
     if (
-      Mn &&
+      isTextInputActive &&
       event.key !== "up" &&
       event.key !== "down" &&
       event.key !== "return" &&
@@ -688,19 +704,19 @@ function ElicitationFormDialog({ serverName, pluginSource, params, onResponse })
     if (expandedAccordion && currentField && isMultiSelectEnumSchema(currentField.schema)) {
       let msSchema = currentField.schema;
       let msValues = getMultiSelectValues(msSchema);
-      let _s = formValues[currentField.name];
-      let fs = Array.isArray(_s) ? _s : [];
+      let rawValue = formValues[currentField.name];
+      let selectedValues = Array.isArray(rawValue) ? rawValue : [];
       if (event.key === "left" || event.key === "escape") {
         event.preventDefault();
         setExpandedAccordion(undefined);
-        validateMultiSelect(currentField.name, msSchema, fs, currentField.isRequired);
+        validateMultiSelect(currentField.name, msSchema, selectedValues, currentField.isRequired);
         return;
       }
       if (event.key === "up") {
         event.preventDefault();
         if (accordionOptionIndex === 0) {
           setExpandedAccordion(undefined);
-          validateMultiSelect(currentField.name, msSchema, fs, currentField.isRequired);
+          validateMultiSelect(currentField.name, msSchema, selectedValues, currentField.isRequired);
         } else setAccordionOptionIndex(accordionOptionIndex - 1);
         return;
       }
@@ -716,9 +732,9 @@ function ElicitationFormDialog({ serverName, pluginSource, params, onResponse })
         event.preventDefault();
         let optionValue = msValues[accordionOptionIndex];
         if (optionValue !== undefined) {
-          let newSelected = fs.includes(optionValue)
-            ? fs.filter((v) => v !== optionValue)
-            : [...fs, optionValue];
+          let newSelected = selectedValues.includes(optionValue)
+            ? selectedValues.filter((v) => v !== optionValue)
+            : [...selectedValues, optionValue];
           let newValue = newSelected.length > 0 ? newSelected : undefined;
           setField(currentField.name, newValue);
           validateMultiSelect(currentField.name, msSchema, newSelected, currentField.isRequired);
@@ -728,8 +744,8 @@ function ElicitationFormDialog({ serverName, pluginSource, params, onResponse })
       if (event.key === "return") {
         event.preventDefault();
         let optionValue = msValues[accordionOptionIndex];
-        if (optionValue !== undefined && !fs.includes(optionValue))
-          setField(currentField.name, [...fs, optionValue]);
+        if (optionValue !== undefined && !selectedValues.includes(optionValue))
+          setField(currentField.name, [...selectedValues, optionValue]);
         setExpandedAccordion(undefined);
         handleNavigation("down");
         return;
@@ -787,8 +803,8 @@ function ElicitationFormDialog({ serverName, pluginSource, params, onResponse })
       }
       return;
     }
-    let Ms = focusedButton ? At() : null;
-    if (event.key === "return" && Ms === "accept") {
+    let activeButton = focusedButton ? getFocusedButton() : null;
+    if (event.key === "return" && activeButton === "accept") {
       event.preventDefault();
       if (validateRequired() && Object.keys(validationErrors).length === 0) {
         if (inputGuard.refuses()) return;
@@ -804,13 +820,13 @@ function ElicitationFormDialog({ serverName, pluginSource, params, onResponse })
         );
         if (firstBadIndex !== -1) {
           setCurrentFieldIndex(firstBadIndex);
-          kt(null);
+          setFocusedButton(null);
           syncTextInput(firstBadIndex);
         }
       }
       return;
     }
-    if (event.key === "return" && Ms === "decline") {
+    if (event.key === "return" && activeButton === "decline") {
       event.preventDefault();
       onResponse("decline");
       return;
@@ -828,14 +844,14 @@ function ElicitationFormDialog({ serverName, pluginSource, params, onResponse })
     }
     if (focusedButton && (event.key === "left" || event.key === "right")) {
       event.preventDefault();
-      if (At() === "decline") inputGuard.arrived();
-      kt((ds) => (ds === "accept" ? "decline" : ds === "decline" ? "accept" : ds));
+      if (getFocusedButton() === "decline") inputGuard.arrived();
+      setFocusedButton((prev) => (prev === "accept" ? "decline" : prev === "decline" ? "accept" : prev));
       return;
     }
-    if (!hasFields && At() === null && (event.key === "left" || event.key === "right")) {
+    if (!hasFields && getFocusedButton() === null && (event.key === "left" || event.key === "right")) {
       event.preventDefault();
       inputGuard.arrived();
-      kt("accept");
+      setFocusedButton("accept");
       return;
     }
     if (!currentField) {
@@ -905,7 +921,7 @@ function ElicitationFormDialog({ serverName, pluginSource, params, onResponse })
       return;
     }
     if (event.key === "backspace") {
-      if (Mn && textInputValue === "") {
+      if (isTextInputActive && textInputValue === "") {
         event.preventDefault();
         unsetField(name);
         return;
@@ -919,33 +935,52 @@ function ElicitationFormDialog({ serverName, pluginSource, params, onResponse })
   }
   let hasScrollViewport = useHasScrollViewport();
   let unattendedNotice = useUnattendedNotice();
-  let or = isFullscreenActive();
-  let pr = 2;
-  let Qn = or ? (hasScrollViewport ? rows : rows - OVERLAY_BATCH_SIZE - pr - unattendedNotice) : rows;
-  let ur = 5;
-  let Ir = 2;
+  let isFullscreen = isFullscreenActive();
+  let buttonRows = 2;
+  let bodyRows = isFullscreen
+    ? hasScrollViewport
+      ? rows
+      : rows - OVERLAY_BATCH_SIZE - buttonRows - unattendedNotice
+    : rows;
+  let chromeRows = 5;
+  let titleRows = 2;
   let LINES_PER_FIELD = 3;
-  let ts = or ? (Qn >= 18 ? 1 : 0) : 1;
-  let Gn = schemaFields.length > 1 ? Ir : 0;
-  let Ur = pluginUserConfigTitle(serverName, pluginSource);
-  let Zr = Ur !== undefined && isFlagOnWithInternalOverride(TENGU_AMBER_QUILLWORT) ? Ur : undefined;
-  let wr = Zr !== undefined ? MAX_URL_PARTS : MAX_DEFAULT_TRUNCATE_LINES + 1;
-  let min = Math.min(wr, Math.max(1, Qn - ur - ts - Gn - Math.min(2, schemaFields.length) * LINES_PER_FIELD));
-  let maxVisibleFields = Math.max(1, Qn - ur - ts - Gn - Math.min(1, schemaFields.length) * LINES_PER_FIELD);
-  let fr = or
+  let subtitleRows = isFullscreen ? (bodyRows >= 18 ? 1 : 0) : 1;
+  let headerRows = schemaFields.length > 1 ? titleRows : 0;
+  let pluginTitle = pluginUserConfigTitle(serverName, pluginSource);
+  let customTitle =
+    pluginTitle !== undefined && isFlagOnWithInternalOverride(TENGU_AMBER_QUILLWORT)
+      ? pluginTitle
+      : undefined;
+  let maxMessageRows = customTitle !== undefined ? MAX_URL_PARTS : MAX_DEFAULT_TRUNCATE_LINES + 1;
+  let min = Math.min(
+    maxMessageRows,
+    Math.max(
+      1,
+      bodyRows - chromeRows - subtitleRows - headerRows - Math.min(2, schemaFields.length) * LINES_PER_FIELD,
+    ),
+  );
+  let maxVisibleFields = Math.max(
+    1,
+    bodyRows - chromeRows - subtitleRows - headerRows - Math.min(1, schemaFields.length) * LINES_PER_FIELD,
+  );
+  let messageRows = isFullscreen
     ? Math.min(min, maxVisibleFields)
-    : Zr === undefined
-      ? wr
-      : Math.max(MAX_DEFAULT_TRUNCATE_LINES + 1, Math.min(min, maxVisibleFields - pr));
-  let scrollWindow = Q(() => truncateLines(displayField(message).text, columns, fr), [message, columns, fr]);
+    : customTitle === undefined
+      ? maxMessageRows
+      : Math.max(MAX_DEFAULT_TRUNCATE_LINES + 1, Math.min(min, maxVisibleFields - buttonRows));
+  let scrollWindow = useMemo(
+    () => truncateLines(displayField(message).text, columns, messageRows),
+    [message, columns, messageRows],
+  );
   let subtitle = scrollWindow
-    ? ts
+    ? subtitleRows
       ? `
 ${scrollWindow}`
       : scrollWindow
     : undefined;
-  let Er = scrollWindow
-    ? ts +
+  let subtitleHeight = scrollWindow
+    ? subtitleRows +
       countCharInString(
         scrollWindow,
         `
@@ -953,51 +988,54 @@ ${scrollWindow}`
       ) +
       1
     : 0;
-  let Vr = Qn - ur - Er - Gn;
-  let ms =
+  let remainingRows = bodyRows - chromeRows - subtitleHeight - headerRows;
+  let expandedField =
     expandedAccordion !== undefined
       ? schemaFields.find((schemaField) => schemaField.name === expandedAccordion)
       : undefined;
-  let Xs = ms
-    ? isMultiSelectEnumSchema(ms.schema)
-      ? getMultiSelectValues(ms.schema).length
-      : isEnumSchema(ms.schema)
-        ? getEnumValues(ms.schema).length
+  let optionCount = expandedField
+    ? isMultiSelectEnumSchema(expandedField.schema)
+      ? getMultiSelectValues(expandedField.schema).length
+      : isEnumSchema(expandedField.schema)
+        ? getEnumValues(expandedField.schema).length
         : 0
     : 0;
-  let Ls = Vr - LINES_PER_FIELD;
-  let is = Q(() => {
-    if (!or || Xs <= Ls) return null;
-    let max = Math.max(1, Ls);
+  let accordionRows = remainingRows - LINES_PER_FIELD;
+  let optionWindow = useMemo(() => {
+    if (!isFullscreen || optionCount <= accordionRows) return null;
+    let max = Math.max(1, accordionRows);
     let max_2 = Math.max(1, max - 2);
     let start = Math.max(0, accordionOptionIndex - Math.floor(max_2 / 2));
-    let end = Math.min(start + max_2, Xs);
+    let end = Math.min(start + max_2, optionCount);
     start = Math.max(0, end - max_2);
-    let gs = start > 0;
-    let es = end < Xs;
-    let ds = end - start + (gs ? 1 : 0) + (es ? 1 : 0) - max;
-    if (ds > 0 && gs) {
-      gs = false;
-      ds--;
+    let showAbove = start > 0;
+    let showBelow = end < optionCount;
+    let overflow = end - start + (showAbove ? 1 : 0) + (showBelow ? 1 : 0) - max;
+    if (overflow > 0 && showAbove) {
+      showAbove = false;
+      overflow--;
     }
-    if (ds > 0) es = false;
+    if (overflow > 0) showBelow = false;
     return {
       start,
       end,
-      showAbove: gs,
-      showBelow: es,
+      showAbove,
+      showBelow,
     };
-  }, [or, Xs, Ls, accordionOptionIndex]);
-  let ws =
-    !or || Xs === 0
+  }, [isFullscreen, optionCount, accordionRows, accordionOptionIndex]);
+  let optionWindowRows =
+    !isFullscreen || optionCount === 0
       ? 0
-      : is === null
-        ? Xs
-        : is.end - is.start + (is.showAbove ? 1 : 0) + (is.showBelow ? 1 : 0);
-  let maxVisibleFields_2 = or
-    ? Math.max(1, Math.floor((Vr - ws) / LINES_PER_FIELD))
+      : optionWindow === null
+        ? optionCount
+        : optionWindow.end -
+          optionWindow.start +
+          (optionWindow.showAbove ? 1 : 0) +
+          (optionWindow.showBelow ? 1 : 0);
+  let maxVisibleFields_2 = isFullscreen
+    ? Math.max(1, Math.floor((remainingRows - optionWindowRows) / LINES_PER_FIELD))
     : Math.max(2, Math.floor((rows - 14) / LINES_PER_FIELD));
-  let scrollWindow_2 = Q(() => {
+  let scrollWindow_2 = useMemo(() => {
     let total = schemaFields.length;
     if (total <= maxVisibleFields_2)
       return {
@@ -1013,23 +1051,26 @@ ${scrollWindow}`
       end,
     };
   }, [schemaFields.length, maxVisibleFields_2, currentFieldIndex]);
-  let Hi = "MCP server \u201C";
-  let Zi = "\u201D requests your input";
+  let titlePrefix = "MCP server \u201C";
+  let titleSuffix = "\u201D requests your input";
   let max_2 = Math.max(MIN_TRUNCATE_WIDTH, columns - max);
-  let qn =
-    max_2 - bunStringWidth(Hi) - bunStringWidth(`${Zi}${We}`) >= MAX_ENUM_LABEL_CHARS ? `${Zi}${We}` : Zi;
-  let ps = or
+  let shortSuffix =
+    max_2 - bunStringWidth(titlePrefix) - bunStringWidth(`${titleSuffix}${taskSuffix}`) >=
+    MAX_ENUM_LABEL_CHARS
+      ? `${titleSuffix}${taskSuffix}`
+      : titleSuffix;
+  let fullTitle = isFullscreen
     ? truncateToWidth(
-        Hi +
+        titlePrefix +
           truncateToWidth(
             labelOrEmpty(serverName),
-            Math.max(1, max_2 - bunStringWidth(Hi) - bunStringWidth(qn)),
+            Math.max(1, max_2 - bunStringWidth(titlePrefix) - bunStringWidth(shortSuffix)),
           ) +
-          qn,
+          shortSuffix,
         max_2,
       )
-    : `${Hi}${labelOrEmpty(serverName)}${Zi}${We}`;
-  let title = Zr === undefined ? ps : truncateToWidth(Zr, max_2);
+    : `${titlePrefix}${labelOrEmpty(serverName)}${titleSuffix}${taskSuffix}`;
+  let title = customTitle === undefined ? fullTitle : truncateToWidth(customTitle, max_2);
   return jsxProd_default(Dialog, {
     title,
     subtitle,
@@ -1084,7 +1125,7 @@ ${scrollWindow}`
       ],
     }),
     children: jsxProd_default_2(FocusColumn, {
-      onKeyDown: Fr,
+      onKeyDown,
       children: [
         jsxProd_default(ElicitationForm, {
           schemaFields,
@@ -1096,8 +1137,8 @@ ${scrollWindow}`
           resolvingFields,
           expandedAccordion,
           accordionOptionIndex,
-          optionWindow: is,
-          clampFieldRows: or,
+          optionWindow,
+          clampFieldRows: isFullscreen,
           textInputValue,
           textInputCursorOffset,
           setTextInputCursorOffset,
@@ -1149,7 +1190,7 @@ ${scrollWindow}`
 }
 //@ chunk-18hwfzwa.js:1220738-1231333 fingerprint = ElicitationURLDialog (0.683)
 function ElicitationURLDialog(props) {
-  let $ = w(163);
+  let $ = useMemoCache(163);
   let {
     serverName,
     params,
@@ -1162,350 +1203,364 @@ function ElicitationURLDialog(props) {
   } = props;
   let { columns, rows } = useTerminalSize();
   let { message, url } = params;
-  let At;
+  let rawPayload;
   if ($[0] !== url) {
-    At = serializeApprovalPayload(url, {
+    rawPayload = serializeApprovalPayload(url, {
       maxUnits: MAX_PAYLOAD_UNITS,
       softWrap: true,
     });
     $[0] = url;
-    $[1] = At;
-  } else At = $[1];
-  let It = At;
-  let Ot;
+    $[1] = rawPayload;
+  } else rawPayload = $[1];
+  let rawPayload_2 = rawPayload;
+  let normalizedHref;
   if ($[2] !== url) {
-    Ot = normalizeUrlHref(url);
+    normalizedHref = normalizeUrlHref(url);
     $[2] = url;
-    $[3] = Ot;
-  } else Ot = $[3];
-  let Et = Ot;
-  let Dt;
-  if ($[4] !== Et) {
-    Dt = serializeApprovalPayload(Et, {
+    $[3] = normalizedHref;
+  } else normalizedHref = $[3];
+  let href = normalizedHref;
+  let hrefPayload;
+  if ($[4] !== href) {
+    hrefPayload = serializeApprovalPayload(href, {
       maxUnits: MAX_PAYLOAD_UNITS,
       softWrap: true,
     });
-    $[4] = Et;
-    $[5] = Dt;
-  } else Dt = $[5];
-  let Lt = Dt;
-  let oo;
+    $[4] = href;
+    $[5] = hrefPayload;
+  } else hrefPayload = $[5];
+  let hrefPayload_2 = hrefPayload;
+  let messageText;
   if ($[6] !== columns || $[7] !== message) {
-    oo = truncateLines(displayField(message).text, columns);
+    messageText = truncateLines(displayField(message).text, columns);
     $[6] = columns;
     $[7] = message;
-    $[8] = oo;
-  } else oo = $[8];
+    $[8] = messageText;
+  } else messageText = $[8];
   let subtitle = `
-${oo}`;
-  let io;
-  if ($[9] !== Lt || $[10] !== Et || $[11] !== url || $[12] !== It.kind || $[13] !== It.text) {
-    io =
-      It.kind === "full" &&
-      It.text.replaceAll(
+${messageText}`;
+  let payloadExact;
+  if (
+    $[9] !== hrefPayload_2 ||
+    $[10] !== href ||
+    $[11] !== url ||
+    $[12] !== rawPayload_2.kind ||
+    $[13] !== rawPayload_2.text
+  ) {
+    payloadExact =
+      rawPayload_2.kind === "full" &&
+      rawPayload_2.text.replaceAll(
         `
 `,
         "",
       ) === url &&
       !hasDisplayUnsafeChar(url) &&
       !/[\n\r\u2028\u2029]/.test(url) &&
-      Lt.kind === "full" &&
-      Lt.text.replaceAll(
+      hrefPayload_2.kind === "full" &&
+      hrefPayload_2.text.replaceAll(
         `
 `,
         "",
-      ) === Et &&
-      !hasDisplayUnsafeChar(Et) &&
-      !/[\n\r\u2028\u2029]/.test(Et);
-    $[9] = Lt;
-    $[10] = Et;
+      ) === href &&
+      !hasDisplayUnsafeChar(href) &&
+      !/[\n\r\u2028\u2029]/.test(href);
+    $[9] = hrefPayload_2;
+    $[10] = href;
     $[11] = url;
-    $[12] = It.kind;
-    $[13] = It.text;
-    $[14] = io;
-  } else io = $[14];
-  let so = io;
-  let po;
-  let domain = "";
-  let urlBeforeDomain = "";
-  let bo;
-  if ($[15] !== Et) {
-    bo = false;
+    $[12] = rawPayload_2.kind;
+    $[13] = rawPayload_2.text;
+    $[14] = payloadExact;
+  } else payloadExact = $[14];
+  let payloadExact_2 = payloadExact;
+  let hostname;
+  let urlPrefix = "";
+  let urlSuffix = "";
+  let hasHostname;
+  if ($[15] !== href) {
+    hasHostname = false;
     try {
-      po = new URL(Et).hostname;
-      let domainStart = Et.indexOf(po);
-      if (po !== "" && domainStart !== -1) {
-        bo = true;
-        domain = Et.slice(0, domainStart);
-        urlBeforeDomain = Et.slice(domainStart + po.length);
+      hostname = new URL(href).hostname;
+      let domainStart = href.indexOf(hostname);
+      if (hostname !== "" && domainStart !== -1) {
+        hasHostname = true;
+        urlPrefix = href.slice(0, domainStart);
+        urlSuffix = href.slice(domainStart + hostname.length);
       }
     } catch {
-      po = Et;
+      hostname = href;
     }
-    $[15] = Et;
-    $[16] = bo;
-    $[17] = po;
-    $[18] = domain;
-    $[19] = urlBeforeDomain;
+    $[15] = href;
+    $[16] = hasHostname;
+    $[17] = hostname;
+    $[18] = urlPrefix;
+    $[19] = urlSuffix;
   } else {
-    bo = $[16];
-    po = $[17];
-    domain = $[18];
-    urlBeforeDomain = $[19];
+    hasHostname = $[16];
+    hostname = $[17];
+    urlPrefix = $[18];
+    urlSuffix = $[19];
   }
-  let Bo = rows - 12;
-  bo;
-  let Ro;
+  let bodyRows = rows - 12;
+  hasHostname;
+  let tooLarge;
   Ho: {
-    if (Bo < 1) {
-      Ro = true;
+    if (bodyRows < 1) {
+      tooLarge = true;
       break Ho;
     }
-    let Io = columns - 6;
-    if (Io < 20) {
-      Ro = true;
+    let contentWidth = columns - 6;
+    if (contentWidth < 20) {
+      tooLarge = true;
       break Ho;
     }
-    let Wo = bo ? Et : Lt.kind === "full" ? Lt.text : Et;
-    let mn;
-    if ($[20] !== Io || $[21] !== Wo) {
-      mn = countCharInString(
-        wrapText(Wo, Io, "wrap"),
+    let measuredText = hasHostname ? href : hrefPayload_2.kind === "full" ? hrefPayload_2.text : href;
+    let lineBreaks;
+    if ($[20] !== contentWidth || $[21] !== measuredText) {
+      lineBreaks = countCharInString(
+        wrapText(measuredText, contentWidth, "wrap"),
         `
 `,
       );
-      $[20] = Io;
-      $[21] = Wo;
-      $[22] = mn;
-    } else mn = $[22];
-    Ro = mn + 1 > Bo;
+      $[20] = contentWidth;
+      $[21] = measuredText;
+      $[22] = lineBreaks;
+    } else lineBreaks = $[22];
+    tooLarge = lineBreaks + 1 > bodyRows;
   }
-  let Cn = Ro;
-  let No = so && elicitationUrlCost(Et) <= MAX_URL_COST_CHARS;
-  let [vo, Yo] = y(initialPhase);
+  let tooLarge_2 = tooLarge;
+  let canOpen = payloadExact_2 && elicitationUrlCost(href) <= MAX_URL_COST_CHARS;
+  let [phase, setPhase] = useState(initialPhase);
   let inputClock = useInputClock();
-  let [Fn] = y(getNowMs);
-  let bn = R(initialPhase === "waiting" ? Fn : undefined);
-  let [Go, hn, Mn] = useLatestState(
+  let [nowMs] = useState(getNowMs);
+  let waitingSinceRef = useRef(initialPhase === "waiting" ? nowMs : undefined);
+  let [focus, setFocus, getFocus] = useLatestState(
     initialPhase === "waiting"
       ? "open"
-      : No && !Cn
+      : canOpen && !tooLarge_2
         ? userConfirmsCompletion
           ? "open"
           : "accept"
         : "decline",
   );
-  let mn;
-  let Xo;
-  if ($[23] !== hn || $[24] !== Cn || $[25] !== No || $[26] !== userConfirmsCompletion) {
-    mn = () => {
-      if (!No || Cn)
-        hn((Sn) => (Sn === "accept" || (Sn === "open" && userConfirmsCompletion) ? "decline" : Sn));
+  let downgradeEffect;
+  let downgradeDeps;
+  if ($[23] !== setFocus || $[24] !== tooLarge_2 || $[25] !== canOpen || $[26] !== userConfirmsCompletion) {
+    downgradeEffect = () => {
+      if (!canOpen || tooLarge_2)
+        setFocus((prev) =>
+          prev === "accept" || (prev === "open" && userConfirmsCompletion) ? "decline" : prev,
+        );
     };
-    Xo = [No, Cn, userConfirmsCompletion, hn];
-    $[23] = hn;
-    $[24] = Cn;
-    $[25] = No;
+    downgradeDeps = [canOpen, tooLarge_2, userConfirmsCompletion, setFocus];
+    $[23] = setFocus;
+    $[24] = tooLarge_2;
+    $[25] = canOpen;
     $[26] = userConfirmsCompletion;
-    $[27] = mn;
-    $[28] = Xo;
+    $[27] = downgradeEffect;
+    $[28] = downgradeDeps;
   } else {
-    mn = $[27];
-    Xo = $[28];
+    downgradeEffect = $[27];
+    downgradeDeps = $[28];
   }
-  P(mn, Xo);
-  let inputGuard = useInputGuard(initialPhase !== "waiting" && No && !Cn);
+  useEffect(downgradeEffect, downgradeDeps);
+  let inputGuard = useInputGuard(initialPhase !== "waiting" && canOpen && !tooLarge_2);
   let showCancel = waitingState?.showCancel ?? false;
   let { setRawMode } = useStdin();
-  let cn;
-  let Dn;
+  let rawModeDeps;
+  let rawModeEffect;
   if ($[29] !== setRawMode) {
-    Dn = () => {
+    rawModeEffect = () => {
       setRawMode(true);
       return () => setRawMode(false);
     };
-    cn = [setRawMode];
+    rawModeDeps = [setRawMode];
     $[29] = setRawMode;
-    $[30] = cn;
-    $[31] = Dn;
+    $[30] = rawModeDeps;
+    $[31] = rawModeEffect;
   } else {
-    cn = $[30];
-    Dn = $[31];
+    rawModeDeps = $[30];
+    rawModeEffect = $[31];
   }
-  zt(Dn, cn);
+  useLayoutEffect(rawModeEffect, rawModeDeps);
   useRegisterOverlay("elicitation-url");
-  let wn = R(false);
-  let mr;
+  let answeredRef = useRef(false);
+  let openUrl;
   if (
-    $[32] !== Et ||
+    $[32] !== href ||
     $[33] !== onResponse ||
-    $[34] !== hn ||
-    $[35] !== No ||
+    $[34] !== setFocus ||
+    $[35] !== canOpen ||
     $[36] !== userConfirmsCompletion
   ) {
-    mr = () => {
-      if (!No || wn.current) {
+    openUrl = () => {
+      if (!canOpen || answeredRef.current) {
         return;
       }
       if (onResponse("accept") === false) {
         return;
       }
-      wn.current = true;
+      answeredRef.current = true;
       if (userConfirmsCompletion) {
         return;
       }
-      bn.current = Date.now();
-      openValidatedUrlSucceeded(Et);
-      Yo("waiting");
-      hn("open");
+      waitingSinceRef.current = Date.now();
+      openValidatedUrlSucceeded(href);
+      setPhase("waiting");
+      setFocus("open");
     };
-    $[32] = Et;
+    $[32] = href;
     $[33] = onResponse;
-    $[34] = hn;
-    $[35] = No;
+    $[34] = setFocus;
+    $[35] = canOpen;
     $[36] = userConfirmsCompletion;
-    $[37] = mr;
-  } else mr = $[37];
-  let Kn = mr;
-  let [Wn, Fr] = y(false);
-  let Zn;
-  if ($[38] !== inputGuard || $[39] !== Et || $[40] !== hn || $[41] !== No || $[42] !== wouldTakeAnswer) {
-    Zn = function Un() {
-      if (!No || wn.current || wouldTakeAnswer?.() !== true) {
+    $[37] = openUrl;
+  } else openUrl = $[37];
+  let openUrl_2 = openUrl;
+  let [reopened, setReopened] = useState(false);
+  let applyExternalAnswer;
+  if (
+    $[38] !== inputGuard ||
+    $[39] !== href ||
+    $[40] !== setFocus ||
+    $[41] !== canOpen ||
+    $[42] !== wouldTakeAnswer
+  ) {
+    applyExternalAnswer = function applyExternalAnswer() {
+      if (!canOpen || answeredRef.current || wouldTakeAnswer?.() !== true) {
         return;
       }
-      openValidatedUrlSucceeded(Et);
-      Fr(true);
+      openValidatedUrlSucceeded(href);
+      setReopened(true);
       inputGuard.arrived();
-      hn("accept");
+      setFocus("accept");
     };
     $[38] = inputGuard;
-    $[39] = Et;
-    $[40] = hn;
-    $[41] = No;
+    $[39] = href;
+    $[40] = setFocus;
+    $[41] = canOpen;
     $[42] = wouldTakeAnswer;
-    $[43] = Zn;
-  } else Zn = $[43];
-  let Un = Zn;
-  let dr;
+    $[43] = applyExternalAnswer;
+  } else applyExternalAnswer = $[43];
+  let applyExternalAnswer_2 = applyExternalAnswer;
+  let onKeyDown;
   if (
     $[44] !== inputGuard ||
-    $[45] !== Et ||
-    $[46] !== Mn ||
-    $[47] !== Kn ||
-    $[48] !== Un ||
+    $[45] !== href ||
+    $[46] !== getFocus ||
+    $[47] !== openUrl_2 ||
+    $[48] !== applyExternalAnswer_2 ||
     $[49] !== inputClock ||
     $[50] !== onResponse ||
     $[51] !== onWaitingDismiss ||
-    $[52] !== vo ||
-    $[53] !== hn ||
+    $[52] !== phase ||
+    $[53] !== setFocus ||
     $[54] !== showCancel ||
-    $[55] !== No ||
+    $[55] !== canOpen ||
     $[56] !== userConfirmsCompletion
   ) {
-    dr = function zr(prev) {
-      if (vo === "prompt") {
+    onKeyDown = function onKeyDown(prev) {
+      if (phase === "prompt") {
         if (prev.key === "left" || prev.key === "right") {
           prev.preventDefault();
-          if (No && userConfirmsCompletion) {
-            let pr = ["open", "accept", "decline"];
-            let index = pr.indexOf(Mn());
-            let ur = pr[(index + (prev.key === "right" ? 1 : -1) + 3) % 3];
-            if (ur !== "decline") inputGuard.arrived();
-            hn(ur);
-          } else if (No) {
-            if (Mn() === "decline") inputGuard.arrived();
-            hn(flipElicitationAction);
+          if (canOpen && userConfirmsCompletion) {
+            let promptActions = ["open", "accept", "decline"];
+            let index = promptActions.indexOf(getFocus());
+            let nextAction = promptActions[(index + (prev.key === "right" ? 1 : -1) + 3) % 3];
+            if (nextAction !== "decline") inputGuard.arrived();
+            setFocus(nextAction);
+          } else if (canOpen) {
+            if (getFocus() === "decline") inputGuard.arrived();
+            setFocus(flipElicitationAction);
           }
           return;
         }
         if (prev.key === "return") {
           prev.preventDefault();
-          let Ir = Mn();
-          if (Ir === "open" && userConfirmsCompletion) {
+          let action = getFocus();
+          if (action === "open" && userConfirmsCompletion) {
             if (inputGuard.refuses()) {
               return;
             }
-            Un();
-          } else if (Ir === "accept") {
+            applyExternalAnswer_2();
+          } else if (action === "accept") {
             if (inputGuard.refuses()) {
               return;
             }
-            Kn();
-          } else if (Ir === "decline" && !wn.current) onResponse("decline");
+            openUrl_2();
+          } else if (action === "decline" && !answeredRef.current) onResponse("decline");
         }
         if (isTextInputKey(prev)) inputGuard.typed();
       } else {
-        let Pr = showCancel ? ["open", "action", "cancel"] : ["open", "action"];
+        let waitingActions = showCancel ? ["open", "action", "cancel"] : ["open", "action"];
         if (prev.key === "left" || prev.key === "right") {
           prev.preventDefault();
-          let ts = prev.key === "right";
-          hn((prev) => {
-            let idx = Pr.indexOf(prev);
-            return Pr[(idx + (ts ? 1 : -1) + Pr.length) % Pr.length];
+          let forward = prev.key === "right";
+          setFocus((prev) => {
+            let idx = waitingActions.indexOf(prev);
+            return waitingActions[(idx + (forward ? 1 : -1) + waitingActions.length) % waitingActions.length];
           });
           return;
         }
         if (prev.key === "return") {
           prev.preventDefault();
-          let Zr = bn.current;
-          if (Zr !== undefined && isWithinRecentInput(inputClock, Zr)) {
+          let waitingSince = waitingSinceRef.current;
+          if (waitingSince !== undefined && isWithinRecentInput(inputClock, waitingSince)) {
             return;
           }
-          let wr = Mn();
-          if (wr === "open") {
-            if (No) openValidatedUrlSucceeded(Et);
-          } else if (wr === "cancel") onWaitingDismiss?.("cancel");
+          let action = getFocus();
+          if (action === "open") {
+            if (canOpen) openValidatedUrlSucceeded(href);
+          } else if (action === "cancel") onWaitingDismiss?.("cancel");
           else onWaitingDismiss?.(showCancel ? "retry" : "dismiss");
         }
       }
     };
     $[44] = inputGuard;
-    $[45] = Et;
-    $[46] = Mn;
-    $[47] = Kn;
-    $[48] = Un;
+    $[45] = href;
+    $[46] = getFocus;
+    $[47] = openUrl_2;
+    $[48] = applyExternalAnswer_2;
     $[49] = inputClock;
     $[50] = onResponse;
     $[51] = onWaitingDismiss;
-    $[52] = vo;
-    $[53] = hn;
+    $[52] = phase;
+    $[53] = setFocus;
     $[54] = showCancel;
-    $[55] = No;
+    $[55] = canOpen;
     $[56] = userConfirmsCompletion;
-    $[57] = dr;
-  } else dr = $[57];
-  let onKeyDown = dr;
-  if (vo === "waiting") {
+    $[57] = onKeyDown;
+  } else onKeyDown = $[57];
+  let onKeyDown_2 = onKeyDown;
+  if (phase === "waiting") {
     let actionLabel = waitingState?.actionLabel ?? "Continue without waiting";
-    let fr;
+    let serverLabel;
     if ($[58] !== serverName) {
-      fr = labelOrEmpty(serverName);
+      serverLabel = labelOrEmpty(serverName);
       $[58] = serverName;
-      $[59] = fr;
-    } else fr = $[59];
-    const title = `MCP server \u201C${fr}\u201D \u2014 waiting for completion`;
+      $[59] = serverLabel;
+    } else serverLabel = $[59];
+    const title = `MCP server \u201C${serverLabel}\u201D \u2014 waiting for completion`;
     let onCancel;
     if ($[60] !== onWaitingDismiss) {
       onCancel = () => onWaitingDismiss?.("cancel");
       $[60] = onWaitingDismiss;
       $[61] = onCancel;
     } else onCancel = $[61];
-    let Er;
+    let cancelHint;
     if ($[62] === MEMO_CACHE_SENTINEL) {
-      Er = jsxProd_default(ConfigurableShortcutHint, {
+      cancelHint = jsxProd_default(ConfigurableShortcutHint, {
         action: "confirm:no",
         context: "Confirmation",
         fallback: "Esc",
         description: "cancel",
       });
-      $[62] = Er;
-    } else Er = $[62];
+      $[62] = cancelHint;
+    } else cancelHint = $[62];
     let inputGuide;
     if ($[63] === MEMO_CACHE_SENTINEL) {
       inputGuide = jsxProd_default_2(Byline, {
         children: [
-          Er,
+          cancelHint,
           jsxProd_default(KeyboardShortcutHint, {
             chord: ["left", "right"],
             action: "switch",
@@ -1514,65 +1569,65 @@ ${oo}`;
       });
       $[63] = inputGuide;
     } else inputGuide = $[63];
-    let ms;
+    let urlBox;
     if (
-      $[64] !== Lt ||
-      $[65] !== po ||
-      $[66] !== bo ||
-      $[67] !== urlBeforeDomain ||
-      $[68] !== domain ||
-      $[69] !== It.kind ||
-      $[70] !== It.marker ||
-      $[71] !== It.needsGutter ||
-      $[72] !== It.text ||
-      $[73] !== No ||
-      $[74] !== so
+      $[64] !== hrefPayload_2 ||
+      $[65] !== hostname ||
+      $[66] !== hasHostname ||
+      $[67] !== urlSuffix ||
+      $[68] !== urlPrefix ||
+      $[69] !== rawPayload_2.kind ||
+      $[70] !== rawPayload_2.marker ||
+      $[71] !== rawPayload_2.needsGutter ||
+      $[72] !== rawPayload_2.text ||
+      $[73] !== canOpen ||
+      $[74] !== payloadExact_2
     ) {
-      ms = jsxProd_default(Box, {
+      urlBox = jsxProd_default(Box, {
         marginBottom: 1,
         flexDirection: "column",
         children:
-          No || so
+          canOpen || payloadExact_2
             ? jsxProd_default(Blockquote, {
-                multiline: Lt.kind === "full" && Lt.needsGutter,
-                children: bo
+                multiline: hrefPayload_2.kind === "full" && hrefPayload_2.needsGutter,
+                children: hasHostname
                   ? jsxProd_default_2(Text, {
                       children: [
-                        domain,
+                        urlPrefix,
                         jsxProd_default(Text, {
                           bold: true,
-                          children: po,
+                          children: hostname,
                         }),
-                        urlBeforeDomain,
+                        urlSuffix,
                       ],
                     })
                   : jsxProd_default(Text, {
-                      children: Lt.kind === "full" ? Lt.text : null,
+                      children: hrefPayload_2.kind === "full" ? hrefPayload_2.text : null,
                     }),
               })
             : jsxProd_default(Blockquote, {
-                multiline: It.kind === "full" && It.needsGutter,
+                multiline: rawPayload_2.kind === "full" && rawPayload_2.needsGutter,
                 children: jsxProd_default(Text, {
-                  children: It.kind === "full" ? It.text : It.marker,
+                  children: rawPayload_2.kind === "full" ? rawPayload_2.text : rawPayload_2.marker,
                 }),
               }),
       });
-      $[64] = Lt;
-      $[65] = po;
-      $[66] = bo;
-      $[67] = urlBeforeDomain;
-      $[68] = domain;
-      $[69] = It.kind;
-      $[70] = It.marker;
-      $[71] = It.needsGutter;
-      $[72] = It.text;
-      $[73] = No;
-      $[74] = so;
-      $[75] = ms;
-    } else ms = $[75];
-    let Xs;
+      $[64] = hrefPayload_2;
+      $[65] = hostname;
+      $[66] = hasHostname;
+      $[67] = urlSuffix;
+      $[68] = urlPrefix;
+      $[69] = rawPayload_2.kind;
+      $[70] = rawPayload_2.marker;
+      $[71] = rawPayload_2.needsGutter;
+      $[72] = rawPayload_2.text;
+      $[73] = canOpen;
+      $[74] = payloadExact_2;
+      $[75] = urlBox;
+    } else urlBox = $[75];
+    let waitingNotice;
     if ($[76] === MEMO_CACHE_SENTINEL) {
-      Xs = jsxProd_default(Box, {
+      waitingNotice = jsxProd_default(Box, {
         marginBottom: 1,
         children: jsxProd_default(Text, {
           dimColor: true,
@@ -1580,24 +1635,24 @@ ${oo}`;
           children: "Waiting for the server to confirm completion\u2026",
         }),
       });
-      $[76] = Xs;
-    } else Xs = $[76];
-    const children = Go === "open" ? figures_default.pointer : " ";
-    let is;
+      $[76] = waitingNotice;
+    } else waitingNotice = $[76];
+    const children = focus === "open" ? figures_default.pointer : " ";
+    let reopenPointer;
     if ($[77] !== children) {
-      is = jsxProd_default(Text, {
+      reopenPointer = jsxProd_default(Text, {
         color: "success",
         children,
       });
       $[77] = children;
-      $[78] = is;
-    } else is = $[78];
-    const bold = Go === "open";
-    const color = Go === "open" ? "success" : undefined;
-    const dimColor = Go !== "open";
-    let Oi;
+      $[78] = reopenPointer;
+    } else reopenPointer = $[78];
+    const bold = focus === "open";
+    const color = focus === "open" ? "success" : undefined;
+    const dimColor = focus !== "open";
+    let reopenButton;
     if ($[79] !== bold || $[80] !== color || $[81] !== dimColor) {
-      Oi = jsxProd_default(Text, {
+      reopenButton = jsxProd_default(Text, {
         bold,
         color,
         dimColor,
@@ -1606,25 +1661,25 @@ ${oo}`;
       $[79] = bold;
       $[80] = color;
       $[81] = dimColor;
-      $[82] = Oi;
-    } else Oi = $[82];
-    const children_2 = Go === "action" ? figures_default.pointer : " ";
-    let Zi;
+      $[82] = reopenButton;
+    } else reopenButton = $[82];
+    const children_2 = focus === "action" ? figures_default.pointer : " ";
+    let actionPointer;
     if ($[83] !== children_2) {
-      Zi = jsxProd_default(Text, {
+      actionPointer = jsxProd_default(Text, {
         color: "success",
         children: children_2,
       });
       $[83] = children_2;
-      $[84] = Zi;
-    } else Zi = $[84];
-    const bold_2 = Go === "action";
-    const color_2 = Go === "action" ? "success" : undefined;
-    const dimColor_2 = Go !== "action";
+      $[84] = actionPointer;
+    } else actionPointer = $[84];
+    const bold_2 = focus === "action";
+    const color_2 = focus === "action" ? "success" : undefined;
+    const dimColor_2 = focus !== "action";
     const children_3 = ` ${actionLabel}`;
-    let kr;
+    let actionButton;
     if ($[85] !== bold_2 || $[86] !== color_2 || $[87] !== dimColor_2 || $[88] !== children_3) {
-      kr = jsxProd_default(Text, {
+      actionButton = jsxProd_default(Text, {
         bold: bold_2,
         color: color_2,
         dimColor: dimColor_2,
@@ -1634,11 +1689,11 @@ ${oo}`;
       $[86] = color_2;
       $[87] = dimColor_2;
       $[88] = children_3;
-      $[89] = kr;
-    } else kr = $[89];
-    let ls;
-    if ($[90] !== Go || $[91] !== showCancel) {
-      ls =
+      $[89] = actionButton;
+    } else actionButton = $[89];
+    let cancelButton;
+    if ($[90] !== focus || $[91] !== showCancel) {
+      cancelButton =
         showCancel &&
         jsxProd_default_2(Fragment, {
           children: [
@@ -1647,46 +1702,52 @@ ${oo}`;
             }),
             jsxProd_default(Text, {
               color: "error",
-              children: Go === "cancel" ? figures_default.pointer : " ",
+              children: focus === "cancel" ? figures_default.pointer : " ",
             }),
             jsxProd_default(Text, {
-              bold: Go === "cancel",
-              color: Go === "cancel" ? "error" : undefined,
-              dimColor: Go !== "cancel",
+              bold: focus === "cancel",
+              color: focus === "cancel" ? "error" : undefined,
+              dimColor: focus !== "cancel",
               children: " Cancel",
             }),
           ],
         });
-      $[90] = Go;
+      $[90] = focus;
       $[91] = showCancel;
-      $[92] = ls;
-    } else ls = $[92];
-    let Ms;
-    if ($[93] !== is || $[94] !== Oi || $[95] !== Zi || $[96] !== kr || $[97] !== ls) {
-      Ms = jsxProd_default_2(Box, {
-        children: [is, Oi, Zi, kr, ls],
+      $[92] = cancelButton;
+    } else cancelButton = $[92];
+    let buttons;
+    if (
+      $[93] !== reopenPointer ||
+      $[94] !== reopenButton ||
+      $[95] !== actionPointer ||
+      $[96] !== actionButton ||
+      $[97] !== cancelButton
+    ) {
+      buttons = jsxProd_default_2(Box, {
+        children: [reopenPointer, reopenButton, actionPointer, actionButton, cancelButton],
       });
-      $[93] = is;
-      $[94] = Oi;
-      $[95] = Zi;
-      $[96] = kr;
-      $[97] = ls;
-      $[98] = Ms;
-    } else Ms = $[98];
+      $[93] = reopenPointer;
+      $[94] = reopenButton;
+      $[95] = actionPointer;
+      $[96] = actionButton;
+      $[97] = cancelButton;
+      $[98] = buttons;
+    } else buttons = $[98];
     let children_4;
-    if ($[99] !== onKeyDown || $[100] !== ms || $[101] !== Ms) {
+    if ($[99] !== onKeyDown_2 || $[100] !== urlBox || $[101] !== buttons) {
       children_4 = jsxProd_default_2(FocusColumn, {
-        onKeyDown,
-        children: [ms, Xs, Ms],
+        onKeyDown: onKeyDown_2,
+        children: [urlBox, waitingNotice, buttons],
       });
-      $[99] = onKeyDown;
-      $[100] = ms;
-      $[101] = Ms;
+      $[99] = onKeyDown_2;
+      $[100] = urlBox;
+      $[101] = buttons;
       $[102] = children_4;
     } else children_4 = $[102];
-    let gs;
+    let waitingDialog;
     if ($[103] !== subtitle || $[104] !== title || $[105] !== onCancel || $[106] !== children_4) {
-      gs = jsxProd_default(Dialog, {
+      waitingDialog = jsxProd_default(Dialog, {
         title,
         subtitle,
         color: "permission",
@@ -1699,38 +1760,38 @@ ${oo}`;
       $[104] = title;
       $[105] = onCancel;
       $[106] = children_4;
-      $[107] = gs;
-    } else gs = $[107];
-    return gs;
+      $[107] = waitingDialog;
+    } else waitingDialog = $[107];
+    return waitingDialog;
   }
-  let fr;
+  let serverLabel;
   if ($[108] !== serverName) {
-    fr = labelOrEmpty(serverName);
+    serverLabel = labelOrEmpty(serverName);
     $[108] = serverName;
-    $[109] = fr;
-  } else fr = $[109];
-  const title = `MCP server \u201C${fr}\u201D wants to open a URL`;
+    $[109] = serverLabel;
+  } else serverLabel = $[109];
+  const title = `MCP server \u201C${serverLabel}\u201D wants to open a URL`;
   let onCancel;
   if ($[110] !== onResponse) {
     onCancel = () => onResponse("cancel");
     $[110] = onResponse;
     $[111] = onCancel;
   } else onCancel = $[111];
-  let Er;
+  let cancelHint;
   if ($[112] === MEMO_CACHE_SENTINEL) {
-    Er = jsxProd_default(ConfigurableShortcutHint, {
+    cancelHint = jsxProd_default(ConfigurableShortcutHint, {
       action: "confirm:no",
       context: "Confirmation",
       fallback: "Esc",
       description: "cancel",
     });
-    $[112] = Er;
-  } else Er = $[112];
+    $[112] = cancelHint;
+  } else cancelHint = $[112];
   let inputGuide;
   if ($[113] === MEMO_CACHE_SENTINEL) {
     inputGuide = jsxProd_default_2(Byline, {
       children: [
-        Er,
+        cancelHint,
         jsxProd_default(KeyboardShortcutHint, {
           chord: ["left", "right"],
           action: "switch",
@@ -1739,84 +1800,84 @@ ${oo}`;
     });
     $[113] = inputGuide;
   } else inputGuide = $[113];
-  let ms;
+  let urlBox;
   if (
-    $[114] !== Lt ||
-    $[115] !== po ||
-    $[116] !== bo ||
-    $[117] !== urlBeforeDomain ||
-    $[118] !== domain ||
-    $[119] !== It.kind ||
-    $[120] !== It.marker ||
-    $[121] !== It.needsGutter ||
-    $[122] !== It.text ||
-    $[123] !== No ||
-    $[124] !== so
+    $[114] !== hrefPayload_2 ||
+    $[115] !== hostname ||
+    $[116] !== hasHostname ||
+    $[117] !== urlSuffix ||
+    $[118] !== urlPrefix ||
+    $[119] !== rawPayload_2.kind ||
+    $[120] !== rawPayload_2.marker ||
+    $[121] !== rawPayload_2.needsGutter ||
+    $[122] !== rawPayload_2.text ||
+    $[123] !== canOpen ||
+    $[124] !== payloadExact_2
   ) {
-    ms = jsxProd_default(Box, {
+    urlBox = jsxProd_default(Box, {
       marginBottom: 1,
       flexDirection: "column",
       children:
-        No || so
+        canOpen || payloadExact_2
           ? jsxProd_default(Blockquote, {
-              multiline: Lt.kind === "full" && Lt.needsGutter,
-              children: bo
+              multiline: hrefPayload_2.kind === "full" && hrefPayload_2.needsGutter,
+              children: hasHostname
                 ? jsxProd_default_2(Text, {
                     children: [
-                      domain,
+                      urlPrefix,
                       jsxProd_default(Text, {
                         bold: true,
-                        children: po,
+                        children: hostname,
                       }),
-                      urlBeforeDomain,
+                      urlSuffix,
                     ],
                   })
                 : jsxProd_default(Text, {
-                    children: Lt.kind === "full" ? Lt.text : null,
+                    children: hrefPayload_2.kind === "full" ? hrefPayload_2.text : null,
                   }),
             })
           : jsxProd_default(Blockquote, {
-              multiline: It.kind === "full" && It.needsGutter,
+              multiline: rawPayload_2.kind === "full" && rawPayload_2.needsGutter,
               children: jsxProd_default(Text, {
-                children: It.kind === "full" ? It.text : It.marker,
+                children: rawPayload_2.kind === "full" ? rawPayload_2.text : rawPayload_2.marker,
               }),
             }),
     });
-    $[114] = Lt;
-    $[115] = po;
-    $[116] = bo;
-    $[117] = urlBeforeDomain;
-    $[118] = domain;
-    $[119] = It.kind;
-    $[120] = It.marker;
-    $[121] = It.needsGutter;
-    $[122] = It.text;
-    $[123] = No;
-    $[124] = so;
-    $[125] = ms;
-  } else ms = $[125];
-  let Xs;
-  if ($[126] !== No || $[127] !== so) {
-    Xs =
-      !No &&
+    $[114] = hrefPayload_2;
+    $[115] = hostname;
+    $[116] = hasHostname;
+    $[117] = urlSuffix;
+    $[118] = urlPrefix;
+    $[119] = rawPayload_2.kind;
+    $[120] = rawPayload_2.marker;
+    $[121] = rawPayload_2.needsGutter;
+    $[122] = rawPayload_2.text;
+    $[123] = canOpen;
+    $[124] = payloadExact_2;
+    $[125] = urlBox;
+  } else urlBox = $[125];
+  let unsafeNotice;
+  if ($[126] !== canOpen || $[127] !== payloadExact_2) {
+    unsafeNotice =
+      !canOpen &&
       jsxProd_default(Box, {
         marginBottom: 1,
         children: jsxProd_default(Text, {
           dimColor: true,
-          children: so
+          children: payloadExact_2
             ? "This URL\u2019s browser-ready form is too long to hand to a browser safely, so one-click opening is disabled. The URL above is shown in full. Decline to continue."
             : "This URL cannot be shown exactly as it would open, so opening it is disabled. Decline to continue.",
         }),
       });
-    $[126] = No;
-    $[127] = so;
-    $[128] = Xs;
-  } else Xs = $[128];
-  let Ls;
-  if ($[129] !== Cn || $[130] !== No) {
-    Ls =
-      No &&
-      Cn &&
+    $[126] = canOpen;
+    $[127] = payloadExact_2;
+    $[128] = unsafeNotice;
+  } else unsafeNotice = $[128];
+  let truncatedNotice;
+  if ($[129] !== tooLarge_2 || $[130] !== canOpen) {
+    truncatedNotice =
+      canOpen &&
+      tooLarge_2 &&
       jsxProd_default(Box, {
         marginBottom: 1,
         children: jsxProd_default(Text, {
@@ -1825,74 +1886,74 @@ ${oo}`;
             "This URL extends past this screen \u2014 its beginning is not visible here. Review it in full before you continue.",
         }),
       });
-    $[129] = Cn;
-    $[130] = No;
-    $[131] = Ls;
-  } else Ls = $[131];
-  let is;
-  if ($[132] !== Go || $[133] !== Wn || $[134] !== No || $[135] !== userConfirmsCompletion) {
-    is =
-      No &&
+    $[129] = tooLarge_2;
+    $[130] = canOpen;
+    $[131] = truncatedNotice;
+  } else truncatedNotice = $[131];
+  let openButton;
+  if ($[132] !== focus || $[133] !== reopened || $[134] !== canOpen || $[135] !== userConfirmsCompletion) {
+    openButton =
+      canOpen &&
       userConfirmsCompletion &&
       jsxProd_default_2(Fragment, {
         children: [
           jsxProd_default(Text, {
             color: "success",
-            children: Go === "open" ? figures_default.pointer : " ",
+            children: focus === "open" ? figures_default.pointer : " ",
           }),
           jsxProd_default(Text, {
-            bold: Go === "open",
-            color: Go === "open" ? "success" : undefined,
-            dimColor: Go !== "open",
-            children: Wn ? " Open again  " : " Open in browser  ",
+            bold: focus === "open",
+            color: focus === "open" ? "success" : undefined,
+            dimColor: focus !== "open",
+            children: reopened ? " Open again  " : " Open in browser  ",
           }),
         ],
       });
-    $[132] = Go;
-    $[133] = Wn;
-    $[134] = No;
+    $[132] = focus;
+    $[133] = reopened;
+    $[134] = canOpen;
     $[135] = userConfirmsCompletion;
-    $[136] = is;
-  } else is = $[136];
-  let ws;
-  if ($[137] !== Go || $[138] !== No || $[139] !== userConfirmsCompletion) {
-    ws =
-      No &&
+    $[136] = openButton;
+  } else openButton = $[136];
+  let acceptButton;
+  if ($[137] !== focus || $[138] !== canOpen || $[139] !== userConfirmsCompletion) {
+    acceptButton =
+      canOpen &&
       jsxProd_default_2(Fragment, {
         children: [
           jsxProd_default(Text, {
             color: "success",
-            children: Go === "accept" ? figures_default.pointer : " ",
+            children: focus === "accept" ? figures_default.pointer : " ",
           }),
           jsxProd_default(Text, {
-            bold: Go === "accept",
-            color: Go === "accept" ? "success" : undefined,
-            dimColor: Go !== "accept",
+            bold: focus === "accept",
+            color: focus === "accept" ? "success" : undefined,
+            dimColor: focus !== "accept",
             children: userConfirmsCompletion ? " I'm done, continue  " : " Accept  ",
           }),
         ],
       });
-    $[137] = Go;
-    $[138] = No;
+    $[137] = focus;
+    $[138] = canOpen;
     $[139] = userConfirmsCompletion;
-    $[140] = ws;
-  } else ws = $[140];
-  const children = Go === "decline" ? figures_default.pointer : " ";
-  let oi;
+    $[140] = acceptButton;
+  } else acceptButton = $[140];
+  const children = focus === "decline" ? figures_default.pointer : " ";
+  let declinePointer;
   if ($[141] !== children) {
-    oi = jsxProd_default(Text, {
+    declinePointer = jsxProd_default(Text, {
       color: "error",
       children,
     });
     $[141] = children;
-    $[142] = oi;
-  } else oi = $[142];
-  const bold = Go === "decline";
-  const color = Go === "decline" ? "error" : undefined;
-  const dimColor = Go !== "decline";
-  let da;
+    $[142] = declinePointer;
+  } else declinePointer = $[142];
+  const bold = focus === "decline";
+  const color = focus === "decline" ? "error" : undefined;
+  const dimColor = focus !== "decline";
+  let declineButton;
   if ($[143] !== bold || $[144] !== color || $[145] !== dimColor) {
-    da = jsxProd_default(Text, {
+    declineButton = jsxProd_default(Text, {
       bold,
       color,
       dimColor,
@@ -1901,35 +1962,46 @@ ${oo}`;
     $[143] = bold;
     $[144] = color;
     $[145] = dimColor;
-    $[146] = da;
-  } else da = $[146];
-  let qn;
-  if ($[147] !== is || $[148] !== ws || $[149] !== oi || $[150] !== da) {
-    qn = jsxProd_default_2(Box, {
-      children: [is, ws, oi, da],
+    $[146] = declineButton;
+  } else declineButton = $[146];
+  let buttons;
+  if (
+    $[147] !== openButton ||
+    $[148] !== acceptButton ||
+    $[149] !== declinePointer ||
+    $[150] !== declineButton
+  ) {
+    buttons = jsxProd_default_2(Box, {
+      children: [openButton, acceptButton, declinePointer, declineButton],
     });
-    $[147] = is;
-    $[148] = ws;
-    $[149] = oi;
-    $[150] = da;
-    $[151] = qn;
-  } else qn = $[151];
+    $[147] = openButton;
+    $[148] = acceptButton;
+    $[149] = declinePointer;
+    $[150] = declineButton;
+    $[151] = buttons;
+  } else buttons = $[151];
   let children_2;
-  if ($[152] !== onKeyDown || $[153] !== ms || $[154] !== Xs || $[155] !== Ls || $[156] !== qn) {
+  if (
+    $[152] !== onKeyDown_2 ||
+    $[153] !== urlBox ||
+    $[154] !== unsafeNotice ||
+    $[155] !== truncatedNotice ||
+    $[156] !== buttons
+  ) {
     children_2 = jsxProd_default_2(FocusColumn, {
-      onKeyDown,
-      children: [ms, Xs, Ls, qn],
+      onKeyDown: onKeyDown_2,
+      children: [urlBox, unsafeNotice, truncatedNotice, buttons],
     });
-    $[152] = onKeyDown;
-    $[153] = ms;
-    $[154] = Xs;
-    $[155] = Ls;
-    $[156] = qn;
+    $[152] = onKeyDown_2;
+    $[153] = urlBox;
+    $[154] = unsafeNotice;
+    $[155] = truncatedNotice;
+    $[156] = buttons;
     $[157] = children_2;
   } else children_2 = $[157];
-  let xs;
+  let promptDialog;
   if ($[158] !== subtitle || $[159] !== title || $[160] !== onCancel || $[161] !== children_2) {
-    xs = jsxProd_default(Dialog, {
+    promptDialog = jsxProd_default(Dialog, {
       title,
       subtitle,
       color: "permission",
@@ -1942,16 +2014,16 @@ ${oo}`;
     $[159] = title;
     $[160] = onCancel;
     $[161] = children_2;
-    $[162] = xs;
-  } else xs = $[162];
-  return xs;
+    $[162] = promptDialog;
+  } else promptDialog = $[162];
+  return promptDialog;
 }
 //@ chunk-18hwfzwa.js:1231333-1237471 placement
 /**
  * MCP elicitation 表单：按服务器给出的 schema 渲染字段、校验输入并提交。
  */
 function ElicitationForm(props) {
-  let $ = w(51);
+  let $ = useMemoCache(51);
   let {
     schemaFields,
     scrollWindow,
@@ -1976,12 +2048,12 @@ function ElicitationForm(props) {
   if (!schemaFields.length) {
     return null;
   }
-  let oo = scrollWindow.start > 0;
-  let Xt = scrollWindow.end < schemaFields.length;
-  let so;
-  if ($[0] !== oo || $[1] !== scrollWindow.start) {
-    so =
-      oo &&
+  let hasAbove = scrollWindow.start > 0;
+  let hasBelow = scrollWindow.end < schemaFields.length;
+  let aboveHint;
+  if ($[0] !== hasAbove || $[1] !== scrollWindow.start) {
+    aboveHint =
+      hasAbove &&
       jsxProd_default(Box, {
         marginLeft: 2,
         children: jsxProd_default_2(Text, {
@@ -1989,11 +2061,11 @@ function ElicitationForm(props) {
           children: [figures_default.arrowUp, " ", scrollWindow.start, " more above"],
         }),
       });
-    $[0] = oo;
+    $[0] = hasAbove;
     $[1] = scrollWindow.start;
-    $[2] = so;
-  } else so = $[2];
-  let po;
+    $[2] = aboveHint;
+  } else aboveHint = $[2];
+  let fieldRows;
   if (
     $[3] !== accordionOptionIndex ||
     $[4] !== clampFieldRows ||
@@ -2017,7 +2089,7 @@ function ElicitationForm(props) {
     $[22] !== validationErrors
   ) {
     const sliced = schemaFields.slice(scrollWindow.start, scrollWindow.end);
-    let co;
+    let renderField;
     if (
       $[24] !== accordionOptionIndex ||
       $[25] !== clampFieldRows ||
@@ -2038,25 +2110,25 @@ function ElicitationForm(props) {
       $[40] !== textInputValue ||
       $[41] !== validationErrors
     ) {
-      co = (bo, Ao) => {
-        let Bo = scrollWindow.start + Ao;
-        let { name: Ro, schema, isRequired } = bo;
-        let Wo = isPluginPasswordField(serverName, pluginSource, Ro, schema);
-        let mn = Bo === currentFieldIndex && !focusedButton;
-        let Cn = formValues[Ro];
-        let No = Cn !== undefined && (!Array.isArray(Cn) || Cn.length > 0);
-        let vo = validationErrors[Ro];
-        let Yo = resolvingFields.has(Ro)
+      renderField = (field, sliceIndex) => {
+        let fieldIndex = scrollWindow.start + sliceIndex;
+        let { name, schema, isRequired } = field;
+        let isPassword = isPluginPasswordField(serverName, pluginSource, name, schema);
+        let isFocused = fieldIndex === currentFieldIndex && !focusedButton;
+        let value = formValues[name];
+        let isSet = value !== undefined && (!Array.isArray(value) || value.length > 0);
+        let error = validationErrors[name];
+        let statusIcon = resolvingFields.has(name)
           ? jsxProd_default(ResolvingSpinner, {})
-          : vo
+          : error
             ? jsxProd_default(Text, {
                 color: "error",
                 children: figures_default.warning,
               })
-            : No
+            : isSet
               ? jsxProd_default(Text, {
                   color: "success",
-                  dimColor: !mn,
+                  dimColor: !isFocused,
                   children: figures_default.tick,
                 })
               : isRequired
@@ -2067,81 +2139,83 @@ function ElicitationForm(props) {
                 : jsxProd_default(Text, {
                     children: " ",
                   });
-        let kn = vo ? "error" : No ? "success" : isRequired ? "error" : "suggestion";
-        let color = mn ? kn : undefined;
-        let title = schema.title || Ro;
-        let Go = clampFieldRows
+        let tone = error ? "error" : isSet ? "success" : isRequired ? "error" : "suggestion";
+        let color = isFocused ? tone : undefined;
+        let title = schema.title || name;
+        let label = clampFieldRows
           ? truncateToWidth(labelOrEmpty_2(title), Math.max(8, columns - max - 8 - MIN_TRUNCATE_WIDTH))
           : labelOrEmpty_2(title);
-        let hn = jsxProd_default(Text, {
+        let labelText = jsxProd_default(Text, {
           color,
-          bold: mn,
-          children: Go,
+          bold: isFocused,
+          children: label,
         });
-        let max_2 = Math.max(MIN_TRUNCATE_WIDTH, columns - max - 8 - bunStringWidth(Go));
+        let max_2 = Math.max(MIN_TRUNCATE_WIDTH, columns - max - 8 - bunStringWidth(label));
         let max_3 = Math.max(MIN_TRUNCATE_WIDTH, columns - max - 6 - 4);
-        let Sn;
-        let $n = null;
+        let valueNode;
+        let optionsBox = null;
         if (isMultiSelectEnumSchema(schema)) {
           let multiSelectValues = getMultiSelectValues(schema);
-          let _o = Array.isArray(Cn) ? Cn : [];
-          if (expandedAccordion === Ro && mn) {
-            Sn = jsxProd_default(Text, {
+          let selectedValues = Array.isArray(value) ? value : [];
+          if (expandedAccordion === name && isFocused) {
+            valueNode = jsxProd_default(Text, {
               dimColor: true,
               children: figures_default.triangleDownSmall,
             });
-            let cn = optionWindow ?? {
+            let visibleWindow = optionWindow ?? {
               start: 0,
               end: multiSelectValues.length,
               showAbove: false,
               showBelow: false,
             };
-            $n = jsxProd_default_2(Box, {
+            optionsBox = jsxProd_default_2(Box, {
               flexDirection: "column",
               marginLeft: 6,
               children: [
-                cn.showAbove &&
+                visibleWindow.showAbove &&
                   jsxProd_default_2(Text, {
                     dimColor: true,
-                    children: [figures_default.arrowUp, " ", cn.start, " more above"],
+                    children: [figures_default.arrowUp, " ", visibleWindow.start, " more above"],
                   }),
-                multiSelectValues.slice(cn.start, cn.end).map((multiSelectValue, wn) => {
-                  let mr = cn.start + wn;
-                  let children = clampFieldRows
-                    ? truncateToWidth(labelOrEmpty_2(getMultiSelectLabel(schema, multiSelectValue)), max_3)
-                    : labelOrEmpty_2(getMultiSelectLabel(schema, multiSelectValue));
-                  let included = _o.includes(multiSelectValue);
-                  let Fr = mr === accordionOptionIndex;
-                  return jsxProd_default_2(
-                    Box,
-                    {
-                      gap: 1,
-                      children: [
-                        jsxProd_default(Text, {
-                          color: "suggestion",
-                          children: Fr ? figures_default.pointer : " ",
-                        }),
-                        jsxProd_default(Text, {
-                          color: included ? "success" : undefined,
-                          children: included ? figures_default.checkboxOn : figures_default.checkboxOff,
-                        }),
-                        jsxProd_default(Text, {
-                          color: Fr ? "suggestion" : undefined,
-                          bold: Fr,
-                          children,
-                        }),
-                      ],
-                    },
-                    multiSelectValue,
-                  );
-                }),
-                cn.showBelow &&
+                multiSelectValues
+                  .slice(visibleWindow.start, visibleWindow.end)
+                  .map((multiSelectValue, optionIndex) => {
+                    let absoluteIndex = visibleWindow.start + optionIndex;
+                    let children = clampFieldRows
+                      ? truncateToWidth(labelOrEmpty_2(getMultiSelectLabel(schema, multiSelectValue)), max_3)
+                      : labelOrEmpty_2(getMultiSelectLabel(schema, multiSelectValue));
+                    let included = selectedValues.includes(multiSelectValue);
+                    let isHighlighted = absoluteIndex === accordionOptionIndex;
+                    return jsxProd_default_2(
+                      Box,
+                      {
+                        gap: 1,
+                        children: [
+                          jsxProd_default(Text, {
+                            color: "suggestion",
+                            children: isHighlighted ? figures_default.pointer : " ",
+                          }),
+                          jsxProd_default(Text, {
+                            color: included ? "success" : undefined,
+                            children: included ? figures_default.checkboxOn : figures_default.checkboxOff,
+                          }),
+                          jsxProd_default(Text, {
+                            color: isHighlighted ? "suggestion" : undefined,
+                            bold: isHighlighted,
+                            children,
+                          }),
+                        ],
+                      },
+                      multiSelectValue,
+                    );
+                  }),
+                visibleWindow.showBelow &&
                   jsxProd_default_2(Text, {
                     dimColor: true,
                     children: [
                       figures_default.arrowDown,
                       " ",
-                      multiSelectValues.length - cn.end,
+                      multiSelectValues.length - visibleWindow.end,
                       " ",
                       "more below",
                     ],
@@ -2149,28 +2223,30 @@ function ElicitationForm(props) {
               ],
             });
           } else {
-            let Zn = mn
+            let collapsedMarker = isFocused
               ? jsxProd_default_2(Text, {
                   dimColor: true,
                   children: [figures_default.triangleRightSmall, " "],
                 })
               : null;
-            if (_o.length > 0) {
-              let joined = _o.map((Un) => labelOrEmpty_2(getMultiSelectLabel(schema, Un))).join(", ");
-              Sn = jsxProd_default_2(Text, {
+            if (selectedValues.length > 0) {
+              let joined = selectedValues
+                .map((selectedValue) => labelOrEmpty_2(getMultiSelectLabel(schema, selectedValue)))
+                .join(", ");
+              valueNode = jsxProd_default_2(Text, {
                 children: [
-                  Zn,
+                  collapsedMarker,
                   jsxProd_default(Text, {
                     color,
-                    bold: mn,
+                    bold: isFocused,
                     children: clampFieldRows ? truncateToWidth(joined, max_2) : joined,
                   }),
                 ],
               });
             } else
-              Sn = jsxProd_default_2(Text, {
+              valueNode = jsxProd_default_2(Text, {
                 children: [
-                  Zn,
+                  collapsedMarker,
                   jsxProd_default(Text, {
                     dimColor: true,
                     italic: true,
@@ -2181,33 +2257,33 @@ function ElicitationForm(props) {
           }
         } else if (isEnumSchema(schema)) {
           let enumValues = getEnumValues(schema);
-          if (expandedAccordion === Ro && mn) {
-            Sn = jsxProd_default(Text, {
+          if (expandedAccordion === name && isFocused) {
+            valueNode = jsxProd_default(Text, {
               dimColor: true,
               children: figures_default.triangleDownSmall,
             });
-            let pr = optionWindow ?? {
+            let visibleWindow = optionWindow ?? {
               start: 0,
               end: enumValues.length,
               showAbove: false,
               showBelow: false,
             };
-            $n = jsxProd_default_2(Box, {
+            optionsBox = jsxProd_default_2(Box, {
               flexDirection: "column",
               marginLeft: 6,
               children: [
-                pr.showAbove &&
+                visibleWindow.showAbove &&
                   jsxProd_default_2(Text, {
                     dimColor: true,
-                    children: [figures_default.arrowUp, " ", pr.start, " more above"],
+                    children: [figures_default.arrowUp, " ", visibleWindow.start, " more above"],
                   }),
-                enumValues.slice(pr.start, pr.end).map((enumValue, ur) => {
-                  let Ir = pr.start + ur;
+                enumValues.slice(visibleWindow.start, visibleWindow.end).map((enumValue, optionIndex) => {
+                  let absoluteIndex = visibleWindow.start + optionIndex;
                   let children = clampFieldRows
                     ? truncateToWidth(labelOrEmpty_2(getEnumLabel(schema, enumValue)), max_3)
                     : labelOrEmpty_2(getEnumLabel(schema, enumValue));
-                  let ts = Cn === enumValue;
-                  let Gn = Ir === accordionOptionIndex;
+                  let isSelected = value === enumValue;
+                  let isHighlighted = absoluteIndex === accordionOptionIndex;
                   return jsxProd_default_2(
                     Box,
                     {
@@ -2215,15 +2291,15 @@ function ElicitationForm(props) {
                       children: [
                         jsxProd_default(Text, {
                           color: "suggestion",
-                          children: Gn ? figures_default.pointer : " ",
+                          children: isHighlighted ? figures_default.pointer : " ",
                         }),
                         jsxProd_default(Text, {
-                          color: ts ? "success" : undefined,
-                          children: ts ? figures_default.radioOn : figures_default.radioOff,
+                          color: isSelected ? "success" : undefined,
+                          children: isSelected ? figures_default.radioOn : figures_default.radioOff,
                         }),
                         jsxProd_default(Text, {
-                          color: Gn ? "suggestion" : undefined,
-                          bold: Gn,
+                          color: isHighlighted ? "suggestion" : undefined,
+                          bold: isHighlighted,
                           children,
                         }),
                       ],
@@ -2231,37 +2307,43 @@ function ElicitationForm(props) {
                     enumValue,
                   );
                 }),
-                pr.showBelow &&
+                visibleWindow.showBelow &&
                   jsxProd_default_2(Text, {
                     dimColor: true,
-                    children: [figures_default.arrowDown, " ", enumValues.length - pr.end, " ", "more below"],
+                    children: [
+                      figures_default.arrowDown,
+                      " ",
+                      enumValues.length - visibleWindow.end,
+                      " ",
+                      "more below",
+                    ],
                   }),
               ],
             });
           } else {
-            let Ur = mn
+            let collapsedMarker = isFocused
               ? jsxProd_default_2(Text, {
                   dimColor: true,
                   children: [figures_default.triangleRightSmall, " "],
                 })
               : null;
-            if (No)
-              Sn = jsxProd_default_2(Text, {
+            if (isSet)
+              valueNode = jsxProd_default_2(Text, {
                 children: [
-                  Ur,
+                  collapsedMarker,
                   jsxProd_default(Text, {
                     color,
-                    bold: mn,
+                    bold: isFocused,
                     children: clampFieldRows
-                      ? truncateToWidth(labelOrEmpty_2(getEnumLabel(schema, Cn)), max_2)
-                      : labelOrEmpty_2(getEnumLabel(schema, Cn)),
+                      ? truncateToWidth(labelOrEmpty_2(getEnumLabel(schema, value)), max_2)
+                      : labelOrEmpty_2(getEnumLabel(schema, value)),
                   }),
                 ],
               });
             else
-              Sn = jsxProd_default_2(Text, {
+              valueNode = jsxProd_default_2(Text, {
                 children: [
-                  Ur,
+                  collapsedMarker,
                   jsxProd_default(Text, {
                     dimColor: true,
                     italic: true,
@@ -2271,21 +2353,21 @@ function ElicitationForm(props) {
               });
           }
         } else if (schema.type === "boolean") {
-          if (mn)
-            Sn = No
+          if (isFocused)
+            valueNode = isSet
               ? jsxProd_default(Text, {
                   color,
                   bold: true,
-                  children: Cn ? figures_default.checkboxOn : figures_default.checkboxOff,
+                  children: value ? figures_default.checkboxOn : figures_default.checkboxOff,
                 })
               : jsxProd_default(Text, {
                   dimColor: true,
                   children: figures_default.checkboxOff,
                 });
           else
-            Sn = No
+            valueNode = isSet
               ? jsxProd_default(Text, {
-                  children: Cn ? figures_default.checkboxOn : figures_default.checkboxOff,
+                  children: value ? figures_default.checkboxOn : figures_default.checkboxOff,
                 })
               : jsxProd_default(Text, {
                   dimColor: true,
@@ -2293,13 +2375,13 @@ function ElicitationForm(props) {
                   children: "not set",
                 });
         } else if (isScalarSchemaType(schema)) {
-          if (mn)
-            Sn = jsxProd_default(TextInput, {
+          if (isFocused)
+            valueNode = jsxProd_default(TextInput, {
               value: textInputValue,
               onChange: handleTextInputChange,
               onSubmit: handleTextInputSubmit,
-              mask: Wo ? "*" : undefined,
-              maskWhole: Wo,
+              mask: isPassword ? "*" : undefined,
+              maskWhole: isPassword,
               placeholder: "Type something\u2026",
               columns: Math.min(clampFieldRows ? max_2 : columns - 20, 60),
               maxVisibleLines: clampFieldRows ? 1 : undefined,
@@ -2309,16 +2391,16 @@ function ElicitationForm(props) {
               showCursor: true,
             });
           else {
-            let Zr =
-              No && Wo && Cn !== ""
+            let displayValue =
+              isSet && isPassword && value !== ""
                 ? REDACTED_FIELD_TEXT
-                : No && isDateTimeSchema(schema)
-                  ? formatDateDisplay(String(Cn), schema)
-                  : String(Cn);
-            let wr = markBrokenSequences(replaceLineBreaks(stripUnsafeChars(Zr)));
-            Sn = No
+                : isSet && isDateTimeSchema(schema)
+                  ? formatDateDisplay(String(value), schema)
+                  : String(value);
+            let safeText = markBrokenSequences(replaceLineBreaks(stripUnsafeChars(displayValue)));
+            valueNode = isSet
               ? jsxProd_default(Text, {
-                  children: clampFieldRows ? truncateToWidth(wr, max_2) : wr,
+                  children: clampFieldRows ? truncateToWidth(safeText, max_2) : safeText,
                 })
               : jsxProd_default(Text, {
                   dimColor: true,
@@ -2327,10 +2409,10 @@ function ElicitationForm(props) {
                 });
           }
         } else {
-          let zr = markBrokenSequences(replaceLineBreaks(stripUnsafeChars(String(Cn))));
-          Sn = No
+          let safeText = markBrokenSequences(replaceLineBreaks(stripUnsafeChars(String(value))));
+          valueNode = isSet
             ? jsxProd_default(Text, {
-                children: clampFieldRows ? truncateToWidth(zr, max_2) : zr,
+                children: clampFieldRows ? truncateToWidth(safeText, max_2) : safeText,
               })
             : jsxProd_default(Text, {
                 dimColor: true,
@@ -2338,7 +2420,7 @@ function ElicitationForm(props) {
                 children: "not set",
               });
         }
-        let _r = schema.description ? displayField(schema.description) : null;
+        let description = schema.description ? displayField(schema.description) : null;
         return jsxProd_default_2(
           Box,
           {
@@ -2348,55 +2430,55 @@ function ElicitationForm(props) {
                 gap: 1,
                 children: [
                   jsxProd_default(Text, {
-                    color: kn,
-                    children: mn ? figures_default.pointer : " ",
+                    color: tone,
+                    children: isFocused ? figures_default.pointer : " ",
                   }),
-                  Yo,
+                  statusIcon,
                   jsxProd_default_2(Box, {
                     children: [
-                      hn,
+                      labelText,
                       jsxProd_default(Text, {
                         color,
                         children: ": ",
                       }),
-                      Sn,
+                      valueNode,
                     ],
                   }),
                 ],
               }),
-              $n,
-              _r !== null &&
+              optionsBox,
+              description !== null &&
                 jsxProd_default(Box, {
                   marginLeft: 6,
                   children: clampFieldRows
                     ? jsxProd_default(Text, {
                         dimColor: true,
                         children: truncateToWidth(
-                          replaceLineBreaks(_r.text),
+                          replaceLineBreaks(description.text),
                           Math.max(MIN_TRUNCATE_WIDTH, columns - 6 - max),
                         ),
                       })
                     : jsxProd_default(Blockquote, {
-                        multiline: _r.needsGutter,
+                        multiline: description.needsGutter,
                         children: jsxProd_default(Text, {
                           dimColor: true,
-                          children: _r.text,
+                          children: description.text,
                         }),
                       }),
                 }),
               jsxProd_default(Box, {
                 marginLeft: 6,
                 height: 1,
-                children: vo
+                children: error
                   ? jsxProd_default(Text, {
                       color: "error",
                       italic: true,
                       children: clampFieldRows
                         ? truncateToWidth(
-                            replaceLineBreaks(displayField(vo).text),
+                            replaceLineBreaks(displayField(error).text),
                             Math.max(MIN_TRUNCATE_WIDTH, columns - 6 - max),
                           )
-                        : replaceLineBreaks(displayField(vo).text),
+                        : replaceLineBreaks(displayField(error).text),
                     })
                   : jsxProd_default(Text, {
                       children: " ",
@@ -2404,7 +2486,7 @@ function ElicitationForm(props) {
               }),
             ],
           },
-          Ro,
+          name,
         );
       };
       $[24] = accordionOptionIndex;
@@ -2425,9 +2507,9 @@ function ElicitationForm(props) {
       $[39] = textInputCursorOffset;
       $[40] = textInputValue;
       $[41] = validationErrors;
-      $[42] = co;
-    } else co = $[42];
-    po = sliced.map(co);
+      $[42] = renderField;
+    } else renderField = $[42];
+    fieldRows = sliced.map(renderField);
     $[3] = accordionOptionIndex;
     $[4] = clampFieldRows;
     $[5] = columns;
@@ -2448,12 +2530,12 @@ function ElicitationForm(props) {
     $[20] = textInputCursorOffset;
     $[21] = textInputValue;
     $[22] = validationErrors;
-    $[23] = po;
-  } else po = $[23];
-  let ao;
-  if ($[43] !== Xt || $[44] !== schemaFields.length || $[45] !== scrollWindow.end) {
-    ao =
-      Xt &&
+    $[23] = fieldRows;
+  } else fieldRows = $[23];
+  let belowHint;
+  if ($[43] !== hasBelow || $[44] !== schemaFields.length || $[45] !== scrollWindow.end) {
+    belowHint =
+      hasBelow &&
       jsxProd_default(Box, {
         marginLeft: 2,
         children: jsxProd_default_2(Text, {
@@ -2461,27 +2543,22 @@ function ElicitationForm(props) {
           children: [figures_default.arrowDown, " ", schemaFields.length - scrollWindow.end, " more below"],
         }),
       });
-    $[43] = Xt;
+    $[43] = hasBelow;
     $[44] = schemaFields.length;
     $[45] = scrollWindow.end;
-    $[46] = ao;
-  } else ao = $[46];
-  let co;
-  if ($[47] !== so || $[48] !== po || $[49] !== ao) {
-    co = jsxProd_default_2(Box, {
+    $[46] = belowHint;
+  } else belowHint = $[46];
+  let fieldsBox;
+  if ($[47] !== aboveHint || $[48] !== fieldRows || $[49] !== belowHint) {
+    fieldsBox = jsxProd_default_2(Box, {
       flexDirection: "column",
-      children: [so, po, ao],
+      children: [aboveHint, fieldRows, belowHint],
     });
-    $[47] = so;
-    $[48] = po;
-    $[49] = ao;
-    $[50] = co;
-  } else co = $[50];
-  return co;
-}
-//@ chunk-tn4j580p.js:17770-17833 fingerprint = resetTypeahead (0.475)
-function resetTypeahead(ta) {
-  ta.writers.delete(ta.signal);
-  clearTimeout(ta.timer);
+    $[47] = aboveHint;
+    $[48] = fieldRows;
+    $[49] = belowHint;
+    $[50] = fieldsBox;
+  } else fieldsBox = $[50];
+  return fieldsBox;
 }
 export { ElicitationDialog, resetTypeahead };

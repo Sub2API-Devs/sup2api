@@ -8,8 +8,14 @@
  * pieces: chunk-18hwfzwa.js (1), chunk-1ztfztfw.js (8), chunk-hthm3h8y.js (1), chunk-s61vbvea.js (1)
  * attribution: fingerprint 5, sole-consumer 5, affinity 1
  */
-import { init_react_production, y, R, P } from "../../../vendor/react/cjs/react.production.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useIdeConnectionStatus } from "../../hooks/useIdeConnectionStatus.js";
+import {
+  init_react_production,
+  useState,
+  useRef,
+  useEffect,
+} from "../../../vendor/react/cjs/react.production.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { getGlobalConfig, saveGlobalConfig } from "../../utils/config.js";
 import {
@@ -48,37 +54,52 @@ import { CHROME_PERMISSIONS_URL as CHROME_PERMISSIONS_URL_2 } from "./chromeDial
 import { Dialog } from "../../components/design-system/Dialog.js";
 import { LearnMoreLink } from "../../components/LearnMoreLink.js";
 import { env } from "../../utils/env.js";
-import { useIdeConnectionStatus } from "../../hooks/useIdeConnectionStatus.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
+//@ chunk-s61vbvea.js:505261-505333 fingerprint = CHROME_EXTENSION_URL (0.667)
+var HTTPS_CLAUDE_AI_CHROME = "https://claude.ai/chrome";
+var FCOEOABGFENEJGLBFFODGKKBKCDHCGFN = "fcoeoabgfenejglbffodgkkbkcdhcgfn";
+//@ chunk-hthm3h8y.js:5518-5561 fingerprint = CHROME_PERMISSIONS_URL (1)
+var CHROME_PERMISSIONS_URL = "https://clau.de/chrome/permissions";
+//@ chunk-18hwfzwa.js:121042-121093 fingerprint = _temp (1)
+function useIdeConnectionStatusValue(s) {
+  return useIdeConnectionStatus(s.mcp.clients).status;
+}
 //@ chunk-1ztfztfw.js:14181-14185 sole-consumer
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-1ztfztfw.js:14181", () => {
+  init_react_production();
+});
 //@ chunk-1ztfztfw.js:14185-14189 sole-consumer
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-1ztfztfw.js:14185", () => {
+  init_react_production();
+});
 //@ chunk-1ztfztfw.js:14189-16885 sole-consumer
 /**
  * /chrome 的浏览器选择面板：列出已连接的浏览器、标记当前配对设备，选择后调用 select_browser。
  */
 function BrowserPicker(props) {
-  let u = w(41);
+  let $ = useMemoCache(41);
   let { chromeClient, onDone } = props;
-  let [browsers, setBrowsers] = y(null);
-  let [listError, setListError] = y(null);
-  let [selecting, setSelecting] = y(false);
-  let doneRef = R(false);
-  let oe;
-  if (u[0] === MEMO_CACHE_SENTINEL) {
-    oe = getGlobalConfig().chromeExtension?.pairedDeviceId;
-    u[0] = oe;
-  } else oe = u[0];
-  let pairedDeviceId = oe;
-  let Y;
-  let ne;
-  if (u[1] !== chromeClient) {
-    Y = () => {
+  let [browsers, setBrowsers] = useState(null);
+  let [listError, setListError] = useState(null);
+  let [selecting, setSelecting] = useState(false);
+  let doneRef = useRef(false);
+  let pairedDeviceId;
+  if ($[0] === MEMO_CACHE_SENTINEL) {
+    pairedDeviceId = getGlobalConfig().chromeExtension?.pairedDeviceId;
+    $[0] = pairedDeviceId;
+  } else pairedDeviceId = $[0];
+  let pairedDeviceId_2 = pairedDeviceId;
+  let loadEffect;
+  let deps;
+  if ($[1] !== chromeClient) {
+    loadEffect = () => {
       doneRef.current = false;
       listConnectedBrowsers(chromeClient)
-        .then((le) => {
-          if (!doneRef.current) setBrowsers(le);
+        .then((list) => {
+          if (!doneRef.current) setBrowsers(list);
         })
         .catch((error) => {
           if (isChromeBridgeUnreachable(error)) {
@@ -93,256 +114,256 @@ function BrowserPicker(props) {
         doneRef.current = true;
       };
     };
-    ne = [chromeClient];
-    u[1] = chromeClient;
-    u[2] = Y;
-    u[3] = ne;
+    deps = [chromeClient];
+    $[1] = chromeClient;
+    $[2] = loadEffect;
+    $[3] = deps;
   } else {
-    Y = u[2];
-    ne = u[3];
+    loadEffect = $[2];
+    deps = $[3];
   }
-  P(Y, ne);
-  let ae;
-  if (u[4] !== onDone) {
-    ae = function h(Ie) {
+  useEffect(loadEffect, deps);
+  let finish;
+  if ($[4] !== onDone) {
+    finish = function onSelectFinish(message) {
       if (doneRef.current) {
         return;
       }
       doneRef.current = true;
-      onDone(Ie);
+      onDone(message);
     };
-    u[4] = onDone;
-    u[5] = ae;
-  } else ae = u[5];
-  let finish = ae;
-  let J;
-  if (u[6] !== browsers || u[7] !== chromeClient || u[8] !== finish || u[9] !== selecting) {
-    J = function W(v) {
+    $[4] = onDone;
+    $[5] = finish;
+  } else finish = $[5];
+  let finish_2 = finish;
+  let selectById;
+  if ($[6] !== browsers || $[7] !== chromeClient || $[8] !== finish_2 || $[9] !== selecting) {
+    selectById = function selectByDevice(deviceId) {
       if (selecting) {
         return;
       }
       setSelecting(true);
-      let found = browsers?.find((browser) => browser.deviceId === v);
-      selectBrowser(chromeClient, v)
+      let found = browsers?.find((browser) => browser.deviceId === deviceId);
+      selectBrowser(chromeClient, deviceId)
         .then(() => {
           logFeatureOk("chrome_browser_picker");
-          finish(found ? `Now using browser "${found.name}" for Chrome actions.` : undefined);
+          finish_2(found ? `Now using browser "${found.name}" for Chrome actions.` : undefined);
         })
         .catch((error) => {
           logBrowserSwitchFailure(error);
           logForDebugging(`claude-in-chrome select_browser failed: ${toError(error).message}`, {
             level: "error",
           });
-          finish(`Couldn't switch browser: ${toError(error).message}`);
+          finish_2(`Couldn't switch browser: ${toError(error).message}`);
         });
     };
-    u[6] = browsers;
-    u[7] = chromeClient;
-    u[8] = finish;
-    u[9] = selecting;
-    u[10] = J;
-  } else J = u[10];
-  let selectBrowserById = J;
+    $[6] = browsers;
+    $[7] = chromeClient;
+    $[8] = finish_2;
+    $[9] = selecting;
+    $[10] = selectById;
+  } else selectById = $[10];
+  let selectBrowserById = selectById;
   if (listError) {
     const children = `Couldn't list connected browsers: ${listError}`;
     let children_2;
-    if (u[11] !== children) {
+    if ($[11] !== children) {
       children_2 = jsxProd_default(Text, {
         color: "error",
         children,
       });
-      u[11] = children;
-      u[12] = children_2;
-    } else children_2 = u[12];
-    let I;
-    if (u[13] !== finish || u[14] !== children_2) {
-      I = jsxProd_default(BackOnlyFrame, {
-        onDone: finish,
+      $[11] = children;
+      $[12] = children_2;
+    } else children_2 = $[12];
+    let errorFrame;
+    if ($[13] !== finish_2 || $[14] !== children_2) {
+      errorFrame = jsxProd_default(BackOnlyFrame, {
+        onDone: finish_2,
         children: children_2,
       });
-      u[13] = finish;
-      u[14] = children_2;
-      u[15] = I;
-    } else I = u[15];
-    return I;
+      $[13] = finish_2;
+      $[14] = children_2;
+      $[15] = errorFrame;
+    } else errorFrame = $[15];
+    return errorFrame;
   }
   if (browsers === null) {
     let children;
-    if (u[16] === MEMO_CACHE_SENTINEL) {
+    if ($[16] === MEMO_CACHE_SENTINEL) {
       children = jsxProd_default(Text, {
         dimColor: true,
         children: "Looking for connected browsers\u2026",
       });
-      u[16] = children;
-    } else children = u[16];
-    let b;
-    if (u[17] !== finish) {
-      b = jsxProd_default(BackOnlyFrame, {
-        onDone: finish,
+      $[16] = children;
+    } else children = $[16];
+    let loadingFrame;
+    if ($[17] !== finish_2) {
+      loadingFrame = jsxProd_default(BackOnlyFrame, {
+        onDone: finish_2,
         children,
       });
-      u[17] = finish;
-      u[18] = b;
-    } else b = u[18];
-    return b;
+      $[17] = finish_2;
+      $[18] = loadingFrame;
+    } else loadingFrame = $[18];
+    return loadingFrame;
   }
   if (browsers.length === 0) {
     let children;
-    if (u[19] === MEMO_CACHE_SENTINEL) {
+    if ($[19] === MEMO_CACHE_SENTINEL) {
       children = jsxProd_default(Text, {
         children: NO_BROWSERS_CONNECTED_TEXT,
       });
-      u[19] = children;
-    } else children = u[19];
-    let b;
-    if (u[20] !== finish) {
-      b = jsxProd_default(BackOnlyFrame, {
-        onDone: finish,
+      $[19] = children;
+    } else children = $[19];
+    let emptyFrame;
+    if ($[20] !== finish_2) {
+      emptyFrame = jsxProd_default(BackOnlyFrame, {
+        onDone: finish_2,
         children,
       });
-      u[20] = finish;
-      u[21] = b;
-    } else b = u[21];
-    return b;
+      $[20] = finish_2;
+      $[21] = emptyFrame;
+    } else emptyFrame = $[21];
+    return emptyFrame;
   }
   const children =
     browsers.length === 1
       ? "One browser is connected:"
       : `Choose which browser to use (${browsers.length} connected):`;
-  let b;
-  if (u[22] !== children) {
-    b = jsxProd_default(Text, {
+  let title;
+  if ($[22] !== children) {
+    title = jsxProd_default(Text, {
       children,
     });
-    u[22] = children;
-    u[23] = b;
-  } else b = u[23];
+    $[22] = children;
+    $[23] = title;
+  } else title = $[23];
   const visibleCount = Math.min(browsers.length, 5);
-  let te;
-  if (u[24] !== browsers) {
-    let A;
-    if (u[26] === MEMO_CACHE_SENTINEL) {
-      A = (de) => de.deviceId === pairedDeviceId;
-      u[26] = A;
-    } else A = u[26];
-    te = browsers.findIndex(A);
-    u[24] = browsers;
-    u[25] = te;
-  } else te = u[25];
-  const defaultFocusIndex = Math.max(0, te);
+  let focusIndex;
+  if ($[24] !== browsers) {
+    let pairMatch;
+    if ($[26] === MEMO_CACHE_SENTINEL) {
+      pairMatch = (browser) => browser.deviceId === pairedDeviceId_2;
+      $[26] = pairMatch;
+    } else pairMatch = $[26];
+    focusIndex = browsers.findIndex(pairMatch);
+    $[24] = browsers;
+    $[25] = focusIndex;
+  } else focusIndex = $[25];
+  const defaultFocusIndex = Math.max(0, focusIndex);
   let onSelect;
-  if (u[27] !== browsers || u[28] !== selectBrowserById) {
-    onSelect = (re) => {
-      let me = browsers[re];
-      if (me) selectBrowserById(me.deviceId);
+  if ($[27] !== browsers || $[28] !== selectBrowserById) {
+    onSelect = (index) => {
+      let browser = browsers[index];
+      if (browser) selectBrowserById(browser.deviceId);
     };
-    u[27] = browsers;
-    u[28] = selectBrowserById;
-    u[29] = onSelect;
-  } else onSelect = u[29];
+    $[27] = browsers;
+    $[28] = selectBrowserById;
+    $[29] = onSelect;
+  } else onSelect = $[29];
   let children_2;
-  if (u[30] !== browsers) {
-    let c;
-    if (u[32] === MEMO_CACHE_SENTINEL) {
-      c = (k) =>
+  if ($[30] !== browsers) {
+    let renderItem;
+    if ($[32] === MEMO_CACHE_SENTINEL) {
+      renderItem = (browser) =>
         jsxProd_default(
           OrderedListWithItem.Item,
           {
-            label: k.name,
+            label: browser.name,
             icon:
-              k.deviceId === pairedDeviceId
+              browser.deviceId === pairedDeviceId_2
                 ? jsxProd_default(StatusIcon, {
                     status: "success",
                     "aria-label": "current:",
                   })
                 : undefined,
-            meta: [k.osPlatform ?? "unknown OS"],
+            meta: [browser.osPlatform ?? "unknown OS"],
           },
-          k.deviceId,
+          browser.deviceId,
         );
-      u[32] = c;
-    } else c = u[32];
-    children_2 = browsers.map(c);
-    u[30] = browsers;
-    u[31] = children_2;
-  } else children_2 = u[31];
-  let c;
-  if (u[33] !== defaultFocusIndex || u[34] !== onSelect || u[35] !== children_2 || u[36] !== visibleCount) {
-    c = jsxProd_default(OrderedListWithItem, {
+      $[32] = renderItem;
+    } else renderItem = $[32];
+    children_2 = browsers.map(renderItem);
+    $[30] = browsers;
+    $[31] = children_2;
+  } else children_2 = $[31];
+  let list;
+  if ($[33] !== defaultFocusIndex || $[34] !== onSelect || $[35] !== children_2 || $[36] !== visibleCount) {
+    list = jsxProd_default(OrderedListWithItem, {
       visibleCount,
       defaultFocusIndex,
       onSelect,
       children: children_2,
     });
-    u[33] = defaultFocusIndex;
-    u[34] = onSelect;
-    u[35] = children_2;
-    u[36] = visibleCount;
-    u[37] = c;
-  } else c = u[37];
-  let B;
-  if (u[38] !== c || u[39] !== b) {
-    B = jsxProd_default_2(Box, {
+    $[33] = defaultFocusIndex;
+    $[34] = onSelect;
+    $[35] = children_2;
+    $[36] = visibleCount;
+    $[37] = list;
+  } else list = $[37];
+  let layout;
+  if ($[38] !== list || $[39] !== title) {
+    layout = jsxProd_default_2(Box, {
       flexDirection: "column",
       gap: 1,
-      children: [b, c],
+      children: [title, list],
     });
-    u[38] = c;
-    u[39] = b;
-    u[40] = B;
-  } else B = u[40];
-  return B;
+    $[38] = list;
+    $[39] = title;
+    $[40] = layout;
+  } else layout = $[40];
+  return layout;
 }
 //@ chunk-1ztfztfw.js:16885-17242 sole-consumer
 /**
  * 内容下方只带一个“Back”选项的外框。
  */
 function BackOnlyFrame(props) {
-  let o = w(6);
+  let $ = useMemoCache(6);
   let { onDone, children } = props;
   let options;
-  if (o[0] === MEMO_CACHE_SENTINEL) {
+  if ($[0] === MEMO_CACHE_SENTINEL) {
     options = [
       {
         value: "back",
         label: "\u2039 Back",
       },
     ];
-    o[0] = options;
-  } else options = o[0];
-  let x;
-  if (o[1] !== onDone) {
-    x = jsxProd_default(ModelSelector, {
+    $[0] = options;
+  } else options = $[0];
+  let selector;
+  if ($[1] !== onDone) {
+    selector = jsxProd_default(ModelSelector, {
       options,
       onChange: () => onDone(),
       onCancel: () => onDone(),
       hideIndexes: true,
     });
-    o[1] = onDone;
-    o[2] = x;
-  } else x = o[2];
-  let V;
-  if (o[3] !== children || o[4] !== x) {
-    V = jsxProd_default_2(Box, {
+    $[1] = onDone;
+    $[2] = selector;
+  } else selector = $[2];
+  let layout;
+  if ($[3] !== children || $[4] !== selector) {
+    layout = jsxProd_default_2(Box, {
       flexDirection: "column",
       gap: 1,
-      children: [children, x],
+      children: [children, selector],
     });
-    o[3] = children;
-    o[4] = x;
-    o[5] = V;
-  } else V = o[5];
-  return V;
+    $[3] = children;
+    $[4] = selector;
+    $[5] = layout;
+  } else layout = $[5];
+  return layout;
 }
 //@ chunk-1ztfztfw.js:17242-17515 sole-consumer
 /**
  * Claude in Chrome MCP 服务器状态：connected/connecting/disabled/failed/absent。
  */
-function getChromeMcpConnectionState(T) {
-  let filtered = T.filter((p) => p.name === CLAUDE_IN_CHROME_MCP_SERVER_NAME);
-  if (filtered.some((p) => p.type === "connected" || p.type === "cached")) return "connected";
-  if (filtered.some((p) => p.type === "pending")) return "connecting";
-  if (filtered.some((p) => p.type === "disabled")) return "disabled";
+function getChromeMcpConnectionState(clients) {
+  let filtered = clients.filter((client) => client.name === CLAUDE_IN_CHROME_MCP_SERVER_NAME);
+  if (filtered.some((client) => client.type === "connected" || client.type === "cached")) return "connected";
+  if (filtered.some((client) => client.type === "pending")) return "connecting";
+  if (filtered.some((client) => client.type === "disabled")) return "disabled";
   if (filtered.length > 0) return "failed";
   return "absent";
 }
@@ -361,22 +382,24 @@ var CHROME_DISABLED_IN_MCP_NOTICE = {
 };
 //@ chunk-1ztfztfw.js:18155-22310 fingerprint = ClaudeInChromeMenu (0.467)
 function ClaudeInChromeMenu({ onDone, isExtensionInstalled, configEnabled, isClaudeAISubscriber, isWSL }) {
-  let x = useAppState((a) => a.mcp.clients);
+  let clients = useAppState((state) => state.mcp.clients);
   let { storageV5 } = useTheme_2();
-  let [K, F] = y(0);
-  let [D, u] = y(configEnabled ?? false);
-  let [oe, X] = y(false);
-  let [Y, ne] = y(isExtensionInstalled);
-  let [le, z] = y("menu");
-  let ae = false;
-  let Ie = false;
-  let found = x.find((a) => a.name === CLAUDE_IN_CHROME_MCP_SERVER_NAME && a.type === "connected");
-  let J = found !== undefined;
-  let chromeMcpConnectionState = getChromeMcpConnectionState(x);
-  let [Q, E] = y(null);
-  let U = R(false);
-  let mcpClients = R(true);
-  P(
+  let [listKey, setListKey] = useState(0);
+  let [defaultEnabled, setDefaultEnabled] = useState(configEnabled ?? false);
+  let [justInstalled, setJustInstalled] = useState(false);
+  let [installed, setInstalled] = useState(isExtensionInstalled);
+  let [view, setView] = useState("menu");
+  let wslFlag = false;
+  let isSubscriber = false;
+  let found = clients.find(
+    (client) => client.name === CLAUDE_IN_CHROME_MCP_SERVER_NAME && client.type === "connected",
+  );
+  let connected = found !== undefined;
+  let chromeMcpConnectionState = getChromeMcpConnectionState(clients);
+  let [notice, setNotice] = useState(null);
+  let reconnecting = useRef(false);
+  let mcpClients = useRef(true);
+  useEffect(
     () => () => {
       mcpClients.current = false;
     },
@@ -384,100 +407,100 @@ function ClaudeInChromeMenu({ onDone, isExtensionInstalled, configEnabled, isCla
   );
   let appStateSession = useAppStateSession();
   let pairedDeviceName = getGlobalConfig().chromeExtension?.pairedDeviceName;
-  function I(a) {
-    openInChrome(a).catch(logError);
+  function openUrl(url) {
+    openInChrome(url).catch(logError);
   }
-  async function te() {
+  async function reconnectNow() {
     let reconnectHandle = getReconnectHandle();
     if (!reconnectHandle) {
-      E({
+      setNotice({
         text: "Reconnect isn't available from this view. Open /mcp, select claude-in-chrome, and choose Reconnect.",
         color: "warning",
       });
       return;
     }
-    let c = {
+    let context = {
       persistsOffBox: isBridgeOrTransport(appStateSession),
-      config: x.find((B) => B.name === CLAUDE_IN_CHROME_MCP_SERVER_NAME)?.config,
+      config: clients.find((client) => client.name === CLAUDE_IN_CHROME_MCP_SERVER_NAME)?.config,
     };
-    let k =
+    let retryHint =
       ' Select "Reconnect extension" to try again, or open /mcp and select claude-in-chrome for details.';
-    U.current = true;
-    E({
+    reconnecting.current = true;
+    setNotice({
       text: "Reconnecting\u2026",
       color: "warning",
     });
     try {
-      let B = await reconnectHandle(CLAUDE_IN_CHROME_MCP_SERVER_NAME);
-      let { message, success } = handleReconnectResult(B, CLAUDE_IN_CHROME_MCP_SERVER_NAME, c);
+      let result = await reconnectHandle(CLAUDE_IN_CHROME_MCP_SERVER_NAME);
+      let { message, success } = handleReconnectResult(result, CLAUDE_IN_CHROME_MCP_SERVER_NAME, context);
       if (!mcpClients.current) return;
       if (success) {
-        I(CHROME_EXTENSION_RECONNECT_URL);
+        openUrl(CHROME_EXTENSION_RECONNECT_URL);
         onDone(
           `${message} Its browser tools are back in this session. If a browser action still doesn't work, check that Chrome is open and the extension is signed in.`,
         );
       } else
-        E({
-          text: message + k,
+        setNotice({
+          text: message + retryHint,
           color: "error",
         });
     } catch (error) {
-      E({
+      setNotice({
         text:
-          handleReconnectError(error, CLAUDE_IN_CHROME_MCP_SERVER_NAME, c) +
-          (error instanceof WireSafeControlError ? "" : k),
+          handleReconnectError(error, CLAUDE_IN_CHROME_MCP_SERVER_NAME, context) +
+          (error instanceof WireSafeControlError ? "" : retryHint),
         color: "error",
       });
     } finally {
-      U.current = false;
+      reconnecting.current = false;
     }
   }
-  function A() {
+  function reconnect() {
     if (chromeMcpConnectionState === "disabled") {
-      E(CHROME_DISABLED_IN_MCP_NOTICE);
+      setNotice(CHROME_DISABLED_IN_MCP_NOTICE);
       return;
     }
     let chromeServerPolicyRefusal = getChromeServerPolicyRefusal();
     if (chromeServerPolicyRefusal) {
-      E({
+      setNotice({
         text: chromeServerPolicyRefusal,
         color: "warning",
       });
       return;
     }
     if (chromeMcpConnectionState === "absent") {
-      E(canAuthenticateChromeBridge() ? CHROME_NOT_ENABLED_NOTICE : CHROME_NEEDS_CLAUDE_AI_NOTICE);
+      setNotice(canAuthenticateChromeBridge() ? CHROME_NOT_ENABLED_NOTICE : CHROME_NEEDS_CLAUDE_AI_NOTICE);
       return;
     }
-    te();
+    reconnectNow();
   }
   function handleAction(action) {
     switch (action) {
       case "install-extension":
-        F((c) => c + 1);
-        X(true);
-        I(HTTPS_CLAUDE_AI_CHROME);
+        setListKey((n) => n + 1);
+        setJustInstalled(true);
+        openUrl(HTTPS_CLAUDE_AI_CHROME);
         break;
       case "reconnect":
-        F((url) => url + 1);
+        setListKey((url) => url + 1);
         isChromeExtensionInstalled()
           .then((installed) => {
-            ne(installed);
-            if (installed) X(false);
+            setInstalled(installed);
+            if (installed) setJustInstalled(false);
           })
           .catch(logError);
-        if (U.current) break;
+        if (reconnecting.current) break;
         if (chromeMcpConnectionState === "connected" || chromeMcpConnectionState === "connecting") {
-          E(null);
-          I(CHROME_EXTENSION_RECONNECT_URL);
-        } else A();
+          setNotice(null);
+          openUrl(CHROME_EXTENSION_RECONNECT_URL);
+        } else reconnect();
         break;
       case "manage-permissions":
-        F((installed_0) => installed_0 + 1);
-        I(CHROME_PERMISSIONS_URL_2);
+        setListKey((installed_0) => installed_0 + 1);
+        openUrl(CHROME_PERMISSIONS_URL_2);
         break;
       case "toggle-default": {
-        let newValue = !D;
+        let newValue = !defaultEnabled;
         saveGlobalConfig(
           (current) => ({
             ...current,
@@ -485,27 +508,27 @@ function ClaudeInChromeMenu({ onDone, isExtensionInstalled, configEnabled, isCla
           }),
           storageV5,
         );
-        u(newValue);
+        setDefaultEnabled(newValue);
         break;
       }
       case "select-browser":
-        z("select-browser");
+        setView("select-browser");
         break;
     }
   }
-  let _ = [];
-  let requiresExtensionSuffix = Y ? "" : " (requires extension)";
-  if (!Y)
-    _.push({
+  let options = [];
+  let requiresExtensionSuffix = installed ? "" : " (requires extension)";
+  if (!installed)
+    options.push({
       label: "Install Chrome extension",
       value: "install-extension",
     });
-  if (J)
-    _.push({
+  if (connected)
+    options.push({
       label: "Select browser\u2026",
       value: "select-browser",
     });
-  _.push(
+  options.push(
     {
       label: jsxProd_default_2(Fragment, {
         children: [
@@ -535,7 +558,7 @@ function ClaudeInChromeMenu({ onDone, isExtensionInstalled, configEnabled, isCla
       value: "reconnect",
     },
     {
-      label: `Enabled by default: ${D ? "Yes" : "No"}`,
+      label: `Enabled by default: ${defaultEnabled ? "Yes" : "No"}`,
       value: "toggle-default",
     },
   );
@@ -602,7 +625,7 @@ function ClaudeInChromeMenu({ onDone, isExtensionInstalled, configEnabled, isCla
                     children: [
                       "Extension:",
                       " ",
-                      Y
+                      installed
                         ? jsxProd_default(Text, {
                             color: "success",
                             children: "Installed",
@@ -613,7 +636,7 @@ function ClaudeInChromeMenu({ onDone, isExtensionInstalled, configEnabled, isCla
                           }),
                     ],
                   }),
-                  J && pairedDeviceName
+                  connected && pairedDeviceName
                     ? jsxProd_default_2(Text, {
                         children: [
                           "Browser: ",
@@ -626,30 +649,30 @@ function ClaudeInChromeMenu({ onDone, isExtensionInstalled, configEnabled, isCla
                     : null,
                 ],
               }),
-              le === "select-browser" && found
+              view === "select-browser" && found
                 ? jsxProd_default(BrowserPicker, {
                     chromeClient: found,
-                    onDone: (a) => {
-                      z("menu");
-                      F((c) => c + 1);
-                      if (a) onDone(a);
+                    onDone: (message) => {
+                      setView("menu");
+                      setListKey((n) => n + 1);
+                      if (message) onDone(message);
                     },
                   })
                 : jsxProd_default(
                     ModelSelector,
                     {
-                      options: _,
+                      options,
                       onChange: handleAction,
                       hideIndexes: true,
                     },
-                    K,
+                    listKey,
                   ),
-              Q &&
+              notice &&
                 jsxProd_default(Text, {
-                  color: Q.color,
-                  children: Q.text,
+                  color: notice.color,
+                  children: notice.text,
                 }),
-              oe &&
+              justInstalled &&
                 jsxProd_default_2(Text, {
                   color: "warning",
                   children: ["Once installed, select ", '"Reconnect extension"', " to connect."],
@@ -711,18 +734,10 @@ var call = async function (onDone) {
     isWSL,
   });
 };
-//@ chunk-18hwfzwa.js:121042-121093 fingerprint = _temp (1)
-function useIdeConnectionStatusValue(s) {
-  return useIdeConnectionStatus(s.mcp.clients).status;
-}
-//@ chunk-hthm3h8y.js:5518-5561 fingerprint = CHROME_PERMISSIONS_URL (1)
-var CHROME_PERMISSIONS_URL = "https://clau.de/chrome/permissions";
-//@ chunk-s61vbvea.js:505261-505333 fingerprint = CHROME_EXTENSION_URL (0.667)
-var HTTPS_CLAUDE_AI_CHROME = "https://claude.ai/chrome";
-var FCOEOABGFENEJGLBFFODGKKBKCDHCGFN = "fcoeoabgfenejglbffodgkkbkcdhcgfn";
 export {
   useIdeConnectionStatusValue,
   HTTPS_CLAUDE_AI_CHROME,
   CHROME_PERMISSIONS_URL,
   FCOEOABGFENEJGLBFFODGKKBKCDHCGFN,
+  call,
 };

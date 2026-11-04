@@ -9,7 +9,7 @@
  * attribution: placement 7
  */
 import __cc_resource_0 from "../../../assets/claude-code.d.ts-9de23df2.txt.zst" with { type: "file" };
-import { Ar } from "../../../runtime/bun-runtime.js";
+import { __export } from "../../../runtime/bun-runtime.js";
 import { readEmbeddedTextSync } from "../../utils/embeddedAssets.js";
 import { BUILTIN_TOOL_INPUTS_HEADER } from "../functionHooks/types/toolTypesDts.js";
 
@@ -19,7 +19,7 @@ import { BUILTIN_TOOL_INPUTS_HEADER } from "../functionHooks/types/toolTypesDts.
  */
 var EMPTY_DECLARATIONS = {};
 //@ chunk-72n15jmc.js:3505-3610 placement
-Ar(EMPTY_DECLARATIONS, {
+__export(EMPTY_DECLARATIONS, {
   PLUGIN_DECLARATIONS_TEXT: () => DECLARATIONS_TEXT,
   coreDeclarationsOf: () => withGenerationHeader,
   default: () => EMPTY_DECLARATIONS,
@@ -44,11 +44,13 @@ var DECLARATIONS_TEXT = declarationsText;
 /**
  * 加生成头
  */
-var withGenerationHeader = (t) => `// Written by Claude Code ${t}.
+var withGenerationHeader = (version) => `// Written by Claude Code ${version}.
 ${DECLARATIONS_TEXT}
 `;
 //@ chunk-72n15jmc.js:3723-3748 placement
 /**
  * 声明加工具输入类型
  */
-var declarationsWithToolInputs = (t, X) => withGenerationHeader(t) + BUILTIN_TOOL_INPUTS_HEADER(X);
+var declarationsWithToolInputs = (version, builtinToolSchemas) =>
+  withGenerationHeader(version) + BUILTIN_TOOL_INPUTS_HEADER(builtinToolSchemas);
+export { DECLARATIONS_TEXT, withGenerationHeader, EMPTY_DECLARATIONS, declarationsWithToolInputs };

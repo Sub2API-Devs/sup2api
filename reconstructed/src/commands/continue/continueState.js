@@ -8,24 +8,28 @@
  * pieces: chunk-mw789w2b.js (11)
  * attribution: placement 11
  */
-import { init_react_production, y, P } from "../../../vendor/react/cjs/react.production.js";
+import { init_react_production, useState, useEffect } from "../../../vendor/react/cjs/react.production.js";
 import { SessionRootSlot } from "../../bootstrap/sessionSlices.js";
 import { getRootSession } from "../../bootstrap/state.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-mw789w2b.js:268-272 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-mw789w2b.js:268", () => {
+  init_react_production();
+});
 //@ chunk-mw789w2b.js:272-291 placement
 var CONTINUE_COMMAND = "continue";
 //@ chunk-mw789w2b.js:291-460 placement
-function normalizeContinueInput(t, e, n) {
-  if (n && e === CONTINUE_COMMAND && t === CONTINUE_COMMAND + "/") return "/";
+function normalizeContinueInput(input, state, options) {
+  if (options && state === CONTINUE_COMMAND && input === CONTINUE_COMMAND + "/") return "/";
   if (
-    e.startsWith("/") &&
-    t.length === CONTINUE_COMMAND.length + e.length + 1 &&
-    t.startsWith(CONTINUE_COMMAND + e)
+    state.startsWith("/") &&
+    input.length === CONTINUE_COMMAND.length + state.length + 1 &&
+    input.startsWith(CONTINUE_COMMAND + state)
   )
-    return t.slice(CONTINUE_COMMAND.length);
-  return t;
+    return input.slice(CONTINUE_COMMAND.length);
+  return input;
 }
 //@ chunk-mw789w2b.js:460-516 placement
 class ContinueState {
@@ -34,16 +38,19 @@ class ContinueState {
   inFlight = null;
 }
 //@ chunk-mw789w2b.js:516-540 placement
-var CONTINUE_STATE_SLOT = new SessionRootSlot(() => new ContinueState());
+var CONTINUE_STATE_SLOT; // deferred: uses SessionRootSlot (../../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-mw789w2b.js:516", () => {
+  CONTINUE_STATE_SLOT = new SessionRootSlot(() => new ContinueState());
+});
 //@ chunk-mw789w2b.js:540-570 placement
 function continueState() {
   return CONTINUE_STATE_SLOT.of(getRootSession());
 }
 //@ chunk-mw789w2b.js:570-641 placement
-function publishContinueResult(t) {
-  let e = continueState();
-  e.lastResult = t;
-  for (let listener of e.listeners) listener(t);
+function publishContinueResult(result) {
+  let state = continueState();
+  state.lastResult = result;
+  for (let listener of state.listeners) listener(result);
 }
 //@ chunk-mw789w2b.js:641-676 placement
 function getContinueInFlight() {
@@ -60,16 +67,16 @@ function resetContinueState() {
 }
 //@ chunk-mw789w2b.js:750-897 placement
 function useContinueResult() {
-  let [t, e] = y(() => continueState().lastResult);
-  P(() => {
-    let n = continueState();
-    e(n.lastResult);
-    n.listeners.add(e);
+  let [state, setState] = useState(() => continueState().lastResult);
+  useEffect(() => {
+    let state = continueState();
+    setState(state.lastResult);
+    state.listeners.add(setState);
     return () => {
-      n.listeners.delete(e);
+      state.listeners.delete(setState);
     };
   }, []);
-  return t;
+  return state;
 }
 export {
   resetContinueState,

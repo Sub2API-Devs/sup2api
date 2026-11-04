@@ -202,3 +202,4 @@ class DefaultAzureCredential extends ChainedTokenCredential {
     super(...credentials);
   }
 }
+export { DefaultAzureCredential };

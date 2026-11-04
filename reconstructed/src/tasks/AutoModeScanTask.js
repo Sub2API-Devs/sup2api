@@ -32,7 +32,7 @@ function findRunningAutoModeScanTask(taskRegistry) {
  */
 function registerAutoModeScanTask(taskRegistry, abortController, gathersFromGitHubOrg) {
   let taskId = generateTaskId("auto_mode_scan");
-  let M = {
+  let taskState = {
     ...createTaskStateBase(taskId, "auto_mode_scan", "scanning for auto-mode setup"),
     type: "auto_mode_scan",
     status: "running",
@@ -40,7 +40,7 @@ function registerAutoModeScanTask(taskRegistry, abortController, gathersFromGitH
     gathersFromGitHubOrg,
     abortController,
   };
-  taskRegistry.register(M);
+  taskRegistry.register(taskState);
   return taskId;
 }
 export { registerAutoModeScanTask, findRunningAutoModeScanTask };

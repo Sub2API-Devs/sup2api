@@ -42,20 +42,21 @@ import { MERMAID_RUNTIME_PATH } from "../../../services/artifacts/pageRuntimes.j
 import { logError } from "../../../utils/log.js";
 import { logFeatureSad } from "../../../services/analytics/featureTelemetry.js";
 import { startBunRelay } from "../../../upstreamproxy/relay.js";
+import { deferInit } from "../../../../runtime/deferred-init.js";
 
 //@ chunk-8wvtd8sr.js:179080-179430 placement
 /**
  * 预览中以页面相对路径引用但未加载的文件：合成一条 note 问题，列出前 zf 个，提示发布后只有通过 files 传入才存在。
  */
-function relativeRefsNotLoadedIssues(e) {
-  if (e.length === 0) return [];
-  let n = e.length;
-  let mapped = e.slice(0, MAX_LISTED_UNLOADED_FILES).map((h) => sanitizeDisplay(h, 60));
-  let r = n - mapped.length;
+function relativeRefsNotLoadedIssues(paths) {
+  if (paths.length === 0) return [];
+  let count = paths.length;
+  let mapped = paths.slice(0, MAX_LISTED_UNLOADED_FILES).map((path) => sanitizeDisplay(path, 60));
+  let moreCount = count - mapped.length;
   return [
     {
       kind: "note",
-      text: `${n} ${plural(n, "file")} referenced relative to the page ${plural(n, "is", "are")} not loaded in preview (${mapped.join(", ")}${r > 0 ? `, \u2026 ${r} more` : ""}); once published ${plural(n, "it exists", "they exist")} only if passed in \`files\``,
+      text: `${count} ${plural(count, "file")} referenced relative to the page ${plural(count, "is", "are")} not loaded in preview (${mapped.join(", ")}${moreCount > 0 ? `, \u2026 ${moreCount} more` : ""}); once published ${plural(count, "it exists", "they exist")} only if passed in \`files\``,
     },
   ];
 }
@@ -63,12 +64,12 @@ function relativeRefsNotLoadedIssues(e) {
 /**
  * 预览里 window.claude.use() 对某些能力返回 null 时，生成一条 note：依赖这些能力的代码在预览中没有运行。
  */
-function missingRuntimeCapabilityIssues(e, n) {
-  if (e.size === 0) return [];
+function missingRuntimeCapabilityIssues(missing, more) {
+  if (missing.size === 0) return [];
   return [
     {
       kind: "note",
-      text: `no artifact runtime in preview: window.claude.use() resolved null for ${[...e].map((r) => sanitizeDisplay(r, 40)).join(", ") + (n ? " and more" : "")}, so the code that needs ${plural(e.size, "that capability", "those capabilities")} did not run here \u2014 exercise it after publishing`,
+      text: `no artifact runtime in preview: window.claude.use() resolved null for ${[...missing].map((capability) => sanitizeDisplay(capability, 40)).join(", ") + (more ? " and more" : "")}, so the code that needs ${plural(missing.size, "that capability", "those capabilities")} did not run here \u2014 exercise it after publishing`,
     },
   ];
 }
@@ -76,50 +77,51 @@ function missingRuntimeCapabilityIssues(e, n) {
 /**
  * 同一宽度的浅色/深色两张截图完全相同时，报告页面没有深色主题样式（只截到顶部时措辞不同）。
  */
-function identicalThemeRenderIssues(e) {
-  let n = [];
-  let s = new Map();
-  for (let r of e) if (r.base64 !== undefined) s.set(r.width, [...(s.get(r.width) ?? []), r]);
-  for (let [r, h] of s) {
-    let [y, p] = h;
-    if (h.length === 2 && y.theme !== p.theme && y.base64 === p.base64) {
-      let w = y.pageHeight !== undefined || p.pageHeight !== undefined;
-      n.push({
+function identicalThemeRenderIssues(shots) {
+  let issues = [];
+  let byWidth = new Map();
+  for (let shot of shots)
+    if (shot.base64 !== undefined) byWidth.set(shot.width, [...(byWidth.get(shot.width) ?? []), shot]);
+  for (let [width, pair] of byWidth) {
+    let [light, dark] = pair;
+    if (pair.length === 2 && light.theme !== dark.theme && light.base64 === dark.base64) {
+      let isPartial = light.pageHeight !== undefined || dark.pageHeight !== undefined;
+      issues.push({
         kind: "theme",
-        text: w
-          ? `${r}: the captured top of the page is identical in light and dark \u2014 no dark-theme styles show there`
-          : `${r}: light and dark renders are identical \u2014 the page has no dark-theme styles`,
+        text: isPartial
+          ? `${width}: the captured top of the page is identical in light and dark \u2014 no dark-theme styles show there`
+          : `${width}: light and dark renders are identical \u2014 the page has no dark-theme styles`,
       });
     }
   }
-  return n;
+  return issues;
 }
 //@ chunk-8wvtd8sr.js:180238-180274 placement
 /**
  * 按视口宽度返回主题高度（<600 用 844，否则 900）。
  */
-function themeForViewportWidth(e) {
-  return e < 600 ? 844 : 900;
+function themeForViewportWidth(width) {
+  return width < 600 ? 844 : 900;
 }
 //@ chunk-8wvtd8sr.js:180274-180717 placement
 /**
  * 把待预览页面改造成预览用 HTML：先禁用 speculationrules 脚本，再在 <html> 上设 data-theme，并在 <head> 开头插入预览脚本与 CSP、禁止 DNS 预取。
  * 页面骨架不符合预期时抛错。
  */
-function composePreviewPage(e, n) {
-  let s = disableSpeculationRules(e);
-  let r = "<!doctype html><html";
-  let h = "<head><meta charset=utf8>";
-  let index = s.indexOf("<head><meta charset=utf8>");
-  if (!s.startsWith("<!doctype html><html") || index === -1)
+function composePreviewPage(html, theme) {
+  let cleaned = disableSpeculationRules(html);
+  let htmlOpen = "<!doctype html><html";
+  let headOpen = "<head><meta charset=utf8>";
+  let index = cleaned.indexOf("<head><meta charset=utf8>");
+  if (!cleaned.startsWith("<!doctype html><html") || index === -1)
     throw Error("composed artifact page has an unexpected skeleton");
-  let p = index + 25;
+  let insertAt = index + 25;
   return (
-    `<!doctype html><html data-theme="${n}"` +
-    s.slice(20, p) +
+    `<!doctype html><html data-theme="${theme}"` +
+    cleaned.slice(20, insertAt) +
     CSP_VIOLATION_COLLECTOR_SCRIPT +
     `<meta http-equiv="Content-Security-Policy" content="${PREVIEW_CSP_POLICY}"><meta http-equiv="x-dns-prefetch-control" content="off">` +
-    s.slice(p)
+    cleaned.slice(insertAt)
   );
 }
 //@ chunk-8wvtd8sr.js:180717-181033 placement
@@ -127,18 +129,18 @@ function composePreviewPage(e, n) {
  * 把 type 为 speculationrules 的 <script> 改写成 text/x-speculationrules-off，避免预览页面预取。
  */
 function disableSpeculationRules(html) {
-  let n = "";
-  let s = 0;
-  let r = /<script(?=[\t\n\f\r />])/gi;
-  for (let match = r.exec(html); match !== null; match = r.exec(html)) {
-    let y = scanTagAttributes(html, match.index + match[0].length);
-    r.lastIndex = y.end;
-    let p = y.type;
-    if (p === undefined || !needsSpeculationRewrite(p.value)) continue;
-    n += `${html.slice(s, p.start)}type=${p.quote}text/x-speculationrules-off${p.quote}`;
-    s = p.end;
+  let out = "";
+  let cursor = 0;
+  let scriptTagRe = /<script(?=[\t\n\f\r />])/gi;
+  for (let match = scriptTagRe.exec(html); match !== null; match = scriptTagRe.exec(html)) {
+    let scan = scanTagAttributes(html, match.index + match[0].length);
+    scriptTagRe.lastIndex = scan.end;
+    let typeAttr = scan.type;
+    if (typeAttr === undefined || !needsSpeculationRewrite(typeAttr.value)) continue;
+    out += `${html.slice(cursor, typeAttr.start)}type=${typeAttr.quote}text/x-speculationrules-off${typeAttr.quote}`;
+    cursor = typeAttr.end;
   }
-  return s === 0 ? html : n + html.slice(s);
+  return cursor === 0 ? html : out + html.slice(cursor);
 }
 //@ chunk-8wvtd8sr.js:181033-181054 placement
 var HTML_SPACE_REGEX = /[\t\n\f\r ]/;
@@ -162,35 +164,36 @@ function scanTagAttributes(html, from) {
         end: pos + 1,
         type: typeAttr,
       };
-    let y = pos;
-    let p = html[pos] === "=" ? pos + 1 : pos;
-    while (p < length && !HTML_SPACE_REGEX.test(html[p]) && !"/>=".includes(html[p])) p++;
-    let lower = html.slice(y, p).toLowerCase();
-    pos = p;
+    let attrStart = pos;
+    let nameEnd = html[pos] === "=" ? pos + 1 : pos;
+    while (nameEnd < length && !HTML_SPACE_REGEX.test(html[nameEnd]) && !"/>=".includes(html[nameEnd]))
+      nameEnd++;
+    let lower = html.slice(attrStart, nameEnd).toLowerCase();
+    pos = nameEnd;
     while (pos < length && HTML_SPACE_REGEX.test(html[pos])) pos++;
-    let A = "";
+    let value = "";
     let quote = "";
     if (html[pos] === "=") {
       pos++;
       while (pos < length && HTML_SPACE_REGEX.test(html[pos])) pos++;
-      let R = html[pos];
-      if (R === '"' || R === "'") {
-        let index = html.indexOf(R, pos + 1);
-        A = html.slice(pos + 1, index === -1 ? length : index);
-        quote = R;
+      let quoteChar = html[pos];
+      if (quoteChar === '"' || quoteChar === "'") {
+        let index = html.indexOf(quoteChar, pos + 1);
+        value = html.slice(pos + 1, index === -1 ? length : index);
+        quote = quoteChar;
         pos = index === -1 ? length : index + 1;
-      } else if (R !== undefined && R !== ">") {
-        let T = pos;
-        while (T < length && !HTML_SPACE_REGEX.test(html[T]) && html[T] !== ">") T++;
-        A = html.slice(pos, T);
-        pos = T;
+      } else if (quoteChar !== undefined && quoteChar !== ">") {
+        let end = pos;
+        while (end < length && !HTML_SPACE_REGEX.test(html[end]) && html[end] !== ">") end++;
+        value = html.slice(pos, end);
+        pos = end;
       }
     }
     if (lower === "type" && typeAttr === undefined)
       typeAttr = {
-        start: y,
+        start: attrStart,
         end: pos,
-        value: A,
+        value,
         quote,
       };
   }
@@ -199,8 +202,8 @@ function scanTagAttributes(html, from) {
 /**
  * 判断属性值是否需要改写（含实体或就是 speculationrules）。
  */
-function needsSpeculationRewrite(e) {
-  return e.includes("&") || e.trim().toLowerCase() === "speculationrules";
+function needsSpeculationRewrite(typeValue) {
+  return typeValue.includes("&") || typeValue.trim().toLowerCase() === "speculationrules";
 }
 //@ chunk-8wvtd8sr.js:181760-182375 placement
 /**
@@ -217,17 +220,18 @@ class PreviewIssueCollector {
     this.dropped += count;
   }
   add(issue, renderLabel) {
-    let s = `${issue.kind}\x00${issue.text}`;
-    let r = this.entries.get(s);
-    if (r) {
-      if (renderLabel !== undefined && !r.labels.includes(renderLabel)) r.labels.push(renderLabel);
+    let key = `${issue.kind}\x00${issue.text}`;
+    let existing = this.entries.get(key);
+    if (existing) {
+      if (renderLabel !== undefined && !existing.labels.includes(renderLabel))
+        existing.labels.push(renderLabel);
       return;
     }
     if (this.entries.size >= MAX_PAGE_USES) {
       this.dropped++;
       return;
     }
-    this.entries.set(s, {
+    this.entries.set(key, {
       kind: issue.kind,
       body: issue.text,
       labels: renderLabel === undefined ? [] : [renderLabel],
@@ -274,11 +278,11 @@ function staticPageIssues(html, publishedBytes) {
       kind: "size",
       text: `page is ${formatBytesDecimal(publishedBytes)} as published, over the ${MAX_ARTIFACT_BYTES / 1024 / 1024} MB publish limit (the inline highlighting runtime included)`,
     });
-  let r = themeOnlyCssVariables(html);
-  if (r.length > 0)
+  let themeOnlyVars = themeOnlyCssVariables(html);
+  if (themeOnlyVars.length > 0)
     issues.push({
       kind: "theme_only_color",
-      text: `${r.join(", ")} ${plural(r.length, "is", "are")} set only inside @media (prefers-color-scheme) or [data-theme] blocks, so ${plural(r.length, "it is", "they are")} unset in the other theme`,
+      text: `${themeOnlyVars.join(", ")} ${plural(themeOnlyVars.length, "is", "are")} set only inside @media (prefers-color-scheme) or [data-theme] blocks, so ${plural(themeOnlyVars.length, "it is", "they are")} unset in the other theme`,
     });
   return issues;
 }
@@ -293,167 +297,179 @@ var DATA_THEME_SELECTOR_RE = /\[data-theme/i;
  */
 function themeOnlyCssVariables(html) {
   let styleBlocks = [];
-  for (let [L, V] of iterateTagBodies(html, /<style\b/gi, /<\/style>/gi)) styleBlocks.push(html.slice(L, V));
+  for (let [bodyStart, bodyEnd] of iterateTagBodies(html, /<style\b/gi, /<\/style>/gi))
+    styleBlocks.push(html.slice(bodyStart, bodyEnd));
   let joined = styleBlocks.join(`
 `);
   let cssText = "";
-  let h = 0;
+  let cursor = 0;
   for (;;) {
-    let index = joined.indexOf("/*", h);
-    let V = index === -1 ? -1 : joined.indexOf("*/", index + 2);
-    if (V === -1) break;
-    cssText += joined.slice(h, index);
-    h = V + 2;
+    let index = joined.indexOf("/*", cursor);
+    let commentEnd = index === -1 ? -1 : joined.indexOf("*/", index + 2);
+    if (commentEnd === -1) break;
+    cssText += joined.slice(cursor, index);
+    cursor = commentEnd + 2;
   }
-  cssText += joined.slice(h);
+  cssText += joined.slice(cursor);
   let themedDefs = new Map();
   let globalDefs = new Set();
   let blockStack = [];
-  let blockThemeOf = (L) => {
-    let match = MEDIA_RULE_RE.exec(L);
-    let M = match === null ? undefined : L.slice(match.index + match[0].length);
-    return M !== undefined && PREFERS_DARK_RE.test(M)
+  let blockThemeOf = (prelude) => {
+    let match = MEDIA_RULE_RE.exec(prelude);
+    let rest = match === null ? undefined : prelude.slice(match.index + match[0].length);
+    return rest !== undefined && PREFERS_DARK_RE.test(rest)
       ? "dark-media"
-      : M !== undefined && PREFERS_LIGHT_RE.test(M)
+      : rest !== undefined && PREFERS_LIGHT_RE.test(rest)
         ? "light-media"
-        : DATA_THEME_SELECTOR_RE.test(L)
+        : DATA_THEME_SELECTOR_RE.test(prelude)
           ? "data-theme"
           : null;
   };
-  let recordDefs = (L) => {
+  let recordDefs = (text) => {
     if (blockStack.length === 0) return;
-    let V = blockStack.at(-1) ?? null;
-    for (let M of L.matchAll(/(?:^|[;{\s])(--[\w-]+)\s*:/g)) {
-      let x = M[1];
-      if (V === null) globalDefs.add(x);
-      else themedDefs.set(x, (themedDefs.get(x) ?? new Set()).add(V));
+    let theme = blockStack.at(-1) ?? null;
+    for (let match of text.matchAll(/(?:^|[;{\s])(--[\w-]+)\s*:/g)) {
+      let name = match[1];
+      if (theme === null) globalDefs.add(name);
+      else themedDefs.set(name, (themedDefs.get(name) ?? new Set()).add(theme));
     }
   };
-  let R = 0;
-  let T = 0;
+  let closeTag = 0;
+  let openTag = 0;
   for (let j = 0; j < cssText.length; j++) {
-    let V = cssText[j];
-    if (V === "{" || V === "}") {
-      recordDefs(cssText.slice(R, j));
-      if (V === "{") blockStack.push(blockStack.at(-1) ?? blockThemeOf(cssText.slice(T, j)));
+    let varName = cssText[j];
+    if (varName === "{" || varName === "}") {
+      recordDefs(cssText.slice(closeTag, j));
+      if (varName === "{") blockStack.push(blockStack.at(-1) ?? blockThemeOf(cssText.slice(openTag, j)));
       else blockStack.pop();
-      R = T = j + 1;
-    } else if (V === ";") T = j + 1;
+      closeTag = openTag = j + 1;
+    } else if (varName === ";") openTag = j + 1;
   }
-  let usedVars = new Set([...html.matchAll(/var\(\s*(--[\w-]+)/g)].map((L) => L[1]));
+  let usedVars = new Set([...html.matchAll(/var\(\s*(--[\w-]+)/g)].map((sel) => sel[1]));
   return [...themedDefs]
     .filter(
-      ([L, V]) => !globalDefs.has(L) && usedVars.has(L) && !(V.has("dark-media") && V.has("light-media")),
+      ([block, body]) =>
+        !globalDefs.has(block) && usedVars.has(block) && !(body.has("dark-media") && body.has("light-media")),
     )
-    .map(([L]) => L)
+    .map(([openTag]) => openTag)
     .slice(0, MAX_LISTED_REFS);
 }
 //@ chunk-8wvtd8sr.js:184319-184530 placement
-function* iterateTagBodies(html, n, s) {
-  for (let match = n.exec(html); match !== null; match = n.exec(html)) {
-    let h = html.indexOf(">", match.index + match[0].length) + 1;
-    if (h === 0) return;
-    s.lastIndex = h;
-    let match_2 = s.exec(html);
+function* iterateTagBodies(html, openRe, closeRe) {
+  for (let match = openRe.exec(html); match !== null; match = openRe.exec(html)) {
+    let bodyStart = html.indexOf(">", match.index + match[0].length) + 1;
+    if (bodyStart === 0) return;
+    closeRe.lastIndex = bodyStart;
+    let match_2 = closeRe.exec(html);
     if (match_2 === null) return;
-    yield [h, match_2.index];
-    n.lastIndex = s.lastIndex;
+    yield [bodyStart, match_2.index];
+    openRe.lastIndex = closeRe.lastIndex;
   }
 }
 //@ chunk-8wvtd8sr.js:184530-190122 placement
 /**
  * 页面内测量脚本的模板：等待字体/mermaid、检测溢出与被裁剪的 SVG 文字、收集 CSP 违规。
  */
-var PAGE_SETTLE_SCRIPT_LINES = [
-  "var sleep=function(ms){return new Promise(function(r){setTimeout(r,ms)})};",
-  "var deadline=Date.now()+SETTLE;",
-  "try{if(document.fonts&&document.fonts.ready)await Promise.race([document.fonts.ready,sleep(SETTLE)]);}catch(e){}",
-  "var pres=Array.prototype.slice.call(document.querySelectorAll('pre.mermaid'));",
-  "var hasRuntime=typeof mermaid!=='undefined';",
-  "var pending=function(){return pres.filter(function(p){return p.style.display!=='none'})};",
-  "while(hasRuntime&&pending().length&&Date.now()<deadline)await sleep(100);",
-  "await new Promise(function(r){requestAnimationFrame(function(){requestAnimationFrame(r)})});",
-  "var failed=[];",
-  "if(hasRuntime){var vis=pending();for(var i=0;i<vis.length;i++){var reason='did not render within '+(SETTLE/1000)+'s';try{await mermaid.parse(vis[i].textContent||'')}catch(e){reason=String(e&&e.message||e).split('\\n')[0]}failed.push({index:pres.indexOf(vis[i])+1,reason:reason})}}",
-  "var sel=function(el){var s=el.tagName.toLowerCase();if(el.id)return s+'#'+el.id;var cl=el.classList?Array.prototype.slice.call(el.classList,0,2):[];return cl.length?s+'.'+cl.join('.'):s};",
-  "var pathOf=function(el){var parts=[];for(var n=el,d=0;n&&n!==document.body&&n.nodeType===1&&d<3;n=n.parentElement,d++)parts.unshift(sel(n));return parts.join(' > ')||sel(el)};",
-  "var de=document.documentElement,body=document.body;",
-  "var overflows=[],overflowMore=0;",
-  "var all=body?body.querySelectorAll('*'):[];",
-  "var FORM={INPUT:1,TEXTAREA:1,SELECT:1,OPTION:1,PROGRESS:1,METER:1};",
-  "for(var j=0;j<all.length&&j<4000;j++){var el=all[j];",
-  "if(!(el instanceof HTMLElement)||FORM[el.tagName]===1)continue;",
-  "var cw=el.clientWidth,ch=el.clientHeight;if(cw<=2||ch<=2)continue;",
-  "var cs=getComputedStyle(el);if(cs.display==='none'||cs.visibility==='hidden'||cs.display==='inline')continue;",
-  "var ox=cs.overflowX,oy=cs.overflowY;",
-  "var cutX=ox==='hidden'||ox==='clip',cutY=oy==='hidden'||oy==='clip';",
-  "if(cutX&&cutY&&cw*ch<=256&&((cs.clip&&cs.clip!=='auto')||(cs.clipPath&&cs.clipPath!=='none')))continue;",
-  "var lc=cs.webkitLineClamp;if(!lc||lc==='none')lc=cs.lineClamp;var clamp=!!lc&&lc!=='none'&&lc!=='0';",
-  "var tol=Math.max(3,Math.round((parseFloat(cs.fontSize)||0)/4));",
-  "var dx=el.scrollWidth-cw,dy=el.scrollHeight-ch;",
-  "var bx=dx>3&&ox!=='auto'&&ox!=='scroll'&&!(cs.textOverflow==='ellipsis'&&cutX);",
-  "var by=dy>tol&&oy!=='auto'&&oy!=='scroll'&&!(clamp&&cutY);",
-  "if(!bx&&!by)continue;",
-  "if(overflows.length<MAXO)overflows.push({path:pathOf(el),dx:bx?dx:0,dy:by?dy:0});else overflowMore++;}",
-  "var svgClips=[],svgClipMore=0;",
-  "var svgs=Array.prototype.slice.call(document.querySelectorAll('svg'),0,50);",
-  "for(var k=0;k<svgs.length;k++){var svg=svgs[k];if(svg.ownerSVGElement)continue;",
-  "if(getComputedStyle(svg).overflow==='visible')continue;",
-  "var sr=svg.getBoundingClientRect();if(sr.width===0||sr.height===0)continue;",
-  "var texts=Array.prototype.slice.call(svg.querySelectorAll('text'),0,200);",
-  "for(var t=0;t<texts.length;t++){var tx=texts[t],b=tx.getBoundingClientRect();",
-  "if(b.width===0&&b.height===0)continue;",
-  "if(b.left<sr.left-1||b.top<sr.top-1||b.right>sr.right+1||b.bottom>sr.bottom+1){if(svgClips.length<MAXS)svgClips.push({path:pathOf(svg),text:(tx.textContent||'').trim().slice(0,40)});else svgClipMore++;}}}",
-  "var csp=(window.__claudePreviewCsp||[]).slice(0,64);",
-  "return JSON.stringify({href:location.href,vw:de.clientWidth,sw:de.scrollWidth,sh:Math.max(de.scrollHeight,body?body.scrollHeight:0),overflows:overflows,overflowMore:overflowMore,svgClips:svgClips,svgClipMore:svgClipMore,mermaid:{total:pres.length,runtime:hasRuntime,failed:failed},csp:csp,dialogs:DIALOGS.called,uses:USES.names,usesMore:USES.more});",
-].join(`
+var PAGE_SETTLE_SCRIPT_LINES; // deferred: uses PREVIEW_SETTLE_TIMEOUT_MS (./chromeSession.js) of its import cycle while loading; runs once the cycle is complete
+var PAGE_PROBE_SETTLE_SCRIPT;
+var PAGE_PROBE_USES_SCRIPT;
+var pageProbeScriptBuilder;
+var PAGE_PROBE_ERROR_FRAME_LEFT;
+var PAGE_PROBE_ERROR_NO_ANSWER;
+deferInit("chunk-8wvtd8sr.js:184530", () => {
+  PAGE_SETTLE_SCRIPT_LINES = [
+    "var sleep=function(ms){return new Promise(function(r){setTimeout(r,ms)})};",
+    "var deadline=Date.now()+SETTLE;",
+    "try{if(document.fonts&&document.fonts.ready)await Promise.race([document.fonts.ready,sleep(SETTLE)]);}catch(e){}",
+    "var pres=Array.prototype.slice.call(document.querySelectorAll('pre.mermaid'));",
+    "var hasRuntime=typeof mermaid!=='undefined';",
+    "var pending=function(){return pres.filter(function(p){return p.style.display!=='none'})};",
+    "while(hasRuntime&&pending().length&&Date.now()<deadline)await sleep(100);",
+    "await new Promise(function(r){requestAnimationFrame(function(){requestAnimationFrame(r)})});",
+    "var failed=[];",
+    "if(hasRuntime){var vis=pending();for(var i=0;i<vis.length;i++){var reason='did not render within '+(SETTLE/1000)+'s';try{await mermaid.parse(vis[i].textContent||'')}catch(e){reason=String(e&&e.message||e).split('\\n')[0]}failed.push({index:pres.indexOf(vis[i])+1,reason:reason})}}",
+    "var sel=function(el){var s=el.tagName.toLowerCase();if(el.id)return s+'#'+el.id;var cl=el.classList?Array.prototype.slice.call(el.classList,0,2):[];return cl.length?s+'.'+cl.join('.'):s};",
+    "var pathOf=function(el){var parts=[];for(var n=el,d=0;n&&n!==document.body&&n.nodeType===1&&d<3;n=n.parentElement,d++)parts.unshift(sel(n));return parts.join(' > ')||sel(el)};",
+    "var de=document.documentElement,body=document.body;",
+    "var overflows=[],overflowMore=0;",
+    "var all=body?body.querySelectorAll('*'):[];",
+    "var FORM={INPUT:1,TEXTAREA:1,SELECT:1,OPTION:1,PROGRESS:1,METER:1};",
+    "for(var j=0;j<all.length&&j<4000;j++){var el=all[j];",
+    "if(!(el instanceof HTMLElement)||FORM[el.tagName]===1)continue;",
+    "var cw=el.clientWidth,ch=el.clientHeight;if(cw<=2||ch<=2)continue;",
+    "var cs=getComputedStyle(el);if(cs.display==='none'||cs.visibility==='hidden'||cs.display==='inline')continue;",
+    "var ox=cs.overflowX,oy=cs.overflowY;",
+    "var cutX=ox==='hidden'||ox==='clip',cutY=oy==='hidden'||oy==='clip';",
+    "if(cutX&&cutY&&cw*ch<=256&&((cs.clip&&cs.clip!=='auto')||(cs.clipPath&&cs.clipPath!=='none')))continue;",
+    "var lc=cs.webkitLineClamp;if(!lc||lc==='none')lc=cs.lineClamp;var clamp=!!lc&&lc!=='none'&&lc!=='0';",
+    "var tol=Math.max(3,Math.round((parseFloat(cs.fontSize)||0)/4));",
+    "var dx=el.scrollWidth-cw,dy=el.scrollHeight-ch;",
+    "var bx=dx>3&&ox!=='auto'&&ox!=='scroll'&&!(cs.textOverflow==='ellipsis'&&cutX);",
+    "var by=dy>tol&&oy!=='auto'&&oy!=='scroll'&&!(clamp&&cutY);",
+    "if(!bx&&!by)continue;",
+    "if(overflows.length<MAXO)overflows.push({path:pathOf(el),dx:bx?dx:0,dy:by?dy:0});else overflowMore++;}",
+    "var svgClips=[],svgClipMore=0;",
+    "var svgs=Array.prototype.slice.call(document.querySelectorAll('svg'),0,50);",
+    "for(var k=0;k<svgs.length;k++){var svg=svgs[k];if(svg.ownerSVGElement)continue;",
+    "if(getComputedStyle(svg).overflow==='visible')continue;",
+    "var sr=svg.getBoundingClientRect();if(sr.width===0||sr.height===0)continue;",
+    "var texts=Array.prototype.slice.call(svg.querySelectorAll('text'),0,200);",
+    "for(var t=0;t<texts.length;t++){var tx=texts[t],b=tx.getBoundingClientRect();",
+    "if(b.width===0&&b.height===0)continue;",
+    "if(b.left<sr.left-1||b.top<sr.top-1||b.right>sr.right+1||b.bottom>sr.bottom+1){if(svgClips.length<MAXS)svgClips.push({path:pathOf(svg),text:(tx.textContent||'').trim().slice(0,40)});else svgClipMore++;}}}",
+    "var csp=(window.__claudePreviewCsp||[]).slice(0,64);",
+    "return JSON.stringify({href:location.href,vw:de.clientWidth,sw:de.scrollWidth,sh:Math.max(de.scrollHeight,body?body.scrollHeight:0),overflows:overflows,overflowMore:overflowMore,svgClips:svgClips,svgClipMore:svgClipMore,mermaid:{total:pres.length,runtime:hasRuntime,failed:failed},csp:csp,dialogs:DIALOGS.called,uses:USES.names,usesMore:USES.more});",
+  ].join(`
 `);
-var PAGE_PROBE_ERROR_FRAME_LEFT =
-  "new Promise(function(r){requestAnimationFrame(function(){requestAnimationFrame(function(){r(location.href)})})})";
-var PAGE_PROBE_ERROR_NO_ANSWER = `var USES={names:[],more:0};try{var C={};Object.defineProperty(C,'use',{value:function(name){var n;try{n=String(name).slice(0,40)}catch(x){n='?'}if(USES.names.indexOf(n)<0){if(USES.names.length<${MAX_COLLECTED_USES})USES.names.push(n);else USES.more=1}return Promise.resolve(null)},writable:true,configurable:true,enumerable:false});Object.defineProperty(window,'claude',{value:C,writable:false,configurable:false,enumerable:true})}catch(x){}`;
-var pageProbeScriptBuilder = `;(function(){var P=window.parent,ap=Reflect.apply,S=String,resolved=Promise.resolve.bind(Promise),then=Promise.prototype.then,Chan=MessageChannel,send=MessagePort.prototype.postMessage;
+  PAGE_PROBE_SETTLE_SCRIPT =
+    "new Promise(function(r){requestAnimationFrame(function(){requestAnimationFrame(function(){r(location.href)})})})";
+  PAGE_PROBE_USES_SCRIPT = `var USES={names:[],more:0};try{var C={};Object.defineProperty(C,'use',{value:function(name){var n;try{n=String(name).slice(0,40)}catch(x){n='?'}if(USES.names.indexOf(n)<0){if(USES.names.length<${MAX_COLLECTED_USES})USES.names.push(n);else USES.more=1}return Promise.resolve(null)},writable:true,configurable:true,enumerable:false});Object.defineProperty(window,'claude',{value:C,writable:false,configurable:false,enumerable:true})}catch(x){}`;
+  pageProbeScriptBuilder = `;(function(){var P=window.parent,ap=Reflect.apply,S=String,resolved=Promise.resolve.bind(Promise),then=Promise.prototype.then,Chan=MessageChannel,send=MessagePort.prototype.postMessage;
 if(!P||P===window){window.addEventListener('message',function(e){var d=e.data,p=e.ports&&e.ports[0];if(e.source!==frames[0]||!d||d.__claudePreviewPort!==1||!p)return;window.__claudePreviewPort=p;try{p.start()}catch(x){}});return}
 if(P!==window.top)return;
 var called={alert:0,confirm:0,prompt:0},DIALOGS={called:called};['alert','confirm','prompt'].forEach(function(k){var o=window[k];try{window[k]=function(){called[k]=1;return ap(o,this,arguments)}}catch(x){}});
-${PAGE_PROBE_ERROR_NO_ANSWER}
-var R=(function(Promise){return {probe:function(settleMs){var SETTLE=+settleMs||0,MAXO=${MAX_PAGE_OBSERVERS},MAXS=${MAX_SVG_CLIPS};return (async function(){${PAGE_SETTLE_SCRIPT_LINES}})()},settle:function(){return ${PAGE_PROBE_ERROR_FRAME_LEFT}}}})(Promise);
+${PAGE_PROBE_USES_SCRIPT}
+var R=(function(Promise){return {probe:function(settleMs){var SETTLE=+settleMs||0,MAXO=${MAX_PAGE_OBSERVERS},MAXS=${MAX_SVG_CLIPS};return (async function(){${PAGE_SETTLE_SCRIPT_LINES}})()},settle:function(){return ${PAGE_PROBE_SETTLE_SCRIPT}}}})(Promise);
 var ch=new Chan(),port=ch.port1;
 port.onmessage=function(e){var id;function ok(v){ap(send,port,[{id:id,v:S(v)}])}function no(x){var m;try{m=S(x&&x.message||x)}catch(y){m='routine failed'}ap(send,port,[{id:id,e:m}])}try{var d=e.data;id=d&&d.id;var fn=d&&R[d.run];ap(then,ap(then,resolved(),[function(){if(!fn)throw new Error('unknown routine');return ap(fn,null,d.args||[])}]),[ok,no])}catch(x){no(x)}};
 P.postMessage({__claudePreviewPort:1},'*',[ch.port2])})()`;
-var PAGE_PROBE_MAX_VALUE_CHARS = "the preview frame left the page";
-var pageProbeRequestScript = "the preview frame is not answering";
+  PAGE_PROBE_ERROR_FRAME_LEFT = "the preview frame left the page";
+  PAGE_PROBE_ERROR_NO_ANSWER = "the preview frame is not answering";
+});
 //@ chunk-8wvtd8sr.js:190122-190922 placement
 /**
  * 生成在预览外壳里执行的脚本：通过 window.__claudePreviewPort 向 iframe 发送 {run, args, id}，等待同 id 的应答，iframe 重新加载或超长时 reject。
  */
 function previewEvalScript(run, args) {
   let requestId = jsonStringify(randomUUID());
-  return `new Promise(function(res,rej){var p=window.__claudePreviewPort,el=document.getElementsByTagName('iframe')[0];if(!p||!el){rej(new Error(${jsonStringify(pageProbeRequestScript)}));return}function done(){try{p.removeEventListener('message',h)}catch(x){}el.removeEventListener('load',left)}function left(){done();rej(new Error(${jsonStringify(PAGE_PROBE_MAX_VALUE_CHARS)}))}function h(e){try{var d=e.data;if(!d||d.id!==${requestId})return;done();if(typeof d.v==='string')res(d.v.length>${MAX_CDP_EVENT_CHARS}?d.v.slice(0,${MAX_CDP_EVENT_CHARS + 1}):d.v);else rej(new Error(typeof d.e==='string'?d.e.slice(0,400):'the page answered without a value'))}catch(x){done();rej(new Error('the page answered unreadably'))}}p.addEventListener('message',h);el.addEventListener('load',left);try{p.postMessage({run:${jsonStringify(run)},args:${jsonStringify(args)},id:${requestId}})}catch(x){done();rej(new Error(${jsonStringify(pageProbeRequestScript)}))}})`;
+  return `new Promise(function(res,rej){var p=window.__claudePreviewPort,el=document.getElementsByTagName('iframe')[0];if(!p||!el){rej(new Error(${jsonStringify(PAGE_PROBE_ERROR_NO_ANSWER)}));return}function done(){try{p.removeEventListener('message',h)}catch(x){}el.removeEventListener('load',left)}function left(){done();rej(new Error(${jsonStringify(PAGE_PROBE_ERROR_FRAME_LEFT)}))}function h(e){try{var d=e.data;if(!d||d.id!==${requestId})return;done();if(typeof d.v==='string')res(d.v.length>${MAX_CDP_EVENT_CHARS}?d.v.slice(0,${MAX_CDP_EVENT_CHARS + 1}):d.v);else rej(new Error(typeof d.e==='string'?d.e.slice(0,400):'the page answered without a value'))}catch(x){done();rej(new Error('the page answered unreadably'))}}p.addEventListener('message',h);el.addEventListener('load',left);try{p.postMessage({run:${jsonStringify(run)},args:${jsonStringify(args)},id:${requestId}})}catch(x){done();rej(new Error(${jsonStringify(PAGE_PROBE_ERROR_NO_ANSWER)}))}})`;
 }
 //@ chunk-8wvtd8sr.js:190922-190979 placement
 /**
  * 非空对象原样返回，否则空对象。
  */
-function asProbeRecord(e) {
-  return e !== null && typeof e === "object" ? e : {};
+function asProbeRecord(value) {
+  return value !== null && typeof value === "object" ? value : {};
 }
 //@ chunk-8wvtd8sr.js:190979-191026 placement
 /**
  * 字符串原样返回，否则空串。
  */
-function asProbeString(e) {
-  return typeof e === "string" ? e : "";
+function asProbeString(value) {
+  return typeof value === "string" ? value : "";
 }
 //@ chunk-8wvtd8sr.js:191026-191134 placement
-function clampNonNegativeInt(e, n = 1e6) {
-  return typeof e === "number" && Number.isFinite(e) ? Math.min(Math.max(0, Math.round(e)), n) : 0;
+function clampNonNegativeInt(value, max = 1e6) {
+  return typeof value === "number" && Number.isFinite(value)
+    ? Math.min(Math.max(0, Math.round(value)), max)
+    : 0;
 }
 //@ chunk-8wvtd8sr.js:191134-191178 placement
 /**
  * 数组原样返回，否则空数组。
  */
-function asArray(e) {
-  return Array.isArray(e) ? e : [];
+function asArray(value) {
+  return Array.isArray(value) ? value : [];
 }
 //@ chunk-8wvtd8sr.js:191178-192285 placement
 /**
@@ -465,47 +481,47 @@ function parsePageMeasurement(json) {
   let parsed = jsonParse(json);
   if (parsed === null || typeof parsed !== "object") throw Error("the measurement returned no data");
   let data = asProbeRecord(parsed);
-  let r = asProbeRecord(data.mermaid);
-  let h = asArray(data.overflows);
-  let y = asArray(data.svgClips);
-  let p = asArray(r.failed);
-  let w = clampNonNegativeInt(r.total);
+  let mermaid = asProbeRecord(data.mermaid);
+  let overflows = asArray(data.overflows);
+  let svgClips = asArray(data.svgClips);
+  let failed = asArray(mermaid.failed);
+  let mermaidTotal = clampNonNegativeInt(mermaid.total);
   return {
     href: asProbeString(data.href),
     vw: clampNonNegativeInt(data.vw),
     sw: clampNonNegativeInt(data.sw),
     sh: clampNonNegativeInt(data.sh),
-    overflows: h.slice(0, MAX_PAGE_OBSERVERS).map((A) => ({
-      path: asProbeString(asProbeRecord(A).path),
-      dx: clampNonNegativeInt(asProbeRecord(A).dx),
-      dy: clampNonNegativeInt(asProbeRecord(A).dy),
+    overflows: overflows.slice(0, MAX_PAGE_OBSERVERS).map((overflow) => ({
+      path: asProbeString(asProbeRecord(overflow).path),
+      dx: clampNonNegativeInt(asProbeRecord(overflow).dx),
+      dy: clampNonNegativeInt(asProbeRecord(overflow).dy),
     })),
-    overflowMore: clampNonNegativeInt(data.overflowMore) + Math.max(0, h.length - MAX_PAGE_OBSERVERS),
-    svgClips: y.slice(0, MAX_SVG_CLIPS).map((A) => ({
-      path: asProbeString(asProbeRecord(A).path),
-      text: asProbeString(asProbeRecord(A).text),
+    overflowMore: clampNonNegativeInt(data.overflowMore) + Math.max(0, overflows.length - MAX_PAGE_OBSERVERS),
+    svgClips: svgClips.slice(0, MAX_SVG_CLIPS).map((clip) => ({
+      path: asProbeString(asProbeRecord(clip).path),
+      text: asProbeString(asProbeRecord(clip).text),
     })),
-    svgClipMore: clampNonNegativeInt(data.svgClipMore) + Math.max(0, y.length - MAX_SVG_CLIPS),
+    svgClipMore: clampNonNegativeInt(data.svgClipMore) + Math.max(0, svgClips.length - MAX_SVG_CLIPS),
     mermaid: {
-      total: w,
-      runtime: r.runtime === true,
-      failed: p.slice(0, MAX_FAILED_CHECKS).map((A) => ({
-        index: Math.min(clampNonNegativeInt(asProbeRecord(A).index), w),
-        reason: asProbeString(asProbeRecord(A).reason),
+      total: mermaidTotal,
+      runtime: mermaid.runtime === true,
+      failed: failed.slice(0, MAX_FAILED_CHECKS).map((failure) => ({
+        index: Math.min(clampNonNegativeInt(asProbeRecord(failure).index), mermaidTotal),
+        reason: asProbeString(asProbeRecord(failure).reason),
       })),
-      failedMore: Math.max(0, p.length - MAX_FAILED_CHECKS),
+      failedMore: Math.max(0, failed.length - MAX_FAILED_CHECKS),
     },
     csp: asArray(data.csp)
       .slice(0, 64)
-      .map((A) => ({
-        uri: asProbeString(asProbeRecord(A).uri),
-        directive: asProbeString(asProbeRecord(A).directive),
+      .map((violation) => ({
+        uri: asProbeString(asProbeRecord(violation).uri),
+        directive: asProbeString(asProbeRecord(violation).directive),
       })),
-    dialogs: ["alert", "confirm", "prompt"].filter((A) => asProbeRecord(data.dialogs)[A] === 1),
+    dialogs: ["alert", "confirm", "prompt"].filter((dialog) => asProbeRecord(data.dialogs)[dialog] === 1),
     uses: asArray(data.uses)
       .slice(0, MAX_COLLECTED_USES)
       .map(asProbeString)
-      .filter((A) => A !== ""),
+      .filter((use) => use !== ""),
     usesMore: data.usesMore === 1 || asArray(data.uses).length > MAX_COLLECTED_USES,
   };
 }
@@ -513,9 +529,9 @@ function parsePageMeasurement(json) {
 /**
  * 清洗展示文本：去掉 artifact 信封标签并限制长度。
  */
-function sanitizeDisplay(e, max = 80) {
+function sanitizeDisplay(text, max = 80) {
   return scrubArtifactEnvelopeTags(
-    sanitizeDisplayText(e, {
+    sanitizeDisplayText(text, {
       max,
     }),
   );
@@ -531,13 +547,16 @@ function layoutIssuesFromMeasurement(measurement) {
       kind: "overflow_x",
       text: `page scrolls horizontally (${measurement.sw}px of content in a ${measurement.vw}px viewport)`,
     });
-  for (let s of measurement.overflows) {
-    let joined = [s.dx > 0 ? `${s.dx}px wider` : "", s.dy > 0 ? `${s.dy}px taller` : ""]
+  for (let overflow of measurement.overflows) {
+    let joined = [
+      overflow.dx > 0 ? `${overflow.dx}px wider` : "",
+      overflow.dy > 0 ? `${overflow.dy}px taller` : "",
+    ]
       .filter(Boolean)
       .join(", ");
     issues.push({
       kind: "element_overflow",
-      text: `content overflows ${sanitizeDisplay(s.path)} (${joined} than its box)`,
+      text: `content overflows ${sanitizeDisplay(overflow.path)} (${joined} than its box)`,
     });
   }
   if (measurement.overflowMore > 0)
@@ -560,10 +579,10 @@ function layoutIssuesFromMeasurement(measurement) {
       kind: "mermaid",
       text: `${measurement.mermaid.total} <pre class="mermaid"> ${plural(measurement.mermaid.total, "block")} but the diagram runtime did not load, so ${plural(measurement.mermaid.total, "it shows", "they show")} as source`,
     });
-  for (let s of measurement.mermaid.failed)
+  for (let failure of measurement.mermaid.failed)
     issues.push({
       kind: "mermaid",
-      text: `mermaid block ${s.index} of ${measurement.mermaid.total} failed: ${sanitizeDisplay(s.reason, 120)}`,
+      text: `mermaid block ${failure.index} of ${measurement.mermaid.total} failed: ${sanitizeDisplay(failure.reason, 120)}`,
     });
   if (measurement.mermaid.failedMore > 0)
     issues.push({
@@ -576,38 +595,38 @@ function layoutIssuesFromMeasurement(measurement) {
 /**
  * 把测量中的 CSP 违规按 origin 去重成问题（超过上限只计 dropped）。
  */
-function cspViolationIssues(e, n, s) {
-  let r = [];
-  for (let h of e.csp) {
-    let y = originOrSelf(h.uri);
-    if (n.has(y)) continue;
-    n.add(y);
-    if (n.size > MAX_TRACKED_SESSIONS) {
-      s.drop();
+function cspViolationIssues(measurement, visitedOrigins, collector) {
+  let issues = [];
+  for (let violation of measurement.csp) {
+    let origin = originOrSelf(violation.uri);
+    if (visitedOrigins.has(origin)) continue;
+    visitedOrigins.add(origin);
+    if (visitedOrigins.size > MAX_TRACKED_SESSIONS) {
+      collector.drop();
       continue;
     }
-    r.push({
+    issues.push({
       kind: "csp",
-      text: `${sanitizeDisplay(y, 100)} is blocked by the artifact content policy (${sanitizeDisplay(h.directive, 24)}) \u2014 only Google Fonts loads from outside`,
+      text: `${sanitizeDisplay(origin, 100)} is blocked by the artifact content policy (${sanitizeDisplay(violation.directive, 24)}) \u2014 only Google Fonts loads from outside`,
     });
   }
-  return r;
+  return issues;
 }
 //@ chunk-8wvtd8sr.js:193816-194023 placement
 /**
  * 预览检查：页面加载时弹出的 JavaScript 对话框（每种只报一次）。
  */
-function dialogIssues(e, n) {
-  let s = [];
-  for (let dialog of e.dialogs) {
-    if (n.has(dialog)) continue;
-    n.add(dialog);
-    s.push({
+function dialogIssues(measurement, visitedDialogs) {
+  let issues = [];
+  for (let dialog of measurement.dialogs) {
+    if (visitedDialogs.has(dialog)) continue;
+    visitedDialogs.add(dialog);
+    issues.push({
       kind: "load",
       text: `the page opened a JavaScript dialog (${dialog}) on load; the published viewer never shows one`,
     });
   }
-  return s;
+  return issues;
 }
 //@ chunk-8wvtd8sr.js:194023-196152 placement
 /**
@@ -616,44 +635,44 @@ function dialogIssues(e, n) {
 function blockedRequestIssues(requests, pageBaseUrl, pageUrl, seenUrls, relativeRefs, collector) {
   let issues = [];
   let pageOrigin = originOf(pageBaseUrl);
-  let A = 0;
-  let S = 0;
+  let blobCount = 0;
+  let listedCount = 0;
   for (let request of requests) {
     if (seenUrls.has(request.url)) continue;
     seenUrls.add(request.url);
-    let T = originOf(request.url) === pageOrigin;
-    let P = T && request.url.startsWith(pageBaseUrl);
+    let sameOrigin = originOf(request.url) === pageOrigin;
+    let underPage = sameOrigin && request.url.startsWith(pageBaseUrl);
     if (
       request.type !== "popup" &&
-      T &&
-      (P
+      sameOrigin &&
+      (underPage
         ? decodeUriSafe(request.url.slice(pageBaseUrl.length)).startsWith("_blob/")
         : decodeUriSafe(request.url.slice(pageOrigin.length)).startsWith("/_blob/"))
     ) {
-      A++;
+      blobCount++;
       continue;
     }
-    if (P && request.type !== "popup" && request.type !== "dialog" && request.type !== "download") {
+    if (underPage && request.type !== "popup" && request.type !== "dialog" && request.type !== "download") {
       let replaced = decodeUriSafe(request.url.slice(pageBaseUrl.length)).replace(/[?#].*$/s, "");
-      let M = replaced === "" ? "./ (the page's own directory)" : replaced;
-      if (!relativeRefs.includes(M)) relativeRefs.push(M);
+      let relativePath = replaced === "" ? "./ (the page's own directory)" : replaced;
+      if (!relativeRefs.includes(relativePath)) relativeRefs.push(relativePath);
       continue;
     }
-    if (++S > MAX_LISTED_UNLOADED_FILES) {
+    if (++listedCount > MAX_LISTED_UNLOADED_FILES) {
       collector.drop();
       continue;
     }
     if (request.type === "popup") {
-      let V = isSamePageUrl(request.url, pageUrl)
+      let popupTarget = isSamePageUrl(request.url, pageUrl)
         ? "this page again"
-        : P
+        : underPage
           ? `another page of this artifact: ${sanitizeDisplay(decodeUriSafe(request.url.slice(pageBaseUrl.length)) || "./", 60)}`
-          : T
+          : sameOrigin
             ? `a page outside this artifact's directory: ${sanitizeDisplay(decodeUriSafe(request.url.slice(pageOrigin.length)), 60)}`
             : describePopupTarget(request.url);
       issues.push({
         kind: "load",
-        text: `the page opens a new window (${V}) on load \u2014 blocked in preview; the published viewer allows pop-ups only from a click`,
+        text: `the page opens a new window (${popupTarget}) on load \u2014 blocked in preview; the published viewer allows pop-ups only from a click`,
       });
     } else if (request.type === "dialog")
       issues.push({
@@ -665,11 +684,11 @@ function blockedRequestIssues(requests, pageBaseUrl, pageUrl, seenUrls, relative
         kind: "load",
         text: `the page starts a download (${sanitizeDisplay(request.url || "unnamed", 60)}) on load \u2014 refused in preview; the published viewer blocks downloads too`,
       });
-    else if (T && !P) {
-      let V = decodeUriSafe(request.url.slice(pageOrigin.length));
+    else if (sameOrigin && !underPage) {
+      let pathPart = decodeUriSafe(request.url.slice(pageOrigin.length));
       issues.push({
         kind: "local_ref",
-        text: `${sanitizeDisplay(V, 100)} points outside the page's own directory and will not load once published either \u2014 reference files relative to the page`,
+        text: `${sanitizeDisplay(pathPart, 100)} points outside the page's own directory and will not load once published either \u2014 reference files relative to the page`,
       });
     } else if (request.url.startsWith("file:"))
       issues.push({
@@ -687,10 +706,10 @@ function blockedRequestIssues(requests, pageBaseUrl, pageUrl, seenUrls, relative
         text: `${sanitizeDisplay(originOrSelf(request.url), 100)} is outside what the published page may load (${sanitizeDisplay(request.type || "request", 16)})`,
       });
   }
-  if (A > 0)
+  if (blobCount > 0)
     issues.push({
       kind: "local_ref",
-      text: `${A} uploaded-asset ${plural(A, "reference")} (_blob/\u2026) ${plural(A, "is", "are")} not loaded in preview`,
+      text: `${blobCount} uploaded-asset ${plural(blobCount, "reference")} (_blob/\u2026) ${plural(blobCount, "is", "are")} not loaded in preview`,
     });
   return issues;
 }
@@ -698,19 +717,19 @@ function blockedRequestIssues(requests, pageBaseUrl, pageUrl, seenUrls, relative
 /**
  * 取 URL 的 origin，非法时返回原串。
  */
-function originOf(e) {
+function originOf(url) {
   try {
-    return new URL(e).origin;
+    return new URL(url).origin;
   } catch {
-    return e;
+    return url;
   }
 }
 //@ chunk-8wvtd8sr.js:196212-196335 placement
 function isSamePageUrl(url, pageUrl) {
   try {
-    let s = new URL(url);
-    let r = new URL(pageUrl);
-    return s.origin === r.origin && s.pathname === r.pathname;
+    let parsed = new URL(url);
+    let expected = new URL(pageUrl);
+    return parsed.origin === expected.origin && parsed.pathname === expected.pathname;
   } catch {
     return url === pageUrl;
   }
@@ -719,49 +738,49 @@ function isSamePageUrl(url, pageUrl) {
 /**
  * 安全地 decodeURIComponent。
  */
-function decodeUriSafe(e) {
+function decodeUriSafe(value) {
   try {
-    return decodeURIComponent(e);
+    return decodeURIComponent(value);
   } catch {
-    return e;
+    return value;
   }
 }
 //@ chunk-8wvtd8sr.js:196399-196623 placement
 function describePopupTarget(url) {
   try {
-    let n = new URL(url);
-    return n.protocol === "http:" || n.protocol === "https:"
-      ? sanitizeDisplay(n.origin, 80)
-      : n.protocol === "about:"
-        ? sanitizeDisplay(n.href, 40)
-        : `a ${sanitizeDisplay(n.protocol, 20)} URL`;
+    let parsed = new URL(url);
+    return parsed.protocol === "http:" || parsed.protocol === "https:"
+      ? sanitizeDisplay(parsed.origin, 80)
+      : parsed.protocol === "about:"
+        ? sanitizeDisplay(parsed.href, 40)
+        : `a ${sanitizeDisplay(parsed.protocol, 20)} URL`;
   } catch {
     return url === "" ? "about:blank" : "an unparseable URL";
   }
 }
 //@ chunk-8wvtd8sr.js:196623-196729 placement
-function originOrSelf(e) {
+function originOrSelf(uri) {
   try {
-    let n = new URL(e);
-    return n.origin !== "null" ? n.origin : e;
+    let parsed = new URL(uri);
+    return parsed.origin !== "null" ? parsed.origin : uri;
   } catch {
-    return e === "" ? "(inline)" : e;
+    return uri === "" ? "(inline)" : uri;
   }
 }
 //@ chunk-8wvtd8sr.js:196729-196960 placement
 /**
  * 预览检查：加载时的控制台错误（列出前若干条，其余计数）。
  */
-function consoleErrorIssues(e) {
-  if (e.length === 0) return [];
-  let mapped = e.slice(0, MAX_LISTED_MISSING_FILES).map((r) => sanitizeDisplay(r, 160));
-  let s = e.length - mapped.length;
+function consoleErrorIssues(errors) {
+  if (errors.length === 0) return [];
+  let mapped = errors.slice(0, MAX_LISTED_MISSING_FILES).map((errorText) => sanitizeDisplay(errorText, 160));
+  let moreCount = errors.length - mapped.length;
   return [
     {
       kind: "console",
       text:
-        `${e.length} console ${plural(e.length, "error")} on load \u2014 ${mapped.join(" | ")}` +
-        (s > 0 ? ` | ${s} more` : ""),
+        `${errors.length} console ${plural(errors.length, "error")} on load \u2014 ${mapped.join(" | ")}` +
+        (moreCount > 0 ? ` | ${moreCount} more` : ""),
     },
   ];
 }
@@ -774,13 +793,13 @@ async function raceWithStepTimeout(promise, timeoutMs, stepName, timers, signal)
     promise.catch(() => {});
     throw Error("preview aborted");
   }
-  let y;
-  let p;
+  let timerId;
+  let onAbort;
   let promise_2 = new Promise((resolve, reject) => {
-    y = timers.setTimeout(() => reject(new PreviewStepTimeout(stepName, timeoutMs)), timeoutMs);
+    timerId = timers.setTimeout(() => reject(new PreviewStepTimeout(stepName, timeoutMs)), timeoutMs);
     if (signal) {
-      p = () => reject(Error("preview aborted"));
-      signal.addEventListener("abort", p, {
+      onAbort = () => reject(Error("preview aborted"));
+      signal.addEventListener("abort", onAbort, {
         once: true,
       });
     }
@@ -788,8 +807,8 @@ async function raceWithStepTimeout(promise, timeoutMs, stepName, timers, signal)
   try {
     return await Promise.race([promise, promise_2]);
   } finally {
-    timers.clearTimeout(y);
-    if (signal && p) signal.removeEventListener("abort", p);
+    timers.clearTimeout(timerId);
+    if (signal && onAbort) signal.removeEventListener("abort", onAbort);
     promise.catch(() => {});
   }
 }
@@ -805,14 +824,14 @@ var SANDBOXED_HEADERS = {
 async function servePreviewPages(pages, host = randomPreviewHost()) {
   let pathToken = randomUUID();
   let previewRoutes = new Map();
-  for (let [T, P] of pages)
-    previewRoutes.set(`/${pathToken}/preview-${T}.html`, {
-      body: P,
+  for (let [theme, body] of pages)
+    previewRoutes.set(`/${pathToken}/preview-${theme}.html`, {
+      body,
       contentType: PREVIEW_HTML_CONTENT_TYPE,
     });
-  if ([...pages.values()].some((T) => T.includes(MERMAID_RUNTIME_PATH)))
+  if ([...pages.values()].some((body) => body.includes(MERMAID_RUNTIME_PATH)))
     try {
-      let { loadMermaidBundleJs } = await import("./chunk-9yfhnw1m.js");
+      let { loadMermaidBundleJs } = await import("../../../../vendor/mermaid/loadMermaidBundleJs.lazy.js");
       previewRoutes.set(MERMAID_RUNTIME_PATH, {
         body: await loadMermaidBundleJs(),
         contentType: "text/javascript; charset=utf-8",
@@ -821,26 +840,26 @@ async function servePreviewPages(pages, host = randomPreviewHost()) {
       logError(error);
       logFeatureSad("artifact_publish", "mermaid_bundle_unreadable");
     }
-  let makeHandler = (T) => (P) => {
-    let L = P.method === "GET" ? T.get(new URL(P.url).pathname) : undefined;
-    return L === undefined
+  let makeHandler = (server4) => (server6) => {
+    let relay = server6.method === "GET" ? server4.get(new URL(server6.url).pathname) : undefined;
+    return relay === undefined
       ? new Response("not found", {
           status: 404,
           headers: SANDBOXED_HEADERS,
         })
-      : new Response(L.body, {
+      : new Response(relay.body, {
           headers: {
-            "content-type": L.contentType,
+            "content-type": relay.contentType,
             "cache-control": "no-store",
             "referrer-policy": "no-referrer",
             "x-content-type-options": "nosniff",
-            ...(L.contentType !== PREVIEW_HTML_CONTENT_TYPE && SANDBOXED_HEADERS),
+            ...(relay.contentType !== PREVIEW_HTML_CONTENT_TYPE && SANDBOXED_HEADERS),
           },
         });
   };
   let previewServers = await serveOnLoopbackPair(makeHandler(previewRoutes));
   let previewBase = `http://${host}:${previewServers[0].port}/${pathToken}/`;
-  let previewUrlFor = (T) => `${previewBase}preview-${T}.html`;
+  let previewUrlFor = (servers) => `${previewBase}preview-${servers}.html`;
   let topRoutes = new Map();
   for (let key of pages.keys())
     topRoutes.set(`/${pathToken}/top-${key}.html`, {
@@ -854,13 +873,13 @@ async function servePreviewPages(pages, host = randomPreviewHost()) {
     for (let previewServer of previewServers) previewServer.stop(true);
     throw error;
   }
-  let R = `http://${host}:${topServers[0].port}/${pathToken}/`;
+  let baseUrl = `http://${host}:${topServers[0].port}/${pathToken}/`;
   return {
     urlFor: previewUrlFor,
-    topUrlFor: (T) => `${R}top-${T}.html`,
+    topUrlFor: (close) => `${baseUrl}top-${close}.html`,
     baseUrl: previewBase,
     close: () => {
-      for (let T of [...previewServers, ...topServers]) T.stop(true);
+      for (let urlFor of [...previewServers, ...topServers]) urlFor.stop(true);
     },
   };
 }
@@ -874,35 +893,40 @@ function previewShellHtml(pageUrl) {
   return `<!doctype html><html><head><meta charset=utf8><meta http-equiv="Content-Security-Policy" content="default-src 'none'; frame-src ${new URL(pageUrl).origin}; style-src 'unsafe-inline'"><meta name="referrer" content="no-referrer"><style>html,body{margin:0;padding:0;width:100%;height:100%;overflow:hidden}iframe{display:block;border:0;margin:0;padding:0;width:100vw;height:100vh}</style></head><body><iframe src="${pageUrl}" referrerpolicy="no-referrer" sandbox="${PREVIEW_IFRAME_SANDBOX}"></iframe></body></html>`;
 }
 //@ chunk-8wvtd8sr.js:199085-199476 affinity
-async function serveOnLoopbackPair(e, n = (h) => Bun.serve(h), s = hasIpv6Loopback, r = startBunRelay) {
+async function serveOnLoopbackPair(
+  fetchHandler,
+  serve = (options) => Bun.serve(options),
+  hasV6 = hasIpv6Loopback,
+  startRelay = startBunRelay,
+) {
   for (let j = 0; ; j++) {
-    let y = n({
+    let server4 = serve({
       hostname: "127.0.0.1",
       port: 0,
-      fetch: e,
+      fetch: fetchHandler,
     });
-    let port = y.port ?? 0;
+    let port = server4.port ?? 0;
     try {
-      let w = n({
+      let server6 = serve({
         hostname: "::1",
         port,
-        fetch: e,
+        fetch: fetchHandler,
       });
-      return [y, w];
+      return [server4, server6];
     } catch (error) {
       let code = error.code;
-      if (code === "EADDRNOTAVAIL" || code === "EAFNOSUPPORT" || (code === "EADDRINUSE" && !s())) {
-        if (await r("::1", port)) {
-          y.stop(true);
+      if (code === "EADDRNOTAVAIL" || code === "EAFNOSUPPORT" || (code === "EADDRINUSE" && !hasV6())) {
+        if (await startRelay("::1", port)) {
+          server4.stop(true);
           throw error;
         }
-        return [y];
+        return [server4];
       }
       if (code === "EADDRINUSE" && j < 8) {
-        y.stop(true);
+        server4.stop(true);
         continue;
       }
-      y.stop(true);
+      server4.stop(true);
       throw error;
     }
   }
@@ -910,7 +934,9 @@ async function serveOnLoopbackPair(e, n = (h) => Bun.serve(h), s = hasIpv6Loopba
 //@ chunk-8wvtd8sr.js:199622-199726 placement
 function hasIpv6Loopback() {
   try {
-    return Object.values(networkInterfaces()).some((e) => e?.some((n) => n.address === "::1"));
+    return Object.values(networkInterfaces()).some((ifaces) =>
+      ifaces?.some((iface) => iface.address === "::1"),
+    );
   } catch {
     return true;
   }
@@ -936,7 +962,7 @@ export {
   asArray,
   asProbeRecord,
   pageProbeScriptBuilder,
-  PAGE_PROBE_MAX_VALUE_CHARS,
-  pageProbeRequestScript,
+  PAGE_PROBE_ERROR_FRAME_LEFT,
+  PAGE_PROBE_ERROR_NO_ANSWER,
   previewEvalScript,
 };

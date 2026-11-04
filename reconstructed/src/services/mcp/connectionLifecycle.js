@@ -31,6 +31,7 @@ import { count } from "../../utils/collections.js";
 import { claimOnce } from "../api/verificationRequired.js";
 import { getOauthAccountInfo, hasStoredOAuthToken, hasLoginManagedKey } from "../../utils/auth.js";
 import { getToolPermissionContext } from "../../utils/permissions/toolPermissionContext.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-29pqxdaf.js:3927-3960 placement
 /**
@@ -72,32 +73,32 @@ function suspendedConnectMessage(name, { clock, awakeStart, wallStart }) {
 /**
  * 因睡眠或时钟变化导致连接失败时重新拨号（有次数上限，身份未变时才重试），并记录特性状态。
  */
-async function redialAfterSuspend(e, n, o) {
-  let r = identityEpoch();
-  let s = await e();
-  let l = 0;
+async function redialAfterSuspend(dial, stillCurrent, onGiveUp) {
+  let epochAtStart = identityEpoch();
+  let result = await dial();
+  let attemptCount = 0;
   while (
-    l < MAX_SUSPENDED_REDIALS &&
-    s.type === "failed" &&
-    s.errorCode === CONNECT_SUSPENDED &&
-    n() &&
-    identityEpoch() === r
+    attemptCount < MAX_SUSPENDED_REDIALS &&
+    result.type === "failed" &&
+    result.errorCode === CONNECT_SUSPENDED &&
+    stillCurrent() &&
+    identityEpoch() === epochAtStart
   ) {
-    l++;
+    attemptCount++;
     logMCPDebug(
-      s.name,
-      `Connecting again after a sleep or a clock change (${l} of at most ${MAX_SUSPENDED_REDIALS})`,
+      result.name,
+      `Connecting again after a sleep or a clock change (${attemptCount} of at most ${MAX_SUSPENDED_REDIALS})`,
     );
-    s = await e();
+    result = await dial();
   }
-  if (l === 0) return s;
-  if (s.type !== "failed") logFeatureOk("mcp_connect_suspend_redial");
-  else if (s.errorCode !== CONNECT_SUSPENDED) logFeatureSad("mcp_connect_suspend_redial", "failed");
+  if (attemptCount === 0) return result;
+  if (result.type !== "failed") logFeatureOk("mcp_connect_suspend_redial");
+  else if (result.errorCode !== CONNECT_SUSPENDED) logFeatureSad("mcp_connect_suspend_redial", "failed");
   else {
     logFeatureSad("mcp_connect_suspend_redial", "slept_again");
-    if (l === MAX_SUSPENDED_REDIALS && n()) o();
+    if (attemptCount === MAX_SUSPENDED_REDIALS && stillCurrent()) onGiveUp();
   }
-  return s;
+  return result;
 }
 //@ chunk-29pqxdaf.js:4861-4900 placement
 /**
@@ -119,64 +120,66 @@ function assertNotShuttingDown() {
 /**
  * 登记孤儿 stdio 服务器并在退出时清理。
  */
-function trackOrphanStdioServer(serverProcess) {
-  let n = registerCleanup(() => signalOrphanStdioServer(serverProcess));
-  serverProcess.once("exit", () => n());
-  return n;
+function trackOrphanStdioServer(child) {
+  let unregister = registerCleanup(() => signalOrphanStdioServer(child));
+  child.once("exit", () => unregister());
+  return unregister;
 }
 //@ chunk-29pqxdaf.js:5073-5133 placement
 /**
  * 判断子进程是否已退出。
  */
-function hasExited(e) {
-  return e.exitCode !== null || e.signalCode !== null;
+function hasExited(child) {
+  return child.exitCode !== null || child.signalCode !== null;
 }
 //@ chunk-29pqxdaf.js:5133-5588 placement
 /**
  * 退出时处理尚未建立连接的 stdio MCP 服务器进程：Windows 下关 stdin；其他平台依次发 SIGINT、SIGTERM、SIGKILL，每次等待一段时间看是否退出。
  */
-async function signalOrphanStdioServer(e) {
-  let pid = e.pid;
-  if (pid === undefined || hasExited(e)) return;
+async function signalOrphanStdioServer(child) {
+  let pid = child.pid;
+  if (pid === undefined || hasExited(child)) return;
   if (getPlatform() === "windows") {
     logForDebugging(
       `[MCP] stdio server process ${pid} has no established connection at exit; closing its stdin`,
     );
-    await closeStdioServer(e);
+    await closeStdioServer(child);
     return;
   }
   let promise = new Promise((resolve) => {
-    e.once("exit", () => resolve());
+    child.once("exit", () => resolve());
   });
-  let r = [
+  let signals = [
     ["SIGINT", SIGINT_GRACE_MS],
     ["SIGTERM", SIGTERM_GRACE_MS],
     ["SIGKILL", SIGKILL_GRACE_MS],
   ];
-  for (let [s, l] of r) {
-    if (hasExited(e)) return;
-    logForDebugging(`[MCP] stdio server process ${pid} has no established connection at exit; sending ${s}`);
+  for (let [signal, graceMs] of signals) {
+    if (hasExited(child)) return;
+    logForDebugging(
+      `[MCP] stdio server process ${pid} has no established connection at exit; sending ${signal}`,
+    );
     try {
-      e.kill(s);
+      child.kill(signal);
     } catch {
       return;
     }
-    await withDeadline(promise, l);
+    await withDeadline(promise, graceMs);
   }
 }
 //@ chunk-29pqxdaf.js:5588-5875 placement
 /**
  * 关闭 stdio MCP 服务器进程：先关 stdin 等待退出，超时后终止其进程树。
  */
-async function closeStdioServer(serverProcess) {
-  let pid = serverProcess.pid;
-  if (pid === undefined || hasExited(serverProcess)) return;
+async function closeStdioServer(childProcess) {
+  let pid = childProcess.pid;
+  if (pid === undefined || hasExited(childProcess)) return;
   let promise = new Promise((resolve) => {
-    serverProcess.once("exit", () => resolve());
+    childProcess.once("exit", () => resolve());
   });
-  serverProcess.stdin?.end();
+  childProcess.stdin?.end();
   await withDeadline(promise, STDIN_CLOSE_GRACE_MS);
-  if (hasExited(serverProcess)) return;
+  if (hasExited(childProcess)) return;
   logForDebugging(
     `[MCP] stdio server process ${pid} is still running ${STDIN_CLOSE_GRACE_MS}ms after stdin closed; terminating its process tree`,
   );
@@ -198,15 +201,18 @@ function isTextBlock(data) {
 /**
  * 开关开启时把 MCP 结果的非文本内容排在文本前重新转换，结果全为空白文本时放弃。
  */
-async function contentOverStructuredResult(content, n) {
+async function contentOverStructuredResult(content, transform) {
   if (!isEventualNoodleEnabled()) return;
-  let o = await n([...content.filter((r) => !isTextBlock(r)), ...content.filter(isTextBlock)]);
-  if (o.content.every((r) => r.type === "text" && r.text.trim() === "")) {
-    if (o.content.length > 0) logFeatureSad("mcp_content_over_structured", "blank_text");
+  let transformed = await transform([
+    ...content.filter((block) => !isTextBlock(block)),
+    ...content.filter(isTextBlock),
+  ]);
+  if (transformed.content.every((block) => block.type === "text" && block.text.trim() === "")) {
+    if (transformed.content.length > 0) logFeatureSad("mcp_content_over_structured", "blank_text");
     return;
   }
   logFeatureOk("mcp_content_over_structured");
-  return o;
+  return transformed;
 }
 //@ chunk-29pqxdaf.js:6296-6351 placement
 /**
@@ -216,13 +222,16 @@ function isSereneTeapotEnabled() {
   return getFeatureValue_CACHED_MAY_BE_STALE("tengu_serene_teapot", true) !== false;
 }
 //@ chunk-29pqxdaf.js:6351-6370 placement
-var weakSet = new WeakSet();
+var weakSet; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-29pqxdaf.js:6351", () => {
+  weakSet = new WeakSet();
+});
 //@ chunk-29pqxdaf.js:6370-6403 placement
 /**
  * 判断该服务器是否曾跳过监听 GET。
  */
-function wasListenGetSkipped(e) {
-  return weakSet.has(e);
+function wasListenGetSkipped(response) {
+  return weakSet.has(response);
 }
 //@ chunk-29pqxdaf.js:6403-6942 placement
 /**
@@ -231,9 +240,9 @@ function wasListenGetSkipped(e) {
 function wrapFetchSkipListenGet(fetchImpl, serverName, endpointUrl) {
   let endpointHref = new URL(endpointUrl).href;
   let getNotAllowed = false;
-  return async (l, i) => {
-    if (new URL(l).href !== endpointHref) return fetchImpl(l, i);
-    if (getNotAllowed && i?.method === "GET" && !new Headers(i.headers).has("last-event-id")) {
+  return async (input, init) => {
+    if (new URL(input).href !== endpointHref) return fetchImpl(input, init);
+    if (getNotAllowed && init?.method === "GET" && !new Headers(init.headers).has("last-event-id")) {
       logMCPDebug(
         serverName,
         "Listen-stream GET not sent: the server's last answer had an Allow header that does not list GET, so Claude Code answered the GET with 405 itself",
@@ -245,10 +254,11 @@ function wrapFetchSkipListenGet(fetchImpl, serverName, endpointUrl) {
       weakSet.add(response);
       return response;
     }
-    let d = await fetchImpl(l, i);
-    let p = d.headers.get("allow");
-    getNotAllowed = p !== null && !p.split(",").some((u) => u.trim().toUpperCase() === "GET");
-    return d;
+    let response = await fetchImpl(input, init);
+    let allowHeader = response.headers.get("allow");
+    getNotAllowed =
+      allowHeader !== null && !allowHeader.split(",").some((method) => method.trim().toUpperCase() === "GET");
+    return response;
   };
 }
 //@ chunk-29pqxdaf.js:6942-7063 placement
@@ -256,9 +266,9 @@ var LIST_CHANGED_MIN_INTERVAL_MS = 1000;
 var LIST_CHANGED_MAX_INTERVAL_MS = 30000;
 var DEFAULT_REFETCH_CLOCK = {
   now: () => performance.now(),
-  arm: (e, n) => {
-    let o = setTimeout(e, n).unref();
-    return () => clearTimeout(o);
+  arm: (callback, delayMs) => {
+    let timer = setTimeout(callback, delayMs).unref();
+    return () => clearTimeout(timer);
   },
 };
 //@ chunk-29pqxdaf.js:7063-7641 placement
@@ -275,13 +285,13 @@ function createListChangedRefetcher(connection, refetch, clock = DEFAULT_REFETCH
     idle = true;
   };
   let runRefetch = () => {
-    let w = pending;
+    let request = pending;
     pending = undefined;
-    if (w === undefined) {
+    if (request === undefined) {
       resetBackoff();
       return;
     }
-    (async () => refetch(w.cause))()
+    (async () => refetch(request.cause))()
       .catch((error) => {
         logMCPDebug(
           connection.name,
@@ -290,16 +300,16 @@ function createListChangedRefetcher(connection, refetch, clock = DEFAULT_REFETCH
       })
       .finally(() => {
         NEGATIVE_INFINITY = clock.now();
-        w.settle();
+        request.settle();
         if (pending === undefined) {
           resetBackoff();
           return;
         }
-        S();
+        scheduleRefetch();
         intervalMs = Math.min(intervalMs * 2, LIST_CHANGED_MAX_INTERVAL_MS);
       });
   };
-  let u = () => {
+  let fireDueRefetch = () => {
     if (isClientWithoutTransport(connection)) {
       pending?.settle();
       pending = undefined;
@@ -308,32 +318,35 @@ function createListChangedRefetcher(connection, refetch, clock = DEFAULT_REFETCH
     }
     runRefetch();
   };
-  let S = () => {
+  let scheduleRefetch = () => {
     idle = false;
-    let w = NEGATIVE_INFINITY + intervalMs - clock.now();
-    if (w > 0) clock.arm(u, w);
+    let delayMs = NEGATIVE_INFINITY + intervalMs - clock.now();
+    if (delayMs > 0) clock.arm(fireDueRefetch, delayMs);
     else runRefetch();
   };
   return (cause) => {
-    let y = pending;
-    if (y === undefined) {
+    let existing = pending;
+    if (existing === undefined) {
       let settle = () => {};
       let settled = new Promise((resolve) => (settle = resolve));
-      y = pending = {
+      existing = pending = {
         cause,
         settled,
         settle,
       };
-      if (idle) S();
-    } else y.cause = cause;
-    return y.settled;
+      if (idle) scheduleRefetch();
+    } else existing.cause = cause;
+    return existing.settled;
   };
 }
 //@ chunk-29pqxdaf.js:7641-7667 placement
 /**
  * 按宿主保存的并发槽位表。
  */
-var overlapSlotsByHost = new HostScoped(() => new Map());
+var overlapSlotsByHost; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-29pqxdaf.js:7641", () => {
+  overlapSlotsByHost = new HostScoped(() => new Map());
+});
 //@ chunk-29pqxdaf.js:7667-7704 placement
 /**
  * 取当前宿主的并发槽位表。
@@ -345,30 +358,34 @@ function getOverlapSlots() {
 /**
  * 若工具在可重叠调用的列表中，给调用包上并发槽位控制。
  */
-function withOverlapSlots(serverName, name, o) {
-  let r = getOverlapSlots().get(serverName);
-  if (r === undefined || !r.toolNames.has(name))
+function withOverlapSlots(serverName, name, call) {
+  let slots = getOverlapSlots().get(serverName);
+  if (slots === undefined || !slots.toolNames.has(name))
     return {
       mayOverlap: false,
-      call: o,
+      call,
     };
   return {
     mayOverlap: true,
-    call: (s, l, ...i) => r.slots.run(l.abortController.signal, () => o(s, l, ...i)),
+    call: (input, context, ...rest) =>
+      slots.slots.run(context.abortController.signal, () => call(input, context, ...rest)),
   };
 }
 //@ chunk-29pqxdaf.js:7899-8017 placement
 /**
  * 表示请求根本没有发出的连接错误码集合。
  */
-var NOTHING_SENT_ERROR_CODES = new Set([
-  "ECONNREFUSED",
-  "ConnectionRefused",
-  "ENOTFOUND",
-  "EAI_AGAIN",
-  "FailedToOpenSocket",
-  "ERR_PROXY_TUNNEL",
-]);
+var NOTHING_SENT_ERROR_CODES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-29pqxdaf.js:7899", () => {
+  NOTHING_SENT_ERROR_CODES = new Set([
+    "ECONNREFUSED",
+    "ConnectionRefused",
+    "ENOTFOUND",
+    "EAI_AGAIN",
+    "FailedToOpenSocket",
+    "ERR_PROXY_TUNNEL",
+  ]);
+});
 //@ chunk-29pqxdaf.js:8017-8697 placement
 /**
  * 包装传输层 send：给 tools/call 计数，发送失败且错误表明根本没发出去（连接拒绝、DNS 失败等）时记为"未执行"，并同步到对应 toolUseId 的调用看门狗。
@@ -379,25 +396,33 @@ function trackToolCallSends(transport, isNothingSentError, watchdogs) {
     ranNothing: [],
   };
   let originalSend = transport.send.bind(transport);
-  transport.send = (l, i) => {
-    if (typeof l !== "object" || l === null || !("method" in l) || l.method !== "tools/call")
-      return originalSend(l, i);
-    let d = ++sends.started;
-    let params = "params" in l ? l.params : undefined;
+  transport.send = (message, requestOptions) => {
+    if (
+      typeof message !== "object" ||
+      message === null ||
+      !("method" in message) ||
+      message.method !== "tools/call"
+    )
+      return originalSend(message, requestOptions);
+    let sendId = ++sends.started;
+    let params = "params" in message ? message.params : undefined;
     let _meta = typeof params === "object" && params !== null && "_meta" in params ? params._meta : undefined;
-    let S =
+    let toolUseId =
       typeof _meta === "object" && _meta !== null && "claudecode/toolUseId" in _meta
         ? _meta["claudecode/toolUseId"]
         : undefined;
-    let w = typeof S === "string" ? [...watchdogs].filter((watchdog) => watchdog.toolUseId === S) : [];
-    for (let E of w) if (E.ownSends !== undefined) E.ownSends.started++;
-    let ownSends = w.length === 1 ? w[0]?.ownSends : undefined;
-    return originalSend(l, i).catch((error) => {
+    let matchingWatchdogs =
+      typeof toolUseId === "string"
+        ? [...watchdogs].filter((watchdog) => watchdog.toolUseId === toolUseId)
+        : [];
+    for (let watchdog of matchingWatchdogs) if (watchdog.ownSends !== undefined) watchdog.ownSends.started++;
+    let ownSends = matchingWatchdogs.length === 1 ? matchingWatchdogs[0]?.ownSends : undefined;
+    return originalSend(message, requestOptions).catch((error) => {
       if (
         NOTHING_SENT_ERROR_CODES.has(getErrnoCode(error) ?? "") ||
         (error instanceof Error && isNothingSentError(error))
       ) {
-        sends.ranNothing.push(d);
+        sends.ranNothing.push(sendId);
         if (ownSends !== undefined) ownSends.ranNothing++;
       }
       throw error;
@@ -412,15 +437,15 @@ function trackToolCallSends(transport, isNothingSentError, watchdogs) {
 function didCallRunNothing(toolCallSends, started, ownSends) {
   if (ownSends !== undefined && ownSends.started > 0) return ownSends.ranNothing === ownSends.started;
   if (toolCallSends === undefined || started === undefined) return false;
-  let r = toolCallSends.started - started;
-  return r > 0 && count(toolCallSends.ranNothing, (s) => s > started) === r;
+  let startedSince = toolCallSends.started - started;
+  return startedSince > 0 && count(toolCallSends.ranNothing, (sendId) => sendId > started) === startedSince;
 }
 //@ chunk-29pqxdaf.js:8870-9148 placement
 /**
  * 不编译 schema 的会话中使用的空校验器：输出 schema 不做校验，首次遇到时记录警告。
  */
 var NO_OP_SCHEMA_VALIDATOR = {
-  getValidator(e) {
+  getValidator(schema) {
     if (claimOnce().claim("mcp_output_schema_unchecked"))
       logForDebugging(
         "An MCP server listed a tool with an outputSchema in a session that compiles no schemas; that tool's results are not checked against it",
@@ -448,11 +473,11 @@ class MemoryChainByMessage {
  */
 function memoryChainMeta(toolState, id) {
   if (!id) return {};
-  let o = toolState.get(MemoryChainByMessage).byMessageId.get(id);
+  let chain = toolState.get(MemoryChainByMessage).byMessageId.get(id);
   return {
     ["anthropic/memory.response_id"]: id,
-    ...(o !== undefined && {
-      ["anthropic/memory.chain"]: o,
+    ...(chain !== undefined && {
+      ["anthropic/memory.chain"]: chain,
     }),
   };
 }
@@ -460,13 +485,13 @@ function memoryChainMeta(toolState, id) {
 /**
  * 从工具结果的元数据中记录记忆链值（按消息 id 保存最近若干条）。
  */
-function rememberMemoryChain(toolState, id, o) {
-  if (!id || !o || !("anthropic/memory.chain" in o)) return;
-  let r = o["anthropic/memory.chain"];
+function rememberMemoryChain(toolState, id, meta) {
+  if (!id || !meta || !("anthropic/memory.chain" in meta)) return;
+  let chain = meta["anthropic/memory.chain"];
   let byMessageId = toolState.get(MemoryChainByMessage).byMessageId;
   byMessageId.delete(id);
-  if (typeof r !== "string" || r.length > 16384) return;
-  byMessageId.set(id, r);
+  if (typeof chain !== "string" || chain.length > 16384) return;
+  byMessageId.set(id, chain);
   for (let key of byMessageId.keys()) {
     if (byMessageId.size <= 8) break;
     byMessageId.delete(key);
@@ -477,14 +502,15 @@ function rememberMemoryChain(toolState, id, o) {
  * 包装 fetch：重定向响应去掉 Location 头，避免跟随重定向。
  */
 function stripRedirectLocation(fetchFn) {
-  return async (n, o) => {
-    let r = await fetchFn(n, o);
-    if (![301, 302, 303, 307, 308].includes(r.status) || !r.headers.has("Location")) return r;
-    let headers = new Headers(r.headers);
+  return async (input, init) => {
+    let response = await fetchFn(input, init);
+    if (![301, 302, 303, 307, 308].includes(response.status) || !response.headers.has("Location"))
+      return response;
+    let headers = new Headers(response.headers);
     headers.delete("Location");
-    return new Response(r.body, {
-      status: r.status,
-      statusText: r.statusText,
+    return new Response(response.body, {
+      status: response.status,
+      statusText: response.statusText,
       headers,
     });
   };
@@ -507,33 +533,33 @@ function oauthAccountIdentity() {
  * 给 MCP 工具挂上文件输入支持：包装 validateInput、call 与 askInputPreparer，调用前把文件引用参数替换为上传后的文件输入。
  */
 function wireFileInputs(tool, listed, callToolFor) {
-  let loadFileInputs = () => import("./chunk-gwvwj681.js");
-  let fileInputContext = (input, u) => ({
+  let loadFileInputs = () => import("./argsWithFileInputs.lazy.js");
+  let fileInputContext = (input, context) => ({
     listed,
     input,
-    toolPermissionContext: getToolPermissionContext(u),
-    callTool: callToolFor(u),
-    signal: u.abortController.signal,
-    session: u.session,
+    toolPermissionContext: getToolPermissionContext(context),
+    callTool: callToolFor(context),
+    signal: context.abortController.signal,
+    session: context.session,
   });
   let validateInput = tool.validateInput;
-  tool.validateInput = async (p, u) =>
-    (await loadFileInputs()).validateToolFileInputs(listed, validateInput, p, u);
-  let i = tool.call;
-  tool.call = async (p, u, ...S) => {
+  tool.validateInput = async (input, context) =>
+    (await loadFileInputs()).validateToolFileInputs(listed, validateInput, input, context);
+  let originalCall = tool.call;
+  tool.call = async (input, context, ...rest) => {
     let { argsWithFileInputs } = await loadFileInputs();
-    let y = await argsWithFileInputs({
-      ...fileInputContext(p ?? {}, u),
-      toolUseId: u.toolUseId,
+    let expandedInput = await argsWithFileInputs({
+      ...fileInputContext(input ?? {}, context),
+      toolUseId: context.toolUseId,
     });
-    return i(y, u, ...S);
+    return originalCall(expandedInput, context, ...rest);
   };
   let askInputPreparer = tool.askInputPreparer;
-  tool.askInputPreparer = async (p, u, S) =>
+  tool.askInputPreparer = async (input, context, toolUseId) =>
     (await loadFileInputs()).fileInputAskPreparer({
-      ...fileInputContext(p, u),
-      toolUseId: S,
-    }) ?? askInputPreparer?.(p, u, S);
+      ...fileInputContext(input, context),
+      toolUseId,
+    }) ?? askInputPreparer?.(input, context, toolUseId);
 }
 export {
   stripRedirectLocation,

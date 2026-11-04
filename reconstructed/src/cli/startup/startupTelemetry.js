@@ -46,37 +46,38 @@ import { isSafeMode } from "../../utils/envUtils.js";
 import { parsePluginIdentifier_2 } from "../../utils/plugins/pluginIdentifier.js";
 import { GLOBAL_CONFIG_KEYS, DEFAULT_GLOBAL_CONFIG } from "../../utils/config.js";
 import { USER_INTENT_SETTING_KEYS } from "../../utils/settings/userIntentSettings.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-3wek6r2k.js:91593-92252 placement
-async function logStartupCommandTelemetry(e, o, n, r, u = false) {
+async function logStartupCommandTelemetry(command, session, storageV5, options, flag = false) {
   try {
-    let commands = await getCommands(e, r);
-    let h = conditionalSkillEntries();
-    let S = new Set(h);
-    let y = [...commands, ...h];
-    let skillBudget = getCharBudget(o, n);
-    let E = policyEnabledPluginNameSet();
-    let w = isCoworkEntrypoint();
+    let commands = await getCommands(command, options);
+    let skillEntries = conditionalSkillEntries();
+    let skillSet = new Set(skillEntries);
+    let allCommands = [...commands, ...skillEntries];
+    let skillBudget = getCharBudget(session, storageV5);
+    let policyPlugins = policyEnabledPluginNameSet();
+    let isCowork = isCoworkEntrypoint();
     let startTime = performance.now();
-    for (let A of y) {
-      if (u && !isCleanupStarted() && performance.now() - startTime > MAX_TELEMETRY_KEYS) {
+    for (let entry of allCommands) {
+      if (flag && !isCleanupStarted() && performance.now() - startTime > MAX_TELEMETRY_KEYS) {
         await yieldToEventLoop();
         startTime = performance.now();
       }
-      if (A.type !== "prompt") continue;
-      if (A.source === "builtin") continue;
-      if (w && A.source === "bundled") continue;
+      if (entry.type !== "prompt") continue;
+      if (entry.source === "builtin") continue;
+      if (isCowork && entry.source === "bundled") continue;
       logEvent("tengu_skill_loaded", {
-        _PROTO_skill_name: A.name,
+        _PROTO_skill_name: entry.name,
         ...false,
-        ...(getCommandId(A) && skillNameHashFields(A.name)),
-        ...logSkillsLoaded(A.source, A.loadedFrom, A.kind, A.createdBy),
+        ...(getCommandId(entry) && skillNameHashFields(entry.name)),
+        ...logSkillsLoaded(entry.source, entry.loadedFrom, entry.kind, entry.createdBy),
         skill_budget: skillBudget,
-        skill_content_chars: A.contentLength,
-        model_invocable: isSkillToolCommand(A),
-        is_conditional: S.has(A),
-        ...frontmatterKeyFlags(A.declaredFields),
-        ...buildServerAttributionFields(A, E),
+        skill_content_chars: entry.contentLength,
+        model_invocable: isSkillToolCommand(entry),
+        is_conditional: skillSet.has(entry),
+        ...frontmatterKeyFlags(entry.declaredFields),
+        ...buildServerAttributionFields(entry, policyPlugins),
       });
     }
     return groupCommandsByRepository(commands);
@@ -86,102 +87,109 @@ async function logStartupCommandTelemetry(e, o, n, r, u = false) {
   }
 }
 //@ chunk-3wek6r2k.js:92284-93159 placement
-function logRegisteredHooks(enabled, o) {
+function logRegisteredHooks(enabled, options) {
   if (shouldDisableAllHooksIncludingManaged()) return;
   if (isCustomizationDisabled("hooks")) return;
-  let n = isToolDetailsLoggingEnabled();
-  let r = shouldAllowManagedHooksOnly();
-  let u = new Set();
-  for (let h of getEnabledSettingSources()) {
-    if (r && h !== "policySettings") continue;
-    let settingsFilePathForSource = getSettingsFilePathForSource(h);
+  let logDetails = isToolDetailsLoggingEnabled();
+  let managedHooksOnly = shouldAllowManagedHooksOnly();
+  let seen = new Set();
+  for (let source of getEnabledSettingSources()) {
+    if (managedHooksOnly && source !== "policySettings") continue;
+    let settingsFilePathForSource = getSettingsFilePathForSource(source);
     if (settingsFilePathForSource) {
-      let M = resolve(settingsFilePathForSource);
-      if (u.has(M)) continue;
-      u.add(M);
+      let path = resolve(settingsFilePathForSource);
+      if (seen.has(path)) continue;
+      seen.add(path);
     }
-    let hooks = getSettingsForSource(h)?.hooks;
+    let hooks = getSettingsForSource(source)?.hooks;
     if (!hooks) continue;
     for (let [key, value] of Object.entries(hooks))
-      for (let w of value)
-        for (let hook of w.hooks)
+      for (let hook of value)
+        for (let hook_2 of hook.hooks)
           logOTelEvent("hook_registered", {
             hook_event: key,
-            hook_type: hook.type,
-            hook_source: h,
+            hook_type: hook_2.type,
+            hook_source: source,
             safe_mode: String(isSafeMode()),
-            ...(n &&
-              w.matcher && {
-                hook_matcher: w.matcher,
+            ...(logDetails &&
+              hook.matcher && {
+                hook_matcher: hook.matcher,
               }),
           });
   }
-  let p = r && !isSafeMode() ? getPolicyAllowedSet() : null;
-  for (let h of enabled) {
-    if (!h.hooksConfig) continue;
-    if (r && !p?.has(h.source)) continue;
-    let { marketplace } = parsePluginIdentifier_2(h.repository);
-    let y = isAnthropicPluginSource(getTelemetryPluginScope(h.name, marketplace, o)) || n;
-    for (let [key, value] of Object.entries(h.hooksConfig))
-      for (let w of value)
-        for (let hook of w.hooks)
+  let policyAllowed = managedHooksOnly && !isSafeMode() ? getPolicyAllowedSet() : null;
+  for (let hook of enabled) {
+    if (!hook.hooksConfig) continue;
+    if (managedHooksOnly && !policyAllowed?.has(hook.source)) continue;
+    let { marketplace } = parsePluginIdentifier_2(hook.repository);
+    let fields =
+      isAnthropicPluginSource(getTelemetryPluginScope(hook.name, marketplace, options)) || logDetails;
+    for (let [key, value] of Object.entries(hook.hooksConfig))
+      for (let event of value)
+        for (let hook_2 of event.hooks)
           logOTelEvent("hook_registered", {
             hook_event: key,
-            hook_type: hook.type,
+            hook_type: hook_2.type,
             hook_source: "pluginHook",
             safe_mode: String(isSafeMode()),
-            "plugin.name": y ? h.name : THIRD_PARTY,
-            plugin_id_hash: pluginIdHash(h.name, marketplace),
-            ...(n &&
-              w.matcher && {
-                hook_matcher: w.matcher,
+            "plugin.name": fields ? hook.name : THIRD_PARTY,
+            plugin_id_hash: pluginIdHash(hook.name, marketplace),
+            ...(logDetails &&
+              event.matcher && {
+                hook_matcher: event.matcher,
               }),
           });
   }
 }
 //@ chunk-3wek6r2k.js:93159-93263 placement
-var TELEMETRY_SKIP_ENV_VARS = new Set([
-  "CLAUDE_CODE_ENTRYPOINT",
-  "CLAUDE_CODE_MESSAGING_SOCKET",
-  "CLAUDE_CODE_MESSAGING_TOKEN",
-]);
+var TELEMETRY_SKIP_ENV_VARS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-3wek6r2k.js:93159", () => {
+  TELEMETRY_SKIP_ENV_VARS = new Set([
+    "CLAUDE_CODE_ENTRYPOINT",
+    "CLAUDE_CODE_MESSAGING_SOCKET",
+    "CLAUDE_CODE_MESSAGING_TOKEN",
+  ]);
+});
 //@ chunk-3wek6r2k.js:93263-93441 placement
-function envVarsForTelemetry(e = process.env) {
-  let o = [];
-  for (let key in e)
+function envVarsForTelemetry(sourceEnv = process.env) {
+  let names = [];
+  for (let key in sourceEnv)
     if (
       (key.startsWith("CLAUDE_CODE_") || key.startsWith("ANTHROPIC_")) &&
       !TELEMETRY_SKIP_ENV_VARS.has(key) &&
-      e[key] !== undefined &&
-      e[key] !== ""
+      sourceEnv[key] !== undefined &&
+      sourceEnv[key] !== ""
     )
-      o.push(key);
-  return o.sort();
+      names.push(key);
+  return names.sort();
 }
 //@ chunk-3wek6r2k.js:93441-93682 placement
-var TELEMETRY_SKIP_CONFIG_KEYS = new Set([
-  "tipsHistory",
-  "installMethod",
-  "shiftEnterKeyBindingInstalled",
-  "hasUsedBackslashReturn",
-  "hasCompletedClaudeInChromeOnboarding",
-  "remoteDialogSeen",
-  "lspRecommendationIgnoredCount",
-  "autoUpdates",
-  "autoUpdatesProtectedForNative",
-]);
+var TELEMETRY_SKIP_CONFIG_KEYS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-3wek6r2k.js:93441", () => {
+  TELEMETRY_SKIP_CONFIG_KEYS = new Set([
+    "tipsHistory",
+    "installMethod",
+    "shiftEnterKeyBindingInstalled",
+    "hasUsedBackslashReturn",
+    "hasCompletedClaudeInChromeOnboarding",
+    "remoteDialogSeen",
+    "lspRecommendationIgnoredCount",
+    "autoUpdates",
+    "autoUpdatesProtectedForNative",
+  ]);
+});
 //@ chunk-3wek6r2k.js:93682-93855 placement
-function nonDefaultGlobalConfigKeys(e) {
+function nonDefaultGlobalConfigKeys(globals) {
   let initialSettings = getInitialSettings_2();
-  let n = [];
-  for (let r of GLOBAL_CONFIG_KEYS) {
-    if (TELEMETRY_SKIP_CONFIG_KEYS.has(r)) continue;
-    let p = (USER_INTENT_SETTING_KEYS.includes(r) ? initialSettings[r] : undefined) ?? e[r];
-    let h = DEFAULT_GLOBAL_CONFIG[r];
-    if (p === undefined || isDefaultConfigValue(p, h)) continue;
-    n.push(r);
+  let keys = [];
+  for (let key of GLOBAL_CONFIG_KEYS) {
+    if (TELEMETRY_SKIP_CONFIG_KEYS.has(key)) continue;
+    let value = (USER_INTENT_SETTING_KEYS.includes(key) ? initialSettings[key] : undefined) ?? globals[key];
+    let defaultValue = DEFAULT_GLOBAL_CONFIG[key];
+    if (value === undefined || isDefaultConfigValue(value, defaultValue)) continue;
+    keys.push(key);
   }
-  return n;
+  return keys;
 }
 //@ chunk-3wek6r2k.js:93855-94500 placement
 var USER_SETTING_KEYS_FOR_TELEMETRY = [
@@ -221,24 +229,28 @@ var USER_SETTING_KEYS_FOR_TELEMETRY = [
 ];
 //@ chunk-3wek6r2k.js:94500-94837 placement
 function setUserSettingKeys(initialSettings) {
-  let o = [];
-  for (let n of USER_SETTING_KEYS_FOR_TELEMETRY) if (initialSettings[n] !== undefined) o.push(n);
-  if (initialSettings.permissions?.defaultMode !== undefined) o.push("permissions.defaultMode");
-  if (initialSettings.worktree?.baseRef !== undefined) o.push("worktree.baseRef");
-  if (Object.values(initialSettings.modelSettings ?? {}).some((n) => n?.autoCompactWindow !== undefined))
-    o.push("modelSettings.autoCompactWindow");
-  return o.sort();
+  let keys = [];
+  for (let key of USER_SETTING_KEYS_FOR_TELEMETRY) if (initialSettings[key] !== undefined) keys.push(key);
+  if (initialSettings.permissions?.defaultMode !== undefined) keys.push("permissions.defaultMode");
+  if (initialSettings.worktree?.baseRef !== undefined) keys.push("worktree.baseRef");
+  if (
+    Object.values(initialSettings.modelSettings ?? {}).some(
+      (settings) => settings?.autoCompactWindow !== undefined,
+    )
+  )
+    keys.push("modelSettings.autoCompactWindow");
+  return keys.sort();
 }
 //@ chunk-3wek6r2k.js:94837-94920 placement = getClientSurface (0.78)
-function getClientSurface_2(e, o) {
-  let n = [];
-  for (let key in e) if (o(key) === "cli") n.push(key);
-  return n.sort();
+function getClientSurface_2(value, surface) {
+  let parts = [];
+  for (let key in value) if (surface(key) === "cli") parts.push(key);
+  return parts.sort();
 }
 //@ chunk-3wek6r2k.js:94920-95030 placement
-function isDefaultConfigValue(e, o) {
-  if (e === o) return true;
-  if (typeof e === "object" && e !== null) return Object.keys(e).length === 0;
+function isDefaultConfigValue(value, defaultValue) {
+  if (value === defaultValue) return true;
+  if (typeof value === "object" && value !== null) return Object.keys(value).length === 0;
   return false;
 }
 export {

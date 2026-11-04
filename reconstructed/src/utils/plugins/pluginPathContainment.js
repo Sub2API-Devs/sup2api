@@ -23,44 +23,44 @@ import { readJunction } from "../fsJunctions.js";
 import { resolveWithinDir } from "./pluginLoader.js";
 
 //@ chunk-e6aww6q8.js:597571-598239 placement
-async function resolvePluginDirComponentPath(e, n) {
+async function resolvePluginDirComponentPath(plugin, relPath) {
   let fsImplementation = getFsImplementation();
-  let s = isProjectLocalPlugin(e) ? resolve_2(e.path, "..", "..", "..") : e.path;
-  let h;
+  let pluginRoot = isProjectLocalPlugin(plugin) ? resolve_2(plugin.path, "..", "..", "..") : plugin.path;
+  let paths;
   try {
-    h = await Promise.all([
-      fsImplementation.realpath(s),
-      fsImplementation.realpath(e.path),
-      fsImplementation.realpath(join(e.path, n)),
+    paths = await Promise.all([
+      fsImplementation.realpath(pluginRoot),
+      fsImplementation.realpath(plugin.path),
+      fsImplementation.realpath(join(plugin.path, relPath)),
     ]);
   } catch (error) {
     if (!isENOENT(error))
       logForDebugging(
-        `Skipping "${redactUrlQuery(n)}" for directory-loaded plugin "${e.name}": could not resolve it inside the plugin directory (${getErrnoCode(error) ?? replaceAll(errorMessage(error), join(e.path, n), join(e.path, redactUrlQuery(n)))}).`,
+        `Skipping "${redactUrlQuery(relPath)}" for directory-loaded plugin "${plugin.name}": could not resolve it inside the plugin directory (${getErrnoCode(error) ?? replaceAll(errorMessage(error), join(plugin.path, relPath), join(plugin.path, redactUrlQuery(relPath)))}).`,
         {
           level: "warn",
         },
       );
     return null;
   }
-  let [y, S, w] = h;
-  if (!isSubpathOf(y, S, true) || !isSubpathOf(S, w, false)) {
+  let [realRoot, realPlugin, realTarget] = paths;
+  if (!isSubpathOf(realRoot, realPlugin, true) || !isSubpathOf(realPlugin, realTarget, false)) {
     logForDebugging(
-      `Skipping "${redactUrlQuery(n)}" for directory-loaded plugin "${e.name}": it resolves outside the plugin directory (or the plugin directory resolves outside ${y}), which a directory-loaded plugin may not reference here.`,
+      `Skipping "${redactUrlQuery(relPath)}" for directory-loaded plugin "${plugin.name}": it resolves outside the plugin directory (or the plugin directory resolves outside ${realRoot}), which a directory-loaded plugin may not reference here.`,
       {
         level: "warn",
       },
     );
     return null;
   }
-  return w;
+  return realTarget;
 }
 //@ chunk-e6aww6q8.js:598239-598400 placement
-async function resolveContainmentRoots(e, boundary) {
+async function resolveContainmentRoots(paths, boundary) {
   try {
     let fsImplementation = getFsImplementation();
     return {
-      roots: await Promise.all(e.map((s) => fsImplementation.realpath(s))),
+      roots: await Promise.all(paths.map((path) => fsImplementation.realpath(path))),
       boundary,
     };
   } catch (error) {
@@ -71,41 +71,41 @@ async function resolveContainmentRoots(e, boundary) {
   }
 }
 //@ chunk-e6aww6q8.js:598400-598982 placement
-async function checkPathContained(e, n) {
-  if ("unresolvable" in e)
+async function checkPathContained(anchor, fullPath) {
+  if ("unresolvable" in anchor)
     return {
       kind: "escapes",
-      reason: `the ${e.boundary} could not be resolved (${e.unresolvable})`,
+      reason: `the ${anchor.boundary} could not be resolved (${anchor.unresolvable})`,
     };
-  if (n.includes("\\"))
+  if (fullPath.includes("\\"))
     return {
       kind: "escapes",
       reason: "its path contains a backslash, which is not resolved reliably on this platform",
     };
   let fsImplementation = getFsImplementation();
-  let s;
+  let real;
   try {
-    s = await fsImplementation.realpath(n);
+    real = await fsImplementation.realpath(fullPath);
   } catch (error) {
     let errnoCode = getErrnoCode(error);
     if (errnoCode === "ENOENT" || errnoCode === "ENOTDIR")
-      return await classifyUnresolvablePath(fsImplementation, n);
+      return await classifyUnresolvablePath(fsImplementation, fullPath);
     return {
       kind: "escapes",
       reason: `it could not be resolved (${errnoCode ?? errorMessage(error)})`,
     };
   }
-  if (!e.roots.some((root) => isSubpathOf(root, s, true)))
+  if (!anchor.roots.some((root) => isSubpathOf(root, real, true)))
     return {
       kind: "escapes",
-      reason: `it resolves to ${s}, outside the ${e.boundary}`,
+      reason: `it resolves to ${real}, outside the ${anchor.boundary}`,
     };
-  return verifyResolvedIdentity(fsImplementation, n, s);
+  return verifyResolvedIdentity(fsImplementation, fullPath, real);
 }
 //@ chunk-e6aww6q8.js:598982-599260 placement
-async function classifyUnresolvablePath(fsImplementation, n) {
+async function classifyUnresolvablePath(fsImplementation, path) {
   try {
-    await fsImplementation.stat(n);
+    await fsImplementation.stat(path);
   } catch (error) {
     let errnoCode = getErrnoCode(error);
     if (errnoCode === "ENOENT" || errnoCode === "ENOTDIR")
@@ -126,49 +126,52 @@ async function classifyUnresolvablePath(fsImplementation, n) {
 /**
  * 原路径与 realpath 结果 stat 身份一致才算 inside。
  */
-async function verifyResolvedIdentity(fsImplementation, n, r) {
-  let s;
+async function verifyResolvedIdentity(fsImplementation, declaredPath, realPath) {
+  let stats;
   try {
-    s = await Promise.all([fsImplementation.statBigint(n), fsImplementation.statBigint(r)]);
+    stats = await Promise.all([
+      fsImplementation.statBigint(declaredPath),
+      fsImplementation.statBigint(realPath),
+    ]);
   } catch (error) {
     return {
       kind: "escapes",
       reason: `its identity could not be verified (${getErrnoCode(error) ?? errorMessage(error)})`,
     };
   }
-  let [h, y] = s;
-  if (h.ino === 0n || y.ino === 0n)
+  let [declaredStat, realStat] = stats;
+  if (declaredStat.ino === 0n || realStat.ino === 0n)
     return {
       kind: "escapes",
       reason: "its identity could not be verified (the filesystem reports no inode number)",
     };
-  if (!getFileIdentity_2(h, y))
+  if (!getFileIdentity_2(declaredStat, realStat))
     return {
       kind: "escapes",
-      reason: `it is read as a different file from the one it resolves to (${r})`,
+      reason: `it is read as a different file from the one it resolves to (${realPath})`,
     };
   return {
     kind: "inside",
-    real: r,
+    real: realPath,
   };
 }
 //@ chunk-e6aww6q8.js:599728-599782 placement = getFileIdentity (0.794)
-function getFileIdentity_2(e, n) {
-  return e.dev === n.dev && e.ino === n.ino;
+function getFileIdentity_2(left, right) {
+  return left.dev === right.dev && left.ino === right.ino;
 }
 //@ chunk-e6aww6q8.js:4546074-4546424 placement
-async function assertManifestContained(containedIn, pluginPath, pluginName, s, noTelemetry) {
-  if (containedIn === undefined) return;
-  let symlinkEscape = await findSymlinkEscape(containedIn, pluginPath, s);
+async function assertManifestContained(anchor, pluginPath, pluginName, manifestRelPath, noTelemetry) {
+  if (anchor === undefined) return;
+  let symlinkEscape = await findSymlinkEscape(anchor, pluginPath, manifestRelPath);
   if (symlinkEscape === undefined) return;
   if (!noTelemetry) logFeatureBad("plugin_load_manifest", "plugin_load_manifest_containment_refused");
-  let manifestPath = join(pluginPath, s);
-  let w = `Plugin ${pluginName}: did not read the manifest at ${manifestPath}: ${symlinkEscape}`;
-  logForDebugging(w, {
+  let manifestPath = join(pluginPath, manifestRelPath);
+  let message = `Plugin ${pluginName}: did not read the manifest at ${manifestPath}: ${symlinkEscape}`;
+  logForDebugging(message, {
     level: "error",
   });
   throw new ManifestLoadError(
-    w,
+    message,
     "plugin manifest not confirmed inside the plugin",
     MANIFEST_ERROR_CLASSES.containment,
     manifestPath,
@@ -176,104 +179,105 @@ async function assertManifestContained(containedIn, pluginPath, pluginName, s, n
   );
 }
 //@ chunk-e6aww6q8.js:4546424-4546825 placement
-async function findSymlinkEscape(e, n, r) {
-  let s = n;
-  let h = false;
-  for (let S of r.split(sep)) {
-    s = join(s, S);
-    let w;
+async function findSymlinkEscape(anchor, pluginPath, relPath) {
+  let current = pluginPath;
+  let escaped = false;
+  for (let segment of relPath.split(sep)) {
+    current = join(current, segment);
+    let stat;
     try {
-      w = await lstat(s);
+      stat = await lstat(current);
     } catch (error) {
       if (isPathAbsent(error)) return;
-      h = true;
+      escaped = true;
       break;
     }
-    if (w.isSymbolicLink()) {
-      h = true;
+    if (stat.isSymbolicLink()) {
+      escaped = true;
       break;
     }
-    if (getPlatform() === "windows" && w.isDirectory()) {
-      switch ((await readJunction(s)).kind) {
+    if (getPlatform() === "windows" && stat.isDirectory()) {
+      switch ((await readJunction(current)).kind) {
         case "directory":
           break;
         case "absent":
           return;
         case "junction":
         case "error":
-          h = true;
+          escaped = true;
       }
-      if (h) break;
+      if (escaped) break;
     }
   }
-  if (!h) return;
-  let y = await checkPathContained(e, join(n, r));
-  return y.kind === "escapes" ? y.reason : undefined;
+  if (!escaped) return;
+  let containment = await checkPathContained(anchor, join(pluginPath, relPath));
+  return containment.kind === "escapes" ? containment.reason : undefined;
 }
 //@ chunk-e6aww6q8.js:4546825-4547120 placement
-async function reportIfPathEscapes(e, pluginPath, r, s) {
-  if (e === undefined) return false;
-  let symlinkEscape = await findSymlinkEscape(e, pluginPath, r);
+async function reportIfPathEscapes(anchor, pluginPath, relPath, options) {
+  if (anchor === undefined) return false;
+  let symlinkEscape = await findSymlinkEscape(anchor, pluginPath, relPath);
   if (symlinkEscape === undefined) return false;
-  let y = join(pluginPath, r);
-  logForDebugging(`Plugin ${s.plugin}: did not read ${y}: ${symlinkEscape}`, {
+  let fullPath = join(pluginPath, relPath);
+  logForDebugging(`Plugin ${options.plugin}: did not read ${fullPath}: ${symlinkEscape}`, {
     level: "error",
   });
-  s.errors.push({
+  options.errors.push({
     type: "path-traversal",
-    source: s.source,
-    plugin: s.plugin,
-    path: y,
-    component: s.component,
+    source: options.source,
+    plugin: options.plugin,
+    path: fullPath,
+    component: options.component,
     reason: symlinkEscape,
   });
   return true;
 }
 //@ chunk-e6aww6q8.js:4547120-4547437 placement
-async function resolveComponentPath(e, anchor, pluginPath, s) {
-  let h = e(pluginPath, s);
-  if (h === null)
+async function resolveComponentPath(resolvePath, anchor, pluginPath, relPath) {
+  let fullPath = resolvePath(pluginPath, relPath);
+  if (fullPath === null)
     return {
       fullPath: null,
       reason: undefined,
       real: undefined,
     };
-  let y = await checkPathContained(anchor, h);
-  switch (y.kind) {
+  let containment = await checkPathContained(anchor, fullPath);
+  switch (containment.kind) {
     case "escapes":
       return {
         fullPath: null,
-        reason: y.reason,
+        reason: containment.reason,
         real: undefined,
       };
     case "inside":
       return {
-        fullPath: h,
+        fullPath,
         reason: undefined,
-        real: y.real,
+        real: containment.real,
       };
     case "absent":
       return {
-        fullPath: h,
+        fullPath,
         reason: undefined,
         real: undefined,
       };
   }
 }
 //@ chunk-e6aww6q8.js:4547437-4547805 placement
-function specCoversDefaultDir(e, pluginPath, r) {
-  let s = [];
-  if (typeof e === "string") s.push(e);
-  else if (Array.isArray(e)) {
-    for (let y of e) if (typeof y === "string") s.push(y);
-  } else if (e && typeof e === "object") {
-    for (let y of Object.values(e))
-      if (y && typeof y === "object" && "source" in y && typeof y.source === "string") s.push(y.source);
+function specCoversDefaultDir(spec, baseDir, defaultDir) {
+  let sources = [];
+  if (typeof spec === "string") sources.push(spec);
+  else if (Array.isArray(spec)) {
+    for (let item of spec) if (typeof item === "string") sources.push(item);
+  } else if (spec && typeof spec === "object") {
+    for (let value of Object.values(spec))
+      if (value && typeof value === "object" && "source" in value && typeof value.source === "string")
+        sources.push(value.source);
   }
-  let h = r + sep;
-  return s.some((y) => {
-    let withinDir = resolveWithinDir(pluginPath, y);
-    return withinDir !== null && (withinDir + sep).startsWith(h);
+  let dirPrefix = defaultDir + sep;
+  return sources.some((source) => {
+    let withinDir = resolveWithinDir(baseDir, source);
+    return withinDir !== null && (withinDir + sep).startsWith(dirPrefix);
   });
 }
 export {

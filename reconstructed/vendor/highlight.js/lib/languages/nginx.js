@@ -5,10 +5,10 @@
  * pieces: chunk-egr0twnb.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:309437-310953 cjs-fingerprint
-var require_nginx = x(function (cjsExports, cjsModule) {
+var require_nginx = __commonJS(function (cjsExports, cjsModule) {
   function nginx(hljs) {
     let regex = hljs.regex;
     let VAR = {

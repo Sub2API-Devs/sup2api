@@ -9,7 +9,44 @@
  * attribution: fingerprint 18, placement 63, layout 90, callgraph-witnessed 1, callgraph-fingerprint 1
  */
 import { isAbsolute, basename } from "path";
-import { MAX_PDF_PAGES, MAX_PDF_BYTES } from "../../utils/truncateGraphemes.js";
+import {
+  APIError,
+  APIConnectionTimeoutError,
+  APIConnectionError,
+} from "../../../vendor/@anthropic-ai/sdk/core/error.mjs";
+import {
+  lit,
+  fromSanitizer_SANITIZER_OUTPUT_ONLY,
+  fromEnum,
+  concatSafe,
+  joinSafe,
+} from "../analytics/safeMetadata.js";
+import {
+  getRetryDelay,
+  isGoogleCloudProvider,
+  isGoogleCredentialLoadError,
+  isOAuthTokenRevokedError,
+  is529Error,
+} from "./withRetry.js";
+import {
+  getApiErrorCode,
+  hasNestedError,
+  extractNestedErrorMessage,
+  effectiveErrorStatus,
+  amazonRequestId,
+  apiErrorCode,
+  formatAPIError,
+  sanitizeAPIError,
+  extractConnectionErrorDetails,
+  STRICT_SSL_ERROR_CODES,
+  isStreamSuspendedError,
+  isConnectionError,
+  CONNECTION_DROPPED_MESSAGE,
+  TRANSIENT_SOCKET_CODES,
+  UNREACHABLE_ERROR_CODES,
+} from "./errorUtils.js";
+import { parseAdvisorResult } from "../../utils/advisor.js";
+import { MAX_PDF_PAGES, MAX_PDF_BYTES } from "../../utils/mediaLimits.js";
 import { formatFileSize, formatDurationCoarse } from "../../utils/format.js";
 import {
   getIsNonInteractiveSession,
@@ -32,31 +69,12 @@ import {
 } from "../../utils/model/providers.js";
 import { env } from "../../utils/env.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, literal, discriminatedUnion, _enum } from "../../../vendor/zod/v4/classic/schemas.js";
+import { objectSchema, literal, discriminatedUnion, _enum } from "../../../vendor/zod/v4/classic/schemas.js";
 import { logFeatureOk, logFeatureSad } from "../analytics/featureTelemetry.js";
 import { isFeedbackAllowed } from "../../commands/feedback/feedbackPolicy.js";
-import {
-  fromSanitizer_SANITIZER_OUTPUT_ONLY,
-  fromEnum,
-  concatSafe,
-  joinSafe,
-  lit,
-} from "../analytics/safeMetadata.js";
 import { isBgSession } from "../../utils/concurrentSessions.js";
 import { tildify } from "../../utils/path.js";
-import {
-  APIError,
-  APIConnectionTimeoutError,
-  APIConnectionError,
-} from "../../../vendor/@anthropic-ai/sdk/core/error.mjs";
 import { isAwsCredentialsProviderError } from "../../utils/aws.js";
-import {
-  isGoogleCloudProvider,
-  isGoogleCredentialLoadError,
-  isOAuthTokenRevokedError,
-  is529Error,
-  getRetryDelay,
-} from "./withRetry.js";
 import { createApiErrorMessage, getAssistantMessageText } from "../../utils/messages.js";
 import { MESSAGE_MARK_SYMBOLS_2 } from "../../utils/messageKinds.js";
 import { classifyMediaError, buildMediaRemovedError } from "./mediaErrors.js";
@@ -74,23 +92,6 @@ import {
   rejectedThinkingType,
   isContextWindowError,
 } from "./badRequestClassifier.js";
-import {
-  effectiveErrorStatus,
-  amazonRequestId,
-  apiErrorCode,
-  formatAPIError,
-  sanitizeAPIError,
-  extractNestedErrorMessage,
-  extractConnectionErrorDetails,
-  STRICT_SSL_ERROR_CODES,
-  isStreamSuspendedError,
-  isConnectionError,
-  CONNECTION_DROPPED_MESSAGE,
-  TRANSIENT_SOCKET_CODES,
-  UNREACHABLE_ERROR_CODES,
-  getApiErrorCode,
-  hasNestedError,
-} from "./errorUtils.js";
 import { isArtifactMountMode } from "../artifacts/artifactMount.js";
 import {
   getSubscriptionType,
@@ -132,7 +133,7 @@ import {
   BETA_MID_CONV_TOOL_CHANGE,
   BETA_TOOL_SEARCH_ADVANCED,
   BETA_TOOL_SEARCH,
-  lls,
+  SUPPORTED_BETA_ENTRIES,
   KNOWN_BETAS,
   BETA_SERVER_SIDE_FALLBACK_CATEGORY,
   MID_CONVERSATION_SYSTEM_2026_04_07,
@@ -215,10 +216,166 @@ import {
 import { firstWord } from "../../utils/model/thirdPartyModelDefaults.js";
 import { isConsumerPlan } from "../../utils/planTiers.js";
 import { HostScoped } from "../../utils/hostScoped.js";
-import { parseAdvisorResult } from "../../utils/advisor.js";
 import { getConnectionTimeoutMs } from "../mcp/client.js";
 import { SdkError, SdkErrorCode } from "../../../vendor/@modelcontextprotocol/client/dist/src-D_zzAWoS.mjs";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
+//@ chunk-gr2vfhah.js:1029-1081 fingerprint = API_ERROR_MESSAGE_PREFIX (0.667)
+/**
+ * "API Error"；TBe=1000；d$="Prompt is too long"。
+ */
+var API_ERROR_MESSAGE_PREFIX = "API Error";
+var API_ERROR_CONST_1000 = 1000;
+var PROMPT_TOO_LONG_ERROR_MESSAGE = "Prompt is too long";
+//@ chunk-gr2vfhah.js:1081-1242 callgraph-fingerprint = isPromptTooLongMessage (1)
+/**
+ * assistant API 错误消息的文本以 "Prompt is too long" 开头。
+ */
+function isPromptTooLongMessage_2(msg) {
+  if (!msg.isApiErrorMessage) return false;
+  let content = msg.message.content;
+  if (!Array.isArray(content)) return false;
+  return content.some(
+    (block) => block.type === "text" && block.text.startsWith(PROMPT_TOO_LONG_ERROR_MESSAGE),
+  );
+}
+//@ chunk-gr2vfhah.js:2086-2183 placement
+function isHeaderlessDecline503(error) {
+  return (
+    error instanceof APIError && error.status === 503 && error.headers?.get("x-should-retry") === "false"
+  );
+}
+//@ chunk-gr2vfhah.js:2183-2265 placement
+/**
+ * 导出函数 `headerlessDeclineKind`：参数 e，返回 d(e) ? lit("headerless_decline") : lit("headerless_retryable_503")。
+ */
+function headerlessDeclineKind(error) {
+  return isHeaderlessDecline503(error) ? lit("headerless_decline") : lit("headerless_retryable_503");
+}
+//@ chunk-gr2vfhah.js:2265-2301 placement
+/**
+ * 导出函数 `headerlessDeclineRetryDelay`：参数 e，返回 d(e) ? 0 : getRetryDelay(1)。
+ */
+function headerlessDeclineRetryDelay(error) {
+  return isHeaderlessDecline503(error) ? 0 : getRetryDelay(1);
+}
+//@ chunk-gr2vfhah.js:2301-2424 placement
+function isRateLimitError(error) {
+  if (!(error instanceof APIError)) return false;
+  return error.status === 429 || (error.message?.includes('"type":"rate_limit_error"') ?? false);
+}
+//@ chunk-gr2vfhah.js:2424-2506 placement
+/**
+ * 导出函数 `isNonRetryable4xx`：参数 e，返回 e >= 400 && e < 500 && e !== 401 && e !== 408 && e !== 409 && e !== 429 && e !== 451。
+ */
+function isNonRetryable4xx(status) {
+  return (
+    status >= 400 &&
+    status < 500 &&
+    status !== 401 &&
+    status !== 408 &&
+    status !== 409 &&
+    status !== 429 &&
+    status !== 451
+  );
+}
+//@ chunk-gr2vfhah.js:2506-2535 placement
+var DLP_REQUEST_DENIED = "dlp_request_denied";
+//@ chunk-gr2vfhah.js:2535-2571 placement
+/**
+ * 导出函数 `isDlpRequestDenied`：参数 e，返回 getApiErrorCode(e) === DLP_REQUEST_DENIED。
+ */
+function isDlpRequestDenied(error) {
+  return getApiErrorCode(error) === DLP_REQUEST_DENIED;
+}
+//@ chunk-gr2vfhah.js:2571-2606 placement
+var EXTRA_USAGE_OUT_OF_CREDITS = "extra_usage_out_of_credits";
+//@ chunk-gr2vfhah.js:2606-2640 placement
+/**
+ * 导出函数 `isExtraUsageOutOfCredits`：参数 e，返回 getApiErrorCode(e) === EXTRA_USAGE_OUT_OF_CREDITS。
+ */
+function isExtraUsageOutOfCredits(error) {
+  return getApiErrorCode(error) === EXTRA_USAGE_OUT_OF_CREDITS;
+}
+//@ chunk-gr2vfhah.js:2640-2757 placement
+/**
+ * 判断错误是否为 400 policy_blocked。
+ */
+function isPolicyBlockedError(error) {
+  if (!(error instanceof APIError) || error.status !== 400 || !hasNestedError(error)) return false;
+  return error.error?.error?.type === "policy_blocked";
+}
+//@ chunk-gr2vfhah.js:2757-2795 placement
+var CLAUDE_CODE_VERSION_TOO_OLD = "claude_code_version_too_old";
+//@ chunk-gr2vfhah.js:2795-2831 placement
+/**
+ * 导出函数 `isClaudeCodeVersionTooOld`：参数 e，返回 getApiErrorCode(e) === CLAUDE_CODE_VERSION_TOO_OLD。
+ */
+function isClaudeCodeVersionTooOld(error) {
+  return getApiErrorCode(error) === CLAUDE_CODE_VERSION_TOO_OLD;
+}
+//@ chunk-gr2vfhah.js:2831-2996 placement
+var VERSION_TOO_OLD_PATTERN =
+  /\bClaude Code \S+ (?:does not support this model; version \S+ or newer is required|is older than the minimum version required by your organization's policy)/;
+//@ chunk-gr2vfhah.js:2996-3111 placement
+/**
+ * 判断错误是否为客户端版本被拒绝（400 且消息匹配版本过旧）。
+ */
+function isClientVersionRejected(error) {
+  if (isClaudeCodeVersionTooOld(error)) return true;
+  if (!(error instanceof APIError) || error.status !== 400) return false;
+  return VERSION_TOO_OLD_PATTERN.test(extractNestedErrorMessage(error) ?? error.message);
+}
+//@ chunk-gr2vfhah.js:3111-3171 placement
+var SAFETY_MONITOR_BLOCKED = "safety_monitor_blocked";
+var CCS_NO_REQUEST_TOKEN = "ccs_no_request_token";
+//@ chunk-gr2vfhah.js:3171-3196 placement
+/**
+ * 导出函数 `alwaysFalseErrors`：参数 e，返回 !1。
+ */
+function alwaysFalseErrors(e) {
+  return false;
+}
+//@ chunk-gr2vfhah.js:3196-3221 placement
+/**
+ * 导出函数 `alwaysFalseB`：参数 e，返回 !1。
+ */
+function alwaysFalseB(error) {
+  return false;
+}
+//@ chunk-gr2vfhah.js:3221-3336 placement
+function isHipaaFeatureError(error) {
+  return (
+    isInvalidRequestStartingWith(error, "The requested features are not available for HIPAA-") &&
+    error.status === 400 &&
+    getApiErrorCode(error) === undefined
+  );
+}
+//@ chunk-gr2vfhah.js:3336-3506 placement
+function isInvalidRequestStartingWith(error, prefix) {
+  if (!(error instanceof APIError) || !hasNestedError(error)) return false;
+  let error_2 = error.error?.error;
+  return (
+    error_2?.type === "invalid_request_error" &&
+    typeof error_2.message === "string" &&
+    error_2.message.startsWith(prefix)
+  );
+}
+//@ chunk-s61vbvea.js:54508-54639 placement = detectPromptTooLong (0.667)
+/**
+ * 判断错误消息是否为“提示词过长”（prompt is too long / input is too long for requested model）。
+ */
+function isPromptTooLongMessage(message) {
+  let lower = message.toLowerCase();
+  return lower.includes("prompt is too long") || lower.includes("input is too long for requested model");
+}
+//@ chunk-s61vbvea.js:59778-59820 fingerprint = getErrorMessageIfRefusal (0.333)
+/**
+ * stop_reason 为 refusal。
+ */
+function getErrorMessageIfRefusal(block) {
+  return parseAdvisorResult(block) === "refusal";
+}
 //@ chunk-e6aww6q8.js:123593-123865 fingerprint = getPdfTooLargeErrorMessage (1)
 /**
  * PDF 过大提示（页数/字节上限）；SDK/非交互与交互模式文案不同。
@@ -261,94 +418,88 @@ function getImageTooLargeErrorMessage() {
  * 生成组织支出上限已达或组织被停用时的错误文案。
  */
 function formatOrgSpendCapError(
-  e,
-  {
-    includeOverageInUse: n = true,
-    unifiedWindows: r,
-    overageEnabled: s,
-    usageCreditOffer: h,
-    adminRequestOffer: y,
-  } = {},
+  limits,
+  { includeOverageInUse = true, unifiedWindows, overageEnabled, usageCreditOffer, adminRequestOffer } = {},
 ) {
-  if (!e) return;
+  if (!limits) return;
   return {
-    status: e.status,
-    ...(e.resetsAt !== undefined && {
-      resetsAt: e.resetsAt,
+    status: limits.status,
+    ...(limits.resetsAt !== undefined && {
+      resetsAt: limits.resetsAt,
     }),
-    ...(e.rateLimitType !== undefined && {
-      rateLimitType: e.rateLimitType,
+    ...(limits.rateLimitType !== undefined && {
+      rateLimitType: limits.rateLimitType,
     }),
-    ...(e.utilization !== undefined && {
-      utilization: e.utilization,
+    ...(limits.utilization !== undefined && {
+      utilization: limits.utilization,
     }),
-    ...(e.overageStatus !== undefined && {
-      overageStatus: e.overageStatus,
+    ...(limits.overageStatus !== undefined && {
+      overageStatus: limits.overageStatus,
     }),
-    ...(e.overageResetsAt !== undefined && {
-      overageResetsAt: e.overageResetsAt,
+    ...(limits.overageResetsAt !== undefined && {
+      overageResetsAt: limits.overageResetsAt,
     }),
-    ...(e.overageDisabledReason !== undefined && {
+    ...(limits.overageDisabledReason !== undefined && {
       overageDisabledReason:
-        e.overageDisabledReason === "org_spend_cap_reached"
+        limits.overageDisabledReason === "org_spend_cap_reached"
           ? "org_level_disabled_until"
-          : e.overageDisabledReason,
+          : limits.overageDisabledReason,
     }),
-    ...(e.overageScope !== undefined &&
-      e.overageScope !== "organization" && {
-        limitScope: e.overageScope,
+    ...(limits.overageScope !== undefined &&
+      limits.overageScope !== "organization" && {
+        limitScope: limits.overageScope,
       }),
-    ...(e.isUsingOverage !== undefined && {
-      isUsingOverage: e.isUsingOverage,
+    ...(limits.isUsingOverage !== undefined && {
+      isUsingOverage: limits.isUsingOverage,
     }),
-    ...(e.overageInUse !== undefined &&
-      n && {
-        overageInUse: e.overageInUse,
+    ...(limits.overageInUse !== undefined &&
+      includeOverageInUse && {
+        overageInUse: limits.overageInUse,
       }),
-    ...(e.surpassedThreshold !== undefined && {
-      surpassedThreshold: e.surpassedThreshold,
+    ...(limits.surpassedThreshold !== undefined && {
+      surpassedThreshold: limits.surpassedThreshold,
     }),
-    ...(e.rateLimitGraceActive === true && {
+    ...(limits.rateLimitGraceActive === true && {
       rateLimitGraceActive: true,
     }),
-    ...(e.overagePeriodMonthly !== undefined && {
-      overagePeriodMonthly: e.overagePeriodMonthly,
+    ...(limits.overagePeriodMonthly !== undefined && {
+      overagePeriodMonthly: limits.overagePeriodMonthly,
     }),
-    ...(e.overagePeriodChannel !== undefined && {
-      overagePeriodChannel: e.overagePeriodChannel,
+    ...(limits.overagePeriodChannel !== undefined && {
+      overagePeriodChannel: limits.overagePeriodChannel,
     }),
-    ...(e.errorCode !== undefined && {
-      errorCode: e.errorCode,
+    ...(limits.errorCode !== undefined && {
+      errorCode: limits.errorCode,
     }),
-    ...(e.canUserPurchaseCredits !== undefined && {
-      canUserPurchaseCredits: e.canUserPurchaseCredits,
+    ...(limits.canUserPurchaseCredits !== undefined && {
+      canUserPurchaseCredits: limits.canUserPurchaseCredits,
     }),
-    ...(e.hasChargeableSavedPaymentMethod !== undefined && {
-      hasChargeableSavedPaymentMethod: e.hasChargeableSavedPaymentMethod,
+    ...(limits.hasChargeableSavedPaymentMethod !== undefined && {
+      hasChargeableSavedPaymentMethod: limits.hasChargeableSavedPaymentMethod,
     }),
-    ...(r !== undefined && {
-      unifiedWindows: r,
+    ...(unifiedWindows !== undefined && {
+      unifiedWindows,
     }),
-    ...(s !== undefined && {
-      overageEnabled: s,
+    ...(overageEnabled !== undefined && {
+      overageEnabled,
     }),
-    ...(h !== undefined && {
-      usageCreditOffer: h,
+    ...(usageCreditOffer !== undefined && {
+      usageCreditOffer,
     }),
-    ...(y !== undefined && {
-      adminRequestOffer: y,
+    ...(adminRequestOffer !== undefined && {
+      adminRequestOffer,
     }),
   };
 }
 //@ chunk-e6aww6q8.js:1555950-1555984 placement
 var MODEL_FAMILY_ORDER = ["fable", "opus", "sonnet"];
 //@ chunk-e6aww6q8.js:1555984-1556162 placement
-function compareVersionParts(e, n) {
-  let mapped = e.split("-").map(Number);
-  let mapped_2 = n.split("-").map(Number);
+function compareVersionParts(leftVersion, rightVersion) {
+  let mapped = leftVersion.split("-").map(Number);
+  let mapped_2 = rightVersion.split("-").map(Number);
   for (let idx = 0; idx < Math.max(mapped.length, mapped_2.length); idx++) {
-    let y = (mapped_2[idx] ?? -1) - (mapped[idx] ?? -1);
-    if (y !== 0) return y;
+    let diff = (mapped_2[idx] ?? -1) - (mapped[idx] ?? -1);
+    if (diff !== 0) return diff;
   }
   return 0;
 }
@@ -359,20 +510,23 @@ function compareVersionParts(e, n) {
 function thirdPartyFallbackModels() {
   return getModelCatalog()
     .models.filter((model) => model.fallback_3p !== undefined)
-    .sort((e, n) => {
-      let r = (family) => {
+    .sort((leftModel, rightModel) => {
+      let familyRank = (family) => {
         let index = MODEL_FAMILY_ORDER.indexOf(family);
         return index === -1 ? MODEL_FAMILY_ORDER.length : index;
       };
-      let s = (id, family) =>
+      let stripFamily = (id, family) =>
         id
           .replace(/^claude-/, "")
           .replace(family, "")
           .replace(/^-|-$/g, "");
       return (
-        r(e.family) - r(n.family) ||
-        (e.family < n.family ? -1 : e.family > n.family ? 1 : 0) ||
-        compareVersionParts(s(e.id, e.family), s(n.id, n.family))
+        familyRank(leftModel.family) - familyRank(rightModel.family) ||
+        (leftModel.family < rightModel.family ? -1 : leftModel.family > rightModel.family ? 1 : 0) ||
+        compareVersionParts(
+          stripFamily(leftModel.id, leftModel.family),
+          stripFamily(rightModel.id, rightModel.family),
+        )
       );
     })
     .map((model) => {
@@ -388,8 +542,8 @@ function thirdPartyFallbackModels() {
 //@ chunk-e6aww6q8.js:1556635-1556748 placement
 function providerModelString(fallbackId) {
   let firstParty = getCatalogEntry_2(fallbackId)?.provider_ids.first_party;
-  let r = firstParty !== undefined ? MODEL_KEY_BY_FIRST_PARTY_ID[firstParty] : undefined;
-  return r !== undefined ? getModelStrings()[r] : undefined;
+  let modelKey = firstParty !== undefined ? MODEL_KEY_BY_FIRST_PARTY_ID[firstParty] : undefined;
+  return modelKey !== undefined ? getModelStrings()[modelKey] : undefined;
 }
 //@ chunk-e6aww6q8.js:1556748-1557033 placement
 /**
@@ -399,7 +553,7 @@ function suggestThirdPartyModel(errorText) {
   if (usesFirstPartyModelIds()) return;
   let lower = errorText.toLowerCase();
   let found = thirdPartyFallbackModels().find(
-    (s) => lower.includes(s.needle) || lower.includes(s.needleUnderscore),
+    (entry) => lower.includes(entry.needle) || lower.includes(entry.needleUnderscore),
   );
   if (found === undefined) return;
   if (found.family === "fable" && getCatalogEntry_2(found.fallbackId)?.family === "opus")
@@ -407,57 +561,66 @@ function suggestThirdPartyModel(errorText) {
   return providerModelString(found.fallbackId);
 }
 //@ chunk-e6aww6q8.js:1557033-1557102 placement
-var ADVISOR_20260301 = "advisor_20260301";
-var replaced = "advisor_20260301".replace(/\d+$/, "");
+var ADVISOR_20260301; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var replaced;
+deferInit("chunk-e6aww6q8.js:1557033", () => {
+  ADVISOR_20260301 = "advisor_20260301";
+  replaced = "advisor_20260301".replace(/\d+$/, "");
+});
 //@ chunk-e6aww6q8.js:1557102-1557476 placement
 /**
  * 网络安全拦截的申诉链接、访问层级名称，以及 cyber_verification 错误详情的结构。
  */
-var CYBER_APPEAL_URL = "https://claude.com/form/cyber-block-false-positive-report-cvp-rejection-appeal";
-var CYBER_ACCESS_TIERS = {
-  a: "Specialized Access",
-  b: "Red Team Access",
-  c: "Defense Access",
-};
-var CYBER_VERIFICATION_SCHEMA = DoctorLazy(() =>
-  u({
-    category: literal("cyber"),
-    cyber_verification: discriminatedUnion("type", [
-      u({
-        type: literal("active"),
-        tier: _enum(["a", "b", "c"]),
-      }),
-      u({
-        type: literal("inactive"),
-        reason: _enum(["not_assigned_but_organization_approved", "organization_not_approved"]),
-      }),
-    ]),
-  }),
-);
+var CYBER_APPEAL_URL; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var CYBER_ACCESS_TIERS;
+var CYBER_VERIFICATION_SCHEMA;
+deferInit("chunk-e6aww6q8.js:1557102", () => {
+  CYBER_APPEAL_URL = "https://claude.com/form/cyber-block-false-positive-report-cvp-rejection-appeal";
+  CYBER_ACCESS_TIERS = {
+    a: "Specialized Access",
+    b: "Red Team Access",
+    c: "Defense Access",
+  };
+  CYBER_VERIFICATION_SCHEMA = DoctorLazy(() =>
+    objectSchema({
+      category: literal("cyber"),
+      cyber_verification: discriminatedUnion("type", [
+        objectSchema({
+          type: literal("active"),
+          tier: _enum(["a", "b", "c"]),
+        }),
+        objectSchema({
+          type: literal("inactive"),
+          reason: _enum(["not_assigned_but_organization_approved", "organization_not_approved"]),
+        }),
+      ]),
+    }),
+  );
+});
 //@ chunk-e6aww6q8.js:1557476-1558563 placement
 /**
  * 生成网络安全验证计划相关的拒绝文案，并引导用户反馈。
  */
-function formatCyberVerificationRefusal(e, n, r) {
-  if (!usesFirstPartyModelIds()) return e;
-  let s = CYBER_VERIFICATION_SCHEMA().safeParse(r);
-  if (!s.success) return e;
+function formatCyberVerificationRefusal(learnMore, articleUrl, details) {
+  if (!usesFirstPartyModelIds()) return learnMore;
+  let parsed = CYBER_VERIFICATION_SCHEMA().safeParse(details);
+  if (!parsed.success) return learnMore;
   logFeatureOk("refusal_cyber_verification_status");
-  let cyberVerification = s.data.cyber_verification;
+  let cyberVerification = parsed.data.cyber_verification;
   switch (cyberVerification.type) {
     case "active": {
-      let y = `You have ${CYBER_ACCESS_TIERS[cyberVerification.tier]} in the Cyber Verification Program, and your last message was still flagged.`;
-      if (!isFeedbackAllowed()) return `${y} ${e}`;
+      let tierNote = `You have ${CYBER_ACCESS_TIERS[cyberVerification.tier]} in the Cyber Verification Program, and your last message was still flagged.`;
+      if (!isFeedbackAllowed()) return `${tierNote} ${learnMore}`;
       return getIsNonInteractiveSession()
-        ? `${y} If it's legitimate security work, send feedback so we can improve: ${CYBER_APPEAL_URL}. It won't unblock your last message. ${e}`
-        : `${y} If it's legitimate security work, send feedback with /feedback so we can improve. It won't unblock your last message. Learn more: ${n}`;
+        ? `${tierNote} If it's legitimate security work, send feedback so we can improve: ${CYBER_APPEAL_URL}. It won't unblock your last message. ${learnMore}`
+        : `${tierNote} If it's legitimate security work, send feedback with /feedback so we can improve. It won't unblock your last message. Learn more: ${articleUrl}`;
     }
     case "inactive":
       switch (cyberVerification.reason) {
         case "not_assigned_but_organization_approved":
-          return `Ask your admin for Defense Access in the Cyber Verification Program to reduce these interruptions. An admin can check your role in Organization settings. ${e}`;
+          return `Ask your admin for Defense Access in the Cyber Verification Program to reduce these interruptions. An admin can check your role in Organization settings. ${learnMore}`;
         case "organization_not_approved":
-          return `Your organization doesn't have Cyber Verification Program access in effect for this model. Your admin can check your organization's status in the Verification Portal (https://portal.anthropic.com). ${e}`;
+          return `Your organization doesn't have Cyber Verification Program access in effect for this model. Your admin can check your organization's status in the Verification Portal (https://portal.anthropic.com). ${learnMore}`;
       }
   }
 }
@@ -471,17 +634,17 @@ var SAFE_PATH_KEY_RE = /^[a-z0-9_/]{1,48}$/;
 /**
  * 导出函数 `sanitizeEventKey`：参数 e，返回 typeof e === "string" && x6o.test(e) ? fromSanitizer_SANITIZER_OUTPUT_ONLY(e) : lit_2("unknown")。
  */
-function sanitizeEventKey(e) {
-  return typeof e === "string" && SAFE_EVENT_KEY_RE.test(e)
-    ? fromSanitizer_SANITIZER_OUTPUT_ONLY(e)
+function sanitizeEventKey(key) {
+  return typeof key === "string" && SAFE_EVENT_KEY_RE.test(key)
+    ? fromSanitizer_SANITIZER_OUTPUT_ONLY(key)
     : lit("unknown");
 }
 //@ chunk-e6aww6q8.js:1558691-1558738 placement
 /**
  * 导出函数 `asSafePathKey`：参数 e，返回 P6o.test(e) ? e : "unknown"。
  */
-function asSafePathKey(e) {
-  return SAFE_PATH_KEY_RE.test(e) ? e : "unknown";
+function asSafePathKey(path) {
+  return SAFE_PATH_KEY_RE.test(path) ? path : "unknown";
 }
 //@ chunk-e6aww6q8.js:1558790-1558827 placement
 var CLAUDE_BG_GATEWAY_WITHHELD = "CLAUDE_BG_GATEWAY_WITHHELD";
@@ -510,9 +673,9 @@ function withheldGatewayFolder() {
 }
 //@ chunk-e6aww6q8.js:1559077-1559261 placement
 function respawnCommandHint() {
-  let e = env.CLAUDE_JOB_DIR && basename(env.CLAUDE_JOB_DIR);
-  return e && /^[A-Za-z0-9_-]{1,64}$/.test(e)
-    ? `\`claude respawn ${e}\``
+  let jobId = env.CLAUDE_JOB_DIR && basename(env.CLAUDE_JOB_DIR);
+  return jobId && /^[A-Za-z0-9_-]{1,64}$/.test(jobId)
+    ? `\`claude respawn ${jobId}\``
     : "`claude respawn <id>` (the id is in the agents view)";
 }
 //@ chunk-e6aww6q8.js:1559261-1559369 placement
@@ -520,8 +683,8 @@ var NO_GATEWAY_MESSAGE =
   "No LLM gateway: a gateway set in your shell isn't passed to a session opened from another folder.";
 //@ chunk-e6aww6q8.js:1559369-1559601 placement
 function noGatewayErrorMessage() {
-  let e = withheldGatewayFolder() ?? "this session's own folder";
-  return `${NO_GATEWAY_MESSAGE} To fix, run ${respawnCommandHint()} from ${e} in another terminal where your gateway is set, or set ANTHROPIC_BASE_URL and its API key or token in a settings file's env block.`;
+  let folder = withheldGatewayFolder() ?? "this session's own folder";
+  return `${NO_GATEWAY_MESSAGE} To fix, run ${respawnCommandHint()} from ${folder} in another terminal where your gateway is set, or set ANTHROPIC_BASE_URL and its API key or token in a settings file's env block.`;
 }
 //@ chunk-e6aww6q8.js:1559601-1559660 placement
 /**
@@ -578,7 +741,7 @@ function hasInvalidCredentialPrefix(text) {
     INVALID_AUTH_TOKEN_MESSAGE,
     INVALID_CUSTOM_HEADERS_MESSAGE,
     INVALID_ENV_HEADER_MESSAGE,
-  ].some((n) => text.startsWith(`${n} \xB7 `));
+  ].some((prefix) => text.startsWith(`${prefix} \xB7 `));
 }
 //@ chunk-e6aww6q8.js:1571945-1572145 fingerprint = startsWithApiErrorPrefix (1)
 /**
@@ -639,8 +802,8 @@ var SINGLE_EXCHANGE_CONTENT_RATIO = 0.8;
 /**
  * 单轮会话无法压缩时的提示词过长文案：区分无法解析、会话内容占大头、系统提示词/工具/附件占大头三种情况。
  */
-function formatSingleExchangePromptTooLong(e) {
-  let { actualTokens, limitTokens, conversationTokensEstimate } = e;
+function formatSingleExchangePromptTooLong(stats) {
+  let { actualTokens, limitTokens, conversationTokensEstimate } = stats;
   if (actualTokens === undefined || limitTokens === undefined)
     return (
       `${PROMPT_TOO_LONG_ERROR_MESSAGE} \xB7 this conversation is a single ` +
@@ -658,24 +821,24 @@ function formatSingleExchangePromptTooLong(e) {
 /**
  * 用新文案重建 API 错误消息，保留 requestId、apiErrorStatus/Code 等元数据。
  */
-function rebuildApiErrorMessage(e, content, deps) {
+function rebuildApiErrorMessage(message, content, deps) {
   return {
     ...createApiErrorMessage({
       content,
       error: "invalid_request",
-      apiError: e.apiError,
-      apiErrorParams: e.apiErrorParams,
-      errorDetails: e.errorDetails,
+      apiError: message.apiError,
+      apiErrorParams: message.apiErrorParams,
+      errorDetails: message.errorDetails,
       now: deps.now,
       uuid: deps.uuid,
     }),
-    requestId: e.requestId,
-    apiErrorStatus: e.apiErrorStatus,
-    ...(e.apiErrorCode !== undefined && {
-      apiErrorCode: e.apiErrorCode,
+    requestId: message.requestId,
+    apiErrorStatus: message.apiErrorStatus,
+    ...(message.apiErrorCode !== undefined && {
+      apiErrorCode: message.apiErrorCode,
     }),
-    ...(e[MESSAGE_MARK_SYMBOLS_2] !== undefined && {
-      [MESSAGE_MARK_SYMBOLS_2]: e[MESSAGE_MARK_SYMBOLS_2],
+    ...(message[MESSAGE_MARK_SYMBOLS_2] !== undefined && {
+      [MESSAGE_MARK_SYMBOLS_2]: message[MESSAGE_MARK_SYMBOLS_2],
     }),
   };
 }
@@ -690,9 +853,9 @@ function isRequestTooLargeOrMediaDetail(errorDetails) {
 /**
  * 400 错误里的媒体错误位置/类型（classifyMediaError）。
  */
-function getMediaErrorFromApiError(e) {
-  if (!(e instanceof APIError) || e.status !== 400) return;
-  return classifyMediaError(e.message);
+function getMediaErrorFromApiError(error) {
+  if (!(error instanceof APIError) || error.status !== 400) return;
+  return classifyMediaError(error.message);
 }
 //@ chunk-e6aww6q8.js:1573830-1573924 fingerprint = isMediaSizeErrorMessage (1)
 /**
@@ -727,22 +890,25 @@ var CONTENT_FILTER_MESSAGE = "Output blocked by content filtering policy";
 //@ chunk-e6aww6q8.js:1574221-1574433 placement
 function isRequestTooLargeError_2(error) {
   if (!(error instanceof Error) || !error.message.includes(CONTENT_FILTER_MESSAGE)) return false;
-  let n = "originalError" in error && error.originalError instanceof Error ? error.originalError : error;
-  let r = n instanceof APIError ? effectiveErrorStatus(n) : undefined;
-  return r === undefined || r === 400;
+  let inner = "originalError" in error && error.originalError instanceof Error ? error.originalError : error;
+  let status = inner instanceof APIError ? effectiveErrorStatus(inner) : undefined;
+  return status === undefined || status === 400;
 }
 //@ chunk-e6aww6q8.js:1574433-1574548 placement
 var UNPROCESSABLE_REQUEST_MESSAGE =
   "Request rejected as unprocessable by the model (too many or oversized images, or unsupported parameters)";
 //@ chunk-e6aww6q8.js:1574548-1574657 placement
-function isUnprocessableRequest(e) {
-  if (!(e instanceof APIError)) return false;
-  let n = effectiveErrorStatus(e);
-  return (n === undefined || n === 400) && getApiErrorFirstLine(e).includes(UNPROCESSABLE_REQUEST_MESSAGE);
+function isUnprocessableRequest(error) {
+  if (!(error instanceof APIError)) return false;
+  let status = effectiveErrorStatus(error);
+  return (
+    (status === undefined || status === 400) &&
+    getApiErrorFirstLine(error).includes(UNPROCESSABLE_REQUEST_MESSAGE)
+  );
 }
 //@ chunk-e6aww6q8.js:1574657-1574761 placement
-function isCreditBalanceTooLow(e) {
-  return e instanceof Error && e.message.toLowerCase().includes("credit balance is too low");
+function isCreditBalanceTooLow(error) {
+  return error instanceof Error && error.message.toLowerCase().includes("credit balance is too low");
 }
 //@ chunk-e6aww6q8.js:1574761-1574871 placement
 function isOrganizationDisabled(error) {
@@ -1007,9 +1173,9 @@ function isRemoteSession() {
  */
 function logToolUseToolResultMismatch(toolUseId, messages, messagesForAPI) {
   try {
-    let s = (role) =>
+    let roleEnum = (role) =>
       role === "user" || role === "assistant" || role === "system" ? fromEnum(role) : lit("unknown");
-    let h = (block) => typeof block === "object" && block !== null;
+    let isObject = (block) => typeof block === "object" && block !== null;
     let normalizedIndex = -1;
     for (let i = 0; i < messagesForAPI.length; i++) {
       let msg = messagesForAPI[i];
@@ -1017,7 +1183,7 @@ function logToolUseToolResultMismatch(toolUseId, messages, messagesForAPI) {
       let content = msg.message.content;
       if (Array.isArray(content)) {
         for (let block of content)
-          if (h(block) && block.type === "tool_use" && "id" in block && block.id === toolUseId) {
+          if (isObject(block) && block.type === "tool_use" && "id" in block && block.id === toolUseId) {
             normalizedIndex = i;
             break;
           }
@@ -1032,7 +1198,7 @@ function logToolUseToolResultMismatch(toolUseId, messages, messagesForAPI) {
         let content = msg.message.content;
         if (Array.isArray(content)) {
           for (let block of content)
-            if (h(block) && block.type === "tool_use" && "id" in block && block.id === toolUseId) {
+            if (isObject(block) && block.type === "tool_use" && "id" in block && block.id === toolUseId) {
               originalIndex = i;
               break;
             }
@@ -1040,94 +1206,99 @@ function logToolUseToolResultMismatch(toolUseId, messages, messagesForAPI) {
       }
       if (originalIndex !== -1) break;
     }
-    let w = (we, Ee) => concatSafe(fromEnum(we), lit(":"), sanitizeMarkName(Ee) ?? lit("nonconforming"));
-    let L = (we) => {
-      let Ee = s(we.message.role);
-      let content = we.message.content;
-      if (typeof content === "string") return [concatSafe(Ee, lit(":string_content"))];
+    let blockTag = (kind, id) =>
+      concatSafe(fromEnum(kind), lit(":"), sanitizeMarkName(id) ?? lit("nonconforming"));
+    let describeMessage = (message) => {
+      let role = roleEnum(message.message.role);
+      let content = message.message.content;
+      if (typeof content === "string") return [concatSafe(role, lit(":string_content"))];
       if (!Array.isArray(content)) return [];
-      return content.map((Ie) =>
+      return content.map((block) =>
         concatSafe(
-          Ee,
+          role,
           lit(":"),
-          !h(Ie)
+          !isObject(block)
             ? lit("unknown")
-            : Ie.type === "tool_use" && "id" in Ie
-              ? w("tool_use", Ie.id)
-              : Ie.type === "tool_result" && "tool_use_id" in Ie
-                ? w("tool_result", Ie.tool_use_id)
-                : isKnownContentBlockType(Ie.type)
-                  ? fromEnum(Ie.type)
+            : block.type === "tool_use" && "id" in block
+              ? blockTag("tool_use", block.id)
+              : block.type === "tool_result" && "tool_use_id" in block
+                ? blockTag("tool_result", block.tool_use_id)
+                : isKnownContentBlockType(block.type)
+                  ? fromEnum(block.type)
                   : lit("unknown"),
         ),
       );
     };
-    let flattened = messagesForAPI.slice(normalizedIndex + 1).flatMap((we) => (we ? L(we) : []));
-    let q = [];
+    let flattened = messagesForAPI
+      .slice(normalizedIndex + 1)
+      .flatMap((message) => (message ? describeMessage(message) : []));
+    let originalSequence = [];
     for (let i = originalIndex + 1; i < messages.length; i++) {
-      let Ee = messages[i];
-      if (!Ee) continue;
-      switch (Ee.type) {
+      let message = messages[i];
+      if (!message) continue;
+      switch (message.type) {
         case "user":
         case "assistant":
-          if ("message" in Ee) q.push(...L(Ee));
+          if ("message" in message) originalSequence.push(...describeMessage(message));
           break;
         case "attachment":
-          if ("attachment" in Ee)
-            q.push(concatSafe(lit("attachment:"), sanitizeEventKey(Ee.attachment.type)));
+          if ("attachment" in message)
+            originalSequence.push(concatSafe(lit("attachment:"), sanitizeEventKey(message.attachment.type)));
           break;
         case "system":
-          if ("subtype" in Ee) q.push(concatSafe(lit("system:"), sanitizeEventKey(Ee.subtype)));
+          if ("subtype" in message)
+            originalSequence.push(concatSafe(lit("system:"), sanitizeEventKey(message.subtype)));
           break;
         case "progress": {
-          let Ae = "data" in Ee ? Ee.data : undefined;
-          let Ie = typeof Ae === "object" && Ae !== null && "type" in Ae ? Ae.type : undefined;
-          q.push(concatSafe(lit("progress:"), sanitizeEventKey(Ie)));
+          let data = "data" in message ? message.data : undefined;
+          let kind = typeof data === "object" && data !== null && "type" in data ? data.type : undefined;
+          originalSequence.push(concatSafe(lit("progress:"), sanitizeEventKey(kind)));
           break;
         }
       }
     }
-    let Z = (we) => {
-      if (!we) return lit("<none>");
-      let Ee = s(we.message.role);
-      let content = we.message.content;
-      if (!Array.isArray(content)) return concatSafe(Ee, lit(":string"));
-      let mapped = content.map((Me) =>
-        !h(Me)
+    let describeMessageOrNone = (message) => {
+      if (!message) return lit("<none>");
+      let role = roleEnum(message.message.role);
+      let content = message.message.content;
+      if (!Array.isArray(content)) return concatSafe(role, lit(":string"));
+      let mapped = content.map((block) =>
+        !isObject(block)
           ? lit("unknown")
-          : Me.type === "tool_use"
-            ? w("tool_use", Me.id)
-            : Me.type === "tool_result"
-              ? w("tool_result", Me.tool_use_id)
-              : isKnownContentBlockType(Me.type)
-                ? fromEnum(Me.type)
+          : block.type === "tool_use"
+            ? blockTag("tool_use", block.id)
+            : block.type === "tool_result"
+              ? blockTag("tool_result", block.tool_use_id)
+              : isKnownContentBlockType(block.type)
+                ? fromEnum(block.type)
                 : lit("unknown"),
       );
-      return concatSafe(Ee, lit(":["), joinSafe(mapped), lit("]"));
+      return concatSafe(role, lit(":["), joinSafe(mapped), lit("]"));
     };
-    let Se = 0;
-    let ke = 0;
+    let toolUseCount = 0;
+    let toolResultCount = 0;
     for (let block of messagesForAPI) {
       let content = block.message.content;
       if (!Array.isArray(content)) continue;
       for (let block of content) {
-        if (!h(block)) continue;
-        if (block.type === "tool_use" && block.id === toolUseId) Se++;
-        if (block.type === "tool_result" && block.tool_use_id === toolUseId) ke++;
+        if (!isObject(block)) continue;
+        if (block.type === "tool_use" && block.id === toolUseId) toolUseCount++;
+        if (block.type === "tool_result" && block.tool_use_id === toolUseId) toolResultCount++;
       }
     }
     logEvent("tengu_tool_use_tool_result_mismatch_error", {
       toolUseId: sanitizeMarkName(toolUseId),
       normalizedSequence: joinSafe(flattened, ", "),
-      preNormalizedSequence: joinSafe(q, ", "),
+      preNormalizedSequence: joinSafe(originalSequence, ", "),
       normalizedMessageCount: messagesForAPI.length,
       originalMessageCount: messages.length,
       normalizedToolUseIndex: normalizedIndex,
       originalToolUseIndex: originalIndex,
-      offendingMessageBlocks: Z(messagesForAPI[normalizedIndex]),
-      followingMessageBlocks: normalizedIndex === -1 ? lit("<none>") : Z(messagesForAPI[normalizedIndex + 1]),
-      toolUseOccurrences: Se,
-      toolResultOccurrences: ke,
+      offendingMessageBlocks: describeMessageOrNone(messagesForAPI[normalizedIndex]),
+      followingMessageBlocks:
+        normalizedIndex === -1 ? lit("<none>") : describeMessageOrNone(messagesForAPI[normalizedIndex + 1]),
+      toolUseOccurrences: toolUseCount,
+      toolResultOccurrences: toolResultCount,
     });
   } catch (error) {}
 }
@@ -1151,12 +1322,12 @@ function isValidAPIMessage(value) {
 /**
  * 400 拒绝 auto 模式的 afk-mode beta。
  */
-function isAfkModeBetaRejected(e) {
+function isAfkModeBetaRejected(error) {
   return (
     !!BETA_AFK_MODE &&
-    e instanceof APIError &&
-    e.status === 400 &&
-    messageMentionsBeta(e.message, BETA_AFK_MODE)
+    error instanceof APIError &&
+    error.status === 400 &&
+    messageMentionsBeta(error.message, BETA_AFK_MODE)
   );
 }
 //@ chunk-e6aww6q8.js:1582932-1582995 layout
@@ -1168,44 +1339,45 @@ var SAFEGUARDS_CONTENT_PATH_REGEX = /^messages\.\d+\.content\.\d+(?:\.\w+)*\.saf
 /**
  * 取错误消息（优先 error.error.message）去掉状态码前缀后的第一行。
  */
-function getApiErrorFirstLine(e) {
-  let message = e.error?.error?.message;
-  let s = typeof message === "string" ? message : e.message.replace(/^\d{3} /, "");
-  let index = s.indexOf(`
+function getApiErrorFirstLine(error) {
+  let message = error.error?.error?.message;
+  let text = typeof message === "string" ? message : error.message.replace(/^\d{3} /, "");
+  let index = text.indexOf(`
 `);
-  return index === -1 ? s : s.slice(0, index);
+  return index === -1 ? text : text.slice(0, index);
 }
 //@ chunk-e6aww6q8.js:1583142-1583266 layout
 /**
  * 422 错误转成等价的 400 错误对象（统一走 400 判定）。
  */
-function normalize422To400(e) {
-  return e instanceof APIError && e.status === 422
-    ? new APIError(400, e.error, e.message.replace(/^422 /, ""), e.headers, e.type)
-    : e;
+function normalize422To400(error) {
+  return error instanceof APIError && error.status === 422
+    ? new APIError(400, error.error, error.message.replace(/^422 /, ""), error.headers, error.type)
+    : error;
 }
 //@ chunk-e6aww6q8.js:1583266-1583393 layout
 /**
  * 400 拒绝 safeguards 字段/对应 beta。
  */
-function isSafeguardsRejected(e) {
+function isSafeguardsRejected(error) {
   return (
-    e instanceof APIError &&
-    e.status === 400 &&
-    (messageMentionsBeta(e.message, BETA_DANGEROUS_TOOL_USE) ||
-      (/\bsafeguards\b/.test(e.message) && !SAFEGUARDS_CONTENT_PATH_REGEX.test(getApiErrorFirstLine(e))))
+    error instanceof APIError &&
+    error.status === 400 &&
+    (messageMentionsBeta(error.message, BETA_DANGEROUS_TOOL_USE) ||
+      (/\bsafeguards\b/.test(error.message) &&
+        !SAFEGUARDS_CONTENT_PATH_REGEX.test(getApiErrorFirstLine(error))))
   );
 }
 //@ chunk-e6aww6q8.js:1583393-1583471 layout
 /**
  * 400 拒绝 PG（tether/thread）beta。
  */
-function isTetherBetaRejected(e) {
+function isTetherBetaRejected(error) {
   return (
     !!BETA_MESSAGE_THREADS &&
-    e instanceof APIError &&
-    e.status === 400 &&
-    messageMentionsBeta(e.message, BETA_MESSAGE_THREADS)
+    error instanceof APIError &&
+    error.status === 400 &&
+    messageMentionsBeta(error.message, BETA_MESSAGE_THREADS)
   );
 }
 //@ chunk-e6aww6q8.js:1583471-1583605 layout
@@ -1218,9 +1390,9 @@ var TURN_SCOPED_SYSTEM_REGEX =
 /**
  * 400 拒绝 clear_at 或 turn-scoped system 消息。
  */
-function isKeptReminderClearAtRejected(e) {
-  if (!(e instanceof APIError) || e.status !== 400) return false;
-  let apiErrorFirstLine = getApiErrorFirstLine(e);
+function isKeptReminderClearAtRejected(error) {
+  if (!(error instanceof APIError) || error.status !== 400) return false;
+  let apiErrorFirstLine = getApiErrorFirstLine(error);
   return (
     (apiErrorFirstLine.startsWith("Unexpected value(s) ") &&
       mentionsAnthropicBeta(apiErrorFirstLine, BETA_MID_CONVERSATION_SYSTEM_CLEAR_AT.header)) ||
@@ -1231,12 +1403,12 @@ function isKeptReminderClearAtRejected(e) {
 /**
  * 400 advisor_tool_result 内容无法处理。
  */
-function isAdvisorResultUnprocessable(e) {
+function isAdvisorResultUnprocessable(error) {
   return (
-    e instanceof APIError &&
-    e.status === 400 &&
-    (e.message.includes("Advisor tool result content could not be processed") ||
-      e.message.includes("found in advisor_tool_result blocks"))
+    error instanceof APIError &&
+    error.status === 400 &&
+    (error.message.includes("Advisor tool result content could not be processed") ||
+      error.message.includes("found in advisor_tool_result blocks"))
   );
 }
 //@ chunk-e6aww6q8.js:1583945-1584164 layout
@@ -1260,20 +1432,20 @@ function normalizeErrorText(message) {
 /**
  * 400 历史 web search 内容解密失败（触发 retry:web-search-strip）。
  */
-function isWebSearchContentRejected(e) {
-  if (!(e instanceof APIError) || e.status !== 400) return false;
-  let n = normalizeErrorText(e.message);
-  return WEB_SEARCH_DECRYPT_ERRORS.some((r) => n.includes(r));
+function isWebSearchContentRejected(error) {
+  if (!(error instanceof APIError) || error.status !== 400) return false;
+  let text = normalizeErrorText(error.message);
+  return WEB_SEARCH_DECRYPT_ERRORS.some((phrase) => text.includes(phrase));
 }
 //@ chunk-e6aww6q8.js:1584341-1584425 layout
 /**
  * 400 历史中代码执行结果加密内容无法解密。
  */
-function isCodeExecutionOutputRejected(e) {
+function isCodeExecutionOutputRejected(error) {
   return (
-    e instanceof APIError &&
-    e.status === 400 &&
-    normalizeErrorText(e.message).includes(CODE_EXECUTION_DECRYPT_ERROR)
+    error instanceof APIError &&
+    error.status === 400 &&
+    normalizeErrorText(error.message).includes(CODE_EXECUTION_DECRYPT_ERROR)
   );
 }
 //@ chunk-e6aww6q8.js:1584425-1584490 layout
@@ -1285,31 +1457,37 @@ var ADVISOR_MODEL_MISMATCH_MESSAGE = "cannot be used as an advisor when the requ
 /**
  * 400 advisor 模型不能为当前请求模型提供建议。
  */
-function isAdvisorModelMismatchError(e) {
-  return e instanceof APIError && e.status === 400 && e.message.includes(ADVISOR_MODEL_MISMATCH_MESSAGE);
+function isAdvisorModelMismatchError(error) {
+  return (
+    error instanceof APIError &&
+    error.status === 400 &&
+    error.message.includes(ADVISOR_MODEL_MISMATCH_MESSAGE)
+  );
 }
 //@ chunk-e6aww6q8.js:1584569-1584850 layout
 /**
  * advisor 工具不可用/模型不能做 advisor/advisor beta 被拒。
  */
-function isAdvisorUnavailableError(e) {
-  if (!(e instanceof APIError)) return false;
-  if (e.status === 400)
+function isAdvisorUnavailableError(error) {
+  if (!(error instanceof APIError)) return false;
+  if (error.status === 400)
     return (
-      e.message.includes("the advisor tool is not available") ||
-      e.message.includes("cannot be used as an advisor") ||
-      /tools\.\d+\.model: /.test(e.message) ||
-      isAdvisorBlockTypeUnknown(e.message) ||
-      isAdvisorBetaRejected(e)
+      error.message.includes("the advisor tool is not available") ||
+      error.message.includes("cannot be used as an advisor") ||
+      /tools\.\d+\.model: /.test(error.message) ||
+      isAdvisorBlockTypeUnknown(error.message) ||
+      isAdvisorBetaRejected(error)
     );
-  return e.status === 422 && isAdvisorBlockTypeUnknown(e.message);
+  return error.status === 422 && isAdvisorBlockTypeUnknown(error.message);
 }
 //@ chunk-e6aww6q8.js:1584850-1584924 layout
 /**
  * 400 拒绝 advisor beta。
  */
-function isAdvisorBetaRejected(e) {
-  return e instanceof APIError && e.status === 400 && messageMentionsBeta(e.message, BETA_ADVISOR_TOOL);
+function isAdvisorBetaRejected(error) {
+  return (
+    error instanceof APIError && error.status === 400 && messageMentionsBeta(error.message, BETA_ADVISOR_TOOL)
+  );
 }
 //@ chunk-e6aww6q8.js:1584924-1584957 layout
 /**
@@ -1322,24 +1500,30 @@ function isAdvisorBlockTypeUnknown(message) {
 /**
  * advisor 被拒的范围：组织不可用→process，block 类型未知/beta 拒→host，否则 conversation。
  */
-function getAdvisorRefusalScope(e) {
-  if (e.message.includes("not available for this organization")) return "process";
-  return isAdvisorBlockTypeUnknown(e.message) || isAdvisorBetaRejected(e) ? "host" : "conversation";
+function getAdvisorRefusalScope(error) {
+  if (error.message.includes("not available for this organization")) return "process";
+  return isAdvisorBlockTypeUnknown(error.message) || isAdvisorBetaRejected(error) ? "host" : "conversation";
 }
 //@ chunk-e6aww6q8.js:1585102-1585175 layout
 /**
  * 400 拒绝 DO（缓存保活）beta。
  */
-function isCacheKeepaliveBetaRejected(e) {
-  return e instanceof APIError && e.status === 400 && messageMentionsBeta(e.message, BETA_CACHE_KEEPALIVE);
+function isCacheKeepaliveBetaRejected(error) {
+  return (
+    error instanceof APIError &&
+    error.status === 400 &&
+    messageMentionsBeta(error.message, BETA_CACHE_KEEPALIVE)
+  );
 }
 //@ chunk-e6aww6q8.js:1585175-1585249 layout
 /**
  * 400 拒绝 l3e beta。
  */
-function isThinkingResumptionBetaRejected(e) {
+function isThinkingResumptionBetaRejected(error) {
   return (
-    e instanceof APIError && e.status === 400 && messageMentionsBeta(e.message, BETA_THINKING_RESUMPTION)
+    error instanceof APIError &&
+    error.status === 400 &&
+    messageMentionsBeta(error.message, BETA_THINKING_RESUMPTION)
   );
 }
 //@ chunk-e6aww6q8.js:1585249-1585315 layout
@@ -1351,22 +1535,24 @@ var THINKING_DISPLAY_INPUT_REGEX = /thinking\.(adaptive|enabled)\.display: Input
 /**
  * 400 "thinking.(adaptive|enabled).display: Input should be"。
  */
-function isThinkingDisplayRejected(e) {
-  return e instanceof APIError && e.status === 400 && THINKING_DISPLAY_INPUT_REGEX.test(e.message);
+function isThinkingDisplayRejected(error) {
+  return (
+    error instanceof APIError && error.status === 400 && THINKING_DISPLAY_INPUT_REGEX.test(error.message)
+  );
 }
 //@ chunk-e6aww6q8.js:1585391-1585606 layout
 /**
  * 400 拒绝 thinking-binding-controls beta 或 block_binding 字段。
  */
-function isThinkingBindingRejected(e) {
+function isThinkingBindingRejected(error) {
   return (
-    e instanceof APIError &&
-    e.status === 400 &&
-    !isInvalidThinkingSignatureError(e) &&
-    !isConversationBindingError(e) &&
-    (messageMentionsBeta(e.message, BETA_THINKING_BINDING_CONTROLS) ||
+    error instanceof APIError &&
+    error.status === 400 &&
+    !isInvalidThinkingSignatureError(error) &&
+    !isConversationBindingError(error) &&
+    (messageMentionsBeta(error.message, BETA_THINKING_BINDING_CONTROLS) ||
       /thinking\.(adaptive|enabled)\.block_binding(\.prefix_mismatch_behavior)?: Extra inputs are not permitted/.test(
-        e.message,
+        error.message,
       ))
   );
 }
@@ -1374,68 +1560,80 @@ function isThinkingBindingRejected(e) {
 /**
  * 400 消息提到 thinking-binding-controls beta 头。
  */
-function mentionsThinkingBindingBeta(e) {
+function mentionsThinkingBindingBeta(error) {
   return (
-    e instanceof APIError &&
-    e.status === 400 &&
-    !isInvalidThinkingSignatureError(e) &&
-    !isConversationBindingError(e) &&
-    e.message.includes(BETA_THINKING_BINDING_CONTROLS.header)
+    error instanceof APIError &&
+    error.status === 400 &&
+    !isInvalidThinkingSignatureError(error) &&
+    !isConversationBindingError(error) &&
+    error.message.includes(BETA_THINKING_BINDING_CONTROLS.header)
   );
 }
 //@ chunk-e6aww6q8.js:1585708-1585817 layout
 /**
  * 400 "invalid beta flag"。
  */
-function isInvalidBetaFlagError(e) {
-  return e instanceof APIError && e.status === 400 && e.message.toLowerCase().includes("invalid beta flag");
+function isInvalidBetaFlagError(error) {
+  return (
+    error instanceof APIError &&
+    error.status === 400 &&
+    error.message.toLowerCase().includes("invalid beta flag")
+  );
 }
 //@ chunk-e6aww6q8.js:1585817-1585946 layout
 /**
  * 400 提到 1M 上下文 beta 或 long context beta。
  */
-function isContext1mBetaRejected(e) {
+function isContext1mBetaRejected(error) {
   return (
-    e instanceof APIError &&
-    e.status === 400 &&
-    (e.message.includes(BETA_LONG_CONTEXT.header) || e.message.includes("long context beta"))
+    error instanceof APIError &&
+    error.status === 400 &&
+    (error.message.includes(BETA_LONG_CONTEXT.header) || error.message.includes("long context beta"))
   );
 }
 //@ chunk-e6aww6q8.js:1585946-1586365 layout
 /**
  * beta → 400 消息匹配器（context_management、evict_on_complete、thinking display、thinking-token-count 等）；OJt 是其键列表，d3o 是 beta → 输入标签名正则。
  */
-var BETA_REJECTION_MATCHERS = new Map([
-  [BETA_CACHE_DIAGNOSIS, null],
-  [BETA_CONTEXT_MANAGEMENT, (e) => e.includes("context_management: Extra inputs are not permitted")],
-  [BETA_PROMPT_CACHING_EVICT, (e) => e.includes("evict_on_complete") && e.includes("beta")],
-  [BETA_THINKING_DISPLAY_UPDATES, (e) => THINKING_DISPLAY_INPUT_REGEX.test(e)],
-  [BETA_THINKING_TOKEN_COUNT, null],
-]);
-var BETA_REJECTION_MATCHER_KEYS = [...BETA_REJECTION_MATCHERS.keys()];
-var BETA_INPUT_TAG_PATTERNS = new Map([
-  [BETA_ADVISOR_TOOL, new RegExp(`^${replaced}\\d+$`)],
-  [BETA_CONTEXT_MANAGEMENT, /^clear_(thinking|tool_uses)_\d+$/],
-  [BETA_INLINE_TOOLS, /^tool_definition$/],
-  [BETA_MID_CONV_TOOL_CHANGE, /^tool_(addition|removal)$/],
-  [BETA_TOOL_SEARCH_ADVANCED, /^tool_reference$/],
-  [BETA_TOOL_SEARCH, /^tool_reference$/],
-]);
+var BETA_REJECTION_MATCHERS; // deferred: uses BETA_CLAUDE_CODE (../../utils/betas.js) of its import cycle while loading; runs once the cycle is complete
+var BETA_REJECTION_MATCHER_KEYS;
+var BETA_INPUT_TAG_PATTERNS;
+deferInit("chunk-e6aww6q8.js:1585946", () => {
+  BETA_REJECTION_MATCHERS = new Map([
+    [BETA_CACHE_DIAGNOSIS, null],
+    [BETA_CONTEXT_MANAGEMENT, (text) => text.includes("context_management: Extra inputs are not permitted")],
+    [BETA_PROMPT_CACHING_EVICT, (text) => text.includes("evict_on_complete") && text.includes("beta")],
+    [BETA_THINKING_DISPLAY_UPDATES, (text) => THINKING_DISPLAY_INPUT_REGEX.test(text)],
+    [BETA_THINKING_TOKEN_COUNT, null],
+  ]);
+  BETA_REJECTION_MATCHER_KEYS = [...BETA_REJECTION_MATCHERS.keys()];
+  BETA_INPUT_TAG_PATTERNS = new Map([
+    [BETA_ADVISOR_TOOL, new RegExp(`^${replaced}\\d+$`)],
+    [BETA_CONTEXT_MANAGEMENT, /^clear_(thinking|tool_uses)_\d+$/],
+    [BETA_INLINE_TOOLS, /^tool_definition$/],
+    [BETA_MID_CONV_TOOL_CHANGE, /^tool_(addition|removal)$/],
+    [BETA_TOOL_SEARCH_ADVANCED, /^tool_reference$/],
+    [BETA_TOOL_SEARCH, /^tool_reference$/],
+  ]);
+});
 //@ chunk-e6aww6q8.js:1586365-1586484 layout
 /**
  * 消息里的 "Input tag 'x'" 是否属于该 beta 引入的块类型。
  */
-function hasRejectedInputTag(e, message) {
-  let r = BETA_INPUT_TAG_PATTERNS.get(e);
-  return r !== undefined && [...message.matchAll(/Input tag '([\w.-]+)'/g)].some(([, s]) => r.test(s));
+function hasRejectedInputTag(beta, message) {
+  let pattern = BETA_INPUT_TAG_PATTERNS.get(beta);
+  return (
+    pattern !== undefined &&
+    [...message.matchAll(/Input tag '([\w.-]+)'/g)].some(([, tag]) => pattern.test(tag))
+  );
 }
 //@ chunk-e6aww6q8.js:1586484-1586584 layout
 /**
  * 错误首行以被拒的 Input tag 开头。
  */
-function errorStartsWithRejectedInputTag(e, n) {
-  let match = /^(?:[\w.]+: )?Input tag '[\w.-]+'/.exec(getApiErrorFirstLine(n));
-  return match !== null && hasRejectedInputTag(e, match[0]);
+function errorStartsWithRejectedInputTag(beta, error) {
+  let match = /^(?:[\w.]+: )?Input tag '[\w.-]+'/.exec(getApiErrorFirstLine(error));
+  return match !== null && hasRejectedInputTag(beta, match[0]);
 }
 //@ chunk-e6aww6q8.js:1586584-1586666 layout
 /**
@@ -1446,75 +1644,81 @@ var UNEXPECTED_BETA_VALUES_REGEX = /Unexpected value\(s\) ((?:`[^`]+`(?:, )?)+) 
 /**
  * 400 中被拒的、本次发送了的 beta 列表（排除思考签名/会话绑定错误）。
  */
-function getRejectedBetas(e, n) {
-  if (!(e instanceof APIError) || isConversationBindingError(e) || isInvalidThinkingSignatureError(e))
+function getRejectedBetas(error, knownHeaders) {
+  if (
+    !(error instanceof APIError) ||
+    isConversationBindingError(error) ||
+    isInvalidThinkingSignatureError(error)
+  )
     return [];
-  return lls.filter(
-    (r) =>
-      r.header !== null &&
-      !KNOWN_BETAS.has(r) &&
-      n.includes(r.header) &&
-      (isBetaHeaderRejected(e, r) ||
-        isBetaListedAsUnexpected(e, r) ||
-        (BETA_REJECTION_MATCHERS.has(r) && e.status === 400 && messageMentionsBeta(e.message, r))),
+  return SUPPORTED_BETA_ENTRIES.filter(
+    (beta) =>
+      beta.header !== null &&
+      !KNOWN_BETAS.has(beta) &&
+      knownHeaders.includes(beta.header) &&
+      (isBetaHeaderRejected(error, beta) ||
+        isBetaListedAsUnexpected(error, beta) ||
+        (BETA_REJECTION_MATCHERS.has(beta) &&
+          error.status === 400 &&
+          messageMentionsBeta(error.message, beta))),
   );
 }
 //@ chunk-e6aww6q8.js:1586870-1587017 layout
 /**
  * 该 beta 出现在 "Unexpected value(s) ... for the anthropic-beta" 列表中。
  */
-function isBetaListedAsUnexpected(e, n) {
+function isBetaListedAsUnexpected(error, beta) {
   return (
-    e instanceof APIError &&
-    e.status === 400 &&
-    e.message.includes(n.header) &&
-    UNEXPECTED_BETA_VALUES_REGEX.exec(e.message)?.[1]?.includes(`\`${n.header}\``) === true
+    error instanceof APIError &&
+    error.status === 400 &&
+    error.message.includes(beta.header) &&
+    UNEXPECTED_BETA_VALUES_REGEX.exec(error.message)?.[1]?.includes(`\`${beta.header}\``) === true
   );
 }
 //@ chunk-e6aww6q8.js:1587017-1587169 layout
 /**
  * 错误是否指向该 beta 被拒。
  */
-function isBetaRejected(e, n) {
+function isBetaRejected(error, beta) {
   return (
-    e instanceof APIError &&
-    !isConversationBindingError(e) &&
-    !isInvalidThinkingSignatureError(e) &&
-    (isBetaHeaderRejected(e, n) ||
-      (e.status === 400 && messageMentionsBeta(e.message, n)) ||
-      ((e.status === 400 || e.status === 422) && hasRejectedInputTag(n, e.message)))
+    error instanceof APIError &&
+    !isConversationBindingError(error) &&
+    !isInvalidThinkingSignatureError(error) &&
+    (isBetaHeaderRejected(error, beta) ||
+      (error.status === 400 && messageMentionsBeta(error.message, beta)) ||
+      ((error.status === 400 || error.status === 422) && hasRejectedInputTag(beta, error.message)))
   );
 }
 //@ chunk-e6aww6q8.js:1587169-1587297 layout
 /**
  * beta 被拒：首行 Unexpected value(s) 列出该头、或 beta 专属匹配器命中、或 Input tag 属于该 beta。
  */
-function isBetaHeaderRejected(e, n) {
-  if (!(e instanceof APIError) || n.header === null) return false;
+function isBetaHeaderRejected(error, beta) {
+  if (!(error instanceof APIError) || beta.header === null) return false;
   return (
-    isBetaNamedInUnexpectedValues(e, n.header) ||
-    BETA_REJECTION_MATCHERS.get(n)?.(e.message) === true ||
-    errorStartsWithRejectedInputTag(n, e)
+    isBetaNamedInUnexpectedValues(error, beta.header) ||
+    BETA_REJECTION_MATCHERS.get(beta)?.(error.message) === true ||
+    errorStartsWithRejectedInputTag(beta, error)
   );
 }
 //@ chunk-e6aww6q8.js:1587297-1587424 layout
 /**
  * 错误首行 Unexpected value(s) 列出该头，或带 beta_header:<名> 诊断标记。
  */
-function isBetaNamedInUnexpectedValues(e, n) {
-  let match = UNEXPECTED_BETA_VALUES_REGEX.exec(getApiErrorFirstLine(e));
+function isBetaNamedInUnexpectedValues(error, header) {
+  let match = UNEXPECTED_BETA_VALUES_REGEX.exec(getApiErrorFirstLine(error));
   return (
-    (match?.index === 0 && match[1]?.includes(`\`${n}\``) === true) ||
-    includesWholeWord(e.message, `beta_header:${n}`)
+    (match?.index === 0 && match[1]?.includes(`\`${header}\``) === true) ||
+    includesWholeWord(error.message, `beta_header:${header}`)
   );
 }
 //@ chunk-e6aww6q8.js:1587424-1588623 layout
 /**
  * 服务端拒答回退（fallbacks 参数/beta）相关 400 的子类：category_beta_header/beta_header/default_unconfigured/unsupported_primary/invalid_target/param_shape…
  */
-function classifyServerFallbackError(e) {
-  if (!(e instanceof APIError) || e.status !== 400) return;
-  let message = e.message;
+function classifyServerFallbackError(error) {
+  if (!(error instanceof APIError) || error.status !== 400) return;
+  let message = error.message;
   if (
     BETA_SERVER_SIDE_FALLBACK_CATEGORY !== null &&
     message.includes(`\`${BETA_SERVER_SIDE_FALLBACK_CATEGORY.header}`) &&
@@ -1543,9 +1747,9 @@ function classifyServerFallbackError(e) {
 /**
  * fallback_credit_token 相关 400 子类：credit_beta_header/malformed/wrong_org/expired/invalid_model/extra_forbidden/other。
  */
-function classifyFallbackCreditError(e) {
-  if (!(e instanceof APIError) || e.status !== 400) return;
-  let message = e.message;
+function classifyFallbackCreditError(error) {
+  if (!(error instanceof APIError) || error.status !== 400) return;
+  let message = error.message;
   if (
     message.includes("fallback-credit-") &&
     (message.includes("anthropic-beta") || message.includes("anthropic_beta"))
@@ -1565,61 +1769,61 @@ function classifyFallbackCreditError(e) {
 /**
  * 消息是否提到该 beta 头。
  */
-function messageMentionsBeta(message, n) {
-  return isBetaHeaderNamed(message, n.header);
+function messageMentionsBeta(message, beta) {
+  return isBetaHeaderNamed(message, beta.header);
 }
 //@ chunk-e6aww6q8.js:1589405-1589646 layout
 /**
  * 400/422 拒绝对话中途的 system 消息（mid_conv_system）。
  */
-function isMidConversationSystemRejected(e) {
+function isMidConversationSystemRejected(error) {
   if (
-    !(e instanceof APIError) ||
-    (e.status !== 400 &&
-      e.status !== 422 &&
-      (e.message.includes("cache_control") ||
-        (mentionsAnthropicBeta(e.message, MID_CONVERSATION_SYSTEM_2026_04_07) &&
-          !isBetaNamedInUnexpectedValues(e, MID_CONVERSATION_SYSTEM_2026_04_07))))
+    !(error instanceof APIError) ||
+    (error.status !== 400 &&
+      error.status !== 422 &&
+      (error.message.includes("cache_control") ||
+        (mentionsAnthropicBeta(error.message, MID_CONVERSATION_SYSTEM_2026_04_07) &&
+          !isBetaNamedInUnexpectedValues(error, MID_CONVERSATION_SYSTEM_2026_04_07))))
   )
     return false;
   return (
-    isUnsupportedRoleError(e.message) ||
-    includesWholeWord(e.message, "mid_conv_system") ||
-    includesWholeWord(e.message, `beta_header:${MID_CONVERSATION_SYSTEM_2026_04_07}`)
+    isUnsupportedRoleError(error.message) ||
+    includesWholeWord(error.message, "mid_conv_system") ||
+    includesWholeWord(error.message, `beta_header:${MID_CONVERSATION_SYSTEM_2026_04_07}`)
   );
 }
 //@ chunk-e6aww6q8.js:1589646-1589732 layout
 /**
  * 中途 system 消息被拒时解析出的具体原因。
  */
-function getMidConvSystemRejection(e) {
-  if (!(e instanceof APIError) || !isMidConversationSystemRejected(e)) return null;
-  return parseMidConvSystemRejection(e.message) ?? null;
+function getMidConvSystemRejection(error) {
+  if (!(error instanceof APIError) || !isMidConversationSystemRejected(error)) return null;
+  return parseMidConvSystemRejection(error.message) ?? null;
 }
 //@ chunk-e6aww6q8.js:1589732-1589771 layout
 /**
  * tool_addition/removal 被拒（classifyToolChangeError 有结果）。
  */
-function isToolChangeRejected(e) {
-  return classifyToolChangeError(e) !== undefined;
+function isToolChangeRejected(error) {
+  return classifyToolChangeError(error) !== undefined;
 }
 //@ chunk-e6aww6q8.js:1589771-1589810 layout
 /**
  * 消息内工具定义被拒（classifyInlineToolDefinitionError 有结果）。
  */
-function isInlineToolDefinitionRejected(e) {
-  return classifyInlineToolDefinitionError(e) !== undefined;
+function isInlineToolDefinitionRejected(error) {
+  return classifyInlineToolDefinitionError(error) !== undefined;
 }
 //@ chunk-e6aww6q8.js:1589810-1590322 layout
 /**
  * 消息内工具定义（tool_definition）被拒原因：unsupported_on_platform/header_rejected/kind_not_enabled/name_conflict。
  */
-function classifyInlineToolDefinitionError(e) {
-  if (!(e instanceof APIError)) return;
-  let message = e.message;
-  if ((e.status === 400 || e.status === 422) && hasRejectedInputTag(BETA_INLINE_TOOLS, message))
+function classifyInlineToolDefinitionError(error) {
+  if (!(error instanceof APIError)) return;
+  let message = error.message;
+  if ((error.status === 400 || error.status === 422) && hasRejectedInputTag(BETA_INLINE_TOOLS, message))
     return "unsupported_on_platform";
-  if (e.status !== 400) return;
+  if (error.status !== 400) return;
   if (messageMentionsBeta(message, BETA_INLINE_TOOLS)) return "header_rejected";
   if (
     message.includes("are not available on this platform") &&
@@ -1635,12 +1839,15 @@ function classifyInlineToolDefinitionError(e) {
 /**
  * tool_addition/removal 块被拒原因：block_type_unknown/header_rejected/after_paused_turn/model_unsupported/too_many_definitions/pfc_only/unknown_tool_reference/other。
  */
-function classifyToolChangeError(e) {
-  if (!(e instanceof APIError)) return;
-  let message = e.message;
-  if ((e.status === 400 || e.status === 422) && hasRejectedInputTag(BETA_MID_CONV_TOOL_CHANGE, message))
+function classifyToolChangeError(error) {
+  if (!(error instanceof APIError)) return;
+  let message = error.message;
+  if (
+    (error.status === 400 || error.status === 422) &&
+    hasRejectedInputTag(BETA_MID_CONV_TOOL_CHANGE, message)
+  )
     return "block_type_unknown";
-  if (e.status !== 400) return;
+  if (error.status !== 400) return;
   if (messageMentionsBeta(message, BETA_MID_CONV_TOOL_CHANGE)) return "header_rejected";
   if (!/\btool_addition\b/.test(message) || isCacheControlError(message)) return;
   if (message.includes("paused assistant turn")) return "after_paused_turn";
@@ -1655,24 +1862,24 @@ function classifyToolChangeError(e) {
 /**
  * 400 拒绝某处 cache_control 字段。
  */
-function isCacheControlFieldRejected(e) {
-  if (!(e instanceof APIError) || e.status !== 400) return false;
-  return isCacheControlError(e.message) || includesWholeWord(e.message, "cache_control_field");
+function isCacheControlFieldRejected(error) {
+  if (!(error instanceof APIError) || error.status !== 400) return false;
+  return isCacheControlError(error.message) || includesWholeWord(error.message, "cache_control_field");
 }
 //@ chunk-e6aww6q8.js:1591069-1591398 layout
 /**
  * 400 拒绝 output_config（除 timing、结构化输出、effort 与 thinking 冲突等已单独处理的情况）。
  */
-function isOutputConfigRejected(e) {
-  if (!(e instanceof APIError) || e.status !== 400) return false;
-  if (isStructuredOutputsUnsupported(e)) return false;
+function isOutputConfigRejected(error) {
+  if (!(error instanceof APIError) || error.status !== 400) return false;
+  if (isStructuredOutputsUnsupported(error)) return false;
   if (
-    getEffortRejectedWithoutThinking(e) !== null &&
-    !/messages\.\d+:\s*output_config\.effort/.test(e.message)
+    getEffortRejectedWithoutThinking(error) !== null &&
+    !/messages\.\d+:\s*output_config\.effort/.test(error.message)
   )
     return false;
-  if (getMidConvSystemRejection(e) !== null) return false;
-  let message = e.message;
+  if (getMidConvSystemRejection(error) !== null) return false;
+  let message = error.message;
   if (messageMentionsBeta(message, BETA_PER_MESSAGE_EFFORT)) return true;
   return (
     (message.includes("output_config") && !message.includes("output_config.timing")) ||
@@ -1683,34 +1890,35 @@ function isOutputConfigRejected(e) {
 /**
  * 400 拒绝按轮 effort（per-turn effort）。
  */
-function isPerTurnEffortRejected(e) {
+function isPerTurnEffortRejected(error) {
   return (
-    isOutputConfigRejected(e) &&
-    e instanceof APIError &&
-    (isBetaHeaderRejected(e, BETA_PER_MESSAGE_EFFORT) ||
-      e.message.includes("requires a model that supports per-turn effort") ||
-      /messages\.\d+\.output_config: Extra inputs are not permitted/.test(e.message))
+    isOutputConfigRejected(error) &&
+    error instanceof APIError &&
+    (isBetaHeaderRejected(error, BETA_PER_MESSAGE_EFFORT) ||
+      error.message.includes("requires a model that supports per-turn effort") ||
+      /messages\.\d+\.output_config: Extra inputs are not permitted/.test(error.message))
   );
 }
 //@ chunk-e6aww6q8.js:1591607-1591726 layout
 /**
  * 400 拒绝 per-turn timing beta 或 output_config.timing。
  */
-function isOutputTimingRejected(e) {
+function isOutputTimingRejected(error) {
   return (
-    e instanceof APIError &&
-    e.status === 400 &&
-    (messageMentionsBeta(e.message, BETA_PER_TURN_TIMING) || e.message.includes("output_config.timing"))
+    error instanceof APIError &&
+    error.status === 400 &&
+    (messageMentionsBeta(error.message, BETA_PER_TURN_TIMING) ||
+      error.message.includes("output_config.timing"))
   );
 }
 //@ chunk-e6aww6q8.js:1591726-1592075 layout
 /**
  * 400 模型不支持 effort（effort parameter not supported / output_config.effort extra inputs）。
  */
-function isEffortUnsupportedError(e) {
-  if (!(e instanceof APIError) || e.status !== 400) return false;
-  if (getRejectedThinkingType(e) !== null) return false;
-  let lower = e.message.toLowerCase();
+function isEffortUnsupportedError(error) {
+  if (!(error instanceof APIError) || error.status !== 400) return false;
+  if (getRejectedThinkingType(error) !== null) return false;
+  let lower = error.message.toLowerCase();
   if (lower.includes("effort parameter") && lower.includes("not support")) return true;
   if (
     lower.includes("output_config") &&
@@ -1718,29 +1926,29 @@ function isEffortUnsupportedError(e) {
     lower.includes("extra inputs are not permitted")
   )
     return true;
-  return includesWholeWord(e.message, "effort_unsupported") || isBetaHeaderRejected(e, BETA_EFFORT);
+  return includesWholeWord(error.message, "effort_unsupported") || isBetaHeaderRejected(error, BETA_EFFORT);
 }
 //@ chunk-e6aww6q8.js:1592075-1592216 layout
 /**
  * 400 模型不支持结构化输出（output_config.format）。
  */
-function isStructuredOutputsUnsupported(e) {
+function isStructuredOutputsUnsupported(error) {
   return (
-    e instanceof APIError &&
-    e.status === 400 &&
-    (isOutputFormatExtraInputsError(e.message) ||
-      includesWholeWord(e.message, "structured_outputs_unsupported") ||
-      isBetaHeaderRejected(e, BETA_STRUCTURED_OUTPUTS) ||
-      isBetaListedAsUnexpected(e, BETA_STRUCTURED_OUTPUTS))
+    error instanceof APIError &&
+    error.status === 400 &&
+    (isOutputFormatExtraInputsError(error.message) ||
+      includesWholeWord(error.message, "structured_outputs_unsupported") ||
+      isBetaHeaderRejected(error, BETA_STRUCTURED_OUTPUTS) ||
+      isBetaListedAsUnexpected(error, BETA_STRUCTURED_OUTPUTS))
   );
 }
 //@ chunk-e6aww6q8.js:1592216-1592411 layout
 /**
  * 400 "not created in this conversation"/"bound to a different conversation"（思考签名或缓存锚点绑定错误）。
  */
-function isConversationBindingError(e) {
-  if (!(e instanceof APIError) || e.status !== 400) return false;
-  let lower = e.message.toLowerCase();
+function isConversationBindingError(error) {
+  if (!(error instanceof APIError) || error.status !== 400) return false;
+  let lower = error.message.toLowerCase();
   return (
     lower.includes("not created in this conversation") || lower.includes("bound to a different conversation")
   );
@@ -1749,8 +1957,8 @@ function isConversationBindingError(e) {
 /**
  * 给错误打 prefixLockHealDeclined 标记（前缀锁自愈被放弃）。
  */
-function markPrefixLockHealDeclined(e) {
-  Object.assign(e, {
+function markPrefixLockHealDeclined(error) {
+  Object.assign(error, {
     prefixLockHealDeclined: true,
   });
 }
@@ -1758,33 +1966,35 @@ function markPrefixLockHealDeclined(e) {
 /**
  * 错误带 prefixLockHealDeclined 标记。
  */
-function isPrefixLockHealDeclined(e) {
-  return e instanceof APIError && "prefixLockHealDeclined" in e && e.prefixLockHealDeclined === true;
+function isPrefixLockHealDeclined(error) {
+  return (
+    error instanceof APIError && "prefixLockHealDeclined" in error && error.prefixLockHealDeclined === true
+  );
 }
 //@ chunk-e6aww6q8.js:1592572-1593149 layout
 /**
  * 解析 anthropic-thinking-prefix-mismatch 响应头为 {block:{messageIndex,blockIndex}, kind}。
  */
-function parseThinkingPrefixMismatchHeader(e) {
-  if (!(e instanceof APIError)) return;
-  let n;
+function parseThinkingPrefixMismatchHeader(error) {
+  if (!(error instanceof APIError)) return;
+  let rawHeader;
   try {
-    n = e.headers?.get?.("anthropic-thinking-prefix-mismatch");
+    rawHeader = error.headers?.get?.("anthropic-thinking-prefix-mismatch");
   } catch {
     return;
   }
-  if (typeof n !== "string" || n.length === 0 || n.length > 2048) return;
-  let r = new Map();
-  for (let S of n.split(";")) {
-    let index = S.indexOf("=");
+  if (typeof rawHeader !== "string" || rawHeader.length === 0 || rawHeader.length > 2048) return;
+  let fields = new Map();
+  for (let part of rawHeader.split(";")) {
+    let index = part.indexOf("=");
     if (index <= 0) continue;
-    let trimmed = S.slice(0, index).trim();
-    if (!r.has(trimmed)) r.set(trimmed, S.slice(index + 1).trim());
+    let trimmed = part.slice(0, index).trim();
+    if (!fields.has(trimmed)) fields.set(trimmed, part.slice(index + 1).trim());
   }
-  let match = /^messages\.(\d{1,6})\.content\.(\d{1,6})$/.exec(r.get("block") ?? "");
-  let h = r.get("kind");
-  let y = h !== undefined && /^[a-z_]{1,40}$/.test(h) ? h : undefined;
-  if (!match && y === undefined) return;
+  let match = /^messages\.(\d{1,6})\.content\.(\d{1,6})$/.exec(fields.get("block") ?? "");
+  let kindValue = fields.get("kind");
+  let kind = kindValue !== undefined && /^[a-z_]{1,40}$/.test(kindValue) ? kindValue : undefined;
+  if (!match && kind === undefined) return;
   return {
     block: match
       ? {
@@ -1792,36 +2002,36 @@ function parseThinkingPrefixMismatchHeader(e) {
           blockIndex: Number(match[2]),
         }
       : undefined,
-    kind: y,
+    kind,
   };
 }
 //@ chunk-e6aww6q8.js:1593149-1593269 layout
 /**
  * 400 thinking 块签名无效（触发 retry:thinking-signature-strip）。
  */
-function isInvalidThinkingSignatureError(e) {
-  if (!(e instanceof APIError) || e.status !== 400) return false;
-  return isThinkingSignatureError(e.message) || includesWholeWord(e.message, "thinking_signature");
+function isInvalidThinkingSignatureError(error) {
+  if (!(error instanceof APIError) || error.status !== 400) return false;
+  return isThinkingSignatureError(error.message) || includesWholeWord(error.message, "thinking_signature");
 }
 //@ chunk-e6aww6q8.js:1593269-1593498 layout
 /**
  * 400 拒绝的 thinking 类型（enabled/adaptive）。
  */
-function getRejectedThinkingType(e) {
-  if (!(e instanceof APIError) || e.status !== 400) return null;
-  let n = rejectedThinkingType(e.message);
-  if (n) return n;
-  if (includesWholeWord(e.message, "thinking_type:enabled")) return "enabled";
-  if (includesWholeWord(e.message, "thinking_type:adaptive")) return "adaptive";
+function getRejectedThinkingType(error) {
+  if (!(error instanceof APIError) || error.status !== 400) return null;
+  let type = rejectedThinkingType(error.message);
+  if (type) return type;
+  if (includesWholeWord(error.message, "thinking_type:enabled")) return "enabled";
+  if (includesWholeWord(error.message, "thinking_type:adaptive")) return "adaptive";
   return null;
 }
 //@ chunk-e6aww6q8.js:1593498-1593661 layout
 /**
  * 400 "effort 'x' is not supported when thinking is disabled" 中的 effort。
  */
-function getEffortRejectedWithoutThinking(e) {
-  if (!(e instanceof APIError) || e.status !== 400) return null;
-  return /effort '([a-z]+)' is not supported when thinking is disabled/i.exec(e.message)?.[1] ?? null;
+function getEffortRejectedWithoutThinking(error) {
+  if (!(error instanceof APIError) || error.status !== 400) return null;
+  return /effort '([a-z]+)' is not supported when thinking is disabled/i.exec(error.message)?.[1] ?? null;
 }
 //@ chunk-e6aww6q8.js:1593661-1594198 layout
 /**
@@ -1830,29 +2040,32 @@ function getEffortRejectedWithoutThinking(e) {
 function getAssistantMessageFromApiError(error, model, options) {
   let assistantMessageFromError = getAssistantMessageFromError(error, model, options);
   if (error instanceof APIError) {
-    let L = isDlpRequestDenied(error) ? error.status : effectiveErrorStatus(error);
-    if (L !== undefined) assistantMessageFromError.apiErrorStatus = L;
+    let status = isDlpRequestDenied(error) ? error.status : effectiveErrorStatus(error);
+    if (status !== undefined) assistantMessageFromError.apiErrorStatus = status;
   } else if (error instanceof Error && error.cause instanceof APIError) {
-    let L = effectiveErrorStatus(error.cause);
-    if (L !== undefined) assistantMessageFromError.apiErrorStatus = L;
+    let status = effectiveErrorStatus(error.cause);
+    if (status !== undefined) assistantMessageFromError.apiErrorStatus = status;
   }
-  let h =
+  let apiError =
     error instanceof APIError
       ? error
       : error instanceof Error && error.cause instanceof APIError
         ? error.cause
         : undefined;
-  let y =
-    options?.requestId || (h ? amazonRequestId(h.requestID || h.error?.request_id, h.headers) : undefined);
-  if (y) assistantMessageFromError.requestId = y;
-  let S = apiErrorCode(h);
-  if (S !== undefined) assistantMessageFromError.apiErrorCode = S;
-  let w = classifyFirstPartyRequest(h, {
+  let requestId =
+    options?.requestId ||
+    (apiError
+      ? amazonRequestId(apiError.requestID || apiError.error?.request_id, apiError.headers)
+      : undefined);
+  if (requestId) assistantMessageFromError.requestId = requestId;
+  let errorCodeValue = apiErrorCode(apiError);
+  if (errorCodeValue !== undefined) assistantMessageFromError.apiErrorCode = errorCodeValue;
+  let firstPartyClass = classifyFirstPartyRequest(apiError, {
     model,
     text: `${getAssistantMessageText(assistantMessageFromError) ?? ""}
 ${assistantMessageFromError.errorDetails ?? ""}`,
   });
-  if (w !== undefined) assistantMessageFromError[MESSAGE_MARK_SYMBOLS_2] = w;
+  if (firstPartyClass !== undefined) assistantMessageFromError[MESSAGE_MARK_SYMBOLS_2] = firstPartyClass;
   return assistantMessageFromError;
 }
 //@ chunk-e6aww6q8.js:1594198-1594272 layout
@@ -1890,12 +2103,13 @@ function getAssistantMessageFromError(error, model, options) {
       error: "invalid_request",
       apiError: CLAUDE_CODE_VERSION_TOO_OLD,
     });
-  let s = error instanceof APIError ? parseVerificationRequired(error.status, error.error) : undefined;
-  if (s !== undefined) {
-    logVerificationShown(s);
+  let verification =
+    error instanceof APIError ? parseVerificationRequired(error.status, error.error) : undefined;
+  if (verification !== undefined) {
+    logVerificationShown(verification);
     return createApiErrorMessage({
       error: "verification_required",
-      content: `${API_ERROR_MESSAGE_PREFIX}: ${s}`,
+      content: `${API_ERROR_MESSAGE_PREFIX}: ${verification}`,
     });
   }
   if (error instanceof Error && error.message.includes(OPUS_HIGH_LOAD_MESSAGE))
@@ -1909,15 +2123,15 @@ function getAssistantMessageFromError(error, model, options) {
       error: "rate_limit",
     });
   if (error instanceof APIError && error.status === 429) {
-    let L = isLimitsDisplayEnabled(isClaudeAISubscriber());
+    let showLimits = isLimitsDisplayEnabled(isClaudeAISubscriber());
     let limits = extractQuotaStatusFromErrorHeaders(error);
-    let q = creditsRequiredDetails(error);
-    let Z =
-      L &&
+    let credits = creditsRequiredDetails(error);
+    let creditsOnly =
+      showLimits &&
       isUsageCreditsOnlyModel(model) &&
       !isLongContextCreditsRequired(error.message) &&
-      (limits?.rateLimitType === "seven_day_overage_included" || q.errorCode === "credits_required");
-    if (L && limits && !Z) {
+      (limits?.rateLimitType === "seven_day_overage_included" || credits.errorCode === "credits_required");
+    if (showLimits && limits && !creditsOnly) {
       let specificErrorMessage = getRateLimitErrorMessage(limits, model);
       if (specificErrorMessage)
         return createApiErrorMessage({
@@ -1936,23 +2150,28 @@ function getAssistantMessageFromError(error, model, options) {
         error: "rate_limit",
       });
     }
-    if (L && isLongContextCreditsRequired(error.message) && !isLongContext1mCreditsBlocked()) {
+    if (showLimits && isLongContextCreditsRequired(error.message) && !isLongContext1mCreditsBlocked()) {
       setLongContext1mCreditsBlocked(true);
       logEvent("tengu_1m_credits_clamp_activated", {});
       logFeatureSad("context_1m_entitlement", "credits_clamp_200k");
     }
-    if (Z) {
-      let Me =
+    if (creditsOnly) {
+      let disabledReason =
         error.headers?.get?.("anthropic-ratelimit-unified-overage-disabled-reason") ??
-        q.overageDisabledReason;
-      let We = Me ?? getGlobalConfig().cachedExtraUsageDisabledReason;
-      let ze = limits?.rateLimitType === "seven_day_overage_included";
-      if (!ze && limits?.rateLimitType === undefined && Me !== "fetch_error" && Me !== "unknown")
+        credits.overageDisabledReason;
+      let extraUsageReason = disabledReason ?? getGlobalConfig().cachedExtraUsageDisabledReason;
+      let isOverageIncluded = limits?.rateLimitType === "seven_day_overage_included";
+      if (
+        !isOverageIncluded &&
+        limits?.rateLimitType === undefined &&
+        disabledReason !== "fetch_error" &&
+        disabledReason !== "unknown"
+      )
         setUsageCreditsRequired(true);
       return createApiErrorMessage({
         content: getUsageCreditsRequiredMessage(
-          We,
-          ze,
+          extraUsageReason,
+          isOverageIncluded,
           renderUsageCreditsOnlyModelName(model),
           limits?.overageScope,
         ),
@@ -1963,57 +2182,57 @@ function getAssistantMessageFromError(error, model, options) {
             status: "rejected",
             unifiedRateLimitFallbackAvailable: false,
             isUsingOverage: false,
-            ...q,
+            ...credits,
             ...limits,
           }),
         },
         errorDetails: error.message,
       });
     }
-    if (L && isLongContextCreditsRequired(error.message)) {
+    if (showLimits && isLongContextCreditsRequired(error.message)) {
       let modelSwitchHint = getModelSwitchHint();
       let usageCreditsCommand = getUsageCreditsCommand();
-      let ze = getIsNonInteractiveSession()
+      let whenNote = getIsNonInteractiveSession()
         ? "they take effect in a new session"
         : "they take effect after you restart Claude Code";
-      let lt =
+      let fixHint =
         canSuggestSlashCommands() && usageCreditsCommand
-          ? `run ${usageCreditsCommand} to turn them on (${ze})${modelSwitchHint ? `, or ${modelSwitchHint} to switch to standard context` : ""}`
+          ? `run ${usageCreditsCommand} to turn them on (${whenNote})${modelSwitchHint ? `, or ${modelSwitchHint} to switch to standard context` : ""}`
           : canSuggestSlashCommands() && modelSwitchHint
             ? `run ${modelSwitchHint} to switch to standard context`
-            : `${getTurnOnUsageCreditsStep()} (${ze})${modelSwitchHint ? `, or use ${modelSwitchHint} to switch to standard context` : ""}`;
+            : `${getTurnOnUsageCreditsStep()} (${whenNote})${modelSwitchHint ? `, or use ${modelSwitchHint} to switch to standard context` : ""}`;
       return createApiErrorMessage({
-        content: `${API_ERROR_MESSAGE_PREFIX}: Usage credits required for 1M context \xB7 ${lt}`,
+        content: `${API_ERROR_MESSAGE_PREFIX}: Usage credits required for 1M context \xB7 ${fixHint}`,
         error: "rate_limit",
         apiError: "long_context_credits_required",
         errorDetails: error.message,
       });
     }
     let stripped = error.message.replace(/^429\s+/, "");
-    let ke;
-    let we;
+    let jsonMessage;
+    let sanitized;
     try {
-      let Me = jsonParse(stripped);
-      let message = Me?.error?.message ?? Me?.message;
-      if (typeof message === "string") ke = message;
+      let parsed = jsonParse(stripped);
+      let message = parsed?.error?.message ?? parsed?.message;
+      if (typeof message === "string") jsonMessage = message;
     } catch {
-      let Me = sanitizeAPIError(error);
-      if (Me !== error.message) we = Me.replace(/^429(\s+|$)/, "");
+      let sanitizedText = sanitizeAPIError(error);
+      if (sanitizedText !== error.message) sanitized = sanitizedText.replace(/^429(\s+|$)/, "");
     }
-    let Ee = we ?? (ke || stripped);
-    if (L && error.headers?.get?.("anthropic-ratelimit-unified-overage-disabled-reason")) {
-      let Me = `${API_ERROR_MESSAGE_PREFIX}: Request rejected (429)${we ? ` \xB7 ${we}` : ""}`;
+    let detail = sanitized ?? (jsonMessage || stripped);
+    if (showLimits && error.headers?.get?.("anthropic-ratelimit-unified-overage-disabled-reason")) {
+      let withPrefix = `${API_ERROR_MESSAGE_PREFIX}: Request rejected (429)${sanitized ? ` \xB7 ${sanitized}` : ""}`;
       return createApiErrorMessage({
-        content: we === undefined ? Ee : Me,
+        content: sanitized === undefined ? detail : withPrefix,
         error: "rate_limit",
       });
     }
-    let Ae = L ? SERVER_RATE_LIMITED_MESSAGE : "Request rejected (429)";
+    let headline = showLimits ? SERVER_RATE_LIMITED_MESSAGE : "Request rejected (429)";
     let baseMessage = `this may be a temporary capacity issue.${getStatusPageHint()}`;
     return createApiErrorMessage({
-      content: `${API_ERROR_MESSAGE_PREFIX}: ${Ae} \xB7 ${Ee || baseMessage}`,
+      content: `${API_ERROR_MESSAGE_PREFIX}: ${headline} \xB7 ${detail || baseMessage}`,
       error: "rate_limit",
-      apiErrorIsTransient: L,
+      apiErrorIsTransient: showLimits,
     });
   }
   if (isPromptTooLongError(error) || isMaxTokensContextOverflow(error))
@@ -2060,14 +2279,14 @@ function getAssistantMessageFromError(error, model, options) {
   {
     let effortRejectedWithoutThinking = getEffortRejectedWithoutThinking(error);
     if (effortRejectedWithoutThinking !== null && error instanceof Error) {
-      let G = isArtifactMountMode()
+      let remedy = isArtifactMountMode()
         ? "you can lower effort to High"
         : getIsNonInteractiveSession()
           ? "use --effort high (or the effortLevel setting)"
           : "run /effort high to continue";
-      let q = shouldEnableThinkingByDefault();
+      let thinkingMode = shouldEnableThinkingByDefault();
       return createApiErrorMessage({
-        content: `${API_ERROR_MESSAGE_PREFIX}: Effort '${effortRejectedWithoutThinking}' isn't available with thinking turned off on this model \xB7 ${G}, or turn thinking back on (${q === "MAX_THINKING_TOKENS" ? "unset MAX_THINKING_TOKENS=0" : q === "alwaysThinkingEnabled" ? 'remove "alwaysThinkingEnabled": false from settings' : "start the session without thinking disabled"})`,
+        content: `${API_ERROR_MESSAGE_PREFIX}: Effort '${effortRejectedWithoutThinking}' isn't available with thinking turned off on this model \xB7 ${remedy}, or turn thinking back on (${thinkingMode === "MAX_THINKING_TOKENS" ? "unset MAX_THINKING_TOKENS=0" : thinkingMode === "alwaysThinkingEnabled" ? 'remove "alwaysThinkingEnabled": false from settings' : "start the session without thinking disabled"})`,
         error: "invalid_request",
         apiError: "effort_requires_thinking",
         apiErrorParams: {
@@ -2078,11 +2297,11 @@ function getAssistantMessageFromError(error, model, options) {
     }
   }
   if (isAdvisorModelMismatchError(error)) {
-    let L = getIsNonInteractiveSession()
+    let remedy = getIsNonInteractiveSession()
       ? "change or unset the advisorModel setting (or the --advisor flag)"
       : "run /advisor to change or disable the advisor";
     return createApiErrorMessage({
-      content: `${API_ERROR_MESSAGE_PREFIX}: ${error.message.replace(/^400\s+/, "")} \xB7 The configured advisor model is not compatible with this request model \u2014 ${L}`,
+      content: `${API_ERROR_MESSAGE_PREFIX}: ${error.message.replace(/^400\s+/, "")} \xB7 The configured advisor model is not compatible with this request model \u2014 ${remedy}`,
       error: "invalid_request",
       apiError: "advisor_incompatible",
       errorDetails: error.message,
@@ -2110,18 +2329,18 @@ function getAssistantMessageFromError(error, model, options) {
         errorDetails: error.message,
       });
     if (parseRequestTooLargeError(error.error) && options?.messagesForAPI && isOfficialFirstPartyEndpoint()) {
-      let G = measureRejectedConversation({
+      let analysis = measureRejectedConversation({
         messagesForAPI: options.messagesForAPI,
       });
-      if (G?.kind === "unrecoverable")
+      if (analysis?.kind === "unrecoverable")
         return createApiErrorMessage({
-          content: formatRequestTooLarge(G),
+          content: formatRequestTooLarge(analysis),
           error: "invalid_request",
-          errorDetails: requestTooLargeDebug(G),
+          errorDetails: requestTooLargeDebug(analysis),
         });
-      if (G?.kind === "strippable_media")
+      if (analysis?.kind === "strippable_media")
         return createApiErrorMessage({
-          content: formatRequestTooLargeMedia(G),
+          content: formatRequestTooLargeMedia(analysis),
           error: "invalid_request",
           errorDetails: `request_too_large: ${error.message}`,
         });
@@ -2192,11 +2411,11 @@ function getAssistantMessageFromError(error, model, options) {
   if (error instanceof APIError && error.status === 400 && isOrganizationDisabled(error)) {
     let { source } = getAnthropicApiKeyWithSource();
     if (source === "ANTHROPIC_API_KEY" && env.ANTHROPIC_API_KEY && !isClaudeAISubscriber()) {
-      let G = hasStoredOAuthToken();
+      let hasOAuth = hasStoredOAuthToken();
       return createApiErrorMessage({
         error: "invalid_request",
         apiError: "org_disabled_credential",
-        content: G ? DISABLED_ORG_API_KEY_WITH_SUBSCRIPTION_MESSAGE : DISABLED_ORG_API_KEY_MESSAGE,
+        content: hasOAuth ? DISABLED_ORG_API_KEY_WITH_SUBSCRIPTION_MESSAGE : DISABLED_ORG_API_KEY_MESSAGE,
       });
     }
   }
@@ -2219,15 +2438,15 @@ function getAssistantMessageFromError(error, model, options) {
         apiError: "invalid_credential_header",
         content: getNotLoggedInMessage(),
       });
-    let L = INVALID_AUTH_TOKEN_MESSAGE;
-    if (error.source === "ANTHROPIC_CUSTOM_HEADERS") L = INVALID_CUSTOM_HEADERS_MESSAGE;
-    else if (!error.isUserSupplied) L = API_ERROR_MESSAGE_PREFIX;
-    else if (error.header === "other") L = INVALID_ENV_HEADER_MESSAGE;
-    else if (error.header === "X-Api-Key") L = INVALID_API_KEY_MESSAGE;
+    let lead = INVALID_AUTH_TOKEN_MESSAGE;
+    if (error.source === "ANTHROPIC_CUSTOM_HEADERS") lead = INVALID_CUSTOM_HEADERS_MESSAGE;
+    else if (!error.isUserSupplied) lead = API_ERROR_MESSAGE_PREFIX;
+    else if (error.header === "other") lead = INVALID_ENV_HEADER_MESSAGE;
+    else if (error.header === "X-Api-Key") lead = INVALID_API_KEY_MESSAGE;
     return createApiErrorMessage({
       error: "invalid_request",
       apiError: error.isUserSupplied && error.header !== "other" ? "invalid_credential_header" : undefined,
-      content: `${L} \xB7 ${error.message}`,
+      content: `${lead} \xB7 ${error.message}`,
     });
   }
   if (isApiKeyHeaderError(error)) {
@@ -2285,11 +2504,11 @@ function getAssistantMessageFromError(error, model, options) {
       apiError: "stored_login_refused",
       content: error.message,
     });
-  let h = error instanceof OAuthAccountOnHoldError ? error : getWIFAccountOnHold(error);
-  if (h)
+  let holdInfo = error instanceof OAuthAccountOnHoldError ? error : getWIFAccountOnHold(error);
+  if (holdInfo)
     return createApiErrorMessage({
       error: "account_on_hold",
-      content: withOnHoldDetails(h.url),
+      content: withOnHoldDetails(holdInfo.url),
     });
   if (isWIFUserOAuthDeadError(error))
     return createApiErrorMessage({
@@ -2339,115 +2558,118 @@ function getAssistantMessageFromError(error, model, options) {
   }
   if (error instanceof APIError && (error.status === 401 || error.status === 403)) {
     if (isRemoteSession()) {
-      let q = error.status === 403 ? extractNestedErrorMessage(error) : null;
-      let Z = `${error.status} `;
-      let baseMsg = `${API_ERROR_MESSAGE_PREFIX}: ${Z}`;
-      let ke = q && printableName(q, API_ERROR_CONST_1000 - baseMsg.length - 1);
+      let nestedMessage = error.status === 403 ? extractNestedErrorMessage(error) : null;
+      let statusPrefix = `${error.status} `;
+      let baseMsg = `${API_ERROR_MESSAGE_PREFIX}: ${statusPrefix}`;
+      let clipped = nestedMessage && printableName(nestedMessage, API_ERROR_CONST_1000 - baseMsg.length - 1);
       return createApiErrorMessage({
         error: "authentication_failed",
-        content: ke ? baseMsg + (ke.startsWith(Z) ? ke.slice(Z.length) : ke) : AUTH_NETWORK_ERROR_MESSAGE,
+        content: clipped
+          ? baseMsg + (clipped.startsWith(statusPrefix) ? clipped.slice(statusPrefix.length) : clipped)
+          : AUTH_NETWORK_ERROR_MESSAGE,
       });
     }
-    let L = formatAPIError(error);
+    let formatted = formatAPIError(error);
     let apiProvider = getAPIProvider();
     if (apiProvider === "bedrock" || apiProvider === "anthropicAws" || apiProvider === "mantle") {
-      let q =
+      let refreshCommand =
         !isAwsAuthRefreshFromProjectSettings() || isProjectScopeTrustAccepted()
           ? getConfiguredAwsAuthRefresh()
           : undefined;
       let providerForModel = getProviderForModel(model);
-      let Se = error.status === 401 && (providerForModel === "anthropicAws" || providerForModel === "mantle");
-      let ke = Se ? AWS_CREDENTIALS_INVALID : AWS_AUTH_FAILED;
-      let we = isBedrockModelIdError(error);
-      let Ee;
-      let Ae;
-      if (we) {
+      let apiKeyInvalid =
+        error.status === 401 && (providerForModel === "anthropicAws" || providerForModel === "mantle");
+      let headline = apiKeyInvalid ? AWS_CREDENTIALS_INVALID : AWS_AUTH_FAILED;
+      let isModelIdError = isBedrockModelIdError(error);
+      let remedyText;
+      let remedy;
+      if (isModelIdError) {
         let modelSwitchHint = getModelSwitchHint();
-        Ee = ` \xB7 enable this model for your account and region in the Amazon Bedrock console${modelSwitchHint ? `, or run ${modelSwitchHint} to pick another model` : ""}`;
-        Ae = "model_access";
+        remedyText = ` \xB7 enable this model for your account and region in the Amazon Bedrock console${modelSwitchHint ? `, or run ${modelSwitchHint} to pick another model` : ""}`;
+        remedy = "model_access";
       } else if (isHostManagedProviderAuth()) {
-        Ee = MANAGED_CREDENTIALS_SUFFIX;
-        Ae = "host_managed";
-      } else if (q) {
-        Ee = getIsNonInteractiveSession()
-          ? ` \xB7 run \`${q}\` and retry`
-          : ` \xB7 run /login and select "${THIRD_PARTY_PROVIDER_LABELS.anthropicAws} \xB7 refresh credentials", or run \`${q}\` in another terminal`;
-        Ae = "refresh_command";
+        remedyText = MANAGED_CREDENTIALS_SUFFIX;
+        remedy = "host_managed";
+      } else if (refreshCommand) {
+        remedyText = getIsNonInteractiveSession()
+          ? ` \xB7 run \`${refreshCommand}\` and retry`
+          : ` \xB7 run /login and select "${THIRD_PARTY_PROVIDER_LABELS.anthropicAws} \xB7 refresh credentials", or run \`${refreshCommand}\` in another terminal`;
+        remedy = "refresh_command";
       } else {
-        Ee =
+        remedyText =
           " \xB7 refresh your AWS credentials (SSO sign-in, access keys, API key or proxy token) and retry";
-        Ae = "refresh_credentials";
+        remedy = "refresh_credentials";
       }
       return createApiErrorMessage({
         error: "authentication_failed",
         apiError: "provider_credentials",
         apiErrorParams: {
           provider: providerForModel === "mantle" ? "mantle" : apiProvider,
-          remedy: Ae,
+          remedy,
         },
-        content: `${ke}${Ee}${Se || we ? "" : " \xB7 if credentials are current, check AWS permissions and model access"} \xB7 ${API_ERROR_MESSAGE_PREFIX}: ${L}`,
+        content: `${headline}${remedyText}${apiKeyInvalid || isModelIdError ? "" : " \xB7 if credentials are current, check AWS permissions and model access"} \xB7 ${API_ERROR_MESSAGE_PREFIX}: ${formatted}`,
       });
     }
     if (apiProvider === "anthropicGoogleCloud" || apiProvider === "vertex") {
-      let Z =
+      let canRefresh =
         !(apiProvider === "vertex"
           ? env.CLAUDE_CODE_SKIP_VERTEX_AUTH
           : env.CLAUDE_CODE_SKIP_ANTHROPIC_GOOGLE_CLOUD_AUTH) && !isHostManagedProviderAuth();
-      let Se =
-        Z && (!isGcpAuthRefreshFromProjectSettings() || isProjectScopeTrustAccepted())
+      let refreshCommand =
+        canRefresh && (!isGcpAuthRefreshFromProjectSettings() || isProjectScopeTrustAccepted())
           ? getConfiguredGcpAuthRefresh()
           : undefined;
-      let ke = error.status === 401;
-      let we = ke ? GCP_CREDENTIALS_INVALID : GCP_AUTH_FAILED;
-      let Ee;
-      let Ae;
-      if (Se) {
-        Ee = ` \xB7 run \`${Se}\` and retry`;
-        Ae = "refresh_command";
-      } else if (Z) {
-        Ee =
+      let is401 = error.status === 401;
+      let headline = is401 ? GCP_CREDENTIALS_INVALID : GCP_AUTH_FAILED;
+      let remedyText;
+      let remedy;
+      if (refreshCommand) {
+        remedyText = ` \xB7 run \`${refreshCommand}\` and retry`;
+        remedy = "refresh_command";
+      } else if (canRefresh) {
+        remedyText =
           " \xB7 refresh your Google Cloud credentials (application default sign-in, or the key file in GOOGLE_APPLICATION_CREDENTIALS) and retry";
-        Ae = "adc";
+        remedy = "adc";
       } else if (isHostManagedProviderAuth()) {
-        Ee = MANAGED_CREDENTIALS_SUFFIX;
-        Ae = "host_managed";
+        remedyText = MANAGED_CREDENTIALS_SUFFIX;
+        remedy = "host_managed";
       } else {
-        Ee =
+        remedyText =
           " \xB7 refresh the gateway token provided via ANTHROPIC_AUTH_TOKEN/ANTHROPIC_CUSTOM_HEADERS and retry";
-        Ae = "gateway_token";
+        remedy = "gateway_token";
       }
       return createApiErrorMessage({
         error: "authentication_failed",
         apiError: "provider_credentials",
         apiErrorParams: {
           provider: apiProvider,
-          remedy: Ae,
+          remedy,
         },
-        content: `${we}${Ee}${ke ? "" : apiProvider === "vertex" ? " \xB7 if credentials are current, check GCP IAM permissions and Vertex AI model access" : " \xB7 if credentials are current, check GCP IAM permissions and workspace access"} \xB7 ${API_ERROR_MESSAGE_PREFIX}: ${L}`,
+        content: `${headline}${remedyText}${is401 ? "" : apiProvider === "vertex" ? " \xB7 if credentials are current, check GCP IAM permissions and Vertex AI model access" : " \xB7 if credentials are current, check GCP IAM permissions and workspace access"} \xB7 ${API_ERROR_MESSAGE_PREFIX}: ${formatted}`,
       });
     }
     if (apiProvider === "foundry") {
-      let q = isHostManagedProviderAuth();
+      let hostManaged = isHostManagedProviderAuth();
       return createApiErrorMessage({
         error: "authentication_failed",
         apiError: "provider_credentials",
         apiErrorParams: {
           provider: apiProvider,
-          remedy: q ? "host_managed" : "refresh_credentials",
+          remedy: hostManaged ? "host_managed" : "refresh_credentials",
         },
-        content: `${FOUNDRY_AUTH_FAILED}${q ? MANAGED_CREDENTIALS_SUFFIX : " \xB7 refresh your Foundry credential (ANTHROPIC_FOUNDRY_AUTH_TOKEN, ANTHROPIC_FOUNDRY_API_KEY, Azure sign-in for Entra, or your proxy token) and retry"} \xB7 if credentials are current, check access to the Foundry resource \xB7 ${API_ERROR_MESSAGE_PREFIX}: ${L}`,
+        content: `${FOUNDRY_AUTH_FAILED}${hostManaged ? MANAGED_CREDENTIALS_SUFFIX : " \xB7 refresh your Foundry credential (ANTHROPIC_FOUNDRY_AUTH_TOKEN, ANTHROPIC_FOUNDRY_API_KEY, Azure sign-in for Entra, or your proxy token) and retry"} \xB7 if credentials are current, check access to the Foundry resource \xB7 ${API_ERROR_MESSAGE_PREFIX}: ${formatted}`,
       });
     }
     if (apiProvider === "gateway" && error.status === 403)
       return createApiErrorMessage({
         error: "authentication_failed",
-        content: `${GATEWAY_REFUSED} \xB7 signing in again won't change this \u2014 check with your gateway administrator \xB7 ${API_ERROR_MESSAGE_PREFIX}: ${L}`,
+        content: `${GATEWAY_REFUSED} \xB7 signing in again won't change this \u2014 check with your gateway administrator \xB7 ${API_ERROR_MESSAGE_PREFIX}: ${formatted}`,
       });
     return createApiErrorMessage({
       error: "authentication_failed",
       content: getIsNonInteractiveSession()
-        ? `Failed to authenticate. ${API_ERROR_MESSAGE_PREFIX}: ${L}`
-        : `Please run /login \xB7 ${API_ERROR_MESSAGE_PREFIX}: ${L}`,
+        ? `Failed to authenticate. ${API_ERROR_MESSAGE_PREFIX}: ${formatted}`
+        : `Please run /login \xB7 ${API_ERROR_MESSAGE_PREFIX}: ${formatted}`,
     });
   }
   if (isBedrockModelIdError(error)) {
@@ -2462,10 +2684,10 @@ function getAssistantMessageFromError(error, model, options) {
   }
   if (error instanceof APIError && error.status === 404) {
     let modelSwitchHint = getModelSwitchHint();
-    let G = suggestThirdPartyModel(model);
+    let suggestion = suggestThirdPartyModel(model);
     return createApiErrorMessage({
-      content: G
-        ? `The model ${model} is not available on your ${getAPIProvider()} deployment. ${modelSwitchHint ? `Try ${modelSwitchHint} to switch to ${G}` : `Try switching to ${G}`}, or ask your admin to enable this model.`
+      content: suggestion
+        ? `The model ${model} is not available on your ${getAPIProvider()} deployment. ${modelSwitchHint ? `Try ${modelSwitchHint} to switch to ${suggestion}` : `Try switching to ${suggestion}`}, or ask your admin to enable this model.`
         : `There's an issue with the selected model (${model}). It may not exist or you may not have access to it.${modelSwitchHint ? ` Run ${modelSwitchHint} to pick a different model.` : ""}`,
       error: "model_not_found",
     });
@@ -2498,23 +2720,23 @@ function getAssistantMessageFromError(error, model, options) {
     let streamNoResponseError = findStreamNoResponseError(error);
     if (streamNoResponseError) {
       let { escalated, firstWindowMs, retryWindowMs } = streamNoResponseError.deadline;
-      let Ae = escalated
+      let waitedText = escalated
         ? `waited ${formatDurationCoarse(firstWindowMs)}, then ${formatDurationCoarse(retryWindowMs)} on the retry`
         : `waited ${formatDurationCoarse(firstWindowMs)}`;
       return createApiErrorMessage({
-        content: `${API_ERROR_MESSAGE_PREFIX}: ${formatAPIError(error)} (${Ae})${isDisklessProcess() ? "" : ". If a proxy or gateway on your network holds responses until they complete, raise API_TIMEOUT_MS or CLAUDE_STREAM_FIRST_BYTE_TIMEOUT_MS to wait longer."}`,
+        content: `${API_ERROR_MESSAGE_PREFIX}: ${formatAPIError(error)} (${waitedText})${isDisklessProcess() ? "" : ". If a proxy or gateway on your network holds responses until they complete, raise API_TIMEOUT_MS or CLAUDE_STREAM_FIRST_BYTE_TIMEOUT_MS to wait longer."}`,
         error: "server_error",
         apiError: "no_response",
       });
     }
     let code = extractConnectionErrorDetails(error)?.code ?? "";
-    let q;
-    if (STRICT_SSL_ERROR_CODES.has(code)) q = "tls_untrusted_ca";
-    else if (code === "BedrockUnexpectedContentType") q = "gateway_content_type";
-    else if (isStreamSuspendedError(error)) q = isDisklessProcess() ? undefined : "computer_slept";
-    else if (isConnectionError(error)) q = "connection_failed";
+    let apiError;
+    if (STRICT_SSL_ERROR_CODES.has(code)) apiError = "tls_untrusted_ca";
+    else if (code === "BedrockUnexpectedContentType") apiError = "gateway_content_type";
+    else if (isStreamSuspendedError(error)) apiError = isDisklessProcess() ? undefined : "computer_slept";
+    else if (isConnectionError(error)) apiError = "connection_failed";
     let fallbackSuggestion = formatAPIError(error);
-    let Se = "";
+    let proxyHint = "";
     if (
       fallbackSuggestion === `${CONNECTION_DROPPED_MESSAGE} (${code})` &&
       !isRemoteSession() &&
@@ -2522,21 +2744,21 @@ function getAssistantMessageFromError(error, model, options) {
       env.ANTHROPIC_UNIX_SOCKET === undefined
     ) {
       let proxyUrlWithSource = getProxyUrlWithSource();
-      let we = [
+      let causes = [
         ...(proxyUrlWithSource && !shouldBypassProxy_2(getApiBaseUrl())
           ? [`the proxy set in ${proxyUrlWithSource.source}`]
           : []),
         ...(configuredApiProxyHost() !== undefined ? ["the gateway set in ANTHROPIC_BASE_URL"] : []),
       ];
-      Se =
-        we.length > 0
-          ? `. Check ${we.join(" and ")}, then try again.`
+      proxyHint =
+        causes.length > 0
+          ? `. Check ${causes.join(" and ")}, then try again.`
           : ". A VPN, firewall, or security software can cause this. Check those or switch networks, then try again.";
     }
     return createApiErrorMessage({
-      content: `${API_ERROR_MESSAGE_PREFIX}: ${fallbackSuggestion}${Se}`,
+      content: `${API_ERROR_MESSAGE_PREFIX}: ${fallbackSuggestion}${proxyHint}`,
       error: "server_error",
-      apiError: q,
+      apiError,
     });
   }
   if (error instanceof APIError)
@@ -2607,9 +2829,9 @@ function canSuggestSlashCommands() {
 /**
  * 413 request_too_large 时尝试测量被拒会话大小，失败记日志。
  */
-function measureRejectedConversation(e) {
+function measureRejectedConversation(options) {
   try {
-    return measureRejectedRequest(e);
+    return measureRejectedRequest(options);
   } catch (error) {
     logForDebugging(
       `413 request_too_large: could not measure the rejected conversation (${errorMessage(error)}); keeping the generic handling`,
@@ -2827,136 +3049,146 @@ function categorizeRetryableAPIError(error) {
 /**
  * stop_reason=refusal 时生成拒答提示消息（安全策略链接、类别说明、换模型提示），记 tengu_refusal_api_response。
  */
-function getRefusalMessage(e, n, requestId, s, id) {
-  if (e !== "refusal") return;
-  let y = n?.explanation?.trimEnd() ?? null;
+function getRefusalMessage(stopReason, details, requestId, model, requestId_2) {
+  if (stopReason !== "refusal") return;
+  let explanation = details?.explanation?.trimEnd() ?? null;
   logEvent("tengu_refusal_api_response", {
-    has_explanation: Boolean(y),
-    category: n?.category ? fromEnum(normalizeRefusalCategory(n.category)) : undefined,
+    has_explanation: Boolean(explanation),
+    category: details?.category ? fromEnum(normalizeRefusalCategory(details.category)) : undefined,
     request_id: sanitizeMarkName(requestId) || undefined,
     convolute_arcades: hasConvoluteArcadesFlag(),
     arm_source: fromEnum(getFallbackLatchKind()),
     ...false,
   });
-  let S = s != null && hasRefusalFallbackTarget(s) ? renderModelName(s) : undefined;
-  let w;
-  if (S !== undefined) {
+  let modelName = model != null && hasRefusalFallbackTarget(model) ? renderModelName(model) : undefined;
+  let text;
+  if (modelName !== undefined) {
     let isNonInteractiveSession = getIsNonInteractiveSession();
-    let we = isNonInteractiveSession
+    let retryHint = isNonInteractiveSession
       ? "Try rephrasing the request in a new session or change your model."
       : "Double press esc to edit your last message, or try a different model with /model.";
-    let Ee = formatCyberVerificationRefusal(
-      isNonInteractiveSession ? `Learn more: ${getSafeguardsArticleUrl(s)}` : buildSafeguardsLearnMore(s),
-      getSafeguardsArticleUrl(s),
-      n,
+    let cyberNote = formatCyberVerificationRefusal(
+      isNonInteractiveSession
+        ? `Learn more: ${getSafeguardsArticleUrl(model)}`
+        : buildSafeguardsLearnMore(model),
+      getSafeguardsArticleUrl(model),
+      details,
     );
-    let Ae = formatSafeguardLead(S, s, n?.category, " (https://www.anthropic.com/legal/aup)");
-    let Ie =
-      Ae ??
-      (isHardRefusalCategory(n?.category)
-        ? `${S}'s safeguards flagged this message (https://www.anthropic.com/legal/aup). ${SAFEGUARD_CATEGORY_LEADS[n.category]}`
-        : `${S}'s safeguards flagged this message (https://www.anthropic.com/legal/aup). This sometimes happens with safe, normal conversations.`);
-    let Me = isDisklessProcess() ? "Claude" : "Claude Code";
-    let We =
-      Ae === undefined
-        ? `${Me} can't respond to this message with ${S}.`
-        : `${Me} can't respond to your last message with ${S}.`;
-    w = `${API_ERROR_MESSAGE_PREFIX}: ${Ie} ${We}
+    let categoryLead = formatSafeguardLead(
+      modelName,
+      model,
+      details?.category,
+      " (https://www.anthropic.com/legal/aup)",
+    );
+    let flagLead =
+      categoryLead ??
+      (isHardRefusalCategory(details?.category)
+        ? `${modelName}'s safeguards flagged this message (https://www.anthropic.com/legal/aup). ${SAFEGUARD_CATEGORY_LEADS[details.category]}`
+        : `${modelName}'s safeguards flagged this message (https://www.anthropic.com/legal/aup). This sometimes happens with safe, normal conversations.`);
+    let productName = isDisklessProcess() ? "Claude" : "Claude Code";
+    let cantRespond =
+      categoryLead === undefined
+        ? `${productName} can't respond to this message with ${modelName}.`
+        : `${productName} can't respond to your last message with ${modelName}.`;
+    text = `${API_ERROR_MESSAGE_PREFIX}: ${flagLead} ${cantRespond}
 
-${we}
+${retryHint}
 
-${Ee}`;
+${cyberNote}`;
   } else {
     let isNonInteractiveSession = getIsNonInteractiveSession();
-    let we = s != null ? renderModelName(s) : "This model";
-    if (n?.category === "cyber" && usesFirstPartyModelIds()) {
-      let Ee = formatCyberVerificationRefusal(
+    let modelLabel = model != null ? renderModelName(model) : "This model";
+    if (details?.category === "cyber" && usesFirstPartyModelIds()) {
+      let cyberNote = formatCyberVerificationRefusal(
         isNonInteractiveSession || !isFeedbackAllowed()
           ? `Learn more: ${CYBER_SAFEGUARDS_URL}`
           : `Send feedback with /feedback or learn more: ${CYBER_SAFEGUARDS_URL}`,
         CYBER_SAFEGUARDS_URL,
-        n,
+        details,
       );
-      w = `${API_ERROR_MESSAGE_PREFIX}: ${we}'s safeguards flagged this message. ${SAFEGUARDS_BROAD_NOTE} ${Ee}`;
+      text = `${API_ERROR_MESSAGE_PREFIX}: ${modelLabel}'s safeguards flagged this message. ${SAFEGUARDS_BROAD_NOTE} ${cyberNote}`;
     } else {
-      let Ee = s != null ? renderModelName(s) : "Claude";
-      let Ae =
+      let modelLabel = model != null ? renderModelName(model) : "Claude";
+      let learnMore =
         isNonInteractiveSession || !isFeedbackAllowed()
           ? "Learn more: https://www.anthropic.com/legal/aup"
           : "Send feedback with /feedback or learn more: https://www.anthropic.com/legal/aup";
-      w = `${API_ERROR_MESSAGE_PREFIX}: ${Ee} can't help with this. Start a new session to continue.
+      text = `${API_ERROR_MESSAGE_PREFIX}: ${modelLabel} can't help with this. Start a new session to continue.
 
-${Ae}`;
+${learnMore}`;
     }
   }
-  let L = formatRefusalDetails(n?.category);
-  let G = sanitizeRequestId(requestId);
-  let q = sanitizeRequestId(id);
-  let Z =
-    (G !== undefined
+  let categoryNote = formatRefusalDetails(details?.category);
+  let requestIdText = sanitizeRequestId(requestId);
+  let messageIdText = sanitizeRequestId(requestId_2);
+  let idsNote =
+    (requestIdText !== undefined
       ? `
 
-Request ID: ${G}`
+Request ID: ${requestIdText}`
       : "") +
-    (q !== undefined
+    (messageIdText !== undefined
       ? `
 
-Message ID: ${q}`
+Message ID: ${messageIdText}`
       : "");
   let apiErrorMessage = createApiErrorMessage({
-    content: w + L + Z,
+    content: text + categoryNote + idsNote,
     error: "invalid_request",
   });
   apiErrorMessage.requestId = requestId ?? undefined;
-  apiErrorMessage.refusedMessageId = q;
+  apiErrorMessage.refusedMessageId = messageIdText;
   apiErrorMessage.message.stop_reason = "refusal";
-  apiErrorMessage.message.stop_details = n ?? null;
+  apiErrorMessage.message.stop_details = details ?? null;
   return apiErrorMessage;
 }
 //@ chunk-e6aww6q8.js:1617851-1619647 placement
 /**
  * 需要用量信用/达到消费上限时的文案（Fable 限额、组织/频道/团队预算），SDK 与交互模式不同。
  */
-function getUsageCreditsRequiredMessage(e, n, r, overageScope) {
-  let h = n && firstWord(r) === "Fable" ? "You've reached your Fable limit." : `${r} requires usage credits.`;
-  let y =
+function getUsageCreditsRequiredMessage(reason, isFable, modelLabel, overageScope) {
+  let limitText =
+    isFable && firstWord(modelLabel) === "Fable"
+      ? "You've reached your Fable limit."
+      : `${modelLabel} requires usage credits.`;
+  let capText =
     overageScope === "channel"
       ? "You've hit your channel's monthly spend limit."
       : "You've hit your monthly spend limit.";
   if (getIsNonInteractiveSession()) {
     let subscriptionType = getSubscriptionType();
-    let G =
+    let manageUrl =
       subscriptionType === "team" || subscriptionType === "enterprise"
         ? HTTPS_CLAUDE_AI_ADMIN_SETTINGS_USAGE
         : USAGE_SETTINGS_URL;
-    let q = isConsumerPlan() ? `, or manage usage credits at ${G},` : "";
+    let manageClause = isConsumerPlan() ? `, or manage usage credits at ${manageUrl},` : "";
     if (overageScope === "group_pool")
-      return `You've hit your team's shared budget. Switch to another model${q} to continue.`;
-    switch (e) {
+      return `You've hit your team's shared budget. Switch to another model${manageClause} to continue.`;
+    switch (reason) {
       case "out_of_credits":
-        return `You're out of usage credits. Switch to another model${q} to continue.`;
+        return `You're out of usage credits. Switch to another model${manageClause} to continue.`;
       case "org_spend_cap_reached":
       case "org_level_disabled_until":
-        return `${y} Switch to another model${q} to continue.`;
+        return `${capText} Switch to another model${manageClause} to continue.`;
       default:
-        return `${h} Switch to another model${q} to continue.`;
+        return `${limitText} Switch to another model${manageClause} to continue.`;
     }
   }
-  let S = isConsumerPlan() && isExtraUsageAllowed();
+  let canManage = isConsumerPlan() && isExtraUsageAllowed();
   if (overageScope === "group_pool")
-    return S
-      ? `You've hit your team's shared budget. Run /usage-credits to raise it and keep using ${r} or switch models to continue this chat.`
+    return canManage
+      ? `You've hit your team's shared budget. Run /usage-credits to raise it and keep using ${modelLabel} or switch models to continue this chat.`
       : "You've hit your team's shared budget. /model to switch models.";
-  switch (e) {
+  switch (reason) {
     case "out_of_credits":
-      return S
-        ? `You're out of usage credits. Run /usage-credits to keep using ${r} or /model to switch models.`
+      return canManage
+        ? `You're out of usage credits. Run /usage-credits to keep using ${modelLabel} or /model to switch models.`
         : "You're out of usage credits. /model to switch models.";
     case "org_spend_cap_reached":
     case "org_level_disabled_until":
-      return S
-        ? `${y} Run /usage-credits to manage your limit and keep using ${r} or switch models to continue this chat.`
-        : `${y} /model to switch models.`;
+      return canManage
+        ? `${capText} Run /usage-credits to manage your limit and keep using ${modelLabel} or switch models to continue this chat.`
+        : `${capText} /model to switch models.`;
     case "org_level_disabled":
     case "org_service_level_disabled":
     case "seat_tier_level_disabled":
@@ -2964,13 +3196,13 @@ function getUsageCreditsRequiredMessage(e, n, r, overageScope) {
     case "member_level_disabled":
     case "member_zero_credit_limit":
     case "group_zero_credit_limit":
-      return S
-        ? `${h} Run /usage-credits to continue or switch models with /model.`
-        : `${h} /model to switch models.`;
+      return canManage
+        ? `${limitText} Run /usage-credits to continue or switch models with /model.`
+        : `${limitText} /model to switch models.`;
     default:
-      return S
-        ? `${h} Run /usage-credits to continue or switch models with /model.`
-        : `${h} /model to switch models.`;
+      return canManage
+        ? `${limitText} Run /usage-credits to continue or switch models with /model.`
+        : `${limitText} /model to switch models.`;
   }
 }
 //@ chunk-e6aww6q8.js:1619647-1619784 placement
@@ -2999,8 +3231,8 @@ function isLongContextCreditsRequiredMessage(msg) {
 /**
  * 只接受 [A-Za-z0-9_-]{1,255}。
  */
-function sanitizeRequestId(e) {
-  return e != null && /^[A-Za-z0-9_-]{1,255}$/.test(e) ? e : undefined;
+function sanitizeRequestId(requestId) {
+  return requestId != null && /^[A-Za-z0-9_-]{1,255}$/.test(requestId) ? requestId : undefined;
 }
 //@ chunk-e6aww6q8.js:1619959-1619976 placement
 /**
@@ -3011,13 +3243,13 @@ var RATE_LIMIT_RESET_MAX_MS = 86400000;
 /**
  * 判断限流状态是否可自动恢复：已拒绝、有有效重置时间且未在使用超额。
  */
-function isAutoResumableLimit(e) {
+function isAutoResumableLimit(limits) {
   return (
-    e.status === "rejected" &&
-    e.resetsAt !== undefined &&
-    Number.isFinite(e.resetsAt) &&
-    e.isUsingOverage !== true &&
-    e.overageInUse !== true
+    limits.status === "rejected" &&
+    limits.resetsAt !== undefined &&
+    Number.isFinite(limits.resetsAt) &&
+    limits.isUsingOverage !== true &&
+    limits.overageInUse !== true
   );
 }
 //@ chunk-e6aww6q8.js:1620114-1620226 placement
@@ -3026,8 +3258,8 @@ class IntentProvider {
   get provided() {
     return this.#e !== null;
   }
-  provide(e) {
-    this.#e = e;
+  provide(provider) {
+    this.#e = provider;
   }
   hasIntent() {
     return this.#e?.() ?? false;
@@ -3037,172 +3269,29 @@ class IntentProvider {
 /**
  * 导出函数 `intentProviderSlot`。
  */
-var intentProviderSlot = new HostScoped(() => new IntentProvider());
-//@ chunk-gr2vfhah.js:1029-1081 fingerprint = API_ERROR_MESSAGE_PREFIX (0.667)
-/**
- * "API Error"；TBe=1000；d$="Prompt is too long"。
- */
-var API_ERROR_MESSAGE_PREFIX = "API Error";
-var API_ERROR_CONST_1000 = 1000;
-var PROMPT_TOO_LONG_ERROR_MESSAGE = "Prompt is too long";
-//@ chunk-gr2vfhah.js:1081-1242 callgraph-fingerprint = isPromptTooLongMessage (1)
-/**
- * assistant API 错误消息的文本以 "Prompt is too long" 开头。
- */
-function isPromptTooLongMessage_2(msg) {
-  if (!msg.isApiErrorMessage) return false;
-  let content = msg.message.content;
-  if (!Array.isArray(content)) return false;
-  return content.some(
-    (block) => block.type === "text" && block.text.startsWith(PROMPT_TOO_LONG_ERROR_MESSAGE),
-  );
-}
-//@ chunk-gr2vfhah.js:2086-2183 placement
-function isHeaderlessDecline503(e) {
-  return e instanceof APIError && e.status === 503 && e.headers?.get("x-should-retry") === "false";
-}
-//@ chunk-gr2vfhah.js:2183-2265 placement
-/**
- * 导出函数 `headerlessDeclineKind`：参数 e，返回 d(e) ? lit("headerless_decline") : lit("headerless_retryable_503")。
- */
-function headerlessDeclineKind(e) {
-  return isHeaderlessDecline503(e) ? lit("headerless_decline") : lit("headerless_retryable_503");
-}
-//@ chunk-gr2vfhah.js:2265-2301 placement
-/**
- * 导出函数 `headerlessDeclineRetryDelay`：参数 e，返回 d(e) ? 0 : getRetryDelay(1)。
- */
-function headerlessDeclineRetryDelay(e) {
-  return isHeaderlessDecline503(e) ? 0 : getRetryDelay(1);
-}
-//@ chunk-gr2vfhah.js:2301-2424 placement
-function isRateLimitError(e) {
-  if (!(e instanceof APIError)) return false;
-  return e.status === 429 || (e.message?.includes('"type":"rate_limit_error"') ?? false);
-}
-//@ chunk-gr2vfhah.js:2424-2506 placement
-/**
- * 导出函数 `isNonRetryable4xx`：参数 e，返回 e >= 400 && e < 500 && e !== 401 && e !== 408 && e !== 409 && e !== 429 && e !== 451。
- */
-function isNonRetryable4xx(e) {
-  return e >= 400 && e < 500 && e !== 401 && e !== 408 && e !== 409 && e !== 429 && e !== 451;
-}
-//@ chunk-gr2vfhah.js:2506-2535 placement
-var DLP_REQUEST_DENIED = "dlp_request_denied";
-//@ chunk-gr2vfhah.js:2535-2571 placement
-/**
- * 导出函数 `isDlpRequestDenied`：参数 e，返回 getApiErrorCode(e) === DLP_REQUEST_DENIED。
- */
-function isDlpRequestDenied(error) {
-  return getApiErrorCode(error) === DLP_REQUEST_DENIED;
-}
-//@ chunk-gr2vfhah.js:2571-2606 placement
-var EXTRA_USAGE_OUT_OF_CREDITS = "extra_usage_out_of_credits";
-//@ chunk-gr2vfhah.js:2606-2640 placement
-/**
- * 导出函数 `isExtraUsageOutOfCredits`：参数 e，返回 getApiErrorCode(e) === EXTRA_USAGE_OUT_OF_CREDITS。
- */
-function isExtraUsageOutOfCredits(e) {
-  return getApiErrorCode(e) === EXTRA_USAGE_OUT_OF_CREDITS;
-}
-//@ chunk-gr2vfhah.js:2640-2757 placement
-/**
- * 判断错误是否为 400 policy_blocked。
- */
-function isPolicyBlockedError(e) {
-  if (!(e instanceof APIError) || e.status !== 400 || !hasNestedError(e)) return false;
-  return e.error?.error?.type === "policy_blocked";
-}
-//@ chunk-gr2vfhah.js:2757-2795 placement
-var CLAUDE_CODE_VERSION_TOO_OLD = "claude_code_version_too_old";
-//@ chunk-gr2vfhah.js:2795-2831 placement
-/**
- * 导出函数 `isClaudeCodeVersionTooOld`：参数 e，返回 getApiErrorCode(e) === CLAUDE_CODE_VERSION_TOO_OLD。
- */
-function isClaudeCodeVersionTooOld(error) {
-  return getApiErrorCode(error) === CLAUDE_CODE_VERSION_TOO_OLD;
-}
-//@ chunk-gr2vfhah.js:2831-2996 placement
-var VERSION_TOO_OLD_PATTERN =
-  /\bClaude Code \S+ (?:does not support this model; version \S+ or newer is required|is older than the minimum version required by your organization's policy)/;
-//@ chunk-gr2vfhah.js:2996-3111 placement
-/**
- * 判断错误是否为客户端版本被拒绝（400 且消息匹配版本过旧）。
- */
-function isClientVersionRejected(e) {
-  if (isClaudeCodeVersionTooOld(e)) return true;
-  if (!(e instanceof APIError) || e.status !== 400) return false;
-  return VERSION_TOO_OLD_PATTERN.test(extractNestedErrorMessage(e) ?? e.message);
-}
-//@ chunk-gr2vfhah.js:3111-3171 placement
-var SAFETY_MONITOR_BLOCKED = "safety_monitor_blocked";
-var CCS_NO_REQUEST_TOKEN = "ccs_no_request_token";
-//@ chunk-gr2vfhah.js:3171-3196 placement
-/**
- * 导出函数 `alwaysFalseErrors`：参数 e，返回 !1。
- */
-function alwaysFalseErrors(error) {
-  return false;
-}
-//@ chunk-gr2vfhah.js:3196-3221 placement
-/**
- * 导出函数 `alwaysFalseB`：参数 e，返回 !1。
- */
-function alwaysFalseB(error) {
-  return false;
-}
-//@ chunk-gr2vfhah.js:3221-3336 placement
-function isHipaaFeatureError(e) {
-  return (
-    isInvalidRequestStartingWith(e, "The requested features are not available for HIPAA-") &&
-    e.status === 400 &&
-    getApiErrorCode(e) === undefined
-  );
-}
-//@ chunk-gr2vfhah.js:3336-3506 placement
-function isInvalidRequestStartingWith(e, t) {
-  if (!(e instanceof APIError) || !hasNestedError(e)) return false;
-  let error = e.error?.error;
-  return (
-    error?.type === "invalid_request_error" &&
-    typeof error.message === "string" &&
-    error.message.startsWith(t)
-  );
-}
-//@ chunk-s61vbvea.js:54508-54639 placement = detectPromptTooLong (0.667)
-/**
- * 判断错误消息是否为“提示词过长”（prompt is too long / input is too long for requested model）。
- */
-function isPromptTooLongMessage(message) {
-  let lower = message.toLowerCase();
-  return lower.includes("prompt is too long") || lower.includes("input is too long for requested model");
-}
-//@ chunk-s61vbvea.js:59778-59820 fingerprint = getErrorMessageIfRefusal (0.333)
-/**
- * stop_reason 为 refusal。
- */
-function getErrorMessageIfRefusal(e) {
-  return parseAdvisorResult(e) === "refusal";
-}
+var intentProviderSlot; // deferred: uses IntentProvider of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:1620226", () => {
+  intentProviderSlot = new HostScoped(() => new IntentProvider());
+});
 //@ chunk-8t8n4kdh.js:79910-80092 fingerprint = API_TIMEOUT_ERROR_MESSAGE (0.717)
 /**
  * 给请求 promise 挂超时：到时用 RequestTimeout 错误中止控制器，完成后清计时器。旧版名 API_TIMEOUT_ERROR_MESSAGE 为错配；疑似第三方/其他 HTTP 客户端代码。
  */
-function armRequestTimeout(e, n) {
+function armRequestTimeout(promise, abortController) {
   let connectionTimeoutMs = getConnectionTimeoutMs();
   let timer = setTimeout(
-    (h, timeout) =>
-      h.abort(
+    (controller, timeout) =>
+      controller.abort(
         new SdkError(SdkErrorCode.RequestTimeout, "Request timed out", {
           timeout,
         }),
       ),
     connectionTimeoutMs,
-    n,
+    abortController,
     connectionTimeoutMs,
   );
   timer.unref?.();
-  e.then(
+  promise.then(
     () => clearTimeout(timer),
     () => clearTimeout(timer),
   );

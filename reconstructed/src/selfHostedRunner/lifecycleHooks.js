@@ -45,9 +45,9 @@ function hookEnvironment() {
   };
 }
 //@ chunk-3nztfxrw.js:40243-41196 placement
-function assertLifecycleHooksSupported(e, n = "linux") {
-  if (n !== "win32") return;
-  switch (e) {
+function assertLifecycleHooksSupported(feature, platform = "linux") {
+  if (platform !== "win32") return;
+  switch (feature) {
     case "--hooks-dir":
       throw Error(
         "--hooks-dir is not supported on Windows: lifecycle hooks currently require a Linux or macOS host, because they are POSIX executables that the runner spawns directly (no shell, no .cmd/.ps1/.exe resolution). Run the runner on a Linux or macOS host to use hooks, or drop --hooks-dir / SELF_HOSTED_RUNNER_HOOKS_DIR to use the built-in checkout and command behavior. See docs/self-hosted-runners-guide.md \xA7 Lifecycle hooks.",
@@ -59,13 +59,14 @@ function assertLifecycleHooksSupported(e, n = "linux") {
   }
 }
 //@ chunk-3nztfxrw.js:41196-41383 placement
-async function findHook(e, n) {
-  if (!e) return null;
-  let r = join(e, n);
+async function findHook(hooksDir, name) {
+  if (!hooksDir) return null;
+  let path = join(hooksDir, name);
   try {
-    if (!(await withBoundedTimeout(stat(r), FILESYSTEM_CHECK_TIMEOUT_MS, `stat ${r}`)).isFile()) return null;
-    await withBoundedTimeout(access(r, constants.X_OK), FILESYSTEM_CHECK_TIMEOUT_MS, `access ${r}`);
-    return r;
+    if (!(await withBoundedTimeout(stat(path), FILESYSTEM_CHECK_TIMEOUT_MS, `stat ${path}`)).isFile())
+      return null;
+    await withBoundedTimeout(access(path, constants.X_OK), FILESYSTEM_CHECK_TIMEOUT_MS, `access ${path}`);
+    return path;
   } catch {
     return null;
   }
@@ -95,123 +96,128 @@ var LIFECYCLE_HOOK_GIT_ENV = {
   GIT_SSH_COMMAND: "ssh",
 };
 //@ chunk-3nztfxrw.js:41934-42196 placement
-function withLifecycleHookGitEnv(e = hookEnvironment()) {
-  let n;
+function withLifecycleHookGitEnv(envVars = hookEnvironment()) {
+  let copy;
   for (let [key, value] of Object.entries(LIFECYCLE_HOOK_GIT_ENV)) {
-    if (e[key] !== undefined) continue;
-    n ??= {
-      ...e,
+    if (envVars[key] !== undefined) continue;
+    copy ??= {
+      ...envVars,
     };
-    n[key] =
-      key === "GIT_SSH_COMMAND" && e.GIT_SSH !== undefined ? `'${e.GIT_SSH.replace(/'/g, "'\\''")}'` : value;
+    copy[key] =
+      key === "GIT_SSH_COMMAND" && envVars.GIT_SSH !== undefined
+        ? `'${envVars.GIT_SSH.replace(/'/g, "'\\''")}'`
+        : value;
   }
-  if (lifecycleHookAskpassSource(e) === "handedOn") {
-    n ??= {
-      ...e,
+  if (lifecycleHookAskpassSource(envVars) === "handedOn") {
+    copy ??= {
+      ...envVars,
     };
-    n.GIT_ASKPASS = e.SSH_ASKPASS;
+    copy.GIT_ASKPASS = envVars.SSH_ASKPASS;
   }
-  return n ?? e;
+  return copy ?? envVars;
 }
 //@ chunk-3nztfxrw.js:42196-42317 placement
-function lifecycleHookAskpassSource(e = hookEnvironment()) {
-  if (e.GIT_ASKPASS !== undefined || envHasGitConfigKey("core.askPass", e)) return "own";
-  return e.SSH_ASKPASS ? "handedOn" : "none";
+function lifecycleHookAskpassSource(envVars = hookEnvironment()) {
+  if (envVars.GIT_ASKPASS !== undefined || envHasGitConfigKey("core.askPass", envVars)) return "own";
+  return envVars.SSH_ASKPASS ? "handedOn" : "none";
 }
 //@ chunk-3nztfxrw.js:42317-42328 placement
 var MAX_GIT_CONFIG_PAIRS = 256;
 //@ chunk-3nztfxrw.js:42328-42658 placement
-function operatorGitConfigPairStatus(e = hookEnvironment()) {
-  let match = /^\s*\+?(\d+)$/.exec(e.GIT_CONFIG_COUNT ?? "");
-  let r = match ? parseInt(match[1], 10) : 0;
-  if (!Number.isSafeInteger(r) || r === 0)
+function operatorGitConfigPairStatus(envVars = hookEnvironment()) {
+  let match = /^\s*\+?(\d+)$/.exec(envVars.GIT_CONFIG_COUNT ?? "");
+  let count = match ? parseInt(match[1], 10) : 0;
+  if (!Number.isSafeInteger(count) || count === 0)
     return {
       count: 0,
       announced: 0,
     };
-  if (r > MAX_GIT_CONFIG_PAIRS)
+  if (count > MAX_GIT_CONFIG_PAIRS)
     return {
       count: 0,
       discarded: "too-many",
-      announced: r,
+      announced: count,
     };
-  if (e[`GIT_CONFIG_KEY_${r - 1}`] === undefined)
+  if (envVars[`GIT_CONFIG_KEY_${count - 1}`] === undefined)
     return {
       count: 0,
       discarded: "sparse",
-      announced: r,
+      announced: count,
     };
   return {
-    count: r,
-    announced: r,
+    count,
+    announced: count,
   };
 }
 //@ chunk-3nztfxrw.js:42658-42693 placement
-function countOperatorGitConfigPairs(e) {
-  return operatorGitConfigPairStatus(e).count;
+function countOperatorGitConfigPairs(envVars) {
+  return operatorGitConfigPairStatus(envVars).count;
 }
 //@ chunk-3nztfxrw.js:42693-42836 placement
-function envHasGitConfigKey(e, n = hookEnvironment()) {
-  let r = countOperatorGitConfigPairs(n);
-  let lower = e.toLowerCase();
-  for (let i = 0; i < r; i++) if ((n[`GIT_CONFIG_KEY_${i}`] ?? "").toLowerCase() === lower) return true;
+function envHasGitConfigKey(key, envVars = hookEnvironment()) {
+  let count = countOperatorGitConfigPairs(envVars);
+  let lower = key.toLowerCase();
+  for (let i = 0; i < count; i++)
+    if ((envVars[`GIT_CONFIG_KEY_${i}`] ?? "").toLowerCase() === lower) return true;
   return false;
 }
 //@ chunk-3nztfxrw.js:42836-42997 placement
-function lifecycleHookGpgProgramPins(e, n) {
-  let r = [
-    ["gpg.program", e.gpg],
-    ["gpg.openpgp.program", e.gpg],
-    ["gpg.x509.program", e.gpgsm],
+function lifecycleHookGpgProgramPins(paths, withSsh) {
+  let pairs = [
+    ["gpg.program", paths.gpg],
+    ["gpg.openpgp.program", paths.gpg],
+    ["gpg.x509.program", paths.gpgsm],
   ];
-  if (n) r.push(["gpg.ssh.program", e.sshKeygen]);
-  return r;
+  if (withSsh) pairs.push(["gpg.ssh.program", paths.sshKeygen]);
+  return pairs;
 }
 //@ chunk-3nztfxrw.js:42997-43766 placement
-function gitConfigEnvArgs(e, n, r) {
-  if (!n?.length) return e;
-  let m = countOperatorGitConfigPairs(e);
-  let a = {
-    ...e,
+function gitConfigEnvArgs(envVars, pairs, legacy) {
+  if (!pairs?.length) return envVars;
+  let existing = countOperatorGitConfigPairs(envVars);
+  let next = {
+    ...envVars,
   };
-  let t = n.length;
-  for (let i = 0; i < m; i++) {
-    delete a[`GIT_CONFIG_KEY_${i}`];
-    delete a[`GIT_CONFIG_VALUE_${i}`];
+  let added = pairs.length;
+  for (let index = 0; index < existing; index++) {
+    delete next[`GIT_CONFIG_KEY_${index}`];
+    delete next[`GIT_CONFIG_VALUE_${index}`];
   }
-  for (let i = 0; i < m; i++) {
-    let s = e[`GIT_CONFIG_KEY_${i}`];
-    let c = e[`GIT_CONFIG_VALUE_${i}`];
-    if (s !== undefined) a[`GIT_CONFIG_KEY_${t + i}`] = s;
-    if (c !== undefined) a[`GIT_CONFIG_VALUE_${t + i}`] = c;
+  for (let index = 0; index < existing; index++) {
+    let key = envVars[`GIT_CONFIG_KEY_${index}`];
+    let value = envVars[`GIT_CONFIG_VALUE_${index}`];
+    if (key !== undefined) next[`GIT_CONFIG_KEY_${added + index}`] = key;
+    if (value !== undefined) next[`GIT_CONFIG_VALUE_${added + index}`] = value;
   }
-  n.forEach(([i, s], c) => {
-    a[`GIT_CONFIG_KEY_${c}`] = i;
-    a[`GIT_CONFIG_VALUE_${c}`] = s;
+  pairs.forEach(([key, value], index) => {
+    next[`GIT_CONFIG_KEY_${index}`] = key;
+    next[`GIT_CONFIG_VALUE_${index}`] = value;
   });
-  a.GIT_CONFIG_COUNT = String(t + m);
-  if (r?.legacyParams) {
-    let i = (l) => `'${l.replace(/'/g, "'\\''")}'`;
-    let mapped = n.map(([l, b]) => i(`${l}=${b}`));
-    let c = [];
-    for (let idx = 0; idx < m; idx++) {
-      let b = e[`GIT_CONFIG_KEY_${idx}`];
-      if (b !== undefined) c.push(i(`${b}=${e[`GIT_CONFIG_VALUE_${idx}`] ?? ""}`));
+  next.GIT_CONFIG_COUNT = String(added + existing);
+  if (legacy?.legacyParams) {
+    let shellQuote = (text) => `'${text.replace(/'/g, "'\\''")}'`;
+    let mapped = pairs.map(([key, value]) => shellQuote(`${key}=${value}`));
+    let extraArgs = [];
+    for (let idx = 0; idx < existing; idx++) {
+      let key = envVars[`GIT_CONFIG_KEY_${idx}`];
+      if (key !== undefined) extraArgs.push(shellQuote(`${key}=${envVars[`GIT_CONFIG_VALUE_${idx}`] ?? ""}`));
     }
-    a.GIT_CONFIG_PARAMETERS = [
+    next.GIT_CONFIG_PARAMETERS = [
       ...mapped,
-      ...c,
-      ...(e.GIT_CONFIG_PARAMETERS ? [e.GIT_CONFIG_PARAMETERS] : []),
+      ...extraArgs,
+      ...(envVars.GIT_CONFIG_PARAMETERS ? [envVars.GIT_CONFIG_PARAMETERS] : []),
     ].join(" ");
   }
-  return a;
+  return next;
 }
 //@ chunk-3nztfxrw.js:43766-43881 placement
 function mergeCommandScopes(gitConfigPins, gitEnvironment, gitConfigLegacyParams) {
   let commandScopeEntries = gitEnvironment?.commandScopeEntries ?? [];
-  let a =
-    gitConfigLegacyParams && commandScopeEntries.some(([t]) => t.includes("=")) ? [] : commandScopeEntries;
-  return [...(gitConfigPins ?? []), ...a];
+  let entries =
+    gitConfigLegacyParams && commandScopeEntries.some(([entry]) => entry.includes("="))
+      ? []
+      : commandScopeEntries;
+  return [...(gitConfigPins ?? []), ...entries];
 }
 //@ chunk-3nztfxrw.js:43881-44131 placement
 /**
@@ -226,26 +232,26 @@ var POST_HOOK_SLEEP_MS = 100;
 var LINGERING_OUTPUT_ADVICE =
   "a hook should `exec` or `wait` for its long-running commands, stop a command's child processes too if it stops that command early, and start a daemon with its output redirected: >/dev/null 2>&1";
 //@ chunk-3nztfxrw.js:44131-44221 placement
-function exitDescription(e) {
-  return e.signalCode !== null ? `signal ${e.signalCode}` : `status ${e.exitCode}`;
+function exitDescription(child) {
+  return child.signalCode !== null ? `signal ${child.signalCode}` : `status ${child.exitCode}`;
 }
 //@ chunk-3nztfxrw.js:44221-44430 placement
-function lingeringOutputMessage(e) {
-  return `hook exited (${exitDescription(e)}) but a process it started still holds its output pipes; not waiting for them to close. The runner has not stopped that process, and it may still be running (${LINGERING_OUTPUT_ADVICE})`;
+function lingeringOutputMessage(child) {
+  return `hook exited (${exitDescription(child)}) but a process it started still holds its output pipes; not waiting for them to close. The runner has not stopped that process, and it may still be running (${LINGERING_OUTPUT_ADVICE})`;
 }
 //@ chunk-3nztfxrw.js:44564-44676 placement
 class CheckoutHookFailedError extends TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS {
   exitCode;
-  constructor(message, exitCode, r) {
-    super(message, r);
+  constructor(message, exitCode, safeMessage) {
+    super(message, safeMessage);
     this.name = "CheckoutHookFailedError";
     this.exitCode = exitCode;
   }
 }
 //@ chunk-3nztfxrw.js:44676-44785 placement
 class CheckoutHookTimedOutError extends TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS {
-  constructor(e) {
-    super(e, "checkout hook timed out");
+  constructor(safeMessage) {
+    super(safeMessage, "checkout hook timed out");
     this.name = "CheckoutHookTimedOutError";
   }
 }
@@ -253,115 +259,117 @@ class CheckoutHookTimedOutError extends TelemetrySafeError_I_VERIFIED_THIS_IS_NO
 /**
  * 自托管 runner 的 checkout 生命周期钩子：带预算运行并记录日志
  */
-async function runCheckoutHook(e) {
-  let r = {
+async function runCheckoutHook(options) {
+  let envVars = {
     ...hookEnvironment(),
-    ...e.gitEnvironment?.envOverrides,
+    ...options.gitEnvironment?.envOverrides,
     ...false,
-    CLAUDE_RUNNER_SESSION_ID: e.sessionId.replace(/^cse_/, "session_"),
-    CLAUDE_RUNNER_SESSION_UUID: decodeTaggedUuid(e.sessionId),
-    CLAUDE_RUNNER_REPO_URL: e.repoUrl,
-    CLAUDE_RUNNER_REPO_REF: e.repoRef ?? "",
-    CLAUDE_RUNNER_CHECKOUT_PATH: e.checkoutPath,
-    CLAUDE_RUNNER_API_BASE_URL: e.apiBaseUrl,
-    CLAUDE_RUNNER_GIT_MOUNT_URL: e.gitMountUrl,
-    CLAUDE_RUNNER_CLIENT_PLATFORM: sanitizeMetricLabel(e.clientPlatform),
-    CLAUDE_CODE_SESSION_ACCESS_TOKEN: e.sessionAccessToken,
+    CLAUDE_RUNNER_SESSION_ID: options.sessionId.replace(/^cse_/, "session_"),
+    CLAUDE_RUNNER_SESSION_UUID: decodeTaggedUuid(options.sessionId),
+    CLAUDE_RUNNER_REPO_URL: options.repoUrl,
+    CLAUDE_RUNNER_REPO_REF: options.repoRef ?? "",
+    CLAUDE_RUNNER_CHECKOUT_PATH: options.checkoutPath,
+    CLAUDE_RUNNER_API_BASE_URL: options.apiBaseUrl,
+    CLAUDE_RUNNER_GIT_MOUNT_URL: options.gitMountUrl,
+    CLAUDE_RUNNER_CLIENT_PLATFORM: sanitizeMetricLabel(options.clientPlatform),
+    CLAUDE_CODE_SESSION_ACCESS_TOKEN: options.sessionAccessToken,
   };
-  let m = (b) => {
+  let reportStatus = (text) => {
     try {
-      e.onStatus(b);
+      options.onStatus(text);
     } catch {}
   };
-  let a = (b) => {
+  let debug = (text) => {
     try {
-      e.onDebug(b);
+      options.onDebug(text);
     } catch {}
   };
-  m(`[runner:hook] checkout ${redactSecretsInText(e.repoUrl)} -> ${e.checkoutPath} (via ${e.hookPath})`);
-  let t = [];
-  let i = (b) => {
+  reportStatus(
+    `[runner:hook] checkout ${redactSecretsInText(options.repoUrl)} -> ${options.checkoutPath} (via ${options.hookPath})`,
+  );
+  let tailLines = [];
+  let emitStderrLine = (line) => {
     try {
-      e.onStderrLine?.(b);
+      options.onStderrLine?.(line);
     } catch {}
   };
-  let s = false;
-  let c = false;
+  let aborted = false;
+  let timedOut = false;
   await new Promise((resolve, reject) => {
-    let S = spawn(e.hookPath, [], {
-      cwd: e.cwd,
+    let child = spawn(options.hookPath, [], {
+      cwd: options.cwd,
       env: gitConfigEnvArgs(
-        e.gitConfigPins?.length ? withLifecycleHookGitEnv(r) : r,
-        mergeCommandScopes(e.gitConfigPins, e.gitEnvironment, e.gitConfigLegacyParams),
+        options.gitConfigPins?.length ? withLifecycleHookGitEnv(envVars) : envVars,
+        mergeCommandScopes(options.gitConfigPins, options.gitEnvironment, options.gitConfigLegacyParams),
         {
-          legacyParams: e.gitConfigLegacyParams,
+          legacyParams: options.gitConfigLegacyParams,
         },
       ),
       stdio: ["ignore", "pipe", "pipe"],
       windowsHide: true,
       ...cgroupSpawnOptions("hooks"),
     });
-    let T = false;
-    let N = [];
-    let D = () => {
-      for (let P of N.splice(0)) clearTimeout(P);
+    let settled = false;
+    let timers = [];
+    let clearTimers = () => {
+      for (let timer of timers.splice(0)) clearTimeout(timer);
     };
-    let R = "";
-    let A = "";
-    let F = (P, x) => {
-      let lines = P.split(`
+    let stdoutBuffer = "";
+    let stderrBuffer = "";
+    let consumeChunk = (buffer, fromStderr) => {
+      let lines = buffer.split(`
 `);
-      let U = lines.pop() ?? "";
+      let partial = lines.pop() ?? "";
       for (let line of lines) {
-        let ee = redactSecretsInText(line);
-        a(`[runner:hook:checkout] ${ee}`);
-        if (x) {
-          t.push(
-            ee +
+        let redacted = redactSecretsInText(line);
+        debug(`[runner:hook:checkout] ${redacted}`);
+        if (fromStderr) {
+          tailLines.push(
+            redacted +
               `
 `,
           );
-          i(ee);
+          emitStderrLine(redacted);
         }
       }
-      if (x) {
-        let reduced = t.reduce((acc, le) => acc + le.length, 0);
-        while (reduced > 4096 && t.length > 1) reduced -= t.shift().length;
+      if (fromStderr) {
+        let reduced = tailLines.reduce((acc, line) => acc + line.length, 0);
+        while (reduced > 4096 && tailLines.length > 1) reduced -= tailLines.shift().length;
       }
-      return U;
+      return partial;
     };
-    S.stdout.on("data", (P) => {
-      R += P.toString();
-      R = F(R, false);
+    child.stdout.on("data", (data) => {
+      stdoutBuffer += data.toString();
+      stdoutBuffer = consumeChunk(stdoutBuffer, false);
     });
-    S.stderr.on("data", (P) => {
-      A += P.toString();
-      A = F(A, true);
+    child.stderr.on("data", (data) => {
+      stderrBuffer += data.toString();
+      stderrBuffer = consumeChunk(stderrBuffer, true);
     });
-    let K = (exitCode, x) => {
-      if (T) return;
-      T = true;
-      D();
-      e.signal?.removeEventListener("abort", oe);
-      if (x !== undefined) {
-        m(`[runner:hook:checkout] ${x}`);
-        S.stdout.destroy();
-        S.stderr.destroy();
+    let finishOnce = (exitCode, signalName) => {
+      if (settled) return;
+      settled = true;
+      clearTimers();
+      options.signal?.removeEventListener("abort", onAbort);
+      if (signalName !== undefined) {
+        reportStatus(`[runner:hook:checkout] ${signalName}`);
+        child.stdout.destroy();
+        child.stderr.destroy();
       }
-      if (R) a(`[runner:hook:checkout] ${redactSecretsInText(R)}`);
-      if (A) {
-        let U = redactSecretsInText(A);
-        a(`[runner:hook:checkout] ${U}`);
-        t.push(U);
-        i(U);
+      if (stdoutBuffer) debug(`[runner:hook:checkout] ${redactSecretsInText(stdoutBuffer)}`);
+      if (stderrBuffer) {
+        let redactedStderr = redactSecretsInText(stderrBuffer);
+        debug(`[runner:hook:checkout] ${redactedStderr}`);
+        tailLines.push(redactedStderr);
+        emitStderrLine(redactedStderr);
       }
-      let G = takeLastChars(t.join(""), 4096);
-      if (c) {
-        if (G.trim() !== "") {
-          let U = redactSecretsInText(G);
-          m(
-            `[runner:hook:checkout] the hook's last output before the time limit: ${U.length > HOOK_CLEANUP_GRACE_MS ? "\u2026" : ""}${takeLastChars(
-              U,
+      let tail = takeLastChars(tailLines.join(""), 4096);
+      if (timedOut) {
+        if (tail.trim() !== "") {
+          let redactedTail = redactSecretsInText(tail);
+          reportStatus(
+            `[runner:hook:checkout] the hook's last output before the time limit: ${redactedTail.length > HOOK_CLEANUP_GRACE_MS ? "\u2026" : ""}${takeLastChars(
+              redactedTail,
               HOOK_CLEANUP_GRACE_MS,
             )
               .trimEnd()
@@ -371,13 +379,13 @@ async function runCheckoutHook(e) {
         }
         reject(
           new CheckoutHookTimedOutError(
-            `checkout hook timed out after ${formatDelay(e.timeoutMs ?? 0)} (the runner's --checkout-hook-timeout-min limit)`,
+            `checkout hook timed out after ${formatDelay(options.timeoutMs ?? 0)} (the runner's --checkout-hook-timeout-min limit)`,
           ),
         );
-      } else if (s) reject(Error("checkout hook aborted"));
+      } else if (aborted) reject(Error("checkout hook aborted"));
       else if (exitCode === 0) resolve();
       else {
-        let message = `checkout hook failed (exit ${exitCode}): ${G}`;
+        let message = `checkout hook failed (exit ${exitCode}): ${tail}`;
         reject(
           exitCode === null
             ? new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
@@ -388,19 +396,19 @@ async function runCheckoutHook(e) {
         );
       }
     };
-    let X = false;
-    let V = false;
-    let q = false;
-    let ae = false;
-    let Z = () => S.exitCode === null && S.signalCode === null;
-    let ne;
-    let h = false;
-    let y = async (P, x) => {
-      let pid = S.pid;
-      let U = [];
-      let Y = false;
-      if (pid !== undefined && Z()) {
-        let Ne = snapshotProcessTree(
+    let stopping = false;
+    let killed = false;
+    let closed = false;
+    let waitingLingering = false;
+    let isAlive = () => child.exitCode === null && child.signalCode === null;
+    let processSnapshot;
+    let lingeringProcs = false;
+    let signalTree = async (signalName, reason) => {
+      let pid = child.pid;
+      let gaps = [];
+      let signalled = false;
+      if (pid !== undefined && isAlive()) {
+        let snapshotPromise = snapshotProcessTree(
           {
             pid,
             alive: true,
@@ -408,194 +416,210 @@ async function runCheckoutHook(e) {
           },
           PROCESS_SNAPSHOT_TIMEOUT_MS,
         );
-        ne = Promise.all([ne, Ne]).then(([_e, pe]) =>
-          _e === undefined || pe === undefined
-            ? (_e ?? pe)
-            : {
-                ...pe,
-                pinned: new Map([..._e.pinned, ...pe.pinned]),
-              },
+        processSnapshot = Promise.all([processSnapshot, snapshotPromise]).then(
+          ([previousSnapshot, snapshot]) =>
+            previousSnapshot === undefined || snapshot === undefined
+              ? (previousSnapshot ?? snapshot)
+              : {
+                  ...snapshot,
+                  pinned: new Map([...previousSnapshot.pinned, ...snapshot.pinned]),
+                },
         );
-        let ue = await Ne;
-        Y = Z() && S.kill(P);
-        V ||= Y;
-        a(
-          Y
-            ? `[runner:hook:checkout] ${x}, sending ${P} to the hook's process tree (pid=${pid})`
-            : `[runner:hook:checkout] ${x}, but the hook process could no longer be sent ${P}; what it started still is, as far as it was listed`,
+        let snapshotResult = await snapshotPromise;
+        signalled = isAlive() && child.kill(signalName);
+        killed ||= signalled;
+        debug(
+          signalled
+            ? `[runner:hook:checkout] ${reason}, sending ${signalName} to the hook's process tree (pid=${pid})`
+            : `[runner:hook:checkout] ${reason}, but the hook process could no longer be sent ${signalName}; what it started still is, as far as it was listed`,
         );
-        if (ue === undefined) U.push(`the process table could not be read before ${P}`);
+        if (snapshotResult === undefined)
+          gaps.push(`the process table could not be read before ${signalName}`);
         else {
-          if (ue.unpinned > 0) U.push(`${ue.unpinned} could not be identified`);
-          if (ue.truncated) U.push(`it had more than ${MAX_PROCESS_TABLE_ENTRIES} processes`);
-          if (ue.degraded) U.push("`ps` failed part-way");
+          if (snapshotResult.unpinned > 0) gaps.push(`${snapshotResult.unpinned} could not be identified`);
+          if (snapshotResult.truncated) gaps.push(`it had more than ${MAX_PROCESS_TABLE_ENTRIES} processes`);
+          if (snapshotResult.degraded) gaps.push("`ps` failed part-way");
         }
       }
-      let ee = await ne;
-      if (ee === undefined) {
-        if (U.length > 0 && P === "SIGTERM")
-          m(
-            `[runner:hook:checkout] could not read the process table (is /proc mounted? on macOS, is \`ps\` on PATH?), so ${Y ? "only the hook process was sent SIGTERM" : "nothing was sent SIGTERM"}; programs the hook started, such as git, may still be running and writing to ${e.checkoutPath}`,
+      let snapshot = await processSnapshot;
+      if (snapshot === undefined) {
+        if (gaps.length > 0 && signalName === "SIGTERM")
+          reportStatus(
+            `[runner:hook:checkout] could not read the process table (is /proc mounted? on macOS, is \`ps\` on PATH?), so ${signalled ? "only the hook process was sent SIGTERM" : "nothing was sent SIGTERM"}; programs the hook started, such as git, may still be running and writing to ${options.checkoutPath}`,
           );
         return;
       }
-      let { pids, incomplete } = await killProcessTree(ee, P);
-      if (U.length > 0)
-        m(`[runner:hook:checkout] may not have stopped everything the hook started: ${U.join("; ")}`);
-      if (P === "SIGTERM") return;
+      let { pids, incomplete } = await killProcessTree(snapshot, signalName);
+      if (gaps.length > 0)
+        reportStatus(
+          `[runner:hook:checkout] may not have stopped everything the hook started: ${gaps.join("; ")}`,
+        );
+      if (signalName === "SIGTERM") return;
       if (pids > 0)
-        m(
+        reportStatus(
           `[runner:hook:checkout] ${pids} program(s) the hook started were still running ${formatDelay(SIGKILL_AFTER_MS)} after SIGTERM and were sent SIGKILL`,
         );
       if (incomplete)
-        m(
+        reportStatus(
           "[runner:hook:checkout] could not check which of the hook's programs were still running; some may be",
         );
     };
-    let v = (P, x) => y(P, x).catch(() => {});
-    let L = (P) => {
-      N.push(setTimeout((x, G, U) => x(G, lingeringOutputMessage(U)), LINGERING_OUTPUT_MS, K, P, S));
-    };
-    let M = () => {
-      if (!V && !Z() && !q) {
-        ae = true;
-        return;
-      }
-      let P = Z();
-      if (P) S.unref();
-      K(
-        S.exitCode,
-        P
-          ? "hook process did not exit after SIGTERM and then SIGKILL (it may be stuck on a disk or network mount); abandoning it, and not waiting for its output pipes to close"
-          : h
-            ? `hook exited (${exitDescription(S)}) but programs it started may still be running, and may still write to ${e.checkoutPath}; giving up on them`
-            : lingeringOutputMessage(S),
+    let signalTreeQuietly = (signalName, reason) => signalTree(signalName, reason).catch(() => {});
+    let scheduleLingeringReport = (exitCode) => {
+      timers.push(
+        setTimeout(
+          (finish, code, child) => finish(code, lingeringOutputMessage(child)),
+          LINGERING_OUTPUT_MS,
+          finishOnce,
+          exitCode,
+          child,
+        ),
       );
     };
-    let H = () => {
-      if (!T) N.push(setTimeout((P) => P(), LINGERING_OUTPUT_MS, M));
+    let abandon = () => {
+      if (!killed && !isAlive() && !closed) {
+        waitingLingering = true;
+        return;
+      }
+      let alive = isAlive();
+      if (alive) child.unref();
+      finishOnce(
+        child.exitCode,
+        alive
+          ? "hook process did not exit after SIGTERM and then SIGKILL (it may be stuck on a disk or network mount); abandoning it, and not waiting for its output pipes to close"
+          : lingeringProcs
+            ? `hook exited (${exitDescription(child)}) but programs it started may still be running, and may still write to ${options.checkoutPath}; giving up on them`
+            : lingeringOutputMessage(child),
+      );
     };
-    let Q = (P) => {
-      if (X || T) return;
-      if (!Z()) {
-        m(
-          `[runner:hook:checkout] ${P}, but the hook has already exited and there is nothing left to stop; still waiting for its output pipes to close, which a process it started may hold, and the slot stays held until then (${LINGERING_OUTPUT_ADVICE})`,
+    let afterLingering = () => {
+      if (!settled) timers.push(setTimeout((call) => call(), LINGERING_OUTPUT_MS, abandon));
+    };
+    let stopHook = (reason) => {
+      if (stopping || settled) return;
+      if (!isAlive()) {
+        reportStatus(
+          `[runner:hook:checkout] ${reason}, but the hook has already exited and there is nothing left to stop; still waiting for its output pipes to close, which a process it started may hold, and the slot stays held until then (${LINGERING_OUTPUT_ADVICE})`,
         );
         return;
       }
-      X = true;
-      v("SIGTERM", P);
-      N.push(
+      stopping = true;
+      signalTreeQuietly("SIGTERM", reason);
+      timers.push(
         setTimeout(
-          (x, G) => void x("SIGKILL", "still running after SIGTERM").then(G),
+          (signalTree, next) => void signalTree("SIGKILL", "still running after SIGTERM").then(next),
           SIGKILL_AFTER_MS,
-          v,
-          H,
+          signalTreeQuietly,
+          afterLingering,
         ),
-        setTimeout((x) => x(), SIGKILL_AFTER_MS + HOOK_OUTPUT_SETTLE_MS + LINGERING_OUTPUT_MS, M),
+        setTimeout((call) => call(), SIGKILL_AFTER_MS + HOOK_OUTPUT_SETTLE_MS + LINGERING_OUTPUT_MS, abandon),
       );
     };
-    let oe = () => {
-      s = true;
-      Q("abort received");
+    let onAbort = () => {
+      aborted = true;
+      stopHook("abort received");
     };
-    if (e.signal?.aborted) oe();
+    if (options.signal?.aborted) onAbort();
     else
-      e.signal?.addEventListener("abort", oe, {
+      options.signal?.addEventListener("abort", onAbort, {
         once: true,
       });
-    if (e.timeoutMs !== undefined && e.timeoutMs > 0)
-      N.push(
+    if (options.timeoutMs !== undefined && options.timeoutMs > 0)
+      timers.push(
         setTimeout(
           (ms) => {
-            if (T || s) return;
-            if (!Z()) return;
-            c = true;
-            m(
+            if (settled || aborted) return;
+            if (!isAlive()) return;
+            timedOut = true;
+            reportStatus(
               `[runner:hook:checkout] timed out after ${formatDelay(ms)} (--checkout-hook-timeout-min) \u2014 stopping the hook and failing this session's setup`,
             );
-            Q(`timed out after ${formatDelay(ms)}`);
+            stopHook(`timed out after ${formatDelay(ms)}`);
           },
-          Math.min(e.timeoutMs, 2147483647),
-          e.timeoutMs,
+          Math.min(options.timeoutMs, 2147483647),
+          options.timeoutMs,
         ),
       );
-    S.on("error", (P) => {
-      if (T) return;
-      T = true;
-      D();
-      e.signal?.removeEventListener("abort", oe);
-      reject(P);
+    child.on("error", (error) => {
+      if (settled) return;
+      settled = true;
+      clearTimers();
+      options.signal?.removeEventListener("abort", onAbort);
+      reject(error);
     });
-    let pn;
-    let Oe = () =>
-      (pn ??= (async () => {
-        while (!T) {
-          let P = await ne;
-          if (P === undefined) return;
-          let { live, incomplete } = await countLiveProcesses(P);
-          h = live > 0 || incomplete;
-          if (!h) return;
+    let drainPromise;
+    let waitForProcs = () =>
+      (drainPromise ??= (async () => {
+        while (!settled) {
+          let snapshot = await processSnapshot;
+          if (snapshot === undefined) return;
+          let { live, incomplete } = await countLiveProcesses(snapshot);
+          lingeringProcs = live > 0 || incomplete;
+          if (!lingeringProcs) return;
           await sleep(POST_HOOK_SLEEP_MS);
         }
       })());
-    S.on("exit", (P) => {
-      Oe().then(() => {
-        if (T) return;
-        if (V) {
-          L(P);
+    child.on("exit", (code) => {
+      waitForProcs().then(() => {
+        if (settled) return;
+        if (killed) {
+          scheduleLingeringReport(code);
           return;
         }
-        N.push(
+        timers.push(
           setTimeout(
-            (x, G, U) => {
-              x(
-                `[runner:hook:checkout] hook exited (${exitDescription(G)}) but a process it started still holds its output pipes. ${U() ? "The slot is not freed" : G.exitCode === 0 ? "The session does not start" : "The hook's failure is not reported"} until that process ends or closes them. The time limit (--checkout-hook-timeout-min) does not end this wait: it stops only a hook that is still running (${LINGERING_OUTPUT_ADVICE})`,
+            (report, child, isStopping) => {
+              report(
+                `[runner:hook:checkout] hook exited (${exitDescription(child)}) but a process it started still holds its output pipes. ${isStopping() ? "The slot is not freed" : child.exitCode === 0 ? "The session does not start" : "The hook's failure is not reported"} until that process ends or closes them. The time limit (--checkout-hook-timeout-min) does not end this wait: it stops only a hook that is still running (${LINGERING_OUTPUT_ADVICE})`,
               );
             },
             LINGERING_OUTPUT_MS,
-            m,
-            S,
-            () => s || c,
+            reportStatus,
+            child,
+            () => aborted || timedOut,
           ),
         );
       });
     });
-    S.on("close", (P) => {
-      q = true;
-      Oe().then(() => K(P));
-      if (ae) H();
+    child.on("close", (code) => {
+      closed = true;
+      waitForProcs().then(() => finishOnce(code));
+      if (waitingLingering) afterLingering();
     });
   });
-  let l;
+  let checkoutStat;
   try {
-    l = await withBoundedTimeout(stat(e.checkoutPath), FILESYSTEM_CHECK_TIMEOUT_MS, `stat ${e.checkoutPath}`);
+    checkoutStat = await withBoundedTimeout(
+      stat(options.checkoutPath),
+      FILESYSTEM_CHECK_TIMEOUT_MS,
+      `stat ${options.checkoutPath}`,
+    );
   } catch (error) {
     if (isENOENT(error))
       throw new CheckoutHookFailedError(
-        `checkout hook exited 0 but ${e.checkoutPath} does not exist`,
+        `checkout hook exited 0 but ${options.checkoutPath} does not exist`,
         0,
         "exited 0 but did not create the checkout directory",
       );
     throw error;
   }
-  if (!l.isDirectory())
+  if (!checkoutStat.isDirectory())
     throw new CheckoutHookFailedError(
-      `checkout hook exited 0 but ${e.checkoutPath} is not a directory`,
+      `checkout hook exited 0 but ${options.checkoutPath} is not a directory`,
       0,
       "exited 0 but the checkout path is not a directory",
     );
   if (process.env.CLAUDE_RUNNER_SKIP_GIT_VERIFY !== "1")
     try {
       await withBoundedTimeout(
-        stat(join(e.checkoutPath, ".git")),
+        stat(join(options.checkoutPath, ".git")),
         FILESYSTEM_CHECK_TIMEOUT_MS,
-        `stat ${e.checkoutPath}/.git`,
+        `stat ${options.checkoutPath}/.git`,
       );
     } catch (error) {
       if (isENOENT(error))
         throw new CheckoutHookFailedError(
-          `checkout hook succeeded but ${e.checkoutPath}/.git is missing (for non-git SCMs, set CLAUDE_RUNNER_SKIP_GIT_VERIFY=1 in the runner's environment)`,
+          `checkout hook succeeded but ${options.checkoutPath}/.git is missing (for non-git SCMs, set CLAUDE_RUNNER_SKIP_GIT_VERIFY=1 in the runner's environment)`,
           0,
           "exited 0 but left no .git in the checkout directory",
         );
@@ -634,34 +658,34 @@ function postSessionHooksRunning() {
 /**
  * 会话结束后的 post-session 钩子，带时间预算
  */
-async function runPostSessionHook(e) {
-  let n = {
+async function runPostSessionHook(options) {
+  let envVars = {
     ...hookEnvironment(),
-    ...e.gitEnvironment?.envOverrides,
-    CLAUDE_RUNNER_SESSION_ID: e.sessionId.replace(/^cse_/, "session_"),
-    CLAUDE_RUNNER_SESSION_UUID: decodeTaggedUuid(e.sessionId),
-    CLAUDE_RUNNER_EXIT_REASON: e.exitReason,
-    CLAUDE_RUNNER_DEBUG_LOG_PATH: e.debugLogPath,
-    CLAUDE_RUNNER_WORKSPACE_PATHS: e.workspacePaths.join(":"),
-    CLAUDE_RUNNER_API_BASE_URL: e.apiBaseUrl,
-    CLAUDE_RUNNER_CLIENT_PLATFORM: sanitizeMetricLabel(e.clientPlatform),
-    CLAUDE_CODE_SESSION_ACCESS_TOKEN: e.sessionAccessToken,
+    ...options.gitEnvironment?.envOverrides,
+    CLAUDE_RUNNER_SESSION_ID: options.sessionId.replace(/^cse_/, "session_"),
+    CLAUDE_RUNNER_SESSION_UUID: decodeTaggedUuid(options.sessionId),
+    CLAUDE_RUNNER_EXIT_REASON: options.exitReason,
+    CLAUDE_RUNNER_DEBUG_LOG_PATH: options.debugLogPath,
+    CLAUDE_RUNNER_WORKSPACE_PATHS: options.workspacePaths.join(":"),
+    CLAUDE_RUNNER_API_BASE_URL: options.apiBaseUrl,
+    CLAUDE_RUNNER_CLIENT_PLATFORM: sanitizeMetricLabel(options.clientPlatform),
+    CLAUDE_CODE_SESSION_ACCESS_TOKEN: options.sessionAccessToken,
   };
-  e.onStatus(
-    `[runner:hook] post-session hook starting (session exit: ${e.exitReason}, budget ${e.timeoutMs}ms, via ${e.hookPath})`,
+  options.onStatus(
+    `[runner:hook] post-session hook starting (session exit: ${options.exitReason}, budget ${options.timeoutMs}ms, via ${options.hookPath})`,
   );
   let now = Date.now();
-  let m = () => {};
+  let resolveDone = () => {};
   let promise = new Promise((resolve) => {
-    m = resolve;
+    resolveDone = resolve;
   });
-  let t = spawn(e.hookPath, [], {
-    cwd: e.cwd,
+  let child = spawn(options.hookPath, [], {
+    cwd: options.cwd,
     env: gitConfigEnvArgs(
-      e.gitConfigPins?.length ? withLifecycleHookGitEnv(n) : n,
-      mergeCommandScopes(e.gitConfigPins, e.gitEnvironment, e.gitConfigLegacyParams),
+      options.gitConfigPins?.length ? withLifecycleHookGitEnv(envVars) : envVars,
+      mergeCommandScopes(options.gitConfigPins, options.gitEnvironment, options.gitConfigLegacyParams),
       {
-        legacyParams: e.gitConfigLegacyParams,
+        legacyParams: options.gitConfigLegacyParams,
       },
     ),
     stdio: ["ignore", "pipe", "pipe"],
@@ -669,105 +693,109 @@ async function runPostSessionHook(e) {
     ...cgroupSpawnOptions("hooks"),
     detached: true,
   });
-  let i = inFlightCounter();
-  i.increment();
-  let s = false;
-  let c = false;
-  let l = [];
-  let b = () => {
-    if (s) return;
-    s = true;
-    i.decrement();
-    for (let R of l) clearTimeout(R);
-    m();
+  let inflight = inFlightCounter();
+  inflight.increment();
+  let finished = false;
+  let timedOut = false;
+  let timers = [];
+  let finishOnce = () => {
+    if (finished) return;
+    finished = true;
+    inflight.decrement();
+    for (let timer of timers) clearTimeout(timer);
+    resolveDone();
   };
-  let w = (R) => {
-    let pid = t.pid;
+  let signalGroup = (signalName) => {
+    let pid = child.pid;
     if (pid === undefined) {
-      t.kill(R);
+      child.kill(signalName);
       return;
     }
     if (pid <= 1) return;
     try {
-      process.kill(-pid, R);
+      process.kill(-pid, signalName);
     } catch {
-      t.kill(R);
+      child.kill(signalName);
     }
   };
-  let timeoutMs = e.timeoutMs > 0 ? e.timeoutMs : 1;
-  l.push(
+  let timeoutMs = options.timeoutMs > 0 ? options.timeoutMs : 1;
+  timers.push(
     setTimeout(
-      (R, A, F, K) => {
-        if (A.exitCode !== null || A.signalCode !== null) return;
-        c = true;
-        R(
-          `[runner:hook:post-session] timed out after ${F}ms, sending SIGTERM to the hook's process group (pgid=${A.pid})`,
+      (debug, child, budgetMs, signalGroup) => {
+        if (child.exitCode !== null || child.signalCode !== null) return;
+        timedOut = true;
+        debug(
+          `[runner:hook:post-session] timed out after ${budgetMs}ms, sending SIGTERM to the hook's process group (pgid=${child.pid})`,
         );
-        K("SIGTERM");
+        signalGroup("SIGTERM");
       },
       timeoutMs,
-      e.onDebug,
-      t,
+      options.onDebug,
+      child,
       timeoutMs,
-      w,
+      signalGroup,
     ),
     setTimeout(
-      (R, A, F) => {
-        if (!c) return;
-        R(
-          `[runner:hook:post-session] still running after SIGTERM, sending SIGKILL to the hook's process group (pgid=${A.pid})`,
+      (debug, child, signalGroup) => {
+        if (!timedOut) return;
+        debug(
+          `[runner:hook:post-session] still running after SIGTERM, sending SIGKILL to the hook's process group (pgid=${child.pid})`,
         );
-        F("SIGKILL");
+        signalGroup("SIGKILL");
       },
       Math.min(timeoutMs + IN_FLIGHT_COUNT_MAX, 2147483647),
-      e.onDebug,
-      t,
-      w,
+      options.onDebug,
+      child,
+      signalGroup,
     ),
     setTimeout(
-      (R, A, F) => {
-        R(
-          `[runner:hook:post-session] resolved without 'close' (${Date.now() - F}ms, grandchild likely holding stdio pipes; ignored)`,
+      (reportStatus, finishOnce, startedAt) => {
+        reportStatus(
+          `[runner:hook:post-session] resolved without 'close' (${Date.now() - startedAt}ms, grandchild likely holding stdio pipes; ignored)`,
         );
-        A();
+        finishOnce();
       },
       Math.min(timeoutMs + IN_FLIGHT_COUNT_MAX + 1000, 2147483647),
-      e.onStatus,
-      b,
+      options.onStatus,
+      finishOnce,
       now,
     ),
   );
-  let T = "";
-  let N = "";
-  let D = (R) => {
-    let lines = R.split(`
+  let stdoutBuffer = "";
+  let stderrBuffer = "";
+  let consumeChunk = (buffer) => {
+    let lines = buffer.split(`
 `);
-    let F = lines.pop() ?? "";
-    for (let line of lines) e.onDebug(`[runner:hook:post-session] ${redactSecretsInText(line)}`);
-    return F;
+    let partial = lines.pop() ?? "";
+    for (let line of lines) options.onDebug(`[runner:hook:post-session] ${redactSecretsInText(line)}`);
+    return partial;
   };
-  t.stdout.on("data", (R) => {
-    T += R.toString();
-    T = D(T);
+  child.stdout.on("data", (data) => {
+    stdoutBuffer += data.toString();
+    stdoutBuffer = consumeChunk(stdoutBuffer);
   });
-  t.stderr.on("data", (R) => {
-    N += R.toString();
-    N = D(N);
+  child.stderr.on("data", (data) => {
+    stderrBuffer += data.toString();
+    stderrBuffer = consumeChunk(stderrBuffer);
   });
-  t.on("error", (R) => {
-    e.onStatus(
-      `[runner:hook:post-session] spawn error (ignored): ${redactSecretsInText(R instanceof Error ? R.message : String(R))}`,
+  child.on("error", (error) => {
+    options.onStatus(
+      `[runner:hook:post-session] spawn error (ignored): ${redactSecretsInText(error instanceof Error ? error.message : String(error))}`,
     );
-    b();
+    finishOnce();
   });
-  t.on("close", (R) => {
-    if (T) e.onDebug(`[runner:hook:post-session] ${redactSecretsInText(T)}`);
-    if (N) e.onDebug(`[runner:hook:post-session] ${redactSecretsInText(N)}`);
-    let A = Date.now() - now;
-    if (c) e.onStatus(`[runner:hook:post-session] killed after timeout (${A}ms, ignored)`);
-    else if (R !== 0) e.onStatus(`[runner:hook:post-session] exited ${R ?? "via signal"} (${A}ms, ignored)`);
-    else e.onStatus(`[runner:hook:post-session] done (exit 0, ${A}ms)`);
-    b();
+  child.on("close", (exitCode) => {
+    if (stdoutBuffer) options.onDebug(`[runner:hook:post-session] ${redactSecretsInText(stdoutBuffer)}`);
+    if (stderrBuffer) options.onDebug(`[runner:hook:post-session] ${redactSecretsInText(stderrBuffer)}`);
+    let elapsedMs = Date.now() - now;
+    if (timedOut)
+      options.onStatus(`[runner:hook:post-session] killed after timeout (${elapsedMs}ms, ignored)`);
+    else if (exitCode !== 0)
+      options.onStatus(
+        `[runner:hook:post-session] exited ${exitCode ?? "via signal"} (${elapsedMs}ms, ignored)`,
+      );
+    else options.onStatus(`[runner:hook:post-session] done (exit 0, ${elapsedMs}ms)`);
+    finishOnce();
   });
   return promise;
 }
@@ -781,4 +809,9 @@ export {
   LIFECYCLE_HOOK_GIT_NEUTRAL_PINS,
   lifecycleHookGpgProgramPins,
   postSessionHooksRunning,
+  LIFECYCLE_HOOK_GIT_ENV,
+  envHasGitConfigKey,
+  lifecycleHookAskpassSource,
+  operatorGitConfigPairStatus,
+  withLifecycleHookGitEnv,
 };

@@ -12,7 +12,7 @@ import * as zlibModule from "zlib";
 import { AbortError_2, RestError } from "./restError.js";
 import { Sanitizer } from "./util/sanitizer.js";
 import { logger_2 } from "./log.js";
-import { et } from "./pipelineRequest.js";
+import { createHttpHeaders } from "./pipelineRequest.js";
 
 //@ chunk-mrx6y2r5.js:37932-37942 esm-layout
 var DEFAULT_TLS_SETTINGS = {};
@@ -245,7 +245,7 @@ class NodeHttpClient {
 }
 //@ chunk-mrx6y2r5.js:41828-41989 esm-fingerprint
 function getResponseHeaders(res) {
-  let headers = et();
+  let headers = createHttpHeaders();
   for (let header of Object.keys(res.headers)) {
     let value = res.headers[header];
     if (Array.isArray(value)) {

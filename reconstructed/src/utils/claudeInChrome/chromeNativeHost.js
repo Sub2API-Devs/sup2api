@@ -72,8 +72,8 @@ async function getComputerName() {
 /**
  * 清洗计算机名：去控制字符、去 .local 后缀、截断到 64。
  */
-function sanitizeComputerName(e) {
-  let trimmed = e
+function sanitizeComputerName(hostName) {
+  let trimmed = hostName
     .replace(/\p{Cc}/gu, "")
     .trim()
     .replace(/\.local$/i, "")
@@ -275,7 +275,7 @@ class ChromeNativeHost {
       case "tool_response": {
         if (this.mcpClients.size > 0) {
           log(`Forwarding tool response to ${this.mcpClients.size} MCP clients`);
-          let { type: o, ...data } = message;
+          let { type, ...data } = message;
           let responseData = Buffer.from(jsonStringify(data), "utf-8");
           let lengthBuffer = Buffer.alloc(4);
           lengthBuffer.writeUInt32LE(responseData.length, 0);
@@ -292,7 +292,7 @@ class ChromeNativeHost {
       case "notification": {
         if (this.mcpClients.size > 0) {
           log(`Forwarding notification to ${this.mcpClients.size} MCP clients`);
-          let { type: o, ...data } = message;
+          let { type, ...data } = message;
           let notificationData = Buffer.from(jsonStringify(data), "utf-8");
           let lengthBuffer = Buffer.alloc(4);
           lengthBuffer.writeUInt32LE(notificationData.length, 0);
@@ -432,3 +432,4 @@ class ChromeMessageReader {
     });
   }
 }
+export { runChromeNativeHost };

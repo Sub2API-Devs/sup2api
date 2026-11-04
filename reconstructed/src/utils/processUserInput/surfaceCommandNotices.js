@@ -36,6 +36,7 @@ import { skillWatchStateByHost } from "../../skills/skillChangeWatch.js";
 import { pluginCommandRegistry } from "../../plugins/functionHooks/commandHooks.js";
 import { loadedModuleArgs } from "../../plugins/hooksModules/loadedModuleFilters.js";
 import { childNameUnder } from "../../plugins/functionHooks/devModsWatch.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-3g0djq3w.js:5357-5566 placement
 /**
@@ -43,14 +44,14 @@ import { childNameUnder } from "../../plugins/functionHooks/devModsWatch.js";
  */
 function hasSingleCommandRunHook(command) {
   try {
-    let n = new Set(
+    let pluginNames = new Set(
       pluginsMatchingEvent("command.run", {
         command,
       }),
     );
     return (
       getPluginRegistry()
-        .loadedModules.filter((loadedModule) => n.has(loadedModule.name))
+        .loadedModules.filter((loadedModule) => pluginNames.has(loadedModule.name))
         .reduce((acc, loadedModule) => acc + loadedModule.registrationsFor("command.run").length, 0) <= 1
     );
   } catch (error) {
@@ -73,8 +74,8 @@ function pluginCommandNotice(command) {
   if (command?.name !== "plugin" || !isNativeTerminalNotifySupported() || !isUsingDefaultPluginsDirectory())
     return;
   try {
-    let o = getStrictKnownMarketplaces() === null;
-    return `${PLUGIN_COMMAND_DESKTOP_NOTE_2} ${o ? PLUGIN_COMMAND_DESKTOP_NOTE : PLUGIN_COMMAND_DESKTOP_NOTE_COPY}`;
+    let noStrictAllowlist = getStrictKnownMarketplaces() === null;
+    return `${PLUGIN_COMMAND_DESKTOP_NOTE_2} ${noStrictAllowlist ? PLUGIN_COMMAND_DESKTOP_NOTE : PLUGIN_COMMAND_DESKTOP_NOTE_COPY}`;
   } catch (error) {
     logForDebugging(`Marketplace policy could not be read: ${errorMessage(error)}`, {
       level: "error",
@@ -125,17 +126,17 @@ function remoteSessionIdFromEnv() {
 /**
  * 某命令在当前界面不可用时的说明（桌面版的 /plugin、云会话中的 /teleport 等）。
  */
-function commandSurfaceNotice(e, builtinCommands) {
-  let command = findCommand(e, builtinCommands);
-  let u = remoteSessionIdFromEnv();
-  if (!u) return pluginCommandNotice(command);
+function commandSurfaceNotice(commandName, builtinCommands) {
+  let command = findCommand(commandName, builtinCommands);
+  let remoteSessionId = remoteSessionIdFromEnv();
+  if (!remoteSessionId) return pluginCommandNotice(command);
   if (!command) return;
-  let s =
+  let noticeFor =
     remoteSessionCommandNotices()[command.name] ??
     (isCcsTenant() ? CCS_COMMAND_NOTICES[command.name] : undefined);
-  return s
-    ? s({
-        remoteSessionId: u,
+  return noticeFor
+    ? noticeFor({
+        remoteSessionId,
       })
     : undefined;
 }
@@ -166,27 +167,30 @@ function unknownCommandFallback({ commandName, suggestion, availableCommandNames
   };
 }
 //@ chunk-3g0djq3w.js:9022-9057 placement
-var modBuildHintState = identity(createValueSlot(), (e) => e.set(undefined));
+var modBuildHintState; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-3g0djq3w.js:9022", () => {
+  modBuildHintState = identity(createValueSlot(), (state) => state.set(undefined));
+});
 //@ chunk-3g0djq3w.js:9057-9865 placement
 /**
  * 用户运行正在构建的 mod 的命令后，给模型的一次性提示（简短回应结果或提出 mod 建议）。
  */
 function modCommandFollowUpNote(isOfficial, agentId) {
   let folder = skillWatchStateByHost.get()?.folder;
-  let u = pluginCommandRegistry.ownerOf(isOfficial);
-  let pluginRoot = u === undefined ? undefined : loadedModuleArgs(u)?.pluginRoot;
-  let T =
+  let owner = pluginCommandRegistry.ownerOf(isOfficial);
+  let pluginRoot = owner === undefined ? undefined : loadedModuleArgs(owner)?.pluginRoot;
+  let holdsPluginFolder =
     folder !== undefined &&
     pluginRoot !== undefined &&
     childNameUnder(resolve(folder), resolve(pluginRoot)) !== undefined;
   let any = [...getInvokedSkillsForAgent(null).values()].some(
-    (y) =>
-      y.content.includes(TERMINAL_SHARING_NOTE) ||
-      y.content.includes(ORG_LIBRARY_SHARING_NOTE) ||
-      y.content.includes(CLOUD_SHARING_NOTE),
+    (skill) =>
+      skill.content.includes(TERMINAL_SHARING_NOTE) ||
+      skill.content.includes(ORG_LIBRARY_SHARING_NOTE) ||
+      skill.content.includes(CLOUD_SHARING_NOTE),
   );
   let sessionId = getSessionId();
-  if (agentId !== undefined || !T || !any || modBuildHintState.get() === sessionId) return;
+  if (agentId !== undefined || !holdsPluginFolder || !any || modBuildHintState.get() === sessionId) return;
   modBuildHintState.set(sessionId);
   return `Claude Code sent this note after the person ran /${isOfficial}, a command of the mod they are building in this session; they have sent no message since, and the command's output is above. Reply in one or two lines and use no tools. If the output shows the mod did what they asked, make the plugin-authoring skill's one-line offer for the mod, unless it was already made or they said no; if the output shows a problem, say what went wrong; otherwise reply in one short line about the result.`;
 }

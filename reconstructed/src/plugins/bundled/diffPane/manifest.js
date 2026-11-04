@@ -8,14 +8,14 @@
  * pieces: chunk-wyqg6m3h.js (1)
  * attribution: placement 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-wyqg6m3h.js:4629-5213 placement
 /**
  * 内置 diff 插件包的 manifest（CommonJS 包裹）：声明扫描到的钩子（session.start、ui.render、command.run…）与调用的宿主能力。
  */
-var diffPaneManifest = x(function (QI, li) {
-  li.exports = {
+var diffPaneManifest = __commonJS(function (requireFn, moduleObject) {
+  moduleObject.exports = {
     scan: {
       hooks: [
         "session.start",

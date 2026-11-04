@@ -22,7 +22,7 @@ import {
 } from "../../utils/auth.js";
 import { heldMachinePinsSignIn, getRemoteSettingsPathOverride } from "./remoteSettingsState.js";
 import { machineAdminPinsSignInOrg } from "../../utils/settings/settings.js";
-import { hasMdmResult } from "../../utils/settings/managedPluginTiers.js";
+import { hasMdmResult } from "../../utils/settings/mdm/mdmLoader.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { errorMessage } from "../../utils/errors.js";
 import { env } from "../../utils/env.js";
@@ -49,6 +49,7 @@ import { getAPIProvider, isFirstPartyAnthropicBaseUrl } from "../../utils/model/
 import { getGatewayAuth, gatewayServesManagedSettings } from "../../bootstrap/state.js";
 import { resolveOrgConfigPlan } from "../policyLimits/index.js";
 import { identity } from "../../utils/identity.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-mdb2vxrz.js:6591-6686 placement = isBigQueryMetricsEnabled (1)
 function isBigQueryMetricsEnabled_2() {
@@ -97,7 +98,10 @@ function isStoredLoginSurfaceShortcut() {
 /**
  * 判断存储登录面是否被跳过时要检查的环境变量清单（含自定义头）。
  */
-var STORED_LOGIN_SURFACE_ENV_VARS = [...PROVIDER_CREDENTIAL_ENV_VARS, "ANTHROPIC_CUSTOM_HEADERS"];
+var STORED_LOGIN_SURFACE_ENV_VARS; // deferred: uses ARTIFACT_PROVIDER_ENV_VARS (../../utils/managedEnvConstants.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-mdb2vxrz.js:7087", () => {
+  STORED_LOGIN_SURFACE_ENV_VARS = [...PROVIDER_CREDENTIAL_ENV_VARS, "ANTHROPIC_CUSTOM_HEADERS"];
+});
 //@ chunk-mdb2vxrz.js:7128-7789 placement
 /**
  * 判断当前凭据来源是否跳过存储登录面（文件描述符令牌、自定义头等）。
@@ -110,29 +114,31 @@ function isStoredLoginSurfaceSkipped() {
       hasPossibleCredentialFromDescriptor("CLAUDE_CODE_API_KEY_FILE_DESCRIPTOR")
     )
       return true;
-    let e = _(STORED_LOGIN_SURFACE_ENV_VARS);
+    let readEnv = _(STORED_LOGIN_SURFACE_ENV_VARS);
     let cachedLastLoadStatus = getCachedLastLoadStatus(STORED_LOGIN_SURFACE_ENV_VARS);
-    let r =
-      e && cachedLastLoadStatus
+    let valuesByVar =
+      readEnv && cachedLastLoadStatus
         ? new Map(
-            STORED_LOGIN_SURFACE_ENV_VARS.map((o) => [
-              o,
-              [cachedLastLoadStatus(o), e(o)].flatMap((a) => (a?.trim() ? [a] : [])),
+            STORED_LOGIN_SURFACE_ENV_VARS.map((name) => [
+              name,
+              [cachedLastLoadStatus(name), readEnv(name)].flatMap((value) => (value?.trim() ? [value] : [])),
             ]),
           )
         : null;
     return (
       (!isFirstPartyManagedOAuthContext() &&
         (getApiKeyFromFileDescriptor() !== null ||
-          (r
-            ? PROVIDER_CREDENTIAL_ENV_VARS.some((o) => !!r.get(o)?.length)
+          (valuesByVar
+            ? PROVIDER_CREDENTIAL_ENV_VARS.some((name) => !!valuesByVar.get(name)?.length)
             : !!env.ANTHROPIC_API_KEY || !!effectiveAuthTokenEnv()))) ||
-      (r
-        ? !!r
+      (valuesByVar
+        ? !!valuesByVar
             .get("ANTHROPIC_CUSTOM_HEADERS")
-            ?.some((o) =>
-              getCustomHeaders(o).some(([a]) => ["authorization", "x-api-key"].includes(a.toLowerCase())),
-            ) || !!r.get("CLAUDE_CODE_OAUTH_TOKEN")?.length
+            ?.some((headerText) =>
+              getCustomHeaders(headerText).some(([headerName]) =>
+                ["authorization", "x-api-key"].includes(headerName.toLowerCase()),
+              ),
+            ) || !!valuesByVar.get("CLAUDE_CODE_OAUTH_TOKEN")?.length
         : hasCustomAuthorizationHeader() || hasCustomApiKeyHeader()) ||
       isClaudeAIOAuthTokenHostInjected()
     );
@@ -150,13 +156,13 @@ function isStoredLoginSurfaceSkipped() {
 /**
  * 判断 chat/teams 会话里存储登录面是否已不适用（远程 OAuth、已跳过登录面，或会话内没有存储登录）。
  */
-function isStoredLoginSurfaceSuperseded(e) {
+function isStoredLoginSurfaceSuperseded(way) {
   return (
     isChatOrTeams() &&
     !isByocEnvironment() &&
     (isRemoteManagedEnvironment() ||
       isStoredLoginSurfaceSkipped() ||
-      (e === "for_session" && !hasStoredClaudeAiLogin()))
+      (way === "for_session" && !hasStoredClaudeAiLogin()))
   );
 }
 //@ chunk-mdb2vxrz.js:7861-8991 placement
@@ -176,27 +182,27 @@ function computeRemoteSettingsEligibilityUncached() {
   if (hasManagedSettings()) return checkRemoteAgentEligibility();
   if (getAPIProvider() === "gateway") {
     let gatewayAuth = getGatewayAuth();
-    let a = gatewayServesManagedSettings(gatewayAuth);
+    let gatewayServesSettings = gatewayServesManagedSettings(gatewayAuth);
     return {
-      eligible: a,
-      ineligibleReason: a
+      eligible: gatewayServesSettings,
+      ineligibleReason: gatewayServesSettings
         ? undefined
         : gatewayAuth?.hostVerdict !== undefined
           ? "host_gateway_not_accepted"
           : "unpinned_gateway",
     };
   }
-  let e =
+  let eligibilityReason =
     getAPIProvider() !== "firstParty"
       ? "third_party_provider"
       : !isFirstPartyAnthropicBaseUrl()
         ? "custom_base_url"
         : undefined;
-  if (e)
+  if (eligibilityReason)
     return (
       eligibilityOverride(false) ?? {
         eligible: false,
-        ineligibleReason: e,
+        ineligibleReason: eligibilityReason,
       }
     );
   if (isLocalAgentEntrypoint())
@@ -209,9 +215,9 @@ function computeRemoteSettingsEligibilityUncached() {
       eligible: false,
       ineligibleReason: "claude_tag",
     };
-  let n = false;
+  let isProfileCredential = false;
   try {
-    n = isProfileRemoteSettingsCredential();
+    isProfileCredential = isProfileRemoteSettingsCredential();
   } catch (error) {
     logForDebugging(
       `Remote settings: could not read the profile store (${errorMessage(error)}); not treating this session as profile-authenticated`,
@@ -220,7 +226,7 @@ function computeRemoteSettingsEligibilityUncached() {
       },
     );
   }
-  if (n)
+  if (isProfileCredential)
     return getBridgeBaseUrl()
       ? {
           eligible: true,
@@ -246,8 +252,8 @@ function computeRemoteSettingsEligibilityUncached() {
     return {
       eligible: true,
     };
-  let r = eligibilityOverride(true);
-  if (r !== null) return r;
+  let forced = eligibilityOverride(true);
+  if (forced !== null) return forced;
   if (
     hasStoredOAuthToken() &&
     resolveOrgConfigPlan(getStoredOAuthSubscriptionType(), getStoredOAuthTierVerifiedAt()) === null
@@ -264,22 +270,25 @@ function computeRemoteSettingsEligibilityUncached() {
 /**
  * 恒返回 false 的开关：BigQuery 指标是否启用（预留）。
  */
-function isBigQueryMetricsEnabled(e = true) {
+function isBigQueryMetricsEnabled(defaultValue = true) {
   return false;
 }
 //@ chunk-mdb2vxrz.js:9019-9167 placement
-var storedLoginNoteState = identity(
-  {
-    isNoted: false,
-    hybridOrganizationUuid: null,
-    hasReportedRefusal: false,
-  },
-  (e) => {
-    e.isNoted = false;
-    e.hybridOrganizationUuid = null;
-    e.hasReportedRefusal = false;
-  },
-);
+var storedLoginNoteState; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-mdb2vxrz.js:9019", () => {
+  storedLoginNoteState = identity(
+    {
+      isNoted: false,
+      hybridOrganizationUuid: null,
+      hasReportedRefusal: false,
+    },
+    (state) => {
+      state.isNoted = false;
+      state.hybridOrganizationUuid = null;
+      state.hasReportedRefusal = false;
+    },
+  );
+});
 //@ chunk-mdb2vxrz.js:9167-9189 placement
 /**
  * 记录登录界面的存储位置（供后续提示）。
@@ -288,7 +297,7 @@ function noteStoredLoginSurface() {
   return;
 }
 //@ chunk-mdb2vxrz.js:9189-9215 placement
-function eligibilityOverride(e) {
+function eligibilityOverride(wantEligible) {
   return null;
 }
 export {

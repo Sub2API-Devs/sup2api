@@ -33,17 +33,17 @@ import { AGENT_COLOR_NAMES } from "../AgentTool/agentColorManager.js";
  * 建立会话唯一的隐式团队：写团队文件（lead 成员 team-lead，in-process 后端）、迁移会话任务列表目录、注册清理，返回 teamContext 与队友颜色分配。316 没有 TeamCreate 工具，此函数由会话启动流程调用。
  */
 async function initializeSessionTeam(options, storageV5) {
-  let o = options?.existingTeamName || getAssistantTeamName();
-  let teamName = o ?? sessionTeamName(getSessionId());
+  let existingTeamName = options?.existingTeamName || getAssistantTeamName();
+  let teamName = existingTeamName ?? sessionTeamName(getSessionId());
   let leadAgentId = agentAddress(TEAM_LEAD, teamName);
   let teamFilePath = getTeamFilePath(teamName);
-  let c = o ? await readTeamFileAsync(teamName, storageV5) : null;
+  let existingTeamFile = existingTeamName ? await readTeamFileAsync(teamName, storageV5) : null;
   let leadProcess = await countConcurrentSessions_2();
-  if (c)
+  if (existingTeamFile)
     await updateTeamFile(
       teamName,
-      (u) => {
-        u.leadProcess = leadProcess;
+      (teamFile) => {
+        teamFile.leadProcess = leadProcess;
       },
       {
         bestEffortWrite: true,
@@ -84,7 +84,7 @@ async function initializeSessionTeam(options, storageV5) {
     await rename(getTaskOutputDir(sessionId), getTaskOutputDir(teamName)).catch(() => {});
   await ensureTaskListDir(teamName, storageV5);
   registerTeamForSessionCleanup(teamName);
-  let p = AGENT_COLOR_NAMES[0];
+  let leadColor = AGENT_COLOR_NAMES[0];
   return {
     teamContext: {
       teamName,
@@ -94,7 +94,7 @@ async function initializeSessionTeam(options, storageV5) {
         [leadAgentId]: {
           name: TEAM_LEAD,
           agentType: TEAM_LEAD,
-          color: p,
+          color: leadColor,
           tmuxSessionName: "in-process",
           tmuxPaneId: "leader",
           cwd: getOriginalCwd(),
@@ -103,7 +103,7 @@ async function initializeSessionTeam(options, storageV5) {
       },
     },
     teammateColors: {
-      assignments: new Map([[leadAgentId, p]]),
+      assignments: new Map([[leadAgentId, leadColor]]),
       index: 1,
     },
   };

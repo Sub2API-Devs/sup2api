@@ -8,6 +8,11 @@
  * pieces: chunk-0tkmvwy0.js (3), chunk-8ndmcarc.js (1), chunk-ah34pb7m.js (39)
  * attribution: placement 2, fingerprint 10, file-local 3, layout 14, affinity 4, facade-exports 10
  */
+import { GENERAL_PURPOSE_AGENT } from "./built-in/generalPurposeAgent.js";
+import { COORDINATOR_WORKER_AGENT_TYPE } from "../../coordinator/workerAgent.js";
+import { resolveAgentOverrides, compareAgentsByName, hasSubagentOverride } from "./agentDisplay.js";
+import { FETCH } from "../WebFetchTool/prompt.js";
+import { getAgentColor } from "./agentColorManager.js";
 import { getSlackChannelLink } from "../MCPTool/slackSend.js";
 import {
   jsxProd_default,
@@ -18,7 +23,7 @@ import { Box, Text } from "../../ink/components/Text.js";
 import { Ansi } from "../../ink/components/AnsiText.js";
 import { supportsHyperlinks } from "../../ink/supports-hyperlinks.js";
 import { createHyperlink } from "../../utils/hyperlink.js";
-import { Rh, R } from "../../../vendor/react/cjs/react.production.js";
+import { memo, useRef } from "../../../vendor/react/cjs/react.production.js";
 import { MessageImpl, areMessagePropsEqual } from "../../components/Message.js";
 import { getSearchOrReadFromContent, getSearchReadSummaryText } from "../../utils/collapseReadSearch.js";
 import { logError } from "../../utils/log.js";
@@ -33,11 +38,10 @@ import {
 import { finalContextTokensFromLastResponse } from "../../cli/print.js";
 import { totalTokensOf } from "../../utils/messages/usageAndStopReason.js";
 import { MarkdownText_2 } from "../../components/pluginUi/render/MarkdownBlock.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { MessageResponse } from "../../components/MessageResponse.js";
 import { hasAutoModeBlockedToolResult } from "../../components/messages/teamMemCollapsed.js";
-import { compareAgentsByName, hasSubagentOverride, resolveAgentOverrides } from "./agentDisplay.js";
 import { Byline } from "../../components/design-system/Byline.js";
 import { KeyboardShortcutHint } from "../../components/design-system/KeyboardShortcutHint.js";
 import { ConfigurableShortcutHint } from "../../components/ConfigurableShortcutHint.js";
@@ -48,7 +52,7 @@ import { SubAgentProvider, CtrlOToExpand, OverflowHint } from "../../components/
 import { firstUrlInText } from "../../services/oauth/oauthErrors.js";
 import { WebFetchTool } from "../WebFetchTool/WebFetchTool.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, array, string } from "../../../vendor/zod/v4/classic/schemas.js";
+import { objectSchema, array, stringSchema } from "../../../vendor/zod/v4/classic/schemas.js";
 import { parseUserSpecifiedModel, renderModelName } from "../../utils/model/modelDisplay.js";
 import { getMainLoopModel } from "../../utils/model/model.js";
 import { FallbackToolUseRejectedMessage } from "../../components/FallbackToolUseRejectedMessage.js";
@@ -57,14 +61,40 @@ import { FallbackToolUseErrorMessage } from "../../components/FallbackToolUseErr
 import { count } from "../../utils/collections.js";
 import { getAgentInputSchema } from "./agentInputSchema.js";
 import { dropRelativeEffortInput } from "./agentEffort.js";
-import { getAgentColor } from "./agentColorManager.js";
 import { ToolUseLoader } from "../../components/ToolUseLoader.js";
 import { AgentProgressLine } from "../../components/AgentProgressLine.js";
 import { findToolByName, safeParseToolInput } from "../../Tool.js";
-import { GENERAL_PURPOSE_AGENT } from "./built-in/generalPurposeAgent.js";
-import { COORDINATOR_WORKER_AGENT_TYPE } from "../../coordinator/workerAgent.js";
-import { FETCH } from "../WebFetchTool/prompt.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
+//@ chunk-0tkmvwy0.js:11509-11666 placement = updateAgentFile (1)
+function updateAgentFile(subagentType, activeAgents) {
+  if (!subagentType || subagentType === GENERAL_PURPOSE_AGENT.agentType) return;
+  if (subagentType !== COORDINATOR_WORKER_AGENT_TYPE) return subagentType;
+  let found = activeAgents?.find((agent) => agent.agentType === COORDINATOR_WORKER_AGENT_TYPE);
+  return found !== undefined && found.source !== "built-in" ? subagentType : undefined;
+}
+//@ chunk-0tkmvwy0.js:11666-11808 fingerprint = userFacingName (0.557)
+/**
+ * Agent 工具的 userFacingName：web-fetch 代理显示为 Fetch，否则显示代理显示名或 "Agent"。
+ */
+function userFacingName(input, { activeAgents, webFetchByAgentType = false } = {}) {
+  if (!webFetchByAgentType && resolveAgentOverrides(input?.subagent_type, activeAgents)) return FETCH;
+  return updateAgentFile(input?.subagent_type, activeAgents) ?? "Agent";
+}
+//@ chunk-0tkmvwy0.js:11808-11923 fingerprint = userFacingNameBackgroundColor (0.7)
+/**
+ * Agent 工具名徽标背景色：按 subagent_type 取代理颜色（web-fetch 代理无色）。
+ */
+function userFacingNameBackgroundColor(input, { activeAgents } = {}) {
+  if (!input?.subagent_type || resolveAgentOverrides(input.subagent_type, activeAgents)) return;
+  return getAgentColor(input.subagent_type);
+}
+//@ chunk-8ndmcarc.js:16602-16633 fingerprint = INITIALIZING_TEXT (1)
+/**
+ * 另一个块中的 "Initializing…" 文本与常量 3。
+ */
+var MAX_TAIL_ITEMS = 3;
+var INITIALIZING_TEXT = "Initializing\u2026";
 //@ chunk-ah34pb7m.js:14627-14788 fingerprint = renderToolUseTag (0.843)
 /**
  * Agent 工具调用行后的标签（如模型/链接），支持超链接。
@@ -87,7 +117,10 @@ function renderToolUseTag_2(input) {
 /**
  * AgentTool UI 的进度选择器与消息类型判断。
  */
-var agentProgressSelector = Rh(MessageImpl, areMessagePropsEqual);
+var agentProgressSelector; // deferred: uses MessageImpl (../../components/Message.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-ah34pb7m.js:241692", () => {
+  agentProgressSelector = memo(MessageImpl, areMessagePropsEqual);
+});
 //@ chunk-ah34pb7m.js:241709-241817 fingerprint = hasProgressMessage (1)
 /**
  * 进度 data 是否带 message 对象。
@@ -106,8 +139,8 @@ function isProgressWithMessage(pm_0) {
 }
 //@ chunk-ah34pb7m.js:241850-241958 layout = countToolCallsSince (1)
 function countToolCallsSince(msg) {
-  let d = msg.data.message.message.content[0];
-  return d?.type === "tool_use" || d?.type === "tool_result";
+  let firstBlock = msg.data.message.message.content[0];
+  return firstBlock?.type === "tool_use" || firstBlock?.type === "tool_result";
 }
 //@ chunk-ah34pb7m.js:241958-242220 file-local
 function getProgressMessageToolUseInfo(progressMessage, tools, toolUseByID) {
@@ -150,26 +183,27 @@ function createProgressGroupingState() {
 /**
  * 增量更新代理进度分组状态：工具列表变化或源消息被改写时整体重置，否则只处理新增的进度消息（逐条 EW 归组，异常只记录）。
  */
-function updateProgressGroupingState(m, progressMessages, tools) {
+function updateProgressGroupingState(state, progressMessages, tools) {
   if (!(
-    tools === m.tools &&
-    progressMessages.length >= m.processedSourceCount &&
-    (m.processedSourceCount === 0 || progressMessages[m.processedSourceCount - 1]?.uuid === m.lastSourceUuid)
+    tools === state.tools &&
+    progressMessages.length >= state.processedSourceCount &&
+    (state.processedSourceCount === 0 ||
+      progressMessages[state.processedSourceCount - 1]?.uuid === state.lastSourceUuid)
   )) {
-    Object.assign(m, createProgressGroupingState());
-    m.tools = tools;
+    Object.assign(state, createProgressGroupingState());
+    state.tools = tools;
   }
   for (
-    let processedSourceCount = m.processedSourceCount;
+    let processedSourceCount = state.processedSourceCount;
     processedSourceCount < progressMessages.length;
     processedSourceCount++
   ) {
-    let h = progressMessages[processedSourceCount];
-    if (isProgressWithMessage(h)) {
-      m.processedSourceCount = processedSourceCount + 1;
-      m.lastSourceUuid = h.uuid;
+    let progressMessage = progressMessages[processedSourceCount];
+    if (isProgressWithMessage(progressMessage)) {
+      state.processedSourceCount = processedSourceCount + 1;
+      state.lastSourceUuid = progressMessage.uuid;
       try {
-        accumulateAgentProgress(m, h, tools);
+        accumulateAgentProgress(state, progressMessage, tools);
       } catch (error) {
         logError(error);
       }
@@ -177,14 +211,14 @@ function updateProgressGroupingState(m, progressMessages, tools) {
   }
 }
 //@ chunk-ah34pb7m.js:242920-242988 affinity
-function pushStableRow(m, d) {
-  m.stable.push(d);
-  if (isCountableProgressRow(d)) m.stableCountableCount++;
+function pushStableRow(state, row) {
+  state.stable.push(row);
+  if (isCountableProgressRow(row)) state.stableCountableCount++;
 }
 //@ chunk-ah34pb7m.js:242988-243111 affinity
-function isCountableProgressRow(m) {
-  if (m.type === "summary") return true;
-  return m.message.data.message.message.content.some((d) => d.type === "tool_use");
+function isCountableProgressRow(row) {
+  if (row.type === "summary") return true;
+  return row.message.data.message.message.content.some((block) => block.type === "tool_use");
 }
 //@ chunk-ah34pb7m.js:243164-243293 fingerprint = processProgressMessages (0.624)
 function processProgressMessages(openGroup, isActive) {
@@ -200,52 +234,52 @@ function processProgressMessages(openGroup, isActive) {
 /**
  * 把打开的搜索/读取分组定稿并入稳定行。
  */
-function finalizeOpenGroup(m) {
-  if (m.openGroup && hasSearchOrReadActivity(m.openGroup))
-    pushStableRow(m, processProgressMessages(m.openGroup, false));
-  m.openGroup = null;
+function finalizeOpenGroup(state) {
+  if (state.openGroup && hasSearchOrReadActivity(state.openGroup))
+    pushStableRow(state, processProgressMessages(state.openGroup, false));
+  state.openGroup = null;
 }
 //@ chunk-ah34pb7m.js:243382-244388 layout
 /**
  * 把一条子代理进度消息并入增量渲染状态：记录 tool_use、已解决/出错的 tool_result、服务端工具调用与最新 usage。
  */
-function accumulateAgentProgress(m, d, c) {
-  if (!isProgressWithMessage(d)) return;
-  let g = d;
-  let message = g.data.message;
+function accumulateAgentProgress(state, progressMessage, tools) {
+  if (!isProgressWithMessage(progressMessage)) return;
+  let entry = progressMessage;
+  let message = entry.data.message;
   if (message.type === "assistant") {
-    if (message.isUnmetered !== true) m.latestAssistantUsage = message.message.usage;
-    m.lastRowAssistantMessageId = message.message.id;
-    let M = false;
-    for (let T of message.message.content) {
-      if (T.type === "tool_use") {
-        M = true;
-        m.toolUseByID.set(T.id, T);
-        if (!m.resolvedToolUseIDs.has(T.id)) m.inProgressToolUseIDs.add(T.id);
-      } else if (T.type === "server_tool_use" || T.type === "mcp_tool_use")
-        m.pendingServerToolUses.push({
-          block: T,
+    if (message.isUnmetered !== true) state.latestAssistantUsage = message.message.usage;
+    state.lastRowAssistantMessageId = message.message.id;
+    let sawToolUse = false;
+    for (let block of message.message.content) {
+      if (block.type === "tool_use") {
+        sawToolUse = true;
+        state.toolUseByID.set(block.id, block);
+        if (!state.resolvedToolUseIDs.has(block.id)) state.inProgressToolUseIDs.add(block.id);
+      } else if (block.type === "server_tool_use" || block.type === "mcp_tool_use")
+        state.pendingServerToolUses.push({
+          block,
           messageId: message.message.id,
         });
-      collectResolvedToolUseIds(T, m.resolvedToolUseIDs, m.erroredToolUseIDs);
-      if ("tool_use_id" in T && typeof T.tool_use_id === "string")
-        m.inProgressToolUseIDs.delete(T.tool_use_id);
+      collectResolvedToolUseIds(block, state.resolvedToolUseIDs, state.erroredToolUseIDs);
+      if ("tool_use_id" in block && typeof block.tool_use_id === "string")
+        state.inProgressToolUseIDs.delete(block.tool_use_id);
     }
-    if (M) m.toolUseCount++;
+    if (sawToolUse) state.toolUseCount++;
   } else if (message.type === "user") {
-    m.lastRowAssistantMessageId = undefined;
-    for (let M of message.message.content)
-      if (M.type === "tool_result") {
-        m.resolvedToolUseIDs.add(M.tool_use_id);
-        m.toolResultByToolUseID.set(M.tool_use_id, message);
-        m.inProgressToolUseIDs.delete(M.tool_use_id);
-        if (M.is_error) m.erroredToolUseIDs.add(M.tool_use_id);
+    state.lastRowAssistantMessageId = undefined;
+    for (let block of message.message.content)
+      if (block.type === "tool_result") {
+        state.resolvedToolUseIDs.add(block.tool_use_id);
+        state.toolResultByToolUseID.set(block.tool_use_id, message);
+        state.inProgressToolUseIDs.delete(block.tool_use_id);
+        if (block.is_error) state.erroredToolUseIDs.add(block.tool_use_id);
       }
   }
   if (message.type !== "user")
-    pushStableRow(m, {
+    pushStableRow(state, {
       type: "original",
-      message: g,
+      message: entry,
     });
   return;
 }
@@ -253,50 +287,56 @@ function accumulateAgentProgress(m, d, c) {
 /**
  * 稳定行加上未定稿分组（按参数包含明细）。
  */
-function stableRowsIncludingOpenGroup(m, isActive) {
-  let openGroup = m.openGroup;
-  if (!openGroup || !hasSearchOrReadActivity(openGroup)) return m.stable;
-  return m.stable.concat(processProgressMessages(openGroup, isActive));
+function stableRowsIncludingOpenGroup(state, isActive) {
+  let openGroup = state.openGroup;
+  if (!openGroup || !hasSearchOrReadActivity(openGroup)) return state.stable;
+  return state.stable.concat(processProgressMessages(openGroup, isActive));
 }
 //@ chunk-ah34pb7m.js:244485-244653 layout
-function countStableCountableRows(m, processedMessages, c) {
-  if (c <= 0) return 0;
-  let stableCountableCount = m.stableCountableCount;
-  if (processedMessages.length > m.stable.length) stableCountableCount++;
-  for (let min = Math.min(c, processedMessages.length); min < processedMessages.length; min++)
+function countStableCountableRows(state, processedMessages, openGroupCount) {
+  if (openGroupCount <= 0) return 0;
+  let stableCountableCount = state.stableCountableCount;
+  if (processedMessages.length > state.stable.length) stableCountableCount++;
+  for (let min = Math.min(openGroupCount, processedMessages.length); min < processedMessages.length; min++)
     if (isCountableProgressRow(processedMessages[min])) stableCountableCount--;
   return stableCountableCount;
 }
 //@ chunk-ah34pb7m.js:244653-244751 layout
-function getLatestContextTokens(m) {
-  let d = m.latestAssistantUsage ? finalContextTokensFromLastResponse(m.latestAssistantUsage) : undefined;
-  return d ? totalTokensOf(d) : null;
+function getLatestContextTokens(state) {
+  let tokens = state.latestAssistantUsage
+    ? finalContextTokensFromLastResponse(state.latestAssistantUsage)
+    : undefined;
+  return tokens ? totalTokensOf(tokens) : null;
 }
 //@ chunk-ah34pb7m.js:244751-245220 layout
 /**
  * 为子代理界面构建查找表：待完成的服务端工具调用等。
  */
-function buildSubagentLookups(m) {
-  if (m.pendingServerToolUses.length > 0) {
-    let d = [];
-    for (let pendingServerToolUse of m.pendingServerToolUses) {
-      if (pendingServerToolUse.messageId === m.lastRowAssistantMessageId) {
-        d.push(pendingServerToolUse);
+function buildSubagentLookups(state) {
+  if (state.pendingServerToolUses.length > 0) {
+    let stillPending = [];
+    for (let pendingServerToolUse of state.pendingServerToolUses) {
+      if (pendingServerToolUse.messageId === state.lastRowAssistantMessageId) {
+        stillPending.push(pendingServerToolUse);
         continue;
       }
-      markServerToolUseResolved(pendingServerToolUse.block, m.resolvedToolUseIDs, m.erroredToolUseIDs);
+      markServerToolUseResolved(
+        pendingServerToolUse.block,
+        state.resolvedToolUseIDs,
+        state.erroredToolUseIDs,
+      );
     }
-    m.pendingServerToolUses = d;
+    state.pendingServerToolUses = stillPending;
   }
   return {
     lookups: {
       ...EMPTY_LOOKUPS,
-      toolUseByToolUseID: m.toolUseByID,
-      resolvedToolUseIDs: m.resolvedToolUseIDs,
-      erroredToolUseIDs: m.erroredToolUseIDs,
-      toolResultByToolUseID: m.toolResultByToolUseID,
+      toolUseByToolUseID: state.toolUseByID,
+      resolvedToolUseIDs: state.resolvedToolUseIDs,
+      erroredToolUseIDs: state.erroredToolUseIDs,
+      toolResultByToolUseID: state.toolResultByToolUseID,
     },
-    inProgressToolUseIDs: m.inProgressToolUseIDs,
+    inProgressToolUseIDs: state.inProgressToolUseIDs,
   };
 }
 //@ chunk-ah34pb7m.js:245220-245320 fingerprint = _temp (1)
@@ -347,7 +387,7 @@ var AGENT_ROWS_OVERHEAD = 7;
  * "Prompt:" 区块。
  */
 function AgentPromptDisplay(props) {
-  let $ = w(3);
+  let $ = useMemoCache(3);
   let { prompt, dim } = props;
   if (dim === undefined) false;
   else dim;
@@ -384,7 +424,7 @@ function AgentPromptDisplay(props) {
  * "Response:" 区块。
  */
 function AgentResponseDisplay(props) {
-  let $ = w(5);
+  let $ = useMemoCache(5);
   let { content } = props;
   let t1;
   if ($[0] === MEMO_CACHE_SENTINEL) {
@@ -417,7 +457,7 @@ function AgentResponseDisplay(props) {
  * verbose 下的子代理完整转录。
  */
 function VerboseAgentTranscript(props) {
-  let $ = w(15);
+  let $ = useMemoCache(15);
   let { progressMessages, tools, verbose } = props;
   let t1;
   if ($[0] !== progressMessages) {
@@ -574,25 +614,25 @@ function renderToolResultMessage(
     )
   ) {
     let { report } = splitHarnessNotes(data.content);
-    let bytes = report.reduce((acc, ee) => acc + Buffer.byteLength(ee.text), 0);
-    let X = jsxProd_default(renderToolUseProgressMessage_6, {
+    let bytes = report.reduce((acc, section) => acc + Buffer.byteLength(section.text), 0);
+    let bytesHint = jsxProd_default(renderToolUseProgressMessage_6, {
       bytes,
     });
     return verbose
       ? jsxProd_default_2(Box, {
           flexDirection: "column",
           children: [
-            X,
+            bytesHint,
             jsxProd_default(Box, {
               flexDirection: "column",
               children: jsxProd_default(Text, {
-                children: report.map((z) => z.text).join(`
+                children: report.map((section) => section.text).join(`
 `),
               }),
             }),
           ],
         })
-      : X;
+      : bytesHint;
   }
   let { totalDurationMs, totalToolUseCount, totalTokens, usage, content, prompt } = data;
   let completionMessage = `Done (${[totalToolUseCount === 1 ? "1 tool use" : `${totalToolUseCount} tool uses`, formatNumber(totalTokens) + " tokens", formatDuration(totalDurationMs)].join(" \xB7 ")})`;
@@ -676,56 +716,60 @@ function renderToolResultMessage(
 /**
  * Agent 调用摘要：description；web-fetch 代理改为显示 URL。
  */
-function renderToolUseMessage(m, d) {
-  let { description, prompt, subagent_type: subagentType } = m;
+function renderToolUseMessage(input, options) {
+  let { description, prompt, subagent_type: subagentType } = input;
   if (!description || !prompt) return null;
-  if (!d.isTranscriptMode && resolveAgentOverrides(subagentType, d.activeAgents)) {
-    let h = firstUrlInText(prompt) ?? firstUrlInText(description);
-    if (h !== undefined)
+  if (!options.isTranscriptMode && resolveAgentOverrides(subagentType, options.activeAgents)) {
+    let url = firstUrlInText(prompt) ?? firstUrlInText(description);
+    if (url !== undefined)
       return WebFetchTool.renderToolUseMessage(
         {
-          url: h,
+          url,
         },
-        d,
+        options,
       );
   }
   return description.replace(/\s+/g, " ").trim();
 }
 //@ chunk-ah34pb7m.js:249228-249348 layout
-var ModelsUsedSchema = DoctorLazy(() =>
-  u({
-    modelsUsed: array(string()).optional(),
-    resolvedModel: string().optional(),
-    status: string().optional(),
-    model: string().optional(),
-  }),
-);
+var ModelsUsedSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-ah34pb7m.js:249228", () => {
+  ModelsUsedSchema = DoctorLazy(() =>
+    objectSchema({
+      modelsUsed: array(stringSchema()).optional(),
+      resolvedModel: stringSchema().optional(),
+      status: stringSchema().optional(),
+      model: stringSchema().optional(),
+    }),
+  );
+});
 //@ chunk-ah34pb7m.js:249348-249561 layout
 function getModelsUsedFromResult(toolUseResult) {
-  let d = ModelsUsedSchema().safeParse(toolUseResult);
-  if (!d.success) return [];
-  let { modelsUsed, resolvedModel, status, model } = d.data;
+  let parsed = ModelsUsedSchema().safeParse(toolUseResult);
+  if (!parsed.success) return [];
+  let { modelsUsed, resolvedModel, status, model } = parsed.data;
   if (modelsUsed && modelsUsed.length > 0) return modelsUsed;
   if (resolvedModel) return [resolvedModel];
   if (status === "teammate_spawned" && model) return [parseUserSpecifiedModel(model)];
   return [];
 }
 //@ chunk-ah34pb7m.js:249561-249732 layout
-function getModelsUsed(m) {
-  let reduced = (m?.progressMessages ?? []).reduce(
-    (acc, f) => (f.data.type === "agent_progress" ? (f.data.modelsUsed ?? acc) : acc),
+function getModelsUsed(toolUse) {
+  let reduced = (toolUse?.progressMessages ?? []).reduce(
+    (acc, progressMessage) =>
+      progressMessage.data.type === "agent_progress" ? (progressMessage.data.modelsUsed ?? acc) : acc,
     [],
   );
-  let modelsUsedFromResult = getModelsUsedFromResult(m?.toolUseResult);
+  let modelsUsedFromResult = getModelsUsedFromResult(toolUse?.toolUseResult);
   return modelsUsedFromResult.length > reduced.length ? modelsUsedFromResult : reduced;
 }
 //@ chunk-ah34pb7m.js:249732-250146 facade-exports
 /**
  * 模型标签：子代理换过模型时显示 a → b，非默认模型时显示模型名。
  */
-function renderToolUseTag(m, d) {
+function renderToolUseTag(input, toolUse) {
   let tags = [];
-  let modelsUsed = getModelsUsed(d);
+  let modelsUsed = getModelsUsed(toolUse);
   if (modelsUsed.length > 1)
     tags.push(
       jsxProd_default(
@@ -741,12 +785,12 @@ function renderToolUseTag(m, d) {
         "model",
       ),
     );
-  else if (m.model && m.model !== "inherit") {
-    let f = modelsUsed[0];
-    if (f) {
+  else if (input.model && input.model !== "inherit") {
+    let resolvedModel = modelsUsed[0];
+    if (resolvedModel) {
       let mainLoopModel = getMainLoopModel();
-      let userSpecifiedModel = parseUserSpecifiedModel(m.model);
-      if (f !== mainLoopModel || userSpecifiedModel !== f)
+      let userSpecifiedModel = parseUserSpecifiedModel(input.model);
+      if (resolvedModel !== mainLoopModel || userSpecifiedModel !== resolvedModel)
         tags.push(
           jsxProd_default(
             Box,
@@ -755,7 +799,7 @@ function renderToolUseTag(m, d) {
               marginLeft: 1,
               children: jsxProd_default(Text, {
                 dimColor: true,
-                children: renderModelName(f),
+                children: renderModelName(resolvedModel),
               }),
             },
             "model",
@@ -800,11 +844,11 @@ function renderToolUseProgressMessage_2({
   inProgressToolCallCount,
   isTranscriptMode,
 }) {
-  let progressGroupingStateRef = R(null);
+  let progressGroupingStateRef = useRef(null);
   progressGroupingStateRef.current ??= createProgressGroupingState();
-  let T = progressGroupingStateRef.current;
+  let state = progressGroupingStateRef.current;
   try {
-    updateProgressGroupingState(T, progressMessages, tools);
+    updateProgressGroupingState(state, progressMessages, tools);
     if (!progressMessages.length)
       return jsxProd_default(MessageResponse, {
         height: 1,
@@ -820,7 +864,7 @@ function renderToolUseProgressMessage_2({
       terminalSize.rows &&
       terminalSize.rows < toolToolRenderLinesEstimate
     ) {
-      let latestContextTokens = getLatestContextTokens(T);
+      let latestContextTokens = getLatestContextTokens(state);
       return jsxProd_default(MessageResponse, {
         height: 1,
         children: jsxProd_default_2(Text, {
@@ -829,11 +873,11 @@ function renderToolUseProgressMessage_2({
             "In progress\u2026 \xB7 ",
             jsxProd_default(Text, {
               bold: true,
-              children: T.toolUseCount,
+              children: state.toolUseCount,
             }),
             " tool",
             " ",
-            T.toolUseCount === 1 ? "use" : "uses",
+            state.toolUseCount === 1 ? "use" : "uses",
             latestContextTokens && ` \xB7 ${formatNumber(latestContextTokens)} tokens`,
             " \xB7",
             " ",
@@ -848,14 +892,14 @@ function renderToolUseProgressMessage_2({
         }),
       });
     }
-    let processedMessages = stableRowsIncludingOpenGroup(T, true);
+    let processedMessages = stableRowsIncludingOpenGroup(state, true);
     let displayedMessages = isTranscriptMode
       ? processedMessages
       : processedMessages.slice(-MAX_COLLAPSED_PROGRESS_ROWS);
     let count = isTranscriptMode
       ? 0
       : countStableCountableRows(
-          T,
+          state,
           processedMessages,
           processedMessages.length - MAX_COLLAPSED_PROGRESS_ROWS,
         );
@@ -869,7 +913,8 @@ function renderToolUseProgressMessage_2({
           children: INITIALIZING_TEXT_2,
         }),
       });
-    let { lookups: subagentLookups, inProgressToolUseIDs: collapsedInProgressIDs } = buildSubagentLookups(T);
+    let { lookups: subagentLookups, inProgressToolUseIDs: collapsedInProgressIDs } =
+      buildSubagentLookups(state);
     return jsxProd_default(MessageResponse, {
       children: jsxProd_default_2(Box, {
         flexDirection: "column",
@@ -1010,11 +1055,11 @@ function calculateAgentStats(progressMessages) {
       msg.data.message.type === "assistant" &&
       msg.data.message.isUnmetered !== true,
   );
-  let g =
+  let contextTokens =
     latestAssistant?.data.message.type === "assistant"
       ? finalContextTokensFromLastResponse(latestAssistant.data.message.message.usage)
       : undefined;
-  let tokens = g ? totalTokensOf(g) : null;
+  let tokens = contextTokens ? totalTokensOf(contextTokens) : null;
   return {
     toolUseCount,
     tokens,
@@ -1034,22 +1079,22 @@ function renderGroupedAgentToolUse(toolUses, options) {
     );
     let isTeammateSpawn = result?.output?.status === "teammate_spawned";
     let agentType;
-    let le;
+    let agentName;
     let color;
     let descriptionColor;
     let taskDescription;
     if (isTeammateSpawn && parsedInput.success && parsedInput.data.name) {
       agentType = `@${parsedInput.data.name}`;
-      le = updateAgentFile(parsedInput.data.subagent_type, activeAgents);
+      agentName = updateAgentFile(parsedInput.data.subagent_type, activeAgents);
       taskDescription = parsedInput.data.description?.replace(/\s+/g, " ").trim() || undefined;
-      descriptionColor = le ? getAgentColor(le) : undefined;
+      descriptionColor = agentName ? getAgentColor(agentName) : undefined;
     } else {
       agentType = parsedInput.success
         ? userFacingName(parsedInput.data, {
             activeAgents,
           })
         : "Agent";
-      le = parsedInput.success
+      agentName = parsedInput.success
         ? parsedInput.data.description?.replace(/\s+/g, " ").trim() || undefined
         : undefined;
       color = parsedInput.success
@@ -1059,18 +1104,21 @@ function renderGroupedAgentToolUse(toolUses, options) {
         : undefined;
       taskDescription = undefined;
     }
-    let te =
+    let wantsBackground =
       parsedInput.success &&
       "run_in_background" in parsedInput.data &&
       parsedInput.data.run_in_background === true;
     let outputStatus = result?.output?.status;
     let isAsync =
-      te || outputStatus === "async_launched" || outputStatus === "remote_launched" || isTeammateSpawn;
+      wantsBackground ||
+      outputStatus === "async_launched" ||
+      outputStatus === "remote_launched" ||
+      isTeammateSpawn;
     let name = parsedInput.success ? parsedInput.data.name : undefined;
     return {
       id: param.id,
       agentType,
-      description: le,
+      description: agentName,
       toolUseCount: stats.toolUseCount,
       tokens: stats.tokens,
       isResolved,
@@ -1188,7 +1236,8 @@ function extractLastToolInfo(progressMessages, tools, activeAgents) {
   for (let pm of progressMessages) {
     if (!hasProgressMessage(pm.data)) continue;
     if (pm.data.message.type === "assistant") {
-      for (let x of pm.data.message.message.content) if (x.type === "tool_use") toolUseByID.set(x.id, x);
+      for (let block of pm.data.message.message.content)
+        if (block.type === "tool_use") toolUseByID.set(block.id, block);
     }
   }
   let searchCount = 0;
@@ -1210,13 +1259,15 @@ function extractLastToolInfo(progressMessages, tools, activeAgents) {
     if (!hasProgressMessage(msg.data)) return false;
     let message = msg.data.message;
     if (message.type !== "user") return false;
-    let found = message.message.content.find((E) => E.type === "tool_result");
+    let found = message.message.content.find((block) => block.type === "tool_result");
     if (found?.type !== "tool_result") return false;
-    let b = toolUseByID.get(found.tool_use_id);
-    return getSearchOrReadFromContent(b, tools)?.isREPL !== true;
+    let toolUseBlock = toolUseByID.get(found.tool_use_id);
+    return getSearchOrReadFromContent(toolUseBlock, tools)?.isREPL !== true;
   });
   if (lastToolResult?.data.message.type === "user") {
-    let toolResultBlock = lastToolResult.data.message.message.content.find((x) => x.type === "tool_result");
+    let toolResultBlock = lastToolResult.data.message.message.content.find(
+      (block) => block.type === "tool_result",
+    );
     if (toolResultBlock?.type === "tool_result") {
       let toolUseBlock = toolUseByID.get(toolResultBlock.tool_use_id);
       if (toolUseBlock) {
@@ -1224,13 +1275,13 @@ function extractLastToolInfo(progressMessages, tools, activeAgents) {
         if (!tool) return toolUseBlock.name;
         let input = toolUseBlock.input;
         let parsedInput = safeParseToolInput(tool, input);
-        let B = parsedInput.success ? parsedInput.data : undefined;
+        let parsedInput_2 = parsedInput.success ? parsedInput.data : undefined;
         try {
-          let L = tool.userFacingName(B, {
+          let toolName = tool.userFacingName(parsedInput_2, {
             activeAgents,
           });
-          let summary = tool.getToolUseSummary?.(B);
-          return summary ? `${L}: ${summary}` : L;
+          let summary = tool.getToolUseSummary?.(parsedInput_2);
+          return summary ? `${toolName}: ${summary}` : toolName;
         } catch {
           return toolUseBlock.name;
         }
@@ -1239,35 +1290,6 @@ function extractLastToolInfo(progressMessages, tools, activeAgents) {
   }
   return null;
 }
-//@ chunk-0tkmvwy0.js:11509-11666 placement = updateAgentFile (1)
-function updateAgentFile(subagentType, e) {
-  if (!subagentType || subagentType === GENERAL_PURPOSE_AGENT.agentType) return;
-  if (subagentType !== COORDINATOR_WORKER_AGENT_TYPE) return subagentType;
-  let found = e?.find((f) => f.agentType === COORDINATOR_WORKER_AGENT_TYPE);
-  return found !== undefined && found.source !== "built-in" ? subagentType : undefined;
-}
-//@ chunk-0tkmvwy0.js:11666-11808 fingerprint = userFacingName (0.557)
-/**
- * Agent 工具的 userFacingName：web-fetch 代理显示为 Fetch，否则显示代理显示名或 "Agent"。
- */
-function userFacingName(n, { activeAgents: e, webFetchByAgentType: s = false } = {}) {
-  if (!s && resolveAgentOverrides(n?.subagent_type, e)) return FETCH;
-  return updateAgentFile(n?.subagent_type, e) ?? "Agent";
-}
-//@ chunk-0tkmvwy0.js:11808-11923 fingerprint = userFacingNameBackgroundColor (0.7)
-/**
- * Agent 工具名徽标背景色：按 subagent_type 取代理颜色（web-fetch 代理无色）。
- */
-function userFacingNameBackgroundColor(input, { activeAgents: e } = {}) {
-  if (!input?.subagent_type || resolveAgentOverrides(input.subagent_type, e)) return;
-  return getAgentColor(input.subagent_type);
-}
-//@ chunk-8ndmcarc.js:16602-16633 fingerprint = INITIALIZING_TEXT (1)
-/**
- * 另一个块中的 "Initializing…" 文本与常量 3。
- */
-var MAX_TAIL_ITEMS = 3;
-var INITIALIZING_TEXT = "Initializing\u2026";
 export {
   userFacingName,
   agentProgressSelector,
@@ -1281,4 +1303,8 @@ export {
   renderToolUseTag,
   userFacingNameBackgroundColor,
   renderToolUseTag_2,
+  AgentPromptDisplay,
+  AgentResponseDisplay,
+  extractLastToolInfo,
+  renderToolUseMessage,
 };

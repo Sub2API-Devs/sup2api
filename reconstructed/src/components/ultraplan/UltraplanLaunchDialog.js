@@ -15,11 +15,16 @@ import { getCwd } from "../../utils/cwd.js";
 import { env } from "../../utils/env.js";
 import { isGithubDotCom } from "../../utils/git/githubUrl.js";
 import { isGithubAppInstalled } from "../../utils/background/remote/preconditions.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { useRegisterOverlay } from "../../context/overlayContext.js";
 import { getUltraplanCopy, CCR_TERMS_URL_ULTRAPLAN } from "../../commands/ultraplan.js";
 import { useAppState } from "../../state/AppState.js";
-import { y, fo, Qr, init_react_production } from "../../../vendor/react/cjs/react.production.js";
+import {
+  useState,
+  suspenseTypeExport,
+  use,
+  init_react_production,
+} from "../../../vendor/react/cjs/react.production.js";
 import { useInputRefusalWindow, useRefusalTracker } from "../CustomSelect/selectTypeahead.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import {
@@ -31,18 +36,19 @@ import { Text, Box, Link } from "../../ink/components/Text.js";
 import { Dialog } from "../design-system/Dialog.js";
 import { sanitizeOneLineLabel } from "../EffortMediumNudgeDialog.js";
 import { ModelSelector } from "../agents/ModelSelector.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-18hwfzwa.js:1254974-1255258 placement
 async function isCcrBundleSeedEnabled() {
-  let [currentRepositoryWithHost, x] = await Promise.all([
+  let [currentRepositoryWithHost, bundleSeedGate] = await Promise.all([
     detectCurrentRepositoryWithHost(),
     checkGate_CACHED_OR_BLOCKING("tengu_ccr_bundle_seed_enabled"),
   ]);
-  let D = findGitRoot(getCwd()) !== null && (env.CCR_ENABLE_BUNDLE || x);
-  if (!D)
+  let bundleSeedEnabled = findGitRoot(getCwd()) !== null && (env.CCR_ENABLE_BUNDLE || bundleSeedGate);
+  if (!bundleSeedEnabled)
     return {
       cloneViable: false,
-      bundleSeedEnabled: D,
+      bundleSeedEnabled,
     };
   return {
     cloneViable:
@@ -50,7 +56,7 @@ async function isCcrBundleSeedEnabled() {
       !isNestedGitLabProject(currentRepositoryWithHost) &&
       (!isGithubDotCom(currentRepositoryWithHost.host) ||
         (await isGithubAppInstalled(currentRepositoryWithHost.owner, currentRepositoryWithHost.name))),
-    bundleSeedEnabled: D,
+    bundleSeedEnabled,
   };
 }
 //@ chunk-18hwfzwa.js:1255258-1255303 placement = _temp2 (1)
@@ -62,9 +68,9 @@ function getTermsState() {
   return TERMS_DEFAULT_STATE;
 }
 //@ chunk-18hwfzwa.js:1255329-1255542 placement
-function ultraplanUploadNote(h) {
-  if (!h.bundleSeedEnabled) return null;
-  return h.cloneViable
+function ultraplanUploadNote(sourceState) {
+  if (!sourceState.bundleSeedEnabled) return null;
+  return sourceState.cloneViable
     ? "This will try to clone your git remote and fall back to uploading this repository."
     : "This will upload your repository to a cloud session.";
 }
@@ -76,43 +82,43 @@ var TERMS_DEFAULT_STATE = {
 var NOTHING_PRINTABLE_TEXT = "(nothing printable)";
 //@ chunk-18hwfzwa.js:1255614-1257026 placement
 function UltraplanLaunchDialog(props) {
-  let $ = w(27);
+  let $ = useMemoCache(27);
   let { promptIdentifier, showTerms, prompt, deliveredByRelay, onDone, wouldTakeAnswer } = props;
   useRegisterOverlay("ultraplan-launch");
-  let He;
+  let copy;
   if ($[0] !== promptIdentifier) {
-    He = getUltraplanCopy(promptIdentifier);
+    copy = getUltraplanCopy(promptIdentifier);
     $[0] = promptIdentifier;
-    $[1] = He;
-  } else He = $[1];
-  let We = He;
+    $[1] = copy;
+  } else copy = $[1];
+  let copy_ = copy;
   let replBridgeEnabled = useAppState(selectReplBridgeEnabled);
-  let Xe;
+  let loadSourceState;
   if ($[2] !== showTerms) {
-    Xe = () => (showTerms ? isCcrBundleSeedEnabled().catch(getTermsState) : null);
+    loadSourceState = () => (showTerms ? isCcrBundleSeedEnabled().catch(getTermsState) : null);
     $[2] = showTerms;
-    $[3] = Xe;
-  } else Xe = $[3];
-  let [rt] = y(Xe);
+    $[3] = loadSourceState;
+  } else loadSourceState = $[3];
+  let [sourcePromise] = useState(loadSourceState);
   let inputRefusalWindow = useInputRefusalWindow();
   let { refusedWithin, noteRefused } = useRefusalTracker();
-  let Ot;
+  let handleChoice;
   if ($[4] !== onDone) {
-    Ot = function Dt(Et) {
-      onDone(Et);
+    handleChoice = function onChoice(choice) {
+      onDone(choice);
     };
     $[4] = onDone;
-    $[5] = Ot;
-  } else Ot = $[5];
-  let Dt = Ot;
-  let Lt;
+    $[5] = handleChoice;
+  } else handleChoice = $[5];
+  let onChoice_ = handleChoice;
+  let refuseInput;
   if (
     $[6] !== inputRefusalWindow ||
     $[7] !== noteRefused ||
     $[8] !== refusedWithin ||
     $[9] !== wouldTakeAnswer
   ) {
-    Lt = function oo() {
+    refuseInput = function refuseInput_() {
       if (inputRefusalWindow() || refusedWithin()) {
         noteRefused();
         return true;
@@ -123,13 +129,13 @@ function UltraplanLaunchDialog(props) {
     $[7] = noteRefused;
     $[8] = refusedWithin;
     $[9] = wouldTakeAnswer;
-    $[10] = Lt;
-  } else Lt = $[10];
-  let refuseInput = Lt;
+    $[10] = refuseInput;
+  } else refuseInput = $[10];
+  let refuseInput_2 = refuseInput;
   let onCancel;
-  if ($[11] !== Dt) {
-    onCancel = () => Dt("cancel");
-    $[11] = Dt;
+  if ($[11] !== onChoice_) {
+    onCancel = () => onChoice_("cancel");
+    $[11] = onChoice_;
     $[12] = onCancel;
   } else onCancel = $[12];
   let fallback;
@@ -142,78 +148,78 @@ function UltraplanLaunchDialog(props) {
   } else fallback = $[13];
   let children;
   if (
-    $[14] !== Dt ||
-    $[15] !== We ||
+    $[14] !== onChoice_ ||
+    $[15] !== copy_ ||
     $[16] !== deliveredByRelay ||
     $[17] !== prompt ||
-    $[18] !== refuseInput ||
+    $[18] !== refuseInput_2 ||
     $[19] !== replBridgeEnabled ||
     $[20] !== showTerms ||
-    $[21] !== rt
+    $[21] !== sourcePromise
   ) {
-    children = jsxProd_default(fo, {
+    children = jsxProd_default(suspenseTypeExport, {
       fallback,
       children: jsxProd_default(UltraplanLaunchBody, {
         showTerms,
         prompt,
         deliveredByRelay,
-        sourcePromise: rt,
-        copy: We,
+        sourcePromise,
+        copy: copy_,
         replBridgeEnabled,
-        onChoice: Dt,
-        refuseInput,
+        onChoice: onChoice_,
+        refuseInput: refuseInput_2,
       }),
     });
-    $[14] = Dt;
-    $[15] = We;
+    $[14] = onChoice_;
+    $[15] = copy_;
     $[16] = deliveredByRelay;
     $[17] = prompt;
-    $[18] = refuseInput;
+    $[18] = refuseInput_2;
     $[19] = replBridgeEnabled;
     $[20] = showTerms;
-    $[21] = rt;
+    $[21] = sourcePromise;
     $[22] = children;
   } else children = $[22];
-  let po;
-  if ($[23] !== We.timeEstimate || $[24] !== onCancel || $[25] !== children) {
-    po = jsxProd_default(Dialog, {
+  let dialogElement;
+  if ($[23] !== copy_.timeEstimate || $[24] !== onCancel || $[25] !== children) {
+    dialogElement = jsxProd_default(Dialog, {
       title: "Run ultraplan in the cloud?",
-      subtitle: We.timeEstimate,
+      subtitle: copy_.timeEstimate,
       onCancel,
       children,
     });
-    $[23] = We.timeEstimate;
+    $[23] = copy_.timeEstimate;
     $[24] = onCancel;
     $[25] = children;
-    $[26] = po;
-  } else po = $[26];
-  return po;
+    $[26] = dialogElement;
+  } else dialogElement = $[26];
+  return dialogElement;
 }
 //@ chunk-18hwfzwa.js:1257026-1259550 placement
 function UltraplanLaunchBody(props) {
-  let $ = w(41);
+  let $ = useMemoCache(41);
   let { showTerms, prompt, deliveredByRelay, sourcePromise, copy, replBridgeEnabled, onChoice, refuseInput } =
     props;
-  let We = sourcePromise ? Qr(sourcePromise) : null;
-  let Xe;
-  if ($[0] !== We) {
-    Xe = We && ultraplanUploadNote(We);
-    $[0] = We;
-    $[1] = Xe;
-  } else Xe = $[1];
-  let rt = Xe;
-  let kt;
+  let sourceState = sourcePromise ? use(sourcePromise) : null;
+  let uploadNote;
+  if ($[0] !== sourceState) {
+    uploadNote = sourceState && ultraplanUploadNote(sourceState);
+    $[0] = sourceState;
+    $[1] = uploadNote;
+  } else uploadNote = $[1];
+  let uploadNote_ = uploadNote;
+  let promptLabel;
   if ($[2] !== prompt) {
-    kt = sanitizeOneLineLabel(prompt);
+    promptLabel = sanitizeOneLineLabel(prompt);
     $[2] = prompt;
-    $[3] = kt;
-  } else kt = $[3];
-  let At = kt;
+    $[3] = promptLabel;
+  } else promptLabel = $[3];
+  let promptText = promptLabel;
   let inputRefusalWindow = useInputRefusalWindow();
   let { refusedWithin, noteRefused } = useRefusalTracker();
-  let Dt;
+  let isInputRefused;
   if ($[4] !== inputRefusalWindow || $[5] !== noteRefused || $[6] !== refusedWithin) {
-    Dt = function Lt() {
+    isInputRefused = function isInputRefused_() {
       if (inputRefusalWindow() || refusedWithin()) {
         noteRefused();
         return true;
@@ -223,39 +229,39 @@ function UltraplanLaunchBody(props) {
     $[4] = inputRefusalWindow;
     $[5] = noteRefused;
     $[6] = refusedWithin;
-    $[7] = Dt;
-  } else Dt = $[7];
-  let Lt = Dt;
+    $[7] = isInputRefused;
+  } else isInputRefused = $[7];
+  let refuseInputLocal = isInputRefused;
   const children = deliveredByRelay ? "Prompt (sent from a connected channel): " : "Prompt: ";
-  let Xt;
+  let promptLabelElement;
   if ($[8] !== children) {
-    Xt = jsxProd_default(Text, {
+    promptLabelElement = jsxProd_default(Text, {
       dimColor: true,
       children,
     });
     $[8] = children;
-    $[9] = Xt;
-  } else Xt = $[9];
-  const io = At === "" ? NOTHING_PRINTABLE_TEXT : At;
-  let so;
-  if ($[10] !== Xt || $[11] !== io) {
-    so = jsxProd_default_2(Text, {
+    $[9] = promptLabelElement;
+  } else promptLabelElement = $[9];
+  const promptDisplay = promptText === "" ? NOTHING_PRINTABLE_TEXT : promptText;
+  let promptElement;
+  if ($[10] !== promptLabelElement || $[11] !== promptDisplay) {
+    promptElement = jsxProd_default_2(Text, {
       wrap: "truncate-end",
-      children: [Xt, io],
+      children: [promptLabelElement, promptDisplay],
     });
-    $[10] = Xt;
-    $[11] = io;
-    $[12] = so;
-  } else so = $[12];
-  let po;
+    $[10] = promptLabelElement;
+    $[11] = promptDisplay;
+    $[12] = promptElement;
+  } else promptElement = $[12];
+  let bodyElement;
   if (
     $[13] !== copy.dialogBody ||
     $[14] !== copy.dialogPipeline ||
     $[15] !== replBridgeEnabled ||
     $[16] !== showTerms ||
-    $[17] !== rt
+    $[17] !== uploadNote_
   ) {
-    po = showTerms
+    bodyElement = showTerms
       ? jsxProd_default_2(Fragment, {
           children: [
             jsxProd_default(Text, {
@@ -265,10 +271,10 @@ function UltraplanLaunchBody(props) {
             jsxProd_default_2(Box, {
               flexDirection: "column",
               children: [
-                rt &&
+                uploadNote_ &&
                   jsxProd_default(Text, {
                     dimColor: true,
-                    children: rt,
+                    children: uploadNote_,
                   }),
                 jsxProd_default_2(Text, {
                   dimColor: true,
@@ -314,13 +320,13 @@ function UltraplanLaunchBody(props) {
     $[14] = copy.dialogPipeline;
     $[15] = replBridgeEnabled;
     $[16] = showTerms;
-    $[17] = rt;
-    $[18] = po;
-  } else po = $[18];
+    $[17] = uploadNote_;
+    $[18] = bodyElement;
+  } else bodyElement = $[18];
   let refuseInput_2;
-  if ($[19] !== Lt || $[20] !== refuseInput) {
-    refuseInput_2 = () => Lt() || refuseInput();
-    $[19] = Lt;
+  if ($[19] !== refuseInputLocal || $[20] !== refuseInput) {
+    refuseInput_2 = () => refuseInputLocal() || refuseInput();
+    $[19] = refuseInputLocal;
     $[20] = refuseInput;
     $[21] = refuseInput_2;
   } else refuseInput_2 = $[21];
@@ -328,49 +334,49 @@ function UltraplanLaunchBody(props) {
   const description = replBridgeEnabled
     ? "Disable remote control and launch in a cloud session"
     : "launch in a cloud session";
-  let Ao;
+  let runOption;
   if ($[22] !== label || $[23] !== description) {
-    Ao = {
+    runOption = {
       label,
       value: "run",
       description,
     };
     $[22] = label;
     $[23] = description;
-    $[24] = Ao;
-  } else Ao = $[24];
+    $[24] = runOption;
+  } else runOption = $[24];
   const label_2 = showTerms ? "No" : "Not now";
-  let Ro;
+  let cancelOption;
   if ($[25] !== label_2) {
-    Ro = {
+    cancelOption = {
       label: label_2,
       value: "cancel",
     };
     $[25] = label_2;
-    $[26] = Ro;
-  } else Ro = $[26];
+    $[26] = cancelOption;
+  } else cancelOption = $[26];
   let options;
-  if ($[27] !== Ao || $[28] !== Ro) {
-    options = [Ao, Ro];
-    $[27] = Ao;
-    $[28] = Ro;
+  if ($[27] !== runOption || $[28] !== cancelOption) {
+    options = [runOption, cancelOption];
+    $[27] = runOption;
+    $[28] = cancelOption;
     $[29] = options;
   } else options = $[29];
   let onChange;
-  if ($[30] !== onChoice || $[31] !== Lt) {
-    onChange = (Wo) => {
-      if (Lt()) {
+  if ($[30] !== onChoice || $[31] !== refuseInputLocal) {
+    onChange = (value) => {
+      if (refuseInputLocal()) {
         return;
       }
-      if (Wo !== "cancelled") onChoice(Wo);
+      if (value !== "cancelled") onChoice(value);
     };
     $[30] = onChoice;
-    $[31] = Lt;
+    $[31] = refuseInputLocal;
     $[32] = onChange;
   } else onChange = $[32];
-  let mn;
+  let selectorElement;
   if ($[33] !== options || $[34] !== onChange || $[35] !== refuseInput_2) {
-    mn = jsxProd_default(ModelSelector, {
+    selectorElement = jsxProd_default(ModelSelector, {
       refuseInput: refuseInput_2,
       selectedValue: "cancelled",
       options,
@@ -379,32 +385,35 @@ function UltraplanLaunchBody(props) {
     $[33] = options;
     $[34] = onChange;
     $[35] = refuseInput_2;
-    $[36] = mn;
-  } else mn = $[36];
-  let Cn;
-  if ($[37] !== mn || $[38] !== so || $[39] !== po) {
-    Cn = jsxProd_default_2(Box, {
+    $[36] = selectorElement;
+  } else selectorElement = $[36];
+  let bodyElement_;
+  if ($[37] !== selectorElement || $[38] !== promptElement || $[39] !== bodyElement) {
+    bodyElement_ = jsxProd_default_2(Box, {
       flexDirection: "column",
       gap: 1,
-      children: [so, po, mn],
+      children: [promptElement, bodyElement, selectorElement],
     });
-    $[37] = mn;
-    $[38] = so;
-    $[39] = po;
-    $[40] = Cn;
-  } else Cn = $[40];
-  return Cn;
+    $[37] = selectorElement;
+    $[38] = promptElement;
+    $[39] = bodyElement;
+    $[40] = bodyElement_;
+  } else bodyElement_ = $[40];
+  return bodyElement_;
 }
 //@ chunk-18hwfzwa.js:1259550-1259554 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:1259550", () => {
+  init_react_production();
+});
 //@ chunk-18hwfzwa.js:1259554-1259603 placement
-function renderPlainText(children, We) {
+function renderPlainText(children, key) {
   return jsxProd_default(
     Text,
     {
       children,
     },
-    We,
+    key,
   );
 }
 export { renderPlainText, UltraplanLaunchDialog };

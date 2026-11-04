@@ -8,7 +8,12 @@
  * pieces: chunk-s5p7fp0c.js (13)
  * attribution: placement 13
  */
-import { init_react_production, y, Oo, P } from "../../vendor/react/cjs/react.production.js";
+import {
+  init_react_production,
+  useState,
+  useEffectEvent,
+  useEffect,
+} from "../../vendor/react/cjs/react.production.js";
 import { logFeatureOk, logFeatureSad, logFeatureBad } from "../services/analytics/featureTelemetry.js";
 import {
   resolveConsoleProfileTarget,
@@ -34,7 +39,7 @@ import { refreshRemoteManagedSettings } from "../services/remoteManagedSettings/
 import { logError } from "../utils/log.js";
 import { errorKindForTelemetry } from "../services/policyLimits/startupGate.js";
 import { refreshPolicyLimits } from "../services/policyLimits/PolicyLimitsClient.js";
-import { w } from "../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import { useTheme_2 } from "./design-system/ThemeProvider.js";
 import {
   GatewayLoginFlow,
@@ -62,9 +67,13 @@ import { AutoRunIssueNotification } from "../utils/autoRunIssue.js";
 import { ConfirmSelect } from "./design-system/ConfirmSelect.js";
 import { Spinner } from "./Spinner.js";
 import { usePermissionExplainerUI } from "./permissions/PermissionExplanation.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-s5p7fp0c.js:2310-2314 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-s5p7fp0c.js:2310", () => {
+  init_react_production();
+});
 //@ chunk-s5p7fp0c.js:2314-2496 placement
 /**
  * Console 账号登录被拒的错误；fallbackCures 表示改用其他登录方式可解决，causeSummary 为原因摘要。
@@ -72,23 +81,23 @@ init_react_production();
 class ConsoleProfileLoginError extends Error {
   fallbackCures;
   causeSummary;
-  constructor(message, o) {
+  constructor(message, options) {
     super(message, {
-      cause: o.cause,
+      cause: options.cause,
     });
-    this.fallbackCures = o.fallbackCures;
-    this.causeSummary = o.fallbackCures ? o.causeSummary : null;
+    this.fallbackCures = options.fallbackCures;
+    this.causeSummary = options.fallbackCures ? options.causeSummary : null;
   }
 }
 //@ chunk-s5p7fp0c.js:2496-2771 placement
 /**
  * 执行 Console 账号登录并记录 oauth_console_profile_login 结果（成功/被拒后回退/失败）。
  */
-async function loginWithConsoleProfile(oauthService, o, D = {}) {
+async function loginWithConsoleProfile(oauthService, profile, options = {}) {
   try {
-    let M = await performConsoleProfileLogin(oauthService, o, D);
+    let result = await performConsoleProfileLogin(oauthService, profile, options);
     logFeatureOk("oauth_console_profile_login");
-    return M;
+    return result;
   } catch (error) {
     if (error instanceof ConsoleProfileLoginError && error.fallbackCures)
       logFeatureSad("oauth_console_profile_login", "refused_fell_back");
@@ -105,8 +114,8 @@ async function loginWithConsoleProfile(oauthService, o, D = {}) {
  * Console 账号登录主体：预检可能拒绝（包成 ConsoleProfileLoginError），走 OAuth 流程、校验令牌、吊销被替换的 claude.ai 登录、安装令牌并保存账号信息；保存失败时撤销令牌。
  */
 async function performConsoleProfileLogin(
-  A,
-  o,
+  oauthService,
+  profile,
   { loginHint, loginMethod, orgUUID, onCallbackListenerUnavailable, onInstallStart },
 ) {
   try {
@@ -129,7 +138,7 @@ async function performConsoleProfileLogin(
           },
     );
   }
-  let U = await A.startOAuthFlow(o, {
+  let login = await oauthService.startOAuthFlow(profile, {
     loginWithClaudeAi: false,
     oauthClient: {
       clientId: CONSOLE_PROFILE_CLIENT_ID,
@@ -140,33 +149,33 @@ async function performConsoleProfileLogin(
     orgUUID,
     onCallbackListenerUnavailable,
   });
-  let tokenResult = GATEWAY_LOGIN_ERROR_TEXTS(U);
+  let tokenResult = GATEWAY_LOGIN_ERROR_TEXTS(login);
   if (tokenResult instanceof Error) {
-    await refreshGatewayToken(U);
+    await refreshGatewayToken(login);
     throw tokenResult;
   }
   await revokeReplacedClaudeAiLogin(await readStoredClaudeAiLogin());
   onInstallStart?.();
-  let installed = await installOAuthTokens(U, {});
+  let installed = await installOAuthTokens(login, {});
   let savedProfile;
   try {
-    let tokenAccount = U.tokenAccount;
+    let tokenAccount = login.tokenAccount;
     savedProfile = await saveConsoleProfileLogin({
-      accessToken: U.accessToken,
+      accessToken: login.accessToken,
       refreshToken: tokenResult.refreshToken,
       expiresAtMs: tokenResult.expiresAtMs,
-      scopes: U.scopes,
-      organizationUuid: tokenAccount?.organizationUuid ?? U.profile?.organization.uuid,
-      organizationName: tokenAccount?.organizationName ?? U.profile?.organization.name,
-      accountEmail: tokenAccount?.emailAddress ?? U.profile?.account.email,
+      scopes: login.scopes,
+      organizationUuid: tokenAccount?.organizationUuid ?? login.profile?.organization.uuid,
+      organizationName: tokenAccount?.organizationName ?? login.profile?.organization.name,
+      accountEmail: tokenAccount?.emailAddress ?? login.profile?.account.email,
       workspaceId: tokenAccount?.workspaceId,
       workspaceName: tokenAccount?.workspaceName,
     });
   } catch (error) {
-    if (!(await isStoredRefreshToken(tokenResult.refreshToken))) await refreshGatewayToken(U);
+    if (!(await isStoredRefreshToken(tokenResult.refreshToken))) await refreshGatewayToken(login);
     throw error;
   }
-  await fetchAndStoreUserRoles(U.accessToken).catch((error) =>
+  await fetchAndStoreUserRoles(login.accessToken).catch((error) =>
     logForDebugging(String(error), {
       level: "error",
     }),
@@ -194,8 +203,8 @@ async function revokeReplacedClaudeAiLogin(storedClaudeAiLogin) {
   if (storedClaudeAiLogin === null) return;
   await revokeOAuthToken(storedClaudeAiLogin.refreshToken, storedClaudeAiLogin.clientId);
   try {
-    await getSecureStorage().mutate((o) => ({
-      ...o,
+    await getSecureStorage().mutate((secureState) => ({
+      ...secureState,
       claudeAiOauth: undefined,
     }));
   } catch (error) {
@@ -208,39 +217,41 @@ async function revokeReplacedClaudeAiLogin(storedClaudeAiLogin) {
   }
 }
 //@ chunk-s5p7fp0c.js:4312-4818 placement
-function GATEWAY_LOGIN_ERROR_TEXTS(A) {
-  if (!A.scopes.includes(CLAUDE_AI_INFERENCE_SCOPE))
+function GATEWAY_LOGIN_ERROR_TEXTS(login) {
+  if (!login.scopes.includes(CLAUDE_AI_INFERENCE_SCOPE))
     return Error(
       "The organization didn't grant inference access to this sign-in, so Claude Code can't use it.",
     );
-  if (!A.refreshToken)
+  if (!login.refreshToken)
     return Error(
       "The sign-in came back without a refresh token, so it would stop working within hours. Try again.",
     );
-  if (A.expiresAt === null || !Number.isFinite(A.expiresAt))
+  if (login.expiresAt === null || !Number.isFinite(login.expiresAt))
     return Error(
       "The sign-in came back without the token's expiry, so it can't be refreshed on time. Try again.",
     );
   return {
-    refreshToken: A.refreshToken,
-    expiresAtMs: A.expiresAt,
+    refreshToken: login.refreshToken,
+    expiresAtMs: login.expiresAt,
   };
 }
 //@ chunk-s5p7fp0c.js:4818-4886 placement
-async function refreshGatewayToken(A) {
-  if (A.refreshToken) await revokeOAuthToken(A.refreshToken, CONSOLE_PROFILE_CLIENT_ID);
+async function refreshGatewayToken(login) {
+  if (login.refreshToken) await revokeOAuthToken(login.refreshToken, CONSOLE_PROFILE_CLIENT_ID);
 }
 //@ chunk-s5p7fp0c.js:4886-5325 placement
 function MANAGED_RELOAD_NOTICES({ showSecurityDialog, storageV5, credentials }) {
-  let M = refreshRemoteManagedSettings(showSecurityDialog, storageV5, credentials).catch((error) => {
-    logError(
-      new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        `Reloading the organization's managed settings after a sign-in threw (${errorKindForTelemetry(error)})`,
-        "Reloading the organization's managed settings after a sign-in threw",
-      ),
-    );
-    return false;
-  });
+  let settingsReload = refreshRemoteManagedSettings(showSecurityDialog, storageV5, credentials).catch(
+    (error) => {
+      logError(
+        new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
+          `Reloading the organization's managed settings after a sign-in threw (${errorKindForTelemetry(error)})`,
+          "Reloading the organization's managed settings after a sign-in threw",
+        ),
+      );
+      return false;
+    },
+  );
   refreshPolicyLimits().catch((error) =>
     logError(
       new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
@@ -249,10 +260,13 @@ function MANAGED_RELOAD_NOTICES({ showSecurityDialog, storageV5, credentials }) 
       ),
     ),
   );
-  return M;
+  return settingsReload;
 }
 //@ chunk-s5p7fp0c.js:5325-5329 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-s5p7fp0c.js:5325", () => {
+  init_react_production();
+});
 //@ chunk-s5p7fp0c.js:5329-5352 placement
 function returnFalse() {
   return false;
@@ -266,119 +280,119 @@ function isEscape(input, key) {
  * 网关登录界面：显示网关 URL 来源（设置文件或托管设置）并完成登录
  */
 function GatewayLogin(props) {
-  let i = w(87);
+  let $ = useMemoCache(87);
   let { onDone, onCancel, initialUrl, namedBy, internalNetworks, screenLocked } = props;
   let { credentials } = useTheme_2();
-  let ae;
-  if (i[0] !== credentials) {
-    ae = () => new GatewayLoginFlow(credentials, openValidatedUrlSucceeded);
-    i[0] = credentials;
-    i[1] = ae;
-  } else ae = i[1];
-  let [x] = y(ae);
-  let storeSelector = useStoreSelector(x.status);
-  let Q = initialUrl ?? undefined?.url;
-  let ue;
-  if (i[2] !== namedBy) {
-    ue =
+  let createFlow;
+  if ($[0] !== credentials) {
+    createFlow = () => new GatewayLoginFlow(credentials, openValidatedUrlSucceeded);
+    $[0] = credentials;
+    $[1] = createFlow;
+  } else createFlow = $[1];
+  let [flow] = useState(createFlow);
+  let storeSelector = useStoreSelector(flow.status);
+  let gatewayUrl = initialUrl ?? undefined?.url;
+  let caption;
+  if ($[2] !== namedBy) {
+    caption =
       undefined?.caption ??
       (namedBy === "developer"
         ? `Gateway URL from your settings file (${getSettingsFilePathForSource("userSettings")}), not from your organization's managed settings.`
         : "Your organization's gateway URL (set by managed settings):");
-    i[2] = namedBy;
-    i[3] = ue;
-  } else ue = i[3];
-  let children = ue;
-  let oe = Oo(onDone);
-  let se;
-  if (i[4] !== oe || i[5] !== x) {
-    se = () => {
-      let De = x.status.subscribe(() => {
-        if (x.status.getSnapshot().state === "done") oe();
+    $[2] = namedBy;
+    $[3] = caption;
+  } else caption = $[3];
+  let children = caption;
+  let finish = useEffectEvent(onDone);
+  let subscribeStatus;
+  if ($[4] !== finish || $[5] !== flow) {
+    subscribeStatus = () => {
+      let unsubscribe = flow.status.subscribe(() => {
+        if (flow.status.getSnapshot().state === "done") finish();
       });
       return () => {
-        De();
-        x.cancel();
+        unsubscribe();
+        flow.cancel();
       };
     };
-    i[4] = oe;
-    i[5] = x;
-    i[6] = se;
-  } else se = i[6];
-  let Oe;
-  if (i[7] !== x) {
-    Oe = [x];
-    i[7] = x;
-    i[8] = Oe;
-  } else Oe = i[8];
-  P(se, Oe);
-  let v;
-  if (i[9] !== onCancel || i[10] !== screenLocked || i[11] !== x) {
-    v = function E() {
-      if (screenLocked) x.restart();
+    $[4] = finish;
+    $[5] = flow;
+    $[6] = subscribeStatus;
+  } else subscribeStatus = $[6];
+  let statusDeps;
+  if ($[7] !== flow) {
+    statusDeps = [flow];
+    $[7] = flow;
+    $[8] = statusDeps;
+  } else statusDeps = $[8];
+  useEffect(subscribeStatus, statusDeps);
+  let cancelOrRestart;
+  if ($[9] !== onCancel || $[10] !== screenLocked || $[11] !== flow) {
+    cancelOrRestart = function handleCancel() {
+      if (screenLocked) flow.restart();
       else {
-        x.cancel();
+        flow.cancel();
         onCancel();
       }
     };
-    i[9] = onCancel;
-    i[10] = screenLocked;
-    i[11] = x;
-    i[12] = v;
-  } else v = i[12];
-  let E = v;
+    $[9] = onCancel;
+    $[10] = screenLocked;
+    $[11] = flow;
+    $[12] = cancelOrRestart;
+  } else cancelOrRestart = $[12];
+  let handleCancel = cancelOrRestart;
   let isActive = storeSelector.state === "url_input";
-  let we;
-  if (i[13] !== Q || i[14] !== internalNetworks || i[15] !== namedBy || i[16] !== x) {
-    we = () => {
-      if (Q)
-        x.connect({
-          url: Q,
+  let connectNow;
+  if ($[13] !== gatewayUrl || $[14] !== internalNetworks || $[15] !== namedBy || $[16] !== flow) {
+    connectNow = () => {
+      if (gatewayUrl)
+        flow.connect({
+          url: gatewayUrl,
           namedBy,
           internalNetworks,
         });
     };
-    i[13] = Q;
-    i[14] = internalNetworks;
-    i[15] = namedBy;
-    i[16] = x;
-    i[17] = we;
-  } else we = i[17];
-  let pe;
-  if (i[18] !== isActive) {
-    pe = {
+    $[13] = gatewayUrl;
+    $[14] = internalNetworks;
+    $[15] = namedBy;
+    $[16] = flow;
+    $[17] = connectNow;
+  } else connectNow = $[17];
+  let confirmYesOptions;
+  if ($[18] !== isActive) {
+    confirmYesOptions = {
       context: "Confirmation",
       isActive,
     };
-    i[18] = isActive;
-    i[19] = pe;
-  } else pe = i[19];
-  useKeybinding("confirm:yes", we, pe);
-  let Ce;
-  if (i[20] !== isActive) {
-    Ce = {
+    $[18] = isActive;
+    $[19] = confirmYesOptions;
+  } else confirmYesOptions = $[19];
+  useKeybinding("confirm:yes", connectNow, confirmYesOptions);
+  let confirmNoOptions;
+  if ($[20] !== isActive) {
+    confirmNoOptions = {
       context: "Confirmation",
       isActive,
     };
-    i[20] = isActive;
-    i[21] = Ce;
-  } else Ce = i[21];
-  useKeybinding("confirm:no", screenLocked ? returnFalse : onCancel, Ce);
+    $[20] = isActive;
+    $[21] = confirmNoOptions;
+  } else confirmNoOptions = $[21];
+  useKeybinding("confirm:no", screenLocked ? returnFalse : onCancel, confirmNoOptions);
   const isActive_2 = storeSelector.state === "saving" || storeSelector.state === "done";
-  let V;
-  if (i[22] !== isActive_2) {
-    V = {
+  let escapeOptions;
+  if ($[22] !== isActive_2) {
+    escapeOptions = {
       isActive: isActive_2,
     };
-    i[22] = isActive_2;
-    i[23] = V;
-  } else V = i[23];
-  switch ((usePreDispatchKeyHandler(isEscape, V), storeSelector.state)) {
+    $[22] = isActive_2;
+    $[23] = escapeOptions;
+  } else escapeOptions = $[23];
+  switch ((usePreDispatchKeyHandler(isEscape, escapeOptions), storeSelector.state)) {
     case "url_input": {
-      if (!Q) {
-        let T;
-        if (i[24] === MEMO_CACHE_SENTINEL) {
-          T = jsxProd_default_2(Box, {
+      if (!gatewayUrl) {
+        let missingUrlView;
+        if ($[24] === MEMO_CACHE_SENTINEL) {
+          missingUrlView = jsxProd_default_2(Box, {
             flexDirection: "column",
             gap: 1,
             children: [
@@ -392,94 +406,98 @@ function GatewayLogin(props) {
               }),
             ],
           });
-          i[24] = T;
-        } else T = i[24];
-        return T;
+          $[24] = missingUrlView;
+        } else missingUrlView = $[24];
+        return missingUrlView;
       }
-      let T;
-      if (i[25] === MEMO_CACHE_SENTINEL) {
-        T = jsxProd_default(Text, {
+      let titleText;
+      if ($[25] === MEMO_CACHE_SENTINEL) {
+        titleText = jsxProd_default(Text, {
           bold: true,
           children: "Cloud gateway",
         });
-        i[25] = T;
-      } else T = i[25];
-      let Y;
-      if (i[26] !== children) {
-        Y = jsxProd_default(Text, {
+        $[25] = titleText;
+      } else titleText = $[25];
+      let captionText;
+      if ($[26] !== children) {
+        captionText = jsxProd_default(Text, {
           children,
         });
-        i[26] = children;
-        i[27] = Y;
-      } else Y = i[27];
-      let B;
-      if (i[28] !== Q) {
-        B = jsxProd_default(Box, {
+        $[26] = children;
+        $[27] = captionText;
+      } else captionText = $[27];
+      let urlBox;
+      if ($[28] !== gatewayUrl) {
+        urlBox = jsxProd_default(Box, {
           borderDimColor: true,
           borderStyle: "round",
           paddingLeft: 1,
           children: jsxProd_default(Text, {
-            children: Q,
+            children: gatewayUrl,
           }),
         });
-        i[28] = Q;
-        i[29] = B;
-      } else B = i[29];
-      const u = screenLocked ? "" : " \xB7 Esc for other login methods";
-      let p;
-      if (i[30] !== u) {
-        p = jsxProd_default_2(Text, {
+        $[28] = gatewayUrl;
+        $[29] = urlBox;
+      } else urlBox = $[29];
+      const escapeHint = screenLocked ? "" : " \xB7 Esc for other login methods";
+      let pressEnterText;
+      if ($[30] !== escapeHint) {
+        pressEnterText = jsxProd_default_2(Text, {
           dimColor: true,
-          children: ["Press Enter to connect", u],
+          children: ["Press Enter to connect", escapeHint],
         });
-        i[30] = u;
-        i[31] = p;
-      } else p = i[31];
-      let H;
-      if (i[32] !== Y || i[33] !== B || i[34] !== p) {
-        H = jsxProd_default_2(Box, {
+        $[30] = escapeHint;
+        $[31] = pressEnterText;
+      } else pressEnterText = $[31];
+      let urlInputView;
+      if ($[32] !== captionText || $[33] !== urlBox || $[34] !== pressEnterText) {
+        urlInputView = jsxProd_default_2(Box, {
           flexDirection: "column",
           gap: 1,
-          children: [T, Y, B, p],
+          children: [titleText, captionText, urlBox, pressEnterText],
         });
-        i[32] = Y;
-        i[33] = B;
-        i[34] = p;
-        i[35] = H;
-      } else H = i[35];
-      return H;
+        $[32] = captionText;
+        $[33] = urlBox;
+        $[34] = pressEnterText;
+        $[35] = urlInputView;
+      } else urlInputView = $[35];
+      return urlInputView;
     }
     case "polling": {
-      let T;
-      if (i[36] !== E || i[37] !== storeSelector.userCode || i[38] !== storeSelector.verificationUri) {
-        T = jsxProd_default(AgentEditor, {
+      let codeEditor;
+      if (
+        $[36] !== handleCancel ||
+        $[37] !== storeSelector.userCode ||
+        $[38] !== storeSelector.verificationUri
+      ) {
+        codeEditor = jsxProd_default(AgentEditor, {
           userCode: storeSelector.userCode,
           verificationUri: storeSelector.verificationUri,
-          onCancel: E,
+          onCancel: handleCancel,
         });
-        i[36] = E;
-        i[37] = storeSelector.userCode;
-        i[38] = storeSelector.verificationUri;
-        i[39] = T;
-      } else T = i[39];
-      return T;
+        $[36] = handleCancel;
+        $[37] = storeSelector.userCode;
+        $[38] = storeSelector.verificationUri;
+        $[39] = codeEditor;
+      } else codeEditor = $[39];
+      return codeEditor;
     }
     case "connecting": {
-      let T;
-      if (i[40] !== E) {
-        T = jsxProd_default(AutoRunIssueNotification, {
+      let connectingNotice;
+      if ($[40] !== handleCancel) {
+        connectingNotice = jsxProd_default(AutoRunIssueNotification, {
           label: "Connecting to gateway\u2026",
-          onCancel: E,
+          onCancel: handleCancel,
         });
-        i[40] = E;
-        i[41] = T;
-      } else T = i[41];
-      return T;
+        $[40] = handleCancel;
+        $[41] = connectingNotice;
+      } else connectingNotice = $[41];
+      return connectingNotice;
     }
     case "trust_prompt": {
-      let T;
-      if (i[42] !== storeSelector.hostname) {
-        T = jsxProd_default_2(Text, {
+      let trustTitle;
+      if ($[42] !== storeSelector.hostname) {
+        trustTitle = jsxProd_default_2(Text, {
           bold: true,
           children: [
             "Trust gateway ",
@@ -490,12 +508,12 @@ function GatewayLogin(props) {
             "?",
           ],
         });
-        i[42] = storeSelector.hostname;
-        i[43] = T;
-      } else T = i[43];
-      let Y;
-      if (i[44] !== storeSelector.previouslyPinned) {
-        Y = storeSelector.previouslyPinned
+        $[42] = storeSelector.hostname;
+        $[43] = trustTitle;
+      } else trustTitle = $[43];
+      let trustMessage;
+      if ($[44] !== storeSelector.previouslyPinned) {
+        trustMessage = storeSelector.previouslyPinned
           ? jsxProd_default(Text, {
               color: "warning",
               children: CERT_ROTATED_MESSAGE,
@@ -503,77 +521,83 @@ function GatewayLogin(props) {
           : jsxProd_default(Text, {
               children: FIRST_TRUST_MESSAGE,
             });
-        i[44] = storeSelector.previouslyPinned;
-        i[45] = Y;
-      } else Y = i[45];
-      let B;
-      if (i[46] !== storeSelector.route) {
-        B =
+        $[44] = storeSelector.previouslyPinned;
+        $[45] = trustMessage;
+      } else trustMessage = $[45];
+      let routeText;
+      if ($[46] !== storeSelector.route) {
+        routeText =
           storeSelector.route &&
           jsxProd_default_2(Text, {
             dimColor: true,
             children: ["Connecting ", storeSelector.route],
           });
-        i[46] = storeSelector.route;
-        i[47] = B;
-      } else B = i[47];
-      let u;
-      if (i[48] !== storeSelector.fingerprint) {
-        u = storeSelector.fingerprint.slice(0, 16);
-        i[48] = storeSelector.fingerprint;
-        i[49] = u;
-      } else u = i[49];
-      let p;
-      if (i[50] !== u) {
-        p = jsxProd_default_2(Text, {
+        $[46] = storeSelector.route;
+        $[47] = routeText;
+      } else routeText = $[47];
+      let fingerprintShort;
+      if ($[48] !== storeSelector.fingerprint) {
+        fingerprintShort = storeSelector.fingerprint.slice(0, 16);
+        $[48] = storeSelector.fingerprint;
+        $[49] = fingerprintShort;
+      } else fingerprintShort = $[49];
+      let fingerprintText;
+      if ($[50] !== fingerprintShort) {
+        fingerprintText = jsxProd_default_2(Text, {
           dimColor: true,
-          children: [FINGERPRINT_LABEL, " ", u, "\u2026"],
+          children: [FINGERPRINT_LABEL, " ", fingerprintShort, "\u2026"],
         });
-        i[50] = u;
-        i[51] = p;
-      } else p = i[51];
+        $[50] = fingerprintShort;
+        $[51] = fingerprintText;
+      } else fingerprintText = $[51];
       const cancelLabel = screenLocked ? "No, go back" : "No, cancel login";
       let onConfirm;
-      if (i[52] !== x) {
-        onConfirm = () => x.trust();
-        i[52] = x;
-        i[53] = onConfirm;
-      } else onConfirm = i[53];
-      let Se;
-      if (i[54] !== E || i[55] !== cancelLabel || i[56] !== onConfirm) {
-        Se = jsxProd_default(ConfirmSelect, {
+      if ($[52] !== flow) {
+        onConfirm = () => flow.trust();
+        $[52] = flow;
+        $[53] = onConfirm;
+      } else onConfirm = $[53];
+      let trustSelect;
+      if ($[54] !== handleCancel || $[55] !== cancelLabel || $[56] !== onConfirm) {
+        trustSelect = jsxProd_default(ConfirmSelect, {
           hideIndexes: true,
           confirmLabel: TRUST_ACCEPT_LABEL,
           cancelLabel,
           focus: "cancel",
           onConfirm,
-          onCancel: E,
+          onCancel: handleCancel,
         });
-        i[54] = E;
-        i[55] = cancelLabel;
-        i[56] = onConfirm;
-        i[57] = Se;
-      } else Se = i[57];
-      let xe;
-      if (i[58] !== T || i[59] !== Y || i[60] !== B || i[61] !== p || i[62] !== Se) {
-        xe = jsxProd_default_2(Box, {
+        $[54] = handleCancel;
+        $[55] = cancelLabel;
+        $[56] = onConfirm;
+        $[57] = trustSelect;
+      } else trustSelect = $[57];
+      let trustView;
+      if (
+        $[58] !== trustTitle ||
+        $[59] !== trustMessage ||
+        $[60] !== routeText ||
+        $[61] !== fingerprintText ||
+        $[62] !== trustSelect
+      ) {
+        trustView = jsxProd_default_2(Box, {
           flexDirection: "column",
           gap: 1,
-          children: [T, Y, B, p, Se],
+          children: [trustTitle, trustMessage, routeText, fingerprintText, trustSelect],
         });
-        i[58] = T;
-        i[59] = Y;
-        i[60] = B;
-        i[61] = p;
-        i[62] = Se;
-        i[63] = xe;
-      } else xe = i[63];
-      return xe;
+        $[58] = trustTitle;
+        $[59] = trustMessage;
+        $[60] = routeText;
+        $[61] = fingerprintText;
+        $[62] = trustSelect;
+        $[63] = trustView;
+      } else trustView = $[63];
+      return trustView;
     }
     case "confirm_account": {
-      let T;
-      if (i[64] !== storeSelector.email) {
-        T = jsxProd_default_2(Text, {
+      let accountTitle;
+      if ($[64] !== storeSelector.email) {
+        accountTitle = jsxProd_default_2(Text, {
           bold: true,
           children: [
             "Signed in to Cloud gateway as",
@@ -584,35 +608,35 @@ function GatewayLogin(props) {
             }),
           ],
         });
-        i[64] = storeSelector.email;
-        i[65] = T;
-      } else T = i[65];
-      let Y;
-      if (i[66] === MEMO_CACHE_SENTINEL) {
-        Y = jsxProd_default(Text, {
+        $[64] = storeSelector.email;
+        $[65] = accountTitle;
+      } else accountTitle = $[65];
+      let pinMismatchText;
+      if ($[66] === MEMO_CACHE_SENTINEL) {
+        pinMismatchText = jsxProd_default(Text, {
           children: PIN_MISMATCH_MESSAGE,
         });
-        i[66] = Y;
-      } else Y = i[66];
+        $[66] = pinMismatchText;
+      } else pinMismatchText = $[66];
       const cancelLabel = screenLocked ? "No, go back" : "No, cancel login";
       let onConfirm;
-      if (i[67] !== x) {
-        onConfirm = () => x.confirmAccount();
-        i[67] = x;
-        i[68] = onConfirm;
-      } else onConfirm = i[68];
+      if ($[67] !== flow) {
+        onConfirm = () => flow.confirmAccount();
+        $[67] = flow;
+        $[68] = onConfirm;
+      } else onConfirm = $[68];
       let onCancel;
-      if (i[69] !== E) {
+      if ($[69] !== handleCancel) {
         onCancel = () => {
           logForDebugging("[gateway-login] signed-in account declined; nothing saved");
-          E();
+          handleCancel();
         };
-        i[69] = E;
-        i[70] = onCancel;
-      } else onCancel = i[70];
-      let H;
-      if (i[71] !== cancelLabel || i[72] !== onConfirm || i[73] !== onCancel) {
-        H = jsxProd_default(ConfirmSelect, {
+        $[69] = handleCancel;
+        $[70] = onCancel;
+      } else onCancel = $[70];
+      let accountSelect;
+      if ($[71] !== cancelLabel || $[72] !== onConfirm || $[73] !== onCancel) {
+        accountSelect = jsxProd_default(ConfirmSelect, {
           hideIndexes: true,
           focus: "cancel",
           confirmLabel: LOGIN_FAILED_MESSAGE,
@@ -620,29 +644,29 @@ function GatewayLogin(props) {
           onConfirm,
           onCancel,
         });
-        i[71] = cancelLabel;
-        i[72] = onConfirm;
-        i[73] = onCancel;
-        i[74] = H;
-      } else H = i[74];
-      let N;
-      if (i[75] !== T || i[76] !== H) {
-        N = jsxProd_default_2(Box, {
+        $[71] = cancelLabel;
+        $[72] = onConfirm;
+        $[73] = onCancel;
+        $[74] = accountSelect;
+      } else accountSelect = $[74];
+      let accountView;
+      if ($[75] !== accountTitle || $[76] !== accountSelect) {
+        accountView = jsxProd_default_2(Box, {
           flexDirection: "column",
           gap: 1,
-          children: [T, Y, H],
+          children: [accountTitle, pinMismatchText, accountSelect],
         });
-        i[75] = T;
-        i[76] = H;
-        i[77] = N;
-      } else N = i[77];
-      return N;
+        $[75] = accountTitle;
+        $[76] = accountSelect;
+        $[77] = accountView;
+      } else accountView = $[77];
+      return accountView;
     }
     case "saving":
     case "done": {
-      let T;
-      if (i[78] !== storeSelector.email) {
-        T =
+      let savingTitle;
+      if ($[78] !== storeSelector.email) {
+        savingTitle =
           storeSelector.email &&
           jsxProd_default_2(Text, {
             bold: true,
@@ -655,12 +679,12 @@ function GatewayLogin(props) {
               }),
             ],
           });
-        i[78] = storeSelector.email;
-        i[79] = T;
-      } else T = i[79];
-      let Y;
-      if (i[80] === MEMO_CACHE_SENTINEL) {
-        Y = jsxProd_default_2(Box, {
+        $[78] = storeSelector.email;
+        $[79] = savingTitle;
+      } else savingTitle = $[79];
+      let finishingRow;
+      if ($[80] === MEMO_CACHE_SENTINEL) {
+        finishingRow = jsxProd_default_2(Box, {
           gap: 1,
           children: [
             jsxProd_default(Spinner, {}),
@@ -670,37 +694,37 @@ function GatewayLogin(props) {
             }),
           ],
         });
-        i[80] = Y;
-      } else Y = i[80];
-      let B;
-      if (i[81] !== T) {
-        B = jsxProd_default_2(Box, {
+        $[80] = finishingRow;
+      } else finishingRow = $[80];
+      let savingView;
+      if ($[81] !== savingTitle) {
+        savingView = jsxProd_default_2(Box, {
           flexDirection: "column",
           gap: 1,
-          children: [T, Y],
+          children: [savingTitle, finishingRow],
         });
-        i[81] = T;
-        i[82] = B;
-      } else B = i[82];
-      return B;
+        $[81] = savingTitle;
+        $[82] = savingView;
+      } else savingView = $[82];
+      return savingView;
     }
     case "cancelled": {
       return null;
     }
     case "error": {
-      let T;
-      if (i[83] !== E || i[84] !== storeSelector.detail || i[85] !== storeSelector.message) {
-        T = jsxProd_default(usePermissionExplainerUI, {
+      let errorView;
+      if ($[83] !== handleCancel || $[84] !== storeSelector.detail || $[85] !== storeSelector.message) {
+        errorView = jsxProd_default(usePermissionExplainerUI, {
           message: storeSelector.message,
           detail: storeSelector.detail,
-          onCancel: E,
+          onCancel: handleCancel,
         });
-        i[83] = E;
-        i[84] = storeSelector.detail;
-        i[85] = storeSelector.message;
-        i[86] = T;
-      } else T = i[86];
-      return T;
+        $[83] = handleCancel;
+        $[84] = storeSelector.detail;
+        $[85] = storeSelector.message;
+        $[86] = errorView;
+      } else errorView = $[86];
+      return errorView;
     }
   }
 }

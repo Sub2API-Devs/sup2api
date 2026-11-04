@@ -6,7 +6,7 @@
  * attribution: esm-layout 1, esm-fingerprint 1
  */
 import { retryPolicy } from "../../../../../core-rest-pipeline/dist/esm/policies/retryPolicy.js";
-import { Xl } from "../../../../../core-rest-pipeline/dist/esm/util/file.js";
+import { readFileBody } from "../../../../../core-rest-pipeline/dist/esm/util/file.js";
 
 //@ chunk-mrx6y2r5.js:288839-288852 esm-layout
 var DEFAULT_CLIENT_MAX_RETRY_INTERVAL_2 = 64000;
@@ -21,7 +21,7 @@ function imdsRetryPolicy(msiRetryConfig) {
             return {
               skipStrategy: true,
             };
-          return Xl(retryCount, {
+          return readFileBody(retryCount, {
             retryDelayInMs: msiRetryConfig.startDelayInMs,
             maxRetryDelayInMs: DEFAULT_CLIENT_MAX_RETRY_INTERVAL_2,
           });

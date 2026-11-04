@@ -5,11 +5,11 @@
  * pieces: chunk-1ny7cxrt.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x, importMetaRequire } from "../../../../runtime/bun-runtime.js";
+import { __commonJS, importMetaRequire } from "../../../../runtime/bun-runtime.js";
 import { require_base64url } from "./base64url.js";
 
 //@ chunk-1ny7cxrt.js:10596-10826 cjs-fingerprint
-var require_generators = x(function (cjsExports, cjsModule) {
+var require_generators = __commonJS(function (cjsExports, cjsModule) {
   var { createHash, randomBytes } = importMetaRequire("crypto");
   var base64url = require_base64url();
   var random = (bytes = 32) => base64url.encode(randomBytes(bytes));

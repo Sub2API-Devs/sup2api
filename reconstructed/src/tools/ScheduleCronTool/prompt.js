@@ -12,6 +12,7 @@ import { DEFAULT_CRON_JITTER_CONFIG } from "../../utils/cronTasks.js";
 import { env } from "../../utils/env.js";
 import { getFeatureValue_CACHED_WITH_REFRESH } from "../../services/analytics/growthbook.js";
 import { MONITOR } from "../MonitorTool/constants.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-gzp2tk59.js:334-463 facade-exports = CRON_CREATE_TOOL_NAME (0.4)
 /**
@@ -25,8 +26,12 @@ var NEXT_FIRE_AT_DESCRIPTION = "Epoch ms of the job's next run, the scheduler's 
 /**
  * Cron 门控缓存刷新间隔（5 分钟）；f$e 为循环任务自动过期天数（来自默认抖动配置 recurringMaxAgeMs）。
  */
-var CRON_GATE_REFRESH_MS = 300000;
-var DEFAULT_MAX_AGE_DAYS = DEFAULT_CRON_JITTER_CONFIG.recurringMaxAgeMs / 86400000;
+var CRON_GATE_REFRESH_MS; // deferred: uses DEFAULT_CRON_JITTER_CONFIG (../../utils/cronTasks.js) of its import cycle while loading; runs once the cycle is complete
+var DEFAULT_MAX_AGE_DAYS;
+deferInit("chunk-gzp2tk59.js:463", () => {
+  CRON_GATE_REFRESH_MS = 300000;
+  DEFAULT_MAX_AGE_DAYS = DEFAULT_CRON_JITTER_CONFIG.recurringMaxAgeMs / 86400000;
+});
 //@ chunk-gzp2tk59.js:510-588 facade-exports = isKairosCronEnabled (1)
 /**
  * Cron 功能总开关：未设置 CLAUDE_CODE_DISABLE_CRON 且 GrowthBook tengu_kairos_cron（默认 true）。
@@ -57,8 +62,8 @@ function buildCronCreateDescription(durableEnabled) {
 /**
  * durable 参数的说明文本（可用/不可用两版）。
  */
-function buildDurableParamDescription(e) {
-  return e
+function buildDurableParamDescription(durableAvailable) {
+  return durableAvailable
     ? "true = persist to .claude/scheduled_tasks.json and survive restarts. false (default) = in-memory only, dies when this Claude session ends. Use true only when the user asks the task to survive across sessions."
     : "Has no effect \u2014 durable persistence is not available. All jobs are session-only (in-memory, gone when this Claude session ends).";
 }

@@ -16,7 +16,7 @@ var ParseOptions;
   };
 })(ParseOptions || (ParseOptions = {}));
 //@ chunk-kndsyy4v.js:7921-8326 esm-fingerprint
-function C(text, s = [], options = ParseOptions.DEFAULT) {
+function parseTree(text, path = [], options = ParseOptions.DEFAULT) {
   let currentProperty = null;
   let currentParent = [];
   let previousParents = [];
@@ -24,7 +24,7 @@ function C(text, s = [], options = ParseOptions.DEFAULT) {
     if (Array.isArray(currentParent)) currentParent.push(value);
     else if (currentProperty !== null) currentParent[currentProperty] = value;
   }
-  Z(
+  getNodeValue(
     text,
     {
       onObjectBegin: () => {
@@ -52,7 +52,7 @@ function C(text, s = [], options = ParseOptions.DEFAULT) {
       },
       onLiteralValue: onValue,
       onError: (error, offset, length) => {
-        s.push({
+        path.push({
           error,
           offset,
           length,
@@ -64,7 +64,7 @@ function C(text, s = [], options = ParseOptions.DEFAULT) {
   return currentParent[0];
 }
 //@ chunk-kndsyy4v.js:8326-9279 esm-fingerprint
-function parseTree(text, errors = [], options = ParseOptions.DEFAULT) {
+function parseTree_2(text, errors = [], options = ParseOptions.DEFAULT) {
   let currentParent = {
     type: "array",
     offset: -1,
@@ -82,7 +82,7 @@ function parseTree(text, errors = [], options = ParseOptions.DEFAULT) {
     currentParent.children.push(valueNode);
     return valueNode;
   }
-  Z(
+  getNodeValue(
     text,
     {
       onObjectBegin: (offset) => {
@@ -193,10 +193,10 @@ function findNodeAtLocation(root, path) {
   return node;
 }
 //@ chunk-kndsyy4v.js:9682-12205 esm-fingerprint
-function Z(text, visitor, options = ParseOptions.DEFAULT) {
+function getNodeValue(text, visitor, options = ParseOptions.DEFAULT) {
   let _scanner = createScanner(text, false);
   let _jsonPath = [];
-  function o(visitFunction) {
+  function toNoArgVisit(visitFunction) {
     return visitFunction
       ? () =>
           visitFunction(
@@ -207,7 +207,7 @@ function Z(text, visitor, options = ParseOptions.DEFAULT) {
           )
       : () => true;
   }
-  function c(visitFunction) {
+  function toOneArgVisit(visitFunction) {
     return visitFunction
       ? () =>
           visitFunction(
@@ -219,7 +219,7 @@ function Z(text, visitor, options = ParseOptions.DEFAULT) {
           )
       : () => true;
   }
-  function toOneArgVisit(visitFunction) {
+  function toOneArgVisit_2(visitFunction) {
     return visitFunction
       ? (arg) =>
           visitFunction(
@@ -233,9 +233,9 @@ function Z(text, visitor, options = ParseOptions.DEFAULT) {
   }
   function toOneArgVisitWithPath(visitFunction) {
     return visitFunction
-      ? (A) =>
+      ? (toBeginVisit) =>
           visitFunction(
-            A,
+            toBeginVisit,
             _scanner.getTokenOffset(),
             _scanner.getTokenLength(),
             _scanner.getTokenStartLine(),
@@ -244,15 +244,15 @@ function Z(text, visitor, options = ParseOptions.DEFAULT) {
           )
       : () => true;
   }
-  let h = c(visitor.onObjectBegin);
+  let toEndVisit = toOneArgVisit(visitor.onObjectBegin);
   let onObjectProperty = toOneArgVisitWithPath(visitor.onObjectProperty);
-  let onObjectEnd = o(visitor.onObjectEnd);
-  let onArrayBegin = c(visitor.onArrayBegin);
-  let onArrayEnd = o(visitor.onArrayEnd);
+  let onObjectEnd = toNoArgVisit(visitor.onObjectEnd);
+  let onArrayBegin = toOneArgVisit(visitor.onArrayBegin);
+  let onArrayEnd = toNoArgVisit(visitor.onArrayEnd);
   let onLiteralValue = toOneArgVisitWithPath(visitor.onLiteralValue);
-  let onSeparator = toOneArgVisit(visitor.onSeparator);
-  let onComment = o(visitor.onComment);
-  let onError = toOneArgVisit(visitor.onError);
+  let onSeparator = toOneArgVisit_2(visitor.onSeparator);
+  let onComment = toNoArgVisit(visitor.onComment);
+  let onError = toOneArgVisit_2(visitor.onError);
   let disallowComments = options && options.disallowComments;
   let allowTrailingComma = options && options.allowTrailingComma;
   function scanNext() {
@@ -359,7 +359,7 @@ function Z(text, visitor, options = ParseOptions.DEFAULT) {
     return true;
   }
   function parseObject() {
-    h();
+    toEndVisit();
     scanNext();
     let needsComma = false;
     while (_scanner.getToken() !== 2 && _scanner.getToken() !== 17) {
@@ -445,4 +445,4 @@ function getNodeType(value) {
       return "null";
   }
 }
-export { parseTree, findNodeAtLocation, C };
+export { parseTree_2, findNodeAtLocation, parseTree };

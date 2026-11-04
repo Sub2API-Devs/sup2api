@@ -24,6 +24,7 @@ import { isDisallowedMemoryChar, INVISIBLE_MEMORY_CODE_POINTS } from "../../memd
 import { uniq } from "../../utils/collections.js";
 import { parseMemoryStoresEnv } from "../orgMemory/memoryStores.js";
 import { scanForSecrets } from "../teamMemorySync/secretScanner.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-a477qqne.js:1332-1379 placement
 /**
@@ -44,10 +45,10 @@ function normalizeKeySegment(cwd) {
 /**
  * 键是否指向被排除的个人记忆子树或隐藏路径。
  */
-function isExcludedMemoryKey(e) {
-  let parts = e.split("/");
+function isExcludedMemoryKey(key) {
+  let parts = key.split("/");
   if (parts.length === 0) return true;
-  if (parts.some((r) => r.startsWith("."))) return true;
+  if (parts.some((segment) => segment.startsWith("."))) return true;
   return EXCLUDED_TOP_LEVEL_DIRS.includes(normalizeKeySegment(parts[0]));
 }
 //@ chunk-a477qqne.js:1682-1709 placement
@@ -71,36 +72,36 @@ async function isRealPathWithinAutoMemDir(realCandidate) {
 /**
  * 把键解析为个人记忆目录下的路径（拒绝越界、symlink）。
  */
-async function resolvePersonalMemoryPath(e) {
-  sanitizePathKey(e);
-  if (isExcludedMemoryKey(e))
-    throw new PathTraversalError(`Key targets an excluded personal-memory subtree: "${e}"`);
+async function resolvePersonalMemoryPath(key) {
+  sanitizePathKey(key);
+  if (isExcludedMemoryKey(key))
+    throw new PathTraversalError(`Key targets an excluded personal-memory subtree: "${key}"`);
   let personalMemoryDir = getPersonalMemoryDir();
-  let r = join(personalMemoryDir, e);
-  let s = resolve(r);
-  if (!s.startsWith(personalMemoryDir))
-    throw new PathTraversalError(`Key escapes personal memory directory: "${e}"`);
-  let realCandidate = await realpathDeepestExisting(s);
+  let candidatePath = join(personalMemoryDir, key);
+  let resolvedPath = resolve(candidatePath);
+  if (!resolvedPath.startsWith(personalMemoryDir))
+    throw new PathTraversalError(`Key escapes personal memory directory: "${key}"`);
+  let realCandidate = await realpathDeepestExisting(resolvedPath);
   if (!(await isRealPathWithinAutoMemDir(realCandidate)))
-    throw new PathTraversalError(`Key escapes personal memory directory via symlink: "${e}"`);
-  for (let d of await isTeamSubscriber())
-    if (realCandidate === d || realCandidate.startsWith(d + sep))
+    throw new PathTraversalError(`Key escapes personal memory directory via symlink: "${key}"`);
+  for (let excludedDir of await isTeamSubscriber())
+    if (realCandidate === excludedDir || realCandidate.startsWith(excludedDir + sep))
       throw new PathTraversalError(
-        `Key resolves into an excluded subtree (${EXCLUDED_TOP_LEVEL_DIRS.join("/, ")}/): "${e}"`,
+        `Key resolves into an excluded subtree (${EXCLUDED_TOP_LEVEL_DIRS.join("/, ")}/): "${key}"`,
       );
-  return s;
+  return resolvedPath;
 }
 //@ chunk-a477qqne.js:2344-2493 placement = isTeamSubscriber (1)
 async function isTeamSubscriber() {
-  let mapped = EXCLUDED_TOP_LEVEL_DIRS.map((r) =>
-    r === "team" ? getMemoryDirNfc().replace(/[/\\]+$/, "") : join(getAutoMemPath(), r),
+  let mapped = EXCLUDED_TOP_LEVEL_DIRS.map((subtree) =>
+    subtree === "team" ? getMemoryDirNfc().replace(/[/\\]+$/, "") : join(getAutoMemPath(), subtree),
   );
-  let n = [];
-  for (let r of mapped)
+  let resolvedDirs = [];
+  for (let subtree of mapped)
     try {
-      n.push(await realpath(r));
+      resolvedDirs.push(await realpath(subtree));
     } catch {}
-  return n;
+  return resolvedDirs;
 }
 //@ chunk-a477qqne.js:2493-2704 placement = setCwdState (1)
 function isOutsideAllowedRoot(cwd) {
@@ -121,42 +122,45 @@ var MEMORY_FILE_EXTENSIONS = [".md", ".txt", ".json", ".jsonl"];
 /**
  * 判断文件名是否带记忆文档扩展名且不以 . 开头。
  */
-function hasMemoryExtension(e) {
-  if (e.startsWith(".")) return false;
-  return MEMORY_FILE_EXTENSIONS.some((n) => e.endsWith(n));
+function hasMemoryExtension(fileName) {
+  if (fileName.startsWith(".")) return false;
+  return MEMORY_FILE_EXTENSIONS.some((extension) => fileName.endsWith(extension));
 }
 //@ chunk-a477qqne.js:2824-2917 placement
-var regExp = new RegExp(
-  `(?:${MEMORY_FILE_EXTENSIONS.map((e) => e.replace(".", "\\.")).join("|")})\\.tmp\\.[0-9a-f]{8}$`,
-);
+var regExp; // deferred: uses MEMORY_FILE_EXTENSIONS of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-a477qqne.js:2824", () => {
+  regExp = new RegExp(
+    `(?:${MEMORY_FILE_EXTENSIONS.map((extension) => extension.replace(".", "\\.")).join("|")})\\.tmp\\.[0-9a-f]{8}$`,
+  );
+});
 //@ chunk-a477qqne.js:2917-2970 placement
 /**
  * 判断键是否为记忆文档（非隐藏且扩展名匹配）。
  */
-function isMemoryDocumentKey(e) {
-  return !e.startsWith(".") && regExp.test(e);
+function isMemoryDocumentKey(fileName) {
+  return !fileName.startsWith(".") && regExp.test(fileName);
 }
 //@ chunk-a477qqne.js:2970-3079 placement
 /**
  * 键是否为记忆文档。
  */
-function isMemoryDocumentKey_2(e) {
-  let parts = e.replace(/^\/+/, "").split("/");
-  return parts.every((r) => !r.startsWith(".")) && hasMemoryExtension(parts.at(-1));
+function isMemoryDocumentKey_2(path) {
+  let parts = path.replace(/^\/+/, "").split("/");
+  return parts.every((segment) => !segment.startsWith(".")) && hasMemoryExtension(parts.at(-1));
 }
 //@ chunk-a477qqne.js:3079-3202 placement
 /**
  * 生成密钥扫描用的文本变体（原文、去掉忽略字符、再去掉特定码位）。
  */
 function getSecretScanVariants(content) {
-  let n = "";
-  let r = "";
-  for (let s of content) {
-    if (isDisallowedMemoryChar(s)) continue;
-    n += s;
-    if (!INVISIBLE_MEMORY_CODE_POINTS.has(s.codePointAt(0))) r += s;
+  let withoutDisallowed = "";
+  let withoutInvisible = "";
+  for (let char of content) {
+    if (isDisallowedMemoryChar(char)) continue;
+    withoutDisallowed += char;
+    if (!INVISIBLE_MEMORY_CODE_POINTS.has(char.codePointAt(0))) withoutInvisible += char;
   }
-  return uniq([content, n, r]);
+  return uniq([content, withoutDisallowed, withoutInvisible]);
 }
 //@ chunk-a477qqne.js:3202-3297 placement
 /**
@@ -164,7 +168,7 @@ function getSecretScanVariants(content) {
  */
 function hasUserRwStore() {
   try {
-    return (parseMemoryStoresEnv() ?? []).some((e) => e.scope === "user" && e.mode === "rw");
+    return (parseMemoryStoresEnv() ?? []).some((store) => store.scope === "user" && store.mode === "rw");
   } catch {
     return false;
   }
@@ -173,17 +177,17 @@ function hasUserRwStore() {
 /**
  * 内容含疑似密钥时的拒绝/警告文本。
  */
-function secretWarning(absolutePath, n) {
-  let r = hasNoAutoMemPath();
-  let s = !r && isTeamMemPath(absolutePath);
-  let i = !r && !s && isOutsideAllowedRoot(absolutePath) && hasUserRwStore();
-  if (!r && !s && !i) return null;
-  let d = scanSecretsInVariants(n);
-  if (d.length === 0) return null;
-  let joined = uniq(d.map((h) => h.label)).join(", ");
-  if (r)
+function secretWarning(absolutePath, content) {
+  let hasNoMemFolder = hasNoAutoMemPath();
+  let isTeamMem = !hasNoMemFolder && isTeamMemPath(absolutePath);
+  let outsideRoot = !hasNoMemFolder && !isTeamMem && isOutsideAllowedRoot(absolutePath) && hasUserRwStore();
+  if (!hasNoMemFolder && !isTeamMem && !outsideRoot) return null;
+  let findings = scanSecretsInVariants(content);
+  if (findings.length === 0) return null;
+  let joined = uniq(findings.map((finding) => finding.label)).join(", ");
+  if (hasNoMemFolder)
     return `Content contains potential secrets (${joined}) and cannot be written. This session has no memory folder, so every file it writes is checked as a memory file would be. Remove the sensitive content and try again.`;
-  if (s)
+  if (isTeamMem)
     return `Content contains potential secrets (${joined}) and cannot be written to team memory. Team memory is shared with all repository collaborators. Remove the sensitive content and try again.`;
   return `Content contains potential secrets (${joined}) and cannot be written to memory. Memory is synced to your account. Remove the sensitive content and try again.`;
 }
@@ -191,8 +195,8 @@ function secretWarning(absolutePath, n) {
 /**
  * 对所有脱敏变体扫描密钥。
  */
-function scanSecretsInVariants(e) {
-  return getSecretScanVariants(e).flatMap((n) => scanForSecrets(n));
+function scanSecretsInVariants(content) {
+  return getSecretScanVariants(content).flatMap((variant) => scanForSecrets(variant));
 }
 export {
   getSecretScanVariants,

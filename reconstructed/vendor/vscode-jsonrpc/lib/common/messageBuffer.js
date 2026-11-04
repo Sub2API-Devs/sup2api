@@ -5,15 +5,15 @@
  * pieces: chunk-t4ksmxzx.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-t4ksmxzx.js:24791-26637 cjs-fingerprint
-var require_messageBuffer = x(function (cjsExports) {
+var require_messageBuffer = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
   cjsExports.AbstractMessageBuffer = undefined;
-  var Zi = 13;
+  var carriageReturn = 13;
   var LF = 10;
   var CRLF = `\r
 `;
@@ -42,7 +42,7 @@ var require_messageBuffer = x(function (cjsExports) {
         offset = 0;
         t: while (offset < chunk.length) {
           switch (chunk[offset]) {
-            case Zi:
+            case carriageReturn:
               switch (state) {
                 case 0:
                   state = 1;

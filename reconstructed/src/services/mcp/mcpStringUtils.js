@@ -18,6 +18,7 @@ import { isRemoteBrowserScoped } from "./builtinServerNames.js";
 import { getMcpClientsFromAccessor } from "../../bootstrap/state.js";
 import { isRemoteBrowserClassifierEnabled } from "../../utils/permissions/classifierMcpContext.js";
 import { isConnectedOrCached } from "../../skills/bundled/scheduleRemoteAgents.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-6mwt0myy.js:18150-18165 fingerprint = getMcpPrefix (1)
 var MCP_TOOL_PREFIX = "mcp__";
@@ -39,16 +40,16 @@ function mcpInfoFromString(toolString) {
 /**
  * getMcpPrefix：mcp__<规范化服务器名>__。
  */
-function getMcpPrefix(e) {
-  return `${MCP_TOOL_PREFIX}${normalizeNameForMCP(e)}__`;
+function getMcpPrefix(serverName) {
+  return `${MCP_TOOL_PREFIX}${normalizeNameForMCP(serverName)}__`;
 }
 //@ chunk-6mwt0myy.js:18350-18470 shared-adjacent = getToolNameForPermissionCheck (1)
 /**
  * isToolFromMcpServer：工具 mcpInfo.serverName 等于给定名，或名字以该服务器前缀开头。
  */
-function isToolFromMcpServer(tool, n, mcpPrefix) {
-  if (tool.mcpInfo?.serverName !== undefined) return tool.mcpInfo.serverName === n;
-  return tool.name.startsWith(mcpPrefix ?? getMcpPrefix(n));
+function isToolFromMcpServer(tool, serverName, toolPrefix) {
+  if (tool.mcpInfo?.serverName !== undefined) return tool.mcpInfo.serverName === serverName;
+  return tool.name.startsWith(toolPrefix ?? getMcpPrefix(serverName));
 }
 //@ chunk-6mwt0myy.js:18527-18630 placement
 function matchesListedOrParsedServer(name, { listedServer, parsedServer }) {
@@ -59,8 +60,8 @@ function matchesListedOrParsedServer(name, { listedServer, parsedServer }) {
 /**
  * 拼接 mcp__服务器__工具 名。
  */
-function buildMcpToolName(e, n) {
-  return `${getMcpPrefix(e)}${normalizeNameForMCP(n)}`;
+function buildMcpToolName(serverName, toolName) {
+  return `${getMcpPrefix(serverName)}${normalizeNameForMCP(toolName)}`;
 }
 //@ chunk-6mwt0myy.js:18672-18722 placement
 var PERMISSION_POLICY_RANK = {
@@ -72,12 +73,12 @@ var PERMISSION_POLICY_RANK = {
 /**
  * 从 MCP 配置的 tools 字段收集 allow/deny/ask 规则。
  */
-function collectServerToolPolicies(...e) {
-  let n = new Map();
-  for (let i of e)
-    for (let [key, value] of Object.entries(i)) {
-      let d = value.type === "sdk";
-      if (!d && value.type !== "http" && value.type !== "sse") continue;
+function collectServerToolPolicies(...configSets) {
+  let policyByTool = new Map();
+  for (let configs of configSets)
+    for (let [key, value] of Object.entries(configs)) {
+      let isSdk = value.type === "sdk";
+      if (!isSdk && value.type !== "http" && value.type !== "sse") continue;
       let tools = value.tools;
       if (!Array.isArray(tools)) continue;
       for (let tool of tools) {
@@ -86,26 +87,27 @@ function collectServerToolPolicies(...e) {
         let permissionPolicy = toolPolicyEntry.policy.permission_policy;
         if (
           permissionPolicy === undefined ||
-          (d ? permissionPolicy === "always_allow" : toolPolicyEntry.rewritten)
+          (isSdk ? permissionPolicy === "always_allow" : toolPolicyEntry.rewritten)
         )
           continue;
-        let m = PERMISSION_POLICY_RANK[permissionPolicy];
+        let rank = PERMISSION_POLICY_RANK[permissionPolicy];
         let mcpToolName = buildMcpToolName(key, toolPolicyEntry.policy.name);
-        let h = n.get(mcpToolName);
-        if (h === undefined || m > PERMISSION_POLICY_RANK[h]) n.set(mcpToolName, permissionPolicy);
+        let existing = policyByTool.get(mcpToolName);
+        if (existing === undefined || rank > PERMISSION_POLICY_RANK[existing])
+          policyByTool.set(mcpToolName, permissionPolicy);
       }
     }
-  let r = [];
-  let t = [];
-  let s = [];
-  for (let [i, o] of n)
-    if (o === "always_allow") r.push(i);
-    else if (o === "always_deny") t.push(i);
-    else s.push(i);
+  let allow = [];
+  let deny = [];
+  let ask = [];
+  for (let [toolName, policy] of policyByTool)
+    if (policy === "always_allow") allow.push(toolName);
+    else if (policy === "always_deny") deny.push(toolName);
+    else ask.push(toolName);
   return {
-    allow: r,
-    deny: t,
-    ask: s,
+    allow,
+    deny,
+    ask,
   };
 }
 //@ chunk-6mwt0myy.js:19287-19719 placement
@@ -113,10 +115,10 @@ function collectServerToolPolicies(...e) {
  * 把动态 MCP 服务器的工具策略合并进权限上下文。
  */
 function applyDynamicServerToolPolicies(toolPermissionContext, configs) {
-  let r = Object.fromEntries(
+  let dynamicConfigs = Object.fromEntries(
     Object.entries(configs).filter(([, value]) => value.scope === "dynamic" && value.type !== "sdk"),
   );
-  let { allow, deny, ask } = collectServerToolPolicies(r);
+  let { allow, deny, ask } = collectServerToolPolicies(dynamicConfigs);
   if (allow.length === 0 && deny.length === 0 && ask.length === 0) return toolPermissionContext;
   return {
     ...toolPermissionContext,
@@ -144,34 +146,41 @@ function applyDynamicServerToolPolicies(toolPermissionContext, configs) {
 /**
  * 替换或追加权限上下文中的 mcpServerPolicy。
  */
-function mergeMcpServerPolicyRules(toolPermissionContext, n, r) {
-  let t = (a, d) => {
-    let mcpServerPolicy = a.mcpServerPolicy ?? [];
-    let f = r === "replace" ? d : [...mcpServerPolicy, ...d.filter((l) => !mcpServerPolicy.includes(l))];
-    if (f.length === mcpServerPolicy.length && f.every((l, u) => l === mcpServerPolicy[u])) return a;
-    if (f.length === 0) {
-      let { mcpServerPolicy, ...u } = a;
-      return u;
+function mergeMcpServerPolicyRules(toolPermissionContext, policies, mode) {
+  let mergeInto = (ruleset, names) => {
+    let mcpServerPolicy = ruleset.mcpServerPolicy ?? [];
+    let merged =
+      mode === "replace"
+        ? names
+        : [...mcpServerPolicy, ...names.filter((name) => !mcpServerPolicy.includes(name))];
+    if (
+      merged.length === mcpServerPolicy.length &&
+      merged.every((name, index) => name === mcpServerPolicy[index])
+    )
+      return ruleset;
+    if (merged.length === 0) {
+      let { mcpServerPolicy, ...rest } = ruleset;
+      return rest;
     }
     return {
-      ...a,
-      mcpServerPolicy: f,
+      ...ruleset,
+      mcpServerPolicy: merged,
     };
   };
-  let s = t(toolPermissionContext.alwaysAllowRules, n.allow);
-  let i = t(toolPermissionContext.alwaysDenyRules, n.deny);
-  let o = t(toolPermissionContext.alwaysAskRules, n.ask);
+  let allowRules = mergeInto(toolPermissionContext.alwaysAllowRules, policies.allow);
+  let denyRules = mergeInto(toolPermissionContext.alwaysDenyRules, policies.deny);
+  let askRules = mergeInto(toolPermissionContext.alwaysAskRules, policies.ask);
   if (
-    s === toolPermissionContext.alwaysAllowRules &&
-    i === toolPermissionContext.alwaysDenyRules &&
-    o === toolPermissionContext.alwaysAskRules
+    allowRules === toolPermissionContext.alwaysAllowRules &&
+    denyRules === toolPermissionContext.alwaysDenyRules &&
+    askRules === toolPermissionContext.alwaysAskRules
   )
     return toolPermissionContext;
   return {
     ...toolPermissionContext,
-    alwaysAllowRules: s,
-    alwaysDenyRules: i,
-    alwaysAskRules: o,
+    alwaysAllowRules: allowRules,
+    alwaysDenyRules: denyRules,
+    alwaysAskRules: askRules,
   };
 }
 //@ chunk-6mwt0myy.js:20222-20305 placement = getToolNameForPermissionCheck (1)
@@ -185,16 +194,16 @@ function getToolNameForPermissionCheck(tool) {
 /**
  * getMcpToolAliasNames：工具在标准键/拒绝键等别名服务器名下的完整名字，用于规则匹配。
  */
-function getMcpToolAliasNames(e) {
-  if (!e.mcpInfo || !isServerIdentityActive()) return [];
-  let toolNameForPermissionCheck = getToolNameForPermissionCheck(e);
-  let r = denyOrAskNamesFor(toolNameForPermissionCheck);
-  let t = `${MCP_TOOL_PREFIX}${normalizeNameForMCP(e.mcpInfo.serverName)}__`;
-  let sliced = toolNameForPermissionCheck.slice(t.length);
-  let flattened = [e.mcpInfo.standardKey?.key, e.mcpInfo.denyKey].flatMap((o) =>
-    o === undefined ? [] : [`${MCP_TOOL_PREFIX}${o}__${sliced}`],
+function getMcpToolAliasNames(tool) {
+  if (!tool.mcpInfo || !isServerIdentityActive()) return [];
+  let toolName = getToolNameForPermissionCheck(tool);
+  let ruleNames = denyOrAskNamesFor(toolName);
+  let prefix = `${MCP_TOOL_PREFIX}${normalizeNameForMCP(tool.mcpInfo.serverName)}__`;
+  let sliced = toolName.slice(prefix.length);
+  let flattened = [tool.mcpInfo.standardKey?.key, tool.mcpInfo.denyKey].flatMap((keyName) =>
+    keyName === undefined ? [] : [`${MCP_TOOL_PREFIX}${keyName}__${sliced}`],
   );
-  return uniq([...r, ...flattened]).filter((o) => o !== toolNameForPermissionCheck);
+  return uniq([...ruleNames, ...flattened]).filter((alias) => alias !== toolName);
 }
 //@ chunk-6mwt0myy.js:20569-20634 layout = getMcpPrefix (1)
 /**
@@ -224,30 +233,33 @@ function isSameMcpServerName(servers, pluginName) {
   return normalizeNameForMCP(servers) === normalizeNameForMCP(pluginName);
 }
 //@ chunk-gz7b768t.js:5309-5540 affinity
-var BROWSER_READ_TOOL_ARGS = new Map([
-  ["browser_take_screenshot", new Set(["type", "fullPage", "scale", "region"])],
-  ["browser_snapshot", new Set(["ref", "depth", "filter", "find", "max_chars", "offset"])],
-  ["browser_wait_for", new Set(["time", "text", "textGone"])],
-]);
+var BROWSER_READ_TOOL_ARGS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-gz7b768t.js:5309", () => {
+  BROWSER_READ_TOOL_ARGS = new Map([
+    ["browser_take_screenshot", new Set(["type", "fullPage", "scale", "region"])],
+    ["browser_snapshot", new Set(["ref", "depth", "filter", "find", "max_chars", "offset"])],
+    ["browser_wait_for", new Set(["time", "text", "textGone"])],
+  ]);
+});
 //@ chunk-gz7b768t.js:5540-5877 facade-majority
 /**
  * （归属疑误：权限/auto 模式）remote-browser 截图类工具在 auto 模式下可由分类器自动批准的判定。
  */
-function isRemoteBrowserReadWithoutClassifier(tool, t, toolPermissionContext, r) {
+function isRemoteBrowserReadWithoutClassifier(tool, input, toolPermissionContext, classifierSource) {
   let mcpInfo = tool.mcpInfo;
   if (mcpInfo?.serverName !== REMOTE_BROWSER_SERVER_NAME || mcpInfo.scope !== "dynamic") return false;
-  let a = BROWSER_READ_TOOL_ARGS.get(mcpInfo.toolName);
+  let allowedArgs = BROWSER_READ_TOOL_ARGS.get(mcpInfo.toolName);
   if (
-    a === undefined ||
-    typeof t !== "object" ||
-    t === null ||
-    Array.isArray(t) ||
-    !Object.keys(t).every((key) => a.has(key))
+    allowedArgs === undefined ||
+    typeof input !== "object" ||
+    input === null ||
+    Array.isArray(input) ||
+    !Object.keys(input).every((key) => allowedArgs.has(key))
   )
     return false;
   return (
     toolPermissionContext.mode === "auto" &&
-    r === "auto" &&
+    classifierSource === "auto" &&
     toolPermissionContext.canAutoClassifierRun === true &&
     toolPermissionContext.servedCall !== true &&
     !isAutoModeCircuitBroken() &&
@@ -272,13 +284,13 @@ function resolveMcpConnectionForTool(fullName, serverName) {
       connection: undefined,
       ambiguous: false,
     };
-  let r = mcpInfoFromString(fullName);
-  if (!r)
+  let mcpInfo = mcpInfoFromString(fullName);
+  if (!mcpInfo)
     return {
       connection: undefined,
       ambiguous: false,
     };
-  let filtered = serverName.filter((y) => normalizeNameForMCP(y.name) === r.serverName);
+  let filtered = serverName.filter((candidate) => normalizeNameForMCP(candidate.name) === mcpInfo.serverName);
   let filtered_2 = filtered.filter(isConnectedOrCached);
   if (filtered_2.length > 1)
     return {
@@ -293,15 +305,15 @@ function resolveMcpConnectionForTool(fullName, serverName) {
 export {
   getMcpPrefix,
   mcpInfoFromString,
-  getToolNameForPermissionCheck,
-  isRemoteBrowserReadWithoutClassifier,
   buildMcpToolName,
   MCP_TOOL_PREFIX,
+  getToolNameForPermissionCheck,
   getMcpToolAliasNames,
+  isRemoteBrowserReadWithoutClassifier,
   isToolFromMcpServer,
-  matchesListedOrParsedServer,
   collectServerToolPolicies,
   mergeMcpServerPolicyRules,
+  matchesListedOrParsedServer,
   applyDynamicServerToolPolicies,
   isSameMcpServerName,
   resolveMcpConnectionForTool,

@@ -5,10 +5,10 @@
  * pieces: chunk-egr0twnb.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:126377-128976 cjs-fingerprint
-var require_elixir = x(function (cjsExports, cjsModule) {
+var require_elixir = __commonJS(function (cjsExports, cjsModule) {
   function elixir(hljs) {
     let regex = hljs.regex;
     let ELIXIR_IDENT_RE = "[a-zA-Z_][a-zA-Z0-9_.]*(!|\\?)?";

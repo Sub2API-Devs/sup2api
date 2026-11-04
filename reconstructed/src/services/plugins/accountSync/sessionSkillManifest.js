@@ -17,42 +17,48 @@ import { sleep } from "../../../utils/sleep.js";
 import { apiClient } from "../../routines/routinesApi.js";
 import { logForDiagnosticsNoPII } from "../../../utils/diagLogs.js";
 import { classifyAxiosError } from "../../../utils/errors.js";
+import { deferInit } from "../../../../runtime/deferred-init.js";
 
 //@ chunk-f9asxqh1.js:21245-21660 placement
 /**
  * 会话技能清单（/worker/skill-manifest）的懒加载 schema：skills 与 plugins 两个条目列表（缺省为空数组，字段缺省为空串，附带市场名与是否官方），另带请求超时与重试间隔常量。
  */
-var sessionSkillManifestSchema = DoctorLazy(() => {
-  let e = create_2()
-    .nullish()
-    .transform((r) => r ?? "");
-  let n = create({
-    id: e,
-    name: e,
-    description: e,
-    version: e,
-    directory: e,
-    marketplace_name: create_2().nullish().catch(undefined),
-    is_official: create_6().nullish().catch(undefined),
-  }).transform(({ marketplace_name: marketplaceName, is_official: isOfficial, ...y }) => ({
-    ...y,
-    ...(marketplaceName && {
-      marketplaceName,
-    }),
-    ...(isOfficial === true && {
-      isOfficial: true,
-    }),
-  }));
-  let s = create_15(n)
-    .nullish()
-    .transform((r) => r ?? []);
-  return create({
-    skills: s,
-    plugins: s,
-  }).strict();
+var sessionSkillManifestSchema; // deferred: uses DoctorLazy (../../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var MANIFEST_TIMEOUT_MS;
+var MANIFEST_RETRY_DELAY_MS;
+deferInit("chunk-f9asxqh1.js:21245", () => {
+  sessionSkillManifestSchema = DoctorLazy(() => {
+    let stringField = create_2()
+      .nullish()
+      .transform((value) => value ?? "");
+    let entrySchema = create({
+      id: stringField,
+      name: stringField,
+      description: stringField,
+      version: stringField,
+      directory: stringField,
+      marketplace_name: create_2().nullish().catch(undefined),
+      is_official: create_6().nullish().catch(undefined),
+    }).transform(({ marketplace_name: marketplaceName, is_official: isOfficial, ...rest }) => ({
+      ...rest,
+      ...(marketplaceName && {
+        marketplaceName,
+      }),
+      ...(isOfficial === true && {
+        isOfficial: true,
+      }),
+    }));
+    let entriesSchema = create_15(entrySchema)
+      .nullish()
+      .transform((value) => value ?? []);
+    return create({
+      skills: entriesSchema,
+      plugins: entriesSchema,
+    }).strict();
+  });
+  MANIFEST_TIMEOUT_MS = 30000;
+  MANIFEST_RETRY_DELAY_MS = 500;
 });
-var MANIFEST_TIMEOUT_MS = 30000;
-var MANIFEST_RETRY_DELAY_MS = 500;
 //@ chunk-f9asxqh1.js:21660-22430 placement
 /**
  * 会话技能/插件清单的缓存：fetch 合并并发请求，启动时复用同一次结果；listEntries 按 skills 或 plugins 返回条目，失败时记录遥测与特性状态并返回 manifest 错误。
@@ -63,10 +69,10 @@ class SessionSkillManifest {
   startupResponse = null;
   fetch() {
     if (!this.inflight) {
-      let e = fetchSkillManifestWithRetry().finally(() => {
-        if (this.inflight === e) this.inflight = null;
+      let request = fetchSkillManifestWithRetry().finally(() => {
+        if (this.inflight === request) this.inflight = null;
       });
-      this.inflight = e;
+      this.inflight = request;
     }
     return this.inflight;
   }
@@ -74,26 +80,29 @@ class SessionSkillManifest {
     this.inflight = null;
     this.startupResponse = null;
   }
-  async listEntries(e, { startup }) {
-    let s = e === "skills" ? "sync_session_refs_skills" : "sync_session_refs_plugins";
-    let r = !this.featureEventReported.has(e);
-    this.featureEventReported.add(e);
-    let f = await (startup ? (this.startupResponse ??= this.fetch()) : this.fetch());
-    if (!f.ok) {
-      logEvent(e === "skills" ? "tengu_skills_sync_manifest_failed" : "tengu_plugins_sync_manifest_failed", {
-        unavailable: f.reason === "unavailable",
-      });
-      if (r) logFeatureBad(s, f.reason);
+  async listEntries(kind, { startup }) {
+    let featureName = kind === "skills" ? "sync_session_refs_skills" : "sync_session_refs_plugins";
+    let reportFeature = !this.featureEventReported.has(kind);
+    this.featureEventReported.add(kind);
+    let manifest = await (startup ? (this.startupResponse ??= this.fetch()) : this.fetch());
+    if (!manifest.ok) {
+      logEvent(
+        kind === "skills" ? "tengu_skills_sync_manifest_failed" : "tengu_plugins_sync_manifest_failed",
+        {
+          unavailable: manifest.reason === "unavailable",
+        },
+      );
+      if (reportFeature) logFeatureBad(featureName, manifest.reason);
       return {
         success: false,
-        error: `manifest ${f.reason}`,
+        error: `manifest ${manifest.reason}`,
         kind: "manifest",
       };
     }
-    if (r) logFeatureOk(s);
+    if (reportFeature) logFeatureOk(featureName);
     return {
       success: true,
-      entries: f[e],
+      entries: manifest[kind],
     };
   }
 }
@@ -101,7 +110,10 @@ class SessionSkillManifest {
 /**
  * 按会话根保存的技能清单。
  */
-var sessionSkillManifestSlot = new SessionRootSlot(() => new SessionSkillManifest());
+var sessionSkillManifestSlot; // deferred: uses SessionRootSlot (../../../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-f9asxqh1.js:22430", () => {
+  sessionSkillManifestSlot = new SessionRootSlot(() => new SessionSkillManifest());
+});
 //@ chunk-f9asxqh1.js:22457-22577 placement
 async function fetchSkillManifestWithRetry() {
   let skillManifest = await fetchSkillManifest();
@@ -116,7 +128,7 @@ async function fetchSkillManifestWithRetry() {
  */
 async function fetchSkillManifest() {
   try {
-    let e = await apiClient.get("/worker/skill-manifest", {
+    let response = await apiClient.get("/worker/skill-manifest", {
       host: "ccr-session",
       auth: "session-jwt",
       headers: {
@@ -125,8 +137,8 @@ async function fetchSkillManifest() {
       timeout: MANIFEST_TIMEOUT_MS,
       validateStatus: () => true,
     });
-    if (!e.ok) {
-      if (e.reason === "no-auth") {
+    if (!response.ok) {
+      if (response.reason === "no-auth") {
         logForDiagnosticsNoPII("warn", "session_refs_manifest_no_auth");
         return {
           ok: false,
@@ -134,31 +146,31 @@ async function fetchSkillManifest() {
         };
       }
       logForDiagnosticsNoPII("warn", "session_refs_manifest_gated", {
-        reason: e.reason,
+        reason: response.reason,
       });
       return {
         ok: false,
         reason: "gated",
       };
     }
-    if (e.status === 503) {
+    if (response.status === 503) {
       logForDiagnosticsNoPII("warn", "session_refs_manifest_unavailable");
       return {
         ok: false,
         reason: "unavailable",
       };
     }
-    if (e.status >= 300) {
+    if (response.status >= 300) {
       logForDiagnosticsNoPII("warn", "session_refs_manifest_http_error", {
-        status: e.status,
+        status: response.status,
       });
       return {
         ok: false,
         reason: "http_error",
       };
     }
-    let n = sessionSkillManifestSchema().safeParse(e.data);
-    if (!n.success) {
+    let parsed = sessionSkillManifestSchema().safeParse(response.data);
+    if (!parsed.success) {
       logForDiagnosticsNoPII("warn", "session_refs_manifest_malformed");
       return {
         ok: false,
@@ -167,8 +179,8 @@ async function fetchSkillManifest() {
     }
     return {
       ok: true,
-      skills: n.data.skills.filter((skill) => skill.id),
-      plugins: n.data.plugins.filter((plugin) => plugin.id),
+      skills: parsed.data.skills.filter((skill) => skill.id),
+      plugins: parsed.data.plugins.filter((plugin) => plugin.id),
     };
   } catch (error) {
     let { kind } = classifyAxiosError(error);
@@ -185,7 +197,7 @@ async function fetchSkillManifest() {
 /**
  * 判断字节数组开头是否为 zip 的 PK 标记。
  */
-function isZipMagic(e) {
-  return e.length >= 2 && e[0] === 80 && e[1] === 75;
+function isZipMagic(bytes) {
+  return bytes.length >= 2 && bytes[0] === 80 && bytes[1] === 75;
 }
 export { sessionSkillManifestSlot, isZipMagic };

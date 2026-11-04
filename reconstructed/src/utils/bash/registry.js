@@ -48,8 +48,8 @@ async function loadFigSpec(command) {
     if (!isRunningFromTsSource()) return null;
   } else if (alwaysTrue_2() && isStandaloneExecutable()) return null;
   try {
-    let r = await import(`@withfig/autocomplete/build/${command}.js`);
-    return r.default || r;
+    let figSpecModule = await import(`@withfig/autocomplete/build/${command}.js`);
+    return figSpecModule.default || figSpecModule;
   } catch {
     return null;
   }
@@ -61,11 +61,11 @@ async function loadFigSpec(command) {
 class FigSpecRegistry {
   specForCommand = memoizeWithLRU(
     async (command) =>
-      FIG_SPEC_REGISTRY.find((r) => r.name === command) || (await loadFigSpec(command)) || null,
-    (e) => e,
+      FIG_SPEC_REGISTRY.find((entry) => entry.name === command) || (await loadFigSpec(command)) || null,
+    (command) => command,
   );
-  get(e) {
-    return this.specForCommand(e);
+  get(command) {
+    return this.specForCommand(command);
   }
 }
 export { FigSpecRegistry };

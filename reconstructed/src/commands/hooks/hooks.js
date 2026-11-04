@@ -38,8 +38,8 @@ function getToolsWithHookOnlyTargets(tools, permissionContext) {
  */
 function appendToolsNotInList(tools, extraTools) {
   if (extraTools.length === 0) return tools;
-  let x = new Set(tools.map((tool) => tool.name));
-  let filtered = extraTools.filter((extraTool) => !x.has(extraTool.name));
+  let toolNames = new Set(tools.map((tool) => tool.name));
+  let filtered = extraTools.filter((extraTool) => !toolNames.has(extraTool.name));
   return filtered.length > 0 ? [...tools, ...filtered] : tools;
 }
 //@ chunk-bajxb7bf.js:57815-57944 fingerprint = call (0.856)
@@ -57,4 +57,4 @@ var call = async (onDone, context) => {
     onExit: onDone,
   });
 };
-export { appendToolsNotInList };
+export { appendToolsNotInList, call };

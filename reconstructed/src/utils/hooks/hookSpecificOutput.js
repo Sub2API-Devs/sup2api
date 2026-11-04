@@ -12,8 +12,8 @@ import { isDeepStrictEqual } from "util";
 import { DoctorLazy } from "../../cli/handlers/util.js";
 import {
   _enum,
-  u,
-  string,
+  objectSchema,
+  stringSchema,
   discriminatedUnion,
   literal,
   array,
@@ -21,59 +21,68 @@ import {
 import { externalPermissionModeSchema } from "../permissions/browserToolNames.js";
 import { clipDisplayText } from "../resultError.js";
 import { ASKUSERQUESTION } from "../../tools/AskUserQuestionTool/prompt.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-s61vbvea.js:310452-310547 placement
-var permissionDecisionSchema = DoctorLazy(() => _enum(["allow", "deny", "ask"]));
-var permissionRuleUpdateSchema = DoctorLazy(() =>
-  u({
-    toolName: string(),
-    ruleContent: string().optional(),
-  }),
-);
+var permissionDecisionSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var permissionRuleUpdateSchema;
+deferInit("chunk-s61vbvea.js:310452", () => {
+  permissionDecisionSchema = DoctorLazy(() => _enum(["allow", "deny", "ask"]));
+  permissionRuleUpdateSchema = DoctorLazy(() =>
+    objectSchema({
+      toolName: stringSchema(),
+      ruleContent: stringSchema().optional(),
+    }),
+  );
+});
 //@ chunk-s61vbvea.js:310547-311057 placement
 /**
  * 权限更新目标与权限更新操作（添加/替换/删除规则、设置模式等）的 schema。
  */
-var permissionUpdateDestinationSchema = DoctorLazy(() =>
-  _enum(["userSettings", "projectSettings", "localSettings", "session", "cliArg"]),
-);
-var permissionUpdateSchema = DoctorLazy(() =>
-  discriminatedUnion("type", [
-    u({
-      type: literal("addRules"),
-      rules: array(permissionRuleUpdateSchema()),
-      behavior: permissionDecisionSchema(),
-      destination: permissionUpdateDestinationSchema(),
-    }),
-    u({
-      type: literal("replaceRules"),
-      rules: array(permissionRuleUpdateSchema()),
-      behavior: permissionDecisionSchema(),
-      destination: permissionUpdateDestinationSchema(),
-    }),
-    u({
-      type: literal("removeRules"),
-      rules: array(permissionRuleUpdateSchema()),
-      behavior: permissionDecisionSchema(),
-      destination: permissionUpdateDestinationSchema(),
-    }),
-    u({
-      type: literal("setMode"),
-      mode: externalPermissionModeSchema(),
-      destination: permissionUpdateDestinationSchema(),
-    }),
-    u({
-      type: literal("addDirectories"),
-      directories: array(string()),
-      destination: permissionUpdateDestinationSchema(),
-    }),
-    u({
-      type: literal("removeDirectories"),
-      directories: array(string()),
-      destination: permissionUpdateDestinationSchema(),
-    }),
-  ]),
-);
+var permissionUpdateDestinationSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var permissionUpdateSchema;
+deferInit("chunk-s61vbvea.js:310547", () => {
+  permissionUpdateDestinationSchema = DoctorLazy(() =>
+    _enum(["userSettings", "projectSettings", "localSettings", "session", "cliArg"]),
+  );
+  permissionUpdateSchema = DoctorLazy(() =>
+    discriminatedUnion("type", [
+      objectSchema({
+        type: literal("addRules"),
+        rules: array(permissionRuleUpdateSchema()),
+        behavior: permissionDecisionSchema(),
+        destination: permissionUpdateDestinationSchema(),
+      }),
+      objectSchema({
+        type: literal("replaceRules"),
+        rules: array(permissionRuleUpdateSchema()),
+        behavior: permissionDecisionSchema(),
+        destination: permissionUpdateDestinationSchema(),
+      }),
+      objectSchema({
+        type: literal("removeRules"),
+        rules: array(permissionRuleUpdateSchema()),
+        behavior: permissionDecisionSchema(),
+        destination: permissionUpdateDestinationSchema(),
+      }),
+      objectSchema({
+        type: literal("setMode"),
+        mode: externalPermissionModeSchema(),
+        destination: permissionUpdateDestinationSchema(),
+      }),
+      objectSchema({
+        type: literal("addDirectories"),
+        directories: array(stringSchema()),
+        destination: permissionUpdateDestinationSchema(),
+      }),
+      objectSchema({
+        type: literal("removeDirectories"),
+        directories: array(stringSchema()),
+        destination: permissionUpdateDestinationSchema(),
+      }),
+    ]),
+  );
+});
 //@ chunk-s61vbvea.js:311099-311310 placement
 var HOOK_TEXT_FIELD_LIMITS = {
   reason: 2000,
@@ -94,8 +103,8 @@ var HOOK_TEXT_FIELD_MAX_LINES = {
 /**
  * 按字符数与行数上限裁剪钩子文本。
  */
-function clipHookText(e, maxCodeUnits, maxLines = MAX_ADDITIONAL_CONTEXT_CHARS) {
-  return clipDisplayText(e, {
+function clipHookText(text, maxCodeUnits, maxLines = MAX_ADDITIONAL_CONTEXT_CHARS) {
+  return clipDisplayText(text, {
     maxCodeUnits,
     maxLines,
   });
@@ -116,42 +125,46 @@ var ANSWER_CHANGE_REFUSED_TEXT =
 var SLACK_MESSAGE_CHANGE_REFUSED_TEXT =
   "A hook from your own Claude Code files tried to change the Slack messages Claude read. Claude read them unchanged.";
 //@ chunk-s61vbvea.js:312014-312204 placement
-function clipHookTextField(e, n, r) {
-  if (typeof r !== "string") return;
-  if (e.options.personal === true) return r;
-  let { text, truncated } = clipHookText(r, HOOK_TEXT_FIELD_LIMITS[n], HOOK_TEXT_FIELD_MAX_LINES[n]);
-  if (truncated) e.report.truncated.push(n);
+function clipHookTextField(state, field, value) {
+  if (typeof value !== "string") return;
+  if (state.options.personal === true) return value;
+  let { text, truncated } = clipHookText(
+    value,
+    HOOK_TEXT_FIELD_LIMITS[field],
+    HOOK_TEXT_FIELD_MAX_LINES[field],
+  );
+  if (truncated) state.report.truncated.push(field);
   return text.trim() === "" ? undefined : text;
 }
 //@ chunk-s61vbvea.js:312204-312284 placement
-function markDroppedField(e, n, r) {
-  if (r && !e.report.dropped.includes(n)) e.report.dropped.push(n);
+function markDroppedField(state, field, dropped) {
+  if (dropped && !state.report.dropped.includes(field)) state.report.dropped.push(field);
 }
 //@ chunk-s61vbvea.js:312284-312416 placement
-function additionalContextOutput(e, hookEventName, r) {
-  let s = clipHookTextField(e, "additionalContext", r.additionalContext);
+function additionalContextOutput(state, hookEventName, output) {
+  let text = clipHookTextField(state, "additionalContext", output.additionalContext);
   return {
     hookEventName,
-    ...(s !== undefined && {
-      additionalContext: s,
+    ...(text !== undefined && {
+      additionalContext: text,
     }),
   };
 }
 //@ chunk-s61vbvea.js:312416-314632 placement
-function parsePreToolUseOutput(e, hookSpecificOutput, r) {
-  if (hookSpecificOutput.hookEventName !== r) {
-    markDroppedField(e, "hookSpecificOutput_event_mismatch", true);
+function parsePreToolUseOutput(state, output, eventName) {
+  if (output.hookEventName !== eventName) {
+    markDroppedField(state, "hookSpecificOutput_event_mismatch", true);
     return;
   }
-  switch (hookSpecificOutput.hookEventName) {
+  switch (output.hookEventName) {
     case "PreToolUse": {
       if (
-        e.options.personal === true &&
-        hookSpecificOutput.permissionDecision !== "deny" &&
-        hookSpecificOutput.updatedInput !== undefined &&
-        !isDeepStrictEqual(hookSpecificOutput.updatedInput, e.options.toolInput)
+        state.options.personal === true &&
+        output.permissionDecision !== "deny" &&
+        output.updatedInput !== undefined &&
+        !isDeepStrictEqual(output.updatedInput, state.options.toolInput)
       ) {
-        markDroppedField(e, "updatedInput", true);
+        markDroppedField(state, "updatedInput", true);
         return {
           hookEventName: "PreToolUse",
           permissionDecision: "deny",
@@ -159,262 +172,264 @@ function parsePreToolUseOutput(e, hookSpecificOutput, r) {
         };
       }
       let permissionDecision =
-        e.options.personal === true && hookSpecificOutput.permissionDecision === "defer"
+        state.options.personal === true && output.permissionDecision === "defer"
           ? "ask"
-          : hookSpecificOutput.permissionDecision;
-      let y = permissionDecision === "deny" || permissionDecision === "ask";
-      markDroppedField(e, "allow", permissionDecision === "allow");
-      markDroppedField(e, "defer", permissionDecision === "defer");
-      markDroppedField(e, "updatedInput", hookSpecificOutput.updatedInput !== undefined);
+          : output.permissionDecision;
+      let canDecide = permissionDecision === "deny" || permissionDecision === "ask";
+      markDroppedField(state, "allow", permissionDecision === "allow");
+      markDroppedField(state, "defer", permissionDecision === "defer");
+      markDroppedField(state, "updatedInput", output.updatedInput !== undefined);
       markDroppedField(
-        e,
+        state,
         "permissionDecisionReason",
-        !y && hookSpecificOutput.permissionDecisionReason !== undefined,
+        !canDecide && output.permissionDecisionReason !== undefined,
       );
-      let S = y
-        ? clipHookTextField(e, "permissionDecisionReason", hookSpecificOutput.permissionDecisionReason)
+      let reason = canDecide
+        ? clipHookTextField(state, "permissionDecisionReason", output.permissionDecisionReason)
         : undefined;
-      let w = clipHookTextField(e, "additionalContext", hookSpecificOutput.additionalContext);
+      let context = clipHookTextField(state, "additionalContext", output.additionalContext);
       return {
         hookEventName: "PreToolUse",
-        ...(y && {
+        ...(canDecide && {
           permissionDecision,
         }),
-        ...(S !== undefined && {
-          permissionDecisionReason: S,
+        ...(reason !== undefined && {
+          permissionDecisionReason: reason,
         }),
-        ...(w !== undefined && {
-          additionalContext: w,
+        ...(context !== undefined && {
+          additionalContext: context,
         }),
       };
     }
     case "UserPromptSubmit":
-      markDroppedField(e, "sessionTitle", hookSpecificOutput.sessionTitle !== undefined);
+      markDroppedField(state, "sessionTitle", output.sessionTitle !== undefined);
       return {
-        ...additionalContextOutput(e, "UserPromptSubmit", hookSpecificOutput),
-        ...(hookSpecificOutput.suppressOriginalPrompt === true && {
+        ...additionalContextOutput(state, "UserPromptSubmit", output),
+        ...(output.suppressOriginalPrompt === true && {
           suppressOriginalPrompt: true,
         }),
       };
     case "PostToolUse": {
-      let s = e.options.personal === true && !isAskUserQuestionTool(e.options.toolName);
+      let allowRewrite = state.options.personal === true && !isAskUserQuestionTool(state.options.toolName);
       if (
-        e.options.personal === true &&
-        !s &&
-        [hookSpecificOutput.updatedToolOutput, hookSpecificOutput.updatedMCPToolOutput].some(
-          (h) => h !== undefined && !isDeepStrictEqual(h, e.options.toolResponse),
+        state.options.personal === true &&
+        !allowRewrite &&
+        [output.updatedToolOutput, output.updatedMCPToolOutput].some(
+          (candidate) => candidate !== undefined && !isDeepStrictEqual(candidate, state.options.toolResponse),
         )
       )
-        e.wordsReplaced = true;
-      markDroppedField(e, "updatedToolOutput", !s && hookSpecificOutput.updatedToolOutput !== undefined);
+        state.wordsReplaced = true;
+      markDroppedField(state, "updatedToolOutput", !allowRewrite && output.updatedToolOutput !== undefined);
       markDroppedField(
-        e,
+        state,
         "updatedMCPToolOutput",
-        !s && hookSpecificOutput.updatedMCPToolOutput !== undefined,
+        !allowRewrite && output.updatedMCPToolOutput !== undefined,
       );
-      markDroppedField(e, "classifierContext", hookSpecificOutput.classifierContext !== undefined);
+      markDroppedField(state, "classifierContext", output.classifierContext !== undefined);
       return {
-        ...additionalContextOutput(e, "PostToolUse", hookSpecificOutput),
-        ...(s &&
-          hookSpecificOutput.updatedToolOutput !== undefined && {
-            updatedToolOutput: hookSpecificOutput.updatedToolOutput,
+        ...additionalContextOutput(state, "PostToolUse", output),
+        ...(allowRewrite &&
+          output.updatedToolOutput !== undefined && {
+            updatedToolOutput: output.updatedToolOutput,
           }),
-        ...(s &&
-          hookSpecificOutput.updatedMCPToolOutput !== undefined && {
-            updatedMCPToolOutput: hookSpecificOutput.updatedMCPToolOutput,
+        ...(allowRewrite &&
+          output.updatedMCPToolOutput !== undefined && {
+            updatedMCPToolOutput: output.updatedMCPToolOutput,
           }),
       };
     }
     case "UserPromptExpansion":
       return {
-        ...additionalContextOutput(e, "UserPromptExpansion", hookSpecificOutput),
-        ...(hookSpecificOutput.suppressOriginalPrompt === true && {
+        ...additionalContextOutput(state, "UserPromptExpansion", output),
+        ...(output.suppressOriginalPrompt === true && {
           suppressOriginalPrompt: true,
         }),
       };
     case "PostToolUseFailure":
-      return additionalContextOutput(e, "PostToolUseFailure", hookSpecificOutput);
+      return additionalContextOutput(state, "PostToolUseFailure", output);
     case "PostToolBatch":
-      return additionalContextOutput(e, "PostToolBatch", hookSpecificOutput);
+      return additionalContextOutput(state, "PostToolBatch", output);
     case "Stop":
-      return additionalContextOutput(e, "Stop", hookSpecificOutput);
+      return additionalContextOutput(state, "Stop", output);
     case "SubagentStop":
-      return additionalContextOutput(e, "SubagentStop", hookSpecificOutput);
+      return additionalContextOutput(state, "SubagentStop", output);
     case "SubagentStart":
-      return additionalContextOutput(e, "SubagentStart", hookSpecificOutput);
+      return additionalContextOutput(state, "SubagentStart", output);
     case "PermissionDenied":
-      markDroppedField(e, "retry", hookSpecificOutput.retry !== undefined);
+      markDroppedField(state, "retry", output.retry !== undefined);
       return {
         hookEventName: "PermissionDenied",
       };
     default:
-      return e.options.personal === true
-        ? parsePermissionRequestOutput(e, hookSpecificOutput)
-        : refuseUnsupportedHookEvent(e);
+      return state.options.personal === true
+        ? parsePermissionRequestOutput(state, output)
+        : refuseUnsupportedHookEvent(state);
   }
 }
 //@ chunk-s61vbvea.js:314632-314702 placement
-function refuseUnsupportedHookEvent(e) {
-  markDroppedField(e, "hookSpecificOutput_unsupported_event", true);
+function refuseUnsupportedHookEvent(state) {
+  markDroppedField(state, "hookSpecificOutput_unsupported_event", true);
   return;
 }
 //@ chunk-s61vbvea.js:314702-316104 placement
-function parsePermissionRequestOutput(e, n) {
-  switch (n.hookEventName) {
+function parsePermissionRequestOutput(state, output) {
+  switch (output.hookEventName) {
     case "PermissionRequest": {
-      if (n.decision.behavior !== "deny") {
-        markDroppedField(e, "allow", true);
+      if (output.decision.behavior !== "deny") {
+        markDroppedField(state, "allow", true);
         return;
       }
-      let r = clipHookTextField(e, "reason", n.decision.message);
+      let message = clipHookTextField(state, "reason", output.decision.message);
       return {
         hookEventName: "PermissionRequest",
         decision: {
           behavior: "deny",
-          ...(r !== undefined && {
-            message: r,
+          ...(message !== undefined && {
+            message,
           }),
-          ...(n.decision.interrupt === true && {
+          ...(output.decision.interrupt === true && {
             interrupt: true,
           }),
         },
       };
     }
     case "PreModelSwitch": {
-      let r = n.permissionDecision === "deny" || n.permissionDecision === "ask";
-      markDroppedField(e, "allow", n.permissionDecision === "allow");
-      let s = r ? clipHookTextField(e, "permissionDecisionReason", n.permissionDecisionReason) : undefined;
+      let canDecide = output.permissionDecision === "deny" || output.permissionDecision === "ask";
+      markDroppedField(state, "allow", output.permissionDecision === "allow");
+      let reason = canDecide
+        ? clipHookTextField(state, "permissionDecisionReason", output.permissionDecisionReason)
+        : undefined;
       return {
         hookEventName: "PreModelSwitch",
-        ...(r && {
-          permissionDecision: n.permissionDecision,
+        ...(canDecide && {
+          permissionDecision: output.permissionDecision,
         }),
-        ...(s !== undefined && {
-          permissionDecisionReason: s,
+        ...(reason !== undefined && {
+          permissionDecisionReason: reason,
         }),
       };
     }
     case "SessionStart":
-      markDroppedField(e, "initialUserMessage", n.initialUserMessage !== undefined);
-      markDroppedField(e, "sessionTitle", n.sessionTitle !== undefined);
+      markDroppedField(state, "initialUserMessage", output.initialUserMessage !== undefined);
+      markDroppedField(state, "sessionTitle", output.sessionTitle !== undefined);
       return {
-        ...additionalContextOutput(e, "SessionStart", n),
-        ...(n.watchPaths !== undefined && {
-          watchPaths: n.watchPaths,
+        ...additionalContextOutput(state, "SessionStart", output),
+        ...(output.watchPaths !== undefined && {
+          watchPaths: output.watchPaths,
         }),
-        ...(n.reloadSkills === true && {
+        ...(output.reloadSkills === true && {
           reloadSkills: true,
         }),
       };
     case "Setup":
-      return additionalContextOutput(e, "Setup", n);
+      return additionalContextOutput(state, "Setup", output);
     case "PostModelSwitch":
-      return additionalContextOutput(e, "PostModelSwitch", n);
+      return additionalContextOutput(state, "PostModelSwitch", output);
     case "Notification":
-      return additionalContextOutput(e, "Notification", n);
+      return additionalContextOutput(state, "Notification", output);
     case "Elicitation":
     case "ElicitationResult": {
-      let r = n.action === "decline" || n.action === "cancel";
-      markDroppedField(e, "allow", n.action === "accept");
-      markDroppedField(e, "content", n.content !== undefined);
+      let declines = output.action === "decline" || output.action === "cancel";
+      markDroppedField(state, "allow", output.action === "accept");
+      markDroppedField(state, "content", output.content !== undefined);
       return {
-        hookEventName: n.hookEventName,
-        ...(r && {
-          action: n.action,
+        hookEventName: output.hookEventName,
+        ...(declines && {
+          action: output.action,
         }),
       };
     }
     case "CwdChanged":
     case "FileChanged":
       return {
-        hookEventName: n.hookEventName,
-        ...(n.watchPaths !== undefined && {
-          watchPaths: n.watchPaths,
+        hookEventName: output.hookEventName,
+        ...(output.watchPaths !== undefined && {
+          watchPaths: output.watchPaths,
         }),
       };
     default:
-      return refuseUnsupportedHookEvent(e);
+      return refuseUnsupportedHookEvent(state);
   }
 }
 //@ chunk-s61vbvea.js:316104-317233 placement
-function parseHookJsonOutput(e, n, r = {}) {
-  let s = {
+function parseHookJsonOutput(output, hookEvent, options = {}) {
+  let state = {
     report: {
       dropped: [],
       truncated: [],
     },
-    options: r,
+    options,
   };
-  if ("async" in e) {
-    markDroppedField(s, "async", true);
+  if ("async" in output) {
+    markDroppedField(state, "async", true);
     return {
       answer: {},
-      report: s.report,
+      report: state.report,
     };
   }
-  let h = e;
-  markDroppedField(s, "approve", h.decision === "approve");
-  markDroppedField(s, "reason", h.decision === "approve" && h.reason !== undefined);
-  let y = r.personal === true;
-  markDroppedField(s, "terminalSequence", !y && h.terminalSequence !== undefined);
-  markDroppedField(s, "metrics", h.metrics !== undefined);
-  markDroppedField(s, "rewakeSummary", h.rewakeSummary !== undefined);
-  let S = clipHookTextField(s, "stopReason", h.stopReason);
-  let w = h.decision === "approve" ? undefined : clipHookTextField(s, "reason", h.reason);
-  let R = clipHookTextField(s, "systemMessage", h.systemMessage);
-  let hookSpecificOutput = h.hookSpecificOutput;
-  let P =
+  let raw = output;
+  markDroppedField(state, "approve", raw.decision === "approve");
+  markDroppedField(state, "reason", raw.decision === "approve" && raw.reason !== undefined);
+  let personal = options.personal === true;
+  markDroppedField(state, "terminalSequence", !personal && raw.terminalSequence !== undefined);
+  markDroppedField(state, "metrics", raw.metrics !== undefined);
+  markDroppedField(state, "rewakeSummary", raw.rewakeSummary !== undefined);
+  let stopReason = clipHookTextField(state, "stopReason", raw.stopReason);
+  let reason = raw.decision === "approve" ? undefined : clipHookTextField(state, "reason", raw.reason);
+  let systemMessage = clipHookTextField(state, "systemMessage", raw.systemMessage);
+  let hookSpecificOutput = raw.hookSpecificOutput;
+  let isObject =
     typeof hookSpecificOutput === "object" &&
     hookSpecificOutput !== null &&
     !Array.isArray(hookSpecificOutput);
-  markDroppedField(s, "hookSpecificOutput_not_object", hookSpecificOutput !== undefined && !P);
-  let j = P ? parsePreToolUseOutput(s, hookSpecificOutput, n) : undefined;
-  let G = s.wordsReplaced
+  markDroppedField(state, "hookSpecificOutput_not_object", hookSpecificOutput !== undefined && !isObject);
+  let specific = isObject ? parsePreToolUseOutput(state, hookSpecificOutput, hookEvent) : undefined;
+  let message = state.wordsReplaced
     ? [
-        R,
-        r.toolName === ASKUSERQUESTION ? ANSWER_CHANGE_REFUSED_TEXT : SLACK_MESSAGE_CHANGE_REFUSED_TEXT,
-      ].filter((L) => L !== undefined).join(`
+        systemMessage,
+        options.toolName === ASKUSERQUESTION ? ANSWER_CHANGE_REFUSED_TEXT : SLACK_MESSAGE_CHANGE_REFUSED_TEXT,
+      ].filter((part) => part !== undefined).join(`
 `)
-    : R;
+    : systemMessage;
   return {
     answer: {
-      ...(h.continue === false && {
+      ...(raw.continue === false && {
         continue: false,
       }),
-      ...(y &&
-        h.terminalSequence !== undefined && {
-          terminalSequence: h.terminalSequence,
+      ...(personal &&
+        raw.terminalSequence !== undefined && {
+          terminalSequence: raw.terminalSequence,
         }),
-      ...(h.suppressOutput === true && {
+      ...(raw.suppressOutput === true && {
         suppressOutput: true,
       }),
-      ...(S !== undefined && {
-        stopReason: S,
+      ...(stopReason !== undefined && {
+        stopReason,
       }),
-      ...(h.decision === "block" && {
+      ...(raw.decision === "block" && {
         decision: "block",
       }),
-      ...(G !== undefined && {
-        systemMessage: G,
+      ...(message !== undefined && {
+        systemMessage: message,
       }),
-      ...(w !== undefined && {
-        reason: w,
+      ...(reason !== undefined && {
+        reason,
       }),
-      ...(j !== undefined && {
-        hookSpecificOutput: j,
+      ...(specific !== undefined && {
+        hookSpecificOutput: specific,
       }),
     },
-    report: s.report,
+    report: state.report,
   };
 }
 //@ chunk-s61vbvea.js:317233-317538 placement
 /**
  * 判断 hook 输出是否要求阻止（decision 为 block、continue 为 false 或权限 deny）。
  */
-function isBlockingHookOutput(e) {
-  if ("decision" in e && e.decision === "block") return true;
-  if ("continue" in e && e.continue === false) return true;
-  let hookSpecificOutput = "hookSpecificOutput" in e ? e.hookSpecificOutput : undefined;
+function isBlockingHookOutput(output) {
+  if ("decision" in output && output.decision === "block") return true;
+  if ("continue" in output && output.continue === false) return true;
+  let hookSpecificOutput = "hookSpecificOutput" in output ? output.hookSpecificOutput : undefined;
   return (
     hookSpecificOutput !== undefined &&
     typeof hookSpecificOutput === "object" &&
@@ -436,9 +451,9 @@ function isAskOnlyHookOutput(answer) {
   );
 }
 //@ chunk-s61vbvea.js:317770-318000 placement
-function isDenyingHookOutput(e) {
-  if ("decision" in e && e.decision === "block") return true;
-  let hookSpecificOutput = "hookSpecificOutput" in e ? e.hookSpecificOutput : undefined;
+function isDenyingHookOutput(output) {
+  if ("decision" in output && output.decision === "block") return true;
+  let hookSpecificOutput = "hookSpecificOutput" in output ? output.hookSpecificOutput : undefined;
   return (
     hookSpecificOutput !== undefined &&
     typeof hookSpecificOutput === "object" &&

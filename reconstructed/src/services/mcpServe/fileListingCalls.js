@@ -11,12 +11,12 @@
 import { DoctorLazy } from "../../cli/handlers/util.js";
 import {
   zodStrictObject,
-  string,
-  u,
+  stringSchema,
+  objectSchema,
   array,
-  E,
+  numberSchema,
   union,
-  M,
+  booleanSchema,
   _enum,
 } from "../../../vendor/zod/v4/classic/schemas.js";
 import { MAX_FILE_SUGGESTIONS } from "../../hooks/fileSuggestions.js";
@@ -47,46 +47,48 @@ var FILESUGGESTIONS = "FileSuggestions";
 var MAX_QUERY_CHARS = 4096;
 var fileSuggestionsInputSchema = DoctorLazy(() =>
   zodStrictObject({
-    query: string().max(MAX_QUERY_CHARS),
+    query: stringSchema().max(MAX_QUERY_CHARS),
   }),
 );
 var fileSuggestionsResultSchema = DoctorLazy(() =>
-  u({
-    paths: array(string().min(1).max(MAX_QUERY_CHARS)).max(MAX_FILE_SUGGESTIONS),
-    cwd: string().min(1).max(MAX_QUERY_CHARS).optional(),
-    leftOut: E().int().min(0).max(MAX_FILE_SUGGESTIONS),
+  objectSchema({
+    paths: array(stringSchema().min(1).max(MAX_QUERY_CHARS)).max(MAX_FILE_SUGGESTIONS),
+    cwd: stringSchema().min(1).max(MAX_QUERY_CHARS).optional(),
+    leftOut: numberSchema().int().min(0).max(MAX_FILE_SUGGESTIONS),
   }),
 );
 //@ chunk-wy9dbk5f.js:18295-18350 placement
 /**
  * 判断查询是否可用（非空、不超长、符合过滤规则）。
  */
-function isUsableQuery(e) {
-  return e.length > 0 && e.length <= MAX_QUERY_CHARS && isAlreadySanitized(e);
+function isUsableQuery(query) {
+  return query.length > 0 && query.length <= MAX_QUERY_CHARS && isAlreadySanitized(query);
 }
 //@ chunk-wy9dbk5f.js:18350-18776 placement
-async function serveFileSuggestions(e, r, n) {
-  let { query } = fileSuggestionsInputSchema().parse(e);
-  let { generateFileSuggestionsWithBase, globalFileIndexCache } = await import("./chunk-21emf7ab.js");
+async function serveFileSuggestions(input, signal, context) {
+  let { query } = fileSuggestionsInputSchema().parse(input);
+  let { generateFileSuggestionsWithBase, globalFileIndexCache } =
+    await import("../../hooks/fileSuggestions.js");
   let { items, baseDir } = await generateFileSuggestionsWithBase(
     globalFileIndexCache,
     query,
     true,
-    n.toolUseContext().storageV5,
+    context.toolUseContext().storageV5,
     false,
   );
-  let h = baseDir !== undefined && isUsableQuery(baseDir) ? baseDir : undefined;
-  let S = [];
+  let usableBaseDir = baseDir !== undefined && isUsableQuery(baseDir) ? baseDir : undefined;
+  let paths = [];
   let sliced = items.slice(0, MAX_FILE_SUGGESTIONS);
-  for (let { displayText } of sliced) if (h !== undefined && isUsableQuery(displayText)) S.push(displayText);
+  for (let { displayText } of sliced)
+    if (usableBaseDir !== undefined && isUsableQuery(displayText)) paths.push(displayText);
   return {
-    summary: `${S.length} paths`,
+    summary: `${paths.length} paths`,
     output: {
-      paths: S,
-      ...(h !== undefined && {
-        cwd: h,
+      paths,
+      ...(usableBaseDir !== undefined && {
+        cwd: usableBaseDir,
       }),
-      leftOut: sliced.length - S.length,
+      leftOut: sliced.length - paths.length,
     },
   };
 }
@@ -96,8 +98,8 @@ async function serveFileSuggestions(e, r, n) {
  */
 var LISTDIRECTORYFORREMOTE = "ListDirectoryForRemote";
 var listDirectoryInputSchema = DoctorLazy(() =>
-  u({
-    path: string().max(MAX_DIRECTORY_PATH_LENGTH),
+  objectSchema({
+    path: stringSchema().max(MAX_DIRECTORY_PATH_LENGTH),
   }),
 );
 var listDirectoryWithContextSchema = DoctorLazy(() =>
@@ -109,29 +111,29 @@ var listDirectoryWithContextSchema = DoctorLazy(() =>
 );
 var listDirectoryResultSchema = DoctorLazy(() =>
   union([
-    u({
-      listing: u({
+    objectSchema({
+      listing: objectSchema({
         entries: array(
-          u({
-            name: string(),
-            isDirectory: M(),
-            isSymlink: M().optional(),
-            isSpecial: M().optional(),
+          objectSchema({
+            name: stringSchema(),
+            isDirectory: booleanSchema(),
+            isSymlink: booleanSchema().optional(),
+            isSpecial: booleanSchema().optional(),
           }),
         ).max(REMOTE_LIST_DIRECTORY_MAX_ENTRIES),
-        truncated: M(),
+        truncated: booleanSchema(),
       }).refine(fitsListingLimit),
     }),
-    u({
+    objectSchema({
       denied: _enum(Object.keys(REPO_ROOT_ERROR_TONES)),
     }),
   ]),
 );
 //@ chunk-wy9dbk5f.js:19090-19226 placement
-async function serveListDirectory(e, r, n) {
-  if (isPlainObject(e) && exceedsSerializedContextLimit(e.permission_context))
+async function serveListDirectory(input, signal, context) {
+  if (isPlainObject(input) && exceedsSerializedContextLimit(input.permission_context))
     throw Error("permission_context is too large");
-  return limitedListDirectory(listDirectoryWithContextSchema().parse(e), r, n);
+  return limitedListDirectory(listDirectoryWithContextSchema().parse(input), signal, context);
 }
 //@ chunk-wy9dbk5f.js:19226-19242 placement
 /**
@@ -139,13 +141,14 @@ async function serveListDirectory(e, r, n) {
  */
 var limitedListDirectory = limitConcurrency(4, serveListDirectoryForRemote);
 //@ chunk-wy9dbk5f.js:19242-19860 placement
-async function serveListDirectoryForRemote({ permission_context: permissionContext, path }, n, s) {
-  if (n.aborted || s.callerGone?.aborted) return deniedListing("unexpected_error");
-  let a = s.launchPermissionContext && remoteReadPermissionContext(s.launchPermissionContext);
-  if (!a) return deniedListing("read_rule");
-  let { projectRoot, originalCwd } = getSessionProject(s.session);
+async function serveListDirectoryForRemote({ permission_context: permissionContext, path }, signal, context) {
+  if (signal.aborted || context.callerGone?.aborted) return deniedListing("unexpected_error");
+  let readContext =
+    context.launchPermissionContext && remoteReadPermissionContext(context.launchPermissionContext);
+  if (!readContext) return deniedListing("read_rule");
+  let { projectRoot, originalCwd } = getSessionProject(context.session);
   if (originalCwd !== projectRoot) return deniedListing("workspace_moved");
-  let nativeDoctorDiagnostics = buildNativeDoctorDiagnostics(permissionContext, a, projectRoot);
+  let nativeDoctorDiagnostics = buildNativeDoctorDiagnostics(permissionContext, readContext, projectRoot);
   try {
     let { entries, truncated } = await listDirectoryForRemote(
       path,
@@ -153,11 +156,11 @@ async function serveListDirectoryForRemote({ permission_context: permissionConte
       () => nativeDoctorDiagnostics,
       () => getOriginalCwd() !== projectRoot,
     );
-    let C = 0;
+    let totalBytes = 0;
     let index = entries.findIndex(
-      (entry) => (C += Buffer.byteLength(jsonStringify(entry)) + 1) > MAX_LISTING_BYTES,
+      (entry) => (totalBytes += Buffer.byteLength(jsonStringify(entry)) + 1) > MAX_LISTING_BYTES,
     );
-    let R =
+    let listing =
       index === -1
         ? {
             entries,
@@ -168,9 +171,9 @@ async function serveListDirectoryForRemote({ permission_context: permissionConte
             truncated: true,
           };
     return {
-      summary: `${R.entries.length} entries`,
+      summary: `${listing.entries.length} entries`,
       output: {
-        listing: R,
+        listing,
       },
     };
   } catch (error) {
@@ -186,18 +189,21 @@ var MAX_LISTING_BYTES = MAX_REMOTE_READ_BYTES - 64;
 /**
  * 生成“列目录被拒绝”的结果。
  */
-function deniedListing(e) {
+function deniedListing(reason) {
   return {
-    summary: `list denied: ${e}`,
+    summary: `list denied: ${reason}`,
     output: {
-      denied: e,
+      denied: reason,
     },
   };
 }
 //@ chunk-wy9dbk5f.js:19943-20050 placement
-function fitsListingLimit(e) {
-  let r = 0;
-  for (let { name: n } of e.entries) r += n.length;
-  return r <= MAX_REMOTE_READ_BYTES && Buffer.byteLength(jsonStringify(e)) <= MAX_REMOTE_READ_BYTES;
+function fitsListingLimit(listing) {
+  let totalNameLength = 0;
+  for (let { name: entryName } of listing.entries) totalNameLength += entryName.length;
+  return (
+    totalNameLength <= MAX_REMOTE_READ_BYTES &&
+    Buffer.byteLength(jsonStringify(listing)) <= MAX_REMOTE_READ_BYTES
+  );
 }
 export { FILESUGGESTIONS, serveFileSuggestions, LISTDIRECTORYFORREMOTE, serveListDirectory };

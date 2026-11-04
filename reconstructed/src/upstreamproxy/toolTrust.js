@@ -44,23 +44,23 @@ import { execFileNoThrow } from "../utils/execFileNoThrow.js";
 /**
  * 描述外部命令的运行结果：退出码、超时仍在运行、输出超限，或未能运行（附错误）。
  */
-function describeExecOutcome(n) {
-  if (n.exitCode !== undefined) return `exit status ${n.exitCode}`;
-  if (n.timedOut) return "still running at the deadline";
-  if (n.maxBufferExceeded) return "output over the cap";
-  return `did not run (${n.error ?? "unknown"})`;
+function describeExecOutcome(result) {
+  if (result.exitCode !== undefined) return `exit status ${result.exitCode}`;
+  if (result.timedOut) return "still running at the deadline";
+  if (result.maxBufferExceeded) return "output over the cap";
+  return `did not run (${result.error ?? "unknown"})`;
 }
 //@ chunk-awy329vy.js:44302-44463 placement
 /**
  * 把外部工具的 stdout/stderr 合并后（超长截断）写入 agent-proxy 调试日志。
  */
-function logToolOutput(n, e) {
-  let trimmed = `${e.stdout}
-${e.stderr}`.trim();
+function logToolOutput(label, result) {
+  let trimmed = `${result.stdout}
+${result.stderr}`.trim();
   if (!trimmed) return;
   if (trimmed.length > MAX_LOGGED_OUTPUT_CHARS)
     trimmed = `${trimmed.slice(0, MAX_LOGGED_OUTPUT_CHARS)}\u2026 (${trimmed.length} chars)`;
-  logForDebugging(`[agent-proxy] ${n}: ${trimmed}`);
+  logForDebugging(`[agent-proxy] ${label}: ${trimmed}`);
 }
 //@ chunk-awy329vy.js:44755-45013 placement
 /**
@@ -86,34 +86,34 @@ var NSS_CHECK_STAMP_SUFFIX = ".checked-v1";
  * 按拒绝证书列表（根证书/SPKI/泄露 CA 哈希）的摘要生成证书包文件名，使列表变化时文件名随之变化。
  */
 function getBundlePathForDenylist(
-  n,
-  e = [...BLOCKED_ROOT_SHA256, ...BLOCKED_ROOT_SPKI_SHA256, ...LEAKED_CA_SPKI_SHA256],
+  storePath,
+  denylist = [...BLOCKED_ROOT_SHA256, ...BLOCKED_ROOT_SPKI_SHA256, ...LEAKED_CA_SPKI_SHA256],
 ) {
   let sliced = createHash("sha256")
     .update(
-      [...e].sort().join(`
+      [...denylist].sort().join(`
 `),
     )
     .digest("hex")
     .slice(0, 16);
-  return `${n}${CA_BUNDLE_V2_SUFFIX}-${sliced}.pem`;
+  return `${storePath}${CA_BUNDLE_V2_SUFFIX}-${sliced}.pem`;
 }
 //@ chunk-awy329vy.js:45157-45292 placement
 /**
  * 生成 JVM 信任库系统属性字符串（-Djavax.net.ssl.trustStore 等）并与已有 JAVA_TOOL_OPTIONS 合并；已有 trustStore 设置时原样保留。
  */
-function buildJavaTrustOptions(javaTrustStorePath, javaTrustStoreType, token) {
+function buildJavaTrustOptions(storePath, storeType, token) {
   let trimmed = token?.trim();
   if (trimmed?.includes("javax.net.ssl.trustStore=")) return trimmed;
-  let joined = javaTrustStoreArgs(javaTrustStorePath, javaTrustStoreType).join(" ");
+  let joined = javaTrustStoreArgs(storePath, storeType).join(" ");
   return trimmed ? `${joined} ${trimmed}` : joined;
 }
 //@ chunk-awy329vy.js:45292-45518 placement
-function javaTrustStoreArgs(n, e) {
-  return e === "JKS"
-    ? [`-Djavax.net.ssl.trustStore=${n}`, "-Djavax.net.ssl.trustStoreType=JKS"]
+function javaTrustStoreArgs(storePath, storeType) {
+  return storeType === "JKS"
+    ? [`-Djavax.net.ssl.trustStore=${storePath}`, "-Djavax.net.ssl.trustStoreType=JKS"]
     : [
-        `-Djavax.net.ssl.trustStore=${n}`,
+        `-Djavax.net.ssl.trustStore=${storePath}`,
         `-Djavax.net.ssl.trustStorePassword=${CHANGEIT_2}`,
         "-Djavax.net.ssl.trustStoreType=PKCS12",
       ];
@@ -122,49 +122,50 @@ function javaTrustStoreArgs(n, e) {
 /**
  * 为 Java、NSS、Bazel、gsutil 等工具配置 CA 信任。
  */
-async function configureToolTrust(n) {
+async function configureToolTrust(options) {
   let failures = [];
-  let r = {
+  let result = {
     failureCodes: failures,
   };
-  let o = {
+  let seedState = {
     used: false,
   };
-  let s = join(n.stateDir, "agent-proxy-ca.crt");
+  let caFilePath = join(options.stateDir, "agent-proxy-ca.crt");
   try {
-    await mkdir(n.stateDir, {
+    await mkdir(options.stateDir, {
       recursive: true,
     });
-    await writeFile(s, n.ccrCa, "utf8");
+    await writeFile(caFilePath, options.ccrCa, "utf8");
   } catch (error) {
     logForDebugging(`[agent-proxy] tool trust setup skipped: cannot write CA file: ${errorMessage(error)}`, {
       level: "warn",
     });
     logFeatureBad("agent_proxy_tool_trust", "ca_file_write_failed");
-    return r;
+    return result;
   }
-  let keytool = await resolveToolBinaryPath(n.keytoolBin, findKeytool);
-  let toolBinaryPath = await resolveToolBinaryPath(n.certutilBin, () => whichAsync("certutil"));
-  let stateDir = (n.nssRecords ?? !env.CCR_AGENT_PROXY_NSS_RECORDS_DISABLED) ? n.stateDir : undefined;
-  let [p, y] = await Promise.all([
+  let toolBinaryPath = await resolveToolBinaryPath(options.keytoolBin, findKeytool);
+  let toolBinaryPath_2 = await resolveToolBinaryPath(options.certutilBin, () => whichAsync("certutil"));
+  let stateDir =
+    (options.nssRecords ?? !env.CCR_AGENT_PROXY_NSS_RECORDS_DISABLED) ? options.stateDir : undefined;
+  let [jvmStore, bazelSetup] = await Promise.all([
     (async () => {
-      if (!keytool) {
+      if (!toolBinaryPath) {
         logForDebugging("[agent-proxy] no keytool found; skipping JVM truststore");
         return;
       }
-      let storePath = join(n.stateDir, "java-truststore.p12");
-      let bazelrcPath = n.bazelrcPath ?? "/etc/bazel.bazelrc";
-      let x;
-      let b = [];
-      let match = n.ccrCa.match(PEM_CERT_BLOCK_RE);
-      let v = async () => {
-        let { cacerts, store } = await loadJdkCacerts(keytool, b);
+      let storePath = join(options.stateDir, "java-truststore.p12");
+      let bazelrcPath = options.bazelrcPath ?? "/etc/bazel.bazelrc";
+      let trustStore;
+      let cacertsList = [];
+      let match = options.ccrCa.match(PEM_CERT_BLOCK_RE);
+      let probeInstalled = async () => {
+        let { cacerts, store } = await loadJdkCacerts(toolBinaryPath, cacertsList);
         let usable =
           store !== undefined &&
           match !== null &&
-          match.every((Y) => {
-            let X = base64URLEncode(Y);
-            return X.length >= 64 && X[0] === 48 && store.includes(X);
+          match.every((certBlock) => {
+            let encodedCert = base64URLEncode(certBlock);
+            return encodedCert.length >= 64 && encodedCert[0] === 48 && store.includes(encodedCert);
           }) &&
           inspectJksStore(store) === "clean";
         return {
@@ -172,73 +173,83 @@ async function configureToolTrust(n) {
           usable,
         };
       };
-      let P = await v();
+      let probeResult = await probeInstalled();
       let previousState = await statTrustStore(storePath);
-      let A =
+      let reusableOnDisk =
         previousState.state === "file" &&
-        (await compareBundleWithFile(getBundlePathForDenylist(storePath), n.ccrCa)) === "same";
-      if (!P.usable && !A) {
-        await n.systemTrust?.then(
+        (await compareBundleWithFile(getBundlePathForDenylist(storePath), options.ccrCa)) === "same";
+      if (!probeResult.usable && !reusableOnDisk) {
+        await options.systemTrust?.then(
           () => {},
           () => {},
         );
-        P = await v();
+        probeResult = await probeInstalled();
       }
-      if (P.cacerts && P.usable) {
-        logForDebugging(`[agent-proxy] JDK truststore at ${P.cacerts} already holds the CA; using it`);
-        x = {
-          path: P.cacerts,
+      if (probeResult.cacerts && probeResult.usable) {
+        logForDebugging(
+          `[agent-proxy] JDK truststore at ${probeResult.cacerts} already holds the CA; using it`,
+        );
+        trustStore = {
+          path: probeResult.cacerts,
           type: "JKS",
           source: "system",
         };
-      } else if (A) {
+      } else if (reusableOnDisk) {
         logForDebugging(`[agent-proxy] reusing JVM truststore at ${storePath}`);
-        x = {
+        trustStore = {
           path: storePath,
           type: "PKCS12",
           source: "reused",
         };
       } else {
-        let M = (Y) => importIntoJvmTruststore(keytool, P.cacerts, n.ccrCa, s, storePath, Y);
-        let R = [];
-        let I = await M(R);
-        if (R[0] === "java_truststore_seed_failed") {
-          o.used = true;
+        let importOnce = (targetFailures) =>
+          importIntoJvmTruststore(
+            toolBinaryPath,
+            probeResult.cacerts,
+            options.ccrCa,
+            caFilePath,
+            storePath,
+            targetFailures,
+          );
+        let importFailures = [];
+        let imported = await importOnce(importFailures);
+        if (importFailures[0] === "java_truststore_seed_failed") {
+          seedState.used = true;
           logForDebugging("[agent-proxy] keytool seed failed; trying once more after a pause");
-          await (n.seedRetryPause?.() ?? sleep(SEED_RETRY_BASE_MS));
-          I = await M(failures);
-        } else failures.push(...R);
-        if (!I) {
-          await loadJdkCacerts(keytool, b);
-          for (let { cacerts, store } of b) {
-            let L = inspectJksStore(store);
-            if (L !== "part_written") {
-              r.rejectedJdkStorePath = L === "failed_filter" ? cacerts : undefined;
+          await (options.seedRetryPause?.() ?? sleep(SEED_RETRY_BASE_MS));
+          imported = await importOnce(failures);
+        } else failures.push(...importFailures);
+        if (!imported) {
+          await loadJdkCacerts(toolBinaryPath, cacertsList);
+          for (let { cacerts, store } of cacertsList) {
+            let storeState = inspectJksStore(store);
+            if (storeState !== "part_written") {
+              result.rejectedJdkStorePath = storeState === "failed_filter" ? cacerts : undefined;
               break;
             }
           }
           if (
             await cleanupJavaTrust(
-              keytool,
+              toolBinaryPath,
               storePath,
               previousState,
-              r.rejectedJdkStorePath,
+              result.rejectedJdkStorePath,
               bazelrcPath,
               failures,
             )
           )
-            r.retiredJavaTrustStorePath = storePath;
+            result.retiredJavaTrustStorePath = storePath;
           return;
         }
-        x = {
-          path: I,
+        trustStore = {
+          path: imported,
           type: "PKCS12",
           source: "built",
         };
       }
-      if (KEYTOOL_PATH_UNSAFE_RE.test(x.path)) {
+      if (KEYTOOL_PATH_UNSAFE_RE.test(trustStore.path)) {
         logForDebugging(
-          `[agent-proxy] truststore path contains JVM-unsafe characters; not emitting JAVA_TOOL_OPTIONS: ${x.path}`,
+          `[agent-proxy] truststore path contains JVM-unsafe characters; not emitting JAVA_TOOL_OPTIONS: ${trustStore.path}`,
           {
             level: "warn",
           },
@@ -246,111 +257,119 @@ async function configureToolTrust(n) {
         failures.push("jvm_unsafe_truststore_path");
         return;
       }
-      r.javaTrustStorePath = x.path;
-      r.javaTrustStoreType = x.type;
-      await writeBazelTrustBlock(x.path, x.type, bazelrcPath, failures);
-      return x.source;
+      result.javaTrustStorePath = trustStore.path;
+      result.javaTrustStoreType = trustStore.type;
+      await writeBazelTrustBlock(trustStore.path, trustStore.type, bazelrcPath, failures);
+      return trustStore.source;
     })(),
     (async () => {
-      if (!toolBinaryPath) {
+      if (!toolBinaryPath_2) {
         logForDebugging("[agent-proxy] certutil not found; skipping NSS trust for browsers");
         return;
       }
       return addToNssDb(
-        s,
-        n.ccrCa,
-        n.nssDbDirs ?? [join(homedir(), ".pki", "nssdb"), join(getXDGDataHome(), "pki", "nssdb")],
-        toolBinaryPath,
+        caFilePath,
+        options.ccrCa,
+        options.nssDbDirs ?? [join(homedir(), ".pki", "nssdb"), join(getXDGDataHome(), "pki", "nssdb")],
+        toolBinaryPath_2,
         stateDir,
         failures,
       );
     })(),
-    writeBotoConfig(n.caBundlePath, n.botoConfigPath ?? join(homedir(), ".boto"), failures),
-    writeLoginShellCaEnv(n, n.profileDPath ?? "/etc/profile.d/ccr-agent-proxy-ca.sh", failures).then(
-      (profileDPath) => {
-        r.profileDPath = profileDPath;
-      },
-    ),
+    writeBotoConfig(options.caBundlePath, options.botoConfigPath ?? join(homedir(), ".boto"), failures),
+    writeLoginShellCaEnv(
+      options,
+      options.profileDPath ?? "/etc/profile.d/ccr-agent-proxy-ca.sh",
+      failures,
+    ).then((profileDPath) => {
+      result.profileDPath = profileDPath;
+    }),
   ]);
-  let w =
-    y === undefined
+  let profilePath =
+    bazelSetup === undefined
       ? undefined
       : {
-          nss_dbs_unchanged: y.unchanged,
+          nss_dbs_unchanged: bazelSetup.unchanged,
           ...(stateDir !== undefined && {
-            nss_dbs_certutil_skipped: y.byRecord,
+            nss_dbs_certutil_skipped: bazelSetup.byRecord,
           }),
         };
   if (failures.length === 0)
     logFeatureOk("agent_proxy_tool_trust", {
-      reused: p === "reused",
-      ...(p && {
-        store: fromEnum(p),
+      reused: jvmStore === "reused",
+      ...(jvmStore && {
+        store: fromEnum(jvmStore),
       }),
-      ...(o.used && {
+      ...(seedState.used && {
         java_seed_retried: true,
       }),
-      ...w,
+      ...profilePath,
     });
   else {
-    let T = failures[0];
-    if (o.used || w)
-      logFeatureSad("agent_proxy_tool_trust", T, {
-        ...(o.used && {
+    let outcome = failures[0];
+    if (seedState.used || profilePath)
+      logFeatureSad("agent_proxy_tool_trust", outcome, {
+        ...(seedState.used && {
           java_seed_retried: true,
         }),
-        ...w,
+        ...profilePath,
       });
-    else logFeatureSad("agent_proxy_tool_trust", T);
+    else logFeatureSad("agent_proxy_tool_trust", outcome);
   }
-  return r;
+  return result;
 }
 //@ chunk-awy329vy.js:48332-48418 placement
 /**
  * 解析 keytool/certutil 的真实路径（配置优先，其次 PATH 查找）。
  */
-async function resolveToolBinaryPath(n, e) {
-  if (n)
-    return realpath(n).catch(() => {
+async function resolveToolBinaryPath(configuredPath, fallback) {
+  if (configuredPath)
+    return realpath(configuredPath).catch(() => {
       return;
     });
-  return (await e()) ?? undefined;
+  return (await fallback()) ?? undefined;
 }
 //@ chunk-awy329vy.js:48418-48642 placement
 /**
  * 找 keytool：PATH 中与 JAVA_HOME/bin 下的候选，解析真实路径，优先选能找到 cacerts 的那个，否则返回第一个找到的。
  */
 async function findKeytool() {
-  let n = [await whichAsync("keytool"), env.JAVA_HOME ? join(env.JAVA_HOME, "bin", "keytool") : undefined];
-  let e;
-  for (let r of n) {
-    if (!r) continue;
-    let o = await realpath(r).catch(() => {
+  let candidates = [
+    await whichAsync("keytool"),
+    env.JAVA_HOME ? join(env.JAVA_HOME, "bin", "keytool") : undefined,
+  ];
+  let firstFound;
+  for (let candidate of candidates) {
+    if (!candidate) continue;
+    let resolved = await realpath(candidate).catch(() => {
       return;
     });
-    if (!o) continue;
-    e ??= o;
-    if (await findJdkCacerts(o)) return o;
+    if (!resolved) continue;
+    firstFound ??= resolved;
+    if (await findJdkCacerts(resolved)) return resolved;
   }
-  return e;
+  return firstFound;
 }
 //@ chunk-awy329vy.js:48642-48825 placement
-async function findJdkCacerts(n) {
-  let e = dirname(dirname(n));
-  for (let r of [join(e, "lib", "security", "cacerts"), join(e, "jre", "lib", "security", "cacerts")]) {
-    let o = await realpath(r).catch(() => {
+async function findJdkCacerts(keytoolPath) {
+  let javaHome = dirname(dirname(keytoolPath));
+  for (let candidate of [
+    join(javaHome, "lib", "security", "cacerts"),
+    join(javaHome, "jre", "lib", "security", "cacerts"),
+  ]) {
+    let resolved = await realpath(candidate).catch(() => {
       return;
     });
-    if (o) return o;
+    if (resolved) return resolved;
   }
   return;
 }
 //@ chunk-awy329vy.js:48825-49081 placement
-async function statTrustStore(n) {
-  let e;
+async function statTrustStore(storePath) {
+  let handle;
   try {
-    e = await open(n, readOnlyNoFollowFlags());
-    let stats = await e.stat();
+    handle = await open(storePath, readOnlyNoFollowFlags());
+    let stats = await handle.stat();
     return stats.isFile()
       ? {
           state: "file",
@@ -364,14 +383,14 @@ async function statTrustStore(n) {
       state: isFsInaccessible(error) ? "unusable" : "unknown",
     };
   } finally {
-    await e?.close().catch(() => {});
+    await handle?.close().catch(() => {});
   }
 }
 //@ chunk-awy329vy.js:49081-49206 placement
-function hasParsableSpki(n) {
+function hasParsableSpki(pemText) {
   if (BLOCKED_ROOT_SPKI_SHA256.size === 0) return true;
   try {
-    new X509Certificate(n).publicKey.export({
+    new X509Certificate(pemText).publicKey.export({
       type: "spki",
       format: "der",
     });
@@ -381,18 +400,18 @@ function hasParsableSpki(n) {
   }
 }
 //@ chunk-awy329vy.js:49477-49636 affinity
-async function loadJdkCacerts(n, e) {
-  let jdkCacerts = await findJdkCacerts(n);
-  let o =
-    jdkCacerts === undefined ? undefined : await readLinesReverse_2(jdkCacerts, MAX_KEYTOOL_OUTPUT_LINES);
-  if (jdkCacerts !== undefined && o !== undefined)
-    e.unshift({
-      cacerts: jdkCacerts,
-      store: o,
+async function loadJdkCacerts(keytoolPath, out) {
+  let filePath = await findJdkCacerts(keytoolPath);
+  let storeLines =
+    filePath === undefined ? undefined : await readLinesReverse_2(filePath, MAX_KEYTOOL_OUTPUT_LINES);
+  if (filePath !== undefined && storeLines !== undefined)
+    out.unshift({
+      cacerts: filePath,
+      store: storeLines,
     });
   return {
-    cacerts: jdkCacerts,
-    store: o,
+    cacerts: filePath,
+    store: storeLines,
   };
 }
 //@ chunk-awy329vy.js:49636-50296 placement
@@ -401,7 +420,7 @@ async function loadJdkCacerts(n, e) {
  */
 function inspectJksStore(buffer) {
   let pemCerts = [];
-  let r = false;
+  let exactLength = false;
   try {
     if (buffer.readUInt32BE(0) !== JKS_LIST_MAGIC || buffer.readUInt32BE(4) !== JKS_LIST_MAGIC_2)
       return "failed_filter";
@@ -421,9 +440,9 @@ ${str}
 -----END CERTIFICATE-----`);
       offset += uInt32BE;
     }
-    let s = offset + JKS_ENTRY_HEADER_BYTES;
-    if (s < buffer.length) return "failed_filter";
-    r = s === buffer.length;
+    let nextOffset = offset + JKS_ENTRY_HEADER_BYTES;
+    if (nextOffset < buffer.length) return "failed_filter";
+    exactLength = nextOffset === buffer.length;
   } catch {
     return "part_written";
   }
@@ -436,18 +455,18 @@ ${str}
     )?.match(PEM_CERT_BLOCK_RE)?.length ?? 0) !== pemCerts.length
   )
     return "failed_filter";
-  return r ? "clean" : "part_written";
+  return exactLength ? "clean" : "part_written";
 }
 //@ chunk-awy329vy.js:50296-52161 placement
-async function importIntoJvmTruststore(keytoolPath, cacerts, ccrCa, o, s, h) {
+async function importIntoJvmTruststore(keytoolPath, cacerts, ccrCa, caFilePath, jdkStorePath, failures) {
   if (!cacerts) {
     logForDebugging(`[agent-proxy] no JDK cacerts found near ${keytoolPath}; skipping JVM truststore`);
-    h.push("jdk_cacerts_not_found");
+    failures.push("jdk_cacerts_not_found");
     return;
   }
-  let storePath = `${s}.${process.pid}.tmp`;
+  let storePath = `${jdkStorePath}.${process.pid}.tmp`;
   await unlink(storePath).catch(() => {});
-  let u = await runToolCommand(keytoolPath, [
+  let importResult = await runToolCommand(keytoolPath, [
     "-importkeystore",
     "-noprompt",
     "-srckeystore",
@@ -461,85 +480,85 @@ async function importIntoJvmTruststore(keytoolPath, cacerts, ccrCa, o, s, h) {
     "-deststorepass",
     CHANGEIT_2,
   ]);
-  if (!u.ok) {
-    logForDebugging(`[agent-proxy] keytool importkeystore failed: ${u.detail}`, {
+  if (!importResult.ok) {
+    logForDebugging(`[agent-proxy] keytool importkeystore failed: ${importResult.detail}`, {
       level: "warn",
     });
-    h.push("java_truststore_seed_failed");
+    failures.push("java_truststore_seed_failed");
     await unlink(storePath).catch(() => {});
     return;
   }
-  let p = await removeDeniedStoreEntries(keytoolPath, storePath);
-  if (!p.ok) {
-    logForDebugging(`[agent-proxy] could not filter the JVM truststore: ${p.detail}`, {
+  let filterResult = await removeDeniedStoreEntries(keytoolPath, storePath);
+  if (!filterResult.ok) {
+    logForDebugging(`[agent-proxy] could not filter the JVM truststore: ${filterResult.detail}`, {
       level: "warn",
     });
-    h.push("java_truststore_filter_failed");
+    failures.push("java_truststore_filter_failed");
     await unlink(storePath).catch(() => {});
     return;
   }
-  let y = await importCertToStore(keytoolPath, storePath, "ccr-agent-proxy", o);
-  if (!y.ok) {
-    logForDebugging(`[agent-proxy] keytool importcert failed: ${y.detail}`, {
+  let certResult = await importCertToStore(keytoolPath, storePath, "ccr-agent-proxy", caFilePath);
+  if (!certResult.ok) {
+    logForDebugging(`[agent-proxy] keytool importcert failed: ${certResult.detail}`, {
       level: "warn",
     });
-    h.push("java_truststore_import_failed");
+    failures.push("java_truststore_import_failed");
     await unlink(storePath).catch(() => {});
     return;
   }
-  let w = firstPemCertAfterDifferent(ccrCa);
-  let T = true;
-  if (w !== undefined) {
-    let C = `${storePath}.second.crt`;
-    let v = await writeFile(
-      C,
-      `${w}
+  let secondCert = firstPemCertAfterDifferent(ccrCa);
+  let secondOk = true;
+  if (secondCert !== undefined) {
+    let secondCertPath = `${storePath}.second.crt`;
+    let secondImport = await writeFile(
+      secondCertPath,
+      `${secondCert}
 `,
       "utf8",
     ).then(
-      () => importCertToStore(keytoolPath, storePath, "ccr-agent-proxy-2", C),
+      () => importCertToStore(keytoolPath, storePath, "ccr-agent-proxy-2", secondCertPath),
       (error) => ({
         ok: false,
         detail: errorMessage(error),
       }),
     );
-    await unlink(C).catch(() => {});
-    if (!v.ok) {
+    await unlink(secondCertPath).catch(() => {});
+    if (!secondImport.ok) {
       logForDebugging(
-        `[agent-proxy] could not import the second certificate: ${v.detail}; the store holds the first only and is rebuilt on the next start`,
+        `[agent-proxy] could not import the second certificate: ${secondImport.detail}; the store holds the first only and is rebuilt on the next start`,
         {
           level: "warn",
         },
       );
-      h.push("java_truststore_second_import_failed");
-      T = false;
+      failures.push("java_truststore_second_import_failed");
+      secondOk = false;
     }
   }
-  let bundlePathForDenylist = getBundlePathForDenylist(s);
+  let bundlePathForDenylist = getBundlePathForDenylist(jdkStorePath);
   await unlink(bundlePathForDenylist).catch(() => {});
-  let x = dirname(s);
-  let b = `${basename(s)}${CA_BUNDLE_V2_SUFFIX}-`;
-  for (let C of await readdir(x).catch(() => []))
-    if (C.startsWith(b)) await unlink(join(x, C)).catch(() => {});
+  let storeDir = dirname(jdkStorePath);
+  let stalePrefix = `${basename(jdkStorePath)}${CA_BUNDLE_V2_SUFFIX}-`;
+  for (let staleName of await readdir(storeDir).catch(() => []))
+    if (staleName.startsWith(stalePrefix)) await unlink(join(storeDir, staleName)).catch(() => {});
   try {
-    await rename(storePath, s).catch(async () => {
-      await writeFile(s, await readFile(storePath));
+    await rename(storePath, jdkStorePath).catch(async () => {
+      await writeFile(jdkStorePath, await readFile(storePath));
       await unlink(storePath).catch(() => {});
     });
   } catch (error) {
     logForDebugging(`[agent-proxy] could not move JVM truststore into place: ${errorMessage(error)}`, {
       level: "warn",
     });
-    h.push("java_truststore_publish_failed");
+    failures.push("java_truststore_publish_failed");
     await unlink(storePath).catch(() => {});
     return;
   }
-  if (T)
+  if (secondOk)
     await writeFile(bundlePathForDenylist, ccrCa, "utf8").catch((error) => {
       logForDebugging(`[agent-proxy] could not record the truststore's CA: ${errorMessage(error)}`);
     });
-  logForDebugging(`[agent-proxy] JVM truststore built at ${s}`);
-  return s;
+  logForDebugging(`[agent-proxy] JVM truststore built at ${jdkStorePath}`);
+  return jdkStorePath;
 }
 //@ chunk-awy329vy.js:52161-52237 placement
 /**
@@ -595,7 +614,9 @@ async function listDeniedStoreAliases(keytool, storePath) {
     detail: "",
     aliases: entries
       .filter((entry) =>
-        entry.match(PEM_CERT_BLOCK_RE)?.some((u) => !filteredPem.includes(u) || !hasParsableSpki(u)),
+        entry
+          .match(PEM_CERT_BLOCK_RE)
+          ?.some((pemCert) => !filteredPem.includes(pemCert) || !hasParsableSpki(pemCert)),
       )
       .map((entry) =>
         entry
@@ -624,12 +645,12 @@ async function removeDeniedStoreEntries(keytoolPath, storePath) {
     `[agent-proxy] removing ${listing.aliases.length} denied or unreadable entries from the JVM truststore`,
   );
   for (let alias of listing.aliases) {
-    let h = await runToolCommand(
+    let deleteResult = await runToolCommand(
       keytoolPath,
       ["-delete", "-alias", alias, "-keystore", storePath, "-storetype", "PKCS12", "-storepass", CHANGEIT_2],
       javaToolEnv(),
     );
-    if (!h.ok) return h;
+    if (!deleteResult.ok) return deleteResult;
   }
   let remaining = await listDeniedStoreAliases(keytoolPath, storePath);
   return remaining.ok && remaining.aliases.length > 0
@@ -640,16 +661,16 @@ async function removeDeniedStoreEntries(keytoolPath, storePath) {
     : remaining;
 }
 //@ chunk-awy329vy.js:53337-53472 placement
-function importCertToStore(n, e, r, o) {
-  return runToolCommand(n, [
+function importCertToStore(keytoolPath, storePath, alias, certPath) {
+  return runToolCommand(keytoolPath, [
     "-importcert",
     "-noprompt",
     "-alias",
-    r,
+    alias,
     "-file",
-    o,
+    certPath,
     "-keystore",
-    e,
+    storePath,
     "-storetype",
     "PKCS12",
     "-storepass",
@@ -667,23 +688,23 @@ async function cleanupJavaTrust(keytool, storePath, previousState, otherStorePat
     caBundleFile.state !== "failed" &&
     !(previousState.state === "file" && caBundleFile.state === "read");
   if (stale && previousState.state === "file") {
-    let T = await listDeniedStoreAliases(keytool, storePath);
-    stale = !T.ok || T.aliases.length > 0;
+    let listing = await listDeniedStoreAliases(keytool, storePath);
+    stale = !listing.ok || listing.aliases.length > 0;
   }
   let currentState = await statTrustStore(storePath);
-  let y =
+  let unchanged =
     currentState.state === "file" &&
     previousState.state === "file" &&
     currentState.identity === previousState.identity;
-  let w = stale && (y || currentState.state === "unusable");
+  let isStale = stale && (unchanged || currentState.state === "unusable");
   try {
-    let T = await readFile(bazelrcPath, "utf8").catch((error) => {
+    let bazelrc = await readFile(bazelrcPath, "utf8").catch((error) => {
       if (isENOENT(error)) return "";
       throw error;
     });
-    let { block, rest } = splitBazelTrustBlock(T);
+    let { block, rest } = splitBazelTrustBlock(bazelrc);
     if (
-      (w && block.includes(storePath)) ||
+      (isStale && block.includes(storePath)) ||
       (otherStorePath !== undefined && block.includes(otherStorePath))
     ) {
       await writeFile(bazelrcPath, rest, "utf8");
@@ -693,21 +714,21 @@ async function cleanupJavaTrust(keytool, storePath, previousState, otherStorePat
     logForDebugging(`[agent-proxy] could not update ${bazelrcPath}: ${errorMessage(error)}`);
     failures.push("bazelrc_write_failed");
   }
-  if (w && y) await unlink(storePath).catch(() => {});
-  return w;
+  if (isStale && unchanged) await unlink(storePath).catch(() => {});
+  return isStale;
 }
 //@ chunk-awy329vy.js:54136-54310 placement
-function splitBazelTrustBlock(n) {
-  let index = n.indexOf(CCR_BLOCK_START_MARKER);
-  let index_2 = n.indexOf(CCR_BLOCK_END_MARKER);
+function splitBazelTrustBlock(text) {
+  let index = text.indexOf(CCR_BLOCK_START_MARKER);
+  let index_2 = text.indexOf(CCR_BLOCK_END_MARKER);
   return index >= 0 && index_2 > index
     ? {
-        block: n.slice(index, index_2 + CCR_BLOCK_END_MARKER.length),
-        rest: n.slice(0, index) + n.slice(index_2 + CCR_BLOCK_END_MARKER.length).replace(/^\n/, ""),
+        block: text.slice(index, index_2 + CCR_BLOCK_END_MARKER.length),
+        rest: text.slice(0, index) + text.slice(index_2 + CCR_BLOCK_END_MARKER.length).replace(/^\n/, ""),
       }
     : {
         block: "",
-        rest: n,
+        rest: text,
       };
 }
 //@ chunk-awy329vy.js:54310-54933 placement
@@ -716,9 +737,9 @@ function splitBazelTrustBlock(n) {
  */
 async function writeBazelTrustBlock(storePath, storeType, bazelrcPath, failures) {
   let joined = javaTrustStoreArgs(storePath, storeType)
-    .map((y) => `--host_jvm_args=${y}`)
+    .map((arg) => `--host_jvm_args=${arg}`)
     .join(" ");
-  let h = `${CCR_BLOCK_START_MARKER}
+  let blockText = `${CCR_BLOCK_START_MARKER}
 # Bazel's repository downloader runs on its embedded JDK and ignores
 # JAVA_TOOL_OPTIONS; carry the agent-proxy truststore via startup options.
 startup ${joined}
@@ -735,15 +756,15 @@ ${CCR_BLOCK_END_MARKER}
     }
     current = "";
   }
-  let u = splitBazelTrustBlock(current).rest.trimEnd();
-  let p = u
-    ? `${u}
+  let rest = splitBazelTrustBlock(current).rest.trimEnd();
+  let next = rest
+    ? `${rest}
 
-${h}`
-    : h;
-  if (p === current) return;
+${blockText}`
+    : blockText;
+  if (next === current) return;
   try {
-    await writeFile(bazelrcPath, p, "utf8");
+    await writeFile(bazelrcPath, next, "utf8");
     logForDebugging(`[agent-proxy] wrote Bazel trust block to ${bazelrcPath}`);
   } catch (error) {
     logForDebugging(`[agent-proxy] could not write ${bazelrcPath}: ${errorMessage(error)}`);
@@ -751,130 +772,142 @@ ${h}`
   }
 }
 //@ chunk-awy329vy.js:54933-57088 placement
-async function addToNssDb(n, ccrCa, r, certutil, stateDir, h) {
-  let l = 0;
-  let u = 0;
-  let p = ccrCa.match(PEM_CERT_BLOCK_RE)?.[0];
-  let y = firstPemCertAfterDifferent(ccrCa);
-  let w = `${n}.${process.pid}.second`;
-  let certs = p === undefined ? undefined : y === undefined ? [p] : [p, y];
-  if (y !== undefined)
+async function addToNssDb(dbDirParam, ccrCa, nssDirs, toolBinaryPath, stateDir, failures) {
+  let addedCount = 0;
+  let directoryCount = 0;
+  let firstCert = ccrCa.match(PEM_CERT_BLOCK_RE)?.[0];
+  let secondCert = firstPemCertAfterDifferent(ccrCa);
+  let secondCertPath = `${dbDirParam}.${process.pid}.second`;
+  let certs =
+    firstCert === undefined ? undefined : secondCert === undefined ? [firstCert] : [firstCert, secondCert];
+  if (secondCert !== undefined)
     await writeFile(
-      w,
-      `${y}
+      secondCertPath,
+      `${secondCert}
 `,
       "utf8",
     ).catch(() => {});
-  for (let S of r) {
-    let x = await mkdir(S, {
+  for (let dir of nssDirs) {
+    let mkdirOutcome = await mkdir(dir, {
       recursive: true,
     }).then(
-      (A) => (A === undefined ? "was_there" : "new"),
+      (created) => (created === undefined ? "was_there" : "new"),
       (error) => {
-        logForDebugging(`[agent-proxy] could not create NSS dir ${S}: ${errorMessage(error)}`);
+        logForDebugging(`[agent-proxy] could not create NSS dir ${dir}: ${errorMessage(error)}`);
         return;
       },
     );
-    if (x === undefined) {
-      h.push("nss_add_failed");
+    if (mkdirOutcome === undefined) {
+      failures.push("nss_add_failed");
       continue;
     }
-    let dbDir = `sql:${S}`;
-    let C = stateDir === undefined ? undefined : getNssDbPath(stateDir, S);
-    let v = C === undefined || certs === undefined ? undefined : await fingerprintNssDb(S, certs, certutil);
-    if (C !== undefined && v !== undefined) {
-      let caBundleFile = await readCaBundleFile(C);
-      if (caBundleFile.state === "read" && caBundleFile.text === v) {
+    let dbDir = `sql:${dir}`;
+    let recordPath = stateDir === undefined ? undefined : getNssDbPath(stateDir, dir);
+    let fingerprint =
+      recordPath === undefined || certs === undefined
+        ? undefined
+        : await fingerprintNssDb(dir, certs, toolBinaryPath);
+    if (recordPath !== undefined && fingerprint !== undefined) {
+      let caBundleFile = await readCaBundleFile(recordPath);
+      if (caBundleFile.state === "read" && caBundleFile.text === fingerprint) {
         logForDebugging(
-          `[agent-proxy] NSS DB at ${S} matches the record of an earlier start that found the served certificates trusted; left as is without running certutil`,
+          `[agent-proxy] NSS DB at ${dir} matches the record of an earlier start that found the served certificates trusted; left as is without running certutil`,
         );
-        l++;
-        u++;
+        addedCount++;
+        directoryCount++;
         continue;
       }
     }
     if (
-      x === "was_there" &&
+      mkdirOutcome === "was_there" &&
       certs !== undefined &&
-      (await verifyNssDb(certutil, dbDir, certs).catch((error) => {
+      (await verifyNssDb(toolBinaryPath, dbDir, certs).catch((error) => {
         logForDebugging(
-          `[agent-proxy] NSS check of ${S} threw, taken as a difference: ${errorMessage(error)}`,
+          `[agent-proxy] NSS check of ${dir} threw, taken as a difference: ${errorMessage(error)}`,
         );
         return false;
       }))
     ) {
       logForDebugging(
-        `[agent-proxy] NSS DB at ${S} already holds the served certificates, trusted; left as is`,
+        `[agent-proxy] NSS DB at ${dir} already holds the served certificates, trusted; left as is`,
       );
-      l++;
-      if (C !== undefined && v !== undefined && (await fingerprintNssDb(S, certs, certutil)) === v)
-        await writeFileAtomic(C, v).catch((error) => {
+      addedCount++;
+      if (
+        recordPath !== undefined &&
+        fingerprint !== undefined &&
+        (await fingerprintNssDb(dir, certs, toolBinaryPath)) === fingerprint
+      )
+        await writeFileAtomic(recordPath, fingerprint).catch((error) => {
           logForDebugging(
-            `[agent-proxy] could not record the NSS check of ${S}: ${errorMessage(error)}; the next start will run certutil again`,
+            `[agent-proxy] could not record the NSS check of ${dir}: ${errorMessage(error)}; the next start will run certutil again`,
           );
         });
-      else if (C !== undefined)
+      else if (recordPath !== undefined)
         logForDebugging(
-          `[agent-proxy] NSS check of ${S} not recorded: the directory ${v === undefined ? `has an entry that is not a regular file, more than ${MAX_NSS_ENTRIES} entries or ${MAX_NSS_DIR_BYTES / 1024 / 1024} MiB, or it or certutil could not be read` : "changed or became unreadable during the check"}; the next start will run certutil again`,
+          `[agent-proxy] NSS check of ${dir} not recorded: the directory ${fingerprint === undefined ? `has an entry that is not a regular file, more than ${MAX_NSS_ENTRIES} entries or ${MAX_NSS_DIR_BYTES / 1024 / 1024} MiB, or it or certutil could not be read` : "changed or became unreadable during the check"}; the next start will run certutil again`,
         );
       continue;
     }
-    if (x === "was_there") {
-      await runToolCommand(certutil, ["-D", "-d", dbDir, "-n", "ccr-agent-proxy"]);
-      await runToolCommand(certutil, ["-D", "-d", dbDir, "-n", "ccr-agent-proxy-2"]);
+    if (mkdirOutcome === "was_there") {
+      await runToolCommand(toolBinaryPath, ["-D", "-d", dbDir, "-n", "ccr-agent-proxy"]);
+      await runToolCommand(toolBinaryPath, ["-D", "-d", dbDir, "-n", "ccr-agent-proxy-2"]);
     }
-    let P = certutilAddArgs(dbDir, "ccr-agent-proxy", n);
-    let E = await runToolCommand(certutil, P);
-    if (!E.ok) {
-      await runToolCommand(certutil, ["-N", "--empty-password", "-d", dbDir]);
-      E = await runToolCommand(certutil, P);
+    let addArgs = certutilAddArgs(dbDir, "ccr-agent-proxy", dbDirParam);
+    let addResult = await runToolCommand(toolBinaryPath, addArgs);
+    if (!addResult.ok) {
+      await runToolCommand(toolBinaryPath, ["-N", "--empty-password", "-d", dbDir]);
+      addResult = await runToolCommand(toolBinaryPath, addArgs);
     }
-    if (E.ok) {
-      logForDebugging(`[agent-proxy] MITM CA added to NSS DB at ${S}`);
-      if (y !== undefined) {
-        let A = await runToolCommand(certutil, certutilAddArgs(dbDir, "ccr-agent-proxy-2", w));
-        if (!A.ok) {
+    if (addResult.ok) {
+      logForDebugging(`[agent-proxy] MITM CA added to NSS DB at ${dir}`);
+      if (secondCert !== undefined) {
+        let secondResult = await runToolCommand(
+          toolBinaryPath,
+          certutilAddArgs(dbDir, "ccr-agent-proxy-2", secondCertPath),
+        );
+        if (!secondResult.ok) {
           logForDebugging(
-            `[agent-proxy] could not add the second certificate to the NSS DB at ${S}: ${A.detail}; it holds the first only`,
+            `[agent-proxy] could not add the second certificate to the NSS DB at ${dir}: ${secondResult.detail}; it holds the first only`,
           );
-          h.push("nss_second_add_failed");
+          failures.push("nss_second_add_failed");
         }
       }
     } else {
-      logForDebugging(`[agent-proxy] certutil -A failed for ${S}: ${E.detail}`);
-      h.push("nss_add_failed");
+      logForDebugging(`[agent-proxy] certutil -A failed for ${dir}: ${addResult.detail}`);
+      failures.push("nss_add_failed");
     }
   }
-  await unlink(w).catch(() => {});
+  await unlink(secondCertPath).catch(() => {});
   return {
-    unchanged: l,
-    byRecord: u,
+    unchanged: addedCount,
+    byRecord: directoryCount,
   };
 }
 //@ chunk-awy329vy.js:57088-57191 placement
-function getNssDbPath(n, e) {
-  let sliced = createHash("sha256").update(e).digest("hex").slice(0, 16);
-  return join(n, `nssdb-${sliced}${NSS_CHECK_STAMP_SUFFIX}`);
+function getNssDbPath(stateDir, caText) {
+  let sliced = createHash("sha256").update(caText).digest("hex").slice(0, 16);
+  return join(stateDir, `nssdb-${sliced}${NSS_CHECK_STAMP_SUFFIX}`);
 }
 //@ chunk-awy329vy.js:57191-57631 placement
 /**
  * 计算 NSS 证书库的指纹：证书集合、证书包文件大小与修改时间、库目录各文件尾部内容；文件过多或读取失败时返回 undefined。
  */
-async function fingerprintNssDb(n, e, r) {
+async function fingerprintNssDb(dbDir, certs, stampPath) {
   let hash = createHash("sha256");
-  hash.update(`${e.length}\x00`);
-  for (let s of e.map((h) => base64URLEncode(h).toString("base64")).sort()) hash.update(`${s}\x00`);
+  hash.update(`${certs.length}\x00`);
+  for (let certEntry of certs.map((encoded) => base64URLEncode(encoded).toString("base64")).sort())
+    hash.update(`${certEntry}\x00`);
   try {
-    let s = await stat(r);
-    hash.update(`${r}\x00${s.size}\x00${s.mtimeMs}\x00`);
-    let sorted = (await readdir(n)).sort();
+    let stampStats = await stat(stampPath);
+    hash.update(`${stampPath}\x00${stampStats.size}\x00${stampStats.mtimeMs}\x00`);
+    let sorted = (await readdir(dbDir)).sort();
     if (sorted.length > MAX_NSS_ENTRIES) return;
-    let l = MAX_NSS_DIR_BYTES;
-    for (let u of sorted) {
-      let linesReverse = await readLinesReverse_2(join(n, u), l);
+    let remainingBytes = MAX_NSS_DIR_BYTES;
+    for (let fileName of sorted) {
+      let linesReverse = await readLinesReverse_2(join(dbDir, fileName), remainingBytes);
       if (linesReverse === undefined) return;
-      l -= linesReverse.length;
-      hash.update(`${u}\x00${linesReverse.length}\x00`);
+      remainingBytes -= linesReverse.length;
+      hash.update(`${fileName}\x00${linesReverse.length}\x00`);
       hash.update(linesReverse);
     }
   } catch {
@@ -886,93 +919,98 @@ async function fingerprintNssDb(n, e, r) {
 /**
  * 构造 certutil 检查 NSS 证书条目的参数。
  */
-function certutilAddArgs(n, e, r) {
-  return ["-A", "-d", n, "-t", "C,,", "-n", e, "-i", r];
+function certutilAddArgs(dbDir, nickname, certPath) {
+  return ["-A", "-d", dbDir, "-t", "C,,", "-n", nickname, "-i", certPath];
 }
 //@ chunk-awy329vy.js:57695-58305 placement
 /**
  * 用 certutil 检查 NSS 库里 agent-proxy 证书条目：数量与信任标志符合预期，且导出的证书集合与期望完全一致。
  */
 async function verifyNssDb(certutil, dbDir, certs) {
-  let o = await runToolCommand(certutil, ["-L", "-d", dbDir]);
-  if (!o.ok) return false;
-  let mapped = o.stdout
+  let listResult = await runToolCommand(certutil, ["-L", "-d", dbDir]);
+  if (!listResult.ok) return false;
+  let mapped = listResult.stdout
     .split(
       `
 `,
     )
     .map((line) => line.trim().split(/\s+/));
-  let h = ["ccr-agent-proxy", "ccr-agent-proxy-2"];
-  for (let [p, y] of h.entries()) {
-    let mapped_2 = mapped.filter((S) => S.length === 2 && S[0] === y).map((S) => S[1]);
-    let T = p < certs.length ? 1 : 0;
-    if (mapped_2.length !== T || mapped_2.some((S) => S !== "C,,")) return false;
+  let rows = ["ccr-agent-proxy", "ccr-agent-proxy-2"];
+  for (let [index, nickname] of rows.entries()) {
+    let mapped_2 = mapped
+      .filter((row) => row.length === 2 && row[0] === nickname)
+      .map((trustValues) => trustValues[1]);
+    let expectCount = index < certs.length ? 1 : 0;
+    if (mapped_2.length !== expectCount || mapped_2.some((trustValue) => trustValue !== "C,,")) return false;
   }
-  let l = new Set();
-  for (let p of h.slice(0, certs.length)) {
-    let y = await runToolCommand(certutil, ["-L", "-d", dbDir, "-n", p, "-a"]);
-    if (!y.ok) return false;
-    for (let w of y.stdout.match(PEM_CERT_BLOCK_RE) ?? []) l.add(base64URLEncode(w).toString("base64"));
+  let foundCerts = new Set();
+  for (let nickname of rows.slice(0, certs.length)) {
+    let certResult = await runToolCommand(certutil, ["-L", "-d", dbDir, "-n", nickname, "-a"]);
+    if (!certResult.ok) return false;
+    for (let pemBlock of certResult.stdout.match(PEM_CERT_BLOCK_RE) ?? [])
+      foundCerts.add(base64URLEncode(pemBlock).toString("base64"));
   }
-  let u = new Set(certs.map((cert) => base64URLEncode(cert).toString("base64")));
-  return l.size === u.size && [...u].every((p) => l.has(p));
+  let expected = new Set(certs.map((cert) => base64URLEncode(cert).toString("base64")));
+  return (
+    foundCerts.size === expected.size && [...expected].every((expectedCert) => foundCerts.has(expectedCert))
+  );
 }
 //@ chunk-awy329vy.js:58305-58573 placement
 /**
  * 为 gsutil 写入 .boto（ca_certificates_file 指向证书包），文件已存在则不覆盖，其他写失败记入失败列表。
  */
-async function writeBotoConfig(caBundlePath, e, r) {
-  let o = `[Boto]
+async function writeBotoConfig(caBundlePath, configPath, failures) {
+  let content = `[Boto]
 ca_certificates_file = ${caBundlePath}
 `;
   try {
-    await writeFile(e, o, {
+    await writeFile(configPath, content, {
       flag: "wx",
       mode: 420,
     });
-    logForDebugging(`[agent-proxy] wrote ${e} for gsutil trust`);
+    logForDebugging(`[agent-proxy] wrote ${configPath} for gsutil trust`);
   } catch (error) {
     if (getErrnoCode(error) === "EEXIST") return;
-    logForDebugging(`[agent-proxy] could not write ${e}: ${errorMessage(error)}`);
-    r.push("boto_write_failed");
+    logForDebugging(`[agent-proxy] could not write ${configPath}: ${errorMessage(error)}`);
+    failures.push("boto_write_failed");
   }
 }
 //@ chunk-awy329vy.js:58573-59484 placement
-async function writeLoginShellCaEnv(n, e, r) {
-  if (!n.hasSystemCa) {
-    await unlink(e).catch(() => {});
+async function writeLoginShellCaEnv(proxyState, profilePath, failures) {
+  if (!proxyState.hasSystemCa) {
+    await unlink(profilePath).catch(() => {});
     return;
   }
-  let o = [
+  let lines = [
     "# Managed by Claude Code (CCR agent-proxy). Re-exports CA-trust env",
     "# vars for login shells that start from a scrubbed environment. Each",
     "# export is set-if-absent so an explicit value in the shell wins.",
     "# HTTPS_PROXY is intentionally NOT set here: the relay port is",
     "# ephemeral and persisting it would break all HTTPS in login shells",
     "# once the relay process exits. Scrubbed login shells dial direct.",
-    `if [ -r ${shellQuote(n.caBundlePath)} ]; then`,
+    `if [ -r ${shellQuote(proxyState.caBundlePath)} ]; then`,
   ];
-  for (let h of [...CA_CERT_ENV_VARS_2, ...CA_CERT_ENV_VARS])
-    o.push("  " + exportEnvIfUnset(h, n.caBundlePath));
-  for (let [key, value] of Object.entries(caCertEnvVarList)) o.push("  " + exportEnvIfUnset(key, value));
-  o.push("fi");
-  let s =
-    o.join(`
+  for (let envVarName of [...CA_CERT_ENV_VARS_2, ...CA_CERT_ENV_VARS])
+    lines.push("  " + exportEnvIfUnset(envVarName, proxyState.caBundlePath));
+  for (let [key, value] of Object.entries(caCertEnvVarList)) lines.push("  " + exportEnvIfUnset(key, value));
+  lines.push("fi");
+  let script =
+    lines.join(`
 `) +
     `
 `;
   try {
-    await mkdir(dirname(e), {
+    await mkdir(dirname(profilePath), {
       recursive: true,
     });
-    await writeFile(e, s, {
+    await writeFile(profilePath, script, {
       mode: 420,
     });
-    logForDebugging(`[agent-proxy] wrote ${e} for login-shell trust`);
-    return e;
+    logForDebugging(`[agent-proxy] wrote ${profilePath} for login-shell trust`);
+    return profilePath;
   } catch (error) {
-    logForDebugging(`[agent-proxy] could not write ${e}: ${errorMessage(error)}`);
-    r.push("profile_d_write_failed");
+    logForDebugging(`[agent-proxy] could not write ${profilePath}: ${errorMessage(error)}`);
+    failures.push("profile_d_write_failed");
     return;
   }
 }
@@ -980,8 +1018,8 @@ async function writeLoginShellCaEnv(n, e, r) {
 /**
  * 生成“未设置则设置并导出环境变量”的 shell 片段。
  */
-function exportEnvIfUnset(n, e) {
-  return `if [ -z "\${${n}:-}" ]; then ${n}=${shellQuote(e)}; fi; export ${n}`;
+function exportEnvIfUnset(name, value) {
+  return `if [ -z "\${${name}:-}" ]; then ${name}=${shellQuote(value)}; fi; export ${name}`;
 }
 //@ chunk-awy329vy.js:59569-59621 placement = shellQuote (1)
 function shellQuote(s) {
@@ -991,9 +1029,9 @@ function shellQuote(s) {
 /**
  * 从字符串里取第一张 PEM 证书（与首块不同时）。
  */
-function firstPemCertAfterDifferent(n) {
-  let e = n.match(PEM_CERT_BLOCK_RE) ?? [];
-  return e.length === 2 && e[1] !== e[0] ? e[1] : undefined;
+function firstPemCertAfterDifferent(caText) {
+  let certs = caText.match(PEM_CERT_BLOCK_RE) ?? [];
+  return certs.length === 2 && certs[1] !== certs[0] ? certs[1] : undefined;
 }
 //@ chunk-awy329vy.js:59703-59800 placement = base64URLEncode (1)
 function base64URLEncode(buffer) {
@@ -1003,23 +1041,23 @@ function base64URLEncode(buffer) {
 /**
  * 以 20 秒超时运行外部命令（保留输出、不使用 cwd），返回 ok、stdout 与失败说明。
  */
-async function runToolCommand(n, e, env) {
-  let o = await execFileNoThrow(n, e, {
+async function runToolCommand(executable, argv, env) {
+  let result = await execFileNoThrow(executable, argv, {
     timeout: 20000,
     preserveOutputOnError: true,
     useCwd: false,
     env,
   });
-  if (o.code === 0)
+  if (result.code === 0)
     return {
       ok: true,
-      stdout: o.stdout,
+      stdout: result.stdout,
       detail: "",
     };
   return {
     ok: false,
-    stdout: o.stdout,
-    detail: `${o.error ?? `exit ${o.code}`} ${o.stderr.slice(0, 200)}`.trim(),
+    stdout: result.stdout,
+    detail: `${result.error ?? `exit ${result.code}`} ${result.stderr.slice(0, 200)}`.trim(),
   };
 }
 export {

@@ -12,7 +12,7 @@ import { TOOL_SEARCH_TOOL_NAME } from "../ToolSearchTool/prompt.js";
 import { REMOTE_DEVICES } from "../../services/mcp/firstPartyServerIds.js";
 import { CLAUDE_IN_CHROME_MCP_SERVER_NAME } from "../../utils/claudeInChrome/common.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { looseObject, unknown, u, string } from "../../../vendor/zod/v4/classic/schemas.js";
+import { looseObject, unknown, objectSchema, stringSchema } from "../../../vendor/zod/v4/classic/schemas.js";
 import { getTeleportRelayEnvConfig } from "../../utils/teleport/relayEnv.js";
 import { getFeatureValue_SESSION_PINNED } from "../../services/analytics/growthbook.js";
 import { buildTool } from "../../services/tools/permissionCheckGuard.js";
@@ -58,10 +58,10 @@ var ENABLE_TOOL_INPUT_SCHEMA = {
 };
 var ENABLE_CHROME_RESULT = `Any of them that was announced as available through ${TOOL_SEARCH_TOOL_NAME} must be loaded before you call it, unless ${TOOL_SEARCH_TOOL_NAME} has loaded it since`;
 var ENABLE_CHROME_RESULT_2 = `${ENABLE_CHROME_RESULT}: load the ones you expect to need in one ${TOOL_SEARCH_TOOL_NAME} call (for example, query "select:<name>[,<name>...]"), and use them once that result has come back, not in the same reply`;
-var ENABLE_TOOL_OUTPUT_SCHEMA =
+var ENABLE_TOOL_OUTPUT_INSTRUCTIONS =
   "If no tool with such a name is in your list or was announced, or you have since been told that they are no longer available, do not call or load one. That applies to those tools only.";
-var ENABLE_CHROME_RESULT_3 = `Claude in Chrome needs no enabling: its tools are the ones whose names contain claude-in-chrome or Claude_in_Chrome. ${ENABLE_CHROME_RESULT_2}. ${ENABLE_TOOL_OUTPUT_SCHEMA} If you have no browser tool of any kind, tell the user in one plain sentence that you can't use Claude in Chrome in this chat right now, and continue with what you can do here. You don't know the cause: don't say that Chrome or its extension isn't connected, and suggest no steps or settings for Claude in Chrome.`;
-var ENABLE_BROWSER_RESULT = `The Claude desktop app's built-in browser needs no enabling: its tools are the ones whose names contain Claude_Browser. ${ENABLE_CHROME_RESULT_2}. ${ENABLE_TOOL_OUTPUT_SCHEMA} If you have no browser tool of any kind, tell the user that the browser in their Claude desktop app is not available in this chat right now and continue with what you can do here.`;
+var ENABLE_CHROME_RESULT_3 = `Claude in Chrome needs no enabling: its tools are the ones whose names contain claude-in-chrome or Claude_in_Chrome. ${ENABLE_CHROME_RESULT_2}. ${ENABLE_TOOL_OUTPUT_INSTRUCTIONS} If you have no browser tool of any kind, tell the user in one plain sentence that you can't use Claude in Chrome in this chat right now, and continue with what you can do here. You don't know the cause: don't say that Chrome or its extension isn't connected, and suggest no steps or settings for Claude in Chrome.`;
+var ENABLE_BROWSER_RESULT = `The Claude desktop app's built-in browser needs no enabling: its tools are the ones whose names contain Claude_Browser. ${ENABLE_CHROME_RESULT_2}. ${ENABLE_TOOL_OUTPUT_INSTRUCTIONS} If you have no browser tool of any kind, tell the user that the browser in their Claude desktop app is not available in this chat right now and continue with what you can do here.`;
 var ENABLE_COMPUTER_DESCRIPTION =
   "Enable computer use on the user's own computer for this conversation, so you can see its screen and work in its applications (take screenshots, click, type, scroll, open apps). If you already have tools whose names start with mcp__remote-devices__computer_, use those directly instead of calling this. Otherwise call it once, before any other computer-use tool, when the user asks you to do something in an application on their computer, or explicitly asks you to use their computer or their screen. Do not call it for questions you can answer from the conversation or with web search, for work that only needs their web browser, or merely because a request mentions an application.";
 var ENABLE_COMPUTER_SHARED_DESCRIPTION =
@@ -76,8 +76,8 @@ var ENABLE_COMPUTER_INPUT_SCHEMA = {
   },
   additionalProperties: false,
 };
-var ENABLE_COMPUTER_OUTPUT_SCHEMA = `mcp__${REMOTE_DEVICES}__computer_`;
-var ENABLE_COMPUTER_RESULT = `The computer-use tools are the ${ENABLE_COMPUTER_OUTPUT_SCHEMA} tools; there is no separate enable step. ${ENABLE_CHROME_RESULT}: load them all in one ${TOOL_SEARCH_TOOL_NAME} call (query "${ENABLE_COMPUTER_OUTPUT_SCHEMA}", max_results 100), and use them once that result has come back, not in the same reply. Try the user's request with them, asking for access to the applications you need first, the way those tools describe. Don't tell the user their computer is connected until a call to one of them has succeeded; if calls keep not responding, the Claude app on the user's computer isn't answering: it may be closed or the computer asleep. Tell the user that, ask them to open the Claude app on that computer, and carry on with what you can do here. If you have no such tools here, tell the user that computer use isn't available on their computer right now and that the Claude app on that computer may show why in the Computer use section of its Settings, then continue with what you can do here. Don't say a permission was denied unless a result says so.`;
+var ENABLE_COMPUTER_TOOL_NAME_PREFIX = `mcp__${REMOTE_DEVICES}__computer_`;
+var ENABLE_COMPUTER_RESULT = `The computer-use tools are the ${ENABLE_COMPUTER_TOOL_NAME_PREFIX} tools; there is no separate enable step. ${ENABLE_CHROME_RESULT}: load them all in one ${TOOL_SEARCH_TOOL_NAME} call (query "${ENABLE_COMPUTER_TOOL_NAME_PREFIX}", max_results 100), and use them once that result has come back, not in the same reply. Try the user's request with them, asking for access to the applications you need first, the way those tools describe. Don't tell the user their computer is connected until a call to one of them has succeeded; if calls keep not responding, the Claude app on the user's computer isn't answering: it may be closed or the computer asleep. Tell the user that, ask them to open the Claude app on that computer, and carry on with what you can do here. If you have no such tools here, tell the user that computer use isn't available on their computer right now and that the Claude app on that computer may show why in the Computer use section of its Settings, then continue with what you can do here. Don't say a permission was denied unless a result says so.`;
 var SWITCHED_OFF_NOTE = `If the request is about files or folders on the user's computer and you have device tools here (loaded or through tool search), such as mcp__${REMOTE_DEVICES}__device_list_dir, use them for that part; if it is and you have none, tell the user that files on their computer can't be reached right now.`;
 var ENABLE_REMOTE_DEVICES_DESCRIPTION =
   "Does nothing. This tool cannot connect a computer here. Tools whose names start with mcp__remote-devices__, if you have any, run on the user's computer; use whichever of them fits the task.";
@@ -97,15 +97,15 @@ var enableTaskInputSchema = DoctorLazy(() =>
   }),
 );
 var enableMessageOutputSchema = DoctorLazy(() =>
-  u({
-    message: string(),
+  objectSchema({
+    message: stringSchema(),
   }),
 );
 //@ chunk-tkqbtg0j.js:26362-26554 placement
 /**
  * teleport 中继共享时使用共享描述并在结果后附加说明。
  */
-function withSharedDescription({ description, sharedDescription, result: s }) {
+function withSharedDescription({ description, sharedDescription, result }) {
   if (
     sharedDescription === undefined ||
     getTeleportRelayEnvConfig() === null ||
@@ -113,38 +113,38 @@ function withSharedDescription({ description, sharedDescription, result: s }) {
   )
     return {
       description,
-      result: s,
+      result,
     };
   return {
     description: sharedDescription,
-    result: `${s} ${SWITCHED_OFF_NOTE}`,
+    result: `${result} ${SWITCHED_OFF_NOTE}`,
   };
 }
 //@ chunk-tkqbtg0j.js:26554-27808 placement
 function createEnableStubTool({
-  name: e,
+  name,
   label,
   description,
   sharedDescription,
-  result: a,
+  result,
   pickResult,
   inputJSONSchema,
   endsRelayOnCall,
 }) {
-  let y = {
+  let descriptionFields = {
     description,
     sharedDescription,
-    result: a,
+    result,
   };
   return buildTool({
-    name: e,
+    name,
     backgrounding: "never",
     maxResultSizeChars: 1e4,
     async description() {
-      return withSharedDescription(y).description;
+      return withSharedDescription(descriptionFields).description;
     },
     async prompt() {
-      return withSharedDescription(y).description;
+      return withSharedDescription(descriptionFields).description;
     },
     get inputSchema() {
       return enableTaskInputSchema();
@@ -177,48 +177,48 @@ function createEnableStubTool({
     renderToolUseMessage() {
       return null;
     },
-    create(r) {
+    create(context) {
       return {
-        async call(C, { parentMessage }) {
-          let S = r.mcpClients();
-          let T =
-            r.tools.some((tool) => isBrowserOrChromeToolName(tool.name)) ||
-            S.some((f) => isBrowserOrChromeToolName(getMcpPrefix(f.name)));
-          let g = pickResult?.({
-            tools: r.tools,
-            clients: S,
-            mayBeLinked: T,
-            subagent: r.agentId !== undefined,
+        async call(input, { parentMessage }) {
+          let clients = context.mcpClients();
+          let mayBeLinked =
+            context.tools.some((tool) => isBrowserOrChromeToolName(tool.name)) ||
+            clients.some((client) => isBrowserOrChromeToolName(getMcpPrefix(client.name)));
+          let pickedResult = pickResult?.({
+            tools: context.tools,
+            clients,
+            mayBeLinked,
+            subagent: context.agentId !== undefined,
           });
-          if (!T)
+          if (!mayBeLinked)
             return {
               data: {
-                message: g ?? ENABLE_TOOL_FAILURE_TEXT,
+                message: pickedResult ?? ENABLE_TOOL_FAILURE_TEXT,
               },
             };
           let teleportCacheState = getTeleportCacheState();
-          if (endsRelayOnCall && r.agentId === undefined && teleportCacheState.status === "active") {
+          if (endsRelayOnCall && context.agentId === undefined && teleportCacheState.status === "active") {
             if (teleportCacheState.marker.automation_tools !== true)
-              revertTeleportCache("device_tool_requested", "main", e);
-            else if (recordEnableStubCall(e, parentMessage?.message.id) === "repeat")
-              revertTeleportCache("device_tool_request_repeated", "main", e);
+              revertTeleportCache("device_tool_requested", "main", name);
+            else if (recordEnableStubCall(name, parentMessage?.message.id) === "repeat")
+              revertTeleportCache("device_tool_request_repeated", "main", name);
           }
           return {
             data: {
               message: withSharedDescription({
-                ...y,
-                result: g ?? a,
+                ...descriptionFields,
+                result: pickedResult ?? result,
               }).result,
             },
           };
         },
       };
     },
-    mapToolResultToToolResultBlockParam(r, toolUseId) {
+    mapToolResultToToolResultBlockParam(result, toolUseId) {
       return {
         tool_use_id: toolUseId,
         type: "tool_result",
-        content: r.message,
+        content: result.message,
       };
     },
   });
@@ -233,13 +233,13 @@ var ENABLE_CHROME_STUB = createEnableStubTool({
   description: ENABLE_CHROME_DESCRIPTION,
   sharedDescription: ENABLE_CHROME_SHARED_DESCRIPTION,
   result: ENABLE_CHROME_RESULT_3,
-  pickResult(e) {
-    let n = chromeStubCase(e);
+  pickResult(stubContext) {
+    let caseName = chromeStubCase(stubContext);
     logForDiagnosticsNoPII("info", "cli_chrome_enable_stub_call", {
-      case: n,
-      subagent: e.subagent,
+      case: caseName,
+      subagent: stubContext.subagent,
     });
-    return CHROME_STUB_RESULTS[n];
+    return CHROME_STUB_RESULTS[caseName];
   },
   inputJSONSchema: ENABLE_TOOL_INPUT_SCHEMA,
   endsRelayOnCall: true,
@@ -280,15 +280,15 @@ var REMOTE_DEVICES_PREFIX = getMcpPrefix(REMOTE_DEVICES);
 /**
  * 判断工具名是否属于 remote-devices 前缀或 Chrome 工具。
  */
-function isBrowserOrChromeToolName(e) {
-  return e.startsWith(REMOTE_DEVICES_PREFIX) || isChromeToolName(e);
+function isBrowserOrChromeToolName(toolName) {
+  return toolName.startsWith(REMOTE_DEVICES_PREFIX) || isChromeToolName(toolName);
 }
 //@ chunk-tkqbtg0j.js:28419-28455 placement
 /**
  * 是 Chrome 工具名且不是 remote-devices 前缀。
  */
-function isPlainChromeToolName(e) {
-  return isChromeToolName(e) && !isBrowserPreviewToolName(e);
+function isPlainChromeToolName(toolName) {
+  return isChromeToolName(toolName) && !isBrowserPreviewToolName(toolName);
 }
 //@ chunk-tkqbtg0j.js:28455-28620 placement
 /**
@@ -311,20 +311,26 @@ var CHROME_STUB_RESULTS = {
  */
 function chromeStubCase({ tools, clients, mayBeLinked }) {
   let filtered = clients.filter((client) => isPlainChromeToolName(getMcpPrefix(client.name)));
-  let a = new Set(filtered.map((t) => t.type));
-  let mapped = filtered.filter((t) => t.type === "disabled").map((t) => getMcpPrefix(t.name));
+  let clientStates = new Set(filtered.map((client) => client.type));
+  let mapped = filtered
+    .filter((client) => client.type === "disabled")
+    .map((client) => getMcpPrefix(client.name));
   if (
-    a.has("connected") ||
-    tools.some((tool) => isPlainChromeToolName(tool.name) && !mapped.some((m) => tool.name.startsWith(m)))
+    clientStates.has("connected") ||
+    tools.some(
+      (tool) =>
+        isPlainChromeToolName(tool.name) &&
+        !mapped.some((serverPrefix) => tool.name.startsWith(serverPrefix)),
+    )
   )
     return "has_tools";
   if (tryOrReport(() => !isClaudeInChromeAllowed())) return "org_disallows";
   if (tryOrReport(isChromeServerPolicyDenied)) return "org_denies_server";
-  if (filtered.length > 0 ? a.has("disabled") : chromeSwitchNote() === false)
+  if (filtered.length > 0 ? clientStates.has("disabled") : chromeSwitchNote() === false)
     return mayBeLinked ? "switched_off" : "switched_off_not_linked";
   if (!mayBeLinked) return "not_linked";
-  if (a.has("pending")) return "server_pending";
-  if (a.has("failed")) return "server_failed";
+  if (clientStates.has("pending")) return "server_pending";
+  if (clientStates.has("failed")) return "server_failed";
   return "no_cause";
 }
 //@ chunk-tkqbtg0j.js:29183-29237 placement
@@ -339,3 +345,4 @@ function tryOrReport(isChromeServerPolicyDenied) {
     return false;
   }
 }
+export { ENABLE_STUB_TOOLS };

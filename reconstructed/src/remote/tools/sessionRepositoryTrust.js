@@ -18,16 +18,16 @@ import { createRefreshableValue } from "./toolHostsNotice.js";
  */
 function sessionRepositoryTrustReader({ sessionId, getAccessToken, fetchSession, initial, createOrigin }) {
   if (!isRepositoryTrustGateEnabled()) return;
-  let n = false;
-  let r = (o) => repositoryTrustFromMessageTags(o, n);
+  let asked = false;
+  let toTrust = (messages) => repositoryTrustFromMessageTags(messages, asked);
   return createRefreshableValue({
     ...(initial && {
-      initial: initial.then(r),
+      initial: initial.then(toTrust),
     }),
     read: () =>
       fetchSession(sessionId, {
         accessToken: getAccessToken(),
-      }).then(r),
+      }).then(toTrust),
   });
 }
 export { sessionRepositoryTrustReader };

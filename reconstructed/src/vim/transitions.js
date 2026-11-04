@@ -41,6 +41,7 @@ import {
 } from "./types.js";
 import { truncatePathMiddle, Cursor } from "../utils/Cursor.js";
 import { findTextObject } from "./textObjects.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-530hfzwb.js:19998-20379 fingerprint = transition (1)
 /**
@@ -76,95 +77,98 @@ function transition(state, input, ctx) {
 /**
  * 普通模式单键命令表：g r > < 进入子状态；~ x s S J p P D C Y ; , u i I a A o O 直接执行。
  */
-var NORMAL_COMMANDS = Object.assign(Object.create(null), {
-  g: (count) => ({
-    next: {
-      type: "g",
-      count,
-    },
-  }),
-  r: (count) => ({
-    next: {
-      type: "replace",
-      count,
-    },
-  }),
-  ">": (count) => ({
-    next: {
-      type: "indent",
-      dir: ">",
-      count,
-    },
-  }),
-  "<": (count) => ({
-    next: {
-      type: "indent",
-      dir: "<",
-      count,
-    },
-  }),
-  "~": (count, ctx) => ({
-    execute: () => executeToggleCase(count, ctx),
-  }),
-  x: (count, ctx) => ({
-    execute: () => executeX(count, ctx),
-    wanted: null,
-  }),
-  s: (count, ctx) => ({
-    execute: () => executeSubstitute(count, ctx),
-  }),
-  S: (e, t) => ({
-    execute: () => executeLineOp("change", e, t),
-  }),
-  J: (count, ctx) => ({
-    execute: () => executeJoinLines(count, ctx),
-  }),
-  p: (count, ctx) => ({
-    execute: () => executePaste(true, count, ctx),
-    wanted: ctx.getRegister() === "" ? undefined : null,
-  }),
-  P: (count, ctx) => ({
-    execute: () => executePaste(false, count, ctx),
-    wanted: ctx.getRegister() === "" ? undefined : null,
-  }),
-  D: (e, t) => ({
-    execute: () => executeOperatorMotion("delete", "$", 1, t),
-    wanted: null,
-  }),
-  C: (e, t) => ({
-    execute: () => executeOperatorMotion("change", "$", 1, t),
-  }),
-  Y: (e, t) => ({
-    execute: () => executeLineOp("yank", e, t),
-  }),
-  ";": (e, t) => ({
-    execute: () => executeRepeatFind(false, e, t),
-  }),
-  ",": (e, t) => ({
-    execute: () => executeRepeatFind(true, e, t),
-  }),
-  u: (e, t) => ({
-    execute: () => t.onUndo?.(),
-    wanted: null,
-  }),
-  i: (e, t) => ({
-    execute: () => executeInsertCommand("i", t),
-  }),
-  I: (e, t) => ({
-    execute: () => executeInsertCommand("I", t),
-  }),
-  a: (e, t) => ({
-    execute: () => executeInsertCommand("a", t),
-  }),
-  A: (e, t) => ({
-    execute: () => executeInsertCommand("A", t),
-  }),
-  o: (e, ctx) => ({
-    execute: () => executeOpenLine("below", ctx),
-  }),
-  O: (e, ctx) => ({
-    execute: () => executeOpenLine("above", ctx),
-  }),
+var NORMAL_COMMANDS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-530hfzwb.js:20379", () => {
+  NORMAL_COMMANDS = Object.assign(Object.create(null), {
+    g: (count) => ({
+      next: {
+        type: "g",
+        count,
+      },
+    }),
+    r: (count) => ({
+      next: {
+        type: "replace",
+        count,
+      },
+    }),
+    ">": (count) => ({
+      next: {
+        type: "indent",
+        dir: ">",
+        count,
+      },
+    }),
+    "<": (count) => ({
+      next: {
+        type: "indent",
+        dir: "<",
+        count,
+      },
+    }),
+    "~": (count, ctx) => ({
+      execute: () => executeToggleCase(count, ctx),
+    }),
+    x: (count, ctx) => ({
+      execute: () => executeX(count, ctx),
+      wanted: null,
+    }),
+    s: (count, ctx) => ({
+      execute: () => executeSubstitute(count, ctx),
+    }),
+    S: (count, ctx) => ({
+      execute: () => executeLineOp("change", count, ctx),
+    }),
+    J: (count, ctx) => ({
+      execute: () => executeJoinLines(count, ctx),
+    }),
+    p: (count, ctx) => ({
+      execute: () => executePaste(true, count, ctx),
+      wanted: ctx.getRegister() === "" ? undefined : null,
+    }),
+    P: (count, ctx) => ({
+      execute: () => executePaste(false, count, ctx),
+      wanted: ctx.getRegister() === "" ? undefined : null,
+    }),
+    D: (count, ctx) => ({
+      execute: () => executeOperatorMotion("delete", "$", 1, ctx),
+      wanted: null,
+    }),
+    C: (count, ctx) => ({
+      execute: () => executeOperatorMotion("change", "$", 1, ctx),
+    }),
+    Y: (count, ctx) => ({
+      execute: () => executeLineOp("yank", count, ctx),
+    }),
+    ";": (count, ctx) => ({
+      execute: () => executeRepeatFind(false, count, ctx),
+    }),
+    ",": (count, ctx) => ({
+      execute: () => executeRepeatFind(true, count, ctx),
+    }),
+    u: (count, ctx) => ({
+      execute: () => ctx.onUndo?.(),
+      wanted: null,
+    }),
+    i: (count, ctx) => ({
+      execute: () => executeInsertCommand("i", ctx),
+    }),
+    I: (count, ctx) => ({
+      execute: () => executeInsertCommand("I", ctx),
+    }),
+    a: (count, ctx) => ({
+      execute: () => executeInsertCommand("a", ctx),
+    }),
+    A: (count, ctx) => ({
+      execute: () => executeInsertCommand("A", ctx),
+    }),
+    o: (count, ctx) => ({
+      execute: () => executeOpenLine("below", ctx),
+    }),
+    O: (count, ctx) => ({
+      execute: () => executeOpenLine("above", ctx),
+    }),
+  });
 });
 //@ chunk-530hfzwb.js:21423-22339 layout
 /**
@@ -205,12 +209,12 @@ function handleNormalInput(input, count, countTyped, ctx) {
           text,
         },
       };
-    let u = clampOffsetOutsidePlaceholder(ctx.cursor, offset);
+    let clampedOffset = clampOffsetOutsidePlaceholder(ctx.cursor, offset);
     return {
-      execute: () => ctx.setOffset(u),
+      execute: () => ctx.setOffset(clampedOffset),
       wanted: {
         column,
-        offset: u,
+        offset: clampedOffset,
         text,
       },
     };
@@ -227,19 +231,19 @@ function handleNormalInput(input, count, countTyped, ctx) {
     };
   }
   if (isSimpleMotion(input, countTyped)) {
-    let s =
+    let motion =
       input === " " || input === BACKSPACE_KEY
         ? applyCharMotionAcrossLines(input, ctx.cursor, count)
         : resolveMotion(input, ctx.cursor, count);
-    let o = clampOffsetOutsidePlaceholder(s, s.offset);
-    if (o === ctx.cursor.offset && isNoOpWhenUnmoved(input))
+    let targetOffset = clampOffsetOutsidePlaceholder(motion, motion.offset);
+    if (targetOffset === ctx.cursor.offset && isNoOpWhenUnmoved(input))
       return {
         next: {
           type: "idle",
         },
       };
     return {
-      execute: () => ctx.setOffset(o),
+      execute: () => ctx.setOffset(targetOffset),
       wanted: null,
     };
   }
@@ -333,8 +337,8 @@ function fromCount(state, input, ctx) {
         count: appendCountDigit(state.count, input),
       },
     };
-  let n = handleNormalInput(input, state.count, true, ctx);
-  if (n) return n;
+  let result = handleNormalInput(input, state.count, true, ctx);
+  if (result) return result;
   return {
     next: {
       type: "idle",
@@ -360,8 +364,8 @@ function fromOperator(state, input, ctx) {
       },
     };
   let countTyped = state.countTyped ?? false;
-  let s = handleOperatorInput(state.op, state.count, countTyped, input, ctx);
-  if (s) return s;
+  let result = handleOperatorInput(state.op, state.count, countTyped, input, ctx);
+  if (result) return result;
   return {
     next: {
       type: "idle",
@@ -385,8 +389,8 @@ function fromOperatorCount(state, input, ctx) {
     return {
       execute: () => executeLineOp(state.op, count, ctx),
     };
-  let s = handleOperatorInput(state.op, count, true, input, ctx);
-  if (s) return s;
+  let result = handleOperatorInput(state.op, count, true, input, ctx);
+  if (result) return result;
   return {
     next: {
       type: "idle",
@@ -439,7 +443,7 @@ function fromG(state, input, ctx) {
 `);
           let targetLine = Math.min(state.count - 1, lines.length - 1);
           let offset = 0;
-          for (let i = 0; i < targetLine; i++) offset += (lines[i]?.length ?? 0) + 1;
+          for (let index = 0; index < targetLine; index++) offset += (lines[index]?.length ?? 0) + 1;
           ctx.setOffset(offset);
         },
       };
@@ -553,124 +557,127 @@ function visualTransition(state, input, ctx) {
 /**
  * 可视模式单键命令：x/s/X/D/C/S/R/Y → 删除/修改/复制（大写强制整行）；r 进替换；~ u U 切换/小写/大写；p P 粘贴；> < 缩进；v V 切换字符/整行可视；o 交换选区两端；J 合并；$ g ; , 移动。
  */
-var VISUAL_COMMANDS = Object.assign(Object.create(null), {
-  x: () => ({
-    exit: "operator",
-    op: "delete",
-  }),
-  s: () => ({
-    exit: "operator",
-    op: "change",
-  }),
-  X: () => ({
-    exit: "operator",
-    op: "delete",
-    forceLinewise: true,
-  }),
-  D: () => ({
-    exit: "operator",
-    op: "delete",
-    forceLinewise: true,
-  }),
-  C: () => ({
-    exit: "operator",
-    op: "change",
-    forceLinewise: true,
-  }),
-  S: () => ({
-    exit: "operator",
-    op: "change",
-    forceLinewise: true,
-  }),
-  R: () => ({
-    exit: "operator",
-    op: "change",
-    forceLinewise: true,
-  }),
-  Y: () => ({
-    exit: "operator",
-    op: "yank",
-    forceLinewise: true,
-  }),
-  r: () => ({
-    next: {
-      type: "replace",
+var VISUAL_COMMANDS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-530hfzwb.js:25103", () => {
+  VISUAL_COMMANDS = Object.assign(Object.create(null), {
+    x: () => ({
+      exit: "operator",
+      op: "delete",
+    }),
+    s: () => ({
+      exit: "operator",
+      op: "change",
+    }),
+    X: () => ({
+      exit: "operator",
+      op: "delete",
+      forceLinewise: true,
+    }),
+    D: () => ({
+      exit: "operator",
+      op: "delete",
+      forceLinewise: true,
+    }),
+    C: () => ({
+      exit: "operator",
+      op: "change",
+      forceLinewise: true,
+    }),
+    S: () => ({
+      exit: "operator",
+      op: "change",
+      forceLinewise: true,
+    }),
+    R: () => ({
+      exit: "operator",
+      op: "change",
+      forceLinewise: true,
+    }),
+    Y: () => ({
+      exit: "operator",
+      op: "yank",
+      forceLinewise: true,
+    }),
+    r: () => ({
+      next: {
+        type: "replace",
+      },
+    }),
+    "~": () => ({
+      exit: "case",
+      op: "toggle",
+    }),
+    u: () => ({
+      exit: "case",
+      op: "lower",
+    }),
+    U: () => ({
+      exit: "case",
+      op: "upper",
+    }),
+    p: () => ({
+      exit: "paste",
+    }),
+    P: () => ({
+      exit: "paste",
+    }),
+    ">": (count) => ({
+      exit: "indent",
+      dir: ">",
+      count,
+    }),
+    "<": (count) => ({
+      exit: "indent",
+      dir: "<",
+      count,
+    }),
+    v: () => ({
+      exit: "toggleKind",
+      key: "v",
+    }),
+    V: () => ({
+      exit: "toggleKind",
+      key: "V",
+    }),
+    o: () => ({
+      exit: "swap",
+    }),
+    J: () => ({
+      exit: "join",
+    }),
+    $: (count, ctx) => {
+      let offset = ctx.cursor.endOfLogicalLine().offset;
+      return {
+        next: {
+          type: "idle",
+        },
+        move: () => ctx.setOffset(offset),
+        wanted: {
+          column: 1 / 0,
+          offset,
+          text: ctx.cursor.text,
+        },
+      };
     },
-  }),
-  "~": () => ({
-    exit: "case",
-    op: "toggle",
-  }),
-  u: () => ({
-    exit: "case",
-    op: "lower",
-  }),
-  U: () => ({
-    exit: "case",
-    op: "upper",
-  }),
-  p: () => ({
-    exit: "paste",
-  }),
-  P: () => ({
-    exit: "paste",
-  }),
-  ">": (count) => ({
-    exit: "indent",
-    dir: ">",
-    count,
-  }),
-  "<": (count) => ({
-    exit: "indent",
-    dir: "<",
-    count,
-  }),
-  v: () => ({
-    exit: "toggleKind",
-    key: "v",
-  }),
-  V: () => ({
-    exit: "toggleKind",
-    key: "V",
-  }),
-  o: () => ({
-    exit: "swap",
-  }),
-  J: () => ({
-    exit: "join",
-  }),
-  $: (e, t) => {
-    let offset = t.cursor.endOfLogicalLine().offset;
-    return {
+    g: (count) => ({
+      next: {
+        type: "g",
+        count,
+      },
+    }),
+    ";": (state, ctx) => ({
       next: {
         type: "idle",
       },
-      move: () => t.setOffset(offset),
-      wanted: {
-        column: 1 / 0,
-        offset,
-        text: t.cursor.text,
+      move: () => executeRepeatFind(false, state, ctx),
+    }),
+    ",": (state, ctx) => ({
+      next: {
+        type: "idle",
       },
-    };
-  },
-  g: (count) => ({
-    next: {
-      type: "g",
-      count,
-    },
-  }),
-  ";": (state, t) => ({
-    next: {
-      type: "idle",
-    },
-    move: () => executeRepeatFind(false, state, t),
-  }),
-  ",": (state, t) => ({
-    next: {
-      type: "idle",
-    },
-    move: () => executeRepeatFind(true, state, t),
-  }),
+      move: () => executeRepeatFind(true, state, ctx),
+    }),
+  });
 });
 //@ chunk-530hfzwb.js:26227-26893 layout
 function handleVisualInput(input, count, countTyped, ctx) {
@@ -693,8 +700,8 @@ function handleVisualInput(input, count, countTyped, ctx) {
         );
       },
     };
-  let s = VISUAL_COMMANDS[input];
-  if (s) return s(count, ctx);
+  let visualCommand = VISUAL_COMMANDS[input];
+  if (visualCommand) return visualCommand(count, ctx);
   if (isTextObjScopeKey(input))
     return {
       next: {
@@ -704,15 +711,15 @@ function handleVisualInput(input, count, countTyped, ctx) {
       },
     };
   if (input === "j" || input === "k") {
-    let o = truncatePathMiddle(input === "j", count, ctx);
-    let offset = o.offset ?? ctx.cursor.offset;
+    let screenLineMove = truncatePathMiddle(input === "j", count, ctx);
+    let offset = screenLineMove.offset ?? ctx.cursor.offset;
     return {
       next: {
         type: "idle",
       },
       move: () => ctx.setOffset(offset),
       wanted: {
-        column: o.column,
+        column: screenLineMove.column,
         offset,
         text: ctx.cursor.text,
       },
@@ -798,9 +805,9 @@ function visualFromFind(state, input, ctx) {
   };
 }
 //@ chunk-530hfzwb.js:27416-27781 placement
-function visualFromG(state, t, ctx) {
-  if (t === "j" || t === "k") {
-    let { offset, column } = computeScreenLineMove(`g${t}`, state.count, ctx);
+function visualFromG(state, input, ctx) {
+  if (input === "j" || input === "k") {
+    let { offset, column } = computeScreenLineMove(`g${input}`, state.count, ctx);
     return {
       next: {
         type: "idle",
@@ -816,14 +823,14 @@ function visualFromG(state, t, ctx) {
             },
     };
   }
-  if (t === "g")
+  if (input === "g")
     return {
       next: {
         type: "idle",
       },
       move: () => {
-        let n = state.count > 1 ? ctx.cursor.goToLine(state.count) : ctx.cursor.startOfFirstLine();
-        ctx.setOffset(n.offset);
+        let target = state.count > 1 ? ctx.cursor.goToLine(state.count) : ctx.cursor.startOfFirstLine();
+        ctx.setOffset(target.offset);
       },
     };
   return {
@@ -850,48 +857,48 @@ function visualFromTextObject(state, objType, ctx) {
   };
 }
 //@ chunk-530hfzwb.js:27950-27999 placement
-function isSimpleMotion(e, countTyped) {
-  return SIMPLE_MOTIONS.has(e) && !(e === "%" && countTyped);
+function isSimpleMotion(input, countTyped) {
+  return SIMPLE_MOTIONS.has(input) && !(input === "%" && countTyped);
 }
 //@ chunk-530hfzwb.js:27999-28040 placement
-function isNoOpWhenUnmoved(e) {
-  return CHAR_MOTIONS.has(e) || e === "%";
+function isNoOpWhenUnmoved(input) {
+  return CHAR_MOTIONS.has(input) || input === "%";
 }
 //@ chunk-530hfzwb.js:28040-28097 placement
-function appendCountDigit(e, t) {
-  return Math.min(e * 10 + parseInt(t, 10), MAX_VIM_COUNT);
+function appendCountDigit(count, digit) {
+  return Math.min(count * 10 + parseInt(digit, 10), MAX_VIM_COUNT);
 }
 //@ chunk-530hfzwb.js:28097-28322 placement
-function getInsertOffset(e, t) {
-  switch (e) {
+function getInsertOffset(command, cursor) {
+  switch (command) {
     case "i":
-      return t.offset;
+      return cursor.offset;
     case "I":
-      return t.firstNonBlankInLogicalLine().offset;
+      return cursor.firstNonBlankInLogicalLine().offset;
     case "a":
-      return t.isAtEnd() ||
-        t.text[t.offset] ===
+      return cursor.isAtEnd() ||
+        cursor.text[cursor.offset] ===
           `
 `
-        ? t.offset
-        : t.right().offset;
+        ? cursor.offset
+        : cursor.right().offset;
     case "A":
-      return t.endOfLogicalLine().offset;
+      return cursor.endOfLogicalLine().offset;
   }
 }
 //@ chunk-530hfzwb.js:28322-28414 placement
-function executeInsertCommand(e, t) {
-  t.enterInsert(getInsertOffset(e, t.cursor));
-  t.recordChange({
+function executeInsertCommand(command, ctx) {
+  ctx.enterInsert(getInsertOffset(command, ctx.cursor));
+  ctx.recordChange({
     type: "insertCommand",
-    key: e,
+    key: command,
   });
 }
 //@ chunk-530hfzwb.js:28414-28612 placement
-function applyCharMotionAcrossLines(e, cursor, count) {
-  let n = cursor;
+function applyCharMotionAcrossLines(motionKey, cursor, count) {
+  let position = cursor;
   for (let k = 0; k < count; k++) {
-    let motion = resolveMotion(e, n, 1);
+    let motion = resolveMotion(motionKey, position, 1);
     let { text, offset } = motion;
     if (
       text[offset] ===
@@ -903,72 +910,76 @@ function applyCharMotionAcrossLines(e, cursor, count) {
 `
     )
       motion =
-        e === BACKSPACE_KEY
+        motionKey === BACKSPACE_KEY
           ? new Cursor(motion.measuredText, clampOffsetOutsidePlaceholder(motion, offset))
-          : resolveMotion(e, motion, 1);
-    if (motion.equals(n)) break;
-    n = motion;
+          : resolveMotion(motionKey, motion, 1);
+    if (motion.equals(position)) break;
+    position = motion;
   }
-  return n;
+  return position;
 }
 //@ chunk-530hfzwb.js:28975-29179 placement
 function toScreenLineMoveResult(screenLineMove, ctx) {
-  let r = clampOffsetOutsidePlaceholder(ctx.cursor, screenLineMove.offset);
-  if (r === ctx.cursor.offset)
+  let clampedOffset = clampOffsetOutsidePlaceholder(ctx.cursor, screenLineMove.offset);
+  if (clampedOffset === ctx.cursor.offset)
     return {
       next: {
         type: "idle",
       },
     };
   return {
-    execute: () => ctx.setOffset(r),
+    execute: () => ctx.setOffset(clampedOffset),
     wanted:
       screenLineMove.column === null
         ? null
         : {
             column: screenLineMove.column,
-            offset: r,
+            offset: clampedOffset,
             text: ctx.cursor.text,
           },
   };
 }
 //@ chunk-530hfzwb.js:29179-29410 placement
-var META_CHAR_SEQUENCE = /^\x1b(?![[\]P_\\])[\x21-\x7e]$/;
-var NON_TEXT_KEY_NAMES = new Set([
-  "backspace",
-  "delete",
-  "tab",
-  "home",
-  "end",
-  "pageup",
-  "pagedown",
-  "insert",
-  "clear",
-  "enter",
-  "center",
-  "undefined",
-  "mouse",
-  "f1",
-  "f2",
-  "f3",
-  "f4",
-  "f5",
-  "f6",
-  "f7",
-  "f8",
-  "f9",
-  "f10",
-  "f11",
-  "f12",
-]);
+var META_CHAR_SEQUENCE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var NON_TEXT_KEY_NAMES;
+deferInit("chunk-530hfzwb.js:29179", () => {
+  META_CHAR_SEQUENCE = /^\x1b(?![[\]P_\\])[\x21-\x7e]$/;
+  NON_TEXT_KEY_NAMES = new Set([
+    "backspace",
+    "delete",
+    "tab",
+    "home",
+    "end",
+    "pageup",
+    "pagedown",
+    "insert",
+    "clear",
+    "enter",
+    "center",
+    "undefined",
+    "mouse",
+    "f1",
+    "f2",
+    "f3",
+    "f4",
+    "f5",
+    "f6",
+    "f7",
+    "f8",
+    "f9",
+    "f10",
+    "f11",
+    "f12",
+  ]);
+});
 //@ chunk-530hfzwb.js:29410-29467 placement
-function isTextInputKey(rawInput, t) {
-  return (t || rawInput.name === "") && !NON_TEXT_KEY_NAMES.has(rawInput.name);
+function isTextInputKey(key, allowUnnamed) {
+  return (allowUnnamed || key.name === "") && !NON_TEXT_KEY_NAMES.has(key.name);
 }
 //@ chunk-530hfzwb.js:29467-29685 placement
-function changeEntersInsert(e) {
-  if (!e) return false;
-  switch (e.type) {
+function changeEntersInsert(change) {
+  if (!change) return false;
+  switch (change.type) {
     case "insertCommand":
     case "openLine":
     case "substitute":
@@ -977,52 +988,52 @@ function changeEntersInsert(e) {
     case "operatorFind":
     case "operatorTextObj":
     case "visualOp":
-      return e.op === "change";
+      return change.op === "change";
     default:
       return false;
   }
 }
 //@ chunk-530hfzwb.js:29685-29872 placement
-function isCursorMovingChange(e) {
-  switch (e.type) {
+function isCursorMovingChange(change) {
+  switch (change.type) {
     case "x":
     case "substitute":
     case "paste":
     case "operatorTextObj":
       return true;
     case "operator":
-      return !["h", "l", " ", BACKSPACE_KEY, "gj", "gk", "%"].includes(e.motion);
+      return !["h", "l", " ", BACKSPACE_KEY, "gj", "gk", "%"].includes(change.motion);
     default:
       return false;
   }
 }
 //@ chunk-530hfzwb.js:29872-30058 placement
-function wrapCtxWithHook(e, t) {
+function wrapCtxWithHook(ctx, onMutate) {
   return {
-    ...e,
-    setText: (r, n) => {
-      t();
-      e.setText(r, n);
+    ...ctx,
+    setText: (text, options) => {
+      onMutate();
+      ctx.setText(text, options);
     },
-    setOffset: (r) => {
-      t();
-      e.setOffset(r);
+    setOffset: (offset) => {
+      onMutate();
+      ctx.setOffset(offset);
     },
-    enterInsert: (r) => {
-      t();
-      e.enterInsert(r);
+    enterInsert: (offset) => {
+      onMutate();
+      ctx.enterInsert(offset);
     },
-    setRegister: (r, n) => {
-      t();
-      e.setRegister(r, n);
+    setRegister: (value, linewise) => {
+      onMutate();
+      ctx.setRegister(value, linewise);
     },
   };
 }
 //@ chunk-530hfzwb.js:30058-30136 placement
-function clampCursorInPlace(e, key) {
-  let r = clampOffsetOutsidePlaceholder(e, e.offset);
-  if (r !== e.offset) key.setOffset(r);
-  return r;
+function clampCursorInPlace(cursor, key) {
+  let clampedOffset = clampOffsetOutsidePlaceholder(cursor, cursor.offset);
+  if (clampedOffset !== cursor.offset) key.setOffset(clampedOffset);
+  return clampedOffset;
 }
 export {
   isTextInputKey,

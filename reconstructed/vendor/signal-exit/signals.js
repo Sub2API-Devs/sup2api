@@ -5,10 +5,10 @@
  * pieces: chunk-bmbhxpfm.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../runtime/bun-runtime.js";
+import { __commonJS } from "../../runtime/bun-runtime.js";
 
 //@ chunk-bmbhxpfm.js:14791-15044 cjs-fingerprint
-var require_signals = x(function (cjsExports, cjsModule) {
+var require_signals = __commonJS(function (cjsExports, cjsModule) {
   cjsModule.exports = ["SIGABRT", "SIGALRM", "SIGHUP", "SIGINT", "SIGTERM"];
   cjsModule.exports.push(
     "SIGVTALRM",

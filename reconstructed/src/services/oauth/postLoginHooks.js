@@ -8,7 +8,7 @@
  * pieces: chunk-vrmtstb0.js (24)
  * attribution: placement 24
  */
-import { init_react_production, y, R } from "../../../vendor/react/cjs/react.production.js";
+import { init_react_production, useState, useRef } from "../../../vendor/react/cjs/react.production.js";
 import { onOrgMemoryAuthCompletion } from "../orgMemory/orgMemoryDecision.js";
 import { selectionAccountKey } from "../orgMemory/selection.js";
 import {
@@ -92,7 +92,7 @@ import {
   jsxProd_default_2,
 } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { yieldToEventLoop } from "../../native-ts/file-index/index.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { useMainLoopModel } from "../../hooks/useMainLoopModel.js";
 import { useSetAppState } from "../../state/AppState.js";
 import { useHasScrollViewport } from "../../components/ScrollViewportContext.js";
@@ -107,58 +107,68 @@ import { ConfigurableShortcutHint } from "../../components/ConfigurableShortcutH
 import { ConsoleOAuthFlow } from "../../components/ConsoleOAuthFlow.js";
 import { PANE_PADDING_X, PANE_PADDING } from "../../components/design-system/Pane.js";
 import { Dialog } from "../../components/design-system/Dialog.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-vrmtstb0.js:2293-2297 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-vrmtstb0.js:2293", () => {
+  init_react_production();
+});
 //@ chunk-vrmtstb0.js:2297-2323 placement
 function runOrgMemoryAuthBoundary() {
   onOrgMemoryAuthCompletion(selectionAccountKey());
 }
 //@ chunk-vrmtstb0.js:2323-4584 placement
-async function runPostLoginHooks(context, a, s) {
-  context.onChangeAPIKey();
-  if (!a)
+async function runPostLoginHooks(session, session_2, options) {
+  session.onChangeAPIKey();
+  if (!session_2)
     return {
       bridgeDisconnected: false,
       accountSwitched: false,
       relaunching: false,
     };
   let gatewayAuth = getGatewayAuth();
-  let c = gatewayAuth !== null && gatewayAuth !== s.previousGatewayAuth;
+  let gatewayChanged = gatewayAuth !== null && gatewayAuth !== options.previousGatewayAuth;
   if (getAPIProvider() === "gateway") {
-    let onConsentNeeded = s.onConsentNeeded;
-    let P = {
+    let onConsentNeeded = options.onConsentNeeded;
+    let consentHold = {
       release: null,
     };
-    let J = onConsentNeeded
+    let releaseConsentHold = onConsentNeeded
       ? armConsentNeededRelease(() => {
-          P.release ??= acquireConsentHandoffHold();
+          consentHold.release ??= acquireConsentHandoffHold();
           return onConsentNeeded();
         })
       : null;
     try {
-      let m;
+      let settingsOutcome;
       try {
-        m = await refreshRemoteManagedSettingsWithOutcome(
+        settingsOutcome = await refreshRemoteManagedSettingsWithOutcome(
           showStandaloneSecurityDialog,
-          context.storageV5,
-          context.credentials,
+          session.storageV5,
+          session.credentials,
         );
       } finally {
-        J?.();
+        releaseConsentHold?.();
       }
       let gatewayAuth = getGatewayAuth();
-      let M = gatewayLabel(gatewayAuth);
-      if (c && !m.fetchSucceeded && m.failure?.errorKind === "gateway_cert_mismatch")
+      let gatewayLabelText = gatewayLabel(gatewayAuth);
+      if (
+        gatewayChanged &&
+        !settingsOutcome.fetchSucceeded &&
+        settingsOutcome.failure?.errorKind === "gateway_cert_mismatch"
+      )
         return await finishGatewayLoginFailure(
-          context,
+          session,
           gatewayAuth,
-          formatGatewayPinMismatchError(M, m.failure.gatewayPinMismatch),
+          formatGatewayPinMismatchError(gatewayLabelText, settingsOutcome.failure.gatewayPinMismatch),
         );
-      if (!m.fetchSucceeded || hasPolicyDiverged()) {
-        let failure = m.fetchSucceeded ? undefined : m.failure;
-        await restartAfterGatewayLogin(context, formatGatewayRestartNotice(M, failure, c), (h) =>
-          formatGatewayExitNotice(M, failure, h, c),
+      if (!settingsOutcome.fetchSucceeded || hasPolicyDiverged()) {
+        let failure = settingsOutcome.fetchSucceeded ? undefined : settingsOutcome.failure;
+        await restartAfterGatewayLogin(
+          session,
+          formatGatewayRestartNotice(gatewayLabelText, failure, gatewayChanged),
+          (exitNotice) => formatGatewayExitNotice(gatewayLabelText, failure, exitNotice, gatewayChanged),
         );
         return POST_LOGIN_SHUTDOWN_STATE;
       }
@@ -167,63 +177,65 @@ async function runPostLoginHooks(context, a, s) {
       applyConfigEnvironmentVariables();
       relatchTenguSandboxGbConfig();
     } finally {
-      if (!isTerminalShutdown()) P.release?.();
+      if (!isTerminalShutdown()) consentHold.release?.();
     }
-  } else refreshRemoteManagedSettings(showStandaloneSecurityDialog, context.storageV5, context.credentials);
+  } else refreshRemoteManagedSettings(showStandaloneSecurityDialog, session.storageV5, session.credentials);
   resetCostState();
-  let p = refreshPolicyLimits().catch(() => {});
-  p.then(() => {
-    if (shouldRefreshArtifactRoster())
-      refreshArtifactRoster({
-        credentials: context.credentials,
-        storageV5: context.storageV5,
-        timeoutMs: 5000,
-      });
-  }).catch(() => {});
+  let policyLimitsRefresh = refreshPolicyLimits().catch(() => {});
+  policyLimitsRefresh
+    .then(() => {
+      if (shouldRefreshArtifactRoster())
+        refreshArtifactRoster({
+          credentials: session.credentials,
+          storageV5: session.storageV5,
+          timeoutMs: 5000,
+        });
+    })
+    .catch(() => {});
   resetUserData();
   refreshGrowthBookAfterAuthChange();
-  withTimeout(p, POLICY_LIMITS_COLD_AWAIT_MS, "post-login policy limits refresh")
+  withTimeout(policyLimitsRefresh, POLICY_LIMITS_COLD_AWAIT_MS, "post-login policy limits refresh")
     .catch(() => {})
     .then(() => noopServedCatalogHook())
     .then(() => {})
     .catch((error) => logError(error));
-  let { setAppState } = s;
-  let _ = loginEventCounter.of(context.session);
-  let C = () => _.credentialsPersisted();
-  let previousAccount = s.previousAccount;
+  let { setAppState } = options;
+  let loginCounter = loginEventCounter.of(session.session);
+  let persisted = () => loginCounter.credentialsPersisted();
+  let previousAccount = options.previousAccount;
   let oauthAccountInfo = getOauthAccountInfo();
-  let A = sameOwnerAccount(previousAccount, oauthAccountInfo);
-  let { replBridgeEnabled, replBridgeOutboundOnly } = context.getAppState();
-  let v = previousAccount?.accountUuid !== undefined && !A;
-  let bridgeDisconnected = v && replBridgeEnabled && !replBridgeOutboundOnly;
-  if (v)
-    setAppState((f) => {
-      if (!(f.replBridgeEnabled || f.replBridgeError !== undefined)) return f;
+  let sameAccount = sameOwnerAccount(previousAccount, oauthAccountInfo);
+  let { replBridgeEnabled, replBridgeOutboundOnly } = session.getAppState();
+  let accountSwitched = previousAccount?.accountUuid !== undefined && !sameAccount;
+  let bridgeDisconnected = accountSwitched && replBridgeEnabled && !replBridgeOutboundOnly;
+  if (accountSwitched)
+    setAppState((state) => {
+      if (!(state.replBridgeEnabled || state.replBridgeError !== undefined)) return state;
       logForDebugging("[bridge:repl] Account changed via /login \u2014 disconnecting Remote Control session");
       return {
-        ...f,
+        ...state,
         replBridgeEnabled: false,
         replBridgeExplicit: false,
         replBridgeOutboundOnly: false,
         replBridgeError: undefined,
         replBridgeErrorKind: undefined,
-        notifications: removeNotificationByKey(f.notifications, BRIDGE_FAILED),
+        notifications: removeNotificationByKey(state.notifications, BRIDGE_FAILED),
       };
     });
   clearOrgMemoryCredential();
   clearOrgMemoryDiscoveryCaches();
   notifyRoomAccountChanged(oauthAccountInfo);
-  s.setAppState(resetSliceIfUnchanged);
-  if (v) {
+  options.setAppState(resetSliceIfUnchanged);
+  if (accountSwitched) {
     clearOrgMemoryDiscoveryAccountState();
-    s.setAppState((f) => ({
-      ...f,
+    options.setAppState((state) => ({
+      ...state,
       replBridgeSessionGroupingId: undefined,
       replBridgeInitialName: undefined,
       ultrareviewOverageConfirmed: false,
     }));
     clearSessionConsentKeys();
-    if (context.dialogStore) context.dialogStore.dismissKind(REMOTE_CALLOUT_DIALOG.kind);
+    if (session.dialogStore) session.dialogStore.dismissKind(REMOTE_CALLOUT_DIALOG.kind);
     else
       logError(
         Error(
@@ -231,28 +243,28 @@ async function runPostLoginHooks(context, a, s) {
         ),
       );
   }
-  if (A && (await readStoredTrustedDeviceToken())) {
+  if (sameAccount && (await readStoredTrustedDeviceToken())) {
     logForDebugging("[trusted-device] Same account+org re-login with existing token, skipping re-enrollment");
     await forgetEnrollmentAfterRefusal();
-    C();
+    persisted();
   } else {
     clearTrustedDeviceToken();
-    let f = enrollTrustedDevice({
-      credentials: context.credentials,
-    }).then(C, C);
-    if (s.awaitEnrollment) await f;
+    let enrollment = enrollTrustedDevice({
+      credentials: session.credentials,
+    }).then(persisted, persisted);
+    if (options.awaitEnrollment) await enrollment;
   }
-  let { host } = context.session;
-  let appState = context.getAppState();
+  let { host } = session.session;
+  let appState = session.getAppState();
   rearmAutoModeGateCheck(host);
   clearFastRejectedFallbackModels();
   if (!getIsRemoteMode())
-    checkAndDisableAutoModeIfNeeded(host, getToolPermissionContext(context), setAppState, appState.fastMode);
+    checkAndDisableAutoModeIfNeeded(host, getToolPermissionContext(session), setAppState, appState.fastMode);
   runOrgMemoryAuthBoundary();
-  _.loginCompleted();
+  loginCounter.loginCompleted();
   return {
     bridgeDisconnected,
-    accountSwitched: v,
+    accountSwitched,
     relaunching: false,
   };
 }
@@ -265,8 +277,8 @@ var FINGERPRINT_PREFIX_CHARS = 16;
 /**
  * 截短指纹用于展示。
  */
-function shortFingerprint(o) {
-  return `${o.slice(0, FINGERPRINT_PREFIX_CHARS)}\u2026`;
+function shortFingerprint(fingerprint) {
+  return `${fingerprint.slice(0, FINGERPRINT_PREFIX_CHARS)}\u2026`;
 }
 //@ chunk-vrmtstb0.js:4640-4734 placement
 /**
@@ -292,7 +304,7 @@ var POST_LOGIN_SHUTDOWN_STATE = {
 /**
  * 网关登录失败后的收尾（清除凭据、恢复会话）。
  */
-async function finishGatewayLoginFailure(o, gatewayAuth, s) {
+async function finishGatewayLoginFailure(session, gatewayAuth, failureText) {
   for (
     let gatewayRefreshInFlight = getGatewayRefreshInFlight();
     gatewayRefreshInFlight;
@@ -302,46 +314,46 @@ async function finishGatewayLoginFailure(o, gatewayAuth, s) {
   let gatewayAuth_2 = getGatewayAuth();
   await clearGatewayCredential(
     gatewayAuth_2 && gatewayAuth && gatewayAuth_2.url === gatewayAuth.url ? gatewayAuth_2 : gatewayAuth,
-    o.credentials,
+    session.credentials,
   );
-  await clearRemoteManagedSettingsCache(o.storageV5);
+  await clearRemoteManagedSettingsCache(session.storageV5);
   if (isTerminalShutdown())
     return {
       ...POST_LOGIN_SHUTDOWN_STATE,
-      gatewayLoginError: s,
+      gatewayLoginError: failureText,
     };
-  let c = !isTranscriptPersistenceDisabled();
-  if (c) await saveResumePoint(o.messages, o.storageV5);
+  let transcriptsSaved = !isTranscriptPersistenceDisabled();
+  if (transcriptsSaved) await saveResumePoint(session.messages, session.storageV5);
   await gracefulShutdown(0, "other", {
-    finalMessage: `${s}
-This session is ending so that nothing from that gateway stays half-applied. Start claude again${c ? " to continue (your conversation can be resumed)" : ""} and sign in once that is fixed.`,
+    finalMessage: `${failureText}
+This session is ending so that nothing from that gateway stays half-applied. Start claude again${transcriptsSaved ? " to continue (your conversation can be resumed)" : ""} and sign in once that is fixed.`,
   });
   return {
     ...POST_LOGIN_SHUTDOWN_STATE,
-    gatewayLoginError: s,
+    gatewayLoginError: failureText,
   };
 }
 //@ chunk-vrmtstb0.js:5306-5871 placement
-function formatGatewayPinMismatchError(o, gatewayPinMismatch) {
-  let s =
+function formatGatewayPinMismatchError(gatewayLabel, gatewayPinMismatch) {
+  let certificateText =
     gatewayPinMismatch?.presentedFingerprint && gatewayPinMismatch.pinnedFingerprint
       ? `TLS certificate ${shortFingerprint(gatewayPinMismatch.presentedFingerprint)} instead of the one you trusted (${shortFingerprint(gatewayPinMismatch.pinnedFingerprint)})`
       : "a different TLS certificate from the one you trusted";
-  return `Cloud gateway sign-in was not completed: on the first request after sign-in, ${o} presented ${s}. No gateway credentials were kept. Usually this means the gateway runs several nodes behind one address that serve different certificates (they must all serve the same one), or something on the network path is intercepting TLS.`;
+  return `Cloud gateway sign-in was not completed: on the first request after sign-in, ${gatewayLabel} presented ${certificateText}. No gateway credentials were kept. Usually this means the gateway runs several nodes behind one address that serve different certificates (they must all serve the same one), or something on the network path is intercepting TLS.`;
 }
 //@ chunk-vrmtstb0.js:5871-7369 placement
 /**
  * 网关托管设置加载失败原因说明。
  */
-function describeGatewaySettingsError(o, a) {
-  switch (o.errorKind) {
+function describeGatewaySettingsError(error, signedIn) {
+  switch (error.errorKind) {
     case "timeout":
       return "the request timed out";
     case "network_error":
       return "couldn't connect to the gateway";
     case "http_401":
     case "api_key_not_sent":
-      return a
+      return signedIn
         ? "the gateway did not accept the new credential"
         : "the gateway did not accept this session's credential";
     case "http_403":
@@ -352,9 +364,9 @@ function describeGatewaySettingsError(o, a) {
       return "the profile credential could not authenticate the request (details with --debug)";
     case "http_4xx":
     case "http_5xx":
-      return o.httpStatus === undefined
+      return error.httpStatus === undefined
         ? "the gateway answered with an unexpected status"
-        : `the gateway answered HTTP ${o.httpStatus}`;
+        : `the gateway answered HTTP ${error.httpStatus}`;
     case "parse_error":
       return "the gateway's response was not valid managed settings";
     case "ruled_empty":
@@ -375,50 +387,62 @@ function describeGatewaySettingsError(o, a) {
 /**
  * 网关登录后设置加载失败的提示。
  */
-function gatewaySettingsErrorMessage(o, a, s) {
-  if (a) {
-    let u = describeGatewaySettingsError(a, s);
-    return s
-      ? `Signed in to Cloud gateway ${o}, but couldn't load your organization's managed settings (${u})`
-      : `Couldn't reload your organization's managed settings from Cloud gateway ${o} (${u})`;
+function gatewaySettingsErrorMessage(gatewayLabel, failure, signedIn) {
+  if (failure) {
+    let detail = describeGatewaySettingsError(failure, signedIn);
+    return signedIn
+      ? `Signed in to Cloud gateway ${gatewayLabel}, but couldn't load your organization's managed settings (${detail})`
+      : `Couldn't reload your organization's managed settings from Cloud gateway ${gatewayLabel} (${detail})`;
   }
-  return s
-    ? `Signed in to Cloud gateway ${o}`
-    : `Your organization's managed settings on Cloud gateway ${o} changed`;
+  return signedIn
+    ? `Signed in to Cloud gateway ${gatewayLabel}`
+    : `Your organization's managed settings on Cloud gateway ${gatewayLabel} changed`;
 }
 //@ chunk-vrmtstb0.js:7712-7979 placement
-function formatGatewayRestartNotice(o, failure, s, u = !isTranscriptPersistenceDisabled()) {
-  let c = u ? "\u2026" : " (this conversation is not saved, so it starts fresh)\u2026";
-  let p = gatewaySettingsErrorMessage(o, failure, s);
+function formatGatewayRestartNotice(
+  gatewayLabel,
+  failure,
+  signedIn,
+  transcriptSaved = !isTranscriptPersistenceDisabled(),
+) {
+  let ellipsis = transcriptSaved ? "\u2026" : " (this conversation is not saved, so it starts fresh)\u2026";
+  let message = gatewaySettingsErrorMessage(gatewayLabel, failure, signedIn);
   return failure
-    ? `${p}. Restarting Claude Code to retry${c}`
-    : `${p}. Restarting Claude Code to apply ${s ? "your organization's managed settings" : "them"}${c}`;
+    ? `${message}. Restarting Claude Code to retry${ellipsis}`
+    : `${message}. Restarting Claude Code to apply ${signedIn ? "your organization's managed settings" : "them"}${ellipsis}`;
 }
 //@ chunk-vrmtstb0.js:7979-8323 placement
-function formatGatewayExitNotice(o, failure, s, u, c = !isTranscriptPersistenceDisabled()) {
-  return `${gatewaySettingsErrorMessage(o, failure, u)}. ${failure ? "Claude Code has to restart to retry" : `Claude Code has to restart to apply ${u ? "your organization's managed settings" : "them"}`}, and ${s}, so this session is ending instead. Your sign-in is saved: start claude again the same way${c ? " (add --continue to return to this conversation)" : ""}.`;
+function formatGatewayExitNotice(
+  gatewayLabel,
+  failure,
+  reason,
+  signedIn,
+  transcriptSaved = !isTranscriptPersistenceDisabled(),
+) {
+  return `${gatewaySettingsErrorMessage(gatewayLabel, failure, signedIn)}. ${failure ? "Claude Code has to restart to retry" : `Claude Code has to restart to apply ${signedIn ? "your organization's managed settings" : "them"}`}, and ${reason}, so this session is ending instead. Your sign-in is saved: start claude again the same way${transcriptSaved ? " (add --continue to return to this conversation)" : ""}.`;
 }
 //@ chunk-vrmtstb0.js:8323-9046 placement
 /**
  * 网关登录后重启 Claude Code（后台会话不能自重启）。
  */
-async function restartAfterGatewayLogin(o, a, s) {
+async function restartAfterGatewayLogin(session, notice, exitNotice) {
   if (isTerminalShutdown()) return;
-  let u = (_) =>
+  let shutdownWith = (reason) =>
     gracefulShutdown(0, "other", {
-      finalMessage: s(_),
+      finalMessage: exitNotice(reason),
     });
-  await saveResumePoint(submittedMessages(o), o.storageV5);
+  await saveResumePoint(submittedMessages(session), session.storageV5);
   if (isTerminalShutdown()) return;
   if (isBgSession())
-    return u(
+    return shutdownWith(
       "a background session cannot restart itself (sign in from a session started directly with `claude`)",
     );
-  let toolPermissionContext = getToolPermissionContext(o);
-  let p = listUncarriedLaunchSettings(toolPermissionContext, getForkRestrictedLaunchConfig());
-  if (p.length > 0) return u(`this session has restrictions a restart can't carry over (${p.join("; ")})`);
+  let toolPermissionContext = getToolPermissionContext(session);
+  let uncarried = listUncarriedLaunchSettings(toolPermissionContext, getForkRestrictedLaunchConfig());
+  if (uncarried.length > 0)
+    return shutdownWith(`this session has restrictions a restart can't carry over (${uncarried.join("; ")})`);
   let proactivity = {
-    proactivityLevel: o.getProactivityLevel(),
+    proactivityLevel: session.getProactivityLevel(),
     toolPermissionContext,
   };
   try {
@@ -426,7 +450,7 @@ async function restartAfterGatewayLogin(o, a, s) {
       {
         freshIfNoTranscript: true,
         extraArgs: [
-          ...buildRelaunchArgs(toolPermissionContext, getSessionEffort(o)),
+          ...buildRelaunchArgs(toolPermissionContext, getSessionEffort(session)),
           ...buildPermissionAndAgentArgs(toolPermissionContext, getForkReplayLaunchConfig()),
         ],
         proactivity,
@@ -436,35 +460,35 @@ async function restartAfterGatewayLogin(o, a, s) {
         },
         preSpawn: () =>
           process.stdout.write(`
-${a}
+${notice}
 `),
       },
-      o.storageV5,
+      session.storageV5,
     );
   } catch (error) {
     logError(toError(error));
-    return u(`it could not restart itself (${errorMessage(error)})`);
+    return shutdownWith(`it could not restart itself (${errorMessage(error)})`);
   }
 }
 //@ chunk-vrmtstb0.js:9046-9588 placement
-function loginCompletion(context, onDone, s, { envTokenWasSet: u = false, envWarningOnce: c } = {}) {
-  if (s.gatewayLoginError !== undefined || s.relaunching) return [s.gatewayLoginError];
-  let p = onDone ? undefined : getLoginAvailability();
-  if (p?.kind === "refused")
+function loginCompletion(context, onDone, outcome, { envTokenWasSet = false, envWarningOnce } = {}) {
+  if (outcome.gatewayLoginError !== undefined || outcome.relaunching) return [outcome.gatewayLoginError];
+  let availability = onDone ? undefined : getLoginAvailability();
+  if (availability?.kind === "refused")
     return [
-      p.notice,
+      availability.notice,
       {
         display: "system",
       },
     ];
-  let g = onDone ? loginAutoContinueOptions(context, s) : undefined;
-  let _ = envTokenWarningRoute({
-    envTokenWasSet: u,
+  let autoContinue = onDone ? loginAutoContinueOptions(context, outcome) : undefined;
+  let envWarningRoute = envTokenWarningRoute({
+    envTokenWasSet,
     gatewayActive: getAPIProvider() === "gateway",
-    willAutoQuery: g?.shouldQuery === true,
+    willAutoQuery: autoContinue?.shouldQuery === true,
   });
-  if (_ === "out-of-band" && c && !c.delivered) {
-    c.delivered = true;
+  if (envWarningRoute === "out-of-band" && envWarningOnce && !envWarningOnce.delivered) {
+    envWarningOnce.delivered = true;
     context.applyMessageOp({
       type: "append",
       messages: [createSystemMessage(LOGIN_SUCCESS_ENV_OVERRIDE_WARNING, "notice")],
@@ -472,16 +496,16 @@ function loginCompletion(context, onDone, s, { envTokenWasSet: u = false, envWar
   }
   return [
     buildLoginDoneMessage(onDone, {
-      bridgeDisconnected: s.bridgeDisconnected,
-      includeEnvTokenWarning: _ === "inline",
+      bridgeDisconnected: outcome.bridgeDisconnected,
+      includeEnvTokenWarning: envWarningRoute === "inline",
     }),
-    g,
+    autoContinue,
   ];
 }
 //@ chunk-vrmtstb0.js:9588-9776 placement = launchAndDone (0.376)
-function loginAutoContinueOptions(o, a) {
-  if (a.accountSwitched || a.relaunching) return;
-  let lastAssistantMessage = getLastAssistantMessage(o.messages);
+function loginAutoContinueOptions(session, outcome) {
+  if (outcome.accountSwitched || outcome.relaunching) return;
+  let lastAssistantMessage = getLastAssistantMessage(session.messages);
   if (lastAssistantMessage?.isApiErrorMessage && lastAssistantMessage.error === "authentication_failed")
     return {
       display: "system",
@@ -505,21 +529,21 @@ function getLoginStartingMessage() {
 //@ chunk-vrmtstb0.js:10228-10367 placement
 var LOGIN_SUCCESS_ENV_OVERRIDE_WARNING = `Note: CLAUDE_CODE_OAUTH_TOKEN was set in your environment when /login started. This session will use your new credentials, ${OLD_TOKEN_ENV_WARNING}`;
 //@ chunk-vrmtstb0.js:10367-10480 placement
-function envTokenWarningRoute(o) {
-  if (!o.envTokenWasSet || o.gatewayActive) return "none";
-  return o.willAutoQuery ? "out-of-band" : "inline";
+function envTokenWarningRoute(input) {
+  if (!input.envTokenWasSet || input.gatewayActive) return "none";
+  return input.willAutoQuery ? "out-of-band" : "inline";
 }
 //@ chunk-vrmtstb0.js:10480-10652 placement = call (0.512)
 function buildLoginDoneMessage(onDone, context) {
   if (!onDone) return "Login interrupted";
-  let s = context.bridgeDisconnected
+  let message = context.bridgeDisconnected
     ? `Login successful. ${REMOTE_CONTROL_DISCONNECTED_MSG}`
     : "Login successful";
   return context.includeEnvTokenWarning
-    ? `${s}
+    ? `${message}
 
 ${LOGIN_SUCCESS_ENV_OVERRIDE_WARNING}`
-    : s;
+    : message;
 }
 //@ chunk-vrmtstb0.js:10652-11396 placement
 async function call(onDone, context) {
@@ -545,215 +569,236 @@ async function call(onDone, context) {
   };
   return jsxProd_default(Login, {
     startingMessage: loginStartingMessage,
-    onDone: async (C, b, setAppState) => {
-      let A = false;
-      let D = await runPostLoginHooks(context, C, {
+    onDone: async (messages, done, setAppState) => {
+      let consentNeeded = false;
+      let postLoginResult = await runPostLoginHooks(context, messages, {
         setAppState,
         previousAccount,
         previousGatewayAuth,
         onConsentNeeded: () => {
-          A = true;
+          consentNeeded = true;
           onDone(getLoginConsentHandoffMessage(), {
             display: "system",
           });
           return yieldToEventLoop();
         },
       });
-      let O = loginCompletion(context, C, D, {
+      let completion = loginCompletion(context, messages, postLoginResult, {
         envTokenWasSet,
         envWarningOnce,
       });
-      if (A) {
-        let [v] = O;
-        if (v)
+      if (consentNeeded) {
+        let [firstMessage] = completion;
+        if (firstMessage)
           context.applyMessageOp({
             type: "append",
-            messages: [createSystemMessage(v, "notice")],
+            messages: [createSystemMessage(firstMessage, "notice")],
           });
         return;
       }
-      onDone(...O);
+      onDone(...completion);
     },
     onHybridSignIn: undefined,
   });
 }
 //@ chunk-vrmtstb0.js:11396-13635 placement = Login (0.296)
 function Login(props) {
-  let g = w(38);
+  let $ = useMemoCache(38);
   let mainLoopModel = useMainLoopModel();
   let setAppState = useSetAppState();
   let hasScrollViewport = useHasScrollViewport();
-  let [c, p] = y(false);
-  let _;
-  if (g[0] === MEMO_CACHE_SENTINEL) {
-    _ = () => p(true);
-    g[0] = _;
-  } else _ = g[0];
-  let C = _;
+  let [authCompleted, setAuthCompleted] = useState(false);
+  let markAuthSuccess;
+  if ($[0] === MEMO_CACHE_SENTINEL) {
+    markAuthSuccess = () => setAuthCompleted(true);
+    $[0] = markAuthSuccess;
+  } else markAuthSuccess = $[0];
+  let onAuthSuccess = markAuthSuccess;
   let { storageV5, credentials } = useTheme_2();
   let { onOrgDocumentsReload } = props;
-  let D;
-  if (g[1] !== credentials || g[2] !== onOrgDocumentsReload || g[3] !== storageV5) {
-    D = (O) => {
-      if (onOrgDocumentsReload) onOrgDocumentsReload(O);
-      else if (O === "previous")
+  let handleOrgDocumentsReload;
+  if ($[1] !== credentials || $[2] !== onOrgDocumentsReload || $[3] !== storageV5) {
+    handleOrgDocumentsReload = (reloadMode) => {
+      if (onOrgDocumentsReload) onOrgDocumentsReload(reloadMode);
+      else if (reloadMode === "previous")
         MANAGED_RELOAD_NOTICES({
           storageV5,
           credentials,
         });
     };
-    g[1] = credentials;
-    g[2] = onOrgDocumentsReload;
-    g[3] = storageV5;
-    g[4] = D;
-  } else D = g[4];
-  let onOrgDocumentsReload_2 = D;
-  let G = R(false);
-  let k = R(null);
-  let [x, f] = y(false);
-  let P;
-  if (g[5] !== mainLoopModel || g[6] !== props || g[7] !== setAppState) {
-    P = (J) => {
-      if (G.current) {
+    $[1] = credentials;
+    $[2] = onOrgDocumentsReload;
+    $[3] = storageV5;
+    $[4] = handleOrgDocumentsReload;
+  } else handleOrgDocumentsReload = $[4];
+  let onOrgDocumentsReload_2 = handleOrgDocumentsReload;
+  let loginHandledRef = useRef(false);
+  let pendingHybridCredentialRef = useRef(null);
+  let [loginCompleted, setLoginCompleted] = useState(false);
+  let handleDone;
+  if ($[5] !== mainLoopModel || $[6] !== props || $[7] !== setAppState) {
+    handleDone = (completed) => {
+      if (loginHandledRef.current) {
         return;
       }
-      G.current = true;
-      f(true);
-      if (k.current !== null && props.onHybridSignIn) {
-        props.onHybridSignIn(k.current);
+      loginHandledRef.current = true;
+      setLoginCompleted(true);
+      if (pendingHybridCredentialRef.current !== null && props.onHybridSignIn) {
+        props.onHybridSignIn(pendingHybridCredentialRef.current);
         return;
       }
-      props.onDone(J, mainLoopModel, setAppState);
+      props.onDone(completed, mainLoopModel, setAppState);
     };
-    g[5] = mainLoopModel;
-    g[6] = props;
-    g[7] = setAppState;
-    g[8] = P;
-  } else P = g[8];
-  let m = P;
-  let B;
-  if (g[9] !== c || g[10] !== m) {
-    B = () => m(c);
-    g[9] = c;
-    g[10] = m;
-    g[11] = B;
-  } else B = g[11];
-  let M = B;
-  let U;
-  if (g[12] === MEMO_CACHE_SENTINEL) {
-    U = {
+    $[5] = mainLoopModel;
+    $[6] = props;
+    $[7] = setAppState;
+    $[8] = handleDone;
+  } else handleDone = $[8];
+  let onDone = handleDone;
+  let handleCancel;
+  if ($[9] !== authCompleted || $[10] !== onDone) {
+    handleCancel = () => onDone(authCompleted);
+    $[9] = authCompleted;
+    $[10] = onDone;
+    $[11] = handleCancel;
+  } else handleCancel = $[11];
+  let onCancel = handleCancel;
+  let keybindingOptions;
+  if ($[12] === MEMO_CACHE_SENTINEL) {
+    keybindingOptions = {
       context: "Settings",
     };
-    g[12] = U;
-  } else U = g[12];
-  useKeybinding("confirm:no", M, U);
-  let [h] = y(getLoginAvailability);
-  let pe;
-  if (g[13] !== h.kind) {
-    pe = () => h.kind === "any-method" && getUserSettingsGateway() !== undefined;
-    g[13] = h.kind;
-    g[14] = pe;
-  } else pe = g[14];
-  let [Fe] = y(pe);
+    $[12] = keybindingOptions;
+  } else keybindingOptions = $[12];
+  useKeybinding("confirm:no", onCancel, keybindingOptions);
+  let [loginAvailability] = useState(getLoginAvailability);
+  let isGatewayOnly;
+  if ($[13] !== loginAvailability.kind) {
+    isGatewayOnly = () => loginAvailability.kind === "any-method" && getUserSettingsGateway() !== undefined;
+    $[13] = loginAvailability.kind;
+    $[14] = isGatewayOnly;
+  } else isGatewayOnly = $[14];
+  let [gatewayOnly] = useState(isGatewayOnly);
   let { exit } = useApp();
-  let [F, Ge] = y(h.kind === "refused");
-  let fe;
-  if (g[15] !== exit || g[16] !== m || g[17] !== F) {
-    fe = () => {
-      if (F && !G.current) {
-        m(false);
+  let [isRefused, setIsRefused] = useState(loginAvailability.kind === "refused");
+  let handleExit;
+  if ($[15] !== exit || $[16] !== onDone || $[17] !== isRefused) {
+    handleExit = () => {
+      if (isRefused && !loginHandledRef.current) {
+        onDone(false);
         return;
       }
       exit();
     };
-    g[15] = exit;
-    g[16] = m;
-    g[17] = F;
-    g[18] = fe;
-  } else fe = g[18];
-  let globalExitKeybindings = useGlobalExitKeybindings(fe);
-  const hideInputGuide = (c || Fe) && !globalExitKeybindings.pending;
+    $[15] = exit;
+    $[16] = onDone;
+    $[17] = isRefused;
+    $[18] = handleExit;
+  } else handleExit = $[18];
+  let globalExitKeybindings = useGlobalExitKeybindings(handleExit);
+  const hideInputGuide = (authCompleted || gatewayOnly) && !globalExitKeybindings.pending;
   let inputGuide;
   if (
-    g[19] !== x ||
-    g[20] !== globalExitKeybindings.keyName ||
-    g[21] !== globalExitKeybindings.pending ||
-    g[22] !== F ||
-    g[23] !== h.kind
+    $[19] !== loginCompleted ||
+    $[20] !== globalExitKeybindings.keyName ||
+    $[21] !== globalExitKeybindings.pending ||
+    $[22] !== isRefused ||
+    $[23] !== loginAvailability.kind
   ) {
     inputGuide = globalExitKeybindings.pending
       ? jsxProd_default_2(Text, {
-          children: ["Press ", globalExitKeybindings.keyName, " again to", " ", F && !x ? "cancel" : "exit"],
+          children: [
+            "Press ",
+            globalExitKeybindings.keyName,
+            " again to",
+            " ",
+            isRefused && !loginCompleted ? "cancel" : "exit",
+          ],
         })
       : jsxProd_default(ConfigurableShortcutHint, {
           action: "confirm:no",
           context: "Settings",
           fallback: "Esc",
-          description: h.kind === "refused" ? "close" : "cancel",
+          description: loginAvailability.kind === "refused" ? "close" : "cancel",
         });
-    g[19] = x;
-    g[20] = globalExitKeybindings.keyName;
-    g[21] = globalExitKeybindings.pending;
-    g[22] = F;
-    g[23] = h.kind;
-    g[24] = inputGuide;
-  } else inputGuide = g[24];
+    $[19] = loginCompleted;
+    $[20] = globalExitKeybindings.keyName;
+    $[21] = globalExitKeybindings.pending;
+    $[22] = isRefused;
+    $[23] = loginAvailability.kind;
+    $[24] = inputGuide;
+  } else inputGuide = $[24];
   let children;
   if (
-    g[25] !== m ||
-    g[26] !== onOrgDocumentsReload_2 ||
-    g[27] !== hasScrollViewport ||
-    g[28] !== props.onHybridSignIn ||
-    g[29] !== props.startingMessage ||
-    g[30] !== h.kind ||
-    g[31] !== h.notice
+    $[25] !== onDone ||
+    $[26] !== onOrgDocumentsReload_2 ||
+    $[27] !== hasScrollViewport ||
+    $[28] !== props.onHybridSignIn ||
+    $[29] !== props.startingMessage ||
+    $[30] !== loginAvailability.kind ||
+    $[31] !== loginAvailability.notice
   ) {
     children =
-      h.kind === "refused"
+      loginAvailability.kind === "refused"
         ? jsxProd_default(Text, {
-            children: h.notice,
+            children: loginAvailability.notice,
           })
         : jsxProd_default(ConsoleOAuthFlow, {
-            onDone: () => m(true),
-            onAuthSuccess: C,
+            onDone: () => onDone(true),
+            onAuthSuccess,
             onOrgDocumentsReload: onOrgDocumentsReload_2,
             onHybridSignIn:
               props.onHybridSignIn &&
-              ((xe) => {
-                k.current = xe;
-                C();
+              ((hybridCredential) => {
+                pendingHybridCredentialRef.current = hybridCredential;
+                onAuthSuccess();
               }),
-            onFreshPickerChange: Ge,
+            onFreshPickerChange: setIsRefused,
             startingMessage: props.startingMessage,
-            forceLoginMethod: h.kind === "claudeai-only" ? "claudeai" : undefined,
+            forceLoginMethod: loginAvailability.kind === "claudeai-only" ? "claudeai" : undefined,
             urlOutdent: hasScrollViewport ? PANE_PADDING_X : PANE_PADDING,
           });
-    g[25] = m;
-    g[26] = onOrgDocumentsReload_2;
-    g[27] = hasScrollViewport;
-    g[28] = props.onHybridSignIn;
-    g[29] = props.startingMessage;
-    g[30] = h.kind;
-    g[31] = h.notice;
-    g[32] = children;
-  } else children = g[32];
-  let me;
-  if (g[33] !== M || g[34] !== hideInputGuide || g[35] !== inputGuide || g[36] !== children) {
-    me = jsxProd_default(Dialog, {
+    $[25] = onDone;
+    $[26] = onOrgDocumentsReload_2;
+    $[27] = hasScrollViewport;
+    $[28] = props.onHybridSignIn;
+    $[29] = props.startingMessage;
+    $[30] = loginAvailability.kind;
+    $[31] = loginAvailability.notice;
+    $[32] = children;
+  } else children = $[32];
+  let dialog;
+  if ($[33] !== onCancel || $[34] !== hideInputGuide || $[35] !== inputGuide || $[36] !== children) {
+    dialog = jsxProd_default(Dialog, {
       title: "Login",
-      onCancel: M,
+      onCancel,
       color: "permission",
       isCancelActive: false,
       hideInputGuide,
       inputGuide,
       children,
     });
-    g[33] = M;
-    g[34] = hideInputGuide;
-    g[35] = inputGuide;
-    g[36] = children;
-    g[37] = me;
-  } else me = g[37];
-  return me;
+    $[33] = onCancel;
+    $[34] = hideInputGuide;
+    $[35] = inputGuide;
+    $[36] = children;
+    $[37] = dialog;
+  } else dialog = $[37];
+  return dialog;
 }
-export { Login, runPostLoginHooks, loginCompletion };
+export {
+  Login,
+  runPostLoginHooks,
+  loginCompletion,
+  LOGIN_SUCCESS_ENV_OVERRIDE_WARNING,
+  buildLoginDoneMessage,
+  call,
+  envTokenWarningRoute,
+  formatGatewayExitNotice,
+  formatGatewayPinMismatchError,
+  formatGatewayRestartNotice,
+  getLoginConsentHandoffMessage,
+  getLoginStartingMessage,
+  loginAutoContinueOptions,
+  runOrgMemoryAuthBoundary,
+};

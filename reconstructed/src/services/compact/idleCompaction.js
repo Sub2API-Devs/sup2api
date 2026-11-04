@@ -8,7 +8,7 @@
  * pieces: chunk-e6aww6q8.js (8)
  * attribution: placement 8
  */
-import { NO_BREAK_SPACE } from "../../utils/permissions/autoModeRulesPrompt.js";
+import { NO_BREAK_SPACE } from "../../constants/figures.js";
 import { env } from "../../utils/env.js";
 import {
   isAutoCompactEnabled,
@@ -32,18 +32,28 @@ import { logForDebugging } from "../../utils/debug.js";
 import { envSessionKind as envSessionKind_2 } from "../../utils/sessionShape.js";
 import { getMainThreadCacheExpiresAt } from "./autoCompact.js";
 import { SessionRootSlot } from "../../bootstrap/sessionSlices.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:1659046-1659291 placement
 /**
  * 缓存被认为已失效的空闲时长（60 秒）。
  */
-var IDLE_COMPACT_MIN_TOKENS = 200000;
-var MIN_IDLE_COMPACT_TOKENS = 1e5;
-var IDLE_COMPACT_AGE_FRACTION = 0.9;
-var CACHE_LAPSED_MS = 60000;
-var IDLE_COMPACT_OFF_HINT = ` \xB7${NO_BREAK_SPACE}turn off with "idleCompaction": false in settings.json`;
-var COMPACTED_WHILE_IDLE_TEXT = `Compacted while idle, before the prompt cache expired${IDLE_COMPACT_OFF_HINT}`;
-var COMPACTED_WITH_PRECOMPUTED_TEXT = `Compacted using a summary written while you were away${IDLE_COMPACT_OFF_HINT}`;
+var IDLE_COMPACT_MIN_TOKENS; // deferred: uses HEAVY_VERTICAL_BAR_GLYPH (../../constants/figures.js) of its import cycle while loading; runs once the cycle is complete
+var MIN_IDLE_COMPACT_TOKENS;
+var IDLE_COMPACT_AGE_FRACTION;
+var CACHE_LAPSED_MS;
+var IDLE_COMPACT_OFF_HINT;
+var COMPACTED_WHILE_IDLE_TEXT;
+var COMPACTED_WITH_PRECOMPUTED_TEXT;
+deferInit("chunk-e6aww6q8.js:1659046", () => {
+  IDLE_COMPACT_MIN_TOKENS = 200000;
+  MIN_IDLE_COMPACT_TOKENS = 1e5;
+  IDLE_COMPACT_AGE_FRACTION = 0.9;
+  CACHE_LAPSED_MS = 60000;
+  IDLE_COMPACT_OFF_HINT = ` \xB7${NO_BREAK_SPACE}turn off with "idleCompaction": false in settings.json`;
+  COMPACTED_WHILE_IDLE_TEXT = `Compacted while idle, before the prompt cache expired${IDLE_COMPACT_OFF_HINT}`;
+  COMPACTED_WITH_PRECOMPUTED_TEXT = `Compacted using a summary written while you were away${IDLE_COMPACT_OFF_HINT}`;
+});
 //@ chunk-e6aww6q8.js:1659291-1659370 placement
 /**
  * 空闲压缩的最小 token 数（环境变量可覆盖，且不低于 W3o）。
@@ -58,16 +68,16 @@ function getIdleCompactMinTokens() {
 /**
  * 空闲压缩不执行的原因（关闭、缓存非 1 小时、已失效、太小、有新请求、接近额度等）。
  */
-function idleCompactionSkipReason(e, n, r, s, h) {
+function idleCompactionSkipReason(precomputeWanted, lateMs, contextTokens, lastRequestAt, hasSummarize) {
   if (!isAutoCompactEnabled()) return "compaction_off";
   if (!isIdleCompactionEnabled()) return "idle_compaction_off";
-  if (e && !isPrecomputeCompactionEnabled()) return "precompute_compaction_off";
-  if (e && !canCompactInRemote()) return "swap_unsupported";
-  if (!h) return "prefix_changed";
+  if (precomputeWanted && !isPrecomputeCompactionEnabled()) return "precompute_compaction_off";
+  if (precomputeWanted && !canCompactInRemote()) return "swap_unsupported";
+  if (!hasSummarize) return "prefix_changed";
   if (getLastMainThreadCacheTtlMs() !== CACHE_TTL_1H_MS) return "not_one_hour";
-  if (!getPromptCacheSummary().warm || n > CACHE_LAPSED_MS) return "lapsed";
-  if (r < getIdleCompactMinTokens()) return "small";
-  if ((getLastMainThreadRequestAt() ?? 0) > s) return "newer_request";
+  if (!getPromptCacheSummary().warm || lateMs > CACHE_LAPSED_MS) return "lapsed";
+  if (contextTokens < getIdleCompactMinTokens()) return "small";
+  if ((getLastMainThreadRequestAt() ?? 0) > lastRequestAt) return "newer_request";
   if (getCurrentLimits().status !== "allowed") return "near_limit";
   return null;
 }
@@ -75,9 +85,9 @@ function idleCompactionSkipReason(e, n, r, s, h) {
 /**
  * 等待一个异步动作并吞掉错误（只记日志）。
  */
-async function awaitSwallowingErrors(e) {
+async function awaitSwallowingErrors(fn) {
   try {
-    await e();
+    await fn();
   } catch (error) {
     logError(error);
   }
@@ -86,12 +96,12 @@ async function awaitSwallowingErrors(e) {
 /**
  * 等待空闲压缩结果并分类（not_compacted/cancelled/failed）。
  */
-async function settleIdleCompaction(e, n) {
+async function settleIdleCompaction(promise, successResult) {
   try {
-    let r = await e;
+    let sizes = await promise;
     return {
-      result: r === null ? "not_compacted" : n,
-      sizes: r,
+      result: sizes === null ? "not_compacted" : successResult,
+      sizes,
     };
   } catch (error) {
     return {
@@ -104,17 +114,17 @@ async function settleIdleCompaction(e, n) {
 /**
  * 记录空闲压缩结果遥测。
  */
-async function reportIdleCompaction(e, n, r) {
-  let { result: s, sizes } = await settleIdleCompaction(e, r);
+async function reportIdleCompaction(promise, startMs, successResult) {
+  let { result, sizes } = await settleIdleCompaction(promise, successResult);
   logEvent("tengu_idle_compact_settled", {
-    result: fromEnum(s),
-    durationMs: Date.now() - n,
+    result: fromEnum(result),
+    durationMs: Date.now() - startMs,
     tokensBefore: sizes?.tokensBefore,
     tokensAfter: sizes?.tokensAfter,
   });
-  if (s === r) logFeatureOk("compact_idle");
-  else if (s === "failed") logFeatureBad("compact_idle", s);
-  else logFeatureSad("compact_idle", s);
+  if (result === successResult) logFeatureOk("compact_idle");
+  else if (result === "failed") logFeatureBad("compact_idle", result);
+  else logFeatureSad("compact_idle", result);
 }
 //@ chunk-e6aww6q8.js:1660256-1661123 placement
 /**
@@ -124,10 +134,10 @@ class fireIdleCompaction {
   host = null;
   summarize = null;
   #e = null;
-  arm(e, n) {
-    awaitSwallowingErrors(() => this.#t(e, n));
+  arm(idleStartedAt, getSummarize) {
+    awaitSwallowingErrors(() => this.#t(idleStartedAt, getSummarize));
   }
-  #t(e, n) {
+  #t(idleStartedAt, getSummarize) {
     if (this.#e !== null) {
       clearTimeout(this.#e);
       this.#e = null;
@@ -140,46 +150,56 @@ class fireIdleCompaction {
       promptCacheSummary.expiresAt === null
     )
       return;
-    let s =
+    let fireAt =
       promptCacheSummary.lastActivityAt +
       (promptCacheSummary.expiresAt - promptCacheSummary.lastActivityAt) * IDLE_COMPACT_AGE_FRACTION;
     this.#e = setTimeout(
-      (h, y, S) => void awaitSwallowingErrors(() => this.#n(h, y, S)),
-      Math.max(0, s - Date.now()),
-      e,
-      s,
-      n,
+      (idleStartedAt, fireAt, getSummarize) =>
+        void awaitSwallowingErrors(() => this.#n(idleStartedAt, fireAt, getSummarize)),
+      Math.max(0, fireAt - Date.now()),
+      idleStartedAt,
+      fireAt,
+      getSummarize,
     );
     this.#e.unref?.();
   }
-  async #n(e, n, r) {
+  async #n(idleStartedAt, fireAt, getSummarize) {
     this.#e = null;
     let now = Date.now();
-    let max = Math.max(0, now - n);
+    let max = Math.max(0, now - fireAt);
     let cacheLeftMs = (getMainThreadCacheExpiresAt() ?? now) - now;
     let { host, summarize } = this;
-    let L = getLastMainThreadContextTokens() ?? 0;
-    let G = r();
-    let q = host === null;
-    let Z = host ? () => host.compact() : summarize && G && (() => summarize(G));
-    let Se =
-      idleCompactionSkipReason(q, max, L, e, G !== null) ??
-      (Z ? ((await host?.refusal()) ?? "started") : "no_host");
+    let contextTokens = getLastMainThreadContextTokens() ?? 0;
+    let summarySource = getSummarize();
+    let noHost = host === null;
+    let runCompact = host
+      ? () => host.compact()
+      : summarize && summarySource && (() => summarize(summarySource));
+    let outcome =
+      idleCompactionSkipReason(noHost, max, contextTokens, idleStartedAt, summarySource !== null) ??
+      (runCompact ? ((await host?.refusal()) ?? "started") : "no_host");
     logEvent("tengu_idle_compact_fired", {
-      outcome: fromEnum(Se),
+      outcome: fromEnum(outcome),
       cacheLeftMs,
-      contextTokens: L,
+      contextTokens,
       minTokens: getIdleCompactMinTokens(),
       lateMs: max,
-      sinceTurnEndMs: now - e,
+      sinceTurnEndMs: now - idleStartedAt,
     });
-    if (Se === "started" && Z)
-      await reportIdleCompaction(Promise.resolve().then(Z), now, q ? "summarized" : "compacted");
+    if (outcome === "started" && runCompact)
+      await reportIdleCompaction(
+        Promise.resolve().then(runCompact),
+        now,
+        noHost ? "summarized" : "compacted",
+      );
   }
 }
 //@ chunk-e6aww6q8.js:1661123-1661151 placement
 /**
  * 按会话根保存的空闲压缩触发器。
  */
-var idleCompactionSlot = new SessionRootSlot(() => new fireIdleCompaction());
+var idleCompactionSlot; // deferred: uses SessionRootSlot (../../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:1661123", () => {
+  idleCompactionSlot = new SessionRootSlot(() => new fireIdleCompaction());
+});
 export { idleCompactionSlot, COMPACTED_WHILE_IDLE_TEXT, COMPACTED_WITH_PRECOMPUTED_TEXT };

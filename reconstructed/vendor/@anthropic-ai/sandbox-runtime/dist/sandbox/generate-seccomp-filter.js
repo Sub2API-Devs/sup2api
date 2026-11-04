@@ -50,7 +50,7 @@ function getSandboxRuntimeCandidates() {
           encoding: "utf8",
           timeout: NPM_ROOT_TIMEOUT_MS,
         },
-        (err, s) => resolve(err ? undefined : s),
+        (err, stderr) => resolve(err ? undefined : stderr),
       ).stdin?.end();
     } catch {
       resolve(undefined);
@@ -110,7 +110,7 @@ function getLocalSeccompPaths(filename) {
   ];
 }
 //@ chunk-fq0cr76a.js:721555-721670 esm-fingerprint
-function vor(seccompBinaryPath) {
+function getApplySeccompBinaryPath(seccompBinaryPath) {
   let cacheKey = seccompBinaryPath ?? "";
   if (sandboxRuntimeCache.has(cacheKey)) return sandboxRuntimeCache.get(cacheKey);
   let local = findLocalApplySeccompPath(seccompBinaryPath);
@@ -119,7 +119,7 @@ function vor(seccompBinaryPath) {
   return result;
 }
 //@ chunk-fq0cr76a.js:721670-721797 esm-fingerprint
-async function B6r(seccompBinaryPath) {
+async function getApplySeccompBinaryPath_2(seccompBinaryPath) {
   let cacheKey = seccompBinaryPath ?? "";
   if (sandboxRuntimeCache.has(cacheKey)) return sandboxRuntimeCache.get(cacheKey);
   let local = findLocalApplySeccompPath(seccompBinaryPath);
@@ -167,4 +167,4 @@ function findGlobalApplySeccompPath(globalBases) {
   logForDebugging_2(`[SeccompFilter] apply-seccomp binary not found in any expected location (${arch})`);
   return null;
 }
-export { B6r, getSandboxRuntimeCandidates, vor };
+export { getApplySeccompBinaryPath_2, getSandboxRuntimeCandidates, getApplySeccompBinaryPath };

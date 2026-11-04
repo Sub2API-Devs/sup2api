@@ -132,47 +132,57 @@ import { getOwnJobShortId } from "../../services/daemon/jobState.js";
 import { isAbortError, errorMessage, StreamClosedAbortError } from "../errors.js";
 import { hasActiveAgentTasks } from "../../tasks/taskStatus.js";
 import { withTimeout } from "../sleep.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
+//@ chunk-jv307fw4.js:22476-22613 fingerprint = applyTruncation (0.586)
+function applyTruncation(text, maxLength, label) {
+  let trimmed = text.trim();
+  let list = Array.from(trimmed);
+  return list.length <= maxLength
+    ? trimmed
+    : `${list.slice(0, maxLength).join("")}
+[${label} truncated after ${maxLength} characters]`;
+}
 //@ chunk-xx1vmpsq.js:34727-35466 placement
 /**
  * 按个人设置加载检查结果处理输入：stop 时停止查询并给出说明，notice 时附加一次系统消息。
  */
-function applyPersonalSettingsCheck(e, session) {
-  let n = describeSettingsProblem();
-  let y = authWarmNoticeStateSlot.of(session);
-  if (n.kind === "clear" && isPersonalConfigRestricted() && !y.countedClear) {
-    y.countedClear = true;
+function applyPersonalSettingsCheck(result, session) {
+  let problem = describeSettingsProblem();
+  let noticeState = authWarmNoticeStateSlot.of(session);
+  if (problem.kind === "clear" && isPersonalConfigRestricted() && !noticeState.countedClear) {
+    noticeState.countedClear = true;
     logFeatureOk("hooks_personal_load_check");
   }
-  if (n.kind === "stop" && !y.countedStop) {
-    y.countedStop = true;
+  if (problem.kind === "stop" && !noticeState.countedStop) {
+    noticeState.countedStop = true;
     logFeatureBad("hooks_personal_load_check", "stopped");
   }
-  if (n.kind === "notice" && !y.countedNotice) {
-    y.countedNotice = true;
+  if (problem.kind === "notice" && !noticeState.countedNotice) {
+    noticeState.countedNotice = true;
     logFeatureSad("hooks_personal_load_check", "notice");
   }
-  if (n.kind === "stop") {
-    e.messages = [
-      ...e.messages,
-      makeMetaUserMessage(n.text),
-      hookStopWarningMessage(n.text, {
+  if (problem.kind === "stop") {
+    result.messages = [
+      ...result.messages,
+      makeMetaUserMessage(problem.text),
+      hookStopWarningMessage(problem.text, {
         kind: "no_verdict",
         noVerdictKind: "personal_config_refused",
       }),
     ];
-    e.shouldQuery = false;
-    e.resultText = n.text;
-    e.allowedTools = undefined;
+    result.shouldQuery = false;
+    result.resultText = problem.text;
+    result.allowedTools = undefined;
     return true;
   }
-  if (n.kind === "notice" && !y.noticed) {
-    y.noticed = true;
-    e.messages = [
-      ...e.messages,
+  if (problem.kind === "notice" && !noticeState.noticed) {
+    noticeState.noticed = true;
+    result.messages = [
+      ...result.messages,
       createAttachmentMessage({
         type: "hook_system_message",
-        content: n.text,
+        content: problem.text,
         hookName: "Claude Code",
         toolUseID: `personal-hooks-${session.id}`,
         hookEvent: "UserPromptSubmit",
@@ -182,135 +192,146 @@ function applyPersonalSettingsCheck(e, session) {
   return false;
 }
 //@ chunk-xx1vmpsq.js:35466-35488 placement
-var regExp = new RegExp(WORD_BOUNDARY_PATTERN);
+var regExp; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-xx1vmpsq.js:35466", () => {
+  regExp = new RegExp(WORD_BOUNDARY_PATTERN);
+});
 //@ chunk-xx1vmpsq.js:35488-35553 placement
-function findRegexMatch(regExp, s, lastIndex) {
+function findRegexMatch(regExp, text, lastIndex) {
   regExp.lastIndex = lastIndex;
-  return regExp.test(s) ? regExp.lastIndex : -1;
+  return regExp.test(text) ? regExp.lastIndex : -1;
 }
 //@ chunk-xx1vmpsq.js:35553-36101 placement
 /**
  * 提取文本中的 @ 提及（支持引号路径与带空格的路径段落）。
  */
-function extractAtMentions(e) {
-  let s = [];
-  let n = /\s/g;
+function extractAtMentions(text) {
+  let mentions = [];
+  let whitespacePattern = /\s/g;
   let regExp_2 = new RegExp(String.raw`[ \t]*\[${ADDRESS_REF_PATTERN}\]`, "y");
-  let r = 0;
-  let w = -1;
-  let T = -1;
-  let C = [];
-  let I = 0;
-  for (let index = e.indexOf("@"); index !== -1; index = e.indexOf("@", Math.max(index + 1, r))) {
-    if (index > 0 && !regExp.test(e[index - 1])) continue;
-    let R = index + 1;
+  let consumedUpTo = 0;
+  let wordEnd = -1;
+  let lastBoundary = -1;
+  let boundaryIndexes = [];
+  let boundaryCursor = 0;
+  for (
+    let index = text.indexOf("@");
+    index !== -1;
+    index = text.indexOf("@", Math.max(index + 1, consumedUpTo))
+  ) {
+    if (index > 0 && !regExp.test(text[index - 1])) continue;
+    let nameStart = index + 1;
     let lastIndex = -1;
-    if (e[R] === '"') {
-      let index = e.indexOf('"', R + 1);
-      if (index > R + 1) lastIndex = index + 1;
+    if (text[nameStart] === '"') {
+      let index = text.indexOf('"', nameStart + 1);
+      if (index > nameStart + 1) lastIndex = index + 1;
     }
     if (lastIndex === -1) {
-      if (R >= w) {
-        n.lastIndex = R;
-        w = n.test(e) ? n.lastIndex - 1 : e.length;
-        T = -1;
-        C = [];
-        I = 0;
-        for (let j = R + 1; j <= w; j++)
-          if (isWordCharCodeAt(e, j - 1) !== isWordCharCodeAt(e, j)) {
-            T = j;
-            if (findRegexMatch(regExp_2, e, j) !== -1) C.push(j);
+      if (nameStart >= wordEnd) {
+        whitespacePattern.lastIndex = nameStart;
+        wordEnd = whitespacePattern.test(text) ? whitespacePattern.lastIndex - 1 : text.length;
+        lastBoundary = -1;
+        boundaryIndexes = [];
+        boundaryCursor = 0;
+        for (let j = nameStart + 1; j <= wordEnd; j++)
+          if (isWordCharCodeAt(text, j - 1) !== isWordCharCodeAt(text, j)) {
+            lastBoundary = j;
+            if (findRegexMatch(regExp_2, text, j) !== -1) boundaryIndexes.push(j);
           }
       }
-      while ((C[I] ?? 1 / 0) <= R) I++;
-      lastIndex = C[I] ?? T;
-      if (lastIndex <= R) continue;
+      while ((boundaryIndexes[boundaryCursor] ?? 1 / 0) <= nameStart) boundaryCursor++;
+      lastIndex = boundaryIndexes[boundaryCursor] ?? lastBoundary;
+      if (lastIndex <= nameStart) continue;
     }
-    let regexMatch = findRegexMatch(regExp_2, e, lastIndex);
-    r = regexMatch === -1 ? lastIndex : regexMatch;
-    s.push(e.slice(index, r));
+    let regexMatch = findRegexMatch(regExp_2, text, lastIndex);
+    consumedUpTo = regexMatch === -1 ? lastIndex : regexMatch;
+    mentions.push(text.slice(index, consumedUpTo));
   }
-  return s;
+  return mentions;
 }
 //@ chunk-xx1vmpsq.js:36101-36184 placement
-function overlappingMentions(rewritten, s) {
-  let n = new Set(extractAtMentions(s));
-  return extractAtMentions(rewritten)
-    .filter((y) => n.has(y))
+function overlappingMentions(text, originalText) {
+  let originalMentions = new Set(extractAtMentions(originalText));
+  return extractAtMentions(text)
+    .filter((mention) => originalMentions.has(mention))
     .join(" ");
 }
 //@ chunk-xx1vmpsq.js:37461-37557 placement
 var BLANK_PROMPT_MESSAGE =
   "Blank prompt \u2014 the message was only whitespace, so nothing was sent to the model.";
 //@ chunk-xx1vmpsq.js:37557-37600 placement
-function startInputPhase(e) {
-  startPhaseWithin("process_user_input", e);
+function startInputPhase(threshold) {
+  startPhaseWithin("process_user_input", threshold);
 }
 //@ chunk-xx1vmpsq.js:37600-37643 placement
-function endInputPhase(e) {
-  endPhaseWithin("process_user_input", e);
+function endInputPhase(label) {
+  endPhaseWithin("process_user_input", label);
 }
 //@ chunk-xx1vmpsq.js:37643-37723 placement
-var promptUtilsModule = () => require("./chunk-wd9kxbpn.js");
-var attachmentsModule = () => require("./chunk-e321p3vc.js");
+var promptUtilsModule = () => require("../../services/agentStatus/LINK_SCAN_MAX_BYTES.lazy.js");
+var attachmentsModule = () => require("../../services/classifierSummary.js");
 //@ chunk-xx1vmpsq.js:37723-37745 placement
 class PromptState {
   state = undefined;
 }
 //@ chunk-xx1vmpsq.js:37745-37770 placement
-var promptStateSlot = new HostScoped(() => new PromptState());
+var promptStateSlot; // deferred: uses PromptState of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-xx1vmpsq.js:37745", () => {
+  promptStateSlot = new HostScoped(() => new PromptState());
+});
 //@ chunk-xx1vmpsq.js:37770-37897 placement
 function classifierJobState(context) {
-  let s = promptStateSlot.of(context.session.host);
-  if (s.state === undefined) s.state = promptUtilsModule?.().createClassifierJobState(context) ?? null;
-  return s.state;
+  let state = promptStateSlot.of(context.session.host);
+  if (state.state === undefined)
+    state.state = promptUtilsModule?.().createClassifierJobState(context) ?? null;
+  return state.state;
 }
 //@ chunk-xx1vmpsq.js:37897-38300 placement
 /**
  * 处理用户输入（斜杠命令、bash、提示词、附件），返回要追加的消息与是否发起查询；记录 process_user_input 计时。
  */
-async function processUserInput(e) {
-  let { input } = e;
-  let n = false;
-  let y = snapshotHookRegistration();
-  let reading = e.uuid === undefined ? undefined : inflightCommandRuns.get(e.uuid)?.reading;
-  let w =
-    reading === undefined
-      ? y
+async function processUserInput(input) {
+  let { input: input_2 } = input;
+  let unscreened = false;
+  let reading = snapshotHookRegistration();
+  let reading_2 = input.uuid === undefined ? undefined : inflightCommandRuns.get(input.uuid)?.reading;
+  let mergedReading =
+    reading_2 === undefined
+      ? reading
       : {
-          ...reading,
-          wasUnknown: reading.wasUnknown || y.wasUnknown,
+          ...reading_2,
+          wasUnknown: reading_2.wasUnknown || reading.wasUnknown,
         };
-  let T = await runPromptSubmitHooks(
-    typeof input === "string"
-      ? input
+  let result = await runPromptSubmitHooks(
+    typeof input_2 === "string"
+      ? input_2
       : extractTextContent_2(
-          input,
+          input_2,
           `
 `,
         ),
-    (C) => {
-      n = C === undefined;
+    (recording) => {
+      unscreened = recording === undefined;
       return processUserInputBase(
-        C === undefined
+        recording === undefined
           ? {
-              ...e,
-              readAtDispatch: w,
+              ...input,
+              readAtDispatch: mergedReading,
             }
           : {
-              ...e,
-              readAtDispatch: w,
-              userPromptRecording: C,
+              ...input,
+              readAtDispatch: mergedReading,
+              userPromptRecording: recording,
             },
       );
     },
     {
-      prompt: e.interactionPrompt,
-      reading: w,
+      prompt: input.interactionPrompt,
+      reading: mergedReading,
     },
   );
-  if (T.noVerdict && n) T.wasUnscreenedAtDispatch = true;
-  return T;
+  if (result.noVerdict && unscreened) result.wasUnscreenedAtDispatch = true;
+  return result;
 }
 //@ chunk-xx1vmpsq.js:38300-47765 placement
 async function processUserInputBase({
@@ -386,10 +407,10 @@ async function processUserInputBase({
     value: input,
     isPollDelivery: skipSkillPermissionReset === true,
   });
-  let qt = typeof input === "string" ? input : null;
-  if (mode === "prompt" && qt !== null && !isMeta) setUserInputOnProcessing?.(qt, origin);
+  let stringInput = typeof input === "string" ? input : null;
+  if (mode === "prompt" && stringInput !== null && !isMeta) setUserInputOnProcessing?.(stringInput, origin);
   queryCheckpoint("query_process_user_input_base_start");
-  let promptSource_2 =
+  let promptSourceCategory =
     shouldQuery === false && isMeta && queryHeldForNextTurn !== true
       ? undefined
       : resolvePromptSource({
@@ -397,26 +418,26 @@ async function processUserInputBase({
           isMeta,
           callerSource: promptSource ?? (isHumanOrUnset(origin) ? undefined : "system"),
         });
-  let Kt = skipAttachments ?? (origin?.kind === "plugin" ? "all" : undefined);
+  let skipAllAttachments = skipAttachments ?? (origin?.kind === "plugin" ? "all" : undefined);
   let readTriggers = [...(context.nestedMemoryAttachmentTriggers ?? [])];
   context.consumedNestedMemoryTriggers = [];
-  let je = getContentText(input) || "";
-  let We;
-  let Me = false;
-  let et = false;
-  let xe = false;
-  let pt = readAtDispatch;
-  let xt = async ({ submission, result: X, enter, queued }, promptSource) => {
-    if (X.shouldQuery && shouldQuery !== false) onQueryCommitted?.();
-    pt = snapshotHookRegistration();
-    let ot = promptSubmitted === undefined ? undefined : readPromptScreens(context);
+  let contentText = getContentText(input) || "";
+  let rewrittenText;
+  let screened = false;
+  let withheld = false;
+  let runReached = false;
+  let readSnapshot = readAtDispatch;
+  let submitWithHooks = async ({ submission, result, enter, queued }, promptSource) => {
+    if (result.shouldQuery && shouldQuery !== false) onQueryCommitted?.();
+    readSnapshot = snapshotHookRegistration();
+    let screens = promptSubmitted === undefined ? undefined : readPromptScreens(context);
     if (
       promptSubmitted === undefined ||
-      ot === undefined ||
+      screens === undefined ||
       (submission.command !== undefined &&
-        submission.text !== je &&
-        (promptSubmitted.stopped === undefined || screensChanged(promptSubmitted.under, ot))) ||
-      pluginsChanged(promptSubmitted.under, ot)
+        submission.text !== contentText &&
+        (promptSubmitted.stopped === undefined || screensChanged(promptSubmitted.under, screens))) ||
+      pluginsChanged(promptSubmitted.under, screens)
     )
       return submitPromptWithHooks({
         submission,
@@ -425,62 +446,62 @@ async function processUserInputBase({
         mode,
         shouldWait: wait,
         context,
-        result: X,
+        result,
         promptSource,
         wakeupSource,
         queued,
         isStartInput: aheadOfSessionStart === true || isGoalIdleCheckinPaused(uuid),
         enter,
         bound: () => {
-          pt = snapshotHookRegistration();
+          readSnapshot = snapshotHookRegistration();
         },
       });
-    if (screensChanged(promptSubmitted.under, ot)) {
-      let Ue = await runUserPromptSubmitHooks({
+    if (screensChanged(promptSubmitted.under, screens)) {
+      let managedResult = await runUserPromptSubmitHooks({
         text: submission.command === undefined ? promptSubmitted.text : submission.text,
         typed: submission.text,
         context,
-        result: X,
+        result,
         promptSource,
         wakeupSource,
         tiers: MANAGED_HOOKS_TIER,
       });
-      let qe =
-        Ue.blocked !== undefined
-          ? Ue
+      let hookResult =
+        managedResult.blocked !== undefined
+          ? managedResult
           : await runUserPromptSubmitHooks({
               text: promptSubmitted.text,
               typed: submission.text,
               context,
-              result: X,
+              result,
               promptSource,
               wakeupSource,
               tiers: {
                 managedHooksExcluded: true,
               },
             });
-      let $t = Ue.wasCancelled === true || qe.wasCancelled === true;
-      return qe.blocked !== undefined && !($t && qe.stopped !== undefined)
+      let wasCancelled = managedResult.wasCancelled === true || hookResult.wasCancelled === true;
+      return hookResult.blocked !== undefined && !(wasCancelled && hookResult.stopped !== undefined)
         ? {
-            ended: qe.blocked,
-            stopped: qe.stopped,
+            ended: hookResult.blocked,
+            stopped: hookResult.stopped,
           }
-        : $t
+        : wasCancelled
           ? CANCELLED_RESULT_2
           : {
               proceeds: {
                 text: promptSubmitted.text,
                 context: promptSubmitted.context,
-                sessionTitle: qe.sessionTitle ?? Ue.sessionTitle,
+                sessionTitle: hookResult.sessionTitle ?? managedResult.sessionTitle,
               },
             };
     }
-    X.messages.push(...promptSubmitted.messages);
+    result.messages.push(...promptSubmitted.messages);
     if (promptSubmitted.stopped !== undefined) {
-      X.shouldQuery = false;
-      X.resultText = promptSubmitted.stopped;
+      result.shouldQuery = false;
+      result.resultText = promptSubmitted.stopped;
       return {
-        ended: X,
+        ended: result,
         stopped: promptSubmitted.stopped,
       };
     }
@@ -493,75 +514,75 @@ async function processUserInputBase({
     };
   };
   let deferred = Promise.withResolvers();
-  let Ut =
+  let runCommand =
     (shouldQuery === false && queryHeldForNextTurn !== true) ||
     skipSubmissionHooks === true ||
-    promptSource_2 === undefined
+    promptSourceCategory === undefined
       ? undefined
-      : async (j) => {
-          let X = {
+      : async (command) => {
+          let rows = {
             messages: [],
             shouldQuery: true,
           };
           if (describeSettingsProblem().kind === "stop")
             return {
-              ran: j,
-              rows: X,
+              ran: command,
+              rows,
               outcome: undefined,
             };
-          let ce = await xt(
+          let outcome = await submitWithHooks(
             {
               submission: {
-                text: slashLineAfterRewrite(je, j) ?? je,
+                text: slashLineAfterRewrite(contentText, command) ?? contentText,
                 input,
                 pastedContents,
                 command: {
-                  name: j.name,
-                  args: j.argsRanWith,
+                  name: command.name,
+                  args: command.argsRanWith,
                 },
                 ...(isMeta === true && {
                   isMeta: true,
                 }),
               },
-              result: X,
+              result: rows,
               enter:
                 entries &&
                 (() => deferred.promise.then(({ messages }) => awaitPromptEntry(entries, messages))),
               queued: {
                 ...queuedSettler,
-                settleWhen: (me) =>
+                settleWhen: (queuedRun) =>
                   queuedSettler.settleWhen(
-                    Promise.all([me, deferred.promise]).then(([ht, { queries: ot }]) =>
-                      ot ? ht : Promise.reject(Error("no query")),
+                    Promise.all([queuedRun, deferred.promise]).then(([priorRun, { queries }]) =>
+                      queries ? priorRun : Promise.reject(Error("no query")),
                     ),
                   ),
               },
             },
-            promptSource_2,
+            promptSourceCategory,
           ).catch((error) => {
             logError(error);
             return {
               error,
             };
           });
-          return "error" in ce
+          return "error" in outcome
             ? {
-                ran: j,
-                rows: X,
+                ran: command,
+                rows,
                 outcome: undefined,
-                threw: ce,
+                threw: outcome,
               }
             : {
-                ran: j,
-                rows: X,
-                outcome: ce,
+                ran: command,
+                rows,
+                outcome,
               };
         };
-  let x = await processUserInputBase_2(
+  let result = await processUserInputBase_2(
     input,
     mode,
     context,
-    promptSource_2,
+    promptSourceCategory,
     pastedContents,
     ideSelection,
     messages,
@@ -574,7 +595,7 @@ async function processUserInputBase({
     bridgeOrigin,
     modelScheduledOrigin,
     isMeta,
-    Kt,
+    skipAllAttachments,
     preExpansionInput,
     suppressWorkflowKeyword,
     origin,
@@ -595,38 +616,38 @@ async function processUserInputBase({
     userPromptRecording?.hold,
     {
       forked: () => {
-        Me = settleScreening({
+        screened = settleScreening({
           recording: userPromptRecording,
           onScreened,
-          screened: withRewriteState({}, We),
-          isRunReached: xe,
+          screened: withRewriteState({}, rewrittenText),
+          isRunReached: runReached,
           since: readAtDispatch,
         });
       },
-      ranAs: (j) => {
-        xe = true;
-        We = slashLineAfterRewrite(je, j);
+      ranAs: (ranAs) => {
+        runReached = true;
+        rewrittenText = slashLineAfterRewrite(contentText, ranAs);
       },
       withheld: () => {
-        et = true;
+        withheld = true;
       },
       isUnknownSinceDispatch: () => hasHookRegistrationChanged(readAtDispatch),
       isHeldForOrganization: () =>
         needsRescreen({
           since: readAtDispatch,
-          isRunReached: xe,
+          isRunReached: runReached,
         }),
       passed: () => {
         if (hasHookRegistrationChanged(readAtDispatch)) {
-          et = true;
+          withheld = true;
           return;
         }
-        Me = true;
-        userPromptRecording?.settled(withRewriteState({}, We));
-        onScreened?.(withRewriteState({}, We));
+        screened = true;
+        userPromptRecording?.settled(withRewriteState({}, rewrittenText));
+        onScreened?.(withRewriteState({}, rewrittenText));
       },
     },
-    Ut,
+    runCommand,
     inboundOrigin,
     clientBashCommand === true,
     clientBashCommandCwd,
@@ -639,58 +660,60 @@ async function processUserInputBase({
     throw error;
   });
   deferred.resolve({
-    messages: x.messages,
-    queries: x.shouldQuery,
+    messages: result.messages,
+    queries: result.shouldQuery,
   });
-  let { promptRow, ranCommand, lineCheck } = x;
-  delete x.promptRow;
-  delete x.ranCommand;
-  delete x.lineCheck;
+  let { promptRow, ranCommand, lineCheck } = result;
+  delete result.promptRow;
+  delete result.ranCommand;
+  delete result.lineCheck;
   if (lineCheck?.threw !== undefined) throw lineCheck.threw.error;
-  let B = slashLineAfterRewrite(je, ranCommand);
-  let H = x.ambientAttachmentsOwed === true;
-  delete x.ambientAttachmentsOwed;
+  let rewrittenSlashLine = slashLineAfterRewrite(contentText, ranCommand);
+  let ambientOwed = result.ambientAttachmentsOwed === true;
+  delete result.ambientAttachmentsOwed;
   if (isHumanOrigin(origin) && !isMeta && verifiedSlackHumanTurn !== true) {
-    let last = x.messages.findLast(
+    let last = result.messages.findLast(
       (message) => message.type === "user" && !message.isMeta && isHumanTurn(message),
     );
     if (last) notePersonPrompt(last.uuid, last.timestamp, context.options.messageClientPlatform);
   }
-  markCronWakeupMessages(x.messages, wakeupSource);
+  markCronWakeupMessages(result.messages, wakeupSource);
   if (scheduledTaskId !== undefined) {
-    let filtered = x.messages.filter((message) => message.type === "user");
-    let X = filtered.find((ce) => ce.promptSource !== undefined) ?? filtered[0];
-    if (X) {
-      X.scheduledTaskId = scheduledTaskId;
-      if (scheduledFireId !== undefined) X.scheduledFireId = scheduledFireId;
+    let filtered = result.messages.filter((message) => message.type === "user");
+    let targetMessage = filtered.find((message) => message.promptSource !== undefined) ?? filtered[0];
+    if (targetMessage) {
+      targetMessage.scheduledTaskId = scheduledTaskId;
+      if (scheduledFireId !== undefined) targetMessage.scheduledFireId = scheduledFireId;
     }
   }
   try {
-    let X =
-      promptSource_2 !== undefined &&
-      x.shouldQuery &&
+    let promptIndex =
+      promptSourceCategory !== undefined &&
+      result.shouldQuery &&
       (shouldQuery !== false || queryHeldForNextTurn === true)
-        ? lastUserPromptIndex(x.messages)
+        ? lastUserPromptIndex(result.messages)
         : -1;
-    let ce = X === -1 ? undefined : x.messages[X];
-    if (ce?.type === "user" && ce.turnOrigin === undefined) {
-      ce.turnOrigin = classifyPromptSource({
+    let userMessage = promptIndex === -1 ? undefined : result.messages[promptIndex];
+    if (userMessage?.type === "user" && userMessage.turnOrigin === undefined) {
+      userMessage.turnOrigin = classifyPromptSource({
         origin,
         isMeta,
         wakeupSource,
-        promptSource: promptSource_2,
+        promptSource: promptSourceCategory,
         hostInitiator,
       });
-      let me =
-        shouldQuery === false ? undefined : nextTurnPosition(messages ?? context.messages, ce.turnOrigin);
-      if (me !== undefined) ce.turnPosition = me;
+      let turnPosition =
+        shouldQuery === false
+          ? undefined
+          : nextTurnPosition(messages ?? context.messages, userMessage.turnOrigin);
+      if (turnPosition !== undefined) userMessage.turnPosition = turnPosition;
     }
   } catch (error) {
     logError(error);
   }
   queryCheckpoint("query_process_user_input_base_end");
-  if (pollEventDelivery === true && x.messages.length > 0)
-    x.messages.push(
+  if (pollEventDelivery === true && result.messages.length > 0)
+    result.messages.push(
       createAttachmentMessage({
         type: "poll_events",
         deliveredVia: "value_dispatch",
@@ -706,131 +729,131 @@ async function processUserInputBase({
       }),
     );
   if (!isAlreadyProcessing && skipSkillPermissionReset !== true)
-    setCommandDenyRules(context.setToolPermissionContext, x.disallowedTools ?? []);
-  let shouldQuery_2 = queryHeldForNextTurn === true && x.shouldQuery;
-  if (shouldQuery === false) x.shouldQuery = false;
-  if ((x.shouldQuery || shouldQuery_2) && applyPersonalSettingsCheck(x, context.session)) {
+    setCommandDenyRules(context.setToolPermissionContext, result.disallowedTools ?? []);
+  let shouldQuery_2 = queryHeldForNextTurn === true && result.shouldQuery;
+  if (shouldQuery === false) result.shouldQuery = false;
+  if ((result.shouldQuery || shouldQuery_2) && applyPersonalSettingsCheck(result, context.session)) {
     if (
-      !Me &&
-      (et ||
+      !screened &&
+      (withheld ||
         !settleScreening({
           recording: userPromptRecording,
           onScreened,
-          screened: withRewriteState({}, We),
-          isRunReached: xe,
+          screened: withRewriteState({}, rewrittenText),
+          isRunReached: runReached,
           since: readAtDispatch,
         }))
     )
-      x.noVerdict = true;
-    return x;
+      result.noVerdict = true;
+    return result;
   }
-  let h = () =>
-    hasHookRegistrationChanged(pt) ||
-    ((ranCommand !== undefined || xe) && hasHookRegistrationChanged(readAtDispatch));
-  let P = (text, X) =>
+  let isUnknownSinceDispatch = () =>
+    hasHookRegistrationChanged(readSnapshot) ||
+    ((ranCommand !== undefined || runReached) && hasHookRegistrationChanged(readAtDispatch));
+  let isRewriteOfPrompt = (text, promptTextArg) =>
     ranCommand !== undefined &&
     isMeta !== true &&
     promptRow?.message.isMeta !== true &&
-    text !== X &&
+    text !== promptTextArg &&
     !(
       origin?.kind === "plugin" &&
       origin.asUser !== true &&
       text ===
-        wrapPluginPrompt(X, origin.name, {
+        wrapPluginPrompt(promptTextArg, origin.name, {
           midTurn: false,
         })
     );
   if (
-    (!x.shouldQuery && !shouldQuery_2) ||
+    (!result.shouldQuery && !shouldQuery_2) ||
     mode === "bash" ||
-    x.forkDispatched ||
-    x.queriesAfterRun === true ||
+    result.forkDispatched ||
+    result.queriesAfterRun === true ||
     skipSubmissionHooks === true ||
-    promptSource_2 === undefined
+    promptSourceCategory === undefined
   ) {
-    if (B !== undefined && x.screened?.dropped !== true)
-      x.screened = {
-        rewritten: B,
+    if (rewrittenSlashLine !== undefined && result.screened?.dropped !== true)
+      result.screened = {
+        rewritten: rewrittenSlashLine,
       };
-    let j = x.screened?.dropped === true;
-    let X = needsRescreen({
+    let dropped = result.screened?.dropped === true;
+    let needsRescreenNow = needsRescreen({
       since: readAtDispatch,
-      isRunReached: xe,
+      isRunReached: runReached,
     });
-    if (!Me && X && x.ownPassCutShort && !j)
-      return interruptedInputResult(x, context, queuedSettler.origin !== undefined);
-    let proceeds = et ? undefined : lineCheck?.outcome?.proceeds;
-    let ht = withRewriteState(x.screened ?? {}, We);
-    if (!Me && proceeds !== undefined) {
-      let Ue = !j && P(proceeds.text, B ?? je);
+    if (!screened && needsRescreenNow && result.ownPassCutShort && !dropped)
+      return interruptedInputResult(result, context, queuedSettler.origin !== undefined);
+    let proceeds = withheld ? undefined : lineCheck?.outcome?.proceeds;
+    let screenedState = withRewriteState(result.screened ?? {}, rewrittenText);
+    if (!screened && proceeds !== undefined) {
+      let rewrittenByHook = !dropped && isRewriteOfPrompt(proceeds.text, rewrittenSlashLine ?? contentText);
       settleScreeningResult({
-        result: x,
-        screened: Ue
+        result,
+        screened: rewrittenByHook
           ? {
               rewritten: proceeds.text,
             }
-          : ht,
-        isUnknown: h(),
+          : screenedState,
+        isUnknown: isUnknownSinceDispatch(),
         recording: userPromptRecording,
         onScreened,
       });
     } else if (
-      !Me &&
-      ((et && !j) ||
+      !screened &&
+      ((withheld && !dropped) ||
         !settleScreening({
           recording: userPromptRecording,
           onScreened,
-          screened: ht,
-          isRunReached: xe,
+          screened: screenedState,
+          isRunReached: runReached,
           since: readAtDispatch,
         }))
     )
-      x.noVerdict = true;
-    if (X && j && context.abortController.signal.aborted) x.endedUnderAbort = true;
-    if (x.noVerdict && x.engineDeferredSlash !== undefined) userPromptRecording?.handedOn();
-    if (H)
+      result.noVerdict = true;
+    if (needsRescreenNow && dropped && context.abortController.signal.aborted) result.endedUnderAbort = true;
+    if (result.noVerdict && result.engineDeferredSlash !== undefined) userPromptRecording?.handedOn();
+    if (ambientOwed)
       await collectInputAttachments({
-        result: x,
+        result,
         context,
         history: messages,
         querySource,
       });
-    await appendWorkflowAuthoringMessages(x, messages, context.options.tools);
-    return x;
+    await appendWorkflowAuthoringMessages(result, messages, context.options.tools);
+    return result;
   }
-  let D = x.screened?.dropped === true;
-  if (D) delete x.screened;
-  let O =
-    D &&
+  let dropped = result.screened?.dropped === true;
+  if (dropped) delete result.screened;
+  let needsRescreenAfterDrop =
+    dropped &&
     needsRescreen({
       since: readAtDispatch,
-      isRunReached: xe,
+      isRunReached: runReached,
     });
   queryCheckpoint("query_hooks_start");
   startInputPhase("input_hooks");
-  let expandedInput = x.expandedInput ?? input;
-  let le = B ?? (getContentText(expandedInput) || "");
-  let Ce = isMeta === true || promptRow?.message.isMeta === true;
-  let Ae = promptRow === undefined && ranCommand === undefined;
+  let expandedInput = result.expandedInput ?? input;
+  let promptText = rewrittenSlashLine ?? (getContentText(expandedInput) || "");
+  let messageIsMeta = isMeta === true || promptRow?.message.isMeta === true;
+  let noPromptRow = promptRow === undefined && ranCommand === undefined;
   let startTime = performance.now();
-  let Z;
+  let hookOutcome;
   if (lineCheck?.outcome !== undefined) {
-    Z = lineCheck.outcome;
-    if (Z.ended !== undefined && Z.stopped !== undefined)
-      Z = {
-        ...Z,
+    hookOutcome = lineCheck.outcome;
+    if (hookOutcome.ended !== undefined && hookOutcome.stopped !== undefined)
+      hookOutcome = {
+        ...hookOutcome,
         ended: {
-          ...x,
-          ...Z.ended,
-          messages: [...x.messages, ...Z.ended.messages],
+          ...result,
+          ...hookOutcome.ended,
+          messages: [...result.messages, ...hookOutcome.ended.messages],
         },
       };
-    else if (Z.proceeds !== undefined) x.messages.push(...lineCheck.rows.messages);
+    else if (hookOutcome.proceeds !== undefined) result.messages.push(...lineCheck.rows.messages);
   } else
-    Z = await xt(
+    hookOutcome = await submitWithHooks(
       {
         submission: {
-          text: le,
+          text: promptText,
           input: expandedInput,
           pastedContents,
           ...(ranCommand !== undefined && {
@@ -839,110 +862,129 @@ async function processUserInputBase({
               args: ranCommand.argsRanWith,
             },
           }),
-          ...(Ce && {
+          ...(messageIsMeta && {
             isMeta: true,
           }),
-          ...(Ae && {
+          ...(noPromptRow && {
             unplaceable: `Prompt not sent: ${promptSubmitHookLabel()} changed it, and Claude Code has no place to put the change.`,
           }),
         },
-        result: x,
-        enter: entries === undefined ? undefined : () => awaitPromptEntry(entries, x.messages),
+        result,
+        enter: entries === undefined ? undefined : () => awaitPromptEntry(entries, result.messages),
         queued: queuedSettler,
       },
-      promptSource_2,
+      promptSourceCategory,
     );
-  if (Z.ended !== undefined) {
+  if (hookOutcome.ended !== undefined) {
     endInputPhase("input_hooks");
-    let j = Z.stopped === undefined ? undefined : (Z.text ?? promptSubmitted?.text);
-    let X = unchangedOrUndefined(
-      le,
-      j !== undefined && origin?.kind === "plugin" && origin.asUser !== true
-        ? wrapPluginPrompt(j, origin.name, {
+    let stoppedText =
+      hookOutcome.stopped === undefined ? undefined : (hookOutcome.text ?? promptSubmitted?.text);
+    let rewrittenNormalized = unchangedOrUndefined(
+      promptText,
+      stoppedText !== undefined && origin?.kind === "plugin" && origin.asUser !== true
+        ? wrapPluginPrompt(stoppedText, origin.name, {
             midTurn: false,
           })
-        : j,
+        : stoppedText,
     );
-    let ce = X === undefined ? undefined : reframeSubmittedMessage(promptRow, expandedInput, X);
-    if (ce !== undefined) {
-      ce.promptRewritten = true;
-      let pluginPrompt = extractPluginPrompt(ce);
-      if (pluginPrompt !== undefined) ce.pluginPrompt = pluginPrompt;
+    let reframed =
+      rewrittenNormalized === undefined
+        ? undefined
+        : reframeSubmittedMessage(promptRow, expandedInput, rewrittenNormalized);
+    if (reframed !== undefined) {
+      reframed.promptRewritten = true;
+      let pluginPrompt = extractPluginPrompt(reframed);
+      if (pluginPrompt !== undefined) reframed.pluginPrompt = pluginPrompt;
     }
     if (hasThirdPartyPromptHooks()) {
-      let me = dropMentionAttachments(
-        Z.stopped === undefined ? x.messages : Z.ended.messages,
+      let deduped = dropMentionAttachments(
+        hookOutcome.stopped === undefined ? result.messages : hookOutcome.ended.messages,
         context.readFileState,
       );
-      if (Z.stopped !== undefined) Z.ended.messages = me.kept;
+      if (hookOutcome.stopped !== undefined) hookOutcome.ended.messages = deduped.kept;
     }
-    if (Z.stopped !== undefined && ranCommand !== undefined && !Ce && j !== undefined && j !== le)
-      Z.ended.messages.push(...slashLineChangedNotice(messages ?? context.messages));
-    Z.ended.screened =
-      Z.stopped === undefined
+    if (
+      hookOutcome.stopped !== undefined &&
+      ranCommand !== undefined &&
+      !messageIsMeta &&
+      stoppedText !== undefined &&
+      stoppedText !== promptText
+    )
+      hookOutcome.ended.messages.push(...slashLineChangedNotice(messages ?? context.messages));
+    hookOutcome.ended.screened =
+      hookOutcome.stopped === undefined
         ? {
             dropped: true,
           }
         : {
-            rewritten: ce !== undefined || ranCommand !== undefined ? (X ?? B) : undefined,
+            rewritten:
+              reframed !== undefined || ranCommand !== undefined
+                ? (rewrittenNormalized ?? rewrittenSlashLine)
+                : undefined,
           };
     settleScreeningResult({
-      result: Z.ended,
-      screened: Z.ended.screened,
-      isUnknown: h(),
+      result: hookOutcome.ended,
+      screened: hookOutcome.ended.screened,
+      isUnknown: isUnknownSinceDispatch(),
       recording: userPromptRecording,
       onScreened,
     });
-    if (!context.abortController.signal.aborted) return Z.ended;
+    if (!context.abortController.signal.aborted) return hookOutcome.ended;
     return {
-      ...Z.ended,
+      ...hookOutcome.ended,
       messages:
-        Z.stopped === undefined
-          ? [...isNullRenderingAttachment_2(x.messages, context), ...Z.ended.messages]
-          : Z.ended.messages,
+        hookOutcome.stopped === undefined
+          ? [...isNullRenderingAttachment_2(result.messages, context), ...hookOutcome.ended.messages]
+          : hookOutcome.ended.messages,
       endedUnderAbort: true,
     };
   }
-  if (Z.proceeds === undefined) {
+  if (hookOutcome.proceeds === undefined) {
     endInputPhase("input_hooks");
-    return interruptedInputResult(x, context, queuedSettler.origin !== undefined);
+    return interruptedInputResult(result, context, queuedSettler.origin !== undefined);
   }
-  let text = Z.proceeds.text;
-  let yt = text === le ? undefined : reframeSubmittedMessage(promptRow, expandedInput, text);
-  if (yt !== undefined) {
-    yt.promptRewritten = true;
-    let pluginPrompt = extractPluginPrompt(yt);
-    if (pluginPrompt !== undefined) yt.pluginPrompt = pluginPrompt;
+  let text = hookOutcome.proceeds.text;
+  let reframedProceed =
+    text === promptText ? undefined : reframeSubmittedMessage(promptRow, expandedInput, text);
+  if (reframedProceed !== undefined) {
+    reframedProceed.promptRewritten = true;
+    let pluginPrompt = extractPluginPrompt(reframedProceed);
+    if (pluginPrompt !== undefined) reframedProceed.pluginPrompt = pluginPrompt;
   }
-  let Xt = P(text, le);
-  if (yt !== undefined || Xt)
-    x.screened = {
+  let lineChanged = isRewriteOfPrompt(text, promptText);
+  if (reframedProceed !== undefined || lineChanged)
+    result.screened = {
       rewritten: text,
     };
-  else if (B !== undefined)
-    x.screened = {
-      rewritten: B,
+  else if (rewrittenSlashLine !== undefined)
+    result.screened = {
+      rewritten: rewrittenSlashLine,
     };
-  if (yt === undefined && text !== le)
+  if (reframedProceed === undefined && text !== promptText)
     logForDebugging(
       "prompt.submit: the chain left another text and no row takes it (a slash command's typed line, or a hidden prompt); it stands as it came",
     );
-  if (O) x.noVerdict = true;
+  if (needsRescreenAfterDrop) result.noVerdict = true;
   else
     settleScreeningResult({
-      result: x,
-      screened: x.screened ?? {},
-      isUnknown: h(),
+      result,
+      screened: result.screened ?? {},
+      isUnknown: isUnknownSinceDispatch(),
       recording: userPromptRecording,
       onScreened,
     });
-  if (Xt) x.messages.push(...slashLineChangedNotice(messages ?? context.messages));
-  let rs = await capAdditionalContext(Z.proceeds.context ?? [], "prompt.submit", context.storageV5);
-  if (rs.length > 0) x.messages.push(createHookContextAttachment(rs, "prompt.submit"));
-  if (yt !== undefined && Kt === undefined && textNotTyped !== true)
-    x.messages = await recollectMentionAttachments({
-      messages: x.messages,
-      prompt: yt,
+  if (lineChanged) result.messages.push(...slashLineChangedNotice(messages ?? context.messages));
+  let contextBlocks = await capAdditionalContext(
+    hookOutcome.proceeds.context ?? [],
+    "prompt.submit",
+    context.storageV5,
+  );
+  if (contextBlocks.length > 0)
+    result.messages.push(createHookContextAttachment(contextBlocks, "prompt.submit"));
+  if (reframedProceed !== undefined && skipAllAttachments === undefined && textNotTyped !== true)
+    result.messages = await recollectMentionAttachments({
+      messages: result.messages,
+      prompt: reframedProceed,
       rewritten: text,
       input,
       preExpansionInput,
@@ -952,24 +994,24 @@ async function processUserInputBase({
       querySource,
     });
   recordPhase("prompt_submit_hooks_ms", performance.now() - startTime, startTime);
-  if (Z.proceeds.sessionTitle)
+  if (hookOutcome.proceeds.sessionTitle)
     await applyHookSessionTitle(
       context.session.id,
-      Z.proceeds.sessionTitle,
+      hookOutcome.proceeds.sessionTitle,
       context.storageV5,
       context.credentials,
     );
   endInputPhase("input_hooks");
   queryCheckpoint("query_hooks_end");
-  if (H)
+  if (ambientOwed)
     await collectInputAttachments({
-      result: x,
+      result,
       context,
       history: messages,
       querySource,
     });
-  await appendWorkflowAuthoringMessages(x, messages, context.options.tools);
-  return x;
+  await appendWorkflowAuthoringMessages(result, messages, context.options.tools);
+  return result;
 }
 //@ chunk-xx1vmpsq.js:47765-47885 placement = isNullRenderingAttachment (1)
 function isNullRenderingAttachment(msg) {
@@ -990,75 +1032,77 @@ function isPromptSubmitHookAttachment(attachment) {
 }
 //@ chunk-xx1vmpsq.js:47988-48102 placement = isNullRenderingAttachment (0.815)
 function isNullRenderingAttachment_2(messages, { readFileState }) {
-  for (let n of messages) if (n.type === "attachment") forgetReadState(n.attachment, readFileState);
+  for (let message of messages)
+    if (message.type === "attachment") forgetReadState(message.attachment, readFileState);
   return messages.filter(isNullRenderingAttachment);
 }
 //@ chunk-xx1vmpsq.js:48102-48204 placement
-function forgetReadState(attachment, s) {
-  if (attachment.type === "file") s.delete(attachment.filename);
-  if (attachment.type === "nested_memory") s.delete(attachment.path);
+function forgetReadState(attachment, readFileState) {
+  if (attachment.type === "file") readFileState.delete(attachment.filename);
+  if (attachment.type === "nested_memory") readFileState.delete(attachment.path);
 }
 //@ chunk-xx1vmpsq.js:48204-48392 placement
-async function appendWorkflowAuthoringMessages(e, messages, tools) {
-  if (!e.shouldQuery) return;
+async function appendWorkflowAuthoringMessages(result, messages, tools) {
+  if (!result.shouldQuery) return;
   try {
-    let { getWorkflowAuthoringAutoloadMessages } = require("./chunk-70r0mv35.js");
-    e.messages.push(...(await getWorkflowAuthoringAutoloadMessages(e.messages, messages, tools)));
+    let { getWorkflowAuthoringAutoloadMessages } = require("../getWorkflowAuthoringAutoloadMessages.lazy.js");
+    result.messages.push(...(await getWorkflowAuthoringAutoloadMessages(result.messages, messages, tools)));
   } catch (error) {
     logError(error);
   }
 }
 //@ chunk-xx1vmpsq.js:48392-48496 placement
-function frameContent(message, s, n) {
-  let y = {
+function frameContent(message, origin, content) {
+  let wrapped = {
     ...message,
     message: {
       ...message.message,
-      content: cloneContent(n),
+      content: cloneContent(content),
     },
   };
-  wrapNonUserMessage(y, s);
-  return y.message.content;
+  wrapNonUserMessage(wrapped, origin);
+  return wrapped.message.content;
 }
 //@ chunk-xx1vmpsq.js:48496-49116 placement
 /**
  * 重新包装提交的消息（插件来源加框，保留非文本块）。
  */
-function reframeSubmittedMessage(promptRow, expandedInput, n) {
+function reframeSubmittedMessage(promptRow, expandedInput, newText) {
   if (promptRow === undefined || promptRow.message.isMeta) return;
   let { message, unframed } = promptRow;
   let { origin } = message;
-  let T = origin !== undefined && frameContent(message, origin, " ") !== " " ? origin : undefined;
+  let wrappedOrigin = origin !== undefined && frameContent(message, origin, " ") !== " " ? origin : undefined;
   if (typeof unframed === "string") {
-    message.message.content = T === undefined ? replacePromptText(unframed, n) : frameContent(message, T, n);
+    message.message.content =
+      wrappedOrigin === undefined
+        ? replacePromptText(unframed, newText)
+        : frameContent(message, wrappedOrigin, newText);
     return message;
   }
   let filtered = unframed.filter(
-    (E, A) =>
-      E.type === "text" &&
+    (block, index) =>
+      block.type === "text" &&
       (typeof expandedInput === "string"
-        ? A > 0 || expandedInput.trim() === ""
-        : expandedInput[A]?.type !== "text"),
+        ? index > 0 || expandedInput.trim() === ""
+        : expandedInput[index]?.type !== "text"),
   );
-  let filtered_2 = unframed.filter((E) => !filtered.includes(E));
-  if (
-    !filtered_2.some((E) => E.type === "text") &&
-    (filtered_2.length === 0 || hasToolResultBlock(filtered_2))
-  )
+  let prompt = unframed.filter((block) => !filtered.includes(block));
+  if (!prompt.some((block) => block.type === "text") && (prompt.length === 0 || hasToolResultBlock(prompt)))
     return;
-  if (T !== undefined) {
-    message.message.content = frameContent(message, T, [
+  if (wrappedOrigin !== undefined) {
+    message.message.content = frameContent(message, wrappedOrigin, [
       {
         type: "text",
-        text: n,
+        text: newText,
       },
       ...filtered,
-      ...filtered_2.filter((E) => E.type !== "text"),
+      ...prompt.filter((block) => block.type !== "text"),
     ]);
     return message;
   }
-  let R = replacePromptText(filtered_2, n);
-  message.message.content = filtered.length === 0 ? R : [...(typeof R === "string" ? [] : R), ...filtered];
+  let replaced = replacePromptText(prompt, newText);
+  message.message.content =
+    filtered.length === 0 ? replaced : [...(typeof replaced === "string" ? [] : replaced), ...filtered];
   return message;
 }
 //@ chunk-xx1vmpsq.js:49116-49244 placement
@@ -1073,55 +1117,64 @@ function readPromptScreens(context) {
   }
 }
 //@ chunk-xx1vmpsq.js:49244-49423 placement
-function slashLineAfterRewrite(e, s) {
-  if (s === undefined || s.argsRanWith === s.args) return;
-  return s.args !== "" && e.endsWith(s.args)
-    ? e.slice(0, e.length - s.args.length) + s.argsRanWith
-    : `/${s.name} ${s.argsRanWith}`;
+function slashLineAfterRewrite(line, commandRun) {
+  if (commandRun === undefined || commandRun.argsRanWith === commandRun.args) return;
+  return commandRun.args !== "" && line.endsWith(commandRun.args)
+    ? line.slice(0, line.length - commandRun.args.length) + commandRun.argsRanWith
+    : `/${commandRun.name} ${commandRun.argsRanWith}`;
 }
 //@ chunk-xx1vmpsq.js:49423-49712 placement
-function slashLineChangedNotice(e) {
-  let s = `prompt.submit: ${promptSubmitHookLabel()} changed a slash command's typed line. That change is never applied: its arguments are changed at command.run, a skill body at skill.prompt.`;
-  return e.some((y) => y.type === "system" && y.subtype === "informational" && y.content === s)
+function slashLineChangedNotice(messages) {
+  let notice = `prompt.submit: ${promptSubmitHookLabel()} changed a slash command's typed line. That change is never applied: its arguments are changed at command.run, a skill body at skill.prompt.`;
+  return messages.some(
+    (message) =>
+      message.type === "system" && message.subtype === "informational" && message.content === notice,
+  )
     ? []
-    : [createSystemMessage(s, "warning")];
+    : [createSystemMessage(notice, "warning")];
 }
 //@ chunk-xx1vmpsq.js:49712-49920 placement
 function promptSubmitHookLabel() {
   let pluginRenderHooks = findPluginRenderHooks("prompt.submit");
   let filtered = pluginRenderHooks.filter((pluginRenderHook) => pluginRenderHook.tier !== "builtin");
-  let n = new Set((filtered.length > 0 ? filtered : pluginRenderHooks).map((y) => sourceLabel(y.plugin)));
-  return n.size > 0 ? `a mod hooked on prompt.submit (${[...n].join(", ")})` : "a hook";
+  let labels = new Set(
+    (filtered.length > 0 ? filtered : pluginRenderHooks).map((hook) => sourceLabel(hook.plugin)),
+  );
+  return labels.size > 0 ? `a mod hooked on prompt.submit (${[...labels].join(", ")})` : "a hook";
 }
 //@ chunk-xx1vmpsq.js:49920-50307 placement
 /**
  * MENTION_ATTACHMENT_TYPES：提及类附件类型。
  */
-var MENTION_ATTACHMENT_TYPES_2 = new Set([
-  "file",
-  "already_read_file",
-  "at_mention_reference",
-  "pdf_reference",
-  "directory",
-  "mcp_resource",
-  "agent_mention",
-  "peer_mention",
-  "skill_mention",
-  "nested_memory",
-  "withheld_memory",
-]);
-var MENTION_ATTACHMENT_TYPES = new Set([
-  "ultrathink_effort",
-  "workflow_keyword_request",
-  "unknown_command_fallback",
-  "selected_lines_in_ide",
-  "selected_lines_in_diff",
-  "opened_file_in_ide",
-  "inlined_image_paths",
-  "thread_state",
-]);
+var MENTION_ATTACHMENT_TYPES_2; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var MENTION_ATTACHMENT_TYPES;
+deferInit("chunk-xx1vmpsq.js:49920", () => {
+  MENTION_ATTACHMENT_TYPES_2 = new Set([
+    "file",
+    "already_read_file",
+    "at_mention_reference",
+    "pdf_reference",
+    "directory",
+    "mcp_resource",
+    "agent_mention",
+    "peer_mention",
+    "skill_mention",
+    "nested_memory",
+    "withheld_memory",
+  ]);
+  MENTION_ATTACHMENT_TYPES = new Set([
+    "ultrathink_effort",
+    "workflow_keyword_request",
+    "unknown_command_fallback",
+    "selected_lines_in_ide",
+    "selected_lines_in_diff",
+    "opened_file_in_ide",
+    "inlined_image_paths",
+    "thread_state",
+  ]);
+});
 //@ chunk-xx1vmpsq.js:50307-50643 placement
-async function collectInputAttachments({ result: e, context, history, querySource }) {
+async function collectInputAttachments({ result, context, history, querySource }) {
   startInputPhase("input_attachments");
   let array = await toArray_2(
     getAttachmentMessages(
@@ -1141,32 +1194,34 @@ async function collectInputAttachments({ result: e, context, history, querySourc
     ),
   );
   endInputPhase("input_attachments");
-  let index = e.messages.findIndex((message) => message.type === "user" && message.turnCompanion !== true);
-  e.messages.splice(index === -1 ? 1 : index + 1, 0, ...array);
+  let index = result.messages.findIndex(
+    (message) => message.type === "user" && message.turnCompanion !== true,
+  );
+  result.messages.splice(index === -1 ? 1 : index + 1, 0, ...array);
 }
 //@ chunk-xx1vmpsq.js:50643-50972 placement
 /**
  * 去掉提及类附件，返回保留的消息与是否有 peer 提及。
  */
-function dropMentionAttachments(e, readFileState) {
-  let n = [];
+function dropMentionAttachments(messages, readFileState) {
+  let kept = [];
   let peerMinted = false;
-  for (let r of e) {
+  for (let message of messages) {
     if (
-      r.type === "attachment" &&
-      r.attachment.type === "hook_additional_context" &&
-      r.attachment.hookName === "prompt.mention"
+      message.type === "attachment" &&
+      message.attachment.type === "hook_additional_context" &&
+      message.attachment.hookName === "prompt.mention"
     )
       continue;
-    if (r.type !== "attachment" || !MENTION_ATTACHMENT_TYPES_2.has(r.attachment.type)) {
-      n.push(r);
+    if (message.type !== "attachment" || !MENTION_ATTACHMENT_TYPES_2.has(message.attachment.type)) {
+      kept.push(message);
       continue;
     }
-    forgetReadState(r.attachment, readFileState);
-    peerMinted ||= r.attachment.type === "peer_mention";
+    forgetReadState(message.attachment, readFileState);
+    peerMinted ||= message.attachment.type === "peer_mention";
   }
   return {
-    kept: n,
+    kept,
     peerMinted,
   };
 }
@@ -1185,14 +1240,15 @@ async function recollectMentionAttachments({
   history,
   querySource,
 }) {
-  let M = overlappingMentions(rewritten, getContentText(input) || "");
-  let R = preExpansionInput === undefined ? undefined : overlappingMentions(rewritten, preExpansionInput);
-  let E = [...readTriggers, ...(context.consumedNestedMemoryTriggers ?? [])];
+  let mentionText = overlappingMentions(rewritten, getContentText(input) || "");
+  let preExpansionMentionText =
+    preExpansionInput === undefined ? undefined : overlappingMentions(rewritten, preExpansionInput);
+  let triggers = [...readTriggers, ...(context.consumedNestedMemoryTriggers ?? [])];
   let { kept, peerMinted } = dropMentionAttachments(messages, context.readFileState);
-  context.nestedMemoryAttachmentTriggers?.push(...E);
+  context.nestedMemoryAttachmentTriggers?.push(...triggers);
   let array = await toArray_2(
     getAttachmentMessages(
-      M,
+      mentionText,
       context,
       null,
       [],
@@ -1205,7 +1261,7 @@ async function recollectMentionAttachments({
       {
         inputMentionsOnly: true,
         isHumanTypedPrompt: peerMinted,
-        preExpansionInput: peerMinted ? R : undefined,
+        preExpansionInput: peerMinted ? preExpansionMentionText : undefined,
       },
     ),
   );
@@ -1217,13 +1273,13 @@ async function recollectMentionAttachments({
  * processUserInputBase：处理一次用户输入：图片、粘贴、! bash 模式、/ 斜杠命令、普通提示，产出要加入会话的消息与 shouldQuery。
  */
 async function processUserInputBase_2(
-  e,
+  input,
   mode,
   context,
-  y,
+  promptIdSeed,
   pastedContents,
   ideSelection,
-  messages,
+  knownTools,
   uuid,
   isAlreadyProcessing,
   querySource,
@@ -1233,13 +1289,13 @@ async function processUserInputBase_2(
   bridgeOrigin,
   modelScheduledOrigin,
   isMeta,
-  re,
+  attachmentsMode,
   preExpansionInput,
   suppressWorkflowKeyword,
   origin,
   shouldQuery,
   inlinedImagePaths,
-  ze,
+  skipUltraplan,
   verifiedSlackHumanTurn,
   localStdinOrigin,
   submittedBySessionChannelPerson,
@@ -1248,27 +1304,27 @@ async function processUserInputBase_2(
   wakeupSource,
   hostInitiator,
   artifactCommentTurn,
-  de = false,
-  gt = false,
+  skipSlashAndAttach = false,
+  skipNotify = false,
   ownFilePaths,
-  hold,
+  userPromptHold,
   userPromptLine,
-  Yt,
+  lineCheckRunner,
   inboundOrigin,
   markOutputAsPasted = false,
   sentForDirectory,
   toolsUsed,
 ) {
-  let Ze = randomUUID();
-  if (!hasToolResultBlock(e)) {
-    setPromptId(Ze);
-    if (y !== undefined) maybeWarmApiAuth(context.credentials, context.storageV5);
+  let promptId = randomUUID();
+  if (!hasToolResultBlock(input)) {
+    setPromptId(promptId);
+    if (promptIdSeed !== undefined) maybeWarmApiAuth(context.credentials, context.storageV5);
   }
   if (
     mode === "prompt" &&
-    typeof e === "string" &&
-    e !== "" &&
-    e.trim() === "" &&
+    typeof input === "string" &&
+    input !== "" &&
+    input.trim() === "" &&
     context.options.isNonInteractiveSession &&
     !isMeta &&
     shouldQuery !== false
@@ -1281,78 +1337,81 @@ async function processUserInputBase_2(
     };
   }
   let inputString = null;
-  let se = [];
-  let he = [];
+  let precedingInputBlocks = [];
+  let imageMetadataTexts = [];
   let imagePasteIds = [];
-  let lt = {};
+  let inlinePastedImages = {};
   let limits = imageLimitsForModel(context.options.mainLoopModel);
-  let L = e;
-  if (typeof e === "string") inputString = e;
-  else if (e.length > 0) {
+  let content = input;
+  if (typeof input === "string") inputString = input;
+  else if (input.length > 0) {
     queryCheckpoint("query_image_processing_start");
-    let B = [];
-    let H = !inlinedImagePaths?.length && isImageStoreAvailable();
-    let any = e.some((h) => h.type === "image");
+    let keptBlocks = [];
+    let imageStoreReady = !inlinedImagePaths?.length && isImageStoreAvailable();
+    let any = input.some((block) => block.type === "image");
     if (any) startInputPhase("input_images");
-    if (H && any) advancePasteId(await getMaxStoredImageId());
-    for (let block of e) {
+    if (imageStoreReady && any) advancePasteId(await getMaxStoredImageId());
+    for (let block of input) {
       if (block.type !== "image") {
-        B.push(block);
+        keptBlocks.push(block);
         continue;
       }
-      let P = await checkImageBlockSource(block, limits);
-      B.push(P.block);
-      if (P.block.type !== "image") continue;
-      if (!H) {
-        let metadataText = createImageMetadataText(P.dimensions ?? {});
-        if (metadataText) he.push(metadataText);
+      let checkedBlock = await checkImageBlockSource(block, limits);
+      keptBlocks.push(checkedBlock.block);
+      if (checkedBlock.block.type !== "image") continue;
+      if (!imageStoreReady) {
+        let metadataText = createImageMetadataText(checkedBlock.dimensions ?? {});
+        if (metadataText) imageMetadataTexts.push(metadataText);
         continue;
       }
-      let D = mintPasteId(getContentText(e) ?? undefined, pastedContents);
-      imagePasteIds.push(D);
+      let pasteId = mintPasteId(getContentText(input) ?? undefined, pastedContents);
+      imagePasteIds.push(pasteId);
       if (block.source.type === "base64")
-        lt[D] = {
-          id: D,
+        inlinePastedImages[pasteId] = {
+          id: pasteId,
           type: "image",
           content: block.source.data,
-          dimensions: P.dimensions,
+          dimensions: checkedBlock.dimensions,
         };
     }
-    L = B;
+    content = keptBlocks;
     endInputPhase("input_images");
     queryCheckpoint("query_image_processing_end");
-    inputString = lastTextBlockText(B);
-    se = inputString === null ? B : B.slice(0, -1);
+    inputString = lastTextBlockText(keptBlocks);
+    precedingInputBlocks = inputString === null ? keptBlocks : keptBlocks.slice(0, -1);
   }
   if (inputString === null && mode !== "prompt") throw Error(`Mode: ${mode} requires a string input.`);
-  let pe = pastedContents ? Object.values(pastedContents).filter(isNonEmptyImageAttachment) : [];
-  if (pe.length > 0 || Object.keys(lt).length > 0) startInputPhase("input_images");
-  let Ie = await storePastedImages(
+  let pastedImageEntries = pastedContents
+    ? Object.values(pastedContents).filter(isNonEmptyImageAttachment)
+    : [];
+  if (pastedImageEntries.length > 0 || Object.keys(inlinePastedImages).length > 0)
+    startInputPhase("input_images");
+  let storedPaths = await storePastedImages(
     {
       ...pastedContents,
-      ...lt,
+      ...inlinePastedImages,
     },
     setSliceField(context.setAppState, "storedImagePaths"),
   );
-  let values = Object.values(lt);
+  let values = Object.values(inlinePastedImages);
   for (let { id, dimensions } of values) {
-    let imageMetadataText = createImageMetadataText(dimensions ?? {}, Ie.get(id));
-    if (imageMetadataText) he.push(imageMetadataText);
+    let imageMetadataText = createImageMetadataText(dimensions ?? {}, storedPaths.get(id));
+    if (imageMetadataText) imageMetadataTexts.push(imageMetadataText);
   }
   if (values.length > 0) {
-    let B = count(values, (img) => !Ie.has(img.id));
-    if (B === 0)
+    let unstoredCount = count(values, (img) => !storedPaths.has(img.id));
+    if (unstoredCount === 0)
       logFeatureOk("input_image_block", {
         images: values.length,
       });
     else
       logFeatureSad("input_image_block", "store_failed", {
-        unstored: B,
+        unstored: unstoredCount,
       });
   }
   queryCheckpoint("query_pasted_image_processing_start");
   let imageProcessingResults = await Promise.all(
-    pe.map(async (pastedImage) => {
+    pastedImageEntries.map(async (pastedImage) => {
       logEvent("tengu_pasted_image_resize_attempt", {
         original_size_bytes: pastedImage.content.length,
       });
@@ -1366,7 +1425,7 @@ async function processUserInputBase_2(
         id: pastedImage.id,
         resized,
         originalDimensions: pastedImage.dimensions,
-        sourcePath: pastedImage.sourcePath ?? Ie.get(pastedImage.id),
+        sourcePath: pastedImage.sourcePath ?? storedPaths.get(pastedImage.id),
       };
     }),
   );
@@ -1377,22 +1436,22 @@ async function processUserInputBase_2(
     imagePasteIds.push(id);
     if (resized.dimensions) {
       let metadataText = createImageMetadataText(resized.dimensions, sourcePath);
-      if (metadataText) he.push(metadataText);
+      if (metadataText) imageMetadataTexts.push(metadataText);
     } else if (originalDimensions) {
       let metadataText = createImageMetadataText(originalDimensions, sourcePath);
-      if (metadataText) he.push(metadataText);
-    } else if (sourcePath) he.push(`${IMAGE_SOURCE_MARKER_PREFIX}${sourcePath}]`);
+      if (metadataText) imageMetadataTexts.push(metadataText);
+    } else if (sourcePath) imageMetadataTexts.push(`${IMAGE_SOURCE_MARKER_PREFIX}${sourcePath}]`);
   }
   endInputPhase("input_images");
   queryCheckpoint("query_pasted_image_processing_end");
-  let Ee = mode === "prompt";
-  let Ne = skipSlashCommands || de;
-  let qt = context;
-  let Se = inputString;
+  let isPromptMode = mode === "prompt";
+  let skipSlash = skipSlashCommands || skipSlashAndAttach;
+  let effectiveContext = context;
+  let effectiveInput = inputString;
   let bridgeRewrite;
-  if (bridgeOrigin && !de && inputString !== null && inputString.startsWith("/")) {
+  if (bridgeOrigin && !skipSlashAndAttach && inputString !== null && inputString.startsWith("/")) {
     startInputPhase("input_command");
-    let { resolveBridgeSlashOverride } = await import("./chunk-thdvqv4s.js");
+    let { resolveBridgeSlashOverride } = await import("../../bridge/bridgeSlashCommands.js");
     let parsed = resolveBridgeSlashOverride({
       inputString,
       context,
@@ -1403,10 +1462,10 @@ async function processUserInputBase_2(
     endInputPhase("input_command");
     if (parsed.kind === "blocked") return parsed.result;
     if (parsed.kind === "updated") {
-      Ne = parsed.effectiveSkipSlash;
-      Se = parsed.effectiveInput;
+      skipSlash = parsed.effectiveSkipSlash;
+      effectiveInput = parsed.effectiveInput;
       bridgeRewrite = parsed.bridgeRewrite;
-      qt = {
+      effectiveContext = {
         ...parsed.effectiveContext,
         dispatchedOverBridge: true,
       };
@@ -1415,12 +1474,12 @@ async function processUserInputBase_2(
   if (
     verifiedSlackHumanTurn === true &&
     !bridgeOrigin &&
-    !Ne &&
+    !skipSlash &&
     inputString !== null &&
     inputString.startsWith("/")
   ) {
     startInputPhase("input_command");
-    let { resolveRelaySlashRefusal } = await import("./chunk-thdvqv4s.js");
+    let { resolveRelaySlashRefusal } = await import("../../bridge/bridgeSlashCommands.js");
     let relaySlashRefusal = resolveRelaySlashRefusal({
       inputString,
       context,
@@ -1431,7 +1490,7 @@ async function processUserInputBase_2(
     endInputPhase("input_command");
     if (relaySlashRefusal.kind === "blocked") return relaySlashRefusal.result;
   }
-  let zt;
+  let relayCommandGate;
   if (
     (verifiedSlackHumanTurn === true || bridgeOrigin === true || origin?.kind === "task-notification") &&
     inputString !== null
@@ -1444,8 +1503,8 @@ async function processUserInputBase_2(
       bridgeRewrite,
     };
     let inputString_2 = inputString;
-    zt = async (cmd, commandName, args) => {
-      let { relayDispatchRefusal } = await import("./chunk-thdvqv4s.js");
+    relayCommandGate = async (cmd, commandName, args) => {
+      let { relayDispatchRefusal } = await import("../../bridge/bridgeSlashCommands.js");
       return relayDispatchRefusal({
         cmd,
         commandName,
@@ -1456,33 +1515,48 @@ async function processUserInputBase_2(
       });
     };
   }
-  if (modelScheduledOrigin && !bridgeOrigin && !de && inputString !== null && inputString.startsWith("/")) {
+  if (
+    modelScheduledOrigin &&
+    !bridgeOrigin &&
+    !skipSlashAndAttach &&
+    inputString !== null &&
+    inputString.startsWith("/")
+  ) {
     let slashCommand = parseSlashCommand(inputString);
-    let H = slashCommand ? findCommand(slashCommand.commandName, context.options.commands) : undefined;
+    let scheduledCommand = slashCommand
+      ? findCommand(slashCommand.commandName, context.options.commands)
+      : undefined;
     let args = slashCommand?.args ?? "";
-    if (!H && slashCommand && !slashCommand.isMcp && args.trim()) {
-      let h = args.trimStart();
-      let P = h.search(/\s/);
-      let D = P === -1 ? h : h.slice(0, P);
-      let command = findCommand(`${slashCommand.commandName}:${D}`, context.options.commands);
+    if (!scheduledCommand && slashCommand && !slashCommand.isMcp && args.trim()) {
+      let scheduledArgs = args.trimStart();
+      let spaceIndex = scheduledArgs.search(/\s/);
+      let firstWord = spaceIndex === -1 ? scheduledArgs : scheduledArgs.slice(0, spaceIndex);
+      let command = findCommand(`${slashCommand.commandName}:${firstWord}`, context.options.commands);
       if (command) {
-        H = command;
-        args = P === -1 ? "" : h.slice(P + 1).trimStart();
+        scheduledCommand = command;
+        args = spaceIndex === -1 ? "" : scheduledArgs.slice(spaceIndex + 1).trimStart();
       }
     }
-    if (H) {
-      let h = isSkillOff(H) ? undefined : matchSubcommand(H, args);
-      let P = h ? findCommand(h.targetName, context.options.commands) : undefined;
-      let D = h && P && isCommandEnabled(P) ? P : H;
+    if (scheduledCommand) {
+      let subcommandMatch = isSkillOff(scheduledCommand)
+        ? undefined
+        : matchSubcommand(scheduledCommand, args);
+      let subcommandTarget = subcommandMatch
+        ? findCommand(subcommandMatch.targetName, context.options.commands)
+        : undefined;
+      let permissionTarget =
+        subcommandMatch && subcommandTarget && isCommandEnabled(subcommandTarget)
+          ? subcommandTarget
+          : scheduledCommand;
       if (
-        checkSkillPermission(D, {
-          commandName: D.name,
+        checkSkillPermission(permissionTarget, {
+          commandName: permissionTarget.name,
           userTypedThisTurn: false,
           isMainSession: true,
           permissionContext: getToolPermissionContext(context),
         }) === null
       )
-        Ne = false;
+        skipSlash = false;
     }
   }
   let classifierTurnHooks = createClassifierTurnHooks({
@@ -1494,22 +1568,22 @@ async function processUserInputBase_2(
     mode === "prompt" &&
     !context.options.isNonInteractiveSession &&
     inputString !== null &&
-    !Ne &&
+    !skipSlash &&
     !inputString.startsWith("/") &&
     !context.options.ultraplanSessionUrl &&
     !context.getAppState().ultraplanLaunching &&
-    ze !== true &&
+    skipUltraplan !== true &&
     !isMeta &&
     isHumanOrigin(origin) &&
     flushPromptHistory(preExpansionInput ?? inputString, pastedContents)
   ) {
     logEvent("tengu_ultraplan_keyword", {});
     let rewritten = findKeywordTriggerPositions(inputString).trim();
-    let { processSlashCommand } = await import("./chunk-jghdfw5c.js");
-    let { ROW_COMMIT } = await import("./chunk-7qydycm2.js");
-    let h = await processSlashCommand(
+    let { processSlashCommand } = await import("./processSlashCommand.js");
+    let { ROW_COMMIT } = await import("../../commands/config/configShorthand.js");
+    let ultraplanResult = await processSlashCommand(
       `/ultraplan ${rewritten}`,
-      se,
+      precedingInputBlocks,
       imageContentBlocks,
       [],
       {
@@ -1518,13 +1592,13 @@ async function processUserInputBase_2(
         dispatchedByKeyword: true,
         submissionVerifiedSlackHumanTurn: verifiedSlackHumanTurn,
         submittedOnLocalStdin: localStdinOrigin,
-        userPromptHold: hold,
+        userPromptHold,
         userPromptLine,
       },
       uuid,
       isAlreadyProcessing,
       canUseTool,
-      y,
+      promptIdSeed,
       undefined,
       undefined,
       undefined,
@@ -1544,31 +1618,31 @@ async function processUserInputBase_2(
       undefined,
       undefined,
       inboundOrigin,
-      zt,
+      relayCommandGate,
     );
-    return addImageMetadataMessage(h, he);
+    return addImageMetadataMessage(ultraplanResult, imageMetadataTexts);
   }
   if (inputString !== null && mode === "bash") {
     startInputPhase("input_command");
-    let { processBashCommand } = await import("./chunk-w235911v.js");
-    let H = await processBashCommand(inputString, se, context, {
+    let { processBashCommand } = await import("./processBashCommand.js");
+    let bashResult = await processBashCommand(inputString, precedingInputBlocks, context, {
       markOutputAsPasted,
       sentForDirectory,
     });
     endInputPhase("input_command");
-    return addImageMetadataMessage(H, he);
+    return addImageMetadataMessage(bashResult, imageMetadataTexts);
   }
-  let We = re !== "all" && (Ne || !inputString?.startsWith("/"));
-  let Me = re === undefined;
-  let et = Ee && !isMeta && shouldQuery !== false;
-  let xe = et && isHumanOrigin(origin) && !de;
+  let shouldLoadAttachments = attachmentsMode !== "all" && (skipSlash || !inputString?.startsWith("/"));
+  let isFullAttachmentsMode = attachmentsMode === undefined;
+  let isRegularPrompt = isPromptMode && !isMeta && shouldQuery !== false;
+  let isHumanTyped = isRegularPrompt && isHumanOrigin(origin) && !skipSlashAndAttach;
   queryCheckpoint("query_attachment_loading_start");
-  if (We && Me) startInputPhase("input_attachments");
+  if (shouldLoadAttachments && isFullAttachmentsMode) startInputPhase("input_attachments");
   let attachmentMessages =
-    We && Me
+    shouldLoadAttachments && isFullAttachmentsMode
       ? await toArray_2(
           getAttachmentMessages(
-            de ? null : inputString,
+            skipSlashAndAttach ? null : inputString,
             context,
             ideSelection ?? null,
             [],
@@ -1576,12 +1650,12 @@ async function processUserInputBase_2(
               now: () => new Date().toISOString(),
               uuid: () => randomUUID(),
             },
-            messages,
+            knownTools,
             querySource,
             {
-              isRegularUserPrompt: et,
-              isHumanTypedPrompt: xe,
-              ownFilePaths: de ? ownFilePaths : undefined,
+              isRegularUserPrompt: isRegularPrompt,
+              isHumanTypedPrompt: isHumanTyped,
+              ownFilePaths: skipSlashAndAttach ? ownFilePaths : undefined,
               preExpansionInput,
               pastedContents,
               suppressWorkflowKeyword,
@@ -1595,55 +1669,55 @@ async function processUserInputBase_2(
         )
       : [];
   endInputPhase("input_attachments");
-  let xt =
+  let inlinedImagesAttachment =
     inlinedImagePaths && inlinedImagePaths.length > 0
       ? createAttachmentMessage({
           type: "inlined_image_paths",
           paths: inlinedImagePaths,
         })
       : null;
-  let Tt = stampThreadState ? getProjectsThreadState() : undefined;
-  let Ut = Tt
+  let threadState = stampThreadState ? getProjectsThreadState() : undefined;
+  let threadStateAttachment = threadState
     ? createAttachmentMessage({
         type: "thread_state",
-        ...Tt,
+        ...threadState,
       })
     : null;
   queryCheckpoint("query_attachment_loading_end");
-  if (Se !== null && !Ne && Se.startsWith("/")) {
+  if (effectiveInput !== null && !skipSlash && effectiveInput.startsWith("/")) {
     startInputPhase("input_command");
-    let { processSlashCommand } = await import("./chunk-jghdfw5c.js");
-    let { ROW_COMMIT } = await import("./chunk-7qydycm2.js");
-    let oe = modelScheduledOrigin
-      ? (P) =>
-          checkSkillPermission(P, {
-            commandName: P.name,
+    let { processSlashCommand } = await import("./processSlashCommand.js");
+    let { ROW_COMMIT } = await import("../../commands/config/configShorthand.js");
+    let skillPermissionCheck = modelScheduledOrigin
+      ? (command) =>
+          checkSkillPermission(command, {
+            commandName: command.name,
             userTypedThisTurn: false,
             isMainSession: context.agentId === undefined,
             permissionContext: getToolPermissionContext(context),
           }) !== null
       : undefined;
-    let h = await processSlashCommand(
-      Se,
-      se,
+    let slashResult = await processSlashCommand(
+      effectiveInput,
+      precedingInputBlocks,
       imageContentBlocks,
       attachmentMessages,
       {
-        ...qt,
+        ...effectiveContext,
         rowCommit: ROW_COMMIT,
         submissionVerifiedSlackHumanTurn: verifiedSlackHumanTurn,
         submittedOnLocalStdin: localStdinOrigin,
         submittedBySessionChannelPerson,
         submittedFromComposer: composerEnter,
-        userPromptHold: hold,
+        userPromptHold,
         userPromptLine,
       },
       uuid,
       isAlreadyProcessing,
       canUseTool,
-      y,
+      promptIdSeed,
       modelScheduledOrigin,
-      oe,
+      skillPermissionCheck,
       modelScheduledOrigin ? undefined : preExpansionInput,
       classifierTurnHooks,
       {
@@ -1659,9 +1733,9 @@ async function processUserInputBase_2(
       permissionMode,
       wakeupSource,
       hostInitiator,
-      Yt,
+      lineCheckRunner,
       inboundOrigin,
-      zt,
+      relayCommandGate,
     );
     endInputPhase("input_command");
     if (
@@ -1670,7 +1744,7 @@ async function processUserInputBase_2(
       shouldQuery !== false &&
       isHumanOrigin(origin) &&
       !modelScheduledOrigin &&
-      h.shouldQuery &&
+      slashResult.shouldQuery &&
       !context.abortController.signal.aborted
     ) {
       notifyAutoReactHumanTurn({
@@ -1679,11 +1753,11 @@ async function processUserInputBase_2(
       resetGoalIdleCheckinCount(context.setAppState, context.session.sessionScratch);
       resetUnansweredSafetyCheckCount();
     }
-    if (h.extractPromptAttachments && !We && re === undefined) {
+    if (slashResult.extractPromptAttachments && !shouldLoadAttachments && attachmentsMode === undefined) {
       startInputPhase("input_attachments");
       let array = await toArray_2(
         getAttachmentMessages(
-          Se,
+          effectiveInput,
           context,
           ideSelection?.source === "diff" ? null : (ideSelection ?? null),
           [],
@@ -1691,11 +1765,11 @@ async function processUserInputBase_2(
             now: () => new Date().toISOString(),
             uuid: () => randomUUID(),
           },
-          messages,
+          knownTools,
           querySource,
           {
-            isRegularUserPrompt: et,
-            isHumanTypedPrompt: xe,
+            isRegularUserPrompt: isRegularPrompt,
+            isHumanTypedPrompt: isHumanTyped,
             preExpansionInput,
             pastedContents,
             suppressWorkflowKeyword,
@@ -1703,182 +1777,185 @@ async function processUserInputBase_2(
         ),
       );
       endInputPhase("input_attachments");
-      h.messages.splice(1, 0, ...array);
+      slashResult.messages.splice(1, 0, ...array);
     }
-    if (h.extractPromptAttachments && !We && re === "mentions") h.ambientAttachmentsOwed = true;
-    if (xt) h.messages.push(xt);
-    if (Ut) h.messages.push(Ut);
-    return addImageMetadataMessage(h, he);
+    if (slashResult.extractPromptAttachments && !shouldLoadAttachments && attachmentsMode === "mentions")
+      slashResult.ambientAttachmentsOwed = true;
+    if (inlinedImagesAttachment) slashResult.messages.push(inlinedImagesAttachment);
+    if (threadStateAttachment) slashResult.messages.push(threadStateAttachment);
+    return addImageMetadataMessage(slashResult, imageMetadataTexts);
   }
-  if (xt) attachmentMessages.push(xt);
-  if (Ut) attachmentMessages.push(Ut);
+  if (inlinedImagesAttachment) attachmentMessages.push(inlinedImagesAttachment);
+  if (threadStateAttachment) attachmentMessages.push(threadStateAttachment);
   if (inputString !== null && mode === "prompt") {
     let trimmedInput = inputString.trim();
-    let agentMention = attachmentMessages.find((oe) => oe.attachment.type === "agent_mention");
+    let agentMention = attachmentMessages.find(
+      (attachment) => attachment.attachment.type === "agent_mention",
+    );
     if (agentMention) {
       let agentMentionString = `@agent-${agentMention.attachment.agentType}`;
-      let h = trimmedInput === agentMentionString;
-      let isPrefix = trimmedInput.startsWith(agentMentionString) && !h;
+      let isOnlyMention = trimmedInput === agentMentionString;
+      let isPrefix = trimmedInput.startsWith(agentMentionString) && !isOnlyMention;
       logEvent("tengu_subagent_at_mention", {
-        is_subagent_only: h,
+        is_subagent_only: isOnlyMention,
         is_prefix: isPrefix,
       });
     }
   }
-  if (et && isHumanOrigin(origin) && !gt && !context.abortController.signal.aborted) {
+  if (isRegularPrompt && isHumanOrigin(origin) && !skipNotify && !context.abortController.signal.aborted) {
     notifyAutoReactHumanTurn({
-      ownWords: verifiedSlackHumanTurn !== true && !de,
+      ownWords: verifiedSlackHumanTurn !== true && !skipSlashAndAttach,
     });
     resetGoalIdleCheckinCount(context.setAppState, context.session.sessionScratch);
     resetUnansweredSafetyCheckCount();
   }
-  let x;
-  let ke;
-  if (et && !de && isHumanOrUnset(origin)) {
-    let B =
-      typeof L === "string"
-        ? L
+  let setupGuideNotice;
+  let expandedContent;
+  if (isRegularPrompt && !skipSlashAndAttach && isHumanOrUnset(origin)) {
+    let plainText =
+      typeof content === "string"
+        ? content
         : extractTextContent_2(
-            L,
+            content,
             `
 `,
           );
-    if (xe && Me && verifiedSlackHumanTurn !== true && ze !== true) {
-      let linkedSetupGuide = await fetchLinkedSetupGuide(
-        B,
+    if (isHumanTyped && isFullAttachmentsMode && verifiedSlackHumanTurn !== true && skipUltraplan !== true) {
+      let content_2 = await fetchLinkedSetupGuide(
+        plainText,
         context.credentials,
         context.abortController.signal,
       );
-      if (linkedSetupGuide) {
-        let oe = isVirtualPancakeEnabled()
-          ? wrapUserTurnContent(linkedSetupGuide)
+      if (content_2) {
+        let guideSuffix = isVirtualPancakeEnabled()
+          ? wrapUserTurnContent(content_2)
           : `
 
-${linkedSetupGuide}`;
-        if (typeof L === "string") ke = `${L}${oe}`;
+${content_2}`;
+        if (typeof content === "string") expandedContent = `${content}${guideSuffix}`;
         else {
-          let last = L.findLast((P) => P.type === "text");
-          ke = L.map((P) =>
-            P === last && P.type === "text"
+          let last = content.findLast((block) => block.type === "text");
+          expandedContent = content.map((block) =>
+            block === last && block.type === "text"
               ? {
-                  ...P,
-                  text: `${P.text}${oe}`,
+                  ...block,
+                  text: `${block.text}${guideSuffix}`,
                 }
-              : P,
+              : block,
           );
         }
-        x = loadedSetupGuideNotice();
+        setupGuideNotice = loadedSetupGuideNotice();
       }
     }
-    notifySetupGuidePasted(B, context.credentials, context.storageV5, context.appendSystemMessage);
+    notifySetupGuidePasted(plainText, context.credentials, context.storageV5, context.appendSystemMessage);
   }
-  let we =
-    xe &&
+  let ultrathinkEffort =
+    isHumanTyped &&
     hasUltrathinkKeyword({
       composerEnter,
       preExpansion: preExpansionInput,
       localStdinOrigin,
-      input: e,
+      input,
     }) &&
     shouldUltrathinkRaiseEffort(context.options.mainLoopModel, getEffortValue(context))
       ? "xhigh"
       : undefined;
-  if (we) logFeatureOk("ultrathink_boost");
-  let Pe = addImageMetadataMessage(
+  if (ultrathinkEffort) logFeatureOk("ultrathink_boost");
+  let result = addImageMetadataMessage(
     {
       ...processTextPrompt(
-        ke ?? L,
+        expandedContent ?? content,
         imageContentBlocks,
         imagePasteIds,
         attachmentMessages,
-        Ze,
+        promptId,
         uuid,
         permissionMode,
         isMeta,
         getEffortLevelIfSupported(
           context.options.mainLoopModel,
           getEffortValue(context),
-          we ?? getEffortLayerOverride(context.permissionLayers),
+          ultrathinkEffort ?? getEffortLayerOverride(context.permissionLayers),
         ),
-        y,
+        promptIdSeed,
         origin,
         wakeupSource,
         hostInitiator,
         artifactCommentTurn,
-        hold,
+        userPromptHold,
         inboundOrigin,
         toolsUsed,
-        messages,
+        knownTools,
       ),
-      ...(we && {
-        effort: we,
+      ...(ultrathinkEffort && {
+        effort: ultrathinkEffort,
       }),
-      ...(We &&
-        !Me && {
+      ...(shouldLoadAttachments &&
+        !isFullAttachmentsMode && {
           ambientAttachmentsOwed: true,
         }),
     },
-    he,
+    imageMetadataTexts,
   );
-  if (ke) Pe.expandedInput = ke;
-  if (x) Pe.messages.push(x);
-  if (Ne) markSkipSlashCommands(Pe.messages);
-  return Pe;
+  if (expandedContent) result.expandedInput = expandedContent;
+  if (setupGuideNotice) result.messages.push(setupGuideNotice);
+  if (skipSlash) markSkipSlashCommands(result.messages);
+  return result;
 }
 //@ chunk-xx1vmpsq.js:59588-59665 layout
 function markSkipSlashCommands(messages) {
-  for (let s of messages) if (s.type === "user") s.queueSkipSlashCommands = true;
+  for (let message of messages) if (message.type === "user") message.queueSkipSlashCommands = true;
 }
 //@ chunk-xx1vmpsq.js:59665-60550 layout
 function createClassifierTurnHooks({ querySource, context }) {
   if (promptUtilsModule) {
-    let n = () =>
+    let shouldClassify = () =>
       isActingAsBgJob() && querySource?.startsWith("repl_main_thread") === true && !context.agentId;
     return {
       markTurnActive: (userText) => {
         try {
-          if (n()) {
-            let r = classifierJobState(context);
-            promptUtilsModule().markTurnActive(r, getOwnJobShortId(), {
+          if (shouldClassify()) {
+            let state = classifierJobState(context);
+            promptUtilsModule().markTurnActive(state, getOwnJobShortId(), {
               userText,
               isTurnStart: true,
             });
-            r.kicked = false;
+            state.kicked = false;
           }
         } catch (error) {
           if (isAbortError(error)) return;
           logError(error);
         }
       },
-      settleTurnEnd: async (y) => {
+      settleTurnEnd: async (messages) => {
         try {
-          if (!n()) return;
-          let r = promptUtilsModule();
-          let w = classifierJobState(context);
+          if (!shouldClassify()) return;
+          let promptUtils = promptUtilsModule();
+          let state = classifierJobState(context);
           let ownJobShortId = getOwnJobShortId();
-          if (y) {
-            let C = attachmentsModule();
-            let I = C.detectSurfaces(false);
-            let M = C.engineFor(C.sinksFor(I));
-            if (M) {
-              let latestRealUserAsk = r.findLatestRealUserAsk([...context.messages, ...y]);
-              if (latestRealUserAsk) r.captureLatestAsk(w, latestRealUserAsk);
+          if (messages) {
+            let attachments = attachmentsModule();
+            let surfaces = attachments.detectSurfaces(false);
+            let engine = attachments.engineFor(attachments.sinksFor(surfaces));
+            if (engine) {
+              let latestRealUserAsk = promptUtils.findLatestRealUserAsk([...context.messages, ...messages]);
+              if (latestRealUserAsk) promptUtils.captureLatestAsk(state, latestRealUserAsk);
               let mainThreadAgentType = getMainThreadAgentType();
-              let A = mainThreadAgentType
+              let agentDef = mainThreadAgentType
                 ? context.options.agentDefinitions.activeAgents.find(
                     (activeAgent) => activeAgent.agentType === mainThreadAgentType,
                   )
                 : undefined;
-              let v = r
+              let classifyPromise = promptUtils
                 .classifyAndPush(
-                  w,
+                  state,
                   ownJobShortId,
-                  A,
+                  agentDef,
                   "",
-                  y.filter((U) => U.type === "assistant"),
+                  messages.filter((message) => message.type === "assistant"),
                   hasActiveAgentTasks(context.taskRegistry.all()),
-                  M,
-                  I,
+                  engine,
+                  surfaces,
                   false,
                   false,
                 )
@@ -1887,11 +1964,12 @@ function createClassifierTurnHooks({ querySource, context }) {
                     level: "error",
                   });
                 });
-              if (isBgSession()) await withTimeout(v, 60000, "classifier write timed out").catch(() => {});
+              if (isBgSession())
+                await withTimeout(classifyPromise, 60000, "classifier write timed out").catch(() => {});
               return;
             }
           }
-          r.markTurnAborted(w, ownJobShortId);
+          promptUtils.markTurnAborted(state, ownJobShortId);
         } catch (error) {
           if (isAbortError(error)) return;
           logError(error);
@@ -1917,40 +1995,40 @@ function addImageMetadataMessage(result, imageMetadataTexts) {
   return result;
 }
 //@ chunk-3g0djq3w.js:44243-45446 fingerprint = processUserInput (0.41)
-async function processUserInput_2(e, commandArgs, o) {
-  let u = [];
-  let prompt = commandArgs ? `/${e.name} ${commandArgs}` : `/${e.name}`;
-  let T = snapshotHookRegistration();
+async function processUserInput_2(command, commandArgs, context) {
+  let hookMessages = [];
+  let prompt = commandArgs ? `/${command.name} ${commandArgs}` : `/${command.name}`;
+  let hookSnapshot = snapshotHookRegistration();
   try {
     for await (let hookResult of executeUserPromptExpansionHooks(
-      e.source === "mcp" ? "mcp_prompt" : "slash_command",
-      e.name,
+      command.source === "mcp" ? "mcp_prompt" : "slash_command",
+      command.name,
       commandArgs,
-      e.source,
+      command.source,
       prompt,
-      getToolPermissionContext(o).mode,
-      o,
+      getToolPermissionContext(context).mode,
+      context,
     )) {
       if (hookResult.message?.type === "progress") continue;
       if (hookResult.blockingError) {
-        let h = `UserPromptExpansion operation blocked by hook:
+        let blockedText = `UserPromptExpansion operation blocked by hook:
 ${hookResult.blockingError.blockingError}`;
-        let R =
+        let message =
           hookResult.suppressOriginalPrompt === true ||
-          hasHookRegistrationChanged(T) ||
+          hasHookRegistrationChanged(hookSnapshot) ||
           hasPromptSubmitHooks({
             isRunReached: false,
           })
-            ? h
-            : `${h}
+            ? blockedText
+            : `${blockedText}
 
 Original prompt: ${prompt}`;
         return {
           blocked: {
-            messages: [createSystemMessage(R, "warning", undefined, true)],
+            messages: [createSystemMessage(message, "warning", undefined, true)],
             shouldQuery: false,
-            resultText: R,
-            command: e,
+            resultText: message,
+            command,
             screened: {
               dropped: true,
             },
@@ -1958,26 +2036,26 @@ Original prompt: ${prompt}`;
         };
       }
       if (hookResult.preventContinuation) {
-        let h = hookResult.stopReason
+        let stopText = hookResult.stopReason
           ? `${HOOK_STOPPED_MESSAGE}: ${hookResult.stopReason}`
           : HOOK_STOPPED_MESSAGE;
         return {
           blocked: {
             messages: [
               createUserMessage({
-                content: h,
+                content: stopText,
                 isMeta: true,
               }),
-              createSystemMessage(h, "warning", undefined, true),
+              createSystemMessage(stopText, "warning", undefined, true),
             ],
             shouldQuery: false,
-            resultText: h,
-            command: e,
+            resultText: stopText,
+            command,
           },
         };
       }
       if (hookResult.additionalContexts?.length)
-        u.push(
+        hookMessages.push(
           createAttachmentMessage({
             type: "hook_additional_context",
             content: hookResult.additionalContexts,
@@ -1994,23 +2072,14 @@ Original prompt: ${prompt}`;
           hookResult.message.attachment.content === ""
         )
       )
-        u.push(hookResult.message);
+        hookMessages.push(hookResult.message);
     }
   } catch (error) {
     if (!(error instanceof StreamClosedAbortError)) throw error;
     logForDebugging("UserPromptExpansion hooks cancelled (control stream closed)");
   }
   return {
-    hookMessages: u,
+    hookMessages,
   };
-}
-//@ chunk-jv307fw4.js:22476-22613 fingerprint = applyTruncation (0.586)
-function applyTruncation(e, n, r) {
-  let trimmed = e.trim();
-  let list = Array.from(trimmed);
-  return list.length <= n
-    ? trimmed
-    : `${list.slice(0, n).join("")}
-[${r} truncated after ${n} characters]`;
 }
 export { processUserInput, isNullRenderingAttachment_2, isNullRenderingAttachment, processUserInput_2 };

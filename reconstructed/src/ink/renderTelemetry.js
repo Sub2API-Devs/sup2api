@@ -16,11 +16,107 @@ import { getTotalDuration } from "../bootstrap/state.js";
 import { logFeatureOk, logFeatureSad } from "../services/analytics/featureTelemetry.js";
 import { env } from "../utils/env.js";
 
+//@ chunk-bzr73sfg.js:286172-287550 placement
+class RenderDebugHud {
+  stylePool;
+  snapshot = {
+    boxOpen: false,
+    stress: "off",
+    cellsPerFrame: 480,
+    fullScreen: false,
+  };
+  recordingBeforeHud = false;
+  listeners = new Set();
+  constructor(stylePool) {
+    this.stylePool = stylePool;
+  }
+  subscribe = (listener) => {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
+  };
+  getSnapshot = () => this.snapshot;
+  isBoxOpen() {
+    return this.snapshot.boxOpen;
+  }
+  get stressing() {
+    return this.snapshot.stress !== "off";
+  }
+  getAtlasKeyCount() {
+    return this.stylePool.atlasRecorder.size;
+  }
+  getStylePoolStats() {
+    return {
+      size: this.stylePool.size,
+      overflowed: this.stylePool.overflowed,
+    };
+  }
+  setBox(isOpen) {
+    if (this.snapshot.boxOpen === isOpen) return;
+    if (isOpen) {
+      this.beginHudRecording();
+      this.update({
+        ...this.snapshot,
+        boxOpen: true,
+      });
+      return;
+    }
+    let atlasRecorder = this.stylePool.atlasRecorder;
+    atlasRecorder.reset();
+    atlasRecorder.setMaxKeys(null);
+    atlasRecorder.recording = this.recordingBeforeHud;
+    this.update({
+      ...this.snapshot,
+      boxOpen: false,
+      stress: "off",
+    });
+  }
+  setStress(stress, options) {
+    let snapshot = this.snapshot;
+    let cellsPerFrame = options?.cellsPerFrame ?? snapshot.cellsPerFrame;
+    let fullScreen = options?.fullScreen ?? snapshot.fullScreen;
+    let boxOpen = snapshot.boxOpen;
+    if (stress !== "off" && !boxOpen) {
+      boxOpen = true;
+      this.beginHudRecording();
+    }
+    if (
+      boxOpen === snapshot.boxOpen &&
+      snapshot.stress === stress &&
+      snapshot.cellsPerFrame === cellsPerFrame &&
+      snapshot.fullScreen === fullScreen
+    )
+      return;
+    this.update({
+      boxOpen,
+      stress,
+      cellsPerFrame,
+      fullScreen,
+    });
+  }
+  resetKeys() {
+    this.stylePool.atlasRecorder.reset();
+    this.update({
+      ...this.snapshot,
+    });
+  }
+  beginHudRecording() {
+    let atlasRecorder = this.stylePool.atlasRecorder;
+    this.recordingBeforeHud = atlasRecorder.recording;
+    atlasRecorder.debugTainted = true;
+    atlasRecorder.setMaxKeys(1500000);
+    atlasRecorder.reset();
+    atlasRecorder.recording = true;
+  }
+  update(snapshot) {
+    this.snapshot = snapshot;
+    for (let listener of this.listeners) listener();
+  }
+}
 //@ chunk-x6v6jz2y.js:4461-4541 placement
 function recordStylePoolAtlas() {
-  let o = getSecondRootError().get(process.stdout);
-  if (!o) return;
-  recordAtlasUsage(o.getStylePool());
+  let inkInstance = getSecondRootError().get(process.stdout);
+  if (!inkInstance) return;
+  recordAtlasUsage(inkInstance.getStylePool());
 }
 //@ chunk-x6v6jz2y.js:4541-4665 placement
 function atlasResetConfig() {
@@ -83,107 +179,11 @@ function detectTerminalHost() {
 }
 //@ chunk-x6v6jz2y.js:5674-5808 placement
 function sessionAgeBucket(totalDuration) {
-  let r = totalDuration / 60000;
-  if (r < 5) return "lt_5m";
-  if (r < 30) return "5m_30m";
-  if (r < 120) return "30m_2h";
-  if (r < 480) return "2h_8h";
+  let minutes = totalDuration / 60000;
+  if (minutes < 5) return "lt_5m";
+  if (minutes < 30) return "5m_30m";
+  if (minutes < 120) return "30m_2h";
+  if (minutes < 480) return "2h_8h";
   return "gt_8h";
-}
-//@ chunk-bzr73sfg.js:286172-287550 placement
-class RenderDebugHud {
-  stylePool;
-  snapshot = {
-    boxOpen: false,
-    stress: "off",
-    cellsPerFrame: 480,
-    fullScreen: false,
-  };
-  recordingBeforeHud = false;
-  listeners = new Set();
-  constructor(stylePool) {
-    this.stylePool = stylePool;
-  }
-  subscribe = (n) => {
-    this.listeners.add(n);
-    return () => this.listeners.delete(n);
-  };
-  getSnapshot = () => this.snapshot;
-  isBoxOpen() {
-    return this.snapshot.boxOpen;
-  }
-  get stressing() {
-    return this.snapshot.stress !== "off";
-  }
-  getAtlasKeyCount() {
-    return this.stylePool.atlasRecorder.size;
-  }
-  getStylePoolStats() {
-    return {
-      size: this.stylePool.size,
-      overflowed: this.stylePool.overflowed,
-    };
-  }
-  setBox(n) {
-    if (this.snapshot.boxOpen === n) return;
-    if (n) {
-      this.beginHudRecording();
-      this.update({
-        ...this.snapshot,
-        boxOpen: true,
-      });
-      return;
-    }
-    let atlasRecorder = this.stylePool.atlasRecorder;
-    atlasRecorder.reset();
-    atlasRecorder.setMaxKeys(null);
-    atlasRecorder.recording = this.recordingBeforeHud;
-    this.update({
-      ...this.snapshot,
-      boxOpen: false,
-      stress: "off",
-    });
-  }
-  setStress(n, u) {
-    let snapshot = this.snapshot;
-    let cellsPerFrame = u?.cellsPerFrame ?? snapshot.cellsPerFrame;
-    let fullScreen = u?.fullScreen ?? snapshot.fullScreen;
-    let boxOpen = snapshot.boxOpen;
-    if (n !== "off" && !boxOpen) {
-      boxOpen = true;
-      this.beginHudRecording();
-    }
-    if (
-      boxOpen === snapshot.boxOpen &&
-      snapshot.stress === n &&
-      snapshot.cellsPerFrame === cellsPerFrame &&
-      snapshot.fullScreen === fullScreen
-    )
-      return;
-    this.update({
-      boxOpen,
-      stress: n,
-      cellsPerFrame,
-      fullScreen,
-    });
-  }
-  resetKeys() {
-    this.stylePool.atlasRecorder.reset();
-    this.update({
-      ...this.snapshot,
-    });
-  }
-  beginHudRecording() {
-    let atlasRecorder = this.stylePool.atlasRecorder;
-    this.recordingBeforeHud = atlasRecorder.recording;
-    atlasRecorder.debugTainted = true;
-    atlasRecorder.setMaxKeys(1500000);
-    atlasRecorder.reset();
-    atlasRecorder.recording = true;
-  }
-  update(snapshot) {
-    this.snapshot = snapshot;
-    for (let listener of this.listeners) listener();
-  }
 }
 export { recordStylePoolAtlas, RenderDebugHud, atlasResetConfig };

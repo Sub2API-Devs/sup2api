@@ -8,17 +8,18 @@
  * pieces: chunk-8nhse09v.js (13)
  * attribution: placement 13
  */
-import { i } from "../../../vendor/lodash-es/_deburrLetter.js";
-import { M, ye } from "../../../vendor/lodash-es/_unicodeWords.js";
+import { import_baseReduce } from "../../../vendor/lodash-es/_deburrLetter.js";
+import { import_words, reAposGlobal } from "../../../vendor/lodash-es/_unicodeWords.js";
 import { deburr_default } from "../../../vendor/lodash-es/_asciiWords.js";
 import { logEvent, logEventAsync } from "./index.js";
 import { fromEnum } from "./safeMetadata.js";
 import { sanitizedFeatureErrorCodeForTelemetry } from "../../utils/errors.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-8nhse09v.js:4731-4804 placement
-function featureNameFactory(e) {
-  return function (r) {
-    return i(M(deburr_default(r).replace(ye, "")), e, "");
+function featureNameFactory(suffix) {
+  return function (text) {
+    return import_baseReduce(import_words(deburr_default(text).replace(reAposGlobal, "")), suffix, "");
   };
 }
 //@ chunk-8nhse09v.js:4804-4813 placement
@@ -27,13 +28,17 @@ var featureNameBuilderFactory = featureNameFactory;
 /**
  * 导出常量或表 `toSnakeFeatureName`：值为 W(function (e, r, u) { return e + (u ? "_" : "") + r.toLowerCase(); }), IDn = ke。
  */
-var toSnakeFeatureName = featureNameBuilderFactory(function (e, r, u) {
-  return e + (u ? "_" : "") + r.toLowerCase();
+var toSnakeFeatureName; // deferred: uses featureNameBuilderFactory of its import cycle while loading; runs once the cycle is complete
+var featureBadNameBuilder;
+deferInit("chunk-8nhse09v.js:4813", () => {
+  toSnakeFeatureName = featureNameBuilderFactory(function (name, a, b) {
+    return name + (b ? "_" : "") + a.toLowerCase();
+  });
+  featureBadNameBuilder = toSnakeFeatureName;
 });
-var featureBadNameBuilder = toSnakeFeatureName;
 //@ chunk-8nhse09v.js:4883-4922 placement
-function toolFeature(e) {
-  return `tool_${featureBadNameBuilder(e)}`;
+function toolFeature(toolName) {
+  return `tool_${featureBadNameBuilder(toolName)}`;
 }
 //@ chunk-8nhse09v.js:4922-4960 placement
 function cmdFeature(name) {
@@ -44,34 +49,34 @@ function hookFeature(hookEvent) {
   return `hook_${featureBadNameBuilder(hookEvent)}`;
 }
 //@ chunk-8nhse09v.js:4998-5061 placement
-function logFeatureOk(e, r) {
+function logFeatureOk(feature, props) {
   logEvent("tengu_feature_ok", {
-    ...r,
-    feature_name: fromEnum(e),
+    ...props,
+    feature_name: fromEnum(feature),
   });
 }
 //@ chunk-8nhse09v.js:5061-5144 placement
-function logFeatureBad(e, r, u) {
+function logFeatureBad(feature, reason, props) {
   logEvent("tengu_feature_bad", {
-    ...u,
-    feature_name: fromEnum(e),
-    error_code: sanitizedFeatureErrorCodeForTelemetry(r),
+    ...props,
+    feature_name: fromEnum(feature),
+    error_code: sanitizedFeatureErrorCodeForTelemetry(reason),
   });
 }
 //@ chunk-8nhse09v.js:5144-5227 placement
-function logFeatureSad(e, r, u) {
+function logFeatureSad(feature, reason, props) {
   logEvent("tengu_feature_sad", {
-    ...u,
-    feature_name: fromEnum(e),
-    error_code: sanitizedFeatureErrorCodeForTelemetry(r),
+    ...props,
+    feature_name: fromEnum(feature),
+    error_code: sanitizedFeatureErrorCodeForTelemetry(reason),
   });
 }
 //@ chunk-8nhse09v.js:5227-5316 placement
-async function logFeatureOkAsync(e, r) {
+async function logFeatureOkAsync(feature, props) {
   try {
     await logEventAsync("tengu_feature_ok", {
-      ...r,
-      feature_name: fromEnum(e),
+      ...props,
+      feature_name: fromEnum(feature),
     });
   } catch {}
 }
@@ -79,33 +84,33 @@ async function logFeatureOkAsync(e, r) {
 /**
  * 功能遥测 tengu_feature_ok/bad/sad 的记录函数，按 tool_/cmd_/hook_ 前缀归类。
  */
-async function logFeatureBadAsync(e, r, u) {
+async function logFeatureBadAsync(feature, reason, props) {
   try {
     await logEventAsync("tengu_feature_bad", {
-      ...u,
-      feature_name: fromEnum(e),
-      error_code: sanitizedFeatureErrorCodeForTelemetry(r),
+      ...props,
+      feature_name: fromEnum(feature),
+      error_code: sanitizedFeatureErrorCodeForTelemetry(reason),
     });
   } catch {}
 }
 //@ chunk-8nhse09v.js:5425-5534 placement
-async function logFeatureSadAsync(e, r, u) {
+async function logFeatureSadAsync(feature, reason, props) {
   try {
     await logEventAsync("tengu_feature_sad", {
-      ...u,
-      feature_name: fromEnum(e),
-      error_code: sanitizedFeatureErrorCodeForTelemetry(r),
+      ...props,
+      feature_name: fromEnum(feature),
+      error_code: sanitizedFeatureErrorCodeForTelemetry(reason),
     });
   } catch {}
 }
 //@ chunk-8nhse09v.js:5534-5632 placement
-async function withFeatureTelemetry(e, r, u) {
+async function withFeatureTelemetry(feature, fn, classifyError) {
   try {
-    let o = await r();
-    logFeatureOk(e);
-    return o;
+    let result = await fn();
+    logFeatureOk(feature);
+    return result;
   } catch (error) {
-    logFeatureBad(e, u?.(error) ?? "error");
+    logFeatureBad(feature, classifyError?.(error) ?? "error");
     throw error;
   }
 }

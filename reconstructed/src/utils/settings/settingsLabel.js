@@ -15,10 +15,10 @@ import { INLINE_FLAG_SETTINGS_LABEL } from "./constants.js";
 /**
  * settingsSourceLabel：设置来源的展示标签。
  */
-function settingsSourceLabel(t) {
-  if (t === undefined) return "settings";
-  return getFlagSettingsExpectedContent() !== undefined && t === getFlagSettingsPath()
+function settingsSourceLabel(settingsPath) {
+  if (settingsPath === undefined) return "settings";
+  return getFlagSettingsExpectedContent() !== undefined && settingsPath === getFlagSettingsPath()
     ? INLINE_FLAG_SETTINGS_LABEL
-    : t;
+    : settingsPath;
 }
 export { settingsSourceLabel };

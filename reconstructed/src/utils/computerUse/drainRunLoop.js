@@ -59,16 +59,16 @@ var NATIVE_CALL_TIMEOUT_MS = 30000;
  * 原生 computer-use 调用超时错误。
  */
 class NativeCallTimeoutError extends Error {
-  constructor(e) {
-    super(`computer-use native call exceeded ${e}ms`);
+  constructor(options) {
+    super(`computer-use native call exceeded ${options}ms`);
   }
 }
 //@ chunk-ha3km179.js:51708-51738 layout
 /**
  * setTimeout 回调：以 NativeCallTimeoutError 拒绝。
  */
-function rejectWithNativeTimeout(e, n) {
-  e(new NativeCallTimeoutError(n));
+function rejectWithNativeTimeout(promise, timeoutMs) {
+  promise(new NativeCallTimeoutError(timeoutMs));
 }
 //@ chunk-ha3km179.js:51738-51748 layout
 /**

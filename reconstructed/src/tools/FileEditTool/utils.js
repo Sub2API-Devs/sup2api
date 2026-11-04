@@ -17,7 +17,7 @@ import { urlPatternToRegex, countCharInString } from "../../utils/stringUtils.js
 import { logForDebugging } from "../../utils/debug.js";
 import { getPatchForDisplay, getPatchFromContents, DIFF_TIMEOUT_MS } from "../../utils/diff.js";
 import { FileStateError } from "./fileStateErrors.js";
-import { P3 } from "../../../vendor/diff/libesm/patch/create.js";
+import { structuredPatch } from "../../../vendor/diff/libesm/patch/create.js";
 import { isTabReadSeparationEnabled } from "../FileReadTool/limits.js";
 import { addLineNumbers } from "../../utils/file.js";
 import { isPathAbsent, isEISDIR, errorMessage } from "../../utils/errors.js";
@@ -31,26 +31,30 @@ import { isRemoteManagedEnvironment } from "../../utils/remoteEnvironment.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../services/analytics/growthbook.js";
 import { computeContentHash } from "../../utils/commitAttribution.js";
 import { jsonStringify, jsonParse } from "../../utils/slowOperations.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-9br8f9tm.js:1515-1538 sole-consumer
 /**
  * FileReadCache 的惰性单例。
  */
-var fileReadCache = new HostScoped(() => new FileReadCache());
+var fileReadCache; // deferred: uses FileReadCache (../../utils/fileReadCache.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-9br8f9tm.js:1515", () => {
+  fileReadCache = new HostScoped(() => new FileReadCache());
+});
 //@ chunk-9br8f9tm.js:1538-1603 placement
 /**
  * 从文件读取缓存里取内容。
  */
-function readCachedFileContent(e) {
-  let { content } = fileReadCache.of(getRootSession().host).readFile(e);
+function readCachedFileContent(filePath) {
+  let { content } = fileReadCache.of(getRootSession().host).readFile(filePath);
   return content;
 }
 //@ chunk-9br8f9tm.js:1645-1752 placement = getMemoryBaseDir (0.773)
 function getMemoryBaseDir() {
   let CLAUDE_CODE_REMOTE_MEMORY_DIR = env.CLAUDE_CODE_REMOTE_MEMORY_DIR;
   if (!CLAUDE_CODE_REMOTE_MEMORY_DIR) return;
-  let n = resolve(CLAUDE_CODE_REMOTE_MEMORY_DIR);
-  return n === parse(n).root ? undefined : n;
+  let resolvedDir = resolve(CLAUDE_CODE_REMOTE_MEMORY_DIR);
+  return resolvedDir === parse(resolvedDir).root ? undefined : resolvedDir;
 }
 //@ chunk-9br8f9tm.js:1752-1797 placement
 /**
@@ -140,52 +144,53 @@ function normalizeQuotes(str) {
 var UNICODE_ESCAPE_RE = /\\u[0-9a-fA-F]{4}/;
 var NON_ASCII_RE = /[\u0080-\uffff]/;
 //@ chunk-9br8f9tm.js:2676-2796 layout
-function decodeUnicodeEscapes(e) {
-  return e.replace(/(\\\\)|\\u([0-9a-fA-F]{4})/g, (n, r, s) =>
-    r !== undefined ? n : String.fromCharCode(parseInt(s, 16)),
+function decodeUnicodeEscapes(text) {
+  return text.replace(/(\\\\)|\\u([0-9a-fA-F]{4})/g, (wholeMatch, escapedBackslash, hexDigits) =>
+    escapedBackslash !== undefined ? wholeMatch : String.fromCharCode(parseInt(hexDigits, 16)),
   );
 }
 //@ chunk-9br8f9tm.js:2796-3000 layout
-function buildEscapedFormRegexSource(e) {
-  let n = "";
-  for (let idx = 0; idx < e.length; idx++) {
-    let code = e.charCodeAt(idx);
+function buildEscapedFormRegexSource(text) {
+  let regexSource = "";
+  for (let idx = 0; idx < text.length; idx++) {
+    let code = text.charCodeAt(idx);
     if (code >= 128) {
-      n += "\\\\u";
-      for (let o of code.toString(16).padStart(4, "0")) n += o >= "a" ? `[${o}${o.toUpperCase()}]` : o;
-    } else n += urlPatternToRegex(e[idx]);
+      regexSource += "\\\\u";
+      for (let hexDigit of code.toString(16).padStart(4, "0"))
+        regexSource += hexDigit >= "a" ? `[${hexDigit}${hexDigit.toUpperCase()}]` : hexDigit;
+    } else regexSource += urlPatternToRegex(text[idx]);
   }
-  return n;
+  return regexSource;
 }
 //@ chunk-9br8f9tm.js:3000-3097 layout
-function escapedFormLength(e) {
-  let n = 0;
-  for (let idx = 0; idx < e.length; idx++) if (e.charCodeAt(idx) >= 128) n++;
-  return e.length + 5 * n;
+function escapedFormLength(text) {
+  let nonAsciiCount = 0;
+  for (let idx = 0; idx < text.length; idx++) if (text.charCodeAt(idx) >= 128) nonAsciiCount++;
+  return text.length + 5 * nonAsciiCount;
 }
 //@ chunk-9br8f9tm.js:3097-3156 layout
-function countPrecedingBackslashes(e, n) {
-  let r = 0;
-  while (e[n - 1 - r] === "\\") r++;
-  return r;
+function countPrecedingBackslashes(text, index) {
+  let count = 0;
+  while (text[index - 1 - count] === "\\") count++;
+  return count;
 }
 //@ chunk-9br8f9tm.js:3156-3672 layout
-function findEscapedFormInFile(e, n) {
-  if (countPrecedingBackslashes(e, e.length) % 2 === 1) return null;
-  let r = e[0] === "\\" ? [0] : [];
-  let s = 0;
-  for (let idx = 0; idx < e.length; idx++)
-    if (e.charCodeAt(idx) >= 128) {
-      r.push(s);
-      s += 6;
-    } else s += 1;
-  let escapedFormRegexSource = buildEscapedFormRegexSource(e);
+function findEscapedFormInFile(oldString, fileContent) {
+  if (countPrecedingBackslashes(oldString, oldString.length) % 2 === 1) return null;
+  let nonAsciiOffsets = oldString[0] === "\\" ? [0] : [];
+  let escapedOffset = 0;
+  for (let idx = 0; idx < oldString.length; idx++)
+    if (oldString.charCodeAt(idx) >= 128) {
+      nonAsciiOffsets.push(escapedOffset);
+      escapedOffset += 6;
+    } else escapedOffset += 1;
+  let escapedFormRegexSource = buildEscapedFormRegexSource(oldString);
   try {
     let regExp = new RegExp(escapedFormRegexSource, "g");
-    for (let match = regExp.exec(n); match !== null; match = regExp.exec(n)) {
+    for (let match = regExp.exec(fileContent); match !== null; match = regExp.exec(fileContent)) {
       let index = match.index;
-      if (r.every((a) => countPrecedingBackslashes(n, index + a) % 2 === 0))
-        return n.indexOf(match[0]) === index ? match[0] : null;
+      if (nonAsciiOffsets.every((offset) => countPrecedingBackslashes(fileContent, index + offset) % 2 === 0))
+        return fileContent.indexOf(match[0]) === index ? match[0] : null;
       regExp.lastIndex = index + 1;
     }
     return null;
@@ -207,38 +212,38 @@ function hasUnicodeOrEscapes(oldString) {
 /**
  * 若 old_string 以字符形式书写而文件里是 \uXXXX 形式（或反之），把 new_string 转成与文件一致的形式（十六进制大小写跟随文件）。
  */
-function preserveEscapeStyle(oldString, n, r) {
-  if (oldString === n) return r;
+function preserveEscapeStyle(oldString, matchedOldString, newString) {
+  if (oldString === matchedOldString) return newString;
   if (
     NON_ASCII_RE.test(oldString) &&
-    escapedFormLength(oldString) === n.length &&
-    findEscapedFormInFile(oldString, n) !== null
+    escapedFormLength(oldString) === matchedOldString.length &&
+    findEscapedFormInFile(oldString, matchedOldString) !== null
   ) {
-    let s = new Map();
-    let o = 0;
-    let l = 0;
-    for (let idx = 0, u = 0; idx < oldString.length; idx++) {
+    let escapeByCode = new Map();
+    let upperHexCount = 0;
+    let lowerHexCount = 0;
+    for (let idx = 0, escapedIndex = 0; idx < oldString.length; idx++) {
       let code = oldString.charCodeAt(idx);
       if (code >= 128) {
-        let sliced = n.slice(u + 2, u + 6);
-        s.set(code, sliced);
-        for (let p of sliced)
-          if (p >= "a" && p <= "f") l++;
-          else if (p >= "A" && p <= "F") o++;
-        u += 6;
-      } else u += 1;
+        let sliced = matchedOldString.slice(escapedIndex + 2, escapedIndex + 6);
+        escapeByCode.set(code, sliced);
+        for (let hexDigit of sliced)
+          if (hexDigit >= "a" && hexDigit <= "f") lowerHexCount++;
+          else if (hexDigit >= "A" && hexDigit <= "F") upperHexCount++;
+        escapedIndex += 6;
+      } else escapedIndex += 1;
     }
-    return r.replace(/[\u0080-\uffff]/g, (c) => {
-      let code = c.charCodeAt(0);
-      let a = s.get(code);
-      if (a !== undefined) return "\\u" + a;
+    return newString.replace(/[\u0080-\uffff]/g, (char) => {
+      let code = char.charCodeAt(0);
+      let matchedEscape = escapeByCode.get(code);
+      if (matchedEscape !== undefined) return "\\u" + matchedEscape;
       let padded = code.toString(16).padStart(4, "0");
-      return "\\u" + (o > l ? padded.toUpperCase() : padded);
+      return "\\u" + (upperHexCount > lowerHexCount ? padded.toUpperCase() : padded);
     });
   }
-  if (UNICODE_ESCAPE_RE.test(oldString) && decodeUnicodeEscapes(oldString) === n)
-    return decodeUnicodeEscapes(r);
-  return r;
+  if (UNICODE_ESCAPE_RE.test(oldString) && decodeUnicodeEscapes(oldString) === matchedOldString)
+    return decodeUnicodeEscapes(newString);
+  return newString;
 }
 //@ chunk-9br8f9tm.js:4222-4485 callgraph-witnessed = findActualString (1)
 /**
@@ -326,10 +331,10 @@ function applyCurlySingleQuotes(str) {
  * 对内容应用单个编辑；new_string 为空且 old_string 后紧跟换行时连同换行一起删除；replace_all 用 replaceAll。
  */
 function applyEditToFile(originalContent, oldString, newString, replaceAll = false) {
-  let o = replaceAll
+  let replace = replaceAll
     ? (content, search, replace) => content.replaceAll(search, () => replace)
     : (content, search, replace) => content.replace(search, () => replace);
-  if (newString !== "") return o(originalContent, oldString, newString);
+  if (newString !== "") return replace(originalContent, oldString, newString);
   return !oldString.endsWith(`
 `) &&
     originalContent.includes(
@@ -337,14 +342,14 @@ function applyEditToFile(originalContent, oldString, newString, replaceAll = fal
         `
 `,
     )
-    ? o(
+    ? replace(
         originalContent,
         oldString +
           `
 `,
         newString,
       )
-    : o(originalContent, oldString, newString);
+    : replace(originalContent, oldString, newString);
 }
 //@ chunk-9br8f9tm.js:5370-5578 fingerprint = getPatchForEdit (0.928)
 /**
@@ -391,16 +396,16 @@ function getPatchForEdits({ filePath, fileContents, edits, isForToolResult }) {
       }),
       updatedFile: "",
     };
-  let o = applyEditsToContent(fileContents, edits);
+  let updatedContent = applyEditsToContent(fileContents, edits);
   return {
     patch: getPatchFromContents({
       filePath,
       oldContent: fileContents,
-      newContent: o,
+      newContent: updatedContent,
       convertTabs: true,
       isForToolResult,
     }),
-    updatedFile: o,
+    updatedFile: updatedContent,
   };
 }
 //@ chunk-9br8f9tm.js:5886-5984 layout = normalizeEdit (1)
@@ -417,9 +422,9 @@ function normalizeEdit(fileContent, edit) {
 /**
  * 依次应用编辑；若 old_string 落在之前某个 new_string 里、某个编辑未生效或整体无变化则抛错。
  */
-function applyEditsToContent(fileContent, edit) {
-  if (normalizeEdit(fileContent, edit)) return "";
-  let originalContent = fileContent;
+function applyEditsToContent(fileContents, edit) {
+  if (normalizeEdit(fileContents, edit)) return "";
+  let originalContent = fileContents;
   let appliedNewStrings = [];
   for (let edit_2 of edit) {
     let oldStringToCheck = edit_2.old_string.replace(/\n+$/, "");
@@ -435,7 +440,7 @@ function applyEditsToContent(fileContent, edit) {
       throw new FileStateError("String not found in file. Failed to apply edit.");
     appliedNewStrings.push(edit_2.new_string);
   }
-  if (originalContent === fileContent)
+  if (originalContent === fileContents)
     throw Error("Original and edited file match exactly. Failed to apply edit.");
   return originalContent;
 }
@@ -446,7 +451,7 @@ var DIFF_SNIPPET_MAX_BYTES = 8192;
  * 两个文件内容的 diff 片段：8 行上下文、带行号、hunk 间用 "..." 分隔，超过 8192 字节时截断并附省略说明。
  */
 function getSnippetForTwoFileDiff(fileAContents, fileBContents) {
-  let patch = P3("file.txt", "file.txt", fileAContents, fileBContents, undefined, undefined, {
+  let patch = structuredPatch("file.txt", "file.txt", fileAContents, fileBContents, undefined, undefined, {
     context: 8,
     timeout: DIFF_TIMEOUT_MS,
   });
@@ -471,15 +476,15 @@ function getSnippetForTwoFileDiff(fileAContents, fileBContents) {
     DIFF_SNIPPET_MAX_BYTES,
   );
   let kept = cutoff > 0 ? full.slice(0, cutoff) : full.slice(0, DIFF_SNIPPET_MAX_BYTES);
-  let u = 1;
-  let a = 1;
+  let lineNumberOffset = 1;
+  let truncationSlack = 1;
   let remaining =
     countCharInString(
       full,
       `
 `,
-      kept.length + u,
-    ) + a;
+      kept.length + lineNumberOffset,
+    ) + truncationSlack;
   return `${kept}
 
 ... [${remaining} lines truncated] ...`;
@@ -490,18 +495,18 @@ function getSnippetForTwoFileDiff(fileAContents, fileBContents) {
  */
 function getEditsForPatch(patch) {
   return patch.map((hunk) => {
-    let r = [];
-    let s = [];
+    let oldLines = [];
+    let newLines = [];
     for (let line of hunk.lines)
       if (line.startsWith(" ")) {
-        r.push(line.slice(1));
-        s.push(line.slice(1));
-      } else if (line.startsWith("-")) r.push(line.slice(1));
-      else if (line.startsWith("+")) s.push(line.slice(1));
+        oldLines.push(line.slice(1));
+        newLines.push(line.slice(1));
+      } else if (line.startsWith("-")) oldLines.push(line.slice(1));
+      else if (line.startsWith("+")) newLines.push(line.slice(1));
     return {
-      old_string: r.join(`
+      old_string: oldLines.join(`
 `),
-      new_string: s.join(`
+      new_string: newLines.join(`
 `),
       replace_all: false,
     };
@@ -602,7 +607,7 @@ function normalizeFileEditInput({ file_path, edits }) {
 /**
  * 两组编辑在同一原文上是否产生相同结果（都报错时比较错误文本）。
  */
-function areFileEditsEquivalent(edits1, edits2, r) {
+function areFileEditsEquivalent(edits1, edits2, fileContents) {
   if (
     edits1.length === edits2.length &&
     edits1.every((edit1, index) => {
@@ -621,12 +626,12 @@ function areFileEditsEquivalent(edits1, edits2, r) {
   let result2 = null;
   let error2 = null;
   try {
-    result1 = applyEditsToContent(r, edits1);
+    result1 = applyEditsToContent(fileContents, edits1);
   } catch (e) {
     error1 = errorMessage(e);
   }
   try {
-    result2 = applyEditsToContent(r, edits2);
+    result2 = applyEditsToContent(fileContents, edits2);
   } catch (e) {
     error2 = errorMessage(e);
   }
@@ -660,7 +665,7 @@ function areFileEditInputsIdentical(input1, input2) {
 function areFileEditsInputsEquivalent(input1, input2) {
   if (input1.file_path !== input2.file_path) return false;
   if (areFileEditInputsIdentical(input1, input2)) return true;
-  let r = "";
+  let cachedContent = "";
   if (
     (!isUncOrDevicePath(input1.file_path) || isWslUncPath(input1.file_path)) &&
     !isDevicePrefixPath(input1.file_path) &&
@@ -668,47 +673,60 @@ function areFileEditsInputsEquivalent(input1, input2) {
     !isNetworkOrSpecialPath(resolve(input1.file_path))
   )
     try {
-      r = readCachedFileContent(input1.file_path);
+      cachedContent = readCachedFileContent(input1.file_path);
     } catch (error) {
       if (!isExpectedReadError(error)) throw error;
     }
-  return areFileEditsEquivalent(input1.edits, input2.edits, r);
+  return areFileEditsEquivalent(input1.edits, input2.edits, cachedContent);
 }
 //@ chunk-e6aww6q8.js:4645172-4645791 placement
 /**
  * 把 replace_name/path/old_str 等别名改为标准字段。
  */
-function normalizeEditInputAliases(e) {
-  if (!isPlainObject_5(e)) return null;
-  let n = {
-    ...e,
+function normalizeEditInputAliases(rawInput) {
+  if (!isPlainObject_5(rawInput)) return null;
+  let normalizedInput = {
+    ...rawInput,
   };
-  let r = [];
-  if ("replace_name" in n) {
-    let replaceName = n.replace_name;
-    if (!("replace_all" in n)) n.replace_all = replaceName === true || replaceName === "true";
-    delete n.replace_name;
-    r.push("alias_replace_name");
+  let appliedAliases = [];
+  if ("replace_name" in normalizedInput) {
+    let replaceName = normalizedInput.replace_name;
+    if (!("replace_all" in normalizedInput))
+      normalizedInput.replace_all = replaceName === true || replaceName === "true";
+    delete normalizedInput.replace_name;
+    appliedAliases.push("alias_replace_name");
   }
-  if ("path" in n && !("file_path" in n) && typeof n.path === "string") {
-    n.file_path = n.path;
-    delete n.path;
-    r.push("path");
+  if (
+    "path" in normalizedInput &&
+    !("file_path" in normalizedInput) &&
+    typeof normalizedInput.path === "string"
+  ) {
+    normalizedInput.file_path = normalizedInput.path;
+    delete normalizedInput.path;
+    appliedAliases.push("path");
   }
-  if ("old_str" in n && !("old_string" in n) && typeof n.old_str === "string") {
-    n.old_string = n.old_str;
-    delete n.old_str;
-    r.push("old_str");
+  if (
+    "old_str" in normalizedInput &&
+    !("old_string" in normalizedInput) &&
+    typeof normalizedInput.old_str === "string"
+  ) {
+    normalizedInput.old_string = normalizedInput.old_str;
+    delete normalizedInput.old_str;
+    appliedAliases.push("old_str");
   }
-  if ("new_str" in n && !("new_string" in n) && typeof n.new_str === "string") {
-    n.new_string = n.new_str;
-    delete n.new_str;
-    r.push("new_str");
+  if (
+    "new_str" in normalizedInput &&
+    !("new_string" in normalizedInput) &&
+    typeof normalizedInput.new_str === "string"
+  ) {
+    normalizedInput.new_string = normalizedInput.new_str;
+    delete normalizedInput.new_str;
+    appliedAliases.push("new_str");
   }
-  return r.length
+  return appliedAliases.length
     ? {
-        input: n,
-        shapeClass: r.join(","),
+        input: normalizedInput,
+        shapeClass: appliedAliases.join(","),
       }
     : null;
 }
@@ -722,10 +740,10 @@ var MAX_FINGERPRINT_EDIT_CHARS = 16384;
 /**
  * 开关与托管模式下记录一次编辑指纹。
  */
-function maybeRecordEditFingerprint(e) {
+function maybeRecordEditFingerprint(fingerprintInput) {
   if (!isRemoteManagedEnvironment() || !getFeatureValue_CACHED_MAY_BE_STALE("tengu_patient_meteor", false))
     return;
-  return recordEditFingerprint(e);
+  return recordEditFingerprint(fingerprintInput);
 }
 //@ chunk-e6aww6q8.js:4648003-4648565 placement
 /**
@@ -746,7 +764,7 @@ function recordEditFingerprint({ absoluteFilePath, output, originalFile, updated
 `,
     ),
   );
-  let S = jsonStringify({
+  let fingerprintJson = jsonStringify({
     filePath: output.filePath,
     oldString: output.oldString,
     newString: output.newString,
@@ -760,9 +778,9 @@ function recordEditFingerprint({ absoluteFilePath, output, originalFile, updated
     originalFileSha256: computeContentHash(originalFile),
     updatedFileSha256: contentHash,
   });
-  if (S.length > MAX_FINGERPRINT_EDIT_CHARS) return;
+  if (fingerprintJson.length > MAX_FINGERPRINT_EDIT_CHARS) return;
   return {
-    subagentFrameResult: jsonParse(S),
+    subagentFrameResult: jsonParse(fingerprintJson),
     subagentFrameResultHolds: () => doesFileStillMatchHash(absoluteFilePath, contentHash),
   };
 }

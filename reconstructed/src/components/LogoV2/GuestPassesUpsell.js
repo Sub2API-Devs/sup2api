@@ -11,11 +11,11 @@
 import { getInitialSettings_2 } from "../../utils/settings/settings.js";
 import { announcementState } from "../../services/announcements/announcementState.js";
 import { getGlobalConfig, saveGlobalConfig } from "../../utils/config.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { getOauthAccountInfo } from "../../utils/auth.js";
 import { useNoticeImpressionEnabled, useNoticeImpression } from "./CondensedLogo.js";
-import { y, Se, init_react_production } from "../../../vendor/react/cjs/react.production.js";
+import { useState, useContext, init_react_production } from "../../../vendor/react/cjs/react.production.js";
 import { SlashLinkContexts } from "../SlashCommandLink.js";
 import { env } from "../../utils/env.js";
 import {
@@ -31,6 +31,7 @@ import {
 } from "../../services/api/referral.js";
 import { logEvent } from "../../services/analytics/index.js";
 import { useTheme_2 } from "../design-system/ThemeProvider.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-ag5x7vhf.js:78702-78730 placement
 function pickGuestPassAnnouncement() {
@@ -42,75 +43,75 @@ function hasCompanyAnnouncements() {
   return !!companyAnnouncements && companyAnnouncements.some((companyAnnouncement) => companyAnnouncement);
 }
 //@ chunk-ag5x7vhf.js:78802-79096 placement
-function pickCompanyAnnouncement(m) {
-  let h = announcementState();
-  if (h.companyAnnouncement !== null) return h.companyAnnouncement;
-  let filtered = (getInitialSettings_2().companyAnnouncements ?? []).filter((k) => k);
+function pickCompanyAnnouncement(cache) {
+  let state = announcementState();
+  if (state.companyAnnouncement !== null) return state.companyAnnouncement;
+  let filtered = (getInitialSettings_2().companyAnnouncements ?? []).filter((announcement) => announcement);
   if (filtered.length === 0) return null;
-  let T =
+  let picked =
     getGlobalConfig().numStartups === 1 ? filtered[0] : filtered[Math.floor(Math.random() * filtered.length)];
-  if (!T) return null;
-  if (m) h.companyAnnouncement = T;
-  return T;
+  if (!picked) return null;
+  if (cache) state.companyAnnouncement = picked;
+  return picked;
 }
 //@ chunk-ag5x7vhf.js:79096-79655 placement
 function CompanyAnnouncementNotice() {
-  let m = w(10);
-  let h;
-  if (m[0] === MEMO_CACHE_SENTINEL) {
-    h = getOauthAccountInfo();
-    m[0] = h;
-  } else h = m[0];
-  let x = h;
+  let $ = useMemoCache(10);
+  let account;
+  if ($[0] === MEMO_CACHE_SENTINEL) {
+    account = getOauthAccountInfo();
+    $[0] = account;
+  } else account = $[0];
+  let account_2 = account;
   let noticeImpressionEnabled = useNoticeImpressionEnabled();
-  let [k] = y(pickGuestPassAnnouncement);
-  let _;
-  if (m[1] !== noticeImpressionEnabled || m[2] !== k) {
-    _ = noticeImpressionEnabled ? pickCompanyAnnouncement(true) : k;
-    m[1] = noticeImpressionEnabled;
-    m[2] = k;
-    m[3] = _;
-  } else _ = m[3];
-  let I = _;
-  let D = Se(SlashLinkContexts);
-  if (!I) {
+  let [cachedAnnouncement] = useState(pickGuestPassAnnouncement);
+  let announcement;
+  if ($[1] !== noticeImpressionEnabled || $[2] !== cachedAnnouncement) {
+    announcement = noticeImpressionEnabled ? pickCompanyAnnouncement(true) : cachedAnnouncement;
+    $[1] = noticeImpressionEnabled;
+    $[2] = cachedAnnouncement;
+    $[3] = announcement;
+  } else announcement = $[3];
+  let announcement_2 = announcement;
+  let linkContexts = useContext(SlashLinkContexts);
+  if (!announcement_2) {
     return null;
   }
-  const alignItems = D ? "center" : undefined;
-  let L;
-  if (m[4] === MEMO_CACHE_SENTINEL) {
-    L =
+  const alignItems = linkContexts ? "center" : undefined;
+  let fromLine;
+  if ($[4] === MEMO_CACHE_SENTINEL) {
+    fromLine =
       !env.IS_DEMO &&
-      x?.organizationName &&
+      account_2?.organizationName &&
       jsxProd_default_2(Text, {
         dimColor: true,
-        children: ["Message from ", x.organizationName, ":"],
+        children: ["Message from ", account_2.organizationName, ":"],
       });
-    m[4] = L;
-  } else L = m[4];
-  let V;
-  if (m[5] !== I) {
-    V = jsxProd_default(Text, {
-      children: I,
+    $[4] = fromLine;
+  } else fromLine = $[4];
+  let messageText;
+  if ($[5] !== announcement_2) {
+    messageText = jsxProd_default(Text, {
+      children: announcement_2,
     });
-    m[5] = I;
-    m[6] = V;
-  } else V = m[6];
-  let W;
-  if (m[7] !== alignItems || m[8] !== V) {
-    W = jsxProd_default_2(Box, {
+    $[5] = announcement_2;
+    $[6] = messageText;
+  } else messageText = $[6];
+  let notice;
+  if ($[7] !== alignItems || $[8] !== messageText) {
+    notice = jsxProd_default_2(Box, {
       flexDirection: "column",
       alignItems,
-      children: [L, V],
+      children: [fromLine, messageText],
     });
-    m[7] = alignItems;
-    m[8] = V;
-    m[9] = W;
-  } else W = m[9];
-  return W;
+    $[7] = alignItems;
+    $[8] = messageText;
+    $[9] = notice;
+  } else notice = $[9];
+  return notice;
 }
 //@ chunk-ag5x7vhf.js:79655-79841 fingerprint = resetIfPassesRefreshed (1)
-function resetIfPassesRefreshed(m) {
+function resetIfPassesRefreshed(storageV5) {
   let remaining = getCachedRemainingPasses();
   if (remaining == null || remaining <= 0) return;
   let lastSeen = getGlobalConfig().passesLastSeenRemaining ?? 0;
@@ -122,7 +123,7 @@ function resetIfPassesRefreshed(m) {
         hasVisitedPasses: false,
         passesLastSeenRemaining: remaining,
       }),
-      m,
+      storageV5,
     );
 }
 //@ chunk-ag5x7vhf.js:79841-80009 fingerprint = shouldShowGuestPassesUpsell (1)
@@ -151,7 +152,7 @@ function incrementGuestPassesSeenCount(storageV5) {
 }
 //@ chunk-ag5x7vhf.js:80161-80518 fingerprint = GuestPassesUpsell (0.607)
 function GuestPassesUpsell() {
-  let $ = w(1);
+  let $ = useMemoCache(1);
   let t0;
   if ($[0] === MEMO_CACHE_SENTINEL) {
     let reward = getCachedReferrerReward();
@@ -185,24 +186,27 @@ function GuestPassesUpsell() {
 }
 //@ chunk-ag5x7vhf.js:80518-80708 placement
 function GuestPassesNotice() {
-  let h = w(3);
+  let $ = useMemoCache(3);
   let { storageV5 } = useTheme_2();
-  let x;
-  if (h[0] !== storageV5) {
-    x = () => incrementGuestPassesSeenCount(storageV5);
-    h[0] = storageV5;
-    h[1] = x;
-  } else x = h[1];
-  useNoticeImpression("guest-passes", x);
-  let k;
-  if (h[2] === MEMO_CACHE_SENTINEL) {
-    k = jsxProd_default(Box, {
+  let onShown;
+  if ($[0] !== storageV5) {
+    onShown = () => incrementGuestPassesSeenCount(storageV5);
+    $[0] = storageV5;
+    $[1] = onShown;
+  } else onShown = $[1];
+  useNoticeImpression("guest-passes", onShown);
+  let upsell;
+  if ($[2] === MEMO_CACHE_SENTINEL) {
+    upsell = jsxProd_default(Box, {
       children: jsxProd_default(GuestPassesUpsell, {}),
     });
-    h[2] = k;
-  } else k = h[2];
-  return k;
+    $[2] = upsell;
+  } else upsell = $[2];
+  return upsell;
 }
 //@ chunk-ag5x7vhf.js:80708-80712 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-ag5x7vhf.js:80708", () => {
+  init_react_production();
+});
 export { hasCompanyAnnouncements, CompanyAnnouncementNotice, shouldShowGuestPassesUpsell, GuestPassesNotice };

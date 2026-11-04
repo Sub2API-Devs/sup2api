@@ -17,15 +17,15 @@ import { hasDotDotSegment } from "./pathClassification.js";
 /**
  * 规范化 socket 路径：命名管道转为小写管道路径，否则解析为绝对路径（特殊地址为 undefined）。
  */
-function canonicalSocketPath(e) {
-  let namedPipeName = parseNamedPipeName(e);
+function canonicalSocketPath(path) {
+  let namedPipeName = parseNamedPipeName(path);
   if (namedPipeName !== undefined) return `\\\\.\\pipe\\${asciiLowerCase(namedPipeName)}`;
-  if (hasDotDotSegment(e)) return;
-  return resolve(e);
+  if (hasDotDotSegment(path)) return;
+  return resolve(path);
 }
 //@ chunk-e7z1g8a9.js:4318-4406 placement
-function hashCanonicalSocketPath(e) {
-  let n = canonicalSocketPath(e);
-  return n === undefined ? undefined : createHash("sha256").update(n).digest("hex");
+function hashCanonicalSocketPath(path) {
+  let canonical = canonicalSocketPath(path);
+  return canonical === undefined ? undefined : createHash("sha256").update(canonical).digest("hex");
 }
 export { canonicalSocketPath, hashCanonicalSocketPath };

@@ -23,7 +23,7 @@ var LABEL_CUT_NOTE = `Note: \`label\` was longer than ${VERSION_LABEL_MAX} chara
  */
 function normalizeArtifactInput(input) {
   if (!isPlainObject(input)) return null;
-  let legacyFields = LEGACY_INPUT_FIELDS.filter((e) => e in input);
+  let legacyFields = LEGACY_INPUT_FIELDS.filter((field) => field in input);
   let labelFix;
   if (typeof input.label === "string" && countCodePoints(input.label) > VERSION_LABEL_MAX) {
     let trimmed = input.label
@@ -34,10 +34,10 @@ function normalizeArtifactInput(input) {
 `,
       )
       .trim();
-    let p = countCodePoints(trimmed) > VERSION_LABEL_MAX;
+    let tooLong = countCodePoints(trimmed) > VERSION_LABEL_MAX;
     labelFix = {
-      value: p ? truncateCodePoints(trimmed, VERSION_LABEL_MAX).trimEnd() : trimmed,
-      cut: p,
+      value: tooLong ? truncateCodePoints(trimmed, VERSION_LABEL_MAX).trimEnd() : trimmed,
+      cut: tooLong,
     };
   }
   let bodyShape;

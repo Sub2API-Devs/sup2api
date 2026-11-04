@@ -29,23 +29,24 @@ var TELEPORT_CACHEABLE_DEVICE_TOOLS = new Set(
     "device_stage_files",
     "get_device_info",
     "list_devices",
-  ].map((e) => buildMcpToolName(REMOTE_DEVICES, e)),
+  ].map((name) => buildMcpToolName(REMOTE_DEVICES, name)),
 );
 //@ chunk-s5mxraj2.js:5259-5493 placement
 /**
  * 判断工具是否为可走 teleport 缓存的设备工具（远程设备 MCP、始终加载、缓存有效且模型匹配、开关开启）。
  */
-function isCachedDeviceTool(e, i, t) {
+function isCachedDeviceTool(tool, context, model) {
   if (
-    e.isMcp !== true ||
-    e.alwaysLoad !== true ||
-    e.mcpInfo?.serverName !== REMOTE_DEVICES ||
-    !TELEPORT_CACHEABLE_DEVICE_TOOLS.has(e.name)
+    tool.isMcp !== true ||
+    tool.alwaysLoad !== true ||
+    tool.mcpInfo?.serverName !== REMOTE_DEVICES ||
+    !TELEPORT_CACHEABLE_DEVICE_TOOLS.has(tool.name)
   )
     return false;
   let teleportCacheState = getTeleportCacheState();
   if (teleportCacheState.status !== "active") return false;
-  if (t === undefined || stripAnyVersatileSuffix(t) !== teleportCacheState.marker.model) return false;
-  if (!canDeclareToolChangeAhead(i, t)) return false;
+  if (model === undefined || stripAnyVersatileSuffix(model) !== teleportCacheState.marker.model) return false;
+  if (!canDeclareToolChangeAhead(context, model)) return false;
   return getFeatureValue_SESSION_PINNED(TENGU_QUIRKY_SKETCH, false);
 }
+export { isCachedDeviceTool };

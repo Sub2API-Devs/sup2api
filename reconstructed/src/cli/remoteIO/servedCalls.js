@@ -16,16 +16,17 @@ import { REMOTE_TOOL_PROTOCOL_VERSION } from "../../remote/tools/protocolConstan
 import { MAX_MANIFEST_STATEMENT_AGE_MS } from "../sdkMcpManifests.js";
 import { isOwnOutboundRequestId, isKnownControlRequestId } from "../../bridge/attestationGate.js";
 import { isTerminalTaskStatus } from "../../tasks/taskStatus.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-z4g2ta8k.js:36667-36696 placement
 var VIA_SESSION_CHANNEL = "via_session_channel";
 //@ chunk-z4g2ta8k.js:36696-36712 placement
-function noop(e) {}
+function noop(x) {}
 //@ chunk-z4g2ta8k.js:36712-36781 placement
 function setRequestSettings(payload, settings) {
-  let r = asPlainObject(payload.request) ?? {};
+  let request = asPlainObject(payload.request) ?? {};
   payload.request = {
-    ...r,
+    ...request,
     settings,
   };
 }
@@ -62,59 +63,63 @@ function markResponseBelowFloor(payload, requestId, result) {
   };
 }
 //@ chunk-z4g2ta8k.js:37207-37393 placement
-function unverifiedRefusalMessage(e) {
-  return `reported refused \u2014 ${e} \u2014 by a sender this session could not verify; whether anything ran there is not confirmed. Check its effect before re-running it.`;
+function unverifiedRefusalMessage(code) {
+  return `reported refused \u2014 ${code} \u2014 by a sender this session could not verify; whether anything ran there is not confirmed. Check its effect before re-running it.`;
 }
 //@ chunk-z4g2ta8k.js:37393-39224 placement
-var SERVED_CALL_REFUSALS = {
-  no_approval:
-    "reported refused \u2014 no person's approval matching this call was found \u2014 by a sender this session could not verify; whether anything ran there is not confirmed. Ask the user to approve it again if it is still wanted.",
-  unbound: unverifiedRefusalMessage("this session is not bound to that machine"),
-  unsupported_protocol: unverifiedRefusalMessage("the call's protocol version was not accepted"),
-  invalid_request: unverifiedRefusalMessage("the call was not acceptable as sent"),
-  not_served: unverifiedRefusalMessage("that machine does not serve this tool to the session"),
-  no_session: unverifiedRefusalMessage("that machine could not tell which session the call came from"),
-  session_mismatch: unverifiedRefusalMessage("that machine is connected on behalf of a different session"),
-  too_many_in_flight: unverifiedRefusalMessage(
-    "that machine already has as many calls under way, or keeps state for as many cloud sessions, as it accepts",
-  ),
-  refused_field: unverifiedRefusalMessage("one of the call's input fields is not accepted on that machine"),
-  sandbox_unavailable: unverifiedRefusalMessage(
-    "that machine serves no tools while its sandbox is off or not fully confining",
-  ),
-  unknown_call: unverifiedRefusalMessage("that machine has no record of the call asked about"),
-  stale: unverifiedRefusalMessage(
-    "the call, or the answer to its permission question, reached that machine after its delivery window",
-  ),
-  unattested_request: unverifiedRefusalMessage("the call arrived without a valid device signature"),
-  queue_full: unverifiedRefusalMessage("that machine was at one of its capacity limits"),
-  rate_limited: unverifiedRefusalMessage("that machine's call budget for this session was spent"),
-  duplicate_call: unverifiedRefusalMessage("that machine had already received a call with this id"),
-  withdrawn: unverifiedRefusalMessage(
-    "the permission request the call was waiting on there ended unanswered",
-  ),
-  result_lost: unverifiedRefusalMessage("that machine no longer holds the result of the call"),
-  unrecognized:
-    "reported refused, without a reason this session recognises, by a sender this session could not verify; whether anything ran there is not confirmed. Check its effect before re-running it.",
-};
-var UNVERIFIED_SENDER = "unverified-sender";
+var SERVED_CALL_REFUSALS; // deferred: uses unverifiedRefusalMessage of its import cycle while loading; runs once the cycle is complete
+var UNVERIFIED_SENDER;
+deferInit("chunk-z4g2ta8k.js:37393", () => {
+  SERVED_CALL_REFUSALS = {
+    no_approval:
+      "reported refused \u2014 no person's approval matching this call was found \u2014 by a sender this session could not verify; whether anything ran there is not confirmed. Ask the user to approve it again if it is still wanted.",
+    unbound: unverifiedRefusalMessage("this session is not bound to that machine"),
+    unsupported_protocol: unverifiedRefusalMessage("the call's protocol version was not accepted"),
+    invalid_request: unverifiedRefusalMessage("the call was not acceptable as sent"),
+    not_served: unverifiedRefusalMessage("that machine does not serve this tool to the session"),
+    no_session: unverifiedRefusalMessage("that machine could not tell which session the call came from"),
+    session_mismatch: unverifiedRefusalMessage("that machine is connected on behalf of a different session"),
+    too_many_in_flight: unverifiedRefusalMessage(
+      "that machine already has as many calls under way, or keeps state for as many cloud sessions, as it accepts",
+    ),
+    refused_field: unverifiedRefusalMessage("one of the call's input fields is not accepted on that machine"),
+    sandbox_unavailable: unverifiedRefusalMessage(
+      "that machine serves no tools while its sandbox is off or not fully confining",
+    ),
+    unknown_call: unverifiedRefusalMessage("that machine has no record of the call asked about"),
+    stale: unverifiedRefusalMessage(
+      "the call, or the answer to its permission question, reached that machine after its delivery window",
+    ),
+    unattested_request: unverifiedRefusalMessage("the call arrived without a valid device signature"),
+    queue_full: unverifiedRefusalMessage("that machine was at one of its capacity limits"),
+    rate_limited: unverifiedRefusalMessage("that machine's call budget for this session was spent"),
+    duplicate_call: unverifiedRefusalMessage("that machine had already received a call with this id"),
+    withdrawn: unverifiedRefusalMessage(
+      "the permission request the call was waiting on there ended unanswered",
+    ),
+    result_lost: unverifiedRefusalMessage("that machine no longer holds the result of the call"),
+    unrecognized:
+      "reported refused, without a reason this session recognises, by a sender this session could not verify; whether anything ran there is not confirmed. Check its effect before re-running it.",
+  };
+  UNVERIFIED_SENDER = "unverified-sender";
+});
 //@ chunk-z4g2ta8k.js:39224-39635 placement
 /**
  * 从 control_response 里读出 served call 的结果信封，若对方报告 refused，就改写成"未验证发送方"的拒绝结果（用固定话术，保留 call_id 与 code）。
  */
 function unverifiedRefusalResult(payload) {
-  let n = asPlainObject(payload.response);
-  let r = asPlainObject(n?.response);
-  if (n?.subtype !== "success" || r === undefined) return;
-  let s;
+  let response = asPlainObject(payload.response);
+  let body = asPlainObject(response?.response);
+  if (response?.subtype !== "success" || body === undefined) return;
+  let read;
   try {
-    s = readCallResult(r.result);
+    read = readCallResult(body.result);
   } catch {
     return;
   }
-  if (s.envelope.status !== "present" || s.envelope.envelope.outcome !== "refused") return;
-  let envelope = s.envelope.envelope;
-  let y = SERVED_CALL_REFUSALS[envelope.code];
+  if (read.envelope.status !== "present" || read.envelope.envelope.outcome !== "refused") return;
+  let envelope = read.envelope.envelope;
+  let message = SERVED_CALL_REFUSALS[envelope.code];
   return buildRemoteToolCallResult({
     envelope: {
       v: REMOTE_TOOL_PROTOCOL_VERSION,
@@ -127,14 +132,14 @@ function unverifiedRefusalResult(payload) {
         working_dir: "",
       },
       code: envelope.code,
-      message: y,
+      message,
     },
-    content: y,
+    content: message,
   });
 }
 //@ chunk-z4g2ta8k.js:39635-39715 placement
-function asPlainObject(e) {
-  return typeof e === "object" && e !== null && !Array.isArray(e) ? e : undefined;
+function asPlainObject(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value) ? value : undefined;
 }
 //@ chunk-z4g2ta8k.js:39715-39728 placement
 var LEASE_RENEW_LEAD_MS = 60000;
@@ -144,45 +149,45 @@ var LEASE_RENEW_AT_MS = MAX_MANIFEST_STATEMENT_AGE_MS - LEASE_RENEW_LEAD_MS;
 /**
  * 租约续期调度器：stated(到期时刻) 记录新租约，按到期前的提前量安排 renew，仍需要时续期一次、不需要或已续过时 lapse；stop 取消定时器。
  */
-function createLeaseRenewer(e) {
-  let n;
-  let r = false;
-  let s;
-  function h() {
-    s?.();
-    s = undefined;
+function createLeaseRenewer(deps) {
+  let statedAt;
+  let renewed = false;
+  let cancel;
+  function stop() {
+    cancel?.();
+    cancel = undefined;
   }
-  function y() {
-    h();
-    let k = n;
-    if (k === undefined) return;
-    let P = r ? MAX_MANIFEST_STATEMENT_AGE_MS : LEASE_RENEW_AT_MS;
-    let O = k + P - e.readNow();
-    if (O > 0) {
-      s = e.schedule(y, Math.min(O, P));
+  function review() {
+    stop();
+    let from = statedAt;
+    if (from === undefined) return;
+    let delay = renewed ? MAX_MANIFEST_STATEMENT_AGE_MS : LEASE_RENEW_AT_MS;
+    let left = from + delay - deps.readNow();
+    if (left > 0) {
+      cancel = deps.schedule(review, Math.min(left, delay));
       return;
     }
-    let A = e.isWanted();
-    let x = k + MAX_MANIFEST_STATEMENT_AGE_MS - e.readNow();
-    if (r || (!A && x <= 0)) {
-      e.lapse();
+    let wanted = deps.isWanted();
+    let remaining = from + MAX_MANIFEST_STATEMENT_AGE_MS - deps.readNow();
+    if (renewed || (!wanted && remaining <= 0)) {
+      deps.lapse();
       return;
     }
-    s = e.schedule(y, Math.max(x, 0));
-    if (A) {
-      r = true;
-      e.renew();
+    cancel = deps.schedule(review, Math.max(remaining, 0));
+    if (wanted) {
+      renewed = true;
+      deps.renew();
     }
   }
-  function S(k) {
-    n = k;
-    r = false;
-    y();
+  function stated(at) {
+    statedAt = at;
+    renewed = false;
+    review();
   }
   return {
-    stated: S,
-    review: y,
-    stop: h,
+    stated,
+    review,
+    stop,
   };
 }
 //@ chunk-z4g2ta8k.js:40104-40116 placement
@@ -199,92 +204,100 @@ var MAX_REPEATED_FRAME_REQUESTS = 30;
 /**
  * 在 Map 中设置键值并移到最新位置，超出容量时淘汰最早的条目。
  */
-function setBoundedRecent(e, n, r) {
-  e.delete(n[0]);
-  e.set(n[0], n[1]);
-  for (let key of e.keys()) {
-    if (e.size <= r) break;
-    e.delete(key);
+function setBoundedRecent(map, pair, limit) {
+  map.delete(pair[0]);
+  map.set(pair[0], pair[1]);
+  for (let key of map.keys()) {
+    if (map.size <= limit) break;
+    map.delete(key);
   }
 }
 //@ chunk-z4g2ta8k.js:40282-41614 placement
-function servedCallDispatcher(e) {
-  let n = new Map();
-  let r = new Map();
-  let s = new Map();
-  let h = 0;
-  let y = 0;
-  function S() {
-    let now = e.readNow();
-    if (now - h >= KEPT_FRAME_TTL_MS) {
-      h = now;
-      y = 0;
+function servedCallDispatcher(deps) {
+  let recentAdmitters = new Map();
+  let pendingAdmissions = new Map();
+  let keptFrames = new Map();
+  let windowStart = 0;
+  let charged = 0;
+  function takeCharge() {
+    let now = deps.readNow();
+    if (now - windowStart >= KEPT_FRAME_TTL_MS) {
+      windowStart = now;
+      charged = 0;
     }
-    if (y >= MAX_REPEATED_FRAME_REQUESTS) return false;
-    y += 1;
+    if (charged >= MAX_REPEATED_FRAME_REQUESTS) return false;
+    charged += 1;
     return true;
   }
-  function k(M) {
-    let { requestId, frame } = M;
+  function isRefused(entry) {
+    let { requestId, frame } = entry;
     if (typeof requestId !== "string") return true;
-    let z = isOwnOutboundRequestId(requestId) || e.isAwaited(requestId);
-    let G = r.has(requestId) || isKnownControlRequestId(requestId);
-    let L = r.get(requestId)?.admitter ?? n.get(requestId);
-    return z || (G && (frame === undefined || L !== frame));
+    let own = isOwnOutboundRequestId(requestId) || deps.isAwaited(requestId);
+    let known = pendingAdmissions.has(requestId) || isKnownControlRequestId(requestId);
+    let admitter = pendingAdmissions.get(requestId)?.admitter ?? recentAdmitters.get(requestId);
+    return own || (known && (frame === undefined || admitter !== frame));
   }
-  function P(requestId, frame) {
-    let q = frame === undefined ? undefined : s.get(frame);
-    let z = q !== undefined && q.requestId === requestId && e.readNow() - q.keptAtMs < KEPT_FRAME_TTL_MS;
-    if (frame !== undefined && q !== undefined) s.delete(frame);
-    return z;
+  function isKeptFrame(requestId, frame) {
+    let kept = frame === undefined ? undefined : keptFrames.get(frame);
+    let fresh =
+      kept !== undefined &&
+      kept.requestId === requestId &&
+      deps.readNow() - kept.keptAtMs < KEPT_FRAME_TTL_MS;
+    if (frame !== undefined && kept !== undefined) keptFrames.delete(frame);
+    return fresh;
   }
-  let O = (M) => typeof M.requestId === "string" && REQUEST_ID_PATTERN.test(M.requestId) && !k(M) && S();
-  function A(M) {
-    if (!(typeof M.requestId === "string" && REQUEST_ID_PATTERN.test(M.requestId))) return;
-    let q = r.get(M.requestId);
-    let z = !M.wasSeen && q === undefined;
-    r.set(M.requestId, {
-      admitter: q?.admitter ?? (z ? M.frame : n.get(M.requestId)),
-      pending: (q?.pending ?? 0) + 1,
+  let charges = (entry) =>
+    typeof entry.requestId === "string" &&
+    REQUEST_ID_PATTERN.test(entry.requestId) &&
+    !isRefused(entry) &&
+    takeCharge();
+  function admitted(entry) {
+    if (!(typeof entry.requestId === "string" && REQUEST_ID_PATTERN.test(entry.requestId))) return;
+    let previous = pendingAdmissions.get(entry.requestId);
+    let firstSeen = !entry.wasSeen && previous === undefined;
+    pendingAdmissions.set(entry.requestId, {
+      admitter: previous?.admitter ?? (firstSeen ? entry.frame : recentAdmitters.get(entry.requestId)),
+      pending: (previous?.pending ?? 0) + 1,
     });
   }
-  function x(requestId) {
-    let T = typeof requestId === "string" ? r.get(requestId) : undefined;
-    if (!(typeof requestId === "string" && T !== undefined)) return;
-    if (T.pending > 1) {
-      r.set(requestId, {
-        ...T,
-        pending: T.pending - 1,
+  function settled(requestId) {
+    let pending = typeof requestId === "string" ? pendingAdmissions.get(requestId) : undefined;
+    if (!(typeof requestId === "string" && pending !== undefined)) return;
+    if (pending.pending > 1) {
+      pendingAdmissions.set(requestId, {
+        ...pending,
+        pending: pending.pending - 1,
       });
       return;
     }
-    r.delete(requestId);
-    if (T.admitter !== undefined) setBoundedRecent(n, [requestId, T.admitter], ADMITTER_RECENT_WINDOW_MS);
+    pendingAdmissions.delete(requestId);
+    if (pending.admitter !== undefined)
+      setBoundedRecent(recentAdmitters, [requestId, pending.admitter], ADMITTER_RECENT_WINDOW_MS);
   }
-  function U(M, T) {
-    if (typeof M.requestId !== "string") return false;
-    if (T === "loop" && P(M.requestId, M.frame)) return !k(M);
-    let z = O(M);
-    if (z && T === "filter" && M.frame !== undefined)
+  function answers(entry, where) {
+    if (typeof entry.requestId !== "string") return false;
+    if (where === "loop" && isKeptFrame(entry.requestId, entry.frame)) return !isRefused(entry);
+    let charged = charges(entry);
+    if (charged && where === "filter" && entry.frame !== undefined)
       setBoundedRecent(
-        s,
+        keptFrames,
         [
-          M.frame,
+          entry.frame,
           {
-            requestId: M.requestId,
-            keptAtMs: e.readNow(),
+            requestId: entry.requestId,
+            keptAtMs: deps.readNow(),
           },
         ],
         MAX_RECENT_KEPT_FRAMES,
       );
-    if (!z && T === "loop" && M.frame !== undefined) x(M.requestId);
-    return z;
+    if (!charged && where === "loop" && entry.frame !== undefined) settled(entry.requestId);
+    return charged;
   }
   return {
-    admitted: A,
-    settled: x,
-    answers: U,
-    charges: O,
+    admitted,
+    settled,
+    answers,
+    charges,
   };
 }
 //@ chunk-z4g2ta8k.js:41614-41678 placement
@@ -298,26 +311,27 @@ var POST_TURN_MEMORY = "post_turn_memory";
 class TaskEventMirror {
   live = new Set();
   startedAt;
-  note(e, n) {
-    if (e.type !== "system") return;
-    switch (e.subtype) {
+  note(frame, at) {
+    if (frame.type !== "system") return;
+    switch (frame.subtype) {
       case "task_started":
-        if (e.task_type !== IN_PROCESS_TEAMMATE && e.task_type !== POST_TURN_MEMORY) this.add(e.task_id, n);
+        if (frame.task_type !== IN_PROCESS_TEAMMATE && frame.task_type !== POST_TURN_MEMORY)
+          this.add(frame.task_id, at);
         return;
       case "task_notification":
-        this.remove(e.task_id);
+        this.remove(frame.task_id);
         return;
       case "task_updated": {
-        let status = e.patch?.status;
-        if (status !== undefined && isTerminalTaskStatus(status)) this.remove(e.task_id);
+        let status = frame.patch?.status;
+        if (status !== undefined && isTerminalTaskStatus(status)) this.remove(frame.task_id);
         return;
       }
       case "background_tasks_changed":
-        if (Array.isArray(e.tasks)) {
+        if (Array.isArray(frame.tasks)) {
           this.drop();
-          for (let task of e.tasks)
+          for (let task of frame.tasks)
             if (task?.task_type !== IN_PROCESS_TEAMMATE && task?.task_type !== POST_TURN_MEMORY)
-              this.add(task?.task_id, n);
+              this.add(task?.task_id, at);
         }
         return;
       default:
@@ -327,14 +341,14 @@ class TaskEventMirror {
   since() {
     return this.startedAt;
   }
-  add(e, n) {
-    if (typeof e !== "string" || e === "") return;
-    if (this.startedAt !== undefined && n >= this.startedAt + SERVED_CALL_MAX_AGE_MS) this.drop();
-    this.startedAt ??= n;
-    this.live.add(e);
+  add(taskId, at) {
+    if (typeof taskId !== "string" || taskId === "") return;
+    if (this.startedAt !== undefined && at >= this.startedAt + SERVED_CALL_MAX_AGE_MS) this.drop();
+    this.startedAt ??= at;
+    this.live.add(taskId);
   }
-  remove(e) {
-    this.live.delete(e);
+  remove(taskId) {
+    this.live.delete(taskId);
     if (this.live.size === 0) this.drop();
   }
   drop() {

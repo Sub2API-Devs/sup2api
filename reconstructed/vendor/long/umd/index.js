@@ -5,28 +5,28 @@
  * pieces: chunk-798ashq9.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../runtime/bun-runtime.js";
 
 //@ chunk-798ashq9.js:12915-24303 cjs-fingerprint
-var require_long = x(function (cjsExports, cjsModule) {
-  (function (l, factory) {
-    function preferDefault(d) {
-      return d.default || d;
+var require_long = __commonJS(function (cjsExports, cjsModule) {
+  (function (root, factory) {
+    function preferDefault(exportsObject) {
+      return exportsObject.default || exportsObject;
     }
     if (typeof define === "function" && define.amd)
       define([], function () {
-        var d = {};
-        factory(d);
-        return preferDefault(d);
+        var amdExports = {};
+        factory(amdExports);
+        return preferDefault(amdExports);
       });
     else if (typeof cjsExports === "object") {
       factory(cjsExports);
       if (typeof cjsModule === "object") cjsModule.exports = preferDefault(cjsExports);
     } else
       (function () {
-        var d = {};
-        factory(d);
-        l.Long = preferDefault(d);
+        var globalExports = {};
+        factory(globalExports);
+        root.Long = preferDefault(globalExports);
       })();
   })(
     typeof globalThis !== "undefined" ? globalThis : typeof self !== "undefined" ? self : cjsExports,

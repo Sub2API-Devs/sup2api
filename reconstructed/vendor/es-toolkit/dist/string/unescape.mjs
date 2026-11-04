@@ -6,10 +6,10 @@
  * attribution: esm-fingerprint 1
  */
 //@ chunk-p5akk6be.js:35215-35280 esm-fingerprint
-var Lu = /&(?:amp|lt|gt);/g;
-var uu = {
+var HTML_ENTITY_RE = /&(?:amp|lt|gt);/g;
+var HTML_ENTITY_MAP = {
   "&amp;": "&",
   "&lt;": "<",
   "&gt;": ">",
 };
-export { Lu, uu };
+export { HTML_ENTITY_RE, HTML_ENTITY_MAP };

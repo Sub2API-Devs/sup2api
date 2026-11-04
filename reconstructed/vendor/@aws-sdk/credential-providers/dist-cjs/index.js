@@ -5,9 +5,9 @@
  * pieces: chunk-thwbpw6e.js (7)
  * attribution: esm-layout 6, esm-fingerprint 1
  */
-import { Re } from "../../../../runtime/bun-runtime.js";
+import { __toESM } from "../../../../runtime/bun-runtime.js";
 import { require_property_provider } from "../../../@smithy/property-provider/dist-cjs/index.js";
-import { fromEnv } from "../../credential-provider-env/dist-cjs/index.js";
+import { fromEnv as fromEnv_2 } from "../../credential-provider-env/dist-cjs/index.js";
 import { fromIni } from "../../credential-provider-ini/dist-cjs/index.js";
 import { defaultProvider } from "../../credential-provider-node/dist-cjs/index.js";
 import { require_index_native } from "../../../@smithy/core/dist-cjs/submodules/config/index.native.js";
@@ -15,8 +15,8 @@ import { require_node_config_provider } from "../../../@smithy/node-config-provi
 import { require_core } from "../../../@smithy/core/dist-cjs/index.js";
 
 //@ chunk-thwbpw6e.js:561-1125 esm-layout
-var ProviderError = Re(require_property_provider());
-var O = (...credentialProviders) => {
+var ProviderError = __toESM(require_property_provider());
+var withMemoizedProvider = (...credentialProviders) => {
   let expireAfter = -1;
   let withOptions = Object.assign(
     async (awsIdentityProperties) => {
@@ -57,23 +57,23 @@ var propertyProviderChain =
     throw lastProviderError;
   };
 //@ chunk-thwbpw6e.js:1125-1143 esm-layout
-var R = (init) => fromEnv(init);
+var chain = (init) => fromEnv_2(init);
 //@ chunk-thwbpw6e.js:1143-1169 esm-layout
-var F = (e = {}) =>
+var fromEnv = (options = {}) =>
   fromIni({
-    ...e,
+    ...options,
   });
 //@ chunk-thwbpw6e.js:1169-1195 esm-layout
-var v = (init = {}) =>
+var fromNodeProviderChain = (init = {}) =>
   defaultProvider({
     ...init,
   });
 //@ chunk-thwbpw6e.js:1195-1221 esm-layout
-var NODE_REGION_CONFIG_FILE_OPTIONS = Re(require_index_native());
-var loadConfig = Re(require_node_config_provider());
+var NODE_REGION_CONFIG_FILE_OPTIONS = __toESM(require_index_native());
+var loadConfig = __toESM(require_node_config_provider());
 //@ chunk-thwbpw6e.js:1221-3607 esm-layout
-var normalizeProvider = Re(require_core());
-var CredentialsProviderError = Re(require_property_provider());
+var normalizeProvider = __toESM(require_core());
+var CredentialsProviderError = __toESM(require_property_provider());
 var ASSUME_ROLE_DEFAULT_REGION = "us-east-1";
 var fromTemporaryCredentials$1 = (options, credentialDefaultProvider, regionProvider) => {
   let stsClient;
@@ -97,7 +97,7 @@ var fromTemporaryCredentials$1 = (options, credentialDefaultProvider, regionProv
         );
       params.TokenCode = await options.mfaCodeProvider(params?.SerialNumber);
     }
-    let { AssumeRoleCommand, STSClient } = await import("./chunk-nm3tp7ry.js");
+    let { AssumeRoleCommand, STSClient } = await import("../../../../src/utils/aws.js");
     if (!stsClient) {
       let defaultCredentialsOrError =
         typeof credentialDefaultProvider === "function" ? credentialDefaultProvider() : undefined;
@@ -174,7 +174,7 @@ var coalesce = (args) => {
 };
 //@ chunk-thwbpw6e.js:3607-3836 esm-fingerprint
 var fromTemporaryCredentials = (options) =>
-  fromTemporaryCredentials$1(options, v, async ({ profile = process.env.AWS_PROFILE }) =>
+  fromTemporaryCredentials$1(options, fromNodeProviderChain, async ({ profile = process.env.AWS_PROFILE }) =>
     loadConfig.loadConfig(
       {
         environmentVariableSelector: (env) => env.AWS_REGION,
@@ -189,3 +189,4 @@ var fromTemporaryCredentials = (options) =>
       },
     )(),
   );
+export { withMemoizedProvider, chain, fromEnv, fromNodeProviderChain, fromTemporaryCredentials };

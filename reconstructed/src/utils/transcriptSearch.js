@@ -17,6 +17,11 @@ import { stripSystemReminders } from "./systemReminder.js";
 import { isUntrustedObject } from "./untrustedValues.js";
 import { CLONE_DEPTH_THRESHOLD } from "./structuredCloneLimits.js";
 
+//@ chunk-wd9kxbpn.js:15515-15608 fingerprint = SYSTEM_REMINDER_CLOSE (0.863)
+function SYSTEM_REMINDER_CLOSE(text) {
+  let index = text.lastIndexOf("</system-reminder>");
+  return (index >= 0 ? text.slice(index + 18) : text).trim();
+}
 //@ chunk-ag5x7vhf.js:136561-137699 fingerprint = computeSearchText (0.768)
 /**
  * 计算消息的可搜索文本（转录搜索用），覆盖文本、工具输入与结果。
@@ -33,13 +38,16 @@ function computeSearchText(msg) {
           : renderCompactSummaryText(renderPluginPromptSpace(content, msg.pluginPrompt), modelOnlyText);
       else {
         let parts = [];
-        for (let _ of content)
-          if (_.type === "text") {
-            if (!INTERRUPT_MESSAGE_TEXTS.has(_.text))
+        for (let block of content)
+          if (block.type === "text") {
+            if (!INTERRUPT_MESSAGE_TEXTS.has(block.text))
               parts.push(
-                renderCompactSummaryText(renderPluginPromptSpace(_.text, msg.pluginPrompt), modelOnlyText),
+                renderCompactSummaryText(
+                  renderPluginPromptSpace(block.text, msg.pluginPrompt),
+                  modelOnlyText,
+                ),
               );
-          } else if (_.type === "tool_result") parts.push(toolResultSearchText(msg.toolUseResult));
+          } else if (block.type === "tool_result") parts.push(toolResultSearchText(msg.toolUseResult));
         raw = parts.join(`
 `);
       }
@@ -48,9 +56,9 @@ function computeSearchText(msg) {
     case "assistant": {
       let content = msg.message.content;
       if (Array.isArray(content))
-        raw = content.flatMap((T) => {
-          if (T.type === "text") return [T.text];
-          if (T.type === "tool_use") return [toolUseSearchText(T.input)];
+        raw = content.flatMap((block) => {
+          if (block.type === "text") return [block.text];
+          if (block.type === "tool_use") return [toolUseSearchText(block.input)];
           return [];
         }).join(`
 `);
@@ -89,9 +97,9 @@ function computeSearchText(msg) {
 //@ chunk-ag5x7vhf.js:137699-138433 fingerprint = toolUseSearchText (0.916)
 function toolUseSearchText(input) {
   if (!input || typeof input !== "object" || isUntrustedObject(input)) return "";
-  let h = input;
+  let toolInput = input;
   let parts = [];
-  for (let T of [
+  for (let fieldName of [
     "command",
     "pattern",
     "file_path",
@@ -102,33 +110,39 @@ function toolUseSearchText(input) {
     "url",
     "skill",
   ]) {
-    let ownPropertyDescriptor = Object.getOwnPropertyDescriptor(h, T);
+    let ownPropertyDescriptor = Object.getOwnPropertyDescriptor(toolInput, fieldName);
     if (!ownPropertyDescriptor || !("value" in ownPropertyDescriptor)) continue;
-    let _ = ownPropertyDescriptor.value;
-    if (typeof _ === "string") parts.push(_);
+    let fieldValue = ownPropertyDescriptor.value;
+    if (typeof fieldValue === "string") parts.push(fieldValue);
   }
-  for (let T of ["args", "files"]) {
-    let ownPropertyDescriptor = Object.getOwnPropertyDescriptor(h, T);
+  for (let arrayFieldName of ["args", "files"]) {
+    let ownPropertyDescriptor = Object.getOwnPropertyDescriptor(toolInput, arrayFieldName);
     if (!ownPropertyDescriptor || !("value" in ownPropertyDescriptor)) continue;
-    let _ = ownPropertyDescriptor.value;
-    if (_ === null || typeof _ !== "object" || isUntrustedObject(_) || !Array.isArray(_)) continue;
-    let I = _.length;
-    if (!Number.isSafeInteger(I) || I > CLONE_DEPTH_THRESHOLD) continue;
-    let D = [];
-    let A = true;
-    for (let idx = 0; idx < I; idx++) {
-      let ownPropertyDescriptor = Object.getOwnPropertyDescriptor(_, idx);
+    let fieldValue = ownPropertyDescriptor.value;
+    if (
+      fieldValue === null ||
+      typeof fieldValue !== "object" ||
+      isUntrustedObject(fieldValue) ||
+      !Array.isArray(fieldValue)
+    )
+      continue;
+    let itemCount = fieldValue.length;
+    if (!Number.isSafeInteger(itemCount) || itemCount > CLONE_DEPTH_THRESHOLD) continue;
+    let strings = [];
+    let allStrings = true;
+    for (let idx = 0; idx < itemCount; idx++) {
+      let ownPropertyDescriptor = Object.getOwnPropertyDescriptor(fieldValue, idx);
       if (
         !ownPropertyDescriptor ||
         !("value" in ownPropertyDescriptor) ||
         typeof ownPropertyDescriptor.value !== "string"
       ) {
-        A = false;
+        allStrings = false;
         break;
       }
-      D.push(ownPropertyDescriptor.value);
+      strings.push(ownPropertyDescriptor.value);
     }
-    if (A) parts.push(D.join(" "));
+    if (allStrings) parts.push(strings.join(" "));
   }
   return parts.join(`
 `);
@@ -136,25 +150,26 @@ function toolUseSearchText(input) {
 //@ chunk-ag5x7vhf.js:138433-138975 fingerprint = toolResultSearchText (1)
 function toolResultSearchText(r) {
   if (!r || typeof r !== "object") return typeof r === "string" ? r : "";
-  let h = r;
-  if (typeof h.stdout === "string") {
-    let err = typeof h.stderr === "string" ? h.stderr : "";
+  let result = r;
+  if (typeof result.stdout === "string") {
+    let err = typeof result.stderr === "string" ? result.stderr : "";
     return (
-      h.stdout +
+      result.stdout +
       (err
         ? `
 ` + err
         : "")
     );
   }
-  if (h.file && typeof h.file === "object" && typeof h.file.content === "string") return h.file.content;
+  if (result.file && typeof result.file === "object" && typeof result.file.content === "string")
+    return result.file.content;
   let parts = [];
   for (let k_2 of ["content", "output", "result", "text", "message"]) {
-    let v = h[k_2];
+    let v = result[k_2];
     if (typeof v === "string") parts.push(v);
   }
   for (let k_2 of ["filenames", "lines", "results"]) {
-    let v = h[k_2];
+    let v = result[k_2];
     if (Array.isArray(v) && v.every((x) => typeof x === "string"))
       parts.push(
         v.join(`
@@ -163,10 +178,5 @@ function toolResultSearchText(r) {
   }
   return parts.join(`
 `);
-}
-//@ chunk-wd9kxbpn.js:15515-15608 fingerprint = SYSTEM_REMINDER_CLOSE (0.863)
-function SYSTEM_REMINDER_CLOSE(e) {
-  let index = e.lastIndexOf("</system-reminder>");
-  return (index >= 0 ? e.slice(index + 18) : e).trim();
 }
 export { computeSearchText, SYSTEM_REMINDER_CLOSE };

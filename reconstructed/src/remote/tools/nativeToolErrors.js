@@ -15,10 +15,10 @@ import { clipText } from "./protocolSchemas.js";
 import { SEND_USER_FILE_TOOL_NAME } from "../../tools/SendUserFileTool/prompt.js";
 
 //@ chunk-g54kbxqw.js:36033-36297 placement
-function assertNativeToolRunsHere(name, n) {
+function assertNativeToolRunsHere(name, session) {
   if (!isRemoteOnlyCheck(name)) return;
   logFeatureBad("native_tool_never_runs_here", name, {
-    has_session: n !== undefined,
+    has_session: session !== undefined,
   });
   throw new NeverRunsInThisProcessError(
     `${name} is unavailable: this session runs file and shell tools only in its cloud environment, and this call could not be sent there. Retrying will not help.`,
@@ -45,10 +45,10 @@ class NeverRunsInThisProcessError extends Error {
   }
 }
 //@ chunk-g54kbxqw.js:36508-37428 placement
-async function runPermissionCheck(e, n, s, signal, h, y, model) {
-  let C;
+async function runPermissionCheck(toolDef, checkRunner, input, signal, toolUseContext, opts, model) {
+  let checkResult;
   try {
-    C = (await n(e.name, s, signal, h)) ?? {};
+    checkResult = (await checkRunner(toolDef.name, input, signal, toolUseContext)) ?? {};
   } catch (error) {
     if (error instanceof NativeToolElsewhereError || isAbortError(error)) throw error;
     let message = escapeXmlInline(clipText(errorMessage(error), 2000));
@@ -62,30 +62,30 @@ async function runPermissionCheck(e, n, s, signal, h, y, model) {
     }
     throw new NativeToolElsewhereError(message);
   }
-  let { output, afterRead, subagentFrameResult, fieldsFromThisSide } = C;
-  let L = (e.outputSchemaAcrossProcesses ?? e.outputSchema)?.safeParse(output);
-  if (L?.success !== true) {
+  let { output, afterRead, subagentFrameResult, fieldsFromThisSide } = checkResult;
+  let parsedOutput = (toolDef.outputSchemaAcrossProcesses ?? toolDef.outputSchema)?.safeParse(output);
+  if (parsedOutput?.success !== true) {
     afterRead?.unreadable();
-    let G = e.isReadOnly?.(s) === true && e.name !== SEND_USER_FILE_TOOL_NAME;
+    let isReadOnly = toolDef.isReadOnly?.(input) === true && toolDef.name !== SEND_USER_FILE_TOOL_NAME;
     throw new NativeToolElsewhereError(
-      G
-        ? `${e.name} ran, but its result could not be read. It changes nothing, so it is safe to run again.`
-        : `${e.name} ran, but its result could not be read. Check its effect before running it again.`,
+      isReadOnly
+        ? `${toolDef.name} ran, but its result could not be read. It changes nothing, so it is safe to run again.`
+        : `${toolDef.name} ran, but its result could not be read. Check its effect before running it again.`,
       "ANSWER_LOST",
     );
   }
   afterRead?.ok();
-  let j =
+  let mergedData =
     fieldsFromThisSide === undefined
-      ? L.data
+      ? parsedOutput.data
       : {
-          ...L.data,
+          ...parsedOutput.data,
           ...fieldsFromThisSide,
         };
-  let Q = e.fromAnotherProcess?.(j, s, y, model) ?? {};
-  let newMessages = Q.newMessages ?? [];
+  let transformed = toolDef.fromAnotherProcess?.(mergedData, input, opts, model) ?? {};
+  let newMessages = transformed.newMessages ?? [];
   return {
-    data: Q.data ?? j,
+    data: transformed.data ?? mergedData,
     ...(newMessages.length > 0 && {
       newMessages,
     }),

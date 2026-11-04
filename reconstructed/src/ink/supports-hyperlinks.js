@@ -8,13 +8,17 @@
  * pieces: chunk-avfhvhz8.js (4)
  * attribution: sole-consumer 1, fingerprint 2, layout 1
  */
-import { Re } from "../../runtime/bun-runtime.js";
+import { __toESM } from "../../runtime/bun-runtime.js";
 import { supportsHyperlinksPackage } from "../../vendor/supports-color/index.js";
 import { getAttacherCaps } from "../bootstrap/state.js";
 import { isEnvDefinedFalsy } from "../utils/envUtils.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-avfhvhz8.js:2914-2930 sole-consumer
-var supportsHyperlinksModule = Re(supportsHyperlinksPackage(), 1);
+var supportsHyperlinksModule; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-avfhvhz8.js:2914", () => {
+  supportsHyperlinksModule = __toESM(supportsHyperlinksPackage(), 1);
+});
 //@ chunk-avfhvhz8.js:2930-3012 fingerprint = ADDITIONAL_HYPERLINK_TERMINALS (0.918)
 /**
  * supports-hyperlinks 之外额外认为支持 OSC 8 的终端名（TERM_PROGRAM / LC_TERMINAL）。
@@ -54,10 +58,10 @@ function supportsHyperlinks(options) {
   if (env.TERMINAL_EMULATOR === "JetBrains-JediTerm") return true;
   if (env.WT_SESSION && TERM_PROGRAM !== "tmux" && !env.TMUX) return true;
   if (TERM_PROGRAM === "tmux") {
-    let [a, R] = (env.TERM_PROGRAM_VERSION ?? "").split(".");
-    let s = parseInt(a ?? "", 10);
-    let A = parseInt(R ?? "", 10);
-    if (s > 3 || (s === 3 && A >= 4)) return true;
+    let [major, minor] = (env.TERM_PROGRAM_VERSION ?? "").split(".");
+    let majorVersion = parseInt(major ?? "", 10);
+    let minorVersion = parseInt(minor ?? "", 10);
+    if (majorVersion > 3 || (majorVersion === 3 && minorVersion >= 4)) return true;
   }
   let lcTerminal = env.LC_TERMINAL;
   if (lcTerminal && ADDITIONAL_HYPERLINK_TERMINALS.includes(lcTerminal)) return true;

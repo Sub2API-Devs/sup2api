@@ -44,14 +44,14 @@ import { isSentinelInode } from "../../../utils/slowOperations.js";
 /**
  * 判断云会话调用的 shell 命令是否会写到本机 Claude 设置文件（解析重定向/参数，比对设置文件身份）。
  */
-async function checkServedShellSettingsWrite(name, n, cwd, stopSignal, s = false) {
-  let command = n.command;
+async function checkServedShellSettingsWrite(name, input, cwd, stopSignal, readOnlyAllowed = false) {
+  let command = input.command;
   if (typeof command !== "string")
     return {
       file: "error",
       fileOrFolder: "error",
     };
-  let u = {
+  let result = {
     file: "none",
     fileOrFolder: "none",
   };
@@ -60,55 +60,59 @@ async function checkServedShellSettingsWrite(name, n, cwd, stopSignal, s = false
     refTimer: true,
   });
   try {
-    let h = getPlatform() === "windows";
-    u = {
+    let isWindows = getPlatform() === "windows";
+    result = {
       file:
-        touchesProtectedPath(n, "file") &&
-        !(s && name === BASH_TOOL_NAME && (await isReadOnlyCommand(command)))
+        touchesProtectedPath(input, "file") &&
+        !(readOnlyAllowed && name === BASH_TOOL_NAME && (await isReadOnlyCommand(command)))
           ? "named"
           : "none",
-      fileOrFolder: touchesProtectedPath(n, "file_or_folder") ? "named" : "none",
+      fileOrFolder: touchesProtectedPath(input, "file_or_folder") ? "named" : "none",
     };
-    if (u.file !== "none" && u.fileOrFolder !== "none") return u;
-    if (combinedAbortSignal.signal.aborted) return withUnresolvedDefaults(u, "unresolved");
+    if (result.file !== "none" && result.fileOrFolder !== "none") return result;
+    if (combinedAbortSignal.signal.aborted) return withUnresolvedDefaults(result, "unresolved");
     let promise = new Promise((resolve) => {
       combinedAbortSignal.signal.addEventListener("abort", () => resolve(CUT_SHORT), {
         once: true,
       });
     });
-    if (name !== BASH_TOOL_NAME) return u;
-    let S = await classifyCommandForSandbox(command, cwd);
-    if (S === "unparsed") return u;
+    if (name !== BASH_TOOL_NAME) return result;
+    let words = await classifyCommandForSandbox(command, cwd);
+    if (words === "unparsed") return result;
     let { files, dirs } = settingsLocationPaths();
     let protectedSettingsPaths = getProtectedSettingsPaths();
-    let V = [
+    let settingsPaths = [
       ...files,
-      ...dirs.flatMap((dir) => SETTINGS_FILE_BASENAMES.map((re) => join(dir, re))),
+      ...dirs.flatMap((dir) => SETTINGS_FILE_BASENAMES.map((base) => join(dir, base))),
       ...protectedSettingsPaths.paths,
     ];
-    let A = uniq([...dirs, ...getClaudeConfigDirs()]);
-    let O = new Set([...V, ...A].map((x) => normalizeCaseForComparison(x)));
-    let X = new Set(
+    let configDirs = uniq([...dirs, ...getClaudeConfigDirs()]);
+    let settingsPathSet = new Set(
+      [...settingsPaths, ...configDirs].map((path) => normalizeCaseForComparison(path)),
+    );
+    let configNameSet = new Set(
       protectedSettingsPaths.globalConfigNames.map((globalConfigName) =>
         normalizeCaseForComparison(globalConfigName),
       ),
     );
     let winner = await Promise.race([
-      Promise.all(uniq([...V, ...A]).map((x) => settingsFileIdentity(x, "followed"))),
+      Promise.all(
+        uniq([...settingsPaths, ...configDirs]).map((path) => settingsFileIdentity(path, "followed")),
+      ),
       promise,
     ]);
-    if (winner === CUT_SHORT) return withUnresolvedDefaults(u, "unresolved");
-    let K = new Set(winner.filter((x) => x !== undefined));
-    let j = h ? /[\\/]/ : "/";
-    let flattened = S.flatMap(({ word, directories, mayBeElsewhere }) => {
+    if (winner === CUT_SHORT) return withUnresolvedDefaults(result, "unresolved");
+    let settingsIdentities = new Set(winner.filter((identity) => identity !== undefined));
+    let separator = isWindows ? /[\\/]/ : "/";
+    let flattened = words.flatMap(({ word, directories, mayBeElsewhere }) => {
       if (word === "") return [];
-      let Y = expandTildeWithHome(word);
-      let ie = containsAnyPlaceholder(word) || Y.startsWith("~") || isUncOrDeviceSpelling(word);
-      let root = parse(Y).root;
-      let E = Y.slice(root.length).split(j)[0] ?? "";
-      let mapped = (ie ? [] : isAbsolute(Y) ? [cwd] : directories).map((T) => ({
-        requested: resolve(T, Y),
-        firstPartThere: resolve(T, root, E),
+      let expanded = expandTildeWithHome(word);
+      let byName = containsAnyPlaceholder(word) || expanded.startsWith("~") || isUncOrDeviceSpelling(word);
+      let root = parse(expanded).root;
+      let firstSegment = expanded.slice(root.length).split(separator)[0] ?? "";
+      let mapped = (byName ? [] : isAbsolute(expanded) ? [cwd] : directories).map((base) => ({
+        requested: resolve(base, expanded),
+        firstPartThere: resolve(base, root, firstSegment),
       }));
       let filtered = mapped.filter(
         ({ requested, firstPartThere }) =>
@@ -118,35 +122,39 @@ async function checkServedShellSettingsWrite(name, n, cwd, stopSignal, s = false
         {
           word,
           local: filtered,
-          byName: ie || filtered.length < mapped.length || (mayBeElsewhere && !isAbsolute(Y)),
+          byName: byName || filtered.length < mapped.length || (mayBeElsewhere && !isAbsolute(expanded)),
         },
       ];
     });
     let winner_2 = await Promise.race([
       Promise.all(
-        uniq(flattened.flatMap(({ local }) => local.map(({ firstPartThere }) => firstPartThere))).map((x) =>
-          getFsImplementation()
-            .lstat(x)
-            .then(
-              () => [x, true],
-              (error) => {
-                let errnoCode = getErrnoCode(error);
-                return [x, errnoCode !== "ENOENT" && errnoCode !== "ENOTDIR" && errnoCode !== "ENAMETOOLONG"];
-              },
-            ),
+        uniq(flattened.flatMap(({ local }) => local.map(({ firstPartThere }) => firstPartThere))).map(
+          (path) =>
+            getFsImplementation()
+              .lstat(path)
+              .then(
+                () => [path, true],
+                (error) => {
+                  let errnoCode = getErrnoCode(error);
+                  return [
+                    path,
+                    errnoCode !== "ENOENT" && errnoCode !== "ENOTDIR" && errnoCode !== "ENAMETOOLONG",
+                  ];
+                },
+              ),
         ),
       ),
       promise,
     ]);
-    if (winner_2 === CUT_SHORT) return withUnresolvedDefaults(u, "unresolved");
-    let Z = new Map(winner_2);
-    let ce = new Set();
-    let ue = 0;
+    if (winner_2 === CUT_SHORT) return withUnresolvedDefaults(result, "unresolved");
+    let existsByPath = new Map(winner_2);
+    let visited = new Set();
+    let piecesWalked = 0;
     for (let { word, local, byName } of flattened) {
       if (byName) {
-        u = {
+        result = {
           file:
-            u.file === "none" &&
+            result.file === "none" &&
             touchesProtectedPath(
               {
                 command: word,
@@ -154,9 +162,9 @@ async function checkServedShellSettingsWrite(name, n, cwd, stopSignal, s = false
               "file",
             )
               ? "named"
-              : u.file,
+              : result.file,
           fileOrFolder:
-            u.fileOrFolder === "none" &&
+            result.fileOrFolder === "none" &&
             touchesProtectedPath(
               {
                 command: word,
@@ -164,40 +172,43 @@ async function checkServedShellSettingsWrite(name, n, cwd, stopSignal, s = false
               "file_or_folder",
             )
               ? "named"
-              : u.fileOrFolder,
+              : result.fileOrFolder,
         };
-        if (u.file !== "none" && u.fileOrFolder !== "none") return u;
+        if (result.file !== "none" && result.fileOrFolder !== "none") return result;
       }
       for (let { requested, firstPartThere } of local) {
-        if (ce.has(requested)) continue;
-        ce.add(requested);
-        let y = [requested];
-        let E;
-        if (Z.get(firstPartThere) !== false) {
-          ue++;
-          if (ue > MAX_PATH_PIECES) return withUnresolvedDefaults(u, "too_many_pieces");
-          let w = await walkPermissionCheckPathsAsync(requested, combinedAbortSignal.signal);
-          if (w.unresolved || isNetworkOrSharedPath(w.landing))
-            return withUnresolvedDefaults(u, "unresolved");
-          E = w.landing;
-          y = uniq([...w.spellings, w.landing]);
+        if (visited.has(requested)) continue;
+        visited.add(requested);
+        let spellings = [requested];
+        let landing;
+        if (existsByPath.get(firstPartThere) !== false) {
+          piecesWalked++;
+          if (piecesWalked > MAX_PATH_PIECES) return withUnresolvedDefaults(result, "too_many_pieces");
+          let walked = await walkPermissionCheckPathsAsync(requested, combinedAbortSignal.signal);
+          if (walked.unresolved || isNetworkOrSharedPath(walked.landing))
+            return withUnresolvedDefaults(result, "unresolved");
+          landing = walked.landing;
+          spellings = uniq([...walked.spellings, walked.landing]);
         }
         if (
-          y.some(
-            (w) =>
-              (E !== undefined && isHostPersonOnlyPath(w, cwd)) ||
-              O.has(normalizeCaseForComparison(w)) ||
-              X.has(normalizeCaseForComparison(basename(w))),
+          spellings.some(
+            (spelling) =>
+              (landing !== undefined && isHostPersonOnlyPath(spelling, cwd)) ||
+              settingsPathSet.has(normalizeCaseForComparison(spelling)) ||
+              configNameSet.has(normalizeCaseForComparison(basename(spelling))),
           )
         )
-          return withUnresolvedDefaults(u, "on_disk");
-        let P =
-          E === undefined ? undefined : await Promise.race([settingsFileIdentity(E, "as_landed"), promise]);
-        if (P === CUT_SHORT) return withUnresolvedDefaults(u, "unresolved");
-        if (P !== undefined && K.has(P)) return withUnresolvedDefaults(u, "on_disk");
+          return withUnresolvedDefaults(result, "on_disk");
+        let identity =
+          landing === undefined
+            ? undefined
+            : await Promise.race([settingsFileIdentity(landing, "as_landed"), promise]);
+        if (identity === CUT_SHORT) return withUnresolvedDefaults(result, "unresolved");
+        if (identity !== undefined && settingsIdentities.has(identity))
+          return withUnresolvedDefaults(result, "on_disk");
       }
     }
-    return u;
+    return result;
   } catch (error) {
     let errnoCode = getErrnoCode(error);
     if (errnoCode === undefined)
@@ -213,40 +224,45 @@ async function checkServedShellSettingsWrite(name, n, cwd, stopSignal, s = false
           level: "error",
         },
       );
-    return withUnresolvedDefaults(u, "error");
+    return withUnresolvedDefaults(result, "error");
   } finally {
     combinedAbortSignal.cleanup();
   }
 }
 //@ chunk-tr0s0d0k.js:50947-51056 placement
-function withUnresolvedDefaults(e, n) {
+function withUnresolvedDefaults(result, fallback) {
   return {
-    file: e.file === "none" ? n : e.file,
-    fileOrFolder: e.fileOrFolder === "none" ? n : e.fileOrFolder,
+    file: result.file === "none" ? fallback : result.file,
+    fileOrFolder: result.fileOrFolder === "none" ? fallback : result.fileOrFolder,
   };
 }
 //@ chunk-tr0s0d0k.js:51056-51092 placement
-function isNetworkOrSharedPath(e) {
-  return isNetworkOrDevicePath(e) || isUnderNetworkDirCached(e);
+function isNetworkOrSharedPath(path) {
+  return isNetworkOrDevicePath(path) || isUnderNetworkDirCached(path);
 }
 //@ chunk-tr0s0d0k.js:51092-51445 placement
-async function settingsFileIdentity(e, n) {
-  if (isNetworkOrSharedPath(e)) return;
+async function settingsFileIdentity(path, mode) {
+  if (isNetworkOrSharedPath(path)) return;
   try {
     let fsImplementation = getFsImplementation();
-    if (n === "followed") {
-      let { identity } = await vetRepoSettingsPathAsync(fsImplementation, e, {
+    if (mode === "followed") {
+      let { identity } = await vetRepoSettingsPathAsync(fsImplementation, path, {
         fileIdentity: true,
       });
       return identity === undefined || isSentinelInode(identity.ino)
         ? undefined
         : `${identity.dev}:${identity.ino}`;
     }
-    let r = await fsImplementation.lstatBigint(e);
-    return isSentinelInode(r.ino) ? undefined : `${r.dev}:${r.ino}`;
+    let stats = await fsImplementation.lstatBigint(path);
+    return isSentinelInode(stats.ino) ? undefined : `${stats.dev}:${stats.ino}`;
   } catch (error) {
     let errnoCode = getErrnoCode(error);
-    if (n === "followed" || errnoCode === "ENOENT" || errnoCode === "ENOTDIR" || errnoCode === "ENAMETOOLONG")
+    if (
+      mode === "followed" ||
+      errnoCode === "ENOENT" ||
+      errnoCode === "ENOTDIR" ||
+      errnoCode === "ENAMETOOLONG"
+    )
       return;
     throw error;
   }

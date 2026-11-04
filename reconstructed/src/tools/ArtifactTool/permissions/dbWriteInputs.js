@@ -29,101 +29,102 @@ import { getPlatform } from "../../../utils/platform.js";
 import { formatPermissionRule } from "../../../utils/permissions/disallowedToolsFlag.js";
 
 //@ chunk-qxvqcab6.js:6699-6980 placement
-function assetDownloadTarget(e) {
-  let { assetId, outDir } = assetFieldsFrom(e);
+function assetDownloadTarget(input) {
+  let { assetId, outDir } = assetFieldsFrom(input);
   if (assetId === undefined || !ASSET_ID_RE.test(assetId)) return;
-  let o;
-  let s = false;
+  let dir;
+  let isDefaultDir = false;
   try {
     if (outDir === undefined || outDir === "") {
-      let { url } = e;
-      let a = typeof url === "string" ? parseArtifactUrl(url) : null;
-      let l = a !== null ? scratchpadArtifactFilePath(a.slug) : null;
-      s = l !== null;
-      o = l ?? getCwd();
-    } else o = expandPath(outDir);
+      let { url } = input;
+      let artifactUrl = typeof url === "string" ? parseArtifactUrl(url) : null;
+      let scratchPath = artifactUrl !== null ? scratchpadArtifactFilePath(artifactUrl.slug) : null;
+      isDefaultDir = scratchPath !== null;
+      dir = scratchPath ?? getCwd();
+    } else dir = expandPath(outDir);
   } catch {
     return;
   }
   return {
-    stem: join(o, assetId),
-    ...(s && {
+    stem: join(dir, assetId),
+    ...(isDefaultDir && {
       defaultDir: true,
     }),
   };
 }
 //@ chunk-qxvqcab6.js:6980-7212 placement
-function urlSubPathError(url, n = "", r = "url") {
+function urlSubPathError(url, suffix = "", fieldName = "url") {
   if (artifactUrlSubPath(url) === undefined) return;
   let artifactUrl = parseArtifactUrl(url);
-  let s = artifactUrl !== null ? ` (${artifactViewerUrlFor(artifactUrl)})` : "";
+  let viewerNote = artifactUrl !== null ? ` (${artifactViewerUrlFor(artifactUrl)})` : "";
   return {
     result: false,
-    message: `\`${r}\` names a path inside the artifact \u2014 pass the artifact's own URL${s} as \`${r}\`${n}.`,
+    message: `\`${fieldName}\` names a path inside the artifact \u2014 pass the artifact's own URL${viewerNote} as \`${fieldName}\`${suffix}.`,
     errorCode: 4,
   };
 }
 //@ chunk-qxvqcab6.js:7212-7719 placement
-function dbWriteFields(e) {
-  let n = (d) => {
-    let f = e[d];
-    return typeof f === "string" ? f : undefined;
+function dbWriteFields(input) {
+  let readField = (key) => {
+    let value = input[key];
+    return typeof value === "string" ? value : undefined;
   };
-  let r = e.data;
-  let data = r !== null && typeof r === "object" && !Array.isArray(r) ? r : undefined;
-  let { replace_all: replaceAll, if_version: ifVersion, query } = e;
+  let rawData = input.data;
+  let data = rawData !== null && typeof rawData === "object" && !Array.isArray(rawData) ? rawData : undefined;
+  let { replace_all: replaceAll, if_version: ifVersion, query } = input;
   let query_2 = query !== null && typeof query === "object" && !Array.isArray(query) ? query : undefined;
   return {
-    dbOp: n("db_op"),
-    collection: n("collection"),
-    docId: n("doc_id"),
+    dbOp: readField("db_op"),
+    collection: readField("collection"),
+    docId: readField("doc_id"),
     data,
     query: query_2,
-    outDir: n("out_dir"),
-    filePath: n("file_path"),
+    outDir: readField("out_dir"),
+    filePath: readField("file_path"),
     strReplace: {
-      field: n("field"),
-      oldStr: n("old_str"),
-      newStr: n("new_str"),
+      field: readField("field"),
+      oldStr: readField("old_str"),
+      newStr: readField("new_str"),
       replaceAll: replaceAll === undefined ? undefined : coerceBooleanString(replaceAll) === true,
     },
     ifVersion: isPositiveInt(ifVersion) ? ifVersion : undefined,
   };
 }
 //@ chunk-qxvqcab6.js:7719-7793 placement
-function isPositiveInt(e) {
-  return typeof e === "number" && Number.isSafeInteger(e) && e >= 1;
+function isPositiveInt(value) {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 1;
 }
 //@ chunk-qxvqcab6.js:7793-7830 placement
 var DB_WRITE_OPS = ["set", "update", STR_REPLACE, "delete"];
 //@ chunk-qxvqcab6.js:7830-7877 placement
-function batchWrites(e) {
-  let batchWrites = parseBatchWrites(e);
+function batchWrites(input) {
+  let batchWrites = parseBatchWrites(input);
   return batchWrites === UNREADABLE_ARRAY ? [] : batchWrites;
 }
 //@ chunk-qxvqcab6.js:7877-8319 placement
-function parseBatchWrites(e) {
-  let untrustedArray = readUntrustedArray(e.writes);
+function parseBatchWrites(input) {
+  let untrustedArray = readUntrustedArray(input.writes);
   if (untrustedArray === undefined || untrustedArray === UNREADABLE_ARRAY) return untrustedArray ?? [];
   return untrustedArray.map((untrusted) => {
-    let o = (g) => (untrusted !== null && typeof untrusted === "object" ? untrusted[g] : undefined);
-    let s = {
-      db_op: o("op"),
-      collection: o("collection"),
-      doc_id: o("doc_id"),
-      data: o("data"),
-      file_path: o("file_path"),
-      if_version: o("if_version"),
+    let readField = (key) =>
+      untrusted !== null && typeof untrusted === "object" ? untrusted[key] : undefined;
+    let rawFields = {
+      db_op: readField("op"),
+      collection: readField("collection"),
+      doc_id: readField("doc_id"),
+      data: readField("data"),
+      file_path: readField("file_path"),
+      if_version: readField("if_version"),
     };
-    let { dbOp, collection, docId, data: d, filePath, ifVersion } = dbWriteFields(s);
+    let { dbOp, collection, docId, data, filePath, ifVersion } = dbWriteFields(rawFields);
     return {
       op: dbOp,
       collection,
       docId,
-      data: d,
+      data,
       filePath,
       ifVersion,
-      ifVersionGiven: s.if_version !== undefined,
+      ifVersionGiven: rawFields.if_version !== undefined,
     };
   });
 }
@@ -131,55 +132,60 @@ function parseBatchWrites(e) {
 /**
  * 批量写入时取出各项的版本前置条件。
  */
-function batchWriteVersions(e) {
-  return e.db_op === DB_BATCH_OP ? batchWrites(e).map((n) => n.ifVersion) : [];
+function batchWriteVersions(input) {
+  return input.db_op === DB_BATCH_OP ? batchWrites(input).map((write) => write.ifVersion) : [];
 }
 //@ chunk-qxvqcab6.js:8384-8460 placement
-function hasVersionPreconditions(e) {
-  return dbWriteFields(e).ifVersion !== undefined || batchWriteVersions(e).some((n) => n !== undefined);
+function hasVersionPreconditions(input) {
+  return (
+    dbWriteFields(input).ifVersion !== undefined ||
+    batchWriteVersions(input).some((version) => version !== undefined)
+  );
 }
 //@ chunk-qxvqcab6.js:8460-8550 placement
-function isArtifactBatchWrite(e) {
-  return typeof e === "object" && e !== null && e.action === "write_db" && e.db_op === DB_BATCH_OP;
+function isArtifactBatchWrite(input) {
+  return (
+    typeof input === "object" && input !== null && input.action === "write_db" && input.db_op === DB_BATCH_OP
+  );
 }
 //@ chunk-qxvqcab6.js:8550-8641 placement = getDenyRuleForAgent (1)
-function formatRuleContentForDisplay(e) {
+function formatRuleContentForDisplay(rule) {
   return markDisplayTokens(
     scrubArtifactEnvelopeTags(
-      sanitizeDisplayText(e.ruleValue.ruleContent ?? "", {
+      sanitizeDisplayText(rule.ruleValue.ruleContent ?? "", {
         max: 1024,
       }).replace(DECISION_SURFACE_BRACKETS_RE, " "),
     ),
   );
 }
 //@ chunk-qxvqcab6.js:8641-8710 placement
-function typeUrlOf(e) {
-  let typeUrl = e?.type_url;
+function typeUrlOf(input) {
+  let typeUrl = input?.type_url;
   return typeof typeUrl === "string" ? typeUrl : undefined;
 }
 //@ chunk-qxvqcab6.js:8710-8776 placement
-function typeOf(e) {
-  let n = e?.type;
-  return typeof n === "string" ? n : undefined;
+function typeOf(input) {
+  let typeName = input?.type;
+  return typeof typeName === "string" ? typeName : undefined;
 }
 //@ chunk-qxvqcab6.js:8776-8897 placement
-function notTypeUrlError(e) {
-  return `type_url: not an Artifact type's link: ${e} \u2014 pass a ${artifactLinkShapeHint()} link from a list_types result`;
+function notTypeUrlError(value) {
+  return `type_url: not an Artifact type's link: ${value} \u2014 pass a ${artifactLinkShapeHint()} link from a list_types result`;
 }
 //@ chunk-qxvqcab6.js:8897-8986 placement
-function autoOpenMode(e) {
-  return e.auto_open === "after_first_write" ? "after_first_write" : "at_create";
+function autoOpenMode(input) {
+  return input.auto_open === "after_first_write" ? "after_first_write" : "at_create";
 }
 //@ chunk-qxvqcab6.js:8986-9230 placement
-function dbOutputTarget(e) {
-  let { outDir, collection } = dbWriteFields(e);
+function dbOutputTarget(input) {
+  let { outDir, collection } = dbWriteFields(input);
   if (outDir === undefined)
     return {
       kind: "inline",
     };
-  let o;
+  let absoluteOutDir;
   try {
-    o = expandPath(outDir === "" ? getCwd() : outDir);
+    absoluteOutDir = expandPath(outDir === "" ? getCwd() : outDir);
   } catch {
     return {
       kind: "unresolvable",
@@ -187,23 +193,23 @@ function dbOutputTarget(e) {
   }
   let dir =
     collection !== undefined && regExp_2.test(collection)
-      ? join(o, ...collection.split("/").map(escapeDbPathSegment))
-      : o;
+      ? join(absoluteOutDir, ...collection.split("/").map(escapeDbPathSegment))
+      : absoluteOutDir;
   return {
     kind: "dir",
-    outDir: o,
+    outDir: absoluteOutDir,
     dir,
   };
 }
 //@ chunk-qxvqcab6.js:9230-9338 placement
-function escapeDbPathSegment(e) {
-  let replaced = e.replaceAll("~", "@");
+function escapeDbPathSegment(segment) {
+  let replaced = segment.replaceAll("~", "@");
   let platform = getPlatform();
   return platform === "windows" || platform === "wsl" ? replaced.replaceAll(":", "%3A") : replaced;
 }
 //@ chunk-qxvqcab6.js:9338-9381 placement
-function dbRowKey(e, n) {
-  return `${e}\x00${formatPermissionRule(n)}`;
+function dbRowKey(source, ruleValue) {
+  return `${source}\x00${formatPermissionRule(ruleValue)}`;
 }
 export {
   dbRowKey,

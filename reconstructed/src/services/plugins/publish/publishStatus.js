@@ -9,10 +9,10 @@
  * attribution: placement 49
  */
 import {
-  An,
+  EMPTY_OUTCOME,
   PUBLISH_HTTP,
   parsePublishApiError,
-  Rn,
+  NOT_SERVED_STATUSES,
   isClientErrorStatus,
   publishApiOutcome,
   slugifyPluginName,
@@ -29,7 +29,7 @@ import {
 } from "../../../tools/PublishPluginTool/constants.js";
 import { sleep } from "../../../utils/sleep.js";
 import { DoctorLazy } from "../../../cli/handlers/util.js";
-import { u, string, unknown } from "../../../../vendor/zod/v4/classic/schemas.js";
+import { objectSchema, stringSchema, unknown } from "../../../../vendor/zod/v4/classic/schemas.js";
 import { buildOrgGetRequest, organizationSubPath } from "./orgRequests.js";
 import { toAccountMarketplaceLocalName } from "../../../utils/plugins/claudeAiMarketplaces.js";
 import { jsonStringify } from "../../../utils/slowOperations.js";
@@ -40,21 +40,21 @@ import { buildInstallPreferenceFields } from "../../../utils/swarm/permissionSyn
 /**
  * 为发布请求生成选项（进度上传或按方法取超时）。
  */
-function requestOptionsFor(e) {
-  return e.bound === "progress"
+function requestOptionsFor(request) {
+  return request.bound === "progress"
     ? {
-        streamUpload: An,
+        streamUpload: EMPTY_OUTCOME,
       }
     : {
-        timeout: PUBLISH_HTTP[e.method],
+        timeout: PUBLISH_HTTP[request.method],
       };
 }
 //@ chunk-9cjx5pnm.js:15319-15368 placement
 /**
  * 给请求头加上 anthropic-beta。
  */
-var withOAuthBetaHeader = (e) => ({
-  ...e.headers,
+var withOAuthBetaHeader = (options) => ({
+  ...options.headers,
   "anthropic-beta": OAUTH_BETA_HEADER,
 });
 //@ chunk-9cjx5pnm.js:15368-15383 placement
@@ -63,12 +63,12 @@ var withOAuthBetaHeader = (e) => ({
  */
 var MAX_PUBLISH_CONTENT_LENGTH = 4194304;
 //@ chunk-9cjx5pnm.js:15383-15559 placement
-var publishRequestOptions = (e) => ({
+var publishRequestOptions = (request) => ({
   auth: "teleport-org",
-  headers: withOAuthBetaHeader(e),
-  ...requestOptionsFor(e),
-  signal: e.signal,
-  maxBodyLength: Buffer.byteLength(e.body ?? ""),
+  headers: withOAuthBetaHeader(request),
+  ...requestOptionsFor(request),
+  signal: request.signal,
+  maxBodyLength: Buffer.byteLength(request.body ?? ""),
   maxContentLength: MAX_PUBLISH_CONTENT_LENGTH,
   maxRedirects: 0,
   validateStatus: () => true,
@@ -77,41 +77,41 @@ var publishRequestOptions = (e) => ({
 /**
  * 发出一次发布请求（GET 或 POST）。
  */
-function publishRequest(e) {
-  return e.method === "get"
-    ? apiClient.get(e.path, publishRequestOptions(e))
-    : apiClient.post(e.path, e.body, publishRequestOptions(e));
+function publishRequest(request) {
+  return request.method === "get"
+    ? apiClient.get(request.path, publishRequestOptions(request))
+    : apiClient.post(request.path, request.body, publishRequestOptions(request));
 }
 //@ chunk-9cjx5pnm.js:15648-15693 placement
-var qo = Object.freeze({
+var NO_ANSWER_OUTCOME = Object.freeze({
   status: 0,
   data: undefined,
 });
 //@ chunk-9cjx5pnm.js:15693-15800 placement
-function noAnswerOutcome(e, error) {
-  logForDebugging(`plugin publish: ${e.method} ${e.path} got no answer: ` + errorMessage(error), {
+function noAnswerOutcome(request, error) {
+  logForDebugging(`plugin publish: ${request.method} ${request.path} got no answer: ` + errorMessage(error), {
     level: "error",
   });
-  return qo;
+  return NO_ANSWER_OUTCOME;
 }
 //@ chunk-9cjx5pnm.js:15800-15917 placement
-var kn = Object.freeze({
+var REFUSAL_REASON_CLASSES = Object.freeze({
   "data-residency": "third-party",
   "essential-traffic-only": "traffic-off",
   "no-auth": "signed-out",
 });
 //@ chunk-9cjx5pnm.js:15917-16052 placement
-async function publishRequestOnce(orgGetRequest) {
-  let r = await publishRequest(orgGetRequest).catch((error) => noAnswerOutcome(orgGetRequest, error));
-  return "status" in r
+async function publishRequestOnce(request) {
+  let response = await publishRequest(request).catch((error) => noAnswerOutcome(request, error));
+  return "status" in response
     ? {
-        status: r.status,
-        data: r.data,
+        status: response.status,
+        data: response.data,
       }
-    : refusalResult(kn[r.reason] ?? "other");
+    : refusalResult(REFUSAL_REASON_CLASSES[response.reason] ?? "other");
 }
 //@ chunk-9cjx5pnm.js:16052-16263 placement
-var Dn = Object.freeze([
+var RETRYABLE_PUBLISH_ERROR_CODES = Object.freeze([
   "plugin_upload_conflict",
   "plugin_previous_save_scanning",
   "plugin_upload_busy",
@@ -130,12 +130,12 @@ var STATUS_TOO_MANY_REQUESTS = 429;
  */
 var STATUS_UNAVAILABLE = 503;
 //@ chunk-9cjx5pnm.js:16285-16315 placement
-var Cn = Object.freeze([STATUS_TOO_MANY_REQUESTS, STATUS_UNAVAILABLE]);
+var RETRYABLE_PUBLISH_STATUSES = Object.freeze([STATUS_TOO_MANY_REQUESTS, STATUS_UNAVAILABLE]);
 //@ chunk-9cjx5pnm.js:16315-16420 placement
-var isRetryablePublishResponse = (e, r) =>
-  (e.method === "get" && r.status === qo.status) ||
-  Cn.includes(r.status) ||
-  Dn.includes(parsePublishApiError(r).code ?? "");
+var isRetryablePublishResponse = (request, response) =>
+  (request.method === "get" && response.status === NO_ANSWER_OUTCOME.status) ||
+  RETRYABLE_PUBLISH_STATUSES.includes(response.status) ||
+  RETRYABLE_PUBLISH_ERROR_CODES.includes(parsePublishApiError(response).code ?? "");
 //@ chunk-9cjx5pnm.js:16420-16429 placement
 /**
  * 发布请求的最多尝试次数（3）。
@@ -147,29 +147,35 @@ var MAX_PUBLISH_RETRIES = 3;
  */
 var PUBLISH_RETRY_DELAY_MS = 2000;
 //@ chunk-9cjx5pnm.js:16441-16585 placement
-async function publishRequestWithRetry(e, r = MAX_PUBLISH_RETRIES) {
-  let s = await publishRequestOnce(e);
-  if (!(r > 0 && !e.signal.aborted && "status" in s && isRetryablePublishResponse(e, s))) return s;
-  await sleep(PUBLISH_RETRY_DELAY_MS, e.signal);
-  return publishRequestWithRetry(e, r - 1);
+async function publishRequestWithRetry(request, retriesLeft = MAX_PUBLISH_RETRIES) {
+  let response = await publishRequestOnce(request);
+  if (!(
+    retriesLeft > 0 &&
+    !request.signal.aborted &&
+    "status" in response &&
+    isRetryablePublishResponse(request, response)
+  ))
+    return response;
+  await sleep(PUBLISH_RETRY_DELAY_MS, request.signal);
+  return publishRequestWithRetry(request, retriesLeft - 1);
 }
 //@ chunk-9cjx5pnm.js:16585-16653 placement
-var firstArrayIn = (e) => [e, ...Object.values(Object(e))].find(Array.isArray) ?? [];
+var firstArrayIn = (body) => [body, ...Object.values(Object(body))].find(Array.isArray) ?? [];
 //@ chunk-9cjx5pnm.js:16653-17016 placement
 var librarySubmissionSchema = DoctorLazy(() =>
-  u({
-    uuid: string().optional(),
-    plugin_id: string().nullish(),
-    plugin_name: string().nullish(),
-    status: string().optional(),
-    publish_state: string().nullish(),
-    updates_published_plugin_id: string().nullish(),
-    denial_reason: string().nullish(),
+  objectSchema({
+    uuid: stringSchema().optional(),
+    plugin_id: stringSchema().nullish(),
+    plugin_name: stringSchema().nullish(),
+    status: stringSchema().optional(),
+    publish_state: stringSchema().nullish(),
+    updates_published_plugin_id: stringSchema().nullish(),
+    denial_reason: stringSchema().nullish(),
     content_scan: unknown().optional(),
-    outcome: u({
-      published_plugin_id: string().nullish(),
-      published_marketplace_id: string().nullish(),
-      failure_reason: string().nullish(),
+    outcome: objectSchema({
+      published_plugin_id: stringSchema().nullish(),
+      published_marketplace_id: stringSchema().nullish(),
+      failure_reason: stringSchema().nullish(),
     }).nullish(),
   }),
 );
@@ -177,12 +183,12 @@ var librarySubmissionSchema = DoctorLazy(() =>
 /**
  * 从错误响应里解析已提交记录。
  */
-var submissionsFromErrorBody = (e) =>
-  firstArrayIn(e).flatMap((r) =>
-    [librarySubmissionSchema().safeParse(r)].flatMap((s) => (s.success ? [s.data] : [])),
+var submissionsFromErrorBody = (body) =>
+  firstArrayIn(body).flatMap((item) =>
+    [librarySubmissionSchema().safeParse(item)].flatMap((parsed) => (parsed.success ? [parsed.data] : [])),
   );
 //@ chunk-9cjx5pnm.js:17104-18022 placement
-var SUBMISSION_STATE_REASONS = Object.freeze({
+var SUBMISSION_STATE_REASONS_2 = Object.freeze({
   plugin_version_scan_pending: "scan-pending",
   plugin_version_scan_failed: "scan",
   org_library_submission_already_pending: "already-pending",
@@ -203,7 +209,7 @@ var SUBMISSION_STATE_REASONS = Object.freeze({
   legal_attestation_required: "legal",
 });
 //@ chunk-9cjx5pnm.js:18022-18115 placement
-var qn = Object.freeze({
+var SUBMISSION_STATUS_CLASSES = Object.freeze({
   0: "busy",
   401: "signed-out",
   404: "publishing-off",
@@ -211,22 +217,26 @@ var qn = Object.freeze({
   503: "busy",
 });
 //@ chunk-9cjx5pnm.js:18115-18160 placement
-var mt = Object.freeze({
-  codes: SUBMISSION_STATE_REASONS,
-  statuses: qn,
+var SUBMISSION_CLASSES = Object.freeze({
+  codes: SUBMISSION_STATE_REASONS_2,
+  statuses: SUBMISSION_STATUS_CLASSES,
 });
 //@ chunk-9cjx5pnm.js:18160-18336 placement
-async function fetchMySubmissions(e) {
-  let r = await publishRequestWithRetry(buildOrgGetRequest(e, ["library_submissions", "me"]));
-  if ("kind" in r) return r;
-  if (Rn.includes(r.status)) return refusalResult("not-served");
-  return isClientErrorStatus(r) ? submissionsFromErrorBody(r.data) : publishApiOutcome(r, mt);
+async function fetchMySubmissions(organization) {
+  let response = await publishRequestWithRetry(
+    buildOrgGetRequest(organization, ["library_submissions", "me"]),
+  );
+  if ("kind" in response) return response;
+  if (NOT_SERVED_STATUSES.includes(response.status)) return refusalResult("not-served");
+  return isClientErrorStatus(response)
+    ? submissionsFromErrorBody(response.data)
+    : publishApiOutcome(response, SUBMISSION_CLASSES);
 }
 //@ chunk-9cjx5pnm.js:18336-18436 placement
-var withUploadLink = (e, r) =>
+var withUploadLink = (result, submission) =>
   refusalResult(
-    e.refusal.kind,
-    e.refusal.details.concat(`See or remove the upload: ${pluginCustomizeUrl(r.id)}`),
+    result.refusal.kind,
+    result.refusal.details.concat(`See or remove the upload: ${pluginCustomizeUrl(submission.id)}`),
   );
 //@ chunk-9cjx5pnm.js:18436-18687 placement
 var SUBMISSION_STATE_REASONS_ALT = Object.freeze({
@@ -243,21 +253,22 @@ var CLAUDEAI_ORGANIZATION_LIBRARY = "claudeai-organization-library";
  * 市场名信息的 schema。
  */
 var marketplaceNameSchema = DoctorLazy(() =>
-  u({
-    name: string().optional(),
-    marketplace_name: string().optional(),
+  objectSchema({
+    name: stringSchema().optional(),
+    marketplace_name: stringSchema().optional(),
   }),
 );
 //@ chunk-9cjx5pnm.js:18797-18905 placement
-function installSpecFromPlugin(e, r) {
-  let s = marketplaceNameSchema().safeParse(e).data;
-  let n = toAccountMarketplaceLocalName(s?.marketplace_name ?? "") ?? CLAUDEAI_ORGANIZATION_LIBRARY;
-  return `${s?.name ?? r}@${n}`;
+function installSpecFromPlugin(pluginBody, fallbackName) {
+  let parsed = marketplaceNameSchema().safeParse(pluginBody).data;
+  let marketplaceName =
+    toAccountMarketplaceLocalName(parsed?.marketplace_name ?? "") ?? CLAUDEAI_ORGANIZATION_LIBRARY;
+  return `${parsed?.name ?? fallbackName}@${marketplaceName}`;
 }
 //@ chunk-9cjx5pnm.js:18905-19006 placement
-async function fetchPublishedInstallSpec(e, r, s) {
-  let n = await publishRequestOnce(buildOrgGetRequest(e, ["plugins", r]));
-  return installSpecFromPlugin("status" in n ? n.data : undefined, s);
+async function fetchPublishedInstallSpec(organization, pluginId, fallbackName) {
+  let response = await publishRequestOnce(buildOrgGetRequest(organization, ["plugins", pluginId]));
+  return installSpecFromPlugin("status" in response ? response.data : undefined, fallbackName);
 }
 //@ chunk-9cjx5pnm.js:19006-19016 placement
 /**
@@ -268,84 +279,88 @@ var MAX_ARCHIVE_NAME_CHARS = 64;
 var archiveFileName = (manifest) =>
   slugifyPluginName(slugifyPluginName(manifest.name).slice(0, MAX_ARCHIVE_NAME_CHARS));
 //@ chunk-9cjx5pnm.js:19054-19216 placement
-async function publishedOutcome(e, publishedPluginId, s, isUnscanned) {
-  let install = await fetchPublishedInstallSpec(e, publishedPluginId, archiveFileName(e.manifest));
+async function publishedOutcome(request, pluginId, verdict, isUnscanned) {
+  let install = await fetchPublishedInstallSpec(request, pluginId, archiveFileName(request.manifest));
   return {
     kind: "published",
-    manifest: e.manifest,
+    manifest: request.manifest,
     isUnscanned,
-    verdict: s.verdict,
+    verdict: verdict.verdict,
     install,
-    link: pluginCustomizeUrl(publishedPluginId),
+    link: pluginCustomizeUrl(pluginId),
   };
 }
 //@ chunk-9cjx5pnm.js:19216-19305 placement
 /**
  * 构造进行中/审核中的发布结果。
  */
-var pendingPublishOutcome = (e, kind, s, isUnscanned) => ({
+var pendingPublishOutcome = (request, kind, verdict, isUnscanned) => ({
   kind,
-  manifest: e.manifest,
+  manifest: request.manifest,
   isUnscanned,
-  verdict: s.verdict,
-  id: s.id,
+  verdict: verdict.verdict,
+  id: verdict.id,
 });
 //@ chunk-9cjx5pnm.js:19305-19664 placement
-async function describePublishOutcome(e, librarySubmission, s) {
+async function describePublishOutcome(request, librarySubmission, verdict) {
   let publishedPluginId = librarySubmission.outcome?.published_plugin_id ?? undefined;
-  let a = librarySubmission.publish_state === "completed" && publishedPluginId !== undefined;
-  let m = librarySubmission.status === "approved" && librarySubmission.publish_state === "failed";
-  let f = librarySubmission.status === "approved";
-  if (m)
+  let hasPublishedId = librarySubmission.publish_state === "completed" && publishedPluginId !== undefined;
+  let publishFailed = librarySubmission.status === "approved" && librarySubmission.publish_state === "failed";
+  let approved = librarySubmission.status === "approved";
+  if (publishFailed)
     return refusalResult(
       SUBMISSION_STATE_REASONS_ALT[librarySubmission.outcome?.failure_reason ?? ""] ?? "other",
     );
-  let c = f && a;
-  let isUnscanned = s.scan === "none" && librarySubmission.content_scan === null;
-  return c
-    ? publishedOutcome(e, publishedPluginId, s, isUnscanned)
-    : pendingPublishOutcome(e, f ? "publishing" : "in-review", s, isUnscanned);
+  let isPublished = approved && hasPublishedId;
+  let isUnscanned = verdict.scan === "none" && librarySubmission.content_scan === null;
+  return isPublished
+    ? publishedOutcome(request, publishedPluginId, verdict, isUnscanned)
+    : pendingPublishOutcome(request, approved ? "publishing" : "in-review", verdict, isUnscanned);
 }
 //@ chunk-9cjx5pnm.js:19986-20084 placement
-var postToOrganization = (e, r, s) => ({
+var postToOrganization = (organization, segments, body) => ({
   method: "post",
-  path: organizationSubPath(e, r),
-  body: jsonStringify(s),
+  path: organizationSubPath(organization, segments),
+  body: jsonStringify(body),
   headers: flushLogs,
   bound: "clock",
-  signal: e.signal,
+  signal: organization.signal,
 });
 //@ chunk-9cjx5pnm.js:20084-20240 placement
-async function createLibrarySubmission(e, installPreferenceFields) {
-  let s = await publishRequestWithRetry(
-    postToOrganization(e, ["library_submissions"], installPreferenceFields),
-  );
-  if ("kind" in s) return s;
-  return isClientErrorStatus(s)
-    ? (librarySubmissionSchema().safeParse(s.data).data ?? refusalResult("other"))
-    : publishApiOutcome(s, mt);
+async function createLibrarySubmission(request, body) {
+  let response = await publishRequestWithRetry(postToOrganization(request, ["library_submissions"], body));
+  if ("kind" in response) return response;
+  return isClientErrorStatus(response)
+    ? (librarySubmissionSchema().safeParse(response.data).data ?? refusalResult("other"))
+    : publishApiOutcome(response, SUBMISSION_CLASSES);
 }
 //@ chunk-9cjx5pnm.js:20240-20480 placement
-function scanStateOutcome(e, r) {
-  if (e.signal.aborted || r.scan === "failed")
-    return withUploadLink(stoppedOrResult(e, refusalResult("scan", securityScanLines(r)), "shelved"), r);
-  if (r.isAwaitingCurrent) return withUploadLink(refusalResult("not-current"), r);
-  return r.scan === "processing"
+function scanStateOutcome(request, published) {
+  if (request.signal.aborted || published.scan === "failed")
+    return withUploadLink(
+      stoppedOrResult(request, refusalResult("scan", securityScanLines(published)), "shelved"),
+      published,
+    );
+  if (published.isAwaitingCurrent) return withUploadLink(refusalResult("not-current"), published);
+  return published.scan === "processing"
     ? {
         kind: "on-shelf",
-        manifest: e.manifest,
-        id: r.id,
+        manifest: request.manifest,
+        id: published.id,
       }
     : undefined;
 }
 //@ chunk-9cjx5pnm.js:20480-20624 placement
-async function setPluginInstallPreference(e, r, mySubmissions) {
-  let n = scanStateOutcome(e, r);
-  if (n !== undefined) return n;
-  let librarySubmission = await createLibrarySubmission(e, buildInstallPreferenceFields(r, mySubmissions));
+async function setPluginInstallPreference(request, published, entries) {
+  let outcome = scanStateOutcome(request, published);
+  if (outcome !== undefined) return outcome;
+  let librarySubmission = await createLibrarySubmission(
+    request,
+    buildInstallPreferenceFields(published, entries),
+  );
   return "kind" in librarySubmission
-    ? withUploadLink(stoppedOrResult(e, librarySubmission, "submitting"), r)
-    : describePublishOutcome(e, librarySubmission, r);
+    ? withUploadLink(stoppedOrResult(request, librarySubmission, "submitting"), published)
+    : describePublishOutcome(request, librarySubmission, published);
 }
 //@ chunk-9cjx5pnm.js:20624-20640 placement
 var MANUAL_SOURCE = "manual";
@@ -357,21 +372,21 @@ var MY_UPLOADS_MARKETPLACE = Object.freeze({
 });
 //@ chunk-9cjx5pnm.js:20706-20761 placement
 var marketplaceRefSchema = DoctorLazy(() =>
-  u({
-    id: string().min(1),
-    source: string().optional(),
+  objectSchema({
+    id: stringSchema().min(1),
+    source: stringSchema().optional(),
   }),
 );
 //@ chunk-9cjx5pnm.js:20761-20849 placement
 /**
  * 找出手工上传市场的 id。
  */
-var manualMarketplaceId = (e) =>
-  [e, ...firstArrayIn(e)]
-    .map((r) => marketplaceRefSchema().safeParse(r).data)
-    .find((r) => r?.source === MANUAL_SOURCE)?.id;
+var manualMarketplaceId = (body) =>
+  [body, ...firstArrayIn(body)]
+    .map((entry) => marketplaceRefSchema().safeParse(entry).data)
+    .find((parsed) => parsed?.source === MANUAL_SOURCE)?.id;
 //@ chunk-9cjx5pnm.js:20849-21202 placement
-var da = Object.freeze({
+var UPLOAD_ERROR_CLASSES = Object.freeze({
   plugin_upload_already_exists: "exists",
   plugin_upload_validation_failed: "invalid",
   plugin_upload_limit_reached: "shelf-full",
@@ -383,7 +398,7 @@ var da = Object.freeze({
   legal_attestation_required: "legal",
 });
 //@ chunk-9cjx5pnm.js:21202-21309 placement
-var ca = Object.freeze({
+var UPLOAD_STATUS_CLASSES = Object.freeze({
   0: "busy",
   401: "signed-out",
   403: "creation-off",
@@ -395,26 +410,28 @@ var ca = Object.freeze({
 /**
  * 插件上传错误码/HTTP 状态到简短分类的表（归属错误，属插件上传）。
  */
-var Dt = Object.freeze({
-  codes: da,
-  statuses: ca,
+var UPLOAD_CLASSES = Object.freeze({
+  codes: UPLOAD_ERROR_CLASSES,
+  statuses: UPLOAD_STATUS_CLASSES,
 });
 //@ chunk-9cjx5pnm.js:21354-21455 placement = extractMarkupText (1)
 /**
- * 插件市场请求：响应带 kind 直接返回，否则按错误表分类（误配名 extractMarkupText，归属错误）。
+ * 发布请求的通用收尾：发请求→带 kind 直接返回→4xx 时取手工市场 id 或兜底 refusal，否则按错误码/HTTP 状态表归类。原先误配名 extractMarkupText（同名的另外三个声明分别属于 SDK schema、LSP formatter、SendMessageTool）。
  */
-async function extractMarkupText(e, r) {
-  let s = await publishRequestWithRetry(e);
-  if ("kind" in s) return s;
-  return isClientErrorStatus(s) ? (manualMarketplaceId(s.data) ?? r()) : publishApiOutcome(s, Dt);
+async function requestPublishOutcome(request, fallback) {
+  let response = await publishRequestWithRetry(request);
+  if ("kind" in response) return response;
+  return isClientErrorStatus(response)
+    ? (manualMarketplaceId(response.data) ?? fallback())
+    : publishApiOutcome(response, UPLOAD_CLASSES);
 }
 //@ chunk-9cjx5pnm.js:21455-21547 placement
 /**
- * 创建账号市场（marketplaces/create-account-marketplace）的请求包装（归属错误）。
+ * 创建账号级“My Uploads”市场：POST marketplaces/create-account-marketplace，失败给 refusalResult("other")。
  */
-var ensureUploadsMarketplace = (e) =>
-  extractMarkupText(
-    postToOrganization(e, ["marketplaces", "create-account-marketplace"], MY_UPLOADS_MARKETPLACE),
+var ensureUploadsMarketplace = (request) =>
+  requestPublishOutcome(
+    postToOrganization(request, ["marketplaces", "create-account-marketplace"], MY_UPLOADS_MARKETPLACE),
     async () => refusalResult("other"),
   );
 //@ chunk-9cjx5pnm.js:21547-21557 placement
@@ -422,10 +439,10 @@ var MAX_SCAN_POLLS = 60;
 export {
   archiveFileName,
   publishRequestWithRetry,
-  Dt,
+  UPLOAD_CLASSES,
   publishRequestOnce,
   MAX_SCAN_POLLS,
-  extractMarkupText,
+  requestPublishOutcome,
   ensureUploadsMarketplace,
   fetchMySubmissions,
   setPluginInstallPreference,

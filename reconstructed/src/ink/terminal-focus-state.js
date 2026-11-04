@@ -26,7 +26,7 @@ function getTerminalFocusGainedAt() {
   return uiSignals.terminalFocusGainedAt;
 }
 //@ chunk-fpjsca9n.js:578-638 placement
-function onTerminalFocusChanged(e) {
-  return uiSignals.terminalFocusChanged.subscribe(e);
+function onTerminalFocusChanged(listener) {
+  return uiSignals.terminalFocusChanged.subscribe(listener);
 }
 export { getTerminalFocus, onTerminalFocusChanged, getTerminalFocused, getTerminalFocusGainedAt };

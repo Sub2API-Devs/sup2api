@@ -26,6 +26,7 @@ import { stripPeerMessageBody } from "../../utils/peerMessageHeaders.js";
 import { lastTurnAttributionKey } from "../../utils/cwd.js";
 import { commonTurnId } from "../../services/mcp/ccrTurnId.js";
 import { uniq } from "../../utils/collections.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-tyg7f3ek.js:52052-61714 placement
 /**
@@ -117,138 +118,161 @@ class UserFrameIntake {
     this.noteReportedDoneUnrun = noteReportedDoneUnrun;
     this.storeRewindStandIn = storeRewindStandIn;
   }
-  dropMalformed(e) {
-    if (!hasMalformedTextBlocks(e.message.content)) return false;
+  dropMalformed(frame) {
+    if (!hasMalformedTextBlocks(frame.message.content)) return false;
     logForDebugging("Dropping malformed user frame: content must be a string or an array of block objects", {
       level: "error",
     });
-    if (e.uuid && !this.receivedMessageUuids.has(e.uuid)) this.io.onCommandLifecycle?.(e.uuid, "completed");
+    if (frame.uuid && !this.receivedMessageUuids.has(frame.uuid))
+      this.io.onCommandLifecycle?.(frame.uuid, "completed");
     return true;
   }
-  isReRun(e) {
-    return this.reRuns.has(e);
+  isReRun(uuid) {
+    return this.reRuns.has(uuid);
   }
-  async skipDuplicate(e, n, r) {
-    let s = this.transcriptForFrame();
-    let h = this.retirementMayLandDuringReads();
-    let y = await s.persisted(e);
-    let S = this.receivedMessageUuids.has(e);
-    let R = r !== undefined && r.shouldQuery !== false && r.seeded_summon !== true;
-    let w = y && !S && R ? this.askWhetherTakenInAtAPrompt(e) : undefined;
-    let P = y && !S && w === undefined && !this.leftToReRun(e) ? await s.holdersTurnUnanswered(e) : undefined;
-    let L = (!y || P === true) && !S && R ? this.askWhetherSummarisedAway(e) : undefined;
-    let q = typeof L === "object" && L.whileStillOwed();
-    let x = typeof L === "function" ? L : q ? L.whileStillOwed : undefined;
-    let G = x !== undefined;
-    let Z = w ?? x;
-    let re = y || G;
-    let Ae = P === undefined && tryOr(() => this.cutBehindItsCompaction(e), false);
-    let Ue = Z === undefined && (P ?? (y && !S && (Ae || (await s.turnUnanswered(e)))));
-    if (Ue && P === undefined && h && !this.rescueOwnsReRun()) Ue = await s.turnUnanswered(e);
-    let ce =
-      Ue &&
-      !(this.leftToReRun(e) && this.heldForParkedTurn(e)) &&
-      (P === true ||
+  async skipDuplicate(uuid, onSkip, frame) {
+    let transcript = this.transcriptForFrame();
+    let retirementMayLand = this.retirementMayLandDuringReads();
+    let persisted = await transcript.persisted(uuid);
+    let seenAtRuntime = this.receivedMessageUuids.has(uuid);
+    let asksForReply = frame !== undefined && frame.shouldQuery !== false && frame.seeded_summon !== true;
+    let takenInCheck =
+      persisted && !seenAtRuntime && asksForReply ? this.askWhetherTakenInAtAPrompt(uuid) : undefined;
+    let turnUnanswered =
+      persisted && !seenAtRuntime && takenInCheck === undefined && !this.leftToReRun(uuid)
+        ? await transcript.holdersTurnUnanswered(uuid)
+        : undefined;
+    let summarised =
+      (!persisted || turnUnanswered === true) && !seenAtRuntime && asksForReply
+        ? this.askWhetherSummarisedAway(uuid)
+        : undefined;
+    let waitsBehindPrompt = typeof summarised === "object" && summarised.whileStillOwed();
+    let whileStillOwed =
+      typeof summarised === "function"
+        ? summarised
+        : waitsBehindPrompt
+          ? summarised.whileStillOwed
+          : undefined;
+    let hasSummarisedProbe = whileStillOwed !== undefined;
+    let unansweredProbe = takenInCheck ?? whileStillOwed;
+    let reachesTranscript = persisted || hasSummarisedProbe;
+    let cutBehindCompaction =
+      turnUnanswered === undefined && tryOr(() => this.cutBehindItsCompaction(uuid), false);
+    let turnUnansweredFinal =
+      unansweredProbe === undefined &&
+      (turnUnanswered ??
+        (persisted && !seenAtRuntime && (cutBehindCompaction || (await transcript.turnUnanswered(uuid)))));
+    if (turnUnansweredFinal && turnUnanswered === undefined && retirementMayLand && !this.rescueOwnsReRun())
+      turnUnansweredFinal = await transcript.turnUnanswered(uuid);
+    let shouldReRun =
+      turnUnansweredFinal &&
+      !(this.leftToReRun(uuid) && this.heldForParkedTurn(uuid)) &&
+      (turnUnanswered === true ||
         (!this.drain.running &&
           !this.messageQueue.hasUserIntentCommandsInQueue() &&
           !this.rescueOwnsReRun()));
-    let nt = re && !S && !Ue && this.heldForParkedTurn(e);
-    let ie =
-      Z !== undefined && (this.drain.running || this.messageQueue.hasUserIntentCommandsInQueue() || Z());
-    if (ce) {
-      this.declinedRedeliveries.forget(e);
-      this.reRuns.add(e);
-      if (Ae) rememberMovedRow(e);
-      let Se = tryOr(() => this.earlierStartOf(e), undefined);
+    let heldForPark =
+      reachesTranscript && !seenAtRuntime && !turnUnansweredFinal && this.heldForParkedTurn(uuid);
+    let owedToRunningTurn =
+      unansweredProbe !== undefined &&
+      (this.drain.running || this.messageQueue.hasUserIntentCommandsInQueue() || unansweredProbe());
+    if (shouldReRun) {
+      this.declinedRedeliveries.forget(uuid);
+      this.reRuns.add(uuid);
+      if (cutBehindCompaction) rememberMovedRow(uuid);
+      let startInfo = tryOr(() => this.earlierStartOf(uuid), undefined);
       logForDiagnosticsNoPII("info", "cli_user_message_dedup_reexecuted", {
-        ...(Ae && {
+        ...(cutBehindCompaction && {
           nothing_stored_after_compaction: true,
         }),
-        runs_by_holders_rule: P === true,
-        ...(Se !== undefined && {
-          inherited_permission_prompt_pending: Se.inheritedPromptPending,
-          conversation_has_compact_boundary: Se.conversationHasCompactBoundary,
-          conversation_has_message_as_queued_command: Se.conversationHasMessageAsQueuedCommand,
-          ...Se.followUp,
+        runs_by_holders_rule: turnUnanswered === true,
+        ...(startInfo !== undefined && {
+          inherited_permission_prompt_pending: startInfo.inheritedPromptPending,
+          conversation_has_compact_boundary: startInfo.conversationHasCompactBoundary,
+          conversation_has_message_as_queued_command: startInfo.conversationHasMessageAsQueuedCommand,
+          ...startInfo.followUp,
         }),
         ...chatOriginField(),
       });
-    } else if (re || S) {
-      let Se =
-        S &&
-        (this.drain.pendingDispatchUuids.includes(e) ||
-          this.messageQueue.peek((Xe) => Xe.uuid === e) !== undefined ||
-          this.parkedUuids().includes(e));
-      let me = extractInboundAttachments(r).length;
+    } else if (reachesTranscript || seenAtRuntime) {
+      let echoWithheld =
+        seenAtRuntime &&
+        (this.drain.pendingDispatchUuids.includes(uuid) ||
+          this.messageQueue.peek((queued) => queued.uuid === uuid) !== undefined ||
+          this.parkedUuids().includes(uuid));
+      let fileCount = extractInboundAttachments(frame).length;
       logForDiagnosticsNoPII("info", "cli_user_message_dedup_skipped", {
-        exists_in_session: y,
-        runtime_dup: S,
-        ...(w !== undefined && {
+        exists_in_session: persisted,
+        runtime_dup: seenAtRuntime,
+        ...(takenInCheck !== undefined && {
           taken_in_before_permission_prompt: true,
         }),
-        ...(G && {
+        ...(hasSummarisedProbe && {
           summarised_away: true,
         }),
-        ...(q && {
+        ...(waitsBehindPrompt && {
           waits_behind_permission_prompt: true,
         }),
         ...chatOriginField(),
-        ...(Se && {
+        ...(echoWithheld && {
           echo_withheld: true,
         }),
-        ...(nt && {
+        ...(heldForPark && {
           held_for_park: true,
         }),
-        ...(me > 0 && {
-          sent_file_count: me,
-          turn_unanswered: Ue,
+        ...(fileCount > 0 && {
+          sent_file_count: fileCount,
+          turn_unanswered: turnUnansweredFinal,
         }),
       });
-      logForDebugging(`Skipping duplicate user message: ${e}`);
-      if (!Se && !q && !this.declinedRedeliveries.takeCancelledLine(e)) n();
-      let Me = re && !S && !Ue && !nt && !ie;
+      logForDebugging(`Skipping duplicate user message: ${uuid}`);
+      if (!echoWithheld && !waitsBehindPrompt && !this.declinedRedeliveries.takeCancelledLine(uuid)) onSkip();
+      let finishedUnrun =
+        reachesTranscript && !seenAtRuntime && !turnUnansweredFinal && !heldForPark && !owedToRunningTurn;
       let nothingRunningOrQueued = false;
-      let He =
-        Me && !this.finishedAtStartUpLogged ? tryOr(() => this.finishedAtStartUp(e), undefined) : undefined;
-      if (Me) {
+      let finishedInfo =
+        finishedUnrun && !this.finishedAtStartUpLogged
+          ? tryOr(() => this.finishedAtStartUp(uuid), undefined)
+          : undefined;
+      if (finishedUnrun) {
         tryOr(
           () =>
-            this.noteReportedDoneUnrun(e, {
-              leftToATurnCarriedOn: Z !== undefined,
-              asksForAReply: R,
+            this.noteReportedDoneUnrun(uuid, {
+              leftToATurnCarriedOn: unansweredProbe !== undefined,
+              asksForAReply: asksForReply,
             }),
           undefined,
         );
-        if (typeof L === "function") this.storeRewindStandIn(e, false);
-        this.io.onCommandLifecycle?.(e, "completed");
-        this.declinedRedeliveries.forget(e);
+        if (typeof summarised === "function") this.storeRewindStandIn(uuid, false);
+        this.io.onCommandLifecycle?.(uuid, "completed");
+        this.declinedRedeliveries.forget(uuid);
       }
       if (this.messageQueue.peek(isActiveMainAgentCommand) !== undefined) this.kick();
       else if (!this.drain.running) {
         nothingRunningOrQueued = true;
         if (this.idleTeeAllowed()) this.io.sessionState.notifyStateChanged("idle");
       }
-      if (He !== undefined) {
+      if (finishedInfo !== undefined) {
         this.finishedAtStartUpLogged = true;
         logForDiagnosticsNoPII("info", "cli_redelivered_message_turn_read_as_finished", {
-          ...He,
+          ...finishedInfo,
           nothing_running_or_queued: nothingRunningOrQueued,
           ...chatOriginField(),
         });
       }
-      if (!Ue && !nt && !ie) this.receivedMessageUuids.track(e);
+      if (!turnUnansweredFinal && !heldForPark && !owedToRunningTurn) this.receivedMessageUuids.track(uuid);
       else
         this.declinedRedeliveries.remember(
-          e,
-          Z !== undefined && r !== undefined
+          uuid,
+          unansweredProbe !== undefined && frame !== undefined
             ? {
-                stillOwed: Z,
-                ...(typeof L === "function" && {
-                  storeRewindStandIn: (Xe) => this.storeRewindStandIn(e, Xe),
+                stillOwed: unansweredProbe,
+                ...(typeof summarised === "function" && {
+                  storeRewindStandIn: (standIn) => this.storeRewindStandIn(uuid, standIn),
                 }),
                 readAgain: () => {
                   this.readAgain({
-                    ...r,
+                    ...frame,
                     priority: undefined,
                   });
                   logForDiagnosticsNoPII(
@@ -257,63 +281,63 @@ class UserFrameIntake {
                     chatOriginField(),
                   );
                 },
-                thenRuns: q,
+                thenRuns: waitsBehindPrompt,
               }
             : undefined,
         );
       return true;
     }
-    if (!ce) {
-      this.declinedRedeliveries.forget(e);
-      this.noteNewAfterStart(e, r, typeof L === "string" ? L : undefined);
+    if (!shouldReRun) {
+      this.declinedRedeliveries.forget(uuid);
+      this.noteNewAfterStart(uuid, frame, typeof summarised === "string" ? summarised : undefined);
     }
-    this.receivedMessageUuids.track(e);
+    this.receivedMessageUuids.track(uuid);
     return false;
   }
-  askWhetherTakenInAtAPrompt(e) {
-    let n = tryOr(() => this.takenInAtAPrompt(e), undefined);
-    return n && (() => tryOr(n, false));
+  askWhetherTakenInAtAPrompt(uuid) {
+    let takenIn = tryOr(() => this.takenInAtAPrompt(uuid), undefined);
+    return takenIn && (() => tryOr(takenIn, false));
   }
-  askWhetherSummarisedAway(e) {
-    let n = tryOr(() => this.summarisedAway(e), undefined);
-    if (typeof n === "object")
+  askWhetherSummarisedAway(uuid) {
+    let summarised = tryOr(() => this.summarisedAway(uuid), undefined);
+    if (typeof summarised === "object")
       return {
-        whileStillOwed: () => tryOr(n.whileStillOwed, false),
+        whileStillOwed: () => tryOr(summarised.whileStillOwed, false),
       };
-    return typeof n === "function" ? () => tryOr(n, false) : n;
+    return typeof summarised === "function" ? () => tryOr(summarised, false) : summarised;
   }
-  noteNewAfterStart(e, n, r) {
+  noteNewAfterStart(uuid, frame, summarisedKind) {
     try {
-      let s = this.earlierStartOf(e);
-      if (s === undefined) return;
+      let startInfo = this.earlierStartOf(uuid);
+      if (startInfo === undefined) return;
       logForDiagnosticsNoPII("info", "cli_user_message_dedup_new_after_start", {
-        started_ago: durationBucket_2(Date.now() - s.startedAtMs),
-        inherited_permission_prompt_pending: s.inheritedPromptPending,
-        conversation_has_compact_boundary: s.conversationHasCompactBoundary,
-        conversation_has_message_as_queued_command: s.conversationHasMessageAsQueuedCommand,
-        ...(n !== undefined && {
-          should_query: n.shouldQuery !== false,
-          is_synthetic: Boolean(n.isSynthetic),
-          has_priority: n.priority !== undefined,
+        started_ago: durationBucket_2(Date.now() - startInfo.startedAtMs),
+        inherited_permission_prompt_pending: startInfo.inheritedPromptPending,
+        conversation_has_compact_boundary: startInfo.conversationHasCompactBoundary,
+        conversation_has_message_as_queued_command: startInfo.conversationHasMessageAsQueuedCommand,
+        ...(frame !== undefined && {
+          should_query: frame.shouldQuery !== false,
+          is_synthetic: Boolean(frame.isSynthetic),
+          has_priority: frame.priority !== undefined,
         }),
         turn_running: this.drain.running,
         user_intent_queued: this.messageQueue.hasUserIntentCommandsInQueue(),
-        ...s.followUp,
-        ...s.endedTurnsCopy,
+        ...startInfo.followUp,
+        ...startInfo.endedTurnsCopy,
         ...chatOriginField(),
-        ...(r === "off" && {
+        ...(summarisedKind === "off" && {
           summarised_away_switch_off: true,
         }),
-        ...(r === "cold" && {
+        ...(summarisedKind === "cold" && {
           summarised_away_switch_cold: true,
         }),
-        ...(r === "unlisted" && {
+        ...(summarisedKind === "unlisted" && {
           summarised_away_unlisted: true,
         }),
-        ...(r === "taken_in_since" && {
+        ...(summarisedKind === "taken_in_since" && {
           summarised_away_taken_in_since: true,
         }),
-        ...(r === "kept_rows_not_loaded" && {
+        ...(summarisedKind === "kept_rows_not_loaded" && {
           summarised_away_kept_rows_not_loaded: true,
         }),
       });
@@ -321,50 +345,52 @@ class UserFrameIntake {
       logError(error);
     }
   }
-  acceptUserFrame(e) {
-    let n = this.admissionBarrier();
-    if (e.ownFirstTurnMessage) {
-      if (n.pending === 0 && this.ownParked === null) return this.deliver(e);
-      let tail = n.tail;
+  acceptUserFrame(frame) {
+    let barrier = this.admissionBarrier();
+    if (frame.ownFirstTurnMessage) {
+      if (barrier.pending === 0 && this.ownParked === null) return this.deliver(frame);
+      let tail = barrier.tail;
       let startTime = performance.now();
       logForDiagnosticsNoPII("info", "cli_user_frame_parked", () => ({
-        uuid: matchRequestId(e.frame.uuid),
-        barrier_pending: n.pending,
+        uuid: matchRequestId(frame.frame.uuid),
+        barrier_pending: barrier.pending,
         had_parked: this.ownParked !== null,
         own_first_turn_message: true,
       }));
-      let w = (this.ownParked ?? Promise.resolve())
+      let parked = (this.ownParked ?? Promise.resolve())
         .then(() => tail)
-        .then(() => this.deliver(e, startTime))
+        .then(() => this.deliver(frame, startTime))
         .catch((error) => logError(toError(error)))
         .finally(() => {
-          e.queueing?.[Symbol.dispose]();
-          if (this.ownParked === w) this.ownParked = null;
+          frame.queueing?.[Symbol.dispose]();
+          if (this.ownParked === parked) this.ownParked = null;
         });
-      this.ownParked = w;
+      this.ownParked = parked;
       return;
     }
-    let r = this.firstTurnGate();
-    if (n.pending === 0 && this.parked === null && r === undefined) return this.deliver(e);
-    let s = r === undefined ? n.tail : Promise.all([n.tail, r]).then(() => {});
+    let firstTurnGate = this.firstTurnGate();
+    if (barrier.pending === 0 && this.parked === null && firstTurnGate === undefined)
+      return this.deliver(frame);
+    let gateTail =
+      firstTurnGate === undefined ? barrier.tail : Promise.all([barrier.tail, firstTurnGate]).then(() => {});
     let startTime = performance.now();
     logForDiagnosticsNoPII("info", "cli_user_frame_parked", () => ({
-      uuid: matchRequestId(e.frame.uuid),
-      barrier_pending: n.pending,
+      uuid: matchRequestId(frame.frame.uuid),
+      barrier_pending: barrier.pending,
       had_parked: this.parked !== null,
-      first_turn_gate: r !== undefined,
+      first_turn_gate: firstTurnGate !== undefined,
     }));
-    this.heldFrames.add(e);
-    let y = (this.parked ?? Promise.resolve())
-      .then(() => s)
-      .then(() => (this.heldFrames.has(e) ? this.deliver(e, startTime) : undefined))
+    this.heldFrames.add(frame);
+    let parked = (this.parked ?? Promise.resolve())
+      .then(() => gateTail)
+      .then(() => (this.heldFrames.has(frame) ? this.deliver(frame, startTime) : undefined))
       .catch((error) => logError(toError(error)))
       .finally(() => {
-        this.heldFrames.delete(e);
-        e.queueing?.[Symbol.dispose]();
-        if (this.parked === y) this.parked = null;
+        this.heldFrames.delete(frame);
+        frame.queueing?.[Symbol.dispose]();
+        if (this.parked === parked) this.parked = null;
       });
-    this.parked = y;
+    this.parked = parked;
   }
   parkedUuids() {
     return [...this.heldFrames].flatMap(({ frame }) => frame.uuid ?? []);
@@ -373,52 +399,52 @@ class UserFrameIntake {
     return [...this.heldFrames].map(({ command }) => command);
   }
   cancelParked() {
-    let e = this.parkedUuids();
+    let uuids = this.parkedUuids();
     this.heldFrames.clear();
-    return e;
+    return uuids;
   }
   hasParked() {
     return this.parked !== null || this.ownParked !== null;
   }
-  async closeInput(e) {
+  async closeInput(onInputClosed) {
     await this.admissionBarrier().tail;
-    let n = this.firstTurnGate();
-    if (n !== undefined) await n;
+    let firstTurnGate = this.firstTurnGate();
+    if (firstTurnGate !== undefined) await firstTurnGate;
     if (this.ownParked !== null) await this.ownParked;
     if (this.parked !== null) await this.parked;
     logForDiagnosticsNoPII("info", "cli_message_loop_ended");
     this.drain.inputClosed = true;
-    return e();
+    return onInputClosed();
   }
-  async deliver(e, n) {
-    using queueing = e.queueing;
+  async deliver(pending, parkedAtMs) {
+    using queueing = pending.queueing;
     let startTime = performance.now();
-    let h = e.admit(queueing);
+    let admitted = pending.admit(queueing);
     let awaitedAdmitMs;
-    if (typeof h !== "boolean") {
-      let q = await h;
+    if (typeof admitted !== "boolean") {
+      let admitResult = await admitted;
       awaitedAdmitMs = elapsedMs_2(startTime);
-      if (!q) return;
-    } else if (!h) return;
-    if (n !== undefined && !e.ownFirstTurnMessage && !this.heldFrames.delete(e)) return;
-    let { frame, command } = e;
+      if (!admitResult) return;
+    } else if (!admitted) return;
+    if (parkedAtMs !== undefined && !pending.ownFirstTurnMessage && !this.heldFrames.delete(pending)) return;
+    let { frame, command } = pending;
     let startTime_2 = performance.now();
     let enqueuedWallMs = Date.now();
     let serverReceivedWallMs = frame.server_received_wall_ms;
-    command.receivedAtMs = e.receivedAtMs;
+    command.receivedAtMs = pending.receivedAtMs;
     command.frameTiming = {
-      ...(e.receivedWallMs !== undefined && {
-        receivedWallMs: e.receivedWallMs,
+      ...(pending.receivedWallMs !== undefined && {
+        receivedWallMs: pending.receivedWallMs,
         intakePhasesMs: inputLatencyFields({
-          waits: e.waits,
-          parsedAtMs: e.parsedAtMs,
-          parkedAtMs: n,
+          waits: pending.waits,
+          parsedAtMs: pending.parsedAtMs,
+          parkedAtMs,
           admitStartedAtMs: startTime,
           awaitedAdmitMs,
           enqueuedAtMs: startTime_2,
-          receivedWallMs: e.receivedWallMs,
+          receivedWallMs: pending.receivedWallMs,
           enqueuedWallMs,
-          aheadOfRead: e.aheadOfRead,
+          aheadOfRead: pending.aheadOfRead,
         }),
         turnStartMark: this.drain.turnStartClock.mark(startTime_2),
       }),
@@ -430,7 +456,7 @@ class UserFrameIntake {
         }),
     };
     try {
-      e.beforeEnqueue?.(command);
+      pending.beforeEnqueue?.(command);
     } catch (error) {
       logError(error);
     }
@@ -438,7 +464,7 @@ class UserFrameIntake {
     if (frame.uuid !== undefined && this.declinedRedeliveries.takeStoppedWhileWaiting(frame.uuid))
       this.startAborted(frame.uuid);
     queueing?.queued();
-    e.afterEnqueue?.();
+    pending.afterEnqueue?.();
     if (frame.uuid !== undefined) this.io.onCommandLifecycle?.(frame.uuid, "queued");
     logForDiagnosticsNoPII("info", "cli_user_message_enqueued", () => ({
       has_uuid: frame.uuid !== undefined,
@@ -446,22 +472,22 @@ class UserFrameIntake {
       should_query: frame.shouldQuery,
       has_priority: frame.priority !== undefined,
       queue_depth: this.messageQueue.getCommandQueueLength(),
-      parse_to_enqueue_ms: Math.round(startTime_2 - e.parsedAtMs),
-      dedup_ms: e.waits.dedupMs,
-      flag_settle_ms: e.waits.flagSettleMs,
-      receive_hook_ms: e.waits.receiveHookMs,
-      ...(e.waits.attachments !== undefined && {
-        attachments_ms: e.waits.attachments.ms,
-        attachment_count: e.waits.attachments.count,
-        inlined_images: e.waits.attachments.inlinedImages,
-        ahead_of_files: e.waits.attachments.aheadOfFiles,
-        ...e.waits.attachments.stages,
+      parse_to_enqueue_ms: Math.round(startTime_2 - pending.parsedAtMs),
+      dedup_ms: pending.waits.dedupMs,
+      flag_settle_ms: pending.waits.flagSettleMs,
+      receive_hook_ms: pending.waits.receiveHookMs,
+      ...(pending.waits.attachments !== undefined && {
+        attachments_ms: pending.waits.attachments.ms,
+        attachment_count: pending.waits.attachments.count,
+        inlined_images: pending.waits.attachments.inlinedImages,
+        ahead_of_files: pending.waits.attachments.aheadOfFiles,
+        ...pending.waits.attachments.stages,
       }),
-      ...(n !== undefined && {
-        parked_ms: Math.round(startTime_2 - n),
+      ...(parkedAtMs !== undefined && {
+        parked_ms: Math.round(startTime_2 - parkedAtMs),
       }),
     }));
-    e.beforeKick?.();
+    pending.beforeKick?.();
     this.kick();
   }
 }
@@ -475,43 +501,43 @@ class InputLatencyLedger {
     this.inputReadyAtMs = inputReadyAtMs;
     this.capacity = capacity;
   }
-  note(kind, n, r) {
-    if (r <= n) return;
+  note(kind, phase, ms) {
+    if (ms <= phase) return;
     this.handled.push({
       kind,
-      startMs: n,
-      endMs: r,
+      startMs: phase,
+      endMs: ms,
     });
     if (this.handled.length > this.capacity) this.droppedUntilMs = this.handled.shift().endMs;
   }
-  split(e, n) {
-    if (e < this.droppedUntilMs) return;
-    let max = Math.max(0, e);
-    let s = {
-      startupMs: overlapMs(Number.NEGATIVE_INFINITY, this.inputReadyAtMs, max, n),
+  split(startMs, endMs) {
+    if (startMs < this.droppedUntilMs) return;
+    let max = Math.max(0, startMs);
+    let phases = {
+      startupMs: overlapMs(Number.NEGATIVE_INFINITY, this.inputReadyAtMs, max, endMs),
       controlRequestsMs: 0,
       userFramesMs: 0,
     };
-    for (let { kind, startMs, endMs } of this.handled) {
-      let R = overlapMs(startMs, endMs, max, n);
-      if (kind === "control") s.controlRequestsMs += R;
-      else s.userFramesMs += R;
+    for (let { kind, startMs, endMs: endMs_2 } of this.handled) {
+      let overlap = overlapMs(startMs, endMs_2, max, endMs);
+      if (kind === "control") phases.controlRequestsMs += overlap;
+      else phases.userFramesMs += overlap;
     }
-    return s;
+    return phases;
   }
-  phasesBeforeRead(e, n) {
-    if (e === undefined) return;
-    let parts = this.split(e, n);
-    return parts && splitStartupWait(n - e, parts);
+  phasesBeforeRead(fromMs, toMs) {
+    if (fromMs === undefined) return;
+    let frame = this.split(fromMs, toMs);
+    return frame && splitStartupWait(toMs - fromMs, frame);
   }
 }
 //@ chunk-tyg7f3ek.js:62405-62473 placement
-function overlapMs(e, n, r, s) {
-  return Math.max(0, Math.min(n, s) - Math.max(e, r));
+function overlapMs(startA, endA, startB, endB) {
+  return Math.max(0, Math.min(endA, endB) - Math.max(startA, startB));
 }
 //@ chunk-tyg7f3ek.js:62473-62524 placement
-function nonNegativeRounded(e) {
-  return Math.max(0, Math.round(e ?? 0));
+function nonNegativeRounded(ms) {
+  return Math.max(0, Math.round(ms ?? 0));
 }
 //@ chunk-tyg7f3ek.js:62524-63097 placement
 function inputLatencyFields({
@@ -526,7 +552,7 @@ function inputLatencyFields({
   aheadOfRead,
 }) {
   let rounded = Math.round(enqueuedAtMs - parsedAtMs);
-  let L = {
+  let waitTimes = {
     ...(waits.dedupMs !== undefined && {
       dedup: waits.dedupMs,
     }),
@@ -546,22 +572,22 @@ function inputLatencyFields({
       admit_check: awaitedAdmitMs,
     }),
   };
-  let q = 0;
-  for (let x of Object.values(L)) q += x ?? 0;
+  let totalMs = 0;
+  for (let ms of Object.values(waitTimes)) totalMs += ms ?? 0;
   return {
     ...splitStartupWait(Math.round(enqueuedWallMs - receivedWallMs) - rounded, aheadOfRead),
-    ...L,
-    other: Math.max(0, rounded - q),
+    ...waitTimes,
+    other: Math.max(0, rounded - totalMs),
   };
 }
 //@ chunk-tyg7f3ek.js:63097-63354 placement
-function splitStartupWait(e, n) {
-  let r = nonNegativeRounded(e);
-  let min = Math.min(r, nonNegativeRounded(n?.startupMs));
-  let min_2 = Math.min(r - min, nonNegativeRounded(n?.controlRequestsMs));
-  let min_3 = Math.min(r - min - min_2, nonNegativeRounded(n?.userFramesMs));
+function splitStartupWait(startupMs, frame) {
+  let rounded = nonNegativeRounded(startupMs);
+  let min = Math.min(rounded, nonNegativeRounded(frame?.startupMs));
+  let min_2 = Math.min(rounded - min, nonNegativeRounded(frame?.controlRequestsMs));
+  let min_3 = Math.min(rounded - min - min_2, nonNegativeRounded(frame?.userFramesMs));
   return {
-    before_read: r - min - min_2 - min_3,
+    before_read: rounded - min - min_2 - min_3,
     ...(min > 0 && {
       startup_wait: min,
     }),
@@ -574,20 +600,20 @@ function splitStartupWait(e, n) {
   };
 }
 //@ chunk-tyg7f3ek.js:63354-63503 placement
-function durationBucket_2(e) {
-  let n = e / 60000;
-  if (n < 1) return "under_1m";
-  if (n < 10) return "under_10m";
-  if (n < 60) return "under_1h";
-  if (n < 360) return "under_6h";
+function durationBucket_2(ms) {
+  let minutes = ms / 60000;
+  if (minutes < 1) return "under_1m";
+  if (minutes < 10) return "under_10m";
+  if (minutes < 60) return "under_1h";
+  if (minutes < 360) return "under_6h";
   return "6h_or_more";
 }
 //@ chunk-tyg7f3ek.js:63503-63708 placement
 function compactionRunFields({ terminalReason, compactions }) {
-  let r = compactions === 1 ? "1" : compactions === 2 ? "2" : "3_or_more";
+  let bucket = compactions === 1 ? "1" : compactions === 2 ? "2" : "3_or_more";
   return {
-    compactions_in_run: r,
-    ...flagKey("compactions_in_run", r),
+    compactions_in_run: bucket,
+    ...flagKey("compactions_in_run", bucket),
     ...(terminalReason !== undefined && {
       terminal_reason: terminalReason,
       ...flagKey("terminal_reason", terminalReason),
@@ -598,18 +624,18 @@ function compactionRunFields({ terminalReason, compactions }) {
 function createTurnPersistenceChecks({ storageV5, heldInMemory }) {
   return {
     flush: () => flushSessionStorage(),
-    async turnRan(r) {
-      let s = createPersistenceChecker({
+    async turnRan(batch) {
+      let checker = createPersistenceChecker({
         storageV5,
         heldInMemory,
       })();
-      return (await s.persisted(r)) && !(await s.turnUnanswered(r));
+      return (await checker.persisted(batch)) && !(await checker.turnUnanswered(batch));
     },
-    isFound: (r) =>
+    isFound: (uuid) =>
       createPersistenceChecker({
         storageV5,
         heldInMemory,
-      })().persisted(r),
+      })().persisted(uuid),
   };
 }
 //@ chunk-tyg7f3ek.js:63949-68286 placement
@@ -654,18 +680,18 @@ class RedeliveryResolver {
       if (!this.isHeld(pendingDeclinedUnansweredAck)) return true;
     return false;
   }
-  remember(e, n) {
-    this.pendingDeclinedUnansweredAcks.add(e);
-    this.putBackAndUnread.delete(e);
-    if (n !== undefined) {
-      let r = this.noRowVouchesFor.get(e);
+  remember(uuid, check) {
+    this.pendingDeclinedUnansweredAcks.add(uuid);
+    this.putBackAndUnread.delete(uuid);
+    if (check !== undefined) {
+      let existing = this.noRowVouchesFor.get(uuid);
       this.noRowVouchesFor.set(
-        e,
-        r?.readAgain === undefined
-          ? n
+        uuid,
+        existing?.readAgain === undefined
+          ? check
           : {
-              ...r,
-              stillOwed: n.stillOwed,
+              ...existing,
+              stillOwed: check.stillOwed,
             },
       );
     }
@@ -673,91 +699,92 @@ class RedeliveryResolver {
   runWhatNoRowVouchesFor() {
     this.readAgain([...this.noRowVouchesFor.keys()]);
   }
-  readAgain(e) {
-    for (let n of e) if (this.noRowVouchesFor.get(n)?.readAgain !== undefined) this.putBack(n);
+  readAgain(frames) {
+    for (let frame of frames)
+      if (this.noRowVouchesFor.get(frame)?.readAgain !== undefined) this.putBack(frame);
   }
   get heldBack() {
     return [...this.pendingDeclinedUnansweredAcks, ...this.putBackAndUnread];
   }
   get waitingToRun() {
     return [
-      ...[...this.noRowVouchesFor].filter(([, { thenRuns: e }]) => e === true).map(([e]) => e),
+      ...[...this.noRowVouchesFor].filter(([, { thenRuns }]) => thenRuns === true).map(([uuid]) => uuid),
       ...this.putBackAndUnread,
     ];
   }
   cancelWaitingToRun() {
     let waitingToRun = this.waitingToRun;
-    for (let n of waitingToRun) {
-      if (this.putBackAndUnread.has(n)) this.cancelledAndUnread.add(n);
-      this.forget(n);
-      this.stoppedWhileWaiting.delete(n);
-      this.receivedMessageUuids.track(n);
+    for (let frame of waitingToRun) {
+      if (this.putBackAndUnread.has(frame)) this.cancelledAndUnread.add(frame);
+      this.forget(frame);
+      this.stoppedWhileWaiting.delete(frame);
+      this.receivedMessageUuids.track(frame);
     }
     return waitingToRun;
   }
-  takeCancelledLine(e) {
-    return this.cancelledAndUnread.delete(e);
+  takeCancelledLine(uuid) {
+    return this.cancelledAndUnread.delete(uuid);
   }
   stopWaitingToRun() {
-    for (let e of this.waitingToRun) this.stoppedWhileWaiting.add(e);
+    for (let uuid of this.waitingToRun) this.stoppedWhileWaiting.add(uuid);
   }
-  takeStoppedWhileWaiting(e) {
-    return this.stoppedWhileWaiting.delete(e);
+  takeStoppedWhileWaiting(uuid) {
+    return this.stoppedWhileWaiting.delete(uuid);
   }
-  putBack(e) {
-    let readAgain = this.noRowVouchesFor.get(e)?.readAgain;
-    this.forget(e);
-    this.putBackAndUnread.add(e);
+  putBack(frame) {
+    let readAgain = this.noRowVouchesFor.get(frame)?.readAgain;
+    this.forget(frame);
+    this.putBackAndUnread.add(frame);
     try {
       readAgain?.();
     } catch (error) {
-      this.putBackAndUnread.delete(e);
+      this.putBackAndUnread.delete(frame);
       logError(error);
     }
   }
   closeWhatNoRowVouchesFor() {
     for (let key of [...this.noRowVouchesFor.keys()]) if (!this.isHeld(key)) this.close(key);
   }
-  isHeld(e) {
-    return this.holds(e) || this.noRowVouchesFor.get(e)?.stillOwed() === true;
+  isHeld(uuid) {
+    return this.holds(uuid) || this.noRowVouchesFor.get(uuid)?.stillOwed() === true;
   }
-  forget(e) {
-    this.pendingDeclinedUnansweredAcks.delete(e);
-    this.noRowVouchesFor.delete(e);
-    this.putBackAndUnread.delete(e);
+  forget(uuid) {
+    this.pendingDeclinedUnansweredAcks.delete(uuid);
+    this.noRowVouchesFor.delete(uuid);
+    this.putBackAndUnread.delete(uuid);
   }
-  async ackAtBatchTerminal(e) {
+  async ackAtBatchTerminal(outcome) {
     if (!this.hasAny) return;
     try {
       await this.transcript.flush();
     } catch {}
     for (let pendingDeclinedUnansweredAck of [...this.pendingDeclinedUnansweredAcks]) {
       if (this.isHeld(pendingDeclinedUnansweredAck)) continue;
-      let r = this.noRowVouchesFor.get(pendingDeclinedUnansweredAck);
-      if (r?.storeRewindStandIn !== undefined) {
+      let declined = this.noRowVouchesFor.get(pendingDeclinedUnansweredAck);
+      if (declined?.storeRewindStandIn !== undefined) {
         this.noRowVouchesFor.set(pendingDeclinedUnansweredAck, {
-          ...r,
+          ...declined,
           storeRewindStandIn: undefined,
         });
-        await r.storeRewindStandIn(true);
+        await declined.storeRewindStandIn(true);
       }
-      let s =
+      let stillHeld =
         this.noRowVouchesFor.has(pendingDeclinedUnansweredAck) ||
         (await this.transcript.turnRan(pendingDeclinedUnansweredAck));
-      let h =
-        !s &&
-        e?.opener === pendingDeclinedUnansweredAck &&
+      let kept =
+        !stillHeld &&
+        outcome?.opener === pendingDeclinedUnansweredAck &&
         !(await this.transcript.isFound(pendingDeclinedUnansweredAck))
-          ? e
+          ? outcome
           : undefined;
-      if (h?.flag === "on") await this.storeRewindStandIn(pendingDeclinedUnansweredAck, true);
+      if (kept?.flag === "on") await this.storeRewindStandIn(pendingDeclinedUnansweredAck, true);
       if (
-        (s || h !== undefined) &&
+        (stillHeld || kept !== undefined) &&
         this.pendingDeclinedUnansweredAcks.has(pendingDeclinedUnansweredAck) &&
         !this.isHeld(pendingDeclinedUnansweredAck)
       ) {
-        if (h !== undefined) {
-          let { flag } = h;
+        if (kept !== undefined) {
+          let { flag } = kept;
           logForDiagnosticsNoPII("info", "cli_redelivered_message_closed_without_transcript_proof", {
             ...chatOriginField(),
             ...(flag === "off" && {
@@ -766,24 +793,24 @@ class RedeliveryResolver {
             ...(flag === "cold" && {
               switch_cold: true,
             }),
-            ...compactionRunFields(h),
+            ...compactionRunFields(kept),
           });
           if (flag !== "on") continue;
         } else if (!this.noRowVouchesFor.has(pendingDeclinedUnansweredAck))
           this.noteNoRewindTarget(
             pendingDeclinedUnansweredAck,
-            e?.opener === pendingDeclinedUnansweredAck ? e : undefined,
+            outcome?.opener === pendingDeclinedUnansweredAck ? outcome : undefined,
           );
         this.close(pendingDeclinedUnansweredAck);
       }
     }
   }
-  noteNoRewindTarget(e, n) {
+  noteNoRewindTarget(uuid, reason) {
     try {
-      if (!this.hasRewindTarget(e))
+      if (!this.hasRewindTarget(uuid))
         logForDiagnosticsNoPII("info", "cli_redelivered_message_closed_with_no_rewind_target", {
           ...chatOriginField(),
-          ...(n && compactionRunFields(n)),
+          ...(reason && compactionRunFields(reason)),
         });
     } catch (error) {
       logForDebugging(
@@ -816,28 +843,28 @@ class RedeliveryResolver {
         this.close(pendingDeclinedUnansweredAck);
   }
   cancelAfterRewind() {
-    for (let e of this.cancelWaitingToRun()) this.io.onCommandLifecycle?.(e, "cancelled");
+    for (let uuid of this.cancelWaitingToRun()) this.io.onCommandLifecycle?.(uuid, "cancelled");
   }
-  cancelWithItsReRun(e) {
-    if (!this.pendingDeclinedUnansweredAcks.has(e)) return false;
-    this.stoppedWhileWaiting.delete(e);
-    this.finish(e, "cancelled");
+  cancelWithItsReRun(uuid) {
+    if (!this.pendingDeclinedUnansweredAcks.has(uuid)) return false;
+    this.stoppedWhileWaiting.delete(uuid);
+    this.finish(uuid, "cancelled");
     return true;
   }
-  close(e) {
-    if (this.noRowVouchesFor.get(e)?.thenRuns === true) {
-      this.putBack(e);
+  close(reason) {
+    if (this.noRowVouchesFor.get(reason)?.thenRuns === true) {
+      this.putBack(reason);
       return;
     }
-    this.noRowVouchesFor.get(e)?.storeRewindStandIn?.(false);
-    this.finish(e, "completed");
+    this.noRowVouchesFor.get(reason)?.storeRewindStandIn?.(false);
+    this.finish(reason, "completed");
   }
-  finish(e, n) {
-    this.forget(e);
-    this.receivedMessageUuids.track(e);
-    this.messageQueue.consumeCancelPending(e);
-    this.noteClosedUnrun(e, n);
-    this.io.onCommandLifecycle?.(e, n);
+  finish(outcome, reason) {
+    this.forget(outcome);
+    this.receivedMessageUuids.track(outcome);
+    this.messageQueue.consumeCancelPending(outcome);
+    this.noteClosedUnrun(outcome, reason);
+    this.io.onCommandLifecycle?.(outcome, reason);
   }
 }
 //@ chunk-tyg7f3ek.js:68286-69150 placement
@@ -853,15 +880,15 @@ class DeclinedRedeliveryBatcher {
     this.declined = declined;
     this.onBatch = onBatch;
   }
-  dropTaken(e) {
-    this.onBatch(e, "dropped");
+  dropTaken(command) {
+    this.onBatch(command, "dropped");
   }
-  startBatch(e) {
+  startBatch(batch) {
     this.onBatch(
-      e.flatMap(({ uuid }) => uuid ?? []),
+      batch.flatMap(({ uuid }) => uuid ?? []),
       "started",
     );
-    for (let { uuid, wakeupSource, wakeupScheduledFor } of e)
+    for (let { uuid, wakeupSource, wakeupScheduledFor } of batch)
       if (uuid !== undefined)
         this.io.onCommandLifecycle?.(
           uuid,
@@ -873,14 +900,14 @@ class DeclinedRedeliveryBatcher {
         );
   }
   settleBatch({ batchUuids, deliveredPollBatchUuids, terminalReason, aborted }) {
-    let h = turnOutcomeLabel(terminalReason, aborted);
+    let outcome = turnOutcomeLabel(terminalReason, aborted);
     this.onBatch(batchUuids, "settled");
     for (let batchUuid of batchUuids) {
       this.messageQueue.consumeCancelPending(batchUuid);
       if (!this.frozen)
         this.io.onCommandLifecycle?.(
           batchUuid,
-          deliveredPollBatchUuids.includes(batchUuid) ? "completed" : h,
+          deliveredPollBatchUuids.includes(batchUuid) ? "completed" : outcome,
         );
       this.declined.forget(batchUuid);
     }
@@ -888,38 +915,42 @@ class DeclinedRedeliveryBatcher {
   freezeTerminals() {
     this.frozen = true;
   }
-  forwardEngineLifecycle(e, n) {
-    if (this.frozen && (n === "completed" || n === "cancelled")) return;
-    this.io.onCommandLifecycle?.(e, n);
+  forwardEngineLifecycle(stage, entry) {
+    if (this.frozen && (entry === "completed" || entry === "cancelled")) return;
+    this.io.onCommandLifecycle?.(stage, entry);
   }
 }
 //@ chunk-tyg7f3ek.js:69187-69492 placement
 /**
  * 输入等待阶段名列表与其索引映射，供 InputWaitStopwatch 按阶段累计耗时。
  */
-var INPUT_WAIT_PHASES = [
-  "idle",
-  "earlier_turn",
-  "after_turn",
-  "background_wait",
-  "entry_joins",
-  "sdk_mcp_update",
-  "loop_top",
-  "session_start_wait",
-  "first_command",
-  "mcp_prewait",
-  "repo_wait",
-  "turn_joins",
-  "tool_pool",
-  "commit",
-  "after_arm",
-  "turn_gate",
-  "turn_open",
-  "engine_setup",
-  "tool_reread",
-  "cwd",
-];
-var INPUT_WAIT_PHASE_INDEX = new Map(INPUT_WAIT_PHASES.map((e, n) => [e, n]));
+var INPUT_WAIT_PHASES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var INPUT_WAIT_PHASE_INDEX;
+deferInit("chunk-tyg7f3ek.js:69187", () => {
+  INPUT_WAIT_PHASES = [
+    "idle",
+    "earlier_turn",
+    "after_turn",
+    "background_wait",
+    "entry_joins",
+    "sdk_mcp_update",
+    "loop_top",
+    "session_start_wait",
+    "first_command",
+    "mcp_prewait",
+    "repo_wait",
+    "turn_joins",
+    "tool_pool",
+    "commit",
+    "after_arm",
+    "turn_gate",
+    "turn_open",
+    "engine_setup",
+    "tool_reread",
+    "cwd",
+  ];
+  INPUT_WAIT_PHASE_INDEX = new Map(INPUT_WAIT_PHASES.map((phase, index) => [phase, index]));
+});
 //@ chunk-tyg7f3ek.js:69492-70578 placement
 class InputWaitStopwatch {
   id = randomUUID();
@@ -931,93 +962,95 @@ class InputWaitStopwatch {
   constructor(phaseSinceMs = performance.now()) {
     this.phaseSinceMs = phaseSinceMs;
   }
-  enter(e, n = performance.now()) {
-    this.spentMs[this.phase] += n - this.phaseSinceMs;
-    this.phase = INPUT_WAIT_PHASE_INDEX.get(e);
-    this.phaseSinceMs = n;
+  enter(phase, now = performance.now()) {
+    this.spentMs[this.phase] += now - this.phaseSinceMs;
+    this.phase = INPUT_WAIT_PHASE_INDEX.get(phase);
+    this.phaseSinceMs = now;
   }
-  controlRequestStarted(e = performance.now()) {
-    this.controlRequestEnded(e);
-    this.controlRequestSinceMs = e;
+  controlRequestStarted(now = performance.now()) {
+    this.controlRequestEnded(now);
+    this.controlRequestSinceMs = now;
   }
-  controlRequestEnded(e = performance.now()) {
+  controlRequestEnded(now = performance.now()) {
     if (this.controlRequestSinceMs !== undefined) {
-      this.controlRequestsMs += e - this.controlRequestSinceMs;
+      this.controlRequestsMs += now - this.controlRequestSinceMs;
       this.controlRequestSinceMs = undefined;
     }
   }
-  mark(e = performance.now()) {
+  mark(now = performance.now()) {
     let list = Array.from(this.spentMs);
-    list[this.phase] += e - this.phaseSinceMs;
+    list[this.phase] += now - this.phaseSinceMs;
     return {
       clockId: this.id,
       spentMs: list,
-      controlRequestsMs: this.controlRequestsNow(e),
+      controlRequestsMs: this.controlRequestsNow(now),
     };
   }
-  readSince(e, n, r) {
-    if (e.clockId !== this.id) return;
+  readSince(phase, now, sinceMs) {
+    if (phase.clockId !== this.id) return;
     return {
       phases: inputWaitBreakdown(
-        e.spentMs,
-        (s) => this.spentMs[s] + (s === this.phase ? n - this.phaseSinceMs : 0),
-        r,
+        phase.spentMs,
+        (name) => this.spentMs[name] + (name === this.phase ? now - this.phaseSinceMs : 0),
+        sinceMs,
       ),
-      controlRequestsMs: Math.max(0, Math.round(this.controlRequestsNow(n) - e.controlRequestsMs)),
+      controlRequestsMs: Math.max(0, Math.round(this.controlRequestsNow(now) - phase.controlRequestsMs)),
     };
   }
-  controlRequestsNow(e) {
+  controlRequestsNow(phase) {
     return (
-      this.controlRequestsMs + (this.controlRequestSinceMs === undefined ? 0 : e - this.controlRequestSinceMs)
+      this.controlRequestsMs +
+      (this.controlRequestSinceMs === undefined ? 0 : phase - this.controlRequestSinceMs)
     );
   }
 }
 //@ chunk-tyg7f3ek.js:70578-70763 placement
-function inputWaitBreakdown(spentMs, n, r) {
-  let s = {};
-  let h = 0;
-  let y = 0;
+function inputWaitBreakdown(spentMs, currentPhase, phaseSinceMs) {
+  let breakdown = {};
+  let previous = 0;
+  let reported = 0;
   for (let j = 0; j < INPUT_WAIT_PHASES.length; j++) {
-    h += Math.max(0, n(j) - (spentMs[j] ?? 0));
-    let R = Math.round(h) - y;
-    if (R > 0) {
-      s[INPUT_WAIT_PHASES[j]] = R;
-      y += R;
+    previous += Math.max(0, currentPhase(j) - (spentMs[j] ?? 0));
+    let elapsedMs = Math.round(previous) - reported;
+    if (elapsedMs > 0) {
+      breakdown[INPUT_WAIT_PHASES[j]] = elapsedMs;
+      reported += elapsedMs;
     }
   }
-  s.other = Math.max(0, Math.round(r) - y);
-  return s;
+  breakdown.other = Math.max(0, Math.round(phaseSinceMs) - reported);
+  return breakdown;
 }
 //@ chunk-tyg7f3ek.js:70763-70830 placement
-function stringToTextBlocks(e) {
-  return typeof e === "string"
+function stringToTextBlocks(text) {
+  return typeof text === "string"
     ? [
         {
           type: "text",
-          text: e,
+          text,
         },
       ]
-    : e;
+    : text;
 }
 //@ chunk-tyg7f3ek.js:70830-70958 placement
-function mergeQueuedPrompts_2(e) {
-  if (e.length === 1) return e[0];
-  if (e.every((n) => typeof n === "string"))
-    return e.join(`
+function mergeQueuedPrompts_2(values) {
+  if (values.length === 1) return values[0];
+  if (values.every((value) => typeof value === "string"))
+    return values.join(`
 `);
-  return e.map(stringToTextBlocks).reduce(joinTextAtSeam);
+  return values.map(stringToTextBlocks).reduce(joinTextAtSeam);
 }
 //@ chunk-tyg7f3ek.js:70958-71819 placement
 /**
  * 把同一批排队的多条 prompt 合并成一条（合并文本、mergedSendUuids、来源）。
  */
 function mergeQueuedPrompts(members) {
-  let n = members[0];
-  if (members.length === 1) return n;
-  let r = mergeQueuedTraceContexts(members);
-  let s = members.findLast((R) => R.uuid) ?? n;
-  let h = mergeQueuedPrompts_2(members.map((R) => R.value));
-  let y = n.origin?.kind === "peer" ? stripPeerMessageBody(n.origin, h, n.value) : undefined;
+  let first = members[0];
+  if (members.length === 1) return first;
+  let traceContext = mergeQueuedTraceContexts(members);
+  let lastWithUuid = members.findLast((member) => member.uuid) ?? first;
+  let mergedValue = mergeQueuedPrompts_2(members.map((member) => member.value));
+  let firstFrame =
+    first.origin?.kind === "peer" ? stripPeerMessageBody(first.origin, mergedValue, first.value) : undefined;
   let flattened = members.flatMap(({ origin }) =>
     origin?.kind === "peer" && origin.body !== undefined
       ? [
@@ -1028,78 +1061,79 @@ function mergeQueuedPrompts(members) {
       : [],
   );
   return {
-    ...n,
-    ...(y !== undefined && {
+    ...first,
+    ...(firstFrame !== undefined && {
       origin:
         flattened.length === members.length
           ? {
-              ...y,
+              ...firstFrame,
               members: flattened,
             }
-          : y,
+          : firstFrame,
     }),
-    value: h,
-    uuid: s.uuid,
-    frameTiming: s.frameTiming,
+    value: mergedValue,
+    uuid: lastWithUuid.uuid,
+    frameTiming: lastWithUuid.frameTiming,
     turnAttributionKey: lastTurnAttributionKey(members),
-    traceContext: r.parent,
-    linkedTraceContexts: r.linked,
+    traceContext: traceContext.parent,
+    linkedTraceContexts: traceContext.linked,
     attachmentSourceUuid: undefined,
     deliveryId: undefined,
-    fileAttachments: members.flatMap((R) => R.fileAttachments ?? []),
-    clientPlatform: members.find((R) => R.clientPlatform)?.clientPlatform ?? n.clientPlatform,
+    fileAttachments: members.flatMap((member) => member.fileAttachments ?? []),
+    clientPlatform: members.find((member) => member.clientPlatform)?.clientPlatform ?? first.clientPlatform,
     ccrTurnId: commonTurnId(members),
-    ...(members.some((R) => R.ccrTurnIdEndsWithTurn) && {
+    ...(members.some((member) => member.ccrTurnIdEndsWithTurn) && {
       ccrTurnIdEndsWithTurn: true,
     }),
-    ...(members.some((R) => R.stampThreadState) && {
+    ...(members.some((member) => member.stampThreadState) && {
       stampThreadState: true,
     }),
-    ...(members.some((R) => R.toolsUsed !== undefined) && {
-      toolsUsed: uniq(members.flatMap((R) => R.toolsUsed ?? [])),
+    ...(members.some((member) => member.toolsUsed !== undefined) && {
+      toolsUsed: uniq(members.flatMap((member) => member.toolsUsed ?? [])),
     }),
   };
 }
 //@ chunk-tyg7f3ek.js:71819-71901 placement
-function hasTurnAttribution(e) {
-  return e.uuid !== undefined && (e.turnAttributionKey !== undefined || !e.isMeta);
+function hasTurnAttribution(batch) {
+  return batch.uuid !== undefined && (batch.turnAttributionKey !== undefined || !batch.isMeta);
 }
 //@ chunk-tyg7f3ek.js:71901-72046 placement
-function isResumedTurnBatch(e) {
+function isResumedTurnBatch(batch) {
   return (
-    !isHandedOffBatch(e) &&
-    e.some(
-      (n) =>
-        n.resumedTurnUserMessageUuid !== undefined ||
-        (hasTurnAttribution(n) && (n.turnAttributionKey !== undefined || n.resumeReason !== undefined)),
+    !isHandedOffBatch(batch) &&
+    batch.some(
+      (member) =>
+        member.resumedTurnUserMessageUuid !== undefined ||
+        (hasTurnAttribution(member) &&
+          (member.turnAttributionKey !== undefined || member.resumeReason !== undefined)),
     )
   );
 }
 //@ chunk-tyg7f3ek.js:72046-72183 placement
-function isHandedOffBatch(e) {
-  return e.some(
-    (n) =>
-      n.handedOffTurn?.kind === "run" ||
-      (n.resumedTurnUserMessageUuid !== undefined && n.resumedTurnOpenerVouched !== true),
+function isHandedOffBatch(batch) {
+  return batch.some(
+    (member) =>
+      member.handedOffTurn?.kind === "run" ||
+      (member.resumedTurnUserMessageUuid !== undefined && member.resumedTurnOpenerVouched !== true),
   );
 }
 //@ chunk-tyg7f3ek.js:72183-72370 placement
-function batchUuids(e) {
-  return e.flatMap((n) =>
+function batchUuids(batch) {
+  return batch.flatMap((member) =>
     [
-      n.uuid,
-      n.resumedTurnUserMessageUuid,
-      ...(n.mergedSendUuids ?? []),
-      ...(n.alsoLeftToThisReRun ?? []),
-      ...(n.sendsOfItsCompactedTurn ?? []),
-    ].filter((r) => r !== undefined),
+      member.uuid,
+      member.resumedTurnUserMessageUuid,
+      ...(member.mergedSendUuids ?? []),
+      ...(member.alsoLeftToThisReRun ?? []),
+      ...(member.sendsOfItsCompactedTurn ?? []),
+    ].filter((uuid) => uuid !== undefined),
   );
 }
 //@ chunk-tyg7f3ek.js:72370-72484 placement
-function isDrainOnlyResume(e) {
+function isDrainOnlyResume(command) {
   return (
-    (e.drainOnly === true && e.resumedTurnUserMessageUuid !== undefined) ||
-    e.sendsOfItsCompactedTurn !== undefined
+    (command.drainOnly === true && command.resumedTurnUserMessageUuid !== undefined) ||
+    command.sendsOfItsCompactedTurn !== undefined
   );
 }
 export {

@@ -8,30 +8,9 @@
  * pieces: chunk-e6aww6q8.js (10), chunk-vp5gef34.js (12)
  * attribution: placement 21, affinity 1
  */
-import { realpath, lstat, unlink, open, readdir } from "fs/promises";
-import { join, sep, resolve, basename } from "path";
+import { sep, basename, join, resolve } from "path";
+import { readdir, open, unlink, lstat, realpath } from "fs/promises";
 import { randomBytes } from "crypto";
-import { memoizeWithLRU, retainCacheKey, memoizeWithTTLAsync } from "../utils/memoize.js";
-import { count, uniq } from "../utils/collections.js";
-import {
-  C,
-  Rn,
-  A,
-  j,
-  De,
-  pt,
-  ut,
-  ft,
-  fe,
-  mt,
-  gt,
-  ht,
-} from "../../vendor/@anthropic-ai/sandbox-runtime/dist/sandbox/sandbox-utils.js";
-import { jsonStringify, jsonParse } from "../utils/slowOperations.js";
-import { writeFileAtomic, assertPathSafeAsync } from "../utils/atomicPublishWrite.js";
-import { readOnlyNoFollowFlags } from "../utils/platformTargets.js";
-import { isENOENT, getErrnoCode, errorMessage } from "../utils/errors.js";
-import { SessionRootSlot } from "../bootstrap/sessionSlices.js";
 import { formatFileSize } from "../utils/format.js";
 import { MEMORY_SIZE_SOFT_RATIO, MEMORY_SIZE_WARN_RATIO } from "../utils/claudemd.js";
 import {
@@ -48,6 +27,7 @@ import {
   EXCLUDED_TOP_LEVEL_DIRS,
   normalizeKeySegment,
 } from "../services/memoryStore/memoryKeys.js";
+import { getErrnoCode, errorMessage, isENOENT } from "../utils/errors.js";
 import { logForDebugging } from "../utils/debug.js";
 import {
   verifyLinkTarget,
@@ -55,1712 +35,32 @@ import {
   errorKindLabel,
 } from "../utils/fsSafety/hardenedRead.js";
 import { formatStorageError } from "../utils/storage/storageErrors.js";
+import { assertPathSafeAsync, writeFileAtomic } from "../utils/atomicPublishWrite.js";
 import { scanMemoryHeaders } from "./memoryScan.js";
 import { createAbortController } from "../utils/abortController.js";
 import { logFeatureSad, logFeatureOk } from "../services/analytics/featureTelemetry.js";
 import { logEvent } from "../services/analytics/index.js";
+import { memoizeWithLRU, retainCacheKey, memoizeWithTTLAsync } from "../utils/memoize.js";
+import { count, uniq } from "../utils/collections.js";
+import {
+  DEFAULT_SYNC_OPTIONS,
+  scanStoreFiles,
+  classifyReadError,
+  TRANSIENT_READ_FAILURE_2,
+  isExcludedPath,
+  isMissingNonFileOrOversized,
+  readFileGuarded,
+  isNotRegularFileError,
+  NOT_A_REGULAR_FILE,
+  existsAsRegularFile,
+  hashContent,
+  readAndVerifyStoreEntry,
+} from "../../vendor/@anthropic-ai/sandbox-runtime/dist/sandbox/sandbox-utils.js";
+import { jsonStringify, jsonParse } from "../utils/slowOperations.js";
+import { readOnlyNoFollowFlags } from "../utils/platformTargets.js";
+import { SessionRootSlot } from "../bootstrap/sessionSlices.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
-//@ chunk-vp5gef34.js:1162-3668 placement
-/**
- * Porter 词干化算法：判断辅音/元音序列、CVC 结尾、双辅音，按 1a–5 各步替换后缀，最终给出词干（记忆索引分词用）。
- */
-var porterStemmer = (e) => e === "a" || e === "e" || e === "i" || e === "o" || e === "u";
-var isConsonantAt = (e, t) => {
-  let n = e[t];
-  if (porterStemmer(n)) return true;
-  if (n !== "y") return false;
-  let o = t;
-  while (o > 0 && e[o - 1] === "y") o--;
-  let s = o === 0 ? true : porterStemmer(e[o - 1]);
-  return (t - o) % 2 === 0 ? !s : s;
-};
-var countConsonantSequences = (e) => {
-  let t = 0;
-  let n = false;
-  for (let i = 0; i < e.length; i++) {
-    let s = e[i];
-    let r = porterStemmer(s) || (s === "y" && i > 0 && !n);
-    if (!r && n) t++;
-    n = r;
-  }
-  return t;
-};
-var hasVowel = (e) => {
-  let t = false;
-  for (let i = 0; i < e.length; i++) {
-    let o = e[i];
-    t = porterStemmer(o) || (o === "y" && i > 0 && !t);
-    if (t) return true;
-  }
-  return false;
-};
-var endsWithDoubleConsonant = (e) =>
-  e.length >= 2 && e.at(-1) === e.at(-2) && !isConsonantAt(e, e.length - 1);
-var endsWithCVC = (e) => {
-  if (e.length < 3) return false;
-  let last = e.at(-1);
-  return (
-    !isConsonantAt(e, e.length - 3) &&
-    isConsonantAt(e, e.length - 2) &&
-    !isConsonantAt(e, e.length - 1) &&
-    last !== "w" &&
-    last !== "x" &&
-    last !== "y"
-  );
-};
-var replaceSuffixList = (e, t) => {
-  for (let [n, o, s] of t) {
-    if (!e.endsWith(n)) continue;
-    let sliced = e.slice(0, e.length - n.length);
-    return countConsonantSequences(sliced) > s ? sliced + o : e;
-  }
-  return e;
-};
-var porterStep1a = (e) => {
-  if (e.endsWith("sses")) return e.slice(0, -2);
-  if (e.endsWith("ies")) return e.slice(0, -2);
-  if (e.endsWith("ss")) return e;
-  if (e.endsWith("s")) return e.slice(0, -1);
-  return e;
-};
-var porterStep1b = (e) => {
-  if (e.endsWith("eed")) {
-    let sliced = e.slice(0, -3);
-    return countConsonantSequences(sliced) > 0 ? e.slice(0, -1) : e;
-  }
-  let t = e.endsWith("ed") ? e.slice(0, -2) : e.endsWith("ing") ? e.slice(0, -3) : undefined;
-  if (t === undefined || !hasVowel(t)) return e;
-  if (t.endsWith("at") || t.endsWith("bl") || t.endsWith("iz")) return t + "e";
-  let last = t.at(-1);
-  if (endsWithDoubleConsonant(t) && last !== "l" && last !== "s" && last !== "z") return t.slice(0, -1);
-  if (countConsonantSequences(t) === 1 && endsWithCVC(t)) return t + "e";
-  return t;
-};
-var porterStep1c = (e) => (e.endsWith("y") && hasVowel(e.slice(0, -1)) ? e.slice(0, -1) + "i" : e);
-var porterStep2 = [
-  ["ational", "ate", 0],
-  ["tional", "tion", 0],
-  ["enci", "ence", 0],
-  ["anci", "ance", 0],
-  ["izer", "ize", 0],
-  ["abli", "able", 0],
-  ["bli", "ble", 0],
-  ["alli", "al", 0],
-  ["entli", "ent", 0],
-  ["eli", "e", 0],
-  ["ousli", "ous", 0],
-  ["ization", "ize", 0],
-  ["ation", "ate", 0],
-  ["ator", "ate", 0],
-  ["alism", "al", 0],
-  ["iveness", "ive", 0],
-  ["fulness", "ful", 0],
-  ["ousness", "ous", 0],
-  ["aliti", "al", 0],
-  ["iviti", "ive", 0],
-  ["biliti", "ble", 0],
-  ["logi", "log", 0],
-];
-var porterStep3 = [
-  ["icate", "ic", 0],
-  ["ative", "", 0],
-  ["alize", "al", 0],
-  ["iciti", "ic", 0],
-  ["ical", "ic", 0],
-  ["ful", "", 0],
-  ["ness", "", 0],
-];
-var porterStep4 = [
-  "al",
-  "ance",
-  "ence",
-  "er",
-  "ic",
-  "able",
-  "ible",
-  "ant",
-  "ement",
-  "ment",
-  "ent",
-  "ion",
-  "ou",
-  "ism",
-  "ate",
-  "iti",
-  "ous",
-  "ive",
-  "ize",
-];
-var porterStep5 = (e) => {
-  for (let t of porterStep4) {
-    if (!e.endsWith(t)) continue;
-    let sliced = e.slice(0, e.length - t.length);
-    let o = t !== "ion" || sliced.endsWith("s") || sliced.endsWith("t");
-    return countConsonantSequences(sliced) > 1 && o ? sliced : e;
-  }
-  return e;
-};
-var porterStem = (e) => {
-  if (!e.endsWith("e")) return e;
-  let sliced = e.slice(0, -1);
-  let n = countConsonantSequences(sliced);
-  if (n > 1) return sliced;
-  if (n === 1 && !endsWithCVC(sliced)) return sliced;
-  return e;
-};
-var stemWord = (e) =>
-  countConsonantSequences(e) > 1 && endsWithDoubleConsonant(e) && e.endsWith("l") ? e.slice(0, -1) : e;
-var measureWord = (e) => {
-  if (e.length <= 2) return e;
-  let t = porterStep1a(e);
-  t = porterStep1b(t);
-  t = porterStep1c(t);
-  t = replaceSuffixList(t, porterStep2);
-  t = replaceSuffixList(t, porterStep3);
-  t = porterStep5(t);
-  t = porterStem(t);
-  t = stemWord(t);
-  return t;
-};
-var isConsonantRun = memoizeWithLRU(measureWord, (e) => e, 50000);
-var stemAlias = retainCacheKey(isConsonantRun.cache);
-var stemWithOptions = (text) => (text.length <= 2 ? text : isConsonantRun(text));
-//@ chunk-vp5gef34.js:3668-7390 placement
-/**
- * 记忆索引的分词流程：按 Unicode 字母/数字切分、拆驼峰与数字、技术词改写（c++→cpp 等）、CJK 边界、去所有格与停用词，再按选项做词干化与复合词拆分。
- */
-var tokenizeForIndex = /[\p{L}\p{M}\p{N}]+/gu;
-var isUpperAscii = (e) => e >= "A" && e <= "Z";
-var isLowerAscii = (e) => e >= "a" && e <= "z";
-var isDigitAscii = (e) => e >= "0" && e <= "9";
-var isAlnumAscii = (e) => isUpperAscii(e) || isLowerAscii(e);
-var splitCamelAndDigits = (e) => {
-  let t = [];
-  let n = 0;
-  for (let idx = 1; idx < e.length; idx++) {
-    let s = e[idx - 1] ?? "";
-    let r = e[idx] ?? "";
-    let i = e[idx + 1] ?? "";
-    let a = i === "s" && idx + 2 === e.length;
-    if (
-      ((isLowerAscii(s) || isDigitAscii(s)) && isUpperAscii(r)) ||
-      (isUpperAscii(s) && isUpperAscii(r) && isLowerAscii(i) && !a) ||
-      (isAlnumAscii(s) && isDigitAscii(r)) ||
-      (isDigitAscii(s) && isAlnumAscii(r))
-    ) {
-      t.push(e.slice(n, idx));
-      n = idx;
-    }
-  }
-  t.push(e.slice(n));
-  return t;
-};
-var normalizeForIndex = (e) =>
-  e
-    .normalize("NFKD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase();
-var isLowerWord = (text) => /^[a-z]+$/.test(text);
-var tokenizeWithCompounds = (e) => {
-  let t = splitCamelAndDigits(e);
-  return t.length > 1
-    ? [
-        {
-          text: e,
-          compound: true,
-        },
-        ...t.map((text) => ({
-          text,
-          compound: false,
-        })),
-      ]
-    : [
-        {
-          text: e,
-          compound: false,
-        },
-      ];
-};
-var CJK_BOUNDARY_LEFT = String.raw`(^|[^\p{L}\p{N}]|[\u3040-\u30FF\u3400-\u4DBF\u4E00-\u9FFF\uAC00-\uD7AF\uF900-\uFAFF])`;
-var CJK_BOUNDARY_RIGHT = String.raw`(?!(?![\u3040-\u30FF\u3400-\u4DBF\u4E00-\u9FFF\uAC00-\uD7AF\uF900-\uFAFF])[\p{L}\p{N}])`;
-var TECH_TERM_REWRITES = [
-  [new RegExp(CJK_BOUNDARY_LEFT + String.raw`[cC]\+\+` + CJK_BOUNDARY_RIGHT, "gu"), " cpp "],
-  [new RegExp(CJK_BOUNDARY_LEFT + String.raw`[cC]#` + CJK_BOUNDARY_RIGHT, "gu"), " csharp "],
-  [new RegExp(CJK_BOUNDARY_LEFT + String.raw`[fF]#` + CJK_BOUNDARY_RIGHT, "gu"), " fsharp "],
-  [new RegExp(CJK_BOUNDARY_LEFT + String.raw`\.[nN][eE][tT]` + CJK_BOUNDARY_RIGHT, "gu"), " dotnet "],
-];
-var regExp = new RegExp(CJK_BOUNDARY_LEFT + String.raw`([vV]?\d+(?:\.\d+)+)`, "gu");
-var CJK_CHAR_CLASS = /^(?![\u3040-\u30FF\u3400-\u4DBF\u4E00-\u9FFF\uAC00-\uD7AF\uF900-\uFAFF])[\p{L}\p{N}]/u;
-var CJK_CHAR_TEST = /[\u3040-\u30FF\u3400-\u4DBF\u4E00-\u9FFF\uAC00-\uD7AF\uF900-\uFAFF]/;
-var trimCjkEdges =
-  /[\u3040-\u30FF\u3400-\u4DBF\u4E00-\u9FFF\uAC00-\uD7AF\uF900-\uFAFF]+|[^\u3040-\u30FF\u3400-\u4DBF\u4E00-\u9FFF\uAC00-\uD7AF\uF900-\uFAFF]+/gu;
-var replaceTechTerms = (e) => {
-  let t = [...e];
-  if (t.length <= 2) return [e];
-  let n = [e];
-  for (let i = 0; i < t.length - 1; i++) n.push(t[i] + t[i + 1]);
-  return n;
-};
-var HALFWIDTH_KATAKANA_RE = /[\uFF66-\uFF9F]/;
-var DIGITS_ONLY_RE = /^\p{N}+$/u;
-var stripPossessive = (e) => {
-  let t = [];
-  let n = false;
-  let o = false;
-  for (let s of e) {
-    let last = t.at(-1);
-    if (last !== undefined && DIGITS_ONLY_RE.test(s) && o) {
-      last.push(s);
-      n = true;
-      continue;
-    }
-    if (last !== undefined && n && CJK_CHAR_TEST.test(s)) {
-      last.push(s);
-      n = false;
-      o = true;
-      continue;
-    }
-    t.push([s]);
-    n = DIGITS_ONLY_RE.test(s);
-    o = CJK_CHAR_TEST.test(s);
-  }
-  return t.map((s) => (s.length === 1 ? s[0] : s.join("")));
-};
-var SINGLE_LETTER_RE = /^\p{L}$/u;
-var dropStopword = (e) => {
-  let t = [];
-  for (let n of e) {
-    let last = t.at(-1);
-    let s = SINGLE_LETTER_RE.test(n) && !CJK_CHAR_TEST.test(n);
-    if (last !== undefined) {
-      let last_2 = last.at(-1);
-      if (s && CJK_CHAR_TEST.test(last_2)) {
-        last.push(n);
-        continue;
-      }
-      if (CJK_CHAR_TEST.test(n) && SINGLE_LETTER_RE.test(last_2) && !CJK_CHAR_TEST.test(last_2)) {
-        last.push(n);
-        continue;
-      }
-    }
-    t.push([n]);
-  }
-  return t.map((n) => (n.length === 1 ? n[0] : n.join("")));
-};
-var tokenizeWord = (e) => {
-  let t = [];
-  for (let idx = 0; idx < e.length; idx++) {
-    let o = e[idx];
-    if (!CJK_CHAR_TEST.test(o) || [...o].length !== 1) continue;
-    let s = idx > 0 ? e[idx - 1] : undefined;
-    let r = idx + 1 < e.length ? e[idx + 1] : undefined;
-    let i =
-      s !== undefined && !CJK_CHAR_TEST.test(s) && [...normalizeForIndex(s)].length > 1
-        ? s + o
-        : r !== undefined && !CJK_CHAR_TEST.test(r) && [...normalizeForIndex(r)].length > 1
-          ? o + r
-          : undefined;
-    if (i !== undefined)
-      t.push({
-        text: i,
-        compound: true,
-      });
-  }
-  return t;
-};
-var stemTokens = (e, t) => {
-  let replaced = e.replace(/\[\[([^[\]]*)\]\]/g, " $1 ");
-  for (let [r, i] of TECH_TERM_REWRITES) replaced = replaced.replace(r, (a, c) => c + i);
-  replaced = replaced.replace(regExp, (r, i, a, c, l) => {
-    let codePoint = l.codePointAt(c + r.length);
-    if (codePoint !== undefined && CJK_CHAR_CLASS.test(String.fromCodePoint(codePoint))) return r;
-    return `${i}${a} ${a.replaceAll(".", "")}`;
-  });
-  let o = replaced.match(tokenizeForIndex) ?? [];
-  let flattened = o
-    .flatMap((r) => {
-      let i = HALFWIDTH_KATAKANA_RE.test(r) ? r.normalize("NFKC") : r;
-      if (CJK_CHAR_TEST.test(i)) {
-        let c = dropStopword(stripPossessive(i.match(trimCjkEdges) ?? []));
-        let l = t.compounds ? tokenizeWord(c) : [];
-        let flattened = c.flatMap((h) => {
-          if (!CJK_CHAR_TEST.test(h)) {
-            let m = tokenizeWithCompounds(h);
-            return t.compounds ? m : m.filter((g) => !g.compound);
-          }
-          let u = replaceTechTerms(h);
-          let p = u.length > 1;
-          let mapped = (h.match(/\p{N}{3,}/gu) ?? []).map((text) => ({
-            text,
-            compound: true,
-          }));
-          return [
-            ...u.map((text, g) => ({
-              text,
-              compound: p && g === 0,
-            })),
-            ...mapped,
-          ].filter((m) => !m.compound || t.compounds);
-        });
-        flattened.push(...l);
-        return [...flattened.filter((h) => h.compound), ...flattened.filter((h) => !h.compound)];
-      }
-      let a = tokenizeWithCompounds(i);
-      return t.compounds ? a : a.filter((c) => !c.compound);
-    })
-    .map(({ text, compound }) => ({
-      text: normalizeForIndex(text),
-      compound,
-    }))
-    .filter(({ text }) => text.length > 1)
-    .flatMap(({ text, compound }) => {
-      if (compound) {
-        let c = t.dualStem && isLowerWord(text) ? stemWithOptions(text) : text;
-        return c !== text ? [text, c] : [text];
-      }
-      if (!isLowerWord(text)) return [text];
-      let a = stemWithOptions(text);
-      return t.dualStem && a !== text ? [a, text] : [a];
-    });
-  if (flattened.length > 0 || o.length === 0 || t.singleCharFallback === false) return flattened;
-  return o.map(normalizeForIndex);
-};
-var tokenizeForSearch = (e) =>
-  stemTokens(e, {
-    dualStem: false,
-    compounds: true,
-  });
-var tokenizeStrict = (e) =>
-  stemTokens(e, {
-    dualStem: false,
-    compounds: true,
-    singleCharFallback: false,
-  });
-var tokenizeDualStem = (e) =>
-  stemTokens(e, {
-    dualStem: true,
-    compounds: true,
-  });
-var tokenizeNoCompounds = (e) =>
-  stemTokens(e, {
-    dualStem: false,
-    compounds: false,
-  });
-//@ chunk-vp5gef34.js:7390-8573 placement
-/**
- * 把记忆文件拆成索引字段：文件名、frontmatter、各级标题、正文（含代码块跳过），并给出各字段文本。
- */
-var extractMemoryFields = ["filename", "frontmatter", "headings", "body"];
-var FRONTMATTER_RE = /^---[ \t]*\r?\n([\s\S]*?)\r?\n---[ \t]*(?:\r?\n|$)/;
-var YAML_KEY_LINE_RE = /^[\w-]+:/m;
-var MARKDOWN_HEADING_RE = /^#{1,6}\s+(.*)$/;
-var FENCE_OPEN_RE = /^(`{3,}|~{3,})(.*)$/;
-var basenameWithoutExt = (e) => {
-  let sliced = e.slice(e.lastIndexOf("/") + 1);
-  let index = sliced.lastIndexOf(".");
-  return index > 0 ? sliced.slice(0, index) : sliced;
-};
-var parseMemoryDocument = (e) => {
-  let t = {
-    headings: [],
-    body: [[]],
-  };
-  let n;
-  for (let o of e) {
-    let match = o.match(FENCE_OPEN_RE);
-    if (match !== null) {
-      let a = match[1];
-      if (n === undefined) {
-        n = a;
-        t.body.at(-1).push(o);
-        continue;
-      }
-      if (a[0] === n[0] && a.length >= n.length && match[2].trim() === "") {
-        n = undefined;
-        t.body.at(-1).push(o);
-        continue;
-      }
-    }
-    let i = n !== undefined ? undefined : o.match(MARKDOWN_HEADING_RE)?.[1];
-    if (i === undefined) t.body.at(-1).push(o);
-    else {
-      t.headings.push(i);
-      t.body.push([]);
-    }
-  }
-  return t;
-};
-var stripFrontmatter = (headings) => {
-  let filtered = headings.map((n) => tokenizeStrict(n)).filter((n) => n.length > 0);
-  if (filtered.length > 0) return filtered.flatMap((n) => [...n, ""]);
-  return tokenizeForSearch(
-    headings.join(`
-`),
-  );
-};
-var splitHeadingSections = (body) => {
-  let filtered = body
-    .map((n) =>
-      tokenizeStrict(
-        n.join(`
-`),
-      ),
-    )
-    .filter((n) => n.length > 0);
-  if (filtered.length > 0) return filtered.flatMap((n, o) => (o === 0 ? n : ["", ...n]));
-  return tokenizeForSearch(
-    body.map((n) =>
-      n.join(`
-`),
-    ).join(`
-`),
-  );
-};
-var extractMemoryFieldsFromFile = (e, t) => {
-  let replaced = t.replace(/^\uFEFF/, "");
-  let match = replaced.match(FRONTMATTER_RE);
-  let s = match !== null && YAML_KEY_LINE_RE.test(match[1] ?? "");
-  let r = s ? (match[1] ?? "") : "";
-  let i = s ? replaced.slice(match[0].length) : replaced;
-  let { headings, body } = parseMemoryDocument(i.split(/\r?\n/));
-  return {
-    path: e,
-    fields: {
-      filename: tokenizeForSearch(basenameWithoutExt(e)),
-      frontmatter: tokenizeForSearch(r),
-      headings: stripFrontmatter(headings),
-      body: splitHeadingSections(body),
-    },
-  };
-};
-//@ chunk-vp5gef34.js:8573-12080 placement
-/**
- * 记忆 BM25 倒排索引的内存结构操作：术语 → 文档 id 与位置、按字段统计长度、增删改文档、未验证文档标记与按路径查文档。
- */
-var buildInvertedIndex = extractMemoryFields.length;
-var le = Object.fromEntries(extractMemoryFields.map((extractMemoryField, t) => [extractMemoryField, t]));
-var MAX_DOC_ID = 4294967295;
-var emptyFieldCounters = () =>
-  Object.fromEntries(extractMemoryFields.map((extractMemoryField) => [extractMemoryField, 0]));
-var createEmptyIndex = () => ({
-  terms: new Map(),
-  docs: new Map(),
-  pathToId: new Map(),
-  unverified: new Set(),
-  fieldLengthTotals: emptyFieldCounters(),
-  fieldDocCounts: emptyFieldCounters(),
-  nextDocId: 0,
-});
-var growUint32Array = (e, t) => {
-  if (e.length >= t) return e;
-  let uint32Array = new Uint32Array(Math.max(t, e.length * 2));
-  uint32Array.set(e);
-  return uint32Array;
-};
-var indexDocumentFields = (e) => {
-  let t = new Map();
-  extractMemoryFields.forEach((extractMemoryField, o) => {
-    e.fields[extractMemoryField].forEach((s, r) => {
-      if (s === "") return;
-      let i = t.get(s) ?? extractMemoryFields.map(() => []);
-      i[o].push(r);
-      t.set(s, i);
-    });
-  });
-  return t;
-};
-var addDocumentToIndex = (e, t, n, o) => {
-  let s = e.terms.get(t) ?? {
-    docIds: new Uint32Array(2),
-    offsets: new Uint32Array(2 * buildInvertedIndex + 1),
-    positions: new Uint32Array(8),
-    size: 0,
-  };
-  let size = s.size;
-  let i = s.offsets[buildInvertedIndex * size];
-  let reduced = o.reduce((acc, d) => acc + d.length, 0);
-  if (i + reduced > MAX_DOC_ID) throw Error("position space exhausted");
-  if (size > 0 && s.docIds[size - 1] >= n) throw Error("posting docId out of order");
-  s.docIds = growUint32Array(s.docIds, size + 1);
-  s.offsets = growUint32Array(s.offsets, buildInvertedIndex * (size + 1) + 1);
-  s.positions = growUint32Array(s.positions, i + reduced);
-  s.docIds[size] = n;
-  let c = i;
-  o.forEach((l, d) => {
-    s.offsets[buildInvertedIndex * size + d] = c;
-    s.positions.set(l, c);
-    c += l.length;
-  });
-  s.offsets[buildInvertedIndex * (size + 1)] = c;
-  s.size = size + 1;
-  if (size === 0) e.terms.set(t, s);
-};
-var removeDocumentFromIndex = (e, t) => {
-  let n = e.offsets[buildInvertedIndex * t];
-  let o = e.offsets[buildInvertedIndex * (t + 1)];
-  let s = e.offsets[buildInvertedIndex * e.size];
-  e.positions.copyWithin(n, o, s);
-  e.docIds.copyWithin(t, t + 1, e.size);
-  for (let i = buildInvertedIndex * (t + 1); i <= buildInvertedIndex * e.size; i++)
-    e.offsets[i - buildInvertedIndex] = e.offsets[i] - (o - n);
-  e.size--;
-};
-var rebuildFieldsForDoc = (e, t) => {
-  let n = 0;
-  let o = e.size - 1;
-  while (n <= o) {
-    let s = (n + o) >> 1;
-    let r = e.docIds[s];
-    if (r === t) return s;
-    if (r < t) n = s + 1;
-    else o = s - 1;
-  }
-  return -1;
-};
-var docIdsOfTerm = (e) => e.docIds.subarray(0, e.size);
-var appendDocId = (e, t, extractMemoryField) =>
-  e.offsets[buildInvertedIndex * t + le[extractMemoryField] + 1] -
-  e.offsets[buildInvertedIndex * t + le[extractMemoryField]];
-var removeDocIdFromTerm = (entry, slot, extractMemoryField) => {
-  let o = entry.offsets[buildInvertedIndex * slot + le[extractMemoryField]];
-  let s = entry.offsets[buildInvertedIndex * slot + le[extractMemoryField] + 1];
-  return o === s ? undefined : entry.positions.subarray(o, s);
-};
-var termDocCount = (e, t) => e.terms.get(t)?.size ?? 0;
-var addPostingPosition = (e, t) => {
-  let n = e.terms.get(t);
-  return n?.size === 1 ? n.docIds[0] : undefined;
-};
-var removePosting = (e) => {
-  e.docIds = e.docIds.slice(0, e.size);
-  e.offsets = e.offsets.slice(0, buildInvertedIndex * e.size + 1);
-  e.positions = e.positions.slice(0, e.offsets[buildInvertedIndex * e.size]);
-};
-var upsertDocument = (e, memoryFieldsFromFile, n) => {
-  if (e.nextDocId > MAX_DOC_ID) throw Error("docId space exhausted");
-  if (e.pathToId.has(memoryFieldsFromFile.path)) hasDocumentPath(e, memoryFieldsFromFile.path);
-  let o = e.nextDocId++;
-  for (let [r, i] of indexDocumentFields(memoryFieldsFromFile)) addDocumentToIndex(e, r, o, i);
-  let s = Object.fromEntries(
-    extractMemoryFields.map((extractMemoryField) => [
-      extractMemoryField,
-      count(memoryFieldsFromFile.fields[extractMemoryField], (i) => i !== ""),
-    ]),
-  );
-  for (let extractMemoryField of extractMemoryFields) {
-    e.fieldLengthTotals[extractMemoryField] += s[extractMemoryField];
-    if (s[extractMemoryField] > 0) e.fieldDocCounts[extractMemoryField]++;
-  }
-  e.docs.set(o, {
-    path: memoryFieldsFromFile.path,
-    hash: n.hash,
-    size: n.size,
-    mtimeMs: n.mtimeMs,
-    fieldLengths: s,
-  });
-  e.pathToId.set(memoryFieldsFromFile.path, o);
-  return o;
-};
-var markUnverified = (e, t, n) => {
-  for (let extractMemoryField of extractMemoryFields) {
-    e.fieldLengthTotals[extractMemoryField] -= n.fieldLengths[extractMemoryField];
-    if (n.fieldLengths[extractMemoryField] > 0) e.fieldDocCounts[extractMemoryField]--;
-  }
-  e.docs.delete(t);
-  e.pathToId.delete(n.path);
-  e.unverified.delete(t);
-};
-var isUnverified = (e, t, n) => {
-  for (let [o, s] of e.terms) {
-    let r = rebuildFieldsForDoc(s, t);
-    if (r < 0) continue;
-    removeDocumentFromIndex(s, r);
-    if (s.size === 0) e.terms.delete(o);
-  }
-  markUnverified(e, t, n);
-};
-var hasDocumentPath = (e, t) => {
-  let n = e.pathToId.get(t);
-  let o = n === undefined ? undefined : e.docs.get(n);
-  if (n === undefined || o === undefined) return false;
-  isUnverified(e, n, o);
-  return true;
-};
-var documentIdForPath = (e, t) => {
-  let n = 0;
-  while (n < e.size && !t.has(e.docIds[n])) n++;
-  if (n === e.size) return;
-  let o = n;
-  let s = e.offsets[buildInvertedIndex * n];
-  for (; n < e.size; n++) {
-    let r = e.docIds[n];
-    let i = e.offsets[buildInvertedIndex * n];
-    let a = e.offsets[buildInvertedIndex * (n + 1)];
-    if (t.has(r)) continue;
-    let c = i - s;
-    e.positions.copyWithin(s, i, a);
-    e.docIds[o] = r;
-    for (let idx = 0; idx < buildInvertedIndex; idx++)
-      e.offsets[buildInvertedIndex * o + idx] = e.offsets[buildInvertedIndex * n + idx] - c;
-    s += a - i;
-    o++;
-  }
-  e.offsets[buildInvertedIndex * o] = s;
-  e.size = o;
-};
-var MAX_TERM_KEY_CHARS = 16;
-var dropDocuments = (e, t) => {
-  let n = new Map();
-  for (let s of t) {
-    let r = e.pathToId.get(s);
-    let i = r === undefined ? undefined : e.docs.get(r);
-    if (r !== undefined && i !== undefined) n.set(r, i);
-  }
-  if (n.size < MAX_TERM_KEY_CHARS) {
-    for (let [s, r] of n) isUnverified(e, s, r);
-    return n.size;
-  }
-  let o = new Set(n.keys());
-  for (let [s, r] of e.terms) {
-    documentIdForPath(r, o);
-    if (r.size === 0) e.terms.delete(s);
-  }
-  for (let [s, r] of n) markUnverified(e, s, r);
-  return n.size;
-};
-var emptyIndexSnapshot = (e) => ({
-  docCount: e.docs.size,
-  avgFieldLength: Object.fromEntries(
-    extractMemoryFields.map((extractMemoryField) => [
-      extractMemoryField,
-      e.fieldDocCounts[extractMemoryField] === 0
-        ? 0
-        : e.fieldLengthTotals[extractMemoryField] / e.fieldDocCounts[extractMemoryField],
-    ]),
-  ),
-});
-//@ chunk-vp5gef34.js:12080-15423 placement
-/**
- * BM25 打分：按字段权重（文件名/frontmatter 3、标题 2.5、正文 1）与文档长度归一化打分，叠加短语命中与邻近性加成，返回排序后的结果。
- */
-var bm25Search = {
-  k1: 1.2,
-  fieldWeights: {
-    filename: 3,
-    frontmatter: 3,
-    headings: 2.5,
-    body: 1,
-  },
-  fieldB: {
-    filename: 0.75,
-    frontmatter: 0.75,
-    headings: 0.75,
-    body: 0.75,
-  },
-  proximityWeight: 0,
-  phraseBoost: 0.5,
-};
-var parseQueryTerms = (e) => {
-  let t = tokenizeNoCompounds(e);
-  if (t.length === 0) return [];
-  let n = tokenizeForSearch(e);
-  let o = [];
-  let s = [];
-  let r = 0;
-  for (let i of n) {
-    if (r < t.length && i === t[r]) {
-      s.push(i);
-      r++;
-      continue;
-    }
-    if (s.length > 0) {
-      o.push(s);
-      s = [];
-    }
-  }
-  if (s.length > 0) o.push(s);
-  for (; r < t.length; r++) o.push([t[r]]);
-  return o;
-};
-var idfForTerm = (e) => {
-  let phrases =
-    ((e.match(/"/g) ?? []).length & 1) === 0
-      ? [...e.matchAll(/"([^"]*)"/g)]
-          .flatMap((o) => parseQueryTerms(o[1] ?? ""))
-          .filter((o) => o.length > 1 && o.every((s) => s.length > 1))
-      : [];
-  return {
-    terms: uniq(tokenizeDualStem(e)),
-    phrases,
-    boostPhrases: [],
-  };
-};
-var fieldBoostFactor = (docCount, t) => {
-  let n = Math.log((docCount - t + 0.5) / (t + 0.5));
-  return n <= 0 ? 0.000001 : n;
-};
-var BM25_K1 = 0.7;
-var MIN_FIELD_LENGTH_FOR_BOOST = 16;
-var fieldLengthBoost = (e) => (e < MIN_FIELD_LENGTH_FOR_BOOST ? 0 : BM25_K1 * fieldBoostFactor(e, 1));
-var scoreDocument = (e, t, fieldLengths, avgFieldLength, s) =>
-  extractMemoryFields.reduce((acc, extractMemoryField) => {
-    let a = appendDocId(e, t, extractMemoryField);
-    if (a === 0 || avgFieldLength[extractMemoryField] === 0) return acc;
-    let c = s.fieldB[extractMemoryField];
-    let l = 1 - c + (c * fieldLengths[extractMemoryField]) / avgFieldLength[extractMemoryField];
-    return acc + (s.fieldWeights[extractMemoryField] * a) / l;
-  }, 0);
-var phraseMatchBonus = (e, t, n) => {
-  let mapped = n.map((s) => proximityBonus(e, s, t));
-  if (mapped.some((s) => s === undefined)) return false;
-  return extractMemoryFields.some((extractMemoryField) => {
-    let r = [];
-    for (let c of mapped) {
-      let l = c === undefined ? undefined : removeDocIdFromTerm(c.entry, c.slot, extractMemoryField);
-      if (l === undefined) return false;
-      r.push(l);
-    }
-    let [i, ...a] = r;
-    if (i === undefined) return false;
-    return i.some((c) => a.every((l, d) => collectFieldScores(l, c + d + 1)));
-  });
-};
-var proximityBonus = (e, t, n) => {
-  let o = e.terms.get(t);
-  let s = o === undefined ? -1 : rebuildFieldsForDoc(o, n);
-  return o === undefined || s < 0
-    ? undefined
-    : {
-        entry: o,
-        slot: s,
-      };
-};
-var collectFieldScores = (e, t) => {
-  let n = 0;
-  let o = e.length - 1;
-  while (n <= o) {
-    let s = (n + o) >> 1;
-    let r = e[s];
-    if (r === t) return true;
-    if (r < t) n = s + 1;
-    else o = s - 1;
-  }
-  return false;
-};
-var EMPTY_BEST_SPAN = {
-  span: 1 / 0,
-  termCount: 0,
-};
-var bestSpanForTerm = (e, t, n) => {
-  let filtered = n
-    .map((l) => {
-      let d = proximityBonus(e, l, t);
-      return d === undefined ? undefined : removeDocIdFromTerm(d.entry, d.slot, "body");
-    })
-    .filter((l) => l !== undefined);
-  if (filtered.length < 2) return EMPTY_BEST_SPAN;
-  let sorted = filtered
-    .flatMap((l, termIdx) =>
-      Array.from(l, (pos) => ({
-        pos,
-        termIdx,
-      })),
-    )
-    .sort((l, d) => l.pos - d.pos);
-  let r = new Map();
-  let i = [];
-  let a = 0;
-  let c = 1 / 0;
-  for (let l of sorted) {
-    i.push(l);
-    let d = r.get(l.termIdx) ?? 0;
-    r.set(l.termIdx, d + 1);
-    if (d === 0) a++;
-    while (a === filtered.length) {
-      let h = i.shift();
-      if (h === undefined) break;
-      c = Math.min(c, l.pos - h.pos + 1);
-      let u = r.get(h.termIdx) ?? 0;
-      r.set(h.termIdx, u - 1);
-      if (u === 1) a--;
-    }
-  }
-  return {
-    span: c,
-    termCount: filtered.length,
-  };
-};
-var mergeSpans = (exactTerms, conceptualKeywords) => {
-  let flattened = exactTerms.flatMap((a) => parseQueryTerms(a));
-  let terms = uniq([
-    ...exactTerms.flatMap((a) => tokenizeDualStem(a)),
-    ...conceptualKeywords.flatMap((a) => tokenizeDualStem(a)),
-  ]);
-  let filtered = flattened.filter((a) => a.length > 1);
-  let r = new Set();
-  let boostPhrases = filtered.filter((a) => {
-    let joined = a.join(" ");
-    if (r.has(joined)) return false;
-    r.add(joined);
-    return true;
-  });
-  return {
-    terms,
-    phrases: [],
-    boostPhrases,
-  };
-};
-var searchIndex = (index, t, n, o = bm25Search) => {
-  let { terms, phrases, boostPhrases } = typeof t === "string" ? idfForTerm(t) : t;
-  let a = emptyIndexSnapshot(index);
-  if (a.docCount === 0 || terms.length === 0) return [];
-  let mapped = terms.map((term) => index.terms.get(term));
-  let l = new Map(terms.map((term, f) => [term, fieldBoostFactor(a.docCount, mapped[f]?.size ?? 0)]));
-  let d = new Map(
-    boostPhrases
-      .flat()
-      .filter((p) => !l.has(p))
-      .map((p) => [p, fieldBoostFactor(a.docCount, index.terms.get(p)?.size ?? 0)]),
-  );
-  let h = new Set(mapped.flatMap((p) => (p === undefined ? [] : [...docIdsOfTerm(p)])));
-  for (let boostPhrase of boostPhrases) {
-    let mapped = boostPhrase.map((I) => index.terms.get(I));
-    if (mapped.some((I) => I === undefined)) continue;
-    let [m, ...g] = mapped;
-    let mapped_2 = g.map((I) => new Set(docIdsOfTerm(I)));
-    for (let I of docIdsOfTerm(m)) if (mapped_2.every((T) => T.has(I))) h.add(I);
-  }
-  return [...h]
-    .filter((p) => phrases.every((phrase) => phraseMatchBonus(index, p, phrase)))
-    .map((p) => {
-      let f = index.docs.get(p);
-      let mapped_2 = mapped.map((v) => (v === undefined ? -1 : rebuildFieldsForDoc(v, p)));
-      let filtered = terms.filter((term, R) => mapped_2[R] >= 0);
-      let reduced = terms.reduce((acc, term, E) => {
-        if (mapped_2[E] < 0) return acc;
-        let D = scoreDocument(mapped[E], mapped_2[E], f.fieldLengths, a.avgFieldLength, o);
-        return acc + l.get(term) * (D / (o.k1 + D));
-      }, 0);
-      let reduced_2 = boostPhrases.reduce(
-        (acc, boostPhrase) =>
-          phraseMatchBonus(index, p, boostPhrase)
-            ? acc + o.phraseBoost * boostPhrase.reduce((acc, D) => acc + (l.get(D) ?? d.get(D) ?? 0), 0)
-            : acc,
-        0,
-      );
-      let { span, termCount } = o.proximityWeight > 0 ? bestSpanForTerm(index, p, filtered) : EMPTY_BEST_SPAN;
-      let P = span === 1 / 0 ? 0 : (o.proximityWeight * reduced) / Math.max(1, 1 + span - termCount);
-      return {
-        path: f.path,
-        score: reduced + reduced_2 + P,
-        matchedTerms: filtered,
-      };
-    })
-    .filter((p) => p.score > 0)
-    .sort((p, f) => f.score - p.score || (p.path < f.path ? -1 : 1))
-    .slice(0, n);
-};
-//@ chunk-vp5gef34.js:19463-21378 affinity
-/**
- * 记忆 BM25 索引与磁盘同步：An 比较扫描结果找出需重建与需删除的文档；yt 扫描目录、确认失踪文件确实不存在后删除，读入新增/变化的 .md 并更新哈希，返回增删改与跳过的统计。
- */
-var diffMemoryIndex = (e, files, skipped = new Set(), skippedSubtrees = new Set(), s) => {
-  let r = new Set(files.map((d) => d.path));
-  let mapped = [...skippedSubtrees].map((d) => d + "/");
-  let a = (d) => mapped.length > 0 && mapped.some((h) => d.startsWith(h));
-  let toRemove = [...e.pathToId.keys()].filter(
-    (key) => s?.(key) === true || (!r.has(key) && !skipped.has(key) && !a(key)),
-  );
-  let filtered = files.filter((d) => {
-    let h = e.pathToId.get(d.path);
-    if (h === undefined) return true;
-    let u = e.docs.get(h);
-    return u.size !== d.size || u.mtimeMs !== d.mtimeMs;
-  });
-  return {
-    toIndex: filtered,
-    toRemove,
-    unchangedCount: files.length - filtered.length,
-  };
-};
-var syncMemoryIndex = async (e, t, n = C, o) => {
-  let s = {
-    added: 0,
-    updated: 0,
-    removed: 0,
-    unchanged: e.docs.size,
-    rehashedUnchanged: 0,
-    transientSkips: 0,
-    scanCompleted: false,
-  };
-  if (o?.aborted) return s;
-  let r = await Rn(t, n).catch(() => {
-    return;
-  });
-  if (r === undefined) return s;
-  if (r.rootMissing && e.docs.size > 0) return s;
-  let i = await realpath(t).catch((error) => (A(error) === "structural" ? undefined : j));
-  if (i === j) return s;
-  let a = diffMemoryIndex(e, r.files, r.skipped, r.skippedSubtrees, (y) => De(y, n));
-  let c = [];
-  let l = [];
-  await Promise.all(
-    a.toRemove.map(async (y) => {
-      if (De(y, n) || r.capDropped.has(y)) c.push(y);
-      else if (await pt(t, y, n.maxFileBytes)) l.push(y);
-    }),
-  );
-  let h =
-    l.length === 0 ||
-    (await realpath(t).then(
-      () => true,
-      () => false,
-    ))
-      ? [...c, ...l]
-      : c;
-  let u = a.toRemove.length - h.length;
-  let p = dropDocuments(e, h);
-  let f = 0;
-  let m = 0;
-  let g = 0;
-  let S = 0;
-  let I = 0;
-  let T = false;
-  for (let y of a.toIndex) {
-    if (o?.aborted) {
-      T = true;
-      break;
-    }
-    let P = await ut(join(t, y.path), {
-      withinReal: i,
-      maxBytes: n.maxFileBytes,
-    }).catch((error) => (ft(error) ? fe : A(error) === "structural" ? undefined : j));
-    if (P === j) {
-      I++;
-      continue;
-    }
-    if (P === fe) {
-      if (hasDocumentPath(e, y.path)) S++;
-      continue;
-    }
-    if (P === undefined) {
-      if (!(await mt(t, y.path))) {
-        I++;
-        continue;
-      }
-      if (hasDocumentPath(e, y.path)) S++;
-      continue;
-    }
-    if (P.byteLength > n.maxFileBytes) {
-      if (hasDocumentPath(e, y.path)) S++;
-      continue;
-    }
-    let v = new TextDecoder().decode(P);
-    let R = gt(v);
-    let E = e.pathToId.get(y.path);
-    let D = E === undefined ? undefined : e.docs.get(E);
-    if (D?.hash === R && !e.unverified.has(E)) {
-      e.docs.set(E, {
-        ...D,
-        size: y.size,
-        mtimeMs: y.mtimeMs,
-      });
-      g++;
-      continue;
-    }
-    upsertDocument(e, extractMemoryFieldsFromFile(y.path, v), {
-      hash: R,
-      size: y.size,
-      mtimeMs: y.mtimeMs,
-    });
-    if (D === undefined) f++;
-    else m++;
-  }
-  return {
-    added: f,
-    updated: m,
-    removed: p + S,
-    unchanged: a.unchangedCount,
-    rehashedUnchanged: g,
-    transientSkips: I + u + r.skipped.size + r.skippedSubtrees.size,
-    scanCompleted: !T,
-  };
-};
-//@ chunk-vp5gef34.js:21378-21544 placement
-var logRecallIndexSad = async (e, t = {}) => {
-  let { logFeatureSad } = await import("./chunk-53at0fec.js").catch(() => ({
-    logFeatureSad: undefined,
-  }));
-  logFeatureSad?.("memory_recall_select", e, {
-    via_index: true,
-    ...t,
-  });
-};
-//@ chunk-vp5gef34.js:21662-26032 placement
-/**
- * BM25 索引文件（.bm25-index.json）的读写：序列化成紧凑数组、解析回内存结构，超过 64 MiB 视为超大并重建。
- */
-var deserializeIndex = 10;
-var serializeIndex = (e) => {
-  let sorted = [...e.docs.keys()].sort((r, i) => r - i);
-  let n = new Map(sorted.map((r, i) => [r, i]));
-  let docs = sorted.map((r) => {
-    let i = e.docs.get(r);
-    return [
-      i.path,
-      i.hash,
-      i.size,
-      i.mtimeMs,
-      extractMemoryFields.map((extractMemoryField) => i.fieldLengths[extractMemoryField]),
-    ];
-  });
-  let terms = [...e.terms.entries()].map(([r, i]) => {
-    let a = [];
-    let c = -1;
-    docIdsOfTerm(i).forEach((l, d) => {
-      let h = n.get(l);
-      if (h === undefined) throw Error("posting references unknown docId");
-      a.push(c < 0 ? h : h - c);
-      c = h;
-      let mapped = extractMemoryFields.map((extractMemoryField) =>
-        removeDocIdFromTerm(i, d, extractMemoryField),
-      );
-      for (let p of mapped) a.push(p?.length ?? 0);
-      for (let p of mapped)
-        p?.forEach((f, m) => {
-          a.push(m === 0 ? f : f - p[m - 1]);
-        });
-    });
-    return [r, a];
-  });
-  return {
-    version: deserializeIndex,
-    docs,
-    terms,
-  };
-};
-var toTypedArray = (e, t) => {
-  let n = e[t];
-  if (typeof n !== "number" || !Number.isInteger(n) || n < 0 || n > MAX_DOC_ID)
-    throw Error("malformed posting data");
-  return n;
-};
-var encodePostings = (emptyIndex, t, n, o) => {
-  let mapped = extractMemoryFields.map(() => 0);
-  let mapped_2 = extractMemoryFields.map(() => []);
-  let i = 0;
-  let a = -1;
-  while (i < n.length) {
-    let typedArray = toTypedArray(n, i++);
-    let d = a < 0 ? typedArray : a + typedArray;
-    if (d >= o) throw Error("posting references unknown docId");
-    if (a >= 0 && typedArray === 0) throw Error("repeated posting docId");
-    a = d;
-    let h = 0;
-    extractMemoryFields.forEach((extractMemoryField, p) => {
-      mapped[p] = toTypedArray(n, i + p);
-      h += mapped[p];
-    });
-    i += extractMemoryFields.length;
-    if (h === 0 || i + h > n.length) throw Error("malformed posting positions");
-    extractMemoryFields.forEach((extractMemoryField, p) => {
-      let f = mapped_2[p];
-      f.length = 0;
-      let m = -1;
-      for (let idx = 0; idx < mapped[p]; idx++) {
-        let typedArray = toTypedArray(n, i++);
-        m = m < 0 ? typedArray : m + typedArray;
-        if ((idx > 0 && typedArray === 0) || m > MAX_DOC_ID) throw Error("malformed posting positions");
-        f.push(m);
-      }
-    });
-    addDocumentToIndex(emptyIndex, t, d, mapped_2);
-  }
-  let c = emptyIndex.terms.get(t);
-  if (c === undefined) throw Error("empty term entry");
-  removePosting(c);
-};
-var decodeIndex = (e) => {
-  if (e.version !== deserializeIndex) throw Error("unsupported index format version");
-  if (!Array.isArray(e.docs) || !Array.isArray(e.terms)) throw Error("malformed index shape");
-  let emptyIndex = createEmptyIndex();
-  for (let [n, o] of e.docs.entries()) {
-    if (!Array.isArray(o) || o.length !== 5) throw Error("malformed doc entry");
-    let [s, r, i, a, c] = o;
-    if (
-      typeof r !== "string" ||
-      !Number.isFinite(i) ||
-      !Number.isFinite(a) ||
-      !Array.isArray(c) ||
-      c.length !== extractMemoryFields.length ||
-      c.some((d) => !Number.isInteger(d) || d < 0 || d > MAX_DOC_ID)
-    )
-      throw Error("malformed doc metadata");
-    if (
-      typeof s !== "string" ||
-      s.length === 0 ||
-      s.startsWith("/") ||
-      (sep === "\\" && (s.includes("\\") || /^[A-Za-z]:/.test(s))) ||
-      s.includes("\x00") ||
-      s.split("/").some((d) => d === ".." || d === "" || d === ".")
-    )
-      throw Error("non-contained doc path");
-    if (emptyIndex.pathToId.has(s)) throw Error("duplicate doc entry");
-    let l = Object.fromEntries(
-      extractMemoryFields.map((extractMemoryField, h) => [extractMemoryField, c[h]]),
-    );
-    emptyIndex.docs.set(n, {
-      path: s,
-      hash: r,
-      size: i,
-      mtimeMs: a,
-      fieldLengths: l,
-    });
-    emptyIndex.pathToId.set(s, n);
-    emptyIndex.unverified.add(n);
-    for (let extractMemoryField of extractMemoryFields) {
-      emptyIndex.fieldLengthTotals[extractMemoryField] += l[extractMemoryField];
-      if (l[extractMemoryField] > 0) emptyIndex.fieldDocCounts[extractMemoryField]++;
-    }
-  }
-  if (
-    extractMemoryFields.some(
-      (extractMemoryField) => !Number.isSafeInteger(emptyIndex.fieldLengthTotals[extractMemoryField]),
-    )
-  )
-    throw Error("malformed doc metadata");
-  emptyIndex.nextDocId = e.docs.length;
-  for (let term of e.terms) {
-    if (!Array.isArray(term) || term.length !== 2) throw Error("malformed term entry");
-    let [o, s] = term;
-    if (typeof o !== "string" || o.length === 0 || !Array.isArray(s) || emptyIndex.terms.has(o))
-      throw Error("malformed term entry");
-    encodePostings(emptyIndex, o, s, e.docs.length);
-  }
-  return emptyIndex;
-};
-var readIndexFile = async (index, indexPath, n = MAX_INDEX_FILE_BYTES) => {
-  let o = jsonStringify(serializeIndex(index));
-  let s = Buffer.byteLength(o);
-  if (s > n) {
-    logRecallIndexSad("index_persist_skipped_oversized");
-    let r = await lstat(indexPath).catch(() => {
-      return;
-    });
-    if (r !== undefined && r.size > n) await unlink(indexPath).catch(() => {});
-    return 0;
-  }
-  await writeFileAtomic(indexPath, o, 384);
-  return s;
-};
-var TRANSIENT_READ_FAILURE = Symbol("transient-index-read-failure");
-var INDEX_JSON_PREFIX = '{"version"';
-var MAX_INDEX_FILE_BYTES = 67108864;
-var INDEX_OVERSIZED = Symbol("index-file-oversized");
-var readIndexFileRaw = async (e) => {
-  let t = await open(e, readOnlyNoFollowFlags());
-  try {
-    let stats = await t.stat();
-    if (!stats.isFile())
-      throw Object.assign(Error("not a regular file"), {
-        code: "ENOTREG",
-      });
-    if (stats.size > MAX_INDEX_FILE_BYTES) {
-      let s = Buffer.alloc(64);
-      let { bytesRead } = await t.read(s, 0, 64, 0);
-      throw Object.assign(Error("index file oversized"), {
-        code: INDEX_OVERSIZED,
-        head: s.subarray(0, bytesRead).toString("utf8"),
-      });
-    }
-    let content = await t.readFile({
-      encoding: "utf8",
-    });
-    if (Buffer.byteLength(content) > MAX_INDEX_FILE_BYTES)
-      throw Object.assign(Error("index file oversized"), {
-        code: INDEX_OVERSIZED,
-        head: content.slice(0, 64),
-      });
-    return content;
-  } finally {
-    await t.close();
-  }
-};
-var tryParseIndex = (error) => {
-  let t = error;
-  if (t.code !== INDEX_OVERSIZED) return;
-  return (typeof t.head === "string" ? t.head.trim() : "").startsWith(INDEX_JSON_PREFIX);
-};
-var loadIndexFromDisk = async (indexPath) => {
-  let t;
-  let n = await readIndexFileRaw(indexPath).catch((error) => {
-    t = tryParseIndex(error);
-    return isENOENT(error) ? undefined : TRANSIENT_READ_FAILURE;
-  });
-  if (n === TRANSIENT_READ_FAILURE)
-    return {
-      owned: t ?? false,
-      absent: false,
-    };
-  if (n === undefined)
-    return {
-      owned: true,
-      absent: true,
-    };
-  try {
-    let o = jsonParse(n);
-    return {
-      owned: typeof o === "object" && o !== null && typeof o.version === "number",
-      absent: false,
-    };
-  } catch {
-    let sliced = n.trim().slice(0, INDEX_JSON_PREFIX.length);
-    return {
-      owned: sliced === "" || INDEX_JSON_PREFIX.startsWith(sliced),
-      absent: false,
-    };
-  }
-};
-var readCachedIndex = async (e) => {
-  let t;
-  let n = await readIndexFileRaw(e).catch((error) => {
-    t = tryParseIndex(error);
-    return isENOENT(error) ? undefined : TRANSIENT_READ_FAILURE;
-  });
-  if (n === TRANSIENT_READ_FAILURE)
-    return {
-      index: undefined,
-      pathOwned: t ?? false,
-    };
-  if (n === undefined)
-    return {
-      index: undefined,
-      pathOwned: true,
-    };
-  let o;
-  try {
-    o = jsonParse(n);
-  } catch {
-    let sliced = n.trim().slice(0, INDEX_JSON_PREFIX.length);
-    return {
-      index: undefined,
-      pathOwned: sliced === "" || INDEX_JSON_PREFIX.startsWith(sliced),
-    };
-  }
-  if (typeof o !== "object" || o === null || typeof o.version !== "number")
-    return {
-      index: undefined,
-      pathOwned: false,
-    };
-  try {
-    return {
-      index: decodeIndex(o),
-      pathOwned: true,
-    };
-  } catch {
-    return {
-      index: undefined,
-      pathOwned: true,
-    };
-  }
-};
-//@ chunk-vp5gef34.js:26032-27170 placement
-/**
- * 记忆索引的打开/建立入口：读取已有索引并同步目录，扫描未完成时退回空索引。
- */
-var memoryIndexPath = ".bm25-index.json";
-var openMemoryIndex = async (e, t = C, n, o = true) => {
-  let s = join(e, memoryIndexPath);
-  let r = o
-    ? await readCachedIndex(s)
-    : {
-        index: undefined,
-        pathOwned: false,
-      };
-  let i = r.index ?? createEmptyIndex();
-  let a = await syncMemoryIndex(i, e, t, n);
-  let c = r.index !== undefined && !a.scanCompleted;
-  return {
-    dir: e,
-    indexPath: s,
-    index: c ? createEmptyIndex() : i,
-    lastSync: c
-      ? {
-          added: 0,
-          updated: 0,
-          removed: 0,
-          unchanged: 0,
-          rehashedUnchanged: 0,
-          transientSkips: 0,
-          scanCompleted: false,
-        }
-      : a,
-    loadedFromDisk: r.index !== undefined,
-    persistable: r.pathOwned && !c,
-    options: t,
-  };
-};
-var buildMemoryIndex = async (memoryIndex) => {
-  if (!memoryIndex.persistable || !memoryIndex.lastSync.scanCompleted) return 0;
-  let indexFromDisk = await loadIndexFromDisk(memoryIndex.indexPath);
-  if (!indexFromDisk.owned || (memoryIndex.loadedFromDisk && indexFromDisk.absent)) return 0;
-  return readIndexFile(memoryIndex.index, memoryIndex.indexPath);
-};
-var ensureMemoryIndex = async (store, t, n = 5, o = bm25Search) => {
-  let s = new Set();
-  let r = (i) => i.filter((a) => !s.has(a.path));
-  for (let i = 0; i < 8; i++) {
-    let sliced = r(searchIndex(store.index, t, n + s.size, o)).slice(0, n);
-    let filtered = sliced.filter((l) => {
-      let d = store.index.pathToId.get(l.path);
-      return d !== undefined && store.index.unverified.has(d);
-    });
-    if (filtered.length === 0) return sliced;
-    for (let l of filtered) {
-      let d = store.index.pathToId.get(l.path);
-      if (
-        !(await ht(store.index, store.dir, l.path, store.options)) &&
-        d !== undefined &&
-        store.index.unverified.has(d)
-      )
-        s.add(l.path);
-    }
-  }
-  return r(searchIndex(store.index, t, n + s.size, o))
-    .filter((i) => {
-      let a = store.index.pathToId.get(i.path);
-      return a === undefined || !store.index.unverified.has(a);
-    })
-    .slice(0, n);
-};
-//@ chunk-vp5gef34.js:27170-29264 placement
-/**
- * 目录到索引的增量同步：比对大小/mtime 找新增与改动、删除已消失文件、抽取短语与加权短语、统计各项计数。
- */
-var syncMemoryIndex_2 = Symbol("transient-realpath-failure");
-var indexDidChange = (lastSync) =>
-  lastSync.added > 0 || lastSync.updated > 0 || lastSync.removed > 0 || lastSync.rehashedUnchanged > 0;
-var dedupePhrases = (e) => {
-  let t = [...e.boostPhrases, ...e.phrases];
-  let n = new Set();
-  let o = [];
-  for (let idx = t.length - 1; idx >= 0; idx--) {
-    let r = t[idx];
-    let joined = r.join(" ");
-    if (!n.has(joined)) {
-      n.add(joined);
-      o.push(r);
-    }
-  }
-  o.reverse();
-  return {
-    terms: e.terms,
-    phrases: [],
-    boostPhrases: o,
-  };
-};
-var MAX_PHRASE_CHARS = 4096;
-var DEFAULT_PHRASE_CHARS = 3072;
-var MIN_PHRASE_CHARS = 1024;
-var phraseMatches = (e, t) => {
-  if (((e.match(/"/g) ?? []).length & 1) === 0) return e;
-  let n = t ? e.lastIndexOf('"') : e.indexOf('"');
-  return e.slice(0, n) + " " + e.slice(n + 1);
-};
-var snapSurrogateStart = (e, t) => (t > 0 && t < e.length && (e.charCodeAt(t) & 64512) === 56320 ? t - 1 : t);
-var collectPhrases = (e) => {
-  if (e.length <= MAX_PHRASE_CHARS) return e;
-  let t = snapSurrogateStart(e, DEFAULT_PHRASE_CHARS);
-  let n = snapSurrogateStart(e, e.length - MIN_PHRASE_CHARS);
-  let o = `${phraseMatches(e.slice(0, t), true)}
-${phraseMatches(e.slice(n), false)}`;
-  return ((e.match(/"/g) ?? []).length & 1) === 0 ? o : o.replaceAll('"', " ");
-};
-var MAX_BOOST_PHRASES = 64;
-var truncatePhraseTerms = (boostPhrases) =>
-  boostPhrases.slice(-8).map((t) => (t.length <= 16 ? t : t.slice(0, 16)));
-var MIN_PHRASE_TERMS = 8;
-var MAX_PHRASE_TERMS = 24;
-var PHRASE_TERM_PADDING = 4;
-var syncIndexFromDirectory = (terms, t, n, o, s) => {
-  let r = new Set(terms);
-  let i = new Set();
-  let a = new Map();
-  let c = (u) => {
-    let p = t(u);
-    if (p === 0) return false;
-    if (p === 1) {
-      let f = n(u);
-      if (f !== undefined) {
-        let m = a.get(f) ?? 0;
-        if (m >= PHRASE_TERM_PADDING) return false;
-        a.set(f, m + 1);
-      }
-    }
-    return true;
-  };
-  for (let u of s) if (r.has(u) && c(u)) i.add(u);
-  let size = i.size;
-  for (let u of o) {
-    if (i.size >= size + MIN_PHRASE_TERMS) break;
-    if (r.has(u) && !i.has(u) && c(u)) i.add(u);
-  }
-  let size_2 = i.size;
-  for (let idx = o.length - 1; idx >= 0 && i.size < size_2 + MAX_PHRASE_TERMS; idx--) {
-    let p = o[idx];
-    if (r.has(p) && !i.has(p) && c(p)) i.add(p);
-  }
-  let sorted = terms
-    .filter((u) => !i.has(u))
-    .map((u) => {
-      let p = t(u);
-      if (p === 0)
-        return {
-          t: u,
-          key: Number.MAX_SAFE_INTEGER,
-        };
-      if (p === 1) {
-        let f = n(u);
-        if (f !== undefined) {
-          let m = a.get(f) ?? 0;
-          a.set(f, m + 1);
-          if (m >= PHRASE_TERM_PADDING)
-            return {
-              t: u,
-              key: Number.MAX_SAFE_INTEGER - 1,
-            };
-        }
-        return {
-          t: u,
-          key: 1,
-        };
-      }
-      return {
-        t: u,
-        key: p,
-      };
-    })
-    .sort((u, p) => u.key - p.key);
-  for (let { t: u } of sorted) {
-    if (i.size >= MAX_BOOST_PHRASES) break;
-    i.add(u);
-  }
-  return terms.filter((u) => i.has(u));
-};
-var indexFileIfChanged = (e, index, n) => {
-  if (
-    e.terms.length <= MAX_BOOST_PHRASES &&
-    e.boostPhrases.every((boostPhrase) => boostPhrase.length <= 16) &&
-    e.boostPhrases.length <= 8
-  )
-    return e;
-  let o = truncatePhraseTerms(e.boostPhrases);
-  return {
-    terms: syncIndexFromDirectory(
-      e.terms,
-      (s) => termDocCount(index, s),
-      (s) => addPostingPosition(index, s),
-      n(),
-      new Set(o.flat()),
-    ),
-    phrases: e.phrases,
-    boostPhrases: o,
-  };
-};
-var syncResult = (e, excludeLog, isRecallVisible) => ({
-  ...(e === null
-    ? C
-    : {
-        ...C,
-        excludePaths: new Set([...e.excluded].map((o) => o.split(sep).join("/"))),
-        excludePrefixes: e.excludedPrefixes.map((excludedPrefix) => excludedPrefix.split(sep).join("/")),
-      }),
-  excludeLog,
-  isRecallVisible,
-});
-var indexCacheKey = (e, t) => `${t ? "persist" : "no-persist"}:${e}`;
-//@ chunk-vp5gef34.js:29264-29751 placement
-/**
- * 记忆索引的打开缓存：按目录与存储空间缓存打开的索引（带 TTL），扫描完成后持久化，并支持释放当前缓存项。
- */
-class MemoryIndexCache {
-  open = memoizeWithTTLAsync(
-    async (e, t, excludeLog, isRecallVisible, s) => {
-      let startTime = performance.now();
-      let memoryIndex = await openMemoryIndex(e, syncResult(t, excludeLog, isRecallVisible), undefined, s);
-      if (
-        s &&
-        memoryIndex.lastSync.scanCompleted &&
-        (!memoryIndex.loadedFromDisk ? memoryIndex.index.docs.size > 0 : indexDidChange(memoryIndex.lastSync))
-      )
-        if (memoryIndex.persistable)
-          await buildMemoryIndex(memoryIndex).catch(() => {
-            logRecallIndexSad("index_persist_failed");
-          });
-        else logRecallIndexSad("index_path_foreign");
-      return {
-        store: memoryIndex,
-        openMs: performance.now() - startTime,
-      };
-    },
-    (e, t, n, o, s) => indexCacheKey(e, s),
-  );
-  isHeld(e, t) {
-    return this.open.cache.has(indexCacheKey(e, t));
-  }
-  releaseIfCurrent(e, t, n) {
-    let o = indexCacheKey(e, t);
-    if (this.open.cache.get(o) === n) this.open.cache.delete(o);
-  }
-}
-//@ chunk-vp5gef34.js:29751-32197 placement
-/**
- * 按会话根缓存记忆索引：打开、按路径取、释放过期实例；扫描不完整时释放并重建。
- */
-var searchMemoryIndex = new SessionRootSlot(() => new MemoryIndexCache());
-var withMemoryIndex = async (e, t, n, o, s, r) => {
-  let i = e.open(t, n, o, s, r);
-  let a = await i;
-  if (!a.store.lastSync.scanCompleted || a.store.lastSync.transientSkips > 0 || a.store.index.docs.size === 0)
-    e.releaseIfCurrent(t, r, i);
-  return a;
-};
-var memoryIndexFor = (e, t, n, o) => {
-  withMemoryIndex(searchMemoryIndex.of(e), t, null, n, o, true)
-    .then(({ store }) => {
-      if (!store.lastSync.scanCompleted)
-        logRecallIndexSad("index_prewarm_failed", {
-          prewarm: true,
-          sweep_incomplete: true,
-        });
-      else if (store.lastSync.transientSkips > 0)
-        logRecallIndexSad("index_prewarm_failed", {
-          prewarm: true,
-          transient_skips: true,
-        });
-    })
-    .catch(() => {
-      logRecallIndexSad("index_prewarm_failed", {
-        prewarm: true,
-      });
-    });
-};
-var releaseMemoryIndex = async (e, t, n, o, s = 5, r = null, i, a = false, c) => {
-  let startTime = performance.now();
-  let d = searchMemoryIndex.of(e);
-  let storeWasHeld = d.isHeld(n, a);
-  let { store, openMs } = await withMemoryIndex(d, n, r, i, c, a);
-  let openWaitMs = performance.now() - startTime;
-  let m = () => fieldLengthBoost(store.index.docs.size);
-  let g = (sync, M = [], queryTermCount = 0) => {
-    let topScore = M[0]?.score ?? 0;
-    let U = m();
-    let ge = count(M, (J) => J.score < U);
-    return {
-      docCount: store.index.docs.size,
-      termCount: store.index.terms.size,
-      loadedFromDisk: store.loadedFromDisk,
-      sync,
-      tookMs: performance.now() - startTime,
-      storeWasHeld,
-      openWaitMs,
-      storeOpenMs: openMs,
-      topScore,
-      relevanceFloor: U,
-      hitCount: M.length,
-      belowFloorCount: ge,
-      suppressedByFloor: M.length > 0 && ge === M.length,
-      queryTermCount,
-    };
-  };
-  if (o.aborted)
-    return {
-      ranked: [],
-      stats: g(store.lastSync),
-    };
-  if (store.loadedFromDisk && !store.lastSync.scanCompleted)
-    return {
-      ranked: [],
-      stats: g(store.lastSync),
-    };
-  let S = typeof t === "string" ? collectPhrases(t) : "";
-  let I =
-    typeof t === "string"
-      ? indexFileIfChanged(dedupePhrases(idfForTerm(S)), store.index, () => tokenizeDualStem(S))
-      : mergeSpans(t.exact_terms, t.conceptual_keywords);
-  let memoryIndex = await ensureMemoryIndex(store, I, s + 5);
-  let y =
-    c === undefined
-      ? i === undefined
-        ? memoryIndex
-        : memoryIndex.filter((w) => !i(w.path))
-      : memoryIndex.filter((w) => (i === undefined || !i(w.path)) && c(w.path));
-  let P = await realpath(n).catch(() => {
-    return;
-  });
-  let v = resolve(n);
-  let R = [];
-  let E = [];
-  let results = await Promise.all(
-    y.map(async (w) => {
-      let M = store.index.pathToId.get(w.path);
-      let O = M === undefined ? undefined : store.index.docs.get(M);
-      let B = resolve(n, w.path);
-      let U = await realpath(B).catch((error) => (A(error) === "structural" ? undefined : syncMemoryIndex_2));
-      if (U === undefined) {
-        if (P !== undefined) R.push(w.path);
-        return [];
-      }
-      if (U === syncMemoryIndex_2) return [];
-      if (!U.startsWith((P ?? v) + sep)) {
-        if (P !== undefined) E.push(w.path);
-        return [];
-      }
-      let J = await lstat(B).catch((error) => (A(error) === "structural" ? undefined : syncMemoryIndex_2));
-      if (J === syncMemoryIndex_2) return [];
-      if (J === undefined) {
-        if (P !== undefined) R.push(w.path);
-        return [];
-      }
-      if (!J.isFile()) {
-        if (P !== undefined) E.push(w.path);
-        return [];
-      }
-      return [
-        {
-          path: B,
-          mtimeMs: O?.mtimeMs ?? 0,
-          score: w.score,
-        },
-      ];
-    }),
-  );
-  if (R.length > 0 || E.length > 0) {
-    let results = await Promise.all(
-      R.map(async (O) =>
-        (await realpath(resolve(n, O)).then(
-          () => false,
-          (error) => A(error) === "structural",
-        ))
-          ? O
-          : undefined,
-      ),
-    );
-    let M = await realpath(n).catch(() => {
-      return;
-    });
-    if (M !== undefined && M === P) {
-      for (let O of E) hasDocumentPath(store.index, O);
-      for (let O of results) if (O !== undefined) hasDocumentPath(store.index, O);
-    }
-  }
-  let X = results.flat();
-  let kt = m();
-  return {
-    ranked: X.filter((w) => w.score >= kt).slice(0, s),
-    stats: g(store.lastSync, X, I.terms.length),
-  };
-};
 //@ chunk-e6aww6q8.js:1311938-1312110 placement
 function pickMemorySizeBasis({ rawSizeBytes, surfaceCap, splicedSizeBytes, spliceCap, spliceActive }) {
   return surfaceCap !== undefined &&
@@ -1778,97 +78,114 @@ function pickMemorySizeBasis({ rawSizeBytes, surfaceCap, splicedSizeBytes, splic
 /**
  * 计算记忆文件（字节、行数）中离上限最近的维度，占比低于阈值返回 null，否则给出超限与否及大小/上限/目标的可读描述。
  */
-function memoryLimitPressure(e) {
-  let n = [
+function memoryLimitPressure(indexSize) {
+  let dimensions = [
     {
-      frac: e.sizeBytes / e.byteCap,
+      frac: indexSize.sizeBytes / indexSize.byteCap,
       dimension: "bytes",
-      over: e.sizeBytes > e.byteCap,
-      sizeDesc: formatFileSize(e.sizeBytes),
-      capDesc: formatFileSize(e.byteCap),
-      targetDesc: formatFileSize(Math.floor(e.byteCap * MEMORY_SIZE_SOFT_RATIO)),
+      over: indexSize.sizeBytes > indexSize.byteCap,
+      sizeDesc: formatFileSize(indexSize.sizeBytes),
+      capDesc: formatFileSize(indexSize.byteCap),
+      targetDesc: formatFileSize(Math.floor(indexSize.byteCap * MEMORY_SIZE_SOFT_RATIO)),
     },
   ];
-  if (e.lineCap !== undefined && e.lineCount !== undefined)
-    n.push({
-      frac: e.lineCount / e.lineCap,
+  if (indexSize.lineCap !== undefined && indexSize.lineCount !== undefined)
+    dimensions.push({
+      frac: indexSize.lineCount / indexSize.lineCap,
       dimension: "lines",
-      over: e.lineCount > e.lineCap,
-      sizeDesc: `${e.lineCount} lines`,
-      capDesc: `${e.lineCap}-line`,
-      targetDesc: `${Math.floor(e.lineCap * MEMORY_SIZE_SOFT_RATIO)} lines`,
+      over: indexSize.lineCount > indexSize.lineCap,
+      sizeDesc: `${indexSize.lineCount} lines`,
+      capDesc: `${indexSize.lineCap}-line`,
+      targetDesc: `${Math.floor(indexSize.lineCap * MEMORY_SIZE_SOFT_RATIO)} lines`,
     });
-  let { frac, ...s } = n.reduce((acc, y) => (y.frac > acc.frac ? y : acc));
-  return frac < MEMORY_SIZE_WARN_RATIO ? null : s;
+  let { frac, ...worstDimension } = dimensions.reduce((acc, dimension) =>
+    dimension.frac > acc.frac ? dimension : acc,
+  );
+  return frac < MEMORY_SIZE_WARN_RATIO ? null : worstDimension;
 }
 //@ chunk-e6aww6q8.js:1312600-1313208 placement
 /**
  * 记忆索引超过读取上限时的提示：超出部分每次加载都会被丢弃。
  */
-function checkMemoryIndexReadLimit(e) {
-  let n = memoryLimitPressure(e);
-  if (n === null) return null;
+function checkMemoryIndexReadLimit(readLimitInfo) {
+  let pressure = memoryLimitPressure(readLimitInfo);
+  if (pressure === null) return null;
   return {
-    text: `${n.over ? `Error: this write left the ${e.label} at ${e.displayPath} at ${n.sizeDesc}, over its ${n.capDesc} read limit. The write succeeded, but everything past the limit ` + "is silently dropped each time the index is loaded \u2014 entries at the end are already invisible " + "to readers. Rewrite it" : `The ${e.label} at ${e.displayPath} is ${n.sizeDesc}, approaching the ${n.capDesc} read limit. Compact it`} to under ${n.targetDesc} now: keep one line per entry, move detail into topic files, and merge or drop stale entries.`,
-    overCap: n.over,
+    text: `${pressure.over ? `Error: this write left the ${readLimitInfo.label} at ${readLimitInfo.displayPath} at ${pressure.sizeDesc}, over its ${pressure.capDesc} read limit. The write succeeded, but everything past the limit ` + "is silently dropped each time the index is loaded \u2014 entries at the end are already invisible " + "to readers. Rewrite it" : `The ${readLimitInfo.label} at ${readLimitInfo.displayPath} is ${pressure.sizeDesc}, approaching the ${pressure.capDesc} read limit. Compact it`} to under ${pressure.targetDesc} now: keep one line per entry, move detail into topic files, and merge or drop stale entries.`,
+    overCap: pressure.over,
   };
 }
 //@ chunk-e6aww6q8.js:1313208-1313357 placement
-var MAX_INDEX_LINE_CHARS = 150;
-var BACKFILL_MAX_LINES = Math.floor(MAX_ENTRYPOINT_LINES * MEMORY_SIZE_SOFT_RATIO);
-var BACKFILL_MAX_BYTES = Math.floor(MAX_ENTRYPOINT_BYTES * MEMORY_SIZE_SOFT_RATIO);
-var UNSAFE_INDEX_NAME_REGEX = /[[\]()\n\r\u2028\u2029]/;
-var UNWRITABLE_ERRNOS = new Set(["EROFS", "EACCES", "EPERM"]);
-var backfillState = new HostScoped(() => new Map());
+var MAX_INDEX_LINE_CHARS; // deferred: uses MEMORY_INDEX_FILENAME (./memdir.js) of its import cycle while loading; runs once the cycle is complete
+var BACKFILL_MAX_LINES;
+var BACKFILL_MAX_BYTES;
+var UNSAFE_INDEX_NAME_REGEX;
+var UNWRITABLE_ERRNOS;
+var backfillState;
+deferInit("chunk-e6aww6q8.js:1313208", () => {
+  MAX_INDEX_LINE_CHARS = 150;
+  BACKFILL_MAX_LINES = Math.floor(MAX_ENTRYPOINT_LINES * MEMORY_SIZE_SOFT_RATIO);
+  BACKFILL_MAX_BYTES = Math.floor(MAX_ENTRYPOINT_BYTES * MEMORY_SIZE_SOFT_RATIO);
+  UNSAFE_INDEX_NAME_REGEX = /[[\]()\n\r\u2028\u2029]/;
+  UNWRITABLE_ERRNOS = new Set(["EROFS", "EACCES", "EPERM"]);
+  backfillState = new HostScoped(() => new Map());
+});
 //@ chunk-e6aww6q8.js:1313357-1313614 placement
-function memoryIndexLine(e) {
-  let joined = e.filename.split(sep).join("/");
-  if (UNSAFE_INDEX_NAME_REGEX.test(joined) || singleLineMemoryText(joined) !== joined) return null;
-  let r = `- [${basename(joined, ".md")}](${joined})`;
-  let trimmed = sanitizeMemoryText(e.description ?? "")
+function memoryIndexLine(entry) {
+  let text = entry.filename.split(sep).join("/");
+  if (UNSAFE_INDEX_NAME_REGEX.test(text) || singleLineMemoryText(text) !== text) return null;
+  let linkLine = `- [${basename(text, ".md")}](${text})`;
+  let trimmed = sanitizeMemoryText(entry.description ?? "")
     .replace(/\s+/g, " ")
     .trim();
-  let h = MAX_INDEX_LINE_CHARS - r.length - 3;
-  if (trimmed === "" || h <= 1) return r;
-  return `${r} \u2014 ${sanitizeMemoryText(truncateAtWord(trimmed, h))}`;
+  let descriptionBudget = MAX_INDEX_LINE_CHARS - linkLine.length - 3;
+  if (trimmed === "" || descriptionBudget <= 1) return linkLine;
+  return `${linkLine} \u2014 ${sanitizeMemoryText(truncateAtWord(trimmed, descriptionBudget))}`;
 }
 //@ chunk-e6aww6q8.js:1313614-1313798 placement
-function buildMemoryIndexContent(e) {
-  let n = "";
-  let r = 0;
-  let s = false;
-  let h = 0;
-  for (let y of e) {
-    let S = memoryIndexLine(y);
-    if (S === null) {
-      h++;
+function buildMemoryIndexContent(entries) {
+  let content = "";
+  let lineCount = 0;
+  let limitReached = false;
+  let skippedCount = 0;
+  for (let entry of entries) {
+    let line = memoryIndexLine(entry);
+    if (line === null) {
+      skippedCount++;
       continue;
     }
-    s ||= r + 1 > BACKFILL_MAX_LINES || n.length + S.length + 1 > BACKFILL_MAX_BYTES;
-    if (!s) {
-      n += `${S}
+    limitReached ||=
+      lineCount + 1 > BACKFILL_MAX_LINES || content.length + line.length + 1 > BACKFILL_MAX_BYTES;
+    if (!limitReached) {
+      content += `${line}
 `;
-      r++;
+      lineCount++;
     }
   }
   return {
-    content: n,
-    skippedCount: h,
+    content,
+    skippedCount,
   };
 }
 //@ chunk-e6aww6q8.js:1313798-1314118 placement
 /**
  * 判断记忆目录是否需要补建索引：已有索引、有候选 .md 文件或子目录，或没有可索引内容。
  */
-async function memoryIndexBackfillState(e) {
-  let n = await readdir(e, {
+async function memoryIndexBackfillState(memoryDir) {
+  let dirents = await readdir(memoryDir, {
     withFileTypes: true,
   });
-  if (n.some((s) => s.name === MEMORY_INDEX_FILENAME)) return "exists";
-  return n.some((s) => {
-    if (isExcludedMemoryKey(s.name)) return false;
-    if (s.isFile()) return s.name.endsWith(".md");
-    if (s.isSymbolicLink() || s.isFIFO() || s.isSocket() || s.isBlockDevice() || s.isCharacterDevice())
+  if (dirents.some((dirent) => dirent.name === MEMORY_INDEX_FILENAME)) return "exists";
+  return dirents.some((dirent) => {
+    if (isExcludedMemoryKey(dirent.name)) return false;
+    if (dirent.isFile()) return dirent.name.endsWith(".md");
+    if (
+      dirent.isSymbolicLink() ||
+      dirent.isFIFO() ||
+      dirent.isSocket() ||
+      dirent.isBlockDevice() ||
+      dirent.isCharacterDevice()
+    )
       return false;
     return true;
   })
@@ -1879,23 +196,26 @@ async function memoryIndexBackfillState(e) {
 /**
  * 写入记忆索引补建结果：先写临时文件再改名，不可写时就地写。
  */
-async function writeMemoryIndexBackfill(e, content) {
-  let r = join(e, `.${MEMORY_INDEX_FILENAME}.backfill-${process.pid}-${randomBytes(4).toString("hex")}.tmp`);
-  let s = join(e, MEMORY_INDEX_FILENAME);
-  let h;
+async function writeMemoryIndexBackfill(memoryDir, content) {
+  let tempPath = join(
+    memoryDir,
+    `.${MEMORY_INDEX_FILENAME}.backfill-${process.pid}-${randomBytes(4).toString("hex")}.tmp`,
+  );
+  let indexPath = join(memoryDir, MEMORY_INDEX_FILENAME);
+  let tempFile;
   try {
-    h = await open(r, "wx");
+    tempFile = await open(tempPath, "wx");
   } catch (error) {
     let errnoCode = getErrnoCode(error);
     if (errnoCode !== undefined && UNWRITABLE_ERRNOS.has(errnoCode)) return "unwritable";
     logForDebugging(`memory index backfill: temp create failed, creating in place: ${errorMessage(error)}`);
-    return writeMemoryIndexExclusive(e, content);
+    return writeMemoryIndexExclusive(memoryDir, content);
   }
   try {
-    let y;
+    let tempStat;
     try {
-      await h.writeFile(content, "utf8");
-      y = await h
+      await tempFile.writeFile(content, "utf8");
+      tempStat = await tempFile
         .stat({
           bigint: true,
         })
@@ -1903,57 +223,63 @@ async function writeMemoryIndexBackfill(e, content) {
     } catch (error) {
       let errnoCode = getErrnoCode(error);
       if (errnoCode !== undefined && UNWRITABLE_ERRNOS.has(errnoCode)) return "unwritable";
-      await h.close().catch(() => {});
-      await unlink(r).catch(() => {});
+      await tempFile.close().catch(() => {});
+      await unlink(tempPath).catch(() => {});
       logForDebugging(`memory index backfill: temp write failed, creating in place: ${errorMessage(error)}`);
-      return await writeMemoryIndexExclusive(e, content);
+      return await writeMemoryIndexExclusive(memoryDir, content);
     } finally {
-      await h.close().catch(() => {});
+      await tempFile.close().catch(() => {});
     }
-    if (y === null) return await writeMemoryIndexExclusive(e, content);
-    let S = await verifyLinkTarget(
-      r,
+    if (tempStat === null) return await writeMemoryIndexExclusive(memoryDir, content);
+    let linkResult = await verifyLinkTarget(
+      tempPath,
       {
-        device: y.dev,
-        inode: y.ino,
+        device: tempStat.dev,
+        inode: tempStat.ino,
       },
-      s,
+      indexPath,
     );
-    if (S.ok) return "written";
-    if (S.error.kind === "fs" && isErrnoCode_2(S.error.error, "EEXIST")) return "exists";
+    if (linkResult.ok) return "written";
+    if (linkResult.error.kind === "fs" && isErrnoCode_2(linkResult.error.error, "EEXIST")) return "exists";
     logForDebugging(
-      `memory index backfill: link did not publish (${S.error.kind === "classified" ? formatStorageError(S.error.error) : errorKindLabel(S.error)}), creating in place`,
+      `memory index backfill: link did not publish (${linkResult.error.kind === "classified" ? formatStorageError(linkResult.error.error) : errorKindLabel(linkResult.error)}), creating in place`,
     );
-    return await writeMemoryIndexExclusive(e, content);
+    return await writeMemoryIndexExclusive(memoryDir, content);
   } finally {
-    await unlink(r).catch(() => {});
+    await unlink(tempPath).catch(() => {});
   }
 }
 //@ chunk-e6aww6q8.js:1315117-1315563 placement
 /**
  * 用 wx 独占方式创建记忆索引文件并写入；已存在返回 exists，只读/权限错误返回 unwritable；写入失败时删掉自己刚创建的文件。
  */
-async function writeMemoryIndexExclusive(e, n) {
-  let r = join(e, MEMORY_INDEX_FILENAME);
-  let s;
+async function writeMemoryIndexExclusive(memoryDir, content) {
+  let indexPath = join(memoryDir, MEMORY_INDEX_FILENAME);
+  let indexFile;
   try {
-    await assertPathSafeAsync(r);
-    s = await open(r, "wx");
+    await assertPathSafeAsync(indexPath);
+    indexFile = await open(indexPath, "wx");
   } catch (error) {
     let errnoCode = getErrnoCode(error);
     if (errnoCode === "EEXIST") return "exists";
     if (errnoCode !== undefined && UNWRITABLE_ERRNOS.has(errnoCode)) return "unwritable";
     throw error;
   }
-  let h = await s.stat().catch(() => null);
+  let fileStat = await indexFile.stat().catch(() => null);
   try {
-    await s.writeFile(n, "utf8");
-    await s.close();
+    await indexFile.writeFile(content, "utf8");
+    await indexFile.close();
     return "written";
   } catch (error) {
-    await s.close().catch(() => {});
-    let S = await lstat(r).catch(() => null);
-    if (h !== null && S !== null && h.ino === S.ino && h.dev === S.dev) await unlink(r).catch(() => {});
+    await indexFile.close().catch(() => {});
+    let currentStat = await lstat(indexPath).catch(() => null);
+    if (
+      fileStat !== null &&
+      currentStat !== null &&
+      fileStat.ino === currentStat.ino &&
+      fileStat.dev === currentStat.dev
+    )
+      await unlink(indexPath).catch(() => {});
     throw error;
   }
 }
@@ -1961,29 +287,29 @@ async function writeMemoryIndexExclusive(e, n) {
 /**
  * 补建记忆索引：扫描记忆目录中索引缺少的条目并写回，记录遥测。
  */
-async function backfillMemoryIndex(e, n, r) {
+async function backfillMemoryIndex(memoryDir, onNothing, onExists) {
   try {
-    let s;
+    let state;
     try {
-      s = await memoryIndexBackfillState(e);
+      state = await memoryIndexBackfillState(memoryDir);
     } catch (error) {
-      n();
+      onNothing();
       logForDebugging(`memory index backfill: ${errorMessage(error)}`);
       return false;
     }
-    switch (s) {
+    switch (state) {
       case "exists":
-        r();
+        onExists();
         return true;
       case "none":
-        n();
+        onNothing();
         return false;
       case "candidates":
         break;
     }
-    let h;
+    let headers;
     try {
-      h = await scanMemoryHeaders(e, createAbortController().signal, {
+      headers = await scanMemoryHeaders(memoryDir, createAbortController().signal, {
         regularFilesOnly: true,
       });
     } catch (error) {
@@ -1993,25 +319,28 @@ async function backfillMemoryIndex(e, n, r) {
       logFeatureSad("memory_index_backfill", "scan_failed");
       return false;
     }
-    h = h.filter(
-      (L) =>
-        !L.filename
+    headers = headers.filter(
+      (header) =>
+        !header.filename
           .split(sep)
-          .some((G) => G.startsWith(".") || EXCLUDED_TOP_LEVEL_DIRS.includes(normalizeKeySegment(G))),
+          .some(
+            (segment) =>
+              segment.startsWith(".") || EXCLUDED_TOP_LEVEL_DIRS.includes(normalizeKeySegment(segment)),
+          ),
     );
-    let { content, skippedCount } = buildMemoryIndexContent(h);
+    let { content, skippedCount } = buildMemoryIndexContent(headers);
     if (content === "") {
-      if (h.length > 0) {
+      if (headers.length > 0) {
         logForDebugging(
-          `memory index backfill: nothing linkable among ${h.length} topic files (${skippedCount} skipped)`,
+          `memory index backfill: nothing linkable among ${headers.length} topic files (${skippedCount} skipped)`,
         );
         logFeatureSad("memory_index_backfill", "nothing_linkable");
       }
       return false;
     }
-    let w;
+    let writeResult;
     try {
-      w = await writeMemoryIndexBackfill(e, content);
+      writeResult = await writeMemoryIndexBackfill(memoryDir, content);
     } catch (error) {
       logForDebugging(`memory index backfill: ${errorMessage(error)}`, {
         level: "warn",
@@ -2019,10 +348,10 @@ async function backfillMemoryIndex(e, n, r) {
       logFeatureSad("memory_index_backfill", "write_failed");
       return false;
     }
-    switch (w) {
+    switch (writeResult) {
       case "written":
         logEvent("tengu_memdir_index_backfilled", {
-          file_count: h.length,
+          file_count: headers.length,
           skipped_count: skippedCount,
         });
         logFeatureOk("memory_index_backfill");
@@ -2041,6 +370,1929 @@ async function backfillMemoryIndex(e, n, r) {
     return false;
   }
 }
+//@ chunk-vp5gef34.js:1162-3668 placement
+/**
+ * 波特词干化：辅音/元音判定与各个步骤。注意 trimTrailingDoubleL（原 stemWord）只是第 5 步后的双辅音 l 去重，porterStemWord（原 measureWord）才是主流程，memoizedStemWord 是它的 5 万条 LRU 包装。
+ */
+var porterStemmer; // deferred: uses memoizeWithLRU (../utils/memoize.js) of its import cycle while loading; runs once the cycle is complete
+var isConsonantAt;
+var countConsonantSequences;
+var hasVowel;
+var endsWithDoubleConsonant;
+var endsWithCVC;
+var replaceSuffixList;
+var porterStep1a;
+var porterStep1b;
+var porterStep1c;
+var porterStep2;
+var porterStep3;
+var porterStep4;
+var porterStep5;
+var porterStem;
+var trimTrailingDoubleL;
+var porterStemWord;
+var memoizedStemWord;
+var stemAlias;
+var stemWithOptions;
+deferInit("chunk-vp5gef34.js:1162", () => {
+  porterStemmer = (char) => char === "a" || char === "e" || char === "i" || char === "o" || char === "u";
+  isConsonantAt = (word, index) => {
+    let char = word[index];
+    if (porterStemmer(char)) return true;
+    if (char !== "y") return false;
+    let scanIndex = index;
+    while (scanIndex > 0 && word[scanIndex - 1] === "y") scanIndex--;
+    let precedingIsVowel = scanIndex === 0 ? true : porterStemmer(word[scanIndex - 1]);
+    return (index - scanIndex) % 2 === 0 ? !precedingIsVowel : precedingIsVowel;
+  };
+  countConsonantSequences = (word) => {
+    let count = 0;
+    let prevIsVowel = false;
+    for (let i = 0; i < word.length; i++) {
+      let char = word[i];
+      let isVowel = porterStemmer(char) || (char === "y" && i > 0 && !prevIsVowel);
+      if (!isVowel && prevIsVowel) count++;
+      prevIsVowel = isVowel;
+    }
+    return count;
+  };
+  hasVowel = (word) => {
+    let foundVowel = false;
+    for (let i = 0; i < word.length; i++) {
+      let char = word[i];
+      foundVowel = porterStemmer(char) || (char === "y" && i > 0 && !foundVowel);
+      if (foundVowel) return true;
+    }
+    return false;
+  };
+  endsWithDoubleConsonant = (word) =>
+    word.length >= 2 && word.at(-1) === word.at(-2) && !isConsonantAt(word, word.length - 1);
+  endsWithCVC = (word) => {
+    if (word.length < 3) return false;
+    let last = word.at(-1);
+    return (
+      !isConsonantAt(word, word.length - 3) &&
+      isConsonantAt(word, word.length - 2) &&
+      !isConsonantAt(word, word.length - 1) &&
+      last !== "w" &&
+      last !== "x" &&
+      last !== "y"
+    );
+  };
+  replaceSuffixList = (word, rules) => {
+    for (let [suffix, replacement, minMeasure] of rules) {
+      if (!word.endsWith(suffix)) continue;
+      let sliced = word.slice(0, word.length - suffix.length);
+      return countConsonantSequences(sliced) > minMeasure ? sliced + replacement : word;
+    }
+    return word;
+  };
+  porterStep1a = (word) => {
+    if (word.endsWith("sses")) return word.slice(0, -2);
+    if (word.endsWith("ies")) return word.slice(0, -2);
+    if (word.endsWith("ss")) return word;
+    if (word.endsWith("s")) return word.slice(0, -1);
+    return word;
+  };
+  porterStep1b = (word) => {
+    if (word.endsWith("eed")) {
+      let sliced = word.slice(0, -3);
+      return countConsonantSequences(sliced) > 0 ? word.slice(0, -1) : word;
+    }
+    let stem = word.endsWith("ed") ? word.slice(0, -2) : word.endsWith("ing") ? word.slice(0, -3) : undefined;
+    if (stem === undefined || !hasVowel(stem)) return word;
+    if (stem.endsWith("at") || stem.endsWith("bl") || stem.endsWith("iz")) return stem + "e";
+    let last = stem.at(-1);
+    if (endsWithDoubleConsonant(stem) && last !== "l" && last !== "s" && last !== "z")
+      return stem.slice(0, -1);
+    if (countConsonantSequences(stem) === 1 && endsWithCVC(stem)) return stem + "e";
+    return stem;
+  };
+  porterStep1c = (word) =>
+    word.endsWith("y") && hasVowel(word.slice(0, -1)) ? word.slice(0, -1) + "i" : word;
+  porterStep2 = [
+    ["ational", "ate", 0],
+    ["tional", "tion", 0],
+    ["enci", "ence", 0],
+    ["anci", "ance", 0],
+    ["izer", "ize", 0],
+    ["abli", "able", 0],
+    ["bli", "ble", 0],
+    ["alli", "al", 0],
+    ["entli", "ent", 0],
+    ["eli", "e", 0],
+    ["ousli", "ous", 0],
+    ["ization", "ize", 0],
+    ["ation", "ate", 0],
+    ["ator", "ate", 0],
+    ["alism", "al", 0],
+    ["iveness", "ive", 0],
+    ["fulness", "ful", 0],
+    ["ousness", "ous", 0],
+    ["aliti", "al", 0],
+    ["iviti", "ive", 0],
+    ["biliti", "ble", 0],
+    ["logi", "log", 0],
+  ];
+  porterStep3 = [
+    ["icate", "ic", 0],
+    ["ative", "", 0],
+    ["alize", "al", 0],
+    ["iciti", "ic", 0],
+    ["ical", "ic", 0],
+    ["ful", "", 0],
+    ["ness", "", 0],
+  ];
+  porterStep4 = [
+    "al",
+    "ance",
+    "ence",
+    "er",
+    "ic",
+    "able",
+    "ible",
+    "ant",
+    "ement",
+    "ment",
+    "ent",
+    "ion",
+    "ou",
+    "ism",
+    "ate",
+    "iti",
+    "ous",
+    "ive",
+    "ize",
+  ];
+  porterStep5 = (word) => {
+    for (let suffix of porterStep4) {
+      if (!word.endsWith(suffix)) continue;
+      let sliced = word.slice(0, word.length - suffix.length);
+      let isValidRemoval = suffix !== "ion" || sliced.endsWith("s") || sliced.endsWith("t");
+      return countConsonantSequences(sliced) > 1 && isValidRemoval ? sliced : word;
+    }
+    return word;
+  };
+  porterStem = (word) => {
+    if (!word.endsWith("e")) return word;
+    let word_2 = word.slice(0, -1);
+    let measure = countConsonantSequences(word_2);
+    if (measure > 1) return word_2;
+    if (measure === 1 && !endsWithCVC(word_2)) return word_2;
+    return word;
+  };
+  trimTrailingDoubleL = (word) =>
+    countConsonantSequences(word) > 1 && endsWithDoubleConsonant(word) && word.endsWith("l")
+      ? word.slice(0, -1)
+      : word;
+  porterStemWord = (word) => {
+    if (word.length <= 2) return word;
+    let stemmed = porterStep1a(word);
+    stemmed = porterStep1b(stemmed);
+    stemmed = porterStep1c(stemmed);
+    stemmed = replaceSuffixList(stemmed, porterStep2);
+    stemmed = replaceSuffixList(stemmed, porterStep3);
+    stemmed = porterStep5(stemmed);
+    stemmed = porterStem(stemmed);
+    stemmed = trimTrailingDoubleL(stemmed);
+    return stemmed;
+  };
+  memoizedStemWord = memoizeWithLRU(porterStemWord, (word) => word, 50000);
+  stemAlias = retainCacheKey(memoizedStemWord.cache);
+  stemWithOptions = (text) => (text.length <= 2 ? text : memoizedStemWord(text));
+});
+//@ chunk-vp5gef34.js:3668-7390 placement
+/**
+ * 记忆索引的分词流程：按 Unicode 字母/数字切分、拆驼峰与数字、技术词改写（c++→cpp 等）、CJK 边界、去所有格与停用词，再按选项做词干化与复合词拆分。
+ */
+var tokenizeForIndex; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var isUpperAscii;
+var isLowerAscii;
+var isDigitAscii;
+var isAlnumAscii;
+var splitCamelAndDigits;
+var normalizeForIndex;
+var isLowerWord;
+var tokenizeWithCompounds;
+var CJK_BOUNDARY_LEFT;
+var CJK_BOUNDARY_RIGHT;
+var TECH_TERM_REWRITES;
+var regExp;
+var CJK_CHAR_CLASS;
+var CJK_CHAR_TEST;
+var trimCjkEdges;
+var replaceTechTerms;
+var HALFWIDTH_KATAKANA_RE;
+var DIGITS_ONLY_RE;
+var stripPossessive;
+var SINGLE_LETTER_RE;
+var dropStopword;
+var tokenizeWord;
+var stemTokens;
+var tokenizeForSearch;
+var tokenizeStrict;
+var tokenizeDualStem;
+var tokenizeNoCompounds;
+deferInit("chunk-vp5gef34.js:3668", () => {
+  tokenizeForIndex = /[\p{L}\p{M}\p{N}]+/gu;
+  isUpperAscii = (char) => char >= "A" && char <= "Z";
+  isLowerAscii = (char) => char >= "a" && char <= "z";
+  isDigitAscii = (char) => char >= "0" && char <= "9";
+  isAlnumAscii = (char) => isUpperAscii(char) || isLowerAscii(char);
+  splitCamelAndDigits = (text) => {
+    let parts = [];
+    let partStart = 0;
+    for (let idx = 1; idx < text.length; idx++) {
+      let prevChar = text[idx - 1] ?? "";
+      let char = text[idx] ?? "";
+      let nextChar = text[idx + 1] ?? "";
+      let isTrailingS = nextChar === "s" && idx + 2 === text.length;
+      if (
+        ((isLowerAscii(prevChar) || isDigitAscii(prevChar)) && isUpperAscii(char)) ||
+        (isUpperAscii(prevChar) && isUpperAscii(char) && isLowerAscii(nextChar) && !isTrailingS) ||
+        (isAlnumAscii(prevChar) && isDigitAscii(char)) ||
+        (isDigitAscii(prevChar) && isAlnumAscii(char))
+      ) {
+        parts.push(text.slice(partStart, idx));
+        partStart = idx;
+      }
+    }
+    parts.push(text.slice(partStart));
+    return parts;
+  };
+  normalizeForIndex = (text) =>
+    text
+      .normalize("NFKD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase();
+  isLowerWord = (text) => /^[a-z]+$/.test(text);
+  tokenizeWithCompounds = (text) => {
+    let parts = splitCamelAndDigits(text);
+    return parts.length > 1
+      ? [
+          {
+            text,
+            compound: true,
+          },
+          ...parts.map((text) => ({
+            text,
+            compound: false,
+          })),
+        ]
+      : [
+          {
+            text,
+            compound: false,
+          },
+        ];
+  };
+  CJK_BOUNDARY_LEFT = String.raw`(^|[^\p{L}\p{N}]|[\u3040-\u30FF\u3400-\u4DBF\u4E00-\u9FFF\uAC00-\uD7AF\uF900-\uFAFF])`;
+  CJK_BOUNDARY_RIGHT = String.raw`(?!(?![\u3040-\u30FF\u3400-\u4DBF\u4E00-\u9FFF\uAC00-\uD7AF\uF900-\uFAFF])[\p{L}\p{N}])`;
+  TECH_TERM_REWRITES = [
+    [new RegExp(CJK_BOUNDARY_LEFT + String.raw`[cC]\+\+` + CJK_BOUNDARY_RIGHT, "gu"), " cpp "],
+    [new RegExp(CJK_BOUNDARY_LEFT + String.raw`[cC]#` + CJK_BOUNDARY_RIGHT, "gu"), " csharp "],
+    [new RegExp(CJK_BOUNDARY_LEFT + String.raw`[fF]#` + CJK_BOUNDARY_RIGHT, "gu"), " fsharp "],
+    [new RegExp(CJK_BOUNDARY_LEFT + String.raw`\.[nN][eE][tT]` + CJK_BOUNDARY_RIGHT, "gu"), " dotnet "],
+  ];
+  regExp = new RegExp(CJK_BOUNDARY_LEFT + String.raw`([vV]?\d+(?:\.\d+)+)`, "gu");
+  CJK_CHAR_CLASS = /^(?![\u3040-\u30FF\u3400-\u4DBF\u4E00-\u9FFF\uAC00-\uD7AF\uF900-\uFAFF])[\p{L}\p{N}]/u;
+  CJK_CHAR_TEST = /[\u3040-\u30FF\u3400-\u4DBF\u4E00-\u9FFF\uAC00-\uD7AF\uF900-\uFAFF]/;
+  trimCjkEdges =
+    /[\u3040-\u30FF\u3400-\u4DBF\u4E00-\u9FFF\uAC00-\uD7AF\uF900-\uFAFF]+|[^\u3040-\u30FF\u3400-\u4DBF\u4E00-\u9FFF\uAC00-\uD7AF\uF900-\uFAFF]+/gu;
+  replaceTechTerms = (text) => {
+    let chars = [...text];
+    if (chars.length <= 2) return [text];
+    let variants = [text];
+    for (let i = 0; i < chars.length - 1; i++) variants.push(chars[i] + chars[i + 1]);
+    return variants;
+  };
+  HALFWIDTH_KATAKANA_RE = /[\uFF66-\uFF9F]/;
+  DIGITS_ONLY_RE = /^\p{N}+$/u;
+  stripPossessive = (chars) => {
+    let groups = [];
+    let prevWasDigits = false;
+    let prevWasCjk = false;
+    for (let char of chars) {
+      let last = groups.at(-1);
+      if (last !== undefined && DIGITS_ONLY_RE.test(char) && prevWasCjk) {
+        last.push(char);
+        prevWasDigits = true;
+        continue;
+      }
+      if (last !== undefined && prevWasDigits && CJK_CHAR_TEST.test(char)) {
+        last.push(char);
+        prevWasDigits = false;
+        prevWasCjk = true;
+        continue;
+      }
+      groups.push([char]);
+      prevWasDigits = DIGITS_ONLY_RE.test(char);
+      prevWasCjk = CJK_CHAR_TEST.test(char);
+    }
+    return groups.map((group) => (group.length === 1 ? group[0] : group.join("")));
+  };
+  SINGLE_LETTER_RE = /^\p{L}$/u;
+  dropStopword = (chunks) => {
+    let groups = [];
+    for (let chunk of chunks) {
+      let last = groups.at(-1);
+      let isLoneLetter = SINGLE_LETTER_RE.test(chunk) && !CJK_CHAR_TEST.test(chunk);
+      if (last !== undefined) {
+        let last_2 = last.at(-1);
+        if (isLoneLetter && CJK_CHAR_TEST.test(last_2)) {
+          last.push(chunk);
+          continue;
+        }
+        if (CJK_CHAR_TEST.test(chunk) && SINGLE_LETTER_RE.test(last_2) && !CJK_CHAR_TEST.test(last_2)) {
+          last.push(chunk);
+          continue;
+        }
+      }
+      groups.push([chunk]);
+    }
+    return groups.map((group) => (group.length === 1 ? group[0] : group.join("")));
+  };
+  tokenizeWord = (chars) => {
+    let words = [];
+    for (let idx = 0; idx < chars.length; idx++) {
+      let char = chars[idx];
+      if (!CJK_CHAR_TEST.test(char) || [...char].length !== 1) continue;
+      let prevChar = idx > 0 ? chars[idx - 1] : undefined;
+      let nextChar = idx + 1 < chars.length ? chars[idx + 1] : undefined;
+      let word =
+        prevChar !== undefined && !CJK_CHAR_TEST.test(prevChar) && [...normalizeForIndex(prevChar)].length > 1
+          ? prevChar + char
+          : nextChar !== undefined &&
+              !CJK_CHAR_TEST.test(nextChar) &&
+              [...normalizeForIndex(nextChar)].length > 1
+            ? char + nextChar
+            : undefined;
+      if (word !== undefined)
+        words.push({
+          text: word,
+          compound: true,
+        });
+    }
+    return words;
+  };
+  stemTokens = (text, options) => {
+    let replaced = text.replace(/\[\[([^[\]]*)\]\]/g, " $1 ");
+    for (let [pattern, replacement] of TECH_TERM_REWRITES)
+      replaced = replaced.replace(pattern, (match, charGroup) => charGroup + replacement);
+    replaced = replaced.replace(regExp, (match, prefix, version, versionOffset, input) => {
+      let codePoint = input.codePointAt(versionOffset + match.length);
+      if (codePoint !== undefined && CJK_CHAR_CLASS.test(String.fromCodePoint(codePoint))) return match;
+      return `${prefix}${version} ${version.replaceAll(".", "")}`;
+    });
+    let tokens = replaced.match(tokenizeForIndex) ?? [];
+    let flattened = tokens
+      .flatMap((token) => {
+        let normalized = HALFWIDTH_KATAKANA_RE.test(token) ? token.normalize("NFKC") : token;
+        if (CJK_CHAR_TEST.test(normalized)) {
+          let cjkChunks = dropStopword(stripPossessive(normalized.match(trimCjkEdges) ?? []));
+          let cjkWords = options.compounds ? tokenizeWord(cjkChunks) : [];
+          let flattened = cjkChunks.flatMap((chunk) => {
+            if (!CJK_CHAR_TEST.test(chunk)) {
+              let chunkTokens = tokenizeWithCompounds(chunk);
+              return options.compounds ? chunkTokens : chunkTokens.filter((token) => !token.compound);
+            }
+            let variants = replaceTechTerms(chunk);
+            let isCompound = variants.length > 1;
+            let mapped = (chunk.match(/\p{N}{3,}/gu) ?? []).map((text) => ({
+              text,
+              compound: true,
+            }));
+            return [
+              ...variants.map((text, variantIndex) => ({
+                text,
+                compound: isCompound && variantIndex === 0,
+              })),
+              ...mapped,
+            ].filter((token) => !token.compound || options.compounds);
+          });
+          flattened.push(...cjkWords);
+          return [
+            ...flattened.filter((token) => token.compound),
+            ...flattened.filter((token) => !token.compound),
+          ];
+        }
+        let chunkTokens = tokenizeWithCompounds(normalized);
+        return options.compounds ? chunkTokens : chunkTokens.filter((token) => !token.compound);
+      })
+      .map(({ text, compound }) => ({
+        text: normalizeForIndex(text),
+        compound,
+      }))
+      .filter(({ text }) => text.length > 1)
+      .flatMap(({ text, compound }) => {
+        if (compound) {
+          let stemmed = options.dualStem && isLowerWord(text) ? stemWithOptions(text) : text;
+          return stemmed !== text ? [text, stemmed] : [text];
+        }
+        if (!isLowerWord(text)) return [text];
+        let stemmed = stemWithOptions(text);
+        return options.dualStem && stemmed !== text ? [stemmed, text] : [stemmed];
+      });
+    if (flattened.length > 0 || tokens.length === 0 || options.singleCharFallback === false) return flattened;
+    return tokens.map(normalizeForIndex);
+  };
+  tokenizeForSearch = (text) =>
+    stemTokens(text, {
+      dualStem: false,
+      compounds: true,
+    });
+  tokenizeStrict = (text) =>
+    stemTokens(text, {
+      dualStem: false,
+      compounds: true,
+      singleCharFallback: false,
+    });
+  tokenizeDualStem = (text) =>
+    stemTokens(text, {
+      dualStem: true,
+      compounds: true,
+    });
+  tokenizeNoCompounds = (text) =>
+    stemTokens(text, {
+      dualStem: false,
+      compounds: false,
+    });
+});
+//@ chunk-vp5gef34.js:7390-8573 placement
+/**
+ * 把记忆文件拆成索引字段：文件名、frontmatter、各级标题、正文（含代码块跳过），并给出各字段文本。
+ */
+var extractMemoryFields = ["filename", "frontmatter", "headings", "body"];
+var FRONTMATTER_RE = /^---[ \t]*\r?\n([\s\S]*?)\r?\n---[ \t]*(?:\r?\n|$)/;
+var YAML_KEY_LINE_RE = /^[\w-]+:/m;
+var MARKDOWN_HEADING_RE = /^#{1,6}\s+(.*)$/;
+var FENCE_OPEN_RE = /^(`{3,}|~{3,})(.*)$/;
+var basenameWithoutExt = (filePath) => {
+  let sliced = filePath.slice(filePath.lastIndexOf("/") + 1);
+  let index = sliced.lastIndexOf(".");
+  return index > 0 ? sliced.slice(0, index) : sliced;
+};
+var parseMemoryDocument = (lines) => {
+  let doc = {
+    headings: [],
+    body: [[]],
+  };
+  let fenceMarker;
+  for (let line of lines) {
+    let match = line.match(FENCE_OPEN_RE);
+    if (match !== null) {
+      let fence = match[1];
+      if (fenceMarker === undefined) {
+        fenceMarker = fence;
+        doc.body.at(-1).push(line);
+        continue;
+      }
+      if (fence[0] === fenceMarker[0] && fence.length >= fenceMarker.length && match[2].trim() === "") {
+        fenceMarker = undefined;
+        doc.body.at(-1).push(line);
+        continue;
+      }
+    }
+    let heading = fenceMarker !== undefined ? undefined : line.match(MARKDOWN_HEADING_RE)?.[1];
+    if (heading === undefined) doc.body.at(-1).push(line);
+    else {
+      doc.headings.push(heading);
+      doc.body.push([]);
+    }
+  }
+  return doc;
+};
+var stripFrontmatter = (headings) => {
+  let filtered = headings.map((heading) => tokenizeStrict(heading)).filter((tokens) => tokens.length > 0);
+  if (filtered.length > 0) return filtered.flatMap((tokens) => [...tokens, ""]);
+  return tokenizeForSearch(
+    headings.join(`
+`),
+  );
+};
+var splitHeadingSections = (body) => {
+  let filtered = body
+    .map((sectionLines) =>
+      tokenizeStrict(
+        sectionLines.join(`
+`),
+      ),
+    )
+    .filter((tokens) => tokens.length > 0);
+  if (filtered.length > 0)
+    return filtered.flatMap((tokens, sectionIndex) => (sectionIndex === 0 ? tokens : ["", ...tokens]));
+  return tokenizeForSearch(
+    body.map((sectionLines) =>
+      sectionLines.join(`
+`),
+    ).join(`
+`),
+  );
+};
+var extractMemoryFieldsFromFile = (filePath, text) => {
+  let replaced = text.replace(/^\uFEFF/, "");
+  let match = replaced.match(FRONTMATTER_RE);
+  let hasYamlKeys = match !== null && YAML_KEY_LINE_RE.test(match[1] ?? "");
+  let frontmatterText = hasYamlKeys ? (match[1] ?? "") : "";
+  let bodyText = hasYamlKeys ? replaced.slice(match[0].length) : replaced;
+  let { headings, body } = parseMemoryDocument(bodyText.split(/\r?\n/));
+  return {
+    path: filePath,
+    fields: {
+      filename: tokenizeForSearch(basenameWithoutExt(filePath)),
+      frontmatter: tokenizeForSearch(frontmatterText),
+      headings: stripFrontmatter(headings),
+      body: splitHeadingSections(body),
+    },
+  };
+};
+//@ chunk-vp5gef34.js:8573-12080 placement
+/**
+ * 倒排索引的增删查：每词一篇 posting（docIds/offsets/positions 三个 Uint32Array），字段编号表与 posting 二分查找。SMALL_DELETION_THRESHOLD=16 决定删文档时逐个标未验证还是重建词表。
+ */
+var buildInvertedIndex; // deferred: uses extractMemoryFields of its import cycle while loading; runs once the cycle is complete
+var FIELD_INDEX;
+var MAX_DOC_ID;
+var emptyFieldCounters;
+var createEmptyIndex;
+var growUint32Array;
+var indexDocumentFields;
+var addDocumentToIndex;
+var removeDocumentFromIndex;
+var rebuildFieldsForDoc;
+var docIdsOfTerm;
+var appendDocId;
+var removeDocIdFromTerm;
+var termDocCount;
+var addPostingPosition;
+var removePosting;
+var upsertDocument;
+var markUnverified;
+var isUnverified;
+var hasDocumentPath;
+var documentIdForPath;
+var SMALL_DELETION_THRESHOLD;
+var dropDocuments;
+var emptyIndexSnapshot;
+deferInit("chunk-vp5gef34.js:8573", () => {
+  buildInvertedIndex = extractMemoryFields.length;
+  FIELD_INDEX = Object.fromEntries(
+    extractMemoryFields.map((extractMemoryField, fieldIndex) => [extractMemoryField, fieldIndex]),
+  );
+  MAX_DOC_ID = 4294967295;
+  emptyFieldCounters = () =>
+    Object.fromEntries(extractMemoryFields.map((extractMemoryField) => [extractMemoryField, 0]));
+  createEmptyIndex = () => ({
+    terms: new Map(),
+    docs: new Map(),
+    pathToId: new Map(),
+    unverified: new Set(),
+    fieldLengthTotals: emptyFieldCounters(),
+    fieldDocCounts: emptyFieldCounters(),
+    nextDocId: 0,
+  });
+  growUint32Array = (array, minLength) => {
+    if (array.length >= minLength) return array;
+    let uint32Array = new Uint32Array(Math.max(minLength, array.length * 2));
+    uint32Array.set(array);
+    return uint32Array;
+  };
+  indexDocumentFields = (doc) => {
+    let termFieldPositions = new Map();
+    extractMemoryFields.forEach((extractMemoryField, fieldIndex) => {
+      doc.fields[extractMemoryField].forEach((token, position) => {
+        if (token === "") return;
+        let fieldPositions = termFieldPositions.get(token) ?? extractMemoryFields.map(() => []);
+        fieldPositions[fieldIndex].push(position);
+        termFieldPositions.set(token, fieldPositions);
+      });
+    });
+    return termFieldPositions;
+  };
+  addDocumentToIndex = (index, term, docId, fieldPositions) => {
+    let posting = index.terms.get(term) ?? {
+      docIds: new Uint32Array(2),
+      offsets: new Uint32Array(2 * buildInvertedIndex + 1),
+      positions: new Uint32Array(8),
+      size: 0,
+    };
+    let size = posting.size;
+    let positionOffset = posting.offsets[buildInvertedIndex * size];
+    let reduced = fieldPositions.reduce((acc, positions) => acc + positions.length, 0);
+    if (positionOffset + reduced > MAX_DOC_ID) throw Error("position space exhausted");
+    if (size > 0 && posting.docIds[size - 1] >= docId) throw Error("posting docId out of order");
+    posting.docIds = growUint32Array(posting.docIds, size + 1);
+    posting.offsets = growUint32Array(posting.offsets, buildInvertedIndex * (size + 1) + 1);
+    posting.positions = growUint32Array(posting.positions, positionOffset + reduced);
+    posting.docIds[size] = docId;
+    let cursor = positionOffset;
+    fieldPositions.forEach((positions, fieldIndex) => {
+      posting.offsets[buildInvertedIndex * size + fieldIndex] = cursor;
+      posting.positions.set(positions, cursor);
+      cursor += positions.length;
+    });
+    posting.offsets[buildInvertedIndex * (size + 1)] = cursor;
+    posting.size = size + 1;
+    if (size === 0) index.terms.set(term, posting);
+  };
+  removeDocumentFromIndex = (posting, docSlot) => {
+    let startOffset = posting.offsets[buildInvertedIndex * docSlot];
+    let endOffset = posting.offsets[buildInvertedIndex * (docSlot + 1)];
+    let positionsEnd = posting.offsets[buildInvertedIndex * posting.size];
+    posting.positions.copyWithin(startOffset, endOffset, positionsEnd);
+    posting.docIds.copyWithin(docSlot, docSlot + 1, posting.size);
+    for (let i = buildInvertedIndex * (docSlot + 1); i <= buildInvertedIndex * posting.size; i++)
+      posting.offsets[i - buildInvertedIndex] = posting.offsets[i] - (endOffset - startOffset);
+    posting.size--;
+  };
+  rebuildFieldsForDoc = (posting, docId) => {
+    let low = 0;
+    let high = posting.size - 1;
+    while (low <= high) {
+      let mid = (low + high) >> 1;
+      let midDocId = posting.docIds[mid];
+      if (midDocId === docId) return mid;
+      if (midDocId < docId) low = mid + 1;
+      else high = mid - 1;
+    }
+    return -1;
+  };
+  docIdsOfTerm = (posting) => posting.docIds.subarray(0, posting.size);
+  appendDocId = (posting, docSlot, extractMemoryField) =>
+    posting.offsets[buildInvertedIndex * docSlot + FIELD_INDEX[extractMemoryField] + 1] -
+    posting.offsets[buildInvertedIndex * docSlot + FIELD_INDEX[extractMemoryField]];
+  removeDocIdFromTerm = (entry, docSlot, extractMemoryField) => {
+    let start = entry.offsets[buildInvertedIndex * docSlot + FIELD_INDEX[extractMemoryField]];
+    let end = entry.offsets[buildInvertedIndex * docSlot + FIELD_INDEX[extractMemoryField] + 1];
+    return start === end ? undefined : entry.positions.subarray(start, end);
+  };
+  termDocCount = (index, term) => index.terms.get(term)?.size ?? 0;
+  addPostingPosition = (index, term) => {
+    let posting = index.terms.get(term);
+    return posting?.size === 1 ? posting.docIds[0] : undefined;
+  };
+  removePosting = (posting) => {
+    posting.docIds = posting.docIds.slice(0, posting.size);
+    posting.offsets = posting.offsets.slice(0, buildInvertedIndex * posting.size + 1);
+    posting.positions = posting.positions.slice(0, posting.offsets[buildInvertedIndex * posting.size]);
+  };
+  upsertDocument = (index, doc, meta) => {
+    if (index.nextDocId > MAX_DOC_ID) throw Error("docId space exhausted");
+    if (index.pathToId.has(doc.path)) hasDocumentPath(index, doc.path);
+    let docId = index.nextDocId++;
+    for (let [term, fieldPositions] of indexDocumentFields(doc))
+      addDocumentToIndex(index, term, docId, fieldPositions);
+    let fieldLengths = Object.fromEntries(
+      extractMemoryFields.map((extractMemoryField) => [
+        extractMemoryField,
+        count(doc.fields[extractMemoryField], (token) => token !== ""),
+      ]),
+    );
+    for (let extractMemoryField of extractMemoryFields) {
+      index.fieldLengthTotals[extractMemoryField] += fieldLengths[extractMemoryField];
+      if (fieldLengths[extractMemoryField] > 0) index.fieldDocCounts[extractMemoryField]++;
+    }
+    index.docs.set(docId, {
+      path: doc.path,
+      hash: meta.hash,
+      size: meta.size,
+      mtimeMs: meta.mtimeMs,
+      fieldLengths,
+    });
+    index.pathToId.set(doc.path, docId);
+    return docId;
+  };
+  markUnverified = (index, docId, doc) => {
+    for (let extractMemoryField of extractMemoryFields) {
+      index.fieldLengthTotals[extractMemoryField] -= doc.fieldLengths[extractMemoryField];
+      if (doc.fieldLengths[extractMemoryField] > 0) index.fieldDocCounts[extractMemoryField]--;
+    }
+    index.docs.delete(docId);
+    index.pathToId.delete(doc.path);
+    index.unverified.delete(docId);
+  };
+  isUnverified = (index, docId, doc) => {
+    for (let [term, posting] of index.terms) {
+      let docSlot = rebuildFieldsForDoc(posting, docId);
+      if (docSlot < 0) continue;
+      removeDocumentFromIndex(posting, docSlot);
+      if (posting.size === 0) index.terms.delete(term);
+    }
+    markUnverified(index, docId, doc);
+  };
+  hasDocumentPath = (index, path) => {
+    let docId = index.pathToId.get(path);
+    let doc = docId === undefined ? undefined : index.docs.get(docId);
+    if (docId === undefined || doc === undefined) return false;
+    isUnverified(index, docId, doc);
+    return true;
+  };
+  documentIdForPath = (posting, keepDocIds) => {
+    let readIndex = 0;
+    while (readIndex < posting.size && !keepDocIds.has(posting.docIds[readIndex])) readIndex++;
+    if (readIndex === posting.size) return;
+    let writeIndex = readIndex;
+    let writeOffset = posting.offsets[buildInvertedIndex * readIndex];
+    for (; readIndex < posting.size; readIndex++) {
+      let docId = posting.docIds[readIndex];
+      let startOffset = posting.offsets[buildInvertedIndex * readIndex];
+      let endOffset = posting.offsets[buildInvertedIndex * (readIndex + 1)];
+      if (keepDocIds.has(docId)) continue;
+      let removedBytes = startOffset - writeOffset;
+      posting.positions.copyWithin(writeOffset, startOffset, endOffset);
+      posting.docIds[writeIndex] = docId;
+      for (let idx = 0; idx < buildInvertedIndex; idx++)
+        posting.offsets[buildInvertedIndex * writeIndex + idx] =
+          posting.offsets[buildInvertedIndex * readIndex + idx] - removedBytes;
+      writeOffset += endOffset - startOffset;
+      writeIndex++;
+    }
+    posting.offsets[buildInvertedIndex * writeIndex] = writeOffset;
+    posting.size = writeIndex;
+  };
+  SMALL_DELETION_THRESHOLD = 16;
+  dropDocuments = (index, paths) => {
+    let docIds = new Map();
+    for (let path of paths) {
+      let docId = index.pathToId.get(path);
+      let doc = docId === undefined ? undefined : index.docs.get(docId);
+      if (docId !== undefined && doc !== undefined) docIds.set(docId, doc);
+    }
+    if (docIds.size < SMALL_DELETION_THRESHOLD) {
+      for (let [docId, doc] of docIds) isUnverified(index, docId, doc);
+      return docIds.size;
+    }
+    let docIdSet = new Set(docIds.keys());
+    for (let [term, posting] of index.terms) {
+      documentIdForPath(posting, docIdSet);
+      if (posting.size === 0) index.terms.delete(term);
+    }
+    for (let [docId, doc] of docIds) markUnverified(index, docId, doc);
+    return docIds.size;
+  };
+  emptyIndexSnapshot = (index) => ({
+    docCount: index.docs.size,
+    avgFieldLength: Object.fromEntries(
+      extractMemoryFields.map((extractMemoryField) => [
+        extractMemoryField,
+        index.fieldDocCounts[extractMemoryField] === 0
+          ? 0
+          : index.fieldLengthTotals[extractMemoryField] / index.fieldDocCounts[extractMemoryField],
+      ]),
+    ),
+  });
+});
+//@ chunk-vp5gef34.js:12080-15423 placement
+/**
+ * BM25 打分：字段权重（filename/frontmatter 3、headings 2.5、body 1）、长度归一化与短语/邻近加成；其中 bm25Idf 是 log((N-df+0.5)/(df+0.5))，fieldLengthBoost 才是 k1 加权。
+ */
+var bm25Search = {
+  k1: 1.2,
+  fieldWeights: {
+    filename: 3,
+    frontmatter: 3,
+    headings: 2.5,
+    body: 1,
+  },
+  fieldB: {
+    filename: 0.75,
+    frontmatter: 0.75,
+    headings: 0.75,
+    body: 0.75,
+  },
+  proximityWeight: 0,
+  phraseBoost: 0.5,
+};
+var parseQueryTerms = (query) => {
+  let plainTerms = tokenizeNoCompounds(query);
+  if (plainTerms.length === 0) return [];
+  let searchTerms = tokenizeForSearch(query);
+  let phrases = [];
+  let currentPhrase = [];
+  let plainIndex = 0;
+  for (let term of searchTerms) {
+    if (plainIndex < plainTerms.length && term === plainTerms[plainIndex]) {
+      currentPhrase.push(term);
+      plainIndex++;
+      continue;
+    }
+    if (currentPhrase.length > 0) {
+      phrases.push(currentPhrase);
+      currentPhrase = [];
+    }
+  }
+  if (currentPhrase.length > 0) phrases.push(currentPhrase);
+  for (; plainIndex < plainTerms.length; plainIndex++) phrases.push([plainTerms[plainIndex]]);
+  return phrases;
+};
+var idfForTerm = (query) => {
+  let phrases =
+    ((query.match(/"/g) ?? []).length & 1) === 0
+      ? [...query.matchAll(/"([^"]*)"/g)]
+          .flatMap((quotedMatch) => parseQueryTerms(quotedMatch[1] ?? ""))
+          .filter((phrase) => phrase.length > 1 && phrase.every((term) => term.length > 1))
+      : [];
+  return {
+    terms: uniq(tokenizeDualStem(query)),
+    phrases,
+    boostPhrases: [],
+  };
+};
+var bm25Idf = (docCount, docFreq) => {
+  let idf = Math.log((docCount - docFreq + 0.5) / (docFreq + 0.5));
+  return idf <= 0 ? 0.000001 : idf;
+};
+var BM25_K1 = 0.7;
+var MIN_FIELD_LENGTH_FOR_BOOST = 16;
+var fieldLengthBoost = (fieldLength) =>
+  fieldLength < MIN_FIELD_LENGTH_FOR_BOOST ? 0 : BM25_K1 * bm25Idf(fieldLength, 1);
+var scoreDocument = (index, term, fieldLengths, avgFieldLength, options) =>
+  extractMemoryFields.reduce((acc, extractMemoryField) => {
+    let termFreq = appendDocId(index, term, extractMemoryField);
+    if (termFreq === 0 || avgFieldLength[extractMemoryField] === 0) return acc;
+    let fieldB = options.fieldB[extractMemoryField];
+    let lengthNorm =
+      1 - fieldB + (fieldB * fieldLengths[extractMemoryField]) / avgFieldLength[extractMemoryField];
+    return acc + (options.fieldWeights[extractMemoryField] * termFreq) / lengthNorm;
+  }, 0);
+var phraseMatchBonus = (index, docId, phraseTerms) => {
+  let mapped = phraseTerms.map((term) => proximityBonus(index, term, docId));
+  if (mapped.some((hit) => hit === undefined)) return false;
+  return extractMemoryFields.some((extractMemoryField) => {
+    let positionsPerTerm = [];
+    for (let hit of mapped) {
+      let positions =
+        hit === undefined ? undefined : removeDocIdFromTerm(hit.entry, hit.slot, extractMemoryField);
+      if (positions === undefined) return false;
+      positionsPerTerm.push(positions);
+    }
+    let [firstPositions, ...restPositions] = positionsPerTerm;
+    if (firstPositions === undefined) return false;
+    return firstPositions.some((position) =>
+      restPositions.every((positions, offset) => collectFieldScores(positions, position + offset + 1)),
+    );
+  });
+};
+var proximityBonus = (index, term, docId) => {
+  let posting = index.terms.get(term);
+  let docSlot = posting === undefined ? -1 : rebuildFieldsForDoc(posting, docId);
+  return posting === undefined || docSlot < 0
+    ? undefined
+    : {
+        entry: posting,
+        slot: docSlot,
+      };
+};
+var collectFieldScores = (sortedPositions, target) => {
+  let low = 0;
+  let high = sortedPositions.length - 1;
+  while (low <= high) {
+    let mid = (low + high) >> 1;
+    let position = sortedPositions[mid];
+    if (position === target) return true;
+    if (position < target) low = mid + 1;
+    else high = mid - 1;
+  }
+  return false;
+};
+var EMPTY_BEST_SPAN = {
+  span: 1 / 0,
+  termCount: 0,
+};
+var bestSpanForTerm = (index, docId, phraseTerms) => {
+  let filtered = phraseTerms
+    .map((term) => {
+      let hit = proximityBonus(index, term, docId);
+      return hit === undefined ? undefined : removeDocIdFromTerm(hit.entry, hit.slot, "body");
+    })
+    .filter((positions) => positions !== undefined);
+  if (filtered.length < 2) return EMPTY_BEST_SPAN;
+  let sorted = filtered
+    .flatMap((positions, termIdx) =>
+      Array.from(positions, (pos) => ({
+        pos,
+        termIdx,
+      })),
+    )
+    .sort((entryA, entryB) => entryA.pos - entryB.pos);
+  let termCounts = new Map();
+  let windowEntries = [];
+  let distinctTerms = 0;
+  let bestSpan = 1 / 0;
+  for (let entry of sorted) {
+    windowEntries.push(entry);
+    let count = termCounts.get(entry.termIdx) ?? 0;
+    termCounts.set(entry.termIdx, count + 1);
+    if (count === 0) distinctTerms++;
+    while (distinctTerms === filtered.length) {
+      let dropped = windowEntries.shift();
+      if (dropped === undefined) break;
+      bestSpan = Math.min(bestSpan, entry.pos - dropped.pos + 1);
+      let count = termCounts.get(dropped.termIdx) ?? 0;
+      termCounts.set(dropped.termIdx, count - 1);
+      if (count === 1) distinctTerms--;
+    }
+  }
+  return {
+    span: bestSpan,
+    termCount: filtered.length,
+  };
+};
+var mergeSpans = (exactTerms, conceptualKeywords) => {
+  let flattened = exactTerms.flatMap((entry) => parseQueryTerms(entry));
+  let terms = uniq([
+    ...exactTerms.flatMap((entry) => tokenizeDualStem(entry)),
+    ...conceptualKeywords.flatMap((keyword) => tokenizeDualStem(keyword)),
+  ]);
+  let filtered = flattened.filter((phrase) => phrase.length > 1);
+  let seenPhrases = new Set();
+  let boostPhrases = filtered.filter((phrase) => {
+    let joined = phrase.join(" ");
+    if (seenPhrases.has(joined)) return false;
+    seenPhrases.add(joined);
+    return true;
+  });
+  return {
+    terms,
+    phrases: [],
+    boostPhrases,
+  };
+};
+var searchIndex = (index, query, limit, options = bm25Search) => {
+  let { terms, phrases, boostPhrases } = typeof query === "string" ? idfForTerm(query) : query;
+  let snapshot = emptyIndexSnapshot(index);
+  if (snapshot.docCount === 0 || terms.length === 0) return [];
+  let mapped = terms.map((term) => index.terms.get(term));
+  let idfByTerm = new Map(
+    terms.map((term, index) => [term, bm25Idf(snapshot.docCount, mapped[index]?.size ?? 0)]),
+  );
+  let boostIdfByTerm = new Map(
+    boostPhrases
+      .flat()
+      .filter((term) => !idfByTerm.has(term))
+      .map((term) => [term, bm25Idf(snapshot.docCount, index.terms.get(term)?.size ?? 0)]),
+  );
+  let candidateDocIds = new Set(
+    mapped.flatMap((posting) => (posting === undefined ? [] : [...docIdsOfTerm(posting)])),
+  );
+  for (let boostPhrase of boostPhrases) {
+    let mapped = boostPhrase.map((term) => index.terms.get(term));
+    if (mapped.some((posting) => posting === undefined)) continue;
+    let [firstPosting, ...restPostings] = mapped;
+    let mapped_2 = restPostings.map((posting) => new Set(docIdsOfTerm(posting)));
+    for (let docId of docIdsOfTerm(firstPosting))
+      if (mapped_2.every((idSet) => idSet.has(docId))) candidateDocIds.add(docId);
+  }
+  return [...candidateDocIds]
+    .filter((docId) => phrases.every((phrase) => phraseMatchBonus(index, docId, phrase)))
+    .map((docId) => {
+      let doc = index.docs.get(docId);
+      let mapped_2 = mapped.map((posting) =>
+        posting === undefined ? -1 : rebuildFieldsForDoc(posting, docId),
+      );
+      let phraseTerms = terms.filter((term, termIndex) => mapped_2[termIndex] >= 0);
+      let reduced = terms.reduce((acc, term, termIndex) => {
+        if (mapped_2[termIndex] < 0) return acc;
+        let rawScore = scoreDocument(
+          mapped[termIndex],
+          mapped_2[termIndex],
+          doc.fieldLengths,
+          snapshot.avgFieldLength,
+          options,
+        );
+        return acc + idfByTerm.get(term) * (rawScore / (options.k1 + rawScore));
+      }, 0);
+      let reduced_2 = boostPhrases.reduce(
+        (acc, phraseTerms) =>
+          phraseMatchBonus(index, docId, phraseTerms)
+            ? acc +
+              options.phraseBoost *
+                phraseTerms.reduce(
+                  (acc, term) => acc + (idfByTerm.get(term) ?? boostIdfByTerm.get(term) ?? 0),
+                  0,
+                )
+            : acc,
+        0,
+      );
+      let { span, termCount } =
+        options.proximityWeight > 0 ? bestSpanForTerm(index, docId, phraseTerms) : EMPTY_BEST_SPAN;
+      let proximityScore =
+        span === 1 / 0 ? 0 : (options.proximityWeight * reduced) / Math.max(1, 1 + span - termCount);
+      return {
+        path: doc.path,
+        score: reduced + reduced_2 + proximityScore,
+        matchedTerms: phraseTerms,
+      };
+    })
+    .filter((hit) => hit.score > 0)
+    .sort((hitA, hitB) => hitB.score - hitA.score || (hitA.path < hitB.path ? -1 : 1))
+    .slice(0, limit);
+};
+//@ chunk-vp5gef34.js:19463-21378 affinity
+/**
+ * 记忆 BM25 索引与磁盘同步：An 比较扫描结果找出需重建与需删除的文档；yt 扫描目录、确认失踪文件确实不存在后删除，读入新增/变化的 .md 并更新哈希，返回增删改与跳过的统计。
+ */
+var diffMemoryIndex = (index, files, skipped = new Set(), skippedSubtrees = new Set(), isAlwaysRemoved) => {
+  let filePaths = new Set(files.map((file) => file.path));
+  let mapped = [...skippedSubtrees].map((subtree) => subtree + "/");
+  let isInSkippedSubtree = (path) => mapped.length > 0 && mapped.some((prefix) => path.startsWith(prefix));
+  let toRemove = [...index.pathToId.keys()].filter(
+    (key) =>
+      isAlwaysRemoved?.(key) === true ||
+      (!filePaths.has(key) && !skipped.has(key) && !isInSkippedSubtree(key)),
+  );
+  let filtered = files.filter((file) => {
+    let docId = index.pathToId.get(file.path);
+    if (docId === undefined) return true;
+    let doc = index.docs.get(docId);
+    return doc.size !== file.size || doc.mtimeMs !== file.mtimeMs;
+  });
+  return {
+    toIndex: filtered,
+    toRemove,
+    unchangedCount: files.length - filtered.length,
+  };
+};
+var syncMemoryIndex = async (index, rootDir, scanOptions = DEFAULT_SYNC_OPTIONS, signal) => {
+  let stats = {
+    added: 0,
+    updated: 0,
+    removed: 0,
+    unchanged: index.docs.size,
+    rehashedUnchanged: 0,
+    transientSkips: 0,
+    scanCompleted: false,
+  };
+  if (signal?.aborted) return stats;
+  let scan = await scanStoreFiles(rootDir, scanOptions).catch(() => {
+    return;
+  });
+  if (scan === undefined) return stats;
+  if (scan.rootMissing && index.docs.size > 0) return stats;
+  let realPath = await realpath(rootDir).catch((error) =>
+    classifyReadError(error) === "structural" ? undefined : TRANSIENT_READ_FAILURE_2,
+  );
+  if (realPath === TRANSIENT_READ_FAILURE_2) return stats;
+  let diff = diffMemoryIndex(index, scan.files, scan.skipped, scan.skippedSubtrees, (path) =>
+    isExcludedPath(path, scanOptions),
+  );
+  let alwaysRemoved = [];
+  let removablePaths = [];
+  await Promise.all(
+    diff.toRemove.map(async (path) => {
+      if (isExcludedPath(path, scanOptions) || scan.capDropped.has(path)) alwaysRemoved.push(path);
+      else if (await isMissingNonFileOrOversized(rootDir, path, scanOptions.maxFileBytes))
+        removablePaths.push(path);
+    }),
+  );
+  let removedPaths =
+    removablePaths.length === 0 ||
+    (await realpath(rootDir).then(
+      () => true,
+      () => false,
+    ))
+      ? [...alwaysRemoved, ...removablePaths]
+      : alwaysRemoved;
+  let skippedRemovalCount = diff.toRemove.length - removedPaths.length;
+  let removedCount = dropDocuments(index, removedPaths);
+  let addedCount = 0;
+  let updatedCount = 0;
+  let rehashedCount = 0;
+  let unavailableCount = 0;
+  let transientSkipCount = 0;
+  let aborted = false;
+  for (let file of diff.toIndex) {
+    if (signal?.aborted) {
+      aborted = true;
+      break;
+    }
+    let content = await readFileGuarded(join(rootDir, file.path), {
+      withinReal: realPath,
+      maxBytes: scanOptions.maxFileBytes,
+    }).catch((error) =>
+      isNotRegularFileError(error)
+        ? NOT_A_REGULAR_FILE
+        : classifyReadError(error) === "structural"
+          ? undefined
+          : TRANSIENT_READ_FAILURE_2,
+    );
+    if (content === TRANSIENT_READ_FAILURE_2) {
+      transientSkipCount++;
+      continue;
+    }
+    if (content === NOT_A_REGULAR_FILE) {
+      if (hasDocumentPath(index, file.path)) unavailableCount++;
+      continue;
+    }
+    if (content === undefined) {
+      if (!(await existsAsRegularFile(rootDir, file.path))) {
+        transientSkipCount++;
+        continue;
+      }
+      if (hasDocumentPath(index, file.path)) unavailableCount++;
+      continue;
+    }
+    if (content.byteLength > scanOptions.maxFileBytes) {
+      if (hasDocumentPath(index, file.path)) unavailableCount++;
+      continue;
+    }
+    let text = new TextDecoder().decode(content);
+    let hash = hashContent(text);
+    let docId = index.pathToId.get(file.path);
+    let doc = docId === undefined ? undefined : index.docs.get(docId);
+    if (doc?.hash === hash && !index.unverified.has(docId)) {
+      index.docs.set(docId, {
+        ...doc,
+        size: file.size,
+        mtimeMs: file.mtimeMs,
+      });
+      rehashedCount++;
+      continue;
+    }
+    upsertDocument(index, extractMemoryFieldsFromFile(file.path, text), {
+      hash,
+      size: file.size,
+      mtimeMs: file.mtimeMs,
+    });
+    if (doc === undefined) addedCount++;
+    else updatedCount++;
+  }
+  return {
+    added: addedCount,
+    updated: updatedCount,
+    removed: removedCount + unavailableCount,
+    unchanged: diff.unchangedCount,
+    rehashedUnchanged: rehashedCount,
+    transientSkips: transientSkipCount + skippedRemovalCount + scan.skipped.size + scan.skippedSubtrees.size,
+    scanCompleted: !aborted,
+  };
+};
+//@ chunk-vp5gef34.js:21378-21544 placement
+var logRecallIndexSad = async (event, extra = {}) => {
+  let { logFeatureSad } = await import("../services/analytics/featureTelemetry.js").catch(() => ({
+    logFeatureSad: undefined,
+  }));
+  logFeatureSad?.("memory_recall_select", event, {
+    via_index: true,
+    ...extra,
+  });
+};
+//@ chunk-vp5gef34.js:21662-26032 placement
+/**
+ * BM25 索引文件（.bm25-index.json）的读写：序列化成紧凑数组、解析回内存结构，超过 64 MiB 视为超大并重建。
+ */
+var deserializeIndex; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var serializeIndex;
+var toTypedArray;
+var encodePostings;
+var decodeIndex;
+var readIndexFile;
+var TRANSIENT_READ_FAILURE;
+var INDEX_JSON_PREFIX;
+var MAX_INDEX_FILE_BYTES;
+var INDEX_OVERSIZED;
+var readIndexFileRaw;
+var tryParseIndex;
+var loadIndexFromDisk;
+var readCachedIndex;
+deferInit("chunk-vp5gef34.js:21662", () => {
+  deserializeIndex = 10;
+  serializeIndex = (index) => {
+    let sorted = [...index.docs.keys()].sort((docIdA, docIdB) => docIdA - docIdB);
+    let docIdRemap = new Map(sorted.map((docId, newDocId) => [docId, newDocId]));
+    let docs = sorted.map((docId) => {
+      let doc = index.docs.get(docId);
+      return [
+        doc.path,
+        doc.hash,
+        doc.size,
+        doc.mtimeMs,
+        extractMemoryFields.map((extractMemoryField) => doc.fieldLengths[extractMemoryField]),
+      ];
+    });
+    let terms = [...index.terms.entries()].map(([term, posting]) => {
+      let encoded = [];
+      let prevDocId = -1;
+      docIdsOfTerm(posting).forEach((postingDocId, postingIndex) => {
+        let mappedDocId = docIdRemap.get(postingDocId);
+        if (mappedDocId === undefined) throw Error("posting references unknown docId");
+        encoded.push(prevDocId < 0 ? mappedDocId : mappedDocId - prevDocId);
+        prevDocId = mappedDocId;
+        let mapped = extractMemoryFields.map((extractMemoryField) =>
+          removeDocIdFromTerm(posting, postingIndex, extractMemoryField),
+        );
+        for (let positions of mapped) encoded.push(positions?.length ?? 0);
+        for (let positions of mapped)
+          positions?.forEach((position, positionIndex) => {
+            encoded.push(positionIndex === 0 ? position : position - positions[positionIndex - 1]);
+          });
+      });
+      return [term, encoded];
+    });
+    return {
+      version: deserializeIndex,
+      docs,
+      terms,
+    };
+  };
+  toTypedArray = (data, offset) => {
+    let value = data[offset];
+    if (typeof value !== "number" || !Number.isInteger(value) || value < 0 || value > MAX_DOC_ID)
+      throw Error("malformed posting data");
+    return value;
+  };
+  encodePostings = (index, term, posting, docCount) => {
+    let mapped = extractMemoryFields.map(() => 0);
+    let fieldPositions = extractMemoryFields.map(() => []);
+    let offset = 0;
+    let prevDocId = -1;
+    while (offset < posting.length) {
+      let typedArray = toTypedArray(posting, offset++);
+      let docId = prevDocId < 0 ? typedArray : prevDocId + typedArray;
+      if (docId >= docCount) throw Error("posting references unknown docId");
+      if (prevDocId >= 0 && typedArray === 0) throw Error("repeated posting docId");
+      prevDocId = docId;
+      let positionCount = 0;
+      extractMemoryFields.forEach((extractMemoryField, fieldIndex) => {
+        mapped[fieldIndex] = toTypedArray(posting, offset + fieldIndex);
+        positionCount += mapped[fieldIndex];
+      });
+      offset += extractMemoryFields.length;
+      if (positionCount === 0 || offset + positionCount > posting.length)
+        throw Error("malformed posting positions");
+      extractMemoryFields.forEach((extractMemoryField, fieldIndex) => {
+        let positions = fieldPositions[fieldIndex];
+        positions.length = 0;
+        let position = -1;
+        for (let idx = 0; idx < mapped[fieldIndex]; idx++) {
+          let typedArray = toTypedArray(posting, offset++);
+          position = position < 0 ? typedArray : position + typedArray;
+          if ((idx > 0 && typedArray === 0) || position > MAX_DOC_ID)
+            throw Error("malformed posting positions");
+          positions.push(position);
+        }
+      });
+      addDocumentToIndex(index, term, docId, fieldPositions);
+    }
+    let termEntry = index.terms.get(term);
+    if (termEntry === undefined) throw Error("empty term entry");
+    removePosting(termEntry);
+  };
+  decodeIndex = (rawIndex) => {
+    if (rawIndex.version !== deserializeIndex) throw Error("unsupported index format version");
+    if (!Array.isArray(rawIndex.docs) || !Array.isArray(rawIndex.terms)) throw Error("malformed index shape");
+    let emptyIndex = createEmptyIndex();
+    for (let [docId, docEntry] of rawIndex.docs.entries()) {
+      if (!Array.isArray(docEntry) || docEntry.length !== 5) throw Error("malformed doc entry");
+      let [path, hash, size, mtimeMs, fieldLengths] = docEntry;
+      if (
+        typeof hash !== "string" ||
+        !Number.isFinite(size) ||
+        !Number.isFinite(mtimeMs) ||
+        !Array.isArray(fieldLengths) ||
+        fieldLengths.length !== extractMemoryFields.length ||
+        fieldLengths.some((length) => !Number.isInteger(length) || length < 0 || length > MAX_DOC_ID)
+      )
+        throw Error("malformed doc metadata");
+      if (
+        typeof path !== "string" ||
+        path.length === 0 ||
+        path.startsWith("/") ||
+        (sep === "\\" && (path.includes("\\") || /^[A-Za-z]:/.test(path))) ||
+        path.includes("\x00") ||
+        path.split("/").some((segment) => segment === ".." || segment === "" || segment === ".")
+      )
+        throw Error("non-contained doc path");
+      if (emptyIndex.pathToId.has(path)) throw Error("duplicate doc entry");
+      let fieldLengthMap = Object.fromEntries(
+        extractMemoryFields.map((extractMemoryField, fieldIndex) => [
+          extractMemoryField,
+          fieldLengths[fieldIndex],
+        ]),
+      );
+      emptyIndex.docs.set(docId, {
+        path,
+        hash,
+        size,
+        mtimeMs,
+        fieldLengths: fieldLengthMap,
+      });
+      emptyIndex.pathToId.set(path, docId);
+      emptyIndex.unverified.add(docId);
+      for (let extractMemoryField of extractMemoryFields) {
+        emptyIndex.fieldLengthTotals[extractMemoryField] += fieldLengthMap[extractMemoryField];
+        if (fieldLengthMap[extractMemoryField] > 0) emptyIndex.fieldDocCounts[extractMemoryField]++;
+      }
+    }
+    if (
+      extractMemoryFields.some(
+        (extractMemoryField) => !Number.isSafeInteger(emptyIndex.fieldLengthTotals[extractMemoryField]),
+      )
+    )
+      throw Error("malformed doc metadata");
+    emptyIndex.nextDocId = rawIndex.docs.length;
+    for (let term of rawIndex.terms) {
+      if (!Array.isArray(term) || term.length !== 2) throw Error("malformed term entry");
+      let [termEntry, posting] = term;
+      if (
+        typeof termEntry !== "string" ||
+        termEntry.length === 0 ||
+        !Array.isArray(posting) ||
+        emptyIndex.terms.has(termEntry)
+      )
+        throw Error("malformed term entry");
+      encodePostings(emptyIndex, termEntry, posting, rawIndex.docs.length);
+    }
+    return emptyIndex;
+  };
+  readIndexFile = async (index, indexPath, maxBytes = MAX_INDEX_FILE_BYTES) => {
+    let json = jsonStringify(serializeIndex(index));
+    let byteLength = Buffer.byteLength(json);
+    if (byteLength > maxBytes) {
+      logRecallIndexSad("index_persist_skipped_oversized");
+      let existingStat = await lstat(indexPath).catch(() => {
+        return;
+      });
+      if (existingStat !== undefined && existingStat.size > maxBytes) await unlink(indexPath).catch(() => {});
+      return 0;
+    }
+    await writeFileAtomic(indexPath, json, 384);
+    return byteLength;
+  };
+  TRANSIENT_READ_FAILURE = Symbol("transient-index-read-failure");
+  INDEX_JSON_PREFIX = '{"version"';
+  MAX_INDEX_FILE_BYTES = 67108864;
+  INDEX_OVERSIZED = Symbol("index-file-oversized");
+  readIndexFileRaw = async (indexPath) => {
+    let file = await open(indexPath, readOnlyNoFollowFlags());
+    try {
+      let stats = await file.stat();
+      if (!stats.isFile())
+        throw Object.assign(Error("not a regular file"), {
+          code: "ENOTREG",
+        });
+      if (stats.size > MAX_INDEX_FILE_BYTES) {
+        let headChunk = Buffer.alloc(64);
+        let { bytesRead } = await file.read(headChunk, 0, 64, 0);
+        throw Object.assign(Error("index file oversized"), {
+          code: INDEX_OVERSIZED,
+          head: headChunk.subarray(0, bytesRead).toString("utf8"),
+        });
+      }
+      let content = await file.readFile({
+        encoding: "utf8",
+      });
+      if (Buffer.byteLength(content) > MAX_INDEX_FILE_BYTES)
+        throw Object.assign(Error("index file oversized"), {
+          code: INDEX_OVERSIZED,
+          head: content.slice(0, 64),
+        });
+      return content;
+    } finally {
+      await file.close();
+    }
+  };
+  tryParseIndex = (error) => {
+    let indexError = error;
+    if (indexError.code !== INDEX_OVERSIZED) return;
+    return (typeof indexError.head === "string" ? indexError.head.trim() : "").startsWith(INDEX_JSON_PREFIX);
+  };
+  loadIndexFromDisk = async (indexPath) => {
+    let ownedIndex;
+    let rawContent = await readIndexFileRaw(indexPath).catch((error) => {
+      ownedIndex = tryParseIndex(error);
+      return isENOENT(error) ? undefined : TRANSIENT_READ_FAILURE;
+    });
+    if (rawContent === TRANSIENT_READ_FAILURE)
+      return {
+        owned: ownedIndex ?? false,
+        absent: false,
+      };
+    if (rawContent === undefined)
+      return {
+        owned: true,
+        absent: true,
+      };
+    try {
+      let parsed = jsonParse(rawContent);
+      return {
+        owned: typeof parsed === "object" && parsed !== null && typeof parsed.version === "number",
+        absent: false,
+      };
+    } catch {
+      let sliced = rawContent.trim().slice(0, INDEX_JSON_PREFIX.length);
+      return {
+        owned: sliced === "" || INDEX_JSON_PREFIX.startsWith(sliced),
+        absent: false,
+      };
+    }
+  };
+  readCachedIndex = async (indexPath) => {
+    let ownedIndex;
+    let rawContent = await readIndexFileRaw(indexPath).catch((error) => {
+      ownedIndex = tryParseIndex(error);
+      return isENOENT(error) ? undefined : TRANSIENT_READ_FAILURE;
+    });
+    if (rawContent === TRANSIENT_READ_FAILURE)
+      return {
+        index: undefined,
+        pathOwned: ownedIndex ?? false,
+      };
+    if (rawContent === undefined)
+      return {
+        index: undefined,
+        pathOwned: true,
+      };
+    let parsed;
+    try {
+      parsed = jsonParse(rawContent);
+    } catch {
+      let sliced = rawContent.trim().slice(0, INDEX_JSON_PREFIX.length);
+      return {
+        index: undefined,
+        pathOwned: sliced === "" || INDEX_JSON_PREFIX.startsWith(sliced),
+      };
+    }
+    if (typeof parsed !== "object" || parsed === null || typeof parsed.version !== "number")
+      return {
+        index: undefined,
+        pathOwned: false,
+      };
+    try {
+      return {
+        index: decodeIndex(parsed),
+        pathOwned: true,
+      };
+    } catch {
+      return {
+        index: undefined,
+        pathOwned: true,
+      };
+    }
+  };
+});
+//@ chunk-vp5gef34.js:26032-27170 placement
+/**
+ * 记忆索引的打开/建立入口：读取已有索引并同步目录，扫描未完成时退回空索引。
+ */
+var memoryIndexPath = ".bm25-index.json";
+var openMemoryIndex = async (dir, scanOptions = DEFAULT_SYNC_OPTIONS, signal, useCache = true) => {
+  let indexPath = join(dir, memoryIndexPath);
+  let cached = useCache
+    ? await readCachedIndex(indexPath)
+    : {
+        index: undefined,
+        pathOwned: false,
+      };
+  let index = cached.index ?? createEmptyIndex();
+  let syncStats = await syncMemoryIndex(index, dir, scanOptions, signal);
+  let isIncomplete = cached.index !== undefined && !syncStats.scanCompleted;
+  return {
+    dir,
+    indexPath,
+    index: isIncomplete ? createEmptyIndex() : index,
+    lastSync: isIncomplete
+      ? {
+          added: 0,
+          updated: 0,
+          removed: 0,
+          unchanged: 0,
+          rehashedUnchanged: 0,
+          transientSkips: 0,
+          scanCompleted: false,
+        }
+      : syncStats,
+    loadedFromDisk: cached.index !== undefined,
+    persistable: cached.pathOwned && !isIncomplete,
+    options: scanOptions,
+  };
+};
+var buildMemoryIndex = async (memoryIndex) => {
+  if (!memoryIndex.persistable || !memoryIndex.lastSync.scanCompleted) return 0;
+  let indexFromDisk = await loadIndexFromDisk(memoryIndex.indexPath);
+  if (!indexFromDisk.owned || (memoryIndex.loadedFromDisk && indexFromDisk.absent)) return 0;
+  return readIndexFile(memoryIndex.index, memoryIndex.indexPath);
+};
+var ensureMemoryIndex = async (store, query, limit = 5, options = bm25Search) => {
+  let excludedPaths = new Set();
+  let withoutExcluded = (hits) => hits.filter((hit) => !excludedPaths.has(hit.path));
+  for (let attempt = 0; attempt < 8; attempt++) {
+    let sliced = withoutExcluded(searchIndex(store.index, query, limit + excludedPaths.size, options)).slice(
+      0,
+      limit,
+    );
+    let filtered = sliced.filter((hit) => {
+      let docId = store.index.pathToId.get(hit.path);
+      return docId !== undefined && store.index.unverified.has(docId);
+    });
+    if (filtered.length === 0) return sliced;
+    for (let hit of filtered) {
+      let docId = store.index.pathToId.get(hit.path);
+      if (
+        !(await readAndVerifyStoreEntry(store.index, store.dir, hit.path, store.options)) &&
+        docId !== undefined &&
+        store.index.unverified.has(docId)
+      )
+        excludedPaths.add(hit.path);
+    }
+  }
+  return withoutExcluded(searchIndex(store.index, query, limit + excludedPaths.size, options))
+    .filter((hit) => {
+      let docId = store.index.pathToId.get(hit.path);
+      return docId === undefined || !store.index.unverified.has(docId);
+    })
+    .slice(0, limit);
+};
+//@ chunk-vp5gef34.js:27170-29264 placement
+/**
+ * 目录到索引的增量同步：比对大小/mtime 找新增与改动、删除已消失文件、抽取短语与加权短语、统计各项计数。
+ */
+var syncMemoryIndex_2; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var indexDidChange;
+var dedupePhrases;
+var MAX_PHRASE_CHARS;
+var DEFAULT_PHRASE_CHARS;
+var MIN_PHRASE_CHARS;
+var phraseMatches;
+var snapSurrogateStart;
+var collectPhrases;
+var MAX_BOOST_PHRASES;
+var truncatePhraseTerms;
+var MIN_PHRASE_TERMS;
+var MAX_PHRASE_TERMS;
+var PHRASE_TERM_PADDING;
+var syncIndexFromDirectory;
+var indexFileIfChanged;
+var syncResult;
+var indexCacheKey;
+deferInit("chunk-vp5gef34.js:27170", () => {
+  syncMemoryIndex_2 = Symbol("transient-realpath-failure");
+  indexDidChange = (lastSync) =>
+    lastSync.added > 0 || lastSync.updated > 0 || lastSync.removed > 0 || lastSync.rehashedUnchanged > 0;
+  dedupePhrases = (queryTerms) => {
+    let allPhrases = [...queryTerms.boostPhrases, ...queryTerms.phrases];
+    let seenPhrases = new Set();
+    let uniquePhrases = [];
+    for (let idx = allPhrases.length - 1; idx >= 0; idx--) {
+      let phrase = allPhrases[idx];
+      let joined = phrase.join(" ");
+      if (!seenPhrases.has(joined)) {
+        seenPhrases.add(joined);
+        uniquePhrases.push(phrase);
+      }
+    }
+    uniquePhrases.reverse();
+    return {
+      terms: queryTerms.terms,
+      phrases: [],
+      boostPhrases: uniquePhrases,
+    };
+  };
+  MAX_PHRASE_CHARS = 4096;
+  DEFAULT_PHRASE_CHARS = 3072;
+  MIN_PHRASE_CHARS = 1024;
+  phraseMatches = (text, fromEnd) => {
+    if (((text.match(/"/g) ?? []).length & 1) === 0) return text;
+    let quoteIndex = fromEnd ? text.lastIndexOf('"') : text.indexOf('"');
+    return text.slice(0, quoteIndex) + " " + text.slice(quoteIndex + 1);
+  };
+  snapSurrogateStart = (text, index) =>
+    index > 0 && index < text.length && (text.charCodeAt(index) & 64512) === 56320 ? index - 1 : index;
+  collectPhrases = (query) => {
+    if (query.length <= MAX_PHRASE_CHARS) return query;
+    let headEnd = snapSurrogateStart(query, DEFAULT_PHRASE_CHARS);
+    let tailStart = snapSurrogateStart(query, query.length - MIN_PHRASE_CHARS);
+    let truncated = `${phraseMatches(query.slice(0, headEnd), true)}
+${phraseMatches(query.slice(tailStart), false)}`;
+    return ((query.match(/"/g) ?? []).length & 1) === 0 ? truncated : truncated.replaceAll('"', " ");
+  };
+  MAX_BOOST_PHRASES = 64;
+  truncatePhraseTerms = (boostPhrases) =>
+    boostPhrases.slice(-8).map((phrase) => (phrase.length <= 16 ? phrase : phrase.slice(0, 16)));
+  MIN_PHRASE_TERMS = 8;
+  MAX_PHRASE_TERMS = 24;
+  PHRASE_TERM_PADDING = 4;
+  syncIndexFromDirectory = (terms, termPriority, termGroup, orderedTerms, phraseTerms) => {
+    let termSet = new Set(terms);
+    let selectedTerms = new Set();
+    let groupUsage = new Map();
+    let shouldIncludeTerm = (term) => {
+      let priority = termPriority(term);
+      if (priority === 0) return false;
+      if (priority === 1) {
+        let group = termGroup(term);
+        if (group !== undefined) {
+          let usedCount = groupUsage.get(group) ?? 0;
+          if (usedCount >= PHRASE_TERM_PADDING) return false;
+          groupUsage.set(group, usedCount + 1);
+        }
+      }
+      return true;
+    };
+    for (let term of phraseTerms) if (termSet.has(term) && shouldIncludeTerm(term)) selectedTerms.add(term);
+    let size = selectedTerms.size;
+    for (let term of orderedTerms) {
+      if (selectedTerms.size >= size + MIN_PHRASE_TERMS) break;
+      if (termSet.has(term) && !selectedTerms.has(term) && shouldIncludeTerm(term)) selectedTerms.add(term);
+    }
+    let size_2 = selectedTerms.size;
+    for (
+      let idx = orderedTerms.length - 1;
+      idx >= 0 && selectedTerms.size < size_2 + MAX_PHRASE_TERMS;
+      idx--
+    ) {
+      let term = orderedTerms[idx];
+      if (termSet.has(term) && !selectedTerms.has(term) && shouldIncludeTerm(term)) selectedTerms.add(term);
+    }
+    let sorted = terms
+      .filter((term) => !selectedTerms.has(term))
+      .map((term) => {
+        let priority = termPriority(term);
+        if (priority === 0)
+          return {
+            t: term,
+            key: Number.MAX_SAFE_INTEGER,
+          };
+        if (priority === 1) {
+          let group = termGroup(term);
+          if (group !== undefined) {
+            let usedCount = groupUsage.get(group) ?? 0;
+            groupUsage.set(group, usedCount + 1);
+            if (usedCount >= PHRASE_TERM_PADDING)
+              return {
+                t: term,
+                key: Number.MAX_SAFE_INTEGER - 1,
+              };
+          }
+          return {
+            t: term,
+            key: 1,
+          };
+        }
+        return {
+          t: term,
+          key: priority,
+        };
+      })
+      .sort((entryA, entryB) => entryA.key - entryB.key);
+    for (let { t: term } of sorted) {
+      if (selectedTerms.size >= MAX_BOOST_PHRASES) break;
+      selectedTerms.add(term);
+    }
+    return terms.filter((term) => selectedTerms.has(term));
+  };
+  indexFileIfChanged = (queryTerms, index, getAllTerms) => {
+    if (
+      queryTerms.terms.length <= MAX_BOOST_PHRASES &&
+      queryTerms.boostPhrases.every((boostPhrase) => boostPhrase.length <= 16) &&
+      queryTerms.boostPhrases.length <= 8
+    )
+      return queryTerms;
+    let truncatedBoostPhrases = truncatePhraseTerms(queryTerms.boostPhrases);
+    return {
+      terms: syncIndexFromDirectory(
+        queryTerms.terms,
+        (term) => termDocCount(index, term),
+        (term) => addPostingPosition(index, term),
+        getAllTerms(),
+        new Set(truncatedBoostPhrases.flat()),
+      ),
+      phrases: queryTerms.phrases,
+      boostPhrases: truncatedBoostPhrases,
+    };
+  };
+  syncResult = (exclusions, excludeLog, isRecallVisible) => ({
+    ...(exclusions === null
+      ? DEFAULT_SYNC_OPTIONS
+      : {
+          ...DEFAULT_SYNC_OPTIONS,
+          excludePaths: new Set(
+            [...exclusions.excluded].map((excludedPath) => excludedPath.split(sep).join("/")),
+          ),
+          excludePrefixes: exclusions.excludedPrefixes.map((excludedPrefix) =>
+            excludedPrefix.split(sep).join("/"),
+          ),
+        }),
+    excludeLog,
+    isRecallVisible,
+  });
+  indexCacheKey = (dir, persist) => `${persist ? "persist" : "no-persist"}:${dir}`;
+});
+//@ chunk-vp5gef34.js:29264-29751 placement
+/**
+ * 记忆索引的打开缓存：按目录与存储空间缓存打开的索引（带 TTL），扫描完成后持久化，并支持释放当前缓存项。
+ */
+class MemoryIndexCache {
+  open = memoizeWithTTLAsync(
+    async (dir, exclusions, excludeLog, isRecallVisible, persist) => {
+      let startTime = performance.now();
+      let memoryIndex = await openMemoryIndex(
+        dir,
+        syncResult(exclusions, excludeLog, isRecallVisible),
+        undefined,
+        persist,
+      );
+      if (
+        persist &&
+        memoryIndex.lastSync.scanCompleted &&
+        (!memoryIndex.loadedFromDisk ? memoryIndex.index.docs.size > 0 : indexDidChange(memoryIndex.lastSync))
+      )
+        if (memoryIndex.persistable)
+          await buildMemoryIndex(memoryIndex).catch(() => {
+            logRecallIndexSad("index_persist_failed");
+          });
+        else logRecallIndexSad("index_path_foreign");
+      return {
+        store: memoryIndex,
+        openMs: performance.now() - startTime,
+      };
+    },
+    (dir, exclusions, excludeLog, isRecallVisible, persist) => indexCacheKey(dir, persist),
+  );
+  isHeld(dir, persist) {
+    return this.open.cache.has(indexCacheKey(dir, persist));
+  }
+  releaseIfCurrent(dir, persist, pending) {
+    let cacheKey = indexCacheKey(dir, persist);
+    if (this.open.cache.get(cacheKey) === pending) this.open.cache.delete(cacheKey);
+  }
+}
+//@ chunk-vp5gef34.js:29751-32197 placement
+/**
+ * 按会话根缓存记忆索引：打开、按路径取、释放过期实例；扫描不完整时释放并重建。
+ */
+var searchMemoryIndex; // deferred: uses SessionRootSlot (../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
+var withMemoryIndex;
+var memoryIndexFor;
+var releaseMemoryIndex;
+deferInit("chunk-vp5gef34.js:29751", () => {
+  searchMemoryIndex = new SessionRootSlot(() => new MemoryIndexCache());
+  withMemoryIndex = async (slot, dir, exclusions, excludeLog, isRecallVisible, persist) => {
+    let pending = slot.open(dir, exclusions, excludeLog, isRecallVisible, persist);
+    let result = await pending;
+    if (
+      !result.store.lastSync.scanCompleted ||
+      result.store.lastSync.transientSkips > 0 ||
+      result.store.index.docs.size === 0
+    )
+      slot.releaseIfCurrent(dir, persist, pending);
+    return result;
+  };
+  memoryIndexFor = (sessionRoot, dir, isRecallVisible, persist) => {
+    withMemoryIndex(searchMemoryIndex.of(sessionRoot), dir, null, isRecallVisible, persist, true)
+      .then(({ store }) => {
+        if (!store.lastSync.scanCompleted)
+          logRecallIndexSad("index_prewarm_failed", {
+            prewarm: true,
+            sweep_incomplete: true,
+          });
+        else if (store.lastSync.transientSkips > 0)
+          logRecallIndexSad("index_prewarm_failed", {
+            prewarm: true,
+            transient_skips: true,
+          });
+      })
+      .catch(() => {
+        logRecallIndexSad("index_prewarm_failed", {
+          prewarm: true,
+        });
+      });
+  };
+  releaseMemoryIndex = async (
+    sessionRoot,
+    query,
+    dir,
+    signal,
+    limit = 5,
+    excludeLog = null,
+    isRecallVisible,
+    persist = false,
+    options,
+  ) => {
+    let startTime = performance.now();
+    let cache = searchMemoryIndex.of(sessionRoot);
+    let storeWasHeld = cache.isHeld(dir, persist);
+    let { store, openMs } = await withMemoryIndex(cache, dir, excludeLog, isRecallVisible, options, persist);
+    let openWaitMs = performance.now() - startTime;
+    let getRelevanceFloor = () => fieldLengthBoost(store.index.docs.size);
+    let buildStats = (sync, ranked = [], queryTermCount = 0) => {
+      let topScore = ranked[0]?.score ?? 0;
+      let relevanceFloor = getRelevanceFloor();
+      let belowFloorCount = count(ranked, (hit) => hit.score < relevanceFloor);
+      return {
+        docCount: store.index.docs.size,
+        termCount: store.index.terms.size,
+        loadedFromDisk: store.loadedFromDisk,
+        sync,
+        tookMs: performance.now() - startTime,
+        storeWasHeld,
+        openWaitMs,
+        storeOpenMs: openMs,
+        topScore,
+        relevanceFloor,
+        hitCount: ranked.length,
+        belowFloorCount,
+        suppressedByFloor: ranked.length > 0 && belowFloorCount === ranked.length,
+        queryTermCount,
+      };
+    };
+    if (signal.aborted)
+      return {
+        ranked: [],
+        stats: buildStats(store.lastSync),
+      };
+    if (store.loadedFromDisk && !store.lastSync.scanCompleted)
+      return {
+        ranked: [],
+        stats: buildStats(store.lastSync),
+      };
+    let phraseQuery = typeof query === "string" ? collectPhrases(query) : "";
+    let queryObject =
+      typeof query === "string"
+        ? indexFileIfChanged(dedupePhrases(idfForTerm(phraseQuery)), store.index, () =>
+            tokenizeDualStem(phraseQuery),
+          )
+        : mergeSpans(query.exact_terms, query.conceptual_keywords);
+    let memoryIndex = await ensureMemoryIndex(store, queryObject, limit + 5);
+    let candidateHits =
+      options === undefined
+        ? isRecallVisible === undefined
+          ? memoryIndex
+          : memoryIndex.filter((hit) => !isRecallVisible(hit.path))
+        : memoryIndex.filter(
+            (hit) => (isRecallVisible === undefined || !isRecallVisible(hit.path)) && options(hit.path),
+          );
+    let realDir = await realpath(dir).catch(() => {
+      return;
+    });
+    let resolvedDir = resolve(dir);
+    let missingPaths = [];
+    let outsidePaths = [];
+    let results = await Promise.all(
+      candidateHits.map(async (hit) => {
+        let docId = store.index.pathToId.get(hit.path);
+        let doc = docId === undefined ? undefined : store.index.docs.get(docId);
+        let filePath = resolve(dir, hit.path);
+        let realFilePath = await realpath(filePath).catch((error) =>
+          classifyReadError(error) === "structural" ? undefined : syncMemoryIndex_2,
+        );
+        if (realFilePath === undefined) {
+          if (realDir !== undefined) missingPaths.push(hit.path);
+          return [];
+        }
+        if (realFilePath === syncMemoryIndex_2) return [];
+        if (!realFilePath.startsWith((realDir ?? resolvedDir) + sep)) {
+          if (realDir !== undefined) outsidePaths.push(hit.path);
+          return [];
+        }
+        let fileStat = await lstat(filePath).catch((error) =>
+          classifyReadError(error) === "structural" ? undefined : syncMemoryIndex_2,
+        );
+        if (fileStat === syncMemoryIndex_2) return [];
+        if (fileStat === undefined) {
+          if (realDir !== undefined) missingPaths.push(hit.path);
+          return [];
+        }
+        if (!fileStat.isFile()) {
+          if (realDir !== undefined) outsidePaths.push(hit.path);
+          return [];
+        }
+        return [
+          {
+            path: filePath,
+            mtimeMs: doc?.mtimeMs ?? 0,
+            score: hit.score,
+          },
+        ];
+      }),
+    );
+    if (missingPaths.length > 0 || outsidePaths.length > 0) {
+      let results = await Promise.all(
+        missingPaths.map(async (path) =>
+          (await realpath(resolve(dir, path)).then(
+            () => false,
+            (error) => classifyReadError(error) === "structural",
+          ))
+            ? path
+            : undefined,
+        ),
+      );
+      let realDirNow = await realpath(dir).catch(() => {
+        return;
+      });
+      if (realDirNow !== undefined && realDirNow === realDir) {
+        for (let path of outsidePaths) hasDocumentPath(store.index, path);
+        for (let path of results) if (path !== undefined) hasDocumentPath(store.index, path);
+      }
+    }
+    let validHits = results.flat();
+    let relevanceFloor = getRelevanceFloor();
+    return {
+      ranked: validHits.filter((hit) => hit.score >= relevanceFloor).slice(0, limit),
+      stats: buildStats(store.lastSync, validHits, queryObject.terms.length),
+    };
+  };
+});
 export {
   backfillState,
   backfillMemoryIndex,
@@ -2050,4 +2302,6 @@ export {
   hasDocumentPath,
   upsertDocument,
   extractMemoryFieldsFromFile,
+  memoryIndexFor,
+  releaseMemoryIndex,
 };

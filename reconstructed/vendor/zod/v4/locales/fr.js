@@ -11,33 +11,47 @@ import {
   _safeParse,
   _safeParseAsync,
   _encode,
-  rr,
+  decodeFactory,
   _encodeAsync,
-  nr,
+  decodeAsyncFactory,
   _safeEncode,
-  sr,
+  safeDecodeFactory,
   _safeEncodeAsync,
 } from "../core/parse.js";
 import { ZodRealError } from "../classic/errors.js";
-import { ur } from "../core/regexes.js";
+import { safeDecodeAsyncFactory } from "../core/regexes.js";
 import { globalConfig, config } from "../core/core.js";
-import { qe } from "./en.js";
+import { defaultLocale } from "./en.js";
 
 //@ chunk-7vp249v4.js:79741-79853 esm-layout
-var Ti = _parse(ZodRealError);
-var Ni = _parseAsync(ZodRealError);
-var slo = _safeParse(ZodRealError);
-var Ci = _safeParseAsync(ZodRealError);
-var Ri = _encode(ZodRealError);
-var Di = rr(ZodRealError);
-var ji = _encodeAsync(ZodRealError);
-var Li = nr(ZodRealError);
-var Fi = _safeEncode(ZodRealError);
-var Mi = sr(ZodRealError);
-var Ui = _safeEncodeAsync(ZodRealError);
-var Ji = ur(ZodRealError);
+var parse = _parse(ZodRealError);
+var parseAsync = _parseAsync(ZodRealError);
+var safeParse = _safeParse(ZodRealError);
+var safeParseAsync = _safeParseAsync(ZodRealError);
+var encode = _encode(ZodRealError);
+var decode = decodeFactory(ZodRealError);
+var encodeAsync = _encodeAsync(ZodRealError);
+var decodeAsync = decodeAsyncFactory(ZodRealError);
+var safeEncode = _safeEncode(ZodRealError);
+var safeDecode = safeDecodeFactory(ZodRealError);
+var safeEncodeAsync = _safeEncodeAsync(ZodRealError);
+var safeDecodeAsync = safeDecodeAsyncFactory(ZodRealError);
 //@ chunk-7vp249v4.js:79853-79897 esm-fingerprint
-function Ys() {
-  if (!globalConfig.localeError) config(qe());
+function initLocaleError() {
+  if (!globalConfig.localeError) config(defaultLocale());
 }
-export { Ys, Ti, Ni, slo, Ci, Ri, Di, ji, Li, Fi, Mi, Ui, Ji };
+export {
+  initLocaleError,
+  parse,
+  parseAsync,
+  safeParse,
+  safeParseAsync,
+  encode,
+  decode,
+  encodeAsync,
+  decodeAsync,
+  safeEncode,
+  safeDecode,
+  safeEncodeAsync,
+  safeDecodeAsync,
+};

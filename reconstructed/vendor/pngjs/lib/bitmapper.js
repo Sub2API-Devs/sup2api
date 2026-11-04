@@ -5,11 +5,11 @@
  * pieces: chunk-spjgqa4y.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../runtime/bun-runtime.js";
 import { require_interlace } from "./interlace.js";
 
 //@ chunk-spjgqa4y.js:31843-34044 cjs-fingerprint
-var require_bitmapper = x(function (cjsExports) {
+var require_bitmapper = __commonJS(function (cjsExports) {
   var interlaceUtils = require_interlace();
   var pixelBppMapper = [
     function () {},
@@ -136,8 +136,8 @@ var require_bitmapper = x(function (cjsExports) {
       },
     };
   }
-  function mapImage8Bit(t, pxData, getPxPos, bpp, data, rawPos) {
-    let { width, height, index } = t;
+  function mapImage8Bit(frame, pxData, getPxPos, bpp, data, rawPos) {
+    let { width, height, index } = frame;
     for (let y = 0; y < height; y++)
       for (let x = 0; x < width; x++) {
         let pxPos = getPxPos(x, y, index);
@@ -146,8 +146,8 @@ var require_bitmapper = x(function (cjsExports) {
       }
     return rawPos;
   }
-  function mapImageCustomBit(t, pxData, getPxPos, bpp, bits, maxBit) {
-    let { width, height, index } = t;
+  function mapImageCustomBit(frame, pxData, getPxPos, bpp, bits, maxBit) {
+    let { width, height, index } = frame;
     for (let y = 0; y < height; y++) {
       for (let x = 0; x < width; x++) {
         let pixelData = bits.get(bpp);
@@ -157,8 +157,8 @@ var require_bitmapper = x(function (cjsExports) {
       bits.resetAfterLine();
     }
   }
-  cjsExports.dataToBitMap = function (data, e) {
-    let { width, height, depth, bpp, interlace } = e;
+  cjsExports.dataToBitMap = function (data, frame) {
+    let { width, height, depth, bpp, interlace } = frame;
     let bits;
     if (depth !== 8) bits = bitRetriever(data, depth);
     let pxData;

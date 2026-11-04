@@ -8,6 +8,7 @@
  * pieces: chunk-6mwt0myy.js (2), chunk-dcmhvw5a.js (1), chunk-m3arwd1y.js (13)
  * attribution: placement 2, fingerprint 6, callgraph-fingerprint 1, affinity 1, layout 5, file-local 1
  */
+import { uuidToBigInt, base58Encode } from "../../utils/taggedId.js";
 import { normalizeConnectorId } from "../../services/mcp/claudeai.js";
 import { isPluginServerConfig } from "../../services/mcp/types.js";
 import { plural } from "../../utils/stringUtils.js";
@@ -44,23 +45,54 @@ import { getStrictMcpConfig } from "../../bootstrap/state.js";
 import { isBareMode } from "../../utils/envUtils.js";
 import { hasDisableClaudeAiConnectors } from "../../utils/settings/settings.js";
 import { isCustomizationDisabled } from "../../utils/settings/customizationDisabled.js";
-import { uuidToBigInt, base58Encode } from "../../utils/taggedId.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
+//@ chunk-6mwt0myy.js:1431-1501 placement
+/**
+ * 用连接器前缀与 base58(uuid) 拼出 id，失败返回 undefined。
+ */
+function connectorScopedAgentId(agentIdPrefix, uuid) {
+  try {
+    let uuidValue = uuidToBigInt(uuid);
+    return `${agentIdPrefix}_01${base58Encode(uuidValue)}`;
+  } catch {
+    return;
+  }
+}
+//@ chunk-6mwt0myy.js:1501-1694 fingerprint = BASE58 (1)
+function BASE58(encoded) {
+  if (encoded.length !== 22) return;
+  let radix = BigInt(58);
+  let value = 0n;
+  for (let char of encoded) {
+    let index = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz".indexOf(char);
+    if (index < 0) return;
+    value = value * radix + BigInt(index);
+  }
+  return value;
+}
+//@ chunk-dcmhvw5a.js:71894-71956 callgraph-fingerprint = getConnectedClaudeAIConnectors (0.455)
+/**
+ * getConnectedClaudeAIConnectors（实为 isConnectedOrCached）：连接状态为 connected 或 cached。
+ */
+function isConnectedOrCached(mcpClients) {
+  return mcpClients.type === "connected" || mcpClients.type === "cached";
+}
 //@ chunk-m3arwd1y.js:12143-12210 affinity = BASE58 (1)
 var BASE58_2 = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
 //@ chunk-m3arwd1y.js:12210-12528 fingerprint = taggedIdToUUID (1)
 function taggedIdToUUID(taggedId) {
-  let n = normalizeConnectorId(taggedId);
+  let normalizedId = normalizeConnectorId(taggedId);
   let prefix = "mcpsrv_";
-  if (!n.startsWith("mcpsrv_")) return null;
-  let rest = n.slice(7).slice(2);
-  let n_2 = 0n;
-  for (let f of rest) {
-    let idx = BASE58_2.indexOf(f);
+  if (!normalizedId.startsWith("mcpsrv_")) return null;
+  let rest = normalizedId.slice(7).slice(2);
+  let n = 0n;
+  for (let char of rest) {
+    let idx = BASE58_2.indexOf(char);
     if (idx === -1) return null;
-    n_2 = n_2 * 58n + BigInt(idx);
+    n = n * 58n + BigInt(idx);
   }
-  let hex = n_2.toString(16).padStart(32, "0");
+  let hex = n.toString(16).padStart(32, "0");
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`;
 }
 //@ chunk-m3arwd1y.js:12528-12637 layout
@@ -72,27 +104,30 @@ function isClaudeAiConnectorConfig(config) {
 /**
  * 判断 MCP 客户端是否可用于 claude.ai 连接器（已连接/缓存且配置匹配）。
  */
-function isUsableClaudeAiConnector(s) {
-  return isConnectedOrCached(s) && isClaudeAiConnectorConfig(s.config);
+function isUsableClaudeAiConnector(client) {
+  return isConnectedOrCached(client) && isClaudeAiConnectorConfig(client.config);
 }
 //@ chunk-m3arwd1y.js:12677-12870 placement = _temp2 (1)
 function collectClaudeAiConnectors(client_0) {
-  let n = [];
-  for (let a of client_0) {
-    if (!isUsableClaudeAiConnector(a)) continue;
-    if (a.config.type !== "claudeai-proxy") continue;
-    let p = taggedIdToUUID(a.config.id);
-    if (!p) continue;
-    n.push({
-      uuid: p,
-      name: a.name,
-      url: a.config.url,
+  let connectors = [];
+  for (let client of client_0) {
+    if (!isUsableClaudeAiConnector(client)) continue;
+    if (client.config.type !== "claudeai-proxy") continue;
+    let uuid = taggedIdToUUID(client.config.id);
+    if (!uuid) continue;
+    connectors.push({
+      uuid,
+      name: client.name,
+      url: client.config.url,
     });
   }
-  return n;
+  return connectors;
 }
 //@ chunk-m3arwd1y.js:12870-12935 layout = SCOPE_ORDER (0.845)
-var SCOPE_ORDER = new Set(["local", "user", "project", "enterprise", "managed"]);
+var SCOPE_ORDER; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-m3arwd1y.js:12870", () => {
+  SCOPE_ORDER = new Set(["local", "user", "project", "enterprise", "managed"]);
+});
 //@ chunk-m3arwd1y.js:12935-13029 file-local
 function sanitizeConnectorName(name) {
   return name
@@ -141,25 +176,31 @@ function buildConnectorsInfo({
         sanitizeConnectorName(connector.name.replace(/^claude[.\s-]ai[.\s-]/i, "")) ||
         `connector_${connector.uuid.slice(0, 8)}`,
     }));
-    let C = new Set(mapped.map((o) => o.baseName));
-    let m = new Set();
+    let baseNames = new Set(mapped.map((entry) => entry.baseName));
+    let usedNames = new Set();
     let displayNames = new Map();
-    for (let o of mapped)
-      if (o.connector.name.replace(/^claude[.\s-]ai[.\s-]/i, "") === o.baseName && !m.has(o.baseName)) {
-        displayNames.set(o, o.baseName);
-        m.add(o.baseName);
+    for (let entry of mapped)
+      if (
+        entry.connector.name.replace(/^claude[.\s-]ai[.\s-]/i, "") === entry.baseName &&
+        !usedNames.has(entry.baseName)
+      ) {
+        displayNames.set(entry, entry.baseName);
+        usedNames.add(entry.baseName);
       }
-    for (let o of mapped) {
-      if (displayNames.has(o)) continue;
-      let baseName = o.baseName;
-      if (m.has(baseName))
-        for (let idx = 2; m.has(baseName) || C.has(baseName); idx++) baseName = `${o.baseName}-${idx}`;
-      m.add(baseName);
-      displayNames.set(o, baseName);
+    for (let entry of mapped) {
+      if (displayNames.has(entry)) continue;
+      let baseName = entry.baseName;
+      if (usedNames.has(baseName))
+        for (let idx = 2; usedNames.has(baseName) || baseNames.has(baseName); idx++)
+          baseName = `${entry.baseName}-${idx}`;
+      usedNames.add(baseName);
+      displayNames.set(entry, baseName);
     }
-    for (let o of mapped) {
-      let d = displayNames.get(o) ?? o.baseName;
-      lines.push(`- ${d} (connector_uuid: ${o.connector.uuid}, name: ${d}, url: ${o.connector.url})`);
+    for (let entry of mapped) {
+      let displayName = displayNames.get(entry) ?? entry.baseName;
+      lines.push(
+        `- ${displayName} (connector_uuid: ${entry.connector.uuid}, name: ${displayName}, url: ${entry.connector.url})`,
+      );
     }
     if (hasUnlistedTrustedConnector)
       lines.push(
@@ -170,15 +211,15 @@ function buildConnectorsInfo({
         "The claude.ai connector list was not loaded in this session, so connectors beyond those listed above may already exist on claude.ai \u2014 do not assert that the user must connect a service that is not listed.",
       );
   }
-  let f = connectors.length === 0 && connectorFetchSkipReason !== null;
+  let hasNoConnectors = connectors.length === 0 && connectorFetchSkipReason !== null;
   if (localOnlyServerCount > 0)
     lines.push(
-      `${localOnlyServerCount} MCP ${plural(localOnlyServerCount, "server is", "servers are")} configured directly in Claude Code and NOT available to routines (the user can run /mcp to see ${plural(localOnlyServerCount, "it", "them")}). Routines can only use claude.ai connectors${f ? `. As explained above, the claude.ai connector list was not loaded in this session, so ${plural(localOnlyServerCount, "this service", "some of these services")} may already have a connector on claude.ai that routines can use \u2014 do not assert that the user must connect one.` : connectorFetchSkipReason === "lockdown" ? `. Loading of claude.ai connectors is disabled in this Claude Code session by the organization's managed MCP configuration, so ${plural(localOnlyServerCount, "this service", "some of these services")} may already have a connector on claude.ai that routines can use \u2014 do not assert that the user must connect one.` : connectorFetchSkipReason === "restricted" ? `. claude.ai connectors are not loaded in this Claude Code session (MCP servers are restricted to explicitly passed config here), so ${plural(localOnlyServerCount, "this service", "some of these services")} may already have a connector on claude.ai that routines can use \u2014 do not assert that the user must connect one.` : connectorFetchSkipReason === "optout" ? `. Automatic loading of claude.ai connectors is disabled in this Claude Code session (disableClaudeAiConnectors setting or ENABLE_CLAUDEAI_MCP_SERVERS env var), so ${plural(localOnlyServerCount, "this service", "some of these services")} may already have a connector on claude.ai that routines can use \u2014 do not assert that the user must connect one; suggest checking https://claude.ai/customize/connectors.` : connectorFetchSkipReason === "safe-mode" ? `. claude.ai connectors are not loaded in this Claude Code session (safe mode), so ${plural(localOnlyServerCount, "this service", "some of these services")} may already have a connector on claude.ai that routines can use \u2014 do not assert that the user must connect one.` : connectorFetchSkipReason === "missing-scope" ? `. claude.ai connectors could not be loaded in this Claude Code session (the session's login token does not include the MCP-connectors permission), so ${plural(localOnlyServerCount, "this service", "some of these services")} may already have a connector on claude.ai that routines can use \u2014 do not assert that the user must connect one.` : " \u2014 to use one of those services in a routine, the user must connect it at https://claude.ai/customize/connectors."}`,
+      `${localOnlyServerCount} MCP ${plural(localOnlyServerCount, "server is", "servers are")} configured directly in Claude Code and NOT available to routines (the user can run /mcp to see ${plural(localOnlyServerCount, "it", "them")}). Routines can only use claude.ai connectors${hasNoConnectors ? `. As explained above, the claude.ai connector list was not loaded in this session, so ${plural(localOnlyServerCount, "this service", "some of these services")} may already have a connector on claude.ai that routines can use \u2014 do not assert that the user must connect one.` : connectorFetchSkipReason === "lockdown" ? `. Loading of claude.ai connectors is disabled in this Claude Code session by the organization's managed MCP configuration, so ${plural(localOnlyServerCount, "this service", "some of these services")} may already have a connector on claude.ai that routines can use \u2014 do not assert that the user must connect one.` : connectorFetchSkipReason === "restricted" ? `. claude.ai connectors are not loaded in this Claude Code session (MCP servers are restricted to explicitly passed config here), so ${plural(localOnlyServerCount, "this service", "some of these services")} may already have a connector on claude.ai that routines can use \u2014 do not assert that the user must connect one.` : connectorFetchSkipReason === "optout" ? `. Automatic loading of claude.ai connectors is disabled in this Claude Code session (disableClaudeAiConnectors setting or ENABLE_CLAUDEAI_MCP_SERVERS env var), so ${plural(localOnlyServerCount, "this service", "some of these services")} may already have a connector on claude.ai that routines can use \u2014 do not assert that the user must connect one; suggest checking https://claude.ai/customize/connectors.` : connectorFetchSkipReason === "safe-mode" ? `. claude.ai connectors are not loaded in this Claude Code session (safe mode), so ${plural(localOnlyServerCount, "this service", "some of these services")} may already have a connector on claude.ai that routines can use \u2014 do not assert that the user must connect one.` : connectorFetchSkipReason === "missing-scope" ? `. claude.ai connectors could not be loaded in this Claude Code session (the session's login token does not include the MCP-connectors permission), so ${plural(localOnlyServerCount, "this service", "some of these services")} may already have a connector on claude.ai that routines can use \u2014 do not assert that the user must connect one.` : " \u2014 to use one of those services in a routine, the user must connect it at https://claude.ai/customize/connectors."}`,
     );
   if (suppressedTwinCount > 0) {
-    let u = suppressedTwinLabels.length > 0 ? ` (${suppressedTwinLabels.join(", ")})` : "";
+    let labelSuffix = suppressedTwinLabels.length > 0 ? ` (${suppressedTwinLabels.join(", ")})` : "";
     lines.push(
-      `Note: ${suppressedTwinCount} claude.ai ${plural(suppressedTwinCount, "connector")}${u} ${plural(suppressedTwinCount, "is", "are")} not active in this Claude Code session because ${plural(suppressedTwinCount, "a manually-configured server points", "manually-configured servers point")} at the same ${plural(suppressedTwinCount, "service")}. ${plural(suppressedTwinCount, "It remains", "They remain")} connected on claude.ai and available to routines there \u2014 connector details are not listed in this session, so to attach ${plural(suppressedTwinCount, "it", "them")} explicitly the user should manage the routine's connectors at https://claude.ai/code/routines.`,
+      `Note: ${suppressedTwinCount} claude.ai ${plural(suppressedTwinCount, "connector")}${labelSuffix} ${plural(suppressedTwinCount, "is", "are")} not active in this Claude Code session because ${plural(suppressedTwinCount, "a manually-configured server points", "manually-configured servers point")} at the same ${plural(suppressedTwinCount, "service")}. ${plural(suppressedTwinCount, "It remains", "They remain")} connected on claude.ai and available to routines there \u2014 connector details are not listed in this session, so to attach ${plural(suppressedTwinCount, "it", "them")} explicitly the user should manage the routine's connectors at https://claude.ai/code/routines.`,
     );
   }
   return lines.join(`
@@ -231,7 +272,7 @@ ${formatSetupNotes(setupNotes)}
 
 ${SCHEDULE_MENU_QUESTION}`
       : SCHEDULE_MENU_QUESTION;
-  let d = validateCatalogAliases("sonnet");
+  let aliases = validateCatalogAliases("sonnet");
   return `# Schedule Cloud Agents
 
 You are helping the user schedule, update, list, or run **cloud** Claude Code agents. These are NOT local cron jobs \u2014 each routine spawns a fully isolated cloud session (CCR) in Anthropic's cloud infrastructure, either on a recurring cron schedule or once at a specific time. The agent runs in a sandboxed environment with its own git checkout, tools, and optional MCP connections.
@@ -280,7 +321,7 @@ For a recurring schedule:
     "ccr": {
       "environment_id": "ENVIRONMENT_ID",
       "session_context": {
-        "model": "${d}",
+        "model": "${aliases}",
         "sources": [
           {"git_repository": {"url": "${gitRepoUrl || "https://github.com/ORG/REPO"}"}}
         ],
@@ -381,7 +422,7 @@ When /schedule was invoked it was **${nowLocal}** (${userTimezone}) / **${nowUtc
    - Clear about which files/areas to focus on
    - Explicit about what actions to take (open PRs, commit, just analyze, etc.)
 3. **Set the schedule** \u2014 Ask when and how often. The user's timezone is ${userTimezone}. When they say a time (e.g., "every morning at 9am"), assume they mean their local time and convert to UTC for the cron expression. Always confirm the conversion: "9am ${userTimezone} = Xam UTC." If they want a one-time run (e.g., "once at 3pm", "tomorrow morning", "remind me to check X later"), use \`run_once_at\` instead of \`cron_expression\` \u2014 same timezone conversion applies. **First re-check the current time with \`date -u\` via Bash** (the reference time above may be stale in a long conversation), resolve the relative phrase against that fresh value, and confirm the resulting absolute timestamp with the user.
-4. **Choose the model** \u2014 Default to \`${d}\`. Tell the user which model you're defaulting to and ask if they want a different one.
+4. **Choose the model** \u2014 Default to \`${aliases}\`. Tell the user which model you're defaulting to and ask if they want a different one.
 5. **Validate connections** \u2014 Infer what services the agent will need from the user's description. For example, if they say "check Datadog and Slack me errors," the agent needs both Datadog and Slack MCP connectors. Cross-reference with the connectors list above. If any are missing, warn the user and link them to https://claude.ai/customize/connectors to connect first.${gitRepoUrl ? ` The default git repo is already set to \`${gitRepoUrl}\`. Ask the user if this is the right repo or if they need a different one.` : " Ask which git repos the cloud agent needs cloned into its environment."}
 6. **Review and confirm** \u2014 Show the full configuration before creating. Let them adjust.
 7. **Create it** \u2014 Call \`${REMOTETRIGGER}\` with \`action: "create"\` and show the result. The response includes the routine ID. Always output a link at the end: \`https://claude.ai/code/routines/{ROUTINE_ID}\`
@@ -446,7 +487,7 @@ function registerScheduleRemoteAgentsSkill() {
       isPolicyAllowed(ALLOW_ROUTINES),
     policyGate: CLOUD_SESSIONS_POLICY,
     allowedTools: [REMOTETRIGGER, ASKUSERQUESTION, "Bash(date *)"],
-    async getPromptForCommand(userArgs, n) {
+    async getPromptForCommand(userArgs, context) {
       if (!hasStoredOAuthToken())
         return [
           {
@@ -454,16 +495,16 @@ function registerScheduleRemoteAgentsSkill() {
             text: "You need to authenticate with a claude.ai account first. API accounts are not supported. Run /login, then try /schedule again.",
           },
         ];
-      let a = [];
-      let p = null;
-      let r = [];
+      let environments = [];
+      let createdEnvironment = null;
+      let setupNotes = [];
       let needsGitHubAccessReminder = false;
       let gitRepoUrl = null;
-      if (n.options?.isSkillPreload)
-        r.push("Environment and repository details are resolved when the skill is actually run.");
+      if (context.options?.isSkillPreload)
+        setupNotes.push("Environment and repository details are resolved when the skill is actually run.");
       else {
         try {
-          a = await fetchEnvironments(undefined, n.storageV5, n.credentials);
+          environments = await fetchEnvironments(undefined, context.storageV5, context.credentials);
         } catch (err) {
           logForDebugging(`[schedule] Failed to fetch environments: ${err}`, {
             level: "warn",
@@ -475,10 +516,10 @@ function registerScheduleRemoteAgentsSkill() {
             },
           ];
         }
-        if (a.length === 0)
+        if (environments.length === 0)
           try {
-            p = await createDefaultCloudEnvironment();
-            a = [p];
+            createdEnvironment = await createDefaultCloudEnvironment();
+            environments = [createdEnvironment];
           } catch (err) {
             logForDebugging(`[schedule] Failed to create environment: ${err}`, {
               level: "warn",
@@ -492,76 +533,76 @@ function registerScheduleRemoteAgentsSkill() {
           }
         let repo = await detectCurrentRepositoryWithHost();
         if (repo === null)
-          r.push(
+          setupNotes.push(
             "Not in a git repo \u2014 you'll need to specify a repo URL manually (or skip repos entirely).",
           );
         else if (isGithubDotCom(repo.host)) {
-          let l = await checkRepoForRemoteAccess(repo.owner, repo.name);
-          if (!l.hasAccess) {
+          let access = await checkRepoForRemoteAccess(repo.owner, repo.name);
+          if (!access.hasAccess) {
             needsGitHubAccessReminder = true;
-            let y = `${repo.owner}/${repo.name}`;
-            let U =
-              l.reason === "transient"
-                ? `Couldn't verify GitHub access for ${y} (the check failed in a way that may be temporary) \u2014 if your routine needs this repo and this persists, install the Claude GitHub App at https://claude.ai/code/onboarding?magic=github-app-setup.`
-                : l.reason === "github_not_connected"
-                  ? githubNotConnectedMessage(y)
+            let repoSlug = `${repo.owner}/${repo.name}`;
+            let accessNote =
+              access.reason === "transient"
+                ? `Couldn't verify GitHub access for ${repoSlug} (the check failed in a way that may be temporary) \u2014 if your routine needs this repo and this persists, install the Claude GitHub App at https://claude.ai/code/onboarding?magic=github-app-setup.`
+                : access.reason === "github_not_connected"
+                  ? githubNotConnectedMessage(repoSlug)
                   : isWebSetupOfferable()
-                    ? `GitHub not connected for ${y} \u2014 run /web-setup to sync your GitHub credentials, or install the Claude GitHub App at https://claude.ai/code/onboarding?magic=github-app-setup.`
-                    : `Claude GitHub App not installed on ${y} \u2014 install at https://claude.ai/code/onboarding?magic=github-app-setup if your routine needs this repo.`;
-            r.push(U);
+                    ? `GitHub not connected for ${repoSlug} \u2014 run /web-setup to sync your GitHub credentials, or install the Claude GitHub App at https://claude.ai/code/onboarding?magic=github-app-setup.`
+                    : `Claude GitHub App not installed on ${repoSlug} \u2014 install at https://claude.ai/code/onboarding?magic=github-app-setup if your routine needs this repo.`;
+            setupNotes.push(accessNote);
           }
         }
         gitRepoUrl = await getCurrentRepoHttpsUrl();
       }
-      let connectors = collectClaudeAiConnectors(n.options.mcpClients);
-      let suppressedClaudeAiConnectors = getSuppressedClaudeAiConnectors(n);
-      let C = new Set(
+      let connectors = collectClaudeAiConnectors(context.options.mcpClients);
+      let suppressedClaudeAiConnectors = getSuppressedClaudeAiConnectors(context);
+      let duplicateNames = new Set(
         suppressedClaudeAiConnectors.map(
           (suppressedClaudeAiConnector) => suppressedClaudeAiConnector.duplicateOf,
         ),
       );
-      let m = new Set();
-      for (let mcpClient of n.options.mcpClients)
+      let claudeAiSignatures = new Set();
+      for (let mcpClient of context.options.mcpClients)
         if (
           (isClaudeAiConnectorConfig(mcpClient.config) &&
             (isConnectedOrCached(mcpClient) ||
               ((mcpClient.type === "failed" || mcpClient.type === "pending") &&
                 mcpClient.config.scope === "claudeai"))) ||
-          C.has(mcpClient.name)
+          duplicateNames.has(mcpClient.name)
         ) {
           let mcpServerSignature = getMcpServerSignature(mcpClient.config);
-          if (mcpServerSignature !== null) m.add(mcpServerSignature);
+          if (mcpServerSignature !== null) claudeAiSignatures.add(mcpServerSignature);
         }
-      let any = n.options.mcpClients.some(
+      let any = context.options.mcpClients.some(
         (mcpClient) =>
           isClaudeAiConnectorConfig(mcpClient.config) &&
           (mcpClient.type === "failed" || mcpClient.type === "pending") &&
           mcpClient.config.scope === "claudeai",
       );
       let size = new Set(
-        n.options.mcpClients
+        context.options.mcpClients
           .filter((mcpClient) => {
             if (
               !SCOPE_ORDER.has(mcpClient.config.scope) ||
               mcpClient.config.type === "sdk" ||
               mcpClient.type === "disabled" ||
-              C.has(mcpClient.name)
+              duplicateNames.has(mcpClient.name)
             )
               return false;
             let mcpServerSignature = getMcpServerSignature(mcpClient.config);
-            return mcpServerSignature === null || !m.has(mcpServerSignature);
+            return mcpServerSignature === null || !claudeAiSignatures.has(mcpServerSignature);
           })
           .map((mcpClient) => mcpClient.name),
       ).size;
-      let d = uniq(
+      let suppressedLabels = uniq(
         suppressedClaudeAiConnectors
           .map((suppressedClaudeAiConnector) =>
             sanitizeConnectorName(suppressedClaudeAiConnector.name.replace(/^claude[.\s-]ai[.\s-]/i, "")),
           )
-          .filter((e) => e.length > 0),
+          .filter((label) => label.length > 0),
       );
-      let b = !hasOAuthScope("user:mcp_servers");
-      let v = shouldSkipClaudeAiFetchForEnterpriseLockdown()
+      let isMissingMcpScope = !hasOAuthScope("user:mcp_servers");
+      let fetchSkipReason = shouldSkipClaudeAiFetchForEnterpriseLockdown()
         ? "lockdown"
         : getStrictMcpConfig() || isBareMode()
           ? "restricted"
@@ -569,36 +610,36 @@ function registerScheduleRemoteAgentsSkill() {
             ? "optout"
             : isCustomizationDisabled("mcpClaudeAi")
               ? "safe-mode"
-              : b
+              : isMissingMcpScope
                 ? "missing-scope"
                 : null;
       if (connectors.length === 0) {
-        let e =
-          v === "lockdown"
+        let skipReasonText =
+          fetchSkipReason === "lockdown"
             ? "claude.ai connectors are not loaded in this session (your organization manages MCP servers); any configured on claude.ai remain available to routines there."
-            : v === "restricted"
+            : fetchSkipReason === "restricted"
               ? "claude.ai connectors are not loaded in this session (MCP servers are restricted to explicitly passed config); any on claude.ai remain available to routines there."
-              : v === "optout"
+              : fetchSkipReason === "optout"
                 ? "claude.ai connectors are disabled in this session (disableClaudeAiConnectors setting or ENABLE_CLAUDEAI_MCP_SERVERS env var); any already connected on claude.ai remain available to routines there."
-                : v === "safe-mode"
+                : fetchSkipReason === "safe-mode"
                   ? "claude.ai connectors are not loaded in this session (safe mode); any connected on claude.ai remain available to routines there."
-                  : v === "missing-scope"
+                  : fetchSkipReason === "missing-scope"
                     ? "claude.ai connectors could not be loaded in this session (the login token does not include the MCP-connectors permission); any connected on claude.ai remain available to routines there."
                     : any
                       ? "A claude.ai connector for this account exists but isn't connected in this session right now (still connecting, or its last connect failed); it remains available to routines on claude.ai."
                       : "Connect one at https://claude.ai/customize/connectors if needed.";
-        r.push(
+        setupNotes.push(
           size > 0
-            ? `No MCP connectors for cloud routines \u2014 ${size} MCP ${plural(size, "server")} configured in Claude Code can't be attached to routines (run /mcp to see ${plural(size, "it", "them")}); routines can only use claude.ai connectors. ${e}`
-            : v !== null || any
-              ? `No MCP connectors \u2014 ${e}`
+            ? `No MCP connectors for cloud routines \u2014 ${size} MCP ${plural(size, "server")} configured in Claude Code can't be attached to routines (run /mcp to see ${plural(size, "it", "them")}); routines can only use claude.ai connectors. ${skipReasonText}`
+            : fetchSkipReason !== null || any
+              ? `No MCP connectors \u2014 ${skipReasonText}`
               : "No MCP connectors \u2014 connect at https://claude.ai/customize/connectors if needed.",
         );
         if (suppressedClaudeAiConnectors.length > 0) {
-          let l = suppressedClaudeAiConnectors.length;
-          let y = d.length > 0 ? ` (${d.join(", ")})` : "";
-          r.push(
-            `${l} claude.ai ${plural(l, "connector")}${y} ${plural(l, "is", "are")} not active in this session (${plural(l, "a server configured in Claude Code covers", "servers configured in Claude Code cover")} the same ${plural(l, "service")}), but ${plural(l, "it remains", "they remain")} available to routines on claude.ai.`,
+          let suppressedCount = suppressedClaudeAiConnectors.length;
+          let labelSuffix = suppressedLabels.length > 0 ? ` (${suppressedLabels.join(", ")})` : "";
+          setupNotes.push(
+            `${suppressedCount} claude.ai ${plural(suppressedCount, "connector")}${labelSuffix} ${plural(suppressedCount, "is", "are")} not active in this session (${plural(suppressedCount, "a server configured in Claude Code covers", "servers configured in Claude Code cover")} the same ${plural(suppressedCount, "service")}), but ${plural(suppressedCount, "it remains", "they remain")} available to routines on claude.ai.`,
           );
         }
       }
@@ -618,12 +659,13 @@ function registerScheduleRemoteAgentsSkill() {
         connectors,
         localOnlyServerCount: size,
         suppressedTwinCount: suppressedClaudeAiConnectors.length,
-        suppressedTwinLabels: d,
-        connectorFetchSkipReason: v,
+        suppressedTwinLabels: suppressedLabels,
+        connectorFetchSkipReason: fetchSkipReason,
         hasUnlistedTrustedConnector: any,
       });
       let lines = ["Available environments:"];
-      for (let env of a) lines.push(`- ${env.name} (id: ${env.environment_id}, kind: ${env.kind})`);
+      for (let env of environments)
+        lines.push(`- ${env.name} (id: ${env.environment_id}, kind: ${env.kind})`);
       let environmentsInfo = lines.join(`
 `);
       return [
@@ -636,8 +678,8 @@ function registerScheduleRemoteAgentsSkill() {
             connectorsInfo,
             gitRepoUrl,
             environmentsInfo,
-            createdEnvironment: p,
-            setupNotes: r,
+            createdEnvironment,
+            setupNotes,
             needsGitHubAccessReminder,
             userArgs,
           }),
@@ -646,35 +688,4 @@ function registerScheduleRemoteAgentsSkill() {
     },
   });
 }
-//@ chunk-6mwt0myy.js:1431-1501 placement
-/**
- * 用连接器前缀与 base58(uuid) 拼出 id，失败返回 undefined。
- */
-function connectorScopedAgentId(e, uuid) {
-  try {
-    let r = uuidToBigInt(uuid);
-    return `${e}_01${base58Encode(r)}`;
-  } catch {
-    return;
-  }
-}
-//@ chunk-6mwt0myy.js:1501-1694 fingerprint = BASE58 (1)
-function BASE58(e) {
-  if (e.length !== 22) return;
-  let n = BigInt(58);
-  let r = 0n;
-  for (let t of e) {
-    let index = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz".indexOf(t);
-    if (index < 0) return;
-    r = r * n + BigInt(index);
-  }
-  return r;
-}
-//@ chunk-dcmhvw5a.js:71894-71956 callgraph-fingerprint = getConnectedClaudeAIConnectors (0.455)
-/**
- * getConnectedClaudeAIConnectors（实为 isConnectedOrCached）：连接状态为 connected 或 cached。
- */
-function isConnectedOrCached(mcpClients) {
-  return mcpClients.type === "connected" || mcpClients.type === "cached";
-}
-export { isConnectedOrCached, connectorScopedAgentId, BASE58 };
+export { isConnectedOrCached, connectorScopedAgentId, BASE58, registerScheduleRemoteAgentsSkill };

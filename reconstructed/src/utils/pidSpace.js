@@ -13,19 +13,20 @@ import { readFile, readlink } from "fs/promises";
 import { readlinkSync } from "fs";
 import { identity } from "./identity.js";
 import { getPlatform } from "./platform.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-g4mgfvqt.js:1454-1712 placement
 async function computePidDomain(platform) {
   if (platform === "windows") return `linux:${hostname().toLowerCase()}`;
   if (platform !== "linux" && platform !== "wsl") return "linux";
-  let [t, e] = await Promise.all([
+  let [machineId, pidNamespace] = await Promise.all([
     readFile("/etc/machine-id", "utf8").then(
       (file) => file.trim(),
       () => "",
     ),
     readlink("/proc/self/ns/pid").catch(() => ""),
   ]);
-  return `linux:${t}:${e}`;
+  return `linux:${machineId}:${pidNamespace}`;
 }
 //@ chunk-g4mgfvqt.js:1776-1833 placement
 class PidSpaceInfo {
@@ -34,19 +35,22 @@ class PidSpaceInfo {
   uidsCollapse = null;
 }
 //@ chunk-g4mgfvqt.js:1833-1877 placement
-var processIdentity = identity(new PidSpaceInfo(), (n) => {
-  n.pidDomain = undefined;
+var processIdentity; // deferred: uses PidSpaceInfo of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-g4mgfvqt.js:1833", () => {
+  processIdentity = identity(new PidSpaceInfo(), (pidSpaceInfo) => {
+    pidSpaceInfo.pidDomain = undefined;
+  });
 });
 //@ chunk-g4mgfvqt.js:1877-2024 placement
 function ownPidSpace() {
   if (processIdentity.pidSpace === null) {
-    let n = "";
+    let pidNamespaceLink = "";
     try {
-      n = readlinkSync("/proc/self/ns/pid");
+      pidNamespaceLink = readlinkSync("/proc/self/ns/pid");
     } catch {
-      n = "";
+      pidNamespaceLink = "";
     }
-    processIdentity.pidSpace = `${hostname()}${n === "" ? "" : "#" + n}`;
+    processIdentity.pidSpace = `${hostname()}${pidNamespaceLink === "" ? "" : "#" + pidNamespaceLink}`;
   }
   return processIdentity.pidSpace;
 }

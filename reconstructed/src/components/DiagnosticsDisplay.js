@@ -15,10 +15,10 @@ import {
 import { MessageResponse } from "./MessageResponse.js";
 import { Text, Box } from "../ink/components/Text.js";
 import { getSeverityIcon, sanitizeDiagnosticsAttachment } from "../utils/attachments/diagnostics.js";
-import { Kc } from "../../vendor/react/cjs/react.production.js";
+import { fragmentTypeExport } from "../../vendor/react/cjs/react.production.js";
 import { toCloudRelativePath } from "../utils/file.js";
 import { firstLineOf } from "../utils/stringUtils.js";
-import { w } from "../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import { EARLY_RETURN_SENTINEL } from "../../runtime/bun-runtime.js";
 
 //@ chunk-ah34pb7m.js:80593-80640 fingerprint = _temp (1)
@@ -56,7 +56,7 @@ function renderDiagnosticLine(diagnostic, diagIndex) {
  */
 function renderDiagnosticFile(file, fileIndex) {
   return jsxProd_default_2(
-    Kc,
+    fragmentTypeExport,
     {
       children: [
         jsxProd_default(MessageResponse, {
@@ -91,72 +91,72 @@ function renderDiagnosticFile(file, fileIndex) {
 }
 //@ chunk-ah34pb7m.js:81246-81968 fingerprint = DiagnosticsDisplay (0.627)
 function DiagnosticsDisplay(props) {
-  let $ = w(11);
+  let $ = useMemoCache(11);
   let { attachment, verbose, isTranscriptMode } = props;
-  let h;
+  let resultElement;
   if ($[0] !== attachment.files || $[1] !== isTranscriptMode || $[2] !== verbose) {
-    h = EARLY_RETURN_SENTINEL;
+    resultElement = EARLY_RETURN_SENTINEL;
     T: {
-      let M = sanitizeDiagnosticsAttachment(attachment.files);
-      if (M.length === 0) {
-        h = null;
+      let files = sanitizeDiagnosticsAttachment(attachment.files);
+      if (files.length === 0) {
+        resultElement = null;
         break T;
       }
-      let totalIssues = M.reduce(sumDiagnostics, 0);
-      let fileCount = M.length;
+      let totalIssues = files.reduce(sumDiagnostics, 0);
+      let fileCount = files.length;
       if (verbose || isTranscriptMode) {
-        h = jsxProd_default(Box, {
+        resultElement = jsxProd_default(Box, {
           flexDirection: "column",
-          children: M.map(renderDiagnosticFile),
+          children: files.map(renderDiagnosticFile),
         });
         break T;
       } else {
-        let b;
+        let countElement;
         if ($[4] !== totalIssues) {
-          b = jsxProd_default(Text, {
+          countElement = jsxProd_default(Text, {
             bold: true,
             children: totalIssues,
           });
           $[4] = totalIssues;
-          $[5] = b;
-        } else b = $[5];
-        const E = totalIssues === 1 ? "issue" : "issues";
-        const B = fileCount === 1 ? "file" : "files";
-        let L;
-        if ($[6] !== fileCount || $[7] !== b || $[8] !== E || $[9] !== B) {
-          L = jsxProd_default(MessageResponse, {
+          $[5] = countElement;
+        } else countElement = $[5];
+        const issueWord = totalIssues === 1 ? "issue" : "issues";
+        const fileWord = fileCount === 1 ? "file" : "files";
+        let summaryElement;
+        if ($[6] !== fileCount || $[7] !== countElement || $[8] !== issueWord || $[9] !== fileWord) {
+          summaryElement = jsxProd_default(MessageResponse, {
             children: jsxProd_default_2(Text, {
               dimColor: true,
               wrap: "wrap",
               children: [
                 "Found ",
-                b,
+                countElement,
                 " new diagnostic",
                 " ",
-                E,
+                issueWord,
                 " in ",
                 fileCount,
                 " ",
-                B,
+                fileWord,
                 " (ctrl+o to expand)",
               ],
             }),
           });
           $[6] = fileCount;
-          $[7] = b;
-          $[8] = E;
-          $[9] = B;
-          $[10] = L;
-        } else L = $[10];
-        h = L;
+          $[7] = countElement;
+          $[8] = issueWord;
+          $[9] = fileWord;
+          $[10] = summaryElement;
+        } else summaryElement = $[10];
+        resultElement = summaryElement;
         break T;
       }
     }
     $[0] = attachment.files;
     $[1] = isTranscriptMode;
     $[2] = verbose;
-    $[3] = h;
-  } else h = $[3];
-  if (h !== EARLY_RETURN_SENTINEL) return h;
+    $[3] = resultElement;
+  } else resultElement = $[3];
+  if (resultElement !== EARLY_RETURN_SENTINEL) return resultElement;
 }
 export { DiagnosticsDisplay };

@@ -19,88 +19,92 @@ import {
 } from "./constants.js";
 import { isPluginPublishAllowed } from "../../services/plugins/publish/publishGate.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-hcckvqyb.js:11744-11853 placement = getErrnoPath (1)
-function getErrnoPath(e) {
-  let path = typeof e === "object" && e !== null && "path" in e ? e.path : undefined;
+function getErrnoPath(error) {
+  let path = typeof error === "object" && error !== null && "path" in error ? error.path : undefined;
   return typeof path === "string" ? path : "";
 }
 //@ chunk-hcckvqyb.js:11853-12930 placement
-var PublishPluginTool = buildTool({
-  name: PUBLISH_PLUGIN_TOOL_NAME,
-  searchHint: "publish or share a plugin or mod with the team or organization library",
-  shouldDefer: true,
-  backgrounding: "never",
-  maxResultSizeChars: MAX_PUBLISH_OUTPUT_LINE_CHARS,
-  async description() {
-    return PUBLISH_PLUGIN_DESCRIPTION;
-  },
-  async prompt() {
-    return joined;
-  },
-  get inputSchema() {
-    return PUBLISH_PLUGIN_INPUT_SCHEMA();
-  },
-  get outputSchema() {
-    return PUBLISH_PLUGIN_OUTPUT_SCHEMA();
-  },
-  userFacingName() {
-    return "Publish plugin";
-  },
-  isEnabled() {
-    return isPluginPublishAllowed();
-  },
-  isConcurrencySafe() {
-    return false;
-  },
-  isReadOnly() {
-    return false;
-  },
-  requiresUserInteraction() {
-    return true;
-  },
-  toAutoClassifierInput(e) {
-    return jsonStringify(e);
-  },
-  getToolUseSummary() {
-    return "Publish a plugin to your organization's library on claude.ai";
-  },
-  getPath(e) {
-    return getErrnoPath(e);
-  },
-  renderToolUseMessage(e) {
-    return e.path ?? "";
-  },
-  create(e) {
-    let t = {
-      ...e,
-      tool: PublishPluginTool,
-    };
-    return {
-      permissionCheckFailureDecision() {
-        return publishRefusalDenial("failed");
-      },
-      async checkPermissions(s, r) {
-        let { default: n } = await import("./chunk-xkt86s08.js");
-        return n.check(s, r, t);
-      },
-      async call(s, r) {
-        let { default: n } = await import("./chunk-wm1cd8qt.js");
-        return {
-          data: publishResultToToolOutput(await n.run(s, r, t)),
-        };
-      },
-    };
-  },
-  mapToolResultToToolResultBlockParam(e, toolUseId) {
-    return {
-      type: "tool_result",
-      tool_use_id: toolUseId,
-      ...(e.state === "refused" && {
-        is_error: true,
-      }),
-      content: jsonStringify(e),
-    };
-  },
+var PublishPluginTool; // deferred: uses buildTool (../../services/tools/permissionCheckGuard.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-hcckvqyb.js:11853", () => {
+  PublishPluginTool = buildTool({
+    name: PUBLISH_PLUGIN_TOOL_NAME,
+    searchHint: "publish or share a plugin or mod with the team or organization library",
+    shouldDefer: true,
+    backgrounding: "never",
+    maxResultSizeChars: MAX_PUBLISH_OUTPUT_LINE_CHARS,
+    async description() {
+      return PUBLISH_PLUGIN_DESCRIPTION;
+    },
+    async prompt() {
+      return joined;
+    },
+    get inputSchema() {
+      return PUBLISH_PLUGIN_INPUT_SCHEMA();
+    },
+    get outputSchema() {
+      return PUBLISH_PLUGIN_OUTPUT_SCHEMA();
+    },
+    userFacingName() {
+      return "Publish plugin";
+    },
+    isEnabled() {
+      return isPluginPublishAllowed();
+    },
+    isConcurrencySafe() {
+      return false;
+    },
+    isReadOnly() {
+      return false;
+    },
+    requiresUserInteraction() {
+      return true;
+    },
+    toAutoClassifierInput(input) {
+      return jsonStringify(input);
+    },
+    getToolUseSummary() {
+      return "Publish a plugin to your organization's library on claude.ai";
+    },
+    getPath(input) {
+      return getErrnoPath(input);
+    },
+    renderToolUseMessage(input) {
+      return input.path ?? "";
+    },
+    create(toolContext) {
+      let context = {
+        ...toolContext,
+        tool: PublishPluginTool,
+      };
+      return {
+        permissionCheckFailureDecision() {
+          return publishRefusalDenial("failed");
+        },
+        async checkPermissions(input, callOptions) {
+          let { default: permissionModule } = await import("../../commands/plugin/check.lazy.js");
+          return permissionModule.check(input, callOptions, context);
+        },
+        async call(input, callOptions) {
+          let { default: publishModule } = await import("../../services/plugins/default.lazy.js");
+          return {
+            data: publishResultToToolOutput(await publishModule.run(input, callOptions, context)),
+          };
+        },
+      };
+    },
+    mapToolResultToToolResultBlockParam(result, toolUseId) {
+      return {
+        type: "tool_result",
+        tool_use_id: toolUseId,
+        ...(result.state === "refused" && {
+          is_error: true,
+        }),
+        content: jsonStringify(result),
+      };
+    },
+  });
 });
 export { PublishPluginTool };

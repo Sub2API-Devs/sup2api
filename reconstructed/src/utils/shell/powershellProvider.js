@@ -18,12 +18,13 @@ import { claudeTempDir } from "../tempDir.js";
 import { quotePowerShellSingleQuoted } from "../powershell/quoting.js";
 import { noPromptEnvDefaults } from "../gitSafeExec.js";
 import { withholdsDaemonForceColor } from "../subprocessEnv.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:858490-858642 fingerprint = buildPowerShellArgs (0.503)
 function buildPowerShellArgs() {
-  let e = ["-NoProfile", "-NonInteractive"];
-  if (!env.CLAUDE_CODE_POWERSHELL_RESPECT_EXECUTION_POLICY) e.push("-ExecutionPolicy", "Bypass");
-  return e;
+  let args = ["-NoProfile", "-NonInteractive"];
+  if (!env.CLAUDE_CODE_POWERSHELL_RESPECT_EXECUTION_POLICY) args.push("-ExecutionPolicy", "Bypass");
+  return args;
 }
 //@ chunk-e6aww6q8.js:858642-858687 layout
 /**
@@ -46,40 +47,46 @@ function buildEncodedPowerShellInvocation(exe, text) {
 /**
  * PowerShell 命令前缀与脚本块关键字：把输出编码设为 UTF-8、关闭 PSStyle 着色的前置片段，以及 begin/process/end 等脚本块关键字及其匹配正则。
  */
-var POWERSHELL_UTF8_PRELUDE =
-  "try { $PSDefaultParameterValues['Out-File:Encoding'] = 'utf8' } catch {}; if ($ExecutionContext.SessionState.LanguageMode -eq 'FullLanguage') { try { $OutputEncoding = [System.Text.UTF8Encoding]::new() } catch {}; if ($null -ne $PSStyle) { try { $PSStyle.OutputRendering = 'PlainText' } catch {} } }; ";
-var SCRIPT_BLOCK_KEYWORDS = "begin|process|end|clean|dynamicparam";
-var SCRIPT_BLOCK_START_RE = new RegExp(`^(${SCRIPT_BLOCK_KEYWORDS})\\s*\\{`, "i");
-var SCRIPT_BLOCK_KEYWORD_RE = new RegExp(
-  `(?:^|[^-$.\\w])(?:${SCRIPT_BLOCK_KEYWORDS})(?=[\\s\\u0085]*(?:\\{|#|<#|\`))`,
-  "i",
-);
+var POWERSHELL_UTF8_PRELUDE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var SCRIPT_BLOCK_KEYWORDS;
+var SCRIPT_BLOCK_START_RE;
+var SCRIPT_BLOCK_KEYWORD_RE;
+deferInit("chunk-e6aww6q8.js:858778", () => {
+  POWERSHELL_UTF8_PRELUDE =
+    "try { $PSDefaultParameterValues['Out-File:Encoding'] = 'utf8' } catch {}; if ($ExecutionContext.SessionState.LanguageMode -eq 'FullLanguage') { try { $OutputEncoding = [System.Text.UTF8Encoding]::new() } catch {}; if ($null -ne $PSStyle) { try { $PSStyle.OutputRendering = 'PlainText' } catch {} } }; ";
+  SCRIPT_BLOCK_KEYWORDS = "begin|process|end|clean|dynamicparam";
+  SCRIPT_BLOCK_START_RE = new RegExp(`^(${SCRIPT_BLOCK_KEYWORDS})\\s*\\{`, "i");
+  SCRIPT_BLOCK_KEYWORD_RE = new RegExp(
+    `(?:^|[^-$.\\w])(?:${SCRIPT_BLOCK_KEYWORDS})(?=[\\s\\u0085]*(?:\\{|#|<#|\`))`,
+    "i",
+  );
+});
 //@ chunk-e6aww6q8.js:859252-859623 layout
 /**
  * 跳过前导空白、分号与注释后，判断 PowerShell 文本是否以只能出现在脚本开头的结构开始（using、param(、begin/process 等块、属性 [..]），这类文本不能直接拼接前缀执行。
  */
-function requiresScriptFile(e) {
-  let n = 0;
+function requiresScriptFile(command) {
+  let cursor = 0;
   for (;;) {
-    while (n < e.length && /[\s;]/.test(e[n])) n++;
-    if (e[n] === "#") {
+    while (cursor < command.length && /[\s;]/.test(command[cursor])) cursor++;
+    if (command[cursor] === "#") {
       while (
-        n < e.length &&
-        e[n] !==
+        cursor < command.length &&
+        command[cursor] !==
           `
 `
       )
-        n++;
+        cursor++;
       continue;
     }
-    if (e.startsWith("<#", n)) {
-      let index = e.indexOf("#>", n + 2);
-      n = index === -1 ? e.length : index + 2;
+    if (command.startsWith("<#", cursor)) {
+      let index = command.indexOf("#>", cursor + 2);
+      cursor = index === -1 ? command.length : index + 2;
       continue;
     }
     break;
   }
-  let sliced = e.slice(n);
+  let sliced = command.slice(cursor);
   return (
     /^using\s+(namespace|module|assembly)\b/i.test(sliced) ||
     /^param\s*\(/i.test(sliced) ||
@@ -88,8 +95,8 @@ function requiresScriptFile(e) {
   );
 }
 //@ chunk-e6aww6q8.js:859623-859666 layout
-function requiresPowerShellScriptFile(finalCommand) {
-  return requiresScriptFile(finalCommand) && SCRIPT_BLOCK_KEYWORD_RE.test(finalCommand);
+function requiresPowerShellScriptFile(command) {
+  return requiresScriptFile(command) && SCRIPT_BLOCK_KEYWORD_RE.test(command);
 }
 //@ chunk-e6aww6q8.js:859666-859730 layout
 var PS_DEFAULT_CHILD_ENV = {
@@ -116,12 +123,12 @@ function createPowerShellProvider(shellPath) {
           `claude-pwd-ps-${execOpts.id}`,
         );
       else {
-        let q = claudeTempDir();
-        await mkdir(q, {
+        let tempDir = claudeTempDir();
+        await mkdir(tempDir, {
           recursive: true,
           mode: 448,
         }).catch(() => {});
-        cwdFilePath = join(q, `claude-pwd-ps-${execOpts.id}`);
+        cwdFilePath = join(tempDir, `claude-pwd-ps-${execOpts.id}`);
       }
       let cwdTracking = `
 ; $_ec = if ($null -ne $LASTEXITCODE) { $LASTEXITCODE } elseif ($?) { 0 } else { 1 }
@@ -144,23 +151,24 @@ function createPowerShellProvider(shellPath) {
     getSpawnArgs(commandString) {
       return buildPowerShellCommandArgs(commandString);
     },
-    async getEnvironmentOverrides(r, s, h) {
-      let y = {
+    async getEnvironmentOverrides(commandString, cwdFilePath, envEntries) {
+      let env = {
         ...noPromptEnvDefaults(process.env),
       };
-      let S =
-        (process.env.FORCE_COLOR !== undefined && !withholdsDaemonForceColor()) || h?.has("FORCE_COLOR");
+      let forceColor =
+        (process.env.FORCE_COLOR !== undefined && !withholdsDaemonForceColor()) ||
+        envEntries?.has("FORCE_COLOR");
       for (let [key, value] of Object.entries(PS_DEFAULT_CHILD_ENV)) {
         if (process.env[key] !== undefined) continue;
-        if (key === "NO_COLOR" && S) continue;
-        y[key] = value;
+        if (key === "NO_COLOR" && forceColor) continue;
+        env[key] = value;
       }
-      if (h) for (let [w, L] of h) y[w] = L;
+      if (envEntries) for (let [name, value] of envEntries) env[name] = value;
       if (sandboxTmpDir) {
-        y.TMPDIR = sandboxTmpDir;
-        y.CLAUDE_CODE_TMPDIR = claudeTempDir();
+        env.TMPDIR = sandboxTmpDir;
+        env.CLAUDE_CODE_TMPDIR = claudeTempDir();
       }
-      return y;
+      return env;
     },
   };
 }

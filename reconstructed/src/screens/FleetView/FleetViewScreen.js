@@ -8,10 +8,10 @@
  * pieces: chunk-8kxjtdv8.js (6)
  * attribution: placement 6
  */
-import { init_react_production, y, P } from "../../../vendor/react/cjs/react.production.js";
+import { init_react_production, useState, useEffect } from "../../../vendor/react/cjs/react.production.js";
 import { resolveThemeSetting, getCachedSystemTheme, onSystemThemeChange } from "../../utils/systemTheme.js";
 import { isLightTheme } from "../../utils/theme.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { getConfiguredTheme } from "../../components/design-system/ThemeProvider.js";
 import { isLaunchComposerEnabled } from "../../utils/fleetGates.js";
@@ -36,55 +36,55 @@ var SURFACE_COLORS = {
   },
 };
 //@ chunk-8kxjtdv8.js:786-908 placement
-function resolveSurface(setting, t, o) {
-  if (!o) return;
-  let r;
+function resolveSurface(setting, systemTheme, enabled) {
+  if (!enabled) return;
+  let theme;
   if (setting === "auto") {
-    if (t === undefined) return;
-    r = t;
-  } else r = resolveThemeSetting(setting);
-  return isLightTheme(r) ? SURFACE_COLORS.light : SURFACE_COLORS.dark;
+    if (systemTheme === undefined) return;
+    theme = systemTheme;
+  } else theme = resolveThemeSetting(setting);
+  return isLightTheme(theme) ? SURFACE_COLORS.light : SURFACE_COLORS.dark;
 }
 //@ chunk-8kxjtdv8.js:908-1104 placement
 function useSurfaceTheme() {
-  let $ = w(4);
-  let [n, t] = y(getCachedSystemTheme);
-  let r;
-  let m;
+  let $ = useMemoCache(4);
+  let [theme, setTheme] = useState(getCachedSystemTheme);
+  let subscribe;
+  let deps;
   if ($[0] === MEMO_CACHE_SENTINEL) {
-    r = () => onSystemThemeChange(() => t(getCachedSystemTheme()));
-    m = [];
-    $[0] = r;
-    $[1] = m;
+    subscribe = () => onSystemThemeChange(() => setTheme(getCachedSystemTheme()));
+    deps = [];
+    $[0] = subscribe;
+    $[1] = deps;
   } else {
-    r = $[0];
-    m = $[1];
+    subscribe = $[0];
+    deps = $[1];
   }
-  P(r, m);
-  let f;
-  if ($[2] !== n) {
-    f = resolveSurface(getConfiguredTheme(), n, isLaunchComposerEnabled());
-    $[2] = n;
-    $[3] = f;
-  } else f = $[3];
-  return f;
+  useEffect(subscribe, deps);
+  let surface;
+  if ($[2] !== theme) {
+    surface = resolveSurface(getConfiguredTheme(), theme, isLaunchComposerEnabled());
+    $[2] = theme;
+    $[3] = surface;
+  } else surface = $[3];
+  return surface;
 }
 //@ chunk-8kxjtdv8.js:1104-1483 placement
 function FleetViewScreen(props) {
-  let $ = w(9);
+  let $ = useMemoCache(9);
   let { children, mouseTracking, killRing } = props;
   let surface = useSurfaceTheme();
-  let c;
+  let withKillRing;
   if ($[0] !== children || $[1] !== killRing) {
-    c = jsxProd_default(KillRingProvider, {
+    withKillRing = jsxProd_default(KillRingProvider, {
       handle: killRing,
       children,
     });
     $[0] = children;
     $[1] = killRing;
-    $[2] = c;
-  } else c = $[2];
-  let a = c;
+    $[2] = withKillRing;
+  } else withKillRing = $[2];
+  let content = withKillRing;
   if (shouldUseFullscreenByDefault()) {
     let mouseTracking_2;
     if ($[3] !== mouseTracking) {
@@ -92,24 +92,24 @@ function FleetViewScreen(props) {
       $[3] = mouseTracking;
       $[4] = mouseTracking_2;
     } else mouseTracking_2 = $[4];
-    let p;
-    if ($[5] !== surface || $[6] !== mouseTracking_2 || $[7] !== a) {
-      p = jsxProd_default(AlternateScreen, {
+    let screen;
+    if ($[5] !== surface || $[6] !== mouseTracking_2 || $[7] !== content) {
+      screen = jsxProd_default(AlternateScreen, {
         mouseTracking: mouseTracking_2,
         surface,
-        children: a,
+        children: content,
       });
       $[5] = surface;
       $[6] = mouseTracking_2;
-      $[7] = a;
-      $[8] = p;
-    } else p = $[8];
-    return p;
+      $[7] = content;
+      $[8] = screen;
+    } else screen = $[8];
+    return screen;
   }
-  return a;
+  return content;
 }
 //@ chunk-8kxjtdv8.js:1483-1585 placement
 function applyFleetViewHostWindowsEnv() {
   if (getPlatform() === "windows" || env.WT_SESSION) process.env.CLAUDE_CODE_ALT_SCREEN_FULL_REPAINT ??= "1";
 }
-export { FleetViewScreen };
+export { FleetViewScreen, applyFleetViewHostWindowsEnv, resolveSurface };

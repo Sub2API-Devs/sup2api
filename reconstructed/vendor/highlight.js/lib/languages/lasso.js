@@ -5,10 +5,10 @@
  * pieces: chunk-egr0twnb.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:222890-225925 cjs-fingerprint
-var require_lasso = x(function (cjsExports, cjsModule) {
+var require_lasso = __commonJS(function (cjsExports, cjsModule) {
   function lasso(hljs) {
     let LASSO_KEYWORDS = {
       $pattern: "[a-zA-Z_][\\w.]*|&[lg]t;",

@@ -9,7 +9,13 @@
  * attribution: placement 1
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { zodStrictObject, array, string, u, literal } from "../../../vendor/zod/v4/classic/schemas.js";
+import {
+  zodStrictObject,
+  array,
+  stringSchema,
+  objectSchema,
+  literal,
+} from "../../../vendor/zod/v4/classic/schemas.js";
 import {
   connectorResultSchema,
   lookupConnectors,
@@ -30,17 +36,17 @@ import { plural } from "../../utils/stringUtils.js";
  */
 var SuggestConnectorsTool_2 = DoctorLazy(() =>
   zodStrictObject({
-    uuids: array(string().min(1).max(64))
+    uuids: array(stringSchema().min(1).max(64))
       .min(1)
       .max(32)
       .describe("directoryUuid or server_id values to resolve."),
   }),
 );
 var suggestConnectorsOutputSchema = DoctorLazy(() =>
-  u({
+  objectSchema({
     connectors: array(connectorResultSchema()),
     opt_in_required: literal(true).optional(),
-    message: string().optional(),
+    message: stringSchema().optional(),
   }),
 );
 var SuggestConnectorsTool = buildTool({
@@ -70,9 +76,9 @@ var SuggestConnectorsTool = buildTool({
   },
   create({ credentials }) {
     return {
-      async call(r, { signal }) {
+      async call(input, { signal }) {
         try {
-          let connectors = await lookupConnectors(r.uuids, signal, credentials);
+          let connectors = await lookupConnectors(input.uuids, signal, credentials);
           if (isOptInRequired(connectors))
             return {
               data: {
@@ -96,14 +102,15 @@ var SuggestConnectorsTool = buildTool({
       },
     };
   },
-  mapToolResultToToolResultBlockParam(e, toolUseId) {
+  mapToolResultToToolResultBlockParam(result, toolUseId) {
     return {
       tool_use_id: toolUseId,
       type: "tool_result",
-      content: jsonStringify(e.opt_in_required ? e : e.connectors),
+      content: jsonStringify(result.opt_in_required ? result : result.connectors),
     };
   },
-  renderToolUseMessage(e) {
-    return plural((e.uuids ?? []).length, "uuid");
+  renderToolUseMessage(input) {
+    return plural((input.uuids ?? []).length, "uuid");
   },
 });
+export { SuggestConnectorsTool };

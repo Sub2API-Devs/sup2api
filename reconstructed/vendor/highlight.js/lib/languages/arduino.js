@@ -5,10 +5,10 @@
  * pieces: chunk-egr0twnb.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:15444-26099 cjs-fingerprint
-var require_arduino = x(function (cjsExports, cjsModule) {
+var require_arduino = __commonJS(function (cjsExports, cjsModule) {
   function cPlusPlus(hljs) {
     let regex = hljs.regex;
     let C_LINE_COMMENT_MODE = hljs.COMMENT("//", "$", {

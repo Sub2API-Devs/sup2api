@@ -26,16 +26,16 @@ import {
 } from "../../utils/permissions/sensitivePaths.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
 import {
-  u,
+  objectSchema,
   zodStrictObject,
-  string,
+  stringSchema,
   array,
   literal,
   record,
 } from "../../../vendor/zod/v4/classic/schemas.js";
 import { SHA256_HEX_RE } from "../../utils/commitAttribution.js";
 import { logError } from "../../utils/log.js";
-import { En } from "../../../vendor/lodash-es/_inlinedHelpers.js";
+import { import_sortedIndex_2 } from "../../../vendor/lodash-es/_inlinedHelpers.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { AUTHORIZE_UPLOAD } from "../mcpServe/fileInputs.js";
 import {
@@ -79,16 +79,20 @@ function validateFileInputPath(
   if (isAttachFailureKind(code)) return attachFailureMessage(path, code, maxFileBytes, nothingDone);
   switch (code) {
     case "path_rejected": {
-      let a = normalize(path);
-      return attachmentDigestOf(a) === undefined &&
-        [path, a].some((h) => {
-          let replaced = h.slice(parse(h).root.length).split(sep).join("/").replace(/^\/+/, "");
+      let normalizedPath = normalize(path);
+      return attachmentDigestOf(normalizedPath) === undefined &&
+        [path, normalizedPath].some((candidate) => {
+          let inputPath = candidate
+            .slice(parse(candidate).root.length)
+            .split(sep)
+            .join("/")
+            .replace(/^\/+/, "");
           return (
-            !exceedsPathVariantBudget(replaced) &&
-            ![replaced, ...getPathAliasVariants(replaced)].some(isAbsolute) &&
-            (isSensitiveNameOrVariant(replaced) ||
-              isSensitiveBasenameWithVariants(replaced) ||
-              isCredentialConfigPath_2(replaced))
+            !exceedsPathVariantBudget(inputPath) &&
+            ![inputPath, ...getPathAliasVariants(inputPath)].some(isAbsolute) &&
+            (isSensitiveNameOrVariant(inputPath) ||
+              isSensitiveBasenameWithVariants(inputPath) ||
+              isCredentialConfigPath_2(inputPath))
           );
         })
         ? {
@@ -107,9 +111,10 @@ function validateFileInputPath(
           };
     }
     case "resolves_elsewhere": {
-      let a = resolved !== undefined && /^[\x20\x21\x23-\x7e]+$/.test(resolved) ? resolved : undefined;
+      let resolvedText =
+        resolved !== undefined && /^[\x20\x21\x23-\x7e]+$/.test(resolved) ? resolved : undefined;
       return {
-        error: `Cannot attach "${path}": it resolves to another path${a === undefined ? ", through a link or a name that is stored otherwise" : `, "${a}"`}. A file is attached only by the path it resolves to, so that the path that is approved names the file that is sent. If that is the file you mean, call again with ${a === undefined ? "the path it resolves to" : "that path"}. ${nothingDone}`,
+        error: `Cannot attach "${path}": it resolves to another path${resolvedText === undefined ? ", through a link or a name that is stored otherwise" : `, "${resolvedText}"`}. A file is attached only by the path it resolves to, so that the path that is approved names the file that is sent. If that is the file you mean, call again with ${resolvedText === undefined ? "the path it resolves to" : "that path"}. ${nothingDone}`,
         code,
       };
     }
@@ -192,18 +197,18 @@ function validateFileInputPath(
 //@ chunk-gwvwj681.js:9527-9758 placement
 var MAX_ERROR_DETAIL_CHARS = 300;
 var fileInputUploadAnswerSchema = DoctorLazy(() =>
-  u({
+  objectSchema({
     arguments: zodStrictObject({
-      slug: string().min(1).max(256).optional(),
+      slug: stringSchema().min(1).max(256).optional(),
     }).optional(),
     files: array(
-      u({
-        sha256: string().regex(SHA256_HEX_RE),
-        uri: string().min(1).max(2048),
-        upload: u({
-          url: string().min(1).max(2048),
+      objectSchema({
+        sha256: stringSchema().regex(SHA256_HEX_RE),
+        uri: stringSchema().min(1).max(2048),
+        upload: objectSchema({
+          url: stringSchema().min(1).max(2048),
           method: literal("PUT"),
-          headers: record(string(), string()),
+          headers: record(stringSchema(), stringSchema()),
         }).optional(),
       }),
     ),
@@ -213,117 +218,120 @@ var fileInputUploadAnswerSchema = DoctorLazy(() =>
 /**
  * 检查调用参数是否符合 schema，返回错误描述。
  */
-function schemaErrorForCall(e, schema, fileInput) {
-  let r = describeCallSchemaError(e, schema, fileInput);
-  return r !== undefined && "error" in r ? r : undefined;
+function schemaErrorForCall(input, schema, words) {
+  let described = describeCallSchemaError(input, schema, words);
+  return described !== undefined && "error" in described ? described : undefined;
 }
 //@ chunk-gwvwj681.js:9831-9969 placement
-async function describeFileInputChange(e) {
-  let fileInputUpload = await resolveFileInputUpload(e);
-  if (fileInputUpload === undefined || "error" in fileInputUpload) return fileInputUpload ?? {};
-  let i = await describeUploadOutcome(e, fileInputUpload);
-  return i.error === undefined
+async function describeFileInputChange(request) {
+  let upload = await resolveFileInputUpload(request);
+  if (upload === undefined || "error" in upload) return upload ?? {};
+  let outcome = await describeUploadOutcome(request, upload);
+  return outcome.error === undefined
     ? {
-        input: fileInputUpload.input,
+        input: upload.input,
       }
-    : i;
+    : outcome;
 }
 //@ chunk-gwvwj681.js:9969-10122 placement
-async function resolveFileInputUpload(e) {
-  let { input, schema, words } = e;
-  let s;
+async function resolveFileInputUpload(request) {
+  let { input, schema, words } = request;
+  let outcome;
   try {
-    let c = describeCallSchemaError(input, schema, words);
-    if (c === undefined) return;
-    s = "error" in c ? c : await uploadFileInput(e, c);
+    let described = describeCallSchemaError(input, schema, words);
+    if (described === undefined) return;
+    outcome = "error" in described ? described : await uploadFileInput(request, described);
   } catch (error) {
     logError(error);
-    s = filesNotAttachedError(words);
+    outcome = filesNotAttachedError(words);
   }
-  return s;
+  return outcome;
 }
 //@ chunk-gwvwj681.js:10122-10587 placement
-async function describeUploadOutcome(e, n) {
-  let { words } = e;
-  let r;
+async function describeUploadOutcome(request, upload) {
+  let { words } = request;
+  let failure;
   try {
-    let s = e.gate();
-    r =
-      s === undefined
-        ? await putFileInputs(e, n.toSend)
+    let gateCode = request.gate();
+    failure =
+      gateCode === undefined
+        ? await putFileInputs(request, upload.toSend)
         : validateFileInputPath(
             {
-              path: n.files[0].path,
-              code: s,
+              path: upload.files[0].path,
+              code: gateCode,
             },
-            e,
+            request,
           );
-    if (r?.code === "put_expired") {
-      let c = await uploadFileInput(
+    if (failure?.code === "put_expired") {
+      let reupload = await uploadFileInput(
         {
-          ...e,
-          input: n.input,
+          ...request,
+          input: upload.input,
         },
         {
           entries: [],
-          paths: n.files.map((file) => file.path),
+          paths: upload.files.map((file) => file.path),
         },
       );
-      let a = "error" in c ? undefined : n.files.find((file, F) => !En(file, c.files[F]));
-      r =
-        "error" in c
-          ? c
-          : a === undefined
-            ? await putFileInputs(e, c.toSend)
+      let changedFile =
+        "error" in reupload
+          ? undefined
+          : upload.files.find((file, index) => !import_sortedIndex_2(file, reupload.files[index]));
+      failure =
+        "error" in reupload
+          ? reupload
+          : changedFile === undefined
+            ? await putFileInputs(request, reupload.toSend)
             : validateFileInputPath(
                 {
-                  path: a.path,
-                  code: c.files.some((file) =>
-                    En(
+                  path: changedFile.path,
+                  code: reupload.files.some((file) =>
+                    import_sortedIndex_2(
                       {
                         ...file,
-                        uri: a.uri,
+                        uri: changedFile.uri,
                       },
-                      a,
+                      changedFile,
                     ),
                   )
                     ? "bad_answer"
                     : "changed",
                 },
-                e,
+                request,
               );
     }
   } catch (error) {
     logError(error);
-    r = filesNotAttachedError(words);
+    failure = filesNotAttachedError(words);
   }
-  return r ?? {};
+  return failure ?? {};
 }
 //@ chunk-gwvwj681.js:10587-11944 placement
-async function uploadFileInput(e, { entries, paths }) {
-  let { input, words, files, signal } = e;
+async function uploadFileInput(request, { entries, paths }) {
+  let { input, words, files, signal } = request;
   let path = paths[0];
-  let F = e.gate();
-  if (F !== undefined)
+  let gateCode = request.gate();
+  if (gateCode !== undefined)
     return validateFileInputPath(
       {
         path,
-        code: F,
+        code: gateCode,
       },
-      e,
+      request,
     );
-  let y = [];
-  for (let _ of await files.hash(paths, signal)) {
-    if ("code" in _) return validateFileInputPath(_, e);
-    y.push(_);
+  let hashedFiles = [];
+  for (let fileResult of await files.hash(paths, signal)) {
+    if ("code" in fileResult) return validateFileInputPath(fileResult, request);
+    hashedFiles.push(fileResult);
   }
-  if (y.length !== paths.length || y.some((_, I) => _.path !== paths[I]))
+  if (hashedFiles.length !== paths.length || hashedFiles.some((file, index) => file.path !== paths[index]))
     return validateFileInputPath(
       {
         path,
         code: "bad_answer",
       },
-      e,
+      request,
     );
   if (signal.aborted)
     return validateFileInputPath(
@@ -331,17 +339,17 @@ async function uploadFileInput(e, { entries, paths }) {
         path,
         code: "canceled",
       },
-      e,
+      request,
     );
-  let O;
+  let answer;
   try {
-    O = await e.authorize({
+    answer = await request.authorize({
       for_tool: words.tool,
       ...(typeof input.slug === "string" && {
         slug: input.slug,
       }),
-      files: y.map(({ name: _, size, sha256 }) => ({
-        name: _,
+      files: hashedFiles.map(({ name, size, sha256 }) => ({
+        name,
         size,
         sha256,
       })),
@@ -353,18 +361,18 @@ async function uploadFileInput(e, { entries, paths }) {
           path,
           code: "canceled",
         },
-        e,
+        request,
       );
     logForDebugging(`[file inputs] ${AUTHORIZE_UPLOAD} failed: ${errorMessage(error)}`, {
       level: "error",
     });
-    let I =
+    let errorDetail =
       error instanceof McpToolCallError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS ||
       error instanceof McpAuthError
         ? truncateAtWord(errorMessage(error).trim(), MAX_ERROR_DETAIL_CHARS)
         : "";
     return {
-      error: `The files could not be attached${I === "" ? "." : `: ${I}${/[.!?\u2026]$/.test(I) ? "" : "."}`} ${words.nothingDone}`,
+      error: `The files could not be attached${errorDetail === "" ? "." : `: ${errorDetail}${/[.!?\u2026]$/.test(errorDetail) ? "" : "."}`} ${words.nothingDone}`,
       code: "authorize_failed",
     };
   }
@@ -374,13 +382,13 @@ async function uploadFileInput(e, { entries, paths }) {
         path,
         code: "canceled",
       },
-      e,
+      request,
     );
-  let S = fileInputUploadAnswerSchema().safeParse(O);
+  let parsed = fileInputUploadAnswerSchema().safeParse(answer);
   if (
-    !S.success ||
-    S.data.files.length !== y.length ||
-    S.data.files.some((file, I) => file.sha256 !== y[I].sha256)
+    !parsed.success ||
+    parsed.data.files.length !== hashedFiles.length ||
+    parsed.data.files.some((file, index) => file.sha256 !== hashedFiles[index].sha256)
   )
     return {
       error: `The files could not be attached. ${words.nothingDone}`,
@@ -388,20 +396,20 @@ async function uploadFileInput(e, { entries, paths }) {
     };
   return {
     input: {
-      ...S.data.arguments,
+      ...parsed.data.arguments,
       ...input,
-      [words.arg]: replaceLocalWithRef(entries, words, (_) => S.data.files[_].uri),
+      [words.arg]: replaceLocalWithRef(entries, words, (index) => parsed.data.files[index].uri),
     },
-    files: y.map((_, I) => ({
-      ..._,
-      uri: S.data.files[I].uri,
+    files: hashedFiles.map((file, index) => ({
+      ...file,
+      uri: parsed.data.files[index].uri,
     })),
-    toSend: S.data.files.flatMap(({ upload, sha256 }, b) =>
+    toSend: parsed.data.files.flatMap(({ upload, sha256 }, index) =>
       upload === undefined
         ? []
         : [
             {
-              path: paths[b],
+              path: paths[index],
               sha256,
               url: upload.url,
               headers: upload.headers,
@@ -411,17 +419,17 @@ async function uploadFileInput(e, { entries, paths }) {
   };
 }
 //@ chunk-gwvwj681.js:11944-12183 placement
-async function putFileInputs(e, toSend) {
-  let i = await e.files.put(toSend, e.signal);
-  let found = i.find((s) => "code" in s);
-  if (found !== undefined) return validateFileInputPath(found, e);
-  return i.length !== toSend.length || e.signal.aborted
+async function putFileInputs(request, toSend) {
+  let results = await request.files.put(toSend, request.signal);
+  let found = results.find((result) => "code" in result);
+  if (found !== undefined) return validateFileInputPath(found, request);
+  return results.length !== toSend.length || request.signal.aborted
     ? validateFileInputPath(
         {
           path: toSend[0]?.path ?? "",
-          code: e.signal.aborted ? "canceled" : "bad_answer",
+          code: request.signal.aborted ? "canceled" : "bad_answer",
         },
-        e,
+        request,
       )
     : undefined;
 }
@@ -433,66 +441,68 @@ function filesNotAttachedError({ nothingDone }) {
   };
 }
 //@ chunk-gwvwj681.js:12283-12606 placement
-function describeCallSchemaError(e, n, i) {
-  let r = e[i.arg];
-  if (r === undefined || r === null || (Array.isArray(r) && r.length === 0)) return;
-  let s = validateFileEntries(r, i);
-  if (!Array.isArray(s)) return s;
-  let entries = [r].flat();
-  let a = describeSchemaViolation(e, n, i);
-  return a === undefined
+function describeCallSchemaError(input, schema, words) {
+  let argValue = input[words.arg];
+  if (argValue === undefined || argValue === null || (Array.isArray(argValue) && argValue.length === 0))
+    return;
+  let pathsOrError = validateFileEntries(argValue, words);
+  if (!Array.isArray(pathsOrError)) return pathsOrError;
+  let entries = [argValue].flat();
+  let violation = describeSchemaViolation(input, schema, words);
+  return violation === undefined
     ? {
         entries,
-        paths: s,
+        paths: pathsOrError,
       }
     : {
-        error: `Cannot call ${i.tool} with these arguments: ${a.listed}.${a.takes} ${i.nothingDone}`,
+        error: `Cannot call ${words.tool} with these arguments: ${violation.listed}.${violation.takes} ${words.nothingDone}`,
         code: "input_schema",
       };
 }
 //@ chunk-gwvwj681.js:12606-12720 placement
-function replaceLocalWithRef(entries, { local, ref }, r) {
-  return entries.map((s, c) => {
-    if (!isPlainObject(s)) return s;
-    let { [local]: a, ...h } = s;
+function replaceLocalWithRef(entries, { local, ref }, uriFor) {
+  return entries.map((entry, index) => {
+    if (!isPlainObject(entry)) return entry;
+    let { [local]: local_2, ...rest } = entry;
     return {
-      ...h,
-      [ref]: r(c),
+      ...rest,
+      [ref]: uriFor(index),
     };
   });
 }
 //@ chunk-gwvwj681.js:12720-13283 placement
-function isFileInputsEnabled(listed, session) {
-  let i = OffscreenFreeze(listed.meta);
-  if (i === undefined) return;
-  let { client } = listed;
+function isFileInputsEnabled(toolRequest, session) {
+  let freeze = OffscreenFreeze(toolRequest.meta);
+  if (freeze === undefined) return;
+  let { client } = toolRequest;
   let host = isDiskless() ? offscreenFreezeSlot.peek(session)?.host : undefined;
-  let c = host?.servers.get(client.name);
-  let a = isDiskless()
-    ? c !== undefined &&
+  let hostedServer = host?.servers.get(client.name);
+  let isHostedMatch = isDiskless()
+    ? hostedServer !== undefined &&
       client.config.type === "http" &&
-      client.config.url === c.url &&
+      client.config.url === hostedServer.url &&
       host?.heldSinceBoot(client.name) === true
-      ? c.server
+      ? hostedServer.server
       : undefined
     : client.config.scope === "claudeai" ||
         firstPartyServerIdFor(client.config) !== undefined ||
         isOwnCcrMcpServer(client.config)
-      ? FIRST_PARTY_UPLOAD_SERVERS.find((h) => isFirstPartyToolboxServer(client, h))
+      ? FIRST_PARTY_UPLOAD_SERVERS.find((server) => isFirstPartyToolboxServer(client, server))
       : undefined;
-  if (a === undefined || !getFeatureValue_CACHED_MAY_BE_STALE("tengu_walnut_tiller", true)) return;
+  if (isHostedMatch === undefined || !getFeatureValue_CACHED_MAY_BE_STALE("tengu_walnut_tiller", true))
+    return;
   return {
     fileInput: {
-      tool: listed.name,
-      arg: i.arg,
+      tool: toolRequest.name,
+      arg: freeze.arg,
       feature: "mcp_file_input_upload",
-      local: i.local,
-      ref: i.ref,
-      refWord: i.ref,
+      local: freeze.local,
+      ref: freeze.ref,
+      refWord: freeze.ref,
       maxFiles: MAX_FILES_PER_INPUT,
-      nothingDone: `${listed.name} was not called.`,
+      nothingDone: `${toolRequest.name} was not called.`,
     },
-    server: a,
+    server: isHostedMatch,
     host,
   };
 }
@@ -500,88 +510,92 @@ function isFileInputsEnabled(listed, session) {
 /**
  * 包装 MCP 工具的 validateInput：原校验通过且该工具启用了文件输入时，再检查文件引用参数是否合法，不合法返回错误（errorCode 2）并记遥测。
  */
-async function validateToolFileInputs(e, n, ...[i, r]) {
-  let s = n
-    ? await n(i, r)
+async function validateToolFileInputs(request, validateInput, ...[input, context]) {
+  let baseResult = validateInput
+    ? await validateInput(input, context)
     : {
         result: true,
       };
-  let c = s.result ? isFileInputsEnabled(e, r.session) : undefined;
-  let a = c && schemaErrorForCall(i, e.schema, c.fileInput);
-  if (a === undefined) return s;
-  logFileInputNotAttached(a.code);
+  let fileInputInfo = baseResult.result ? isFileInputsEnabled(request, context.session) : undefined;
+  let schemaError = fileInputInfo && schemaErrorForCall(input, request.schema, fileInputInfo.fileInput);
+  if (schemaError === undefined) return baseResult;
+  logFileInputNotAttached(schemaError.code);
   return {
     result: false,
-    message: a.error,
+    message: schemaError.error,
     errorCode: 2,
   };
 }
 //@ chunk-gwvwj681.js:13492-14066 placement
-async function describeInputChanged(e) {
-  let n = isFileInputsEnabled(e.listed, e.session);
-  if (n === undefined) return e.input;
-  let i = attachFileInputs(e, n);
-  let { fileInput } = n;
-  let s = takeFileGrants(e.session, e.toolUseId);
-  let c = s !== undefined && En(s.input, e.input);
-  let a;
-  if (c)
-    a = {
-      ...(await describeUploadOutcome(i, s)),
-      input: e.input,
+async function describeInputChanged(request) {
+  let fileInputInfo = isFileInputsEnabled(request.listed, request.session);
+  if (fileInputInfo === undefined) return request.input;
+  let attachRequest = attachFileInputs(request, fileInputInfo);
+  let { fileInput } = fileInputInfo;
+  let grants = takeFileGrants(request.session, request.toolUseId);
+  let isSameInput = grants !== undefined && import_sortedIndex_2(grants.input, request.input);
+  let outcome;
+  if (isSameInput)
+    outcome = {
+      ...(await describeUploadOutcome(attachRequest, grants)),
+      input: request.input,
     };
-  else if (s !== undefined)
-    a = {
+  else if (grants !== undefined)
+    outcome = {
       error: `The arguments of this call changed while it waited for approval. Call ${fileInput.tool} again, giving each file by its "${fileInput.local}". ${fileInput.nothingDone}`,
       code: "input_changed",
     };
-  else a = await describeFileInputChange(i);
-  if (a.error !== undefined) {
-    logFileInputNotAttached(a.code);
-    throw new McpToolFileInputRejectedError(a.error, a.code ?? "unexpected");
+  else outcome = await describeFileInputChange(attachRequest);
+  if (outcome.error !== undefined) {
+    logFileInputNotAttached(outcome.code);
+    throw new McpToolFileInputRejectedError(outcome.error, outcome.code ?? "unexpected");
   }
-  if (a.input === undefined) return e.input;
+  if (outcome.input === undefined) return request.input;
   logFeatureOk("mcp_file_input_upload");
-  return a.input;
+  return outcome.input;
 }
 //@ chunk-gwvwj681.js:14066-14655 placement
-function describeNoFilesNamed(e) {
-  let n = isFileInputsEnabled(e.listed, e.session);
-  let i = n && e.input[n.fileInput.arg];
-  if (n === undefined || !Array.isArray(i) || !i.some((s) => isPlainObject(s) && n.fileInput.local in s))
+function describeNoFilesNamed(request) {
+  let fileInputInfo = isFileInputsEnabled(request.listed, request.session);
+  let argValue = fileInputInfo && request.input[fileInputInfo.fileInput.arg];
+  if (
+    fileInputInfo === undefined ||
+    !Array.isArray(argValue) ||
+    !argValue.some((entry) => isPlainObject(entry) && fileInputInfo.fileInput.local in entry)
+  )
     return;
-  let r = async (input) => {
+  let prepareFor = async (input) => {
     let fileInputUpload = await resolveFileInputUpload(
       attachFileInputs(
         {
-          ...e,
+          ...request,
           input,
         },
-        n,
+        fileInputInfo,
       ),
     );
     if (fileInputUpload === undefined || "error" in fileInputUpload) {
       logFileInputNotAttached(fileInputUpload?.code);
       return {
-        error: fileInputUpload?.error ?? `${n.fileInput.tool} names no files.`,
+        error: fileInputUpload?.error ?? `${fileInputInfo.fileInput.tool} names no files.`,
       };
     }
     let description = attachmentListText(fileInputUpload.files);
-    keepFileGrants(e.session, e.toolUseId, fileInputUpload);
+    keepFileGrants(request.session, request.toolUseId, fileInputUpload);
     return {
       input: fileInputUpload.input,
       description,
-      release: async () => dropFileGrants(e.session, e.toolUseId),
+      release: async () => dropFileGrants(request.session, request.toolUseId),
     };
   };
   return {
-    prepare: () => r(e.input),
+    prepare: () => prepareFor(request.input),
     prepareAgain: ({ slug }) =>
-      r(
-        Object.hasOwn(e.input, "slug") || typeof slug !== "string" || slug === ""
-          ? e.input
+      prepareFor(
+        Object.hasOwn(request.input, "slug") || typeof slug !== "string" || slug === ""
+          ? request.input
           : {
-              ...e.input,
+              ...request.input,
               slug,
             },
       ),
@@ -602,8 +616,9 @@ function attachFileInputs(
     maxFileBytes: MAX_FILE_BYTES,
     toolPermissionContext,
     gate: () => {
-      let F = policyDenyKind(server.policy);
-      if (F !== null) return F === "cache_miss" || F === "route_missing" ? "policy_unread" : "policy_denied";
+      let denyKind = policyDenyKind(server.policy);
+      if (denyKind !== null)
+        return denyKind === "cache_miss" || denyKind === "route_missing" ? "policy_unread" : "policy_denied";
       if (!allowsFileUploadFor(listed.client.config)) return "uploads_off";
       return (
         filesApiUnavailableReason() ??
@@ -624,9 +639,9 @@ function attachFileInputs(
     files:
       host?.files ??
       createUploadScreen({
-        screen: async (F) => {
+        screen: async (path) => {
           try {
-            return await screenUploadPath(F, toolPermissionContext);
+            return await screenUploadPath(path, toolPermissionContext);
           } catch (error) {
             logForDebugging(
               `[file inputs] a path was rejected: ${error instanceof TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS ? error.telemetryMessage : "not readable"}`,
@@ -639,8 +654,8 @@ function attachFileInputs(
         uploadPathPrefix: server.uploadPathPrefix,
         namesResolvedPaths: true,
       }),
-    authorize: (F) =>
-      logSessionRecovery(callTool, F, signal).catch((error) => {
+    authorize: (authorizeRequest) =>
+      logSessionRecovery(callTool, authorizeRequest, signal).catch((error) => {
         throw error instanceof McpToolCallError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS ||
           error instanceof McpAuthError ||
           (error instanceof Error &&
@@ -660,31 +675,31 @@ function attachFileInputs(
 /**
  * 判断权限规则中是否有针对该 MCP 工具的服务器级策略条目。
  */
-function serverStatesPolicyFor(e, { alwaysAllowRules, alwaysAskRules, alwaysDenyRules }) {
-  let mcpToolName = buildMcpToolName(e.serverName, e.toolName);
-  return [alwaysAllowRules, alwaysAskRules, alwaysDenyRules].some((c) =>
-    (c.mcpServerPolicy ?? []).some(
-      (a) =>
-        a === mcpToolName ||
-        mcpRuleMatchesTool(a, {
+function serverStatesPolicyFor(toolRef, { alwaysAllowRules, alwaysAskRules, alwaysDenyRules }) {
+  let mcpToolName = buildMcpToolName(toolRef.serverName, toolRef.toolName);
+  return [alwaysAllowRules, alwaysAskRules, alwaysDenyRules].some((ruleSet) =>
+    (ruleSet.mcpServerPolicy ?? []).some(
+      (rule) =>
+        rule === mcpToolName ||
+        mcpRuleMatchesTool(rule, {
           name: mcpToolName,
-          mcpInfo: e,
+          mcpInfo: toolRef,
         }),
     ),
   );
 }
 //@ chunk-gwvwj681.js:15907-16251 placement
-async function logSessionRecovery(callTool, n, signal) {
+async function logSessionRecovery(callTool, authorizeRequest, signal) {
   try {
-    return await callTool(AUTHORIZE_UPLOAD, n);
+    return await callTool(AUTHORIZE_UPLOAD, authorizeRequest);
   } catch (error) {
     if (!(error instanceof McpSessionExpiredError)) throw error;
     logFeatureSad("mcp_session_recovery", error.expiryKind);
   }
   try {
-    let r = await callTool(AUTHORIZE_UPLOAD, n);
+    let answer = await callTool(AUTHORIZE_UPLOAD, authorizeRequest);
     logFeatureOk("mcp_session_recovery");
-    return r;
+    return answer;
   } catch (error) {
     if (error instanceof McpSessionExpiredError)
       logFeatureBad("mcp_session_recovery", "session_retry_exhausted");
@@ -698,3 +713,4 @@ function logFileInputNotAttached(code) {
   if (code === "input_schema" || code === "resolves_elsewhere") logFeatureSad("mcp_file_input_upload", code);
   else if (code !== "canceled") logFeatureBad("mcp_file_input_upload", code ?? "unexpected");
 }
+export { describeInputChanged, describeNoFilesNamed, serverStatesPolicyFor, validateToolFileInputs };

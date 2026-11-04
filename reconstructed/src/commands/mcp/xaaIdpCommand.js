@@ -18,10 +18,10 @@ import { createHyperlink } from "../../utils/hyperlink.js";
 
 //@ chunk-4vq0yytw.js:16442-16516 affinity
 function mcpXaaIdpModule() {
-  return require("./chunk-asne9cp8.js").mcpXaaIdpLoginModule();
+  return require("../../services/mcp/emitTripwireEvent.lazy.js").mcpXaaIdpLoginModule();
 }
 //@ chunk-4vq0yytw.js:16516-20902 fingerprint = registerMcpXaaIdpCommand (0.928)
-function registerMcpXaaIdpCommand(mcp, p) {
+function registerMcpXaaIdpCommand(mcp, command) {
   let xaaIdp = mcp.command("xaa").description("Manage the XAA (SEP-990) IdP connection");
   xaaIdp
     .command("setup")
@@ -34,7 +34,7 @@ function registerMcpXaaIdpCommand(mcp, p) {
       "Fixed loopback callback port (only if IdP does not honor RFC 8252 port-any matching)",
     )
     .action(
-      p(async (s, options) => {
+      command(async (args, options) => {
         let issuerUrl;
         try {
           issuerUrl = new URL(options.issuer);
@@ -75,7 +75,7 @@ function registerMcpXaaIdpCommand(mcp, p) {
             },
           },
           undefined,
-          s,
+          args,
         );
         if (error) return cliError(`Error writing settings: ${error.message}`);
         if (oldIssuer) {
@@ -170,7 +170,7 @@ function registerMcpXaaIdpCommand(mcp, p) {
     .command("clear")
     .description("Clear the IdP connection config and cached id_token")
     .action(
-      p(async (s) => {
+      command(async (args) => {
         let idp = getXaaIdpSettings();
         let { error } = await updateSettingsForSource(
           "userSettings",
@@ -178,7 +178,7 @@ function registerMcpXaaIdpCommand(mcp, p) {
             xaaIdp: undefined,
           },
           undefined,
-          s,
+          args,
         );
         if (error) return cliError(`Error writing settings: ${error.message}`);
         if (idp) {

@@ -5,19 +5,19 @@
  * pieces: chunk-mrx6y2r5.js (11)
  * attribution: esm-layout 2, esm-fingerprint 9
  */
-import { createDefaultHttpClient } from "../../../core-rest-pipeline/dist/esm/defaultHttpClient.js";
+import { createDefaultHttpClient_2 } from "../../../core-rest-pipeline/dist/esm/defaultHttpClient.js";
 import { getOperationArgumentValueFromParameter } from "./operationHelpers.js";
 import { getPathStringFromParameter } from "../index.js";
 
 //@ chunk-mrx6y2r5.js:76933-76940 esm-layout
-var _a;
+var serializer;
 //@ chunk-mrx6y2r5.js:76940-76979 esm-layout
-function Od() {
-  if (!_a) _a = createDefaultHttpClient();
-  return _a;
+function getSerializer() {
+  if (!serializer) serializer = createDefaultHttpClient_2();
+  return serializer;
 }
 //@ chunk-mrx6y2r5.js:76979-77037 esm-fingerprint
-var og = {
+var collectionFormat = {
   CSV: ",",
   SSV: " ",
   Multi: "Multi",
@@ -117,7 +117,9 @@ function calculateQueryParameters(operationSpec, operationArguments, fallbackObj
           queryParameterValue,
           getPathStringFromParameter(queryParameter),
         );
-        let delimiter = queryParameter.collectionFormat ? og[queryParameter.collectionFormat] : "";
+        let delimiter = queryParameter.collectionFormat
+          ? collectionFormat[queryParameter.collectionFormat]
+          : "";
         if (Array.isArray(queryParameterValue))
           queryParameterValue = queryParameterValue.map((item) => {
             if (item === null || item === undefined) return "";
@@ -192,4 +194,4 @@ function appendQueryParams(url, queryParams, sequenceParams, noOverwrite = false
   parsedUrl.search = searchPieces.length ? `?${searchPieces.join("&")}` : "";
   return parsedUrl.toString();
 }
-export { Od, getRequestUrl };
+export { getSerializer, getRequestUrl };

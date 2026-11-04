@@ -32,11 +32,11 @@ var ARTIFACTS_OFF_SERVER_IGNORED_RUNNER =
 /**
  * Artifacts 被关闭（设置、CLAUDE_CODE_DISABLE_ARTIFACT 或 deny 规则）时，从 MCP 服务器配置中剔除连向 Artifacts 服务的条目，返回保留项、被剔除的名字和提示文字。
  */
-function withoutWithheldCcrArtifactsEntry(s) {
-  let o = Object.create(null);
-  let e = [];
+function withoutWithheldCcrArtifactsEntry(entries) {
+  let kept = Object.create(null);
+  let dropped = [];
   let isSelfHostedRunnerChild = startupCcrEnv.isSelfHostedRunnerChild;
-  let c =
+  let artifactsOff =
     isArtifactSwitchedOffInSettings() ||
     (isSelfHostedRunnerChild &&
       (!resolveArtifactEnableSetting().enabled ||
@@ -45,18 +45,19 @@ function withoutWithheldCcrArtifactsEntry(s) {
           {
             name: ARTIFACT_TOOL_NAME,
           },
-          loadAllPermissionRulesFromDisk().filter((r) => r.ruleBehavior === "deny"),
+          loadAllPermissionRulesFromDisk().filter((rule) => rule.ruleBehavior === "deny"),
         ) !== null));
-  for (let [key, value] of Object.entries(s))
-    if (c && isInjectedCcrServer(value)) e.push(key);
-    else o[key] = value;
-  if (e.length > 0)
+  for (let [key, value] of Object.entries(entries))
+    if (artifactsOff && isInjectedCcrServer(value)) dropped.push(key);
+    else kept[key] = value;
+  if (dropped.length > 0)
     logForDebugging(
-      `[MCP] Artifacts are switched off: MCP server entries left out because they reach Claude Code Remote's Artifacts server: ${e.length}`,
+      `[MCP] Artifacts are switched off: MCP server entries left out because they reach Claude Code Remote's Artifacts server: ${dropped.length}`,
     );
   return {
-    kept: o,
-    dropped: e,
+    kept,
+    dropped,
     error: isSelfHostedRunnerChild ? ARTIFACTS_OFF_SERVER_IGNORED_RUNNER : ARTIFACTS_OFF_SERVER_IGNORED,
   };
 }
+export { withoutWithheldCcrArtifactsEntry };

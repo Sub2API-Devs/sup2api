@@ -9,8 +9,16 @@
  * attribution: placement 18
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, M, unknown, string, E, hu } from "../../../vendor/zod/v4/classic/schemas.js";
+import {
+  objectSchema,
+  booleanSchema,
+  unknown,
+  stringSchema,
+  numberSchema,
+  custom,
+} from "../../../vendor/zod/v4/classic/schemas.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../analytics/growthbook.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-s61vbvea.js:513035-513067 placement
 var ABSOLUTE_PROMO_PATH_REGEX = /^\/v1(\/[a-z0-9_-]+)+$/;
@@ -18,22 +26,26 @@ var ABSOLUTE_PROMO_PATH_REGEX = /^\/v1(\/[a-z0-9_-]+)+$/;
 /**
  * 判断字符串是不是以 /v1 开头的绝对促销页面路径。
  */
-function isAbsolutePromoPath(e) {
-  return typeof e === "string" && ABSOLUTE_PROMO_PATH_REGEX.test(e);
+function isAbsolutePromoPath(path) {
+  return typeof path === "string" && ABSOLUTE_PROMO_PATH_REGEX.test(path);
 }
 //@ chunk-s61vbvea.js:513122-513294 placement
-var PROMO_STATES = ["not_claimed", "pending", "active", "expired", "claimed_elsewhere"];
-var promoStatusSchema = DoctorLazy(() =>
-  u({
-    eligible: M().default(false),
-    claimed: M().default(false),
-    state: unknown().transform(normalizePromoState).optional(),
-  }),
-);
+var PROMO_STATES; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var promoStatusSchema;
+deferInit("chunk-s61vbvea.js:513122", () => {
+  PROMO_STATES = ["not_claimed", "pending", "active", "expired", "claimed_elsewhere"];
+  promoStatusSchema = DoctorLazy(() =>
+    objectSchema({
+      eligible: booleanSchema().default(false),
+      claimed: booleanSchema().default(false),
+      state: unknown().transform(normalizePromoState).optional(),
+    }),
+  );
+});
 //@ chunk-s61vbvea.js:513294-513362 placement
 function parsePromoStatus(body) {
-  let n = promoStatusSchema().safeParse(body);
-  return n.success ? n.data : null;
+  let parsed = promoStatusSchema().safeParse(body);
+  return parsed.success ? parsed.data : null;
 }
 //@ chunk-s61vbvea.js:513362-513716 placement
 function parsePromoState({ httpStatus, body }) {
@@ -64,10 +76,10 @@ function parsePromoState({ httpStatus, body }) {
   };
 }
 //@ chunk-s61vbvea.js:513716-513840 placement
-function normalizePromoState(e) {
-  if (typeof e !== "string") return;
-  let replaced = e.toLowerCase().replace(/^[a-z_]*_state_/, "");
-  return PROMO_STATES.find((r) => r === replaced);
+function normalizePromoState(value) {
+  if (typeof value !== "string") return;
+  let replaced = value.toLowerCase().replace(/^[a-z_]*_state_/, "");
+  return PROMO_STATES.find((state) => state === replaced);
 }
 //@ chunk-s61vbvea.js:513840-513891 placement
 /**
@@ -79,21 +91,21 @@ var RELATIVE_PROMO_PATH_REGEX = /^(\/[a-z0-9_-]+)+$/;
 /**
  * 判断字符串是不是以 / 开头的相对促销页面路径。
  */
-function isRelativePromoPath(e) {
-  return typeof e === "string" && RELATIVE_PROMO_PATH_REGEX.test(e);
+function isRelativePromoPath(path) {
+  return typeof path === "string" && RELATIVE_PROMO_PATH_REGEX.test(path);
 }
 //@ chunk-s61vbvea.js:513946-514017 placement
-function joinPromoPath(e, n) {
-  return `${e.endsWith("/") ? `/${e.slice(1, -1)}` : e}/${n}`;
+function joinPromoPath(basePath, subpath) {
+  return `${basePath.endsWith("/") ? `/${basePath.slice(1, -1)}` : basePath}/${subpath}`;
 }
 //@ chunk-s61vbvea.js:514017-514099 placement
 /**
  * 把同一子路径同时追加到 web 与 desktop 两种促销路径上。
  */
-function appendPromoSubpath(e, n) {
+function appendPromoSubpath(paths, subpath) {
   return {
-    webPath: joinPromoPath(e.webPath, n),
-    desktopPath: joinPromoPath(e.desktopPath, n),
+    webPath: joinPromoPath(paths.webPath, subpath),
+    desktopPath: joinPromoPath(paths.desktopPath, subpath),
   };
 }
 //@ chunk-s61vbvea.js:514099-514171 placement
@@ -102,62 +114,77 @@ var UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$
 /**
  * 组织 id 是 UUID 时把它追加到促销路径后，否则返回原路径。
  */
-function appendOrgIdIfUuid(e, n) {
-  let r = typeof n === "string" ? n.toLowerCase() : "";
-  return UUID_REGEX.test(r) ? `${e}/${r}` : e;
+function appendOrgIdIfUuid(basePath, orgId) {
+  let normalizedOrgId = typeof orgId === "string" ? orgId.toLowerCase() : "";
+  return UUID_REGEX.test(normalizedOrgId) ? `${basePath}/${normalizedOrgId}` : basePath;
 }
 //@ chunk-s61vbvea.js:514266-514374 placement
-var MAX_PROMO_TEXT_CHARS = 120;
-var promoTextSchema = DoctorLazy(() =>
-  string()
-    .trim()
-    .min(1)
-    .max(MAX_PROMO_TEXT_CHARS)
-    .regex(/^\P{Cc}*$/u),
-);
-var DEFAULT_PROMO_STATUS_MAX_AGE_SECONDS = 3600;
-var promoStatusMaxAgeSchema = DoctorLazy(() => E().min(0).catch(DEFAULT_PROMO_STATUS_MAX_AGE_SECONDS));
+var MAX_PROMO_TEXT_CHARS; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var promoTextSchema;
+var DEFAULT_PROMO_STATUS_MAX_AGE_SECONDS;
+var promoStatusMaxAgeSchema;
+deferInit("chunk-s61vbvea.js:514266", () => {
+  MAX_PROMO_TEXT_CHARS = 120;
+  promoTextSchema = DoctorLazy(() =>
+    stringSchema()
+      .trim()
+      .min(1)
+      .max(MAX_PROMO_TEXT_CHARS)
+      .regex(/^\P{Cc}*$/u),
+  );
+  DEFAULT_PROMO_STATUS_MAX_AGE_SECONDS = 3600;
+  promoStatusMaxAgeSchema = DoctorLazy(() =>
+    numberSchema().min(0).catch(DEFAULT_PROMO_STATUS_MAX_AGE_SECONDS),
+  );
+});
 //@ chunk-s61vbvea.js:514374-514444 placement
 /**
  * 按年龄（秒）判断缓存的促销状态是否已过期。
  */
-function isPromoStale(checkedAt, n, r) {
-  if (n === 0) return false;
-  let s = r - checkedAt;
-  return s < 0 || s >= n * 1000;
+function isPromoStale(checkedAt, ttlSeconds, nowMs) {
+  if (ttlSeconds === 0) return false;
+  let ageMs = nowMs - checkedAt;
+  return ageMs < 0 || ageMs >= ttlSeconds * 1000;
 }
 //@ chunk-s61vbvea.js:514444-514610 placement
-var promoConfigSchema_2 = DoctorLazy(() =>
-  u({
-    version: E().default(0),
-    endpoint: hu(isAbsolutePromoPath),
-    webPath: hu(isRelativePromoPath),
-    desktopPath: hu(isRelativePromoPath),
-    claimLinkIncludesOrganization: M().optional(),
-    statusMaxAgeSeconds: promoStatusMaxAgeSchema(),
-  }),
-);
+var promoConfigSchema_2; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-s61vbvea.js:514444", () => {
+  promoConfigSchema_2 = DoctorLazy(() =>
+    objectSchema({
+      version: numberSchema().default(0),
+      endpoint: custom(isAbsolutePromoPath),
+      webPath: custom(isRelativePromoPath),
+      desktopPath: custom(isRelativePromoPath),
+      claimLinkIncludesOrganization: booleanSchema().optional(),
+      statusMaxAgeSeconds: promoStatusMaxAgeSchema(),
+    }),
+  );
+});
 //@ chunk-s61vbvea.js:514610-514690 placement
 /**
  * promo 配置的校验 schema。
  */
-var CLAIM_CREDIT = "claim-credit";
-var promoConfigSchema = DoctorLazy(() =>
-  u({
-    startup: u({
-      text: promoTextSchema(),
-      claimPageLine: promoTextSchema(),
+var CLAIM_CREDIT; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var promoConfigSchema;
+deferInit("chunk-s61vbvea.js:514610", () => {
+  CLAIM_CREDIT = "claim-credit";
+  promoConfigSchema = DoctorLazy(() =>
+    objectSchema({
+      startup: objectSchema({
+        text: promoTextSchema(),
+        claimPageLine: promoTextSchema(),
+      }),
     }),
-  }),
-);
+  );
+});
 //@ chunk-s61vbvea.js:514690-514856 placement
 function parsePromoConfig(featureValue_CACHED_MAY_BE_STALE) {
-  let n = promoConfigSchema_2().safeParse(featureValue_CACHED_MAY_BE_STALE);
-  if (!n.success) return null;
-  let r = promoConfigSchema().safeParse(featureValue_CACHED_MAY_BE_STALE);
+  let parsed = promoConfigSchema_2().safeParse(featureValue_CACHED_MAY_BE_STALE);
+  if (!parsed.success) return null;
+  let pageLineParsed = promoConfigSchema().safeParse(featureValue_CACHED_MAY_BE_STALE);
   return {
-    ...n.data,
-    claimPageLine: r.success ? r.data.startup.claimPageLine : null,
+    ...parsed.data,
+    claimPageLine: pageLineParsed.success ? pageLineParsed.data.startup.claimPageLine : null,
   };
 }
 //@ chunk-s61vbvea.js:514856-514928 placement

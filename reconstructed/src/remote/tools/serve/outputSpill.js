@@ -37,24 +37,31 @@ function spillServedOutput({
   maxInlineBytes = DEFAULT_MAX_INLINE_BYTES,
   maxImageBytes = DEFAULT_MAX_IMAGE_BYTES,
 }) {
-  let R = unreadableSpillNote({
+  let spillNote = unreadableSpillNote({
     targetName,
     shellToolName,
     localSpillPaths,
     localSpillDirs,
   });
-  let w = outputTruncatedNote(targetName);
-  let C = truncateResultContent(content, R, maxInlineBytes, maxImageBytes, w, targetName);
-  let P = truncateStructuredResult(output, R, maxInlineBytes, w);
+  let truncatedNote = outputTruncatedNote(targetName);
+  let contentResult = truncateResultContent(
+    content,
+    spillNote,
+    maxInlineBytes,
+    maxImageBytes,
+    truncatedNote,
+    targetName,
+  );
+  let outputResult = truncateStructuredResult(output, spillNote, maxInlineBytes, truncatedNote);
   return {
-    content: C.content,
-    output: P.value,
-    truncated: C.truncated || P.truncated,
+    content: contentResult.content,
+    output: outputResult.value,
+    truncated: contentResult.truncated || outputResult.truncated,
   };
 }
 //@ chunk-ad2e1aj6.js:18475-19037 placement
 function unreadableSpillNote({ targetName, shellToolName, localSpillPaths, localSpillDirs }) {
-  let r = `a file on ${targetName} that cannot be read from here \u2014 the command already ran on ${targetName}, so only this part of its output is out of reach. If it is safe to repeat, re-run it there with ${outputFilterHint(shellToolName)} to see the part you need`;
+  let unreadableText = `a file on ${targetName} that cannot be read from here \u2014 the command already ran on ${targetName}, so only this part of its output is out of reach. If it is safe to repeat, re-run it there with ${outputFilterHint(shellToolName)} to see the part you need`;
   let mapped = localSpillDirs
     .filter((localSpillDir) => localSpillDir.length > 0)
     .map(
@@ -65,74 +72,74 @@ function unreadableSpillNote({ targetName, shellToolName, localSpillPaths, local
         ),
     );
   let filtered = localSpillPaths.filter((localSpillPath) => localSpillPath.length > 0);
-  return (O) =>
+  return (text) =>
     mapped.reduce(
-      (acc, w) => acc.replace(w, () => r),
-      filtered.reduce((acc, w) => acc.replaceAll(w, () => r), O),
+      (acc, dirPattern) => acc.replace(dirPattern, () => unreadableText),
+      filtered.reduce((acc, path) => acc.replaceAll(path, () => unreadableText), text),
     );
 }
 //@ chunk-ad2e1aj6.js:19037-20146 placement
-function truncateResultContent(content, n, maxInlineBytes, imageRemaining, r, targetName) {
+function truncateResultContent(content, rewrite, maxBytes, imageRemaining, truncatedNote, targetName) {
   if (typeof content === "string") {
-    let R = scanPreBoundaryMetadata(n(content), maxInlineBytes, r);
+    let scanned = scanPreBoundaryMetadata(rewrite(content), maxBytes, truncatedNote);
     return {
-      content: R.text,
-      truncated: R.truncated,
+      content: scanned.text,
+      truncated: scanned.truncated,
     };
   }
   let { blocks, truncated } = content.reduce(
-    (acc, w) => {
-      if (w.type === "image") {
-        let P = w.source.type === "base64" ? w.source.data.length : undefined;
-        if (P === undefined || P > acc.imageRemaining) {
-          let x =
-            P === undefined
+    (acc, block) => {
+      if (block.type === "image") {
+        let imageBytes = block.source.type === "base64" ? block.source.data.length : undefined;
+        if (imageBytes === undefined || imageBytes > acc.imageRemaining) {
+          let omittedNote =
+            imageBytes === undefined
               ? `(an image referenced by URL was omitted on ${targetName})`
               : `(an image was omitted on ${targetName}: too large to return)`;
           acc.blocks.push({
             type: "text",
-            text: x,
+            text: omittedNote,
           });
           return {
             ...acc,
-            remaining: Math.max(0, acc.remaining - Buffer.byteLength(x)),
+            remaining: Math.max(0, acc.remaining - Buffer.byteLength(omittedNote)),
             truncated: true,
           };
         }
-        acc.blocks.push(w);
+        acc.blocks.push(block);
         return {
           ...acc,
-          imageRemaining: acc.imageRemaining - P,
+          imageRemaining: acc.imageRemaining - imageBytes,
         };
       }
-      if (w.type !== "text") {
-        let P = `(a ${w.type} block was omitted on ${targetName})`;
+      if (block.type !== "text") {
+        let omittedNote = `(a ${block.type} block was omitted on ${targetName})`;
         acc.blocks.push({
           type: "text",
-          text: P,
+          text: omittedNote,
         });
         return {
           ...acc,
-          remaining: Math.max(0, acc.remaining - Buffer.byteLength(P)),
+          remaining: Math.max(0, acc.remaining - Buffer.byteLength(omittedNote)),
           truncated: true,
         };
       }
       if (acc.remaining === 0 && acc.truncated) return acc;
-      let C = scanPreBoundaryMetadata(n(w.text), acc.remaining, r);
+      let scanned = scanPreBoundaryMetadata(rewrite(block.text), acc.remaining, truncatedNote);
       acc.blocks.push({
-        ...w,
-        text: C.text,
+        ...block,
+        text: scanned.text,
       });
       return {
         blocks: acc.blocks,
-        remaining: Math.max(0, acc.remaining - Buffer.byteLength(C.text)),
+        remaining: Math.max(0, acc.remaining - Buffer.byteLength(scanned.text)),
         imageRemaining: acc.imageRemaining,
-        truncated: acc.truncated || C.truncated,
+        truncated: acc.truncated || scanned.truncated,
       };
     },
     {
       blocks: [],
-      remaining: maxInlineBytes,
+      remaining: maxBytes,
       imageRemaining,
       truncated: false,
     },
@@ -143,128 +150,139 @@ function truncateResultContent(content, n, maxInlineBytes, imageRemaining, r, ta
   };
 }
 //@ chunk-ad2e1aj6.js:20146-20920 placement
-function truncateStructuredResult(output, n, maxInlineBytes, h) {
-  let r = {
+function truncateStructuredResult(output, rewrite, maxInlineBytes, truncatedNote) {
+  let budget = {
     remaining: maxInlineBytes,
     entriesRemaining: MAX_TOTAL_ENTRIES,
     markerSpent: false,
     floorsGranted: 0,
   };
   if (typeof output !== "object" || output === null || Array.isArray(output))
-    return truncateJsonValue(output, n, r, h, 0);
+    return truncateJsonValue(output, rewrite, budget, truncatedNote, 0);
   if (Reflect.get(output, "isImage") === true)
     return {
       value: undefined,
       truncated: false,
     };
   let any = Object.entries(output).some(([key, value]) => PERSISTED_OUTPUT_FIELDS.has(key) && Boolean(value));
-  let y = Reflect.get(output, "persistedOutputSize");
-  let O = typeof y === "number" && Number.isSafeInteger(y) && y > 0 ? [[SPILLEDOUTPUTBYTES, y]] : [];
+  let persistedSize = Reflect.get(output, "persistedOutputSize");
+  let sizeEntry =
+    typeof persistedSize === "number" && Number.isSafeInteger(persistedSize) && persistedSize > 0
+      ? [[SPILLEDOUTPUTBYTES, persistedSize]]
+      : [];
   let min = Math.min(MAX_FLOOR_BYTES, maxInlineBytes);
-  let w = truncateObjectEntries(
-    [...Object.entries(output).filter(([key]) => !PERSISTED_OUTPUT_FIELDS.has(key)), ...O],
-    n,
-    r,
-    (P) => (typeof P === "string" ? truncateString(P, n, r, h, min) : truncateJsonValue(P, n, r, h, 1)),
+  let entries = truncateObjectEntries(
+    [...Object.entries(output).filter(([key]) => !PERSISTED_OUTPUT_FIELDS.has(key)), ...sizeEntry],
+    rewrite,
+    budget,
+    (value) =>
+      typeof value === "string"
+        ? truncateString(value, rewrite, budget, truncatedNote, min)
+        : truncateJsonValue(value, rewrite, budget, truncatedNote, 1),
   );
-  let mapped = w.entries.map(([P, x]) =>
-    any && P === "stdout" && typeof x.value === "string" && !x.truncated
+  let mapped = entries.entries.map(([key, entry]) =>
+    any && key === "stdout" && typeof entry.value === "string" && !entry.truncated
       ? [
-          P,
+          key,
           {
-            value: `${x.value}${h}`,
+            value: `${entry.value}${truncatedNote}`,
             truncated: true,
           },
         ]
-      : [P, x],
+      : [key, entry],
   );
   return {
-    value: Object.fromEntries(mapped.map(([P, x]) => [P, x.value])),
-    truncated: w.truncated || mapped.some(([, P]) => P.truncated),
+    value: Object.fromEntries(mapped.map(([key, entry]) => [key, entry.value])),
+    truncated: entries.truncated || mapped.some(([, entry]) => entry.truncated),
   };
 }
 //@ chunk-ad2e1aj6.js:20920-21092 placement
-function truncateObjectEntries(e, n, s, h) {
-  let r = takeEntriesWithinBudget(e, s);
-  let i = new Set();
-  let y = false;
+function truncateObjectEntries(entries, rewrite, budget, convert) {
+  let taken = takeEntriesWithinBudget(entries, budget);
+  let usedNames = new Set();
+  let renamed = false;
   return {
-    entries: r.map(([R, w]) => {
-      let C = uniqueSpillName(spillNameWithBudget(R, n, s), i);
-      y ||= C !== R;
-      i.add(C);
-      return [C, h(w)];
+    entries: taken.map(([key, value]) => {
+      let newKey = uniqueSpillName(spillNameWithBudget(key, rewrite, budget), usedNames);
+      renamed ||= newKey !== key;
+      usedNames.add(newKey);
+      return [newKey, convert(value)];
     }),
-    truncated: r.length < e.length || y,
+    truncated: taken.length < entries.length || renamed,
   };
 }
 //@ chunk-ad2e1aj6.js:21092-21631 placement
-function truncateJsonValue(e, n, s, h, r) {
-  if (typeof e === "string") return truncateString(e, n, s, h, 0);
-  if (typeof e !== "object" || e === null) {
-    consumeBudget(s, Buffer.byteLength(String(e)));
+function truncateJsonValue(value, rewrite, budget, truncatedNote, depth) {
+  if (typeof value === "string") return truncateString(value, rewrite, budget, truncatedNote, 0);
+  if (typeof value !== "object" || value === null) {
+    consumeBudget(budget, Buffer.byteLength(String(value)));
     return {
-      value: e,
+      value,
       truncated: false,
     };
   }
-  if (r >= MAX_JSON_DEPTH)
+  if (depth >= MAX_JSON_DEPTH)
     return {
       value: undefined,
       truncated: true,
     };
-  if (Array.isArray(e)) {
-    let mapped = takeEntriesWithinBudget(e, s).map((O) => truncateJsonValue(O, n, s, h, r + 1));
+  if (Array.isArray(value)) {
+    let mapped = takeEntriesWithinBudget(value, budget).map((item) =>
+      truncateJsonValue(item, rewrite, budget, truncatedNote, depth + 1),
+    );
     return {
-      value: mapped.map((O) => O.value),
-      truncated: mapped.length < e.length || mapped.some((O) => O.truncated),
+      value: mapped.map((item) => item.value),
+      truncated: mapped.length < value.length || mapped.some((item) => item.truncated),
     };
   }
-  let i = truncateObjectEntries(Object.entries(e), n, s, (y) => truncateJsonValue(y, n, s, h, r + 1));
+  let entries = truncateObjectEntries(Object.entries(value), rewrite, budget, (value) =>
+    truncateJsonValue(value, rewrite, budget, truncatedNote, depth + 1),
+  );
   return {
-    value: Object.fromEntries(i.entries.map(([y, O]) => [y, O.value])),
-    truncated: i.truncated || i.entries.some(([, y]) => y.truncated),
+    value: Object.fromEntries(entries.entries.map(([key, entry]) => [key, entry.value])),
+    truncated: entries.truncated || entries.entries.some(([, entry]) => entry.truncated),
   };
 }
 //@ chunk-ad2e1aj6.js:21631-21996 placement
-function truncateString(e, n, s, h, r) {
-  let i = r > 0 && s.floorsGranted < MAX_FLOORS_GRANTED;
-  let y = i ? Math.max(s.remaining, r) : s.remaining;
-  let O = n(e);
-  if (y === 0 && s.markerSpent)
+function truncateString(text, rewrite, budget, truncatedNote, floorBytes) {
+  let canGrantFloor = floorBytes > 0 && budget.floorsGranted < MAX_FLOORS_GRANTED;
+  let allowedBytes = canGrantFloor ? Math.max(budget.remaining, floorBytes) : budget.remaining;
+  let rewritten = rewrite(text);
+  if (allowedBytes === 0 && budget.markerSpent)
     return {
       value: "",
-      truncated: O.length > 0,
+      truncated: rewritten.length > 0,
     };
-  let R = scanPreBoundaryMetadata(O, y, s.markerSpent ? "" : h);
-  if (R.truncated) s.markerSpent = true;
-  let w = Buffer.byteLength(R.text);
-  if (i && y > s.remaining && w > s.remaining) s.floorsGranted += 1;
-  consumeBudget(s, w);
+  let scanned = scanPreBoundaryMetadata(rewritten, allowedBytes, budget.markerSpent ? "" : truncatedNote);
+  if (scanned.truncated) budget.markerSpent = true;
+  let byteCount = Buffer.byteLength(scanned.text);
+  if (canGrantFloor && allowedBytes > budget.remaining && byteCount > budget.remaining)
+    budget.floorsGranted += 1;
+  consumeBudget(budget, byteCount);
   return {
-    value: R.text,
-    truncated: R.truncated,
+    value: scanned.text,
+    truncated: scanned.truncated,
   };
 }
 //@ chunk-ad2e1aj6.js:21996-22100 placement
-function takeEntriesWithinBudget(e, n) {
-  let sliced = e.slice(0, Math.min(MAX_ENTRIES_PER_LEVEL, n.entriesRemaining));
-  n.entriesRemaining -= sliced.length;
+function takeEntriesWithinBudget(entries, budget) {
+  let sliced = entries.slice(0, Math.min(MAX_ENTRIES_PER_LEVEL, budget.entriesRemaining));
+  budget.entriesRemaining -= sliced.length;
   return sliced;
 }
 //@ chunk-ad2e1aj6.js:22100-22179 placement
-function uniqueSpillName(e, n, s = 1) {
-  let h = s === 1 ? e : `${e} (${s})`;
-  return n.has(h) ? uniqueSpillName(e, n, s + 1) : h;
+function uniqueSpillName(name, used, suffix = 1) {
+  let candidate = suffix === 1 ? name : `${name} (${suffix})`;
+  return used.has(candidate) ? uniqueSpillName(name, used, suffix + 1) : candidate;
 }
 //@ chunk-ad2e1aj6.js:22179-22252 placement
-function spillNameWithBudget(e, n, s) {
-  let h = truncateToLength(n(e), MAX_KEY_CHARS);
-  consumeBudget(s, Buffer.byteLength(h));
-  return h;
+function spillNameWithBudget(key, rewrite, budget) {
+  let clipped = truncateToLength(rewrite(key), MAX_KEY_CHARS);
+  consumeBudget(budget, Buffer.byteLength(clipped));
+  return clipped;
 }
 //@ chunk-ad2e1aj6.js:22252-22307 placement
-function consumeBudget(e, n) {
-  e.remaining = Math.max(0, e.remaining - n);
+function consumeBudget(budget, bytes) {
+  budget.remaining = Math.max(0, budget.remaining - bytes);
 }
 export { spillServedOutput, unreadableSpillNote };

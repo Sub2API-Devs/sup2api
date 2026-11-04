@@ -12,6 +12,11 @@ import { FILE_READ_TOOL_NAME } from "../FileReadTool/constants.js";
 import { leanPromptOf } from "../../utils/model/promptBundles.js";
 import { FILE_EDIT_TOOL_NAME } from "../FileEditTool/constants.js";
 
+//@ chunk-bwbq4xvm.js:176155-176170 fingerprint = FILE_WRITE_TOOL_NAME (1)
+/**
+ * Write 工具名 "Write"。
+ */
+var FILE_WRITE_TOOL_NAME = "Write";
 //@ chunk-g54kbxqw.js:135755-135928 fingerprint = getPreReadInstruction (1)
 /**
  * Write 提示词里"已有文件必须先 Read"一行。
@@ -42,9 +47,4 @@ Usage:
 - NEVER create documentation files (*.md) or README files unless explicitly requested by the User.
 - Only use emojis if the user explicitly requests it. Avoid writing emojis to files unless asked.`;
 }
-//@ chunk-bwbq4xvm.js:176155-176170 fingerprint = FILE_WRITE_TOOL_NAME (1)
-/**
- * Write 工具名 "Write"。
- */
-var FILE_WRITE_TOOL_NAME = "Write";
 export { FILE_WRITE_TOOL_NAME, getWriteToolDescription };

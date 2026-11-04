@@ -10,41 +10,41 @@
  */
 
 //@ chunk-s67vc0kc.js:1066-1196 placement = UNDERLINE_STYLES (0.497)
-function quoteKind(e) {
-  if (e === "'" || (e >= "\u2018" && e <= "\u201B")) return "single";
-  if (e === '"' || (e >= "\u201C" && e <= "\u201E")) return "double";
+function quoteKind(char) {
+  if (char === "'" || (char >= "\u2018" && char <= "\u201B")) return "single";
+  if (char === '"' || (char >= "\u201C" && char <= "\u201E")) return "double";
   return null;
 }
 //@ chunk-s67vc0kc.js:1196-1510 fingerprint = createSingleEditDiffConfig (0.38)
-function createSingleEditDiffConfig(e) {
-  let t = "";
-  let n = null;
-  for (let idx = 0; idx < e.length; idx++) {
-    let a = e[idx];
-    if (a === "`") {
-      if (n === "single") t += "``";
-      else if (idx + 1 < e.length) {
-        t += a + e[idx + 1];
+function createSingleEditDiffConfig(text) {
+  let out = "";
+  let openQuote = null;
+  for (let idx = 0; idx < text.length; idx++) {
+    let char = text[idx];
+    if (char === "`") {
+      if (openQuote === "single") out += "``";
+      else if (idx + 1 < text.length) {
+        out += char + text[idx + 1];
         idx++;
-      } else t += a;
+      } else out += char;
       continue;
     }
-    let s = quoteKind(a);
-    if (n === null) {
-      if (s !== null) {
-        n = s;
+    let kind = quoteKind(char);
+    if (openQuote === null) {
+      if (kind !== null) {
+        openQuote = kind;
         continue;
       }
-      t += a;
-    } else if (s === n) {
-      if (idx + 1 < e.length && quoteKind(e[idx + 1]) === s) {
-        t += e[idx + 1];
+      out += char;
+    } else if (kind === openQuote) {
+      if (idx + 1 < text.length && quoteKind(text[idx + 1]) === kind) {
+        out += text[idx + 1];
         idx++;
         continue;
       }
-      n = null;
-    } else t += a;
+      openQuote = null;
+    } else out += char;
   }
-  return t;
+  return out;
 }
 export { createSingleEditDiffConfig };

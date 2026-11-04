@@ -21,26 +21,26 @@ import { withTimeout } from "../../utils/sleep.js";
 import { listJobs } from "../../services/daemon/jobState.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { errorMessage } from "../../utils/errors.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { ConfirmSelect } from "../../components/design-system/ConfirmSelect.js";
 import { Dialog } from "../../components/design-system/Dialog.js";
 
 //@ chunk-18hwfzwa.js:60922-61089 placement
-function sendDetachRequest(h) {
+function sendDetachRequest(options) {
   if (!isDaemonBgWorker()) return;
-  let x = h?.message ?? formatDetachedTaskNotice();
+  let message = options?.message ?? formatDetachedTaskNotice();
   if (
     sendRv({
       type: "detach-request",
-      msg: x,
-      broadcast: h?.broadcast,
+      msg: message,
+      broadcast: options?.broadcast,
     })
   ) {
     markDetachedSinceAttach();
     return;
   }
-  process.stdout.write(daemonDetachApc(x));
+  process.stdout.write(daemonDetachApc(message));
   markDetachedSinceAttach();
 }
 //@ chunk-18hwfzwa.js:61089-61113 placement
@@ -58,7 +58,7 @@ function alwaysFalseB() {
 /**
  * 导出函数 `noopBackgroundConfirm`：参数 h。
  */
-function noopBackgroundConfirm(h) {
+function noopBackgroundConfirm(request) {
   return;
 }
 //@ chunk-18hwfzwa.js:61160-61202 placement
@@ -68,15 +68,15 @@ var LIST_JOBS_TIMEOUT_MS = 1500;
 /**
  * 解析 “名字 (N)” 的基名与代数。
  */
-function parseGenerationSuffix(h) {
-  let match = SEED_NAME_WITH_COUNT_RE.exec(h);
+function parseGenerationSuffix(name) {
+  let match = SEED_NAME_WITH_COUNT_RE.exec(name);
   return match
     ? {
         base: match[1],
         generation: Number(match[2]),
       }
     : {
-        base: h,
+        base: name,
         generation: 1,
       };
 }
@@ -84,67 +84,68 @@ function parseGenerationSuffix(h) {
 /**
  * 名称已被占用时生成 “基名 (N)” 的新名字。
  */
-function uniqueSeedName(name, x) {
-  let D = slugifySessionName(name);
+function uniqueSeedName(name, takenNames) {
+  let slug = slugifySessionName(name);
   let { base } = parseGenerationSuffix(name);
-  let ee = slugifySessionName(base);
-  let ke = new Set();
-  let Re = 1;
-  for (let He of x) {
-    ke.add(slugifySessionName(He));
-    let generationSuffix = parseGenerationSuffix(He);
-    if (slugifySessionName(generationSuffix.base) === ee) Re = Math.max(Re, generationSuffix.generation);
+  let baseSlug = slugifySessionName(base);
+  let takenSlugs = new Set();
+  let maxGeneration = 1;
+  for (let takenName of takenNames) {
+    takenSlugs.add(slugifySessionName(takenName));
+    let generationSuffix = parseGenerationSuffix(takenName);
+    if (slugifySessionName(generationSuffix.base) === baseSlug)
+      maxGeneration = Math.max(maxGeneration, generationSuffix.generation);
   }
-  if (!ke.has(D)) return name;
-  let Be = redactSecrets(collapseWhitespace(base));
-  for (let idx = Re + 1; ; idx++) {
-    let We = ` (${idx})`;
-    let ze = `${truncateToLength(Be, MAX_SEED_NAME_CHARS - We.length)}${We}`;
-    if (!ke.has(slugifySessionName(ze))) return ze;
+  if (!takenSlugs.has(slug)) return name;
+  let safeBase = redactSecrets(collapseWhitespace(base));
+  for (let idx = maxGeneration + 1; ; idx++) {
+    let suffix = ` (${idx})`;
+    let candidate = `${truncateToLength(safeBase, MAX_SEED_NAME_CHARS - suffix.length)}${suffix}`;
+    if (!takenSlugs.has(slugifySessionName(candidate))) return candidate;
   }
 }
 //@ chunk-18hwfzwa.js:61615-61924 placement
-async function settleSeedName(h, x) {
-  if (!h.name) return h;
-  let D;
+async function settleSeedName(seed, store) {
+  if (!seed.name) return seed;
+  let existingNames;
   try {
-    D = (await withTimeout(listJobs(undefined, x), LIST_JOBS_TIMEOUT_MS, "seed name settle")).flatMap((ke) =>
-      ke.state.name ? [ke.state.name] : [],
-    );
+    existingNames = (
+      await withTimeout(listJobs(undefined, store), LIST_JOBS_TIMEOUT_MS, "seed name settle")
+    ).flatMap((job) => (job.state.name ? [job.state.name] : []));
   } catch (error) {
     logForDebugging(`[background] seed name settle skipped: ${errorMessage(error)}`);
-    return h;
+    return seed;
   }
-  let L = uniqueSeedName(h.name, D);
-  if (L === h.name) return h;
+  let settledName = uniqueSeedName(seed.name, existingNames);
+  if (settledName === seed.name) return seed;
   return {
-    ...h,
-    name: L,
+    ...seed,
+    name: settledName,
     nameSource: "collision",
   };
 }
 //@ chunk-18hwfzwa.js:61924-62182 placement
-function artifactRepliesStopNotice(h) {
-  if (h === 0) return "";
-  return `Automatic replies to ${h === 1 ? "Artifact comments" : `comments on ${h} Artifacts`} keep going in the background session, where you won't see each reply as it's posted. You'll see a summary of the replies when you return.`;
+function artifactRepliesStopNotice(artifactCount) {
+  if (artifactCount === 0) return "";
+  return `Automatic replies to ${artifactCount === 1 ? "Artifact comments" : `comments on ${artifactCount} Artifacts`} keep going in the background session, where you won't see each reply as it's posted. You'll see a summary of the replies when you return.`;
 }
 //@ chunk-18hwfzwa.js:62182-62507 placement
 function describeCarriedTasks({ running, finished, rerun }) {
   if (running === 0) return "";
-  let L =
+  let finishedNotice =
     finished > 0
       ? `; ${finished} finished ${plural(finished, "subagent")} ${finished === 1 ? "is" : "are"} kept`
       : "";
-  let ee =
+  let rerunNotice =
     rerun > 0 ? `; ${rerun} that finished after a failed one ${rerun === 1 ? "runs" : "run"} again` : "";
-  return `${running} running workflow ${plural(running, "subagent")} ${running === 1 ? "restarts" : "restart"} from the beginning${L}${ee}.`;
+  return `${running} running workflow ${plural(running, "subagent")} ${running === 1 ? "restarts" : "restart"} from the beginning${finishedNotice}${rerunNotice}.`;
 }
 //@ chunk-18hwfzwa.js:62507-62719 placement
-function backgroundAnywayLabel(h, workflowAgents) {
-  if (h) return "Background anyway (tasks will be stopped)";
-  let D = workflowAgents.running + workflowAgents.rerun;
+function backgroundAnywayLabel(tasksWillStop, workflowAgents) {
+  if (tasksWillStop) return "Background anyway (tasks will be stopped)";
+  let subagentCount = workflowAgents.running + workflowAgents.rerun;
   if (workflowAgents.running > 0)
-    return `Background anyway (${D} ${plural(D, "subagent")} ${D === 1 ? "restarts" : "restart"})`;
+    return `Background anyway (${subagentCount} ${plural(subagentCount, "subagent")} ${subagentCount === 1 ? "restarts" : "restart"})`;
   return "Background";
 }
 //@ chunk-18hwfzwa.js:62719-63754 placement
@@ -152,40 +153,45 @@ function backgroundAnywayLabel(h, workflowAgents) {
  * 后台化（← 进入 agents 视图 / /background）前的确认对话框：列出将被停止的任务与可带到后台会话的任务数，选项 Stay / Background anyway。
  */
 function BackgroundConfirmDialog(props) {
-  let $ = w(20);
+  let $ = useMemoCache(20);
   let { summary, carryOverCount, monitorParkCount, workflowAgents, onConfirm, onCancel } = props;
-  const Be = summary ? `${summary} running \u2014 they will be stopped.` : "";
-  let We;
+  const summaryNotice = summary ? `${summary} running \u2014 they will be stopped.` : "";
+  let artifactNotice;
   if ($[0] !== monitorParkCount) {
-    We = artifactRepliesStopNotice(monitorParkCount);
+    artifactNotice = artifactRepliesStopNotice(monitorParkCount);
     $[0] = monitorParkCount;
-    $[1] = We;
-  } else We = $[1];
-  const ze =
+    $[1] = artifactNotice;
+  } else artifactNotice = $[1];
+  const taskNotice =
     carryOverCount > 0
       ? `${carryOverCount} ${carryOverCount === 1 ? "task carries" : "tasks carry"} over to the background session.`
       : "";
-  let Xe;
+  let carriedTasksNotice;
   if ($[2] !== workflowAgents) {
-    Xe = describeCarriedTasks(workflowAgents);
+    carriedTasksNotice = describeCarriedTasks(workflowAgents);
     $[2] = workflowAgents;
-    $[3] = Xe;
-  } else Xe = $[3];
-  let rt;
-  if ($[4] !== Be || $[5] !== We || $[6] !== ze || $[7] !== Xe) {
-    rt = [Be, We, ze, Xe].filter(Boolean);
-    $[4] = Be;
-    $[5] = We;
-    $[6] = ze;
-    $[7] = Xe;
-    $[8] = rt;
-  } else rt = $[8];
-  const subtitle = rt.join(" ");
-  const It = summary !== "";
+    $[3] = carriedTasksNotice;
+  } else carriedTasksNotice = $[3];
+  let notices;
+  if (
+    $[4] !== summaryNotice ||
+    $[5] !== artifactNotice ||
+    $[6] !== taskNotice ||
+    $[7] !== carriedTasksNotice
+  ) {
+    notices = [summaryNotice, artifactNotice, taskNotice, carriedTasksNotice].filter(Boolean);
+    $[4] = summaryNotice;
+    $[5] = artifactNotice;
+    $[6] = taskNotice;
+    $[7] = carriedTasksNotice;
+    $[8] = notices;
+  } else notices = $[8];
+  const subtitle = notices.join(" ");
+  const hasSummary = summary !== "";
   let confirmLabel;
-  if ($[9] !== It || $[10] !== workflowAgents) {
-    confirmLabel = backgroundAnywayLabel(It, workflowAgents);
-    $[9] = It;
+  if ($[9] !== hasSummary || $[10] !== workflowAgents) {
+    confirmLabel = backgroundAnywayLabel(hasSummary, workflowAgents);
+    $[9] = hasSummary;
     $[10] = workflowAgents;
     $[11] = confirmLabel;
   } else confirmLabel = $[11];
@@ -202,9 +208,9 @@ function BackgroundConfirmDialog(props) {
     $[14] = confirmLabel;
     $[15] = children;
   } else children = $[15];
-  let Dt;
+  let dialog;
   if ($[16] !== onCancel || $[17] !== subtitle || $[18] !== children) {
-    Dt = jsxProd_default(Dialog, {
+    dialog = jsxProd_default(Dialog, {
       title: "Background this session?",
       subtitle,
       onCancel,
@@ -213,13 +219,13 @@ function BackgroundConfirmDialog(props) {
     $[16] = onCancel;
     $[17] = subtitle;
     $[18] = children;
-    $[19] = Dt;
-  } else Dt = $[19];
-  return Dt;
+    $[19] = dialog;
+  } else dialog = $[19];
+  return dialog;
 }
 //@ chunk-18hwfzwa.js:63754-63795 placement
-function selectSessionEffort(mr) {
-  return mr.sessionEffort;
+function selectSessionEffort(state) {
+  return state.sessionEffort;
 }
 export {
   sendDetachRequest,

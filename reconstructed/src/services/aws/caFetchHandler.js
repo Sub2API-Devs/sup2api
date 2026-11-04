@@ -8,7 +8,7 @@
  * pieces: chunk-aepeg2w5.js (2)
  * attribution: placement 2
  */
-import { Re } from "../../../runtime/bun-runtime.js";
+import { __toESM } from "../../../runtime/bun-runtime.js";
 import { require_fetch_http_handler } from "../../../vendor/@smithy/fetch-http-handler/dist-cjs/index.js";
 import { require_protocol_http } from "../../../vendor/@smithy/protocol-http/dist-cjs/index.js";
 import { require_querystring_builder } from "../../../vendor/@smithy/querystring-builder/dist-cjs/index.js";
@@ -17,9 +17,9 @@ import { require_querystring_builder } from "../../../vendor/@smithy/querystring
 /**
  * 懒加载的 @smithy/querystring-builder 模块（拼接请求查询串）。
  */
-var fetchHttpHandlerModule = Re(require_fetch_http_handler(), 1);
-var protocolHttpModule = Re(require_protocol_http(), 1);
-var querystringBuilderModule = Re(require_querystring_builder(), 1);
+var fetchHttpHandlerModule = __toESM(require_fetch_http_handler(), 1);
+var protocolHttpModule = __toESM(require_protocol_http(), 1);
+var querystringBuilderModule = __toESM(require_querystring_builder(), 1);
 //@ chunk-aepeg2w5.js:486565-487365 placement
 /**
  * 带自定义 CA 的 AWS SDK fetch 处理器。
@@ -30,23 +30,26 @@ class CaFetchHttpHandler extends fetchHttpHandlerModule.FetchHttpHandler {
     super();
     this.caList = caList;
   }
-  async handle(e, { abortSignal: n, requestTimeout: r } = {}) {
-    let s = querystringBuilderModule.buildQueryString(e.query || {});
-    let h = e.username != null || e.password != null ? `${e.username ?? ""}:${e.password ?? ""}@` : "";
-    let body = e.method === "GET" || e.method === "HEAD" ? undefined : e.body;
+  async handle(request, { abortSignal, requestTimeout } = {}) {
+    let queryString = querystringBuilderModule.buildQueryString(request.query || {});
+    let userinfo =
+      request.username != null || request.password != null
+        ? `${request.username ?? ""}:${request.password ?? ""}@`
+        : "";
+    let body = request.method === "GET" || request.method === "HEAD" ? undefined : request.body;
     let response = await fetch(
       new Request(
-        `${e.protocol}//${h}${e.hostname}${e.port ? `:${e.port}` : ""}${e.path}${s && `?${s}`}${e.fragment ? `#${e.fragment}` : ""}`,
+        `${request.protocol}//${userinfo}${request.hostname}${request.port ? `:${request.port}` : ""}${request.path}${queryString && `?${queryString}`}${request.fragment ? `#${request.fragment}` : ""}`,
         {
           body,
-          headers: new Headers(e.headers),
-          method: e.method,
+          headers: new Headers(request.headers),
+          method: request.method,
           ...(body && {
             duplex: "half",
           }),
           signal: AbortSignal.any([
-            ...(n instanceof AbortSignal ? [n] : []),
-            ...(r ? [AbortSignal.timeout(r)] : []),
+            ...(abortSignal instanceof AbortSignal ? [abortSignal] : []),
+            ...(requestTimeout ? [AbortSignal.timeout(requestTimeout)] : []),
           ]),
         },
       ),

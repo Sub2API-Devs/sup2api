@@ -9,16 +9,23 @@
  * attribution: placement 2, fingerprint 1
  */
 import { isDeepStrictEqual } from "util";
-import { init_react_production, y, ce } from "../../../vendor/react/cjs/react.production.js";
+import { init_react_production, useState, useCallback } from "../../../vendor/react/cjs/react.production.js";
 import { useLatestState } from "./option-map.js";
 import { useSelectNavigation } from "./use-select-navigation.js";
 import { useRegisterOverlay } from "../../context/overlayContext.js";
 import { normalizeFullWidthDigits_2, replaceIdeographicSpace } from "../../utils/stringUtils.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-nq7jz8ya.js:608-612 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-nq7jz8ya.js:608", () => {
+  init_react_production();
+});
 //@ chunk-nq7jz8ya.js:612-616 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-nq7jz8ya.js:612", () => {
+  init_react_production();
+});
 //@ chunk-nq7jz8ya.js:658-3281 fingerprint = useMultiSelectState (0.639)
 function useMultiSelectState({
   isDisabled = false,
@@ -34,32 +41,34 @@ function useMultiSelectState({
   hideIndexes = false,
   refuseSubmitFocus,
 }) {
-  let [J, T, selectedValues] = useLatestState(defaultValue);
-  let [N, V, z] = useLatestState(false);
-  let [lastOptions, setLastOptions] = y(options);
+  let [selectedValues, setSelectedValues, selectedValues_2] = useLatestState(defaultValue);
+  let [isSubmitFocused, setIsSubmitFocused, getIsSubmitFocused] = useLatestState(false);
+  let [lastOptions, setLastOptions] = useState(options);
   if (options !== lastOptions && !isDeepStrictEqual(options, lastOptions)) {
-    T(defaultValue);
+    setSelectedValues(defaultValue);
     setLastOptions(options);
   }
-  let [D, Q] = y(() => {
+  let [inputValues, setInputValues] = useState(() => {
     let initialMap = new Map();
     options.forEach((option) => {
       if (option.type === "input" && option.initialValue) initialMap.set(option.value, option.initialValue);
     });
     return initialMap;
   });
-  let updateSelectedValues = ce(
+  let updateSelectedValues = useCallback(
     (values) => {
-      let newValues = typeof values === "function" ? values(selectedValues()) : values;
+      let newValues = typeof values === "function" ? values(selectedValues_2()) : values;
       if (onChange?.(newValues) === false) return;
-      T(newValues);
+      setSelectedValues(newValues);
     },
-    [selectedValues, T, onChange],
+    [selectedValues_2, setSelectedValues, onChange],
   );
-  let C = ce(
-    (t) => {
-      if (options.find((option) => option.value === t)?.disabled === true) return;
-      updateSelectedValues((a) => (a.includes(t) ? a.filter((v) => v !== t) : [...a, t]));
+  let toggleValue = useCallback(
+    (value) => {
+      if (options.find((option) => option.value === value)?.disabled === true) return;
+      updateSelectedValues((previous) =>
+        previous.includes(value) ? previous.filter((v) => v !== value) : [...previous, value],
+      );
     },
     [options, updateSelectedValues],
   );
@@ -69,12 +78,12 @@ function useMultiSelectState({
     onFocus,
   });
   useRegisterOverlay("multi-select");
-  let updateInputValue = ce(
+  let updateInputValue = useCallback(
     (value, inputValue) => {
       let found = options.find((opt) => opt.value === value);
       if (found?.type === "input" && found.onChange(inputValue) === false) return;
-      Q((b) => {
-        let next = new Map(b);
+      setInputValues((previous) => {
+        let next = new Map(previous);
         next.set(value, inputValue);
         return next;
       });
@@ -90,29 +99,29 @@ function useMultiSelectState({
   return {
     ...navigation,
     focusOption: (opt) => {
-      V(false);
+      setIsSubmitFocused(false);
       navigation.focusOption(opt);
     },
     scrollViewport: (prev) => {
       let focusedValue = navigation.getFocusedValue();
-      let f = navigation.scrollViewport(prev);
-      if (navigation.getFocusedValue() !== focusedValue) V(false);
-      return f;
+      let scrolled = navigation.scrollViewport(prev);
+      if (navigation.getFocusedValue() !== focusedValue) setIsSubmitFocused(false);
+      return scrolled;
     },
-    selectedValues: J,
-    getSelectedValues: selectedValues,
-    inputValues: D,
-    isSubmitFocused: N,
+    selectedValues,
+    getSelectedValues: selectedValues_2,
+    inputValues,
+    isSubmitFocused,
     updateInputValue,
-    toggleValue: C,
+    toggleValue,
     onCancel,
     handleKeyDown: (event) => {
       if (isDisabled) return;
       let normalizedInput = normalizeFullWidthDigits_2(event.key);
       let focusedValue = navigation.getFocusedValue();
-      let F = options.find((opt) => opt.value === focusedValue)?.type === "input";
-      let h = z();
-      if (F) {
+      let isInputOption = options.find((opt) => opt.value === focusedValue)?.type === "input";
+      let submitFocused = getIsSubmitFocused();
+      if (isInputOption) {
         if (!(
           event.key === "up" ||
           event.key === "down" ||
@@ -126,16 +135,16 @@ function useMultiSelectState({
       let lastOptionValue = options.at(-1)?.value;
       if (event.key === "tab" && !event.shift) {
         event.preventDefault();
-        if (submitButtonText && onSubmit && focusedValue === lastOptionValue && !h) {
+        if (submitButtonText && onSubmit && focusedValue === lastOptionValue && !submitFocused) {
           if (refuseSubmitFocus?.()) return;
-          V(true);
-        } else if (!h) navigation.focusNextOption();
+          setIsSubmitFocused(true);
+        } else if (!submitFocused) navigation.focusNextOption();
         return;
       }
       if (event.key === "tab" && event.shift) {
         event.preventDefault();
-        if (submitButtonText && onSubmit && h) {
-          V(false);
+        if (submitButtonText && onSubmit && submitFocused) {
+          setIsSubmitFocused(false);
           navigation.focusOption(lastOptionValue);
         } else navigation.focusPreviousOption();
         return;
@@ -146,13 +155,13 @@ function useMultiSelectState({
         (!event.ctrl && !event.shift && event.key === "j")
       ) {
         event.preventDefault();
-        if (h && onDownFromLastItem) onDownFromLastItem();
-        else if (submitButtonText && onSubmit && focusedValue === lastOptionValue && !h) {
+        if (submitFocused && onDownFromLastItem) onDownFromLastItem();
+        else if (submitButtonText && onSubmit && focusedValue === lastOptionValue && !submitFocused) {
           if (refuseSubmitFocus?.()) return;
-          V(true);
+          setIsSubmitFocused(true);
         } else if (!submitButtonText && onDownFromLastItem && focusedValue === lastOptionValue)
           onDownFromLastItem();
-        else if (!h) navigation.focusNextOption();
+        else if (!submitFocused) navigation.focusNextOption();
         return;
       }
       if (
@@ -161,8 +170,8 @@ function useMultiSelectState({
         (!event.ctrl && !event.shift && event.key === "k")
       ) {
         event.preventDefault();
-        if (submitButtonText && onSubmit && h) {
-          V(false);
+        if (submitButtonText && onSubmit && submitFocused) {
+          setIsSubmitFocused(false);
           navigation.focusOption(lastOptionValue);
         } else navigation.focusPreviousOption();
         return;
@@ -179,25 +188,25 @@ function useMultiSelectState({
       }
       if (event.key === "return" || replaceIdeographicSpace(event.key) === " ") {
         event.preventDefault();
-        if (event.ctrl && event.key === "return" && F && onSubmit) {
-          onSubmit(selectedValues());
+        if (event.ctrl && event.key === "return" && isInputOption && onSubmit) {
+          onSubmit(selectedValues_2());
           return;
         }
-        if (event.key === "return" && h && onSubmit) {
-          onSubmit(selectedValues());
+        if (event.key === "return" && submitFocused && onSubmit) {
+          onSubmit(selectedValues_2());
           return;
         }
         if (event.key === "return" && !submitButtonText && onSubmit) {
-          onSubmit(selectedValues());
+          onSubmit(selectedValues_2());
           return;
         }
-        if (!h && focusedValue !== undefined) C(focusedValue);
+        if (!submitFocused && focusedValue !== undefined) toggleValue(focusedValue);
         return;
       }
       if (!hideIndexes && /^[0-9]$/.test(normalizedInput)) {
         event.preventDefault();
         let index = parseInt(normalizedInput) - 1;
-        if (index >= 0 && index < options.length) C(options[index].value);
+        if (index >= 0 && index < options.length) toggleValue(options[index].value);
         return;
       }
       if (event.key === "escape") {

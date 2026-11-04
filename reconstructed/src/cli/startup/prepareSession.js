@@ -10,6 +10,15 @@
  */
 import { resolve } from "path";
 import { readFile, stat, realpath } from "fs/promises";
+import {
+  isBgSession,
+  getSessionRegistryState,
+  registerSession,
+  envSessionKind,
+  updateSessionName,
+  getRegisteredSessionName,
+  countConcurrentSessions,
+} from "../../utils/concurrentSessions.js";
 import { getClientSurface_2, logStartupCommandTelemetry, logRegisteredHooks } from "./startupTelemetry.js";
 import {
   fromSanitizer_SANITIZER_OUTPUT_ONLY,
@@ -371,7 +380,7 @@ import {
   areSideloadFlagsDisabledByPolicy,
   sideloadFlagsBlockedMessage,
 } from "../../utils/plugins/marketplacePolicy.js";
-import { xr } from "../../../vendor/lodash-es/_inlinedHelpers.js";
+import { import_mapValues } from "../../../vendor/lodash-es/_inlinedHelpers.js";
 import { isCliOwnedConfig, registerCliOwnedConfig } from "../../services/mcp/cliOwnedClients.js";
 import { isLockedOutByOrgMcpPolicy } from "../../services/mcp/orgMcpPolicyLockout.js";
 import {
@@ -432,15 +441,6 @@ import {
   isNonInteractiveOrBgSession,
   createSyntheticOutputTool,
 } from "../../tools/SyntheticOutputTool/SyntheticOutputTool.js";
-import {
-  isBgSession,
-  getSessionRegistryState,
-  registerSession,
-  envSessionKind,
-  updateSessionName,
-  getRegisteredSessionName,
-  countConcurrentSessions,
-} from "../../utils/concurrentSessions.js";
 import { claudeTempDir } from "../../utils/tempDir.js";
 import { writeStartupFailureResult } from "../startupFailureResult.js";
 import { initBuiltinPlugins } from "../../plugins/builtinPlugins.js";
@@ -528,7 +528,7 @@ import { shouldWireHostedDesktopComputerUse } from "../../utils/computerUse/host
 import { getHostedDesktopComputerUseConfig } from "../../services/mcp/client.js";
 import { isFirstPartyUploadScope } from "../../services/mcp/fileReference/fileReferencePolicy.js";
 import { applyDynamicServerToolPolicies } from "../../services/mcp/mcpStringUtils.js";
-import { Ji } from "../../../vendor/lodash-es/uniqBy.js";
+import { uniqByExport } from "../../../vendor/lodash-es/uniqBy.js";
 import { hookSourcesSummary } from "../../utils/hooks/hookSources.js";
 import { startHookRun } from "../../utils/sessionStart.js";
 import { isThinkingDisplayMode } from "../../entrypoints/sdk/coreSchemas.js";
@@ -549,20 +549,29 @@ import { noopAsync_3 } from "../../services/compact/compact.js";
 import { createManagedSettingsReporter } from "../../services/remoteManagedSettings/managedSettingsTelemetry.js";
 import { reclaimSessionNameOnResume, claimSessionNameAtStartup } from "../../utils/sessionNameUniqueness.js";
 import { gracefulShutdownSync } from "../../utils/gracefulShutdown.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
+//@ chunk-1ptrwbb7.js:335-362 placement
+/**
+ * 判断当前是否为交互会话（非后台会话）。
+ */
+function isInteractiveSession() {
+  return !isBgSession();
+}
 //@ chunk-3wek6r2k.js:95105-95186 placement
-function summarizeFlagSettingsForLogging(e, o) {
-  let allKeys = getClientSurface_2(e, o);
+function summarizeFlagSettingsForLogging(context, config) {
+  let allKeys = getClientSurface_2(context, config);
   return {
     flag_count: allKeys.length,
     flags: fromSanitizer_SANITIZER_OUTPUT_ONLY(allKeys.join(",")),
   };
 }
 //@ chunk-3wek6r2k.js:95186-95378 placement
-function prefetchAllMcpResourcesSafe(e, o, n) {
+function prefetchAllMcpResourcesSafe(session, config, context) {
   try {
-    let { prefetchAllMcpResources } = require("./chunk-asne9cp8.js").mcpClientModule();
-    return prefetchAllMcpResources(e, o, n);
+    let { prefetchAllMcpResources } =
+      require("../../services/mcp/emitTripwireEvent.lazy.js").mcpClientModule();
+    return prefetchAllMcpResources(session, config, context);
   } catch (error) {
     logError(error);
     return Promise.resolve({
@@ -576,15 +585,27 @@ function prefetchAllMcpResourcesSafe(e, o, n) {
 /**
  * main.tsx 的懒加载模块句柄：teammate 工具、teammate 提示补充、teammate 模式快照、协调者模式、制品启动等。
  */
-var getTeammateUtils = () => require("./chunk-7tqwkdxc.js");
-var teammatePromptAddendumModule = () => require("./chunk-8b9d5hx8.js");
-var teammateModeSnapshotModule = () => require("./chunk-s90rfvdh.js");
-var coordinatorModeModule = require("./chunk-yxywkh50.js");
-var routineStartupModule = null;
-var artifactStartupModule = require("./chunk-tbts81qj.js");
-var ccrArtifactsEntryModule = require("./chunk-vtyyqz9q.js");
+var getTeammateUtils; // deferred: loads other modules while loading; runs once its import cycle is complete
+var teammatePromptAddendumModule;
+var teammateModeSnapshotModule;
+var coordinatorModeModule;
+var routineStartupModule;
+var artifactStartupModule;
+var ccrArtifactsEntryModule;
+deferInit("chunk-3wek6r2k.js:95378", () => {
+  getTeammateUtils = () => require("../../utils/teammate.js");
+  teammatePromptAddendumModule = () => require("../../utils/swarm/teammatePromptAddendum.js");
+  teammateModeSnapshotModule = () => require("../../utils/swarm/backends/teammateModeSnapshot.js");
+  coordinatorModeModule = require("../../coordinator/coordinatorMode.js");
+  routineStartupModule = null;
+  artifactStartupModule = require("../../services/artifacts/artifactToolGates.js");
+  ccrArtifactsEntryModule = require("../../services/mcp/artifactMcpFilter.js");
+});
 //@ chunk-3wek6r2k.js:95608-95646 placement
-var artifactsMcpLaptopModule = require("./chunk-d5fbj7hf.js");
+var artifactsMcpLaptopModule; // deferred: loads other modules while loading; runs once its import cycle is complete
+deferInit("chunk-3wek6r2k.js:95608", () => {
+  artifactsMcpLaptopModule = require("../../services/artifacts/artifactsMcpLaptop.js");
+});
 //@ chunk-3wek6r2k.js:95646-96816 placement
 /**
  * 托管设置（policySettings）存在时上报 tengu_managed_settings_loaded，并对未生效的 MCP 策略键、被忽略的 policyHelper 打警告。
@@ -656,7 +677,7 @@ function maybeActivateBrief(options) {
   let briefFlag = options.brief;
   let briefEnv = env.CLAUDE_CODE_BRIEF;
   if (!briefFlag && !briefEnv) return;
-  let { isBriefEntitled } = require("./chunk-cv3kgbt2.js");
+  let { isBriefEntitled } = require("../../tools/BriefTool/BriefTool.js");
   let entitled = isBriefEntitled();
   if (entitled) setUserMsgOptIn(true);
   logEvent("tengu_brief_mode_enabled", {
@@ -666,22 +687,22 @@ function maybeActivateBrief(options) {
   });
 }
 //@ chunk-3wek6r2k.js:101033-101113 placement
-function startDeferredPrefetches(e, o, n, { userContext: r = true } = {}) {
-  startTurnInputPrefetches(e, o, n, {
-    userContext: r,
+function startDeferredPrefetches(host, storageV5, credentials, { userContext = true } = {}) {
+  startTurnInputPrefetches(host, storageV5, credentials, {
+    userContext,
   });
-  startIdleStartupWork(e, o, n);
+  startIdleStartupWork(host, storageV5, credentials);
 }
 //@ chunk-3wek6r2k.js:101178-101818 placement = startDeferredPrefetches (0.413)
 /**
  * 首屏渲染后的延迟预取：用户上下文、系统上下文、Bedrock/Vertex/Mantle 等云凭证、模型能力、文件变更检测器等。
  */
-function startTurnInputPrefetches(e, o, credentials, { userContext = true } = {}) {
+function startTurnInputPrefetches(host, config, credentials, { userContext = true } = {}) {
   if (useAfterFirstRender()) return;
   initCoreUserData();
   if (!isParkedSpare()) {
-    if (userContext) getOrBuildUserContext(e, o, credentials);
-    prefetchSystemContextIfSafe(e, o);
+    if (userContext) getOrBuildUserContext(host, config, credentials);
+    prefetchSystemContextIfSafe(host, config);
   }
   if (env.CLAUDE_CODE_USE_BEDROCK && !env.CLAUDE_CODE_SKIP_BEDROCK_AUTH)
     prefetchAwsCredentialsAndBedRockInfoIfSafe();
@@ -692,36 +713,36 @@ function startTurnInputPrefetches(e, o, credentials, { userContext = true } = {}
   if (env.CLAUDE_CODE_USE_VERTEX && !env.CLAUDE_CODE_SKIP_VERTEX_AUTH) prefetchGcpCredentialsIfSafe();
   if (env.CLAUDE_CODE_USE_ANTHROPIC_GOOGLE_CLOUD && !env.CLAUDE_CODE_SKIP_ANTHROPIC_GOOGLE_CLOUD_AUTH)
     prefetchGcpCredentialsIfSafe();
-  primeModelCapabilities(o);
-  primeGatewayModels(o);
-  refreshServedModelCapabilities(o, credentials);
-  discoverGatewayModels(o);
+  primeModelCapabilities(config);
+  primeGatewayModels(config);
+  refreshServedModelCapabilities(config, credentials);
+  discoverGatewayModels(config);
   startServedCatalog({
     allowNetwork: true,
   });
   startServedCatalogShadow({
     allowNetwork: shouldFetchServedCatalog(),
   });
-  let p = configChangeBlocker(e, o, credentials);
-  noteReloadReason(p);
-  settingsChangeDetector.initialize(p, o);
+  let blocker = configChangeBlocker(host, config, credentials);
+  noteReloadReason(blocker);
+  settingsChangeDetector.initialize(blocker, config);
   if (!isBareMode() && !getIsRemoteMode() && !getDisableSlashCommands())
-    sharedSkillChangeDetector.initialize(p, o);
+    sharedSkillChangeDetector.initialize(blocker, config);
 }
 //@ chunk-3wek6r2k.js:101818-102267 placement
-function startIdleStartupWork(e, o, n) {
+function startIdleStartupWork(host, storageV5, credentials) {
   if (useAfterFirstRender()) return;
   if (!getIsNonInteractiveSession())
-    import("./chunk-4t8fx0s8.js")
+    import("../../services/tips/MARKETPLACE_PLUGIN_TIP_ID_PREFIX.lazy.js")
       .then(({ getRelevantTips }) =>
         getRelevantTips({
           session: getRootSession(),
           theme: "dark",
-          ...(o && {
-            storageV5: o,
+          ...(storageV5 && {
+            storageV5,
           }),
-          ...(n && {
-            credentials: n,
+          ...(credentials && {
+            credentials,
           }),
         }),
       )
@@ -729,8 +750,8 @@ function startIdleStartupWork(e, o, n) {
   if (!env.CLAUDE_CODE_REMOTE && !isParkedSpare()) countFilesRounded(getCwd(), AbortSignal.timeout(3000), []);
   prefetchOfficialMcpUrls();
   if (getFeatureValue_CACHED_MAY_BE_STALE("tengu_drift_lantern", false))
-    import("./chunk-d33z3ny7.js").then((r) =>
-      r.startEventLoopStallDetector(e.host, {
+    import("../../utils/eventLoopStallDetector.js").then((mod) =>
+      mod.startEventLoopStallDetector(host.host, {
         attributeSigcont: !getIsNonInteractiveSession(),
       }),
     );
@@ -740,39 +761,42 @@ function startIdleStartupWork(e, o, n) {
 /**
  * 会话启动时的插件遥测：cacheOnly 加载插件，预取 MCP/LSP 配置，记录启用插件与错误。名字配错，见 lead 建议。
  */
-function logSessionTelemetry(e, o, n) {
+function logSessionTelemetry(host, storageV5, ready) {
   let userSpecifiedModel = parseUserSpecifiedModel(getInitialMainLoopModel() ?? getDefaultMainLoopModel());
-  let u = [
+  let args = [
     getCwd(),
     getContextWindow(userSpecifiedModel, getSdkBetas()),
     bytesPerTokenForModel(userSpecifiedModel),
-    e,
-    n !== undefined,
+    host,
+    ready !== undefined,
   ];
-  let p = n === undefined ? logStartupCommandTelemetry(...u) : n.then(() => logStartupCommandTelemetry(...u));
-  return loadAllPluginsCacheOnly(e, o)
+  let readiness =
+    ready === undefined
+      ? logStartupCommandTelemetry(...args)
+      : ready.then(() => logStartupCommandTelemetry(...args));
+  return loadAllPluginsCacheOnly(host, storageV5)
     .then(async ({ enabled, errors }) => {
-      let managedNames = policyEnabledPluginNameSet();
-      buildPluginCommandTelemetryFields(enabled, managedNames);
+      let policyPluginNames = policyEnabledPluginNameSet();
+      buildPluginCommandTelemetryFields(enabled, policyPluginNames);
       await Promise.all(
-        enabled.map(async (E) => {
-          await extractMcpServersFromPlugins(E, [], e);
-          if (!E.lspServers) {
-            let pluginLspServers = await loadPluginLspServers(E, [], e);
-            if (pluginLspServers) E.lspServers = pluginLspServers;
+        enabled.map(async (plugin) => {
+          await extractMcpServersFromPlugins(plugin, [], host);
+          if (!plugin.lspServers) {
+            let pluginLspServers = await loadPluginLspServers(plugin, [], host);
+            if (pluginLspServers) plugin.lspServers = pluginLspServers;
           }
         }),
       );
-      logPluginLoadFailed(errors, managedNames, {
+      logPluginLoadFailed(errors, policyPluginNames, {
         cacheOnly: true,
       });
-      logRegisteredHooks(enabled, managedNames);
-      let M = await p;
-      logPluginsEnabledForSession(enabled, managedNames, getPluginSeedDirs(), M, e);
+      logRegisteredHooks(enabled, policyPluginNames);
+      let telemetry = await readiness;
+      logPluginsEnabledForSession(enabled, policyPluginNames, getPluginSeedDirs(), telemetry, host);
     })
     .catch((error) => logError(withTelemetryMessage(toError(error), "plugin session telemetry load failed")))
     .then(async () => {
-      await p;
+      await readiness;
     });
 }
 //@ chunk-3wek6r2k.js:102733-102792 placement
@@ -780,10 +804,10 @@ function branchModeForTelemetry(poolOnBranch, poolRef) {
   return fromEnum(poolOnBranch ? "on_branch" : poolRef ? "ref" : "default");
 }
 //@ chunk-3wek6r2k.js:102792-102852 placement
-function pendingSettingsEnvBlocksEarlyGb(e) {
+function pendingSettingsEnvBlocksEarlyGb(config) {
   if (computeRemoteSettingsEligibility() && !isRemoteManagedSettingsVerified() && !hasManagedSettings())
     return true;
-  return hasRepoSettingsEnv(e);
+  return hasRepoSettingsEnv(config);
 }
 //@ chunk-3wek6r2k.js:102852-103020 placement
 function shouldHoldEarlyGrowthBook(env_2) {
@@ -806,47 +830,47 @@ function judgeGrowthBookKick(relaunches) {
   });
 }
 //@ chunk-3wek6r2k.js:103126-103179 placement
-function shouldKickGrowthBookOnWarmCache(e) {
-  return e && getFeatureValue_CACHED_MAY_BE_STALE("tengu_sleepy_rabbit", false);
+function shouldKickGrowthBookOnWarmCache(remote) {
+  return remote && getFeatureValue_CACHED_MAY_BE_STALE("tengu_sleepy_rabbit", false);
 }
 //@ chunk-3wek6r2k.js:103179-103441 placement
-function judgeStartupGrowthBookKick(site, o) {
+function judgeStartupGrowthBookKick(site, config) {
   let isNonInteractiveSession = getIsNonInteractiveSession();
-  let r = isNonInteractiveSession && isRemoteNonInteractiveSession();
-  let u = isNonInteractiveSession ? judgeGrowthBookKick(r) : undefined;
-  let p = u !== undefined && isGrowthBookCacheEmpty();
-  let h =
-    u !== undefined &&
-    !p &&
-    ((r && env.CLAUDE_CODE_GROWTHBOOK_KICK_ON_WARM_CACHE) || shouldKickGrowthBookOnWarmCache(r));
+  let remote = isNonInteractiveSession && isRemoteNonInteractiveSession();
+  let budget = isNonInteractiveSession ? judgeGrowthBookKick(remote) : undefined;
+  let cacheEmpty = budget !== undefined && isGrowthBookCacheEmpty();
+  let warmKick =
+    budget !== undefined &&
+    !cacheEmpty &&
+    ((remote && env.CLAUDE_CODE_GROWTHBOOK_KICK_ON_WARM_CACHE) || shouldKickGrowthBookOnWarmCache(remote));
   return startupGrowthBookKickOutcome({
     site,
     nonInteractive: isNonInteractiveSession,
-    budgetMs: u,
-    settingsEnvPending: (p || h) && pendingSettingsEnvBlocksEarlyGb(o),
-    cacheEmpty: p,
-    warmCacheKick: h,
+    budgetMs: budget,
+    settingsEnvPending: (cacheEmpty || warmKick) && pendingSettingsEnvBlocksEarlyGb(config),
+    cacheEmpty,
+    warmCacheKick: warmKick,
   });
 }
 //@ chunk-3wek6r2k.js:103441-103747 placement
-function reportStartupModelNotice(e, { key, outputFormat, debugLine = e, onStderrToo = false }) {
+function reportStartupModelNotice(message, { key, outputFormat, debugLine = message, onStderrToo = false }) {
   if (
     !getIsNonInteractiveSession() ||
     (outputFormat !== "json" && outputFormat !== "stream-json" && env.CLAUDE_CODE_SESSION_KIND !== "bg")
   ) {
-    warnStartupIssues(e);
+    warnStartupIssues(message);
     return;
   }
   logForDebugging(debugLine, {
     level: "warn",
   });
-  if (onStderrToo) cliWarn(e);
+  if (onStderrToo) cliWarn(message);
   if (outputFormat === "stream-json" && !isPlainNonInteractive())
     enqueueTaskNotification({
       type: "system",
       subtype: "notification",
       key,
-      text: e,
+      text: message,
       priority: "high",
       color: "warning",
     });
@@ -873,13 +897,23 @@ function logStartupStarted() {
 /**
  * 根命令的 action 主体（prepareSession）：处理深链、--bare/--safe-mode、单词提示、权限与工具参数、读 stdin 提示（getInputPrompt），调用 setup()，加载命令/工具/MCP/插件与 SessionStart 钩子，返回 prepared-headless（-p）或 prepared-interactive。
  */
-async function prepareSession(name, options, program, r, pendingConnect, pendingSSH, h, storage, y) {
+async function prepareSession(
+  typedName,
+  options,
+  program,
+  shouldRefillPluginCache,
+  pendingConnect,
+  pendingSSH,
+  args,
+  storageV5,
+  extraOptions,
+) {
   profileCheckpoint("action_handler_start");
   consumeBridgeMcpCarrierMarker();
-  registerHistoryExitFlush(storage);
+  registerHistoryExitFlush(storageV5);
   if (!getIsNonInteractiveSession()) {
-    let s = require("./chunk-pky8b2sx.js");
-    s.startPreviewBrowserDiscovery();
+    let previewBrowserModule = require("../../services/artifactPreview/browserDiscovery.js");
+    previewBrowserModule.startPreviewBrowserDiscovery();
   }
   if (options.deepLinkOrigin && options.prefillB64 !== undefined && options.prefill === undefined)
     try {
@@ -900,20 +934,21 @@ async function prepareSession(name, options, program, r, pendingConnect, pending
       clearMemoryFilesCacheForHost();
       invalidateCommandNames();
       clearPluginCache("deeplink: originalCwd changed");
-      let s;
-      using C = {
-        [Symbol.dispose]: () => s?.(),
+      let settingsReset;
+      using resetScope = {
+        [Symbol.dispose]: () => settingsReset?.(),
       };
-      if (isStorageV5Enabled() && storage !== undefined) s = await resetSettingsCacheWithBackendRead(storage);
-      if (r()) refillPluginLoadCacheOnly(storage, "deeplink");
+      if (isStorageV5Enabled() && storageV5 !== undefined)
+        settingsReset = await resetSettingsCacheWithBackendRead(storageV5);
+      if (shouldRefillPluginCache()) refillPluginLoadCacheOnly(storageV5, "deeplink");
       resetGitFileWatcher();
-      if (s !== undefined)
+      if (settingsReset !== undefined)
         updateHooksConfigSnapshot({
           userLayer: "retain",
         });
       else updateHooksConfigSnapshot();
       getPlansDirectory.cache.clear?.();
-      primePlanSlugCollisions(storage);
+      primePlanSlugCollisions(storageV5);
     } catch (error) {
       logForDebugging(
         `Ignoring invalid --deep-link-cwd-b64: ${error instanceof Error ? error.message : error}`,
@@ -934,30 +969,31 @@ async function prepareSession(name, options, program, r, pendingConnect, pending
   } catch (error) {
     return cliError(errorMessage(error));
   }
-  if (name === "code") {
+  if (typedName === "code") {
     logEvent("tengu_code_prompt_ignored", {});
     warnStartupIssues("Tip: You can launch Claude Code with just `claude`");
-    name = undefined;
+    typedName = undefined;
   }
-  if (name && typeof name === "string" && !/\s/.test(name) && name.length > 0) {
+  if (typedName && typeof typedName === "string" && !/\s/.test(typedName) && typedName.length > 0) {
     logEvent("tengu_single_word_prompt", {
-      length: name.length,
+      length: typedName.length,
     });
-    if (!options.print && !options.continue && !options.resume && /^[a-zA-Z][a-zA-Z-]*$/.test(name))
-      await suggestUnknownSubcommand(name, program);
+    if (!options.print && !options.continue && !options.resume && /^[a-zA-Z][a-zA-Z-]*$/.test(typedName))
+      await suggestUnknownSubcommand(typedName, program);
   }
-  let E;
+  let sessionTeam;
   if (isAgentSwarmsEnabled() && !getIsNonInteractiveSession() && !options.agentId)
     try {
-      let { initializeSessionTeam } = await import("./chunk-6cc2zqkz.js");
-      E = await initializeSessionTeam(undefined, storage);
+      let { initializeSessionTeam } =
+        await import("../../tools/TeamCreateTool/initializeSessionTeam.lazy.js");
+      sessionTeam = await initializeSessionTeam(undefined, storageV5);
     } catch (error) {
       logError(error);
     }
   if (!isFirstPartyTelemetryBlocked())
     logEvent(
       "tengu_cli_flags",
-      summarizeFlagSettingsForLogging(options, (s) => program.getOptionValueSource(s)),
+      summarizeFlagSettingsForLogging(options, (flagName) => program.getOptionValueSource(flagName)),
     );
   let {
     debug = false,
@@ -984,31 +1020,31 @@ async function prepareSession(name, options, program, r, pendingConnect, pending
   setRestrictedSession(restricted);
   if (options.prefill) seedEarlyInput(options.prefill);
   let fileDownloadPromise;
-  let jt =
+  let agentsFromFlag =
     typeof options.agents === "string" &&
     options.agents !== "" &&
     !isCustomizationDisabled("agents", {
       explicitlyRequested: true,
     });
-  let yt = !options.resume && !options.continue && !env.CLAUDE_BG_POST_CLEAR_RESPAWN;
-  let Ve;
-  if (jt && typeof options.agents === "string" && !looksLikeAgentsJson(options.agents)) {
+  let freshSession = !options.resume && !options.continue && !env.CLAUDE_BG_POST_CLEAR_RESPAWN;
+  let agentsFlagPath;
+  if (agentsFromFlag && typeof options.agents === "string" && !looksLikeAgentsJson(options.agents)) {
     if (!options.print && !getIsNonInteractiveSession()) return cliError(AGENTS_FLAG_FILE_REQUIRES_PRINT);
     let agentsFlagFile = await readAgentsFlagFile(options.agents);
     if (!agentsFlagFile.ok) return cliError(agentsFlagFile.error);
     options.agents = agentsFlagFile.json;
-    Ve = agentsFlagFile.filePath;
+    agentsFlagPath = agentsFlagFile.filePath;
     setFlagAgentsFilePaths(uniq([agentsFlagFile.filePath, agentsFlagFile.realPath]));
   }
   let agents = options.agents;
-  if (jt && (yt || Ve !== undefined) && typeof agents === "string") {
-    let s = validateAgentsJson(agents);
-    if (s)
+  if (agentsFromFlag && (freshSession || agentsFlagPath !== undefined) && typeof agents === "string") {
+    let invalidAgents = validateAgentsJson(agents);
+    if (invalidAgents)
       return cliError(`Error: Invalid --agents configuration:
-${s}${
-        Ve
+${invalidAgents}${
+        agentsFlagPath
           ? `
-(read from ${Ve})`
+(read from ${agentsFlagPath})`
           : ""
       }`);
   }
@@ -1016,34 +1052,34 @@ ${s}${
   if (agent) process.env.CLAUDE_CODE_AGENT = agent;
   let { outputFormat, inputFormat } = options;
   let viewMode = getInitialSettings_2().viewMode;
-  let Ie = isFocusModeEnabled();
-  let Ee =
+  let focusMode = isFocusModeEnabled();
+  let verbose =
     options.verbose ??
-    (viewMode ? viewMode === "verbose" : Ie ? false : resolveSetting("verbose", false).value);
+    (viewMode ? viewMode === "verbose" : focusMode ? false : resolveSetting("verbose", false).value);
   let print = options.print;
   let init = options.init ?? false;
   let initOnly = options.initOnly ?? false;
   let maintenance = options.maintenance ?? false;
-  announceScreenReaderMode(!print && process.stdout.isTTY === true, (s) => {
-    console.log(s);
+  announceScreenReaderMode(!print && process.stdout.isTTY === true, (message) => {
+    console.log(message);
   });
   let disableSlashCommands = options.disableSlashCommands || false;
   setDisableSlashCommands(disableSlashCommands);
   let windowArg = resolveWindowArg(options.autocompact);
   let worktree = isWorktreeModeEnabled() ? options.worktree : undefined;
-  let eo = typeof worktree === "string" ? worktree : undefined;
-  let env_2 = worktree !== undefined;
-  let kn;
-  if (eo) {
-    let prReference = parsePRReference(eo);
-    if (prReference !== null) {
-      kn = prReference;
-      eo = undefined;
+  let worktreeArg = typeof worktree === "string" ? worktree : undefined;
+  let worktreeRequested = worktree !== undefined;
+  let prReference;
+  if (worktreeArg) {
+    let prReference_2 = parsePRReference(worktreeArg);
+    if (prReference_2 !== null) {
+      prReference = prReference_2;
+      worktreeArg = undefined;
     }
   }
-  let An = isWorktreeModeEnabled() && options.tmux === true;
-  if (An) {
-    if (!env_2) return cliError("Error: --tmux requires --worktree");
+  let useTmux = isWorktreeModeEnabled() && options.tmux === true;
+  if (useTmux) {
+    if (!worktreeRequested) return cliError("Error: --tmux requires --worktree");
     if (getPlatform() === "windows") return cliError("Error: --tmux is not supported on Windows");
     if (!(await isTmuxAvailable()))
       return cliError(`Error: tmux is not installed.
@@ -1053,12 +1089,12 @@ ${getTmuxInstallInstructions()}`);
   if (teammateOptions.parentSessionId)
     getTeammateUtils().setCliParentSessionId?.(teammateOptions.parentSessionId);
   setTeammateAgentId(teammateOptions.agentId);
-  let ze;
+  let teammateSetup;
   if (isAgentSwarmsEnabled()) {
-    ze = teammateOptions;
-    let s = teammateOptions.agentId || teammateOptions.agentName || teammateOptions.teamName;
+    teammateSetup = teammateOptions;
+    let partialTeammateId = teammateOptions.agentId || teammateOptions.agentName || teammateOptions.teamName;
     let teamName = teammateOptions.agentId && teammateOptions.agentName && teammateOptions.teamName;
-    if (s && !teamName)
+    if (partialTeammateId && !teamName)
       return cliError("Error: --agent-id, --agent-name, and --team-name must all be provided together");
     if (teammateOptions.agentId && teammateOptions.agentName && teammateOptions.teamName)
       getTeammateUtils().setDynamicTeamContext?.({
@@ -1073,21 +1109,21 @@ ${getTmuxInstallInstructions()}`);
       teammateModeSnapshotModule().setCliTeammateModeOverride?.(teammateOptions.teammateMode);
   }
   let sdkUrl = options.sdkUrl ?? undefined;
-  let Tn = includePartialMessages || env.CLAUDE_CODE_INCLUDE_PARTIAL_MESSAGES;
-  let Pn = forwardSubagentText || env.CLAUDE_CODE_FORWARD_SUBAGENT_TEXT;
+  let partialMessages = includePartialMessages || env.CLAUDE_CODE_INCLUDE_PARTIAL_MESSAGES;
+  let forwardSubagent = forwardSubagentText || env.CLAUDE_CODE_FORWARD_SUBAGENT_TEXT;
   if (includeHookEvents || env.CLAUDE_CODE_REMOTE) setAllHookEventsEnabled(true);
   consumeUserPromptSubmitEventsEnv();
   if (sdkUrl) {
     if (!inputFormat) inputFormat = "stream-json";
     if (!outputFormat) outputFormat = "stream-json";
-    if (options.verbose === undefined) Ee = true;
+    if (options.verbose === undefined) verbose = true;
     if (!options.print) print = true;
   }
-  let Np = false;
+  let usedSettingSource = false;
   let cloudSessionsByDefault = false;
   let sandboxVmByDefault = false;
   let cloudLaunchOptions = await resolveCloudLaunchOptions(options, {
-    prompt: typeof name === "string" ? name : undefined,
+    prompt: typeof typedName === "string" ? typedName : undefined,
     sessionId,
     outputFormat,
     inputFormat,
@@ -1115,15 +1151,15 @@ ${getTmuxInstallInstructions()}`);
       : cliError(cloudLaunchOptions.error);
   forgetLauncherHostLoginForCloud(cloudLaunchOptions.value);
   if (cloudLaunchOptions.value.resumeInCloud !== null) options.resume = undefined;
-  let yl = cloudLaunchOptions.value.cloudDefault === "declined";
-  let jp = alwaysFalse_2();
-  if (yl) logFeatureSad("cloud_session_default", "local_flag");
-  let ts = cloudLaunchOptions.value.cloudDefault === "not_allowed";
-  if (ts) logFeatureSad("cloud_session_default", "org_policy");
+  let cloudDeclined = cloudLaunchOptions.value.cloudDefault === "declined";
+  let neverTrue = alwaysFalse_2();
+  if (cloudDeclined) logFeatureSad("cloud_session_default", "local_flag");
+  let cloudNotAllowed = cloudLaunchOptions.value.cloudDefault === "not_allowed";
+  if (cloudNotAllowed) logFeatureSad("cloud_session_default", "org_policy");
   let personalWithoutEffectNotification;
   let sandboxVmStayReason;
   let askCloudDefaultReason = false;
-  let os = cloudLaunchOptions.value.cloudDefault === "applied";
+  let cloudApplied = cloudLaunchOptions.value.cloudDefault === "applied";
   let {
     teleport,
     cloudAttachId,
@@ -1150,7 +1186,7 @@ ${getTmuxInstallInstructions()}`);
     personal,
   } = cloudLaunchOptions.value;
   let { remote } = cloudLaunchOptions.value;
-  let oo =
+  let runsOnAnotherMachine =
     remote !== null ||
     cloudAttachId !== null ||
     poolId !== null ||
@@ -1158,23 +1194,23 @@ ${getTmuxInstallInstructions()}`);
     projectBrowse !== null ||
     Boolean(pendingConnect?.url) ||
     Boolean(pendingSSH?.host);
-  if (restricted && oo)
+  if (restricted && runsOnAnotherMachine)
     return cliError(
       "Error: --restricted cannot be enforced in a cloud, remote-environment or ssh session, which runs its tools on another machine",
     );
   getRootSession().host.launchOptions.replaceMayForwardHomeSettings(forwardHomeSettings);
   getRootSession().host.launchOptions.replaceHomeSettingsHostConsent(homeSettingsConsent);
-  let $t =
+  let sdkNonInteractive =
     getIsNonInteractiveSession() &&
     (headlessCloud ||
       headlessCloudPrint ||
       cloudAttachId !== null ||
       projectBrowse !== null ||
       poolId !== null);
-  let Ln;
-  let ls = false;
-  let ds = options.watchArtifact ?? options.watchArtifactNoAutoreact;
-  if (ds !== undefined) {
+  let footer;
+  let footerFlag = false;
+  let watchArtifactOpt = options.watchArtifact ?? options.watchArtifactNoAutoreact;
+  if (watchArtifactOpt !== undefined) {
     if (env.CLAUDE_CODE_REMOTE)
       return cliError(
         "Error: --watch-artifact isn't supported yet from remote sessions \u2014 run it in Claude Code on your own machine",
@@ -1193,35 +1229,36 @@ ${getTmuxInstallInstructions()}`);
       return cliError(
         "Error: --watch-artifact is not available in sessions attached to a remote environment \u2014 run it in a plain local session",
       );
-    let watchArtifactArg = parseWatchArtifactArg(ds);
+    let watchArtifactArg = parseWatchArtifactArg(watchArtifactOpt);
     if ("error" in watchArtifactArg) return cliError(watchArtifactArg.error);
-    let C = typeof options.watchArtifactNoAutoreact === "string";
+    let noAutoReact = typeof options.watchArtifactNoAutoreact === "string";
     setPendingWatchArtifact(
-      C
+      noAutoReact
         ? {
             ...watchArtifactArg,
             autoReactDisarmed: true,
           }
         : watchArtifactArg,
     );
-    Ln = watchArtifactArg.slug;
-    ls = C;
+    footer = watchArtifactArg.slug;
+    footerFlag = noAutoReact;
   }
   let sessionGroupingId = null;
-  let Fo = options.remoteControl ?? options.rc;
+  let remoteControlOpt = options.remoteControl ?? options.rc;
   let remoteControl = false;
-  let remoteControlName = typeof Fo === "string" && Fo.length > 0 ? Fo : undefined;
+  let remoteControlName =
+    typeof remoteControlOpt === "string" && remoteControlOpt.length > 0 ? remoteControlOpt : undefined;
   let remoteControlSessionNamePrefix = options.remoteControlSessionNamePrefix;
   if (remoteControlSessionNamePrefix)
     process.env.CLAUDE_REMOTE_CONTROL_SESSION_NAME_PREFIX = remoteControlSessionNamePrefix;
-  let ps = validateSessionIdFlag({
+  let sessionIdCheck = validateSessionIdFlag({
     sessionId,
     continue: options.continue,
     resume: options.resume,
     forkSession: options.forkSession,
     sdkUrl,
   });
-  if (!ps.ok) return cliError(ps.error);
+  if (!sessionIdCheck.ok) return cliError(sessionIdCheck.error);
   if (sessionId) {
     if (!sdkUrl) {
       let sessionId_2 = normalizeUuidOrNull(sessionId);
@@ -1253,8 +1290,8 @@ ${getTmuxInstallInstructions()}`);
   let systemPrompt = options.systemPrompt;
   if (options.systemPromptFile)
     try {
-      let s = resolve(options.systemPromptFile);
-      systemPrompt = joinPromptAppend(await readFile(s, "utf8"), options.systemPrompt);
+      let systemPromptFile = resolve(options.systemPromptFile);
+      systemPrompt = joinPromptAppend(await readFile(systemPromptFile, "utf8"), options.systemPrompt);
     } catch (error) {
       if (getErrnoCode(error) === "ENOENT")
         return cliError(`Error: System prompt file not found: ${resolve(options.systemPromptFile)}`);
@@ -1267,9 +1304,9 @@ ${getTmuxInstallInstructions()}`);
         "Error: --append-system-prompt cannot be given with --append-system-prompt-file in a Remote Control session. Remove --append-system-prompt.",
       );
     try {
-      let s = resolve(options.appendSystemPromptFile);
+      let appendPromptFile = resolve(options.appendSystemPromptFile);
       appendSystemPrompt = joinPromptAppend(
-        verifyBridgeCarrierPrompt(await readFile(s)),
+        verifyBridgeCarrierPrompt(await readFile(appendPromptFile)),
         options.appendSystemPrompt,
       );
     } catch (error) {
@@ -1295,7 +1332,12 @@ ${getTmuxInstallInstructions()}`);
       settings: getInitialSettings_2(),
     },
   );
-  if (isAgentSwarmsEnabled() && ze?.agentId && ze?.agentName && ze?.teamName) {
+  if (
+    isAgentSwarmsEnabled() &&
+    teammateSetup?.agentId &&
+    teammateSetup?.agentName &&
+    teammateSetup?.teamName
+  ) {
     let TEAMMATE_SYSTEM_PROMPT_ADDENDUM = teammatePromptAddendumModule().TEAMMATE_SYSTEM_PROMPT_ADDENDUM;
     appendSystemPrompt_2 = appendSystemPrompt_2
       ? `${appendSystemPrompt_2}
@@ -1304,9 +1346,9 @@ ${TEAMMATE_SYSTEM_PROMPT_ADDENDUM}`
       : TEAMMATE_SYSTEM_PROMPT_ADDENDUM;
   }
   let permissionMode_2 = agent
-    ? getBuiltInAgents().find((s) => s.agentType === agent)?.permissionMode
+    ? getBuiltInAgents().find((builtinAgent) => builtinAgent.agentType === agent)?.permissionMode
     : undefined;
-  let ms = isRemoteSessionLaunch({
+  let isRemoteLaunch = isRemoteSessionLaunch({
     remote,
     isNonInteractiveSession,
     headlessCloud,
@@ -1316,66 +1358,69 @@ ${TEAMMATE_SYSTEM_PROMPT_ADDENDUM}`
     pendingConnectUrl: pendingConnect?.url,
     pendingSSHHost: pendingSSH?.host,
   });
-  let jl = false;
-  let Ct = isRemoteNonInteractiveSession();
-  let rt;
-  let ro = async (s, C, T) => {
-    profileCheckpoint(C.before);
+  let resumed = false;
+  let remoteNonInteractive = isRemoteNonInteractiveSession();
+  let initResult;
+  let initializeSession = async (session, options, budgetMs) => {
+    profileCheckpoint(options.before);
     let startTime = performance.now();
-    let L = await waitForInitialize({
+    let initDone = await waitForInitialize({
       initialize: initializeGrowthBook,
-      budgetMs: T,
+      budgetMs,
     });
-    noteFlagFetchWait(L.waitMs);
-    recordPhase(s, performance.now() - startTime, startTime);
-    logForDiagnosticsNoPII(L.timedOut ? "warn" : "info", "startup_flag_fetch_wait", {
-      budget_ms: T,
-      waited_ms: Math.round(L.waitMs),
-      timed_out: L.timedOut,
-      killswitch_recheck: s !== "growthbook_init_ms",
+    noteFlagFetchWait(initDone.waitMs);
+    recordPhase(session, performance.now() - startTime, startTime);
+    logForDiagnosticsNoPII(initDone.timedOut ? "warn" : "info", "startup_flag_fetch_wait", {
+      budget_ms: budgetMs,
+      waited_ms: Math.round(initDone.waitMs),
+      timed_out: initDone.timedOut,
+      killswitch_recheck: session !== "growthbook_init_ms",
     });
-    profileCheckpoint(C.after);
-    return L;
+    profileCheckpoint(options.after);
+    return initDone;
   };
-  let so = false;
-  let fs = getFeatureValueWithSource_CACHED_MAY_BE_STALE("tengu_auto_mode_config", {});
-  let gs = fs.source === "disk" && fs.value?.enabled === "disabled";
-  let io = judgeGrowthBookKick(Ct);
-  let Wt = io !== undefined && shouldKickGrowthBookOnWarmCache(Ct);
+  let growthBookCold = false;
+  let autoModeConfig = getFeatureValueWithSource_CACHED_MAY_BE_STALE("tengu_auto_mode_config", {});
+  let autoModeDisabledByDisk =
+    autoModeConfig.source === "disk" && autoModeConfig.value?.enabled === "disabled";
+  let kickDecision = judgeGrowthBookKick(remoteNonInteractive);
+  let shouldKick = kickDecision !== undefined && shouldKickGrowthBookOnWarmCache(remoteNonInteractive);
   if (
     startupFlagWaitPoint({
       nonInteractive: isNonInteractiveSession,
-      budgetMs: io,
+      budgetMs: kickDecision,
       settingsEnvPending:
-        isNonInteractiveSession && io !== undefined && pendingSettingsEnvBlocksEarlyGb(env_2),
+        isNonInteractiveSession &&
+        kickDecision !== undefined &&
+        pendingSettingsEnvBlocksEarlyGb(worktreeRequested),
       cacheEmpty: isGrowthBookCacheEmpty(),
-      relaunches: Ct,
-      autoModeKillSwitchOnDisk: gs,
-      warmWakeEarlyFetch: Wt,
+      relaunches: remoteNonInteractive,
+      autoModeKillSwitchOnDisk: autoModeDisabledByDisk,
+      warmWakeEarlyFetch: shouldKick,
     }) === "gb-before-mode" &&
-    io !== undefined
+    kickDecision !== undefined
   ) {
-    so = true;
-    rt = {
+    growthBookCold = true;
+    initResult = {
       site: "gb-before-mode",
-      result: await ro(
+      result: await initializeSession(
         "growthbook_init_ms",
         {
           before: "before_growthbook_init",
           after: "after_growthbook_init",
         },
-        io,
+        kickDecision,
       ),
     };
   }
   if (
     getIsNonInteractiveSession() &&
-    rt === undefined &&
-    gs &&
+    initResult === undefined &&
+    autoModeDisabledByDisk &&
     is1PEventLoggingEnabled() &&
-    !pendingSettingsEnvBlocksEarlyGb(env_2)
+    !pendingSettingsEnvBlocksEarlyGb(worktreeRequested)
   )
-    await ro(
+    await initializeSession(
       "growthbook_killswitch_recheck_ms",
       {
         before: "before_gb_killswitch_recheck",
@@ -1384,20 +1429,20 @@ ${TEAMMATE_SYSTEM_PROMPT_ADDENDUM}`
       EVENT_LOGGING_FLAG_WAIT_MS,
     );
   let proactivityLevel = DEFAULT;
-  let ao;
-  let lo = permissionMode;
-  let Ss;
+  let permissionCtx;
+  let startupPermissionMode = permissionMode;
+  let modeState;
   {
-    disableProactivitySelector(keybindingsState, storage, undefined);
+    disableProactivitySelector(keybindingsState, storageV5, undefined);
     if (proactivity !== undefined || (!alwaysFalse() && isRelaunchProactivityEverOn()))
       startProactivitySelectorGate();
     let startupProactivity = resolveStartupProactivity(proactivity);
     proactivityLevel = startupProactivity.level;
-    ao = startupProactivityLevel({
+    permissionCtx = startupProactivityLevel({
       startupLevel: startupProactivity,
-      startsAsRemoteThinClient: ms,
+      startsAsRemoteThinClient: isRemoteLaunch,
     });
-    let T = startupPermissionModeForAsk({
+    let askMode = startupPermissionModeForAsk({
       cliLevel: proactivity,
       modeSuppliedOnInvocation:
         permissionMode !== undefined ||
@@ -1405,186 +1450,187 @@ ${TEAMMATE_SYSTEM_PROMPT_ADDENDUM}`
         dangerouslySkipPermissions === true ||
         permissionMode_2 !== undefined,
     });
-    if (T !== undefined) {
-      lo = T;
-      Ss = "--proactivity ask isn't available here \xB7 Started in manual mode";
+    if (askMode !== undefined) {
+      startupPermissionMode = askMode;
+      modeState = "--proactivity ask isn't available here \xB7 Started in manual mode";
     }
   }
   let bypassPermissionsBlockedByHost = false;
-  let It;
-  let _s = [];
+  let defaultMode;
+  let inheritedDirs = [];
   let {
     mode,
     notification,
     proactivity: proactivity_2,
     modeSuppliedOnInvocation,
   } = initialPermissionModeFromCLI({
-    permissionModeCli: lo,
+    permissionModeCli: startupPermissionMode,
     inheritPermissionModeCli: inheritPermissionMode,
     dangerouslySkipPermissions,
     allowDangerouslySkipPermissions,
     bypassPermissionsBlockedByHost,
     agentPermissionMode: permissionMode_2,
-    proactivityLevel: ao?.level,
+    proactivityLevel: permissionCtx?.level,
   });
-  It = notification ?? Ss;
-  let xe = mode;
-  let ys = restrictedBypassNotice({
+  defaultMode = notification ?? modeState;
+  let initialMode = mode;
+  let bypassNotice = restrictedBypassNotice({
     restricted,
-    permissionMode: xe,
+    permissionMode: initialMode,
     allowDangerouslySkipPermissions,
   });
-  if (ys) return cliError(`Error: ${ys}`);
+  if (bypassNotice) return cliError(`Error: ${bypassNotice}`);
   applyInheritedPermissionModeFlag({
     inheritPermissionModeCli: inheritPermissionMode,
-    resolvedMode: xe,
-    storageV5: storage,
+    resolvedMode: initialMode,
+    storageV5,
   });
-  setSessionBypassPermissionsMode(xe === "bypassPermissions");
+  setSessionBypassPermissionsMode(initialMode === "bypassPermissions");
   if (
     options.enableAutoMode ||
-    lo === "auto" ||
+    startupPermissionMode === "auto" ||
     permissionMode_2 === "auto" ||
-    (xe === "auto" && !isAutoModeFromFallback()) ||
-    (!lo && isDefaultPermissionModeAuto())
+    (initialMode === "auto" && !isAutoModeFromFallback()) ||
+    (!startupPermissionMode && isDefaultPermissionModeAuto())
   )
     setAutoModeFlagCli(true);
   emitStartupMark("action_before_mcp_policy_wait");
   await awaitMcpPolicyColdStart({
     hasDynamicMcpConfig: Boolean(mcpConfig && mcpConfig.length > 0) || ide,
-    pluginStateReliable: r(),
-    storageV5: storage,
+    pluginStateReliable: shouldRefillPluginCache(),
+    storageV5,
   });
   let config = {};
-  let vs = {
+  let mcpAnalytics = {
     ...getRepoMcpListsForAnalytics(),
     mcpConfigBlockedCount: 0,
   };
-  let co = {};
-  let uo = {};
+  let ownedConfigs = {};
+  let sdkConfigs = {};
   let bridgeSessionId = sdkUrl ? sessionId : undefined;
   let remoteMcpConfig = loadRemoteMcpConfig(bridgeSessionId, getServerUrl);
-  let Gt = mergeMcpConfigs([], [], remoteMcpConfig);
+  let mergedMcp = mergeMcpConfigs([], [], remoteMcpConfig);
   if (mcpConfig && mcpConfig.length > 0) {
-    let filtered = mcpConfig.map((U) => U.trim()).filter((U) => U.length > 0);
-    let C = [];
-    let T = [];
-    let R = [];
+    let filtered = mcpConfig.map((entry) => entry.trim()).filter((text) => text.length > 0);
+    let sdkServers = [];
+    let warnings = [];
+    let fileServers = [];
     let isBridgeCarrierChild = startupCcrEnv.isBridgeCarrierChild;
-    let Be = [];
-    for (let U of filtered) {
-      let Fe = null;
-      let lt = [];
-      let Eo = safeParseJSON(U, false);
-      if (Eo) {
+    let parsedConfigs = [];
+    for (let entry of filtered) {
+      let inlineConfig = null;
+      let entryWarnings = [];
+      let parsedJson = safeParseJSON(entry, false);
+      if (parsedJson) {
         let mcpConfig = parseMcpConfig({
-          configObject: Eo,
+          configObject: parsedJson,
           filePath: "command line",
           expandVars: true,
           scope: "dynamic",
           bridgeSessionId,
         });
-        if (mcpConfig.config) Fe = mcpConfig.config.mcpServers;
-        lt = mcpConfig.errors;
-        uo = {
-          ...uo,
+        if (mcpConfig.config) inlineConfig = mcpConfig.config.mcpServers;
+        entryWarnings = mcpConfig.errors;
+        sdkConfigs = {
+          ...sdkConfigs,
           ...mcpConfig.asWrittenEntries,
         };
       } else {
-        let me = resolve(U);
+        let filePath = resolve(entry);
         let mcpConfigFromFilePath = parseMcpConfigFromFilePath({
-          filePath: me,
+          filePath,
           expandVars: true,
           scope: "dynamic",
           bridgeSessionId,
         });
-        if (mcpConfigFromFilePath.config) Fe = mcpConfigFromFilePath.config.mcpServers;
-        lt = mcpConfigFromFilePath.errors;
-        uo = {
-          ...uo,
+        if (mcpConfigFromFilePath.config) inlineConfig = mcpConfigFromFilePath.config.mcpServers;
+        entryWarnings = mcpConfigFromFilePath.errors;
+        sdkConfigs = {
+          ...sdkConfigs,
           ...mcpConfigFromFilePath.asWrittenEntries,
         };
-        let [tn, on] = await Promise.all([
-          stat(me).catch(() => {
+        let [fromFile, fromSdk] = await Promise.all([
+          stat(filePath).catch(() => {
             return;
           }),
-          realpath(me).catch(() => me),
+          realpath(filePath).catch(() => filePath),
         ]);
-        if (tn === undefined || tn.isFile()) Be.push(me, on);
+        if (fromFile === undefined || fromFile.isFile()) parsedConfigs.push(filePath, fromSdk);
       }
-      if (Fe) {
-        C.push(Fe);
-        if (lt.length > 0) {
+      if (inlineConfig) {
+        sdkServers.push(inlineConfig);
+        if (entryWarnings.length > 0) {
           logForDebugging(
-            `--mcp-config: ${lt.length} entry warning(s): ${lt.map((me) => `${me.path ? me.path + ": " : ""}${me.message}`).join("; ")}`,
+            `--mcp-config: ${entryWarnings.length} entry warning(s): ${entryWarnings.map((warning) => `${warning.path ? warning.path + ": " : ""}${warning.message}`).join("; ")}`,
             {
               level: "warn",
             },
           );
-          for (let me of lt) {
-            let mcpErrorMetadata = me.mcpErrorMetadata;
+          for (let warning of entryWarnings) {
+            let mcpErrorMetadata = warning.mcpErrorMetadata;
             if (mcpErrorMetadata?.skipReason && mcpErrorMetadata.serverName != null)
-              R.push({
+              fileServers.push({
                 name: mcpErrorMetadata.serverName,
                 type: mcpErrorMetadata.skipReason,
-                message: me.message,
+                message: warning.message,
               });
           }
         }
-      } else T.push(...lt);
+      } else warnings.push(...entryWarnings);
     }
-    setFlagMcpConfigFilePaths(uniq(Be));
-    if (T.length > 0) {
-      let joined = T.map((Fe) => `${Fe.path ? Fe.path + ": " : ""}${Fe.message}`).join(`
+    setFlagMcpConfigFilePaths(uniq(parsedConfigs));
+    if (warnings.length > 0) {
+      let joined = warnings.map((warning) => `${warning.path ? warning.path + ": " : ""}${warning.message}`)
+        .join(`
 `);
-      logForDebugging(`--mcp-config validation failed (${T.length} errors): ${joined}`, {
+      logForDebugging(`--mcp-config validation failed (${warnings.length} errors): ${joined}`, {
         level: "error",
       });
       return cliError(`Error: Invalid MCP configuration:
 ${joined}`);
     }
-    Gt = mergeMcpConfigs(
-      C,
-      R.map((U) => U.name),
+    mergedMcp = mergeMcpConfigs(
+      sdkServers,
+      fileServers.map((server) => server.name),
       remoteMcpConfig,
     );
-    for (let U of Gt.refused)
-      logForDebugging(`--mcp-config: ${U.message}`, {
+    for (let refused of mergedMcp.refused)
+      logForDebugging(`--mcp-config: ${refused.message}`, {
         level: "warn",
       });
-    let servers = Gt.servers;
-    R.unshift(...Gt.refused);
-    let Co = new Map();
-    for (let U of R) if (!Object.hasOwn(servers, U.name)) Co.set(U.name, U);
-    if (Co.size > 0) {
-      let list = Array.from(Co.values());
+    let servers = mergedMcp.servers;
+    fileServers.unshift(...mergedMcp.refused);
+    let byName = new Map();
+    for (let server of fileServers) if (!Object.hasOwn(servers, server.name)) byName.set(server.name, server);
+    if (byName.size > 0) {
+      let list = Array.from(byName.values());
       recordSkippedDynamicServers(list);
       if (!getIsNonInteractiveSession() || process.stderr.isTTY)
         warnStartupIssues(
           `${list.length} ${plural(list.length, "MCP server")} skipped due to invalid config:`,
           {
             stderrPrefix: "Warning: ",
-            items: list.map((Fe) => Fe.message),
+            items: list.map((warning) => warning.message),
           },
         );
     }
     if (Object.keys(servers).length > 0) {
-      let U = Boolean(env.CLAUDE_CODE_REMOTE) || isBridgeCarrierChild;
-      let Fe = areSideloadFlagsDisabledByPolicy() && !areMcpConfigsAllSdkType(servers);
-      if (Fe && !U) return cliError(sideloadFlagsBlockedMessage(["--mcp-config"]));
+      let isRemote = Boolean(env.CLAUDE_CODE_REMOTE) || isBridgeCarrierChild;
+      let sideloadBlocked = areSideloadFlagsDisabledByPolicy() && !areMcpConfigsAllSdkType(servers);
+      if (sideloadBlocked && !isRemote) return cliError(sideloadFlagsBlockedMessage(["--mcp-config"]));
       let kept = ccrArtifactsEntryModule?.withoutWithheldCcrArtifactsEntry(servers).kept ?? servers;
-      let Eo = xr(kept, (ut, rn) => {
-        let Si = {
-          ...ut,
+      let keptConfigs = import_mapValues(kept, (config, name) => {
+        let dynamicConfig = {
+          ...config,
           scope: "dynamic",
         };
-        if (env.CLAUDE_CODE_REMOTE) getServerUrl(rn, ut);
-        return isCliOwnedConfig(ut)
-          ? registerCliOwnedConfig(Si)
-          : markCcrInjectedConfig(rn, Si, isLockedOutByOrgMcpPolicy);
+        if (env.CLAUDE_CODE_REMOTE) getServerUrl(name, config);
+        return isCliOwnedConfig(config)
+          ? registerCliOwnedConfig(dynamicConfig)
+          : markCcrInjectedConfig(name, dynamicConfig, isLockedOutByOrgMcpPolicy);
       });
-      let { configs, blocked, held } = filterDynamicMcpServersByPolicy(Eo);
-      vs.mcpConfigBlockedCount = blocked.length;
+      let { configs, blocked, held } = filterDynamicMcpServersByPolicy(keptConfigs);
+      mcpAnalytics.mcpConfigBlockedCount = blocked.length;
       if (blocked.length > 0)
         warnStartupIssues(
           `MCP ${plural(blocked.length, "server")} blocked by enterprise policy: ${blocked.join(", ")}`,
@@ -1592,24 +1638,24 @@ ${joined}`);
             stderrPrefix: "Warning: ",
           },
         );
-      let on = {
+      let heldNames = {
         ...configs,
-        ...filterObject(Eo, (ut, rn) => held.includes(rn)),
+        ...filterObject(keptConfigs, (config, name) => held.includes(name)),
       };
-      let Id = filterObject(on, (ut) => ut.type === "sdk");
+      let sdkOnly = filterObject(heldNames, (config) => config.type === "sdk");
       let dropForEnterpriseMcpConfig =
         doesEnterpriseMcpConfigExist() &&
-        U &&
+        isRemote &&
         !options.strictMcpConfig &&
-        areMcpConfigsAllowedWithEnterpriseMcpConfig(Id);
+        areMcpConfigsAllowedWithEnterpriseMcpConfig(sdkOnly);
       let {
         servers: servers_2,
         dropped,
         keptNotes,
         reason,
-      } = applyMcpPolicyDrops(on, {
+      } = applyMcpPolicyDrops(heldNames, {
         dropForEnterpriseMcpConfig,
-        dropForSideloadPolicy: Fe && U,
+        dropForSideloadPolicy: sideloadBlocked && isRemote,
         keptDespiteAllowlist: ccrInjectedKeptDespiteAllowlist(configs),
       });
       if (dropped.length > 0) {
@@ -1638,75 +1684,87 @@ ${joined}`);
         logForDebugging(keptNote);
         if (startupCcrEnv.isSelfHostedRunnerChild) cliWarn(keptNote);
       }
-      let Cr = ccrRepoToolsOnlyNote(servers_2);
-      if (Cr) {
-        logForDebugging(Cr);
-        cliWarn(Cr);
+      let repoToolsNote = ccrRepoToolsOnlyNote(servers_2);
+      if (repoToolsNote) {
+        logForDebugging(repoToolsNote);
+        cliWarn(repoToolsNote);
       }
-      co = servers_2;
+      ownedConfigs = servers_2;
       config = {
         ...config,
         ...servers_2,
       };
     }
   }
-  let ownership = Gt.ownership;
-  let Yn = mcpConfigProvenanceNote(ownership?.hostOwnedNames, Object.keys(Gt.servers).length);
-  if (Yn)
-    logForDebugging(Yn.text, {
-      level: Yn.level,
+  let ownership = mergedMcp.ownership;
+  let provenanceNote = mcpConfigProvenanceNote(
+    ownership?.hostOwnedNames,
+    Object.keys(mergedMcp.servers).length,
+  );
+  if (provenanceNote)
+    logForDebugging(provenanceNote.text, {
+      level: provenanceNote.level,
     });
   let unusableEnterpriseMcpConfigMessage = getUnusableEnterpriseMcpConfigMessage();
-  if (unusableEnterpriseMcpConfigMessage !== null && getIsNonInteractiveSession() && !$t)
+  if (unusableEnterpriseMcpConfigMessage !== null && getIsNonInteractiveSession() && !sdkNonInteractive)
     if (process.stderr.isTTY) cliWarn(`Warning: ${unusableEnterpriseMcpConfigMessage}`);
     else
       logForDebugging(unusableEnterpriseMcpConfigMessage, {
         level: "warn",
       });
-  let Dt = options;
-  setChromeFlagOverride(Dt.chrome);
-  let Yt = hasHostedClaudeInChromeServer(config);
-  let qt = !Yt && shouldEnableClaudeInChrome(Dt.chrome) && isClaudeAISubscriber();
+  let opts = options;
+  setChromeFlagOverride(opts.chrome);
+  let hostedChrome = hasHostedClaudeInChromeServer(config);
+  let wantsChrome = !hostedChrome && shouldEnableClaudeInChrome(opts.chrome) && isClaudeAISubscriber();
   if (
-    !Yt &&
-    Dt.chrome !== false &&
-    (Dt.chrome === true || env.CLAUDE_CODE_ENABLE_CFC === true) &&
+    !hostedChrome &&
+    opts.chrome !== false &&
+    (opts.chrome === true || env.CLAUDE_CODE_ENABLE_CFC === true) &&
     !isClaudeInChromeAllowed()
   ) {
-    let s =
+    let policyReason =
       policyDeniedReason("allow_claude_browser_extension", "Claude in Chrome", "is") ??
       "Claude in Chrome is disabled by your organization";
     if (isNonInteractiveSession)
-      logForDebugging(`[Claude in Chrome] ${s}`, {
+      logForDebugging(`[Claude in Chrome] ${policyReason}`, {
         level: "warn",
       });
-    else warnStartupIssues(s);
+    else warnStartupIssues(policyReason);
   }
-  let Bo = isMcpServerDenied(CLAUDE_IN_CHROME_MCP_SERVER_NAME, getClaudeInChromeStdioServerConfig());
-  let Es = isClaudeInChromeBlockedByEnterpriseMcpConfig() || Bo;
-  let offerClaudeInChrome = !qt && !Yt && !Es && shouldAutoEnableClaudeInChrome(storage);
-  let ks = qt && Dt.chrome !== true && env.CLAUDE_CODE_ENABLE_CFC !== true && Es;
-  let Vl = qt && Dt.chrome !== true && ((env.CLAUDE_CODE_ENABLE_CFC !== true && isSafeMode()) || restricted);
-  if (Yt && Bo) {
+  let chromeDenied = isMcpServerDenied(
+    CLAUDE_IN_CHROME_MCP_SERVER_NAME,
+    getClaudeInChromeStdioServerConfig(),
+  );
+  let chromeBlocked = isClaudeInChromeBlockedByEnterpriseMcpConfig() || chromeDenied;
+  let offerClaudeInChrome =
+    !wantsChrome && !hostedChrome && !chromeBlocked && shouldAutoEnableClaudeInChrome(storageV5);
+  let offerChrome =
+    wantsChrome && opts.chrome !== true && env.CLAUDE_CODE_ENABLE_CFC !== true && chromeBlocked;
+  let notChrome =
+    wantsChrome &&
+    opts.chrome !== true &&
+    ((env.CLAUDE_CODE_ENABLE_CFC !== true && isSafeMode()) || restricted);
+  if (hostedChrome && chromeDenied) {
     logForDebugging(
       "[Claude in Chrome] Served by the remote session host over --mcp-config, but a deniedMcpServers policy entry denies Claude in Chrome; dropping the entry and not starting the built-in server",
     );
-    config = filterObject(config, (s, C) => C !== CLAUDE_IN_CHROME_MCP_SERVER_NAME);
-  } else if (Yt && !isClaudeInChromeAllowed())
+    config = filterObject(config, (config, name) => name !== CLAUDE_IN_CHROME_MCP_SERVER_NAME);
+  } else if (hostedChrome && !isClaudeInChromeAllowed())
     logForDebugging(
       "[Claude in Chrome] Served by the remote session host over --mcp-config, but the org policy denies the browser extension; not adopting it and not starting the built-in server",
     );
-  else if (Yt) {
+  else if (hostedChrome) {
     logForDebugging(
       "[Claude in Chrome] Served by the remote session host over --mcp-config; not starting the built-in server",
     );
     putChromePromptInSystemPrompt(adoptHostedClaudeInChrome().systemPrompt);
-  } else if (ks)
+  } else if (offerChrome)
     logForDebugging(
       "[Claude in Chrome] Skipping chrome wiring: blocked by enterprise MCP config or managed deniedMcpServers policy",
     );
-  else if (Vl) logForDebugging("[Claude in Chrome] Skipping chrome wiring: --safe-mode or --restricted");
-  else if (qt && (Bo || unusableEnterpriseMcpConfigMessage !== null)) {
+  else if (notChrome)
+    logForDebugging("[Claude in Chrome] Skipping chrome wiring: --safe-mode or --restricted");
+  else if (wantsChrome && (chromeDenied || unusableEnterpriseMcpConfigMessage !== null)) {
     if (isNonInteractiveSession)
       logForDebugging(
         `[Claude in Chrome] MCP server blocked by enterprise policy: ${CLAUDE_IN_CHROME_MCP_SERVER_NAME}`,
@@ -1715,7 +1773,7 @@ ${joined}`);
         },
       );
     else warnStartupIssues(`MCP server blocked by enterprise policy: ${CLAUDE_IN_CHROME_MCP_SERVER_NAME}`);
-  } else if (qt) {
+  } else if (wantsChrome) {
     let platform = getPlatform();
     try {
       logEvent("tengu_claude_in_chrome_setup", {
@@ -1743,11 +1801,11 @@ ${joined}`);
       return cliError("Error: Failed to run with Claude in Chrome.");
     }
   }
-  let Kn = options;
+  let mcpOpts = options;
   let strictMcpConfig = options.strictMcpConfig || false;
   setStrictMcpConfig(strictMcpConfig);
-  let ws = options.includeUnsupportedModels === true;
-  getProviderState().includeUnsupportedModels = ws;
+  let includeUnsupported = options.includeUnsupportedModels === true;
+  getProviderState().includeUnsupportedModels = includeUnsupported;
   setCliSessionConfigCarried(cliCarriesSessionConfig(options));
   setForkRestrictedLaunchConfig(cliCarriesForkRestrictedConfig(options));
   setForkReplayLaunchConfig({
@@ -1758,12 +1816,12 @@ ${joined}`);
     ...(options.systemPromptSnapshot !== undefined && {
       systemPromptSnapshot: options.systemPromptSnapshot,
     }),
-    ...(Ve === undefined &&
+    ...(agentsFlagPath === undefined &&
       typeof options.agent === "string" &&
       options.agent !== "" && {
         agent: options.agent,
       }),
-    ...(Ve === undefined &&
+    ...(agentsFlagPath === undefined &&
       typeof options.agents === "string" &&
       options.agents !== "" && {
         agents: options.agents,
@@ -1797,124 +1855,130 @@ ${joined}`);
     ...(baseTools ? ["--fallback-model", baseTools] : []),
     ...(allowDangerouslySkipPermissions ? ["--allow-dangerously-skip-permissions"] : []),
     ...(disableSlashCommands ? ["--disable-slash-commands"] : []),
-    ...(ws ? ["--include-unsupported-models"] : []),
-    ...(Kn.channels ?? []).flatMap((s) => ["--channels", s]),
-    ...(Ln !== undefined ? [ls ? "--watch-artifact-no-autoreact" : "--watch-artifact", Ln] : []),
+    ...(includeUnsupported ? ["--include-unsupported-models"] : []),
+    ...(mcpOpts.channels ?? []).flatMap((channel) => ["--channels", channel]),
+    ...(footer !== undefined
+      ? [footerFlag ? "--watch-artifact-no-autoreact" : "--watch-artifact", footer]
+      : []),
   ]);
-  let $o = gateDynamicMcpConfigForEnterpriseMcpConfig({
+  let gatedMcp = gateDynamicMcpConfigForEnterpriseMcpConfig({
     dynamicMcpConfig: config,
     strictMcpConfig,
   });
-  if ($o.kind === "refuse") return cliError($o.message);
-  if ($o.dropped.length > 0) {
-    let { servers, dropped } = $o;
+  if (gatedMcp.kind === "refuse") return cliError(gatedMcp.message);
+  if (gatedMcp.dropped.length > 0) {
+    let { servers, dropped } = gatedMcp;
     config = servers;
-    co = filterObject(co, (R, L) => Object.hasOwn(servers, L));
-    let T = `the enterprise MCP config (managed-mcp.json) keeps exclusive control over MCP servers; ignoring ${dropped.length} dynamically configured MCP ${plural(dropped.length, "server")}: ${dropped.join(", ")}`;
-    logForDebugging(T, {
+    ownedConfigs = filterObject(ownedConfigs, (config, name) => Object.hasOwn(servers, name));
+    let enterpriseNote = `the enterprise MCP config (managed-mcp.json) keeps exclusive control over MCP servers; ignoring ${dropped.length} dynamically configured MCP ${plural(dropped.length, "server")}: ${dropped.join(", ")}`;
+    logForDebugging(enterpriseNote, {
       level: "warn",
     });
-    if (getIsNonInteractiveSession() && (process.stderr.isTTY || env.CLAUDE_CODE_REMOTE) && !$t)
-      warnStartupIssues(T, {
+    if (
+      getIsNonInteractiveSession() &&
+      (process.stderr.isTTY || env.CLAUDE_CODE_REMOTE) &&
+      !sdkNonInteractive
+    )
+      warnStartupIssues(enterpriseNote, {
         stderrPrefix: "Warning: ",
       });
   }
   setAdditionalDirectoriesForClaudeMd(addDir);
-  let po;
-  let As = (s, C) => {
-    let T = [];
-    let R = [];
-    for (let L of s)
-      if (L.startsWith("plugin:")) {
-        let sliced = L.slice(7);
+  let header;
+  let partition = (entries, pluginIds) => {
+    let channelEntries = [];
+    let pluginEntries = [];
+    for (let entry of entries)
+      if (entry.startsWith("plugin:")) {
+        let sliced = entry.slice(7);
         let index = sliced.indexOf("@");
-        if (index <= 0 || index === sliced.length - 1) R.push(L);
+        if (index <= 0 || index === sliced.length - 1) pluginEntries.push(entry);
         else
-          T.push({
+          channelEntries.push({
             kind: "plugin",
             name: sliced.slice(0, index),
             marketplace: sliced.slice(index + 1),
           });
-      } else if (L.startsWith("server:") && L.length > 7)
-        T.push({
+      } else if (entry.startsWith("server:") && entry.length > 7)
+        channelEntries.push({
           kind: "server",
-          name: L.slice(7),
+          name: entry.slice(7),
         });
-      else R.push(L);
-    if (R.length > 0)
+      else pluginEntries.push(entry);
+    if (pluginEntries.length > 0)
       cliError(
-        `${C} entries must be tagged: ${R.join(", ")}
+        `${pluginIds} entries must be tagged: ${pluginEntries.join(", ")}
 ` +
           `  plugin:<name>@<marketplace>  \u2014 plugin-provided channel (allowlist enforced)
 ` +
           "  server:<name>                \u2014 manually configured MCP server",
       );
-    return T;
+    return channelEntries;
   };
-  let { channels, dangerouslyLoadDevelopmentChannels } = Kn;
-  let mo = [];
+  let { channels, dangerouslyLoadDevelopmentChannels } = mcpOpts;
+  let channelArgs = [];
   if (channels && channels.length > 0) {
-    mo = As(channels, "--channels");
-    setAllowedChannels(mo);
+    channelArgs = partition(channels, "--channels");
+    setAllowedChannels(channelArgs);
   }
   if (!isNonInteractiveSession) {
     if (dangerouslyLoadDevelopmentChannels && dangerouslyLoadDevelopmentChannels.length > 0)
-      po = As(dangerouslyLoadDevelopmentChannels, "--dangerously-load-development-channels");
+      header = partition(dangerouslyLoadDevelopmentChannels, "--dangerously-load-development-channels");
   }
-  if (mo.length > 0 || (po?.length ?? 0) > 0) {
-    let s = (C) =>
+  if (channelArgs.length > 0 || (header?.length ?? 0) > 0) {
+    let sanitizePluginIds = (entry) =>
       sanitizedPluginIds(
-        C.flatMap((T) => (T.kind === "plugin" ? [`${T.name}@${T.marketplace}`] : [])),
+        entry.flatMap((id) => (id.kind === "plugin" ? [`${id.name}@${id.marketplace}`] : [])),
         isChannelAllowlisted,
       );
     logEvent("tengu_mcp_channel_flags", {
-      channels_count: mo.length,
-      dev_count: po?.length ?? 0,
-      plugins: s(mo),
-      dev_plugins: s(po ?? []),
+      channels_count: channelArgs.length,
+      dev_count: header?.length ?? 0,
+      plugins: sanitizePluginIds(channelArgs),
+      dev_plugins: sanitizePluginIds(header ?? []),
     });
   }
   if (tools.length > 0) {
-    let { shouldToolsListOptInToBrief } = require("./chunk-cv3kgbt2.js");
+    let { shouldToolsListOptInToBrief } = require("../../tools/BriefTool/BriefTool.js");
     if (shouldToolsListOptInToBrief(splitRuleList(tools))) setUserMsgOptIn(true);
   }
   if (getIsNonInteractiveSession()) {
-    let s = checkHasTrustDialogAccepted();
+    let trusted = checkHasTrustDialogAccepted();
     setSessionTrustAccepted(true);
-    if (!s)
-      import("./chunk-zqrznfbt.js").then((C) => {
-        C.primeCurrentRepository();
+    if (!trusted)
+      import("../../utils/detectRepository.js").then((loaderModule) => {
+        loaderModule.primeCurrentRepository();
       });
   }
   emitStartupMark("action_before_permission_context");
   let startTime = performance.now();
-  let Wo = await applySessionLaunchOptions({
+  let launchOptions = await applySessionLaunchOptions({
     allowedTools,
     disallowedTools,
     baseTools: tools,
     restricted,
-    permissionMode: xe,
+    permissionMode: initialMode,
     allowDangerouslySkipPermissions,
     addDirs: addDir,
-    storageV5: storage,
+    storageV5,
   });
-  let toolPermissionContext = Wo.toolPermissionContext;
+  let toolPermissionContext = launchOptions.toolPermissionContext;
   if (proactivity_2)
     toolPermissionContext = {
       ...toolPermissionContext,
       ...proactivity_2,
     };
-  let { warnings, overlyBroadBashPermissions } = Wo;
-  It ??= Wo.bypassCapabilityNotification;
+  let { warnings, overlyBroadBashPermissions } = launchOptions;
+  defaultMode ??= launchOptions.bypassCapabilityNotification;
   recordPhase("permission_context_ms", performance.now() - startTime, startTime);
   if (
     !getIsNonInteractiveSession() ||
     (outputFormat !== "json" && outputFormat !== "stream-json" && env.CLAUDE_CODE_SESSION_KIND !== "bg")
   ) {
     warnings.forEach((warning) => warnStartupIssues(warning));
-    _s.push(
+    inheritedDirs.push(
       ...filterUnseenSecurityWarnings(
-        Wo.securityWarnings.map((securityWarning) => ({
+        launchOptions.securityWarnings.map((securityWarning) => ({
           ...securityWarning,
           text: cleanWarningLine(securityWarning.text),
         })),
@@ -1926,18 +1990,18 @@ ${joined}`);
         level: "warn",
       }),
     );
-  let Os = checkBypassPermissionsEnv(toolPermissionContext);
-  if (Os !== undefined)
-    reportStartupModelNotice(Os, {
+  let bypassCheck = checkBypassPermissionsEnv(toolPermissionContext);
+  if (bypassCheck !== undefined)
+    reportStartupModelNotice(bypassCheck, {
       key: "bypass-removal-waiver",
       outputFormat,
       onStderrToo: true,
     });
-  armPendingSettingsEnvRule(getRootSession(), hasRepoSettingsEnv, env_2);
+  armPendingSettingsEnvRule(getRootSession(), hasRepoSettingsEnv, worktreeRequested);
   enforceMinimumVersion();
-  let Go =
-    isNonInteractiveSession && !$t && headlessSyncsClaudeAiConnectors()
-      ? fetchClaudeAiConfigsOnce(y).then((claudeAiConfigs) => {
+  let mcpReady =
+    isNonInteractiveSession && !sdkNonInteractive && headlessSyncsClaudeAiConnectors()
+      ? fetchClaudeAiConfigsOnce(extraOptions).then((claudeAiConfigs) => {
           printClaudeAiConnectorNotice();
           let { allowed, blocked } = filterMcpServersByPolicy(claudeAiConfigs ?? {});
           if (blocked.length > 0)
@@ -1947,7 +2011,7 @@ ${joined}`);
           return allowed;
         })
       : Promise.resolve({});
-  if (ms) {
+  if (isRemoteLaunch) {
     setIsRemoteMode(true);
     if (hasSyncedPluginLaneOpened()) {
       clearPluginCache("remote thin client: synced plugin lane closes");
@@ -1956,28 +2020,28 @@ ${joined}`);
   }
   logForDebugging("[STARTUP] Loading MCP configs...");
   let now = Date.now();
-  let Jn = {
+  let prefetchTiming = {
     value: undefined,
   };
-  let Ds =
+  let enterpriseGate =
     isNonInteractiveSession && isGateOOn() && hasManagedMcpPolicy()
-      ? Go.catch(() => ({}))
+      ? mcpReady.catch(() => ({}))
       : Promise.resolve();
-  let Yl = !(strictMcpConfig || isBareMode() || getIsRemoteMode()) && isEnterpriseMcpConfigHeld();
-  let fo = (
+  let enterpriseHeld = !(strictMcpConfig || isBareMode() || getIsRemoteMode()) && isEnterpriseMcpConfigHeld();
+  let mcpConfigsPromise = (
     strictMcpConfig || isBareMode() || getIsRemoteMode()
       ? Promise.resolve({
           servers: {},
         })
-      : Ds.then(() =>
+      : enterpriseGate.then(() =>
           getClaudeCodeMcpConfigs(config, {
-            storageV5: storage,
-            credentials: y,
+            storageV5,
+            credentials: extraOptions,
           }),
         )
-  ).then((s) => {
-    Jn.value = Date.now() - now;
-    return s;
+  ).then((result) => {
+    prefetchTiming.value = Date.now() - now;
+    return result;
   });
   let wasTrustedBeforeSetup = checkHasTrustDialogAccepted();
   let wasPersistedTrustedBeforeSetup = isWorkspacePersistedTrusted();
@@ -1988,13 +2052,13 @@ ${joined}`);
   if (inputFormat === "stream-json" && !getIsNonInteractiveSession())
     return cliError("Error: --input-format=stream-json requires --print.");
   {
-    let s = validateSdkUrlFlag(sdkUrl);
-    if (s !== null) {
+    let sdkUrlCheck = validateSdkUrlFlag(sdkUrl);
+    if (sdkUrlCheck !== null) {
       await logEventAsync("tengu_sdk_url_host_rejected", {
-        code: fromEnum(s.code),
+        code: fromEnum(sdkUrlCheck.code),
       });
       return cliErrorAfterAnalyticsFlush(
-        `Error: --sdk-url rejected: ${s.reason}. This flag is reserved for Remote Control worker processes connecting to Anthropic's backend.`,
+        `Error: --sdk-url rejected: ${sdkUrlCheck.reason}. This flag is reserved for Remote Control worker processes connecting to Anthropic's backend.`,
       );
     }
   }
@@ -2005,10 +2069,10 @@ ${joined}`);
       );
     if (!env.CLAUDE_CODE_REMOTE) {
       await waitForPolicyLimitsToLoad();
-      let s = policyDeniedReason("allow_remote_control", "Remote Control", "is");
-      if (s) {
+      let remoteControlDenied = policyDeniedReason("allow_remote_control", "Remote Control", "is");
+      if (remoteControlDenied) {
         await logOrgPolicyDeniedAsync("allow_remote_control", "startup");
-        return cliErrorAfterAnalyticsFlush(s);
+        return cliErrorAfterAnalyticsFlush(remoteControlDenied);
       }
       if (getSettingsWithErrors_2().settings.disableRemoteControl === true)
         return cliError(`Error: ${REMOTE_CONTROL_DISABLED_BY_POLICY_MESSAGE}`);
@@ -2028,16 +2092,18 @@ ${joined}`);
     sdkUrl,
     isNonInteractiveSession,
   });
-  let Qn = {
+  let hydrateOpts = {
     hydrate: env.CLAUDE_CODE_CCR_EARLY_HYDRATE_PREFETCH,
     connect: env.CLAUDE_CODE_CCR_EARLY_REMOTE_CONNECT,
   };
-  let Ls =
-    (Qn.hydrate || Qn.connect) && sdkUrl && options.resume
-      ? import("./chunk-yvf1bnw9.js").then((s) => s.startEarlyRemoteWork(sdkUrl, storage, Qn))
+  let earlyHydrate =
+    (hydrateOpts.hydrate || hydrateOpts.connect) && sdkUrl && options.resume
+      ? import("../remoteIO.js").then((hydrateModule) =>
+          hydrateModule.startEarlyRemoteWork(sdkUrl, storageV5, hydrateOpts),
+        )
       : undefined;
-  let earlyHydrateReads = Ls?.then((s) => s.hydrateReads);
-  let earlyRemoteLink = Ls?.then((s) => s.link);
+  let earlyHydrateReads = earlyHydrate?.then((readHydrator) => readHydrator.hydrateReads);
+  let earlyRemoteLink = earlyHydrate?.then((linkHydrator) => linkHydrator.link);
   if (options.awaitInitialize) {
     if (inputFormat !== "stream-json")
       return cliError("Error: --await-initialize requires --input-format=stream-json.");
@@ -2067,31 +2133,31 @@ ${joined}`);
     return cliError(
       "Error: --prompt-suggestions requires --print and --output-format=stream-json (prompt_suggestion messages are only surfaced in stream-json output).",
     );
-  if (Tn) {
+  if (partialMessages) {
     if (!isNonInteractiveSession || outputFormat !== "stream-json") {
       if (includePartialMessages)
         return cliError(
           "Error: --include-partial-messages requires --print and --output-format=stream-json.",
         );
-      Tn = false;
+      partialMessages = false;
     }
   }
-  if (Pn) {
+  if (forwardSubagent) {
     if (!isNonInteractiveSession || outputFormat !== "stream-json") {
       if (forwardSubagentText)
         return cliError("Error: --forward-subagent-text requires --print and --output-format=stream-json.");
-      Pn = false;
+      forwardSubagent = false;
     }
   }
   if (options.planModeInstructions && !isNonInteractiveSession)
     return cliError("Error: --plan-mode-instructions can only be used with --print mode.");
   if (!isNonInteractiveSession) {
-    let s = cloudUnavailableReason(stdinOverrideCache.get(), {
-      explicitCloudLaunch: remote !== null && !os,
+    let cloudReason = cloudUnavailableReason(stdinOverrideCache.get(), {
+      explicitCloudLaunch: remote !== null && !cloudApplied,
     });
-    if (s !== undefined) return exitWithoutInteractiveInput(s);
+    if (cloudReason !== undefined) return exitWithoutInteractiveInput(cloudReason);
   }
-  let inputPrompt = await getInputPrompt(name || "", inputFormat ?? "text");
+  let inputPrompt = await getInputPrompt(typedName || "", inputFormat ?? "text");
   let preDecorationInputPrompt = typeof inputPrompt === "string" ? inputPrompt : null;
   profileCheckpoint("action_after_input_prompt");
   let jsonSchema;
@@ -2114,7 +2180,7 @@ ${joined}`);
   logForDebugging("[STARTUP] Running setup()...");
   let now_2 = Date.now();
   let startTime_2 = performance.now();
-  let { setup } = await import("./chunk-fhdzwff4.js");
+  let { setup } = await import("../../isDesktopEntrypointExempted.lazy.js");
   recordPhase("setup_import_ms", performance.now() - startTime_2, startTime_2);
   let messagingSocketPath = options.messagingSocketPath;
   let cwd = getCwd();
@@ -2122,67 +2188,67 @@ ${joined}`);
     claudeTempDir();
   } catch (error) {
     logError(error);
-    let C = errorMessage(error);
-    printCliError(C);
+    let message = errorMessage(error);
+    printCliError(message);
     await writeStartupFailureResult({
       sessionId: getSessionId(),
-      message: C,
+      message,
       reason: "temp_dir_unusable",
     });
     return cliErrorAfterAnalyticsFlush();
   }
   initBuiltinPlugins();
-  jl = true;
+  resumed = true;
   initBundledSkills();
-  let Zn = !!pendingSSH?.host;
-  let er;
-  let tr = false;
-  let nr = async () => {
-    if (er !== undefined && !tr) return;
+  let hasSshHost = !!pendingSSH?.host;
+  let remoteLink;
+  let linkFailed = false;
+  let establishLink = async () => {
+    if (remoteLink !== undefined && !linkFailed) return;
     try {
-      let { shouldRefreshArtifactRoster } = await import("./chunk-tbts81qj.js");
+      let { shouldRefreshArtifactRoster } = await import("../../services/artifacts/artifactToolGates.js");
       if (!shouldRefreshArtifactRoster()) return;
       let {
         artifactRosterFetchDeferred,
         artifactRosterFresh,
         artifactRosterIdentityKnown,
         refreshArtifactRoster,
-      } = await import("./chunk-rdzbcgex.js");
+      } = await import("../../services/artifacts/rosterWait.js");
       if (!artifactRosterIdentityKnown() || artifactRosterFresh() || artifactRosterFetchDeferred()) return;
-      tr = false;
-      er = refreshArtifactRoster({
-        credentials: y,
-        storageV5: storage,
+      linkFailed = false;
+      remoteLink = refreshArtifactRoster({
+        credentials: extraOptions,
+        storageV5,
         timeoutMs: 5000,
       });
-      er.then((Be) => {
-        tr = !Be;
+      remoteLink.then((link) => {
+        linkFailed = !link;
       });
     } catch (error) {
       logForDebugging(`Artifact roster kick failed: ${errorMessage(error)}`);
     }
   };
-  if (isNonInteractiveSession && !pendingSettingsEnvBlocksEarlyGb(env_2)) await nr();
+  if (isNonInteractiveSession && !pendingSettingsEnvBlocksEarlyGb(worktreeRequested)) await establishLink();
   if (!shouldAwaitPolicyLimitsOnStartup()) ensurePolicyLimitsLoadRequested();
   else if ((await awaitPolicyLimitsColdStart()) !== "skipped")
     profileCheckpoint("action_after_policy_limits_cold_await");
   let orgValidation;
   if (!getIsNonInteractiveSession())
     await refuseOrgConfigEarlyAtStartup({
-      showBlockedScreen: h.showOrgConfigBlockedScreen,
+      showBlockedScreen: args.showOrgConfigBlockedScreen,
     });
   {
-    let s = settleProvisionalStartupMode(toolPermissionContext, {
-      onNotification: (C) => {
-        It ??= C;
+    let settledMode = settleProvisionalStartupMode(toolPermissionContext, {
+      onNotification: (notice) => {
+        defaultMode ??= notice;
       },
     });
-    if (s !== toolPermissionContext) {
-      toolPermissionContext = s;
-      xe = s.mode;
+    if (settledMode !== toolPermissionContext) {
+      toolPermissionContext = settledMode;
+      initialMode = settledMode.mode;
     }
     if (getIsNonInteractiveSession()) {
-      It ??= levelAutoHeldForPendingVerdictNotice();
+      defaultMode ??= levelAutoHeldForPendingVerdictNotice();
       abandonPendingPolicyVerdictResolution();
     }
   }
@@ -2193,18 +2259,18 @@ ${joined}`);
       policyLimitsColdStartWait.waitedMs,
       policyLimitsColdStartWait.firstAtMs,
     );
-    let s = didPolicyLimitsColdStartTimeOut();
-    logForDiagnosticsNoPII(s ? "warn" : "info", "policy_limits_cold_await", {
+    let coldStartTimedOut = didPolicyLimitsColdStartTimeOut();
+    logForDiagnosticsNoPII(coldStartTimedOut ? "warn" : "info", "policy_limits_cold_await", {
       budget_ms: POLICY_LIMITS_COLD_AWAIT_MS,
       waited_ms: Math.round(policyLimitsColdStartWait.waitedMs),
-      timed_out: s,
+      timed_out: coldStartTimedOut,
     });
   }
   if (
     startEarlyPluginsSync(
       getRootSession(),
-      y,
-      () => shouldHoldEarlyGrowthBook(env_2) || env.CLAUDE_CODE_ENABLE_PROXY_AUTH_HELPER,
+      extraOptions,
+      () => shouldHoldEarlyGrowthBook(worktreeRequested) || env.CLAUDE_CODE_ENABLE_PROXY_AUTH_HELPER,
     )
   )
     addStartupContext({
@@ -2213,43 +2279,43 @@ ${joined}`);
   if (
     startEarlySkillsSync(
       getRootSession(),
-      storage,
-      y,
-      () => shouldHoldEarlyGrowthBook(env_2) || env.CLAUDE_CODE_ENABLE_PROXY_AUTH_HELPER,
+      storageV5,
+      extraOptions,
+      () => shouldHoldEarlyGrowthBook(worktreeRequested) || env.CLAUDE_CODE_ENABLE_PROXY_AUTH_HELPER,
     )
   )
     addStartupContext({
       early_skills_sync: 1,
     });
-  let od =
-    ((so && hasFreshGrowthBookFeatures()) || Wt) &&
-    !pendingSettingsEnvBlocksEarlyGb(env_2) &&
+  let setupResult =
+    ((growthBookCold && hasFreshGrowthBookFeatures()) || shouldKick) &&
+    !pendingSettingsEnvBlocksEarlyGb(worktreeRequested) &&
     !env.CLAUDE_CODE_ENABLE_PROXY_AUTH_HELPER &&
     refreshMemoryContextForCcr(getRootSession());
   setAutoMemoryToggleRecorder(saveAutoMemorySessionSwitch);
-  let nd = setup(
+  let setupPromise = setup(
     cwd,
-    Zn ? "default" : xe,
-    Zn ? false : allowDangerouslySkipPermissions,
-    env_2,
-    eo,
-    An,
+    hasSshHost ? "default" : initialMode,
+    hasSshHost ? false : allowDangerouslySkipPermissions,
+    worktreeRequested,
+    worktreeArg,
+    useTmux,
     sessionId ? normalizeUuidOrNull(sessionId) : undefined,
-    kn,
+    prReference,
     messagingSocketPath,
-    storage,
-    y,
-    env_2 && (cloudAttachId !== null || resumeInCloud !== null) && isWorktreeCloudClaimEnabled(),
-    !oo,
+    storageV5,
+    extraOptions,
+    worktreeRequested && (cloudAttachId !== null || resumeInCloud !== null) && isWorktreeCloudClaimEnabled(),
+    !runsOnAnotherMachine,
   );
-  if (shouldFillPluginLoadWithStore(y) && !env_2 && !isBareMode() && !isSafeMode())
-    loadAllPluginsCacheOnly(storage, y).catch(() => {});
-  if (!env_2) warmCommandSourceCaches(cwd, storage);
-  let rr = env_2 ? null : getAgentDefinitionsWithOverrides(cwd, storage);
-  rr?.catch(() => {});
+  if (shouldFillPluginLoadWithStore(extraOptions) && !worktreeRequested && !isBareMode() && !isSafeMode())
+    loadAllPluginsCacheOnly(storageV5, extraOptions).catch(() => {});
+  if (!worktreeRequested) warmCommandSourceCaches(cwd, storageV5);
+  let agentDefs = worktreeRequested ? null : getAgentDefinitionsWithOverrides(cwd, storageV5);
+  agentDefs?.catch(() => {});
   let startTime_3 = performance.now();
   try {
-    await nd;
+    await setupPromise;
   } catch (error) {
     if (error instanceof CliUserError) return cliError(error.message);
     throw error;
@@ -2257,16 +2323,17 @@ ${joined}`);
   recordPhase("setup_ms", performance.now() - startTime_3, startTime_3);
   logForDebugging(`[STARTUP] setup() completed in ${Date.now() - now_2}ms`);
   profileCheckpoint("action_after_setup");
-  if (sessionId && E) {
-    let { rekeySessionTeamAtStartup } = await import("./chunk-6cc2zqkz.js");
-    E = (await rekeySessionTeamAtStartup(storage)) ?? E;
+  if (sessionId && sessionTeam) {
+    let { rekeySessionTeamAtStartup } =
+      await import("../../tools/TeamCreateTool/initializeSessionTeam.lazy.js");
+    sessionTeam = (await rekeySessionTeamAtStartup(storageV5)) ?? sessionTeam;
   }
-  await nr();
+  await establishLink();
   let rootSession = getRootSession();
   setClaudeMdJudgedBy(rootSession, toolPermissionContext);
-  let sr = !!options.replayUserMessages;
-  sr = shouldReplayUserMessages({
-    replayUserMessagesFlag: sr,
+  let replaysMessages = !!options.replayUserMessages;
+  replaysMessages = shouldReplayUserMessages({
+    replayUserMessagesFlag: replaysMessages,
     outputFormat,
     explicitSocketPath: messagingSocketPath,
     socketBound: udsEnv.CLAUDE_CODE_MESSAGING_SOCKET !== undefined,
@@ -2274,70 +2341,70 @@ ${joined}`);
   if (getIsNonInteractiveSession()) {
     applyConfigEnvironmentVariables();
     releaseGrowthBookHold(rootSession.host);
-    orgValidation = await enforceOrgConfigGateHeadless(() => validateForceLoginOrg(y));
+    orgValidation = await enforceOrgConfigGateHeadless(() => validateForceLoginOrg(extraOptions));
     if (inputFormat === "stream-json") armStartupWorkGate(rootSession.host);
-    if (Ct && !so) {
-      so = true;
-      let s = judgeGrowthBookKick(Ct);
-      if (s !== undefined) {
-        if (Wt && isGrowthBookInitializeInFlight()) {
+    if (remoteNonInteractive && !growthBookCold) {
+      growthBookCold = true;
+      let kickDecision = judgeGrowthBookKick(remoteNonInteractive);
+      if (kickDecision !== undefined) {
+        if (shouldKick && isGrowthBookInitializeInFlight()) {
           profileCheckpoint("before_idle_gc");
           try {
             (await import("bun:jsc")).edenGC();
           } catch {}
           profileCheckpoint("after_idle_gc");
         }
-        rt = {
+        initResult = {
           site: "gb-before-context",
-          result: await ro(
+          result: await initializeSession(
             "growthbook_init_ms",
             {
               before: "before_growthbook_init",
               after: "after_growthbook_init",
             },
-            s,
+            kickDecision,
           ),
         };
       }
     }
     if (!isParkedSpare())
-      if ($t) logForDiagnosticsNoPII("info", "git_status_skipped_headless_cloud_arm");
+      if (sdkNonInteractive) logForDiagnosticsNoPII("info", "git_status_skipped_headless_cloud_arm");
       else prefetchGitStatus(rootSession);
     if (!isParkedSpare())
       if (!shouldPrefetchUserContext(Boolean(options.continue || options.resume)))
-        getOrBuildUserContext(rootSession, storage, y);
-      else startKeptProjectDetail(y);
+        getOrBuildUserContext(rootSession, storageV5, extraOptions);
+      else startKeptProjectDetail(extraOptions);
     ensureModelStringsInitialized();
   }
-  let So = options.name ? sanitizeSessionTitle(options.name) || undefined : undefined;
-  if (So) {
-    cacheSessionTitle(So);
-    cacheAgentName(So);
+  let explicitName = options.name ? sanitizeSessionTitle(options.name) || undefined : undefined;
+  if (explicitName) {
+    cacheSessionTitle(explicitName);
+    cacheAgentName(explicitName);
   }
   let model = options.model;
-  let Yo = env_2 ? getCwd() : cwd;
-  let Hs = !so ? judgeGrowthBookKick(Ct) : undefined;
-  if (Hs !== undefined)
-    rt = {
+  let sessionCwd = worktreeRequested ? getCwd() : cwd;
+  let kickOnWarm = !growthBookCold ? judgeGrowthBookKick(remoteNonInteractive) : undefined;
+  if (kickOnWarm !== undefined)
+    initResult = {
       site: "gb-before-tools",
-      result: await ro(
+      result: await initializeSession(
         "growthbook_init_ms",
         {
           before: "before_growthbook_init",
           after: "after_growthbook_init",
         },
-        Hs,
+        kickOnWarm,
       ),
     };
-  if (Ct) {
-    markWarmCacheKickAsks(Wt);
+  if (remoteNonInteractive) {
+    markWarmCacheKickAsks(shouldKick);
     logEvent("tengu_startup_flag_fetch_wait", {
-      waited: rt !== undefined,
-      site: fromEnumOpt(rt?.site),
-      wait_ms: Math.round(rt?.result.waitMs ?? 0),
-      timed_out: rt?.result.timedOut ?? false,
+      waited: initResult !== undefined,
+      site: fromEnumOpt(initResult?.site),
+      wait_ms: Math.round(initResult?.result.waitMs ?? 0),
+      timed_out: initResult?.result.timedOut ?? false,
       fetched: hasFreshGrowthBookFeatures(),
-      warm_wake_early_fetch: Wt,
+      warm_wake_early_fetch: shouldKick,
       kick_from_init: env.CLAUDE_CODE_GROWTHBOOK_KICK_FROM_INIT,
       kick_on_warm_cache: env.CLAUDE_CODE_GROWTHBOOK_KICK_ON_WARM_CACHE,
       flag_fetch_kick: fromEnumOpt(getFlagFetchKick()),
@@ -2347,56 +2414,56 @@ ${joined}`);
       chromeClassifierFloorEnabled: readChromeClassifierFloor(),
     };
   }
-  await nr();
-  let $s = refreshAccountSkillsSyncFlag();
-  if ($s) startSkillSyncAndResync(rootSession, storage, y);
+  await establishLink();
+  let skillsSyncFlag = refreshAccountSkillsSyncFlag();
+  if (skillsSyncFlag) startSkillSyncAndResync(rootSession, storageV5, extraOptions);
   else if (getSkillsSyncVetoed()) {
     clearSkillCaches();
-    pruneSkillsSyncRoot(storage).catch(logError);
+    pruneSkillsSyncRoot(storageV5).catch(logError);
   }
   onSkillsSyncVetoChange();
-  let rd = enableAccountPluginsSync();
-  primeSkillsListAskConversion(rootSession, () => isAppliedListCurrent(y));
-  if (rd) {
-    startFirstPluginsSync(rootSession, y);
-    syncClaudeAiMarketplaces(rootSession, y, storage);
+  let pluginsSyncEnabled = enableAccountPluginsSync();
+  primeSkillsListAskConversion(rootSession, () => isAppliedListCurrent(extraOptions));
+  if (pluginsSyncEnabled) {
+    startFirstPluginsSync(rootSession, extraOptions);
+    syncClaudeAiMarketplaces(rootSession, extraOptions, storageV5);
   } else if (getPluginsSyncVetoed()) pruneSyncedPluginsForClosedGate().catch(logError);
   else if (isPluginsSyncFlagOn()) completeDeferredRemovals().catch(logError);
   subscribeMemoryToggleRefresh(rootSession);
-  if (od)
+  if (setupResult)
     refreshMemoryContext(rootSession, {
-      credentials: y,
-      storageV5: storage,
+      credentials: extraOptions,
+      storageV5,
     });
   else
     maybeKickMemoryContextFetch(rootSession, {
-      credentials: y,
-      storageV5: storage,
+      credentials: extraOptions,
+      storageV5,
     });
-  let Ws = env_2 ? null : getCommands(Yo, storage);
-  Ws?.catch(() => {});
+  let commands = worktreeRequested ? null : getCommands(sessionCwd, storageV5);
+  commands?.catch(() => {});
   if (isXtermJs() && getFeatureValue_CACHED_MAY_BE_STALE("tengu_cobalt_thicket", true))
     clampLevelForAttacher(true);
   logForDebugging("[STARTUP] Loading commands and agents...");
   let now_3 = Date.now();
-  if (shouldFillPluginLoadWithStore(y) && env_2 && !isBareMode() && !isSafeMode())
-    loadAllPluginsCacheOnly(storage, y).catch(() => {});
+  if (shouldFillPluginLoadWithStore(extraOptions) && worktreeRequested && !isBareMode() && !isSafeMode())
+    loadAllPluginsCacheOnly(storageV5, extraOptions).catch(() => {});
   let startTime_4 = performance.now();
-  using id = artifactStartupModule?.holdArtifactStartupTelemetry();
+  using artifactTelemetryHold = artifactStartupModule?.holdArtifactStartupTelemetry();
   let agentsForSession = await loadAgentsForSession({
-    cwd: Yo,
+    cwd: sessionCwd,
     toolPermissionContext,
     applyCoordinatorFilter: true,
     agentsJson: agents,
     agentSetting: agent,
-    commandsPromise: Ws,
-    agentDefsPromise: rr && agentReadForTheSeat(rr, cwd, storage),
+    commandsPromise: commands,
+    agentDefsPromise: agentDefs && agentReadForTheSeat(agentDefs, cwd, storageV5),
     deferCommands: shouldSyncPluginInstall(isNonInteractiveSession),
     onToolsLoaded: () => profileCheckpoint("action_tools_loaded"),
-    storageV5: storage,
+    storageV5,
   });
   recordPhase("tools_commands_load_ms", performance.now() - startTime_4, startTime_4);
-  let { tools: tools_2, mainThreadAgentDefinition, commands } = agentsForSession;
+  let { tools: tools_2, mainThreadAgentDefinition, commands: commands_2 } = agentsForSession;
   let { agentDefinitions, cliAgents, deferredCommandsPromise } = agentsForSession;
   if (
     agent &&
@@ -2412,16 +2479,16 @@ ${joined}`);
   }
   addStartupContext({
     tool_count: tools_2.length,
-    skill_count: count(commands, isSkillToolCommand),
+    skill_count: count(commands_2, isSkillToolCommand),
   });
   deferredCommandsPromise?.then(
-    (s) =>
+    (agent) =>
       addStartupContext({
-        skill_count: count(s, isSkillToolCommand),
+        skill_count: count(agent, isSkillToolCommand),
       }),
     () => {},
   );
-  loadAllPluginsCacheOnly(storage, y).then(
+  loadAllPluginsCacheOnly(storageV5, extraOptions).then(
     (allPluginsCacheOnly) =>
       addStartupContext({
         plugin_count: allPluginsCacheOnly.enabled.length,
@@ -2431,20 +2498,24 @@ ${joined}`);
   if (
     !mainThreadAgentDefinition &&
     isAgentSwarmsEnabled() &&
-    ze?.agentId &&
-    ze?.agentName &&
-    ze?.teamName &&
-    ze?.agentType
+    teammateSetup?.agentId &&
+    teammateSetup?.agentName &&
+    teammateSetup?.teamName &&
+    teammateSetup?.agentType
   ) {
-    let agentExcludingWebFetch = findAgentExcludingWebFetch(agentDefinitions.activeAgents, ze.agentType);
+    let agentExcludingWebFetch = findAgentExcludingWebFetch(
+      agentDefinitions.activeAgents,
+      teammateSetup.agentType,
+    );
     if (agentExcludingWebFetch) {
       mainThreadAgentDefinition = agentExcludingWebFetch;
       setMainThreadAgentType(agentExcludingWebFetch.agentType);
-    } else logForDebugging(`[teammate] Custom agent ${ze.agentType} not found in available agents`);
+    } else
+      logForDebugging(`[teammate] Custom agent ${teammateSetup.agentType} not found in available agents`);
   }
-  let ir = agent ?? (isCoworkAny() ? undefined : getSettingsAfterPluginLoad("agent"));
-  if (!mainThreadAgentDefinition && !agent && ir) {
-    mainThreadAgentDefinition = findSelectedAgent(agentDefinitions.activeAgents, ir);
+  let agentSetting = agent ?? (isCoworkAny() ? undefined : getSettingsAfterPluginLoad("agent"));
+  if (!mainThreadAgentDefinition && !agent && agentSetting) {
+    mainThreadAgentDefinition = findSelectedAgent(agentDefinitions.activeAgents, agentSetting);
     setMainThreadAgentType(mainThreadAgentDefinition?.agentType);
   }
   toolPermissionContext = withAgentDisallowedTools(
@@ -2467,14 +2538,15 @@ ${joined}`);
         );
       let tool = syntheticOutputTool.tool;
       if (isBgSession()) {
-        let T = tool.call.bind(tool);
+        let originalCall = tool.call.bind(tool);
         tool = {
           ...tool,
-          async call(R, L, Be, We, Co) {
-            let U = await T(R, L, Be, We, Co);
-            let { stashBgStructuredResult } = await import("./chunk-wd9kxbpn.js");
-            stashBgStructuredResult(R);
-            return U;
+          async call(args, context, options, onQueryEvent, extra) {
+            let callResult = await originalCall(args, context, options, onQueryEvent, extra);
+            let { stashBgStructuredResult } =
+              await import("../../services/agentStatus/LINK_SCAN_MAX_BYTES.lazy.js");
+            stashBgStructuredResult(args);
+            return callResult;
           },
         };
       }
@@ -2526,10 +2598,10 @@ ${inputPrompt}`
     else if (!inputPrompt) inputPrompt = initialPrompt;
   }
   let providerSetupCommand;
-  let Ks = Boolean(
+  let continuesExisting = Boolean(
     options.continue || options.resume || (!isNonInteractiveSession && options.fromPr) || teleport,
   );
-  let lr;
+  let routineModel;
   let routineModelTransientlySkipped = false;
   if (routineStartupModule)
     try {
@@ -2537,22 +2609,22 @@ ${inputPrompt}`
         routineName: options.routine?.trim(),
         userSpecifiedModel: model,
         agentModel: mainThreadAgentDefinition?.model,
-        isSessionRestore: Ks,
+        isSessionRestore: continuesExisting,
         cwd: getProjectRoot(),
-        storageV5: storage,
+        storageV5,
       });
-      if (routineStartupModel.status === "model") lr = routineStartupModel.model;
+      if (routineStartupModel.status === "model") routineModel = routineStartupModel.model;
       else if (routineStartupModel.status === "transient_skip") routineModelTransientlySkipped = true;
     } catch (error) {
       logError(error);
     }
-  let dr = lr ?? mainThreadAgentDefinition?.model;
+  let initialModel = routineModel ?? mainThreadAgentDefinition?.model;
   let startTime_5 = performance.now();
   await ensureCatalogDecision({
     headless: isPlainNonInteractive(),
   });
   recordPhase("model_catalog_decision_ms", performance.now() - startTime_5, startTime_5);
-  let cr;
+  let mantleOverride;
   if (
     getIsNonInteractiveSession() &&
     !env.CLAUDE_CODE_SKIP_BEDROCK_AUTH &&
@@ -2560,11 +2632,11 @@ ${inputPrompt}`
     !env.CLAUDE_CODE_SKIP_MANTLE_AUTH
   )
     try {
-      let { apply3PDefaultFallbacks } = await import("./chunk-kva132ev.js");
-      let { lines, mantleOverride } = await apply3PDefaultFallbacks({
-        pendingUserModel: model != null ? model : dr === "inherit" ? undefined : dr,
+      let { apply3PDefaultFallbacks } = await import("../../utils/model/thirdPartyDefaultFallbacks.js");
+      let { lines, mantleOverride: mantleOverride_2 } = await apply3PDefaultFallbacks({
+        pendingUserModel: model != null ? model : initialModel === "inherit" ? undefined : initialModel,
       });
-      cr = mantleOverride;
+      mantleOverride = mantleOverride_2;
       for (let line of lines)
         process.stderr.write(`Warning: ${line}
 `);
@@ -2573,10 +2645,10 @@ ${inputPrompt}`
     }
   if (options.clientDataUrl) env.set("CLAUDE_CODE_CLIENT_DATA_URL", options.clientDataUrl);
   if (options.allowOtherModels) env.set("CLAUDE_CODE_ALLOW_OTHER_MODELS", true);
-  let Xs = await applyClientDataToSession({
-    runsOnAnotherMachine: oo,
+  let clientDataApplied = await applyClientDataToSession({
+    runsOnAnotherMachine,
   });
-  if (Xs !== undefined) return cliError(Xs);
+  if (clientDataApplied !== undefined) return cliError(clientDataApplied);
   let {
     effectiveModel,
     initialMainLoopModel,
@@ -2586,26 +2658,27 @@ ${inputPrompt}`
     unservedModelSpelling,
   } = await collectModelOverrides({
     userSpecifiedModel: model,
-    agentModel: dr,
-    agentModelSource: lr !== undefined ? "routine" : "agent",
+    agentModel: initialModel,
+    agentModelSource: routineModel !== undefined ? "routine" : "agent",
     routineModelTransientlySkipped,
-    storageV5: storage,
-    credentials: y,
+    storageV5,
+    credentials: extraOptions,
   });
-  let pr = managedDenyStartupRefusal(resolvedInitialModel);
-  if (pr !== null) {
-    printCliError(pr);
+  let modelDeny = managedDenyStartupRefusal(resolvedInitialModel);
+  if (modelDeny !== null) {
+    printCliError(modelDeny);
     await writeStartupFailureResult({
       sessionId: getSessionId(),
-      message: pr,
+      message: modelDeny,
       reason: "managed_settings_invalid",
     });
     return cliErrorAfterAnalyticsFlush();
   }
-  if (cr && (effectiveModel == null || options.model === "default")) setMainLoopModelOverride(cr);
-  let Qs = checkClientDataModelEntry();
-  if (Qs !== undefined) return cliError(Qs);
-  fetchDynamicModelConfig(resolvedInitialModel, y, storage);
+  if (mantleOverride && (effectiveModel == null || options.model === "default"))
+    setMainLoopModelOverride(mantleOverride);
+  let clientDataModelEntry = checkClientDataModelEntry();
+  if (clientDataModelEntry !== undefined) return cliError(clientDataModelEntry);
+  fetchDynamicModelConfig(resolvedInitialModel, extraOptions, storageV5);
   let fallbackModels = resolveFallbackModels({
     cli: {
       fallbackModel: baseTools,
@@ -2628,7 +2701,7 @@ ${inputPrompt}`
         debugLine: `[effort] ${effortCapWarning}`,
       });
   }
-  let Jo;
+  let advisorState;
   if (isAdvisorToolEnabled()) {
     let advisor = options.advisor;
     if (advisor) {
@@ -2643,166 +2716,172 @@ ${inputPrompt}`
           },
         );
       }
-      let C = stripAnyVersatileSuffix(parseUserSpecifiedModel(advisor));
-      if (!canUseAsAdvisor(C)) {
-        let T = isAdvisorPendingConsent(C);
-        let R = T
-          ? `${getAdvisorCreditsNotice(C)} Run ${getAdvisorModelSwitchCommand(C)}${isNonInteractiveSession ? " in an interactive session" : ""} to review and enable.`
+      let advisorModel = stripAnyVersatileSuffix(parseUserSpecifiedModel(advisor));
+      if (!canUseAsAdvisor(advisorModel)) {
+        let advisorPending = isAdvisorPendingConsent(advisorModel);
+        let advisorNotice = advisorPending
+          ? `${getAdvisorCreditsNotice(advisorModel)} Run ${getAdvisorModelSwitchCommand(advisorModel)}${isNonInteractiveSession ? " in an interactive session" : ""} to review and enable.`
           : `Error: The model "${advisor}" cannot be used as an advisor.`;
         if (env.CLAUDE_CODE_SESSION_KIND !== "bg") {
-          if (T) {
+          if (advisorPending) {
             await logFeatureSadAsync(
               "advisor_fable_consent",
               isNonInteractiveSession ? "noninteractive_set_blocked" : "interactive_launch_blocked",
             );
-            return cliErrorAfterAnalyticsFlush(R);
+            return cliErrorAfterAnalyticsFlush(advisorNotice);
           }
-          return cliError(R);
+          return cliError(advisorNotice);
         }
-        logForDebugging(`[AdvisorTool] ${R}`, {
+        logForDebugging(`[AdvisorTool] ${advisorNotice}`, {
           level: "warn",
         });
       }
-      if (!canAdviseModel(resolvedInitialModel, C)) {
-        let T = `"${advisor}" cannot advise "${resolvedInitialModel}" (the advisor must be at least as capable as the main model). The advisor will not be used for the main model.`;
-        if (!isNonInteractiveSession || env.CLAUDE_CODE_SESSION_KIND !== "bg") warnStartupIssues(T);
+      if (!canAdviseModel(resolvedInitialModel, advisorModel)) {
+        let advisorRefusal = `"${advisor}" cannot advise "${resolvedInitialModel}" (the advisor must be at least as capable as the main model). The advisor will not be used for the main model.`;
+        if (!isNonInteractiveSession || env.CLAUDE_CODE_SESSION_KIND !== "bg")
+          warnStartupIssues(advisorRefusal);
         else
-          logForDebugging(`[AdvisorTool] ${T}`, {
+          logForDebugging(`[AdvisorTool] ${advisorRefusal}`, {
             level: "warn",
           });
       }
     }
-    Jo = advisor ?? getConfiguredAdvisorModel();
-    if (Jo) logForDebugging(`[AdvisorTool] Advisor model: ${Jo}`);
+    advisorState = advisor ?? getConfiguredAdvisorModel();
+    if (advisorState) logForDebugging(`[AdvisorTool] Advisor model: ${advisorState}`);
   }
-  let mr = isNonInteractiveSession && !$t ? filterAllowedSdkBetas(betas) : undefined;
-  let oi =
+  let allowedBetas = isNonInteractiveSession && !sdkNonInteractive ? filterAllowedSdkBetas(betas) : undefined;
+  let cloudAttachCheck =
     cloudAttachId === null &&
     poolId === null &&
     remote === null &&
-    !(Ks && !startupModelWinsOverSessionRestore());
+    !(continuesExisting && !startupModelWinsOverSessionRestore());
   let unknownModelWindow = null;
-  if (oi) {
-    let unknownModelNotice = buildUnknownModelNotice(resolvedInitialModel, windowArg, mr);
-    let C = oneMillionContextNotice(resolvedInitialModel, windowArg, mr);
+  if (cloudAttachCheck) {
+    let unknownModelNotice = buildUnknownModelNotice(resolvedInitialModel, windowArg, allowedBetas);
+    let contextWindowNotice = oneMillionContextNotice(resolvedInitialModel, windowArg, allowedBetas);
     if (unknownModelNotice !== null)
       unknownModelWindow = emitUnknownModelNotice(unknownModelNotice, {
-        interactive: !isNonInteractiveSession && !oo,
-        headless: (T) =>
-          reportStartupModelNotice(T, {
+        interactive: !isNonInteractiveSession && !runsOnAnotherMachine,
+        headless: (headlessValue) =>
+          reportStartupModelNotice(headlessValue, {
             key: "model-context-window",
             outputFormat,
           }),
       });
-    else if (C !== null)
-      reportStartupModelNotice(C, {
+    else if (contextWindowNotice !== null)
+      reportStartupModelNotice(contextWindowNotice, {
         key: "model-context-window",
         outputFormat,
-        debugLine: `[autocompact] ${C}`,
+        debugLine: `[autocompact] ${contextWindowNotice}`,
       });
   }
-  if (!oo)
+  if (!runsOnAnotherMachine)
     reportEnvWindow(env.CLAUDE_CODE_AUTO_COMPACT_WINDOW, {
       interactive: !isNonInteractiveSession,
-      headless: (s) =>
-        reportStartupModelNotice(s, {
+      headless: (headlessValue) =>
+        reportStartupModelNotice(headlessValue, {
           key: "auto-compact-window-env",
           outputFormat,
-          debugLine: `[autocompact] ${s}`,
+          debugLine: `[autocompact] ${headlessValue}`,
         }),
     });
   maybeActivateBrief(options);
   if (!getIsNonInteractiveSession() && !getUserMsgOptIn() && getInitialSettings_2().defaultView === "chat") {
-    let { isBriefEntitled } = require("./chunk-cv3kgbt2.js");
+    let { isBriefEntitled } = require("../../tools/BriefTool/BriefTool.js");
     if (isBriefEntitled()) setUserMsgOptIn(true);
   }
-  let yo;
+  let mcpApprovalState;
   let mcpApprovalSkipWarning = null;
   let skipDangerousModePromptSetPreDialog = hasSkipDangerousModePermissionPrompt();
   if (!isNonInteractiveSession) {
-    let s =
-      (await h.runOnboarding?.({
+    let printHost =
+      (await args.runOnboarding?.({
         session: rootSession,
         options,
         teleport,
-        permissionMode: xe,
+        permissionMode: initialMode,
         toolPermissionContext,
-        storedTeammateOpts: ze,
-        isSSHPending: Zn,
+        storedTeammateOpts: teammateSetup,
+        isSSHPending: hasSshHost,
         allowDangerouslySkipPermissions,
-        commands,
-        skippedChromeForAdminPolicy: ks,
-        enableClaudeInChrome: qt,
-        chromeDeniedByPolicy: Bo,
-        devChannels: po,
+        commands: commands_2,
+        skippedChromeForAdminPolicy: offerChrome,
+        enableClaudeInChrome: wantsChrome,
+        chromeDeniedByPolicy: chromeDenied,
+        devChannels: header,
         offerClaudeInChrome,
         askCloudDefaultReason,
         wasTrustedBeforeSetup,
         wasPersistedTrustedBeforeSetup,
         strictMcpConfig,
-        mcpConfigPromise: fo,
+        mcpConfigPromise: mcpConfigsPromise,
         dynamicMcpConfig: config,
-        currentCwd: Yo,
-        mcpConfigResolvedMs: Jn,
+        currentCwd: sessionCwd,
+        mcpConfigResolvedMs: prefetchTiming,
         providerSetupCommand,
-        remoteControlOption: Fo,
+        remoteControlOption: remoteControlOpt,
         remoteControl,
         projectForRemoteControl,
         mainThreadAgentDefinition,
         inputPrompt,
-        prompt: name,
-        storageV5: storage,
-        credentials: y,
+        prompt: typedName,
+        storageV5,
+        credentials: extraOptions,
       })) ?? cliError("Interactive session requires the runOnboarding capability");
     releaseGrowthBookHold(rootSession.host);
-    let C = hasHeldGrowthBook(rootSession.host) ? judgeGrowthBookKick(Ct) : undefined;
-    if (C !== undefined) await ro("growthbook_init_ms", GROWTHBOOK_HOLD_STAGES, C);
-    let endInkWithError = h.endInkWithError;
+    let kickDecision = hasHeldGrowthBook(rootSession.host)
+      ? judgeGrowthBookKick(remoteNonInteractive)
+      : undefined;
+    if (kickDecision !== undefined)
+      await initializeSession("growthbook_init_ms", GROWTHBOOK_HOLD_STAGES, kickDecision);
+    let endInkWithError = args.endInkWithError;
     await enforceOrgConfigGateAtStartup({
-      showBlockedScreen: h.showOrgConfigBlockedScreen,
+      showBlockedScreen: args.showOrgConfigBlockedScreen,
       ...(endInkWithError !== undefined && {
-        printMessage: (L) => endInkWithError(s.root, L),
+        printMessage: (message) => endInkWithError(printHost.root, message),
       }),
     });
-    yo = {
-      root: s.root,
-      getFpsMetrics: s.getFpsMetrics,
-      stats: s.stats,
+    mcpApprovalState = {
+      root: printHost.root,
+      getFpsMetrics: printHost.getFpsMetrics,
+      stats: printHost.stats,
     };
-    mcpApprovalSkipWarning = s.mcpApprovalSkipWarning;
-    config = s.dynamicMcpConfig;
-    commands = s.commands;
-    remoteControl = s.remoteControl;
-    inputPrompt = s.inputPrompt;
-    name = s.prompt;
-    fo = s.mcpConfigPromise;
-    let R = settleProvisionalStartupMode(toolPermissionContext, {
-      onNotification: (L) => {
-        It ??= L;
+    mcpApprovalSkipWarning = printHost.mcpApprovalSkipWarning;
+    config = printHost.dynamicMcpConfig;
+    commands_2 = printHost.commands;
+    remoteControl = printHost.remoteControl;
+    inputPrompt = printHost.inputPrompt;
+    typedName = printHost.prompt;
+    mcpConfigsPromise = printHost.mcpConfigPromise;
+    let settledMode = settleProvisionalStartupMode(toolPermissionContext, {
+      onNotification: (notice) => {
+        defaultMode ??= notice;
       },
     });
-    if (R !== toolPermissionContext) {
-      toolPermissionContext = R;
-      xe = R.mode;
+    if (settledMode !== toolPermissionContext) {
+      toolPermissionContext = settledMode;
+      initialMode = settledMode.mode;
     }
   }
-  It ??= levelAutoHeldForPendingVerdictNotice();
+  defaultMode ??= levelAutoHeldForPendingVerdictNotice();
   if (process.exitCode !== undefined) {
     logForDebugging("Graceful shutdown initiated, skipping further initialization");
     return {
       kind: "exited",
     };
   }
-  if (canSkipGrowthBookHold(rootSession, $s)) maybeStartLazyLoad(rootSession, storage, y);
-  initializeLspServerManager(rootSession, storage, y);
-  if (yo) {
+  if (canSkipGrowthBookHold(rootSession, skillsSyncFlag))
+    maybeStartLazyLoad(rootSession, storageV5, extraOptions);
+  initializeLspServerManager(rootSession, storageV5, extraOptions);
+  if (mcpApprovalState) {
     let { errors } = getSettingsWithErrors_2();
-    let C = isReportableDiagnostic(errors);
-    if (C.length > 0 && (!isInteractiveSession() || !h.handleInvalidSettings)) logSkippedInvalidSetting(C);
-    else if (C.length > 0 && h.handleInvalidSettings) {
-      if ((await h.handleInvalidSettings(yo.root, C)) === "fix") {
-        let { buildSettingsFixPrompt } = await import("./chunk-n37wdxq8.js");
-        let settingsFixPrompt = buildSettingsFixPrompt(C, {
+    let reportable = isReportableDiagnostic(errors);
+    if (reportable.length > 0 && (!isInteractiveSession() || !args.handleInvalidSettings))
+      logSkippedInvalidSetting(reportable);
+    else if (reportable.length > 0 && args.handleInvalidSettings) {
+      if ((await args.handleInvalidSettings(mcpApprovalState.root, reportable)) === "fix") {
+        let { buildSettingsFixPrompt } = await import("../../utils/settings/settingsFixPrompt.js");
+        let settingsFixPrompt = buildSettingsFixPrompt(reportable, {
           flagSettingsPath:
             getFlagSettingsExpectedContent() === undefined ? getFlagSettingsPath() : undefined,
         });
@@ -2823,22 +2902,22 @@ ${inputPrompt}`
     (featureValue_CACHED_MAY_BE_STALE > 0 &&
       Date.now() - startupPrefetchedAt < featureValue_CACHED_MAY_BE_STALE)
   )) {
-    let s =
+    let needsPrefetch =
       startupPrefetchedAt > 0
         ? ` last ran ${Math.round((Date.now() - startupPrefetchedAt) / 1000)}s ago`
         : "";
-    logForDebugging(`Starting background startup prefetches${s}`);
-    probeQuotaStatusAtStart(y, storage).catch((error) => logError(error));
-    trackClientDataFetch(fetchBootstrapData(storage, y));
-    prefetchEligibilityIfNeeded(y, storage);
-    prefetchFastModeStatus(storage, y);
+    logForDebugging(`Starting background startup prefetches${needsPrefetch}`);
+    probeQuotaStatusAtStart(extraOptions, storageV5).catch((error) => logError(error));
+    trackClientDataFetch(fetchBootstrapData(storageV5, extraOptions));
+    prefetchEligibilityIfNeeded(extraOptions, storageV5);
+    prefetchFastModeStatus(storageV5, extraOptions);
     if (featureValue_CACHED_MAY_BE_STALE > 0)
       saveGlobalConfig(
-        (C) => ({
-          ...C,
+        (config) => ({
+          ...config,
           startupPrefetchedAt: Date.now(),
         }),
-        storage,
+        storageV5,
       ).catch(logError);
   } else {
     logForDebugging(
@@ -2850,24 +2929,26 @@ ${inputPrompt}`
       bootstrapFetchCanConvergeSlot() &&
       !hasClientDataCacheSlot()
     )
-      trackClientDataFetch(fetchBootstrapData(storage, y));
+      trackClientDataFetch(fetchBootstrapData(storageV5, extraOptions));
     initFastModeOrgStatusGuess();
   }
-  fo = mcpConfigsAfterWaits(fo, Yl, () =>
-    Ds.then(() =>
+  mcpConfigsPromise = mcpConfigsAfterWaits(mcpConfigsPromise, enterpriseHeld, () =>
+    enterpriseGate.then(() =>
       getClaudeCodeMcpConfigs(config, {
-        storageV5: storage,
-        credentials: y,
+        storageV5,
+        credentials: extraOptions,
       }),
     ),
   );
-  let { servers } = await fo;
-  logForDebugging(`[STARTUP] MCP configs resolved in ${Jn.value}ms (awaited at +${Date.now() - now}ms)`);
+  let { servers } = await mcpConfigsPromise;
+  logForDebugging(
+    `[STARTUP] MCP configs resolved in ${prefetchTiming.value}ms (awaited at +${Date.now() - now}ms)`,
+  );
   config = applyAgentModelOverride(config, mainThreadAgentDefinition, {
     strictMcpConfig,
-    onBlocked: (s) =>
+    onBlocked: (issues) =>
       warnStartupIssues(
-        `agent frontmatter MCP ${plural(s.length, "server")} blocked by enterprise policy: ${s.join(", ")}`,
+        `agent frontmatter MCP ${plural(issues.length, "server")} blocked by enterprise policy: ${issues.join(", ")}`,
         {
           stderrPrefix: "Warning: ",
         },
@@ -2881,8 +2962,8 @@ ${inputPrompt}`
     };
     toolPermissionContext = withCliArgAllowRules(toolPermissionContext, allowedTools);
   }
-  let gd = false;
-  if (Object.keys(config).length > 0 || gd)
+  let trustedBefore = false;
+  if (Object.keys(config).length > 0 || trustedBefore)
     await awaitMcpPolicyColdStart({
       hasDynamicMcpConfig: true,
     });
@@ -2904,22 +2985,22 @@ ${inputPrompt}`
       };
   }
   if (isNonInteractiveSession) {
-    if ($t || !headlessSyncsClaudeAiConnectors()) markConnectorListUnavailable();
-    else if (filterDynamicMcpServersByPolicy(config).held.length > 0) await Go.catch(() => ({}));
+    if (sdkNonInteractive || !headlessSyncsClaudeAiConnectors()) markConnectorListUnavailable();
+    else if (filterDynamicMcpServersByPolicy(config).held.length > 0) await mcpReady.catch(() => ({}));
   }
   let { configs, blocked } = filterDynamicMcpServersByPolicy(config);
   let { allowed, blocked: blocked_2 } = filterMcpServersByPolicy(servers);
-  let Zo = [...blocked, ...blocked_2];
-  if (Zo.length > 0) {
+  let allBlocked = [...blocked, ...blocked_2];
+  if (allBlocked.length > 0) {
     logForDebugging(
-      `MCP ${plural(Zo.length, "server")} blocked by enterprise policy before prefetch: ${Zo.join(", ")}`,
+      `MCP ${plural(allBlocked.length, "server")} blocked by enterprise policy before prefetch: ${allBlocked.join(", ")}`,
       {
         level: "warn",
       },
     );
-    if (Zo.includes(CLAUDE_IN_CHROME_MCP_SERVER_NAME)) {
+    if (allBlocked.includes(CLAUDE_IN_CHROME_MCP_SERVER_NAME)) {
       markClaudeInChromeUnwired();
-      commands = commands.filter(
+      commands_2 = commands_2.filter(
         (command) =>
           !(
             command.name === CLAUDE_IN_CHROME_MCP_SERVER_NAME &&
@@ -2929,16 +3010,16 @@ ${inputPrompt}`
       );
     }
   }
-  let en = {
+  let allConfigs = {
     ...allowed,
     ...configs,
   };
-  let di = Object.create(null);
-  let gr = {};
-  for (let [key, value] of Object.entries(en)) {
-    let T = value;
-    if (T.type !== "sdk") gr[key] = T;
-    else if (isFirstPartyUploadScope(T)) di[key] = T;
+  let refusedNames = Object.create(null);
+  let byName = {};
+  for (let [key, value] of Object.entries(allConfigs)) {
+    let optionValue = value;
+    if (optionValue.type !== "sdk") byName[key] = optionValue;
+    else if (isFirstPartyUploadScope(optionValue)) refusedNames[key] = optionValue;
     else
       logForDebugging(`MCP server "${key}" dropped: an sdk entry outside the SDK host's channel`, {
         level: "warn",
@@ -2947,13 +3028,13 @@ ${inputPrompt}`
   if (env.CLAUDE_CODE_REMOTE && getFeatureValue_CACHED_MAY_BE_STALE("tengu_mcp_startup_policy_seed", true))
     toolPermissionContext = applyDynamicServerToolPolicies(toolPermissionContext, configs);
   addStartupContext({
-    mcp_server_count: Object.keys(en).length,
+    mcp_server_count: Object.keys(allConfigs).length,
   });
   profileCheckpoint("action_mcp_configs_loaded");
-  let yd = trackSessionSwitches({
-    permissionMode: xe,
+  let switchTracker = trackSessionSwitches({
+    permissionMode: initialMode,
     dangerouslySkipPermissionsPassed: dangerouslySkipPermissions ?? false,
-    modeIsBypass: xe === "bypassPermissions",
+    modeIsBypass: initialMode === "bypassPermissions",
     print: print ?? false,
   });
   maybeSwitchSessionForResume({
@@ -2961,12 +3042,12 @@ ${inputPrompt}`
     forkSession: options.forkSession,
     hasSessionIdFlag: !!sessionId,
   });
-  id?.flush();
+  artifactTelemetryHold?.flush();
   let remoteDroppedMcpMessages = getIsRemoteMode()
     ? mcpConfigIgnoredOnCloud({
-        mcpConfigFlagServers: co,
+        mcpConfigFlagServers: ownedConfigs,
         agent: mainThreadAgentDefinition,
-        chromeFlag: Dt.chrome,
+        chromeFlag: opts.chrome,
         dynamicMcpConfig: config,
       })
     : [];
@@ -2975,25 +3056,25 @@ ${inputPrompt}`
     tools: [],
     commands: [],
   });
-  let bd = isNonInteractiveSession
+  let mcpClients = isNonInteractiveSession
     ? Promise.resolve({
         clients: [],
         tools: [],
         commands: [],
       })
-    : Go.then((s) =>
-        Object.keys(s).length > 0
-          ? prefetchAllMcpResourcesSafe(s, storage, y)
+    : mcpReady.then((prefetched) =>
+        Object.keys(prefetched).length > 0
+          ? prefetchAllMcpResourcesSafe(prefetched, storageV5, extraOptions)
           : {
               clients: [],
               tools: [],
               commands: [],
             },
       );
-  let Ed = Promise.all([resolved, bd]).then(([s, C]) => ({
-    clients: [...s.clients, ...C.clients],
-    tools: Ji([...s.tools, ...C.tools], "name"),
-    commands: Ji([...s.commands, ...C.commands], "name"),
+  let allReady = Promise.all([resolved, mcpClients]).then(([agents, mcp]) => ({
+    clients: [...agents.clients, ...mcp.clients],
+    tools: uniqByExport([...agents.tools, ...mcp.tools], "name"),
+    commands: uniqByExport([...agents.commands, ...mcp.commands], "name"),
   }));
   hookSourcesSummary(mainThreadAgentDefinition);
   let sessionStartHooks =
@@ -3006,55 +3087,55 @@ ${inputPrompt}`
             agentType: mainThreadAgentDefinition?.agentType,
             model: resolvedInitialModel,
             orphaned,
-            storageV5: storage,
-            credentials: y,
+            storageV5,
+            credentials: extraOptions,
           }),
         );
-  Ed.catch(() => {});
-  let mcpClients = [];
+  allReady.catch(() => {});
+  let mcpClients_2 = [];
   let mcpTools = [];
   let mcpCommands = [];
-  let Ue;
-  let vo = false;
+  let thinkingState;
+  let adaptiveThinking = false;
   if (options.thinking === "adaptive" || options.thinking === "enabled") {
-    Ue = {
+    thinkingState = {
       type: "adaptive",
     };
-    vo = true;
+    adaptiveThinking = true;
   } else if (options.thinking === "disabled") {
-    Ue = {
+    thinkingState = {
       type: "disabled",
     };
-    vo = true;
+    adaptiveThinking = true;
   } else {
-    let s = process.env.MAX_THINKING_TOKENS
+    let maxThinkingTokens = process.env.MAX_THINKING_TOKENS
       ? parseIntLoose(process.env.MAX_THINKING_TOKENS)
       : options.maxThinkingTokens;
-    if (s !== undefined) {
-      if (s > 0) {
-        Ue = {
+    if (maxThinkingTokens !== undefined) {
+      if (maxThinkingTokens > 0) {
+        thinkingState = {
           type: "enabled",
-          budgetTokens: s,
+          budgetTokens: maxThinkingTokens,
         };
-        vo = true;
-      } else if (s === 0) {
-        Ue = {
+        adaptiveThinking = true;
+      } else if (maxThinkingTokens === 0) {
+        thinkingState = {
           type: "disabled",
         };
-        vo = true;
+        adaptiveThinking = true;
       }
     }
   }
-  Ue ??= isBetaHeaderAllowed()
+  thinkingState ??= isBetaHeaderAllowed()
     ? {
         type: "adaptive",
       }
     : {
         type: "disabled",
       };
-  let thinkingEnabled = Ue.type !== "disabled";
+  let thinkingEnabled = thinkingState.type !== "disabled";
   let thinkingDisplay = isThinkingDisplayMode(options.thinkingDisplay) ? options.thinkingDisplay : undefined;
-  if (Ue.type !== "disabled") {
+  if (thinkingState.type !== "disabled") {
     if (thinkingDisplay) setThinkingDisplayExplicit(true);
     let isNonInteractive = getIsNonInteractiveSession();
     let outputFormat_2 = outputFormat ?? "text";
@@ -3062,27 +3143,27 @@ ${inputPrompt}`
       explicitDisplay: thinkingDisplay,
       isNonInteractive,
       outputFormat: outputFormat_2,
-      verbose: Ee,
+      verbose,
     });
-    if (thinkingDisplay_2) Ue.display = thinkingDisplay_2;
+    if (thinkingDisplay_2) thinkingState.display = thinkingDisplay_2;
     if (
       thinkingDisplay_2 === "omitted" &&
       suppressesThinkingDisplay({
         isNonInteractive,
         outputFormat: outputFormat_2,
-        verbose: Ee,
+        verbose,
       })
     )
-      Ue.displayExplicit = false;
+      thinkingState.displayExplicit = false;
   } else if (
     suppressesThinkingDisplay({
       isNonInteractive: getIsNonInteractiveSession(),
       outputFormat: outputFormat ?? "text",
-      verbose: Ee,
+      verbose,
     })
   ) {
-    Ue.display = "omitted";
-    Ue.displayExplicit = false;
+    thinkingState.display = "omitted";
+    thinkingState.displayExplicit = false;
   }
   logStartupStarted();
   startWatchdogSafe();
@@ -3090,7 +3171,7 @@ ${inputPrompt}`
     logForDiagnosticsNoPII("info", "exited");
   });
   mergeSessionFlags({
-    permissionMode: xe,
+    permissionMode: initialMode,
     bypassPermissionsAvailable: toolPermissionContext.isBypassPermissionsModeAvailable,
   });
   setSessionFlagReaders({
@@ -3099,29 +3180,33 @@ ${inputPrompt}`
     areUnsandboxedCommandsAllowed: () => SandboxManager.areUnsandboxedCommandsAllowed(),
     isToolSandboxActive,
   });
-  if (ao)
+  if (permissionCtx)
     logProactivityStartup({
-      ...ao,
-      entryMode: xe,
+      ...permissionCtx,
+      entryMode: initialMode,
       entryModeDecidedByLevel: proactivity_2?.startupModeDecidedByProactivityLevel !== undefined,
     });
-  let ci =
+  let attachCheck =
     cloudAttachId === null &&
     poolId === null &&
     remote === null &&
     !getIsRemoteMode() &&
     projectBrowse === null;
-  let modelProvenance = !ci ? undefined : oi ? modelAttributionFields() : RESUME_MODEL_ATTRIBUTION;
-  let pi = !isNonInteractiveSession && !Ee && Ie;
+  let modelProvenance = !attachCheck
+    ? undefined
+    : cloudAttachCheck
+      ? modelAttributionFields()
+      : RESUME_MODEL_ATTRIBUTION;
+  let focusedVerbose = !isNonInteractiveSession && !verbose && focusMode;
   logTenguInit({
     host: rootSession.host,
-    storageV5: storage,
-    credentials: y,
-    onAntSandboxDetection: yd.updateContext,
-    hasInitialPrompt: Boolean(name),
+    storageV5,
+    credentials: extraOptions,
+    onAntSandboxDetection: switchTracker.updateContext,
+    hasInitialPrompt: Boolean(typedName),
     hasStdin: Boolean(inputPrompt),
-    verbose: Ee,
-    focusView: pi,
+    verbose,
+    focusView: focusedVerbose,
     debug,
     print: print ?? false,
     outputFormat: outputFormat ?? "text",
@@ -3129,16 +3214,16 @@ ${inputPrompt}`
     numAllowedTools: allowedTools.length,
     numDisallowedTools: disallowedTools.length,
     restricted,
-    mcpClientCount: Object.keys(en).length,
-    mcpListSizing: vs,
-    mcpConfigs: getIsRemoteMode() ? null : Object.values(en),
-    worktreeEnabled: env_2,
+    mcpClientCount: Object.keys(allConfigs).length,
+    mcpListSizing: mcpAnalytics,
+    mcpConfigs: getIsRemoteMode() ? null : Object.values(allConfigs),
+    worktreeEnabled: worktreeRequested,
     skipWebFetchPreflight: getInitialSettings_2().skipWebFetchPreflight,
     githubActionInputs: env.GITHUB_ACTION_INPUTS,
     dangerouslySkipPermissionsPassed: dangerouslySkipPermissions ?? false,
-    permissionMode: xe,
-    proactivityLevel: ao?.level,
-    modeIsBypass: xe === "bypassPermissions",
+    permissionMode: initialMode,
+    proactivityLevel: permissionCtx?.level,
+    modeIsBypass: initialMode === "bypassPermissions",
     allowDangerouslySkipPermissionsPassed: allowDangerouslySkipPermissions,
     skipDangerousModePromptSetPreDialog,
     systemPromptFlag: systemPrompt_2 ? (options.systemPromptFile ? "file" : "flag") : undefined,
@@ -3147,76 +3232,76 @@ ${inputPrompt}`
       : options.appendSystemPromptFile
         ? "file"
         : undefined,
-    thinkingConfig: Ue,
+    thinkingConfig: thinkingState,
     modelProvenance,
-    runsLocalQueryLoop: ci,
+    runsLocalQueryLoop: attachCheck,
   });
   if (!getIsRemoteMode() && !isParkedSpare())
-    logContextMetrics(rootSession, gr, toolPermissionContext, getTools, storage, y).catch((error) =>
-      logError(withTelemetryMessage(toError(error), "context metrics failed")),
+    logContextMetrics(rootSession, byName, toolPermissionContext, getTools, storageV5, extraOptions).catch(
+      (error) => logError(withTelemetryMessage(toError(error), "context metrics failed")),
     );
-  let mi = false;
-  let Sr = async () => {
-    if (mi) return;
-    mi = true;
+  let parked = false;
+  let registerName = async () => {
+    if (parked) return;
+    parked = true;
     logShellAllowRulesAtInit(toolPermissionContext.alwaysAllowRules);
     logManagedSettingsLoaded();
     await noopAsync_3(null, "initialization");
   };
   if (isNonInteractiveSession)
     holdForStartupWork(rootSession.host, "permission_context_log", () => {
-      Sr().catch(logError);
+      registerName().catch(logError);
     });
   else {
-    withTimeout_2(rootSession).then(Sr).catch(logError);
-    registerCleanup(() => Sr().catch(logError));
+    withTimeout_2(rootSession).then(registerName).catch(logError);
+    registerCleanup(() => registerName().catch(logError));
   }
   createManagedSettingsReporter();
-  getSessionRegistryState().restoreSetAsideName = (s, C) => {
-    reclaimSessionNameOnResume(s, storage, {
-      autoOnly: C === "auto",
-      source: C,
+  getSessionRegistryState().restoreSetAsideName = (uuid, name) => {
+    reclaimSessionNameOnResume(uuid, storageV5, {
+      autoOnly: name === "auto",
+      source: name,
       yieldToLaterRestore: true,
     });
   };
-  (isParkedSpare() ? Promise.resolve(false) : registerSession(storage)).then((s) => {
-    if (!s) return;
+  (isParkedSpare() ? Promise.resolve(false) : registerSession(storageV5)).then((session) => {
+    if (!session) return;
     let sessionId = getSessionId();
     claimSessionNameAtStartup({
-      sessionNameArg: So,
+      sessionNameArg: explicitName,
       sessionNameArgSource: envSessionKind() === undefined ? "user" : "peer",
       interactive: envSessionKind() === undefined && !getIsNonInteractiveSession(),
-      writeName: async (T, R) => {
+      writeName: async (uuid, name) => {
         await updateSessionName(
-          T,
-          storage,
-          R,
-          R === "collision" ? getRegisteredSessionName()?.givenAtLaunch : true,
+          uuid,
+          storageV5,
+          name,
+          name === "collision" ? getRegisteredSessionName()?.givenAtLaunch : true,
         );
       },
-      onRenamed: (T, R) => {
-        let L = sanitizeSessionTitle(T);
+      onRenamed: (uuid, name) => {
+        let title = sanitizeSessionTitle(uuid);
         if (getSessionId() !== sessionId) return;
-        if (L && titleCacheStillOn(sessionId, R, L)) {
-          cacheSessionTitle(L);
-          cacheAgentName(L);
+        if (title && titleCacheStillOn(sessionId, name, title)) {
+          cacheSessionTitle(title);
+          cacheAgentName(title);
         }
       },
     });
-    countConcurrentSessions(storage).then((T) => {
-      if (T >= 2)
+    countConcurrentSessions(storageV5).then((count) => {
+      if (count >= 2)
         logEvent("tengu_concurrent_sessions", {
-          num_sessions: T,
+          num_sessions: count,
         });
     });
   });
   if (isBareMode());
   else {
-    holdForStartupWork(rootSession.host, "plugin_init", (s) => {
-      if (s === "shutdown") return;
+    holdForStartupWork(rootSession.host, "plugin_init", (result) => {
+      if (result === "shutdown") return;
       initPluginsAtStartup({
         deferToCleanup: isNonInteractiveSession,
-        storageV5: storage,
+        storageV5,
       });
     });
     profileCheckpoint("action_after_plugins_init");
@@ -3228,48 +3313,48 @@ ${inputPrompt}`
       kind: "setup",
       trigger: "init",
       forceSyncExecution: true,
-      storageV5: storage,
-      credentials: y,
+      storageV5,
+      credentials: extraOptions,
     });
     await runStartupHooks(rootSession, {
       kind: "session-start",
       source: "startup",
       forceSyncExecution: true,
-      storageV5: storage,
-      credentials: y,
+      storageV5,
+      credentials: extraOptions,
     });
     gracefulShutdownSync(0);
     return {
       kind: "exited",
     };
   }
-  let fi = {
+  let limits = {
     allowedTools,
     appendSystemPrompt: appendSystemPrompt_2,
     appendSystemPromptCli: appendSystemPrompt,
     appendSystemPromptHead,
-    asWrittenMcpEntries: uo,
-    claudeaiConfigPromise: Go,
+    asWrittenMcpEntries: sdkConfigs,
+    claudeaiConfigPromise: mcpReady,
     cliAgents,
-    credentials: y,
-    currentCwd: Yo,
+    credentials: extraOptions,
+    currentCwd: sessionCwd,
     debug,
     jsonSchema,
     sdkUrl,
     sessionMirror,
     systemPrompt: systemPrompt_2,
     systemPromptCli: systemPrompt,
-    thinkingConfig: Ue,
-    thinkingConfigExplicit: vo,
+    thinkingConfig: thinkingState,
+    thinkingConfigExplicit: adaptiveThinking,
     thinkingDisplayFlag: thinkingDisplay,
     thinkingEnabled,
-    advisorModel: Jo,
+    advisorModel: advisorState,
     agentCli: agent,
     agentDefinitions,
-    agentSetting: ir,
+    agentSetting,
     autoCompactWindow: windowArg,
     cloudAttachId,
-    commands,
+    commands: commands_2,
     correlationId,
     dangerouslySkipPermissions,
     deferredCommandsPromise,
@@ -3277,30 +3362,30 @@ ${inputPrompt}`
     dynamicMcpConfig: config,
     earlyHydrateReads,
     earlyRemoteLink,
-    effectiveForwardSubagentText: Pn,
-    effectiveIncludePartialMessages: Tn,
+    effectiveForwardSubagentText: forwardSubagent,
+    effectiveIncludePartialMessages: partialMessages,
     effectiveModel,
-    effectiveReplayUserMessages: sr,
+    effectiveReplayUserMessages: replaysMessages,
     fileDownloadPromise,
     headlessCloud,
     headlessCloudPrint,
     ide,
-    initialFocusView: pi,
+    initialFocusView: focusedVerbose,
     initialMainLoopModel,
     inputPrompt,
     isNonInteractiveSession,
     mainThreadAgentDefinition,
     mcpApprovalSkipWarning,
-    mcpClients,
+    mcpClients: mcpClients_2,
     mcpCommands,
-    mcpConfigFlagServers: co,
+    mcpConfigFlagServers: ownedConfigs,
     mcpConfigOwnership: ownership,
     mcpTools,
     modelCli: model,
     modelProvenance,
     outputFormat,
-    permissionModeCli: lo,
-    permissionModeNotification: It,
+    permissionModeCli: startupPermissionMode,
+    permissionModeNotification: defaultMode,
     permissionModeSuppliedOnInvocation: modeSuppliedOnInvocation,
     allowDangerouslySkipPermissions,
     persistentVolume,
@@ -3321,15 +3406,15 @@ ${inputPrompt}`
     projectBrowse,
     projectForRemoteControl,
     rawModelRequest,
-    regularMcpConfigs: gr,
-    relaunchFlagFetchSettled: Wt && rt !== undefined && !rt.result.timedOut,
+    regularMcpConfigs: byName,
+    relaunchFlagFetchSettled: shouldKick && initResult !== undefined && !initResult.result.timedOut,
     remote,
     remoteControl,
     remoteControlName,
     resumeInCloud,
     serveOnly,
-    defaultedToCloud: os,
-    cloudDefaultNotAllowed: ts,
+    defaultedToCloud: cloudApplied,
+    cloudDefaultNotAllowed: cloudNotAllowed,
     personalWithoutEffectNotification,
     cloudSessionsByDefault,
     sandboxVmStayReason,
@@ -3337,44 +3422,44 @@ ${inputPrompt}`
     resolvedInitialModel,
     resolvedMaxTurns,
     restrictedModel,
-    sdkBetas: mr,
-    sdkMcpConfigs: di,
+    sdkBetas: allowedBetas,
+    sdkMcpConfigs: refusedNames,
     session: rootSession,
     sessionGroupingId,
-    sessionNameArg: So,
+    sessionNameArg: explicitName,
     sessionStartHooks,
-    sessionTeamContext: E,
+    sessionTeamContext: sessionTeam,
     setupTrigger,
-    storageV5: storage,
+    storageV5,
     strictMcpConfig,
     structuredOutputTool,
     teleport,
     toolPermissionContext,
     tools: tools_2,
     unknownModelWindow,
-    securityWarnings: _s,
+    securityWarnings: inheritedDirs,
     userSpecifiedFallbackModel: fallbackModels,
-    verbose: Ee,
+    verbose,
     wasPersistedTrustedBeforeSetup,
     wasTrustedBeforeSetup,
   };
-  if (!yo)
+  if (!mcpApprovalState)
     return {
       kind: "prepared-headless",
-      ...fi,
+      ...limits,
       orgValidation,
     };
   return {
     kind: "prepared-interactive",
-    ...fi,
-    ...yo,
+    ...limits,
+    ...mcpApprovalState,
     terminalInput: stdinOverrideCache.get(),
   };
 }
 //@ chunk-3wek6r2k.js:148438-148567 placement
-function readSizingReport(e) {
+function readSizingReport(report) {
   try {
-    return e();
+    return report();
   } catch (error) {
     logForDebugging(`Managed settings: a sizing report could not be read: ${errorMessage(error)}`, {
       level: "error",
@@ -3382,23 +3467,17 @@ function readSizingReport(e) {
     return;
   }
 }
-//@ chunk-1ptrwbb7.js:335-362 placement
-/**
- * 判断当前是否为交互会话（非后台会话）。
- */
-function isInteractiveSession() {
-  return !isBgSession();
-}
 export {
-  getTeammateUtils,
-  logSessionTelemetry,
   coordinatorModeModule,
-  maybeActivateBrief,
   branchModeForTelemetry,
   startTurnInputPrefetches,
   startIdleStartupWork,
+  logSessionTelemetry,
   judgeStartupGrowthBookKick,
   prepareSession,
+  getTeammateUtils,
+  maybeActivateBrief,
   reportStartupModelNotice,
   startDeferredPrefetches,
+  pendingSettingsEnvBlocksEarlyGb,
 };

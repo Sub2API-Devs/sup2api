@@ -18,6 +18,7 @@ import { getIsInteractive, getPendingConversationEditKinds, getRootSession } fro
 import { isRemoteManagedEnvironment } from "../remoteEnvironment.js";
 import { HostScoped } from "../hostScoped.js";
 import { createStore } from "../../state/store.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-g54kbxqw.js:145685-145700 placement
 var SHELL_TOOL_NAMES = [BASH_TOOL_NAME, POWERSHELL_TOOL_NAME];
@@ -38,10 +39,10 @@ function isBashAvailable() {
   return getGitBashPathCached() !== null;
 }
 //@ chunk-g54kbxqw.js:145931-146008 placement
-function shouldUseShellTool(e, hasSpendCap) {
+function shouldUseShellTool(forceShellTool, hasSpendCap) {
   return (
     getIsInteractive() ||
-    e ||
+    forceShellTool ||
     hasSpendCap ||
     !isRemoteManagedEnvironment() ||
     getFeatureValue_CACHED_MAY_BE_STALE("tengu_wiggly_locket", false) !== true
@@ -57,19 +58,22 @@ function defaultShellKind() {
   return isBashAvailable() ? "bash" : "powershell";
 }
 //@ chunk-g54kbxqw.js:146320-146349 placement
-function notePendingConversationEdit(e) {
-  getPendingConversationEditKinds().add(e);
+function notePendingConversationEdit(editKind) {
+  getPendingConversationEditKinds().add(editKind);
 }
 //@ chunk-g54kbxqw.js:146349-146431 placement
 function takePendingConversationEdits() {
   let pendingConversationEditKinds = getPendingConversationEditKinds();
   if (pendingConversationEditKinds.size === 0) return [];
-  let n = [...pendingConversationEditKinds];
+  let kinds = [...pendingConversationEditKinds];
   pendingConversationEditKinds.clear();
-  return n;
+  return kinds;
 }
 //@ chunk-g54kbxqw.js:146431-146456 placement
-var microCompactFlagStoreByHost = new HostScoped(() => createStore(false));
+var microCompactFlagStoreByHost; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-g54kbxqw.js:146431", () => {
+  microCompactFlagStoreByHost = new HostScoped(() => createStore(false));
+});
 //@ chunk-g54kbxqw.js:146456-146493 placement
 function microCompactFlagStore() {
   return microCompactFlagStoreByHost.of(getRootSession().host);

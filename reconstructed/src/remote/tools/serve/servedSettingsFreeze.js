@@ -34,7 +34,11 @@ import { stripBomAndCarriageReturns } from "../../../utils/settings/settingsRevi
 import { REMOTE_TOOLS_CONSENT_TEXT } from "../consentText.js";
 import { lit, fromEnum } from "../../../services/analytics/safeMetadata.js";
 import { count } from "../../../utils/collections.js";
+import { deferInit, beginDeferredInits, runDeferredInits } from "../../../../runtime/deferred-init.js";
 
+// This module is the first evaluated of an import cycle of 2 modules closed by ../../../services/voice.js;
+// the load-time work of the cycle's statements marked "deferred" waits until the cycle is complete (runtime/deferred-init.js).
+beginDeferredInits("src/services/voice.js");
 //@ chunk-g4k0hvs5.js:918-950 placement
 var TENGU_SYNCHRONOUS_BUNNY = "tengu_synchronous_bunny";
 //@ chunk-g4k0hvs5.js:950-986 placement
@@ -59,7 +63,7 @@ var RULE_SOURCE_TO_SETTINGS_NAME = {
   legacy: "localSettings",
 };
 //@ chunk-g4k0hvs5.js:1516-1671 placement
-function notifySettingsSourcesChanged(s) {
+function notifySettingsSourcesChanged(sources) {
   try {
     invalidateCommandNames();
     updateHooksConfigSnapshot({
@@ -73,112 +77,117 @@ function notifySettingsSourcesChanged(s) {
   } catch (error) {
     logError(toError(error));
   }
-  for (let r of s)
+  for (let source of sources)
     try {
-      settingsChangeDetector.notifyChange(r);
+      settingsChangeDetector.notifyChange(source);
     } catch (error) {
       logError(toError(error));
     }
 }
 //@ chunk-g4k0hvs5.js:1671-1696 placement
-var SETTINGS_REFRESH_DEBOUNCE_MS = 2000;
-var weakSet = new WeakSet();
+var SETTINGS_REFRESH_DEBOUNCE_MS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var weakSet;
+deferInit("chunk-g4k0hvs5.js:1671", () => {
+  SETTINGS_REFRESH_DEBOUNCE_MS = 2000;
+  weakSet = new WeakSet();
+});
 //@ chunk-g4k0hvs5.js:1696-2097 placement
 /**
  * 创建仓库层设置刷新器：设置变化时异步重新读取 projectSettings 与 localSettings。
  */
-function createRepoTiersRefresher(s, r, a) {
-  let d = a;
-  let t = r;
+function createRepoTiersRefresher(store, initialKey, initialTiers) {
+  let lastTiers = initialTiers;
+  let lastKey = initialKey;
   let startTime = performance.now();
-  let u = () => {
+  let notifyChanged = () => {
     queueMicrotask(() => notifySettingsSourcesChanged(["projectSettings", "localSettings"]));
     return;
   };
   return () => {
-    let h = repoTierFolderKey() !== t;
-    if (!h && performance.now() - startTime < SETTINGS_REFRESH_DEBOUNCE_MS) return d;
+    let folderChanged = repoTierFolderKey() !== lastKey;
+    if (!folderChanged && performance.now() - startTime < SETTINGS_REFRESH_DEBOUNCE_MS) return lastTiers;
     startTime = performance.now();
     try {
-      let p = repoTierFileSlots();
+      let slots = repoTierFileSlots();
       let servedOwnerSettings = readServedOwnerSettings(
-        s,
-        p,
+        store,
+        slots,
         readRepoTierFileText,
         "look",
         repoTierFileLeadsAway,
       );
       if (
-        servedOwnerSettings.heldBack.filter((T) => !servedOwnerSettings.firstSeen.some((E) => E.slot === T))
-          .length === 0
+        servedOwnerSettings.heldBack.filter(
+          (slot) => !servedOwnerSettings.firstSeen.some((seen) => seen.slot === slot),
+        ).length === 0
       )
-        return u();
-      t = p.key;
-      d = repoTiersFrom(servedOwnerSettings.seeds);
+        return notifyChanged();
+      lastKey = slots.key;
+      lastTiers = repoTiersFrom(servedOwnerSettings.seeds);
     } catch (error) {
       logError(toError(error));
-      if (h) return u();
+      if (folderChanged) return notifyChanged();
     }
-    return d;
+    return lastTiers;
   };
 }
 //@ chunk-g4k0hvs5.js:2097-4073 placement
 /**
  * 远程提供工具期间冻结项目/本地设置，自己的写入除外
  */
-function freezeServedSettings(s, r = createAcceptedSettingsStore()) {
+function freezeServedSettings(onNotice, store = createAcceptedSettingsStore()) {
   if (!isSynchronousBunnyEnabled()) return;
-  let a = (e) => {
+  let logFreeze = (fields) => {
     try {
-      logFeatureOk("remote_served_settings_freeze", e);
+      logFeatureOk("remote_served_settings_freeze", fields);
     } catch (error) {
       logError(toError(error));
     }
   };
-  let d = (e, o) => {
+  let notice = (key, text) => {
     try {
-      s?.(e, o);
+      onNotice?.(key, text);
     } catch (error) {
       logError(toError(error));
     }
   };
-  let t;
-  let f;
-  let u;
-  let h = false;
-  let p;
-  let S = true;
+  let ownerSettings;
+  let hold;
+  let tiers;
+  let ownWriteHappened = false;
+  let folderKey;
+  let priorServing = true;
   try {
-    S = hasServedCallLogs();
+    priorServing = hasServedCallLogs();
   } catch (error) {
     logError(toError(error));
   }
   try {
-    let e = repoTierFileSlots();
-    p = e.key;
-    t = readServedOwnerSettings(
-      r,
-      e,
+    let slots = repoTierFileSlots();
+    folderKey = slots.key;
+    ownerSettings = readServedOwnerSettings(
+      store,
+      slots,
       readRepoTierFileText,
       "engage",
       repoTierFileLeadsAway,
       onceExport(hasCommand),
     );
-    let matching = t.matching;
-    u = repoTiersFrom(
-      t.sandboxTurnedOn
-        ? readServedOwnerSettings(r, e, readRepoTierFileText, "look", repoTierFileLeadsAway).seeds
-        : t.seeds,
+    let matching = ownerSettings.matching;
+    tiers = repoTiersFrom(
+      ownerSettings.sandboxTurnedOn
+        ? readServedOwnerSettings(store, slots, readRepoTierFileText, "look", repoTierFileLeadsAway).seeds
+        : ownerSettings.seeds,
     );
-    f = holdRepoTiers({
-      files: t.seeds,
-      onOwnWrite: (n, _) => {
-        if (!matching.has(n)) return;
+    hold = holdRepoTiers({
+      files: ownerSettings.seeds,
+      onOwnWrite: (path, contents) => {
+        if (!matching.has(path)) return;
         try {
-          r.recordFile(n, stripBomAndCarriageReturns(_), "own_write");
-          h = true;
+          store.recordFile(path, stripBomAndCarriageReturns(contents), "own_write");
+          ownWriteHappened = true;
         } catch (error) {
-          matching.delete(n);
+          matching.delete(path);
           logFeatureBad("remote_served_settings_freeze", "own_write_not_recorded");
           throw error;
         }
@@ -186,106 +195,111 @@ function freezeServedSettings(s, r = createAcceptedSettingsStore()) {
     });
   } catch (error) {
     logFeatureBad("remote_served_settings_freeze", "engage_failed");
-    d(SERVED_SETTINGS_RECORD_UNAVAILABLE, REMOTE_TOOLS_CONSENT_TEXT["served_settings.record_unavailable"]);
+    notice(
+      SERVED_SETTINGS_RECORD_UNAVAILABLE,
+      REMOTE_TOOLS_CONSENT_TEXT["served_settings.record_unavailable"],
+    );
     throw error;
   }
-  a({
+  logFreeze({
     op: lit("engaged"),
   });
-  if (t.firstSeen.length > 0) {
-    let any = t.firstSeen.some((o) => o.widening);
-    a({
+  if (ownerSettings.firstSeen.length > 0) {
+    let any = ownerSettings.firstSeen.some((file) => file.widening);
+    logFreeze({
       op: lit("baseline"),
-      files_present: count(t.firstSeen, (o) => o.present),
-      prior_serving: S,
+      files_present: count(ownerSettings.firstSeen, (file) => file.present),
+      prior_serving: priorServing,
       widening_keys: any,
     });
-    if (S && any)
-      d(SERVED_SETTINGS_TAKEN_AS_FOUND, REMOTE_TOOLS_CONSENT_TEXT["served_settings.taken_as_found"]);
+    if (priorServing && any)
+      notice(SERVED_SETTINGS_TAKEN_AS_FOUND, REMOTE_TOOLS_CONSENT_TEXT["served_settings.taken_as_found"]);
   }
-  if (t.heldBack.length > 0) {
-    a({
+  if (ownerSettings.heldBack.length > 0) {
+    logFreeze({
       op: lit("held_back"),
-      files: t.heldBack.length,
-      unreadable: t.unreadable,
-      hook_waiting: t.hookWaiting,
+      files: ownerSettings.heldBack.length,
+      unreadable: ownerSettings.unreadable,
+      hook_waiting: ownerSettings.hookWaiting,
     });
-    d(SERVED_SETTINGS_CHANGED_BETWEEN, REMOTE_TOOLS_CONSENT_TEXT["served_settings.held_back"]);
+    notice(SERVED_SETTINGS_CHANGED_BETWEEN, REMOTE_TOOLS_CONSENT_TEXT["served_settings.held_back"]);
   }
-  let y = commandSyncNameState();
-  let T = weakSet.has(y);
-  if (f.began && (t.heldBack.length > 0 || T))
+  let syncState = commandSyncNameState();
+  let alreadyNotified = weakSet.has(syncState);
+  if (hold.began && (ownerSettings.heldBack.length > 0 || alreadyNotified))
     notifySettingsSourcesChanged(
-      T
+      alreadyNotified
         ? ["projectSettings", "localSettings"]
-        : new Set(t.heldBack.map((e) => RULE_SOURCE_TO_SETTINGS_NAME[e])),
+        : new Set(ownerSettings.heldBack.map((slot) => RULE_SOURCE_TO_SETTINGS_NAME[slot])),
     );
-  weakSet.add(y);
-  let E = (e) => {
-    a({
+  weakSet.add(syncState);
+  let reportHeldChange = (when) => {
+    logFreeze({
       op: lit("held_change"),
-      when: fromEnum(e),
+      when: fromEnum(when),
     });
-    d(SERVED_SETTINGS_CHANGED, REMOTE_TOOLS_CONSENT_TEXT["served_settings.changed_while_attached"]);
+    notice(SERVED_SETTINGS_CHANGED, REMOTE_TOOLS_CONSENT_TEXT["served_settings.changed_while_attached"]);
   };
-  let k = false;
-  let R = (e) => {
-    if (k) return;
+  let heldChangeSeen = false;
+  let checkHeldChange = (when) => {
+    if (heldChangeSeen) return;
     try {
       if (compareRepoTiersWithHeld() === "changed") {
-        k = true;
-        E(e);
+        heldChangeSeen = true;
+        reportHeldChange(when);
       }
     } catch (error) {
       logError(toError(error));
-      k = true;
-      E(e);
+      heldChangeSeen = true;
+      reportHeldChange(when);
     }
   };
-  let A = commandSyncNameState().onInvalidate(() => R("during_attach"));
-  let O = false;
+  let unsubscribe = commandSyncNameState().onInvalidate(() => checkHeldChange("during_attach"));
+  let ended = false;
   let sandboxTurnedOn =
-    t.sandboxTurnedOn ||
-    (!f.began && y.repoTierFreeze.tier("localSettings")?.settings?.sandbox?.enabled === true);
+    ownerSettings.sandboxTurnedOn ||
+    (!hold.began && syncState.repoTierFreeze.tier("localSettings")?.settings?.sandbox?.enabled === true);
   return {
-    hookWaiting: t.hookWaiting,
+    hookWaiting: ownerSettings.hookWaiting,
     sandboxTurnedOn,
     end: () => {
-      if (O) return;
-      O = true;
-      A();
-      R("at_end");
-      let e;
+      if (ended) return;
+      ended = true;
+      unsubscribe();
+      checkHeldChange("at_end");
+      let lingerTiers;
       try {
-        let n = repoTierFileSlots();
+        let slots = repoTierFileSlots();
         let servedOwnerSettings = readServedOwnerSettings(
-          r,
-          n,
+          store,
+          slots,
           readRepoTierFileText,
           "look",
           repoTierFileLeadsAway,
         );
-        e = servedOwnerSettings.heldBack.length > 0 ? repoTiersFrom(servedOwnerSettings.seeds) : undefined;
+        lingerTiers =
+          servedOwnerSettings.heldBack.length > 0 ? repoTiersFrom(servedOwnerSettings.seeds) : undefined;
         try {
-          r.noteServed(n.key, [...servedOwnerSettings.matching]);
+          store.noteServed(slots.key, [...servedOwnerSettings.matching]);
         } catch (error) {
           logError(toError(error));
         }
       } catch (error) {
         logError(toError(error));
-        e = u;
+        lingerTiers = tiers;
       }
-      let o;
+      let released;
       try {
-        o = f.release().last;
+        released = hold.release().last;
       } catch (error) {
         logError(toError(error));
-        o = true;
+        released = true;
       }
-      if (!o) return;
+      if (!released) return;
       try {
-        if (e !== undefined) lingerRepoTiers(e, createRepoTiersRefresher(r, p, e));
-        else if (k || h || t.heldBack.length > 0)
+        if (lingerTiers !== undefined)
+          lingerRepoTiers(lingerTiers, createRepoTiersRefresher(store, folderKey, lingerTiers));
+        else if (heldChangeSeen || ownWriteHappened || ownerSettings.heldBack.length > 0)
           notifySettingsSourcesChanged(["projectSettings", "localSettings"]);
       } catch (error) {
         logError(toError(error));
@@ -293,4 +307,8 @@ function freezeServedSettings(s, r = createAcceptedSettingsStore()) {
     },
   };
 }
+
+// The import cycle this module closes (2 modules) is complete: run the load-time work its statements
+// marked "deferred" waited for, in the official build's order (runtime/deferred-init.js).
+runDeferredInits("src/remote/tools/serve/servedSettingsFreeze.js");
 export { freezeServedSettings, SETTINGS_FREEZE_MIN_REFRESH_MS };

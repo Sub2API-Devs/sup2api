@@ -60,39 +60,39 @@ import {
 function createSyncedFileLane({ sessionId, credentials, signer, signedOnly = false }) {
   validateBridgeId(sessionId, "seed upload session id");
   let infraSessionId = toInfraSessionId(sessionId);
-  let s = null;
-  let h;
-  function S(E) {
-    s ??= recoverFromUntrustedDevice(E)
+  let recoverPromise = null;
+  let deviceToken;
+  function recoverToken(currentToken) {
+    recoverPromise ??= recoverFromUntrustedDevice(currentToken)
       .then(
-        (v) => {
-          if (v !== undefined) h = v;
-          return v;
+        (recovered) => {
+          if (recovered !== undefined) deviceToken = recovered;
+          return recovered;
         },
         () => {
           return;
         },
       )
       .finally(() => {
-        s = null;
+        recoverPromise = null;
       });
-    return s;
+    return recoverPromise;
   }
-  let b = null;
-  let w = false;
-  async function R(E) {
-    let v = await signer?.catch(() => {
+  let retryTracker = null;
+  let signFailureLogged = false;
+  async function runSigned(withSigner) {
+    let sessionSigner = await signer?.catch(() => {
       return;
     });
-    if (v === undefined) {
+    if (sessionSigner === undefined) {
       if (signedOnly) throw new DeviceSignatureUnavailableError();
       return;
     }
     try {
-      return await E(v);
+      return await withSigner(sessionSigner);
     } catch (error) {
-      if (!w) {
-        w = true;
+      if (!signFailureLogged) {
+        signFailureLogged = true;
         logForDebugging(`lane: request not signed: ${errorMessage(error)}`, {
           level: "warn",
         });
@@ -102,32 +102,37 @@ function createSyncedFileLane({ sessionId, credentials, signer, signedOnly = fal
       return;
     }
   }
-  async function U(E, v, H = {}) {
-    let T = H.heedsRetryAfter ? b?.trackRequest() : undefined;
-    let x = await D(E, v, H, T);
-    T?.noteSettled(x);
-    return x;
+  async function withRetry(request, signal, options = {}) {
+    let tracked = options.heedsRetryAfter ? retryTracker?.trackRequest() : undefined;
+    let response = await attemptLoop(request, signal, options, tracked);
+    tracked?.noteSettled(response);
+    return response;
   }
-  async function D(E, v, { retryTimeouts = false, attempts = MAX_LANE_RETRIES }, x) {
-    let I = false;
+  async function attemptLoop(
+    request,
+    signal,
+    { retryTimeouts = false, attempts = MAX_LANE_RETRIES },
+    tracked,
+  ) {
+    let triedRecovery = false;
     for (let idx = 0; ; idx++) {
-      if (isAborted(v)) return "aborted";
-      h ??= await getTrustedDeviceToken().catch(() => {
+      if (isAborted(signal)) return "aborted";
+      deviceToken ??= await getTrustedDeviceToken().catch(() => {
         return;
       });
-      let L = h;
-      let k;
+      let token = deviceToken;
+      let response;
       try {
-        k = await E(
-          L === undefined
+        response = await request(
+          token === undefined
             ? {}
             : {
-                "X-Trusted-Device-Token": L,
+                "X-Trusted-Device-Token": token,
               },
         );
       } catch (error) {
         if (error instanceof DeviceSignatureUnavailableError) return "unsigned";
-        if (isAborted(v)) return "aborted";
+        if (isAborted(signal)) return "aborted";
         if (await isOAuthRefreshKnownDeadAsync(credentials)) return "no_auth";
         if (isMaxContentLengthError(error)) {
           logForDebugging("lane: the response is larger than this request accepts; not retried", {
@@ -136,7 +141,7 @@ function createSyncedFileLane({ sessionId, credentials, signer, signedOnly = fal
           return "too_large";
         }
         if ((retryTimeouts || !isConnAborted(error)) && idx + 1 < attempts) {
-          await sleep(retryDelayMs(idx), v);
+          await sleep(retryDelayMs(idx), signal);
           continue;
         }
         if (isConnAborted(error)) {
@@ -148,64 +153,81 @@ function createSyncedFileLane({ sessionId, credentials, signer, signedOnly = fal
         logError(error);
         return "failed";
       }
-      if (!k.ok) return k.reason === "no-auth" ? "no_auth" : "gated";
-      if ((k.status === 429 || (k.status >= 500 && k.status !== 501)) && idx + 1 < attempts) {
-        let B = retryDelayMs(idx);
+      if (!response.ok) return response.reason === "no-auth" ? "no_auth" : "gated";
+      if (
+        (response.status === 429 || (response.status >= 500 && response.status !== 501)) &&
+        idx + 1 < attempts
+      ) {
+        let delayMs = retryDelayMs(idx);
         await sleep(
-          (k.status === 429 ? x?.takeWaitMs(idx, k.response?.headers?.["retry-after"], B) : undefined) ?? B,
-          v,
+          (response.status === 429
+            ? tracked?.takeWaitMs(idx, response.response?.headers?.["retry-after"], delayMs)
+            : undefined) ?? delayMs,
+          signal,
         );
         continue;
       }
-      let M = k.status === 403 && !I ? readUntrustedDeviceRefusal(k.data) : undefined;
-      if (M !== undefined && shouldCloudSessionEnroll(M)) {
-        I = true;
-        let B = await S(L);
-        if (B !== undefined && B !== L) continue;
-      } else if (M !== undefined) {
-        logRefusalWithoutEnrollment("lane:", M);
-        h = undefined;
+      let refusal =
+        response.status === 403 && !triedRecovery ? readUntrustedDeviceRefusal(response.data) : undefined;
+      if (refusal !== undefined && shouldCloudSessionEnroll(refusal)) {
+        triedRecovery = true;
+        let newToken = await recoverToken(token);
+        if (newToken !== undefined && newToken !== token) continue;
+      } else if (refusal !== undefined) {
+        logRefusalWithoutEnrollment("lane:", refusal);
+        deviceToken = undefined;
         clearTrustedDeviceTokenCache();
       }
       return {
-        status: k.status,
-        data: k.data,
+        status: response.status,
+        data: response.data,
       };
     }
   }
-  async function j(E, v, { ifMatchSha256: H, signal: T, shouldAttemptOnceIfLong: x = false } = {}) {
-    let I = validateLanePath(E, v);
-    if (I !== null)
+  async function putRow(
+    filePath,
+    content,
+    { ifMatchSha256, signal, shouldAttemptOnceIfLong: singleTryIfLong = false } = {},
+  ) {
+    let pathProblem = validateLanePath(filePath, content);
+    if (pathProblem !== null)
       return {
-        kind: I,
+        kind: pathProblem,
       };
-    if (H === "")
+    if (ifMatchSha256 === "")
       return {
         kind: "failed",
       };
-    let timeout = uploadTimeoutForSize(base64PaddedLength(v.length));
+    let timeout = uploadTimeoutForSize(base64PaddedLength(content.length));
     return parseLaneResponse(
-      await P(E, v, H, T, x && timeout > SYNCED_FILE_CONSTANTS ? 1 : MAX_LANE_RETRIES, timeout),
+      await requestOnce(
+        filePath,
+        content,
+        ifMatchSha256,
+        signal,
+        singleTryIfLong && timeout > SYNCED_FILE_CONSTANTS ? 1 : MAX_LANE_RETRIES,
+        timeout,
+      ),
     );
   }
-  function P(E, v, H, T, attempts, timeout) {
-    let path = lanePath(E);
-    return U(
+  function requestOnce(filePath, content, ifMatchSha256, signal, attempts, timeout) {
+    let path = lanePath(filePath);
+    return withRetry(
       async (headers) =>
         apiClient.put(
           `/v1/code/sessions/${infraSessionId}/synced_file`,
           {
             session_id: infraSessionId,
             path,
-            content: v.toString("base64"),
-            ...(H !== undefined && {
-              if_match_sha256: H,
+            content: content.toString("base64"),
+            ...(ifMatchSha256 !== undefined && {
+              if_match_sha256: ifMatchSha256,
             }),
-            ...(await R((k) =>
-              k.sign({
-                content: v,
+            ...(await runSigned((signing) =>
+              signing.sign({
+                content,
                 path,
-                ifMatchSha256: H,
+                ifMatchSha256,
               }),
             )),
           },
@@ -215,122 +237,122 @@ function createSyncedFileLane({ sessionId, credentials, signer, signedOnly = fal
             headers,
             timeout,
             validateStatus: () => true,
-            signal: T,
+            signal,
             maxBodyLength: MAX_LANE_FILE_BYTES,
           },
         ),
-      T,
+      signal,
       {
         attempts,
       },
     );
   }
-  async function N(E, v, H = 0, T = MAX_WORKING_FILE_BYTES) {
-    if (laneEscapeError(E))
+  async function getRow(filePath, signal, knownSize = 0, maxBytes = MAX_WORKING_FILE_BYTES) {
+    if (laneEscapeError(filePath))
       return {
         kind: "failed",
       };
     let uRLSearchParams = new URLSearchParams({
-      path: lanePath(E),
+      path: lanePath(filePath),
     });
-    let I = uploadTimeoutForSize(base64PaddedLength(H));
-    let y = await U(
+    let timeoutMs = uploadTimeoutForSize(base64PaddedLength(knownSize));
+    let result = await withRetry(
       (headers) =>
         apiClient.get(`/v1/code/sessions/${infraSessionId}/file?${uRLSearchParams.toString()}`, {
           auth: "teleport-org",
           credentials,
           headers,
-          timeout: I,
+          timeout: timeoutMs,
           validateStatus: () => true,
-          signal: v,
-          maxContentLength: base64Length(T),
+          signal,
+          maxContentLength: base64Length(maxBytes),
         }),
-      v,
+      signal,
       {
-        attempts: I > SYNCED_FILE_CONSTANTS ? 1 : MAX_LANE_RETRIES,
+        attempts: timeoutMs > SYNCED_FILE_CONSTANTS ? 1 : MAX_LANE_RETRIES,
       },
     );
-    if (typeof y === "string") return laneOutcomeOf(y);
-    if (isHttpSuccess(y.status)) {
-      let L = syncedFileContentSchema().safeParse(y.data);
-      if (!L.success)
+    if (typeof result === "string") return laneOutcomeOf(result);
+    if (isHttpSuccess(result.status)) {
+      let parsed = syncedFileContentSchema().safeParse(result.data);
+      if (!parsed.success)
         return {
           kind: "failed",
-          status: y.status,
+          status: result.status,
         };
-      let buffer = Buffer.from(L.data.content, "base64");
-      return buffer.length > T
+      let buffer = Buffer.from(parsed.data.content, "base64");
+      return buffer.length > maxBytes
         ? {
             kind: "failed",
-            status: y.status,
+            status: result.status,
             tooLarge: true,
           }
         : {
             kind: "ok",
             content: buffer,
-            etag: L.data.content_sha256,
+            etag: parsed.data.content_sha256,
           };
     }
-    if (y.status === 404)
+    if (result.status === 404)
       return {
         kind: "not_found",
       };
-    return withFailedStatus(laneOutcomeOf(y), y.status);
+    return withFailedStatus(laneOutcomeOf(result), result.status);
   }
   return {
-    putStoreRow: j,
-    getStoreRow: N,
+    putStoreRow: putRow,
+    getStoreRow: getRow,
     ...UNAVAILABLE_LANE,
   };
 }
 //@ chunk-mxpjbr4y.js:9545-10001 placement
-function parseLaneResponse(e) {
-  if (typeof e === "string") return laneOutcomeOf(e);
-  if (isHttpSuccess(e.status)) {
-    let n = syncedFileDigestSchema().safeParse(e.data);
-    return n.success
+function parseLaneResponse(response) {
+  if (typeof response === "string") return laneOutcomeOf(response);
+  if (isHttpSuccess(response.status)) {
+    let parsed = syncedFileDigestSchema().safeParse(response.data);
+    return parsed.success
       ? {
           kind: "ok",
-          etag: n.data.content_sha256,
+          etag: parsed.data.content_sha256,
         }
       : {
           kind: "failed",
-          status: e.status,
+          status: response.status,
         };
   }
-  if (e.status === 409)
+  if (response.status === 409)
     return {
       kind: "conflict",
     };
-  if (e.status === 400) {
-    let n = syncedFileErrorSchema().safeParse(e.data);
-    let { type: r, reason } = n.success
-      ? n.data.error
+  if (response.status === 400) {
+    let parsed = syncedFileErrorSchema().safeParse(response.data);
+    let { type, reason } = parsed.success
+      ? parsed.data.error
       : {
           type: undefined,
           reason: undefined,
         };
-    logForDebugging(`lane: put rejected (400): type=${r} reason=${reason}`);
+    logForDebugging(`lane: put rejected (400): type=${type} reason=${reason}`);
     if (reason === SYNCED_FILE_LIMIT_EXCEEDED)
       return {
         kind: "lane_full",
       };
   }
-  return withFailedStatus(laneOutcomeOf(e), e.status);
+  return withFailedStatus(laneOutcomeOf(response), response.status);
 }
 //@ chunk-mxpjbr4y.js:10001-10040 placement
 /**
  * 把字节数换算成 base64 长度（4 字节对齐）。
  */
-function base64PaddedLength(e) {
-  return Math.ceil(e / 3) * 4;
+function base64PaddedLength(length) {
+  return Math.ceil(length / 3) * 4;
 }
 //@ chunk-mxpjbr4y.js:10040-10092 placement
 /**
  * 按退避指数算重试等待（带抖动）。
  */
-function retryDelayMs(e) {
-  return DEFAULT_UPLOAD_TIMEOUT_MS * 2 ** e * (0.5 + Math.random() / 2);
+function retryDelayMs(attempt) {
+  return DEFAULT_UPLOAD_TIMEOUT_MS * 2 ** attempt * (0.5 + Math.random() / 2);
 }
 //@ chunk-mxpjbr4y.js:10092-10103 placement
 var LANE_REQUEST_TIMEOUT_MS = 1e4;

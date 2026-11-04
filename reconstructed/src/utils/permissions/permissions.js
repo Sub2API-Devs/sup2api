@@ -5,9 +5,47 @@
  *
  * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/permissions/permissions.ts
- * pieces: chunk-0e8j1zzj.js (1), chunk-0h4e7gnq.js (1), chunk-0wdgqhcf.js (1), chunk-18hwfzwa.js (1), chunk-38x90rmj.js (1), chunk-8wvtd8sr.js (3), chunk-ddkccdnb.js (1), chunk-dyjqn2aj.js (1), chunk-e6aww6q8.js (203), chunk-pc1rmcr2.js (1), chunk-sfy7bm1n.js (41), chunk-xde1fhwg.js (1), chunk-xr4xc2mq.js (1)
- * attribution: fingerprint 15, callgraph-witnessed 2, placement 208, shared-adjacent 1, layout 30, file-local 1
+ * pieces: chunk-0e8j1zzj.js (1), chunk-0h4e7gnq.js (1), chunk-0wdgqhcf.js (1), chunk-18hwfzwa.js (1), chunk-38x90rmj.js (1), chunk-8wvtd8sr.js (3), chunk-dyjqn2aj.js (1), chunk-e6aww6q8.js (203), chunk-pc1rmcr2.js (1), chunk-sfy7bm1n.js (41), chunk-xde1fhwg.js (1), chunk-xr4xc2mq.js (1)
+ * attribution: fingerprint 15, callgraph-witnessed 2, placement 207, shared-adjacent 1, layout 30, file-local 1
  */
+import { BASH_TOOL_NAME } from "../../tools/BashTool/toolName.js";
+import { POWERSHELL_TOOL_NAME } from "../../tools/PowerShellTool/toolName.js";
+import {
+  classifyAllShellEnabled,
+  isDangerousClassifierPermission,
+  warnMcpRuleMismatch,
+  getAutoModeConfigOrDefault,
+  requiresClassifierForHookAllow,
+} from "./permissionSetup.js";
+import { isChromeToolName, isBrowserPreviewToolName } from "../claudeInChrome/chromeToolNames.js";
+import { FILE_WRITE_TOOL_NAME } from "../../tools/FileWriteTool/prompt.js";
+import { NOTEBOOK_EDIT_TOOL_NAME } from "../../tools/NotebookEditTool/constants.js";
+import { FILE_EDIT_TOOL_NAME } from "../../tools/FileEditTool/constants.js";
+import {
+  HEARTH_WRITE_TOOL_NAMES as HEARTH_WRITE_TOOL_NAMES_2,
+  HEARTHBOT,
+} from "../../services/mcp/ccrMetaMcp.js";
+import {
+  buildMcpToolName,
+  MCP_TOOL_PREFIX,
+  getToolNameForPermissionCheck as getToolNameForPermissionCheck_2,
+  mcpInfoFromString,
+  getMcpToolAliasNames,
+  isRemoteBrowserReadWithoutClassifier,
+} from "../../services/mcp/mcpStringUtils.js";
+import {
+  SETTING_SOURCES,
+  isSettingSourceEnabled,
+  getSettingSourceDisplayNameLowercase,
+  EDITABLE_SETTING_SOURCES,
+} from "../settings/constants.js";
+import {
+  isAutoClassifierActive,
+  isAutoModePermissionSurface,
+  isAutoModeActive,
+  noteRefusedMcpSkip,
+} from "./autoModeState.js";
+import { env, antEnv } from "../env.js";
 import {
   permissionRuleValueFromString,
   toolNameVariants,
@@ -16,6 +54,34 @@ import {
   aliasesFor,
   matchWildcard,
 } from "./permissionRuleParser.js";
+import {
+  isRestrictedNonSessionRule,
+  isSkillPluginSurfaceEnabled,
+  isWebToolRestrictedInRelay,
+} from "./permissionRulePayload.js";
+import {
+  standardKeyRuleRow,
+  ruleWithinServerPrefix,
+  compileMcpRuleMatcher,
+  getMcpServerRulePrefixes,
+  ruleWithNormalizedServer,
+  isServerIdentityActive,
+  toInternalToolName,
+  mcpRuleMatchesToolAlias,
+} from "../../services/mcp/serverIdentity.js";
+import { FILE_READ_TOOL_NAME } from "../../tools/FileReadTool/constants.js";
+import { GREP_TOOL_NAME } from "../../tools/GrepTool/prompt.js";
+import { GLOB_TOOL_NAME } from "../../tools/GlobTool/prompt.js";
+import { LISTMCPRESOURCESTOOL } from "../../tools/ListMcpResourcesTool/prompt.js";
+import { READ_MCP_RESOURCE_DIR_TOOL_NAME } from "../../tools/ReadMcpResourceDirTool/prompt.js";
+import { READMCPRESOURCETOOL } from "../../tools/ReadMcpResourceTool/prompt.js";
+import { REFRESH_MCP_TOOLS_TOOL_NAME } from "../../tools/RefreshMcpToolsTool/RefreshMcpToolsTool.js";
+import { DEVICE_2, HOST_TOOL_INPUT_FIELD, machineNameMatches } from "../../bridge/deviceRegistration.js";
+import { normalizeNameForMCP, CLAUDE_AI_NAME_PREFIX, CLAUDE_AI } from "../../services/mcp/normalization.js";
+import { trimEndChars, plural } from "../stringUtils.js";
+import { SKILL } from "../../tools/SkillTool/skillToolNames.js";
+import { toSyncedSkillAlias } from "../../skills/syncedSkills.js";
+import { isTopHostSession } from "../sessionShape.js";
 import { AGENT } from "../../tools/AgentTool/constants.js";
 import {
   getAllowedChannels,
@@ -45,7 +111,7 @@ import {
   applyPermissionAnswerChanges,
 } from "./permissionAnswer.js";
 import { isLiveMemoryTool } from "../../services/mcp/memoryServerVerification.js";
-import { ZIi } from "./gitCommandRules.js";
+import { ruleReasons } from "./gitCommandRules.js";
 import { formatPermissionRule, ruleToolNameFromString } from "./disallowedToolsFlag.js";
 import { DEVICE_BASH_TOOL, DEVICE_COMMIT_FILES_TOOL } from "../../services/mcp/firstPartyServerIds.js";
 import {
@@ -53,23 +119,8 @@ import {
   getMcpPermissionModeOverride,
   isSandboxAutoAllowOff,
 } from "./browserToolNames.js";
-import {
-  isRemoteBrowserReadWithoutClassifier,
-  buildMcpToolName,
-  MCP_TOOL_PREFIX,
-  getToolNameForPermissionCheck as getToolNameForPermissionCheck_2,
-  mcpInfoFromString,
-  getMcpToolAliasNames,
-} from "../../services/mcp/mcpStringUtils.js";
 import { readFlagWithOverride } from "../../services/analytics/flagOverrides.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../services/analytics/growthbook.js";
-import { env, antEnv } from "../env.js";
-import {
-  isAutoClassifierActive,
-  isAutoModePermissionSurface,
-  isAutoModeActive,
-  noteRefusedMcpSkip,
-} from "./autoModeState.js";
 import {
   getAutoModeClassifierRole,
   SERVER_CLASSIFIER_LABEL,
@@ -93,7 +144,7 @@ import { WEBFETCH, ALLOW_WEB_FETCH } from "../../tools/WebFetchTool/prompt.js";
 import { WEBSEARCH } from "../../tools/WebSearchTool/prompt.js";
 import { isCoworkAny } from "../entrypointKinds.js";
 import { getToolPermissionContext, getMainLoopModel as getMainLoopModel_2 } from "./toolPermissionContext.js";
-import { wi, xr } from "../../../vendor/lodash-es/_inlinedHelpers.js";
+import { import_reject, import_mapValues } from "../../../vendor/lodash-es/_inlinedHelpers.js";
 import {
   isClassifierRoutedCircuitBreaker,
   isAutoModeDenyCircuitBreaker,
@@ -164,17 +215,8 @@ import {
 import { SessionRootSlot, isNoProjectDirectoryError } from "../../bootstrap/sessionSlices.js";
 import { identity as identity_2 } from "../identity.js";
 import { canonicalFingerprint } from "../../services/api/requestFingerprint.js";
-import { FILE_READ_TOOL_NAME } from "../../tools/FileReadTool/constants.js";
-import { GREP_TOOL_NAME } from "../../tools/GrepTool/prompt.js";
-import { GLOB_TOOL_NAME } from "../../tools/GlobTool/prompt.js";
 import { isBgSession, isUnattendedInteractiveSession } from "../concurrentSessions.js";
 import { isTeammateContextReady } from "../swarm/permissionSync.js";
-import {
-  isSettingSourceEnabled,
-  getSettingSourceDisplayNameLowercase,
-  EDITABLE_SETTING_SOURCES,
-  SETTING_SOURCES,
-} from "../settings/constants.js";
 import { getGlobalConfig, saveGlobalConfig } from "../config.js";
 import { markReadBlockApplied, isReadBlockOn } from "./readBlock.js";
 import { logFeatureSad, logFeatureOk } from "../../services/analytics/featureTelemetry.js";
@@ -186,17 +228,7 @@ import {
 } from "../settings/settings.js";
 import { logForDebugging } from "../debug.js";
 import { SandboxManager } from "../sandbox/sandbox-adapter.js";
-import {
-  getAutoModeConfigOrDefault,
-  isDangerousClassifierPermission,
-  classifyAllShellEnabled,
-  requiresClassifierForHookAllow,
-  warnMcpRuleMismatch,
-} from "./permissionSetup.js";
 import { mainModelOverrideKeys } from "../model/canonicalModelName.js";
-import { FILE_EDIT_TOOL_NAME } from "../../tools/FileEditTool/constants.js";
-import { FILE_WRITE_TOOL_NAME } from "../../tools/FileWriteTool/prompt.js";
-import { NOTEBOOK_EDIT_TOOL_NAME } from "../../tools/NotebookEditTool/constants.js";
 import { wasProactivityEverOn } from "../../Tool.js";
 import { cycleAllTeammateModes, cycleTeammateMode } from "../../components/teams/TeamsDialog.js";
 import {
@@ -240,12 +272,10 @@ import {
   shouldFallbackToPrompting,
   DENIAL_LIMITS,
 } from "./denialTracking.js";
-import { POWERSHELL_TOOL_NAME } from "../../tools/PowerShellTool/toolName.js";
 import {
   shouldUseSandbox,
   antDisabledListMatchesCommandText,
 } from "../../tools/BashTool/shouldUseSandbox.js";
-import { BASH_TOOL_NAME } from "../../tools/BashTool/toolName.js";
 import { MONITOR } from "../../tools/MonitorTool/constants.js";
 import {
   getDestructiveTargetCategory,
@@ -294,7 +324,6 @@ import {
   buildDangerousRemovalDenial,
 } from "../messages.js";
 import { extractOutputRedirections } from "../bash/commands.js";
-import { plural, trimEndChars } from "../stringUtils.js";
 import { permissionModeTitle } from "./PermissionMode.js";
 import { isPinnedOrWildcardRule, USERSETTINGS } from "./classifierApprovalRules.js";
 import {
@@ -342,7 +371,6 @@ import {
 } from "./serverClassifier/results.js";
 import { settingsProblemDenial } from "../settings/settingsProblems.js";
 import { denyReservedArtifactKeys } from "../../tools/ArtifactTool/reservedKeys.js";
-import { isChromeToolName, isBrowserPreviewToolName } from "../claudeInChrome/chromeToolNames.js";
 import { sanitizeToolNameForAnalytics, builtinToolServedByMcp } from "../../services/analytics/metadata.js";
 import { sanitizeMarkName } from "../startupMarks.js";
 import { mcpToolLogFields } from "../../hooks/toolPermission/permissionLogging.js";
@@ -383,11 +411,6 @@ import { isLinkedWorktreeFastPathEnabled, verifiedLinkedWorktreeDirectories } fr
 import { APIUserAbortError } from "../../../vendor/@anthropic-ai/sdk/core/error.mjs";
 import { REMOTE_BROWSER_SERVER_NAME } from "../../services/mcp/remoteBrowserServer.js";
 import { keepResolvedHostPin } from "../../commands/mobile/mobile.js";
-import {
-  isWebToolRestrictedInRelay,
-  isRestrictedNonSessionRule,
-  isSkillPluginSurfaceEnabled,
-} from "./permissionRulePayload.js";
 import { isRemoteBrowserToolUnderModeFloor } from "./remoteBrowser.js";
 import { CommitTurnSlot, enqueueClassifierRequest } from "./serverClassifier/context.js";
 import { pinSessionId } from "../sessionStorage.js";
@@ -406,33 +429,16 @@ import { STRUCTUREDOUTPUT } from "../../tools/SyntheticOutputTool/SyntheticOutpu
 import { HOOK_AGENT_ID_PREFIX } from "../agentId.js";
 import { powershellToolCheckExactMatchPermission } from "../../tools/PowerShellTool/powershellPermissions.js";
 import { askClassifierForAllowedDomains } from "../../tools/BashTool/bashSecurity.js";
-import { SKILL } from "../../tools/SkillTool/skillToolNames.js";
 import { jsonStringify } from "../slowOperations.js";
 import { dispatchClassicEvent } from "../../plugins/functionHooks/modAdmission.js";
 import { registerAgent } from "../telemetry/perfettoTracing.js";
 import { getSessionFeatureValues } from "../../bootstrap/sessionFeatureValues.js";
-import {
-  HEARTH_WRITE_TOOL_NAMES as HEARTH_WRITE_TOOL_NAMES_2,
-  HEARTHBOT,
-} from "../../services/mcp/ccrMetaMcp.js";
-import {
-  standardKeyRuleRow,
-  ruleWithinServerPrefix,
-  compileMcpRuleMatcher,
-  getMcpServerRulePrefixes,
-  ruleWithNormalizedServer,
-  isServerIdentityActive,
-  toInternalToolName,
-  mcpRuleMatchesToolAlias,
-} from "../../services/mcp/serverIdentity.js";
-import { LISTMCPRESOURCESTOOL } from "../../tools/ListMcpResourcesTool/prompt.js";
-import { READ_MCP_RESOURCE_DIR_TOOL_NAME } from "../../tools/ReadMcpResourceDirTool/prompt.js";
-import { READMCPRESOURCETOOL } from "../../tools/ReadMcpResourceTool/prompt.js";
-import { REFRESH_MCP_TOOLS_TOOL_NAME } from "../../tools/RefreshMcpToolsTool/RefreshMcpToolsTool.js";
-import { DEVICE_2, HOST_TOOL_INPUT_FIELD, machineNameMatches } from "../../bridge/deviceRegistration.js";
-import { normalizeNameForMCP, CLAUDE_AI_NAME_PREFIX, CLAUDE_AI } from "../../services/mcp/normalization.js";
-import { toSyncedSkillAlias } from "../../skills/syncedSkills.js";
-import { isTopHostSession } from "../sessionShape.js";
+import { uniq } from "../collections.js";
+import { isReplToolName } from "../../tools/REPLTool/constants.js";
+import { toolsRunningCodeAsBash } from "./filterToolsByDenyRules.js";
+import { toolMatchesAnyName } from "../../services/tools/permissionCheckGuard.js";
+import { ARTIFACT_TOOL_NAME, standsInForBuiltInArtifact } from "../../tools/AgentTool/agentToolUtils.js";
+import { dbRowKey } from "../../tools/ArtifactTool/permissions/dbWriteInputs.js";
 import {
   parseTypePrefixedValue,
   getUrlRulesForTool,
@@ -441,16 +447,780 @@ import {
 import { typeNameWithoutQuotes } from "../../services/artifacts/artifactTypes.js";
 import { FileEditTool } from "../../tools/FileEditTool/FileEditTool.js";
 import { editAskClassifierRoutable } from "../../tools/ArtifactTool/publishEdits.js";
-import { uniq } from "../collections.js";
-import { isReplToolName } from "../../tools/REPLTool/constants.js";
-import { toolsRunningCodeAsBash } from "./filterToolsByDenyRules.js";
-import { toolMatchesAnyName } from "../../services/tools/permissionCheckGuard.js";
-import { ARTIFACT_TOOL_NAME, standsInForBuiltInArtifact } from "../../tools/AgentTool/agentToolUtils.js";
-import { dbRowKey } from "../../tools/ArtifactTool/permissions/dbWriteInputs.js";
-import { CLAUDE_IN_CHROME_DOMAIN_RULE_TOOL } from "../claudeInChrome/common.js";
-import { isOfficialMarketplaceRef, hasSimilarMarketplaceName } from "../plugins/marketplaceNames.js";
 import { hasMintedReentry } from "../../tools/SendMessageTool/isolationDispatchGate.js";
+import { CLAUDE_IN_CHROME_DOMAIN_RULE_TOOL } from "../claudeInChrome/common.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
+//@ chunk-sfy7bm1n.js:10287-10409 placement
+/**
+ * 进入 auto 模式时把工具名映射为允许规则使用的名字：Bash/PowerShell 视开关保留、Chrome 与危险工具返回 undefined、写文件类映射为编辑工具。
+ */
+function toAllowRuleToolName(toolNameForPermissionCheck) {
+  if (toolNameForPermissionCheck === BASH_TOOL_NAME || toolNameForPermissionCheck === POWERSHELL_TOOL_NAME)
+    return classifyAllShellEnabled() ? undefined : toolNameForPermissionCheck;
+  if (
+    isChromeToolName(toolNameForPermissionCheck) ||
+    isDangerousClassifierPermission(toolNameForPermissionCheck, undefined) ||
+    isAllowRuleIgnoredInAutoMode(toolNameForPermissionCheck)
+  )
+    return;
+  return toolNameForPermissionCheck === FILE_WRITE_TOOL_NAME ||
+    toolNameForPermissionCheck === NOTEBOOK_EDIT_TOOL_NAME
+    ? FILE_EDIT_TOOL_NAME
+    : toolNameForPermissionCheck;
+}
+//@ chunk-sfy7bm1n.js:10409-10455 placement
+var HEARTH_WRITE_TOOL_NAMES; // deferred: uses buildMcpToolName (../../services/mcp/mcpStringUtils.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-sfy7bm1n.js:10409", () => {
+  HEARTH_WRITE_TOOL_NAMES = new Set(
+    Array.from(HEARTH_WRITE_TOOL_NAMES_2, (toolName) => buildMcpToolName(HEARTHBOT, toolName)),
+  );
+});
+//@ chunk-sfy7bm1n.js:10455-10488 placement
+function isAllowRuleIgnoredInAutoMode(toolName) {
+  return HEARTH_WRITE_TOOL_NAMES.has(toolName);
+}
+//@ chunk-sfy7bm1n.js:10488-10701 placement
+/**
+ * 规则来源按顺序：userSettings、projectSettings、localSettings、flagSettings、policySettings、cliArg、command、session、mcpMount、toolsNarrowing、mcpServerPolicy、hostCredential。
+ */
+var PERMISSION_RULE_SOURCES; // deferred: loads other modules while loading; runs once its import cycle is complete
+var NARROWING_RULE_SOURCES;
+var CONVERSATION_END_TOOLS;
+deferInit("chunk-sfy7bm1n.js:10488", () => {
+  PERMISSION_RULE_SOURCES = [
+    ...SETTING_SOURCES,
+    "cliArg",
+    "command",
+    "session",
+    "mcpMount",
+    "toolsNarrowing",
+    "mcpServerPolicy",
+    "hostCredential",
+  ];
+  NARROWING_RULE_SOURCES = ["toolsNarrowing", "command"];
+  CONVERSATION_END_TOOLS = new Set([
+    require("../../tools/EndConversationTool/constants.js").END_CONVERSATION_TOOL_NAME,
+  ]);
+});
+//@ chunk-sfy7bm1n.js:10701-10749 placement
+function isConversationEndTool(tool) {
+  return !tool.mcpInfo && CONVERSATION_END_TOOLS.has(tool.name);
+}
+//@ chunk-sfy7bm1n.js:10749-11364 fingerprint = getAllowRules (0.577)
+/**
+ * 收集 allow 规则；auto 模式下跳过危险规则（sme）与特定工具；CLAUDE_CODE_EVAL_CONFINED 时只用 cliArg；M() 判为被托管限制的来源之后的规则被截断。
+ */
+function getAllowRules(context) {
+  if (isAutoClassifierActive(context.mode, context.servedCall === true)) {
+    let ruleTables = env.CLAUDE_CODE_EVAL_CONFINED
+      ? {
+          cliArg: context.alwaysAllowRules.cliArg,
+        }
+      : context.alwaysAllowRules;
+    let rules = [];
+    for (let source of PERMISSION_RULE_SOURCES) {
+      let rawRules = ruleTables[source];
+      if (rawRules === undefined) continue;
+      for (let rawRule of rawRules) {
+        let ruleValue = permissionRuleValueFromString(rawRule);
+        if (isDangerousClassifierPermission(ruleValue.toolName, ruleValue.ruleContent)) continue;
+        if (isAllowRuleIgnoredInAutoMode(ruleValue.toolName)) continue;
+        if (isRestrictedNonSessionRule(source, ruleValue.toolName)) continue;
+        rules.push({
+          source,
+          ruleBehavior: "allow",
+          ruleValue,
+        });
+      }
+    }
+    return rules;
+  }
+  if (env.CLAUDE_CODE_EVAL_CONFINED)
+    return collectRulesFromSettings(
+      {
+        cliArg: context.alwaysAllowRules.cliArg,
+      },
+      "allow",
+    );
+  let rulesFromSettings = collectRulesFromSettings(context.alwaysAllowRules, "allow");
+  let filtered;
+  for (let [index, rule] of rulesFromSettings.entries())
+    if (isRestrictedNonSessionRule(rule.source, rule.ruleValue.toolName))
+      filtered ??= rulesFromSettings.slice(0, index);
+    else filtered?.push(rule);
+  return filtered ?? rulesFromSettings;
+}
+//@ chunk-sfy7bm1n.js:11364-11517 layout = hasBashPermission (1)
+/**
+ * 把某行为（allow/deny/ask）的各来源规则字符串展开成规则对象列表 {source, ruleBehavior, ruleValue}。
+ */
+function collectRulesFromSettings(ruleTables, ruleBehavior) {
+  let rules = [];
+  for (let source of PERMISSION_RULE_SOURCES) {
+    let rawRules = ruleTables[source];
+    if (rawRules === undefined) continue;
+    for (let rawRule of rawRules)
+      rules.push({
+        source,
+        ruleBehavior,
+        ruleValue: permissionRuleValueFromString(rawRule),
+      });
+  }
+  return rules;
+}
+//@ chunk-sfy7bm1n.js:11517-11569 layout
+function getDenyRules(context) {
+  return collectRulesFromSettings(context.alwaysDenyRules, "deny");
+}
+//@ chunk-sfy7bm1n.js:11569-11619 layout
+function getAskRules(context) {
+  return collectRulesFromSettings(context.alwaysAskRules, "ask");
+}
+//@ chunk-sfy7bm1n.js:11619-11703 layout = getDenyRuleForAgent (1)
+/**
+ * 工具是否命中整工具规则（规则无内容时按工具名匹配）。
+ */
+function toolMatchesWholeToolRule(context, agentToolName, agentType = {}) {
+  if (agentToolName.ruleValue.ruleContent !== undefined) return false;
+  return toolMatchesRuleName(context, agentToolName, agentType);
+}
+//@ chunk-sfy7bm1n.js:11703-12599 layout
+/**
+ * 规则工具名是否匹配工具：同名、家族父工具、别名展开、glob 名、MCP 服务器级规则（mcp__server / mcp__server__*）。
+ */
+function toolMatchesRuleName(
+  tool,
+  rule,
+  { proxyExpansion = false, globMatching = false, toolAliases } = {},
+  nameMatchers = getRuleNameMatchers(rule),
+  matchInfo = getToolMatchInfo(tool, toolAliases),
+) {
+  if (rule.ruleBehavior !== "allow" && tool.mcpInfo !== undefined) {
+    let options = {
+      proxyExpansion,
+      globMatching,
+      toolAliases,
+    };
+    if (
+      matchInfo.otherDenyOrAskReads().some((aliasInfo) =>
+        toolMatchesRuleName(
+          {
+            name: aliasInfo.name,
+          },
+          rule,
+          options,
+          nameMatchers,
+          aliasInfo,
+        ),
+      )
+    )
+      return true;
+    let standardRow = standardKeyRuleRow(rule.ruleValue.toolName, matchInfo.name);
+    if (
+      standardRow !== undefined &&
+      toolMatchesRuleName(
+        {
+          name: standardRow.row,
+        },
+        withRuleToolName(standardRow.rule, rule),
+        options,
+      )
+    )
+      return true;
+  }
+  let ruleToolName = matchInfo.name;
+  if (rule.ruleValue.toolName === ruleToolName) return true;
+  let familyParentToolName = "familyParentToolName" in tool ? tool.familyParentToolName : undefined;
+  if (
+    familyParentToolName !== undefined &&
+    tool.mcpInfo === undefined &&
+    rule.ruleValue.toolName === familyParentToolName
+  )
+    return true;
+  if (proxyExpansion && toolNameVariants(rule.ruleValue.toolName, toolAliases).includes(ruleToolName))
+    return true;
+  let { matchesGlob } = nameMatchers;
+  if (
+    globMatching &&
+    matchesGlob !== undefined &&
+    (matchesGlob(ruleToolName) || (proxyExpansion && matchInfo.aliasSources().some(matchesGlob)))
+  )
+    return true;
+  let coversMcp = nameMatchers.coversMcpTool(matchInfo.mcpInfo());
+  if (rule.ruleBehavior === "allow") {
+    if (!coversMcp) return false;
+    if (ruleWithinServerPrefix(rule.ruleValue.toolName, tool)) return true;
+    warnMcpRuleMismatch(rule.ruleValue, tool);
+    return false;
+  }
+  return (
+    coversMcp ||
+    (isUserMcpServerRule(rule) && matchInfo.mcpServerRuleNames().includes(rule.ruleValue.toolName))
+  );
+}
+//@ chunk-sfy7bm1n.js:12599-12690 layout
+function isUserMcpServerRule({ source, ruleValue }) {
+  return source !== "mcpServerPolicy" && ruleValue.toolName.startsWith(MCP_TOOL_PREFIX);
+}
+//@ chunk-sfy7bm1n.js:12690-12824 layout
+function getRuleNameMatchers({ ruleValue: { toolName } }) {
+  let regex;
+  let mcpMatcher;
+  return {
+    matchesGlob: hasWildcard(toolName)
+      ? (candidateName) => (regex ??= wildcardRuleRegex(toolName))(candidateName)
+      : undefined,
+    coversMcpTool: (mcpInfo) => (mcpMatcher ??= compileMcpRuleMatcher(toolName))(mcpInfo),
+  };
+}
+//@ chunk-sfy7bm1n.js:12824-13030 layout
+/**
+ * 构造工具匹配信息（惰性计算）：工具名、MCP 信息、别名来源、MCP 服务器规则名、其他 deny/ask 读取名。
+ */
+function getToolMatchInfo(tool, toolAliases) {
+  let toolNameForPermissionCheck = getToolNameForPermissionCheck_2(tool);
+  let aliasSourcesCache;
+  let serverRuleNamesCache;
+  let otherReadsCache;
+  let mcpInfoCache;
+  return {
+    name: toolNameForPermissionCheck,
+    mcpInfo: () =>
+      mcpInfoCache === undefined
+        ? (mcpInfoCache = mcpInfoFromString(toolNameForPermissionCheck))
+        : mcpInfoCache,
+    aliasSources: () => (aliasSourcesCache ??= aliasesFor(toolNameForPermissionCheck, toolAliases)),
+    mcpServerRuleNames: () => (serverRuleNamesCache ??= getMcpServerRulePrefixes(tool)),
+    otherDenyOrAskReads: () =>
+      (otherReadsCache ??= getMcpToolAliasNames(tool).map((name) =>
+        getToolMatchInfo(
+          {
+            name,
+          },
+          toolAliases,
+        ),
+      )),
+  };
+}
+//@ chunk-sfy7bm1n.js:13030-13086 file-local
+function toolAlwaysAllowedRule(context, tool) {
+  return getAllowRules(context).find((rule) => toolMatchesWholeToolRule(tool, rule)) || null;
+}
+//@ chunk-sfy7bm1n.js:13086-13158 layout
+/**
+ * 该规则是否允许别名展开：cliArg 与 toolsNarrowing 来源不展开。
+ */
+function allowsAliasExpansion(rule) {
+  return rule.source !== "cliArg" && rule.source !== "toolsNarrowing";
+}
+//@ chunk-sfy7bm1n.js:13158-13562 layout
+/**
+ * 规则是否命中工具：按名字（含别名、glob）匹配，再检查 aliasSkillToolNames 与打包别名 skill 名。
+ */
+function toolMatchesRule(
+  toolPermissionContext,
+  tool,
+  rule,
+  nameMatchers = getRuleNameMatchers(rule),
+  matchInfo,
+  includePackagingAliases = false,
+) {
+  let options = {
+    proxyExpansion: allowsAliasExpansion(rule),
+    globMatching: true,
+    toolAliases: toolPermissionContext.toolAliases,
+  };
+  if (toolMatchesRuleName(tool, rule, options, nameMatchers, matchInfo)) return true;
+  if (
+    ("aliasSkillToolNames" in tool ? tool.aliasSkillToolNames : undefined)?.some((name) =>
+      toolMatchesRuleName(
+        {
+          name,
+        },
+        rule,
+        options,
+        nameMatchers,
+      ),
+    )
+  )
+    return true;
+  let packagingAliasSkillToolNames =
+    "packagingAliasSkillToolNames" in tool ? tool.packagingAliasSkillToolNames : undefined;
+  if (
+    packagingAliasSkillToolNames === undefined ||
+    (hasWildcard(rule.ruleValue.toolName) && !isSkillPluginSurfaceEnabled(includePackagingAliases))
+  )
+    return false;
+  return packagingAliasSkillToolNames.some((name) =>
+    toolMatchesRuleName(
+      {
+        name,
+      },
+      rule,
+      options,
+      nameMatchers,
+    ),
+  );
+}
+//@ chunk-sfy7bm1n.js:13562-13688 layout
+/**
+ * 找命中该工具的 deny 规则（会话结束类工具除外），返回规则或 null。
+ */
+function getDenyRuleForTool(toolPermissionContext, tool, denyRules, includePackagingAliases = false) {
+  if (isConversationEndTool(tool)) return null;
+  let matchInfo;
+  return (
+    (denyRules ?? getDenyRules(toolPermissionContext)).find((rule) =>
+      toolMatchesRuleWithAliases(
+        tool,
+        rule,
+        toolPermissionContext,
+        undefined,
+        (matchInfo ??= getToolMatchInfo(tool, toolPermissionContext.toolAliases)),
+        includePackagingAliases,
+      ),
+    ) || null
+  );
+}
+//@ chunk-sfy7bm1n.js:13688-13729 layout
+function isWildcardOnlyContent(ruleContent) {
+  return /^[\s*]+$/.test(ruleContent);
+}
+//@ chunk-sfy7bm1n.js:13729-13834 layout
+function isRootWildcardPathContent(ruleContent) {
+  return (
+    ruleContent.startsWith("//") && /^\/(?:\*\*\/)?\*+(?:\/\*\*)?$/.test(ruleContent.replace(/\/{2,}/g, "/"))
+  );
+}
+//@ chunk-sfy7bm1n.js:13834-13929 layout
+var EDIT_FAMILY_TOOLS; // deferred: uses GREP_TOOL_NAME (../../tools/GrepTool/prompt.js) of its import cycle while loading; runs once the cycle is complete
+var READ_FAMILY_TOOLS;
+var BROAD_PATH_RULE_COVERAGE;
+deferInit("chunk-sfy7bm1n.js:13834", () => {
+  EDIT_FAMILY_TOOLS = [FILE_EDIT_TOOL_NAME, FILE_WRITE_TOOL_NAME, NOTEBOOK_EDIT_TOOL_NAME];
+  READ_FAMILY_TOOLS = [FILE_READ_TOOL_NAME, GREP_TOOL_NAME, GLOB_TOOL_NAME];
+  BROAD_PATH_RULE_COVERAGE = new Map([
+    [
+      FILE_READ_TOOL_NAME,
+      {
+        deny: [...READ_FAMILY_TOOLS, FILE_EDIT_TOOL_NAME, FILE_WRITE_TOOL_NAME],
+        ask: READ_FAMILY_TOOLS,
+      },
+    ],
+    [
+      FILE_EDIT_TOOL_NAME,
+      {
+        deny: EDIT_FAMILY_TOOLS,
+        ask: EDIT_FAMILY_TOOLS,
+      },
+    ],
+  ]);
+});
+//@ chunk-sfy7bm1n.js:13929-14102 layout = getRuleByContentsForToolName (1)
+function ruleCoversToolViaBroadContent({ ruleBehavior, ruleValue: { toolName, ruleContent } }, aliasName) {
+  if (ruleContent === undefined || ruleBehavior === "allow") return false;
+  return toolName === BASH_TOOL_NAME
+    ? aliasName === BASH_TOOL_NAME && isWildcardOnlyContent(ruleContent)
+    : isRootWildcardPathContent(ruleContent) &&
+        (BROAD_PATH_RULE_COVERAGE.get(toolName)?.[ruleBehavior] ?? []).includes(aliasName);
+}
+//@ chunk-sfy7bm1n.js:14102-14330 layout
+/**
+ * 带别名的规则匹配：无内容规则走 toolMatchesRule；有内容规则检查别名来源上的宽泛内容是否覆盖该工具。
+ */
+function toolMatchesRuleWithAliases(
+  toolPermissionContext,
+  tool,
+  rule,
+  nameMatchers,
+  toolMatchInfo,
+  includePackagingAliases = false,
+) {
+  if (tool.ruleValue.ruleContent === undefined)
+    return toolMatchesRule(
+      rule,
+      toolPermissionContext,
+      tool,
+      nameMatchers,
+      toolMatchInfo,
+      includePackagingAliases,
+    );
+  let { name: toolName, aliasSources } =
+    toolMatchInfo ?? getToolMatchInfo(toolPermissionContext, rule.toolAliases);
+  let isDirectMatch = tool.ruleValue.toolName === toolName;
+  let expandsAliases = allowsAliasExpansion(tool);
+  return aliasSources().some(
+    (aliasName) =>
+      aliasName !== toolName &&
+      ((expandsAliases && ruleCoversToolViaBroadContent(tool, aliasName)) ||
+        (isDirectMatch && ruleCoversToolViaBroadContent(withRuleToolName(aliasName, tool), aliasName))),
+  );
+}
+//@ chunk-sfy7bm1n.js:14330-14397 layout
+function withRuleToolName(toolName, rule) {
+  return {
+    ...rule,
+    ruleValue: {
+      ...rule.ruleValue,
+      toolName,
+    },
+  };
+}
+//@ chunk-sfy7bm1n.js:14397-14480 layout
+/**
+ * 规则名是否为模式名（glob 名或只到 MCP 服务器一级的名字）。
+ */
+function isPatternRuleName(toolName) {
+  if (hasWildcard(toolName)) return true;
+  let mcpInfo = mcpInfoFromString(toolName);
+  return mcpInfo !== null && mcpInfo.toolName === undefined;
+}
+//@ chunk-sfy7bm1n.js:14480-14932 layout
+/**
+ * 为一组 deny 规则建索引：整名集合、模式规则、MCP 服务器名、带内容但经别名覆盖的规则等，供批量过滤工具池。
+ */
+function buildDenyRuleIndex(toolPermissionContext, rules) {
+  let names = new Set();
+  let parentNames = new Set();
+  let mcpServerNames = new Set();
+  let patterns = [];
+  let withContent = [];
+  for (let rule of rules) {
+    let { toolName, ruleContent } = rule.ruleValue;
+    if (ruleContent !== undefined) {
+      if (
+        Object.entries(toolPermissionContext.toolAliases ?? {}).some(
+          ([key, value]) =>
+            ruleCoversToolViaBroadContent(rule, key) ||
+            (value === toolName && ruleCoversToolViaBroadContent(withRuleToolName(key, rule), key)),
+        )
+      )
+        withContent.push(rule);
+      continue;
+    }
+    if (isPatternRuleName(toolName) || ruleWithNormalizedServer(toolName)) {
+      patterns.push({
+        rule,
+        ruleName: getRuleNameMatchers(rule),
+      });
+      continue;
+    }
+    if (isUserMcpServerRule(rule)) mcpServerNames.add(toolName);
+    parentNames.add(toolName);
+    let variants = allowsAliasExpansion(rule)
+      ? toolNameVariants(toolName, toolPermissionContext.toolAliases)
+      : [toolName];
+    for (let variant of variants) names.add(variant);
+  }
+  return {
+    names,
+    parentNames,
+    mcpServerNames,
+    patterns,
+    withContent,
+  };
+}
+//@ chunk-sfy7bm1n.js:14932-14991 layout
+function getDenyRuleIndex(toolPermissionContext) {
+  let rules = getDenyRules(toolPermissionContext);
+  return {
+    rules,
+    index: buildDenyRuleIndex(toolPermissionContext, rules),
+  };
+}
+//@ chunk-sfy7bm1n.js:14991-15938 layout
+/**
+ * 用 deny 规则索引判断工具是否被拒绝：名字、其他读名、父工具名、别名 skill 名、MCP 服务器名、模式规则、带内容的覆盖规则依次检查。
+ */
+function isToolDeniedByIndex(toolPermissionContext, index, tool) {
+  if (
+    isConversationEndTool(tool) ||
+    (index.names.size === 0 && index.patterns.length === 0 && index.withContent.length === 0)
+  )
+    return false;
+  let toolMatchInfo = getToolMatchInfo(tool, toolPermissionContext.toolAliases);
+  if (index.names.has(toolMatchInfo.name)) return true;
+  if (
+    toolMatchInfo
+      .otherDenyOrAskReads()
+      .some(
+        (aliasInfo) =>
+          index.names.has(aliasInfo.name) ||
+          aliasInfo.mcpServerRuleNames().some((prefix) => index.mcpServerNames.has(prefix)),
+      )
+  )
+    return true;
+  let familyParentToolName = "familyParentToolName" in tool ? tool.familyParentToolName : undefined;
+  if (
+    familyParentToolName !== undefined &&
+    tool.mcpInfo === undefined &&
+    index.parentNames.has(familyParentToolName)
+  )
+    return true;
+  let aliasSkillToolNames = "aliasSkillToolNames" in tool ? tool.aliasSkillToolNames : undefined;
+  if (aliasSkillToolNames?.some((aliasSkillToolName) => index.names.has(aliasSkillToolName))) return true;
+  let packagingAliasSkillToolNames =
+    "packagingAliasSkillToolNames" in tool ? tool.packagingAliasSkillToolNames : undefined;
+  if (
+    packagingAliasSkillToolNames?.some((packagingAliasSkillToolName) =>
+      index.names.has(packagingAliasSkillToolName),
+    )
+  )
+    return true;
+  if (
+    index.mcpServerNames.size > 0 &&
+    (toolMatchInfo.mcpServerRuleNames().some((prefix) => index.mcpServerNames.has(prefix)) ||
+      [...(aliasSkillToolNames ?? []), ...(packagingAliasSkillToolNames ?? [])].some((name) =>
+        getMcpServerRulePrefixes({
+          name,
+        }).some((prefix) => index.mcpServerNames.has(prefix)),
+      ))
+  )
+    return true;
+  return (
+    index.patterns.some(({ rule, ruleName }) =>
+      toolMatchesRuleWithAliases(tool, rule, toolPermissionContext, ruleName, toolMatchInfo),
+    ) ||
+    (toolMatchInfo.aliasSources().length > 0 &&
+      index.withContent.some((rule) =>
+        toolMatchesRuleWithAliases(tool, rule, toolPermissionContext, undefined, toolMatchInfo),
+      ))
+  );
+}
+//@ chunk-sfy7bm1n.js:15938-16133 layout
+/**
+ * 会话结束类工具是否被整工具 deny 拒绝（存在同名 allow 规则时不算）。
+ */
+function isConversationEndToolDenied(toolPermissionContext, tool) {
+  if (!isConversationEndTool(tool)) return false;
+  if (getAllowRules(toolPermissionContext).some((allowRule) => allowRule.ruleValue.toolName === tool.name))
+    return false;
+  return getDenyRules(toolPermissionContext).some((denyRule) =>
+    toolMatchesWholeToolRule(tool, denyRule, {
+      proxyExpansion: allowsAliasExpansion(denyRule),
+      globMatching: true,
+      toolAliases: toolPermissionContext.toolAliases,
+    }),
+  );
+}
+//@ chunk-sfy7bm1n.js:16133-16236 layout = getDenyRuleForAgent (1)
+/**
+ * 找 toolName 与 ruleContent 精确相等的 deny 规则（例如 Agent(type)）。
+ */
+function findDenyRuleWithContent(context, agentToolName, agentType) {
+  return (
+    getDenyRules(context).find(
+      (rule) => rule.ruleValue.toolName === agentToolName && rule.ruleValue.ruleContent === agentType,
+    ) || null
+  );
+}
+//@ chunk-sfy7bm1n.js:16236-16340 layout = getDenyRuleForAgent (1)
+/**
+ * 找 toolName 与 ruleContent 精确相等的 ask 规则。
+ */
+function findAskRuleWithContent(context, agentToolName, agentType) {
+  return (
+    getAskRules(context).find(
+      (rule) => rule.ruleValue.toolName === agentToolName && rule.ruleValue.ruleContent === agentType,
+    ) || null
+  );
+}
+//@ chunk-sfy7bm1n.js:16340-16528 fingerprint = filterDeniedAgents (1)
+/**
+ * 按 Agent(type) deny 规则过滤代理列表。
+ */
+function filterDeniedAgents(agents, context, agentToolName) {
+  let deniedAgentTypes = new Set();
+  for (let rule of getDenyRules(context))
+    if (rule.ruleValue.toolName === agentToolName && rule.ruleValue.ruleContent !== undefined)
+      deniedAgentTypes.add(rule.ruleValue.ruleContent);
+  return agents.filter((agent) => !deniedAgentTypes.has(agent.agentType));
+}
+//@ chunk-sfy7bm1n.js:16528-16647 placement
+function getAskRuleForTool(toolPermissionContext, tool, askRules) {
+  if (isConversationEndTool(tool)) return null;
+  let matchInfo;
+  return (
+    (askRules ?? getAskRules(toolPermissionContext)).find((rule) =>
+      toolMatchesRuleWithAliases(
+        tool,
+        rule,
+        toolPermissionContext,
+        undefined,
+        (matchInfo ??= getToolMatchInfo(tool, toolPermissionContext.toolAliases)),
+      ),
+    ) || null
+  );
+}
+//@ chunk-sfy7bm1n.js:16647-16750 placement
+function stringifyScalar(value) {
+  if (value === undefined || value === null) return null;
+  if (typeof value !== "object") return String(value);
+  return null;
+}
+//@ chunk-sfy7bm1n.js:16750-16901 placement
+function parseFieldRuleContent(content) {
+  let index = content.indexOf(":");
+  if (index <= 0) return null;
+  let trimmed = content.slice(0, index).trim();
+  let trimmed_2 = content.slice(index + 1).trim();
+  return trimmed === "" || trimmed_2 === ""
+    ? null
+    : {
+        key: trimmed,
+        expected: trimmed_2,
+      };
+}
+//@ chunk-sfy7bm1n.js:16901-16999 placement
+function formatRuleDeniedMessage(name, rule) {
+  return `Permission to use ${name} with ${rule.ruleValue.ruleContent} has been denied.`;
+}
+//@ chunk-sfy7bm1n.js:16999-17029 placement
+var MCP_RESOURCE_TOOLS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-sfy7bm1n.js:16999", () => {
+  MCP_RESOURCE_TOOLS = new Set([
+    LISTMCPRESOURCESTOOL,
+    READ_MCP_RESOURCE_DIR_TOOL_NAME,
+    READMCPRESOURCETOOL,
+    REFRESH_MCP_TOOLS_TOOL_NAME,
+  ]);
+});
+//@ chunk-sfy7bm1n.js:17029-18589 placement
+/**
+ * 匹配 "key: expected" 形式的字段规则：对工具（及其别名、家族、MCP 服务器）的同行为规则，取输入字段值做通配比较；MCP 资源工具的 server 字段与 skill 名特判。
+ */
+function matchToolRule(context, tool, input, behavior) {
+  let toolNameForPermissionCheck = getToolNameForPermissionCheck_2(tool);
+  let skillAliasNames = [
+    ...("aliasSkillToolNames" in tool ? (tool.aliasSkillToolNames ?? []) : []),
+    ...("packagingAliasSkillToolNames" in tool ? (tool.packagingAliasSkillToolNames ?? []) : []),
+  ];
+  let nameCandidates = [
+    [toolNameForPermissionCheck, false],
+    ...getMcpToolAliasNames(tool).map((aliasName) => [aliasName, false]),
+    ...(tool.mcpInfo !== undefined && isServerIdentityActive()
+      ? (behavior === "deny" ? getDenyRules(context) : getAskRules(context))
+          .map((rule) => rule.ruleValue.toolName)
+          .filter((ruleToolName) => {
+            let row = standardKeyRuleRow(ruleToolName, toolNameForPermissionCheck);
+            return row !== undefined && row.rule === row.row;
+          })
+          .map((serverRuleName) => [serverRuleName, false])
+      : []),
+    ...skillAliasNames.map((aliasName) => [aliasName, false]),
+    ...aliasesFor(toolNameForPermissionCheck, context.toolAliases).map((alias) => [alias, true]),
+  ];
+  for (let [candidateName, isAlias] of nameCandidates) {
+    let filtered = getContentRulesForToolName(context, candidateName, behavior).filter(
+      (rule) => !isAlias || allowsAliasExpansion(rule),
+    );
+    for (let [ruleContent = "", rule] of new Map(
+      filtered.map((contentRule) => [contentRule.ruleValue.ruleContent, contentRule]),
+    )) {
+      let fieldRuleContent = parseFieldRuleContent(ruleContent);
+      if (fieldRuleContent === null) continue;
+      let { key, expected } = fieldRuleContent;
+      if (key === tool.ruleContentField) continue;
+      let inputField =
+        key === DEVICE_2 && !Object.hasOwn(input, key) && Object.hasOwn(input, HOST_TOOL_INPUT_FIELD)
+          ? HOST_TOOL_INPUT_FIELD
+          : key;
+      if (!Object.hasOwn(input, inputField)) continue;
+      let fieldValue = stringifyScalar(input[inputField]);
+      if (fieldValue === null) continue;
+      if (matchWildcard(expected, fieldValue.trim())) return rule;
+      if (inputField === "server" && MCP_RESOURCE_TOOLS.has(candidateName)) {
+        let replaced = expected.replace(/[^a-zA-Z0-9_*-]/g, "_");
+        let replaced_2 = replaced.replace(/_+/g, "_").replace(/_$/, "").replace(/_?\*/g, "*");
+        if (
+          [fieldValue.trim(), fieldValue]
+            .map(normalizeNameForMCP)
+            .flatMap((normalizedName) => [
+              normalizedName,
+              trimEndChars(normalizedName, "_").replace(/^_+/, ""),
+            ])
+            .some((candidateValue) =>
+              expected.startsWith(CLAUDE_AI_NAME_PREFIX)
+                ? matchWildcard(replaced_2, candidateValue)
+                : matchWildcard(replaced, candidateValue) ||
+                  (expected.includes("*") &&
+                    !replaced.startsWith("_") &&
+                    `${candidateValue}_`.startsWith(CLAUDE_AI) &&
+                    matchWildcard(replaced_2, candidateValue)),
+            )
+        )
+          return rule;
+      }
+      if (
+        inputField === HOST_TOOL_INPUT_FIELD &&
+        (expected.includes("*")
+          ? matchWildcard(expected.toLowerCase(), fieldValue.trim())
+          : machineNameMatches(expected, fieldValue.trim()))
+      )
+        return rule;
+      if (toolNameForPermissionCheck === SKILL && inputField === "skill") {
+        let name = fieldValue.trim();
+        let syncedSkillAlias = toSyncedSkillAlias(name);
+        if (syncedSkillAlias !== undefined) {
+          if ((!expected.includes("*") || isTopHostSession()) && matchWildcard(expected, syncedSkillAlias))
+            return rule;
+        }
+      }
+    }
+  }
+  let familyParentToolName = "familyParentToolName" in tool ? tool.familyParentToolName : undefined;
+  if (
+    familyParentToolName !== undefined &&
+    tool.mcpInfo === undefined &&
+    tool.toFamilyParentInput !== undefined
+  )
+    return matchToolRule(
+      context,
+      {
+        name: familyParentToolName,
+        ruleContentField: tool.ruleContentField,
+      },
+      tool.toFamilyParentInput(input),
+      behavior,
+    );
+  return null;
+}
+//@ chunk-sfy7bm1n.js:18589-18630 placement
+function getContentRulesMapForTool(context, tool, behavior) {
+  return getContentRulesMapForToolName(context, getToolNameForPermissionCheck_2(tool), behavior);
+}
+//@ chunk-sfy7bm1n.js:18630-18765 placement = getDenyRuleForAgent (1)
+function getContentRulesMapForToolName(context, agentToolName, agentType) {
+  let rulesByContent = new Map();
+  for (let rule of getContentRulesForToolName(context, agentToolName, agentType))
+    if (rule.ruleValue.ruleContent !== undefined) rulesByContent.set(rule.ruleValue.ruleContent, rule);
+  return rulesByContent;
+}
+//@ chunk-sfy7bm1n.js:18765-19004 placement = getRuleByContentsForToolName (1)
+function getContentRulesForToolName(context, toolName, behavior) {
+  let allRules = [];
+  switch (behavior) {
+    case "allow":
+      allRules = getAllowRules(context);
+      break;
+    case "deny":
+      allRules = getDenyRules(context);
+      break;
+    case "ask":
+      allRules = getAskRules(context);
+      break;
+  }
+  let rules = [];
+  for (let rule of allRules)
+    if (
+      rule.ruleValue.toolName === toolName &&
+      rule.ruleValue.ruleContent !== undefined &&
+      rule.ruleBehavior === behavior
+    )
+      rules.push(rule);
+  return rules;
+}
 //@ chunk-e6aww6q8.js:49322-49345 placement
 function isChainOnAllowActive() {
   return false;
@@ -462,22 +1232,22 @@ function isChainOnAllowActive() {
 function parseWildcardAgentTypes(tools) {
   if (tools === undefined) return {};
   if (!tools.includes("*")) return null;
-  let n;
-  for (let r of tools) {
-    if (r === "*") continue;
-    let { toolName, ruleContent } = permissionRuleValueFromString(r);
+  let agentTypes;
+  for (let tool of tools) {
+    if (tool === "*") continue;
+    let { toolName, ruleContent } = permissionRuleValueFromString(tool);
     if (toolName !== AGENT || !ruleContent) return null;
-    n ??= [];
-    n.push(
+    agentTypes ??= [];
+    agentTypes.push(
       ...ruleContent
         .split(",")
-        .map((y) => y.trim())
+        .map((name) => name.trim())
         .filter(Boolean),
     );
   }
-  return n
+  return agentTypes
     ? {
-        allowedAgentTypes: n,
+        allowedAgentTypes: agentTypes,
       }
     : {};
 }
@@ -494,12 +1264,12 @@ function canPromptUserForPermission() {
 /**
  * shouldReplaceMemoryInput：Live 记忆工具的输入被替换。
  */
-function shouldReplaceMemoryInput(tool, n, updatedInput, s = false) {
+function shouldReplaceMemoryInput(tool, originalInput, updatedInput, allowEmpty = false) {
   return (
     isLiveMemoryToolName(tool) &&
     updatedInput !== undefined &&
-    !(s && Object.keys(updatedInput).length === 0) &&
-    !isSameAnswerInput(updatedInput, n)
+    !(allowEmpty && Object.keys(updatedInput).length === 0) &&
+    !isSameAnswerInput(updatedInput, originalInput)
   );
 }
 //@ chunk-e6aww6q8.js:997021-997050 placement
@@ -517,53 +1287,67 @@ function EMPTY_RULE_ANNOTATIONS() {
 /**
  * 按决策原因里的规则（子命令结果递归）查注释表，命中返回带前导空格的说明后缀，否则空串。
  */
-function getRuleAnnotationSuffix(decisionReason, n = EMPTY_RULE_ANNOTATIONS(), r = ZIi) {
+function getRuleAnnotationSuffix(
+  decisionReason,
+  annotations = EMPTY_RULE_ANNOTATIONS(),
+  commandAnnotations = ruleReasons,
+) {
   if (decisionReason?.type === "rule") {
     let { rule } = decisionReason;
-    let h = formatPermissionRule(rule.ruleValue);
-    let y = n[h] ?? (rule.source === "command" ? r[h] : undefined);
-    return y ? ` ${y}` : "";
+    let ruleText = formatPermissionRule(rule.ruleValue);
+    let annotation =
+      annotations[ruleText] ?? (rule.source === "command" ? commandAnnotations[ruleText] : undefined);
+    return annotation ? ` ${annotation}` : "";
   }
   if (decisionReason?.type === "subcommandResults")
     for (let reason of decisionReason.reasons.values()) {
-      let ruleAnnotationSuffix = getRuleAnnotationSuffix(reason.decisionReason, n, r);
+      let ruleAnnotationSuffix = getRuleAnnotationSuffix(
+        reason.decisionReason,
+        annotations,
+        commandAnnotations,
+      );
       if (ruleAnnotationSuffix) return ruleAnnotationSuffix;
     }
   return "";
 }
 //@ chunk-e6aww6q8.js:1271167-1271286 placement
-function appendRuleAnnotation(e) {
-  let ruleAnnotationSuffix = getRuleAnnotationSuffix(e.decisionReason);
-  if (ruleAnnotationSuffix === "" || e.message.endsWith(ruleAnnotationSuffix)) return e;
+function appendRuleAnnotation(decision) {
+  let ruleAnnotationSuffix = getRuleAnnotationSuffix(decision.decisionReason);
+  if (ruleAnnotationSuffix === "" || decision.message.endsWith(ruleAnnotationSuffix)) return decision;
   return {
-    ...e,
-    message: e.message + ruleAnnotationSuffix,
+    ...decision,
+    message: decision.message + ruleAnnotationSuffix,
   };
 }
 //@ chunk-e6aww6q8.js:1285727-1285804 placement
-var TENGU_BUZZING_PELICAN = "tengu_buzzing_pelican";
-var DEVICE_TOOLS_WITH_CLASSIFIER_ROLE = new Set([DEVICE_BASH_TOOL, DEVICE_COMMIT_FILES_TOOL]);
-var TENGU_DEEP_DUSK = "tengu_deep_dusk";
+var TENGU_BUZZING_PELICAN; // deferred: uses DEVICE_BASH_TOOL (../../services/mcp/firstPartyServerIds.js) of its import cycle while loading; runs once the cycle is complete
+var DEVICE_TOOLS_WITH_CLASSIFIER_ROLE;
+var TENGU_DEEP_DUSK;
+deferInit("chunk-e6aww6q8.js:1285727", () => {
+  TENGU_BUZZING_PELICAN = "tengu_buzzing_pelican";
+  DEVICE_TOOLS_WITH_CLASSIFIER_ROLE = new Set([DEVICE_BASH_TOOL, DEVICE_COMMIT_FILES_TOOL]);
+  TENGU_DEEP_DUSK = "tengu_deep_dusk";
+});
 //@ chunk-e6aww6q8.js:1285804-1285898 placement
 /**
  * isClassifierRoutedMcpTool：该 MCP 工具交由分类器裁决。
  */
 function isClassifierRoutedMcpTool(tool, toolPermissionContext) {
   if (tool.mcpInfo === undefined) return false;
-  let r = isAutoAllowedInMode(tool, toolPermissionContext);
+  let effectiveMode = isAutoAllowedInMode(tool, toolPermissionContext);
   return (
-    isDeepDuskDeviceTool(getToolNameForPermissionCheck_2(tool), r, toolPermissionContext) ||
-    isBuzzingPelicanRouted(r, toolPermissionContext)
+    isDeepDuskDeviceTool(getToolNameForPermissionCheck_2(tool), effectiveMode, toolPermissionContext) ||
+    isBuzzingPelicanRouted(effectiveMode, toolPermissionContext)
   );
 }
 //@ chunk-e6aww6q8.js:1285898-1285965 placement
 /**
  * isDeepDuskDeviceTool：设备工具在 deep_dusk 开关下走仲裁。
  */
-function isDeepDuskDeviceTool(e, n, r) {
+function isDeepDuskDeviceTool(toolName, mode, toolPermissionContext) {
   return (
-    DEVICE_TOOLS_WITH_CLASSIFIER_ROLE.has(e) &&
-    isRemoteArbiterMode(n, r) &&
+    DEVICE_TOOLS_WITH_CLASSIFIER_ROLE.has(toolName) &&
+    isRemoteArbiterMode(mode, toolPermissionContext) &&
     readFlagWithOverride(TENGU_DEEP_DUSK, {
       safe: true,
     })
@@ -573,15 +1357,18 @@ function isDeepDuskDeviceTool(e, n, r) {
 /**
  * isBuzzingPelicanRouted：仲裁器下按 buzzing_pelican 开关放行。
  */
-function isBuzzingPelicanRouted(e, n) {
-  return isRemoteArbiterMode(e, n) && getFeatureValue_CACHED_MAY_BE_STALE(TENGU_BUZZING_PELICAN, false);
+function isBuzzingPelicanRouted(mode, toolPermissionContext) {
+  return (
+    isRemoteArbiterMode(mode, toolPermissionContext) &&
+    getFeatureValue_CACHED_MAY_BE_STALE(TENGU_BUZZING_PELICAN, false)
+  );
 }
 //@ chunk-e6aww6q8.js:1286010-1286105 placement
-function isRemoteArbiterMode(e, n) {
+function isRemoteArbiterMode(mode, toolPermissionContext) {
   return (
     env.CLAUDE_CODE_REMOTE &&
-    isAutoClassifierActive(e, n.servedCall === true) &&
-    getAutoModeClassifierRole(n.mode) === "arbiter"
+    isAutoClassifierActive(mode, toolPermissionContext.servedCall === true) &&
+    getAutoModeClassifierRole(toolPermissionContext.mode) === "arbiter"
   );
 }
 //@ chunk-e6aww6q8.js:1286105-1286163 placement
@@ -591,8 +1378,8 @@ var TENGU_TOASTY_FIDDLE = "tengu_toasty_fiddle";
 /**
  * isWebFetchOrSearch：是否为 WebFetch/WebSearch。
  */
-function isWebFetchOrSearch(e) {
-  return e === WEBFETCH || e === WEBSEARCH;
+function isWebFetchOrSearch(toolName) {
+  return toolName === WEBFETCH || toolName === WEBSEARCH;
 }
 //@ chunk-e6aww6q8.js:1286201-1286280 placement
 /**
@@ -613,16 +1400,19 @@ function isWebToolClassifierRouted(tool, toolPermissionContext) {
 /**
  * 判断 WebFetch/WebSearch 是否交给 auto 分类器处理：调用方已声明、Cowork 且分类器启用时按分类器角色（arbiter 读 tengu_jaunty_umbrella，off/shadow 读 tengu_toasty_fiddle 列表）决定。
  */
-function isWebToolClassifierRouted_2(e, mode, r) {
-  if (r.callerClassifiesWebCalls?.includes(e)) return true;
-  if (!isCoworkAny() || !isAutoClassifierActive(mode, r.servedCall === true)) return false;
-  switch (getAutoModeClassifierRole(r.mode)) {
+function isWebToolClassifierRouted_2(toolName, mode, toolPermissionContext) {
+  if (toolPermissionContext.callerClassifiesWebCalls?.includes(toolName)) return true;
+  if (!isCoworkAny() || !isAutoClassifierActive(mode, toolPermissionContext.servedCall === true))
+    return false;
+  switch (getAutoModeClassifierRole(toolPermissionContext.mode)) {
     case "arbiter":
       return getFeatureValue_CACHED_MAY_BE_STALE(TENGU_JAUNTY_UMBRELLA, false);
     case "off":
     case "shadow": {
       let featureValue_CACHED_MAY_BE_STALE = getFeatureValue_CACHED_MAY_BE_STALE(TENGU_TOASTY_FIDDLE, []);
-      return Array.isArray(featureValue_CACHED_MAY_BE_STALE) && featureValue_CACHED_MAY_BE_STALE.includes(e);
+      return (
+        Array.isArray(featureValue_CACHED_MAY_BE_STALE) && featureValue_CACHED_MAY_BE_STALE.includes(toolName)
+      );
     }
     case "arbiterWithLocalFallback":
       return false;
@@ -632,10 +1422,12 @@ function isWebToolClassifierRouted_2(e, mode, r) {
 /**
  * 复制权限上下文并切换模式，同时记录由分类器裁决的 Web 工具（callerClassifiesWebCalls）。
  */
-function withClassifiedWebCalls(e, mode) {
-  let filtered = [WEBFETCH, WEBSEARCH].filter((s) => isWebToolClassifierRouted_2(s, e.mode, e));
+function withClassifiedWebCalls(toolPermissionContext, mode) {
+  let filtered = [WEBFETCH, WEBSEARCH].filter((toolName) =>
+    isWebToolClassifierRouted_2(toolName, toolPermissionContext.mode, toolPermissionContext),
+  );
   return {
-    ...e,
+    ...toolPermissionContext,
     mode,
     ...(filtered.length > 0 && {
       callerClassifiesWebCalls: filtered,
@@ -652,59 +1444,64 @@ function isWebSearchClassifierRouted(tool, toolPermissionContext) {
 //@ chunk-e6aww6q8.js:1286737-1286768 placement
 var TENGU_DAPPER_TRUFFLE = "tengu_dapper_truffle";
 //@ chunk-e6aww6q8.js:1286768-1286891 placement
-function shouldClassifyDestructiveMcpWrite(e, n, r, s) {
+function shouldClassifyDestructiveMcpWrite(tool, input, mode, servedCall) {
   return (
-    isAutoClassifierActive(r, s) &&
-    (e.isDestructive?.(n) ?? false) &&
+    isAutoClassifierActive(mode, servedCall) &&
+    (tool.isDestructive?.(input) ?? false) &&
     getFeatureValue_CACHED_MAY_BE_STALE("tengu_cowork_auto_mode_include_allowed_write_mcp", false)
   );
 }
 //@ chunk-e6aww6q8.js:1286891-1286991 placement
-function shouldClassifyRemoteMcpWrite(e, n, r, s) {
+function shouldClassifyRemoteMcpWrite(tool, input, mode, toolPermissionContext) {
   return (
-    e.mcpInfo !== undefined &&
+    tool.mcpInfo !== undefined &&
     env.CLAUDE_CODE_REMOTE &&
-    shouldClassifyDestructiveMcpWrite(e, n, r, s.servedCall === true)
+    shouldClassifyDestructiveMcpWrite(tool, input, mode, toolPermissionContext.servedCall === true)
   );
 }
 //@ chunk-e6aww6q8.js:1286991-1287072 placement
-function hasMcpServerPolicyAllow(e, n) {
-  return getAllowRules(n).some((r) => r.source === "mcpServerPolicy" && toolMatchesWholeToolRule(e, r));
+function hasMcpServerPolicyAllow(tool, toolPermissionContext) {
+  return getAllowRules(toolPermissionContext).some(
+    (rule) => rule.source === "mcpServerPolicy" && toolMatchesWholeToolRule(tool, rule),
+  );
 }
 //@ chunk-e6aww6q8.js:1287072-1287202 placement
-function getClassifierOverridableRuleSource(e, n, r, s, toolPermissionContext) {
-  let { source } = e;
+function getClassifierOverridableRuleSource(rule, tool, mode, servedCall, toolPermissionContext) {
+  let { source } = rule;
   return (source === "cliArg" || source === "command" || source === "session" || source === "mcpMount") &&
-    shouldClassifyRemoteMcpWritePolicy(n, r, s, toolPermissionContext)
+    shouldClassifyRemoteMcpWritePolicy(tool, mode, servedCall, toolPermissionContext)
     ? source
     : undefined;
 }
 //@ chunk-e6aww6q8.js:1287202-1287254 placement
-function shouldClassifyRemoteMcpWritePolicy(e, n, r, s) {
-  return shouldClassifyRemoteMcpWrite(e, n, r, s) && hasMcpServerPolicyAllow(e, s);
+function shouldClassifyRemoteMcpWritePolicy(tool, mode, servedCall, toolPermissionContext) {
+  return (
+    shouldClassifyRemoteMcpWrite(tool, mode, servedCall, toolPermissionContext) &&
+    hasMcpServerPolicyAllow(tool, toolPermissionContext)
+  );
 }
 //@ chunk-e6aww6q8.js:1287254-1287419 placement
-function isShadowedServerPolicyRule(e, n, r, s, toolPermissionContext, y) {
+function isShadowedServerPolicyRule(rule, tool, mode, servedCall, toolPermissionContext, getRole) {
   return (
-    (e.source === "cliArg" || e.source === "session" || e.source === "mcpMount") &&
-    shouldClassifyRemoteMcpWrite(n, r, s, toolPermissionContext) &&
+    (rule.source === "cliArg" || rule.source === "session" || rule.source === "mcpMount") &&
+    shouldClassifyRemoteMcpWrite(tool, mode, servedCall, toolPermissionContext) &&
     getFeatureValue_CACHED_MAY_BE_STALE(TENGU_DAPPER_TRUFFLE, "off") === "server" &&
-    y() === "arbiter" &&
-    hasMcpServerPolicyAllow(n, toolPermissionContext)
+    getRole() === "arbiter" &&
+    hasMcpServerPolicyAllow(tool, toolPermissionContext)
   );
 }
 //@ chunk-e6aww6q8.js:1287419-1287660 placement
 /**
  * 判断一条规则命中的 MCP 调用该走哪条分类器路径：serverPolicy、remoteSession 或 shadowedServerPolicy；不适用返回 undefined。
  */
-function getMcpRuleClassifierRoute(e, tool, r, s, h, y) {
-  if (e === null) return;
-  if (e.source === "mcpServerPolicy" && shouldClassifyDestructiveMcpWrite(tool, r, s, false))
+function getMcpRuleClassifierRoute(rule, tool, mode, servedCall, toolUseContext, getRole) {
+  if (rule === null) return;
+  if (rule.source === "mcpServerPolicy" && shouldClassifyDestructiveMcpWrite(tool, mode, servedCall, false))
     return "serverPolicy";
   if (tool.mcpInfo === undefined) return;
-  let toolPermissionContext = getToolPermissionContext(h);
+  let toolPermissionContext = getToolPermissionContext(toolUseContext);
   if (isClassifierRoutedMcpTool(tool, toolPermissionContext)) return "remoteSession";
-  return isShadowedServerPolicyRule(e, tool, r, s, toolPermissionContext, y)
+  return isShadowedServerPolicyRule(rule, tool, mode, servedCall, toolPermissionContext, getRole)
     ? "shadowedServerPolicy"
     : undefined;
 }
@@ -712,30 +1509,38 @@ function getMcpRuleClassifierRoute(e, tool, r, s, h, y) {
 /**
  * classifierOnlyConfig：取工具的 classifierOnly 配置。
  */
-function classifierOnlyConfig(e) {
-  return e.classifierOnly?.();
+function classifierOnlyConfig(tool) {
+  return tool.classifierOnly?.();
 }
 //@ chunk-e6aww6q8.js:1287703-1287781 placement
-var CLASSIFIER_DENY_SOURCES = new Set(["userSettings", "projectSettings", "localSettings", "session"]);
+var CLASSIFIER_DENY_SOURCES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:1287703", () => {
+  CLASSIFIER_DENY_SOURCES = new Set(["userSettings", "projectSettings", "localSettings", "session"]);
+});
 //@ chunk-e6aww6q8.js:1287781-1287974 placement
-function isClassifierOnlyToolUnblocked(e, n, r) {
-  let toolPermissionContext = getToolPermissionContext(r);
-  if (classifierOnlyConfig(e)?.onBlock !== "flag" || !isAutoModePermissionSurface(toolPermissionContext))
+function isClassifierOnlyToolUnblocked(tool, input, toolUseContext) {
+  let toolPermissionContext = getToolPermissionContext(toolUseContext);
+  if (classifierOnlyConfig(tool)?.onBlock !== "flag" || !isAutoModePermissionSurface(toolPermissionContext))
     return false;
-  let h = {
+  let contextWithoutClassifierDenies = {
     ...toolPermissionContext,
-    alwaysDenyRules: wi(toolPermissionContext.alwaysDenyRules, (y, S) => CLASSIFIER_DENY_SOURCES.has(S)),
+    alwaysDenyRules: import_reject(toolPermissionContext.alwaysDenyRules, (ruleList, source) =>
+      CLASSIFIER_DENY_SOURCES.has(source),
+    ),
   };
-  return getDenyRuleForTool(h, e) === null && matchToolRule(h, e, n, "deny") === null;
+  return (
+    getDenyRuleForTool(contextWithoutClassifierDenies, tool) === null &&
+    matchToolRule(contextWithoutClassifierDenies, tool, input, "deny") === null
+  );
 }
 //@ chunk-e6aww6q8.js:1287974-1288141 placement
-function buildClassifierOnlyDenial(e, n) {
+function buildClassifierOnlyDenial(tool, reason) {
   return {
     behavior: "deny",
-    message: `Only the auto-mode classifier can allow ${e.name}: ${n}`,
+    message: `Only the auto-mode classifier can allow ${tool.name}: ${reason}`,
     decisionReason: {
       type: "other",
-      reason: `classifierOnly: ${n}`,
+      reason: `classifierOnly: ${reason}`,
     },
   };
 }
@@ -759,60 +1564,67 @@ function isUnclassifiableAskReason(decisionReason) {
   }
 }
 //@ chunk-e6aww6q8.js:1288404-1289119 placement
-function requireAutoModeClassifierReview(e, n, r, s) {
-  if (classifierOnlyConfig(e) === undefined || s?.behavior === "deny") return;
-  if (!isAutoModePermissionSurface(getToolPermissionContext(r)))
-    return buildClassifierOnlyDenial(e, "the session is not in auto mode");
+function requireAutoModeClassifierReview(tool, input, toolUseContext, decision) {
+  if (classifierOnlyConfig(tool) === undefined || decision?.behavior === "deny") return;
+  if (!isAutoModePermissionSurface(getToolPermissionContext(toolUseContext)))
+    return buildClassifierOnlyDenial(tool, "the session is not in auto mode");
   if (
-    s?.behavior === "ask" &&
-    (isUnclassifiableAskReason(s.decisionReason) || s.matchedAskRule?.ruleBehavior === "ask")
+    decision?.behavior === "ask" &&
+    (isUnclassifiableAskReason(decision.decisionReason) || decision.matchedAskRule?.ruleBehavior === "ask")
   )
     return buildClassifierOnlyDenial(
-      e,
+      tool,
       "this call trips a check only a person may answer, and nobody is asked about this tool's calls",
     );
   return {
     behavior: "ask",
     message:
-      s !== undefined && "message" in s ? s.message : `${e.name} requires auto-mode classifier review.`,
-    updatedInput: s !== undefined && "updatedInput" in s ? (s.updatedInput ?? n) : n,
+      decision !== undefined && "message" in decision
+        ? decision.message
+        : `${tool.name} requires auto-mode classifier review.`,
+    updatedInput:
+      decision !== undefined && "updatedInput" in decision ? (decision.updatedInput ?? input) : input,
     suppressAlwaysAllowRule: true,
     decisionReason: {
       type: "safetyCheck",
-      reason: `Every ${e.name} call is reviewed by the auto-mode classifier; saved allow rules and hook allows do not apply.`,
+      reason: `Every ${tool.name} call is reviewed by the auto-mode classifier; saved allow rules and hook allows do not apply.`,
       classifierApprovable: true,
     },
   };
 }
 //@ chunk-e6aww6q8.js:1289119-1289307 placement
 function describeNonClassifierAllow(decision) {
-  let n = decision.decisionReason?.type;
-  return n === undefined
+  let reasonType = decision.decisionReason?.type;
+  return reasonType === undefined
     ? "an allow with no recorded source is not the classifier's verdict"
-    : `an allow of type '${n}' is not the classifier's verdict`;
+    : `an allow of type '${reasonType}' is not the classifier's verdict`;
 }
 //@ chunk-e6aww6q8.js:1289307-1289390 placement
 /**
  * isClassifierAllow：允许且原因类型为 classifier。
  */
-function isClassifierAllow(e) {
-  return e.behavior === "allow" && e.decisionReason?.type === "classifier";
+function isClassifierAllow(decision) {
+  return decision.behavior === "allow" && decision.decisionReason?.type === "classifier";
 }
 //@ chunk-e6aww6q8.js:1289390-1289639 placement
-function enforceClassifierOnlyDecision(tool, n) {
-  if (classifierOnlyConfig(tool) === undefined || n.behavior === "deny" || isClassifierAllow(n)) return n;
+function enforceClassifierOnlyDecision(tool, decision) {
+  if (classifierOnlyConfig(tool) === undefined || decision.behavior === "deny" || isClassifierAllow(decision))
+    return decision;
   return buildClassifierOnlyDenial(
     tool,
-    n.behavior === "ask"
-      ? `no prompt is raised for it, and the classifier did not allow it${n.decisionReason?.type === "other" ? ` (${n.decisionReason.reason})` : ""}`
-      : describeNonClassifierAllow(n),
+    decision.behavior === "ask"
+      ? `no prompt is raised for it, and the classifier did not allow it${decision.decisionReason?.type === "other" ? ` (${decision.decisionReason.reason})` : ""}`
+      : describeNonClassifierAllow(decision),
   );
 }
 //@ chunk-e6aww6q8.js:1289639-1289655 placement
-var classifierBlockReasons = new Map();
+var classifierBlockReasons; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:1289639", () => {
+  classifierBlockReasons = new Map();
+});
 //@ chunk-e6aww6q8.js:1289655-1289686 placement
-function rememberClassifierBlock(toolUseID, n) {
-  classifierBlockReasons.set(toolUseID, n);
+function rememberClassifierBlock(toolUseID, reason) {
+  classifierBlockReasons.set(toolUseID, reason);
 }
 //@ chunk-e6aww6q8.js:1289686-1289763 placement
 /**
@@ -820,34 +1632,39 @@ function rememberClassifierBlock(toolUseID, n) {
  */
 function takeClassifierBlock(toolUseId) {
   if (toolUseId === undefined) return;
-  let n = classifierBlockReasons.get(toolUseId);
+  let reason = classifierBlockReasons.get(toolUseId);
   classifierBlockReasons.delete(toolUseId);
-  return n;
+  return reason;
 }
 //@ chunk-e6aww6q8.js:1289763-1290149 placement
 /**
  * 把分类器结果映射为阻断类型：安全护栏拒绝或分类器被关闭为 refused；不可用、转录过长、无法解析、出错为 unavailable（带模型、HTTP 状态、错误类型）。
  */
-function getClassifierBlockOutcome(e) {
-  if (!e.shouldBlock) return;
-  if (e.refusedBySafeguard)
+function getClassifierBlockOutcome(result) {
+  if (!result.shouldBlock) return;
+  if (result.refusedBySafeguard)
     return {
       kind: "refused",
     };
-  if (e.errorKind === CLASSIFIER_SWITCHED_OFF_KIND)
+  if (result.errorKind === CLASSIFIER_SWITCHED_OFF_KIND)
     return {
       kind: "refused",
       switchedOff: true,
     };
-  if (e.unavailable || e.transcriptTooLong || e.failureMode === "unparseable" || e.errorKind !== undefined)
+  if (
+    result.unavailable ||
+    result.transcriptTooLong ||
+    result.failureMode === "unparseable" ||
+    result.errorKind !== undefined
+  )
     return {
       kind: "unavailable",
-      model: e.model,
-      ...(e.httpStatus !== undefined && {
-        httpStatus: e.httpStatus,
+      model: result.model,
+      ...(result.httpStatus !== undefined && {
+        httpStatus: result.httpStatus,
       }),
-      ...(e.errorKind !== undefined && {
-        errorKind: e.errorKind,
+      ...(result.errorKind !== undefined && {
+        errorKind: result.errorKind,
       }),
     };
   return;
@@ -869,44 +1686,48 @@ function buildToolsPausedMessage(name) {
   return `${name} was not run. Tool calls are paused in this session until the user sends a new message themselves; a message that an app or an automation sends does not count. Do not retry or look for another way. Say where things stand, what you would do next, and that a new message from them will let you go on.`;
 }
 //@ chunk-e6aww6q8.js:1290576-1290609 placement
-var CLASSIFIER_ONLY_RULE_IDS = new Set([
-  ...ALL_AUTO_MODE_RULE_ID_SET_WITH_COWORK,
-  ...UNTRUSTED_CONTENT_RULE_IDS,
-]);
+var CLASSIFIER_ONLY_RULE_IDS; // deferred: uses EXTRA_AUTO_MODE_RULE_IDS (./autoModeRulesPrompt.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:1290576", () => {
+  CLASSIFIER_ONLY_RULE_IDS = new Set([
+    ...ALL_AUTO_MODE_RULE_ID_SET_WITH_COWORK,
+    ...UNTRUSTED_CONTENT_RULE_IDS,
+  ]);
+});
 //@ chunk-e6aww6q8.js:1290609-1290668 placement
 /**
  * sanitizeRuleCategoryOrUndefined：规则类别白名单化。
  */
-function sanitizeRuleCategoryOrUndefined(e) {
-  return e !== undefined && CLASSIFIER_ONLY_RULE_IDS.has(e)
-    ? fromSanitizer_SANITIZER_OUTPUT_ONLY(e)
+function sanitizeRuleCategoryOrUndefined(category) {
+  return category !== undefined && CLASSIFIER_ONLY_RULE_IDS.has(category)
+    ? fromSanitizer_SANITIZER_OUTPUT_ONLY(category)
     : undefined;
 }
 //@ chunk-e6aww6q8.js:1290668-1290708 placement
-var SANITIZABLE_RULE_IDS = new Set([
-  ...AUTO_MODE_RULE_IDS,
-  ...COWORK_RULE_IDS,
-  ...UNTRUSTED_CONTENT_RULE_IDS,
-]);
+var SANITIZABLE_RULE_IDS; // deferred: uses AUTO_MODE_RULE_IDS (./autoModeRulesPrompt.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:1290668", () => {
+  SANITIZABLE_RULE_IDS = new Set([...AUTO_MODE_RULE_IDS, ...COWORK_RULE_IDS, ...UNTRUSTED_CONTENT_RULE_IDS]);
+});
 //@ chunk-e6aww6q8.js:1290708-1290766 placement
 /**
  * sanitizeRuleCategory：规则类别脱敏。
  */
-function sanitizeRuleCategory(e) {
-  return e !== undefined && SANITIZABLE_RULE_IDS.has(e) ? fromSanitizer_SANITIZER_OUTPUT_ONLY(e) : undefined;
+function sanitizeRuleCategory(category) {
+  return category !== undefined && SANITIZABLE_RULE_IDS.has(category)
+    ? fromSanitizer_SANITIZER_OUTPUT_ONLY(category)
+    : undefined;
 }
 //@ chunk-e6aww6q8.js:1290766-1290907 placement
 /**
  * 把 setAppState 包装成只更新 classifierApprovals 子状态的 setter，值未变时不触发更新。
  */
-function makeClassifierApprovalsSetter(e) {
-  return (n) =>
-    e((r) => {
-      let s = n(r.classifierApprovals);
-      if (s === r.classifierApprovals) return r;
+function makeClassifierApprovalsSetter(setAppState) {
+  return (updater) =>
+    setAppState((state) => {
+      let next = updater(state.classifierApprovals);
+      if (next === state.classifierApprovals) return state;
       return {
-        ...r,
-        classifierApprovals: s,
+        ...state,
+        classifierApprovals: next,
       };
     });
 }
@@ -916,13 +1737,13 @@ function makeClassifierApprovalsSetter(e) {
  */
 function setClassifierApproval(permissionUpdater, toolUseID, reason) {
   if (!permissionUpdater) return;
-  permissionUpdater((s) => {
-    if (s.approvals.get(toolUseID) === reason) return s;
-    let h = new Map(s.approvals);
-    h.set(toolUseID, reason);
+  permissionUpdater((approvals) => {
+    if (approvals.approvals.get(toolUseID) === reason) return approvals;
+    let next = new Map(approvals.approvals);
+    next.set(toolUseID, reason);
     return {
-      ...s,
-      approvals: h,
+      ...approvals,
+      approvals: next,
     };
   });
 }
@@ -934,15 +1755,15 @@ function classifierApprovalFor(state, toolUseID) {
   return state.classifierApprovals.approvals.get(toolUseID);
 }
 //@ chunk-e6aww6q8.js:1291113-1291244 placement
-function markClassifierChecking(e, n) {
-  if (!e) return;
-  e((r) => {
-    if (r.checking.has(n)) return r;
-    let s = new Set(r.checking);
-    s.add(n);
+function markClassifierChecking(setAppState, toolUseId) {
+  if (!setAppState) return;
+  setAppState((state) => {
+    if (state.checking.has(toolUseId)) return state;
+    let next = new Set(state.checking);
+    next.add(toolUseId);
     return {
-      ...r,
-      checking: s,
+      ...state,
+      checking: next,
     };
   });
 }
@@ -952,13 +1773,13 @@ function markClassifierChecking(e, n) {
  */
 function clearClassifierChecking(setClassifierApprovals, toolUseID) {
   if (!setClassifierApprovals) return;
-  setClassifierApprovals((r) => {
-    if (!r.checking.has(toolUseID)) return r;
-    let s = new Set(r.checking);
-    s.delete(toolUseID);
+  setClassifierApprovals((state) => {
+    if (!state.checking.has(toolUseID)) return state;
+    let next = new Set(state.checking);
+    next.delete(toolUseID);
     return {
-      ...r,
-      checking: s,
+      ...state,
+      checking: next,
     };
   });
 }
@@ -968,21 +1789,21 @@ function clearClassifierChecking(setClassifierApprovals, toolUseID) {
  */
 function deleteClassifierApproval(classifierApprovalsSetter, toolUseID) {
   if (!classifierApprovalsSetter) return;
-  classifierApprovalsSetter((r) => {
-    if (!r.approvals.has(toolUseID)) return r;
-    let s = new Map(r.approvals);
-    s.delete(toolUseID);
+  classifierApprovalsSetter((state) => {
+    if (!state.approvals.has(toolUseID)) return state;
+    let next = new Map(state.approvals);
+    next.delete(toolUseID);
     return {
-      ...r,
-      approvals: s,
+      ...state,
+      approvals: next,
     };
   });
 }
 //@ chunk-e6aww6q8.js:1291517-1291653 placement
-function resetClassifierApprovals(e) {
-  if (!e) return;
-  e((n) => {
-    if (n.approvals.size === 0 && n.checking.size === 0) return n;
+function resetClassifierApprovals(setAppState) {
+  if (!setAppState) return;
+  setAppState((state) => {
+    if (state.approvals.size === 0 && state.checking.size === 0) return state;
     return {
       approvals: new Map(),
       checking: new Set(),
@@ -994,7 +1815,7 @@ function arePermissionHooksUnsettled() {
   try {
     let pluginRegistry = getPluginRegistry();
     let organizationAsk = pluginRegistry.organizationAsk;
-    let r =
+    let heldSurfaces =
       pluginRegistry.hookRegistrationsInFlight.size > 0 ||
       pluginRegistry.hookModulesAwaitTrust ||
       organizationAsk.isHeld ||
@@ -1004,7 +1825,7 @@ function arePermissionHooksUnsettled() {
     return (
       isHookRegistrationPending() ||
       pluginRegistry.hooksRespawns.size > 0 ||
-      (r && areHooksEnabled() && hasNonBuiltinPluginSurface())
+      (heldSurfaces && areHooksEnabled() && hasNonBuiltinPluginSurface())
     );
   } catch (error) {
     logError(toError(error));
@@ -1015,60 +1836,63 @@ function arePermissionHooksUnsettled() {
 /**
  * hasPersonOnlyAskFloor：钩子 ask 地板或仅人工 ask。
  */
-function hasPersonOnlyAskFloor(e, n) {
-  return e || (n.behavior === "ask" && n.personOnly === true);
+function hasPersonOnlyAskFloor(alreadyPersonOnly, decision) {
+  return alreadyPersonOnly || (decision.behavior === "ask" && decision.personOnly === true);
 }
 //@ chunk-e6aww6q8.js:1292250-1292278 placement
-var compactionRequestsSlot = new SessionRootSlot(() => new Map());
+var compactionRequestsSlot; // deferred: uses SessionRootSlot (../../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:1292250", () => {
+  compactionRequestsSlot = new SessionRootSlot(() => new Map());
+});
 //@ chunk-e6aww6q8.js:1292278-1292311 placement
 function agentKeyOrMain(agentId) {
   return agentId ?? "main";
 }
 //@ chunk-e6aww6q8.js:1292311-1292345 placement
-function firstMessageUuid(e) {
-  return e[0]?.uuid;
+function firstMessageUuid(messages) {
+  return messages[0]?.uuid;
 }
 //@ chunk-e6aww6q8.js:1292345-1292730 placement
 /**
  * 按（会话, agent）记录一次待处理的压缩请求：当前允许压缩且本 epoch 未用过时，新建或并入 pending（拒绝时追加工具名），返回 requested/joined。
  */
-function requestDenialCompact(permissionContext, messages, r) {
-  let s = firstMessageUuid(messages);
-  if (s === undefined) return;
-  let h = compactionRequestsSlot.of(permissionContext.session);
-  let y = agentKeyOrMain(permissionContext.agentId);
-  let S = h.get(y);
-  if (S?.canCompact !== true || S.spentEpoch === s) return;
-  let pending = S.pending?.epoch === s ? S.pending : undefined;
-  let L = pending ?? {
-    epoch: s,
-    mode: r.mode,
-    toolName: r.toolName,
+function requestDenialCompact(permissionContext, messages, request) {
+  let epoch = firstMessageUuid(messages);
+  if (epoch === undefined) return;
+  let slots = compactionRequestsSlot.of(permissionContext.session);
+  let agentKey = agentKeyOrMain(permissionContext.agentId);
+  let slot = slots.get(agentKey);
+  if (slot?.canCompact !== true || slot.spentEpoch === epoch) return;
+  let pending = slot.pending?.epoch === epoch ? slot.pending : undefined;
+  let pendingRequest = pending ?? {
+    epoch,
+    mode: request.mode,
+    toolName: request.toolName,
     deniedToolNames: [],
   };
-  h.set(y, {
-    ...S,
-    pending: r.denied
+  slots.set(agentKey, {
+    ...slot,
+    pending: request.denied
       ? {
-          ...L,
-          deniedToolNames: [...L.deniedToolNames, r.toolName],
+          ...pendingRequest,
+          deniedToolNames: [...pendingRequest.deniedToolNames, request.toolName],
         }
-      : L,
+      : pendingRequest,
   });
   return pending ? "joined" : "requested";
 }
 //@ chunk-e6aww6q8.js:1292730-1293008 placement
-function syncCompactEligibility(e, n, mode, canCompact) {
-  let h = compactionRequestsSlot.of(e.session);
-  let y = agentKeyOrMain(e.agentId);
-  let S = h.get(y);
-  h.set(y, {
+function syncCompactEligibility(permissionContext, messages, mode, canCompact) {
+  let slots = compactionRequestsSlot.of(permissionContext.session);
+  let agentKey = agentKeyOrMain(permissionContext.agentId);
+  let previous = slots.get(agentKey);
+  slots.set(agentKey, {
     canCompact,
-    spentEpoch: S?.spentEpoch,
+    spentEpoch: previous?.spentEpoch,
   });
-  let pending = S?.pending;
+  let pending = previous?.pending;
   if (pending === undefined) return {};
-  if (pending.epoch !== firstMessageUuid(n))
+  if (pending.epoch !== firstMessageUuid(messages))
     return {
       pending,
       stale: "epoch",
@@ -1083,17 +1907,20 @@ function syncCompactEligibility(e, n, mode, canCompact) {
   };
 }
 //@ chunk-e6aww6q8.js:1293008-1293124 placement
-function markCompactRequestSpent(e, n) {
-  let r = compactionRequestsSlot.of(e.session);
-  let s = agentKeyOrMain(e.agentId);
-  r.set(s, {
-    ...r.get(s),
+function markCompactRequestSpent(permissionContext, pending) {
+  let slots = compactionRequestsSlot.of(permissionContext.session);
+  let agentKey = agentKeyOrMain(permissionContext.agentId);
+  slots.set(agentKey, {
+    ...slots.get(agentKey),
     pending: undefined,
-    spentEpoch: n.epoch,
+    spentEpoch: pending.epoch,
   });
 }
 //@ chunk-e6aww6q8.js:1293124-1293158 placement
-var seenToolCalls = identity_2(new Map(), (e) => e.clear());
+var seenToolCalls; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:1293124", () => {
+  seenToolCalls = identity_2(new Map(), (map) => map.clear());
+});
 //@ chunk-e6aww6q8.js:1293158-1293202 placement
 function sessionAgentKey(agentId) {
   return `${getSessionId()}:${agentId ?? "main"}`;
@@ -1106,15 +1933,15 @@ function recordPromptedToolCall({ agentId, tool, input, message }) {
   } catch {
     return;
   }
-  let y = sessionAgentKey(agentId);
-  let S = seenToolCalls.get(y) ?? [];
-  S.push({
+  let agentKey = sessionAgentKey(agentId);
+  let entries = seenToolCalls.get(agentKey) ?? [];
+  entries.push({
     tool,
     inputJson,
     fromMessageId: message.message.id,
     fromUuid: message.uuid,
   });
-  seenToolCalls.set(y, S);
+  seenToolCalls.set(agentKey, entries);
 }
 //@ chunk-e6aww6q8.js:1293397-1293939 placement
 /**
@@ -1147,7 +1974,7 @@ function consumeRepeatedToolCall({ agentId, tool, input, message, messages }) {
     inputJson = undefined;
   }
   let index = filtered.findIndex(
-    (Z) => Z.fromMessageId !== id && Z.tool === tool && Z.inputJson === inputJson,
+    (entry) => entry.fromMessageId !== id && entry.tool === tool && entry.inputJson === inputJson,
   );
   if (index !== -1) filtered.splice(index, 1);
   if (filtered.length > 0) seenToolCalls.set(agentKey, filtered);
@@ -1155,15 +1982,18 @@ function consumeRepeatedToolCall({ agentId, tool, input, message, messages }) {
   return index !== -1;
 }
 //@ chunk-e6aww6q8.js:1293939-1293977 placement
-var DENIAL_LIMIT_FALLBACK_SYMBOL = Symbol("DenialLimitFallback");
+var DENIAL_LIMIT_FALLBACK_SYMBOL; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:1293939", () => {
+  DENIAL_LIMIT_FALLBACK_SYMBOL = Symbol("DenialLimitFallback");
+});
 //@ chunk-e6aww6q8.js:1293977-1294108 placement
-function withPermissionDisclosure(disclosure, n) {
+function withPermissionDisclosure(disclosure, deadline) {
   return {
     [DENIAL_LIMIT_FALLBACK_SYMBOL]: true,
     disclosure,
-    ...(n !== undefined && {
-      autoDenyAfterMs: n.autoDenyAfterMs,
-      autoDenyResolution: n.resolution,
+    ...(deadline !== undefined && {
+      autoDenyAfterMs: deadline.autoDenyAfterMs,
+      autoDenyResolution: deadline.resolution,
     }),
   };
 }
@@ -1182,14 +2012,17 @@ function withDenialDeadline(denialLimitFallback, deadlineEpochMs) {
  * 去掉权限请求里的截止时间与自动拒绝字段，保留披露标记。
  */
 function stripAutoDenyFields(denialLimitFallback) {
-  let { deadlineEpochMs, autoDenyAfterMs, autoDenyResolution, ...h } = denialLimitFallback;
+  let { deadlineEpochMs, autoDenyAfterMs, autoDenyResolution, ...rest } = denialLimitFallback;
   return {
-    ...h,
+    ...rest,
     [DENIAL_LIMIT_FALLBACK_SYMBOL]: denialLimitFallback[DENIAL_LIMIT_FALLBACK_SYMBOL],
   };
 }
 //@ chunk-e6aww6q8.js:1294268-1294296 placement
-var READ_TOOLS_WITH_EXTERNAL_NOTE = new Set([FILE_READ_TOOL_NAME, GREP_TOOL_NAME, GLOB_TOOL_NAME]);
+var READ_TOOLS_WITH_EXTERNAL_NOTE; // deferred: uses GREP_TOOL_NAME (../../tools/GrepTool/prompt.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:1294268", () => {
+  READ_TOOLS_WITH_EXTERNAL_NOTE = new Set([FILE_READ_TOOL_NAME, GREP_TOOL_NAME, GLOB_TOOL_NAME]);
+});
 //@ chunk-e6aww6q8.js:1294296-1294866 placement
 /**
  * 判断工作目录外读取的 ask 是否应改为展示一次性的 auto 模式外部读取提示：auto 分类器启用、可交互、非后台/远程、未见过该提示等条件。
@@ -1226,11 +2059,11 @@ function shouldShowOutsideReadPrompt(tool, input, decision, context) {
  */
 function markOutsideReadPromptSeen(toolUseContext) {
   saveGlobalConfig(
-    (n) =>
-      n.hasSeenAutoModeOutsideReadPrompt
-        ? n
+    (config) =>
+      config.hasSeenAutoModeOutsideReadPrompt
+        ? config
         : {
-            ...n,
+            ...config,
             hasSeenAutoModeOutsideReadPrompt: true,
           },
     toolUseContext.storageV5,
@@ -1238,8 +2071,8 @@ function markOutsideReadPromptSeen(toolUseContext) {
 }
 //@ chunk-e6aww6q8.js:1294983-1295927 placement
 async function persistBlockReadsOutsideWorkspace(toolUseContext) {
-  toolUseContext.setSessionToolPermissionContext((s) => ({
-    ...s,
+  toolUseContext.setSessionToolPermissionContext((context) => ({
+    ...context,
     blockReadsOutsideWorkingDirectories: true,
   }));
   markReadBlockApplied();
@@ -1271,9 +2104,9 @@ async function persistBlockReadsOutsideWorkspace(toolUseContext) {
       sandboxRefreshed: false,
     };
   }
-  let r;
+  let refreshed;
   try {
-    r = SandboxManager.refreshConfig();
+    refreshed = SandboxManager.refreshConfig();
   } catch (error) {
     logError(toError(error));
     logFeatureSad("permission_block_outside_reads", "sandbox_refresh_failed");
@@ -1282,7 +2115,7 @@ async function persistBlockReadsOutsideWorkspace(toolUseContext) {
       sandboxRefreshed: false,
     };
   }
-  if (!r) {
+  if (!refreshed) {
     logFeatureSad("permission_block_outside_reads", "sandbox_refresh_skipped");
     return {
       error: null,
@@ -1303,23 +2136,23 @@ function classifyEditsEnabled(mainLoopModel) {
   return resolveClassifyEditsFlag(mainLoopModel).value;
 }
 //@ chunk-e6aww6q8.js:1295963-1296079 placement
-function resolveClassifyEditsFlag(e) {
+function resolveClassifyEditsFlag(currentModel) {
   let CLAUDE_CODE_AUTO_MODE_CLASSIFY_EDITS = antEnv.CLAUDE_CODE_AUTO_MODE_CLASSIFY_EDITS;
   if (CLAUDE_CODE_AUTO_MODE_CLASSIFY_EDITS !== undefined)
     return {
       value: CLAUDE_CODE_AUTO_MODE_CLASSIFY_EDITS,
       src: "env",
     };
-  return classifyEditsByModelList(e);
+  return classifyEditsByModelList(currentModel);
 }
 //@ chunk-e6aww6q8.js:1296079-1296179 placement
 /**
  * auto 模式下文件编辑是否也交给分类器：环境变量 CLAUDE_CODE_AUTO_MODE_CLASSIFY_EDITS 为 true，或当前主模型在配置的 classifyEditsModels 列表中。
  */
-function shouldClassifyEdits(e) {
+function shouldClassifyEdits(currentModel) {
   return (
     antEnv.CLAUDE_CODE_AUTO_MODE_CLASSIFY_EDITS === true ||
-    classifyEditsByModelList(e, {
+    classifyEditsByModelList(currentModel, {
       overridesMap: {},
     }).value
   );
@@ -1331,22 +2164,25 @@ function runLoneHandedOverEditEnabled() {
 //@ chunk-e6aww6q8.js:1296233-1296462 placement
 function classifyEditsByModelList(skillModel, currentModel) {
   let classifyEditsModels = getAutoModeConfigOrDefault()?.classifyEditsModels;
-  let h = new Set(Array.isArray(classifyEditsModels) ? classifyEditsModels : []);
-  let y = [];
-  if (h.size === 0 && y.length === 0)
+  let allowedModels = new Set(Array.isArray(classifyEditsModels) ? classifyEditsModels : []);
+  let allowedPrefixes = [];
+  if (allowedModels.size === 0 && allowedPrefixes.length === 0)
     return {
       value: false,
       src: "default",
     };
   return {
     value: mainModelOverrideKeys(skillModel, currentModel).some(
-      (S) => h.has(S) || y.some((w) => S.startsWith(w)),
+      (key) => allowedModels.has(key) || allowedPrefixes.some((prefix) => key.startsWith(prefix)),
     ),
     src: "gb",
   };
 }
 //@ chunk-e6aww6q8.js:1296462-1296490 placement
-var FILE_MUTATION_TOOLS = new Set([FILE_EDIT_TOOL_NAME, FILE_WRITE_TOOL_NAME, NOTEBOOK_EDIT_TOOL_NAME]);
+var FILE_MUTATION_TOOLS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:1296462", () => {
+  FILE_MUTATION_TOOLS = new Set([FILE_EDIT_TOOL_NAME, FILE_WRITE_TOOL_NAME, NOTEBOOK_EDIT_TOOL_NAME]);
+});
 //@ chunk-e6aww6q8.js:1296490-1296524 placement
 /**
  * isFileMutationTool：是否文件修改工具。
@@ -1357,8 +2193,8 @@ function isFileMutationTool(name) {
 //@ chunk-e6aww6q8.js:1296524-1296625 placement
 class ToolUseIdSet {
   #e;
-  constructor(e) {
-    this.#e = new Set(e);
+  constructor(ids) {
+    this.#e = new Set(ids);
   }
   toolUseIDs() {
     return new Set(this.#e);
@@ -1392,32 +2228,32 @@ function isAskOnMutationTool(name, proactivityLevel) {
 /**
  * isProactivityModeChange：ask 与非 ask 之间的模式变化。
  */
-function isProactivityModeChange(from, n) {
-  return from === "ask" && n !== "ask";
+function isProactivityModeChange(from, to) {
+  return from === "ask" && to !== "ask";
 }
 //@ chunk-e6aww6q8.js:1297111-1297265 placement
 /**
  * 启动模式由主动性等级决定，且当前模式（plan 取进入前的模式）已不同于基线模式。
  */
 function hasLeftProactivityBaseline(toolPermissionContext) {
-  let n =
+  let effectiveMode =
     toolPermissionContext.mode === "plan"
       ? (toolPermissionContext.prePlanMode ?? "plan")
       : toolPermissionContext.mode;
   return (
     toolPermissionContext.startupModeDecidedByProactivityLevel !== undefined &&
-    toolPermissionContext.proactivityBaseline?.mode !== n
+    toolPermissionContext.proactivityBaseline?.mode !== effectiveMode
   );
 }
 //@ chunk-e6aww6q8.js:1297265-1297367 placement
 /**
  * 按当前模式、主动性等级和是否偏离基线，算出 Shift+Tab 的模式循环。
  */
-function getPermissionModeCycle(e) {
+function getPermissionModeCycle(appState) {
   return cycleAllTeammateModes(
-    e.toolPermissionContext.mode,
-    e.proactivityLevel,
-    hasLeftProactivityBaseline(e.toolPermissionContext),
+    appState.toolPermissionContext.mode,
+    appState.proactivityLevel,
+    hasLeftProactivityBaseline(appState.toolPermissionContext),
   );
 }
 //@ chunk-e6aww6q8.js:1329439-1330061 fingerprint = getDenyRules (0.493)
@@ -1425,33 +2261,33 @@ function getPermissionModeCycle(e) {
  * 把磁盘上（严格信任）各来源新出现的 deny 规则并入上下文（y$ 匹配的排前面），并按需开启 blockReadsOutsideWorkingDirectories。
  */
 var mergePersistedDenyRules = (context) => {
-  let n = new Map();
+  let gainedBySource = new Map();
   for (let { ruleBehavior, ruleValue, source } of loadAllPermissionRulesFromDisk({
     strictPersistedTrust: true,
   })) {
     if (ruleBehavior !== "deny") continue;
-    let S = formatPermissionRule(ruleValue);
-    let w = n.get(source) ?? {
+    let ruleText = formatPermissionRule(ruleValue);
+    let entry = gainedBySource.get(source) ?? {
       holds: new Set(context.alwaysDenyRules[source]),
       gained: [],
     };
-    n.set(source, w);
-    if (!w.holds.has(S)) {
-      w.holds.add(S);
-      w.gained.push(S);
+    gainedBySource.set(source, entry);
+    if (!entry.holds.has(ruleText)) {
+      entry.holds.add(ruleText);
+      entry.gained.push(ruleText);
     }
   }
-  let flattened = Array.from(n).flatMap(([s, { gained: h }]) => {
-    if (h.length === 0) return [];
-    let y = context.alwaysDenyRules[s] ?? [];
-    if (y.length === 0) return [[s, h]];
+  let flattened = Array.from(gainedBySource).flatMap(([source, { gained }]) => {
+    if (gained.length === 0) return [];
+    let existing = context.alwaysDenyRules[source] ?? [];
+    if (existing.length === 0) return [[source, gained]];
     return [
       [
-        s,
+        source,
         [
-          ...h.filter((source) => PATH_RULE_CARVE_OUT_RE.test(source)),
-          ...y,
-          ...h.filter((ruleString) => !PATH_RULE_CARVE_OUT_RE.test(ruleString)),
+          ...gained.filter((source) => PATH_RULE_CARVE_OUT_RE.test(source)),
+          ...existing,
+          ...gained.filter((ruleString) => !PATH_RULE_CARVE_OUT_RE.test(ruleString)),
         ],
       ],
     ];
@@ -1485,8 +2321,13 @@ function alwaysFullClassifierRole(permissionContext) {
 /**
  * 服务端分类器角色的按调用修正：本次 tool_use 是客户端指定的 clientRequestedToolUseId 时返回 "off"（不交服务端分类器），否则原样返回角色。
  */
-function resolveServerClassifierRoleForCall(autoModeClassifierRole, n, r, s) {
-  if (s.clientRequestedToolUseId === r) return "off";
+function resolveServerClassifierRoleForCall(
+  autoModeClassifierRole,
+  assistantMessage,
+  toolUseId,
+  toolUseContext,
+) {
+  if (toolUseContext.clientRequestedToolUseId === toolUseId) return "off";
   return autoModeClassifierRole;
 }
 //@ chunk-e6aww6q8.js:2952398-2952534 placement
@@ -1495,8 +2336,8 @@ function isTicklishWhisperEnabled() {
   return getFeatureValue_CACHED_MAY_BE_STALE("tengu_ticklish_whisper", false);
 }
 //@ chunk-e6aww6q8.js:2952534-2952572 placement
-function canShowServerFallbackNotice(e) {
-  return isTicklishWhisperEnabled() && e && !isSdkDialogHostActive();
+function canShowServerFallbackNotice(hasFallback) {
+  return isTicklishWhisperEnabled() && hasFallback && !isSdkDialogHostActive();
 }
 //@ chunk-e6aww6q8.js:2952572-2953294 placement
 /**
@@ -1505,9 +2346,8 @@ function canShowServerFallbackNotice(e) {
 function awaitClassifierBillingFallbackNotice(permissionContext) {
   let requestDialog = permissionContext.requestDialog;
   if (permissionContext.abortController.signal.aborted) return Promise.resolve("interrupt");
-  let serverClassifierFallbackChoice = getServerClassifierFallbackChoice();
-  if (serverClassifierFallbackChoice !== undefined)
-    return raceChoiceWithAbort(serverClassifierFallbackChoice, permissionContext.abortController.signal);
+  let choice = getServerClassifierFallbackChoice();
+  if (choice !== undefined) return raceChoiceWithAbort(choice, permissionContext.abortController.signal);
   if (!hasOpusAccess()) return Promise.resolve("continue");
   if (
     requestDialog === undefined ||
@@ -1518,7 +2358,7 @@ function awaitClassifierBillingFallbackNotice(permissionContext) {
     );
     return Promise.resolve("continue");
   }
-  let serverFallbackChoice = resolveServerFallbackChoice(() => {
+  let choice_2 = resolveServerFallbackChoice(() => {
     let gatewayNoticeInfo = getGatewayNoticeInfo();
     logEvent("tengu_auto_mode_server_fallback_notice", {
       gatewayDetected: gatewayNoticeInfo.gatewayHost !== undefined,
@@ -1534,7 +2374,7 @@ function awaitClassifierBillingFallbackNotice(permissionContext) {
           : turnAbortControllerOf(permissionContext.abortController).signal,
     });
   });
-  return raceChoiceWithAbort(serverFallbackChoice, permissionContext.abortController.signal);
+  return raceChoiceWithAbort(choice_2, permissionContext.abortController.signal);
 }
 //@ chunk-e6aww6q8.js:2953294-2953600 placement
 /**
@@ -1566,10 +2406,10 @@ function getTimedFallbackAutoDenyMs() {
 /**
  * 判断脚本是否“请求在沙箱外运行”：dangerouslyDisableSandbox 为 true，且该命令带此标志时不走沙箱、不带时会走沙箱（即标志确实改变了沙箱决定）。PowerShell 工具按 powershell shellType 判断。
  */
-function scriptAsksToRunUnsandboxed(tool, n) {
-  let dangerouslyDisableSandbox = n.dangerouslyDisableSandbox;
+function scriptAsksToRunUnsandboxed(tool, input) {
+  let dangerouslyDisableSandbox = input.dangerouslyDisableSandbox;
   if (dangerouslyDisableSandbox !== true && dangerouslyDisableSandbox !== "true") return false;
-  let command = typeof n.command === "string" ? n.command : undefined;
+  let command = typeof input.command === "string" ? input.command : undefined;
   let shellType = tool.name === POWERSHELL_TOOL_NAME ? "powershell" : undefined;
   return (
     !shouldUseSandbox({
@@ -1590,20 +2430,20 @@ function scriptAsksToRunUnsandboxed(tool, n) {
  */
 function updateDenialTrackingState(context, update) {
   if (context.localDenialTracking) {
-    let s = update(context.localDenialTracking);
-    Object.assign(context.localDenialTracking, s);
-    return s;
+    let next = update(context.localDenialTracking);
+    Object.assign(context.localDenialTracking, next);
+    return next;
   }
-  let r;
+  let result;
   context.setAppState((prev) => {
-    r = update(prev.denialTracking ?? createDenialTrackingState());
-    if (prev.denialTracking === r) return prev;
+    result = update(prev.denialTracking ?? createDenialTrackingState());
+    if (prev.denialTracking === result) return prev;
     return {
       ...prev,
-      denialTracking: r,
+      denialTracking: result,
     };
   });
-  return r ?? update(context.getAppState().denialTracking ?? createDenialTrackingState());
+  return result ?? update(context.getAppState().denialTracking ?? createDenialTrackingState());
 }
 //@ chunk-e6aww6q8.js:2954253-2954278 placement
 function resetDenialStreakAfterUserApproval(toolUseContext) {
@@ -1613,8 +2453,8 @@ function resetDenialStreakAfterUserApproval(toolUseContext) {
 var ORG_REQUIRES_APPROVAL_MESSAGE = "Your organization requires approval for this tool";
 var CLI_ALWAYS_ASKS_MESSAGE = "Claude Code asks before every use of this tool.";
 //@ chunk-e6aww6q8.js:2954392-2954448 placement
-function askCeilingReason(e) {
-  return e.mcpInfo?.cliOwned === true ? CLI_ALWAYS_ASKS_MESSAGE : ORG_REQUIRES_APPROVAL_MESSAGE;
+function askCeilingReason(tool) {
+  return tool.mcpInfo?.cliOwned === true ? CLI_ALWAYS_ASKS_MESSAGE : ORG_REQUIRES_APPROVAL_MESSAGE;
 }
 //@ chunk-e6aww6q8.js:2954448-2954477 placement
 function permissionRuleSourceDisplayString(source) {
@@ -1630,7 +2470,7 @@ function serverHeldShellAllowSource(tool, result) {
     (tool.name !== BASH_TOOL_NAME && tool.name !== MONITOR && tool.name !== POWERSHELL_TOOL_NAME)
   )
     return;
-  let r = (decisionReason) => {
+  let sourceForReason = (decisionReason) => {
     if (decisionReason?.type === "other")
       return decisionReason.reason === SANDBOX_AUTO_ALLOW_REASON
         ? "sandbox"
@@ -1641,44 +2481,54 @@ function serverHeldShellAllowSource(tool, result) {
           : undefined;
     if (decisionReason?.type !== "subcommandResults") return;
     for (let reason of decisionReason.reasons.values()) {
-      let y = reason.behavior === "allow" ? r(reason.decisionReason) : undefined;
-      if (y !== undefined) return y;
+      let nested = reason.behavior === "allow" ? sourceForReason(reason.decisionReason) : undefined;
+      if (nested !== undefined) return nested;
     }
     return;
   };
-  return r(result.decisionReason);
+  return sourceForReason(result.decisionReason);
 }
 //@ chunk-e6aww6q8.js:2954880-2955190 placement
 /**
  * 为 Bash/PowerShell 调用生成破坏性命令分析字段（destructive_category、destructive_target_scope、git_destructive_target），用于权限决定的遥测；其他工具返回 undefined。
  */
-function getDestructiveCommandAnalytics(name, n) {
-  let r = name === BASH_TOOL_NAME;
-  if (!r && name !== POWERSHELL_TOOL_NAME) return;
-  if (n === null || typeof n !== "object" || !("command" in n) || typeof n.command !== "string") return;
-  let s = r ? getDestructiveTargetCategory(n.command) : getPowerShellDestructiveCategory(n.command);
+function getDestructiveCommandAnalytics(name, input) {
+  let isBash = name === BASH_TOOL_NAME;
+  if (!isBash && name !== POWERSHELL_TOOL_NAME) return;
+  if (
+    input === null ||
+    typeof input !== "object" ||
+    !("command" in input) ||
+    typeof input.command !== "string"
+  )
+    return;
+  let category = isBash
+    ? getDestructiveTargetCategory(input.command)
+    : getPowerShellDestructiveCategory(input.command);
   return {
-    destructive_category: fromEnum(s ?? "none"),
-    destructive_target_scope: fromEnum(classifyDestructiveTargetScope(n.command, getCwdOrNull(), s)),
-    git_destructive_target: fromEnum(classifyGitDestructiveTarget(n.command, s)),
+    destructive_category: fromEnum(category ?? "none"),
+    destructive_target_scope: fromEnum(
+      classifyDestructiveTargetScope(input.command, getCwdOrNull(), category),
+    ),
+    git_destructive_target: fromEnum(classifyGitDestructiveTarget(input.command, category)),
   };
 }
 //@ chunk-e6aww6q8.js:2955190-2955549 placement
 /**
  * 模式切换后，之前的放行是否仍成立：auto 恒真；plan 下仅在 auto 激活且工具输入只读（或属于 plan 允许的只读类）时成立；其余模式返回调用方给定的原结果。
  */
-function isStillAllowedAfterModeChange(e, n, tool, s, permissionContext) {
-  switch (e) {
+function isStillAllowedAfterModeChange(fromMode, wasAllowed, tool, input, permissionContext) {
+  switch (fromMode) {
     case "auto":
       return true;
     case "plan": {
       if (!isAutoModeActive()) return false;
-      let y = tool.inputSchema.safeParse(s);
+      let parsed = tool.inputSchema.safeParse(input);
       return (
-        (y.success === true &&
-          tool.isReadOnly(y.data, permissionContext) &&
-          !(tool.ignoresWholeToolAllowRule?.(y.data) ?? false)) ||
-        isReadOnlyBrowserCall(getToolNameForPermissionCheck_2(tool), y.success ? y.data : s)
+        (parsed.success === true &&
+          tool.isReadOnly(parsed.data, permissionContext) &&
+          !(tool.ignoresWholeToolAllowRule?.(parsed.data) ?? false)) ||
+        isReadOnlyBrowserCall(getToolNameForPermissionCheck_2(tool), parsed.success ? parsed.data : input)
       );
     }
     case "default":
@@ -1686,9 +2536,9 @@ function isStillAllowedAfterModeChange(e, n, tool, s, permissionContext) {
     case "acceptEdits":
     case "bypassPermissions":
     case "bubble":
-      return n;
+      return wasAllowed;
     default: {
-      let y = e;
+      let otherMode = fromMode;
       return false;
     }
   }
@@ -1697,29 +2547,34 @@ function isStillAllowedAfterModeChange(e, n, tool, s, permissionContext) {
 /**
  * Cowork 云会话的 Web 工具放行覆盖：存在授权且工具是 Cowork Web 工具时，按 RL（Cowork Web 判定）返回是否覆盖。
  */
-function isCoworkWebAllowOverride(e, tool, r, s) {
-  if (e === null || !isWebFetchOrSearch(tool.name)) return false;
-  return isWebToolClassifierRouted(tool, getToolPermissionContext(s));
+function isCoworkWebAllowOverride(rule, tool, toolInput, toolUseContext) {
+  if (rule === null || !isWebFetchOrSearch(tool.name)) return false;
+  return isWebToolClassifierRouted(tool, getToolPermissionContext(toolUseContext));
 }
 //@ chunk-e6aww6q8.js:2955625-2955872 placement
 /**
  * MCP 工具在 auto 模式下被“破坏性 MCP allow 规则”直接放行（跳过分类器复核）时上报 tengu_auto_mode_destructive_mcp_rule_allow，带规则来源与服务端分类器角色。
  */
-function countMcpPolicyRecheckSkipped(e, tool, r, s, h, toolUseID) {
+function countMcpPolicyRecheckSkipped(ruleSource, tool, mode, toolUseContext, assistantMessage, toolUseID) {
   if (tool.mcpInfo === undefined) return;
-  let toolPermissionContext = getToolPermissionContext(s);
+  let toolPermissionContext = getToolPermissionContext(toolUseContext);
   if (
     isAutoAllowedInMode(tool, toolPermissionContext) !== "auto" ||
-    !shouldClassifyRemoteMcpWritePolicy(tool, r, "auto", toolPermissionContext)
+    !shouldClassifyRemoteMcpWritePolicy(tool, mode, "auto", toolPermissionContext)
   )
     return;
   let autoModeClassifierRole = getAutoModeClassifierRole(toolPermissionContext.mode);
   logEvent("tengu_auto_mode_destructive_mcp_rule_allow", {
-    ruleSource: fromEnum(e),
+    ruleSource: fromEnum(ruleSource),
     serverClassifierRole: fromEnum(
-      h === undefined
+      assistantMessage === undefined
         ? autoModeClassifierRole
-        : resolveServerClassifierRoleForCall(autoModeClassifierRole, h, toolUseID, s),
+        : resolveServerClassifierRoleForCall(
+            autoModeClassifierRole,
+            assistantMessage,
+            toolUseID,
+            toolUseContext,
+          ),
     ),
   });
 }
@@ -1727,8 +2582,8 @@ function countMcpPolicyRecheckSkipped(e, tool, r, s, h, toolUseID) {
 /**
  * MCP 的 ask 是否否决已有的整工具授权：远程会话 MCP、Cowork Web、或开启服务端策略且该 MCP 工具受策略 ask 约束并命中会话级 allow 时为真；为真时 hasPermissionsToUseTool 给结果加 suppressAlwaysAllowRule。
  */
-function mcpAskVetoesStandingGrant(tool, n, r, assistantMessage, toolUseID) {
-  let toolPermissionContext = getToolPermissionContext(r);
+function mcpAskVetoesStandingGrant(tool, mode, toolUseContext, assistantMessage, toolUseID) {
+  let toolPermissionContext = getToolPermissionContext(toolUseContext);
   return (
     isClassifierRoutedMcpTool(tool, toolPermissionContext) ||
     isRemoteBrowserToolModeFloorActive(tool, toolPermissionContext) ||
@@ -1744,15 +2599,15 @@ function mcpAskVetoesStandingGrant(tool, n, r, assistantMessage, toolUseID) {
           },
         },
         tool,
-        n,
+        mode,
         isAutoAllowedInMode(tool, toolPermissionContext),
-        r,
+        toolUseContext,
         () =>
           resolveServerClassifierRoleForCall(
             getAutoModeClassifierRole(toolPermissionContext.mode),
             assistantMessage,
             toolUseID,
-            r,
+            toolUseContext,
           ),
       ) !== undefined)
   );
@@ -1761,11 +2616,11 @@ function mcpAskVetoesStandingGrant(tool, n, r, assistantMessage, toolUseID) {
 /**
  * 破坏性 MCP 调用在 auto/分类器模式下是否应改为 ask：有授权、模式走分类器、工具 isDestructive(input) 为真，且远程破坏性 MCP 开关或 tengu_modular_mochi 打开。
  */
-function isDestructiveMcpAskOverride(e, tool, r, s, permissionContext) {
+function isDestructiveMcpAskOverride(isAsk, tool, input, mode, permissionContext) {
   return (
-    e &&
-    isAutoClassifierActive(s) &&
-    (tool.isDestructive?.(r) ?? false) &&
+    isAsk &&
+    isAutoClassifierActive(mode) &&
+    (tool.isDestructive?.(input) ?? false) &&
     (includesRemoteDestructiveMcp() || isModularMochiEnabled(permissionContext))
   );
 }
@@ -1787,9 +2642,9 @@ function getComputerUseChecksSetting() {
     : undefined;
 }
 //@ chunk-e6aww6q8.js:2956361-2956450 placement
-function isModularMochiEnabled(e) {
+function isModularMochiEnabled(permissionContext) {
   return (
-    hasRelaySourceForClients(isDiskless() ? e.options.mcpClients : undefined) &&
+    hasRelaySourceForClients(isDiskless() ? permissionContext.options.mcpClients : undefined) &&
     getFeatureValue_CACHED_MAY_BE_STALE("tengu_modular_mochi", false)
   );
 }
@@ -1816,8 +2671,8 @@ function appendAutoModeWarning(permissionContext, asks, heldByDenyRules) {
     (!asks && permissionContext.agentId !== undefined)
   )
     return;
-  let s = takeNoServerCheckNotice(asks, heldByDenyRules);
-  if (s !== undefined) permissionContext.appendSystemMessage(createSystemMessage(s, "warning"));
+  let notice = takeNoServerCheckNotice(asks, heldByDenyRules);
+  if (notice !== undefined) permissionContext.appendSystemMessage(createSystemMessage(notice, "warning"));
 }
 //@ chunk-e6aww6q8.js:2956707-2958079 placement = createPermissionRequestMessage (1)
 /**
@@ -1870,31 +2725,38 @@ function createPermissionRequestMessage(toolName, decisionReason) {
   return `Claude requested permissions to use ${toolName}, but you haven't granted it yet.`;
 }
 //@ chunk-e6aww6q8.js:2958079-2958214 placement
-function hasAllowRuleInSource(e, n, r) {
-  let s = formatPermissionRule(n);
-  let h = (y) => (y?.[r] ?? []).some((w) => formatPermissionRule(permissionRuleValueFromString(w)) === s);
-  return h(e.alwaysAllowRules) || h(e.strippedDangerousRules);
+function hasAllowRuleInSource(toolPermissionContext, rule, source) {
+  let ruleText = formatPermissionRule(rule);
+  let sourceHasRule = (rulesBySource) =>
+    (rulesBySource?.[source] ?? []).some(
+      (rawRule) => formatPermissionRule(permissionRuleValueFromString(rawRule)) === ruleText,
+    );
+  return (
+    sourceHasRule(toolPermissionContext.alwaysAllowRules) ||
+    sourceHasRule(toolPermissionContext.strippedDangerousRules)
+  );
 }
 //@ chunk-e6aww6q8.js:2958214-2958535 placement
 /**
  * 从 addRules/replaceRules 的 allow 更新中剔除“加载 MCP skill 形式”的新规则（除非来源允许），用于 MCP skill 加载 ask 的回答。
  */
-function withoutNewRulesOfMcpSkillLoadForm(toolNameWithAliases, n, r) {
-  return n.flatMap((s) => {
-    if ((s.type !== "addRules" && s.type !== "replaceRules") || s.behavior !== "allow") return [s];
-    let filtered = s.rules.filter((rule) => {
-      let S = permissionRuleValueFromString(formatPermissionRule(rule));
+function withoutNewRulesOfMcpSkillLoadForm(toolNameWithAliases, updates, toolPermissionContext) {
+  return updates.flatMap((update) => {
+    if ((update.type !== "addRules" && update.type !== "replaceRules") || update.behavior !== "allow")
+      return [update];
+    let filtered = update.rules.filter((rule) => {
+      let ruleValue = permissionRuleValueFromString(formatPermissionRule(rule));
       return (
-        !toolNameWithAliases.has(S.toolName) ||
-        !isPinnedOrWildcardRule(S.ruleContent ?? "") ||
-        hasAllowRuleInSource(r, S, s.destination)
+        !toolNameWithAliases.has(ruleValue.toolName) ||
+        !isPinnedOrWildcardRule(ruleValue.ruleContent ?? "") ||
+        hasAllowRuleInSource(toolPermissionContext, ruleValue, update.destination)
       );
     });
-    if (filtered.length === s.rules.length) return [s];
+    if (filtered.length === update.rules.length) return [update];
     return filtered.length > 0
       ? [
           {
-            ...s,
+            ...update,
             rules: filtered,
           },
         ]
@@ -1902,8 +2764,8 @@ function withoutNewRulesOfMcpSkillLoadForm(toolNameWithAliases, n, r) {
   });
 }
 //@ chunk-e6aww6q8.js:2958535-2958619 placement
-function isWholeToolAllowRule(e, ruleValue) {
-  return toolMatchesWholeToolRule(e, {
+function isWholeToolAllowRule(tool, ruleValue) {
+  return toolMatchesWholeToolRule(tool, {
     source: "session",
     ruleBehavior: "allow",
     ruleValue,
@@ -1913,13 +2775,18 @@ function isWholeToolAllowRule(e, ruleValue) {
 /**
  * 选择要展示的决定原因：结果里有带熔断器的 safetyCheck，或结果标记 localDisplayOnly 时用结果自己的原因，否则用调用方给的原因。
  */
-function pickDisplayedDecisionReason(checkResult, n) {
+function pickDisplayedDecisionReason(checkResult, fallback) {
   if (
     checkResult.decisionReason !== undefined &&
-    findSafetyCheckReason(checkResult.decisionReason, (r) => r.circuitBreaker !== undefined) !== undefined
+    findSafetyCheckReason(
+      checkResult.decisionReason,
+      (safetyReason) => safetyReason.circuitBreaker !== undefined,
+    ) !== undefined
   )
     return checkResult.decisionReason;
-  return checkResult.localDisplayOnly === true && checkResult.decisionReason ? checkResult.decisionReason : n;
+  return checkResult.localDisplayOnly === true && checkResult.decisionReason
+    ? checkResult.decisionReason
+    : fallback;
 }
 //@ chunk-e6aww6q8.js:2958819-2958893 placement
 /**
@@ -1929,7 +2796,7 @@ function stripWholeToolGrantsForAsk(updates, tool, toolPermissionContext) {
   return dropBareAllowRulesForTools(
     updates,
     getToolNameWithAliases(tool, toolPermissionContext),
-    (s, h) => hasAllowRuleInSource(toolPermissionContext, s, h),
+    (ruleValue, destination) => hasAllowRuleInSource(toolPermissionContext, ruleValue, destination),
     (ruleValue) => isWholeToolAllowRule(tool, ruleValue),
   );
 }
@@ -1957,10 +2824,10 @@ function withoutGrantsForRemoteScope(updates) {
 /**
  * 由一组 PermissionUpdate 推出授权范围：去掉远程作用域不允许的授权后，若有持久化目的地返回 "always"，有其他更新返回 "session"，否则 "once"。
  */
-function permissionGrantScope(e) {
-  let n = new Set(withoutGrantsForRemoteScope(e));
-  let filtered = e.filter((s) => !n.has(s));
-  if (filtered.some((s) => supportsPersistence_2(s.destination))) return "always";
+function permissionGrantScope(updates) {
+  let withheld = new Set(withoutGrantsForRemoteScope(updates));
+  let filtered = updates.filter((update) => !withheld.has(update));
+  if (filtered.some((update) => supportsPersistence_2(update.destination))) return "always";
   return filtered.length > 0 ? "session" : "once";
 }
 //@ chunk-e6aww6q8.js:2959282-2959596 placement = buildPermissionUpdates (0.851)
@@ -1968,18 +2835,23 @@ function permissionGrantScope(e) {
  * 回答 MCP skill 加载 ask 时可应用的更新：普通更新经远程作用域过滤；allow addRules 只保留与本次 skill 规则完全一致、目的地为 session 或允许目的地的那条。
  */
 function answerUpdatesForMcpSkillAsk(mode, allowedPrompts) {
-  return mode.flatMap((r) => {
-    let s = withoutGrantsForRemoteScope([r]);
-    if (s.length > 0 || allowedPrompts === undefined || r.type !== "addRules" || r.behavior !== "allow")
-      return s;
-    if (r.destination !== USERSETTINGS && r.destination !== "session") return [];
-    let filtered = r.rules.filter(
+  return mode.flatMap((update) => {
+    let remoteScoped = withoutGrantsForRemoteScope([update]);
+    if (
+      remoteScoped.length > 0 ||
+      allowedPrompts === undefined ||
+      update.type !== "addRules" ||
+      update.behavior !== "allow"
+    )
+      return remoteScoped;
+    if (update.destination !== USERSETTINGS && update.destination !== "session") return [];
+    let filtered = update.rules.filter(
       (rule) => rule.toolName === allowedPrompts.toolName && rule.ruleContent === allowedPrompts.ruleContent,
     );
     return filtered.length > 0
       ? [
           {
-            ...r,
+            ...update,
             rules: filtered,
           },
         ]
@@ -1987,22 +2859,22 @@ function answerUpdatesForMcpSkillAsk(mode, allowedPrompts) {
   });
 }
 //@ chunk-e6aww6q8.js:2959596-2959849 placement = _temp1 (1)
-function filterBuiltInAgentsByDeniedTools(e, n) {
-  let r;
-  return e.filter((s) => {
+function filterBuiltInAgentsByDeniedTools(agents, toolPermissionContext) {
+  let denyIndex;
+  return agents.filter((agent) => {
     if (
-      s.source !== "built-in" ||
-      !s.tools ||
-      s.tools.length === 0 ||
-      parseWildcardAgentTypes(s.tools) !== null
+      agent.source !== "built-in" ||
+      !agent.tools ||
+      agent.tools.length === 0 ||
+      parseWildcardAgentTypes(agent.tools) !== null
     )
       return true;
-    return s.tools.some((tool) => {
+    return agent.tools.some((tool) => {
       if (tool === "*") return false;
       let toolName = permissionRuleValueFromString(tool).toolName;
-      r ??= getDenyRuleIndex(n);
+      denyIndex ??= getDenyRuleIndex(toolPermissionContext);
       return (
-        !isToolDeniedByIndex(n, r.index, {
+        !isToolDeniedByIndex(toolPermissionContext, denyIndex.index, {
           name: toolName,
         }) && isWebFetchPolicyAllowed(toolName)
       );
@@ -2010,8 +2882,8 @@ function filterBuiltInAgentsByDeniedTools(e, n) {
   });
 }
 //@ chunk-e6aww6q8.js:2959849-2959896 placement
-function isAgentToolPoolDenied(e, n) {
-  return filterBuiltInAgentsByDeniedTools([e], n).length === 0;
+function isAgentToolPoolDenied(agent, toolPermissionContext) {
+  return filterBuiltInAgentsByDeniedTools([agent], toolPermissionContext).length === 0;
 }
 //@ chunk-e6aww6q8.js:2959896-2960029 placement
 /**
@@ -2028,27 +2900,29 @@ function isWebFetchPolicyAllowed(toolName) {
 /**
  * 过滤可派发的代理：去掉 isEnabled 为假的、被 Agent(type) deny 规则拒绝的、工具池全被拒绝的代理。
  */
-function filterDispatchableAgents(e, context, agentToolName, s) {
+function filterDispatchableAgents(agents, toolPermissionContext, agentToolName, toolUseContext) {
   return filterOfferedAgents(
     filterBuiltInAgentsByDeniedTools(
       filterDeniedAgents(
-        e.filter((h) => h.isEnabled?.(s) !== false),
-        context,
+        agents.filter((agent) => agent.isEnabled?.(toolUseContext) !== false),
+        toolPermissionContext,
         agentToolName,
       ),
-      context,
+      toolPermissionContext,
     ),
-    s,
+    toolUseContext,
   );
 }
 //@ chunk-e6aww6q8.js:2960191-2960275 placement
 /**
  * 取可派发代理列表：先按允许的 agentType 名单筛选，再走 filterDispatchableAgents。
  */
-function getDispatchableAgents(activeAgents, allowedAgentTypes, r, toolUseContext) {
+function getDispatchableAgents(activeAgents, allowedAgentTypes, toolPermissionContext, toolUseContext) {
   return filterDispatchableAgents(
-    allowedAgentTypes ? activeAgents.filter((h) => allowedAgentTypes.includes(h.agentType)) : activeAgents,
-    r,
+    allowedAgentTypes
+      ? activeAgents.filter((agent) => allowedAgentTypes.includes(agent.agentType))
+      : activeAgents,
+    toolPermissionContext,
     AGENT,
     toolUseContext,
   );
@@ -2057,12 +2931,12 @@ function getDispatchableAgents(activeAgents, allowedAgentTypes, r, toolUseContex
 /**
  * PermissionRequest 钩子带 updatedInput 放行时的守卫：如果对改写后输入的规则检查结果是 deny/ask，记日志并返回该结果（规则优先于钩子）；否则返回 null。
  */
-function guardHookUpdatedInput(e, name) {
-  if (e?.behavior === "deny" || e?.behavior === "ask") {
+function guardHookUpdatedInput(permissionResult, name) {
+  if (permissionResult?.behavior === "deny" || permissionResult?.behavior === "ask") {
     logForDebugging(
-      `PermissionRequest hook allowed ${name} with updatedInput, but ${e.behavior} rule overrides: ${e.message}`,
+      `PermissionRequest hook allowed ${name} with updatedInput, but ${permissionResult.behavior} rule overrides: ${permissionResult.message}`,
     );
-    return e;
+    return permissionResult;
   }
   return null;
 }
@@ -2084,7 +2958,7 @@ async function applyHookPermissionAllow(
     if (!isUnchangedAnswerInput(hookResult.updatedInput, input))
       return denyChangedAnswerInput(tool.name, toolUseId);
     if (tool.requiresUserInteraction?.() || requiresConnectorGrant_2(tool)) {
-      let Se = guardHookUpdatedInput(
+      let flagged = guardHookUpdatedInput(
         await checkRuleBasedPermissions(
           tool,
           input,
@@ -2098,25 +2972,25 @@ async function applyHookPermissionAllow(
         ),
         tool.name,
       );
-      if (Se)
-        return Se.behavior === "ask"
+      if (flagged)
+        return flagged.behavior === "ask"
           ? {
               behavior: "deny",
-              message: Se.message,
-              decisionReason: Se.decisionReason ?? HOOK_ALLOW_FLAGGED_HEADLESS_DENY_REASON,
+              message: flagged.message,
+              decisionReason: flagged.decisionReason ?? HOOK_ALLOW_FLAGGED_HEADLESS_DENY_REASON,
             }
-          : Se;
+          : flagged;
     }
     let { lostTightenings } = applyAnswerPermissionUpdates(hookMode, hookResult.updatedPermissions, {
       vetoed: isVetoed,
-      strip: (Se) =>
+      strip: (updates) =>
         isHookOrPluginSteered(context)
           ? []
           : tool.suppressesAllPermissionUpdates?.(input) === true
-            ? withoutGrantsForRemoteScope(Se)
+            ? withoutGrantsForRemoteScope(updates)
             : tool.suppressesAlwaysAllowRule?.(input) === true || stripWholeToolGrants
-              ? stripWholeToolGrantsForAsk(Se, tool, getToolPermissionContext(context))
-              : Se,
+              ? stripWholeToolGrantsForAsk(updates, tool, getToolPermissionContext(context))
+              : updates,
       toolName: getToolNameForPermissionCheck_2(tool),
       input,
       setContext: context.setSessionToolPermissionContext,
@@ -2133,17 +3007,21 @@ async function applyHookPermissionAllow(
   }
   if (shouldReplaceMemoryInput(tool, input, hookResult.updatedInput, true))
     return guardAccountMemoryHookRewrite(tool, "PermissionRequest");
-  let validated = await validatePermissionRequestUpdatedInput(tool, hookResult.updatedInput, input, (Z) =>
-    tool.validateInput?.(Z, {
-      ...context,
-      toolUseId,
-    }),
+  let validated = await validatePermissionRequestUpdatedInput(
+    tool,
+    hookResult.updatedInput,
+    input,
+    (candidate) =>
+      tool.validateInput?.(candidate, {
+        ...context,
+        toolUseId,
+      }),
   );
   if (validated.deny !== undefined) return validated.deny;
   let input_2 = validated.input;
   let effectiveInput = input_2 ?? input;
   if (input_2 || tool.requiresUserInteraction?.() || requiresConnectorGrant_2(tool)) {
-    let Z = guardHookUpdatedInput(
+    let flagged = guardHookUpdatedInput(
       await checkRuleBasedPermissions(
         tool,
         effectiveInput,
@@ -2158,20 +3036,20 @@ async function applyHookPermissionAllow(
       ),
       tool.name,
     );
-    if (Z)
-      return Z.behavior === "ask"
+    if (flagged)
+      return flagged.behavior === "ask"
         ? {
             behavior: "deny",
-            message: Z.message,
+            message: flagged.message,
             decisionReason:
-              Z.decisionReason ??
+              flagged.decisionReason ??
               (input_2 ? HOOK_REWRITE_HEADLESS_DENY_REASON : HOOK_ALLOW_FLAGGED_HEADLESS_DENY_REASON),
           }
-        : Z;
+        : flagged;
   }
   switch (hookMode.kind) {
     case "launcher": {
-      let Z =
+      let updates =
         tool.suppressesAllPermissionUpdates?.(input) === true
           ? withoutGrantsForRemoteScope(hookResult.updatedPermissions ?? [])
           : tool.suppressesAlwaysAllowRule?.(input) === true || stripWholeToolGrants
@@ -2181,9 +3059,9 @@ async function applyHookPermissionAllow(
                 getToolPermissionContext(context),
               )
             : (hookResult.updatedPermissions ?? []);
-      if (Z.length && !isVetoed() && !isHookOrPluginSteered(context)) {
-        context.setSessionToolPermissionContext((Se) => applyPermissionUpdates(Se, Z));
-        persistPermissionUpdates(Z, context.storageV5).catch(logError);
+      if (updates.length && !isVetoed() && !isHookOrPluginSteered(context)) {
+        context.setSessionToolPermissionContext((context) => applyPermissionUpdates(context, updates));
+        persistPermissionUpdates(updates, context.storageV5).catch(logError);
       }
       break;
     }
@@ -2356,7 +3234,7 @@ async function personAskAfterHooks(result, { tool, input, context, toolUseID, an
       }
     }
     if (hookResult !== undefined && answers !== undefined) {
-      let G = await applyHookPermissionAllow(
+      let hookDecision = await applyHookPermissionAllow(
         answers,
         tool,
         updatedInput,
@@ -2366,8 +3244,9 @@ async function personAskAfterHooks(result, { tool, input, context, toolUseID, an
         result.suppressAlwaysAllowRule === true,
         () => context.abortController.signal.aborted,
       );
-      if (G.behavior === "allow") notePendingPermissionAnswer(context, toolUseID, result, tool.name);
-      return G;
+      if (hookDecision.behavior === "allow")
+        notePendingPermissionAnswer(context, toolUseID, result, tool.name);
+      return hookDecision;
     }
   } catch (error) {
     logForDebugging(
@@ -2386,32 +3265,32 @@ async function personAskAfterHooks(result, { tool, input, context, toolUseID, an
 async function resolveAskWithoutPrompt(answers, tool, input, result, toolUseID, context) {
   if (getToolPermissionContext(context).shouldAvoidPermissionPrompts || result.refusal !== undefined) {
     if (result.refusal !== undefined && result.hooksMayAllow === false) {
-      let q = await personAskAfterHooks(result, {
+      let hookDecision = await personAskAfterHooks(result, {
         tool,
         input,
         context,
         toolUseID,
       });
-      return q.behavior === "ask" ? result.refusal : q;
+      return hookDecision.behavior === "ask" ? result.refusal : hookDecision;
     }
-    let w = suppressAlwaysAllowForSafetyCheck(result);
-    let L = {
+    let safetyResult = suppressAlwaysAllowForSafetyCheck(result);
+    let flags = {
       ignoredAllow: false,
     };
-    let G = await consultPermissionRequestHooksForUnpromptableAsk(
+    let hookResult = await consultPermissionRequestHooksForUnpromptableAsk(
       answers,
       tool,
       input,
-      w.behavior === "ask" ? w : result,
+      safetyResult.behavior === "ask" ? safetyResult : result,
       toolUseID,
       context,
       () => {
-        L.ignoredAllow = true;
+        flags.ignoredAllow = true;
       },
     );
-    if (G) {
-      if (G.behavior === "allow") notePendingPermissionAnswer(context, toolUseID, result, tool.name);
-      return G;
+    if (hookResult) {
+      if (hookResult.behavior === "allow") notePendingPermissionAnswer(context, toolUseID, result, tool.name);
+      return hookResult;
     }
     if (result.refusal !== undefined) return result.refusal;
     return {
@@ -2420,7 +3299,7 @@ async function resolveAskWithoutPrompt(answers, tool, input, result, toolUseID, 
         type: "asyncAgent",
         reason: "Permission prompts are not available in this context",
         ask: refusedAskOf(result),
-        ...(L.ignoredAllow && {
+        ...(flags.ignoredAllow && {
           hookAllowIgnored: true,
         }),
       },
@@ -2462,8 +3341,8 @@ function denyPromptUnavailable(checkResult, message = buildNoPromptAvailableDeni
 /**
  * 插件评测（plugin eval）授权检查：把上下文改成 dontAsk 并把 cliArg allow 规则（含被剥离的危险规则）加回，用 checkDeclarativePermission 经插件裁决层判定是否 allow。
  */
-async function isAllowedByEvalGrants(tool, n, permissionContext, toolUseID, id) {
-  let y = {
+async function isAllowedByEvalGrants(tool, input, permissionContext, toolUseID, id) {
+  let grantContext = {
     ...permissionContext,
     permissionRound: undefined,
     permissionLayers: [
@@ -2491,17 +3370,17 @@ async function isAllowedByEvalGrants(tool, n, permissionContext, toolUseID, id) 
       };
     },
   };
-  if (getToolPermissionContext(y).mode !== "dontAsk") return false;
+  if (getToolPermissionContext(grantContext).mode !== "dontAsk") return false;
   return (
     (
       await decideWithToolCheckHooks(
         {
           tool,
-          input: n,
-          context: y,
+          input,
+          context: grantContext,
           toolUseID,
           evaluate: () =>
-            checkDeclarativePermission(tool, n, y, {
+            checkDeclarativePermission(tool, input, grantContext, {
               crashIsObjection: true,
             }),
         },
@@ -2518,18 +3397,18 @@ function isServerContextStaleCheckEnabled() {
 /**
  * 请求时模式是否为 auto：上下文带 permissionModeAtRequest 且去掉它后的有效模式为 auto。
  */
-function isRequestedModeAuto(e) {
+function isRequestedModeAuto(context) {
   return (
-    e.permissionModeAtRequest !== undefined &&
+    context.permissionModeAtRequest !== undefined &&
     getToolPermissionContext({
-      ...e,
+      ...context,
       permissionModeAtRequest: undefined,
     }).mode === "auto"
   );
 }
 //@ chunk-e6aww6q8.js:2965934-2965986 placement
-function getStaleContextErrorKind(e) {
-  return e.errorKind === SERVER_CONTEXT_STALE ? SERVER_CONTEXT_STALE : undefined;
+function getStaleContextErrorKind(result) {
+  return result.errorKind === SERVER_CONTEXT_STALE ? SERVER_CONTEXT_STALE : undefined;
 }
 //@ chunk-e6aww6q8.js:2965986-2966061 placement
 /**
@@ -2551,15 +3430,15 @@ var hasPermissionsToUseTool = async (tool, input, context, assistantMessage, too
 /**
  * 以 asksNoHost 标志调用 hasPermissionsToUseTool，用于没有宿主可询问的评估。
  */
-function evaluateAskingNoHost(...[e, n, r, ...s]) {
+function evaluateAskingNoHost(...[tool, input, context, ...rest]) {
   return hasPermissionsToUseTool(
-    e,
-    n,
+    tool,
+    input,
     {
-      ...r,
+      ...context,
       asksNoHost: true,
     },
-    ...s,
+    ...rest,
   );
 }
 //@ chunk-e6aww6q8.js:2966131-2966576 placement
@@ -2573,64 +3452,73 @@ var hasPermissionsToUseToolWithSink = async (
   assistantMessage,
   toolUseID,
   answers,
-  S,
-  w,
+  toolSuggestions,
+  classifierApprovalsSetter,
 ) => {
-  let L = enforceClassifierOnlyDecision(
+  let decision = enforceClassifierOnlyDecision(
     tool,
     settingsProblemDenial() ??
       denyReservedArtifactKeys(tool, input) ??
-      (await hasPermissionsToUseToolInner(tool, input, context, assistantMessage, toolUseID, answers, S, w)),
+      (await hasPermissionsToUseToolInner(
+        tool,
+        input,
+        context,
+        assistantMessage,
+        toolUseID,
+        answers,
+        toolSuggestions,
+        classifierApprovalsSetter,
+      )),
   );
   let result =
-    L.behavior === "ask" && L.refusal !== undefined
-      ? await resolveAskWithoutPrompt(answers, tool, input, L, toolUseID, context)
-      : L;
-  let q = await personAskAfterHooks(result, {
+    decision.behavior === "ask" && decision.refusal !== undefined
+      ? await resolveAskWithoutPrompt(answers, tool, input, decision, toolUseID, context)
+      : decision;
+  let afterHooks = await personAskAfterHooks(result, {
     tool,
     input,
     context,
     toolUseID,
     answers,
   });
-  let Z =
-    q.behavior === "deny"
+  let finalDecision =
+    afterHooks.behavior === "deny"
       ? appendRuleAnnotation({
-          ...q,
+          ...afterHooks,
           decideLocation: "pre-ask",
         })
-      : suppressAlwaysAllowForSafetyCheck(q);
+      : suppressAlwaysAllowForSafetyCheck(afterHooks);
   if (
-    Z.behavior === "allow" &&
+    finalDecision.behavior === "allow" &&
     getDenialTrackingState(context).lastRewriteFingerprint !== undefined &&
     isClassifierTargetToolUse(assistantMessage, toolUseID, context.clientRequestedToolUseId)
   )
     updateDenialTrackingState(context, (state) => undoRewriteDenialIfRetried(state, tool.name, input));
-  recordPipelineResult(context, toolUseID, input, Z, tool.name);
-  return Z;
+  recordPipelineResult(context, toolUseID, input, finalDecision, tool.name);
+  return finalDecision;
 };
 //@ chunk-e6aww6q8.js:2966576-2966786 placement
-function suppressAlwaysAllowForSafetyCheck(e) {
+function suppressAlwaysAllowForSafetyCheck(decision) {
   if (
-    e.behavior === "ask" &&
-    e.suppressAlwaysAllowRule !== true &&
-    e.metadata?.mcpSkill === undefined &&
-    findSafetyCheckReason(e.decisionReason, (n) => !n.classifierApprovable) !== undefined
+    decision.behavior === "ask" &&
+    decision.suppressAlwaysAllowRule !== true &&
+    decision.metadata?.mcpSkill === undefined &&
+    findSafetyCheckReason(decision.decisionReason, (reason) => !reason.classifierApprovable) !== undefined
   )
     return {
-      ...e,
+      ...decision,
       suppressAlwaysAllowRule: true,
     };
-  return e;
+  return decision;
 }
 //@ chunk-e6aww6q8.js:2966786-2967060 placement
 /**
  * 找到能放行该工具的整工具 allow 规则（排除忽略整工具规则的工具、Chrome 地板、MCP 限制、computer-use 例外等）。
  */
-function findApplicableAllowRule(tool, input, context, mode, h) {
-  let y = toolAlwaysAllowedRule(getToolPermissionContext(context), tool);
+function findApplicableAllowRule(tool, input, context, mode, getMode) {
+  let allowRule = toolAlwaysAllowedRule(getToolPermissionContext(context), tool);
   if (
-    y &&
+    allowRule &&
     tool.ignoresWholeToolAllowRule?.(input) !== true &&
     !shouldRelyOnModeFloorForBrowser(tool, getToolPermissionContext(context)) &&
     !(
@@ -2638,10 +3526,10 @@ function findApplicableAllowRule(tool, input, context, mode, h) {
       (isBrowserPreviewToolName(getToolNameForPermissionCheck_2(tool)) ||
         getToolPermissionContext(context).chromeClassifierFloorEnabled === true)
     ) &&
-    getMcpRuleClassifierRoute(y, tool, input, mode, context, () =>
-      h(getToolPermissionContext(context).mode),
+    getMcpRuleClassifierRoute(allowRule, tool, input, mode, context, () =>
+      getMode(getToolPermissionContext(context).mode),
     ) === undefined &&
-    !isCoworkWebAllowOverride(y, tool, input, context) &&
+    !isCoworkWebAllowOverride(allowRule, tool, input, context) &&
     !shouldRouteBrowserCallToClassifier(
       getComputerUseChecksSetting(),
       getToolPermissionContext(context),
@@ -2650,7 +3538,7 @@ function findApplicableAllowRule(tool, input, context, mode, h) {
       mode,
     )
   )
-    return y;
+    return allowRule;
   return null;
 }
 //@ chunk-e6aww6q8.js:2967060-3008254 callgraph-witnessed = hasPermissionsToUseTool (0.269)
@@ -2664,8 +3552,8 @@ var hasPermissionsToUseToolInner = async (
   assistantMessage,
   toolUseID,
   answers,
-  S,
-  w,
+  toolSuggestions,
+  classifierApprovalsSetter,
 ) => {
   let permissionContext = {
     ...context,
@@ -2680,25 +3568,26 @@ var hasPermissionsToUseToolInner = async (
       toolUseId: sanitizeMarkName(toolUseID),
       agentMsgId: sanitizeMarkName(assistantMessage.message.id),
     });
-  let G;
-  let q = () => (G ??= mcpToolLogFields(tool, permissionContext.options.mcpClients));
-  let Z;
-  let Se = () => (Z ??= getProjectsRoleTelemetry(permissionContext));
-  let ke = (Ae) =>
+  let mcpFieldsCache;
+  let mcpFields = () => (mcpFieldsCache ??= mcpToolLogFields(tool, permissionContext.options.mcpClients));
+  let projectsRoleCache;
+  let projectsRoleFields = () => (projectsRoleCache ??= getProjectsRoleTelemetry(permissionContext));
+  let resolveRole = (requestedMode) =>
     resolveServerClassifierRoleForCall(
-      getAutoModeClassifierRole(Ae),
+      getAutoModeClassifierRole(requestedMode),
       assistantMessage,
       toolUseID,
       permissionContext,
     );
-  let we = await decideWithToolCheckHooks(
+  let hookDecision = await decideWithToolCheckHooks(
     {
       tool,
       input,
       context: permissionContext,
       toolUseID,
       evaluate: () => {
-        let evaluateHere = () => checkToolAndRulePermissions(tool, input, permissionContext, S, ke);
+        let evaluateHere = () =>
+          checkToolAndRulePermissions(tool, input, permissionContext, toolSuggestions, resolveRole);
         let registeredCheck = getRegisteredCheck(permissionContext.session, tool.name);
         return registeredCheck === undefined
           ? evaluateHere()
@@ -2710,8 +3599,8 @@ var hasPermissionsToUseToolInner = async (
               assistantMessage,
               toolUseID,
               evaluateHere,
-            ).then((Me) => {
-              if (Me !== CHECK_NO_DECISION) return Me;
+            ).then((adjudicated) => {
+              if (adjudicated !== CHECK_NO_DECISION) return adjudicated;
               rememberPendingCheck(permissionContext.session, toolUseID);
               return evaluateHere();
             });
@@ -2720,17 +3609,17 @@ var hasPermissionsToUseToolInner = async (
     assistantMessage.message.id,
   );
   let checkResult =
-    we.behavior === "ask" &&
+    hookDecision.behavior === "ask" &&
     (mcpAskVetoesStandingGrant(tool, input, permissionContext, assistantMessage, toolUseID) ||
       isWebSearchClassifierRouted(tool, getToolPermissionContext(permissionContext)))
       ? {
-          ...we,
+          ...hookDecision,
           suppressAlwaysAllowRule: true,
           ...(isRemoteBrowserToolModeFloorActive(tool, getToolPermissionContext(permissionContext)) && {
             suggestions: undefined,
           }),
         }
-      : we;
+      : hookDecision;
   if (
     checkResult.behavior !== "deny" &&
     settingsGrantsConfined() &&
@@ -2763,38 +3652,38 @@ var hasPermissionsToUseToolInner = async (
   if (checkResult.behavior === "ask") {
     let appState = permissionContext.getAppState();
     let toolPermissionContext = getToolPermissionContext(permissionContext);
-    let mode = isAutoAllowedInMode(tool, toolPermissionContext);
-    let We = hasPersonOnlyAskFloor(permissionContext.hookAskFloor === true, checkResult);
-    let toolNameForPermissionCheck = getToolNameForPermissionCheck_2(tool);
-    let lt = isChromeToolName(toolNameForPermissionCheck);
+    let effectiveMode = isAutoAllowedInMode(tool, toolPermissionContext);
+    let hasPersonOnlyFloor = hasPersonOnlyAskFloor(permissionContext.hookAskFloor === true, checkResult);
+    let toolName = getToolNameForPermissionCheck_2(tool);
+    let isChromeTool = isChromeToolName(toolName);
     let chrome = checkResult.metadata?.command?.chrome;
-    let nt =
+    let chromeRuleRouted =
       isChromeClassifierFloorCall(tool, toolPermissionContext) &&
       (chrome?.domainAllowed === true ||
         chrome?.hostHandlesOriginConsent === true ||
         toolAlwaysAllowedRule(toolPermissionContext, tool) !== null);
-    let pt =
+    let chromeGrantRouted =
       isChromeClassifierFloorTool(tool, toolPermissionContext) &&
       toolPermissionContext.canAutoClassifierRun === false &&
-      !isAutoClassifierActive(mode, toolPermissionContext.servedCall === true) &&
+      !isAutoClassifierActive(effectiveMode, toolPermissionContext.servedCall === true) &&
       chrome?.domainAllowed === true &&
       chrome.grantRule !== undefined &&
       chrome.navigation === undefined &&
       chromeGrantAllowlistWithoutClassifier() &&
       toolPermissionContext.mode !== "plan" &&
-      !We &&
+      !hasPersonOnlyFloor &&
       !carriesAskRuleIntent(checkResult) &&
       findSafetyCheckReason(checkResult.decisionReason) === undefined &&
       tool.mcpInfo?.effectiveMaxPermission !== "ask" &&
       isBrowserToolAutoAllowed(tool, input) &&
-      !shouldClassifyBrowserWrite(toolPermissionContext, toolNameForPermissionCheck, input);
-    if (mode === "dontAsk" && !nt) {
-      let yt = false;
+      !shouldClassifyBrowserWrite(toolPermissionContext, toolName, input);
+    if (effectiveMode === "dontAsk" && !chromeRuleRouted) {
+      let hasApplicableAllowRule = false;
       if (toolMaySettleUnaskedQuestion(tool, checkResult, permissionContext))
         try {
-          yt =
+          hasApplicableAllowRule =
             tool.requiresUserInteraction?.() !== true &&
-            findApplicableAllowRule(tool, input, permissionContext, mode, ke) !== null;
+            findApplicableAllowRule(tool, input, permissionContext, effectiveMode, resolveRole) !== null;
         } catch (error) {
           if (!isAbortError(error)) logError(error);
         }
@@ -2803,68 +3692,72 @@ var hasPermissionsToUseToolInner = async (
         decisionReason: {
           type: "mode",
           mode: "dontAsk",
-          ...(yt && {
+          ...(hasApplicableAllowRule && {
             ask: refusedAskOf(checkResult),
           }),
         },
         message: DONT_ASK_REJECT_MESSAGE(tool.name),
       };
     }
-    if (isAutoClassifierActive(mode, toolPermissionContext.servedCall === true) || nt || pt) {
+    if (
+      isAutoClassifierActive(effectiveMode, toolPermissionContext.servedCall === true) ||
+      chromeRuleRouted ||
+      chromeGrantRouted
+    ) {
       if (isAskOnMutationTool(tool.name, appState.proactivityLevel)) {
         if (toolPermissionContext.shouldAvoidPermissionPrompts) return denyPromptUnavailable(checkResult);
         return checkResult;
       }
-      let yt = {
-        mode,
+      let modeSnapshot = {
+        mode: effectiveMode,
         autoActive: isAutoModeActive(),
       };
-      let gt = isChainOnAllowActive();
-      let At = classifierOnlyConfig(tool);
-      if (At?.onBlock === "refuse" && (We || gt))
+      let chainOnAllow = isChainOnAllowActive();
+      let classifierOnly = classifierOnlyConfig(tool);
+      if (classifierOnly?.onBlock === "refuse" && (hasPersonOnlyFloor || chainOnAllow))
         return buildClassifierOnlyDenial(
           tool,
-          We
+          hasPersonOnlyFloor
             ? "a hook asked for a prompt, and none is raised"
             : "the host re-asks every allow, and no prompt is raised",
         );
       if (
-        We &&
-        !gt &&
+        hasPersonOnlyFloor &&
+        !chainOnAllow &&
         checkResult.refusal === undefined &&
         toolPermissionContext.shouldAvoidPermissionPrompts &&
-        At?.onBlock !== "flag"
+        classifierOnly?.onBlock !== "flag"
       )
         return denyPromptUnavailable(checkResult);
-      let It = (Ks) => {
-        if (Ks.decisionReason.type === "classifier" && Or)
+      let finishClassifierAllow = (allowedByClassifier) => {
+        if (allowedByClassifier.decisionReason.type === "classifier" && commandNetworkListsOffered)
           rememberCommandNetworkLists(toolUseID, tool, input);
-        let { classifierRan, ...Yd } = Ks;
-        let xc =
-          Yd.decisionReason.type === "classifier" &&
-          Yd.decisionReason.noVerdict !== true &&
+        let { classifierRan, ...restDecision } = allowedByClassifier;
+        let withClassifierFlag =
+          restDecision.decisionReason.type === "classifier" &&
+          restDecision.decisionReason.noVerdict !== true &&
           classifierRan !== false
             ? {
-                ...Yd,
+                ...restDecision,
                 decisionReason: {
-                  ...Yd.decisionReason,
+                  ...restDecision.decisionReason,
                   classifierAllowed: true,
                 },
               }
-            : Yd;
-        if (At?.onBlock === "flag")
+            : restDecision;
+        if (classifierOnly?.onBlock === "flag")
           return {
             behavior: "allow",
-            ...xc,
+            ...withClassifierFlag,
           };
-        if (gt)
+        if (chainOnAllow)
           return {
             ...checkResult,
-            ...Yd,
-            decisionReason: pickDisplayedDecisionReason(checkResult, Yd.decisionReason),
+            ...restDecision,
+            decisionReason: pickDisplayedDecisionReason(checkResult, restDecision.decisionReason),
           };
-        if (We) {
-          if (mode === "dontAsk")
+        if (hasPersonOnlyFloor) {
+          if (effectiveMode === "dontAsk")
             return {
               behavior: "deny",
               decisionReason: {
@@ -2875,23 +3768,23 @@ var hasPermissionsToUseToolInner = async (
             };
           return {
             ...checkResult,
-            updatedInput: Ks.updatedInput,
+            updatedInput: allowedByClassifier.updatedInput,
           };
         }
         return {
           behavior: "allow",
-          ...xc,
+          ...withClassifierFlag,
         };
       };
-      let Yt = (Ks, kl) => {
+      let fallBackToAsk = (reason, extraFields) => {
         if (!isAskOnMutationTool(tool.name, permissionContext.getAppState().proactivityLevel)) return;
         logEvent("tengu_auto_mode_fallback_to_ask", {
-          ...kl,
-          reason: fromEnum(Ks),
+          ...extraFields,
+          reason: fromEnum(reason),
           toolName: sanitizeToolNameForAnalytics(tool.name),
           toolUseId: sanitizeMarkName(toolUseID),
           isMcp: tool.isMcp ?? false,
-          ...q(),
+          ...mcpFields(),
         });
         if (getToolPermissionContext(permissionContext).shouldAvoidPermissionPrompts)
           return denyPromptUnavailable(checkResult);
@@ -2899,50 +3792,69 @@ var hasPermissionsToUseToolInner = async (
       };
       let safetyCheckReason = findSafetyCheckReason(
         checkResult.decisionReason,
-        (Ks) =>
-          !Ks.classifierApprovable &&
+        (safetyReason) =>
+          !safetyReason.classifierApprovable &&
           !(
-            isClassifierRoutedCircuitBreaker(Ks) &&
-            !carriesPersonsAsk(Ks) &&
+            isClassifierRoutedCircuitBreaker(safetyReason) &&
+            !carriesPersonsAsk(safetyReason) &&
             isAutoModePermissionSurface(toolPermissionContext)
           ),
       );
-      let Zt =
+      let projectionOnly =
         findSafetyCheckReason(checkResult.decisionReason, isLocalProjectionOnlyCircuitBreaker) !== undefined;
-      let rn = checkResult.decisionReason?.type === "sandboxOverride";
-      let pn = isSandboxOverrideUnderReadBlock(checkResult.decisionReason, toolPermissionContext);
-      let no = carriesAskRuleIntent(checkResult);
-      let hn =
+      let isSandboxOverride = checkResult.decisionReason?.type === "sandboxOverride";
+      let sandboxOverrideUnderReadBlock = isSandboxOverrideUnderReadBlock(
+        checkResult.decisionReason,
+        toolPermissionContext,
+      );
+      let carriesAskIntent = carriesAskRuleIntent(checkResult);
+      let isServerPolicyAsk =
         isServerPolicyAskReason(checkResult.decisionReason) ||
         checkResult.matchedAskRule?.source === "mcpServerPolicy";
-      let ho = isDestructiveMcpAskOverride(hn, tool, input, mode, permissionContext);
-      let yn = no && !gt && !(hn && (!(tool.isDestructive?.(input) ?? false) || ho));
-      let Kn = tool.mcpInfo?.effectiveMaxPermission === "ask";
-      let Xn =
+      let destructiveAskOverride = isDestructiveMcpAskOverride(
+        isServerPolicyAsk,
+        tool,
+        input,
+        effectiveMode,
+        permissionContext,
+      );
+      let isAskRuleFloor =
+        carriesAskIntent &&
+        !chainOnAllow &&
+        !(isServerPolicyAsk && (!(tool.isDestructive?.(input) ?? false) || destructiveAskOverride));
+      let askCeiling = tool.mcpInfo?.effectiveMaxPermission === "ask";
+      let isPlanOrPolicyFloor =
         (isPlanModeFloorReason(checkResult.decisionReason) &&
           !isReadOnlyBrowserCall(getToolNameForPermissionCheck_2(tool), input)) ||
-        (!gt &&
-          !We &&
+        (!chainOnAllow &&
+          !hasPersonOnlyFloor &&
           isServerPolicyAskUnderPlanFloor(checkResult.decisionReason, tool, input, permissionContext));
       let safetyCheckReason_2 = findSafetyCheckReason(
         checkResult.decisionReason,
         isAutoModeDenyCircuitBreaker,
       );
-      let To =
-        safetyCheckReason_2 !== undefined && isAutoModePermissionSurface(toolPermissionContext) && !no
+      let rmTimeoutConfig =
+        safetyCheckReason_2 !== undefined &&
+        isAutoModePermissionSurface(toolPermissionContext) &&
+        !carriesAskIntent
           ? getDangerousRmTimeoutConfig()
           : undefined;
-      if (safetyCheckReason_2 !== undefined && To?.enabled) {
-        let Ks = applySafetyCheckDialogPolicy(checkResult, safetyCheckReason_2, permissionContext, To);
-        if (Ks.behavior === "ask") {
+      if (safetyCheckReason_2 !== undefined && rmTimeoutConfig?.enabled) {
+        let safetyDecision = applySafetyCheckDialogPolicy(
+          checkResult,
+          safetyCheckReason_2,
+          permissionContext,
+          rmTimeoutConfig,
+        );
+        if (safetyDecision.behavior === "ask") {
           logEvent("tengu_auto_mode_fallback_to_ask", {
             reason: lit_2("safety_check"),
             toolName: sanitizeToolNameForAnalytics(tool.name),
             toolUseId: sanitizeMarkName(toolUseID),
             isMcp: tool.isMcp ?? false,
-            ...q(),
+            ...mcpFields(),
           });
-          return Ks;
+          return safetyDecision;
         }
         appendAutoModeDecision(permissionContext.session, {
           tool: tool.name,
@@ -2957,11 +3869,11 @@ var hasPermissionsToUseToolInner = async (
           toolName: sanitizeToolNameForAnalytics(tool.name),
           toolUseId: sanitizeMarkName(toolUseID),
           isMcp: tool.isMcp ?? false,
-          ...q(),
+          ...mcpFields(),
           inProtectedNamespace: isEvalBuild(),
-          ...Se(),
-          chromeAutomode: lt,
-          mcpServerAskOverride: ho,
+          ...projectsRoleFields(),
+          chromeAutomode: isChromeTool,
+          mcpServerAskOverride: destructiveAskOverride,
           agentMsgId: sanitizeMarkName(assistantMessage.message.id),
           fromTurnHandoff: assistantMessage.handedOff === true,
           fastPath: lit_2("hardcodedDeny"),
@@ -2970,41 +3882,51 @@ var hasPermissionsToUseToolInner = async (
           hookAllowVouch: permissionContext.hookAllowVouched === true,
           ...getDestructiveCommandAnalytics(tool.name, input),
         });
-        return Ks;
+        return safetyDecision;
       }
-      if (safetyCheckReason || rn || yn || Kn || Xn) {
+      if (safetyCheckReason || isSandboxOverride || isAskRuleFloor || askCeiling || isPlanOrPolicyFloor) {
         if (toolPermissionContext.shouldAvoidPermissionPrompts) return denyPromptUnavailable(checkResult);
-        if (safetyCheckReason || pn || yn || Kn || Xn) {
+        if (
+          safetyCheckReason ||
+          sandboxOverrideUnderReadBlock ||
+          isAskRuleFloor ||
+          askCeiling ||
+          isPlanOrPolicyFloor
+        ) {
           logEvent("tengu_auto_mode_fallback_to_ask", {
             reason: lit_2(
-              safetyCheckReason || pn
+              safetyCheckReason || sandboxOverrideUnderReadBlock
                 ? "safety_check"
-                : yn
+                : isAskRuleFloor
                   ? "ask_rule"
-                  : Xn
+                  : isPlanOrPolicyFloor
                     ? "plan_mode_floor"
                     : "org_ask_ceiling",
             ),
             toolName: sanitizeToolNameForAnalytics(tool.name),
             toolUseId: sanitizeMarkName(toolUseID),
             isMcp: tool.isMcp ?? false,
-            ...q(),
+            ...mcpFields(),
           });
           return checkResult;
         }
       }
-      let bo =
+      let askUserQuestionClassifiable =
         tool.name === ASKUSERQUESTION &&
         checkResult.behavior === "ask" &&
         !alwaysTrueFlag() &&
         shouldClassifyAskUserQuestion();
-      if (!bo && tool.requiresUserInteraction?.() && checkResult.behavior === "ask") {
+      if (
+        !askUserQuestionClassifiable &&
+        tool.requiresUserInteraction?.() &&
+        checkResult.behavior === "ask"
+      ) {
         logEvent("tengu_auto_mode_fallback_to_ask", {
           reason: lit_2("requires_user_interaction"),
           toolName: sanitizeToolNameForAnalytics(tool.name),
           toolUseId: sanitizeMarkName(toolUseID),
           isMcp: tool.isMcp ?? false,
-          ...q(),
+          ...mcpFields(),
         });
         return checkResult;
       }
@@ -3014,7 +3936,7 @@ var hasPermissionsToUseToolInner = async (
           toolName: sanitizeToolNameForAnalytics(tool.name),
           toolUseId: sanitizeMarkName(toolUseID),
           isMcp: tool.isMcp ?? false,
-          ...q(),
+          ...mcpFields(),
         });
         return checkResult;
       }
@@ -3025,7 +3947,7 @@ var hasPermissionsToUseToolInner = async (
           toolName: sanitizeToolNameForAnalytics(tool.name),
           toolUseId: sanitizeMarkName(toolUseID),
           isMcp: tool.isMcp ?? false,
-          ...q(),
+          ...mcpFields(),
         });
         return {
           ...checkResult,
@@ -3035,106 +3957,114 @@ var hasPermissionsToUseToolInner = async (
       let state =
         permissionContext.localDenialTracking ?? appState.denialTracking ?? createDenialTrackingState();
       let autoModeClassifierRole = getAutoModeClassifierRole(toolPermissionContext.mode);
-      let So = isAutoClassifierActive(toolPermissionContext.mode);
-      let ko =
+      let autoClassifierActive = isAutoClassifierActive(toolPermissionContext.mode);
+      let mcpHeldOutsideAuto =
         autoModeClassifierRole === "off" &&
-        !Zt &&
+        !projectionOnly &&
         hasHeldServerVerdict(assistantMessage, toolUseID) &&
         isMcpReviewedOutsideAuto(tool, toolPermissionContext);
       let serverClassifierRoleForCall = resolveServerClassifierRoleForCall(
-        ko ? "arbiter" : autoModeClassifierRole,
+        mcpHeldOutsideAuto ? "arbiter" : autoModeClassifierRole,
         assistantMessage,
         toolUseID,
         permissionContext,
       );
-      let ao = isArbiterRole(serverClassifierRoleForCall);
-      let $o = permissionContext.clientRequestedToolUseId === toolUseID;
-      let yo = ao
+      let callRole = isArbiterRole(serverClassifierRoleForCall);
+      let isClientRequested = permissionContext.clientRequestedToolUseId === toolUseID;
+      let roleOffReason = callRole
         ? undefined
         : isArbiterRole(autoModeClassifierRole)
-          ? $o
+          ? isClientRequested
             ? "client_call"
             : "script_call"
           : serverClassifierOffReason(toolPermissionContext.mode);
-      let Ho = toolPermissionContext.servedCall === true;
-      let rr = isAutoClassifierActive(toolPermissionContext.mode, Ho)
+      let servedCall = toolPermissionContext.servedCall === true;
+      let outsideAutoReason = isAutoClassifierActive(toolPermissionContext.mode, servedCall)
         ? undefined
-        : !isAutoClassifierActive(yt.mode, Ho)
-          ? nt
+        : !isAutoClassifierActive(modeSnapshot.mode, servedCall)
+          ? chromeRuleRouted
             ? "chrome_rule_allowed"
             : undefined
           : typeof getMcpPermissionModeOverride(tool, toolPermissionContext) === "string"
             ? "mcp_mode_override"
             : "floor";
-      if (ao) logStrictTierUnavailable("server_arbiter");
-      let br = At?.onBlock === "flag";
-      let Hr = isServerClassifierActive(toolPermissionContext.mode, autoModeClassifierRole, {
-        handoffReview: br,
+      if (callRole) logStrictTierUnavailable("server_arbiter");
+      let isFlagOnBlock = classifierOnly?.onBlock === "flag";
+      let serverClassifierActive = isServerClassifierActive(
+        toolPermissionContext.mode,
+        autoModeClassifierRole,
+        {
+          handoffReview: isFlagOnBlock,
+        },
+      );
+      let serverClassifierActiveNoReview = isFlagOnBlock
+        ? isServerClassifierActive(toolPermissionContext.mode, autoModeClassifierRole)
+        : serverClassifierActive;
+      let localSwitchedOff = isLocalClassifierSwitchedOff({
+        handoffReview: isFlagOnBlock,
       });
-      let Fr = br ? isServerClassifierActive(toolPermissionContext.mode, autoModeClassifierRole) : Hr;
-      let cs = isLocalClassifierSwitchedOff({
-        handoffReview: br,
-      });
-      let _r = br ? isLocalClassifierSwitchedOff() : cs;
+      let localSwitchedOffNoReview = isFlagOnBlock ? isLocalClassifierSwitchedOff() : localSwitchedOff;
       let decisionReason =
         checkResult.decisionReason?.type === "other" &&
         checkResult.decisionReason.reason === SERVER_HOLDS_SHELL_ALLOW_REASON
           ? checkResult.decisionReason
           : undefined;
-      let Vr = decisionReason !== undefined;
-      let Oo =
+      let shellAllowHeld = decisionReason !== undefined;
+      let toolHostAllowClassified =
         checkResult.decisionReason?.type === "other" &&
         checkResult.decisionReason.reason === TOOL_HOST_ALLOW_IS_CLASSIFIED_REASON;
       let reroutedFrom = decisionReason?.reroutedFrom;
-      let Or = areCommandNetworkListsOffered_2();
-      let Io;
-      let zo =
+      let commandNetworkListsOffered = areCommandNetworkListsOffered_2();
+      let serverVerdictPromise;
+      let keepLocalVerdict =
         assistantMessage.serverClassifierInputRewrite?.keptVerdict === true &&
         (involvesSafetyCheck(checkResult.decisionReason) ||
           (isFileMutationTool(tool.name) &&
             (classifyEditsEnabled(getMainLoopModel_2(permissionContext)) ||
               shouldClassifyEdits(getMainLoopModel_2(permissionContext)) ||
               shouldClassifyEdits(assistantMessage.message.model))));
-      let rs = new enqueuePermissionCheckStatus(toolUseID, permissionContext.agentId);
-      let Es;
-      let Nr;
-      let Is = () => {
-        if (Io === undefined) {
+      let checkStatus = new enqueuePermissionCheckStatus(toolUseID, permissionContext.agentId);
+      let serverWaitMs;
+      let serverVerdict;
+      let awaitServerVerdictCached = () => {
+        if (serverVerdictPromise === undefined) {
           let now = Date.now();
-          Io = awaitServerVerdict(assistantMessage, toolUseID, !zo).then((kl) => {
-            Es = Date.now() - now;
-            Nr = kl;
-            return kl;
-          });
+          serverVerdictPromise = awaitServerVerdict(assistantMessage, toolUseID, !keepLocalVerdict).then(
+            (verdict) => {
+              serverWaitMs = Date.now() - now;
+              serverVerdict = verdict;
+              return verdict;
+            },
+          );
         }
-        return Io;
+        return serverVerdictPromise;
       };
-      let fs = () => {
-        let Ks = Is();
-        if (Es === undefined) {
-          let kl = rs.hold();
-          Ks.then(kl, kl);
+      let awaitVerdictHolding = () => {
+        let verdictPromise = awaitServerVerdictCached();
+        if (serverWaitMs === undefined) {
+          let releaseHold = checkStatus.hold();
+          verdictPromise.then(releaseHold, releaseHold);
         }
-        return Ks;
+        return verdictPromise;
       };
-      let as = (Ks) => {
-        let kl = shouldFallBackToLocal(serverClassifierRoleForCall, Ks, toolUseID, {
-          outsideAutoMode: ko,
+      let shouldFallBack = (verdict) => {
+        let fallBack = shouldFallBackToLocal(serverClassifierRoleForCall, verdict, toolUseID, {
+          outsideAutoMode: mcpHeldOutsideAuto,
         });
         if (
-          kl &&
+          fallBack &&
           serverClassifierRoleForCall === "arbiter" &&
-          !ko &&
-          !Fr &&
+          !mcpHeldOutsideAuto &&
+          !serverClassifierActiveNoReview &&
           !isThirdPartyServerClassifierRefused()
         ) {
           markThirdPartyServerClassifierRefused();
           logEvent("tengu_server_classifier_no_result_latched", {
             isSubagent: permissionContext.agentId !== undefined,
-            reason: fromEnum(Ks.kind === "none" ? Ks.why : "other"),
+            reason: fromEnum(verdict.kind === "none" ? verdict.why : "other"),
           });
           logForDebugging(
-            Ks.kind === "none" && Ks.why === "server_unsupported"
+            verdict.kind === "none" && verdict.why === "server_unsupported"
               ? "[server-classifier] the API answered that it does not run the server-side classifier for this session (unsupported), so auto mode classifies locally for the rest of this session"
               : "[server-classifier] a completed response carried no classification result (no safeguard_results); assuming something on the path to the API dropped it, so auto mode classifies locally for the rest of this session",
             {
@@ -3142,129 +4072,143 @@ var hasPermissionsToUseToolInner = async (
             },
           );
         }
-        if (!kl || !Hr) return kl;
-        if (isServerClassifierUnsupported(Ks) || isThirdPartyServerClassifierRefused()) return true;
-        let Yd = noVerdictReasonFor(Ks, toolUseID);
-        return Yd !== "server_input_rewritten" && !isServerUnavailableReason(Yd, Ks.kind === "per_call");
+        if (!fallBack || !serverClassifierActive) return fallBack;
+        if (isServerClassifierUnsupported(verdict) || isThirdPartyServerClassifierRefused()) return true;
+        let noVerdictReason = noVerdictReasonFor(verdict, toolUseID);
+        return (
+          noVerdictReason !== "server_input_rewritten" &&
+          !isServerUnavailableReason(noVerdictReason, verdict.kind === "per_call")
+        );
       };
-      let Vi =
-        !ao &&
+      let editClassificationGated =
+        !callRole &&
         true &&
         isFileMutationTool(tool.name) &&
         classifyEditsEnabled(getMainLoopModel_2(permissionContext));
-      let ji = async () => {
-        if (!ao || !(isFileMutationTool(tool.name) || Vr)) return false;
-        let Ks = await fs();
-        let kl = noVerdictReasonFor(Ks, toolUseID);
-        if (kl === "server_input_rewritten") return true;
-        if (as(Ks)) return !Vr && classifyEditsEnabled(getMainLoopModel_2(permissionContext));
-        if (Vr && isServerNotRequestedReason(kl)) return false;
-        let Yd = handedOffIds(assistantMessage.handedOffLive);
+      let serverWouldAllow = async () => {
+        if (!callRole || !(isFileMutationTool(tool.name) || shellAllowHeld)) return false;
+        let verdict = await awaitVerdictHolding();
+        let reason = noVerdictReasonFor(verdict, toolUseID);
+        if (reason === "server_input_rewritten") return true;
+        if (shouldFallBack(verdict))
+          return !shellAllowHeld && classifyEditsEnabled(getMainLoopModel_2(permissionContext));
+        if (shellAllowHeld && isServerNotRequestedReason(reason)) return false;
+        let handedOffSet = handedOffIds(assistantMessage.handedOffLive);
         if (
-          kl === "server_not_requested" &&
-          Yd?.size === 1 &&
-          Yd.has(toolUseID) &&
+          reason === "server_not_requested" &&
+          handedOffSet?.size === 1 &&
+          handedOffSet.has(toolUseID) &&
           runLoneHandedOverEditEnabled()
         )
           return (
             classifyEditsEnabled(getMainLoopModel_2(permissionContext)) ||
             shouldClassifyEdits(assistantMessage.message.model)
           );
-        return kl !== "server_call_skipped";
+        return reason !== "server_call_skipped";
       };
-      let Wi = toolAlwaysAllowedRule(toolPermissionContext, tool);
+      let alwaysAllowRule = toolAlwaysAllowedRule(toolPermissionContext, tool);
       let mcpRuleClassifierRoute = getMcpRuleClassifierRoute(
-        Wi,
+        alwaysAllowRule,
         tool,
         input,
-        mode,
+        effectiveMode,
         permissionContext,
         () => serverClassifierRoleForCall,
       );
       let mcpAlwaysAllowOverride =
         mcpRuleClassifierRoute === "serverPolicy" || mcpRuleClassifierRoute === "shadowedServerPolicy";
       let mcpAlwaysAllowShadowedBy =
-        mcpRuleClassifierRoute === "shadowedServerPolicy" ? fromEnumOpt(Wi?.source) : undefined;
+        mcpRuleClassifierRoute === "shadowedServerPolicy" ? fromEnumOpt(alwaysAllowRule?.source) : undefined;
       let mcpRemoteSessionAllowOverride = mcpRuleClassifierRoute === "remoteSession";
-      let coworkWebAllowOverride = isCoworkWebAllowOverride(Wi, tool, input, permissionContext);
-      let $a =
-        Wi !== null &&
+      let coworkWebAllowOverride = isCoworkWebAllowOverride(alwaysAllowRule, tool, input, permissionContext);
+      let browserRouted =
+        alwaysAllowRule !== null &&
         shouldRouteBrowserCallToClassifier(
           getComputerUseChecksSetting(),
           toolPermissionContext,
           tool,
           input,
-          mode,
+          effectiveMode,
         );
-      let nr = classifyBrowserAction(toolNameForPermissionCheck, input);
+      let browserActionKind = classifyBrowserAction(toolName, input);
       let computerUseRouted =
-        $a && checkResult.decisionReason === undefined && mcpRuleClassifierRoute === undefined;
-      let Vs =
-        nr === undefined
+        browserRouted && checkResult.decisionReason === undefined && mcpRuleClassifierRoute === undefined;
+      let actionSummaryMeasure =
+        browserActionKind === undefined
           ? undefined
-          : measureActionSummaries(toolNameForPermissionCheck, tool.inputJSONSchema, input);
-      let _i =
-        nr === undefined
+          : measureActionSummaries(toolName, tool.inputJSONSchema, input);
+      let computerUseFields =
+        browserActionKind === undefined
           ? {}
           : {
               computerUseTool: true,
-              computerUseActionKind: fromEnum(nr),
+              computerUseActionKind: fromEnum(browserActionKind),
               computerUseRouted,
-              computerUseActionSummaryLength: Vs !== undefined && "length" in Vs ? Vs.length : undefined,
+              computerUseActionSummaryLength:
+                actionSummaryMeasure !== undefined && "length" in actionSummaryMeasure
+                  ? actionSummaryMeasure.length
+                  : undefined,
               computerUseActionSummaryExpectedItems:
-                Vs !== undefined && "filledItems" in Vs ? Vs.expectedItems : undefined,
+                actionSummaryMeasure !== undefined && "filledItems" in actionSummaryMeasure
+                  ? actionSummaryMeasure.expectedItems
+                  : undefined,
               computerUseActionSummaryFilledItems:
-                Vs !== undefined && "filledItems" in Vs ? Vs.filledItems : undefined,
+                actionSummaryMeasure !== undefined && "filledItems" in actionSummaryMeasure
+                  ? actionSummaryMeasure.filledItems
+                  : undefined,
             };
-      let jo = mode === "plan" && !Vr;
-      let Qr = [];
-      let fi = false;
-      let navigation = lt ? chrome?.navigation : undefined;
+      let inPlanMode = effectiveMode === "plan" && !shellAllowHeld;
+      let worktreeDirectories = [];
+      let serverOverrodeFastPath = false;
+      let navigation = isChromeTool ? chrome?.navigation : undefined;
       if (navigation) recordContextNavigation(toolUseID, navigation.from, navigation.to);
-      let chromePointerPress = lt && hasBrowserWriteAction(toolNameForPermissionCheck, input);
-      let Di = lt
-        ? countBatchActionSummaries(toolNameForPermissionCheck, tool.inputJSONSchema, input)
+      let chromePointerPress = isChromeTool && hasBrowserWriteAction(toolName, input);
+      let batchSummaryCounts = isChromeTool
+        ? countBatchActionSummaries(toolName, tool.inputJSONSchema, input)
         : undefined;
-      let yr = {
-        chromeActionSummaryLength: lt
-          ? getActionSummaryLength(toolNameForPermissionCheck, tool.inputJSONSchema, input)
+      let chromeSummaryFields = {
+        chromeActionSummaryLength: isChromeTool
+          ? getActionSummaryLength(toolName, tool.inputJSONSchema, input)
           : undefined,
-        chromeActionSummaryExpectedItems: Di?.expectedItems,
-        chromeActionSummaryFilledItems: Di?.filledItems,
+        chromeActionSummaryExpectedItems: batchSummaryCounts?.expectedItems,
+        chromeActionSummaryFilledItems: batchSummaryCounts?.filledItems,
       };
-      let Kr = lt && shouldClassifyBrowserWrite(toolPermissionContext, toolNameForPermissionCheck, input);
-      let Li = navigation !== undefined || Kr;
-      let Qs = findSafetyCheckReason(checkResult.decisionReason) !== undefined;
+      let chromeWriteRouted =
+        isChromeTool && shouldClassifyBrowserWrite(toolPermissionContext, toolName, input);
+      let needsClassifier = navigation !== undefined || chromeWriteRouted;
+      let hasSafetyCheck = findSafetyCheckReason(checkResult.decisionReason) !== undefined;
       if (
-        !Li &&
-        !$a &&
-        !pt &&
+        !needsClassifier &&
+        !browserRouted &&
+        !chromeGrantRouted &&
         !isAgentSpawningTool(tool.name) &&
-        At === undefined &&
-        !Zt &&
+        classifierOnly === undefined &&
+        !projectionOnly &&
         tool.sandboxNetworkLists?.(input) === undefined &&
-        !rn &&
-        !Vi &&
-        !Qs &&
-        !jo &&
-        !(lt && getFeatureValue_CACHED_MAY_BE_STALE("tengu_radiant_hare", false))
+        !isSandboxOverride &&
+        !editClassificationGated &&
+        !hasSafetyCheck &&
+        !inPlanMode &&
+        !(isChromeTool && getFeatureValue_CACHED_MAY_BE_STALE("tengu_radiant_hare", false))
       )
         try {
           let parsedInput = tool.inputSchema.parse(input);
-          let kl = (oc) => {
-            let hp = permissionRuleValueFromString(oc);
-            return !isDangerousClassifierPermission(hp.toolName, hp.ruleContent);
+          let schemaInput = (ruleString) => {
+            let ruleValue = permissionRuleValueFromString(ruleString);
+            return !isDangerousClassifierPermission(ruleValue.toolName, ruleValue.ruleContent);
           };
-          let alwaysAllowRules = xr(toolPermissionContext.alwaysAllowRules, (oc) => (oc ?? []).filter(kl));
+          let alwaysAllowRules = import_mapValues(toolPermissionContext.alwaysAllowRules, (ruleList) =>
+            (ruleList ?? []).filter(schemaInput),
+          );
           let permissionLayers = permissionContext.permissionLayers?.map((permissionLayer) =>
             permissionLayer.kind === "allowed_tools"
               ? {
                   ...permissionLayer,
-                  allowedTools: permissionLayer.allowedTools.filter(kl),
+                  allowedTools: permissionLayer.allowedTools.filter(schemaInput),
                 }
               : permissionLayer,
           );
-          let Ip = (directories) =>
+          let checkInAcceptEdits = (directories) =>
             tool.checkPermissions(parsedInput, {
               ...permissionContext,
               toolUseId: undefined,
@@ -3285,43 +4229,44 @@ var hasPermissionsToUseToolInner = async (
                 };
               },
             });
-          let Gc =
-            ao &&
+          let acceptEditsDecision =
+            callRole &&
             reroutedFrom === "readOnly" &&
             getRegisteredCheck(permissionContext.session, tool.name) !== undefined &&
-            noVerdictReasonFor(await fs(), toolUseID) === "server_call_skipped"
+            noVerdictReasonFor(await awaitVerdictHolding(), toolUseID) === "server_call_skipped"
               ? {
                   behavior: "allow",
                 }
-              : await Ip([]);
+              : await checkInAcceptEdits([]);
           if (
-            Gc.behavior === "ask" &&
-            Gc.decisionReason?.type === "workingDir" &&
+            acceptEditsDecision.behavior === "ask" &&
+            acceptEditsDecision.decisionReason?.type === "workingDir" &&
             isLinkedWorktreeFastPathEnabled() &&
             !isBrowserToolAutoAllowed(tool, input)
           ) {
-            Qr = await verifiedLinkedWorktreeDirectories(
+            worktreeDirectories = await verifiedLinkedWorktreeDirectories(
               permissionContext.getAppState().toolPermissionContext,
             );
-            if (Qr.length > 0) Gc = await Ip(Qr);
+            if (worktreeDirectories.length > 0)
+              acceptEditsDecision = await checkInAcceptEdits(worktreeDirectories);
           }
-          fi = Gc.behavior === "allow" && (await ji());
-          if (Gc.behavior === "allow" && !fi) {
-            let oc = ao ? await fs() : undefined;
-            if (ao) {
-              let Sc = isAutoAllowedInMode(tool, getToolPermissionContext(permissionContext));
+          serverOverrodeFastPath = acceptEditsDecision.behavior === "allow" && (await serverWouldAllow());
+          if (acceptEditsDecision.behavior === "allow" && !serverOverrodeFastPath) {
+            let serverVerdict = callRole ? await awaitVerdictHolding() : undefined;
+            if (callRole) {
+              let liveMode = isAutoAllowedInMode(tool, getToolPermissionContext(permissionContext));
               if (
-                !(Sc === yt.mode && isAutoModeActive() === yt.autoActive) &&
-                !isStillAllowedAfterModeChange(Sc, nt, tool, input, permissionContext)
+                !(liveMode === modeSnapshot.mode && isAutoModeActive() === modeSnapshot.autoActive) &&
+                !isStillAllowedAfterModeChange(liveMode, chromeRuleRouted, tool, input, permissionContext)
               ) {
                 logEvent("tengu_auto_mode_fallback_to_ask", {
                   reason: lit_2("mode_changed_while_queued"),
                   toolName: sanitizeToolNameForAnalytics(tool.name),
                   toolUseId: sanitizeMarkName(toolUseID),
                   isMcp: tool.isMcp ?? false,
-                  ...q(),
+                  ...mcpFields(),
                 });
-                if (Sc === "dontAsk")
+                if (liveMode === "dontAsk")
                   return {
                     behavior: "deny",
                     decisionReason: {
@@ -3335,18 +4280,18 @@ var hasPermissionsToUseToolInner = async (
                 return checkResult;
               }
             }
-            let hp = Yt("ask_level_during_accept_edits_sim");
-            if (hp) return hp;
+            let askFallback = fallBackToAsk("ask_level_during_accept_edits_sim");
+            if (askFallback) return askFallback;
             if (!canShowServerFallbackNotice(permissionContext.requestDialog !== undefined))
               updateDenialTrackingState(permissionContext, resetConsecutiveDenials);
             logForDebugging(
-              Vr
+              shellAllowHeld
                 ? `Server classifier skipped ${tool.name} or left it to this CLI: the tool's own allow stands`
                 : `Skipping auto mode classifier for ${tool.name}: would be allowed in acceptEdits mode`,
             );
-            let Pg = Vr
+            let fastPath = shellAllowHeld
               ? "serverHeldShellAllow"
-              : Qr.length > 0
+              : worktreeDirectories.length > 0
                 ? "acceptEditsLinkedWorktree"
                 : "acceptEdits";
             logEvent("tengu_auto_mode_decision", {
@@ -3354,45 +4299,46 @@ var hasPermissionsToUseToolInner = async (
               toolName: sanitizeToolNameForAnalytics(tool.name),
               toolUseId: sanitizeMarkName(toolUseID),
               isMcp: tool.isMcp ?? false,
-              ...q(),
+              ...mcpFields(),
               inProtectedNamespace: isEvalBuild(),
-              ...Se(),
-              chromeAutomode: lt,
+              ...projectsRoleFields(),
+              chromeAutomode: isChromeTool,
               mcpAlwaysAllowOverride,
               mcpAlwaysAllowShadowedBy,
               mcpRemoteSessionAllowOverride,
               coworkWebAllowOverride,
-              ..._i,
-              mcpServerAskOverride: ho,
+              ...computerUseFields,
+              mcpServerAskOverride: destructiveAskOverride,
               agentMsgId: sanitizeMarkName(assistantMessage.message.id),
               fromTurnHandoff: assistantMessage.handedOff === true,
               confidence: lit_2("high"),
-              fastPath: fromEnum(Pg),
+              fastPath: fromEnum(fastPath),
               chromePointerPress,
-              ...yr,
+              ...chromeSummaryFields,
               serverHeldShellAllowFrom: fromEnumOpt(reroutedFrom),
               hookAllowVouch: permissionContext.hookAllowVouched === true,
               ...getDestructiveCommandAnalytics(tool.name, input),
-              ...(oc !== undefined && {
+              ...(serverVerdict !== undefined && {
                 classifierSource: lit_2("server"),
-                serverClassifierNoVerdict: fromEnumOpt(noVerdictReasonFor(oc, toolUseID)),
-                classifierTotalWaitMs: Es,
+                serverClassifierNoVerdict: fromEnumOpt(noVerdictReasonFor(serverVerdict, toolUseID)),
+                classifierTotalWaitMs: serverWaitMs,
               }),
             });
-            if (oc !== undefined)
+            if (serverVerdict !== undefined)
               appendAutoModeDecision(permissionContext.session, {
                 tool: tool.name,
                 allowlisted: false,
                 decision: "allowed",
-                fastPath: Pg,
+                fastPath,
                 serverHeldShellAllowFrom: reroutedFrom,
                 durationMs: 0,
-                totalWaitMs: Es,
+                totalWaitMs: serverWaitMs,
                 classifierSource: "server",
-                serverClassifierNoVerdict: noVerdictReasonFor(oc, toolUseID),
+                serverClassifierNoVerdict: noVerdictReasonFor(serverVerdict, toolUseID),
               });
-            return It({
-              updatedInput: (decisionReason ? checkResult.updatedInput : Gc.updatedInput) ?? input,
+            return finishClassifierAllow({
+              updatedInput:
+                (decisionReason ? checkResult.updatedInput : acceptEditsDecision.updatedInput) ?? input,
               decisionReason: decisionReason?.replaces ?? {
                 type: "mode",
                 mode: "auto",
@@ -3407,35 +4353,36 @@ var hasPermissionsToUseToolInner = async (
             toolName: sanitizeToolNameForAnalytics(tool.name),
             toolUseId: sanitizeMarkName(toolUseID),
             isMcp: tool.isMcp ?? false,
-            ...q(),
+            ...mcpFields(),
             inProtectedNamespace: isEvalBuild(),
-            ...Se(),
-            chromeAutomode: lt,
+            ...projectsRoleFields(),
+            chromeAutomode: isChromeTool,
             mcpAlwaysAllowOverride,
             mcpAlwaysAllowShadowedBy,
             mcpRemoteSessionAllowOverride,
             coworkWebAllowOverride,
-            ..._i,
-            mcpServerAskOverride: ho,
+            ...computerUseFields,
+            mcpServerAskOverride: destructiveAskOverride,
             agentMsgId: sanitizeMarkName(assistantMessage.message.id),
             fromTurnHandoff: assistantMessage.handedOff === true,
-            fastPath: Qr.length > 0 ? lit_2("acceptEditsLinkedWorktree") : lit_2("acceptEdits"),
+            fastPath:
+              worktreeDirectories.length > 0 ? lit_2("acceptEditsLinkedWorktree") : lit_2("acceptEdits"),
             hookAllowVouch: permissionContext.hookAllowVouched === true,
             error: sanitizeErrorName_2(error) ?? lit_2("unknown"),
             ...getDestructiveCommandAnalytics(tool.name, input),
           });
         }
-      let Hi =
-        At === undefined &&
-        !Zt &&
+      let onSafeAllowlist =
+        classifierOnly === undefined &&
+        !projectionOnly &&
         (isBrowserToolAutoAllowed(tool, input) ||
           (tool.mcpInfo?.serverName === REMOTE_BROWSER_SERVER_NAME &&
-            !no &&
+            !carriesAskIntent &&
             !hasAutoModeClassifierDenyRules() &&
-            isRemoteBrowserReadWithoutClassifier(tool, input, toolPermissionContext, mode)));
-      let Xa = Kr && navigation === undefined && Hi;
-      if (Xa) keepResolvedHostPin(toolUseID);
-      if (!Li && !$a && Hi) {
+            isRemoteBrowserReadWithoutClassifier(tool, input, toolPermissionContext, effectiveMode)));
+      let chromeClickRouted = chromeWriteRouted && navigation === undefined && onSafeAllowlist;
+      if (chromeClickRouted) keepResolvedHostPin(toolUseID);
+      if (!needsClassifier && !browserRouted && onSafeAllowlist) {
         if (!canShowServerFallbackNotice(permissionContext.requestDialog !== undefined))
           updateDenialTrackingState(permissionContext, resetConsecutiveDenials);
         logForDebugging(`Skipping auto mode classifier for ${tool.name}: tool is on the safe allowlist`);
@@ -3444,7 +4391,7 @@ var hasPermissionsToUseToolInner = async (
           allowlisted: true,
           decision: "allowed",
           durationMs: 0,
-          ...(pt && {
+          ...(chromeGrantRouted && {
             chromeGrantNoClassifier: true,
           }),
         });
@@ -3453,32 +4400,32 @@ var hasPermissionsToUseToolInner = async (
           toolName: sanitizeToolNameForAnalytics(tool.name),
           toolUseId: sanitizeMarkName(toolUseID),
           isMcp: tool.isMcp ?? false,
-          ...q(),
+          ...mcpFields(),
           inProtectedNamespace: isEvalBuild(),
-          ...Se(),
-          chromeAutomode: lt,
+          ...projectsRoleFields(),
+          chromeAutomode: isChromeTool,
           mcpAlwaysAllowOverride,
           mcpAlwaysAllowShadowedBy,
           mcpRemoteSessionAllowOverride,
           coworkWebAllowOverride,
-          ..._i,
-          mcpServerAskOverride: ho,
+          ...computerUseFields,
+          mcpServerAskOverride: destructiveAskOverride,
           agentMsgId: sanitizeMarkName(assistantMessage.message.id),
           fromTurnHandoff: assistantMessage.handedOff === true,
           confidence: lit_2("high"),
           fastPath: lit_2("allowlist"),
           chromePointerPress,
-          ...(pt && {
+          ...(chromeGrantRouted && {
             chromeGrantNoClassifier: true,
           }),
-          ...yr,
+          ...chromeSummaryFields,
           hookAllowVouch: permissionContext.hookAllowVouched === true,
           ...getDestructiveCommandAnalytics(tool.name, input),
         });
-        return It({
+        return finishClassifierAllow({
           updatedInput: checkResult.updatedInput ?? input,
           decisionReason:
-            pt && !gt && chrome?.grantRule !== undefined
+            chromeGrantRouted && !chainOnAllow && chrome?.grantRule !== undefined
               ? {
                   type: "rule",
                   rule: chrome.grantRule,
@@ -3489,51 +4436,51 @@ var hasPermissionsToUseToolInner = async (
                 },
         });
       }
-      if (pt) {
+      if (chromeGrantRouted) {
         logEvent("tengu_auto_mode_fallback_to_ask", {
           reason: lit_2("chrome_grant_no_classifier"),
           toolName: sanitizeToolNameForAnalytics(tool.name),
           toolUseId: sanitizeMarkName(toolUseID),
           isMcp: tool.isMcp ?? false,
-          ...q(),
+          ...mcpFields(),
         });
         return resolveAskWithoutPrompt(answers, tool, input, checkResult, toolUseID, permissionContext);
       }
-      let ta = () =>
+      let desktopForwardEligible = () =>
         isAutoClassifierActive(toolPermissionContext.mode) &&
-        isAutoClassifierActive(mode) &&
+        isAutoClassifierActive(effectiveMode) &&
         checkResult.checkIncomplete !== true &&
         navigation === undefined &&
         tool.requiresUserInteraction?.() !== true &&
-        At === undefined &&
-        !Zt &&
+        classifierOnly === undefined &&
+        !projectionOnly &&
         !getToolNameForPermissionCheck(tool, input);
-      let Bs = false;
-      let Ca = false;
+      let unusedA = false;
+      let unusedB = false;
       if (
         permissionContext.desktopForwardToolUseId !== undefined &&
         permissionContext.desktopForwardToolUseId === toolUseID &&
-        ta() &&
+        desktopForwardEligible() &&
         findSafetyCheckReason(checkResult.decisionReason) === undefined &&
-        !rn &&
+        !isSandboxOverride &&
         !scriptAsksToRunUnsandboxed(tool, input) &&
         checkResult.decisionReason?.type !== "workingDir" &&
         !(checkResult.blockedPath !== undefined && checkResult.bashAllowRuleOverridable !== true) &&
         !isAgentSpawningTool(tool.name) &&
         true
       ) {
-        let Ks = Yt("ask_level_during_accept_edits_sim");
-        if (Ks) return Ks;
-        let kl = isAutoAllowedInMode(tool, getToolPermissionContext(permissionContext));
-        if (kl !== yt.mode || isAutoModeActive() !== yt.autoActive) {
+        let askFallback = fallBackToAsk("ask_level_during_accept_edits_sim");
+        if (askFallback) return askFallback;
+        let liveMode = isAutoAllowedInMode(tool, getToolPermissionContext(permissionContext));
+        if (liveMode !== modeSnapshot.mode || isAutoModeActive() !== modeSnapshot.autoActive) {
           logEvent("tengu_auto_mode_fallback_to_ask", {
             reason: lit_2("mode_changed_while_queued"),
             toolName: sanitizeToolNameForAnalytics(tool.name),
             toolUseId: sanitizeMarkName(toolUseID),
             isMcp: tool.isMcp ?? false,
-            ...q(),
+            ...mcpFields(),
           });
-          if (kl === "dontAsk")
+          if (liveMode === "dontAsk")
             return {
               behavior: "deny",
               decisionReason: {
@@ -3548,7 +4495,7 @@ var hasPermissionsToUseToolInner = async (
         }
         if (!canShowServerFallbackNotice(permissionContext.requestDialog !== undefined))
           updateDenialTrackingState(permissionContext, resetConsecutiveDenials);
-        let Yd = "desktop_forward";
+        let fastPath = "desktop_forward";
         logForDebugging(
           `Skipping auto mode classifier for ${tool.name}: this is SendMessage's forward to Claude Desktop, and the classifier already allowed that SendMessage`,
         );
@@ -3556,7 +4503,7 @@ var hasPermissionsToUseToolInner = async (
           tool: tool.name,
           allowlisted: false,
           decision: "allowed",
-          fastPath: Yd,
+          fastPath,
           durationMs: 0,
         });
         logEvent("tengu_auto_mode_decision", {
@@ -3564,26 +4511,26 @@ var hasPermissionsToUseToolInner = async (
           toolName: sanitizeToolNameForAnalytics(tool.name),
           toolUseId: sanitizeMarkName(toolUseID),
           isMcp: tool.isMcp ?? false,
-          ...q(),
+          ...mcpFields(),
           inProtectedNamespace: isEvalBuild(),
-          ...Se(),
-          chromeAutomode: lt,
+          ...projectsRoleFields(),
+          chromeAutomode: isChromeTool,
           mcpAlwaysAllowOverride,
           mcpAlwaysAllowShadowedBy,
           mcpRemoteSessionAllowOverride,
           coworkWebAllowOverride,
-          ..._i,
-          mcpServerAskOverride: ho,
+          ...computerUseFields,
+          mcpServerAskOverride: destructiveAskOverride,
           agentMsgId: sanitizeMarkName(assistantMessage.message.id),
           fromTurnHandoff: assistantMessage.handedOff === true,
           confidence: lit_2("high"),
-          fastPath: fromEnum(Yd),
+          fastPath: fromEnum(fastPath),
           chromePointerPress,
-          ...yr,
+          ...chromeSummaryFields,
           hookAllowVouch: permissionContext.hookAllowVouched === true,
           ...getDestructiveCommandAnalytics(tool.name, input),
         });
-        return It({
+        return finishClassifierAllow({
           updatedInput: checkResult.updatedInput ?? input,
           decisionReason: {
             type: "mode",
@@ -3591,12 +4538,12 @@ var hasPermissionsToUseToolInner = async (
           },
         });
       }
-      let tu = (Ks, reason) => {
+      let allowWithoutClassifier = (fastPath, reason) => {
         appendAutoModeDecision(permissionContext.session, {
           tool: tool.name,
           allowlisted: false,
           decision: "allowed",
-          fastPath: Ks,
+          fastPath,
           durationMs: 0,
         });
         logEvent("tengu_auto_mode_decision", {
@@ -3605,23 +4552,23 @@ var hasPermissionsToUseToolInner = async (
           toolUseId: sanitizeMarkName(toolUseID),
           isMcp: tool.isMcp ?? false,
           inProtectedNamespace: isEvalBuild(),
-          ...Se(),
-          chromeAutomode: lt,
+          ...projectsRoleFields(),
+          chromeAutomode: isChromeTool,
           mcpAlwaysAllowOverride,
           mcpAlwaysAllowShadowedBy,
           mcpRemoteSessionAllowOverride,
           coworkWebAllowOverride,
-          ..._i,
-          mcpServerAskOverride: ho,
+          ...computerUseFields,
+          mcpServerAskOverride: destructiveAskOverride,
           agentMsgId: sanitizeMarkName(assistantMessage.message.id),
           fromTurnHandoff: assistantMessage.handedOff === true,
-          fastPath: fromEnum(Ks),
+          fastPath: fromEnum(fastPath),
           chromePointerPress,
-          ...yr,
+          ...chromeSummaryFields,
           hookAllowVouch: permissionContext.hookAllowVouched === true,
           ...getDestructiveCommandAnalytics(tool.name, input),
         });
-        return It({
+        return finishClassifierAllow({
           updatedInput: checkResult.updatedInput ?? input,
           decisionReason: {
             type: "other",
@@ -3633,37 +4580,40 @@ var hasPermissionsToUseToolInner = async (
       if (
         newDenialState !== undefined &&
         isAutoClassifierActive(toolPermissionContext.mode) &&
-        isAutoClassifierActive(mode) &&
-        At === undefined &&
+        isAutoClassifierActive(effectiveMode) &&
+        classifierOnly === undefined &&
         navigation === undefined &&
         !hasAutoModeClassifierDenyRules() &&
         findSafetyCheckReason(checkResult.decisionReason, isClassifierRoutedCircuitBreaker) === undefined &&
-        !Zt &&
+        !projectionOnly &&
         !getToolNameForPermissionCheck(tool, input) &&
         !isWebToolRestrictedInRelay(tool.name) &&
         !isWebToolClassifierRouted(tool, toolPermissionContext) &&
         !isRemoteBrowserToolUnderModeFloor(tool) &&
-        !isDeepDuskDeviceTool(toolNameForPermissionCheck, mode, toolPermissionContext)
+        !isDeepDuskDeviceTool(toolName, effectiveMode, toolPermissionContext)
       ) {
         logForDebugging(`Skipping auto mode classifier for ${tool.name}: called by plugin ${newDenialState}`);
-        if (bo) return checkResult;
-        if (Or) rememberCommandNetworkLists(toolUseID, tool, input);
-        return tu("pluginOrigin", `plugin-origin: ${newDenialState}`);
+        if (askUserQuestionClassifiable) return checkResult;
+        if (commandNetworkListsOffered) rememberCommandNetworkLists(toolUseID, tool, input);
+        return allowWithoutClassifier("pluginOrigin", `plugin-origin: ${newDenialState}`);
       }
       if (
         permissionContext.synthesizedBy !== undefined &&
         tool.name === AGENT &&
         isAutoClassifierActive(toolPermissionContext.mode) &&
-        isAutoClassifierActive(mode) &&
-        At === undefined &&
-        !Li &&
-        !Zt &&
+        isAutoClassifierActive(effectiveMode) &&
+        classifierOnly === undefined &&
+        !needsClassifier &&
+        !projectionOnly &&
         findSafetyCheckReason(checkResult.decisionReason, isClassifierRoutedCircuitBreaker) === undefined
       ) {
         logForDebugging(
           `Skipping auto mode classifier for ${tool.name}: synthesized by ${permissionContext.synthesizedBy}`,
         );
-        return tu("harnessSynthesized", `harness-synthesized: ${permissionContext.synthesizedBy}`);
+        return allowWithoutClassifier(
+          "harnessSynthesized",
+          `harness-synthesized: ${permissionContext.synthesizedBy}`,
+        );
       }
       let sameTurnToolUses = permissionContext.sameTurnToolUses ?? [];
       let newDenialState_2 = isModelDrivenSession(permissionContext.agentId);
@@ -3673,30 +4623,30 @@ var hasPermissionsToUseToolInner = async (
         newDenialState_2,
       );
       let messages_2 = formatActionForClassifier(tool.name, input, toolUseID);
-      markClassifierChecking(w, toolUseID);
-      let classifierResult;
-      let ol = false;
-      let gd = false;
-      let Su = false;
-      let Eu;
-      let Uc;
-      let Kc;
-      using _s = new CommitTurnSlot();
+      markClassifierChecking(classifierApprovalsSetter, toolUseID);
+      let classifierVerdict;
+      let leftToLocal = false;
+      let inputRewritten = false;
+      let classifierSwitchedOff = false;
+      let localUnderArbiterReason;
+      let staleContext;
+      let queueInfo;
+      using turnSlot = new CommitTurnSlot();
       let classifierKeepalive = startClassifierKeepalive();
-      let wr = rs.hold();
+      let releaseHold = checkStatus.hold();
       try {
-        let Ks = sameTurnToolUses.length > 0 ? [...messages, ...sameTurnToolUses] : messages;
+        let classifierMessages = sameTurnToolUses.length > 0 ? [...messages, ...sameTurnToolUses] : messages;
         let sessionId = pinSessionId(getSessionId());
-        let Yd = (queueProgress) =>
+        let runLocalClassifier = (queueProgress) =>
           classifyYoloAction(
-            Ks,
+            classifierMessages,
             messages_2,
             permissionContext.options.tools,
             getToolPermissionContext(permissionContext),
             permissionContext.abortController.signal,
             {
               localClassifierSite: "gate",
-              judgesHandback: br,
+              judgesHandback: isFlagOnBlock,
               isSubagentLoop: newDenialState_2,
               inheritedPrefix,
               recordPresumed: permissionContext.agentId === undefined,
@@ -3710,35 +4660,35 @@ var hasPermissionsToUseToolInner = async (
               queueProgress,
             },
           );
-        let xc = async () => {
-          let Sc = classifyServerVerdict(await fs(), toolUseID, () =>
+        let runServerClassifier = async () => {
+          let serverResult = classifyServerVerdict(await awaitVerdictHolding(), toolUseID, () =>
             collectToolUseIdSet(messages_2, permissionContext.options.tools),
           );
-          if (!Sc.shouldBlock && isServerContextStaleCheckEnabled()) {
-            let Hu = tool.staleServerClassifierContext?.(
+          if (!serverResult.shouldBlock && isServerContextStaleCheckEnabled()) {
+            let staleInfo = tool.staleServerClassifierContext?.(
               input,
               assistantMessage.serverClassifierResults?.sentArtifacts,
               permissionContext,
             );
-            if (Hu !== undefined) {
-              Uc = Hu;
+            if (staleInfo !== undefined) {
+              staleContext = staleInfo;
               logForDebugging(
-                `[server-classifier] ${tool.name}: what the request told the server of the artifact's ${Hu.phrase} was missing or no longer holds (${Hu.cause.kind}); the server's allow is void`,
+                `[server-classifier] ${tool.name}: what the request told the server of the artifact's ${staleInfo.phrase} was missing or no longer holds (${staleInfo.cause.kind}); the server's allow is void`,
               );
               logEvent("tengu_auto_mode_server_context_stale", {
                 toolName: sanitizeToolNameForAnalytics(tool.name),
-                staleOwnership: Hu.facts.includes("ownership"),
-                staleAudience: Hu.facts.includes("audience"),
-                staleSharedLive: Hu.facts.includes("shared-live"),
-                staleCowritten: Hu.facts.includes("co-written"),
-                staleAttested: Hu.facts.includes("attested"),
-                staleTypeDeclaration: Hu.facts.includes("type-declaration"),
-                staleWatch: Hu.facts.includes("watch"),
-                staleConnectors: Hu.facts.includes("connectors"),
-                staleFirstTouch: Hu.firstTouch,
+                staleOwnership: staleInfo.facts.includes("ownership"),
+                staleAudience: staleInfo.facts.includes("audience"),
+                staleSharedLive: staleInfo.facts.includes("shared-live"),
+                staleCowritten: staleInfo.facts.includes("co-written"),
+                staleAttested: staleInfo.facts.includes("attested"),
+                staleTypeDeclaration: staleInfo.facts.includes("type-declaration"),
+                staleWatch: staleInfo.facts.includes("watch"),
+                staleConnectors: staleInfo.facts.includes("connectors"),
+                staleFirstTouch: staleInfo.firstTouch,
               });
               return {
-                model: Sc.model,
+                model: serverResult.model,
                 durationMs: 0,
                 shouldBlock: true,
                 unavailable: true,
@@ -3747,47 +4697,52 @@ var hasPermissionsToUseToolInner = async (
               };
             }
           }
-          return Sc;
+          return serverResult;
         };
-        let Ip = async (Sc) => {
-          let Hu = await xc();
+        let withLocalFallback = async (queueProgress) => {
+          let serverVerdict = await runServerClassifier();
           if (
-            Hu.shouldBlock &&
-            isInputRewrittenWithFallbackOff(Hu.errorKind) &&
+            serverVerdict.shouldBlock &&
+            isInputRewrittenWithFallbackOff(serverVerdict.errorKind) &&
             countToolCallsSince_6(assistantMessage, toolUseID)
           ) {
-            gd = true;
+            inputRewritten = true;
             logForDebugging(
               `[server-classifier] ${tool.name}: after the server reviewed the response a hook rewrote this call's input, or that of a call before it; the local classifier judges this one call`,
             );
-            let dy = await Yd(Sc);
-            if (dy.errorKind === CLASSIFIER_SWITCHED_OFF_KIND) {
-              Su = true;
-              if (At?.onBlock === "flag") return dy;
+            let localResult = await runLocalClassifier(queueProgress);
+            if (localResult.errorKind === CLASSIFIER_SWITCHED_OFF_KIND) {
+              classifierSwitchedOff = true;
+              if (classifierOnly?.onBlock === "flag") return localResult;
             }
-            return isClassifierVerdictUsable(dy)
-              ? dy
+            return isClassifierVerdictUsable(localResult)
+              ? localResult
               : {
-                  ...Hu,
+                  ...serverVerdict,
                   shouldBlock: true,
                   unavailable: true,
                 };
           }
-          if (!Hr && Hu.errorKind === "server_not_requested" && getToolNameForPermissionCheck(tool, input)) {
-            Eu = "hosted_desktop_not_requested";
-            return Yd(Sc);
+          if (
+            !serverClassifierActive &&
+            serverVerdict.errorKind === "server_not_requested" &&
+            getToolNameForPermissionCheck(tool, input)
+          ) {
+            localUnderArbiterReason = "hosted_desktop_not_requested";
+            return runLocalClassifier(queueProgress);
           }
           if (
-            !Zt ||
-            (Hu.shouldBlock &&
-              (!isServerNotRequestedReason(Hu.errorKind) ||
-                (Hu.errorKind === "server_input_rewritten" && getServerClassifierFallbackMode() !== "off")))
+            !projectionOnly ||
+            (serverVerdict.shouldBlock &&
+              (!isServerNotRequestedReason(serverVerdict.errorKind) ||
+                (serverVerdict.errorKind === "server_input_rewritten" &&
+                  getServerClassifierFallbackMode() !== "off")))
           )
-            return Hu;
-          Eu = "projection_only";
-          return Yd(Sc);
+            return serverVerdict;
+          localUnderArbiterReason = "projection_only";
+          return runLocalClassifier(queueProgress);
         };
-        let Gc = async () => {
+        let handleBillingNotice = async () => {
           if (!isThirdPartyServerClassifierRefused()) return false;
           if ((await awaitClassifierBillingFallbackNotice(permissionContext)) === "interrupt") {
             if (!permissionContext.abortController.signal.aborted)
@@ -3796,46 +4751,52 @@ var hasPermissionsToUseToolInner = async (
           }
           return false;
         };
-        let oc = ao
-          ? async (Sc) => {
-              let Hu = await fs();
-              let dy = false;
-              if (as(Hu)) {
-                ol = true;
+        let runClassifierByRole = callRole
+          ? async (queueProgress) => {
+              let serverVerdict = await awaitVerdictHolding();
+              let unused = false;
+              if (shouldFallBack(serverVerdict)) {
+                leftToLocal = true;
                 logForDebugging(
-                  `[server-classifier] ${tool.name}: no server verdict for this call (${noVerdictReasonFor(Hu, toolUseID)}); the local classifier decides it`,
+                  `[server-classifier] ${tool.name}: no server verdict for this call (${noVerdictReasonFor(serverVerdict, toolUseID)}); the local classifier decides it`,
                 );
-                return (await Gc()) ? CLASSIFIER_BILLING_CANCELLED_RESULT : Yd(Sc);
+                return (await handleBillingNotice())
+                  ? CLASSIFIER_BILLING_CANCELLED_RESULT
+                  : runLocalClassifier(queueProgress);
               }
-              return Ip(Sc);
+              return withLocalFallback(queueProgress);
             }
-          : Yd;
-        let hp = async (Sc) => ((await Gc()) ? CLASSIFIER_BILLING_CANCELLED_RESULT : oc(Sc));
-        let Pg = async (Sc) => {
-          let Hu = ao ? await fs() : undefined;
-          if (Hu !== undefined && !as(Hu)) return Ip(Sc);
+          : runLocalClassifier;
+        let runWithBillingGuard = async (queueProgress) =>
+          (await handleBillingNotice())
+            ? CLASSIFIER_BILLING_CANCELLED_RESULT
+            : runClassifierByRole(queueProgress);
+        let runServerAware = async (queueProgress) => {
+          let serverVerdict = callRole ? await awaitVerdictHolding() : undefined;
+          if (serverVerdict !== undefined && !shouldFallBack(serverVerdict))
+            return withLocalFallback(queueProgress);
           return (
             collectToolUseIdSet(messages_2, permissionContext.options.tools) ??
             NO_CLASSIFIER_FOR_SESSION_RESULT
           );
         };
-        classifierResult = await enqueueClassifierRequest(
+        classifierVerdict = await enqueueClassifierRequest(
           permissionContext.agentId ?? "main",
-          Hr ? Pg : hp,
-          (Sc) => {
-            Kc = Sc;
+          serverClassifierActive ? runServerAware : runWithBillingGuard,
+          (progress) => {
+            queueInfo = progress;
             classifierKeepalive.restartDeadline();
           },
           {
-            commitTurn: _s,
+            commitTurn: turnSlot,
           },
         );
       } finally {
         classifierKeepalive();
-        wr();
-        clearClassifierChecking(w, toolUseID);
+        releaseHold();
+        clearClassifierChecking(classifierApprovalsSetter, toolUseID);
       }
-      if (classifierResult === CLASSIFIER_BILLING_CANCELLED_RESULT)
+      if (classifierVerdict === CLASSIFIER_BILLING_CANCELLED_RESULT)
         return {
           behavior: "deny",
           message: REJECT_MESSAGE,
@@ -3844,7 +4805,7 @@ var hasPermissionsToUseToolInner = async (
             reason: CANCELLED_AT_CLASSIFIER_NOTICE_REASON,
           },
         };
-      if (classifierResult === NO_CLASSIFIER_FOR_SESSION_RESULT && $o)
+      if (classifierVerdict === NO_CLASSIFIER_FOR_SESSION_RESULT && isClientRequested)
         return {
           behavior: "deny",
           decisionReason: {
@@ -3854,61 +4815,70 @@ var hasPermissionsToUseToolInner = async (
           },
           message: `${tool.name} was not run: auto mode's safety check cannot judge a call that a client asked for in this session. This is not a judgment that it is unsafe. Another permission mode can run it.`,
         };
-      if (classifierResult === NO_CLASSIFIER_FOR_SESSION_RESULT) {
-        let Ks = ao ? await fs() : undefined;
-        let kl = cs && yo === "script_call";
-        let Yd = kl
+      if (classifierVerdict === NO_CLASSIFIER_FOR_SESSION_RESULT) {
+        let serverVerdict = callRole ? await awaitVerdictHolding() : undefined;
+        let isScriptCall = localSwitchedOff && roleOffReason === "script_call";
+        let noVerdictReason = isScriptCall
           ? "server_not_requested"
-          : Ks === undefined || isServerClassifierUnsupported(Ks) || isThirdPartyServerClassifierRefused()
+          : serverVerdict === undefined ||
+              isServerClassifierUnsupported(serverVerdict) ||
+              isThirdPartyServerClassifierRefused()
             ? undefined
-            : noVerdictReasonFor(Ks, toolUseID);
-        let xc = Ks === undefined ? yo : isServerClassifierUnsupported(Ks) ? Ks.why : "refused_latch";
-        let Ip =
-          xc === "user_switch_off" ||
-          (xc === "third_party_switch_off" && getUserServerClassifierSwitch() === false);
+            : noVerdictReasonFor(serverVerdict, toolUseID);
+        let serverUnavailableReason =
+          serverVerdict === undefined
+            ? roleOffReason
+            : isServerClassifierUnsupported(serverVerdict)
+              ? serverVerdict.why
+              : "refused_latch";
+        let isOwnSwitchOff =
+          serverUnavailableReason === "user_switch_off" ||
+          (serverUnavailableReason === "third_party_switch_off" && getUserServerClassifierSwitch() === false);
         let newDenialState = getToolPermissionContext(permissionContext);
-        let oc =
+        let canAskUser =
           !permissionContext.options.isNonInteractiveSession &&
-          !gt &&
+          !chainOnAllow &&
           !newDenialState.shouldAvoidPermissionPrompts &&
           !isUnattendedInteractiveSession();
-        let hp = oc && hasCustomAutoModeDenyRules();
-        let Pg = oc && !hp;
+        let heldByDenyRules = canAskUser && hasCustomAutoModeDenyRules();
+        let canOfferPrompt = canAskUser && !heldByDenyRules;
         if (
-          Yd === undefined &&
+          noVerdictReason === undefined &&
           noteNoServerCheck(
-            Ip
+            isOwnSwitchOff
               ? "own_switch_off"
-              : xc === "betas_disabled" || xc === "third_party_switch_off"
+              : serverUnavailableReason === "betas_disabled" ||
+                  serverUnavailableReason === "third_party_switch_off"
                 ? "betas_off"
-                : xc === "kill_switch"
+                : serverUnavailableReason === "kill_switch"
                   ? "switched_off"
-                  : xc === "code_mode" || xc === "batch_file_tools"
+                  : serverUnavailableReason === "code_mode" || serverUnavailableReason === "batch_file_tools"
                     ? "feature_not_covered"
                     : "not_served",
           )
         )
-          logFeatureSad("auto_mode_no_server_check", xc ?? "unknown", {
+          logFeatureSad("auto_mode_no_server_check", serverUnavailableReason ?? "unknown", {
             gatewayConfigured: gatewayDisplayName() !== undefined,
-            interactive: oc,
-            heldByDenyRules: hp,
-            ...(cs && {
+            interactive: canAskUser,
+            heldByDenyRules,
+            ...(localSwitchedOff && {
               localClassifierSwitchedOff: true,
             }),
           });
-        if (Yd === undefined) appendAutoModeWarning(permissionContext, Pg, hp);
+        if (noVerdictReason === undefined)
+          appendAutoModeWarning(permissionContext, canOfferPrompt, heldByDenyRules);
         logForDebugging(
-          Yd === undefined
-            ? `[server-classifier] ${tool.name}: the server-side classifier does not run for this session (${xc ?? "unknown"}) and there is no local one to fall back to`
-            : `[server-classifier] ${tool.name}: no server verdict for this call (${Yd}) and there is no local classifier to fall back to`,
+          noVerdictReason === undefined
+            ? `[server-classifier] ${tool.name}: the server-side classifier does not run for this session (${serverUnavailableReason ?? "unknown"}) and there is no local one to fall back to`
+            : `[server-classifier] ${tool.name}: no server verdict for this call (${noVerdictReason}) and there is no local classifier to fall back to`,
           {
             level: "warn",
           },
         );
-        if (At?.onBlock === "flag") {
+        if (classifierOnly?.onBlock === "flag") {
           rememberClassifierBlock(
             toolUseID,
-            cs
+            localSwitchedOff
               ? {
                   kind: "refused",
                   switchedOff: true,
@@ -3924,7 +4894,7 @@ var hasPermissionsToUseToolInner = async (
             decisionReason: {
               type: "classifier",
               classifier: "auto-mode",
-              reason: cs
+              reason: localSwitchedOff
                 ? UNREVIEWED_SUBAGENT_REPORT_WARNING
                 : "Delivered with a note: the classifier could not review it",
               noVerdict: true,
@@ -3940,23 +4910,25 @@ var hasPermissionsToUseToolInner = async (
             },
             message: DONT_ASK_REJECT_MESSAGE(tool.name),
           };
-        if (bo) {
+        if (askUserQuestionClassifiable) {
           logEvent("tengu_auto_mode_fallback_to_ask", {
             reason: lit_2("requires_user_interaction"),
             toolName: sanitizeToolNameForAnalytics(tool.name),
             toolUseId: sanitizeMarkName(toolUseID),
             isMcp: tool.isMcp ?? false,
-            ...q(),
+            ...mcpFields(),
           });
           return checkResult;
         }
-        if (Pg && At === undefined) {
+        if (canOfferPrompt && classifierOnly === undefined) {
           logEvent("tengu_auto_mode_fallback_to_ask", {
-            reason: lit_2(Yd === undefined ? "no_classifier_for_session" : "no_classifier_for_call"),
+            reason: lit_2(
+              noVerdictReason === undefined ? "no_classifier_for_session" : "no_classifier_for_call",
+            ),
             toolName: sanitizeToolNameForAnalytics(tool.name),
             toolUseId: sanitizeMarkName(toolUseID),
             isMcp: tool.isMcp ?? false,
-            ...q(),
+            ...mcpFields(),
           });
           return {
             ...checkResult,
@@ -3969,59 +4941,62 @@ var hasPermissionsToUseToolInner = async (
             suggestions: undefined,
             decisionReason: pickDisplayedDecisionReason(checkResult, {
               type: "other",
-              reason: Yd === undefined ? NO_CHECK_FOR_SESSION_TITLE : NO_CHECK_FOR_ACTION_TITLE,
+              reason: noVerdictReason === undefined ? NO_CHECK_FOR_SESSION_TITLE : NO_CHECK_FOR_ACTION_TITLE,
             }),
           };
         }
-        let Sc = await handleServerVerdictUnavailable(
+        let stopOrRetry = await handleServerVerdictUnavailable(
           assistantMessage.serverClassifierRequest ?? assistantMessage.message.id,
           {
             runKey: agentIdOrMain(permissionContext.agentId),
             turn: permissionContext.queryTracking?.chainId,
             signal: permissionContext.abortController.signal,
-            scheduleTimeout: (dy) => {
-              dy();
+            scheduleTimeout: (schedule) => {
+              schedule();
               return () => {};
             },
           },
         );
-        if (Sc.kind === "stop") {
+        if (stopOrRetry.kind === "stop") {
           if (
-            Yd !== undefined &&
-            (kl || noteNoServerCheck(Yd === "server_not_requested" ? "not_requested" : "not_served"))
+            noVerdictReason !== undefined &&
+            (isScriptCall ||
+              noteNoServerCheck(noVerdictReason === "server_not_requested" ? "not_requested" : "not_served"))
           )
             logFeatureSad(
               "auto_mode_no_server_check",
-              kl
+              isScriptCall
                 ? "script_calls"
-                : Yd === "server_not_requested"
+                : noVerdictReason === "server_not_requested"
                   ? "not_requested"
-                  : Yd === "server_results_not_held"
+                  : noVerdictReason === "server_results_not_held"
                     ? "results_not_held"
                     : "calls_not_named",
               {
                 gatewayConfigured: gatewayDisplayName() !== undefined,
-                interactive: oc,
-                heldByDenyRules: hp,
-                ...(cs && {
+                interactive: canAskUser,
+                heldByDenyRules,
+                ...(localSwitchedOff && {
                   localClassifierSwitchedOff: true,
                 }),
               },
             );
-          appendAutoModeWarning(permissionContext, Pg, hp);
-          let dy = Yd === undefined ? "no_classifier_for_session" : "no_classifier_for_call";
+          appendAutoModeWarning(permissionContext, canOfferPrompt, heldByDenyRules);
+          let unavailableReason =
+            noVerdictReason === undefined ? "no_classifier_for_session" : "no_classifier_for_call";
           if (permissionContext.agentId === undefined) noteNoServerCheckStoppedTurn();
           else {
-            let Hx = autoModeUnavailableNotes.of(permissionContext.session.host);
-            if (Hx.has(permissionContext.agentId)) Hx.set(permissionContext.agentId, dy);
+            let notesByAgent = autoModeUnavailableNotes.of(permissionContext.session.host);
+            if (notesByAgent.has(permissionContext.agentId))
+              notesByAgent.set(permissionContext.agentId, unavailableReason);
           }
           return {
-            ...stopTurnForMissingVerdict(tool, permissionContext, Sc.recorded, dy),
-            message: `Auto mode is unavailable: ${describeAutoModeUnavailableCause(dy)}, so ${tool.name} was not run and this turn has ended. Wait for the user's next message before doing anything further.`,
+            ...stopTurnForMissingVerdict(tool, permissionContext, stopOrRetry.recorded, unavailableReason),
+            message: `Auto mode is unavailable: ${describeAutoModeUnavailableCause(unavailableReason)}, so ${tool.name} was not run and this turn has ended. Wait for the user's next message before doing anything further.`,
           };
         }
-        if (Sc.interrupted) throw new AbortError_2();
-        let Hu = kl
+        if (stopOrRetry.interrupted) throw new AbortError_2();
+        let retryAdvice = isScriptCall
           ? "Auto mode's safety check never sees a call made from a script, so this call is refused every time a script makes it: continue with work that doesn't need it,"
           : "Issue it again once, as-is. If it is denied the same way, don't issue it again: continue with work that doesn't need it,";
         return {
@@ -4032,28 +5007,36 @@ var hasPermissionsToUseToolInner = async (
             reason: CLASSIFIER_UNAVAILABLE_REASON,
           },
           message:
-            At !== undefined
+            classifierOnly !== undefined
               ? `${tool.name} was not run: only auto mode's safety check can allow it, and that check gave no result. No permission prompt is raised for this tool. This is not a judgment that the action is unsafe. Continue with work that doesn't need it, then tell the user that it was not run and why.`
-              : hp
-                ? `${tool.name} was not run: auto mode's safety check ${Yd === undefined ? "does not run for this session" : "gave no result"}, and nobody is asked to approve it in its place, because the settings hold auto mode deny rules, which only the automatic check applies. This is not a judgment that the action is unsafe. ${Yd === undefined ? "Other actions that need the check will be denied too, and retrying won't help. Finish what you can without them, then tell the user what is blocked and why." : `${Hu} then tell the user that it was not run and why.`}`
-                : Yd === undefined
+              : heldByDenyRules
+                ? `${tool.name} was not run: auto mode's safety check ${noVerdictReason === undefined ? "does not run for this session" : "gave no result"}, and nobody is asked to approve it in its place, because the settings hold auto mode deny rules, which only the automatic check applies. This is not a judgment that the action is unsafe. ${noVerdictReason === undefined ? "Other actions that need the check will be denied too, and retrying won't help. Finish what you can without them, then tell the user what is blocked and why." : `${retryAdvice} then tell the user that it was not run and why.`}`
+                : noVerdictReason === undefined
                   ? `Auto mode is unavailable: its safety check does not run for this session, so ${tool.name} was not run. Other actions that need the check will be denied too, and retrying won't help. Finish what you can without them, then tell the user what is blocked and that they can switch to another permission mode.`
-                  : `${tool.name} was not run: auto mode has no safety result for this call, and nobody can be asked to approve it here. This is not a judgment that it is unsafe. ${Hu} then tell the user that auto mode has no safety result for it and that they can approve it themselves in another permission mode.`,
+                  : `${tool.name} was not run: auto mode has no safety result for this call, and nobody can be asked to approve it here. This is not a judgment that it is unsafe. ${retryAdvice} then tell the user that auto mode has no safety result for it and that they can approve it themselves in another permission mode.`,
         };
       }
-      classifierResult = {
-        ...classifierResult,
-        reason: classifierWrittenReason(classifierResult.reason),
+      classifierVerdict = {
+        ...classifierVerdict,
+        reason: classifierWrittenReason(classifierVerdict.reason),
       };
-      let li = ao && !ol && !gd && Eu === undefined ? "server" : "local";
-      let nl = Su || classifierResult.errorKind === CLASSIFIER_SWITCHED_OFF_KIND;
-      let Tl = {
+      let classifierSource =
+        callRole && !leftToLocal && !inputRewritten && localUnderArbiterReason === undefined
+          ? "server"
+          : "local";
+      let switchedOffOrRefused =
+        classifierSwitchedOff || classifierVerdict.errorKind === CLASSIFIER_SWITCHED_OFF_KIND;
+      let roleFields = {
         serverClassifierRole: fromEnum(serverClassifierRoleForCall),
-        serverClassifierOffReason: fromEnumOpt(yo),
-        classifiedOutsideAutoMode: fromEnumOpt(rr),
+        serverClassifierOffReason: fromEnumOpt(roleOffReason),
+        classifiedOutsideAutoMode: fromEnumOpt(outsideAutoReason),
         classifierSite:
-          li === "local" && classifierResult.classifierRan !== false && !nl ? lit_2("gate") : undefined,
-        localUnderArbiterReason: fromEnumOpt(gd ? "input_rewritten" : ol ? "left_to_local" : Eu),
+          classifierSource === "local" && classifierVerdict.classifierRan !== false && !switchedOffOrRefused
+            ? lit_2("gate")
+            : undefined,
+        localUnderArbiterReason: fromEnumOpt(
+          inputRewritten ? "input_rewritten" : leftToLocal ? "left_to_local" : localUnderArbiterReason,
+        ),
         serverClassifierConnection: fromEnumOpt(getApiRouteKind()),
         betasSwitchSetAside:
           isBetasSwitchSetAside({
@@ -4061,47 +5044,48 @@ var hasPermissionsToUseToolInner = async (
           }) || undefined,
       };
       if (
-        ol &&
-        !classifierResult.unavailable &&
-        !classifierResult.transcriptTooLong &&
-        !classifierResult.refusedBySafeguard
+        leftToLocal &&
+        !classifierVerdict.unavailable &&
+        !classifierVerdict.transcriptTooLong &&
+        !classifierVerdict.refusedBySafeguard
       )
         clearUnavailableStreak(agentIdOrMain(permissionContext.agentId));
-      let kd;
-      let na =
-        classifierResult.unavailable === true &&
-        classifierResult.errorKind === "server_input_rewritten" &&
+      let commitWaitMs;
+      let inputRewriteFallback =
+        classifierVerdict.unavailable === true &&
+        classifierVerdict.errorKind === "server_input_rewritten" &&
         countToolCallsSince_6(assistantMessage, toolUseID) &&
         getServerClassifierFallbackMode() !== "off";
-      let Ac =
-        na &&
+      let quotedInput =
+        inputRewriteFallback &&
         (assistantMessage.serverClassifierOwnInputRewritten === true ||
           assistantMessage.serverClassifierInputRewrite !== undefined)
           ? quoteToolInputForClassifierMessage(tool, input, assistantMessage[inputAsWrittenSymbol])
           : undefined;
-      let tp = assistantMessage.serverClassifierInputRewrite?.cause === "turn_step";
-      let countTotal = Ac !== undefined && Ac.kind !== "quoted" && !tp;
-      let Ef = isCountedClassifierBlock(classifierResult) || na ? _s.reached() : undefined;
-      if (Ef !== undefined) {
+      let isTurnStepRewrite = assistantMessage.serverClassifierInputRewrite?.cause === "turn_step";
+      let countTotal = quotedInput !== undefined && quotedInput.kind !== "quoted" && !isTurnStepRewrite;
+      let commitReached =
+        isCountedClassifierBlock(classifierVerdict) || inputRewriteFallback ? turnSlot.reached() : undefined;
+      if (commitReached !== undefined) {
         let now = Date.now();
-        await Ef;
-        kd = Date.now() - now;
+        await commitReached;
+        commitWaitMs = Date.now() - now;
       }
       {
-        mode = isAutoAllowedInMode(tool, getToolPermissionContext(permissionContext));
+        effectiveMode = isAutoAllowedInMode(tool, getToolPermissionContext(permissionContext));
         if (
-          !(mode === yt.mode && isAutoModeActive() === yt.autoActive) &&
-          !isStillAllowedAfterModeChange(mode, nt, tool, input, permissionContext)
+          !(effectiveMode === modeSnapshot.mode && isAutoModeActive() === modeSnapshot.autoActive) &&
+          !isStillAllowedAfterModeChange(effectiveMode, chromeRuleRouted, tool, input, permissionContext)
         ) {
           logEvent("tengu_auto_mode_fallback_to_ask", {
             reason: lit_2("mode_changed_while_queued"),
             toolName: sanitizeToolNameForAnalytics(tool.name),
             toolUseId: sanitizeMarkName(toolUseID),
             isMcp: tool.isMcp ?? false,
-            ...q(),
-            ...Tl,
+            ...mcpFields(),
+            ...roleFields,
           });
-          if (mode === "dontAsk")
+          if (effectiveMode === "dontAsk")
             return {
               behavior: "deny",
               decisionReason: {
@@ -4114,208 +5098,222 @@ var hasPermissionsToUseToolInner = async (
             return denyPromptUnavailable(checkResult);
           return checkResult;
         }
-        let kl = Yt("ask_level_while_queued", Tl);
-        if (kl) return kl;
+        let askFallback = fallBackToAsk("ask_level_while_queued", roleFields);
+        if (askFallback) return askFallback;
       }
-      let np = classifierResult.unavailable
+      let decisionOutcome = classifierVerdict.unavailable
         ? "unavailable"
-        : classifierResult.refusedBySafeguard
+        : classifierVerdict.refusedBySafeguard
           ? "refused"
-          : classifierResult.shouldBlock
+          : classifierVerdict.shouldBlock
             ? "blocked"
             : "allowed";
-      let newDenialState_3 = fallbackUsageDelta(classifierResult);
-      let ap = (Es ?? 0) + (Kc?.queueWaitMs ?? 0) + (classifierResult.durationMs ?? 0) + (kd ?? 0);
-      let al =
-        classifierResult.errorKind === "server_call_skipped" &&
+      let newDenialState_3 = fallbackUsageDelta(classifierVerdict);
+      let totalWaitMs =
+        (serverWaitMs ?? 0) +
+        (queueInfo?.queueWaitMs ?? 0) +
+        (classifierVerdict.durationMs ?? 0) +
+        (commitWaitMs ?? 0);
+      let skippedOnExactMcpRule =
+        classifierVerdict.errorKind === "server_call_skipped" &&
         sentExactMcpAllowRule(assistantMessage.serverClassifierResults, tool.name);
-      let mf =
-        ao && Nr !== undefined
-          ? getRewriteLostVerdictNote(assistantMessage, noVerdictReasonFor(Nr, toolUseID))
+      let lostVerdictNote =
+        callRole && serverVerdict !== undefined
+          ? getRewriteLostVerdictNote(assistantMessage, noVerdictReasonFor(serverVerdict, toolUseID))
           : undefined;
       appendAutoModeDecision(permissionContext.session, {
         tool: tool.name,
         allowlisted: false,
-        decision: np,
-        classifierModel: classifierResult.model,
-        inputTokens: classifierResult.usage?.inputTokens,
-        outputTokens: classifierResult.usage?.outputTokens,
-        cacheReadInputTokens: classifierResult.usage?.cacheReadInputTokens,
-        cacheCreationInputTokens: classifierResult.usage?.cacheCreationInputTokens,
-        durationMs: classifierResult.durationMs,
+        decision: decisionOutcome,
+        classifierModel: classifierVerdict.model,
+        inputTokens: classifierVerdict.usage?.inputTokens,
+        outputTokens: classifierVerdict.usage?.outputTokens,
+        cacheReadInputTokens: classifierVerdict.usage?.cacheReadInputTokens,
+        cacheCreationInputTokens: classifierVerdict.usage?.cacheCreationInputTokens,
+        durationMs: classifierVerdict.durationMs,
         costUSD: newDenialState_3,
-        stage: classifierResult.stage,
-        category: classifierResult.category,
-        stage1Severity: classifierResult.stage1Severity,
-        stage2Severity: classifierResult.stage2Severity,
+        stage: classifierVerdict.stage,
+        category: classifierVerdict.category,
+        stage1Severity: classifierVerdict.stage1Severity,
+        stage2Severity: classifierVerdict.stage2Severity,
         originalDecisionReasonType: checkResult.decisionReason?.type,
-        editClassificationGated: Vi,
-        serverVerdictOverrodeFastPath: fi,
+        editClassificationGated,
+        serverVerdictOverrodeFastPath: serverOverrodeFastPath,
         serverHeldShellAllowFrom: reroutedFrom,
-        classifierSource: li,
-        ...Tl,
-        serverClassifierNoVerdict: ao
-          ? (noVerdictReasonFor(await fs(), toolUseID) ?? getStaleContextErrorKind(classifierResult))
+        classifierSource,
+        ...roleFields,
+        serverClassifierNoVerdict: callRole
+          ? (noVerdictReasonFor(await awaitVerdictHolding(), toolUseID) ??
+            getStaleContextErrorKind(classifierVerdict))
           : undefined,
-        totalWaitMs: ap,
+        totalWaitMs,
       });
-      let rg =
-        At?.onBlock === "flag"
+      let blockOutcome =
+        classifierOnly?.onBlock === "flag"
           ? getClassifierBlockOutcome(
-              _r && classifierResult.errorKind === "server_input_rewritten"
+              localSwitchedOffNoReview && classifierVerdict.errorKind === "server_input_rewritten"
                 ? {
-                    ...classifierResult,
+                    ...classifierVerdict,
                     errorKind: CLASSIFIER_SWITCHED_OFF_KIND,
                   }
-                : classifierResult,
+                : classifierVerdict,
             )
           : undefined;
-      let uh = (classifierResult) =>
+      let promptAfterChromeFloor = (classifierResult) =>
         shouldPromptAfterChromeFloorBlock({
-          siteGrantRouted: nt && chrome?.domainAllowed === true,
-          mode,
+          siteGrantRouted: chromeRuleRouted && chrome?.domainAllowed === true,
+          mode: effectiveMode,
           liveContext: getToolPermissionContext(permissionContext),
-          chainOnAllow: gt,
+          chainOnAllow,
           classifierResult,
         });
-      let Kf =
-        (classifierResult.shouldBlock &&
-          !classifierResult.unavailable &&
-          classifierResult.errorKind !== SAFETY_MONITOR_BLOCKED &&
-          !classifierResult.transcriptTooLong &&
-          !classifierResult.refusedBySafeguard &&
-          rg === undefined &&
-          !uh(classifierResult)) ||
-        (na && rg === undefined && !bo && state.lastRewriteMessageId !== assistantMessage.message.id);
-      let ch =
-        classifierResult.shouldBlock &&
-        !na &&
+      let countsAsBlock =
+        (classifierVerdict.shouldBlock &&
+          !classifierVerdict.unavailable &&
+          classifierVerdict.errorKind !== SAFETY_MONITOR_BLOCKED &&
+          !classifierVerdict.transcriptTooLong &&
+          !classifierVerdict.refusedBySafeguard &&
+          blockOutcome === undefined &&
+          !promptAfterChromeFloor(classifierVerdict)) ||
+        (inputRewriteFallback &&
+          blockOutcome === undefined &&
+          !askUserQuestionClassifiable &&
+          state.lastRewriteMessageId !== assistantMessage.message.id);
+      let targetsThisCall =
+        classifierVerdict.shouldBlock &&
+        !inputRewriteFallback &&
         isClassifierTargetToolUse(assistantMessage, toolUseID, permissionContext.clientRequestedToolUseId);
-      let uS =
-        ch && Kf
+      let undoneDenials =
+        targetsThisCall && countsAsBlock
           ? state.consecutiveDenials - undoRewriteDenialIfRetried(state, tool.name, input).consecutiveDenials
           : 0;
       logEvent("tengu_auto_mode_decision", {
-        decision: fromEnum(np),
+        decision: fromEnum(decisionOutcome),
         toolName: sanitizeToolNameForAnalytics(tool.name),
         toolUseId: sanitizeMarkName(toolUseID),
         ...false,
         isMcp: tool.isMcp ?? false,
-        ...q(),
+        ...mcpFields(),
         inProtectedNamespace: isEvalBuild(),
-        ...Se(),
-        chromeAutomode: lt,
+        ...projectsRoleFields(),
+        chromeAutomode: isChromeTool,
         chromeNavigationForced: navigation !== undefined,
         chromePointerPress,
-        chromeClickRouted: Xa,
-        ...yr,
+        chromeClickRouted,
+        ...chromeSummaryFields,
         hookAllowVouch: permissionContext.hookAllowVouched === true,
         mcpAlwaysAllowOverride,
         mcpAlwaysAllowShadowedBy,
         mcpRemoteSessionAllowOverride,
         coworkWebAllowOverride,
-        ..._i,
-        mcpServerAskOverride: ho,
+        ...computerUseFields,
+        mcpServerAskOverride: destructiveAskOverride,
         ...getDestructiveCommandAnalytics(tool.name, input),
         stripAllBashFlag: classifyAllShellEnabled(),
         originalDecisionReasonType: fromEnumOpt(checkResult.decisionReason?.type),
         circuitBreaker: fromEnumOpt(
-          findSafetyCheckReason(checkResult.decisionReason, (Ks) => Ks.circuitBreaker !== undefined)
+          findSafetyCheckReason(checkResult.decisionReason, (reason) => reason.circuitBreaker !== undefined)
             ?.circuitBreaker,
         ),
-        editClassificationGated: Vi,
-        serverVerdictOverrodeFastPath: fi,
+        editClassificationGated,
+        serverVerdictOverrodeFastPath: serverOverrodeFastPath,
         serverHeldShellAllowFrom: fromEnumOpt(reroutedFrom),
         agentMsgId: sanitizeMarkName(assistantMessage.message.id),
         fromTurnHandoff: assistantMessage.handedOff === true,
         sameTurnSiblings: sameTurnToolUses.length,
         inheritedVerifiedTurns: inheritedPrefix,
-        classifierQueueDepth: Kc?.queueDepth,
-        classifierQueueWaitMs: Kc?.queueWaitMs,
-        ...(Kc?.overlap !== undefined && {
+        classifierQueueDepth: queueInfo?.queueDepth,
+        classifierQueueWaitMs: queueInfo?.queueWaitMs,
+        ...(queueInfo?.overlap !== undefined && {
           classifierQueueOverlapEnabled: true,
-          classifierQueueInFlightAtStart: Kc.overlap.inFlightAtStart,
-          classifierQueueOverlapped: Kc.overlap.overlapped,
-          classifierQueueReleasedByEscalation: Kc.overlap.releasedByEscalation,
-          classifierQueueCommitWaitMs: kd,
+          classifierQueueInFlightAtStart: queueInfo.overlap.inFlightAtStart,
+          classifierQueueOverlapped: queueInfo.overlap.overlapped,
+          classifierQueueReleasedByEscalation: queueInfo.overlap.releasedByEscalation,
+          classifierQueueCommitWaitMs: commitWaitMs,
         }),
-        classifierSource: fromEnum(li),
-        ...Tl,
+        classifierSource: fromEnum(classifierSource),
+        ...roleFields,
         ...(isCcsTenant() && {
-          sessionAutoClassifierActive: So,
+          sessionAutoClassifierActive: autoClassifierActive,
         }),
-        serverClassifierNoVerdict: ao
+        serverClassifierNoVerdict: callRole
           ? fromEnumOpt(
-              noVerdictReasonFor(await fs(), toolUseID) ?? getStaleContextErrorKind(classifierResult),
+              noVerdictReasonFor(await awaitVerdictHolding(), toolUseID) ??
+                getStaleContextErrorKind(classifierVerdict),
             )
           : undefined,
         serverRewriteCause: fromEnumOpt(
-          mf && (assistantMessage.serverClassifierInputRewrite?.cause ?? mf.cause),
+          lostVerdictNote && (assistantMessage.serverClassifierInputRewrite?.cause ?? lostVerdictNote.cause),
         ),
-        serverRewriteLostVerdict: fromEnumOpt(mf?.lostVerdict),
-        skippedOnAllowRule: al,
+        serverRewriteLostVerdict: fromEnumOpt(lostVerdictNote?.lostVerdict),
+        skippedOnAllowRule: skippedOnExactMcpRule,
         serverRewriteSource: fromEnumOpt(assistantMessage.serverClassifierInputRewrite?.source),
         serverRewriteByLocalCode: assistantMessage.serverClassifierInputRewrite?.byLocalCode,
         serverRewriteShape: fromEnumOpt(assistantMessage.serverClassifierInputRewrite?.shape),
         serverRewriteKeptVerdict:
           assistantMessage.serverClassifierInputRewrite === undefined
             ? undefined
-            : assistantMessage.serverClassifierInputRewrite.keptVerdict && !na,
-        serverRewriteUnquoted: Ac === undefined || Ac.kind === "quoted" ? undefined : fromEnum(Ac.kind),
-        classifierTotalWaitMs: ap,
-        classifierModel: telemetrySafeModelName(classifierResult.model),
-        classifierCategory: sanitizeRuleCategoryOrUndefined(classifierResult.category),
-        classifierStage1Severity: classifierResult.stage1Severity,
-        classifierStage2Severity: classifierResult.stage2Severity,
-        ...(classifierResult.remoteBrowserRule !== undefined && {
+            : assistantMessage.serverClassifierInputRewrite.keptVerdict && !inputRewriteFallback,
+        serverRewriteUnquoted:
+          quotedInput === undefined || quotedInput.kind === "quoted" ? undefined : fromEnum(quotedInput.kind),
+        classifierTotalWaitMs: totalWaitMs,
+        classifierModel: telemetrySafeModelName(classifierVerdict.model),
+        classifierCategory: sanitizeRuleCategoryOrUndefined(classifierVerdict.category),
+        classifierStage1Severity: classifierVerdict.stage1Severity,
+        classifierStage2Severity: classifierVerdict.stage2Severity,
+        ...(classifierVerdict.remoteBrowserRule !== undefined && {
           classifierRemoteBrowserRule: true,
         }),
-        consecutiveDenials: classifierResult.shouldBlock ? state.consecutiveDenials - uS + (Kf ? 1 : 0) : 0,
-        totalDenials: state.totalDenials + ((Kf && !na) || countTotal ? 1 : 0),
-        classifierInputTokens: classifierResult.usage?.inputTokens,
-        classifierOutputTokens: classifierResult.usage?.outputTokens,
-        classifierCacheReadInputTokens: classifierResult.usage?.cacheReadInputTokens,
-        classifierCacheCreationInputTokens: classifierResult.usage?.cacheCreationInputTokens,
-        classifierDurationMs: classifierResult.durationMs,
-        classifierSystemPromptLength: classifierResult.promptLengths?.systemPrompt,
-        classifierToolCallsLength: classifierResult.promptLengths?.toolCalls,
-        classifierUserPromptsLength: classifierResult.promptLengths?.userPrompts,
+        consecutiveDenials: classifierVerdict.shouldBlock
+          ? state.consecutiveDenials - undoneDenials + (countsAsBlock ? 1 : 0)
+          : 0,
+        totalDenials: state.totalDenials + ((countsAsBlock && !inputRewriteFallback) || countTotal ? 1 : 0),
+        classifierInputTokens: classifierVerdict.usage?.inputTokens,
+        classifierOutputTokens: classifierVerdict.usage?.outputTokens,
+        classifierCacheReadInputTokens: classifierVerdict.usage?.cacheReadInputTokens,
+        classifierCacheCreationInputTokens: classifierVerdict.usage?.cacheCreationInputTokens,
+        classifierDurationMs: classifierVerdict.durationMs,
+        classifierSystemPromptLength: classifierVerdict.promptLengths?.systemPrompt,
+        classifierToolCallsLength: classifierVerdict.promptLengths?.toolCalls,
+        classifierUserPromptsLength: classifierVerdict.promptLengths?.userPrompts,
         sessionInputTokens: getTotalInputTokens(),
         sessionOutputTokens: getTotalOutputTokens(),
         sessionCacheReadInputTokens: getTotalCacheReadInputTokens(),
         sessionCacheCreationInputTokens: getTotalCacheCreationInputTokens(),
         classifierCostUSD: newDenialState_3,
-        classifierStage: fromEnumOpt(classifierResult.stage),
-        classifierFailureMode: fromEnumOpt(classifierResult.failureMode),
-        classifierStage1InputTokens: classifierResult.stage1Usage?.inputTokens,
-        classifierStage1OutputTokens: classifierResult.stage1Usage?.outputTokens,
-        classifierStage1CacheReadInputTokens: classifierResult.stage1Usage?.cacheReadInputTokens,
-        classifierStage1CacheCreationInputTokens: classifierResult.stage1Usage?.cacheCreationInputTokens,
-        classifierStage1DurationMs: classifierResult.stage1DurationMs,
-        classifierStage1RequestId: sanitizeMarkName(classifierResult.stage1RequestId),
-        classifierStage1MsgId: sanitizeMarkName(classifierResult.stage1MsgId),
+        classifierStage: fromEnumOpt(classifierVerdict.stage),
+        classifierFailureMode: fromEnumOpt(classifierVerdict.failureMode),
+        classifierStage1InputTokens: classifierVerdict.stage1Usage?.inputTokens,
+        classifierStage1OutputTokens: classifierVerdict.stage1Usage?.outputTokens,
+        classifierStage1CacheReadInputTokens: classifierVerdict.stage1Usage?.cacheReadInputTokens,
+        classifierStage1CacheCreationInputTokens: classifierVerdict.stage1Usage?.cacheCreationInputTokens,
+        classifierStage1DurationMs: classifierVerdict.stage1DurationMs,
+        classifierStage1RequestId: sanitizeMarkName(classifierVerdict.stage1RequestId),
+        classifierStage1MsgId: sanitizeMarkName(classifierVerdict.stage1MsgId),
         classifierStage1CostUSD:
-          classifierResult.stage1Usage && classifierResult.model
-            ? calculateCostFromTokenCounts(classifierResult.model, classifierResult.stage1Usage)
+          classifierVerdict.stage1Usage && classifierVerdict.model
+            ? calculateCostFromTokenCounts(classifierVerdict.model, classifierVerdict.stage1Usage)
             : undefined,
-        classifierStage2InputTokens: classifierResult.stage2Usage?.inputTokens,
-        classifierStage2OutputTokens: classifierResult.stage2Usage?.outputTokens,
-        classifierStage2CacheReadInputTokens: classifierResult.stage2Usage?.cacheReadInputTokens,
-        classifierStage2CacheCreationInputTokens: classifierResult.stage2Usage?.cacheCreationInputTokens,
-        classifierStage2DurationMs: classifierResult.stage2DurationMs,
-        classifierStage2RequestId: sanitizeMarkName(classifierResult.stage2RequestId),
-        classifierStage2MsgId: sanitizeMarkName(classifierResult.stage2MsgId),
+        classifierStage2InputTokens: classifierVerdict.stage2Usage?.inputTokens,
+        classifierStage2OutputTokens: classifierVerdict.stage2Usage?.outputTokens,
+        classifierStage2CacheReadInputTokens: classifierVerdict.stage2Usage?.cacheReadInputTokens,
+        classifierStage2CacheCreationInputTokens: classifierVerdict.stage2Usage?.cacheCreationInputTokens,
+        classifierStage2DurationMs: classifierVerdict.stage2DurationMs,
+        classifierStage2RequestId: sanitizeMarkName(classifierVerdict.stage2RequestId),
+        classifierStage2MsgId: sanitizeMarkName(classifierVerdict.stage2MsgId),
         classifierStage2CostUSD:
-          classifierResult.stage2Usage && classifierResult.model
-            ? calculateCostFromTokenCounts(classifierResult.model, classifierResult.stage2Usage)
+          classifierVerdict.stage2Usage && classifierVerdict.model
+            ? calculateCostFromTokenCounts(classifierVerdict.model, classifierVerdict.stage2Usage)
             : undefined,
       });
-      if (ko) {
-        let Ks = noVerdictReasonFor(await fs(), toolUseID) ?? getStaleContextErrorKind(classifierResult);
-        if (Ks === undefined) logFeatureOk("auto_mode_floor_server_check");
-        else logFeatureSad("auto_mode_floor_server_check", Ks);
+      if (mcpHeldOutsideAuto) {
+        let noVerdictReason =
+          noVerdictReasonFor(await awaitVerdictHolding(), toolUseID) ??
+          getStaleContextErrorKind(classifierVerdict);
+        if (noVerdictReason === undefined) logFeatureOk("auto_mode_floor_server_check");
+        else logFeatureSad("auto_mode_floor_server_check", noVerdictReason);
       }
-      if (At !== undefined && classifierResult.classifierRan === false) {
+      if (classifierOnly !== undefined && classifierVerdict.classifierRan === false) {
         logForDebugging(
           `${tool.name} declares classifierOnly() but serialized to an empty classifier action; denying`,
           {
@@ -4327,16 +5325,16 @@ var hasPermissionsToUseToolInner = async (
           decisionReason: {
             type: "classifier",
             classifier: "auto-mode",
-            reason: classifierResult.reason,
+            reason: classifierVerdict.reason,
             noVerdict: true,
           },
           message: `${tool.name} was not reviewed: it gave the auto mode classifier nothing to judge (its toAutoClassifierInput is empty), and only the classifier can allow it. This is a tool bug, not a judgment on the action.`,
         };
       }
-      if (rg !== undefined) {
-        rememberClassifierBlock(toolUseID, rg);
+      if (blockOutcome !== undefined) {
+        rememberClassifierBlock(toolUseID, blockOutcome);
         logForDebugging(
-          `Auto mode classifier gave no verdict for ${tool.name} (${rg.kind}); delivering flagged`,
+          `Auto mode classifier gave no verdict for ${tool.name} (${blockOutcome.kind}); delivering flagged`,
           {
             level: "warn",
           },
@@ -4348,8 +5346,8 @@ var hasPermissionsToUseToolInner = async (
             type: "classifier",
             classifier: "auto-mode",
             reason:
-              rg.kind === "refused"
-                ? rg.switchedOff
+              blockOutcome.kind === "refused"
+                ? blockOutcome.switchedOff
                   ? UNREVIEWED_SUBAGENT_REPORT_WARNING
                   : "Delivered with a warning: the classifier request was refused by the safety safeguard"
                 : "Delivered with a note: the classifier could not review it",
@@ -4357,35 +5355,46 @@ var hasPermissionsToUseToolInner = async (
           },
         };
       }
-      if (classifierResult.shouldBlock) {
-        if (classifierResult.transcriptTooLong) {
-          let Gc = classifierResult.errorKind === SERVER_CALL_UNAVAILABLE_INPUT_TOO_LONG;
-          let oc = At !== undefined && !toolPermissionContext.shouldAvoidPermissionPrompts;
-          let hp = !Gc && !We && !tool.mcpInfo && ((tool.name === AGENT && true) || false);
-          let Pg = oc ? "classifier_only_deny" : hp ? "allow" : bo ? "question_dialog" : "deny";
-          let Sc = isMerryPopcornOn()
+      if (classifierVerdict.shouldBlock) {
+        if (classifierVerdict.transcriptTooLong) {
+          let serverInputTooLong = classifierVerdict.errorKind === SERVER_CALL_UNAVAILABLE_INPUT_TOO_LONG;
+          let classifierOnlyDeny =
+            classifierOnly !== undefined && !toolPermissionContext.shouldAvoidPermissionPrompts;
+          let agentMayProceed =
+            !serverInputTooLong &&
+            !hasPersonOnlyFloor &&
+            !tool.mcpInfo &&
+            ((tool.name === AGENT && true) || false);
+          let tooLongArm = classifierOnlyDeny
+            ? "classifier_only_deny"
+            : agentMayProceed
+              ? "allow"
+              : askUserQuestionClassifiable
+                ? "question_dialog"
+                : "deny";
+          let compactRequest = isMerryPopcornOn()
             ? requestDenialCompact(permissionContext, permissionContext.messages, {
                 toolName: tool.name,
                 denied:
-                  (Pg === "deny" || Pg === "classifier_only_deny") &&
+                  (tooLongArm === "deny" || tooLongArm === "classifier_only_deny") &&
                   permissionContext.permissionRound !== undefined,
                 mode: toolPermissionContext.mode,
               })
             : undefined;
-          let Hu = Sc !== undefined;
-          if (Sc === "requested")
+          let hasCompactRequest = compactRequest !== undefined;
+          if (compactRequest === "requested")
             logEvent("tengu_auto_mode_classifier_overflow_compact", {
               stage: lit_2("requested"),
-              arm: fromEnum(Pg),
+              arm: fromEnum(tooLongArm),
               toolName: sanitizeToolNameForAnalytics(tool.name),
               isMcp: tool.isMcp ?? false,
               isSubagent: permissionContext.agentId !== undefined,
               headless: toolPermissionContext.shouldAvoidPermissionPrompts === true,
-              serverPath: ao && !ol,
-              serverInputTooLong: Gc,
+              serverPath: callRole && !leftToLocal,
+              serverInputTooLong,
             });
-          if (!Gc || Hu) {
-            if (oc) {
+          if (!serverInputTooLong || hasCompactRequest) {
+            if (classifierOnlyDeny) {
               logForDebugging(
                 `Auto mode classifier transcript too long for ${tool.name}, denying (classifierOnly: no prompt fallback)`,
                 {
@@ -4400,12 +5409,12 @@ var hasPermissionsToUseToolInner = async (
                   reason: CLASSIFIER_TRANSCRIPT_TOO_LONG_REASON,
                   noVerdict: true,
                 },
-                message: Hu
+                message: hasCompactRequest
                   ? `${tool.name} was not reviewed and did not run: the conversation is too long for auto mode's classifier, and no permission prompt is raised for this tool. This is not a judgment that the action is unsafe. Claude Code will try to compact the conversation before the next request; if this action is still needed after that, issue it again.`
                   : `${tool.name} was not reviewed: the auto mode classifier transcript exceeded its context window, and no permission prompt is raised for this tool. This is not a judgment that the action is unsafe; the same call will hit the same limit until the conversation is shorter.`,
               };
             }
-            if (hp)
+            if (agentMayProceed)
               return {
                 behavior: "allow",
                 updatedInput: input,
@@ -4414,7 +5423,7 @@ var hasPermissionsToUseToolInner = async (
                   mode: "auto",
                 },
               };
-            if (bo) {
+            if (askUserQuestionClassifiable) {
               logForDebugging(
                 "Auto mode classifier transcript too long for AskUserQuestion, falling back to the question dialog",
                 {
@@ -4426,11 +5435,11 @@ var hasPermissionsToUseToolInner = async (
                 toolName: sanitizeToolNameForAnalytics(tool.name),
                 toolUseId: sanitizeMarkName(toolUseID),
                 isMcp: tool.isMcp ?? false,
-                ...q(),
+                ...mcpFields(),
               });
               return checkResult;
             }
-            if (Hu) {
+            if (hasCompactRequest) {
               logForDebugging(
                 `Auto mode classifier transcript too long for ${tool.name}, denying and compacting before the next request`,
                 {
@@ -4463,9 +5472,9 @@ var hasPermissionsToUseToolInner = async (
               toolName: sanitizeToolNameForAnalytics(tool.name),
               toolUseId: sanitizeMarkName(toolUseID),
               isMcp: tool.isMcp ?? false,
-              ...q(),
+              ...mcpFields(),
             });
-            if (mode === "dontAsk")
+            if (effectiveMode === "dontAsk")
               return {
                 behavior: "deny",
                 decisionReason: {
@@ -4483,10 +5492,10 @@ var hasPermissionsToUseToolInner = async (
             };
           }
         }
-        let Ks =
-          classifierResult.errorKind === SAFETY_MONITOR_BLOCKED && !classifierResult.refusedBySafeguard;
-        if (classifierResult.unavailable || Ks) {
-          if (bo && !Ks) {
+        let safetyMonitorBlocked =
+          classifierVerdict.errorKind === SAFETY_MONITOR_BLOCKED && !classifierVerdict.refusedBySafeguard;
+        if (classifierVerdict.unavailable || safetyMonitorBlocked) {
+          if (askUserQuestionClassifiable && !safetyMonitorBlocked) {
             logForDebugging(
               "Auto mode classifier unavailable for AskUserQuestion, falling back to the question dialog",
               {
@@ -4498,12 +5507,12 @@ var hasPermissionsToUseToolInner = async (
               toolName: sanitizeToolNameForAnalytics(tool.name),
               toolUseId: sanitizeMarkName(toolUseID),
               isMcp: tool.isMcp ?? false,
-              ...q(),
+              ...mcpFields(),
             });
             return checkResult;
           }
-          if (na) {
-            let oc = {
+          if (inputRewriteFallback) {
+            let unavailableDenial = {
               behavior: "deny",
               decisionReason: {
                 type: "classifier",
@@ -4512,17 +5521,17 @@ var hasPermissionsToUseToolInner = async (
               },
               message: buildClassifierUnavailableMessage(
                 tool.name,
-                classifierResult.model,
-                classifierResult.httpStatus,
-                classifierResult.errorKind,
-                classifierResult.retryAfterMs,
+                classifierVerdict.model,
+                classifierVerdict.httpStatus,
+                classifierVerdict.errorKind,
+                classifierVerdict.retryAfterMs,
                 assistantMessage.handedOff === true,
                 undefined,
                 false,
                 alwaysFullClassifierRole(permissionContext),
                 {
-                  quote: Ac,
-                  recorded: tp,
+                  quote: quotedInput,
+                  recorded: isTurnStepRewrite,
                 },
               ),
             };
@@ -4530,14 +5539,14 @@ var hasPermissionsToUseToolInner = async (
               recordRewriteDenial(
                 state,
                 assistantMessage.message.id,
-                Ac?.kind === "quoted" || state.lastRewriteMessageId !== assistantMessage.message.id
-                  ? fingerprintToolCall(tool.name, Ac?.kind === "quoted" ? Ac.input : input)
+                quotedInput?.kind === "quoted" || state.lastRewriteMessageId !== assistantMessage.message.id
+                  ? fingerprintToolCall(tool.name, quotedInput?.kind === "quoted" ? quotedInput.input : input)
                   : state.lastRewriteFingerprint,
                 countTotal,
               ),
             );
-            let Pg =
-              At !== undefined && !toolPermissionContext.shouldAvoidPermissionPrompts
+            let denialLimitResult =
+              classifierOnly !== undefined && !toolPermissionContext.shouldAvoidPermissionPrompts
                 ? null
                 : handleDenialLimitExceeded(
                     state,
@@ -4547,14 +5556,14 @@ var hasPermissionsToUseToolInner = async (
                     tool,
                     checkResult,
                     permissionContext,
-                    isAutoClassifierActive(mode),
+                    isAutoClassifierActive(effectiveMode),
                     {
-                      ...oc,
+                      ...unavailableDenial,
                       decideLocation: "pre-ask",
                     },
                   );
-            if (Pg) {
-              if (mode === "dontAsk")
+            if (denialLimitResult) {
+              if (effectiveMode === "dontAsk")
                 return {
                   behavior: "deny",
                   decisionReason: {
@@ -4563,32 +5572,33 @@ var hasPermissionsToUseToolInner = async (
                   },
                   message: DONT_ASK_REJECT_MESSAGE(tool.name),
                 };
-              return Pg;
+              return denialLimitResult;
             }
-            if (Ac?.kind === "quoted")
+            if (quotedInput?.kind === "quoted")
               recordPromptedToolCall({
                 agentId: permissionContext.agentId,
                 tool: tool.name,
-                input: Ac.input,
+                input: quotedInput.input,
                 message: assistantMessage,
               });
-            return oc;
+            return unavailableDenial;
           }
           if (
-            (ko || (!So && classifierResult.errorKind === CLASSIFIER_SWITCHED_OFF_KIND)) &&
-            (!ol || classifierResult.errorKind === CLASSIFIER_SWITCHED_OFF_KIND) &&
-            !gd &&
-            !Ks
+            (mcpHeldOutsideAuto ||
+              (!autoClassifierActive && classifierVerdict.errorKind === CLASSIFIER_SWITCHED_OFF_KIND)) &&
+            (!leftToLocal || classifierVerdict.errorKind === CLASSIFIER_SWITCHED_OFF_KIND) &&
+            !inputRewritten &&
+            !safetyMonitorBlocked
           ) {
-            if (al) noteRefusedMcpSkip(tool.name);
-            let oc =
-              mode === "dontAsk"
+            if (skippedOnExactMcpRule) noteRefusedMcpSkip(tool.name);
+            let whyNoPrompt =
+              effectiveMode === "dontAsk"
                 ? "the permission mode is don't ask"
-                : At !== undefined
+                : classifierOnly !== undefined
                   ? "no prompt can approve this tool"
                   : hasCustomAutoModeDenyRules()
                     ? "the settings hold auto mode deny rules, which only the automatic check applies"
-                    : getIsNonInteractiveSession() || gt
+                    : getIsNonInteractiveSession() || chainOnAllow
                       ? "an app or a script runs this session, so a program might answer the prompt"
                       : permissionContext.options.isNonInteractiveSession
                         ? "a background agent or a teammate made the call, so the prompt might not be seen"
@@ -4597,33 +5607,33 @@ var hasPermissionsToUseToolInner = async (
                           : isUnattendedInteractiveSession()
                             ? "Remote Control is connected, or the session runs in the background or in a teammate's pane, so the prompt might not be seen"
                             : undefined;
-            if (oc !== undefined) {
+            if (whyNoPrompt !== undefined) {
               logForDebugging(
-                `[server-classifier] ${tool.name}: no server verdict for this call outside auto mode (${classifierResult.errorKind ?? "unknown kind"}); nobody is asked here, denying`,
+                `[server-classifier] ${tool.name}: no server verdict for this call outside auto mode (${classifierVerdict.errorKind ?? "unknown kind"}); nobody is asked here, denying`,
                 {
                   level: "warn",
                 },
               );
               return denyPromptUnavailable(
                 checkResult,
-                `${tool.name} did not run. The automatic safety check gave no verdict on this call, and Claude Code doesn't ask for approval in its place here: ${oc}. This is not a judgment that the action is unsafe, and a later call may get a verdict. Don't retry it now. Continue with work that doesn't need it, and tell the user that ${tool.name} could not be approved here.`,
+                `${tool.name} did not run. The automatic safety check gave no verdict on this call, and Claude Code doesn't ask for approval in its place here: ${whyNoPrompt}. This is not a judgment that the action is unsafe, and a later call may get a verdict. Don't retry it now. Continue with work that doesn't need it, and tell the user that ${tool.name} could not be approved here.`,
               );
             }
             logForDebugging(
-              `[server-classifier] ${tool.name}: no server verdict for this call outside auto mode (${classifierResult.errorKind ?? "unknown kind"}); asking the person`,
+              `[server-classifier] ${tool.name}: no server verdict for this call outside auto mode (${classifierVerdict.errorKind ?? "unknown kind"}); asking the person`,
               {
                 level: "warn",
               },
             );
             logEvent("tengu_auto_mode_fallback_to_ask", {
               reason:
-                classifierResult.errorKind === CLASSIFIER_SWITCHED_OFF_KIND
+                classifierVerdict.errorKind === CLASSIFIER_SWITCHED_OFF_KIND
                   ? lit_2("floor_local_classifier_switched_off")
                   : lit_2("floor_no_server_verdict"),
               toolName: sanitizeToolNameForAnalytics(tool.name),
               toolUseId: sanitizeMarkName(toolUseID),
               isMcp: tool.isMcp ?? false,
-              ...q(),
+              ...mcpFields(),
             });
             return {
               ...checkResult,
@@ -4642,33 +5652,36 @@ var hasPermissionsToUseToolInner = async (
           }
           let serverClassifierRequest = assistantMessage.serverClassifierRequest;
           if (
-            ao &&
-            !ko &&
-            !ol &&
-            !Ks &&
+            callRole &&
+            !mcpHeldOutsideAuto &&
+            !leftToLocal &&
+            !safetyMonitorBlocked &&
             serverClassifierRequest !== undefined &&
-            isServerUnavailableReason(classifierResult.errorKind, (await fs()).kind === "per_call")
+            isServerUnavailableReason(
+              classifierVerdict.errorKind,
+              (await awaitVerdictHolding()).kind === "per_call",
+            )
           ) {
-            let oc = await waitForServerClassifierRetry(
+            let retryOutcome = await waitForServerClassifierRetry(
               serverClassifierRequest,
               permissionContext,
-              w,
+              classifierApprovalsSetter,
               toolUseID,
-              rs,
+              checkStatus,
             );
-            if (oc.kind === "stop")
-              return stopTurnForMissingVerdict(tool, permissionContext, oc.recorded, "no_verdict");
-            if (oc.interrupted) throw new AbortError_2();
+            if (retryOutcome.kind === "stop")
+              return stopTurnForMissingVerdict(tool, permissionContext, retryOutcome.recorded, "no_verdict");
+            if (retryOutcome.interrupted) throw new AbortError_2();
           }
           logForDebugging(
-            classifierResult.retryAfterMs === undefined
+            classifierVerdict.retryAfterMs === undefined
               ? "Auto mode classifier unavailable, denying with retry guidance (fail closed)"
               : "Auto mode classifier told to wait by the API, denying (fail closed)",
             {
               level: "warn",
             },
           );
-          if (al) noteRefusedMcpSkip(tool.name);
+          if (skippedOnExactMcpRule) noteRefusedMcpSkip(tool.name);
           return {
             behavior: "deny",
             decisionReason: {
@@ -4679,18 +5692,18 @@ var hasPermissionsToUseToolInner = async (
             },
             message: buildClassifierUnavailableMessage(
               tool.name,
-              classifierResult.model,
-              classifierResult.httpStatus,
-              classifierResult.errorKind,
-              classifierResult.retryAfterMs,
+              classifierVerdict.model,
+              classifierVerdict.httpStatus,
+              classifierVerdict.errorKind,
+              classifierVerdict.retryAfterMs,
               assistantMessage.handedOff === true,
-              Uc,
-              al,
+              staleContext,
+              skippedOnExactMcpRule,
               alwaysFullClassifierRole(permissionContext),
             ),
           };
         }
-        if (classifierResult.refusedBySafeguard) {
+        if (classifierVerdict.refusedBySafeguard) {
           if (toolPermissionContext.shouldAvoidPermissionPrompts)
             throw new AbortError_2(
               "Agent aborted: auto mode classifier request refused by the safety safeguard in headless mode",
@@ -4706,22 +5719,22 @@ var hasPermissionsToUseToolInner = async (
             decisionReason: {
               type: "classifier",
               classifier: "auto-mode",
-              reason: classifierResult.reason,
+              reason: classifierVerdict.reason,
               noVerdict: true,
             },
-            message: buildClassifierRefusedOrTransientGuidance(classifierResult.reason, {
+            message: buildClassifierRefusedOrTransientGuidance(classifierVerdict.reason, {
               refused: true,
               callerHasReadTools: alwaysFullClassifierRole(permissionContext),
             }),
           };
         }
-        if (uh(classifierResult)) {
+        if (promptAfterChromeFloor(classifierVerdict)) {
           logEvent("tengu_auto_mode_fallback_to_ask", {
             reason: lit_2("chrome_floor_block"),
             toolName: sanitizeToolNameForAnalytics(tool.name),
             toolUseId: sanitizeMarkName(toolUseID),
             isMcp: tool.isMcp ?? false,
-            ...q(),
+            ...mcpFields(),
           });
           logFeatureOk("permission_chrome_block_prompt");
           return {
@@ -4733,20 +5746,22 @@ var hasPermissionsToUseToolInner = async (
             decisionReason: pickDisplayedDecisionReason(checkResult, {
               type: "classifier",
               classifier: "auto-mode",
-              reason: classifierResult.reason,
+              reason: classifierVerdict.reason,
             }),
           };
         }
         let state = updateDenialTrackingState(permissionContext, (state) =>
-          incrementDenialCounts(ch ? undoRewriteDenialIfRetried(state, tool.name, input) : state),
+          incrementDenialCounts(
+            targetsThisCall ? undoRewriteDenialIfRetried(state, tool.name, input) : state,
+          ),
         );
-        logForDebugging(`Auto mode classifier blocked action: ${classifierResult.reason}`, {
+        logForDebugging(`Auto mode classifier blocked action: ${classifierVerdict.reason}`, {
           level: "warn",
         });
-        if (At?.onBlock === "flag") {
+        if (classifierOnly?.onBlock === "flag") {
           rememberClassifierBlock(toolUseID, {
             kind: "blocked",
-            reason: classifierResult.reason,
+            reason: classifierVerdict.reason,
           });
           return {
             behavior: "allow",
@@ -4754,36 +5769,37 @@ var hasPermissionsToUseToolInner = async (
             decisionReason: {
               type: "classifier",
               classifier: "auto-mode",
-              reason: `Flagged by the classifier, delivered with its warning: ${classifierResult.reason}`,
+              reason: `Flagged by the classifier, delivered with its warning: ${classifierVerdict.reason}`,
             },
           };
         }
         let classifierDenyResult = buildClassifierDenyResult(
-          classifierResult,
+          classifierVerdict,
           permissionContext,
           tool,
           input,
           checkResult,
         );
-        let Ip =
-          bo || (At !== undefined && !toolPermissionContext.shouldAvoidPermissionPrompts)
+        let denialLimitResult =
+          askUserQuestionClassifiable ||
+          (classifierOnly !== undefined && !toolPermissionContext.shouldAvoidPermissionPrompts)
             ? null
             : handleDenialLimitExceeded(
                 state,
-                classifierResult.reason,
+                classifierVerdict.reason,
                 assistantMessage,
                 toolUseID,
                 tool,
                 checkResult,
                 permissionContext,
-                isAutoClassifierActive(mode),
+                isAutoClassifierActive(effectiveMode),
                 {
                   ...classifierDenyResult,
                   decideLocation: "pre-ask",
                 },
               );
-        if (Ip) {
-          if (mode === "dontAsk")
+        if (denialLimitResult) {
+          if (effectiveMode === "dontAsk")
             return {
               behavior: "deny",
               decisionReason: {
@@ -4792,36 +5808,36 @@ var hasPermissionsToUseToolInner = async (
               },
               message: DONT_ASK_REJECT_MESSAGE(tool.name),
             };
-          return Ip;
+          return denialLimitResult;
         }
         return classifierDenyResult;
       }
       if (
-        (!bo && !Vr && !Oo && !Xa) ||
+        (!askUserQuestionClassifiable && !shellAllowHeld && !toolHostAllowClassified && !chromeClickRouted) ||
         !canShowServerFallbackNotice(permissionContext.requestDialog !== undefined)
       )
-        _s.runInTurn(() => updateDenialTrackingState(permissionContext, resetConsecutiveDenials));
-      if (bo) {
+        turnSlot.runInTurn(() => updateDenialTrackingState(permissionContext, resetConsecutiveDenials));
+      if (askUserQuestionClassifiable) {
         logEvent("tengu_auto_mode_fallback_to_ask", {
           reason: lit_2("requires_user_interaction"),
           toolName: sanitizeToolNameForAnalytics(tool.name),
           toolUseId: sanitizeMarkName(toolUseID),
           isMcp: tool.isMcp ?? false,
-          ...q(),
+          ...mcpFields(),
         });
         return checkResult;
       }
-      return It({
+      return finishClassifierAllow({
         updatedInput: checkResult.updatedInput ?? input,
         decisionReason: {
           type: "classifier",
           classifier: "auto-mode",
-          reason: classifierResult.reason,
+          reason: classifierVerdict.reason,
         },
-        classifierRan: classifierResult.classifierRan,
+        classifierRan: classifierVerdict.classifierRan,
       });
     }
-    let Et =
+    let canAskHostCard =
       isSdkDialogHostActive() &&
       getPermissionPromptPerson() !== null &&
       permissionContext.requestDialog !== undefined &&
@@ -4829,27 +5845,36 @@ var hasPermissionsToUseToolInner = async (
       !toolPermissionContext.shouldAvoidPermissionPrompts &&
       toolPermissionContext.servedCall !== true;
     if (
-      mode === "bypassPermissions" &&
+      effectiveMode === "bypassPermissions" &&
       !carriesAskRuleIntent(checkResult) &&
-      (canShowSafetyCheckDialog(permissionContext) || Et)
+      (canShowSafetyCheckDialog(permissionContext) || canAskHostCard)
     ) {
       let safetyCheckReason = findSafetyCheckReason(checkResult.decisionReason, isAutoModeDenyCircuitBreaker);
-      let gt = safetyCheckReason !== undefined ? getDangerousRmTimeoutConfig() : undefined;
-      if (safetyCheckReason !== undefined && gt?.enabled && (gt.denyOnHostCard || !Et)) {
-        let At = applySafetyCheckDialogPolicy(checkResult, safetyCheckReason, permissionContext, gt);
-        return Et && At.behavior === "deny"
+      let rmTimeoutConfig = safetyCheckReason !== undefined ? getDangerousRmTimeoutConfig() : undefined;
+      if (
+        safetyCheckReason !== undefined &&
+        rmTimeoutConfig?.enabled &&
+        (rmTimeoutConfig.denyOnHostCard || !canAskHostCard)
+      ) {
+        let safetyDecision = applySafetyCheckDialogPolicy(
+          checkResult,
+          safetyCheckReason,
+          permissionContext,
+          rmTimeoutConfig,
+        );
+        return canAskHostCard && safetyDecision.behavior === "deny"
           ? resolveAskWithoutPrompt(
               answers,
               tool,
               input,
               {
                 ...checkResult,
-                refusal: At,
+                refusal: safetyDecision,
               },
               toolUseID,
               permissionContext,
             )
-          : At;
+          : safetyDecision;
       }
     }
     return resolveAskWithoutPrompt(answers, tool, input, checkResult, toolUseID, permissionContext);
@@ -4860,21 +5885,21 @@ var hasPermissionsToUseToolInner = async (
 /**
  * 分类器拦截是否计入拒绝次数：shouldBlock 且不是不可用、转录过长或被安全拦截。
  */
-function isCountedClassifierBlock(e) {
-  return e.shouldBlock && !e.unavailable && !e.transcriptTooLong && !e.refusedBySafeguard;
+function isCountedClassifierBlock(result) {
+  return result.shouldBlock && !result.unavailable && !result.transcriptTooLong && !result.refusedBySafeguard;
 }
 //@ chunk-e6aww6q8.js:3008352-3008503 placement
 /**
  * 分类器结论是否可用：分类器确实运行、非不可用/转录过长/被安全拦截，且没有 failureMode 与 errorKind。
  */
-function isClassifierVerdictUsable(e) {
+function isClassifierVerdictUsable(result) {
   return (
-    e.classifierRan !== false &&
-    !e.unavailable &&
-    !e.transcriptTooLong &&
-    !e.refusedBySafeguard &&
-    e.failureMode === undefined &&
-    e.errorKind === undefined
+    result.classifierRan !== false &&
+    !result.unavailable &&
+    !result.transcriptTooLong &&
+    !result.refusedBySafeguard &&
+    result.failureMode === undefined &&
+    result.errorKind === undefined
   );
 }
 //@ chunk-e6aww6q8.js:3008503-3008876 placement
@@ -4910,9 +5935,9 @@ function shouldPromptAfterChromeFloorBlock({
 }
 //@ chunk-e6aww6q8.js:3008876-3008928 placement
 function recordAutoModeDenial(toolUseContext) {
-  let n = incrementDenialCounts(getDenialTrackingState(toolUseContext));
-  persistDenialState(toolUseContext, n);
-  return n;
+  let state = incrementDenialCounts(getDenialTrackingState(toolUseContext));
+  persistDenialState(toolUseContext, state);
+  return state;
 }
 //@ chunk-e6aww6q8.js:3008928-3009537 placement
 /**
@@ -4920,10 +5945,10 @@ function recordAutoModeDenial(toolUseContext) {
  */
 function enforceAutoModeDenialLimits(toolUseContext, state, tool, messageId, toolUseId) {
   if (!shouldFallbackToPrompting(state)) return false;
-  let y = state.totalDenials >= DENIAL_LIMITS.maxTotal;
+  let hitTotalLimit = state.totalDenials >= DENIAL_LIMITS.maxTotal;
   let shouldAvoidPermissionPrompts = getToolPermissionContext(toolUseContext).shouldAvoidPermissionPrompts;
   logEvent("tengu_auto_mode_denial_limit_exceeded", {
-    limit: lit_2(y ? "total" : "consecutive"),
+    limit: lit_2(hitTotalLimit ? "total" : "consecutive"),
     mode: lit_2(shouldAvoidPermissionPrompts ? "headless" : "cli"),
     messageID: sanitizeMarkName(messageId),
     consecutiveDenials: state.consecutiveDenials,
@@ -4934,7 +5959,7 @@ function enforceAutoModeDenialLimits(toolUseContext, state, tool, messageId, too
   });
   if (shouldAvoidPermissionPrompts)
     throw new AbortError_2("Agent aborted: too many classifier denials in headless mode");
-  if (y)
+  if (hitTotalLimit)
     persistDenialState(toolUseContext, {
       ...state,
       totalDenials: 0,
@@ -4974,12 +5999,14 @@ function persistDenialState(context, newState) {
     });
 }
 //@ chunk-e6aww6q8.js:3009861-3010723 layout
-function buildClassifierDenyResult(e, permissionContext, tool, s, checkResult) {
-  let y = e.failureMode !== undefined;
-  let S = sanitizeRuleCategory(
-    e.model === SERVER_CLASSIFIER_LABEL && !y ? ruleIdFromBracketPrefix(e.reason) : e.category,
+function buildClassifierDenyResult(classifierResult, permissionContext, tool, input, checkResult) {
+  let hasNoVerdict = classifierResult.failureMode !== undefined;
+  let category = sanitizeRuleCategory(
+    classifierResult.model === SERVER_CLASSIFIER_LABEL && !hasNoVerdict
+      ? ruleIdFromBracketPrefix(classifierResult.reason)
+      : classifierResult.category,
   );
-  let w =
+  let allowRuleEligible =
     checkResult !== undefined &&
     !carriesAskRuleIntent(checkResult) &&
     checkResult.decisionReason?.type !== "hook" &&
@@ -4987,17 +6014,17 @@ function buildClassifierDenyResult(e, permissionContext, tool, s, checkResult) {
     findSafetyCheckReason(checkResult.decisionReason) === undefined &&
     tool.requiresUserInteraction?.() !== true &&
     checkResult.suppressAlwaysAllowRule !== true &&
-    tool.suppressesAlwaysAllowRule?.(s) !== true &&
-    tool.suppressesAllPermissionUpdates?.(s) !== true &&
+    tool.suppressesAlwaysAllowRule?.(input) !== true &&
+    tool.suppressesAllPermissionUpdates?.(input) !== true &&
     permissionContext.forRemoteExecution !== true &&
     !isHookOrPluginSteered(permissionContext) &&
     !isWebToolRestrictedInRelay(tool.name) &&
     !isWebToolClassifierRouted(tool, getToolPermissionContext(permissionContext)) &&
     !isRemoteBrowserToolUnderModeFloor(tool) &&
-    tool.ignoresWholeToolAllowRule?.(s) !== true &&
+    tool.ignoresWholeToolAllowRule?.(input) !== true &&
     getClassifiableBrowserAction(
       tool,
-      s,
+      input,
       isAutoAllowedInMode(tool, getToolPermissionContext(permissionContext)),
     ) === undefined &&
     !isAgentSpawningTool(tool.name);
@@ -5006,32 +6033,34 @@ function buildClassifierDenyResult(e, permissionContext, tool, s, checkResult) {
     decisionReason: {
       type: "classifier",
       classifier: "auto-mode",
-      reason: e.reason,
-      ...(y && {
-        noVerdict: y,
+      reason: classifierResult.reason,
+      ...(hasNoVerdict && {
+        noVerdict: hasNoVerdict,
       }),
-      ...(S !== undefined && {
-        category: S,
+      ...(category !== undefined && {
+        category,
       }),
     },
-    message: y
-      ? buildClassifierRefusedOrTransientGuidance(e.reason, {
+    message: hasNoVerdict
+      ? buildClassifierRefusedOrTransientGuidance(classifierResult.reason, {
           refused: false,
           callerHasReadTools: alwaysFullClassifierRole(permissionContext),
         })
-      : buildYoloRejectionMessage(e.reason, {
+      : buildYoloRejectionMessage(classifierResult.reason, {
           autoModeConsentFlow: isAutoModeConsentFlowEnabled(permissionContext.agentId),
           blockedHelp: autoModeBlockedHelp(permissionContext.agentId),
-          allowRuleToolName: w ? toAllowRuleToolName(getToolNameForPermissionCheck_2(tool)) : undefined,
+          allowRuleToolName: allowRuleEligible
+            ? toAllowRuleToolName(getToolNameForPermissionCheck_2(tool))
+            : undefined,
         }),
   };
 }
 //@ chunk-e6aww6q8.js:3010723-3010815 layout
-function canShowPermissionDialog(e) {
+function canShowPermissionDialog(permissionContext) {
   return (
-    e.requestDialog !== undefined &&
+    permissionContext.requestDialog !== undefined &&
     !isSdkDialogHostActive() &&
-    !getToolPermissionContext(e).shouldAvoidPermissionPrompts
+    !getToolPermissionContext(permissionContext).shouldAvoidPermissionPrompts
   );
 }
 //@ chunk-e6aww6q8.js:3010815-3010854 layout
@@ -5042,91 +6071,94 @@ function canShowSafetyCheckDialog(toolUseContext) {
 /**
  * 从 subcommandResults 中取出原因与给定原因相同的那个子命令 ask 的消息，否则用结果自身消息。
  */
-function flaggedPartMessage(e, n) {
-  if (e.decisionReason?.type === "subcommandResults") {
-    for (let reason of e.decisionReason.reasons.values())
-      if (reason.behavior === "ask" && reason.decisionReason === n) return reason.message;
+function flaggedPartMessage(result, safetyReason) {
+  if (result.decisionReason?.type === "subcommandResults") {
+    for (let reason of result.decisionReason.reasons.values())
+      if (reason.behavior === "ask" && reason.decisionReason === safetyReason) return reason.message;
   }
-  return e.message;
+  return result.message;
 }
 //@ chunk-e6aww6q8.js:3011046-3011546 layout
-function applySafetyCheckDialogPolicy(checkResult, safetyCheckReason, permissionContext, s) {
-  let h = (unansweredSafetyCheckCount) => ({
+function applySafetyCheckDialogPolicy(result, safetyReason, toolUseContext, dialogPolicy) {
+  let deny = (unansweredCount) => ({
     behavior: "deny",
-    message: buildDangerousRemovalDenial(
-      flaggedPartMessage(checkResult, safetyCheckReason),
-      unansweredSafetyCheckCount,
-    ),
-    decisionReason: safetyCheckReason,
+    message: buildDangerousRemovalDenial(flaggedPartMessage(result, safetyReason), unansweredCount),
+    decisionReason: safetyReason,
     decideLocation: "pre-ask",
   });
-  if (!s.showDialog || !canShowSafetyCheckDialog(permissionContext)) return h();
+  if (!dialogPolicy.showDialog || !canShowSafetyCheckDialog(toolUseContext)) return deny();
   let unansweredSafetyCheckCount = getUnansweredSafetyCheckCount();
-  if (s.maxDialogTimeouts > 0 && unansweredSafetyCheckCount >= s.maxDialogTimeouts) {
+  if (dialogPolicy.maxDialogTimeouts > 0 && unansweredSafetyCheckCount >= dialogPolicy.maxDialogTimeouts) {
     logEvent("tengu_safety_check_dialog_capped", {
-      permissionMode: fromEnum(getToolPermissionContext(permissionContext).mode),
+      permissionMode: fromEnum(getToolPermissionContext(toolUseContext).mode),
       circuitBreaker: fromEnumOpt(
-        safetyCheckReason.type === "safetyCheck" ? safetyCheckReason.circuitBreaker : undefined,
+        safetyReason.type === "safetyCheck" ? safetyReason.circuitBreaker : undefined,
       ),
       unansweredPrompts: unansweredSafetyCheckCount,
-      maxDialogTimeouts: s.maxDialogTimeouts,
+      maxDialogTimeouts: dialogPolicy.maxDialogTimeouts,
     });
-    return h(unansweredSafetyCheckCount);
+    return deny(unansweredSafetyCheckCount);
   }
   return {
-    ...checkResult,
+    ...result,
     autoDenyWindow: buildAutoDenyMarker({
-      autoDenyAfterMs: s.timeoutMs,
-      resolution: h(),
+      autoDenyAfterMs: dialogPolicy.timeoutMs,
+      resolution: deny(),
     }),
   };
 }
 //@ chunk-e6aww6q8.js:3011546-3012163 layout
-async function waitForServerClassifierRetry(toolUseId, permissionContext, r, toolUseID, h) {
-  markClassifierChecking(r, toolUseID);
-  let y = h.hold();
+async function waitForServerClassifierRetry(
+  toolUseId,
+  permissionContext,
+  setClassifierApprovals,
+  toolUseId_2,
+  hold,
+) {
+  markClassifierChecking(setClassifierApprovals, toolUseId_2);
+  let release = hold.hold();
   try {
     return await handleServerVerdictUnavailable(toolUseId, {
       runKey: agentIdOrMain(permissionContext.agentId),
       turnNow: permissionContext.queryTracking?.chainId,
       signal: permissionContext.abortController.signal,
       scheduleTimeout: permissionContext.scheduleTimeout,
-      onWait: (S) => {
-        if (S === null) {
+      onWait: (status) => {
+        if (status === null) {
           permissionContext.onRetryStatus?.(null);
           return;
         }
         logForDebugging(
-          `[server-classifier] no usable verdict for ${S.position} response(s) in a row; holding this response's denials ${S.delayMs}ms before the model may retry (${S.position}/${S.limit})`,
+          `[server-classifier] no usable verdict for ${status.position} response(s) in a row; holding this response's denials ${status.delayMs}ms before the model may retry (${status.position}/${status.limit})`,
           {
             level: "warn",
           },
         );
         permissionContext.onRetryStatus?.({
           kind: "auto_mode_unavailable",
-          attempt: S.position,
-          maxRetries: S.limit,
-          retryInMs: S.delayMs,
-          deadline: Date.now() + S.delayMs,
+          attempt: status.position,
+          maxRetries: status.limit,
+          retryInMs: status.delayMs,
+          deadline: Date.now() + status.delayMs,
         });
       },
     });
   } finally {
-    y();
-    clearClassifierChecking(r, toolUseID);
+    release();
+    clearClassifierChecking(setClassifierApprovals, toolUseId_2);
   }
 }
 //@ chunk-e6aww6q8.js:3012163-3012579 layout
-function stopTurnForMissingVerdict(tool, permissionContext, recorded, s) {
+function stopTurnForMissingVerdict(tool, permissionContext, recorded, reason) {
   if (recorded) {
-    let h = permissionContext.agentId !== undefined;
+    let isSubagent = permissionContext.agentId !== undefined;
     logEvent("tengu_auto_mode_unavailable_stop", {
-      reason: fromEnum(s),
-      isSubagent: h,
+      reason: fromEnum(reason),
+      isSubagent,
       gatewayConfigured: gatewayDisplayName() !== undefined,
     });
     logForDebugging(
-      `[server-classifier] no usable verdict for ${TIMER_MARGIN_MS} responses in a row; stopping the ${h ? "agent's run" : "turn"}`,
+      `[server-classifier] no usable verdict for ${TIMER_MARGIN_MS} responses in a row; stopping the ${isSubagent ? "agent's run" : "turn"}`,
       {
         level: "warn",
       },
@@ -5163,13 +6195,13 @@ function handleDenialLimitExceeded(
   let hitTotalLimit = state.totalDenials >= DENIAL_LIMITS.maxTotal;
   let isHeadless = getToolPermissionContext(context).shouldAvoidPermissionPrompts;
   let { totalDenials, consecutiveDenials } = state;
-  let ke = canShowServerFallbackNotice(context.requestDialog !== undefined);
-  let we = context.requestDialog !== undefined && !isSdkDialogHostActive();
-  let Ee =
-    ke &&
+  let canShowFallback = canShowServerFallbackNotice(context.requestDialog !== undefined);
+  let hasDialogHost = context.requestDialog !== undefined && !isSdkDialogHostActive();
+  let useTimedFallback =
+    canShowFallback &&
     !hitTotalLimit &&
     isAutoMode &&
-    we &&
+    hasDialogHost &&
     !isUnattendedAgentContext(context) &&
     hasAccessToIDEExtensionDiffFeature_3(currentMcpClients(context)) === undefined &&
     consecutiveDenials >= DENIAL_LIMITS.maxConsecutive &&
@@ -5179,7 +6211,9 @@ function handleDenialLimitExceeded(
     : `${consecutiveDenials} consecutive actions were blocked. Please review the transcript before continuing.`;
   logEvent("tengu_auto_mode_denial_limit_exceeded", {
     limit: lit_2(hitTotalLimit ? "total" : "consecutive"),
-    fallbackShape: lit_2(Ee ? "timed" : ke && we ? "blocking" : "legacy"),
+    fallbackShape: lit_2(
+      useTimedFallback ? "timed" : canShowFallback && hasDialogHost ? "blocking" : "legacy",
+    ),
     mode: lit_2(isHeadless ? "headless" : "cli"),
     messageID: sanitizeMarkName(assistantMessage.message.id),
     consecutiveDenials,
@@ -5204,9 +6238,9 @@ function handleDenialLimitExceeded(
     });
   let originalClassifier =
     askResult.decisionReason?.type === "classifier" ? askResult.decisionReason.classifier : "auto-mode";
-  if (ke && !hitTotalLimit && we && isAutoMode)
-    updateDenialTrackingState(context, (lt) => ({
-      ...lt,
+  if (canShowFallback && !hitTotalLimit && hasDialogHost && isAutoMode)
+    updateDenialTrackingState(context, (tracking) => ({
+      ...tracking,
       timedFallbackShown: true,
     }));
   let category =
@@ -5226,12 +6260,12 @@ Latest blocked action: ${latestReason}`,
   let decisionReason = pickDisplayedDecisionReason(askResult, disclosure);
   return {
     ...askResult,
-    ...(ke &&
+    ...(canShowFallback &&
       !hitTotalLimit &&
-      we && {
+      hasDialogHost && {
         denialLimitFallback: withPermissionDisclosure(
           disclosure,
-          Ee
+          useTimedFallback
             ? {
                 autoDenyAfterMs: getTimedFallbackAutoDenyMs(),
                 resolution: classifierResult,
@@ -5258,8 +6292,8 @@ function isAskRuleDrivenReason(decisionReason) {
 /**
  * 结果是否带 ask 规则意图：原因由 ask 规则驱动，或 matchedAskRule 为 ask。auto 下这类 ask 回退人工而不交分类器。
  */
-function carriesAskRuleIntent(e) {
-  return isAskRuleDrivenReason(e.decisionReason) || e.matchedAskRule?.ruleBehavior === "ask";
+function carriesAskRuleIntent(result) {
+  return isAskRuleDrivenReason(result.decisionReason) || result.matchedAskRule?.ruleBehavior === "ask";
 }
 //@ chunk-e6aww6q8.js:3014464-3014568 placement
 /**
@@ -5276,11 +6310,11 @@ function isServerPolicyAskReason(decisionReason) {
 /**
  * 沙箱/只读放行是否改标为 sandboxOverride 交复核：无 ask 规则意图、无安全检查原因、尚非 sandboxOverride，且 tengu_curried_squirrel 打开。
  */
-function shouldRetagAskAsSandboxOverride(e) {
+function shouldRetagAskAsSandboxOverride(result) {
   if (
-    carriesAskRuleIntent(e) ||
-    findSafetyCheckReason(e.decisionReason) !== undefined ||
-    e.decisionReason?.type === "sandboxOverride"
+    carriesAskRuleIntent(result) ||
+    findSafetyCheckReason(result.decisionReason) !== undefined ||
+    result.decisionReason?.type === "sandboxOverride"
   )
     return false;
   return sandboxOverrideAskGuardsOn();
@@ -5299,30 +6333,31 @@ function isPlanModeFloorReason(decisionReason) {
   return decisionReason?.type === "mode" && decisionReason.mode === "plan";
 }
 //@ chunk-e6aww6q8.js:3014916-3015069 placement
-function usesToolCheckRunner(e, n) {
-  if (e.mcpInfo) return true;
-  if (getCheckRunner(n.session, e.name) === undefined) return false;
+function usesToolCheckRunner(tool, context) {
+  if (tool.mcpInfo) return true;
+  if (getCheckRunner(context.session, tool.name) === undefined) return false;
   return !(
-    (e.name === BASH_TOOL_NAME || e.name === POWERSHELL_TOOL_NAME) &&
-    isAutoClassifierActive("plan", getToolPermissionContext(n).servedCall === true)
+    (tool.name === BASH_TOOL_NAME || tool.name === POWERSHELL_TOOL_NAME) &&
+    isAutoClassifierActive("plan", getToolPermissionContext(context).servedCall === true)
   );
 }
 //@ chunk-e6aww6q8.js:3015069-3015160 placement
-function isPlanModeWriteCall(e, parsedInput, r) {
+function isPlanModeWriteCall(tool, parsedInput, context) {
   return (
-    getToolPermissionContext(r).mode === "plan" &&
-    usesToolCheckRunner(e, r) &&
-    !e.isReadOnly(parsedInput, r) &&
-    !isReadOnlyBrowserCall(getToolNameForPermissionCheck_2(e), parsedInput)
+    getToolPermissionContext(context).mode === "plan" &&
+    usesToolCheckRunner(tool, context) &&
+    !tool.isReadOnly(parsedInput, context) &&
+    !isReadOnlyBrowserCall(getToolNameForPermissionCheck_2(tool), parsedInput)
   );
 }
 //@ chunk-e6aww6q8.js:3015160-3015319 placement
-function isPlanModeBlockedWrite(e, n, r) {
-  if (getToolPermissionContext(r).mode !== "plan") return false;
+function isPlanModeBlockedWrite(tool, input, context) {
+  if (getToolPermissionContext(context).mode !== "plan") return false;
   try {
-    let { parsedInput } = parseToolInputForPermission(e, n, r);
+    let { parsedInput } = parseToolInputForPermission(tool, input, context);
     return (
-      !e.isReadOnly(parsedInput, r) && !isReadOnlyBrowserCall(getToolNameForPermissionCheck_2(e), parsedInput)
+      !tool.isReadOnly(parsedInput, context) &&
+      !isReadOnlyBrowserCall(getToolNameForPermissionCheck_2(tool), parsedInput)
     );
   } catch (error) {
     if (!isAbortError(error)) logError(error);
@@ -5330,10 +6365,10 @@ function isPlanModeBlockedWrite(e, n, r) {
   }
 }
 //@ chunk-e6aww6q8.js:3015319-3015451 placement
-function buildPlanModeAsk(e) {
+function buildPlanModeAsk(tool) {
   return {
     behavior: "ask",
-    message: `Cannot call ${e.name} while in plan mode.`,
+    message: `Cannot call ${tool.name} while in plan mode.`,
     decisionReason: {
       type: "mode",
       mode: "plan",
@@ -5341,72 +6376,77 @@ function buildPlanModeAsk(e) {
   };
 }
 //@ chunk-e6aww6q8.js:3015451-3015533 placement
-function defaultToNoFields(e) {
-  return e.behavior === "ask" && e.defaultToNo === true
+function defaultToNoFields(decision) {
+  return decision.behavior === "ask" && decision.defaultToNo === true
     ? {
         defaultToNo: true,
       }
     : {};
 }
 //@ chunk-e6aww6q8.js:3015533-3015707 placement
-function isPersonOnlySafetyAsk(e) {
+function isPersonOnlySafetyAsk(decision) {
   return (
-    e?.behavior === "ask" &&
-    e.personOnly === true &&
-    e.suppressAlwaysAllowRule === true &&
-    e.decisionReason?.type === "safetyCheck" &&
-    !e.decisionReason.classifierApprovable
+    decision?.behavior === "ask" &&
+    decision.personOnly === true &&
+    decision.suppressAlwaysAllowRule === true &&
+    decision.decisionReason?.type === "safetyCheck" &&
+    !decision.decisionReason.classifierApprovable
   );
 }
 //@ chunk-e6aww6q8.js:3015707-3015835 placement
 /**
  * mcpServerPolicy 的 ask 是否落在 plan 写地板之下：解析输入后判断该调用在 plan 下是否属于需要阻挡的写；解析失败时以当前是否 plan 模式为准。
  */
-function isServerPolicyAskUnderPlanFloor(decisionReason, tool, r, s) {
+function isServerPolicyAskUnderPlanFloor(decisionReason, tool, input, context) {
   if (!isServerPolicyAskReason(decisionReason)) return false;
   try {
-    let { parsedInput } = parseToolInputForPermission(tool, r, s);
-    return isPlanModeWriteCall(tool, parsedInput, s);
+    let { parsedInput } = parseToolInputForPermission(tool, input, context);
+    return isPlanModeWriteCall(tool, parsedInput, context);
   } catch {
-    return getToolPermissionContext(s).mode === "plan";
+    return getToolPermissionContext(context).mode === "plan";
   }
 }
 //@ chunk-e6aww6q8.js:3015835-3015860 placement
-var FORCED_INTERACTION_TOOLS = new Set([EXITPLANMODE_2, ASKUSERQUESTION]);
+var FORCED_INTERACTION_TOOLS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:3015835", () => {
+  FORCED_INTERACTION_TOOLS = new Set([EXITPLANMODE_2, ASKUSERQUESTION]);
+});
 //@ chunk-e6aww6q8.js:3015860-3015933 placement
-function isExemptFromUserInteraction(e, n) {
-  return n !== undefined && e.mcpInfo === undefined && FORCED_INTERACTION_TOOLS.has(e.name);
+function isExemptFromUserInteraction(tool, hookUpdatedInput) {
+  return (
+    hookUpdatedInput !== undefined && tool.mcpInfo === undefined && FORCED_INTERACTION_TOOLS.has(tool.name)
+  );
 }
 //@ chunk-e6aww6q8.js:3015933-3016015 placement
 /**
  * 是否仍欠一次人工交互：工具属于强制人工类，或 requiresUserInteraction 为真且未被豁免。
  */
-function isInteractionStillOwed(tool, n) {
+function isInteractionStillOwed(tool, hookUpdatedInput) {
   return (
     requiresConnectorGrant_2(tool) ||
-    (Boolean(tool.requiresUserInteraction?.()) && !isExemptFromUserInteraction(tool, n))
+    (Boolean(tool.requiresUserInteraction?.()) && !isExemptFromUserInteraction(tool, hookUpdatedInput))
   );
 }
 //@ chunk-e6aww6q8.js:3016015-3016265 placement
 /**
  * 解析工具输入：先严格 parse；失败且仅因未知键、tengu_tidy_eclipse 打开、且未知键无需询问时，去掉这些键重试，并返回 keysSetAside:true。
  */
-function parseToolInputForPermission(e, n, r) {
+function parseToolInputForPermission(tool, input, toolUseContext) {
   try {
     return {
-      parsedInput: e.inputSchema.parse(n),
+      parsedInput: tool.inputSchema.parse(input),
       keysSetAside: false,
     };
   } catch (error) {
-    let h = isUnrecognizedKeysIssue(error?.issues);
+    let extraKeyPaths = isUnrecognizedKeysIssue(error?.issues);
     if (
-      h.length === 0 ||
+      extraKeyPaths.length === 0 ||
       !getFeatureValue_CACHED_MAY_BE_STALE("tengu_tidy_eclipse", true) ||
-      isSettledPermissionResult(runFailClosedDecision(e, n, r))
+      isSettledPermissionResult(runFailClosedDecision(tool, input, toolUseContext))
     )
       throw error;
     return {
-      parsedInput: e.inputSchema.parse(deleteKeysAtPaths(n, h)),
+      parsedInput: tool.inputSchema.parse(deleteKeysAtPaths(input, extraKeyPaths)),
       keysSetAside: true,
     };
   }
@@ -5415,22 +6455,22 @@ function parseToolInputForPermission(e, n, r) {
 /**
  * 结果是否“已确定”：有结果且不是 checkIncomplete 的 ask。
  */
-function isSettledPermissionResult(e) {
-  return e !== undefined && !(e.behavior === "ask" && e.checkIncomplete === true);
+function isSettledPermissionResult(result) {
+  return result !== undefined && !(result.behavior === "ask" && result.checkIncomplete === true);
 }
 //@ chunk-e6aww6q8.js:3016346-3016738 placement
 /**
  * 工具声明了 permissionCheckFailureDecision 时调用它决定权限检查失败的处理；该函数本身抛错时记日志并直接拒绝。
  */
-function runFailClosedDecision(e, n, r) {
-  if (e.permissionCheckFailureDecision === undefined) return;
+function runFailClosedDecision(tool, input, toolUseContext) {
+  if (tool.permissionCheckFailureDecision === undefined) return;
   try {
-    return e.permissionCheckFailureDecision(n, r);
+    return tool.permissionCheckFailureDecision(input, toolUseContext);
   } catch (error) {
     if (!isAbortError(error)) logError(error);
     return {
       behavior: "deny",
-      message: `The ${e.name} permission check failed and its fail-closed posture could not be determined. The call is denied.`,
+      message: `The ${tool.name} permission check failed and its fail-closed posture could not be determined. The call is denied.`,
       decisionReason: {
         type: "other",
         reason: "permission check crashed; tool declares a fail-closed posture",
@@ -5439,13 +6479,13 @@ function runFailClosedDecision(e, n, r) {
   }
 }
 //@ chunk-e6aww6q8.js:3016738-3017371 placement
-function describePermissionCheckFault(error, n, r, s) {
+function describePermissionCheckFault(error, tool, input, toolUseContext) {
   if (error instanceof AbortError_2 || error instanceof APIUserAbortError) throw error;
-  if (isAbortError(error) && s.abortController.signal.aborted) throw new AbortError_2();
+  if (isAbortError(error) && toolUseContext.abortController.signal.aborted) throw new AbortError_2();
   if (isNoProjectDirectoryError(error))
     return {
       behavior: "deny",
-      message: `The ${n.name} permission check needs a working directory, and this session has none, so the call is denied. A retry is denied the same way.`,
+      message: `The ${tool.name} permission check needs a working directory, and this session has none, so the call is denied. A retry is denied the same way.`,
       decisionReason: {
         type: "other",
         reason: NO_PROJECT_DIRECTORY_DENY_REASON,
@@ -5455,13 +6495,13 @@ function describePermissionCheckFault(error, n, r, s) {
   if (mergeClients_3(error))
     return {
       behavior: "deny",
-      message: `The ${n.name} permission check failed because of a fault in Claude Code, so the call is denied. Nothing in this session can fix it, and a retry is denied the same way.`,
+      message: `The ${tool.name} permission check failed because of a fault in Claude Code, so the call is denied. Nothing in this session can fix it, and a retry is denied the same way.`,
       decisionReason: {
         type: "other",
         reason: NO_CONFIG_HOME_DENY_REASON,
       },
     };
-  return runFailClosedDecision(n, r, s);
+  return runFailClosedDecision(tool, input, toolUseContext);
 }
 //@ chunk-e6aww6q8.js:3017889-3017923 placement
 var PERMISSION_CHECK_CRASHED_REASON = "permission_check_crashed";
@@ -5469,15 +6509,15 @@ var PERMISSION_CHECK_CRASHED_REASON = "permission_check_crashed";
 /**
  * 规则检查前的早期拒绝：会话处于"工具暂停待用户"状态时拒绝（结束工具和钩子代理的 StructuredOutput 除外）；否则查整工具 deny 规则，classifierOnly 工具可绕过。
  */
-function getEarlyDenial(e, n, r) {
-  let toolPermissionContext = getToolPermissionContext(r);
+function getEarlyDenial(tool, input, toolUseContext) {
+  let toolPermissionContext = getToolPermissionContext(toolUseContext);
   if (
     isPersonTypesHold(toolPermissionContext) &&
-    !isConversationEndTool(e) &&
+    !isConversationEndTool(tool) &&
     !(
-      e.name === STRUCTUREDOUTPUT &&
-      !("mcpInfo" in e && e.mcpInfo) &&
-      r.agentId?.startsWith(HOOK_AGENT_ID_PREFIX) === true
+      tool.name === STRUCTUREDOUTPUT &&
+      !("mcpInfo" in tool && tool.mcpInfo) &&
+      toolUseContext.agentId?.startsWith(HOOK_AGENT_ID_PREFIX) === true
     )
   )
     return {
@@ -5486,10 +6526,11 @@ function getEarlyDenial(e, n, r) {
         type: "other",
         reason: TOOLS_HELD_UNTIL_A_PERSON_TYPES,
       },
-      message: buildToolsPausedMessage(e.name),
+      message: buildToolsPausedMessage(tool.name),
     };
-  let denyRuleForTool = getDenyRuleForTool(toolPermissionContext, e);
-  return denyRuleForTool === null || ("classifierOnly" in e && isClassifierOnlyToolUnblocked(e, n, r))
+  let denyRuleForTool = getDenyRuleForTool(toolPermissionContext, tool);
+  return denyRuleForTool === null ||
+    ("classifierOnly" in tool && isClassifierOnlyToolUnblocked(tool, input, toolUseContext))
     ? undefined
     : {
         behavior: "deny",
@@ -5497,102 +6538,103 @@ function getEarlyDenial(e, n, r) {
           type: "rule",
           rule: denyRuleForTool,
         },
-        message: `Permission to use ${e.name} has been denied.`,
+        message: `Permission to use ${tool.name} has been denied.`,
       };
 }
 //@ chunk-e6aww6q8.js:3018318-3020395 placement = PermissionDecisionDebugInfo (0.162)
 /**
  * 只查规则与工具自检的权限检查（给 PreToolUse 钩子 allow/ask 后复核用）：提前裁决、deny 规则、整工具 ask 规则（沙箱自动放行例外）、tool.checkPermissions；hook allow 时施加 plan 写地板；检查崩溃且 crashIsObjection 时返回 ask；只返回 deny/ask，放行时返回 null。
  */
-async function checkRuleBasedPermissions(tool, n, r, s) {
-  let toolPermissionContext = getToolPermissionContext(r);
-  let earlyDenial = getEarlyDenial(tool, n, r);
+async function checkRuleBasedPermissions(tool, input, toolUseContext, options) {
+  let toolPermissionContext = getToolPermissionContext(toolUseContext);
+  let earlyDenial = getEarlyDenial(tool, input, toolUseContext);
   if (earlyDenial !== undefined) return earlyDenial;
-  let S = matchToolRule(toolPermissionContext, tool, n, "deny");
-  if (S && !isClassifierOnlyToolUnblocked(tool, n, r))
+  let denyRule = matchToolRule(toolPermissionContext, tool, input, "deny");
+  if (denyRule && !isClassifierOnlyToolUnblocked(tool, input, toolUseContext))
     return {
       behavior: "deny",
       decisionReason: {
         type: "rule",
-        rule: S,
+        rule: denyRule,
       },
-      message: formatRuleDeniedMessage(tool.name, S),
+      message: formatRuleDeniedMessage(tool.name, denyRule),
     };
   let askRuleForTool = getAskRuleForTool(toolPermissionContext, tool);
   if (askRuleForTool) {
-    let Z =
+    let sandboxCoversAsk =
       tool.name === BASH_TOOL_NAME &&
-      r.forRemoteExecution !== true &&
-      getCheckRunner(r.session, tool.name) === undefined &&
+      toolUseContext.forRemoteExecution !== true &&
+      getCheckRunner(toolUseContext.session, tool.name) === undefined &&
       SandboxManager.isSandboxingEnabled() &&
       SandboxManager.isAutoAllowBashIfSandboxedEnabled() &&
-      shouldUseSandbox(n) &&
-      !(typeof n.command === "string" && antDisabledListMatchesCommandText(n.command));
-    let Se = Z && isSandboxAutoAllowOff(toolPermissionContext);
-    if (!(Z && !Se)) return powershellToolCheckExactMatchPermission(tool, n, r, askRuleForTool, s);
+      shouldUseSandbox(input) &&
+      !(typeof input.command === "string" && antDisabledListMatchesCommandText(input.command));
+    let sandboxAutoAllowOff = sandboxCoversAsk && isSandboxAutoAllowOff(toolPermissionContext);
+    if (!(sandboxCoversAsk && !sandboxAutoAllowOff))
+      return powershellToolCheckExactMatchPermission(tool, input, toolUseContext, askRuleForTool, options);
   }
-  let result = {
+  let decision = {
     behavior: "passthrough",
     message: createPermissionRequestMessage(tool.name),
   };
   try {
-    let { parsedInput } = parseToolInputForPermission(tool, n, r);
-    result = await tool.checkPermissions(parsedInput, r);
-    recordCheckedResult(r, parsedInput, result, tool.name);
+    let { parsedInput } = parseToolInputForPermission(tool, input, toolUseContext);
+    decision = await tool.checkPermissions(parsedInput, toolUseContext);
+    recordCheckedResult(toolUseContext, parsedInput, decision, tool.name);
     if (
-      s?.planModeWriteFloor === true &&
-      getRegisteredCheck(r.session, tool.name) === undefined &&
-      result.behavior === "passthrough" &&
-      isPlanModeWriteCall(tool, parsedInput, r)
+      options?.planModeWriteFloor === true &&
+      getRegisteredCheck(toolUseContext.session, tool.name) === undefined &&
+      decision.behavior === "passthrough" &&
+      isPlanModeWriteCall(tool, parsedInput, toolUseContext)
     )
       return buildPlanModeAsk(tool);
   } catch (error) {
-    let Se = describePermissionCheckFault(error, tool, n, r);
-    if (Se !== undefined && isSettledPermissionResult(Se)) result = Se;
-    else if (s?.crashIsObjection === true && classifierOnlyConfig(tool) === undefined) {
-      let ke = {
+    let faultDecision = describePermissionCheckFault(error, tool, input, toolUseContext);
+    if (faultDecision !== undefined && isSettledPermissionResult(faultDecision)) decision = faultDecision;
+    else if (options?.crashIsObjection === true && classifierOnlyConfig(tool) === undefined) {
+      let crashReason = {
         type: "other",
         reason: PERMISSION_CHECK_CRASHED_REASON,
       };
       return {
         behavior: "ask",
-        message: createPermissionRequestMessage(tool.name, ke),
-        decisionReason: ke,
+        message: createPermissionRequestMessage(tool.name, crashReason),
+        decisionReason: crashReason,
       };
     }
     if (
-      s?.planModeWriteFloor === true &&
-      getRegisteredCheck(r.session, tool.name) === undefined &&
-      result.behavior === "passthrough" &&
-      isPlanModeBlockedWrite(tool, n, r)
+      options?.planModeWriteFloor === true &&
+      getRegisteredCheck(toolUseContext.session, tool.name) === undefined &&
+      decision.behavior === "passthrough" &&
+      isPlanModeBlockedWrite(tool, input, toolUseContext)
     )
       return buildPlanModeAsk(tool);
   }
-  result = requireAutoModeClassifierReview(tool, n, r, result) ?? result;
-  result = askClassifierForAllowedDomains(tool, n, r, result) ?? result;
-  result = buildDesktopActionReviewAsk(tool, n, result) ?? result;
-  if (result?.behavior === "deny") return result;
-  let G = matchToolRule(toolPermissionContext, tool, n, "ask");
-  if (G)
-    return result?.behavior === "ask"
+  decision = requireAutoModeClassifierReview(tool, input, toolUseContext, decision) ?? decision;
+  decision = askClassifierForAllowedDomains(tool, input, toolUseContext, decision) ?? decision;
+  decision = buildDesktopActionReviewAsk(tool, input, decision) ?? decision;
+  if (decision?.behavior === "deny") return decision;
+  let askRule = matchToolRule(toolPermissionContext, tool, input, "ask");
+  if (askRule)
+    return decision?.behavior === "ask"
       ? {
-          ...result,
-          matchedAskRule: G,
+          ...decision,
+          matchedAskRule: askRule,
         }
       : {
           behavior: "ask",
           decisionReason: {
             type: "rule",
-            rule: G,
+            rule: askRule,
           },
           message: createPermissionRequestMessage(tool.name),
         };
   if (
-    isInteractionStillOwed(tool, s?.hookUpdatedInput) &&
-    !(s?.hookAsked === true && !tool.requiresUserInteraction?.())
+    isInteractionStillOwed(tool, options?.hookUpdatedInput) &&
+    !(options?.hookAsked === true && !tool.requiresUserInteraction?.())
   )
-    return result?.behavior === "ask"
-      ? result
+    return decision?.behavior === "ask"
+      ? decision
       : {
           behavior: "ask",
           message: createPermissionRequestMessage(tool.name),
@@ -5601,39 +6643,39 @@ async function checkRuleBasedPermissions(tool, n, r, s) {
             reason: "requiresUserInteraction",
           },
         };
-  if (result?.behavior === "ask" && carriesAskRuleIntent(result)) return result;
+  if (decision?.behavior === "ask" && carriesAskRuleIntent(decision)) return decision;
   if (tool.mcpInfo?.effectiveMaxPermission === "ask") {
-    if (isPersonOnlySafetyAsk(result)) return result;
-    let Z = {
+    if (isPersonOnlySafetyAsk(decision)) return decision;
+    let ceilingReason = {
       type: "other",
       reason: askCeilingReason(tool),
     };
     return {
       behavior: "ask",
-      message: createPermissionRequestMessage(tool.name, Z),
-      decisionReason: Z,
-      ...defaultToNoFields(result),
+      message: createPermissionRequestMessage(tool.name, ceilingReason),
+      decisionReason: ceilingReason,
+      ...defaultToNoFields(decision),
     };
   }
-  let suggestedRules = getToolPermissionContext(r);
+  let suggestedRules = getToolPermissionContext(toolUseContext);
   if (
-    result?.behavior === "ask" &&
-    (findSafetyCheckReason(result.decisionReason) ||
-      result.decisionReason?.type === "sandboxOverride" ||
-      (s?.planModeWriteFloor === true &&
-        isPlanModeFloorReason(result.decisionReason) &&
-        !cycleTeammateMode(tool, r, suggestedRules, isAutoAllowedInMode(tool, suggestedRules))))
+    decision?.behavior === "ask" &&
+    (findSafetyCheckReason(decision.decisionReason) ||
+      decision.decisionReason?.type === "sandboxOverride" ||
+      (options?.planModeWriteFloor === true &&
+        isPlanModeFloorReason(decision.decisionReason) &&
+        !cycleTeammateMode(tool, toolUseContext, suggestedRules, isAutoAllowedInMode(tool, suggestedRules))))
   )
-    return result;
+    return decision;
   if (
-    s?.planModeWriteFloor === true &&
-    getRegisteredCheck(r.session, tool.name) === undefined &&
+    options?.planModeWriteFloor === true &&
+    getRegisteredCheck(toolUseContext.session, tool.name) === undefined &&
     !tool.requiresUserInteraction?.() &&
-    !cycleTeammateMode(tool, r, suggestedRules, isAutoAllowedInMode(tool, suggestedRules)) &&
-    isPlanModeBlockedWrite(tool, n, r)
+    !cycleTeammateMode(tool, toolUseContext, suggestedRules, isAutoAllowedInMode(tool, suggestedRules)) &&
+    isPlanModeBlockedWrite(tool, input, toolUseContext)
   )
-    return result?.behavior === "ask"
-      ? result
+    return decision?.behavior === "ask"
+      ? decision
       : {
           behavior: "ask",
           message: createPermissionRequestMessage(tool.name),
@@ -5644,29 +6686,19 @@ async function checkRuleBasedPermissions(tool, n, r, s) {
 /**
  * 工具宿主（ToolHost）上的规则检查：会话为该工具注册了宿主裁决时调用它；返回 deny，或带 ask 规则意图/安全检查/仅限人工的 ask，否则 null。
  */
-async function checkRuleBasedPermissionsOnToolHost(
-  tool,
-  hookUpdatedInput,
-  toolUseContext,
-  assistantMessage,
-  toolUseID,
-) {
-  let registeredCheck = getRegisteredCheck(toolUseContext.session, tool.name);
+async function checkRuleBasedPermissionsOnToolHost(tool, mode, context, assistantMessage, toolUseID) {
+  let registeredCheck = getRegisteredCheck(context.session, tool.name);
   if (registeredCheck === undefined) return null;
-  let S = {
-    ...toolUseContext,
+  let adjudicationContext = {
+    ...context,
     toolUseId: toolUseID,
-    permissionModeAtRequest: getPermissionModeAtRequestForArbiter(
-      assistantMessage,
-      toolUseID,
-      toolUseContext,
-    ),
+    permissionModeAtRequest: getPermissionModeAtRequestForArbiter(assistantMessage, toolUseID, context),
   };
-  let w = await invokeToolHostAdjudicator(
+  let decision = await invokeToolHostAdjudicator(
     registeredCheck,
     tool,
-    hookUpdatedInput,
-    S,
+    mode,
+    adjudicationContext,
     assistantMessage,
     toolUseID,
     () =>
@@ -5679,50 +6711,58 @@ async function checkRuleBasedPermissionsOnToolHost(
         },
       }),
   );
-  if (w === CHECK_NO_DECISION) {
-    rememberPendingCheck(toolUseContext.session, toolUseID);
+  if (decision === CHECK_NO_DECISION) {
+    rememberPendingCheck(context.session, toolUseID);
     return null;
   }
-  return w.behavior === "deny" ||
-    (w.behavior === "ask" &&
-      (carriesAskRuleIntent(w) ||
-        findSafetyCheckReason(w.decisionReason) !== undefined ||
-        w.personOnly === true))
-    ? w
+  return decision.behavior === "deny" ||
+    (decision.behavior === "ask" &&
+      (carriesAskRuleIntent(decision) ||
+        findSafetyCheckReason(decision.decisionReason) !== undefined ||
+        decision.personOnly === true))
+    ? decision
     : null;
 }
 //@ chunk-e6aww6q8.js:3020896-3021043 placement
 /**
  * 调用工具宿主的裁决函数，传入服务端分类器是否裁决（serverClassifierDecides）与本地评估回调 evaluateHere。
  */
-function invokeToolHostAdjudicator(registeredCheck, tool, input, s, h, y, evaluateHere) {
+function invokeToolHostAdjudicator(
+  registeredCheck,
+  tool,
+  input,
+  toolUseContext,
+  assistantMessage,
+  toolUseID,
+  evaluateHere,
+) {
   return registeredCheck({
     tool,
     input,
-    context: s,
-    toolUseID: y,
+    context: toolUseContext,
+    toolUseID,
     serverClassifierDecides: isArbiterRole(
       resolveServerClassifierRoleForCall(
-        getAutoModeClassifierRole(getToolPermissionContext(s).mode),
-        h,
-        y,
-        s,
+        getAutoModeClassifierRole(getToolPermissionContext(toolUseContext).mode),
+        assistantMessage,
+        toolUseID,
+        toolUseContext,
       ),
     ),
     evaluateHere,
   });
 }
 //@ chunk-e6aww6q8.js:3021043-3021095 placement
-function checkDeclarativePermission(e, n, r, s) {
-  return checkToolAndRulePermissions(e, n, r, undefined, getAutoModeClassifierRole, s);
+function checkDeclarativePermission(tool, input, context, options) {
+  return checkToolAndRulePermissions(tool, input, context, undefined, getAutoModeClassifierRole, options);
 }
 //@ chunk-e6aww6q8.js:3021095-3021385 placement
 /**
  * checkDeclarativePermission 的变体：去掉 mcpServerPolicy 来源的 ask 规则后再检查，检查崩溃视为异议。
  */
-function checkDeclarativePermissionLessServerPolicyAsks(e, effectiveInput, toolUseContext) {
+function checkDeclarativePermissionLessServerPolicyAsks(tool, effectiveInput, toolUseContext) {
   return checkDeclarativePermission(
-    e,
+    tool,
     effectiveInput,
     {
       ...toolUseContext,
@@ -5730,12 +6770,12 @@ function checkDeclarativePermissionLessServerPolicyAsks(e, effectiveInput, toolU
       permissionRound: undefined,
       getAppState: () => {
         let appState = toolUseContext.getAppState();
-        let { mcpServerPolicy, ...y } = appState.toolPermissionContext.alwaysAskRules;
+        let { mcpServerPolicy, ...remainingAskRules } = appState.toolPermissionContext.alwaysAskRules;
         return {
           ...appState,
           toolPermissionContext: {
             ...appState.toolPermissionContext,
-            alwaysAskRules: y,
+            alwaysAskRules: remainingAskRules,
           },
         };
       },
@@ -5755,19 +6795,19 @@ var VERDICT_RANK = {
 /**
  * 插件 tool.check 裁决层：先运行插件检查（resolveToolCheck）包住 evaluate；deny 或与本地评估一致且无 refusal/hooksMayAllow 时直接返回；否则按一系列闸门（远程 MCP、Cowork Web、auto 下钩子 allow 不能放行的工具、云浏览器、需人工交互、等待人写入、MCP skill ask、plan 写地板）限制插件只能收紧不能放宽。
  */
-async function decideWithToolCheckHooks(e, id) {
-  let r;
-  let s = async () => (r = await e.evaluate());
+async function decideWithToolCheckHooks(request, id) {
+  let coreDecision;
+  let runCore = async () => (coreDecision = await request.evaluate());
   let toolCheck = await resolveToolCheck({
-    ...e,
-    evaluate: s,
+    ...request,
+    evaluate: runCore,
   });
   let refusal = toolCheck.behavior === "ask" ? toolCheck.refusal : undefined;
-  let S = toolCheck.behavior === "deny" || toolCheck.behavior === r?.behavior;
-  let w = toolCheck.behavior === "ask" && toolCheck.hooksMayAllow === true;
-  if (S && refusal === undefined && !w) return toolCheck;
-  let { tool, context, toolUseID } = e;
-  let Z = isClassifierRoutedMcpTool(tool, getToolPermissionContext(context))
+  let settledInCore = toolCheck.behavior === "deny" || toolCheck.behavior === coreDecision?.behavior;
+  let hookMayAllow = toolCheck.behavior === "ask" && toolCheck.hooksMayAllow === true;
+  if (settledInCore && refusal === undefined && !hookMayAllow) return toolCheck;
+  let { tool, context, toolUseID } = request;
+  let veto = isClassifierRoutedMcpTool(tool, getToolPermissionContext(context))
     ? {
         gate: lit_2("remoteSessionMcp"),
         why: "a remote session's MCP call",
@@ -5779,201 +6819,218 @@ async function decideWithToolCheckHooks(e, id) {
         }
       : undefined;
   if (
-    Z === undefined &&
+    veto === undefined &&
     isAutoClassifierActive(isAutoAllowedInMode(tool, getToolPermissionContext(context))) &&
     requiresClassifierForHookAllow(tool)
   )
-    Z = {
+    veto = {
       gate: lit_2("hookAllowClassified"),
       why: "in auto mode, or plan mode with auto mode on, a plugin can only tighten a call that a hook's allow cannot approve",
     };
-  if (Z === undefined && isRemoteBrowserToolUnderModeFloor(tool))
-    Z = {
+  if (veto === undefined && isRemoteBrowserToolUnderModeFloor(tool))
+    veto = {
       gate: lit_2("remoteBrowserModeFloor"),
       why: "a plugin can only tighten a call to CCR's cloud browser",
     };
-  if (Z === undefined && isInteractionStillOwed(tool, undefined))
-    Z = {
+  if (veto === undefined && isInteractionStillOwed(tool, undefined))
+    veto = {
       gate: lit_2("requiresUserInteraction"),
       why: "the tool requires the person",
     };
-  if (Z === undefined && isPersonTypesHold(getToolPermissionContext(context)))
-    Z = {
+  if (veto === undefined && isPersonTypesHold(getToolPermissionContext(context)))
+    veto = {
       gate: lit_2("toolsHeldUntilAPersonTypes"),
       why: "tool calls are held until a person writes",
     };
-  let coreRan = r !== undefined;
-  if (Z === undefined && tool.name === SKILL) {
-    let we = r ?? (await s());
-    if (we.behavior === "ask" && we.metadata?.mcpSkill !== undefined)
-      Z = {
+  let coreRan = coreDecision !== undefined;
+  if (veto === undefined && tool.name === SKILL) {
+    let decision = coreDecision ?? (await runCore());
+    if (decision.behavior === "ask" && decision.metadata?.mcpSkill !== undefined)
+      veto = {
         gate: lit_2("mcpSkillAsk"),
         why: "only a person answers the ask before an MCP skill loads",
       };
   }
   if (
-    Z === undefined &&
+    veto === undefined &&
     getToolPermissionContext(context).mode === "plan" &&
-    ((r?.behavior === "ask" && isPlanModeFloorReason(r.decisionReason)) ||
-      isPlanModeBlockedWrite(tool, e.input, context)) &&
-    (r ?? (await s())).behavior !== "allow"
+    ((coreDecision?.behavior === "ask" && isPlanModeFloorReason(coreDecision.decisionReason)) ||
+      isPlanModeBlockedWrite(tool, request.input, context)) &&
+    (coreDecision ?? (await runCore())).behavior !== "allow"
   )
-    Z = {
+    veto = {
       gate: lit_2("planModeWriteFloor"),
       why: "plan mode holds the call",
     };
   if (refusal !== undefined)
-    return Z === undefined &&
+    return veto === undefined &&
       context.asksNoHost !== true &&
       isAutoAllowedInMode(tool, getToolPermissionContext(context)) !== "dontAsk"
       ? toolCheck
       : refusal;
-  if (Z === undefined) {
+  if (veto === undefined) {
     if (toolCheck.behavior === "allow")
-      countMcpPolicyRecheckSkipped("toolCheck", tool, e.input, context, undefined, toolUseID);
+      countMcpPolicyRecheckSkipped("toolCheck", tool, request.input, context, undefined, toolUseID);
     return toolCheck;
   }
-  if (S && toolCheck.behavior === "ask")
+  if (settledInCore && toolCheck.behavior === "ask")
     return {
       ...toolCheck,
       hooksMayAllow: false,
     };
-  let ke = r ?? (await s());
-  if (VERDICT_RANK[toolCheck.behavior] < VERDICT_RANK[ke.behavior]) return toolCheck;
-  if (ke.behavior === "ask" && toolCheck.behavior === "ask" && toolCheck.personOnly === true)
+  let coreVerdict = coreDecision ?? (await runCore());
+  if (VERDICT_RANK[toolCheck.behavior] < VERDICT_RANK[coreVerdict.behavior]) return toolCheck;
+  if (coreVerdict.behavior === "ask" && toolCheck.behavior === "ask" && toolCheck.personOnly === true)
     return {
-      ...personOnlyAsk(ke),
+      ...personOnlyAsk(coreVerdict),
       hooksMayAllow: false,
     };
   logForDebugging(
-    `tool.check ${tool.name} ${toolUseID}: ${Z.why}, so the plugins' ${toolCheck.behavior} is ignored; continuing with the engine's own decision (${ke.behavior})`,
+    `tool.check ${tool.name} ${toolUseID}: ${veto.why}, so the plugins' ${toolCheck.behavior} is ignored; continuing with the engine's own decision (${coreVerdict.behavior})`,
   );
   logEvent("tengu_auto_mode_tool_check_verdict_held", {
     toolName: sanitizeToolNameForAnalytics(tool.name),
     isMcp: tool.isMcp ?? false,
-    gate: Z.gate,
+    gate: veto.gate,
     hookDecision: fromEnum(toolCheck.behavior),
-    coreDecision: fromEnum(ke.behavior),
+    coreDecision: fromEnum(coreVerdict.behavior),
     coreRan,
     agentMsgId: sanitizeMarkName(id),
     toolUseId: sanitizeMarkName(toolUseID),
   });
-  return ke;
+  return coreVerdict;
 }
 //@ chunk-e6aww6q8.js:3023557-3027359 placement
 /**
  * 规则与工具自检阶段：已中止则抛错；deny 规则命中即拒绝；整工具 ask 规则返回 ask（Bash 在沙箱自动放行且启用 autoAllowBashIfSandboxed 时例外，mcpServerPolicy 在远程 bypass 下可豁免）；随后调用 tool.checkPermissions、安全修正、字段级 ask 规则、requiresUserInteraction、bypassPermissions 放行、allow 规则，最后把 passthrough 转为 ask。
  */
-async function checkToolAndRulePermissions(tool, fallback, context, s, h = getAutoModeClassifierRole, y) {
-  if (context.abortController.signal.aborted) throw new AbortError_2();
-  let toolPermissionContext = getToolPermissionContext(context);
-  let earlyDenial = getEarlyDenial(tool, fallback, context);
+async function checkToolAndRulePermissions(
+  tool,
+  input,
+  permissionContext,
+  toolSuggestions,
+  getClassifierRole = getAutoModeClassifierRole,
+  hookOptions,
+) {
+  if (permissionContext.abortController.signal.aborted) throw new AbortError_2();
+  let toolPermissionContext = getToolPermissionContext(permissionContext);
+  let earlyDenial = getEarlyDenial(tool, input, permissionContext);
   if (earlyDenial !== undefined) return earlyDenial;
-  let L = matchToolRule(toolPermissionContext, tool, fallback, "deny");
-  if (L && !isClassifierOnlyToolUnblocked(tool, fallback, context))
+  let denyRule = matchToolRule(toolPermissionContext, tool, input, "deny");
+  if (denyRule && !isClassifierOnlyToolUnblocked(tool, input, permissionContext))
     return {
       behavior: "deny",
       decisionReason: {
         type: "rule",
-        rule: L,
+        rule: denyRule,
       },
-      message: formatRuleDeniedMessage(tool.name, L),
+      message: formatRuleDeniedMessage(tool.name, denyRule),
     };
   let askRuleForTool = getAskRuleForTool(toolPermissionContext, tool);
   if (askRuleForTool) {
-    let pt =
+    let sandboxCouldCover =
       tool.name === BASH_TOOL_NAME &&
-      context.forRemoteExecution !== true &&
-      getCheckRunner(context.session, tool.name) === undefined &&
+      permissionContext.forRemoteExecution !== true &&
+      getCheckRunner(permissionContext.session, tool.name) === undefined &&
       SandboxManager.isSandboxingEnabled() &&
       SandboxManager.isAutoAllowBashIfSandboxedEnabled() &&
-      shouldUseSandbox(fallback) &&
-      !(typeof fallback.command === "string" && antDisabledListMatchesCommandText(fallback.command));
-    let Et = pt && isSandboxAutoAllowOff(toolPermissionContext);
-    let yt = pt && !Et;
-    let gt =
+      shouldUseSandbox(input) &&
+      !(typeof input.command === "string" && antDisabledListMatchesCommandText(input.command));
+    let sandboxAllowOff = sandboxCouldCover && isSandboxAutoAllowOff(toolPermissionContext);
+    let sandboxCoversAsk = sandboxCouldCover && !sandboxAllowOff;
+    let policyBypassExempt =
       askRuleForTool.source === "mcpServerPolicy" &&
       env.CLAUDE_CODE_REMOTE &&
       isAutoAllowedInMode(tool, toolPermissionContext) === "bypassPermissions" &&
       getFeatureValue_CACHED_MAY_BE_STALE("tengu_mcp_server_policy_bypass_exempt", true);
-    if (!yt && !gt)
-      return powershellToolCheckExactMatchPermission(tool, fallback, context, askRuleForTool, y);
+    if (!sandboxCoversAsk && !policyBypassExempt)
+      return powershellToolCheckExactMatchPermission(
+        tool,
+        input,
+        permissionContext,
+        askRuleForTool,
+        hookOptions,
+      );
   }
-  let q = {
+  let result = {
     behavior: "passthrough",
     message: createPermissionRequestMessage(tool.name),
   };
-  let Z = false;
+  let checkRan = false;
   try {
-    let { parsedInput, keysSetAside } = parseToolInputForPermission(tool, fallback, context);
-    q = await tool.checkPermissions(parsedInput, context);
-    if (keysSetAside && q.behavior !== "deny")
-      q =
-        q.behavior === "allow"
+    let { parsedInput, keysSetAside } = parseToolInputForPermission(tool, input, permissionContext);
+    result = await tool.checkPermissions(parsedInput, permissionContext);
+    if (keysSetAside && result.behavior !== "deny")
+      result =
+        result.behavior === "allow"
           ? {
               behavior: "passthrough",
               message: createPermissionRequestMessage(tool.name),
               checkIncomplete: true,
             }
           : {
-              ...q,
+              ...result,
               checkIncomplete: true,
             };
-    Z = true;
-    recordCheckedResult(context, parsedInput, q, tool.name);
-    if (isPlanModeWriteCall(tool, parsedInput, context) && q.behavior === "passthrough")
-      q = buildPlanModeAsk(tool);
+    checkRan = true;
+    recordCheckedResult(permissionContext, parsedInput, result, tool.name);
+    if (isPlanModeWriteCall(tool, parsedInput, permissionContext) && result.behavior === "passthrough")
+      result = buildPlanModeAsk(tool);
   } catch (error) {
-    let Et = describePermissionCheckFault(error, tool, fallback, context);
-    if (Et !== undefined && isSettledPermissionResult(Et)) q = Et;
-    else if (y?.crashIsObjection === true && !Z && classifierOnlyConfig(tool) === undefined) {
-      let yt = {
+    let faultDecision = describePermissionCheckFault(error, tool, input, permissionContext);
+    if (faultDecision !== undefined && isSettledPermissionResult(faultDecision)) result = faultDecision;
+    else if (
+      hookOptions?.crashIsObjection === true &&
+      !checkRan &&
+      classifierOnlyConfig(tool) === undefined
+    ) {
+      let crashReason = {
         type: "other",
         reason: PERMISSION_CHECK_CRASHED_REASON,
       };
       return {
         behavior: "ask",
-        message: createPermissionRequestMessage(tool.name, yt),
-        decisionReason: yt,
+        message: createPermissionRequestMessage(tool.name, crashReason),
+        decisionReason: crashReason,
       };
-    } else if (Et !== undefined && !Z) q = Et;
-    else if (!Z)
-      q = {
+    } else if (faultDecision !== undefined && !checkRan) result = faultDecision;
+    else if (!checkRan)
+      result = {
         behavior: "passthrough",
         message: createPermissionRequestMessage(tool.name),
         checkIncomplete: true,
       };
-    if (q.behavior === "passthrough" && isPlanModeBlockedWrite(tool, fallback, context))
-      q =
-        q.checkIncomplete === true
+    if (result.behavior === "passthrough" && isPlanModeBlockedWrite(tool, input, permissionContext))
+      result =
+        result.checkIncomplete === true
           ? {
               ...buildPlanModeAsk(tool),
               checkIncomplete: true,
             }
           : buildPlanModeAsk(tool);
   }
-  q = requireAutoModeClassifierReview(tool, fallback, context, q) ?? q;
-  q = askClassifierForAllowedDomains(tool, fallback, context, q) ?? q;
-  q = buildDesktopActionReviewAsk(tool, fallback, q) ?? q;
-  if (q?.behavior === "deny") return q;
-  let Se = matchToolRule(toolPermissionContext, tool, fallback, "ask");
-  if (Se)
-    return q?.behavior === "ask"
+  result = requireAutoModeClassifierReview(tool, input, permissionContext, result) ?? result;
+  result = askClassifierForAllowedDomains(tool, input, permissionContext, result) ?? result;
+  result = buildDesktopActionReviewAsk(tool, input, result) ?? result;
+  if (result?.behavior === "deny") return result;
+  let askRule = matchToolRule(toolPermissionContext, tool, input, "ask");
+  if (askRule)
+    return result?.behavior === "ask"
       ? {
-          ...q,
-          matchedAskRule: Se,
+          ...result,
+          matchedAskRule: askRule,
         }
       : {
           behavior: "ask",
           decisionReason: {
             type: "rule",
-            rule: Se,
+            rule: askRule,
           },
           message: createPermissionRequestMessage(tool.name),
         };
   if (tool.requiresUserInteraction?.())
-    return q?.behavior === "ask"
-      ? q
+    return result?.behavior === "ask"
+      ? result
       : {
           behavior: "ask",
           message: createPermissionRequestMessage(tool.name),
@@ -5982,138 +7039,151 @@ async function checkToolAndRulePermissions(tool, fallback, context, s, h = getAu
             reason: "requiresUserInteraction",
           },
         };
-  let ke = serverHeldShellAllowSource(tool, q);
+  let heldShellAllowFrom = serverHeldShellAllowSource(tool, result);
   if (
-    q.behavior === "allow" &&
-    ke !== undefined &&
+    result.behavior === "allow" &&
+    heldShellAllowFrom !== undefined &&
     toolPermissionContext.servedCall !== true &&
-    isArbiterRole(h(toolPermissionContext.mode))
+    isArbiterRole(getClassifierRole(toolPermissionContext.mode))
   )
-    q = {
+    result = {
       behavior: "ask",
       message: createPermissionRequestMessage(tool.name),
-      updatedInput: q.updatedInput,
+      updatedInput: result.updatedInput,
       decisionReason: {
         type: "other",
         reason: SERVER_HOLDS_SHELL_ALLOW_REASON,
-        reroutedFrom: ke,
-        replaces: q.decisionReason,
+        reroutedFrom: heldShellAllowFrom,
+        replaces: result.decisionReason,
       },
     };
-  if (q?.behavior === "ask" && carriesAskRuleIntent(q)) return q;
+  if (result?.behavior === "ask" && carriesAskRuleIntent(result)) return result;
   if (tool.mcpInfo?.effectiveMaxPermission === "ask") {
-    if (isPersonOnlySafetyAsk(q)) return q;
-    let pt = {
+    if (isPersonOnlySafetyAsk(result)) return result;
+    let ceilingReason = {
       type: "other",
       reason: askCeilingReason(tool),
     };
     return {
       behavior: "ask",
-      message: createPermissionRequestMessage(tool.name, pt),
-      decisionReason: pt,
-      ...defaultToNoFields(q),
+      message: createPermissionRequestMessage(tool.name, ceilingReason),
+      decisionReason: ceilingReason,
+      ...defaultToNoFields(result),
     };
   }
-  let toolPermissionContext_2 = getToolPermissionContext(context);
-  let mode = isAutoAllowedInMode(tool, toolPermissionContext_2);
-  let Ae = cycleTeammateMode(tool, context, toolPermissionContext_2, mode);
-  holdRemovalWaiverOnAskAdjudicator(context);
-  let Ie =
-    Ae &&
-    q?.behavior === "ask" &&
-    mode === "bypassPermissions" &&
-    context.hookAskFloor !== true &&
-    isRemovalWaiverActive(toolPermissionContext_2) &&
+  let context = getToolPermissionContext(permissionContext);
+  let effectiveMode = isAutoAllowedInMode(tool, context);
+  let isBypassMode = cycleTeammateMode(tool, permissionContext, context, effectiveMode);
+  holdRemovalWaiverOnAskAdjudicator(permissionContext);
+  let waiverEligible =
+    isBypassMode &&
+    result?.behavior === "ask" &&
+    effectiveMode === "bypassPermissions" &&
+    permissionContext.hookAskFloor !== true &&
+    isRemovalWaiverActive(context) &&
     !arePermissionHooksUnsettled() &&
     managedTierHooks("PermissionRequest") === "none";
-  let Me =
-    Ae && q?.behavior === "ask"
+  let bypassImmuneReason =
+    isBypassMode && result?.behavior === "ask"
       ? findSafetyCheckReason(
-          q.decisionReason,
-          Ie ? isUnwaivableBypassImmuneCircuitBreaker : isBypassImmuneCircuitBreaker,
+          result.decisionReason,
+          waiverEligible ? isUnwaivableBypassImmuneCircuitBreaker : isBypassImmuneCircuitBreaker,
         )
       : undefined;
-  let We = q?.behavior === "ask" && isSandboxOverrideUnderReadBlock(q.decisionReason, toolPermissionContext);
-  let ze =
-    Ae &&
-    context.hookAskFloor === true &&
-    q?.behavior === "ask" &&
-    (q.decisionReason?.type === "sandboxOverride" ||
+  let sandboxOverrideAsk =
+    result?.behavior === "ask" &&
+    isSandboxOverrideUnderReadBlock(result.decisionReason, toolPermissionContext);
+  let unsandboxedAsk =
+    isBypassMode &&
+    permissionContext.hookAskFloor === true &&
+    result?.behavior === "ask" &&
+    (result.decisionReason?.type === "sandboxOverride" ||
       ((tool.name === BASH_TOOL_NAME || tool.name === POWERSHELL_TOOL_NAME) &&
-        scriptAsksToRunUnsandboxed(tool, fallback))) &&
+        scriptAsksToRunUnsandboxed(tool, input))) &&
     sandboxOverrideAskGuardsOn();
-  let lt = Ae && context.hookAskFloor === true && q?.behavior === "ask" && q.standsInUnderHookAsk === true;
+  let standsInUnderHook =
+    isBypassMode &&
+    permissionContext.hookAskFloor === true &&
+    result?.behavior === "ask" &&
+    result.standsInUnderHookAsk === true;
   if (
-    q?.behavior === "ask" &&
-    (Me ||
-      We ||
-      ze ||
-      lt ||
-      (!Ae &&
-        (findSafetyCheckReason(q.decisionReason) ||
-          q.decisionReason?.type === "sandboxOverride" ||
-          isPlanModeFloorReason(q.decisionReason))))
+    result?.behavior === "ask" &&
+    (bypassImmuneReason ||
+      sandboxOverrideAsk ||
+      unsandboxedAsk ||
+      standsInUnderHook ||
+      (!isBypassMode &&
+        (findSafetyCheckReason(result.decisionReason) ||
+          result.decisionReason?.type === "sandboxOverride" ||
+          isPlanModeFloorReason(result.decisionReason))))
   )
-    return q;
-  if (Ae) {
-    if (Ie && findSafetyCheckReason(q.decisionReason, isBypassImmuneCircuitBreaker) !== undefined)
+    return result;
+  if (isBypassMode) {
+    if (
+      waiverEligible &&
+      findSafetyCheckReason(result.decisionReason, isBypassImmuneCircuitBreaker) !== undefined
+    )
       logFeatureOk("permission_bypass_removal_prompt_waived");
     return {
       behavior: "allow",
-      updatedInput: getUpdatedInputOrFallback(q, fallback),
+      updatedInput: getUpdatedInputOrFallback(result, input),
       decisionReason: {
         type: "mode",
-        mode,
+        mode: effectiveMode,
       },
     };
   }
-  let Je =
-    !Z && q.behavior === "passthrough" ? null : findApplicableAllowRule(tool, fallback, context, mode, h);
-  if (Je) {
-    let pt =
-      getToolPermissionContext(context).servedCall !== true
-        ? getClassifiableBrowserAction(tool, fallback, mode)
+  let allowRule =
+    !checkRan && result.behavior === "passthrough"
+      ? null
+      : findApplicableAllowRule(tool, input, permissionContext, effectiveMode, getClassifierRole);
+  if (allowRule) {
+    let browserActionKind =
+      getToolPermissionContext(permissionContext).servedCall !== true
+        ? getClassifiableBrowserAction(tool, input, effectiveMode)
         : undefined;
-    if (pt !== undefined)
+    if (browserActionKind !== undefined)
       logEvent("tengu_auto_mode_computer_use_rule_allow", {
-        computerUseActionKind: fromEnum(pt),
-        ruleSource: fromEnum(Je.source),
+        computerUseActionKind: fromEnum(browserActionKind),
+        ruleSource: fromEnum(allowRule.source),
       });
-    let toolPermissionContext = getToolPermissionContext(context);
+    let toolPermissionContext = getToolPermissionContext(permissionContext);
     let classifierOverridableRuleSource = getClassifierOverridableRuleSource(
-      Je,
+      allowRule,
       tool,
-      fallback,
-      mode,
+      input,
+      effectiveMode,
       toolPermissionContext,
     );
     if (classifierOverridableRuleSource !== undefined) {
       if (true)
         logEvent("tengu_auto_mode_destructive_mcp_rule_allow", {
           ruleSource: fromEnum(classifierOverridableRuleSource),
-          serverClassifierRole: fromEnum(h(toolPermissionContext.mode)),
+          serverClassifierRole: fromEnum(getClassifierRole(toolPermissionContext.mode)),
         });
     }
     return {
       behavior: "allow",
-      updatedInput: getUpdatedInputOrFallback(q, fallback),
+      updatedInput: getUpdatedInputOrFallback(result, input),
       decisionReason: {
         type: "rule",
-        rule: Je,
+        rule: allowRule,
       },
     };
   }
-  let nt =
-    q.behavior === "passthrough"
+  let resolvedResult =
+    result.behavior === "passthrough"
       ? {
-          ...q,
+          ...result,
           behavior: "ask",
-          message: createPermissionRequestMessage(tool.name, q.decisionReason),
+          message: createPermissionRequestMessage(tool.name, result.decisionReason),
         }
-      : q;
-  if (nt.behavior === "ask" && nt.suggestions)
-    logForDebugging(`Permission suggestions for ${tool.name}: ${jsonStringify(nt.suggestions, null, 2)}`);
-  return nt;
+      : result;
+  if (resolvedResult.behavior === "ask" && resolvedResult.suggestions)
+    logForDebugging(
+      `Permission suggestions for ${tool.name}: ${jsonStringify(resolvedResult.suggestions, null, 2)}`,
+    );
+  return resolvedResult;
 }
 //@ chunk-e6aww6q8.js:3027359-3027830 placement = deletePermissionRule (1)
 /**
@@ -6154,12 +7224,12 @@ function convertRulesToUpdates(rules, updateType) {
   }
   let updates = [];
   for (let [key, ruleValues] of grouped) {
-    let [S, w] = key.split(":");
+    let [source, behavior] = key.split(":");
     updates.push({
       type: updateType,
       rules: ruleValues,
-      behavior: w,
-      destination: S,
+      behavior,
+      destination: source,
     });
   }
   return updates;
@@ -6168,9 +7238,9 @@ function convertRulesToUpdates(rules, updateType) {
 /**
  * 把规则列表作为 addRules 更新应用到上下文。
  */
-function applyPermissionRulesToPermissionContext(e, rules, r) {
-  let updates = convertRulesToUpdates(rules, "addRules");
-  return applyPermissionUpdates(e, updates, r);
+function applyPermissionRulesToPermissionContext(context, rules, updates) {
+  let updates_2 = convertRulesToUpdates(rules, "addRules");
+  return applyPermissionUpdates(context, updates_2, updates);
 }
 //@ chunk-e6aww6q8.js:3028136-3028623 placement = syncPermissionRulesFromDisk (0.68)
 /**
@@ -6208,16 +7278,16 @@ function syncPermissionRulesFromDisk(toolPermissionContext, rules) {
         destination: diskSource,
       });
   let updates = convertRulesToUpdates(rules, "replaceRules");
-  let h = applyPermissionUpdates(context, updates);
-  clearRemovalWaiverIfPathScoped(h);
+  let nextContext = applyPermissionUpdates(context, updates);
+  clearRemovalWaiverIfPathScoped(nextContext);
   holdRemovalWaiverOnAskAdjudicator(undefined);
-  return h;
+  return nextContext;
 }
 //@ chunk-e6aww6q8.js:3028623-3028902 placement
 /**
  * 设置 CLAUDE_CODE_EVEN_MORE_DANGEROUSLY_SKIP_PERMISSIONS 且存在 PermissionRequest 钩子（SDK、托管层或设置中）时，把 removalWaiverRulesClear 置为 false，即危险删除豁免交给钩子裁决。
  */
-function holdRemovalWaiverOnAskAdjudicator(e) {
+function holdRemovalWaiverOnAskAdjudicator(toolUseContext) {
   if (
     env.CLAUDE_CODE_EVEN_MORE_DANGEROUSLY_SKIP_PERMISSIONS &&
     (hasPermissionPromptTool(getPermissionPromptToolName()) ||
@@ -6225,8 +7295,10 @@ function holdRemovalWaiverOnAskAdjudicator(e) {
       managedTierHooks("PermissionRequest") === "some" ||
       hasSettingsHookForEvent(
         "PermissionRequest",
-        e?.sessionHooksRegistry,
-        e === undefined ? [] : registerAgent(e, "PermissionRequest", e.session.id),
+        toolUseContext?.sessionHooksRegistry,
+        toolUseContext === undefined
+          ? []
+          : registerAgent(toolUseContext, "PermissionRequest", toolUseContext.session.id),
       ))
   )
     getSessionFeatureValues().removalWaiverRulesClear = false;
@@ -6242,12 +7314,12 @@ function getUpdatedInputOrFallback(permissionResult, fallback) {
 /**
  * 在决定原因（含 subcommandResults 递归）中找第一个满足谓词的 safetyCheck 原因。
  */
-function findSafetyCheckReason(decisionReason, n = () => true) {
+function findSafetyCheckReason(decisionReason, predicate = () => true) {
   if (!decisionReason) return;
-  if (decisionReason.type === "safetyCheck") return n(decisionReason) ? decisionReason : undefined;
+  if (decisionReason.type === "safetyCheck") return predicate(decisionReason) ? decisionReason : undefined;
   if (decisionReason.type === "subcommandResults")
     for (let reason of decisionReason.reasons.values()) {
-      let safetyCheckReason = findSafetyCheckReason(reason.decisionReason, n);
+      let safetyCheckReason = findSafetyCheckReason(reason.decisionReason, predicate);
       if (safetyCheckReason) return safetyCheckReason;
     }
   return;
@@ -6268,693 +7340,104 @@ function involvesSafetyCheck(decisionReason) {
       return true;
   }
 }
-//@ chunk-sfy7bm1n.js:10287-10409 placement
+//@ chunk-xr4xc2mq.js:14991-15271 fingerprint = checkRuleBasedPermissions (0.395)
 /**
- * 进入 auto 模式时把工具名映射为允许规则使用的名字：Bash/PowerShell 视开关保留、Chrome 与危险工具返回 undefined、写文件类映射为编辑工具。
+ * 原因（含子命令递归）是否为非 allow 的规则原因，或读阻挡相关原因；第二参数选择检查哪一类。
  */
-function toAllowRuleToolName(toolNameForPermissionCheck) {
-  if (toolNameForPermissionCheck === BASH_TOOL_NAME || toolNameForPermissionCheck === POWERSHELL_TOOL_NAME)
-    return classifyAllShellEnabled() ? undefined : toolNameForPermissionCheck;
-  if (
-    isChromeToolName(toolNameForPermissionCheck) ||
-    isDangerousClassifierPermission(toolNameForPermissionCheck, undefined) ||
-    isAllowRuleIgnoredInAutoMode(toolNameForPermissionCheck)
-  )
-    return;
-  return toolNameForPermissionCheck === FILE_WRITE_TOOL_NAME ||
-    toolNameForPermissionCheck === NOTEBOOK_EDIT_TOOL_NAME
-    ? FILE_EDIT_TOOL_NAME
-    : toolNameForPermissionCheck;
-}
-//@ chunk-sfy7bm1n.js:10409-10455 placement
-var HEARTH_WRITE_TOOL_NAMES = new Set(
-  Array.from(HEARTH_WRITE_TOOL_NAMES_2, (e) => buildMcpToolName(HEARTHBOT, e)),
-);
-//@ chunk-sfy7bm1n.js:10455-10488 placement
-function isAllowRuleIgnoredInAutoMode(toolName) {
-  return HEARTH_WRITE_TOOL_NAMES.has(toolName);
-}
-//@ chunk-sfy7bm1n.js:10488-10701 placement
-/**
- * 规则来源按顺序：userSettings、projectSettings、localSettings、flagSettings、policySettings、cliArg、command、session、mcpMount、toolsNarrowing、mcpServerPolicy、hostCredential。
- */
-var PERMISSION_RULE_SOURCES = [
-  ...SETTING_SOURCES,
-  "cliArg",
-  "command",
-  "session",
-  "mcpMount",
-  "toolsNarrowing",
-  "mcpServerPolicy",
-  "hostCredential",
-];
-var NARROWING_RULE_SOURCES = ["toolsNarrowing", "command"];
-var CONVERSATION_END_TOOLS = new Set([require("./chunk-jbpmz76b.js").END_CONVERSATION_TOOL_NAME]);
-//@ chunk-sfy7bm1n.js:10701-10749 placement
-function isConversationEndTool(e) {
-  return !e.mcpInfo && CONVERSATION_END_TOOLS.has(e.name);
-}
-//@ chunk-sfy7bm1n.js:10749-11364 fingerprint = getAllowRules (0.577)
-/**
- * 收集 allow 规则；auto 模式下跳过危险规则（sme）与特定工具；CLAUDE_CODE_EVAL_CONFINED 时只用 cliArg；M() 判为被托管限制的来源之后的规则被截断。
- */
-function getAllowRules(context) {
-  if (isAutoClassifierActive(context.mode, context.servedCall === true)) {
-    let n = env.CLAUDE_CODE_EVAL_CONFINED
-      ? {
-          cliArg: context.alwaysAllowRules.cliArg,
-        }
-      : context.alwaysAllowRules;
-    let s = [];
-    for (let l of PERMISSION_RULE_SOURCES) {
-      let m = n[l];
-      if (m === undefined) continue;
-      for (let u of m) {
-        let a = permissionRuleValueFromString(u);
-        if (isDangerousClassifierPermission(a.toolName, a.ruleContent)) continue;
-        if (isAllowRuleIgnoredInAutoMode(a.toolName)) continue;
-        if (isRestrictedNonSessionRule(l, a.toolName)) continue;
-        s.push({
-          source: l,
-          ruleBehavior: "allow",
-          ruleValue: a,
-        });
-      }
-    }
-    return s;
-  }
-  if (env.CLAUDE_CODE_EVAL_CONFINED)
-    return collectRulesFromSettings(
-      {
-        cliArg: context.alwaysAllowRules.cliArg,
-      },
-      "allow",
+function isRuleOrReadBlockReason(decisionReason, kind) {
+  if (decisionReason?.type === "subcommandResults")
+    return [...decisionReason.reasons.values()].some((reason) =>
+      isRuleOrReadBlockReason(reason.decisionReason, kind),
     );
-  let rulesFromSettings = collectRulesFromSettings(context.alwaysAllowRules, "allow");
-  let o;
-  for (let [n, s] of rulesFromSettings.entries())
-    if (isRestrictedNonSessionRule(s.source, s.ruleValue.toolName)) o ??= rulesFromSettings.slice(0, n);
-    else o?.push(s);
-  return o ?? rulesFromSettings;
+  return kind === "rule"
+    ? decisionReason?.type === "rule" && decisionReason.rule.ruleBehavior !== "allow"
+    : (decisionReason?.type === "safetyCheck" && decisionReason.circuitBreaker === "outsideReadsBlocked") ||
+        (decisionReason?.type === "other" && decisionReason.reason === OUTSIDE_READS_BLOCKED_DENY_REASON);
 }
-//@ chunk-sfy7bm1n.js:11364-11517 layout = hasBashPermission (1)
+//@ chunk-pc1rmcr2.js:3877-3941 fingerprint = PERMISSION_RULE_SOURCES (1)
 /**
- * 把某行为（allow/deny/ask）的各来源规则字符串展开成规则对象列表 {source, ruleBehavior, ruleValue}。
+ * 规则来源是否为会话级（cliArg、command、session）。
  */
-function collectRulesFromSettings(e, ruleBehavior) {
-  let o = [];
-  for (let n of PERMISSION_RULE_SOURCES) {
-    let s = e[n];
-    if (s === undefined) continue;
-    for (let l of s)
-      o.push({
-        source: n,
-        ruleBehavior,
-        ruleValue: permissionRuleValueFromString(l),
-      });
-  }
-  return o;
+function isSessionScopedRuleSource(source) {
+  return source === "cliArg" || source === "command" || source === "session";
 }
-//@ chunk-sfy7bm1n.js:11517-11569 layout
-function getDenyRules(e) {
-  return collectRulesFromSettings(e.alwaysDenyRules, "deny");
-}
-//@ chunk-sfy7bm1n.js:11569-11619 layout
-function getAskRules(e) {
-  return collectRulesFromSettings(e.alwaysAskRules, "ask");
-}
-//@ chunk-sfy7bm1n.js:11619-11703 layout = getDenyRuleForAgent (1)
+//@ chunk-0h4e7gnq.js:136066-136964 callgraph-witnessed = toolMatchesRule (0.205)
 /**
- * 工具是否命中整工具规则（规则无内容时按工具名匹配）。
+ * 由 disallowedTools 规则串构建过滤器：工具名集合、裸名集合、MCP 服务器级禁用，isToolDisallowed(tool) 综合判断（Bash 被禁时一并禁用 Monitor 等等价工具）。
  */
-function toolMatchesWholeToolRule(context, agentToolName, agentType = {}) {
-  if (agentToolName.ruleValue.ruleContent !== undefined) return false;
-  return toolMatchesRuleName(context, agentToolName, agentType);
-}
-//@ chunk-sfy7bm1n.js:11703-12599 layout
-/**
- * 规则工具名是否匹配工具：同名、家族父工具、别名展开、glob 名、MCP 服务器级规则（mcp__server / mcp__server__*）。
- */
-function toolMatchesRuleName(
-  e,
-  r,
-  { proxyExpansion: o = false, globMatching: n = false, toolAliases: s } = {},
-  l = getRuleNameMatchers(r),
-  m = getToolMatchInfo(e, s),
-) {
-  if (r.ruleBehavior !== "allow" && e.mcpInfo !== undefined) {
-    let d = {
-      proxyExpansion: o,
-      globMatching: n,
-      toolAliases: s,
-    };
-    if (
-      m.otherDenyOrAskReads().some((T) =>
-        toolMatchesRuleName(
-          {
-            name: T.name,
-          },
-          r,
-          d,
-          l,
-          T,
-        ),
-      )
-    )
-      return true;
-    let p = standardKeyRuleRow(r.ruleValue.toolName, m.name);
-    if (
-      p !== undefined &&
-      toolMatchesRuleName(
-        {
-          name: p.row,
-        },
-        withRuleToolName(p.rule, r),
-        d,
-      )
-    )
-      return true;
-  }
-  let u = m.name;
-  if (r.ruleValue.toolName === u) return true;
-  let familyParentToolName = "familyParentToolName" in e ? e.familyParentToolName : undefined;
-  if (
-    familyParentToolName !== undefined &&
-    e.mcpInfo === undefined &&
-    r.ruleValue.toolName === familyParentToolName
-  )
-    return true;
-  if (o && toolNameVariants(r.ruleValue.toolName, s).includes(u)) return true;
-  let { matchesGlob } = l;
-  if (n && matchesGlob !== undefined && (matchesGlob(u) || (o && m.aliasSources().some(matchesGlob))))
-    return true;
-  let c = l.coversMcpTool(m.mcpInfo());
-  if (r.ruleBehavior === "allow") {
-    if (!c) return false;
-    if (ruleWithinServerPrefix(r.ruleValue.toolName, e)) return true;
-    warnMcpRuleMismatch(r.ruleValue, e);
-    return false;
-  }
-  return c || (isUserMcpServerRule(r) && m.mcpServerRuleNames().includes(r.ruleValue.toolName));
-}
-//@ chunk-sfy7bm1n.js:12599-12690 layout
-function isUserMcpServerRule({ source, ruleValue }) {
-  return source !== "mcpServerPolicy" && ruleValue.toolName.startsWith(MCP_TOOL_PREFIX);
-}
-//@ chunk-sfy7bm1n.js:12690-12824 layout
-function getRuleNameMatchers({ ruleValue: { toolName } }) {
-  let r;
-  let o;
-  return {
-    matchesGlob: hasWildcard(toolName) ? (n) => (r ??= wildcardRuleRegex(toolName))(n) : undefined,
-    coversMcpTool: (n) => (o ??= compileMcpRuleMatcher(toolName))(n),
-  };
-}
-//@ chunk-sfy7bm1n.js:12824-13030 layout
-/**
- * 构造工具匹配信息（惰性计算）：工具名、MCP 信息、别名来源、MCP 服务器规则名、其他 deny/ask 读取名。
- */
-function getToolMatchInfo(e, toolAliases) {
-  let toolNameForPermissionCheck = getToolNameForPermissionCheck_2(e);
-  let n;
-  let s;
-  let l;
-  let m;
-  return {
-    name: toolNameForPermissionCheck,
-    mcpInfo: () => (m === undefined ? (m = mcpInfoFromString(toolNameForPermissionCheck)) : m),
-    aliasSources: () => (n ??= aliasesFor(toolNameForPermissionCheck, toolAliases)),
-    mcpServerRuleNames: () => (s ??= getMcpServerRulePrefixes(e)),
-    otherDenyOrAskReads: () =>
-      (l ??= getMcpToolAliasNames(e).map((name) =>
-        getToolMatchInfo(
-          {
-            name,
-          },
-          toolAliases,
-        ),
-      )),
-  };
-}
-//@ chunk-sfy7bm1n.js:13030-13086 file-local
-function toolAlwaysAllowedRule(context, tool) {
-  return getAllowRules(context).find((rule) => toolMatchesWholeToolRule(tool, rule)) || null;
-}
-//@ chunk-sfy7bm1n.js:13086-13158 layout
-/**
- * 该规则是否允许别名展开：cliArg 与 toolsNarrowing 来源不展开。
- */
-function allowsAliasExpansion(e) {
-  return e.source !== "cliArg" && e.source !== "toolsNarrowing";
-}
-//@ chunk-sfy7bm1n.js:13158-13562 layout
-/**
- * 规则是否命中工具：按名字（含别名、glob）匹配，再检查 aliasSkillToolNames 与打包别名 skill 名。
- */
-function toolMatchesRule(e, r, o, n = getRuleNameMatchers(o), s, l = false) {
-  let m = {
-    proxyExpansion: allowsAliasExpansion(o),
-    globMatching: true,
-    toolAliases: e.toolAliases,
-  };
-  if (toolMatchesRuleName(r, o, m, n, s)) return true;
-  if (
-    ("aliasSkillToolNames" in r ? r.aliasSkillToolNames : undefined)?.some((name) =>
-      toolMatchesRuleName(
-        {
-          name,
-        },
-        o,
-        m,
-        n,
-      ),
-    )
-  )
-    return true;
-  let packagingAliasSkillToolNames =
-    "packagingAliasSkillToolNames" in r ? r.packagingAliasSkillToolNames : undefined;
-  if (
-    packagingAliasSkillToolNames === undefined ||
-    (hasWildcard(o.ruleValue.toolName) && !isSkillPluginSurfaceEnabled(l))
-  )
-    return false;
-  return packagingAliasSkillToolNames.some((name) =>
-    toolMatchesRuleName(
-      {
-        name,
-      },
-      o,
-      m,
-      n,
-    ),
-  );
-}
-//@ chunk-sfy7bm1n.js:13562-13688 layout
-/**
- * 找命中该工具的 deny 规则（会话结束类工具除外），返回规则或 null。
- */
-function getDenyRuleForTool(e, r, o, n = false) {
-  if (isConversationEndTool(r)) return null;
-  let s;
-  return (
-    (o ?? getDenyRules(e)).find((l) =>
-      toolMatchesRuleWithAliases(r, l, e, undefined, (s ??= getToolMatchInfo(r, e.toolAliases)), n),
-    ) || null
-  );
-}
-//@ chunk-sfy7bm1n.js:13688-13729 layout
-function isWildcardOnlyContent(ruleContent) {
-  return /^[\s*]+$/.test(ruleContent);
-}
-//@ chunk-sfy7bm1n.js:13729-13834 layout
-function isRootWildcardPathContent(ruleContent) {
-  return (
-    ruleContent.startsWith("//") && /^\/(?:\*\*\/)?\*+(?:\/\*\*)?$/.test(ruleContent.replace(/\/{2,}/g, "/"))
-  );
-}
-//@ chunk-sfy7bm1n.js:13834-13929 layout
-var EDIT_FAMILY_TOOLS = [FILE_EDIT_TOOL_NAME, FILE_WRITE_TOOL_NAME, NOTEBOOK_EDIT_TOOL_NAME];
-var READ_FAMILY_TOOLS = [FILE_READ_TOOL_NAME, GREP_TOOL_NAME, GLOB_TOOL_NAME];
-var BROAD_PATH_RULE_COVERAGE = new Map([
-  [
-    FILE_READ_TOOL_NAME,
-    {
-      deny: [...READ_FAMILY_TOOLS, FILE_EDIT_TOOL_NAME, FILE_WRITE_TOOL_NAME],
-      ask: READ_FAMILY_TOOLS,
-    },
-  ],
-  [
-    FILE_EDIT_TOOL_NAME,
-    {
-      deny: EDIT_FAMILY_TOOLS,
-      ask: EDIT_FAMILY_TOOLS,
-    },
-  ],
-]);
-//@ chunk-sfy7bm1n.js:13929-14102 layout = getRuleByContentsForToolName (1)
-function ruleCoversToolViaBroadContent({ ruleBehavior, ruleValue: { toolName, ruleContent } }, n) {
-  if (ruleContent === undefined || ruleBehavior === "allow") return false;
-  return toolName === BASH_TOOL_NAME
-    ? n === BASH_TOOL_NAME && isWildcardOnlyContent(ruleContent)
-    : isRootWildcardPathContent(ruleContent) &&
-        (BROAD_PATH_RULE_COVERAGE.get(toolName)?.[ruleBehavior] ?? []).includes(n);
-}
-//@ chunk-sfy7bm1n.js:14102-14330 layout
-/**
- * 带别名的规则匹配：无内容规则走 toolMatchesRule；有内容规则检查别名来源上的宽泛内容是否覆盖该工具。
- */
-function toolMatchesRuleWithAliases(e, r, o, n, toolMatchInfo, l = false) {
-  if (r.ruleValue.ruleContent === undefined) return toolMatchesRule(o, e, r, n, toolMatchInfo, l);
-  let { name: m, aliasSources } = toolMatchInfo ?? getToolMatchInfo(e, o.toolAliases);
-  let a = r.ruleValue.toolName === m;
-  let f = allowsAliasExpansion(r);
-  return aliasSources().some(
-    (c) =>
-      c !== m &&
-      ((f && ruleCoversToolViaBroadContent(r, c)) ||
-        (a && ruleCoversToolViaBroadContent(withRuleToolName(c, r), c))),
-  );
-}
-//@ chunk-sfy7bm1n.js:14330-14397 layout
-function withRuleToolName(toolName, r) {
-  return {
-    ...r,
-    ruleValue: {
-      ...r.ruleValue,
-      toolName,
-    },
-  };
-}
-//@ chunk-sfy7bm1n.js:14397-14480 layout
-/**
- * 规则名是否为模式名（glob 名或只到 MCP 服务器一级的名字）。
- */
-function isPatternRuleName(toolName) {
-  if (hasWildcard(toolName)) return true;
-  let r = mcpInfoFromString(toolName);
-  return r !== null && r.toolName === undefined;
-}
-//@ chunk-sfy7bm1n.js:14480-14932 layout
-/**
- * 为一组 deny 规则建索引：整名集合、模式规则、MCP 服务器名、带内容但经别名覆盖的规则等，供批量过滤工具池。
- */
-function buildDenyRuleIndex(e, r) {
-  let o = new Set();
-  let n = new Set();
-  let s = new Set();
-  let l = [];
-  let m = [];
-  for (let u of r) {
-    let { toolName, ruleContent } = u.ruleValue;
-    if (ruleContent !== undefined) {
-      if (
-        Object.entries(e.toolAliases ?? {}).some(
-          ([key, value]) =>
-            ruleCoversToolViaBroadContent(u, key) ||
-            (value === toolName && ruleCoversToolViaBroadContent(withRuleToolName(key, u), key)),
-        )
-      )
-        m.push(u);
-      continue;
+function buildDisallowedToolsFilter(disallowedTools) {
+  let flattened = disallowedTools?.flatMap((entry) => uniq([entry, toInternalToolName(entry)]));
+  let disallowedToolSet = new Set();
+  let bareDisallowedToolSet = new Set();
+  let disallowedServerNames = new Set();
+  let allServersDisallowed = false;
+  for (let entry of flattened ?? []) {
+    let { toolName, ruleContent } = permissionRuleValueFromString(entry);
+    let nameForRuleMatch = ruleToolNameFromString(entry);
+    for (let name of new Set(isReplToolName(nameForRuleMatch) ? [toolName, nameForRuleMatch] : [toolName])) {
+      disallowedToolSet.add(name);
+      if (!ruleContent) bareDisallowedToolSet.add(name);
     }
-    if (isPatternRuleName(toolName) || ruleWithNormalizedServer(toolName)) {
-      l.push({
-        rule: u,
-        ruleName: getRuleNameMatchers(u),
-      });
-      continue;
-    }
-    if (isUserMcpServerRule(u)) s.add(toolName);
-    n.add(toolName);
-    let c = allowsAliasExpansion(u) ? toolNameVariants(toolName, e.toolAliases) : [toolName];
-    for (let d of c) o.add(d);
+    if (toolName === BASH_TOOL_NAME)
+      for (let name of toolsRunningCodeAsBash()) {
+        disallowedToolSet.add(name);
+        bareDisallowedToolSet.add(name);
+      }
+    let ruleInfo = mcpInfoFromString(toolName);
+    if (ruleInfo !== null && (ruleInfo.toolName === undefined || ruleInfo.toolName === "*"))
+      if (ruleInfo.serverName === "*") allServersDisallowed = true;
+      else disallowedServerNames.add(ruleInfo.serverName);
   }
+  let isServerLevelDisallowed = (toolInfo) => {
+    if (!allServersDisallowed && disallowedServerNames.size === 0) return false;
+    let serverName = mcpInfoFromString(toolInfo)?.serverName;
+    return serverName !== undefined && (allServersDisallowed || disallowedServerNames.has(serverName));
+  };
   return {
-    names: o,
-    parentNames: n,
-    mcpServerNames: s,
-    patterns: l,
-    withContent: m,
+    disallowedToolSet,
+    bareDisallowedToolSet,
+    isServerLevelDisallowed,
+    isToolDisallowed: (tool) => {
+      let toolInfo = getToolNameForPermissionCheck_2(tool);
+      let servedViaMcp = builtinToolServedByMcp(tool);
+      return (
+        toolMatchesAnyName(tool, disallowedToolSet) ||
+        disallowedToolSet.has(toolInfo) ||
+        (servedViaMcp !== undefined && disallowedToolSet.has(servedViaMcp)) ||
+        isServerLevelDisallowed(toolInfo) ||
+        (tool.mcpInfo !== undefined &&
+          [...disallowedToolSet].some((disallowedName) => mcpRuleMatchesToolAlias(disallowedName, tool))) ||
+        getMcpServerRulePrefixes(tool).some(
+          (prefix) => disallowedToolSet.has(prefix) || disallowedToolSet.has(`${prefix}__*`),
+        ) ||
+        (tool.aliasSkillToolNames?.some((aliasSkillToolName) => disallowedToolSet.has(aliasSkillToolName)) ??
+          false) ||
+        (tool.packagingAliasSkillToolNames?.some((packagingAliasSkillToolName) =>
+          disallowedToolSet.has(packagingAliasSkillToolName),
+        ) ??
+          false) ||
+        (ARTIFACT_TOOL_NAME !== null &&
+          disallowedToolSet.has(ARTIFACT_TOOL_NAME) &&
+          (standsInForBuiltInArtifact?.(tool) ?? false))
+      );
+    },
   };
 }
-//@ chunk-sfy7bm1n.js:14932-14991 layout
-function getDenyRuleIndex(e) {
-  let denyRules = getDenyRules(e);
-  return {
-    rules: denyRules,
-    index: buildDenyRuleIndex(e, denyRules),
-  };
-}
-//@ chunk-sfy7bm1n.js:14991-15938 layout
+//@ chunk-0wdgqhcf.js:53327-53451 fingerprint = getAskRules (0.546)
 /**
- * 用 deny 规则索引判断工具是否被拒绝：名字、其他读名、父工具名、别名 skill 名、MCP 服务器名、模式规则、带内容的覆盖规则依次检查。
+ * 按键集合从 alwaysAskRules 中删除 ask 规则。
  */
-function isToolDeniedByIndex(e, index, o) {
-  if (
-    isConversationEndTool(o) ||
-    (index.names.size === 0 && index.patterns.length === 0 && index.withContent.length === 0)
-  )
-    return false;
-  let toolMatchInfo = getToolMatchInfo(o, e.toolAliases);
-  if (index.names.has(toolMatchInfo.name)) return true;
-  if (
-    toolMatchInfo
-      .otherDenyOrAskReads()
-      .some((u) => index.names.has(u.name) || u.mcpServerRuleNames().some((a) => index.mcpServerNames.has(a)))
-  )
-    return true;
-  let familyParentToolName = "familyParentToolName" in o ? o.familyParentToolName : undefined;
-  if (
-    familyParentToolName !== undefined &&
-    o.mcpInfo === undefined &&
-    index.parentNames.has(familyParentToolName)
-  )
-    return true;
-  let aliasSkillToolNames = "aliasSkillToolNames" in o ? o.aliasSkillToolNames : undefined;
-  if (aliasSkillToolNames?.some((aliasSkillToolName) => index.names.has(aliasSkillToolName))) return true;
-  let packagingAliasSkillToolNames =
-    "packagingAliasSkillToolNames" in o ? o.packagingAliasSkillToolNames : undefined;
-  if (
-    packagingAliasSkillToolNames?.some((packagingAliasSkillToolName) =>
-      index.names.has(packagingAliasSkillToolName),
-    )
-  )
-    return true;
-  if (
-    index.mcpServerNames.size > 0 &&
-    (toolMatchInfo.mcpServerRuleNames().some((u) => index.mcpServerNames.has(u)) ||
-      [...(aliasSkillToolNames ?? []), ...(packagingAliasSkillToolNames ?? [])].some((name) =>
-        getMcpServerRulePrefixes({
-          name,
-        }).some((a) => index.mcpServerNames.has(a)),
-      ))
-  )
-    return true;
-  return (
-    index.patterns.some(({ rule, ruleName }) =>
-      toolMatchesRuleWithAliases(o, rule, e, ruleName, toolMatchInfo),
-    ) ||
-    (toolMatchInfo.aliasSources().length > 0 &&
-      index.withContent.some((u) => toolMatchesRuleWithAliases(o, u, e, undefined, toolMatchInfo)))
-  );
-}
-//@ chunk-sfy7bm1n.js:15938-16133 layout
-/**
- * 会话结束类工具是否被整工具 deny 拒绝（存在同名 allow 规则时不算）。
- */
-function isConversationEndToolDenied(e, r) {
-  if (!isConversationEndTool(r)) return false;
-  if (getAllowRules(e).some((n) => n.ruleValue.toolName === r.name)) return false;
-  return getDenyRules(e).some((n) =>
-    toolMatchesWholeToolRule(r, n, {
-      proxyExpansion: allowsAliasExpansion(n),
-      globMatching: true,
-      toolAliases: e.toolAliases,
-    }),
-  );
-}
-//@ chunk-sfy7bm1n.js:16133-16236 layout = getDenyRuleForAgent (1)
-/**
- * 找 toolName 与 ruleContent 精确相等的 deny 规则（例如 Agent(type)）。
- */
-function findDenyRuleWithContent(context, agentToolName, agentType) {
-  return (
-    getDenyRules(context).find(
-      (rule) => rule.ruleValue.toolName === agentToolName && rule.ruleValue.ruleContent === agentType,
-    ) || null
-  );
-}
-//@ chunk-sfy7bm1n.js:16236-16340 layout = getDenyRuleForAgent (1)
-/**
- * 找 toolName 与 ruleContent 精确相等的 ask 规则。
- */
-function findAskRuleWithContent(context, agentToolName, agentType) {
-  return (
-    getAskRules(context).find(
-      (rule) => rule.ruleValue.toolName === agentToolName && rule.ruleValue.ruleContent === agentType,
-    ) || null
-  );
-}
-//@ chunk-sfy7bm1n.js:16340-16528 fingerprint = filterDeniedAgents (1)
-/**
- * 按 Agent(type) deny 规则过滤代理列表。
- */
-function filterDeniedAgents(agents, context, agentToolName) {
-  let deniedAgentTypes = new Set();
-  for (let rule of getDenyRules(context))
-    if (rule.ruleValue.toolName === agentToolName && rule.ruleValue.ruleContent !== undefined)
-      deniedAgentTypes.add(rule.ruleValue.ruleContent);
-  return agents.filter((agent) => !deniedAgentTypes.has(agent.agentType));
-}
-//@ chunk-sfy7bm1n.js:16528-16647 placement
-function getAskRuleForTool(e, r, o) {
-  if (isConversationEndTool(r)) return null;
-  let n;
-  return (
-    (o ?? getAskRules(e)).find((s) =>
-      toolMatchesRuleWithAliases(r, s, e, undefined, (n ??= getToolMatchInfo(r, e.toolAliases))),
-    ) || null
-  );
-}
-//@ chunk-sfy7bm1n.js:16647-16750 placement
-function stringifyScalar(e) {
-  if (e === undefined || e === null) return null;
-  if (typeof e !== "object") return String(e);
-  return null;
-}
-//@ chunk-sfy7bm1n.js:16750-16901 placement
-function parseFieldRuleContent(e) {
-  let index = e.indexOf(":");
-  if (index <= 0) return null;
-  let trimmed = e.slice(0, index).trim();
-  let trimmed_2 = e.slice(index + 1).trim();
-  return trimmed === "" || trimmed_2 === ""
-    ? null
+function removeAskRulesByKey(toolPermissionContext, keys) {
+  return keys.size === 0
+    ? toolPermissionContext
     : {
-        key: trimmed,
-        expected: trimmed_2,
+        ...toolPermissionContext,
+        alwaysAskRules: import_mapValues(toolPermissionContext.alwaysAskRules, (rulesBySource, source) =>
+          rulesBySource?.filter(
+            (source_2) => !keys.has(dbRowKey(source, permissionRuleValueFromString(source_2))),
+          ),
+        ),
       };
-}
-//@ chunk-sfy7bm1n.js:16901-16999 placement
-function formatRuleDeniedMessage(name, r) {
-  return `Permission to use ${name} with ${r.ruleValue.ruleContent} has been denied.`;
-}
-//@ chunk-sfy7bm1n.js:16999-17029 placement
-var MCP_RESOURCE_TOOLS = new Set([
-  LISTMCPRESOURCESTOOL,
-  READ_MCP_RESOURCE_DIR_TOOL_NAME,
-  READMCPRESOURCETOOL,
-  REFRESH_MCP_TOOLS_TOOL_NAME,
-]);
-//@ chunk-sfy7bm1n.js:17029-18589 placement
-/**
- * 匹配 "key: expected" 形式的字段规则：对工具（及其别名、家族、MCP 服务器）的同行为规则，取输入字段值做通配比较；MCP 资源工具的 server 字段与 skill 名特判。
- */
-function matchToolRule(context, tool, input, behavior) {
-  let toolNameForPermissionCheck = getToolNameForPermissionCheck_2(tool);
-  let l = [
-    ...("aliasSkillToolNames" in tool ? (tool.aliasSkillToolNames ?? []) : []),
-    ...("packagingAliasSkillToolNames" in tool ? (tool.packagingAliasSkillToolNames ?? []) : []),
-  ];
-  let m = [
-    [toolNameForPermissionCheck, false],
-    ...getMcpToolAliasNames(tool).map((a) => [a, false]),
-    ...(tool.mcpInfo !== undefined && isServerIdentityActive()
-      ? (behavior === "deny" ? getDenyRules(context) : getAskRules(context))
-          .map((a) => a.ruleValue.toolName)
-          .filter((a) => {
-            let f = standardKeyRuleRow(a, toolNameForPermissionCheck);
-            return f !== undefined && f.rule === f.row;
-          })
-          .map((a) => [a, false])
-      : []),
-    ...l.map((a) => [a, false]),
-    ...aliasesFor(toolNameForPermissionCheck, context.toolAliases).map((a) => [a, true]),
-  ];
-  for (let [a, f] of m) {
-    let filtered = getContentRulesForToolName(context, a, behavior).filter(
-      (d) => !f || allowsAliasExpansion(d),
-    );
-    for (let [d = "", p] of new Map(filtered.map((T) => [T.ruleValue.ruleContent, T]))) {
-      let fieldRuleContent = parseFieldRuleContent(d);
-      if (fieldRuleContent === null) continue;
-      let { key, expected } = fieldRuleContent;
-      if (key === tool.ruleContentField) continue;
-      let E =
-        key === DEVICE_2 && !Object.hasOwn(input, key) && Object.hasOwn(input, HOST_TOOL_INPUT_FIELD)
-          ? HOST_TOOL_INPUT_FIELD
-          : key;
-      if (!Object.hasOwn(input, E)) continue;
-      let g = stringifyScalar(input[E]);
-      if (g === null) continue;
-      if (matchWildcard(expected, g.trim())) return p;
-      if (E === "server" && MCP_RESOURCE_TOOLS.has(a)) {
-        let replaced = expected.replace(/[^a-zA-Z0-9_*-]/g, "_");
-        let replaced_2 = replaced.replace(/_+/g, "_").replace(/_$/, "").replace(/_?\*/g, "*");
-        if (
-          [g.trim(), g]
-            .map(normalizeNameForMCP)
-            .flatMap((P) => [P, trimEndChars(P, "_").replace(/^_+/, "")])
-            .some((P) =>
-              expected.startsWith(CLAUDE_AI_NAME_PREFIX)
-                ? matchWildcard(replaced_2, P)
-                : matchWildcard(replaced, P) ||
-                  (expected.includes("*") &&
-                    !replaced.startsWith("_") &&
-                    `${P}_`.startsWith(CLAUDE_AI) &&
-                    matchWildcard(replaced_2, P)),
-            )
-        )
-          return p;
-      }
-      if (
-        E === HOST_TOOL_INPUT_FIELD &&
-        (expected.includes("*")
-          ? matchWildcard(expected.toLowerCase(), g.trim())
-          : machineNameMatches(expected, g.trim()))
-      )
-        return p;
-      if (toolNameForPermissionCheck === SKILL && E === "skill") {
-        let trimmed = g.trim();
-        let syncedSkillAlias = toSyncedSkillAlias(trimmed);
-        if (syncedSkillAlias !== undefined) {
-          if ((!expected.includes("*") || isTopHostSession()) && matchWildcard(expected, syncedSkillAlias))
-            return p;
-        }
-      }
-    }
-  }
-  let familyParentToolName = "familyParentToolName" in tool ? tool.familyParentToolName : undefined;
-  if (
-    familyParentToolName !== undefined &&
-    tool.mcpInfo === undefined &&
-    tool.toFamilyParentInput !== undefined
-  )
-    return matchToolRule(
-      context,
-      {
-        name: familyParentToolName,
-        ruleContentField: tool.ruleContentField,
-      },
-      tool.toFamilyParentInput(input),
-      behavior,
-    );
-  return null;
-}
-//@ chunk-sfy7bm1n.js:18589-18630 placement
-function getContentRulesMapForTool(context, tool, behavior) {
-  return getContentRulesMapForToolName(context, getToolNameForPermissionCheck_2(tool), behavior);
-}
-//@ chunk-sfy7bm1n.js:18630-18765 placement = getDenyRuleForAgent (1)
-function getContentRulesMapForToolName(context, agentToolName, agentType) {
-  let n = new Map();
-  for (let s of getContentRulesForToolName(context, agentToolName, agentType))
-    if (s.ruleValue.ruleContent !== undefined) n.set(s.ruleValue.ruleContent, s);
-  return n;
-}
-//@ chunk-sfy7bm1n.js:18765-19004 placement = getRuleByContentsForToolName (1)
-function getContentRulesForToolName(context, toolName, behavior) {
-  let n = [];
-  switch (behavior) {
-    case "allow":
-      n = getAllowRules(context);
-      break;
-    case "deny":
-      n = getDenyRules(context);
-      break;
-    case "ask":
-      n = getAskRules(context);
-      break;
-  }
-  let s = [];
-  for (let rule of n)
-    if (
-      rule.ruleValue.toolName === toolName &&
-      rule.ruleValue.ruleContent !== undefined &&
-      rule.ruleBehavior === behavior
-    )
-      s.push(rule);
-  return s;
 }
 //@ chunk-8wvtd8sr.js:94302-94434 fingerprint = getDenyRuleForAgent (1)
 /**
@@ -6962,8 +7445,8 @@ function getContentRulesForToolName(context, toolName, behavior) {
  */
 function getRuleExactDomain(askTypeRule) {
   let typePrefixedValue = parseTypePrefixedValue(askTypeRule.ruleValue.ruleContent ?? "");
-  let s = typePrefixedValue === undefined ? undefined : typeNameWithoutQuotes(typePrefixedValue);
-  return s === undefined || s === "" || s.includes("*") ? undefined : s;
+  let domain = typePrefixedValue === undefined ? undefined : typeNameWithoutQuotes(typePrefixedValue);
+  return domain === undefined || domain === "" || domain.includes("*") ? undefined : domain;
 }
 //@ chunk-8wvtd8sr.js:94434-94519 shared-adjacent = getDenyRuleForAgent (1)
 /**
@@ -7003,15 +7486,15 @@ function getFileEditPermissionOutcome(tool, input, context) {
       : {
           kind: "ask",
         };
-  let y =
+  let isAutoAllowed =
     tool.behavior === "allow" ||
     (decisionReason?.type !== "safetyCheck" &&
       (input.mode === "bypassPermissions" || toolAlwaysAllowedRule(input, FileEditTool) !== null));
-  if (editAskClassifierRoutable(y ? undefined : decisionReason, input, context))
+  if (editAskClassifierRoutable(isAutoAllowed ? undefined : decisionReason, input, context))
     return {
       kind: "unseen",
     };
-  if (y)
+  if (isAutoAllowed)
     return {
       kind: "allow",
     };
@@ -7024,80 +7507,48 @@ function getFileEditPermissionOutcome(tool, input, context) {
         kind: "ask",
       };
 }
-//@ chunk-0e8j1zzj.js:44090-44119 fingerprint = applyPermissionRulesToPermissionContext (1)
-var RULE_ADDING_UPDATE_TYPES = new Set(["addRules"]);
-//@ chunk-0h4e7gnq.js:136066-136964 callgraph-witnessed = toolMatchesRule (0.205)
+//@ chunk-dyjqn2aj.js:191-476 placement
 /**
- * 由 disallowedTools 规则串构建过滤器：工具名集合、裸名集合、MCP 服务器级禁用，isToolDisallowed(tool) 综合判断（Bash 被禁时一并禁用 Monitor 等等价工具）。
+ * 有命中的 ask 规则时把决策改为 ask（已是 ask 则补 matchedAskRule），保留改写过的输入；deny 不变。
  */
-function buildDisallowedToolsFilter(disallowedTools) {
-  let flattened = disallowedTools?.flatMap((w) => uniq([w, toInternalToolName(w)]));
-  let s = new Set();
-  let y = new Set();
-  let r = new Set();
-  let S = false;
-  for (let w of flattened ?? []) {
-    let { toolName, ruleContent } = permissionRuleValueFromString(w);
-    let nameForRuleMatch = ruleToolNameFromString(w);
-    for (let ee of new Set(isReplToolName(nameForRuleMatch) ? [toolName, nameForRuleMatch] : [toolName])) {
-      s.add(ee);
-      if (!ruleContent) y.add(ee);
-    }
-    if (toolName === BASH_TOOL_NAME)
-      for (let ee of toolsRunningCodeAsBash()) {
-        s.add(ee);
-        y.add(ee);
+async function applyAskRuleOverride(decision, askRule, getAskMessage) {
+  if (askRule === null || decision.behavior === "deny") return decision;
+  return decision.behavior === "ask"
+    ? {
+        ...decision,
+        matchedAskRule: decision.matchedAskRule ?? askRule,
       }
-    let ruleInfo = mcpInfoFromString(toolName);
-    if (ruleInfo !== null && (ruleInfo.toolName === undefined || ruleInfo.toolName === "*"))
-      if (ruleInfo.serverName === "*") S = true;
-      else r.add(ruleInfo.serverName);
-  }
-  let h = (toolInfo) => {
-    if (!S && r.size === 0) return false;
-    let serverName = mcpInfoFromString(toolInfo)?.serverName;
-    return serverName !== undefined && (S || r.has(serverName));
-  };
-  return {
-    disallowedToolSet: s,
-    bareDisallowedToolSet: y,
-    isServerLevelDisallowed: h,
-    isToolDisallowed: (w) => {
-      let toolInfo = getToolNameForPermissionCheck_2(w);
-      let L = builtinToolServedByMcp(w);
-      return (
-        toolMatchesAnyName(w, s) ||
-        s.has(toolInfo) ||
-        (L !== undefined && s.has(L)) ||
-        h(toolInfo) ||
-        (w.mcpInfo !== undefined && [...s].some((I) => mcpRuleMatchesToolAlias(I, w))) ||
-        getMcpServerRulePrefixes(w).some((I) => s.has(I) || s.has(`${I}__*`)) ||
-        (w.aliasSkillToolNames?.some((aliasSkillToolName) => s.has(aliasSkillToolName)) ?? false) ||
-        (w.packagingAliasSkillToolNames?.some((packagingAliasSkillToolName) =>
-          s.has(packagingAliasSkillToolName),
-        ) ??
-          false) ||
-        (ARTIFACT_TOOL_NAME !== null &&
-          s.has(ARTIFACT_TOOL_NAME) &&
-          (standsInForBuiltInArtifact?.(w) ?? false))
-      );
-    },
-  };
-}
-//@ chunk-0wdgqhcf.js:53327-53451 fingerprint = getAskRules (0.546)
-/**
- * 按键集合从 alwaysAskRules 中删除 ask 规则。
- */
-function removeAskRulesByKey(e, t) {
-  return t.size === 0
-    ? e
     : {
-        ...e,
-        alwaysAskRules: xr(e.alwaysAskRules, (n, r) =>
-          n?.filter((source) => !t.has(dbRowKey(r, permissionRuleValueFromString(source)))),
-        ),
+        behavior: "ask",
+        message: await getAskMessage(),
+        decisionReason: {
+          type: "rule",
+          rule: askRule,
+        },
+        ...("updatedInput" in decision &&
+          decision.updatedInput !== undefined && {
+            updatedInput: decision.updatedInput,
+          }),
       };
 }
+//@ chunk-xde1fhwg.js:300-463 placement
+/**
+ * 决策不能被绕过模式放行：含绕过免疫的安全检查或已签发重入、工具要求用户交互、调用方强制或仅限本人。
+ */
+function isBypassImmuneDecision(decision, tool, toolUseContext) {
+  if (
+    findSafetyCheckReason(decision.decisionReason, isBypassImmuneCircuitBreaker) !== undefined ||
+    hasMintedReentry(toolUseContext)
+  )
+    return true;
+  if (tool.requiresUserInteraction?.()) return true;
+  return decision.forcedByCaller === true || decision.personOnly === true;
+}
+//@ chunk-0e8j1zzj.js:44090-44119 fingerprint = applyPermissionRulesToPermissionContext (1)
+var RULE_ADDING_UPDATE_TYPES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-0e8j1zzj.js:44090", () => {
+  RULE_ADDING_UPDATE_TYPES = new Set(["addRules"]);
+});
 //@ chunk-18hwfzwa.js:63873-63939 placement = createGetAppStateWithAllowedTools (1)
 /**
  * 取权限上下文里的 alwaysAllowRules。
@@ -7119,70 +7570,6 @@ function createChromeDomainAllowRule(ruleContent, source) {
     },
   };
 }
-//@ chunk-ddkccdnb.js:231-264 placement
-/**
- * copsSimilar：非官方且不相似的插件 id（占位）。
- */
-var copsSimilar = (pluginStorageId, r) =>
-  !isOfficialMarketplaceRef(pluginStorageId) && !hasSimilarMarketplaceName(pluginStorageId, r);
-//@ chunk-dyjqn2aj.js:191-476 placement
-/**
- * 有命中的 ask 规则时把决策改为 ask（已是 ask 则补 matchedAskRule），保留改写过的输入；deny 不变。
- */
-async function applyAskRuleOverride(e, i, n) {
-  if (i === null || e.behavior === "deny") return e;
-  return e.behavior === "ask"
-    ? {
-        ...e,
-        matchedAskRule: e.matchedAskRule ?? i,
-      }
-    : {
-        behavior: "ask",
-        message: await n(),
-        decisionReason: {
-          type: "rule",
-          rule: i,
-        },
-        ...("updatedInput" in e &&
-          e.updatedInput !== undefined && {
-            updatedInput: e.updatedInput,
-          }),
-      };
-}
-//@ chunk-pc1rmcr2.js:3877-3941 fingerprint = PERMISSION_RULE_SOURCES (1)
-/**
- * 规则来源是否为会话级（cliArg、command、session）。
- */
-function isSessionScopedRuleSource(source) {
-  return source === "cliArg" || source === "command" || source === "session";
-}
-//@ chunk-xde1fhwg.js:300-463 placement
-/**
- * 决策不能被绕过模式放行：含绕过免疫的安全检查或已签发重入、工具要求用户交互、调用方强制或仅限本人。
- */
-function isBypassImmuneDecision(e, tool, toolUseContext) {
-  if (
-    findSafetyCheckReason(e.decisionReason, isBypassImmuneCircuitBreaker) !== undefined ||
-    hasMintedReentry(toolUseContext)
-  )
-    return true;
-  if (tool.requiresUserInteraction?.()) return true;
-  return e.forcedByCaller === true || e.personOnly === true;
-}
-//@ chunk-xr4xc2mq.js:14991-15271 fingerprint = checkRuleBasedPermissions (0.395)
-/**
- * 原因（含子命令递归）是否为非 allow 的规则原因，或读阻挡相关原因；第二参数选择检查哪一类。
- */
-function isRuleOrReadBlockReason(decisionReason, r) {
-  if (decisionReason?.type === "subcommandResults")
-    return [...decisionReason.reasons.values()].some((reason) =>
-      isRuleOrReadBlockReason(reason.decisionReason, r),
-    );
-  return r === "rule"
-    ? decisionReason?.type === "rule" && decisionReason.rule.ruleBehavior !== "allow"
-    : (decisionReason?.type === "safetyCheck" && decisionReason.circuitBreaker === "outsideReadsBlocked") ||
-        (decisionReason?.type === "other" && decisionReason.reason === OUTSIDE_READS_BLOCKED_DENY_REASON);
-}
 export {
   getDenyRuleForTool,
   createPermissionRequestMessage,
@@ -7191,10 +7578,10 @@ export {
   withoutGrantsForRemoteScope,
   stripWholeToolGrantsForAsk,
   withoutNewRulesOfMcpSkillLoadForm,
-  buildDisallowedToolsFilter,
-  parseWildcardAgentTypes,
-  sanitizeRuleCategoryOrUndefined,
   findDenyRuleWithContent,
+  parseWildcardAgentTypes,
+  buildDisallowedToolsFilter,
+  sanitizeRuleCategoryOrUndefined,
   isPersonTypesHold,
   isConversationEndTool,
   buildToolsPausedMessage,
@@ -7293,7 +7680,6 @@ export {
   checkDeclarativePermission,
   serverHeldShellAllowSource,
   flaggedPartMessage,
-  copsSimilar,
   toolMatchesWholeToolRule,
   resetClassifierApprovals,
   isLiveMemoryToolName,

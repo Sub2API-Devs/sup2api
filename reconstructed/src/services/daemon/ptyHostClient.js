@@ -34,7 +34,7 @@ import {
   isSameProcess,
 } from "../../utils/processIdentity.js";
 import { readSmallFileOrNull } from "../../utils/readSmallFile.js";
-import { ptyErrFile, ptyLateFile } from "../../utils/sandbox/userNamespace.js";
+import { ptyErrFile, ptyLateFile } from "./paths.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { logEvent } from "../analytics/index.js";
 import { fromEnum } from "../analytics/safeMetadata.js";
@@ -67,11 +67,11 @@ function createPtyActivityTracker(jobDir, options) {
   let lastOutputAt = 0;
   let lastStatus = "";
   let disposed = false;
-  function writeStatus(w, E) {
-    let S = truncateWithEllipsis(redactSecrets(lastLine), MAX_STATUS_DETAIL_CHARS);
-    let R = `${w}|${E}|${S}`;
-    if (R === lastStatus) return;
-    lastStatus = R;
+  function writeStatus(status, tempo) {
+    let detail = truncateWithEllipsis(redactSecrets(lastLine), MAX_STATUS_DETAIL_CHARS);
+    let key = `${status}|${tempo}|${detail}`;
+    if (key === lastStatus) return;
+    lastStatus = key;
     readJobState(jobDir, options)
       .then((jobState) =>
         jobState && !disposed
@@ -79,9 +79,9 @@ function createPtyActivityTracker(jobDir, options) {
               jobDir,
               {
                 ...jobState,
-                state: w,
-                tempo: E,
-                detail: S,
+                state: status,
+                tempo,
+                detail,
                 updatedAt: new Date().toISOString(),
               },
               options,
@@ -97,8 +97,10 @@ function createPtyActivityTracker(jobDir, options) {
   }, ACTIVITY_POLL_MS);
   timer.unref();
   return {
-    feed(w) {
-      let replaced = (hasControlSequences(w) ? stripAnsiPerLine(w.replace(CURSOR_BACK_RE, "\x00")) : w)
+    feed(data) {
+      let replaced = (
+        hasControlSequences(data) ? stripAnsiPerLine(data.replace(CURSOR_BACK_RE, "\x00")) : data
+      )
         .replace(
           /\r\n?/g,
           `
@@ -145,201 +147,201 @@ var WRITABLE_CHECK_INTERVAL_MS = 50;
 /**
  * 连接 pty 宿主进程，处理 utf8 流、认证要求、重连与退出。
  */
-function connectPtyHost(e, pid, s) {
-  let { procStart, short, hostProc, auth, onAuthRequired } = s ?? {};
+function connectPtyHost(socketPath, pid, options) {
+  let { procStart, short, hostProc, auth, onAuthRequired } = options ?? {};
   let signal = createSignal();
   let signal_2 = createSignal();
-  let w;
-  let E = new StringDecoder("utf8");
-  let S;
-  let R = false;
-  let A = false;
-  let O = 0;
-  let G = 0;
-  let L;
-  let C;
-  let x;
-  let W;
-  let P = 0;
-  let T;
-  let V;
-  let H;
-  let F = false;
-  let X = false;
-  let ie = false;
-  let Q = "";
-  let De = false;
-  let Z = procStart;
-  if (Z === undefined)
+  let onResume;
+  let decoder = new StringDecoder("utf8");
+  let socket;
+  let closed = false;
+  let exited = false;
+  let attempts = 0;
+  let authRetries = 0;
+  let reconnectTimer;
+  let killTimer;
+  let writeStallTimer;
+  let writableWatchTimer;
+  let replPid = 0;
+  let replProcStart;
+  let onRepl;
+  let replVersion;
+  let helloSeen = false;
+  let draining = false;
+  let live = false;
+  let pending = "";
+  let sockMissing = false;
+  let knownProcStart = procStart;
+  if (knownProcStart === undefined)
     getProcessStartTimeAsync(pid, {
       skipCache: true,
     }).then((processStartTime) => {
-      Z = processStartTime;
+      knownProcStart = processStartTime;
     });
-  let Pe = [];
-  let ge = 0;
-  function ee(y) {
-    if (S) {
-      if (S.destroyed) return false;
-      if (!S.write(y)) {
-        if (!x) {
-          x = setTimeout(() => {
-            x = undefined;
-            S?.destroy();
+  let queued = [];
+  let queuedBytes = 0;
+  function sendOrQueue(frame) {
+    if (socket) {
+      if (socket.destroyed) return false;
+      if (!socket.write(frame)) {
+        if (!writeStallTimer) {
+          writeStallTimer = setTimeout(() => {
+            writeStallTimer = undefined;
+            socket?.destroy();
           }, CONNECT_TIMEOUT_MS);
-          x.unref();
+          writeStallTimer.unref();
         }
-        if (!W && S.writableLength > MAX_SOCKET_WRITABLE_BYTES) {
-          W = setTimeout(() => {
-            W = undefined;
-            if (S && !S.destroyed && S.writableLength > MAX_SOCKET_WRITABLE_BYTES) {
-              se();
-              S.destroy();
+        if (!writableWatchTimer && socket.writableLength > MAX_SOCKET_WRITABLE_BYTES) {
+          writableWatchTimer = setTimeout(() => {
+            writableWatchTimer = undefined;
+            if (socket && !socket.destroyed && socket.writableLength > MAX_SOCKET_WRITABLE_BYTES) {
+              clearWriteTimers();
+              socket.destroy();
             }
           }, WRITABLE_CHECK_INTERVAL_MS);
-          W.unref();
+          writableWatchTimer.unref();
         }
       }
       return true;
     }
-    if (ge < 2 * MAX_FRAME_BYTES) {
-      Pe.push(y);
-      ge += y.length;
+    if (queuedBytes < 2 * MAX_FRAME_BYTES) {
+      queued.push(frame);
+      queuedBytes += frame.length;
     }
     return false;
   }
-  function se() {
-    if (x) {
-      clearTimeout(x);
-      x = undefined;
+  function clearWriteTimers() {
+    if (writeStallTimer) {
+      clearTimeout(writeStallTimer);
+      writeStallTimer = undefined;
     }
-    if (W) {
-      clearTimeout(W);
-      W = undefined;
+    if (writableWatchTimer) {
+      clearTimeout(writableWatchTimer);
+      writableWatchTimer = undefined;
     }
   }
-  function K(exitCode, signal_3, hostStderr) {
-    if (A) return;
-    A = true;
-    R = true;
-    if (C) {
-      clearTimeout(C);
-      C = undefined;
+  function finishExit(exitCode, signal_3, hostStderr) {
+    if (exited) return;
+    exited = true;
+    closed = true;
+    if (killTimer) {
+      clearTimeout(killTimer);
+      killTimer = undefined;
     }
-    se();
-    S?.destroy();
-    S = undefined;
-    let M = E.end();
-    if (M) signal.emit(M);
+    clearWriteTimers();
+    socket?.destroy();
+    socket = undefined;
+    let tail = decoder.end();
+    if (tail) signal.emit(tail);
     signal_2.emit({
       exitCode,
       signal: signal_3,
       hostStderr,
     });
   }
-  function me(y) {
-    let D = readSmallFileOrNull(ptyErrFile(e), 1048576)
+  function onHostCrash(via) {
+    let stderrPromise = readSmallFileOrNull(ptyErrFile(socketPath), 1048576)
       .then((smallFileOrNull) => smallFileOrNull ?? "")
       .catch(() => "");
-    D.then((U) => {
-      let trimmed = U.slice(0, 2000).trim();
+    stderrPromise.then((text) => {
+      let trimmed = text.slice(0, 2000).trim();
       if (trimmed.length > 0)
         logForDebugging(`[bg-pty] host crash: ${trimmed}`, {
           level: "warn",
         });
-      let j = [...trimmed.matchAll(/\bE[A-Z]{2,14}\b/g)].find(
-        (Se) => !"/\\".includes(trimmed[Se.index - 1] ?? "."),
+      let errnoToken = [...trimmed.matchAll(/\bE[A-Z]{2,14}\b/g)].find(
+        (match) => !"/\\".includes(trimmed[match.index - 1] ?? "."),
       )?.[0];
       logEvent("tengu_bg_ptyhost_crash", {
         hadBreadcrumb: trimmed.length > 0,
-        hadHello: F,
-        via: fromEnum(y),
+        hadHello: helloSeen,
+        via: fromEnum(via),
         short: short === undefined ? undefined : bgShort(short),
-        stderr_errno: sanitizeErrnoTokenForTelemetry(j),
+        stderr_errno: sanitizeErrnoTokenForTelemetry(errnoToken),
       });
     });
-    sigtermThenKill(P ? [-pid, P] : [-pid], y !== "hung" ? undefined : Z);
-    reapDetachedRepl(P, T);
-    let N = processWrapperArgv().length > 0;
-    let M = N
-      ? (U, B) =>
-          void D.then(
-            (j) => K(U, B, firstVisibleLine(j)),
-            () => K(U, B),
+    sigtermThenKill(replPid ? [-pid, replPid] : [-pid], via !== "hung" ? undefined : knownProcStart);
+    reapDetachedRepl(replPid, replProcStart);
+    let wrapped = processWrapperArgv().length > 0;
+    let finishWithStderr = wrapped
+      ? (exitCode, signal) =>
+          void stderrPromise.then(
+            (text) => finishExit(exitCode, signal, firstVisibleLine(text)),
+            () => finishExit(exitCode, signal),
           )
-      : K;
+      : finishExit;
     if (hostProc) {
-      let U = null;
+      let exitInfo = null;
       hostProc.exited.then(
-        (B) => {
-          U = {
-            code: B,
+        (code) => {
+          exitInfo = {
+            code,
             signal: hostProc.signalCode ?? undefined,
           };
-          M(B, U.signal);
+          finishWithStderr(code, exitInfo.signal);
         },
-        () => M(-1),
+        () => finishWithStderr(-1),
       );
-      setTimeout(() => K(U ? U.code : -1, U?.signal), 1000).unref();
+      setTimeout(() => finishExit(exitInfo ? exitInfo.code : -1, exitInfo?.signal), 1000).unref();
       return;
     }
-    M(-1);
-    if (N) setTimeout(K, 1000, -1).unref();
+    finishWithStderr(-1);
+    if (wrapped) setTimeout(finishExit, 1000, -1).unref();
   }
-  function dt(y) {
-    if (y.kind === DATA_FRAME_KIND) {
-      if (!X) {
-        let D = E.write(y.payload);
-        if (ie) signal.emit(D);
-        else if (D.length > 0) {
-          let replaced = (Q + D).replaceAll(DAEMON_DETACH_APC, "");
-          let M = partialDetachSuffixLength(replaced);
-          Q = M > 0 ? replaced.slice(replaced.length - M) : "";
-          let U = M > 0 ? replaced.slice(0, replaced.length - M) : replaced;
-          if (U.length > 0) signal.emit(U);
+  function onFrame(frame) {
+    if (frame.kind === DATA_FRAME_KIND) {
+      if (!draining) {
+        let text = decoder.write(frame.payload);
+        if (live) signal.emit(text);
+        else if (text.length > 0) {
+          let text_2 = (pending + text).replaceAll(DAEMON_DETACH_APC, "");
+          let carryLength = partialDetachSuffixLength(text_2);
+          pending = carryLength > 0 ? text_2.slice(text_2.length - carryLength) : "";
+          let emitText = carryLength > 0 ? text_2.slice(0, text_2.length - carryLength) : text_2;
+          if (emitText.length > 0) signal.emit(emitText);
         }
       }
-    } else if (y.ctrl.t === "hello") {
-      if (F) {
-        X = true;
-        E.end();
-        Q = "";
-      } else unlink(ptyLateFile(e)).catch(() => {});
-      F = true;
-      P = y.ctrl.replPid;
-      H = y.ctrl.version;
-      T = undefined;
-      if (P > 1 && getPlatform() !== "windows") {
-        let D = P;
-        captureProcessStartTimeAsync(D).then((N) => {
-          if (P !== D || A || R || N === undefined) return;
-          T = N;
-          V?.(P, N);
+    } else if (frame.ctrl.t === "hello") {
+      if (helloSeen) {
+        draining = true;
+        decoder.end();
+        pending = "";
+      } else unlink(ptyLateFile(socketPath)).catch(() => {});
+      helloSeen = true;
+      replPid = frame.ctrl.replPid;
+      replVersion = frame.ctrl.version;
+      replProcStart = undefined;
+      if (replPid > 1 && getPlatform() !== "windows") {
+        let pidValue = replPid;
+        captureProcessStartTimeAsync(pidValue).then((procStartValue) => {
+          if (replPid !== pidValue || exited || closed || procStartValue === undefined) return;
+          replProcStart = procStartValue;
+          onRepl?.(replPid, procStartValue);
         });
       }
-    } else if (y.ctrl.t === "live") {
-      if (!ie) {
-        ie = true;
-        if (Q.length > 0) {
-          signal.emit(Q);
-          Q = "";
+    } else if (frame.ctrl.t === "live") {
+      if (!live) {
+        live = true;
+        if (pending.length > 0) {
+          signal.emit(pending);
+          pending = "";
         }
       }
-      if (X) {
-        X = false;
-        w?.();
+      if (draining) {
+        draining = false;
+        onResume?.();
       }
-    } else if (y.ctrl.t === "exit") K(y.ctrl.code, y.ctrl.signal);
-    else if (y.ctrl.t === "ping")
-      ee(
+    } else if (frame.ctrl.t === "exit") finishExit(frame.ctrl.code, frame.ctrl.signal);
+    else if (frame.ctrl.t === "ping")
+      sendOrQueue(
         encodeControlFrame({
           t: "pong",
         }),
       );
-    else if (y.ctrl.t === "auth-required")
+    else if (frame.ctrl.t === "auth-required")
       if (auth) {
         logForDebugging(
-          `[bg-pty] ${short ?? e}: host rejected auth token \u2014 roster ptyAuth poisoned; input is dead until the worker is re-keyed`,
+          `[bg-pty] ${short ?? socketPath}: host rejected auth token \u2014 roster ptyAuth poisoned; input is dead until the worker is re-keyed`,
           {
             level: "warn",
           },
@@ -347,54 +349,54 @@ function connectPtyHost(e, pid, s) {
         onAuthRequired?.();
       } else
         logForDebugging(
-          `[bg-pty] ${short ?? e}: host dropped input \u2014 DATA auth token missing (version skew; respawn the worker to re-key)`,
+          `[bg-pty] ${short ?? socketPath}: host dropped input \u2014 DATA auth token missing (version skew; respawn the worker to re-key)`,
           {
             level: "warn",
           },
         );
   }
-  function Ie() {
-    if (R) return;
-    let y = new Socket();
-    let D = false;
-    y.on("error", (N) => {
-      De = getErrnoCode(N) === "ENOENT";
-      _e();
+  function connect() {
+    if (closed) return;
+    let sock = new Socket();
+    let connected = false;
+    sock.on("error", (error) => {
+      sockMissing = getErrnoCode(error) === "ENOENT";
+      retry();
     });
-    y.once("close", () => {
-      if (S === y) {
-        S = undefined;
-        se();
+    sock.once("close", () => {
+      if (socket === sock) {
+        socket = undefined;
+        clearWriteTimers();
       }
-      if (R) return;
-      if (D && !A) {
+      if (closed) return;
+      if (connected && !exited) {
         try {
           process.kill(pid, 0);
           logForDebugging("[bg-pty] dropped by host; reconnecting", {
             level: "debug",
           });
-          G = AUTH_RETRY_DELAY_MS;
-          O = 0;
-          _e();
+          authRetries = AUTH_RETRY_DELAY_MS;
+          attempts = 0;
+          retry();
           return;
         } catch {}
-        me("close");
+        onHostCrash("close");
         return;
       }
-      _e();
+      retry();
     });
-    y.once("connect", () => {
-      D = true;
-      O = 0;
-      G = 0;
-      S = y;
-      y.on("drain", se);
-      let N = ptyErrFile(e);
-      let M = `${N}.read`;
-      rename(N, M)
-        .then(() => readSmallFileOrNull(M, 1048576))
-        .then((B) => {
-          let trimmed = (B ?? "").slice(0, 2000).trim();
+    sock.once("connect", () => {
+      connected = true;
+      attempts = 0;
+      authRetries = 0;
+      socket = sock;
+      sock.on("drain", clearWriteTimers);
+      let errPath = ptyErrFile(socketPath);
+      let readPath = `${errPath}.read`;
+      rename(errPath, readPath)
+        .then(() => readSmallFileOrNull(readPath, 1048576))
+        .then((text) => {
+          let trimmed = (text ?? "").slice(0, 2000).trim();
           if (trimmed.length > 0)
             logForDebugging(
               `[bg-pty] pre-connect stderr:
@@ -405,63 +407,66 @@ ${trimmed}`,
             );
         })
         .catch(() => {})
-        .finally(() => unlink(M).catch(() => {}));
-      ee(
+        .finally(() => unlink(readPath).catch(() => {}));
+      sendOrQueue(
         encodeControlFrame({
           t: "pong",
         }),
       );
       if (auth)
-        ee(
+        sendOrQueue(
           encodeControlFrame({
             t: "auth",
             token: auth,
           }),
         );
-      for (let B of Pe.splice(0)) ee(B);
-      ge = 0;
-      let frameDecoder = createFrameDecoder(dt, (B) => {
-        logForDebugging(`[bg-pty] frame error: ${B}`, {
+      for (let pendingFrame of queued.splice(0)) sendOrQueue(pendingFrame);
+      queuedBytes = 0;
+      let frameDecoder = createFrameDecoder(onFrame, (frameError) => {
+        logForDebugging(`[bg-pty] frame error: ${frameError}`, {
           level: "warn",
         });
-        y.destroy();
+        sock.destroy();
       });
-      y.on("data", frameDecoder);
+      sock.on("data", frameDecoder);
     });
-    y.connect(e);
+    sock.connect(socketPath);
   }
-  function _e() {
-    if (R || L) return;
+  function retry() {
+    if (closed || reconnectTimer) return;
     try {
       process.kill(pid, 0);
     } catch {
-      R = true;
-      readSmallFileOrNull(ptyLateFile(e), 8388608)
+      closed = true;
+      readSmallFileOrNull(ptyLateFile(socketPath), 8388608)
         .then((smallFileOrNull) => smallFileOrNull ?? "")
-        .then((D) => {
-          if (!F && D.length > 0) signal.emit(D.replaceAll(DAEMON_DETACH_APC, ""));
-          unlink(ptyLateFile(e)).catch(() => {});
-          me("connect");
+        .then((text) => {
+          if (!helloSeen && text.length > 0) signal.emit(text.replaceAll(DAEMON_DETACH_APC, ""));
+          unlink(ptyLateFile(socketPath)).catch(() => {});
+          onHostCrash("connect");
         });
       return;
     }
-    if (G > 0 && --G === 0) {
-      me("hung");
+    if (authRetries > 0 && --authRetries === 0) {
+      onHostCrash("hung");
       return;
     }
-    if (procStart !== undefined && De && O >= 3) {
-      logForDebugging(`[bg-pty] ${e}: ENOENT on adopt \u2014 sock file externally deleted; respawning`, {
-        level: "warn",
-      });
+    if (procStart !== undefined && sockMissing && attempts >= 3) {
+      logForDebugging(
+        `[bg-pty] ${socketPath}: ENOENT on adopt \u2014 sock file externally deleted; respawning`,
+        {
+          level: "warn",
+        },
+      );
       logEvent("tengu_bg_adopt_sock_unlinked", {});
-      O = MAX_RECONNECT_ATTEMPTS;
+      attempts = MAX_RECONNECT_ATTEMPTS;
     }
-    if (O >= MAX_RECONNECT_ATTEMPTS) {
-      logForDebugging(`[bg-pty] ${e}: ${O} connect attempts failed; treating host as dead`, {
+    if (attempts >= MAX_RECONNECT_ATTEMPTS) {
+      logForDebugging(`[bg-pty] ${socketPath}: ${attempts} connect attempts failed; treating host as dead`, {
         level: "warn",
       });
-      let D = Z && getProcessStartTime(pid);
-      if (pid > 1 && (!Z || !D || Z === D))
+      let nowStart = knownProcStart && getProcessStartTime(pid);
+      if (pid > 1 && (!knownProcStart || !nowStart || knownProcStart === nowStart))
         try {
           process.kill(-pid, "SIGKILL");
         } catch {
@@ -469,177 +474,178 @@ ${trimmed}`,
             process.kill(pid, "SIGKILL");
           } catch {}
         }
-      R = true;
-      readSmallFileOrNull(ptyLateFile(e), 8388608)
+      closed = true;
+      readSmallFileOrNull(ptyLateFile(socketPath), 8388608)
         .then((smallFileOrNull) => smallFileOrNull ?? "")
-        .then((N) => {
-          if (!F && N.length > 0) signal.emit(N.replaceAll(DAEMON_DETACH_APC, ""));
-          unlink(ptyLateFile(e)).catch(() => {});
-          let M = processWrapperArgv().length > 0;
-          let U = (B, signal) => {
-            if (!M) {
-              K(B, signal);
+        .then((text) => {
+          if (!helloSeen && text.length > 0) signal.emit(text.replaceAll(DAEMON_DETACH_APC, ""));
+          unlink(ptyLateFile(socketPath)).catch(() => {});
+          let wrapped = processWrapperArgv().length > 0;
+          let finishCompat = (exitCode, signal) => {
+            if (!wrapped) {
+              finishExit(exitCode, signal);
               return;
             }
-            readSmallFileOrNull(ptyErrFile(e), 1048576).then(
-              (smallFileOrNull) => K(B, signal, firstVisibleLine(smallFileOrNull ?? "")),
-              () => K(B, signal),
+            readSmallFileOrNull(ptyErrFile(socketPath), 1048576).then(
+              (smallFileOrNull) => finishExit(exitCode, signal, firstVisibleLine(smallFileOrNull ?? "")),
+              () => finishExit(exitCode, signal),
             );
           };
           if (hostProc) {
-            let B = null;
+            let exitInfo = null;
             hostProc.exited.then(
-              (j) => {
-                B = {
-                  code: j,
+              (code) => {
+                exitInfo = {
+                  code,
                   signal: hostProc.signalCode ?? undefined,
                 };
-                U(j, B.signal);
+                finishCompat(code, exitInfo.signal);
               },
-              () => U(-1),
+              () => finishCompat(-1),
             );
-            setTimeout(() => K(B ? B.code : -1, B?.signal), 1000).unref();
+            setTimeout(() => finishExit(exitInfo ? exitInfo.code : -1, exitInfo?.signal), 1000).unref();
           } else {
-            U(-1);
-            if (M) setTimeout(K, 1000, -1).unref();
+            finishCompat(-1);
+            if (wrapped) setTimeout(finishExit, 1000, -1).unref();
           }
         });
       return;
     }
-    let y = RECONNECT_BACKOFF_MS[Math.min(O, RECONNECT_BACKOFF_MS.length - 1)];
-    O++;
-    L = setTimeout(() => {
-      L = undefined;
-      Ie();
-    }, y);
-    L.unref();
+    let backoffMs = RECONNECT_BACKOFF_MS[Math.min(attempts, RECONNECT_BACKOFF_MS.length - 1)];
+    attempts++;
+    reconnectTimer = setTimeout(() => {
+      reconnectTimer = undefined;
+      connect();
+    }, backoffMs);
+    reconnectTimer.unref();
   }
-  Ie();
+  connect();
   return {
     pid,
-    replPid: () => P,
-    replVersion: () => H,
-    onRepl: (y) => {
-      V = y;
-      if (P > 1 && T !== undefined) y(P, T);
+    replPid: () => replPid,
+    replVersion: () => replVersion,
+    onRepl: (listener) => {
+      onRepl = listener;
+      if (replPid > 1 && replProcStart !== undefined) listener(replPid, replProcStart);
     },
-    onResume: (y) => {
-      w = y;
+    onResume: (listener) => {
+      onResume = listener;
     },
-    write: (y) => {
-      if (A) return;
-      let buffer = Buffer.from(y, "utf8");
-      let N = MAX_FRAME_BYTES - 1;
-      for (let M = 0; M < buffer.length; M += N) ee(encodeDataFrame(buffer.subarray(M, M + N)));
+    write: (data) => {
+      if (exited) return;
+      let buffer = Buffer.from(data, "utf8");
+      let chunkBytes = MAX_FRAME_BYTES - 1;
+      for (let offset = 0; offset < buffer.length; offset += chunkBytes)
+        sendOrQueue(encodeDataFrame(buffer.subarray(offset, offset + chunkBytes)));
     },
     resize: (cols, rows) =>
-      ee(
+      sendOrQueue(
         encodeControlFrame({
           t: "resize",
           cols,
           rows,
         }),
       ),
-    kill: (y) => {
-      let D = y === "SIGKILL" ? "SIGKILL" : "SIGTERM";
-      let N = ee(
+    kill: (sig) => {
+      let finalSig = sig === "SIGKILL" ? "SIGKILL" : "SIGTERM";
+      let sent = sendOrQueue(
         encodeControlFrame({
           t: "kill",
-          sig: D,
+          sig: finalSig,
         }),
       );
       if (pid <= 1) return;
-      if (getPlatform() === "windows" && D === "SIGTERM" && N) {
-        if (C) clearTimeout(C);
-        C = setTimeout(
-          (M, U) => {
-            if (!isSameProcess(M, Z)) {
-              U(-1);
+      if (getPlatform() === "windows" && finalSig === "SIGTERM" && sent) {
+        if (killTimer) clearTimeout(killTimer);
+        killTimer = setTimeout(
+          (pidValue, finish) => {
+            if (!isSameProcess(pidValue, knownProcStart)) {
+              finish(-1);
               return;
             }
             try {
-              process.kill(M, "SIGKILL");
+              process.kill(pidValue, "SIGKILL");
             } catch {
-              U(-1);
+              finish(-1);
             }
           },
           5000,
           pid,
-          K,
+          finishExit,
         );
-        C.unref();
+        killTimer.unref();
         return;
       }
       try {
-        process.kill(-pid, D);
+        process.kill(-pid, finalSig);
       } catch {
         try {
-          process.kill(pid, D);
+          process.kill(pid, finalSig);
         } catch {
-          K(-1);
+          finishExit(-1);
         }
       }
-      reapDetachedRepl(P, T, D);
-      if (D === "SIGTERM" && !A) {
-        if (C) clearTimeout(C);
-        C = setTimeout(
-          (M, U) => {
-            if (!isSameProcess(M, Z)) {
-              U(-1);
+      reapDetachedRepl(replPid, replProcStart, finalSig);
+      if (finalSig === "SIGTERM" && !exited) {
+        if (killTimer) clearTimeout(killTimer);
+        killTimer = setTimeout(
+          (pidValue, finish) => {
+            if (!isSameProcess(pidValue, knownProcStart)) {
+              finish(-1);
               return;
             }
-            reapDetachedRepl(P, T, "SIGKILL");
+            reapDetachedRepl(replPid, replProcStart, "SIGKILL");
             try {
-              process.kill(-M, "SIGKILL");
+              process.kill(-pidValue, "SIGKILL");
             } catch {
               try {
-                process.kill(M, "SIGKILL");
+                process.kill(pidValue, "SIGKILL");
               } catch {
-                U(-1);
+                finish(-1);
               }
             }
           },
           5000,
           pid,
-          K,
+          finishExit,
         );
-        C.unref();
+        killTimer.unref();
       }
     },
     dispose: () => {
-      R = true;
-      if (L) {
-        clearTimeout(L);
-        L = undefined;
+      closed = true;
+      if (reconnectTimer) {
+        clearTimeout(reconnectTimer);
+        reconnectTimer = undefined;
       }
-      if (C) {
-        clearTimeout(C);
-        C = undefined;
+      if (killTimer) {
+        clearTimeout(killTimer);
+        killTimer = undefined;
       }
-      se();
-      S?.destroy();
-      S = undefined;
+      clearWriteTimers();
+      socket?.destroy();
+      socket = undefined;
     },
-    onData: (y) => ({
-      dispose: signal.subscribe(y),
+    onData: (listener) => ({
+      dispose: signal.subscribe(listener),
     }),
-    onExit: (y) => ({
-      dispose: signal_2.subscribe(y),
+    onExit: (listener) => ({
+      dispose: signal_2.subscribe(listener),
     }),
   };
 }
 //@ chunk-89ebz077.js:9109-9211 placement
-function firstVisibleLine(e) {
-  return e
+function firstVisibleLine(text) {
+  return text
     .slice(0, 2000)
     .split(/\r?\n/)
     .map((line) => line.trim())
-    .find((r) => collapseWhitespace(stripAnsiPerLine(r)).length > 0);
+    .find((line) => collapseWhitespace(stripAnsiPerLine(line)).length > 0);
 }
 //@ chunk-89ebz077.js:9211-9332 placement
-function partialDetachSuffixLength(e) {
-  let min = Math.min(DAEMON_DETACH_APC.length - 1, e.length);
-  for (let s = min; s > 0; s--) if (e.endsWith(DAEMON_DETACH_APC.slice(0, s))) return s;
+function partialDetachSuffixLength(text) {
+  let min = Math.min(DAEMON_DETACH_APC.length - 1, text.length);
+  for (let len = min; len > 0; len--) if (text.endsWith(DAEMON_DETACH_APC.slice(0, len))) return len;
   return 0;
 }
 //@ chunk-89ebz077.js:9362-9399 placement
@@ -660,21 +666,21 @@ function connectRendezvousSocket(socketPath, onMessage, onDisconnect, onConnect,
   let retryTimer;
   function connect() {
     if (closed) return;
-    let S = new Socket();
-    let R = false;
-    S.on("error", () => scheduleRetry());
-    S.once("close", () => {
-      if (socket === S) socket = undefined;
+    let sock = new Socket();
+    let connected = false;
+    sock.on("error", () => scheduleRetry());
+    sock.once("close", () => {
+      if (socket === sock) socket = undefined;
       if (closed) return;
-      if (R) onDisconnect();
+      if (connected) onDisconnect();
       scheduleRetry();
     });
-    S.once("connect", () => {
-      R = true;
+    sock.once("connect", () => {
+      connected = true;
       attempts = 0;
       gaveUp = false;
-      socket = S;
-      S.write(
+      socket = sock;
+      sock.write(
         jsonStringify({
           proto: BG_PROTO,
           role: "supervisor",
@@ -685,17 +691,17 @@ function connectRendezvousSocket(socketPath, onMessage, onDisconnect, onConnect,
 `,
       );
       onConnect?.();
-      readStreamLines(S, (A) => {
-        let O;
+      readStreamLines(sock, (attempts) => {
+        let gaveUp;
         try {
-          O = jsonParse(A);
+          gaveUp = jsonParse(attempts);
         } catch {
           return;
         }
-        if (O && typeof O === "object" && "type" in O) onMessage(O);
+        if (gaveUp && typeof gaveUp === "object" && "type" in gaveUp) onMessage(gaveUp);
       });
     });
-    S.connect(socketPath);
+    sock.connect(socketPath);
   }
   function scheduleRetry() {
     if (closed || retryTimer || gaveUp) return;
@@ -712,17 +718,17 @@ function connectRendezvousSocket(socketPath, onMessage, onDisconnect, onConnect,
       });
       return;
     }
-    let S = RENDEZVOUS_RETRY_DELAYS_MS[Math.min(attempts, RENDEZVOUS_RETRY_DELAYS_MS.length - 1)];
+    let message = RENDEZVOUS_RETRY_DELAYS_MS[Math.min(attempts, RENDEZVOUS_RETRY_DELAYS_MS.length - 1)];
     attempts++;
     retryTimer = setTimeout(() => {
       retryTimer = undefined;
       connect();
-    }, S);
+    }, message);
     retryTimer.unref();
   }
   connect();
   return {
-    send(S) {
+    send(timer) {
       if (!socket || socket.destroyed) {
         if (attempts >= MAX_RENDEZVOUS_ATTEMPTS) {
           attempts = 0;
@@ -733,7 +739,7 @@ function connectRendezvousSocket(socketPath, onMessage, onDisconnect, onConnect,
       }
       try {
         socket.write(
-          jsonStringify(S) +
+          jsonStringify(timer) +
             `
 `,
         );
@@ -787,14 +793,14 @@ function isCosmicCookieEnabled() {
   return getFeatureValue_CACHED_MAY_BE_STALE("tengu_cosmic_cookie", false) === true;
 }
 //@ chunk-89ebz077.js:10885-11038 placement
-function applySilentPeersFlag(e) {
+function applySilentPeersFlag(env) {
   if (
     readFlagWithOverride("bot_protected_tengu_merry_bear", {
       safe: true,
     })
   )
-    delete e.CLAUDE_BG_SOCK_ADMIT_SILENT_PEERS;
-  else e.CLAUDE_BG_SOCK_ADMIT_SILENT_PEERS = "1";
+    delete env.CLAUDE_BG_SOCK_ADMIT_SILENT_PEERS;
+  else env.CLAUDE_BG_SOCK_ADMIT_SILENT_PEERS = "1";
 }
 export {
   connectPtyHost,

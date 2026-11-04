@@ -10,6 +10,7 @@
  */
 import { HostScoped } from "../hostScoped.js";
 import { getRootSession } from "../../bootstrap/state.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-648vry02.js:735-1025 placement
 class ShellPathsState {
@@ -26,7 +27,10 @@ class ShellPathsState {
   warnedShortTmpDir = false;
 }
 //@ chunk-648vry02.js:1025-1048 placement
-var shellPathsByHost = new HostScoped(() => new ShellPathsState());
+var shellPathsByHost; // deferred: uses ShellPathsState of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-648vry02.js:1025", () => {
+  shellPathsByHost = new HostScoped(() => new ShellPathsState());
+});
 //@ chunk-648vry02.js:1048-1085 placement
 /**
  * 按宿主缓存的 shell 路径状态。

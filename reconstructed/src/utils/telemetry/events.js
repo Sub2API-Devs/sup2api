@@ -27,6 +27,7 @@ import { getWorkflowSpanAttributes } from "../agentContext.js";
 import { maskModelIdsInRecord } from "../model/modelCatalog/catalogEntries.js";
 import { agentAttributes } from "./repositoryAttributes.js";
 import { logForDebugging } from "../debug.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-p52gp8zk.js:14655-14702 placement
 class OTelEventState {
@@ -34,7 +35,10 @@ class OTelEventState {
   warnedNoEventLogger = false;
 }
 //@ chunk-p52gp8zk.js:14702-14727 placement
-var otelEventStateByHost = new HostScoped(() => new OTelEventState());
+var otelEventStateByHost; // deferred: uses OTelEventState of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-p52gp8zk.js:14702", () => {
+  otelEventStateByHost = new HostScoped(() => new OTelEventState());
+});
 //@ chunk-p52gp8zk.js:14727-14772 layout = isUserPromptLoggingEnabled (1)
 function isUserPromptLoggingEnabled_2() {
   return env.OTEL_LOG_USER_PROMPTS;
@@ -53,12 +57,12 @@ function redactIfDisabled_2(content) {
       prompt: "<REDACTED>",
       prompt_text: "<REDACTED>",
     };
-  let n = isUserPromptLoggingEnabled_2()
+  let redacted = isUserPromptLoggingEnabled_2()
     ? redactAccountMemoryText(() => accountMemoryRedactionKeys(getRootSession().host), undefined, content)
     : redactIfDisabled(content);
   return {
-    prompt: n,
-    prompt_text: n,
+    prompt: redacted,
+    prompt_text: redacted,
   };
 }
 //@ chunk-p52gp8zk.js:14977-15055 layout
@@ -66,15 +70,18 @@ function isAssistantResponseLoggingEnabled() {
   return env.OTEL_LOG_ASSISTANT_RESPONSES ?? env.OTEL_LOG_USER_PROMPTS;
 }
 //@ chunk-p52gp8zk.js:15055-15095 layout
-var traceContextPropagator = new promClient_2.W3CTraceContextPropagator();
+var traceContextPropagator; // deferred: uses otelApi (./gatewayIdentityAttributes.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-p52gp8zk.js:15055", () => {
+  traceContextPropagator = new promClient_2.W3CTraceContextPropagator();
+});
 //@ chunk-p52gp8zk.js:15095-15314 layout
 function getEventContext() {
-  let e = activeOtelContext();
-  let spanContext = otelApi.trace.getSpanContext(e);
-  if (spanContext && otelApi.isSpanContextValid(spanContext)) return e;
+  let context = activeOtelContext();
+  let spanContext = otelApi.trace.getSpanContext(context);
+  if (spanContext && otelApi.isSpanContextValid(spanContext)) return context;
   if (getIsNonInteractiveSession() && env.TRACEPARENT)
     return traceContextPropagator.extract(
-      e,
+      context,
       {
         traceparent: env.TRACEPARENT,
         tracestate: env.TRACESTATE,
@@ -87,10 +94,10 @@ function getEventContext() {
 /**
  * 发 OTel 事件（claude_code.<name>）：属性含 getTelemetryAttributes、event.name/timestamp/sequence、prompt.id、workspace.host_paths、agent id；无事件 logger 时可跳过。
  */
-async function logOTelEvent(e, metadata = {}, agentContext, hookOrigin) {
-  let s = otelEventStateByHost.of(getRootSession().host);
+async function logOTelEvent(event, metadata = {}, agentContext, hookOrigin) {
+  let state = otelEventStateByHost.of(getRootSession().host);
   if (
-    s.warnedNoEventLogger &&
+    state.warnedNoEventLogger &&
     getEventLogger() === null &&
     !isOTelInitPending() &&
     !env.CLAUDE_CODE_DISABLE_OTEL_EVENT_SKIP &&
@@ -100,9 +107,9 @@ async function logOTelEvent(e, metadata = {}, agentContext, hookOrigin) {
     return;
   let attributes = {
     ...getTelemetryAttributes(),
-    "event.name": e,
+    "event.name": event,
     "event.timestamp": new Date().toISOString(),
-    "event.sequence": s.nextSequence++,
+    "event.sequence": state.nextSequence++,
   };
   let promptId = getPromptId();
   if (promptId) attributes["prompt.id"] = promptId;
@@ -110,8 +117,8 @@ async function logOTelEvent(e, metadata = {}, agentContext, hookOrigin) {
   if (workspaceDir) attributes["workspace.host_paths"] = workspaceDir.split("|");
   Object.assign(attributes, getWorkflowSpanAttributes(agentContext));
   for (let [key, value] of Object.entries(isDiskless() ? maskModelIdsInRecord(metadata) : metadata)) {
-    let g = key === "error" && isDiskless() && !/^[a-z0-9_]+$/.test(String(value));
-    if (value !== undefined && !g) attributes[key] = value;
+    let eventContext = key === "error" && isDiskless() && !/^[a-z0-9_]+$/.test(String(value));
+    if (value !== undefined && !eventContext) attributes[key] = value;
   }
   try {
     Object.assign(attributes, agentAttributes(agentContext));
@@ -125,7 +132,7 @@ async function logOTelEvent(e, metadata = {}, agentContext, hookOrigin) {
   await eventRecordQueue.route(
     () =>
       buildEventRecord({
-        event: e,
+        event,
         attributes,
         loggedAt,
         eventContext,

@@ -5,31 +5,32 @@
  * pieces: chunk-6ja29j2n.js (2)
  * attribution: esm-fingerprint 1, esm-layout 1
  */
-import { c } from "../../lib/common/html.js";
+import { TAG_NAMES } from "../../lib/common/html.js";
 import { Parser } from "../parser/index.js";
 
 //@ chunk-6ja29j2n.js:179577-179730 esm-fingerprint
 var VOID_ELEMENTS = new Set([
-  c.AREA,
-  c.BASE,
-  c.BASEFONT,
-  c.BGSOUND,
-  c.BR,
-  c.COL,
-  c.EMBED,
-  c.FRAME,
-  c.HR,
-  c.IMG,
-  c.INPUT,
-  c.KEYGEN,
-  c.LINK,
-  c.META,
-  c.PARAM,
-  c.SOURCE,
-  c.TRACK,
-  c.WBR,
+  TAG_NAMES.AREA,
+  TAG_NAMES.BASE,
+  TAG_NAMES.BASEFONT,
+  TAG_NAMES.BGSOUND,
+  TAG_NAMES.BR,
+  TAG_NAMES.COL,
+  TAG_NAMES.EMBED,
+  TAG_NAMES.FRAME,
+  TAG_NAMES.HR,
+  TAG_NAMES.IMG,
+  TAG_NAMES.INPUT,
+  TAG_NAMES.KEYGEN,
+  TAG_NAMES.LINK,
+  TAG_NAMES.META,
+  TAG_NAMES.PARAM,
+  TAG_NAMES.SOURCE,
+  TAG_NAMES.TRACK,
+  TAG_NAMES.WBR,
 ]);
 //@ chunk-6ja29j2n.js:179730-179769 esm-layout
 function parse(node, options) {
   return Parser.parse(node, options);
 }
+export { parse };

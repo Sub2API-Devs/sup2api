@@ -54,14 +54,15 @@ import {
 import { getCwd } from "../../utils/cwd.js";
 import { GIT_SAFETY_WRITE_CMDLETS } from "./powershellPermissions.js";
 import { createReadRuleSuggestion } from "../../utils/permissions/PermissionUpdate.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-v0yfsee9.js:21828-21856 sole-consumer
 var TENGU_CURIOUS_LAKE = "tengu_curious_lake";
 //@ chunk-v0yfsee9.js:21856-21987 sole-consumer
 function isCmdRmDenyEnabled() {
   if (env.CLAUDE_CODE_DISABLE_POWERSHELL_CMD_RM_DENY) return false;
-  let e = getFeatureValueWithSource_CACHED_MAY_BE_STALE(TENGU_CURIOUS_LAKE, true);
-  return !(e.value === false && e.source === "payload");
+  let flag = getFeatureValueWithSource_CACHED_MAY_BE_STALE(TENGU_CURIOUS_LAKE, true);
+  return !(flag.value === false && flag.source === "payload");
 }
 //@ chunk-v0yfsee9.js:21987-22151 sole-consumer
 /**
@@ -75,67 +76,70 @@ var NON_PRINTING_SPACE_RE = /[^\S\uFEFF]|\u0085/;
 /**
  * 参数是否是 cmd / cmd.exe（去掉路径与尾随点空格）。
  */
-function isCmdExecutableName(e) {
-  let n = e.length;
-  while (n > 0 && (e[n - 1] === "." || e[n - 1] === " ")) n--;
-  let sliced = e.slice(Math.max(e.lastIndexOf("\\", n), e.lastIndexOf("/", n)) + 1, n);
+function isCmdExecutableName(name) {
+  let endIndex = name.length;
+  while (endIndex > 0 && (name[endIndex - 1] === "." || name[endIndex - 1] === " ")) endIndex--;
+  let sliced = name.slice(
+    Math.max(name.lastIndexOf("\\", endIndex), name.lastIndexOf("/", endIndex)) + 1,
+    endIndex,
+  );
   return /^cmd(?:\.exe)?$/i.test(sliced);
 }
 //@ chunk-v0yfsee9.js:22330-22447 fingerprint = SAFE_PATH_ELEMENT_TYPES (0.33)
-function classifyElementType(e) {
-  if (e === undefined || e === "StringConstant") return "literal";
-  return e === "ExpandableString" ? "expands" : "unknown";
+function classifyElementType(elementType) {
+  if (elementType === undefined || elementType === "StringConstant") return "literal";
+  return elementType === "ExpandableString" ? "expands" : "unknown";
 }
 //@ chunk-v0yfsee9.js:22447-22582 file-local
-function hasUnquotedWhitespace(e) {
-  let n = false;
-  for (let j = 0; j < e.length; j++) {
-    let s = e[j];
-    if (s === '"' && e[j - 1] !== "\\") n = !n;
-    else if (!n && NON_PRINTING_SPACE_RE.test(s)) return true;
+function hasUnquotedWhitespace(text) {
+  let inQuotes = false;
+  for (let j = 0; j < text.length; j++) {
+    let char = text[j];
+    if (char === '"' && text[j - 1] !== "\\") inQuotes = !inQuotes;
+    else if (!inQuotes && NON_PRINTING_SPACE_RE.test(char)) return true;
   }
   return false;
 }
 //@ chunk-v0yfsee9.js:22582-22703 layout
-function combineElementKinds(e, kind) {
-  if (e === "unknown" || kind === "unknown") return "unknown";
-  return e === "expands" || kind === "expands" ? "expands" : "literal";
+function combineElementKinds(leftKind, kind) {
+  if (leftKind === "unknown" || kind === "unknown") return "unknown";
+  return leftKind === "expands" || kind === "expands" ? "expands" : "literal";
 }
 //@ chunk-v0yfsee9.js:22703-23207 layout
-function tokenizeCmdLine(e) {
-  let n = [];
-  let r = "";
-  let s = "literal";
-  let m = false;
-  let g = 0;
-  let y = () => {
-    if (r !== "")
-      n.push({
-        text: r,
-        kind: s,
+function tokenizeCmdLine(chars) {
+  let tokens = [];
+  let current = "";
+  let currentKind = "literal";
+  let inQuote = false;
+  let parenDepth = 0;
+  let flushToken = () => {
+    if (current !== "")
+      tokens.push({
+        text: current,
+        kind: currentKind,
         separator: false,
       });
-    r = "";
-    s = "literal";
+    current = "";
+    currentKind = "literal";
   };
-  for (let j = 0; j < e.length; j++) {
-    let { ch, kind } = e[j];
-    if (m) {
-      r += ch;
-      s = combineElementKinds(s, kind);
-      m = ch !== '"';
+  for (let j = 0; j < chars.length; j++) {
+    let { ch, kind } = chars[j];
+    if (inQuote) {
+      current += ch;
+      currentKind = combineElementKinds(currentKind, kind);
+      inQuote = ch !== '"';
       continue;
     }
-    if (ch === "^" && j + 1 < e.length) {
+    if (ch === "^" && j + 1 < chars.length) {
       j++;
-      r += e[j].ch;
-      s = combineElementKinds(s, combineElementKinds(kind, e[j].kind));
+      current += chars[j].ch;
+      currentKind = combineElementKinds(currentKind, combineElementKinds(kind, chars[j].kind));
       continue;
     }
-    if ("&|<>".includes(ch) || (ch === "(" && r === "") || (ch === ")" && g > 0)) {
-      y();
-      g += ch === "(" ? 1 : ch === ")" ? -1 : 0;
-      n.push({
+    if ("&|<>".includes(ch) || (ch === "(" && current === "") || (ch === ")" && parenDepth > 0)) {
+      flushToken();
+      parenDepth += ch === "(" ? 1 : ch === ")" ? -1 : 0;
+      tokens.push({
         text: ch,
         kind,
         separator: true,
@@ -143,25 +147,25 @@ function tokenizeCmdLine(e) {
       continue;
     }
     if (/[ \t\r\n\v\f,;=]/.test(ch)) {
-      y();
+      flushToken();
       continue;
     }
-    if (ch === '"') m = true;
-    r += ch;
-    s = combineElementKinds(s, kind);
+    if (ch === '"') inQuote = true;
+    current += ch;
+    currentKind = combineElementKinds(currentKind, kind);
   }
-  y();
-  return n;
+  flushToken();
+  return tokens;
 }
 //@ chunk-v0yfsee9.js:23207-23472 layout
 function findStopParsingToken(text) {
-  let n = null;
+  let quoteChar = null;
   for (let j = 0; j < text.length; j++) {
-    let s = text[j];
-    if (s === "`" && n !== "'") j++;
-    else if (n !== null) {
-      if (s === n) n = null;
-    } else if (s === '"' || s === "'") n = s;
+    let char = text[j];
+    if (char === "`" && quoteChar !== "'") j++;
+    else if (quoteChar !== null) {
+      if (char === quoteChar) quoteChar = null;
+    } else if (char === '"' || char === "'") quoteChar = char;
     else if (
       text.startsWith("--%", j) &&
       (j === 0 || /\s/.test(text[j - 1])) &&
@@ -175,111 +179,119 @@ function findStopParsingToken(text) {
 /**
  * 从 PowerShell 调用 cmd.exe /c|/k 的命令里还原出 cmd 实际要执行的命令字符（处理 --% 停止解析、引号、元素是否可展开）。
  */
-function getCmdInlineCommandChars(e) {
-  if (classifyElementType(e.elementTypes?.[0]) !== "literal" || !isCmdExecutableName(e.name)) return null;
-  let stopParsingToken = findStopParsingToken(e.text);
-  let r = stopParsingToken === -1 ? undefined : e.text.slice(stopParsingToken + 3).trimStart();
-  let s = (S) => stopParsingToken !== -1 && /^--%(?:$|\s)/.test(S);
-  let any = e.args.some(s);
-  let g = [];
-  let y = false;
-  for (let j = 0; j < e.args.length; j++) {
-    let v = e.args[j];
-    let kind = classifyElementType(e.elementTypes?.[j + 1]);
-    if (!y && r !== undefined && !any && j === e.args.length - 1) {
-      y = true;
-      v = r;
+function getCmdInlineCommandChars(element) {
+  if (classifyElementType(element.elementTypes?.[0]) !== "literal" || !isCmdExecutableName(element.name))
+    return null;
+  let stopParsingToken = findStopParsingToken(element.text);
+  let inlineCommandText =
+    stopParsingToken === -1 ? undefined : element.text.slice(stopParsingToken + 3).trimStart();
+  let isStopParsingArg = (arg) => stopParsingToken !== -1 && /^--%(?:$|\s)/.test(arg);
+  let any = element.args.some(isStopParsingArg);
+  let args = [];
+  let verbatim = false;
+  for (let j = 0; j < element.args.length; j++) {
+    let argText = element.args[j];
+    let kind = classifyElementType(element.elementTypes?.[j + 1]);
+    if (!verbatim && inlineCommandText !== undefined && !any && j === element.args.length - 1) {
+      verbatim = true;
+      argText = inlineCommandText;
     }
-    if (!y && s(v)) {
-      y = true;
-      v = v.slice(3).trimStart();
-      if (v === "") continue;
+    if (!verbatim && isStopParsingArg(argText)) {
+      verbatim = true;
+      argText = argText.slice(3).trimStart();
+      if (argText === "") continue;
     }
-    if (y) kind = "literal";
-    if (v !== "" || y)
-      g.push({
-        text: v,
+    if (verbatim) kind = "literal";
+    if (argText !== "" || verbatim)
+      args.push({
+        text: argText,
         kind,
-        verbatim: y,
+        verbatim,
       });
   }
-  let index = g.findIndex((S) => S.kind !== "unknown" && CMD_RUN_SWITCH_RE.test(S.text));
+  let index = args.findIndex((runArg) => runArg.kind !== "unknown" && CMD_RUN_SWITCH_RE.test(runArg.text));
   if (index === -1) return null;
-  let h = [];
-  g.forEach((S, v) => {
-    if (v < index) return;
-    let x = v === index ? S.text.slice(2).trimStart() : S.text;
-    if (v === index && x === "") return;
-    if (h.length > 0)
-      h.push({
+  let commandChars = [];
+  args.forEach((preparedArg, argIndex) => {
+    if (argIndex < index) return;
+    let argBody = argIndex === index ? preparedArg.text.slice(2).trimStart() : preparedArg.text;
+    if (argIndex === index && argBody === "") return;
+    if (commandChars.length > 0)
+      commandChars.push({
         ch: " ",
         kind: "literal",
       });
-    let _ = !S.verbatim && v > index && hasUnquotedWhitespace(x);
-    for (let ch of _ ? `"${x}"` : x)
-      h.push({
+    let needsQuoting = !preparedArg.verbatim && argIndex > index && hasUnquotedWhitespace(argBody);
+    for (let ch of needsQuoting ? `"${argBody}"` : argBody)
+      commandChars.push({
         ch,
-        kind: S.kind,
+        kind: preparedArg.kind,
       });
   });
-  let index_2 = h.findIndex((S) => !/\s/.test(S.ch));
-  if (index_2 !== -1 && h[index_2].ch === '"') {
-    let S = -1;
-    for (let j = h.length - 1; j > index_2; j--)
-      if (h[j].ch === '"') {
-        S = j;
+  let index_2 = commandChars.findIndex((nonSpace) => !/\s/.test(nonSpace.ch));
+  if (index_2 !== -1 && commandChars[index_2].ch === '"') {
+    let closingQuoteIndex = -1;
+    for (let j = commandChars.length - 1; j > index_2; j--)
+      if (commandChars[j].ch === '"') {
+        closingQuoteIndex = j;
         break;
       }
-    h = h.filter((v, x) => x !== index_2 && x !== S);
+    commandChars = commandChars.filter(
+      (charEntry, charIndex) => charIndex !== index_2 && charIndex !== closingQuoteIndex,
+    );
   }
-  return h;
+  return commandChars;
 }
 //@ chunk-v0yfsee9.js:24434-24999 layout
 /**
  * 解析 cmd /c 命令行，收集其中 rd/rmdir/del/erase 的操作数（含 start、if exist、嵌套 cmd、cd 之后的状态）。
  */
-function extractCmdRemovalOperands(e) {
-  let cmdInlineCommandChars = getCmdInlineCommandChars(e);
-  if (cmdInlineCommandChars === null) return [];
-  let r = new Map();
-  let s = (w) => {
-    let h = r.get(w);
-    if (h !== undefined) return h;
-    let matches = /^\$[\p{L}\p{Nd}_:]+$/u.test(w);
-    let S = {
+function extractCmdRemovalOperands(element) {
+  let chars = getCmdInlineCommandChars(element);
+  if (chars === null) return [];
+  let occurrences = new Map();
+  let countOccurrences = (tokenText) => {
+    let cachedCounts = occurrences.get(tokenText);
+    if (cachedCounts !== undefined) return cachedCounts;
+    let matches = /^\$[\p{L}\p{Nd}_:]+$/u.test(tokenText);
+    let copyCounts = {
       copies: 0,
       escaped: 0,
     };
-    for (let index = e.text.indexOf(w); index !== -1; index = e.text.indexOf(w, index + 1)) {
-      if (matches && /[\p{L}\p{Nd}_:]/u.test(e.text[index + w.length] ?? "")) continue;
-      let x = 0;
-      while (index - x > 0 && e.text[index - x - 1] === "`") x++;
-      S.copies++;
-      S.escaped += x % 2;
+    for (
+      let index = element.text.indexOf(tokenText);
+      index !== -1;
+      index = element.text.indexOf(tokenText, index + 1)
+    ) {
+      if (matches && /[\p{L}\p{Nd}_:]/u.test(element.text[index + tokenText.length] ?? "")) continue;
+      let backslashCount = 0;
+      while (index - backslashCount > 0 && element.text[index - backslashCount - 1] === "`") backslashCount++;
+      copyCounts.copies++;
+      copyCounts.escaped += backslashCount % 2;
     }
-    r.set(w, S);
-    return S;
+    occurrences.set(tokenText, copyCounts);
+    return copyCounts;
   };
-  let everyCopyEscaped = (w) => {
-    let { copies, escaped } = s(w);
+  let everyCopyEscaped = (tokenText) => {
+    let { copies, escaped } = countOccurrences(tokenText);
     return copies > 0 && escaped === copies;
   };
-  let someCopyEscaped = (w) => s(w).escaped > 0;
-  let y = [];
+  let someCopyEscaped = (tokenText) => countOccurrences(tokenText).escaped > 0;
+  let operands = [];
   walkCmdRemovalCommands(
-    tokenizeCmdLine(cmdInlineCommandChars),
+    tokenizeCmdLine(chars),
     {
       cdSeen: false,
       cdTarget: null,
     },
     false,
     {
-      operands: y,
+      operands,
       everyCopyEscaped,
       someCopyEscaped,
     },
   );
-  return y;
+  return operands;
 }
 //@ chunk-v0yfsee9.js:24999-25008 layout
 var MAX_CMD_NESTING_DEPTH = 8;
@@ -288,57 +300,57 @@ var MAX_CMD_NESTING_DEPTH = 8;
  * 遍历 cmd /c 命令行 token，收集 rd/rmdir/del/erase 的操作数：跟踪 cd 状态、if exist/defined 条件、start（含 /d）、嵌套 cmd /c /k 递归（有深度上限）与重定向。
  */
 function walkCmdRemovalCommands(tokens, cdState, inStart, sink, depth = 0) {
-  let g = true;
-  let y = "none";
-  let w = false;
+  let atCommandStart = true;
+  let ifState = "none";
+  let afterPipe = false;
   for (let j = 0; j < tokens.length; j++) {
-    let O = tokens[j];
-    if (O.separator) {
-      if (O.text === "<" || O.text === ">") j = skipRedirection(tokens, j);
+    let token = tokens[j];
+    if (token.separator) {
+      if (token.text === "<" || token.text === ">") j = skipRedirection(tokens, j);
       else {
-        g = true;
-        y = "none";
-        w = O.text === "|";
-        if (w) cdState.cdTarget = null;
+        atCommandStart = true;
+        ifState = "none";
+        afterPipe = token.text === "|";
+        if (afterPipe) cdState.cdTarget = null;
       }
       continue;
     }
-    if (/^\d$/.test(O.text) && ["<", ">"].includes(tokens[j + 1]?.text ?? "")) continue;
-    if (y === "condition") {
-      let lower = O.text.toLowerCase();
+    if (/^\d$/.test(token.text) && ["<", ">"].includes(tokens[j + 1]?.text ?? "")) continue;
+    if (ifState === "condition") {
+      let lower = token.text.toLowerCase();
       if (lower === "/i" || lower === "not") continue;
-      y = lower === "exist" || lower === "defined" ? "operand" : "none";
+      ifState = lower === "exist" || lower === "defined" ? "operand" : "none";
       continue;
     }
-    if (y === "operand") {
-      y = "none";
-      g = true;
+    if (ifState === "operand") {
+      ifState = "none";
+      atCommandStart = true;
       continue;
     }
-    if (!g) continue;
-    let replaced = O.text.replace(/^@+/, "");
-    if (!inStart && (O.kind === "unknown" || CMD_CD_VERB_RE.test(replaced))) {
+    if (!atCommandStart) continue;
+    let replaced = token.text.replace(/^@+/, "");
+    if (!inStart && (token.kind === "unknown" || CMD_CD_VERB_RE.test(replaced))) {
       cdState.cdSeen = true;
       cdState.cdTarget =
-        w || O.kind === "unknown"
+        afterPipe || token.kind === "unknown"
           ? null
           : parseCmdCdTarget(
               {
-                ...O,
+                ...token,
                 text: replaced,
               },
               tokens,
               j + 1,
             );
     }
-    if (O.kind !== "unknown") {
+    if (token.kind !== "unknown") {
       let lower = replaced.toLowerCase();
       if (lower === "call" || lower === "") continue;
       if (/^start(?=$|\/)/.test(lower) && depth < MAX_CMD_NESTING_DEPTH) {
-        let k = nextSeparatorIndex(tokens, j + 1);
+        let startEndIndex = nextSeparatorIndex(tokens, j + 1);
         let matches = /\/d/.test(lower.slice(5));
         walkCmdRemovalCommands(
-          tokens.slice(j + 1, k),
+          tokens.slice(j + 1, startEndIndex),
           matches
             ? {
                 cdSeen: true,
@@ -351,8 +363,8 @@ function walkCmdRemovalCommands(tokens, cdState, inStart, sink, depth = 0) {
           sink,
           depth + 1,
         );
-        j = k - 1;
-        g = false;
+        j = startEndIndex - 1;
+        atCommandStart = false;
         continue;
       }
       if (inStart && lower.startsWith("/d")) {
@@ -360,37 +372,37 @@ function walkCmdRemovalCommands(tokens, cdState, inStart, sink, depth = 0) {
         cdState.cdTarget = null;
       }
       if (lower === "if") {
-        y = "condition";
-        g = false;
+        ifState = "condition";
+        atCommandStart = false;
         continue;
       }
       if (isCmdExecutableName(replaced.replaceAll('"', ""))) {
-        let k = j + 1;
-        while (k < tokens.length && !/^\/[ckr]$/i.test(tokens[k].text)) {
-          let z = nextSeparatorIndex(tokens, k, k + 1);
-          if (z === k) break;
-          k = z;
+        let switchIndex = j + 1;
+        while (switchIndex < tokens.length && !/^\/[ckr]$/i.test(tokens[switchIndex].text)) {
+          let nextIndex = nextSeparatorIndex(tokens, switchIndex, switchIndex + 1);
+          if (nextIndex === switchIndex) break;
+          switchIndex = nextIndex;
         }
-        let D = k < tokens.length && !tokens[k].separator;
-        if (D && depth >= MAX_CMD_NESTING_DEPTH) {
-          j = k;
-          g = true;
+        let hasCmdSwitch = switchIndex < tokens.length && !tokens[switchIndex].separator;
+        if (hasCmdSwitch && depth >= MAX_CMD_NESTING_DEPTH) {
+          j = switchIndex;
+          atCommandStart = true;
           continue;
         }
-        let V = nextSeparatorIndex(tokens, k);
-        if (D && k + 1 < V) {
-          let tokens_2 = tokens.slice(k + 1, V);
+        let cmdEndIndex = nextSeparatorIndex(tokens, switchIndex);
+        if (hasCmdSwitch && switchIndex + 1 < cmdEndIndex) {
+          let tokens_2 = tokens.slice(switchIndex + 1, cmdEndIndex);
           if (tokens_2[0].text.startsWith('"')) {
-            let flattened = tokens_2.flatMap((R) =>
-              [...` ${R.text}`].map((ch) => ({
+            let chars = tokens_2.flatMap((switchToken) =>
+              [...` ${switchToken.text}`].map((ch) => ({
                 ch,
-                kind: R.kind,
+                kind: switchToken.kind,
               })),
             );
-            flattened.splice(0, 2);
-            let lastIndex = flattened.findLastIndex((R) => R.ch === '"');
-            if (lastIndex !== -1) flattened.splice(lastIndex, 1);
-            tokens_2 = tokenizeCmdLine(flattened);
+            chars.splice(0, 2);
+            let lastIndex = chars.findLastIndex((charEntry) => charEntry.ch === '"');
+            if (lastIndex !== -1) chars.splice(lastIndex, 1);
+            tokens_2 = tokenizeCmdLine(chars);
           }
           walkCmdRemovalCommands(
             tokens_2,
@@ -402,57 +414,59 @@ function walkCmdRemovalCommands(tokens, cdState, inStart, sink, depth = 0) {
             depth + 1,
           );
         }
-        j = V - 1;
-        g = false;
+        j = cmdEndIndex - 1;
+        atCommandStart = false;
         continue;
       }
     }
-    g = inStart;
-    let v = O.kind === "unknown" ? null : CMD_REMOVE_VERB_RE.exec(replaced);
-    if (v === null) continue;
-    let x = [];
-    let sliced = replaced.slice(v[0].length);
+    atCommandStart = inStart;
+    let removeMatch = token.kind === "unknown" ? null : CMD_REMOVE_VERB_RE.exec(replaced);
+    if (removeMatch === null) continue;
+    let operandTokens = [];
+    let sliced = replaced.slice(removeMatch[0].length);
     if (sliced !== "")
-      x.push({
-        ...O,
+      operandTokens.push({
+        ...token,
         text: sliced,
       });
     for (let j_2 = j + 1; j_2 < tokens.length; j_2++) {
-      let k = tokens[j_2];
-      if (!k.separator) {
-        x.push(k);
+      let nextToken = tokens[j_2];
+      if (!nextToken.separator) {
+        operandTokens.push(nextToken);
         j = j_2;
         continue;
       }
-      if (k.text !== "<" && k.text !== ">") break;
-      if (/^\d$/.test(x.at(-1)?.text ?? "")) x.pop();
+      if (nextToken.text !== "<" && nextToken.text !== ">") break;
+      if (/^\d$/.test(operandTokens.at(-1)?.text ?? "")) operandTokens.pop();
       j_2 = skipRedirection(tokens, j_2);
       j = j_2;
     }
-    for (let P of x) {
-      if (P.kind === "unknown" || P.text.startsWith("/")) continue;
-      let trimmed = P.text.replaceAll('"', "").trim();
-      if (trimmed === "") continue;
-      let D =
-        P.kind === "expands"
-          ? [sink.everyCopyEscaped, sink.someCopyEscaped].map((V) => stripPsVariables(trimmed, V))
+    for (let operandToken of operandTokens) {
+      if (operandToken.kind === "unknown" || operandToken.text.startsWith("/")) continue;
+      let text = operandToken.text.replaceAll('"', "").trim();
+      if (text === "") continue;
+      let views =
+        operandToken.kind === "expands"
+          ? [sink.everyCopyEscaped, sink.someCopyEscaped].map((escapedCheck) =>
+              stripPsVariables(text, escapedCheck),
+            )
           : [
               {
-                view: trimmed,
+                view: text,
                 literalPrefix: null,
               },
             ];
-      for (let [V, { view: z, literalPrefix: W }] of D.entries()) {
-        if (V > 0 && z === D[0].view) continue;
+      for (let [viewIndex, { view, literalPrefix }] of views.entries()) {
+        if (viewIndex > 0 && view === views[0].view) continue;
         sink.operands.push({
-          verb: v[1].toLowerCase(),
-          text: trimmed,
+          verb: removeMatch[1].toLowerCase(),
+          text,
           emptied:
-            W === null
+            literalPrefix === null
               ? null
               : {
-                  view: z,
-                  literalPrefix: W,
+                  view,
+                  literalPrefix,
                 },
           afterCd: cdState.cdSeen,
           ...(cdState.cdTarget !== null && {
@@ -467,89 +481,97 @@ function walkCmdRemovalCommands(tokens, cdState, inStart, sink, depth = 0) {
 /**
  * 用给定环境展开 cmd 的 %NAME% 变量（大小写不敏感）。
  */
-function expandCmdPercentVars(e, n) {
-  if (!e.includes("%")) return e;
-  let r = new Map(Object.entries(n).map(([key, value]) => [key.toLowerCase(), value]));
-  return e.replace(/%([^%:]+)%/g, (s, m) => r.get(m.toLowerCase()) ?? s);
+function expandCmdPercentVars(text, variables) {
+  if (!text.includes("%")) return text;
+  let lowerByName = new Map(Object.entries(variables).map(([key, value]) => [key.toLowerCase(), value]));
+  return text.replace(
+    /%([^%:]+)%/g,
+    (wholeMatch, varName) => lowerByName.get(varName.toLowerCase()) ?? wholeMatch,
+  );
 }
 //@ chunk-v0yfsee9.js:27382-27947 layout
-function parseCmdCdTarget(e, tokens, r) {
-  let match = /^(cd|chdir|pushd)(?![a-z])/i.exec(e.text);
+function parseCmdCdTarget(cdToken, tokens, startIndex) {
+  let match = /^(cd|chdir|pushd)(?![a-z])/i.exec(cdToken.text);
   if (match === null) return null;
-  let m = r;
-  while (m < tokens.length && !tokens[m].separator) m++;
+  let endIndex = startIndex;
+  while (endIndex < tokens.length && !tokens[endIndex].separator) endIndex++;
   let filtered = [
     {
-      ...e,
-      text: e.text.slice(match[0].length),
+      ...cdToken,
+      text: cdToken.text.slice(match[0].length),
     },
-    ...tokens.slice(r, m),
-  ].filter((h) => h.text !== "");
-  if (["<", ">"].includes(tokens[m]?.text ?? "") && /^\d$/.test(filtered.at(-1)?.text ?? "")) filtered.pop();
-  if (filtered.some((h) => h.kind !== "literal")) return null;
-  let y = match[1].toLowerCase() === "pushd" || filtered.some((h) => /^\/d$/i.test(h.text));
+    ...tokens.slice(startIndex, endIndex),
+  ].filter((argToken) => argToken.text !== "");
+  if (["<", ">"].includes(tokens[endIndex]?.text ?? "") && /^\d$/.test(filtered.at(-1)?.text ?? ""))
+    filtered.pop();
+  if (filtered.some((argToken) => argToken.kind !== "literal")) return null;
+  let isDriveChange =
+    match[1].toLowerCase() === "pushd" || filtered.some((argToken) => /^\/d$/i.test(argToken.text));
   let trimmed = filtered
-    .filter((h) => !h.text.startsWith("/"))
-    .map((h) => h.text.replaceAll('"', ""))
+    .filter((argToken) => !argToken.text.startsWith("/"))
+    .map((argToken) => argToken.text.replaceAll('"', ""))
     .join(" ")
     .trim();
-  return y && /^(?:[A-Za-z]:[\\/]|%)/.test(trimmed) ? trimmed : null;
+  return isDriveChange && /^(?:[A-Za-z]:[\\/]|%)/.test(trimmed) ? trimmed : null;
 }
 //@ chunk-v0yfsee9.js:27947-28092 layout
-function nextSeparatorIndex(tokens, n, r = tokens.length) {
-  let s = n;
-  while (s < r) {
-    let m = tokens[s];
-    if (!m.separator) s++;
-    else if (m.text === "<" || m.text === ">") s = skipRedirection(tokens, s) + 1;
+function nextSeparatorIndex(tokens, startIndex, limitIndex = tokens.length) {
+  let index = startIndex;
+  while (index < limitIndex) {
+    let token = tokens[index];
+    if (!token.separator) index++;
+    else if (token.text === "<" || token.text === ">") index = skipRedirection(tokens, index) + 1;
     else break;
   }
-  return s;
+  return index;
 }
 //@ chunk-v0yfsee9.js:28092-28230 layout
-function skipRedirection(tokens, n) {
-  let r = n;
-  while (tokens[r + 1]?.separator && ["<", ">", "&"].includes(tokens[r + 1].text)) r++;
-  return tokens[r + 1] !== undefined && !tokens[r + 1].separator ? r + 1 : r;
+function skipRedirection(tokens, index) {
+  let targetIndex = index;
+  while (tokens[targetIndex + 1]?.separator && ["<", ">", "&"].includes(tokens[targetIndex + 1].text))
+    targetIndex++;
+  return tokens[targetIndex + 1] !== undefined && !tokens[targetIndex + 1].separator
+    ? targetIndex + 1
+    : targetIndex;
 }
 //@ chunk-v0yfsee9.js:28230-28444 layout
-function stripPsVariables(e, n = () => false) {
-  let r = "";
+function stripPsVariables(text, keepVariable = () => false) {
+  let view = "";
   let literalPrefix = null;
-  let m = 0;
-  while (m < e.length) {
-    let g = e[m] === "$" ? scanPsVariableEnd(e, m) : m;
-    if (g === m || n(e.slice(m, g))) {
-      r += e.slice(m, Math.max(g, m + 1));
-      m = Math.max(g, m + 1);
+  let index = 0;
+  while (index < text.length) {
+    let endIndex = text[index] === "$" ? scanPsVariableEnd(text, index) : index;
+    if (endIndex === index || keepVariable(text.slice(index, endIndex))) {
+      view += text.slice(index, Math.max(endIndex, index + 1));
+      index = Math.max(endIndex, index + 1);
       continue;
     }
-    literalPrefix ??= r;
-    m = g;
+    literalPrefix ??= view;
+    index = endIndex;
   }
   return {
-    view: r,
+    view,
     literalPrefix,
   };
 }
 //@ chunk-v0yfsee9.js:28444-28781 layout
-function scanPsVariableEnd(e, n) {
-  let r = e[n + 1];
-  if (r === "{") {
-    let index = e.indexOf("}", n + 2);
-    return index === -1 ? e.length : index + 1;
+function scanPsVariableEnd(text, startIndex) {
+  let nextChar = text[startIndex + 1];
+  if (nextChar === "{") {
+    let index = text.indexOf("}", startIndex + 2);
+    return index === -1 ? text.length : index + 1;
   }
-  if (r === "(") {
-    let m = 0;
-    for (let j = n + 1; j < e.length; j++)
-      if (e[j] === "(") m++;
-      else if (e[j] === ")" && --m === 0) return j + 1;
-    return e.length;
+  if (nextChar === "(") {
+    let depth = 0;
+    for (let j = startIndex + 1; j < text.length; j++)
+      if (text[j] === "(") depth++;
+      else if (text[j] === ")" && --depth === 0) return j + 1;
+    return text.length;
   }
-  if (r === "$" || r === "^" || r === "?") return n + 2;
-  let s = n + 1;
-  while (s < e.length && /[\p{L}\p{Nd}_:]/u.test(e[s])) s++;
-  return s === n + 1 ? n : s;
+  if (nextChar === "$" || nextChar === "^" || nextChar === "?") return startIndex + 2;
+  let index = startIndex + 1;
+  while (index < text.length && /[\p{L}\p{Nd}_:]/u.test(text[index])) index++;
+  return index === startIndex + 1 ? startIndex : index;
 }
 //@ chunk-v0yfsee9.js:28781-39050 fingerprint = CMDLET_PATH_CONFIG (0.974)
 /**
@@ -1006,34 +1028,37 @@ function getParamCategories(config) {
  * 把参数缩写解析到 path/leafOnly/switch/value 类别；匹配多个类别时为 ambiguous，未知为 unknown。
  */
 function classifyParamAbbreviation(paramLower, paramCategories) {
-  let r = new Set();
-  let s = new Map();
-  let m = false;
-  for (let [w, h] of paramCategories)
-    for (let O of h)
-      if (O === paramLower) r.add(w);
-      else if (paramLower.length > 1 && O.startsWith(paramLower)) {
-        let S = s.get(O);
-        if (S !== undefined && S !== w) m = true;
-        s.set(O, w);
+  let exactCategories = new Set();
+  let prefixCategories = new Map();
+  let hasConflict = false;
+  for (let [category, paramNames] of paramCategories)
+    for (let paramName of paramNames)
+      if (paramName === paramLower) exactCategories.add(category);
+      else if (paramLower.length > 1 && paramName.startsWith(paramLower)) {
+        let existingCategory = prefixCategories.get(paramName);
+        if (existingCategory !== undefined && existingCategory !== category) hasConflict = true;
+        prefixCategories.set(paramName, category);
       }
-  if (r.size > 1) return "ambiguous";
-  let g = [...r][0];
-  if (g !== undefined)
-    return g === "value" && (m || [...s.values()].some((h) => h !== "value")) ? "ambiguous" : g;
-  if (m || s.size > 1) return "ambiguous";
-  let y = [...s.values()][0];
-  if (y !== undefined) return y;
+  if (exactCategories.size > 1) return "ambiguous";
+  let exactCategory = [...exactCategories][0];
+  if (exactCategory !== undefined)
+    return exactCategory === "value" &&
+      (hasConflict || [...prefixCategories.values()].some((prefixCategory) => prefixCategory !== "value"))
+      ? "ambiguous"
+      : exactCategory;
+  if (hasConflict || prefixCategories.size > 1) return "ambiguous";
+  let prefixCategory = [...prefixCategories.values()][0];
+  if (prefixCategory !== undefined) return prefixCategory;
   return "unknown";
 }
 //@ chunk-v0yfsee9.js:39633-39758 layout
-function normalizeWindowsPathCase(e) {
-  if (getPlatform() !== "windows") return e;
-  return e
+function normalizeWindowsPathCase(filePath) {
+  if (getPlatform() !== "windows") return filePath;
+  return filePath
     .split(/([/\\])/)
-    .map((n, r) => {
-      if (r % 2 !== 0) return n;
-      return stripTrailingDotsSpaces(n);
+    .map((part, partIndex) => {
+      if (partIndex % 2 !== 0) return part;
+      return stripTrailingDotsSpaces(part);
     })
     .join("");
 }
@@ -1081,15 +1106,18 @@ function expandTilde(filePath) {
 /**
  * 路径（去提供程序前缀、各种拼写）是否是禁止删除的系统路径（盘根、盘根下一级、home 等）。
  */
-function isDangerousRemovalPath(e) {
-  let n = new Set([
-    stripPsParameterPrefix(e),
-    stripFileSystemProviderPrefix(e),
-    createSingleEditDiffConfig(e),
+function isDangerousRemovalPath(rawPath) {
+  let variants = new Set([
+    stripPsParameterPrefix(rawPath),
+    stripFileSystemProviderPrefix(rawPath),
+    createSingleEditDiffConfig(rawPath),
   ]);
-  for (let r of n) {
-    let index = r.indexOf("::");
-    if ((index >= 0 && isDangerousRemovalRawPath(r.slice(index + 2))) || isDangerousRemovalRawPath(r))
+  for (let variant of variants) {
+    let index = variant.indexOf("::");
+    if (
+      (index >= 0 && isDangerousRemovalRawPath(variant.slice(index + 2))) ||
+      isDangerousRemovalRawPath(variant)
+    )
       return true;
   }
   return false;
@@ -1097,26 +1125,30 @@ function isDangerousRemovalPath(e) {
 //@ chunk-v0yfsee9.js:40408-40501 file-local
 function isDangerousRemovalRawPath(filePath) {
   let expanded = expandTilde(filePath).replace(/\\/g, "/");
-  let r = normalizeWindowsPathCase(expanded);
-  if (isAbsolute(r)) r = normalize(r);
-  return isDangerousRemovalPath_2(r) || isDangerousRemovalPath_2(expanded);
+  let normalized = normalizeWindowsPathCase(expanded);
+  if (isAbsolute(normalized)) normalized = normalize(normalized);
+  return isDangerousRemovalPath_2(normalized) || isDangerousRemovalPath_2(expanded);
 }
 //@ chunk-v0yfsee9.js:40501-40849 layout
-function resolveDangerousRemovalPath(e, cwd) {
-  let r = new Set([e, stripFileSystemProviderPrefix(e), createSingleEditDiffConfig(e)]);
-  for (let s of [...r]) {
-    if (s.includes("`")) r.add(unescapePsDoubleQuoted(s));
-    if (s.includes("::")) {
-      let sliced = s.slice(s.indexOf("::") + 2);
-      r.add(sliced);
-      if (sliced.includes("`")) r.add(unescapePsDoubleQuoted(sliced));
+function resolveDangerousRemovalPath(rawPath, cwd) {
+  let variants = new Set([
+    rawPath,
+    stripFileSystemProviderPrefix(rawPath),
+    createSingleEditDiffConfig(rawPath),
+  ]);
+  for (let variant of [...variants]) {
+    if (variant.includes("`")) variants.add(unescapePsDoubleQuoted(variant));
+    if (variant.includes("::")) {
+      let sliced = variant.slice(variant.indexOf("::") + 2);
+      variants.add(sliced);
+      if (sliced.includes("`")) variants.add(unescapePsDoubleQuoted(sliced));
     }
   }
-  for (let s of r) {
-    let m = normalizeWindowsPathCase(expandTilde(s).replace(/\\/g, "/"));
-    if (m === "") continue;
-    let g = isAbsolute(m) ? m : resolve(cwd, m);
-    let { resolvedPath } = safeResolvePath(getFsImplementation(), g);
+  for (let variant of variants) {
+    let normalizedPath = normalizeWindowsPathCase(expandTilde(variant).replace(/\\/g, "/"));
+    if (normalizedPath === "") continue;
+    let absolutePath = isAbsolute(normalizedPath) ? normalizedPath : resolve(cwd, normalizedPath);
+    let { resolvedPath } = safeResolvePath(getFsImplementation(), absolutePath);
     if (isDangerousRemovalPath_2(resolvedPath)) return resolvedPath;
   }
   return null;
@@ -1125,16 +1157,16 @@ function resolveDangerousRemovalPath(e, cwd) {
 /**
  * 判断基础规范化后与原值相同（表示路径未改写）。
  */
-function isUnchangedByBasicNormalize(e) {
-  return stripPsParameterPrefix(e) === e;
+function isUnchangedByBasicNormalize(pathArg) {
+  return stripPsParameterPrefix(pathArg) === pathArg;
 }
 //@ chunk-v0yfsee9.js:40881-41126 fingerprint = dangerousRemovalDeny (0.879)
 /**
  * 构造"删除受保护系统路径"的 deny 结果（safetyCheck，分类器不可批准）。
  */
 function dangerousRemovalDeny(
-  e,
-  message = `Remove-Item on system path '${e}' is blocked. This path is protected from removal.`,
+  pathText,
+  message = `Remove-Item on system path '${pathText}' is blocked. This path is protected from removal.`,
 ) {
   return {
     behavior: "deny",
@@ -1147,41 +1179,45 @@ function dangerousRemovalDeny(
   };
 }
 //@ chunk-v0yfsee9.js:41126-41363 layout
-function stripTrailingWildcardSegment(e) {
-  let n = e.length;
-  while (n > 0 && (e[n - 1] === "\\" || e[n - 1] === "/")) n--;
-  let r = n;
-  while (r > 0 && "*?.".includes(e[r - 1])) r--;
-  let sliced = e.slice(r, n);
-  if (!(r === 0 || e[r - 1] === "\\" || e[r - 1] === "/") || !/[*?]/.test(sliced)) return e;
-  return r === 0 ? "." : e.slice(0, r);
+function stripTrailingWildcardSegment(filePath) {
+  let endIndex = filePath.length;
+  while (endIndex > 0 && (filePath[endIndex - 1] === "\\" || filePath[endIndex - 1] === "/")) endIndex--;
+  let segmentStart = endIndex;
+  while (segmentStart > 0 && "*?.".includes(filePath[segmentStart - 1])) segmentStart--;
+  let sliced = filePath.slice(segmentStart, endIndex);
+  if (
+    !(segmentStart === 0 || filePath[segmentStart - 1] === "\\" || filePath[segmentStart - 1] === "/") ||
+    !/[*?]/.test(sliced)
+  )
+    return filePath;
+  return segmentStart === 0 ? "." : filePath.slice(0, segmentStart);
 }
 //@ chunk-v0yfsee9.js:41363-41743 layout
-function findProtectedRemovalTarget(e, n, r, cdTarget, m) {
-  let g = stripTrailingWildcardSegment(normalizeDosDevicePath(e));
-  if (isDangerousRemovalPath(g))
+function findProtectedRemovalTarget(rawPath, cwd, compoundCommandHasCd, text, cmdVariables) {
+  let normalizedPath = stripTrailingWildcardSegment(normalizeDosDevicePath(rawPath));
+  if (isDangerousRemovalPath(normalizedPath))
     return {
-      path: g,
+      path: normalizedPath,
       quotable: true,
     };
-  let y = r && !/^(?:[A-Za-z]:)?[\\/]/.test(g);
-  if (!isUncOrDevicePath(g) && !y) {
-    let dangerousRemovalPath = resolveDangerousRemovalPath(g, n);
+  let isCwdRelative = compoundCommandHasCd && !/^(?:[A-Za-z]:)?[\\/]/.test(normalizedPath);
+  if (!isUncOrDevicePath(normalizedPath) && !isCwdRelative) {
+    let dangerousRemovalPath = resolveDangerousRemovalPath(normalizedPath, cwd);
     if (dangerousRemovalPath !== null)
       return {
         path: dangerousRemovalPath,
         quotable: true,
       };
   }
-  if (y && cdTarget !== undefined && !/^[A-Za-z]:/.test(g))
-    for (let w of new Set([cdTarget, expandCmdPercentVars(cdTarget, m)])) {
-      if (!/^[A-Za-z]:[\\/]/.test(w)) continue;
-      let resolved = win32.resolve(w, g);
+  if (isCwdRelative && text !== undefined && !/^[A-Za-z]:/.test(normalizedPath))
+    for (let cdBase of new Set([text, expandCmdPercentVars(text, cmdVariables)])) {
+      if (!/^[A-Za-z]:[\\/]/.test(cdBase)) continue;
+      let resolved = win32.resolve(cdBase, normalizedPath);
       if (isDangerousRemovalPath(resolved))
         return {
           path: resolved,
-          quotable: w === cdTarget,
-          viaCd: cdTarget,
+          quotable: cdBase === text,
+          viaCd: text,
         };
     }
   return null;
@@ -1190,41 +1226,41 @@ function findProtectedRemovalTarget(e, n, r, cdTarget, m) {
 /**
  * 开关 tengu_curious_lake（可用 CLAUDE_CODE_DISABLE_POWERSHELL_CMD_RM_DENY 关闭）打开时，检查 PowerShell 里通过 cmd /c 执行的 rd/del 是否删除受保护路径（考虑 %VAR%、$变量为空、cd 之后的相对路径），命中则 deny。
  */
-function checkCmdRemovalOfProtectedPath(cmd, cwd, compoundCommandHasCd) {
+function checkCmdRemovalOfProtectedPath(element, cwd, compoundCommandHasCd) {
   if (!isCmdRmDenyEnabled()) return;
-  let cmdRemovalOperands = extractCmdRemovalOperands(cmd);
+  let cmdRemovalOperands = extractCmdRemovalOperands(element);
   if (cmdRemovalOperands.length === 0) return;
-  let m = subprocessEnv();
+  let cmdVariables = subprocessEnv();
   for (let { verb, text, emptied, afterCd, cdTarget } of cmdRemovalOperands) {
     if (emptied?.literalPrefix === "") continue;
     let view = emptied?.view ?? text;
-    for (let v of new Set([view, expandCmdPercentVars(view, m)])) {
+    for (let pathView of new Set([view, expandCmdPercentVars(view, cmdVariables)])) {
       let protectedRemovalTarget = findProtectedRemovalTarget(
-        v,
+        pathView,
         cwd,
         compoundCommandHasCd || afterCd,
         cdTarget,
-        m,
+        cmdVariables,
       );
       if (protectedRemovalTarget === null) continue;
-      let _ = protectedRemovalTarget.quotable && v === view;
-      let P =
+      let quotable = protectedRemovalTarget.quotable && pathView === view;
+      let viaCdNote =
         protectedRemovalTarget.viaCd === undefined
           ? null
           : `after this line's cd to '${protectedRemovalTarget.viaCd}'`;
       let joined = (
-        _
-          ? [P, emptied !== null ? "if its variables are empty" : null]
+        quotable
+          ? [viaCdNote, emptied !== null ? "if its variables are empty" : null]
           : [
-              P,
+              viaCdNote,
               `with cmd's %NAME% variables replaced${emptied !== null ? " and PowerShell's $ variables empty" : ""}`,
             ]
       )
-        .filter((V) => V !== null)
+        .filter((reasonPart) => reasonPart !== null)
         .join(" and ");
       return dangerousRemovalDeny(
         text,
-        !_
+        !quotable
           ? `cmd's ${verb} on '${text}' is blocked because, ${joined}, it targets a path that no command may remove: a drive root, a folder directly under one, or the home folder.`
           : text === protectedRemovalTarget.path
             ? `cmd's ${verb} on '${protectedRemovalTarget.path}' is blocked because no command may remove that path.`
@@ -1244,8 +1280,8 @@ function checkDenyRuleForGuessedPath(strippedPath, cwd, toolPermissionContext, o
   let abs = isAbsolute(tildeExpanded) ? tildeExpanded : resolve(cwd, tildeExpanded);
   let { resolvedPath } = safeResolvePath(getFsImplementation(), abs);
   let permissionType = operationType === "read" ? "read" : "edit";
-  for (let h of getPathsForPermissionCheck(resolvedPath)) {
-    let denyRule = matchingRuleForInput(h, toolPermissionContext, permissionType, "deny");
+  for (let pathSpelling of getPathsForPermissionCheck(resolvedPath)) {
+    let denyRule = matchingRuleForInput(pathSpelling, toolPermissionContext, permissionType, "deny");
     if (denyRule !== null)
       return {
         resolvedPath,
@@ -1260,36 +1296,36 @@ function checkDenyRuleForGuessedPath(strippedPath, cwd, toolPermissionContext, o
  */
 function validatePath(filePath, cwd, toolPermissionContext, operationType) {
   let cleanPath = stripPsParameterPrefix(filePath);
-  let g = cleanPath !== filePath;
-  if (g) {
-    let _ = new Set();
-    for (let P of [
+  let hadParamPrefix = cleanPath !== filePath;
+  if (hadParamPrefix) {
+    let variants = new Set();
+    for (let variant of [
       filePath.replaceAll("\\", "/"),
       stripFileSystemProviderPrefix(filePath).replaceAll("\\", "/"),
       createSingleEditDiffConfig(filePath).replaceAll("\\", "/"),
     ]) {
-      _.add(P);
-      if (P.includes("`")) _.add(unescapePsDoubleQuoted(P));
-      if (P.includes("::")) {
-        let sliced = P.slice(P.indexOf("::") + 2);
-        _.add(sliced);
-        if (sliced.includes("`")) _.add(unescapePsDoubleQuoted(sliced));
+      variants.add(variant);
+      if (variant.includes("`")) variants.add(unescapePsDoubleQuoted(variant));
+      if (variant.includes("::")) {
+        let sliced = variant.slice(variant.indexOf("::") + 2);
+        variants.add(sliced);
+        if (sliced.includes("`")) variants.add(unescapePsDoubleQuoted(sliced));
       }
     }
-    for (let P of _) {
-      let k = checkDenyRuleForGuessedPath(P, cwd, toolPermissionContext, operationType);
-      if (k)
+    for (let variant of variants) {
+      let denyHit = checkDenyRuleForGuessedPath(variant, cwd, toolPermissionContext, operationType);
+      if (denyHit)
         return {
           allowed: false,
-          resolvedPath: k.resolvedPath,
+          resolvedPath: denyHit.resolvedPath,
           decisionReason: {
             type: "rule",
-            rule: k.rule,
+            rule: denyHit.rule,
           },
         };
     }
   }
-  let y = (resolvedPath) => ({
+  let withParamPrefixDenial = (resolvedPath) => ({
     allowed: false,
     resolvedPath,
     decisionReason: {
@@ -1357,7 +1393,7 @@ function validatePath(filePath, cwd, toolPermissionContext, operationType) {
       resolvedPath: normalizedPath,
       decisionReason: {
         type: "other",
-        reason: `Path '${g ? filePath : normalizedPath}' is drive-relative (resolves against the per-drive current directory, which cannot be statically validated) and requires manual approval`,
+        reason: `Path '${hadParamPrefix ? filePath : normalizedPath}' is drive-relative (resolves against the per-drive current directory, which cannot be statically validated) and requires manual approval`,
       },
     };
   normalizedPath = normalizeWindowsPathCase(normalizedPath);
@@ -1389,18 +1425,18 @@ function validatePath(filePath, cwd, toolPermissionContext, operationType) {
       resolvedPath: normalizedPath,
       decisionReason: {
         type: "other",
-        reason: `Path '${g ? filePath : normalizedPath}' uses a non-filesystem provider and requires manual approval`,
+        reason: `Path '${hadParamPrefix ? filePath : normalizedPath}' uses a non-filesystem provider and requires manual approval`,
       },
     };
   if (hasInteriorDotDot(normalizedPath)) {
-    let _ = checkDenyRuleForGuessedPath(normalizedPath, cwd, toolPermissionContext, operationType);
-    if (_)
+    let denyHit = checkDenyRuleForGuessedPath(normalizedPath, cwd, toolPermissionContext, operationType);
+    if (denyHit)
       return {
         allowed: false,
-        resolvedPath: _.resolvedPath,
+        resolvedPath: denyHit.resolvedPath,
         decisionReason: {
           type: "rule",
-          rule: _.rule,
+          rule: denyHit.rule,
         },
       };
     return {
@@ -1426,20 +1462,20 @@ function validatePath(filePath, cwd, toolPermissionContext, operationType) {
     if (containsPathTraversal(normalizedPath)) {
       let absolutePath = isAbsolute(normalizedPath) ? normalizedPath : resolve(cwd, normalizedPath);
       let { resolvedPath } = safeResolvePath(getFsImplementation(), absolutePath);
-      let H = operationType === "read" ? "read" : "edit";
-      for (let R of getPathsForPermissionCheck(resolvedPath)) {
-        let G = matchingRuleForInput(R, toolPermissionContext, H, "deny");
-        if (G !== null)
+      let permissionType = operationType === "read" ? "read" : "edit";
+      for (let pathSpelling of getPathsForPermissionCheck(resolvedPath)) {
+        let denyRule = matchingRuleForInput(pathSpelling, toolPermissionContext, permissionType, "deny");
+        if (denyRule !== null)
           return {
             allowed: false,
             resolvedPath,
             decisionReason: {
               type: "rule",
-              rule: G,
+              rule: denyRule,
             },
           };
       }
-      if (g) return y(resolvedPath);
+      if (hadParamPrefix) return withParamPrefixDenial(resolvedPath);
       return {
         allowed: false,
         resolvedPath,
@@ -1478,10 +1514,14 @@ function validatePath(filePath, cwd, toolPermissionContext, operationType) {
       },
     };
   }
-  let S = isAbsolute(normalizedPath) ? normalizedPath : resolve(cwd, normalizedPath);
-  let { resolvedPath, ...x } = validateResolvedOperand(S, toolPermissionContext, operationType);
-  if (g && x.allowed) return y(resolvedPath);
-  if (g && !x.allowed && x.decisionReason?.type === "safetyCheck")
+  let absolutePath = isAbsolute(normalizedPath) ? normalizedPath : resolve(cwd, normalizedPath);
+  let { resolvedPath, ...resolvedResult } = validateResolvedOperand(
+    absolutePath,
+    toolPermissionContext,
+    operationType,
+  );
+  if (hadParamPrefix && resolvedResult.allowed) return withParamPrefixDenial(resolvedPath);
+  if (hadParamPrefix && !resolvedResult.allowed && resolvedResult.decisionReason?.type === "safetyCheck")
     return {
       allowed: false,
       resolvedPath,
@@ -1492,7 +1532,7 @@ function validatePath(filePath, cwd, toolPermissionContext, operationType) {
       },
     };
   return {
-    ...x,
+    ...resolvedResult,
     resolvedPath,
   };
 }
@@ -1509,17 +1549,21 @@ function getGlobBaseDirectory(filePath) {
 /**
  * 只读类路径 cmdlet 集合（get-childitem、resolve-path、test-path 等）。
  */
-var VALIDATABLE_ELEMENT_TYPES = new Set(["StringConstant", "Parameter"]);
-var READ_ONLY_PATH_CMDLETS = new Set([
-  "get-childitem",
-  "get-item",
-  "get-itemproperty",
-  "resolve-path",
-  "convert-path",
-  "get-filehash",
-  "get-acl",
-  "test-path",
-]);
+var VALIDATABLE_ELEMENT_TYPES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var READ_ONLY_PATH_CMDLETS;
+deferInit("chunk-v0yfsee9.js:47149", () => {
+  VALIDATABLE_ELEMENT_TYPES = new Set(["StringConstant", "Parameter"]);
+  READ_ONLY_PATH_CMDLETS = new Set([
+    "get-childitem",
+    "get-item",
+    "get-itemproperty",
+    "resolve-path",
+    "convert-path",
+    "get-filehash",
+    "get-acl",
+    "test-path",
+  ]);
+});
 //@ chunk-v0yfsee9.js:47323-48577 fingerprint = extractPathsFromCommand (0.595)
 /**
  * 按 CMDLET_PATH_CONFIG 从 cmdlet 参数中提取路径：识别参数缩写、冒号绑定值、位置参数，标记无法验证的参数（变量、表达式）与可选写入。
@@ -1542,8 +1586,8 @@ function extractPathsFromCommand(cmd) {
   let positionalSkip = config.positionalSkip ?? 0;
   function checkArgElementType(argIdx) {
     if (!elementTypes) return;
-    let x = elementTypes[argIdx + 1];
-    if (x && !VALIDATABLE_ELEMENT_TYPES.has(x)) hasUnvalidatablePathArg = true;
+    let elementType = elementTypes[argIdx + 1];
+    if (elementType && !VALIDATABLE_ELEMENT_TYPES.has(elementType)) hasUnvalidatablePathArg = true;
   }
   for (let i = 0; i < args.length; i++) {
     let arg = args[i];
@@ -1553,8 +1597,8 @@ function extractPathsFromCommand(cmd) {
       let normalized = "-" + arg.slice(1);
       let colonIdx = normalized.indexOf(":", 1);
       let paramLower = (colonIdx > 0 ? normalized.substring(0, colonIdx) : normalized).toLowerCase();
-      let z = classifyParamAbbreviation(paramLower, paramCategories);
-      if (z === "path") {
+      let paramKind = classifyParamAbbreviation(paramLower, paramCategories);
+      if (paramKind === "path") {
         let value;
         if (colonIdx > 0) {
           let rawValue = arg.substring(colonIdx + 1);
@@ -1570,7 +1614,7 @@ function extractPathsFromCommand(cmd) {
           }
         }
         if (value) paths.push(value);
-      } else if (z === "leafOnly") {
+      } else if (paramKind === "leafOnly") {
         let value;
         if (colonIdx > 0) {
           let rawValue = arg.substring(colonIdx + 1);
@@ -1589,8 +1633,8 @@ function extractPathsFromCommand(cmd) {
           if (value.includes("/") || value.includes("\\") || value === "." || value === "..")
             hasUnvalidatablePathArg = true;
           else paths.push(value);
-      } else if (z === "switch");
-      else if (z === "value") {
+      } else if (paramKind === "switch");
+      else if (paramKind === "value") {
         if (colonIdx > 0) {
           if (hasComplexColonValue(arg.substring(colonIdx + 1))) hasUnvalidatablePathArg = true;
         } else {
@@ -1604,9 +1648,9 @@ function extractPathsFromCommand(cmd) {
       } else {
         hasUnvalidatablePathArg = true;
         {
-          let W = args[i + 1];
-          let H = elementTypes ? elementTypes[i + 2] : undefined;
-          if (W && !isPowerShellParameter(W, H)) paths.push(W);
+          let nextArg = args[i + 1];
+          let nextElementType = elementTypes ? elementTypes[i + 2] : undefined;
+          if (nextArg && !isPowerShellParameter(nextArg, nextElementType)) paths.push(nextArg);
         }
         if (colonIdx > 0) {
           let rawValue = arg.substring(colonIdx + 1);
@@ -1641,17 +1685,17 @@ function checkPathConstraints(input, parsed, toolPermissionContext, compoundComm
       message: "Cannot validate paths for unparsed command",
     };
   let firstAsk;
-  let g;
+  let outsideReadsAsk;
   for (let statement of parsed.statements) {
     let result = checkPathConstraintsForStatement(statement, toolPermissionContext, compoundCommandHasCd);
     if (result.behavior === "deny") return result;
     if (result.behavior === "ask") {
       firstAsk ??= result;
-      if (isOutsideReadsBlockedAsk(result.decisionReason)) g ??= result;
+      if (isOutsideReadsBlockedAsk(result.decisionReason)) outsideReadsAsk ??= result;
     }
   }
   return (
-    g ??
+    outsideReadsAsk ??
     firstAsk ?? {
       behavior: "passthrough",
       message: "All path constraints validated successfully",
@@ -1663,89 +1707,99 @@ function checkPathConstraints(input, parsed, toolPermissionContext, compoundComm
  * 读封锁开启时检查外部程序（含内联代码解释器、cmd /c）的参数路径：内联代码直接拒绝，变量/表达式参数要求确认，路径命中 deny 规则拒绝，读出工作目录则 ask。
  */
 function checkNativeCommandReads(command, cwd, permissionContext, hasCd) {
-  let m = resolveToCanonical(command.name);
+  let canonicalName = resolveToCanonical(command.name);
   let elementTypes = command.elementTypes;
   let replaced = command.name
     .slice(Math.max(command.name.lastIndexOf("\\"), command.name.lastIndexOf("/")) + 1)
     .replace(/\.exe$/i, "")
     .replace(/[\d.]+$/, "");
-  let w =
+  let inlineCodeFlags =
     INLINE_CODE_FLAGS.get(replaced) ?? (replaced.toLowerCase() === "cmd" ? new Set(["/c", "/k"]) : undefined);
   if (
-    w !== undefined &&
+    inlineCodeFlags !== undefined &&
     command.args.some((arg) => {
       let lower = arg.toLowerCase();
-      return [...w].some((v) => lower === v.toLowerCase() || lower.startsWith(v.toLowerCase() + "="));
+      return [...inlineCodeFlags].some(
+        (flag) => lower === flag.toLowerCase() || lower.startsWith(flag.toLowerCase() + "="),
+      );
     })
   )
-    return outsideReadsTooComplexAsk(`${m} runs inline code, which cannot be checked against the read block`);
+    return outsideReadsTooComplexAsk(
+      `${canonicalName} runs inline code, which cannot be checked against the read block`,
+    );
   let runtimeAsk;
   for (let j = 0; j < command.args.length; j++) {
-    let S = command.args[j];
-    let v = elementTypes ? elementTypes[j + 1] : undefined;
-    if (v !== undefined && v !== "StringConstant" && v !== "Parameter") {
-      runtimeAsk ??= outsideReadsRuntimePathAsk(m);
+    let arg = command.args[j];
+    let elementType = elementTypes ? elementTypes[j + 1] : undefined;
+    if (elementType !== undefined && elementType !== "StringConstant" && elementType !== "Parameter") {
+      runtimeAsk ??= outsideReadsRuntimePathAsk(canonicalName);
       continue;
     }
-    if (S === "") continue;
-    let index = S.indexOf(":");
-    let index_2 = S.indexOf("=");
-    let P =
-      index > 0 && /^[-/][A-Za-z]+$/.test(S.slice(0, index))
-        ? S.slice(index + 1)
-        : index_2 > 0 && /^--?[A-Za-z][A-Za-z-]*$/.test(S.slice(0, index_2))
-          ? S.slice(index_2 + 1)
+    if (arg === "") continue;
+    let index = arg.indexOf(":");
+    let index_2 = arg.indexOf("=");
+    let optionValue =
+      index > 0 && /^[-/][A-Za-z]+$/.test(arg.slice(0, index))
+        ? arg.slice(index + 1)
+        : index_2 > 0 && /^--?[A-Za-z][A-Za-z-]*$/.test(arg.slice(0, index_2))
+          ? arg.slice(index_2 + 1)
           : undefined;
-    if (P !== undefined && P.includes("$")) {
-      runtimeAsk ??= outsideReadsRuntimePathAsk(m);
+    if (optionValue !== undefined && optionValue.includes("$")) {
+      runtimeAsk ??= outsideReadsRuntimePathAsk(canonicalName);
       continue;
     }
-    if (isUncOrDevicePath(S)) {
-      runtimeAsk ??= outsideReadsRuntimePathAsk(m);
+    if (isUncOrDevicePath(arg)) {
+      runtimeAsk ??= outsideReadsRuntimePathAsk(canonicalName);
       continue;
     }
-    if (P === undefined && isPowerShellParameter(S, v)) continue;
-    for (let k of P !== undefined ? [P] : [S]) {
-      if (k === "") continue;
-      if (k.startsWith("~") && k !== "~" && !/^~[\\/]/.test(k)) {
-        runtimeAsk ??= outsideReadsRuntimePathAsk(m);
+    if (optionValue === undefined && isPowerShellParameter(arg, elementType)) continue;
+    for (let candidatePath of optionValue !== undefined ? [optionValue] : [arg]) {
+      if (candidatePath === "") continue;
+      if (candidatePath.startsWith("~") && candidatePath !== "~" && !/^~[\\/]/.test(candidatePath)) {
+        runtimeAsk ??= outsideReadsRuntimePathAsk(canonicalName);
         continue;
       }
-      let D = expandTilde(k);
-      if (hasCd && !isAbsolute(D)) {
-        runtimeAsk ??= outsideReadsRuntimePathAsk(m);
+      let expandedPath = expandTilde(candidatePath);
+      if (hasCd && !isAbsolute(expandedPath)) {
+        runtimeAsk ??= outsideReadsRuntimePathAsk(canonicalName);
         continue;
       }
-      let V = k;
-      let z = firstGlobCharIndex(D);
-      if (z !== -1) {
-        let sliced = D.slice(0, z);
-        V = /[\\/]$/.test(sliced) ? sliced : dirname(sliced);
+      let globParent = candidatePath;
+      let globIndex = firstGlobCharIndex(expandedPath);
+      if (globIndex !== -1) {
+        let sliced = expandedPath.slice(0, globIndex);
+        globParent = /[\\/]$/.test(sliced) ? sliced : dirname(sliced);
       }
-      let W = expandTilde(V);
-      if (isUncOrDevicePath(W)) {
-        runtimeAsk ??= outsideReadsRuntimePathAsk(m);
+      let globParentExpanded = expandTilde(globParent);
+      if (isUncOrDevicePath(globParentExpanded)) {
+        runtimeAsk ??= outsideReadsRuntimePathAsk(canonicalName);
         continue;
       }
-      let H = isAbsolute(W) ? W : resolve(cwd, W);
-      if (!hasInteriorDotDot(W.replaceAll("\\", "/")) && !getFsImplementation().existsSync(H)) continue;
-      let R = validatePath(V, cwd, permissionContext, "read");
-      if (R.allowed) continue;
-      if (R.decisionReason?.type === "rule")
+      let absoluteTarget = isAbsolute(globParentExpanded)
+        ? globParentExpanded
+        : resolve(cwd, globParentExpanded);
+      if (
+        !hasInteriorDotDot(globParentExpanded.replaceAll("\\", "/")) &&
+        !getFsImplementation().existsSync(absoluteTarget)
+      )
+        continue;
+      let pathResult = validatePath(globParent, cwd, permissionContext, "read");
+      if (pathResult.allowed) continue;
+      if (pathResult.decisionReason?.type === "rule")
         return {
           behavior: "deny",
-          message: `${m} targeting '${R.resolvedPath}' was blocked by a deny rule`,
-          decisionReason: R.decisionReason,
+          message: `${canonicalName} targeting '${pathResult.resolvedPath}' was blocked by a deny rule`,
+          decisionReason: pathResult.decisionReason,
         };
-      if (isOutsideReadsBlockedAsk(R.decisionReason)) {
+      if (isOutsideReadsBlockedAsk(pathResult.decisionReason)) {
         runtimeAsk ??= askOutsideReadBlock(
-          m,
-          R.decisionReason,
-          isUnchangedByBasicNormalize(V) ? R.resolvedPath : undefined,
+          canonicalName,
+          pathResult.decisionReason,
+          isUnchangedByBasicNormalize(globParent) ? pathResult.resolvedPath : undefined,
         );
         continue;
       }
-      runtimeAsk ??= outsideReadsRuntimePathAsk(m);
+      runtimeAsk ??= outsideReadsRuntimePathAsk(canonicalName);
     }
   }
   return runtimeAsk;
@@ -1755,25 +1809,29 @@ function checkNativeCommandReads(command, cwd, permissionContext, hasCd) {
  * New-Item 参数中是否同时有 -ItemType *link/junction 与 -Value（创建链接到指定目标）。
  */
 function isItemTypeParamAbbrev_2(cmd) {
-  let n = false;
-  let r = false;
+  let hasLinkType = false;
+  let hasValue = false;
   for (let i = 0; i < cmd.length; i++) {
     let lower = cmd[i].toLowerCase();
     let colonIdx = lower.indexOf(":");
-    let w = colonIdx > 0 ? lower.slice(0, colonIdx) : lower;
-    let h = colonIdx > 0 ? lower.slice(colonIdx + 1) : (cmd[i + 1] ?? "").toLowerCase();
-    if (w.length >= 2 && ("-itemtype".startsWith(w) || "-type".startsWith(w)) && /link|junction/.test(h))
-      n = true;
-    if (w.length >= 2 && "-value".startsWith(w)) r = true;
+    let paramName = colonIdx > 0 ? lower.slice(0, colonIdx) : lower;
+    let paramValue = colonIdx > 0 ? lower.slice(colonIdx + 1) : (cmd[i + 1] ?? "").toLowerCase();
+    if (
+      paramName.length >= 2 &&
+      ("-itemtype".startsWith(paramName) || "-type".startsWith(paramName)) &&
+      /link|junction/.test(paramValue)
+    )
+      hasLinkType = true;
+    if (paramName.length >= 2 && "-value".startsWith(paramName)) hasValue = true;
   }
-  return n && r;
+  return hasLinkType && hasValue;
 }
 //@ chunk-v0yfsee9.js:50968-51261 affinity
-function askOutsideReadBlock(canonical, decisionReason, blockedPath) {
+function askOutsideReadBlock(blockedPath, decisionReason, blockedPath_2) {
   return {
     behavior: "ask",
-    message: `${canonical} names a path outside the working directories, which the read block does not allow without asking (permissions.blockReadsOutsideWorkingDirectories). Add the directory with /add-dir, or remove that setting.`,
-    blockedPath,
+    message: `${blockedPath} names a path outside the working directories, which the read block does not allow without asking (permissions.blockReadsOutsideWorkingDirectories). Add the directory with /add-dir, or remove that setting.`,
+    blockedPath: blockedPath_2,
     decisionReason,
   };
 }
@@ -1784,10 +1842,10 @@ function askOutsideReadBlock(canonical, decisionReason, blockedPath) {
 function checkPathConstraintsForStatement(statement, toolPermissionContext, compoundCommandHasCd = false) {
   let cwd = getCwd();
   let firstAsk;
-  let g;
-  let y = toolPermissionContext.blockReadsOutsideWorkingDirectories === true;
-  let w = (canonical, operationType) =>
-    y && (operationType === "read" || GIT_SAFETY_WRITE_CMDLETS.has(canonical));
+  let outsideReadsAsk;
+  let blocksOutsideReads = toolPermissionContext.blockReadsOutsideWorkingDirectories === true;
+  let needsReadCheck = (canonical, operationType) =>
+    blocksOutsideReads && (operationType === "read" || GIT_SAFETY_WRITE_CMDLETS.has(canonical));
   if (compoundCommandHasCd)
     firstAsk = {
       behavior: "ask",
@@ -1800,48 +1858,48 @@ function checkPathConstraintsForStatement(statement, toolPermissionContext, comp
       },
     };
   let hasExpressionPipelineSource = false;
-  let O;
-  let S = false;
+  let pipelineSourceText;
+  let sawNonReadOnlyCmdlet = false;
   for (let cmd of statement.commands) {
     if (cmd.elementType !== "CommandAst") {
       hasExpressionPipelineSource = true;
-      O = cmd.text;
+      pipelineSourceText = cmd.text;
       continue;
     }
     let { paths, operationType, hasUnvalidatablePathArg, optionalWrite } = extractPathsFromCommand(cmd);
     let canonical = resolveToCanonical(cmd.name);
-    let V = getOwn(CMDLET_PATH_CONFIG, canonical) !== undefined;
-    let z = checkCmdRemovalOfProtectedPath(cmd, cwd, compoundCommandHasCd);
-    if (z !== undefined) return z;
-    if (y && !V) {
+    let hasCmdletPathConfig = getOwn(CMDLET_PATH_CONFIG, canonical) !== undefined;
+    let protectedPathDenial = checkCmdRemovalOfProtectedPath(cmd, cwd, compoundCommandHasCd);
+    if (protectedPathDenial !== undefined) return protectedPathDenial;
+    if (blocksOutsideReads && !hasCmdletPathConfig) {
       let denyHit = checkNativeCommandReads(cmd, cwd, toolPermissionContext, compoundCommandHasCd);
       if (denyHit?.behavior === "deny") return denyHit;
-      g ??= denyHit;
+      outsideReadsAsk ??= denyHit;
     }
-    if (y && canonical === "new-item" && isItemTypeParamAbbrev_2(cmd.args))
-      g ??= outsideReadsRuntimePathAsk(canonical);
-    let W = S;
-    if (!READ_ONLY_PATH_CMDLETS.has(canonical)) S = true;
+    if (blocksOutsideReads && canonical === "new-item" && isItemTypeParamAbbrev_2(cmd.args))
+      outsideReadsAsk ??= outsideReadsRuntimePathAsk(canonical);
+    let previousWasReadOnly = sawNonReadOnlyCmdlet;
+    if (!READ_ONLY_PATH_CMDLETS.has(canonical)) sawNonReadOnlyCmdlet = true;
     if (hasExpressionPipelineSource) {
       let canonical_2 = resolveToCanonical(cmd.name);
-      if (O !== undefined) {
-        let G = new Set();
-        for (let B of [
-          O,
-          stripPsParameterPrefix(O),
-          stripFileSystemProviderPrefix(O),
-          createSingleEditDiffConfig(O),
+      if (pipelineSourceText !== undefined) {
+        let variants = new Set();
+        for (let variant of [
+          pipelineSourceText,
+          stripPsParameterPrefix(pipelineSourceText),
+          stripFileSystemProviderPrefix(pipelineSourceText),
+          createSingleEditDiffConfig(pipelineSourceText),
         ]) {
-          G.add(B);
-          if (B.includes("`")) G.add(unescapePsDoubleQuoted(B));
-          if (B.includes("::")) {
-            let sliced = B.slice(B.indexOf("::") + 2);
-            G.add(sliced);
-            if (sliced.includes("`")) G.add(unescapePsDoubleQuoted(sliced));
+          variants.add(variant);
+          if (variant.includes("`")) variants.add(unescapePsDoubleQuoted(variant));
+          if (variant.includes("::")) {
+            let sliced = variant.slice(variant.indexOf("::") + 2);
+            variants.add(sliced);
+            if (sliced.includes("`")) variants.add(unescapePsDoubleQuoted(sliced));
           }
         }
-        for (let B of G) {
-          let denyHit = checkDenyRuleForGuessedPath(B, cwd, toolPermissionContext, operationType);
+        for (let variant of variants) {
+          let denyHit = checkDenyRuleForGuessedPath(variant, cwd, toolPermissionContext, operationType);
           if (denyHit)
             return {
               behavior: "deny",
@@ -1857,7 +1915,7 @@ function checkPathConstraintsForStatement(statement, toolPermissionContext, comp
         behavior: "ask",
         message: `${canonical_2} receives its path from a pipeline expression source that cannot be statically validated and requires manual approval`,
       };
-      if (w(canonical, operationType)) g ??= outsideReadsRuntimePathAsk(canonical);
+      if (needsReadCheck(canonical, operationType)) outsideReadsAsk ??= outsideReadsRuntimePathAsk(canonical);
     }
     if (hasUnvalidatablePathArg) {
       let canonical_2 = resolveToCanonical(cmd.name);
@@ -1865,38 +1923,42 @@ function checkPathConstraintsForStatement(statement, toolPermissionContext, comp
         behavior: "ask",
         message: `${canonical_2} uses a parameter or complex path expression (array literal, subexpression, unknown parameter, etc.) that cannot be statically validated and requires manual approval`,
       };
-      if (w(canonical, operationType)) g ??= outsideReadsRuntimePathAsk(canonical);
+      if (needsReadCheck(canonical, operationType)) outsideReadsAsk ??= outsideReadsRuntimePathAsk(canonical);
     }
-    if (operationType !== "read" && !optionalWrite && paths.length === 0 && V) {
+    if (operationType !== "read" && !optionalWrite && paths.length === 0 && hasCmdletPathConfig) {
       firstAsk ??= {
         behavior: "ask",
         message: `${canonical} is a write operation but no target path could be determined; requires manual approval`,
       };
       continue;
     }
-    if (W && V) {
+    if (previousWasReadOnly && hasCmdletPathConfig) {
       firstAsk ??= {
         behavior: "ask",
         message: `${canonical} may receive a path from an upstream pipeline command whose output cannot be statically validated and requires manual approval`,
       };
-      if (w(canonical, operationType)) g ??= outsideReadsRuntimePathAsk(canonical);
+      if (needsReadCheck(canonical, operationType)) outsideReadsAsk ??= outsideReadsRuntimePathAsk(canonical);
     }
-    let H = resolveToCanonical(cmd.name) === "remove-item";
-    if (H) {
+    let isRemoveItem = resolveToCanonical(cmd.name) === "remove-item";
+    if (isRemoveItem) {
       if (
         cmd.args.some((arg) => {
           let lower = (arg.length > 0 ? "-" + arg.slice(1) : arg).toLowerCase();
           let index = lower.indexOf(":");
-          let X = index > 0 ? lower.slice(0, index) : lower;
-          return X.length >= 2 && "-recurse".startsWith(X);
+          let paramName = index > 0 ? lower.slice(0, index) : lower;
+          return paramName.length >= 2 && "-recurse".startsWith(paramName);
         })
       ) {
-        let G = normalizeCaseForComparison(cwd);
+        let cwdNormalized = normalizeCaseForComparison(cwd);
         for (let filePath of paths) {
           let replaced = expandTilde(normalizeWindowsPathCase(filePath)).replace(/\\/g, "/");
-          let X = isAbsolute(replaced) ? resolve(replaced) : resolve(cwd, replaced);
-          let te = normalizeCaseForComparison(X);
-          if (te === G || G.startsWith(te + "/") || G.startsWith(te + "\\")) {
+          let absoluteTarget = isAbsolute(replaced) ? resolve(replaced) : resolve(cwd, replaced);
+          let targetNormalized = normalizeCaseForComparison(absoluteTarget);
+          if (
+            targetNormalized === cwdNormalized ||
+            cwdNormalized.startsWith(targetNormalized + "/") ||
+            cwdNormalized.startsWith(targetNormalized + "\\")
+          ) {
             firstAsk ??= {
               behavior: "ask",
               message: `Remove-Item -Recurse targeting '${filePath}' would delete the working directory including .git and .claude \u2014 requires manual approval`,
@@ -1908,35 +1970,35 @@ function checkPathConstraintsForStatement(statement, toolPermissionContext, comp
     }
     if (
       compoundCommandHasCd &&
-      w(canonical, operationType) &&
+      needsReadCheck(canonical, operationType) &&
       paths.some((path) => !isAbsolute(expandTilde(path)))
     )
-      g ??= outsideReadsRuntimePathAsk(canonical);
+      outsideReadsAsk ??= outsideReadsRuntimePathAsk(canonical);
     for (let path of paths) {
-      if (H && isDangerousRemovalPath(path)) return dangerousRemovalDeny(path);
+      if (isRemoveItem && isDangerousRemovalPath(path)) return dangerousRemovalDeny(path);
       let { allowed, resolvedPath, decisionReason } = validatePath(
         path,
         cwd,
         toolPermissionContext,
         operationType,
       );
-      if (operationType !== "read" && w(canonical, operationType)) {
-        let X = validatePath(path, cwd, toolPermissionContext, "read");
-        if (!X.allowed && X.decisionReason?.type === "rule")
+      if (operationType !== "read" && needsReadCheck(canonical, operationType)) {
+        let readResult = validatePath(path, cwd, toolPermissionContext, "read");
+        if (!readResult.allowed && readResult.decisionReason?.type === "rule")
           return {
             behavior: "deny",
-            message: `${canonical} targeting '${X.resolvedPath}' was blocked by a deny rule`,
-            decisionReason: X.decisionReason,
+            message: `${canonical} targeting '${readResult.resolvedPath}' was blocked by a deny rule`,
+            decisionReason: readResult.decisionReason,
           };
-        if (!X.allowed && isOutsideReadsBlockedAsk(X.decisionReason))
-          g ??= askOutsideReadBlock(
+        if (!readResult.allowed && isOutsideReadsBlockedAsk(readResult.decisionReason))
+          outsideReadsAsk ??= askOutsideReadBlock(
             canonical,
-            X.decisionReason,
-            isUnchangedByBasicNormalize(path) ? X.resolvedPath : undefined,
+            readResult.decisionReason,
+            isUnchangedByBasicNormalize(path) ? readResult.resolvedPath : undefined,
           );
       }
-      if (H && isDangerousRemovalPath_2(resolvedPath)) return dangerousRemovalDeny(resolvedPath);
-      if (H) {
+      if (isRemoveItem && isDangerousRemovalPath_2(resolvedPath)) return dangerousRemovalDeny(resolvedPath);
+      if (isRemoveItem) {
         let dangerousRemovalPath = resolveDangerousRemovalPath(path, cwd);
         if (dangerousRemovalPath !== null) return dangerousRemovalDeny(dangerousRemovalPath);
       }
@@ -1975,15 +2037,15 @@ function checkPathConstraintsForStatement(statement, toolPermissionContext, comp
             mode: "acceptEdits",
             destination: "session",
           });
-        let he = {
+        let askResult = {
           behavior: "ask",
           message,
           blockedPath: isUnchangedByBasicNormalize(path) ? resolvedPath : undefined,
           decisionReason,
           suggestions,
         };
-        firstAsk ??= he;
-        if (isOutsideReadsBlockedAsk(decisionReason)) g ??= he;
+        firstAsk ??= askResult;
+        if (isOutsideReadsBlockedAsk(decisionReason)) outsideReadsAsk ??= askResult;
       }
     }
   }
@@ -1991,14 +2053,15 @@ function checkPathConstraintsForStatement(statement, toolPermissionContext, comp
     for (let cmd of statement.nestedCommands) {
       let { paths, operationType, hasUnvalidatablePathArg, optionalWrite } = extractPathsFromCommand(cmd);
       let canonical = resolveToCanonical(cmd.name);
-      let V = checkCmdRemovalOfProtectedPath(cmd, cwd, compoundCommandHasCd);
-      if (V !== undefined) return V;
+      let protectedPathDenial = checkCmdRemovalOfProtectedPath(cmd, cwd, compoundCommandHasCd);
+      if (protectedPathDenial !== undefined) return protectedPathDenial;
       if (hasUnvalidatablePathArg) {
         firstAsk ??= {
           behavior: "ask",
           message: `${canonical} uses a parameter or complex path expression (array literal, subexpression, unknown parameter, etc.) that cannot be statically validated and requires manual approval`,
         };
-        if (w(canonical, operationType)) g ??= outsideReadsRuntimePathAsk(canonical);
+        if (needsReadCheck(canonical, operationType))
+          outsideReadsAsk ??= outsideReadsRuntimePathAsk(canonical);
       }
       if (
         operationType !== "read" &&
@@ -2012,32 +2075,32 @@ function checkPathConstraintsForStatement(statement, toolPermissionContext, comp
         };
         continue;
       }
-      let z = resolveToCanonical(cmd.name) === "remove-item";
+      let isRemoveItem = resolveToCanonical(cmd.name) === "remove-item";
       for (let filePath of paths) {
-        if (z && isDangerousRemovalPath(filePath)) return dangerousRemovalDeny(filePath);
+        if (isRemoveItem && isDangerousRemovalPath(filePath)) return dangerousRemovalDeny(filePath);
         let { allowed, resolvedPath, decisionReason } = validatePath(
           filePath,
           cwd,
           toolPermissionContext,
           operationType,
         );
-        if (operationType !== "read" && w(canonical, operationType)) {
-          let B = validatePath(filePath, cwd, toolPermissionContext, "read");
-          if (!B.allowed && B.decisionReason?.type === "rule")
+        if (operationType !== "read" && needsReadCheck(canonical, operationType)) {
+          let readResult = validatePath(filePath, cwd, toolPermissionContext, "read");
+          if (!readResult.allowed && readResult.decisionReason?.type === "rule")
             return {
               behavior: "deny",
-              message: `${canonical} targeting '${B.resolvedPath}' was blocked by a deny rule`,
-              decisionReason: B.decisionReason,
+              message: `${canonical} targeting '${readResult.resolvedPath}' was blocked by a deny rule`,
+              decisionReason: readResult.decisionReason,
             };
-          if (!B.allowed && isOutsideReadsBlockedAsk(B.decisionReason))
-            g ??= askOutsideReadBlock(
+          if (!readResult.allowed && isOutsideReadsBlockedAsk(readResult.decisionReason))
+            outsideReadsAsk ??= askOutsideReadBlock(
               canonical,
-              B.decisionReason,
-              isUnchangedByBasicNormalize(filePath) ? B.resolvedPath : undefined,
+              readResult.decisionReason,
+              isUnchangedByBasicNormalize(filePath) ? readResult.resolvedPath : undefined,
             );
         }
-        if (z && isDangerousRemovalPath_2(resolvedPath)) return dangerousRemovalDeny(resolvedPath);
-        if (z) {
+        if (isRemoveItem && isDangerousRemovalPath_2(resolvedPath)) return dangerousRemovalDeny(resolvedPath);
+        if (isRemoveItem) {
           let dangerousRemovalPath = resolveDangerousRemovalPath(filePath, cwd);
           if (dangerousRemovalPath !== null) return dangerousRemovalDeny(dangerousRemovalPath);
         }
@@ -2076,15 +2139,15 @@ function checkPathConstraintsForStatement(statement, toolPermissionContext, comp
               mode: "acceptEdits",
               destination: "session",
             });
-          let de = {
+          let askResult = {
             behavior: "ask",
             message,
             blockedPath: isUnchangedByBasicNormalize(filePath) ? resolvedPath : undefined,
             decisionReason,
             suggestions,
           };
-          firstAsk ??= de;
-          if (isOutsideReadsBlockedAsk(decisionReason)) g ??= de;
+          firstAsk ??= askResult;
+          if (isOutsideReadsBlockedAsk(decisionReason)) outsideReadsAsk ??= askResult;
         }
       }
       if (hasExpressionPipelineSource)
@@ -2179,7 +2242,7 @@ function checkPathConstraintsForStatement(statement, toolPermissionContext, comp
       }
     }
   return (
-    g ??
+    outsideReadsAsk ??
     firstAsk ?? {
       behavior: "passthrough",
       message: "All path constraints validated successfully",

@@ -5,10 +5,10 @@
  * pieces: chunk-na3pph4p.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../runtime/bun-runtime.js";
+import { __commonJS } from "../../runtime/bun-runtime.js";
 
 //@ chunk-na3pph4p.js:273-1502 cjs-fingerprint
-var require_extend = x(function (cjsExports, cjsModule) {
+var require_extend = __commonJS(function (cjsExports, cjsModule) {
   var hasOwn = Object.prototype.hasOwnProperty;
   var toStr = Object.prototype.toString;
   var { defineProperty, getOwnPropertyDescriptor: gOPD } = Object;

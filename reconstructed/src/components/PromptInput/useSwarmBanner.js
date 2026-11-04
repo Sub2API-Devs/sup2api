@@ -9,10 +9,10 @@
  * attribution: fingerprint 2, layout 3, placement 1
  */
 import {
+  getTeamName,
   isTeammate,
   isInProcessTeammate,
   getAgentName,
-  getTeamName,
   getTeammateColor,
 } from "../../utils/teammate.js";
 import { getViewedTeammateTask_2, getActiveAgentForInput } from "../../state/selectors.js";
@@ -25,8 +25,16 @@ import {
   AGENT_COLOR_TO_THEME_COLOR,
 } from "../../tools/AgentTool/agentColorManager.js";
 import { useAppState, useAppStoreDirect } from "../../state/AppState.js";
-import { Q } from "../../../vendor/react/cjs/react.production.js";
+import { useMemo } from "../../../vendor/react/cjs/react.production.js";
 
+//@ chunk-7s4yj2r0.js:227-317 placement
+/**
+ * 函数 swarmBannerName（远端会话名或独立代理名）；位于「new in 2.1.316 (2.1.88 has no file at this path)」模块。
+ */
+function swarmBannerName(props) {
+  if (getTeamName()) return;
+  return props.remoteSessionName ?? props.standaloneAgentContext?.name;
+}
 //@ chunk-0e8j1zzj.js:13825-14564 fingerprint = useSwarmBanner (0.733)
 function useSwarmBanner({ state, teamContext, insideTmux }) {
   if (isTeammate() && !isInProcessTeammate()) {
@@ -88,10 +96,10 @@ function useSwarmBanner({ state, teamContext, insideTmux }) {
 /**
  * 读取 AppState 计算提示框上方的会话横幅（会话标题或代理名与颜色）。
  */
-function useSessionBanner(o) {
-  let standaloneAgentContext = useAppState((u) => u.standaloneAgentContext);
-  let remoteSessionName = useAppState((u) => u.remoteSessionName);
-  let agent = useAppState((u) => u.agent);
+function useSessionBanner(props) {
+  let standaloneAgentContext = useAppState((state) => state.standaloneAgentContext);
+  let remoteSessionName = useAppState((state) => state.remoteSessionName);
+  let agent = useAppState((state) => state.agent);
   let appStoreDirect = useAppStoreDirect();
   return useStableBanner(
     computeSessionBanner({
@@ -99,7 +107,7 @@ function useSessionBanner(o) {
       standaloneAgentContext,
       remoteSessionName,
       agent,
-      hideSessionTitle: o?.hideSessionTitle,
+      hideSessionTitle: props?.hideSessionTitle,
     }),
   );
 }
@@ -108,21 +116,21 @@ function useSessionBanner(o) {
  * 计算会话横幅：有会话名或独立代理颜色时显示标题，否则显示代理名，颜色取用户覆盖或代理定义的颜色。
  */
 function computeSessionBanner({ state, standaloneAgentContext, remoteSessionName, agent, hideSessionTitle }) {
-  let u = agent
+  let agentDefinition = agent
     ? state.agentDefinitions.activeAgents.find((activeAgent) => activeAgent.agentType === agent)
     : undefined;
-  let i = swarmBannerName({
+  let bannerName = swarmBannerName({
     standaloneAgentContext,
     remoteSessionName,
   });
   let color = standaloneAgentContext?.color;
-  if (!hideSessionTitle && (i || color))
+  if (!hideSessionTitle && (bannerName || color))
     return {
-      text: i || agent || "",
+      text: bannerName || agent || "",
       bgColor: toThemeColor(
         getEffectiveAgentColor({
           userOverride: color,
-          agentDefinitionColor: u?.color,
+          agentDefinitionColor: agentDefinition?.color,
         }),
         "promptBorder",
       ),
@@ -130,15 +138,15 @@ function computeSessionBanner({ state, standaloneAgentContext, remoteSessionName
   if (agent)
     return {
       text: agent,
-      bgColor: toThemeColor(u?.color, "promptBorder"),
+      bgColor: toThemeColor(agentDefinition?.color, "promptBorder"),
     };
   return null;
 }
 //@ chunk-0e8j1zzj.js:15217-15326 layout
-function useStableBanner(o) {
-  let text = o?.text;
-  let bgColor = o?.bgColor;
-  return Q(
+function useStableBanner(banner) {
+  let text = banner?.text;
+  let bgColor = banner?.bgColor;
+  return useMemo(
     () =>
       text !== undefined && bgColor !== undefined
         ? {
@@ -154,13 +162,5 @@ function toThemeColor(colorName, fallback = "cyan_FOR_SUBAGENTS_ONLY") {
   return colorName && AGENT_COLOR_NAMES.includes(colorName)
     ? AGENT_COLOR_TO_THEME_COLOR[colorName]
     : fallback;
-}
-//@ chunk-7s4yj2r0.js:227-317 placement
-/**
- * 函数 swarmBannerName（远端会话名或独立代理名）；位于「new in 2.1.316 (2.1.88 has no file at this path)」模块。
- */
-function swarmBannerName(t) {
-  if (getTeamName()) return;
-  return t.remoteSessionName ?? t.standaloneAgentContext?.name;
 }
 export { useSwarmBanner, useStableBanner, useSessionBanner };

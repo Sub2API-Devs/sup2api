@@ -27,7 +27,7 @@ var DEPTH_RULES = {
   "git push": 2,
 };
 //@ chunk-e6aww6q8.js:1047569-1047593 placement
-function noAdditionalDepthRule(e, n) {
+function noAdditionalDepthRule(command, subcommand) {
   return;
 }
 //@ chunk-e6aww6q8.js:1047593-1047628 placement
@@ -36,14 +36,15 @@ var toArray_3 = (val) => (Array.isArray(val) ? val : [val]);
 /**
  * 按命令规格判断某选项是否带参数：规格里有该选项时看其 args；规格有子命令且下一个词不是已知子命令时也视为带参数。
  */
-function optionTakesArg(arg, n, spec) {
+function optionTakesArg(arg, nextArg, spec) {
   if (spec?.options) {
     let found = spec.options.find((sub) =>
       Array.isArray(sub.name) ? sub.name.includes(arg) : sub.name === arg,
     );
     if (found) return !!found.args;
   }
-  if (spec?.subcommands?.length && n && !n.startsWith("-")) return !isKnownSubcommand(n, spec);
+  if (spec?.subcommands?.length && nextArg && !nextArg.startsWith("-"))
+    return !isKnownSubcommand(nextArg, spec);
   return false;
 }
 //@ chunk-e6aww6q8.js:1048029-1048219 sole-consumer = isKnownSubcommand (1)
@@ -52,14 +53,14 @@ function optionTakesArg(arg, n, spec) {
  */
 function findFirstSubcommand(arg, spec) {
   for (let idx = 0; idx < arg.length; idx++) {
-    let s = arg[idx];
-    if (!s) continue;
-    if (s.startsWith("-")) {
-      if (optionTakesArg(s, arg[idx + 1], spec)) idx++;
+    let token = arg[idx];
+    if (!token) continue;
+    if (token.startsWith("-")) {
+      if (optionTakesArg(token, arg[idx + 1], spec)) idx++;
       continue;
     }
-    if (!spec?.subcommands?.length) return s;
-    if (isKnownSubcommand(s, spec)) return s;
+    if (!spec?.subcommands?.length) return token;
+    if (isKnownSubcommand(token, spec)) return token;
   }
   return;
 }
@@ -81,7 +82,10 @@ async function buildPrefix(command, args, spec) {
         let option = spec.options.find((opt) =>
           Array.isArray(opt.name) ? opt.name.includes(arg) : opt.name === arg,
         );
-        if (option?.args && toArray_3(option.args).some((q) => q?.isCommand || q?.isModule)) {
+        if (
+          option?.args &&
+          toArray_3(option.args).some((optionArg) => optionArg?.isCommand || optionArg?.isModule)
+        ) {
           parts.push(arg);
           continue;
         }
@@ -106,11 +110,11 @@ async function calculateDepth(command, args, spec) {
   let firstSubcommand = findFirstSubcommand(args, spec);
   let commandLower = command.toLowerCase();
   let key = firstSubcommand ? `${commandLower} ${firstSubcommand.toLowerCase()}` : commandLower;
-  let S =
+  let depthRule =
     getOwn(DEPTH_RULES, key) ??
     noAdditionalDepthRule(command, firstSubcommand ?? "") ??
     getOwn(DEPTH_RULES, commandLower);
-  if (S !== undefined) return S;
+  if (depthRule !== undefined) return depthRule;
   if (!spec) return 2;
   if (spec.options && args.some((arg) => arg?.startsWith("-")))
     for (let arg of args) {

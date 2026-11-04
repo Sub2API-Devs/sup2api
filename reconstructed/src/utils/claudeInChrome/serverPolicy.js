@@ -38,8 +38,8 @@ function getChromeServerPolicyRefusal() {
   return "--chrome is blocked by your organization's MCP policy (an enterprise MCP config or a deniedMcpServers entry).";
 }
 //@ chunk-b8kdmzpq.js:547-662 placement
-function sessionAutoAllowsToolCalls(r) {
-  let { mode, isBypassPermissionsModeAvailable } = getToolPermissionContext(r);
+function sessionAutoAllowsToolCalls(toolUseContext) {
+  let { mode, isBypassPermissionsModeAvailable } = getToolPermissionContext(toolUseContext);
   return mode === "bypassPermissions" || (mode === "plan" && isBypassPermissionsModeAvailable);
 }
 export { getChromeServerPolicyRefusal, isChromeServerPolicyDenied, sessionAutoAllowsToolCalls };

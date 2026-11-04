@@ -5,23 +5,23 @@
  * pieces: chunk-2pe5kgjj.js (2)
  * attribution: esm-layout 1, esm-fingerprint 1
  */
-import { Re } from "../../../../runtime/bun-runtime.js";
+import { __toESM } from "../../../../runtime/bun-runtime.js";
 import { require_client } from "../../core/dist-cjs/submodules/client/index.js";
 import { require_property_provider } from "../../../@smithy/property-provider/dist-cjs/index.js";
 import { require_shared_ini_file_loader } from "../../../@smithy/shared-ini-file-loader/dist-cjs/index.js";
 
 //@ chunk-2pe5kgjj.js:335-372 esm-layout
-var import_client = Re(require_client());
-var import_property_provider = Re(require_property_provider());
-var import_shared_ini_file_loader = Re(require_shared_ini_file_loader());
+var import_client = __toESM(require_client());
+var import_property_provider = __toESM(require_property_provider());
+var import_shared_ini_file_loader = __toESM(require_shared_ini_file_loader());
 //@ chunk-2pe5kgjj.js:406-1050 esm-fingerprint
 var fromWebToken = (init) => async (awsIdentityProperties) => {
   init.logger?.debug("@aws-sdk/credential-provider-web-identity - fromWebToken");
   let { roleArn, roleSessionName, webIdentityToken, providerId, policyArns, policy, durationSeconds } = init;
   let { roleAssumerWithWebIdentity } = init;
   if (!roleAssumerWithWebIdentity) {
-    let { getDefaultRoleAssumerWithWebIdentity } = await import("./chunk-my7fcfze.js").then((m) =>
-      Re(m.default),
+    let { getDefaultRoleAssumerWithWebIdentity } = await import("../../nested-clients/sts-default.js").then(
+      (mod) => __toESM(mod.default),
     );
     roleAssumerWithWebIdentity = getDefaultRoleAssumerWithWebIdentity(
       {

@@ -36,7 +36,7 @@ In plan mode, you'll:
  * EnterPlanMode 工具的完整提示词：何时主动进入计划模式、计划模式下做什么。
  */
 function enterPlanModeToolPrompt() {
-  let e = agentToolHintSuffix();
+  let agentHintSuffix = agentToolHintSuffix();
   return `Use this tool proactively when you're about to start a non-trivial implementation task. Getting user sign-off on your approach before writing code prevents wasted effort and ensures alignment. This tool transitions you into plan mode where you can explore the codebase and design an implementation approach for user approval.
 
 ## When to Use This Tool
@@ -77,7 +77,7 @@ Only skip EnterPlanMode for simple tasks:
 - Single-line or few-line fixes (typos, obvious bugs, small tweaks)
 - Adding a single function with clear requirements
 - Tasks where the user has given very specific, detailed instructions
-- Pure research/exploration tasks${e}
+- Pure research/exploration tasks${agentHintSuffix}
 
 ${planModeWhatHappensText()}## Examples
 

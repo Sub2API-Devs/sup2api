@@ -12,13 +12,14 @@ import { MAX_SEED_NAME_CHARS } from "./swarm/teammateIds.js";
 import { replaceControlChars } from "./resultError.js";
 import { isPlainObjectNonArray } from "../plugins/bundled/claudeTest/appFacts.js";
 import { APP_STATE_LABELS } from "../plugins/bundled/claudeTest/runState.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-m41h77x8.js:191-253 placement = joinContinuationLines (0.701)
 /**
  * 把字符串重复 n 次（n 非有限或不大于 0 时视为 0）。旧版名 joinContinuationLines 误配，属第三方或通用工具。
  */
-function repeatString(t, n) {
-  return t.repeat(Number.isFinite(n) && n > 0 ? n : 0);
+function repeatString(text, count) {
+  return text.repeat(Number.isFinite(count) && count > 0 ? count : 0);
 }
 //@ chunk-m41h77x8.js:253-315 placement = urlPatternToRegex (1)
 function urlPatternToRegex(pattern) {
@@ -42,50 +43,50 @@ function plural(n_2, word, pluralWord = word + "s") {
 /**
  * 按码点统计字符串长度（代理对计 1）。
  */
-function countCodePoints(t) {
-  let n = 0;
-  for (let j = 0; j < t.length; j++) {
-    let code = t.charCodeAt(j);
-    if (code >= 55296 && code <= 56319 && j + 1 < t.length) {
-      let code = t.charCodeAt(j + 1);
+function countCodePoints(text) {
+  let count = 0;
+  for (let j = 0; j < text.length; j++) {
+    let code = text.charCodeAt(j);
+    if (code >= 55296 && code <= 56319 && j + 1 < text.length) {
+      let code = text.charCodeAt(j + 1);
       if (code >= 56320 && code <= 57343) j++;
     }
-    n++;
+    count++;
   }
-  return n;
+  return count;
 }
 //@ chunk-m41h77x8.js:588-703 layout
 /**
  * 按码点截断到 n 个字符。
  */
-function truncateCodePoints(t, n) {
-  if (t.length <= n) return t;
-  let e = [];
-  for (let r of t) {
-    if (e.length >= n) break;
-    e.push(r);
+function truncateCodePoints(text, maxLength) {
+  if (text.length <= maxLength) return text;
+  let chars = [];
+  for (let char of text) {
+    if (chars.length >= maxLength) break;
+    chars.push(char);
   }
-  return e.join("");
+  return chars.join("");
 }
 //@ chunk-m41h77x8.js:703-847 layout
 /**
  * 截断到 n 个 UTF-16 单元，切点落在代理对中间时少取一个，保证结果良构。
  */
-function truncateToLength(t, n) {
-  if (n <= 0) return "";
-  if (t.length <= n) return t;
-  let sliced = t.slice(0, n);
-  let code = sliced.charCodeAt(n - 1);
+function truncateToLength(text, maxLength) {
+  if (maxLength <= 0) return "";
+  if (text.length <= maxLength) return text;
+  let sliced = text.slice(0, maxLength);
+  let code = sliced.charCodeAt(maxLength - 1);
   return repairUtf16(code >= 55296 && code <= 56319 ? sliced.slice(0, -1) : sliced);
 }
 //@ chunk-m41h77x8.js:847-985 layout
 /**
  * 取末尾 n 个 UTF-16 单元，起点落在低代理项时跳过一个。
  */
-function takeLastChars(t, n) {
-  if (n <= 0) return "";
-  if (t.length <= n) return t;
-  let sliced = t.slice(-n);
+function takeLastChars(text, maxLength) {
+  if (maxLength <= 0) return "";
+  if (text.length <= maxLength) return text;
+  let sliced = text.slice(-maxLength);
   let code = sliced.charCodeAt(0);
   return repairUtf16(code >= 56320 && code <= 57343 ? sliced.slice(1) : sliced);
 }
@@ -93,49 +94,55 @@ function takeLastChars(t, n) {
 /**
  * 中间截断：保留开头 headChars 与结尾 tailChars，中间替换为回调生成的“省略 N 字”文本；长度足够时原样返回。
  */
-function truncateMiddle(t, headChars, tailChars, formatOmitted) {
-  if (t.length <= headChars + tailChars) return t;
-  let i = headChars > 0 ? truncateToLength(t, headChars) : "";
-  let o = tailChars > 0 ? takeLastChars(t, tailChars) : "";
-  return `${i}${formatOmitted(t.length - i.length - o.length)}${o}`;
+function truncateMiddle(text, headChars, tailChars, formatOmitted) {
+  if (text.length <= headChars + tailChars) return text;
+  let head = headChars > 0 ? truncateToLength(text, headChars) : "";
+  let tail = tailChars > 0 ? takeLastChars(text, tailChars) : "";
+  return `${head}${formatOmitted(text.length - head.length - tail.length)}${tail}`;
 }
 //@ chunk-m41h77x8.js:1120-1221 layout
-function repairUtf16(t) {
-  if (typeof Buffer !== "undefined") return Buffer.from(t, "utf16le").toString("utf16le");
-  return normalizeFullWidthDigits(t);
+function repairUtf16(text) {
+  if (typeof Buffer !== "undefined") return Buffer.from(text, "utf16le").toString("utf16le");
+  return normalizeFullWidthDigits(text);
 }
 //@ chunk-m41h77x8.js:1221-1426 fingerprint = normalizeFullWidthDigits (1)
 function normalizeFullWidthDigits(input) {
-  let e = [];
-  for (let r = 0; r < input.length; r += 8192) {
-    let min = Math.min(r + 8192, input.length);
-    let uint16Array = new Uint16Array(min - r);
-    for (let s = r; s < min; s++) uint16Array[s - r] = input.charCodeAt(s);
-    e.push(String.fromCharCode(...uint16Array));
+  let parts = [];
+  for (let start = 0; start < input.length; start += 8192) {
+    let min = Math.min(start + 8192, input.length);
+    let uint16Array = new Uint16Array(min - start);
+    for (let index = start; index < min; index++) uint16Array[index - start] = input.charCodeAt(index);
+    parts.push(String.fromCharCode(...uint16Array));
   }
-  return e.join("");
+  return parts.join("");
 }
 //@ chunk-m41h77x8.js:1426-1819 layout
 /**
  * 孤立 UTF-16 代理项模式（非全局版），用于一次性检测。
  */
-var LONE_SURROGATE_PATTERN = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/;
-var LONE_SURROGATE_GLOBAL_RE = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g;
-var isWellFormedNative =
-  typeof String.prototype.isWellFormed === "function"
-    ? Function.prototype.call.bind(String.prototype.isWellFormed)
-    : undefined;
-var toWellFormedNative =
-  typeof String.prototype.toWellFormed === "function"
-    ? Function.prototype.call.bind(String.prototype.toWellFormed)
-    : undefined;
+var LONE_SURROGATE_PATTERN; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var LONE_SURROGATE_GLOBAL_RE;
+var isWellFormedNative;
+var toWellFormedNative;
+deferInit("chunk-m41h77x8.js:1426", () => {
+  LONE_SURROGATE_PATTERN = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/;
+  LONE_SURROGATE_GLOBAL_RE = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g;
+  isWellFormedNative =
+    typeof String.prototype.isWellFormed === "function"
+      ? Function.prototype.call.bind(String.prototype.isWellFormed)
+      : undefined;
+  toWellFormedNative =
+    typeof String.prototype.toWellFormed === "function"
+      ? Function.prototype.call.bind(String.prototype.toWellFormed)
+      : undefined;
+});
 //@ chunk-m41h77x8.js:1819-1868 layout
 /**
  * 字符串是否良构（无孤立 UTF-16 代理项）；优先用 String.prototype.isWellFormed。
  */
-function isWellFormedString(t) {
-  if (isWellFormedNative) return isWellFormedNative(t);
-  return !LONE_SURROGATE_PATTERN.test(t);
+function isWellFormedString(text) {
+  if (isWellFormedNative) return isWellFormedNative(text);
+  return !LONE_SURROGATE_PATTERN.test(text);
 }
 //@ chunk-m41h77x8.js:1868-1929 file-local
 /**
@@ -149,66 +156,66 @@ function normalizeFullWidthSpace(input) {
 /**
  * 去掉字符串中的孤立代理项，得到良构字符串。
  */
-function toWellFormedString(t) {
-  if (isWellFormedNative && isWellFormedNative(t)) return t;
-  return t.replace(LONE_SURROGATE_GLOBAL_RE, "");
+function toWellFormedString(text) {
+  if (isWellFormedNative && isWellFormedNative(text)) return text;
+  return text.replace(LONE_SURROGATE_GLOBAL_RE, "");
 }
 //@ chunk-m41h77x8.js:1987-2403 layout
 /**
  * 深度遍历数组/对象，把非良构字符串原地修复，返回是否有改动（发送 API 前清洗 JSON 用）。
  */
-function repairMalformedStringsDeep(t) {
-  let n = false;
-  let e = [t];
-  while (e.length > 0) {
-    let r = e.pop();
-    if (Array.isArray(r))
-      for (let i = 0; i < r.length; i++) {
-        let o = r[i];
-        if (typeof o === "string") {
-          if (!isWellFormedString(o)) {
-            r[i] = normalizeFullWidthSpace(o);
-            n = true;
+function repairMalformedStringsDeep(root) {
+  let repaired = false;
+  let pending = [root];
+  while (pending.length > 0) {
+    let current = pending.pop();
+    if (Array.isArray(current))
+      for (let index = 0; index < current.length; index++) {
+        let item = current[index];
+        if (typeof item === "string") {
+          if (!isWellFormedString(item)) {
+            current[index] = normalizeFullWidthSpace(item);
+            repaired = true;
           }
-        } else if (o !== null && typeof o === "object") e.push(o);
+        } else if (item !== null && typeof item === "object") pending.push(item);
       }
-    else if (r !== null && typeof r === "object") {
-      let i = r;
-      for (let key of Object.keys(i)) {
-        let s = i[key];
-        if (typeof s === "string") {
-          if (!isWellFormedString(s)) {
-            i[key] = normalizeFullWidthSpace(s);
-            n = true;
+    else if (current !== null && typeof current === "object") {
+      let object = current;
+      for (let key of Object.keys(object)) {
+        let value = object[key];
+        if (typeof value === "string") {
+          if (!isWellFormedString(value)) {
+            object[key] = normalizeFullWidthSpace(value);
+            repaired = true;
           }
-        } else if (s !== null && typeof s === "object") e.push(s);
+        } else if (value !== null && typeof value === "object") pending.push(value);
       }
     }
   }
-  return n;
+  return repaired;
 }
 //@ chunk-m41h77x8.js:2403-2800 layout
 /**
  * 深度遍历判断结构中是否含非良构字符串。
  */
-function containsMalformedStringDeep(t) {
-  let n = [t];
-  while (n.length > 0) {
-    let e = n.pop();
-    if (Array.isArray(e))
-      for (let j = 0; j < e.length; j++) {
-        let i = e[j];
-        if (typeof i === "string") {
-          if (!isWellFormedString(i)) return true;
-        } else if (i !== null && typeof i === "object") n.push(i);
+function containsMalformedStringDeep(root) {
+  let pending = [root];
+  while (pending.length > 0) {
+    let current = pending.pop();
+    if (Array.isArray(current))
+      for (let j = 0; j < current.length; j++) {
+        let item = current[j];
+        if (typeof item === "string") {
+          if (!isWellFormedString(item)) return true;
+        } else if (item !== null && typeof item === "object") pending.push(item);
       }
-    else if (e !== null && typeof e === "object") {
-      let r = e;
-      for (let key of Object.keys(r)) {
-        let o = r[key];
-        if (typeof o === "string") {
-          if (!isWellFormedString(o)) return true;
-        } else if (o !== null && typeof o === "object") n.push(o);
+    else if (current !== null && typeof current === "object") {
+      let object = current;
+      for (let key of Object.keys(object)) {
+        let value = object[key];
+        if (typeof value === "string") {
+          if (!isWellFormedString(value)) return true;
+        } else if (value !== null && typeof value === "object") pending.push(value);
       }
     }
   }
@@ -218,50 +225,50 @@ function containsMalformedStringDeep(t) {
 /**
  * 返回字符串中第一个分隔符之前的部分（找不到分隔符时返回原串）。
  */
-function firstLineOf(t, n) {
-  let index = t.indexOf(n);
-  return index === -1 ? t : t.slice(0, index);
+function firstLineOf(text, separator) {
+  let index = text.indexOf(separator);
+  return index === -1 ? text : text.slice(0, index);
 }
 //@ chunk-m41h77x8.js:2865-2952 layout
 /**
  * 去掉末尾属于给定字符集合的字符（类似 trimEnd 指定字符）。
  */
-function trimEndChars(t, chars) {
-  let e = t.length;
-  while (e > 0 && chars.includes(t[e - 1])) e--;
-  return t.slice(0, e);
+function trimEndChars(text, chars) {
+  let end = text.length;
+  while (end > 0 && chars.includes(text[end - 1])) end--;
+  return text.slice(0, end);
 }
 //@ chunk-m41h77x8.js:2952-3012 layout
 /**
  * 若以前缀开头则去掉前缀。
  */
-function stripPrefix(t, n) {
-  return t.startsWith(n) ? t.slice(n.length) : t;
+function stripPrefix(text, prefix) {
+  return text.startsWith(prefix) ? text.slice(prefix.length) : text;
 }
 //@ chunk-m41h77x8.js:3012-3081 layout
 /**
  * 若以后缀结尾则去掉后缀。
  */
-function stripSuffix(t, n) {
-  return t.endsWith(n) ? t.slice(0, t.length - n.length) : t;
+function stripSuffix(text, suffix) {
+  return text.endsWith(suffix) ? text.slice(0, text.length - suffix.length) : text;
 }
 //@ chunk-m41h77x8.js:3081-3104 layout
 var ASCII_ONLY_PATTERN = /^[\x00-\x7f]*$/;
 //@ chunk-m41h77x8.js:3104-3234 layout
-function compareStringsGrouped(t, n) {
-  let matches = ASCII_ONLY_PATTERN.test(t);
-  if (matches !== ASCII_ONLY_PATTERN.test(n)) return matches ? -1 : 1;
-  if (matches) return t.localeCompare(n);
-  if (t === n) return 0;
-  return t < n ? -1 : 1;
+function compareStringsGrouped(left, right) {
+  let matches = ASCII_ONLY_PATTERN.test(left);
+  if (matches !== ASCII_ONLY_PATTERN.test(right)) return matches ? -1 : 1;
+  if (matches) return left.localeCompare(right);
+  if (left === right) return 0;
+  return left < right ? -1 : 1;
 }
 //@ chunk-m41h77x8.js:3234-3266 layout
 /**
  * 取第一行（firstLineOf(t, '\n')）。
  */
-function getFirstLine(t) {
+function getFirstLine(text) {
   return firstLineOf(
-    t,
+    text,
     `
 `,
   );
@@ -369,21 +376,21 @@ function truncateToLines(text, maxLines) {
 /**
  * 截断字符串并附上被截掉的字符数。
  */
-function truncateWithCount(t, n) {
-  if (t.length <= n) return t;
-  let e = truncateToLength(t, n);
-  return `${e}\u2026 [+${t.length - e.length} chars]`;
+function truncateWithCount(text, maxLength) {
+  if (text.length <= maxLength) return text;
+  let truncated = truncateToLength(text, maxLength);
+  return `${truncated}\u2026 [+${text.length - truncated.length} chars]`;
 }
 //@ chunk-m41h77x8.js:4727-4884 placement
 /**
  * 在单词边界截断字符串并加省略号（边界太靠前时直接截断）。
  */
-function truncateAtWord(t, n) {
-  if (t.length <= n) return t;
-  let e = truncateToLength(t, n - 1);
-  let r = e.search(/\s\S*$/);
-  let i = r === -1 ? "" : e.slice(0, r).trimEnd();
-  return `${i.length > n / 2 ? i : e.trimEnd()}\u2026`;
+function truncateAtWord(text, maxLength) {
+  if (text.length <= maxLength) return text;
+  let truncated = truncateToLength(text, maxLength - 1);
+  let lastSpace = truncated.search(/\s\S*$/);
+  let wordEnd = lastSpace === -1 ? "" : truncated.slice(0, lastSpace).trimEnd();
+  return `${wordEnd.length > maxLength / 2 ? wordEnd : truncated.trimEnd()}\u2026`;
 }
 //@ chunk-m41h77x8.js:4884-5030 placement
 /**
@@ -396,12 +403,16 @@ var WINDOWS_RESERVED_NAME_RE = /^(con|prn|aux|nul|com[0-9\u00B9\u00B2\u00B3]|lpt
 /**
  * 去控制字符、压缩空白并 trim。
  */
-function collapseWhitespace(t) {
-  return t.replace(CONTROL_CHARS_EXCEPT_WS_RE, "").replace(/\s+/g, " ").trim();
+function collapseWhitespace(text) {
+  return text.replace(CONTROL_CHARS_EXCEPT_WS_RE, "").replace(/\s+/g, " ").trim();
 }
 //@ chunk-m41h77x8.js:5096-5171 placement
-var LINE_BREAK_RE = /[\t\n\v\f\r\u2028\u2029]/g;
-var regExp = new RegExp(`${CONTROL_CHARS_EXCEPT_WS_RE.source}|${LINE_BREAK_RE.source}`);
+var LINE_BREAK_RE; // deferred: uses CONTROL_CHARS_EXCEPT_WS_RE of its import cycle while loading; runs once the cycle is complete
+var regExp;
+deferInit("chunk-m41h77x8.js:5096", () => {
+  LINE_BREAK_RE = /[\t\n\v\f\r\u2028\u2029]/g;
+  regExp = new RegExp(`${CONTROL_CHARS_EXCEPT_WS_RE.source}|${LINE_BREAK_RE.source}`);
+});
 //@ chunk-m41h77x8.js:5171-5249 placement
 /**
  * 若含控制/行分隔字符则替换为空格。
@@ -414,8 +425,8 @@ function stripLineBreaks(displayText) {
 /**
  * 去掉控制、格式、代理与默认可忽略字符及行/段分隔符。
  */
-function stripFormatChars(t) {
-  return t.replace(/[\p{Cc}\p{Cf}\p{Cs}\p{Default_Ignorable_Code_Point}\u2028\u2029]/gu, "");
+function stripFormatChars(text) {
+  return text.replace(/[\p{Cc}\p{Cf}\p{Cs}\p{Default_Ignorable_Code_Point}\u2028\u2029]/gu, "");
 }
 //@ chunk-m41h77x8.js:5354-5555 placement
 var ANSI_ESCAPE_RE =
@@ -424,8 +435,8 @@ var ANSI_ESCAPE_RE =
 /**
  * 转成良构字符串并去掉 ANSI 与控制/格式字符。
  */
-function printableText(t) {
-  return toWellFormedString(t)
+function printableText(text) {
+  return toWellFormedString(text)
     .replace(ANSI_ESCAPE_RE, "")
     .replace(/[\p{Cc}\p{Cf}\u2028\u2029]/gu, "");
 }
@@ -433,70 +444,70 @@ function printableText(t) {
 /**
  * 把控制字符、格式字符和默认可忽略码点转成可见形式（ESC→␛、C0→␀ 系列、DEL→␡，其余 \u{…}），保留换行/Tab 以及 emoji 序列中必需的变体选择符、ZWJ 与标签字符。
  */
-function escapeControlChars(t) {
-  let n = /[\p{Cc}\p{Cf}\p{Default_Ignorable_Code_Point}\u2028\u2029]/gu;
-  if (!n.test(t)) return t;
-  let e = "";
+function escapeControlChars(text) {
+  let controlPattern = /[\p{Cc}\p{Cf}\p{Default_Ignorable_Code_Point}\u2028\u2029]/gu;
+  if (!controlPattern.test(text)) return text;
+  let out = "";
   for (let { segment } of new Intl.Segmenter(undefined, {
     granularity: "grapheme",
-  }).segment(t)) {
+  }).segment(text)) {
     let matches = /\p{Extended_Pictographic}|\p{Regional_Indicator}|^[#*0-9]\uFE0F?\u20E3$/u.test(segment);
     let matches_2 = /^\u{1F3F4}[\u{E0030}-\u{E0039}\u{E0061}-\u{E007A}]{1,6}\u{E007F}$/u.test(segment);
-    n.lastIndex = 0;
-    e += segment.replace(n, (s, c) => {
+    controlPattern.lastIndex = 0;
+    out += segment.replace(controlPattern, (char, offset) => {
       if (
-        s ===
+        char ===
           `
 ` ||
-        s === "\t"
+        char === "\t"
       )
-        return s;
-      let u = s.codePointAt(0) ?? 0;
+        return char;
+      let codePoint = char.codePointAt(0) ?? 0;
       if (
         matches &&
-        (s === "\uFE0F" ||
-          s === "\uFE0E" ||
-          s === "\u20E3" ||
-          (s === "\u200D" && c + s.length < segment.length) ||
-          (matches_2 && u >= 917536 && u <= 917631))
+        (char === "\uFE0F" ||
+          char === "\uFE0E" ||
+          char === "\u20E3" ||
+          (char === "\u200D" && offset + char.length < segment.length) ||
+          (matches_2 && codePoint >= 917536 && codePoint <= 917631))
       )
-        return s;
-      if (u === 27) return "\u241B";
-      if (u < 32) return String.fromCodePoint(9216 + u);
-      if (u === 127) return "\u2421";
-      return `\\u{${u.toString(16).toUpperCase()}}`;
+        return char;
+      if (codePoint === 27) return "\u241B";
+      if (codePoint < 32) return String.fromCodePoint(9216 + codePoint);
+      if (codePoint === 127) return "\u2421";
+      return `\\u{${codePoint.toString(16).toUpperCase()}}`;
     });
   }
-  return e;
+  return out;
 }
 //@ chunk-m41h77x8.js:6371-6447 placement
 /**
  * 把控制字符转成可见符号，换行/制表符转 ␤/␉。
  */
-function escapeControlCharsForDisplay(t) {
-  return escapeControlChars(t).replace(/\n/g, "\u2424").replace(/\t/g, "\u2409");
+function escapeControlCharsForDisplay(text) {
+  return escapeControlChars(text).replace(/\n/g, "\u2424").replace(/\t/g, "\u2409");
 }
 //@ chunk-m41h77x8.js:6447-6521 placement
 /**
  * 取首行可打印文本并按 200 字符截断。
  */
-function oneLineClipped(t) {
-  let n = printableText(getFirstLine(t));
-  return n.length > 200 ? `${truncateToLength(n, 200)}\u2026` : n;
+function oneLineClipped(text) {
+  let firstLine = printableText(getFirstLine(text));
+  return firstLine.length > 200 ? `${truncateToLength(firstLine, 200)}\u2026` : firstLine;
 }
 //@ chunk-m41h77x8.js:6521-6557 placement
 /**
  * 清洗后按长度截断。
  */
-function clippedMessage(t, n) {
-  return truncateToLength(cleanForDisplay(t), n);
+function clippedMessage(text, maxLength) {
+  return truncateToLength(cleanForDisplay(text), maxLength);
 }
 //@ chunk-m41h77x8.js:6557-6610 placement
 /**
  * 去 ANSI、控制字符并压缩空白的一行文本。
  */
-function cleanForDisplay(t) {
-  return stripFormatChars(collapseWhitespace(t.replace(ANSI_ESCAPE_RE, ""))).trim();
+function cleanForDisplay(text) {
+  return stripFormatChars(collapseWhitespace(text.replace(ANSI_ESCAPE_RE, ""))).trim();
 }
 //@ chunk-m41h77x8.js:6610-6618 placement
 var MAX_COERCE_DEPTH = 8;
@@ -504,23 +515,23 @@ var MAX_COERCE_DEPTH = 8;
 /**
  * 把值按 JS 字符串转换规则转成字符串：字符串/数字/布尔直接转换，数组递归用逗号连接（限深度），普通对象为 [object Object]，其他返回 undefined。
  */
-function coerceToPlainString(t, n = 0) {
-  if (typeof t === "string") return t;
-  if (typeof t === "number" || typeof t === "boolean") return String(t);
-  if (Array.isArray(t)) {
-    if (n >= MAX_COERCE_DEPTH) return;
-    let e = [];
-    for (let r of t) {
-      let i = r === null || r === undefined ? "" : coerceToPlainString(r, n + 1);
-      if (i === undefined) return;
-      e.push(i);
+function coerceToPlainString(value, depth = 0) {
+  if (typeof value === "string") return value;
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  if (Array.isArray(value)) {
+    if (depth >= MAX_COERCE_DEPTH) return;
+    let parts = [];
+    for (let item of value) {
+      let converted = item === null || item === undefined ? "" : coerceToPlainString(item, depth + 1);
+      if (converted === undefined) return;
+      parts.push(converted);
     }
-    return e.join(",");
+    return parts.join(",");
   }
-  return typeof t === "object" &&
-    t !== null &&
-    Object.getPrototypeOf(t) === Object.prototype &&
-    !Object.hasOwn(t, "toString")
+  return typeof value === "object" &&
+    value !== null &&
+    Object.getPrototypeOf(value) === Object.prototype &&
+    !Object.hasOwn(value, "toString")
     ? "[object Object]"
     : undefined;
 }
@@ -533,78 +544,79 @@ var MAX_CLIP_CHARS = 500;
 /**
  * 按 UTF-8 字节数截断字符串（不切断字符），长度一定不超限时直接返回原串。
  */
-function truncateUtf8Bytes(t, n) {
-  if (t.length * 3 <= n) return t;
+function truncateUtf8Bytes(text, maxBytes) {
+  if (text.length * 3 <= maxBytes) return text;
   let textEncoder = new TextEncoder();
-  let uint8Array = new Uint8Array(Math.max(0, Math.min(n, 4194304)));
-  let i = 0;
-  let o = 0;
-  while (o < t.length) {
-    let s = n - i;
-    if (s <= 0) break;
-    let c = s < uint8Array.length ? uint8Array.subarray(0, s) : uint8Array;
-    let { read, written } = textEncoder.encodeInto(t.slice(o), c);
+  let uint8Array = new Uint8Array(Math.max(0, Math.min(maxBytes, 4194304)));
+  let writtenBytes = 0;
+  let readChars = 0;
+  while (readChars < text.length) {
+    let remainingBytes = maxBytes - writtenBytes;
+    if (remainingBytes <= 0) break;
+    let target = remainingBytes < uint8Array.length ? uint8Array.subarray(0, remainingBytes) : uint8Array;
+    let { read, written } = textEncoder.encodeInto(text.slice(readChars), target);
     if (read === 0) break;
-    o += read;
-    i += written;
+    readChars += read;
+    writtenBytes += written;
   }
-  return o >= t.length ? t : t.slice(0, o);
+  return readChars >= text.length ? text : text.slice(0, readChars);
 }
 //@ chunk-m41h77x8.js:7338-7505 placement
 /**
  * 用足够长的反引号围栏包裹代码块（比内容中最长的反引号串多一个，至少 3 个），可带语言标记。
  */
-function fenceCodeBlock(t, n = "") {
-  let reduced = (t.match(/`+/g) ?? []).reduce((acc, o) => Math.max(acc, o.length), 0);
-  let r = "`".repeat(Math.max(3, reduced + 1));
-  return `${r}${n.replace(/[`\s].*$/s, "")}
-${t}
-${r}`;
+function fenceCodeBlock(code, language = "") {
+  let reduced = (code.match(/`+/g) ?? []).reduce((acc, run) => Math.max(acc, run.length), 0);
+  let fence = "`".repeat(Math.max(3, reduced + 1));
+  return `${fence}${language.replace(/[`\s].*$/s, "")}
+${code}
+${fence}`;
 }
 //@ chunk-m41h77x8.js:7505-7532 placement
 /**
  * 已以省略号结尾的文本模式。
  */
 var TRAILING_ELLIPSIS_RE = /(\u2026|\.\.\.)$/;
-//@ chunk-bwbq4xvm.js:775124-775209 placement
-function stripControlCharsTruncated(e) {
-  return [...e.replace(/[\x00-\x1f\x7f-\x9f]/g, "")].slice(0, MAX_SEED_NAME_CHARS).join("");
-}
-//@ chunk-bwbq4xvm.js:775209-775255 placement
-function sanitizeSessionTitle(e) {
-  return stripControlCharsTruncated(replaceControlChars(e.trim())).trim();
-}
-//@ chunk-ae5g0zb5.js:38606-39033 fingerprint = capitalize (1)
-function capitalize_2(e, n) {
-  let r = null;
-  try {
-    r = e === undefined ? null : JSON.parse(e);
-  } catch {
-    r = null;
-  }
-  let o = isPlainObjectNonArray(r) ? r.name : null;
-  let s =
-    typeof o === "string" &&
-    o.length <= 214 &&
-    /^(?:@[a-z0-9-~][a-z0-9-._~]*\/)?[a-z0-9-~][a-z0-9-._~]*$/.test(o)
-      ? o
-      : null;
-  let a = n.length <= 214 && /^[A-Za-z0-9][A-Za-z0-9-._~]*$/.test(n) ? n : null;
-  let trimmed = (s ?? a ?? "")
-    .replace(/^@[^/]*\//, "")
-    .replace(/[-._~]+/g, " ")
-    .trim()
-    .slice(0, 30)
-    .trim();
-  let c = trimmed.charAt(0).toUpperCase() + trimmed.slice(1);
-  return APP_STATE_LABELS.test(c) ? c : null;
-}
 //@ chunk-dcmhvw5a.js:141176-141231 placement = setCwdState (1)
 /**
  * NFC 规范化后转小写，用于大小写不敏感的名字/路径比较（被 50 多处使用）。
  */
 function nfcLower(cwd) {
   return cwd.normalize("NFC").toLowerCase();
+}
+//@ chunk-bwbq4xvm.js:775124-775209 placement
+function stripControlCharsTruncated(text) {
+  return [...text.replace(/[\x00-\x1f\x7f-\x9f]/g, "")].slice(0, MAX_SEED_NAME_CHARS).join("");
+}
+//@ chunk-bwbq4xvm.js:775209-775255 placement
+function sanitizeSessionTitle(title) {
+  return stripControlCharsTruncated(replaceControlChars(title.trim())).trim();
+}
+//@ chunk-ae5g0zb5.js:38606-39033 fingerprint = capitalize (1)
+function capitalize_2(configJson, fallbackName) {
+  let parsed = null;
+  try {
+    parsed = configJson === undefined ? null : JSON.parse(configJson);
+  } catch {
+    parsed = null;
+  }
+  let configuredName = isPlainObjectNonArray(parsed) ? parsed.name : null;
+  let safeConfiguredName =
+    typeof configuredName === "string" &&
+    configuredName.length <= 214 &&
+    /^(?:@[a-z0-9-~][a-z0-9-._~]*\/)?[a-z0-9-~][a-z0-9-._~]*$/.test(configuredName)
+      ? configuredName
+      : null;
+  let safeFallbackName =
+    fallbackName.length <= 214 && /^[A-Za-z0-9][A-Za-z0-9-._~]*$/.test(fallbackName) ? fallbackName : null;
+  let trimmed = (safeConfiguredName ?? safeFallbackName ?? "")
+    .replace(/^@[^/]*\//, "")
+    .replace(/[-._~]+/g, " ")
+    .trim()
+    .slice(0, 30)
+    .trim();
+  let label = trimmed.charAt(0).toUpperCase() + trimmed.slice(1);
+  return APP_STATE_LABELS.test(label) ? label : null;
 }
 export {
   firstLineOf,

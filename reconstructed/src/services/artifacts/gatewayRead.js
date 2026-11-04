@@ -40,20 +40,28 @@ import { isNotFoundProxy } from "./shareEntries.js";
 import { proxyDenialResult } from "../../utils/sandbox/proxyDenial.js";
 import { redactFrameToken } from "./webfetchRead.js";
 import { isWellFormedString } from "../../utils/stringUtils.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-jv307fw4.js:36997-37182 placement
 /**
  * 经会话网关读取 artifact 的常量：页面/文件读取的最大字节数、"网关几分钟前拒绝过"的跳过结果、重试等待上限与默认值。
  */
-var MAX_MOUNT_READ_BYTES = MAX_ARTIFACT_BYTES + FRAME_RUNTIME_MAX_SPAN + MAX_FRAME_HTML_MINUS_SCRIPT + 65536;
-var MAX_MOUNT_FILE_BYTES = MAX_FRAME_RESPONSE_BYTES + FRAME_RUNTIME_MAX_SPAN + 1;
-var GATEWAY_DECLINED_RESULT = {
-  relayed: false,
-  why: "the session gateway declined an artifact read a few minutes ago, so this read did not retry it",
-  code: "declined",
-};
-var MOUNT_RETRY_MAX_MS = 5000;
-var MOUNT_RETRY_DEFAULT_MS = 1000;
+var MAX_MOUNT_READ_BYTES; // deferred: uses MAX_FRAME_RESPONSE_BYTES (./frameApi.js) of its import cycle while loading; runs once the cycle is complete
+var MAX_MOUNT_FILE_BYTES;
+var GATEWAY_DECLINED_RESULT;
+var MOUNT_RETRY_MAX_MS;
+var MOUNT_RETRY_DEFAULT_MS;
+deferInit("chunk-jv307fw4.js:36997", () => {
+  MAX_MOUNT_READ_BYTES = MAX_ARTIFACT_BYTES + FRAME_RUNTIME_MAX_SPAN + MAX_FRAME_HTML_MINUS_SCRIPT + 65536;
+  MAX_MOUNT_FILE_BYTES = MAX_FRAME_RESPONSE_BYTES + FRAME_RUNTIME_MAX_SPAN + 1;
+  GATEWAY_DECLINED_RESULT = {
+    relayed: false,
+    why: "the session gateway declined an artifact read a few minutes ago, so this read did not retry it",
+    code: "declined",
+  };
+  MOUNT_RETRY_MAX_MS = 5000;
+  MOUNT_RETRY_DEFAULT_MS = 1000;
+});
 //@ chunk-jv307fw4.js:37182-37217 placement
 /**
  * 导出函数 `singleReadRetryBudget`：返回 { remaining: 1 }。
@@ -75,7 +83,7 @@ function describeGatewayTransient(status) {
  * 经会话网关（ccr-gateway，session JWT）GET 一次 artifact 内容；遇到可重试状态且还有重试预算时按 retry-after 等待后重试一次。
  */
 async function getViaMountOnce(slug, path, options) {
-  let s = () =>
+  let retry = () =>
     apiClient.get(artifactProxyPath(slug, path), {
       host: "ccr-gateway",
       auth: "session-jwt",
@@ -87,13 +95,13 @@ async function getViaMountOnce(slug, path, options) {
       validateStatus: () => true,
       signal: options.signal,
     });
-  let response = await s();
+  let response = await retry();
   if (!response.ok || !isRetryableStatus(response.status) || options.retryBudget.remaining < 1)
     return response;
   options.retryBudget.remaining--;
-  let l = response.response.headers?.["retry-after"];
+  let retryAfter = response.response.headers?.["retry-after"];
   let min = Math.min(
-    parseRetryAfterMs(typeof l === "string" ? l : undefined) ?? MOUNT_RETRY_DEFAULT_MS,
+    parseRetryAfterMs(typeof retryAfter === "string" ? retryAfter : undefined) ?? MOUNT_RETRY_DEFAULT_MS,
     MOUNT_RETRY_MAX_MS,
   );
   logForDebugging(
@@ -102,14 +110,14 @@ async function getViaMountOnce(slug, path, options) {
   await sleep(min, options.signal, {
     abortError: () => new AbortError(),
   });
-  return s();
+  return retry();
 }
 //@ chunk-jv307fw4.js:37943-38012 placement
 /**
  * 导出函数 `canReadViaFrame`：参数 e，返回 e.contentVia === "frame" && !env.CLAUDE_CODE_REMOTE。
  */
-function canReadViaFrame(e) {
-  return e.contentVia === "frame" && !env.CLAUDE_CODE_REMOTE;
+function canReadViaFrame(url) {
+  return url.contentVia === "frame" && !env.CLAUDE_CODE_REMOTE;
 }
 //@ chunk-jv307fw4.js:38012-38055 placement
 /**
@@ -123,14 +131,14 @@ var MAX_RETRY_AFTER_MS = 1e4;
  * 经 frame 接口的 /api/frame/content 读取 artifact 内容（带资源令牌）：传输错误重试一次，429/503 在期限内指数退避；只有响应头表明 served 时才返回答复，否则为 declined。
  */
 async function getViaFrameContent(slug, path, options) {
-  let s = `/api/frame/content/${encodeURIComponent(slug)}${path}`;
+  let url = `/api/frame/content/${encodeURIComponent(slug)}${path}`;
   let deadline = Date.now() + options.timeout;
-  let l = false;
+  let done = false;
   let retries = 0;
   for (;;) {
     let response;
     try {
-      response = await frameApi.get(s, {
+      response = await frameApi.get(url, {
         headers: {
           ...buildFrameHeaders(),
           "x-frame-asset-token": options.token,
@@ -146,12 +154,12 @@ async function getViaFrameContent(slug, path, options) {
       if (
         isCancel(error) ||
         error instanceof AbortError ||
-        l ||
+        done ||
         !isTransportError(error) ||
         Date.now() >= deadline
       )
         throw error;
-      l = true;
+      done = true;
       continue;
     }
     if (!response.ok)
@@ -160,9 +168,9 @@ async function getViaFrameContent(slug, path, options) {
       };
     let headers = response.response.headers;
     if ((response.status === 429 || response.status === 503) && retries < MAX_RETRY_AFTER_ATTEMPTS) {
-      let T = headers?.["retry-after"];
+      let retryAfter = headers?.["retry-after"];
       let min = Math.min(
-        parseRetryAfterMs(typeof T === "string" ? T : undefined) ?? 500 * 2 ** retries,
+        parseRetryAfterMs(typeof retryAfter === "string" ? retryAfter : undefined) ?? 500 * 2 ** retries,
         MAX_RETRY_AFTER_MS,
       );
       if (Date.now() + min + 1000 < deadline) {
@@ -190,8 +198,8 @@ async function getViaFrameContent(slug, path, options) {
  * 导出函数 `contentTypeOfHeaders`：参数 e，返回 n?.["x-frame-asset-content-type"] ?? n?.["content-type"]。
  */
 function contentTypeOfHeaders(headers) {
-  let n = headers;
-  return n?.["x-frame-asset-content-type"] ?? n?.["content-type"];
+  let responseHeaders = headers;
+  return responseHeaders?.["x-frame-asset-content-type"] ?? responseHeaders?.["content-type"];
 }
 //@ chunk-jv307fw4.js:38954-40989 placement
 /**
@@ -208,24 +216,24 @@ async function readViaGateway(options, buildResult) {
       retryBudget,
     });
   if (options.source !== undefined && !options.source.fellBack) {
-    let d;
+    let out;
     try {
-      d = await getPath(options.source.path);
+      out = await getPath(options.source.path);
     } catch (error) {
       if (isCancel(error) || error instanceof AbortError) throw error;
     }
-    if (d?.ok && d.status === 200) {
+    if (out?.ok && out.status === 200) {
       markRelayServed(ARTIFACT_MOUNT);
       return {
         relayed: true,
         result: buildResult(
-          Buffer.from(d.data ?? new ArrayBuffer(0)),
-          contentTypeOfHeaders(d.response.headers),
+          Buffer.from(out.data ?? new ArrayBuffer(0)),
+          contentTypeOfHeaders(out.response.headers),
           true,
         ),
       };
     }
-    options.source.fellBack = d?.ok ? d.status : 0;
+    options.source.fellBack = out?.ok ? out.status : 0;
     logForDebugging(
       `[artifact] stored-source read via the gateway fell back (${options.source.fellBack}) slug=${options.slug}`,
     );
@@ -277,8 +285,8 @@ async function readViaGateway(options, buildResult) {
         ...(relayServed(ARTIFACT_MOUNT) &&
           isNotFoundProxy(
             response.response.headers,
-            proxyDenialResult(response.response.headers, response.data, (h) =>
-              redactFrameToken(h, options.token),
+            proxyDenialResult(response.response.headers, response.data, (line) =>
+              redactFrameToken(line, options.token),
             ),
           ) && {
             missingFile: true,
@@ -318,11 +326,12 @@ async function readViaGateway(options, buildResult) {
 /**
  * 校验并编码 artifact 内文件路径：良构、不超过 512 字节，各段非空、非 ./..、无反斜杠/%/控制字符；逐段 URI 编码后返回，非法时 undefined，空输入返回空串。
  */
-function encodeFilePath(e) {
-  if (e === undefined) return "";
-  if (!isWellFormedString(e) || Buffer.byteLength(e, "utf8") > 512) return;
-  let parts = e.split("/");
-  for (let r of parts) if (r === "" || r === "." || r === ".." || /[\\%\x00-\x1f\x7f]/.test(r)) return;
+function encodeFilePath(filePath) {
+  if (filePath === undefined) return "";
+  if (!isWellFormedString(filePath) || Buffer.byteLength(filePath, "utf8") > 512) return;
+  let parts = filePath.split("/");
+  for (let segment of parts)
+    if (segment === "" || segment === "." || segment === ".." || /[\\%\x00-\x1f\x7f]/.test(segment)) return;
   return parts.map(encodeURIComponent).join("/");
 }
 export {

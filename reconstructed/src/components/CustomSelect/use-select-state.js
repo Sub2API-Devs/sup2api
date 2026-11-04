@@ -8,7 +8,7 @@
  * pieces: chunk-ey2qag4x.js (1)
  * attribution: fingerprint 1
  */
-import { y, ce } from "../../../vendor/react/cjs/react.production.js";
+import { useState, useCallback } from "../../../vendor/react/cjs/react.production.js";
 import { useSelectNavigation } from "./use-select-navigation.js";
 
 //@ chunk-ey2qag4x.js:42760-43084 fingerprint = useSelectState (0.744)
@@ -22,7 +22,7 @@ function useSelectState_2({
   onFocus,
   focusValue,
 }) {
-  let [value, setValue] = y(defaultValue);
+  let [value, setValue] = useState(defaultValue);
   let navigation = useSelectNavigation({
     visibleOptionCount,
     options,
@@ -30,7 +30,7 @@ function useSelectState_2({
     focusValue,
   });
   let { getFocusedValue } = navigation;
-  let selectFocusedOption = ce(() => {
+  let selectFocusedOption = useCallback(() => {
     setValue(getFocusedValue());
   }, [getFocusedValue]);
   return {

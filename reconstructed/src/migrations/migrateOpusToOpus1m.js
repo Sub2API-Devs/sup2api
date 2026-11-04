@@ -18,7 +18,7 @@ import { logEvent } from "../services/analytics/index.js";
 /**
  * 迁移：userSettings.model 为 opus 且允许 1M 时改成 opus[1m]。
  */
-async function migrateOpusToOpus1m(e) {
+async function migrateOpusToOpus1m(context) {
   if (!opus1mMergeTagsDefaultOpus()) return true;
   if (getSettingsForSourceForUpkeep("userSettings")?.model !== "opus") return true;
   let { error } = await updateSettingsForSource(
@@ -27,7 +27,7 @@ async function migrateOpusToOpus1m(e) {
       model: "opus[1m]",
     },
     undefined,
-    e,
+    context,
   );
   if (error) {
     logForDebugging(`Failed to migrate opus model setting: ${error}`, {

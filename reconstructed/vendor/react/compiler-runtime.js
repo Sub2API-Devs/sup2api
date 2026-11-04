@@ -10,9 +10,9 @@ import { init_react_production, addTransitionType } from "./cjs/react.production
 //@ chunk-s89ma3n1.js:230-234 placement
 init_react_production();
 //@ chunk-s89ma3n1.js:234-244 placement
-var e = addTransitionType;
+var transitionTypeAdder = addTransitionType;
 //@ chunk-s89ma3n1.js:244-290 placement
-var w = function (_) {
-  return e.H.useMemoCache(_);
+var useMemoCache = function (size) {
+  return transitionTypeAdder.H.useMemoCache(size);
 };
-export { w };
+export { useMemoCache };

@@ -39,6 +39,7 @@ import { getWslVersion, getPlatform as getPlatform_2 } from "../../platform.js";
 import { isSentinelInode, didInodeChange } from "../../slowOperations.js";
 import { probeEntryKind } from "./gitDirShape.js";
 import { readOnlyNoFollowFlags } from "../../platformTargets.js";
+import { deferInit } from "../../../../runtime/deferred-init.js";
 
 //@ chunk-s61vbvea.js:279403-279520 placement
 function homeSetupFailure(detail, home) {
@@ -52,38 +53,38 @@ function homeSetupFailure(detail, home) {
   };
 }
 //@ chunk-s61vbvea.js:279520-279653 placement
-function setupFailure(detail, n) {
+function setupFailure(detail, reason) {
   return {
     kind: "failed",
-    reason: n === "placement" ? "placement" : "setup",
-    cause: n,
+    reason: reason === "placement" ? "placement" : "setup",
+    cause: reason,
     detail,
     [Symbol.asyncDispose]: async () => {},
   };
 }
 //@ chunk-s61vbvea.js:279653-280118 placement
-async function checkSessionTempRoot(e) {
+async function checkSessionTempRoot(launchDir) {
   let protectedTempDirsWithPreSettings = getProtectedTempDirsWithPreSettings();
   let results = await Promise.all(
     protectedTempDirsWithPreSettings.map(async (protectedTempDirsWithPreSetting) => {
       let foreignSpelling = await resolveForeignSpellingAsync(
-        await classifyPathSpelling_3(protectedTempDirsWithPreSetting, e),
-        e,
+        await classifyPathSpelling_3(protectedTempDirsWithPreSetting, launchDir),
+        launchDir,
         protectedHomeRoots(),
       );
       if (foreignSpelling.verdict === "local") {
-        let y = await realpath(foreignSpelling.spelling).catch(() =>
-          resolveRealPathLoose(foreignSpelling.spelling, e),
+        let realTempRoot = await realpath(foreignSpelling.spelling).catch(() =>
+          resolveRealPathLoose(foreignSpelling.spelling, launchDir),
         );
-        return y === null
+        return realTempRoot === null
           ? spellingsToCheck(
               {
                 ...foreignSpelling,
                 verdict: "opaque",
               },
-              e,
+              launchDir,
             )
-          : [y];
+          : [realTempRoot];
       }
       logForDebugging(
         `[builderGit] session temp root ${truncateWithCount(protectedTempDirsWithPreSetting, 256)} cannot be vouched for (${foreignSpelling.verdict}): nothing under any volume is`,
@@ -98,27 +99,27 @@ async function checkSessionTempRoot(e) {
               verdict: "opaque",
             }
           : foreignSpelling,
-        e,
+        launchDir,
       );
     }),
   );
   return uniq([...protectedTempDirsWithPreSettings, ...results.flat()]);
 }
 //@ chunk-s61vbvea.js:280118-281030 placement
-async function resolveGitFile(e) {
-  let n = join(e, ".git");
-  let r = await lstat(n).catch(() => null);
-  if (r === null || r.isDirectory())
+async function resolveGitFile(launchDir) {
+  let dotGitPath = join(launchDir, ".git");
+  let dotGitStats = await lstat(dotGitPath).catch(() => null);
+  if (dotGitStats === null || dotGitStats.isDirectory())
     return {
       kind: "not_file",
     };
-  if (!r.isFile())
+  if (!dotGitStats.isFile())
     return {
       kind: "refuse",
       why: "git_file",
     };
   let gitdirPointer = readGitdirPointer(
-    await readTextFileQuiet(n, {
+    await readTextFileQuiet(dotGitPath, {
       oneName: true,
     }).catch(() => {
       return;
@@ -126,92 +127,95 @@ async function resolveGitFile(e) {
   );
   if (
     gitdirPointer === undefined ||
-    pathIsForeignOrUnsafePointer(gitdirPointer, e) ||
-    hasBackslash(resolveRelative(e, gitdirPointer))
+    pathIsForeignOrUnsafePointer(gitdirPointer, launchDir) ||
+    hasBackslash(resolveRelative(launchDir, gitdirPointer))
   )
     return {
       kind: "refuse",
       why: "git_file",
     };
-  let h = await realpath(resolveRelative(e, gitdirPointer)).catch(() => null);
-  if (h === null)
+  let adminDir = await realpath(resolveRelative(launchDir, gitdirPointer)).catch(() => null);
+  if (adminDir === null)
     return {
       kind: "refuse",
       why: "admin_dir",
     };
-  if (hasBackslash(h))
+  if (hasBackslash(adminDir))
     return {
       kind: "refuse",
       why: "admin_dir",
     };
-  if (basename(dirname(h)) !== "worktrees")
+  if (basename(dirname(adminDir)) !== "worktrees")
     return {
       kind: "refuse",
       why: "git_file",
-      adminDir: h,
+      adminDir,
     };
-  let y = dirname(dirname(h));
-  if (resolveCommonDir(await readCommonDirFile(h), h) !== y)
+  let commonDir = dirname(dirname(adminDir));
+  if (resolveCommonDir(await readCommonDirFile(adminDir), adminDir) !== commonDir)
     return {
       kind: "refuse",
       why: "common_dir",
-      adminDir: h,
+      adminDir,
     };
-  let S = cleanSingleLine(
-    await readTextFileQuiet(join(h, "gitdir")).catch(() => {
+  let backLink = cleanSingleLine(
+    await readTextFileQuiet(join(adminDir, "gitdir")).catch(() => {
       return;
     }),
   );
   if (
-    (S === null || pathIsForeignOrUnsafePointer(S, h, e) || hasBackslash(resolveRelative(h, S))
+    (backLink === null ||
+    pathIsForeignOrUnsafePointer(backLink, adminDir, launchDir) ||
+    hasBackslash(resolveRelative(adminDir, backLink))
       ? null
-      : await realpath(resolveRelative(h, S)).catch(() => null)) !== n
+      : await realpath(resolveRelative(adminDir, backLink)).catch(() => null)) !== dotGitPath
   )
     return {
       kind: "refuse",
       why: "back_link",
-      adminDir: h,
+      adminDir,
     };
-  if (!(await isLooseGitDirPath(y, e)))
+  if (!(await isLooseGitDirPath(commonDir, launchDir)))
     return {
       kind: "refuse",
       why: "placement",
-      adminDir: h,
+      adminDir,
     };
   return {
     kind: "chain",
-    adminDir: h,
-    commonDir: y,
+    adminDir,
+    commonDir,
   };
 }
 //@ chunk-s61vbvea.js:281030-282455 placement
-async function resolveLinkedWorktreeGitDir(e, n, r, gitFile) {
-  let h = (detail) => ({
+async function resolveLinkedWorktreeGitDir(launchDir, adminDirPath, commonDirPath, gitFile) {
+  let linkedWorktreeFailure = (detail) => ({
     kind: "linked_worktree",
     detail,
   });
   if (
-    pathIsForeignOrUnsafePointer(n, e) ||
-    pathIsForeignOrUnsafePointer(r, e) ||
-    hasBackslash(n) ||
-    hasBackslash(r)
+    pathIsForeignOrUnsafePointer(adminDirPath, launchDir) ||
+    pathIsForeignOrUnsafePointer(commonDirPath, launchDir) ||
+    hasBackslash(adminDirPath) ||
+    hasBackslash(commonDirPath)
   )
-    return h("admin_dir");
-  let [filePath, filePath_2] = await Promise.all([
-    realpath(n).catch(() => null),
-    realpath(r).catch(() => null),
+    return linkedWorktreeFailure("admin_dir");
+  let [resolvedAdminDir, resolvedCommonDir] = await Promise.all([
+    realpath(adminDirPath).catch(() => null),
+    realpath(commonDirPath).catch(() => null),
   ]);
-  if (filePath === null || filePath_2 === null)
+  if (resolvedAdminDir === null || resolvedCommonDir === null)
     return {
       kind: "unread",
       detail: "the git directory could not be resolved",
     };
-  if (hasBackslash(filePath) || hasBackslash(filePath_2)) return h("admin_dir");
+  if (hasBackslash(resolvedAdminDir) || hasBackslash(resolvedCommonDir))
+    return linkedWorktreeFailure("admin_dir");
   let [fileIdentity, fileIdentity_2, fileIdentity_3, fileIdentity_4] = await Promise.all([
-    getFileIdentity(filePath),
+    getFileIdentity(resolvedAdminDir),
     getFileIdentity_2(gitFile.adminDir),
-    getFileIdentity(filePath_2),
-    getFileIdentity_2(dirname(dirname(filePath))),
+    getFileIdentity(resolvedCommonDir),
+    getFileIdentity_2(dirname(dirname(resolvedAdminDir))),
   ]);
   let id = fileIdentity?.id ?? null;
   let id_2 = fileIdentity_3?.id ?? null;
@@ -222,42 +226,45 @@ async function resolveLinkedWorktreeGitDir(e, n, r, gitFile) {
   if (
     id === null ||
     fileIdentity_2 !== id ||
-    basename(dirname(filePath)) !== "worktrees" ||
+    basename(dirname(resolvedAdminDir)) !== "worktrees" ||
     id_2 === null ||
     fileIdentity_4 !== id_2
   )
-    return h("admin_dir");
-  let [mountId, mountId_2] = await Promise.all([readMountId(filePath), readMountId(filePath_2)]);
-  let Q = mountId !== null && mountId_2 !== null && "id" in mountId && "id" in mountId_2;
+    return linkedWorktreeFailure("admin_dir");
+  let [mountId, mountId_2] = await Promise.all([
+    readMountId(resolvedAdminDir),
+    readMountId(resolvedCommonDir),
+  ]);
+  let hasMountIds = mountId !== null && mountId_2 !== null && "id" in mountId && "id" in mountId_2;
   if (
     hasUnreadableGitDirRead([mountId, mountId_2]) ||
-    (Q && (mountId.identity !== id || mountId_2.identity !== id_2))
+    (hasMountIds && (mountId.identity !== id || mountId_2.identity !== id_2))
   )
     return {
       kind: "unread",
       detail: "the git directory changed while it was read",
     };
-  if (!Q && mountId !== null) {
+  if (!hasMountIds && mountId !== null) {
     let joined = [mountId, mountId_2]
-      .flatMap((se) => (se !== null && "unread" in se ? [se.unread] : []))
+      .flatMap((mountRecord) => (mountRecord !== null && "unread" in mountRecord ? [mountRecord.unread] : []))
       .join(", ");
     logForDebugging(
-      `[builderGit] ${filePath}: mount ids unread (${joined}); the admin dir is compared with the common dir by device alone`,
+      `[builderGit] ${resolvedAdminDir}: mount ids unread (${joined}); the admin dir is compared with the common dir by device alone`,
     );
   }
   if (
     !sameMount(
       {
         id,
-        mountId: Q ? mountId.id : null,
+        mountId: hasMountIds ? mountId.id : null,
       },
       {
         id: id_2,
-        mountId: Q ? mountId_2.id : null,
+        mountId: hasMountIds ? mountId_2.id : null,
       },
     ) &&
     !(
-      Q &&
+      hasMountIds &&
       sameMount(
         {
           id,
@@ -270,29 +277,30 @@ async function resolveLinkedWorktreeGitDir(e, n, r, gitFile) {
       ) &&
       (await readMountInfo(
         {
-          dir: filePath,
+          dir: resolvedAdminDir,
           mountId: mountId.id,
         },
         {
-          dir: filePath_2,
+          dir: resolvedCommonDir,
           mountId: mountId_2.id,
         },
       ))
     )
   )
-    return h("foreign_mount");
-  if (resolveCommonDir(await readCommonDirFile(filePath), filePath) !== filePath_2) return h("common_dir");
-  if (!(await isLooseGitDirPath(filePath_2, e))) return h("placement");
+    return linkedWorktreeFailure("foreign_mount");
+  if (resolveCommonDir(await readCommonDirFile(resolvedAdminDir), resolvedAdminDir) !== resolvedCommonDir)
+    return linkedWorktreeFailure("common_dir");
+  if (!(await isLooseGitDirPath(resolvedCommonDir, launchDir))) return linkedWorktreeFailure("placement");
   let born = fileIdentity?.born;
   let born_2 = fileIdentity_3?.born;
   return {
     kind: "vouched",
-    gitDir: filePath,
+    gitDir: resolvedAdminDir,
     gitDirId: id,
     ...(born !== undefined && {
       gitDirBorn: born,
     }),
-    commonDir: filePath_2,
+    commonDir: resolvedCommonDir,
     commonDirId: id_2,
     ...(born_2 !== undefined && {
       commonDirBorn: born_2,
@@ -303,101 +311,103 @@ async function resolveLinkedWorktreeGitDir(e, n, r, gitFile) {
 /**
  * 两个 git 目录（含 .git）身份或真实路径是否一致。
  */
-async function isSameGitDir(e, n, r) {
-  if (r === null || hasBackslash(r)) return false;
-  let s = await realpath(r).catch(() => null);
-  if (s === null) return "unresolved";
-  if (s === n) return true;
-  let h = join(r, ".git");
-  let id = await getFileIdentity_2(r);
-  let id_2 = await getFileIdentity_2(h);
-  let w = await realpath(h).catch((error) =>
+async function isSameGitDir(expected, resolvedLaunchDir, keyedFolder) {
+  if (keyedFolder === null || hasBackslash(keyedFolder)) return false;
+  let realKeyedFolder = await realpath(keyedFolder).catch(() => null);
+  if (realKeyedFolder === null) return "unresolved";
+  if (realKeyedFolder === resolvedLaunchDir) return true;
+  let dotGitPath = join(keyedFolder, ".git");
+  let id = await getFileIdentity_2(keyedFolder);
+  let id_2 = await getFileIdentity_2(dotGitPath);
+  let realDotGit = await realpath(dotGitPath).catch((error) =>
     ["ENOENT", "ENOTDIR"].includes(getErrnoCode(error) ?? "") ? null : "unresolved",
   );
-  let R = {
-    id: e.id ?? (await getFileIdentity_2(e.resolved)),
-    resolved: e.resolved,
+  let expectedIdentity = {
+    id: expected.id ?? (await getFileIdentity_2(expected.resolved)),
+    resolved: expected.resolved,
   };
   return (
     [
       {
         id,
-        resolved: s,
+        resolved: realKeyedFolder,
       },
       {
         id: id_2,
-        resolved: w === "unresolved" ? null : w,
+        resolved: realDotGit === "unresolved" ? null : realDotGit,
       },
-    ].some((P) => sameIdentity(P, R)) || (w === "unresolved" ? "unresolved" : false)
+    ].some((candidate) => sameIdentity(candidate, expectedIdentity)) ||
+    (realDotGit === "unresolved" ? "unresolved" : false)
   );
 }
 //@ chunk-s61vbvea.js:282897-283051 placement
-function sameIdentity(e, n) {
-  return e.id !== null &&
-    n.id !== null &&
-    classifyIdentity(e.id) === "an_object" &&
-    classifyIdentity(n.id) === "an_object"
-    ? e.id === n.id
-    : e.resolved !== null && e.resolved === n.resolved;
+function sameIdentity(left, right) {
+  return left.id !== null &&
+    right.id !== null &&
+    classifyIdentity(left.id) === "an_object" &&
+    classifyIdentity(right.id) === "an_object"
+    ? left.id === right.id
+    : left.resolved !== null && left.resolved === right.resolved;
 }
 //@ chunk-s61vbvea.js:283051-283304 placement
-async function isLooseGitDirPath(e, n) {
-  let filtered = e.split(sep).filter((S) => S !== "");
-  let s = filtered.at(-1) ?? "";
-  let h = (S) => S.toLowerCase() === ".git" || S.toLowerCase().endsWith(".git");
-  if (!h(s) || filtered.slice(0, -1).some(h)) return false;
-  if (isPathInside_2(n, e) || isPathInside_2(e, n)) return false;
-  return !(await checkSessionTempRoot(n)).some((S) => isPathInside_2(S, e));
+async function isLooseGitDirPath(gitDirPath, launchDir) {
+  let filtered = gitDirPath.split(sep).filter((segment) => segment !== "");
+  let lastSegment = filtered.at(-1) ?? "";
+  let isGitNamedSegment = (segment) =>
+    segment.toLowerCase() === ".git" || segment.toLowerCase().endsWith(".git");
+  if (!isGitNamedSegment(lastSegment) || filtered.slice(0, -1).some(isGitNamedSegment)) return false;
+  if (isPathInside_2(launchDir, gitDirPath) || isPathInside_2(gitDirPath, launchDir)) return false;
+  return !(await checkSessionTempRoot(launchDir)).some((tempRoot) => isPathInside_2(tempRoot, gitDirPath));
 }
 //@ chunk-s61vbvea.js:283304-283538 placement
-async function readWorktreeConfigExtension(e, n, signal, probes) {
-  let h = await listGitRefs(
-    e,
+async function readWorktreeConfigExtension(launchDir, layout, signal, probes) {
+  let result = await listGitRefs(
+    launchDir,
     [
       "config",
       "--file",
-      join(n.commonDir, "config"),
+      join(layout.commonDir, "config"),
       "--bool",
       "--default=false",
       "extensions.worktreeConfig",
     ],
     {
       hardened: true,
-      layout: n,
+      layout,
       signal,
       probes,
     },
   );
-  return h.code !== 0 ? null : h.stdout.trim() === "true";
+  return result.code !== 0 ? null : result.stdout.trim() === "true";
 }
 //@ chunk-s61vbvea.js:283538-283910 placement
 /**
  * worktree 配置状态：absent/extension/inert/file/unread。
  */
-async function classifyWorktreeConfig(e, n, signal, probes) {
-  let [h, y] = await Promise.all([
+async function classifyWorktreeConfig(launchDir, layout, signal, probes) {
+  let [configResult, fileKind] = await Promise.all([
     listGitRefs(
-      e,
+      launchDir,
       [
         "config",
         "--file",
-        join(n.commonDir, "config"),
+        join(layout.commonDir, "config"),
         "--bool",
         "--default=false",
         "extensions.worktreeConfig",
       ],
       {
         hardened: true,
-        layout: n,
+        layout,
         signal,
         probes,
       },
     ),
-    probeWorktreeConfigFile(n.gitDir),
+    probeWorktreeConfigFile(layout.gitDir),
   ]);
-  if (h.code !== 0 || y === "unread") return "unread";
-  if (y !== "absent") return (await isInertWorktreeConfig(n.gitDir)) ? "inert" : "file";
-  return h.stdout.trim() === "false" ? "absent" : "extension";
+  if (configResult.code !== 0 || fileKind === "unread") return "unread";
+  if (fileKind !== "absent") return (await isInertWorktreeConfig(layout.gitDir)) ? "inert" : "file";
+  return configResult.stdout.trim() === "false" ? "absent" : "extension";
 }
 //@ chunk-s61vbvea.js:283910-284022 placement
 async function isInertWorktreeConfig(gitDir) {
@@ -408,9 +418,9 @@ async function isInertWorktreeConfig(gitDir) {
 /**
  * config.worktree 是否存在（空文件视为不存在）。
  */
-function probeWorktreeConfigFile(e) {
-  return lstat(join(e, "config.worktree")).then(
-    (n) => (n.isFile() && n.nlink === 1 && n.size === 0 ? "absent" : "standing"),
+function probeWorktreeConfigFile(gitDir) {
+  return lstat(join(gitDir, "config.worktree")).then(
+    (stats) => (stats.isFile() && stats.nlink === 1 && stats.size === 0 ? "absent" : "standing"),
     (error) => {
       let errnoCode = getErrnoCode(error);
       return errnoCode === "ENOENT" || errnoCode === "ENOTDIR" ? "absent" : "unread";
@@ -434,106 +444,117 @@ async function getFileIdentity(filePath) {
   }
 }
 //@ chunk-s61vbvea.js:284350-284452 placement
-function sameMount(e, n) {
-  let r = (id) => id.slice(0, id.indexOf(":"));
-  return r(e.id) === r(n.id) && e.mountId === n.mountId;
+function sameMount(left, right) {
+  let mountIdOf = (id) => id.slice(0, id.indexOf(":"));
+  return mountIdOf(left.id) === mountIdOf(right.id) && left.mountId === right.mountId;
 }
 //@ chunk-s61vbvea.js:284452-285080 placement
-async function readMountInfo(e, n) {
-  let r;
+async function readMountInfo(leftLocation, rightLocation) {
+  let mountInfo;
   try {
-    r = await readFile("/proc/self/mountinfo", "utf8");
+    mountInfo = await readFile("/proc/self/mountinfo", "utf8");
   } catch {
     return false;
   }
-  let s = (j) => j.replace(/\\([0-7]{3})/g, (G, L) => String.fromCharCode(parseInt(L, 8)));
-  let h = new Map();
-  for (let line of r.split(`
+  let decodeOctal = (encoded) =>
+    encoded.replace(/\\([0-7]{3})/g, (escapeMatch, octal) => String.fromCharCode(parseInt(octal, 8)));
+  let mountsById = new Map();
+  for (let line of mountInfo.split(`
 `)) {
     let parts = line.split(" ");
-    if (parts.length >= 5 && (parts[0] === e.mountId || parts[0] === n.mountId))
-      h.set(parts[0], {
+    if (parts.length >= 5 && (parts[0] === leftLocation.mountId || parts[0] === rightLocation.mountId))
+      mountsById.set(parts[0], {
         device: parts[2],
-        root: s(parts[3]),
-        point: s(parts[4]),
+        root: decodeOctal(parts[3]),
+        point: decodeOctal(parts[4]),
       });
   }
-  let y = h.get(e.mountId);
-  let S = h.get(n.mountId);
-  if (y === undefined || S === undefined) return false;
-  let w = (dir, G) => {
-    let L = relative(G.point, dir);
-    return L.startsWith("..") || isAbsolute(L) ? null : join(G.root, L);
+  let leftMount = mountsById.get(leftLocation.mountId);
+  let rightMount = mountsById.get(rightLocation.mountId);
+  if (leftMount === undefined || rightMount === undefined) return false;
+  let toMountPath = (dir, mount) => {
+    let relPath = relative(mount.point, dir);
+    return relPath.startsWith("..") || isAbsolute(relPath) ? null : join(mount.root, relPath);
   };
-  let R = w(e.dir, y);
-  let x = w(n.dir, S);
-  let P = relative(n.dir, e.dir);
+  let leftMountedPath = toMountPath(leftLocation.dir, leftMount);
+  let rightMountedPath = toMountPath(rightLocation.dir, rightMount);
+  let dirRelPath = relative(rightLocation.dir, leftLocation.dir);
   return (
-    y.device === S.device &&
-    R !== null &&
-    x !== null &&
-    !P.startsWith("..") &&
-    !isAbsolute(P) &&
-    R === join(x, P)
+    leftMount.device === rightMount.device &&
+    leftMountedPath !== null &&
+    rightMountedPath !== null &&
+    !dirRelPath.startsWith("..") &&
+    !isAbsolute(dirRelPath) &&
+    leftMountedPath === join(rightMountedPath, dirRelPath)
   );
 }
 //@ chunk-s61vbvea.js:285080-285140 placement
-var GIT_DIR_READ_FAILURE_ERRNOS = new Set(["ENOENT", "ENOTDIR", "ELOOP", "ENAMETOOLONG"]);
+var GIT_DIR_READ_FAILURE_ERRNOS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-s61vbvea.js:285080", () => {
+  GIT_DIR_READ_FAILURE_ERRNOS = new Set(["ENOENT", "ENOTDIR", "ELOOP", "ENAMETOOLONG"]);
+});
 //@ chunk-s61vbvea.js:285140-285236 placement
-function hasUnreadableGitDirRead(e) {
-  return e.some(
-    (n) => n !== null && "unread" in n && n.stage === "open" && GIT_DIR_READ_FAILURE_ERRNOS.has(n.unread),
+function hasUnreadableGitDirRead(reads) {
+  return reads.some(
+    (read) =>
+      read !== null &&
+      "unread" in read &&
+      read.stage === "open" &&
+      GIT_DIR_READ_FAILURE_ERRNOS.has(read.unread),
   );
 }
 //@ chunk-s61vbvea.js:285236-285278 placement
-var OPEN_GIT_DIR_FLAGS = O_NOFOLLOW_ANY | constants.O_DIRECTORY | constants.O_NOFOLLOW | READ_LIMITS;
+var OPEN_GIT_DIR_FLAGS; // deferred: uses READ_LIMITS (../../fsBoundRead.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-s61vbvea.js:285236", () => {
+  OPEN_GIT_DIR_FLAGS = O_NOFOLLOW_ANY | constants.O_DIRECTORY | constants.O_NOFOLLOW | READ_LIMITS;
+});
 //@ chunk-s61vbvea.js:285278-285662 placement
 /**
  * 经 /proc/self/fdinfo 读挂载 id 与身份。
  */
-async function readMountId(e) {
-  let n;
+async function readMountId(filePath) {
+  let handle;
   try {
-    n = await open(e, OPEN_GIT_DIR_FLAGS);
-    let [file, s] = await Promise.all([
-      readFile(`/proc/self/fdinfo/${n.fd}`, "utf8"),
-      n.stat({
+    handle = await open(filePath, OPEN_GIT_DIR_FLAGS);
+    let [file, stats] = await Promise.all([
+      readFile(`/proc/self/fdinfo/${handle.fd}`, "utf8"),
+      handle.stat({
         bigint: true,
       }),
     ]);
-    let h = /^mnt_id:[ \t]*(\d+)$/m.exec(file)?.[1];
-    return h === undefined
+    let rawMountId = /^mnt_id:[ \t]*(\d+)$/m.exec(file)?.[1];
+    return rawMountId === undefined
       ? {
           unread: "no mnt_id in fdinfo",
           stage: "fdinfo",
         }
       : {
-          id: h,
-          identity: `${s.dev}:${s.ino}`,
+          id: rawMountId,
+          identity: `${stats.dev}:${stats.ino}`,
         };
   } catch (error) {
     return {
       unread: getErrnoCode(error) ?? errorMessage(error),
-      stage: n === undefined ? "open" : "fdinfo",
+      stage: handle === undefined ? "open" : "fdinfo",
     };
   } finally {
-    await n?.close().catch(() => {});
+    await handle?.close().catch(() => {});
   }
 }
 //@ chunk-s61vbvea.js:285662-285723 placement
 /**
  * 判断 git 目录身份是否仍成立（未持有或非 gone 且 id 相同）。
  */
-function gitDirIdentityHeld(e, n) {
-  return e === "not_held" || (e !== "gone" && e.id === n);
+function gitDirIdentityHeld(hold, expectedId) {
+  return hold === "not_held" || (hold !== "gone" && hold.id === expectedId);
 }
 //@ chunk-s61vbvea.js:285723-285903 placement
-function gitDirChangedFailure(...e) {
+function gitDirChangedFailure(...holds) {
   return {
     kind: "failed",
     detail: "a git directory was replaced after the read opened it, or could not be opened",
     why: "changed_under_hold",
-    unopened: e.includes("gone"),
+    unopened: holds.includes("gone"),
   };
 }
 //@ chunk-s61vbvea.js:285903-285988 placement
@@ -542,14 +563,14 @@ function isWsl2Kernel() {
 }
 //@ chunk-s61vbvea.js:285988-286361 placement
 function holdDirectory() {
-  let e = [];
+  let openHandles = [];
   return {
-    hold: async (n) => {
+    hold: async (dirPath) => {
       if (O_NOFOLLOW_ANY === 0 || isWsl2Kernel()) return "not_held";
       try {
-        let r = await open(n, OPEN_GIT_DIR_FLAGS);
-        e.push(r);
-        let stats = await r.stat({
+        let handle = await open(dirPath, OPEN_GIT_DIR_FLAGS);
+        openHandles.push(handle);
+        let stats = await handle.stat({
           bigint: true,
         });
         return {
@@ -563,7 +584,7 @@ function holdDirectory() {
       }
     },
     [Symbol.asyncDispose]: async () => {
-      await Promise.all(e.splice(0).map((n) => n.close().catch(() => {})));
+      await Promise.all(openHandles.splice(0).map((handle) => handle.close().catch(() => {})));
     },
   };
 }
@@ -582,11 +603,11 @@ async function getFileIdentity_2(filePath) {
 /**
  * dev:ino 字符串：an_object/none/unreadable。
  */
-function classifyIdentity(e) {
-  let [, n, r] = /^(-?\d+):(-?\d+)$/.exec(e) ?? [];
-  return n === undefined || r === undefined
+function classifyIdentity(identity) {
+  let [, devPart, inoPart] = /^(-?\d+):(-?\d+)$/.exec(identity) ?? [];
+  return devPart === undefined || inoPart === undefined
     ? "unreadable"
-    : BigInt(n) === 0n || isSentinelInode(BigInt(r))
+    : BigInt(devPart) === 0n || isSentinelInode(BigInt(inoPart))
       ? "none"
       : "an_object";
 }
@@ -594,18 +615,19 @@ function classifyIdentity(e) {
 /**
  * 工作树是否同一：the_same/another_at_the_path/another_elsewhere/not_known。
  */
-function compareWorkTree(layout, n, r) {
+function compareWorkTree(layout, spelledWorkTree, currentWorkTreeId) {
   if (
-    r === null ||
+    currentWorkTreeId === null ||
     layout.workTreeId === undefined ||
-    classifyIdentity(r) === "unreadable" ||
+    classifyIdentity(currentWorkTreeId) === "unreadable" ||
     classifyIdentity(layout.workTreeId) === "unreadable"
   )
     return "not_known";
-  let s = layout.workTree === toPosixSpelling(n);
-  return layout.workTreeId === r && (s || classifyIdentity(r) === "an_object")
+  let sameSpelling = layout.workTree === toPosixSpelling(spelledWorkTree);
+  return layout.workTreeId === currentWorkTreeId &&
+    (sameSpelling || classifyIdentity(currentWorkTreeId) === "an_object")
     ? "the_same"
-    : s
+    : sameSpelling
       ? "another_at_the_path"
       : "another_elsewhere";
 }
@@ -613,32 +635,34 @@ function compareWorkTree(layout, n, r) {
 /**
  * 在 Windows 上把反斜杠转成正斜杠，其它平台原样返回。
  */
-function toPosixSpelling(e) {
-  return getPlatform_2() === "windows" ? e.replaceAll("\\", "/") : e;
+function toPosixSpelling(path) {
+  return getPlatform_2() === "windows" ? path.replaceAll("\\", "/") : path;
 }
 //@ chunk-s61vbvea.js:286959-287034 placement
 /**
  * 生成 git 目录的比较键（多种拼写形式排序后以分隔符连接）。
  */
-function gitDirComparisonKey(e, n) {
-  return uniq([e, n].flatMap((r) => [dirname(r), toPosixSpelling(dirname(r))])).join(delimiter);
+function gitDirComparisonKey(gitDir, launchDir) {
+  return uniq([gitDir, launchDir].flatMap((path) => [dirname(path), toPosixSpelling(dirname(path))])).join(
+    delimiter,
+  );
 }
 //@ chunk-s61vbvea.js:287034-287203 placement = scanDirectory (0.766)
-async function probePathKind(commonDir, n) {
-  let r = commonDir;
-  for (let s of n.slice(0, -1)) {
-    r = join(r, s);
-    let h = await probeEntryKind(r);
-    if (h !== "directory") return h === "absent" ? "absent" : "other";
+async function probePathKind(commonDir, commonDir_2) {
+  let currentPath = commonDir;
+  for (let part of commonDir_2.slice(0, -1)) {
+    currentPath = join(currentPath, part);
+    let kind = await probeEntryKind(currentPath);
+    if (kind !== "directory") return kind === "absent" ? "absent" : "other";
   }
-  return probeEntryKind(join(r, n.at(-1)));
+  return probeEntryKind(join(currentPath, commonDir_2.at(-1)));
 }
 //@ chunk-s61vbvea.js:287203-287215 placement
 var MAX_COMMONDIR_FILE_BYTES = 4096;
 //@ chunk-s61vbvea.js:287215-287342 placement
-async function readCommonDirFile(e) {
+async function readCommonDirFile(gitDir) {
   try {
-    let textFileQuiet = await readTextFileQuiet(join(e, "commondir"));
+    let textFileQuiet = await readTextFileQuiet(join(gitDir, "commondir"));
     return cleanSingleLine(textFileQuiet) ?? undefined;
   } catch (error) {
     return getErrnoCode(error) === "ENOENT" ? null : undefined;
@@ -648,78 +672,83 @@ async function readCommonDirFile(e) {
 /**
  * 静默读取文本文件内容（失败返回 undefined）。
  */
-async function readTextFileQuiet(e, n = {}) {
-  return ((await openWithIdentityCheck(e, n)) ?? (await openWithIdentityCheck(e, n)))?.text;
+async function readTextFileQuiet(filePath, options = {}) {
+  return (
+    (await openWithIdentityCheck(filePath, options)) ?? (await openWithIdentityCheck(filePath, options))
+  )?.text;
 }
 //@ chunk-s61vbvea.js:287412-288118 placement
-async function openWithIdentityCheck(e, { tail, oneName = false }) {
-  let s =
+async function openWithIdentityCheck(filePath, { tail, oneName = false }) {
+  let beforeStats =
     getPlatform_2() === "windows"
-      ? await lstat(e, {
+      ? await lstat(filePath, {
           bigint: true,
         })
       : null;
-  if (s !== null && !s.isFile())
+  if (beforeStats !== null && !beforeStats.isFile())
     return {
       text: undefined,
     };
-  let h = await open(e, readOnlyNoFollowFlags());
+  let handle = await open(filePath, readOnlyNoFollowFlags());
   try {
-    let stats = await h.stat({
+    let after = await handle.stat({
       bigint: true,
     });
-    if (s !== null && didInodeChange(s, stats)) {
+    if (beforeStats !== null && didInodeChange(beforeStats, after)) {
       logForDebugging(
-        `[builderGit] ${e}, once opened, had file number ${stats.ino}, not the ${s.ino} that the lstat before it saw; nothing of it was read`,
+        `[builderGit] ${filePath}, once opened, had file number ${after.ino}, not the ${beforeStats.ino} that the lstat before it saw; nothing of it was read`,
       );
       return null;
     }
-    let S = Number(stats.size);
+    let size = Number(after.size);
     if (
-      !stats.isFile() ||
-      (oneName && stats.nlink !== 1n) ||
-      (tail === undefined && S > MAX_COMMONDIR_FILE_BYTES)
+      !after.isFile() ||
+      (oneName && after.nlink !== 1n) ||
+      (tail === undefined && size > MAX_COMMONDIR_FILE_BYTES)
     )
       return {
         text: undefined,
       };
-    let min = Math.min(S, tail ?? MAX_COMMONDIR_FILE_BYTES);
-    let R = Buffer.alloc(min);
-    let { bytesRead } = await h.read(R, 0, min, S - min);
+    let min = Math.min(size, tail ?? MAX_COMMONDIR_FILE_BYTES);
+    let buffer = Buffer.alloc(min);
+    let { bytesRead } = await handle.read(buffer, 0, min, size - min);
     if (bytesRead !== min)
       return {
         text: undefined,
       };
-    let P = oneName
-      ? await h.stat({
+    let afterStats = oneName
+      ? await handle.stat({
           bigint: true,
         })
-      : stats;
+      : after;
     return {
-      text: P.nlink === stats.nlink && P.ctimeNs === stats.ctimeNs ? R.toString("utf8") : undefined,
+      text:
+        afterStats.nlink === after.nlink && afterStats.ctimeNs === after.ctimeNs
+          ? buffer.toString("utf8")
+          : undefined,
     };
   } finally {
-    await h.close();
+    await handle.close();
   }
 }
 //@ chunk-s61vbvea.js:288118-288260 placement
-function resolveCommonDir(commonDirFile, n) {
+function resolveCommonDir(commonDirFile, gitDir) {
   if (commonDirFile === undefined) return;
-  let r =
+  let normalized =
     commonDirFile === null
       ? "."
       : commonDirFile.length > 1 && commonDirFile.endsWith("/")
         ? commonDirFile.slice(0, -1)
         : commonDirFile;
-  return r === "." ? n : r === "../.." ? dirname(dirname(n)) : r;
+  return normalized === "." ? gitDir : normalized === "../.." ? dirname(dirname(gitDir)) : normalized;
 }
 //@ chunk-s61vbvea.js:288260-288350 placement
 /**
  * 去掉末尾换行；没有换行时返回 null。
  */
 function stripLineEnding(stdout) {
-  let n = getPlatform_2() === "windows" ? /\r?\n$/ : /\n$/;
-  return n.test(stdout) ? stdout.replace(n, "") : null;
+  let lineEndingRe = getPlatform_2() === "windows" ? /\r?\n$/ : /\n$/;
+  return lineEndingRe.test(stdout) ? stdout.replace(lineEndingRe, "") : null;
 }
 //@ chunk-s61vbvea.js:288350-288580 placement
 function gitDirEnv({ gitDir, commonDir, workTree, adminDir, pinnedIndexFile }) {

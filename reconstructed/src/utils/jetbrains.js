@@ -107,9 +107,9 @@ async function detectPluginDirectories(ideName) {
 async function isJetBrainsPluginInstalled(ideName) {
   let pluginDirectories = await detectPluginDirectories(ideName);
   for (let pluginDirectory of pluginDirectories) {
-    let s = join(pluginDirectory, CLAUDE_CODE_JETBRAINS_PLUGIN);
+    let pluginPath = join(pluginDirectory, CLAUDE_CODE_JETBRAINS_PLUGIN);
     try {
-      await getFsImplementation().stat(s);
+      await getFsImplementation().stat(pluginPath);
       return true;
     } catch {}
   }

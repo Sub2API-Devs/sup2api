@@ -8,7 +8,7 @@
  * pieces: chunk-shznzb37.js (10)
  * attribution: placement 10
  */
-import { x, Ar } from "../../../../runtime/bun-runtime.js";
+import { __commonJS, __export } from "../../../../runtime/bun-runtime.js";
 import { isScreenReaderMode } from "../../../utils/accessibility/screenReader.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../../services/analytics/growthbook.js";
 import { getProxyUrl } from "../../../utils/proxy.js";
@@ -21,8 +21,8 @@ import { registerBuiltinPlugin, builtinHooksModuleRef } from "../../builtinPlugi
 /**
  * easel 插件 hooks 模块的扫描清单（钩子与调用）。
  */
-var EASEL_HOOKS_SCAN = x(function (F, m) {
-  m.exports = {
+var EASEL_HOOKS_SCAN = __commonJS(function (requireFn, moduleObject) {
+  moduleObject.exports = {
     scan: {
       hooks: ["session.start", "session.attach", "prompt.section", "tool.call", "ui.render"],
       calls: [
@@ -52,7 +52,7 @@ var EASEL_HOOKS_SCAN = x(function (F, m) {
  */
 var EMPTY_PLUGIN_EXPORTS = {};
 //@ chunk-shznzb37.js:3863-4018 placement
-Ar(EMPTY_PLUGIN_EXPORTS, {
+__export(EMPTY_PLUGIN_EXPORTS, {
   PLUGIN_DESCRIPTION: () => EASEL_DESCRIPTION,
   SUPPLEMENTED_MODULE: () => EASEL_HOOKS_MODULE,
   availabilityFlag: () => EASEL_FLAG,
@@ -73,8 +73,8 @@ function EASEL_FLAG() {
  * easel 钩子模块入口：注入读屏、批量、代理、合规等环境判断后注册。
  */
 var EASEL_HOOKS_MODULE = {
-  register: (e, r) =>
-    require("./chunk-3s7ydtfd.js").register(e, r, {
+  register: (on, settings) =>
+    require("./default.lazy.js").register(on, settings, {
       isReaderOn: () => isScreenReaderMode(),
       isBatchAwaited: () => getFeatureValue_CACHED_MAY_BE_STALE("tengu_virtual_toast", false),
       isProxySet: () => getProxyUrl() !== undefined,
@@ -96,9 +96,9 @@ var EASEL_SUPPORTED_PLATFORMS = new Set(["linux", "macos"]);
  * easel 可用：开关开启、平台支持且无 HIPAA/ZDR 合规污点。
  */
 function isEaselAvailable() {
-  let e = getFeatureValue_CACHED_MAY_BE_STALE(EASEL_FLAG(), EASEL_ON_BY_DEFAULT) === true;
-  let r = EASEL_SUPPORTED_PLATFORMS.has(getPlatform()) || false;
-  if (!e || !r) return false;
+  let isEnabled = getFeatureValue_CACHED_MAY_BE_STALE(EASEL_FLAG(), EASEL_ON_BY_DEFAULT) === true;
+  let isSupported = EASEL_SUPPORTED_PLATFORMS.has(getPlatform()) || false;
+  if (!isEnabled || !isSupported) return false;
   isPolicyVerdictAbsent();
   return !hasComplianceTaint("hipaa") && !hasComplianceTaint("zdr");
 }
@@ -134,3 +134,12 @@ var registerEaselPlugin = () =>
       },
     },
   });
+export {
+  EASEL_DESCRIPTION,
+  EASEL_HOOKS_MODULE,
+  EASEL_FLAG,
+  EMPTY_PLUGIN_EXPORTS,
+  isEaselAvailable,
+  EASEL_ON_BY_DEFAULT,
+  registerEaselPlugin,
+};

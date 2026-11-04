@@ -9,7 +9,7 @@
  * attribution: placement 3
  */
 import { isAbsolute, normalize } from "path";
-import { string, zodStrictObject, array } from "../../../vendor/zod/v4/classic/schemas.js";
+import { stringSchema, zodStrictObject, array } from "../../../vendor/zod/v4/classic/schemas.js";
 import { isUntouchableSpelling } from "../../utils/networkPaths.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
 import { vetRepoForWorktrees } from "../../utils/git/worktreeVetting.js";
@@ -18,11 +18,11 @@ import { jsonStringify } from "../../utils/slowOperations.js";
 
 //@ chunk-5sfp2t4x.js:1659-1946 placement
 var localAbsolutePathSchema = () =>
-  string()
+  stringSchema()
     .min(1)
     .max(4096)
     .refine(
-      (t) => !t.includes("\x00") && isAbsolute(t) && !isUntouchableSpelling(t),
+      (path) => !path.includes("\x00") && isAbsolute(path) && !isUntouchableSpelling(path),
       "must be an absolute local path, not a network or automount path (such as \\\\server\\share, //server/share or /net/host), with no NUL character",
     );
 var worktreeDropRequestSchema = DoctorLazy(() =>
@@ -35,22 +35,22 @@ var worktreeDropRequestSchema = DoctorLazy(() =>
 /**
  * 处理 worktree 注册撤销请求：校验请求、核对仓库后移除注册。
  */
-async function runWorktreeRegistrationDrops(t) {
-  let e = worktreeDropRequestSchema().safeParse(t);
-  if (!e.success) {
-    let r = e.error.issues[0];
+async function runWorktreeRegistrationDrops(request) {
+  let parsed = worktreeDropRequestSchema().safeParse(request);
+  if (!parsed.success) {
+    let issue = parsed.error.issues[0];
     return {
       ok: false,
-      error: r
-        ? `Not a worktree registration request (${r.path.map(String).join(".") || "request"}: ${r.message}).`
+      error: issue
+        ? `Not a worktree registration request (${issue.path.map(String).join(".") || "request"}: ${issue.message}).`
         : "Not a worktree registration request.",
     };
   }
-  let { worktreePaths } = e.data;
-  let s = normalize(e.data.repoRoot);
-  let a = await vetRepoForWorktrees(s);
-  if (a === null) {
-    let reason = `the repository at ${s} could not be vetted`;
+  let { worktreePaths } = parsed.data;
+  let repoRoot = normalize(parsed.data.repoRoot);
+  let vetResult = await vetRepoForWorktrees(repoRoot);
+  if (vetResult === null) {
+    let reason = `the repository at ${repoRoot} could not be vetted`;
     return {
       ok: true,
       outcomes: worktreePaths.map(() => ({
@@ -59,32 +59,32 @@ async function runWorktreeRegistrationDrops(t) {
       })),
     };
   }
-  let u = [];
+  let errors = [];
   for (let worktreePath of worktreePaths) {
-    let i = await deregisterWorktree(
-      a,
+    let result = await deregisterWorktree(
+      vetResult,
       {
         worktreePath,
-        repoSpelled: s,
+        repoSpelled: repoRoot,
       },
       {
         locked: "keep",
       },
     );
-    u.push(
-      i.outcome === "kept"
+    errors.push(
+      result.outcome === "kept"
         ? {
             outcome: "kept",
-            reason: i.reason,
+            reason: result.reason,
           }
         : {
-            outcome: i.outcome,
+            outcome: result.outcome,
           },
     );
   }
   return {
     ok: true,
-    outcomes: u,
+    outcomes: errors,
   };
 }
 //@ chunk-5sfp2t4x.js:2573-2616 placement
@@ -94,3 +94,4 @@ function worktreeDropResultJson(outcomes) {
     outcomes,
   });
 }
+export { worktreeDropResultJson, runWorktreeRegistrationDrops };

@@ -24,9 +24,10 @@ import { alwaysFalseFlag, alwaysFalseLocal } from "../RefreshMcpToolsTool/Refres
 import { isClassifierSideCallRetired } from "../../utils/permissions/serverClassifier/flags.js";
 import { splitDomainPatternPort } from "../../../vendor/@anthropic-ai/sandbox-runtime/dist/sandbox/domain-pattern.js";
 import { isIpv4MappedOrTranslatedIpv6 } from "../../utils/network/privateHostCheck.js";
-import { string, array } from "../../../vendor/zod/v4/classic/schemas.js";
+import { stringSchema, array } from "../../../vendor/zod/v4/classic/schemas.js";
 import { readUntrustedArrayOrUndefined } from "../../utils/untrustedArray.js";
 import { isAutoModePermissionSurface } from "../../utils/permissions/autoModeState.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:1042347-1042544 placement
 /**
@@ -76,60 +77,66 @@ function sandboxHostDenyReason() {
   return SandboxManager.askCallbackDenyReason ? NOT_IN_SANDBOX_DOMAINS : false;
 }
 //@ chunk-e6aww6q8.js:1042968-1043121 placement
-function isValidDomainEntry(e) {
-  if (!isPlainHostPattern(e)) return false;
-  let { NetworkConfigSchema } = require("./chunk-ymy42xbh.js");
-  return NetworkConfigSchema.shape.allowedDomains.element.safeParse(e).success;
+function isValidDomainEntry(entry) {
+  if (!isPlainHostPattern(entry)) return false;
+  let {
+    NetworkConfigSchema,
+  } = require("../../../vendor/@anthropic-ai/sandbox-runtime/dist/sandbox/sandbox-config.js");
+  return NetworkConfigSchema.shape.allowedDomains.element.safeParse(entry).success;
 }
 //@ chunk-e6aww6q8.js:1043121-1043545 placement
 /**
  * 判断域名白名单条目是否为纯主机名（可带 *. 前缀、IPv6 方括号与端口），用 URL 解析确认不含路径、查询、凭据等。
  */
-function isPlainHostPattern(e) {
-  let n = e.startsWith("[");
-  let r = n ? e.indexOf("]") + 1 : e.lastIndexOf(":") === -1 ? e.length : e.lastIndexOf(":");
-  let sliced = e.slice(0, r);
-  let sliced_2 = e.slice(r);
-  if (sliced_2 !== "" && !isStrictPortSuffix(sliced_2)) return false;
-  let y = !n && sliced.startsWith("*.") ? sliced.slice(2) : sliced;
-  if (y === "" || (!n && !isSrtHostNameCharset(y))) return false;
-  let S;
+function isPlainHostPattern(entry) {
+  let isBracketed = entry.startsWith("[");
+  let portStart = isBracketed
+    ? entry.indexOf("]") + 1
+    : entry.lastIndexOf(":") === -1
+      ? entry.length
+      : entry.lastIndexOf(":");
+  let sliced = entry.slice(0, portStart);
+  let text = entry.slice(portStart);
+  if (text !== "" && !isStrictPortSuffix(text)) return false;
+  let hostPart = !isBracketed && sliced.startsWith("*.") ? sliced.slice(2) : sliced;
+  if (hostPart === "" || (!isBracketed && !isSrtHostNameCharset(hostPart))) return false;
+  let parsedUrl;
   try {
-    S = new URL(`https://${y}/`);
+    parsedUrl = new URL(`https://${hostPart}/`);
   } catch {
     return false;
   }
   return (
-    S.hostname === y.toLowerCase() &&
-    S.port === "" &&
-    S.pathname === "/" &&
-    S.search === "" &&
-    S.hash === "" &&
-    S.username === "" &&
-    S.password === ""
+    parsedUrl.hostname === hostPart.toLowerCase() &&
+    parsedUrl.port === "" &&
+    parsedUrl.pathname === "/" &&
+    parsedUrl.search === "" &&
+    parsedUrl.hash === "" &&
+    parsedUrl.username === "" &&
+    parsedUrl.password === ""
   );
 }
 //@ chunk-e6aww6q8.js:1043545-1043781 placement = doesSourceMatchHostPattern (1)
 /**
  * 域名模式是否合法（含 *. 通配）。与插件无关。
  */
-function doesSourceMatchHostPattern(e) {
-  let lower = e.toLowerCase();
+function doesSourceMatchHostPattern(entry) {
+  let lower = entry.toLowerCase();
   let { hostPattern } = splitDomainPatternPort(lower);
-  let s = hostPattern.startsWith("*.") ? hostPattern.slice(2) : hostPattern;
-  let h = lower.startsWith("[") ? lower.slice(1, Math.max(1, lower.indexOf("]"))) : undefined;
+  let hostPart = hostPattern.startsWith("*.") ? hostPattern.slice(2) : hostPattern;
+  let bracketedHost = lower.startsWith("[") ? lower.slice(1, Math.max(1, lower.indexOf("]"))) : undefined;
   return (
-    (isIP(s) === 4 && s.startsWith("0.")) ||
-    s === "::" ||
-    isIpv4MappedOrTranslatedIpv6(s) ||
-    (h !== undefined && isIpv4MappedOrTranslatedIpv6(h))
+    (isIP(hostPart) === 4 && hostPart.startsWith("0.")) ||
+    hostPart === "::" ||
+    isIpv4MappedOrTranslatedIpv6(hostPart) ||
+    (bracketedHost !== undefined && isIpv4MappedOrTranslatedIpv6(bracketedHost))
   );
 }
 //@ chunk-e6aww6q8.js:1043781-1043871 placement = doesSourceMatchHostPattern (1)
-function doesSourceMatchHostPattern_2(e) {
-  let { hostPattern } = splitDomainPatternPort(e);
-  let r = hostPattern.startsWith("*.") ? hostPattern.slice(2) : hostPattern;
-  return canonicalizationChangesHost(r);
+function doesSourceMatchHostPattern_2(entry) {
+  let { hostPattern } = splitDomainPatternPort(entry);
+  let hostPart = hostPattern.startsWith("*.") ? hostPattern.slice(2) : hostPattern;
+  return canonicalizationChangesHost(hostPart);
 }
 //@ chunk-e6aww6q8.js:1043871-1045363 placement
 /**
@@ -144,7 +151,7 @@ var NON_CANONICAL_HOST_ERROR =
 var MAX_ALLOWED_DOMAIN_ENTRIES = 100;
 var MAX_ALLOWED_DOMAIN_CHARS = 260;
 var allowedDomainsEntrySchema = () =>
-  string().max(MAX_ALLOWED_DOMAIN_CHARS).refine(isValidDomainEntry, {
+  stringSchema().max(MAX_ALLOWED_DOMAIN_CHARS).refine(isValidDomainEntry, {
     message: SANDBOX_NETWORK_ENTRY_ERRORS,
     abort: true,
   });
@@ -158,11 +165,11 @@ function allowedDomainsInputSchema() {
   return {
     allowed_domains: array(
       allowedDomainsEntrySchema()
-        .refine((e) => !doesSourceMatchHostPattern(e), {
-          error: (e) => `"${String(e.input)}": ${LOOPBACK_ALIAS_ERROR}`,
+        .refine((entry) => !doesSourceMatchHostPattern(entry), {
+          error: (ctx) => `"${String(ctx.input)}": ${LOOPBACK_ALIAS_ERROR}`,
         })
-        .refine((e) => !doesSourceMatchHostPattern_2(e), {
-          error: (e) => `"${String(e.input)}": ${NON_CANONICAL_HOST_ERROR}`,
+        .refine((entry) => !doesSourceMatchHostPattern_2(entry), {
+          error: (ctx) => `"${String(ctx.input)}": ${NON_CANONICAL_HOST_ERROR}`,
         }),
     )
       .max(MAX_ALLOWED_DOMAIN_ENTRIES)
@@ -174,24 +181,25 @@ function allowedDomainsInputSchema() {
 /**
  * 从 Bash 输入中读取 allowed_domains，返回 {allow} 网络列表（为空时 undefined）。
  */
-function getCommandNetworkLists(e) {
-  let untrustedArrayOrUndefined = readUntrustedArrayOrUndefined(e.allowed_domains);
-  let r =
-    untrustedArrayOrUndefined !== undefined && untrustedArrayOrUndefined.every((s) => typeof s === "string")
+function getCommandNetworkLists(input) {
+  let untrustedArrayOrUndefined = readUntrustedArrayOrUndefined(input.allowed_domains);
+  let domains =
+    untrustedArrayOrUndefined !== undefined &&
+    untrustedArrayOrUndefined.every((entry) => typeof entry === "string")
       ? untrustedArrayOrUndefined
       : [];
-  return r.length === 0
+  return domains.length === 0
     ? undefined
     : {
-        allow: r,
+        allow: domains,
       };
 }
 //@ chunk-e6aww6q8.js:1045710-1045790 placement
 /**
  * 把命令的网络白名单转成 Bash 输入的 allowed_domains 字段（无白名单返回 undefined）。
  */
-function commandNetworkListsInput(e) {
-  let commandNetworkLists = getCommandNetworkLists(e);
+function commandNetworkListsInput(input) {
+  let commandNetworkLists = getCommandNetworkLists(input);
   return commandNetworkLists === undefined
     ? undefined
     : {
@@ -199,9 +207,9 @@ function commandNetworkListsInput(e) {
       };
 }
 //@ chunk-e6aww6q8.js:1045790-1046433 placement
-function checkAllowedDomainsInput(e, n) {
-  if (getCommandNetworkLists(e) === undefined) return;
-  if (!n)
+function checkAllowedDomainsInput(input, useSandbox) {
+  if (getCommandNetworkLists(input) === undefined) return;
+  if (!useSandbox)
     return {
       result: false,
       message:
@@ -232,24 +240,28 @@ function shouldAcceptCommandDomains(toolPermissionContext) {
 /**
  * 按工具调用 id 缓存命令的网络白名单；nOo 是条数上限 256，超出逐出最旧。
  */
-var commandNetworkListsByToolUseId = new Map();
-var MAX_REMEMBERED_NETWORK_LISTS = 256;
+var commandNetworkListsByToolUseId; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var MAX_REMEMBERED_NETWORK_LISTS;
+deferInit("chunk-e6aww6q8.js:1047061", () => {
+  commandNetworkListsByToolUseId = new Map();
+  MAX_REMEMBERED_NETWORK_LISTS = 256;
+});
 //@ chunk-e6aww6q8.js:1047084-1047291 placement
 /**
  * 按工具调用 id 记住命令的网络白名单（LRU 有上限）。
  */
-function rememberCommandNetworkLists(toolUseID, tool, r) {
+function rememberCommandNetworkLists(toolUseID, tool, input) {
   commandNetworkListsByToolUseId.delete(toolUseID);
-  let s = tool.sandboxNetworkLists?.(r);
-  if (s === undefined) return;
+  let lists = tool.sandboxNetworkLists?.(input);
+  if (lists === undefined) return;
   commandNetworkListsByToolUseId.set(toolUseID, {
-    command: r.command,
-    lists: s,
+    command: input.command,
+    lists,
   });
   while (commandNetworkListsByToolUseId.size > MAX_REMEMBERED_NETWORK_LISTS) {
-    let h = commandNetworkListsByToolUseId.keys().next().value;
-    if (h === undefined) break;
-    commandNetworkListsByToolUseId.delete(h);
+    let oldest = commandNetworkListsByToolUseId.keys().next().value;
+    if (oldest === undefined) break;
+    commandNetworkListsByToolUseId.delete(oldest);
   }
 }
 //@ chunk-e6aww6q8.js:1047291-1047407 placement
@@ -258,9 +270,9 @@ function rememberCommandNetworkLists(toolUseID, tool, r) {
  */
 function takeCommandNetworkLists(toolUseId, command) {
   if (toolUseId === undefined) return;
-  let r = commandNetworkListsByToolUseId.get(toolUseId);
+  let entry = commandNetworkListsByToolUseId.get(toolUseId);
   commandNetworkListsByToolUseId.delete(toolUseId);
-  return r !== undefined && r.command === command ? r.lists : undefined;
+  return entry !== undefined && entry.command === command ? entry.lists : undefined;
 }
 export {
   rememberCommandNetworkLists,

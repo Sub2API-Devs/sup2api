@@ -13,6 +13,7 @@ import { MAX_TREE_TEXT_CHARS } from "../ui/treeConstants.js";
 import { HooksError } from "../hooksErrors.js";
 import { isUntrustedObject } from "../../../utils/untrustedValues.js";
 import { checkPinnedKeys } from "./siteRules.js";
+import { deferInit } from "../../../../runtime/deferred-init.js";
 
 //@ chunk-4121qate.js:128890-128947 placement
 /**
@@ -25,13 +26,13 @@ var emptyPlainDataState = () => ({
   done: new Map(),
 });
 //@ chunk-4121qate.js:128947-129089 placement
-function* childEntriesWithCost(e) {
-  if (Array.isArray(e)) {
-    let o = checkedListLength(e);
-    for (let r = 0; r < o; r += 1) yield [1, e[r]];
+function* childEntriesWithCost(value) {
+  if (Array.isArray(value)) {
+    let length = checkedListLength(value);
+    for (let index = 0; index < length; index += 1) yield [1, value[index]];
     return;
   }
-  for (let [key, value] of Object.entries(e)) yield [key.length + 4, value];
+  for (let [key, value_2] of Object.entries(value)) yield [key.length + 4, value_2];
 }
 //@ chunk-4121qate.js:129089-129100 placement
 var MAX_DEPTH = 32;
@@ -53,61 +54,61 @@ var MAX_NODES = 20000;
  */
 var MAX_NODES_2 = MAX_NODES;
 //@ chunk-4121qate.js:129150-129288 placement
-function plainDataLimitProblem(e) {
-  if (e.nodes > MAX_NODES_2) return `holds more than ${MAX_NODES_2} values`;
-  return e.chars > MAX_TREE_TEXT_CHARS_2
+function plainDataLimitProblem(budget) {
+  if (budget.nodes > MAX_NODES_2) return `holds more than ${MAX_NODES_2} values`;
+  return budget.chars > MAX_TREE_TEXT_CHARS_2
     ? `serializes to more than ${MAX_TREE_TEXT_CHARS_2} characters`
     : undefined;
 }
 //@ chunk-4121qate.js:129288-129445 placement
-function scalarJsonLength(e) {
-  switch (typeof e) {
+function scalarJsonLength(value) {
+  switch (typeof value) {
     case "boolean":
       return 5;
     case "string":
-      return e.length + 2;
+      return value.length + 2;
     case "number":
-      return String(e).length;
+      return String(value).length;
     default:
-      return e === null ? 5 : undefined;
+      return value === null ? 5 : undefined;
   }
 }
 //@ chunk-4121qate.js:129445-129576 placement
-function valueKind(e) {
-  if (e === null) return "null";
-  let o = typeof e === "object";
-  return Array.isArray(e) ? "an array" : o ? "an object" : `a ${typeof e}`;
+function valueKind(value) {
+  if (value === null) return "null";
+  let isObject = typeof value === "object";
+  return Array.isArray(value) ? "an array" : isObject ? "an object" : `a ${typeof value}`;
 }
 //@ chunk-4121qate.js:129576-130412 placement
-function checkPlainDataDepth(e, o, r) {
-  if (o > MAX_DEPTH_2) return `nests deeper than ${MAX_DEPTH_2}`;
-  let n = typeof e === "object" ? r.done.get(e) : undefined;
-  r.nodes += n?.nodes ?? 1;
-  r.chars += n?.chars ?? scalarJsonLength(e) ?? 2;
-  let s = plainDataLimitProblem(r);
-  if (s !== undefined || n !== undefined) return s;
-  if (typeof e === "number" && !Number.isFinite(e)) return `holds ${String(e)}`;
-  if (scalarJsonLength(e) !== undefined) return;
-  if (e === undefined) return "holds undefined (an array hole, a missing value)";
-  if (typeof e !== "object" || e === null) return `holds ${valueKind(e)}`;
-  if (r.path.has(e)) return "holds a cycle";
-  let prototypeOf = Object.getPrototypeOf(e);
-  if (!(Array.isArray(e) || prototypeOf === null || Object.getPrototypeOf(prototypeOf) === null))
+function checkPlainDataDepth(value, depth, budget) {
+  if (depth > MAX_DEPTH_2) return `nests deeper than ${MAX_DEPTH_2}`;
+  let memo = typeof value === "object" ? budget.done.get(value) : undefined;
+  budget.nodes += memo?.nodes ?? 1;
+  budget.chars += memo?.chars ?? scalarJsonLength(value) ?? 2;
+  let limitProblem = plainDataLimitProblem(budget);
+  if (limitProblem !== undefined || memo !== undefined) return limitProblem;
+  if (typeof value === "number" && !Number.isFinite(value)) return `holds ${String(value)}`;
+  if (scalarJsonLength(value) !== undefined) return;
+  if (value === undefined) return "holds undefined (an array hole, a missing value)";
+  if (typeof value !== "object" || value === null) return `holds ${valueKind(value)}`;
+  if (budget.path.has(value)) return "holds a cycle";
+  let prototypeOf = Object.getPrototypeOf(value);
+  if (!(Array.isArray(value) || prototypeOf === null || Object.getPrototypeOf(prototypeOf) === null))
     return "holds an object that is not plain (a class instance)";
-  let f = {
-    nodes: r.nodes - 1,
-    chars: r.chars - 2,
+  let before = {
+    nodes: budget.nodes - 1,
+    chars: budget.chars - 2,
   };
-  r.path.add(e);
-  for (let [a, m] of childEntriesWithCost(e)) {
-    r.chars += a;
-    let c = checkPlainDataDepth(m, o + 1, r);
-    if (c !== undefined) return c;
+  budget.path.add(value);
+  for (let [entryCost, child] of childEntriesWithCost(value)) {
+    budget.chars += entryCost;
+    let childProblem = checkPlainDataDepth(child, depth + 1, budget);
+    if (childProblem !== undefined) return childProblem;
   }
-  r.path.delete(e);
-  r.done.set(e, {
-    nodes: r.nodes - f.nodes,
-    chars: r.chars - f.chars,
+  budget.path.delete(value);
+  budget.done.set(value, {
+    nodes: budget.nodes - before.nodes,
+    chars: budget.chars - before.chars,
   });
   return;
 }
@@ -115,65 +116,71 @@ function checkPlainDataDepth(e, o, r) {
 /**
  * 纯数据校验入口
  */
-var checkPlainData = (e) => checkPlainDataDepth(e, 0, emptyPlainDataState());
+var checkPlainData = (value) => checkPlainDataDepth(value, 0, emptyPlainDataState());
 //@ chunk-4121qate.js:130438-130499 placement
 /**
  * 普通对象
  */
-var isPlainObjectNoArray = (e) => typeof e === "object" && e !== null && !Array.isArray(e);
+var isPlainObjectNoArray = (value) => typeof value === "object" && value !== null && !Array.isArray(value);
 //@ chunk-4121qate.js:130499-130562 placement
-var FORBIDDEN_OBJECT_KEYS = Object.freeze(["__proto__", "constructor", "prototype"]);
+var FORBIDDEN_OBJECT_KEYS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-4121qate.js:130499", () => {
+  FORBIDDEN_OBJECT_KEYS = Object.freeze(["__proto__", "constructor", "prototype"]);
+});
 //@ chunk-4121qate.js:130562-131896 placement
 /**
  * 校验插件钩子传回的值是纯 JSON 数据（深度、类型、原型键）
  */
-function checkPlainData_2(e, o, r) {
-  let n = typeof e === "number" && Number.isFinite(e);
-  if (typeof e === "string" || typeof e === "boolean" || e === null || n) return e;
-  if (typeof e !== "object")
+function checkPlainData_2(value, depth, memo) {
+  let isFiniteNumber = typeof value === "number" && Number.isFinite(value);
+  if (typeof value === "string" || typeof value === "boolean" || value === null || isFiniteNumber)
+    return value;
+  if (typeof value !== "object")
     throw new HooksError(
-      typeof e === "number" ? `holds ${String(e)}` : `holds what JSON cannot (${typeof e})`,
+      typeof value === "number" ? `holds ${String(value)}` : `holds what JSON cannot (${typeof value})`,
     );
-  if (isUntrustedObject(e)) throw new HooksError("holds a Proxy or a vm context");
-  if (o > MAX_DEPTH_2) throw new HooksError(`nests deeper than ${MAX_DEPTH_2}`);
-  let s = r.get(e);
-  if (s !== undefined) return s;
-  if (r.has(e)) throw new HooksError("holds a cycle");
-  let i = Array.isArray(e);
-  let prototypeOf = Object.getPrototypeOf(e);
-  let f =
+  if (isUntrustedObject(value)) throw new HooksError("holds a Proxy or a vm context");
+  if (depth > MAX_DEPTH_2) throw new HooksError(`nests deeper than ${MAX_DEPTH_2}`);
+  let memoized = memo.get(value);
+  if (memoized !== undefined) return memoized;
+  if (memo.has(value)) throw new HooksError("holds a cycle");
+  let isArray = Array.isArray(value);
+  let prototypeOf = Object.getPrototypeOf(value);
+  let isPlainProto =
     prototypeOf === null ||
     prototypeOf === Object.prototype ||
     (typeof prototypeOf === "object" &&
       Object.getPrototypeOf(prototypeOf) === null &&
       Object.keys(prototypeOf).length === 0 &&
       Reflect.ownKeys(prototypeOf).length === Reflect.ownKeys(Object.prototype).length);
-  if (!i && !f) throw new HooksError("holds an object that is not plain");
-  let filtered = Reflect.ownKeys(e).filter((x) => typeof x === "string");
-  let found = filtered.find((x) => FORBIDDEN_OBJECT_KEYS.includes(x));
+  if (!isArray && !isPlainProto) throw new HooksError("holds an object that is not plain");
+  let filtered = Reflect.ownKeys(value).filter((key) => typeof key === "string");
+  let found = filtered.find((forbiddenKey) => FORBIDDEN_OBJECT_KEYS.includes(forbiddenKey));
   if (found !== undefined) throw new HooksError(`holds a key ${found}`);
   let mapped = filtered
-    .filter((x) => !i || x !== "length")
-    .map((x) => [x, Object.getOwnPropertyDescriptor(e, x)]);
-  let any = mapped.some(([, x]) => !("value" in (x ?? {})));
-  let l = i ? e.length : 0;
-  let y = i && mapped.length !== l;
-  if (any || y) throw new HooksError(any ? "holds an accessor" : "holds a list with a hole or a key");
-  r.set(e, undefined);
-  let g = i
+    .filter((key) => !isArray || key !== "length")
+    .map((key) => [key, Object.getOwnPropertyDescriptor(value, key)]);
+  let any = mapped.some(([, descriptor]) => !("value" in (descriptor ?? {})));
+  let arrayLength = isArray ? value.length : 0;
+  let hasHoleOrKey = isArray && mapped.length !== arrayLength;
+  if (any || hasHoleOrKey)
+    throw new HooksError(any ? "holds an accessor" : "holds a list with a hole or a key");
+  memo.set(value, undefined);
+  let copy = isArray
     ? Array.from(
         {
-          length: l,
+          length: arrayLength,
         },
-        (x, T) => checkPlainData_2(Object.getOwnPropertyDescriptor(e, String(T))?.value, o + 1, r),
+        (unusedSlot, index) =>
+          checkPlainData_2(Object.getOwnPropertyDescriptor(value, String(index))?.value, depth + 1, memo),
       )
     : Object.fromEntries(
         mapped
-          .filter(([, x]) => x?.enumerable === true)
-          .map(([x, T]) => [x, checkPlainData_2(T?.value, o + 1, r)]),
+          .filter(([, descriptor]) => descriptor?.enumerable === true)
+          .map(([key, descriptor]) => [key, checkPlainData_2(descriptor?.value, depth + 1, memo)]),
       );
-  r.set(e, g);
-  return g;
+  memo.set(value, copy);
+  return copy;
 }
 //@ chunk-4121qate.js:131896-132028 placement
 /**
@@ -181,8 +188,8 @@ function checkPlainData_2(e, o, r) {
  */
 function checkPlainObject(frontmatter) {
   try {
-    let o = checkPlainData_2(frontmatter, 0, new Map());
-    return isPlainObjectNoArray(o) ? o : "is no plain object";
+    let checked = checkPlainData_2(frontmatter, 0, new Map());
+    return isPlainObjectNoArray(checked) ? checked : "is no plain object";
   } catch (error) {
     if (error instanceof HooksError) return error.message;
     throw error;
@@ -192,17 +199,18 @@ function checkPlainObject(frontmatter) {
 /**
  * skill.prompt 参数校验：skill 不可改，固定字段不可改，text 必须是字符串，frontmatter 必须是纯数据对象。
  */
-function checkSkillPromptArgument(e, o) {
-  let { skill, text, frontmatter } = e;
-  let i = typeof skill === "string";
-  let p = skill === o.skill;
-  let f = typeof text === "string";
-  let a = checkPlainObject(frontmatter);
-  let m = typeof a === "string" ? a : checkPlainData(a);
-  return i
-    ? p
-      ? (checkPinnedKeys(["source", "pluginName", "path", "frontmatterProblem"], e, o) ??
-        (f ? m && `a frontmatter that ${m}` : "no { text }"))
+function checkSkillPromptArgument(args, received) {
+  let { skill, text, frontmatter } = args;
+  let isSkillString = typeof skill === "string";
+  let isSameSkill = skill === received.skill;
+  let isTextString = typeof text === "string";
+  let frontmatterCheck = checkPlainObject(frontmatter);
+  let frontmatterProblem =
+    typeof frontmatterCheck === "string" ? frontmatterCheck : checkPlainData(frontmatterCheck);
+  return isSkillString
+    ? isSameSkill
+      ? (checkPinnedKeys(["source", "pluginName", "path", "frontmatterProblem"], args, received) ??
+        (isTextString ? frontmatterProblem && `a frontmatter that ${frontmatterProblem}` : "no { text }"))
       : "a changed skill (the hooks beneath match on it)"
     : "no { skill }";
 }

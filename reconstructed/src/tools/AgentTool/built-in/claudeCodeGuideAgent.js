@@ -28,8 +28,9 @@ import { isUsing3PServices } from "../../../utils/auth.js";
 import { isFeedbackAllowed } from "../../../commands/feedback/feedbackPolicy.js";
 import { SENDMESSAGE } from "../../SendMessageTool/constants.js";
 import { BASH_TOOL_NAME } from "../../BashTool/toolName.js";
-import { Ji } from "../../../../vendor/lodash-es/uniqBy.js";
+import { uniqByExport } from "../../../../vendor/lodash-es/uniqBy.js";
 import { getSettings_DEPRECATED } from "../../../utils/settings/settings.js";
+import { deferInit } from "../../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:2324498-2332456 fingerprint = getClaudeCodeGuideBasePrompt (0.757)
 function getClaudeCodeGuideBasePrompt() {
@@ -110,14 +111,14 @@ Complete the user's request by providing accurate, documentation-based guidance.
 }
 //@ chunk-e6aww6q8.js:2332456-2333149 layout
 function getPluginEvalReferenceSection() {
-  let e = describePluginEvalAvailability();
-  let n = lanternPrismEnabled()
+  let availability = describePluginEvalAvailability();
+  let skillDoctorNote = lanternPrismEnabled()
     ? "`/skill-doctor` is available in this session."
     : "`/skill-doctor` is NOT available in this session. It is on by default in current releases; a session lacks it on an older release, or when this client does not receive feature settings (Bedrock/Vertex/Foundry, telemetry or non-essential traffic disabled, or a first launch that has not fetched them yet) and no administrator has switched it on. Describe it if asked and suggest updating or asking their administrator, but do not tell the user to run it here.";
-  let bundledText = loadBundledText(() => require("./chunk-ytrjx25w.js"));
+  let bundledText = loadBundledText(() => require("../../../skills/bundled/default_6.lazy.js"));
   return `# Plugin eval and /skill-doctor (embedded offline reference)
 
-In THIS session: ${e.text} ${n}
+In THIS session: ${availability.text} ${skillDoctorNote}
 
 ${bundledText}`;
 }
@@ -143,67 +144,69 @@ function getFeedbackGuideline() {
 /**
  * claude-code-guide 内建代理：model haiku、permissionMode dontAsk，工具 Glob/Grep/Read/WebFetch/WebSearch（嵌入搜索时 Bash/Read/WebFetch/WebSearch），系统提示词附带本项目自定义 skills 列表等。
  */
-var CLAUDE_CODE_GUIDE_AGENT = {
-  agentType: CLAUDE_CODE_GUIDE,
-  whenToUse: `Use this agent when the user asks questions ("Can Claude...", "Does Claude...", "How do I...") about: (1) Claude Code (the CLI tool) - features, hooks, slash commands, MCP servers, settings, IDE integrations, keyboard shortcuts; (2) Claude Agent SDK - building custom agents; (3) Claude API (formerly Anthropic API) - Messages API for directly passing messages to Claude, Tool Runner (\`client.beta.messages.tool_runner\`) for running an agentic loop over your own tools, manual tool-use loops, Managed Agents for server-hosted agents with a managed sandbox, prompt caching, and general Anthropic SDK usage; (4) Claude Tag (Claude in Slack) - what it is, setting it up for a Slack workspace, \`/install-slack-app\`; (5) \`claude plugin eval\` (writing and running plugin eval suites, its JSON/report, sandbox, CI) and the \`/skill-doctor\` report. **IMPORTANT:** Before spawning a new agent, check if there is already a running or recently completed claude-code-guide agent that you can continue via ${SENDMESSAGE}.`,
-  get tools() {
-    return hasEmbeddedSearchTools() && isBashAvailable()
-      ? [BASH_TOOL_NAME, FILE_READ_TOOL_NAME, WEBFETCH, WEBSEARCH]
-      : [GLOB_TOOL_NAME, GREP_TOOL_NAME, FILE_READ_TOOL_NAME, WEBFETCH, WEBSEARCH];
-  },
-  source: "built-in",
-  baseDir: "built-in",
-  model: "haiku",
-  permissionMode: "dontAsk",
-  getSystemPrompt({ toolUseContext }) {
-    let commands = toolUseContext.options.commands;
-    let contextSections = [];
-    let customCommands = Ji(commands, "name").filter((cmd) => cmd.type === "prompt");
-    if (customCommands.length > 0) {
-      let commandList = customCommands.map((cmd) => `- /${cmd.name}: ${cmd.description}`).join(`
+var CLAUDE_CODE_GUIDE_AGENT; // deferred: uses SENDMESSAGE (../../SendMessageTool/constants.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:2333908", () => {
+  CLAUDE_CODE_GUIDE_AGENT = {
+    agentType: CLAUDE_CODE_GUIDE,
+    whenToUse: `Use this agent when the user asks questions ("Can Claude...", "Does Claude...", "How do I...") about: (1) Claude Code (the CLI tool) - features, hooks, slash commands, MCP servers, settings, IDE integrations, keyboard shortcuts; (2) Claude Agent SDK - building custom agents; (3) Claude API (formerly Anthropic API) - Messages API for directly passing messages to Claude, Tool Runner (\`client.beta.messages.tool_runner\`) for running an agentic loop over your own tools, manual tool-use loops, Managed Agents for server-hosted agents with a managed sandbox, prompt caching, and general Anthropic SDK usage; (4) Claude Tag (Claude in Slack) - what it is, setting it up for a Slack workspace, \`/install-slack-app\`; (5) \`claude plugin eval\` (writing and running plugin eval suites, its JSON/report, sandbox, CI) and the \`/skill-doctor\` report. **IMPORTANT:** Before spawning a new agent, check if there is already a running or recently completed claude-code-guide agent that you can continue via ${SENDMESSAGE}.`,
+    get tools() {
+      return hasEmbeddedSearchTools() && isBashAvailable()
+        ? [BASH_TOOL_NAME, FILE_READ_TOOL_NAME, WEBFETCH, WEBSEARCH]
+        : [GLOB_TOOL_NAME, GREP_TOOL_NAME, FILE_READ_TOOL_NAME, WEBFETCH, WEBSEARCH];
+    },
+    source: "built-in",
+    baseDir: "built-in",
+    model: "haiku",
+    permissionMode: "dontAsk",
+    getSystemPrompt({ toolUseContext }) {
+      let commands = toolUseContext.options.commands;
+      let contextSections = [];
+      let customCommands = uniqByExport(commands, "name").filter((cmd) => cmd.type === "prompt");
+      if (customCommands.length > 0) {
+        let commandList = customCommands.map((cmd) => `- /${cmd.name}: ${cmd.description}`).join(`
 `);
-      contextSections.push(`**Available custom skills in this project:**
+        contextSections.push(`**Available custom skills in this project:**
 ${commandList}`);
-    }
-    let customAgents = toolUseContext.options.agentDefinitions.activeAgents.filter(
-      (activeAgent) => activeAgent.source !== "built-in",
-    );
-    if (customAgents.length > 0) {
-      let agentList = customAgents.map(
-        (customAgent) => `- ${customAgent.agentType}: ${customAgent.whenToUse}`,
-      ).join(`
-`);
-      contextSections.push(`**Available custom agents configured:**
-${agentList}`);
-    }
-    let mcpClients = toolUseContext.options.mcpClients;
-    if (mcpClients && mcpClients.length > 0) {
-      let mcpList = mcpClients.map((client) => `- ${client.name}`).join(`
-`);
-      contextSections.push(`**Configured MCP servers:**
-${mcpList}`);
-    }
-    let pluginCommands = commands.filter((cmd) => cmd.type === "prompt" && cmd.source === "plugin");
-    if (pluginCommands.length > 0) {
-      let pluginList = pluginCommands.map((cmd) => `- /${cmd.name}: ${cmd.description}`).join(`
-`);
-      contextSections.push(`**Available plugin skills:**
-${pluginList}`);
-    }
-    let settings = Object.keys(getSettings_DEPRECATED()).sort();
-    if (settings.length > 0)
-      contextSections.push(
-        `**Settings keys configured (values omitted):** ${settings.join(", ")}. To see values, the user can run the in-session \`/config\` command or open \`~/.claude/settings.json\`.`,
+      }
+      let customAgents = toolUseContext.options.agentDefinitions.activeAgents.filter(
+        (activeAgent) => activeAgent.source !== "built-in",
       );
-    let feedbackGuideline = getFeedbackGuideline();
-    let basePromptWithFeedback = `${getClaudeCodeGuideBasePrompt()}
+      if (customAgents.length > 0) {
+        let agentList = customAgents.map(
+          (customAgent) => `- ${customAgent.agentType}: ${customAgent.whenToUse}`,
+        ).join(`
+`);
+        contextSections.push(`**Available custom agents configured:**
+${agentList}`);
+      }
+      let mcpClients = toolUseContext.options.mcpClients;
+      if (mcpClients && mcpClients.length > 0) {
+        let mcpList = mcpClients.map((client) => `- ${client.name}`).join(`
+`);
+        contextSections.push(`**Configured MCP servers:**
+${mcpList}`);
+      }
+      let pluginCommands = commands.filter((cmd) => cmd.type === "prompt" && cmd.source === "plugin");
+      if (pluginCommands.length > 0) {
+        let pluginList = pluginCommands.map((cmd) => `- /${cmd.name}: ${cmd.description}`).join(`
+`);
+        contextSections.push(`**Available plugin skills:**
+${pluginList}`);
+      }
+      let settings = Object.keys(getSettings_DEPRECATED()).sort();
+      if (settings.length > 0)
+        contextSections.push(
+          `**Settings keys configured (values omitted):** ${settings.join(", ")}. To see values, the user can run the in-session \`/config\` command or open \`~/.claude/settings.json\`.`,
+        );
+      let feedbackGuideline = getFeedbackGuideline();
+      let basePromptWithFeedback = `${getClaudeCodeGuideBasePrompt()}
 ${feedbackGuideline}
 
 ---
 
 ${getPluginEvalReferenceSection()}`;
-    if (contextSections.length > 0)
-      return `${basePromptWithFeedback}
+      if (contextSections.length > 0)
+        return `${basePromptWithFeedback}
 
 ---
 
@@ -216,7 +219,8 @@ ${contextSections.join(`
 `)}
 
 When answering questions, consider these configured features and proactively suggest them when relevant.`;
-    return basePromptWithFeedback;
-  },
-};
+      return basePromptWithFeedback;
+    },
+  };
+});
 export { CLAUDE_CODE_GUIDE_AGENT };

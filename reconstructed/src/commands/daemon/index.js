@@ -22,3 +22,4 @@ var daemonCommandDefinition = {
   },
 };
 var daemonCommand = daemonCommandDefinition;
+export { daemonCommand };

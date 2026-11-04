@@ -18,11 +18,12 @@ import {
 } from "./storageSpaces.js";
 import { BACKUP_FILE_NAME_PATTERN_WITH_LEGACY, getProjectsDir } from "../sessionStoragePortable.js";
 import { hasJsonlFiles } from "../errorLogSink.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-t0gq9gyw.js:25952-26099 placement
-function invalidSegmentError(e) {
+function invalidSegmentError(argument) {
   return invalidStorageArgument(
-    e,
+    argument,
     "expected a segment that is not empty or made only of dots and spaces, with no path separator, NUL or set-aside shape",
   );
 }
@@ -30,39 +31,45 @@ function invalidSegmentError(e) {
 /**
  * 校验存储键对象。
  */
-function validateStorageKey(e) {
-  if (typeof e !== "object" || e === null) return invalidStorageArgument("key", "expected a key object");
-  let n = validateKeyByNamespace(e);
-  if (n !== undefined) return n;
-  let r = keyPathSegments(e);
-  if (r === undefined) return invalidStorageArgument("key", `${e.namespace} is not a storage namespace`);
-  return checkKeyFields("key", r);
+function validateStorageKey(key) {
+  if (typeof key !== "object" || key === null) return invalidStorageArgument("key", "expected a key object");
+  let namespaceError = validateKeyByNamespace(key);
+  if (namespaceError !== undefined) return namespaceError;
+  let fields = keyPathSegments(key);
+  if (fields === undefined)
+    return invalidStorageArgument("key", `${key.namespace} is not a storage namespace`);
+  return checkKeyFields("key", fields);
 }
 //@ chunk-t0gq9gyw.js:26329-26757 placement
 /**
  * 按字段定义检查键字段（必填、格式）。
  */
-function checkKeyFields(e, n) {
-  for (let [r, o, s] of n) {
-    let a = `${e}.${r}`;
-    if (o === undefined) {
-      if (s !== "optional") return invalidStorageArgument(a, "required");
-    } else if (isRelPathField(r)) {
+function checkKeyFields(keyPath, fields) {
+  for (let [fieldName, value, presence] of fields) {
+    let fieldPath = `${keyPath}.${fieldName}`;
+    if (value === undefined) {
+      if (presence !== "optional") return invalidStorageArgument(fieldPath, "required");
+    } else if (isRelPathField(fieldName)) {
       if (
-        !(e === "scope" && r === "agentRelPath" && Array.isArray(o) && o.length === 0) &&
-        (!Array.isArray(o) || !areValidKeySegments(o))
+        !(
+          keyPath === "scope" &&
+          fieldName === "agentRelPath" &&
+          Array.isArray(value) &&
+          value.length === 0
+        ) &&
+        (!Array.isArray(value) || !areValidKeySegments(value))
       )
         return invalidStorageArgument(
-          a,
+          fieldPath,
           "expected a non-empty array of segments, none empty or made only of dots and spaces, with no path separator, NUL or set-aside shape",
         );
-    } else if (typeof o !== "string" || !isValidKeySegment(o)) return invalidSegmentError(a);
+    } else if (typeof value !== "string" || !isValidKeySegment(value)) return invalidSegmentError(fieldPath);
   }
   return;
 }
 //@ chunk-t0gq9gyw.js:26757-26813 placement
-function isRelPathField(e) {
-  return e === "relPath" || e === "agentRelPath";
+function isRelPathField(field) {
+  return field === "relPath" || field === "agentRelPath";
 }
 //@ chunk-t0gq9gyw.js:26813-26987 placement
 var USER_CONFIG_DIR_NAMES = [
@@ -81,21 +88,39 @@ var USER_CONFIG_DIR_NAMES = [
   "mcp-discovery-cache",
 ];
 //@ chunk-t0gq9gyw.js:26987-27144 placement
-var USER_CONFIG_DIR_NAME_SET = new Set(USER_CONFIG_DIR_NAMES);
-var USER_CONFIG_DIR_ERROR = `must be one of the userConfigDir directory names (${USER_CONFIG_DIR_NAMES.join(", ")})`;
-var PLUGIN_REGISTRY_FILES = ["installed", "marketplaces", "flagged", "catalog", "inUseSweep"];
+var USER_CONFIG_DIR_NAME_SET; // deferred: uses USER_CONFIG_DIR_NAMES of its import cycle while loading; runs once the cycle is complete
+var USER_CONFIG_DIR_ERROR;
+var PLUGIN_REGISTRY_FILES;
+deferInit("chunk-t0gq9gyw.js:26987", () => {
+  USER_CONFIG_DIR_NAME_SET = new Set(USER_CONFIG_DIR_NAMES);
+  USER_CONFIG_DIR_ERROR = `must be one of the userConfigDir directory names (${USER_CONFIG_DIR_NAMES.join(", ")})`;
+  PLUGIN_REGISTRY_FILES = ["installed", "marketplaces", "flagged", "catalog", "inUseSweep"];
+});
 //@ chunk-t0gq9gyw.js:27144-27253 placement
-var PLUGIN_REGISTRY_FILE_SET = new Set(PLUGIN_REGISTRY_FILES);
-var PLUGIN_REGISTRY_FILE_ERROR = `must be one of the pluginRegistry files (${PLUGIN_REGISTRY_FILES.join(", ")})`;
-var MARKETPLACE_CACHE_FORMS_2 = ["manifest", "catalog"];
+var PLUGIN_REGISTRY_FILE_SET; // deferred: uses USER_CONFIG_DIR_NAME_SET of its import cycle while loading; runs once the cycle is complete
+var PLUGIN_REGISTRY_FILE_ERROR;
+var MARKETPLACE_CACHE_FORMS_2;
+deferInit("chunk-t0gq9gyw.js:27144", () => {
+  PLUGIN_REGISTRY_FILE_SET = new Set(PLUGIN_REGISTRY_FILES);
+  PLUGIN_REGISTRY_FILE_ERROR = `must be one of the pluginRegistry files (${PLUGIN_REGISTRY_FILES.join(", ")})`;
+  MARKETPLACE_CACHE_FORMS_2 = ["manifest", "catalog"];
+});
 //@ chunk-t0gq9gyw.js:27253-27338 placement
-var MARKETPLACE_CACHE_FORMS = new Set(MARKETPLACE_CACHE_FORMS_2);
-var MARKETPLACE_CACHE_FORM_ERROR = `must be one of the marketplaceCache forms (${MARKETPLACE_CACHE_FORMS_2.join(", ")})`;
+var MARKETPLACE_CACHE_FORMS; // deferred: uses PLUGIN_REGISTRY_FILE_SET of its import cycle while loading; runs once the cycle is complete
+var MARKETPLACE_CACHE_FORM_ERROR;
+deferInit("chunk-t0gq9gyw.js:27253", () => {
+  MARKETPLACE_CACHE_FORMS = new Set(MARKETPLACE_CACHE_FORMS_2);
+  MARKETPLACE_CACHE_FORM_ERROR = `must be one of the marketplaceCache forms (${MARKETPLACE_CACHE_FORMS_2.join(", ")})`;
+});
 //@ chunk-t0gq9gyw.js:27338-27355 placement
 var SESSION_JOURNAL_NAMES = ["world"];
 //@ chunk-t0gq9gyw.js:27355-27439 placement
-var SESSION_JOURNAL_NAME_SET = new Set(SESSION_JOURNAL_NAMES);
-var SESSION_JOURNAL_NAME_ERROR = `must be one of the session journal names (${SESSION_JOURNAL_NAMES.join(", ")})`;
+var SESSION_JOURNAL_NAME_SET; // deferred: uses SESSION_JOURNAL_NAMES of its import cycle while loading; runs once the cycle is complete
+var SESSION_JOURNAL_NAME_ERROR;
+deferInit("chunk-t0gq9gyw.js:27355", () => {
+  SESSION_JOURNAL_NAME_SET = new Set(SESSION_JOURNAL_NAMES);
+  SESSION_JOURNAL_NAME_ERROR = `must be one of the session journal names (${SESSION_JOURNAL_NAMES.join(", ")})`;
+});
 //@ chunk-t0gq9gyw.js:27439-27471 placement
 function isSessionJournalName(sessionJournal) {
   return SESSION_JOURNAL_NAME_SET.has(sessionJournal);
@@ -108,77 +133,78 @@ function isSha256Hex(digest) {
 /**
  * 按命名空间校验存储键。
  */
-function validateKeyByNamespace(e) {
-  if (e.namespace === "transcript") return validateTranscriptKey(e);
-  if (e.namespace === "pluginAssetCache" && !isSha256Hex(e.digest))
+function validateKeyByNamespace(key) {
+  if (key.namespace === "transcript") return validateTranscriptKey(key);
+  if (key.namespace === "pluginAssetCache" && !isSha256Hex(key.digest))
     return invalidStorageArgument(
       "key.digest",
       "must be a SHA-256 digest: 64 lowercase hexadecimal characters",
     );
-  if (e.namespace === "globalConfig" && "kind" in e) {
-    if (!isGlobalConfigCopyKind(e.kind))
+  if (key.namespace === "globalConfig" && "kind" in key) {
+    if (!isGlobalConfigCopyKind(key.kind))
       return invalidStorageArgument("key.kind", GLOBAL_CONFIG_COPY_KIND_ERROR);
-    if (typeof e.stamp !== "string")
+    if (typeof key.stamp !== "string")
       return invalidStorageArgument("key.stamp", "a recovery copy key carries its stamp");
   }
-  if (e.namespace === "task") return validateTaskKey(e);
-  if (e.namespace === "sidecar") {
-    let n = validateSessionIdSegment("key.sessionId", e.sessionId);
-    if (n !== undefined) return n;
-    if (namesJsonlStream(e.relPath)) return invalidStorageArgument("key.relPath", JSONL_STREAM_KEY_ERROR);
-    return isRecordingStreamPath(e.relPath)
+  if (key.namespace === "task") return validateTaskKey(key);
+  if (key.namespace === "sidecar") {
+    let sessionError = validateSessionIdSegment("key.sessionId", key.sessionId);
+    if (sessionError !== undefined) return sessionError;
+    if (namesJsonlStream(key.relPath)) return invalidStorageArgument("key.relPath", JSONL_STREAM_KEY_ERROR);
+    return isRecordingStreamPath(key.relPath)
       ? invalidStorageArgument("key.relPath", RECORDING_STREAM_ADDRESSED_ERROR)
       : undefined;
   }
-  if (e.namespace === "recording")
+  if (key.namespace === "recording")
     return (
-      validateSessionIdSegment("key.sessionId", e.sessionId) ??
-      (isRecordingStamp(e.stamp) ? undefined : invalidStorageArgument("key.stamp", RECORDING_STAMP_ERROR))
+      validateSessionIdSegment("key.sessionId", key.sessionId) ??
+      (isRecordingStamp(key.stamp) ? undefined : invalidStorageArgument("key.stamp", RECORDING_STAMP_ERROR))
     );
-  if (e.namespace === "jobsRoot") return validateJobsKey(e);
-  if (e.namespace === "userConfigDir" && !USER_CONFIG_DIR_NAME_SET.has(e.dir))
+  if (key.namespace === "jobsRoot") return validateJobsKey(key);
+  if (key.namespace === "userConfigDir" && !USER_CONFIG_DIR_NAME_SET.has(key.dir))
     return invalidStorageArgument("key.dir", USER_CONFIG_DIR_ERROR);
-  if (e.namespace === "fileHistory") return validateBackupFileName(e);
-  if (e.namespace === "settings" && !isMcpServerFromProjectOrLocalSettings_2(e.layer))
+  if (key.namespace === "fileHistory") return validateBackupFileName(key);
+  if (key.namespace === "settings" && !isMcpServerFromProjectOrLocalSettings_2(key.layer))
     return invalidStorageArgument("key.layer", "must be user, project or local");
-  if (e.namespace === "log") return validateLogChannelKey(e);
-  if (e.namespace === "job" && isJobTimelinePath(e.relPath))
+  if (key.namespace === "log") return validateLogChannelKey(key);
+  if (key.namespace === "job" && isJobTimelinePath(key.relPath))
     return invalidStorageArgument("key.relPath", JOB_TIMELINE_KEY_ERROR);
-  if (e.namespace === "sessionLog")
+  if (key.namespace === "sessionLog")
     return (
-      validateDateParts("key", e) ??
-      (isShortLogName(e.logName)
+      validateDateParts("key", key) ??
+      (isShortLogName(key.logName)
         ? undefined
         : invalidStorageArgument(
             "key.logName",
             "must be the session-log stem <sessionId8>[-<title-slug>]: up to eight word characters, then lower-case a-z / 0-9 runs joined by single hyphens; not a bare device name",
           ))
     );
-  if (e.namespace === "pluginRegistry" && !PLUGIN_REGISTRY_FILE_SET.has(e.file))
+  if (key.namespace === "pluginRegistry" && !PLUGIN_REGISTRY_FILE_SET.has(key.file))
     return invalidStorageArgument("key.file", PLUGIN_REGISTRY_FILE_ERROR);
-  if (e.namespace === "marketplaceCache") {
-    if (!("relPath" in e))
-      return MARKETPLACE_CACHE_FORMS.has(e.form)
+  if (key.namespace === "marketplaceCache") {
+    if (!("relPath" in key))
+      return MARKETPLACE_CACHE_FORMS.has(key.form)
         ? undefined
         : invalidStorageArgument("key.form", MARKETPLACE_CACHE_FORM_ERROR);
-    return e.form === undefined
+    return key.form === undefined
       ? undefined
       : invalidStorageArgument("key.form", "a tree file key carries relPath, not form");
   }
-  if (e.namespace !== "agentMemory") return;
-  if (!isMcpServerFromProjectOrLocalSettings(e.layer))
+  if (key.namespace !== "agentMemory") return;
+  if (!isMcpServerFromProjectOrLocalSettings(key.layer))
     return invalidStorageArgument("key.layer", "must be user, project or local");
-  if (e.layer === "user" && "projectKey" in e)
+  if (key.layer === "user" && "projectKey" in key)
     return invalidStorageArgument("key.projectKey", "the user layer is not keyed by project");
-  if (e.layer !== "user" && typeof e.projectKey !== "string")
+  if (key.layer !== "user" && typeof key.projectKey !== "string")
     return invalidStorageArgument("key.projectKey", "required for the project and local layers");
-  return typeof e.agentType === "string"
+  return typeof key.agentType === "string"
     ? undefined
     : invalidStorageArgument("key.agentType", "an agent memory key names its agent");
 }
 //@ chunk-t0gq9gyw.js:29572-29769 placement
-function validateBackupFileName(e) {
-  return typeof e.backupFileName !== "string" || !BACKUP_FILE_NAME_PATTERN_WITH_LEGACY.test(e.backupFileName)
+function validateBackupFileName(key) {
+  return typeof key.backupFileName !== "string" ||
+    !BACKUP_FILE_NAME_PATTERN_WITH_LEGACY.test(key.backupFileName)
     ? invalidStorageArgument(
         "key.backupFileName",
         "must be a backup file name the engine has ever written (hex hash @v version)",
@@ -192,8 +218,12 @@ function isMcpServerFromProjectOrLocalSettings(config) {
 //@ chunk-t0gq9gyw.js:29830-29860 placement
 var GLOBAL_CONFIG_COPY_KINDS = ["backup", "corrupted"];
 //@ chunk-t0gq9gyw.js:29860-29947 placement
-var GLOBAL_CONFIG_COPY_KIND_SET = new Set(GLOBAL_CONFIG_COPY_KINDS);
-var GLOBAL_CONFIG_COPY_KIND_ERROR = `must be one of the global-config copy kinds (${GLOBAL_CONFIG_COPY_KINDS.join(", ")})`;
+var GLOBAL_CONFIG_COPY_KIND_SET; // deferred: uses GLOBAL_CONFIG_COPY_KINDS of its import cycle while loading; runs once the cycle is complete
+var GLOBAL_CONFIG_COPY_KIND_ERROR;
+deferInit("chunk-t0gq9gyw.js:29860", () => {
+  GLOBAL_CONFIG_COPY_KIND_SET = new Set(GLOBAL_CONFIG_COPY_KINDS);
+  GLOBAL_CONFIG_COPY_KIND_ERROR = `must be one of the global-config copy kinds (${GLOBAL_CONFIG_COPY_KINDS.join(", ")})`;
+});
 //@ chunk-t0gq9gyw.js:29947-29979 placement
 function isGlobalConfigCopyKind(kind) {
   return GLOBAL_CONFIG_COPY_KIND_SET.has(kind);
@@ -202,33 +232,33 @@ function isGlobalConfigCopyKind(kind) {
 /**
  * 校验转录存储键（会话、代理相对路径）。
  */
-function validateTranscriptKey(e) {
-  let n = validateSessionIdSegment("key.sessionId", e.sessionId);
-  if (n !== undefined) return n;
-  if (namesJsonlStream(e.agentRelPath))
+function validateTranscriptKey(key) {
+  let sessionError = validateSessionIdSegment("key.sessionId", key.sessionId);
+  if (sessionError !== undefined) return sessionError;
+  if (namesJsonlStream(key.agentRelPath))
     return invalidStorageArgument("key.agentRelPath", JSONL_STREAM_KEY_ERROR);
-  if ("sessionJournal" in e) {
-    if (typeof e.sessionJournal !== "string" || !isSessionJournalName(e.sessionJournal))
+  if ("sessionJournal" in key) {
+    if (typeof key.sessionJournal !== "string" || !isSessionJournalName(key.sessionJournal))
       return invalidStorageArgument("key.sessionJournal", SESSION_JOURNAL_NAME_ERROR);
-    return e.agentId === undefined && e.agentRelPath === undefined && !("journal" in e)
+    return key.agentId === undefined && key.agentRelPath === undefined && !("journal" in key)
       ? undefined
       : invalidStorageArgument(
           "key.sessionJournal",
           "a session journal key names the session's own journal: no agentId, agentRelPath or run journal",
         );
   }
-  if ("journal" in e) {
-    if (e.journal !== true) return invalidStorageArgument("key.journal", "must be true");
-    if (!Array.isArray(e.agentRelPath))
+  if ("journal" in key) {
+    if (key.journal !== true) return invalidStorageArgument("key.journal", "must be true");
+    if (!Array.isArray(key.agentRelPath))
       return invalidStorageArgument("key.agentRelPath", "a run journal key carries its run directory");
-    return e.agentId === undefined
+    return key.agentId === undefined
       ? undefined
       : invalidStorageArgument(
           "key.agentId",
           "a transcript key names an agent transcript or the run journal, never both",
         );
   }
-  return e.agentRelPath !== undefined && e.agentId === undefined
+  return key.agentRelPath !== undefined && key.agentId === undefined
     ? invalidStorageArgument("key.agentRelPath", "requires agentId or journal")
     : undefined;
 }
@@ -244,74 +274,91 @@ var FOLDER_SYNC = "folder-sync";
 /**
  * 「steps-under-way」目录名：会话转录下保留项目级条目的保留名单之一。
  */
-var STEPS_UNDER_WAY_DIR = "steps-under-way";
-var RESERVED_PROJECT_ENTRY_NAMES = new Set([
-  "memory",
-  "tiny_memory",
-  "bagel",
-  CLOUD_SNAPSHOTS_DIR,
-  "bridge-pointer.json",
-  ".session-aliases",
-]);
-var RECORDING_STAMP_RE = /^[0-9]{1,16}$/;
-var RECORDING_STAMP_ERROR = "must be the recording stamp: 1 to 16 decimal digits (epoch milliseconds)";
-var RECORDING_STREAM_SUFFIX = ".cast";
-var RECORDING_STREAM_ADDRESSED_ERROR = `<stamp>${RECORDING_STREAM_SUFFIX} inside a session's folder is that session's terminal recording stream: address it as keys.recording(projectKey, sessionId, stamp)`;
+var STEPS_UNDER_WAY_DIR; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var RESERVED_PROJECT_ENTRY_NAMES;
+var RECORDING_STAMP_RE;
+var RECORDING_STAMP_ERROR;
+var RECORDING_STREAM_SUFFIX;
+var RECORDING_STREAM_ADDRESSED_ERROR;
+deferInit("chunk-t0gq9gyw.js:30931", () => {
+  STEPS_UNDER_WAY_DIR = "steps-under-way";
+  RESERVED_PROJECT_ENTRY_NAMES = new Set([
+    "memory",
+    "tiny_memory",
+    "bagel",
+    CLOUD_SNAPSHOTS_DIR,
+    "bridge-pointer.json",
+    ".session-aliases",
+  ]);
+  RECORDING_STAMP_RE = /^[0-9]{1,16}$/;
+  RECORDING_STAMP_ERROR = "must be the recording stamp: 1 to 16 decimal digits (epoch milliseconds)";
+  RECORDING_STREAM_SUFFIX = ".cast";
+  RECORDING_STREAM_ADDRESSED_ERROR = `<stamp>${RECORDING_STREAM_SUFFIX} inside a session's folder is that session's terminal recording stream: address it as keys.recording(projectKey, sessionId, stamp)`;
+});
 //@ chunk-t0gq9gyw.js:31303-31357 placement
-function isRecordingStamp(e) {
-  return typeof e === "string" && RECORDING_STAMP_RE.test(e);
+function isRecordingStamp(stamp) {
+  return typeof stamp === "string" && RECORDING_STAMP_RE.test(stamp);
 }
 //@ chunk-t0gq9gyw.js:31357-31458 placement
 function isRecordingStreamPath(relPath) {
   return (
     Array.isArray(relPath) &&
     typeof relPath[0] === "string" &&
-    storageNameSpellings(relPath[0]).some((n) => recordingStampOfStreamName(n) !== undefined)
+    storageNameSpellings(relPath[0]).some((spelling) => recordingStampOfStreamName(spelling) !== undefined)
   );
 }
 //@ chunk-t0gq9gyw.js:31458-31550 placement
 /**
  * 从录音流文件名取时间戳前缀，非法返回 undefined。
  */
-function recordingStampOfStreamName(e) {
-  if (!e.endsWith(RECORDING_STREAM_SUFFIX)) return;
-  let sliced = e.slice(0, -RECORDING_STREAM_SUFFIX.length);
-  return isRecordingStamp(sliced) ? sliced : undefined;
+function recordingStampOfStreamName(name) {
+  if (!name.endsWith(RECORDING_STREAM_SUFFIX)) return;
+  let stamp = name.slice(0, -RECORDING_STREAM_SUFFIX.length);
+  return isRecordingStamp(stamp) ? stamp : undefined;
 }
 //@ chunk-t0gq9gyw.js:31550-31689 placement
-var SESSION_SIBLING_SUFFIXES = [".ccr-tip.json", ".precompact.json", RECORDING_STREAM_SUFFIX];
-var SESSION_SIBLING_SUFFIX_ERROR = `must not end with ${SESSION_SIBLING_SUFFIXES.join(", ")}: those name a session's project-level sibling files`;
+var SESSION_SIBLING_SUFFIXES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var SESSION_SIBLING_SUFFIX_ERROR;
+deferInit("chunk-t0gq9gyw.js:31550", () => {
+  SESSION_SIBLING_SUFFIXES = [".ccr-tip.json", ".precompact.json", RECORDING_STREAM_SUFFIX];
+  SESSION_SIBLING_SUFFIX_ERROR = `must not end with ${SESSION_SIBLING_SUFFIXES.join(", ")}: those name a session's project-level sibling files`;
+});
 //@ chunk-t0gq9gyw.js:31689-31757 placement
-function hasSessionSiblingSuffix(e) {
-  return storageNameSpellings(e).some((n) => SESSION_SIBLING_SUFFIXES.some((r) => n.endsWith(r)));
+function hasSessionSiblingSuffix(name) {
+  return storageNameSpellings(name).some((spelling) =>
+    SESSION_SIBLING_SUFFIXES.some((suffix) => spelling.endsWith(suffix)),
+  );
 }
 //@ chunk-t0gq9gyw.js:31757-31885 placement
 var DIR_SYNC_RECORD_SUFFIX = ".dir-sync.json";
 var DIR_SYNC_SUFFIX_ERROR = `must not end with ${DIR_SYNC_RECORD_SUFFIX}: that name is reserved for a cloud session's record at the project level`;
 //@ chunk-t0gq9gyw.js:31885-31941 placement
-function hasDirSyncSuffix(e) {
-  return storageNameSpellings(e).some((n) => n.endsWith(DIR_SYNC_RECORD_SUFFIX));
+function hasDirSyncSuffix(name) {
+  return storageNameSpellings(name).some((spelling) => spelling.endsWith(DIR_SYNC_RECORD_SUFFIX));
 }
 //@ chunk-t0gq9gyw.js:31941-32032 placement
-var RESERVED_SESSION_NAME_ERROR = `${[...RESERVED_PROJECT_ENTRY_NAMES].join(", ")} are reserved: they name project-level entries, not sessions`;
+var RESERVED_SESSION_NAME_ERROR; // deferred: uses STEPS_UNDER_WAY_DIR of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-t0gq9gyw.js:31941", () => {
+  RESERVED_SESSION_NAME_ERROR = `${[...RESERVED_PROJECT_ENTRY_NAMES].join(", ")} are reserved: they name project-level entries, not sessions`;
+});
 //@ chunk-t0gq9gyw.js:32032-32082 placement
-function isReservedProjectEntryName(e) {
-  return storageNameSpellings(e).some((n) => RESERVED_PROJECT_ENTRY_NAMES.has(n));
+function isReservedProjectEntryName(name) {
+  return storageNameSpellings(name).some((spelling) => RESERVED_PROJECT_ENTRY_NAMES.has(spelling));
 }
 //@ chunk-t0gq9gyw.js:32082-32128 placement
 /**
  * 该名字能否用作会话 id（不是保留项、不含 .jsonl、不带兄弟后缀）。
  */
-function isNameableSessionId(e) {
-  return !isReservedProjectEntryName(e) && !hasJsonlFiles(e) && !hasSessionSiblingSuffix(e);
+function isNameableSessionId(name) {
+  return !isReservedProjectEntryName(name) && !hasJsonlFiles(name) && !hasSessionSiblingSuffix(name);
 }
 //@ chunk-t0gq9gyw.js:32128-32280 placement
-function validateSessionIdSegment(e, sessionId) {
-  if (typeof sessionId !== "string") return;
-  if (isReservedProjectEntryName(sessionId)) return invalidStorageArgument(e, RESERVED_SESSION_NAME_ERROR);
-  if (hasSessionSiblingSuffix(sessionId)) return invalidStorageArgument(e, SESSION_SIBLING_SUFFIX_ERROR);
-  if (hasDirSyncSuffix(sessionId)) return invalidStorageArgument(e, DIR_SYNC_SUFFIX_ERROR);
-  return hasJsonlFiles(sessionId) ? invalidStorageArgument(e, JSONL_STREAM_KEY_ERROR) : undefined;
+function validateSessionIdSegment(fieldPath, name) {
+  if (typeof name !== "string") return;
+  if (isReservedProjectEntryName(name)) return invalidStorageArgument(fieldPath, RESERVED_SESSION_NAME_ERROR);
+  if (hasSessionSiblingSuffix(name)) return invalidStorageArgument(fieldPath, SESSION_SIBLING_SUFFIX_ERROR);
+  if (hasDirSyncSuffix(name)) return invalidStorageArgument(fieldPath, DIR_SYNC_SUFFIX_ERROR);
+  return hasJsonlFiles(name) ? invalidStorageArgument(fieldPath, JSONL_STREAM_KEY_ERROR) : undefined;
 }
 //@ chunk-t0gq9gyw.js:32280-32391 placement
 var META_JSON_SUFFIX = ".meta.json";
@@ -322,14 +369,17 @@ function isMetaJsonTaskId(taskId) {
   return isMetaJsonName(`${taskId}.json`);
 }
 //@ chunk-t0gq9gyw.js:32429-32471 placement
-function isMetaJsonName(e) {
-  return storageNameSpellings(e).includes(META_JSON_SUFFIX);
+function isMetaJsonName(name) {
+  return storageNameSpellings(name).includes(META_JSON_SUFFIX);
 }
 //@ chunk-t0gq9gyw.js:32471-32541 placement
 var JSONL_STREAM_KEY_ERROR = "names a .jsonl stream, which only a transcript key addresses";
 //@ chunk-t0gq9gyw.js:32541-32622 placement
-function namesJsonlStream(e) {
-  return Array.isArray(e) && e.some((n) => typeof n === "string" && hasJsonlFiles(n));
+function namesJsonlStream(segments) {
+  return (
+    Array.isArray(segments) &&
+    segments.some((segment) => typeof segment === "string" && hasJsonlFiles(segment))
+  );
 }
 //@ chunk-t0gq9gyw.js:32622-32683 placement = isMcpServerFromProjectOrLocalSettings (1)
 function isMcpServerFromProjectOrLocalSettings_2(config) {
@@ -345,13 +395,13 @@ function isLogChannel(channel) {
 /**
  * 校验日志通道键。
  */
-function validateLogChannelKey(e) {
-  if (!isLogChannel(e.channel)) return invalidStorageArgument("key.channel", LOG_CHANNEL_ERROR);
-  if (e.channel !== "apiDump") return;
-  for (let n of ["agentId", "runId"])
-    if (n in e && e[n] !== undefined)
+function validateLogChannelKey(key) {
+  if (!isLogChannel(key.channel)) return invalidStorageArgument("key.channel", LOG_CHANNEL_ERROR);
+  if (key.channel !== "apiDump") return;
+  for (let field of ["agentId", "runId"])
+    if (field in key && key[field] !== undefined)
       return invalidStorageArgument(
-        `key.${n}`,
+        `key.${field}`,
         "an apiDump key names its dump by one id \u2014 the agent's for a subagent's requests, else the session's (today's dump-prompts/<id>.jsonl); agentId and runId nest nothing on this channel",
       );
   return;
@@ -360,42 +410,43 @@ function validateLogChannelKey(e) {
 /**
  * 校验任务存储键。
  */
-function validateTaskKey(e) {
-  if ("taskId" in e && ("meta" in e || "highWaterMark" in e))
+function validateTaskKey(key) {
+  if ("taskId" in key && ("meta" in key || "highWaterMark" in key))
     return invalidStorageArgument(
       "key.taskId",
       "a task key names an item, the list metadata or the list high-water mark, never more than one",
     );
-  if ("meta" in e && "highWaterMark" in e)
+  if ("meta" in key && "highWaterMark" in key)
     return invalidStorageArgument(
       "key.highWaterMark",
       "a task key names an item, the list metadata or the list high-water mark, never more than one",
     );
-  if ("meta" in e && e.meta !== true) return invalidStorageArgument("key.meta", "must be true");
-  if ("highWaterMark" in e && e.highWaterMark !== true)
+  if ("meta" in key && key.meta !== true) return invalidStorageArgument("key.meta", "must be true");
+  if ("highWaterMark" in key && key.highWaterMark !== true)
     return invalidStorageArgument("key.highWaterMark", "must be true");
-  if (typeof e.listId !== "string")
+  if (typeof key.listId !== "string")
     return invalidStorageArgument("key.listId", "a task key carries its listId");
-  if ("meta" in e || "highWaterMark" in e) return;
-  if (typeof e.taskId !== "string")
+  if ("meta" in key || "highWaterMark" in key) return;
+  if (typeof key.taskId !== "string")
     return invalidStorageArgument("key.taskId", "a task item key carries its taskId");
-  if (isMetaJsonTaskId(e.taskId)) return invalidStorageArgument("key.taskId", META_RESERVED_ERROR);
+  if (isMetaJsonTaskId(key.taskId)) return invalidStorageArgument("key.taskId", META_RESERVED_ERROR);
   return;
 }
 //@ chunk-t0gq9gyw.js:33936-34337 placement
 /**
  * 校验 jobs 根下的键。
  */
-function validateJobsKey(e) {
-  if ("file" in e && "draftKey" in e)
+function validateJobsKey(key) {
+  if ("file" in key && "draftKey" in key)
     return invalidStorageArgument(
       "key.draftKey",
       "a jobs-root key names the pins file or one draft, never both",
     );
-  if ("file" in e) return e.file === "pins" ? undefined : invalidStorageArgument("key.file", "must be pins");
-  if (typeof e.draftKey !== "string")
+  if ("file" in key)
+    return key.file === "pins" ? undefined : invalidStorageArgument("key.file", "must be pins");
+  if (typeof key.draftKey !== "string")
     return invalidStorageArgument("key.draftKey", "a jobs-root draft key carries its draftKey");
-  return DRAFT_KEY_RE.test(e.draftKey)
+  return DRAFT_KEY_RE.test(key.draftKey)
     ? undefined
     : invalidStorageArgument("key.draftKey", "must be 8 lowercase hex characters");
 }
@@ -426,31 +477,31 @@ function isShortLogName(logName) {
   );
 }
 //@ chunk-t0gq9gyw.js:34726-35005 placement
-function validateDateParts(e, n) {
-  if (n.year !== undefined && !matchesDigits(YEAR_RE, n.year))
-    return invalidStorageArgument(`${e}.year`, "must be four digits (YYYY)");
-  if (n.month !== undefined && !matchesDigits(TWO_DIGIT_RE, n.month))
-    return invalidStorageArgument(`${e}.month`, "must be two digits (MM)");
-  if (n.day !== undefined && !matchesDigits(TWO_DIGIT_RE, n.day))
-    return invalidStorageArgument(`${e}.day`, "must be two digits (DD)");
+function validateDateParts(prefix, scope) {
+  if (scope.year !== undefined && !matchesDigits(YEAR_RE, scope.year))
+    return invalidStorageArgument(`${prefix}.year`, "must be four digits (YYYY)");
+  if (scope.month !== undefined && !matchesDigits(TWO_DIGIT_RE, scope.month))
+    return invalidStorageArgument(`${prefix}.month`, "must be two digits (MM)");
+  if (scope.day !== undefined && !matchesDigits(TWO_DIGIT_RE, scope.day))
+    return invalidStorageArgument(`${prefix}.day`, "must be two digits (DD)");
   return;
 }
 //@ chunk-t0gq9gyw.js:35005-35060 placement
-function matchesDigits(e, n) {
-  return typeof n === "string" && e.test(n);
+function matchesDigits(pattern, value) {
+  return typeof value === "string" && pattern.test(value);
 }
 //@ chunk-t0gq9gyw.js:35060-35380 placement
 /**
  * 校验按年月的范围。
  */
-function validateDateScope(e) {
-  if (e.year !== undefined && e.projectKey === undefined)
+function validateDateScope(scope) {
+  if (scope.year !== undefined && scope.projectKey === undefined)
     return invalidStorageArgument("scope.projectKey", "required when year is given");
-  if (e.month !== undefined && e.year === undefined)
+  if (scope.month !== undefined && scope.year === undefined)
     return invalidStorageArgument("scope.year", "required when month is given");
-  if (e.day !== undefined && e.month === undefined)
+  if (scope.day !== undefined && scope.month === undefined)
     return invalidStorageArgument("scope.month", "required when day is given");
-  return validateDateParts("scope", e);
+  return validateDateParts("scope", scope);
 }
 //@ chunk-t0gq9gyw.js:35380-35403 placement
 var DRAFT_KEY_RE = /^[0-9a-f]{8}$/;
@@ -458,140 +509,140 @@ var DRAFT_KEY_RE = /^[0-9a-f]{8}$/;
 /**
  * 存储键对应的路径片段。
  */
-function keyPathSegments(e) {
-  switch (e.namespace) {
+function keyPathSegments(key) {
+  switch (key.namespace) {
     case "transcript":
       return [
-        ["projectKey", e.projectKey],
-        ["sessionId", e.sessionId],
-        ["agentId", e.agentId, "optional"],
-        ["agentRelPath", e.agentRelPath, "optional"],
+        ["projectKey", key.projectKey],
+        ["sessionId", key.sessionId],
+        ["agentId", key.agentId, "optional"],
+        ["agentRelPath", key.agentRelPath, "optional"],
       ];
     case "history":
     case "identity":
       return [];
     case "globalConfig":
-      return "kind" in e ? [["stamp", e.stamp]] : [];
+      return "kind" in key ? [["stamp", key.stamp]] : [];
     case "settings":
-      return e.layer === "user"
+      return key.layer === "user"
         ? []
-        : e.layer === "project"
-          ? [["projectKey", e.projectKey]]
-          : [["consentRootKey", e.consentRootKey]];
+        : key.layer === "project"
+          ? [["projectKey", key.projectKey]]
+          : [["consentRootKey", key.consentRootKey]];
     case "task":
-      return "taskId" in e
+      return "taskId" in key
         ? [
-            ["listId", e.listId],
-            ["taskId", e.taskId],
+            ["listId", key.listId],
+            ["taskId", key.taskId],
           ]
-        : [["listId", e.listId]];
+        : [["listId", key.listId]];
     case "memory":
       return [
-        ["projectKey", e.projectKey],
-        ["relPath", e.relPath],
+        ["projectKey", key.projectKey],
+        ["relPath", key.relPath],
       ];
     case "pluginRegistry":
       return [];
     case "marketplaceCache":
-      return "relPath" in e
+      return "relPath" in key
         ? [
-            ["marketplace", e.marketplace],
-            ["relPath", e.relPath],
+            ["marketplace", key.marketplace],
+            ["relPath", key.relPath],
           ]
-        : [["marketplace", e.marketplace]];
+        : [["marketplace", key.marketplace]];
     case "pluginCache":
       return [
-        ["marketplace", e.marketplace],
-        ["plugin", e.plugin],
-        ["version", e.version],
-        ["relPath", e.relPath],
+        ["marketplace", key.marketplace],
+        ["plugin", key.plugin],
+        ["version", key.version],
+        ["relPath", key.relPath],
       ];
     case "cache":
       return [
-        ["store", e.store],
-        ["id", e.id],
+        ["store", key.store],
+        ["id", key.id],
       ];
     case "paste":
-      return [["id", e.id]];
+      return [["id", key.id]];
     case "pluginAssetCache":
-      return [["digest", e.digest]];
+      return [["digest", key.digest]];
     case "state":
-      return [["id", e.id]];
+      return [["id", key.id]];
     case "plan":
-      return [["name", e.name]];
+      return [["name", key.name]];
     case "feedbackDraft":
-      return [["draftId", e.draftId]];
+      return [["draftId", key.draftId]];
     case "agentMemory":
       return [
-        ...(e.layer === "user" ? [] : [["projectKey", e.projectKey]]),
-        ["agentType", e.agentType],
-        ["relPath", e.relPath],
+        ...(key.layer === "user" ? [] : [["projectKey", key.projectKey]]),
+        ["agentType", key.agentType],
+        ["relPath", key.relPath],
       ];
     case "team":
-      return [["team", e.team]];
+      return [["team", key.team]];
     case "sidecar":
       return [
-        ["projectKey", e.projectKey],
-        ["sessionId", e.sessionId],
-        ["relPath", e.relPath],
+        ["projectKey", key.projectKey],
+        ["sessionId", key.sessionId],
+        ["relPath", key.relPath],
       ];
     case "scratch":
       return [
-        ["sessionId", e.sessionId],
-        ["relPath", e.relPath],
+        ["sessionId", key.sessionId],
+        ["relPath", key.relPath],
       ];
     case "userConfigDir":
-      return [["relPath", e.relPath]];
+      return [["relPath", key.relPath]];
     case "fileHistory":
       return [
-        ["sessionId", e.sessionId],
-        ["backupFileName", e.backupFileName],
+        ["sessionId", key.sessionId],
+        ["backupFileName", key.backupFileName],
       ];
     case "job":
       return [
-        ["jobId", e.jobId],
-        ["relPath", e.relPath],
+        ["jobId", key.jobId],
+        ["relPath", key.relPath],
       ];
     case "daemon":
-      return [["relPath", e.relPath]];
+      return [["relPath", key.relPath]];
     case "jobsRoot":
-      return "file" in e ? [] : [["draftKey", e.draftKey]];
+      return "file" in key ? [] : [["draftKey", key.draftKey]];
     case "session":
-      return [["file", e.file]];
+      return [["file", key.file]];
     case "bridgePointer":
     case "sessionAliases":
-      return [["projectKey", e.projectKey]];
+      return [["projectKey", key.projectKey]];
     case "dirSyncRecord":
       return [
-        ["projectKey", e.projectKey],
-        ["sessionId", e.sessionId],
+        ["projectKey", key.projectKey],
+        ["sessionId", key.sessionId],
       ];
     case "mailbox":
       return [
-        ["team", e.team],
-        ["teammate", e.teammate],
+        ["team", key.team],
+        ["teammate", key.teammate],
       ];
     case "log":
       return [
-        ["sessionId", e.sessionId],
-        ["agentId", e.agentId, "optional"],
-        ["runId", e.runId, "optional"],
+        ["sessionId", key.sessionId],
+        ["agentId", key.agentId, "optional"],
+        ["runId", key.runId, "optional"],
       ];
     case "jobTimeline":
-      return [["jobId", e.jobId]];
+      return [["jobId", key.jobId]];
     case "recording":
       return [
-        ["projectKey", e.projectKey],
-        ["sessionId", e.sessionId],
-        ["stamp", e.stamp],
+        ["projectKey", key.projectKey],
+        ["sessionId", key.sessionId],
+        ["stamp", key.stamp],
       ];
     case "sessionLog":
       return [
-        ["projectKey", e.projectKey],
-        ["year", e.year],
-        ["month", e.month],
-        ["day", e.day],
-        ["logName", e.logName],
+        ["projectKey", key.projectKey],
+        ["year", key.year],
+        ["month", key.month],
+        ["day", key.day],
+        ["logName", key.logName],
       ];
   }
   return;
@@ -600,12 +651,13 @@ function keyPathSegments(e) {
 /**
  * 校验存储范围对象。
  */
-function validateStorageScope(e) {
-  if (typeof e !== "object" || e === null) return invalidStorageArgument("scope", "expected a scope object");
-  let n = scopePathSegments(e);
-  if (n === undefined)
-    return invalidStorageArgument("scope", `${String(e.namespace)} is not a listable namespace`);
-  return validateScopeByNamespace(e) ?? checkKeyFields("scope", n);
+function validateStorageScope(scope) {
+  if (typeof scope !== "object" || scope === null)
+    return invalidStorageArgument("scope", "expected a scope object");
+  let fields = scopePathSegments(scope);
+  if (fields === undefined)
+    return invalidStorageArgument("scope", `${String(scope.namespace)} is not a listable namespace`);
+  return validateScopeByNamespace(scope) ?? checkKeyFields("scope", fields);
 }
 //@ chunk-t0gq9gyw.js:37999-39955 placement
 /**
@@ -669,71 +721,72 @@ var SCOPE_FIELD_ERRORS = {
 /**
  * 按命名空间校验范围。
  */
-function validateScopeByNamespace(e) {
-  let n = e.namespace === "agentMemory" ? validateAgentMemoryScope(e) : undefined;
-  if (n !== undefined) return n;
-  if (e.namespace === "transcript" || e.namespace === "sidecar") {
-    let o = validateSessionIdSegment("scope.sessionId", e.sessionId);
-    if (o !== undefined) return o;
+function validateScopeByNamespace(scope) {
+  let agentMemoryError = scope.namespace === "agentMemory" ? validateAgentMemoryScope(scope) : undefined;
+  if (agentMemoryError !== undefined) return agentMemoryError;
+  if (scope.namespace === "transcript" || scope.namespace === "sidecar") {
+    let sessionError = validateSessionIdSegment("scope.sessionId", scope.sessionId);
+    if (sessionError !== undefined) return sessionError;
   }
-  for (let [o, s] of SCOPE_FIELD_ERRORS[e.namespace])
-    if (o in e && e[o] !== undefined) return invalidStorageArgument(`scope.${o}`, s);
-  if (e.namespace === "sidecar" && namesJsonlStream(e.relPath))
+  for (let [field, errorText] of SCOPE_FIELD_ERRORS[scope.namespace])
+    if (field in scope && scope[field] !== undefined)
+      return invalidStorageArgument(`scope.${field}`, errorText);
+  if (scope.namespace === "sidecar" && namesJsonlStream(scope.relPath))
     return invalidStorageArgument("scope.relPath", JSONL_STREAM_KEY_ERROR);
-  if (e.namespace === "sidecar" && isRecordingStreamPath(e.relPath))
+  if (scope.namespace === "sidecar" && isRecordingStreamPath(scope.relPath))
     return invalidStorageArgument("scope.relPath", RECORDING_STREAM_ADDRESSED_ERROR);
-  if (e.namespace === "log" && e.channel !== undefined && !isLogChannel(e.channel))
+  if (scope.namespace === "log" && scope.channel !== undefined && !isLogChannel(scope.channel))
     return invalidStorageArgument("scope.channel", LOG_CHANNEL_ERROR);
-  if (e.namespace === "job" && isJobTimelinePath(e.relPath))
+  if (scope.namespace === "job" && isJobTimelinePath(scope.relPath))
     return invalidStorageArgument("scope.relPath", JOB_TIMELINE_KEY_ERROR);
-  let r = e.namespace === "sessionLog" ? validateDateScope(e) : undefined;
-  if (r !== undefined) return r;
-  if (e.namespace === "scratch" && e.sessionId === undefined && e.relPath !== undefined)
+  let dateError = scope.namespace === "sessionLog" ? validateDateScope(scope) : undefined;
+  if (dateError !== undefined) return dateError;
+  if (scope.namespace === "scratch" && scope.sessionId === undefined && scope.relPath !== undefined)
     return invalidStorageArgument(
       "scope.relPath",
       "requires scope.sessionId: a scratch relPath narrows one session directory, and no cross-session prefix filter exists",
     );
-  if (e.namespace === "userConfigDir" && !USER_CONFIG_DIR_NAME_SET.has(e.dir))
+  if (scope.namespace === "userConfigDir" && !USER_CONFIG_DIR_NAME_SET.has(scope.dir))
     return invalidStorageArgument("scope.dir", USER_CONFIG_DIR_ERROR);
   if (
-    e.namespace === "transcript" &&
-    e.agentRelPath !== undefined &&
-    (e.projectKey === undefined || e.sessionId === undefined)
+    scope.namespace === "transcript" &&
+    scope.agentRelPath !== undefined &&
+    (scope.projectKey === undefined || scope.sessionId === undefined)
   )
     return invalidStorageArgument(
       "scope.agentRelPath",
       "requires scope.projectKey and scope.sessionId: an agentRelPath narrows the subagents/ tree of one session directory",
     );
-  if (e.namespace === "transcript" && namesJsonlStream(e.agentRelPath))
+  if (scope.namespace === "transcript" && namesJsonlStream(scope.agentRelPath))
     return invalidStorageArgument("scope.agentRelPath", JSONL_STREAM_KEY_ERROR);
-  if (e.namespace === "pluginCache") {
-    if (e.marketplace === undefined && e.plugin !== undefined)
+  if (scope.namespace === "pluginCache") {
+    if (scope.marketplace === undefined && scope.plugin !== undefined)
       return invalidStorageArgument(
         "scope.plugin",
         "requires scope.marketplace: a plugin narrows one marketplace folder",
       );
-    if (e.plugin === undefined && e.version !== undefined)
+    if (scope.plugin === undefined && scope.version !== undefined)
       return invalidStorageArgument(
         "scope.version",
         "requires scope.plugin: a version narrows one plugin folder",
       );
-    if (e.version === undefined && e.relPath !== undefined)
+    if (scope.version === undefined && scope.relPath !== undefined)
       return invalidStorageArgument(
         "scope.relPath",
         "requires scope.version: a relPath narrows one version folder",
       );
   }
-  if (e.namespace === "job" && e.jobId === undefined && e.relPath !== undefined)
+  if (scope.namespace === "job" && scope.jobId === undefined && scope.relPath !== undefined)
     return invalidStorageArgument(
       "scope.relPath",
       "requires scope.jobId: a job relPath narrows one job directory, and no cross-job prefix filter exists",
     );
-  if (e.namespace === "transcript" && e.projectKey === undefined && e.sessionId !== undefined)
+  if (scope.namespace === "transcript" && scope.projectKey === undefined && scope.sessionId !== undefined)
     return invalidStorageArgument(
       "scope.sessionId",
       "requires scope.projectKey: a session narrows one project folder, and no cross-project session filter exists",
     );
-  if (e.namespace === "globalConfig" && e.kind !== undefined && !isGlobalConfigCopyKind(e.kind))
+  if (scope.namespace === "globalConfig" && scope.kind !== undefined && !isGlobalConfigCopyKind(scope.kind))
     return invalidStorageArgument("scope.kind", GLOBAL_CONFIG_COPY_KIND_ERROR);
   return;
 }
@@ -741,14 +794,14 @@ function validateScopeByNamespace(e) {
 /**
  * 校验代理记忆范围（user/project/local）。
  */
-function validateAgentMemoryScope(e) {
-  if (!isMcpServerFromProjectOrLocalSettings(e.layer))
+function validateAgentMemoryScope(scope) {
+  if (!isMcpServerFromProjectOrLocalSettings(scope.layer))
     return invalidStorageArgument("scope.layer", "must be user, project or local");
-  if (e.layer === "user" && "projectKey" in e)
+  if (scope.layer === "user" && "projectKey" in scope)
     return invalidStorageArgument("scope.projectKey", "the user layer is not keyed by project");
-  if (e.layer !== "user" && typeof e.projectKey !== "string")
+  if (scope.layer !== "user" && typeof scope.projectKey !== "string")
     return invalidStorageArgument("scope.projectKey", "required for the project and local layers");
-  return e.agentType === undefined && e.relPath !== undefined
+  return scope.agentType === undefined && scope.relPath !== undefined
     ? invalidStorageArgument(
         "scope.relPath",
         "requires scope.agentType: an agent-memory relPath narrows one agent directory",
@@ -759,37 +812,37 @@ function validateAgentMemoryScope(e) {
 /**
  * 范围对应的路径片段。
  */
-function scopePathSegments(e) {
-  switch (e.namespace) {
+function scopePathSegments(scope) {
+  switch (scope.namespace) {
     case "transcript":
       return [
-        ["projectKey", e.projectKey, "optional"],
-        ["sessionId", e.sessionId, "optional"],
-        ["agentRelPath", e.agentRelPath, "optional"],
+        ["projectKey", scope.projectKey, "optional"],
+        ["sessionId", scope.sessionId, "optional"],
+        ["agentRelPath", scope.agentRelPath, "optional"],
       ];
     case "task":
-      return [["listId", e.listId, "optional"]];
+      return [["listId", scope.listId, "optional"]];
     case "mailbox":
-      return [["team", e.team, "optional"]];
+      return [["team", scope.team, "optional"]];
     case "memory":
       return [
-        ["projectKey", e.projectKey],
-        ["relPath", e.relPath, "optional"],
+        ["projectKey", scope.projectKey],
+        ["relPath", scope.relPath, "optional"],
       ];
     case "pluginCache":
       return [
-        ["marketplace", e.marketplace, "optional"],
-        ["plugin", e.plugin, "optional"],
-        ["version", e.version, "optional"],
-        ["relPath", e.relPath, "optional"],
+        ["marketplace", scope.marketplace, "optional"],
+        ["plugin", scope.plugin, "optional"],
+        ["version", scope.version, "optional"],
+        ["relPath", scope.relPath, "optional"],
       ];
     case "marketplaceCache":
       return [
-        ["marketplace", e.marketplace],
-        ["relPath", e.relPath, "optional"],
+        ["marketplace", scope.marketplace],
+        ["relPath", scope.relPath, "optional"],
       ];
     case "cache":
-      return [["store", e.store]];
+      return [["store", scope.store]];
     case "state":
     case "plan":
     case "paste":
@@ -798,47 +851,47 @@ function scopePathSegments(e) {
       return [];
     case "sidecar":
       return [
-        ["projectKey", e.projectKey],
-        ["sessionId", e.sessionId],
-        ["relPath", e.relPath, "optional"],
+        ["projectKey", scope.projectKey],
+        ["sessionId", scope.sessionId],
+        ["relPath", scope.relPath, "optional"],
       ];
     case "agentMemory":
       return [
-        ["projectKey", e.layer === "user" ? undefined : e.projectKey, "optional"],
-        ["agentType", e.agentType, "optional"],
-        ["relPath", e.relPath, "optional"],
+        ["projectKey", scope.layer === "user" ? undefined : scope.projectKey, "optional"],
+        ["agentType", scope.agentType, "optional"],
+        ["relPath", scope.relPath, "optional"],
       ];
     case "scratch":
       return [
-        ["sessionId", e.sessionId, "optional"],
-        ["relPath", e.relPath, "optional"],
+        ["sessionId", scope.sessionId, "optional"],
+        ["relPath", scope.relPath, "optional"],
       ];
     case "userConfigDir":
-      return [["relPath", e.relPath, "optional"]];
+      return [["relPath", scope.relPath, "optional"]];
     case "fileHistory":
-      return [["sessionId", e.sessionId, "optional"]];
+      return [["sessionId", scope.sessionId, "optional"]];
     case "job":
       return [
-        ["jobId", e.jobId, "optional"],
-        ["relPath", e.relPath, "optional"],
+        ["jobId", scope.jobId, "optional"],
+        ["relPath", scope.relPath, "optional"],
       ];
     case "daemon":
-      return [["relPath", e.relPath, "optional"]];
+      return [["relPath", scope.relPath, "optional"]];
     case "jobsRoot":
     case "session":
       return [];
     case "bridgeSpawn":
-      return [["dir", e.dir, "optional"]];
+      return [["dir", scope.dir, "optional"]];
     case "globalConfig":
-      return [["kind", e.kind, "optional"]];
+      return [["kind", scope.kind, "optional"]];
     case "log":
-      return [["sessionId", e.sessionId, "optional"]];
+      return [["sessionId", scope.sessionId, "optional"]];
     case "sessionLog":
       return [
-        ["projectKey", e.projectKey, "optional"],
-        ["year", e.year, "optional"],
-        ["month", e.month, "optional"],
-        ["day", e.day, "optional"],
+        ["projectKey", scope.projectKey, "optional"],
+        ["year", scope.year, "optional"],
+        ["month", scope.month, "optional"],
+        ["day", scope.day, "optional"],
       ];
   }
   return;
@@ -856,33 +909,39 @@ function keyFromMetaPath(agentId) {
 /**
  * 从文件路径反推存储键。
  */
-function pathToSessionSideKey(e) {
-  let n = basename(e);
-  if (hasJsonlFiles(n)) return;
+function pathToSessionSideKey(path) {
+  let name = basename(path);
+  if (hasJsonlFiles(name)) return;
   let projectsDir = getProjectsDir();
-  let o = [n];
-  let s = dirname(e);
-  while (s !== projectsDir && o.length <= MAX_SIDE_PATH_DEPTH + 1) {
-    let y = dirname(s);
-    if (y === s) return;
-    o.unshift(basename(s));
-    s = y;
+  let segments = [name];
+  let dir = dirname(path);
+  while (dir !== projectsDir && segments.length <= MAX_SIDE_PATH_DEPTH + 1) {
+    let parentDir = dirname(dir);
+    if (parentDir === dir) return;
+    segments.unshift(basename(dir));
+    dir = parentDir;
   }
-  if (s !== projectsDir || o.length < 3) return;
-  let [a, c, ...u] = o;
-  if (!isValidKeySegment(a) || !isValidKeySegment(c) || u.length === 0 || !u.every(isValidKeySegment)) return;
-  let p = STORAGE_SPACES.sidecar(a, c, u);
-  return validateStorageKey(p) === undefined ? p : undefined;
+  if (dir !== projectsDir || segments.length < 3) return;
+  let [sessionId, relDir, ...relSegments] = segments;
+  if (
+    !isValidKeySegment(sessionId) ||
+    !isValidKeySegment(relDir) ||
+    relSegments.length === 0 ||
+    !relSegments.every(isValidKeySegment)
+  )
+    return;
+  let sideKey = STORAGE_SPACES.sidecar(sessionId, relDir, relSegments);
+  return validateStorageKey(sideKey) === undefined ? sideKey : undefined;
 }
 //@ chunk-t0gq9gyw.js:44734-44789 placement
-function toStorageKey(e) {
-  return typeof e === "string" ? pathToSessionSideKey(e) : e.key;
+function toStorageKey(pathOrKey) {
+  return typeof pathOrKey === "string" ? pathToSessionSideKey(pathOrKey) : pathOrKey.key;
 }
 export {
   pathToSessionSideKey,
   toStorageKey,
-  keyFromMetaPath,
   validateStorageKey,
+  keyFromMetaPath,
   validateStorageScope,
   isNameableSessionId,
   ARCHIVE_SYNC,

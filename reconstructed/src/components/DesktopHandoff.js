@@ -8,16 +8,17 @@
  * pieces: chunk-5nte8cwj.js (1), chunk-ds2d8kad.js (5)
  * attribution: placement 2, fingerprint 3, layout 1
  */
-import { init_react_production, y, P } from "../../vendor/react/cjs/react.production.js";
+import {
+  openCurrentSessionInDesktop,
+  getDesktopInstallStatus,
+  MIN_DESKTOP_VERSION,
+} from "../utils/desktopDeepLink.js";
+import { getSessionId } from "../bootstrap/state.js";
+import { init_react_production, useState, useEffect } from "../../vendor/react/cjs/react.production.js";
 import { useTheme_2 } from "./design-system/ThemeProvider.js";
 import { useClock } from "../ink/components/ClockContext.js";
 import { useHasScrollViewport } from "./ScrollViewportContext.js";
 import { openValidatedUrlSucceeded } from "../utils/browser.js";
-import {
-  getDesktopInstallStatus,
-  MIN_DESKTOP_VERSION,
-  openCurrentSessionInDesktop,
-} from "../utils/desktopDeepLink.js";
 import { confirmRelaunch, withRelaunchHint } from "../utils/processRelaunch.js";
 import { flushSessionStorage } from "../utils/sessionStorage.js";
 import { isBgSession } from "../utils/concurrentSessions.js";
@@ -34,8 +35,17 @@ import { Text, Box } from "../ink/components/Text.js";
 import { ConfigurableShortcutHint } from "./ConfigurableShortcutHint.js";
 import { PANE_PADDING_X, PANE_PADDING } from "./design-system/Pane.js";
 import { WorkerBadge } from "./permissions/WorkerBadge.js";
-import { getSessionId } from "../bootstrap/state.js";
 
+//@ chunk-5nte8cwj.js:3680-3743 placement
+/**
+ * 以 resume 方式把当前会话交到 Claude Desktop 打开。
+ */
+async function resumeCurrentSessionInDesktop() {
+  return openCurrentSessionInDesktop({
+    kind: "resume",
+    sessionId: getSessionId(),
+  });
+}
 //@ chunk-ds2d8kad.js:15178-15182 placement
 init_react_production();
 //@ chunk-ds2d8kad.js:15182-15214 fingerprint = DESKTOP_DOCS_URL (1)
@@ -61,46 +71,46 @@ function nullRef() {
  */
 function DesktopHandoff({ onDone, handoff, getTranscript }) {
   let { storageV5 } = useTheme_2();
-  let [state, setState] = y(handoff.current?.state ?? "checking");
-  let [error, setError] = y(handoff.current?.error ?? null);
-  let [downloadMessage, setDownloadMessage] = y(handoff.current?.downloadMessage ?? "");
+  let [state, setState] = useState(handoff.current?.state ?? "checking");
+  let [error, setError] = useState(handoff.current?.error ?? null);
+  let [downloadMessage, setDownloadMessage] = useState(handoff.current?.downloadMessage ?? "");
   let clock = useClock();
   let hasScrollViewport = useHasScrollViewport();
-  P(() => {
-    let t = handoff.current;
-    if (t) {
-      t.setters = {
+  useEffect(() => {
+    let current = handoff.current;
+    if (current) {
+      current.setters = {
         setState,
         setError,
         setDownloadMessage,
       };
-      setState(t.state);
-      setError(t.error);
-      setDownloadMessage(t.downloadMessage);
+      setState(current.state);
+      setError(current.error);
+      setDownloadMessage(current.downloadMessage);
     }
     return () => {
       if (handoff.current?.setters?.setState === setState) handoff.current.setters = null;
     };
   }, [handoff]);
-  function p(t, u) {
+  function finish(message, options) {
     handoff.current = null;
-    onDone(t, u);
+    onDone(message, options);
   }
-  function D() {
-    p(`Cancelled. Learn more about Claude Desktop at ${DESKTOP_DOCS_URL}`, {
+  function handleCancel() {
+    finish(`Cancelled. Learn more about Claude Desktop at ${DESKTOP_DOCS_URL}`, {
       display: "system",
     });
   }
-  function S(event) {
+  function handleKeyDown(event) {
     if (event.meta && (event.key === "c" || event.key === "d")) {
       event.preventDefault();
-      D();
+      handleCancel();
       return;
     }
     if (event.ctrl || event.meta) return;
     if (state === "error") {
       event.preventDefault();
-      p(error ?? "Unknown error", {
+      finish(error ?? "Unknown error", {
         display: "system",
       });
       return;
@@ -109,7 +119,7 @@ function DesktopHandoff({ onDone, handoff, getTranscript }) {
       if (event.key === "y" || event.key === "Y") {
         event.preventDefault();
         openValidatedUrlSucceeded(getDownloadUrl()).catch(() => {});
-        p(
+        finish(
           `Starting download. Re-run /desktop once you\u2019ve installed the app.
 Learn more at ${DESKTOP_DOCS_URL}`,
           {
@@ -118,13 +128,13 @@ Learn more at ${DESKTOP_DOCS_URL}`,
         );
       } else if (event.key === "n" || event.key === "N") {
         event.preventDefault();
-        p(`The desktop app is required for /desktop. Learn more at ${DESKTOP_DOCS_URL}`, {
+        finish(`The desktop app is required for /desktop. Learn more at ${DESKTOP_DOCS_URL}`, {
           display: "system",
         });
       }
     }
   }
-  P(() => {
+  useEffect(() => {
     if (handoff.current) return;
     handoff.current = {
       state: "checking",
@@ -136,56 +146,56 @@ Learn more at ${DESKTOP_DOCS_URL}`,
         setDownloadMessage,
       },
     };
-    function t(input) {
-      let i = handoff.current;
-      if (!i) return;
-      Object.assign(i, input);
-      let setters = i.setters;
+    function updateState(input) {
+      let current = handoff.current;
+      if (!current) return;
+      Object.assign(current, input);
+      let setters = current.setters;
       if (input.state !== undefined) setters?.setState(input.state);
       if (input.error !== undefined) setters?.setError(input.error);
       if (input.downloadMessage !== undefined) setters?.setDownloadMessage(input.downloadMessage);
     }
-    let u = false;
-    async function O() {
-      t({
+    let relaunchConfirmed = false;
+    async function runCheck() {
+      updateState({
         state: "checking",
       });
       let installStatus = await getDesktopInstallStatus();
       if (installStatus.status === "not-installed") {
-        t({
+        updateState({
           state: "prompt-download",
           downloadMessage: "Claude Desktop is not installed.",
         });
         return;
       }
       if (installStatus.status === "version-too-old") {
-        t({
+        updateState({
           state: "prompt-download",
           downloadMessage: `Claude Desktop needs to be updated (found v${installStatus.version}, need v${MIN_DESKTOP_VERSION}+).`,
         });
         return;
       }
-      u = await confirmRelaunch(getTranscript(), "desktop_handoff", {}, storageV5);
-      t({
+      relaunchConfirmed = await confirmRelaunch(getTranscript(), "desktop_handoff", {}, storageV5);
+      updateState({
         state: "flushing",
       });
       await flushSessionStorage();
-      t({
+      updateState({
         state: "opening",
       });
       let result = await resumeCurrentSessionInDesktop();
       if (!result.success) {
-        t({
+        updateState({
           state: "error",
-          error: withRelaunchHint(result.error, u),
+          error: withRelaunchHint(result.error, relaunchConfirmed),
         });
         return;
       }
-      t({
+      updateState({
         state: "success",
       });
       clock.setTimeout(async () => {
-        p("Session transferred to Claude Desktop", {
+        finish("Session transferred to Claude Desktop", {
           display: "system",
         });
         if (isBgSession())
@@ -196,10 +206,10 @@ Learn more at ${DESKTOP_DOCS_URL}`,
         await gracefulShutdown(0, "other");
       }, 500);
     }
-    O().catch((err) => {
-      t({
+    runCheck().catch((err) => {
+      updateState({
         state: "error",
-        error: withRelaunchHint(errorMessage(err), u, {
+        error: withRelaunchHint(errorMessage(err), relaunchConfirmed, {
           as: "clause",
         }),
       });
@@ -208,10 +218,10 @@ Learn more at ${DESKTOP_DOCS_URL}`,
   if (state === "error")
     return jsxProd_default(Dialog, {
       title: "Claude Desktop",
-      onCancel: D,
+      onCancel: handleCancel,
       inputGuide: "Press any key to continue\u2026",
       children: jsxProd_default(FocusColumn, {
-        onKeyDown: S,
+        onKeyDown: handleKeyDown,
         children: jsxProd_default_2(Text, {
           color: "error",
           children: ["Error: ", error],
@@ -221,7 +231,7 @@ Learn more at ${DESKTOP_DOCS_URL}`,
   if (state === "prompt-download")
     return jsxProd_default(Dialog, {
       title: "Claude Desktop",
-      onCancel: D,
+      onCancel: handleCancel,
       inputGuide: jsxProd_default(ConfigurableShortcutHint, {
         action: "confirm:no",
         context: "Confirmation",
@@ -229,7 +239,7 @@ Learn more at ${DESKTOP_DOCS_URL}`,
         description: "cancel",
       }),
       children: jsxProd_default_2(FocusColumn, {
-        onKeyDown: S,
+        onKeyDown: handleKeyDown,
         children: [
           jsxProd_default(Text, {
             children: downloadMessage,
@@ -250,16 +260,6 @@ Learn more at ${DESKTOP_DOCS_URL}`,
         success: "Opening in Claude Desktop\u2026",
       }[state],
     }),
-  });
-}
-//@ chunk-5nte8cwj.js:3680-3743 placement
-/**
- * 以 resume 方式把当前会话交到 Claude Desktop 打开。
- */
-async function resumeCurrentSessionInDesktop() {
-  return openCurrentSessionInDesktop({
-    kind: "resume",
-    sessionId: getSessionId(),
   });
 }
 export { DesktopHandoff, nullRef };

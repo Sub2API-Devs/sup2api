@@ -8,66 +8,70 @@
  * pieces: chunk-82kqcve8.js (12)
  * attribution: placement 12
  */
-import { Re } from "../../runtime/bun-runtime.js";
+import { __toESM } from "../../runtime/bun-runtime.js";
 import { require_ignore } from "../../vendor/ignore/index.js";
 import { logForDebugging } from "./debug.js";
 import { logEvent } from "../services/analytics/index.js";
 import { fromEnum } from "../services/analytics/safeMetadata.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-82kqcve8.js:161884-162066 placement
 /**
  * 去掉路径段末尾的空格与点（Windows 规则），保留 "." 与 ".."。
  */
-function stripTrailingDotsSpaces(e) {
-  let n = e.length;
+function stripTrailingDotsSpaces(segmentText) {
+  let endIndex = segmentText.length;
   for (;;) {
-    let r = n;
-    while (r > 0 && e[r - 1] === " ") r--;
-    let sliced = e.slice(0, r);
+    let spaceTrimmed = endIndex;
+    while (spaceTrimmed > 0 && segmentText[spaceTrimmed - 1] === " ") spaceTrimmed--;
+    let sliced = segmentText.slice(0, spaceTrimmed);
     if (sliced === "." || sliced === "..") return sliced;
-    let h = r;
-    while (h > 0 && e[h - 1] === ".") h--;
-    if (h === n) return sliced;
-    n = h;
+    let dotTrimmed = spaceTrimmed;
+    while (dotTrimmed > 0 && segmentText[dotTrimmed - 1] === ".") dotTrimmed--;
+    if (dotTrimmed === endIndex) return sliced;
+    endIndex = dotTrimmed;
   }
 }
 //@ chunk-82kqcve8.js:162066-162536 placement
 /**
  * 按 Windows 规则规整路径：保留前缀（盘符/UNC/设备），去掉段尾点与空格、处理 . 与 ..；无需改动时原样返回。
  */
-function normalizeWin32Path(e) {
-  if (/^\\(?:\\\?|\?\?)\\/.test(e)) return e;
-  let n =
+function normalizeWin32Path(win32Path) {
+  if (/^\\(?:\\\?|\?\?)\\/.test(win32Path)) return win32Path;
+  let prefix =
     /^(?:[\\/]{2,}[?.](?=[\\/])|[\\/]\?\?(?=[\\/])|[\\/]{2,}[^\\/]*(?:[\\/]+[^\\/]+)?|[a-z]:(?=[\\/]))/i.exec(
-      e,
+      win32Path,
     )?.[0] ?? "";
-  if (n === "" && !/^[\\/]/.test(e)) return e;
-  let r = [];
-  let s = false;
-  for (let y of e.slice(n.length).split(/[\\/]+/)) {
-    if (y === "") continue;
-    let w = stripTrailingDotsSpaces(y);
-    s ||= w !== y || w === "." || w === "..";
-    if (w === "..") r.pop();
-    else if (w !== "" && w !== ".") r.push(w);
+  if (prefix === "" && !/^[\\/]/.test(win32Path)) return win32Path;
+  let parts = [];
+  let changed = false;
+  for (let part of win32Path.slice(prefix.length).split(/[\\/]+/)) {
+    if (part === "") continue;
+    let cleanPart = stripTrailingDotsSpaces(part);
+    changed ||= cleanPart !== part || cleanPart === "." || cleanPart === "..";
+    if (cleanPart === "..") parts.pop();
+    else if (cleanPart !== "" && cleanPart !== ".") parts.push(cleanPart);
   }
-  if (!s) return e;
-  let h = e.includes("\\") ? "\\" : "/";
-  return `${n}${h}${r.join(h)}`;
+  if (!changed) return win32Path;
+  let separator = win32Path.includes("\\") ? "\\" : "/";
+  return `${prefix}${separator}${parts.join(separator)}`;
 }
 //@ chunk-82kqcve8.js:162536-162555 placement
-var ignoreLibrary = Re(require_ignore(), 1);
+var ignoreLibrary; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-82kqcve8.js:162536", () => {
+  ignoreLibrary = __toESM(require_ignore(), 1);
+});
 //@ chunk-82kqcve8.js:162555-162604 placement
 /**
  * 编译忽略模式，返回错误说明；合法返回 null。
  */
-function ignorePatternError(e) {
-  return ignorePatternDiagnostics.compileErrorMessage(e);
+function ignorePatternError(pattern) {
+  return ignorePatternDiagnostics.compileErrorMessage(pattern);
 }
 //@ chunk-82kqcve8.js:162604-162727 placement
-function getIgnoreCompileError(e) {
+function getIgnoreCompileError(pattern) {
   try {
-    ignoreLibrary.default().add([e]).test("probe");
+    ignoreLibrary.default().add([pattern]).test("probe");
     return null;
   } catch (error) {
     return error instanceof Error ? error.message : String(error);
@@ -76,10 +80,10 @@ function getIgnoreCompileError(e) {
 //@ chunk-82kqcve8.js:162727-162760 placement
 var IGNORE_SKIP_PATTERN_RE = /^\s*$|^#|(?:^|[^\\])\\$/;
 //@ chunk-82kqcve8.js:162760-162872 placement
-function describeIgnorePatternSkip(e) {
-  return IGNORE_SKIP_PATTERN_RE.test(e)
+function describeIgnorePatternSkip(pattern) {
+  return IGNORE_SKIP_PATTERN_RE.test(pattern)
     ? "skipped by the ignore library (blank, comment, or trailing backslash)"
-    : ignorePatternError(e);
+    : ignorePatternError(pattern);
 }
 //@ chunk-82kqcve8.js:162872-163260 placement
 /**
@@ -88,17 +92,17 @@ function describeIgnorePatternSkip(e) {
 class IgnorePatternDiagnostics {
   compileErrorMessages = new Map();
   warnedPatterns = new Set();
-  compileErrorMessage(e) {
-    let n = this.compileErrorMessages.get(e);
-    if (n !== undefined) return n;
-    let ignoreCompileError = getIgnoreCompileError(e);
-    this.compileErrorMessages.set(e, ignoreCompileError);
+  compileErrorMessage(pattern) {
+    let message = this.compileErrorMessages.get(pattern);
+    if (message !== undefined) return message;
+    let ignoreCompileError = getIgnoreCompileError(pattern);
+    this.compileErrorMessages.set(pattern, ignoreCompileError);
     return ignoreCompileError;
   }
-  firstWarning(e, n) {
-    let r = `${e}\x00${n}`;
-    if (this.warnedPatterns.has(r)) return false;
-    this.warnedPatterns.add(r);
+  firstWarning(site, pattern) {
+    let warningKey = `${site}\x00${pattern}`;
+    if (this.warnedPatterns.has(warningKey)) return false;
+    this.warnedPatterns.add(warningKey);
     return true;
   }
   reset() {
@@ -107,26 +111,37 @@ class IgnorePatternDiagnostics {
   }
 }
 //@ chunk-82kqcve8.js:163260-163274 placement
-var ignorePatternDiagnostics = new IgnorePatternDiagnostics();
+var ignorePatternDiagnostics; // deferred: uses IgnorePatternDiagnostics of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-82kqcve8.js:163260", () => {
+  ignorePatternDiagnostics = new IgnorePatternDiagnostics();
+});
 //@ chunk-82kqcve8.js:163274-163494 placement
-function warnUnusableIgnorePattern(e, n, r, s = "treating it as matching nothing") {
-  if (!ignorePatternDiagnostics.firstWarning(e, n)) return;
-  logForDebugging(`[${e}] gitignore-style pattern is unusable (${r}); ${s}: ${n}`, {
-    level: "warn",
-  });
+function warnUnusableIgnorePattern(
+  site,
+  pattern,
+  errorText,
+  consequence = "treating it as matching nothing",
+) {
+  if (!ignorePatternDiagnostics.firstWarning(site, pattern)) return;
+  logForDebugging(
+    `[${site}] gitignore-style pattern is unusable (${errorText}); ${consequence}: ${pattern}`,
+    {
+      level: "warn",
+    },
+  );
   logEvent("tengu_uncompilable_ignore_pattern", {
-    site: fromEnum(e),
+    site: fromEnum(site),
   });
 }
 //@ chunk-82kqcve8.js:163494-163590 placement
 /**
  * 过滤掉无法编译的忽略模式并逐条告警。
  */
-function filterUsableIgnorePatterns(e, n) {
-  return e.filter((r) => {
-    let s = ignorePatternError(r);
-    if (s === null) return true;
-    warnUnusableIgnorePattern(n, r, s);
+function filterUsableIgnorePatterns(patterns, site) {
+  return patterns.filter((pattern) => {
+    let errorText = ignorePatternError(pattern);
+    if (errorText === null) return true;
+    warnUnusableIgnorePattern(site, pattern, errorText);
     return false;
   });
 }
@@ -134,8 +149,8 @@ function filterUsableIgnorePatterns(e, n) {
 /**
  * 按行拆分并丢弃空行。
  */
-function splitNonEmptyLines(e) {
-  return e.split(/\r?\n/).filter(Boolean);
+function splitNonEmptyLines(text) {
+  return text.split(/\r?\n/).filter(Boolean);
 }
 export {
   normalizeWin32Path,

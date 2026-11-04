@@ -17,7 +17,7 @@ import { clipTeammateText } from "../../utils/swarm/teammateIds.js";
 import { stripInvisibleChars } from "../../utils/sanitization.js";
 import { stripAnsiPerLine } from "../../utils/stripAnsi.js";
 import { firstLineOfPeerBody } from "../../utils/peerMessageHeaders.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { resolveTranscriptMode } from "./transcriptModeContext.js";
 import {
   jsxProd_default,
@@ -38,231 +38,236 @@ var CROSS_SESSION_CLOSE_TAG = "</cross-session-message>";
 var PEER = "peer";
 //@ chunk-e766yyad.js:728-946 placement
 function parseCrossSessionSender(text) {
-  let found = PEER_MESSAGE_PREFIXES.find((d) => text.startsWith(d));
-  let l = (found ? text.slice(found.length) : text).match(/^<cross-session-message\b([^>]*)>/)?.[1] ?? "";
-  let g = l.match(/\bfrom="([^"]+)"/)?.[1];
-  let c = l.match(/\bfrom-name="([^"]+)"/)?.[1];
-  return hasCrossSessionBody(c, g);
+  let found = PEER_MESSAGE_PREFIXES.find((prefix) => text.startsWith(prefix));
+  let attrs = (found ? text.slice(found.length) : text).match(/^<cross-session-message\b([^>]*)>/)?.[1] ?? "";
+  let peer = attrs.match(/\bfrom="([^"]+)"/)?.[1];
+  let displayName = attrs.match(/\bfrom-name="([^"]+)"/)?.[1];
+  return hasCrossSessionBody(displayName, peer);
 }
 //@ chunk-e766yyad.js:946-995 placement
-function hasCrossSessionBody(i, a) {
-  return (i && clipTeammateText(i)) || (a && clipTeammateText(shortPeerAddressLabel(a))) || PEER;
+function hasCrossSessionBody(displayName, peer) {
+  return (
+    (displayName && clipTeammateText(displayName)) ||
+    (peer && clipTeammateText(shortPeerAddressLabel(peer))) ||
+    PEER
+  );
 }
 //@ chunk-e766yyad.js:995-1295 placement
 /**
  * 去掉跨会话消息的前缀、外层 cross-session-message 标签与已知的尾随说明，得到正文。
  */
-function stripCrossSessionWrapper(i, a) {
-  let o = i;
-  let found = PEER_MESSAGE_PREFIXES.find((c) => o.startsWith(c));
-  if (found) o = o.slice(found.length);
-  let g = o.lastIndexOf(CROSS_SESSION_CLOSE_TAG) + CROSS_SESSION_CLOSE_TAG.length;
-  if (g > CROSS_SESSION_CLOSE_TAG.length - 1) {
-    let sliced = o.slice(g);
-    if (PEER_MESSAGE_SUFFIXES.includes(sliced) || (a && HOST_MESSAGE_SUFFIXES.includes(sliced)))
-      o = o.slice(0, g);
+function stripCrossSessionWrapper(text, hostInjected) {
+  let rest = text;
+  let found = PEER_MESSAGE_PREFIXES.find((prefix) => rest.startsWith(prefix));
+  if (found) rest = rest.slice(found.length);
+  let closeEnd = rest.lastIndexOf(CROSS_SESSION_CLOSE_TAG) + CROSS_SESSION_CLOSE_TAG.length;
+  if (closeEnd > CROSS_SESSION_CLOSE_TAG.length - 1) {
+    let sliced = rest.slice(closeEnd);
+    if (PEER_MESSAGE_SUFFIXES.includes(sliced) || (hostInjected && HOST_MESSAGE_SUFFIXES.includes(sliced)))
+      rest = rest.slice(0, closeEnd);
   }
-  return o.replace(/^<cross-session-message[^>]*>\n/, "").replace(/\n<\/cross-session-message>$/, "");
+  return rest.replace(/^<cross-session-message[^>]*>\n/, "").replace(/\n<\/cross-session-message>$/, "");
 }
 //@ chunk-e766yyad.js:1295-1438 placement
-function crossSessionPreviewHidesBody(i, a) {
-  let o = stripCrossSessionWrapper(i, a);
-  let trimmed = stripInvisibleChars(stripAnsiPerLine(o.replace(/\p{Cs}/gu, "\u200B")), " ", {
+function crossSessionPreviewHidesBody(text, hostInjected) {
+  let stripped = stripCrossSessionWrapper(text, hostInjected);
+  let trimmed = stripInvisibleChars(stripAnsiPerLine(stripped.replace(/\p{Cs}/gu, "\u200B")), " ", {
     keepEmojiJoiners: true,
   })
     .replace(/\s+/g, " ")
     .trim();
-  return firstLineOfPeerBody(o) !== trimmed;
+  return firstLineOfPeerBody(stripped) !== trimmed;
 }
 //@ chunk-e766yyad.js:1438-2381 placement
 function UserCrossSessionMessage(props) {
-  let m = w(22);
+  let $ = useMemoCache(22);
   let { addMargin, param, hostInjected, verbose, isTranscriptMode, messageId, origin, followsSpeakerLabel } =
     props;
   let { text } = param;
-  let u = followsSpeakerLabel === undefined ? false : followsSpeakerLabel;
+  let followsLabelFlag = followsSpeakerLabel === undefined ? false : followsSpeakerLabel;
   let transcriptMode = resolveTranscriptMode(verbose, isTranscriptMode);
-  let x;
-  if (m[0] !== text) {
-    x = parseCrossSessionSender(text);
-    m[0] = text;
-    m[1] = x;
-  } else x = m[1];
-  let b = x;
-  let W;
-  if (m[2] !== origin) {
-    W = origin?.kind === "peer" && origin.plugin !== undefined ? clipTeammateText(origin.plugin) : "";
-    m[2] = origin;
-    m[3] = W;
-  } else W = m[3];
-  let senderPlugin = W;
-  const _ = hostInjected === true;
-  let text_2;
-  if (m[4] !== _ || m[5] !== text) {
-    text_2 = stripCrossSessionWrapper(text, _);
-    m[4] = _;
-    m[5] = text;
-    m[6] = text_2;
-  } else text_2 = m[6];
-  const isExpanded = transcriptMode || u;
   let sender;
-  if (m[7] !== b) {
-    sender = {
-      name: b,
+  if ($[0] !== text) {
+    sender = parseCrossSessionSender(text);
+    $[0] = text;
+    $[1] = sender;
+  } else sender = $[1];
+  let senderNameValue = sender;
+  let pluginName;
+  if ($[2] !== origin) {
+    pluginName =
+      origin?.kind === "peer" && origin.plugin !== undefined ? clipTeammateText(origin.plugin) : "";
+    $[2] = origin;
+    $[3] = pluginName;
+  } else pluginName = $[3];
+  let senderPlugin = pluginName;
+  const suffix = hostInjected === true;
+  let text_2;
+  if ($[4] !== suffix || $[5] !== text) {
+    text_2 = stripCrossSessionWrapper(text, suffix);
+    $[4] = suffix;
+    $[5] = text;
+    $[6] = text_2;
+  } else text_2 = $[6];
+  const isExpanded = transcriptMode || followsLabelFlag;
+  let sender_2;
+  if ($[7] !== senderNameValue) {
+    sender_2 = {
+      name: senderNameValue,
     };
-    m[7] = b;
-    m[8] = sender;
-  } else sender = m[8];
+    $[7] = senderNameValue;
+    $[8] = sender_2;
+  } else sender_2 = $[8];
   let draw;
   if (
-    m[9] !== addMargin ||
-    m[10] !== b ||
-    m[11] !== transcriptMode ||
-    m[12] !== u ||
-    m[13] !== senderPlugin
+    $[9] !== addMargin ||
+    $[10] !== senderNameValue ||
+    $[11] !== transcriptMode ||
+    $[12] !== followsLabelFlag ||
+    $[13] !== senderPlugin
   ) {
     draw = (body) =>
       jsxProd_default(CrossSessionMessageBody, {
         addMargin,
-        displayName: b,
+        displayName: senderNameValue,
         senderPlugin,
         expanded: transcriptMode,
-        followsSpeakerLabel: u,
+        followsSpeakerLabel: followsLabelFlag,
         body,
       });
-    m[9] = addMargin;
-    m[10] = b;
-    m[11] = transcriptMode;
-    m[12] = u;
-    m[13] = senderPlugin;
-    m[14] = draw;
-  } else draw = m[14];
-  let F;
+    $[9] = addMargin;
+    $[10] = senderNameValue;
+    $[11] = transcriptMode;
+    $[12] = followsLabelFlag;
+    $[13] = senderPlugin;
+    $[14] = draw;
+  } else draw = $[14];
+  let bodyElement;
   if (
-    m[15] !== messageId ||
-    m[16] !== origin ||
-    m[17] !== text_2 ||
-    m[18] !== isExpanded ||
-    m[19] !== sender ||
-    m[20] !== draw
+    $[15] !== messageId ||
+    $[16] !== origin ||
+    $[17] !== text_2 ||
+    $[18] !== isExpanded ||
+    $[19] !== sender_2 ||
+    $[20] !== draw
   ) {
-    F = {
+    bodyElement = {
       messageId,
       stored: origin,
       text: text_2,
       isExpanded,
-      sender,
+      sender: sender_2,
       draw,
     };
-    m[15] = messageId;
-    m[16] = origin;
-    m[17] = text_2;
-    m[18] = isExpanded;
-    m[19] = sender;
-    m[20] = draw;
-    m[21] = F;
-  } else F = m[21];
-  return BriefTimestampNamespace.useUserMessageSite(F);
+    $[15] = messageId;
+    $[16] = origin;
+    $[17] = text_2;
+    $[18] = isExpanded;
+    $[19] = sender_2;
+    $[20] = draw;
+    $[21] = bodyElement;
+  } else bodyElement = $[21];
+  return BriefTimestampNamespace.useUserMessageSite(bodyElement);
 }
 //@ chunk-e766yyad.js:2381-3364 placement
 /**
  * 跨会话消息正文：紧跟说话人标签时直接显示可折叠文本；未展开时显示 ctrl+o 展开提示；展开时显示"@ 发送者 <插件>"与正文。
  */
 function CrossSessionMessageBody(props) {
-  let t = w(19);
+  let $ = useMemoCache(19);
   let { addMargin, displayName, senderPlugin, expanded, followsSpeakerLabel, body } = props;
   if (followsSpeakerLabel) {
-    let p;
-    if (t[0] !== body) {
-      p = jsxProd_default(CollapsibleText, {
+    let collapsibleTextElement;
+    if ($[0] !== body) {
+      collapsibleTextElement = jsxProd_default(CollapsibleText, {
         text: body,
       });
-      t[0] = body;
-      t[1] = p;
-    } else p = t[1];
-    return p;
+      $[0] = body;
+      $[1] = collapsibleTextElement;
+    } else collapsibleTextElement = $[1];
+    return collapsibleTextElement;
   }
   if (!expanded) {
-    let p;
-    if (t[2] !== addMargin || t[3] !== body || t[4] !== displayName) {
-      p = jsxProd_default(CtrlOToExpandHint, {
+    let ctrlOToExpandHintElement;
+    if ($[2] !== addMargin || $[3] !== body || $[4] !== displayName) {
+      ctrlOToExpandHintElement = jsxProd_default(CtrlOToExpandHint, {
         displayName,
         addMargin,
         fallbackLabel: PEER,
         body,
       });
-      t[2] = addMargin;
-      t[3] = body;
-      t[4] = displayName;
-      t[5] = p;
-    } else p = t[5];
-    return p;
+      $[2] = addMargin;
+      $[3] = body;
+      $[4] = displayName;
+      $[5] = ctrlOToExpandHintElement;
+    } else ctrlOToExpandHintElement = $[5];
+    return ctrlOToExpandHintElement;
   }
   const marginTop = addMargin ? 1 : 0;
   let color;
-  if (t[6] === MEMO_CACHE_SENTINEL) {
+  if ($[6] === MEMO_CACHE_SENTINEL) {
     color = toInkColor(undefined);
-    t[6] = color;
-  } else color = t[6];
-  let u;
-  if (t[7] !== senderPlugin) {
-    u = senderPlugin
+    $[6] = color;
+  } else color = $[6];
+  let pluginBadge;
+  if ($[7] !== senderPlugin) {
+    pluginBadge = senderPlugin
       ? jsxProd_default_2(Text, {
           dimColor: true,
           children: [" <", senderPlugin, " plugin", ">"],
         })
       : null;
-    t[7] = senderPlugin;
-    t[8] = u;
-  } else u = t[8];
-  let y;
-  if (t[9] === MEMO_CACHE_SENTINEL) {
-    y = jsxProd_default(Text, {
+    $[7] = senderPlugin;
+    $[8] = pluginBadge;
+  } else pluginBadge = $[8];
+  let headerElement;
+  if ($[9] === MEMO_CACHE_SENTINEL) {
+    headerElement = jsxProd_default(Text, {
       "aria-hidden": true,
       children: figures_default.pointer,
     });
-    t[9] = y;
-  } else y = t[9];
-  let m;
-  if (t[10] !== displayName || t[11] !== u) {
-    m = jsxProd_default_2(Text, {
+    $[9] = headerElement;
+  } else headerElement = $[9];
+  let bodyElement;
+  if ($[10] !== displayName || $[11] !== pluginBadge) {
+    bodyElement = jsxProd_default_2(Text, {
       color,
-      children: ["@ ", displayName, u, y],
+      children: ["@ ", displayName, pluginBadge, headerElement],
     });
-    t[10] = displayName;
-    t[11] = u;
-    t[12] = m;
-  } else m = t[12];
-  let x;
-  if (t[13] !== body) {
-    x = jsxProd_default(Box, {
+    $[10] = displayName;
+    $[11] = pluginBadge;
+    $[12] = bodyElement;
+  } else bodyElement = $[12];
+  let contentElement;
+  if ($[13] !== body) {
+    contentElement = jsxProd_default(Box, {
       paddingLeft: 2,
       children: jsxProd_default(MarkdownText_2, {
         stripPromptTags: false,
         children: body,
       }),
     });
-    t[13] = body;
-    t[14] = x;
-  } else x = t[14];
-  let b;
-  if (t[15] !== marginTop || t[16] !== m || t[17] !== x) {
-    b = jsxProd_default_2(Box, {
+    $[13] = body;
+    $[14] = contentElement;
+  } else contentElement = $[14];
+  let containerElement;
+  if ($[15] !== marginTop || $[16] !== bodyElement || $[17] !== contentElement) {
+    containerElement = jsxProd_default_2(Box, {
       flexDirection: "column",
       marginTop,
       width: "100%",
-      children: [m, x],
+      children: [bodyElement, contentElement],
     });
-    t[15] = marginTop;
-    t[16] = m;
-    t[17] = x;
-    t[18] = b;
-  } else b = t[18];
-  return b;
+    $[15] = marginTop;
+    $[16] = bodyElement;
+    $[17] = contentElement;
+    $[18] = containerElement;
+  } else containerElement = $[18];
+  return containerElement;
 }
 //@ chunk-e766yyad.js:3364-3581 placement
-function shortPeerAddressLabel(i) {
-  let { scheme, target } = parseAddress(i);
+function shortPeerAddressLabel(address) {
+  let { scheme, target } = parseAddress(address);
   switch (scheme) {
     case "uds":
       return target
@@ -272,7 +277,7 @@ function shortPeerAddressLabel(i) {
       return "(untitled)";
     case "did":
     case "other":
-      return i;
+      return address;
   }
 }
-export { crossSessionPreviewHidesBody };
+export { crossSessionPreviewHidesBody, UserCrossSessionMessage };

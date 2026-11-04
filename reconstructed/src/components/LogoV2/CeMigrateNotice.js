@@ -19,33 +19,41 @@ import { env } from "../../utils/env.js";
 import { logEvent } from "../../services/analytics/index.js";
 import { fromEnum } from "../../services/analytics/safeMetadata.js";
 import { announcementState } from "../../services/announcements/announcementState.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { useTheme_2 } from "../design-system/ThemeProvider.js";
 import { useNoticeImpressionEnabled, useNoticeImpression } from "./CondensedLogo.js";
-import { y, init_react_production } from "../../../vendor/react/cjs/react.production.js";
+import { useState, init_react_production } from "../../../vendor/react/cjs/react.production.js";
 import {
   jsxProd_default,
   jsxProd_default_2,
 } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Link, Text, Box } from "../../ink/components/Text.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-ag5x7vhf.js:89444-89472 placement
 function getCeMigrateCohortCached() {
   return getCeMigrateCohort(false);
 }
 //@ chunk-ag5x7vhf.js:89472-89754 placement
-var CE_MIGRATE_FLAG = "tengu_velvet_harbor_owl";
-var HTTPS_CLAUDE_COM_ENTERPRISE = "https://claude.com/enterprise";
-var replaced = HTTPS_CLAUDE_COM_ENTERPRISE.replace(/^https?:\/\//, "");
-var CE_MIGRATE_ROLES = new Set(["admin", "billing", "owner", "primary_owner"]);
-var CE_MIGRATE_COPY = {
-  has_ce: {
-    headline: "Get more out of Claude Code on Claude Enterprise",
-    ctaLabel: "Learn more at ",
-    ctaUrlText: replaced,
-    ctaHref: HTTPS_CLAUDE_COM_ENTERPRISE,
-  },
-};
+var CE_MIGRATE_FLAG; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var HTTPS_CLAUDE_COM_ENTERPRISE;
+var replaced;
+var CE_MIGRATE_ROLES;
+var CE_MIGRATE_COPY;
+deferInit("chunk-ag5x7vhf.js:89472", () => {
+  CE_MIGRATE_FLAG = "tengu_velvet_harbor_owl";
+  HTTPS_CLAUDE_COM_ENTERPRISE = "https://claude.com/enterprise";
+  replaced = HTTPS_CLAUDE_COM_ENTERPRISE.replace(/^https?:\/\//, "");
+  CE_MIGRATE_ROLES = new Set(["admin", "billing", "owner", "primary_owner"]);
+  CE_MIGRATE_COPY = {
+    has_ce: {
+      headline: "Get more out of Claude Code on Claude Enterprise",
+      ctaLabel: "Learn more at ",
+      ctaUrlText: replaced,
+      ctaHref: HTTPS_CLAUDE_COM_ENTERPRISE,
+    },
+  };
+});
 //@ chunk-ag5x7vhf.js:89754-89826 placement
 function getCeMigrateGroup() {
   let featureValue_CACHED_MAY_BE_STALE = getFeatureValue_CACHED_MAY_BE_STALE(CE_MIGRATE_FLAG, "off");
@@ -72,11 +80,11 @@ function shouldShowCeMigrateNotice() {
   );
 }
 //@ chunk-ag5x7vhf.js:90083-90259 placement
-function recordCeMigrateNoticeShown(m, storageV5) {
-  saveGlobalConfig((x) => {
-    let seenNotifications = x.seenNotifications ?? {};
+function recordCeMigrateNoticeShown(cohort, storageV5) {
+  saveGlobalConfig((config) => {
+    let seenNotifications = config.seenNotifications ?? {};
     return {
-      ...x,
+      ...config,
       seenNotifications: {
         ...seenNotifications,
         [CC_CE_MIGRATE]: (seenNotifications[CC_CE_MIGRATE] ?? 0) + 1,
@@ -84,91 +92,94 @@ function recordCeMigrateNoticeShown(m, storageV5) {
     };
   }, storageV5);
   logEvent("tengu_cc_ce_migrate_notice_shown", {
-    cohort_group: fromEnum(m),
+    cohort_group: fromEnum(cohort),
   });
 }
 //@ chunk-ag5x7vhf.js:90259-90414 placement
-function getCeMigrateCohort(m) {
-  let h = announcementState();
-  if (h.ccCeMigrateGroup !== undefined) return h.ccCeMigrateGroup;
+function getCeMigrateCohort(enabled) {
+  let state = announcementState();
+  if (state.ccCeMigrateGroup !== undefined) return state.ccCeMigrateGroup;
   let ceMigrateGroup = getCeMigrateGroup();
-  if (m && ceMigrateGroup !== null && CE_MIGRATE_COPY[ceMigrateGroup] !== undefined)
-    h.ccCeMigrateGroup = ceMigrateGroup;
+  if (enabled && ceMigrateGroup !== null && CE_MIGRATE_COPY[ceMigrateGroup] !== undefined)
+    state.ccCeMigrateGroup = ceMigrateGroup;
   return ceMigrateGroup;
 }
 //@ chunk-ag5x7vhf.js:90414-91252 placement
 function CeMigrateNotice() {
-  let T = w(17);
+  let $ = useMemoCache(17);
   let { storageV5 } = useTheme_2();
   let noticeImpressionEnabled = useNoticeImpressionEnabled();
-  let [x] = y(getCeMigrateCohortCached);
-  let k;
-  if (T[0] !== noticeImpressionEnabled || T[1] !== x) {
-    k = noticeImpressionEnabled ? getCeMigrateCohort(true) : x;
-    T[0] = noticeImpressionEnabled;
-    T[1] = x;
-    T[2] = k;
-  } else k = T[2];
-  let _ = k;
-  let I = _ !== null ? CE_MIGRATE_COPY[_] : undefined;
-  let D;
-  if (T[3] !== _ || T[4] !== storageV5) {
-    D = () => {
-      if (_ !== null) recordCeMigrateNoticeShown(_, storageV5);
+  let [cachedCohort] = useState(getCeMigrateCohortCached);
+  let cohort;
+  if ($[0] !== noticeImpressionEnabled || $[1] !== cachedCohort) {
+    cohort = noticeImpressionEnabled ? getCeMigrateCohort(true) : cachedCohort;
+    $[0] = noticeImpressionEnabled;
+    $[1] = cachedCohort;
+    $[2] = cohort;
+  } else cohort = $[2];
+  let cohort_2 = cohort;
+  let copy = cohort_2 !== null ? CE_MIGRATE_COPY[cohort_2] : undefined;
+  let onShown;
+  if ($[3] !== cohort_2 || $[4] !== storageV5) {
+    onShown = () => {
+      if (cohort_2 !== null) recordCeMigrateNoticeShown(cohort_2, storageV5);
     };
-    T[3] = _;
-    T[4] = storageV5;
-    T[5] = D;
-  } else D = T[5];
-  let A = D;
-  const enabled = I !== undefined;
-  let V;
-  if (T[6] !== enabled) {
-    V = {
+    $[3] = cohort_2;
+    $[4] = storageV5;
+    $[5] = onShown;
+  } else onShown = $[5];
+  let onShown_2 = onShown;
+  const enabled = copy !== undefined;
+  let impressionOptions;
+  if ($[6] !== enabled) {
+    impressionOptions = {
       enabled,
     };
-    T[6] = enabled;
-    T[7] = V;
-  } else V = T[7];
-  useNoticeImpression("cc-ce-migrate", A, V);
-  if (!I) {
+    $[6] = enabled;
+    $[7] = impressionOptions;
+  } else impressionOptions = $[7];
+  useNoticeImpression("cc-ce-migrate", onShown_2, impressionOptions);
+  if (!copy) {
     return null;
   }
-  let W;
-  if (T[8] !== I.ctaHref || T[9] !== I.ctaUrlText) {
-    W = jsxProd_default(Link, {
-      url: I.ctaHref,
-      children: I.ctaUrlText,
+  let link;
+  if ($[8] !== copy.ctaHref || $[9] !== copy.ctaUrlText) {
+    link = jsxProd_default(Link, {
+      url: copy.ctaHref,
+      children: copy.ctaUrlText,
     });
-    T[8] = I.ctaHref;
-    T[9] = I.ctaUrlText;
-    T[10] = W;
-  } else W = T[10];
-  let z;
-  if (T[11] !== I.ctaLabel || T[12] !== W) {
-    z = jsxProd_default_2(Text, {
+    $[8] = copy.ctaHref;
+    $[9] = copy.ctaUrlText;
+    $[10] = link;
+  } else link = $[10];
+  let ctaText;
+  if ($[11] !== copy.ctaLabel || $[12] !== link) {
+    ctaText = jsxProd_default_2(Text, {
       color: "text",
       dimColor: true,
-      children: [" \xB7 ", I.ctaLabel, W],
+      children: [" \xB7 ", copy.ctaLabel, link],
     });
-    T[11] = I.ctaLabel;
-    T[12] = W;
-    T[13] = z;
-  } else z = T[13];
-  let K;
-  if (T[14] !== I.headline || T[15] !== z) {
-    K = jsxProd_default(Box, {
+    $[11] = copy.ctaLabel;
+    $[12] = link;
+    $[13] = ctaText;
+  } else ctaText = $[13];
+  let box;
+  if ($[14] !== copy.headline || $[15] !== ctaText) {
+    box = jsxProd_default(Box, {
       children: jsxProd_default_2(Text, {
         color: "suggestion",
-        children: [I.headline, z],
+        children: [copy.headline, ctaText],
       }),
     });
-    T[14] = I.headline;
-    T[15] = z;
-    T[16] = K;
-  } else K = T[16];
-  return K;
+    $[14] = copy.headline;
+    $[15] = ctaText;
+    $[16] = box;
+  } else box = $[16];
+  return box;
 }
 //@ chunk-ag5x7vhf.js:91252-91256 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-ag5x7vhf.js:91252", () => {
+  init_react_production();
+});
 export { shouldShowCeMigrateNotice, CeMigrateNotice };

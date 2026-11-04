@@ -11,13 +11,13 @@
 import { MAX_LOG_LINE_CHARS } from "../../../types/logs.js";
 import { DoctorLazy } from "../../../cli/handlers/util.js";
 import {
-  string,
+  stringSchema,
   zodStrictObject,
-  M,
+  booleanSchema,
   array,
   tuple,
   literal,
-  E,
+  numberSchema,
   record,
   unknown,
 } from "../../../../vendor/zod/v4/classic/schemas.js";
@@ -49,58 +49,73 @@ import {
 import { jsonStringify } from "../../../utils/slowOperations.js";
 import { logError } from "../../../utils/log.js";
 import { registerCleanup } from "../../../utils/cleanupRegistry.js";
+import { deferInit } from "../../../../runtime/deferred-init.js";
 
 //@ chunk-9tgt55am.js:3469-4182 placement
 /**
  * 自动回复台账（autoreact ledger）的限额与 schema：最长 1 天、最短写入间隔 1 小时、防抖 10 s、未来偏差 5 分钟、每部分 160 KB、2000 线程、每线程 500 条、600 个回合时间戳。
  */
-var AUTOREACT_LEDGER_LIMITS = 86400000;
-var LEDGER_MIN_WRITE_INTERVAL_MS = 3600000;
-var LEDGER_DEBOUNCE_MS = 1e4;
-var LEDGER_MAX_FUTURE_SKEW_MS = 300000;
-var MIN_PART_BUDGET_CHARS = 32768;
-var LEDGER_PART_BUDGET_BYTES = 163840;
-var MAX_LEDGER_ARTIFACTS = MAX_LOG_LINE_CHARS;
-var MAX_LEDGER_THREADS = 2000;
-var MAX_THREAD_ENTRIES = 500;
-var MAX_ENTRY_ID_CHARS = 128;
-var MAX_TURN_TIMESTAMPS = 600;
-var autoreactLedgerSchema = DoctorLazy(() => {
-  let e = string()
-    .max(MAX_ENTRY_ID_CHARS)
-    .refine((d) => parseTimestamp(d) !== null);
-  let t = string().min(1).max(MAX_ENTRY_ID_CHARS);
-  let n = zodStrictObject({
-    id: t,
-    activatedAt: e.nullable(),
-    activatedAtObserved: M(),
-    seen: array(t).max(MAX_THREAD_ENTRIES),
-    sent: array(tuple([t, e.nullable()])).max(MAX_THREAD_ENTRIES),
-    ownReplyIds: array(t).max(MAX_THREAD_ENTRIES),
-    ownReplyIdsIncomplete: literal(true).optional(),
+var AUTOREACT_LEDGER_LIMITS; // deferred: uses DoctorLazy (../../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var LEDGER_MIN_WRITE_INTERVAL_MS;
+var LEDGER_DEBOUNCE_MS;
+var LEDGER_MAX_FUTURE_SKEW_MS;
+var MIN_PART_BUDGET_CHARS;
+var LEDGER_PART_BUDGET_BYTES;
+var MAX_LEDGER_ARTIFACTS;
+var MAX_LEDGER_THREADS;
+var MAX_THREAD_ENTRIES;
+var MAX_ENTRY_ID_CHARS;
+var MAX_TURN_TIMESTAMPS;
+var autoreactLedgerSchema;
+deferInit("chunk-9tgt55am.js:3469", () => {
+  AUTOREACT_LEDGER_LIMITS = 86400000;
+  LEDGER_MIN_WRITE_INTERVAL_MS = 3600000;
+  LEDGER_DEBOUNCE_MS = 1e4;
+  LEDGER_MAX_FUTURE_SKEW_MS = 300000;
+  MIN_PART_BUDGET_CHARS = 32768;
+  LEDGER_PART_BUDGET_BYTES = 163840;
+  MAX_LEDGER_ARTIFACTS = MAX_LOG_LINE_CHARS;
+  MAX_LEDGER_THREADS = 2000;
+  MAX_THREAD_ENTRIES = 500;
+  MAX_ENTRY_ID_CHARS = 128;
+  MAX_TURN_TIMESTAMPS = 600;
+  autoreactLedgerSchema = DoctorLazy(() => {
+    let updatedAt = stringSchema()
+      .max(MAX_ENTRY_ID_CHARS)
+      .refine((value) => parseTimestamp(value) !== null);
+    let threadId = stringSchema().min(1).max(MAX_ENTRY_ID_CHARS);
+    let artifactSchema = zodStrictObject({
+      id: threadId,
+      activatedAt: updatedAt.nullable(),
+      activatedAtObserved: booleanSchema(),
+      seen: array(threadId).max(MAX_THREAD_ENTRIES),
+      sent: array(tuple([threadId, updatedAt.nullable()])).max(MAX_THREAD_ENTRIES),
+      ownReplyIds: array(threadId).max(MAX_THREAD_ENTRIES),
+      ownReplyIdsIncomplete: literal(true).optional(),
+    });
+    let finite = numberSchema().refine(Number.isFinite);
+    let artifact = zodStrictObject({
+      savedAt: finite,
+      stampHighWater: updatedAt.nullable(),
+      everBaselined: booleanSchema(),
+      everHadThreads: booleanSchema(),
+      turnTimestamps: array(finite).max(MAX_TURN_TIMESTAMPS),
+      threads: array(artifactSchema).max(MAX_LEDGER_THREADS).optional(),
+      interrupted: literal(true).optional(),
+    });
+    let envelope = zodStrictObject({
+      type: literal("artifact-autoreact-ledger"),
+      v: literal(1),
+      sessionId: stringSchema(),
+      accountUuid: stringSchema().nullable(),
+      artifacts: record(stringSchema(), unknown()),
+    });
+    return {
+      thread: artifactSchema,
+      artifact,
+      envelope,
+    };
   });
-  let a = E().refine(Number.isFinite);
-  let artifact = zodStrictObject({
-    savedAt: a,
-    stampHighWater: e.nullable(),
-    everBaselined: M(),
-    everHadThreads: M(),
-    turnTimestamps: array(a).max(MAX_TURN_TIMESTAMPS),
-    threads: array(n).max(MAX_LEDGER_THREADS).optional(),
-    interrupted: literal(true).optional(),
-  });
-  let envelope = zodStrictObject({
-    type: literal("artifact-autoreact-ledger"),
-    v: literal(1),
-    sessionId: string(),
-    accountUuid: string().nullable(),
-    artifacts: record(string(), unknown()),
-  });
-  return {
-    thread: n,
-    artifact,
-    envelope,
-  };
 });
 //@ chunk-9tgt55am.js:4182-4245 placement
 function ledgerMaxAgeMs() {
@@ -114,64 +129,67 @@ function gatewayAccountUuidLower() {
 /**
  * 读取会话的评论自动响应台账（已见评论、激活时间、自己的回复），校验会话与账号。
  */
-function parseAutoreactLedger(e) {
-  let t = new Map();
-  let n = autoreactLedgerSchema();
-  let a = n.envelope.safeParse(e);
-  if (!a.success || a.data.sessionId !== getSessionId()) {
+function parseAutoreactLedger(raw) {
+  let out = new Map();
+  let schema = autoreactLedgerSchema();
+  let envelope = schema.envelope.safeParse(raw);
+  if (!envelope.success || envelope.data.sessionId !== getSessionId()) {
     logFeatureSad("artifact_comments_autoreact", "ledger_invalid");
-    return t;
+    return out;
   }
-  let r = (a.data.accountUuid?.toLowerCase() ?? null) !== gatewayAccountUuidLower();
-  if (r) logFeatureSad("artifact_comments_autoreact", "ledger_foreign_account");
-  let entries = Object.entries(a.data.artifacts);
+  let accountChanged = (envelope.data.accountUuid?.toLowerCase() ?? null) !== gatewayAccountUuidLower();
+  if (accountChanged) logFeatureSad("artifact_comments_autoreact", "ledger_foreign_account");
+  let entries = Object.entries(envelope.data.artifacts);
   if (entries.length > MAX_LEDGER_ARTIFACTS) {
     logFeatureSad("artifact_comments_autoreact", "ledger_invalid");
-    return t;
+    return out;
   }
-  for (let [d, h] of entries) {
-    let y = n.artifact.safeParse(h);
-    if (!ARTIFACT_SLUG_RE.test(d) || !y.success) {
+  for (let [slug, entry] of entries) {
+    let parsed = schema.artifact.safeParse(entry);
+    if (!ARTIFACT_SLUG_RE.test(slug) || !parsed.success) {
       logFeatureSad("artifact_comments_autoreact", "ledger_slug_invalid");
       continue;
     }
-    t.set(d, r ? resetLedgerEntryKeepingTimes(y.data) : y.data);
+    out.set(slug, accountChanged ? resetLedgerEntryKeepingTimes(parsed.data) : parsed.data);
   }
-  return t;
+  return out;
 }
 //@ chunk-9tgt55am.js:4874-5295 placement
 function loadAutoreactLedger() {
   let { autoReact } = getLiveState();
   let sessionId = getSessionId();
-  let n =
+  let state =
     ledgerSessionId(peekResumedArtifactAutoReactLedger()) === sessionId
       ? takeResumedArtifactAutoReactLedger()
       : undefined;
-  let a = gatewayAccountUuidLower();
-  if (n !== undefined) {
+  let gatewayUuid = gatewayAccountUuidLower();
+  if (state !== undefined) {
     autoReact.ledgerRetiredSids.delete(sessionId);
     autoReact.ledgerOwnerSid ??= sessionId;
     autoReact.pendingLedger = {
       sid: sessionId,
-      accountUuid: a,
-      slugs: parseAutoreactLedger(n),
+      accountUuid: gatewayUuid,
+      slugs: parseAutoreactLedger(state),
     };
-    for (let [s, d] of autoReact.pendingLedger.slugs)
-      if (d.interrupted === true) {
-        let h = isSlugSwept(s);
-        sweepSlug(s);
-        if (!h) markLatchChanged(s, d.savedAt);
+    for (let [slug, entry] of autoReact.pendingLedger.slugs)
+      if (entry.interrupted === true) {
+        let swept = isSlugSwept(slug);
+        sweepSlug(slug);
+        if (!swept) markLatchChanged(slug, entry.savedAt);
       }
   }
   let pendingLedger = autoReact.pendingLedger;
-  if (pendingLedger?.sid === sessionId && pendingLedger.accountUuid === null) pendingLedger.accountUuid = a;
-  return pendingLedger?.sid === sessionId && pendingLedger.accountUuid === a ? pendingLedger.slugs : null;
+  if (pendingLedger?.sid === sessionId && pendingLedger.accountUuid === null)
+    pendingLedger.accountUuid = gatewayUuid;
+  return pendingLedger?.sid === sessionId && pendingLedger.accountUuid === gatewayUuid
+    ? pendingLedger.slugs
+    : null;
 }
 //@ chunk-9tgt55am.js:5295-5452 placement
-function getPendingLedgerFor(e = getSessionId()) {
-  if (e === getSessionId()) loadAutoreactLedger();
+function getPendingLedgerFor(sessionId = getSessionId()) {
+  if (sessionId === getSessionId()) loadAutoreactLedger();
   let { pendingLedger } = getLiveState().autoReact;
-  return pendingLedger?.sid === e
+  return pendingLedger?.sid === sessionId
     ? {
         slugs: pendingLedger.slugs,
         own: pendingLedger.accountUuid === null || pendingLedger.accountUuid === gatewayAccountUuidLower(),
@@ -179,55 +197,59 @@ function getPendingLedgerFor(e = getSessionId()) {
     : null;
 }
 //@ chunk-9tgt55am.js:5452-5570 placement
-function listLedgerSlugs(e) {
-  let pendingLedgerFor = getPendingLedgerFor(e);
+function listLedgerSlugs(options) {
+  let pendingLedgerFor = getPendingLedgerFor(options);
   if (pendingLedgerFor === null) return [];
-  let n = [...pendingLedgerFor.slugs.entries()];
-  return pendingLedgerFor.own ? n : n.map(([a, r]) => [a, resetLedgerEntryKeepingTimes(r)]);
+  let entries = [...pendingLedgerFor.slugs.entries()];
+  return pendingLedgerFor.own
+    ? entries
+    : entries.map(([slug, entry]) => [slug, resetLedgerEntryKeepingTimes(entry)]);
 }
 //@ chunk-9tgt55am.js:5570-5658 placement
-function ledgerSessionId(e) {
-  return typeof e === "object" && e !== null && "sessionId" in e ? e.sessionId : undefined;
+function ledgerSessionId(sessionId) {
+  return typeof sessionId === "object" && sessionId !== null && "sessionId" in sessionId
+    ? sessionId.sessionId
+    : undefined;
 }
 //@ chunk-9tgt55am.js:5658-5678 placement
 function initAutoreactLedger() {
   loadAutoreactLedger();
 }
 //@ chunk-9tgt55am.js:5678-5984 placement
-function takeLedgerEntry(slug, t = Date.now()) {
+function takeLedgerEntry(slug, now = Date.now()) {
   let pendingLedgerFor = getPendingLedgerFor();
-  let a = pendingLedgerFor?.slugs.get(slug);
-  if (a === undefined) return null;
+  let entry = pendingLedgerFor?.slugs.get(slug);
+  if (entry === undefined) return null;
   pendingLedgerFor.slugs.delete(slug);
-  let r = pendingLedgerFor.own ? a : resetLedgerEntryKeepingTimes(a);
-  let s = t - r.savedAt;
-  if (s > ledgerMaxAgeMs() || s < -LEDGER_MAX_FUTURE_SKEW_MS) {
+  let kept = pendingLedgerFor.own ? entry : resetLedgerEntryKeepingTimes(entry);
+  let ageMs = now - kept.savedAt;
+  if (ageMs > ledgerMaxAgeMs() || ageMs < -LEDGER_MAX_FUTURE_SKEW_MS) {
     logFeatureSad("artifact_comments_autoreact", "ledger_stale");
     return null;
   }
   return {
-    ...r,
-    turnTimestamps: r.turnTimestamps
-      .filter((turnTimestamp) => t - turnTimestamp < 3600000)
-      .map((turnTimestamp) => Math.min(turnTimestamp, t)),
+    ...kept,
+    turnTimestamps: kept.turnTimestamps
+      .filter((turnTimestamp) => now - turnTimestamp < 3600000)
+      .map((turnTimestamp) => Math.min(turnTimestamp, now)),
   };
 }
 //@ chunk-9tgt55am.js:5984-6137 placement
-function resetLedgerEntry(e) {
+function resetLedgerEntry(slug) {
   return {
-    savedAt: e.savedAt,
+    savedAt: slug.savedAt,
     stampHighWater: null,
     everBaselined: false,
-    everHadThreads: e.everHadThreads,
-    turnTimestamps: e.turnTimestamps,
+    everHadThreads: slug.everHadThreads,
+    turnTimestamps: slug.turnTimestamps,
     threads: [],
   };
 }
 //@ chunk-9tgt55am.js:6137-6209 placement
-function resetLedgerEntryKeepingTimes(e) {
+function resetLedgerEntryKeepingTimes(slug) {
   return {
-    ...resetLedgerEntry(e),
-    ...(e.interrupted === true && {
+    ...resetLedgerEntry(slug),
+    ...(slug.interrupted === true && {
       interrupted: true,
     }),
   };
@@ -236,13 +258,13 @@ function resetLedgerEntryKeepingTimes(e) {
 /**
  * 把台账里某个 slug 的自动回复记录重置为空线程（保留保存时间与回合时间戳），并标记锁存已变化。
  */
-function resetLedgerSlug(e) {
+function resetLedgerSlug(slug) {
   loadAutoreactLedger();
   let pendingLedger = getLiveState().autoReact.pendingLedger;
-  let n = pendingLedger?.slugs.get(e);
-  if (n !== undefined) {
-    pendingLedger.slugs.set(e, resetLedgerEntry(n));
-    markLatchChanged(e);
+  let entry = pendingLedger?.slugs.get(slug);
+  if (entry !== undefined) {
+    pendingLedger.slugs.set(slug, resetLedgerEntry(entry));
+    markLatchChanged(slug);
   }
 }
 //@ chunk-9tgt55am.js:6324-6434 placement
@@ -252,43 +274,45 @@ function resetLedgerSlug(e) {
 function resetAllLedgerSlugs() {
   loadAutoreactLedger();
   let pendingLedger = getLiveState().autoReact.pendingLedger;
-  for (let [t, n] of pendingLedger?.slugs ?? []) {
-    pendingLedger.slugs.set(t, resetLedgerEntry(n));
-    markLatchChanged(t);
+  for (let [slug, entry] of pendingLedger?.slugs ?? []) {
+    pendingLedger.slugs.set(slug, resetLedgerEntry(entry));
+    markLatchChanged(slug);
   }
 }
 //@ chunk-9tgt55am.js:6434-6762 placement
-function serializeThreadStates(e) {
-  return [...e.threads.entries()]
-    .map(([t, n]) => ({
-      id: t,
-      activatedAt: n.activatedAt,
-      activatedAtObserved: n.activatedAtObserved,
-      seen: [...n.seen],
-      sent: [...n.sentToClaudeAt.entries()],
-      ownReplyIds: [...n.ownReplyIds],
-      ...(n.ownReplyIdsIncomplete === true && {
+function serializeThreadStates(state) {
+  return [...state.threads.entries()]
+    .map(([key, value]) => ({
+      id: key,
+      activatedAt: value.activatedAt,
+      activatedAtObserved: value.activatedAtObserved,
+      seen: [...value.seen],
+      sent: [...value.sentToClaudeAt.entries()],
+      ownReplyIds: [...value.ownReplyIds],
+      ...(value.ownReplyIdsIncomplete === true && {
         ownReplyIdsIncomplete: true,
       }),
     }))
-    .filter((t) => autoreactLedgerSchema().thread.safeParse(t).success);
+    .filter((thread) => autoreactLedgerSchema().thread.safeParse(thread).success);
 }
 //@ chunk-9tgt55am.js:6762-7167 placement
-function buildLedgerArtifactEntry(e, t, n, a) {
+function buildLedgerArtifactEntry(slug, entry, thread, savedAt) {
   let { autoReact } = getLiveState();
-  let s = !autoReact.userDisarmed && isSlugSwept(e);
-  let d =
-    autoReact.userDisarmed || (t.accountUuid !== null && t.accountUuid !== a) || (isSlugStopped(e) && !s);
+  let swept = !autoReact.userDisarmed && isSlugSwept(slug);
+  let ledgerEntry =
+    autoReact.userDisarmed ||
+    (entry.accountUuid !== null && entry.accountUuid !== savedAt) ||
+    (isSlugStopped(slug) && !swept);
   return {
-    savedAt: Math.max(t.lastScanAt ?? n, latchChangedAt(e) ?? 0),
-    stampHighWater: d ? null : t.stampHighWater,
-    everBaselined: d ? false : t.everBaselined,
-    everHadThreads: t.everHadThreads,
-    turnTimestamps: t.turnTimestamps
-      .filter((turnTimestamp) => n - turnTimestamp < 3600000)
+    savedAt: Math.max(entry.lastScanAt ?? thread, latchChangedAt(slug) ?? 0),
+    stampHighWater: ledgerEntry ? null : entry.stampHighWater,
+    everBaselined: ledgerEntry ? false : entry.everBaselined,
+    everHadThreads: entry.everHadThreads,
+    turnTimestamps: entry.turnTimestamps
+      .filter((turnTimestamp) => thread - turnTimestamp < 3600000)
       .slice(-MAX_TURN_TIMESTAMPS),
-    threads: d ? [] : serializeThreadStates(t),
-    ...(s && {
+    threads: ledgerEntry ? [] : serializeThreadStates(entry),
+    ...(swept && {
       interrupted: true,
     }),
   };
@@ -306,109 +330,114 @@ function makeInterruptedLedgerEntry(savedAt) {
   };
 }
 //@ chunk-9tgt55am.js:7299-7442 placement
-function markLedgerEntryInterrupted(e) {
+function markLedgerEntryInterrupted(systemRow) {
   return {
-    savedAt: e.savedAt,
+    savedAt: systemRow.savedAt,
     stampHighWater: null,
     everBaselined: false,
-    everHadThreads: e.everHadThreads,
+    everHadThreads: systemRow.everHadThreads,
     turnTimestamps: [],
     interrupted: true,
   };
 }
 //@ chunk-9tgt55am.js:7442-8840 placement
-function buildLedgerSnapshot(e, savedAt, n) {
+function buildLedgerSnapshot(store, entry, options) {
   let { autoReact } = getLiveState();
-  let r = listLedgerSlugs(e);
-  let s = new Set([...autoReact.artifacts.keys(), ...(getPendingLedgerFor(e)?.slugs.keys() ?? [])]);
-  let d = autoReact.userDisarmed
+  let ledgerSlugs = listLedgerSlugs(store);
+  let liveSlugs = new Set([
+    ...autoReact.artifacts.keys(),
+    ...(getPendingLedgerFor(store)?.slugs.keys() ?? []),
+  ]);
+  let interruptedEntries = autoReact.userDisarmed
     ? []
     : [...sweptSlugs()]
-        .filter((S) => {
-          if (s.has(S)) return false;
-          return !isSlugOrphaned(S);
+        .filter((slug) => {
+          if (liveSlugs.has(slug)) return false;
+          return !isSlugOrphaned(slug);
         })
-        .map((S) => [S, makeInterruptedLedgerEntry(savedAt)]);
-  let h = [
+        .map((slug) => [slug, makeInterruptedLedgerEntry(entry)]);
+  let entries = [
     ...[...autoReact.artifacts.entries()]
       .reverse()
-      .map(([S, w]) => [S, buildLedgerArtifactEntry(S, w, savedAt, n)]),
-    ...[...r, ...d]
-      .filter(([S]) => !autoReact.artifacts.has(S))
-      .flatMap(([S, { interrupted: w, ...L }]) => {
-        let P = !autoReact.userDisarmed && isSlugSwept(S);
-        let D = !P && isSlugStopped(S);
-        let G = L.savedAt - savedAt > LEDGER_MAX_FUTURE_SKEW_MS;
-        let V = savedAt - L.savedAt <= ledgerMaxAgeMs() && !G;
-        if (!V && !P && w !== true) return [];
+      .map(([slug, state]) => [slug, buildLedgerArtifactEntry(slug, state, entry, options)]),
+    ...[...ledgerSlugs, ...interruptedEntries]
+      .filter(([slug]) => !autoReact.artifacts.has(slug))
+      .flatMap(([slug, { interrupted, ...entry_2 }]) => {
+        let swept = !autoReact.userDisarmed && isSlugSwept(slug);
+        let stopped = !swept && isSlugStopped(slug);
+        let futureSkew = entry_2.savedAt - entry > LEDGER_MAX_FUTURE_SKEW_MS;
+        let fresh = entry - entry_2.savedAt <= ledgerMaxAgeMs() && !futureSkew;
+        if (!fresh && !swept && interrupted !== true) return [];
         return [
           [
-            S,
+            slug,
             {
-              ...(V && !D ? L : resetLedgerEntry(L)),
-              savedAt: Math.max(G ? savedAt : L.savedAt, latchChangedAt(S) ?? 0),
-              turnTimestamps: L.turnTimestamps
-                .filter((turnTimestamp) => savedAt - turnTimestamp < 3600000)
-                .map((turnTimestamp) => Math.min(turnTimestamp, savedAt)),
-              ...(P && {
+              ...(fresh && !stopped ? entry_2 : resetLedgerEntry(entry_2)),
+              savedAt: Math.max(futureSkew ? entry : entry_2.savedAt, latchChangedAt(slug) ?? 0),
+              turnTimestamps: entry_2.turnTimestamps
+                .filter((turnTimestamp) => entry - turnTimestamp < 3600000)
+                .map((turnTimestamp) => Math.min(turnTimestamp, entry)),
+              ...(swept && {
                 interrupted: true,
               }),
             },
           ],
         ];
       })
-      .sort(([, S], [, w]) => w.savedAt - S.savedAt),
+      .sort(([, entryA], [, entryB]) => entryB.savedAt - entryA.savedAt),
   ];
-  for (let j = h.length - 1; j >= 0; j--) if (isSlugYielded(h[j][0])) h.splice(j, 1);
-  h.sort(([, S], [, w]) => Number(w.interrupted === true) - Number(S.interrupted === true));
-  let y = {};
-  let C = new Map();
-  let sliced = h.slice(0, MAX_LEDGER_ARTIFACTS);
+  for (let j = entries.length - 1; j >= 0; j--) if (isSlugYielded(entries[j][0])) entries.splice(j, 1);
+  entries.sort(
+    ([, entryA], [, entryB]) => Number(entryB.interrupted === true) - Number(entryA.interrupted === true),
+  );
+  let artifacts = {};
+  let threadSizes = new Map();
+  let sliced = entries.slice(0, MAX_LEDGER_ARTIFACTS);
   let max = Math.max(
     MIN_PART_BUDGET_CHARS,
     Math.floor(LEDGER_PART_BUDGET_BYTES / Math.max(1, sliced.length)) - 1024,
   );
-  let N = 2;
-  for (let [S, w] of sliced) {
-    let { threads, ...P } = w;
-    let D = threads === undefined ? 0 : jsonStringify(threads).length;
-    let G = threads !== undefined && threads.length <= MAX_LEDGER_THREADS && D <= max;
-    y[S] = G
+  let bytes = 2;
+  for (let [slug, entry] of sliced) {
+    let { threads, ...withoutThreads } = entry;
+    let threadsSize = threads === undefined ? 0 : jsonStringify(threads).length;
+    let keepThreads = threads !== undefined && threads.length <= MAX_LEDGER_THREADS && threadsSize <= max;
+    artifacts[slug] = keepThreads
       ? {
-          ...P,
+          ...withoutThreads,
           threads,
         }
-      : P;
-    N += jsonStringify(P).length + S.length + 4;
-    if (G) {
-      C.set(S, D);
-      N += D + 12;
+      : withoutThreads;
+    bytes += jsonStringify(withoutThreads).length + slug.length + 4;
+    if (keepThreads) {
+      threadSizes.set(slug, threadsSize);
+      bytes += threadsSize + 12;
     }
   }
-  for (let [S, w] of [...C].sort(([, L], [, P]) => P - L)) {
-    if (N <= LEDGER_PART_BUDGET_BYTES) break;
-    let { threads, ...P } = y[S];
-    y[S] = P;
-    N -= w + 12;
+  for (let [slug, size] of [...threadSizes].sort(([, sizeA], [, sizeB]) => sizeB - sizeA)) {
+    if (bytes <= LEDGER_PART_BUDGET_BYTES) break;
+    let { threads, ...withoutThreads } = artifacts[slug];
+    artifacts[slug] = withoutThreads;
+    bytes -= size + 12;
   }
-  for (let [S] of [...sliced].reverse()) {
-    if (N <= LEDGER_PART_BUDGET_BYTES) break;
-    let w = y[S];
-    let L = jsonStringify(w).length;
-    if (w.interrupted === true) {
-      let P = markLedgerEntryInterrupted(w);
-      let D = jsonStringify(P).length;
-      if (D < L) {
-        y[S] = P;
-        N -= L - D;
+  for (let [slug] of [...sliced].reverse()) {
+    if (bytes <= LEDGER_PART_BUDGET_BYTES) break;
+    let entry = artifacts[slug];
+    let size = jsonStringify(entry).length;
+    if (entry.interrupted === true) {
+      let marked = markLedgerEntryInterrupted(entry);
+      let markedSize = jsonStringify(marked).length;
+      if (markedSize < size) {
+        artifacts[slug] = marked;
+        bytes -= size - markedSize;
       }
     } else {
-      delete y[S];
-      N -= L + S.length + 4;
+      delete artifacts[slug];
+      bytes -= size + slug.length + 4;
     }
   }
   return {
-    artifacts: y,
+    artifacts,
   };
 }
 //@ chunk-9tgt55am.js:8840-9014 placement
@@ -422,31 +451,31 @@ function ledgerFingerprint(artifacts) {
         threads: value.threads?.map((thread) => ({
           ...thread,
           seen: thread.seen.length > 0,
-          sent: thread.sent.filter(([, r]) => r !== null),
+          sent: thread.sent.filter(([, entry]) => entry !== null),
         })),
       },
     ]),
   );
 }
 //@ chunk-9tgt55am.js:9014-9112 placement
-function scheduleLedgerWriteSafely(e = {}) {
+function scheduleLedgerWriteSafely(options = {}) {
   try {
-    scheduleLedgerWrite(e);
+    scheduleLedgerWrite(options);
   } catch (error) {
     logError(error);
     logFeatureSad("artifact_comments_autoreact", "ledger_write_failed");
   }
 }
 //@ chunk-9tgt55am.js:9112-9288 placement
-function buildLedgerEntry(e, t) {
-  let n = gatewayAccountUuidLower();
-  let { artifacts } = buildLedgerSnapshot(e, t, n);
+function buildLedgerEntry(slug, entry) {
+  let account = gatewayAccountUuidLower();
+  let { artifacts } = buildLedgerSnapshot(slug, entry, account);
   if (Object.keys(artifacts).length === 0) return null;
   return {
     type: "artifact-autoreact-ledger",
     v: 1,
-    sessionId: e,
-    accountUuid: n,
+    sessionId: slug,
+    accountUuid: account,
     artifacts,
   };
 }
@@ -470,40 +499,40 @@ function scheduleLedgerWrite({ force = false, urgent = false }) {
   if (ledgerOwnerSid !== sessionId) writeAutoreactLedger(sessionId, now, force);
 }
 //@ chunk-9tgt55am.js:9606-10380 placement
-function writeAutoreactLedger(e, t, force) {
+function writeAutoreactLedger(sessionId, force, force_2) {
   let { autoReact } = getLiveState();
-  if (autoReact.ledgerRetiredSids.has(e)) return;
-  let ledgerEntry = buildLedgerEntry(e, t);
+  if (autoReact.ledgerRetiredSids.has(sessionId)) return;
+  let ledgerEntry = buildLedgerEntry(sessionId, force);
   if (ledgerEntry === null) return;
-  let s = ledgerFingerprint(ledgerEntry.artifacts);
+  let fingerprint = ledgerFingerprint(ledgerEntry.artifacts);
   let transcriptWriteFailureSeq = getTranscriptWriteFailureSeq();
   if (
-    !force &&
-    s === autoReact.ledgerLastWritten &&
-    e === autoReact.ledgerLastWriteSid &&
+    !force_2 &&
+    fingerprint === autoReact.ledgerLastWritten &&
+    sessionId === autoReact.ledgerLastWriteSid &&
     ledgerEntry.accountUuid === autoReact.ledgerLastWriteAccount &&
     transcriptWriteFailureSeq === autoReact.ledgerFailureSeqAtWrite &&
-    t - (autoReact.ledgerLastWriteAt ?? 0) < LEDGER_MIN_WRITE_INTERVAL_MS
+    force - (autoReact.ledgerLastWriteAt ?? 0) < LEDGER_MIN_WRITE_INTERVAL_MS
   )
     return;
-  autoReact.ledgerLastWritten = s;
-  autoReact.ledgerLastWriteAt = t;
-  autoReact.ledgerLastWriteSid = e;
-  autoReact.ledgerOwnerSid ??= e;
+  autoReact.ledgerLastWritten = fingerprint;
+  autoReact.ledgerLastWriteAt = force;
+  autoReact.ledgerLastWriteSid = sessionId;
+  autoReact.ledgerOwnerSid ??= sessionId;
   autoReact.ledgerLastWriteAccount = ledgerEntry.accountUuid;
   autoReact.ledgerFailureSeqAtWrite = transcriptWriteFailureSeq;
   autoReact.ledgerExitReStamp ??= registerTranscriptExitReStamp(buildExitLedgerEntry);
-  let h = recordArtifactAutoReactLedger(
+  let written = recordArtifactAutoReactLedger(
     ledgerEntry,
     autoReact.ledgerStorageV5 ?? getLiveState().commentMonitorIntent.storageV5,
   ).catch(() => {
-    if (autoReact.ledgerLastWritten === s) {
+    if (autoReact.ledgerLastWritten === fingerprint) {
       autoReact.ledgerLastWritten = null;
       autoReact.ledgerLastWriteAt = null;
     }
     logFeatureSad("artifact_comments_autoreact", "ledger_write_failed");
   });
-  autoReact.ledgerLastAppend = Promise.all([autoReact.ledgerLastAppend, h]).then(() => {});
+  autoReact.ledgerLastAppend = Promise.all([autoReact.ledgerLastAppend, written]).then(() => {});
 }
 //@ chunk-9tgt55am.js:10380-10443 placement
 function setLedgerStorage(storageV5) {
@@ -519,16 +548,16 @@ function claimLedgerOwnership(storageV5) {
   if (!autoReact.ledgerRetiredSids.has(getSessionId())) autoReact.ledgerOwnerSid = getSessionId();
 }
 //@ chunk-9tgt55am.js:10568-10831 placement
-function flushAutoreactLedger(e) {
+function flushAutoreactLedger(options) {
   let { autoReact } = getLiveState();
-  setLedgerStorage(e?.storageV5);
+  setLedgerStorage(options?.storageV5);
   autoReact.ledgerExitCleanup ??= registerCleanup(flushLedgerOnExit);
   let ledgerDebounceMsOverride = autoReact.ledgerDebounceMsOverride ?? LEDGER_DEBOUNCE_MS;
   if (autoReact.ledgerOwnerSid === null || autoReact.ledgerOwnerSid === getSessionId())
     autoReact.ledgerDeferredSince = null;
-  if (e?.flush === true || ledgerDebounceMsOverride <= 0) {
+  if (options?.flush === true || ledgerDebounceMsOverride <= 0) {
     scheduleLedgerWriteSafely({
-      urgent: e?.flush === true,
+      urgent: options?.flush === true,
     });
     return;
   }
@@ -555,19 +584,19 @@ async function flushLedgerOnExit() {
 //@ chunk-9tgt55am.js:11086-11284 placement
 function buildExitLedgerEntry() {
   let { autoReact } = getLiveState();
-  let sessionId = getSessionId();
+  let slug = getSessionId();
   if (
     autoReact.ledgerFailureSeqAtWrite === null ||
     getTranscriptWriteFailureSeq() === autoReact.ledgerFailureSeqAtWrite ||
-    (autoReact.ledgerOwnerSid !== null && sessionId !== autoReact.ledgerOwnerSid)
+    (autoReact.ledgerOwnerSid !== null && slug !== autoReact.ledgerOwnerSid)
   )
     return;
-  return buildLedgerEntry(sessionId, Date.now()) ?? undefined;
+  return buildLedgerEntry(slug, Date.now()) ?? undefined;
 }
 //@ chunk-9tgt55am.js:11284-11806 placement
-function retireAutoreactLedger(e) {
+function retireAutoreactLedger(reason) {
   let { autoReact } = getLiveState();
-  if (e?.stillCurrent !== false) {
+  if (reason?.stillCurrent !== false) {
     if (autoReact.ledgerOwnerSid !== null) autoReact.ledgerRetiredSids.add(autoReact.ledgerOwnerSid);
     autoReact.ledgerRetiredSids.add(getSessionId());
   }

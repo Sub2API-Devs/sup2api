@@ -8,7 +8,7 @@
  * pieces: chunk-18hwfzwa.js (2)
  * attribution: file-last-pair 1, fingerprint 1
  */
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { useEditorMode } from "../../utils/subagentStatusLine.js";
 import {
   jsxProd_default,
@@ -22,24 +22,24 @@ import { TextInput } from "../TextInput.js";
 function noop_4() {}
 //@ chunk-18hwfzwa.js:813870-814630 fingerprint = HistorySearchInput (0.91)
 function HistorySearchInput(props) {
-  let $ = w(13);
+  let $ = useMemoCache(13);
   let { value, onChange, historyFailedMatch } = props;
   let editorMode = useEditorMode();
   const children = historyFailedMatch ? "no matching prompt:" : "search prompts:";
-  let Be;
+  let labelElement;
   if ($[0] !== children) {
-    Be = jsxProd_default(Text, {
+    labelElement = jsxProd_default(Text, {
       dimColor: true,
       children,
     });
     $[0] = children;
-    $[1] = Be;
-  } else Be = $[1];
+    $[1] = labelElement;
+  } else labelElement = $[1];
   const cursorOffset = value.length;
   const columns = bunStringWidth(value) + 1;
-  let ze;
+  let searchInput;
   if ($[2] !== onChange || $[3] !== columns || $[4] !== value) {
-    ze = jsxProd_default(TextInput, {
+    searchInput = jsxProd_default(TextInput, {
       value,
       onChange,
       cursorOffset,
@@ -53,11 +53,11 @@ function HistorySearchInput(props) {
     $[2] = onChange;
     $[3] = columns;
     $[4] = value;
-    $[5] = ze;
-  } else ze = $[5];
-  let Xe;
+    $[5] = searchInput;
+  } else searchInput = $[5];
+  let editorHint;
   if ($[6] !== value || $[7] !== editorMode) {
-    Xe =
+    editorHint =
       editorMode &&
       value === "" &&
       jsxProd_default(Text, {
@@ -66,19 +66,19 @@ function HistorySearchInput(props) {
       });
     $[6] = value;
     $[7] = editorMode;
-    $[8] = Xe;
-  } else Xe = $[8];
-  let rt;
-  if ($[9] !== Be || $[10] !== ze || $[11] !== Xe) {
-    rt = jsxProd_default_2(Box, {
+    $[8] = editorHint;
+  } else editorHint = $[8];
+  let rowElement;
+  if ($[9] !== labelElement || $[10] !== searchInput || $[11] !== editorHint) {
+    rowElement = jsxProd_default_2(Box, {
       gap: 1,
-      children: [Be, ze, Xe],
+      children: [labelElement, searchInput, editorHint],
     });
-    $[9] = Be;
-    $[10] = ze;
-    $[11] = Xe;
-    $[12] = rt;
-  } else rt = $[12];
-  return rt;
+    $[9] = labelElement;
+    $[10] = searchInput;
+    $[11] = editorHint;
+    $[12] = rowElement;
+  } else rowElement = $[12];
+  return rowElement;
 }
 export { HistorySearchInput };

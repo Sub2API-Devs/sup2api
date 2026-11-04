@@ -5,11 +5,11 @@
  * pieces: chunk-1r4fv9mg.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../../runtime/bun-runtime.js";
 import { require_util_2 as require_util } from "../../compile/util.js";
 
 //@ chunk-1r4fv9mg.js:2999-3298 cjs-fingerprint
-var require_limitContains = x(function (cjsExports) {
+var require_limitContains = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });

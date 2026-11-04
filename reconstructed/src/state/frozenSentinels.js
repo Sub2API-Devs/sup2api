@@ -10,17 +10,32 @@
  */
 //@ chunk-nvyvpw3y.js:191-503 placement
 var FROZEN_EMPTY_OBJECTS = Object.freeze({});
-var Tqn = Object.freeze({});
-var Aqn = Object.freeze({});
-var Qln = Object.freeze({});
-var Zln = Object.freeze({});
-var edn = Object.freeze({});
-var tdn = Object.freeze({});
-var Cqn = Object.freeze({});
-var Rqn = Object.freeze({});
-var xqn = Object.freeze({});
-var Pqn = Object.freeze({});
-var Iqn = Object.freeze({});
-var Oqn = Object.freeze({});
-var y_t = Object.freeze({});
-export { Tqn, Aqn, Qln, Cqn, Rqn, Zln, edn, tdn, xqn, Pqn, Iqn, Oqn, y_t, FROZEN_EMPTY_OBJECTS };
+var EMPTY_ARTIFACT_DB_READ_CONSENT = Object.freeze({});
+var EMPTY_ARTIFACT_DB_READ_HUMAN_CONSENT = Object.freeze({});
+var EMPTY_ARTIFACT_READ_CONSENT = Object.freeze({});
+var EMPTY_ARTIFACT_ASSET_READ_CONSENT = Object.freeze({});
+var EMPTY_ARTIFACT_ASSET_READ_HUMAN_CONSENT = Object.freeze({});
+var EMPTY_ARTIFACT_OUTSIDE_ORG_CONSENT = Object.freeze({});
+var EMPTY_ARTIFACT_ASSET_UPLOAD_CONSENT = Object.freeze({});
+var EMPTY_ARTIFACT_ASSET_UPLOAD_HUMAN_CONSENT = Object.freeze({});
+var EMPTY_ARTIFACT_HANDLERS_READ_CONSENT = Object.freeze({});
+var EMPTY_ARTIFACT_HANDLERS_READ_HUMAN_CONSENT = Object.freeze({});
+var EMPTY_ARTIFACT_HANDLERS_WRITE_CONSENT = Object.freeze({});
+var EMPTY_ARTIFACT_HANDLERS_WRITE_HUMAN_CONSENT = Object.freeze({});
+var EMPTY_ARTIFACT_ROOM_JOIN_CONSENT = Object.freeze({});
+export {
+  EMPTY_ARTIFACT_DB_READ_CONSENT,
+  EMPTY_ARTIFACT_DB_READ_HUMAN_CONSENT,
+  EMPTY_ARTIFACT_READ_CONSENT,
+  EMPTY_ARTIFACT_ASSET_UPLOAD_CONSENT,
+  EMPTY_ARTIFACT_ASSET_UPLOAD_HUMAN_CONSENT,
+  EMPTY_ARTIFACT_ASSET_READ_CONSENT,
+  EMPTY_ARTIFACT_ASSET_READ_HUMAN_CONSENT,
+  EMPTY_ARTIFACT_OUTSIDE_ORG_CONSENT,
+  EMPTY_ARTIFACT_HANDLERS_READ_CONSENT,
+  EMPTY_ARTIFACT_HANDLERS_READ_HUMAN_CONSENT,
+  EMPTY_ARTIFACT_HANDLERS_WRITE_CONSENT,
+  EMPTY_ARTIFACT_HANDLERS_WRITE_HUMAN_CONSENT,
+  EMPTY_ARTIFACT_ROOM_JOIN_CONSENT,
+  FROZEN_EMPTY_OBJECTS,
+};

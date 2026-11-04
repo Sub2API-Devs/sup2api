@@ -5,7 +5,7 @@
  * pieces: chunk-pwh5dx3n.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../runtime/bun-runtime.js";
+import { __commonJS as x } from "../../../runtime/bun-runtime.js";
 import { zr } from "./namespace.js";
 import { nt } from "./enum.js";
 import { Sr } from "./oneof.js";
@@ -105,8 +105,8 @@ var Ps = x(function (cjsExports, cjsModule) {
   });
   Type.generateConstructor = function (mtype) {
     var gen = util.codegen(["p"], mtype.name);
-    for (var i = 0, field; i < mtype.fieldsArray.length; ++i)
-      if ((field = mtype._fieldsArray[i]).map) gen("this%s={}", util.safeProp(field.name));
+    for (var idx = 0, field; idx < mtype.fieldsArray.length; ++idx)
+      if ((field = mtype._fieldsArray[idx]).map) gen("this%s={}", util.safeProp(field.name));
       else if (field.repeated) gen("this%s=[]", util.safeProp(field.name));
     return gen('if(p)for(var ks=Object.keys(p),i=0;i<ks.length;++i)if(p[ks[i]]!=null&&ks[i]!=="__proto__")')(
       "this[ks[i]]=p[ks[i]]",
@@ -192,11 +192,11 @@ var Ps = x(function (cjsExports, cjsModule) {
     if (!this._needsRecursiveResolve) return this;
     Namespace.prototype.resolveAll.call(this);
     var oneofs = this.oneofsArray;
-    i = 0;
-    while (i < oneofs.length) oneofs[i++].resolve();
+    idx = 0;
+    while (idx < oneofs.length) oneofs[idx++].resolve();
     var fields = this.fieldsArray;
-    var i = 0;
-    while (i < fields.length) fields[i++].resolve();
+    var idx = 0;
+    while (idx < fields.length) fields[idx++].resolve();
     return this;
   };
   Type.prototype._resolveFeaturesRecursive = function (edition) {
@@ -271,7 +271,8 @@ var Ps = x(function (cjsExports, cjsModule) {
   Type.prototype.setup = function () {
     var fullName = this.fullName;
     var types = [];
-    for (var i = 0; i < this.fieldsArray.length; ++i) types.push(this._fieldsArray[i].resolve().resolvedType);
+    for (var idx = 0; idx < this.fieldsArray.length; ++idx)
+      types.push(this._fieldsArray[idx].resolve().resolvedType);
     this.encode = encoder(this)({
       Writer,
       types,

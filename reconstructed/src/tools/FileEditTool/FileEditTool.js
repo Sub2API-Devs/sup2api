@@ -142,6 +142,7 @@ import {
 import { logForDebugging } from "../../utils/debug.js";
 import { logFileOperation } from "../../utils/fileOperationAnalytics.js";
 import { shouldSendToolDiff, fetchSingleFileGitDiff, isPatchWithinSizeLimit } from "../../utils/gitDiff.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:4648901-4648920 placement
 /**
@@ -152,8 +153,8 @@ var MAX_EDITABLE_FILE_BYTES = 1073741824;
 /**
  * 判断读取记录是否在模型之后刷新过。
  */
-function isRefreshedBehindModel(e) {
-  return e?.refreshedBehindModel === true;
+function isRefreshedBehindModel(editResult) {
+  return editResult?.refreshedBehindModel === true;
 }
 //@ chunk-e6aww6q8.js:4649110-4649429 affinity = areFileEditsInputsEquivalent (0.819)
 /**
@@ -171,474 +172,497 @@ function normalizeEditInputForRemote(input1, input2) {
       },
     ],
   });
-  let [h] = edits;
-  return h === undefined
+  let [normalizedEdit] = edits;
+  return normalizedEdit === undefined
     ? input1
     : {
         ...input1,
         file_path: filePath,
-        old_string: h.old_string,
-        new_string: h.new_string,
+        old_string: normalizedEdit.old_string,
+        new_string: normalizedEdit.new_string,
       };
 }
 //@ chunk-e6aww6q8.js:4649429-4656768 fingerprint = FileEditTool (0.557)
 /**
  * Edit 工具定义（name "Edit"）。精确字符串替换：validateInput 依次查空字节/不稳定路径/用户电脑路径/工作树隔离/记忆目录 lint、old==new、deny 规则、Read deny、1GiB 上限、Perforce 只读、文件不存在/已存在、.ipynb、必须先 Read 且未被外部修改（可自动恢复）、匹配唯一性、settings 文件校验；call 交给 editFileToolCall。
  */
-var FileEditTool = buildTool({
-  name: FILE_EDIT_TOOL_NAME,
-  ruleContentField: "file_path",
-  searchHint: "modify file contents in place",
-  remoteExecution: {
-    supported: true,
-    decidingInputFields: ["file_path", "old_string", "new_string", "replace_all"],
-  },
-  backgrounding: "never",
-  maxResultSizeChars: 1e5,
-  strict: true,
-  async description() {
-    return "A tool for editing files";
-  },
-  async prompt({ model, leanPrompt }) {
-    return getEditToolDescription(model, leanPrompt);
-  },
-  userFacingName: userFacingName_2,
-  getToolUseSummary: renderToolUseMessage_2,
-  getActivityDescription(input) {
-    let summary = renderToolUseMessage_2(input);
-    return summary ? `Editing ${summary}` : "Editing file";
-  },
-  get inputSchema() {
-    return fileEditInputSchema();
-  },
-  get outputSchema() {
-    return fileEditOutputSchema();
-  },
-  get outputSchemaAcrossProcesses() {
-    return SDKUserMessageSchema_3();
-  },
-  fromAnotherProcess(e, n, r, s) {
-    if (s !== undefined && !e.staged) logFileChanged(e.structuredPatch, s);
-    return {
-      data: {
-        ...e,
-        filePath: String(n.file_path ?? ""),
-        userModified: r?.userModified === true,
-      },
-    };
-  },
-  coerceInput: normalizeEditInputAliases,
-  stripForStorage(output) {
-    if (typeof output !== "object" || output === null) return output;
-    if ((output.originalFile ?? "") === "") return output;
-    return {
-      ...output,
-      originalFile: "",
-    };
-  },
-  toAutoClassifierInput(input) {
-    let n = remoteRoutingCandidate(input);
-    if (!editRemovalVisibilityValue())
-      return n === undefined
-        ? `${input.file_path}: ${input.new_string}`
-        : {
-            file_path: input.file_path,
-            new_string: input.new_string,
-            [HOST_TOOL_INPUT_FIELD]: n,
-            ...hostContextMeta(input),
-          };
-    let r = editRemovalCapValue();
-    let oldString = input.old_string;
-    let h = r > 0 && typeof oldString === "string" && oldString.length > r;
-    return {
-      file_path: input.file_path,
-      adds: input.new_string,
-      removes: h ? oldString.slice(0, r) : oldString,
-      ...(r > 0 && {
-        removesTruncated: h,
-      }),
-      ...(input.replace_all === true && {
-        replaceAll: true,
-      }),
-      ...(n !== undefined && {
-        [HOST_TOOL_INPUT_FIELD]: n,
-        ...hostContextMeta(input),
-      }),
-    };
-  },
-  suppressesAllPermissionUpdates(e) {
-    return hasHostField(e);
-  },
-  getPath(input) {
-    return input.file_path;
-  },
-  backfillObservableInput(input) {
-    if (typeof input.file_path === "string" && !isRemoteOnlyCheck(FILE_EDIT_TOOL_NAME))
-      input.file_path = expandStablePath(input.file_path);
-  },
-  async preparePermissionMatcher({ file_path }) {
-    return (pattern) => matchesPathRule(pattern, file_path);
-  },
-  inputsEquivalent(e, n) {
-    let r = expandPathOrNull(e.file_path);
-    let s = (h) => ({
-      file_path: h.file_path,
-      edits: [
-        {
-          old_string: h.old_string,
-          new_string: r === null ? h.new_string : lintMemoryTextIfEnabled(r, h.new_string),
-          replace_all: h.replace_all ?? false,
+var FileEditTool; // deferred: uses buildTool (../../services/tools/permissionCheckGuard.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:4649429", () => {
+  FileEditTool = buildTool({
+    name: FILE_EDIT_TOOL_NAME,
+    ruleContentField: "file_path",
+    searchHint: "modify file contents in place",
+    remoteExecution: {
+      supported: true,
+      decidingInputFields: ["file_path", "old_string", "new_string", "replace_all"],
+    },
+    backgrounding: "never",
+    maxResultSizeChars: 1e5,
+    strict: true,
+    async description() {
+      return "A tool for editing files";
+    },
+    async prompt({ model, leanPrompt }) {
+      return getEditToolDescription(model, leanPrompt);
+    },
+    userFacingName: userFacingName_2,
+    getToolUseSummary: renderToolUseMessage_2,
+    getActivityDescription(input) {
+      let summary = renderToolUseMessage_2(input);
+      return summary ? `Editing ${summary}` : "Editing file";
+    },
+    get inputSchema() {
+      return fileEditInputSchema();
+    },
+    get outputSchema() {
+      return fileEditOutputSchema();
+    },
+    get outputSchemaAcrossProcesses() {
+      return SDKUserMessageSchema_3();
+    },
+    fromAnotherProcess(result, input, callOptions, toolUseId) {
+      if (toolUseId !== undefined && !result.staged) logFileChanged(result.structuredPatch, toolUseId);
+      return {
+        data: {
+          ...result,
+          filePath: String(input.file_path ?? ""),
+          userModified: callOptions?.userModified === true,
         },
-      ],
-    });
-    return isRemoteOnlyCheck(FILE_EDIT_TOOL_NAME)
-      ? areFileEditInputsIdentical(s(e), s(n))
-      : areFileEditsInputsEquivalent(s(e), s(n));
-  },
-  create(toolContext) {
-    return {
-      permissionCheckFailureDecision(n) {
-        return buildUnfinishedCheckDecision(
-          FILE_EDIT_TOOL_NAME,
-          isPlainObject_5(n) ? n.file_path : undefined,
-          toolContext.permissions(),
-        );
-      },
-      async checkPermissions(input, r) {
-        let s = expandStablePath(input.file_path);
-        let h = walkPermissionCheckPaths(s);
-        toolContext.session.writePermissionStash.stash(r.toolUseId, s, h.spellings);
-        let y = checkWritePermissionForTool(FileEditTool, input, toolContext.permissions(), h);
-        let permissionResult = y.behavior === "deny" ? y : (leafSymlinkWriteRefusal(s, h) ?? y);
-        if (
-          permissionResult.behavior === "deny" ||
-          (permissionResult.updatedInput !== undefined && permissionResult.updatedInput !== input)
-        )
-          return permissionResult;
-        let toolUseSummary = getToolUseSummary_2(input, "new_string", memoryWriteSource(toolContext), {
-          host: toolContext.session.host,
-          toolUseId: r.toolUseId,
-        });
-        return toolUseSummary === input || toolUseSummary.new_string === input.old_string
-          ? permissionResult
+      };
+    },
+    coerceInput: normalizeEditInputAliases,
+    stripForStorage(output) {
+      if (typeof output !== "object" || output === null) return output;
+      if ((output.originalFile ?? "") === "") return output;
+      return {
+        ...output,
+        originalFile: "",
+      };
+    },
+    toAutoClassifierInput(input) {
+      let hostRouting = remoteRoutingCandidate(input);
+      if (!editRemovalVisibilityValue())
+        return hostRouting === undefined
+          ? `${input.file_path}: ${input.new_string}`
           : {
-              ...permissionResult,
-              updatedInput: toolUseSummary,
+              file_path: input.file_path,
+              new_string: input.new_string,
+              [HOST_TOOL_INPUT_FIELD]: hostRouting,
+              ...hostContextMeta(input),
             };
-      },
-      async validateInput(input1, r) {
-        let callContext = createToolContextView(toolContext, r);
-        if (canRunToolsOnThisMachine() && hasHostField(input1))
-          return {
-            result: false,
-            message: hostFieldNotForwardedMessage(),
-            errorCode: 14,
-          };
-        let { file_path, replace_all: replaceAll = false } = input1;
-        let { old_string, new_string: newString } = input1;
-        let L = rejectNullBytes(FILE_EDIT_TOOL_NAME, [["file_path", file_path]]);
-        if (L) return L;
-        let G = rejectTrailingWhitespace(FILE_EDIT_TOOL_NAME, [["file_path", file_path]]);
-        if (G) return G;
-        let q = checkForeignFilePath(FILE_EDIT_TOOL_NAME, [["file_path", file_path]]);
-        if (q) return q;
-        let absolutePath = expandStablePath(file_path);
-        let Se = checkWorktreeIsolation_2(absolutePath, callContext);
-        if (Se)
-          return {
-            result: false,
-            message: Se,
-            errorCode: 12,
-          };
-        let ke = secretWarning(absolutePath, newString);
-        if (ke)
-          return {
-            result: false,
-            message: ke,
-            errorCode: 0,
-          };
-        let we = lintMemoryFilePath(absolutePath, newString, memoryWriteSource(callContext));
-        if (we)
-          return {
-            result: false,
-            message: we,
-            errorCode: 0,
-          };
-        if (old_string === newString)
-          return {
-            result: false,
-            behavior: "ask",
-            message: "No changes to make: old_string and new_string are exactly the same.",
-            errorCode: 1,
-          };
-        let Ee = matchingRuleForInput(absolutePath, callContext.permissions(), "edit", "deny");
-        if (Ee !== null)
-          return {
-            result: false,
-            behavior: "ask",
-            message: DENIED_DIRECTORY_ERROR,
-            errorCode: 2,
-            deniedByPermissionRule: true,
-            denyRule: Ee,
-          };
-        let denyRuleForPath = readDenyRuleForPath(absolutePath, callContext.permissions());
-        if (denyRuleForPath !== undefined)
-          return {
-            result: false,
-            behavior: "ask",
-            message: READ_DENY_RULE_EDIT_ERROR,
-            errorCode: 13,
-            deniedByPermissionRule: true,
-            denyRule: denyRuleForPath,
-          };
-        if (isUntouchableSpelling(absolutePath))
-          return {
-            result: true,
-          };
-        let fsImplementation = getFsImplementation();
-        try {
-          let { size, mode } = await fsImplementation.stat(absolutePath);
-          if (size > MAX_EDITABLE_FILE_BYTES)
+      let removalCap = editRemovalCapValue();
+      let oldString = input.old_string;
+      let removesTruncated = removalCap > 0 && typeof oldString === "string" && oldString.length > removalCap;
+      return {
+        file_path: input.file_path,
+        adds: input.new_string,
+        removes: removesTruncated ? oldString.slice(0, removalCap) : oldString,
+        ...(removalCap > 0 && {
+          removesTruncated,
+        }),
+        ...(input.replace_all === true && {
+          replaceAll: true,
+        }),
+        ...(hostRouting !== undefined && {
+          [HOST_TOOL_INPUT_FIELD]: hostRouting,
+          ...hostContextMeta(input),
+        }),
+      };
+    },
+    suppressesAllPermissionUpdates(input) {
+      return hasHostField(input);
+    },
+    getPath(input) {
+      return input.file_path;
+    },
+    backfillObservableInput(input) {
+      if (typeof input.file_path === "string" && !isRemoteOnlyCheck(FILE_EDIT_TOOL_NAME))
+        input.file_path = expandStablePath(input.file_path);
+    },
+    async preparePermissionMatcher({ file_path }) {
+      return (pattern) => matchesPathRule(pattern, file_path);
+    },
+    inputsEquivalent(leftInput, rightInput) {
+      let expandedPath = expandPathOrNull(leftInput.file_path);
+      let toComparable = (editInput) => ({
+        file_path: editInput.file_path,
+        edits: [
+          {
+            old_string: editInput.old_string,
+            new_string:
+              expandedPath === null
+                ? editInput.new_string
+                : lintMemoryTextIfEnabled(expandedPath, editInput.new_string),
+            replace_all: editInput.replace_all ?? false,
+          },
+        ],
+      });
+      return isRemoteOnlyCheck(FILE_EDIT_TOOL_NAME)
+        ? areFileEditInputsIdentical(toComparable(leftInput), toComparable(rightInput))
+        : areFileEditsInputsEquivalent(toComparable(leftInput), toComparable(rightInput));
+    },
+    create(toolContext) {
+      return {
+        permissionCheckFailureDecision(input) {
+          return buildUnfinishedCheckDecision(
+            FILE_EDIT_TOOL_NAME,
+            isPlainObject_5(input) ? input.file_path : undefined,
+            toolContext.permissions(),
+          );
+        },
+        async checkPermissions(input, callOptions) {
+          let stablePath = expandStablePath(input.file_path);
+          let pathSpellings = walkPermissionCheckPaths(stablePath);
+          toolContext.session.writePermissionStash.stash(
+            callOptions.toolUseId,
+            stablePath,
+            pathSpellings.spellings,
+          );
+          let writeDecision = checkWritePermissionForTool(
+            FileEditTool,
+            input,
+            toolContext.permissions(),
+            pathSpellings,
+          );
+          let permissionResult =
+            writeDecision.behavior === "deny"
+              ? writeDecision
+              : (leafSymlinkWriteRefusal(stablePath, pathSpellings) ?? writeDecision);
+          if (
+            permissionResult.behavior === "deny" ||
+            (permissionResult.updatedInput !== undefined && permissionResult.updatedInput !== input)
+          )
+            return permissionResult;
+          let toolUseSummary = getToolUseSummary_2(input, "new_string", memoryWriteSource(toolContext), {
+            host: toolContext.session.host,
+            toolUseId: callOptions.toolUseId,
+          });
+          return toolUseSummary === input || toolUseSummary.new_string === input.old_string
+            ? permissionResult
+            : {
+                ...permissionResult,
+                updatedInput: toolUseSummary,
+              };
+        },
+        async validateInput(input1, callOptions) {
+          let callContext = createToolContextView(toolContext, callOptions);
+          if (canRunToolsOnThisMachine() && hasHostField(input1))
+            return {
+              result: false,
+              message: hostFieldNotForwardedMessage(),
+              errorCode: 14,
+            };
+          let { file_path, replace_all: replaceAll = false } = input1;
+          let { old_string, new_string: newString } = input1;
+          let nullByteRefusal = rejectNullBytes(FILE_EDIT_TOOL_NAME, [["file_path", file_path]]);
+          if (nullByteRefusal) return nullByteRefusal;
+          let trailingWhitespaceRefusal = rejectTrailingWhitespace(FILE_EDIT_TOOL_NAME, [
+            ["file_path", file_path],
+          ]);
+          if (trailingWhitespaceRefusal) return trailingWhitespaceRefusal;
+          let foreignPathRefusal = checkForeignFilePath(FILE_EDIT_TOOL_NAME, [["file_path", file_path]]);
+          if (foreignPathRefusal) return foreignPathRefusal;
+          let absolutePath = expandStablePath(file_path);
+          let worktreeRefusal = checkWorktreeIsolation_2(absolutePath, callContext);
+          if (worktreeRefusal)
+            return {
+              result: false,
+              message: worktreeRefusal,
+              errorCode: 12,
+            };
+          let secretRefusal = secretWarning(absolutePath, newString);
+          if (secretRefusal)
+            return {
+              result: false,
+              message: secretRefusal,
+              errorCode: 0,
+            };
+          let memoryLintRefusal = lintMemoryFilePath(absolutePath, newString, memoryWriteSource(callContext));
+          if (memoryLintRefusal)
+            return {
+              result: false,
+              message: memoryLintRefusal,
+              errorCode: 0,
+            };
+          if (old_string === newString)
             return {
               result: false,
               behavior: "ask",
-              message: `File is too large to edit (${formatFileSize(size)}). Maximum editable file size is ${formatFileSize(MAX_EDITABLE_FILE_BYTES)}.`,
-              errorCode: 10,
+              message: "No changes to make: old_string and new_string are exactly the same.",
+              errorCode: 1,
             };
-          if (isPerforceReadOnlyFile(mode))
+          let denyRule = matchingRuleForInput(absolutePath, callContext.permissions(), "edit", "deny");
+          if (denyRule !== null)
             return {
               result: false,
               behavior: "ask",
-              message: PERFORCE_READ_ONLY_MESSAGE,
-              errorCode: 11,
+              message: DENIED_DIRECTORY_ERROR,
+              errorCode: 2,
+              deniedByPermissionRule: true,
+              denyRule,
             };
-        } catch (e) {
-          if (!isENOENT(e)) throw e;
-        }
-        ({ old_string, new_string: newString } = normalizeEditInputForRemote(input1, callContext));
-        let fileContent;
-        let notTextReason;
-        try {
-          let fileBytes = await fsImplementation.readFileBytes(absolutePath);
-          let encoding = detectTextEncoding(fileBytes);
-          notTextReason = encoding.notText;
-          fileContent = stripBomAndCarriageReturn(fileBytes.toString(encoding.encoding));
-        } catch (e) {
-          if (isENOENT(e)) fileContent = null;
-          else throw e;
-        }
-        if (fileContent === null) {
-          if (old_string === "")
+          let denyRuleForPath = readDenyRuleForPath(absolutePath, callContext.permissions());
+          if (denyRuleForPath !== undefined)
+            return {
+              result: false,
+              behavior: "ask",
+              message: READ_DENY_RULE_EDIT_ERROR,
+              errorCode: 13,
+              deniedByPermissionRule: true,
+              denyRule: denyRuleForPath,
+            };
+          if (isUntouchableSpelling(absolutePath))
             return {
               result: true,
             };
-          let similarFilename = await findSimilarFile(absolutePath);
-          let cwdSuggestion = await normalizePathForComparison(absolutePath);
-          let message = `File does not exist. ${FILE_NOT_FOUND_CWD_NOTE} ${getCwd()}.`;
-          if (cwdSuggestion) message += ` Did you mean ${cwdSuggestion}?`;
-          else if (similarFilename) message += ` Did you mean ${similarFilename}?`;
-          return {
-            result: false,
-            behavior: "ask",
-            message: encodeControlChars(message),
-            errorCode: 4,
-          };
-        }
-        if (old_string === "") {
-          if (fileContent.trim() !== "")
+          let fsImplementation = getFsImplementation();
+          try {
+            let { size, mode } = await fsImplementation.stat(absolutePath);
+            if (size > MAX_EDITABLE_FILE_BYTES)
+              return {
+                result: false,
+                behavior: "ask",
+                message: `File is too large to edit (${formatFileSize(size)}). Maximum editable file size is ${formatFileSize(MAX_EDITABLE_FILE_BYTES)}.`,
+                errorCode: 10,
+              };
+            if (isPerforceReadOnlyFile(mode))
+              return {
+                result: false,
+                behavior: "ask",
+                message: PERFORCE_READ_ONLY_MESSAGE,
+                errorCode: 11,
+              };
+          } catch (e) {
+            if (!isENOENT(e)) throw e;
+          }
+          ({ old_string, new_string: newString } = normalizeEditInputForRemote(input1, callContext));
+          let fileContent;
+          let notTextReason;
+          try {
+            let fileBytes = await fsImplementation.readFileBytes(absolutePath);
+            let encoding = detectTextEncoding(fileBytes);
+            notTextReason = encoding.notText;
+            fileContent = stripBomAndCarriageReturn(fileBytes.toString(encoding.encoding));
+          } catch (e) {
+            if (isENOENT(e)) fileContent = null;
+            else throw e;
+          }
+          if (fileContent === null) {
+            if (old_string === "")
+              return {
+                result: true,
+              };
+            let similarFilename = await findSimilarFile(absolutePath);
+            let cwdSuggestion = await normalizePathForComparison(absolutePath);
+            let message = `File does not exist. ${FILE_NOT_FOUND_CWD_NOTE} ${getCwd()}.`;
+            if (cwdSuggestion) message += ` Did you mean ${cwdSuggestion}?`;
+            else if (similarFilename) message += ` Did you mean ${similarFilename}?`;
             return {
               result: false,
               behavior: "ask",
-              message: "Cannot create new file - file already exists.",
-              errorCode: 3,
+              message: encodeControlChars(message),
+              errorCode: 4,
             };
-          return {
-            result: true,
-          };
-        }
-        if (absolutePath.endsWith(".ipynb"))
-          return {
-            result: false,
-            behavior: "ask",
-            message: `File is a Jupyter Notebook. Use the ${NOTEBOOK_EDIT_TOOL_NAME} to edit this file.`,
-            errorCode: 5,
-          };
-        let readState = callContext.readFileState.get(absolutePath);
-        let tryRecoverStaleRead = (trigger) => {
-          let At = classifyEditMatch(fileContent, old_string, replaceAll);
-          let It =
-            At === "applies" &&
-            readAutoAllowedForMutation(
-              FILE_EDIT_TOOL_NAME,
-              absolutePath,
-              callContext,
-              callContext.permissions(),
-            );
-          logEvent("tengu_edit_tool_stale_read", {
-            wouldHaveResult: editMatchResultCode(At),
-            recovered: It,
-            trigger,
-          });
-          return It;
-        };
-        let staleReadError = (hostName) => ({
-          result: false,
-          behavior: "ask",
-          message: REMOTE_FILE_MODIFIED_ERROR(hostName),
-          errorCode: 7,
-        });
-        if (!readState || readState.isPartialView) {
-          let canonicalName = getCanonicalName(callContext.model());
-          let modelBucket = toTelemetryModelSlug(canonicalName);
-          let It =
-            !isLegacyPromptModelOrOverride(canonicalName, callContext.remoteCall) &&
-            readAutoAllowedForMutation(
-              FILE_EDIT_TOOL_NAME,
-              absolutePath,
-              callContext,
-              callContext.permissions(),
-            );
-          let readBaseline = It && readState === undefined ? callContext.remoteCall?.readBaseline : undefined;
-          let qt =
-            readBaseline === undefined
-              ? "absent"
-              : await compareWithDisk(absolutePath, readBaseline, () =>
-                  readAutoAllowedForMutation(
-                    FILE_EDIT_TOOL_NAME,
-                    absolutePath,
-                    callContext,
-                    callContext.permissions(),
-                  ),
-                );
-          logEvent("tengu_edit_tool_not_read_hypothetical", {
-            wouldHaveResult: editMatchResultCode(classifyEditMatch(fileContent, old_string, replaceAll)),
-            isPartialView: readState?.isPartialView === true,
-            isFilePathAbsolute: isAbsolute(file_path),
-            guardSkipped: It,
-            modelBucket,
-            servedCall: callContext.remoteCall !== undefined,
-            ...(callContext.remoteCall?.model !== undefined && {
-              callerModelBucket: toTelemetryModelSlug(callContext.remoteCall.model),
-            }),
-            readBaseline: fromEnum(qt),
-          });
-          if (!It)
+          }
+          if (old_string === "") {
+            if (fileContent.trim() !== "")
+              return {
+                result: false,
+                behavior: "ask",
+                message: "Cannot create new file - file already exists.",
+                errorCode: 3,
+              };
+            return {
+              result: true,
+            };
+          }
+          if (absolutePath.endsWith(".ipynb"))
             return {
               result: false,
               behavior: "ask",
-              message: FILE_NOT_READ_ERROR,
+              message: `File is a Jupyter Notebook. Use the ${NOTEBOOK_EDIT_TOOL_NAME} to edit this file.`,
+              errorCode: 5,
+            };
+          let readState = callContext.readFileState.get(absolutePath);
+          let tryRecoverStaleRead = (trigger) => {
+            let matchKind = classifyEditMatch(fileContent, old_string, replaceAll);
+            let canRecover =
+              matchKind === "applies" &&
+              readAutoAllowedForMutation(
+                FILE_EDIT_TOOL_NAME,
+                absolutePath,
+                callContext,
+                callContext.permissions(),
+              );
+            logEvent("tengu_edit_tool_stale_read", {
+              wouldHaveResult: editMatchResultCode(matchKind),
+              recovered: canRecover,
+              trigger,
+            });
+            return canRecover;
+          };
+          let staleReadError = (host) => ({
+            result: false,
+            behavior: "ask",
+            message: REMOTE_FILE_MODIFIED_ERROR(host),
+            errorCode: 7,
+          });
+          if (!readState || readState.isPartialView) {
+            let canonicalName = getCanonicalName(callContext.model());
+            let modelBucket = toTelemetryModelSlug(canonicalName);
+            let guardSkipped =
+              !isLegacyPromptModelOrOverride(canonicalName, callContext.remoteCall) &&
+              readAutoAllowedForMutation(
+                FILE_EDIT_TOOL_NAME,
+                absolutePath,
+                callContext,
+                callContext.permissions(),
+              );
+            let readBaseline =
+              guardSkipped && readState === undefined ? callContext.remoteCall?.readBaseline : undefined;
+            let baselineState =
+              readBaseline === undefined
+                ? "absent"
+                : await compareWithDisk(absolutePath, readBaseline, () =>
+                    readAutoAllowedForMutation(
+                      FILE_EDIT_TOOL_NAME,
+                      absolutePath,
+                      callContext,
+                      callContext.permissions(),
+                    ),
+                  );
+            logEvent("tengu_edit_tool_not_read_hypothetical", {
+              wouldHaveResult: editMatchResultCode(classifyEditMatch(fileContent, old_string, replaceAll)),
+              isPartialView: readState?.isPartialView === true,
+              isFilePathAbsolute: isAbsolute(file_path),
+              guardSkipped,
+              modelBucket,
+              servedCall: callContext.remoteCall !== undefined,
+              ...(callContext.remoteCall?.model !== undefined && {
+                callerModelBucket: toTelemetryModelSlug(callContext.remoteCall.model),
+              }),
+              readBaseline: fromEnum(baselineState),
+            });
+            if (!guardSkipped)
+              return {
+                result: false,
+                behavior: "ask",
+                message: FILE_NOT_READ_ERROR,
+                meta: {
+                  isFilePathAbsolute: String(isAbsolute(file_path)),
+                },
+                errorCode: 6,
+              };
+            if (baselineState === "mismatch" && !tryRecoverStaleRead(lit_2("baseline")))
+              return staleReadError(callContext.remoteCall?.origin.hostName);
+          }
+          if (readState) {
+            if (isRefreshedBehindModel(readState) && !tryRecoverStaleRead(lit_2("refreshed")))
+              return staleReadError();
+            if ((await getFileModificationTimeAsync(absolutePath)) > readState.timestamp) {
+              if (
+                !(isFullFileView(readState) && matchesContentHash(readState, fileContent)) &&
+                !tryRecoverStaleRead(lit_2("mtime"))
+              )
+                return staleReadError();
+            }
+          }
+          if (notTextReason)
+            return {
+              result: false,
+              message: fileWriteRefusalMessage(notTextReason),
+              errorCode: 15,
+            };
+          let file = fileContent;
+          let actualOldString = findActualString(file, old_string);
+          if (!actualOldString) {
+            let unicodeMismatchNote = hasUnicodeOrEscapes(old_string)
+              ? `
+(note: Edit also tried swapping \\uXXXX escapes and their characters; neither form matched, so the mismatch is likely elsewhere in old_string. Re-read the file and copy the exact surrounding text.)`
+              : "";
+            return {
+              result: false,
+              behavior: "ask",
+              message: `String to replace not found in file.
+String: ${old_string}${unicodeMismatchNote}`,
               meta: {
                 isFilePathAbsolute: String(isAbsolute(file_path)),
               },
-              errorCode: 6,
+              errorCode: 8,
             };
-          if (qt === "mismatch" && !tryRecoverStaleRead(lit_2("baseline")))
-            return staleReadError(callContext.remoteCall?.origin.hostName);
-        }
-        if (readState) {
-          if (isRefreshedBehindModel(readState) && !tryRecoverStaleRead(lit_2("refreshed")))
-            return staleReadError();
-          if ((await getFileModificationTimeAsync(absolutePath)) > readState.timestamp) {
-            if (
-              !(isFullFileView(readState) && matchesContentHash(readState, fileContent)) &&
-              !tryRecoverStaleRead(lit_2("mtime"))
-            )
-              return staleReadError();
           }
-        }
-        if (notTextReason)
-          return {
-            result: false,
-            message: fileWriteRefusalMessage(notTextReason),
-            errorCode: 15,
-          };
-        let file = fileContent;
-        let actualOldString = findActualString(file, old_string);
-        if (!actualOldString) {
-          let gt = hasUnicodeOrEscapes(old_string)
-            ? `
-(note: Edit also tried swapping \\uXXXX escapes and their characters; neither form matched, so the mismatch is likely elsewhere in old_string. Re-read the file and copy the exact surrounding text.)`
-            : "";
-          return {
-            result: false,
-            behavior: "ask",
-            message: `String to replace not found in file.
-String: ${old_string}${gt}`,
-            meta: {
-              isFilePathAbsolute: String(isAbsolute(file_path)),
-            },
-            errorCode: 8,
-          };
-        }
-        let matches = file.split(actualOldString).length - 1;
-        if (matches > 1 && !replaceAll)
-          return {
-            result: false,
-            behavior: "ask",
-            message: `Found ${matches} matches of the string to replace, but replace_all is false. To replace all occurrences, set replace_all to true. To replace only one occurrence, please provide more context to uniquely identify the instance.
+          let matches = file.split(actualOldString).length - 1;
+          if (matches > 1 && !replaceAll)
+            return {
+              result: false,
+              behavior: "ask",
+              message: `Found ${matches} matches of the string to replace, but replace_all is false. To replace all occurrences, set replace_all to true. To replace only one occurrence, please provide more context to uniquely identify the instance.
 String: ${old_string}`,
+              meta: {
+                isFilePathAbsolute: String(isAbsolute(file_path)),
+                actualOldString,
+              },
+              errorCode: 9,
+            };
+          let settingsValidationResult = validateInputForSettingsFileEdit(absolutePath, file, () =>
+            replaceAll
+              ? file.replaceAll(actualOldString, newString)
+              : file.replace(actualOldString, newString),
+          );
+          if (settingsValidationResult !== null) return settingsValidationResult;
+          return {
+            result: true,
             meta: {
-              isFilePathAbsolute: String(isAbsolute(file_path)),
               actualOldString,
             },
-            errorCode: 9,
           };
-        let settingsValidationResult = validateInputForSettingsFileEdit(absolutePath, file, () =>
-          replaceAll ? file.replaceAll(actualOldString, newString) : file.replace(actualOldString, newString),
-        );
-        if (settingsValidationResult !== null) return settingsValidationResult;
+        },
+        async call(input, callOptions) {
+          let { parentMessage } = callOptions;
+          if (parentMessage === undefined) throw Error("Edit: a call needs the message that issued it");
+          return editFileToolCall(input, createToolContextView(toolContext, callOptions), parentMessage);
+        },
+      };
+    },
+    mapToolResultToToolResultBlockParam(data, toolUseID) {
+      let {
+        filePath,
+        userModified,
+        replaceAll,
+        staleRecovered,
+        contentNotInModelContext,
+        staged,
+        stagedWording,
+        syncedSkillNext,
+      } = data;
+      if (staged)
         return {
-          result: true,
-          meta: {
-            actualOldString,
-          },
+          tool_use_id: toolUseID,
+          type: "tool_result",
+          content: settingsNotAppliedMessage(filePath, stagedWording ?? "review"),
         };
-      },
-      async call(n, r) {
-        let { parentMessage } = r;
-        if (parentMessage === undefined) throw Error("Edit: a call needs the message that issued it");
-        return editFileToolCall(n, createToolContextView(toolContext, r), parentMessage);
-      },
-    };
-  },
-  mapToolResultToToolResultBlockParam(data, toolUseID) {
-    let {
-      filePath,
-      userModified,
-      replaceAll,
-      staleRecovered,
-      contentNotInModelContext,
-      staged,
-      stagedWording,
-      syncedSkillNext,
-    } = data;
-    if (staged)
+      let modifiedNote = userModified
+        ? ".  The user modified your proposed changes before accepting them. "
+        : "";
+      let staleOrModifiedNote = staleRecovered
+        ? " (note: the file had been modified on disk since you last read it \u2014 the edit applied cleanly, but the file contains other changes not in your context. Read it before edits that depend on surrounding content.)"
+        : userModified || contentNotInModelContext
+          ? ""
+          : FILE_STATE_CURRENT_SUFFIX;
+      let skillSaveHint = syncedSkillSaveHint(syncedSkillNext);
+      if (replaceAll)
+        return {
+          tool_use_id: toolUseID,
+          type: "tool_result",
+          content: `The file ${filePath} has been updated${modifiedNote}. All occurrences were successfully replaced.${staleOrModifiedNote}${skillSaveHint}`,
+        };
       return {
         tool_use_id: toolUseID,
         type: "tool_result",
-        content: settingsNotAppliedMessage(filePath, stagedWording ?? "review"),
+        content: `The file ${filePath} has been updated successfully${modifiedNote}.${staleOrModifiedNote}${skillSaveHint}`,
       };
-    let modifiedNote = userModified
-      ? ".  The user modified your proposed changes before accepting them. "
-      : "";
-    let Z = staleRecovered
-      ? " (note: the file had been modified on disk since you last read it \u2014 the edit applied cleanly, but the file contains other changes not in your context. Read it before edits that depend on surrounding content.)"
-      : userModified || contentNotInModelContext
-        ? ""
-        : FILE_STATE_CURRENT_SUFFIX;
-    let Se = syncedSkillSaveHint(syncedSkillNext);
-    if (replaceAll)
-      return {
-        tool_use_id: toolUseID,
-        type: "tool_result",
-        content: `The file ${filePath} has been updated${modifiedNote}. All occurrences were successfully replaced.${Z}${Se}`,
-      };
-    return {
-      tool_use_id: toolUseID,
-      type: "tool_result",
-      content: `The file ${filePath} has been updated successfully${modifiedNote}.${Z}${Se}`,
-    };
-  },
+    },
+  });
 });
 //@ chunk-e6aww6q8.js:4656768-4661702 layout
 /**
@@ -650,11 +674,11 @@ async function editFileToolCall(input, context, parentMessage) {
   let { file_path: filePath, replace_all: replaceAll = false } = input;
   let { old_string: oldString, new_string: newString } = input;
   let absolutePath = expandStablePath(filePath);
-  let spellings = consumeWritePermission(context, absolutePath);
+  let approvedSpellings = consumeWritePermission(context, absolutePath);
   if (hasReadDenyRuleForPath(absolutePath, context.permissions()))
     throw new FileStateError(READ_DENY_RULE_EDIT_ERROR);
-  let we = writeBlockRefusal(absolutePath, context.permissions(), spellings);
-  if (we !== undefined) throw new FileStateError(we);
+  let writeRefusal = writeBlockRefusal(absolutePath, context.permissions(), approvedSpellings);
+  if (writeRefusal !== undefined) throw new FileStateError(writeRefusal);
   ({ old_string: oldString, new_string: newString } = normalizeEditInputForRemote(input, context));
   if (!env.CLAUDE_CODE_SIMPLE && context.remoteCall === undefined)
     await discoverSkillsForPath(
@@ -665,12 +689,16 @@ async function editFileToolCall(input, context, parentMessage) {
     );
   if (context.remoteCall === undefined)
     await diagnosticTrackingSlot.of(context.session).beforeFileEdited(absolutePath);
-  let stagingDecision = await checkSettingsWrite(context, spellings, {
+  let stagingDecision = await checkSettingsWrite(context, approvedSpellings, {
     toolName: FILE_EDIT_TOOL_NAME,
     absolutePath,
     input,
   });
-  let Ae = skillSaveMode(context, spellings, await isInSyncedSkillsDir(context.session.host, spellings));
+  let skillSaveModeValue = skillSaveMode(
+    context,
+    approvedSpellings,
+    await isInSyncedSkillsDir(context.session.host, approvedSpellings),
+  );
   if (stagingDecision === undefined)
     await fileHistoryTrackEdit(getFileHistoryState, applyFileHistoryOp, absolutePath, parentMessage.uuid);
   let {
@@ -683,7 +711,7 @@ async function editFileToolCall(input, context, parentMessage) {
     contentNotInModelContext,
     staged,
   } = await runWithFileWriteContext(absolutePath, async () => {
-    let fileHandle = await pinWriteTarget(absolutePath, spellings, {
+    let fileHandle = await pinWriteTarget(absolutePath, approvedSpellings, {
       createParents: oldString === "" && stagingDecision === undefined,
     }).catch((error) => {
       if (stagingDecision !== undefined && oldString === "" && isENOENT(error)) return null;
@@ -714,20 +742,21 @@ async function editFileToolCall(input, context, parentMessage) {
         matchedOldString,
         preserveQuoteStyle(oldString, matchedOldString, newString),
       );
-      let fo = memoryWriteSource(context);
-      let To =
-        lintMemoryFilePath(absolutePath, quotedNewString, fo) ?? secretWarning(absolutePath, quotedNewString);
-      if (To !== null)
+      let memorySource = memoryWriteSource(context);
+      let postEditRefusal =
+        lintMemoryFilePath(absolutePath, quotedNewString, memorySource) ??
+        secretWarning(absolutePath, quotedNewString);
+      if (postEditRefusal !== null)
         throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-          To,
+          postEditRefusal,
           "memory-directory write refused an edit after escape decoding",
         );
-      let bo = lintBackgroundMemoryWrite(absolutePath, quotedNewString, fo);
-      let vn = bo !== quotedNewString;
-      let co = oldString === "" ? preserveBomPrefix(content, bo) : bo;
-      let So = forgetLintedWrite(context.session.host, context.toolUseId);
-      let ko = vn || So;
-      if (vn && co === matchedOldString)
+      let lintedNewString = lintBackgroundMemoryWrite(absolutePath, quotedNewString, memorySource);
+      let newStringChanged = lintedNewString !== quotedNewString;
+      let finalNewString = oldString === "" ? preserveBomPrefix(content, lintedNewString) : lintedNewString;
+      let staleLintCleared = forgetLintedWrite(context.session.host, context.toolUseId);
+      let contentAdjusted = newStringChanged || staleLintCleared;
+      if (newStringChanged && finalNewString === matchedOldString)
         throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
           "Nothing to change once the invisible characters are removed and harness-tag text is defused in new_string: it then equals old_string. Nothing was written.",
           "memory-directory write lint left an edit with nothing to change",
@@ -736,12 +765,12 @@ async function editFileToolCall(input, context, parentMessage) {
         filePath: absolutePath,
         fileContents: content,
         oldString: matchedOldString,
-        newString: co,
+        newString: finalNewString,
         replaceAll,
         isForToolResult: stagingDecision === undefined,
       });
       let filePath = await mapToMirrorPath(absolutePath);
-      let $o =
+      let syncOutcome =
         stagingDecision !== undefined || fileHandle === null
           ? undefined
           : await memoryItemStampContext(
@@ -753,11 +782,11 @@ async function editFileToolCall(input, context, parentMessage) {
                 remote: context.remoteCall !== undefined,
               },
             );
-      let memoryContent = prepareMemoryContent(filePath, editPatch.updatedFile, $o?.context);
+      let memoryContent = prepareMemoryContent(filePath, editPatch.updatedFile, syncOutcome?.context);
       logMemoryItemBlock(memoryContent.sharedItemBlock, "team");
       let content_2 = memoryContent.content;
-      let rr = content_2 !== editPatch.updatedFile;
-      let patch = !rr
+      let memoryContentChanged = content_2 !== editPatch.updatedFile;
+      let patch = !memoryContentChanged
         ? editPatch.patch
         : getPatchFromContents({
             filePath: absolutePath,
@@ -766,10 +795,10 @@ async function editFileToolCall(input, context, parentMessage) {
             convertTabs: true,
             isForToolResult: stagingDecision === undefined,
           });
-      let Hr =
+      let contentNotInModelContext =
         userModified ||
-        rr ||
-        ko ||
+        memoryContentChanged ||
+        contentAdjusted ||
         (fileExists &&
           (!hasFullFileContent(lastRead) ||
             staleRecovered ||
@@ -785,11 +814,11 @@ async function editFileToolCall(input, context, parentMessage) {
         return {
           originalFileContents: content,
           actualOldString: matchedOldString,
-          actualNewString: co,
+          actualNewString: finalNewString,
           updatedFile: content_2,
           patch,
           staleRecovered,
-          contentNotInModelContext: Hr,
+          contentNotInModelContext,
           staged: true,
         };
       }
@@ -801,13 +830,13 @@ async function editFileToolCall(input, context, parentMessage) {
         notePlanFileForgotten(absolutePath);
         throw error;
       }
-      await noteMemoryItemWritten(filePath, content_2, memoryContent.item, $o?.rev);
+      await noteMemoryItemWritten(filePath, content_2, memoryContent.item, syncOutcome?.rev);
       readFileState.set(absolutePath, {
         content: stripBom_2(content_2),
         timestamp,
         offset: undefined,
         limit: undefined,
-        ...(Hr && {
+        ...(contentNotInModelContext && {
           contentNotInModelContext: true,
         }),
         ...(fileExists &&
@@ -820,11 +849,11 @@ async function editFileToolCall(input, context, parentMessage) {
       return {
         originalFileContents: content,
         actualOldString: matchedOldString,
-        actualNewString: co,
+        actualNewString: finalNewString,
         updatedFile: content_2,
         patch,
         staleRecovered,
-        contentNotInModelContext: Hr,
+        contentNotInModelContext,
         staged: false,
       };
     } catch (error) {
@@ -835,14 +864,14 @@ async function editFileToolCall(input, context, parentMessage) {
     }
   });
   if (staged) {
-    let qt = context.remoteCall !== undefined || context.inputFromAnotherMachine === true;
+    let isRemoteOrForeign = context.remoteCall !== undefined || context.inputFromAnotherMachine === true;
     return {
       data: {
         filePath,
-        oldString: qt ? input.old_string : actualOldString,
-        newString: qt ? input.new_string : newString,
-        originalFile: qt ? null : originalFileContents,
-        structuredPatch: qt ? [] : patch,
+        oldString: isRemoteOrForeign ? input.old_string : actualOldString,
+        newString: isRemoteOrForeign ? input.new_string : newString,
+        originalFile: isRemoteOrForeign ? null : originalFileContents,
+        structuredPatch: isRemoteOrForeign ? [] : patch,
         userModified: userModified ?? false,
         replaceAll,
         staged: true,
@@ -859,16 +888,16 @@ async function editFileToolCall(input, context, parentMessage) {
     };
   }
   if (context.remoteCall === undefined) pushUnique(context.nestedMemoryAttachmentTriggers, absolutePath);
-  let Et = context.remoteCall === undefined ? getLspServerManager() : undefined;
-  if (Et) {
+  let lspManager = context.remoteCall === undefined ? getLspServerManager() : undefined;
+  if (lspManager) {
     clearDeliveredDiagnosticsForFile(context.session, absolutePath);
     clearPendingDiagnosticsForFile(context.session, absolutePath);
-    Et.changeFile(absolutePath, updatedFile).catch((error) => {
+    lspManager.changeFile(absolutePath, updatedFile).catch((error) => {
       logForDebugging(`LSP: Failed to notify server of file change for ${absolutePath}: ${error.message}`, {
         level: "error",
       });
     });
-    Et.saveFile(absolutePath).catch((error) => {
+    lspManager.saveFile(absolutePath).catch((error) => {
       logForDebugging(`LSP: Failed to notify server of file save for ${absolutePath}: ${error.message}`, {
         level: "error",
       });
@@ -898,7 +927,7 @@ async function editFileToolCall(input, context, parentMessage) {
       hasDiff: !!singleFileGitDiff,
     });
   }
-  let At = {
+  let output = {
     filePath,
     oldString: actualOldString,
     newString,
@@ -912,31 +941,31 @@ async function editFileToolCall(input, context, parentMessage) {
     ...(contentNotInModelContext && {
       contentNotInModelContext: true,
     }),
-    ...(Ae && {
-      syncedSkillNext: Ae,
+    ...(skillSaveModeValue && {
+      syncedSkillNext: skillSaveModeValue,
     }),
     ...(gitDiff && {
       gitDiff,
     }),
   };
-  let It = {
+  let fingerprintInput = {
     absoluteFilePath: absolutePath,
-    output: At,
+    output,
     originalFile: originalFileContents,
     updatedFile,
     appliedNewString: actualNewString,
   };
-  let Yt =
+  let fingerprintResult =
     context.remoteCall !== undefined
       ? undefined
       : context.smallResultAsked === true
-        ? recordEditFingerprint(It)
+        ? recordEditFingerprint(fingerprintInput)
         : context.agentId !== undefined
-          ? maybeRecordEditFingerprint(It)
+          ? maybeRecordEditFingerprint(fingerprintInput)
           : undefined;
   return {
-    data: At,
-    ...Yt,
+    data: output,
+    ...fingerprintResult,
   };
 }
 //@ chunk-e6aww6q8.js:4661702-4661872 fingerprint = readFileForEdit (0.838)
@@ -944,8 +973,8 @@ async function editFileToolCall(input, context, parentMessage) {
  * 读取待编辑文件：句柄为 null 或文件不存在时返回空内容（utf8/LF、fileExists:false），否则返回 readExisting 的内容/编码/行尾。
  */
 async function readFileForEdit(absoluteFilePath) {
-  let n = absoluteFilePath === null ? null : await absoluteFilePath.readExisting();
-  if (n === null)
+  let readResult = absoluteFilePath === null ? null : await absoluteFilePath.readExisting();
+  if (readResult === null)
     return {
       content: "",
       fileExists: false,
@@ -953,18 +982,18 @@ async function readFileForEdit(absoluteFilePath) {
       lineEndings: "LF",
     };
   return {
-    ...n,
+    ...readResult,
     fileExists: true,
   };
 }
 //@ chunk-e6aww6q8.js:4661872-4662049 sole-consumer
-function classifyEditMatch(e, oldString, replaceAll) {
+function classifyEditMatch(fileContent, oldString, replaceAll) {
   if (oldString === "") return "no_match";
-  let actualString = findActualString(e, oldString);
+  let actualString = findActualString(fileContent, oldString);
   if (!actualString) return "no_match";
   if (!replaceAll) {
-    let index = e.indexOf(actualString);
-    if (e.indexOf(actualString, index + actualString.length) !== -1) return "ambiguous";
+    let index = fileContent.indexOf(actualString);
+    if (fileContent.indexOf(actualString, index + actualString.length) !== -1) return "ambiguous";
   }
   return "applies";
 }
@@ -992,17 +1021,19 @@ async function isUnreadEditAllowed({
     }
     throw new FileStateError(FILE_NOT_READ_ERROR);
   }
-  let G = isRefreshedBehindModel(lastRead);
-  if (!G && (await getFileModificationTimeAsync(ioPath)) <= lastRead.timestamp) return false;
-  let q = isFullFileView(lastRead);
-  if (!G && q && matchesContentHash(lastRead, stripBom_2(fileContents))) return false;
+  let refreshedBehindModel = isRefreshedBehindModel(lastRead);
+  if (!refreshedBehindModel && (await getFileModificationTimeAsync(ioPath)) <= lastRead.timestamp)
+    return false;
+  let isFullView = isFullFileView(lastRead);
+  if (!refreshedBehindModel && isFullView && matchesContentHash(lastRead, stripBom_2(fileContents)))
+    return false;
   if (classifyEditMatch(fileContents, oldString, replaceAll) === "applies" && !readNotAutoAllowed())
     return true;
   throw new FileStateError(FILE_UNEXPECTEDLY_MODIFIED_ERROR);
 }
 //@ chunk-e6aww6q8.js:4662480-4662618 sole-consumer
-function editMatchResultCode(e) {
-  switch (e) {
+function editMatchResultCode(matchOutcome) {
+  switch (matchOutcome) {
     case "no_match":
       return lit_2("errorCode8");
     case "ambiguous":

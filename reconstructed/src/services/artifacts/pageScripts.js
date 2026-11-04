@@ -16,36 +16,37 @@ var PASSIVE = "passive";
 /**
  * 导出函数 `parseHtml`：参数 e，返回 e。
  */
-function parseHtml(e) {
-  return e;
+function parseHtml(html) {
+  return html;
 }
 //@ chunk-jv307fw4.js:16451-16550 placement
 /**
  * 导出函数 `attrOf`：参数 e, n，返回 e.attrs?.find((s) => s.name.toLowerCase() === lower)?.value。
  */
-function attrOf(e, n) {
-  let lower = n.toLowerCase();
-  return e.attrs?.find((attr) => attr.name.toLowerCase() === lower)?.value;
+function attrOf(node, name) {
+  let lower = name.toLowerCase();
+  return node.attrs?.find((attr) => attr.name.toLowerCase() === lower)?.value;
 }
 //@ chunk-jv307fw4.js:16550-16585 placement
 var SAFE_SCRIPT_ID_RE = /^[a-z0-9][a-z0-9-]{0,63}$/;
 //@ chunk-jv307fw4.js:16585-16750 placement
 function findIdAttributeTags(html, id) {
-  let r = `id="${id}"`;
-  let s = [];
-  let index = html.indexOf(r);
+  let idAttr = `id="${id}"`;
+  let ranges = [];
+  let index = html.indexOf(idAttr);
   while (index !== -1) {
-    let l = index + r.length;
-    let d = l + dataIdAttributeLength(html, l);
-    if (html.charCodeAt(d) === 62) s.push([index, d + 1]);
-    index = html.indexOf(r, l);
+    let afterId = index + idAttr.length;
+    let afterDataId = afterId + dataIdAttributeLength(html, afterId);
+    if (html.charCodeAt(afterDataId) === 62) ranges.push([index, afterDataId + 1]);
+    index = html.indexOf(idAttr, afterId);
   }
-  return s;
+  return ranges;
 }
 //@ chunk-jv307fw4.js:16750-16902 placement
 async function findElementsByIdSafe(html, id) {
   try {
-    let { nestingBudgetExceeded } = await import("./chunk-kpk3x82b.js");
+    let { nestingBudgetExceeded } =
+      await import("../../../vendor/@mixmark-io/domino/lib/RAWTEXT_MODES.lazy.js");
     if (nestingBudgetExceeded(html)) return null;
     return await findElementsById(html, id);
   } catch {
@@ -56,43 +57,43 @@ async function findElementsByIdSafe(html, id) {
 /**
  * 解析 HTML 并遍历所有节点（包括 template 内容），找出 id 等于给定值的元素及其是否位于 template 中。
  */
-async function findElementsById(e, n) {
-  let { parse } = await import("./chunk-ytv6b64r.js");
+async function findElementsById(html, id) {
+  let { parse } = await import("../../../vendor/parse5/dist/tokenizer/Tokenizer.lazy.js");
   let node = parseHtml(
-    parse(e, {
+    parse(html, {
       sourceCodeLocationInfo: true,
     }),
   );
-  let a = [];
-  let l = [
+  let found = [];
+  let stack = [
     {
       node,
       inTemplate: false,
     },
   ];
   for (;;) {
-    let d = l.pop();
-    if (d === undefined) break;
-    let { node, inTemplate } = d;
+    let entry = stack.pop();
+    if (entry === undefined) break;
+    let { node, inTemplate } = entry;
     if (node.tagName !== undefined) {
-      if (attrOf(node, "id") === n)
-        a.push({
+      if (attrOf(node, "id") === id)
+        found.push({
           node,
           inTemplate,
         });
     }
     for (let node_2 of node.childNodes ?? [])
-      l.push({
+      stack.push({
         node: node_2,
         inTemplate,
       });
     for (let node_2 of node.content?.childNodes ?? [])
-      l.push({
+      stack.push({
         node: node_2,
         inTemplate: true,
       });
   }
-  return a;
+  return found;
 }
 //@ chunk-jv307fw4.js:17326-18001 placement
 /**
@@ -120,7 +121,7 @@ async function extractJsonScriptById(html, id) {
     return {
       ambiguous: true,
     };
-  let [s, a] = textMatches[0];
+  let [fullMatch, text] = textMatches[0];
   let parsedMatches = await findElementsByIdSafe(html, id);
   if (parsedMatches === null || parsedMatches.length !== 1 || parsedMatches[0].inTemplate)
     return {
@@ -141,7 +142,7 @@ async function extractJsonScriptById(html, id) {
     return {
       ambiguous: true,
     };
-  if (s < startTag.startOffset || a !== startTag.endOffset)
+  if (fullMatch < startTag.startOffset || text !== startTag.endOffset)
     return {
       ambiguous: true,
     };
@@ -159,8 +160,10 @@ var VERSION_TS_PREFIX_RE = /^(\d{1,15})-/;
 /**
  * 接受版本号时间戳不超前于当前时间（允许少量偏差）的版本字符串，否则返回 undefined。
  */
-function acceptVersionNotAhead(e) {
-  let n = e === undefined ? undefined : VERSION_TS_PREFIX_RE.exec(e)?.[1];
-  return n !== undefined && Number(n) * 1000 <= Date.now() + MAX_VERSION_AHEAD_MS ? e : undefined;
+function acceptVersionNotAhead(ver) {
+  let timestampPart = ver === undefined ? undefined : VERSION_TS_PREFIX_RE.exec(ver)?.[1];
+  return timestampPart !== undefined && Number(timestampPart) * 1000 <= Date.now() + MAX_VERSION_AHEAD_MS
+    ? ver
+    : undefined;
 }
 export { extractJsonScriptById, parseHtml, attrOf, PASSIVE, acceptVersionNotAhead, VERSION_TS_PREFIX_RE };

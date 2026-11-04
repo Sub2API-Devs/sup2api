@@ -6,9 +6,9 @@
  * attribution: esm-layout 1, esm-fingerprint 8
  */
 import { decodeUtf8 } from "../../internal/utils/bytes.mjs";
-import { du } from "../../internal/utils/base64.mjs";
+import { fromBuffer } from "../../internal/utils/base64.mjs";
 import { AnthropicError, APIError } from "../../core/error.mjs";
-import { M8r } from "../../tools/agent-toolset/sync-interval.mjs";
+import { checkMemorySyncInterval } from "../../tools/agent-toolset/sync-interval.mjs";
 import { __classPrivateFieldSet, __classPrivateFieldGet } from "../../internal/tslib.mjs";
 import { WorkPoller } from "./poller.mjs";
 import { loggerFor } from "../../internal/utils/log.mjs";
@@ -41,7 +41,7 @@ function sessionsTokenFromSecret(secret) {
   try {
     let normalized = secret.replace(/-/g, "+").replace(/_/g, "/");
     let padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=");
-    parsed = JSON.parse(decodeUtf8(du(padded)));
+    parsed = JSON.parse(decodeUtf8(fromBuffer(padded)));
   } catch {
     return null;
   }
@@ -66,7 +66,8 @@ var EnvironmentWorker = (() => {
       this.workdir = opts.workdir ?? process.cwd();
       this.maxFileBytes = opts.maxFileBytes;
       this.maxIdleMs = opts.maxIdleMs;
-      if (opts.memorySyncIntervalMs != null) M8r(opts.memorySyncIntervalMs, "memorySyncIntervalMs");
+      if (opts.memorySyncIntervalMs != null)
+        checkMemorySyncInterval(opts.memorySyncIntervalMs, "memorySyncIntervalMs");
       this.memorySyncIntervalMs = opts.memorySyncIntervalMs;
       this.memorySyncDeletions = opts.memorySyncDeletions ?? "enabled";
       this.workerId = opts.workerId;
@@ -185,7 +186,7 @@ var EnvironmentWorker = (() => {
     let ctrl = new AbortController();
     let detachExternal = linkAbort(externalSignal, ctrl);
     let lease = new Lease(ctrl);
-    let agentToolset = await import("./chunk-2cw52qnf.js");
+    let agentToolset = await import("../../tools/agent-toolset/MEMORY_FLUSH_TIMEOUT_MS.lazy.js");
     let leaseTtlMs;
     let runner;
     let heartbeatPromise = heartbeatLoop(sessionClient, work, lease, log, this.requestOptions, (ttlMs) => {
@@ -399,8 +400,8 @@ var Lease = (() => {
   return Lease;
 })();
 //@ chunk-hwmsct5x.js:78266-78411 esm-fingerprint
-function serverLeaseState(e) {
-  let node = e instanceof APIError ? e.error : undefined;
+function serverLeaseState(error) {
+  let node = error instanceof APIError ? error.error : undefined;
   for (let key of ["error", "details", "current_state"]) {
     if (!isObj(node)) return {};
     node = node[key];

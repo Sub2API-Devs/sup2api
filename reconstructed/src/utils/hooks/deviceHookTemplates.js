@@ -53,53 +53,53 @@ var buildTemplateLauncherScript = () =>
 var TEMPLATE_LAUNCHER_SCRIPT = buildTemplateLauncherScript();
 //@ chunk-y47q51t0.js:4491-4581 placement
 async function firstVettedPython3(templateFs) {
-  for (let r of PYTHON3_CANDIDATES) {
-    let e = await templateFs.vet(r);
-    if (e !== null) return e;
+  for (let candidate of PYTHON3_CANDIDATES) {
+    let vetted = await templateFs.vet(candidate);
+    if (vetted !== null) return vetted;
   }
   return null;
 }
 //@ chunk-y47q51t0.js:4581-4713 placement
-async function writeTemplateFile(o, r, templateFs) {
+async function writeTemplateFile(id, content, templateFs) {
   await templateFs.mkdir(templateFs.templateDir, 448);
-  let n = join(templateFs.templateDir, `${o}.py`);
-  await templateFs.writeFileAtomic(n, r, 384);
-  return n;
+  let path = join(templateFs.templateDir, `${id}.py`);
+  await templateFs.writeFileAtomic(path, content, 384);
+  return path;
 }
 //@ chunk-y47q51t0.js:4713-4781 placement
-function templateLauncherArgs(o, r, e, maxBytes = 262144) {
-  return [o, "-I", "-S", "-c", TEMPLATE_LAUNCHER_SCRIPT, r, e, String(maxBytes)];
+function templateLauncherArgs(python, scriptPath, templateId, maxBytes = 262144) {
+  return [python, "-I", "-S", "-c", TEMPLATE_LAUNCHER_SCRIPT, scriptPath, templateId, String(maxBytes)];
 }
 //@ chunk-y47q51t0.js:4781-4847 placement
 var UNSAFE_TEMPLATE_ENV_RE = /^(?:LD_|DYLD_|GCONV_PATH$|NLSPATH$|DEVELOPER_DIR$|PYTHON)/;
 //@ chunk-y47q51t0.js:4847-4936 placement
-function withoutUnsafeTemplateEnv(o) {
-  let r = {
-    ...o,
+function withoutUnsafeTemplateEnv(env) {
+  let copy = {
+    ...env,
   };
-  for (let key of Object.keys(r)) if (UNSAFE_TEMPLATE_ENV_RE.test(key)) delete r[key];
-  return r;
+  for (let key of Object.keys(copy)) if (UNSAFE_TEMPLATE_ENV_RE.test(key)) delete copy[key];
+  return copy;
 }
 //@ chunk-y47q51t0.js:4936-4948 placement
 var MAX_TEMPLATE_OUTPUT_CHARS = 65536;
 //@ chunk-y47q51t0.js:4948-5131 placement
-async function runTemplateWithCwdFallback(argv, r, options) {
-  let templateProcess = await spawnTemplateProcess(r.cwd, argv, r, options);
+async function runTemplateWithCwdFallback(argv, options, options_2) {
+  let templateProcess = await spawnTemplateProcess(options.cwd, argv, options, options_2);
   return templateProcess.status === null &&
     templateProcess.signal === undefined &&
     !templateProcess.timedOut &&
     /ENOENT|spawn .* cwd|uv_cwd|not a directory/i.test(templateProcess.stderr)
-    ? spawnTemplateProcess(homedir(), argv, r, options)
+    ? spawnTemplateProcess(homedir(), argv, options, options_2)
     : templateProcess;
 }
 //@ chunk-y47q51t0.js:5131-6415 placement
 /**
  * 在指定 cwd 以独立进程组启动设备钩子模板（python 启动器），把钩子输入写入 stdin，收集有上限的 stdout/stderr，处理超时与中止，返回 {stdout, stderr, status, signal, timedOut}。
  */
-function spawnTemplateProcess(cwd, argv, e, options) {
+function spawnTemplateProcess(cwd, argv, input, options) {
   return new Promise((resolve) => {
-    let [l, ...s] = argv;
-    if (l === undefined) {
+    let [command, ...args] = argv;
+    if (command === undefined) {
       resolve({
         stdout: "",
         stderr: "no command",
@@ -108,16 +108,16 @@ function spawnTemplateProcess(cwd, argv, e, options) {
       });
       return;
     }
-    let p = false;
-    let y = (d) => {
-      if (!p) {
-        p = true;
-        resolve(d);
+    let settled = false;
+    let finish = (result) => {
+      if (!settled) {
+        settled = true;
+        resolve(result);
       }
     };
     let child;
     try {
-      child = spawn(l, s, {
+      child = spawn(command, args, {
         cwd,
         env: {
           ...withoutUnsafeTemplateEnv(options.env ?? subprocessEnv()),
@@ -126,10 +126,10 @@ function spawnTemplateProcess(cwd, argv, e, options) {
         stdio: ["pipe", "pipe", "pipe"],
         detached: true,
         windowsHide: true,
-        ...hooksSettingForEvent(e.hook_event_name),
+        ...hooksSettingForEvent(input.hook_event_name),
       });
     } catch (error) {
-      y({
+      finish({
         stdout: "",
         stderr: error instanceof Error ? error.message : "spawn failed",
         status: null,
@@ -137,82 +137,84 @@ function spawnTemplateProcess(cwd, argv, e, options) {
       });
       return;
     }
-    let f = () => {
+    let killGroup = () => {
       try {
         if (child.pid !== undefined) process.kill(-child.pid, "SIGKILL");
       } catch {
         child.kill("SIGKILL");
       }
     };
-    let m = "";
+    let stdout = "";
     let stderr = "";
     let timedOut = false;
-    let g = false;
-    let h = false;
+    let stdoutTruncated = false;
+    let stderrTruncated = false;
     let timer = setTimeout(
-      (d) => {
+      (kill) => {
         timedOut = true;
-        d();
+        kill();
       },
       options.timeoutMs,
-      f,
+      killGroup,
     );
-    let T = () => f();
+    let onAbort = () => killGroup();
     if (options.signal !== undefined)
-      if (options.signal.aborted) T();
+      if (options.signal.aborted) onAbort();
       else
-        options.signal.addEventListener("abort", T, {
+        options.signal.addEventListener("abort", onAbort, {
           once: true,
         });
-    let D = (d, v, M) => {
-      if (d.length + v.length > MAX_TEMPLATE_OUTPUT_CHARS) M();
-      return d.length >= MAX_TEMPLATE_OUTPUT_CHARS ? d : (d + v).slice(0, MAX_TEMPLATE_OUTPUT_CHARS);
+    let append = (current, chunk, overflow) => {
+      if (current.length + chunk.length > MAX_TEMPLATE_OUTPUT_CHARS) overflow();
+      return current.length >= MAX_TEMPLATE_OUTPUT_CHARS
+        ? current
+        : (current + chunk).slice(0, MAX_TEMPLATE_OUTPUT_CHARS);
     };
     child.stdout?.setEncoding("utf8");
     child.stderr?.setEncoding("utf8");
-    child.stdout?.on("data", (d) => (m = D(m, d, () => (g = true))));
-    child.stderr?.on("data", (d) => (stderr = D(stderr, d, () => (h = true))));
+    child.stdout?.on("data", (chunk) => (stdout = append(stdout, chunk, () => (stdoutTruncated = true))));
+    child.stderr?.on("data", (chunk) => (stderr = append(stderr, chunk, () => (stderrTruncated = true))));
     child.stdin?.on("error", () => {});
-    let C = (status, v) => {
+    let settle = (status, exitSignal) => {
       clearTimeout(timer);
-      options.signal?.removeEventListener("abort", T);
-      y({
-        stdout: m,
+      options.signal?.removeEventListener("abort", onAbort);
+      finish({
+        stdout,
         stderr,
         status,
-        ...(v !== undefined && {
-          signal: v,
+        ...(exitSignal !== undefined && {
+          signal: exitSignal,
         }),
         timedOut,
-        ...(g && {
-          stdoutTruncated: g,
+        ...(stdoutTruncated && {
+          stdoutTruncated,
         }),
-        ...(h && {
-          stderrTruncated: h,
+        ...(stderrTruncated && {
+          stderrTruncated,
         }),
       });
     };
-    child.on("error", (d) => {
-      stderr = stderr || d.message;
-      C(null);
+    child.on("error", (error) => {
+      stderr = stderr || error.message;
+      settle(null);
     });
-    child.on("close", (status, v) => C(status, v ?? undefined));
-    let O;
+    child.on("close", (status, exitSignal) => settle(status, exitSignal ?? undefined));
+    let inputJson;
     try {
-      O = jsonStringify(e);
+      inputJson = jsonStringify(input);
     } catch {
-      O = "";
+      inputJson = "";
     }
-    child.stdin?.end(O);
+    child.stdin?.end(inputJson);
   });
 }
 //@ chunk-y47q51t0.js:6415-6757 placement
 /**
  * 解析模板 hook 的标准输出：空输出、JSON 回答或无法读取。
  */
-function parseTemplateAnswer(o) {
-  let trimmed = o.stdout.trim();
-  if (o.stdoutTruncated === true)
+function parseTemplateAnswer(result) {
+  let trimmed = result.stdout.trim();
+  if (result.stdoutTruncated === true)
     return {
       kind: "unreadable",
     };
@@ -225,19 +227,19 @@ function parseTemplateAnswer(o) {
           kind: "unreadable",
         };
   try {
-    let e = hookJSONOutputSchema().safeParse(jsonParse(trimmed));
-    if (!e.success)
+    let parsed = hookJSONOutputSchema().safeParse(jsonParse(trimmed));
+    if (!parsed.success)
       return {
         kind: "unreadable",
       };
-    let n = e.data;
-    return "async" in n
+    let output = parsed.data;
+    return "async" in output
       ? {
           kind: "unreadable",
         }
       : {
           kind: "answer",
-          answer: n,
+          answer: output,
         };
   } catch {
     return {
@@ -259,7 +261,7 @@ function templateResultToHookOutput(result) {
   let templateAnswer = parseTemplateAnswer(result);
   if (templateAnswer.kind !== "answer") return {};
   let answer = templateAnswer.answer;
-  let n = {
+  let base = {
     ...(answer.continue === false && {
       continue: false,
       ...(answer.stopReason !== undefined && {
@@ -283,7 +285,7 @@ function templateResultToHookOutput(result) {
         ? hookSpecificOutput.permissionDecision
         : undefined;
     return {
-      ...n,
+      ...base,
       hookSpecificOutput: {
         hookEventName: "PreToolUse",
         ...(permissionDecision !== undefined && {
@@ -304,23 +306,23 @@ function templateResultToHookOutput(result) {
     hookSpecificOutput.additionalContext !== undefined
   )
     return {
-      ...n,
+      ...base,
       hookSpecificOutput: {
         hookEventName: "PostToolUse",
         additionalContext: hookSpecificOutput.additionalContext,
       },
     };
-  return n;
+  return base;
 }
 //@ chunk-y47q51t0.js:7794-8077 placement
-function classifyTemplateOutcome(o, r) {
-  if (r) return "aborted";
-  if (o.timedOut) return "timeout";
-  if (o.signal !== undefined) return "killed";
-  if (o.status === null) return "spawn_failed";
-  if (o.status === INTEGRITY_FAILED_EXIT_CODE) return "integrity_failed";
-  if (o.status === 0) return parseTemplateAnswer(o).kind === "unreadable" ? "error" : "ok";
-  return o.status === 2 ? "blocked" : "error";
+function classifyTemplateOutcome(result, aborted) {
+  if (aborted) return "aborted";
+  if (result.timedOut) return "timeout";
+  if (result.signal !== undefined) return "killed";
+  if (result.status === null) return "spawn_failed";
+  if (result.status === INTEGRITY_FAILED_EXIT_CODE) return "integrity_failed";
+  if (result.status === 0) return parseTemplateAnswer(result).kind === "unreadable" ? "error" : "ok";
+  return result.status === 2 ? "blocked" : "error";
 }
 //@ chunk-y47q51t0.js:8077-8379 placement
 /**
@@ -338,16 +340,16 @@ var TEMPLATE_FAILURE_REASONS = {
 /**
  * 创建运行设备 hook 模板的执行函数：解析解释器、按超时运行并记录结果。
  */
-function createTemplateHookRunner(o, r, e, n, i, l) {
-  return async (s, p, y) => {
+function createTemplateHookRunner(argv, timeoutSec, hookEntry, report, isTrusted, projectDirOf) {
+  return async (argv_2, timeoutMs, signal) => {
     let now = Date.now();
-    let f = await i();
-    let m = f
-      ? await runTemplateWithCwdFallback(o, s, {
-          timeoutMs: Math.max(1000, r * 1000 - 2000),
-          projectDir: l(),
-          ...(y !== undefined && {
-            signal: y,
+    let trusted = await isTrusted();
+    let run = trusted
+      ? await runTemplateWithCwdFallback(argv, argv_2, {
+          timeoutMs: Math.max(1000, timeoutSec * 1000 - 2000),
+          projectDir: projectDirOf(),
+          ...(signal !== undefined && {
+            signal,
           }),
         })
       : {
@@ -356,37 +358,37 @@ function createTemplateHookRunner(o, r, e, n, i, l) {
           status: null,
           timedOut: false,
         };
-    let w = templateResultToHookOutput({
-      ...m,
-      stderr: clipHookText(m.stderr, 2000).text,
+    let output = templateResultToHookOutput({
+      ...run,
+      stderr: clipHookText(run.stderr, 2000).text,
     });
-    let { answer, report } = parseHookJsonOutput(w, e.event);
-    let h = f ? classifyTemplateOutcome(m, y?.aborted === true) : "interpreter_untrusted";
-    let R = h === "ok" && isBlockingHookOutput(answer) ? "blocked" : h;
-    n({
-      outcome: R,
+    let { answer, report: report_2 } = parseHookJsonOutput(output, hookEntry.event);
+    let outcome = trusted ? classifyTemplateOutcome(run, signal?.aborted === true) : "interpreter_untrusted";
+    let finalOutcome = outcome === "ok" && isBlockingHookOutput(answer) ? "blocked" : outcome;
+    report({
+      outcome: finalOutcome,
       durationMs: Date.now() - now,
-      fieldsDropped: report.dropped.length > 0 || report.truncated.length > 0,
+      fieldsDropped: report_2.dropped.length > 0 || report_2.truncated.length > 0,
     });
-    if (R === "aborted")
-      return e.failClosed
+    if (finalOutcome === "aborted")
+      return hookEntry.failClosed
         ? {
             decision: "block",
-            reason: `cloud template ${e.id} was interrupted before it could answer`,
+            reason: `cloud template ${hookEntry.id} was interrupted before it could answer`,
           }
         : {};
-    let T = TEMPLATE_FAILURE_REASONS[R];
-    if (T !== undefined) {
-      let D = `cloud template ${e.id} did not run cleanly: ${T}`;
-      return e.failClosed
+    let failureText = TEMPLATE_FAILURE_REASONS[finalOutcome];
+    if (failureText !== undefined) {
+      let message = `cloud template ${hookEntry.id} did not run cleanly: ${failureText}`;
+      return hookEntry.failClosed
         ? {
             decision: "block",
-            reason: D,
-            systemMessage: D,
+            reason: message,
+            systemMessage: message,
           }
         : {
             ...answer,
-            systemMessage: D,
+            systemMessage: message,
           };
     }
     return answer;
@@ -398,41 +400,43 @@ function createTemplateHookRunner(o, r, e, n, i, l) {
  */
 function createTemplateFs(templateDir) {
   return {
-    vet: async (r) => {
+    vet: async (path) => {
       try {
-        let e = typeof process.getuid === "function" ? process.getuid() : undefined;
-        let n = (uid) => e !== undefined && e !== 0 && uid === e;
-        let i = async (p) => {
-          let filtered = p.split("/").filter(Boolean);
-          for (let u = 0; u < filtered.length; u += 1) {
-            let f = await lstat("/" + filtered.slice(0, u).join("/"));
-            if (!f.isDirectory() || (f.mode & 18) !== 0 || n(f.uid)) return false;
+        let uid = typeof process.getuid === "function" ? process.getuid() : undefined;
+        let ownedByUs = (uid_2) => uid !== undefined && uid !== 0 && uid_2 === uid;
+        let ancestorsSafe = async (path) => {
+          let filtered = path.split("/").filter(Boolean);
+          for (let index = 0; index < filtered.length; index += 1) {
+            let stats = await lstat("/" + filtered.slice(0, index).join("/"));
+            if (!stats.isDirectory() || (stats.mode & 18) !== 0 || ownedByUs(stats.uid)) return false;
           }
           return true;
         };
-        if (!(await i(r))) return null;
-        let l = await realpath(r);
-        if (!(await i(l))) return null;
-        let s = await lstat(l);
-        return s.isFile() && (s.mode & 73) !== 0 && (s.mode & 18) === 0 && !n(s.uid) ? l : null;
+        if (!(await ancestorsSafe(path))) return null;
+        let resolved = await realpath(path);
+        if (!(await ancestorsSafe(resolved))) return null;
+        let stats = await lstat(resolved);
+        return stats.isFile() && (stats.mode & 73) !== 0 && (stats.mode & 18) === 0 && !ownedByUs(stats.uid)
+          ? resolved
+          : null;
       } catch {
         return null;
       }
     },
-    mkdir: async (r, mode) => {
+    mkdir: async (dir, mode) => {
       try {
-        await mkdir(r, {
+        await mkdir(dir, {
           mode,
         });
       } catch (error) {
         if (getErrnoCode(error) !== "EEXIST") throw error;
       }
-      let n = await lstat(r);
-      let i = typeof process.getuid === "function" ? process.getuid() : undefined;
-      if (!n.isDirectory() || (i !== undefined && n.uid !== i) || (n.mode & 63) !== 0)
+      let stats = await lstat(dir);
+      let uid = typeof process.getuid === "function" ? process.getuid() : undefined;
+      if (!stats.isDirectory() || (uid !== undefined && stats.uid !== uid) || (stats.mode & 63) !== 0)
         throw Error("unsafe device-hook template directory");
     },
-    writeFileAtomic: (r, e, n) => writeFileAtomic(r, e, n),
+    writeFileAtomic: (path, data, mode) => writeFileAtomic(path, data, mode),
     templateDir,
   };
 }
@@ -440,106 +444,111 @@ function createTemplateFs(templateDir) {
 /**
  * 创建设备钩子模板宿主：解析可信的绝对路径 python3，prepare 时把模板写入私有临时目录（已写过且 sha256 仍匹配则复用），并返回运行该模板的钩子执行器。
  */
-function createDeviceHookTemplateHost(o) {
+function createDeviceHookTemplateHost(options) {
   let tempRoot = getClaudeTempDirRealpath();
   let templateFs = createTemplateFs(join(tempRoot, "device-hook-templates", String(process.pid)));
-  let n;
-  let i = () => {
-    n ??= firstVettedPython3(templateFs).then((s) => {
-      if (s === null) n = undefined;
-      return s;
+  let interpreter;
+  let resolveInterpreter = () => {
+    interpreter ??= firstVettedPython3(templateFs).then((found) => {
+      if (found === null) interpreter = undefined;
+      return found;
     });
-    return n;
+    return interpreter;
   };
   let prepared = new Map();
   return {
-    resolveInterpreter: i,
-    async prepare(s, p, y, u) {
-      let f = await i();
-      if (f === null) throw Error("no absolute python3 for a device hook template");
+    resolveInterpreter,
+    async prepare(spec, id, content, timeoutSec) {
+      let python = await resolveInterpreter();
+      if (python === null) throw Error("no absolute python3 for a device hook template");
       await mkdir(tempRoot, {
         recursive: true,
         mode: 448,
       });
       verifyTempDirOwnership(tempRoot);
-      let m = prepared.get(p);
-      if (m !== undefined && !(await verifyTemplateFileDigest(await m.catch(() => null), p, s.maxBytes))) {
-        prepared.delete(p);
-        m = undefined;
+      let cached = prepared.get(id);
+      if (
+        cached !== undefined &&
+        !(await verifyTemplateFileDigest(await cached.catch(() => null), id, spec.maxBytes))
+      ) {
+        prepared.delete(id);
+        cached = undefined;
       }
-      if (m === undefined) {
-        m = (async () => {
+      if (cached === undefined) {
+        cached = (async () => {
           await templateFs.mkdir(join(tempRoot, "device-hook-templates"), 448);
-          return writeTemplateFile(p, y, templateFs);
+          return writeTemplateFile(id, content, templateFs);
         })();
-        prepared.set(p, m);
-        m.catch(() => prepared.delete(p));
+        prepared.set(id, cached);
+        cached.catch(() => prepared.delete(id));
       }
-      let w = await m;
-      let failClosed = isPreToolUseTemplate(s);
+      let scriptPath = await cached;
+      let failClosed = isPreToolUseTemplate(spec);
       return createTemplateHookRunner(
-        templateLauncherArgs(f, w, p, s.maxBytes),
-        u,
+        templateLauncherArgs(python, scriptPath, id, spec.maxBytes),
+        timeoutSec,
         {
-          id: s.id,
-          event: s.event,
+          id: spec.id,
+          event: spec.event,
           failClosed,
         },
-        (g) => {
+        (report) => {
           logEvent("tengu_device_hook_template_run", {
-            template: fromEnum(hookTemplateId(s.id)),
-            outcome: fromEnum(g.outcome),
-            duration_ms: g.durationMs,
-            fields_dropped: g.fieldsDropped,
+            template: fromEnum(hookTemplateId(spec.id)),
+            outcome: fromEnum(report.outcome),
+            duration_ms: report.durationMs,
+            fields_dropped: report.fieldsDropped,
           });
-          if (g.outcome === "integrity_failed")
+          if (report.outcome === "integrity_failed")
             logForDebugging(
-              `Device hook template ${s.id} refused at run time: integrity check failed (${w})`,
+              `Device hook template ${spec.id} refused at run time: integrity check failed (${scriptPath})`,
               {
                 level: "warn",
               },
             );
-          else if (g.outcome === "interpreter_untrusted")
+          else if (report.outcome === "interpreter_untrusted")
             logForDebugging(
-              `Device hook template ${s.id} refused at run time: ${f} no longer vets as a trusted interpreter`,
+              `Device hook template ${spec.id} refused at run time: ${python} no longer vets as a trusted interpreter`,
               {
                 level: "warn",
               },
             );
         },
         async () => {
-          let g = (await templateFs.vet(f)) === f;
-          if (!g) n = undefined;
-          return g;
+          let stillTrusted = (await templateFs.vet(python)) === python;
+          if (!stillTrusted) interpreter = undefined;
+          return stillTrusted;
         },
-        o,
+        options,
       );
     },
-    install: (s, p, y) => registerDeviceHookCallbacks(s, p, "templates", y),
-    remove: (s) => unregisterDeviceHookCallbacks(s, "templates"),
+    install: (owner, hooks, templateIdFor) =>
+      registerDeviceHookCallbacks(owner, hooks, "templates", templateIdFor),
+    remove: (owner) => unregisterDeviceHookCallbacks(owner, "templates"),
   };
 }
 //@ chunk-y47q51t0.js:11235-11578 placement
 /**
  * 校验模板文件摘要：不跟随链接地打开普通文件，大小受限，计算哈希比较。
  */
-async function verifyTemplateFileDigest(o, r, maxBytes) {
-  if (o === null) return false;
-  let n;
+async function verifyTemplateFileDigest(path, digest, maxBytes) {
+  if (path === null) return false;
+  let handle;
   try {
-    n = await open(o, constants.O_RDONLY | constants.O_NONBLOCK | constants.O_NOFOLLOW);
-    let stats = await n.stat();
+    handle = await open(path, constants.O_RDONLY | constants.O_NONBLOCK | constants.O_NOFOLLOW);
+    let stats = await handle.stat();
     if (!stats.isFile() || stats.size > maxBytes) return false;
-    let l = Buffer.alloc(stats.size);
-    let { bytesRead } = await n.read(l, 0, stats.size, 0);
-    return bytesRead === stats.size && createHash("sha256").update(l).digest("hex") === r;
+    let buffer = Buffer.alloc(stats.size);
+    let { bytesRead } = await handle.read(buffer, 0, stats.size, 0);
+    return bytesRead === stats.size && createHash("sha256").update(buffer).digest("hex") === digest;
   } catch {
     return false;
   } finally {
-    await n?.close().catch(() => {});
+    await handle?.close().catch(() => {});
   }
 }
 //@ chunk-y47q51t0.js:11578-11622 placement
-function hookTemplateId(id) {
-  return getHookTemplate(id)?.id ?? "unknown";
+function hookTemplateId(templateId) {
+  return getHookTemplate(templateId)?.id ?? "unknown";
 }
+export { createDeviceHookTemplateHost, hookTemplateId };

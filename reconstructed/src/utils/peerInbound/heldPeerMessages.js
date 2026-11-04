@@ -10,7 +10,7 @@
  */
 import { withHideWhile } from "../../components/dialogs/dialogRequests.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { hu } from "../../../vendor/zod/v4/classic/schemas.js";
+import { custom } from "../../../vendor/zod/v4/classic/schemas.js";
 import {
   setOnPeerHeld,
   setOnPeerHoldDropped,
@@ -31,111 +31,118 @@ import { isPeerAddress, MAX_PEER_LABEL_WIDTH } from "../peerMessageHeaders.js";
 import { clipTeammateText, MAX_ADDRESS_TEXT_CHARS } from "../swarm/teammateIds.js";
 import { jsonStringify } from "../slowOperations.js";
 import { truncateToWidthNoEllipsis } from "../format.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-18hwfzwa.js:354486-354793 placement
-var peerInboundApprovalDialogDef = withHideWhile({
-  kind: "peer_inbound_approval",
-  payload: DoctorLazy(() =>
-    hu((h) => typeof h === "object" && h !== null && "holdCause" in h && "preview" in h),
-  ),
-  result: DoctorLazy(() =>
-    hu(
-      (h) =>
-        typeof h === "object" &&
-        h !== null &&
-        "behavior" in h &&
-        (h.behavior === "approve" || h.behavior === "deny" || h.behavior === "cancelled"),
+var peerInboundApprovalDialogDef; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-18hwfzwa.js:354486", () => {
+  peerInboundApprovalDialogDef = withHideWhile({
+    kind: "peer_inbound_approval",
+    payload: DoctorLazy(() =>
+      custom(
+        (payload) =>
+          typeof payload === "object" && payload !== null && "holdCause" in payload && "preview" in payload,
+      ),
     ),
-  ),
-  default: {
-    behavior: "cancelled",
-  },
+    result: DoctorLazy(() =>
+      custom(
+        (result) =>
+          typeof result === "object" &&
+          result !== null &&
+          "behavior" in result &&
+          (result.behavior === "approve" || result.behavior === "deny" || result.behavior === "cancelled"),
+      ),
+    ),
+    default: {
+      behavior: "cancelled",
+    },
+  });
 });
 //@ chunk-18hwfzwa.js:354793-358069 placement
 /**
  * 跨会话入站消息审核：crossSessionInbound=hold 或权限模式不匹配时，把其他 Claude 会话发来的消息暂存，弹出 peer_inbound_approval 对话框，批准后投递、拒绝则告知发送方。
  */
 function HeldPeerMessages({ clock, store, transcript, requestDialog, visibleDialog }) {
-  let ke = () => visibleDialog.get() !== peerInboundApprovalDialogDef.kind;
-  let Re = new Map();
-  let Be = (At, It) => {
-    let Ot = Re.get(At);
-    if (!Ot) return;
-    Ot.superseded = true;
-    Ot.clearDeadline();
-    Ot.abort.abort(It);
-    Re.delete(At);
+  let isDialogHidden = () => visibleDialog.get() !== peerInboundApprovalDialogDef.kind;
+  let pendingByKey = new Map();
+  let settlePending = (holdKey, reason) => {
+    let pending = pendingByKey.get(holdKey);
+    if (!pending) return;
+    pending.superseded = true;
+    pending.clearDeadline();
+    pending.abort.abort(reason);
+    pendingByKey.delete(holdKey);
   };
-  setOnPeerHeld((At, It, Ot) => {
-    Be(At, "superseded");
-    let Et = describePeerSender(At);
-    let Dt = Et.claimedName ? ` (peer claims name: ${Et.claimedName})` : "";
-    let Lt = Et.verifiedPeerPid ? ` [verified pid ${Et.verifiedPeerPid}]` : "";
+  setOnPeerHeld((holdKey, holdCause, cause) => {
+    settlePending(holdKey, "superseded");
+    let sender = describePeerSender(holdKey);
+    let claimedNameSuffix = sender.claimedName ? ` (peer claims name: ${sender.claimedName})` : "";
+    let pidSuffix = sender.verifiedPeerPid ? ` [verified pid ${sender.verifiedPeerPid}]` : "";
     transcript.apply({
       type: "append",
       messages: [
         createSystemMessage(
-          `Held peer message \u2014 from ${Et.address}${Lt}${Dt}${Et.preview || Et.previewSummary ? `; preview: \xAB${Et.preview}\xBB${Et.previewSummary}` : ""} \u2014 not delivered to Claude (${It} held). ${peerHoldReasonText(Ot)}`,
+          `Held peer message \u2014 from ${sender.address}${pidSuffix}${claimedNameSuffix}${sender.preview || sender.previewSummary ? `; preview: \xAB${sender.preview}\xBB${sender.previewSummary}` : ""} \u2014 not delivered to Claude (${holdCause} held). ${peerHoldReasonText(cause)}`,
           "warning",
         ),
       ],
     });
-    if (requestDialog && (Ot === "mode-mismatch" || Ot === "no-mode-asserted")) {
+    if (requestDialog && (cause === "mode-mismatch" || cause === "no-mode-asserted")) {
       let abortController = new AbortController();
-      let Xt = false;
+      let expired = false;
       let userDialogTimeoutMs = getUserDialogTimeoutMs();
-      let so = null;
-      let po = () => {
+      let timer = null;
+      let armDeadline = () => {
         if (userDialogTimeoutMs <= 0) return;
-        so = clock.setTimeout(() => {
-          if (isUnattendedBgSession() || ke()) {
-            po();
+        timer = clock.setTimeout(() => {
+          if (isUnattendedBgSession() || isDialogHidden()) {
+            armDeadline();
             return;
           }
           refreshAndReevaluateHeld("policy-accepts");
-          if (ao.superseded) return;
-          Xt = true;
+          if (handle.superseded) return;
+          expired = true;
           abortController.abort("expired");
         }, userDialogTimeoutMs);
       };
-      let ao = {
+      let handle = {
         abort: abortController,
         clearDeadline: () => {
-          so?.();
-          so = null;
+          timer?.();
+          timer = null;
         },
         rearmDeadline: () => {
-          so?.();
-          so = null;
-          po();
+          timer?.();
+          timer = null;
+          armDeadline();
         },
         superseded: false,
       };
-      Re.set(At, ao);
-      po();
+      pendingByKey.set(holdKey, handle);
+      armDeadline();
       requestDialog(
         peerInboundApprovalDialogDef,
         {
-          fromAddress: Et.address === "an unidentified session" ? undefined : Et.address,
-          claimedName: Et.claimedName || undefined,
-          verifiedPeerPid: Et.verifiedPeerPid,
-          holdCause: Ot,
-          preview: Et.dialogBody,
+          fromAddress: sender.address === "an unidentified session" ? undefined : sender.address,
+          claimedName: sender.claimedName || undefined,
+          verifiedPeerPid: sender.verifiedPeerPid,
+          holdCause: cause,
+          preview: sender.dialogBody,
         },
         {
           signal: abortController.signal,
           place: "under",
         },
       )
-        .then((co) => {
-          ao.clearDeadline();
-          if (ao.superseded) return;
-          Re.delete(At);
-          let bo =
-            co.behavior === "cancelled"
-              ? resolveHeldMessage(At, Xt ? "cancelled" : "deny")
-              : resolveHeldMessage(At, co.behavior);
-          if (bo === "dropped" && co.behavior === "approve")
+        .then((result) => {
+          handle.clearDeadline();
+          if (handle.superseded) return;
+          pendingByKey.delete(holdKey);
+          let outcome =
+            result.behavior === "cancelled"
+              ? resolveHeldMessage(holdKey, expired ? "cancelled" : "deny")
+              : resolveHeldMessage(holdKey, result.behavior);
+          if (outcome === "dropped" && result.behavior === "approve")
             transcript.apply({
               type: "append",
               messages: [
@@ -145,7 +152,7 @@ function HeldPeerMessages({ clock, store, transcript, requestDialog, visibleDial
                 ),
               ],
             });
-          if (bo === "dropped-by-guard")
+          if (outcome === "dropped-by-guard")
             transcript.apply({
               type: "append",
               messages: [
@@ -155,41 +162,41 @@ function HeldPeerMessages({ clock, store, transcript, requestDialog, visibleDial
                 ),
               ],
             });
-          if (bo === "gone" && co.behavior !== "cancelled")
+          if (outcome === "gone" && result.behavior !== "cancelled")
             transcript.apply({
               type: "append",
               messages: [
                 createSystemMessage(
-                  `That held message was already resolved before your ${co.behavior === "approve" ? "approval" : "denial"} (released or dropped by a mode/setting change) \u2014 no action taken.`,
+                  `That held message was already resolved before your ${result.behavior === "approve" ? "approval" : "denial"} (released or dropped by a mode/setting change) \u2014 no action taken.`,
                   "warning",
                 ),
               ],
             });
         })
         .catch(() => {
-          ao.clearDeadline();
-          if (ao.superseded) return;
-          Re.delete(At);
-          resolveHeldMessage(At, Xt ? "cancelled" : "deny");
+          handle.clearDeadline();
+          if (handle.superseded) return;
+          pendingByKey.delete(holdKey);
+          resolveHeldMessage(holdKey, expired ? "cancelled" : "deny");
         });
     }
   });
-  setOnPeerHoldDropped((At) => {
-    Be(At, "dropped");
+  setOnPeerHoldDropped((releasedKey) => {
+    settlePending(releasedKey, "dropped");
   });
-  let He = isUnattendedBgSession();
-  let We = onAttacherCapsChange(() => {
-    let At = isUnattendedBgSession();
-    if (He && !At) for (let It of Re.values()) It.rearmDeadline();
-    He = At;
+  let wasUnattended = isUnattendedBgSession();
+  let stopCapsWatch = onAttacherCapsChange(() => {
+    let isUnattended = isUnattendedBgSession();
+    if (wasUnattended && !isUnattended) for (let pending of pendingByKey.values()) pending.rearmDeadline();
+    wasUnattended = isUnattended;
   });
-  setOnPeerHoldReleased((At, It) => {
-    for (let Ot of At) Be(Ot, "released");
+  setOnPeerHoldReleased((releasedKeys, cause) => {
+    for (let key of releasedKeys) settlePending(key, "released");
     transcript.apply({
       type: "append",
       messages: [
         createSystemMessage(
-          `Released ${At.length} held cross-session ${plural(At.length, "message")} to Claude's queue (${peerHoldReleaseReason(It)}).`,
+          `Released ${releasedKeys.length} held cross-session ${plural(releasedKeys.length, "message")} to Claude's queue (${peerHoldReleaseReason(cause)}).`,
           "warning",
         ),
       ],
@@ -202,7 +209,7 @@ function HeldPeerMessages({ clock, store, transcript, requestDialog, visibleDial
       isBypassPermissionsModeAvailable,
     };
   });
-  let ze = settingsChangeDetector.subscribe(() => {
+  let unsubscribeSettings = settingsChangeDetector.subscribe(() => {
     refreshAndReevaluateHeld("policy-accepts");
   });
   let dependencyWatcher = createDependencyWatcher(
@@ -215,37 +222,40 @@ function HeldPeerMessages({ clock, store, transcript, requestDialog, visibleDial
       refreshAndReevaluateHeld("mode-changed");
     },
   );
-  let rt = ke();
+  let wasDialogHidden = isDialogHidden();
   let dependencyWatcher_2 = createDependencyWatcher(
     [visibleDialog],
-    () => [ke()],
-    (At) => {
-      if (rt && !At) for (let It of Re.values()) It.rearmDeadline();
-      rt = At;
+    () => [isDialogHidden()],
+    (isHidden) => {
+      if (wasDialogHidden && !isHidden) for (let pending of pendingByKey.values()) pending.rearmDeadline();
+      wasDialogHidden = isHidden;
     },
   );
   return () => {
     dependencyWatcher_2();
     dependencyWatcher();
-    ze();
+    unsubscribeSettings();
     setInboundModeGetter(null);
     setOnPeerHeld(null);
     setOnPeerHoldReleased(null);
     setOnPeerHoldDropped(null);
-    We();
+    stopCapsWatch();
   };
 }
 //@ chunk-18hwfzwa.js:358069-358141 placement
-var regExp = new RegExp(`[\\p{Ps}\\p{Pe}\\p{Pi}\\p{Pf}"'\u2212${BOX_DRAWING_RANGES_2}]`, "gu");
+var regExp; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:358069", () => {
+  regExp = new RegExp(`[\\p{Ps}\\p{Pe}\\p{Pi}\\p{Pf}"'\u2212${BOX_DRAWING_RANGES_2}]`, "gu");
+});
 //@ chunk-18hwfzwa.js:358141-358227 placement
-function sanitizePeerDisplayLabel(h) {
-  return normalizeForDisplay(h)
+function sanitizePeerDisplayLabel(label) {
+  return normalizeForDisplay(label)
     .replace(regExp, "")
-    .replace(/\p{Pd}/gu, (x) => (x === "-" ? "-" : ""));
+    .replace(/\p{Pd}/gu, (dash) => (dash === "-" ? "-" : ""));
 }
 //@ chunk-18hwfzwa.js:358227-359449 placement
-function describePeerSender(h) {
-  let origin = h.origin?.kind === "peer" ? h.origin : undefined;
+function describePeerSender(message) {
+  let origin = message.origin?.kind === "peer" ? message.origin : undefined;
   let address =
     typeof origin?.from === "string" && isPeerAddress(origin.from)
       ? sanitizePeerDisplayLabel(origin.from)
@@ -258,53 +268,59 @@ function describePeerSender(h) {
       : undefined;
   let claimedName =
     typeof origin?.name === "string" ? sanitizePeerDisplayLabel(clipTeammateText(origin.name)) : "";
-  let ke =
+  let bodyText =
     typeof origin?.body === "string"
       ? origin.body
-      : typeof h.value === "string"
-        ? h.value
-        : Array.isArray(h.value) && h.value.length > 0
-          ? `Unpreviewable content: ${h.value.length} ${plural(h.value.length, "block")}, ~${jsonStringify(h.value).length} chars. The FULL content is delivered on approve`
+      : typeof message.value === "string"
+        ? message.value
+        : Array.isArray(message.value) && message.value.length > 0
+          ? `Unpreviewable content: ${message.value.length} ${plural(message.value.length, "block")}, ~${jsonStringify(message.value).length} chars. The FULL content is delivered on approve`
           : "";
-  let Re =
-    ke.length > 0
-      ? ke.split(`
+  let lines =
+    bodyText.length > 0
+      ? bodyText.split(`
 `)
       : [];
-  let mapped = Re.map((Xt) => sanitizePeerDisplayLabel(Xt));
-  let He = mapped.length;
-  let We = ke.length;
-  let any = Re.some((Xt, io) => mapped[io] !== Xt);
-  let Xe = mapped.map((Xt) => Xt.replace(/\s+/g, " ").trim()).find((Xt) => Xt !== "") ?? "";
-  let rt = truncateToWidthNoEllipsis(truncateToLength(Xe, MAX_ADDRESS_TEXT_CHARS), MAX_PEER_LABEL_WIDTH);
-  let kt = He > 1 || any || rt !== Xe;
-  let preview = rt;
-  let previewSummary = kt
-    ? ` \u2026[${He} ${plural(He, "line")}, ${We} chars total \u2014 expand to review before approving]`
+  let mapped = lines.map((line) => sanitizePeerDisplayLabel(line));
+  let lineCount = mapped.length;
+  let charCount = bodyText.length;
+  let any = lines.some((line, index) => mapped[index] !== line);
+  let firstLine =
+    mapped.map((sanitized) => sanitized.replace(/\s+/g, " ").trim()).find((nonEmpty) => nonEmpty !== "") ??
+    "";
+  let preview = truncateToWidthNoEllipsis(
+    truncateToLength(firstLine, MAX_ADDRESS_TEXT_CHARS),
+    MAX_PEER_LABEL_WIDTH,
+  );
+  let isTruncated = lineCount > 1 || any || preview !== firstLine;
+  let preview_2 = preview;
+  let previewSummary = isTruncated
+    ? ` \u2026[${lineCount} ${plural(lineCount, "line")}, ${charCount} chars total \u2014 expand to review before approving]`
     : "";
-  let Ot = 8;
-  let Et = 72;
-  let mapped_2 = mapped.slice(0, 8).map((Xt) => truncateToWidthNoEllipsis(truncateToLength(Xt, 240), 72));
-  let Lt = He > 8 || any || mapped_2.some((Xt, io) => Xt !== mapped[io]);
+  let maxLines = 8;
+  let maxWidth = 72;
+  let mapped_2 = mapped.slice(0, 8).map((line) => truncateToWidthNoEllipsis(truncateToLength(line, 240), 72));
+  let isDialogTruncated =
+    lineCount > 8 || any || mapped_2.some((trimmed, index) => trimmed !== mapped[index]);
   let dialogBody =
     mapped_2.join(`
 `) +
-    (Lt
+    (isDialogTruncated
       ? `
-\u2026[${He} ${plural(He, "line")}, ${We} chars total \u2014 full body will be delivered on approve]`
+\u2026[${lineCount} ${plural(lineCount, "line")}, ${charCount} chars total \u2014 full body will be delivered on approve]`
       : "");
   return {
     address,
     verifiedPeerPid,
     claimedName,
-    preview,
+    preview: preview_2,
     previewSummary,
     dialogBody,
   };
 }
 //@ chunk-18hwfzwa.js:359449-359635 placement
-function peerHoldReleaseReason(h) {
-  switch (h) {
+function peerHoldReleaseReason(releaseReason) {
+  switch (releaseReason) {
     case "mode-changed":
       return "permissions are prompting again";
     case "policy-accepts":
@@ -314,8 +330,8 @@ function peerHoldReleaseReason(h) {
   }
 }
 //@ chunk-18hwfzwa.js:359635-360893 placement
-function peerHoldReasonText(h) {
-  switch (h) {
+function peerHoldReasonText(holdReason) {
+  switch (holdReason) {
     case "bypass-default":
       return "It is being reviewed before delivery.";
     case "explicit-setting":

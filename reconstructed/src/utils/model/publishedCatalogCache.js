@@ -10,7 +10,14 @@
  */
 import { join } from "path";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, literal, E, string, _enum, unknown } from "../../../vendor/zod/v4/classic/schemas.js";
+import {
+  objectSchema,
+  literal,
+  numberSchema,
+  stringSchema,
+  _enum,
+  unknown,
+} from "../../../vendor/zod/v4/classic/schemas.js";
 import {
   isValidEtag,
   CatalogDocumentSchema,
@@ -53,74 +60,87 @@ import {
 import { isEnvTruthy } from "../envUtils.js";
 import { env } from "../env.js";
 import { isDiskless } from "../../bootstrap/state.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-s93zf4b4.js:788-998 placement
-var CACHE_VERSION = 2;
-var CATALOG_TTL_MS = 3600000;
-var TTL_JITTER = 0.1;
-var CATALOG_SOURCES = ["hosted", "custom_url", "file"];
-var cachedCatalogSchema = DoctorLazy(() =>
-  u({
-    version: literal(CACHE_VERSION),
-    fetchedAt: E(),
-    staleAt: E(),
-    etag: string().refine(isValidEtag).optional(),
-    source: _enum(CATALOG_SOURCES),
-    documentBytes: string(),
-    sidecar: unknown(),
-    rootId: string(),
-    document: CatalogDocumentSchema(),
-  }),
-);
+var CACHE_VERSION; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var CATALOG_TTL_MS;
+var TTL_JITTER;
+var CATALOG_SOURCES;
+var cachedCatalogSchema;
+deferInit("chunk-s93zf4b4.js:788", () => {
+  CACHE_VERSION = 2;
+  CATALOG_TTL_MS = 3600000;
+  TTL_JITTER = 0.1;
+  CATALOG_SOURCES = ["hosted", "custom_url", "file"];
+  cachedCatalogSchema = DoctorLazy(() =>
+    objectSchema({
+      version: literal(CACHE_VERSION),
+      fetchedAt: numberSchema(),
+      staleAt: numberSchema(),
+      etag: stringSchema().refine(isValidEtag).optional(),
+      source: _enum(CATALOG_SOURCES),
+      documentBytes: stringSchema(),
+      sidecar: unknown(),
+      rootId: stringSchema(),
+      document: CatalogDocumentSchema(),
+    }),
+  );
+});
 //@ chunk-s93zf4b4.js:998-1051 placement
 /**
  * 某作用域的已发布目录缓存文件路径。
  */
-function publishedCatalogCachePath(e) {
-  return join(modelCatalogCacheDir(), `published-${e}.json`);
+function publishedCatalogCachePath(cacheKey) {
+  return join(modelCatalogCacheDir(), `published-${cacheKey}.json`);
 }
 //@ chunk-s93zf4b4.js:1051-1098 placement
 function publishedCatalogByKey() {
   return getProviderState().publishedCatalogByKey;
 }
 //@ chunk-s93zf4b4.js:1098-1119 placement
-var MAX_CACHE_FILE_BYTES = CATALOG_SCHEMA * 3 + MAX_DOCUMENT_CHARS + 4096;
+var MAX_CACHE_FILE_BYTES; // deferred: uses CATALOG_SCHEMA_VERSION (./modelCatalog/servedCatalog.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-s93zf4b4.js:1098", () => {
+  MAX_CACHE_FILE_BYTES = CATALOG_SCHEMA * 3 + MAX_DOCUMENT_CHARS + 4096;
+});
 //@ chunk-s93zf4b4.js:1119-1575 placement
 async function readPublishedCatalogCache(cacheKey) {
-  let a = publishedCatalogByKey().get(cacheKey);
-  if (a !== undefined) return a ?? undefined;
-  let r = publishedCatalogCachePath(cacheKey);
-  let n;
+  let cached = publishedCatalogByKey().get(cacheKey);
+  if (cached !== undefined) return cached ?? undefined;
+  let path = publishedCatalogCachePath(cacheKey);
+  let raw;
   try {
-    n = await maskStorage().readRange(r, 0, MAX_CACHE_FILE_BYTES + 1);
+    raw = await maskStorage().readRange(path, 0, MAX_CACHE_FILE_BYTES + 1);
   } catch (error) {
     if (!isENOENT(error))
       logForDebugging(`[publishedCatalog] cache read failed: ${getErrnoCode(error) ?? "unknown"}`);
     publishedCatalogByKey().set(cacheKey, null);
     return;
   }
-  let s =
-    n.length > MAX_CACHE_FILE_BYTES
+  let parsed =
+    raw.length > MAX_CACHE_FILE_BYTES
       ? undefined
-      : cachedCatalogSchema().safeParse(safeParseJSON(n.toString("utf8"), false));
-  if (!s?.success) {
-    logForDebugging(`[publishedCatalog] cache file ${s === undefined ? "oversized" : "invalid"}, discarding`);
+      : cachedCatalogSchema().safeParse(safeParseJSON(raw.toString("utf8"), false));
+  if (!parsed?.success) {
+    logForDebugging(
+      `[publishedCatalog] cache file ${parsed === undefined ? "oversized" : "invalid"}, discarding`,
+    );
     await clearPublishedCatalogCache(cacheKey);
     return;
   }
-  await storePublishedCatalog(cacheKey, s.data, {
+  await storePublishedCatalog(cacheKey, parsed.data, {
     verified: false,
   });
-  return s.data;
+  return parsed.data;
 }
 //@ chunk-s93zf4b4.js:1575-1651 placement
 /**
  * 清除某作用域的已发布目录缓存（内存与磁盘）。
  */
-async function clearPublishedCatalogCache(e) {
-  publishedCatalogByKey().set(e, null);
+async function clearPublishedCatalogCache(cacheKey) {
+  publishedCatalogByKey().set(cacheKey, null);
   try {
-    await maskStorage().delete(publishedCatalogCachePath(e));
+    await maskStorage().delete(publishedCatalogCachePath(cacheKey));
   } catch {}
 }
 //@ chunk-s93zf4b4.js:1651-1683 placement
@@ -131,14 +151,14 @@ function forgetPublishedCatalogCache(cacheKey) {
   publishedCatalogByKey().set(cacheKey, null);
 }
 //@ chunk-s93zf4b4.js:1683-1881 placement
-async function writePublishedCatalogCache(cacheKey, a) {
-  await storePublishedCatalog(cacheKey, a, {
+async function writePublishedCatalogCache(cacheKey, entry) {
+  await storePublishedCatalog(cacheKey, entry, {
     verified: true,
   });
   try {
-    let r = maskStorage();
-    await r.mkdir(modelCatalogCacheDir());
-    await r.atomicWrite(publishedCatalogCachePath(cacheKey), jsonStringify(a), 384);
+    let storage = maskStorage();
+    await storage.mkdir(modelCatalogCacheDir());
+    await storage.atomicWrite(publishedCatalogCachePath(cacheKey), jsonStringify(entry), 384);
   } catch (error) {
     logForDebugging(`[publishedCatalog] cache write failed: ${getErrnoCode(error) ?? "unknown"}`);
   }
@@ -147,29 +167,29 @@ async function writePublishedCatalogCache(cacheKey, a) {
 /**
  * 保存已发布目录缓存条目，验证过且非托管根时登记各界面，并应用目录。
  */
-async function storePublishedCatalog(e, a, { verified }) {
-  publishedCatalogByKey().set(e, a);
-  if (verified && a.rootId !== MANAGED_MODEL_CATALOG_PUBLIC_KEY)
-    for (let n of getDocumentSurfaces(a.document)) registerPublicIds(n);
-  await applyPublishedCatalog(a.document);
+async function storePublishedCatalog(cacheKey, entry, { verified }) {
+  publishedCatalogByKey().set(cacheKey, entry);
+  if (verified && entry.rootId !== MANAGED_MODEL_CATALOG_PUBLIC_KEY)
+    for (let surface of getDocumentSurfaces(entry.document)) registerPublicIds(surface);
+  await applyPublishedCatalog(entry.document);
 }
 //@ chunk-s93zf4b4.js:2008-2111 placement
 /**
  * 应用已发布目录文档：注册各界面目录并加入遮盖 id。
  */
-async function applyPublishedCatalog(e) {
-  let documentSurfaces = getDocumentSurfaces(e);
+async function applyPublishedCatalog(catalogDocument) {
+  let documentSurfaces = getDocumentSurfaces(catalogDocument);
   for (let documentSurface of documentSurfaces) recordMaskedFromCatalog(documentSurface);
   await addMaskedIds(
     new Set(documentSurfaces.flatMap((documentSurface) => [...getMaskedIdSet(documentSurface)])),
   );
 }
 //@ chunk-s93zf4b4.js:2111-2222 placement
-function getDocumentSurfaces(e) {
-  return SURFACE_NAMES.flatMap((a) => {
-    let r = e.surfaces[a];
-    let n = r === undefined ? null : getSelectorSurface(r, a);
-    return n === null ? [] : [n];
+function getDocumentSurfaces(catalogDocument) {
+  return SURFACE_NAMES.flatMap((surfaceName) => {
+    let rawSurface = catalogDocument.surfaces[surfaceName];
+    let surface = rawSurface === undefined ? null : getSelectorSurface(rawSurface, surfaceName);
+    return surface === null ? [] : [surface];
   });
 }
 //@ chunk-s93zf4b4.js:2222-2496 placement
@@ -177,7 +197,7 @@ function getDocumentSurfaces(e) {
  * 构建已发布目录缓存条目（版本、获取时间、带抖动的过期时间、原始字节与签名）。
  */
 function buildCacheEntry({
-  document: e,
+  document: catalogDocument,
   documentBytes,
   sidecar,
   etag,
@@ -197,69 +217,74 @@ function buildCacheEntry({
     documentBytes: Buffer.from(documentBytes).toString("base64"),
     sidecar,
     rootId,
-    document: e,
+    document: catalogDocument,
   };
 }
 //@ chunk-s93zf4b4.js:2496-2581 placement
 /**
  * 给缓存条目补上抓取时间与带抖动的过期时间。
  */
-function withCacheTimestamps(e, a = Date.now(), r = Math.random()) {
+function withCacheTimestamps(entry, now = Date.now(), random = Math.random()) {
   return {
-    ...e,
-    fetchedAt: a,
-    staleAt: computeStaleAt(a, r),
+    ...entry,
+    fetchedAt: now,
+    staleAt: computeStaleAt(now, random),
   };
 }
 //@ chunk-s93zf4b4.js:2581-2640 placement
-function computeStaleAt(e, a) {
-  let r = 1 + TTL_JITTER * (2 * a - 1);
-  return e + Math.round(CATALOG_TTL_MS * r);
+function computeStaleAt(now, random) {
+  let jitter = 1 + TTL_JITTER * (2 * random - 1);
+  return now + Math.round(CATALOG_TTL_MS * jitter);
 }
 //@ chunk-s93zf4b4.js:2640-2717 placement
 /**
  * 判断目录文档本身是否已过期。
  */
-function isDocumentExpired(e, a = Date.now()) {
-  let isoTimestamp = parseIsoTimestamp(e.expires_at);
-  return isoTimestamp !== undefined && a >= isoTimestamp;
+function isDocumentExpired(entry, now = Date.now()) {
+  let isoTimestamp = parseIsoTimestamp(entry.expires_at);
+  return isoTimestamp !== undefined && now >= isoTimestamp;
 }
 //@ chunk-s93zf4b4.js:2717-2839 placement
 /**
  * 判断缓存条目是否过期（时间异常、到期或文档自身过期）。
  */
-function isCacheEntryStale(e, a = Date.now()) {
-  let r = e.fetchedAt + CATALOG_TTL_MS * (1 + TTL_JITTER);
-  return a < e.fetchedAt || a >= e.staleAt || e.staleAt > r || isDocumentExpired(e.document, a);
+function isCacheEntryStale(entry, now = Date.now()) {
+  let age = entry.fetchedAt + CATALOG_TTL_MS * (1 + TTL_JITTER);
+  return (
+    now < entry.fetchedAt ||
+    now >= entry.staleAt ||
+    entry.staleAt > age ||
+    isDocumentExpired(entry.document, now)
+  );
 }
 //@ chunk-s93zf4b4.js:2839-2966 placement
 /**
  * 计算已发布目录的阻止原因（必要流量门可在特定情况下跳过）。
  */
 function getPublishedCatalogBlock() {
-  let e = servedModelCatalogEligibility();
-  if (e === "essential_traffic" && isFileCatalogSource()) {
-    let a = servedModelCatalogEligibility({
+  let eligibility = servedModelCatalogEligibility();
+  if (eligibility === "essential_traffic" && isFileCatalogSource()) {
+    let relaxedEligibility = servedModelCatalogEligibility({
       skipEssentialTrafficGate: true,
     });
-    return mapCatalogEligibility(a);
+    return mapCatalogEligibility(relaxedEligibility);
   }
-  return mapCatalogEligibility(e);
+  return mapCatalogEligibility(eligibility);
 }
 //@ chunk-s93zf4b4.js:2966-3051 placement
 /**
  * 判断是否为"fallback 来源且用 key 认证"的目录。
  */
-function isKeyAuthFallbackSource(e) {
-  return e.source === "fallback" && e.credential !== undefined && isKeyAuthKind(e.credential);
+function isKeyAuthFallbackSource(source) {
+  return source.source === "fallback" && source.credential !== undefined && isKeyAuthKind(source.credential);
 }
 //@ chunk-s93zf4b4.js:3051-3092 placement
-function isKeyAuthCatalogSource(e) {
-  return e !== null && isKeyAuthKind(catalogAuthKind(e));
+function isKeyAuthCatalogSource(source) {
+  return source !== null && isKeyAuthKind(catalogAuthKind(source));
 }
 //@ chunk-s93zf4b4.js:3092-3192 placement
-function isKeyAuthKind(e) {
-  switch (e) {
+function isKeyAuthKind(authKind) {
+  switch (authKind) {
     case "oauth":
       return false;
     case "api_key":
@@ -272,14 +297,14 @@ function isKeyAuthKind(e) {
 /**
  * 把服务端目录资格结果映射为已发布目录的阻止原因：环境关闭/bare/必要流量/socket/策略原样返回，非第一方再细分，非 claude.ai 认证看策略，无组织/账号时由服务端目录接管。
  */
-function mapCatalogEligibility(e) {
-  switch (e) {
+function mapCatalogEligibility(eligibility) {
+  switch (eligibility) {
     case "env_off":
     case "bare":
     case "essential_traffic":
     case "unix_socket":
     case "policy":
-      return e;
+      return eligibility;
     case "not_first_party":
       return getProviderCatalogBlock();
     case "not_claude_ai_auth":
@@ -298,11 +323,15 @@ function mapCatalogEligibility(e) {
 function getProviderCatalogBlock() {
   let apiProvider = getAPIProvider();
   if (apiProvider === "gateway") return "cloud_gateway";
-  let a = isClaudePlatformProvider(apiProvider);
-  let r = !a && isFirstPartyProvider();
-  let n = a ? "platform_flag_off" : r && !isFileCatalogSource() ? "gateway_flag_off" : null;
-  if (n !== null && delegatedQuailMode("published") === "off") return n;
-  if ((a || r) && !includeUnsupportedCatalogFlag()) return "release_off";
+  let isPlatform = isClaudePlatformProvider(apiProvider);
+  let isFirstParty = !isPlatform && isFirstPartyProvider();
+  let block = isPlatform
+    ? "platform_flag_off"
+    : isFirstParty && !isFileCatalogSource()
+      ? "gateway_flag_off"
+      : null;
+  if (block !== null && delegatedQuailMode("published") === "off") return block;
+  if ((isPlatform || isFirstParty) && !includeUnsupportedCatalogFlag()) return "release_off";
   if (isThirdPartyBackend(apiProvider) && !isModelCatalogEnvOn(apiProvider)) return "release_off";
   return null;
 }

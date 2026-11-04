@@ -25,110 +25,126 @@ import { fromEnum } from "../analytics/safeMetadata.js";
 import { SdkError, SdkErrorCode } from "../../../vendor/@modelcontextprotocol/client/dist/src-D_zzAWoS.mjs";
 
 //@ chunk-8t8n4kdh.js:48365-49332 placement
-async function listAllPages_2(e, name, config, s, h, y, S, w) {
-  let P = false;
+async function listAllPages_2(
+  connection,
+  name,
+  config,
+  method,
+  resultSchema,
+  extractItems,
+  firstPagePromise,
+  onFirstPage,
+) {
+  let hasLoggedError = false;
   for (let idx = 0; ; idx++) {
-    let j = [];
-    let R = new Set();
-    let ce;
+    let items = [];
+    let seenCursors = new Set();
+    let cursor;
     let pageCount = 0;
-    let ie;
+    let stopReason;
     try {
       do {
-        let ge = () =>
-          e.request(
+        let sendPage = () =>
+          connection.request(
             {
-              method: s,
-              ...(ce && {
+              method,
+              ...(cursor && {
                 params: {
-                  cursor: ce,
+                  cursor,
                 },
               }),
             },
-            h,
+            resultSchema,
             {
               timeout: getConnectionTimeoutMs(),
             },
           );
-        let Ie =
-          S?.catch((error) => {
-            if (hasNoTransport(e) || isTimeoutError(error)) throw error;
+        let pagePromise =
+          firstPagePromise?.catch((error) => {
+            if (hasNoTransport(connection) || isTimeoutError(error)) throw error;
             logMCPDebug(
               name,
-              `first ${s} page, sent during the connect, failed (${truncateToLength(describeConnectError(error, config), 200)}); sending it again`,
+              `first ${method} page, sent during the connect, failed (${truncateToLength(describeConnectError(error, config), 200)}); sending it again`,
             );
-            return ge();
-          }) ?? ge();
-        S = undefined;
-        let G = await Ie;
+            return sendPage();
+          }) ?? sendPage();
+        firstPagePromise = undefined;
+        let page = await pagePromise;
         pageCount++;
-        if (pageCount === 1) w?.(G);
-        let Pe = y(G);
-        if (Pe) j.push(...Pe);
-        if (ce) R.add(ce);
-        ce = G.nextCursor;
-        if (ce && R.has(ce)) {
-          ie = "repeated_cursor";
+        if (pageCount === 1) onFirstPage?.(page);
+        let pageItems = extractItems(page);
+        if (pageItems) items.push(...pageItems);
+        if (cursor) seenCursors.add(cursor);
+        cursor = page.nextCursor;
+        if (cursor && seenCursors.has(cursor)) {
+          stopReason = "repeated_cursor";
           break;
         }
-        if (ce && pageCount >= MAX_LIST_PAGES) {
-          ie = "capped";
+        if (cursor && pageCount >= MAX_LIST_PAGES) {
+          stopReason = "capped";
           break;
         }
-      } while (ce);
-      if (ie === "repeated_cursor")
+      } while (cursor);
+      if (stopReason === "repeated_cursor")
         logMCPDebug(
           name,
-          `${s} returned a nextCursor already sent in this walk (page ${pageCount}); stopping`,
+          `${method} returned a nextCursor already sent in this walk (page ${pageCount}); stopping`,
         );
-      if (ie === "capped")
-        logMCPDebug(name, `${s} still returning nextCursor after ${MAX_LIST_PAGES} pages; stopping`);
-      if (pageCount > 1) logListPaginated(s, pageCount, j.length, ie ?? "complete");
-      return j;
+      if (stopReason === "capped")
+        logMCPDebug(name, `${method} still returning nextCursor after ${MAX_LIST_PAGES} pages; stopping`);
+      if (pageCount > 1) logListPaginated(method, pageCount, items.length, stopReason ?? "complete");
+      return items;
     } catch (error) {
-      if (pageCount > 0 && !P) {
-        P = true;
-        logListPaginated(s, pageCount, j.length, "error");
+      if (pageCount > 0 && !hasLoggedError) {
+        hasLoggedError = true;
+        logListPaginated(method, pageCount, items.length, "error");
       }
-      let Ie = LIST_PAGE_DELAYS_MS[idx];
-      if (Ie === undefined || !isRetryableListError(error) || hasNoTransport(e)) throw error;
-      logMCPDebug(name, `${s} failed (${describeConnectError(error, config)}); retrying in ${Ie}ms`);
-      await sleep(Ie);
-      if (hasNoTransport(e)) throw error;
+      let retryDelayMs = LIST_PAGE_DELAYS_MS[idx];
+      if (retryDelayMs === undefined || !isRetryableListError(error) || hasNoTransport(connection))
+        throw error;
+      logMCPDebug(
+        name,
+        `${method} failed (${describeConnectError(error, config)}); retrying in ${retryDelayMs}ms`,
+      );
+      await sleep(retryDelayMs);
+      if (hasNoTransport(connection)) throw error;
     }
   }
 }
 //@ chunk-8t8n4kdh.js:49332-49456 placement
-function logListPaginated(e, pageCount, itemCount, s, h = "pages") {
+function logListPaginated(method, pageCount, itemCount, outcome, source = "pages") {
   logEvent("tengu_mcp_list_paginated", {
-    method: fromEnum(e),
+    method: fromEnum(method),
     pageCount,
     itemCount,
-    outcome: fromEnum(s),
-    source: fromEnum(h),
+    outcome: fromEnum(outcome),
+    source: fromEnum(source),
   });
 }
 //@ chunk-8t8n4kdh.js:49456-49905 placement
-async function listToolsModern(e, name, config) {
+async function listToolsModern(connection, name, config) {
   for (let j = 0; ; j++)
     try {
-      let h = await e.listTools(undefined, {
+      let result = await connection.listTools(undefined, {
         timeout: getConnectionTimeoutMs(),
         cacheMode: "refresh",
       });
-      logListPaginated("tools/list", undefined, h.tools.length, "complete", "aggregate");
-      return h.tools;
+      logListPaginated("tools/list", undefined, result.tools.length, "complete", "aggregate");
+      return result.tools;
     } catch (error) {
-      let y = LIST_PAGE_DELAYS_MS[j];
-      if (y === undefined || !isRetryableListError(error)) {
+      let retryDelayMs = LIST_PAGE_DELAYS_MS[j];
+      if (retryDelayMs === undefined || !isRetryableListError(error)) {
         if (error instanceof SdkError && error.code === SdkErrorCode.ListPaginationExceeded)
           logListPaginated("tools/list", undefined, 0, "capped", "aggregate");
         throw error;
       }
-      if (hasNoTransport(e)) throw error;
-      logMCPDebug(name, `tools/list failed (${describeConnectError(error, config)}); retrying in ${y}ms`);
-      await sleep(y);
-      if (hasNoTransport(e)) throw error;
+      if (hasNoTransport(connection)) throw error;
+      logMCPDebug(
+        name,
+        `tools/list failed (${describeConnectError(error, config)}); retrying in ${retryDelayMs}ms`,
+      );
+      await sleep(retryDelayMs);
+      if (hasNoTransport(connection)) throw error;
     }
 }
 export { listAllPages_2, listToolsModern };

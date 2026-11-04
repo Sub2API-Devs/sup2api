@@ -5,11 +5,11 @@
  * pieces: chunk-1ny7cxrt.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x, importMetaRequire } from "../../../runtime/bun-runtime.js";
+import { __commonJS, importMetaRequire } from "../../../runtime/bun-runtime.js";
 import { require_shake256 } from "./shake256.js";
 
 //@ chunk-1ny7cxrt.js:5641-7171 cjs-fingerprint
-var require_oidc_token_hash = x(function (cjsExports, cjsModule) {
+var require_oidc_token_hash = __commonJS(function (cjsExports, cjsModule) {
   var { strict: assert } = importMetaRequire("assert");
   var { createHash } = importMetaRequire("crypto");
   var { format } = importMetaRequire("util");

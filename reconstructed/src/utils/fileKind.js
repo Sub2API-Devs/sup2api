@@ -14,16 +14,23 @@ import { lstat } from "fs/promises";
 /**
  * 由 Dirent/Stats 判断文件类型（dir、symlink、file、other）；类型未知时再 lstat 一次，失败返回给定默认值。
  */
-async function getFileKind(i, e, t) {
-  if (i.isDirectory()) return "dir";
-  if (i.isSymbolicLink()) return "symlink";
-  if (i.isFile()) return "file";
-  if (i.isFIFO() || i.isSocket() || i.isBlockDevice() || i.isCharacterDevice()) return "other";
+async function getFileKind(dirent, filePath, fallbackKind) {
+  if (dirent.isDirectory()) return "dir";
+  if (dirent.isSymbolicLink()) return "symlink";
+  if (dirent.isFile()) return "file";
+  if (dirent.isFIFO() || dirent.isSocket() || dirent.isBlockDevice() || dirent.isCharacterDevice())
+    return "other";
   try {
-    let r = await lstat(e);
-    return r.isDirectory() ? "dir" : r.isSymbolicLink() ? "symlink" : r.isFile() ? "file" : "other";
+    let stats = await lstat(filePath);
+    return stats.isDirectory()
+      ? "dir"
+      : stats.isSymbolicLink()
+        ? "symlink"
+        : stats.isFile()
+          ? "file"
+          : "other";
   } catch {
-    return t;
+    return fallbackKind;
   }
 }
 export { getFileKind };

@@ -5,7 +5,7 @@
  * pieces: chunk-fq0cr76a.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../../../runtime/bun-runtime.js";
 import { require_names } from "../../cjs/reflect/names.js";
 import { require_fields } from "../fields.js";
 import { require_base64_encoding } from "../../cjs/wire/base64-encoding.js";
@@ -14,7 +14,7 @@ import { require_clone } from "../clone.js";
 import { require_descriptor_pb } from "../wkt/gen/google/protobuf/descriptor_pb.js";
 
 //@ chunk-fq0cr76a.js:510775-515173 cjs-fingerprint
-var require_embed = x(function (cjsExports) {
+var require_embed = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
@@ -55,7 +55,7 @@ var require_embed = x(function (cjsExports) {
     for (let f of d.field)
       if (f.jsonName === names_js_1.protoCamelCase(f.name))
         fields_js_1.clearField(f, descriptor_pb_js_1.FieldDescriptorProtoSchema.field.jsonName);
-    for (let n of d.nestedType) stripJsonNames(n);
+    for (let nested of d.nestedType) stripJsonNames(nested);
   }
   function pathInFileDesc(desc) {
     if (desc.kind == "service") return [desc.file.services.indexOf(desc)];
@@ -123,11 +123,11 @@ var require_embed = x(function (cjsExports) {
     if (proto.nestedType.length) b.nestedType = proto.nestedType.map(createDescriptorBoot);
     if (proto.enumType.length) b.enumType = proto.enumType.map(createEnumDescriptorBoot);
     if (proto.extensionRange.length)
-      b.extensionRange = proto.extensionRange.map((r) => {
-        assert(!r.options);
+      b.extensionRange = proto.extensionRange.map((range) => {
+        assert(!range.options);
         return {
-          start: r.start,
-          end: r.end,
+          start: range.start,
+          end: range.end,
         };
       });
     return b;

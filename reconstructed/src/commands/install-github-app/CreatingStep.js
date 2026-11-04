@@ -8,7 +8,7 @@
  * pieces: chunk-4v9zy7gn.js (1)
  * attribution: fingerprint 1
  */
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import {
   jsxProd_default,
   jsxProd_default_2,
@@ -17,7 +17,7 @@ import { Box, Text } from "../../ink/components/Text.js";
 
 //@ chunk-4v9zy7gn.js:29707-30650 fingerprint = CreatingStep (0.89)
 function CreatingStep(props) {
-  let $ = w(9);
+  let $ = useMemoCache(9);
   let {
     currentWorkflowInstallStep,
     secretExists,
@@ -59,9 +59,9 @@ function CreatingStep(props) {
     $[5] = t2;
   } else t2 = $[5];
   let progressSteps = t2;
-  let k;
+  let stepLine;
   if ($[6] !== currentWorkflowInstallStep || $[7] !== progressSteps) {
-    k = jsxProd_default(Box, {
+    stepLine = jsxProd_default(Box, {
       flexDirection: "column",
       children: progressSteps.map((stepText, index) => {
         let status = "pending";
@@ -85,8 +85,8 @@ function CreatingStep(props) {
     });
     $[6] = currentWorkflowInstallStep;
     $[7] = progressSteps;
-    $[8] = k;
-  } else k = $[8];
-  return k;
+    $[8] = stepLine;
+  } else stepLine = $[8];
+  return stepLine;
 }
 export { CreatingStep };

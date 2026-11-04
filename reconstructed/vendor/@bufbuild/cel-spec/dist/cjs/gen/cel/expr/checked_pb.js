@@ -5,7 +5,7 @@
  * pieces: chunk-fq0cr76a.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../../../../../runtime/bun-runtime.js";
 import {
   require_error_6,
   require_error_4,
@@ -13,7 +13,7 @@ import {
 import { require_syntax_pb } from "./syntax_pb.js";
 
 //@ chunk-fq0cr76a.js:597494-602201 cjs-fingerprint
-var require_checked_pb = x(function (cjsExports) {
+var require_checked_pb = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });

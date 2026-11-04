@@ -5,14 +5,14 @@
  * pieces: chunk-2tyrgda4.js (1)
  * attribution: esm-fingerprint 1
  */
-import { K } from "../../../webapi/lib/validate.js";
+import { isPlainObject } from "../../../webapi/lib/validate.js";
 import { epoch_2 } from "../../../webapi/lib/jwt_claims_set.js";
-import { ct } from "../lib/secs.js";
+import { parseSecs } from "../lib/secs.js";
 
 //@ chunk-2tyrgda4.js:39526-40328 esm-fingerprint
 class ProduceJWT {
   constructor(payload) {
-    if (!K(payload)) throw TypeError("JWT Claims Set MUST be an object");
+    if (!isPlainObject(payload)) throw TypeError("JWT Claims Set MUST be an object");
     this._payload = payload;
   }
   setIssuer(issuer) {
@@ -52,7 +52,7 @@ class ProduceJWT {
     else
       this._payload = {
         ...this._payload,
-        nbf: epoch_2(new Date()) + ct(input),
+        nbf: epoch_2(new Date()) + parseSecs(input),
       };
     return this;
   }
@@ -65,7 +65,7 @@ class ProduceJWT {
     else
       this._payload = {
         ...this._payload,
-        exp: epoch_2(new Date()) + ct(input),
+        exp: epoch_2(new Date()) + parseSecs(input),
       };
     return this;
   }

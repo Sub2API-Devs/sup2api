@@ -32,12 +32,16 @@ async function scanTopLevelEntries(cwd) {
         withFileTypes: true,
       })
     )
-      .filter((a) => !a.name.startsWith(".") && !a.isSymbolicLink())
-      .map((a) => truncateToLength(stripAnsiAndControls(a.isDirectory() ? a.name + "/" : a.name), 80))
-      .sort((a, l) => a.localeCompare(l));
-    let r = (a) => (/^readme/i.test(a) ? 0 : /^claude\.md$/i.test(a) ? 1 : 2);
+      .filter((entry) => !entry.name.startsWith(".") && !entry.isSymbolicLink())
+      .map((entry) =>
+        truncateToLength(stripAnsiAndControls(entry.isDirectory() ? entry.name + "/" : entry.name), 80),
+      )
+      .sort((leftName, b) => leftName.localeCompare(b));
+    let docRank = (docName) => (/^readme/i.test(docName) ? 0 : /^claude\.md$/i.test(docName) ? 1 : 2);
     return {
-      docs: sorted.filter((a) => DOC_NAME_REGEX.test(stripSuffix(a, "/"))).sort((a, l) => r(a) - r(l)),
+      docs: sorted
+        .filter((entry) => DOC_NAME_REGEX.test(stripSuffix(entry, "/")))
+        .sort((leftDoc, b) => docRank(leftDoc) - docRank(b)),
       entries: sorted.slice(0, MAX_TOP_LEVEL_ENTRIES),
     };
   } catch (error) {

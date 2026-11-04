@@ -5,11 +5,11 @@
  * pieces: chunk-spjgqa4y.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 import { require_polynomial } from "./polynomial.js";
 
 //@ chunk-spjgqa4y.js:7479-7990 cjs-fingerprint
-var require_reed_solomon_encoder = x(function (cjsExports, cjsModule) {
+var require_reed_solomon_encoder = __commonJS(function (cjsExports, cjsModule) {
   var Polynomial = require_polynomial();
   function ReedSolomonEncoder(degree) {
     this.genPoly = undefined;

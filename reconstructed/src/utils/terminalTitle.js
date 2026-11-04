@@ -37,7 +37,7 @@ function isTerminalTitleEnabled() {
   );
 }
 //@ chunk-q6msdgx4.js:1163-1203 placement
-function _(e) {
-  return e.trim().length >= MIN_RESUBMIT_TEXT_CHARS;
+function _(text) {
+  return text.trim().length >= MIN_RESUBMIT_TEXT_CHARS;
 }
 export { MAX_TITLE_RESUBMIT_CHARS, isTerminalTitleEnabled, isTerminalTitleDisabled, _, MAX_TITLE_TEXT_CHARS };

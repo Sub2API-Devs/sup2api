@@ -32,14 +32,14 @@ var MCP_TRANSPORTS_SUPPORTING_TOOLS = {
   "claudeai-proxy": true,
 };
 //@ chunk-0h4e7gnq.js:29153-29618 placement
-function mcpDepartureCause(e, n, s, toolPermissionContext) {
-  let departureCause = describeToolAvailability(e, s, toolPermissionContext).kind;
-  let longestPrefixClients = findLongestPrefixClients(e, s);
+function mcpDepartureCause(toolName, tools, clients, toolPermissionContext) {
+  let departureCause = describeToolAvailability(toolName, clients, toolPermissionContext).kind;
+  let longestPrefixClients = findLongestPrefixClients(toolName, clients);
   let filtered = longestPrefixClients.filter(
     (longestPrefixClient) => longestPrefixClient.type === "connected",
   );
-  let k = filtered[0] ?? longestPrefixClients[0];
-  if (!k)
+  let client = filtered[0] ?? longestPrefixClients[0];
+  if (!client)
     return {
       departureCause,
       serverTransport: undefined,
@@ -49,23 +49,27 @@ function mcpDepartureCause(e, n, s, toolPermissionContext) {
     };
   return {
     departureCause,
-    serverTransport: getMcpTransportTelemetryLabel(k.config),
-    serverIsDeviceBridge: k.name === REMOTE_DEVICES,
+    serverTransport: getMcpTransportTelemetryLabel(client.config),
+    serverIsDeviceBridge: client.name === REMOTE_DEVICES,
     serverToolsListFailed:
-      filtered.length > 0 ? filtered.some((w) => w.toolsListError !== undefined) : undefined,
-    serverToolsInPool: concurrencyBucket(count(n, (w) => findLongestPrefixClients(w.name, s).includes(k))),
+      filtered.length > 0
+        ? filtered.some((connectedClient) => connectedClient.toolsListError !== undefined)
+        : undefined,
+    serverToolsInPool: concurrencyBucket(
+      count(tools, (tool) => findLongestPrefixClients(tool.name, clients).includes(client)),
+    ),
   };
 }
 //@ chunk-0h4e7gnq.js:29618-29912 placement
-function missingToolTelemetry(e, n, s) {
+function missingToolTelemetry(toolName, tools, toolUseContext) {
   try {
-    let y = aliasOrSelf(e, s.options.toolAliases);
-    if (typeof y !== "string") return;
+    let resolvedName = aliasOrSelf(toolName, toolUseContext.options.toolAliases);
+    if (typeof resolvedName !== "string") return;
     return mcpDepartureCause(
-      y,
-      s.options.refreshTools?.() ?? n,
-      currentMcpClients(s),
-      getToolPermissionContext(s),
+      resolvedName,
+      toolUseContext.options.refreshTools?.() ?? tools,
+      currentMcpClients(toolUseContext),
+      getToolPermissionContext(toolUseContext),
     );
   } catch (error) {
     logForDebugging(

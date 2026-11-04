@@ -7,18 +7,22 @@
  */
 
 //@ chunk-mrx6y2r5.js:34734-34851 esm-layout
-function zn(e) {
+function isErrorLike(value) {
   return (
-    typeof e === "object" && e !== null && !Array.isArray(e) && !(e instanceof RegExp) && !(e instanceof Date)
+    typeof value === "object" &&
+    value !== null &&
+    !Array.isArray(value) &&
+    !(value instanceof RegExp) &&
+    !(value instanceof Date)
   );
 }
 //@ chunk-mrx6y2r5.js:34851-34958 esm-fingerprint
-function tr(e) {
-  if (zn(e)) {
-    let hasName = typeof e.name === "string";
-    let r = typeof e.message === "string";
-    return hasName && r;
+function isError(error) {
+  if (isErrorLike(error)) {
+    let hasName = typeof error.name === "string";
+    let hasMessage = typeof error.message === "string";
+    return hasName && hasMessage;
   }
   return false;
 }
-export { zn, tr };
+export { isErrorLike, isError };

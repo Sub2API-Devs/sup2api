@@ -26,10 +26,10 @@ import { mainAgentId } from "../../bootstrap/state.js";
  */
 function isParkedOnChildWork(task) {
   if (!isLocalAgent(task) || !task.isBackgrounded || task.status !== "completed") return false;
-  let n = isConcurrentShoreOn();
-  for (let r of keepaliveReasons(task)) {
-    if (r.startsWith("monitor:") || r.startsWith("workflow:") || neverTrue_3(r)) return true;
-    if (n && r.startsWith("bash:")) return true;
+  let isConcurrentShore = isConcurrentShoreOn();
+  for (let reason of keepaliveReasons(task)) {
+    if (reason.startsWith("monitor:") || reason.startsWith("workflow:") || neverTrue_3(reason)) return true;
+    if (isConcurrentShore && reason.startsWith("bash:")) return true;
   }
   return false;
 }
@@ -39,33 +39,33 @@ function isParkedOnChildWork(task) {
  */
 function hasAnyKeepaliveReason(agentId, taskRegistry) {
   if (!agentId) return false;
-  let r = taskRegistry.get(agentId);
-  return isLocalAgent(r) && keepaliveReasons(r).size > 0;
+  let task = taskRegistry.get(agentId);
+  return isLocalAgent(task) && keepaliveReasons(task).size > 0;
 }
 //@ chunk-e6aww6q8.js:4716503-4716633 placement
 /**
  * 判断代理是否有子代理在运行（保活原因中有 agent:）。
  */
-function hasChildAgents(e, taskRegistry) {
-  if (!e) return false;
-  let r = taskRegistry.get(e);
-  if (!isLocalAgent(r)) return false;
-  for (let s of keepaliveReasons(r)) if (s.startsWith("agent:")) return true;
+function hasChildAgents(agentId, taskRegistry) {
+  if (!agentId) return false;
+  let task = taskRegistry.get(agentId);
+  if (!isLocalAgent(task)) return false;
+  for (let reason of keepaliveReasons(task)) if (reason.startsWith("agent:")) return true;
   return false;
 }
 //@ chunk-e6aww6q8.js:4716633-4716896 placement
 /**
  * 判断代理是否有待完成的子工作（子代理、工作流、后台命令）。
  */
-function hasPendingChildWork(e, taskRegistry) {
-  if (!e) return false;
-  let r = taskRegistry.get(e);
-  if (!isLocalAgent(r)) return false;
-  let s = isConcurrentShoreOn();
-  for (let h of keepaliveReasons(r)) {
-    if (h.startsWith("agent:")) return true;
-    if (r.isBackgrounded && (h.startsWith("workflow:") || neverTrue_3(h))) return true;
-    if (s && r.isBackgrounded && h.startsWith("bash:")) return true;
+function hasPendingChildWork(agentId, taskRegistry) {
+  if (!agentId) return false;
+  let task = taskRegistry.get(agentId);
+  if (!isLocalAgent(task)) return false;
+  let isConcurrentShore = isConcurrentShoreOn();
+  for (let reason of keepaliveReasons(task)) {
+    if (reason.startsWith("agent:")) return true;
+    if (task.isBackgrounded && (reason.startsWith("workflow:") || neverTrue_3(reason))) return true;
+    if (isConcurrentShore && task.isBackgrounded && reason.startsWith("bash:")) return true;
   }
   return false;
 }
@@ -74,23 +74,23 @@ function hasPendingChildWork(e, taskRegistry) {
  * 移除已结束或不再属于该代理的子工作保活原因。
  */
 function pruneSettledChildWork(agentId, tasks) {
-  let r = tasks.get(agentId);
-  if (!isLocalAgent(r)) return;
-  for (let s of keepaliveReasons(r)) {
-    let h;
-    if (s.startsWith("agent:")) h = s.slice(6);
-    else if (s.startsWith("workflow:")) h = s.slice(9);
-    else if (s.startsWith("bash:")) h = s.slice(5);
+  let task = tasks.get(agentId);
+  if (!isLocalAgent(task)) return;
+  for (let reason of keepaliveReasons(task)) {
+    let childId;
+    if (reason.startsWith("agent:")) childId = reason.slice(6);
+    else if (reason.startsWith("workflow:")) childId = reason.slice(9);
+    else if (reason.startsWith("bash:")) childId = reason.slice(5);
     else continue;
-    if (hasQueuedTaskNotification(agentId, h)) continue;
-    let y = tasks.get(h);
+    if (hasQueuedTaskNotification(agentId, childId)) continue;
+    let child = tasks.get(childId);
     if (
-      !y ||
-      (isLocalAgent(y) && (y.notified || y.ownerAgentId !== agentId)) ||
-      (y.type === "local_workflow" && y.notified) ||
-      (y.type === "local_bash" && y.notified && isTerminalTaskStatus(y.status))
+      !child ||
+      (isLocalAgent(child) && (child.notified || child.ownerAgentId !== agentId)) ||
+      (child.type === "local_workflow" && child.notified) ||
+      (child.type === "local_bash" && child.notified && isTerminalTaskStatus(child.status))
     )
-      removeKeepaliveReason(agentId, s, tasks);
+      removeKeepaliveReason(agentId, reason, tasks);
   }
 }
 //@ chunk-e6aww6q8.js:4717295-4717398 placement
@@ -98,58 +98,59 @@ function pruneSettledChildWork(agentId, tasks) {
  * 标记代理已与聊天交互（未放弃固定时）。
  */
 function markChatEngaged(id, taskRegistry) {
-  taskRegistry.update(id, (r) =>
-    r.chatEngaged === true || r.chatPinForfeited === true
-      ? r
+  taskRegistry.update(id, (task) =>
+    task.chatEngaged === true || task.chatPinForfeited === true
+      ? task
       : {
-          ...r,
+          ...task,
           chatEngaged: true,
         },
   );
 }
 //@ chunk-e6aww6q8.js:4717398-4717678 placement
-function forfeitChatPins(tasks, n) {
-  let r;
+function forfeitChatPins(tasks, nowMs) {
+  let next;
   for (let [key, value] of Object.entries(tasks)) {
     if (!isLocalAgent(value) || value.chatPinForfeited === true) continue;
-    let y = isCompletedBackgroundAgent(value);
-    r ??= {
+    let isCompleted = isCompletedBackgroundAgent(value);
+    next ??= {
       ...tasks,
     };
-    r[key] = {
+    next[key] = {
       ...value,
       chatPinForfeited: true,
-      ...(y &&
+      ...(isCompleted &&
         !value.retain &&
         (value.keepaliveReasons?.size ?? 0) === 0 && {
-          evictAfter: value.endTime === undefined ? n : Math.max(n, value.endTime + MCP_TASK_KEEPALIVE_MS),
+          evictAfter:
+            value.endTime === undefined ? nowMs : Math.max(nowMs, value.endTime + MCP_TASK_KEEPALIVE_MS),
         }),
     };
   }
-  return r ?? tasks;
+  return next ?? tasks;
 }
 //@ chunk-e6aww6q8.js:4717678-4717977 placement
 /**
  * 放弃所有代理的聊天固定，并清除等待通知的接收者。
  */
-function forfeitAllChatPins(e) {
-  for (let task of Object.values(e.tasks))
+function forfeitAllChatPins(state) {
+  for (let task of Object.values(state.tasks))
     if (isLocalAgent(task)) getTaskRunState().chatPinForfeitedAgentIds.add(task.agentId);
-  let n = forfeitChatPins(e.tasks, Date.now());
-  for (let [key, value] of Object.entries(n))
+  let tasks = forfeitChatPins(state.tasks, Date.now());
+  for (let [key, value] of Object.entries(tasks))
     if (isLocalAgent(value) && value.waitingNoticeRecipient !== undefined)
-      n = {
-        ...n,
+      tasks = {
+        ...tasks,
         [key]: {
           ...value,
           waitingNoticeRecipient: undefined,
         },
       };
-  return n === e.tasks
-    ? e
+  return tasks === state.tasks
+    ? state
     : {
-        ...e,
-        tasks: n,
+        ...state,
+        tasks,
       };
 }
 //@ chunk-e6aww6q8.js:4717977-4718577 placement
@@ -157,10 +158,10 @@ function forfeitAllChatPins(e) {
  * 向代理的待处理消息队列追加一条消息（带来源、是否元消息、工具等），并记录事件。
  */
 function queueAgentMessage(agentId, text, tasks, options = {}) {
-  tasks.update(agentId, (h) => ({
-    ...h,
+  tasks.update(agentId, (task) => ({
+    ...task,
     pendingMessages: [
-      ...h.pendingMessages,
+      ...task.pendingMessages,
       {
         text,
         origin: options.origin,
@@ -170,7 +171,7 @@ function queueAgentMessage(agentId, text, tasks, options = {}) {
             toolsUsed: options.toolsUsed,
           }),
         ...(options.userInitiated && {
-          userInitiatedAt: h.userStopCount ?? 0,
+          userInitiatedAt: task.userStopCount ?? 0,
         }),
         ...(options.forwarded && {
           forwarded: options.forwarded,
@@ -204,15 +205,15 @@ function queueAgentMessage(agentId, text, tasks, options = {}) {
 }
 //@ chunk-e6aww6q8.js:4718577-4718644 placement
 function releaseBackgroundedAgent(taskId, taskRegistry) {
-  let r = taskRegistry.get(taskId);
-  if (isLocalAgent(r) && r.isBackgrounded) forgetHandback(taskId);
+  let task = taskRegistry.get(taskId);
+  if (isLocalAgent(task) && task.isBackgrounded) forgetHandback(taskId);
 }
 //@ chunk-e6aww6q8.js:4718761-4718810 placement
 /**
  * 判断是否应发送队友生命周期通知（主代理总是发）。
  */
-function shouldNotifyTeammateLifecycle(e, taskRegistry) {
-  return e === mainAgentId() || useTeammateLifecycleNotification(taskRegistry.get(e));
+function shouldNotifyTeammateLifecycle(agentId, taskRegistry) {
+  return agentId === mainAgentId() || useTeammateLifecycleNotification(taskRegistry.get(agentId));
 }
 export {
   pruneSettledChildWork,

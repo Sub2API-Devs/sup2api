@@ -36,7 +36,7 @@ import { useAppStoreDirect, useSetAppState, useAppState } from "../state/AppStat
 import { useSpinnerStore } from "../components/Spinner/spinnerStatus.js";
 import { useSetVoiceState } from "../context/voice.js";
 import { useSession } from "../context/session.js";
-import { ce, R, yt } from "../../vendor/react/cjs/react.production.js";
+import { useCallback, useRef, useSyncExternalStore } from "../../vendor/react/cjs/react.production.js";
 import {
   useShadowedFooterActionHandler,
   isPanelOrTeammateTask,
@@ -113,54 +113,61 @@ import { getShortcutDisplay } from "../keybindings/shortcutFormat.js";
  */
 function interruptBackgroundWork(tasks, taskRegistry, addNotification, store, storageV5) {
   if (isZincHarborOn()) {
-    let ke = [];
-    let Re = [];
-    let Be = 0;
+    let interruptedDescriptions = [];
+    let stoppedDescriptions = [];
+    let teammateCount = 0;
     for (let [key, value] of Object.entries(tasks)) {
       if (taskAbortController(value)) continue;
       if (isInterruptibleBackgroundSubagent(value)) {
         if (interruptBackgroundSubagent(key, taskRegistry)) {
-          if (!isObserverAgentTask(value)) ke.push(value.description);
+          if (!isObserverAgentTask(value)) interruptedDescriptions.push(value.description);
         } else if (isObserverAgentTask(value)) {
           markAgentNotified(key, taskRegistry);
           killAsyncAgent(key, taskRegistry, "user");
         } else {
           stopAgentFromUi(key, value, taskRegistry, storageV5);
-          Re.push(value.description);
+          stoppedDescriptions.push(value.description);
         }
       } else if (isLocalAgent(value) && value.agentType === "main-session" && value.status === "running") {
         stopAgentFromUi(key, value, taskRegistry, storageV5);
-        Re.push(value.description);
-      } else if (isInProcessTeammateTask(value) && interruptTeammateWork(value)) Be++;
+        stoppedDescriptions.push(value.description);
+      } else if (isInProcessTeammateTask(value) && interruptTeammateWork(value)) teammateCount++;
     }
-    if (ke.length === 0 && Re.length === 0 && Be === 0) return false;
-    if (ke.length > 0 || Re.length > 0) {
-      let ze = [];
-      if (ke.length > 0)
-        ze.push(
-          `${ke.length} background ${plural(ke.length, "agent")} ${plural(ke.length, "was", "were")} interrupted by the user and parked: ${ke.map((Xe) => `"${Xe}"`).join(", ")}. Progress is preserved; resume an agent by sending it a message.`,
+    if (interruptedDescriptions.length === 0 && stoppedDescriptions.length === 0 && teammateCount === 0)
+      return false;
+    if (interruptedDescriptions.length > 0 || stoppedDescriptions.length > 0) {
+      let messages = [];
+      if (interruptedDescriptions.length > 0)
+        messages.push(
+          `${interruptedDescriptions.length} background ${plural(interruptedDescriptions.length, "agent")} ${plural(interruptedDescriptions.length, "was", "were")} interrupted by the user and parked: ${interruptedDescriptions.map((description) => `"${description}"`).join(", ")}. Progress is preserved; resume an agent by sending it a message.`,
         );
-      if (Re.length > 0)
-        ze.push(
-          `${Re.length} background ${plural(Re.length, "task")} ${plural(Re.length, "was", "were")} stopped by the user: ${Re.map((Xe) => `"${Xe}"`).join(", ")}.`,
+      if (stoppedDescriptions.length > 0)
+        messages.push(
+          `${stoppedDescriptions.length} background ${plural(stoppedDescriptions.length, "task")} ${plural(stoppedDescriptions.length, "was", "were")} stopped by the user: ${stoppedDescriptions.map((description) => `"${description}"`).join(", ")}.`,
         );
       store.enqueuePendingNotification({
         agentId: mainAgentId(),
-        value: ze.join(" "),
+        value: messages.join(" "),
         mode: "task-notification",
         skipAttachments: true,
         passive: true,
         priority: "next",
       });
     }
-    let He = ke.length + Be;
-    let We = [];
-    if (He > 0) We.push(`${He} background ${plural(He, "agent")} parked \u2014 send a message to resume`);
-    if (Re.length > 0) We.push(`${Re.length} background ${plural(Re.length, "task")} stopped`);
+    let parkedCount = interruptedDescriptions.length + teammateCount;
+    let parts = [];
+    if (parkedCount > 0)
+      parts.push(
+        `${parkedCount} background ${plural(parkedCount, "agent")} parked \u2014 send a message to resume`,
+      );
+    if (stoppedDescriptions.length > 0)
+      parts.push(
+        `${stoppedDescriptions.length} background ${plural(stoppedDescriptions.length, "task")} stopped`,
+      );
     addNotification({
       key: "agents-parked",
       kind: "feedback",
-      text: We.join(" \xB7 "),
+      text: parts.join(" \xB7 "),
       priority: "immediate",
       timeoutMs: 5000,
     });
@@ -198,46 +205,58 @@ function CancelRequestHandler(props) {
   let spinnerStore = useSpinnerStore();
   let taskRegistry = useSetVoiceState();
   let session = useSession();
-  let io = ce(() => appStoreDirect.getState().footerSelection !== null, [appStoreDirect]);
-  let shadowedFooterActionHandler = useShadowedFooterActionHandler(io);
+  let hasFooterSelection = useCallback(
+    () => appStoreDirect.getState().footerSelection !== null,
+    [appStoreDirect],
+  );
+  let shadowedFooterActionHandler = useShadowedFooterActionHandler(hasFooterSelection);
   let storeSelector = useStoreSelector(detachedCallSlots.of(session), hasRunningTask);
   let { storageV5 } = useTheme_2();
   let store = useCommandQueueOrDefault();
   let setAppState_2 = useCommandQueue();
   let { addNotification, removeNotification } = useNotifications();
-  let lastKillAgentsPressRef = R(0);
-  let viewSelectionMode = R(0);
-  let viewSelectionMode_2 = useAppState((Pr) => Pr.viewSelectionMode);
+  let lastKillAgentsPressRef = useRef(0);
+  let viewSelectionMode = useRef(0);
+  let viewSelectionMode_2 = useAppState((state) => state.viewSelectionMode);
   let queuedMessageText = useQueuedMessageText();
-  let handleCancel = yt(onSessionCronsChange, hasLoopTask);
-  let Cn = exitDetachesToCaller || isBgSession();
-  let No = renderWithForceUpdate(() => getFeatureValue_CACHED_MAY_BE_STALE("tengu_calm_riddle", true));
-  let vo = Cn && No;
-  let Yo = handleCancel && !vo;
+  let handleCancel = useSyncExternalStore(onSessionCronsChange, hasLoopTask);
+  let exitDetaches = exitDetachesToCaller || isBgSession();
+  let calmRiddleEnabled = renderWithForceUpdate(() =>
+    getFeatureValue_CACHED_MAY_BE_STALE("tengu_calm_riddle", true),
+  );
+  let detachesAndCalm = exitDetaches && calmRiddleEnabled;
+  let canCancel = handleCancel && !detachesAndCalm;
   let phase = useQuotaAutoResumeState().phase;
-  let Fn = isPhaseActive(phase);
-  let bn = Fn && isInputEmpty === true;
-  let Go = phase === "armed" || phase === "stale";
-  let hn = useAppState((Pr) => Object.values(Pr.tasks).some(isAgentPanelTask));
-  let killAllAgentsAndNotify = ce(
-    (Pr) => (stoppableWork === undefined ? noopUnsubscribeFactory() : stoppableWork.onOutstandingChange(Pr)),
+  let isPhaseActiveNow = isPhaseActive(phase);
+  let isIdleInPhase = isPhaseActiveNow && isInputEmpty === true;
+  let isArmedOrStale = phase === "armed" || phase === "stale";
+  let hasAgentPanelTask = useAppState((state) => Object.values(state.tasks).some(isAgentPanelTask));
+  let killAllAgentsAndNotify = useCallback(
+    (state) =>
+      stoppableWork === undefined ? noopUnsubscribeFactory() : stoppableWork.onOutstandingChange(state),
     [stoppableWork],
   );
-  let Xo = yt(killAllAgentsAndNotify, () => (stoppableWork?.stoppable() ?? 0) > 0);
-  let Sn = useAppState((Pr) => Object.values(Pr.tasks).some(isClaimableAutoReactSubscription));
+  let hasStoppableWork = useSyncExternalStore(
+    killAllAgentsAndNotify,
+    () => (stoppableWork?.stoppable() ?? 0) > 0,
+  );
+  let shouldPrependModeChar_2 = useAppState((state) =>
+    Object.values(state.tasks).some(isClaimableAutoReactSubscription),
+  );
   let any = setAppState_2.some(processQueuedCommands_4);
-  let on = ce(
+  let handleCancelPress = useCallback(
     ({ passive }) => {
       let tasks = appStoreDirect.getState().tasks;
       let running = Object.entries(tasks).filter(([, t]) => isLiveAgentOrTeammateTask(t));
       if (running.length === 0) return false;
-      for (let [wr, zr] of running) {
-        markAgentNotified(wr, taskRegistry);
-        if (isLocalAgent(zr) && !isObserverAgentTask(zr)) markStoppedByUser(wr, taskRegistry, storageV5);
+      for (let [taskId, handle] of running) {
+        markAgentNotified(taskId, taskRegistry);
+        if (isLocalAgent(handle) && !isObserverAgentTask(handle))
+          markStoppedByUser(taskId, taskRegistry, storageV5);
       }
       killAllRunningAgentTasks(tasks, taskRegistry, "user");
-      for (let [taskId, zr] of running)
-        if (zr.type === "in_process_teammate")
+      for (let [taskId, task] of running)
+        if (task.type === "in_process_teammate")
           killInProcessTeammate(taskId, taskRegistry, setAppState, storageV5);
       let descriptions = [];
       for (let [taskId, task] of running) {
@@ -272,24 +291,24 @@ function CancelRequestHandler(props) {
     },
     [appStoreDirect, onAgentsKilled, taskRegistry, setAppState, store, storageV5],
   );
-  let handleInterrupt = ce(
+  let handleInterrupt = useCallback(
     ({ gesture, suppressBackgroundAgentKill = false, pressLandedOnWork = false }) => {
       let handleKillAgents = getEffortLevelIfSupported(getMainLoopModel(), queuedMessageText);
-      let Zr = getInFlightMessageId?.();
-      let wr = {
+      let inFlightMessageId = getInFlightMessageId?.();
+      let killOptions = {
         source: lit_2("escape"),
         streamMode: fromEnum(spinnerStore.get().mode),
         ...(handleKillAgents && {
           effort_level: fromEnum(handleKillAgents),
         }),
-        ...(Zr && {
-          message_id: sanitizeMarkName(Zr),
+        ...(inFlightMessageId && {
+          message_id: sanitizeMarkName(inFlightMessageId),
         }),
       };
-      let zr = (abortSignal !== undefined && !abortSignal.aborted) || isExternalLoading;
-      let _r = gesture === "ctrl_c" && vo && !zr;
-      let fr = _r ? 0 : syncLoopTickState();
-      if (fr > 0)
+      let isBusy = (abortSignal !== undefined && !abortSignal.aborted) || isExternalLoading;
+      let isHardInterrupt = gesture === "ctrl_c" && detachesAndCalm && !isBusy;
+      let tickValue = isHardInterrupt ? 0 : syncLoopTickState();
+      if (tickValue > 0)
         addNotification({
           key: LOOP_WAKEUP_CANCELLED,
           kind: "feedback",
@@ -299,69 +318,81 @@ function CancelRequestHandler(props) {
           requeueOnPreempt: true,
           invalidates: [LOOP_WAKEUP_CANCELLED],
         });
-      let $r = promptInputValue(session) === "";
-      let Yr = !suppressBackgroundAgentKill || $r;
-      let Er = hasPendingContinuation() && Yr;
-      let Vr = false;
-      if (Er) {
+      let isInputEmptyNow = promptInputValue(session) === "";
+      let allowAgentKill = !suppressBackgroundAgentKill || isInputEmptyNow;
+      let hasPendingContinuationNow = hasPendingContinuation() && allowAgentKill;
+      let unusedFlag = false;
+      if (hasPendingContinuationNow) {
         cancelQuotaAutoResumeWithNotice(addNotification, gesture);
-        Vr = true;
+        unusedFlag = true;
       }
-      if (isAutoArmedByItself() && Yr) {
+      if (isAutoArmedByItself() && allowAgentKill) {
         cancelQuotaAutoResumeWithNotice(addNotification, gesture);
-        Vr = true;
+        unusedFlag = true;
       }
-      if (zr || (isCloudMessageHeld && $r)) {
+      if (isBusy || (isCloudMessageHeld && isInputEmptyNow)) {
         viewSelectionMode.current = Date.now();
-        logEvent("tengu_cancel", wr);
+        logEvent("tengu_cancel", killOptions);
         detachedCallSlots.of(session).stopRunning();
         onCancel();
         return true;
       }
-      if ($r && detachedCallSlots.of(session).stopRunning() > 0) {
+      if (isInputEmptyNow && detachedCallSlots.of(session).stopRunning() > 0) {
         viewSelectionMode.current = Date.now();
-        logEvent("tengu_cancel", wr);
+        logEvent("tengu_cancel", killOptions);
         return true;
       }
       let any = Object.values(appStoreDirect.getState().tasks).some(isClaimableAutoReactSubscription);
       let any_2 = store.getCommandQueueSnapshot().some(processQueuedCommands_4);
-      let is = !suppressBackgroundAgentKill && (hn || any || any_2 || hasStoppableAutoReactSupervision());
-      let ws = hasModeCharCommand(store, $r) && popCommandFromQueue !== undefined;
-      let Ci = fr > 0;
-      let oi =
-        is ||
-        ws ||
-        Ci ||
-        (_r && hasLoopTask()) ||
+      let shouldDrain =
+        !suppressBackgroundAgentKill &&
+        (hasAgentPanelTask || any || any_2 || hasStoppableAutoReactSupervision());
+      let canPopQueuedModeCommand =
+        hasModeCharCommand(store, isInputEmptyNow) && popCommandFromQueue !== undefined;
+      let hasTickTarget = tickValue > 0;
+      let isInterruptible =
+        shouldDrain ||
+        canPopQueuedModeCommand ||
+        hasTickTarget ||
+        (isHardInterrupt && hasLoopTask()) ||
         pressLandedOnWork ||
         abortSignal !== undefined ||
         Date.now() - viewSelectionMode.current < GESTURE_WINDOW_MS;
-      if (Go && !Vr && !oi && Yr) {
+      if (isArmedOrStale && !unusedFlag && !isInterruptible && allowAgentKill) {
         cancelQuotaAutoResumeWithNotice(addNotification, gesture);
-        Vr = true;
+        unusedFlag = true;
       }
-      if (ws && popCommandFromQueue) {
+      if (canPopQueuedModeCommand && popCommandFromQueue) {
         popCommandFromQueue();
         return true;
       }
-      if (!suppressBackgroundAgentKill && any_2 && !hn && !any && !hasStoppableAutoReactSupervision()) {
+      if (
+        !suppressBackgroundAgentKill &&
+        any_2 &&
+        !hasAgentPanelTask &&
+        !any &&
+        !hasStoppableAutoReactSupervision()
+      ) {
         clearSummonWakeTimers();
         bumpScanGeneration();
         artifactWatchStopNotice(0, drainQueuedTaskNotifications(store), {
           passive: true,
         });
         viewSelectionMode.current = Date.now();
-        logEvent("tengu_cancel", wr);
-        return Vr || Ci;
+        logEvent("tengu_cancel", killOptions);
+        return unusedFlag || hasTickTarget;
       }
       let any_3 = Object.values(appStoreDirect.getState().tasks).some(isAgentPanelTask);
-      if (!suppressBackgroundAgentKill && (hn || Xo || any || hasStoppableAutoReactSupervision())) {
-        let Zi = interruptIfStoppable(stoppableWork);
-        let da = killAutoReactSubscriptions(taskRegistry, {
+      if (
+        !suppressBackgroundAgentKill &&
+        (hasAgentPanelTask || hasStoppableWork || any || hasStoppableAutoReactSupervision())
+      ) {
+        let interrupted = interruptIfStoppable(stoppableWork);
+        let killedSubscriptions = killAutoReactSubscriptions(taskRegistry, {
           durable: false,
         });
-        let qn = drainQueuedTaskNotifications(store);
-        artifactWatchStopNotice(da, qn, {
+        let drainedNotifications = drainQueuedTaskNotifications(store);
+        artifactWatchStopNotice(killedSubscriptions, drainedNotifications, {
           nameChordGesture: true,
           passive: true,
         });
@@ -374,22 +405,22 @@ function CancelRequestHandler(props) {
                 store,
                 storageV5,
               )
-            : on({
+            : handleCancelPress({
                 passive: true,
               })) ||
           any_3 ||
-          Zi ||
-          da > 0 ||
-          qn.length > 0
+          interrupted ||
+          killedSubscriptions > 0 ||
+          drainedNotifications.length > 0
         ) {
           viewSelectionMode.current = Date.now();
-          logEvent("tengu_cancel", wr);
-          return Zi || Vr || Ci;
+          logEvent("tengu_cancel", killOptions);
+          return interrupted || unusedFlag || hasTickTarget;
         }
       }
-      if (Vr) return true;
-      if (onCancel() === false && !Ci) return false;
-      logEvent("tengu_cancel", wr);
+      if (unusedFlag) return true;
+      if (onCancel() === false && !hasTickTarget) return false;
+      logEvent("tengu_cancel", killOptions);
       return true;
     },
     [
@@ -400,10 +431,10 @@ function CancelRequestHandler(props) {
       onCancel,
       getInFlightMessageId,
       queuedMessageText,
-      hn,
-      Xo,
+      hasAgentPanelTask,
+      hasStoppableWork,
       stoppableWork,
-      on,
+      handleCancelPress,
       appStoreDirect,
       spinnerStore,
       taskRegistry,
@@ -411,44 +442,50 @@ function CancelRequestHandler(props) {
       store,
       session,
       storageV5,
-      Go,
-      vo,
+      isArmedOrStale,
+      detachesAndCalm,
     ],
   );
   let secondOverlayKeys = useSecondOverlayKeys();
-  let Dn = useOverlayKeys() && !secondOverlayKeys;
+  let hasModalOverlay = useOverlayKeys() && !secondOverlayKeys;
   let dialogOfKind = useDialogOfKind(LOCAL_JSX_DIALOG.kind);
-  let mr = LayoutOverflow() === "visible";
-  let Kn = (abortSignal !== undefined && !abortSignal.aborted) || isExternalLoading;
-  let Wn = isCloudMessageHeld && isInputEmpty;
-  let Fr = storeSelector && isInputEmpty;
-  let any_2 = setAppState_2.some((Pr) => shouldPrependModeChar(Pr, isInputEmpty));
-  let Un = inputMode !== undefined && inputMode !== "prompt" && isInputEmpty;
-  let dr = viewSelectionMode_2 === "viewing-agent";
-  let or =
+  let isLayoutVisible = LayoutOverflow() === "visible";
+  let isBusyNow = (abortSignal !== undefined && !abortSignal.aborted) || isExternalLoading;
+  let isHeldMessageIdle = isCloudMessageHeld && isInputEmpty;
+  let hasSelectorOnIdleInput = storeSelector && isInputEmpty;
+  let any_2 = setAppState_2.some((state) => shouldPrependModeChar(state, isInputEmpty));
+  let isNonPromptModeIdle = inputMode !== undefined && inputMode !== "prompt" && isInputEmpty;
+  let isViewingAgent = viewSelectionMode_2 === "viewing-agent";
+  let shouldCancel =
     screen !== "transcript" &&
     !isBackgroundTasksDialogVisible &&
     !dialogOfKind &&
     !secondOverlayKeys &&
     !isInputOverlayActive;
   let isActive =
-    or && !Dn && !mr && (Kn || Wn || Fr || any_2 || handleCancel || bn) && !Un && !isVimEditing && !dr;
-  let Qn =
-    or &&
-    (Kn ||
-      (Dn
+    shouldCancel &&
+    !hasModalOverlay &&
+    !isLayoutVisible &&
+    (isBusyNow || isHeldMessageIdle || hasSelectorOnIdleInput || any_2 || handleCancel || isIdleInPhase) &&
+    !isNonPromptModeIdle &&
+    !isVimEditing &&
+    !isViewingAgent;
+  let cancelReason =
+    shouldCancel &&
+    (isBusyNow ||
+      (hasModalOverlay
         ? false
-        : Wn ||
-          Fr ||
+        : isHeldMessageIdle ||
+          hasSelectorOnIdleInput ||
           any_2 ||
-          Yo ||
-          Fn ||
-          hn ||
-          Xo ||
-          Sn ||
+          canCancel ||
+          isPhaseActiveNow ||
+          hasAgentPanelTask ||
+          hasStoppableWork ||
+          shouldPrependModeChar_2 ||
           any ||
           hasStoppableAutoReactSupervision() ||
-          dr));
+          isViewingAgent));
   useKeybinding(
     "chat:cancel",
     () => {
@@ -464,29 +501,29 @@ function CancelRequestHandler(props) {
       isActive,
     },
   );
-  let ur = ce(() => {
-    if (dr) {
+  let cancelCallback = useCallback(() => {
+    if (isViewingAgent) {
       let { viewingAgentTaskId, tasks } = appStoreDirect.getState();
-      let Ur = viewingAgentTaskId ? tasks[viewingAgentTaskId] : undefined;
-      let Zr = isPanelOrTeammateTask(Ur);
-      if (Zr) {
+      let viewedTask = viewingAgentTaskId ? tasks[viewingAgentTaskId] : undefined;
+      let isPanelTask = isPanelOrTeammateTask(viewedTask);
+      if (isPanelTask) {
         viewSelectionMode.current = Date.now();
-        stopTask(Ur, taskRegistry, setAppState, {
+        stopTask(viewedTask, taskRegistry, setAppState, {
           session,
           storageV5,
         });
       }
       exitTeammateView(setAppState);
-      if (Kn || Wn || Fr || any_2 || Yo || bn)
+      if (isBusyNow || isHeldMessageIdle || hasSelectorOnIdleInput || any_2 || canCancel || isIdleInPhase)
         handleInterrupt({
           gesture: "ctrl_c",
           suppressBackgroundAgentKill: true,
-          pressLandedOnWork: Zr,
+          pressLandedOnWork: isPanelTask,
         });
       return;
     }
-    let Pr = (abortSignal !== undefined && !abortSignal.aborted) || isExternalLoading;
-    if (Dn && !Pr) return false;
+    let isBusyNow_2 = (abortSignal !== undefined && !abortSignal.aborted) || isExternalLoading;
+    if (hasModalOverlay && !isBusyNow_2) return false;
     if (
       !handleInterrupt({
         gesture: "ctrl_c",
@@ -494,8 +531,8 @@ function CancelRequestHandler(props) {
     )
       return false;
   }, [
-    dr,
-    Dn,
+    isViewingAgent,
+    hasModalOverlay,
     abortSignal,
     isExternalLoading,
     appStoreDirect,
@@ -503,34 +540,42 @@ function CancelRequestHandler(props) {
     session,
     setAppState,
     storageV5,
-    Kn,
-    Wn,
-    Fr,
+    isBusyNow,
+    isHeldMessageIdle,
+    hasSelectorOnIdleInput,
     any_2,
-    Yo,
-    bn,
+    canCancel,
+    isIdleInPhase,
     handleInterrupt,
   ]);
-  useKeybinding("app:interrupt", ur, {
+  useKeybinding("app:interrupt", cancelCallback, {
     context: "Global",
-    isActive: Qn,
+    isActive: cancelReason,
   });
-  useKeybinding("app:exit", () => (promptInputValue(session) === "" ? ur() : false), {
+  useKeybinding("app:exit", () => (promptInputValue(session) === "" ? cancelCallback() : false), {
     context: "Global",
-    isActive: Qn && isInputEmpty && !Dn && !Cn && isZincHarborOn(),
+    isActive: cancelReason && isInputEmpty && !hasModalOverlay && !exitDetaches && isZincHarborOn(),
   });
-  let Ir = ce(() => {
+  let drainCallback = useCallback(() => {
     let tasks = appStoreDirect.getState().tasks;
     let hasRunningAgents = Object.values(tasks).some(isLiveAgentOrTeammateTask);
-    let Gn = (stoppableWork?.stoppable() ?? 0) > 0;
-    let Ur = pairingForObserver(session, MAIN_OBSERVED_KEY)?.state === "armed";
+    let hasStoppable = (stoppableWork?.stoppable() ?? 0) > 0;
+    let isObserverArmed = pairingForObserver(session, MAIN_OBSERVED_KEY)?.state === "armed";
     let any = Object.values(tasks).some(isClaimableAutoReactSubscription);
-    let wr = isAutoreactArmed();
-    let zr = liveDocWatchController != null && liveDocWatchController.liveDocWatchCount() > 0;
-    let _r =
+    let isAutoreactArmedNow = isAutoreactArmed();
+    let hasLiveDocWatch = liveDocWatchController != null && liveDocWatchController.liveDocWatchCount() > 0;
+    let shouldStop =
       activeArtifactConnections() > 0 ||
       Object.keys(appStoreDirect.getState().artifactRoomJoinConsentSlugs ?? {}).length > 0;
-    if (!hasRunningAgents && !Gn && !Ur && !any && !zr && !_r && !wr) {
+    if (
+      !hasRunningAgents &&
+      !hasStoppable &&
+      !isObserverArmed &&
+      !any &&
+      !hasLiveDocWatch &&
+      !shouldStop &&
+      !isAutoreactArmedNow
+    ) {
       addNotification({
         key: "kill-agents-none",
         kind: "feedback",
@@ -551,14 +596,15 @@ function CancelRequestHandler(props) {
           effort_level: fromEnum(effortLevelIfSupported),
         }),
       });
-      let Vr = drainQueuedTaskNotifications(store);
-      let ms = emptyPartitionedNotifications();
-      let Xs = hasRunningAgents || Gn || Ur || any;
-      if (Xs || wr || zr || _r) viewSelectionMode.current = Date.now();
-      if (Xs) {
+      let drainedNotifications = drainQueuedTaskNotifications(store);
+      let emptyPartition = emptyPartitionedNotifications();
+      let hasAnyRunning = hasRunningAgents || hasStoppable || isObserverArmed || any;
+      if (hasAnyRunning || isAutoreactArmedNow || hasLiveDocWatch || shouldStop)
+        viewSelectionMode.current = Date.now();
+      if (hasAnyRunning) {
         if (hasPendingContinuation()) cancelQuotaAutoResumeWithNotice(addNotification, "kill_agents_chord");
         if (store.getCommandQueue().some(isScreeningPendingEntry)) popCommandFromQueue?.();
-        let combined = store
+        let notifications = store
           .clearCommandQueue({
             reason: "cleared_on_cancel",
             ...(alwaysFalseTool() && {
@@ -566,44 +612,50 @@ function CancelRequestHandler(props) {
             }),
           })
           .concat(clearHeldInput());
-        ms = partitionStopNotifications(combined);
-        recordSubmittedPrompts(combined, storageV5, {
+        emptyPartition = partitionStopNotifications(notifications);
+        recordSubmittedPrompts(notifications, storageV5, {
           armUndo: false,
           placed: withExpandedPastes,
         });
       }
-      let Ls = stopMainObservers(session, storageV5);
+      let stoppedObservers = stopMainObservers(session, storageV5);
       liveDocWatchController?.stopAllLiveDocWatches();
       leaveArtifactRooms();
-      let is = wr;
-      let ws = killAutoReactSubscriptions(taskRegistry, {
+      let autoreactArmed = isAutoreactArmedNow;
+      let killedSubscriptions = killAutoReactSubscriptions(taskRegistry, {
         storageV5,
       });
       dropNonDurableStopDisclosures(store);
-      if (ws > 0 || (is && !sendsPromptsElsewhere) || Vr.length > 0) {
-        let Ci = isBuiltInArtifactHiddenForMcp();
+      if (
+        killedSubscriptions > 0 ||
+        (autoreactArmed && !sendsPromptsElsewhere) ||
+        drainedNotifications.length > 0
+      ) {
+        let isArtifactHidden = isBuiltInArtifactHiddenForMcp();
         store.enqueuePendingNotification({
           agentId: mainAgentId(),
           value: formatTaskNotification({
             taskType: "artifact-auto-react",
             summary: escapeXml(
-              ws > 0
-                ? `${ws} artifact ${Ci ? plural(ws, "comment watch", "comment watches") : `auto-reply ${plural(ws, "subscription")}`} stopped by the user`
-                : Ci
+              killedSubscriptions > 0
+                ? `${killedSubscriptions} artifact ${isArtifactHidden ? plural(killedSubscriptions, "comment watch", "comment watches") : `auto-reply ${plural(killedSubscriptions, "subscription")}`} stopped by the user`
+                : isArtifactHidden
                   ? "Artifact comments sent to Claude no longer wake this session"
                   : "Artifact auto-replies are disarmed for the rest of this session",
             ),
             body: `
 ${escapeXml(
-  Vr.map(stoppedAfterAutoActionsNotice).concat([
-    Ci
-      ? ws > 0
-        ? "Comments sent to Claude no longer wake this session. Wakes stay off until the user restarts Claude Code and publishes again."
-        : "No watch was active to stop. Wakes stay off until the user restarts Claude Code and publishes again."
-      : ws > 0
-        ? "Auto-replies are disarmed for the rest of this session (a new session re-arms on publish; a watch this session carried is ended or stays disarmed for its continuations)."
-        : "No subscription was active to stop (a new session re-arms on publish; a watch this session carried stays disarmed for its continuations).",
-  ]).join(`
+  drainedNotifications
+    .map(stoppedAfterAutoActionsNotice)
+    .concat([
+      isArtifactHidden
+        ? killedSubscriptions > 0
+          ? "Comments sent to Claude no longer wake this session. Wakes stay off until the user restarts Claude Code and publishes again."
+          : "No watch was active to stop. Wakes stay off until the user restarts Claude Code and publishes again."
+        : killedSubscriptions > 0
+          ? "Auto-replies are disarmed for the rest of this session (a new session re-arms on publish; a watch this session carried is ended or stays disarmed for its continuations)."
+          : "No subscription was active to stop (a new session re-arms on publish; a watch this session carried stays disarmed for its continuations).",
+    ]).join(`
 
 `),
 )}`,
@@ -613,19 +665,19 @@ ${escapeXml(
           origin: {
             kind: "task-notification",
             source: "artifact-auto-react-stop-disclosure",
-            ...(Vr.length > 0 && {
+            ...(drainedNotifications.length > 0 && {
               carriesDiscardRecord: true,
             }),
           },
         });
       }
-      requeueStopNotifications(store, ms, ws);
+      requeueStopNotifications(store, emptyPartition, killedSubscriptions);
       interruptIfStoppable(stoppableWork);
       if (
-        !on({
+        !handleCancelPress({
           passive: false,
         }) &&
-        Ls
+        stoppedObservers
       )
         onAgentsKilled();
       return;
@@ -644,7 +696,7 @@ ${escapeXml(
     appStoreDirect,
     addNotification,
     removeNotification,
-    on,
+    handleCancelPress,
     onAgentsKilled,
     queuedMessageText,
     taskRegistry,
@@ -654,14 +706,14 @@ ${escapeXml(
     storageV5,
     sendsPromptsElsewhere,
   ]);
-  useKeybinding("chat:killAgents", Ir, {
+  useKeybinding("chat:killAgents", drainCallback, {
     context: "Chat",
   });
   return null;
 }
 //@ chunk-18hwfzwa.js:473810-473910 affinity
-function hasRunningTask(h) {
-  for (let x of h.values()) if (x.status === "running" && !x.stopRequested) return true;
+function hasRunningTask(tasks) {
+  for (let task of tasks.values()) if (task.status === "running" && !task.stopRequested) return true;
   return false;
 }
 export { CancelRequestHandler };

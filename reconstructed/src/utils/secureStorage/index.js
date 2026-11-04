@@ -17,6 +17,7 @@ import { getClaudeConfigDir } from "../envUtils.js";
 import { fileSuffixForOauthConfig } from "../../constants/oauth.js";
 import { getErrnoCode } from "../errors.js";
 import { plainTextStorage } from "./plainTextStorage.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-b29hdd5e.js:5478-5850 sole-consumer
 /**
@@ -25,25 +26,25 @@ import { plainTextStorage } from "./plainTextStorage.js";
 class CredmanFlagResolver {
   memo;
   handedIn;
-  prime(enabled, r) {
+  prime(enabled, extra) {
     if (this.memo !== undefined) return;
     this.handedIn = {
       enabled,
-      ...r(),
+      ...extra(),
     };
   }
-  resolve(e, r) {
+  resolve(paths, resolveFn) {
     if (this.memo !== undefined) return this.memo;
     try {
-      let a = e();
+      let resolvedPaths = paths();
       let handedIn = this.handedIn;
       if (
         handedIn !== undefined &&
-        handedIn.legacyPath === a.legacyPath &&
-        handedIn.configPath === a.configPath
+        handedIn.legacyPath === resolvedPaths.legacyPath &&
+        handedIn.configPath === resolvedPaths.configPath
       )
         this.memo = handedIn.enabled;
-      else this.memo = r(a);
+      else this.memo = resolveFn(resolvedPaths);
     } catch {
       this.memo = false;
     }
@@ -55,7 +56,10 @@ class CredmanFlagResolver {
   }
 }
 //@ chunk-b29hdd5e.js:5850-5874 sole-consumer
-var credmanFlagSlot = new HostScoped(() => new CredmanFlagResolver());
+var credmanFlagSlot; // deferred: uses CredmanFlagResolver of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-b29hdd5e.js:5850", () => {
+  credmanFlagSlot = new HostScoped(() => new CredmanFlagResolver());
+});
 //@ chunk-b29hdd5e.js:5874-5910 sole-consumer
 function credmanFlagResolver() {
   return credmanFlagSlot.of(getRootSession().host);
@@ -77,20 +81,20 @@ function isWindowsCredManBackendEnabled() {
 }
 //@ chunk-b29hdd5e.js:6141-6393 layout
 function readCredmanFlag({ legacyPath, configPath }) {
-  let a = "";
+  let text = "";
   try {
-    a = readFileSync(legacyPath, "utf8");
+    text = readFileSync(legacyPath, "utf8");
   } catch (error) {
     let errnoCode = getErrnoCode(error);
     if (errnoCode !== "ENOENT" && errnoCode !== "ENOTDIR" && errnoCode !== "EISDIR" && errnoCode !== "ELOOP")
       throw error;
   }
-  if (a === "") a = readFileSync(configPath, "utf8");
-  return JSON.parse(a).cachedGrowthBookFeatures?.tengu_windows_credman === true;
+  if (text === "") text = readFileSync(configPath, "utf8");
+  return JSON.parse(text).cachedGrowthBookFeatures?.tengu_windows_credman === true;
 }
 //@ chunk-b29hdd5e.js:6393-6424 facade-majority
-function primeWindowsCredManBackendEnabled(e) {
-  credmanFlagResolver().prime(e, getConfigPaths);
+function primeWindowsCredManBackendEnabled(enabled) {
+  credmanFlagResolver().prime(enabled, getConfigPaths);
 }
 //@ chunk-b29hdd5e.js:6424-6430 layout
 var plainTextAvailability;

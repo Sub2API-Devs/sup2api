@@ -9,13 +9,21 @@
  * attribution: placement 9, fingerprint 5, affinity 1
  */
 import { basename, sep } from "path";
-import { Re } from "../../../runtime/bun-runtime.js";
+import { __toESM } from "../../../runtime/bun-runtime.js";
 import { require_picomatch_2 } from "../../../vendor/picomatch/index.js";
 import { isPlainObject as isPlainObject_5 } from "../../utils/isPlainObject.js";
 import { GREP_TOOL_NAME, getDescription } from "./prompt.js";
 import { coerceBooleanString, booleanishSchema } from "../../utils/spellcheck.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { zodStrictObject, string, _enum, E, M, u, array } from "../../../vendor/zod/v4/classic/schemas.js";
+import {
+  zodStrictObject,
+  stringSchema,
+  _enum,
+  numberSchema,
+  booleanSchema,
+  objectSchema,
+  array,
+} from "../../../vendor/zod/v4/classic/schemas.js";
 import { coercedNumberSchema } from "../ArtifactTool/publishEdits.js";
 import {
   attachedMachineInputField,
@@ -74,12 +82,16 @@ import { INHERITED_FD_PATH } from "../../utils/execFileNoThrow.js";
 import { createAbortableStream } from "../../utils/readFileInRange.js";
 import { uniq } from "../../utils/collections.js";
 import { jsonParseRaw } from "../../utils/slowOperations.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:1445523-1445543 placement
 /**
  * 按需加载的 ripgrep 模块（interopRequireDefault 包装后取 default）。
  */
-var interopRequireDefault = Re(require_picomatch_2(), 1);
+var interopRequireDefault; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:1445523", () => {
+  interopRequireDefault = __toESM(require_picomatch_2(), 1);
+});
 //@ chunk-e6aww6q8.js:1445605-1445676 placement
 /**
  * Grep 的布尔简写选项到 output_mode 的映射（-l → files_with_matches、-c → count）。
@@ -92,49 +104,49 @@ var GREP_BOOLEAN_SHORTHANDS = [
 /**
  * 把 Grep 工具输入中的 file_path 别名映射为 path。
  */
-function normalizeGrepInputAliases(e) {
-  if (!isPlainObject_5(e)) return null;
-  let n = {
-    ...e,
+function normalizeGrepInputAliases(rawInput) {
+  if (!isPlainObject_5(rawInput)) return null;
+  let normalizedInput = {
+    ...rawInput,
   };
-  let r = [];
-  let s = [];
-  let filePath = n.file_path;
+  let appliedAliases = [];
+  let notes = [];
+  let filePath = normalizedInput.file_path;
   if (typeof filePath === "string" && filePath !== "") {
-    let y = !Object.hasOwn(n, "path");
-    if (y || n.path === filePath) {
-      delete n.file_path;
-      n.path = filePath;
-      r.push(y ? "file_path" : "repeated_file_path");
-      s.push(
-        `${GREP_TOOL_NAME}'s parameter for where to search is named \`path\`. ${y ? "`file_path` was read as `path`." : "`file_path` repeated `path` and was ignored."}`,
+    let pathMissing = !Object.hasOwn(normalizedInput, "path");
+    if (pathMissing || normalizedInput.path === filePath) {
+      delete normalizedInput.file_path;
+      normalizedInput.path = filePath;
+      appliedAliases.push(pathMissing ? "file_path" : "repeated_file_path");
+      notes.push(
+        `${GREP_TOOL_NAME}'s parameter for where to search is named \`path\`. ${pathMissing ? "`file_path` was read as `path`." : "`file_path` repeated `path` and was ignored."}`,
       );
     }
   }
-  for (let [y, S, w] of GREP_BOOLEAN_SHORTHANDS) {
-    if (coerceBooleanString(n[y]) !== true) continue;
-    let L = !Object.hasOwn(n, "output_mode");
-    if (L || n.output_mode === w) {
-      delete n[y];
-      n.output_mode = w;
-      r.push(L ? S : `repeated_${S}`);
-      s.push(
-        L
-          ? `\`${y}\` is not a ${GREP_TOOL_NAME} parameter and was read as \`output_mode: "${w}"\`.`
-          : `\`${y}\` repeated \`output_mode\` and was ignored.`,
+  for (let [shorthandFlag, aliasName, outputMode] of GREP_BOOLEAN_SHORTHANDS) {
+    if (coerceBooleanString(normalizedInput[shorthandFlag]) !== true) continue;
+    let outputModeMissing = !Object.hasOwn(normalizedInput, "output_mode");
+    if (outputModeMissing || normalizedInput.output_mode === outputMode) {
+      delete normalizedInput[shorthandFlag];
+      normalizedInput.output_mode = outputMode;
+      appliedAliases.push(outputModeMissing ? aliasName : `repeated_${aliasName}`);
+      notes.push(
+        outputModeMissing
+          ? `\`${shorthandFlag}\` is not a ${GREP_TOOL_NAME} parameter and was read as \`output_mode: "${outputMode}"\`.`
+          : `\`${shorthandFlag}\` repeated \`output_mode\` and was ignored.`,
       );
     }
   }
-  if (coerceBooleanString(n["-r"]) === true) {
-    delete n["-r"];
-    r.push("flag_r");
-    s.push(`\`-r\` was ignored: ${GREP_TOOL_NAME} always searches a directory recursively.`);
+  if (coerceBooleanString(normalizedInput["-r"]) === true) {
+    delete normalizedInput["-r"];
+    appliedAliases.push("flag_r");
+    notes.push(`\`-r\` was ignored: ${GREP_TOOL_NAME} always searches a directory recursively.`);
   }
-  return r.length
+  return appliedAliases.length
     ? {
-        input: n,
-        shapeClass: r.join(","),
-        resultNote: `Note: ${s.join(" ")}`,
+        input: normalizedInput,
+        shapeClass: appliedAliases.join(","),
+        resultNote: `Note: ${notes.join(" ")}`,
       }
     : null;
 }
@@ -142,57 +154,63 @@ function normalizeGrepInputAliases(e) {
 /**
  * Grep 输入 schema（pattern/path/glob/output_mode/-B/-A/-C/context/-n/-i/-o/type/head_limit/offset/multiline）、VCS 目录排除列表、默认 head_limit 250。
  */
-var grepInputSchema = DoctorLazy(() =>
-  zodStrictObject({
-    pattern: string().describe("The regular expression pattern to search for in file contents"),
-    path: string()
-      .optional()
-      .describe("File or directory to search in (rg PATH). Defaults to current working directory."),
-    glob: string()
-      .optional()
-      .describe('Glob pattern to filter files (e.g. "*.js", "*.{ts,tsx}") - maps to rg --glob'),
-    output_mode: _enum(["content", "files_with_matches", "count"])
-      .optional()
-      .describe(
-        'Output mode: "content" shows matching lines (supports -A/-B/-C context, -n line numbers, head_limit), "files_with_matches" shows file paths (supports head_limit), "count" shows match counts (supports head_limit). Defaults to "files_with_matches".',
+var grepInputSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var grepInputSchemaRef;
+var VCS_DIRECTORIES_TO_EXCLUDE;
+var DEFAULT_HEAD_LIMIT;
+deferInit("chunk-e6aww6q8.js:1446577", () => {
+  grepInputSchema = DoctorLazy(() =>
+    zodStrictObject({
+      pattern: stringSchema().describe("The regular expression pattern to search for in file contents"),
+      path: stringSchema()
+        .optional()
+        .describe("File or directory to search in (rg PATH). Defaults to current working directory."),
+      glob: stringSchema()
+        .optional()
+        .describe('Glob pattern to filter files (e.g. "*.js", "*.{ts,tsx}") - maps to rg --glob'),
+      output_mode: _enum(["content", "files_with_matches", "count"])
+        .optional()
+        .describe(
+          'Output mode: "content" shows matching lines (supports -A/-B/-C context, -n line numbers, head_limit), "files_with_matches" shows file paths (supports head_limit), "count" shows match counts (supports head_limit). Defaults to "files_with_matches".',
+        ),
+      "-B": coercedNumberSchema(numberSchema().optional()).describe(
+        'Number of lines to show before each match (rg -B). Requires output_mode: "content", ignored otherwise.',
       ),
-    "-B": coercedNumberSchema(E().optional()).describe(
-      'Number of lines to show before each match (rg -B). Requires output_mode: "content", ignored otherwise.',
-    ),
-    "-A": coercedNumberSchema(E().optional()).describe(
-      'Number of lines to show after each match (rg -A). Requires output_mode: "content", ignored otherwise.',
-    ),
-    "-C": coercedNumberSchema(E().optional()).describe("Alias for context."),
-    context: coercedNumberSchema(E().optional()).describe(
-      'Number of lines to show before and after each match (rg -C). Requires output_mode: "content", ignored otherwise.',
-    ),
-    "-n": booleanishSchema(M().optional()).describe(
-      'Show line numbers in output (rg -n). Requires output_mode: "content", ignored otherwise. Defaults to true.',
-    ),
-    "-i": booleanishSchema(M().optional()).describe("Case insensitive search (rg -i)"),
-    "-o": booleanishSchema(M().optional()).describe(
-      'Print only the matched (non-empty) parts of each matching line, one match per output line (rg -o / --only-matching). Requires output_mode: "content", ignored otherwise. Defaults to false.',
-    ),
-    type: string()
-      .optional()
-      .describe(
-        "File type to search (rg --type). Common types: js, py, rust, go, java, etc. More efficient than include for standard file types.",
+      "-A": coercedNumberSchema(numberSchema().optional()).describe(
+        'Number of lines to show after each match (rg -A). Requires output_mode: "content", ignored otherwise.',
       ),
-    head_limit: coercedNumberSchema(E().optional()).describe(
-      'Limit output to first N lines/entries, equivalent to "| head -N". Works across all output modes: content (limits output lines), files_with_matches (limits file paths), count (limits count entries). Defaults to 250 when unspecified. Pass 0 for unlimited (use sparingly \u2014 large result sets waste context).',
-    ),
-    offset: coercedNumberSchema(E().optional()).describe(
-      'Skip first N lines/entries before applying head_limit, equivalent to "| tail -n +N | head -N". Works across all output modes. Defaults to 0.',
-    ),
-    multiline: booleanishSchema(M().optional()).describe(
-      "Enable multiline mode where . matches newlines and patterns can span lines (rg -U --multiline-dotall). Default: false.",
-    ),
-    ...attachedMachineInputField(),
-  }),
-);
-var grepInputSchemaRef = grepInputSchema;
-var VCS_DIRECTORIES_TO_EXCLUDE = [".git", ".svn", ".hg", ".bzr", ".jj", ".sl"];
-var DEFAULT_HEAD_LIMIT = 250;
+      "-C": coercedNumberSchema(numberSchema().optional()).describe("Alias for context."),
+      context: coercedNumberSchema(numberSchema().optional()).describe(
+        'Number of lines to show before and after each match (rg -C). Requires output_mode: "content", ignored otherwise.',
+      ),
+      "-n": booleanishSchema(booleanSchema().optional()).describe(
+        'Show line numbers in output (rg -n). Requires output_mode: "content", ignored otherwise. Defaults to true.',
+      ),
+      "-i": booleanishSchema(booleanSchema().optional()).describe("Case insensitive search (rg -i)"),
+      "-o": booleanishSchema(booleanSchema().optional()).describe(
+        'Print only the matched (non-empty) parts of each matching line, one match per output line (rg -o / --only-matching). Requires output_mode: "content", ignored otherwise. Defaults to false.',
+      ),
+      type: stringSchema()
+        .optional()
+        .describe(
+          "File type to search (rg --type). Common types: js, py, rust, go, java, etc. More efficient than include for standard file types.",
+        ),
+      head_limit: coercedNumberSchema(numberSchema().optional()).describe(
+        'Limit output to first N lines/entries, equivalent to "| head -N". Works across all output modes: content (limits output lines), files_with_matches (limits file paths), count (limits count entries). Defaults to 250 when unspecified. Pass 0 for unlimited (use sparingly \u2014 large result sets waste context).',
+      ),
+      offset: coercedNumberSchema(numberSchema().optional()).describe(
+        'Skip first N lines/entries before applying head_limit, equivalent to "| tail -n +N | head -N". Works across all output modes. Defaults to 0.',
+      ),
+      multiline: booleanishSchema(booleanSchema().optional()).describe(
+        "Enable multiline mode where . matches newlines and patterns can span lines (rg -U --multiline-dotall). Default: false.",
+      ),
+      ...attachedMachineInputField(),
+    }),
+  );
+  grepInputSchemaRef = grepInputSchema;
+  VCS_DIRECTORIES_TO_EXCLUDE = [".git", ".svn", ".hg", ".bzr", ".jj", ".sl"];
+  DEFAULT_HEAD_LIMIT = 250;
+});
 //@ chunk-e6aww6q8.js:1449071-1449232 fingerprint = applyHeadLimit (1)
 /**
  * 按 offset/limit 截取结果（limit 为 0 表示不限，未给时 250），返回是否实际截断。
@@ -225,226 +243,239 @@ function formatLimitInfo(appliedLimit, appliedOffset) {
 /**
  * Grep 工具定义（name "Grep"）。只读、可并发、maxResultSizeChars 20000；ripgrep 正则搜索，三种 output_mode，head_limit 默认 250、offset 分页；validateInput 查空字节与 head_limit/offset 为非负整数。
  */
-var grepOutputSchema = DoctorLazy(() =>
-  u({
-    mode: _enum(["content", "files_with_matches", "count"]).optional(),
-    numFiles: E(),
-    filenames: array(string()),
-    content: string().optional(),
-    numLines: E().optional(),
-    numMatches: E().optional(),
-    totalFiles: E().optional(),
-    totalLines: E().optional(),
-    appliedLimit: E().optional(),
-    appliedOffset: E().optional(),
-  }),
-);
-var GrepTool = buildTool({
-  name: GREP_TOOL_NAME,
-  searchHint: "search file contents with regex (ripgrep)",
-  remoteExecution: {
-    supported: true,
-  },
-  backgrounding: "never",
-  maxResultSizeChars: 20000,
-  strict: true,
-  async description() {
-    return getDescription(undefined);
-  },
-  userFacingName() {
-    return "Search";
-  },
-  getToolUseSummary: getToolUseSummary_4,
-  getActivityDescription(input) {
-    let summary = getToolUseSummary_4(input);
-    return summary ? `Searching for ${summary}` : "Searching";
-  },
-  get inputSchema() {
-    return grepInputSchemaRef();
-  },
-  get outputSchema() {
-    return grepOutputSchema();
-  },
-  coerceInput(e) {
-    return parsedToolInputOrNull(grepInputSchemaRef(), normalizeGrepInputAliases(e));
-  },
-  isConcurrencySafe() {
-    return true;
-  },
-  isReadOnly() {
-    return true;
-  },
-  toAutoClassifierInput(input) {
-    let n = remoteRoutingCandidate(input);
-    return n === undefined
-      ? input.path
-        ? `${input.pattern} in ${input.path}`
-        : input.pattern
-      : {
-          pattern: input.pattern,
-          ...(input.path !== undefined && {
-            path: input.path,
-          }),
-          [HOST_TOOL_INPUT_FIELD]: n,
-          ...hostContextMeta(input),
-        };
-  },
-  suppressesAllPermissionUpdates(e) {
-    return hasHostField(e);
-  },
-  isSearchOrReadCommand() {
-    return {
-      isSearch: true,
-      isRead: false,
-    };
-  },
-  ruleContentField: "path",
-  getPath({ path }) {
-    if (isRemoteOnlyCheck(GREP_TOOL_NAME)) return path ?? "";
-    return path ? expandPath(path) : getCwd();
-  },
-  async preparePermissionMatcher({ pattern }) {
-    return (rulePattern) => matchWildcardPattern(rulePattern, pattern);
-  },
-  async prompt({ model, leanPrompt, leanRewrite }) {
-    return getDescription(model, leanPrompt, leanRewrite);
-  },
-  renderToolUseMessage,
-  extractSearchText({ mode, content, filenames }) {
-    if (mode === "content" && content) return content;
-    return filenames.join(`
-`);
-  },
-  mapToolResultToToolResultBlockParam(
-    {
-      mode = "files_with_matches",
-      numFiles,
-      filenames,
-      content,
-      numLines: _numLines,
-      numMatches,
-      totalFiles,
-      totalLines,
-      appliedLimit,
-      appliedOffset,
+var grepOutputSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var GrepTool;
+deferInit("chunk-e6aww6q8.js:1449343", () => {
+  grepOutputSchema = DoctorLazy(() =>
+    objectSchema({
+      mode: _enum(["content", "files_with_matches", "count"]).optional(),
+      numFiles: numberSchema(),
+      filenames: array(stringSchema()),
+      content: stringSchema().optional(),
+      numLines: numberSchema().optional(),
+      numMatches: numberSchema().optional(),
+      totalFiles: numberSchema().optional(),
+      totalLines: numberSchema().optional(),
+      appliedLimit: numberSchema().optional(),
+      appliedOffset: numberSchema().optional(),
+    }),
+  );
+  GrepTool = buildTool({
+    name: GREP_TOOL_NAME,
+    searchHint: "search file contents with regex (ripgrep)",
+    remoteExecution: {
+      supported: true,
     },
-    toolUseID,
-  ) {
-    if (mode === "content") {
-      let limitInfo = formatLimitInfo(appliedLimit, appliedOffset);
-      let resultContent =
-        content ||
-        (appliedOffset && (totalLines ?? 0) > 0 ? "No entries at this offset" : "No matches found");
-      let finalContent = limitInfo
-        ? `${resultContent}
+    backgrounding: "never",
+    maxResultSizeChars: 20000,
+    strict: true,
+    async description() {
+      return getDescription(undefined);
+    },
+    userFacingName() {
+      return "Search";
+    },
+    getToolUseSummary: getToolUseSummary_4,
+    getActivityDescription(input) {
+      let summary = getToolUseSummary_4(input);
+      return summary ? `Searching for ${summary}` : "Searching";
+    },
+    get inputSchema() {
+      return grepInputSchemaRef();
+    },
+    get outputSchema() {
+      return grepOutputSchema();
+    },
+    coerceInput(input) {
+      return parsedToolInputOrNull(grepInputSchemaRef(), normalizeGrepInputAliases(input));
+    },
+    isConcurrencySafe() {
+      return true;
+    },
+    isReadOnly() {
+      return true;
+    },
+    toAutoClassifierInput(input) {
+      let hostRouting = remoteRoutingCandidate(input);
+      return hostRouting === undefined
+        ? input.path
+          ? `${input.pattern} in ${input.path}`
+          : input.pattern
+        : {
+            pattern: input.pattern,
+            ...(input.path !== undefined && {
+              path: input.path,
+            }),
+            [HOST_TOOL_INPUT_FIELD]: hostRouting,
+            ...hostContextMeta(input),
+          };
+    },
+    suppressesAllPermissionUpdates(input) {
+      return hasHostField(input);
+    },
+    isSearchOrReadCommand() {
+      return {
+        isSearch: true,
+        isRead: false,
+      };
+    },
+    ruleContentField: "path",
+    getPath({ path }) {
+      if (isRemoteOnlyCheck(GREP_TOOL_NAME)) return path ?? "";
+      return path ? expandPath(path) : getCwd();
+    },
+    async preparePermissionMatcher({ pattern }) {
+      return (rulePattern) => matchWildcardPattern(rulePattern, pattern);
+    },
+    async prompt({ model, leanPrompt, leanRewrite }) {
+      return getDescription(model, leanPrompt, leanRewrite);
+    },
+    renderToolUseMessage,
+    extractSearchText({ mode, content, filenames }) {
+      if (mode === "content" && content) return content;
+      return filenames.join(`
+`);
+    },
+    mapToolResultToToolResultBlockParam(
+      {
+        mode = "files_with_matches",
+        numFiles,
+        filenames,
+        content,
+        numLines: _numLines,
+        numMatches,
+        totalFiles,
+        totalLines,
+        appliedLimit,
+        appliedOffset,
+      },
+      toolUseID,
+    ) {
+      if (mode === "content") {
+        let limitInfo = formatLimitInfo(appliedLimit, appliedOffset);
+        let resultContent =
+          content ||
+          (appliedOffset && (totalLines ?? 0) > 0 ? "No entries at this offset" : "No matches found");
+        let finalContent = limitInfo
+          ? `${resultContent}
 
 [Showing results with pagination = ${limitInfo}]`
-        : resultContent;
-      return {
-        tool_use_id: toolUseID,
-        type: "tool_result",
-        content: finalContent,
-      };
-    }
-    if (mode === "count") {
-      let limitInfo = formatLimitInfo(appliedLimit, appliedOffset);
-      let we = numMatches ?? 0;
-      let files = numFiles ?? 0;
-      let Ae = content || (we > 0 ? "No entries at this offset" : "No matches found");
-      let summary = `
+          : resultContent;
+        return {
+          tool_use_id: toolUseID,
+          type: "tool_result",
+          content: finalContent,
+        };
+      }
+      if (mode === "count") {
+        let limitInfo = formatLimitInfo(appliedLimit, appliedOffset);
+        let matchCount = numMatches ?? 0;
+        let files = numFiles ?? 0;
+        let contentText = content || (matchCount > 0 ? "No entries at this offset" : "No matches found");
+        let summary = `
 
-Found ${we} total ${we === 1 ? "occurrence" : "occurrences"} across ${files} ${files === 1 ? "file" : "files"}.${limitInfo ? ` with pagination = ${limitInfo}` : ""}`;
-      return {
-        tool_use_id: toolUseID,
-        type: "tool_result",
-        content: Ae + summary,
-      };
-    }
-    let limitInfo = formatLimitInfo(appliedLimit, appliedOffset);
-    if (numFiles === 0)
-      return {
-        tool_use_id: toolUseID,
-        type: "tool_result",
-        content:
-          appliedOffset && (totalFiles ?? 0) > 0
-            ? `No entries at this offset. [Showing results with pagination = ${limitInfo}]`
-            : "No files found",
-      };
-    let result = `Found ${numFiles} ${plural(numFiles, "file")}${limitInfo ? ` ${limitInfo}` : ""}
+Found ${matchCount} total ${matchCount === 1 ? "occurrence" : "occurrences"} across ${files} ${files === 1 ? "file" : "files"}.${limitInfo ? ` with pagination = ${limitInfo}` : ""}`;
+        return {
+          tool_use_id: toolUseID,
+          type: "tool_result",
+          content: contentText + summary,
+        };
+      }
+      let limitInfo = formatLimitInfo(appliedLimit, appliedOffset);
+      if (numFiles === 0)
+        return {
+          tool_use_id: toolUseID,
+          type: "tool_result",
+          content:
+            appliedOffset && (totalFiles ?? 0) > 0
+              ? `No entries at this offset. [Showing results with pagination = ${limitInfo}]`
+              : "No files found",
+        };
+      let result = `Found ${numFiles} ${plural(numFiles, "file")}${limitInfo ? ` ${limitInfo}` : ""}
 ${filenames.join(`
 `)}`;
-    return {
-      tool_use_id: toolUseID,
-      type: "tool_result",
-      content: result,
-    };
-  },
-  create(e) {
-    return {
-      async validateInput(n) {
-        let { pattern, path, glob, type: y, head_limit: headLimit, offset } = n;
-        if (canRunToolsOnThisMachine() && hasHostField(n))
-          return {
-            result: false,
-            message: hostFieldNotForwardedMessage(),
-            errorCode: 3,
-          };
-        let L = rejectNullBytes(GREP_TOOL_NAME, [
-          ["pattern", pattern],
-          ["path", path],
-          ["glob", glob],
-          ["type", y],
-        ]);
-        if (L) return L;
-        for (let [G, q] of [
-          ["head_limit", headLimit],
-          ["offset", offset],
-        ])
-          if (q !== undefined && (!Number.isInteger(q) || q < 0))
+      return {
+        tool_use_id: toolUseID,
+        type: "tool_result",
+        content: result,
+      };
+    },
+    create(toolContext) {
+      return {
+        async validateInput(input) {
+          let { pattern, path, glob, type: fileType, head_limit: headLimit, offset } = input;
+          if (canRunToolsOnThisMachine() && hasHostField(input))
             return {
               result: false,
-              message: `${G} must be a whole number of 0 or more, got ${q}.${G === "head_limit" ? " Pass 0 for unlimited." : ""}`,
-              errorCode: 2,
+              message: hostFieldNotForwardedMessage(),
+              errorCode: 3,
             };
-        return {
-          result: true,
-        };
-      },
-      async checkPermissions(n, r) {
-        let path = GrepTool.getPath(n);
-        let h = walkPermissionCheckPaths(path);
-        e.session.writePermissionStash.stash(r.toolUseId, path, h.spellings, "read");
-        return checkReadPermissionForTool(GrepTool, n, e.permissions(), h);
-      },
-      async call(n, r) {
-        return pathFromToolUse(n, {
-          toolUseId: r.toolUseId,
-          signal: r.signal,
-          timing: r.timing,
-          remoteCall: r.remoteCall,
-          session: e.session,
-          toolState: e.toolState,
-          permissions: e.permissions,
-        });
-      },
-    };
-  },
+          let nullByteRefusal = rejectNullBytes(GREP_TOOL_NAME, [
+            ["pattern", pattern],
+            ["path", path],
+            ["glob", glob],
+            ["type", fileType],
+          ]);
+          if (nullByteRefusal) return nullByteRefusal;
+          for (let [paramName, paramValue] of [
+            ["head_limit", headLimit],
+            ["offset", offset],
+          ])
+            if (paramValue !== undefined && (!Number.isInteger(paramValue) || paramValue < 0))
+              return {
+                result: false,
+                message: `${paramName} must be a whole number of 0 or more, got ${paramValue}.${paramName === "head_limit" ? " Pass 0 for unlimited." : ""}`,
+                errorCode: 2,
+              };
+          return {
+            result: true,
+          };
+        },
+        async checkPermissions(input, callOptions) {
+          let path = GrepTool.getPath(input);
+          let pathSpellings = walkPermissionCheckPaths(path);
+          toolContext.session.writePermissionStash.stash(
+            callOptions.toolUseId,
+            path,
+            pathSpellings.spellings,
+            "read",
+          );
+          return checkReadPermissionForTool(GrepTool, input, toolContext.permissions(), pathSpellings);
+        },
+        async call(input, callOptions) {
+          return pathFromToolUse(input, {
+            toolUseId: callOptions.toolUseId,
+            signal: callOptions.signal,
+            timing: callOptions.timing,
+            remoteCall: callOptions.remoteCall,
+            session: toolContext.session,
+            toolState: toolContext.toolState,
+            permissions: toolContext.permissions,
+          });
+        },
+      };
+    },
+  });
 });
 //@ chunk-e6aww6q8.js:1452555-1452836 placement
 /**
  * 校验 Grep 的搜索路径存在（受保护路径或权限检查路径变化时跳过）；不存在时抛出带当前目录与"你是不是指…"建议的遥测安全错误。
  */
-async function assertGrepPathExists(path, n, r) {
-  let s = expandPath(path);
-  if (isUntouchableSpelling(s) || getPathsForPermissionCheck(s).some((h) => !n.includes(h))) return;
+async function assertGrepPathExists(path, permittedPaths, checkContext) {
+  let expandedPath = expandPath(path);
+  if (
+    isUntouchableSpelling(expandedPath) ||
+    getPathsForPermissionCheck(expandedPath).some((pathSpelling) => !permittedPaths.includes(pathSpelling))
+  )
+    return;
   try {
-    await getFsImplementation().stat(s);
+    await getFsImplementation().stat(expandedPath);
   } catch (error) {
     if (!isENOENT(error)) throw error;
-    let y = await normalizePathForComparison(s);
+    let normalizedPath = await normalizePathForComparison(expandedPath);
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
       encodeControlChars(
-        `Path does not exist: ${path}. ${FILE_NOT_FOUND_CWD_NOTE} ${getCwd()}.${y ? ` Did you mean ${y}?` : ""}${separateCopyHint(GrepTool, s, r)}`,
+        `Path does not exist: ${path}. ${FILE_NOT_FOUND_CWD_NOTE} ${getCwd()}.${normalizedPath ? ` Did you mean ${normalizedPath}?` : ""}${separateCopyHint(GrepTool, expandedPath, checkContext)}`,
       ),
       "Path does not exist",
     );
@@ -459,8 +490,8 @@ var NOT_APPLICABLE = undefined;
 /**
  * 搜索目标不可打开时按 output_mode 返回空结果。
  */
-function emptyGrepResult(e) {
-  switch (e.output_mode ?? "files_with_matches") {
+function emptyGrepResult(input) {
+  switch (input.output_mode ?? "files_with_matches") {
     case "content":
       return {
         data: {
@@ -506,7 +537,7 @@ async function runGrep(
   {
     pattern,
     glob,
-    type: s,
+    type: fileType,
     output_mode: outputMode = "files_with_matches",
     "-B": beforeContext,
     "-A": afterContext,
@@ -526,11 +557,11 @@ async function runGrep(
   let rgArgs = ["--hidden"];
   let userGlobIndices = [];
   let builtinGlobIndices = new Set();
-  let addGlob = (fo) => {
+  let addGlob = (globPattern) => {
     builtinGlobIndices.add(rgArgs.length);
-    rgArgs.push("--glob", fo);
+    rgArgs.push("--glob", globPattern);
   };
-  for (let fo of VCS_DIRECTORIES_TO_EXCLUDE) addGlob(`!${fo}`);
+  for (let excludedDir of VCS_DIRECTORIES_TO_EXCLUDE) addGlob(`!${excludedDir}`);
   rgArgs.push("--max-columns", "500");
   if (multiline) rgArgs.push("-U", "--multiline-dotall");
   if (caseInsensitive) rgArgs.push("-i");
@@ -548,16 +579,16 @@ async function runGrep(
     }
   if (pattern.startsWith("-")) rgArgs.push("-e", pattern);
   else rgArgs.push(pattern);
-  if (s) rgArgs.push("--type", s);
+  if (fileType) rgArgs.push("--type", fileType);
   if (glob) {
-    let fo = [];
+    let userGlobs = [];
     let parts = glob.split(/\s+/);
-    for (let bo of parts)
-      if (bo.includes("{") && bo.includes("}")) fo.push(bo);
-      else fo.push(...bo.split(",").filter(Boolean));
-    for (let bo of fo.filter(Boolean)) {
+    for (let globPart of parts)
+      if (globPart.includes("{") && globPart.includes("}")) userGlobs.push(globPart);
+      else userGlobs.push(...globPart.split(",").filter(Boolean));
+    for (let userGlob of userGlobs.filter(Boolean)) {
       userGlobIndices.push(rgArgs.length);
-      addGlob(bo);
+      addGlob(userGlob);
     }
   }
   let readIgnorePatterns = getFileReadIgnorePatterns(context_2.permissions());
@@ -567,30 +598,42 @@ async function runGrep(
     hasUnsafeDenyGlob(readIgnorePatterns, searchTarget) ||
     (readIgnorePatterns.size > 0 && mayBeGuardedFileSyncCopy(searchTarget.canonical));
   for (let denyGlob of denyGlobs) rgArgs.push("--iglob", denyGlob);
-  for (let fo of await getPluginCacheExclusionDirs(canonical)) {
-    let ripgrepExcludeGlob = toRipgrepExcludeGlob(fo, getRipgrepDisplayRoot(searchTarget));
-    if (ripgrepExcludeGlob === null) continue;
-    addGlob(ripgrepExcludeGlob);
+  for (let pluginDir of await getPluginCacheExclusionDirs(canonical)) {
+    let globPattern = toRipgrepExcludeGlob(pluginDir, getRipgrepDisplayRoot(searchTarget));
+    if (globPattern === null) continue;
+    addGlob(globPattern);
   }
   let rgLines;
   let taskOutput = isTaskOutputFilePath(canonical) ? await bindTaskOutputForRead(canonical) : undefined;
-  let At = taskOutput !== undefined && taskOutput.ioPath !== procFdPath(taskOutput.handle.fd);
-  let It = taskOutput === undefined ? searchTarget.target : At ? "-" : INHERITED_FD_PATH;
-  let inheritFd = taskOutput === undefined ? searchTarget.inheritFd : At ? undefined : taskOutput.handle.fd;
-  let qt = false;
+  let taskOutputNeedsStdin =
+    taskOutput !== undefined && taskOutput.ioPath !== procFdPath(taskOutput.handle.fd);
+  let searchPathArg =
+    taskOutput === undefined ? searchTarget.target : taskOutputNeedsStdin ? "-" : INHERITED_FD_PATH;
+  let inheritFd =
+    taskOutput === undefined
+      ? searchTarget.inheritFd
+      : taskOutputNeedsStdin
+        ? undefined
+        : taskOutput.handle.fd;
+  let allFilesFiltered = false;
   if (taskOutput !== undefined) {
     let mapped = userGlobIndices.map((userGlobIndex) => rgArgs[userGlobIndex + 1]);
-    let To = (co) => {
-      let So = interopRequireDefault.default(co, {
+    let matchesPath = (value) => {
+      let matcher = interopRequireDefault.default(value, {
         dot: true,
         nocase: caseInsensitive === true,
       });
-      return So(basename(canonical)) || So(canonical) || So(canonical.replaceAll("\\", "/"));
+      return matcher(basename(canonical)) || matcher(canonical) || matcher(canonical.replaceAll("\\", "/"));
     };
-    let mapped_2 = mapped.filter((co) => co.startsWith("!") && co.length > 1).map((co) => co.slice(1));
-    let filtered = mapped.filter((co) => co !== "" && !co.startsWith("!"));
+    let mapped_2 = mapped
+      .filter((glob) => glob.startsWith("!") && glob.length > 1)
+      .map((negatedGlob) => negatedGlob.slice(1));
+    let filtered = mapped.filter((includeGlob) => includeGlob !== "" && !includeGlob.startsWith("!"));
     try {
-      qt = mapped_2.some(To) || (filtered.length > 0 && !filtered.some(To)) || (s !== undefined && s !== "");
+      allFilesFiltered =
+        mapped_2.some(matchesPath) ||
+        (filtered.length > 0 && !filtered.some(matchesPath)) ||
+        (fileType !== undefined && fileType !== "");
     } catch (error) {
       await taskOutput.close();
       throw error;
@@ -598,20 +641,20 @@ async function runGrep(
     for (let idx = rgArgs.length - 2; idx >= 0; idx--)
       if (rgArgs[idx] === "--glob" && builtinGlobIndices.has(idx)) rgArgs.splice(idx, 2);
   }
-  let stdin = At ? () => createAbortableStream(taskOutput.handle, true, signal) : undefined;
-  let rn = taskOutput === undefined ? taskOutputDirExclusions(canonical) : [];
-  if (rn.includes("!**"))
+  let stdin = taskOutputNeedsStdin ? () => createAbortableStream(taskOutput.handle, true, signal) : undefined;
+  let dirExclusions = taskOutput === undefined ? taskOutputDirExclusions(canonical) : [];
+  if (dirExclusions.includes("!**"))
     throw Error(
       "Task output files are read individually: Grep (or Read) a specific task's output path rather than the tasks directory.",
     );
-  for (let fo of rn) addGlob(fo);
-  let pn = false;
+  for (let exclusionGlob of dirExclusions) addGlob(exclusionGlob);
+  let didRunRipgrep = false;
   try {
-    if (qt) rgLines = [];
+    if (allFilesFiltered) rgLines = [];
     else {
-      pn = true;
-      let To = timing?.mark("external");
-      rgLines = await ripGrep_2(rgArgs, It, signal, {
+      didRunRipgrep = true;
+      let markExternalTiming = timing?.mark("external");
+      rgLines = await ripGrep_2(rgArgs, searchPathArg, signal, {
         rawLines: true,
         rejectOnInputError: true,
         searchOtherAppsData: true,
@@ -622,76 +665,78 @@ async function runGrep(
           searchTarget.recheckBeforeSpawn();
           assertDenyGlobsUnchanged(readIgnorePatterns, searchTarget, denyGlobs);
         },
-      }).finally(To);
+      }).finally(markExternalTiming);
     }
   } finally {
     await taskOutput?.close();
   }
-  if (pn && outputMode !== "content") rgLines = splitNulDelimitedOutput(rgLines, outputMode);
-  if (taskOutput !== undefined && It !== searchTarget.target && outputMode !== "content") {
-    let fo = At ? "<stdin>" : It;
+  if (didRunRipgrep && outputMode !== "content") rgLines = splitNulDelimitedOutput(rgLines, outputMode);
+  if (taskOutput !== undefined && searchPathArg !== searchTarget.target && outputMode !== "content") {
+    let rawLine = taskOutputNeedsStdin ? "<stdin>" : searchPathArg;
     rgLines = rgLines.map((rgLine) =>
-      rgLine === fo
+      rgLine === rawLine
         ? searchTarget.target
-        : rgLine.startsWith(`${fo}:`)
-          ? searchTarget.target + rgLine.slice(fo.length)
+        : rgLine.startsWith(`${rawLine}:`)
+          ? searchTarget.target + rgLine.slice(rawLine.length)
           : outputMode === "count" && /^\d+$/.test(rgLine)
             ? `${searchTarget.target}:${rgLine}`
             : rgLine,
     );
   }
-  if (pn && outputMode === "content")
+  if (didRunRipgrep && outputMode === "content")
     rgLines = formatRgJsonLines(rgLines, {
       contextBreaks: [context, contextLines, beforeContext, afterContext].some(
-        (fo) => typeof fo === "number" && fo > 0,
+        (isContextLine) => typeof isContextLine === "number" && isContextLine > 0,
       ),
       onlyMatching: onlyMatching === true,
     });
-  if (pn && (searchTarget.relativeOutput || !searchTarget.isDirectory))
+  if (didRunRipgrep && (searchTarget.relativeOutput || !searchTarget.isDirectory))
     rgLines = rgLines.map((rgLine) => toDisplayPath(rgLine, searchTarget));
   if (readIgnorePatterns.size > 0)
     if (!searchTarget.isDirectory) {
-      let fo = context_2.permissions();
+      let permissions = context_2.permissions();
       if (
         uniq([
           searchTarget.canonical,
           searchTarget.lexical,
           ...getPathsForPermissionCheck(searchTarget.lexical),
-        ]).some((bo) => matchingRuleForInput(bo, fo, "read", "deny") !== null)
+        ]).some((lexicalPath) => matchingRuleForInput(lexicalPath, permissions, "read", "deny") !== null)
       )
         rgLines = [];
     } else {
-      let mapped = uniq([searchTarget.canonical, searchTarget.lexical, searchTarget.target]).map((So) =>
-        So.endsWith(sep) ? So : So + sep,
+      let allowedRoots = uniq([searchTarget.canonical, searchTarget.lexical, searchTarget.target]).map(
+        (dirPath) => (dirPath.endsWith(sep) ? dirPath : dirPath + sep),
       );
-      let To = new Map();
-      let bo = new Set();
-      let vn = new Set();
+      let resultPathsByLine = new Map();
+      let escapedPaths = new Set();
+      let unjudgedLines = new Set();
       for (let rgLine of rgLines) {
-        if (To.has(rgLine) || vn.has(rgLine)) continue;
-        let resultPath = extractResultPath(rgLine, outputMode, mapped);
+        if (resultPathsByLine.has(rgLine) || unjudgedLines.has(rgLine)) continue;
+        let resultPath = extractResultPath(rgLine, outputMode, allowedRoots);
         if (resultPath === null) {
-          vn.add(rgLine);
+          unjudgedLines.add(rgLine);
           continue;
         }
         if (judgeEveryResult || resultPath.some(mayEscapeExclusionGlobs)) {
-          To.set(rgLine, resultPath);
-          for (let un of resultPath) bo.add(un);
+          resultPathsByLine.set(rgLine, resultPath);
+          for (let escapedPath of resultPath) escapedPaths.add(escapedPath);
         }
       }
-      let co = denyFoldVariantPaths(
-        [...bo],
+      let deniedPaths = denyFoldVariantPaths(
+        [...escapedPaths],
         context_2.permissions(),
-        (So) => getAlternateRootSpellings(So, searchTarget),
+        (escapedPath) => getAlternateRootSpellings(escapedPath, searchTarget),
         judgeEveryResult,
       );
-      if (co.size > 0 || vn.size > 0) {
+      if (deniedPaths.size > 0 || unjudgedLines.size > 0) {
         rgLines = rgLines.filter((rgLine) => {
-          if (vn.has(rgLine)) return false;
-          return !(To.get(rgLine) ?? []).some((ko) => co.has(ko));
+          if (unjudgedLines.has(rgLine)) return false;
+          return !(resultPathsByLine.get(rgLine) ?? []).some((escapedPath) => deniedPaths.has(escapedPath));
         });
         rgLines = rgLines.filter(
-          (rgLine, ko, un) => rgLine !== "--" || (ko > 0 && ko < un.length - 1 && un[ko - 1] !== "--"),
+          (rgLine, lineIndex, allLines) =>
+            rgLine !== "--" ||
+            (lineIndex > 0 && lineIndex < allLines.length - 1 && allLines[lineIndex - 1] !== "--"),
         );
       }
     }
@@ -700,11 +745,13 @@ async function runGrep(
     let mapped = items.map((item) => {
       let index = item.indexOf("\x00");
       if (index < 0) return showLineNumbers ? item : item.replace(/^\d+[:-]/, "");
-      let ko = item.substring(index + 1);
-      let match = /^(\d+)([:-])/.exec(ko);
-      let ao = match?.[2] ?? ":";
-      let $o = showLineNumbers || match === null ? ko : ko.substring(match[0].length);
-      return searchTarget.isDirectory ? toRelativePath(item.substring(0, index)) + ao + $o : $o;
+      let pathPart = item.substring(index + 1);
+      let match = /^(\d+)([:-])/.exec(pathPart);
+      let separator = match?.[2] ?? ":";
+      let linePart = showLineNumbers || match === null ? pathPart : pathPart.substring(match[0].length);
+      return searchTarget.isDirectory
+        ? toRelativePath(item.substring(0, index)) + separator + linePart
+        : linePart;
     });
     return {
       data: {
@@ -730,8 +777,8 @@ async function runGrep(
       let index = item.lastIndexOf(":");
       if (index > 0) {
         let absolutePath = item.substring(0, index);
-        let $o = item.substring(index);
-        return toRelativePath(absolutePath) + $o;
+        let linePart = item.substring(index);
+        return toRelativePath(absolutePath) + linePart;
       }
       return item;
     });
@@ -740,10 +787,10 @@ async function runGrep(
     for (let rgLine of rgLines) {
       let index = rgLine.lastIndexOf(":");
       if (index > 0) {
-        let ao = rgLine.substring(index + 1);
-        let $o = parseInt(ao, 10);
-        if (!isNaN($o)) {
-          numMatches += $o;
+        let countText = rgLine.substring(index + 1);
+        let matchCount = parseInt(countText, 10);
+        if (!isNaN(matchCount)) {
+          numMatches += matchCount;
           numFiles += 1;
         }
       }
@@ -767,16 +814,16 @@ async function runGrep(
   }
   let settled = await Promise.allSettled(rgLines.map((rgLine) => getFsImplementation().stat(rgLine)));
   let mapped = rgLines
-    .map((rgLine, To) => {
-      let bo = settled[To];
-      return [rgLine, bo.status === "fulfilled" ? (bo.value.mtimeMs ?? 0) : 0];
+    .map((rgLine, lineIndexInList) => {
+      let statResult = settled[lineIndexInList];
+      return [rgLine, statResult.status === "fulfilled" ? (statResult.value.mtimeMs ?? 0) : 0];
     })
-    .sort((fo, To) => {
-      let bo = To[1] - fo[1];
-      if (bo === 0) return fo[0].localeCompare(To[0]);
-      return bo;
+    .sort((left, right) => {
+      let mtimeDelta = right[1] - left[1];
+      if (mtimeDelta === 0) return left[0].localeCompare(right[0]);
+      return mtimeDelta;
     })
-    .map((fo) => fo[0]);
+    .map((entry) => entry[0]);
   let { items, appliedLimit } = applyHeadLimit(mapped, headLimit, offset);
   let mapped_2 = items.map(toRelativePath);
   return {
@@ -799,111 +846,120 @@ async function runGrep(
  * 把 ripgrep 输出的路径前缀（目标或规范路径）换回用户看到的词法路径，处理相对输出与 ":"/NUL 分隔。
  */
 function toDisplayPath(rgLine, searchTarget) {
-  let r = searchTarget.lexical.endsWith(sep) ? searchTarget.lexical : searchTarget.lexical + sep;
-  if (searchTarget.relativeOutput) return rgLine.startsWith("./") ? r + rgLine.slice(2) : rgLine;
-  for (let s of [searchTarget.target, searchTarget.canonical]) {
-    let h = s.endsWith(sep) ? s : s + sep;
-    if (rgLine.startsWith(h)) return r + rgLine.slice(h.length);
-    if (rgLine === s) return searchTarget.lexical;
-    if (rgLine.startsWith(`${s}:`) || rgLine.startsWith(`${s}\x00`))
-      return searchTarget.lexical + rgLine.slice(s.length);
+  let lexicalPrefix = searchTarget.lexical.endsWith(sep) ? searchTarget.lexical : searchTarget.lexical + sep;
+  if (searchTarget.relativeOutput) return rgLine.startsWith("./") ? lexicalPrefix + rgLine.slice(2) : rgLine;
+  for (let searchRoot of [searchTarget.target, searchTarget.canonical]) {
+    let rootPrefix = searchRoot.endsWith(sep) ? searchRoot : searchRoot + sep;
+    if (rgLine.startsWith(rootPrefix)) return lexicalPrefix + rgLine.slice(rootPrefix.length);
+    if (rgLine === searchRoot) return searchTarget.lexical;
+    if (rgLine.startsWith(`${searchRoot}:`) || rgLine.startsWith(`${searchRoot}\x00`))
+      return searchTarget.lexical + rgLine.slice(searchRoot.length);
   }
   return rgLine;
 }
 //@ chunk-e6aww6q8.js:1458885-1459178 placement
-function extractResultPath(rgLine, outputMode, r) {
-  let s;
+function extractResultPath(rgLine, outputMode, allowedRoots) {
+  let pathPart;
   if (outputMode === "content") {
     if (rgLine === "--") return [];
     let index = rgLine.indexOf("\x00");
     if (index < 0) return null;
-    s = rgLine.substring(0, index);
+    pathPart = rgLine.substring(0, index);
   } else if (outputMode === "count") {
     let index = rgLine.lastIndexOf(":");
-    s = index > 0 ? rgLine.substring(0, index) : rgLine;
-  } else s = rgLine;
-  let h = sep === "\\" ? s.replaceAll("/", "\\") : s;
-  return r.some((y) => h.startsWith(y)) ? [h] : null;
+    pathPart = index > 0 ? rgLine.substring(0, index) : rgLine;
+  } else pathPart = rgLine;
+  let normalizedPath = sep === "\\" ? pathPart.replaceAll("/", "\\") : pathPart;
+  return allowedRoots.some((root) => normalizedPath.startsWith(root)) ? [normalizedPath] : null;
 }
 //@ chunk-e6aww6q8.js:1459178-1460512 placement
 /**
  * 把 ripgrep --json 输出转成"路径\0行号:内容"形式的行：处理 begin/end（二进制文件只报一行提示）、上下文分隔 --、仅匹配模式按子匹配拆行、过长行用省略标记替代。
  */
 function formatRgJsonLines(lines, options) {
-  let decodeText = (G) =>
-    G === undefined
+  let decodeText = (textValue) =>
+    textValue === undefined
       ? ""
-      : G.text !== undefined
-        ? G.text
-        : Buffer.from(G.bytes ?? "", "base64").toString("utf8");
-  let clipLine = (G, q) =>
-    G.length > 500 ? (q === "match" ? "[Omitted long matching line]" : "[Omitted long context line]") : G;
+      : textValue.text !== undefined
+        ? textValue.text
+        : Buffer.from(textValue.bytes ?? "", "base64").toString("utf8");
+  let clipLine = (line, lineKind) =>
+    line.length > 500
+      ? lineKind === "match"
+        ? "[Omitted long matching line]"
+        : "[Omitted long context line]"
+      : line;
   let out = [];
   let fileLines = [];
   let lastPath = null;
   let lastLine = -1;
   for (let line of lines) {
     if (!line.startsWith("{")) continue;
-    let q;
+    let event;
     try {
-      q = jsonParseRaw(line);
+      event = jsonParseRaw(line);
     } catch {
       continue;
     }
-    if (q === null || typeof q !== "object") continue;
-    let Z = q.data ?? {};
-    if (q.type === "begin") {
+    if (event === null || typeof event !== "object") continue;
+    let data = event.data ?? {};
+    if (event.type === "begin") {
       fileLines = [];
       continue;
     }
-    if (q.type === "end") {
-      let binaryOffset = Z.binary_offset;
-      let We = typeof binaryOffset === "number";
+    if (event.type === "end") {
+      let binaryOffset = data.binary_offset;
+      let hasBinaryOffset = typeof binaryOffset === "number";
       for (let fileLine of fileLines)
-        if (!We || !fileLine.slice(fileLine.indexOf("\x00") + 1).includes("\x00")) out.push(fileLine);
-      if (We && fileLines.length > 0)
+        if (!hasBinaryOffset || !fileLine.slice(fileLine.indexOf("\x00") + 1).includes("\x00"))
+          out.push(fileLine);
+      if (hasBinaryOffset && fileLines.length > 0)
         out.push(
-          `${decodeText(Z.path)}\x00binary file matches (found "\\0" byte around offset ${binaryOffset})`,
+          `${decodeText(data.path)}\x00binary file matches (found "\\0" byte around offset ${binaryOffset})`,
         );
       fileLines = [];
       continue;
     }
-    if (q.type !== "match" && q.type !== "context") continue;
-    let Se = decodeText(Z.path);
-    let lineNumber = Z.line_number ?? 0;
-    let replaced = decodeText(Z.lines).replace(/\r?\n$/, "");
-    if (options.contextBreaks && lastPath !== null && (Se !== lastPath || lineNumber > lastLine + 1))
+    if (event.type !== "match" && event.type !== "context") continue;
+    let filePath = decodeText(data.path);
+    let lineNumber = data.line_number ?? 0;
+    let replaced = decodeText(data.lines).replace(/\r?\n$/, "");
+    if (options.contextBreaks && lastPath !== null && (filePath !== lastPath || lineNumber > lastLine + 1))
       fileLines.push("--");
-    if (q.type === "match" && options.onlyMatching) {
-      let Me = lineNumber;
-      for (let We of Z.submatches ?? []) {
-        let ze = lineNumber + countNewlinesBefore(Buffer.from(replaced), We.start ?? 0);
-        decodeText(We.match)
+    if (event.type === "match" && options.onlyMatching) {
+      let lastMatchLine = lineNumber;
+      for (let submatch of data.submatches ?? []) {
+        let matchLineNumber = lineNumber + countNewlinesBefore(Buffer.from(replaced), submatch.start ?? 0);
+        decodeText(submatch.match)
           .split(
             `
 `,
           )
-          .forEach((line, Je) => {
-            fileLines.push(`${Se}\x00${ze + Je}:${clipLine(stripSuffix(line, "\r"), "match")}`);
-            Me = ze + Je;
+          .forEach((line, matchLineIndex) => {
+            fileLines.push(
+              `${filePath}\x00${matchLineNumber + matchLineIndex}:${clipLine(stripSuffix(line, "\r"), "match")}`,
+            );
+            lastMatchLine = matchLineNumber + matchLineIndex;
           });
       }
-      lastPath = Se;
-      lastLine = Me;
+      lastPath = filePath;
+      lastLine = lastMatchLine;
       continue;
     }
-    let Ee = q.type === "match" ? "match" : "context";
-    let Ae = Ee === "match" ? ":" : "-";
+    let lineKind = event.type === "match" ? "match" : "context";
+    let lineSeparator = lineKind === "match" ? ":" : "-";
     let mapped = replaced
       .split(
         `
 `,
       )
       .map((line) => stripSuffix(line, "\r"));
-    mapped.forEach((Me, We) => {
-      fileLines.push(`${Se}\x00${lineNumber + We}${Ae}${clipLine(Me, Ee)}`);
+    mapped.forEach((textLine, textLineIndex) => {
+      fileLines.push(
+        `${filePath}\x00${lineNumber + textLineIndex}${lineSeparator}${clipLine(textLine, lineKind)}`,
+      );
     });
-    lastPath = Se;
+    lastPath = filePath;
     lastLine = lineNumber + mapped.length - 1;
   }
   for (let fileLine of fileLines) out.push(fileLine);
@@ -913,9 +969,10 @@ function formatRgJsonLines(lines, options) {
 /**
  * 统计缓冲区前 N 个字节里的换行数，用于计算行号。
  */
-function countNewlinesBefore(e, n) {
-  let r = 0;
-  for (let idx = Math.min(n, e.length) - 1; idx >= 0; idx--) if (e[idx] === 10) r++;
-  return r;
+function countNewlinesBefore(buffer, endOffset) {
+  let newlineCount = 0;
+  for (let idx = Math.min(endOffset, buffer.length) - 1; idx >= 0; idx--)
+    if (buffer[idx] === 10) newlineCount++;
+  return newlineCount;
 }
 export { GrepTool, assertGrepPathExists, emptyGrepResult, runGrep };

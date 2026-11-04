@@ -19,13 +19,13 @@ import { logFeatureSad } from "../services/analytics/featureTelemetry.js";
 /**
  * 技能名不符合显示规则时记录（去重、有上限）。
  */
-function reportRefusedSkillName(e, n) {
+function reportRefusedSkillName(name, reason) {
   let namesNotShown = getHostState().namesNotShown;
-  let h = `${escapeControlCharsForDisplay(truncateToLength(e, 200)).replace(NON_ASCII_SPACE_RE, (y) => `\\u{${y.codePointAt(0)?.toString(16).toUpperCase()}}`)} ${n}`;
-  if (namesNotShown.has(h) || namesNotShown.size >= MAX_NAME_WARNINGS) return;
-  namesNotShown.add(h);
+  let warning = `${escapeControlCharsForDisplay(truncateToLength(name, 200)).replace(NON_ASCII_SPACE_RE, (char) => `\\u{${char.codePointAt(0)?.toString(16).toUpperCase()}}`)} ${reason}`;
+  if (namesNotShown.has(warning) || namesNotShown.size >= MAX_NAME_WARNINGS) return;
+  namesNotShown.add(warning);
   logForDebugging(
-    `[names] ${h}: ${INVALID_NAME_MESSAGE}${namesNotShown.size === MAX_NAME_WARNINGS ? ". No more are told" : ""}`,
+    `[names] ${warning}: ${INVALID_NAME_MESSAGE}${namesNotShown.size === MAX_NAME_WARNINGS ? ". No more are told" : ""}`,
     {
       level: "warn",
     },

@@ -16,44 +16,47 @@ import { TASK_NOTIFICATION, STATUS, SUMMARY } from "../constants/xml.js";
 /**
  * 把连续的后台 Bash 完成通知合并成一条显示。
  */
-function collapseBackgroundBashNotifications(messages, n, r) {
-  if (n) return messages;
+function collapseBackgroundBashNotifications(messages, host, options) {
+  if (host) return messages;
   if (!isFullscreenEnvEnabled()) return messages;
-  if (r) return collapseNotificationRunsIn(messages);
+  if (options) return collapseNotificationRunsIn(messages);
   let result = [];
   let i = 0;
   while (i < messages.length) {
     let msg = messages[i];
-    let S = notificationKind(msg);
-    if (S === null || msg.type !== "user") {
+    let kind = notificationKind(msg);
+    if (kind === null || msg.type !== "user") {
       result.push(msg);
       i++;
       continue;
     }
-    let w = 0;
-    while (i < messages.length && notificationKind(messages[i]) === S) {
-      w++;
+    let collapsedCount = 0;
+    while (i < messages.length && notificationKind(messages[i]) === kind) {
+      collapsedCount++;
       i++;
     }
-    if (w === 1) {
+    if (collapsedCount === 1) {
       result.push(msg);
       continue;
     }
-    let L = S === "bash" ? `${w} background commands completed` : `${w} remote tasks completed`;
-    let G = {
+    let summary =
+      kind === "bash"
+        ? `${collapsedCount} background commands completed`
+        : `${collapsedCount} remote tasks completed`;
+    let entry = {
       ...msg,
       message: {
         role: "user",
         content: [
           {
             type: "text",
-            text: `<${TASK_NOTIFICATION}><${STATUS}>completed</${STATUS}><${SUMMARY}>${L}</${SUMMARY}></${TASK_NOTIFICATION}>`,
+            text: `<${TASK_NOTIFICATION}><${STATUS}>completed</${STATUS}><${SUMMARY}>${summary}</${SUMMARY}></${TASK_NOTIFICATION}>`,
           },
         ],
       },
     };
-    if (S === "bash") weakMap_14.set(G, w);
-    result.push(G);
+    if (kind === "bash") weakMap_14.set(entry, collapsedCount);
+    result.push(entry);
   }
   return result;
 }

@@ -8,8 +8,8 @@
  * pieces: chunk-18hwfzwa.js (4)
  * attribution: placement 4
  */
-import { init_react_production, R } from "../../../vendor/react/cjs/react.production.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { init_react_production, useRef } from "../../../vendor/react/cjs/react.production.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { useAppState } from "../../state/AppState.js";
 import { useMainLoopBusy } from "../LogoV2/Notices.js";
 import { stripNonPrintable } from "../../utils/truncateGraphemes.js";
@@ -34,37 +34,41 @@ import { needsGutter } from "../../utils/permissions/approvalPayloadSerializatio
 import { truncateWithNotice } from "../../utils/truncationNotice.js";
 import { getFirstLine } from "../../utils/stringUtils.js";
 import { ConfirmSelect } from "../design-system/ConfirmSelect.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-18hwfzwa.js:1386191-1386195 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:1386191", () => {
+  init_react_production();
+});
 //@ chunk-18hwfzwa.js:1386195-1386233 placement
-function selectActiveGoal(Kn) {
-  return Kn.activeGoal;
+function selectActiveGoal(state) {
+  return state.activeGoal;
 }
 //@ chunk-18hwfzwa.js:1386233-1389938 placement
 /**
  * GoalProposalPermissionRequest：模型提出目标（goal）时的确认界面。
  */
 function GoalProposalPermissionRequest(props) {
-  let $ = w(64);
+  let $ = useMemoCache(64);
   let { payload, answer } = props;
   let appState = useAppState(selectActiveGoal);
   let mainLoopBusy = useMainLoopBusy();
-  let ke = stripNonPrintable(payload.condition);
+  let condition = stripNonPrintable(payload.condition);
   let inputClock = useInputClock();
-  let He;
+  let now;
   if ($[0] === MEMO_CACHE_SENTINEL) {
-    He = Date.now();
-    $[0] = He;
-  } else He = $[0];
-  let We = R(He);
+    now = Date.now();
+    $[0] = now;
+  } else now = $[0];
+  let lastShownAt = useRef(now);
   let { refusedWithin, noteRefused, epoch } = useRefusalTracker();
   let openedAt = useMountTime();
-  let At;
+  let refuseInput;
   if ($[1] !== inputClock || $[2] !== noteRefused || $[3] !== refusedWithin) {
-    At = function It() {
+    refuseInput = function shouldRefuseInput() {
       if (
-        isWithinRecentInput(inputClock, We.current, RECENT_INPUT_GUARD_MS_3) ||
+        isWithinRecentInput(inputClock, lastShownAt.current, RECENT_INPUT_GUARD_MS_3) ||
         refusedWithin(RECENT_INPUT_GUARD_MS_3)
       ) {
         noteRefused();
@@ -75,144 +79,144 @@ function GoalProposalPermissionRequest(props) {
     $[1] = inputClock;
     $[2] = noteRefused;
     $[3] = refusedWithin;
-    $[4] = At;
-  } else At = $[4];
-  let It = At;
-  let Ot;
-  if ($[5] !== answer || $[6] !== It) {
-    Ot = function Dt(Et) {
-      if (!It()) answer(Et);
+    $[4] = refuseInput;
+  } else refuseInput = $[4];
+  let refuseInput_2 = refuseInput;
+  let answerSafely;
+  if ($[5] !== answer || $[6] !== refuseInput_2) {
+    answerSafely = function answerSafelyImpl(result) {
+      if (!refuseInput_2()) answer(result);
     };
     $[5] = answer;
-    $[6] = It;
-    $[7] = Ot;
-  } else Ot = $[7];
-  let Dt = Ot;
-  let Lt;
+    $[6] = refuseInput_2;
+    $[7] = answerSafely;
+  } else answerSafely = $[7];
+  let answerSafelyStable = answerSafely;
+  let onDismiss;
   if ($[8] !== answer) {
-    Lt = () =>
+    onDismiss = () =>
       answer({
         approved: false,
         explicit: true,
       });
     $[8] = answer;
-    $[9] = Lt;
-  } else Lt = $[9];
-  let { handleInterrupt, handleExit, exitState } = useExitOnCtrlCD(undefined, Lt);
-  let so;
-  if ($[10] !== handleInterrupt || $[11] !== It) {
-    so = () => {
-      if (!It()) handleInterrupt();
+    $[9] = onDismiss;
+  } else onDismiss = $[9];
+  let { handleInterrupt, handleExit, exitState } = useExitOnCtrlCD(undefined, onDismiss);
+  let onInterrupt;
+  if ($[10] !== handleInterrupt || $[11] !== refuseInput_2) {
+    onInterrupt = () => {
+      if (!refuseInput_2()) handleInterrupt();
     };
     $[10] = handleInterrupt;
-    $[11] = It;
-    $[12] = so;
-  } else so = $[12];
-  let po;
-  if ($[13] !== handleExit || $[14] !== It) {
-    po = () => {
-      if (!It()) handleExit();
+    $[11] = refuseInput_2;
+    $[12] = onInterrupt;
+  } else onInterrupt = $[12];
+  let onExit;
+  if ($[13] !== handleExit || $[14] !== refuseInput_2) {
+    onExit = () => {
+      if (!refuseInput_2()) handleExit();
     };
     $[13] = handleExit;
-    $[14] = It;
-    $[15] = po;
-  } else po = $[15];
-  let ao;
-  if ($[16] !== so || $[17] !== po) {
-    ao = {
-      "app:interrupt": so,
-      "app:exit": po,
+    $[14] = refuseInput_2;
+    $[15] = onExit;
+  } else onExit = $[15];
+  let keyActions;
+  if ($[16] !== onInterrupt || $[17] !== onExit) {
+    keyActions = {
+      "app:interrupt": onInterrupt,
+      "app:exit": onExit,
     };
-    $[16] = so;
-    $[17] = po;
-    $[18] = ao;
-  } else ao = $[18];
-  let co;
+    $[16] = onInterrupt;
+    $[17] = onExit;
+    $[18] = keyActions;
+  } else keyActions = $[18];
+  let keyOptions;
   if ($[19] === MEMO_CACHE_SENTINEL) {
-    co = {
+    keyOptions = {
       context: "Global",
     };
-    $[19] = co;
-  } else co = $[19];
-  MessageActionsKeybindings(ao, co);
-  let bo = settleKey(epoch, RECENT_INPUT_GUARD_MS_3);
-  const Ao = Pane;
+    $[19] = keyOptions;
+  } else keyOptions = $[19];
+  MessageActionsKeybindings(keyActions, keyOptions);
+  let settle = settleKey(epoch, RECENT_INPUT_GUARD_MS_3);
+  const PaneComponent = Pane;
   const color = "permission";
-  const Ro = Box;
+  const BoxComponent = Box;
   const flexDirection = "column";
   const gap = 1;
-  const Wo = Box;
+  const headerBox = Box;
   const flexDirection_2 = "column";
-  let Cn;
+  let title;
   if ($[20] === MEMO_CACHE_SENTINEL) {
-    Cn = jsxProd_default(Text, {
+    title = jsxProd_default(Text, {
       bold: true,
       color: "permission",
       children: "Claude proposes a goal",
     });
-    $[20] = Cn;
-  } else Cn = $[20];
-  const No = DiffFrame;
-  const vo = Blockquote;
-  const multiline = needsGutter(ke);
+    $[20] = title;
+  } else title = $[20];
+  const DiffFrameComponent = DiffFrame;
+  const BlockquoteComponent = Blockquote;
+  const multiline = needsGutter(condition);
   let children;
-  if ($[21] !== ke) {
+  if ($[21] !== condition) {
     children = jsxProd_default(Text, {
-      children: ke,
+      children: condition,
     });
-    $[21] = ke;
+    $[21] = condition;
     $[22] = children;
   } else children = $[22];
   let children_2;
-  if ($[23] !== vo || $[24] !== multiline || $[25] !== children) {
-    children_2 = jsxProd_default(vo, {
+  if ($[23] !== BlockquoteComponent || $[24] !== multiline || $[25] !== children) {
+    children_2 = jsxProd_default(BlockquoteComponent, {
       multiline,
       children,
     });
-    $[23] = vo;
+    $[23] = BlockquoteComponent;
     $[24] = multiline;
     $[25] = children;
     $[26] = children_2;
   } else children_2 = $[26];
-  let bn;
-  if ($[27] !== No || $[28] !== children_2) {
-    bn = jsxProd_default(No, {
+  let framedCondition;
+  if ($[27] !== DiffFrameComponent || $[28] !== children_2) {
+    framedCondition = jsxProd_default(DiffFrameComponent, {
       children: children_2,
     });
-    $[27] = No;
+    $[27] = DiffFrameComponent;
     $[28] = children_2;
-    $[29] = bn;
-  } else bn = $[29];
-  let Go;
-  if ($[30] !== Wo || $[31] !== Cn || $[32] !== bn) {
-    Go = jsxProd_default_2(Wo, {
+    $[29] = framedCondition;
+  } else framedCondition = $[29];
+  let header;
+  if ($[30] !== headerBox || $[31] !== title || $[32] !== framedCondition) {
+    header = jsxProd_default_2(headerBox, {
       flexDirection: flexDirection_2,
-      children: [Cn, bn],
+      children: [title, framedCondition],
     });
-    $[30] = Wo;
-    $[31] = Cn;
-    $[32] = bn;
-    $[33] = Go;
-  } else Go = $[33];
-  const hn = mainLoopBusy
+    $[30] = headerBox;
+    $[31] = title;
+    $[32] = framedCondition;
+    $[33] = header;
+  } else header = $[33];
+  const busyNote = mainLoopBusy
     ? "Claude continues with the current work while you decide."
     : "Claude has finished its current work \u2014 approving starts it working again, toward this goal. Esc dismisses without setting it.";
-  let Mn;
-  if ($[34] !== hn) {
-    Mn = jsxProd_default_2(Text, {
+  let explainText;
+  if ($[34] !== busyNote) {
+    explainText = jsxProd_default_2(Text, {
       dimColor: true,
       children: [
         "Approving sets this as the session goal, like running /goal: after each turn a separate check decides whether the condition is met, and Claude keeps working until it is.",
         " ",
-        hn,
+        busyNote,
       ],
     });
-    $[34] = hn;
-    $[35] = Mn;
-  } else Mn = $[35];
-  let Xo;
+    $[34] = busyNote;
+    $[35] = explainText;
+  } else explainText = $[35];
+  let replaceNotice;
   if ($[36] !== appState) {
-    Xo =
+    replaceNotice =
       appState !== undefined &&
       jsxProd_default_2(Text, {
         dimColor: true,
@@ -223,40 +227,40 @@ function GoalProposalPermissionRequest(props) {
         ],
       });
     $[36] = appState;
-    $[37] = Xo;
-  } else Xo = $[37];
+    $[37] = replaceNotice;
+  } else replaceNotice = $[37];
   let onConfirm;
   let onCancel;
-  if ($[38] !== Dt) {
+  if ($[38] !== answerSafelyStable) {
     onConfirm = () =>
-      Dt({
+      answerSafelyStable({
         approved: true,
         explicit: true,
       });
     onCancel = () =>
-      Dt({
+      answerSafelyStable({
         approved: false,
         explicit: true,
       });
-    $[38] = Dt;
+    $[38] = answerSafelyStable;
     $[39] = onConfirm;
     $[40] = onCancel;
   } else {
     onConfirm = $[39];
     onCancel = $[40];
   }
-  let on;
+  let selector;
   if (
-    $[41] !== bo.remountKey ||
-    $[42] !== It ||
+    $[41] !== settle.remountKey ||
+    $[42] !== refuseInput_2 ||
     $[43] !== openedAt ||
     $[44] !== onConfirm ||
     $[45] !== onCancel
   ) {
-    on = jsxProd_default(
+    selector = jsxProd_default(
       ConfirmSelect,
       {
-        refuseInput: It,
+        refuseInput: refuseInput_2,
         openedAt,
         confirmLabel: "Set this goal",
         cancelLabel: "Not now",
@@ -268,15 +272,15 @@ function GoalProposalPermissionRequest(props) {
         onCancel,
         windowMs: RECENT_INPUT_GUARD_MS_3,
       },
-      bo.remountKey,
+      settle.remountKey,
     );
-    $[41] = bo.remountKey;
-    $[42] = It;
+    $[41] = settle.remountKey;
+    $[42] = refuseInput_2;
     $[43] = openedAt;
     $[44] = onConfirm;
     $[45] = onCancel;
-    $[46] = on;
-  } else on = $[46];
+    $[46] = selector;
+  } else selector = $[46];
   let children_3;
   if ($[47] !== exitState.keyName || $[48] !== exitState.pending) {
     children_3 =
@@ -290,51 +294,60 @@ function GoalProposalPermissionRequest(props) {
     $[48] = exitState.pending;
     $[49] = children_3;
   } else children_3 = $[49];
-  let cn;
+  let exitHintBox;
   if ($[50] !== children_3) {
-    cn = jsxProd_default(Box, {
+    exitHintBox = jsxProd_default(Box, {
       height: 1,
       children: children_3,
     });
     $[50] = children_3;
-    $[51] = cn;
-  } else cn = $[51];
-  let Dn;
-  if ($[52] !== on || $[53] !== cn) {
-    Dn = jsxProd_default_2(Box, {
+    $[51] = exitHintBox;
+  } else exitHintBox = $[51];
+  let footerBox;
+  if ($[52] !== selector || $[53] !== exitHintBox) {
+    footerBox = jsxProd_default_2(Box, {
       flexDirection: "column",
-      children: [on, cn],
+      children: [selector, exitHintBox],
     });
-    $[52] = on;
-    $[53] = cn;
-    $[54] = Dn;
-  } else Dn = $[54];
+    $[52] = selector;
+    $[53] = exitHintBox;
+    $[54] = footerBox;
+  } else footerBox = $[54];
   let children_4;
-  if ($[55] !== Ro || $[56] !== Go || $[57] !== Mn || $[58] !== Xo || $[59] !== Dn) {
-    children_4 = jsxProd_default_2(Ro, {
+  if (
+    $[55] !== BoxComponent ||
+    $[56] !== header ||
+    $[57] !== explainText ||
+    $[58] !== replaceNotice ||
+    $[59] !== footerBox
+  ) {
+    children_4 = jsxProd_default_2(BoxComponent, {
       flexDirection,
       gap,
-      children: [Go, Mn, Xo, Dn],
+      children: [header, explainText, replaceNotice, footerBox],
     });
-    $[55] = Ro;
-    $[56] = Go;
-    $[57] = Mn;
-    $[58] = Xo;
-    $[59] = Dn;
+    $[55] = BoxComponent;
+    $[56] = header;
+    $[57] = explainText;
+    $[58] = replaceNotice;
+    $[59] = footerBox;
     $[60] = children_4;
   } else children_4 = $[60];
-  let mr;
-  if ($[61] !== Ao || $[62] !== children_4) {
-    mr = jsxProd_default(Ao, {
+  let pane;
+  if ($[61] !== PaneComponent || $[62] !== children_4) {
+    pane = jsxProd_default(PaneComponent, {
       color,
       children: children_4,
     });
-    $[61] = Ao;
+    $[61] = PaneComponent;
     $[62] = children_4;
-    $[63] = mr;
-  } else mr = $[63];
-  return mr;
+    $[63] = pane;
+  } else pane = $[63];
+  return pane;
 }
 //@ chunk-18hwfzwa.js:1389938-1389942 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:1389938", () => {
+  init_react_production();
+});
 export { GoalProposalPermissionRequest };

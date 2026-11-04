@@ -128,7 +128,7 @@ import {
 import { CHECKER_NO_ANSWER } from "../../plugins/functionHooks/hostBridge.js";
 import { asStringList, UI_ENV_SITE_RULES } from "../../plugins/functionHooks/sites/siteRules.js";
 import { logError } from "../../utils/log.js";
-import { string } from "../../../vendor/zod/v4/classic/schemas.js";
+import { stringSchema } from "../../../vendor/zod/v4/classic/schemas.js";
 import { env } from "../../utils/env.js";
 import { logEvent } from "../analytics/index.js";
 import {
@@ -180,7 +180,31 @@ import {
   buildMcpToolName,
 } from "../mcp/mcpStringUtils.js";
 import { REMOTE_DEVICES, CLAUDE_ARTIFACTS } from "../mcp/firstPartyServerIds.js";
-import { IOS_SIMULATOR_DISPLAY_NAME, ANDROID_EMULATOR_DISPLAY_NAME } from "../routines/routinesApi.js";
+import {
+  IOS_SIMULATOR_DISPLAY_NAME,
+  ANDROID_EMULATOR_DISPLAY_NAME,
+  sdkHostToolSource,
+  sanitizeToolNameWithMcpFlag,
+  isMcpServerLoggableInAnalytics,
+  extractMcpToolDetails,
+  sanitizeToolNameForAnalytics,
+  getUnknownToolAnalyticsName,
+  claudeAiServerIdField,
+  mcpToolDetailsForAnalytics,
+  isToolDetailsLoggingEnabled,
+  mcpToolAnalyticsFields,
+  builtinToolServedByMcp,
+  extractSkillName,
+  extractSubagentType,
+  extractToolInputDetailsForAnalytics,
+  toolSourceMetadata,
+  extractToolInputForTelemetry_2,
+  isMedia,
+  getFileExtensionForAnalytics,
+  getFileExtensionsFromBashCommand_2,
+  extensionsInCommand,
+  logToolFileActivity,
+} from "../analytics/metadata.js";
 import { isChromeToolName, CHROME_TOOL_PREFIXES } from "../../utils/claudeInChrome/chromeToolNames.js";
 import { isClassifiableBrowserCall } from "../../utils/permissions/browserComputerUseTools.js";
 import { TOOL_SEARCH_TOOL_NAME, isDeferredToolInConversation } from "../../tools/ToolSearchTool/prompt.js";
@@ -246,29 +270,6 @@ import { hasRelaySource } from "../projectsRelay/relayConfig.js";
 import { FILE_EDIT_TOOL_NAME } from "../../tools/FileEditTool/constants.js";
 import { roughTokenCountEstimationForContent } from "../tokenEstimation.js";
 import { count, uniq } from "../../utils/collections.js";
-import {
-  sdkHostToolSource,
-  sanitizeToolNameWithMcpFlag,
-  isMcpServerLoggableInAnalytics,
-  extractMcpToolDetails,
-  sanitizeToolNameForAnalytics,
-  getUnknownToolAnalyticsName,
-  claudeAiServerIdField,
-  mcpToolDetailsForAnalytics,
-  isToolDetailsLoggingEnabled,
-  mcpToolAnalyticsFields,
-  builtinToolServedByMcp,
-  extractSkillName,
-  extractSubagentType,
-  extractToolInputDetailsForAnalytics,
-  toolSourceMetadata,
-  extractToolInputForTelemetry_2,
-  isMedia,
-  getFileExtensionForAnalytics,
-  getFileExtensionsFromBashCommand_2,
-  extensionsInCommand,
-  logToolFileActivity,
-} from "../analytics/metadata.js";
 import {
   getLoggingSafeMcpBaseUrl,
   RETRYABLE_CONNECT_CODES,
@@ -495,22 +496,25 @@ import {
   SUMMARY,
   OTHER,
 } from "../../skills/bundled/explainUsage.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:3765505-3765551 placement
 /**
  * 把权限决策原因转成可安全展示的文本（经输出清洗器）。
  */
-function sanitizedDecisionReasonDisplay(e, n, r, matchedAskRule) {
-  return fromSanitizer_SANITIZER_OUTPUT_ONLY(decisionReasonDisplayString(e, n, r, matchedAskRule));
+function sanitizedDecisionReasonDisplay(decision, tool, input, permissionMode) {
+  return fromSanitizer_SANITIZER_OUTPUT_ONLY(
+    decisionReasonDisplayString(decision, tool, input, permissionMode),
+  );
 }
 //@ chunk-e6aww6q8.js:3783493-3783547 placement
 /**
  * 定时任务类工具调用时复制一份结果，供后续修正插件归属。
  */
-function cronToolCallResult(name, n) {
-  return isCronToolName(name) && isPlainObjectValue(n)
+function cronToolCallResult(toolName, result) {
+  return isCronToolName(toolName) && isPlainObjectValue(result)
     ? {
-        ...n,
+        ...result,
       }
     : undefined;
 }
@@ -518,54 +522,57 @@ function cronToolCallResult(name, n) {
 /**
  * 定时任务触发的工具调用：按对应会话定时任务（或当前调度插件）修正结果里的 plugin 归属。
  */
-function attributeScheduledPlugin(name, n, toolOutput) {
+function attributeScheduledPlugin(name, toolResult, toolOutput) {
   if (!isCronToolName(name) || !isPlainObjectValue(toolOutput)) return toolOutput;
-  let s = getCronTaskPlugin(isPlainObjectValue(n) ? n : toolOutput) ?? getScheduledByPlugin();
-  if (toolOutput.plugin === s) return toolOutput;
-  let { plugin, ...y } = toolOutput;
-  return s === undefined
-    ? y
+  let pluginName =
+    getCronTaskPlugin(isPlainObjectValue(toolResult) ? toolResult : toolOutput) ?? getScheduledByPlugin();
+  if (toolOutput.plugin === pluginName) return toolOutput;
+  let { plugin, ...rest } = toolOutput;
+  return pluginName === undefined
+    ? rest
     : {
-        ...y,
-        plugin: s,
+        ...rest,
+        plugin: pluginName,
       };
 }
 //@ chunk-e6aww6q8.js:3783707-3783745 placement
 /**
  * 工具名是 CronCreate 或 ScheduleWakeup。
  */
-function isCronToolName(e) {
-  return e === CRON_CREATE_TOOL_NAME || e === SCHEDULE_WAKEUP_TOOL_NAME;
+function isCronToolName(toolName) {
+  return toolName === CRON_CREATE_TOOL_NAME || toolName === SCHEDULE_WAKEUP_TOOL_NAME;
 }
 //@ chunk-e6aww6q8.js:3783745-3783817 placement
-function isPlainObjectValue(e) {
-  return typeof e === "object" && e !== null && !Array.isArray(e);
+function isPlainObjectValue(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 //@ chunk-e6aww6q8.js:3783817-3783966 placement
-function getCronTaskPlugin(e) {
-  if (!isPlainObjectValue(e)) return;
-  return getSessionCronTasks().find((n) =>
-    typeof e.id === "string" ? n.id === e.id : n.kind === "loop" && n.scheduledFor === e.scheduledFor,
+function getCronTaskPlugin(value) {
+  if (!isPlainObjectValue(value)) return;
+  return getSessionCronTasks().find((task) =>
+    typeof value.id === "string"
+      ? task.id === value.id
+      : task.kind === "loop" && task.scheduledFor === value.scheduledFor,
   )?.plugin;
 }
 //@ chunk-e6aww6q8.js:3783966-3784199 placement
 /**
  * MCP 结果被持久化或截断标签替换时，为副本保留原始结果的截断版本（钩子调用的除外）。
  */
-function restoreMcpResultForCopy(tool, n, { content }, { hookCaller }) {
+function restoreMcpResultForCopy(tool, result, { content }, { hookCaller }) {
   return tool.isMcp === true &&
     hookCaller === undefined &&
     typeof content === "string" &&
-    content !== n &&
+    content !== result &&
     ((content.startsWith(PERSISTED_OUTPUT_TAG) && content.endsWith(PERSISTED_OUTPUT_CLOSING_TAG)) ||
       (content.startsWith(TRUNCATED_OUTPUT_TAG) && content.endsWith(TRUNCATED_OUTPUT_CLOSING_TAG)))
     ? truncateResultForCopy(
-        n,
+        result,
         content.startsWith(TRUNCATED_OUTPUT_TAG)
           ? Math.min(content.length, MAX_MCP_RESULT_CHARS)
           : MAX_MCP_RESULT_CHARS,
       )
-    : n;
+    : result;
 }
 //@ chunk-e6aww6q8.js:3784199-3784210 placement
 var MAX_KEPT_TEXT_BLOCK_CHARS = 32;
@@ -573,49 +580,49 @@ var MAX_KEPT_TEXT_BLOCK_CHARS = 32;
 /**
  * 按字符预算截断结果中的文本块，超出部分用"[N more characters are not kept on this copy]"说明。
  */
-function truncateResultForCopy(e, n = MAX_MCP_RESULT_CHARS) {
-  let r =
-    typeof e === "string"
+function truncateResultForCopy(result, maxChars = MAX_MCP_RESULT_CHARS) {
+  let blocks =
+    typeof result === "string"
       ? [
           {
             type: "text",
-            text: e,
+            text: result,
           },
         ]
-      : e;
-  if (!Array.isArray(r)) return e;
-  let s = n + MAX_KEPT_TEXT_BLOCK_CHARS;
-  let h = 0;
-  let y = false;
-  let S = [];
-  for (let w of r) {
-    if (!isTextBlock(w)) {
-      S.push(w);
+      : result;
+  if (!Array.isArray(blocks)) return result;
+  let remainingChars = maxChars + MAX_KEPT_TEXT_BLOCK_CHARS;
+  let droppedChars = 0;
+  let didTruncate = false;
+  let kept = [];
+  for (let block of blocks) {
+    if (!isTextBlock(block)) {
+      kept.push(block);
       continue;
     }
-    let L = s - MAX_KEPT_TEXT_BLOCK_CHARS;
-    if (w.text.length <= L) {
-      s -= w.text.length + MAX_KEPT_TEXT_BLOCK_CHARS;
-      S.push(w);
+    let blockBudget = remainingChars - MAX_KEPT_TEXT_BLOCK_CHARS;
+    if (block.text.length <= blockBudget) {
+      remainingChars -= block.text.length + MAX_KEPT_TEXT_BLOCK_CHARS;
+      kept.push(block);
       continue;
     }
-    if (w.text === "") continue;
-    let G = L > 0 ? truncateToLength(w.text, L) : "";
-    h += w.text.length - G.length;
-    s = 0;
-    y = true;
-    if (G !== "")
-      S.push({
-        ...w,
-        text: G,
+    if (block.text === "") continue;
+    let keptText = blockBudget > 0 ? truncateToLength(block.text, blockBudget) : "";
+    droppedChars += block.text.length - keptText.length;
+    remainingChars = 0;
+    didTruncate = true;
+    if (keptText !== "")
+      kept.push({
+        ...block,
+        text: keptText,
       });
   }
-  if (!y) return e;
+  if (!didTruncate) return result;
   return [
-    ...S,
+    ...kept,
     {
       type: "text",
-      text: `[${h} more character${h === 1 ? " is" : "s are"} not kept on this copy of the result]`,
+      text: `[${droppedChars} more character${droppedChars === 1 ? " is" : "s are"} not kept on this copy of the result]`,
     },
   ];
 }
@@ -624,27 +631,31 @@ function truncateResultForCopy(e, n = MAX_MCP_RESULT_CHARS) {
  * 运行 tool.call 钩子链；对账户记忆服务器的调用，钩子的代答会被记录并警告。
  */
 async function runToolCallHooks(
-  e,
+  hookResult,
   { runs, thrown, managedRan, undelivered },
   { tool, input, toolUseContext, assistantMessage, now },
 ) {
   let toolUseId = input.tool_use_id;
   forgetOpenCall(toolUseId);
-  let Z = runs.of(e.ref);
-  let Se = thrown();
-  if (Se !== undefined && toolUseContext.abortController.signal.aborted && isAbortError(Se.error))
-    throw Se.error;
-  let we = Z !== undefined && isRunUnchanged(e, Z.made);
-  let Ee = shouldApplyManagedRewrite(tool, e, we);
-  if (Ee)
+  let hookRun = runs.of(hookResult.ref);
+  let thrownError = thrown();
+  if (
+    thrownError !== undefined &&
+    toolUseContext.abortController.signal.aborted &&
+    isAbortError(thrownError.error)
+  )
+    throw thrownError.error;
+  let isRunKept = hookRun !== undefined && isRunUnchanged(hookResult, hookRun.made);
+  let isManagedDropped = shouldApplyManagedRewrite(tool, hookResult, isRunKept);
+  if (isManagedDropped)
     logForDebugging(
       `tool.call ${tool.name} ${toolUseId}: a hooks module answered for the account memory server; its answer was dropped`,
       {
         level: "warn",
       },
     );
-  let Ae = we ? Z : Ee ? runs.last() : undefined;
-  if (Ee && Ae === undefined)
+  let keptRun = isRunKept ? hookRun : isManagedDropped ? runs.last() : undefined;
+  if (isManagedDropped && keptRun === undefined)
     return makeErrorResultAppender(toolUseId, dropBlockingErrors(undelivered()), {
       sourceToolAssistantUUID: assistantMessage.uuid,
       now,
@@ -655,88 +666,94 @@ async function runToolCallHooks(
       },
     );
   let toolUseContext_2 = toolUseContext;
-  let Me = managedRan() && shouldKeepToolResultInSubagents(toolUseContext, tool);
-  if (Ae && !Me) return Ae.made.messages;
-  let We = shouldRunManagedLink(Me, managedRan(), Ae !== undefined);
-  let ze = dropBlockingErrors(undelivered());
-  let lt = runs.last()?.input ?? toolInputOf(input);
-  if (!Ae)
+  let keepResultForSubagents = managedRan() && shouldKeepToolResultInSubagents(toolUseContext, tool);
+  if (keptRun && !keepResultForSubagents) return keptRun.made.messages;
+  let needsManagedLink = shouldRunManagedLink(keepResultForSubagents, managedRan(), keptRun !== undefined);
+  let undeliveredErrors = dropBlockingErrors(undelivered());
+  let hookInput = runs.last()?.input ?? toolInputOf(input);
+  if (!keptRun)
     logForDebugging(
       `tool.call ${tool.name} ${toolUseId}: resolved by a hooks module (` +
-        (e.deny === undefined ? "result" : `deny: ${e.deny}`) +
+        (hookResult.deny === undefined ? "result" : `deny: ${hookResult.deny}`) +
         ")",
     );
-  let Je = {
+  let messageOrigin = {
     sourceToolAssistantUUID: assistantMessage.uuid,
     now,
   };
-  let errorResultAppender = makeErrorResultAppender(toolUseId, ze, Je);
-  let pt = (deny) =>
+  let errorResultAppender = makeErrorResultAppender(toolUseId, undeliveredErrors, messageOrigin);
+  let denyAppender = (deny) =>
     errorResultAppender(deny, {
       toolDenialKind: "permission-rule",
     });
-  let Et = (deny) =>
+  let withheldResultAppender = (deny) =>
     errorResultAppender(
       `${tool.name} ran, and a plugin withheld its result: ${deny}`,
       {},
       hookErrorToolResult,
-    ).map((hn) => stripToolResultBlock(hn, toolUseId));
-  let yt = (no) => errorResultAppender(no, {});
-  if (e.deny !== undefined) {
-    let no = runs.last();
-    let ho =
-      no !== undefined && Me
+    ).map((message) => stripToolResultBlock(message, toolUseId));
+  let plainErrorAppender = (message) => errorResultAppender(message, {});
+  if (hookResult.deny !== undefined) {
+    let lastRun = runs.last();
+    let memoryHookResult =
+      lastRun !== undefined && keepResultForSubagents
         ? await runPostToolUseHooksForMemory({
             tool,
             toolUseID: toolUseId,
-            input: no.input,
-            output: no.made.result,
+            input: lastRun.input,
+            output: lastRun.made.result,
             toolUseContext: toolUseContext_2,
-            durationMs: toolDurationMsOf(no.made, toolUseId),
+            durationMs: toolDurationMsOf(lastRun.made, toolUseId),
           })
         : undefined;
     return [
-      ...(runs.last((Kn) => Kn.made.messages.some((message) => ranWithoutError(message, toolUseId))) !==
+      ...(runs.last((run) => run.made.messages.some((message) => ranWithoutError(message, toolUseId))) !==
       undefined
-        ? Et(e.deny)
-        : pt(e.deny)),
-      ...(ho?.messages ?? []),
+        ? withheldResultAppender(hookResult.deny)
+        : denyAppender(hookResult.deny)),
+      ...(memoryHookResult?.messages ?? []),
     ];
   }
-  let output = Ae ? Ae.made.result : e.result;
-  let At = We
+  let output = keptRun ? keptRun.made.result : hookResult.result;
+  let postHookResult = needsManagedLink
     ? await runPostToolUseHooksForMemory({
         tool,
         toolUseID: toolUseId,
-        input: Ae?.input ?? lt,
+        input: keptRun?.input ?? hookInput,
         output,
         toolUseContext: toolUseContext_2,
-        durationMs: toolDurationMsOf((Ae ?? runs.last())?.made, toolUseId),
+        durationMs: toolDurationMsOf((keptRun ?? runs.last())?.made, toolUseId),
       })
     : {
         output,
         rewritten: false,
         messages: [],
       };
-  if (Ae && !At.rewritten)
-    return At.messages.length === 0 ? Ae.made.messages : [...Ae.made.messages, ...At.messages];
-  let It = tool.outputSchema?.safeParse(At.output);
-  if (It && !It.success)
+  if (keptRun && !postHookResult.rewritten)
+    return postHookResult.messages.length === 0
+      ? keptRun.made.messages
+      : [...keptRun.made.messages, ...postHookResult.messages];
+  let outputCheck = tool.outputSchema?.safeParse(postHookResult.output);
+  if (outputCheck && !outputCheck.success)
     return [
-      ...yt(
-        `${At.rewritten ? "a managed PostToolUse hook rewrote" : "tool.call step resolved"} ${tool.name} with a result that does not match its output shape: ` +
-          It.error.message,
+      ...plainErrorAppender(
+        `${postHookResult.rewritten ? "a managed PostToolUse hook rewrote" : "tool.call step resolved"} ${tool.name} with a result that does not match its output shape: ` +
+          outputCheck.error.message,
       ),
-      ...(Ae ? withoutToolResultBlock(Ae.made.messages, toolUseId) : []),
-      ...At.messages,
+      ...(keptRun ? withoutToolResultBlock(keptRun.made.messages, toolUseId) : []),
+      ...postHookResult.messages,
     ];
-  let toolUseResult = attributeScheduledPlugin(tool.name, runs.last()?.made.result, It?.data ?? At.output);
-  let qt = toolUseResult;
-  let Zt = shouldKeepToolResultInSubagents(toolUseContext, tool);
-  let toolDuration = (Ae ?? Z)?.made.messages.find(
+  let toolUseResult = attributeScheduledPlugin(
+    tool.name,
+    runs.last()?.made.result,
+    outputCheck?.data ?? postHookResult.output,
+  );
+  let finalOutput = toolUseResult;
+  let keepForSubagents = shouldKeepToolResultInSubagents(toolUseContext, tool);
+  let toolDuration = (keptRun ?? hookRun)?.made.messages.find(
     (message) => findToolResultBlock(message, toolUseId) !== undefined,
   )?.toolDuration;
-  let pn = await mapAndMaybePersistToolResult(
+  let resultBlock = await mapAndMaybePersistToolResult(
     tool,
     toolUseResult,
     toolUseId,
@@ -744,96 +761,102 @@ async function runToolCallHooks(
     toolUseContext.storageV5,
   );
   return [
-    ...ze,
+    ...undeliveredErrors,
     {
       message: createUserMessage({
-        ...replaceToolResult((Ae ?? Z)?.made.messages ?? [], toolUseId, pn),
-        toolUseResult: Zt ? restoreMcpResultForCopy(tool, qt, pn, toolUseContext) : undefined,
-        ...Je,
+        ...replaceToolResult((keptRun ?? hookRun)?.made.messages ?? [], toolUseId, resultBlock),
+        toolUseResult: keepForSubagents
+          ? restoreMcpResultForCopy(tool, finalOutput, resultBlock, toolUseContext)
+          : undefined,
+        ...messageOrigin,
       }),
       toolDuration,
     },
-    ...(Ae ? withoutToolResultBlock(Ae.made.messages, toolUseId) : []),
-    ...At.messages,
+    ...(keptRun ? withoutToolResultBlock(keptRun.made.messages, toolUseId) : []),
+    ...postHookResult.messages,
   ];
 }
 //@ chunk-e6aww6q8.js:3787120-3787208 placement
 /**
  * tool.call 钩子最近一次运行失败时返回拒绝结果。
  */
-function denyOnStaleHookRun(e, n, toolUseId) {
-  return forgetWithheldCall(toolUseId) && e.deny === undefined && n.runs.last() !== undefined
+function denyOnStaleHookRun(hookResult, hookRun, toolUseId) {
+  return forgetWithheldCall(toolUseId) && hookResult.deny === undefined && hookRun.runs.last() !== undefined
     ? {
         deny: CHECKER_NO_ANSWER,
       }
-    : e;
+    : hookResult;
 }
 //@ chunk-e6aww6q8.js:3787208-3788237 placement
 /**
  * 应用 tool.call 钩子的结果（阻止执行、改写结果）。
  */
-async function applyToolCallHookResult(e, toolCallChain, r) {
-  let filtered = toolCallChain.undelivered().filter((Se) => Se.preventContinuation === true);
-  let stopReason = filtered.findLast((Se) => Se.stopReason)?.stopReason;
-  let deny = toolCallChain.managedRan() ? undefined : e.deny;
-  let S = denyOnStaleHookRun(e, toolCallChain, r.input.tool_use_id);
-  let w = await runToolCallHooks(S, toolCallChain, r);
+async function applyToolCallHookResult(hookResult, toolCallChain, callInfo) {
+  let filtered = toolCallChain.undelivered().filter((delivery) => delivery.preventContinuation === true);
+  let stopReason = filtered.findLast((delivery) => delivery.stopReason)?.stopReason;
+  let deny = toolCallChain.managedRan() ? undefined : hookResult.deny;
+  let staleCheckedResult = denyOnStaleHookRun(hookResult, toolCallChain, callInfo.input.tool_use_id);
+  let messages = await runToolCallHooks(staleCheckedResult, toolCallChain, callInfo);
   if (toolCallChain.toolEntered())
-    for (let Se of w) {
-      let { message } = Se;
+    for (let entry of messages) {
+      let { message } = entry;
       if (
         message.type === "user" &&
         message.toolDenialKind === "permission-rule" &&
-        findToolResultBlock(Se, r.input.tool_use_id) !== undefined
+        findToolResultBlock(entry, callInfo.input.tool_use_id) !== undefined
       )
         message.toolDenialAfterRun = true;
     }
-  let L =
-    r.toolUseContext.abortController.signal.aborted || w.some(isHookStoppedMessage)
+  let stoppedMessage =
+    callInfo.toolUseContext.abortController.signal.aborted || messages.some(isHookStoppedMessage)
       ? undefined
       : filtered.length > 0
         ? buildHookStoppedMessage(
             stopReason || deny || "Execution stopped by hook",
-            r.tool.name,
-            r.input.tool_use_id,
+            callInfo.tool.name,
+            callInfo.input.tool_use_id,
           )
         : toolCallChain.runs
-            .last((Se) => Se.made.messages.some(isHookStoppedMessage))
+            .last((run) => run.made.messages.some(isHookStoppedMessage))
             ?.made.messages.find(isHookStoppedMessage);
-  let G = L === undefined ? w : [...w, L];
-  let q = S.deny === undefined ? asStringList(S.context) : undefined;
-  return q === undefined ||
-    q.length === 0 ||
+  let allMessages = stoppedMessage === undefined ? messages : [...messages, stoppedMessage];
+  let contextList =
+    staleCheckedResult.deny === undefined ? asStringList(staleCheckedResult.context) : undefined;
+  return contextList === undefined ||
+    contextList.length === 0 ||
     !shouldRunManagedToolHooks(
-      r.tool,
-      r.toolUseContext.options.bareFork,
-      r.toolUseContext.options.settingsHooksOff,
+      callInfo.tool,
+      callInfo.toolUseContext.options.bareFork,
+      callInfo.toolUseContext.options.settingsHooksOff,
     )
-    ? G
+    ? allMessages
     : toolCallChain.managedRan()
       ? [
-          ...G,
+          ...allMessages,
           ...(await runToolCallPostHooks(
-            q,
+            contextList,
             {
-              tool: r.tool,
-              toolUseID: r.input.tool_use_id,
-              input: findRunInputForResult(S, toolCallChain, r.input),
-              toolUseContext: r.toolUseContext,
+              tool: callInfo.tool,
+              toolUseID: callInfo.input.tool_use_id,
+              input: findRunInputForResult(staleCheckedResult, toolCallChain, callInfo.input),
+              toolUseContext: callInfo.toolUseContext,
             },
-            G,
+            allMessages,
           )),
         ]
       : [
-          ...G,
+          ...allMessages,
           buildToolCallContextMessage(
-            await capAdditionalContext(q, "tool.call", r.toolUseContext.storageV5),
-            r.input.tool_use_id,
+            await capAdditionalContext(contextList, "tool.call", callInfo.toolUseContext.storageV5),
+            callInfo.input.tool_use_id,
           ),
         ];
 }
 //@ chunk-e6aww6q8.js:3788237-3788261 placement
-var TOOL_CALL_SITE_RULES = UI_ENV_SITE_RULES["tool.call"];
+var TOOL_CALL_SITE_RULES; // deferred: uses UI_ENV_SITE_RULES (../../plugins/functionHooks/sites/siteRules.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:3788237", () => {
+  TOOL_CALL_SITE_RULES = UI_ENV_SITE_RULES["tool.call"];
+});
 //@ chunk-e6aww6q8.js:3788305-3788666 placement
 /**
  * 安全采样 process.memoryUsage()：无磁盘会话跳过；失败时记日志，非常见文件系统错误只上报一次。
@@ -844,14 +867,14 @@ class MemoryUsageSampler {
   constructor(stallSampler) {
     this.#e = stallSampler;
   }
-  sample(e) {
+  sample(reason) {
     if (isDiskless()) return;
     try {
       return this.#e();
     } catch (error) {
       let errno = isSyscallError(error) ? error.errno : "none";
       logForDebugging(
-        `[tool-memory] process.memoryUsage() failed (${e}, errno=${errno}); a memory measurement for this tool call is skipped`,
+        `[tool-memory] process.memoryUsage() failed (${reason}, errno=${errno}); a memory measurement for this tool call is skipped`,
         {
           level: "error",
         },
@@ -865,12 +888,12 @@ class MemoryUsageSampler {
   }
 }
 //@ chunk-e6aww6q8.js:3788666-3788833 placement
-function diffMemoryUsage(e, n) {
-  if (e === undefined || n === undefined) return;
+function diffMemoryUsage(before, after) {
+  if (before === undefined || after === undefined) return;
   return {
-    rssDeltaBytes: n.rss - e.rss,
-    heapUsedDeltaBytes: n.heapUsed - e.heapUsed,
-    externalDeltaBytes: n.external - e.external,
+    rssDeltaBytes: after.rss - before.rss,
+    heapUsedDeltaBytes: after.heapUsed - before.heapUsed,
+    externalDeltaBytes: after.external - before.external,
   };
 }
 //@ chunk-e6aww6q8.js:3788883-3788929 placement
@@ -905,17 +928,17 @@ class ToolWallClockTracker {
     this.#r = startMs;
     this.#t = now;
   }
-  mark(e) {
+  mark(category) {
     if (this.#s) return () => {};
-    let n = this.#a();
-    if (e !== "own") this.#i ??= n;
-    this.#n[e]++;
-    let r = false;
+    let nowMs = this.#a();
+    if (category !== "own") this.#i ??= nowMs;
+    this.#n[category]++;
+    let isSettled = false;
     return () => {
-      if (r || this.#s) return;
-      r = true;
+      if (isSettled || this.#s) return;
+      isSettled = true;
       this.#a();
-      this.#n[e]--;
+      this.#n[category]--;
     };
   }
   settle() {
@@ -924,50 +947,53 @@ class ToolWallClockTracker {
       this.#s = true;
     }
   }
-  fields(e, { declaredNoOutsideWork }) {
+  fields(totalMs, { declaredNoOutsideWork }) {
     if (this.#i === undefined && !declaredNoOutsideWork) return {};
-    let max = Math.max(0, e);
-    let s = (L) => {
-      let min = Math.min(Math.max(0, L), max);
+    let max = Math.max(0, totalMs);
+    let takeMs = (availableMs) => {
+      let min = Math.min(Math.max(0, availableMs), max);
       max -= min;
       return min;
     };
-    let h = s(this.#o.approval);
-    let y = s(this.#o.model);
-    let externalWallMs = s(this.#o.external);
-    let w = s((this.#i ?? this.#e) - this.#e);
+    let approvalWaitMs = takeMs(this.#o.approval);
+    let modelCallMs = takeMs(this.#o.model);
+    let externalWallMs = takeMs(this.#o.external);
+    let preExternalMs = takeMs((this.#i ?? this.#e) - this.#e);
     return {
       externalWallMs,
-      ...(h > 0 && {
-        approvalWaitMs: h,
+      ...(approvalWaitMs > 0 && {
+        approvalWaitMs,
       }),
-      ...(y > 0 && {
-        modelCallMs: y,
+      ...(modelCallMs > 0 && {
+        modelCallMs,
       }),
-      ...(w > 0 && {
-        preExternalMs: w,
+      ...(preExternalMs > 0 && {
+        preExternalMs,
       }),
     };
   }
   #a() {
-    let e = this.#t();
-    let found = TIMING_CATEGORIES.find((r) => this.#n[r] > 0);
-    if (found !== undefined) this.#o[found] += Math.max(0, e - this.#r);
-    this.#r = e;
-    return e;
+    let nowMs = this.#t();
+    let found = TIMING_CATEGORIES.find((category) => this.#n[category] > 0);
+    if (found !== undefined) this.#o[found] += Math.max(0, nowMs - this.#r);
+    this.#r = nowMs;
+    return nowMs;
   }
 }
 //@ chunk-e6aww6q8.js:3789753-3789769 placement
 /**
  * 按调用保存计时上下文的 AsyncLocalStorage。
  */
-var timingContext = new AsyncLocalStorage();
+var timingContext; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:3789753", () => {
+  timingContext = new AsyncLocalStorage();
+});
 //@ chunk-e6aww6q8.js:3789769-3789807 placement
 /**
  * 在给定计时上下文里执行函数。
  */
-function runWithTimingContext(e, n) {
-  return timingContext.run(e, n);
+function runWithTimingContext(timing, fn) {
+  return timingContext.run(timing, fn);
 }
 //@ chunk-e6aww6q8.js:3789807-3789844 placement = getAgentContext (1)
 /**
@@ -980,30 +1006,30 @@ function getRequestTimingStore() {
 var CALL_DIRECTORY_CHANGED_MESSAGE =
   "The working directory no longer leads where it did when this call was permission-checked (it was deleted, a part of its path was replaced, or it can't be examined), so the call was not run. Make the call again to have it checked afresh.";
 //@ chunk-e6aww6q8.js:3790091-3790191 placement
-function runInHeldDirectory(cwd, n) {
+function runInHeldDirectory(cwd, fn) {
   return callFrameCwd() !== undefined || (cwd !== undefined && cwd === getCwdOrNull())
-    ? runInRemoteCallFrame(n, {
+    ? runInRemoteCallFrame(fn, {
         recoversIfAlreadyGone: true,
       })
-    : n();
+    : fn();
 }
 //@ chunk-e6aww6q8.js:3790191-3790638 placement
 /**
  * 检查工作目录在权限检查后是否仍指向同一位置；变化时记日志与 call_directory_hold 事件并拒绝调用。
  */
 function isCallDirectoryUnchanged() {
-  let e = callFrameCwd();
-  if (e === undefined) return true;
-  let n = realPathOutcomeSync(e);
-  if (callFramePhysicalMatches(n)) {
-    if (n === undefined)
+  let heldCwd = callFrameCwd();
+  if (heldCwd === undefined) return true;
+  let realPath = realPathOutcomeSync(heldCwd);
+  if (callFramePhysicalMatches(realPath)) {
+    if (realPath === undefined)
       logForDebugging(
-        `Working directory "${e}" may not be examined, now or at the call's permission check, so it isn't compared`,
+        `Working directory "${heldCwd}" may not be examined, now or at the call's permission check, so it isn't compared`,
       );
     return true;
   }
   logForDebugging(
-    `Call refused: working directory "${e}" now leads to ${typeof n === "string" ? `"${n}"` : "nowhere that can be examined"}, elsewhere than at the call's permission check`,
+    `Call refused: working directory "${heldCwd}" now leads to ${typeof realPath === "string" ? `"${realPath}"` : "nowhere that can be examined"}, elsewhere than at the call's permission check`,
     {
       level: "warn",
     },
@@ -1016,9 +1042,9 @@ function isCallDirectoryUnchanged() {
  * 根据中止原因选择工具取消消息：同批被拒、交付中断（特性开关）或普通取消。
  */
 function getCancelMessage(signal) {
-  let n = unwrapAbortReason(signal.reason);
-  if (n === "permission-stop") return TOOL_CALL_SKIPPED_BY_SIBLING_DENIAL;
-  if (n === "interrupt" && getFeatureValue_CACHED_MAY_BE_STALE("tengu_fizzy_grove", false))
+  let reasonKind = unwrapAbortReason(signal.reason);
+  if (reasonKind === "permission-stop") return TOOL_CALL_SKIPPED_BY_SIBLING_DENIAL;
+  if (reasonKind === "interrupt" && getFeatureValue_CACHED_MAY_BE_STALE("tengu_fizzy_grove", false))
     return TOOL_CALL_SKIPPED_FOR_DELIVERY;
   return CANCEL_MESSAGE;
 }
@@ -1046,42 +1072,47 @@ function classifyToolError(error) {
 /**
  * 输入校验失败时，若未知键或枚举值"在本对话早先的工具 schema 里出现过"（内联或延迟 schema），生成"…was offered earlier in this conversation but is not available in this session"提示。
  */
-function buildUnavailableOptionNote(name, n, schemaInput, error, messages) {
+function buildUnavailableOptionNote(name, schema, schemaInput, error, messages) {
   try {
     if (!isPlainObject_5(schemaInput)) return null;
-    let y = new Set();
-    let S = [];
+    let offeredKeys = new Set();
+    let offeredValues = [];
     for (let issue of error.issues)
       if (issue.code === "unrecognized_keys" && issue.path.length === 0) {
-        for (let key of issue.keys) if (Object.hasOwn(n, key)) y.add(key);
+        for (let key of issue.keys) if (Object.hasOwn(schema, key)) offeredKeys.add(key);
       } else if (issue.code === "invalid_value" && issue.path.length === 1) {
-        let Ae = issue.path[0];
-        if (typeof Ae === "string" && Object.hasOwn(n, Ae) && Object.is(n[Ae], schemaInput[Ae]))
-          S.push({
-            parameter: Ae,
-            value: schemaInput[Ae],
+        let parameter = issue.path[0];
+        if (
+          typeof parameter === "string" &&
+          Object.hasOwn(schema, parameter) &&
+          Object.is(schema[parameter], schemaInput[parameter])
+        )
+          offeredValues.push({
+            parameter,
+            value: schemaInput[parameter],
           });
       }
-    if (y.size === 0 && S.length === 0) return null;
-    let w = latestPromptSnapshot(messages)?.toolEntries.get(name);
-    let inputSchema = w?.input_schema;
+    if (offeredKeys.size === 0 && offeredValues.length === 0) return null;
+    let toolEntry = latestPromptSnapshot(messages)?.toolEntries.get(name);
+    let inputSchema = toolEntry?.input_schema;
     let source = "inline";
-    if (w === undefined) {
-      let Ee = recordedDeferredTools(messages).entries.get(name);
-      if (Ee === undefined || !("input_schema" in Ee)) return null;
-      inputSchema = Ee.input_schema;
+    if (toolEntry === undefined) {
+      let deferredEntry = recordedDeferredTools(messages).entries.get(name);
+      if (deferredEntry === undefined || !("input_schema" in deferredEntry)) return null;
+      inputSchema = deferredEntry.input_schema;
       source = "deferred";
     }
-    let q = schemaPropertiesMap(inputSchema);
-    let Z = [];
-    for (let { parameter, value: Ae } of S)
-      if (schemaEnumValues(q.get(parameter))?.includes(Ae)) Z.push(`\`${parameter}: ${jsonStringify(Ae)}\``);
-    let kind = Z.length > 0 ? "enum_value" : "unknown_key";
-    for (let Ee of y) if (q.has(Ee)) Z.push(`\`${Ee}\``);
-    if (Z.length === 0) return null;
-    let ke = Z.length === 1;
+    let properties = schemaPropertiesMap(inputSchema);
+    let listed = [];
+    for (let { parameter, value } of offeredValues)
+      if (schemaEnumValues(properties.get(parameter))?.includes(value))
+        listed.push(`\`${parameter}: ${jsonStringify(value)}\``);
+    let kind = listed.length > 0 ? "enum_value" : "unknown_key";
+    for (let key of offeredKeys) if (properties.has(key)) listed.push(`\`${key}\``);
+    if (listed.length === 0) return null;
+    let isSingle = listed.length === 1;
     return {
-      text: `${ke ? Z[0] : `${Z.slice(0, -1).join(", ")} and ${Z.at(-1)}`} ${ke ? "was" : "were"} offered earlier in this conversation but ${ke ? "is" : "are"} not available in this session; continue without ${ke ? "it" : "them"}.`,
+      text: `${isSingle ? listed[0] : `${listed.slice(0, -1).join(", ")} and ${listed.at(-1)}`} ${isSingle ? "was" : "were"} offered earlier in this conversation but ${isSingle ? "is" : "are"} not available in this session; continue without ${isSingle ? "it" : "them"}.`,
       kind,
       source,
     };
@@ -1164,57 +1195,69 @@ function getToolDecisionForOTel(permissionDecision, aborted) {
 /**
  * 组装权限决策记录（decision、source、reasonType、ruleSource、grantScope、reasonCode、circuitBreaker、classifierCategory），供权限遥测与审计。
  */
-function buildPermissionDecisionRecord(e, n, r) {
-  let decisionReason = r?.outcome.decisionReason;
-  let h =
-    r?.outcome.behavior === "ask" ||
-    r?.recorded?.source.startsWith("user_") === true ||
-    n === "user_abort" ||
+function buildPermissionDecisionRecord(decision, source, outcomeInfo) {
+  let decisionReason = outcomeInfo?.outcome.decisionReason;
+  let isPrompted =
+    outcomeInfo?.outcome.behavior === "ask" ||
+    outcomeInfo?.recorded?.source.startsWith("user_") === true ||
+    source === "user_abort" ||
     decisionReason?.type === "permissionPromptTool";
-  let y = r === undefined ? undefined : resolveShownPermissionOutcome(r, h);
-  let S =
-    r === undefined
+  let shownOutcome =
+    outcomeInfo === undefined ? undefined : resolveShownPermissionOutcome(outcomeInfo, isPrompted);
+  let ruleSource =
+    outcomeInfo === undefined
       ? undefined
-      : (getDecisionRuleSource(decisionReason, r.outcome.behavior) ??
-        getMatchedAskRule(r.outcome)?.source ??
-        (y && (getDecisionRuleSource(y.reason, y.behavior) ?? y.matchedAskRule?.source)));
-  let w =
-    e !== "accept"
+      : (getDecisionRuleSource(decisionReason, outcomeInfo.outcome.behavior) ??
+        getMatchedAskRule(outcomeInfo.outcome)?.source ??
+        (shownOutcome &&
+          (getDecisionRuleSource(shownOutcome.reason, shownOutcome.behavior) ??
+            shownOutcome.matchedAskRule?.source)));
+  let grantScope =
+    decision !== "accept"
       ? undefined
-      : (r?.recorded?.grantScope ?? (r?.outcome.behavior === "allow" ? r.outcome.grantScope : undefined));
-  let L = y && findCircuitBreaker(y.reason, y.behavior);
-  let G = y?.reason?.type === "classifier" ? sanitizeRuleCategory(y.reason.category) : undefined;
+      : (outcomeInfo?.recorded?.grantScope ??
+        (outcomeInfo?.outcome.behavior === "allow" ? outcomeInfo.outcome.grantScope : undefined));
+  let circuitBreaker = shownOutcome && findCircuitBreaker(shownOutcome.reason, shownOutcome.behavior);
+  let classifierCategory =
+    shownOutcome?.reason?.type === "classifier"
+      ? sanitizeRuleCategory(shownOutcome.reason.category)
+      : undefined;
   return {
-    decision: e,
-    source: n,
+    decision,
+    source,
     ...(decisionReason !== undefined &&
-      !h && {
+      !isPrompted && {
         reasonType: decisionReason.type,
       }),
-    ...(S !== undefined && {
-      ruleSource: S,
+    ...(ruleSource !== undefined && {
+      ruleSource,
     }),
-    ...(w !== undefined && {
-      grantScope: w,
+    ...(grantScope !== undefined && {
+      grantScope,
     }),
-    ...(y !== undefined && {
-      reasonCode: sanitizedDecisionReasonDisplay(y.behavior, undefined, y.reason, y.matchedAskRule),
+    ...(shownOutcome !== undefined && {
+      reasonCode: sanitizedDecisionReasonDisplay(
+        shownOutcome.behavior,
+        undefined,
+        shownOutcome.reason,
+        shownOutcome.matchedAskRule,
+      ),
     }),
-    ...(L !== undefined && {
-      circuitBreaker: L,
+    ...(circuitBreaker !== undefined && {
+      circuitBreaker,
     }),
-    ...(G !== undefined && {
-      classifierCategory: G,
+    ...(classifierCategory !== undefined && {
+      classifierCategory,
     }),
   };
 }
 //@ chunk-e6aww6q8.js:3794030-3794695 layout
-function resolveShownPermissionOutcome(e, n) {
-  let { outcome, shown } = e;
-  let h =
+function resolveShownPermissionOutcome(decisionInfo, isPrompted) {
+  let { outcome, shown } = decisionInfo;
+  let isEvaluationReason =
     outcome.behavior !== "allow" &&
     (outcome.decisionReason?.type === "hook" || outcome.decisionReason?.type === "classifier");
-  if (shown?.behavior === "ask" && !h)
+  if (shown?.behavior === "ask" && !isEvaluationReason)
     return {
       behavior: "ask",
       reason: shown.decisionReason,
@@ -1238,7 +1281,7 @@ function resolveShownPermissionOutcome(e, n) {
       reason: outcome.decisionReason,
       matchedAskRule: getMatchedAskRule(outcome),
     };
-  if (n && outcome.decisionReason?.type !== "permissionPromptTool")
+  if (isPrompted && outcome.decisionReason?.type !== "permissionPromptTool")
     return {
       behavior: "ask",
       reason: outcome.decisionReason,
@@ -1251,30 +1294,30 @@ function getMatchedAskRule(outcome) {
   return "matchedAskRule" in outcome ? outcome.matchedAskRule : undefined;
 }
 //@ chunk-e6aww6q8.js:3794762-3795026 placement
-function findCircuitBreaker(e, n) {
-  if (e?.type === "safetyCheck") {
-    let circuitBreaker = e.circuitBreaker;
+function findCircuitBreaker(reason, behavior) {
+  if (reason?.type === "safetyCheck") {
+    let circuitBreaker = reason.circuitBreaker;
     return circuitBreaker !== undefined && Object.hasOwn(CIRCUIT_BREAKER_TRAITS, circuitBreaker)
       ? circuitBreaker
       : undefined;
   }
-  if (e?.type === "subcommandResults") {
-    for (let reason of e.reasons.values())
-      if (reason.behavior === n) {
-        let circuitBreaker = findCircuitBreaker(reason.decisionReason, n);
+  if (reason?.type === "subcommandResults") {
+    for (let reason_2 of reason.reasons.values())
+      if (reason_2.behavior === behavior) {
+        let circuitBreaker = findCircuitBreaker(reason_2.decisionReason, behavior);
         if (circuitBreaker !== undefined) return circuitBreaker;
       }
   }
   return;
 }
 //@ chunk-e6aww6q8.js:3795026-3795185 placement
-function buildDeniedDecisionRecord(permissionDecision, n, source, pipeline) {
+function buildDeniedDecisionRecord(permissionDecision, recorded, source, pipeline) {
   return buildPermissionDecisionRecord(
-    permissionDecision.behavior === "allow" ? n?.decision || source.decision : "reject",
-    n?.source || source.source,
+    permissionDecision.behavior === "allow" ? recorded?.decision || source.decision : "reject",
+    recorded?.source || source.source,
     {
       outcome: permissionDecision,
-      recorded: n,
+      recorded,
       shown: pipeline?.answered ?? pipeline?.result,
     },
   );
@@ -1295,20 +1338,20 @@ function buildDenyRuleDecisionRecord(message, rule) {
   });
 }
 //@ chunk-e6aww6q8.js:3795335-3795439 placement
-function getDecisionRuleSource(e, behavior) {
-  if (e?.type === "rule") return e.rule.source;
-  return findDecidingRule(e, behavior === "deny" ? "deny" : "ask")?.source;
+function getDecisionRuleSource(reason, behavior) {
+  if (reason?.type === "rule") return reason.rule.source;
+  return findDecidingRule(reason, behavior === "deny" ? "deny" : "ask")?.source;
 }
 //@ chunk-e6aww6q8.js:3795439-3795670 placement
-function shouldAddBashAudienceNote(name, n, mainLoopModel) {
+function shouldAddBashAudienceNote(name, toolOutput, mainLoopModel) {
   if (
     name !== BASH_TOOL_NAME ||
-    typeof n !== "object" ||
-    n === null ||
-    !("stdout" in n) ||
-    typeof n.stdout !== "string" ||
+    typeof toolOutput !== "object" ||
+    toolOutput === null ||
+    !("stdout" in toolOutput) ||
+    typeof toolOutput.stdout !== "string" ||
     getIsNonInteractiveSession() ||
-    !exceedsLineLimit(n.stdout)
+    !exceedsLineLimit(toolOutput.stdout)
   )
     return false;
   let canonicalName = getCanonicalName(mainLoopModel);
@@ -1320,30 +1363,32 @@ function shouldAddBashAudienceNote(name, n, mainLoopModel) {
   );
 }
 //@ chunk-e6aww6q8.js:3795670-3795810 placement
-var REMOTE_DEVICES_PREFIX = getMcpPrefix_2(REMOTE_DEVICES);
-var BROWSER_TOOL_PREFIXES = [`${REMOTE_DEVICES_PREFIX}Claude_Preview__`, "mcp__claude-for-chrome__"];
-var flattened_2 = [IOS_SIMULATOR_DISPLAY_NAME, ANDROID_EMULATOR_DISPLAY_NAME].flatMap((e) => {
-  let mcpPrefix = getMcpPrefix_2(e);
-  return [mcpPrefix, REMOTE_DEVICES_PREFIX + mcpPrefix.slice(5)];
+var REMOTE_DEVICES_PREFIX; // deferred: uses getMcpPrefix (../mcp/mcpStringUtils.js) of its import cycle while loading; runs once the cycle is complete
+var BROWSER_TOOL_PREFIXES;
+var flattened_2;
+deferInit("chunk-e6aww6q8.js:3795670", () => {
+  REMOTE_DEVICES_PREFIX = getMcpPrefix_2(REMOTE_DEVICES);
+  BROWSER_TOOL_PREFIXES = [`${REMOTE_DEVICES_PREFIX}Claude_Preview__`, "mcp__claude-for-chrome__"];
+  flattened_2 = [IOS_SIMULATOR_DISPLAY_NAME, ANDROID_EMULATOR_DISPLAY_NAME].flatMap((displayName) => {
+    let mcpPrefix = getMcpPrefix_2(displayName);
+    return [mcpPrefix, REMOTE_DEVICES_PREFIX + mcpPrefix.slice(5)];
+  });
 });
 //@ chunk-e6aww6q8.js:3795810-3796064 placement
-function getDeviceToolKind(e) {
-  if (e.isMcp !== true) return;
-  let toolNameForPermissionCheck = getToolNameForPermissionCheck_4(e);
-  if (
-    isChromeToolName(toolNameForPermissionCheck) ||
-    BROWSER_TOOL_PREFIXES.some((r) => toolNameForPermissionCheck.startsWith(r))
-  )
+function getDeviceToolKind(tool) {
+  if (tool.isMcp !== true) return;
+  let toolName = getToolNameForPermissionCheck_4(tool);
+  if (isChromeToolName(toolName) || BROWSER_TOOL_PREFIXES.some((prefix) => toolName.startsWith(prefix)))
     return "browser";
   if (
-    isClassifiableBrowserCall(toolNameForPermissionCheck) &&
+    isClassifiableBrowserCall(toolName) &&
     !(
-      toolNameForPermissionCheck.startsWith(REMOTE_DEVICES_PREFIX) &&
-      toolNameForPermissionCheck.slice(REMOTE_DEVICES_PREFIX.length).includes("__")
+      toolName.startsWith(REMOTE_DEVICES_PREFIX) &&
+      toolName.slice(REMOTE_DEVICES_PREFIX.length).includes("__")
     )
   )
     return "computer_use";
-  return flattened_2.some((r) => toolNameForPermissionCheck.startsWith(r)) ? "simulator" : undefined;
+  return flattened_2.some((prefix) => toolName.startsWith(prefix)) ? "simulator" : undefined;
 }
 //@ chunk-e6aww6q8.js:3796064-3796090 placement
 var TOOL_NOT_LOADED = "TOOL_NOT_LOADED";
@@ -1366,14 +1411,23 @@ function sanitizeShapeClass(shapeClass) {
     : lit_2("nonconforming");
 }
 //@ chunk-e6aww6q8.js:3796627-3796882 placement
-var MAX_RESULT_FIELDS = 256;
-var MAX_PENDING_CUTS = 64;
-var MAX_PENDING_CUT_CHARS = 33554432;
-var MAX_WALK_NODES = 1048576;
-var MAX_WALK_NODES_DEDUPED = 65536;
-var HOOK_RESULT_FIELDS_CUT_NOTICE =
-  "[Parts of this tool result were left out: a hook replaced the tool's output with one that has too many fields, and only its text, inline images and inline PDFs are kept.]";
-var pendingResultCuts = new SessionRootSlot(() => new Map());
+var MAX_RESULT_FIELDS; // deferred: uses SessionRootSlot (../../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
+var MAX_PENDING_CUTS;
+var MAX_PENDING_CUT_CHARS;
+var MAX_WALK_NODES;
+var MAX_WALK_NODES_DEDUPED;
+var HOOK_RESULT_FIELDS_CUT_NOTICE;
+var pendingResultCuts;
+deferInit("chunk-e6aww6q8.js:3796627", () => {
+  MAX_RESULT_FIELDS = 256;
+  MAX_PENDING_CUTS = 64;
+  MAX_PENDING_CUT_CHARS = 33554432;
+  MAX_WALK_NODES = 1048576;
+  MAX_WALK_NODES_DEDUPED = 65536;
+  HOOK_RESULT_FIELDS_CUT_NOTICE =
+    "[Parts of this tool result were left out: a hook replaced the tool's output with one that has too many fields, and only its text, inline images and inline PDFs are kept.]";
+  pendingResultCuts = new SessionRootSlot(() => new Map());
+});
 //@ chunk-e6aww6q8.js:3796882-3796916 placement
 /**
  * 判断工具是否属于项目中继读取工具集。
@@ -1385,18 +1439,18 @@ function isHearthReadTool(name) {
 /**
  * 有 MCP 入站门时，字段过多的 MCP 结果只保留简化形式，完整结果按 uuid 暂存待取回；子代理或无法序列化时只做截断并记事件。
  */
-function cutLargeMcpResult(e) {
-  if (!hasMcpInboundDoor()) return e;
-  let { toolUseId, toolUseResult, mcpMeta } = e;
-  let minimalMcpResult = buildMinimalMcpResult(toolUseResult, mcpMeta, e.keepsMcpMeta);
-  if (!needsResultCut(minimalMcpResult, e)) return e;
-  if (e.inSubagent) {
+function cutLargeMcpResult(result) {
+  if (!hasMcpInboundDoor()) return result;
+  let { toolUseId, toolUseResult, mcpMeta } = result;
+  let minimalMcpResult = buildMinimalMcpResult(toolUseResult, mcpMeta, result.keepsMcpMeta);
+  if (!needsResultCut(minimalMcpResult, result)) return result;
+  if (result.inSubagent) {
     logFeatureSad("mcp_large_result_cut", "in_subagent");
     return minimalMcpResult;
   }
-  let y;
+  let json;
   try {
-    y = jsonStringify(
+    json = jsonStringify(
       mcpMeta
         ? {
             content: toolUseResult,
@@ -1411,8 +1465,8 @@ function cutLargeMcpResult(e) {
   return {
     ...minimalMcpResult,
     uuid: stashCutResult(toolUseId, {
-      whole: new RawJson(y),
-      chars: y.length,
+      whole: new RawJson(json),
+      chars: json.length,
       feature: "mcp_large_result_cut",
     }),
   };
@@ -1459,46 +1513,48 @@ function cutEditOriginalFile({ toolUseId, toolUseResult, mcpMeta, inSubagent }) 
 /**
  * 按 toolUseId 暂存被截掉的完整结果，超过条数或字符上限时淘汰最早的（记 dropped_waiting），返回新 uuid。
  */
-function stashCutResult(toolUseId, n) {
-  let r = randomUUID();
-  let s = pendingResultCuts.of(getRootSession());
-  s.delete(toolUseId);
-  s.set(toolUseId, {
-    ...n,
-    uuid: r,
+function stashCutResult(toolUseId, cut) {
+  let uuid = randomUUID();
+  let cuts = pendingResultCuts.of(getRootSession());
+  cuts.delete(toolUseId);
+  cuts.set(toolUseId, {
+    ...cut,
+    uuid,
   });
-  let h = 0;
-  for (let y of s.values()) h += y.chars;
-  for (let [y, S] of s) {
-    if (y === toolUseId || (s.size <= MAX_PENDING_CUTS && h <= MAX_PENDING_CUT_CHARS)) break;
-    s.delete(y);
-    h -= S.chars;
-    logFeatureSad(S.feature, "dropped_waiting");
+  let totalChars = 0;
+  for (let entry of cuts.values()) totalChars += entry.chars;
+  for (let [key, entry] of cuts) {
+    if (key === toolUseId || (cuts.size <= MAX_PENDING_CUTS && totalChars <= MAX_PENDING_CUT_CHARS)) break;
+    cuts.delete(key);
+    totalChars -= entry.chars;
+    logFeatureSad(entry.feature, "dropped_waiting");
   }
-  return r;
+  return uuid;
 }
 //@ chunk-e6aww6q8.js:3797933-3798073 placement
 function cutOversizedResultBlocks(content) {
-  let n = hasMcpInboundDoor() ? simplifyResultBlocks(content) : undefined;
-  if (n === undefined) return content;
-  logFeatureSad("mcp_result_block_cut", typeof n === "string" ? "not_a_list" : "list");
-  return n;
+  let simplified = hasMcpInboundDoor() ? simplifyResultBlocks(content) : undefined;
+  if (simplified === undefined) return content;
+  logFeatureSad("mcp_result_block_cut", typeof simplified === "string" ? "not_a_list" : "list");
+  return simplified;
 }
 //@ chunk-e6aww6q8.js:3798073-3798344 placement
 /**
  * 结果字段过多时把内容块简化为只保留文本、工具引用、内联图片与 PDF，丢弃部分处加一条说明；不需要时返回 undefined。
  */
-function simplifyResultBlocks(e, n = false) {
-  let allowToolReference = Array.isArray(e) && e.every(isToolReferenceWithName);
-  let s = Array.isArray(e) ? e.map((S) => simplifyResultBlock(S, allowToolReference)) : undefined;
-  let h = MAX_RESULT_FIELDS + countResultFields(s, 1 / 0, n);
-  if (h !== 1 / 0 && countResultFields(e, h, n) <= h) return;
-  if (s === undefined) return stringifyToolResult(e);
-  let index = s.indexOf(undefined);
-  return s.flatMap(
-    (S, w) =>
-      S ??
-      (w === index
+function simplifyResultBlocks(content, dedupe = false) {
+  let allowToolReference = Array.isArray(content) && content.every(isToolReferenceWithName);
+  let simplified = Array.isArray(content)
+    ? content.map((block) => simplifyResultBlock(block, allowToolReference))
+    : undefined;
+  let budget = MAX_RESULT_FIELDS + countResultFields(simplified, 1 / 0, dedupe);
+  if (budget !== 1 / 0 && countResultFields(content, budget, dedupe) <= budget) return;
+  if (simplified === undefined) return stringifyToolResult(content);
+  let index = simplified.indexOf(undefined);
+  return simplified.flatMap(
+    (block, blockIndex) =>
+      block ??
+      (blockIndex === index
         ? {
             type: "text",
             text: HOOK_RESULT_FIELDS_CUT_NOTICE,
@@ -1559,66 +1615,72 @@ function simplifyResultBlock(block, allowToolReference) {
   return;
 }
 //@ chunk-e6aww6q8.js:3798989-3799116 placement
-function needsResultCut(minimalMcpResult, n, r = false) {
-  let s =
+function needsResultCut(minimalMcpResult, original, dedupe = false) {
+  let budget =
     MAX_RESULT_FIELDS +
-    countResultFields([minimalMcpResult.toolUseResult, minimalMcpResult.mcpMeta], 1 / 0, r);
-  return s === 1 / 0 || countResultFields([n.toolUseResult, n.mcpMeta], s, r) > s;
+    countResultFields([minimalMcpResult.toolUseResult, minimalMcpResult.mcpMeta], 1 / 0, dedupe);
+  return (
+    budget === 1 / 0 || countResultFields([original.toolUseResult, original.mcpMeta], budget, dedupe) > budget
+  );
 }
 //@ chunk-e6aww6q8.js:3799116-3799419 placement
 /**
  * 迭代统计结果对象的字段数（超过上限提前返回上限+1），可对重复键形状的对象去重计数。
  */
-function countResultFields(e, n, r = false) {
-  let s = 0;
-  let h = 0;
-  let y = new Set();
-  let S = [e];
-  while (S.length > 0) {
-    let w = S.pop();
-    if (typeof w !== "object" || w === null) continue;
-    if (++h > (r ? MAX_WALK_NODES_DEDUPED : MAX_WALK_NODES)) return n + 1;
-    if (Array.isArray(w)) {
-      for (let G of w) S.push(G);
+function countResultFields(root, limit, dedupe = false) {
+  let fieldCount = 0;
+  let nodeCount = 0;
+  let seenShapes = new Set();
+  let stack = [root];
+  while (stack.length > 0) {
+    let node = stack.pop();
+    if (typeof node !== "object" || node === null) continue;
+    if (++nodeCount > (dedupe ? MAX_WALK_NODES_DEDUPED : MAX_WALK_NODES)) return limit + 1;
+    if (Array.isArray(node)) {
+      for (let item of node) stack.push(item);
       continue;
     }
-    let L = r && isRepeatedKeyShape(w, y);
-    for (let G of Object.values(w)) {
-      if (!L && ++s > n) return n + 1;
-      S.push(G);
+    let isRepeated = dedupe && isRepeatedKeyShape(node, seenShapes);
+    for (let value of Object.values(node)) {
+      if (!isRepeated && ++fieldCount > limit) return limit + 1;
+      stack.push(value);
     }
   }
-  return s;
+  return fieldCount;
 }
 //@ chunk-e6aww6q8.js:3799419-3799572 placement
-function isRepeatedKeyShape(e, n) {
-  let keys = Object.keys(e);
-  let s = String(Number(keys[0]) >>> 0) === keys[0];
-  if (keys.length > MAX_JSON_NESTING || s) return false;
-  let h = jsonStringifyRaw(keys);
-  if (n.has(h)) return true;
-  n.add(h);
+function isRepeatedKeyShape(value, seenShapes) {
+  let keys = Object.keys(value);
+  let isNumericKey = String(Number(keys[0]) >>> 0) === keys[0];
+  if (keys.length > MAX_JSON_NESTING || isNumericKey) return false;
+  let shapeKey = jsonStringifyRaw(keys);
+  if (seenShapes.has(shapeKey)) return true;
+  seenShapes.add(shapeKey);
   return false;
 }
 //@ chunk-e6aww6q8.js:3799572-3799920 placement
 /**
  * 构造精简的 MCP 结果：内容块只留基本字段，mcpMeta 只保留结束轮次标记、限定大小的插件元数据、来源中继、结构化内容省略标记与资源链接。
  */
-function buildMinimalMcpResult(e, n, keepsMcpMeta = false) {
+function buildMinimalMcpResult(toolUseResult, mcpMeta, keepsMcpMeta = false) {
   if (keepsMcpMeta)
     return {
-      ...buildMinimalMcpResult(e, undefined),
-      mcpMeta: n,
+      ...buildMinimalMcpResult(toolUseResult, undefined),
+      mcpMeta,
     };
   return {
-    toolUseResult: Array.isArray(e) ? e.map(minimalContentBlock) : isPlainObject_5(e) ? {} : e,
-    mcpMeta: n && {
-      ...(isPlainObject_5(n._meta) && pickMcpMetaFields(n._meta)),
-      ...((n.structuredContent !== undefined || n.structuredContentOmitted === true) && {
+    toolUseResult: Array.isArray(toolUseResult)
+      ? toolUseResult.map(minimalContentBlock)
+      : isPlainObject_5(toolUseResult)
+        ? {}
+        : toolUseResult,
+    mcpMeta: mcpMeta && {
+      ...(isPlainObject_5(mcpMeta._meta) && pickMcpMetaFields(mcpMeta._meta)),
+      ...((mcpMeta.structuredContent !== undefined || mcpMeta.structuredContentOmitted === true) && {
         structuredContentOmitted: true,
       }),
-      ...(Array.isArray(n.resourceLinks) && {
-        resourceLinks: n.resourceLinks.filter(isPlainObject_5).map(minimalResourceLink),
+      ...(Array.isArray(mcpMeta.resourceLinks) && {
+        resourceLinks: mcpMeta.resourceLinks.filter(isPlainObject_5).map(minimalResourceLink),
       }),
     },
   };
@@ -1627,46 +1689,46 @@ function buildMinimalMcpResult(e, n, keepsMcpMeta = false) {
 /**
  * 从 MCP _meta 中挑出要保留的键：结束轮次标记，以及开关开启时大小受限的插件元数据（超限的记录到 plugin_meta_cut）。
  */
-function pickMcpMetaFields(e) {
-  let n = {};
-  if (e[CLAUDE_ENDTURN] === true) {
-    n[CLAUDE_ENDTURN] = true;
-    if (e[CLAUDE_ENDTURNHONORSSTOPHOOKS] === true) n[CLAUDE_ENDTURNHONORSSTOPHOOKS] = true;
+function pickMcpMetaFields(meta) {
+  let kept = {};
+  if (meta[CLAUDE_ENDTURN] === true) {
+    kept[CLAUDE_ENDTURN] = true;
+    if (meta[CLAUDE_ENDTURNHONORSSTOPHOOKS] === true) kept[CLAUDE_ENDTURNHONORSSTOPHOOKS] = true;
   }
   if (isSnappyPlumOn()) {
-    let r = [];
-    for (let s of EDIT_SOURCE_KINDS) {
-      let h = e[s];
-      if (!Object.hasOwn(e, s) || h === undefined) continue;
+    let droppedKinds = [];
+    for (let kind of EDIT_SOURCE_KINDS) {
+      let value = meta[kind];
+      if (!Object.hasOwn(meta, kind) || value === undefined) continue;
       if (
-        typeof h === "string"
-          ? h.length <= MAX_REQUEST_META_BYTES
-          : countResultFields(h, MAX_RESULT_FIELDS) <= MAX_RESULT_FIELDS
+        typeof value === "string"
+          ? value.length <= MAX_REQUEST_META_BYTES
+          : countResultFields(value, MAX_RESULT_FIELDS) <= MAX_RESULT_FIELDS
       )
-        n[s] = h;
-      else r.push(s);
+        kept[kind] = value;
+      else droppedKinds.push(kind);
     }
-    if (typeof e[COM_ANTHROPIC_SOURCES_RELAY] === "string")
-      n[COM_ANTHROPIC_SOURCES_RELAY] = e[COM_ANTHROPIC_SOURCES_RELAY];
-    if (r.length > 0) n[COM_ANTHROPIC_PLUGIN_META_CUT] = r;
+    if (typeof meta[COM_ANTHROPIC_SOURCES_RELAY] === "string")
+      kept[COM_ANTHROPIC_SOURCES_RELAY] = meta[COM_ANTHROPIC_SOURCES_RELAY];
+    if (droppedKinds.length > 0) kept[COM_ANTHROPIC_PLUGIN_META_CUT] = droppedKinds;
   }
-  return Object.keys(n).length === 0
+  return Object.keys(kept).length === 0
     ? {}
     : {
-        _meta: n,
+        _meta: kept,
       };
 }
 //@ chunk-e6aww6q8.js:3800270-3800692 placement
 /**
  * 把内容块精简为 type、text、source（type/media_type/data）、title、context。
  */
-function minimalContentBlock(e) {
-  if (Array.isArray(e)) return [];
-  if (!isPlainObject_5(e)) return e;
-  let { type: n, text, source, title, context } = e;
+function minimalContentBlock(block) {
+  if (Array.isArray(block)) return [];
+  if (!isPlainObject_5(block)) return block;
+  let { type, text, source, title, context } = block;
   return {
-    ...(typeof n === "string" && {
-      type: n,
+    ...(typeof type === "string" && {
+      type,
     }),
     ...(typeof text === "string" && {
       text,
@@ -1693,11 +1755,11 @@ function minimalContentBlock(e) {
   };
 }
 //@ chunk-e6aww6q8.js:3800692-3800979 placement
-function minimalResourceLink(e) {
-  let { uri, name: r, title, description, mimeType, size } = e;
+function minimalResourceLink(link) {
+  let { uri, name, title, description, mimeType, size } = link;
   return {
     uri: typeof uri === "string" ? uri : "",
-    name: typeof r === "string" ? r : "",
+    name: typeof name === "string" ? name : "",
     ...(typeof title === "string" && {
       title,
     }),
@@ -1717,58 +1779,69 @@ function minimalResourceLink(e) {
  * 按 toolUseId 取回暂存的完整结果，uuid 不符时丢弃并记事件。
  */
 function takeCutResult(toolUseId, uuid) {
-  let r = pendingResultCuts.peek(getRootSession());
-  let s = r?.get(toolUseId);
-  if (s === undefined) return;
-  r?.delete(toolUseId);
-  if (s.uuid !== uuid) {
-    logFeatureSad(s.feature, "other_message");
+  let cuts = pendingResultCuts.peek(getRootSession());
+  let cut = cuts?.get(toolUseId);
+  if (cut === undefined) return;
+  cuts?.delete(toolUseId);
+  if (cut.uuid !== uuid) {
+    logFeatureSad(cut.feature, "other_message");
     return;
   }
-  logFeatureOk(s.feature);
-  return s.whole;
+  logFeatureOk(cut.feature);
+  return cut.whole;
 }
 //@ chunk-e6aww6q8.js:3801142-3801243 placement
 /**
  * 轮次结束时，对仍未完成的切出结果逐个上报 turn_ended 并清空。
  */
 function clearCutResults() {
-  let e = pendingResultCuts.peek(getRootSession());
-  for (let n of e?.values() ?? []) logFeatureSad(n.feature, "turn_ended");
-  e?.clear();
+  let cuts = pendingResultCuts.peek(getRootSession());
+  for (let cut of cuts?.values() ?? []) logFeatureSad(cut.feature, "turn_ended");
+  cuts?.clear();
 }
 //@ chunk-e6aww6q8.js:3801243-3801328 placement
 /**
  * 设备类 MCP 工具名的前缀常量与后缀规则。
  */
-var CLAUDE_DEVICE_MCP_PREFIX = getMcpPrefix_2(CLAUDE_DEVICE);
-var REMOTE_DEVICES_MCP_PREFIX = getMcpPrefix_2(REMOTE_DEVICES);
-var MAX_DEVICE_TOOL_SUFFIX_CHARS = 108;
-var DEVICE_TOOL_SUFFIX_REGEX = /^[a-zA-Z0-9](?:[a-zA-Z0-9_-]*[a-zA-Z0-9])?$/;
+var CLAUDE_DEVICE_MCP_PREFIX; // deferred: uses getMcpPrefix (../mcp/mcpStringUtils.js) of its import cycle while loading; runs once the cycle is complete
+var REMOTE_DEVICES_MCP_PREFIX;
+var MAX_DEVICE_TOOL_SUFFIX_CHARS;
+var DEVICE_TOOL_SUFFIX_REGEX;
+deferInit("chunk-e6aww6q8.js:3801243", () => {
+  CLAUDE_DEVICE_MCP_PREFIX = getMcpPrefix_2(CLAUDE_DEVICE);
+  REMOTE_DEVICES_MCP_PREFIX = getMcpPrefix_2(REMOTE_DEVICES);
+  MAX_DEVICE_TOOL_SUFFIX_CHARS = 108;
+  DEVICE_TOOL_SUFFIX_REGEX = /^[a-zA-Z0-9](?:[a-zA-Z0-9_-]*[a-zA-Z0-9])?$/;
+});
 //@ chunk-e6aww6q8.js:3801328-3801494 placement
-function matchLocalToolAlias(e, n) {
-  let r;
-  if (e.startsWith(REMOTE_DEVICES_MCP_PREFIX)) {
-    let localToolAlias = toLocalToolAlias(e);
-    r = n.filter((h) => h === localToolAlias);
-  } else r = n.filter((s) => s.startsWith(REMOTE_DEVICES_MCP_PREFIX) && toLocalToolAlias(s) === e);
-  return r.length === 1 ? r[0] : undefined;
+function matchLocalToolAlias(toolName, aliases) {
+  let matches;
+  if (toolName.startsWith(REMOTE_DEVICES_MCP_PREFIX)) {
+    let localToolAlias = toLocalToolAlias(toolName);
+    matches = aliases.filter((alias) => alias === localToolAlias);
+  } else
+    matches = aliases.filter(
+      (alias) => alias.startsWith(REMOTE_DEVICES_MCP_PREFIX) && toLocalToolAlias(alias) === toolName,
+    );
+  return matches.length === 1 ? matches[0] : undefined;
 }
 //@ chunk-e6aww6q8.js:3801494-3801722 placement
-function toLocalToolAlias(e) {
-  let sliced = e.slice(REMOTE_DEVICES_MCP_PREFIX.length);
-  let [r, s, ...h] = sliced.split("__");
+function toLocalToolAlias(toolName) {
+  let sliced = toolName.slice(REMOTE_DEVICES_MCP_PREFIX.length);
+  let [devicePart, actionPart, ...extraParts] = sliced.split("__");
   if (
-    r === undefined ||
-    s === undefined ||
-    h.length > 0 ||
-    !DEVICE_TOOL_SUFFIX_REGEX.test(r) ||
-    !DEVICE_TOOL_SUFFIX_REGEX.test(s) ||
-    ALL_BROWSER_TOOL_PREFIXES.some((S) => sliced.startsWith(S))
+    devicePart === undefined ||
+    actionPart === undefined ||
+    extraParts.length > 0 ||
+    !DEVICE_TOOL_SUFFIX_REGEX.test(devicePart) ||
+    !DEVICE_TOOL_SUFFIX_REGEX.test(actionPart) ||
+    ALL_BROWSER_TOOL_PREFIXES.some((prefix) => sliced.startsWith(prefix))
   )
     return;
-  let y = `lcl-${r}-${s}`;
-  return y.length <= MAX_DEVICE_TOOL_SUFFIX_CHARS ? CLAUDE_DEVICE_MCP_PREFIX + y : undefined;
+  let localSuffix = `lcl-${devicePart}-${actionPart}`;
+  return localSuffix.length <= MAX_DEVICE_TOOL_SUFFIX_CHARS
+    ? CLAUDE_DEVICE_MCP_PREFIX + localSuffix
+    : undefined;
 }
 //@ chunk-e6aww6q8.js:3801722-3801750 placement
 /**
@@ -1804,22 +1877,22 @@ function isCacheMissReason(bridgeEnd) {
 /**
  * 等待 MCP 工具所在服务器就绪并返回工具与等待信息；出错时记日志并返回未知状态。
  */
-async function waitForMcpToolServer(e, n, r, s = {}) {
-  let { signal } = r.abortController;
-  function y(S) {
+async function waitForMcpToolServer(toolName, tools, toolUseContext, options = {}) {
+  let { signal } = toolUseContext.abortController;
+  function notWaited(extra) {
     return {
       tool: undefined,
-      tools: n,
+      tools,
       waitedMs: 0,
       aborted: signal.aborted,
-      ...S,
+      ...extra,
     };
   }
   try {
-    return await getMcpServerType(e, n, r, s, y);
+    return await getMcpServerType(toolName, tools, toolUseContext, options, notWaited);
   } catch (error) {
     logError(error);
-    return y({
+    return notWaited({
       serverState: "unknown",
       initialServerState: "unknown",
     });
@@ -1829,22 +1902,22 @@ async function waitForMcpToolServer(e, n, r, s = {}) {
 /**
  * 判断调用的 MCP 工具是否值得等待：已能在刷新后的工具池找到，或对应服务器尚未出现在已知行中。
  */
-function shouldWaitForMcpTool(name, toolUseContext) {
-  if (typeof name !== "string") return false;
+function shouldWaitForMcpTool(toolName, toolUseContext) {
+  if (typeof toolName !== "string") return false;
   let { refreshTools, toolAliases } = toolUseContext.options;
-  let h = aliasOrSelf(name, toolAliases);
-  if (!refreshTools || !mcpInfoFromString(h)) return false;
+  let resolvedName = aliasOrSelf(toolName, toolAliases);
+  if (!refreshTools || !mcpInfoFromString(resolvedName)) return false;
   let rows = toolUseContext.toolState.get(ToolRowsState).rows;
   try {
     return (
-      findToolByName(refreshTools(), name, toolAliases) !== undefined ||
-      findLongestPrefixClients(h, currentMcpClients(toolUseContext)).some(
-        (S) => isPendingWithoutReconnect(S) && !rows.has(S),
+      findToolByName(refreshTools(), toolName, toolAliases) !== undefined ||
+      findLongestPrefixClients(resolvedName, currentMcpClients(toolUseContext)).some(
+        (client) => isPendingWithoutReconnect(client) && !rows.has(client),
       )
     );
   } catch (error) {
     logForDebugging(
-      `Not waiting for MCP tool ${name}: reading its server or the tool pool failed: ${errorMessage(error)}`,
+      `Not waiting for MCP tool ${toolName}: reading its server or the tool pool failed: ${errorMessage(error)}`,
       {
         level: "warn",
       },
@@ -1857,156 +1930,165 @@ function shouldWaitForMcpTool(name, toolUseContext) {
 /**
  * 工具名属 MCP 且前缀客户端里有尚未连接完成的客户端。
  */
-function isPendingMcpToolName(name, n) {
+function isPendingMcpToolName(name, clients) {
   return (
-    mcpInfoFromString(name) !== null && findLongestPrefixClients(name, n).some(isPendingWithoutReconnect)
+    mcpInfoFromString(name) !== null &&
+    findLongestPrefixClients(name, clients).some(isPendingWithoutReconnect)
   );
 }
 //@ chunk-e6aww6q8.js:3802575-3802646 placement
-function isPendingWithoutReconnect(e) {
-  return e.type === "pending" && e.reconnectAttempt === undefined;
+function isPendingWithoutReconnect(client) {
+  return client.type === "pending" && client.reconnectAttempt === undefined;
 }
 //@ chunk-e6aww6q8.js:3802646-3804158 placement
-async function getMcpServerType(e, n, r, s, h) {
-  let y = s.maxWaitMs ?? Math.min(getConnectionTimeoutMs(), MAX_MCP_WAIT_MS);
-  let absentGraceMs = s.absentGraceMs ?? MCP_ABSENT_GRACE_MS;
-  let connectedGraceMs = s.connectedGraceMs ?? 0;
-  let rows = r.toolState.get(ToolRowsState).rows;
-  let G = s.skipExhausted === true;
-  let { signal } = r.abortController;
-  let { toolAliases } = r.options;
-  let serverConnection = aliasOrSelf(e, toolAliases);
+async function getMcpServerType(toolName, tools, toolUseContext, options, notWaited) {
+  let maxWaitMs = options.maxWaitMs ?? Math.min(getConnectionTimeoutMs(), MAX_MCP_WAIT_MS);
+  let absentGraceMs = options.absentGraceMs ?? MCP_ABSENT_GRACE_MS;
+  let connectedGraceMs = options.connectedGraceMs ?? 0;
+  let rows = toolUseContext.toolState.get(ToolRowsState).rows;
+  let skipExhausted = options.skipExhausted === true;
+  let { signal } = toolUseContext.abortController;
+  let { toolAliases } = toolUseContext.options;
+  let serverConnection = aliasOrSelf(toolName, toolAliases);
   if (typeof serverConnection !== "string" || !mcpInfoFromString(serverConnection))
-    return h({
+    return notWaited({
       serverState: "not_mcp",
       initialServerState: "not_mcp",
     });
-  function ke() {
-    return findLongestPrefixClients(serverConnection, currentMcpClients(r));
+  function clients() {
+    return findLongestPrefixClients(serverConnection, currentMcpClients(toolUseContext));
   }
-  function we() {
-    return getMcpServerBaseUrlFromToolName(ke());
+  function serverState() {
+    return getMcpServerBaseUrlFromToolName(clients());
   }
-  let Ee = new Set(ke().filter((gt) => isUnwaitedPendingClient(gt, G, rows)));
-  function Ae(gt) {
-    let At = ke();
-    if (At.some((It) => Ee.has(It) || isUnwaitedPendingClient(It, G, rows))) return true;
-    if (gt < connectedGraceMs && At.some((It) => It.type === "connected")) return true;
-    return At.length === 0 && gt < absentGraceMs;
+  let waitedClients = new Set(
+    clients().filter((client) => isUnwaitedPendingClient(client, skipExhausted, rows)),
+  );
+  function shouldKeepWaiting(elapsedMs) {
+    let currentClients = clients();
+    if (
+      currentClients.some(
+        (client) => waitedClients.has(client) || isUnwaitedPendingClient(client, skipExhausted, rows),
+      )
+    )
+      return true;
+    if (elapsedMs < connectedGraceMs && currentClients.some((client) => client.type === "connected"))
+      return true;
+    return currentClients.length === 0 && elapsedMs < absentGraceMs;
   }
-  function Ie(gt) {
-    return findToolByName(gt, e, toolAliases);
+  function findTool(currentTools) {
+    return findToolByName(currentTools, toolName, toolAliases);
   }
-  let Me = we();
-  let refreshTools = r.options.refreshTools;
+  let initialState = serverState();
+  let refreshTools = toolUseContext.options.refreshTools;
   if (!refreshTools)
-    return h({
-      serverState: Me,
-      initialServerState: Me,
+    return notWaited({
+      serverState: initialState,
+      initialServerState: initialState,
     });
-  let ze = refreshTools();
-  let lt = Ie(ze);
-  if (lt)
+  let currentTools = refreshTools();
+  let foundTool = findTool(currentTools);
+  if (foundTool)
     return {
-      tool: lt,
-      tools: ze,
+      tool: foundTool,
+      tools: currentTools,
       waitedMs: 0,
-      serverState: Me,
-      initialServerState: Me,
+      serverState: initialState,
+      initialServerState: initialState,
       aborted: false,
     };
-  if (!Ae(0))
-    return h({
-      serverState: Me,
-      initialServerState: Me,
+  if (!shouldKeepWaiting(0))
+    return notWaited({
+      serverState: initialState,
+      initialServerState: initialState,
     });
-  let byResponse = r.toolState.get(ToolWaitByResponse).byResponse;
-  let responseId = s.responseId;
-  let pt = responseId ? y - (byResponse.get(responseId) ?? 0) : y;
-  if (pt <= 0)
-    return h({
-      serverState: Me,
-      initialServerState: Me,
+  let byResponse = toolUseContext.toolState.get(ToolWaitByResponse).byResponse;
+  let responseId = options.responseId;
+  let waitBudgetMs = responseId ? maxWaitMs - (byResponse.get(responseId) ?? 0) : maxWaitMs;
+  if (waitBudgetMs <= 0)
+    return notWaited({
+      serverState: initialState,
+      initialServerState: initialState,
     });
   let now = Date.now();
   while (!signal.aborted) {
-    ze = refreshTools();
-    lt = Ie(ze);
-    let gt = Date.now() - now;
-    if (lt || !Ae(gt) || gt >= pt) break;
+    currentTools = refreshTools();
+    foundTool = findTool(currentTools);
+    let elapsedMs = Date.now() - now;
+    if (foundTool || !shouldKeepWaiting(elapsedMs) || elapsedMs >= waitBudgetMs) break;
     await sleep(MCP_WAIT_POLL_INTERVAL_MS, signal);
   }
-  if (signal.aborted) lt = undefined;
-  else if (!lt) {
-    ze = refreshTools();
-    lt = Ie(ze);
-    if (!lt && pt === y && Date.now() - now >= pt) {
-      for (let gt of ke()) if (Ee.has(gt)) rows.add(gt);
+  if (signal.aborted) foundTool = undefined;
+  else if (!foundTool) {
+    currentTools = refreshTools();
+    foundTool = findTool(currentTools);
+    if (!foundTool && waitBudgetMs === maxWaitMs && Date.now() - now >= waitBudgetMs) {
+      for (let client of clients()) if (waitedClients.has(client)) rows.add(client);
     }
   }
-  let yt = Date.now() - now;
+  let waitedMs = Date.now() - now;
   if (responseId) {
-    byResponse.set(responseId, (byResponse.get(responseId) ?? 0) + yt);
+    byResponse.set(responseId, (byResponse.get(responseId) ?? 0) + waitedMs);
     for (let key of byResponse.keys()) {
       if (byResponse.size <= MAX_WAIT_BY_RESPONSE_ENTRIES) break;
       byResponse.delete(key);
     }
   }
   return {
-    tool: lt,
-    tools: lt ? ze : n,
-    waitedMs: yt,
-    serverState: we(),
-    initialServerState: Me,
+    tool: foundTool,
+    tools: foundTool ? currentTools : tools,
+    waitedMs,
+    serverState: serverState(),
+    initialServerState: initialState,
     aborted: signal.aborted,
   };
 }
 //@ chunk-e6aww6q8.js:3804158-3804318 placement
-function getMcpServerBaseUrlFromToolName(e) {
-  let mapped = e.map((r) => r.type);
-  for (let r of ["connected", "cached", "pending", "needs-auth", "failed", "disabled"])
-    if (mapped.includes(r)) return r;
+function getMcpServerBaseUrlFromToolName(clients) {
+  let mapped = clients.map((client) => client.type);
+  for (let state of ["connected", "cached", "pending", "needs-auth", "failed", "disabled"])
+    if (mapped.includes(state)) return state;
   return "absent";
 }
 //@ chunk-e6aww6q8.js:3804318-3804375 placement
 /**
  * 别名表里有该名字则返回别名，否则返回原名。
  */
-function aliasOrSelf(e, toolAliases) {
-  return toolAliases && Object.hasOwn(toolAliases, e) ? (toolAliases[e] ?? e) : e;
+function aliasOrSelf(name, toolAliases) {
+  return toolAliases && Object.hasOwn(toolAliases, name) ? (toolAliases[name] ?? name) : name;
 }
 //@ chunk-e6aww6q8.js:3804375-3804529 placement
 /**
  * 找出 MCP 前缀与工具名匹配且前缀最长的客户端列表。
  */
-function findLongestPrefixClients(e, n) {
-  let r = [];
-  let s = 0;
-  for (let h of n) {
-    let mcpPrefix = getMcpPrefix_2(h.name);
-    if (!e.startsWith(mcpPrefix) || mcpPrefix.length < s) continue;
-    if (mcpPrefix.length > s) {
-      s = mcpPrefix.length;
-      r = [];
+function findLongestPrefixClients(toolName, clients) {
+  let matches = [];
+  let bestPrefixLength = 0;
+  for (let client of clients) {
+    let mcpPrefix = getMcpPrefix_2(client.name);
+    if (!toolName.startsWith(mcpPrefix) || mcpPrefix.length < bestPrefixLength) continue;
+    if (mcpPrefix.length > bestPrefixLength) {
+      bestPrefixLength = mcpPrefix.length;
+      matches = [];
     }
-    r.push(h);
+    matches.push(client);
   }
-  return r;
+  return matches;
 }
 //@ chunk-e6aww6q8.js:3804529-3804591 placement
 /**
  * 客户端处于 pending 且不在已尝试集合里。
  */
-function isUnwaitedPendingClient(e, n, rows) {
-  return e.type === "pending" && !(n && rows.has(e));
+function isUnwaitedPendingClient(client, skipExhausted, rows) {
+  return client.type === "pending" && !(skipExhausted && rows.has(client));
 }
 //@ chunk-e6aww6q8.js:3804591-3805028 placement
 /**
  * 解析工具输入：原始 JSON 无法解析时报 json 错误；可选先做 coerceInput 修复，再按 inputSchema 校验，返回解析结果与修复信息。
  */
-function parseToolInput(tool, n, coercion) {
-  if (isUnparsedInputMarker(n)) {
-    let { raw, len } = n[UNPARSED_TOOL_INPUT_KEY];
+function parseToolInput(tool, rawInput, coercion) {
+  if (isUnparsedInputMarker(rawInput)) {
+    let { raw, len } = rawInput[UNPARSED_TOOL_INPUT_KEY];
     return {
       ok: false,
       phase: "parse",
@@ -2015,29 +2097,29 @@ function parseToolInput(tool, n, coercion) {
       len,
     };
   }
-  let s = coercion === undefined ? (tool.coerceInput?.(n) ?? null) : coercion.repair;
-  let h = coercion !== undefined || s === null ? n : s.input;
-  let y = tool.inputSchema.safeParse(h);
+  let coercionResult = coercion === undefined ? (tool.coerceInput?.(rawInput) ?? null) : coercion.repair;
+  let candidateInput = coercion !== undefined || coercionResult === null ? rawInput : coercionResult.input;
+  let parsed = tool.inputSchema.safeParse(candidateInput);
   let coerced =
-    s === null
+    coercionResult === null
       ? undefined
       : {
-          shapeClass: s.shapeClass,
-          valid: y.success,
-          resultNote: s.resultNote,
+          shapeClass: coercionResult.shapeClass,
+          valid: parsed.success,
+          resultNote: coercionResult.resultNote,
         };
-  if (!y.success)
+  if (!parsed.success)
     return {
       ok: false,
       phase: "parse",
       cause: "schema",
-      error: y.error,
-      schemaInput: h,
+      error: parsed.error,
+      schemaInput: candidateInput,
       coerced,
     };
   return {
     ok: true,
-    input: y.data,
+    input: parsed.data,
     coerced,
   };
 }
@@ -2045,38 +2127,38 @@ function parseToolInput(tool, n, coercion) {
 /**
  * 调用 validateInput：失败时返回校验结论（被规则拒绝时补全可观测输入）；成功时按需生成补全后的可观测输入。
  */
-async function runValidateInput(e, n, r) {
-  let s = await r(n);
-  if (s?.result === false) {
-    let y;
-    if (s.deniedByPermissionRule) {
-      y = {
-        ...n,
+async function runValidateInput(tool, input, validate) {
+  let verdict = await validate(input);
+  if (verdict?.result === false) {
+    let deniedInput;
+    if (verdict.deniedByPermissionRule) {
+      deniedInput = {
+        ...input,
       };
-      e.backfillObservableInput?.(y);
+      tool.backfillObservableInput?.(deniedInput);
     }
     return {
       ok: false,
       phase: "validate",
-      verdict: s,
-      deniedInput: y,
+      verdict,
+      deniedInput,
     };
   }
-  if (!e.backfillObservableInput)
+  if (!tool.backfillObservableInput)
     return {
       ok: true,
-      callInput: n,
-      observableInput: n,
+      callInput: input,
+      observableInput: input,
       backfilled: false,
     };
-  let h = {
-    ...n,
+  let observableInput = {
+    ...input,
   };
-  e.backfillObservableInput(h);
+  tool.backfillObservableInput(observableInput);
   return {
     ok: true,
-    callInput: n,
-    observableInput: h,
+    callInput: input,
+    observableInput,
     backfilled: true,
   };
 }
@@ -2084,21 +2166,21 @@ async function runValidateInput(e, n, r) {
 /**
  * 把基于可观测输入改写的输入映射回实际调用输入（file_path 等）。
  */
-function restoreCallInput(e, observableInput) {
-  let { callInput, observableInput: observableInput_2, backfilled } = e;
+function restoreCallInput(parseResult, restoredInput) {
+  let { callInput, observableInput, backfilled } = parseResult;
   if (
     backfilled &&
-    observableInput !== callInput &&
-    "file_path" in observableInput &&
+    restoredInput !== callInput &&
+    "file_path" in restoredInput &&
     "file_path" in callInput &&
-    observableInput.file_path === observableInput_2.file_path
+    restoredInput.file_path === observableInput.file_path
   )
     return {
-      ...observableInput,
+      ...restoredInput,
       file_path: callInput.file_path,
     };
-  if (backfilled && observableInput === observableInput_2) return callInput;
-  return observableInput;
+  if (backfilled && restoredInput === observableInput) return callInput;
+  return restoredInput;
 }
 //@ chunk-e6aww6q8.js:3805614-3805638 placement
 var MAX_PREWARM_WAIT_MS = 300000;
@@ -2107,57 +2189,60 @@ var PREWARM_POLL_MS = 5000;
 /**
  * 工具执行前预热远程记忆路径，处理中止、超时与挂载断开。
  */
-async function warmRemoteMemoryPath(tool, n, signal, s) {
+async function warmRemoteMemoryPath(tool, input, signal, activityLabel) {
   try {
     let memoryBaseDir = getMemoryBaseDir();
     if (
       memoryBaseDir === undefined ||
       !tool.getPath ||
       isRemoteOnlyCheck(tool.name) ||
-      (canRunToolsOnThisMachine() && hasHostField(n))
+      (canRunToolsOnThisMachine() && hasHostField(input))
     )
       return false;
-    let y = expandStablePath(tool.getPath(n));
-    if (!isPathWithinCaseAware(y, memoryBaseDir, false)) return false;
+    let absolutePath = expandStablePath(tool.getPath(input));
+    if (!isPathWithinCaseAware(absolutePath, memoryBaseDir, false)) return false;
     if (signal.aborted) return true;
-    startSessionActivity("tool_exec", s);
+    startSessionActivity("tool_exec", activityLabel);
     let combinedAbortSignal = createCombinedAbortSignal(signal, {
       timeoutMs: MAX_PREWARM_WAIT_MS,
       refTimer: true,
     });
     try {
       let now = Date.now();
-      let L = await walkPermissionCheckPathsAsync(
-        y,
+      let walkResult = await walkPermissionCheckPathsAsync(
+        absolutePath,
         combinedAbortSignal.signal,
-        (q) =>
-          isPathWithinCaseAware(q, memoryBaseDir, false) || isPathWithinCaseAware(memoryBaseDir, q, false),
+        (candidatePath) =>
+          isPathWithinCaseAware(candidatePath, memoryBaseDir, false) ||
+          isPathWithinCaseAware(memoryBaseDir, candidatePath, false),
       );
-      let G = {
+      let timing = {
         duration_ms: Date.now() - now,
       };
       if (signal.aborted) {
-        if (G.duration_ms >= PREWARM_POLL_MS) logFeatureSad("remote_memory_path_warmup", "aborted", G);
+        if (timing.duration_ms >= PREWARM_POLL_MS)
+          logFeatureSad("remote_memory_path_warmup", "aborted", timing);
       } else if (combinedAbortSignal.signal.aborted) logFeatureBad("remote_memory_path_warmup", "timed_out");
-      else if (L.unresolved)
-        switch (L.reason) {
+      else if (walkResult.unresolved)
+        switch (walkResult.reason) {
           case "cut-short":
-            logFeatureSad("remote_memory_path_warmup", "link_off_mount", G);
+            logFeatureSad("remote_memory_path_warmup", "link_off_mount", timing);
             break;
           case "unexamined":
-            logFeatureSad("remote_memory_path_warmup", "lookup_failed", G);
+            logFeatureSad("remote_memory_path_warmup", "lookup_failed", timing);
             break;
           case "past-a-link":
-            logFeatureSad("remote_memory_path_warmup", "link_unresolved", G);
+            logFeatureSad("remote_memory_path_warmup", "link_unresolved", timing);
             break;
           default:
-            L.reason;
+            walkResult.reason;
         }
-      else if (G.duration_ms >= PREWARM_POLL_MS) logFeatureSad("remote_memory_path_warmup", "slow", G);
+      else if (timing.duration_ms >= PREWARM_POLL_MS)
+        logFeatureSad("remote_memory_path_warmup", "slow", timing);
       else logFeatureOk("remote_memory_path_warmup");
     } finally {
       combinedAbortSignal.cleanup();
-      endActivity("tool_exec", s);
+      endActivity("tool_exec", activityLabel);
     }
     if (isTerminalShutdown() && !signal.aborted) await heldUntilExit();
     return signal.aborted;
@@ -2176,20 +2261,20 @@ var MEMORY_PREWARM_TIMEOUT_MS = 30000;
 //@ chunk-e6aww6q8.js:3900138-3900640 placement
 function emitToolHeartbeat({ toolName, toolUseID, abortSignal, onProgress }) {
   let now = Date.now();
-  let y = false;
-  let S = false;
-  let w = 0;
+  let isStopped = false;
+  let didTickThrow = false;
+  let heartbeatCount = 0;
   let interval = setInterval(() => {
     try {
-      if (y) return;
+      if (isStopped) return;
       if (abortSignal.aborted) {
-        G();
+        stopHeartbeat();
         return;
       }
       if (currentActivityState()) return;
       onProgress({
         type: "progress",
-        toolUseID: `${toolUseID}-heartbeat-${w++}`,
+        toolUseID: `${toolUseID}-heartbeat-${heartbeatCount++}`,
         data: {
           type: "tool_heartbeat",
           toolName,
@@ -2197,20 +2282,20 @@ function emitToolHeartbeat({ toolName, toolUseID, abortSignal, onProgress }) {
         },
       });
     } catch (error) {
-      S = true;
-      G();
+      didTickThrow = true;
+      stopHeartbeat();
       logError(error);
       logFeatureBad("heartbeat_tool_progress", "tick_emit_threw");
     }
   }, MEMORY_PREWARM_TIMEOUT_MS);
   interval.unref();
-  function G() {
-    if (y) return;
-    y = true;
+  function stopHeartbeat() {
+    if (isStopped) return;
+    isStopped = true;
     clearInterval(interval);
-    if (w > 0 && !S) logFeatureOk("heartbeat_tool_progress");
+    if (heartbeatCount > 0 && !didTickThrow) logFeatureOk("heartbeat_tool_progress");
   }
-  return G;
+  return stopHeartbeat;
 }
 //@ chunk-e6aww6q8.js:3906428-3906616 placement
 function getEffortTelemetryFields(toolUseContext) {
@@ -2234,29 +2319,29 @@ function getEffortTelemetryFields(toolUseContext) {
 /**
  * 为写入转录准备工具结果：MCP 或需要时裁掉过大的结果，编辑工具结果的 originalFile 过长时置空，返回结果、mcpMeta 与暂存 uuid。
  */
-function cutResultForStorage(toolUseContext, tool, r, s) {
+function cutResultForStorage(toolUseContext, tool, forceCut, result) {
   let inSubagent = Boolean(toolUseContext.agentId);
-  let y = isHearthReadTool(tool.name) && hasRelaySource(toolUseContext.options.mcpClients);
-  let S =
-    r || (tool.isMcp === true && !y && !toolUseContext.agentId)
+  let keepsMcpMeta = isHearthReadTool(tool.name) && hasRelaySource(toolUseContext.options.mcpClients);
+  let cutResult =
+    forceCut || (tool.isMcp === true && !keepsMcpMeta && !toolUseContext.agentId)
       ? cutLargeMcpResult({
-          ...s,
-          keepsMcpMeta: y,
+          ...result,
+          keepsMcpMeta,
           inSubagent,
         })
-      : s;
+      : result;
   let { toolUseResult, mcpMeta, uuid } =
-    tool.isMcp !== true && tool.name === FILE_EDIT_TOOL_NAME && S.uuid === undefined
+    tool.isMcp !== true && tool.name === FILE_EDIT_TOOL_NAME && cutResult.uuid === undefined
       ? {
-          ...S,
+          ...cutResult,
           ...cutEditOriginalFile({
-            toolUseId: s.toolUseId,
-            toolUseResult: S.toolUseResult,
-            mcpMeta: S.mcpMeta,
+            toolUseId: result.toolUseId,
+            toolUseResult: cutResult.toolUseResult,
+            mcpMeta: cutResult.mcpMeta,
             inSubagent,
           }),
         }
-      : S;
+      : cutResult;
   return {
     toolUseResult,
     mcpMeta,
@@ -2272,13 +2357,13 @@ function toolFeatureOf(signal) {
     : {};
 }
 //@ chunk-e6aww6q8.js:3907066-3907259 placement
-function measureStringChars(e, n = 0) {
-  if (typeof e === "string") return e.length + 1;
-  if (n >= 8 || e === null || typeof e !== "object") return 0;
-  let r = 0;
-  let s = Array.isArray(e) ? e : Object.values(e);
-  for (let h of s) r += measureStringChars(h, n + 1);
-  return r;
+function measureStringChars(value, depth = 0) {
+  if (typeof value === "string") return value.length + 1;
+  if (depth >= 8 || value === null || typeof value !== "object") return 0;
+  let total = 0;
+  let items = Array.isArray(value) ? value : Object.values(value);
+  for (let item of items) total += measureStringChars(item, depth + 1);
+  return total;
 }
 //@ chunk-e6aww6q8.js:3907259-3908209 placement
 /**
@@ -2324,7 +2409,7 @@ function getResultSizeTelemetry(content, tool) {
     return {
       toolResultTokensEst: roughTokenCountEstimationForContent(content),
       toolResultMediaBlocks: Array.isArray(content)
-        ? count(content, (r) => r.type === "image" || r.type === "document")
+        ? count(content, (block) => block.type === "image" || block.type === "document")
         : 0,
       toolResultWillPersist:
         !!content &&
@@ -2348,18 +2433,18 @@ function getResultSizeTelemetry(content, tool) {
 /**
  * 取工具对应的遥测特性名（MCP 工具按来源归类）。
  */
-function toolFeatureName(name, mcpInfo) {
-  let r = sdkHostToolSource(mcpInfo);
-  if (r !== undefined) return toolFeature(r);
-  return toolFeature(String(sanitizeToolNameWithMcpFlag(name, mcpInfo !== undefined)));
+function toolFeatureName(name, server) {
+  let hostSource = sdkHostToolSource(server);
+  if (hostSource !== undefined) return toolFeature(hostSource);
+  return toolFeature(String(sanitizeToolNameWithMcpFlag(name, server !== undefined)));
 }
 //@ chunk-e6aww6q8.js:3908619-3908673 placement
 /**
  * 安全地处理未知工具（吞掉异常）。
  */
-function resolveUnknownToolSafe(e, id, toolUseContext, requestId) {
+function resolveUnknownToolSafe(toolName, toolUseId, toolUseContext, requestId) {
   try {
-    resolveUnknownTool(e, id, toolUseContext, requestId);
+    resolveUnknownTool(toolName, toolUseId, toolUseContext, requestId);
   } catch (error) {
     logError(error);
   }
@@ -2368,56 +2453,60 @@ function resolveUnknownToolSafe(e, id, toolUseContext, requestId) {
 /**
  * 处理找不到的工具名：未注册的 MCP 工具、未知工具，返回对应错误。
  */
-function resolveUnknownTool(toolName, n, r, s) {
-  let { connection, ambiguous } = resolveMcpConnectionForTool(toolName, r.options.mcpClients);
-  let S = connection ? (connection.config.type ?? "stdio") : undefined;
-  let w = connection ? getLoggingSafeMcpBaseUrl(connection.config) : undefined;
+function resolveUnknownTool(toolName, toolUseId, toolUseContext, requestId) {
+  let { connection, ambiguous } = resolveMcpConnectionForTool(toolName, toolUseContext.options.mcpClients);
+  let serverType = connection ? (connection.config.type ?? "stdio") : undefined;
+  let serverBaseUrl = connection ? getLoggingSafeMcpBaseUrl(connection.config) : undefined;
   let mcpServerType =
     !ambiguous &&
     isMcpServerLoggableInAnalytics(extractMcpToolDetails(toolName)?.serverName ?? "", connection?.config);
-  let tool = findTool(r.options.toolCatalog.getAllBaseTools(), toolName);
-  let q = toolNameForTelemetry(tool === undefined ? [] : [tool], toolName);
-  let Z = q ? sanitizeToolNameForAnalytics(q) : getUnknownToolAnalyticsName(toolName);
-  logForDebugging(`Unknown tool ${Z}: ${n}`);
-  let Se = tool !== undefined && isArtifactFamilyTool(tool) && isBuiltInArtifactHiddenForMcp();
+  let tool = findTool(toolUseContext.options.toolCatalog.getAllBaseTools(), toolName);
+  let registeredToolName = toolNameForTelemetry(tool === undefined ? [] : [tool], toolName);
+  let analyticsToolName = registeredToolName
+    ? sanitizeToolNameForAnalytics(registeredToolName)
+    : getUnknownToolAnalyticsName(toolName);
+  logForDebugging(`Unknown tool ${analyticsToolName}: ${toolUseId}`);
+  let isHiddenArtifact = tool !== undefined && isArtifactFamilyTool(tool) && isBuiltInArtifactHiddenForMcp();
   logFeatureBad(
-    String(Z) === "mcp_tool" ? toolFeature("unregistered_mcp") : toolFeature(String(Z)),
+    String(analyticsToolName) === "mcp_tool"
+      ? toolFeature("unregistered_mcp")
+      : toolFeature(String(analyticsToolName)),
     "tool_not_found",
-    Se
+    isHiddenArtifact
       ? {
           hidden_for_mcp: true,
         }
       : undefined,
   );
-  let ke = {
+  let errorLabels = {
     unknown_tool: lit_2("No such tool available: unknown_tool"),
     mcp_tool: lit_2("No such tool available: mcp_tool"),
     skill_tool: lit_2("No such tool available: skill_tool"),
   };
   logEvent("tengu_tool_use_error", {
-    error: q
+    error: registeredToolName
       ? lit_2("No such tool available: registered_base_tool")
-      : (ke[String(Z)] ?? lit_2("No such tool available: unknown_tool")),
+      : (errorLabels[String(analyticsToolName)] ?? lit_2("No such tool available: unknown_tool")),
     errorCode: lit_2("NO_SUCH_TOOL"),
-    toolName: Z,
-    ...(Se && {
+    toolName: analyticsToolName,
+    ...(isHiddenArtifact && {
       hiddenForMcp: true,
     }),
     toolNameHash: shortHash(toolName),
-    toolUseID: sanitizeMarkName(n),
+    toolUseID: sanitizeMarkName(toolUseId),
     isMcp: toolName.startsWith("mcp__"),
-    ...getSubagentTelemetryFields(r.agentContext),
-    ...getEffortTelemetryFields(r),
-    queryChainId: sanitizeMarkName(r.queryTracking?.chainId),
-    queryDepth: r.queryTracking?.depth,
-    ...(r.options.messageClientPlatform && {
-      messageClientPlatform: entrypointForTelemetry(r.options.messageClientPlatform),
+    ...getSubagentTelemetryFields(toolUseContext.agentContext),
+    ...getEffortTelemetryFields(toolUseContext),
+    queryChainId: sanitizeMarkName(toolUseContext.queryTracking?.chainId),
+    queryDepth: toolUseContext.queryTracking?.depth,
+    ...(toolUseContext.options.messageClientPlatform && {
+      messageClientPlatform: entrypointForTelemetry(toolUseContext.options.messageClientPlatform),
     }),
-    ...(S && {
-      mcpServerType: fromEnum(S),
+    ...(serverType && {
+      mcpServerType: fromEnum(serverType),
     }),
-    ...(w && {
-      mcpServerBaseUrl: safeOrigin(w),
+    ...(serverBaseUrl && {
+      mcpServerBaseUrl: safeOrigin(serverBaseUrl),
     }),
     ...claudeAiServerIdField(
       connection
@@ -2427,8 +2516,8 @@ function resolveUnknownTool(toolName, n, r, s) {
           }
         : undefined,
     ),
-    ...(s && {
-      requestId: sanitizeMarkName(s),
+    ...(requestId && {
+      requestId: sanitizeMarkName(requestId),
     }),
     ...mcpToolDetailsForAnalytics(toolName, mcpServerType, connection !== undefined),
   });
@@ -2475,14 +2564,14 @@ async function settleUnaskedQuestion(tool, decision, input, context, state) {
   )
     return;
   try {
-    let L = await tool.settleUnaskedQuestion(
+    let text = await tool.settleUnaskedQuestion(
       ask,
       input,
       context,
       decisionReason.type === "asyncAgent" && decisionReason.hookAllowIgnored === true,
       decisionReason.type === "mode",
     );
-    return L === "" || signal.aborted ? undefined : L;
+    return text === "" || signal.aborted ? undefined : text;
   } catch (error) {
     if (!isAbortOrCancelError(error)) logError(error);
     return;
@@ -2546,8 +2635,8 @@ function classifyToolErrorCode(error) {
       isSad: true,
     };
   if (error instanceof Error) {
-    let r = error.name !== "Error" ? error.name : (error.constructor?.name ?? "");
-    if (KNOWN_ERROR_CLASS_NAMES.has(r))
+    let className = error.name !== "Error" ? error.name : (error.constructor?.name ?? "");
+    if (KNOWN_ERROR_CLASS_NAMES.has(className))
       return {
         code:
           "reasonCode" in error &&
@@ -2576,9 +2665,15 @@ function classifyToolErrorCode(error) {
 }
 //@ chunk-e6aww6q8.js:3911894-3912026 placement = getToolNameForPermissionCheck (1)
 function getToolNameForPermissionCheck_3(tool) {
-  let n = (r) => tool.some((s) => s.mcpInfo?.serverName === CLAUDE_ARTIFACTS && s.mcpInfo.toolName === r);
+  let hasArtifactTool = (toolName) =>
+    tool.some(
+      (candidate) =>
+        candidate.mcpInfo?.serverName === CLAUDE_ARTIFACTS && candidate.mcpInfo.toolName === toolName,
+    );
   return (
-    findToolByName(tool, WEBFETCH) !== undefined && n(ARTIFACTS_MCP_READ_TOOL) && n(ARTIFACTS_MCP_GET_TOOL)
+    findToolByName(tool, WEBFETCH) !== undefined &&
+    hasArtifactTool(ARTIFACTS_MCP_READ_TOOL) &&
+    hasArtifactTool(ARTIFACTS_MCP_GET_TOOL)
   );
 }
 //@ chunk-e6aww6q8.js:3912026-3918095 placement
@@ -2587,47 +2682,47 @@ function getToolNameForPermissionCheck_3(tool) {
  */
 function explainUnavailableArtifactTool(
   toolName,
-  tool,
+  toolDefinitions,
   allBaseTools,
   isRestrictedContext,
-  tools,
   mcpClients,
+  toolPermissionContext,
   agentSpawnContext = {},
-  w,
-  L,
-  G,
+  input,
+  toolSearchIndex,
+  deferredIndex,
 ) {
-  let tool_2 = G?.sourceFor(toolName) ?? L?.sourceFor(toolName);
-  if (tool_2?.mcpInfo !== undefined && mcpInfoFromString(toolName) === null)
+  let tool = deferredIndex?.sourceFor(toolName) ?? toolSearchIndex?.sourceFor(toolName);
+  if (tool?.mcpInfo !== undefined && mcpInfoFromString(toolName) === null)
     return describeUnavailableMcpTool(
       toolName,
       isRestrictedContext,
-      tools,
       mcpClients,
-      tool_2,
-      G === undefined && isToolSearchInPool(tool),
+      toolPermissionContext,
+      tool,
+      deferredIndex === undefined && isToolSearchInPool(toolDefinitions),
     );
-  let tool_3 = findTool(allBaseTools, toolName);
+  let tool_2 = findTool(allBaseTools, toolName);
   if (
-    tool_3 !== undefined &&
-    isArtifactFamilyTool(tool_3) &&
+    tool_2 !== undefined &&
+    isArtifactFamilyTool(tool_2) &&
     isBuiltInArtifactHiddenForMcp() &&
-    tool.some((At) => At.mcpInfo?.serverName === CLAUDE_ARTIFACTS)
+    toolDefinitions.some((tool) => tool.mcpInfo?.serverName === CLAUDE_ARTIFACTS)
   ) {
-    let At =
-      !isByocEnvironment() && getToolNameForPermissionCheck_3(tool)
+    let searchNote =
+      !isByocEnvironment() && getToolNameForPermissionCheck_3(toolDefinitions)
         ? ` ${WEBFETCH} can read claude.ai artifact links.`
         : "";
-    return G === undefined && isToolSearchInPool(tool)
-      ? `. In this session the built-in Artifact tools were replaced by the tools of the MCP server '${CLAUDE_ARTIFACTS}': find them with ${TOOL_SEARCH_TOOL_NAME} and call those instead.${At}`
-      : `. In this session the built-in Artifact tools were replaced by the tools of the MCP server '${CLAUDE_ARTIFACTS}', which are in your tool list: call those instead.${At}`;
+    return deferredIndex === undefined && isToolSearchInPool(toolDefinitions)
+      ? `. In this session the built-in Artifact tools were replaced by the tools of the MCP server '${CLAUDE_ARTIFACTS}': find them with ${TOOL_SEARCH_TOOL_NAME} and call those instead.${searchNote}`
+      : `. In this session the built-in Artifact tools were replaced by the tools of the MCP server '${CLAUDE_ARTIFACTS}', which are in your tool list: call those instead.${searchNote}`;
   }
   if (
     !isByocEnvironment() &&
-    tool_3 !== undefined &&
-    isArtifactFamilyTool(tool_3) &&
+    tool_2 !== undefined &&
+    isArtifactFamilyTool(tool_2) &&
     isBuiltInArtifactHiddenForMcp() &&
-    !tools.some((At) => At.name === CLAUDE_ARTIFACTS && At.type === "connected")
+    !mcpClients.some((tool) => tool.name === CLAUDE_ARTIFACTS && tool.type === "connected")
   )
     return `. The Artifacts tools aren't available in this session right now: the MCP server '${CLAUDE_ARTIFACTS}' that replaced the built-in Artifact tools isn't connected. Tell the user; /mcp can reconnect or re-enable it, or restarting Claude Code restores the tools.`;
   if (
@@ -2635,209 +2730,228 @@ function explainUnavailableArtifactTool(
     toolName === buildMcpToolName(CLAUDE_ARTIFACTS, ARTIFACTS_MCP_READ_SHARED_TOOL) &&
     isBuiltInArtifactHiddenForMcp()
   ) {
-    let any = tool.some(
-      (qt) => qt.mcpInfo?.serverName === CLAUDE_ARTIFACTS && qt.mcpInfo.toolName === ARTIFACTS_MCP_READ_TOOL,
+    let any = toolDefinitions.some(
+      (tool) =>
+        tool.mcpInfo?.serverName === CLAUDE_ARTIFACTS && tool.mcpInfo.toolName === ARTIFACTS_MCP_READ_TOOL,
     );
-    let toolNameForPermissionCheck = getToolNameForPermissionCheck_3(tool);
-    let Yt = any
+    let toolNameForPermissionCheck = getToolNameForPermissionCheck_3(toolDefinitions);
+    let sharedNote = any
       ? ` ${ARTIFACTS_MCP_READ_TOOL} reads an artifact the user owns, or one from their organization that they can open; ${toolNameForPermissionCheck ? `for a link ${ARTIFACTS_MCP_READ_TOOL} refuses, use ${WEBFETCH}.` : "for anything else, tell the user."}`
       : " Tell the user.";
-    return `. ${ARTIFACTS_MCP_READ_SHARED_TOOL} isn't available in local Claude Code sessions.${Yt}`;
+    return `. ${ARTIFACTS_MCP_READ_SHARED_TOOL} isn't available in local Claude Code sessions.${sharedNote}`;
   }
-  let toolByName = findToolByName(tool, ARTIFACT_TOOL_NAME_2);
+  let tool_3 = findToolByName(toolDefinitions, ARTIFACT_TOOL_NAME_2);
   if (
-    toolByName !== undefined &&
+    tool_3 !== undefined &&
     mcpInfoFromString(toolName)?.serverName === CLAUDE_ARTIFACTS &&
-    tools.some(isEntryRowNotServed)
+    mcpClients.some(isEntryRowNotServed)
   )
-    return `. The MCP server '${CLAUDE_ARTIFACTS}' is no longer served in this session, and the built-in Artifact tools are back${suggestToolInstead(toolByName, tool, L, G)}`;
-  let ke = aliasOfToolName(toolName) ?? tool_3?.underlyingV1ToolName;
+    return `. The MCP server '${CLAUDE_ARTIFACTS}' is no longer served in this session, and the built-in Artifact tools are back${suggestToolInstead(tool_3, toolDefinitions, toolSearchIndex, deferredIndex)}`;
+  let underlyingName = aliasOfToolName(toolName) ?? tool_2?.underlyingV1ToolName;
   if (
     isRestrictedContext &&
-    tool_3 &&
-    (toolMatchesAnyName(tool_3, EXTERNAL_ALWAYS_AVAILABLE_TOOLS) || tool_3.name === POLL)
+    tool_2 &&
+    (toolMatchesAnyName(tool_2, EXTERNAL_ALWAYS_AVAILABLE_TOOLS) || tool_2.name === POLL)
   )
     return `. ${toolName} is not available inside subagents. Complete the task with the tools provided and return findings to the orchestrator.`;
-  if (tool_3?.name === BRIEF_TOOL_NAME_2)
+  if (tool_2?.name === BRIEF_TOOL_NAME_2)
     return `. ${toolName} is not enabled in this session \u2014 write your message as normal assistant text instead.`;
-  if (tool_3?.name === GET_TASK_TOOL_TEXT) return GET_TASK_NOT_A_TOOL_TEXT;
-  let we = tool_3 && toolByAlias(tool_3.name);
+  if (tool_2?.name === GET_TASK_TOOL_TEXT) return GET_TASK_NOT_A_TOOL_TEXT;
+  let aliasTool = tool_2 && toolByAlias(tool_2.name);
   if (
-    tool_3 &&
+    tool_2 &&
     !isRestrictedContext &&
     isCoordinatorMode_2() &&
     !env.CLAUDE_CODE_SIMPLE &&
-    !COORDINATOR_MAIN_THREAD_TOOL_NAMES.has(tool_3.name) &&
-    tool_3.name !== POLL &&
-    toolMatchesAnyName(tool_3, EXTERNAL_ALWAYS_AVAILABLE_TOOLS_2) &&
-    tool_3.isEnabled() &&
-    !getDenyRuleForTool(mcpClients, tool_3) &&
-    (ke === undefined ||
-      !getDenyRuleForTool(mcpClients, {
-        name: ke,
+    !COORDINATOR_MAIN_THREAD_TOOL_NAMES.has(tool_2.name) &&
+    tool_2.name !== POLL &&
+    toolMatchesAnyName(tool_2, EXTERNAL_ALWAYS_AVAILABLE_TOOLS_2) &&
+    tool_2.isEnabled() &&
+    !getDenyRuleForTool(toolPermissionContext, tool_2) &&
+    (underlyingName === undefined ||
+      !getDenyRuleForTool(toolPermissionContext, {
+        name: underlyingName,
       })) &&
-    (we === undefined || !we.isEnabled() || !getDenyRuleForTool(mcpClients, we)) &&
-    findToolByName(tool, AGENT)
+    (aliasTool === undefined ||
+      !aliasTool.isEnabled() ||
+      !getDenyRuleForTool(toolPermissionContext, aliasTool)) &&
+    findToolByName(toolDefinitions, AGENT)
   )
     return `. ${toolName} is not available to you as the coordinator \u2014 run it from a worker via the ${AGENT} tool instead.`;
-  if (tool_3?.name === WEBFETCH && tool_3.isEnabled() && !getDenyRuleForTool(mcpClients, tool_3)) {
-    let At = typeof w === "object" && w !== null && "url" in w ? parseArtifactUrlInput(w.url) : null;
+  if (tool_2?.name === WEBFETCH && tool_2.isEnabled() && !getDenyRuleForTool(toolPermissionContext, tool_2)) {
+    let artifactUrl =
+      typeof input === "object" && input !== null && "url" in input ? parseArtifactUrlInput(input.url) : null;
     if (
-      At !== null &&
-      At.env === claudeAiEnvironment() &&
-      findToolByName(tool, ARTIFACT_TOOL_NAME_2) &&
-      !getDenyRuleForTool(mcpClients, {
+      artifactUrl !== null &&
+      artifactUrl.env === claudeAiEnvironment() &&
+      findToolByName(toolDefinitions, ARTIFACT_TOOL_NAME_2) &&
+      !getDenyRuleForTool(toolPermissionContext, {
         name: ARTIFACT_TOOL_NAME_2,
       })
     )
-      return `. ${artifactViewerUrlFor(At)} is a claude.ai artifact \u2014 read it with the ${ARTIFACT_TOOL_NAME_2} tool (action: "read", url) instead of ${WEBFETCH}.`;
-    let It =
-      At !== null &&
-      At.env === claudeAiEnvironment() &&
+      return `. ${artifactViewerUrlFor(artifactUrl)} is a claude.ai artifact \u2014 read it with the ${ARTIFACT_TOOL_NAME_2} tool (action: "read", url) instead of ${WEBFETCH}.`;
+    let readTool =
+      artifactUrl !== null &&
+      artifactUrl.env === claudeAiEnvironment() &&
       isBuiltInArtifactHiddenForMcp() &&
-      !getDenyRuleForTool(mcpClients, {
+      !getDenyRuleForTool(toolPermissionContext, {
         name: ARTIFACT_TOOL_NAME_2,
       })
-        ? tool.find(
-            (Yt) =>
-              Yt.mcpInfo?.serverName === CLAUDE_ARTIFACTS && Yt.mcpInfo.toolName === ARTIFACTS_MCP_READ_TOOL,
+        ? toolDefinitions.find(
+            (tool) =>
+              tool.mcpInfo?.serverName === CLAUDE_ARTIFACTS &&
+              tool.mcpInfo.toolName === ARTIFACTS_MCP_READ_TOOL,
           )
         : undefined;
-    if (At !== null && It !== undefined)
-      return `. ${artifactViewerUrlFor(At)} is a claude.ai artifact \u2014 read it with ${It.name} (slug: "${At.slug}") instead of ${WEBFETCH}.`;
+    if (artifactUrl !== null && readTool !== undefined)
+      return `. ${artifactViewerUrlFor(artifactUrl)} is a claude.ai artifact \u2014 read it with ${readTool.name} (slug: "${artifactUrl.slug}") instead of ${WEBFETCH}.`;
     if (
-      canUseWebFetchAgent(tool, mcpClients, {
+      canUseWebFetchAgent(toolDefinitions, toolPermissionContext, {
         activeAgents: agentSpawnContext.activeAgents,
       })
     ) {
-      if (canUseWebFetchAgent(tool, mcpClients, agentSpawnContext))
+      if (canUseWebFetchAgent(toolDefinitions, toolPermissionContext, agentSpawnContext))
         return `. ${WEBFETCH} is not available directly in this context \u2014 use the ${AGENT} tool with subagent_type: "${WEB_FETCH_AGENT}" to read web pages instead.`;
       return (agentSpawnContext.depth ?? 0) === 0
         ? `. ${WEBFETCH} is not available in this context, and the ${WEB_FETCH_AGENT} agent that reads web pages for this session is outside this session's allowed subagent types. If the page is required, tell the user.`
         : `. ${WEBFETCH} is not available in this context, and the ${WEB_FETCH_AGENT} agent that reads web pages for this session cannot be dispatched from here (this agent's nesting depth or allowed subagent types rule it out). If the page is required, say so in your report so the caller can fetch it.`;
     }
   }
-  let Ee = G ?? (isToolSearchInPool(tool) ? L : undefined);
-  let Ae =
-    (L?.keeps(toolName) === true || G?.keeps(toolName) === true) &&
-    tool_2?.mcpInfo === undefined &&
+  let searchIndex = deferredIndex ?? (isToolSearchInPool(toolDefinitions) ? toolSearchIndex : undefined);
+  let isListedHere =
+    (toolSearchIndex?.keeps(toolName) === true || deferredIndex?.keeps(toolName) === true) &&
+    tool?.mcpInfo === undefined &&
     mcpInfoFromString(toolName) === null &&
     !toolMatchesAnyName(
       {
         name: toolName,
-        underlyingV1ToolName: ke,
+        underlyingV1ToolName: underlyingName,
       },
       getShadowedSearchToolNames(),
     );
-  let Ie = Ae && isPermanentUnavailabilityFor(describeToolAvailability(toolName, tools, mcpClients, tool_2));
-  let Me = Ae && Ee?.keeps(toolName) === true && !Ie && !findToolByName(tool, toolName);
-  let We = tool_3?.name === SENDMESSAGE;
-  let ze =
-    We && canSpawnSubagents(tool, mcpClients, agentSpawnContext)
+  let isSwitchOff =
+    isListedHere &&
+    isPermanentUnavailabilityFor(describeToolAvailability(toolName, mcpClients, toolPermissionContext, tool));
+  let listedButGone =
+    isListedHere &&
+    searchIndex?.keeps(toolName) === true &&
+    !isSwitchOff &&
+    !findToolByName(toolDefinitions, toolName);
+  let isSendMessage = tool_2?.name === SENDMESSAGE;
+  let spawnNote =
+    isSendMessage && canSpawnSubagents(toolDefinitions, toolPermissionContext, agentSpawnContext)
       ? ` To follow up on an agent's work, start a new ${AGENT} call with everything it needs in its prompt.`
       : "";
-  let lt = We
-    ? ` An agent cannot be continued from this context. To message another session, use your host application's own messaging tool if it provides one; otherwise that is not possible from here.${ze}`
+  let sendMessageNote = isSendMessage
+    ? ` An agent cannot be continued from this context. To message another session, use your host application's own messaging tool if it provides one; otherwise that is not possible from here.${spawnNote}`
     : "";
-  if (Me) {
+  if (listedButGone) {
     if (
-      tool_3 !== undefined &&
-      (!tool_3.isEnabled() ||
-        isToolOmittedByLaunchToolList(mcpClients, tool_3) ||
-        isOutsideLaunchToolList(mcpClients, tool_3))
+      tool_2 !== undefined &&
+      (!tool_2.isEnabled() ||
+        isToolOmittedByLaunchToolList(toolPermissionContext, tool_2) ||
+        isOutsideLaunchToolList(toolPermissionContext, tool_2))
     )
       return toolName === ASKUSERQUESTION && !canPromptUserForPermission()
         ? `. ${toolName} is still listed for this conversation, but nobody in this session can answer it, so it cannot run. Continue without it; if you need the user's decision, ask in your response text instead.`
-        : `. ${toolName} is still listed for this conversation but is switched off in this session right now, so it cannot run. Continue without it.${lt}`;
-    return `. ${toolName} is still listed for this conversation, but nothing in this session provides it right now (its source was removed or disconnected, or this version no longer has it), so it cannot run. Continue without it.${lt}`;
+        : `. ${toolName} is still listed for this conversation but is switched off in this session right now, so it cannot run. Continue without it.${sendMessageNote}`;
+    return `. ${toolName} is still listed for this conversation, but nothing in this session provides it right now (its source was removed or disconnected, or this version no longer has it), so it cannot run. Continue without it.${sendMessageNote}`;
   }
-  if (We) return `. ${SENDMESSAGE} is not among the tools available here.${lt}`;
-  if (tool_3 || Ie)
-    return Ie ||
-      !tool_3?.isEnabled() ||
-      getDenyRuleForTool(mcpClients, tool_3) ||
-      isOutsideLaunchToolList(mcpClients, tool_3) ||
-      (ke !== undefined &&
-        getDenyRuleForTool(mcpClients, {
-          name: ke,
+  if (isSendMessage) return `. ${SENDMESSAGE} is not among the tools available here.${sendMessageNote}`;
+  if (tool_2 || isSwitchOff)
+    return isSwitchOff ||
+      !tool_2?.isEnabled() ||
+      getDenyRuleForTool(toolPermissionContext, tool_2) ||
+      isOutsideLaunchToolList(toolPermissionContext, tool_2) ||
+      (underlyingName !== undefined &&
+        getDenyRuleForTool(toolPermissionContext, {
+          name: underlyingName,
         })) ||
-      (we?.isEnabled() && getDenyRuleForTool(mcpClients, we))
+      (aliasTool?.isEnabled() && getDenyRuleForTool(toolPermissionContext, aliasTool))
       ? `. ${toolName} is disabled for this session, in subagents as well as here.`
       : `. ${toolName} is not among the tools available here. Continue with the tools you have.`;
   if (
     toolMatchesAnyName(
       {
         name: toolName,
-        underlyingV1ToolName: ke,
+        underlyingV1ToolName: underlyingName,
       },
       getShadowedSearchToolNames(),
     )
   ) {
-    let At = (ke ?? toolName) === GLOB_TOOL_NAME ? GLOB_TOOL_NAME : GREP_TOOL_NAME;
-    if (!findToolByName(tool, BASH_TOOL_NAME)) return `. ${At} is disabled for this session.`;
-    return At === GLOB_TOOL_NAME
+    let searchToolName = (underlyingName ?? toolName) === GLOB_TOOL_NAME ? GLOB_TOOL_NAME : GREP_TOOL_NAME;
+    if (!findToolByName(toolDefinitions, BASH_TOOL_NAME))
+      return `. ${searchToolName} is disabled for this session.`;
+    return searchToolName === GLOB_TOOL_NAME
       ? `. ${GLOB_TOOL_NAME} is not available in this session \u2014 find files with \`find\` via the ${BASH_TOOL_NAME} tool instead.`
       : `. ${GREP_TOOL_NAME} is not available in this session \u2014 search file contents with \`grep\` via the ${BASH_TOOL_NAME} tool instead.`;
   }
-  let Je = isRestrictedContext ? "" : suggestWaitForMcpServers(toolName, tool, tools);
-  if (Je) return Je;
+  let waitHint = isRestrictedContext ? "" : suggestWaitForMcpServers(toolName, toolDefinitions, mcpClients);
+  if (waitHint) return waitHint;
   if (
     (areDeferredToolsKept() && deferredToolCache().hasTool(toolName)) ||
-    L?.has(toolName) ||
-    G?.has(toolName)
+    toolSearchIndex?.has(toolName) ||
+    deferredIndex?.has(toolName)
   )
     return describeUnavailableMcpTool(
       toolName,
       isRestrictedContext,
-      tools,
       mcpClients,
-      tool_2,
-      G === undefined && isToolSearchInPool(tool),
+      toolPermissionContext,
+      tool,
+      deferredIndex === undefined && isToolSearchInPool(toolDefinitions),
     );
   if (typeof toolName !== "string") return "";
-  let filtered = tool.filter((At) => At.name.toLowerCase() === toolName.toLowerCase());
-  let [pt] = filtered;
-  if (pt !== undefined && filtered.length === 1 && !isDeferredToolInConversation(pt, L, tool))
-    return `. Tool names are case-sensitive: call ${pt.name} instead.`;
-  let found = CHROME_TOOL_NAMES.find((At) => At === toolName);
+  let filtered = toolDefinitions.filter((tool) => tool.name.toLowerCase() === toolName.toLowerCase());
+  let [caseMatch] = filtered;
+  if (
+    caseMatch !== undefined &&
+    filtered.length === 1 &&
+    !isDeferredToolInConversation(caseMatch, toolSearchIndex, toolDefinitions)
+  )
+    return `. Tool names are case-sensitive: call ${caseMatch.name} instead.`;
+  let found = CHROME_TOOL_NAMES.find((chromeName) => chromeName === toolName);
   if (found !== undefined) {
-    let filtered = tool.filter((Yt) => {
-      let lower = Yt.name.toLowerCase();
+    let filtered = toolDefinitions.filter((tool) => {
+      let lower = tool.name.toLowerCase();
       return lower === found || lower.endsWith(`__${found}`);
     });
-    let [It] = filtered;
+    let [prefixedTool] = filtered;
     if (
-      It !== undefined &&
+      prefixedTool !== undefined &&
       filtered.length === 1 &&
-      isInputSchemaCompatible(It, w) &&
-      CHROME_TOOL_PREFIXES.some((Yt) => It.name === Yt + found)
+      isInputSchemaCompatible(prefixedTool, input) &&
+      CHROME_TOOL_PREFIXES.some((prefix) => prefixedTool.name === prefix + found)
     )
-      return suggestToolInstead(It, tool, L, G);
+      return suggestToolInstead(prefixedTool, toolDefinitions, toolSearchIndex, deferredIndex);
   }
-  let yt = matchLocalToolAlias(
+  let aliasName = matchLocalToolAlias(
     toolName,
-    tool.map((At) => At.name),
+    toolDefinitions.map((tool) => tool.name),
   );
-  let gt = yt === undefined ? undefined : findToolByName(tool, yt);
-  if (gt !== undefined && isInputSchemaCompatible(gt, w)) return suggestToolInstead(gt, tool, L, G);
+  let matchedAliasTool = aliasName === undefined ? undefined : findToolByName(toolDefinitions, aliasName);
+  if (matchedAliasTool !== undefined && isInputSchemaCompatible(matchedAliasTool, input))
+    return suggestToolInstead(matchedAliasTool, toolDefinitions, toolSearchIndex, deferredIndex);
   return "";
 }
 //@ chunk-e6aww6q8.js:3918095-3918311 placement
-function isInputSchemaCompatible(e, n) {
-  let properties = e.inputJSONSchema?.properties;
-  let required = e.inputJSONSchema?.required;
+function isInputSchemaCompatible(tool, input) {
+  let properties = tool.inputJSONSchema?.properties;
+  let required = tool.inputJSONSchema?.required;
   return (
     properties === undefined ||
-    (isPlainObject_4(n) &&
-      Object.keys(n).every((key) => Object.hasOwn(properties, key)) &&
-      (Object.keys(n).length > 0 || !Array.isArray(required) || required.length === 0))
+    (isPlainObject_4(input) &&
+      Object.keys(input).every((key) => Object.hasOwn(properties, key)) &&
+      (Object.keys(input).length > 0 || !Array.isArray(required) || required.length === 0))
   );
 }
 //@ chunk-e6aww6q8.js:3918311-3918503 placement
-function suggestToolInstead(e, n, r, s) {
-  return s === undefined && isToolSearchInPool(n) && isDeferredToolInConversation(e, r, n)
-    ? `. Call ${e.name} instead, loading it first with ${TOOL_SEARCH_TOOL_NAME} query "select:${e.name}" if it is not loaded yet.`
-    : `. Call ${e.name} instead.`;
+function suggestToolInstead(tool, pool, messages, surfaced) {
+  return surfaced === undefined &&
+    isToolSearchInPool(pool) &&
+    isDeferredToolInConversation(tool, messages, pool)
+    ? `. Call ${tool.name} instead, loading it first with ${TOOL_SEARCH_TOOL_NAME} query "select:${tool.name}" if it is not loaded yet.`
+    : `. Call ${tool.name} instead.`;
 }
 //@ chunk-e6aww6q8.js:3918503-3921286 placement
 /**
@@ -2891,12 +3005,16 @@ function describeUnavailableMcpTool(toolName, isRestrictedContext, tools, mcpCli
   }
 }
 //@ chunk-e6aww6q8.js:3921286-3921570 placement
-function suggestWaitForMcpServers(e, n, r) {
-  let h = /^mcp__(.+?)__/.exec(e)?.[1];
-  if (!h) return "";
-  if (!findToolByName(n, WAITFORMCPSERVERS)) return "";
-  let y = normalizeNameForMCP(h);
-  let found = r.find((w) => w.type === "pending" && (w.name === h || normalizeNameForMCP(w.name) === y));
+function suggestWaitForMcpServers(toolName, tools, clients) {
+  let serverName = /^mcp__(.+?)__/.exec(toolName)?.[1];
+  if (!serverName) return "";
+  if (!findToolByName(tools, WAITFORMCPSERVERS)) return "";
+  let normalizedServer = normalizeNameForMCP(serverName);
+  let found = clients.find(
+    (client) =>
+      client.type === "pending" &&
+      (client.name === serverName || normalizeNameForMCP(client.name) === normalizedServer),
+  );
   if (!found) return "";
   return `. The MCP server '${found.name}' is still connecting. Call ${WAITFORMCPSERVERS} to wait for it, then try again.`;
 }
@@ -2964,49 +3082,49 @@ async function* runToolUse(
     await waitForAttachmentFiles(toolUseContext.abortController.signal, {
       activityAgentId: backgroundAgentIdOf(toolUseContext),
     });
-  let S = stagedFilesWaiterByRoot.peek(toolUseContext.session);
-  if (S !== undefined && S.pending() > 0)
+  let stagedWaiter = stagedFilesWaiterByRoot.peek(toolUseContext.session);
+  if (stagedWaiter !== undefined && stagedWaiter.pending() > 0)
     await waitForStagedToolCallFiles(
-      S,
+      stagedWaiter,
       toolUseContext.abortController.signal,
       backgroundAgentIdOf(toolUseContext),
     );
   if (isTerminalShutdown() && !toolUseContext.abortController.signal.aborted) await heldUntilExit();
-  let w = toolUse.name;
-  let tool = findTool(toolUseContext.options.tools, w, toolUseContext.options.toolAliases);
+  let toolName = toolUse.name;
+  let tool = findTool(toolUseContext.options.tools, toolName, toolUseContext.options.toolAliases);
   if (
     tool &&
-    tool.name !== w &&
-    tool.aliases?.includes(w) &&
-    !toolUseContext.toolState.get(AliasFireState).fired.has(w)
+    tool.name !== toolName &&
+    tool.aliases?.includes(toolName) &&
+    !toolUseContext.toolState.get(AliasFireState).fired.has(toolName)
   ) {
-    toolUseContext.toolState.get(AliasFireState).fired.add(w);
+    toolUseContext.toolState.get(AliasFireState).fired.add(toolName);
     logEvent("tengu_dead_probe_tool_alias_exec", {
-      alias: sanitizeToolNameForAnalytics(w),
+      alias: sanitizeToolNameForAnalytics(toolName),
       tool: sanitizeToolNameForAnalytics(tool.name),
     });
   }
   let id = assistantMessage.message.id;
   let requestId = assistantMessage.requestId;
-  if (!tool && shouldWaitForMcpTool(w, toolUseContext)) {
-    let lt = await waitForMcpToolServer(w, toolUseContext.options.tools, toolUseContext, {
+  if (!tool && shouldWaitForMcpTool(toolName, toolUseContext)) {
+    let waitResult = await waitForMcpToolServer(toolName, toolUseContext.options.tools, toolUseContext, {
       absentGraceMs: 0,
       skipExhausted: true,
       responseId: id ? `${requestId ?? ""}|${id}` : undefined,
     });
     logEvent("tengu_mcp_pending_tool_wait", {
-      found: lt.tool !== undefined,
-      aborted: lt.aborted,
-      waited_ms: lt.waitedMs,
-      server_state: fromEnum(lt.serverState),
-      server_state_at_start: fromEnum(lt.initialServerState),
+      found: waitResult.tool !== undefined,
+      aborted: waitResult.aborted,
+      waited_ms: waitResult.waitedMs,
+      server_state: fromEnum(waitResult.serverState),
+      server_state_at_start: fromEnum(waitResult.initialServerState),
       handed_off: assistantMessage.handedOff === true,
     });
-    if (lt.tool) {
+    if (waitResult.tool) {
       let options = toolUseContext.options;
-      let nt = {
+      let waitOptions = {
         ...options,
-        tools: lt.tools,
+        tools: waitResult.tools,
         mcpClients: [...currentMcpClients(toolUseContext)],
         activeMcpServer: undefined,
         activeMcpTool: undefined,
@@ -3018,20 +3136,20 @@ async function* runToolUse(
           canUseTool,
           {
             ...toolUseContext,
-            options: nt,
+            options: waitOptions,
           },
           now,
           stallSampler,
         );
       } finally {
-        if (nt.activeMcpServer !== undefined && !toolUseContext.abortController.signal.aborted) {
-          options.activeMcpServer = nt.activeMcpServer;
-          options.activeMcpTool = nt.activeMcpTool;
+        if (waitOptions.activeMcpServer !== undefined && !toolUseContext.abortController.signal.aborted) {
+          options.activeMcpServer = waitOptions.activeMcpServer;
+          options.activeMcpTool = waitOptions.activeMcpTool;
         }
       }
       return;
     }
-    if (lt.aborted) {
+    if (waitResult.aborted) {
       yield {
         message: createCancelledToolResult(
           toolUse.id,
@@ -3045,8 +3163,8 @@ async function* runToolUse(
     if (isTerminalShutdown() && !toolUseContext.abortController.signal.aborted) await heldUntilExit();
   }
   if (!tool) {
-    let lt = explainUnavailableArtifactTool(
-      w,
+    let unavailableNote = explainUnavailableArtifactTool(
+      toolName,
       toolUseContext.options.tools,
       toolUseContext.options.toolCatalog.getAllBaseTools(),
       toolUseContext.agentId,
@@ -3057,36 +3175,39 @@ async function* runToolUse(
       cachedDeclaredTools(toolUseContext),
       cachedNoChannelTools(toolUseContext),
     );
-    resolveUnknownToolSafe(w, toolUse.id, toolUseContext, requestId);
+    resolveUnknownToolSafe(toolName, toolUse.id, toolUseContext, requestId);
     yield {
       message: createUserMessage({
         content: [
           {
             type: "tool_result",
-            content: `<tool_use_error>Error: No such tool available: ${w}${lt}</tool_use_error>`,
+            content: `<tool_use_error>Error: No such tool available: ${toolName}${unavailableNote}</tool_use_error>`,
             is_error: true,
             tool_use_id: toolUse.id,
           },
         ],
-        toolUseResult: `Error: No such tool available: ${w}${lt}`,
+        toolUseResult: `Error: No such tool available: ${toolName}${unavailableNote}`,
         sourceToolAssistantUUID: assistantMessage.uuid,
         now,
       }),
     };
     return;
   }
-  recordToolUsePair(w, tool.name);
-  let { connection, ambiguous } = resolveMcpConnectionForTool(w, toolUseContext.options.mcpClients);
-  let ke = connection && isConnectedOrCached(connection) ? connection : undefined;
-  let mcpServerType = ke ? (ke.config.type ?? "stdio") : undefined;
-  let mcpServerBaseUrl = ke ? getLoggingSafeMcpBaseUrl(ke.config) : undefined;
-  let serverName = extractMcpToolDetails(w)?.serverName;
-  let Ie = serverName !== undefined && serverName !== extractMcpToolDetails(tool.name)?.serverName;
+  recordToolUsePair(toolName, tool.name);
+  let { connection, ambiguous } = resolveMcpConnectionForTool(toolName, toolUseContext.options.mcpClients);
+  let connectedClient = connection && isConnectedOrCached(connection) ? connection : undefined;
+  let mcpServerType = connectedClient ? (connectedClient.config.type ?? "stdio") : undefined;
+  let mcpServerBaseUrl = connectedClient ? getLoggingSafeMcpBaseUrl(connectedClient.config) : undefined;
+  let serverName = extractMcpToolDetails(toolName)?.serverName;
+  let isRenamedTool = serverName !== undefined && serverName !== extractMcpToolDetails(tool.name)?.serverName;
   let mcpNameLoggable =
     !ambiguous &&
-    !Ie &&
-    isMcpServerLoggableInAnalytics(extractMcpToolDetails(w)?.serverName ?? "", ke?.config);
-  let We = toolFeatureName(tool.name, tool.mcpInfo);
+    !isRenamedTool &&
+    isMcpServerLoggableInAnalytics(
+      extractMcpToolDetails(toolName)?.serverName ?? "",
+      connectedClient?.config,
+    );
+  let featureName = toolFeatureName(tool.name, tool.mcpInfo);
   let input = toolUse.input;
   try {
     if (toolUseContext.abortController.signal.aborted) {
@@ -3121,19 +3242,19 @@ async function* runToolUse(
       };
       return;
     }
-    let lt = isHookCallerVirtualTool(assistantMessage, toolUseContext)
+    let notLoadedVerdict = isHookCallerVirtualTool(assistantMessage, toolUseContext)
       ? null
       : getNotLoadedToolVerdict(tool, toolUseContext, toolUse.id);
-    if (lt !== null) {
+    if (notLoadedVerdict !== null) {
       try {
-        let gt = {
-          family: fromEnum(lt.family),
-          late: lt.late,
-          loadInSameReply: lt.loadInSameReply,
-          firstForTool: lt.firstForTool,
-          relayActive: lt.relayActive,
-          flagSource: fromEnum(lt.flagSource),
-          coworkSurface: lt.coworkSurface,
+        let commonFields = {
+          family: fromEnum(notLoadedVerdict.family),
+          late: notLoadedVerdict.late,
+          loadInSameReply: notLoadedVerdict.loadInSameReply,
+          firstForTool: notLoadedVerdict.firstForTool,
+          relayActive: notLoadedVerdict.relayActive,
+          flagSource: fromEnum(notLoadedVerdict.flagSource),
+          coworkSurface: notLoadedVerdict.coworkSurface,
           toolName: lit_2("mcp_tool"),
           isMcp: true,
           ...getSubagentTelemetryFields(toolUseContext.agentContext),
@@ -3157,34 +3278,34 @@ async function* runToolUse(
           ...tool.mcpInfo?.pluginTelemetry,
         };
         logEvent("tengu_tool_use_not_loaded", {
-          enforced: lt.enforced,
+          enforced: notLoadedVerdict.enforced,
           toolUseID: sanitizeMarkName(toolUse.id),
-          ...gt,
+          ...commonFields,
         });
-        if (lt.enforced) {
-          logFeatureSad(We, "tool_not_loaded");
+        if (notLoadedVerdict.enforced) {
+          logFeatureSad(featureName, "tool_not_loaded");
           logEvent("tengu_tool_use_error", {
             error: lit_2("InputValidationError"),
             errorCode: fromEnum(TOOL_NOT_LOADED),
             messageID: sanitizeMarkName(id),
-            ...gt,
+            ...commonFields,
           });
         }
       } catch (error) {
         logNotLoadedCheckFailure("telemetry", error);
       }
-      if (lt.enforced) {
+      if (notLoadedVerdict.enforced) {
         yield {
           message: createUserMessage({
             content: [
               {
                 type: "tool_result",
-                content: `<tool_use_error>${lt.message}</tool_use_error>`,
+                content: `<tool_use_error>${notLoadedVerdict.message}</tool_use_error>`,
                 is_error: true,
                 tool_use_id: toolUse.id,
               },
             ],
-            toolUseResult: lt.message,
+            toolUseResult: notLoadedVerdict.message,
             sourceToolAssistantUUID: assistantMessage.uuid,
             now,
           }),
@@ -3192,15 +3313,15 @@ async function* runToolUse(
         return;
       }
     }
-    let Je = checkWebIsolation(tool, toolUseContext, toolUse.input);
-    if (Je.denyMessage) {
-      logFeatureSad(We, "tool_isolation_denied");
+    let isolationCheck = checkWebIsolation(tool, toolUseContext, toolUse.input);
+    if (isolationCheck.denyMessage) {
+      logFeatureSad(featureName, "tool_isolation_denied");
       logEvent("tengu_tool_use_isolation_latch_denied", {
         toolName: sanitizeToolNameForAnalytics(tool.name),
         toolUseID: sanitizeMarkName(toolUse.id),
         isMcp: tool.isMcp ?? false,
-        isolationLatch: fromEnumOpt(Je.activeLatch),
-        isolationClassifiedAs: fromEnumOpt(Je.classifiedAs),
+        isolationLatch: fromEnumOpt(isolationCheck.activeLatch),
+        isolationClassifiedAs: fromEnumOpt(isolationCheck.classifiedAs),
         queryChainId: sanitizeMarkName(toolUseContext.queryTracking?.chainId),
         queryDepth: toolUseContext.queryTracking?.depth,
         ...(mcpServerType && {
@@ -3221,12 +3342,12 @@ async function* runToolUse(
           content: [
             {
               type: "tool_result",
-              content: `<tool_use_error>${Je.denyMessage}</tool_use_error>`,
+              content: `<tool_use_error>${isolationCheck.denyMessage}</tool_use_error>`,
               is_error: true,
               tool_use_id: toolUse.id,
             },
           ],
-          toolUseResult: `Error: ${Je.denyMessage}`,
+          toolUseResult: `Error: ${isolationCheck.denyMessage}`,
           toolDenialKind: "permission-rule",
           sourceToolAssistantUUID: assistantMessage.uuid,
           now,
@@ -3234,59 +3355,61 @@ async function* runToolUse(
       };
       return;
     }
-    let nt = shouldRouteToolToHost(tool, input, toolUseContext, toolUse.id) ? new Stream() : undefined;
-    let pt = routeToolCallWithAdoption(
+    let remoteStream = shouldRouteToolToHost(tool, input, toolUseContext, toolUse.id)
+      ? new Stream()
+      : undefined;
+    let routePromise = routeToolCallWithAdoption(
       tool,
       input,
       toolUseContext,
       toolUse.id,
-      nt === undefined
+      remoteStream === undefined
         ? undefined
-        : (text, At) =>
-            nt.enqueue({
+        : (text, timeoutMs) =>
+            remoteStream.enqueue({
               type: "notification",
               notification: {
                 key: `remote-tool-status-${toolUse.id}`,
                 text,
                 priority: "medium",
-                ...(At !== undefined && {
-                  timeoutMs: At,
+                ...(timeoutMs !== undefined && {
+                  timeoutMs,
                 }),
               },
             }),
     );
-    if (nt !== undefined) {
-      pt.then(
-        () => nt.done(),
-        () => nt.done(),
+    if (remoteStream !== undefined) {
+      routePromise.then(
+        () => remoteStream.done(),
+        () => remoteStream.done(),
       );
-      for await (let gt of nt) yield gt;
+      for await (let message of remoteStream) yield message;
     }
-    let Et = describeCoordinatorRefusal(tool, toolUseContext, await pt);
-    if (Et.where === "refused") {
+    let coordinatorVerdict = describeCoordinatorRefusal(tool, toolUseContext, await routePromise);
+    if (coordinatorVerdict.where === "refused") {
       yield {
         message: createUserMessage({
           content: [
             {
               type: "tool_result",
-              content: `<tool_use_error>${Et.message}</tool_use_error>`,
+              content: `<tool_use_error>${coordinatorVerdict.message}</tool_use_error>`,
               is_error: true,
               tool_use_id: toolUse.id,
             },
           ],
-          toolUseResult: `Error: ${Et.message}`,
+          toolUseResult: `Error: ${coordinatorVerdict.message}`,
           sourceToolAssistantUUID: assistantMessage.uuid,
           now,
         }),
       };
       return;
     }
-    if (Et.where === "elsewhere") {
+    if (coordinatorVerdict.where === "elsewhere") {
       try {
-        yield* Et.hosts.runToolUse({
+        yield* coordinatorVerdict.hosts.runToolUse({
           tool,
           toolUse,
-          route: Et.route,
+          route: coordinatorVerdict.route,
           assistantMessage,
           toolUseContext,
           canUseTool,
@@ -3297,11 +3420,11 @@ async function* runToolUse(
       }
       return;
     }
-    let yt = withPlanPath(tool.name, Et.input, toolUseContext.agentId);
-    for await (let gt of streamedCheckPermissionsAndCallTool(
+    let planInput = withPlanPath(tool.name, coordinatorVerdict.input, toolUseContext.agentId);
+    for await (let message of streamedCheckPermissionsAndCallTool(
       tool,
       toolUse.id,
-      yt,
+      planInput,
       toolUseContext,
       canUseTool,
       assistantMessage,
@@ -3313,33 +3436,33 @@ async function* runToolUse(
       now,
       stallSampler,
     ))
-      yield gt;
+      yield message;
   } catch (error) {
-    let Je = error instanceof Error ? error.message : String(error);
-    let nt = tool ? ` (${tool.name})` : "";
+    let message = error instanceof Error ? error.message : String(error);
+    let toolSuffix = tool ? ` (${tool.name})` : "";
     if (!isAbortOrCancelError(error)) {
       let { code, isSad } = classifyToolErrorCode(error);
       logForDebugging(
-        `runToolUse error${tool ? ` (${toolCategoryForTelemetry(tool)})` : ""}: code=${code} errorChars=${Je.length}`,
+        `runToolUse error${tool ? ` (${toolCategoryForTelemetry(tool)})` : ""}: code=${code} errorChars=${message.length}`,
       );
-      if (isSad) logFeatureSad(We, code);
+      if (isSad) logFeatureSad(featureName, code);
       else {
         logError(error);
-        logFeatureBad(We, "tool_unexpected_error");
+        logFeatureBad(featureName, "tool_unexpected_error");
       }
     }
-    let pt = `Error calling tool${nt}: ${Je}`;
+    let errorText = `Error calling tool${toolSuffix}: ${message}`;
     yield {
       message: createUserMessage({
         content: [
           {
             type: "tool_result",
-            content: `<tool_use_error>${pt}</tool_use_error>`,
+            content: `<tool_use_error>${errorText}</tool_use_error>`,
             is_error: true,
             tool_use_id: toolUse.id,
           },
         ],
-        toolUseResult: pt,
+        toolUseResult: errorText,
         toolDenialKind: getInterruptKind(error, toolUseContext.abortController.signal),
         interruptedByShutdown: shutdownInterruptStamp(toolUseContext.abortController.signal),
         sourceToolAssistantUUID: assistantMessage.uuid,
@@ -3410,13 +3533,13 @@ function streamedCheckPermissionsAndCallTool(
         }
       : undefined;
   let input_2 = coercion?.repair?.input;
-  let Ie = isPlainObject_5(input_2) ? input_2 : input;
-  let Me = cloneIfServerResults(assistantMessage, Ie);
-  let We = Me ?? undefined;
-  let ze = clonedHookInput(toolUseContext, Ie);
-  let lt = {
+  let candidateInput = isPlainObject_5(input_2) ? input_2 : input;
+  let serverResult = cloneIfServerResults(assistantMessage, candidateInput);
+  let serverInput = serverResult ?? undefined;
+  let clonedInput = clonedHookInput(toolUseContext, candidateInput);
+  let classifierState = {
     input:
-      isPlainObject_5(Ie) &&
+      isPlainObject_5(candidateInput) &&
       isAutoClassifierActive(
         getToolPermissionContext(toolUseContext).mode,
         getToolPermissionContext(toolUseContext).servedCall === true,
@@ -3426,26 +3549,26 @@ function streamedCheckPermissionsAndCallTool(
       consumeRepeatedToolCall({
         agentId: toolUseContext.agentId,
         tool: tool.name,
-        input: Ie,
+        input: candidateInput,
         message: assistantMessage,
         messages: toolUseContext.messages,
       })
-        ? clone(Ie)
+        ? clone(candidateInput)
         : undefined,
     used: false,
   };
-  let Je = false;
-  let nt;
-  let run = (It, Yt, callObserver) => {
+  let safetyLogged = false;
+  let observedMode;
+  let run = (inputArg, callContext, callObserver) => {
     let decisionOut = {};
-    let usedClassifierInput = lt.input !== undefined && !lt.used;
-    lt.used = true;
-    let pn = usedClassifierInput ? lt.input : It;
-    let no = !usedClassifierInput && lacksServerResult(Me, It);
-    let hn = toolCallChain.managedLeft();
-    let ho = !no
+    let usedClassifierInput = classifierState.input !== undefined && !classifierState.used;
+    classifierState.used = true;
+    let effectiveInput = usedClassifierInput ? classifierState.input : inputArg;
+    let changed = !usedClassifierInput && lacksServerResult(serverResult, inputArg);
+    let managedLeft = toolCallChain.managedLeft();
+    let changedKinds = !changed
       ? []
-      : hn !== undefined && deepEqualIgnoringUndefined(It, hn)
+      : managedLeft !== undefined && deepEqualIgnoringUndefined(inputArg, managedLeft)
         ? toolCallChain.managedRewrites()
         : [
             ...toolCallChain.managedRewrites(),
@@ -3457,8 +3580,8 @@ function streamedCheckPermissionsAndCallTool(
     return checkPermissionsAndCallTool(
       tool,
       toolUseID,
-      pn,
-      rebaseOriginIfInputChanged(Yt, ze, pn),
+      effectiveInput,
+      rebaseOriginIfInputChanged(callContext, clonedInput, effectiveInput),
       canUseTool,
       assistantMessage,
       messageId,
@@ -3470,54 +3593,54 @@ function streamedCheckPermissionsAndCallTool(
       stallSampler,
       onProgress,
       {
-        changed: no,
-        kinds: ho.map((results) => results.kind),
-        sources: ho.map((yn) => yn.source),
-        written: Me,
+        changed,
+        kinds: changedKinds.map((results) => results.kind),
+        sources: changedKinds.map((kindResult) => kindResult.source),
+        written: serverResult,
       },
-      We !== undefined && !deepEqualIgnoringUndefined(pn, We),
+      serverInput !== undefined && !deepEqualIgnoringUndefined(effectiveInput, serverInput),
       decisionOut,
       callObserver,
       coercion,
       usedClassifierInput,
     )
-      .then((yn) => {
+      .then((decision) => {
         let { decided } = decisionOut;
-        attachPermissionDecision(yn, toolUseID, decided?.record);
-        nt = decided?.mode ?? nt;
-        if (decided !== undefined && !Je)
-          Je = logToolSafetyEvent({
+        attachPermissionDecision(decision, toolUseID, decided?.record);
+        observedMode = decided?.mode ?? observedMode;
+        if (decided !== undefined && !safetyLogged)
+          safetyLogged = logToolSafetyEvent({
             tool,
             toolUseId: toolUseID,
             record: decided.record,
-            sandboxViolations: findToolResultMessages(yn, toolUseID).flatMap(
-              (Xn) => Xn.sandboxViolations ?? [],
+            sandboxViolations: findToolResultMessages(decision, toolUseID).flatMap(
+              (resultMessage) => resultMessage.sandboxViolations ?? [],
             ),
             permissionMode: decided.mode,
-            agentContext: Yt.agentContext,
-            toolCatalog: Yt.options.toolCatalog,
+            agentContext: callContext.agentContext,
+            toolCatalog: callContext.options.toolCatalog,
           });
-        return yn;
+        return decision;
       })
-      .finally(() => clearToolUsePermissionState(Yt.session, toolUseID));
+      .finally(() => clearToolUsePermissionState(callContext.session, toolUseID));
   };
-  let Et = withAgentId(toolCallEvent(tool.name, toolUseID, Ie), toolUseContext.agentId);
-  let yt = false;
-  let toolCallChain = createToolCallChain(tool, toolUseContext, run, (It) =>
-    shouldReplaceMemoryInput(tool, Ie, It)
+  let callEvent = withAgentId(toolCallEvent(tool.name, toolUseID, candidateInput), toolUseContext.agentId);
+  let didLogSuspected = false;
+  let toolCallChain = createToolCallChain(tool, toolUseContext, run, (managedInput) =>
+    shouldReplaceMemoryInput(tool, candidateInput, managedInput)
       ? guardAccountMemoryHookRewrite(tool, "PreToolUse", "tool.call hook").message
       : undefined,
   );
   if (
     hasModuleHookingSite("tool.call", {
-      ...Ie,
+      ...candidateInput,
       tool: tool.name,
       tool_use_id: toolUseID,
     })
   )
     toolUseContext.markToolCallStarted?.(toolUseID);
   setOpenCall(toolUseID, toolUseContext.hookOrigin);
-  let At = eventCallersFor2({
+  let eventHandle = eventCallersFor2({
     signal: toolUseContext.abortController.signal,
     origin: toolUseContext.hookOrigin,
     core: {
@@ -3529,28 +3652,28 @@ function streamedCheckPermissionsAndCallTool(
     withoutModuleHandlers: toolUseContext.options.settingsHooksOff ? true : undefined,
   });
   runInHeldDirectory(toolUseContext.session.project?.cwd, () =>
-    releaseToolServerHold(tool).then(() => At.tool.call(Et)),
+    releaseToolServerHold(tool).then(() => eventHandle.tool.call(callEvent)),
   )
-    .then((It) =>
-      applyToolCallHookResult(It, toolCallChain, {
+    .then((hookMessages) =>
+      applyToolCallHookResult(hookMessages, toolCallChain, {
         tool,
-        input: Et,
+        input: callEvent,
         toolUseContext,
         assistantMessage,
         now,
       }),
     )
     .then(
-      (It) => {
+      (updates) => {
         logHookPushbacks({
-          updates: It,
+          updates,
           tool,
           toolUseId: toolUseID,
-          getPermissionMode: () => nt ?? getToolPermissionContext(toolUseContext).mode,
+          getPermissionMode: () => observedMode ?? getToolPermissionContext(toolUseContext).mode,
           agentContext: toolUseContext.agentContext,
           toolCatalog: toolUseContext.options.toolCatalog,
         });
-        for (let result of It) stream.enqueue(result);
+        for (let result of updates) stream.enqueue(result);
         stream.done();
       },
       (error) => {
@@ -3564,39 +3687,41 @@ function streamedCheckPermissionsAndCallTool(
 /**
  * 工具搜索乐观开启（isToolSearchEnabledOptimistic）且当前工具列表里有 ToolSearch。
  */
-function isToolSearchInPool(e) {
-  return isToolSearchEnabledOptimistic() && isToolSearchToolAvailable(e);
+function isToolSearchInPool(pool) {
+  return isToolSearchEnabledOptimistic() && isToolSearchToolAvailable(pool);
 }
 //@ chunk-e6aww6q8.js:3930223-3930305 layout
 /**
  * 判断调用的工具是否是"schema 没发给 API 的延迟工具"：工具搜索在池中、该工具在本对话应延迟、且历史中未被发现（extractDiscoveredToolNames 不含它）。buildSchemaNotSentHint 与未加载判定都依赖它。
  */
-function isDeferredSchemaNotSent(e, n, r, s, surfaced) {
+function isDeferredSchemaNotSent(tool, messages, pool, conversation, surfaced) {
   return (
-    isToolSearchInPool(r) &&
-    isDeferredToolInConversation(e, s, r) &&
-    !extractDiscoveredToolNames(n, {
+    isToolSearchInPool(pool) &&
+    isDeferredToolInConversation(tool, conversation, pool) &&
+    !extractDiscoveredToolNames(messages, {
       surfaced,
-    }).has(e.name)
+    }).has(tool.name)
   );
 }
 //@ chunk-e6aww6q8.js:3930305-3930472 layout = countToolCallsSince (1)
-function countToolCallsSince_9(name, n, r) {
-  return n.some(
-    (s) =>
-      s.type === "assistant" &&
-      Array.isArray(s.message.content) &&
-      s.message.content.some((block) => block.type === "tool_use" && block.name === name && block.id !== r),
+function countToolCallsSince_9(name, messages, sinceUuid) {
+  return messages.some(
+    (message) =>
+      message.type === "assistant" &&
+      Array.isArray(message.message.content) &&
+      message.message.content.some(
+        (block) => block.type === "tool_use" && block.name === name && block.id !== sinceUuid,
+      ),
   );
 }
 //@ chunk-e6aww6q8.js:3930472-3930574 layout
 /**
  * 未加载工具检查自身出错时的兜底：记 tengu_tool_use_not_loaded_check_failed{part} 并 logError，两步都吞掉异常，不影响工具调用。
  */
-function logNotLoadedCheckFailure(e, error) {
+function logNotLoadedCheckFailure(part, error) {
   try {
     logEvent("tengu_tool_use_not_loaded_check_failed", {
-      part: fromEnum(e),
+      part: fromEnum(part),
     });
   } catch {}
   try {
@@ -3607,14 +3732,15 @@ function logNotLoadedCheckFailure(e, error) {
 /**
  * 为"调用未加载的延迟工具"收集附加信息：late（工具本不该延迟）、loadInSameReply（同一回答里已调用 ToolSearch）、firstForTool（本对话首次调用该工具）、relayActive（中继缓存活跃）。
  */
-function getNotLoadedCallNotes(e, n, r) {
+function getNotLoadedCallNotes(tool, toolUseContext, messageId) {
   try {
-    let sameTurnToolUses = n.sameTurnToolUses ?? [];
+    let sameTurnToolUses = toolUseContext.sameTurnToolUses ?? [];
     return {
-      late: !isDeferredToolInConversation(e, undefined, n.options.tools),
+      late: !isDeferredToolInConversation(tool, undefined, toolUseContext.options.tools),
       loadInSameReply: countToolCallsSince_9(TOOL_SEARCH_TOOL_NAME, sameTurnToolUses),
       firstForTool:
-        !countToolCallsSince_9(e.name, n.messages, r) && !countToolCallsSince_9(e.name, sameTurnToolUses),
+        !countToolCallsSince_9(tool.name, toolUseContext.messages, messageId) &&
+        !countToolCallsSince_9(tool.name, sameTurnToolUses),
       relayActive: webIsolationModule?.getTeleportCacheState().status === "active",
     };
   } catch (error) {
@@ -3635,33 +3761,33 @@ function isHookCallerVirtualTool(assistantMessage, toolUseContext) {
 /**
  * 延迟工具未加载就被调用时的判定：工具属于受管家族、工具搜索处于 tst 或已声明、且 schema 未发送时，返回 {enforced, flagSource, coworkSurface, family, message, …notes}，否则 null。出错时记失败事件返回 null。
  */
-function getNotLoadedToolVerdict(e, toolUseContext, id) {
+function getNotLoadedToolVerdict(tool, toolUseContext, messageId) {
   try {
-    let deviceToolKind = getDeviceToolKind(e);
+    let deviceToolKind = getDeviceToolKind(tool);
     if (deviceToolKind === undefined) return null;
     let tools = toolUseContext.options.tools;
-    let y = cachedDeclaredTools(toolUseContext);
+    let declaredTools = cachedDeclaredTools(toolUseContext);
     if (
       cachedNoChannelTools(toolUseContext) !== undefined ||
       isToolSearchPrecluded(toolUseContext.options.mainLoopModel, tools) ||
-      !(getToolSearchMode() === "tst" || y?.has(TOOL_SEARCH_TOOL_NAME) === true) ||
+      !(getToolSearchMode() === "tst" || declaredTools?.has(TOOL_SEARCH_TOOL_NAME) === true) ||
       !isDeferredSchemaNotSent(
-        e,
+        tool,
         toolUseContext.messages,
         tools,
-        y,
+        declaredTools,
         getSurfacedToolNames(toolUseContext.stickyBetas ?? getStickyBetas()),
       )
     )
       return null;
-    let S = notLoadedToolPolicy();
+    let policy = notLoadedToolPolicy();
     return {
-      enforced: S.inForce,
-      flagSource: S.flagSource,
-      coworkSurface: S.coworkSurface,
+      enforced: policy.inForce,
+      flagSource: policy.flagSource,
+      coworkSurface: policy.coworkSurface,
       family: deviceToolKind,
-      message: buildNotLoadedToolError(e.name),
-      ...getNotLoadedCallNotes(e, toolUseContext, id),
+      message: buildNotLoadedToolError(tool.name),
+      ...getNotLoadedCallNotes(tool, toolUseContext, messageId),
     };
   } catch (error) {
     logNotLoadedCheckFailure("verdict", error);
@@ -3674,22 +3800,22 @@ function getNotLoadedToolVerdict(e, toolUseContext, id) {
  */
 function buildSchemaNotSentHint(tool, input, toolUseContext, coercion, options) {
   if (!isDeferredSchemaNotSent(tool, input, toolUseContext, coercion, options)) return null;
-  let y = "";
+  let schemaNote = "";
   try {
-    y = ` For reference, this tool's input schema is: ${jsonStringify(toolInputJsonSchema(tool.inputSchema))}`;
+    schemaNote = ` For reference, this tool's input schema is: ${jsonStringify(toolInputJsonSchema(tool.inputSchema))}`;
   } catch {}
   return (
     `
 
 This tool's schema was not sent to the API \u2014 it was not in the discovered-tool set derived from message history. ` +
-    `Without the schema in your prompt, typed parameters (arrays, numbers, booleans) get emitted as strings and the client-side parser rejects them. Load the tool first: call ${TOOL_SEARCH_TOOL_NAME} with query "select:${tool.name}", then retry this call.${y}`
+    `Without the schema in your prompt, typed parameters (arrays, numbers, booleans) get emitted as strings and the client-side parser rejects them. Load the tool first: call ${TOOL_SEARCH_TOOL_NAME} with query "select:${tool.name}", then retry this call.${schemaNote}`
   );
 }
 //@ chunk-e6aww6q8.js:3931895-3932586 fingerprint = runToolUse (0.478)
 /**
  * 生成"已取消"的工具结果：记 tengu_tool_use_cancelled（阶段 validate_input/permission/... 与中断原因），返回 toolDenialKind=cancelled 的 tool_result。
  */
-function buildCancelledToolResult(e) {
+function buildCancelledToolResult(options) {
   let {
     phase,
     cancelText = CANCEL_MESSAGE,
@@ -3702,7 +3828,7 @@ function buildCancelledToolResult(e) {
     mcpNameLoggable,
     requestId,
     now,
-  } = e;
+  } = options;
   logEvent("tengu_tool_use_cancelled", {
     toolName: sanitizeToolNameForAnalytics(tool.name),
     toolUseID: sanitizeMarkName(toolUseID),
@@ -3740,17 +3866,17 @@ function buildCancelledToolResult(e) {
 }
 //@ chunk-e6aww6q8.js:3932586-3932738 layout = isUnrecognizedKeysIssue (0.804)
 function isUnrecognizedKeysIssue_2(inputSchema, updatedInput) {
-  let r = inputSchema.safeParse(updatedInput);
-  if (r.success) return null;
-  let filtered = r.error.issues.filter((issue) => issue.code !== "unrecognized_keys");
+  let parsed = inputSchema.safeParse(updatedInput);
+  if (parsed.success) return null;
+  let filtered = parsed.error.issues.filter((issue) => issue.code !== "unrecognized_keys");
   return filtered.length > 0 ? filtered : null;
 }
 //@ chunk-e6aww6q8.js:3932738-3932917 layout
 /**
  * 向结果列表推入 hook_stopped_continuation 附件（hookName=PreToolUse:<工具名>），表示 PreToolUse hook 阻止了继续。
  */
-function pushHookStoppedContinuation(e, { toolName, toolUseID, message }) {
-  e.push({
+function pushHookStoppedContinuation(results, { toolName, toolUseID, message }) {
+  results.push({
     message: createAttachmentMessage_2({
       type: "hook_stopped_continuation",
       message,
@@ -3764,15 +3890,15 @@ function pushHookStoppedContinuation(e, { toolName, toolUseID, message }) {
 /**
  * 判断工具调用是否需要"外部结果读取器"：有非内置插件模块已加载→plugin_loaded，插件加载中→plugins_loading，有会话外的 PostToolUse hook→post_tool_use_hook，否则 undefined。
  */
-function getOutsideResultReaderBlocker(e) {
+function getOutsideResultReaderBlocker(toolUseContext) {
   if (getPluginRegistry().loadedModules.some((loadedModule) => !hasLink(loadedModule)))
     return "plugin_loaded";
   if (arePermissionHooksUnsettled()) return "plugins_loading";
   return hasOnlyOwnCallbacksToRun(
     "PostToolUse",
-    e.sessionHooksRegistry,
-    registerAgent(e, "PostToolUse", e.session.id),
-    e,
+    toolUseContext.sessionHooksRegistry,
+    registerAgent(toolUseContext, "PostToolUse", toolUseContext.session.id),
+    toolUseContext,
     isRemoteManagedEnvironment(),
   )
     ? undefined
@@ -3805,17 +3931,17 @@ async function checkPermissionsAndCallTool(
   usedClassifierInput = false,
 ) {
   let errorContent = toolFeatureName(tool.name, tool.mcpInfo);
-  let lt = builtinToolServedByMcp(tool) ?? tool.name;
-  let Je =
+  let effectiveToolName = builtinToolServedByMcp(tool) ?? tool.name;
+  let parsedInput =
     coercion?.repair && deepEqualIgnoringUndefined(input, coercion.repair.input) ? coercion.sent : input;
-  let nt = jsonStringify(Je).length;
+  let inputBytes = jsonStringify(parsedInput).length;
   let classifierEpoch = getClassifierEpoch();
   let schemaHint = parseToolInput(tool, input, coercion);
   if (!schemaHint.ok && schemaHint.cause === "json") {
     let { raw, len } = schemaHint;
-    let Li = truncateToLength(raw, 200);
-    let Qs = `${tool.name} was called with input that could not be parsed as JSON.
-You sent (first ${Li.length} of ${len} bytes): ${Li}
+    let rawPrefix = truncateToLength(raw, 200);
+    let parseFailureText = `${tool.name} was called with input that could not be parsed as JSON.
+You sent (first ${rawPrefix.length} of ${len} bytes): ${rawPrefix}
 Common causes: unescaped backslashes in file paths (use / or \\\\), unescaped control characters, or truncated output. Retry with valid JSON.`;
     logFeatureSad(errorContent, "tool_input_validation_failed");
     logEvent("tengu_tool_use_error", {
@@ -3852,7 +3978,7 @@ Common causes: unescaped backslashes in file paths (use / or \\\\), unescaped co
           content: [
             {
               type: "tool_result",
-              content: `<tool_use_error>InputValidationError: ${Qs}</tool_use_error>`,
+              content: `<tool_use_error>InputValidationError: ${parseFailureText}</tool_use_error>`,
               is_error: true,
               tool_use_id: toolUseID,
             },
@@ -3869,42 +3995,42 @@ Common causes: unescaped backslashes in file paths (use / or \\\\), unescaped co
       toolName: sanitizeToolNameForAnalytics(tool.name),
       shapeClass: sanitizeShapeClass(schemaHint.coerced.shapeClass),
       outcome: lit_2(schemaHint.coerced.valid ? "coerced_valid" : "coerced_still_invalid"),
-      toolInputSizeBytes: nt,
+      toolInputSizeBytes: inputBytes,
     });
   if (!schemaHint.ok) {
-    let yr = formatZodValidationError(tool.name, schemaHint.error);
-    let Kr = false;
-    if (emptyInputRepairConfig() && isEmptyObject(Je)) {
-      let ta = placeholderToolInput(tool.name, tool.inputSchema);
-      if (ta !== null) {
-        yr = ta;
-        Kr = true;
+    let validationText = formatZodValidationError(tool.name, schemaHint.error);
+    let emptyRepaired = false;
+    if (emptyInputRepairConfig() && isEmptyObject(parsedInput)) {
+      let placeholderInput = placeholderToolInput(tool.name, tool.inputSchema);
+      if (placeholderInput !== null) {
+        validationText = placeholderInput;
+        emptyRepaired = true;
       }
     }
-    let Li = tool.validationErrorSteer?.(Je, schemaHint.error);
-    if (Li)
-      yr = `${Li}
+    let steerNote = tool.validationErrorSteer?.(parsedInput, schemaHint.error);
+    if (steerNote)
+      validationText = `${steerNote}
 
-${yr}`;
-    let Qs = isArtifactFamilyTool(tool)
+${validationText}`;
+    let unavailableNote = isArtifactFamilyTool(tool)
       ? buildUnavailableOptionNote(
           tool.name,
-          Je,
+          parsedInput,
           schemaHint.schemaInput,
           schemaHint.error,
           toolUseContext.messages,
         )
       : null;
-    if (Qs) {
+    if (unavailableNote) {
       logEvent("tengu_recorded_tool_option_unavailable", {
         toolName: sanitizeToolNameForAnalytics(tool.name),
         isArtifactFamily: true,
-        kind: fromEnum(Qs.kind),
-        source: fromEnum(Qs.source),
+        kind: fromEnum(unavailableNote.kind),
+        source: fromEnum(unavailableNote.source),
       });
-      yr += `
+      validationText += `
 
-${Qs.text}`;
+${unavailableNote.text}`;
     }
     let schemaNotSentHint = buildSchemaNotSentHint(
       tool,
@@ -3918,25 +4044,25 @@ ${Qs.text}`;
         toolName: sanitizeToolNameForAnalytics(tool.name),
         isMcp: tool.isMcp ?? false,
       });
-      yr += schemaNotSentHint;
+      validationText += schemaNotSentHint;
     }
     let joined = uniq(schemaHint.error.issues.map((issue) => issue.code)).join(",");
     logForDebugging(
-      `${toolCategoryForTelemetry(tool)} tool input error: issues=${joined} inputBytes=${nt} errorChars=${yr.length}`,
+      `${toolCategoryForTelemetry(tool)} tool input error: issues=${joined} inputBytes=${inputBytes} errorChars=${validationText.length}`,
     );
     logFeatureSad(errorContent, "tool_input_validation_failed");
     logEvent("tengu_tool_use_error", {
       error: lit_2("InputValidationError"),
       errorCode: lit_2("ZOD_VALIDATION"),
       zodIssueCodes: fromEnumArr(uniq(schemaHint.error.issues.map((issue) => issue.code))),
-      errorDetailsHash: shortHash(yr),
+      errorDetailsHash: shortHash(validationText),
       messageID: sanitizeMarkName(messageId),
       toolName: sanitizeToolNameForAnalytics(tool.name),
       isMcp: tool.isMcp ?? false,
       ...getSubagentTelemetryFields(toolUseContext.agentContext),
       ...getEffortTelemetryFields(toolUseContext),
-      toolInputSizeBytes: nt,
-      ...(Kr && {
+      toolInputSizeBytes: inputBytes,
+      ...(emptyRepaired && {
         emptyInputRepaired: true,
       }),
       queryChainId: sanitizeMarkName(toolUseContext.queryTracking?.chainId),
@@ -3963,13 +4089,13 @@ ${Qs.text}`;
           content: [
             {
               type: "tool_result",
-              content: `<tool_use_error>InputValidationError: ${yr}</tool_use_error>`,
+              content: `<tool_use_error>InputValidationError: ${validationText}</tool_use_error>`,
               is_error: true,
               tool_use_id: toolUseID,
             },
           ],
           toolUseResult: `InputValidationError: ${schemaHint.error.message}`,
-          toolResultRemedy: tool.validationErrorRemedy?.(Je),
+          toolResultRemedy: tool.validationErrorRemedy?.(parsedInput),
           sourceToolAssistantUUID: assistantMessage.uuid,
           now,
         }),
@@ -3977,19 +4103,19 @@ ${Qs.text}`;
     ];
   }
   if (tool.isMcp) {
-    let yr = describeMissingRequiredArgs(schemaHint.input, tool.inputJSONSchema);
-    if (yr !== null)
+    let missingArgs = describeMissingRequiredArgs(schemaHint.input, tool.inputJSONSchema);
+    if (missingArgs !== null)
       logEvent("tengu_mcp_input_missing_required", {
         toolName: sanitizeToolNameForAnalytics(tool.name),
         isMcp: true,
         toolUseID: sanitizeMarkName(toolUseID),
         messageID: sanitizeMarkName(messageId),
-        toolInputSizeBytes: nt,
-        requiredCount: yr.requiredCount,
-        missingCount: yr.missingCount,
-        presentKeyCount: yr.presentKeyCount,
-        maxStringValueLen: yr.maxStringValueLen,
-        hasPseudoTagDebris: yr.hasPseudoTagDebris,
+        toolInputSizeBytes: inputBytes,
+        requiredCount: missingArgs.requiredCount,
+        missingCount: missingArgs.missingCount,
+        presentKeyCount: missingArgs.presentKeyCount,
+        maxStringValueLen: missingArgs.maxStringValueLen,
+        hasPseudoTagDebris: missingArgs.hasPseudoTagDebris,
         ...getSubagentTelemetryFields(toolUseContext.agentContext),
         queryChainId: sanitizeMarkName(toolUseContext.queryTracking?.chainId),
         queryDepth: toolUseContext.queryTracking?.depth,
@@ -4008,20 +4134,20 @@ ${Qs.text}`;
       });
   }
   let resultNote = schemaHint.coerced?.resultNote;
-  let validateInput = (yr) =>
-    tool.validateInput?.(yr, {
+  let validateToolInput = (validateInput) =>
+    tool.validateInput?.(validateInput, {
       ...toolUseContext,
       toolUseId: toolUseID,
     });
-  let It = (await warmRemoteMemoryPath(
+  let validation = (await warmRemoteMemoryPath(
     tool,
     schemaHint.input,
     toolUseContext.abortController.signal,
     backgroundAgentIdOf(toolUseContext),
   ))
     ? undefined
-    : await runValidateInput(tool, schemaHint.input, validateInput);
-  if (It === undefined || isServerFallbackDiscard(toolUseContext.abortController.signal))
+    : await runValidateInput(tool, schemaHint.input, validateToolInput);
+  if (validation === undefined || isServerFallbackDiscard(toolUseContext.abortController.signal))
     return buildCancelledToolResult({
       phase: "validate_input",
       cancelText: isServerFallbackDiscard(toolUseContext.abortController.signal)
@@ -4037,7 +4163,7 @@ ${Qs.text}`;
       requestId,
       now,
     });
-  let Yt = (verdict) => {
+  let rejectResult = (verdict) => {
     logForDebugging(
       `${toolCategoryForTelemetry(tool)} tool validation error: code=${verdict.errorCode} messageChars=${verdict.message?.length ?? 0}`,
     );
@@ -4107,24 +4233,26 @@ ${Qs.text}`;
       },
     ];
   };
-  if (!It.ok) {
-    let yr = Yt(It.verdict);
-    if (It.deniedInput !== undefined) toolUseContext.onPermissionDenial?.(tool, toolUseID, It.deniedInput);
-    if (It.verdict.denyRule !== undefined)
+  if (!validation.ok) {
+    let rejection = rejectResult(validation.verdict);
+    if (validation.deniedInput !== undefined)
+      toolUseContext.onPermissionDenial?.(tool, toolUseID, validation.deniedInput);
+    if (validation.verdict.denyRule !== undefined)
       decisionOut.decided = {
-        record: buildDenyRuleDecisionRecord(It.verdict.message, It.verdict.denyRule),
+        record: buildDenyRuleDecisionRecord(validation.verdict.message, validation.verdict.denyRule),
         mode: getToolPermissionContext(toolUseContext).mode,
       };
-    return yr;
+    return rejection;
   }
-  let qt = [];
-  let { observableInput, callInput } = It;
-  let pn = cloneIfServerResults(assistantMessage, It.observableInput);
-  let no = pn ?? undefined;
-  let hn = usedClassifierInput ? clone(It.observableInput) : undefined;
-  let ho = usedClassifierInput && It.backfilled ? clone(It.callInput) : undefined;
-  let yn = It;
-  let Kn = clonedHookInput(toolUseContext, It.observableInput);
+  let messages = [];
+  let { observableInput, callInput } = validation;
+  let clonedMessage = cloneIfServerResults(assistantMessage, validation.observableInput);
+  let baselineInput = clonedMessage ?? undefined;
+  let classifierInput = usedClassifierInput ? clone(validation.observableInput) : undefined;
+  let classifierCallInput =
+    usedClassifierInput && validation.backfilled ? clone(validation.callInput) : undefined;
+  let callContext = validation;
+  let hookInputSnapshot = clonedHookInput(toolUseContext, validation.observableInput);
   let toolUseContext_2 = {
     ...toolUseContext,
     mcpRequestMeta: stripHostToolMeta(toolUseContext.mcpRequestMeta),
@@ -4134,12 +4262,12 @@ ${Qs.text}`;
       toolUseContext,
     ),
   };
-  let fo = false;
-  let To;
+  let preventContinuation = false;
+  let stopReason;
   let hookPermissionResult;
-  let vn = [];
-  let co = [];
-  let So = [];
+  let rewriteKinds = [];
+  let rewriteSources = [];
+  let hookTimings = [];
   let preToolHookStart = Date.now();
   for await (let result of runPreToolUseHooks(
     toolUseContext_2,
@@ -4150,13 +4278,13 @@ ${Qs.text}`;
     requestId,
     mcpServerType,
     mcpServerBaseUrl,
-    validateInput,
+    validateToolInput,
   ))
     switch (result.type) {
       case "message":
         if (result.message.message.type === "progress") onProgress(result.message.message);
         else {
-          qt.push(result.message);
+          messages.push(result.message);
           let att = result.message.message.attachment;
           if (
             att &&
@@ -4165,7 +4293,7 @@ ${Qs.text}`;
             "durationMs" in att &&
             att.durationMs !== undefined
           )
-            So.push({
+            hookTimings.push({
               command: att.command,
               durationMs: att.durationMs,
             });
@@ -4178,17 +4306,17 @@ ${Qs.text}`;
         observableInput = result.updatedInput;
         break;
       case "hookRewriterKind":
-        vn.push(result.kind);
-        co.push(result.source);
+        rewriteKinds.push(result.kind);
+        rewriteSources.push(result.source);
         break;
       case "preventContinuation":
-        fo = result.shouldPreventContinuation;
+        preventContinuation = result.shouldPreventContinuation;
         break;
       case "stopReason":
-        To = result.stopReason;
+        stopReason = result.stopReason;
         break;
       case "additionalContext":
-        if (!isDelegatedObservationContext(toolUseContext.agentContext)) qt.push(result.message);
+        if (!isDelegatedObservationContext(toolUseContext.agentContext)) messages.push(result.message);
         break;
       case "defer": {
         if (toolUseContext.remoteCall !== undefined) {
@@ -4220,12 +4348,12 @@ ${Qs.text}`;
           );
           break;
         }
-        let Kr = Array.isArray(assistantMessage.message.content)
-          ? count(assistantMessage.message.content, (Qs) => Qs.type === "tool_use")
+        let batchToolCount = Array.isArray(assistantMessage.message.content)
+          ? count(assistantMessage.message.content, (block) => block.type === "tool_use")
           : 1;
-        if (Kr > 1) {
+        if (batchToolCount > 1) {
           logForDebugging(
-            `PreToolUse hook for ${toolCategoryForTelemetry(tool)} returned permissionDecision=defer but ${Kr} tool calls are in this batch; ignoring (defer is solo-only \u2014 siblings would be orphaned on resume)`,
+            `PreToolUse hook for ${toolCategoryForTelemetry(tool)} returned permissionDecision=defer but ${batchToolCount} tool calls are in this batch; ignoring (defer is solo-only \u2014 siblings would be orphaned on resume)`,
             {
               level: "warn",
             },
@@ -4234,7 +4362,7 @@ ${Qs.text}`;
         }
         if (toolUseContext.abortController.signal.aborted) {
           let cancelMessage = getCancelMessage(toolUseContext.abortController.signal);
-          qt.push({
+          messages.push({
             message: createUserMessage({
               content: [
                 {
@@ -4248,7 +4376,7 @@ ${Qs.text}`;
               now,
             }),
           });
-          return qt;
+          return messages;
         }
         logEvent("tengu_pre_tool_hook_deferred", {
           toolName: sanitizeToolNameForAnalytics(tool.name),
@@ -4256,7 +4384,7 @@ ${Qs.text}`;
           queryDepth: toolUseContext.queryTracking?.depth,
         });
         let activeSpanId = getActiveSpanId();
-        qt.push({
+        messages.push({
           message: createAttachmentMessage_2({
             type: "hook_deferred_tool",
             toolUseID,
@@ -4270,51 +4398,51 @@ ${Qs.text}`;
             }),
           }),
         });
-        return qt;
+        return messages;
       }
       case "stop": {
         getStatsStore()?.observe("pre_tool_hook_duration_ms", Date.now() - preToolHookStart);
         let cancelMessage = getCancelMessage(toolUseContext.abortController.signal);
         let cancelledToolResultBlock = createCancelledToolResultBlock(toolUseID);
         cancelledToolResultBlock.content = result.stopReason ?? cancelMessage;
-        let stopReason = result.stopReason ?? To;
-        qt.push({
+        let stopReason_2 = result.stopReason ?? stopReason;
+        messages.push({
           message: createUserMessage({
             content: [cancelledToolResultBlock],
-            toolUseResult: stopReason ? `Error: ${stopReason}` : cancelMessage,
+            toolUseResult: stopReason_2 ? `Error: ${stopReason_2}` : cancelMessage,
             toolDenialKind: result.stopReason ? undefined : "cancelled",
             sourceToolAssistantUUID: assistantMessage.uuid,
             now,
           }),
         });
-        if (fo && result.stopReason && !toolUseContext.abortController.signal.aborted)
-          pushHookStoppedContinuation(qt, {
+        if (preventContinuation && result.stopReason && !toolUseContext.abortController.signal.aborted)
+          pushHookStoppedContinuation(messages, {
             toolName: tool.name,
             toolUseID,
-            message: stopReason || "Execution stopped by hook",
+            message: stopReason_2 || "Execution stopped by hook",
           });
-        return qt;
+        return messages;
       }
     }
-  let un = Date.now() - preToolHookStart;
-  getStatsStore()?.observe("pre_tool_hook_duration_ms", un);
-  if (usedClassifierInput && hn !== undefined) {
+  let hookDurationMs = Date.now() - preToolHookStart;
+  getStatsStore()?.observe("pre_tool_hook_duration_ms", hookDurationMs);
+  if (usedClassifierInput && classifierInput !== undefined) {
     let updatedInput =
       hookPermissionResult !== undefined && "updatedInput" in hookPermissionResult
         ? hookPermissionResult.updatedInput
         : undefined;
-    let Kr =
-      !deepEqualIgnoringUndefined(observableInput, hn) ||
-      (updatedInput !== undefined && !deepEqualIgnoringUndefined(updatedInput, hn));
-    if (!deepEqualIgnoringUndefined(observableInput, hn)) {
-      observableInput = hn;
-      yn = {
-        ...It,
-        observableInput: hn,
-        callInput: ho ?? hn,
+    let rewriteDropped =
+      !deepEqualIgnoringUndefined(observableInput, classifierInput) ||
+      (updatedInput !== undefined && !deepEqualIgnoringUndefined(updatedInput, classifierInput));
+    if (!deepEqualIgnoringUndefined(observableInput, classifierInput)) {
+      observableInput = classifierInput;
+      callContext = {
+        ...validation,
+        observableInput: classifierInput,
+        callInput: classifierCallInput ?? classifierInput,
       };
     }
-    if (hookPermissionResult?.behavior === "allow" && Kr) hookPermissionResult = undefined;
+    if (hookPermissionResult?.behavior === "allow" && rewriteDropped) hookPermissionResult = undefined;
     else if (
       hookPermissionResult !== undefined &&
       "updatedInput" in hookPermissionResult &&
@@ -4328,89 +4456,90 @@ ${Qs.text}`;
       toolName: sanitizeToolNameForAnalytics(tool.name),
       isMcp: tool.isMcp ?? false,
       toolUseId: sanitizeMarkName(toolUseID),
-      rewriteDropped: Kr,
+      rewriteDropped,
     });
   }
-  if (un >= ISOLATION_TIMEOUT_MS)
+  if (hookDurationMs >= ISOLATION_TIMEOUT_MS)
     logForDebugging(
-      `Slow PreToolUse hooks: ${un}ms for ${toolCategoryForTelemetry(tool)} (${So.length} hooks)`,
+      `Slow PreToolUse hooks: ${hookDurationMs}ms for ${toolCategoryForTelemetry(tool)} (${hookTimings.length} hooks)`,
       {
         level: "info",
       },
     );
-  let ao = {};
+  let spanAttributes = {};
   if (observableInput && typeof observableInput === "object" && !isTracingRedacted()) {
     if (tool.name === FILE_READ_TOOL_NAME && "file_path" in observableInput && isToolDetailsLoggingEnabled())
-      ao.file_path = String(observableInput.file_path);
+      spanAttributes.file_path = String(observableInput.file_path);
     else if (
       (tool.name === FILE_EDIT_TOOL_NAME || tool.name === FILE_WRITE_TOOL_NAME) &&
       "file_path" in observableInput &&
       isToolDetailsLoggingEnabled()
     )
-      ao.file_path = String(observableInput.file_path);
+      spanAttributes.file_path = String(observableInput.file_path);
     else if (tool.name === BASH_TOOL_NAME && "command" in observableInput && isToolDetailsLoggingEnabled()) {
-      let yr = observableInput;
-      ao.full_command = yr.command;
+      let bashInput = observableInput;
+      spanAttributes.full_command = bashInput.command;
     } else if (isToolDetailsLoggingEnabled()) {
       let skillName = extractSkillName(tool.name, observableInput);
-      if (skillName) ao.skill_name = skillName;
+      if (skillName) spanAttributes.skill_name = skillName;
       let subagentType = extractSubagentType(tool.name, observableInput);
-      if (subagentType) ao.subagent_type = subagentType;
+      if (subagentType) spanAttributes.subagent_type = subagentType;
     }
   }
-  let $o =
+  let bashClass =
     observableInput &&
     typeof observableInput === "object" &&
-    lt === BASH_TOOL_NAME &&
+    effectiveToolName === BASH_TOOL_NAME &&
     "command" in observableInput &&
     typeof observableInput.command === "string"
       ? classifyBashCommand(observableInput.command)
       : undefined;
-  if ($o && isSessionTracingEnabled()) {
-    ao.bash_command_class = $o.bash_command_class;
-    ao.bash_argv0 = $o.bash_argv0;
+  if (bashClass && isSessionTracingEnabled()) {
+    spanAttributes.bash_command_class = bashClass.bash_command_class;
+    spanAttributes.bash_argv0 = bashClass.bash_argv0;
   }
-  let yo = isLiveMemoryTool(tool);
-  let Ho = yo || tool.mcpInfo?.accountMemory === true;
+  let memoryTool = isLiveMemoryTool(tool);
+  let accountMemoryTool = memoryTool || tool.mcpInfo?.accountMemory === true;
   if (tool.mcpInfo?.accountMemory === true) markRecordGenuine();
-  let rr = withholdsFileReferenceErrors(tool, toolUseID);
-  let toolSpan = startToolSpan(
+  let withholdsFileRefs = withholdsFileReferenceErrors(tool, toolUseID);
+  let span = startToolSpan(
     tool.name,
     toolUseContext.agentContext,
-    ao,
+    spanAttributes,
     isPerfettoTracingEnabled() || (isBetaTracingEnabled() && isToolDetailsLoggingEnabled())
       ? jsonStringify(observableInput)
       : undefined,
     toolUseID,
-    Ho,
+    accountMemoryTool,
   );
   startToolBlockedOnUserSpan(toolUseContext.agentContext);
   rebaseBatchHookOrigins(
     [toolUseContext, toolUseContext_2],
-    Kn,
+    hookInputSnapshot,
     getHookUpdatedInput(hookPermissionResult, observableInput),
   );
   let permissionMode = getToolPermissionContext(toolUseContext_2).mode;
   let permissionStart = Date.now();
   let hookUpdatedInput = getHookUpdatedInput(hookPermissionResult, observableInput);
-  let _r = describeInputRewrite(
+  let rewriteDescription = describeInputRewrite(
     hookRewrite,
     {
-      changed: lacksServerResult(pn, hookUpdatedInput),
-      kinds: vn,
-      sources: co,
+      changed: lacksServerResult(clonedMessage, hookUpdatedInput),
+      kinds: rewriteKinds,
+      sources: rewriteSources,
     },
     () => isShellToolClassified(tool.name),
     () => isShellOrFileToolForClassifier(tool),
   );
   let permissionRound = startPermissionRound(toolUseContext, toolUseID, tool.name);
   let checkRunner = getCheckRunner(toolUseContext.session, tool.name);
-  let Oo = getRegisteredCheck(toolUseContext.session, tool.name) && checkRunner;
-  let jr = Oo ? undefined : checkRunner;
+  let checkRegistered = getRegisteredCheck(toolUseContext.session, tool.name) && checkRunner;
+  let checkRunnerHere = checkRegistered ? undefined : checkRunner;
   toolUseContext.toolDecisions ??= new Map();
-  let Or =
-    inputRewrittenBeforeCall || (no !== undefined && !deepEqualIgnoringUndefined(hookUpdatedInput, no));
-  let Io = await resolvePermissionDecisionForCall(
+  let inputRewritten =
+    inputRewrittenBeforeCall ||
+    (baselineInput !== undefined && !deepEqualIgnoringUndefined(hookUpdatedInput, baselineInput));
+  let permissionResult = await resolvePermissionDecisionForCall(
     hookPermissionResult,
     tool,
     observableInput,
@@ -4418,14 +4547,14 @@ ${Qs.text}`;
       ...toolUseContext_2,
       permissionPhase: undefined,
       permissionRound,
-      inputChangedByHook: Or ? true : undefined,
+      inputChangedByHook: inputRewritten ? true : undefined,
     },
     canUseTool,
     await applyServerClassifierVerdict(
       assistantMessage,
       toolUseID,
       hookUpdatedInput,
-      _r,
+      rewriteDescription,
       toolUseContext.sameTurnToolUses,
     ),
     toolUseID,
@@ -4433,9 +4562,9 @@ ${Qs.text}`;
     takePermissionRecord(toolUseContext, toolUseID, permissionRound);
     throw error;
   });
-  let permissionDecision = Io.decision;
-  observableInput = Io.input;
-  let rs = takePermissionRecord(toolUseContext, toolUseID, permissionRound) ?? {};
+  let permissionDecision = permissionResult.decision;
+  observableInput = permissionResult.input;
+  let permissionRecord = takePermissionRecord(toolUseContext, toolUseID, permissionRound) ?? {};
   if (
     permissionDecision.behavior !== "allow" &&
     isServerFallbackDiscard(toolUseContext.abortController.signal)
@@ -4445,7 +4574,7 @@ ${Qs.text}`;
       permissionMode,
       buildPermissionDecisionRecord("cancelled", "server_fallback_tombstone"),
     );
-    endToolSpan(toolSpan);
+    endToolSpan(span);
     return buildCancelledToolResult({
       phase: "permission",
       tool,
@@ -4459,15 +4588,15 @@ ${Qs.text}`;
       now,
     });
   }
-  let Es = toolUseContext.toolDecisions.get(toolUseID);
+  let decisionEntry = toolUseContext.toolDecisions.get(toolUseID);
   if (
     permissionDecision.behavior === "ask" &&
     unwrapAbortReason(toolUseContext.abortController.signal.reason) === "interrupt" &&
-    (Es === undefined || Es.source === "user_abort")
+    (decisionEntry === undefined || decisionEntry.source === "user_abort")
   ) {
     setDecided(decisionOut, permissionMode, buildPermissionDecisionRecord("cancelled", "user_abort"));
-    endToolSpan(toolSpan);
-    qt.push({
+    endToolSpan(span);
+    messages.push({
       message: createCancelledToolResult(
         toolUseID,
         assistantMessage,
@@ -4475,34 +4604,34 @@ ${Qs.text}`;
         now,
       ),
     });
-    return qt;
+    return messages;
   }
   if (permissionDecision.behavior !== "allow") {
     if (isTerminalShutdown() && !toolUseContext.abortController.signal.aborted) await heldUntilExit();
     if (isInvalidInputDeny(permissionDecision)) {
       setDecided(decisionOut, permissionMode, buildPermissionDecisionRecord("reject", "invalid_input"));
-      endToolSpan(toolSpan);
-      qt.push(
-        ...Yt({
+      endToolSpan(span);
+      messages.push(
+        ...rejectResult({
           result: false,
           message: permissionDecision.message,
           errorCode: 1,
         }),
       );
-      if (fo && !toolUseContext.abortController.signal.aborted)
-        pushHookStoppedContinuation(qt, {
+      if (preventContinuation && !toolUseContext.abortController.signal.aborted)
+        pushHookStoppedContinuation(messages, {
           toolName: tool.name,
           toolUseID,
-          message: To || "Execution stopped by hook",
+          message: stopReason || "Execution stopped by hook",
         });
-      return qt;
+      return messages;
     }
     toolUseContext.onPermissionDenial?.(tool, toolUseID, observableInput);
   }
-  let Nr = Date.now() - permissionStart;
-  if (Nr >= ISOLATION_TIMEOUT_MS && permissionMode === "auto")
+  let permissionDurationMs = Date.now() - permissionStart;
+  if (permissionDurationMs >= ISOLATION_TIMEOUT_MS && permissionMode === "auto")
     logForDebugging(
-      `Slow permission decision: ${Nr}ms for ${toolCategoryForTelemetry(tool)} (mode=${permissionMode}, behavior=${permissionDecision.behavior})`,
+      `Slow permission decision: ${permissionDurationMs}ms for ${toolCategoryForTelemetry(tool)} (mode=${permissionMode}, behavior=${permissionDecision.behavior})`,
       {
         level: "info",
       },
@@ -4557,7 +4686,7 @@ ${Qs.text}`;
     permissionDecision.decisionReason.hookName === "PermissionRequest" &&
     permissionDecision.behavior !== "ask"
   )
-    qt.push({
+    messages.push({
       message: createAttachmentMessage_2({
         type: "hook_permission_decision",
         decision: permissionDecision.behavior,
@@ -4565,7 +4694,7 @@ ${Qs.text}`;
         hookEvent: "PermissionRequest",
       }),
     });
-  let as;
+  let cancelledResult;
   try {
     if (
       isCcsTenant() &&
@@ -4574,7 +4703,7 @@ ${Qs.text}`;
         toolPermissionContext.servedCall === true,
       )
     )
-      as = {
+      cancelledResult = {
         autoClassifierActive: true,
         ...(permissionDecision.behavior === "allow" && {
           approver: fromEnumOpt(getApprovalSource(permissionDecision)),
@@ -4586,30 +4715,30 @@ ${Qs.text}`;
   }
   if (permissionDecision.behavior !== "allow") {
     logForDebugging(`${toolCategoryForTelemetry(tool)} tool permission denied`);
-    let yr = toolUseContext.toolDecisions.get(toolUseID);
+    let decisionEntry = toolUseContext.toolDecisions.get(toolUseID);
     setDecided(
       decisionOut,
       permissionMode,
-      buildDeniedDecisionRecord(permissionDecision, yr, source, rs.pipeline),
+      buildDeniedDecisionRecord(permissionDecision, decisionEntry, source, permissionRecord.pipeline),
     );
-    endToolSpan(toolSpan);
+    endToolSpan(span);
     logEvent("tengu_tool_use_can_use_tool_rejected", {
-      ...as,
+      ...cancelledResult,
       messageID: sanitizeMarkName(messageId),
       toolUseID: sanitizeMarkName(toolUseID),
       toolName: sanitizeToolNameForAnalytics(tool.name),
       deniedBy:
-        permissionDecision.behavior === "ask" && yr?.decision !== "reject"
+        permissionDecision.behavior === "ask" && decisionEntry?.decision !== "reject"
           ? lit_2("unresolvedAsk")
-          : sanitizedDecisionReasonDisplay("deny", yr?.source, permissionDecision.decisionReason),
+          : sanitizedDecisionReasonDisplay("deny", decisionEntry?.source, permissionDecision.decisionReason),
       decisionReasonType: fromEnum(
         permissionDecision.decisionReason?.type !== "rule" &&
           toDecisionRecord(permissionDecision).matchedAskRule !== undefined
           ? "rule"
           : (permissionDecision.decisionReason?.type ?? "unknown"),
       ),
-      preToolHookDurationMs: un,
-      permissionDurationMs: Nr,
+      preToolHookDurationMs: hookDurationMs,
+      permissionDurationMs,
       queryChainId: sanitizeMarkName(toolUseContext.queryTracking?.chainId),
       queryDepth: toolUseContext.queryTracking?.depth,
       ...(toolUseContext.options.messageClientPlatform && {
@@ -4628,26 +4757,27 @@ ${Qs.text}`;
       ...claudeAiServerIdField(tool.mcpInfo),
       ...tool.mcpInfo?.pluginTelemetry,
     });
-    let Kr = await settleUnaskedQuestion(tool, permissionDecision, toolUseID, toolUseContext, {
-      stopped: fo,
+    let settledAsk = await settleUnaskedQuestion(tool, permissionDecision, toolUseID, toolUseContext, {
+      stopped: preventContinuation,
       asked: hookPermissionResult?.behavior === "ask",
     });
-    let Li = Kr ?? permissionDecision.message;
-    if (fo && !Li) Li = `Execution stopped by PreToolUse hook${To ? `: ${To}` : ""}`;
+    let denyMessage = settledAsk ?? permissionDecision.message;
+    if (preventContinuation && !denyMessage)
+      denyMessage = `Execution stopped by PreToolUse hook${stopReason ? `: ${stopReason}` : ""}`;
     if (permissionDecision.decisionReason?.type === "hook")
-      Li += webFetchAgentHookHint(
+      denyMessage += webFetchAgentHookHint(
         tool.name,
         observableInput,
         toolUseContext.options.tools,
         getToolPermissionContext(toolUseContext),
         getAgentSpawnContext(toolUseContext),
       );
-    let Qs = Li;
+    let settledMessage = denyMessage;
     let messageContent = [
       {
         type: "tool_result",
-        content: Qs,
-        ...(Kr === undefined && {
+        content: settledMessage,
+        ...(settledAsk === undefined && {
           is_error: true,
         }),
         tool_use_id: toolUseID,
@@ -4657,14 +4787,14 @@ ${Qs.text}`;
     if (contentBlocks?.length) messageContent.push(...contentBlocks);
     let imagePasteIds;
     if (contentBlocks?.length) {
-      let imageCount = count(contentBlocks, (Ca) => Ca.type === "image");
+      let imageCount = count(contentBlocks, (imageCount) => imageCount.type === "image");
       if (imageCount > 0) imagePasteIds = makeImagePlaceholders(imageCount);
     }
-    qt.push({
+    messages.push({
       message: createUserMessage({
         content: messageContent,
         imagePasteIds,
-        toolUseResult: Kr === undefined ? `Error: ${Qs}` : Qs,
+        toolUseResult: settledAsk === undefined ? `Error: ${settledMessage}` : settledMessage,
         toolDenialKind: getToolCallOutcomeCode(permissionDecision),
         toolDenialEndsTurn:
           permissionDecision.behavior === "deny" && permissionDecision.endsTurn ? true : undefined,
@@ -4682,23 +4812,23 @@ ${Qs.text}`;
       }),
     });
     if (
-      fo &&
+      preventContinuation &&
       permissionDecision.behavior === "deny" &&
       permissionDecision.decisionReason.type === "hook" &&
       !toolUseContext.abortController.signal.aborted
     )
-      pushHookStoppedContinuation(qt, {
+      pushHookStoppedContinuation(messages, {
         toolName: tool.name,
         toolUseID,
-        message: To ?? Li,
+        message: stopReason ?? denyMessage,
       });
     if (
       permissionDecision.decisionReason?.type === "classifier" &&
       permissionDecision.decisionReason.classifier === "auto-mode"
     ) {
-      let Bs = false;
+      let deniedHooksRan = false;
       try {
-        for await (let Ca of executePermissionDeniedHooks(
+        for await (let deniedHookEvent of executePermissionDeniedHooks(
           tool.name,
           toolUseID,
           observableInput,
@@ -4707,13 +4837,13 @@ ${Qs.text}`;
           permissionMode,
           toolUseContext.abortController.signal,
         ))
-          if (Ca.retry) Bs = true;
+          if (deniedHookEvent.retry) deniedHooksRan = true;
       } catch (error) {
         if (!(error instanceof StreamClosedAbortError)) throw error;
         logForDebugging("PermissionDenied hooks cancelled (control stream closed)");
       }
-      if (Bs && !permissionDecision.decisionReason.noVerdict)
-        qt.push({
+      if (deniedHooksRan && !permissionDecision.decisionReason.noVerdict)
+        messages.push({
           message: createUserMessage({
             content: PERMISSION_DENIED_RETRY_TEXT,
             isMeta: true,
@@ -4728,10 +4858,10 @@ ${Qs.text}`;
       !toolUseContext.abortController.signal.aborted
     )
       turnAbortControllerOf(toolUseContext.abortController).abort(userAbortReason("permission-stop"));
-    return qt;
+    return messages;
   }
   logEvent("tengu_tool_use_can_use_tool_allowed", {
-    ...as,
+    ...cancelledResult,
     messageID: sanitizeMarkName(messageId),
     toolUseID: sanitizeMarkName(toolUseID),
     toolName: sanitizeToolNameForAnalytics(tool.name),
@@ -4751,18 +4881,18 @@ ${Qs.text}`;
     ...tool.mcpInfo?.pluginTelemetry,
   });
   if (permissionDecision.updatedInput !== undefined && !isEmptyObject(permissionDecision.updatedInput)) {
-    let yr = isUnrecognizedKeysIssue_2(tool.inputSchema, permissionDecision.updatedInput);
-    if (yr !== null) {
-      let Kr = new ZodError(yr);
-      let Li = `The permission handler returned updatedInput for ${tool.name} that failed schema validation: ${formatZodValidationError(tool.name, Kr)}
+    let unknownIssues = isUnrecognizedKeysIssue_2(tool.inputSchema, permissionDecision.updatedInput);
+    if (unknownIssues !== null) {
+      let zodError = new ZodError(unknownIssues);
+      let updatedInputError = `The permission handler returned updatedInput for ${tool.name} that failed schema validation: ${formatZodValidationError(tool.name, zodError)}
 This is a configuration issue in your canUseTool callback, PermissionRequest hook, or permission-prompt tool \u2014 updatedInput must satisfy the tool's input schema. The tool input from the model was valid.`;
-      let startId = uniq(yr.map((Hi) => Hi.code));
+      let startId = uniq(unknownIssues.map((issueCode) => issueCode.code));
       setDecided(
         decisionOut,
         permissionMode,
         buildPermissionDecisionRecord("reject", "permission_updated_input_invalid"),
       );
-      endToolSpan(toolSpan);
+      endToolSpan(span);
       logForDebugging(
         `Permission handler updatedInput for ${toolCategoryForTelemetry(tool)} failed schema validation (${startId.join(",")})`,
         {
@@ -4774,13 +4904,13 @@ This is a configuration issue in your canUseTool callback, PermissionRequest hoo
         error: lit_2("InputValidationError"),
         errorCode: lit_2("PERMISSION_UPDATED_INPUT"),
         zodIssueCodes: fromEnumArr(startId),
-        errorDetailsHash: shortHash(Li),
+        errorDetailsHash: shortHash(updatedInputError),
         messageID: sanitizeMarkName(messageId),
         toolName: sanitizeToolNameForAnalytics(tool.name),
         isMcp: tool.isMcp ?? false,
         ...getSubagentTelemetryFields(toolUseContext.agentContext),
         ...getEffortTelemetryFields(toolUseContext),
-        toolInputSizeBytes: nt,
+        toolInputSizeBytes: inputBytes,
         queryChainId: sanitizeMarkName(toolUseContext.queryTracking?.chainId),
         queryDepth: toolUseContext.queryTracking?.depth,
         ...(mcpServerType && {
@@ -4796,12 +4926,12 @@ This is a configuration issue in your canUseTool callback, PermissionRequest hoo
         ...claudeAiServerIdField(tool.mcpInfo),
         ...tool.mcpInfo?.pluginTelemetry,
       });
-      qt.push({
+      messages.push({
         message: createUserMessage({
           content: [
             {
               type: "tool_result",
-              content: `<tool_use_error>${Li}</tool_use_error>`,
+              content: `<tool_use_error>${updatedInputError}</tool_use_error>`,
               is_error: true,
               tool_use_id: toolUseID,
             },
@@ -4811,13 +4941,13 @@ This is a configuration issue in your canUseTool callback, PermissionRequest hoo
           now,
         }),
       });
-      if (fo && !toolUseContext.abortController.signal.aborted)
-        pushHookStoppedContinuation(qt, {
+      if (preventContinuation && !toolUseContext.abortController.signal.aborted)
+        pushHookStoppedContinuation(messages, {
           toolName: tool.name,
           toolUseID,
-          message: To || "Execution stopped by hook",
+          message: stopReason || "Execution stopped by hook",
         });
-      return qt;
+      return messages;
     }
     observableInput = stripUnchangedHostOwnedKeys(
       tool.name,
@@ -4825,13 +4955,13 @@ This is a configuration issue in your canUseTool callback, PermissionRequest hoo
       observableInput,
     );
   } else observableInput = stripHostOwnedInputKeys(tool.name, observableInput);
-  let Vi = {
+  let attributionState = {
     stamped: false,
     visiblyAttributed: false,
   };
   let toolInputForTelemetry = extractToolInputForTelemetry_2(observableInput);
-  let Wi =
-    toolInputForTelemetry !== undefined && Ho
+  let attributedFlag =
+    toolInputForTelemetry !== undefined && accountMemoryTool
       ? notRecordedLength(jsonStringify(observableInput))
       : toolInputForTelemetry;
   let toolInputDetailsForAnalytics = extractToolInputDetailsForAnalytics(
@@ -4839,30 +4969,30 @@ This is a configuration issue in your canUseTool callback, PermissionRequest hoo
     observableInput,
     tool.mcpInfo,
   );
-  let wa = toolUseContext.toolDecisions.get(toolUseID);
+  let decisionRecord = toolUseContext.toolDecisions.get(toolUseID);
   setDecided(
     decisionOut,
     permissionMode,
-    buildDeniedDecisionRecord(permissionDecision, wa, source, rs.pipeline),
+    buildDeniedDecisionRecord(permissionDecision, decisionRecord, source, permissionRecord.pipeline),
   );
   let aborted = toolUseContext.abortController.signal.aborted;
-  let mi = assistantMessage.isVirtual
+  let isVirtual = assistantMessage.isVirtual
     ? undefined
     : notifyBridgeSessionListener(toolUseContext.session, {
         toolUseId: toolUseID,
-        mayWrite: () => !tool.isReadOnly(restoreCallInput(yn, observableInput), toolUseContext),
+        mayWrite: () => !tool.isReadOnly(restoreCallInput(callContext, observableInput), toolUseContext),
         agentId: toolUseContext.agentId,
         signal: toolUseContext.abortController.signal,
       });
-  if (mi) {
-    await mi;
+  if (isVirtual) {
+    await isVirtual;
     if (
       !aborted &&
       toolUseContext.abortController.signal.aborted &&
       !isServerFallbackDiscard(toolUseContext.abortController.signal)
     ) {
-      endToolSpan(toolSpan);
-      qt.push(
+      endToolSpan(span);
+      messages.push(
         ...buildCancelledToolResult({
           phase: "pre_call",
           cancelText: getCancelMessage(toolUseContext.abortController.signal),
@@ -4877,17 +5007,17 @@ This is a configuration issue in your canUseTool callback, PermissionRequest hoo
           now,
         }),
       );
-      return qt;
+      return messages;
     }
   }
   if (toolUseContext.toolCallAbandoned?.(toolUseID)) {
-    endToolSpan(toolSpan);
+    endToolSpan(span);
     return [];
   }
   startToolExecutionSpan(toolUseContext.agentContext, toolUseID);
   let now_2 = Date.now();
-  let $a = new ToolWallClockTracker(now_2);
-  let nr = {
+  let wallClock = new ToolWallClockTracker(now_2);
+  let callState = {
     declaredNoOutsideWork:
       tool.mcpInfo === undefined &&
       ISOLATION_NEUTRAL_TOOLS.has(tool.name) &&
@@ -4897,11 +5027,11 @@ This is a configuration issue in your canUseTool callback, PermissionRequest hoo
         observableInput.action === "read"
       ),
   };
-  let Ti = new MemoryUsageSampler(stallSampler);
-  let Vs = Ti.sample("before_call");
-  let _i;
-  callInput = restoreCallInput(yn, observableInput);
-  let jo;
+  let memorySampler = new MemoryUsageSampler(stallSampler);
+  let memoryBefore = memorySampler.sample("before_call");
+  let callSpan;
+  callInput = restoreCallInput(callContext, observableInput);
+  let toolResult;
   if (isServerFallbackDiscard(toolUseContext.abortController.signal))
     return buildCancelledToolResult({
       phase: "pre_call",
@@ -4926,47 +5056,48 @@ This is a configuration issue in your canUseTool callback, PermissionRequest hoo
     },
   });
   logForDebugging(
-    `[Stall] tool_dispatch_start tool=${toolCategoryForTelemetry(tool)} toolUseId=${toolUseID} permissionDecisionMs=${Nr}`,
+    `[Stall] tool_dispatch_start tool=${toolCategoryForTelemetry(tool)} toolUseId=${toolUseID} permissionDecisionMs=${permissionDurationMs}`,
     {
       level: "info",
     },
   );
-  let Qr = false;
-  let fi;
+  let callFailed = false;
+  let callError;
   let telemetryToolInput = backgroundAgentIdOf(toolUseContext);
-  let Ja = false;
-  let Di = () => {
-    if (Ja) {
-      Ja = false;
+  let stopAfterCall = false;
+  let onStreamProgress = () => {
+    if (stopAfterCall) {
+      stopAfterCall = false;
       endActivity("tool_exec", telemetryToolInput);
     }
   };
   try {
-    Ja = true;
+    stopAfterCall = true;
     startSessionActivity("tool_exec", telemetryToolInput);
-    toolUseContext.lendToolExecEnd?.(toolUseID, Di);
+    toolUseContext.lendToolExecEnd?.(toolUseID, onStreamProgress);
     if (supportsRemoteExecution(tool) && splitHostField(callInput).requested !== undefined)
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
         INJECTED_MACHINE_REFUSAL,
         "late host argument on a local tool call",
       );
     if (isCoordinatorBashToolUse(tool, toolUseContext)) {
-      let Ks = checkCoordinatorShellCommand(tool, callInput, toolUseContext);
-      if (Ks !== null)
+      let coordinatorProblem = checkCoordinatorShellCommand(tool, callInput, toolUseContext);
+      if (coordinatorProblem !== null)
         throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-          Ks,
+          coordinatorProblem,
           "coordinator Bash call refused at call time",
         );
       callInput = clampCoordinatorShellTimeout(callInput);
     }
     let cwd = toolUseContext.session.project?.cwd;
-    if (cwd !== undefined && shouldLogGitCommitDetails(tool, callInput)) jo = await markHeadReflog(cwd);
+    if (cwd !== undefined && shouldLogGitCommitDetails(tool, callInput))
+      toolResult = await markHeadReflog(cwd);
     if (!isCallDirectoryUnchanged())
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
         CALL_DIRECTORY_CHANGED_MESSAGE,
         "working directory changed between check and call",
       );
-    let Kr = toolUseContext.agentId
+    let agentIdForCall = toolUseContext.agentId
       ? () => {}
       : emitToolHeartbeat({
           toolName: tool.name,
@@ -4974,25 +5105,25 @@ This is a configuration issue in your canUseTool callback, PermissionRequest hoo
           abortSignal: toolUseContext.abortController.signal,
           onProgress,
         });
-    let Li = () => {
-      _i = Date.now();
+    let applyResultLayers = () => {
+      callSpan = Date.now();
     };
-    if (toolUseContext.abortController.signal.aborted) _i = now_2;
-    toolUseContext.abortController.signal.addEventListener("abort", Li, {
+    if (toolUseContext.abortController.signal.aborted) callSpan = now_2;
+    toolUseContext.abortController.signal.addEventListener("abort", applyResultLayers, {
       once: true,
     });
-    let Qs = !tool.isReadOnly(callInput, toolUseContext);
-    toolUseContext.toolState.get(BashRepeatMeter).noteOtherToolCall(tool, Qs);
-    if (callObserver && !Qs) callObserver.isReadOnly = true;
+    let isWriteCall = !tool.isReadOnly(callInput, toolUseContext);
+    toolUseContext.toolState.get(BashRepeatMeter).noteOtherToolCall(tool, isWriteCall);
+    if (callObserver && !isWriteCall) callObserver.isReadOnly = true;
     let mcpDetails = getApprovalSource(permissionDecision);
     let skillName = forgetPendingCheck(toolUseContext.session, toolUseID);
-    let ta = (toolUseContext, onProgress) =>
+    let runToolCall = (toolUseContext, onProgress) =>
       tool.call(
         callInput,
         {
           ...toolUseContext,
           toolUseId: toolUseID,
-          permissionPhase: rs,
+          permissionPhase: permissionRecord,
           autoModeClassified:
             permissionDecision.decisionReason?.type === "classifier" &&
             permissionDecision.decisionReason.classifier === "auto-mode" &&
@@ -5013,15 +5144,15 @@ This is a configuration issue in your canUseTool callback, PermissionRequest hoo
           userModified: permissionDecision.userModified ?? false,
           gitDiffRead: true,
           outsideResultReader: () => getOutsideResultReaderBlocker(toolUseContext),
-          permissionCheckedFor: skillName ? undefined : Oo,
-          runnerCheckedHere: skillName ? checkRunner : jr,
-          timing: $a,
+          permissionCheckedFor: skillName ? undefined : checkRegistered,
+          runnerCheckedHere: skillName ? checkRunner : checkRunnerHere,
+          timing: wallClock,
         },
       );
     let result;
     callObserver?.onToolEntered?.();
     try {
-      result = await runWithTimingContext($a, () =>
+      result = await runWithTimingContext(wallClock, () =>
         detachToolCall(tool, callInput, toolUseContext)
           ? runDetachableToolCall({
               tool,
@@ -5029,13 +5160,13 @@ This is a configuration issue in your canUseTool callback, PermissionRequest hoo
               toolUseID,
               toolUseContext,
               onProgress,
-              run: ta,
+              run: runToolCall,
             })
-          : ta(toolUseContext, onProgress),
+          : runToolCall(toolUseContext, onProgress),
       );
     } finally {
-      Kr();
-      toolUseContext.abortController.signal.removeEventListener("abort", Li);
+      agentIdForCall();
+      toolUseContext.abortController.signal.removeEventListener("abort", applyResultLayers);
     }
     await waitForFolderAttached({
       toolState: toolUseContext.toolState,
@@ -5043,57 +5174,57 @@ This is a configuration issue in your canUseTool callback, PermissionRequest hoo
       content: result.data,
       signal: toolUseContext.abortController.signal,
     });
-    let toolDurationMs = Date.now() - now_2;
-    $a.settle();
-    fi = toolDurationMs;
-    let tu = Ti.sample("after_call");
-    addToToolDuration(toolDurationMs);
+    let callDurationMs = Date.now() - now_2;
+    wallClock.settle();
+    callError = callDurationMs;
+    let memoryAfter = memorySampler.sample("after_call");
+    addToToolDuration(callDurationMs);
     logForDebugging(
-      `[Stall] tool_dispatch_end tool=${toolCategoryForTelemetry(tool)} toolUseId=${toolUseID} outcome=ok durationMs=${toolDurationMs}`,
+      `[Stall] tool_dispatch_end tool=${toolCategoryForTelemetry(tool)} toolUseId=${toolUseID} outcome=ok durationMs=${callDurationMs}`,
       {
         level: "info",
       },
     );
-    Qr = true;
+    callFailed = true;
     if (
       tool.mcpInfo === undefined &&
       CORE_FILE_TOOLS.has(tool.name) &&
       result.data &&
       typeof result.data === "object"
     ) {
-      let Ks = {};
+      let timings = {};
       if (tool.name === FILE_READ_TOOL_NAME) {
-        let kl = result.data;
-        if (kl.type === "text") {
+        let resultData = result.data;
+        if (resultData.type === "text") {
           if (isToolDetailsLoggingEnabled() && "file_path" in observableInput)
-            Ks.file_path = String(observableInput.file_path);
-          Ks.content = kl.file.content;
+            timings.file_path = String(observableInput.file_path);
+          timings.content = resultData.file.content;
         }
       }
       if (
         (tool.name === FILE_EDIT_TOOL_NAME || tool.name === FILE_WRITE_TOOL_NAME) &&
         "file_path" in observableInput
       ) {
-        if (isToolDetailsLoggingEnabled()) Ks.file_path = String(observableInput.file_path);
+        if (isToolDetailsLoggingEnabled()) timings.file_path = String(observableInput.file_path);
         if (
           isToolDetailsLoggingEnabled() &&
           tool.name === FILE_EDIT_TOOL_NAME &&
           "structuredPatch" in result.data
         )
-          Ks.diff = jsonStringify(result.data.structuredPatch);
+          timings.diff = jsonStringify(result.data.structuredPatch);
         if (
           isToolDetailsLoggingEnabled() &&
           tool.name === FILE_WRITE_TOOL_NAME &&
           "content" in observableInput
         )
-          Ks.content = String(observableInput.content);
+          timings.content = String(observableInput.content);
       }
       if (tool.name === BASH_TOOL_NAME && "command" in observableInput) {
-        let kl = observableInput;
-        if (isToolDetailsLoggingEnabled()) Ks.bash_command = kl.command;
-        if ("stdout" in result.data) Ks.output = String(result.data.stdout);
+        let callInputSnapshot = observableInput;
+        if (isToolDetailsLoggingEnabled()) timings.bash_command = callInputSnapshot.command;
+        if ("stdout" in result.data) timings.output = String(result.data.stdout);
       }
-      if (Object.keys(Ks).length > 0) addToolContentEvent(toolSpan, "tool.output", Ks);
+      if (Object.keys(timings).length > 0) addToolContentEvent(span, "tool.output", timings);
     }
     if (
       tool.name === POLL &&
@@ -5103,7 +5234,7 @@ This is a configuration issue in your canUseTool callback, PermissionRequest hoo
       typeof result.data.eventCount === "number" &&
       result.data.eventCount > 0
     )
-      qt.push({
+      messages.push({
         message: createAttachmentMessage_2({
           type: "poll_events",
           deliveredVia: "poll_tool",
@@ -5122,7 +5253,7 @@ This is a configuration issue in your canUseTool callback, PermissionRequest hoo
         }),
       });
     if (typeof result === "object" && "structured_output" in result)
-      qt.push({
+      messages.push({
         message: createAttachmentMessage_2({
           type: "structured_output",
           data: result.structured_output,
@@ -5142,92 +5273,96 @@ This is a configuration issue in your canUseTool callback, PermissionRequest hoo
     if (
       (tool.mcpInfo !== undefined || WEB_TOOLS.has(tool.name)) &&
       !result.detached &&
-      shouldRecordToolContent(toolSpan)
+      shouldRecordToolContent(span)
     ) {
-      let Ks = stringifyToolContentForSpan(preMappedBlock.content);
-      addToolContentEvent(toolSpan, "tool.output", {
-        output: Ho ? notRecordedLength(Ks) : Ks,
+      let preMappedText = stringifyToolContentForSpan(preMappedBlock.content);
+      addToolContentEvent(span, "tool.output", {
+        output: accountMemoryTool ? notRecordedLength(preMappedText) : preMappedText,
       });
     }
-    let ga =
+    let mappedBlock =
       isPerfettoTracingEnabled() || (isBetaTracingEnabled() && isToolContentLoggingEnabled())
         ? result.data && typeof result.data === "object"
           ? jsonStringify(result.data)
           : String(result.data ?? "")
         : undefined;
-    endToolSpan(toolSpan, ga, undefined, Ho);
+    endToolSpan(span, mappedBlock, undefined, accountMemoryTool);
     let mappedContent = preMappedBlock.content;
-    if (yo) noteToolTexts(observableInput, mappedContent);
-    let hd = !mappedContent
+    if (memoryTool) noteToolTexts(observableInput, mappedContent);
+    let hasMappedContent = !mappedContent
       ? 0
       : typeof mappedContent === "string"
         ? mappedContent.length
         : jsonStringify(mappedContent).length;
     let resultSizeTelemetry = getResultSizeTelemetry(mappedContent, tool);
-    let Ld = isMedia(result.newMessages);
-    let vs;
-    let ol;
-    let gd;
-    let Su;
-    let Eu;
+    let resultIsMedia = isMedia(result.newMessages);
+    let mediaBlocks;
+    let mediaUrls;
+    let extraMessages;
+    let resultFiles;
+    let resultNotes;
     if (observableInput && typeof observableInput === "object") {
       if (
-        (lt === FILE_READ_TOOL_NAME || lt === FILE_EDIT_TOOL_NAME || lt === FILE_WRITE_TOOL_NAME) &&
+        (effectiveToolName === FILE_READ_TOOL_NAME ||
+          effectiveToolName === FILE_EDIT_TOOL_NAME ||
+          effectiveToolName === FILE_WRITE_TOOL_NAME) &&
         "file_path" in observableInput &&
         typeof observableInput.file_path === "string"
       ) {
-        vs = getFileExtensionForAnalytics(observableInput.file_path);
-        gd = String(callInput.file_path).length;
+        mediaBlocks = getFileExtensionForAnalytics(observableInput.file_path);
+        extraMessages = String(callInput.file_path).length;
       } else if (
-        lt === NOTEBOOK_EDIT_TOOL_NAME &&
+        effectiveToolName === NOTEBOOK_EDIT_TOOL_NAME &&
         "notebook_path" in observableInput &&
         typeof observableInput.notebook_path === "string"
       ) {
         let notebookPath = observableInput.notebook_path;
-        vs = getFileExtensionForAnalytics(notebookPath);
-        gd = notebookPath.length;
+        mediaBlocks = getFileExtensionForAnalytics(notebookPath);
+        extraMessages = notebookPath.length;
       } else if (tool.name === ARTIFACT_TOOL_NAME_2 && "file_path" in observableInput) {
-        let Ks = String(observableInput.file_path);
-        vs = getFileExtensionForAnalytics(Ks);
-        gd = Ks.length;
+        let filePathText = String(observableInput.file_path);
+        mediaBlocks = getFileExtensionForAnalytics(filePathText);
+        extraMessages = filePathText.length;
       } else if (
-        lt === BASH_TOOL_NAME &&
+        effectiveToolName === BASH_TOOL_NAME &&
         "command" in observableInput &&
         typeof observableInput.command === "string"
       ) {
-        let Ks = observableInput;
-        vs = getFileExtensionsFromBashCommand_2(Ks.command);
-        ol = extensionsInCommand(Ks.command);
-        Su = Ks.command.length;
+        let fileInput = observableInput;
+        mediaBlocks = getFileExtensionsFromBashCommand_2(fileInput.command);
+        mediaUrls = extensionsInCommand(fileInput.command);
+        resultFiles = fileInput.command.length;
       } else if (
-        (tool.name === WORKSPACE_BASH_TOOL || lt === POWERSHELL_TOOL_NAME) &&
+        (tool.name === WORKSPACE_BASH_TOOL || effectiveToolName === POWERSHELL_TOOL_NAME) &&
         "command" in observableInput &&
         typeof observableInput.command === "string"
       )
-        ol = extensionsInCommand(observableInput.command);
+        mediaUrls = extensionsInCommand(observableInput.command);
       else if (tool.name === DESIGNSYNC) {
-        let Ks = observableInput;
-        let kl = (xc) => (Array.isArray(xc) ? xc.length : undefined);
-        let counts = Ks.method === "report_validate" ? Ks.counts : undefined;
-        Eu = {
-          dsMethod: fromEnumOpt(DESIGNSYNC_METHODS.find((xc) => xc === Ks.method)),
-          ...(typeof Ks.projectId === "string" && {
-            dsProjectIdHash: shortHash(Ks.projectId),
+        let designInput = observableInput;
+        let listLength = (item) => (Array.isArray(item) ? item.length : undefined);
+        let counts = designInput.method === "report_validate" ? designInput.counts : undefined;
+        resultNotes = {
+          dsMethod: fromEnumOpt(
+            DESIGNSYNC_METHODS.find((designMethod) => designMethod === designInput.method),
+          ),
+          ...(typeof designInput.projectId === "string" && {
+            dsProjectIdHash: shortHash(designInput.projectId),
           }),
-          ...(kl(Ks.assets) !== undefined && {
-            dsAssetCount: kl(Ks.assets),
+          ...(listLength(designInput.assets) !== undefined && {
+            dsAssetCount: listLength(designInput.assets),
           }),
-          ...(kl(Ks.files) !== undefined && {
-            dsFileCount: kl(Ks.files),
+          ...(listLength(designInput.files) !== undefined && {
+            dsFileCount: listLength(designInput.files),
           }),
-          ...(kl(Ks.paths) !== undefined && {
-            dsPathCount: kl(Ks.paths),
+          ...(listLength(designInput.paths) !== undefined && {
+            dsPathCount: listLength(designInput.paths),
           }),
-          ...(kl(Ks.writes) !== undefined && {
-            dsWriteCount: kl(Ks.writes),
+          ...(listLength(designInput.writes) !== undefined && {
+            dsWriteCount: listLength(designInput.writes),
           }),
-          ...(kl(Ks.deletes) !== undefined && {
-            dsDeleteCount: kl(Ks.deletes),
+          ...(listLength(designInput.deletes) !== undefined && {
+            dsDeleteCount: listLength(designInput.deletes),
           }),
           ...(counts && {
             dsValidateTotal: counts.total,
@@ -5239,7 +5374,7 @@ This is a configuration issue in your canUseTool callback, PermissionRequest hoo
         };
       }
     }
-    logToolFileActivity(lt, observableInput, messageId);
+    logToolFileActivity(effectiveToolName, observableInput, messageId);
     if (tool.mcpInfo !== undefined && getIsNonInteractiveSession())
       toolUseContext.session.mcpSessionWiring.connections()?.clearNeedsAuth(tool.mcpInfo.serverName);
     logFeatureOk(errorContent);
@@ -5250,22 +5385,22 @@ This is a configuration issue in your canUseTool callback, PermissionRequest hoo
       isMcp: tool.isMcp ?? false,
       ...getSubagentTelemetryFields(toolUseContext.agentContext),
       ...getEffortTelemetryFields(toolUseContext),
-      durationMs: toolDurationMs,
-      ...$a.fields(toolDurationMs, nr),
+      durationMs: callDurationMs,
+      ...wallClock.fields(callDurationMs, callState),
       ...(result.detached && {
         detached: true,
       }),
-      ...(_i !== undefined && {
+      ...(callSpan !== undefined && {
         ...toolFeatureOf(toolUseContext.abortController.signal),
-        durationMsAtAbort: _i - now_2,
+        durationMsAtAbort: callSpan - now_2,
       }),
-      ...diffMemoryUsage(Vs, tu),
-      preToolHookDurationMs: un,
-      permissionDurationMs: Nr,
-      toolResultSizeBytes: hd,
+      ...diffMemoryUsage(memoryBefore, memoryAfter),
+      preToolHookDurationMs: hookDurationMs,
+      permissionDurationMs,
+      toolResultSizeBytes: hasMappedContent,
       ...resultSizeTelemetry,
-      ...(Ld > 0 && {
-        toolResultAttachmentBytes: Ld,
+      ...(resultIsMedia > 0 && {
+        toolResultAttachmentBytes: resultIsMedia,
       }),
       ...measureSidecarFields(result.data),
       ...(!shouldKeepToolResultInSubagents(toolUseContext, tool) && {
@@ -5274,29 +5409,29 @@ This is a configuration issue in your canUseTool callback, PermissionRequest hoo
           sidecarSmallFormOfferedForSubagent: true,
         }),
       }),
-      toolInputSizeBytes: nt,
-      ...(vs !== undefined && {
-        fileExtension: vs,
+      toolInputSizeBytes: inputBytes,
+      ...(mediaBlocks !== undefined && {
+        fileExtension: mediaBlocks,
       }),
-      ...(ol !== undefined && {
-        bashCommandFileExtensions: ol,
+      ...(mediaUrls !== undefined && {
+        bashCommandFileExtensions: mediaUrls,
       }),
-      ...(gd !== undefined && {
-        filePathLen: gd,
+      ...(extraMessages !== undefined && {
+        filePathLen: extraMessages,
       }),
-      ...(Su !== undefined && {
-        bashCommandLen: Su,
+      ...(resultFiles !== undefined && {
+        bashCommandLen: resultFiles,
       }),
-      ...($o && {
-        bash_command_class: $o.bash_command_class,
-        bash_argv0: $o.bash_argv0,
-        ...($o.bash_subcommand !== undefined && {
-          bash_subcommand: $o.bash_subcommand,
+      ...(bashClass && {
+        bash_command_class: bashClass.bash_command_class,
+        bash_argv0: bashClass.bash_argv0,
+        ...(bashClass.bash_subcommand !== undefined && {
+          bash_subcommand: bashClass.bash_subcommand,
         }),
-        has_pipe: $o.has_pipe,
+        has_pipe: bashClass.has_pipe,
       }),
-      ...Eu,
-      ...(lt === FILE_READ_TOOL_NAME &&
+      ...resultNotes,
+      ...(effectiveToolName === FILE_READ_TOOL_NAME &&
         observableInput &&
         typeof observableInput === "object" && {
           readHasLimit: observableInput.limit !== undefined,
@@ -5324,25 +5459,25 @@ This is a configuration issue in your canUseTool callback, PermissionRequest hoo
       ...claudeAiServerIdField(tool.mcpInfo),
       ...tool.mcpInfo?.pluginTelemetry,
     });
-    let Uc;
+    let cronResult;
     if (
       shouldLogGitCommitDetails(tool, callInput) &&
       result.data &&
       typeof result.data === "object" &&
       "stdout" in result.data
     ) {
-      let Ks =
+      let cronData =
         !("backgroundTaskId" in result.data && result.data.backgroundTaskId) &&
         !("interrupted" in result.data && result.data.interrupted === true);
       let commitInfo = await resolveCommitInfo(
         String(result.data.stdout),
         toolUseContext.session.project?.cwd ?? null,
-        Ks ? jo : undefined,
+        cronData ? toolResult : undefined,
       );
       if (commitInfo) {
         toolInputDetailsForAnalytics.git_commit_id = commitInfo.commitId;
         if (commitInfo.branch) toolInputDetailsForAnalytics.git_branch = commitInfo.branch;
-        Uc = commitAttributes(commitInfo);
+        cronResult = commitAttributes(commitInfo);
       }
     }
     let gitCommitId = getMcpToolScope(tool);
@@ -5352,23 +5487,23 @@ This is a configuration issue in your canUseTool callback, PermissionRequest hoo
         tool_name: sanitizeToolNameForAnalytics(tool.name),
         tool_use_id: toolUseID,
         success: "true",
-        duration_ms: String(toolDurationMs),
+        duration_ms: String(callDurationMs),
         ...(Object.keys(toolInputDetailsForAnalytics).length > 0 && {
           tool_parameters: jsonStringify(toolInputDetailsForAnalytics),
         }),
-        ...(Wi && {
-          tool_input: Wi,
+        ...(attributedFlag && {
+          tool_input: attributedFlag,
         }),
-        tool_input_size_bytes: String(nt),
-        tool_result_size_bytes: String(hd),
-        ...(wa && {
-          decision_source: wa.source,
-          decision_type: wa.decision,
+        tool_input_size_bytes: String(inputBytes),
+        tool_result_size_bytes: String(hasMappedContent),
+        ...(decisionRecord && {
+          decision_source: decisionRecord.source,
+          decision_type: decisionRecord.decision,
         }),
         ...(gitCommitId && {
           mcp_server_scope: gitCommitId,
         }),
-        ...Uc,
+        ...cronResult,
         ...(requestId && {
           request_id: requestId,
         }),
@@ -5376,12 +5511,12 @@ This is a configuration issue in your canUseTool callback, PermissionRequest hoo
       toolUseContext.agentContext,
     );
     let toolOutput = result.data;
-    let Qm = cronToolCallResult(tool.name, result.data);
-    let wr = [];
-    let zs = 0;
-    let li = false;
-    let nl;
-    let Tl = [];
+    let cronSummary = cronToolCallResult(tool.name, result.data);
+    let followups = [];
+    let followupCount = 0;
+    let followupFailed = false;
+    let followupError;
+    let followupMessages = [];
     if (
       result.classifierContext !== undefined &&
       (!tool.isMcp ||
@@ -5391,7 +5526,7 @@ This is a configuration issue in your canUseTool callback, PermissionRequest hoo
             resolveMcpConnectionForTool(tool.name, toolUseContext.options.mcpClients).connection?.config,
           )))
     )
-      Tl.push({
+      followupMessages.push({
         value: truncateToLength(result.classifierContext, HOST_CONTEXT_LINE_LIMIT),
         hostPrincipal: true,
         pairedRewriteSeq: 0,
@@ -5403,27 +5538,33 @@ This is a configuration issue in your canUseTool callback, PermissionRequest hoo
     let sandboxViolations = result.sandboxViolations;
     let sandboxed = result.sandboxed;
     async function addToolResult(toolUseResult, preMappedBlock) {
-      let Yd = toolResultsDirFor_2(toolUseContext.session);
-      let xc = preMappedBlock
-        ? await processToolResultBlock(preMappedBlock, tool, Yd, toolUseContext.storageV5)
-        : await mapAndMaybePersistToolResult(tool, toolUseResult, toolUseID, Yd, toolUseContext.storageV5);
-      let Ip =
-        resultNote !== undefined && !xc.is_error && typeof xc.content === "string"
+      let toolResultsDir = toolResultsDirFor_2(toolUseContext.session);
+      let mappedPreBlock = preMappedBlock
+        ? await processToolResultBlock(preMappedBlock, tool, toolResultsDir, toolUseContext.storageV5)
+        : await mapAndMaybePersistToolResult(
+            tool,
+            toolUseResult,
+            toolUseID,
+            toolResultsDir,
+            toolUseContext.storageV5,
+          );
+      let finalBlock =
+        resultNote !== undefined && !mappedPreBlock.is_error && typeof mappedPreBlock.content === "string"
           ? {
-              ...xc,
-              content: `${xc.content}
+              ...mappedPreBlock,
+              content: `${mappedPreBlock.content}
 
 ${resultNote}`,
             }
-          : xc;
-      let Gc = zs !== 0 && !li;
+          : mappedPreBlock;
+      let hasFollowups = followupCount !== 0 && !followupFailed;
       let contentBlocks = [
-        isMcpTool(tool) || Gc
+        isMcpTool(tool) || hasFollowups
           ? {
-              ...Ip,
-              content: cutOversizedResultBlocks(Ip.content),
+              ...finalBlock,
+              content: cutOversizedResultBlocks(finalBlock.content),
             }
-          : Ip,
+          : finalBlock,
       ];
       if ("acceptFeedback" in permissionDecision && permissionDecision.acceptFeedback)
         contentBlocks.push({
@@ -5435,49 +5576,51 @@ ${resultNote}`,
       if (contentBlocks_2?.length) contentBlocks.push(...contentBlocks_2);
       let imagePasteIds;
       if (contentBlocks_2?.length) {
-        let imageCount = count(contentBlocks_2, (mae) => mae.type === "image");
+        let imageCount = count(contentBlocks_2, (imageCount) => imageCount.type === "image");
         if (imageCount > 0) imagePasteIds = makeImagePlaceholders(imageCount);
       }
-      let Sc = toolUseResult;
+      let strippedResult = toolUseResult;
       try {
-        if (tool.stripForCreation) Sc = tool.stripForCreation(toolUseResult);
+        if (tool.stripForCreation) strippedResult = tool.stripForCreation(toolUseResult);
         else if (tool.stripToolUseResultAtCreation && tool.stripForStorage)
-          Sc = tool.stripForStorage(toolUseResult, false);
+          strippedResult = tool.stripForStorage(toolUseResult, false);
       } catch (error) {
         logError(error);
-        Sc = undefined;
+        strippedResult = undefined;
       }
       if (callObserver)
         callObserver.output = {
-          value: Sc,
+          value: strippedResult,
         };
-      Sc = restoreMcpResultForCopy(tool, Sc, xc, toolUseContext);
-      let filtered = Tl.filter((cS) => {
-        if (cS.pairedRewriteSeq === undefined) return true;
-        if (cS.pairedRewriteSeq === 0) return zs === 0 || li;
-        return !li && cS.pairedRewriteSeq === zs;
+      strippedResult = restoreMcpResultForCopy(tool, strippedResult, mappedPreBlock, toolUseContext);
+      let filtered = followupMessages.filter((followup) => {
+        if (followup.pairedRewriteSeq === undefined) return true;
+        if (followup.pairedRewriteSeq === 0) return followupCount === 0 || followupFailed;
+        return !followupFailed && followup.pairedRewriteSeq === followupCount;
       });
-      if (filtered.length < Tl.length)
+      if (filtered.length < followupMessages.length)
         logForDebugging(
-          `host classifier context: dropped ${Tl.length - filtered.length} entr(y/ies) whose paired rewrite never took effect (${li ? "rewrites reverted" : "superseded or inapplicable"}) for ${toolCategoryForTelemetry(tool)}`,
+          `host classifier context: dropped ${followupMessages.length - filtered.length} entr(y/ies) whose paired rewrite never took effect (${followupFailed ? "rewrites reverted" : "superseded or inapplicable"}) for ${toolCategoryForTelemetry(tool)}`,
         );
-      let dy =
+      let joinedContext =
         filtered.length > 0
-          ? filtered.map((cS) => cS.value).join(`
+          ? filtered.map((followup) => followup.value).join(`
 `)
           : undefined;
-      let Hx = filtered.length > 0 && filtered.every((cS) => cS.hostPrincipal);
-      let aI = dy !== undefined ? truncateToLength(dy, HOST_CONTEXT_LINE_LIMIT) : undefined;
-      if (aI !== undefined)
-        if (aI.length < dy.length) logFeatureSad("auto_mode_host_context", "join_truncated");
+      let allHostPrincipals = filtered.length > 0 && filtered.every((followup) => followup.hostPrincipal);
+      let classifierContext =
+        joinedContext !== undefined ? truncateToLength(joinedContext, HOST_CONTEXT_LINE_LIMIT) : undefined;
+      if (classifierContext !== undefined)
+        if (classifierContext.length < joinedContext.length)
+          logFeatureSad("auto_mode_host_context", "join_truncated");
         else logFeatureOk("auto_mode_host_context");
       let startId = createUserMessage({
         content: contentBlocks,
         imagePasteIds,
-        hostClassifierContext: aI,
-        ...cutResultForStorage(toolUseContext, tool, Gc, {
+        hostClassifierContext: classifierContext,
+        ...cutResultForStorage(toolUseContext, tool, hasFollowups, {
           toolUseId: toolUseID,
-          toolUseResult: shouldKeepToolResultInSubagents(toolUseContext, tool) ? Sc : undefined,
+          toolUseResult: shouldKeepToolResultInSubagents(toolUseContext, tool) ? strippedResult : undefined,
           mcpMeta: formatMcpStructuredContent(
             toolUseContext.agentId,
             mcpMeta,
@@ -5494,7 +5637,7 @@ ${resultNote}`,
         now,
       });
       if (
-        wa?.surface === "host_dialog" &&
+        decisionRecord?.surface === "host_dialog" &&
         "acceptFeedback" in permissionDecision &&
         permissionDecision.acceptFeedback &&
         getAutoModeConfigOrDefault().typedMarks === true
@@ -5504,21 +5647,21 @@ ${resultNote}`,
           texts: [permissionDecision.acceptFeedback],
         };
       if (result.subagentFrameResult !== undefined && !shouldKeepToolResultInSubagents(toolUseContext, tool))
-        if (Gc) logFeatureSad("subagent_frame_result", "hook_rewrote_output");
-        else if (nl !== undefined) logFeatureSad("subagent_frame_result", nl);
+        if (hasFollowups) logFeatureSad("subagent_frame_result", "hook_rewrote_output");
+        else if (followupError !== undefined) logFeatureSad("subagent_frame_result", followupError);
         else {
           Object.assign(startId, asSubagentFrameResult(result.subagentFrameResult));
           logFeatureOk("subagent_frame_result");
         }
       if (
         startId.hostClassifierContext !== undefined &&
-        Hx &&
+        allHostPrincipals &&
         !toolUseContext.abortController.signal.aborted &&
         getClassifierEpoch() === classifierEpoch &&
         !isLiveHostContextDisabled()
       )
         registerClassifiedRun(startId);
-      qt.push({
+      messages.push({
         message: startId,
         contextLayers:
           contextLayers && contextLayers.length > 0
@@ -5529,27 +5672,27 @@ ${resultNote}`,
             : undefined,
         toolDuration: {
           toolName: tool.name,
-          durationMs: toolDurationMs,
+          durationMs: callDurationMs,
         },
       });
     }
     if (result.detached) {
       await addToolResult(DETACHED_TOOL_CALL_FLAG, preMappedBlock);
-      if (fo && !toolUseContext.abortController.signal.aborted)
-        pushHookStoppedContinuation(qt, {
+      if (preventContinuation && !toolUseContext.abortController.signal.aborted)
+        pushHookStoppedContinuation(messages, {
           toolName: tool.name,
           toolUseID,
-          message: To || "Execution stopped by hook",
+          message: stopReason || "Execution stopped by hook",
         });
-      return qt;
+      return messages;
     }
-    let np;
-    let Rf = [];
+    let unusedShape;
+    let hookTimings = [];
     let postToolHookStart = Date.now();
-    let al = false;
-    let mf = false;
-    let rg = false;
-    for await (let Ks of rg
+    let outputModified = false;
+    let didRewriteOutput = false;
+    let followupsStarted = false;
+    for await (let followup of followupsStarted
       ? []
       : runPostToolUseHooks(
           toolUseContext,
@@ -5561,51 +5704,56 @@ ${resultNote}`,
           requestId,
           mcpServerType,
           mcpServerBaseUrl,
-          toolDurationMs,
+          callDurationMs,
           {
             managedHooksExcluded:
               toolUseContext.managedPass?.toolUseId === toolUseID &&
               shouldKeepToolResultInSubagents(toolUseContext, tool),
           },
         )) {
-      al = true;
-      if ("updatedToolOutput" in Ks) {
-        toolOutput = Ks.updatedToolOutput;
-        mf = true;
-        zs += 1;
-      } else if ("classifierContext" in Ks)
-        Tl.push({
-          ...Ks.classifierContext,
-          pairedRewriteSeq: Ks.pairing === "none" ? undefined : Ks.pairing === "pending" && zs > 0 ? zs : -1,
+      outputModified = true;
+      if ("updatedToolOutput" in followup) {
+        toolOutput = followup.updatedToolOutput;
+        didRewriteOutput = true;
+        followupCount += 1;
+      } else if ("classifierContext" in followup)
+        followupMessages.push({
+          ...followup.classifierContext,
+          pairedRewriteSeq:
+            followup.pairing === "none"
+              ? undefined
+              : followup.pairing === "pending" && followupCount > 0
+                ? followupCount
+                : -1,
         });
       else {
-        wr.push(Ks);
-        if (Ks.message.type === "attachment") {
-          let att = Ks.message.attachment;
+        followups.push(followup);
+        if (followup.message.type === "attachment") {
+          let att = followup.message.attachment;
           if (
             "command" in att &&
             att.command !== undefined &&
             "durationMs" in att &&
             att.durationMs !== undefined
           )
-            Rf.push({
+            hookTimings.push({
               command: att.command,
               durationMs: att.durationMs,
             });
         }
       }
     }
-    let uh = Date.now() - postToolHookStart;
-    if (al) {
-      let Ks = await noteHookModifiedFile(
+    let postHookElapsedMs = Date.now() - postToolHookStart;
+    if (outputModified) {
+      let modifiedFileNote = await noteHookModifiedFile(
         tool.name,
         toolUseID,
         observableInput,
         toolUseContext.readFileState,
       );
-      if (Ks)
-        wr.push({
-          message: Ks,
+      if (modifiedFileNote)
+        followups.push({
+          message: modifiedFileNote,
         });
     }
     if (
@@ -5613,90 +5761,93 @@ ${resultNote}`,
       !shouldKeepToolResultInSubagents(toolUseContext, tool)
     ) {
       try {
-        if (!(await result.subagentFrameResultHolds())) nl = "tool_says_stale";
+        if (!(await result.subagentFrameResultHolds())) followupError = "tool_says_stale";
       } catch (error) {
         logError(error);
-        nl = "check_threw";
+        followupError = "check_threw";
       }
-      if (nl !== undefined)
+      if (followupError !== undefined)
         logForDebugging(
-          `${toolCategoryForTelemetry(tool)}: subagentFrameResult not sent (${nl}): the tool's check did not confirm that it still describes what the call left behind`,
+          `${toolCategoryForTelemetry(tool)}: subagentFrameResult not sent (${followupError}): the tool's check did not confirm that it still describes what the call left behind`,
         );
     }
-    if (uh >= ISOLATION_TIMEOUT_MS)
+    if (postHookElapsedMs >= ISOLATION_TIMEOUT_MS)
       logForDebugging(
-        `Slow PostToolUse hooks: ${uh}ms for ${toolCategoryForTelemetry(tool)} (${Rf.length} hooks)`,
+        `Slow PostToolUse hooks: ${postHookElapsedMs}ms for ${toolCategoryForTelemetry(tool)} (${hookTimings.length} hooks)`,
         {
           level: "info",
         },
       );
     if (isMcpTool(tool)) {
-      await addToolResult(attributeScheduledPlugin(tool.name, Qm, toolOutput));
-      let Ks = isDocsConnectorTool(tool, toolUseContext.getAppState().mcp.clients)
+      await addToolResult(attributeScheduledPlugin(tool.name, cronSummary, toolOutput));
+      let frameKey = isDocsConnectorTool(tool, toolUseContext.getAppState().mcp.clients)
         ? readFirstJsonPayload(result.data)
         : null;
-      if (Ks !== null)
-        import("./chunk-4mngb19a.js")
-          .then((kl) =>
-            kl.touchFrameLiveForMcpWrite(
-              Ks,
+      if (frameKey !== null)
+        import("../artifacts/AUTO_REPLIES_ARMED_TOKEN.lazy.js")
+          .then((artifactModule) =>
+            artifactModule.touchFrameLiveForMcpWrite(
+              frameKey,
               toolUseContext,
-              kl.makeArtifactReadVersionReader(toolUseContext.getAppState, Ks),
+              artifactModule.makeArtifactReadVersionReader(toolUseContext.getAppState, frameKey),
             ),
           )
           .catch(logError);
     } else {
       let preMappedBlock_2 = preMappedBlock;
-      if (mf) {
-        let kl = tool.outputSchema?.safeParse(toolOutput);
-        let Yd = (xc, Ip) => {
+      if (didRewriteOutput) {
+        let outputCheck = tool.outputSchema?.safeParse(toolOutput);
+        let logInvalidOutput = (reason, detail) => {
           logForDebugging(
-            `PostToolUse hook returned updatedToolOutput that does not match ${toolCategoryForTelemetry(tool)}'s output shape: reason=${xc} detailChars=${Ip.length}`,
+            `PostToolUse hook returned updatedToolOutput that does not match ${toolCategoryForTelemetry(tool)}'s output shape: reason=${reason} detailChars=${detail.length}`,
             {
               level: "error",
             },
           );
           toolOutput = result.data;
-          li = true;
-          let Gc = count(Tl, (oc) => oc.pairedRewriteSeq === zs);
-          wr.push({
+          followupFailed = true;
+          let pairedCount = count(
+            followupMessages,
+            (followup) => followup.pairedRewriteSeq === followupCount,
+          );
+          followups.push({
             message: createAttachmentMessage_2({
               type: "hook_error_during_execution",
-              content: `PostToolUse hook returned updatedToolOutput that does not match ${tool.name}'s output shape; using original output.${Gc > 0 ? " A host-asserted classifier context attached by the same hook was discarded with the rejected rewrite." : ""} ${Ip}`,
+              content: `PostToolUse hook returned updatedToolOutput that does not match ${tool.name}'s output shape; using original output.${pairedCount > 0 ? " A host-asserted classifier context attached by the same hook was discarded with the rejected rewrite." : ""} ${detail}`,
               hookName: `PostToolUse:${tool.name}`,
               toolUseID,
               hookEvent: "PostToolUse",
             }),
           });
         };
-        if (kl && !kl.success)
-          Yd(
-            `schema_invalid issues=${uniq(kl.error.issues.map((issue) => issue.code)).join(",")}`,
-            kl.error.message,
+        if (outputCheck && !outputCheck.success)
+          logInvalidOutput(
+            `schema_invalid issues=${uniq(outputCheck.error.issues.map((issue) => issue.code)).join(",")}`,
+            outputCheck.error.message,
           );
         else
           try {
-            let xc = toolOutput;
+            let remappedOutput = toolOutput;
             if (tool.restoreTransientForRemap)
               try {
-                xc = tool.restoreTransientForRemap(result.data, toolOutput);
+                remappedOutput = tool.restoreTransientForRemap(result.data, toolOutput);
               } catch (error) {
                 logError(error);
-                xc = toolOutput;
+                remappedOutput = toolOutput;
               }
-            let Ip = tool.mapToolResultToToolResultBlockParam(xc, toolUseID);
-            if (Ip === undefined) Yd("mapper_undefined", "mapper returned undefined");
-            else preMappedBlock_2 = Ip;
+            let detail = tool.mapToolResultToToolResultBlockParam(remappedOutput, toolUseID);
+            if (detail === undefined) logInvalidOutput("mapper_undefined", "mapper returned undefined");
+            else preMappedBlock_2 = detail;
           } catch (error) {
-            Yd("mapper_throw", formatToolErrorMessage(error));
+            logInvalidOutput("mapper_throw", formatToolErrorMessage(error));
           }
       }
-      await addToolResult(attributeScheduledPlugin(tool.name, Qm, toolOutput), preMappedBlock_2);
+      await addToolResult(attributeScheduledPlugin(tool.name, cronSummary, toolOutput), preMappedBlock_2);
     }
     if (tool.name === FILE_READ_TOOL_NAME && result.data && typeof result.data === "object") {
       let cachedReadingLimit = getCachedReadingLimit(result.data);
       if (cachedReadingLimit !== undefined)
-        qt.push({
+        messages.push({
           message: createAttachmentMessage_2({
             type: "read_truncation_notice",
             banner: cachedReadingLimit,
@@ -5705,13 +5856,13 @@ ${resultNote}`,
         });
     }
     if (shouldAddBashAudienceNote(tool.name, result.data, getMainLoopModel_2(toolUseContext)))
-      qt.push({
+      messages.push({
         message: createAttachmentMessage_2({
           type: "bash_output_audience_note",
           toolUseID,
         }),
       });
-    let Kf =
+    let resultCommitted =
       getAbortKind(
         toolUseContext.abortController.signal,
         {
@@ -5721,87 +5872,87 @@ ${resultNote}`,
         },
         abortScopeOf(toolUseContext),
       ) !== null;
-    for (let Ks of wr) qt.push(Ks);
-    let ch = [...(result.newMessages ?? []), ...[]];
-    if (ch.length > 0)
-      for (let hookResult of ch)
+    for (let followup of followups) messages.push(followup);
+    let message = [...(result.newMessages ?? []), ...[]];
+    if (message.length > 0)
+      for (let hookResult of message)
         if (hookResult.type === "user") {
           let message = {
             ...hookResult,
             turnCompanion: true,
           };
-          qt.push({
+          messages.push({
             message,
           });
         } else
-          qt.push({
+          messages.push({
             message: hookResult,
           });
-    if (fo && !toolUseContext.abortController.signal.aborted)
-      pushHookStoppedContinuation(qt, {
+    if (preventContinuation && !toolUseContext.abortController.signal.aborted)
+      pushHookStoppedContinuation(messages, {
         toolName: tool.name,
         toolUseID,
-        message: To || "Execution stopped by hook",
+        message: stopReason || "Execution stopped by hook",
       });
-    runAfterResultCommitted(result, false || Kf, logError);
-    return qt;
+    runAfterResultCommitted(result, false || resultCommitted, logError);
+    return messages;
   } catch (error) {
-    let toolDurationMs = Date.now() - now_2;
-    $a.settle();
-    let Li = Ti.sample("after_throw");
-    addToToolDuration(toolDurationMs);
-    let Qs = isAbortOrCancelError(error);
-    if (!Qr)
+    let errorDurationMs = Date.now() - now_2;
+    wallClock.settle();
+    let memoryAfter = memorySampler.sample("after_throw");
+    addToToolDuration(errorDurationMs);
+    let wasCanceled = isAbortOrCancelError(error);
+    if (!callFailed)
       logForDebugging(
-        `[Stall] tool_dispatch_end tool=${toolCategoryForTelemetry(tool)} toolUseId=${toolUseID} outcome=${Qs ? "aborted" : "error"} durationMs=${toolDurationMs}`,
+        `[Stall] tool_dispatch_end tool=${toolCategoryForTelemetry(tool)} toolUseId=${toolUseID} outcome=${wasCanceled ? "aborted" : "error"} durationMs=${errorDurationMs}`,
         {
-          level: Qs ? "info" : "warn",
+          level: wasCanceled ? "info" : "warn",
         },
       );
     else
       logForDebugging(
-        `[Stall] tool_dispatch_post_error tool=${toolCategoryForTelemetry(tool)} toolUseId=${toolUseID} durationMs=${toolDurationMs}`,
+        `[Stall] tool_dispatch_post_error tool=${toolCategoryForTelemetry(tool)} toolUseId=${toolUseID} durationMs=${errorDurationMs}`,
         {
           level: "warn",
         },
       );
-    let Hi = errorMessage(error);
-    let Xa = classifyToolError(error);
-    if (yo)
+    let errorText = errorMessage(error);
+    let errorKind = classifyToolError(error);
+    if (memoryTool)
       noteToolTexts(
         observableInput,
-        error instanceof McpToolCallError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS ? Hi : undefined,
+        error instanceof McpToolCallError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS ? errorText : undefined,
       );
-    let ta =
-      Ho || rr || withholdsFileReferenceErrors(tool, toolUseID)
+    let loggedError =
+      accountMemoryTool || withholdsFileRefs || withholdsFileReferenceErrors(tool, toolUseID)
         ? error instanceof Error
           ? describeErrorWithoutText(error)
-          : notRecordedLength(Hi)
-        : Hi;
+          : notRecordedLength(errorText)
+        : errorText;
     endToolExecutionSpan({
       success: false,
       interrupted: getInterruptKind(error, toolUseContext.abortController.signal) !== undefined,
-      error: isToolDetailsLoggingEnabled() ? ta : Xa,
-      errorClass: Xa,
+      error: isToolDetailsLoggingEnabled() ? loggedError : errorKind,
+      errorClass: errorKind,
     });
-    endToolSpan(toolSpan);
+    endToolSpan(span);
     if (error instanceof McpAuthError)
       toolUseContext.session.mcpSessionWiring.connections()?.markNeedsAuth(error.serverName);
-    let Bs = isServerFallbackDiscard(toolUseContext.abortController.signal);
-    let Ca = {
+    let isFallbackDiscard = isServerFallbackDiscard(toolUseContext.abortController.signal);
+    let commonFields = {
       messageID: sanitizeMarkName(messageId),
       toolName: sanitizeToolNameForAnalytics(tool.name),
       toolUseID: sanitizeMarkName(toolUseID),
       isMcp: tool.isMcp ?? false,
-      toolInputSizeBytes: nt,
-      ...(!Qr && {
-        durationMs: toolDurationMs,
-        ...$a.fields(toolDurationMs, nr),
-        preToolHookDurationMs: un,
-        permissionDurationMs: Nr,
+      toolInputSizeBytes: inputBytes,
+      ...(!callFailed && {
+        durationMs: errorDurationMs,
+        ...wallClock.fields(errorDurationMs, callState),
+        preToolHookDurationMs: hookDurationMs,
+        permissionDurationMs,
         ...toolFeatureOf(toolUseContext.abortController.signal),
-        ...(_i !== undefined && {
-          durationMsAtAbort: _i - now_2,
+        ...(callSpan !== undefined && {
+          durationMsAtAbort: callSpan - now_2,
         }),
       }),
       ...getSubagentTelemetryFields(toolUseContext.agentContext),
@@ -5824,29 +5975,31 @@ ${resultNote}`,
       ...claudeAiServerIdField(tool.mcpInfo),
       ...tool.mcpInfo?.pluginTelemetry,
     };
-    if (!Bs && !Qs) {
+    if (!isFallbackDiscard && !wasCanceled) {
       let { code, isSad } = classifyToolErrorCode(error);
       logForDebugging(
-        `${toolCategoryForTelemetry(tool)} tool error (${toolDurationMs}ms): code=${code} type=${Xa} errorChars=${Hi.length}`,
+        `${toolCategoryForTelemetry(tool)} tool error (${errorDurationMs}ms): code=${code} type=${errorKind} errorChars=${errorText.length}`,
       );
       if (isSad) logFeatureSad(errorContent, code);
       else {
         let error_2 = toError(error);
         logError(
-          "telemetryMessage" in error_2 ? error_2 : withTelemetryMessage(error_2, `tool.call threw (${Xa})`),
+          "telemetryMessage" in error_2
+            ? error_2
+            : withTelemetryMessage(error_2, `tool.call threw (${errorKind})`),
         );
         logFeatureBad(errorContent, code);
       }
-      let gd = tool.isMcp === true ? classifyMcpErrorSourceCategory(error) : undefined;
+      let mcpErrorSource = tool.isMcp === true ? classifyMcpErrorSourceCategory(error) : undefined;
       logEvent("tengu_tool_use_error", {
-        ...Ca,
-        error: Xa,
+        ...commonFields,
+        error: errorKind,
         ...errorTelemetryFields(error),
-        errorCode: Xa,
-        ...(gd !== undefined && {
-          mcpErrorSource: fromEnum(gd),
+        errorCode: errorKind,
+        ...(mcpErrorSource !== undefined && {
+          mcpErrorSource: fromEnum(mcpErrorSource),
         }),
-        ...diffMemoryUsage(Vs, Li),
+        ...diffMemoryUsage(memoryBefore, memoryAfter),
         ...(tool.name === DESIGNSYNC && {
           dsMethod: fromEnumOpt(DESIGNSYNC_METHODS.find((prevState) => prevState === observableInput.method)),
         }),
@@ -5855,12 +6008,12 @@ ${resultNote}`,
           messageClientPlatform: entrypointForTelemetry(toolUseContext.options.messageClientPlatform),
         }),
       });
-      if (!Qr && gd === "downstream_unreachable")
+      if (!callFailed && mcpErrorSource === "downstream_unreachable")
         logForDiagnosticsNoPII("warn", "mcp_tool_call_unreachable", () => ({
           transport: mcpServerType ?? "unknown",
-          error_class: Xa.replace(":", "_"),
+          error_class: errorKind.replace(":", "_"),
           error_code: sanitizeErrnoForTelemetry(error) ?? "missing",
-          duration_ms: toolDurationMs,
+          duration_ms: errorDurationMs,
         }));
       let errorMsg = getMcpToolScope(tool);
       logOTelEvent(
@@ -5869,21 +6022,21 @@ ${resultNote}`,
           tool_name: sanitizeToolNameForAnalytics(tool.name),
           tool_use_id: toolUseID,
           success: "false",
-          duration_ms: String(toolDurationMs),
-          error_type: Xa,
+          duration_ms: String(errorDurationMs),
+          error_type: errorKind,
           ...(isToolDetailsLoggingEnabled() && {
-            error: ta,
+            error: loggedError,
           }),
           ...(Object.keys(toolInputDetailsForAnalytics).length > 0 && {
             tool_parameters: jsonStringify(toolInputDetailsForAnalytics),
           }),
-          ...(Wi && {
-            tool_input: Wi,
+          ...(attributedFlag && {
+            tool_input: attributedFlag,
           }),
-          tool_input_size_bytes: String(nt),
-          ...(wa && {
-            decision_source: wa.source,
-            decision_type: wa.decision,
+          tool_input_size_bytes: String(inputBytes),
+          ...(decisionRecord && {
+            decision_source: decisionRecord.source,
+            decision_type: decisionRecord.decision,
           }),
           ...(errorMsg && {
             mcp_server_scope: errorMsg,
@@ -5894,26 +6047,26 @@ ${resultNote}`,
         },
         toolUseContext.agentContext,
       );
-    } else if (!Bs && !Qr) logEvent("tengu_tool_use_interrupted", Ca);
+    } else if (!isFallbackDiscard && !callFailed) logEvent("tengu_tool_use_interrupted", commonFields);
     let error_2 = toolErrorTextForAbort(error, toolUseContext.abortController.signal);
     let mcpMeta =
       error instanceof McpToolCallError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS ? error.mcpMeta : undefined;
-    let ga = [];
-    for await (let vs of runPostToolUseFailureHooks(
+    let failureHookResults = [];
+    for await (let hookResult of runPostToolUseFailureHooks(
       toolUseContext,
       tool,
       toolUseID,
       messageId,
       observableInput,
       error_2,
-      Qs || Bs,
+      wasCanceled || isFallbackDiscard,
       requestId,
       mcpServerType,
       mcpServerBaseUrl,
-      toolDurationMs,
+      errorDurationMs,
     ))
-      ga.push(vs);
-    if (Bs)
+      failureHookResults.push(hookResult);
+    if (isFallbackDiscard)
       return buildCancelledToolResult({
         phase: "call",
         tool,
@@ -5940,8 +6093,8 @@ ${resultNote}`,
         },
         abortScopeOf(toolUseContext),
       ) !== null;
-    let Ld = [];
-    qt.push(
+    let extraMessages = [];
+    messages.push(
       {
         message: createUserMessage({
           content: [
@@ -5971,33 +6124,33 @@ ${resultNote}`,
         }),
         toolDuration: {
           toolName: tool.name,
-          durationMs: fi ?? toolDurationMs,
+          durationMs: callError ?? errorDurationMs,
         },
       },
-      ...Ld,
-      ...ga,
+      ...extraMessages,
+      ...failureHookResults,
     );
-    if (fo && !Qs && !toolUseContext.abortController.signal.aborted)
-      pushHookStoppedContinuation(qt, {
+    if (preventContinuation && !wasCanceled && !toolUseContext.abortController.signal.aborted)
+      pushHookStoppedContinuation(messages, {
         toolName: tool.name,
         toolUseID,
-        message: To || "Execution stopped by hook",
+        message: stopReason || "Execution stopped by hook",
       });
     runAfterResultCommitted(error, skip, logError);
-    return qt;
+    return messages;
   } finally {
-    if (jo !== undefined) releaseHeadReflogMark(jo);
-    Di();
-    if (wa) toolUseContext.toolDecisions.delete(toolUseID);
+    if (toolResult !== undefined) releaseHeadReflogMark(toolResult);
+    onStreamProgress();
+    if (decisionRecord) toolUseContext.toolDecisions.delete(toolUseID);
   }
 }
 //@ chunk-bk5ntezz.js:3179-3346 fingerprint = findMcpServerConnection (1)
 /**
  * 规范化工具名用于记录：Task→Agent，MCP 工具缩成 mcp__<server>，非法字符换成 _，与保留词（instructions/person/claude/summary/other）冲突时加 _。
  */
-function normalizeToolNameForTranscript(s) {
-  if (s === TASK) return AGENT;
-  let sliced = s.slice(0, MAX_USAGE_NAME_CHARS);
+function normalizeToolNameForTranscript(toolName) {
+  if (toolName === TASK) return AGENT;
+  let sliced = toolName.slice(0, MAX_USAGE_NAME_CHARS);
   let serverName = mcpInfoFromString(sliced)?.serverName;
   let replaced = (serverName === undefined ? sliced : `mcp__${serverName}`).replace(/[^\w.:-]/g, "_");
   return [INSTRUCTIONS, PERSON, CLAUDE, SUMMARY, OTHER].includes(replaced) ? `${replaced}_` : replaced;

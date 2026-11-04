@@ -19,32 +19,33 @@ import { parseRepoSlug } from "./detectRepository.js";
 import { getRemoteUrlForDir } from "./git/gitFilesystem.js";
 
 //@ chunk-qa2d1m12.js:5810-6226 placement
-async function resolveAnchoredReadPath(o, e) {
-  let t = PathAnchorSchema().safeParse(e);
-  if (!t.success) return null;
-  let r;
-  switch (t.data.kind) {
+async function resolveAnchoredReadPath(path, anchor) {
+  let anchorParse = PathAnchorSchema().safeParse(anchor);
+  if (!anchorParse.success) return null;
+  let anchorRoot;
+  switch (anchorParse.data.kind) {
     case "workspace_root":
-      r = getProjectRootOrNull();
+      anchorRoot = getProjectRootOrNull();
       break;
     case "diff_root": {
       let workspaceDiffRoot = await getWorkspaceDiffRoot();
-      r = workspaceDiffRoot === null || workspaceDiffRoot.followsShell ? null : workspaceDiffRoot.root;
+      anchorRoot =
+        workspaceDiffRoot === null || workspaceDiffRoot.followsShell ? null : workspaceDiffRoot.root;
       break;
     }
     case "repo":
-      r = await resolveRepoSlugRoot(t.data.repo);
+      anchorRoot = await resolveRepoSlugRoot(anchorParse.data.repo);
       break;
     case "as_written":
       return null;
   }
-  if (r === null || !isAbsolute(r) || /^~(?:\/|$)/.test(o.trim())) return null;
-  let n = expandPath(r);
-  let i = expandPath(o, n);
-  return isSubpathOf(n, i, false)
+  if (anchorRoot === null || !isAbsolute(anchorRoot) || /^~(?:\/|$)/.test(path.trim())) return null;
+  let rootPath = expandPath(anchorRoot);
+  let absPath = expandPath(path, rootPath);
+  return isSubpathOf(rootPath, absPath, false)
     ? {
-        absPath: i,
-        kind: t.data.kind,
+        absPath,
+        kind: anchorParse.data.kind,
       }
     : null;
 }
@@ -55,25 +56,27 @@ async function resolveAnchoredReadPath(o, e) {
 async function resolveRepoSlugRoot(repo) {
   if (!/^[\w.-]{1,100}\/[\w.-]{1,100}$/.test(repo)) return null;
   let index = repo.indexOf("/");
-  let t = {
+  let repoSlug = {
     owner: repo.slice(0, index),
     name: repo.slice(index + 1),
   };
-  for (let [i, s] of getDeclaredRepoCheckouts()) if (sameRepoSlug(parseRepoSlug(i), t)) return s;
+  for (let [checkoutSlug, checkoutPath] of getDeclaredRepoCheckouts())
+    if (sameRepoSlug(parseRepoSlug(checkoutSlug), repoSlug)) return checkoutPath;
   let root = (await getWorkspaceDiffRoot())?.root;
   if (root === undefined) return null;
   let remoteUrlForDir = await getRemoteUrlForDir(root);
   return remoteUrlForDir !== null &&
     remoteUrlForDir.length <= 2048 &&
-    sameRepoSlug(parseRepoSlug(remoteUrlForDir), t)
+    sameRepoSlug(parseRepoSlug(remoteUrlForDir), repoSlug)
     ? root
     : null;
 }
 //@ chunk-qa2d1m12.js:6533-6657 placement
-function sameRepoSlug(repoSlug, e) {
+function sameRepoSlug(repoSlug, expectedSlug) {
   return (
     repoSlug !== null &&
-    repoSlug.owner.toLowerCase() === e.owner.toLowerCase() &&
-    repoSlug.name.toLowerCase() === e.name.toLowerCase()
+    repoSlug.owner.toLowerCase() === expectedSlug.owner.toLowerCase() &&
+    repoSlug.name.toLowerCase() === expectedSlug.name.toLowerCase()
   );
 }
+export { resolveAnchoredReadPath };

@@ -20,34 +20,34 @@ var ACTIVE_FORM_ALIASES = ["active_form"];
 /**
  * 判断值是非空字符串（去空白后）。
  */
-function isNonBlankString(e) {
-  return typeof e === "string" && e.trim() !== "";
+function isNonBlankString(value) {
+  return typeof value === "string" && value.trim() !== "";
 }
 //@ chunk-e6aww6q8.js:1779060-1779327 placement
 /**
  * 把别名字段改为 taskId/activeForm。
  */
-function normalizeTaskInputAliases(e) {
-  if (!isPlainObject_5(e)) return null;
-  let n = [];
-  let r = {
-    ...e,
+function normalizeTaskInputAliases(rawInput) {
+  if (!isPlainObject_5(rawInput)) return null;
+  let appliedAliases = [];
+  let input = {
+    ...rawInput,
   };
-  let s = [
+  let aliasGroups = [
     [TASK_ID_ALIASES, "taskId"],
     [ACTIVE_FORM_ALIASES, "activeForm"],
   ];
-  for (let [h, y] of s)
-    for (let S of h)
-      if (S in r && !(y in r) && isNonBlankString(r[S])) {
-        r[y] = r[S];
-        delete r[S];
-        n.push(`alias_${S}`);
+  for (let [aliases, canonicalField] of aliasGroups)
+    for (let alias of aliases)
+      if (alias in input && !(canonicalField in input) && isNonBlankString(input[alias])) {
+        input[canonicalField] = input[alias];
+        delete input[alias];
+        appliedAliases.push(`alias_${alias}`);
       }
-  if (n.length === 0) return null;
+  if (appliedAliases.length === 0) return null;
   return {
-    input: r,
-    shapeClass: n.join("+"),
+    input,
+    shapeClass: appliedAliases.join("+"),
   };
 }
 export { normalizeTaskInputAliases };

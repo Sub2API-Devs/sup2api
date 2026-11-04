@@ -12,6 +12,7 @@ import { createSignal } from "../../utils/signal.js";
 import { HostScoped } from "../../utils/hostScoped.js";
 import { getRootSession } from "../../bootstrap/state.js";
 import { identityId2 } from "../../types/ids.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-wztb57wq.js:333-3409 placement
 class CliOwnedMcpClientState {
@@ -120,7 +121,10 @@ class CliOwnedMcpClientState {
 /**
  * 按宿主保存的 CLI 自有 MCP 客户端状态。
  */
-var cliOwnedStateSlot = new HostScoped(() => new CliOwnedMcpClientState());
+var cliOwnedStateSlot; // deferred: uses CliOwnedMcpClientState of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-wztb57wq.js:3409", () => {
+  cliOwnedStateSlot = new HostScoped(() => new CliOwnedMcpClientState());
+});
 //@ chunk-wztb57wq.js:3432-3468 placement
 /**
  * 取当前宿主的 CLI 自有状态。
@@ -132,8 +136,8 @@ function getCliOwnedState() {
 /**
  * 该客户端是否已登记 bearer 提供者。
  */
-function hasCliOwnedAuthProvider(e) {
-  return getCliOwnedState().clientAuthProviders.has(identityId2(e.client));
+function hasCliOwnedAuthProvider(connection) {
+  return getCliOwnedState().clientAuthProviders.has(identityId2(connection.client));
 }
 //@ chunk-wztb57wq.js:3534-4429 placement
 /**
@@ -169,9 +173,9 @@ function registerCliOwnedConfig(config, options) {
 /**
  * 取 CLI 自有 MCP 客户端被扣留的 bearer 令牌拒绝信息。
  */
-function withheldBearerRefusalFor(e) {
-  return typeof e === "object" && e !== null
-    ? getCliOwnedState().cliOwnedWithheldBearerRefusals.get(e)
+function withheldBearerRefusalFor(config) {
+  return typeof config === "object" && config !== null
+    ? getCliOwnedState().cliOwnedWithheldBearerRefusals.get(config)
     : undefined;
 }
 //@ chunk-wztb57wq.js:4532-4613 placement
@@ -196,26 +200,29 @@ function firstPartyServerIdFor(config) {
  */
 function allowsFileUploadFor(config) {
   if (typeof config !== "object" || config === null) return true;
-  let n = getCliOwnedState().cliOwnedFileUploadSwitches.get(config);
-  if (n === undefined) return firstPartyServerIdFor(config) === undefined;
-  return n();
+  let uploadSwitch = getCliOwnedState().cliOwnedFileUploadSwitches.get(config);
+  if (uploadSwitch === undefined) return firstPartyServerIdFor(config) === undefined;
+  return uploadSwitch();
 }
 //@ chunk-wztb57wq.js:4864-5012 placement
 /**
  * 判断 MCP 配置是否由 CLI 提供 bearer 令牌（同步或异步提供者）。
  */
-function hasCliOwnedBearer(e) {
-  if (typeof e !== "object" || e === null) return false;
+function hasCliOwnedBearer(config) {
+  if (typeof config !== "object" || config === null) return false;
   let cliOwnedState = getCliOwnedState();
-  return cliOwnedState.cliOwnedBearerProviders.has(e) || cliOwnedState.cliOwnedAsyncBearerProviders.has(e);
+  return (
+    cliOwnedState.cliOwnedBearerProviders.has(config) ||
+    cliOwnedState.cliOwnedAsyncBearerProviders.has(config)
+  );
 }
 //@ chunk-wztb57wq.js:5012-5171 placement
-function syncBearerTokenFor(e) {
-  if (typeof e !== "object" || e === null) return null;
-  let n = getCliOwnedState().cliOwnedBearerProviders.get(e);
-  if (!n) return null;
+function syncBearerTokenFor(config) {
+  if (typeof config !== "object" || config === null) return null;
+  let provider = getCliOwnedState().cliOwnedBearerProviders.get(config);
+  if (!provider) return null;
   try {
-    return n() || null;
+    return provider() || null;
   } catch {
     return null;
   }
@@ -224,12 +231,12 @@ function syncBearerTokenFor(e) {
 /**
  * 获取 CLI 自有 MCP 客户端的 bearer 令牌（优先异步提供者，失败返回 null）。
  */
-async function resolveBearerTokenFor(e) {
-  if (typeof e !== "object" || e === null) return null;
-  let n = getCliOwnedState().cliOwnedAsyncBearerProviders.get(e);
-  if (!n) return syncBearerTokenFor(e);
+async function resolveBearerTokenFor(config) {
+  if (typeof config !== "object" || config === null) return null;
+  let asyncProvider = getCliOwnedState().cliOwnedAsyncBearerProviders.get(config);
+  if (!asyncProvider) return syncBearerTokenFor(config);
   try {
-    return (await n()) || null;
+    return (await asyncProvider()) || null;
   } catch {
     return null;
   }
@@ -238,22 +245,22 @@ async function resolveBearerTokenFor(e) {
 /**
  * 在 CLI 自有 MCP 客户端发请求前运行注册的钩子（出错忽略）。
  */
-async function runBeforeRequestHook(e, n) {
-  if (typeof e !== "object" || e === null) return;
+async function runBeforeRequestHook(config, requestInfo) {
+  if (typeof config !== "object" || config === null) return;
   try {
-    await getCliOwnedState().cliOwnedBeforeRequestHooks.get(e)?.(n);
+    await getCliOwnedState().cliOwnedBeforeRequestHooks.get(config)?.(requestInfo);
   } catch {}
 }
 //@ chunk-wztb57wq.js:5475-5631 placement
 /**
  * 取 CLI 自有 MCP 客户端的额外请求头（出错返回空对象）。
  */
-function cliOwnedRequestHeaders(e, n) {
-  if (typeof e !== "object" || e === null) return {};
-  let r = getCliOwnedState().cliOwnedRequestHeaderProviders.get(e);
-  if (!r) return {};
+function cliOwnedRequestHeaders(config, requestInfo) {
+  if (typeof config !== "object" || config === null) return {};
+  let provider = getCliOwnedState().cliOwnedRequestHeaderProviders.get(config);
+  if (!provider) return {};
   try {
-    return r(n);
+    return provider(requestInfo);
   } catch {
     return {};
   }
@@ -262,11 +269,11 @@ function cliOwnedRequestHeaders(e, n) {
 /**
  * 判断请求头是否是 CLI 自有 MCP 客户端声明的凭据头。
  */
-function isCredentialRequestHeader(config, n) {
+function isCredentialRequestHeader(config, headerName) {
   return (
     typeof config === "object" &&
     config !== null &&
-    (getCliOwnedState().cliOwnedCredentialRequestHeaders.get(config)?.has(n.toLowerCase()) ?? false)
+    (getCliOwnedState().cliOwnedCredentialRequestHeaders.get(config)?.has(headerName.toLowerCase()) ?? false)
   );
 }
 //@ chunk-wztb57wq.js:5760-5957 placement
@@ -276,10 +283,10 @@ function isCredentialRequestHeader(config, n) {
 async function shouldResendRequest(config, response, owned) {
   if (typeof config !== "object" || config === null) return false;
   try {
-    let t = getCliOwnedState().cliOwnedResendDeciders.get(config);
-    return t === undefined
+    let decider = getCliOwnedState().cliOwnedResendDeciders.get(config);
+    return decider === undefined
       ? false
-      : await t(
+      : await decider(
           {
             status: response.status,
             headers: response.headers,
@@ -294,17 +301,17 @@ async function shouldResendRequest(config, response, owned) {
 /**
  * 把请求与响应摘要（方法、状态、头、令牌指纹）通知 CLI 自有 MCP 客户端的观察者。
  */
-function notifyResponseObserver(e, n) {
-  if (typeof e !== "object" || e === null) return;
-  let r = getCliOwnedState().cliOwnedResponseObservers.get(e);
-  if (!r) return;
+function notifyResponseObserver(config, observation) {
+  if (typeof config !== "object" || config === null) return;
+  let observer = getCliOwnedState().cliOwnedResponseObservers.get(config);
+  if (!observer) return;
   try {
-    r({
-      method: n.method,
-      status: n.status,
-      headers: n.headers,
-      requestHeaders: n.requestHeaders,
-      bearerFingerprint: n.bearerFingerprint,
+    observer({
+      method: observation.method,
+      status: observation.status,
+      headers: observation.headers,
+      requestHeaders: observation.requestHeaders,
+      bearerFingerprint: observation.bearerFingerprint,
     });
   } catch {}
 }

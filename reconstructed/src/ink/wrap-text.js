@@ -43,19 +43,19 @@ function truncate(text, columns, position) {
 }
 //@ chunk-bzr73sfg.js:181854-181965 placement = readHeadAndTail (0.802)
 function readHeadAndTail(filePath, fileSize, buf) {
-  let m = sliceAnsiToWidth(filePath, 0, Math.floor(buf / 2));
-  let p = sliceAnsiToWidth(filePath, fileSize - (buf - 1 - bunStringWidth(m)), fileSize);
+  let headSlice = sliceAnsiToWidth(filePath, 0, Math.floor(buf / 2));
+  let tailText = sliceAnsiToWidth(filePath, fileSize - (buf - 1 - bunStringWidth(headSlice)), fileSize);
   return {
-    head: sliceAnsiToWidth(filePath, 0, buf - 1 - bunStringWidth(p)),
-    tail: p,
+    head: sliceAnsiToWidth(filePath, 0, buf - 1 - bunStringWidth(tailText)),
+    tail: tailText,
   };
 }
 //@ chunk-bzr73sfg.js:181965-182062 placement = readHeadAndTail (0.802)
 function readHeadAndTail_2(filePath, fileSize, buf) {
   if (fileSize < 1) return "";
   let text = squashSingleText(filePath);
-  let p = truncate(text, fileSize, buf);
-  return p === null ? text : p.head + ELLIPSIS + p.tail;
+  let truncated = truncate(text, fileSize, buf);
+  return truncated === null ? text : truncated.head + ELLIPSIS + truncated.tail;
 }
 //@ chunk-bzr73sfg.js:182131-182451 placement = wrapText (0.934)
 /**

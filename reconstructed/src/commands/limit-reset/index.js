@@ -76,8 +76,8 @@ function cedarEmberAutoContinue() {
   return getCedarEmberConfig().autoContinue !== false;
 }
 //@ chunk-e6aww6q8.js:2045326-2045389 placement
-function stringOrDefault(e, n) {
-  return typeof e === "string" && e.trim() !== "" ? e : n;
+function stringOrDefault(value, fallback) {
+  return typeof value === "string" && value.trim() !== "" ? value : fallback;
 }
 //@ chunk-e6aww6q8.js:2045389-2046524 placement
 function getCedarEmberCopy() {
@@ -135,41 +135,51 @@ function getCedarEmberCopy() {
   };
 }
 //@ chunk-e6aww6q8.js:2046524-2046541 placement = SEP_WIDTH (1)
-var SEP_WIDTH = " \xB7 ";
+/**
+ * 终端/摘要输出里多处使用的分隔串 " · "（split/join 与 trim 后拼接）。
+ */
+var SEP = " \xB7 ";
 //@ chunk-e6aww6q8.js:2046541-2047364 placement
-function formatLimitResetTemplate(e, n) {
-  let r = {
-    "{kind}": n.kind,
-    "{Kind}": n.kind === undefined ? undefined : n.kind.charAt(0).toUpperCase() + n.kind.slice(1),
-    "{kindResets}": n.kindResets,
-    "{held}": n.held,
-    "{returns}": n.returns,
-    "{done}": n.done,
-    "{left}": n.left === undefined ? undefined : String(n.left),
+function formatLimitResetTemplate(template, values) {
+  let templateVars = {
+    "{kind}": values.kind,
+    "{Kind}":
+      values.kind === undefined ? undefined : values.kind.charAt(0).toUpperCase() + values.kind.slice(1),
+    "{kindResets}": values.kindResets,
+    "{held}": values.held,
+    "{returns}": values.returns,
+    "{done}": values.done,
+    "{left}": values.left === undefined ? undefined : String(values.left),
     "{resets}":
-      n.left === undefined
+      values.left === undefined
         ? undefined
-        : n.left === 0
+        : values.left === 0
           ? "no resets"
-          : n.left === 1
+          : values.left === 1
             ? "1 reset"
-            : `${n.left} resets`,
-    "{date}": n.date,
-    "{deadline}": n.deadline,
-    "{week}": n.week,
-    "{limits}": n.limits,
-    "{percent}": n.percent === undefined ? undefined : String(n.percent),
-    "{limit}": n.limit,
+            : `${values.left} resets`,
+    "{date}": values.date,
+    "{deadline}": values.deadline,
+    "{week}": values.week,
+    "{limits}": values.limits,
+    "{percent}": values.percent === undefined ? undefined : String(values.percent),
+    "{limit}": values.limit,
   };
-  let filtered = Object.keys(r).filter((key) => r[key] === undefined && e.includes(key));
-  let h = e;
+  let filtered = Object.keys(templateVars).filter(
+    (key) => templateVars[key] === undefined && template.includes(key),
+  );
+  let filled = template;
   if (filtered.length > 0) {
-    let filtered_2 = h.split(SEP_WIDTH).filter((S) => !filtered.some((w) => S.includes(w)));
-    h = filtered_2.length > 0 ? filtered_2.join(SEP_WIDTH) : h.replace(/ \([^)]*\{[A-Za-z]+\}[^)]*\)/g, "");
-    for (let S of filtered) h = h.replaceAll(S, "\u2026");
+    let filtered_2 = filled
+      .split(SEP)
+      .filter((key) => !filtered.some((placeholder) => key.includes(placeholder)));
+    filled =
+      filtered_2.length > 0 ? filtered_2.join(SEP) : filled.replace(/ \([^)]*\{[A-Za-z]+\}[^)]*\)/g, "");
+    for (let placeholder of filtered) filled = filled.replaceAll(placeholder, "\u2026");
   }
-  for (let [key, value] of Object.entries(r)) if (value !== undefined) h = h.replaceAll(key, value);
-  return h;
+  for (let [key, value] of Object.entries(templateVars))
+    if (value !== undefined) filled = filled.replaceAll(key, value);
+  return filled;
 }
 //@ chunk-e6aww6q8.js:2047364-2047768 placement
 /**
@@ -215,8 +225,8 @@ function limitResetAutoContinue() {
   return getLimitResetConfig().autoContinue !== false;
 }
 //@ chunk-e6aww6q8.js:2048033-2048096 placement
-function stringOrDefault_2(e, n) {
-  return typeof e === "string" && e.trim() !== "" ? e : n;
+function stringOrDefault_2(value, fallback) {
+  return typeof value === "string" && value.trim() !== "" ? value : fallback;
 }
 //@ chunk-e6aww6q8.js:2048096-2048341 placement
 function getLimitResetCopy() {
@@ -236,14 +246,14 @@ function getLimitResetCopy() {
 /**
  * 填充文案中的 {date} 占位：有日期则替换；没有则删去含占位的分段，全部被删时改用 later。
  */
-function fillDatePlaceholder(e, n) {
-  if (!e.includes("{date}")) return e;
-  if (n !== undefined) return e.replaceAll("{date}", n);
-  let joined = e
+function fillDatePlaceholder(template, values) {
+  if (!template.includes("{date}")) return template;
+  if (values !== undefined) return template.replaceAll("{date}", values);
+  let joined = template
     .split(" \xB7 ")
-    .filter((s) => !s.includes("{date}"))
+    .filter((part) => !part.includes("{date}"))
     .join(" \xB7 ");
-  return joined !== "" ? joined : e.replaceAll("{date}", "later");
+  return joined !== "" ? joined : template.replaceAll("{date}", "later");
 }
 //@ chunk-e6aww6q8.js:2048560-2048898 placement
 /**

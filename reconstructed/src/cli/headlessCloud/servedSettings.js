@@ -57,58 +57,58 @@ import { truncateToLength } from "../../utils/stringUtils.js";
 
 //@ chunk-fe6rs39h.js:120657-120966 placement
 function createServedSettingsTracker() {
-  let e = new Map();
+  let entries = new Map();
   let signal = createSignal();
   return {
-    add(s, r) {
-      let h = truncateStatusMessage(r);
-      if (e.get(s) === h) return;
-      if (s === SERVING_MUTED_NOTICE_KEY) e.delete(SERVING_UNMUTED_NOTICE_KEY);
-      else if (s === SERVING_UNMUTED_NOTICE_KEY) e.delete(SERVING_MUTED_NOTICE_KEY);
-      e.set(s, h);
-      let y = e.keys().next();
-      if (e.size > CLOUD_SHORT_LIST_MAX && y.done !== true) e.delete(y.value);
+    add(key, text) {
+      let hash = truncateStatusMessage(text);
+      if (entries.get(key) === hash) return;
+      if (key === SERVING_MUTED_NOTICE_KEY) entries.delete(SERVING_UNMUTED_NOTICE_KEY);
+      else if (key === SERVING_UNMUTED_NOTICE_KEY) entries.delete(SERVING_MUTED_NOTICE_KEY);
+      entries.set(key, hash);
+      let oldest = entries.keys().next();
+      if (entries.size > CLOUD_SHORT_LIST_MAX && oldest.done !== true) entries.delete(oldest.value);
       signal.emit();
     },
     list: () =>
-      [...e].map(([s, r]) => ({
-        key: s,
-        text: r,
+      [...entries].map(([listener, mode]) => ({
+        key: listener,
+        text: mode,
       })),
-    onChanged: (s) => {
-      signal.subscribe(s);
+    onChanged: (served) => {
+      signal.subscribe(served);
     },
   };
 }
 //@ chunk-fe6rs39h.js:120966-121005 placement
 var SERVED_FOLDER_CONFIG_NOT_USED = "served-folder-config-not-used";
 //@ chunk-fe6rs39h.js:121005-121208 placement
-function servedFolderConfigNotice(e) {
-  let n = loadedManagedKeyGroupsList();
-  if (n.length === 0) return;
+function servedFolderConfigNotice(mode) {
+  let withheld = loadedManagedKeyGroupsList();
+  if (withheld.length === 0) return;
   logFeatureOk("remote_served_folder_config_withheld", {
-    arm: fromEnum(e),
-    keys: n.includes("keys"),
-    hook: n.includes("hook"),
+    arm: fromEnum(mode),
+    keys: withheld.includes("keys"),
+    hook: withheld.includes("hook"),
   });
   return REMOTE_TOOLS_CONSENT_TEXT["served_settings.folder_config_not_used"];
 }
 //@ chunk-fe6rs39h.js:121208-121248 placement
 var SERVED_PROJECT_ENV_NOT_APPLIED = "served-project-env-not-applied";
 //@ chunk-fe6rs39h.js:121248-121384 placement
-function servedProjectEnvNotice(e) {
+function servedProjectEnvNotice(mode) {
   if (!servedFolderEnvWasWithheld()) return;
   logFeatureOk("remote_served_project_env_withheld", {
-    arm: fromEnum(e),
+    arm: fromEnum(mode),
   });
   return REMOTE_TOOLS_CONSENT_TEXT["served_settings.project_env_not_applied"];
 }
 //@ chunk-fe6rs39h.js:121384-122229 placement
 async function askUnattendedServingConsent({ dialogs, permissionMode, signal, seams = {} }) {
   let surface = lit("desktop");
-  let y = (S) => {
+  let logAction = (action) => {
     logEvent("tengu_served_unattended_consent", {
-      action: fromEnum(S),
+      action: fromEnum(action),
       surface,
     });
   };
@@ -124,10 +124,10 @@ async function askUnattendedServingConsent({ dialogs, permissionMode, signal, se
       return;
     if ((await (seams.readConsent ?? readUnattendedServingConsent)()) !== "unset") return;
     if (!dialogs.kinds.has(UNATTENDED_SERVING_CONSENT.kind)) {
-      y("unsupported_surface");
+      logAction("unsupported_surface");
       return;
     }
-    y("shown");
+    logAction("shown");
     let { answer, answered } = await dialogs.request(
       UNATTENDED_SERVING_CONSENT,
       unattendedServingConsentPayload((seams.machineName ?? unattendedServingMachineName)()),
@@ -136,12 +136,12 @@ async function askUnattendedServingConsent({ dialogs, permissionMode, signal, se
       },
     );
     if (!answered || answer === "not_now") {
-      y("not_now");
+      logAction("not_now");
       return;
     }
-    let R = answer === "accept" ? "accepted" : "declined";
-    y(R);
-    if (!(await (seams.writeConsent ?? writeUnattendedServingConsent)(R)))
+    let choice = answer === "accept" ? "accepted" : "declined";
+    logAction(choice);
+    if (!(await (seams.writeConsent ?? writeUnattendedServingConsent)(choice)))
       logForDebugging("[headlessCloud] unattended-serving answer not saved; asked again next launch", {
         level: "warn",
       });
@@ -155,15 +155,15 @@ async function askUnattendedServingConsent({ dialogs, permissionMode, signal, se
 /**
  * 无头云会话的插件转发特性：判断启动目录与同步根的关系、本机同意状态，决定是否把启用的插件带到云会话。
  */
-function createPluginForwardingFeature(e) {
-  let flagsOn = e.flagsOn ?? isCloudPluginForwardingFlagOn;
-  let s = e.optedOut ?? (() => Boolean(env.CLAUDE_CODE_DISABLE_PLUGIN_FORWARDING));
-  let clock = e.clock ?? REAL_PLUGIN_FORWARD_CLOCK;
-  let muted = e.muted ?? isRemoteToolServingMuted;
-  let onMuteRecheck = e.onMuteRecheck ?? onServingMuteRecheck;
-  return async (S) => {
+function createPluginForwardingFeature(options) {
+  let flagsOn = options.flagsOn ?? isCloudPluginForwardingFlagOn;
+  let isOptedOut = options.optedOut ?? (() => Boolean(env.CLAUDE_CODE_DISABLE_PLUGIN_FORWARDING));
+  let clock = options.clock ?? REAL_PLUGIN_FORWARD_CLOCK;
+  let muted = options.muted ?? isRemoteToolServingMuted;
+  let onMuteRecheck = options.onMuteRecheck ?? onServingMuteRecheck;
+  return async (session) => {
     if (!(await flagsOn())) return;
-    if (s())
+    if (isOptedOut())
       return {
         feature: "plugins",
         report: () => ({
@@ -171,177 +171,178 @@ function createPluginForwardingFeature(e) {
           reason: "switched_off",
         }),
       };
-    let w = S.trigger === "attach";
-    switch (S.binding) {
+    let isAttach = session.trigger === "attach";
+    switch (session.binding) {
       case "bound":
       case "none":
         break;
       case "elsewhere":
-        return cloudPluginsAdmissionReport("bound_elsewhere", "no_consent", "bound_elsewhere", w);
+        return cloudPluginsAdmissionReport("bound_elsewhere", "no_consent", "bound_elsewhere", isAttach);
       case "unknown":
-        return cloudPluginsAdmissionReport("binding_unknown", "no_consent", "binding_unknown", w);
+        return cloudPluginsAdmissionReport("binding_unknown", "no_consent", "binding_unknown", isAttach);
       default:
-        return S.binding;
+        return session.binding;
     }
-    let memory = e.memory;
-    let k = e.consentDeps ?? readCloudPluginsConsent(S.storageV5);
-    let I = (e.launchDir ?? getOriginalCwd)();
-    let O = {
-      launchDir: I,
+    let memory = options.memory;
+    let consentDeps = options.consentDeps ?? readCloudPluginsConsent(session.storageV5);
+    let launchDir = (options.launchDir ?? getOriginalCwd)();
+    let reachArgs = {
+      launchDir,
       syncRoot: () => null,
-      syncElsewhere: w ? (S.sessionRecordMayBeElsewhere ?? "unknown") : false,
+      syncElsewhere: isAttach ? (session.sessionRecordMayBeElsewhere ?? "unknown") : false,
     };
-    let P =
-      e.reach?.(O) ??
+    let reach =
+      options.reach?.(reachArgs) ??
       createDeviceHookDecider({
-        ...O,
-        memory: e.reachMemory.reachFor(I),
+        ...reachArgs,
+        memory: options.reachMemory.reachFor(launchDir),
       });
-    let untrustedStoreJudge = createUntrustedStoreJudge(P);
+    let untrustedStoreJudge = createUntrustedStoreJudge(reach);
     let cloudPluginsConsentWithTimeout = await readCloudPluginsConsentWithTimeout(
       memory.consentPin,
-      k,
+      consentDeps,
       untrustedStoreJudge,
-      S.signal,
+      session.signal,
       clock,
     );
     if (cloudPluginsConsentWithTimeout === "declined")
-      return cloudPluginsAdmissionReport("declined", "opted_out", "stored", w, "stored");
+      return cloudPluginsAdmissionReport("declined", "opted_out", "stored", isAttach, "stored");
     if (cloudPluginsConsentWithTimeout === "aborted")
-      return cloudPluginsAdmissionReport("unreadable", "no_consent", "detached", w);
+      return cloudPluginsAdmissionReport("unreadable", "no_consent", "detached", isAttach);
     if (cloudPluginsConsentWithTimeout === "unreadable") {
       logFeatureBad("ccr_cloud_plugins_forward", "read_failed");
-      return cloudPluginsAdmissionReport("unreadable", "no_consent", "read_failed", w);
+      return cloudPluginsAdmissionReport("unreadable", "no_consent", "read_failed", isAttach);
     }
     if (cloudPluginsConsentWithTimeout !== "accepted") {
-      let x = untrustedStoreJudge.withheld();
+      let withheld = untrustedStoreJudge.withheld();
       return cloudPluginsAdmissionReport(
         "no_consent",
         "no_consent",
-        x !== null ? "untrusted_store" : "undecided",
-        w,
+        withheld !== null ? "untrusted_store" : "undecided",
+        isAttach,
         "default",
-        x !== null ? cloudPluginsOffMessage(x) : CLOUD_PLUGINS_UNDECIDED_MESSAGE,
+        withheld !== null ? cloudPluginsOffMessage(withheld) : CLOUD_PLUGINS_UNDECIDED_MESSAGE,
       );
     }
     let noticeBacklog = createNoticeBacklog();
-    let j = null;
-    let Y = [];
-    let D = false;
-    let W = (x) => {
-      if (x && !D) Y.forEach((ie) => ie());
-      D = x;
+    let forwarder = null;
+    let pendingSettles = [];
+    let isSettled = false;
+    let setSettled = (settled) => {
+      if (settled && !isSettled) pendingSettles.forEach((finish) => finish());
+      isSettled = settled;
     };
-    let te = false;
-    let X;
-    let ee = false;
+    let sawMessageBeforeSession = false;
+    let lastNotice;
+    let isPendingNotice = false;
     return {
       feature: "plugins",
       status: noticeBacklog,
-      onSettled: (x) => {
-        Y.push(x);
-        if (D) x();
+      onSettled: (finish) => {
+        pendingSettles.push(finish);
+        if (isSettled) finish();
       },
       sessionCallbacks: {
-        onMessage: (x) => {
-          if (x.type === "system" && x.subtype === "plugin_install") j?.pluginInstallFrame();
+        onMessage: (message) => {
+          if (message.type === "system" && message.subtype === "plugin_install")
+            forwarder?.pluginInstallFrame();
         },
       },
       onSession({ sessionId, manager }) {
-        j = forwardCloudPlugins({
+        forwarder = forwardCloudPlugins({
           sessionId,
-          reattach: w,
+          reattach: isAttach,
           manager,
           memory,
-          storageV5: S.storageV5,
+          storageV5: session.storageV5,
           say: ({ line, level }) => {
-            if (!ee || level === "warning") X = line;
-            if (!ee) {
-              ee = true;
+            if (!isPendingNotice || level === "warning") lastNotice = line;
+            if (!isPendingNotice) {
+              isPendingNotice = true;
               queueMicrotask(() => {
-                ee = false;
+                isPendingNotice = false;
               });
             }
             noticeBacklog.publish(line, mapLogLevel(level));
           },
-          bound: S.bound,
-          reach: P,
+          bound: session.bound,
+          reach,
           distrust: untrustedStoreJudge,
-          consentDeps: k,
+          consentDeps,
           clock,
           muted,
           onMuteRecheck,
-          ...(e.readChoices && {
-            readChoices: e.readChoices,
+          ...(options.readChoices && {
+            readChoices: options.readChoices,
           }),
           onChange: () => {
-            let G = j?.state();
-            W(G !== undefined && isSettledWithoutAnswer(G));
+            let state = forwarder?.state();
+            setSettled(state !== undefined && isSettledWithoutAnswer(state));
           },
         });
-        if (w) j.workerKnownUp();
-        if (te) j.messageSent();
+        if (isAttach) forwarder.workerKnownUp();
+        if (sawMessageBeforeSession) forwarder.messageSent();
       },
       onWorkerUp() {
-        j?.workerCameUp();
+        forwarder?.workerCameUp();
       },
       onMessageSent() {
-        if (j === null) {
-          te = true;
+        if (forwarder === null) {
+          sawMessageBeforeSession = true;
           return;
         }
-        j.messageSent();
+        forwarder.messageSent();
       },
       report: () => {
-        let x = j?.state();
-        if (x?.muted)
+        let state = forwarder?.state();
+        if (state?.muted)
           return {
             state: "off",
             source: "stored",
             reason: "muted",
           };
-        let ie =
-          x !== undefined && x.settled && x.admission === "admitted"
-            ? classifyCloudPluginsWorkerReply(x.notice)
+        let replyReason =
+          state !== undefined && state.settled && state.admission === "admitted"
+            ? classifyCloudPluginsWorkerReply(state.notice)
             : undefined;
-        if (ie !== undefined)
+        if (replyReason !== undefined)
           return {
             state: "off",
             source: "stored",
-            reason: ie,
+            reason: replyReason,
           };
-        if (x?.gaveUp !== undefined && x.notice === undefined)
+        if (state?.gaveUp !== undefined && state.notice === undefined)
           return {
             state: "off",
             source: "stored",
-            reason: x.gaveUp === "read_failed" ? "unreadable" : "could_not_send",
+            reason: state.gaveUp === "read_failed" ? "unreadable" : "could_not_send",
           };
-        if (x !== undefined && x.settled && x.admission !== "admitted")
+        if (state !== undefined && state.settled && state.admission !== "admitted")
           return {
             state: "off",
             reason:
-              x.admission === "opted_out"
+              state.admission === "opted_out"
                 ? "declined"
-                : x.source === "read_failed"
+                : state.source === "read_failed"
                   ? "unreadable"
-                  : x.source === "internal_error"
+                  : state.source === "internal_error"
                     ? "could_not_send"
                     : "unavailable",
           };
         return {
           state: "forwarded",
           source: "stored",
-          ...(X !== undefined && {
-            message: truncateToLength(X, 200),
+          ...(lastNotice !== undefined && {
+            message: truncateToLength(lastNotice, 200),
           }),
-          ...(!(x !== undefined && isSettledWithoutAnswer(x)) && {
+          ...(!(state !== undefined && isSettledWithoutAnswer(state)) && {
             pending: true,
           }),
         };
       },
       async dispose() {
-        j?.teardown();
-        j = null;
+        forwarder?.teardown();
+        forwarder = null;
       },
     };
   };
@@ -350,26 +351,26 @@ function createPluginForwardingFeature(e) {
 /**
  * 带超时与中止读取云插件同意状态：超时返回 unreadable，中止返回 aborted。
  */
-function readCloudPluginsConsentWithTimeout(consentPin, n, untrustedStoreJudge, signal, clock) {
+function readCloudPluginsConsentWithTimeout(consentPin, pin, untrustedStoreJudge, signal, clock) {
   if (signal.aborted) return Promise.resolve("aborted");
   return new Promise((resolve) => {
-    let S = () => resolve("unreadable");
-    let w = () => resolve("aborted");
-    let R = clock.setTimeout(S, LOCAL_READ_TIMEOUT_MS);
-    signal.addEventListener("abort", w, {
+    let onTimeout = () => resolve("unreadable");
+    let onAbort = () => resolve("aborted");
+    let timer = clock.setTimeout(onTimeout, LOCAL_READ_TIMEOUT_MS);
+    signal.addEventListener("abort", onAbort, {
       once: true,
     });
-    resolveCloudPluginsConsent(consentPin, n, untrustedStoreJudge)
-      .then(resolve, S)
+    resolveCloudPluginsConsent(consentPin, pin, untrustedStoreJudge)
+      .then(resolve, onTimeout)
       .finally(() => {
-        R();
-        signal.removeEventListener("abort", w);
+        timer();
+        signal.removeEventListener("abort", onAbort);
       });
   });
 }
 //@ chunk-fe6rs39h.js:125255-125305 placement
-function isSettledWithoutAnswer(e) {
-  return e.settled && !e.answerPending;
+function isSettledWithoutAnswer(state) {
+  return state.settled && !state.answerPending;
 }
 //@ chunk-fe6rs39h.js:125305-125430 placement = startFileWatcher (0.581)
 function mapLogLevel(teamDir) {

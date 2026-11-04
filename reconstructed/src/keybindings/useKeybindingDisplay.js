@@ -8,31 +8,35 @@
  * pieces: chunk-qfgcgf22.js (2)
  * attribution: placement 2
  */
-import { init_react_production, R, P } from "../../vendor/react/cjs/react.production.js";
+import { init_react_production, useRef, useEffect } from "../../vendor/react/cjs/react.production.js";
 import { useKeybindingContext } from "./KeybindingContext.js";
 import { getActionChord } from "./resolver.js";
 import { logShortcutFallbackUsed } from "./shortcutFormat.js";
 import { chordToString } from "./parser.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-qfgcgf22.js:310-314 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-qfgcgf22.js:310", () => {
+  init_react_production();
+});
 //@ chunk-qfgcgf22.js:314-544 placement
 /**
  * 取动作对应快捷键的显示文本；找不到绑定时回退给定文本并（一次性）上报回退原因。
  */
-function useShortcutDisplay(action, i, t) {
+function useShortcutDisplay(action, context, fallback) {
   let keybindingContext = useKeybindingContext();
-  let n = keybindingContext ? getActionChord(action, i, keybindingContext.bindings) : undefined;
-  let r = n === undefined;
-  let f = keybindingContext ? "action_not_found" : "no_context";
-  let d = R(false);
-  P(() => {
-    if (r && !d.current) {
-      d.current = true;
-      logShortcutFallbackUsed(action, i, t, f);
+  let chord = keybindingContext ? getActionChord(action, context, keybindingContext.bindings) : undefined;
+  let isMissing = chord === undefined;
+  let fallbackReason = keybindingContext ? "action_not_found" : "no_context";
+  let hasLogged = useRef(false);
+  useEffect(() => {
+    if (isMissing && !hasLogged.current) {
+      hasLogged.current = true;
+      logShortcutFallbackUsed(action, context, fallback, fallbackReason);
     }
-  }, [r, action, i, t, f]);
-  if (n === undefined) return t;
-  return n === null ? "" : chordToString(n);
+  }, [isMissing, action, context, fallback, fallbackReason]);
+  if (chord === undefined) return fallback;
+  return chord === null ? "" : chordToString(chord);
 }
 export { useShortcutDisplay };

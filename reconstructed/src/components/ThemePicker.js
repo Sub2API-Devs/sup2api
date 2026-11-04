@@ -8,9 +8,15 @@
  * pieces: chunk-5je9hz27.js (5)
  * attribution: placement 1, fingerprint 2, layout 2
  */
-import { init_react_production, R, P, y, Se } from "../../vendor/react/cjs/react.production.js";
+import {
+  init_react_production,
+  useRef,
+  useEffect,
+  useState,
+  useContext,
+} from "../../vendor/react/cjs/react.production.js";
 import { customThemeRef, parseCustomThemeRef } from "../utils/customThemes.js";
-import { w } from "../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import {
   useTheme_2,
   useTheme,
@@ -58,11 +64,11 @@ function selectSettingsSyntaxHighlightingDisabled(s) {
   return s.settings.syntaxHighlightingDisabled;
 }
 //@ chunk-5je9hz27.js:1212-1331 layout
-function toCustomThemeOption(xe) {
+function toCustomThemeOption(theme) {
   return {
-    label: xe.name,
-    origin: xe.source === "user" ? "custom" : `from ${xe.source.plugin}`,
-    value: customThemeRef(xe.slug),
+    label: theme.name,
+    origin: theme.source === "user" ? "custom" : `from ${theme.source.plugin}`,
+    value: customThemeRef(theme.slug),
   };
 }
 //@ chunk-5je9hz27.js:1331-1361 layout
@@ -72,7 +78,7 @@ var NEW_CUSTOM_THEME = "__new_custom_theme__";
  * 主题选择器：列出 dark/light/daltonized/ansi 等主题，选中即预览（含 diff 示例），ctrl+t 切换语法高亮，确定后写入 userSettings。
  */
 function ThemePicker(props) {
-  let $ = w(109);
+  let $ = useMemoCache(109);
   let {
     onThemeSelect,
     showIntroText,
@@ -83,71 +89,71 @@ function ThemePicker(props) {
     onCancel: onCancelProp,
     onCustomTheme,
   } = props;
-  let g = showIntroText === undefined ? false : showIntroText;
-  let c = helpText === undefined ? "" : helpText;
-  let x = showHelpTextBelow === undefined ? false : showHelpTextBelow;
-  let X = hideEscToCancel === undefined ? false : hideEscToCancel;
-  let p = skipExitHandling === undefined ? false : skipExitHandling;
+  let showIntroText_ = showIntroText === undefined ? false : showIntroText;
+  let helpText_ = helpText === undefined ? "" : helpText;
+  let showHelpTextBelow_ = showHelpTextBelow === undefined ? false : showHelpTextBelow;
+  let hideEscToCancel_ = hideEscToCancel === undefined ? false : hideEscToCancel;
+  let skipExitHandling_ = skipExitHandling === undefined ? false : skipExitHandling;
   let { storageV5 } = useTheme_2();
   let [theme] = useTheme();
   let themeSetting = useThemeSetting();
   let { columns } = useTerminalSize();
-  let vt;
+  let colorModuleUnavailableReason;
   if ($[0] === MEMO_CACHE_SENTINEL) {
-    vt = getColorModuleUnavailableReason();
-    $[0] = vt;
-  } else vt = $[0];
-  let colorModuleUnavailableReason = vt;
-  let Tt;
+    colorModuleUnavailableReason = getColorModuleUnavailableReason();
+    $[0] = colorModuleUnavailableReason;
+  } else colorModuleUnavailableReason = $[0];
+  let colorModuleUnavailableReason_2 = colorModuleUnavailableReason;
+  let syntaxTheme;
   if ($[1] !== theme) {
-    Tt = colorModuleUnavailableReason === null ? getColorSyntaxTheme(theme) : null;
+    syntaxTheme = colorModuleUnavailableReason_2 === null ? getColorSyntaxTheme(theme) : null;
     $[1] = theme;
-    $[2] = Tt;
-  } else Tt = $[2];
-  let syntaxTheme = Tt;
+    $[2] = syntaxTheme;
+  } else syntaxTheme = $[2];
+  let syntaxTheme_2 = syntaxTheme;
   let { setPreviewTheme, cancelPreview } = usePreviewTheme();
-  let d = R(undefined);
-  let wt;
+  let commitTokenRef = useRef(undefined);
+  let commitAfter;
   if ($[3] !== cancelPreview) {
-    wt = (wo) => {
-      let Ct = Symbol("commit");
-      d.current = Ct;
-      let bt = () => {
-        if (d.current === Ct) {
-          d.current = undefined;
+    commitAfter = (themePromise) => {
+      let commitToken = Symbol("commit");
+      commitTokenRef.current = commitToken;
+      let finishCommit = () => {
+        if (commitTokenRef.current === commitToken) {
+          commitTokenRef.current = undefined;
           cancelPreview();
         }
       };
-      Promise.resolve(wo).then(bt, bt);
+      Promise.resolve(themePromise).then(finishCommit, finishCommit);
     };
     $[3] = cancelPreview;
-    $[4] = wt;
-  } else wt = $[4];
-  let T = wt;
-  let St;
-  let yt;
+    $[4] = commitAfter;
+  } else commitAfter = $[4];
+  let runWithCommit = commitAfter;
+  let cleanupDeps;
+  let cancelOnUnmount;
   if ($[5] !== cancelPreview) {
-    yt = () => () => {
-      if (d.current === undefined) cancelPreview();
+    cancelOnUnmount = () => () => {
+      if (commitTokenRef.current === undefined) cancelPreview();
     };
-    St = [cancelPreview];
+    cleanupDeps = [cancelPreview];
     $[5] = cancelPreview;
-    $[6] = St;
-    $[7] = yt;
+    $[6] = cleanupDeps;
+    $[7] = cancelOnUnmount;
   } else {
-    St = $[6];
-    yt = $[7];
+    cleanupDeps = $[6];
+    cancelOnUnmount = $[7];
   }
-  P(yt, St);
-  let W = useAppState(selectSettingsSyntaxHighlightingDisabled) ?? false;
+  useEffect(cancelOnUnmount, cleanupDeps);
+  let syntaxHighlightingDisabled = useAppState(selectSettingsSyntaxHighlightingDisabled) ?? false;
   let setAppState = useSetAppState();
   useRegisterKeybindingContext("ThemePicker");
   let syntaxToggleShortcut = useShortcutDisplay("theme:toggleSyntaxHighlighting", "ThemePicker", "ctrl+t");
-  let Pt;
-  if ($[8] !== setAppState || $[9] !== storageV5 || $[10] !== W) {
-    Pt = () => {
-      if (colorModuleUnavailableReason === null) {
-        let newValue = !W;
+  let toggleSyntaxHighlighting;
+  if ($[8] !== setAppState || $[9] !== storageV5 || $[10] !== syntaxHighlightingDisabled) {
+    toggleSyntaxHighlighting = () => {
+      if (colorModuleUnavailableReason_2 === null) {
+        let newValue = !syntaxHighlightingDisabled;
         updateSettingsForSource(
           "userSettings",
           {
@@ -167,110 +173,110 @@ function ThemePicker(props) {
     };
     $[8] = setAppState;
     $[9] = storageV5;
-    $[10] = W;
-    $[11] = Pt;
-  } else Pt = $[11];
-  let Ot;
+    $[10] = syntaxHighlightingDisabled;
+    $[11] = toggleSyntaxHighlighting;
+  } else toggleSyntaxHighlighting = $[11];
+  let themePickerKeybindingOptions;
   if ($[12] === MEMO_CACHE_SENTINEL) {
-    Ot = {
+    themePickerKeybindingOptions = {
       context: "ThemePicker",
     };
-    $[12] = Ot;
-  } else Ot = $[12];
-  useKeybinding("theme:toggleSyntaxHighlighting", Pt, Ot);
-  let Dt;
+    $[12] = themePickerKeybindingOptions;
+  } else themePickerKeybindingOptions = $[12];
+  useKeybinding("theme:toggleSyntaxHighlighting", toggleSyntaxHighlighting, themePickerKeybindingOptions);
+  let handleCancel;
   if ($[13] !== cancelPreview || $[14] !== onCancelProp) {
-    Dt = () => {
-      d.current = undefined;
+    handleCancel = () => {
+      commitTokenRef.current = undefined;
       cancelPreview();
       onCancelProp?.();
     };
     $[13] = cancelPreview;
     $[14] = onCancelProp;
-    $[15] = Dt;
-  } else Dt = $[15];
-  let Y = Dt;
-  let It;
-  if ($[16] !== Y || $[17] !== cancelPreview || $[18] !== p) {
-    It = p
-      ? Y
+    $[15] = handleCancel;
+  } else handleCancel = $[15];
+  let cancelThemePicker = handleCancel;
+  let onSelectCancel;
+  if ($[16] !== cancelThemePicker || $[17] !== cancelPreview || $[18] !== skipExitHandling_) {
+    onSelectCancel = skipExitHandling_
+      ? cancelThemePicker
       : async () => {
           cancelPreview();
           await gracefulShutdown(0);
         };
-    $[16] = Y;
+    $[16] = cancelThemePicker;
     $[17] = cancelPreview;
-    $[18] = p;
-    $[19] = It;
-  } else It = $[19];
-  let Et;
+    $[18] = skipExitHandling_;
+    $[19] = onSelectCancel;
+  } else onSelectCancel = $[19];
+  let selectKeybindingOptions;
   if ($[20] === MEMO_CACHE_SENTINEL) {
-    Et = {
+    selectKeybindingOptions = {
       context: "Select",
     };
-    $[20] = Et;
-  } else Et = $[20];
-  useKeybinding("select:cancel", It, Et);
-  let exitState = useGlobalExitKeybindings(p ? Y : undefined);
+    $[20] = selectKeybindingOptions;
+  } else selectKeybindingOptions = $[20];
+  useKeybinding("select:cancel", onSelectCancel, selectKeybindingOptions);
+  let exitState = useGlobalExitKeybindings(skipExitHandling_ ? cancelThemePicker : undefined);
   let { customThemes } = useCustomThemes();
-  let Mt;
-  let Lt;
-  let _t;
-  let At;
-  let Rt;
-  let Bt;
-  let Nt;
+  let autoOption;
+  let darkOption;
+  let lightOption;
+  let darkDaltonizedOption;
+  let lightDaltonizedOption;
+  let darkAnsiOption;
+  let lightAnsiOption;
   if ($[21] === MEMO_CACHE_SENTINEL) {
-    Mt = {
+    autoOption = {
       label: "Auto (match terminal)",
       value: "auto",
     };
-    Lt = {
+    darkOption = {
       label: "Dark mode",
       value: "dark",
     };
-    _t = {
+    lightOption = {
       label: "Light mode",
       value: "light",
     };
-    At = {
+    darkDaltonizedOption = {
       label: "Dark mode (colorblind-friendly)",
       value: "dark-daltonized",
     };
-    Rt = {
+    lightDaltonizedOption = {
       label: "Light mode (colorblind-friendly)",
       value: "light-daltonized",
     };
-    Bt = {
+    darkAnsiOption = {
       label: "Dark mode (ANSI colors only)",
       value: "dark-ansi",
     };
-    Nt = {
+    lightAnsiOption = {
       label: "Light mode (ANSI colors only)",
       value: "light-ansi",
     };
-    $[21] = Mt;
-    $[22] = Lt;
-    $[23] = _t;
-    $[24] = At;
-    $[25] = Rt;
-    $[26] = Bt;
-    $[27] = Nt;
+    $[21] = autoOption;
+    $[22] = darkOption;
+    $[23] = lightOption;
+    $[24] = darkDaltonizedOption;
+    $[25] = lightDaltonizedOption;
+    $[26] = darkAnsiOption;
+    $[27] = lightAnsiOption;
   } else {
-    Mt = $[21];
-    Lt = $[22];
-    _t = $[23];
-    At = $[24];
-    Rt = $[25];
-    Bt = $[26];
-    Nt = $[27];
+    autoOption = $[21];
+    darkOption = $[22];
+    lightOption = $[23];
+    darkDaltonizedOption = $[24];
+    lightDaltonizedOption = $[25];
+    darkAnsiOption = $[26];
+    lightAnsiOption = $[27];
   }
-  let $t;
+  let themeOptions;
   if ($[28] !== customThemes || $[29] !== onCustomTheme) {
     const mapped = customThemes.map(toCustomThemeOption);
-    let I;
+    let newCustomOptionList;
     if ($[31] !== onCustomTheme) {
-      I = onCustomTheme
+      newCustomOptionList = onCustomTheme
         ? [
             {
               label: "New custom theme\u2026",
@@ -279,78 +285,92 @@ function ThemePicker(props) {
           ]
         : [];
       $[31] = onCustomTheme;
-      $[32] = I;
-    } else I = $[32];
-    $t = [Mt, Lt, _t, At, Rt, Bt, Nt, ...mapped, ...I];
+      $[32] = newCustomOptionList;
+    } else newCustomOptionList = $[32];
+    themeOptions = [
+      autoOption,
+      darkOption,
+      lightOption,
+      darkDaltonizedOption,
+      lightDaltonizedOption,
+      darkAnsiOption,
+      lightAnsiOption,
+      ...mapped,
+      ...newCustomOptionList,
+    ];
     $[28] = customThemes;
     $[29] = onCustomTheme;
-    $[30] = $t;
-  } else $t = $[30];
-  let a = $t;
-  let index = a.findIndex((Co) => Co.value === themeSetting);
-  let [b, Ut] = y(a[Math.max(0, index)]?.value ?? themeSetting);
-  let [bo, So] = y(false);
-  let [Ft, yo] = y(index !== -1);
-  if (!Ft && !bo && index !== -1) {
-    yo(true);
-    Ut(themeSetting);
+    $[30] = themeOptions;
+  } else themeOptions = $[30];
+  let options = themeOptions;
+  let index = options.findIndex((option) => option.value === themeSetting);
+  let [focusedValue, setFocusedValue] = useState(options[Math.max(0, index)]?.value ?? themeSetting);
+  let [hasPreviewed, setHasPreviewed] = useState(false);
+  let [isInitialized, setIsInitialized] = useState(index !== -1);
+  if (!isInitialized && !hasPreviewed && index !== -1) {
+    setIsInitialized(true);
+    setFocusedValue(themeSetting);
   }
-  let Q;
-  if ($[33] !== b) {
-    Q = parseCustomThemeRef(b);
-    $[33] = b;
-    $[34] = Q;
-  } else Q = $[34];
-  let ee = Q;
-  let I;
-  if ($[35] !== customThemes || $[36] !== ee) {
-    I = ee ? customThemes.find((customTheme) => customTheme.slug === ee) : undefined;
+  let customRef;
+  if ($[33] !== focusedValue) {
+    customRef = parseCustomThemeRef(focusedValue);
+    $[33] = focusedValue;
+    $[34] = customRef;
+  } else customRef = $[34];
+  let customRefSlug = customRef;
+  let customTheme;
+  if ($[35] !== customThemes || $[36] !== customRefSlug) {
+    customTheme = customRefSlug
+      ? customThemes.find((customTheme) => customTheme.slug === customRefSlug)
+      : undefined;
     $[35] = customThemes;
-    $[36] = ee;
-    $[37] = I;
-  } else I = $[37];
-  let f = I;
+    $[36] = customRefSlug;
+    $[37] = customTheme;
+  } else customTheme = $[37];
+  let selectedCustomTheme = customTheme;
   let chord = useShortcutDisplay("theme:editCustom", "ThemePicker", "ctrl+e");
-  let Vt;
-  if ($[38] !== f || $[39] !== T || $[40] !== onCustomTheme) {
-    Vt = () => {
-      if (f && onCustomTheme && d.current === undefined) T(onCustomTheme(f));
+  let editCustomTheme;
+  if ($[38] !== selectedCustomTheme || $[39] !== runWithCommit || $[40] !== onCustomTheme) {
+    editCustomTheme = () => {
+      if (selectedCustomTheme && onCustomTheme && commitTokenRef.current === undefined)
+        runWithCommit(onCustomTheme(selectedCustomTheme));
     };
-    $[38] = f;
-    $[39] = T;
+    $[38] = selectedCustomTheme;
+    $[39] = runWithCommit;
     $[40] = onCustomTheme;
-    $[41] = Vt;
-  } else Vt = $[41];
-  let Gt;
+    $[41] = editCustomTheme;
+  } else editCustomTheme = $[41];
+  let editCustomKeybindingOptions;
   if ($[42] === MEMO_CACHE_SENTINEL) {
-    Gt = {
+    editCustomKeybindingOptions = {
       context: "ThemePicker",
     };
-    $[42] = Gt;
-  } else Gt = $[42];
-  useKeybinding("theme:editCustom", Vt, Gt);
+    $[42] = editCustomKeybindingOptions;
+  } else editCustomKeybindingOptions = $[42];
+  useKeybinding("theme:editCustom", editCustomTheme, editCustomKeybindingOptions);
   let scrollColumnContext = useScrollColumnContext();
-  let E = Se(scrollViewportContext);
-  let Xt = R(null);
-  let zt;
+  let scrollViewportValue = useContext(scrollViewportContext);
+  let containerRef = useRef(null);
+  let measureTop;
   if ($[43] !== scrollColumnContext) {
-    zt = () => {
-      let $e = Xt.current;
-      if ($e === null) {
+    measureTop = () => {
+      let container = containerRef.current;
+      if (container === null) {
         return 0;
       }
-      let te = scrollColumnContext?.box.current ?? $e;
-      while (scrollColumnContext === null && te.parentNode !== undefined) te = te.parentNode;
-      return Math.max(0, topWithin($e, te));
+      let scrollRoot = scrollColumnContext?.box.current ?? container;
+      while (scrollColumnContext === null && scrollRoot.parentNode !== undefined)
+        scrollRoot = scrollRoot.parentNode;
+      return Math.max(0, topWithin(container, scrollRoot));
     };
     $[43] = scrollColumnContext;
-    $[44] = zt;
-  } else zt = $[44];
-  let measured = useMeasured(zt);
-  let oe = g ? 0 : measured + (X ? 1 : 0);
-  let ne;
-  if ($[45] !== g) {
-    ne = g
+    $[44] = measureTop;
+  } else measureTop = $[44];
+  let measured = useMeasured(measureTop);
+  let reservedTopRows = showIntroText_ ? 0 : measured + (hideEscToCancel_ ? 1 : 0);
+  let titleElement;
+  if ($[45] !== showIntroText_) {
+    titleElement = showIntroText_
       ? jsxProd_default(Text, {
           children: "Let's get started.",
         })
@@ -359,95 +379,99 @@ function ThemePicker(props) {
           color: "permission",
           children: "Theme",
         });
-    $[45] = g;
-    $[46] = ne;
-  } else ne = $[46];
-  let Wt;
+    $[45] = showIntroText_;
+    $[46] = titleElement;
+  } else titleElement = $[46];
+  let subtitleElement;
   if ($[47] === MEMO_CACHE_SENTINEL) {
-    Wt = jsxProd_default(Text, {
+    subtitleElement = jsxProd_default(Text, {
       bold: true,
       children: "Choose the text style that looks best with your terminal",
     });
-    $[47] = Wt;
-  } else Wt = $[47];
-  let ie;
-  if ($[48] !== c || $[49] !== x) {
-    ie =
-      c &&
-      !x &&
+    $[47] = subtitleElement;
+  } else subtitleElement = $[47];
+  let helpElement;
+  if ($[48] !== helpText_ || $[49] !== showHelpTextBelow_) {
+    helpElement =
+      helpText_ &&
+      !showHelpTextBelow_ &&
       jsxProd_default(Text, {
         dimColor: true,
-        children: c,
+        children: helpText_,
       });
-    $[48] = c;
-    $[49] = x;
-    $[50] = ie;
-  } else ie = $[50];
-  let se;
-  if ($[51] !== ie) {
-    se = jsxProd_default_2(Box, {
+    $[48] = helpText_;
+    $[49] = showHelpTextBelow_;
+    $[50] = helpElement;
+  } else helpElement = $[50];
+  let headerElement;
+  if ($[51] !== helpElement) {
+    headerElement = jsxProd_default_2(Box, {
       flexDirection: "column",
-      children: [Wt, ie],
+      children: [subtitleElement, helpElement],
     });
-    $[51] = ie;
-    $[52] = se;
-  } else se = $[52];
-  const Ue = Ft ? "on-saved-theme" : "on-first-theme";
+    $[51] = helpElement;
+    $[52] = headerElement;
+  } else headerElement = $[52];
+  const listKey = isInitialized ? "on-saved-theme" : "on-first-theme";
   const defaultFocusIndex = Math.max(0, index);
   let onFocus;
-  if ($[53] !== cancelPreview || $[54] !== b || $[55] !== setPreviewTheme || $[56] !== a) {
+  if ($[53] !== cancelPreview || $[54] !== focusedValue || $[55] !== setPreviewTheme || $[56] !== options) {
     onFocus = (setting) => {
-      let M = a[setting]?.value;
-      if (M === undefined || M === b || d.current !== undefined) {
+      let focusedOptionValue = options[setting]?.value;
+      if (
+        focusedOptionValue === undefined ||
+        focusedOptionValue === focusedValue ||
+        commitTokenRef.current !== undefined
+      ) {
         return;
       }
-      Ut(M);
-      So(true);
-      if (isSelectableThemeName(M)) setPreviewTheme(M);
+      setFocusedValue(focusedOptionValue);
+      setHasPreviewed(true);
+      if (isSelectableThemeName(focusedOptionValue)) setPreviewTheme(focusedOptionValue);
       else cancelPreview();
     };
     $[53] = cancelPreview;
-    $[54] = b;
+    $[54] = focusedValue;
     $[55] = setPreviewTheme;
-    $[56] = a;
+    $[56] = options;
     $[57] = onFocus;
   } else onFocus = $[57];
   let onSelect;
   if (
     $[58] !== cancelPreview ||
-    $[59] !== T ||
+    $[59] !== runWithCommit ||
     $[60] !== onCustomTheme ||
     $[61] !== onThemeSelect ||
-    $[62] !== a
+    $[62] !== options
   ) {
     onSelect = (setting_0) => {
-      let Ve = a[setting_0]?.value;
-      if (Ve === undefined || d.current !== undefined) {
+      let selectedOptionValue = options[setting_0]?.value;
+      if (selectedOptionValue === undefined || commitTokenRef.current !== undefined) {
         return;
       }
-      if (!isSelectableThemeName(Ve)) {
+      if (!isSelectableThemeName(selectedOptionValue)) {
         cancelPreview();
         onCustomTheme?.(undefined);
         return;
       }
-      T(onThemeSelect(Ve));
+      runWithCommit(onThemeSelect(selectedOptionValue));
     };
     $[58] = cancelPreview;
-    $[59] = T;
+    $[59] = runWithCommit;
     $[60] = onCustomTheme;
     $[61] = onThemeSelect;
-    $[62] = a;
+    $[62] = options;
     $[63] = onSelect;
   } else onSelect = $[63];
   let children;
-  if ($[64] !== a || $[65] !== themeSetting) {
-    children = a.map((L) =>
+  if ($[64] !== options || $[65] !== themeSetting) {
+    children = options.map((option) =>
       jsxProd_default(
         OrderedListWithItem.Item,
         {
-          label: L.label,
+          label: option.label,
           icon:
-            L.value === themeSetting
+            option.value === themeSetting
               ? jsxProd_default(StatusIcon, {
                   status: "success",
                   "aria-label": "current:",
@@ -456,24 +480,24 @@ function ThemePicker(props) {
                   "aria-hidden": true,
                   children: " ".repeat(maxStatusIconWidth()),
                 }),
-          meta: L.origin === undefined ? undefined : [L.origin],
+          meta: option.origin === undefined ? undefined : [option.origin],
         },
-        L.value,
+        option.value,
       ),
     );
-    $[64] = a;
+    $[64] = options;
     $[65] = themeSetting;
     $[66] = children;
   } else children = $[66];
-  let me;
+  let listElement;
   if (
-    $[67] !== Ue ||
+    $[67] !== listKey ||
     $[68] !== defaultFocusIndex ||
     $[69] !== onFocus ||
     $[70] !== onSelect ||
     $[71] !== children
   ) {
-    me = jsxProd_default(
+    listElement = jsxProd_default(
       OrderedListWithItem,
       {
         defaultFocusIndex,
@@ -481,27 +505,27 @@ function ThemePicker(props) {
         onSelect,
         children,
       },
-      Ue,
+      listKey,
     );
-    $[67] = Ue;
+    $[67] = listKey;
     $[68] = defaultFocusIndex;
     $[69] = onFocus;
     $[70] = onSelect;
     $[71] = children;
-    $[72] = me;
-  } else me = $[72];
-  let ce;
-  if ($[73] !== ne || $[74] !== se || $[75] !== me) {
-    ce = jsxProd_default_2(Box, {
+    $[72] = listElement;
+  } else listElement = $[72];
+  let pickerElement;
+  if ($[73] !== titleElement || $[74] !== headerElement || $[75] !== listElement) {
+    pickerElement = jsxProd_default_2(Box, {
       flexDirection: "column",
       gap: 1,
-      children: [ne, se, me],
+      children: [titleElement, headerElement, listElement],
     });
-    $[73] = ne;
-    $[74] = se;
-    $[75] = me;
-    $[76] = ce;
-  } else ce = $[76];
+    $[73] = titleElement;
+    $[74] = headerElement;
+    $[75] = listElement;
+    $[76] = pickerElement;
+  } else pickerElement = $[76];
   let patch;
   if ($[77] === MEMO_CACHE_SENTINEL) {
     patch = {
@@ -519,9 +543,9 @@ function ThemePicker(props) {
     $[77] = patch;
   } else patch = $[77];
   const width = columns - 6;
-  let de;
+  let previewElement;
   if ($[78] !== width) {
-    de = jsxProd_default(DiffFrame, {
+    previewElement = jsxProd_default(DiffFrame, {
       paddingX: 0,
       children: jsxProd_default(StructuredDiff, {
         patch,
@@ -532,95 +556,101 @@ function ThemePicker(props) {
       }),
     });
     $[78] = width;
-    $[79] = de;
-  } else de = $[79];
-  const Xe =
-    colorModuleUnavailableReason === "env"
+    $[79] = previewElement;
+  } else previewElement = $[79];
+  const syntaxStatusText =
+    colorModuleUnavailableReason_2 === "env"
       ? `Syntax highlighting disabled (via CLAUDE_CODE_SYNTAX_HIGHLIGHT=${env.CLAUDE_CODE_SYNTAX_HIGHLIGHT})`
-      : W
+      : syntaxHighlightingDisabled
         ? `Syntax highlighting disabled (${syntaxToggleShortcut} to enable)`
-        : syntaxTheme
-          ? `Syntax theme: ${syntaxTheme.theme}${syntaxTheme.source ? ` (from ${syntaxTheme.source})` : ""} (${syntaxToggleShortcut} to disable)`
+        : syntaxTheme_2
+          ? `Syntax theme: ${syntaxTheme_2.theme}${syntaxTheme_2.source ? ` (from ${syntaxTheme_2.source})` : ""} (${syntaxToggleShortcut} to disable)`
           : `Syntax highlighting enabled (${syntaxToggleShortcut} to disable)`;
-  let he;
-  if ($[80] !== Xe) {
-    he = jsxProd_default_2(Text, {
+  let syntaxStatusElement;
+  if ($[80] !== syntaxStatusText) {
+    syntaxStatusElement = jsxProd_default_2(Text, {
       dimColor: true,
-      children: [" ", Xe],
+      children: [" ", syntaxStatusText],
     });
-    $[80] = Xe;
-    $[81] = he;
-  } else he = $[81];
-  let ue;
-  if ($[82] !== de || $[83] !== he) {
-    ue = jsxProd_default_2(Box, {
+    $[80] = syntaxStatusText;
+    $[81] = syntaxStatusElement;
+  } else syntaxStatusElement = $[81];
+  let previewSection;
+  if ($[82] !== previewElement || $[83] !== syntaxStatusElement) {
+    previewSection = jsxProd_default_2(Box, {
       flexDirection: "column",
       width: "100%",
-      children: [de, he],
+      children: [previewElement, syntaxStatusElement],
     });
-    $[82] = de;
-    $[83] = he;
-    $[84] = ue;
-  } else ue = $[84];
-  let jt;
-  if ($[85] !== ce || $[86] !== ue) {
-    jt = jsxProd_default_2(Box, {
-      ref: Xt,
+    $[82] = previewElement;
+    $[83] = syntaxStatusElement;
+    $[84] = previewSection;
+  } else previewSection = $[84];
+  let scrollContent;
+  if ($[85] !== pickerElement || $[86] !== previewSection) {
+    scrollContent = jsxProd_default_2(Box, {
+      ref: containerRef,
       flexDirection: "column",
       gap: 1,
-      children: [ce, ue],
+      children: [pickerElement, previewSection],
     });
-    $[85] = ce;
-    $[86] = ue;
-    $[87] = jt;
-  } else jt = $[87];
-  let ze = jt;
+    $[85] = pickerElement;
+    $[86] = previewSection;
+    $[87] = scrollContent;
+  } else scrollContent = $[87];
+  let content = scrollContent;
   let value;
-  if ($[88] !== scrollColumnContext?.rows || $[89] !== oe || $[90] !== E) {
-    value = E && {
-      ...E,
-      rows: Math.max(0, (scrollColumnContext?.rows ?? E.rows) - oe),
+  if ($[88] !== scrollColumnContext?.rows || $[89] !== reservedTopRows || $[90] !== scrollViewportValue) {
+    value = scrollViewportValue && {
+      ...scrollViewportValue,
+      rows: Math.max(0, (scrollColumnContext?.rows ?? scrollViewportValue.rows) - reservedTopRows),
     };
     $[88] = scrollColumnContext?.rows;
-    $[89] = oe;
-    $[90] = E;
+    $[89] = reservedTopRows;
+    $[90] = scrollViewportValue;
     $[91] = value;
   } else value = $[91];
-  const reserve = (scrollColumnContext?.reserve ?? SCROLL_COLUMN_MIN_ROWS) + oe;
-  let pe;
+  const reserve = (scrollColumnContext?.reserve ?? SCROLL_COLUMN_MIN_ROWS) + reservedTopRows;
+  let footerElement;
   if (
     $[92] !== chord ||
     $[93] !== exitState ||
-    $[94] !== f ||
-    $[95] !== c ||
-    $[96] !== X ||
+    $[94] !== selectedCustomTheme ||
+    $[95] !== helpText_ ||
+    $[96] !== hideEscToCancel_ ||
     $[97] !== onCustomTheme ||
-    $[98] !== x ||
-    $[99] !== g ||
-    $[100] !== p
+    $[98] !== showHelpTextBelow_ ||
+    $[99] !== showIntroText_ ||
+    $[100] !== skipExitHandling_
   ) {
-    pe =
-      !g &&
+    footerElement =
+      !showIntroText_ &&
       jsxProd_default_2(Box, {
         marginTop: 1,
         children: [
-          x &&
-            c &&
+          showHelpTextBelow_ &&
+            helpText_ &&
             jsxProd_default(Box, {
               marginLeft: 3,
               children: jsxProd_default(Text, {
                 dimColor: true,
-                children: c,
+                children: helpText_,
               }),
             }),
-          !X &&
+          !hideEscToCancel_ &&
             jsxProd_default(Box, {
               children: jsxProd_default(Text, {
                 dimColor: true,
                 italic: true,
                 children: exitState.pending
                   ? jsxProd_default_2(Fragment, {
-                      children: ["Press ", exitState.keyName, " again to", " ", p ? "cancel" : "exit"],
+                      children: [
+                        "Press ",
+                        exitState.keyName,
+                        " again to",
+                        " ",
+                        skipExitHandling_ ? "cancel" : "exit",
+                      ],
                     })
                   : jsxProd_default_2(Byline, {
                       children: [
@@ -628,7 +658,7 @@ function ThemePicker(props) {
                           chord: "enter",
                           action: "select",
                         }),
-                        f &&
+                        selectedCustomTheme &&
                           onCustomTheme &&
                           jsxProd_default(KeyboardShortcutHint, {
                             chord,
@@ -646,36 +676,36 @@ function ThemePicker(props) {
       });
     $[92] = chord;
     $[93] = exitState;
-    $[94] = f;
-    $[95] = c;
-    $[96] = X;
+    $[94] = selectedCustomTheme;
+    $[95] = helpText_;
+    $[96] = hideEscToCancel_;
     $[97] = onCustomTheme;
-    $[98] = x;
-    $[99] = g;
-    $[100] = p;
-    $[101] = pe;
-  } else pe = $[101];
+    $[98] = showHelpTextBelow_;
+    $[99] = showIntroText_;
+    $[100] = skipExitHandling_;
+    $[101] = footerElement;
+  } else footerElement = $[101];
   let children_2;
-  if ($[102] !== ze || $[103] !== reserve || $[104] !== pe) {
+  if ($[102] !== content || $[103] !== reserve || $[104] !== footerElement) {
     children_2 = jsxProd_default_2(ScrollColumn, {
       reserve,
-      children: [ze, pe],
+      children: [content, footerElement],
     });
-    $[102] = ze;
+    $[102] = content;
     $[103] = reserve;
-    $[104] = pe;
+    $[104] = footerElement;
     $[105] = children_2;
   } else children_2 = $[105];
-  let qt;
+  let rootElement;
   if ($[106] !== value || $[107] !== children_2) {
-    qt = jsxProd_default(scrollViewportContext, {
+    rootElement = jsxProd_default(scrollViewportContext, {
       value,
       children: children_2,
     });
     $[106] = value;
     $[107] = children_2;
-    $[108] = qt;
-  } else qt = $[108];
-  return qt;
+    $[108] = rootElement;
+  } else rootElement = $[108];
+  return rootElement;
 }
 export { ThemePicker };

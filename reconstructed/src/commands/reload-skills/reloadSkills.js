@@ -18,9 +18,12 @@ import { isSafeMode } from "../../utils/envUtils.js";
 import { plural } from "../../utils/stringUtils.js";
 
 //@ chunk-9dc848ph.js:11866-11997 placement
-function formatSkillChangeCounts(m, e) {
-  let a = [...(m > 0 ? [`${m} added`] : []), ...(e > 0 ? [`${e} removed`] : [])];
-  return a.length > 0 ? a.join(", ") : "none added or removed";
+function formatSkillChangeCounts(addedCount, removedCount) {
+  let parts = [
+    ...(addedCount > 0 ? [`${addedCount} added`] : []),
+    ...(removedCount > 0 ? [`${removedCount} removed`] : []),
+  ];
+  return parts.length > 0 ? parts.join(", ") : "none added or removed";
 }
 //@ chunk-9dc848ph.js:11997-12428 placement
 /**
@@ -28,22 +31,23 @@ function formatSkillChangeCounts(m, e) {
  */
 var runReloadSkillsCommand = async (args, context) => {
   let projectRoot = getProjectRoot();
-  let l = filterMcpPromptCommands(context.getMcp().commands);
-  let r = (skillToolCommands) => dropSyncedNameClashes(skillToolCommands, l);
-  let s = r(await getSkillToolCommands(projectRoot, context.storageV5));
-  let i = new Set(s.map((o) => o.name));
+  let mcpPromptCommands = filterMcpPromptCommands(context.getMcp().commands);
+  let dropClashes = (skillToolCommands) => dropSyncedNameClashes(skillToolCommands, mcpPromptCommands);
+  let beforeSkills = dropClashes(await getSkillToolCommands(projectRoot, context.storageV5));
+  let beforeNames = new Set(beforeSkills.map((skill) => skill.name));
   refreshSkillsSyncVeto();
   clearCommandsCache();
-  let t = r(await getSkillToolCommands(projectRoot, context.storageV5));
-  let d = new Set(t.map((o) => o.name));
+  let afterSkills = dropClashes(await getSkillToolCommands(projectRoot, context.storageV5));
+  let afterNames = new Set(afterSkills.map((skill) => skill.name));
   skillsChangedSignal.emit();
-  let c = formatSkillChangeCounts(
-    count(t, (o) => !i.has(o.name)),
-    count(s, (o) => !d.has(o.name)),
+  let countsText = formatSkillChangeCounts(
+    count(afterSkills, (skill) => !beforeNames.has(skill.name)),
+    count(beforeSkills, (skill) => !afterNames.has(skill.name)),
   );
-  let p = isSafeMode() ? "; custom skills are disabled in safe mode" : "";
+  let safeModeNote = isSafeMode() ? "; custom skills are disabled in safe mode" : "";
   return {
     type: "text",
-    value: `Reloaded skills: ${t.length} ${plural(t.length, "skill")} available (${c}${p}).`,
+    value: `Reloaded skills: ${afterSkills.length} ${plural(afterSkills.length, "skill")} available (${countsText}${safeModeNote}).`,
   };
 };
+export { runReloadSkillsCommand };

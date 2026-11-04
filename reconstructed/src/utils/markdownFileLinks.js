@@ -15,34 +15,34 @@ import { toSafeFileUrl } from "../services/mcp/xaa.js";
 import { isUnsafeFileUrl } from "./pathSanitize.js";
 
 //@ chunk-6vnxsn99.js:72708-73149 placement
-function fileUrlToPath(e) {
-  let matches = /^file:/i.test(e);
+function fileUrlToPath(url) {
+  let matches = /^file:/i.test(url);
   if (!matches) {
-    if (!(e.startsWith("/") && !isUncOrDevicePath(e))) return e;
+    if (!(url.startsWith("/") && !isUncOrDevicePath(url))) return url;
   }
-  let r = matches ? e.slice(5) : e;
-  if (r.startsWith("//")) {
-    r = r.slice(2);
-    if (r === "localhost") r = "/";
-    else if (r.startsWith("localhost/")) r = r.slice(9);
+  let remainder = matches ? url.slice(5) : url;
+  if (remainder.startsWith("//")) {
+    remainder = remainder.slice(2);
+    if (remainder === "localhost") remainder = "/";
+    else if (remainder.startsWith("localhost/")) remainder = remainder.slice(9);
   }
-  let o = r.search(/[#?]/);
-  let s = o === -1 ? "" : r.slice(o);
-  let a = o === -1 ? r : r.slice(0, o);
-  if (a === "") return null;
+  let queryIndex = remainder.search(/[#?]/);
+  let suffix = queryIndex === -1 ? "" : remainder.slice(queryIndex);
+  let decodedPath = queryIndex === -1 ? remainder : remainder.slice(0, queryIndex);
+  if (decodedPath === "") return null;
   try {
-    a = decodeURIComponent(a);
+    decodedPath = decodeURIComponent(decodedPath);
   } catch {}
-  a = stripLeadingSlashBeforeDrive(a);
-  let u = isAbsolute(a) ? a : resolve(getCwd(), a);
-  let safeFileUrl = toSafeFileUrl(u);
+  decodedPath = stripLeadingSlashBeforeDrive(decodedPath);
+  let absolutePath = isAbsolute(decodedPath) ? decodedPath : resolve(getCwd(), decodedPath);
+  let safeFileUrl = toSafeFileUrl(absolutePath);
   if (safeFileUrl === null) return null;
-  let p = safeFileUrl + s;
-  return isUnsafeFileUrl(p) ? null : p;
+  let resultUrl = safeFileUrl + suffix;
+  return isUnsafeFileUrl(resultUrl) ? null : resultUrl;
 }
 //@ chunk-6vnxsn99.js:73149-73248 placement
-function stripLeadingSlashBeforeDrive(e, n = isAbsolute) {
-  if (/^\/[A-Za-z]:(?=[\\/]|$)/.test(e) && n(e.slice(1))) return e.slice(1);
-  return e;
+function stripLeadingSlashBeforeDrive(path, isAbsolutePath = isAbsolute) {
+  if (/^\/[A-Za-z]:(?=[\\/]|$)/.test(path) && isAbsolutePath(path.slice(1))) return path.slice(1);
+  return path;
 }
 export { fileUrlToPath };

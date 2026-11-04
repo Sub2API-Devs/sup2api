@@ -8,7 +8,7 @@
  * pieces: chunk-e6aww6q8.js (59)
  * attribution: placement 59
  */
-import { relative, isAbsolute, sep, join, resolve as resolve_2, basename, dirname } from "path";
+import { relative as relative_2, isAbsolute, sep, join, resolve as resolve_2, basename, dirname } from "path";
 import { realpath, stat } from "fs/promises";
 import { TYPES_DIR, startPluginDirWatcher } from "./typeRoots.js";
 import { logForDebugging, getDebugLogPath } from "../../utils/debug.js";
@@ -81,27 +81,30 @@ import { describePluginDirShape, isNotDotPrefixed } from "../../utils/plugins/pl
 import { hooksModuleFiles } from "./eventPatterns.js";
 import { identity as identity_2 } from "../../utils/identity.js";
 import { createValueSlot } from "../../utils/valueSlot.js";
-import { io } from "../../../vendor/@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
+import { memoizeAlias } from "../../../vendor/@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
 import { HooksError } from "./hooksErrors.js";
 import { pluginErrorText } from "../../types/plugin.js";
 import { currentTurn, turnFinishedSignal, turnEndedSignal } from "./personHold.js";
 import { skillWatchStateByHost } from "../../skills/skillChangeWatch.js";
 import { devModsDir } from "./devModsName.js";
 import { MAX_LISTED_MOD_CHANGES } from "./devModsNotices.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:4127280-4127384 placement
 /**
  * n 是 e 的直接子项时返回子项名，否则 undefined。
  */
-function childNameUnder(e, n) {
-  let r = relative(e, n);
-  return r !== "" && !isAbsolute(r) && !r.startsWith("..") && !r.includes(sep) ? r : undefined;
+function childNameUnder(root, path) {
+  let relative = relative_2(root, path);
+  return relative !== "" && !isAbsolute(relative) && !relative.startsWith("..") && !relative.includes(sep)
+    ? relative
+    : undefined;
 }
 //@ chunk-e6aww6q8.js:4127445-4127486 placement
 /**
  * 把变更路径映射到根下
  */
-var watchPathMapper = (e, n) => (r) => join(e, relative(n, resolve_2(r)));
+var watchPathMapper = (root, base) => (path) => join(root, relative_2(base, resolve_2(path)));
 //@ chunk-e6aww6q8.js:4127486-4127500 placement
 /**
  * 60000
@@ -126,47 +129,49 @@ var WATCH_IGNORED_DIRS = ["node_modules", ".git"];
 /**
  * 监视时忽略 node_modules、.git、点开头（.claude-plugin 除外）、.log 文件和调试日志路径。
  */
-function isIgnoredWatchPath(e, n) {
-  let r = basename(e);
-  let s = r.startsWith(".") && r !== ".claude-plugin";
-  let h = e === n || e === join(dirname(n), "latest");
-  return WATCH_IGNORED_DIRS.includes(r) || s || r.endsWith(".log") || h;
+function isIgnoredWatchPath(path, root) {
+  let name = basename(path);
+  let isHiddenName = name.startsWith(".") && name !== ".claude-plugin";
+  let isRootOrLatest = path === root || path === join(dirname(root), "latest");
+  return WATCH_IGNORED_DIRS.includes(name) || isHiddenName || name.endsWith(".log") || isRootOrLatest;
 }
 //@ chunk-e6aww6q8.js:4127944-4128028 placement
 /**
  * 路径是否在目录内
  */
-function isWithinDir(e, n) {
-  let r = relative(e, n);
-  return !(isAbsolute(r) || r === ".." || r.startsWith(`..${sep}`));
+function isWithinDir(dir, path) {
+  let relative = relative_2(dir, path);
+  return !(isAbsolute(relative) || relative === ".." || relative.startsWith(`..${sep}`));
 }
 //@ chunk-e6aww6q8.js:4128028-4128144 placement
-function ancestorPathsWithin(e, n) {
-  let r = relative(e, n);
-  let s = r === "" ? [] : r.split(sep);
-  return isWithinDir(e, n) ? s.map((h, y) => join(e, ...s.slice(0, y + 1))) : [n];
+function ancestorPathsWithin(root, path) {
+  let relative = relative_2(root, path);
+  let segments = relative === "" ? [] : relative.split(sep);
+  return isWithinDir(root, path)
+    ? segments.map((index, paths) => join(root, ...segments.slice(0, paths + 1)))
+    : [path];
 }
 //@ chunk-e6aww6q8.js:4128402-4128433 placement
 /**
  * 是否在 types 目录内
  */
-var isInsideTypesDir = (e, n) => isWithinDir(join(e, TYPES_DIR), n);
+var isInsideTypesDir = (root, path) => isWithinDir(join(root, TYPES_DIR), path);
 //@ chunk-e6aww6q8.js:4128433-4128570 placement
 /**
  * 生成 chokidar ignored 函数：路径链上有忽略目录、在插件缓存里或命中忽略规则（且非 manifest）时忽略。
  */
-var createWatchIgnorer = (e, debugLogPath, r) => (s) => {
-  let h = resolve_2(s);
-  let y = ancestorPathsWithin(e, h);
-  let any = y.some((L) => WATCH_IGNORED_DIRS.includes(basename(L)));
-  let any_2 = y.some((L) => isIgnoredWatchPath(L, debugLogPath));
-  return any || isInsideTypesDir(e, h) || (any_2 && !r(h));
+var createWatchIgnorer = (root, root_2, isIgnored) => (path) => {
+  let resolved = resolve_2(path);
+  let ancestors = ancestorPathsWithin(root, resolved);
+  let any = ancestors.some((ancestor) => WATCH_IGNORED_DIRS.includes(basename(ancestor)));
+  let any_2 = ancestors.some((ancestor) => isIgnoredWatchPath(ancestor, root_2));
+  return any || isInsideTypesDir(root, resolved) || (any_2 && !isIgnored(resolved));
 };
 //@ chunk-e6aww6q8.js:4128570-4128606 placement
 /**
  * 任一目录内
  */
-var anyWithinDirs = (e, n) => n.some((r) => isWithinDir(e, r));
+var anyWithinDirs = (path, dirs) => dirs.some((dir) => isWithinDir(path, dir));
 //@ chunk-e6aww6q8.js:4128606-4128618 placement
 /**
  * 100
@@ -176,20 +181,22 @@ var WATCH_STABILITY_MS = 100;
 /**
  * 按用户最近交互切换监视轮询频率（活动/空闲），切换时回调以补扫。
  */
-function createIdlePacer(root, pace, r) {
-  let s = false;
+function createIdlePacer(root, pace, onIdle) {
+  let wasActive = false;
   let activeMs = pace.activeMs;
-  let y = pace.now();
+  let secondNow = pace.now();
   let interval = setInterval(() => {
-    let w = pace.now();
-    let L = w - pace.lastInteractionTime() > pace.idleAfterMs;
-    if (L === s) return;
-    let G = Math.max(y, w - activeMs) - WATCH_STABILITY_MS;
-    s = L;
-    activeMs = s ? pace.idleMs : pace.activeMs;
-    y = w;
-    logForDebugging(`plugin-dir watch on ${root}: ${s ? "idle" : "active"}, polling every ${activeMs}ms`);
-    r(G);
+    let lastActiveAt = pace.now();
+    let timer = lastActiveAt - pace.lastInteractionTime() > pace.idleAfterMs;
+    if (timer === wasActive) return;
+    let fire = Math.max(secondNow, lastActiveAt - activeMs) - WATCH_STABILITY_MS;
+    wasActive = timer;
+    activeMs = wasActive ? pace.idleMs : pace.activeMs;
+    secondNow = lastActiveAt;
+    logForDebugging(
+      `plugin-dir watch on ${root}: ${wasActive ? "idle" : "active"}, polling every ${activeMs}ms`,
+    );
+    onIdle(fire);
   }, pace.checkEveryMs);
   interval.unref();
   return {
@@ -200,13 +207,13 @@ function createIdlePacer(root, pace, r) {
   };
 }
 //@ chunk-e6aww6q8.js:4128977-4129155 placement
-var watchOptionsFor = (e) => ({
+var watchOptionsFor = (root) => ({
   persistent: true,
   followSymlinks: false,
   ignorePermissionErrors: true,
   usePolling: true,
-  interval: e,
-  binaryInterval: e,
+  interval: root,
+  binaryInterval: root,
   awaitWriteFinish: {
     stabilityThreshold: WATCH_STABILITY_MS,
     pollInterval: WATCH_STABILITY_MS / 2,
@@ -216,86 +223,87 @@ var watchOptionsFor = (e) => ({
 /**
  * 真实路径或原值
  */
-var realpathOrSelf = (e) => realpath(e).catch(() => e);
+var realpathOrSelf = (path) => realpath(path).catch(() => path);
 //@ chunk-e6aww6q8.js:4129229-4130260 placement
 /**
  * 在一个插件目录上建立文件监视（chokidar 风格的 add/change/unlink 事件），失败时降级为轮询。
  */
 function openPluginDirWatcher({ root, ignored, onChange, pace }) {
-  let idlePacer = createIdlePacer(root, pace, (q) => {
-    L(q);
+  let idlePacer = createIdlePacer(root, pace, (root) => {
+    reopen(root);
   });
-  let y;
-  let S = G(undefined).then((q) => q.watcher);
-  let w = (q) =>
-    logForDebugging(`plugin-dir watch on ${root}: close failed: ${errorMessage(q)}`, {
+  let current;
+  let watcherPromise = open(undefined).then((opened) => opened.watcher);
+  let logCloseError = (error) =>
+    logForDebugging(`plugin-dir watch on ${root}: close failed: ${errorMessage(error)}`, {
       level: "warn",
     });
-  function L(q) {
-    let Z = S.then(async (Se) => {
-      await Se.close().then(undefined, w);
-      y?.scanned.resolve();
-      return G(q);
+  function reopen(sinceCtime) {
+    let secondOpened = watcherPromise.then(async (opened) => {
+      await opened.close().then(undefined, logCloseError);
+      current?.scanned.resolve();
+      return open(sinceCtime);
     });
-    S = Z.then((Se) => Se.watcher);
-    return Z.then((Se) => Se.scanned.promise);
+    watcherPromise = secondOpened.then((opened) => opened.watcher);
+    return secondOpened.then((opened) => opened.scanned.promise);
   }
-  async function G(q) {
-    let Z = await realpathOrSelf(root);
-    let Se = watchPathMapper(root, Z);
-    let ke = typeof ignored === "function";
-    let we = q !== undefined;
+  async function open(sinceCtime) {
+    let realPath = await realpathOrSelf(root);
+    let mapPath = watchPathMapper(root, realPath);
+    let isIgnoredFn = typeof ignored === "function";
+    let isIncremental = sinceCtime !== undefined;
     let deferred = Promise.withResolvers();
-    let Ae = chokidar_default.watch(Z, {
+    let watcher = chokidar_default.watch(realPath, {
       ...watchOptionsFor(idlePacer.interval()),
-      ignoreInitial: q === undefined,
-      alwaysStat: q !== undefined,
-      ignored: ke ? (Ie, Me) => ignored(Se(Ie), Me) : ignored,
+      ignoreInitial: sinceCtime === undefined,
+      alwaysStat: sinceCtime !== undefined,
+      ignored: isIgnoredFn ? (watchedPath, stat) => ignored(mapPath(watchedPath), stat) : ignored,
     });
-    Ae.on("add", (Ie, Me) => {
-      if (!we || (Me !== undefined && Me.ctimeMs > (q ?? 0))) onChange(Se(Ie), Me?.ctimeMs);
+    watcher.on("add", (path, stat) => {
+      if (!isIncremental || (stat !== undefined && stat.ctimeMs > (sinceCtime ?? 0)))
+        onChange(mapPath(path), stat?.ctimeMs);
     });
-    Ae.on("ready", () => {
-      we = false;
+    watcher.on("ready", () => {
+      isIncremental = false;
       deferred.resolve();
     });
-    Ae.on("change", (Ie, Me) => onChange(Se(Ie), Me?.ctimeMs));
-    Ae.on("unlink", (Ie) => {
-      onChange(Se(Ie));
+    watcher.on("change", (path, stat) => onChange(mapPath(path), stat?.ctimeMs));
+    watcher.on("unlink", (path) => {
+      onChange(mapPath(path));
     });
-    Ae.on("error", (Ie) =>
-      logForDebugging(`plugin-dir watch on ${root}: ${errorMessage(Ie)}`, {
+    watcher.on("error", (error) =>
+      logForDebugging(`plugin-dir watch on ${root}: ${errorMessage(error)}`, {
         level: "warn",
       }),
     );
-    y = {
-      watcher: Ae,
+    current = {
+      watcher,
       scanned: deferred,
     };
-    return y;
+    return current;
   }
   return {
     close: async () => {
       idlePacer.stop();
-      await (await S).close();
-      y?.scanned.resolve();
+      await (await watcherPromise).close();
+      current?.scanned.resolve();
     },
     retarget: () => {},
     interval: idlePacer.interval,
-    rescan: L,
+    rescan: reopen,
   };
 }
 //@ chunk-e6aww6q8.js:4130297-4130448 placement
-var statFiles = async (e) =>
+var statFiles = async (paths) =>
   (
     await Promise.all(
-      e.map((n) =>
-        stat(n).then(
-          (r) =>
-            r.isFile()
+      paths.map((path) =>
+        stat(path).then(
+          (stat) =>
+            stat.isFile()
               ? {
-                  path: n,
-                  ctimeMs: r.ctimeMs,
+                  path,
+                  ctimeMs: stat.ctimeMs,
                 }
               : undefined,
           () => {
@@ -304,84 +312,84 @@ var statFiles = async (e) =>
         ),
       ),
     )
-  ).filter((n) => n !== undefined);
+  ).filter((stat) => stat !== undefined);
 //@ chunk-e6aww6q8.js:4130448-4131608 placement
 /**
  * 处理插件目录的文件变化事件，安排对应 mod 的重新加载。
  */
 function handlePluginDirWatchEvent({ root, files, onChange, pace }) {
-  let idlePacer = createIdlePacer(root, pace, (Se) => {
-    w = w.then((ke) => q(ke, Se));
+  let idlePacer = createIdlePacer(root, pace, (sinceCtime) => {
+    chain = chain.then((result) => handleEvent(result, sinceCtime));
   });
-  let y = new Set();
-  let S = new Set();
-  let w = q(undefined, undefined);
-  let L = G();
-  function G() {
+  let busy = new Set();
+  let pending = new Set();
+  let chain = handleEvent(undefined, undefined);
+  let index = fourthIndex();
+  function fourthIndex() {
     let timer = setTimeout(() => {
-      w = w.then(Z);
-      L = G();
+      chain = chain.then(since);
+      index = fourthIndex();
     }, idlePacer.interval());
     timer.unref();
     return timer;
   }
-  async function q(Se, ke) {
-    await Se?.close();
-    let we = files();
-    let Ee = await statFiles(we);
-    y.clear();
-    for (let Ie of Ee) {
-      y.add(Ie.path);
-      if (ke !== undefined && Ie.ctimeMs > ke) onChange(Ie.path, Ie.ctimeMs);
+  async function handleEvent(sinceCtime, secondEvent) {
+    await sinceCtime?.close();
+    let path = files();
+    let kind = await statFiles(path);
+    busy.clear();
+    for (let index of kind) {
+      busy.add(index.path);
+      if (secondEvent !== undefined && index.ctimeMs > secondEvent) onChange(index.path, index.ctimeMs);
     }
-    S = new Set(we.filter((Ie) => !y.has(Ie)));
-    let Ae = chokidar_default.watch([...y], {
+    pending = new Set(path.filter((index) => !busy.has(index)));
+    let index = chokidar_default.watch([...busy], {
       ...watchOptionsFor(idlePacer.interval()),
       ignoreInitial: true,
     });
-    Ae.on("change", (Ie, Me) => onChange(Ie, Me?.ctimeMs));
-    Ae.on("unlink", (Ie) => {
-      y.delete(Ie);
-      S.add(Ie);
-      onChange(Ie);
+    index.on("change", (index, fifthIndex) => onChange(index, fifthIndex?.ctimeMs));
+    index.on("unlink", (index) => {
+      busy.delete(index);
+      pending.add(index);
+      onChange(index);
     });
-    Ae.on("error", (Ie) =>
-      logForDebugging(`plugin-dir watch on ${root}: ${errorMessage(Ie)}`, {
+    index.on("error", (index) =>
+      logForDebugging(`plugin-dir watch on ${root}: ${errorMessage(index)}`, {
         level: "warn",
       }),
     );
-    return Ae;
+    return index;
   }
-  async function Z(Se) {
-    let ke = files();
-    let we = new Map((await statFiles(ke)).map((Ee) => [Ee.path, Ee.ctimeMs]));
-    for (let [Ee, Ae] of we)
-      if (!y.has(Ee)) {
-        Se.add(Ee);
-        y.add(Ee);
-        if (S.has(Ee)) onChange(Ee, Ae);
+  async function since(kind) {
+    let index = files();
+    let stat = new Map((await statFiles(index)).map((index) => [index.path, index.ctimeMs]));
+    for (let [index, sixthIndex] of stat)
+      if (!busy.has(index)) {
+        kind.add(index);
+        busy.add(index);
+        if (pending.has(index)) onChange(index, sixthIndex);
       }
-    for (let Ee of [...y])
-      if (!ke.includes(Ee)) {
-        Se.unwatch(Ee);
-        y.delete(Ee);
+    for (let seventhIndex of [...busy])
+      if (!index.includes(seventhIndex)) {
+        kind.unwatch(seventhIndex);
+        busy.delete(seventhIndex);
       }
-    S = new Set(ke.filter((Ee) => !we.has(Ee) && !y.has(Ee)));
-    return Se;
+    pending = new Set(index.filter((index) => !stat.has(index) && !busy.has(index)));
+    return kind;
   }
   return {
     close: async () => {
       idlePacer.stop();
-      clearTimeout(L);
-      await (await w).close();
+      clearTimeout(index);
+      await (await chain).close();
     },
     retarget: () => {
-      w = w.then(Z);
+      chain = chain.then(since);
     },
     interval: idlePacer.interval,
-    rescan(Se) {
-      w = w.then((ke) => q(ke, Se));
-      return w.then(() => {});
+    rescan(index) {
+      chain = chain.then((eighthIndex) => handleEvent(eighthIndex, index));
+      return chain.then(() => {});
     },
   };
 }
@@ -391,29 +399,32 @@ function handlePluginDirWatchEvent({ root, files, onChange, pace }) {
  */
 var WATCH_ACTIVE_POLL_MS = 400;
 //@ chunk-e6aww6q8.js:4131620-4131723 placement
-var WATCH_PACE = {
-  activeMs: WATCH_ACTIVE_POLL_MS,
-  idleMs: WATCH_IDLE_MS,
-  idleAfterMs: WATCH_IDLE_AFTER_MS,
-  checkEveryMs: WATCH_CHECK_EVERY_MS,
-  lastInteractionTime: getLastInteractionTime,
-  now: Date.now,
-};
+var WATCH_PACE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:4131620", () => {
+  WATCH_PACE = {
+    activeMs: WATCH_ACTIVE_POLL_MS,
+    idleMs: WATCH_IDLE_MS,
+    idleAfterMs: WATCH_IDLE_AFTER_MS,
+    checkEveryMs: WATCH_CHECK_EVERY_MS,
+    lastInteractionTime: getLastInteractionTime,
+    now: Date.now,
+  };
+});
 //@ chunk-e6aww6q8.js:4131723-4131888 placement
 /**
  * 按插件范围启动监视：folder 用目录监视，files 只监视指定文件。
  */
-function startPluginWatch(e, onChange, r) {
-  return e.scope === "folder"
+function startPluginWatch(collection, onChange, secondOnChange) {
+  return collection.scope === "folder"
     ? openPluginDirWatcher({
-        root: e.root,
-        ignored: createWatchIgnorer(e.root, getDebugLogPath(), r),
+        root: collection.root,
+        ignored: createWatchIgnorer(collection.root, getDebugLogPath(), secondOnChange),
         onChange,
         pace: WATCH_PACE,
       })
     : handlePluginDirWatchEvent({
-        root: e.root,
-        files: e.files,
+        root: collection.root,
+        files: collection.files,
         onChange,
         pace: WATCH_PACE,
       });
@@ -427,51 +438,56 @@ var WATCH_CLOCK_SLACK_MS = 10;
 /**
  * 是否为关心的变更
  */
-var isChangedWatchTarget = (e, manifests, r) =>
-  manifests.includes(e) || (r === undefined ? isScriptFile(e) : r.includes(e));
+var isChangedWatchTarget = (path, manifests, loadedModules) =>
+  manifests.includes(path) ||
+  (loadedModules === undefined ? isScriptFile(path) : loadedModules.includes(path));
 //@ chunk-e6aww6q8.js:4131965-4132024 placement
 /**
  * 插件读取快照
  */
-var pluginReadSnapshot = (taken, n, r) => ({
-  read: n ?? r,
-  isServed: n !== undefined,
+var pluginReadSnapshot = (taken, readStamp, defaultStamp) => ({
+  read: readStamp ?? defaultStamp,
+  isServed: readStamp !== undefined,
   taken,
 });
 //@ chunk-e6aww6q8.js:4132024-4132116 placement
 /**
  * 优先把 manifest 变化当原因
  */
-function preferManifestCause(e, n, r) {
-  return n !== undefined && e.manifests.includes(n) && !e.manifests.includes(r) ? n : r;
+function preferManifestCause(collection, previousPath, nextPath) {
+  return previousPath !== undefined &&
+    collection.manifests.includes(previousPath) &&
+    !collection.manifests.includes(nextPath)
+    ? previousPath
+    : nextPath;
 }
 //@ chunk-e6aww6q8.js:4132116-4132514 placement
 /**
  * 某插件文件变化时：非 manifest 文件直接重载；manifest 变化则重读 manifest，按"需重启/不再有入口/重载"给出状态。
  */
-async function reloadOnChange(e, n, r) {
-  let { name: s, root, scope } = n;
-  if (!n.manifests.includes(r)) {
-    let G = await e.reload(s);
-    return reloadedNotice(reloadedText(G), G);
+async function reloadOnChange(host, collection, path) {
+  let { name, root, scope } = collection;
+  if (!collection.manifests.includes(path)) {
+    let reload = await host.reload(name);
+    return reloadedNotice(reloadedText(reload), reload);
   }
-  let S = await e.rereadManifest({
-    name: s,
+  let isManifest = await host.rereadManifest({
+    name,
     root,
     scope,
-    manifests: n.manifests,
-    entry: n.entry,
+    manifests: collection.manifests,
+    entry: collection.entry,
   });
-  if (!S) return restartNeededNotice(r);
-  n.manifests = S.manifests;
-  n.entry = S.now;
-  let w = {
-    manifest: r,
+  if (!isManifest) return restartNeededNotice(path);
+  collection.manifests = isManifest.manifests;
+  collection.entry = isManifest.now;
+  let loaded = {
+    manifest: path,
     root,
   };
-  if (S.now === undefined) return unnamedNotice(describeModuleUnnamed(w, S.before));
-  let L = await e.reload(s);
-  return reloadedNotice(describeManifestReload(w, S, L), L);
+  if (isManifest.now === undefined) return unnamedNotice(describeModuleUnnamed(loaded, isManifest.before));
+  let unserved = await host.reload(name);
+  return reloadedNotice(describeManifestReload(loaded, isManifest, unserved), unserved);
 }
 //@ chunk-e6aww6q8.js:4132514-4139257 placement
 /**
@@ -497,8 +513,8 @@ function runPluginDirWatch({
   plainLine,
   plainWording,
 }) {
-  let Me = new Map();
-  let We = reportPluginDirWatchChanges(
+  let watched = new Map();
+  let collections = reportPluginDirWatchChanges(
     {
       watchRoot,
       listChildren,
@@ -512,219 +528,233 @@ function runPluginDirWatch({
       plainLine,
       plainWording,
     },
-    fo,
-    (co) => [...Me.values()].some((So) => childNameUnder(co, So.root) !== undefined && Xn(So)),
+    isFolderUnloaded,
+    (root) =>
+      [...watched.values()].some(
+        (entry) => childNameUnder(root, entry.root) !== undefined && hasLoadedStamp(entry),
+      ),
   );
-  let ze = turn.onBegin(hn);
-  let lt = turn.onEnd(hn);
-  function Je(co, So) {
-    let ko = Me.get(co) ?? So;
-    return uniq([...ko.manifests, ...(filesOf(co) ?? []), ...(ko.entry === undefined ? [] : [ko.entry])]);
+  let offBegin = turn.onBegin(onTurnChange);
+  let offEnd = turn.onEnd(onTurnChange);
+  function targetsOf(name, plugin) {
+    let entry = watched.get(name) ?? plugin;
+    return uniq([
+      ...entry.manifests,
+      ...(filesOf(name) ?? []),
+      ...(entry.entry === undefined ? [] : [entry.entry]),
+    ]);
   }
-  function nt(co, So, ko) {
-    let un = Me.get(co);
-    let ao = un?.failed === undefined ? filesOf(co) : undefined;
-    if (un === undefined || !isChangedWatchTarget(So, un.manifests, ao)) return;
-    pt(un, So, ko);
+  function onChange(name, path, ctimeMs) {
+    let entry = watched.get(name);
+    let files = entry?.failed === undefined ? filesOf(name) : undefined;
+    if (entry === undefined || !isChangedWatchTarget(path, entry.manifests, files)) return;
+    tellChange(entry, path, ctimeMs);
   }
-  function pt(co, So, ko) {
-    co.telling = co.telling.then(() => gt(co, So, ko)).catch(logError);
+  function tellChange(entry, path, ctimeMs) {
+    entry.telling = entry.telling.then(() => recordChange(entry, path, ctimeMs)).catch(logError);
   }
-  let Et = (co, So) => (co.manifests.includes(So) ? co.manifestReadAt : co.readAt);
-  function yt(co, So) {
-    let taken = co.takenStamps.get(So);
-    let un = co.reloading ? undefined : loadedStampOf(co.name, So);
+  let readAtOf = (entry, path) => (entry.manifests.includes(path) ? entry.manifestReadAt : entry.readAt);
+  function snapshotOf(entry, path) {
+    let taken = entry.takenStamps.get(path);
+    let loadedStamp = entry.reloading ? undefined : loadedStampOf(entry.name, path);
     return pluginReadSnapshot(
       taken,
-      co.isBehind ? undefined : un,
-      (co.tried.has(So) ? taken?.stamp : undefined) ?? un,
+      entry.isBehind ? undefined : loadedStamp,
+      (entry.tried.has(path) ? taken?.stamp : undefined) ?? loadedStamp,
     );
   }
-  async function gt(co, So, ko) {
-    if (ko === undefined) return At(co, So, undefined);
-    let stamp = yt(co, So).read === undefined && ko <= Et(co, So) ? undefined : await stampOf(So, co.root);
-    return At(co, So, {
-      ctimeMs: ko,
+  async function recordChange(entry, path, ctimeMs) {
+    if (ctimeMs === undefined) return applyChange(entry, path, undefined);
+    let stamp =
+      snapshotOf(entry, path).read === undefined && ctimeMs <= readAtOf(entry, path)
+        ? undefined
+        : await stampOf(path, entry.root);
+    return applyChange(entry, path, {
+      ctimeMs,
       stamp,
     });
   }
-  function At(co, So, ko) {
-    if (Me.get(co.name) !== co) return;
-    let un = ko && classifyChangeSource(ko, yt(co, So), Et(co, So));
-    if (un === "served") It(co, So);
-    if (un !== undefined) return;
-    let ao = ko === undefined || ko.ctimeMs > co.newest;
-    co.cause = preferManifestCause(co, co.cause, So);
-    co.newest = Math.max(co.newest, ko?.ctimeMs ?? Number.POSITIVE_INFINITY);
-    if (ko !== undefined)
-      co.pendingStamps.set(So, {
-        ctimeMs: Math.max(ko.ctimeMs, co.pendingStamps.get(So)?.ctimeMs ?? ko.ctimeMs),
-        stamp: ko.stamp,
+  function applyChange(entry, path, change) {
+    if (watched.get(entry.name) !== entry) return;
+    let source = change && classifyChangeSource(change, snapshotOf(entry, path), readAtOf(entry, path));
+    if (source === "served") dropPending(entry, path);
+    if (source !== undefined) return;
+    let isNewer = change === undefined || change.ctimeMs > entry.newest;
+    entry.cause = preferManifestCause(entry, entry.cause, path);
+    entry.newest = Math.max(entry.newest, change?.ctimeMs ?? Number.POSITIVE_INFINITY);
+    if (change !== undefined)
+      entry.pendingStamps.set(path, {
+        ctimeMs: Math.max(change.ctimeMs, entry.pendingStamps.get(path)?.ctimeMs ?? change.ctimeMs),
+        stamp: change.stamp,
       });
-    if (!ao) return;
-    let $o = clock.now();
-    co.breaker.sawChange($o);
-    Zt(
-      co,
+    if (!isNewer) return;
+    let now = clock.now();
+    entry.breaker.sawChange(now);
+    scheduleReload(
+      entry,
       nextReloadDelay(
         {
           debounceMs,
           burst,
           storm,
         },
-        co,
+        entry,
         {
-          now: $o,
-          intervalMs: co.watcher.interval(),
+          now,
+          intervalMs: entry.watcher.interval(),
         },
       ),
     );
   }
-  function It(co, So) {
-    let ko = co.pendingStamps.delete(So);
-    let un = co.newest === Number.POSITIVE_INFINITY;
-    let ao = [...co.pendingStamps.keys()];
-    if (ko && ao.length === 0 && !un) qt(co);
-    if (co.cause === So && ao.length > 0)
-      co.cause = ao.reduce((acc, yo) => preferManifestCause(co, acc, yo), undefined);
+  function dropPending(entry, path) {
+    let dropped = entry.pendingStamps.delete(path);
+    let isNewestUnknown = entry.newest === Number.POSITIVE_INFINITY;
+    let remaining = [...entry.pendingStamps.keys()];
+    if (dropped && remaining.length === 0 && !isNewestUnknown) resetEntry(entry);
+    if (entry.cause === path && remaining.length > 0)
+      entry.cause = remaining.reduce((acc, path) => preferManifestCause(entry, acc, path), undefined);
   }
-  function Yt(co) {
-    for (let [So, ko] of [...co.pendingStamps]) {
-      let un = yt(co, So);
-      if (un.isServed && compareStamp(ko.stamp, un.read) === "same") It(co, So);
+  function clearServed(entry) {
+    for (let [path, secondStamp] of [...entry.pendingStamps]) {
+      let snapshot = snapshotOf(entry, path);
+      if (snapshot.isServed && compareStamp(secondStamp.stamp, snapshot.read) === "same")
+        dropPending(entry, path);
     }
   }
-  function qt(co) {
-    co.cancelTimer?.();
-    co.cancelTimer = undefined;
-    co.cause = undefined;
-    co.newest = Number.NEGATIVE_INFINITY;
-    co.pendingStamps.clear();
-    co.pendingSince = undefined;
-    co.isHeld = false;
+  function resetEntry(entry) {
+    entry.cancelTimer?.();
+    entry.cancelTimer = undefined;
+    entry.cause = undefined;
+    entry.newest = Number.NEGATIVE_INFINITY;
+    entry.pendingStamps.clear();
+    entry.pendingSince = undefined;
+    entry.isHeld = false;
   }
-  function Zt(co, So) {
-    if (co.isRescanning) return;
-    if (co.breaker.isDeferring()) {
-      if (co.cancelTimer === undefined) rn(co.name, storm.quietMs, pn);
+  function scheduleReload(entry, delay) {
+    if (entry.isRescanning) return;
+    if (entry.breaker.isDeferring()) {
+      if (entry.cancelTimer === undefined) armTimer(entry.name, storm.quietMs, onQuiet);
       return;
     }
     if (turn.isRunning()) {
-      co.cancelTimer?.();
-      co.cancelTimer = undefined;
-      co.isHeld = true;
+      entry.cancelTimer?.();
+      entry.cancelTimer = undefined;
+      entry.isHeld = true;
       return;
     }
-    rn(co.name, So, bo);
+    armTimer(entry.name, delay, reloadNow);
   }
-  function rn(name, quietMs, ko) {
-    let un = Me.get(name);
-    if (un === undefined) return;
-    un.cancelTimer?.();
-    un.cancelTimer = clock.setTimeout(() => ko(name), quietMs);
+  function armTimer(name, delayMs, run) {
+    let entry = watched.get(name);
+    if (entry === undefined) return;
+    entry.cancelTimer?.();
+    entry.cancelTimer = clock.setTimeout(() => run(name), delayMs);
   }
-  function pn(co) {
-    Me.get(co)?.breaker.catchesUp();
-    bo(co);
+  function onQuiet(name) {
+    watched.get(name)?.breaker.catchesUp();
+    reloadNow(name);
   }
-  function no(co, So) {
-    co.isBehind = co.isBehind && (So.isFaulted || So.readAt < co.readAt);
-    co.readAt = Math.max(co.readAt, Math.min(So.readAt, clock.now()));
-    co.failed = undefined;
-    let ko = co.cause !== undefined && co.manifests.includes(co.cause);
-    let filtered = [...co.pendingStamps].filter(
-      ([$o, yo]) => classifyChangeSource(yo, yt(co, $o), So.readAt) === undefined,
+  function syncRead(entry, snapshot) {
+    entry.isBehind = entry.isBehind && (snapshot.isFaulted || snapshot.readAt < entry.readAt);
+    entry.readAt = Math.max(entry.readAt, Math.min(snapshot.readAt, clock.now()));
+    entry.failed = undefined;
+    let causeIsManifest = entry.cause !== undefined && entry.manifests.includes(entry.cause);
+    let filtered = [...entry.pendingStamps].filter(
+      ([path, thirdStamp]) =>
+        classifyChangeSource(thirdStamp, snapshotOf(entry, path), snapshot.readAt) === undefined,
     );
-    if (filtered.length === 0 && co.newest !== Number.POSITIVE_INFINITY && !ko) qt(co);
-    for (let [$o, yo] of filtered) pt(co, $o, yo.ctimeMs);
+    if (filtered.length === 0 && entry.newest !== Number.POSITIVE_INFINITY && !causeIsManifest)
+      resetEntry(entry);
+    for (let [path, fourthStamp] of filtered) tellChange(entry, path, fourthStamp.ctimeMs);
   }
-  function hn() {
-    for (let co of Me.values()) co.boundary = co.boundary.then(() => ho(co));
+  function onTurnChange() {
+    for (let entry of watched.values()) entry.boundary = entry.boundary.then(() => rescan(entry));
   }
-  function ho(co) {
-    if (Me.get(co.name) !== co || co.breaker.isDeferring()) return Promise.resolve();
-    co.cancelTimer?.();
-    co.cancelTimer = undefined;
-    co.isRescanning = true;
-    function ko() {
-      co.isRescanning = false;
-      co.isHeld = false;
-      bo(co.name);
+  function rescan(entry) {
+    if (watched.get(entry.name) !== entry || entry.breaker.isDeferring()) return Promise.resolve();
+    entry.cancelTimer?.();
+    entry.cancelTimer = undefined;
+    entry.isRescanning = true;
+    function done() {
+      entry.isRescanning = false;
+      entry.isHeld = false;
+      reloadNow(entry.name);
     }
-    let un = Math.min(co.readAt, co.manifestReadAt) - WATCH_CLOCK_SLACK_MS;
-    return co.watcher
-      .rescan(un)
-      .then(() => co.telling)
-      .then(ko, ko);
+    let since = Math.min(entry.readAt, entry.manifestReadAt) - WATCH_CLOCK_SLACK_MS;
+    return entry.watcher
+      .rescan(since)
+      .then(() => entry.telling)
+      .then(done, done);
   }
-  let yn = (co) =>
-    co.telling.then(() => {
-      if (!co.breaker.isDeferring()) {
-        co.isHeld = false;
-        bo(co.name);
+  let resumeAfterTelling = (entry) =>
+    entry.telling.then(() => {
+      if (!entry.breaker.isDeferring()) {
+        entry.isHeld = false;
+        reloadNow(entry.name);
       }
     });
-  let Kn = (co) =>
-    co.settling.then(() => {
-      if (co.cause !== undefined && !co.reloading && !co.breaker.isDeferring()) {
-        co.isHeld = false;
-        bo(co.name);
+  let resumeAfterSettling = (entry) =>
+    entry.settling.then(() => {
+      if (entry.cause !== undefined && !entry.reloading && !entry.breaker.isDeferring()) {
+        entry.isHeld = false;
+        reloadNow(entry.name);
       }
-      return co.settling;
+      return entry.settling;
     });
-  let Xn = (co) => Je(co.name, co).some((So) => loadedStampOf(co.name, So) !== undefined);
-  function fo(co) {
-    let found = [...Me.values()].find((ko) => relative(ko.root, co) === "");
-    return found !== undefined && !Xn(found);
+  let hasLoadedStamp = (entry) =>
+    targetsOf(entry.name, entry).some((path) => loadedStampOf(entry.name, path) !== undefined);
+  function isFolderUnloaded(folder) {
+    let entry = [...watched.values()].find((entry) => relative_2(entry.root, folder) === "");
+    return entry !== undefined && !hasLoadedStamp(entry);
   }
-  let To = (co, So) =>
+  let tellForEntry = (entry, line) =>
     tellWatchLine(
       {
         tell,
         plainLine,
       },
       {
-        plugin: co.name,
-        folder: dirname(co.root),
+        plugin: entry.name,
+        folder: dirname(entry.root),
       },
-      So,
+      line,
     );
-  function bo(name) {
-    let So = Me.get(name);
-    if (So?.cause === undefined) return;
-    So.cancelTimer?.();
-    So.cancelTimer = undefined;
-    So.isHeld = false;
-    if (So.reloading) {
-      So.again = preferManifestCause(So, So.again, So.cause);
-      So.cause = undefined;
+  function reloadNow(name) {
+    let entry = watched.get(name);
+    if (entry?.cause === undefined) return;
+    entry.cancelTimer?.();
+    entry.cancelTimer = undefined;
+    entry.isHeld = false;
+    if (entry.reloading) {
+      entry.again = preferManifestCause(entry, entry.again, entry.cause);
+      entry.cause = undefined;
       return;
     }
-    if (!So.breaker.admits(clock.now())) {
-      if (So.breaker.isDeferring()) rn(name, storm.quietMs, pn);
+    if (!entry.breaker.admits(clock.now())) {
+      if (entry.breaker.isDeferring()) armTimer(name, storm.quietMs, onQuiet);
       return;
     }
-    let ko = preferManifestCause(So, So.failed, So.cause);
-    let un = clock.now();
-    let intervalMs = So.watcher.interval();
-    settleReloadPending(burst, So, {
-      now: un,
+    let cause = preferManifestCause(entry, entry.failed, entry.cause);
+    let now = clock.now();
+    let intervalMs = entry.watcher.interval();
+    settleReloadPending(burst, entry, {
+      now,
       intervalMs,
     });
-    let $o = un - WATCH_CLOCK_SLACK_MS;
-    So.readAt = Math.max(So.readAt, $o);
-    if (So.manifests.includes(ko)) So.manifestReadAt = Math.max(So.manifestReadAt, $o);
-    for (let [yo, Ho] of So.pendingStamps) So.takenStamps.set(yo, Ho);
-    So.tried = new Set(So.pendingStamps.keys());
-    So.pendingStamps.clear();
-    So.isBehind = true;
-    So.cause = undefined;
-    So.newest = Number.NEGATIVE_INFINITY;
-    So.reloading = true;
-    So.settling = admit(So.scope, ko)
-      .then((yo) => {
-        if (!yo) {
-          To(So, vetoedNotice(ko, Xn(So)));
+    let since = now - WATCH_CLOCK_SLACK_MS;
+    entry.readAt = Math.max(entry.readAt, since);
+    if (entry.manifests.includes(cause)) entry.manifestReadAt = Math.max(entry.manifestReadAt, since);
+    for (let [path, fifthStamp] of entry.pendingStamps) entry.takenStamps.set(path, fifthStamp);
+    entry.tried = new Set(entry.pendingStamps.keys());
+    entry.pendingStamps.clear();
+    entry.isBehind = true;
+    entry.cause = undefined;
+    entry.newest = Number.NEGATIVE_INFINITY;
+    entry.reloading = true;
+    entry.settling = admit(entry.scope, cause)
+      .then((admitted) => {
+        if (!admitted) {
+          tellForEntry(entry, vetoedNotice(cause, hasLoadedStamp(entry)));
           return;
         }
         return reloadOnChange(
@@ -732,68 +762,68 @@ function runPluginDirWatch({
             reload,
             rereadManifest,
           },
-          So,
-          ko,
+          entry,
+          cause,
         ).then(
-          (Ho) => {
-            So.failed = undefined;
-            So.isBehind = false;
-            To(So, Ho);
+          (line) => {
+            entry.failed = undefined;
+            entry.isBehind = false;
+            tellForEntry(entry, line);
           },
           (error) => {
-            So.failed = ko;
-            To(So, reloadFailureNotice(name, error, error instanceof ReloadFailedError));
+            entry.failed = cause;
+            tellForEntry(entry, reloadFailureNotice(name, error, error instanceof ReloadFailedError));
           },
         );
       })
       .finally(() => {
-        So.reloading = false;
-        So.settledAt = clock.now();
-        So.watcher.retarget();
-        let again = So.again;
-        So.again = undefined;
-        if (again !== undefined) So.cause = preferManifestCause(So, So.cause, again);
-        Yt(So);
-        if (again !== undefined && So.cause !== undefined) {
-          So.pendingSince ??= So.settledAt;
-          Zt(So, debounceMs);
+        entry.reloading = false;
+        entry.settledAt = clock.now();
+        entry.watcher.retarget();
+        let again = entry.again;
+        entry.again = undefined;
+        if (again !== undefined) entry.cause = preferManifestCause(entry, entry.cause, again);
+        clearServed(entry);
+        if (again !== undefined && entry.cause !== undefined) {
+          entry.pendingSince ??= entry.settledAt;
+          scheduleReload(entry, debounceMs);
         }
       });
   }
-  function vn(co, So) {
-    So.cancelTimer?.();
-    Me.delete(co);
-    return Promise.all([So.watcher.close(), So.telling]).then(() => {});
+  function drop(name, entry) {
+    entry.cancelTimer?.();
+    watched.delete(name);
+    return Promise.all([entry.watcher.close(), entry.telling]).then(() => {});
   }
   return {
-    watchPlugins(co, So) {
-      let ko = new Map(co.map((un) => [un.name, un]));
-      for (let [un, ao] of Me) {
-        let $o = ko.get(un);
-        if ($o?.root !== ao.root) {
-          vn(un, ao);
+    watchPlugins(plugins, snapshot) {
+      let byName = new Map(plugins.map((plugin) => [plugin.name, plugin]));
+      for (let [name, entry] of watched) {
+        let plugin = byName.get(name);
+        if (plugin?.root !== entry.root) {
+          drop(name, entry);
           continue;
         }
-        ao.manifests = $o.manifests;
-        ao.entry = $o.entry;
-        if (So) no(ao, So);
-        ao.watcher.retarget();
+        entry.manifests = plugin.manifests;
+        entry.entry = plugin.entry;
+        if (snapshot) syncRead(entry, snapshot);
+        entry.watcher.retarget();
       }
-      for (let [un, ao] of ko) {
-        let { root, scope, manifests } = ao;
-        if (!Me.has(un))
-          Me.set(un, {
-            name: un,
+      for (let [name, plugin] of byName) {
+        let { root, scope, manifests } = plugin;
+        if (!watched.has(name))
+          watched.set(name, {
+            name,
             root,
             scope,
             watcher: watchDir(
               {
                 root,
                 scope,
-                files: () => Je(un, ao),
+                files: () => targetsOf(name, plugin),
               },
-              (rr, br) => nt(un, rr, br),
-              (rr) => anyWithinDirs(rr, Je(un, ao)),
+              (path, ctimeMs) => onChange(name, path, ctimeMs),
+              (path) => anyWithinDirs(path, targetsOf(name, plugin)),
             ),
             breaker: createReloadThrottle(storm, () =>
               tellWatchLine(
@@ -802,21 +832,21 @@ function runPluginDirWatch({
                   plainLine,
                 },
                 {
-                  plugin: un,
+                  plugin: name,
                   folder: dirname(root),
                 },
                 reloadStormNotice(storm, "paused"),
               ),
             ),
             manifests,
-            entry: ao.entry,
+            entry: plugin.entry,
             cancelTimer: undefined,
             cause: undefined,
             reloading: false,
             failed: undefined,
             again: undefined,
-            readAt: Math.min(So?.readAt ?? clock.now(), clock.now()),
-            manifestReadAt: Math.min(So?.readAt ?? clock.now(), clock.now()),
+            readAt: Math.min(snapshot?.readAt ?? clock.now(), clock.now()),
+            manifestReadAt: Math.min(snapshot?.readAt ?? clock.now(), clock.now()),
             newest: Number.NEGATIVE_INFINITY,
             pendingStamps: new Map(),
             takenStamps: new Map(),
@@ -834,21 +864,21 @@ function runPluginDirWatch({
           });
       }
     },
-    watchCollections: We.watchCollections,
-    watched: () => [...Me.keys()],
-    watchedCollections: We.watchedCollections,
-    isUnloaded: fo,
-    release(co) {
-      let So = Me.get(co);
-      if (So === undefined) return Promise.resolve();
-      let ko = So.watcher.interval() <= RELOAD_MIN_NOTICE_MS;
-      So.boundary = So.boundary.then(() => (ko ? yn(So) : ho(So)));
-      return So.boundary.then(() => Kn(So));
+    watchCollections: collections.watchCollections,
+    watched: () => [...watched.keys()],
+    watchedCollections: collections.watchedCollections,
+    isUnloaded: isFolderUnloaded,
+    release(name) {
+      let entry = watched.get(name);
+      if (entry === undefined) return Promise.resolve();
+      let isFast = entry.watcher.interval() <= RELOAD_MIN_NOTICE_MS;
+      entry.boundary = entry.boundary.then(() => (isFast ? resumeAfterTelling(entry) : rescan(entry)));
+      return entry.boundary.then(() => resumeAfterSettling(entry));
     },
     async dispose() {
-      ze();
-      lt();
-      await Promise.all([...[...Me].map(([co, So]) => vn(co, So)), We.dispose()]);
+      offBegin();
+      offEnd();
+      await Promise.all([...[...watched].map(([name, entry]) => drop(name, entry)), collections.dispose()]);
     },
   };
 }
@@ -856,15 +886,15 @@ function runPluginDirWatch({
 /**
  * 记录插件选项重载结果（重载、拒绝或失败）。
  */
-function logOptionsReloads(e) {
-  for (let n of e)
-    switch (n.kind) {
+function logOptionsReloads(results) {
+  for (let result of results)
+    switch (result.kind) {
       case "reloaded":
       case "refused":
-        uiLog(n.name, OPTIONS_CHANGED_PREFIX + reloadedText(n.result), repeatWord(n.result));
+        uiLog(result.name, OPTIONS_CHANGED_PREFIX + reloadedText(result.result), repeatWord(result.result));
         break;
       case "failed":
-        uiLog(n.name, OPTIONS_CHANGED_PREFIX + describeReloadFailure(n.name, n.error));
+        uiLog(result.name, OPTIONS_CHANGED_PREFIX + describeReloadFailure(result.name, result.error));
         break;
       case "failing":
       case "held":
@@ -872,22 +902,22 @@ function logOptionsReloads(e) {
     }
 }
 //@ chunk-e6aww6q8.js:4139467-4139692 placement
-function reportOptionsReloads(e) {
-  let n = [];
-  for (let r of e) {
-    let pluginStorageId = loadedModuleArgs(r.name)?.pluginStorageId ?? "";
-    let h = hostStateRef.get(pluginStorageId);
+function reportOptionsReloads(results) {
+  let notices = [];
+  for (let result of results) {
+    let pluginStorageId = loadedModuleArgs(result.name)?.pluginStorageId ?? "";
+    let storageId = hostStateRef.get(pluginStorageId);
     if (
-      r.kind === "reloaded" &&
-      !r.recovers &&
-      h !== undefined &&
-      h.before === h.now &&
+      result.kind === "reloaded" &&
+      !result.recovers &&
+      storageId !== undefined &&
+      storageId.before === storageId.now &&
       (isOfficialMarketplacePlugin(pluginStorageId) || isVouchedPolicyPluginId(pluginStorageId))
     )
-      logForDebugging(`${r.name}: ${OPTIONS_CHANGED_PREFIX}` + reloadedText(r.result));
-    else n.push(r);
+      logForDebugging(`${result.name}: ${OPTIONS_CHANGED_PREFIX}` + reloadedText(result.result));
+    else notices.push(result);
   }
-  logOptionsReloads(n);
+  logOptionsReloads(notices);
 }
 //@ chunk-e6aww6q8.js:4139692-4139912 placement
 /**
@@ -895,31 +925,31 @@ function reportOptionsReloads(e) {
  */
 function watchPluginOptionChanges(refreshOptions) {
   if (devModHostState.get() !== undefined) return;
-  let n = settingsChangeDetector.subscribe((r) => {
-    if (!TRUSTED_SETTING_SOURCES_2.includes(r)) return;
+  let unsubscribe = settingsChangeDetector.subscribe((source) => {
+    if (!TRUSTED_SETTING_SOURCES_2.includes(source)) return;
     refreshOptions()
       .then(reportOptionsReloads)
       .catch((error) => {
-        logForDebugging(`options watch: reload after a ${r} change failed: ` + errorMessage(error), {
+        logForDebugging(`options watch: reload after a ${source} change failed: ` + errorMessage(error), {
           level: "error",
         });
       });
   });
-  devModHostState.set(n);
-  registerCleanup(n);
+  devModHostState.set(unsubscribe);
+  registerCleanup(unsubscribe);
 }
 //@ chunk-e6aww6q8.js:4139912-4140125 placement
 /**
  * hooks 模块整体被禁止时记录原因与被排除的插件，返回空列表。
  */
-function logHooksModulesDisabled(e) {
-  let joined = e
-    .filter((s) => s.modulePath !== undefined)
+function logHooksModulesDisabled(loadedModules) {
+  let joined = loadedModules
+    .filter((plugin) => plugin.modulePath !== undefined)
     .map(hookPluginLabel)
     .join(", ");
-  let r = joined !== "";
+  let lines = joined !== "";
   logForDebugging(
-    `hooks modules not loaded: ${hooksModulesRefusalReason()}; no switch lifts it and no built-in plugin loads; kept out: ${r ? joined : "(none)"}`,
+    `hooks modules not loaded: ${hooksModulesRefusalReason()}; no switch lifts it and no built-in plugin loads; kept out: ${lines ? joined : "(none)"}`,
   );
   return [];
 }
@@ -927,48 +957,50 @@ function logHooksModulesDisabled(e) {
 /**
  * 大小 + 哈希
  */
-var fileStamp = (e) => ({
-  size: Buffer.byteLength(e),
-  hash: bunHashOf(e),
+var fileStamp = (text) => ({
+  size: Buffer.byteLength(text),
+  hash: bunHashOf(text),
 });
 //@ chunk-e6aww6q8.js:4140253-4140430 placement
 /**
  * 读取插件清单文件的戳（受门控的 fd 读取），不可读时为 undefined。
  */
-async function readManifestStamp(e, n) {
-  let s = (await Promise.all([realpath(n), realpath(dirname(e))]).then(
-    ([h, y]) => isWithinDir(h, y),
+async function readManifestStamp(manifestPath, root) {
+  let isInside = (await Promise.all([realpath(root), realpath(dirname(manifestPath))]).then(
+    ([realManifest, realRoot]) => isWithinDir(realManifest, realRoot),
     () => false,
   ))
-    ? await getFsImplementation().readFileFdGated(e, MAX_MODULE_BYTES)
+    ? await getFsImplementation().readFileFdGated(manifestPath, MAX_MODULE_BYTES)
     : null;
-  return s === null ? undefined : fileStamp(s.content);
+  return isInside === null ? undefined : fileStamp(isInside.content);
 }
 //@ chunk-e6aww6q8.js:4140463-4140593 placement
 /**
  * 只保留被监视的插件目录。
  */
-function filterWatchedPluginDirs(e) {
-  let n = new Set(
-    [...watchedPluginDirs(e), ...(pluginDirSlot.get() ?? []), ...(pluginDirWatchSlot.get() ?? [])].map((r) =>
-      resolve_2(r),
-    ),
+function filterWatchedPluginDirs(collections) {
+  let roots = new Set(
+    [
+      ...watchedPluginDirs(collections),
+      ...(pluginDirSlot.get() ?? []),
+      ...(pluginDirWatchSlot.get() ?? []),
+    ].map((root) => resolve_2(root)),
   );
-  return e.filter((r) => n.has(resolve_2(r)));
+  return collections.filter((root) => roots.has(resolve_2(root)));
 }
 //@ chunk-e6aww6q8.js:4140638-4140809 placement
 /**
  * 插件的 manifest 相关路径：plugin.json、.claude-plugin 清单、hooks/hooks.json 以及 manifest.hooks 指定的文件。
  */
-function pluginManifestPaths(e, n) {
-  let mapped = [e.manifest.hooks ?? []]
+function pluginManifestPaths(collection, loadedModules) {
+  let mapped = [collection.manifest.hooks ?? []]
     .flat()
-    .filter((s) => typeof s === "string")
-    .map((s) => resolve_2(n, s));
+    .filter((entry) => typeof entry === "string")
+    .map((plugin) => resolve_2(loadedModules, plugin));
   return uniq([
-    join(n, PLUGIN_MANIFEST_PATH_2),
-    join(n, PLUGIN_JSON),
-    join(n, "hooks", "hooks.json"),
+    join(loadedModules, PLUGIN_MANIFEST_PATH_2),
+    join(loadedModules, PLUGIN_JSON),
+    join(loadedModules, "hooks", "hooks.json"),
     ...mapped,
   ]);
 }
@@ -976,24 +1008,27 @@ function pluginManifestPaths(e, n) {
 /**
  * 为 --plugin-dir 集合目录建立监视项：目录下各子插件名映射，以及未被正确服务的子项。
  */
-function collectPluginDirRoots(e, n) {
-  return uniq(n.filter((r) => !isZipPathCaseInsensitive(r)).map((r) => resolve_2(r)))
-    .filter((r) => !e.some((s) => relative(r, s.path) === ""))
-    .map((r) => {
-      let s = new Map();
-      let h = new Set();
-      for (let y of e) {
-        let S = childNameUnder(r, y.path);
-        if (S === undefined) continue;
-        s.set(S, y.name);
-        let pluginRoot = loadedModuleArgs(y.name)?.pluginRoot;
-        if (y.modulePath !== undefined && (pluginRoot === undefined || relative(pluginRoot, y.path) !== ""))
-          h.add(S);
+function collectPluginDirRoots(collections, candidates) {
+  return uniq(candidates.filter((path) => !isZipPathCaseInsensitive(path)).map((entry) => resolve_2(entry)))
+    .filter((plugin) => !collections.some((modulePath) => relative_2(plugin, modulePath.path) === ""))
+    .map((modulePath) => {
+      let dir = new Map();
+      let index = new Set();
+      for (let ninthIndex of collections) {
+        let tenthIndex = childNameUnder(modulePath, ninthIndex.path);
+        if (tenthIndex === undefined) continue;
+        dir.set(tenthIndex, ninthIndex.name);
+        let pluginRoot = loadedModuleArgs(ninthIndex.name)?.pluginRoot;
+        if (
+          ninthIndex.modulePath !== undefined &&
+          (pluginRoot === undefined || relative_2(pluginRoot, ninthIndex.path) !== "")
+        )
+          index.add(tenthIndex);
       }
       return {
-        root: r,
-        loaded: s,
-        unserved: h,
+        root: modulePath,
+        loaded: dir,
+        unserved: index,
       };
     });
 }
@@ -1001,41 +1036,41 @@ function collectPluginDirRoots(e, n) {
 /**
  * 为 --plugin-dir 下有 hooks 模块的插件生成 folder 范围的监视目标（根目录、manifest 列表、入口）。
  */
-function folderWatchTargets(e, n) {
-  let mapped = n.map((s) => resolve_2(s));
-  return e
-    .filter((s) => s.modulePath !== undefined)
-    .flatMap((s) => {
-      let found = mapped.find((q) => relative(q, s.path) === "");
-      let any = mapped.some((q) => childNameUnder(q, s.path) !== undefined);
-      let S = found ?? (any ? resolve_2(s.path) : undefined);
-      if (S === undefined) return [];
-      let manifests = pluginManifestPaths(s, S);
-      let { modulePath } = s;
-      let entry = modulePath === undefined ? undefined : resolve_2(modulePath);
+function folderWatchTargets(collections, roots) {
+  let mapped = roots.map((root) => resolve_2(root));
+  return collections
+    .filter((plugin) => plugin.modulePath !== undefined)
+    .flatMap((entry) => {
+      let found = mapped.find((found) => relative_2(found, entry.path) === "");
+      let any = mapped.some((found) => childNameUnder(found, entry.path) !== undefined);
+      let index = found ?? (any ? resolve_2(entry.path) : undefined);
+      if (index === undefined) return [];
+      let manifests = pluginManifestPaths(entry, index);
+      let { modulePath } = entry;
+      let entry_2 = modulePath === undefined ? undefined : resolve_2(modulePath);
       return [
         {
-          name: s.name,
-          root: S,
+          name: entry.name,
+          root: index,
           scope: "folder",
           manifests,
-          entry,
+          entry: entry_2,
         },
       ];
     });
 }
 //@ chunk-e6aww6q8.js:4141649-4141873 placement
-var skillsWatchTargets = (e) =>
-  e
-    .filter((n) => n.modulePath !== undefined && n.source.endsWith(`@${SKILLS_DIR}`))
-    .map((n) => {
-      let r = resolve_2(n.path);
-      let manifests = pluginManifestPaths(n, r);
-      let { modulePath } = n;
+var skillsWatchTargets = (loadedModules) =>
+  loadedModules
+    .filter((plugin) => plugin.modulePath !== undefined && plugin.source.endsWith(`@${SKILLS_DIR}`))
+    .map((plugin) => {
+      let prefix = resolve_2(plugin.path);
+      let manifests = pluginManifestPaths(plugin, prefix);
+      let { modulePath } = plugin;
       let entry = modulePath === undefined ? undefined : resolve_2(modulePath);
       return {
-        name: n.name,
-        root: r,
+        name: plugin.name,
+        root: prefix,
         scope: "files",
         manifests,
         entry,
@@ -1047,8 +1082,8 @@ var skillsWatchTargets = (e) =>
  */
 var WATCH_CLOCK = {
   now: () => Date.now(),
-  setTimeout(e, n) {
-    let timer = setTimeout(e, n);
+  setTimeout(fn, ms) {
+    let timer = setTimeout(fn, ms);
     timer.unref();
     return () => clearTimeout(timer);
   },
@@ -1057,18 +1092,18 @@ var WATCH_CLOCK = {
 /**
  * files 范围的重载先经 ConfigChange 钩子把关；钩子未接好或抛错时不重载。
  */
-async function passesConfigChangeGate(e, n) {
-  if (e !== "files") return true;
-  let r = reloadReasonSlot.get();
-  if (r === undefined) {
+async function passesConfigChangeGate(kind, snapshot) {
+  if (kind !== "files") return true;
+  let gate = reloadReasonSlot.get();
+  if (gate === undefined) {
     logError(Error("plugin-dir watch: ConfigChange hook gate not wired"));
     return false;
   }
   try {
-    return !(await r("skills", n));
+    return !(await gate("skills", snapshot));
   } catch (error) {
     logForDebugging(
-      `plugin-dir watch: the ConfigChange hooks for ${n} threw, so no reload: ${errorMessage(error)}`,
+      `plugin-dir watch: the ConfigChange hooks for ${snapshot} threw, so no reload: ${errorMessage(error)}`,
       {
         level: "error",
       },
@@ -1080,18 +1115,20 @@ async function passesConfigChangeGate(e, n) {
 /**
  * 列出目录子项；目录不存在时为空列表，其他错误返回 undefined。
  */
-async function listDirChildren(e) {
-  let n = await describePluginDirShape(e);
-  if (n.kind === "collection") return n.children;
-  return n.kind === "unreadable" && (n.errno === "ENOENT" || n.errno === "ENOTDIR") ? [] : undefined;
+async function listDirChildren(root) {
+  let shape = await describePluginDirShape(root);
+  if (shape.kind === "collection") return shape.children;
+  return shape.kind === "unreadable" && (shape.errno === "ENOENT" || shape.errno === "ENOTDIR")
+    ? []
+    : undefined;
 }
 //@ chunk-e6aww6q8.js:4142446-4142550 placement
 /**
  * 取内置插件某文件源码的戳。
  */
-function bundledFileStamp(e, n) {
-  let r = loadedModuleArgs(e);
-  let source = r && hooksModuleFiles(r).find((h) => h.file === n)?.source;
+function bundledFileStamp(name, file) {
+  let args = loadedModuleArgs(name);
+  let source = args && hooksModuleFiles(args).find((fileEntry) => fileEntry.file === file)?.source;
   return source === undefined ? undefined : fileStamp(source);
 }
 //@ chunk-e6aww6q8.js:4142550-4142628 placement
@@ -1099,8 +1136,8 @@ function bundledFileStamp(e, n) {
  * 重载绑定的插件
  */
 function reloadBoundPlugins() {
-  let e = pendingReloadSlot.get();
-  return e ? e.reload() : Promise.resolve("unbound");
+  let slot = pendingReloadSlot.get();
+  return slot ? slot.reload() : Promise.resolve("unbound");
 }
 //@ chunk-e6aww6q8.js:4142628-4142639 placement
 /**
@@ -1111,65 +1148,77 @@ var WATCH_AUTO_RELOAD_OFF = false;
 /**
  * 监视中的插件记录
  */
-var watchedPluginRecords = identity_2(createValueSlot(), (e) => e.set(undefined));
+var watchedPluginRecords; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:4142673", () => {
+  watchedPluginRecords = identity_2(createValueSlot(), (slot) => slot.set(undefined));
+});
 //@ chunk-e6aww6q8.js:4142709-4142723 placement
 /**
  * 插件目录串行队列
  */
-var pluginDirQueue = createSerialQueue();
+var pluginDirQueue; // deferred: uses createSerialQueue (./panes.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:4142709", () => {
+  pluginDirQueue = createSerialQueue();
+});
 //@ chunk-e6aww6q8.js:4142723-4142821 placement
 /**
  * 惰性创建设备树宿主
  */
-var lazyDeviceTreeHost = io(async () => {
-  let { createDeviceTreeHost } = await import("./chunk-78kn47sp.js");
-  return createDeviceTreeHost();
+var lazyDeviceTreeHost; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:4142723", () => {
+  lazyDeviceTreeHost = memoizeAlias(async () => {
+    let { createDeviceTreeHost } = await import("../../utils/fsAnchor/deviceTreeHost.js");
+    return createDeviceTreeHost();
+  });
 });
 //@ chunk-e6aww6q8.js:4142821-4142922 placement
-function replacePluginRecord(e) {
-  let n = watchedPluginRecords.get();
-  if (n === undefined) return;
-  watchedPluginRecords.set(n.map((r) => (r.path === e.path ? mergePluginRecord(r, e) : r)));
+function replacePluginRecord(plugin) {
+  let records = watchedPluginRecords.get();
+  if (records === undefined) return;
+  watchedPluginRecords.set(
+    records.map((record) => (record.path === plugin.path ? mergePluginRecord(record, plugin) : record)),
+  );
 }
 //@ chunk-e6aww6q8.js:4142922-4143126 placement
 var findHookLoadError = (errors) =>
   errors.find(
-    (n) =>
-      n.type === "hook-load-failed" ||
-      n.type === "manifest-parse-error" ||
-      n.type === "manifest-validation-error" ||
-      ((n.type === "path-not-found" || n.type === "path-traversal") && n.component === "hooks"),
+    (error) =>
+      error.type === "hook-load-failed" ||
+      error.type === "manifest-parse-error" ||
+      error.type === "manifest-validation-error" ||
+      ((error.type === "path-not-found" || error.type === "path-traversal") && error.component === "hooks"),
   );
 //@ chunk-e6aww6q8.js:4143126-4143460 placement
 /**
  * 重新读取插件（manifest 与 hooks 模块），有加载错误则抛出，成功后更新 manifest 列表与插件记录。
  */
-async function retargetPluginModule(e) {
-  let manifests = e.manifests;
-  let r;
-  async function s(y) {
-    let { plugin, errors } = await createPluginFromPath(
-      y.path,
-      y.source,
-      y.enabled ?? true,
-      basename(y.path),
+async function retargetPluginModule(plugin) {
+  let manifests = plugin.manifests;
+  let reread;
+  async function keepEntry(previous) {
+    let { plugin: plugin_2, errors } = await createPluginFromPath(
+      previous.path,
+      previous.source,
+      previous.enabled ?? true,
+      basename(previous.path),
       WATCH_AUTO_RELOAD_OFF,
     );
     let hookLoadError = findHookLoadError(errors);
-    if (hookLoadError !== undefined) throw new HooksError(`${y.name}: ${pluginErrorText(hookLoadError)}`);
-    manifests = pluginManifestPaths(plugin, e.root);
-    r = plugin;
-    return plugin;
+    if (hookLoadError !== undefined)
+      throw new HooksError(`${previous.name}: ${pluginErrorText(hookLoadError)}`);
+    manifests = pluginManifestPaths(plugin_2, plugin.root);
+    reread = plugin_2;
+    return plugin_2;
   }
-  let h = await retargetHooksModule(e.name, s);
-  if (r) {
-    pendingReloadSlot.get()?.retarget(r);
-    replacePluginRecord(r);
+  let next = await retargetHooksModule(plugin.name, keepEntry);
+  if (reread) {
+    pendingReloadSlot.get()?.retarget(reread);
+    replacePluginRecord(reread);
   }
-  return h === undefined
+  return next === undefined
     ? undefined
     : {
-        ...h,
+        ...next,
         manifests,
       };
 }
@@ -1180,92 +1229,95 @@ async function retargetPluginModule(e) {
 var TURN_STATE_PROBE = {
   isRunning: () => currentTurn() !== undefined,
   isPersonTurn: () => currentTurn()?.isPersonStarted === true,
-  onBegin: (e) => turnFinishedSignal.subscribe(e),
-  onEnd: (e) => turnEndedSignal.subscribe(e),
+  onBegin: (handler) => turnFinishedSignal.subscribe(handler),
+  onEnd: (handler) => turnEndedSignal.subscribe(handler),
 };
 //@ chunk-e6aww6q8.js:4143650-4143756 placement
 /**
  * 判断目录是否为当前 mods 文件夹或位于全局 mods 目录下。
  */
-function isInModsFolder(e) {
+function isInModsFolder(path) {
   let folder = skillWatchStateByHost.get()?.folder;
   return (
-    (folder !== undefined && resolve_2(folder) === resolve_2(e)) ||
-    (!isDiskless() && dirname(resolve_2(e)) === resolve_2(devModsDir()))
+    (folder !== undefined && resolve_2(folder) === resolve_2(path)) ||
+    (!isDiskless() && dirname(resolve_2(path)) === resolve_2(devModsDir()))
   );
 }
 //@ chunk-e6aww6q8.js:4145928-4146092 placement
-function isWatchedCollectionPath(e, n) {
-  let [r, ...s] = relative(n, e).split(sep);
-  if (r === undefined || r === "") return true;
-  if (r === ".." || !isNotDotPrefixed(r)) return false;
-  let joined = s.join(sep);
+function isWatchedCollectionPath(path, root) {
+  let [head, ...rest] = relative_2(root, path).split(sep);
+  if (head === undefined || head === "") return true;
+  if (head === ".." || !isNotDotPrefixed(head)) return false;
+  let joined = rest.join(sep);
   return joined === "" || joined === dirname(PLUGIN_MANIFEST_PATH_2) || joined === PLUGIN_MANIFEST_PATH_2;
 }
 //@ chunk-e6aww6q8.js:4146092-4146542 placement
 /**
  * 监视 --plugin-dir 集合目录（深度 2，只关心子插件目录与清单），任何增删改都触发回调。
  */
-function watchPluginCollection(e, n) {
-  let r = realpathOrSelf(e).then((s) => {
-    let h = watchPathMapper(e, s);
-    let y = chokidar_default.watch(s, {
+function watchPluginCollection(root, name) {
+  let watcher = realpathOrSelf(root).then((realPath) => {
+    let mapPath = watchPathMapper(root, realPath);
+    let instance = chokidar_default.watch(realPath, {
       persistent: true,
       ignoreInitial: true,
       followSymlinks: false,
       ignorePermissionErrors: true,
       depth: MAX_LISTED_MOD_CHANGES,
-      ignored: (w) => !isWatchedCollectionPath(h(w), e),
+      ignored: (watcher) => !isWatchedCollectionPath(mapPath(watcher), root),
       usePolling: true,
       interval: WATCH_ACTIVE_POLL_MS,
       binaryInterval: WATCH_ACTIVE_POLL_MS,
     });
-    let S = () => n();
-    y.on("add", S);
-    y.on("addDir", S);
-    y.on("change", S);
-    y.on("unlink", S);
-    y.on("unlinkDir", S);
-    y.on("error", (w) =>
-      logForDebugging(`plugin-dir watch on ${e}: ${errorMessage(w)}`, {
+    let path = () => name();
+    instance.on("add", path);
+    instance.on("addDir", path);
+    instance.on("change", path);
+    instance.on("unlink", path);
+    instance.on("unlinkDir", path);
+    instance.on("error", (stat) =>
+      logForDebugging(`plugin-dir watch on ${root}: ${errorMessage(stat)}`, {
         level: "warn",
       }),
     );
-    return y;
+    return instance;
   });
   return {
-    close: async () => (await r).close(),
+    close: async () => (await watcher).close(),
   };
 }
 //@ chunk-e6aww6q8.js:4157047-4157494 placement
 /**
  * 根据 --plugin-dir、技能目录与已有监视器，启动对开发中插件的文件监视与集合目录监视。
  */
-function startPluginDirWatches(e, n, r) {
-  let s = isPluginDirWatchOn();
-  let h = watchedPluginDirs(inlinePlugins());
-  let y = reloadControllerSlot.get();
-  if (!s && h.length === 0 && y === undefined) return;
-  let S = reloadReasonSlot.get() !== undefined;
-  reloadTimerSlot.set(S ? undefined : () => startPluginDirWatches(e, n, r));
-  let w = s && S;
-  let L = [...folderWatchTargets(e, h), ...(w ? skillsWatchTargets(e) : [])];
-  let pluginDirRoots = collectPluginDirRoots(n, h);
-  if (y === undefined && L.length === 0 && pluginDirRoots.length === 0) return;
-  let Z = y ?? startPluginDirWatcher();
-  Z.watchPlugins(L, r);
-  Z.watchCollections(pluginDirRoots);
+function startPluginDirWatches(options, onChange, isServing) {
+  let isOn = isPluginDirWatchOn();
+  let dirs = watchedPluginDirs(inlinePlugins());
+  let controller = reloadControllerSlot.get();
+  if (!isOn && dirs.length === 0 && controller === undefined) return;
+  let watcher = reloadReasonSlot.get() !== undefined;
+  reloadTimerSlot.set(watcher ? undefined : () => startPluginDirWatches(options, onChange, isServing));
+  let secondWatcher = isOn && watcher;
+  let watchTargets = [
+    ...folderWatchTargets(options, dirs),
+    ...(secondWatcher ? skillsWatchTargets(options) : []),
+  ];
+  let pluginDirRoots = collectPluginDirRoots(onChange, dirs);
+  if (controller === undefined && watchTargets.length === 0 && pluginDirRoots.length === 0) return;
+  let dirEntry = controller ?? startPluginDirWatcher();
+  dirEntry.watchPlugins(watchTargets, isServing);
+  dirEntry.watchCollections(pluginDirRoots);
   logForDebugging(
-    `plugin-dir watch: watching ${Z.watched().join(", ") || "nothing"}; folders of plugins ${Z.watchedCollections().join(", ") || "none"}`,
+    `plugin-dir watch: watching ${dirEntry.watched().join(", ") || "nothing"}; folders of plugins ${dirEntry.watchedCollections().join(", ") || "none"}`,
   );
 }
 //@ chunk-e6aww6q8.js:4157532-4157595 placement
 /**
  * URI 解码失败返回 undefined
  */
-function decodeUriOrUndefined(e) {
+function decodeUriOrUndefined(uri) {
   try {
-    return decodeURIComponent(e);
+    return decodeURIComponent(uri);
   } catch {
     return;
   }

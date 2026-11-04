@@ -62,28 +62,28 @@ function parseSendToProjectArgs(args) {
     };
   if (LEADING_QUOTE_PATTERN.test(firstToken)) {
     let quotedMatch = /^["\u201C]([^"\u201C\u201D\n]*)["\u201D](?=[\s,.;:!?]|$)/.exec(trimmed);
-    let s = quotedMatch?.[1]?.trim() ?? "";
-    return quotedMatch === null || s === ""
+    let name = quotedMatch?.[1]?.trim() ?? "";
+    return quotedMatch === null || name === ""
       ? {
           kind: "problem",
           problem: "quotes",
         }
       : {
           kind: "name",
-          name: s,
+          name,
           note: trimmed
             .slice(quotedMatch[0].length)
             .replace(/^[,.;:!?]+/, "")
             .trim(),
         };
   }
-  let o = CHANNEL_ID_REGEX.test(firstToken)
+  let projectId = CHANNEL_ID_REGEX.test(firstToken)
     ? firstToken
     : (parseProjectReference(firstToken)?.projectId ?? "");
-  if (CHANNEL_ID_REGEX.test(o))
+  if (CHANNEL_ID_REGEX.test(projectId))
     return {
       kind: "id",
-      projectId: o,
+      projectId,
       note: trimmed.slice(firstToken.length).trim(),
     };
   return /^[a-z][a-z0-9+.-]*:\/\/\S*(\/project\/|chan_)/i.test(firstToken)
@@ -101,69 +101,69 @@ function parseSendToProjectArgs(args) {
  * 按规范化名字（以及用户输入过的名字）建立 名字 → 项目列表 的索引。
  */
 function indexProjectsByName(projects, typedNames) {
-  let e = new Map();
-  for (let o of projects) {
-    let r = new Set([normalizeProjectName(o.name), typedNames.get(o.id) ?? ""]);
-    r.delete("");
-    for (let s of r) e.set(s, [...(e.get(s) ?? []), o]);
+  let byName = new Map();
+  for (let project of projects) {
+    let keys = new Set([normalizeProjectName(project.name), typedNames.get(project.id) ?? ""]);
+    keys.delete("");
+    for (let key of keys) byName.set(key, [...(byName.get(key) ?? []), project]);
   }
-  return e;
+  return byName;
 }
 //@ chunk-2ygwbyvf.js:2183-2339 placement
 /**
  * 在名字索引里查项目：none、ambiguous（多个同名）或 match。
  */
-function lookupProjectByName(name, t) {
-  let [e, ...o] = t.get(normalizeProjectName(name)) ?? [];
-  if (e === undefined)
+function lookupProjectByName(name, byName) {
+  let [first, ...rest] = byName.get(normalizeProjectName(name)) ?? [];
+  if (first === undefined)
     return {
       kind: "none",
     };
-  return o.length > 0
+  return rest.length > 0
     ? {
         kind: "ambiguous",
-        name: e.name,
+        name: first.name,
       }
     : {
         kind: "match",
-        project: e,
+        project: first,
       };
 }
 //@ chunk-2ygwbyvf.js:2339-2364 placement
-var l = Math.ceil(TARGET_PROJECT_ROWS_MAX / CHANNEL_LIST_PAGE_SIZE);
+var MAX_CHANNEL_PAGES = Math.ceil(TARGET_PROJECT_ROWS_MAX / CHANNEL_LIST_PAGE_SIZE);
 //@ chunk-2ygwbyvf.js:2364-2721 placement
 /**
  * 分页拉取个人 Claude Projects 频道（有页数上限），过滤掉不适用的频道，按活跃度排序截取前 N 个；返回项目、是否截断、id → 规范名映射。
  */
 async function listPersonalProjects(signal, credentials) {
-  let e = [];
-  let o = new Map();
-  let r = null;
+  let projects = [];
+  let typedNames = new Map();
+  let cursor = null;
   let truncated = false;
-  for (let i = 0; i < l; i++) {
-    let c = await listChannelsPage(r, signal, credentials);
-    for (let channel of c.channels)
+  for (let pageIndex = 0; pageIndex < MAX_CHANNEL_PAGES; pageIndex++) {
+    let page = await listChannelsPage(cursor, signal, credentials);
+    for (let channel of page.channels)
       if (projectNotTargetReason(channel) === null && CHANNEL_ID_REGEX.test(channel.id)) {
-        e.push({
+        projects.push({
           id: channel.id,
           name: stripNonPrintable(printableName(channel.name, 80)),
           lastMessageAtMs: channel.lastMessageAtMs,
         });
-        o.set(channel.id, normalizeProjectName(channel.name));
+        typedNames.set(channel.id, normalizeProjectName(channel.name));
       }
-    r = c.nextCursor;
-    if (r === null) break;
-    truncated = i === l - 1;
+    cursor = page.nextCursor;
+    if (cursor === null) break;
+    truncated = pageIndex === MAX_CHANNEL_PAGES - 1;
   }
   return {
-    projects: sortProjectsByRecency(e).slice(0, TARGET_PROJECT_ROWS_MAX),
+    projects: sortProjectsByRecency(projects).slice(0, TARGET_PROJECT_ROWS_MAX),
     truncated,
-    typedNames: o,
+    typedNames,
   };
 }
 //@ chunk-2ygwbyvf.js:2721-2809 placement
-function sortProjectsByRecency(n) {
-  return n.toSorted((t, e) => (e.lastMessageAtMs ?? -1) - (t.lastMessageAtMs ?? -1));
+function sortProjectsByRecency(projects) {
+  return projects.toSorted((left, right) => (right.lastMessageAtMs ?? -1) - (left.lastMessageAtMs ?? -1));
 }
 export {
   listPersonalProjects,

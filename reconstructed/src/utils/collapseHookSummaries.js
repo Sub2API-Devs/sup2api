@@ -9,35 +9,50 @@
  * attribution: fingerprint 2, placement 10
  */
 import { DoctorLazy } from "../cli/handlers/util.js";
-import { u, string, E, M } from "../../vendor/zod/v4/classic/schemas.js";
+import {
+  objectSchema,
+  stringSchema,
+  numberSchema,
+  booleanSchema,
+} from "../../vendor/zod/v4/classic/schemas.js";
 import { isPlainObject as isPlainObject_5 } from "./isPlainObject.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:329597-329917 placement
 /**
  * hookInfos 数组项的校验 schema。
  */
-var HOOK_SUMMARY_FIELDS = [
-  "hookCount",
-  "hookInfos",
-  "hookErrors",
-  "hookAdditionalContext",
-  "preventedContinuation",
-  "stopReason",
-  "hookLabel",
-  "totalDurationMs",
-];
-var hookInfosSchema = DoctorLazy(() =>
-  u({
-    command: string(),
-    promptText: string().optional(),
-    durationMs: E().optional(),
-  }),
-);
-var hookErrorSchema = DoctorLazy(() => string());
-var hookLabelSchema = DoctorLazy(() => string().min(1));
-var hookCountSchema = DoctorLazy(() => E().int().nonnegative());
-var totalDurationSchema = DoctorLazy(() => E());
-var preventedContinuationSchema = DoctorLazy(() => M());
+var HOOK_SUMMARY_FIELDS; // deferred: uses DoctorLazy (../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var hookInfosSchema;
+var hookErrorSchema;
+var hookLabelSchema;
+var hookCountSchema;
+var totalDurationSchema;
+var preventedContinuationSchema;
+deferInit("chunk-e6aww6q8.js:329597", () => {
+  HOOK_SUMMARY_FIELDS = [
+    "hookCount",
+    "hookInfos",
+    "hookErrors",
+    "hookAdditionalContext",
+    "preventedContinuation",
+    "stopReason",
+    "hookLabel",
+    "totalDurationMs",
+  ];
+  hookInfosSchema = DoctorLazy(() =>
+    objectSchema({
+      command: stringSchema(),
+      promptText: stringSchema().optional(),
+      durationMs: numberSchema().optional(),
+    }),
+  );
+  hookErrorSchema = DoctorLazy(() => stringSchema());
+  hookLabelSchema = DoctorLazy(() => stringSchema().min(1));
+  hookCountSchema = DoctorLazy(() => numberSchema().int().nonnegative());
+  totalDurationSchema = DoctorLazy(() => numberSchema());
+  preventedContinuationSchema = DoctorLazy(() => booleanSchema());
+});
 //@ chunk-e6aww6q8.js:329917-330797 placement = collapseHookSummaries (0.799)
 /**
  * 校验 hook 汇总附件字段（hookCount、hookInfos、hookErrors、stopReason 等），丢弃非法值后重建对象。
@@ -62,11 +77,11 @@ function normalizeHookSummary(messages) {
         totalDurationMs: messages.totalDurationMs,
       }),
     };
-  let n = filterValidArrayItems(messages.hookInfos, hookInfosSchema());
+  let hookInfos = filterValidArrayItems(messages.hookInfos, hookInfosSchema());
   let validHookLabel = getValidHookLabel(messages);
   return {
-    hookCount: matchesSchema(messages.hookCount, hookCountSchema()) ? messages.hookCount : n.length,
-    hookInfos: n,
+    hookCount: matchesSchema(messages.hookCount, hookCountSchema()) ? messages.hookCount : hookInfos.length,
+    hookInfos,
     hookErrors: filterValidArrayItems(messages.hookErrors, hookErrorSchema()),
     ...(Array.isArray(messages.hookAdditionalContext) && {
       hookAdditionalContext: filterValidArrayItems(messages.hookAdditionalContext, hookErrorSchema()),
@@ -86,16 +101,16 @@ function normalizeHookSummary(messages) {
   };
 }
 //@ chunk-e6aww6q8.js:330797-330861 placement
-function getValidHookLabel(e) {
-  return matchesSchema(e.hookLabel, hookLabelSchema()) ? e.hookLabel : undefined;
+function getValidHookLabel(value) {
+  return matchesSchema(value.hookLabel, hookLabelSchema()) ? value.hookLabel : undefined;
 }
 //@ chunk-e6aww6q8.js:330861-330897 placement
-function getValidStringArray(e) {
-  return filterValidArrayItems(e, hookErrorSchema());
+function getValidStringArray(value) {
+  return filterValidArrayItems(value, hookErrorSchema());
 }
 //@ chunk-e6aww6q8.js:330897-330944 placement
-function matchesSchema(e, n) {
-  return n.safeParse(e).success;
+function matchesSchema(value, schema) {
+  return schema.safeParse(value).success;
 }
 //@ chunk-e6aww6q8.js:330944-331389 placement = collapseHookSummaries (0.762)
 function collapseHookSummaries_2(messages) {
@@ -126,31 +141,31 @@ function collapseHookSummaries_2(messages) {
   );
 }
 //@ chunk-e6aww6q8.js:331389-331547 placement
-function isHookInfo(e) {
+function isHookInfo(value) {
   return (
-    isPlainObject_5(e) &&
-    typeof e.command === "string" &&
-    (e.promptText === undefined || typeof e.promptText === "string") &&
-    (e.durationMs === undefined || isFiniteNumber_2(e.durationMs))
+    isPlainObject_5(value) &&
+    typeof value.command === "string" &&
+    (value.promptText === undefined || typeof value.promptText === "string") &&
+    (value.durationMs === undefined || isFiniteNumber_2(value.durationMs))
   );
 }
 //@ chunk-e6aww6q8.js:331547-331590 placement
-function isString(e) {
-  return typeof e === "string";
+function isString(value) {
+  return typeof value === "string";
 }
 //@ chunk-e6aww6q8.js:331590-331653 placement
-function isFiniteNumber_2(e) {
-  return typeof e === "number" && Number.isFinite(e);
+function isFiniteNumber_2(value) {
+  return typeof value === "number" && Number.isFinite(value);
 }
 //@ chunk-e6aww6q8.js:331653-331756 placement
 /**
  * 非数组返回空数组；否则只保留通过 schema 校验的元素（全部合法时原样返回）。
  */
-function filterValidArrayItems(e, n) {
-  if (!Array.isArray(e)) return [];
-  let r = e;
-  let s = (h) => matchesSchema(h, n);
-  return r.every(s) ? r : r.filter(s);
+function filterValidArrayItems(items, schema) {
+  if (!Array.isArray(items)) return [];
+  let list = items;
+  let isValid = (item) => matchesSchema(item, schema);
+  return list.every(isValid) ? list : list.filter(isValid);
 }
 //@ chunk-ag5x7vhf.js:119609-119699 fingerprint = isLabeledHookSummary (0.773)
 function isLabeledHookSummary(msg) {
@@ -164,24 +179,24 @@ function collapseHookSummaries(messages) {
     let msg = messages[i];
     if (isLabeledHookSummary(msg)) {
       let label = getValidHookLabel(msg);
-      let _ = [];
+      let batch = [];
       while (i < messages.length) {
         let next = messages[i];
         if (!isLabeledHookSummary(next) || getValidHookLabel(next) !== label) break;
-        _.push(next);
+        batch.push(next);
         i++;
       }
-      if (_.length === 1) result.push(msg);
+      if (batch.length === 1) result.push(msg);
       else {
-        let mapped = _.map(normalizeHookSummary);
+        let mapped = batch.map(normalizeHookSummary);
         result.push({
           ...msg,
           hookCount: mapped.reduce((sum, m) => sum + m.hookCount, 0),
           hookInfos: mapped.flatMap((m) => m.hookInfos),
           hookErrors: mapped.flatMap((m) => m.hookErrors),
-          hookAdditionalContext: mapped.flatMap((D) => D.hookAdditionalContext ?? []),
+          hookAdditionalContext: mapped.flatMap((summary) => summary.hookAdditionalContext ?? []),
           preventedContinuation: mapped.some((m) => m.preventedContinuation),
-          hasOutput: _.some((m) => m.hasOutput),
+          hasOutput: batch.some((m) => m.hasOutput),
           totalDurationMs: Math.max(...mapped.map((m) => m.totalDurationMs ?? 0)),
         });
       }

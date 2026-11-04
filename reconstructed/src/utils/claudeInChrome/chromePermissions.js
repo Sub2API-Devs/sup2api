@@ -49,6 +49,7 @@ import { jsonParse } from "../slowOperations.js";
 import { logForDebugging } from "../debug.js";
 import { McpToolCallError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS } from "../../services/mcp/client.js";
 import { CCR_NEEDS_APPROVAL_CODE } from "../../services/mcp/mcpResultErrors.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-29pqxdaf.js:10535-10616 placement
 /**
@@ -62,22 +63,22 @@ var CHROME_SITE_IPV6_RE = /^\[[0-9a-f:.]+\]$/;
 /**
  * 判断站点名格式是否可用。
  */
-function isUsableChromeSite(e) {
-  return e.length <= MAX_CHROME_SITE_CHARS && CHROME_SITE_RE.test(e);
+function isUsableChromeSite(site) {
+  return site.length <= MAX_CHROME_SITE_CHARS && CHROME_SITE_RE.test(site);
 }
 //@ chunk-29pqxdaf.js:10661-11070 placement
 /**
  * 从 Claude in Chrome 工具的错误数据中读出操作的站点（chrome_site/端口），校验格式；无法读出返回 unreadable，非该服务器返回 undefined。
  */
-function chromeSiteFromError(client, n) {
+function chromeSiteFromError(client, errorInfo) {
   if (
     client.name !== CLAUDE_IN_CHROME_MCP_SERVER_NAME ||
     !isClaudeAiProxyServer(client.config) ||
-    !isPlainObject(n) ||
-    (n.chrome_site === undefined && n.chrome_site_port === undefined)
+    !isPlainObject(errorInfo) ||
+    (errorInfo.chrome_site === undefined && errorInfo.chrome_site_port === undefined)
   )
     return;
-  let { chrome_site: chromeSite, chrome_site_port: chromeSitePort } = n;
+  let { chrome_site: chromeSite, chrome_site_port: chromeSitePort } = errorInfo;
   if (
     typeof chromeSite !== "string" ||
     chromeSite.length > MAX_CHROME_SITE_CHARS ||
@@ -94,20 +95,20 @@ function chromeSiteFromError(client, n) {
     offersGrant:
       chromeSitePort === undefined &&
       CHROME_SITE_RE.test(chromeSite) &&
-      n.chrome_offers_site_grant === "true",
+      errorInfo.chrome_offers_site_grant === "true",
   };
 }
 //@ chunk-29pqxdaf.js:11070-11495 placement
 /**
  * 询问前检查 Chrome 站点拒绝规则：能识别站点时按拒绝列表判断；识别不了站点且存在拒绝规则时直接拒绝（安全检查，不可被分类器批准）。
  */
-function chromeSiteDenyCheck(e, toolPermissionContext) {
+function chromeSiteDenyCheck(chromeSite, toolPermissionContext) {
   let chromeSiteRules = collectChromeSiteRules(toolPermissionContext);
-  if (e.kind !== "unreadable") {
-    let r = chromeSiteDenyDecision(chromeSiteRules, e.site);
+  if (chromeSite.kind !== "unreadable") {
+    let denyDecision = chromeSiteDenyDecision(chromeSiteRules, chromeSite.site);
     return (
-      r && {
-        ...r,
+      denyDecision && {
+        ...denyDecision,
         decideLocation: "pre-ask",
       }
     );
@@ -129,13 +130,13 @@ function chromeSiteDenyCheck(e, toolPermissionContext) {
 /**
  * 为命名站点生成询问：若 navigate 目标可能离开该站点则注明；可授权时附带"本会话允许该站点"的规则建议，否则禁止"总是允许"。
  */
-function chromeSiteAsk(e, tool, o, toolUseContext) {
-  if (e.kind !== "named") return;
-  let { site } = e;
-  let any = navigateTargets(tool, o).some((d) => siteOfActionUrl(d) !== site);
-  let i =
+function chromeSiteAsk(chromeSite, toolName, input, toolUseContext) {
+  if (chromeSite.kind !== "named") return;
+  let { site } = chromeSite;
+  let any = navigateTargets(toolName, input).some((targetUrl) => siteOfActionUrl(targetUrl) !== site);
+  let canOfferGrant =
     !any &&
-    e.offersGrant &&
+    chromeSite.offersGrant &&
     !isHookOrPluginSteered(toolUseContext) &&
     toolUseContext.forRemoteExecution !== true;
   return {
@@ -147,7 +148,7 @@ function chromeSiteAsk(e, tool, o, toolUseContext) {
         ? `Claude in Chrome action on ${site}, which may also leave that site`
         : `Claude in Chrome action on ${site}`,
     },
-    ...(i
+    ...(canOfferGrant
       ? {
           suggestions: [
             {
@@ -181,101 +182,115 @@ function isPortString(chromeSitePort) {
 /**
  * 把动作 URL 规范成 Chrome 站点名。
  */
-function siteOfActionUrl(e) {
-  if (typeof e !== "string" || isBackOrForward(e)) return;
-  let siteActionUrl = parseSiteActionUrl(e);
+function siteOfActionUrl(url) {
+  if (typeof url !== "string" || isBackOrForward(url)) return;
+  let siteActionUrl = parseSiteActionUrl(url);
   return siteActionUrl && normalizeChromeSite(siteActionUrl.host);
 }
 //@ chunk-29pqxdaf.js:12191-12391 placement
-function navigateTargets(e, n) {
-  if (e === "navigate") return [n.url];
-  if (e !== "browser_batch" || !Array.isArray(n.actions)) return [];
-  return n.actions.flatMap((action) =>
+function navigateTargets(toolName, input) {
+  if (toolName === "navigate") return [input.url];
+  if (toolName !== "browser_batch" || !Array.isArray(input.actions)) return [];
+  return input.actions.flatMap((action) =>
     isPlainObject(action) && action.name === "navigate"
       ? [isPlainObject(action.input) ? action.input.url : undefined]
       : [],
   );
 }
 //@ chunk-29pqxdaf.js:12391-12690 placement
-var CHROME_TOOL_NAMES = new Set(BROWSER_TOOLS.map((e) => e.name));
-var ANTHROPIC_CHROMEWORKERDECIDES = "anthropic/chromeWorkerDecides";
-var CLAUDECODE_CHROMEJUDGEDSITE = "claudecode/chromeJudgedSite";
-var ANTHROPIC_CHROMEOWNTABSUNASKED = "anthropic/chromeOwnTabsUnasked";
-var PAGE_READ_TOOLS = new Set([
-  "computer",
-  "find",
-  "form_input",
-  "get_page_text",
-  "read_page",
-  "read_console_messages",
-  "read_network_requests",
-]);
-var TABS_CONTEXT_MCP = "tabs_context_mcp";
-var MAX_SITE_LENGTH = 259;
-var TAB_READ_TIMEOUT_MS = 5000;
+var CHROME_TOOL_NAMES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var ANTHROPIC_CHROMEWORKERDECIDES;
+var CLAUDECODE_CHROMEJUDGEDSITE;
+var ANTHROPIC_CHROMEOWNTABSUNASKED;
+var PAGE_READ_TOOLS;
+var TABS_CONTEXT_MCP;
+var MAX_SITE_LENGTH;
+var TAB_READ_TIMEOUT_MS;
+deferInit("chunk-29pqxdaf.js:12391", () => {
+  CHROME_TOOL_NAMES = new Set(BROWSER_TOOLS.map((tool) => tool.name));
+  ANTHROPIC_CHROMEWORKERDECIDES = "anthropic/chromeWorkerDecides";
+  CLAUDECODE_CHROMEJUDGEDSITE = "claudecode/chromeJudgedSite";
+  ANTHROPIC_CHROMEOWNTABSUNASKED = "anthropic/chromeOwnTabsUnasked";
+  PAGE_READ_TOOLS = new Set([
+    "computer",
+    "find",
+    "form_input",
+    "get_page_text",
+    "read_page",
+    "read_console_messages",
+    "read_network_requests",
+  ]);
+  TABS_CONTEXT_MCP = "tabs_context_mcp";
+  MAX_SITE_LENGTH = 259;
+  TAB_READ_TIMEOUT_MS = 5000;
+});
 //@ chunk-29pqxdaf.js:12690-18137 placement
 /**
  * Claude in Chrome 的工具权限处理器（按会话与客户端平台判定、记录已允许站点）。
  */
-function createChromePermissionHandler(toolName, n, o) {
-  let r = `${CFC_TOOL_PREFIX}${toolName}`;
+function createChromePermissionHandler(toolName, gateConfig, readTabUrl) {
+  let commandName = `${CFC_TOOL_PREFIX}${toolName}`;
   let weakMap = new WeakMap();
-  let l = async (i, d) => {
-    logChromeToolAttempted(d.options?.messageClientPlatform);
-    let p = [];
-    let u = false;
-    let S = true;
-    let w = new Set();
-    let y = () => isDiskless() && disklessHostState.peek(d.session)?.host === undefined;
-    if (toolName === "file_upload" && y()) return fileUploadDeny(FILE_UPLOAD_UNAVAILABLE);
+  let checkPermissions = async (input, toolUseContext) => {
+    logChromeToolAttempted(toolUseContext.options?.messageClientPlatform);
+    let urls = [];
+    let sawNavigate = false;
+    let isSingleSite = true;
+    let readTabIds = new Set();
+    let isHostlessDiskless = () =>
+      isDiskless() && disklessHostState.peek(toolUseContext.session)?.host === undefined;
+    if (toolName === "file_upload" && isHostlessDiskless()) return fileUploadDeny(FILE_UPLOAD_UNAVAILABLE);
     if (
       toolName === "file_upload" &&
-      n?.[ANTHROPIC_CHROMEUPLOADAUTOMODEONLY] === true &&
-      !isChromeToolAutoAllowed(toolName, getToolPermissionContext(d))
+      gateConfig?.[ANTHROPIC_CHROMEUPLOADAUTOMODEONLY] === true &&
+      !isChromeToolAutoAllowed(toolName, getToolPermissionContext(toolUseContext))
     )
       return fileUploadDeny(UPLOAD_NEEDS_APPROVAL);
     if (toolName === "navigate") {
-      if (typeof i.url !== "string") return unjudgeableChromeInputDeny("navigate url is not a string");
-      p.push(i.url);
+      if (typeof input.url !== "string") return unjudgeableChromeInputDeny("navigate url is not a string");
+      urls.push(input.url);
     } else if (toolName === "browser_batch") {
-      if (i.actions !== undefined && !Array.isArray(i.actions))
+      if (input.actions !== undefined && !Array.isArray(input.actions))
         return unjudgeableChromeInputDeny("batch actions is not an array");
-      for (let c of Array.isArray(i.actions) ? i.actions : []) {
-        if (!isPlainObject(c) || typeof c.name !== "string")
+      for (let action of Array.isArray(input.actions) ? input.actions : []) {
+        if (!isPlainObject(action) || typeof action.name !== "string")
           return unjudgeableChromeInputDeny("unreadable batch item");
-        if (c.name === "browser_batch") return unjudgeableChromeInputDeny("nested batch");
-        if (!CHROME_TOOL_NAMES.has(c.name)) return unjudgeableChromeInputDeny("unrecognized batch item name");
-        w.add(PAGE_READ_TOOLS.has(c.name) && isPlainObject(c.input) ? c.input.tabId : undefined);
-        if (c.name === "file_upload")
-          return fileUploadDeny(y() ? FILE_UPLOAD_UNAVAILABLE : UPLOAD_IN_BATCH_UNAVAILABLE);
-        if (c.name === "navigate") {
-          if (!isPlainObject(c.input) || typeof c.input.url !== "string")
+        if (action.name === "browser_batch") return unjudgeableChromeInputDeny("nested batch");
+        if (!CHROME_TOOL_NAMES.has(action.name))
+          return unjudgeableChromeInputDeny("unrecognized batch item name");
+        readTabIds.add(
+          PAGE_READ_TOOLS.has(action.name) && isPlainObject(action.input) ? action.input.tabId : undefined,
+        );
+        if (action.name === "file_upload")
+          return fileUploadDeny(isHostlessDiskless() ? FILE_UPLOAD_UNAVAILABLE : UPLOAD_IN_BATCH_UNAVAILABLE);
+        if (action.name === "navigate") {
+          if (!isPlainObject(action.input) || typeof action.input.url !== "string")
             return unjudgeableChromeInputDeny("batch navigate url is not a string");
-          p.push(c.input.url);
-          u = true;
-          if (isBackOrForward(c.input.url)) S = false;
+          urls.push(action.input.url);
+          sawNavigate = true;
+          if (isBackOrForward(action.input.url)) isSingleSite = false;
         } else if (
-          !CHROME_INPUT_APPROVED_TOOL_NAMES.has(c.name) ||
-          (c.input !== undefined && !isPlainObject(c.input)) ||
-          !isBrowserHousekeepingCall(c.name, isPlainObject(c.input) ? c.input : {})
+          !CHROME_INPUT_APPROVED_TOOL_NAMES.has(action.name) ||
+          (action.input !== undefined && !isPlainObject(action.input)) ||
+          !isBrowserHousekeepingCall(action.name, isPlainObject(action.input) ? action.input : {})
         )
-          S = false;
+          isSingleSite = false;
       }
     }
-    let E =
-      n?.[ANTHROPIC_CHROMEWORKERDECIDES] === true &&
-      o !== undefined &&
-      getToolPermissionContext(d).mode !== "plan";
-    let toolPermissionContext = getToolPermissionContext(d);
-    let x =
+    let canWorkerDecide =
+      gateConfig?.[ANTHROPIC_CHROMEWORKERDECIDES] === true &&
+      readTabUrl !== undefined &&
+      getToolPermissionContext(toolUseContext).mode !== "plan";
+    let toolPermissionContext = getToolPermissionContext(toolUseContext);
+    let isAutoBatch =
       toolName === "browser_batch" &&
-      E &&
-      d.agentId === undefined &&
-      d.toolUseId !== undefined &&
+      canWorkerDecide &&
+      toolUseContext.agentId === undefined &&
+      toolUseContext.toolUseId !== undefined &&
       !isChromeToolAutoAllowed(toolName, toolPermissionContext) &&
       toolPermissionContext.chromeClassifierFloorEnabled === true &&
       toolPermissionContext.canAutoClassifierRun === true;
-    if (x && sessionAllowedSites(toolPermissionContext.alwaysAllowRules.session).size > 0) {
+    if (isAutoBatch && sessionAllowedSites(toolPermissionContext.alwaysAllowRules.session).size > 0) {
       logFeatureSad("chrome_permission_prompt", "batch_one_by_one");
       return {
         behavior: "deny",
@@ -287,15 +302,15 @@ function createChromePermissionHandler(toolName, n, o) {
         },
       };
     }
-    let Z = toolName === "browser_batch" && u && S;
-    let filtered = p.filter((c) => !isBackOrForward(c));
-    let T;
-    let H = new Map();
+    let isPlainBatch = toolName === "browser_batch" && sawNavigate && isSingleSite;
+    let filtered = urls.filter((url) => !isBackOrForward(url));
+    let firstSiteUrl;
+    let deniableHosts = new Map();
     if (filtered.length > 0) {
-      let toolPermissionContext = getToolPermissionContext(d);
+      let toolPermissionContext = getToolPermissionContext(toolUseContext);
       let chromeSiteRules = collectChromeSiteRules(toolPermissionContext);
-      for (let P of filtered) {
-        let siteActionUrl = parseSiteActionUrl(P);
+      for (let url of filtered) {
+        let siteActionUrl = parseSiteActionUrl(url);
         if (!siteActionUrl) {
           logFeatureBad("chrome_permission_prompt", "non_web_url");
           return {
@@ -309,34 +324,45 @@ function createChromePermissionHandler(toolName, n, o) {
             },
           };
         }
-        let R = chromeSiteDenyDecision(chromeSiteRules, siteActionUrl.host);
-        if (R) {
+        let denyDecision = chromeSiteDenyDecision(chromeSiteRules, siteActionUrl.host);
+        if (denyDecision) {
           logFeatureSad("chrome_permission_prompt", "domain_rule_denied");
-          return R;
+          return denyDecision;
         }
-        let O = normalizeChromeSite(siteActionUrl.host);
-        if (!chromeSiteRules.allowed.has(O) && !H.has(O)) H.set(O, siteActionUrl.host);
-        T ??= siteActionUrl;
+        let site = normalizeChromeSite(siteActionUrl.host);
+        if (!chromeSiteRules.allowed.has(site) && !deniableHosts.has(site))
+          deniableHosts.set(site, siteActionUrl.host);
+        firstSiteUrl ??= siteActionUrl;
       }
-      if (T !== undefined && H.size === 0 && (toolName === "navigate" || Z)) {
-        if (E && toolName === "navigate" && isUsableChromeSite(hostWithoutPort(T.host)))
+      if (
+        firstSiteUrl !== undefined &&
+        deniableHosts.size === 0 &&
+        (toolName === "navigate" || isPlainBatch)
+      ) {
+        if (
+          canWorkerDecide &&
+          toolName === "navigate" &&
+          isUsableChromeSite(hostWithoutPort(firstSiteUrl.host))
+        )
           setPendingPermissionNote(
-            d,
-            i,
+            toolUseContext,
+            input,
             siteJudgementNote(
-              T.host,
-              d.agentId === undefined,
+              firstSiteUrl.host,
+              toolUseContext.agentId === undefined,
               toolPermissionContext.alwaysAllowRules.session,
             ),
-            r,
+            commandName,
           );
-        let P = normalizeChromeSite(T.host);
+        let site = normalizeChromeSite(firstSiteUrl.host);
         let source =
-          chromeSiteRules.sourceOf.get(P) ?? chromeSiteRules.sourceOf.get(hostWithoutPort(P)) ?? "session";
+          chromeSiteRules.sourceOf.get(site) ??
+          chromeSiteRules.sourceOf.get(hostWithoutPort(site)) ??
+          "session";
         if (toolPermissionContext.chromeClassifierFloorEnabled !== true)
           return {
             behavior: "allow",
-            updatedInput: i,
+            updatedInput: input,
             decisionReason: {
               type: "rule",
               rule: {
@@ -344,7 +370,7 @@ function createChromePermissionHandler(toolName, n, o) {
                 ruleBehavior: "allow",
                 ruleValue: {
                   toolName: CLAUDE_IN_CHROME_DOMAIN_RULE_TOOL,
-                  ruleContent: T.host,
+                  ruleContent: firstSiteUrl.host,
                 },
               },
             },
@@ -352,16 +378,16 @@ function createChromePermissionHandler(toolName, n, o) {
         return {
           behavior: "ask",
           message: "Claude in Chrome requires permission.",
-          updatedInput: i,
+          updatedInput: input,
           decisionReason: {
             type: "other",
-            reason: `Claude in Chrome action on ${T.host}`,
+            reason: `Claude in Chrome action on ${firstSiteUrl.host}`,
           },
           metadata: {
             command: {
-              name: r,
+              name: commandName,
               chrome: {
-                ...T,
+                ...firstSiteUrl,
                 domainAllowed: true,
               },
             },
@@ -369,18 +395,18 @@ function createChromePermissionHandler(toolName, n, o) {
         };
       }
     }
-    if (CHROME_INPUT_APPROVED_TOOL_NAMES.has(toolName) && isBrowserHousekeepingCall(toolName, i))
+    if (CHROME_INPUT_APPROVED_TOOL_NAMES.has(toolName) && isBrowserHousekeepingCall(toolName, input))
       return {
         behavior: "allow",
-        updatedInput: i,
+        updatedInput: input,
       };
-    let toolPermissionContext_2 = getToolPermissionContext(d);
+    let toolPermissionContext_2 = getToolPermissionContext(toolUseContext);
     if (
       toolName === TABS_CONTEXT_MCP &&
-      n?.[ANTHROPIC_CHROMEOWNTABSUNASKED] === true &&
-      i.createIfEmpty === true &&
-      Object.keys(i).length === 1 &&
-      d.toolUseId !== undefined &&
+      gateConfig?.[ANTHROPIC_CHROMEOWNTABSUNASKED] === true &&
+      input.createIfEmpty === true &&
+      Object.keys(input).length === 1 &&
+      toolUseContext.toolUseId !== undefined &&
       toolPermissionContext_2.mode === "acceptEdits" &&
       getAccountSetPermissionMode() === "acceptEdits" &&
       getMcpPermissionModeOverride(
@@ -394,29 +420,35 @@ function createChromePermissionHandler(toolName, n, o) {
     )
       return {
         behavior: "allow",
-        updatedInput: i,
+        updatedInput: input,
       };
-    if (E) {
-      let c =
+    if (canWorkerDecide) {
+      let tabIdToResolve =
         toolName === "browser_batch"
-          ? x && w.size === 1 && Object.keys(i).length === 1 && [...w][0]
+          ? isAutoBatch && readTabIds.size === 1 && Object.keys(input).length === 1 && [...readTabIds][0]
           : !["navigate", "file_upload"].includes(toolName) &&
             !CHROME_INPUT_APPROVED_TOOL_NAMES.has(toolName) &&
-            i.tabId;
-      let A =
-        typeof c === "number" && d.toolUseId !== undefined && d.permissionRound !== undefined
-          ? await o?.(c, d.abortController.signal)
+            input.tabId;
+      let resolvedTabUrl =
+        typeof tabIdToResolve === "number" &&
+        toolUseContext.toolUseId !== undefined &&
+        toolUseContext.permissionRound !== undefined
+          ? await readTabUrl?.(tabIdToResolve, toolUseContext.abortController.signal)
           : undefined;
-      let P = A === undefined ? undefined : parseSiteActionUrl(A);
-      let h =
-        toolName === "navigate" ? T : P !== undefined && P.host.length <= MAX_SITE_LENGTH ? P : undefined;
-      let toolPermissionContext = getToolPermissionContext(d);
+      let tabActionUrl = resolvedTabUrl === undefined ? undefined : parseSiteActionUrl(resolvedTabUrl);
+      let actionSite =
+        toolName === "navigate"
+          ? firstSiteUrl
+          : tabActionUrl !== undefined && tabActionUrl.host.length <= MAX_SITE_LENGTH
+            ? tabActionUrl
+            : undefined;
+      let toolPermissionContext = getToolPermissionContext(toolUseContext);
       let chromeSiteRules = collectChromeSiteRules(toolPermissionContext);
-      let ne = h && chromeSiteDenyDecision(chromeSiteRules, h.host);
+      let tabDenyDecision = actionSite && chromeSiteDenyDecision(chromeSiteRules, actionSite.host);
       if (toolPermissionContext.mode === "plan");
-      else if (x && sessionAllowedSites(toolPermissionContext.alwaysAllowRules.session).size > 0)
-        return l(i, d);
-      else if (A !== undefined && h === undefined) {
+      else if (isAutoBatch && sessionAllowedSites(toolPermissionContext.alwaysAllowRules.session).size > 0)
+        return checkPermissions(input, toolUseContext);
+      else if (resolvedTabUrl !== undefined && actionSite === undefined) {
         logFeatureBad("chrome_permission_prompt", "non_web_tab_url");
         return {
           behavior: "deny",
@@ -427,41 +459,42 @@ function createChromePermissionHandler(toolName, n, o) {
             classifierApprovable: false,
           },
         };
-      } else if (ne) {
+      } else if (tabDenyDecision) {
         logFeatureSad("chrome_permission_prompt", "domain_rule_denied");
-        return ne;
-      } else if (h !== undefined && isUsableChromeSite(hostWithoutPort(h.host))) {
-        if (A !== undefined) logFeatureOk("chrome_permission_prompt");
+        return tabDenyDecision;
+      } else if (actionSite !== undefined && isUsableChromeSite(hostWithoutPort(actionSite.host))) {
+        if (resolvedTabUrl !== undefined) logFeatureOk("chrome_permission_prompt");
         if (toolName !== "browser_batch")
           setPendingPermissionNote(
-            d,
-            i,
+            toolUseContext,
+            input,
             siteJudgementNote(
-              h.host,
-              d.agentId === undefined,
+              actionSite.host,
+              toolUseContext.agentId === undefined,
               toolPermissionContext.alwaysAllowRules.session,
             ),
-            r,
+            commandName,
           );
-        let oe = chromeSiteRules.allowed.has(normalizeChromeSite(h.host));
-        let re =
-          !oe &&
+        let siteAllowed = chromeSiteRules.allowed.has(normalizeChromeSite(actionSite.host));
+        let offerDomainRule =
+          !siteAllowed &&
           toolPermissionContext.chromeClassifierFloorEnabled === true &&
           toolPermissionContext.canAutoClassifierRun === true;
-        if (re) weakMap.set(i, h.host);
-        let ie = toolName === "browser_batch" ? `in the ${h.host} tab` : `on ${h.host}`;
+        if (offerDomainRule) weakMap.set(input, actionSite.host);
+        let whereText =
+          toolName === "browser_batch" ? `in the ${actionSite.host} tab` : `on ${actionSite.host}`;
         return {
           behavior: "ask",
           message: "Claude in Chrome requires permission.",
-          updatedInput: i,
-          suggestions: re
+          updatedInput: input,
+          suggestions: offerDomainRule
             ? [
                 {
                   type: "addRules",
                   rules: [
                     {
                       toolName: CLAUDE_IN_CHROME_DOMAIN_RULE_TOOL,
-                      ruleContent: h.host,
+                      ruleContent: actionSite.host,
                     },
                   ],
                   behavior: "allow",
@@ -471,31 +504,32 @@ function createChromePermissionHandler(toolName, n, o) {
             : undefined,
           decisionReason: {
             type: "other",
-            reason: `Claude in Chrome action ${ie}`,
+            reason: `Claude in Chrome action ${whereText}`,
           },
           metadata: {
             command: {
-              name: r,
-              description: `Allow Claude in Chrome to ${describeBrowserToolAction(toolName, i)} ${ie}?`,
+              name: commandName,
+              description: `Allow Claude in Chrome to ${describeBrowserToolAction(toolName, input)} ${whereText}?`,
               chrome: {
-                ...h,
-                domainAllowed: oe && toolName !== "browser_batch",
+                ...actionSite,
+                domainAllowed: siteAllowed && toolName !== "browser_batch",
               },
             },
           },
         };
-      } else if (A !== undefined) logFeatureSad("chrome_permission_prompt", "tab_site_not_plain");
+      } else if (resolvedTabUrl !== undefined)
+        logFeatureSad("chrome_permission_prompt", "tab_site_not_plain");
     }
-    let we = !isDiskless();
+    let isNotDiskless = !isDiskless();
     return {
       behavior: "passthrough",
       message: "Claude in Chrome requires permission.",
       suggestions:
-        H.size === 1 && (toolName === "navigate" || Z) && we
+        deniableHosts.size === 1 && (toolName === "navigate" || isPlainBatch) && isNotDiskless
           ? [
               {
                 type: "addRules",
-                rules: [...H.values()].map((ruleContent) => ({
+                rules: [...deniableHosts.values()].map((ruleContent) => ({
                   toolName: CLAUDE_IN_CHROME_DOMAIN_RULE_TOOL,
                   ruleContent,
                 })),
@@ -507,20 +541,20 @@ function createChromePermissionHandler(toolName, n, o) {
     };
   };
   return {
-    coerceInput: (i) => {
-      let d = stripCyclesAndHiddenKeys(i);
-      return d === i
+    coerceInput: (input) => {
+      let strippedInput = stripCyclesAndHiddenKeys(input);
+      return strippedInput === input
         ? null
         : {
-            input: d,
+            input: strippedInput,
             shapeClass: "chrome_host_only_args_removed",
           };
     },
-    checkPermissions: l,
-    suggestedAllowRule: (i, d) =>
-      i.toolName === CLAUDE_IN_CHROME_DOMAIN_RULE_TOOL &&
-      i.ruleContent !== undefined &&
-      i.ruleContent === weakMap.get(d),
+    checkPermissions,
+    suggestedAllowRule: (rule, input) =>
+      rule.toolName === CLAUDE_IN_CHROME_DOMAIN_RULE_TOOL &&
+      rule.ruleContent !== undefined &&
+      rule.ruleContent === weakMap.get(input),
     suppressesAlwaysAllowRule: () => true,
     ignoresWholeToolAllowRule: () => true,
     excludedFromAutoModeAllowlist: () => true,
@@ -531,37 +565,37 @@ function createChromePermissionHandler(toolName, n, o) {
 /**
  * 调用 tabs_context_mcp 读取指定 tabId 的 URL（带超时）；读不到时按原因（未列出、超时、无标签组、非 JSON、需批准等）记 chrome_permission_prompt 埋点。
  */
-async function readTabUrl(e, n, o) {
-  let r = AbortSignal.timeout(TAB_READ_TIMEOUT_MS);
-  let s = "";
+async function readTabUrl(callTool, tabId, signal) {
+  let timeoutSignal = AbortSignal.timeout(TAB_READ_TIMEOUT_MS);
+  let rawText = "";
   try {
-    let l = await e(
+    let response = await callTool(
       TABS_CONTEXT_MCP,
       {
         createIfEmpty: false,
       },
-      AbortSignal.any([o, r]),
+      AbortSignal.any([signal, timeoutSignal]),
     );
-    let i = Array.isArray(l) ? l[0] : undefined;
-    s = isPlainObject(i) ? String(i.text) : String(l);
-    let d = jsonParse(s);
-    let availableTabs = isPlainObject(d) ? d.availableTabs : undefined;
-    let u = Array.isArray(availableTabs)
-      ? availableTabs.find((availableTab) => isPlainObject(availableTab) && availableTab.tabId === n)
+    let firstBlock = Array.isArray(response) ? response[0] : undefined;
+    rawText = isPlainObject(firstBlock) ? String(firstBlock.text) : String(response);
+    let parsed = jsonParse(rawText);
+    let availableTabs = isPlainObject(parsed) ? parsed.availableTabs : undefined;
+    let tab = Array.isArray(availableTabs)
+      ? availableTabs.find((availableTab) => isPlainObject(availableTab) && availableTab.tabId === tabId)
       : undefined;
-    if (isPlainObject(u) && typeof u.url === "string" && u.url) return u.url;
+    if (isPlainObject(tab) && typeof tab.url === "string" && tab.url) return tab.url;
     logFeatureSad("chrome_permission_prompt", "tab_url_unresolved_tab_not_listed");
   } catch (error) {
-    if (!o.aborted) {
+    if (!signal.aborted) {
       logForDebugging(`Claude in Chrome: the tab read failed: ${String(error)}`, {
         level: "error",
       });
       logFeatureSad(
         "chrome_permission_prompt",
-        r.aborted
+        timeoutSignal.aborted
           ? "tab_url_unresolved_timed_out"
           : error instanceof SyntaxError
-            ? s.includes("createIfEmpty")
+            ? rawText.includes("createIfEmpty")
               ? "tab_url_unresolved_no_tab_group"
               : "tab_url_unresolved_not_json"
             : error instanceof McpToolCallError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
@@ -575,12 +609,12 @@ async function readTabUrl(e, n, o) {
   return;
 }
 //@ chunk-29pqxdaf.js:18970-19073 placement
-function siteJudgementNote(host, n, session = []) {
+function siteJudgementNote(host, leftToClassifier, session = []) {
   return {
     site: host,
     personLeftItToClassifier:
       (getAccountSetPermissionMode() === "auto" && isAutoModeActive()) ||
-      (n && sessionAllowedSites(session).has(normalizeChromeSite(host))),
+      (leftToClassifier && sessionAllowedSites(session).has(normalizeChromeSite(host))),
   };
 }
 //@ chunk-29pqxdaf.js:19073-19350 placement
@@ -638,14 +672,14 @@ function isChromeToolAutoAllowed(toolName, toolPermissionContext) {
   );
 }
 //@ chunk-29pqxdaf.js:19719-19995 placement
-function unjudgeableChromeInputDeny(e) {
+function unjudgeableChromeInputDeny(reason) {
   logFeatureBad("chrome_permission_prompt", "unjudgeable_chrome_input");
   return {
     behavior: "deny",
     message: "Can't run this Claude in Chrome action: its input couldn't be safely checked.",
     decisionReason: {
       type: "safetyCheck",
-      reason: `Claude in Chrome: ${e}`,
+      reason: `Claude in Chrome: ${reason}`,
       classifierApprovable: false,
     },
   };

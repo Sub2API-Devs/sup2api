@@ -18,9 +18,9 @@ var UNLIMITED = "unlimited";
 /**
  * 在档位表中前后移动 n 档并返回结果。
  */
-function stepStatusLineWidth(attentionBudget, n) {
+function stepStatusLineWidth(attentionBudget, step) {
   let index = STATUS_LINE_WIDTH_STEPS.indexOf(attentionBudget);
-  let max = Math.max(0, Math.min(STATUS_LINE_WIDTH_STEPS.length - 1, index + n));
+  let max = Math.max(0, Math.min(STATUS_LINE_WIDTH_STEPS.length - 1, index + step));
   return STATUS_LINE_WIDTH_STEPS[max];
 }
 export { UNLIMITED, stepStatusLineWidth };

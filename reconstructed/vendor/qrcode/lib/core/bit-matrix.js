@@ -5,10 +5,10 @@
  * pieces: chunk-spjgqa4y.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-spjgqa4y.js:2022-2536 cjs-fingerprint
-var require_bit_matrix = x(function (cjsExports, cjsModule) {
+var require_bit_matrix = __commonJS(function (cjsExports, cjsModule) {
   function BitMatrix(size) {
     if (!size || size < 1) throw Error("BitMatrix size must be defined and greater than 0");
     this.size = size;

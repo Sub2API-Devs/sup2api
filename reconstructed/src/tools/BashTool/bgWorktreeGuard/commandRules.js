@@ -107,10 +107,11 @@ import {
 import { getParserModule } from "../../../utils/bash/bashParser.js";
 import { count } from "../../../utils/collections.js";
 import { getPlatform } from "../../../utils/platform.js";
+import { deferInit } from "../../../../runtime/deferred-init.js";
 
 //@ chunk-63f0f3kd.js:50717-50884 placement
-function programBaseName(t) {
-  let replaced = basename(t.replace(/\\/g, "/"))
+function programBaseName(program) {
+  let replaced = basename(program.replace(/\\/g, "/"))
     .toLowerCase()
     .replace(/\.(?:exe|bat|cmd|com)$/, "");
   let replaced_2 = replaced.replace(/([a-z])-?\d[\d.]*$/, "$1");
@@ -120,163 +121,174 @@ function programBaseName(t) {
 /**
  * 若命令是 git 或可能间接执行 git 的声明/eval 类内建命令，返回说明原因。
  */
-function describeGitRunner(t) {
-  let e = programBaseName(t);
-  if (GIT_COMMAND_PATTERN.test(e)) return GIT_TOO_COMPLEX_REASON;
-  return DECLARATION_BUILTINS.has(e) || EVAL_LIKE_BUILTINS.has(e)
-    ? `runs ${e} ${TOO_COMPLEX_SUFFIX}; what it reads or is handed as shell text cannot be shown not to run git`
+function describeGitRunner(program) {
+  let baseName = programBaseName(program);
+  if (GIT_COMMAND_PATTERN.test(baseName)) return GIT_TOO_COMPLEX_REASON;
+  return DECLARATION_BUILTINS.has(baseName) || EVAL_LIKE_BUILTINS.has(baseName)
+    ? `runs ${baseName} ${TOO_COMPLEX_SUFFIX}; what it reads or is handed as shell text cannot be shown not to run git`
     : null;
 }
 //@ chunk-63f0f3kd.js:51057-55417 placement
 /**
  * 各解释器（python/node/bun/deno/perl/ruby/php/lua/R/julia/osascript/groovy/tcl）的命令行规则表：内联代码选项、模块选项、取值选项、普通标志、能启动其他程序的代码特征（bridge）、启动时相关的环境变量前缀。
  */
-var NEVER_MATCH_RE = /(?!)/;
-var INTERPRETER_RULE_DEFAULTS = {
-  module: NEVER_MATCH_RE,
-  inlineEndsOptions: false,
-  console: NEVER_MATCH_RE,
-  literalScript: false,
-  scriptAfterDashes: true,
-};
-var GENERIC_BRIDGE_RE = /system|exec|popen|spawn|eval|shell|\x60|\bopen\b|pipe\(|load|dofile|source|require/i;
-var NODE_INTERPRETER_RULES = {
-  ...INTERPRETER_RULE_DEFAULTS,
-  inline: /^(?:-[ep]|--(?:eval|print))$|^--(?:eval|print)=(.*)$/s,
-  console: /^inspect$/,
-  valued: /^(?:-[rC]|--(?:require|import|loader|experimental-loader|conditions|env-file))$/,
-  flag: /^(?:-[vhc]|--[a-z][a-z0-9-]*=.*|--(?:no-[a-z-]+|enable-source-maps|experimental-[a-z-]+|trace-[a-z-]+|inspect(?:-brk)?|expose-gc|version|help|check|watch|test))$/,
-  bridge:
-    /child_process|exec\w*\s*\(|_compile|spawn(?:Sync)?\s*\(|\beval\b(?!['"])|\bFunction\b|runMain|\.constructor|import\s*\(|--import|--require|--loader|-r\b|require\s*\(\s*[^'"\s)]|\bvm\b|runIn\w*Context|inspector|repl|dlopen|process\.binding|worker_threads|\bWorker\(|\$`|Bun\.\$|Deno\./,
-  environment: /^(?:NODE_|NPM_CONFIG_)/,
-};
-var LUA_INTERPRETER_RULES = {
-  ...INTERPRETER_RULE_DEFAULTS,
-  inline: /^-e(.*)$/s,
-  valued: /^-l$/,
-  flag: /^-(?:[vEW]|l.+)$/,
-  bridge: GENERIC_BRIDGE_RE,
-  environment: /^LUA_/,
-};
-var R_INTERPRETER_RULES = {
-  ...INTERPRETER_RULE_DEFAULTS,
-  inline: /^-e(.*)$/s,
-  valued: /^-f$/,
-  flag: /^--[a-z][a-z-]*(?:=.*)?$/,
-  bridge: GENERIC_BRIDGE_RE,
-  environment: /^R_/,
-};
-var TCL_INTERPRETER_RULES = {
-  ...INTERPRETER_RULE_DEFAULTS,
-  inline: NEVER_MATCH_RE,
-  valued: /^-encoding$/,
-  flag: NEVER_MATCH_RE,
-  bridge: GENERIC_BRIDGE_RE,
-  environment: /^TCL/,
-};
-var PYTHON_INTERPRETER_RULES = {
-  ...INTERPRETER_RULE_DEFAULTS,
-  inline: /^-[bBdEhIOPqRsSuvVx3]*c(.*)$/s,
-  inlineEndsOptions: true,
-  module: /^-[bBdEhIOPqRsSuvVx3]*m$/,
-  valued: /^(?:-[bBdEhIOPqRsSuvVx3]*[WX]|--check-hash-based-pycs)$/,
-  flag: /^(?:-[bBdEhIOPqRsSuvVx3]+|-[WX].+|--(?:version|help)[a-z-]*)$/,
-  bridge:
-    /system|subprocess|[pP]open|spawn|\bexec\b(?!['"])|exec\w*\s*\(|\beval\b(?!['"])|(?:^|[^.\w])compile\s*\(|\bimp\.|__import__|importlib|runpy|getattr\s*\(|\b(?:globals|locals|vars)\s*\(|builtins|pickle|marshal|shelve|ctypes|breakpoint|\b[bp]db\b|\bcode\.|(?:from|import)\s+code\b|codeop|Interactive(?:Console|Interpreter)|\binteract\s*\(|cProfile|\bprofile\.run|\btrace\b|timeit|\bpty\b|webbrowser|\bdoctest\b/,
-  environment: /^PYTHON/,
-};
-var INTERPRETER_RULES = new Map(
-  Object.entries({
-    python: PYTHON_INTERPRETER_RULES,
-    pypy: PYTHON_INTERPRETER_RULES,
-    ipython: PYTHON_INTERPRETER_RULES,
-    node: NODE_INTERPRETER_RULES,
-    nodejs: NODE_INTERPRETER_RULES,
-    tsx: NODE_INTERPRETER_RULES,
-    "ts-node": NODE_INTERPRETER_RULES,
-    bun: {
-      ...NODE_INTERPRETER_RULES,
-      module: /^(?:run|x)$/,
-      valued: /^(?:-r|--(?:preload|config|cwd|env-file))$/,
-      flag: /^(?:-[vh]|--[a-z][a-z0-9-]*=.*|--(?:no-[a-z-]+|version|help|watch|hot|bun|silent|smol)|test)$/,
-      console: /^repl$/,
-      environment: /^(?:BUN_|NODE_|NPM_CONFIG_)/,
-    },
-    deno: {
-      ...NODE_INTERPRETER_RULES,
-      inline: /^eval$/,
-      valued: NEVER_MATCH_RE,
-      flag: /^(?:run|test|bench|serve|-[A-Za-z]+|--[a-z][a-z0-9-]*(?:=.*)?)$/,
-      console: /^repl$/,
-      literalScript: true,
-      environment: /^(?:DENO_|NODE_|NPM_CONFIG_)/,
-    },
-    perl: {
-      ...INTERPRETER_RULE_DEFAULTS,
-      inline: /^-(?:[achnpsStTuUvwWX]|l[0-7]*|0[0-9a-fA-Fx]*)*(?:[eE]|[Mm]-?)(.*)$/s,
-      valued: /^-[IF]$/,
-      flag: /^-(?:[achnpsStTuUvwWX]|l[0-7]*|0[0-9a-fA-Fx]*)*(?:[iIFxCDV].*)?$/s,
-      bridge:
-        /system|exec|\x60|qx\W|%x|popen|\bopen[23]?\b|IPC::|eval|syscall|fork|\bdo\b|\brequire\s*[^A-Za-z\s;]|\/e[egimosxr]*(?![\w\/])/,
-      environment: /^PERL/,
-    },
-    ruby: {
-      ...INTERPRETER_RULE_DEFAULTS,
-      inline: /^-(?:[adhlnpsSvwy]|W[0-2]?|0\d*)*e(.*)$/s,
-      valued: /^-(?:[adhlnpsSvwy]|W[0-2]?|0\d*)*[IrCEF]$/,
-      flag: /^(?:-(?:[adhlnpsSvwy]|W[0-2]?|0\d*)*(?:[iIrCEFKTx].*)?|--(?:version|help|verbose|copyright|yjit|jit|(?:en|dis)able[-=].*|[a-z-]*encoding=.*))$/s,
-      bridge:
-        /system|exec|\x60|%x|popen|spawn|\bopen\b|\bIO\.|Open3|eval|\b(?:public_)?send\b|__send__|\bmethod\s*\(|instance_method|syscall|fork|binding\.|\birb\b|pry|\bload\b|\brequire\s*[^'"\s]/,
-      environment: /^RUBY/,
-    },
-    php: {
-      ...INTERPRETER_RULE_DEFAULTS,
-      inline: /^(?:-[rBRE]|--(?:run|process-(?:begin|code|end)))$/,
-      valued: /^(?:-[cdfztSF]|--(?:php-ini|define|file|zend-extension|docroot|server|process-file))$/,
-      flag: /^(?:-[eHhilmnqsvwCM]|--(?:no-php-ini|version|help|modules|info|syntax-check|ini))$/,
-      bridge:
-        /system|exec|passthru|popen|proc_open|\x60|eval|pcntl|include|require|\bassert\b|create_function|call_user_func|\$\w+\s*\(/,
-      environment: /^PHP/,
-      scriptAfterDashes: false,
-    },
-    lua: LUA_INTERPRETER_RULES,
-    luajit: LUA_INTERPRETER_RULES,
-    rscript: R_INTERPRETER_RULES,
-    r: R_INTERPRETER_RULES,
-    julia: {
-      ...INTERPRETER_RULE_DEFAULTS,
-      inline: /^(?:-[eE]|--(?:eval|print))$|^--(?:eval|print)=(.*)$/s,
-      valued: /^(?:-[ptJLCOm]|--(?:project|sysimage|load|threads|procs|module))$/,
-      flag: /^(?:-[hvq]|-[ptO]\d+|--[a-z][a-z-]*=.*|--(?:version|help|quiet|color|banner|startup-file[a-z=]*))$/,
-      bridge: /run\(|\x60|Cmd|eval|pipeline|success\(|spawn|ccall|include/,
-      environment: /^JULIA_/,
-    },
-    osascript: {
-      ...INTERPRETER_RULE_DEFAULTS,
-      inline: /^-e(.*)$/s,
-      valued: /^-[ls]$/,
-      flag: /^-[ls].+$/,
-      bridge: GENERIC_BRIDGE_RE,
-      environment: /^OSA/,
-    },
-    groovy: {
-      ...INTERPRETER_RULE_DEFAULTS,
-      inline: /^-e(.*)$/s,
-      valued: /^(?:-(?:c|cp|classpath|a|l|b)|--(?:encoding|classpath|autosplit|basescript))$/,
-      flag: /^(?:-[dinpvh]|-D.+|--(?:debug|indy|version|help))$/,
-      bridge: GENERIC_BRIDGE_RE,
-      environment: /^(?:JAVA_TOOL_OPTIONS$|JDK_JAVA_OPTIONS$|GROOVY|CLASSPATH$)/,
-    },
-    tclsh: TCL_INTERPRETER_RULES,
-    wish: TCL_INTERPRETER_RULES,
-  }),
-);
+var NEVER_MATCH_RE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var INTERPRETER_RULE_DEFAULTS;
+var GENERIC_BRIDGE_RE;
+var NODE_INTERPRETER_RULES;
+var LUA_INTERPRETER_RULES;
+var R_INTERPRETER_RULES;
+var TCL_INTERPRETER_RULES;
+var PYTHON_INTERPRETER_RULES;
+var INTERPRETER_RULES;
+deferInit("chunk-63f0f3kd.js:51057", () => {
+  NEVER_MATCH_RE = /(?!)/;
+  INTERPRETER_RULE_DEFAULTS = {
+    module: NEVER_MATCH_RE,
+    inlineEndsOptions: false,
+    console: NEVER_MATCH_RE,
+    literalScript: false,
+    scriptAfterDashes: true,
+  };
+  GENERIC_BRIDGE_RE = /system|exec|popen|spawn|eval|shell|\x60|\bopen\b|pipe\(|load|dofile|source|require/i;
+  NODE_INTERPRETER_RULES = {
+    ...INTERPRETER_RULE_DEFAULTS,
+    inline: /^(?:-[ep]|--(?:eval|print))$|^--(?:eval|print)=(.*)$/s,
+    console: /^inspect$/,
+    valued: /^(?:-[rC]|--(?:require|import|loader|experimental-loader|conditions|env-file))$/,
+    flag: /^(?:-[vhc]|--[a-z][a-z0-9-]*=.*|--(?:no-[a-z-]+|enable-source-maps|experimental-[a-z-]+|trace-[a-z-]+|inspect(?:-brk)?|expose-gc|version|help|check|watch|test))$/,
+    bridge:
+      /child_process|exec\w*\s*\(|_compile|spawn(?:Sync)?\s*\(|\beval\b(?!['"])|\bFunction\b|runMain|\.constructor|import\s*\(|--import|--require|--loader|-r\b|require\s*\(\s*[^'"\s)]|\bvm\b|runIn\w*Context|inspector|repl|dlopen|process\.binding|worker_threads|\bWorker\(|\$`|Bun\.\$|Deno\./,
+    environment: /^(?:NODE_|NPM_CONFIG_)/,
+  };
+  LUA_INTERPRETER_RULES = {
+    ...INTERPRETER_RULE_DEFAULTS,
+    inline: /^-e(.*)$/s,
+    valued: /^-l$/,
+    flag: /^-(?:[vEW]|l.+)$/,
+    bridge: GENERIC_BRIDGE_RE,
+    environment: /^LUA_/,
+  };
+  R_INTERPRETER_RULES = {
+    ...INTERPRETER_RULE_DEFAULTS,
+    inline: /^-e(.*)$/s,
+    valued: /^-f$/,
+    flag: /^--[a-z][a-z-]*(?:=.*)?$/,
+    bridge: GENERIC_BRIDGE_RE,
+    environment: /^R_/,
+  };
+  TCL_INTERPRETER_RULES = {
+    ...INTERPRETER_RULE_DEFAULTS,
+    inline: NEVER_MATCH_RE,
+    valued: /^-encoding$/,
+    flag: NEVER_MATCH_RE,
+    bridge: GENERIC_BRIDGE_RE,
+    environment: /^TCL/,
+  };
+  PYTHON_INTERPRETER_RULES = {
+    ...INTERPRETER_RULE_DEFAULTS,
+    inline: /^-[bBdEhIOPqRsSuvVx3]*c(.*)$/s,
+    inlineEndsOptions: true,
+    module: /^-[bBdEhIOPqRsSuvVx3]*m$/,
+    valued: /^(?:-[bBdEhIOPqRsSuvVx3]*[WX]|--check-hash-based-pycs)$/,
+    flag: /^(?:-[bBdEhIOPqRsSuvVx3]+|-[WX].+|--(?:version|help)[a-z-]*)$/,
+    bridge:
+      /system|subprocess|[pP]open|spawn|\bexec\b(?!['"])|exec\w*\s*\(|\beval\b(?!['"])|(?:^|[^.\w])compile\s*\(|\bimp\.|__import__|importlib|runpy|getattr\s*\(|\b(?:globals|locals|vars)\s*\(|builtins|pickle|marshal|shelve|ctypes|breakpoint|\b[bp]db\b|\bcode\.|(?:from|import)\s+code\b|codeop|Interactive(?:Console|Interpreter)|\binteract\s*\(|cProfile|\bprofile\.run|\btrace\b|timeit|\bpty\b|webbrowser|\bdoctest\b/,
+    environment: /^PYTHON/,
+  };
+  INTERPRETER_RULES = new Map(
+    Object.entries({
+      python: PYTHON_INTERPRETER_RULES,
+      pypy: PYTHON_INTERPRETER_RULES,
+      ipython: PYTHON_INTERPRETER_RULES,
+      node: NODE_INTERPRETER_RULES,
+      nodejs: NODE_INTERPRETER_RULES,
+      tsx: NODE_INTERPRETER_RULES,
+      "ts-node": NODE_INTERPRETER_RULES,
+      bun: {
+        ...NODE_INTERPRETER_RULES,
+        module: /^(?:run|x)$/,
+        valued: /^(?:-r|--(?:preload|config|cwd|env-file))$/,
+        flag: /^(?:-[vh]|--[a-z][a-z0-9-]*=.*|--(?:no-[a-z-]+|version|help|watch|hot|bun|silent|smol)|test)$/,
+        console: /^repl$/,
+        environment: /^(?:BUN_|NODE_|NPM_CONFIG_)/,
+      },
+      deno: {
+        ...NODE_INTERPRETER_RULES,
+        inline: /^eval$/,
+        valued: NEVER_MATCH_RE,
+        flag: /^(?:run|test|bench|serve|-[A-Za-z]+|--[a-z][a-z0-9-]*(?:=.*)?)$/,
+        console: /^repl$/,
+        literalScript: true,
+        environment: /^(?:DENO_|NODE_|NPM_CONFIG_)/,
+      },
+      perl: {
+        ...INTERPRETER_RULE_DEFAULTS,
+        inline: /^-(?:[achnpsStTuUvwWX]|l[0-7]*|0[0-9a-fA-Fx]*)*(?:[eE]|[Mm]-?)(.*)$/s,
+        valued: /^-[IF]$/,
+        flag: /^-(?:[achnpsStTuUvwWX]|l[0-7]*|0[0-9a-fA-Fx]*)*(?:[iIFxCDV].*)?$/s,
+        bridge:
+          /system|exec|\x60|qx\W|%x|popen|\bopen[23]?\b|IPC::|eval|syscall|fork|\bdo\b|\brequire\s*[^A-Za-z\s;]|\/e[egimosxr]*(?![\w\/])/,
+        environment: /^PERL/,
+      },
+      ruby: {
+        ...INTERPRETER_RULE_DEFAULTS,
+        inline: /^-(?:[adhlnpsSvwy]|W[0-2]?|0\d*)*e(.*)$/s,
+        valued: /^-(?:[adhlnpsSvwy]|W[0-2]?|0\d*)*[IrCEF]$/,
+        flag: /^(?:-(?:[adhlnpsSvwy]|W[0-2]?|0\d*)*(?:[iIrCEFKTx].*)?|--(?:version|help|verbose|copyright|yjit|jit|(?:en|dis)able[-=].*|[a-z-]*encoding=.*))$/s,
+        bridge:
+          /system|exec|\x60|%x|popen|spawn|\bopen\b|\bIO\.|Open3|eval|\b(?:public_)?send\b|__send__|\bmethod\s*\(|instance_method|syscall|fork|binding\.|\birb\b|pry|\bload\b|\brequire\s*[^'"\s]/,
+        environment: /^RUBY/,
+      },
+      php: {
+        ...INTERPRETER_RULE_DEFAULTS,
+        inline: /^(?:-[rBRE]|--(?:run|process-(?:begin|code|end)))$/,
+        valued: /^(?:-[cdfztSF]|--(?:php-ini|define|file|zend-extension|docroot|server|process-file))$/,
+        flag: /^(?:-[eHhilmnqsvwCM]|--(?:no-php-ini|version|help|modules|info|syntax-check|ini))$/,
+        bridge:
+          /system|exec|passthru|popen|proc_open|\x60|eval|pcntl|include|require|\bassert\b|create_function|call_user_func|\$\w+\s*\(/,
+        environment: /^PHP/,
+        scriptAfterDashes: false,
+      },
+      lua: LUA_INTERPRETER_RULES,
+      luajit: LUA_INTERPRETER_RULES,
+      rscript: R_INTERPRETER_RULES,
+      r: R_INTERPRETER_RULES,
+      julia: {
+        ...INTERPRETER_RULE_DEFAULTS,
+        inline: /^(?:-[eE]|--(?:eval|print))$|^--(?:eval|print)=(.*)$/s,
+        valued: /^(?:-[ptJLCOm]|--(?:project|sysimage|load|threads|procs|module))$/,
+        flag: /^(?:-[hvq]|-[ptO]\d+|--[a-z][a-z-]*=.*|--(?:version|help|quiet|color|banner|startup-file[a-z=]*))$/,
+        bridge: /run\(|\x60|Cmd|eval|pipeline|success\(|spawn|ccall|include/,
+        environment: /^JULIA_/,
+      },
+      osascript: {
+        ...INTERPRETER_RULE_DEFAULTS,
+        inline: /^-e(.*)$/s,
+        valued: /^-[ls]$/,
+        flag: /^-[ls].+$/,
+        bridge: GENERIC_BRIDGE_RE,
+        environment: /^OSA/,
+      },
+      groovy: {
+        ...INTERPRETER_RULE_DEFAULTS,
+        inline: /^-e(.*)$/s,
+        valued: /^(?:-(?:c|cp|classpath|a|l|b)|--(?:encoding|classpath|autosplit|basescript))$/,
+        flag: /^(?:-[dinpvh]|-D.+|--(?:debug|indy|version|help))$/,
+        bridge: GENERIC_BRIDGE_RE,
+        environment: /^(?:JAVA_TOOL_OPTIONS$|JDK_JAVA_OPTIONS$|GROOVY|CLASSPATH$)/,
+      },
+      tclsh: TCL_INTERPRETER_RULES,
+      wish: TCL_INTERPRETER_RULES,
+    }),
+  );
+});
 //@ chunk-63f0f3kd.js:55417-55509 placement
 /**
  * 判断词值无法静态验证：值是动态的、不是整数，且不是（选项安全且无展开）。
  */
-function isUnverifiableValue({ node, value: e }) {
-  return e.kind === "dynamic" && !e.integer && !(e.optionSafe && !hasExpansion(node));
+function isUnverifiableValue({ node, value }) {
+  return value.kind === "dynamic" && !value.integer && !(value.optionSafe && !hasExpansion(node));
 }
 //@ chunk-63f0f3kd.js:55509-55609 placement
 /**
@@ -285,11 +297,11 @@ function isUnverifiableValue({ node, value: e }) {
 var TENGU_HOLLOW_SANDPIPER = "tengu_hollow_sandpiper";
 var ARRAY_EXPANSION_RE = /\$@|\$\{@|(?<!\$\{#\w*)\[@\]|\$\{\([^)]*@[^)]*\)|\$\{![^}]*@\}/;
 //@ chunk-63f0f3kd.js:55609-55886 placement
-function isNonEmptyWordPart({ type: t, text }) {
+function isNonEmptyWordPart({ type, text }) {
   return (
-    /^(?:raw_string|ansi_c_string|number|arithmetic_expansion|process_substitution)$/.test(t) ||
-    (t === "string" && !ARRAY_EXPANSION_RE.test(text)) ||
-    (t === "word" && !GLOB_WITH_ESCAPE_RE.test(text) && !/[[\]{}]|(?:^|[^\\])(?:\\\\)*[#^]/.test(text)) ||
+    /^(?:raw_string|ansi_c_string|number|arithmetic_expansion|process_substitution)$/.test(type) ||
+    (type === "string" && !ARRAY_EXPANSION_RE.test(text)) ||
+    (type === "word" && !GLOB_WITH_ESCAPE_RE.test(text) && !/[[\]{}]|(?:^|[^\\])(?:\\\\)*[#^]/.test(text)) ||
     /^\$(?:\{?[?#$]\}?|\{#\w+(?:\[[^\]]*\])?\})$/.test(text)
   );
 }
@@ -304,42 +316,43 @@ function mayExpandToNothing(node) {
   );
 }
 //@ chunk-63f0f3kd.js:56003-56224 placement
-function emptyExpansionReason({ value: t }) {
-  return `${describeWordValue(t)}, which may expand to no word at all (a pattern that matches no file, or an empty value), so the word after it would take its place (quote it, or name the files instead of a pattern)`;
+function emptyExpansionReason({ value }) {
+  return `${describeWordValue(value)}, which may expand to no word at all (a pattern that matches no file, or an empty value), so the word after it would take its place (quote it, or name the files instead of a pattern)`;
 }
 //@ chunk-63f0f3kd.js:56224-56734 placement
 /**
  * 收集语法节点中各单词的字面前缀（跳过展开/替换、[ ] 测试表达式），动态单词只取通配前的前缀，无法确定时记为 "-"。
  */
-function collectWordPrefixes(t, e) {
-  if (/expansion|substitution/.test(t.type)) return [];
-  if (t.children.length > 0) {
-    let index = t.children.findIndex((child) => child.type === "word" && child.text === "[");
-    let lastIndex = t.children.findLastIndex((child) => child.type === "word" && child.text.endsWith("]"));
-    return t.children.flatMap((child, o) =>
-      index !== -1 && index <= o && o <= lastIndex ? [] : collectWordPrefixes(child, e),
+function collectWordPrefixes(node, evalCtx) {
+  if (/expansion|substitution/.test(node.type)) return [];
+  if (node.children.length > 0) {
+    let index = node.children.findIndex((child) => child.type === "word" && child.text === "[");
+    let lastIndex = node.children.findLastIndex((child) => child.type === "word" && child.text.endsWith("]"));
+    return node.children.flatMap((child, idx) =>
+      index !== -1 && index <= idx && idx <= lastIndex ? [] : collectWordPrefixes(child, evalCtx),
     );
   }
-  if (t.type === '"') return [];
-  if (t.type === "string_content") return [unescapeDoubleQuoted(t.text)];
-  let i = evaluateWord(t, e, true);
-  if (i.kind === "literal") return [i.text];
-  let n = i.kind === "dynamic" && GLOB_SIMPLE_RE.test(t.text) ? /^[^\\*?[]*/.exec(t.text)[0] : "";
-  return [n === "" ? "-" : n];
+  if (node.type === '"') return [];
+  if (node.type === "string_content") return [unescapeDoubleQuoted(node.text)];
+  let evaluated = evaluateWord(node, evalCtx, true);
+  if (evaluated.kind === "literal") return [evaluated.text];
+  let literalPrefix =
+    evaluated.kind === "dynamic" && GLOB_SIMPLE_RE.test(node.text) ? /^[^\\*?[]*/.exec(node.text)[0] : "";
+  return [literalPrefix === "" ? "-" : literalPrefix];
 }
 //@ chunk-63f0f3kd.js:56734-56795 placement
 /**
  * 判断词的前缀片段里是否含以 - 开头的部分（可能被当成选项）。
  */
-function hasOptionPrefix(node, e) {
-  return collectWordPrefixes(node, e).some((i) => i.startsWith("-"));
+function hasOptionPrefix(node, evalCtx) {
+  return collectWordPrefixes(node, evalCtx).some((prefix) => prefix.startsWith("-"));
 }
 //@ chunk-63f0f3kd.js:56795-56850 placement
 /**
  * 判断词前缀里除 -n/-N 之外是否还有其他字符。
  */
-function hasNonFlagPrefix(node, e) {
-  return /[^-nN]/.test(collectWordPrefixes(node, e).join(""));
+function hasNonFlagPrefix(node, evalCtx) {
+  return /[^-nN]/.test(collectWordPrefixes(node, evalCtx).join(""));
 }
 //@ chunk-63f0f3kd.js:56850-57031 placement
 /**
@@ -357,12 +370,12 @@ function hasExpansion(node) {
 /**
  * 判断词值是否无法验证（在 bot_protected_tengu_hushed_hyphen 开关下整数动态值也算）。
  */
-function isRefusedValue(t) {
-  let { value: e } = t;
+function isRefusedValue(arg) {
+  let { value } = arg;
   return (
-    isUnverifiableValue(t) ||
-    (e.kind === "dynamic" &&
-      e.integer &&
+    isUnverifiableValue(arg) ||
+    (value.kind === "dynamic" &&
+      value.integer &&
       readFlagWithOverride(BOT_PROTECTED_TENGU_HUSHED_HYPHEN, {
         safe: true,
       }))
@@ -372,14 +385,15 @@ function isRefusedValue(t) {
 /**
  * 判断节点是否为不含展开的引号字面量（或其拼接）。
  */
-function isQuotedLiteral(node, e = /^string$/) {
+function isQuotedLiteral(node, typePattern = /^string$/) {
   return (
     !hasExpansion(node) &&
     !node.text.includes("${!") &&
-    (e.test(node.type) ||
+    (typePattern.test(node.type) ||
       (node.type === "concatenation" &&
         node.children.every(
-          (child) => e.test(child.type) || (child.type === "word" && PLAIN_TEXT_RE.test(child.text)),
+          (child) =>
+            typePattern.test(child.type) || (child.type === "word" && PLAIN_TEXT_RE.test(child.text)),
         )))
   );
 }
@@ -418,18 +432,18 @@ function isStaticWord(node) {
   }
 }
 //@ chunk-63f0f3kd.js:57682-57907 placement
-function isStaticWordPart(t) {
-  switch (t.type) {
+function isStaticWordPart(node) {
+  switch (node.type) {
     case "word":
     case "number":
-      return !GLOB_WITH_ESCAPE_RE.test(t.text);
+      return !GLOB_WITH_ESCAPE_RE.test(node.text);
     case "raw_string":
     case "ansi_c_string":
     case "$":
       return true;
     case "string":
     case "translated_string":
-      return !ARRAY_REF_RE.test(t.text.replace(ARRAY_LENGTH_RE, "0"));
+      return !ARRAY_REF_RE.test(node.text.replace(ARRAY_LENGTH_RE, "0"));
     default:
       return false;
   }
@@ -438,43 +452,49 @@ function isStaticWordPart(t) {
 /**
  * 判断值不含“动态多值”，且单词本身是静态的。
  */
-function isFullyStaticValue({ node, value: e }) {
-  return !(e.kind === "dynamic" && e.many) && isStaticWord(node);
+function isFullyStaticValue({ node, value }) {
+  return !(value.kind === "dynamic" && value.many) && isStaticWord(node);
 }
 //@ chunk-63f0f3kd.js:57980-58369 placement
 /**
  * 在 argv 中查找 sh/bash 的 -c 命令字符串参数下标（解析组合短选项与 -o 参数）；不是 shell 或没有 -c 返回 -1。
  */
-function findShellCommandStringIndex(t, e) {
-  if (!POSIX_SHELL_NAMES.has(programBaseName(t[e] ?? "-"))) return -1;
-  let i = false;
-  for (let idx = e + 1; idx < t.length; idx++) {
-    let r = t[idx];
-    if (typeof r !== "string") return -1;
-    let match = /^[-+](?=.)[bcefhlmnptuvxBCEHP]*(o?)$/.exec(r);
-    if (match && (!match[1] || typeof t[idx + 1] === "string")) {
-      if (match[1] && !isSafeShellOption(t[idx + 1] ?? "")) return -1;
-      i ||= r.includes("c");
+function findShellCommandStringIndex(argv, shellIdx) {
+  if (!POSIX_SHELL_NAMES.has(programBaseName(argv[shellIdx] ?? "-"))) return -1;
+  let hasDashC = false;
+  for (let idx = shellIdx + 1; idx < argv.length; idx++) {
+    let arg = argv[idx];
+    if (typeof arg !== "string") return -1;
+    let match = /^[-+](?=.)[bcefhlmnptuvxBCEHP]*(o?)$/.exec(arg);
+    if (match && (!match[1] || typeof argv[idx + 1] === "string")) {
+      if (match[1] && !isSafeShellOption(argv[idx + 1] ?? "")) return -1;
+      hasDashC ||= arg.includes("c");
       idx += match[1] ? 1 : 0;
     } else {
-      let a = r === "--" ? idx + 1 : idx;
-      return i && typeof t[a] === "string" && !/^[-+]/.test(t[a]) ? a : -1;
+      let commandIdx = arg === "--" ? idx + 1 : idx;
+      return hasDashC && typeof argv[commandIdx] === "string" && !/^[-+]/.test(argv[commandIdx])
+        ? commandIdx
+        : -1;
     }
   }
   return -1;
 }
 //@ chunk-63f0f3kd.js:58369-59406 placement
-function analyzeNestedShellText(t, e, i, n) {
-  if (i.depth >= 2) return unverifiableRunReason(t, "with shell text that starts a third shell");
-  if (/git/i.test(e))
-    return `hands ${t} text naming git ${TOO_COMPLEX_SUFFIX}, which cannot be shown to stay inside the worktree`;
-  let r = getParserModule()?.parse(e) ?? null;
-  let s = r ? parseForSecurityFromAst(e, r) : null;
-  if (!r || !s || (s.kind !== "simple" && isParseFailureNode(s)))
-    return unverifiableRunReason(t, `with shell text it cannot parse (${shortenForReason(e)})`);
-  let a = {
+function analyzeNestedShellText(launcher, shellText, parentState, stdinFed) {
+  if (parentState.depth >= 2)
+    return unverifiableRunReason(launcher, "with shell text that starts a third shell");
+  if (/git/i.test(shellText))
+    return `hands ${launcher} text naming git ${TOO_COMPLEX_SUFFIX}, which cannot be shown to stay inside the worktree`;
+  let astRoot = getParserModule()?.parse(shellText) ?? null;
+  let parsed = astRoot ? parseForSecurityFromAst(shellText, astRoot) : null;
+  if (!astRoot || !parsed || (parsed.kind !== "simple" && isParseFailureNode(parsed)))
+    return unverifiableRunReason(
+      launcher,
+      `with shell text it cannot parse (${shortenForReason(shellText)})`,
+    );
+  let state = {
     simple: false,
-    kinds: new Map([...i.kinds.keys()].map((key) => [key, "other"])),
+    kinds: new Map([...parentState.kinds.keys()].map((key) => [key, "other"])),
     integerNames: new Set(),
     arrayNames: new Set(),
     bindingSites: new Map(),
@@ -485,29 +505,31 @@ function analyzeNestedShellText(t, e, i, n) {
     shellSetNameWord: null,
     statPathDenied: false,
     dateDirectiveDenied: false,
-    pathAssigned: i.pathAssigned,
-    startupHazards: new Map(i.startupHazards),
-    allExported: i.allExported,
+    pathAssigned: parentState.pathAssigned,
+    startupHazards: new Map(parentState.startupHazards),
+    allExported: parentState.allExported,
     stdinFed: false,
     pipedFrom: undefined,
-    inputAssembled: n || i.inputAssembled,
-    cwd: i.cwd,
-    opaqueCwd: i.opaqueCwd,
-    deviceLinked: i.deviceLinked,
+    inputAssembled: stdinFed || parentState.inputAssembled,
+    cwd: parentState.cwd,
+    opaqueCwd: parentState.opaqueCwd,
+    deviceLinked: parentState.deviceLinked,
     scopes: [new Map()],
-    depth: i.depth + 1,
+    depth: parentState.depth + 1,
   };
-  analyzeAssignment(r, a, false);
-  let o = withStdinState(r, a, n);
-  i.statPathDenied ||= a.statPathDenied;
-  i.dateDirectiveDenied ||= a.dateDirectiveDenied;
-  return o === null ? null : `hands ${t} the text ${shortenForReason(e)}, which ${o}`;
+  analyzeAssignment(astRoot, state, false);
+  let verdict = withStdinState(astRoot, state, stdinFed);
+  parentState.statPathDenied ||= state.statPathDenied;
+  parentState.dateDirectiveDenied ||= state.dateDirectiveDenied;
+  return verdict === null
+    ? null
+    : `hands ${launcher} the text ${shortenForReason(shellText)}, which ${verdict}`;
 }
 //@ chunk-63f0f3kd.js:59406-59486 placement
 var PUBLIC_IPV4_PATTERN = /^(?!127\.|0\.)(?:(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(?:\.(?!$)|$)){4}$/;
 //@ chunk-63f0f3kd.js:59486-59710 placement
-function isRemoteSshHost(t) {
-  let replaced = t.replace(/^ssh:\/\/|:\d*$/gi, "").replace(/^[^@]*@/, "");
+function isRemoteSshHost(host) {
+  let replaced = host.replace(/^ssh:\/\/|:\d*$/gi, "").replace(/^[^@]*@/, "");
   return (
     /[^\w.-]|^$|(?:^|[.-])(?:localhost[46]?|localdomain[46]?|loopback)\.?$/i.test(replaced) ||
     (/^(?:(?:0x[0-9a-f]*|\d+)(?:\.|$))+$/i.test(replaced) && !PUBLIC_IPV4_PATTERN.test(replaced))
@@ -517,399 +539,428 @@ function isRemoteSshHost(t) {
 var SED_COMMAND_PARTS_RE = /^[\s="']*(\w*)["']?[\s=]*(.*)$/s;
 var SSH_OPTION_RE = /^-[46AaCfGgKkMNnqsTtVvXxYy]*(?:([BbcDEeFIiJLlmOoPpQRSWw])(.*))?$/s;
 //@ chunk-63f0f3kd.js:59822-61454 placement
-function analyzeSshArgs(t, e, i, n) {
-  let mapped = t.map((c) => (c.value.kind === "literal" ? c.value.text : null));
-  let s = i;
-  let a = false;
+function analyzeSshArgs(args, startIdx, hasHost, state) {
+  let mapped = args.map((arg) => (arg.value.kind === "literal" ? arg.value.text : null));
+  let hostFound = hasHost;
+  let isRemoteHost = false;
   let commandAt = -1;
-  let u = [];
-  let l = [];
-  for (let c = e; c < t.length; c++) {
-    let f = mapped[c] ?? null;
-    let h = f === "--" && !s ? c + 1 : c;
+  let hostParts = [];
+  let remoteCommands = [];
+  for (let idx = startIdx; idx < args.length; idx++) {
+    let text = mapped[idx] ?? null;
+    let operandIdx = text === "--" && !hostFound ? idx + 1 : idx;
     if (
-      h + 1 < t.length &&
-      (!s || (mapped[h + 1] ?? "-").startsWith("-") || mayExpandToNothing(t[h + 1].node)) &&
-      mayExpandToNothing(t[h].node)
+      operandIdx + 1 < args.length &&
+      (!hostFound ||
+        (mapped[operandIdx + 1] ?? "-").startsWith("-") ||
+        mayExpandToNothing(args[operandIdx + 1].node)) &&
+      mayExpandToNothing(args[operandIdx].node)
     )
       return {
-        detail: unverifiableRunReason("ssh", `with ${emptyExpansionReason(t[h])}`),
+        detail: unverifiableRunReason("ssh", `with ${emptyExpansionReason(args[operandIdx])}`),
       };
-    if (f !== "--" && f?.[0] === "-" && mayExpandToNothing(t[c].node))
+    if (text !== "--" && text?.[0] === "-" && mayExpandToNothing(args[idx].node))
       return {
         detail: unverifiableRunReason(
           "ssh",
-          `with ${shortenForReason(t[c].node.text)}, a pattern that may expand to file names ssh reads as options (quote it)`,
+          `with ${shortenForReason(args[idx].node.text)}, a pattern that may expand to file names ssh reads as options (quote it)`,
         ),
       };
-    let b = f === null ? !isRefusedValue(t[c]) : f[0] !== "-";
-    if (f === "--" || b) {
-      let T = f === "--" ? c + 1 : c;
-      if (!s && T < t.length) {
-        s = true;
-        a ||= mapped[T] === null || isRemoteSshHost(mapped[T] ?? "");
-        u.push(mapped[T] ?? "");
-        if (f !== "--") continue;
-        T++;
+    let isOperand = text === null ? !isRefusedValue(args[idx]) : text[0] !== "-";
+    if (text === "--" || isOperand) {
+      let hostIdx = text === "--" ? idx + 1 : idx;
+      if (!hostFound && hostIdx < args.length) {
+        hostFound = true;
+        isRemoteHost ||= mapped[hostIdx] === null || isRemoteSshHost(mapped[hostIdx] ?? "");
+        hostParts.push(mapped[hostIdx] ?? "");
+        if (text !== "--") continue;
+        hostIdx++;
       }
-      commandAt = T < t.length ? T : -1;
+      commandAt = hostIdx < args.length ? hostIdx : -1;
       break;
     }
-    let g = f === null ? null : SSH_OPTION_RE.exec(f);
-    if (!g)
+    let optionMatch = text === null ? null : SSH_OPTION_RE.exec(text);
+    if (!optionMatch)
       return {
         detail: unverifiableRunReason(
           "ssh",
-          `with ${f ?? `${describeWordValue(t[c].value)} ${OPTION_POSITION_NOTE}`}`,
+          `with ${text ?? `${describeWordValue(args[idx].value)} ${OPTION_POSITION_NOTE}`}`,
         ),
       };
-    let [, S, p] = g;
-    if (!S) continue;
-    let m = p
+    let [, optionLetters, inlineValue] = optionMatch;
+    if (!optionLetters) continue;
+    let optionValue = inlineValue
       ? {
           kind: "literal",
-          text: p,
+          text: inlineValue,
         }
-      : t[++c]?.value;
-    if (!m || m.kind === "refuse")
+      : args[++idx]?.value;
+    if (!optionValue || optionValue.kind === "refuse")
       return {
-        detail: m ? m.detail : unverifiableRunReason("ssh", `with ${f}`),
+        detail: optionValue ? optionValue.detail : unverifiableRunReason("ssh", `with ${text}`),
       };
-    if (m.kind === "dynamic") {
-      if (/[oFSOJI]/.test(S))
+    if (optionValue.kind === "dynamic") {
+      if (/[oFSOJI]/.test(optionLetters))
         return {
-          detail: unverifiableRunReason("ssh", `with -${S} ${describeWordValue(m)}`),
+          detail: unverifiableRunReason("ssh", `with -${optionLetters} ${describeWordValue(optionValue)}`),
         };
-      if (isStrictDynamicValuesEnabled() && !isFullyStaticValue(t[c]))
+      if (isStrictDynamicValuesEnabled() && !isFullyStaticValue(args[idx]))
         return {
-          detail: unverifiableRunReason("ssh", `with ${dynamicArgumentReason("ssh", `-${S}`, t[c])}`),
+          detail: unverifiableRunReason(
+            "ssh",
+            `with ${dynamicArgumentReason("ssh", `-${optionLetters}`, args[idx])}`,
+          ),
         };
-      if (S === "l") u.push("");
+      if (optionLetters === "l") hostParts.push("");
       continue;
     }
-    let [, _ = "", x = ""] = S === "o" ? (SED_COMMAND_PARTS_RE.exec(m.text) ?? []) : ["", S, m.text];
-    a ||= /^hostname$/i.test(_) && isRemoteSshHost(x.trim());
-    if (/^(?:hostname|user)$/i.test(_) || _ === "l") u.push(x.trim());
-    if (/command$/i.test(_)) l.push([_, x]);
+    let [, configKey = "", configValue = ""] =
+      optionLetters === "o"
+        ? (SED_COMMAND_PARTS_RE.exec(optionValue.text) ?? [])
+        : ["", optionLetters, optionValue.text];
+    isRemoteHost ||= /^hostname$/i.test(configKey) && isRemoteSshHost(configValue.trim());
+    if (/^(?:hostname|user)$/i.test(configKey) || configKey === "l") hostParts.push(configValue.trim());
+    if (/command$/i.test(configKey)) remoteCommands.push([configKey, configValue]);
     else if (
-      _ === "" ||
-      (/[oFSI]/.test(S) && isDevicePath(x)) ||
-      (S === "F" && n.inputAssembled && isOpaquePathArgument(x, n))
+      configKey === "" ||
+      (/[oFSI]/.test(optionLetters) && isDevicePath(configValue)) ||
+      (optionLetters === "F" && state.inputAssembled && isOpaquePathArgument(configValue, state))
     )
       return {
-        detail: unverifiableRunReason("ssh", `with -${S} ${shortenForReason(m.text)}`),
+        detail: unverifiableRunReason("ssh", `with -${optionLetters} ${shortenForReason(optionValue.text)}`),
       };
   }
-  let d = u.length > 0 && !u.includes("") ? u.flatMap((c) => c.split("@")) : ["$9"];
-  for (let [c, f] of l)
-    for (let h of d) {
-      let b = analyzeNestedShellText(`ssh -o ${c}`, f.replace(/%[a-z]/gi, h), n, false);
-      if (b !== null)
+  let hostCandidates =
+    hostParts.length > 0 && !hostParts.includes("")
+      ? hostParts.flatMap((hostText) => hostText.split("@"))
+      : ["$9"];
+  for (let [key, commandText] of remoteCommands)
+    for (let hostPart of hostCandidates) {
+      let reason = analyzeNestedShellText(
+        `ssh -o ${key}`,
+        commandText.replace(/%[a-z]/gi, hostPart),
+        state,
+        false,
+      );
+      if (reason !== null)
         return {
-          detail: b,
+          detail: reason,
         };
     }
   return {
     commandAt,
-    local: a,
+    local: isRemoteHost,
   };
 }
 //@ chunk-63f0f3kd.js:61454-62302 placement
 /**
  * gcloud 通用选项；Gi 是输出相关选项；Mi/zi 是 kubectl 通用与压缩选项，Hi/Ui 是带凭据/秘密值的选项正则。用于判定云命令参数是否影响目标。
  */
-var BOT_PROTECTED_TENGU_BUZZING_FOUNTAIN = "bot_protected_tengu_buzzing_fountain";
-var GCLOUD_COMMON_FLAGS = wordSet(
-  "--access-token-file --account --authority-selector --authorization-token-file --billing-project --configuration --flatten --format --http-timeout --impersonate-service-account --project --trace-token --universe-domain --verbosity",
-);
-var GCLOUD_OUTPUT_FLAGS = wordSet(
-  "-q --quiet --log-http --no-log-http --user-output-enabled --no-user-output-enabled",
-);
-var KUBECTL_GLOBAL_FLAGS = wordSet(
-  "--as --as-group --as-uid --as-user-extra --cluster --context -n --namespace --request-timeout --user",
-);
-var KUBECTL_COMPRESSION_FLAGS = wordSet("--disable-compression --match-server-version --warnings-as-errors");
-var KUBECTL_CREDENTIAL_RE = /^--credential-file-override(?:=|$)/;
-var KUBECTL_VALUE_FLAGS_RE =
-  /^(?:-[itq]*s|--(?:cache[-_]dir|certificate[-_]authority|client[-_]certificate|client[-_]key|insecure[-_]skip[-_]tls[-_]verify|kubeconfig|kuberc|password|profile|profile[-_]output|proxy[-_]url|server|tls[-_]server[-_]name|token|username)(?:=|$))/;
+var BOT_PROTECTED_TENGU_BUZZING_FOUNTAIN; // deferred: uses wordSet (./shellState.js) of its import cycle while loading; runs once the cycle is complete
+var GCLOUD_COMMON_FLAGS;
+var GCLOUD_OUTPUT_FLAGS;
+var KUBECTL_GLOBAL_FLAGS;
+var KUBECTL_COMPRESSION_FLAGS;
+var KUBECTL_CREDENTIAL_RE;
+var KUBECTL_VALUE_FLAGS_RE;
+deferInit("chunk-63f0f3kd.js:61454", () => {
+  BOT_PROTECTED_TENGU_BUZZING_FOUNTAIN = "bot_protected_tengu_buzzing_fountain";
+  GCLOUD_COMMON_FLAGS = wordSet(
+    "--access-token-file --account --authority-selector --authorization-token-file --billing-project --configuration --flatten --format --http-timeout --impersonate-service-account --project --trace-token --universe-domain --verbosity",
+  );
+  GCLOUD_OUTPUT_FLAGS = wordSet(
+    "-q --quiet --log-http --no-log-http --user-output-enabled --no-user-output-enabled",
+  );
+  KUBECTL_GLOBAL_FLAGS = wordSet(
+    "--as --as-group --as-uid --as-user-extra --cluster --context -n --namespace --request-timeout --user",
+  );
+  KUBECTL_COMPRESSION_FLAGS = wordSet("--disable-compression --match-server-version --warnings-as-errors");
+  KUBECTL_CREDENTIAL_RE = /^--credential-file-override(?:=|$)/;
+  KUBECTL_VALUE_FLAGS_RE =
+    /^(?:-[itq]*s|--(?:cache[-_]dir|certificate[-_]authority|client[-_]certificate|client[-_]key|insecure[-_]skip[-_]tls[-_]verify|kubeconfig|kuberc|password|profile|profile[-_]output|proxy[-_]url|server|tls[-_]server[-_]name|token|username)(?:=|$))/;
+});
 //@ chunk-63f0f3kd.js:62302-62535 placement
-function hasRiskyOptionWord(t, e, i, n) {
-  let index = e.indexOf("--", i);
-  return t
-    .slice(i, index === -1 ? undefined : index)
+function hasRiskyOptionWord(words, literals, startIdx, valueFlagPattern) {
+  let index = literals.indexOf("--", startIdx);
+  return words
+    .slice(startIdx, index === -1 ? undefined : index)
     .some(
-      ({ node }, a) =>
+      ({ node }, offset) =>
         hasChildWordGlob(node) ||
-        [node, ...node.children].some((o) => o.type === "brace_expression") ||
-        n.test(e[i + a] ?? (/^[$'"\\]*-/.test(node.text) ? node.text.replace(SHELL_QUOTE_CHARS_RE, "") : "")),
+        [node, ...node.children].some((part) => part.type === "brace_expression") ||
+        valueFlagPattern.test(
+          literals[startIdx + offset] ??
+            (/^[$'"\\]*-/.test(node.text) ? node.text.replace(SHELL_QUOTE_CHARS_RE, "") : ""),
+        ),
     );
 }
 //@ chunk-63f0f3kd.js:62535-62892 placement
 /**
  * 拼出命令的程序词序列（跳过带值选项及其参数、忽略的词），到目标词为止；值缺失或可疑时返回空串。
  */
-function collectProgramWords(t, e, i, n, r) {
-  let s = [];
-  for (let idx = 0; idx < t.length; idx++) {
-    let { node, value: u } = t[idx];
-    let l = u.kind === "literal" ? u.text : isQuotedLiteral(node) ? node.text : "-";
-    let replaced = l.replace(/=.*$/s, "");
-    if (i.has(replaced)) {
-      if (replaced === l) {
+function collectProgramWords(words, target, valueFlags, ignoredFlags, allowQuotedValue) {
+  let collected = [];
+  for (let idx = 0; idx < words.length; idx++) {
+    let { node, value } = words[idx];
+    let text = value.kind === "literal" ? value.text : isQuotedLiteral(node) ? node.text : "-";
+    let replaced = text.replace(/=.*$/s, "");
+    if (valueFlags.has(replaced)) {
+      if (replaced === text) {
         idx++;
-        let c = t[idx];
+        let nextWord = words[idx];
         if (
-          !c ||
-          (c.value.kind === "literal"
-            ? c.value.text.startsWith("-") || mayExpandToNothing(c.node)
-            : !r || !isQuotedLiteral(c.node))
+          !nextWord ||
+          (nextWord.value.kind === "literal"
+            ? nextWord.value.text.startsWith("-") || mayExpandToNothing(nextWord.node)
+            : !allowQuotedValue || !isQuotedLiteral(nextWord.node))
         )
           return "";
       }
-    } else if (!n.has(l)) {
-      s.push(l);
-      if (l === e) break;
+    } else if (!ignoredFlags.has(text)) {
+      collected.push(text);
+      if (text === target) break;
     }
   }
-  return s.join(" ");
+  return collected.join(" ");
 }
 //@ chunk-63f0f3kd.js:62892-67460 placement
 /**
  * 检查 ssh/rlogin/kubectl 等"在别处执行命令"的程序：目标可能是本机或参数无法静态判定时拒绝。
  */
-function analyzeRemoteShellCommand(t, e, i, n) {
-  let mapped = e.map((s) => (s.value.kind === "literal" ? s.value.text : null));
-  switch (t) {
+function analyzeRemoteShellCommand(program, args, state, stdinInfo) {
+  let literals = args.map((arg) => (arg.value.kind === "literal" ? arg.value.text : null));
+  switch (program) {
     case "rlogin":
     case "ssh": {
-      let s = analyzeSshArgs(e, 0, false, i);
-      if ("detail" in s) return s.detail;
-      if (!s.local) return null;
-      if (s.commandAt === -1)
-        return n.fed
+      let sshResult = analyzeSshArgs(args, 0, false, state);
+      if ("detail" in sshResult) return sshResult.detail;
+      if (!sshResult.local) return null;
+      if (sshResult.commandAt === -1)
+        return stdinInfo.fed
           ? unverifiableRunReason(
               "ssh",
               "with a shell on what may be this machine reading its commands from stdin",
             )
           : null;
-      let sliced = mapped.slice(s.commandAt);
-      let found = e.slice(s.commandAt).find((u) => u.value.kind !== "literal");
+      let sliced = literals.slice(sshResult.commandAt);
+      let found = args.slice(sshResult.commandAt).find((arg) => arg.value.kind !== "literal");
       return found
         ? unverifiableRunReason(
             "ssh",
             `with a command for what may be this machine computed at runtime (${describeWordValue(found.value)})`,
           )
-        : analyzeNestedShellText("ssh", sliced.join(" "), i, n.fed);
+        : analyzeNestedShellText("ssh", sliced.join(" "), state, stdinInfo.fed);
     }
     case "kubectl":
     case "oc": {
-      let index = mapped.indexOf("exec");
-      let index_2 = mapped.indexOf("--");
+      let index = literals.indexOf("exec");
+      let index_2 = literals.indexOf("--");
       if (index === -1 || index_2 < index) return;
-      let o =
+      let isCleanExec =
         !readFlagWithOverride(BOT_PROTECTED_TENGU_BUZZING_FOUNTAIN, {
           safe: true,
         }) ||
-        (collectProgramWords(e, "exec", KUBECTL_GLOBAL_FLAGS, KUBECTL_COMPRESSION_FLAGS, true) === "exec" &&
-          !hasRiskyOptionWord(e, mapped, index + 1, KUBECTL_VALUE_FLAGS_RE));
-      for (let [b, g] of mapped.entries()) {
-        let S =
-          b > index_2
-            ? g !== null && /\bgit\b/i.test(g.replace(SHELL_QUOTE_CHARS_RE, ""))
-              ? `remote text naming git (${shortenForReason(g)}), which cannot be shown to stay inside the worktree`
+        (collectProgramWords(args, "exec", KUBECTL_GLOBAL_FLAGS, KUBECTL_COMPRESSION_FLAGS, true) ===
+          "exec" &&
+          !hasRiskyOptionWord(args, literals, index + 1, KUBECTL_VALUE_FLAGS_RE));
+      for (let [idx, literal] of literals.entries()) {
+        let reason =
+          idx > index_2
+            ? literal !== null && /\bgit\b/i.test(literal.replace(SHELL_QUOTE_CHARS_RE, ""))
+              ? `remote text naming git (${shortenForReason(literal)}), which cannot be shown to stay inside the worktree`
               : null
-            : g === null
-              ? n.assembled || /[<>]\(/.test(e[b].node.text)
-                ? `${describeWordValue(e[b].value)} next to input assembled at runtime`
+            : literal === null
+              ? stdinInfo.assembled || /[<>]\(/.test(args[idx].node.text)
+                ? `${describeWordValue(args[idx].value)} next to input assembled at runtime`
                 : null
-              : n.assembled && isDevicePath(g)
-                ? `${g} naming a descriptor fed here`
+              : stdinInfo.assembled && isDevicePath(literal)
+                ? `${literal} naming a descriptor fed here`
                 : null;
-        if (S !== null) return unverifiableRunReason(`${t} exec`, `with ${S}`);
+        if (reason !== null) return unverifiableRunReason(`${program} exec`, `with ${reason}`);
       }
-      let sliced = e.slice(index_2 + 1);
-      if (i.simple) {
-        let b = checkLauncherInvocation(t, sliced, i, n);
-        return o ? b : (b ?? undefined);
+      let sliced = args.slice(index_2 + 1);
+      if (state.simple) {
+        let reason = checkLauncherInvocation(program, sliced, state, stdinInfo);
+        return isCleanExec ? reason : (reason ?? undefined);
       }
-      let sliced_2 = mapped.slice(index_2 + 1);
-      let index_3 = sliced_2.findIndex((b) => SHELL_PROGRAM_NAMES.has(programBaseName(b ?? "-")));
+      let sliced_2 = literals.slice(index_2 + 1);
+      let index_3 = sliced_2.findIndex((word) => SHELL_PROGRAM_NAMES.has(programBaseName(word ?? "-")));
       let shellCommandStringIndex = findShellCommandStringIndex(sliced_2, index_3);
       let found = sliced.find(
-        (b, g) =>
-          (shellCommandStringIndex === -1 || g < index_3 || g > shellCommandStringIndex) &&
-          !isPlainOrInertValue(b.value),
+        (word, idx) =>
+          (shellCommandStringIndex === -1 || idx < index_3 || idx > shellCommandStringIndex) &&
+          !isPlainOrInertValue(word.value),
       );
-      let h = found
-        ? unverifiableRunReason(`${t} exec`, `with ${describeWordValue(found.value)}`)
-        : n.fed && n.assembled
-          ? unverifiableRunReason(`${t} exec`, "with input assembled at runtime")
+      let reason = found
+        ? unverifiableRunReason(`${program} exec`, `with ${describeWordValue(found.value)}`)
+        : stdinInfo.fed && stdinInfo.assembled
+          ? unverifiableRunReason(`${program} exec`, "with input assembled at runtime")
           : shellCommandStringIndex === -1
             ? null
             : analyzeNestedShellText(
                 programBaseName(sliced_2[index_3]),
                 sliced_2[shellCommandStringIndex],
-                i,
-                n.fed,
+                state,
+                stdinInfo.fed,
               );
-      return o ? h : (h ?? undefined);
+      return isCleanExec ? reason : (reason ?? undefined);
     }
     case "gcloud": {
-      let index = mapped.indexOf("ssh");
+      let index = literals.indexOf("ssh");
       let flagWithOverride = readFlagWithOverride(BOT_PROTECTED_TENGU_BUZZING_FOUNTAIN, {
         safe: true,
       });
-      let index_2 = mapped
+      let index_2 = literals
         .slice(0, index)
         .findIndex(
-          (p, m) =>
-            p !== null &&
-            !/^(?:alpha|beta|compute|-.*)$/.test(p) &&
-            !/^--[^=]+$/.test(mapped[m - 1] ?? "") &&
-            !mayExpandToNothing(e[m].node),
+          (literal, idx) =>
+            literal !== null &&
+            !/^(?:alpha|beta|compute|-.*)$/.test(literal) &&
+            !/^--[^=]+$/.test(literals[idx - 1] ?? "") &&
+            !mayExpandToNothing(args[idx].node),
         );
-      let u = index > 0 && mapped.slice(0, index).includes("compute");
-      let l = !u || index_2 >= 0;
-      let d =
-        u &&
-        e
+      let isComputeSsh = index > 0 && literals.slice(0, index).includes("compute");
+      let isWellFormed = !isComputeSsh || index_2 >= 0;
+      let emptyExpansionWord =
+        isComputeSsh &&
+        args
           .slice(0, index_2 < 0 ? index : index_2)
           .find(({ node }) => mayExpandToNothing(node) && !/^--?[\w-]+=[^*?[]*$/.test(node.text));
-      if (d)
+      if (emptyExpansionWord)
         return unverifiableRunReason(
           "gcloud",
-          `with ${describeWordValue(d.value)} before the word ssh: it may expand to no word at all and the next word would take its place, so this cannot tell what gcloud will run (spell the value out)`,
+          `with ${describeWordValue(emptyExpansionWord.value)} before the word ssh: it may expand to no word at all and the next word would take its place, so this cannot tell what gcloud will run (spell the value out)`,
         );
-      let included = mapped.slice(0, index).includes(null);
+      let included = literals.slice(0, index).includes(null);
       let flagWithOverride_2 = readFlagWithOverride(TENGU_HOLLOW_SANDPIPER, {
         safe: true,
       });
-      if (l || included) {
-        let matching = findMatching(mapped, /^--(?:ssh-flag|scp-flag|flags-file)/);
+      if (isWellFormed || included) {
+        let matching = findMatching(literals, /^--(?:ssh-flag|scp-flag|flags-file)/);
         if (matching !== null) return unverifiableRunReason("gcloud", `with ${matching}`);
-        let index_2 = mapped.indexOf("compute");
-        let _ = mapped[index - 1];
-        let x =
+        let index_2 = literals.indexOf("compute");
+        let precedingWord = literals[index - 1];
+        let overrideReason =
           flagWithOverride &&
           index > 0 &&
-          (_ === null || _?.startsWith("-")) &&
+          (precedingWord === null || precedingWord?.startsWith("-")) &&
           index < index_2 &&
-          mapped.includes("ssh", index_2)
+          literals.includes("ssh", index_2)
             ? unverifiableRunReason(
                 "gcloud",
-                GCLOUD_COMMON_FLAGS.has(_ ?? "")
-                  ? `with ssh as the separate value of ${_} before compute (write ${_}=ssh instead)`
+                GCLOUD_COMMON_FLAGS.has(precedingWord ?? "")
+                  ? `with ssh as the separate value of ${precedingWord} before compute (write ${precedingWord}=ssh instead)`
                   : "with ssh both before and after compute, where either could be the subcommand (join a flag's value to it with =, or drop the extra ssh)",
               )
             : undefined;
-        if (!flagWithOverride_2) return x;
-        if (l) {
-          let T = index < 0 ? -1 : mapped.indexOf("--", index);
-          if (T < 0) return x;
-          let G = analyzeSshArgs(e, T + 1, true, i);
-          return "detail" in G
-            ? G.detail
-            : G.local
+        if (!flagWithOverride_2) return overrideReason;
+        if (isWellFormed) {
+          let doubleDashIdx = index < 0 ? -1 : literals.indexOf("--", index);
+          if (doubleDashIdx < 0) return overrideReason;
+          let sshResult = analyzeSshArgs(args, doubleDashIdx + 1, true, state);
+          return "detail" in sshResult
+            ? sshResult.detail
+            : sshResult.local
               ? unverifiableRunReason("gcloud", "with ssh pointed at what may be this machine")
-              : x;
+              : overrideReason;
         }
       }
-      let h =
+      let isCleanSshSubcommand =
         !flagWithOverride ||
         (/^(?:(?:alpha|beta) )?compute ssh$/.test(
-          collectProgramWords(e, "ssh", GCLOUD_COMMON_FLAGS, GCLOUD_OUTPUT_FLAGS, false),
+          collectProgramWords(args, "ssh", GCLOUD_COMMON_FLAGS, GCLOUD_OUTPUT_FLAGS, false),
         ) &&
-          !hasRiskyOptionWord(e, mapped, index + 1, KUBECTL_CREDENTIAL_RE));
-      let b = [];
-      let g = 1 / 0;
-      for (let idx = 0; idx < e.length; idx++) {
-        let m = mapped[idx] ?? null;
-        if (flagWithOverride && (idx <= index ? /^--(?:scp|ssh)-flag/ : /^--scp-flag/).test(m ?? ""))
+          !hasRiskyOptionWord(args, literals, index + 1, KUBECTL_CREDENTIAL_RE));
+      let sshWords = [];
+      let doubleDashPos = 1 / 0;
+      for (let idx = 0; idx < args.length; idx++) {
+        let literal = literals[idx] ?? null;
+        if (flagWithOverride && (idx <= index ? /^--(?:scp|ssh)-flag/ : /^--scp-flag/).test(literal ?? ""))
           return unverifiableRunReason(
             "gcloud",
-            `with ${shortenForReason(m ?? "")} (${/^--scp/.test(m ?? "") ? "--scp-flag hands options to scp, which can run a local program; drop it" : "put --ssh-flag after the word ssh"})`,
+            `with ${shortenForReason(literal ?? "")} (${/^--scp/.test(literal ?? "") ? "--scp-flag hands options to scp, which can run a local program; drop it" : "put --ssh-flag after the word ssh"})`,
           );
         if (idx <= index) {
-          if (/^--flags-file/.test(m ?? "") || isDevicePath(m ?? ""))
-            return unverifiableRunReason("gcloud compute ssh", `with ${m}`);
-          if (flagWithOverride_2 && /^--(?:ssh|scp)-flag/.test(m ?? ""))
-            return unverifiableRunReason("gcloud", `with ${shortenForReason(m ?? "")} before ssh`);
+          if (/^--flags-file/.test(literal ?? "") || isDevicePath(literal ?? ""))
+            return unverifiableRunReason("gcloud compute ssh", `with ${literal}`);
+          if (flagWithOverride_2 && /^--(?:ssh|scp)-flag/.test(literal ?? ""))
+            return unverifiableRunReason("gcloud", `with ${shortenForReason(literal ?? "")} before ssh`);
           if (
             flagWithOverride_2 &&
-            m === null &&
-            isUnverifiableValue(e[idx]) &&
-            !/^--(?!flags-file|ssh-flag|scp-flag)[\w-]+=$/.test(e[idx].node.children[0]?.text ?? "")
+            literal === null &&
+            isUnverifiableValue(args[idx]) &&
+            !/^--(?!flags-file|ssh-flag|scp-flag)[\w-]+=$/.test(args[idx].node.children[0]?.text ?? "")
           )
             return unverifiableRunReason(
               "gcloud",
-              `with ${describeWordValue(e[idx].value)} before ssh, which may be a flag of its own (spell it out)`,
+              `with ${describeWordValue(args[idx].value)} before ssh, which may be a flag of its own (spell it out)`,
             );
           continue;
         }
-        if (m === "--") {
-          g = b.length;
-          b.push(...e.slice(idx + 1));
+        if (literal === "--") {
+          doubleDashPos = sshWords.length;
+          sshWords.push(...args.slice(idx + 1));
           break;
         }
-        if (m === null) {
-          let T = e[idx];
+        if (literal === null) {
+          let arg = args[idx];
           if (
-            isUnverifiableValue(T) &&
+            isUnverifiableValue(arg) &&
             !(
-              T.node.type === "concatenation" &&
-              /^--(?:command|zone|project)=$/.test(T.node.children[0]?.text ?? "")
+              arg.node.type === "concatenation" &&
+              /^--(?:command|zone|project)=$/.test(arg.node.children[0]?.text ?? "")
             )
           )
             return unverifiableRunReason(
               "gcloud compute ssh",
-              `with ${describeWordValue(T.value)} ${OPTION_POSITION_NOTE}`,
+              `with ${describeWordValue(arg.value)} ${OPTION_POSITION_NOTE}`,
             );
           continue;
         }
-        let match = /^--(command|zone|project|ssh-flag)(?:=(.*))?$/s.exec(m);
+        let match = /^--(command|zone|project|ssh-flag)(?:=(.*))?$/s.exec(literal);
         if (!match) {
-          if (/^--flags-file/.test(m) || isDevicePath(m))
-            return unverifiableRunReason("gcloud compute ssh", `with ${m}`);
+          if (/^--flags-file/.test(literal) || isDevicePath(literal))
+            return unverifiableRunReason("gcloud compute ssh", `with ${literal}`);
           if (
-            /^-[^-]/.test(m) &&
-            !/^-[qh]$/.test(m) &&
+            /^-[^-]/.test(literal) &&
+            !/^-[qh]$/.test(literal) &&
             readFlagWithOverride(BOT_PROTECTED_TENGU_HUSHED_HYPHEN, {
               safe: true,
             })
           )
             return unverifiableRunReason(
               "gcloud compute ssh",
-              `with ${shortenForReason(m)} before any -- (gcloud takes only its own flags there; words meant for ssh go after a literal --)`,
+              `with ${shortenForReason(literal)} before any -- (gcloud takes only its own flags there; words meant for ssh go after a literal --)`,
             );
           continue;
         }
-        let x = match[2] ?? mapped[++idx];
+        let configValue = match[2] ?? literals[++idx];
         if (match[1] !== "ssh-flag") continue;
-        if (typeof x !== "string")
+        if (typeof configValue !== "string")
           return unverifiableRunReason(
             "gcloud compute ssh",
-            `with --ssh-flag ${x === null ? describeWordValue(e[idx].value) : "lacking its value"}`,
+            `with --ssh-flag ${configValue === null ? describeWordValue(args[idx].value) : "lacking its value"}`,
           );
-        for (let text of x.trim().split(/\s+/))
-          b.push({
-            node: e[idx].node,
+        for (let text of configValue.trim().split(/\s+/))
+          sshWords.push({
+            node: args[idx].node,
             value: {
               kind: "literal",
               text,
             },
           });
       }
-      let S = analyzeSshArgs(b, 0, true, i);
-      return "detail" in S
-        ? S.detail
-        : S.local
+      let sshResult = analyzeSshArgs(sshWords, 0, true, state);
+      return "detail" in sshResult
+        ? sshResult.detail
+        : sshResult.local
           ? unverifiableRunReason("gcloud compute ssh", "pointed at what may be this machine")
-          : S.commandAt !== -1 && S.commandAt < g
+          : sshResult.commandAt !== -1 && sshResult.commandAt < doubleDashPos
             ? unverifiableRunReason(
                 "gcloud compute ssh",
                 "with an --ssh-flag word ssh would not read as an option",
               )
-            : included || !h
+            : included || !isCleanSshSubcommand
               ? undefined
               : null;
     }
@@ -921,54 +972,65 @@ function analyzeRemoteShellCommand(t, e, i, n) {
 var TENGU_COMPOSED_TEACUP = "tengu_composed_teacup";
 var TENGU_WOOLLY_WALL = "tengu_woolly_wall";
 //@ chunk-63f0f3kd.js:67514-68621 placement
-function analyzeRsyncScp(t, e, i) {
-  let mapped = e.map((l) => (l.value.kind === "literal" ? l.value.text : null));
-  let r =
-    t === "rsync"
+function analyzeRsyncScp(program, args, state) {
+  let mapped = args.map((arg) => (arg.value.kind === "literal" ? arg.value.text : null));
+  let remoteRunPattern =
+    program === "rsync"
       ? readFlagWithOverride(TENGU_COMPOSED_TEACUP, {
           safe: true,
         })
         ? /^(?:-[^-]*?(e)|--(?:rsh|rsync-path)(?==|$))=?(.*)$/s
         : /^(?:-[^-]*(e)|--(?:rsh|rsync-path)(?==|$))=?(.*)$/s
-      : /^(?:scp|rcp|sftp)$/.test(t)
+      : /^(?:scp|rcp|sftp)$/.test(program)
         ? /^-[^-]*?([oSD])(.*)$/s
         : null;
-  if (!r) return null;
-  let flattened = mapped.flatMap((l) => (l !== null && /^[^-/][^:/]*:/.test(l) ? [l] : []));
-  let found = flattened.find((l) => /[^\w.,:\/@~+=-]/.test(l) && isRemoteSshHost(l.replace(/:.*$/s, "")));
-  if (found !== undefined) return unverifiableRunReason(t, `with ${shortenForReason(found)}`);
-  let o =
-    flattened.length > 0 && mapped.every((l) => !/^(?:-\w*o)?\W*(?:hostname|user)/i.test(l ?? "user"))
-      ? flattened.flatMap((l) => l.replace(/:.*$/s, "").split("@"))
+  if (!remoteRunPattern) return null;
+  let flattened = mapped.flatMap((literal) =>
+    literal !== null && /^[^-/][^:/]*:/.test(literal) ? [literal] : [],
+  );
+  let found = flattened.find(
+    (target) => /[^\w.,:\/@~+=-]/.test(target) && isRemoteSshHost(target.replace(/:.*$/s, "")),
+  );
+  if (found !== undefined) return unverifiableRunReason(program, `with ${shortenForReason(found)}`);
+  let hostCandidates =
+    flattened.length > 0 &&
+    mapped.every((literal) => !/^(?:-\w*o)?\W*(?:hostname|user)/i.test(literal ?? "user"))
+      ? flattened.flatMap((target) => target.replace(/:.*$/s, "").split("@"))
       : ["$9"];
   let flagWithOverride = readFlagWithOverride(TENGU_WOOLLY_WALL, {
     safe: true,
   });
   for (let idx = 0; idx < mapped.length; idx++) {
     if (mapped[idx] === null) {
-      if (flagWithOverride && isUnverifiableValue(e[idx]))
+      if (flagWithOverride && isUnverifiableValue(args[idx]))
         return unverifiableRunReason(
-          t,
-          `with ${describeWordValue(e[idx].value)} ${OPTION_POSITION_NOTE_LONG}`,
+          program,
+          `with ${describeWordValue(args[idx].value)} ${OPTION_POSITION_NOTE_LONG}`,
         );
       continue;
     }
-    let match = r.exec(mapped[idx]);
+    let match = remoteRunPattern.exec(mapped[idx]);
     if (!match) continue;
-    let c = match[2] || mapped[++idx];
-    if (typeof c !== "string")
+    let optionValue = match[2] || mapped[++idx];
+    if (typeof optionValue !== "string")
       return unverifiableRunReason(
-        t,
-        `with ${match[0]} ${c === null ? describeWordValue(e[idx].value) : "lacking its value"}`,
+        program,
+        `with ${match[0]} ${optionValue === null ? describeWordValue(args[idx].value) : "lacking its value"}`,
       );
-    let [, f = "", h = ""] = match[1] === "o" ? (SED_COMMAND_PARTS_RE.exec(c) ?? []) : ["", "Command", c];
-    for (let b of o) {
-      let g = /command$/i.test(f)
-        ? analyzeNestedShellText(`${t} ${match[0]}`, h.replace(/%[a-z]/gi, b), i, false)
-        : f === "" || isDevicePath(h)
-          ? unverifiableRunReason(t, `with -o ${shortenForReason(c)}`)
+    let [, configKey = "", configValue = ""] =
+      match[1] === "o" ? (SED_COMMAND_PARTS_RE.exec(optionValue) ?? []) : ["", "Command", optionValue];
+    for (let hostPart of hostCandidates) {
+      let reason = /command$/i.test(configKey)
+        ? analyzeNestedShellText(
+            `${program} ${match[0]}`,
+            configValue.replace(/%[a-z]/gi, hostPart),
+            state,
+            false,
+          )
+        : configKey === "" || isDevicePath(configValue)
+          ? unverifiableRunReason(program, `with -o ${shortenForReason(optionValue)}`)
           : null;
-      if (g !== null) return g;
+      if (reason !== null) return reason;
     }
   }
   return null;
@@ -980,35 +1042,35 @@ var DEBUGGER_MODULES_RE =
 /**
  * 判断词值是普通字面量（不含特殊字符），或不会展开的动态值。
  */
-function isPlainOrInertValue(t) {
-  return t.kind === "literal" ? isPlainWordText(t.text) : t.kind === "dynamic" && t.inert;
+function isPlainOrInertValue(value) {
+  return value.kind === "literal" ? isPlainWordText(value.text) : value.kind === "dynamic" && value.inert;
 }
 //@ chunk-63f0f3kd.js:68852-68939 placement
 /**
  * 除指定下标外，是否还有其他动态且非 inert 的单词。
  */
-function hasOtherDynamicWord(words, e) {
-  return words.some((i, n) => n !== e && i.value.kind === "dynamic" && !i.value.inert);
+function hasOtherDynamicWord(words, skipIdx) {
+  return words.some((word, idx) => idx !== skipIdx && word.value.kind === "dynamic" && !word.value.inert);
 }
 //@ chunk-63f0f3kd.js:68939-69356 placement
 /**
  * 某个可能展开为空的单词导致无法判定时，去掉它重新检查；超过 16 个这类单词直接判为无法验证，并在原因中提示加引号或写明文件。
  */
-function retryWithoutEmptyWord(index, program, rules, words, state, context) {
-  let a = words[index];
-  if (!a || !mayExpandToNothing(a.node)) return null;
-  if (count(words, (u) => mayExpandToNothing(u.node)) > 16)
+function retryWithoutEmptyWord(wordIndex, program, rules, words, state, context) {
+  let word = words[wordIndex];
+  if (!word || !mayExpandToNothing(word.node)) return null;
+  if (count(words, (word) => mayExpandToNothing(word.node)) > 16)
     return unverifiableRunReason(
       program,
       "with more than 16 words that may expand to no word at all (name the files, or quote the words)",
     );
-  let o = checkInterpreterInvocation(program, rules, words.toSpliced(index, 1), state, {
+  let reason = checkInterpreterInvocation(program, rules, words.toSpliced(wordIndex, 1), state, {
     ...context,
-    prefixValues: [...context.prefixValues, a.value],
+    prefixValues: [...context.prefixValues, word.value],
   });
-  return o === null
+  return reason === null
     ? null
-    : `${o}, since ${shortenForReason(a.node.text)} may expand to no word at all (quote it, or name the files instead of a pattern)`;
+    : `${reason}, since ${shortenForReason(word.node.text)} may expand to no word at all (quote it, or name the files instead of a pattern)`;
 }
 //@ chunk-63f0f3kd.js:69356-73556 placement
 /**
@@ -1016,12 +1078,13 @@ function retryWithoutEmptyWord(index, program, rules, words, state, context) {
  */
 function checkInterpreterInvocation(program, rules, words, state, context) {
   let literals = words.map((word) => (word.value.kind === "literal" ? word.value.text : null));
-  let a = state.stdinFed || context.redirects.some(isStdinRedirect);
+  let stdinFed = state.stdinFed || context.redirects.some(isStdinRedirect);
   let inputAssembled = state.inputAssembled;
-  let u = inputAssembled || context.prefixValues.some((prefixValue) => !isPlainOrInertValue(prefixValue));
-  let filtered = [...state.startupHazards].filter(([x]) => rules.environment.test(x));
-  let found = filtered.find(([, x]) => x);
-  if (found || (filtered.length > 0 && (u || hasOtherDynamicWord(words, -1))))
+  let hasDynamicInput =
+    inputAssembled || context.prefixValues.some((prefixValue) => !isPlainOrInertValue(prefixValue));
+  let filtered = [...state.startupHazards].filter(([name]) => rules.environment.test(name));
+  let found = filtered.find(([, value]) => value);
+  if (found || (filtered.length > 0 && (hasDynamicInput || hasOtherDynamicWord(words, -1))))
     return unverifiableRunReason(
       program,
       found
@@ -1033,7 +1096,7 @@ function checkInterpreterInvocation(program, rules, words, state, context) {
     literals.some((literal) => literal !== null && literal.split(/\s+/).some(isDevicePath))
   )
     return `feeds ${program} a descriptor it names ${TOO_COMPLEX_SUFFIX}, whose content is assembled at runtime and may be read as a program`;
-  let c =
+  let isDashZeroAware =
     (rules.flag.test("-0") || rules.flag.test("-3")) &&
     readFlagWithOverride(BOT_PROTECTED_TENGU_HUSHED_HYPHEN, {
       safe: true,
@@ -1044,154 +1107,161 @@ function checkInterpreterInvocation(program, rules, words, state, context) {
     ...literals,
     ...context.prefixValues.map((prefixValue) => (prefixValue.kind === "literal" ? prefixValue.text : null)),
     joined,
-  ].some((x) => !!x && mentionsGit(x));
+  ].some((text) => !!text && mentionsGit(text));
   let inlineProgram;
-  let g = new Set();
-  let S = false;
+  let seen = new Set();
+  let sawInlineFlag = false;
   let index = 0;
   while (index < words.length) {
-    let x = literals[index] ?? null;
-    let T = x === null ? null : rules.inline.exec(x);
-    if (inlineProgram !== undefined && x === "--") break;
-    if (T) {
-      S ||= !rules.flag.test("-0") || /^-[anplsw]*[eE]/.test(x ?? "");
-      let last = T.slice(1).findLast((O) => !!O);
-      let z = last === undefined ? index + 1 : -1;
-      let R =
+    let literal = literals[index] ?? null;
+    let inlineMatch = literal === null ? null : rules.inline.exec(literal);
+    if (inlineProgram !== undefined && literal === "--") break;
+    if (inlineMatch) {
+      sawInlineFlag ||= !rules.flag.test("-0") || /^-[anplsw]*[eE]/.test(literal ?? "");
+      let last = inlineMatch.slice(1).findLast((capture) => !!capture);
+      let programIdx = last === undefined ? index + 1 : -1;
+      let programValue =
         last !== undefined
           ? {
               kind: "literal",
               text: last,
             }
-          : (words[z]?.value ?? {
+          : (words[programIdx]?.value ?? {
               kind: "literal",
               text: "",
             });
-      if (R.kind === "refuse") return R.detail;
-      if (R.kind === "dynamic")
-        return !R.inert
-          ? unverifiableRunReason(program, `with a program computed at runtime (${R.why})`)
-          : u || hasOtherDynamicWord(words, z)
+      if (programValue.kind === "refuse") return programValue.detail;
+      if (programValue.kind === "dynamic")
+        return !programValue.inert
+          ? unverifiableRunReason(program, `with a program computed at runtime (${programValue.why})`)
+          : hasDynamicInput || hasOtherDynamicWord(words, programIdx)
             ? unverifiableRunReason(
                 program,
                 "with a program pieced together here next to an operand or input computed at runtime",
               )
-            : retryWithoutEmptyWord(z, program, rules, words, state, context);
+            : retryWithoutEmptyWord(programIdx, program, rules, words, state, context);
       inlineProgram = `${inlineProgram ?? ""}
-${R.text}`;
-      g.add(last === undefined ? z : index);
+${programValue.text}`;
+      seen.add(last === undefined ? programIdx : index);
       index += last === undefined ? 2 : 1;
       if (!rules.inlineEndsOptions) continue;
       break;
     }
-    if (program === "bun" && x === "exec")
+    if (program === "bun" && literal === "exec")
       return index === 0 && typeof literals[1] === "string" && words.length === 2
-        ? analyzeNestedShellText("bun exec", literals[1], state, a)
+        ? analyzeNestedShellText("bun exec", literals[1], state, stdinFed)
         : unverifiableRunReason("bun exec", "with shell text it cannot read");
-    if (x !== null && rules.module.test(x)) {
-      let y = literals[index + 1];
-      let any_2 = literals.some((literal, Y) => Y !== index && literal?.[0] === "-");
-      let R =
-        /^(?:pip|pipx|ensurepip|easy_install)$/.test(y ?? "") &&
+    if (literal !== null && rules.module.test(literal)) {
+      let moduleName = literals[index + 1];
+      let any_2 = literals.some((literal, idx) => idx !== index && literal?.[0] === "-");
+      let installerOperand =
+        /^(?:pip|pipx|ensurepip|easy_install)$/.test(moduleName ?? "") &&
         words.slice(index + 2).find((word) => word.value.kind !== "literal");
-      return y === null
-        ? unverifiableRunReason(program, `with ${x} ${describeWordValue(words[index + 1].value)}`)
-        : (DEBUGGER_MODULES_RE.test(y ?? "") && (u || hasOtherDynamicWord(words, -1))) ||
-            (inputAssembled && isOpaquePathArgument(y ?? "", state))
-          ? unverifiableRunReason(program, `with ${x} ${y} next to an operand or input computed at runtime`)
-          : R
+      return moduleName === null
+        ? unverifiableRunReason(program, `with ${literal} ${describeWordValue(words[index + 1].value)}`)
+        : (DEBUGGER_MODULES_RE.test(moduleName ?? "") &&
+              (hasDynamicInput || hasOtherDynamicWord(words, -1))) ||
+            (inputAssembled && isOpaquePathArgument(moduleName ?? "", state))
+          ? unverifiableRunReason(
+              program,
+              `with ${literal} ${moduleName} next to an operand or input computed at runtime`,
+            )
+          : installerOperand
             ? unverifiableRunReason(
                 program,
-                `with ${x} ${y} installing what a computed operand names (${describeWordValue(R.value)})`,
+                `with ${literal} ${moduleName} installing what a computed operand names (${describeWordValue(installerOperand.value)})`,
               )
-            : program !== "bun" && !(any && DEBUGGER_MODULES_RE.test(y ?? ""))
+            : program !== "bun" && !(any && DEBUGGER_MODULES_RE.test(moduleName ?? ""))
               ? null
               : any ||
                   words.some(
-                    ({ value: O }, Y) =>
-                      Y > index &&
-                      (O.kind !== "literal"
-                        ? !(O.kind === "dynamic" && O.inert)
-                        : isDevicePath(O.text) || (any_2 && isGitProgram(programBaseName(O.text)))),
+                    ({ value }, idx) =>
+                      idx > index &&
+                      (value.kind !== "literal"
+                        ? !(value.kind === "dynamic" && value.inert)
+                        : isDevicePath(value.text) || (any_2 && isGitProgram(programBaseName(value.text)))),
                   )
-                ? unverifiableRunReason(program, `with ${x} ${y}`)
+                ? unverifiableRunReason(program, `with ${literal} ${moduleName}`)
                 : checkLauncherInvocation(program, words.slice(index + 1), state, {
-                    fed: a,
+                    fed: stdinFed,
                     assembled: inputAssembled,
                   });
     }
     if (
-      x === null
+      literal === null
         ? isUnverifiableValue(words[index]) ||
-          (c &&
+          (isDashZeroAware &&
             isRefusedValue(words[index]) &&
-            ((a && !S) ||
+            ((stdinFed && !sawInlineFlag) ||
               words
                 .slice(index + 1)
                 .some((word) =>
                   word.value.kind === "literal" ? word.value.text.startsWith("-") : isUnverifiableValue(word),
                 )))
-        : /^-[^-]|^--./.test(x) && !rules.valued.test(x) && !rules.flag.test(x)
+        : /^-[^-]|^--./.test(literal) && !rules.valued.test(literal) && !rules.flag.test(literal)
     )
-      return u || hasOtherDynamicWord(words, -1) || (x === null && !isUnverifiableValue(words[index]))
+      return hasDynamicInput ||
+        hasOtherDynamicWord(words, -1) ||
+        (literal === null && !isUnverifiableValue(words[index]))
         ? unverifiableRunReason(
             program,
-            `with ${x ?? `${describeWordValue(words[index].value)} (a computed argument goes after the script or --)`} where it cannot tell which operand is the program, next to an operand or input computed at runtime`,
+            `with ${literal ?? `${describeWordValue(words[index].value)} (a computed argument goes after the script or --)`} where it cannot tell which operand is the program, next to an operand or input computed at runtime`,
           )
         : any
           ? GIT_TOO_COMPLEX_REASON
           : retryWithoutEmptyWord(index, program, rules, words, state, context);
-    let D = x !== null && rules.valued.test(x);
-    if (D && index + 1 < words.length && literals[index + 1] === null)
-      return unverifiableRunReason(program, `with ${x} ${describeWordValue(words[index + 1].value)}`);
-    let N = D ? `${x} ${literals[index + 1] ?? ""}` : (x ?? "");
+    let isValueFlag = literal !== null && rules.valued.test(literal);
+    if (isValueFlag && index + 1 < words.length && literals[index + 1] === null)
+      return unverifiableRunReason(program, `with ${literal} ${describeWordValue(words[index + 1].value)}`);
+    let flagText = isValueFlag ? `${literal} ${literals[index + 1] ?? ""}` : (literal ?? "");
     if (
-      /^-(?:-interactive\b|[A-Za-z0-9]*r ?(?:irb|debug|pry|byebug)\b)/.test(N) &&
-      (u || hasOtherDynamicWord(words, -1))
+      /^-(?:-interactive\b|[A-Za-z0-9]*r ?(?:irb|debug|pry|byebug)\b)/.test(flagText) &&
+      (hasDynamicInput || hasOtherDynamicWord(words, -1))
     )
       return unverifiableRunReason(
         program,
-        `with ${N.trim()}, a console that reads its program from input or operands computed at runtime`,
+        `with ${flagText.trim()}, a console that reads its program from input or operands computed at runtime`,
       );
-    if (D || (x !== null && rules.flag.test(x))) {
-      let match = /(?:^|=)(data:.*)$/is.exec(D ? literals[index + 1] : x);
+    if (isValueFlag || (literal !== null && rules.flag.test(literal))) {
+      let match = /(?:^|=)(data:.*)$/is.exec(isValueFlag ? literals[index + 1] : literal);
       inlineProgram = match
         ? `${inlineProgram ?? ""}
 ${match[1]}`
         : inlineProgram;
-      index += D ? 2 : 1;
+      index += isValueFlag ? 2 : 1;
     } else {
-      index += x !== "--" ? 0 : rules.scriptAfterDashes ? 1 : words.length;
+      index += literal !== "--" ? 0 : rules.scriptAfterDashes ? 1 : words.length;
       break;
     }
   }
-  let m = retryWithoutEmptyWord(index, program, rules, words, state, context);
-  if (m !== null) return m;
-  let _ = index < words.length ? (literals[index] ?? null) : undefined;
-  if (inlineProgram === undefined && _ !== undefined) {
-    if (_ === null)
+  let retryReason = retryWithoutEmptyWord(index, program, rules, words, state, context);
+  if (retryReason !== null) return retryReason;
+  let scriptLiteral = index < words.length ? (literals[index] ?? null) : undefined;
+  if (inlineProgram === undefined && scriptLiteral !== undefined) {
+    if (scriptLiteral === null)
       return inputAssembled || rules.literalScript
         ? unverifiableRunReason(
             program,
             `with a script computed at runtime (${describeWordValue(words[index].value)})`,
           )
         : null;
-    if (/^(?:data|https?|npm|jsr):/i.test(_)) {
-      inlineProgram = _;
-      g.add(index);
-    } else if (rules.console.test(_))
-      return u || hasOtherDynamicWord(words, -1)
+    if (/^(?:data|https?|npm|jsr):/i.test(scriptLiteral)) {
+      inlineProgram = scriptLiteral;
+      seen.add(index);
+    } else if (rules.console.test(scriptLiteral))
+      return hasDynamicInput || hasOtherDynamicWord(words, -1)
         ? unverifiableRunReason(
             program,
-            `with ${_}, a console that reads its program from input or operands computed at runtime`,
+            `with ${scriptLiteral}, a console that reads its program from input or operands computed at runtime`,
           )
         : null;
-    else if (!isOpaquePathArgument(_, state)) return null;
+    else if (!isOpaquePathArgument(scriptLiteral, state)) return null;
   }
   if (inlineProgram !== undefined) {
     if (any || mentionsGit(inlineProgram)) return GIT_TOO_COMPLEX_REASON;
     let match = rules.bridge.exec(inlineProgram);
-    return match && (u || words.some((word, G) => !g.has(G) && !isPlainOrInertValue(word.value)))
+    return match &&
+      (hasDynamicInput || words.some((word, idx) => !seen.has(idx) && !isPlainOrInertValue(word.value)))
       ? unverifiableRunReason(
           program,
           `with a program that can start another program (${match[0]}) next to an operand, env value or input that is computed at runtime or not plain text`,
@@ -1201,7 +1271,7 @@ ${match[1]}`
   if (inputAssembled)
     return `feeds ${program} a program assembled at runtime ${TOO_COMPLEX_SUFFIX}, so what it runs cannot be shown not to be git`;
   if (any) return GIT_TOO_COMPLEX_REASON;
-  return rules.bridge.test(joined) && (u || hasOtherDynamicWord(words, -1))
+  return rules.bridge.test(joined) && (hasDynamicInput || hasOtherDynamicWord(words, -1))
     ? unverifiableRunReason(
         program,
         "with a program on a descriptor that can start another program, next to an operand computed at runtime",
@@ -1222,180 +1292,212 @@ var FIND_SIDE_EFFECT_PREDICATE_RE =
 /**
  * 判断语句是否为只用安全谓词、带 -print0 的 find 命令（允许文件重定向）。
  */
-function isSafeFindPrint0(t, state) {
-  let i = t?.type === "redirected_statement" ? t.children.find((child) => child.type === "command") : t;
+function isSafeFindPrint0(findStatement, state) {
+  let commandNode =
+    findStatement?.type === "redirected_statement"
+      ? findStatement.children.find((child) => child.type === "command")
+      : findStatement;
   if (
-    i?.type !== "command" ||
-    i.children[0]?.type !== "command_name" ||
-    programBaseName(i.children[0].text) !== "find"
+    commandNode?.type !== "command" ||
+    commandNode.children[0]?.type !== "command_name" ||
+    programBaseName(commandNode.children[0].text) !== "find"
   )
     return false;
-  let n = false;
-  let r = "";
+  let sawPrint0 = false;
+  let previousWordText = "";
   return (
-    i.children.slice(1).every((child, o) => {
+    commandNode.children.slice(1).every((child, argIndex) => {
       if (!WORD_NODE_TYPES.has(child.type)) return child.type === "file_redirect";
-      let u = evaluateWord(child, state, true);
-      let l = r;
-      r = u.kind === "literal" ? u.text : "";
-      if (u.kind !== "literal")
+      let wordValue = evaluateWord(child, state, true);
+      let previousText = previousWordText;
+      previousWordText = wordValue.kind === "literal" ? wordValue.text : "";
+      if (wordValue.kind !== "literal")
         return (
-          FIND_PATH_PREDICATE_RE.test(l) ||
-          (o === 0 &&
+          FIND_PATH_PREDICATE_RE.test(previousText) ||
+          (argIndex === 0 &&
             !isUnverifiableValue({
               node: child,
-              value: u,
+              value: wordValue,
             }))
         );
-      n ||= u.text === "-print0";
-      return /^[^-(),!]/.test(u.text) || /^[(),!]$/.test(u.text) || FIND_PREDICATE_PATTERN.test(u.text);
-    }) && n
+      sawPrint0 ||= wordValue.text === "-print0";
+      return (
+        /^[^-(),!]/.test(wordValue.text) ||
+        /^[(),!]$/.test(wordValue.text) ||
+        FIND_PREDICATE_PATTERN.test(wordValue.text)
+      );
+    }) && sawPrint0
   );
 }
 //@ chunk-63f0f3kd.js:74717-80297 placement
 /**
  * 分析一个简单命令：环境赋值前缀、命令名、参数求值；按程序分派到 git/ssh/rsync/find/xargs/sudo/printf 等专用规则。
  */
-function analyzeCommand(t, state, i) {
+function analyzeCommand(commandNode, state, redirects) {
   let stdinFed = state.stdinFed;
-  let r;
-  let s = [];
-  let a = [];
-  let o = [...i];
-  let lastIndex = t.children.findLastIndex(
+  let commandNameNode;
+  let wordNodes = [];
+  let prefixValues = [];
+  let redirectNodes = [...redirects];
+  let lastIndex = commandNode.children.findLastIndex(
     (child) => child.type === "variable_assignment" && containsSubstitution(child),
   );
-  for (let [E, A] of t.children.entries()) {
-    let L = null;
-    if (A.type === "command_name") {
-      r = A.children.length === 1 ? A.children[0] : undefined;
-      L = r ? null : tooComplexReason("a command name it cannot read");
-    } else if (A.type === "variable_assignment" && !r) {
-      let U = programBaseName(t.children.find((child) => child.type === "command_name")?.text ?? ":");
-      let ut = KNOWN_PROGRAMS.has(U) && !POSIX_SPECIAL_BUILTINS_NONEVAL.has(U);
-      let bt = E < lastIndex;
-      L = analyzeVariableAssignment(A, state, undefined, ut, STRING_EXEC_COMMANDS.has(U) || bt, bt);
-      a.push(
-        A.children[2]
-          ? evaluateWord(A.children[2], state, false)
+  for (let [childIndex, child] of commandNode.children.entries()) {
+    let refusalReason = null;
+    if (child.type === "command_name") {
+      commandNameNode = child.children.length === 1 ? child.children[0] : undefined;
+      refusalReason = commandNameNode ? null : tooComplexReason("a command name it cannot read");
+    } else if (child.type === "variable_assignment" && !commandNameNode) {
+      let assignedProgram = programBaseName(
+        commandNode.children.find((child) => child.type === "command_name")?.text ?? ":",
+      );
+      let isKnownProgram =
+        KNOWN_PROGRAMS.has(assignedProgram) && !POSIX_SPECIAL_BUILTINS_NONEVAL.has(assignedProgram);
+      let precedesCommandName = childIndex < lastIndex;
+      refusalReason = analyzeVariableAssignment(
+        child,
+        state,
+        undefined,
+        isKnownProgram,
+        STRING_EXEC_COMMANDS.has(assignedProgram) || precedesCommandName,
+        precedesCommandName,
+      );
+      prefixValues.push(
+        child.children[2]
+          ? evaluateWord(child.children[2], state, false)
           : {
               kind: "literal",
               text: "",
             },
       );
-    } else if (REDIRECT_NODE_TYPES.has(A.type)) {
-      let U = [];
-      L =
-        analyzeHeredocRedirect(A, state, U) ??
-        (U.length > 0 ? tooComplexReason("a pipeline nested in a redirect") : null);
-      o.push(A);
-    } else if (r && WORD_NODE_TYPES.has(A.type))
-      s.push({
-        node: A,
-        value: evaluateWord(A, state, true),
+    } else if (REDIRECT_NODE_TYPES.has(child.type)) {
+      let nestedRedirects = [];
+      refusalReason =
+        analyzeHeredocRedirect(child, state, nestedRedirects) ??
+        (nestedRedirects.length > 0 ? tooComplexReason("a pipeline nested in a redirect") : null);
+      redirectNodes.push(child);
+    } else if (commandNameNode && WORD_NODE_TYPES.has(child.type))
+      wordNodes.push({
+        node: child,
+        value: evaluateWord(child, state, true),
       });
-    else if (r && A.type === "ERROR" && /^[=!]?=$/.test(A.text))
-      s.push({
-        node: A,
+    else if (commandNameNode && child.type === "ERROR" && /^[=!]?=$/.test(child.text))
+      wordNodes.push({
+        node: child,
         value: {
           kind: "literal",
           text: "=",
         },
       });
     else
-      L = tooComplexReason(
-        A.type === "ERROR" ? "syntax the parser could not recover" : `a ${A.type} in a command`,
+      refusalReason = tooComplexReason(
+        child.type === "ERROR" ? "syntax the parser could not recover" : `a ${child.type} in a command`,
       );
-    if (L !== null) return L;
+    if (refusalReason !== null) return refusalReason;
   }
-  if (!r) return null;
-  let l = evaluateWord(r, state, true);
-  if (l.kind === "refuse") return l.detail;
-  let d = state.simple && l.kind === "dynamic" ? /\/([^/$`'"\\{}*?[\]]+)"?$/.exec(r.text)?.[1] : undefined;
-  let [, , c, f] = SINGLE_VAR_REF_RE.exec(r.text) ?? [];
-  let h = c ?? f ?? "";
-  let b = state.scopes.findLast((scope) => scope.has(h))?.get(h);
-  if (d)
-    l = {
+  if (!commandNameNode) return null;
+  let commandNameValue = evaluateWord(commandNameNode, state, true);
+  if (commandNameValue.kind === "refuse") return commandNameValue.detail;
+  let dynamicPathTail =
+    state.simple && commandNameValue.kind === "dynamic"
+      ? /\/([^/$`'"\\{}*?[\]]+)"?$/.exec(commandNameNode.text)?.[1]
+      : undefined;
+  let [, , bracedVarName, plainVarName] = SINGLE_VAR_REF_RE.exec(commandNameNode.text) ?? [];
+  let varName = bracedVarName ?? plainVarName ?? "";
+  let scopedVarValue = state.scopes.findLast((scope) => scope.has(varName))?.get(varName);
+  if (dynamicPathTail)
+    commandNameValue = {
       kind: "literal",
-      text: d,
+      text: dynamicPathTail,
     };
-  else if (b !== undefined) {
-    let E = programBaseName(b);
+  else if (scopedVarValue !== undefined) {
+    let resolvedProgram = programBaseName(scopedVarValue);
     if (
-      KNOWN_PROGRAMS.has(E) ||
-      ARG_SENSITIVE_COMMANDS.has(E) ||
-      TRANSPARENT_LAUNCHERS.has(E) ||
-      /^(?:chdir|popd|link|mkfifo|mknod)$/.test(E)
+      KNOWN_PROGRAMS.has(resolvedProgram) ||
+      ARG_SENSITIVE_COMMANDS.has(resolvedProgram) ||
+      TRANSPARENT_LAUNCHERS.has(resolvedProgram) ||
+      /^(?:chdir|popd|link|mkfifo|mknod)$/.test(resolvedProgram)
     )
-      return `runs ${E} through the variable ${h} ${TOO_COMPLEX_SUFFIX}; spell it out`;
-    l = {
+      return `runs ${resolvedProgram} through the variable ${varName} ${TOO_COMPLEX_SUFFIX}; spell it out`;
+    commandNameValue = {
       kind: "literal",
-      text: b,
+      text: scopedVarValue,
     };
   }
-  if ((!isStaticNode(r) && !d && b === undefined) || l.kind !== "literal" || !SAFE_PATH_TOKEN_RE.test(l.text))
+  if (
+    (!isStaticNode(commandNameNode) && !dynamicPathTail && scopedVarValue === undefined) ||
+    commandNameValue.kind !== "literal" ||
+    !SAFE_PATH_TOKEN_RE.test(commandNameValue.text)
+  )
     return `runs a command whose name is computed at runtime ${TOO_COMPLEX_SUFFIX}, so it cannot be shown not to be git`;
-  let g = [l.text];
-  for (let [E, { node: A, value: L }] of s.entries()) {
-    if (L.kind === "refuse") return L.detail;
+  let argv = [commandNameValue.text];
+  for (let [wordIndex, { node: wordNode, value: wordValue }] of wordNodes.entries()) {
+    if (wordValue.kind === "refuse") return wordValue.detail;
     if (
       !state.simple &&
-      L.kind === "literal" &&
-      L.text.split(/\s+/).some((U) => GIT_COMMAND_PATTERN.test(basename(U)))
+      wordValue.kind === "literal" &&
+      wordValue.text.split(/\s+/).some((wordPart) => GIT_COMMAND_PATTERN.test(basename(wordPart)))
     )
       return GIT_TOO_COMPLEX_REASON;
-    if (g.length === E + 1 && L.kind === "literal" && isStaticNode(A)) g.push(L.text);
+    if (argv.length === wordIndex + 1 && wordValue.kind === "literal" && isStaticNode(wordNode))
+      argv.push(wordValue.text);
   }
-  let S = 0;
-  while (TRANSPARENT_LAUNCHERS.has(programBaseName(g[S])) || (state.simple && EXEC_LIKE_COMMANDS.has(g[S]))) {
-    let E = programBaseName(g[S]);
-    let A = S + 1;
-    if (E === "timeout" && /^\d+(?:\.\d+)?[smhd]?$/.test(g[A] ?? "-")) A++;
-    let L = programBaseName(g.slice(A).find((bt) => !/^[A-Za-z_]\w*=/.test(bt)) ?? "");
-    let U = KNOWN_PROGRAMS.has(L);
-    let ut = STRING_EXEC_COMMANDS.has(L);
-    while (/^(?:env|sudo)$/.test(E) && /^[A-Za-z_]\w*=/.test(g[A] ?? "-")) {
-      let [bt = "", St = ""] = g[A].split(/=(.*)/s);
-      let nn =
-        (GIT_LOCATION_ENV_RE.test(bt) || !PLAIN_TEXT_RE.test(St)) && !state.simple
-          ? unverifiableRunReason("env", `with ${shortenForReason(g[A])}`)
+  let programIndex = 0;
+  while (
+    TRANSPARENT_LAUNCHERS.has(programBaseName(argv[programIndex])) ||
+    (state.simple && EXEC_LIKE_COMMANDS.has(argv[programIndex]))
+  ) {
+    let launcherName = programBaseName(argv[programIndex]);
+    let argStartIndex = programIndex + 1;
+    if (launcherName === "timeout" && /^\d+(?:\.\d+)?[smhd]?$/.test(argv[argStartIndex] ?? "-"))
+      argStartIndex++;
+    let nextProgram = programBaseName(
+      argv.slice(argStartIndex).find((argText) => !/^[A-Za-z_]\w*=/.test(argText)) ?? "",
+    );
+    let nextIsKnown = KNOWN_PROGRAMS.has(nextProgram);
+    let nextIsStringExec = STRING_EXEC_COMMANDS.has(nextProgram);
+    while (/^(?:env|sudo)$/.test(launcherName) && /^[A-Za-z_]\w*=/.test(argv[argStartIndex] ?? "-")) {
+      let [envVarName = "", envVarValue = ""] = argv[argStartIndex].split(/=(.*)/s);
+      let envAssignmentReason =
+        (GIT_LOCATION_ENV_RE.test(envVarName) || !PLAIN_TEXT_RE.test(envVarValue)) && !state.simple
+          ? unverifiableRunReason("env", `with ${shortenForReason(argv[argStartIndex])}`)
           : environmentAssignmentReason(
-              bt,
+              envVarName,
               {
                 kind: "literal",
-                text: St,
+                text: envVarValue,
               },
-              St,
-              U,
-              ut,
+              envVarValue,
+              nextIsKnown,
+              nextIsStringExec,
             );
-      if (nn !== null) return nn;
-      a.push({
+      if (envAssignmentReason !== null) return envAssignmentReason;
+      prefixValues.push({
         kind: "literal",
-        text: St,
+        text: envVarValue,
       });
-      A++;
+      argStartIndex++;
     }
-    if (/^-|=/.test(g[A] ?? "-")) break;
-    S = A;
+    if (/^-|=/.test(argv[argStartIndex] ?? "-")) break;
+    programIndex = argStartIndex;
   }
-  if (isDevicePath(g[S]))
-    return `runs the program a descriptor holds (${g[S]}) ${TOO_COMPLEX_SUFFIX}, so it cannot be shown not to be git`;
-  let program = programBaseName(g[S]);
-  let words = s.slice(S);
-  let mapped = words.map((E) => (E.value.kind === "literal" ? E.value.text : null));
-  let x = stdinFed || o.some(isStdinRedirect);
+  if (isDevicePath(argv[programIndex]))
+    return `runs the program a descriptor holds (${argv[programIndex]}) ${TOO_COMPLEX_SUFFIX}, so it cannot be shown not to be git`;
+  let program = programBaseName(argv[programIndex]);
+  let words = wordNodes.slice(programIndex);
+  let mapped = words.map((word) => (word.value.kind === "literal" ? word.value.text : null));
+  let stdinFedToProgram = stdinFed || redirectNodes.some(isStdinRedirect);
   let inputAssembled = state.inputAssembled;
   if (state.simple && GIT_COMMAND_PATTERN.test(program)) return null;
   if (
     program === "integer" ||
     program === "float" ||
-    (program === "private" && mapped.some((E) => E === null || /^[-+].*[iEF]/.test(E)))
+    (program === "private" &&
+      mapped.some((mappedWord) => mappedWord === null || /^[-+].*[iEF]/.test(mappedWord)))
   ) {
     let found = mapped
-      .map((A) => describeIntegerTyping(/^[A-Za-z_]\w*/.exec(A ?? "")?.[0] ?? ""))
-      .find((A) => A !== null);
+      .map((word) => describeIntegerTyping(/^[A-Za-z_]\w*/.exec(word ?? "")?.[0] ?? ""))
+      .find((typingReason) => typingReason !== null);
     if (found !== undefined) return found;
   }
   let text = state.pipedFrom?.text ?? "";
@@ -1405,7 +1507,7 @@ function analyzeCommand(t, state, i) {
     mentionsGit(
       [
         KNOWN_PROGRAMS.has(text.split(/\s/)[0] ?? "") ? text : "",
-        ...o.filter(isStdinRedirect).map((E) => E.text),
+        ...redirectNodes.filter(isStdinRedirect).map((redirect) => redirect.text),
       ].join(`
 `),
     )
@@ -1416,65 +1518,74 @@ function analyzeCommand(t, state, i) {
       ? unverifiableRunReason("exec", "redirecting this shell's descriptors to one it assembles")
       : EXEC_LIKE_COMMANDS.has(program)
         ? checkLauncherInvocation(program, words, state, {
-            fed: x,
+            fed: stdinFedToProgram,
             assembled: inputAssembled,
           })
         : null;
-  let D = [g[S], ...mapped];
-  let N = !SHELL_PROGRAM_NAMES.has(program)
+  let commandArgv = [argv[programIndex], ...mapped];
+  let shellArgIndex = !SHELL_PROGRAM_NAMES.has(program)
     ? -1
     : APPLET_SHELL_NAMES.has(program) && SHELL_PROGRAM_NAMES.has(programBaseName(mapped[0] ?? "-"))
       ? 1
       : 0;
-  let shellCommandStringIndex = findShellCommandStringIndex(D, N);
+  let shellCommandStringIndex = findShellCommandStringIndex(commandArgv, shellArgIndex);
   if (shellCommandStringIndex !== -1)
-    return analyzeNestedShellText(programBaseName(D[N]), D[shellCommandStringIndex], state, x);
+    return analyzeNestedShellText(
+      programBaseName(commandArgv[shellArgIndex]),
+      commandArgv[shellCommandStringIndex],
+      state,
+      stdinFedToProgram,
+    );
   if (state.simple && SHELL_PROGRAM_NAMES.has(program)) {
-    let mapped_2 = mapped.map((U) => U?.toLowerCase() ?? "-");
-    let sliced = mapped_2.slice(N);
-    let L = sliced[0] === "-n" ? sliced[1] : sliced[0];
-    return (x && (L === undefined || isOpaquePathArgument(L, state) || /^(?:su|runuser)$/.test(program))) ||
+    let mapped_2 = mapped.map((lowerWord) => lowerWord?.toLowerCase() ?? "-");
+    let sliced = mapped_2.slice(shellArgIndex);
+    let shellCommandArg = sliced[0] === "-n" ? sliced[1] : sliced[0];
+    return (stdinFedToProgram &&
+      (shellCommandArg === undefined ||
+        isOpaquePathArgument(shellCommandArg, state) ||
+        /^(?:su|runuser)$/.test(program))) ||
       (/^(?:cmd|powershell|pwsh)$/.test(program) && words.length > 0) ||
-      /^[-+]/.test(L ?? "") ||
-      isDevicePath(L ?? "") ||
-      mapped_2.some((U) => SHELL_COMMAND_FLAG_PATTERN.test(U))
+      /^[-+]/.test(shellCommandArg ?? "") ||
+      isDevicePath(shellCommandArg ?? "") ||
+      mapped_2.some((lowerWord) => SHELL_COMMAND_FLAG_PATTERN.test(lowerWord))
       ? describeGitRunner(program)
       : APPLET_SHELL_NAMES.has(program)
         ? checkLauncherInvocation(program, words, state, {
-            fed: x,
+            fed: stdinFedToProgram,
             assembled: inputAssembled,
           })
         : program === "rsh"
           ? (analyzeRemoteShellCommand("ssh", words, state, {
               assembled: inputAssembled,
-              fed: x,
+              fed: stdinFedToProgram,
             }) ?? null)
           : null;
   }
-  let z = describeGitRunner(program);
-  if (z !== null) return z;
-  let R =
+  let gitRunnerReason = describeGitRunner(program);
+  if (gitRunnerReason !== null) return gitRunnerReason;
+  let strictDynamicReason =
     !isStrictDynamicValuesEnabled() || mapped.length === 0
       ? null
       : program === "pushd" &&
           (mapped.includes("-n") ||
             words.some(
-              (E, A) =>
-                mapped[A] === null &&
-                (isUnverifiableValue(E) ||
-                  hasOptionPrefix(E.node, state) ||
-                  isBracketGlobNode(E.node) ||
-                  /^[?*[]/.test(E.node.text)) &&
-                !(!hasExpansion(E.node) && hasNonFlagPrefix(E.node, state)) &&
-                !(mapped.slice(0, A).includes("--") && !hasExpansion(E.node)),
+              (word, wordIndex) =>
+                mapped[wordIndex] === null &&
+                (isUnverifiableValue(word) ||
+                  hasOptionPrefix(word.node, state) ||
+                  isBracketGlobNode(word.node) ||
+                  /^[?*[]/.test(word.node.text)) &&
+                !(!hasExpansion(word.node) && hasNonFlagPrefix(word.node, state)) &&
+                !(mapped.slice(0, wordIndex).includes("--") && !hasExpansion(word.node)),
             ))
         ? mapped.includes("-n")
           ? "-n (pushd then puts the directory on the stack without entering it, and a later ~1 stands for it; use pushd without -n, or cd)"
           : "a word that may come out as -n (pushd would then put the directory on the stack without entering it, and a later ~1 stands for it; write the directory out, or put it in double quotes after --)"
-        : program === "dirs" && mapped.some((E) => E === null || !/^(?:-[clpv]+|[-+]\d+)$/.test(E))
+        : program === "dirs" &&
+            mapped.some((mappedWord) => mappedWord === null || !/^(?:-[clpv]+|[-+]\d+)$/.test(mappedWord))
           ? "a word that zsh puts on the directory stack without entering it (a later ~1 stands for it)"
           : null;
-  if (R !== null) return unverifiableRunReason(program, `with ${R}`);
+  if (strictDynamicReason !== null) return unverifiableRunReason(program, `with ${strictDynamicReason}`);
   if (program === "command" && /^-[vV]$/.test(mapped[0] ?? "")) return null;
   if (TRANSPARENT_LAUNCHERS.has(program) && words.length > 0 && !state.simple)
     return unverifiableRunReason(program, `with ${describeWordValue(words[0].value)}`);
@@ -1483,117 +1594,136 @@ function analyzeCommand(t, state, i) {
       program,
       words,
       state,
-      o.some(isStdinRedirect) ? undefined : state.pipedFrom,
+      redirectNodes.some(isStdinRedirect) ? undefined : state.pipedFrom,
     );
   let rules = INTERPRETER_RULES.get(program);
   if (rules)
     return checkInterpreterInvocation(program, rules, words, state, {
-      redirects: o,
-      prefixValues: a,
+      redirects: redirectNodes,
+      prefixValues,
     });
   if (state.simple)
     return checkLauncherInvocation(program, words, state, {
-      fed: x,
+      fed: stdinFedToProgram,
       assembled: inputAssembled,
     });
-  let Y = checkSshpassInvocation(program, words, state, {
+  let sshpassReason = checkSshpassInvocation(program, words, state, {
     assembled: inputAssembled,
-    fed: x,
+    fed: stdinFedToProgram,
   });
-  if (Y !== null) return Y;
-  let st =
+  if (sshpassReason !== null) return sshpassReason;
+  let remoteTransferReason =
     analyzeRsyncScp(program, words, state) ??
     analyzeRemoteShellCommand(program, words, state, {
       assembled: inputAssembled,
-      fed: x,
+      fed: stdinFedToProgram,
     });
-  let index = mapped.findIndex((E) => SHELL_PROGRAM_NAMES.has(programBaseName(E ?? "-")));
+  let index = mapped.findIndex((mappedWord) => SHELL_PROGRAM_NAMES.has(programBaseName(mappedWord ?? "-")));
   let shellCommandStringIndex_2 = findShellCommandStringIndex(mapped, index);
-  for (let [E, A] of [...words.map((L) => L.value), ...a].entries())
+  for (let [valueIndex, value] of [...words.map((word) => word.value), ...prefixValues].entries())
     if (
       !(
-        E < words.length &&
-        (st !== undefined ||
-          (shellCommandStringIndex_2 !== -1 && E >= index && E <= shellCommandStringIndex_2))
+        valueIndex < words.length &&
+        (remoteTransferReason !== undefined ||
+          (shellCommandStringIndex_2 !== -1 &&
+            valueIndex >= index &&
+            valueIndex <= shellCommandStringIndex_2))
       ) &&
-      !isPlainOrInertValue(A)
+      !isPlainOrInertValue(value)
     )
-      return A.kind === "refuse" ? A.detail : unverifiableRunReason(program, `with ${describeWordValue(A)}`);
-  if (st !== undefined) return st;
-  if (inputAssembled && mapped.some((E) => E !== null && E.split(/\s+/).some(isDevicePath)))
-    return `feeds ${program} a descriptor it names ${TOO_COMPLEX_SUFFIX}, whose content is assembled at runtime and may be read as a program`;
-  let filtered = o.filter(isStdinRedirect);
+      return value.kind === "refuse"
+        ? value.detail
+        : unverifiableRunReason(program, `with ${describeWordValue(value)}`);
+  if (remoteTransferReason !== undefined) return remoteTransferReason;
   if (
-    filtered.length > 0 ? filtered.some((E) => analyzeRedirect(E, state)) : stdinFed && state.inputAssembled
+    inputAssembled &&
+    mapped.some((mappedWord) => mappedWord !== null && mappedWord.split(/\s+/).some(isDevicePath))
+  )
+    return `feeds ${program} a descriptor it names ${TOO_COMPLEX_SUFFIX}, whose content is assembled at runtime and may be read as a program`;
+  let filtered = redirectNodes.filter(isStdinRedirect);
+  if (
+    filtered.length > 0
+      ? filtered.some((redirect) => analyzeRedirect(redirect, state))
+      : stdinFed && state.inputAssembled
   )
     return `feeds ${program} input assembled by the command ${TOO_COMPLEX_SUFFIX}; a program this guard does not know may run that input, so it cannot be shown not to run git`;
   return shellCommandStringIndex_2 === -1
     ? null
-    : analyzeNestedShellText(programBaseName(mapped[index]), mapped[shellCommandStringIndex_2], state, x);
+    : analyzeNestedShellText(
+        programBaseName(mapped[index]),
+        mapped[shellCommandStringIndex_2],
+        state,
+        stdinFedToProgram,
+      );
 }
 //@ chunk-63f0f3kd.js:80297-80390 placement
 /**
  * 返回第一个非选项参数的下标（跳过 -p/-f/-d/-P 这类带值选项）。
  */
-function findNonOptionWordIndex(t) {
-  return t.findIndex((e, i) => !/^(?:-|$)/.test(e) && !/^-[pfdP]$/.test(t[i - 1] ?? ""));
+function findNonOptionWordIndex(words) {
+  return words.findIndex(
+    (word, wordIndex) => !/^(?:-|$)/.test(word) && !/^-[pfdP]$/.test(words[wordIndex - 1] ?? ""),
+  );
 }
 //@ chunk-63f0f3kd.js:80390-81547 placement
 /**
  * 分析 sshpass 调用：校验其选项可读，找出被包装的程序；若为 rsh/ssh/scp/rsync 则交给远程命令分析，若后续词可能指定远程客户端则拒绝。
  */
-function checkSshpassInvocation(t, e, i, n) {
+function checkSshpassInvocation(program, words, state, options) {
   if (
-    t !== "sshpass" ||
+    program !== "sshpass" ||
     !readFlagWithOverride(TENGU_HOLLOW_SANDPIPER, {
       safe: true,
     })
   )
     return null;
-  let mapped = e.map((f) => (f.value.kind === "literal" ? f.value.text : ""));
-  let nonOptionWordIndex = findNonOptionWordIndex(mapped);
-  let a = nonOptionWordIndex === -1 ? e.length : nonOptionWordIndex;
+  let words_2 = words.map((word) => (word.value.kind === "literal" ? word.value.text : ""));
+  let nonOptionWordIndex = findNonOptionWordIndex(words_2);
+  let programWordIndex = nonOptionWordIndex === -1 ? words.length : nonOptionWordIndex;
   if (
-    !mapped
-      .slice(0, a)
-      .every((f, h) =>
-        /^-[pfdP]$/.test(mapped[h - 1] ?? "")
-          ? !f.startsWith("-")
-          : (f === "--" && h + 1 === a) || /^-(?:[hVv]+e?|e|[pfdP]|[hVv]*[pfdP].+)$/s.test(f),
+    !words_2
+      .slice(0, programWordIndex)
+      .every((optionWord, wordIndex) =>
+        /^-[pfdP]$/.test(words_2[wordIndex - 1] ?? "")
+          ? !optionWord.startsWith("-")
+          : (optionWord === "--" && wordIndex + 1 === programWordIndex) ||
+            /^-(?:[hVv]+e?|e|[pfdP]|[hVv]*[pfdP].+)$/s.test(optionWord),
       )
   )
     return unverifiableRunReason(
-      t,
+      program,
       "with an option or computed word this check cannot read before the program it runs (write each option as its own word: -p PASSWORD, -f FILE, -d FD, -P PROMPT, -e or -v; attach a value that starts with -, as in -p-secret; and write the program name as plain text)",
     );
-  let found = e.slice(0, a + 1).find((f) => mayExpandToNothing(f.node));
-  if (found) return unverifiableRunReason(t, `with ${emptyExpansionReason(found)}`);
-  let l = programBaseName(mapped[nonOptionWordIndex] ?? "");
-  let sliced = e.slice(nonOptionWordIndex + 1);
-  if (l === t) return checkSshpassInvocation(t, sliced, i, n);
-  if (l === "rsh") return analyzeRemoteShellCommand("ssh", sliced, i, n) ?? null;
-  let c =
-    TRANSPARENT_LAUNCHERS.has(l) ||
-    UNHANDLED_EXEC_WRAPPERS.has(l) ||
-    APPLET_SHELL_NAMES.has(l) ||
-    /^(?:xargs|find)$/.test(l);
+  let found = words.slice(0, programWordIndex + 1).find((word) => mayExpandToNothing(word.node));
+  if (found) return unverifiableRunReason(program, `with ${emptyExpansionReason(found)}`);
+  let innerProgram = programBaseName(words_2[nonOptionWordIndex] ?? "");
+  let words_3 = words.slice(nonOptionWordIndex + 1);
+  if (innerProgram === program) return checkSshpassInvocation(program, words_3, state, options);
+  if (innerProgram === "rsh") return analyzeRemoteShellCommand("ssh", words_3, state, options) ?? null;
+  let isWrapper =
+    TRANSPARENT_LAUNCHERS.has(innerProgram) ||
+    UNHANDLED_EXEC_WRAPPERS.has(innerProgram) ||
+    APPLET_SHELL_NAMES.has(innerProgram) ||
+    /^(?:xargs|find)$/.test(innerProgram);
   if (
-    !REMOTE_SESSION_PROGRAMS.has(l) &&
-    sliced.some(({ value: f }) =>
-      f.kind === "literal"
-        ? f.text
+    !REMOTE_SESSION_PROGRAMS.has(innerProgram) &&
+    words_3.some(({ value }) =>
+      value.kind === "literal"
+        ? value.text
             .split(/\s+/)
             .map(programBaseName)
-            .some((h) => h === "rsh" || REMOTE_SESSION_PROGRAMS.has(h))
-        : c,
+            .some((wordPart) => wordPart === "rsh" || REMOTE_SESSION_PROGRAMS.has(wordPart))
+        : isWrapper,
     )
   )
     return unverifiableRunReason(
-      t,
-      `with ${l} as its program and a later word that may name a remote client, which this guard does not read past (make the client sshpass's own program)`,
+      program,
+      `with ${innerProgram} as its program and a later word that may name a remote client, which this guard does not read past (make the client sshpass's own program)`,
     );
-  return REMOTE_SESSION_PROGRAMS.has(l)
-    ? (analyzeRsyncScp(l, sliced, i) ?? analyzeRemoteShellCommand(l, sliced, i, n) ?? null)
+  return REMOTE_SESSION_PROGRAMS.has(innerProgram)
+    ? (analyzeRsyncScp(innerProgram, words_3, state) ??
+        analyzeRemoteShellCommand(innerProgram, words_3, state, options) ??
+        null)
     : null;
 }
 //@ chunk-63f0f3kd.js:81547-83889 placement
@@ -1607,7 +1737,7 @@ function checkLauncherInvocation(program, words, state, { fed, assembled }) {
     EXEC_LIKE_COMMANDS.has(program) ||
     APPLET_SHELL_NAMES.has(program);
   let literals = words.map((word) => (word.value.kind === "literal" ? word.value.text : ""));
-  let o = isParameterExpansionStrictnessOn();
+  let isStrictExpansion = isParameterExpansionStrictnessOn();
   if (program === "sudo" && literals.some((literal) => /^(?:-[A-Za-z]*D|--chdir)/.test(literal)))
     return unverifiableRunReason(
       "sudo",
@@ -1618,30 +1748,30 @@ function checkLauncherInvocation(program, words, state, { fed, assembled }) {
     (/^(?:at|batch|crontab|newgrp)$/.test(program) ||
       (program === "parallel" && literals.every((literal) => literal.startsWith("-"))) ||
       (/^(?:unshare|nsenter|chroot)$/.test(program) &&
-        count(literals, (g) => !/^(?:-|\d*$)/.test(g)) <= +(program === "chroot")) ||
+        count(literals, (literal) => !/^(?:-|\d*$)/.test(literal)) <= +(program === "chroot")) ||
       (/^(?:sudo|doas)$/.test(program) &&
         literals.some((literal) => /^(?:-[A-Za-z]*[si]|--shell|--login)/.test(literal))))
   )
     return unverifiableRunReason(program, "with a shell reading its commands from stdin");
-  let u = checkSshpassInvocation(program, words, state, {
+  let sshpassReason = checkSshpassInvocation(program, words, state, {
     fed,
     assembled,
   });
-  if (u !== null) return u;
-  let l = program === "sshpass" ? findNonOptionWordIndex(literals) : -1;
-  let d = REMOTE_SESSION_PROGRAMS.has(program)
+  if (sshpassReason !== null) return sshpassReason;
+  let innerProgramIndex = program === "sshpass" ? findNonOptionWordIndex(literals) : -1;
+  let remoteProgram = REMOTE_SESSION_PROGRAMS.has(program)
     ? program
-    : l !== -1 && REMOTE_SESSION_PROGRAMS.has(programBaseName(literals[l]))
-      ? programBaseName(literals[l])
+    : innerProgramIndex !== -1 && REMOTE_SESSION_PROGRAMS.has(programBaseName(literals[innerProgramIndex]))
+      ? programBaseName(literals[innerProgramIndex])
       : null;
-  if (d !== null) {
-    let g =
-      analyzeRsyncScp(d, words.slice(l + 1), state) ??
-      analyzeRemoteShellCommand(d, words.slice(l + 1), state, {
+  if (remoteProgram !== null) {
+    let remoteReason =
+      analyzeRsyncScp(remoteProgram, words.slice(innerProgramIndex + 1), state) ??
+      analyzeRemoteShellCommand(remoteProgram, words.slice(innerProgramIndex + 1), state, {
         assembled,
         fed,
       });
-    if (g !== undefined) return g;
+    if (remoteReason !== undefined) return remoteReason;
   }
   let index = literals
     .slice(0, -1)
@@ -1655,10 +1785,10 @@ function checkLauncherInvocation(program, words, state, { fed, assembled }) {
       literals
         .slice(0, index)
         .some(
-          (literal, S, p) =>
+          (literal, literalIndex, literals) =>
             /^(?:-[A-Za-z]*[DR]|--ch(?:dir|root))/.test(literal) ||
             (!/^(?:-|[A-Za-z_]\w*=|[\d.,:]+[a-z]?$)/.test(literal) &&
-              !/^-[A-Za-z]*[ugnskoecptwC]$/.test(p[S - 1] ?? "") &&
+              !/^-[A-Za-z]*[ugnskoecptwC]$/.test(literals[literalIndex - 1] ?? "") &&
               (!(TRANSPARENT_LAUNCHERS.has(literal) || UNHANDLED_EXEC_WRAPPERS.has(literal)) ||
                 NAMESPACE_WRAPPER_RE.test(literal))),
         ))
@@ -1672,57 +1802,60 @@ function checkLauncherInvocation(program, words, state, { fed, assembled }) {
     words.map((word) => (word.value.kind === "literal" ? word.value.text : null)),
     index_2,
   );
-  let b = literals[index_2 + (literals[index_2 + 1] === "-n" ? 2 : 1)];
+  let commandArg = literals[index_2 + (literals[index_2 + 1] === "-n" ? 2 : 1)];
   if (
     index_2 !== -1 &&
     shellCommandStringIndex === -1 &&
     (literals.some((literal) => SHELL_COMMAND_FLAG_PATTERN.test(literal)) ||
-      /^[-+]/.test(b ?? "") ||
-      isDevicePath(b ?? "") ||
-      (fed && (!b || isOpaquePathArgument(b, state))))
+      /^[-+]/.test(commandArg ?? "") ||
+      isDevicePath(commandArg ?? "") ||
+      (fed && (!commandArg || isOpaquePathArgument(commandArg, state))))
   )
     return unverifiableRunReason(program, `with ${describeWordValue(words[index_2].value)}`);
-  for (let [g, { value: S }] of words.entries()) {
-    if (g === shellCommandStringIndex) continue;
-    if (S.kind !== "literal") {
+  for (let [wordIndex, { value }] of words.entries()) {
+    if (wordIndex === shellCommandStringIndex) continue;
+    if (value.kind !== "literal") {
       if (
-        S.kind === "refuse" ||
-        (S.why === "a glob pattern" && (isLauncher || !S.inert)) ||
-        (isLauncher && !S.inert)
+        value.kind === "refuse" ||
+        (value.why === "a glob pattern" && (isLauncher || !value.inert)) ||
+        (isLauncher && !value.inert)
       )
-        return unverifiableRunReason(program, `with ${describeWordValue(S)}`);
+        return unverifiableRunReason(program, `with ${describeWordValue(value)}`);
       continue;
     }
-    let matches = /[$`'"\\]/.test(S.text);
-    let mapped = S.text
+    let matches = /[$`'"\\]/.test(value.text);
+    let mapped = value.text
       .replace(SHELL_QUOTE_CHARS_RE, "")
       .split(/\s+/)
-      .map((D) => programBaseName(D.replace(/^.*=/, "")));
-    let _ = o ? (mapped.find((D) => D !== "") ?? "") : mapped[0];
-    let x = isLauncher && /^([A-Za-z_]\w*)=(.*)$/s.exec(S.text);
-    let T = x
+      .map((wordPart) => programBaseName(wordPart.replace(/^.*=/, "")));
+    let firstProgram = isStrictExpansion ? (mapped.find((wordPart) => wordPart !== "") ?? "") : mapped[0];
+    let assignmentMatch = isLauncher && /^([A-Za-z_]\w*)=(.*)$/s.exec(value.text);
+    let assignmentReason = assignmentMatch
       ? environmentAssignmentReason(
-          x[1],
+          assignmentMatch[1],
           {
             kind: "literal",
-            text: x[2],
+            text: assignmentMatch[2],
           },
-          x[2],
+          assignmentMatch[2],
         )
       : null;
-    if (T !== null) return T;
-    let G = isLauncher
+    if (assignmentReason !== null) return assignmentReason;
+    let wordReason = isLauncher
       ? matches ||
-        isDevicePath(S.text) ||
-        mapped.some((D) => ARG_SENSITIVE_COMMANDS.has(D) || (fed && INTERPRETER_RULES.has(D)))
-        ? unverifiableRunReason(program, `with ${describeWordValue(S)}`)
-        : mapped.length > 1 || /[*?[]/.test(S.text)
-          ? analyzeNestedShellText(program, S.text, state, fed)
+        isDevicePath(value.text) ||
+        mapped.some(
+          (wordPart) => ARG_SENSITIVE_COMMANDS.has(wordPart) || (fed && INTERPRETER_RULES.has(wordPart)),
+        )
+        ? unverifiableRunReason(program, `with ${describeWordValue(value)}`)
+        : mapped.length > 1 || /[*?[]/.test(value.text)
+          ? analyzeNestedShellText(program, value.text, state, fed)
           : null
-      : (matches || mapped.length > 1) && (isGitProgram(_) || (matches && mapped.some(isGitProgram)))
-        ? unverifiableRunReason(program, `with ${describeWordValue(S)}`)
+      : (matches || mapped.length > 1) &&
+          (isGitProgram(firstProgram) || (matches && mapped.some(isGitProgram)))
+        ? unverifiableRunReason(program, `with ${describeWordValue(value)}`)
         : null;
-    if (G !== null) return G;
+    if (wordReason !== null) return wordReason;
   }
   return shellCommandStringIndex === -1
     ? null
@@ -1734,13 +1867,13 @@ function checkLauncherInvocation(program, words, state, { fed, assembled }) {
       );
 }
 //@ chunk-63f0f3kd.js:83889-83932 placement
-function isGitProgram(t) {
-  return GIT_COMMAND_PATTERN.test(t) || SHELL_PROGRAM_NAMES.has(t);
+function isGitProgram(program) {
+  return GIT_COMMAND_PATTERN.test(program) || SHELL_PROGRAM_NAMES.has(program);
 }
 //@ chunk-63f0f3kd.js:83932-84026 placement
-function mentionsGit(t) {
-  return [t, t.replace(SHELL_QUOTE_CHARS_RE, "")].some((e) =>
-    e.split(/[^\w.-]+/).some((i) => GIT_COMMAND_PATTERN.test(i)),
+function mentionsGit(text) {
+  return [text, text.replace(SHELL_QUOTE_CHARS_RE, "")].some((candidate) =>
+    candidate.split(/[^\w.-]+/).some((wordPart) => GIT_COMMAND_PATTERN.test(wordPart)),
   );
 }
 //@ chunk-63f0f3kd.js:84026-84177 placement
@@ -1759,21 +1892,27 @@ function hasChildWordGlob(node) {
 /**
  * 检查内建命令与常用工具（printf、test、set/shopt、rg/sort、cd、read/getopts/unset 等）的参数能否静态判定（计算值可能是选项、变量名可能被绑定等），不能时返回原因。
  */
-function checkBuiltinArguments(program, words, state, n) {
+function checkBuiltinArguments(program, words, state, context) {
   let values = words.map((word) => word.value);
   let literalValues = values.map((value) => (value.kind === "literal" ? value.text : null));
   let reason = null;
   if (program === "printf") {
-    let o = literalValues[literalValues[0] === "--" ? 1 : 0];
-    reason = o === null || (o ?? "").startsWith("-") ? (o ?? "a computed format") : null;
+    let formatValue = literalValues[literalValues[0] === "--" ? 1 : 0];
+    reason =
+      formatValue === null || (formatValue ?? "").startsWith("-")
+        ? (formatValue ?? "a computed format")
+        : null;
   } else if (program === "test" || program === "[") {
     let index = literalValues.findIndex(
-      (literalValue, d) =>
-        /^-[vRt]$/.test(literalValue ?? "") && !/^(?:[A-Za-z_]\w*|\d+)$/.test(literalValues[d + 1] ?? ""),
+      (literalValue, idx) =>
+        /^-[vRt]$/.test(literalValue ?? "") && !/^(?:[A-Za-z_]\w*|\d+)$/.test(literalValues[idx + 1] ?? ""),
     );
     let index_2 = values.findIndex(
-      (value, d) =>
-        d + 1 < values.length && value.kind === "dynamic" && !value.integer && !isTestOperand(values[d + 1]),
+      (value, idx) =>
+        idx + 1 < values.length &&
+        value.kind === "dynamic" &&
+        !value.integer &&
+        !isTestOperand(values[idx + 1]),
     );
     reason =
       index !== -1
@@ -1782,106 +1921,116 @@ function checkBuiltinArguments(program, words, state, n) {
           ? null
           : describeWordValue(values[index_2]);
   } else if (/^(?:set|shopt|setopt|unsetopt|rg|sort)$/.test(program)) {
-    let o = (N) => program === "rg" && GREP_PATTERN_OPTIONS.test(literalValues[N - 1] ?? "");
-    let u = (program === "rg" || program === "sort") && isStrictDynamicValuesEnabled();
-    let l = [];
-    for (let idx = 0; u && idx < literalValues.length; idx++) {
-      let y = idx > 0 && l[idx - 1] === null ? literalValues[idx - 1] : null;
-      l[idx] =
-        y === null
+    let isPatternOption = (idx) =>
+      program === "rg" && GREP_PATTERN_OPTIONS.test(literalValues[idx - 1] ?? "");
+    let isStrictValues = (program === "rg" || program === "sort") && isStrictDynamicValuesEnabled();
+    let optionAt = [];
+    for (let idx = 0; isStrictValues && idx < literalValues.length; idx++) {
+      let prevLiteral = idx > 0 && optionAt[idx - 1] === null ? literalValues[idx - 1] : null;
+      optionAt[idx] =
+        prevLiteral === null
           ? null
           : program === "sort"
-            ? normalizeSortOption(y)
-            : GREP_PATTERN_OPTIONS.test(y) || RG_PROGRAM_OPTIONS.test(y)
-              ? y
-              : findGrepPatternFlag(y);
+            ? normalizeSortOption(prevLiteral)
+            : GREP_PATTERN_OPTIONS.test(prevLiteral) || RG_PROGRAM_OPTIONS.test(prevLiteral)
+              ? prevLiteral
+              : findGrepPatternFlag(prevLiteral);
     }
-    let d = u
-      ? literalValues.findIndex((literalValue, y) => literalValue === "--" && l[y] === null)
+    let doubleDashIdx = isStrictValues
+      ? literalValues.findIndex((literalValue, idx) => literalValue === "--" && optionAt[idx] === null)
       : literalValues.indexOf("--");
-    let c = (N) => (u ? (l[N] ?? (o(N) ? literalValues[N - 1] : null)) : null);
-    let f = program === "rg" ? GREP_CONTEXT_OPTIONS_RE : SORT_VALUE_OPTIONS_RE;
-    let h = (N, y) =>
-      y !== null &&
-      N.value.kind !== "literal" &&
-      !isFullyStaticValue(N) &&
-      !(N.value.kind === "dynamic" && N.value.integer && f.test(y));
+    let optionFor = (idx) =>
+      isStrictValues ? (optionAt[idx] ?? (isPatternOption(idx) ? literalValues[idx - 1] : null)) : null;
+    let valueOptionsRe = program === "rg" ? GREP_CONTEXT_OPTIONS_RE : SORT_VALUE_OPTIONS_RE;
+    let isDynamicForOption = (word, option) =>
+      option !== null &&
+      word.value.kind !== "literal" &&
+      !isFullyStaticValue(word) &&
+      !(word.value.kind === "dynamic" && word.value.integer && valueOptionsRe.test(option));
     let index = literalValues.indexOf("--");
-    let g = (word, y) =>
-      (index === -1 || y < index) &&
+    let isUnverifiableAt = (word, idx) =>
+      (index === -1 || idx < index) &&
       isUnverifiableValue(word) &&
       !(
         program === "rg" &&
-        GREP_PATTERN_OPTIONS.test(literalValues[y - 1] ?? "") &&
+        GREP_PATTERN_OPTIONS.test(literalValues[idx - 1] ?? "") &&
         !hasExpansion(word.node)
       );
-    let S = (word, y) =>
-      u &&
-      (d === -1 || y < d) &&
-      (o(y) && l[y] !== null ? h(word, l[y]) : isUnverifiableValue(word) || h(word, c(y)));
-    let index_2 = words.findIndex((word, y) => g(word, y) || S(word, y));
-    let m = (N) => `${OPTION_POSITION_NOTE.slice(0, OPTION_POSITION_NOTE.indexOf(";"))}: ${N})`;
-    let _ = (N) => {
-      let y = words[N];
-      let z = literalValues[N - 1] ?? "";
-      let R = u ? c(N) : o(N) ? z : null;
-      if (R === null)
-        return u && z === "--" && l[N - 1]
-          ? `${describeWordValue(y.value)} ${m(`the -- before it is the ${l[N - 1]} value here, so options have not ended`)}`
-          : `${describeWordValue(y.value)} ${OPTION_POSITION_NOTE}`;
-      let O = u && l[N] != null && R !== z;
-      let Y = O ? `${z.slice(0, -1)} ${R}` : R;
-      let st = `as the ${R} value${O ? ` of the cluster ${z}` : ""}, where an option may stand`;
-      if (y.value.kind === "dynamic" && y.value.many) return dynamicArgumentReason(program, R, y);
-      if (program !== "rg" || !GREP_PATTERN_OPTIONS.test(R))
-        return f.test(R)
-          ? `${describeWordValue(y.value)} ${st} (give a spelled-out count or key: ${Y} 4)`
-          : `${describeWordValue(y.value)} ${st} (if this command sets it to a path, quoting it is enough: "$x"; otherwise spell the value out, or at least its first character: a wholly computed ${R} value may begin with -)`;
-      if ((u ? h(y, R) : true) || (o(N) && l[N] !== null && hasExpansion(y.node)))
-        return dynamicArgumentReason(program, R, y, O ? z : undefined);
-      return O
-        ? `${describeWordValue(y.value)} ${st} (write ${R} as its own word: ${Y} "$x")`
-        : `${describeWordValue(y.value)} ${m(`the ${z} before it is itself the ${l[N - 1] ?? "previous option"} value here, so give each option its own value`)}`;
+    let isValueDynamicAt = (word, idx) =>
+      isStrictValues &&
+      (doubleDashIdx === -1 || idx < doubleDashIdx) &&
+      (isPatternOption(idx) && optionAt[idx] !== null
+        ? isDynamicForOption(word, optionAt[idx])
+        : isUnverifiableValue(word) || isDynamicForOption(word, optionFor(idx)));
+    let idx = words.findIndex((word, idx) => isUnverifiableAt(word, idx) || isValueDynamicAt(word, idx));
+    let optionPositionReason = (why) =>
+      `${OPTION_POSITION_NOTE.slice(0, OPTION_POSITION_NOTE.indexOf(";"))}: ${why})`;
+    let explainWord = (idx) => {
+      let word = words[idx];
+      let prevLiteral = literalValues[idx - 1] ?? "";
+      let option = isStrictValues ? optionFor(idx) : isPatternOption(idx) ? prevLiteral : null;
+      if (option === null)
+        return isStrictValues && prevLiteral === "--" && optionAt[idx - 1]
+          ? `${describeWordValue(word.value)} ${optionPositionReason(`the -- before it is the ${optionAt[idx - 1]} value here, so options have not ended`)}`
+          : `${describeWordValue(word.value)} ${OPTION_POSITION_NOTE}`;
+      let isInsideCluster = isStrictValues && optionAt[idx] != null && option !== prevLiteral;
+      let optionText = isInsideCluster ? `${prevLiteral.slice(0, -1)} ${option}` : option;
+      let positionText = `as the ${option} value${isInsideCluster ? ` of the cluster ${prevLiteral}` : ""}, where an option may stand`;
+      if (word.value.kind === "dynamic" && word.value.many)
+        return dynamicArgumentReason(program, option, word);
+      if (program !== "rg" || !GREP_PATTERN_OPTIONS.test(option))
+        return valueOptionsRe.test(option)
+          ? `${describeWordValue(word.value)} ${positionText} (give a spelled-out count or key: ${optionText} 4)`
+          : `${describeWordValue(word.value)} ${positionText} (if this command sets it to a path, quoting it is enough: "$x"; otherwise spell the value out, or at least its first character: a wholly computed ${option} value may begin with -)`;
+      if (
+        (isStrictValues ? isDynamicForOption(word, option) : true) ||
+        (isPatternOption(idx) && optionAt[idx] !== null && hasExpansion(word.node))
+      )
+        return dynamicArgumentReason(program, option, word, isInsideCluster ? prevLiteral : undefined);
+      return isInsideCluster
+        ? `${describeWordValue(word.value)} ${positionText} (write ${option} as its own word: ${optionText} "$x")`
+        : `${describeWordValue(word.value)} ${optionPositionReason(`the ${prevLiteral} before it is itself the ${optionAt[idx - 1] ?? "previous option"} value here, so give each option its own value`)}`;
     };
-    let x = -1;
-    let T;
-    let G = program !== "set";
-    let D = !/^(?:rg|sort)$/.test(program);
-    for (let idx = 0; D && x === -1 && idx < literalValues.length; idx++) {
-      let y = literalValues[idx] ?? null;
-      if (program === "set" && !G && !/^[-+][a-zA-Z]/.test(y ?? "")) {
+    let badIdx = -1;
+    let expandingWord;
+    let hasInlineOptions = program !== "set";
+    let scanOptions = !/^(?:rg|sort)$/.test(program);
+    for (let idx = 0; scanOptions && badIdx === -1 && idx < literalValues.length; idx++) {
+      let literal = literalValues[idx] ?? null;
+      if (program === "set" && !hasInlineOptions && !/^[-+][a-zA-Z]/.test(literal ?? "")) {
         if (mayExpandToNothing(words[idx].node)) {
-          T = words[idx];
+          expandingWord = words[idx];
           continue;
         }
         break;
       }
-      x = (
-        y === null
+      badIdx = (
+        literal === null
           ? false
-          : G
-            ? isSafeShellOption(y) ||
-              /^(?:no)?allexport$/i.test(y.replace(/_/g, "")) ||
-              (program === "shopt" && /^-[suqpo]+$/.test(y))
-            : !/o.*o/.test(y) &&
-              y
+          : hasInlineOptions
+            ? isSafeShellOption(literal) ||
+              /^(?:no)?allexport$/i.test(literal.replace(/_/g, "")) ||
+              (program === "shopt" && /^-[suqpo]+$/.test(literal))
+            : !/o.*o/.test(literal) &&
+              literal
                 .slice(1)
                 .split("")
-                .every((R) => /[ao]/.test(R) || (R !== "T" && SET_O_SAFE_LETTERS.has(R)))
+                .every((letter) => /[ao]/.test(letter) || (letter !== "T" && SET_O_SAFE_LETTERS.has(letter)))
       )
         ? -1
         : idx;
-      G = program !== "set" || /^[-+][a-zA-Z]*o/.test(y ?? "");
+      hasInlineOptions = program !== "set" || /^[-+][a-zA-Z]*o/.test(literal ?? "");
     }
     reason =
-      x !== -1
-        ? describeWordValue(values[x]) + (T ? ` after ${emptyExpansionReason(T)}` : "")
-        : ((D
+      badIdx !== -1
+        ? describeWordValue(values[badIdx]) +
+          (expandingWord ? ` after ${emptyExpansionReason(expandingWord)}` : "")
+        : ((scanOptions
             ? null
             : findMatching(
                 literalValues,
                 program === "rg" ? /^--(?:pre(?:-glob)?|hostname-bin)(?:=|$)/ : /^--co/,
-              )) ?? (index_2 === -1 ? null : _(index_2)));
+              )) ?? (idx === -1 ? null : explainWord(idx)));
   } else if (program === "cd" || program === "pushd")
     reason = literalValues.some(
       (literalValue) => literalValue !== null && literalValue[0] !== "-" && isDevicePath(literalValue),
@@ -1890,16 +2039,16 @@ function checkBuiltinArguments(program, words, state, n) {
       : null;
   if (reason !== null) return unverifiableRunReason(program, `with ${reason}`);
   if (SHELL_BUILTIN_ARG_COMMANDS.has(program)) {
-    let o = program === "getopts" ? "data" : "name";
-    for (let [u, l] of values.entries()) {
-      let d = o;
-      o = "name";
-      let c = literalValues[u] ?? null;
-      let node = words[u].node;
-      let h = d === "name" && program === "read" && c?.[0] === "-";
+    let argRole = program === "getopts" ? "data" : "name";
+    for (let [idx, value] of values.entries()) {
+      let previousRole = argRole;
+      argRole = "name";
+      let literal = literalValues[idx] ?? null;
+      let node = words[idx].node;
+      let isReadFlagWord = previousRole === "name" && program === "read" && literal?.[0] === "-";
       if (
-        l.kind === "literal" &&
-        (h || d === "data") &&
+        value.kind === "literal" &&
+        (isReadFlagWord || previousRole === "data") &&
         hasChildWordGlob(node) &&
         readFlagWithOverride(BOT_PROTECTED_TENGU_STEADY_THIMBLE, {
           safe: true,
@@ -1907,89 +2056,109 @@ function checkBuiltinArguments(program, words, state, n) {
       )
         return unverifiableRunReason(
           program,
-          `with the word ${shortenForReason(node.text)}: its unquoted *, ?, [ or { may make it no word or several, and the words after it may then be read as variable names (${h ? "spell the option letters out, such as -d" : "write it as quoted text, such as '*'"})`,
+          `with the word ${shortenForReason(node.text)}: its unquoted *, ?, [ or { may make it no word or several, and the words after it may then be read as variable names (${isReadFlagWord ? "spell the option letters out, such as -d" : "write it as quoted text, such as '*'"})`,
         );
-      if (h) {
-        for (let idx = 1; idx < c.length; idx++) {
-          let p = `-${c[idx]}`;
-          if (!/^-[aA]$/.test(p) && !READ_DATA_FLAGS.has(p)) continue;
-          let m = READ_NUMERIC_ARG_FLAGS.has(p) ? "number" : READ_DATA_FLAGS.has(p) ? "data" : "name";
-          let sliced = c.slice(idx + 1);
-          if (sliced === "") o = m;
+      if (isReadFlagWord) {
+        for (let idx = 1; idx < literal.length; idx++) {
+          let flag = `-${literal[idx]}`;
+          if (!/^-[aA]$/.test(flag) && !READ_DATA_FLAGS.has(flag)) continue;
+          let role = READ_NUMERIC_ARG_FLAGS.has(flag)
+            ? "number"
+            : READ_DATA_FLAGS.has(flag)
+              ? "data"
+              : "name";
+          let sliced = literal.slice(idx + 1);
+          if (sliced === "") argRole = role;
           else if (
-            m === "number"
+            role === "number"
               ? !READ_NUMERIC_OPERAND_RE.test(sliced)
-              : m === "name" && (!SHELL_NAME_PATTERN.test(sliced) || describeUnsafeBinding(sliced, state))
+              : role === "name" && (!SHELL_NAME_PATTERN.test(sliced) || describeUnsafeBinding(sliced, state))
           )
-            return describeUnsafeBinding(sliced, state) ?? unverifiableRunReason(program, `with ${c}`);
+            return describeUnsafeBinding(sliced, state) ?? unverifiableRunReason(program, `with ${literal}`);
           break;
         }
         continue;
       }
-      let b =
-        d === "data"
-          ? l.kind === "refuse"
-          : d === "number"
-            ? !(c === null ? l.kind === "dynamic" && l.integer : READ_NUMERIC_OPERAND_RE.test(c))
-            : c === null
-              ? l.kind !== "dynamic" || !l.arithmeticSafe
-              : !PLAIN_TEXT_RE.test(c);
-      let g =
-        d === "name" && program !== "unset" && SHELL_NAME_PATTERN.test(c ?? "-")
-          ? describeUnsafeBinding(c, state)
+      let isUnsafe =
+        previousRole === "data"
+          ? value.kind === "refuse"
+          : previousRole === "number"
+            ? !(literal === null
+                ? value.kind === "dynamic" && value.integer
+                : READ_NUMERIC_OPERAND_RE.test(literal))
+            : literal === null
+              ? value.kind !== "dynamic" || !value.arithmeticSafe
+              : !PLAIN_TEXT_RE.test(literal);
+      let bindingReason =
+        previousRole === "name" && program !== "unset" && SHELL_NAME_PATTERN.test(literal ?? "-")
+          ? describeUnsafeBinding(literal, state)
           : null;
-      if (b || g !== null)
-        return g ?? unverifiableRunReason(program, `with a name it would evaluate (${describeWordValue(l)})`);
+      if (isUnsafe || bindingReason !== null)
+        return (
+          bindingReason ??
+          unverifiableRunReason(program, `with a name it would evaluate (${describeWordValue(value)})`)
+        );
       if (
-        l.kind === "dynamic" &&
-        (d === "number" || (d === "data" && !isQuotedLiteral(node, STRING_NODE_TYPES_RE))) &&
+        value.kind === "dynamic" &&
+        (previousRole === "number" ||
+          (previousRole === "data" && !isQuotedLiteral(node, STRING_NODE_TYPES_RE))) &&
         readFlagWithOverride(BOT_PROTECTED_TENGU_STEADY_THIMBLE, {
           safe: true,
         })
       )
         return unverifiableRunReason(
           program,
-          d === "number"
-            ? `with ${describeWordValue(l)} after -t, -n or -N: zsh may read it and the words after it as variable names (write the number itself, such as -t 5)`
-            : `with ${describeWordValue(l)} where one value belongs: it may become no word or several, and the words after it may then be read as variable names (write it as one double-quoted variable, such as "$NAME", or as quoted text; $@, $*, [@], [*] and \${! are refused here even inside quotes)`,
+          previousRole === "number"
+            ? `with ${describeWordValue(value)} after -t, -n or -N: zsh may read it and the words after it as variable names (write the number itself, such as -t 5)`
+            : `with ${describeWordValue(value)} where one value belongs: it may become no word or several, and the words after it may then be read as variable names (write it as one double-quoted variable, such as "$NAME", or as quoted text; $@, $*, [@], [*] and \${! are refused here even inside quotes)`,
         );
     }
     return null;
   }
   if (AWK_NAMES.has(program)) {
-    let o = 0;
-    while (o < literalValues.length && literalValues[o] !== "--" && literalValues[o]?.[0] === "-") {
-      let h = literalValues[o];
-      let match = /^-[Fv](.+)$/s.exec(h);
-      let g = match
+    let idx = 0;
+    while (idx < literalValues.length && literalValues[idx] !== "--" && literalValues[idx]?.[0] === "-") {
+      let arg = literalValues[idx];
+      let match = /^-[Fv](.+)$/s.exec(arg);
+      let assignmentText = match
         ? match[1]
-        : h === "-v"
-          ? words[o + 1]?.node.text.replace(/["'\\]/g, "")
-          : literalValues[o + 1];
-      if (!/^-[Fv]/.test(h) || typeof g !== "string" || (h[1] === "v" && !/^[A-Za-z_]\w*=/.test(g)))
-        return unverifiableRunReason(program, `with ${h}`);
-      let S = !match && literalValues[o + 1] === null ? words[o + 1] : null;
+        : arg === "-v"
+          ? words[idx + 1]?.node.text.replace(/["'\\]/g, "")
+          : literalValues[idx + 1];
       if (
-        S &&
-        (S.value.kind === "refuse" ||
-          hasExpansion(S.node) ||
-          (isStrictDynamicValuesEnabled() && !isFullyStaticValue(S)))
+        !/^-[Fv]/.test(arg) ||
+        typeof assignmentText !== "string" ||
+        (arg[1] === "v" && !/^[A-Za-z_]\w*=/.test(assignmentText))
       )
-        return unverifiableRunReason(program, `with ${dynamicArgumentReason(program, h, S)}`);
-      o += match ? 1 : 2;
+        return unverifiableRunReason(program, `with ${arg}`);
+      let valueWord = !match && literalValues[idx + 1] === null ? words[idx + 1] : null;
+      if (
+        valueWord &&
+        (valueWord.value.kind === "refuse" ||
+          hasExpansion(valueWord.node) ||
+          (isStrictDynamicValuesEnabled() && !isFullyStaticValue(valueWord)))
+      )
+        return unverifiableRunReason(program, `with ${dynamicArgumentReason(program, arg, valueWord)}`);
+      idx += match ? 1 : 2;
     }
-    o += literalValues[o] === "--" ? 1 : 0;
-    let u = o < literalValues.length ? literalValues[o] : "";
-    if (u === null || u === undefined || u.includes("{}") || awkProgramHasExecBridge(u))
+    idx += literalValues[idx] === "--" ? 1 : 0;
+    let programText = idx < literalValues.length ? literalValues[idx] : "";
+    if (
+      programText === null ||
+      programText === undefined ||
+      programText.includes("{}") ||
+      awkProgramHasExecBridge(programText)
+    )
       return unverifiableRunReason(
         program,
         "with a program that can execute commands or that it cannot read",
       );
-    let replaced = u.replaceAll("||", "  ");
+    let replaced = programText.replaceAll("||", "  ");
     let index = replaced.indexOf("|");
-    let index_2 = u.indexOf("print");
+    let index_2 = programText.indexOf("print");
     return index !== -1 &&
-      ((index_2 !== -1 && index_2 < replaced.lastIndexOf("|")) || u.lastIndexOf("getline") > index) &&
+      ((index_2 !== -1 && index_2 < replaced.lastIndexOf("|")) ||
+        programText.lastIndexOf("getline") > index) &&
       readFlagWithOverride(TENGU_RUSTLING_LIGHTHOUSE, {
         safe: true,
       })
@@ -2001,18 +2170,20 @@ function checkBuiltinArguments(program, words, state, n) {
   }
   switch (program) {
     case "sed": {
-      let o = readFlagWithOverride(TENGU_HUMBLE_WHALE, {
+      let linuxSedProgram = readFlagWithOverride(TENGU_HUMBLE_WHALE, {
         safe: true,
       })
         ? parseSedProgram(literalValues, false)
         : null;
-      let u =
-        o && !["linux", "wsl", "windows"].includes(getPlatform())
+      let bsdSedProgram =
+        linuxSedProgram && !["linux", "wsl", "windows"].includes(getPlatform())
           ? parseSedProgram(literalValues, true)
           : null;
       let index = literalValues.indexOf("--");
-      let d = index !== -1 && u ? Math.max(index, u.optionsEnd) : index;
-      let found = words.find((word, m) => (d === -1 || m < d) && isUnverifiableValue(word));
+      let optionsEnd = index !== -1 && bsdSedProgram ? Math.max(index, bsdSedProgram.optionsEnd) : index;
+      let found = words.find(
+        (word, idx) => (optionsEnd === -1 || idx < optionsEnd) && isUnverifiableValue(word),
+      );
       let found_2 = literalValues.find(
         (literalValue) =>
           isOptionWord(literalValue) &&
@@ -2027,8 +2198,8 @@ function checkBuiltinArguments(program, words, state, n) {
             `with ${found_2 ?? `${describeWordValue(found.value)} ${OPTION_POSITION_NOTE}`}`,
           ) + (!found_2 && index !== -1 && words.indexOf(found) > index ? SED_BSD_INPLACE_NOTE : "")
         );
-      let flattened = literalValues.flatMap((literalValue, m) =>
-        isSedExpressionFlag(literalValues[m - 1])
+      let flattened = literalValues.flatMap((literalValue, idx) =>
+        isSedExpressionFlag(literalValues[idx - 1])
           ? [literalValue]
           : literalValue?.startsWith("--expression=")
             ? [literalValue.slice(13)]
@@ -2037,32 +2208,32 @@ function checkBuiltinArguments(program, words, state, n) {
       if (flattened.length === 0)
         flattened = literalValues
           .filter(
-            (literalValue, m) =>
+            (literalValue, idx) =>
               literalValue !== "--" &&
-              !isSedExpressionFlag(literalValues[m - 1]) &&
+              !isSedExpressionFlag(literalValues[idx - 1]) &&
               !isOptionWord(literalValue),
           )
           .slice(0, 1);
       let regExp = new RegExp(SED_COMMAND_PATTERN_STRICT, "y");
-      let g = isSedScriptStrictnessOn() ? new RegExp(SED_COMMAND_PATTERN, "y") : null;
-      let S = [
+      let strictRegExp = isSedScriptStrictnessOn() ? new RegExp(SED_COMMAND_PATTERN, "y") : null;
+      let candidateScripts = [
         ...flattened.map((script) => ({
           script,
           hint: "",
         })),
-        ...(o
+        ...(linuxSedProgram
           ? [
               {
-                script: o.program,
+                script: linuxSedProgram.program,
                 hint: SED_OPTION_ORDER_NOTE,
               },
             ]
           : []),
-        ...(u
+        ...(bsdSedProgram
           ? [
               {
-                script: u.program,
-                hint: u.suffixes.some((suffix) => suffix !== "")
+                script: bsdSedProgram.program,
+                hint: bsdSedProgram.suffixes.some((suffix) => suffix !== "")
                   ? SED_BSD_INPLACE_NOTE
                   : flattened[0] === ""
                     ? ""
@@ -2071,18 +2242,18 @@ function checkBuiltinArguments(program, words, state, n) {
             ]
           : []),
       ];
-      for (let { script, hint } of S) {
+      for (let { script, hint } of candidateScripts) {
         if (script === null) return unverifiableRunReason("sed", "with a program computed at runtime") + hint;
         if (!matchesWhole(regExp, script))
           return unverifiableRunReason("sed", `with the program ${shortenForReason(script)}`) + hint;
-        if (g && !matchesWhole(g, script))
+        if (strictRegExp && !matchesWhole(strictRegExp, script))
           return (
             unverifiableRunReason("sed", `with the program ${shortenForReason(script)}`) +
             SED_PATTERN_NOTE +
             hint
           );
       }
-      return u?.suffixes.includes(null)
+      return bsdSedProgram?.suffixes.includes(null)
         ? unverifiableRunReason(
             "sed",
             "with a computed word after a bare -i, which macOS and BSD sed take as the backup suffix",
@@ -2091,122 +2262,131 @@ function checkBuiltinArguments(program, words, state, n) {
     }
     case "find": {
       let mapped = literalValues.map(() => null);
-      let u = literalValues.length;
-      for (let idx = 0; isStrictDynamicValuesEnabled() && idx < u; idx++) {
-        let h = literalValues[idx] ?? null;
-        if (h === null || mapped[idx] !== null) continue;
-        if (FIND_EXEC_OPTIONS.has(h)) u = idx;
-        else if (FIND_PATH_PREDICATE_RE.test(h) || FIND_SIDE_EFFECT_PREDICATE_RE.test(h)) {
-          for (let idx_2 = 1; idx_2 <= (h === "-fprintf" ? 2 : 1); idx_2++)
-            if (idx + idx_2 < literalValues.length) mapped[idx + idx_2] = h;
+      let execIdxLimit = literalValues.length;
+      for (let idx = 0; isStrictDynamicValuesEnabled() && idx < execIdxLimit; idx++) {
+        let literal = literalValues[idx] ?? null;
+        if (literal === null || mapped[idx] !== null) continue;
+        if (FIND_EXEC_OPTIONS.has(literal)) execIdxLimit = idx;
+        else if (FIND_PATH_PREDICATE_RE.test(literal) || FIND_SIDE_EFFECT_PREDICATE_RE.test(literal)) {
+          for (let idx_2 = 1; idx_2 <= (literal === "-fprintf" ? 2 : 1); idx_2++)
+            if (idx + idx_2 < literalValues.length) mapped[idx + idx_2] = literal;
         }
       }
-      let l = 0;
-      let d = false;
-      while (isStrictDynamicValuesEnabled() && l < literalValues.length && literalValues[l] !== "-") {
-        let f = literalValues[l] ?? null;
-        if (f === null) {
-          if (isUnverifiableValue(words[l])) {
-            d = true;
+      let idx = 0;
+      let hasUnverifiablePath = false;
+      while (isStrictDynamicValuesEnabled() && idx < literalValues.length && literalValues[idx] !== "-") {
+        let literal = literalValues[idx] ?? null;
+        if (literal === null) {
+          if (isUnverifiableValue(words[idx])) {
+            hasUnverifiablePath = true;
             break;
           }
-          if (isQuotedLiteral(words[l].node)) break;
-          l += 1;
+          if (isQuotedLiteral(words[idx].node)) break;
+          idx += 1;
           continue;
         }
-        let match = /^-[EHLPXdhsx]*(f([\s\S]*))?$/.exec(f);
+        let match = /^-[EHLPXdhsx]*(f([\s\S]*))?$/.exec(literal);
         if (match === null) break;
-        l += match[1] !== undefined && match[2] === "" ? 2 : 1;
+        idx += match[1] !== undefined && match[2] === "" ? 2 : 1;
       }
-      let c =
-        d ||
+      let hasStdinSource =
+        hasUnverifiablePath ||
         (isStrictDynamicValuesEnabled() &&
           literalValues.some(
-            (literalValue, h) =>
+            (literalValue, pathIdx) =>
               literalValue === "-files0-from" ||
-              ((h < l || (h < u && mapped[h] === null)) && /^-[EHLPXdhsx]*f(?:-|$)/.test(literalValue ?? "")),
+              ((pathIdx < idx || (pathIdx < execIdxLimit && mapped[pathIdx] === null)) &&
+                /^-[EHLPXdhsx]*f(?:-|$)/.test(literalValue ?? "")),
           ));
-      for (let [f, h] of literalValues.entries()) {
-        let node = words[f].node;
-        let g =
-          f === 0 &&
+      for (let [idx, literal] of literalValues.entries()) {
+        let node = words[idx].node;
+        let isFirstPathSlot =
+          idx === 0 &&
           !(
-            isUnverifiableValue(words[f]) &&
+            isUnverifiableValue(words[idx]) &&
             (node.type !== "string" ||
               node.children.length !== 3 ||
               literalValues.some((literalValue) => literalValue === ";" || literalValue === "+"))
           );
-        let S =
-          h === null &&
-          (!FIND_PATH_PREDICATE_RE.test(literalValues[f - 1] ?? "") || hasExpansion(node)) &&
-          !g;
-        let p = f < u && FIND_PATH_PREDICATE_RE.test(mapped[f] ?? "");
-        let m = isStrictDynamicValuesEnabled() && h === null && (!p || !isFullyStaticValue(words[f])) && !g;
-        if (S || m) {
-          let _ =
+        let isDynamicPath =
+          literal === null &&
+          (!FIND_PATH_PREDICATE_RE.test(literalValues[idx - 1] ?? "") || hasExpansion(node)) &&
+          !isFirstPathSlot;
+        let isPathPredicateSlot = idx < execIdxLimit && FIND_PATH_PREDICATE_RE.test(mapped[idx] ?? "");
+        let isStrictDynamicPath =
+          isStrictDynamicValuesEnabled() &&
+          literal === null &&
+          (!isPathPredicateSlot || !isFullyStaticValue(words[idx])) &&
+          !isFirstPathSlot;
+        if (isDynamicPath || isStrictDynamicPath) {
+          let isAfterExec =
             isStrictDynamicValuesEnabled() &&
-            f >= u &&
-            FIND_PATH_PREDICATE_RE.test(literalValues[f - 1] ?? "");
-          let x = isStrictDynamicValuesEnabled()
-            ? p
-              ? mapped[f]
+            idx >= execIdxLimit &&
+            FIND_PATH_PREDICATE_RE.test(literalValues[idx - 1] ?? "");
+          let optionName = isStrictDynamicValuesEnabled()
+            ? isPathPredicateSlot
+              ? mapped[idx]
               : null
-            : FIND_PATH_PREDICATE_RE.test(literalValues[f - 1] ?? "")
-              ? literalValues[f - 1]
+            : FIND_PATH_PREDICATE_RE.test(literalValues[idx - 1] ?? "")
+              ? literalValues[idx - 1]
               : null;
           return unverifiableRunReason(
             "find",
-            `with ${x !== null ? dynamicArgumentReason("find", x, words[f]) : _ ? `${describeWordValue(values[f])} after ${literalValues[f - 1]} once an -exec action has begun, where no computed word is read as a value (spell it out, or put a find test before the -exec clause),` : describeWordValue(values[f])}`,
+            `with ${optionName !== null ? dynamicArgumentReason("find", optionName, words[idx]) : isAfterExec ? `${describeWordValue(values[idx])} after ${literalValues[idx - 1]} once an -exec action has begun, where no computed word is read as a value (spell it out, or put a find test before the -exec clause),` : describeWordValue(values[idx])}`,
           );
         }
-        if (FIND_EXEC_OPTIONS.has(h ?? "")) {
-          let matches = /^-exec(?:dir)?$/.test(h);
-          let index = literalValues.findIndex(
-            (literalValue, O) => O > f && /^[;+]$/.test(literalValue ?? ""),
+        if (FIND_EXEC_OPTIONS.has(literal ?? "")) {
+          let matches = /^-exec(?:dir)?$/.test(literal);
+          let terminatorIdx = literalValues.findIndex(
+            (literalValue, termIdx1) => termIdx1 > idx && /^[;+]$/.test(literalValue ?? ""),
           );
-          let index_2 = literalValues.findIndex(
-            (literalValue, O) =>
-              O > f &&
-              (literalValue === ";" || (matches && literalValue === "+" && literalValues[O - 1] === "{}")),
+          let terminatorIdx_2 = literalValues.findIndex(
+            (literalValue, termIdx2) =>
+              termIdx2 > idx &&
+              (literalValue === ";" ||
+                (matches && literalValue === "+" && literalValues[termIdx2 - 1] === "{}")),
           );
-          let G = isStrictDynamicValuesEnabled()
+          let misplacedTerminator = isStrictDynamicValuesEnabled()
             ? literalValues
-                .slice(f + 1, index_2 === -1 ? literalValues.length : index_2)
+                .slice(idx + 1, terminatorIdx_2 === -1 ? literalValues.length : terminatorIdx_2)
                 .find(
-                  (literalValue, O) =>
+                  (literalValue, offset) =>
                     literalValue !== null &&
                     ((literalValue !== ";" && literalValue.startsWith(";")) ||
                       (matches &&
                         literalValue !== "+" &&
                         literalValue.startsWith("+") &&
-                        literalValues[f + O] === "{}")),
+                        literalValues[idx + offset] === "{}")),
                 )
             : undefined;
-          if (G !== undefined)
+          if (misplacedTerminator !== undefined)
             return unverifiableRunReason(
               "find",
-              `${h} with a clause containing ${shortenForReason(G)}, which GNU and BSD find end differently,`,
+              `${literal} with a clause containing ${shortenForReason(misplacedTerminator)}, which GNU and BSD find end differently,`,
             );
-          let D = literalValues[f + 1];
-          let N = c || (isStrictDynamicValuesEnabled() && (h === "-execdir" || h === "-okdir"));
-          let y = (R) =>
-            R === -1 || !D || D.includes("{}")
-              ? unverifiableRunReason("find", `${h} with a program it cannot verify`)
+          let execCommand = literalValues[idx + 1];
+          let isDirExec =
+            hasStdinSource ||
+            (isStrictDynamicValuesEnabled() && (literal === "-execdir" || literal === "-okdir"));
+          let checkExecAt = (terminatorIdx) =>
+            terminatorIdx === -1 || !execCommand || execCommand.includes("{}")
+              ? unverifiableRunReason("find", `${literal} with a program it cannot verify`)
               : checkExecSlotCommand(
-                  D,
-                  words.slice(f + 2, R).map((word, Y) =>
+                  execCommand,
+                  words.slice(idx + 2, terminatorIdx).map((word, offset) =>
                     word.value.kind === "literal" && word.value.text.includes("{}")
                       ? {
                           node: word.node,
                           value: dynamicValue("a found path", {
                             ...DYNAMIC_VALUE_FLAGS,
                             optionSafe:
-                              !word.value.text.startsWith("-") && !(N && word.value.text.startsWith("{}")),
+                              !word.value.text.startsWith("-") &&
+                              !(isDirExec && word.value.text.startsWith("{}")),
                             many:
                               isStrictDynamicValuesEnabled() &&
                               matches &&
-                              literalValues[R] === "+" &&
-                              f + 2 + Y === R - 1 &&
+                              literalValues[terminatorIdx] === "+" &&
+                              idx + 2 + offset === terminatorIdx - 1 &&
                               word.value.text === "{}",
                           }),
                         }
@@ -2214,63 +2394,77 @@ function checkBuiltinArguments(program, words, state, n) {
                   ),
                   state,
                 );
-          let z = y(index) ?? (isStrictDynamicValuesEnabled() && index_2 !== index ? y(index_2) : null);
-          if (z !== null) return z;
+          let execReason =
+            checkExecAt(terminatorIdx) ??
+            (isStrictDynamicValuesEnabled() && terminatorIdx_2 !== terminatorIdx
+              ? checkExecAt(terminatorIdx_2)
+              : null);
+          if (execReason !== null) return execReason;
         }
       }
       return null;
     }
     case "xargs": {
-      let o = null;
-      let u = false;
+      let replaceToken = null;
+      let isNulSeparated = false;
       for (let idx = 0; idx < literalValues.length; idx++) {
-        let d = literalValues[idx] ?? null;
-        let match = /^(?:-I(.*)|-i(.*)|--replace(?:=(.*))?)$/.exec(d ?? "");
-        if (match && d !== "-I") {
-          o = match[1] || match[2] || match[3] || "{}";
+        let literal = literalValues[idx] ?? null;
+        let match = /^(?:-I(.*)|-i(.*)|--replace(?:=(.*))?)$/.exec(literal ?? "");
+        if (match && literal !== "-I") {
+          replaceToken = match[1] || match[2] || match[3] || "{}";
           continue;
         }
-        if (d === "-I" && literalValues[idx + 1]) {
-          o = literalValues[++idx];
+        if (literal === "-I" && literalValues[idx + 1]) {
+          replaceToken = literalValues[++idx];
           continue;
         }
-        if (d !== null && XARGS_OPTIONS_RE.test(d)) {
-          u = /^(?:-[0rtpx]*0|--null$)/.test(d) ? true : /^(?:-[0rtpx]*d|--delimiter)/.test(d) ? false : u;
-          let matches = /^(?:-[nPLsdE]|--(?:max-args|max-procs|delimiter))$/.test(d);
-          let b = matches && literalValues[idx + 1] === null ? words[idx + 1] : null;
-          if (b && isStrictDynamicValuesEnabled() && !isFullyStaticValue(b))
-            return unverifiableRunReason("xargs", `with ${dynamicArgumentReason("xargs", d, b)}`);
+        if (literal !== null && XARGS_OPTIONS_RE.test(literal)) {
+          isNulSeparated = /^(?:-[0rtpx]*0|--null$)/.test(literal)
+            ? true
+            : /^(?:-[0rtpx]*d|--delimiter)/.test(literal)
+              ? false
+              : isNulSeparated;
+          let matches = /^(?:-[nPLsdE]|--(?:max-args|max-procs|delimiter))$/.test(literal);
+          let valueWord = matches && literalValues[idx + 1] === null ? words[idx + 1] : null;
+          if (valueWord && isStrictDynamicValuesEnabled() && !isFullyStaticValue(valueWord))
+            return unverifiableRunReason(
+              "xargs",
+              `with ${dynamicArgumentReason("xargs", literal, valueWord)}`,
+            );
           idx += matches ? 1 : 0;
           continue;
         }
-        let f = {
+        let appendedWords = {
           node: words[idx].node,
           value: dynamicValue(
             "the words xargs appends, which may begin with - unless they follow a -- operand or come NUL-separated from find -print0 into xargs -0",
             {
               ...DYNAMIC_VALUE_FLAGS,
-              optionSafe: u && isSafeFindPrint0(n, state),
+              optionSafe: isNulSeparated && isSafeFindPrint0(context, state),
             },
           ),
         };
-        return d !== null && !d.startsWith("-") && (o === null || !d.includes(o))
+        return literal !== null &&
+          !literal.startsWith("-") &&
+          (replaceToken === null || !literal.includes(replaceToken))
           ? checkExecSlotCommand(
-              d,
+              literal,
               [
                 ...words.slice(idx + 1).map((word) =>
-                  o !== null && (word.value.kind !== "literal" || word.value.text.includes(o))
+                  replaceToken !== null &&
+                  (word.value.kind !== "literal" || word.value.text.includes(replaceToken))
                     ? {
                         node: word.node,
                         value: dynamicValue("the words xargs substitutes"),
                       }
                     : word,
                 ),
-                f,
-                f,
+                appendedWords,
+                appendedWords,
               ],
               state,
             )
-          : unverifiableRunReason("xargs", `with ${d ?? describeWordValue(values[idx])}`);
+          : unverifiableRunReason("xargs", `with ${literal ?? describeWordValue(values[idx])}`);
       }
       return null;
     }
@@ -2281,8 +2475,8 @@ function checkBuiltinArguments(program, words, state, n) {
 //@ chunk-63f0f3kd.js:93992-94027 placement
 var TENGU_RUSTLING_LIGHTHOUSE = "tengu_rustling_lighthouse";
 //@ chunk-63f0f3kd.js:94027-94310 placement
-function checkExecSlotCommand(t, words, state) {
-  let program = programBaseName(t);
+function checkExecSlotCommand(programPath, words, state) {
+  let program = programBaseName(programPath);
   if (KNOWN_PROGRAMS.has(program)) return checkBuiltinArguments(program, words, state);
   let rules = INTERPRETER_RULES.get(program);
   if (rules)
@@ -2302,21 +2496,21 @@ function checkExecSlotCommand(t, words, state) {
     : unverifiableRunReason(program, "from a find -exec or xargs slot");
 }
 //@ chunk-63f0f3kd.js:94310-94373 placement
-function findMatching(t, e) {
-  return t.find((i) => i !== null && e.test(i)) ?? null;
+function findMatching(values, pattern) {
+  return values.find((value) => value !== null && pattern.test(value)) ?? null;
 }
 //@ chunk-63f0f3kd.js:94373-94506 placement
-function isTestOperand(t) {
-  return t.kind === "literal"
-    ? PLAIN_TEXT_RE.test(t.text) || /^(?:!=?|==?|=~|\]|\(|\)|<|>)$/.test(t.text)
-    : t.kind === "dynamic" && t.integer;
+function isTestOperand(value) {
+  return value.kind === "literal"
+    ? PLAIN_TEXT_RE.test(value.text) || /^(?:!=?|==?|=~|\]|\(|\)|<|>)$/.test(value.text)
+    : value.kind === "dynamic" && value.integer;
 }
 //@ chunk-63f0f3kd.js:94506-94632 placement
-function matchesWhole(t, script) {
-  t.lastIndex = 0;
-  while (t.lastIndex < script.length) {
-    let lastIndex = t.lastIndex;
-    if (!t.test(script) || t.lastIndex === lastIndex) return false;
+function matchesWhole(pattern, script) {
+  pattern.lastIndex = 0;
+  while (pattern.lastIndex < script.length) {
+    let lastIndex = pattern.lastIndex;
+    if (!pattern.test(script) || pattern.lastIndex === lastIndex) return false;
   }
   return true;
 }
@@ -2324,37 +2518,38 @@ function matchesWhole(t, script) {
 /**
  * 解析 sed 参数：找出脚本程序参数位置（被 -e/--expression 指定时为空）、选项结束下标与 -i 的后缀。
  */
-function parseSedProgram(literalValues, e) {
-  let i = [];
-  let n = false;
-  let r = false;
-  let s = 0;
-  for (; s < literalValues.length; s++) {
-    let l = literalValues[s] ?? null;
-    if (l === null) n ||= !r;
-    else if (!isOptionWord(l)) break;
-    else if (isSedExpressionFlag(l)) {
-      r = true;
-      s++;
-    } else if (l.startsWith("--expression=")) r = true;
-    else if (e && l === "-i" && ++s < literalValues.length) i.push(literalValues[s] ?? null);
+function parseSedProgram(literalValues, allowInPlace) {
+  let suffixes = [];
+  let hasDynamicWord = false;
+  let hasExpressionFlag = false;
+  let optionIndex = 0;
+  for (; optionIndex < literalValues.length; optionIndex++) {
+    let word = literalValues[optionIndex] ?? null;
+    if (word === null) hasDynamicWord ||= !hasExpressionFlag;
+    else if (!isOptionWord(word)) break;
+    else if (isSedExpressionFlag(word)) {
+      hasExpressionFlag = true;
+      optionIndex++;
+    } else if (word.startsWith("--expression=")) hasExpressionFlag = true;
+    else if (allowInPlace && word === "-i" && ++optionIndex < literalValues.length)
+      suffixes.push(literalValues[optionIndex] ?? null);
   }
-  let a = literalValues[s] === "--" ? s + 1 : s;
-  let o = a < literalValues.length ? (literalValues[a] ?? null) : "";
-  let u = r || o?.startsWith(".") ? "" : o;
+  let programIndex = literalValues[optionIndex] === "--" ? optionIndex + 1 : optionIndex;
+  let scriptCandidate = programIndex < literalValues.length ? (literalValues[programIndex] ?? null) : "";
+  let script = hasExpressionFlag || scriptCandidate?.startsWith(".") ? "" : scriptCandidate;
   return {
-    program: n ? null : u,
-    optionsEnd: s,
-    suffixes: i,
+    program: hasDynamicWord ? null : script,
+    optionsEnd: optionIndex,
+    suffixes,
   };
 }
 //@ chunk-63f0f3kd.js:94998-95061 placement
-function isOptionWord(literalValue) {
-  return !!literalValue && literalValue !== "-" && literalValue !== "--" && literalValue.startsWith("-");
+function isOptionWord(word) {
+  return !!word && word !== "-" && word !== "--" && word.startsWith("-");
 }
 //@ chunk-63f0f3kd.js:95061-95112 placement
-function isSedExpressionFlag(t) {
-  return t === "-e" || t === "--expression";
+function isSedExpressionFlag(word) {
+  return word === "-e" || word === "--expression";
 }
 export {
   programBaseName,

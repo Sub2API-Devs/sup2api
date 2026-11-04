@@ -25,7 +25,7 @@ var mcpNonInteractiveCommand = {
   get isHidden() {
     return !getIsNonInteractiveSession();
   },
-  load: () => import("./chunk-3re05e6m.js"),
+  load: () => import("./call.lazy.js"),
 };
 var mcpCommandDefinition = {
   type: "local-jsx",

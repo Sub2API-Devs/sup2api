@@ -18,19 +18,19 @@ import { POWERSHELL_TOOL_NAME } from "../../tools/PowerShellTool/toolName.js";
 /**
  * 提交后钩子：git commit 成功后提示 ultrareview。
  */
-async function ultrareviewPostCommitHook(o, a, l, u, s) {
-  if (o.hook_event_name !== "PostToolUse") return {};
-  if (getIsNonInteractiveSession() || o.agent_id !== undefined) return {};
-  let command = o.tool_input?.command;
+async function ultrareviewPostCommitHook(hookInput, toolUseId, hookOptions, hookRuntime, context) {
+  if (hookInput.hook_event_name !== "PostToolUse") return {};
+  if (getIsNonInteractiveSession() || hookInput.agent_id !== undefined) return {};
+  let command = hookInput.tool_input?.command;
   if (typeof command !== "string" || !looksLikeGitCommit(command)) return {};
-  let toolResponse = o.tool_response;
+  let toolResponse = hookInput.tool_response;
   let stdout = typeof toolResponse?.stdout === "string" ? toolResponse.stdout : "";
   let stderr = typeof toolResponse?.stderr === "string" ? toolResponse.stderr : "";
   if (!looksLikeCommitOutput(stdout, stderr, undefined)) return {};
-  let n = ultrareviewPostCommitTip(s?.storageV5);
-  return n !== null
+  let tip = ultrareviewPostCommitTip(context?.storageV5);
+  return tip !== null
     ? {
-        systemMessage: n,
+        systemMessage: tip,
       }
     : {};
 }
@@ -51,3 +51,4 @@ function registerSessionFileAccessHooks() {
     ],
   });
 }
+export { registerSessionFileAccessHooks };

@@ -5,10 +5,10 @@
  * pieces: chunk-egr0twnb.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:125540-125988 cjs-fingerprint
-var require_dust = x(function (cjsExports, cjsModule) {
+var require_dust = __commonJS(function (cjsExports, cjsModule) {
   function dust(hljs) {
     return {
       name: "Dust",

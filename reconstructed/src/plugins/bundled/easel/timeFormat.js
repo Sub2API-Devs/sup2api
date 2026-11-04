@@ -35,36 +35,44 @@ var parseISOString = (s) => Date.UTC(s[0] ?? 0, ...s.slice(1));
 /**
  * 周末或周首日
  */
-function isWeekendOrFirst(e, zone) {
-  let utcDay = new Date(parseISOString(logEaselError(e, zone))).getUTCDay();
+function isWeekendOrFirst(ms, zone) {
+  let utcDay = new Date(parseISOString(logEaselError(ms, zone))).getUTCDay();
   return utcDay === 0 || utcDay === SATURDAY_DAY_INDEX;
 }
 //@ chunk-3s7ydtfd.js:11412-11459 placement
 /**
  * 周序号
  */
-var weekIndex = (e, t) =>
-  Math.floor((parseISOString(logEaselError(e, t)) / MS_PER_DAY + ISO_WEEK_OFFSET_DAYS) / DAYS_PER_WEEK_TICKS);
+var weekIndex = (ms, zone) =>
+  Math.floor(
+    (parseISOString(logEaselError(ms, zone)) / MS_PER_DAY + ISO_WEEK_OFFSET_DAYS) / DAYS_PER_WEEK_TICKS,
+  );
 //@ chunk-3s7ydtfd.js:11459-11532 placement
 /**
  * 跨周但无周末点
  */
-var spansWeeksWithoutWeekend = (e, t) =>
-  weekIndex(e.at(-1) ?? 0, t) - weekIndex(e[0] ?? 0, t) >= MIN_WEEKS_SPANNED &&
-  !e.some((o) => isWeekendOrFirst(o, t));
+var spansWeeksWithoutWeekend = (times, zone) =>
+  weekIndex(times.at(-1) ?? 0, zone) - weekIndex(times[0] ?? 0, zone) >= MIN_WEEKS_SPANNED &&
+  !times.some((ms) => isWeekendOrFirst(ms, zone));
 //@ chunk-3s7ydtfd.js:11532-11605 placement
 /**
  * 时间在区间的相对位置
  */
-var positionRatio = (axisSpan) => (t) =>
+var positionRatio = (axisSpan) => (ms) =>
   axisSpan.untilMs > axisSpan.fromMs
-    ? (t - axisSpan.fromMs) / (axisSpan.untilMs - axisSpan.fromMs)
+    ? (ms - axisSpan.fromMs) / (axisSpan.untilMs - axisSpan.fromMs)
     : FALLBACK_POSITION_RATIO;
 //@ chunk-3s7ydtfd.js:11605-11805 placement
-var TIME_TICK_STEPS = (e, t) => (o) => {
-  let r = t.get(o) ?? e.periodStarts.findLastIndex((periodStart) => periodStart <= o);
-  let s = e.periodStarts[r] ?? e.axisSpan.fromMs;
-  return (r + (o - s) / ((e.periodStarts[r + 1] ?? e.axisSpan.untilMs) - s)) / e.periodStarts.length;
+var TIME_TICK_STEPS = (timeline, indexByStart) => (ms) => {
+  let periodIndex =
+    indexByStart.get(ms) ?? timeline.periodStarts.findLastIndex((periodStart) => periodStart <= ms);
+  let periodStart = timeline.periodStarts[periodIndex] ?? timeline.axisSpan.fromMs;
+  return (
+    (periodIndex +
+      (ms - periodStart) /
+        ((timeline.periodStarts[periodIndex + 1] ?? timeline.axisSpan.untilMs) - periodStart)) /
+    timeline.periodStarts.length
+  );
 };
 //@ chunk-3s7ydtfd.js:11805-11914 placement
 /**
@@ -72,7 +80,10 @@ var TIME_TICK_STEPS = (e, t) => (o) => {
  */
 function tickStepsFor(timeline) {
   return timeline.periodStarts.length > 0
-    ? TIME_TICK_STEPS(timeline, new Map(timeline.periodStarts.map((periodStart, r) => [periodStart, r])))
+    ? TIME_TICK_STEPS(
+        timeline,
+        new Map(timeline.periodStarts.map((periodStart, index) => [periodStart, index])),
+      )
     : positionRatio(timeline.axisSpan);
 }
 //@ chunk-3s7ydtfd.js:11914-11937 placement
@@ -84,7 +95,8 @@ var DATE_FIELD_ZEROES = [0, 0, 1, 0, 0, 0, 0];
 /**
  * 字段序号过滤器
  */
-var ranksChangingFields = (e) => (t) => e.some((o) => o >= t.fieldIndex);
+var ranksChangingFields = (changedFields) => (unit) =>
+  changedFields.some((fieldIndex) => fieldIndex >= unit.fieldIndex);
 //@ chunk-3s7ydtfd.js:11983-12107 placement
 /**
  * 默认时间步长（按时间字段的变化选单位）。
@@ -93,7 +105,9 @@ var defaultTimeStep = (times, zone) => ({
   unit:
     EASEL_PROMPT_HINT.findLast(
       ranksChangingFields(
-        times.map((o) => logEaselError(o, zone).findLastIndex((r, s) => r !== DATE_FIELD_ZEROES[s])),
+        times.map((ms) =>
+          logEaselError(ms, zone).findLastIndex((value, index) => value !== DATE_FIELD_ZEROES[index]),
+        ),
       ),
     ) ?? EASEL_PROMPT_HINT[SECONDS_FIELD_INDEX],
   count: 1,
@@ -105,78 +119,81 @@ var parts = "Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec".split(" ");
 /**
  * 时区偏移量
  */
-var zoneOffsetMs = (e, t) => (t.zone === "UTC" ? 0 : parseISOString(logEaselError(e, t.zone)) - e);
+var zoneOffsetMs = (ms, context) =>
+  context.zone === "UTC" ? 0 : parseISOString(logEaselError(ms, context.zone)) - ms;
 //@ chunk-3s7ydtfd.js:12223-12315 placement
 /**
  * 把 UTC 时间换算到当地
  */
-function localizeTimestamp(e, t) {
-  let isoString = parseISOString(e);
-  let r = isoString - zoneOffsetMs(isoString - MS_PER_DAY, t);
-  let s = isoString - zoneOffsetMs(r, t);
-  return s + zoneOffsetMs(s, t) === isoString ? s : Math.max(r, s);
+function localizeTimestamp(ms, context) {
+  let isoString = parseISOString(ms);
+  let dayBefore = isoString - zoneOffsetMs(isoString - MS_PER_DAY, context);
+  let localized = isoString - zoneOffsetMs(dayBefore, context);
+  return localized + zoneOffsetMs(localized, context) === isoString
+    ? localized
+    : Math.max(dayBefore, localized);
 }
 //@ chunk-3s7ydtfd.js:12315-12491 placement
 /**
  * 按步长从起点生成直到结束时间的各周期起点。
  */
-function periodStarts(e) {
-  let { start, step } = e;
+function periodStarts(context) {
+  let { start, step } = context;
   let { fieldIndex } = step.unit;
-  let s = [];
-  let p = start[fieldIndex] ?? 0;
-  let m = localizeTimestamp(start, e);
-  while (m <= e.untilMs) {
-    if (m > (s.at(-1) ?? -1 / 0)) s.push(m);
-    p += step.count;
-    m = localizeTimestamp(start.with(fieldIndex, p), e);
+  let starts = [];
+  let fieldValue = start[fieldIndex] ?? 0;
+  let ms = localizeTimestamp(start, context);
+  while (ms <= context.untilMs) {
+    if (ms > (starts.at(-1) ?? -1 / 0)) starts.push(ms);
+    fieldValue += step.count;
+    ms = localizeTimestamp(start.with(fieldIndex, fieldValue), context);
   }
-  return s;
+  return starts;
 }
 //@ chunk-3s7ydtfd.js:12491-12517 placement
 /**
  * 集合包含判断
  */
-var hasInSet = (e) => (t) => e.has(t);
+var hasInSet = (set) => (value) => set.has(value);
 //@ chunk-3s7ydtfd.js:12517-12554 placement
 /**
  * 步长覆盖的毫秒数
  */
-var stepSpan = (e) => e.unit.typicalMs * e.count;
+var stepSpan = (step) => step.unit.typicalMs * step.count;
 //@ chunk-3s7ydtfd.js:12554-12643 placement
 /**
  * 刻度起点与终点
  */
-var tickContext = (e, t) => ({
-  start: logEaselError(t.fromMs, t.zone),
-  step: e,
-  untilMs: t.untilMs + TICK_OVERHANG_STEPS * stepSpan(e),
-  zone: t.zone,
+var tickContext = (step, span) => ({
+  start: logEaselError(span.fromMs, span.zone),
+  step,
+  untilMs: span.untilMs + TICK_OVERHANG_STEPS * stepSpan(step),
+  zone: span.zone,
 });
 //@ chunk-3s7ydtfd.js:12643-12813 placement
 /**
  * 用某步长生成时间网格，所有读数都落在网格上才返回。
  */
-function tryTimeGrid(e, timeStep, o) {
-  let r = periodStarts(tickContext(timeStep, o));
-  if (!e.every(hasInSet(new Set(r)))) return null;
-  let filtered = r.filter((m) => m <= o.untilMs);
+function tryTimeGrid(times, step, span) {
+  let starts = periodStarts(tickContext(step, span));
+  if (!times.every(hasInSet(new Set(starts)))) return null;
+  let filtered = starts.filter((ms) => ms <= span.untilMs);
   return {
-    step: timeStep,
+    step,
     periodStarts: filtered,
-    endMs: r[filtered.length] ?? o.untilMs,
+    endMs: starts[filtered.length] ?? span.untilMs,
   };
 }
 //@ chunk-3s7ydtfd.js:12813-12850 placement
 /**
  * 跨度小于一天只用 UTC
  */
-var zonesFor = (e, zone) => (e < MS_PER_DAY ? ["UTC"] : ["UTC", zone]);
+var zonesFor = (medianMs, zone) => (medianMs < MS_PER_DAY ? ["UTC"] : ["UTC", zone]);
 //@ chunk-3s7ydtfd.js:12850-12903 placement
 /**
  * 该字段不同
  */
-var differsAtField = (e, t) => (o) => e[o.fieldIndex] !== t[o.fieldIndex];
+var differsAtField = (a, b) => (unit) => a[unit.fieldIndex] !== b[unit.fieldIndex];
 //@ chunk-3s7ydtfd.js:12903-12949 placement
 /**
  * 构造时间范围
@@ -190,39 +207,44 @@ var timeRange = (fromMs, untilMs, zone) => ({
 /**
  * 中位数
  */
-var medianValue = (e) => e.toSorted((t, o) => t - o)[Math.floor(e.length / HALF_DIVISOR)] ?? 0;
+var medianValue = (values) => values.toSorted((a, b) => a - b)[Math.floor(values.length / HALF_DIVISOR)] ?? 0;
 //@ chunk-3s7ydtfd.js:13012-13144 placement
 /**
  * 由单位与跨度生成步长（按天时可跳过周末）。
  */
-function makeTimeStep(e, t, o) {
-  let max = Math.max(1, Math.round(t / e.typicalMs));
-  let skipsWeekends = o && e.fieldIndex === DAY_FIELD_INDEX && max === 1;
+function makeTimeStep(unit, medianMs, allowWeekendSkip) {
+  let max = Math.max(1, Math.round(medianMs / unit.typicalMs));
+  let skipsWeekends = allowWeekendSkip && unit.fieldIndex === DAY_FIELD_INDEX && max === 1;
   return {
-    unit: e,
+    unit,
     count: max,
     skipsWeekends,
   };
 }
 //@ chunk-3s7ydtfd.js:13144-13573 placement
-function formatTimeTick(e, t, o) {
-  let { zone } = t;
-  let fromMs = e[0];
-  let untilMs = e.at(-1);
-  if (!(fromMs !== undefined && untilMs !== undefined && e.length >= MIN_DECIMALS_TICKS)) return null;
-  let mapped = e.slice(1).map((x, l) => x - (e[l] ?? x));
-  let a = medianValue(mapped);
-  if ((untilMs - fromMs) / a > e.length * MAX_LABEL_RATIO) return null;
-  let i = e[mapped.indexOf(a)] ?? fromMs;
-  for (let x of zonesFor(a, zone)) {
-    let last = EASEL_PROMPT_HINT.findLast(differsAtField(logEaselError(i, x), logEaselError(i + a, x)));
-    if (!last) return null;
-    let timeStep = makeTimeStep(last, a, o);
-    let d = tryTimeGrid(e, timeStep, timeRange(fromMs, untilMs, x));
-    if (d)
+function formatTimeTick(times, timeline, allowWeekendSkip) {
+  let { zone } = timeline;
+  let fromMs = times[0];
+  let untilMs = times.at(-1);
+  if (!(fromMs !== undefined && untilMs !== undefined && times.length >= MIN_DECIMALS_TICKS)) return null;
+  let mapped = times.slice(1).map((ms, index) => ms - (times[index] ?? ms));
+  let medianStep = medianValue(mapped);
+  if ((untilMs - fromMs) / medianStep > times.length * MAX_LABEL_RATIO) return null;
+  let referenceMs = times[mapped.indexOf(medianStep)] ?? fromMs;
+  for (let candidateZone of zonesFor(medianStep, zone)) {
+    let unit = EASEL_PROMPT_HINT.findLast(
+      differsAtField(
+        logEaselError(referenceMs, candidateZone),
+        logEaselError(referenceMs + medianStep, candidateZone),
+      ),
+    );
+    if (!unit) return null;
+    let timeStep = makeTimeStep(unit, medianStep, allowWeekendSkip);
+    let grid = tryTimeGrid(times, timeStep, timeRange(fromMs, untilMs, candidateZone));
+    if (grid)
       return {
-        ...d,
-        periodStarts: d.periodStarts.filter(
+        ...grid,
+        periodStarts: grid.periodStarts.filter(
           (periodStart) => !(timeStep.skipsWeekends && isWeekendOrFirst(periodStart, zone)),
         ),
       };
@@ -233,58 +255,65 @@ function formatTimeTick(e, t, o) {
 /**
  * 某字段变化
  */
-var fieldChanged = (e) => (t, o) => t !== e[o];
+var fieldChanged = (expected) => (value, index) => value !== expected[index];
 //@ chunk-3s7ydtfd.js:13601-13780 placement
 /**
  * 刻度标签上下文：时区与公共前缀字段。
  */
-function tickLabelContext(e, t) {
-  let dataSpan = e.dataSpan;
-  let r = logEaselError(dataSpan.fromMs, dataSpan.zone);
-  let index = r.findIndex(fieldChanged(logEaselError(dataSpan.untilMs, dataSpan.zone)));
+function tickLabelContext(timeline, ms) {
+  let dataSpan = timeline.dataSpan;
+  let fromFields = logEaselError(dataSpan.fromMs, dataSpan.zone);
+  let index = fromFields.findIndex(fieldChanged(logEaselError(dataSpan.untilMs, dataSpan.zone)));
   return {
     zone: dataSpan.zone,
     areTicks: !ALLOW_ZONED_TIME,
-    fieldsBefore: logEaselError(t, dataSpan.zone).slice(0, index === -1 ? r.length : index),
+    fieldsBefore: logEaselError(ms, dataSpan.zone).slice(0, index === -1 ? fromFields.length : index),
   };
 }
 //@ chunk-3s7ydtfd.js:13780-14217 placement
-function pickTickStep(e, t, o) {
-  let { fieldIndex } = t.unit;
-  let s = [];
-  let fieldsBefore = o.fieldsBefore;
-  for (let m of e) {
-    let n = logEaselError(m, o.zone);
-    let [a, f, i, x, l, u] = n;
-    let d = a !== fieldsBefore[YEAR_FIELD_INDEX];
-    let c =
+function pickTickStep(times, step, context) {
+  let { fieldIndex } = step.unit;
+  let labels = [];
+  let fieldsBefore = context.fieldsBefore;
+  for (let ms of times) {
+    let fileds = logEaselError(ms, context.zone);
+    let [year, month, day, hour, minute, second] = fileds;
+    let yearChanged = year !== fieldsBefore[YEAR_FIELD_INDEX];
+    let showDate =
       fieldIndex >= MONTH_FIELD_INDEX &&
       (fieldIndex <= DAY_FIELD_INDEX ||
-        d ||
-        f !== fieldsBefore[MONTH_FIELD_INDEX] ||
-        i !== fieldsBefore[DAY_FIELD_INDEX]);
-    let g = fieldIndex === YEAR_FIELD_INDEX || d;
-    let T = fieldIndex > DAY_FIELD_INDEX && !(o.areTicks && c && x === 0 && l === 0 && u === 0);
-    let L = [];
-    if (c) {
-      let _ = fieldIndex === MONTH_FIELD_INDEX;
-      L.push(_ ? `${parts[f]}` : `${parts[f]} ${i}`);
+        yearChanged ||
+        month !== fieldsBefore[MONTH_FIELD_INDEX] ||
+        day !== fieldsBefore[DAY_FIELD_INDEX]);
+    let showYear = fieldIndex === YEAR_FIELD_INDEX || yearChanged;
+    let showTime =
+      fieldIndex > DAY_FIELD_INDEX &&
+      !(context.areTicks && showDate && hour === 0 && minute === 0 && second === 0);
+    let partsOut = [];
+    if (showDate) {
+      let isMonthOnly = fieldIndex === MONTH_FIELD_INDEX;
+      partsOut.push(isMonthOnly ? `${parts[month]}` : `${parts[month]} ${day}`);
     }
-    if (g) L.push(String(a));
-    if (T) {
-      let _ = fieldIndex === SECONDS_FIELD_INDEX;
-      L.push((_ ? [x, l, u] : [x, l]).map((w) => String(w).padStart(TIME_PART_PAD_WIDTH, "0")).join(":"));
+    if (showYear) partsOut.push(String(year));
+    if (showTime) {
+      let withSeconds = fieldIndex === SECONDS_FIELD_INDEX;
+      partsOut.push(
+        (withSeconds ? [hour, minute, second] : [hour, minute])
+          .map((value) => String(value).padStart(TIME_PART_PAD_WIDTH, "0"))
+          .join(":"),
+      );
     }
-    s.push(L.join(" "));
-    fieldsBefore = n;
+    labels.push(partsOut.join(" "));
+    fieldsBefore = fileds;
   }
-  return s;
+  return labels;
 }
 //@ chunk-3s7ydtfd.js:14217-14266 placement
 /**
  * 某时刻的刻度文本
  */
-var tickTextAt = (e, ms) => pickTickStep([ms], e.precision, tickLabelContext(e, ms))[0] ?? "";
+var tickTextAt = (timeline, ms) =>
+  pickTickStep([ms], timeline.precision, tickLabelContext(timeline, ms))[0] ?? "";
 //@ chunk-3s7ydtfd.js:14266-14316 placement
 /**
  * 构造步长对象
@@ -295,12 +324,12 @@ var tickStep = (unit, count) => ({
   skipsWeekends: false,
 });
 //@ chunk-3s7ydtfd.js:14316-14396 placement
-var rp = EASEL_PROMPT_HINT.flatMap((e) => e.counts.map((count) => tickStep(e, count))).toSorted(
-  (e, t) => stepSpan(e) - stepSpan(t),
-);
+var TICK_STEPS_BY_SPAN = EASEL_PROMPT_HINT.flatMap((unit) =>
+  unit.counts.map((count) => tickStep(unit, count)),
+).toSorted((a, b) => stepSpan(a) - stepSpan(b));
 export {
   pickTickStep,
-  rp,
+  TICK_STEPS_BY_SPAN,
   stepSpan,
   periodStarts,
   isWeekendOrFirst,

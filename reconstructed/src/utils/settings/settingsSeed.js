@@ -33,90 +33,94 @@ import { logEvent } from "../../services/analytics/index.js";
 import { fromEnum } from "../../services/analytics/safeMetadata.js";
 
 //@ chunk-q8cqcff6.js:90356-90809 placement
-async function readSettingsSeed(e, n, r) {
-  let s = await e.read([
+async function readSettingsSeed(backend, settingsPath, previous) {
+  let readResult = await backend.read([
     {
       key: STORAGE_SPACES.userSettings(),
       offset: 0,
       length: MAX_SETTINGS_JSON_BYTES + 1,
     },
   ]);
-  if (!s.ok)
+  if (!readResult.ok)
     return {
       kind: "failing",
-      code: s.error.code,
-      failureClass: "failureClass" in s.error ? s.error.failureClass : undefined,
+      code: readResult.error.code,
+      failureClass: "failureClass" in readResult.error ? readResult.error.failureClass : undefined,
     };
-  let S = s.value.items[0];
-  if (!S.found) return statHomeSpace(e.hostFiles, n);
-  if (S.totalBytes > MAX_SETTINGS_JSON_BYTES)
+  let item = readResult.value.items[0];
+  if (!item.found) return statHomeSpace(backend.hostFiles, settingsPath);
+  if (item.totalBytes > MAX_SETTINGS_JSON_BYTES)
     return {
       kind: "oversize",
     };
-  let contentHash = computeContentHash(S.value);
+  let contentHash = computeContentHash(item.value);
   let parsed =
-    r !== undefined && r.contentHash === contentHash
-      ? r.parsed
-      : parseSettingsContent(decodeTextBuffer(S.value), n);
+    previous !== undefined && previous.contentHash === contentHash
+      ? previous.parsed
+      : parseSettingsContent(decodeTextBuffer(item.value), settingsPath);
   return {
     kind: "seeded",
     contentHash,
-    size: S.totalBytes,
+    size: item.totalBytes,
     parsed,
   };
 }
 //@ chunk-q8cqcff6.js:90809-91049 placement
-async function statHomeSpace(hostFiles, n) {
-  let r;
+async function statHomeSpace(hostFiles, settingsPath) {
+  let statResult;
   try {
-    r = await hostFiles.stat(PathSpace.home(n));
+    statResult = await hostFiles.stat(PathSpace.home(settingsPath));
   } catch (error) {
     return {
       kind: "failing",
       code: errorMessage(error),
     };
   }
-  if (r.ok)
-    return r.value.kind === "absent"
+  if (statResult.ok)
+    return statResult.value.kind === "absent"
       ? {
           kind: "absent",
         }
       : {
           kind: "failing",
-          code: r.value.kind,
+          code: statResult.value.kind,
         };
-  return isUnsupportedStorageError(r.error)
+  return isUnsupportedStorageError(statResult.error)
     ? {
         kind: "absent",
       }
-    : failingReadDescriptor(r.error);
+    : failingReadDescriptor(statResult.error);
 }
 //@ chunk-q8cqcff6.js:91049-91715 placement
-async function seedUserSettings(e, n) {
+async function seedUserSettings(store, read) {
   if (!isStorageV5Enabled()) return;
-  let epoch = e.epoch;
+  let epoch = store.epoch;
   try {
-    let s = await n.read();
-    let S =
-      s.kind === "seeded"
-        ? s.parsed
-        : s.kind === "absent" && n.whenAbsent === "seedAbsence"
+    let result = await read.read();
+    let parsed =
+      result.kind === "seeded"
+        ? result.parsed
+        : result.kind === "absent" && read.whenAbsent === "seedAbsence"
           ? missingSettingsFileResult()
           : undefined;
-    if (S === undefined) {
-      logForDebugging(`settings: ${n.label} not re-seeded (${seedOutcomeLabel(s)}); the file read serves`);
-      return;
-    }
-    if (n.source !== "userSettings" && e.walkReadDiffers(n.path, S)) {
+    if (parsed === undefined) {
       logForDebugging(
-        `settings: ${n.label} not re-seeded (the file read already saw different content this generation); the file read serves`,
+        `settings: ${read.label} not re-seeded (${seedOutcomeLabel(result)}); the file read serves`,
       );
       return;
     }
-    if (s.kind === "absent") logMissingSettingsFile(n.path);
-    return e.seedParsedFile(n.path, n.source, S, epoch) ? e.retainLayer(n.path, S) : undefined;
+    if (read.source !== "userSettings" && store.walkReadDiffers(read.path, parsed)) {
+      logForDebugging(
+        `settings: ${read.label} not re-seeded (the file read already saw different content this generation); the file read serves`,
+      );
+      return;
+    }
+    if (result.kind === "absent") logMissingSettingsFile(read.path);
+    return store.seedParsedFile(read.path, read.source, parsed, epoch)
+      ? store.retainLayer(read.path, parsed)
+      : undefined;
   } catch (error) {
-    logForDebugging(`settings: ${n.label} not re-seeded: ${errorMessage(error)}; the file read serves`, {
+    logForDebugging(`settings: ${read.label} not re-seeded: ${errorMessage(error)}; the file read serves`, {
       level: "warn",
     });
     return;
@@ -126,46 +130,46 @@ async function seedUserSettings(e, n) {
 /**
  * 构造用户设置的预读描述（来源、路径、读取函数、缺省处理）。
  */
-function userSettingsSeedRead(e, n) {
+function userSettingsSeedRead(backend, settingsPath) {
   return {
     source: "userSettings",
-    path: n,
-    read: () => readSettingsSeed(e, n),
+    path: settingsPath,
+    read: () => readSettingsSeed(backend, settingsPath),
     label: "user settings",
     whenAbsent: "seedAbsence",
   };
 }
 //@ chunk-q8cqcff6.js:91835-92019 placement
-async function readUserNamedSeed(hostFiles, n) {
+async function readUserNamedSeed(hostFiles, settingsPath) {
   if (!hostFiles.serves("userNamed"))
     return {
       kind: "failing",
       code: UNSUPPORTED,
     };
-  if (!isInClaudeConfigHome(n))
+  if (!isInClaudeConfigHome(settingsPath))
     try {
-      await vetRepoSettingsPathAsync(getFsImplementation(), n);
+      await vetRepoSettingsPathAsync(getFsImplementation(), settingsPath);
     } catch {
       return {
         kind: "failing",
         code: SYMLINK_TO_NETWORK_PATH_CODE,
       };
     }
-  return readSeedFile(hostFiles, PathSpace.userNamed(n), n, false);
+  return readSeedFile(hostFiles, PathSpace.userNamed(settingsPath), settingsPath, false);
 }
 //@ chunk-q8cqcff6.js:92019-92281 placement
-async function readSystemSeed(backend, n, r) {
-  let seedBytes = await readSeedBytes(backend, PathSpace.system(n));
+async function readSystemSeed(backend, settingsPath, previous) {
+  let seedBytes = await readSeedBytes(backend, PathSpace.system(settingsPath));
   if (seedBytes.kind !== "bytes") return seedBytes;
   return {
     kind: "seeded",
     contentHash: seedBytes.contentHash,
     size: seedBytes.size,
     parsed:
-      r !== undefined && r.contentHash === seedBytes.contentHash
-        ? r.parsed
+      previous !== undefined && previous.contentHash === seedBytes.contentHash
+        ? previous.parsed
         : {
-            ...parseSettingsContent(decodeTextBuffer(seedBytes.bytes), n, true),
+            ...parseSettingsContent(decodeTextBuffer(seedBytes.bytes), settingsPath, true),
             ...(seedBytes.owner && {
               fileOwner: seedBytes.owner,
             }),
@@ -173,14 +177,14 @@ async function readSystemSeed(backend, n, r) {
   };
 }
 //@ chunk-q8cqcff6.js:92281-92445 placement
-async function readSeedFile(backend, space, r, s) {
+async function readSeedFile(backend, space, settingsPath, isSystemSpace) {
   let seedBytes = await readSeedBytes(backend, space);
   if (seedBytes.kind !== "bytes") return seedBytes;
   return {
     kind: "seeded",
     contentHash: seedBytes.contentHash,
     size: seedBytes.size,
-    parsed: parseSettingsContent(decodeTextBuffer(seedBytes.bytes), r, s),
+    parsed: parseSettingsContent(decodeTextBuffer(seedBytes.bytes), settingsPath, isSystemSpace),
   };
 }
 //@ chunk-q8cqcff6.js:92445-92991 placement
@@ -232,24 +236,24 @@ async function readSeedBytes(backend, space) {
 /**
  * 经存储后端列出托管设置 drop-in 目录中的设置文件名（排序），目录不存在或不是目录时为空列表。
  */
-async function listManagedDropIns(hostFiles, n) {
-  let r = await hostFiles.listFolder(PathSpace.system(n));
-  if (!r.ok) {
-    if (r.error.code === "Failed" && r.error.telemetryCode === "ENOTDIR")
+async function listManagedDropIns(hostFiles, dropInDir) {
+  let listResult = await hostFiles.listFolder(PathSpace.system(dropInDir));
+  if (!listResult.ok) {
+    if (listResult.error.code === "Failed" && listResult.error.telemetryCode === "ENOTDIR")
       return {
         kind: "listed",
         names: [],
       };
-    return failingReadDescriptor(r.error);
+    return failingReadDescriptor(listResult.error);
   }
-  if (!r.value.found)
+  if (!listResult.value.found)
     return {
       kind: "listed",
       names: [],
     };
   return {
     kind: "listed",
-    names: r.value.entries
+    names: listResult.value.entries
       .filter(
         (entry) =>
           (entry.kind === "file" || entry.kind === "link") && isManagedSettingsDropInName(entry.name),
@@ -262,9 +266,11 @@ async function listManagedDropIns(hostFiles, n) {
 /**
  * 把设置预读结果转为日志用的标签。
  */
-function seedOutcomeLabel(e) {
-  if (e.kind !== "failing") return e.kind;
-  return e.code === UNSUPPORTED ? "the backend does not serve this space" : `backend read failed: ${e.code}`;
+function seedOutcomeLabel(outcome) {
+  if (outcome.kind !== "failing") return outcome.kind;
+  return outcome.code === UNSUPPORTED
+    ? "the backend does not serve this space"
+    : `backend read failed: ${outcome.code}`;
 }
 //@ chunk-q8cqcff6.js:93499-93594 placement
 function failingReadDescriptor(error) {
@@ -278,11 +284,11 @@ function failingReadDescriptor(error) {
 /**
  * 构造项目设置的预读描述。
  */
-function projectSettingsSeedRead(e, source, r, label) {
+function projectSettingsSeedRead(context, source, settingsPath, label) {
   return {
     source,
-    path: r,
-    read: () => readUserNamedSeed(e.hostFiles, r),
+    path: settingsPath,
+    read: () => readUserNamedSeed(context.hostFiles, settingsPath),
     label,
     whenAbsent: "seedAbsence",
   };
@@ -291,11 +297,11 @@ function projectSettingsSeedRead(e, source, r, label) {
 /**
  * 构造托管设置文件的预读描述（可复用已读内容）。
  */
-function managedSettingsSeedRead(e, n, label, s) {
+function managedSettingsSeedRead(context, settingsPath, label, store) {
   return {
     source: "policySettings",
-    path: n,
-    read: () => readSystemSeed(e.hostFiles, n, s.managedFileReads.get(n)),
+    path: settingsPath,
+    read: () => readSystemSeed(context.hostFiles, settingsPath, store.managedFileReads.get(settingsPath)),
     label,
     whenAbsent: "fileServes",
   };
@@ -304,17 +310,17 @@ function managedSettingsSeedRead(e, n, label, s) {
 /**
  * seedProjectSettings：预热项目设置读取。
  */
-async function seedProjectSettings(e, n, r) {
-  return seedUserSettings(n, userSettingsSeedRead(e, r));
+async function seedProjectSettings(context, store, settingsPath) {
+  return seedUserSettings(store, userSettingsSeedRead(context, settingsPath));
 }
 //@ chunk-q8cqcff6.js:93895-94076 placement
 class LegacyLocalSettingsProbe {
   firedSites = new Set();
-  fire(e) {
-    if (this.firedSites.has(e)) return;
-    this.firedSites.add(e);
+  fire(site) {
+    if (this.firedSites.has(site)) return;
+    this.firedSites.add(site);
     logEvent("tengu_dead_probe_legacy_local_settings", {
-      site: fromEnum(e),
+      site: fromEnum(site),
     });
   }
   reset() {

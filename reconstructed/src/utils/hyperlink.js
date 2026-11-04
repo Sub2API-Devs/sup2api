@@ -21,17 +21,17 @@ var OSC8_START = "\x1B]8;;";
 var BEL = "\x07";
 //@ chunk-hnwnzznd.js:370-746 fingerprint = createHyperlink (0.455)
 function createHyperlink(url, content, options) {
-  let s = content === undefined ? undefined : stripAnsi(content);
-  let n = s === undefined || isUrl(url, s);
+  let plainContent = content === undefined ? undefined : stripAnsi(content);
+  let contentIsUrl = plainContent === undefined || urlMatchesHost(url, plainContent);
   if (!(
-    (n &&
+    (contentIsUrl &&
       (options?.assumeSupport ?? false) &&
       process.stdout.isTTY === true &&
       (getForcedHyperlinkSetting() ?? true)) ||
     (options?.supportsHyperlinks ?? supportsHyperlinks())
   )) {
     let shownUrlStart = options?.shownUrlStart ?? "";
-    if (content !== undefined && !n) return `${content}${shownUrlStart} (${url})`;
+    if (content !== undefined && !contentIsUrl) return `${content}${shownUrlStart} (${url})`;
     return `${shownUrlStart}${url}`;
   }
   let coloredText = (
@@ -41,9 +41,9 @@ function createHyperlink(url, content, options) {
 }
 //@ chunk-hnwnzznd.js:746-816 placement = isUrl (1)
 /**
- * 主机串是否等于 r（含 http:// 与 https:// 前缀）。名字配错，见 lead 建议。
+ * 判断 URL 串与该主机是否指同一地址：相等，或只差 http:// 、https:// 前缀。只用于决定是否把链接文本换成 URL。
  */
-function isUrl(e, r) {
-  return r === e || e === `http://${r}` || e === `https://${r}`;
+function urlMatchesHost(url, text) {
+  return text === url || url === `http://${text}` || url === `https://${text}`;
 }
-export { createHyperlink, OSC8_START, BEL, isUrl };
+export { createHyperlink, OSC8_START, BEL, urlMatchesHost };

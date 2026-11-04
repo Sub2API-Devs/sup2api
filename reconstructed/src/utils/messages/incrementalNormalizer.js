@@ -14,6 +14,7 @@ import { logError } from "../log.js";
 import { logEvent } from "../../services/analytics/index.js";
 import { fromEnum } from "../../services/analytics/safeMetadata.js";
 import { TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS } from "../errors.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-ag5x7vhf.js:122149-122271 placement
 var NORMALIZER_CHECK_FAILED_EVENT = "tengu_normalizer_retained_output_check_failed";
@@ -35,27 +36,33 @@ var VALUE_KINDS = [
 /**
  * 增量规范化器诊断用的常量：值类型标签、运行时长分档、扫描上限与 32 位上限。
  */
-var VALUE_KIND_LABELS = [...VALUE_KINDS, "object", "array", "n_a"];
-var UPTIME_BUCKETS = [
-  [60, "lt_1m"],
-  [600, "lt_10m"],
-  [3600, "lt_1h"],
-  [21600, "lt_6h"],
-  [86400, "lt_24h"],
-  [1 / 0, "gte_24h"],
-];
-var MAX_CORRUPTION_SCAN = 50000;
-var UINT32_MAX = 4294967295;
+var VALUE_KIND_LABELS; // deferred: uses VALUE_KINDS of its import cycle while loading; runs once the cycle is complete
+var UPTIME_BUCKETS;
+var MAX_CORRUPTION_SCAN;
+var UINT32_MAX;
+deferInit("chunk-ag5x7vhf.js:122369", () => {
+  VALUE_KIND_LABELS = [...VALUE_KINDS, "object", "array", "n_a"];
+  UPTIME_BUCKETS = [
+    [60, "lt_1m"],
+    [600, "lt_10m"],
+    [3600, "lt_1h"],
+    [21600, "lt_6h"],
+    [86400, "lt_24h"],
+    [1 / 0, "gte_24h"],
+  ];
+  MAX_CORRUPTION_SCAN = 50000;
+  UINT32_MAX = 4294967295;
+});
 //@ chunk-ag5x7vhf.js:122527-122862 placement
-function valueKindAt(output, h) {
-  let x = output[h];
-  switch (typeof x) {
+function valueKindAt(output, index) {
+  let value = output[index];
+  switch (typeof value) {
     case "object":
-      return x === null ? "null" : undefined;
+      return value === null ? "null" : undefined;
     case "undefined":
-      return h in output ? "undefined" : "hole";
+      return index in output ? "undefined" : "hole";
     case "number":
-      return Number.isNaN(x) ? "nan" : "number";
+      return Number.isNaN(value) ? "nan" : "number";
     case "boolean":
       return "boolean";
     case "string":
@@ -69,10 +76,10 @@ function valueKindAt(output, h) {
   }
 }
 //@ chunk-ag5x7vhf.js:122862-122964 placement
-function findFirstNonObject(m, h, x) {
-  for (let T = h; T < x; T++) {
-    let k = m[T];
-    if (typeof k !== "object" || k === null) return T;
+function findFirstNonObject(output, start, end) {
+  for (let index = start; index < end; index++) {
+    let value = output[index];
+    if (typeof value !== "object" || value === null) return index;
   }
   return -1;
 }
@@ -83,62 +90,85 @@ function findFirstNonObject(m, h, x) {
 class RetainedOutputChecker {
   #e = 0;
   #t = false;
-  intact(m, h, x, T, k, _, I, D) {
+  intact(output, starts, chains, inputLength, tailLength, expectedLength, headLength, tailReused) {
     this.#e++;
-    let A = -1;
-    let L = -1;
-    let V = -1;
-    let W = -1;
-    let z = false;
+    let lengthOk = -1;
+    let nonObjectIndex = -1;
+    let badStartIndex = -1;
+    let badChainIndex = -1;
+    let arraysOk = false;
     try {
-      z = Array.isArray(m) && Array.isArray(h) && Array.isArray(x);
-      if (z) {
-        A = boundedObjectInt(h, _, -1, UINT32_MAX);
-        let K = m.length === A;
-        L = K ? findFirstNonObject(m, 0, A) : -1;
-        V = K && L === -1 ? findBadStartIndex(h, T, k, _, A) : -1;
-        W = K && L === -1 && V === -1 ? findBadBooleanIndex(x, T, k, _) : -1;
-        if (K && L === -1 && V === -1 && W === -1) return true;
+      arraysOk = Array.isArray(output) && Array.isArray(starts) && Array.isArray(chains);
+      if (arraysOk) {
+        lengthOk = boundedObjectInt(starts, expectedLength, -1, UINT32_MAX);
+        let lengthMatches = output.length === lengthOk;
+        nonObjectIndex = lengthMatches ? findFirstNonObject(output, 0, lengthOk) : -1;
+        badStartIndex =
+          lengthMatches && nonObjectIndex === -1
+            ? findBadStartIndex(starts, inputLength, tailLength, expectedLength, lengthOk)
+            : -1;
+        badChainIndex =
+          lengthMatches && nonObjectIndex === -1 && badStartIndex === -1
+            ? findBadBooleanIndex(chains, inputLength, tailLength, expectedLength)
+            : -1;
+        if (lengthMatches && nonObjectIndex === -1 && badStartIndex === -1 && badChainIndex === -1)
+          return true;
       }
     } catch {
-      z = false;
+      arraysOk = false;
     }
     if (!this.#t) {
       this.#t = true;
       this.reportFinding(
-        m,
-        h,
-        A,
-        L,
-        V !== -1 ? V : W,
-        V !== -1 ? "starts" : W !== -1 ? "chain" : "n_a",
-        T,
-        k,
-        _,
-        I,
-        D,
-        z,
+        output,
+        starts,
+        lengthOk,
+        nonObjectIndex,
+        badStartIndex !== -1 ? badStartIndex : badChainIndex,
+        badStartIndex !== -1 ? "starts" : badChainIndex !== -1 ? "chain" : "n_a",
+        inputLength,
+        tailLength,
+        expectedLength,
+        headLength,
+        tailReused,
+        arraysOk,
       );
     }
     return false;
   }
-  reportFinding(m, h, x, index, bookkeepingIndex, bookkeepingArray, I, D, A, inputLength, V, W) {
+  reportFinding(
+    output,
+    starts,
+    expectedLength,
+    index,
+    bookkeepingIndex,
+    bookkeepingArray,
+    headLength,
+    tailLength,
+    previousInputLength,
+    inputLength,
+    site,
+    describeOk,
+  ) {
     let checks = this.#e;
-    let K = W
+    let report = describeOk
       ? safeDescribeCacheCorruption(() => {
-          let q = x < 0 ? m.length : x;
+          let scanLimit = expectedLength < 0 ? output.length : expectedLength;
           return {
-            site: V,
-            output: m,
-            expectedLength: x,
+            site,
+            output,
+            expectedLength,
             index,
             bookkeepingIndex,
             bookkeepingArray,
-            head: I,
-            tail: D,
-            headEnd: boundedObjectInt(h, I, 0, q),
-            tailStart: D > 0 ? boundedObjectInt(h, A - D, q, q) : q,
-            previousInputLength: A,
+            head: headLength,
+            tail: tailLength,
+            headEnd: boundedObjectInt(starts, headLength, 0, scanLimit),
+            tailStart:
+              tailLength > 0
+                ? boundedObjectInt(starts, previousInputLength - tailLength, scanLimit, scanLimit)
+                : scanLimit,
+            previousInputLength,
             inputLength,
             checks,
           };
@@ -147,29 +177,33 @@ class RetainedOutputChecker {
     try {
       logError(
         this.buildFindingError(
-          K !== undefined ? formatCorruptionReport(K) : W ? REBUILT_DESCRIBE_FAILED : REBUILT_DETECT_FAILED,
+          report !== undefined
+            ? formatCorruptionReport(report)
+            : describeOk
+              ? REBUILT_DESCRIBE_FAILED
+              : REBUILT_DETECT_FAILED,
         ),
       );
     } catch {}
     try {
       logEvent(
         NORMALIZER_CHECK_FAILED_EVENT,
-        K !== undefined
-          ? toCorruptionEventProps(K)
-          : W
+        report !== undefined
+          ? toCorruptionEventProps(report)
+          : describeOk
             ? {
                 describe_failed: true,
-                site: fromEnum(V),
+                site: fromEnum(site),
               }
             : {
                 detect_failed: true,
-                site: fromEnum(V),
+                site: fromEnum(site),
               },
       );
     } catch {}
   }
-  buildFindingError(m) {
-    return new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(m);
+  buildFindingError(message) {
+    return new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(message);
   }
 }
 //@ chunk-ag5x7vhf.js:123887-123988 placement
@@ -180,9 +214,9 @@ var CACHE_REBUILT_NOTE = `${RETAINED_OUTPUT_FAILED_TEXT} and is rebuilt from the
 var REBUILT_DESCRIBE_FAILED = `${CACHE_REBUILT_NOTE} (describe_failed)`;
 var REBUILT_DETECT_FAILED = `${CACHE_REBUILT_NOTE} (detect_failed)`;
 //@ chunk-ag5x7vhf.js:123988-124059 placement
-function safeDescribeCacheCorruption(m) {
+function safeDescribeCacheCorruption(describe) {
   try {
-    return describeCacheCorruption(m(), "x64", process.uptime());
+    return describeCacheCorruption(describe(), "x64", process.uptime());
   } catch {
     return;
   }
@@ -218,13 +252,13 @@ function describeCacheCorruption(
   let firstKind;
   let hasMixedKinds = false;
   for (let idx = 0; idx < min; idx++) {
-    let _e = valueKindAt(output, idx);
-    if (_e !== undefined) {
+    let kind = valueKindAt(output, idx);
+    if (kind !== undefined) {
       corruptCount++;
       if (firstCorruptIndex === -1) {
         firstCorruptIndex = idx;
-        firstKind = _e;
-      } else if (_e !== firstKind) hasMixedKinds = true;
+        firstKind = kind;
+      } else if (kind !== firstKind) hasMixedKinds = true;
       lastCorruptIndex = idx;
     }
   }
@@ -273,84 +307,93 @@ function describeCacheCorruption(
     checks: integerOr(checks, -1),
     site,
     arch,
-    uptime: UPTIME_BUCKETS.find(([se]) => uptimeMs < se)?.[1] ?? "gte_24h",
+    uptime: UPTIME_BUCKETS.find(([threshold]) => uptimeMs < threshold)?.[1] ?? "gte_24h",
   };
 }
 //@ chunk-ag5x7vhf.js:125146-125735 placement
 /**
  * 把增量规范化器损坏诊断格式化为一行文本（类型、区域、位置、长度、损坏数量与跨度等）。
  */
-function formatCorruptionReport(m) {
-  return `${CACHE_REBUILT_NOTE} (kind=${m.kind} extra_slot=${m.extraSlot} region=${m.region} index=${m.index} index_from_end=${m.indexFromEnd} output_length=${m.outputLength} expected_output_length=${m.expectedOutputLength} corrupt_count=${m.corruptCount} corrupt_span=${m.corruptSpan} mixed_kinds=${m.mixedKinds ? "yes" : "no"} scan_capped=${m.scanCapped ? "yes" : "no"} reused_head_length=${m.reusedHeadLength} reused_tail_length=${m.reusedTailLength} previous_input_length=${m.previousInputLength} input_length=${m.inputLength} checks=${m.checks} site=${m.site} arch=${m.arch} uptime=${m.uptime})`;
+function formatCorruptionReport(report) {
+  return `${CACHE_REBUILT_NOTE} (kind=${report.kind} extra_slot=${report.extraSlot} region=${report.region} index=${report.index} index_from_end=${report.indexFromEnd} output_length=${report.outputLength} expected_output_length=${report.expectedOutputLength} corrupt_count=${report.corruptCount} corrupt_span=${report.corruptSpan} mixed_kinds=${report.mixedKinds ? "yes" : "no"} scan_capped=${report.scanCapped ? "yes" : "no"} reused_head_length=${report.reusedHeadLength} reused_tail_length=${report.reusedTailLength} previous_input_length=${report.previousInputLength} input_length=${report.inputLength} checks=${report.checks} site=${report.site} arch=${report.arch} uptime=${report.uptime})`;
 }
 //@ chunk-ag5x7vhf.js:125735-126255 placement
 /**
  * 把增量规范化器损坏诊断转为打点事件属性。
  */
-function toCorruptionEventProps(m) {
+function toCorruptionEventProps(report) {
   return {
-    kind: fromEnum(m.kind),
-    extra_slot: fromEnum(m.extraSlot),
-    region: fromEnum(m.region),
-    index: m.index,
-    index_from_end: m.indexFromEnd,
-    output_length: m.outputLength,
-    expected_output_length: m.expectedOutputLength,
-    corrupt_count: m.corruptCount,
-    corrupt_span: m.corruptSpan,
-    mixed_kinds: m.mixedKinds,
-    scan_capped: m.scanCapped,
-    reused_head_length: m.reusedHeadLength,
-    reused_tail_length: m.reusedTailLength,
-    previous_input_length: m.previousInputLength,
-    input_length: m.inputLength,
-    checks: m.checks,
-    site: fromEnum(m.site),
-    arch: fromEnum(m.arch),
-    uptime: fromEnum(m.uptime),
+    kind: fromEnum(report.kind),
+    extra_slot: fromEnum(report.extraSlot),
+    region: fromEnum(report.region),
+    index: report.index,
+    index_from_end: report.indexFromEnd,
+    output_length: report.outputLength,
+    expected_output_length: report.expectedOutputLength,
+    corrupt_count: report.corruptCount,
+    corrupt_span: report.corruptSpan,
+    mixed_kinds: report.mixedKinds,
+    scan_capped: report.scanCapped,
+    reused_head_length: report.reusedHeadLength,
+    reused_tail_length: report.reusedTailLength,
+    previous_input_length: report.previousInputLength,
+    input_length: report.inputLength,
+    checks: report.checks,
+    site: fromEnum(report.site),
+    arch: fromEnum(report.arch),
+    uptime: fromEnum(report.uptime),
   };
 }
 //@ chunk-ag5x7vhf.js:126255-126498 placement
-function findBadStartIndex(m, h, x, T, k) {
-  let _ = m[h];
-  if (_ === undefined || !Number.isInteger(_) || _ < 0 || _ > k || (h === 0 && _ !== 0)) return h;
-  if (x <= 0) return -1;
-  let I = _;
-  for (let idx = T - x; idx <= T; idx++) {
-    let A = m[idx];
-    if (A === undefined || !Number.isInteger(A) || A < I || A > k) return idx;
-    I = A;
+function findBadStartIndex(starts, firstIndex, tailLength, lastIndex, outputLength) {
+  let firstStart = starts[firstIndex];
+  if (
+    firstStart === undefined ||
+    !Number.isInteger(firstStart) ||
+    firstStart < 0 ||
+    firstStart > outputLength ||
+    (firstIndex === 0 && firstStart !== 0)
+  )
+    return firstIndex;
+  if (tailLength <= 0) return -1;
+  let previousStart = firstStart;
+  for (let idx = lastIndex - tailLength; idx <= lastIndex; idx++) {
+    let start = starts[idx];
+    if (start === undefined || !Number.isInteger(start) || start < previousStart || start > outputLength)
+      return idx;
+    previousStart = start;
   }
-  return m[T] === k ? -1 : T;
+  return starts[lastIndex] === outputLength ? -1 : lastIndex;
 }
 //@ chunk-ag5x7vhf.js:126498-126640 placement
-function findBadBooleanIndex(m, h, x, T) {
-  if (typeof m[h] !== "boolean") return h;
-  if (x <= 0) return -1;
-  for (let k = T - x; k <= T; k++) if (typeof m[k] !== "boolean") return k;
+function findBadBooleanIndex(chains, firstIndex, tailLength, lastIndex) {
+  if (typeof chains[firstIndex] !== "boolean") return firstIndex;
+  if (tailLength <= 0) return -1;
+  for (let index = lastIndex - tailLength; index <= lastIndex; index++)
+    if (typeof chains[index] !== "boolean") return index;
   return -1;
 }
 //@ chunk-ag5x7vhf.js:126640-126688 placement
-function integerOr(checks, h) {
-  return Number.isInteger(checks) ? checks : h;
+function integerOr(checks, fallback) {
+  return Number.isInteger(checks) ? checks : fallback;
 }
 //@ chunk-ag5x7vhf.js:126688-126750 placement
-function boundedIntOr(m, h, x) {
-  return Number.isInteger(m) && m >= 0 && m <= x ? m : h;
+function boundedIntOr(value, fallback, max) {
+  return Number.isInteger(value) && value >= 0 && value <= max ? value : fallback;
 }
 //@ chunk-ag5x7vhf.js:126750-126823 placement
-function objectIntField(m, h, x) {
-  let T = m[h];
-  return T !== undefined && Number.isInteger(T) ? T : x;
+function objectIntField(object, key, fallback) {
+  let value = object[key];
+  return value !== undefined && Number.isInteger(value) ? value : fallback;
 }
 //@ chunk-ag5x7vhf.js:126823-126870 placement
-function boundedObjectInt(m, h, x, T) {
-  return boundedIntOr(objectIntField(m, h, -1), x, T);
+function boundedObjectInt(object, key, fallback, max) {
+  return boundedIntOr(objectIntField(object, key, -1), fallback, max);
 }
 //@ chunk-ag5x7vhf.js:126870-126968 placement
-function valueKindOrFallback(output, expectedLength) {
-  let x = valueKindAt(output, expectedLength);
-  if (x !== undefined) return x;
-  return Array.isArray(output[expectedLength]) ? "array" : "object";
+function valueKindOrFallback(output, index) {
+  let kind = valueKindAt(output, index);
+  if (kind !== undefined) return kind;
+  return Array.isArray(output[index]) ? "array" : "object";
 }
 export { RetainedOutputChecker };

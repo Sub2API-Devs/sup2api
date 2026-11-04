@@ -12,25 +12,28 @@ import { realpath, lstat, readlink, open } from "fs/promises";
 import { constants } from "fs";
 import { READ_LIMITS, O_NOATIME_FLAG } from "../fsBoundRead.js";
 import { getErrnoCode } from "../errors.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-t0gq9gyw.js:7930-8222 placement
-async function readHandleBounded(e, n, r) {
-  let o = n + 1;
-  let s = Buffer.alloc(r === undefined ? o : Math.min(Math.max(Number(r) + 1, 1), o));
-  let a = 0;
-  while (a < o) {
-    if (a === s.length) {
-      let u = Buffer.alloc(o);
-      s.copy(u);
-      s = u;
+async function readHandleBounded(handle, maxBytes, limitBytes) {
+  let bufferSize = maxBytes + 1;
+  let buffer = Buffer.alloc(
+    limitBytes === undefined ? bufferSize : Math.min(Math.max(Number(limitBytes) + 1, 1), bufferSize),
+  );
+  let totalRead = 0;
+  while (totalRead < bufferSize) {
+    if (totalRead === buffer.length) {
+      let grownBuffer = Buffer.alloc(bufferSize);
+      buffer.copy(grownBuffer);
+      buffer = grownBuffer;
     }
-    let { bytesRead } = await e.read(s, a, s.length - a, a);
+    let { bytesRead } = await handle.read(buffer, totalRead, buffer.length - totalRead, totalRead);
     if (bytesRead === 0) break;
-    a += bytesRead;
+    totalRead += bytesRead;
   }
   return {
-    bytes: s.subarray(0, Math.min(a, n)),
-    overLimit: a > n,
+    bytes: buffer.subarray(0, Math.min(totalRead, maxBytes)),
+    overLimit: totalRead > maxBytes,
   };
 }
 //@ chunk-t0gq9gyw.js:8222-8264 placement
@@ -40,54 +43,58 @@ var boundOpenFsOps = {
   readlink,
 };
 //@ chunk-t0gq9gyw.js:8264-8651 placement
-async function bindCanonicalPathToHandle(e, n, r, o = boundOpenFsOps) {
-  let s;
+async function bindCanonicalPathToHandle(handle, expectedIdentity, filePath, fsImpl = boundOpenFsOps) {
+  let pathStats;
   try {
-    s = await o.lstat(r, {
+    pathStats = await fsImpl.lstat(filePath, {
       bigint: true,
     });
   } catch {
     return;
   }
-  if (s.dev !== n.dev || s.ino !== n.ino) return;
+  if (pathStats.dev !== expectedIdentity.dev || pathStats.ino !== expectedIdentity.ino) return;
   try {
-    let a = await o.readlink(`/proc/self/fd/${e.fd}`);
-    if (!a.startsWith("/") || a.endsWith(" (deleted)")) return;
-    let stats = await o.lstat(a, {
+    let descriptorPath = await fsImpl.readlink(`/proc/self/fd/${handle.fd}`);
+    if (!descriptorPath.startsWith("/") || descriptorPath.endsWith(" (deleted)")) return;
+    let stats = await fsImpl.lstat(descriptorPath, {
       bigint: true,
     });
-    if (stats.dev !== n.dev || stats.ino !== n.ino) return;
-    return a;
+    if (stats.dev !== expectedIdentity.dev || stats.ino !== expectedIdentity.ino) return;
+    return descriptorPath;
   } catch {
     return;
   }
   try {
-    if ((await o.realpath(r)) !== r) return;
+    if ((await fsImpl.realpath(filePath)) !== filePath) return;
   } catch {
     return;
   }
-  return r;
+  return filePath;
 }
 //@ chunk-t0gq9gyw.js:8651-8741 placement
-var OPEN_READ_NOFOLLOW_FLAGS = constants.O_RDONLY | constants.O_NONBLOCK | READ_LIMITS;
-var BENIGN_OPEN_ERRNOS = new Set(["EPERM", "EINVAL", "ENOTSUP", "EOPNOTSUPP"]);
+var OPEN_READ_NOFOLLOW_FLAGS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var BENIGN_OPEN_ERRNOS;
+deferInit("chunk-t0gq9gyw.js:8651", () => {
+  OPEN_READ_NOFOLLOW_FLAGS = constants.O_RDONLY | constants.O_NONBLOCK | READ_LIMITS;
+  BENIGN_OPEN_ERRNOS = new Set(["EPERM", "EINVAL", "ENOTSUP", "EOPNOTSUPP"]);
+});
 //@ chunk-t0gq9gyw.js:8741-8779 placement
-async function openRegularFileForRead(e) {
-  return open(e, OPEN_READ_NOFOLLOW_FLAGS);
+async function openRegularFileForRead(filePath) {
+  return open(filePath, OPEN_READ_NOFOLLOW_FLAGS);
 }
 //@ chunk-t0gq9gyw.js:8779-8948 placement
-async function openRegularFileForReadWithNoAtime(e, n = O_NOATIME_FLAG) {
-  if (n !== 0)
+async function openRegularFileForReadWithNoAtime(filePath, noAtimeFlag = O_NOATIME_FLAG) {
+  if (noAtimeFlag !== 0)
     try {
       return {
-        handle: await open(e, OPEN_READ_NOFOLLOW_FLAGS | n),
+        handle: await open(filePath, OPEN_READ_NOFOLLOW_FLAGS | noAtimeFlag),
         withNoAtime: true,
       };
     } catch (error) {
       if (!BENIGN_OPEN_ERRNOS.has(getErrnoCode(error) ?? "")) throw error;
     }
   return {
-    handle: await openRegularFileForRead(e),
+    handle: await openRegularFileForRead(filePath),
     withNoAtime: false,
   };
 }

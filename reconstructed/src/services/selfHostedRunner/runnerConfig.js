@@ -43,9 +43,10 @@ var RELEASE_IN_FLIGHT_WAIT_MS = 20000;
 function runnerRetireAtMs() {
   let envSelfHostedRunnerRetireAt = process.env.SELF_HOSTED_RUNNER_RETIRE_AT;
   if (envSelfHostedRunnerRetireAt === undefined || envSelfHostedRunnerRetireAt === "") return 0;
-  let n = Number(envSelfHostedRunnerRetireAt);
-  if (!Number.isSafeInteger(n) || n < MAX_TIMESTAMP_SECONDS || n > MIN_DURATION_MS) return 0;
-  return n * 1000;
+  let seconds = Number(envSelfHostedRunnerRetireAt);
+  if (!Number.isSafeInteger(seconds) || seconds < MAX_TIMESTAMP_SECONDS || seconds > MIN_DURATION_MS)
+    return 0;
+  return seconds * 1000;
 }
 //@ chunk-hm0ce8vc.js:219147-219171 placement
 /**
@@ -84,60 +85,60 @@ function getMaxHoldMs() {
     : envPositiveMs("SELF_HOSTED_RUNNER_MAX_HOLD_MS");
 }
 //@ chunk-hm0ce8vc.js:219577-220001 placement
-async function checkPathNotOnNetworkLocation(e, n) {
-  let r = await checkNetworkPath(e);
-  if (r === UNVETTABLE_LINK_MESSAGE)
+async function checkPathNotOnNetworkLocation(path, nowMs) {
+  let problem = await checkNetworkPath(path);
+  if (problem === UNVETTABLE_LINK_MESSAGE)
     throw Error(
       "the path could not be checked for links to a network location: a folder or link on the way could not be read",
     );
-  if (r !== undefined)
+  if (problem !== undefined)
     throw Error(
       "the path, or a link on the way to it, leads to a network location; point --hold-idle-file at a local file",
     );
-  let s = await lstat(e).catch((error) => {
+  let stats = await lstat(path).catch((error) => {
     if (isPathAbsent(error)) return;
     throw error;
   });
-  return s !== undefined && s.isFile() && Math.abs(n - s.mtimeMs) < HOLD_IDLE_MTIME_FRESH_MS;
+  return stats !== undefined && stats.isFile() && Math.abs(nowMs - stats.mtimeMs) < HOLD_IDLE_MTIME_FRESH_MS;
 }
 //@ chunk-hm0ce8vc.js:220001-220804 placement
-async function readRegularFileSafe(e) {
-  let n = await lstat(e).catch((error) => {
+async function readRegularFileSafe(path) {
+  let stats = await lstat(path).catch((error) => {
     let code = error instanceof Error && "code" in error && typeof error.code === "string" ? error.code : "";
     if (code === "ENOENT" || code === "ENOTDIR") return;
     throw error;
   });
-  if (n === undefined)
+  if (stats === undefined)
     return {
       present: false,
       deadlineMs: undefined,
     };
-  let r;
+  let handle;
   try {
-    if (!n.isFile())
+    if (!stats.isFile())
       return {
         present: true,
         deadlineMs: undefined,
         unreadable: "not a regular file",
       };
-    r = await open(e, constants.O_RDONLY | NOFOLLOW_NONBLOCK_FLAGS);
-    let s = Buffer.alloc(MAX_SECRET_FILE_READ_BYTES);
-    let { bytesRead } = await r.read(s, 0, MAX_SECRET_FILE_READ_BYTES, 0);
-    let replaced = getFirstLine(s.toString("utf8", 0, bytesRead)).replace(/\r$/, "");
+    handle = await open(path, constants.O_RDONLY | NOFOLLOW_NONBLOCK_FLAGS);
+    let buffer = Buffer.alloc(MAX_SECRET_FILE_READ_BYTES);
+    let { bytesRead } = await handle.read(buffer, 0, MAX_SECRET_FILE_READ_BYTES, 0);
+    let replaced = getFirstLine(buffer.toString("utf8", 0, bytesRead)).replace(/\r$/, "");
     if (!/^[0-9]+$/.test(replaced))
       return {
         present: true,
         deadlineMs: undefined,
       };
-    let l = Number(replaced);
-    if (!Number.isSafeInteger(l) || l < MAX_TIMESTAMP_SECONDS || l > MIN_DURATION_MS)
+    let seconds = Number(replaced);
+    if (!Number.isSafeInteger(seconds) || seconds < MAX_TIMESTAMP_SECONDS || seconds > MIN_DURATION_MS)
       return {
         present: true,
         deadlineMs: undefined,
       };
     return {
       present: true,
-      deadlineMs: l * 1000,
+      deadlineMs: seconds * 1000,
     };
   } catch (error) {
     return {
@@ -149,7 +150,7 @@ async function readRegularFileSafe(e) {
           : errorMessage(error),
     };
   } finally {
-    r?.close().catch(() => {});
+    handle?.close().catch(() => {});
   }
 }
 //@ chunk-hm0ce8vc.js:220804-220949 placement
@@ -172,29 +173,29 @@ var MIN_DURATION_MS = 100000000000;
 var ENV_SECRET_READ_TIMEOUT_MS_2 = 15000;
 var DEFAULT_POST_SESSION_ALLOWANCE_MS = 60000;
 //@ chunk-hm0ce8vc.js:220949-221157 placement
-function parseHealthPort(e, n) {
-  if (e === undefined || e === "") return n;
-  let intLoose = parseIntLoose(e);
+function parseHealthPort(raw, fallback) {
+  if (raw === undefined || raw === "") return fallback;
+  let intLoose = parseIntLoose(raw);
   if (Number.isNaN(intLoose) || intLoose < 0 || intLoose > 65535)
     throw Error(
-      `SELF_HOSTED_RUNNER_HEALTH_PORT must be an integer in [0, 65535] (0 disables), got: ${jsonStringify(e)}`,
+      `SELF_HOSTED_RUNNER_HEALTH_PORT must be an integer in [0, 65535] (0 disables), got: ${jsonStringify(raw)}`,
     );
   return intLoose;
 }
 //@ chunk-hm0ce8vc.js:221157-221332 placement
-function parseBooleanEnv(e, n, r) {
-  if (isEnvDefinedFalsy(n)) return false;
-  if (isEnvTruthy(n)) return true;
-  if (n === undefined || n.trim() === "") return r;
-  throw Error(`${e} must be one of 1/true/yes/on or 0/false/no/off (got: ${jsonStringify(n)})`);
+function parseBooleanEnv(name, value, fallback) {
+  if (isEnvDefinedFalsy(value)) return false;
+  if (isEnvTruthy(value)) return true;
+  if (value === undefined || value.trim() === "") return fallback;
+  throw Error(`${name} must be one of 1/true/yes/on or 0/false/no/off (got: ${jsonStringify(value)})`);
 }
 //@ chunk-hm0ce8vc.js:221332-221570 placement
-function parseConfineRepoSettings(e) {
-  if (e === undefined || e.trim() === "") return "warn";
-  let lower = e.trim().toLowerCase();
+function parseConfineRepoSettings(raw) {
+  if (raw === undefined || raw.trim() === "") return "warn";
+  let lower = raw.trim().toLowerCase();
   if (lower === "enforce" || lower === "warn" || lower === "off") return lower;
   throw Error(
-    `SELF_HOSTED_RUNNER_CONFINE_REPO_SETTINGS must be one of enforce/warn/off (got: ${jsonStringify(e)})`,
+    `SELF_HOSTED_RUNNER_CONFINE_REPO_SETTINGS must be one of enforce/warn/off (got: ${jsonStringify(raw)})`,
   );
 }
 //@ chunk-hm0ce8vc.js:221570-221936 placement
@@ -205,30 +206,30 @@ var SERVER_AUTO_MODE_LISTS_DESCRIPTIONS = {
   none: "sessions apply none of the server's auto mode lists, not even its soft_deny restrictions",
 };
 //@ chunk-hm0ce8vc.js:221936-222175 placement
-function parseServerAutoModeLists(e) {
-  if (e === undefined || e.trim() === "") return NO_ALLOW;
-  let lower = e.trim().toLowerCase();
+function parseServerAutoModeLists(raw) {
+  if (raw === undefined || raw.trim() === "") return NO_ALLOW;
+  let lower = raw.trim().toLowerCase();
   if (lower === "all" || lower === "no-allow" || lower === "none") return lower;
   throw Error(
-    `SELF_HOSTED_RUNNER_SERVER_AUTO_MODE_LISTS must be one of all/no-allow/none (got: ${jsonStringify(e)})`,
+    `SELF_HOSTED_RUNNER_SERVER_AUTO_MODE_LISTS must be one of all/no-allow/none (got: ${jsonStringify(raw)})`,
   );
 }
 //@ chunk-hm0ce8vc.js:222175-222395 placement
-function parseHostConfigSnapshotMode(e) {
-  if (e === undefined || e.trim() === "") return "disk";
-  let lower = e.trim().toLowerCase();
+function parseHostConfigSnapshotMode(raw) {
+  if (raw === undefined || raw.trim() === "") return "disk";
+  let lower = raw.trim().toLowerCase();
   if (lower === "disk" || lower === "memory") return lower;
   throw Error(
-    `SELF_HOSTED_RUNNER_HOST_CONFIG_SNAPSHOT must be one of disk/memory (got: ${jsonStringify(e)})`,
+    `SELF_HOSTED_RUNNER_HOST_CONFIG_SNAPSHOT must be one of disk/memory (got: ${jsonStringify(raw)})`,
   );
 }
 //@ chunk-hm0ce8vc.js:222395-233662 placement
 /**
  * 解析 claude self-hosted-runner 的全部参数与 SELF_HOSTED_RUNNER_* 环境变量（约 11 KB）。
  */
-function parseRunnerOptions(e) {
+function parseRunnerOptions(argv) {
   let SELF_HOSTED_RUNNER_BASE_DIR = process.env.SELF_HOSTED_RUNNER_BASE_DIR || undefined;
-  let r = {
+  let options = {
     apiUrl: HTTPS_API_ANTHROPIC_COM,
     capacity: DEFAULT_SESSION_CAPACITY,
     baseDir: resolve(SELF_HOSTED_RUNNER_BASE_DIR ?? DEFAULT_BASE_DIR),
@@ -267,186 +268,189 @@ function parseRunnerOptions(e) {
   };
   if (process.env.SELF_HOSTED_RUNNER_HOOKS_DIR)
     process.env.SELF_HOSTED_RUNNER_HOOKS_DIR = resolve(process.env.SELF_HOSTED_RUNNER_HOOKS_DIR);
-  for (let j = 0; j < e.length; j++) {
-    let o = e[j];
-    let l = e[j + 1];
-    switch (o) {
+  for (let j = 0; j < argv.length; j++) {
+    let arg = argv[j];
+    let next = argv[j + 1];
+    switch (arg) {
       case "--api-url":
-        if (l) {
-          r.apiUrl = l;
+        if (next) {
+          options.apiUrl = next;
           j++;
         }
         break;
       case "--pool-secret-file":
       case "--environment-secret-file":
-        if (o === "--pool-secret-file")
+        if (arg === "--pool-secret-file")
           console.error("[runner:warn] --pool-secret-file is deprecated; use --environment-secret-file");
-        if (l) {
-          r.poolSecretFile = l;
+        if (next) {
+          options.poolSecretFile = next;
           j++;
         }
         break;
       case "--capacity":
-        if (l) {
-          let intLoose = parseIntLoose(l);
+        if (next) {
+          let intLoose = parseIntLoose(next);
           if (Number.isNaN(intLoose) || intLoose < 1)
-            throw Error(`--capacity must be a positive integer, got: ${l}`);
-          r.capacity = intLoose;
+            throw Error(`--capacity must be a positive integer, got: ${next}`);
+          options.capacity = intLoose;
           j++;
         }
         break;
       case "--base-dir":
-        if (l) {
-          r.baseDir = resolve(l);
-          r.baseDirSource = "flag";
+        if (next) {
+          options.baseDir = resolve(next);
+          options.baseDirSource = "flag";
           j++;
         }
         break;
       case "--exec-path":
-        if (l) {
-          r.execPath = l;
+        if (next) {
+          options.execPath = next;
           j++;
         }
         break;
       case "--hooks-dir":
-        if (l) {
-          process.env.SELF_HOSTED_RUNNER_HOOKS_DIR = resolve(l);
+        if (next) {
+          process.env.SELF_HOSTED_RUNNER_HOOKS_DIR = resolve(next);
           j++;
         }
         break;
       case "--git-ssh-rewrite":
-        if (!l) throw Error("--git-ssh-rewrite requires a hostname");
-        r.gitSshRewriteHosts.push(l);
+        if (!next) throw Error("--git-ssh-rewrite requires a hostname");
+        options.gitSshRewriteHosts.push(next);
         j++;
         break;
       case "--git-host-rewrite": {
-        if (!l) throw Error("--git-host-rewrite requires <from>=<to>");
-        let index = l.indexOf("=");
-        if (index <= 0 || index === l.length - 1)
-          throw Error(`--git-host-rewrite requires <from>=<to>, got: ${l}`);
-        let lower = l.slice(0, index).toLowerCase();
-        let sliced = l.slice(index + 1);
+        if (!next) throw Error("--git-host-rewrite requires <from>=<to>");
+        let index = next.indexOf("=");
+        if (index <= 0 || index === next.length - 1)
+          throw Error(`--git-host-rewrite requires <from>=<to>, got: ${next}`);
+        let lower = next.slice(0, index).toLowerCase();
+        let sliced = next.slice(index + 1);
         if (lower.includes("://") || lower.includes("/") || sliced.includes("://") || sliced.includes("/"))
           throw Error(
-            `--git-host-rewrite expects bare hostnames (e.g. ext.example.com=int.example.com), not URLs. Got: ${l}`,
+            `--git-host-rewrite expects bare hostnames (e.g. ext.example.com=int.example.com), not URLs. Got: ${next}`,
           );
-        if (r.gitHostRewrites.some(([S]) => S === lower))
+        if (options.gitHostRewrites.some(([fromHost]) => fromHost === lower))
           throw Error(`duplicate --git-host-rewrite for '${lower}'`);
-        r.gitHostRewrites.push([lower, sliced]);
+        options.gitHostRewrites.push([lower, sliced]);
         j++;
         break;
       }
       case "--use-anthropic-git-proxy":
-        r.useAnthropicGitProxy = true;
+        options.useAnthropicGitProxy = true;
         break;
       case "--configure-git":
-        r.configureGit = true;
+        options.configureGit = true;
         break;
       case "--push-outcome-on-release":
-        r.pushOutcomeOnRelease = true;
+        options.pushOutcomeOnRelease = true;
         break;
       case "--trust-workspace":
-        if (l === "false" || l === "0") {
-          r.trustWorkspace = false;
+        if (next === "false" || next === "0") {
+          options.trustWorkspace = false;
           j++;
-        } else if (l === "true" || l === "1") {
-          r.trustWorkspace = true;
+        } else if (next === "true" || next === "1") {
+          options.trustWorkspace = true;
           j++;
-        } else r.trustWorkspace = true;
+        } else options.trustWorkspace = true;
         break;
       case "--remove-session-state":
-        if (l === "false" || l === "0") {
-          r.removeSessionState = false;
+        if (next === "false" || next === "0") {
+          options.removeSessionState = false;
           j++;
-        } else if (l === "true" || l === "1") {
-          r.removeSessionState = true;
+        } else if (next === "true" || next === "1") {
+          options.removeSessionState = true;
           j++;
-        } else r.removeSessionState = true;
+        } else options.removeSessionState = true;
         break;
       case "--diff-finds-nested-repository":
-        if (l === "false" || l === "0") {
-          r.diffFindsNestedRepository = false;
+        if (next === "false" || next === "0") {
+          options.diffFindsNestedRepository = false;
           j++;
-        } else if (l === "true" || l === "1") {
-          r.diffFindsNestedRepository = true;
+        } else if (next === "true" || next === "1") {
+          options.diffFindsNestedRepository = true;
           j++;
-        } else r.diffFindsNestedRepository = true;
+        } else options.diffFindsNestedRepository = true;
         break;
       case "--confine-repo-settings":
-        if (l === "enforce" || l === "warn" || l === "off") {
-          r.confineRepoSettings = l;
-          j++;
-        } else
-          throw Error(`--confine-repo-settings requires one of enforce/warn/off (got: ${jsonStringify(l)})`);
-        break;
-      case "--server-auto-mode-lists":
-        if (l === "all" || l === "no-allow" || l === "none") {
-          r.serverAutoModeLists = l;
+        if (next === "enforce" || next === "warn" || next === "off") {
+          options.confineRepoSettings = next;
           j++;
         } else
           throw Error(
-            `--server-auto-mode-lists requires one of all/no-allow/none (got: ${jsonStringify(l)})`,
+            `--confine-repo-settings requires one of enforce/warn/off (got: ${jsonStringify(next)})`,
+          );
+        break;
+      case "--server-auto-mode-lists":
+        if (next === "all" || next === "no-allow" || next === "none") {
+          options.serverAutoModeLists = next;
+          j++;
+        } else
+          throw Error(
+            `--server-auto-mode-lists requires one of all/no-allow/none (got: ${jsonStringify(next)})`,
           );
         break;
       case "--host-config-snapshot":
-        if (l === "disk" || l === "memory") {
-          r.hostConfigSnapshot = l;
+        if (next === "disk" || next === "memory") {
+          options.hostConfigSnapshot = next;
           j++;
-        } else throw Error(`--host-config-snapshot requires one of disk/memory (got: ${jsonStringify(l)})`);
+        } else
+          throw Error(`--host-config-snapshot requires one of disk/memory (got: ${jsonStringify(next)})`);
         break;
       case "--log-level":
-        if (l) {
-          r.logLevel = l;
+        if (next) {
+          options.logLevel = next;
           j++;
         }
         break;
       case "--log-file":
-        if (l) {
-          r.logFile = l;
+        if (next) {
+          options.logFile = next;
           j++;
         }
         break;
       case "--health-port":
-        if (l) {
-          let intLoose = parseIntLoose(l);
+        if (next) {
+          let intLoose = parseIntLoose(next);
           if (Number.isNaN(intLoose) || intLoose < 0 || intLoose > 65535)
-            throw Error(`--health-port must be an integer in [0, 65535] (0 disables), got: ${l}`);
-          r.healthPort = intLoose;
+            throw Error(`--health-port must be an integer in [0, 65535] (0 disables), got: ${next}`);
+          options.healthPort = intLoose;
           j++;
         }
         break;
       case "--kill-session-after-min": {
-        if (l) {
-          let u = Number(l);
-          if (!Number.isFinite(u) || u < 0 || u > MAX_KILL_AFTER_MINUTES)
+        if (next) {
+          let minutes = Number(next);
+          if (!Number.isFinite(minutes) || minutes < 0 || minutes > MAX_KILL_AFTER_MINUTES)
             throw Error(
-              `--kill-session-after-min must be a non-negative number of minutes (0 disables, max ${MAX_KILL_AFTER_MINUTES}), got: ${l}`,
+              `--kill-session-after-min must be a non-negative number of minutes (0 disables, max ${MAX_KILL_AFTER_MINUTES}), got: ${next}`,
             );
-          process.env.SELF_HOSTED_RUNNER_MAX_LIFETIME_MS = String(u * 60 * 1000);
-          r.envSetByFlag.add("SELF_HOSTED_RUNNER_MAX_LIFETIME_MS");
+          process.env.SELF_HOSTED_RUNNER_MAX_LIFETIME_MS = String(minutes * 60 * 1000);
+          options.envSetByFlag.add("SELF_HOSTED_RUNNER_MAX_LIFETIME_MS");
           j++;
         }
         break;
       }
       case "--exit-if-unused-min": {
-        if (l) {
-          let u = Number(l);
-          if (!Number.isFinite(u) || u < 0 || u > MAX_KILL_AFTER_MINUTES)
+        if (next) {
+          let minutes = Number(next);
+          if (!Number.isFinite(minutes) || minutes < 0 || minutes > MAX_KILL_AFTER_MINUTES)
             throw Error(
-              `--exit-if-unused-min must be a non-negative number of minutes (0 disables, max ${MAX_KILL_AFTER_MINUTES}), got: ${l}`,
+              `--exit-if-unused-min must be a non-negative number of minutes (0 disables, max ${MAX_KILL_AFTER_MINUTES}), got: ${next}`,
             );
-          process.env.SELF_HOSTED_RUNNER_IDLE_SHUTDOWN_MS = String(u * 60 * 1000);
-          r.envSetByFlag.add("SELF_HOSTED_RUNNER_IDLE_SHUTDOWN_MS");
+          process.env.SELF_HOSTED_RUNNER_IDLE_SHUTDOWN_MS = String(minutes * 60 * 1000);
+          options.envSetByFlag.add("SELF_HOSTED_RUNNER_IDLE_SHUTDOWN_MS");
           j++;
         }
         break;
       }
       case "--session-stop-grace-sec": {
-        let u = e[++j];
-        let h = Number(u);
-        if (!u || !Number.isFinite(h) || h <= 0)
-          throw Error(`--session-stop-grace-sec must be a positive number of seconds, got: ${u}`);
-        process.env.SELF_HOSTED_RUNNER_SESSION_STOP_GRACE_MS = String(h * 1000);
+        let raw = argv[++j];
+        let seconds = Number(raw);
+        if (!raw || !Number.isFinite(seconds) || seconds <= 0)
+          throw Error(`--session-stop-grace-sec must be a positive number of seconds, got: ${raw}`);
+        process.env.SELF_HOSTED_RUNNER_SESSION_STOP_GRACE_MS = String(seconds * 1000);
         break;
       }
       case "--sigkill-timeout-sec":
@@ -454,188 +458,207 @@ function parseRunnerOptions(e) {
           "--sigkill-timeout-sec was renamed to --session-stop-grace-sec. It controls how long to wait for the Claude process to exit cleanly after a session ends, before force-killing it. The post-session hook runs after this.",
         );
       case "--post-session-hook-timeout-sec": {
-        let u = e[++j];
-        let h = Number(u);
-        if (!u || !Number.isFinite(h) || h <= 0)
-          throw Error(`--post-session-hook-timeout-sec must be a positive number of seconds, got: ${u}`);
-        process.env.SELF_HOSTED_RUNNER_POST_SESSION_HOOK_TIMEOUT_MS = String(h * 1000);
+        let raw = argv[++j];
+        let seconds = Number(raw);
+        if (!raw || !Number.isFinite(seconds) || seconds <= 0)
+          throw Error(`--post-session-hook-timeout-sec must be a positive number of seconds, got: ${raw}`);
+        process.env.SELF_HOSTED_RUNNER_POST_SESSION_HOOK_TIMEOUT_MS = String(seconds * 1000);
         break;
       }
       case "--checkout-hook-timeout-min": {
-        let u = e[++j];
-        let h = Number(u);
-        if (!u || !Number.isFinite(h) || h < 0 || h > MAX_KILL_AFTER_MINUTES)
+        let raw = argv[++j];
+        let minutes = Number(raw);
+        if (!raw || !Number.isFinite(minutes) || minutes < 0 || minutes > MAX_KILL_AFTER_MINUTES)
           throw Error(
-            `--checkout-hook-timeout-min must be a non-negative number of minutes (0 disables, max ${MAX_KILL_AFTER_MINUTES}), got: ${u}`,
+            `--checkout-hook-timeout-min must be a non-negative number of minutes (0 disables, max ${MAX_KILL_AFTER_MINUTES}), got: ${raw}`,
           );
-        process.env.SELF_HOSTED_RUNNER_CHECKOUT_HOOK_TIMEOUT_MS = String(h * 60 * 1000);
-        r.envSetByFlag.add("SELF_HOSTED_RUNNER_CHECKOUT_HOOK_TIMEOUT_MS");
+        process.env.SELF_HOSTED_RUNNER_CHECKOUT_HOOK_TIMEOUT_MS = String(minutes * 60 * 1000);
+        options.envSetByFlag.add("SELF_HOSTED_RUNNER_CHECKOUT_HOOK_TIMEOUT_MS");
         break;
       }
       case "--drain-wait-bg-tasks-sec":
       case "--drain-wait-sec": {
-        if (o === "--drain-wait-bg-tasks-sec")
+        if (arg === "--drain-wait-bg-tasks-sec")
           console.error(
             "[runner:warn] --drain-wait-bg-tasks-sec is deprecated; use --drain-wait-sec (it now also waits for an in-flight foreground turn, not only background tasks)",
           );
-        let u = e[++j];
-        let h = Number(u);
-        if (!u || !Number.isFinite(h) || h < 0 || h > 86400)
-          throw Error(`${o} must be a non-negative number of seconds (max 86400), got: ${u}`);
-        process.env.SELF_HOSTED_RUNNER_DRAIN_WAIT_MS = String(h * 1000);
+        let raw = argv[++j];
+        let seconds = Number(raw);
+        if (!raw || !Number.isFinite(seconds) || seconds < 0 || seconds > 86400)
+          throw Error(`${arg} must be a non-negative number of seconds (max 86400), got: ${raw}`);
+        process.env.SELF_HOSTED_RUNNER_DRAIN_WAIT_MS = String(seconds * 1000);
         break;
       }
       case "--drain-marker-file": {
-        let u = e[++j];
-        if (u === undefined || u.trim() === "" || u.startsWith("--"))
+        let raw = argv[++j];
+        if (raw === undefined || raw.trim() === "" || raw.startsWith("--"))
           throw Error(
-            `${o} requires a file path (the marker your host writes to announce a graceful drain), got: ${u === undefined ? "nothing" : jsonStringify(u)}`,
+            `${arg} requires a file path (the marker your host writes to announce a graceful drain), got: ${raw === undefined ? "nothing" : jsonStringify(raw)}`,
           );
-        process.env.SELF_HOSTED_RUNNER_DRAIN_MARKER_FILE = resolve(u);
+        process.env.SELF_HOSTED_RUNNER_DRAIN_MARKER_FILE = resolve(raw);
         break;
       }
       case "--drain-grace-sec": {
-        if (l) {
-          let u = Number(l);
-          if (!Number.isFinite(u) || u < 0 || u > MIN_TIMESTAMP_SECONDS)
+        if (next) {
+          let seconds = Number(next);
+          if (!Number.isFinite(seconds) || seconds < 0 || seconds > MIN_TIMESTAMP_SECONDS)
             throw Error(
-              `--drain-grace-sec must be a non-negative number of seconds (0 = immediate, max ${MIN_TIMESTAMP_SECONDS}), got: ${l}`,
+              `--drain-grace-sec must be a non-negative number of seconds (0 = immediate, max ${MIN_TIMESTAMP_SECONDS}), got: ${next}`,
             );
-          process.env.SELF_HOSTED_RUNNER_DRAIN_GRACE_MS = String(u * 1000);
+          process.env.SELF_HOSTED_RUNNER_DRAIN_GRACE_MS = String(seconds * 1000);
           j++;
         }
         break;
       }
       case "--release-idle-session-min": {
-        if (l) {
-          let u = Number(l);
-          if (!Number.isFinite(u) || u < 0 || u > MAX_KILL_AFTER_MINUTES)
+        if (next) {
+          let minutes = Number(next);
+          if (!Number.isFinite(minutes) || minutes < 0 || minutes > MAX_KILL_AFTER_MINUTES)
             throw Error(
-              `--release-idle-session-min must be a non-negative number of minutes (0 disables, max ${MAX_KILL_AFTER_MINUTES}), got: ${l}`,
+              `--release-idle-session-min must be a non-negative number of minutes (0 disables, max ${MAX_KILL_AFTER_MINUTES}), got: ${next}`,
             );
-          process.env.SELF_HOSTED_RUNNER_SESSION_IDLE_MS = String(u * 60 * 1000);
-          r.envSetByFlag.add("SELF_HOSTED_RUNNER_SESSION_IDLE_MS");
+          process.env.SELF_HOSTED_RUNNER_SESSION_IDLE_MS = String(minutes * 60 * 1000);
+          options.envSetByFlag.add("SELF_HOSTED_RUNNER_SESSION_IDLE_MS");
           j++;
         }
         break;
       }
       case "--hold-idle-file": {
-        let u = e[++j];
-        if (u === undefined || u.trim() === "" || u.startsWith("--"))
+        let raw = argv[++j];
+        if (raw === undefined || raw.trim() === "" || raw.startsWith("--"))
           throw Error(
-            `${o} requires a file path (a file your host keeps fresh while the session has processes left running), got: ${u === undefined ? "nothing" : jsonStringify(u)}`,
+            `${arg} requires a file path (a file your host keeps fresh while the session has processes left running), got: ${raw === undefined ? "nothing" : jsonStringify(raw)}`,
           );
-        process.env.SELF_HOSTED_RUNNER_HOLD_IDLE_FILE = resolve(u);
-        r.envSetByFlag.add("SELF_HOSTED_RUNNER_HOLD_IDLE_FILE");
+        process.env.SELF_HOSTED_RUNNER_HOLD_IDLE_FILE = resolve(raw);
+        options.envSetByFlag.add("SELF_HOSTED_RUNNER_HOLD_IDLE_FILE");
         break;
       }
       case "--max-hold-min": {
-        let u = e[++j];
-        let h = Number(u);
-        if (u === undefined || u.trim() === "" || !Number.isFinite(h) || h < 0 || h > MAX_KILL_AFTER_MINUTES)
+        let raw = argv[++j];
+        let minutes = Number(raw);
+        if (
+          raw === undefined ||
+          raw.trim() === "" ||
+          !Number.isFinite(minutes) ||
+          minutes < 0 ||
+          minutes > MAX_KILL_AFTER_MINUTES
+        )
           throw Error(
-            `${o} must be a non-negative number of minutes (0 disables, max ${MAX_KILL_AFTER_MINUTES}), got: ${u}`,
+            `${arg} must be a non-negative number of minutes (0 disables, max ${MAX_KILL_AFTER_MINUTES}), got: ${raw}`,
           );
-        process.env.SELF_HOSTED_RUNNER_MAX_HOLD_MS = String(h * 60 * 1000);
-        r.envSetByFlag.add("SELF_HOSTED_RUNNER_MAX_HOLD_MS");
+        process.env.SELF_HOSTED_RUNNER_MAX_HOLD_MS = String(minutes * 60 * 1000);
+        options.envSetByFlag.add("SELF_HOSTED_RUNNER_MAX_HOLD_MS");
         break;
       }
       case "--startup-timeout-min": {
-        if (l) {
-          let u = Number(l);
-          if (!Number.isFinite(u) || u < 0 || u > MAX_KILL_AFTER_MINUTES)
+        if (next) {
+          let minutes = Number(next);
+          if (!Number.isFinite(minutes) || minutes < 0 || minutes > MAX_KILL_AFTER_MINUTES)
             throw Error(
-              `--startup-timeout-min must be a non-negative number of minutes (0 disables, max ${MAX_KILL_AFTER_MINUTES}), got: ${l}`,
+              `--startup-timeout-min must be a non-negative number of minutes (0 disables, max ${MAX_KILL_AFTER_MINUTES}), got: ${next}`,
             );
-          process.env.SELF_HOSTED_RUNNER_STARTUP_TIMEOUT_MS = String(u * 60 * 1000);
-          r.envSetByFlag.add("SELF_HOSTED_RUNNER_STARTUP_TIMEOUT_MS");
+          process.env.SELF_HOSTED_RUNNER_STARTUP_TIMEOUT_MS = String(minutes * 60 * 1000);
+          options.envSetByFlag.add("SELF_HOSTED_RUNNER_STARTUP_TIMEOUT_MS");
           j++;
         }
         break;
       }
       case "--defer-shutdown-max-min": {
-        let u = e[++j];
-        let h = Number(u);
-        if (u === undefined || u.trim() === "" || !Number.isFinite(h) || h < 0 || h > MAX_KILL_AFTER_MINUTES)
+        let raw = argv[++j];
+        let minutes = Number(raw);
+        if (
+          raw === undefined ||
+          raw.trim() === "" ||
+          !Number.isFinite(minutes) ||
+          minutes < 0 ||
+          minutes > MAX_KILL_AFTER_MINUTES
+        )
           throw Error(
-            `${o} must be a non-negative number of minutes (0 disables, max ${MAX_KILL_AFTER_MINUTES}), got: ${u}`,
+            `${arg} must be a non-negative number of minutes (0 disables, max ${MAX_KILL_AFTER_MINUTES}), got: ${raw}`,
           );
-        process.env.SELF_HOSTED_RUNNER_DEFER_SHUTDOWN_MAX_MS = String(h * 60 * 1000);
-        r.envSetByFlag.add("SELF_HOSTED_RUNNER_DEFER_SHUTDOWN_MAX_MS");
+        process.env.SELF_HOSTED_RUNNER_DEFER_SHUTDOWN_MAX_MS = String(minutes * 60 * 1000);
+        options.envSetByFlag.add("SELF_HOSTED_RUNNER_DEFER_SHUTDOWN_MAX_MS");
         break;
       }
       case "--retire-at": {
-        let u = e[++j];
-        let h = Number(u);
-        if (!u || !Number.isSafeInteger(h) || h < MAX_TIMESTAMP_SECONDS || h > MIN_DURATION_MS)
+        let raw = argv[++j];
+        let seconds = Number(raw);
+        if (
+          !raw ||
+          !Number.isSafeInteger(seconds) ||
+          seconds < MAX_TIMESTAMP_SECONDS ||
+          seconds > MIN_DURATION_MS
+        )
           throw Error(
-            `--retire-at must be an absolute Unix timestamp in whole SECONDS (e.g. the output of 'date +%s' plus the runner's intended lifetime \u2014 not milliseconds, not a duration), got: ${u}`,
+            `--retire-at must be an absolute Unix timestamp in whole SECONDS (e.g. the output of 'date +%s' plus the runner's intended lifetime \u2014 not milliseconds, not a duration), got: ${raw}`,
           );
-        process.env.SELF_HOSTED_RUNNER_RETIRE_AT = String(h);
+        process.env.SELF_HOSTED_RUNNER_RETIRE_AT = String(seconds);
         break;
       }
       case "--lock-to-account":
-        if (l) {
-          r.lockToAccountId = l;
+        if (next) {
+          options.lockToAccountId = next;
           j++;
         }
         break;
       case "--client-label":
-        if (l && !l.startsWith("--")) {
-          let trimmed = l.trim();
+        if (next && !next.startsWith("--")) {
+          let trimmed = next.trim();
           if (trimmed) {
-            r.clientLabel = trimmed;
+            options.clientLabel = trimmed;
             j++;
           }
         }
         break;
       case "--debug-token-dir":
-        if (l) {
-          r.debugTokenDir = l;
+        if (next) {
+          options.debugTokenDir = next;
           j++;
         }
         break;
       case "--agent-proxy-url": {
-        let u = e[++j];
-        if (u === undefined || u.trim() === "" || u.startsWith("--"))
+        let url = argv[++j];
+        if (url === undefined || url.trim() === "" || url.startsWith("--"))
           throw Error("--agent-proxy-url requires your proxy's https:// URL");
-        env.set("SELF_HOSTED_RUNNER_AGENT_PROXY_URL", u);
-        r.envSetByFlag.add("SELF_HOSTED_RUNNER_AGENT_PROXY_URL");
+        env.set("SELF_HOSTED_RUNNER_AGENT_PROXY_URL", url);
+        options.envSetByFlag.add("SELF_HOSTED_RUNNER_AGENT_PROXY_URL");
         break;
       }
       case "--proxy-authorization-command":
       case "--proxy-authorization-file":
-        if (l === undefined || l.startsWith("--"))
+        if (next === undefined || next.startsWith("--"))
           throw Error("--proxy-authorization-command / --proxy-authorization-file requires a value");
-        if (o === "--proxy-authorization-command") r.proxyAuthorizationCommand = l;
-        else r.proxyAuthorizationFile = l;
+        if (arg === "--proxy-authorization-command") options.proxyAuthorizationCommand = next;
+        else options.proxyAuthorizationFile = next;
         j++;
         break;
       default:
-        if (o?.startsWith("--")) throw Error(`unknown flag ${o}`);
-        if (o === "")
+        if (arg?.startsWith("--")) throw Error(`unknown flag ${arg}`);
+        if (arg === "")
           throw Error("empty argument \u2014 a flag value may be unset (failed env/K8s substitution?)");
-        if (o !== undefined)
-          throw Error(`unexpected argument '${o}' \u2014 this command takes no positional arguments`);
+        if (arg !== undefined)
+          throw Error(`unexpected argument '${arg}' \u2014 this command takes no positional arguments`);
         break;
     }
   }
-  let s = new Set(r.gitSshRewriteHosts.map((gitSshRewriteHost) => gitSshRewriteHost.toLowerCase()));
-  for (let [a, o] of r.gitHostRewrites)
-    if (s.has(a))
+  let sshRewriteHosts = new Set(
+    options.gitSshRewriteHosts.map((gitSshRewriteHost) => gitSshRewriteHost.toLowerCase()),
+  );
+  for (let [fromHost, toHost] of options.gitHostRewrites)
+    if (sshRewriteHosts.has(fromHost))
       console.error(
-        `[runner:warn] --git-ssh-rewrite '${a}' will not match: --git-host-rewrite rewrites it to '${o}' first. Did you mean --git-ssh-rewrite '${o}'?`,
+        `[runner:warn] --git-ssh-rewrite '${fromHost}' will not match: --git-host-rewrite rewrites it to '${toHost}' first. Did you mean --git-ssh-rewrite '${toHost}'?`,
       );
-  if (r.diffFindsNestedRepository && r.capacity > 1)
+  if (options.diffFindsNestedRepository && options.capacity > 1)
     throw Error(
       "--diff-finds-nested-repository requires --capacity 1. Turn the option off (the flag, or SELF_HOSTED_RUNNER_DIFF_FINDS_NESTED_REPOSITORY), or run every runner in this environment at --capacity 1. Why: another session's process, run by the same Unix user at the same time, could rewrite the checked copy of the repository's git settings after the check. In Claude Code's tests no rewritten setting made the git commands it runs under that copy start a program, but those tests cover one git version on Linux, so the runner also keeps other sessions out.",
     );
-  return r;
+  return options;
 }
 //@ chunk-hm0ce8vc.js:233662-234138 placement
-function warnCapacityOnSessionBoundRunner(e, capacity) {
+function warnCapacityOnSessionBoundRunner(sessionToken, capacity) {
   if (capacity <= 1) return null;
-  if (getSpawnSessionIdFromJwt(e) === null) return null;
+  if (getSpawnSessionIdFromJwt(sessionToken) === null) return null;
   return (
     `[runner:warn] --capacity ${capacity} has no effect on a session-bound runner: this work order is bound to one session, so this runner will serve exactly one session and the extra ${capacity - 1} slot(s) will not be used. To run multiple concurrent sessions for the same account ` +
     "per runner, register a fixed-fleet runner with the environment secret \u2014 see " +
@@ -643,32 +666,32 @@ function warnCapacityOnSessionBoundRunner(e, capacity) {
   );
 }
 //@ chunk-hm0ce8vc.js:234138-234416 placement
-function requireBaseDirOnWindows(baseDirSource, n = "linux") {
-  if (n === "win32" && baseDirSource === "default")
+function requireBaseDirOnWindows(baseDirSource, platform = "linux") {
+  if (platform === "win32" && baseDirSource === "default")
     throw Error(
       "--base-dir (or SELF_HOSTED_RUNNER_BASE_DIR) is required on Windows: the built-in default is a POSIX container path that does not apply there. Pass the directory that repositories should be checked out under.",
     );
 }
 //@ chunk-hm0ce8vc.js:234416-234694 placement
-async function resetRunnerHome(e) {
-  await rm(e.globalCfgPath, {
+async function resetRunnerHome(paths) {
+  await rm(paths.globalCfgPath, {
     recursive: true,
     force: true,
   });
-  await rm(e.homeGitconfigPath, {
+  await rm(paths.homeGitconfigPath, {
     recursive: true,
     force: true,
   });
-  for (let xdgGitDir of e.xdgGitDirs)
+  for (let xdgGitDir of paths.xdgGitDirs)
     await rm(xdgGitDir, {
       recursive: true,
       force: true,
     });
-  await rm(e.runnerDir, {
+  await rm(paths.runnerDir, {
     recursive: true,
     force: true,
   });
-  await mkdir(dirname(e.globalCfgPath), {
+  await mkdir(dirname(paths.globalCfgPath), {
     recursive: true,
   });
 }
@@ -676,32 +699,32 @@ async function resetRunnerHome(e) {
 /**
  * 带超时读取环境密钥文件（CSI/secret 挂载）。
  */
-async function readEnvironmentSecretFile(e, n = (r) => console.error(r)) {
-  if (e.poolSecretFile) {
-    let a;
+async function readEnvironmentSecretFile(options, report = (message) => console.error(message)) {
+  if (options.poolSecretFile) {
+    let content;
     try {
-      a = await withBoundedTimeout(
-        readFile(e.poolSecretFile, {
+      content = await withBoundedTimeout(
+        readFile(options.poolSecretFile, {
           encoding: "utf-8",
         }),
         ENV_SECRET_READ_TIMEOUT_MS,
-        `environment-secret read from ${e.poolSecretFile}`,
+        `environment-secret read from ${options.poolSecretFile}`,
       );
     } catch (error) {
-      let l = errorMessage(error);
-      if (l.includes("timed out after")) {
-        n(`[runner:fatal] ${l} \u2014 check CSI/secret mount health`);
+      let message = errorMessage(error);
+      if (message.includes("timed out after")) {
+        report(`[runner:fatal] ${message} \u2014 check CSI/secret mount health`);
         process.exit(1);
       }
-      throw Error(`Failed to read environment secret file ${e.poolSecretFile} (${l})`);
+      throw Error(`Failed to read environment secret file ${options.poolSecretFile} (${message})`);
     }
-    return a.trim();
+    return content.trim();
   }
   let envSelfHostedRunnerEnvironmentSecret = process.env.SELF_HOSTED_RUNNER_ENVIRONMENT_SECRET;
   if (envSelfHostedRunnerEnvironmentSecret) return envSelfHostedRunnerEnvironmentSecret.trim();
   let envSelfHostedRunnerPoolSecret = process.env.SELF_HOSTED_RUNNER_POOL_SECRET;
   if (envSelfHostedRunnerPoolSecret) {
-    n(
+    report(
       "[runner:warn] SELF_HOSTED_RUNNER_POOL_SECRET is deprecated; use SELF_HOSTED_RUNNER_ENVIRONMENT_SECRET",
     );
     return envSelfHostedRunnerPoolSecret.trim();

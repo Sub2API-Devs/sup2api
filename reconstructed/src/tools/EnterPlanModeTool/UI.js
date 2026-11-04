@@ -14,13 +14,13 @@ import {
 } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Box, Text } from "../../ink/components/Text.js";
 import { themeColorOf } from "../../utils/spellcheck.js";
-import { BLACK_CIRCLE } from "../../utils/permissions/autoModeRulesPrompt.js";
+import { BLACK_CIRCLE } from "../../constants/figures.js";
 
 //@ chunk-ah34pb7m.js:30138-30454 placement
 /**
  * 进入计划模式的结果显示。
  */
-function EnterPlanModeResult(m, d, c) {
+function EnterPlanModeResult(props, unused, unusedOther) {
   return jsxProd_default_2(Box, {
     flexDirection: "column",
     marginTop: 1,

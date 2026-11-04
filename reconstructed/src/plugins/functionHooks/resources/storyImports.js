@@ -21,3 +21,4 @@ var STORY_IMPORTS_RESOURCE = __cc_resource_0;
  * 读取资源文本
  */
 var storyImportsText = readEmbeddedTextSync(STORY_IMPORTS_RESOURCE, import.meta.dirname);
+export { storyImportsText };

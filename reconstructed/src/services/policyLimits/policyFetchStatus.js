@@ -74,36 +74,36 @@ function describeIneligibleReason(reason) {
  * 拉取失败（鉴权、超时、网络等）的说明与修复建议。
  */
 function describeFetchFailure(errorCode, httpStatus, host, retrying) {
-  let s = retrying ? "" : " \xB7 Retried hourly while Claude Code runs; restart to retry now";
+  let retryNote = retrying ? "" : " \xB7 Retried hourly while Claude Code runs; restart to retry now";
   switch (errorCode) {
     case "auth_failed":
       if (httpStatus === 403)
-        return `${host}, or a proxy in front of it, refused the request (HTTP 403) \xB7 Fix: if you use a web proxy make sure it allows ${host}; if your organization restricts by IP, check this machine is allowed${s}`;
+        return `${host}, or a proxy in front of it, refused the request (HTTP 403) \xB7 Fix: if you use a web proxy make sure it allows ${host}; if your organization restricts by IP, check this machine is allowed${retryNote}`;
       if (httpStatus === 401 && retrying)
         return `${host} rejected this session's sign-in (HTTP 401) while it was being refreshed \xB7 Claude Code is retrying with the refreshed sign-in`;
       return httpStatus
         ? `${host} rejected this session's credentials (HTTP ${httpStatus}) \xB7 Fix: sign in again or check the API key this session uses`
         : "Couldn't attach credentials to the request \xB7 Fix: sign in, set the API key this session should use, or check your workload-identity setup";
     case "timeout":
-      return `${host} took too long to answer \xB7 Fix: check your network or proxy${s}`;
+      return `${host} took too long to answer \xB7 Fix: check your network or proxy${retryNote}`;
     case "network_error":
-      return `Couldn't reach ${host} \xB7 Fix: check your network or proxy${s}`;
+      return `Couldn't reach ${host} \xB7 Fix: check your network or proxy${retryNote}`;
     case "parse_failed":
-      return `The answer from ${host} couldn't be read, either because a proxy replaced it or because this version of Claude Code doesn't understand it \xB7 Fix: check your proxy settings, or update Claude Code${s}`;
+      return `The answer from ${host} couldn't be read, either because a proxy replaced it or because this version of Claude Code doesn't understand it \xB7 Fix: check your proxy settings, or update Claude Code${retryNote}`;
     case "spurious_304":
-      return `${host} confirmed a cached copy from a previous sign-in, which this session can't use${s}`;
+      return `${host} confirmed a cached copy from a previous sign-in, which this session can't use${retryNote}`;
     case "stale_tunnel_credential":
-      return `The machine running claude ssh changed credentials while ${host} was answering, so that answer wasn't used${s}`;
+      return `The machine running claude ssh changed credentials while ${host} was answering, so that answer wasn't used${retryNote}`;
     case "request_failed":
       if (httpStatus === 404)
-        return `The request for ${POLICY_LIMITS_PATH} on ${host} got a 404, which usually means a proxy or gateway between you and the API isn't forwarding that path \xB7 Fix: ask your network admin to allow it${s}`;
+        return `The request for ${POLICY_LIMITS_PATH} on ${host} got a 404, which usually means a proxy or gateway between you and the API isn't forwarding that path \xB7 Fix: ask your network admin to allow it${retryNote}`;
       if (httpStatus === 304)
-        return `A caching proxy between you and ${host} answered in place of the API (HTTP 304) \xB7 Fix: ask your network admin to stop caching ${POLICY_LIMITS_PATH}${s}`;
+        return `A caching proxy between you and ${host} answered in place of the API (HTTP 304) \xB7 Fix: ask your network admin to stop caching ${POLICY_LIMITS_PATH}${retryNote}`;
       if (httpStatus === 407)
-        return `Your proxy asked for authentication before it would forward the request to ${host} (HTTP 407) \xB7 Fix: check your proxy credentials${s}`;
+        return `Your proxy asked for authentication before it would forward the request to ${host} (HTTP 407) \xB7 Fix: check your proxy credentials${retryNote}`;
       return httpStatus
-        ? `HTTP ${httpStatus} on the request to ${host}${s}`
-        : `Couldn't complete the request to ${host}; if a proxy intercepts TLS, its certificate must be trusted (NODE_EXTRA_CA_CERTS) \xB7 Fix: check your network or proxy${s}`;
+        ? `HTTP ${httpStatus} on the request to ${host}${retryNote}`
+        : `Couldn't complete the request to ${host}; if a proxy intercepts TLS, its certificate must be trusted (NODE_EXTRA_CA_CERTS) \xB7 Fix: check your network or proxy${retryNote}`;
   }
 }
 //@ chunk-4xpk3fhh.js:9776-10898 placement
@@ -121,18 +121,23 @@ function formatPolicyFetchStatus(policyFetchStatus) {
     case "settled": {
       let { outcome } = policyFetchStatus;
       if (outcome.success) return `Loaded from ${outcome.host}`;
-      let r = describeFetchFailure(outcome.errorCode, outcome.httpStatus, outcome.host, outcome.retrying);
-      let o = outcome.retrying ? " yet, still retrying" : "";
-      let s = policyFetchStatus.egressKeysWithheld ? ", web fetch, design sync, Channels" : "";
+      let failureText = describeFetchFailure(
+        outcome.errorCode,
+        outcome.httpStatus,
+        outcome.host,
+        outcome.retrying,
+      );
+      let retryingNote = outcome.retrying ? " yet, still retrying" : "";
+      let withheldNote = policyFetchStatus.egressKeysWithheld ? ", web fetch, design sync, Channels" : "";
       switch (policyFetchStatus.served) {
         case "stale_cache":
-          return `Couldn't refresh${o} \xB7 using the last copy on this machine${policyFetchStatus.egressKeysWithheld ? _ : ""} \xB7 ${r}`;
+          return `Couldn't refresh${retryingNote} \xB7 using the last copy on this machine${policyFetchStatus.egressKeysWithheld ? _ : ""} \xB7 ${failureText}`;
         case "unrestricted":
           return policyFetchStatus.egressKeysWithheld
-            ? `Couldn't load${o} \xB7 no restrictions applied this session, except that web fetch, design sync and Channels stay off until it loads \xB7 ${r}`
-            : `Couldn't load${o} \xB7 no restrictions applied this session \xB7 ${r}`;
+            ? `Couldn't load${retryingNote} \xB7 no restrictions applied this session, except that web fetch, design sync and Channels stay off until it loads \xB7 ${failureText}`
+            : `Couldn't load${retryingNote} \xB7 no restrictions applied this session \xB7 ${failureText}`;
         case "nothing":
-          return `Couldn't load${o} \xB7 features that must check it first (Remote Control, cloud sessions, /feedback${s} and others) stay off, and some need a restart once it loads \xB7 ${r}`;
+          return `Couldn't load${retryingNote} \xB7 features that must check it first (Remote Control, cloud sessions, /feedback${withheldNote} and others) stay off, and some need a restart once it loads \xB7 ${failureText}`;
       }
     }
   }

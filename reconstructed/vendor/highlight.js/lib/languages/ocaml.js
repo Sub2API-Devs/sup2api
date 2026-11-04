@@ -5,10 +5,10 @@
  * pieces: chunk-egr0twnb.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:325653-326893 cjs-fingerprint
-var require_ocaml = x(function (cjsExports, cjsModule) {
+var require_ocaml = __commonJS(function (cjsExports, cjsModule) {
   function ocaml(hljs) {
     return {
       name: "OCaml",

@@ -141,16 +141,16 @@ async function requestPeerIdleNotice(peerSocket, label, storage, fromMode) {
 /**
  * 构造空闲订阅失败结果，并上报命中的失败原因。
  */
-function idleSubscribeFailure(e) {
-  logFeatureSad("cross_session_notify_idle", IDLE_SUBSCRIBE_FAILURE_EVENTS[e]);
+function idleSubscribeFailure(reason) {
+  logFeatureSad("cross_session_notify_idle", IDLE_SUBSCRIBE_FAILURE_EVENTS[reason]);
   return {
     ok: false,
-    reason: e,
+    reason,
   };
 }
 //@ chunk-7bvr1kd2.js:13417-13551 placement
-function idleSelfTargetMessage(e) {
-  return `notify_when_idle: ${e} is THIS session \u2014 nothing was subscribed; you already know when your own turn ends.`;
+function idleSelfTargetMessage(peerName) {
+  return `notify_when_idle: ${peerName} is THIS session \u2014 nothing was subscribed; you already know when your own turn ends.`;
 }
 //@ chunk-7bvr1kd2.js:13551-13821 placement
 var IDLE_SUBSCRIBE_FAILURE_EVENTS = {
@@ -255,10 +255,10 @@ function idleSubscriptionLines(peer, result, peer_2) {
     };
   } catch (error) {
     logError(error);
-    let n = result.ok ? "Idle subscription sent." : "The idle subscription could not be set up.";
+    let text = result.ok ? "Idle subscription sent." : "The idle subscription could not be set up.";
     return {
-      model: n,
-      display: n,
+      model: text,
+      display: text,
     };
   }
 }
@@ -267,6 +267,7 @@ function idleSubscriptionLines(peer, result, peer_2) {
  * 返回当前用户的 uid 列表（宿主 uid 或进程 uid，取不到为空数组）。
  */
 async function currentUserUids() {
-  let e = (await getHostUid()) ?? process.getuid?.();
-  return e === undefined ? [] : [e];
+  let uid = (await getHostUid()) ?? process.getuid?.();
+  return uid === undefined ? [] : [uid];
 }
+export { idleSelfTargetMessage, idleSubscriptionLines, subscribeToPeerIdle };

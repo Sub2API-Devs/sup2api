@@ -18,8 +18,8 @@ var cliArgvReaderState = identity(
   {
     read: undefined,
   },
-  (e) => {
-    e.read = undefined;
+  (state) => {
+    state.read = undefined;
   },
 );
 //@ chunk-cmr2yp8m.js:272-297 placement
@@ -33,4 +33,4 @@ function installCliArgvReader(read) {
 function cliArgvReader() {
   return cliArgvReaderState.read;
 }
-export { cliArgvReader };
+export { cliArgvReader, installCliArgvReader };

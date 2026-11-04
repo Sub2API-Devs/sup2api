@@ -26,123 +26,136 @@ var SCP_LIKE_GIT_URL_RE = /^(?!-)[A-Za-z0-9._-]+@(?:(?!-)[A-Za-z0-9._-]+|\[[0-9A
 var GIT_HOST_RE = /^(?:(?!-)[A-Za-z0-9._-]+|\[[0-9A-Fa-f:.]+\])$/;
 var GIT_USER_RE = /^(?!-)[A-Za-z0-9._-]+$/;
 //@ chunk-9qwbw2qr.js:1225-1295 placement
-function printableUrlLabel(e) {
-  if (e === REDACTED_URL) return e;
-  return printableLabel(printableName(e, 200)) || "\u201C\u201D";
+function printableUrlLabel(url) {
+  if (url === REDACTED_URL) return url;
+  return printableLabel(printableName(url, 200)) || "\u201C\u201D";
 }
 //@ chunk-9qwbw2qr.js:1295-4793 placement
 /**
  * 校验并解析插件 git URL（拒绝控制字符、不安全协议等）。
  */
-function parsePluginGitUrl(e) {
-  if (/[\u0000-\u001f\u007f]/.test(e))
+function parsePluginGitUrl(rawUrl) {
+  if (/[\u0000-\u001f\u007f]/.test(rawUrl))
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `Invalid git URL: ${printableUrlLabel(redactUrlQuery(e))} \u2014 control characters are not allowed`,
+      `Invalid git URL: ${printableUrlLabel(redactUrlQuery(rawUrl))} \u2014 control characters are not allowed`,
       "git URL contains control characters",
     );
-  if (e.includes("%00"))
+  if (rawUrl.includes("%00"))
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `Invalid git URL: ${printableUrlLabel(redactUrlQuery(e))} \u2014 "%00" in a git address means different things to different versions of git, so it is not allowed. Remove it.`,
+      `Invalid git URL: ${printableUrlLabel(redactUrlQuery(rawUrl))} \u2014 "%00" in a git address means different things to different versions of git, so it is not allowed. Remove it.`,
       "git URL contains %00",
     );
-  if (describeUrlScheme(e))
+  if (describeUrlScheme(rawUrl))
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `Invalid git URL: ${printableUrlLabel(redactUrlQuery(e))} \u2014 git can read a square bracket (also written %5B or %5D) as marking a server name or where a local path starts, so it could connect to a different server or open a different folder than this address names. In a server address, brackets may only surround an IPv6 address, as in git@[2001:db8::1]:repo.git. Remove them, or rename the folder whose name has them.`,
+      `Invalid git URL: ${printableUrlLabel(redactUrlQuery(rawUrl))} \u2014 git can read a square bracket (also written %5B or %5D) as marking a server name or where a local path starts, so it could connect to a different server or open a different folder than this address names. In a server address, brackets may only surround an IPv6 address, as in git@[2001:db8::1]:repo.git. Remove them, or rename the folder whose name has them.`,
       "git URL has a square bracket that git could read as the host",
     );
-  if (SCP_LIKE_GIT_URL_RE.test(e)) {
-    if (!e.includes("://")) return e;
+  if (SCP_LIKE_GIT_URL_RE.test(rawUrl)) {
+    if (!rawUrl.includes("://")) return rawUrl;
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
       `Invalid git URL: an address written as user@host:path can't contain "://", because git then reads the text before "://" as a protocol name, as in https://. Remove the "://".`,
       "scp-like git URL contains ://",
     );
   }
-  let i;
+  let parsedUrl;
   try {
-    i = new URL(e);
+    parsedUrl = new URL(rawUrl);
   } catch {
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `Invalid git URL: ${printableUrlLabel(redactUrlQuery(e))} (it could not be read as a URL). Supported: ${SUPPORTED_GIT_URL_FORMS}`,
+      `Invalid git URL: ${printableUrlLabel(redactUrlQuery(rawUrl))} (it could not be read as a URL). Supported: ${SUPPORTED_GIT_URL_FORMS}`,
       "Invalid git URL",
     );
   }
-  if (!["https:", "http:", "ssh:", "file:", "git+ssh:", "ssh+git:"].includes(i.protocol)) {
-    let r = redactUrlQuery(e);
-    let lower = e.slice(0, e.indexOf(":") + 1).toLowerCase();
+  if (!["https:", "http:", "ssh:", "file:", "git+ssh:", "ssh+git:"].includes(parsedUrl.protocol)) {
+    let redacted = redactUrlQuery(rawUrl);
+    let lower = rawUrl.slice(0, rawUrl.indexOf(":") + 1).toLowerCase();
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      r === e
-        ? `Invalid git URL protocol: ${printableLabel(printableName(i.protocol, 40))}. Supported: ${SUPPORTED_GIT_URL_FORMS}`
-        : lower !== "" && r.toLowerCase().startsWith(lower)
-          ? `Invalid git URL: ${printableUrlLabel(r)}. Supported: ${SUPPORTED_GIT_URL_FORMS}`
+      redacted === rawUrl
+        ? `Invalid git URL protocol: ${printableLabel(printableName(parsedUrl.protocol, 40))}. Supported: ${SUPPORTED_GIT_URL_FORMS}`
+        : lower !== "" && redacted.toLowerCase().startsWith(lower)
+          ? `Invalid git URL: ${printableUrlLabel(redacted)}. Supported: ${SUPPORTED_GIT_URL_FORMS}`
           : `Invalid git URL. Supported: ${SUPPORTED_GIT_URL_FORMS}`,
       "Invalid git URL protocol",
     );
   }
-  if ((i.protocol === "https:" || i.protocol === "http:") && hasBackslashInUrlAuthority(e))
+  if (
+    (parsedUrl.protocol === "https:" || parsedUrl.protocol === "http:") &&
+    hasBackslashInUrlAuthority(rawUrl)
+  )
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `Invalid git URL: ${printableUrlLabel(redactUrlQuery(e))} \u2014 a backslash before the first "/" can make git connect to a different server than this address names. Remove it, or write it as %5C if it is part of a user name.`,
+      `Invalid git URL: ${printableUrlLabel(redactUrlQuery(rawUrl))} \u2014 a backslash before the first "/" can make git connect to a different server than this address names. Remove it, or write it as %5C if it is part of a user name.`,
       "git URL has a backslash in its authority",
     );
-  if (["ssh:", "git+ssh:", "ssh+git:"].includes(i.protocol)) {
-    let r = /^[a-z][a-z0-9+.-]*:\/\/([^/]*)/i.exec(e)?.[1] ?? "";
-    let index = r.lastIndexOf("@");
-    let s = index === -1 ? undefined : r.slice(0, index);
-    let y = index === -1 ? r : r.slice(index + 1);
-    let h = /^(.*?)(?::([0-9]{1,5}))?$/.exec(y)?.[1] ?? y;
-    if (/[?#]/.test(e) || !GIT_HOST_RE.test(h) || (s !== undefined && !GIT_USER_RE.test(s))) {
-      let match = /^[\u0000-\u0020]*[a-z][a-z0-9+.-]*:(?:\/\/)?([^/?#]*)/i.exec(e);
-      let w = match?.[1] ?? "";
-      let v = (match?.[0].length ?? 0) - w.length;
-      let sliced = w.slice(0, Math.max(0, w.lastIndexOf("@")));
-      let O = sliced.search(COLON_RE);
-      let Y = O !== -1 ? e.slice(0, v) + `${sliced.slice(0, O)}:***` + e.slice(v + sliced.length) : e;
-      let x = match?.[0].includes("//") === true;
-      let K = x && w !== "" && !/:(?!\d+$)|%3a/i.test(w);
-      let j =
-        (e.includes("@") && !w.includes("@") && !K) || (w.includes("@") && e.includes("@", v + w.length));
-      let W =
-        /%40/i.test(e) || redactUrlQuery(e) === REDACTED_URL
+  if (["ssh:", "git+ssh:", "ssh+git:"].includes(parsedUrl.protocol)) {
+    let authority = /^[a-z][a-z0-9+.-]*:\/\/([^/]*)/i.exec(rawUrl)?.[1] ?? "";
+    let index = authority.lastIndexOf("@");
+    let userPart = index === -1 ? undefined : authority.slice(0, index);
+    let hostPart = index === -1 ? authority : authority.slice(index + 1);
+    let host = /^(.*?)(?::([0-9]{1,5}))?$/.exec(hostPart)?.[1] ?? hostPart;
+    if (
+      /[?#]/.test(rawUrl) ||
+      !GIT_HOST_RE.test(host) ||
+      (userPart !== undefined && !GIT_USER_RE.test(userPart))
+    ) {
+      let match = /^[\u0000-\u0020]*[a-z][a-z0-9+.-]*:(?:\/\/)?([^/?#]*)/i.exec(rawUrl);
+      let authorityText = match?.[1] ?? "";
+      let prefixLength = (match?.[0].length ?? 0) - authorityText.length;
+      let sliced = authorityText.slice(0, Math.max(0, authorityText.lastIndexOf("@")));
+      let colonIndex = sliced.search(COLON_RE);
+      let maskedUrl =
+        colonIndex !== -1
+          ? rawUrl.slice(0, prefixLength) +
+            `${sliced.slice(0, colonIndex)}:***` +
+            rawUrl.slice(prefixLength + sliced.length)
+          : rawUrl;
+      let hasSlashes = match?.[0].includes("//") === true;
+      let looksLikeHostWithPort = hasSlashes && authorityText !== "" && !/:(?!\d+$)|%3a/i.test(authorityText);
+      let strayAtSign =
+        (rawUrl.includes("@") && !authorityText.includes("@") && !looksLikeHostWithPort) ||
+        (authorityText.includes("@") && rawUrl.includes("@", prefixLength + authorityText.length));
+      let shownUrl =
+        /%40/i.test(rawUrl) || redactUrlQuery(rawUrl) === REDACTED_URL
           ? REDACTED_URL
-          : j || !x
-            ? redactUrlQuery(e)
-            : Y.replace(/[?#][\s\S]*$/, (H) => `${H[0]}***`);
+          : strayAtSign || !hasSlashes
+            ? redactUrlQuery(rawUrl)
+            : maskedUrl.replace(/[?#][\s\S]*$/, (queryFragment) => `${queryFragment[0]}***`);
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        `Invalid ssh git URL: the host must be a hostname or bracketed IPv6 literal (optionally :port), the user a plain name, and the URL may not carry ? or # (${printableUrlLabel(W)})`,
+        `Invalid ssh git URL: the host must be a hostname or bracketed IPv6 literal (optionally :port), the user a plain name, and the URL may not carry ? or # (${printableUrlLabel(shownUrl)})`,
         "ssh git URL host or user has disallowed characters",
       );
     }
   }
-  if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(e))
+  if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(rawUrl))
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `Invalid git URL: ${printableUrlLabel(redactUrlQuery(e))} \u2014 a scheme URL must be spelled scheme://\u2026`,
+      `Invalid git URL: ${printableUrlLabel(redactUrlQuery(rawUrl))} \u2014 a scheme URL must be spelled scheme://\u2026`,
       "git URL scheme without //",
     );
   if (
-    i.protocol === "file:" &&
-    (hasDotSegmentAlias(decodeFileUrlPath(e)) ||
-      i.host !== "" ||
-      /^file:\/\/[^/\\]/i.test(e) ||
-      /^file:[\\/]*[\\]/i.test(e) ||
-      isUntrustedLinkPath(decodeUrlPathname(i)))
+    parsedUrl.protocol === "file:" &&
+    (hasDotSegmentAlias(decodeFileUrlPath(rawUrl)) ||
+      parsedUrl.host !== "" ||
+      /^file:\/\/[^/\\]/i.test(rawUrl) ||
+      /^file:[\\/]*[\\]/i.test(rawUrl) ||
+      isUntrustedLinkPath(decodeUrlPathname(parsedUrl)))
   )
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `Refusing git URL ${printableUrlLabel(redactUrlQuery(e))}: a file: URL must name a local path (no host, no network-shaped path).${/^file:\/\/[a-z]:/i.test(e) ? " A drive letter such as C: counts as a local path only on Windows." : ""}`,
+      `Refusing git URL ${printableUrlLabel(redactUrlQuery(rawUrl))}: a file: URL must name a local path (no host, no network-shaped path).${/^file:\/\/[a-z]:/i.test(rawUrl) ? " A drive letter such as C: counts as a local path only on Windows." : ""}`,
       "file git URL names a host or network path",
     );
-  return e;
+  return rawUrl;
 }
 //@ chunk-9qwbw2qr.js:4793-4912 placement
-function decodeFileUrlPath(e) {
+function decodeFileUrlPath(url) {
   try {
-    return decodeURIComponent(e.replace(/^file:\/\//i, ""));
+    return decodeURIComponent(url.replace(/^file:\/\//i, ""));
   } catch {
     return "/../malformed-percent-encoding";
   }
 }
 //@ chunk-9qwbw2qr.js:4912-5013 placement
-function decodeUrlPathname(e) {
+function decodeUrlPathname(url) {
   try {
-    return decodeURIComponent(e.pathname);
+    return decodeURIComponent(url.pathname);
   } catch {
     return "//malformed-percent-encoding/";
   }

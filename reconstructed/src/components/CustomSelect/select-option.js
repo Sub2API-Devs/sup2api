@@ -8,13 +8,13 @@
  * pieces: chunk-ey2qag4x.js (1)
  * attribution: fingerprint 1
  */
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { ListItem } from "../design-system/ListItem.js";
 
 //@ chunk-ey2qag4x.js:25844-26333 fingerprint = SelectOption (0.897)
 function SelectOption(props) {
-  let $ = w(10);
+  let $ = useMemoCache(10);
   let {
     isFocused,
     isSelected,

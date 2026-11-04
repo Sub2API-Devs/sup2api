@@ -72,10 +72,10 @@ function findMatchingBracketOffset(text, offset) {
 `,
     offset,
   );
-  let n = index === -1 ? text.length : index;
-  let s = text.slice(offset, n).search(/[()[\]{}]/);
-  if (s === -1) return null;
-  let offset_2 = offset + s;
+  let lineEnd = index === -1 ? text.length : index;
+  let relativeIndex = text.slice(offset, lineEnd).search(/[()[\]{}]/);
+  if (relativeIndex === -1) return null;
+  let offset_2 = offset + relativeIndex;
   let textObject = findTextObject(text, offset_2, text[offset_2], false);
   if (!textObject) return null;
   return textObject.start === offset_2 ? textObject.end - 1 : textObject.start;

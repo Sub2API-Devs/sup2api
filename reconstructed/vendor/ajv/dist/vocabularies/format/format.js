@@ -5,11 +5,11 @@
  * pieces: chunk-s82q9s4x.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../../runtime/bun-runtime.js";
 import { require_codegen_2 } from "../../compile/codegen/index.js";
 
 //@ chunk-s82q9s4x.js:106427-108297 cjs-fingerprint
-var require_format_6 = x(function (cjsExports) {
+var require_format_6 = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
@@ -26,13 +26,13 @@ var require_format_6 = x(function (cjsExports) {
     error,
     code(cxt, ruleType) {
       let { gen, data, $data, schema, schemaCode, it } = cxt;
-      let { opts, errSchemaPath, schemaEnv, self: f } = it;
+      let { opts, errSchemaPath, schemaEnv, self: ajvInstance } = it;
       if (!opts.validateFormats) return;
       if ($data) validate$DataFormat();
       else validateFormat();
       function validate$DataFormat() {
         let fmts = gen.scopeValue("formats", {
-          ref: f.formats,
+          ref: ajvInstance.formats,
           code: opts.code.formats,
         });
         let fDef = gen.const("fDef", codegen_1._`${fmts}[${schemaCode}]`);
@@ -60,7 +60,7 @@ var require_format_6 = x(function (cjsExports) {
         }
       }
       function validateFormat() {
-        let formatDef = f.formats[schema];
+        let formatDef = ajvInstance.formats[schema];
         if (!formatDef) {
           unknownFormat();
           return;
@@ -70,7 +70,7 @@ var require_format_6 = x(function (cjsExports) {
         if (fmtType === ruleType) cxt.pass(validCondition());
         function unknownFormat() {
           if (opts.strictSchema === false) {
-            f.logger.warn(unknownMsg());
+            ajvInstance.logger.warn(unknownMsg());
             return;
           }
           throw Error(unknownMsg());

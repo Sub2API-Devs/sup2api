@@ -23,7 +23,14 @@ import { jsonStringify } from "../utils/slowOperations.js";
 import { getFileReader } from "../utils/fileStore.js";
 import { writeFileAtomic } from "../utils/atomicPublishWrite.js";
 import { DoctorLazy } from "../cli/handlers/util.js";
-import { u, string, M, _enum, E, array } from "../../vendor/zod/v4/classic/schemas.js";
+import {
+  objectSchema,
+  stringSchema,
+  booleanSchema,
+  _enum,
+  numberSchema,
+  array,
+} from "../../vendor/zod/v4/classic/schemas.js";
 import { parseCronExpression } from "../utils/cron.js";
 import { PERMISSION_MODE_MANUAL_ALIAS } from "../types/permissions.js";
 import { getClaudeConfigDir } from "../utils/envUtils.js";
@@ -34,6 +41,7 @@ import { processWrapperError } from "../utils/processWrapper.js";
 import { getLaunchCommand } from "../utils/deepLink/registerProtocol.js";
 import { WORKLOAD_CRON } from "../utils/workloadContext.js";
 import { withFeatureTelemetry } from "../services/analytics/featureTelemetry.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-f1dqjgj0.js:948-964 placement
 /**
@@ -44,44 +52,44 @@ var MAX_DAEMON_CONFIG_BYTES = 1048576;
 /**
  * 从存储后端读 daemon.json：返回 text / absent / refused（非常规文件或超过 1MiB）/ failed / threw 之一。
  */
-async function readDaemonConfigFromStorage(s) {
-  let r;
+async function readDaemonConfigFromStorage(storageV5) {
+  let result;
   try {
-    r = await readDaemonConfig(s);
+    result = await readDaemonConfig(storageV5);
   } catch (error) {
     return {
       kind: "threw",
       error,
     };
   }
-  if (!r.ok) {
-    let telemetryCode = "telemetryCode" in r.error ? r.error.telemetryCode : undefined;
+  if (!result.ok) {
+    let telemetryCode = "telemetryCode" in result.error ? result.error.telemetryCode : undefined;
     if (telemetryCode === "ENXIO" || telemetryCode === "EISDIR" || telemetryCode === "EFBIG")
       return {
         kind: "refused",
       };
     return {
       kind: "failed",
-      error: r.error,
+      error: result.error,
     };
   }
-  let e = r.value.items[0];
-  if (!e.found)
+  let item = result.value.items[0];
+  if (!item.found)
     return {
       kind: "absent",
     };
-  if (e.totalBytes > MAX_DAEMON_CONFIG_BYTES)
+  if (item.totalBytes > MAX_DAEMON_CONFIG_BYTES)
     return {
       kind: "refused",
     };
   return {
     kind: "text",
-    text: Buffer.from(e.value).toString("utf8"),
+    text: Buffer.from(item.value).toString("utf8"),
   };
 }
 //@ chunk-f1dqjgj0.js:1382-1467 placement
-function readDaemonConfig(s) {
-  return s.read([
+function readDaemonConfig(storageV5) {
+  return storageV5.read([
     {
       key: STORAGE_SPACES.state("daemon-config"),
       offset: 0,
@@ -93,43 +101,44 @@ function readDaemonConfig(s) {
 /**
  * 读取 daemon.json 为对象：storage v5 默认路径走后端，否则读文件（拒绝非常规文件或超过 1MiB）；空文件返回 {}，格式错误抛错。
  */
-async function readDaemonConfig_2(s, r) {
-  let e = s ?? daemonJsonPath();
-  let n;
-  if (isStorageV5Enabled() && r !== undefined && e === daemonJsonPath()) n = await readDaemonConfigText(r, e);
+async function readDaemonConfig_2(customPath, storageV5) {
+  let configPath = customPath ?? daemonJsonPath();
+  let text;
+  if (isStorageV5Enabled() && storageV5 !== undefined && configPath === daemonJsonPath())
+    text = await readDaemonConfigText(storageV5, configPath);
   else
     try {
-      let l = await stat(e);
-      if (!l.isFile() || l.size > MAX_DAEMON_CONFIG_BYTES)
-        throw Error(`${e} is not a regular file (or exceeds 1MiB); refusing read-modify-write`);
-      n = await readFile(e, "utf8");
+      let stats = await stat(configPath);
+      if (!stats.isFile() || stats.size > MAX_DAEMON_CONFIG_BYTES)
+        throw Error(`${configPath} is not a regular file (or exceeds 1MiB); refusing read-modify-write`);
+      text = await readFile(configPath, "utf8");
     } catch (error) {
       if (!isENOENT(error)) throw error;
     }
-  if (n === undefined || n.trim() === "") return {};
-  let a;
+  if (text === undefined || text.trim() === "") return {};
+  let parsed;
   try {
-    a = JSON.parse(stripBom(n));
+    parsed = JSON.parse(stripBom(text));
   } catch {
-    throw Error(`daemon.json is malformed: ${e}`);
+    throw Error(`daemon.json is malformed: ${configPath}`);
   }
-  if (a && typeof a === "object" && !Array.isArray(a)) return a;
+  if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) return parsed;
   return {};
 }
 //@ chunk-f1dqjgj0.js:1922-2323 placement
 /**
  * 把 tNt 的结果转成文本或抛错（refused/failed/threw）。
  */
-async function readDaemonConfigText(s, r) {
-  let daemonConfigFromStorage = await readDaemonConfigFromStorage(s);
+async function readDaemonConfigText(storageV5, configPath) {
+  let daemonConfigFromStorage = await readDaemonConfigFromStorage(storageV5);
   switch (daemonConfigFromStorage.kind) {
     case "text":
       return daemonConfigFromStorage.text;
     case "absent":
       return;
     case "refused": {
-      let n = `${r} is not a regular file (or exceeds 1MiB); refusing read-modify-write`;
-      throw Error(n);
+      let refusalMessage = `${configPath} is not a regular file (or exceeds 1MiB); refusing read-modify-write`;
+      throw Error(refusalMessage);
     }
     case "failed":
       throw Object.assign(
@@ -152,12 +161,12 @@ async function readDaemonConfigText(s, r) {
 /**
  * 读-改-写 daemon.json：调用修改函数（返回 false 则不写），storage v5 写入 state/daemon-config，否则原子写文件。
  */
-async function updateDaemonConfig(s, r, e) {
-  let n = r ?? daemonJsonPath();
-  let daemonConfig = await readDaemonConfig_2(n, e);
-  if ((await s(daemonConfig)) === false) return;
-  if (isStorageV5Enabled() && e !== undefined && n === daemonJsonPath()) {
-    let m = await e.write(
+async function updateDaemonConfig(mutate, customPath, storageV5) {
+  let configPath = customPath ?? daemonJsonPath();
+  let daemonConfig = await readDaemonConfig_2(configPath, storageV5);
+  if ((await mutate(daemonConfig)) === false) return;
+  if (isStorageV5Enabled() && storageV5 !== undefined && configPath === daemonJsonPath()) {
+    let writeResult = await storageV5.write(
       STORAGE_SPACES.state("daemon-config"),
       jsonStringify(daemonConfig, null, 2) +
         `
@@ -167,21 +176,21 @@ async function updateDaemonConfig(s, r, e) {
         mode: 438 & ~process.umask(),
       },
     );
-    if (!m.ok)
+    if (!writeResult.ok)
       throw Object.assign(
         new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-          `daemon.json write failed: ${m.error.code}`,
+          `daemon.json write failed: ${writeResult.error.code}`,
           "daemon.json v5 write failed",
         ),
         {
-          cause: "cause" in m.error ? m.error.cause : m.error,
+          cause: "cause" in writeResult.error ? writeResult.error.cause : writeResult.error,
         },
       );
     return;
   }
-  await getFileReader().mkdir(dirname(n));
+  await getFileReader().mkdir(dirname(configPath));
   await writeFileAtomic(
-    n,
+    configPath,
     jsonStringify(daemonConfig, null, 2) +
       `
 `,
@@ -192,7 +201,8 @@ async function updateDaemonConfig(s, r, e) {
  * 把配置里的目录项规范为数组（过滤无 dir 字段的项）。
  */
 function normalizeDirEntries(remoteControl) {
-  if (Array.isArray(remoteControl)) return remoteControl.filter((r) => !!r && typeof r.dir === "string");
+  if (Array.isArray(remoteControl))
+    return remoteControl.filter((entry) => !!entry && typeof entry.dir === "string");
   if (remoteControl && typeof remoteControl.dir === "string") return [remoteControl];
   return [];
 }
@@ -200,36 +210,43 @@ function normalizeDirEntries(remoteControl) {
 /**
  * 定时任务配置常量与 schema：最长运行 7 天（分钟）、允许的权限模式、单个任务 schema（id、cron、prompt、目录、启用、权限模式、模型、超时、排队上限）与整体 scheduled 配置 schema（任务 id 唯一、最大并发）。
  */
-var MIN_RUN_TIMEOUT_MS = 1000;
-var MAX_RUN_TIMEOUT_MINUTES = 10080;
-var SCHEDULED_PERMISSION_MODES = ["dontAsk", "auto", "default", "acceptEdits", "plan", "bypassPermissions"];
-var scheduledTaskSchema = DoctorLazy(() =>
-  u({
-    id: string().min(1),
-    cron: string().refine((s) => parseCronExpression(s) !== null, {
-      message: "invalid 5-field cron expression",
-    }),
-    prompt: string().min(1),
-    directory: string().min(1),
-    enabled: M().default(true),
-    permissionMode: _enum([...SCHEDULED_PERMISSION_MODES, PERMISSION_MODE_MANUAL_ALIAS])
-      .transform((s) => (s === PERMISSION_MODE_MANUAL_ALIAS ? "default" : s))
-      .default("dontAsk"),
-    model: string().optional(),
-    runTimeoutMinutes: E().positive().max(MAX_RUN_TIMEOUT_MINUTES).default(30),
-    maxQueued: E().int().positive().default(1),
-  }).strict(),
-);
-var scheduledConfigSchema = DoctorLazy(() =>
-  u({
-    tasks: array(scheduledTaskSchema())
-      .default([])
-      .refine((s) => new Set(s.map((r) => r.id)).size === s.length, {
-        message: "task ids must be unique",
+var MIN_RUN_TIMEOUT_MS; // deferred: uses DoctorLazy (../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var MAX_RUN_TIMEOUT_MINUTES;
+var SCHEDULED_PERMISSION_MODES;
+var scheduledTaskSchema;
+var scheduledConfigSchema;
+deferInit("chunk-f1dqjgj0.js:2975", () => {
+  MIN_RUN_TIMEOUT_MS = 1000;
+  MAX_RUN_TIMEOUT_MINUTES = 10080;
+  SCHEDULED_PERMISSION_MODES = ["dontAsk", "auto", "default", "acceptEdits", "plan", "bypassPermissions"];
+  scheduledTaskSchema = DoctorLazy(() =>
+    objectSchema({
+      id: stringSchema().min(1),
+      cron: stringSchema().refine((cron) => parseCronExpression(cron) !== null, {
+        message: "invalid 5-field cron expression",
       }),
-    maxConcurrent: E().int().positive().default(1),
-  }).strict(),
-);
+      prompt: stringSchema().min(1),
+      directory: stringSchema().min(1),
+      enabled: booleanSchema().default(true),
+      permissionMode: _enum([...SCHEDULED_PERMISSION_MODES, PERMISSION_MODE_MANUAL_ALIAS])
+        .transform((mode) => (mode === PERMISSION_MODE_MANUAL_ALIAS ? "default" : mode))
+        .default("dontAsk"),
+      model: stringSchema().optional(),
+      runTimeoutMinutes: numberSchema().positive().max(MAX_RUN_TIMEOUT_MINUTES).default(30),
+      maxQueued: numberSchema().int().positive().default(1),
+    }).strict(),
+  );
+  scheduledConfigSchema = DoctorLazy(() =>
+    objectSchema({
+      tasks: array(scheduledTaskSchema())
+        .default([])
+        .refine((tasks) => new Set(tasks.map((task) => task.id)).size === tasks.length, {
+          message: "task ids must be unique",
+        }),
+      maxConcurrent: numberSchema().int().positive().default(1),
+    }).strict(),
+  );
+});
 //@ chunk-f1dqjgj0.js:3634-3694 placement
 function scheduledStatusPath() {
   return join(getClaudeConfigDir(), "daemon.scheduled.status.json");
@@ -242,181 +259,183 @@ function scheduledStatusState() {
 /**
  * 写出定时任务 worker 的状态文件（pid、进程启动时间、写入时间与任务列表），经存储后端或本地文件。
  */
-async function writeScheduledStatus(tasks, r) {
-  let e = {
+async function writeScheduledStatus(tasks, storageV5) {
+  let status = {
     workerPid: process.pid,
     workerProcStart: ownProcStart(),
     writtenAt: Date.now(),
     tasks,
   };
-  if (isStorageV5Enabled() && r) {
+  if (isStorageV5Enabled() && storageV5) {
     try {
-      let n = await r.write(scheduledStatusState(), jsonStringify(e), {
+      let result = await storageV5.write(scheduledStatusState(), jsonStringify(status), {
         mode: 438 & ~process.umask(),
       });
-      if (!n.ok) logForDebugging(`writeScheduledStatus: ${n.error.code}`);
+      if (!result.ok) logForDebugging(`writeScheduledStatus: ${result.error.code}`);
     } catch (error) {
       logForDebugging(`writeScheduledStatus: ${errorMessage(error)}`);
     }
     return;
   }
   try {
-    await writeFileAtomic(scheduledStatusPath(), jsonStringify(e));
+    await writeFileAtomic(scheduledStatusPath(), jsonStringify(status));
   } catch {}
 }
 //@ chunk-f1dqjgj0.js:4054-4549 placement
 /**
  * 读取定时 worker 状态文件：校验格式，且 worker 进程仍在、启动标记一致才返回，否则 null。
  */
-async function readScheduledStatus(s) {
-  let r;
-  if (isStorageV5Enabled() && s !== undefined) {
-    let a;
+async function readScheduledStatus(storageV5) {
+  let text;
+  if (isStorageV5Enabled() && storageV5 !== undefined) {
+    let readResult;
     try {
-      a = await s.readText([scheduledStatusState()]);
+      readResult = await storageV5.readText([scheduledStatusState()]);
     } catch {
       return null;
     }
-    if (!a.ok) return null;
-    let l = a.value.items[0];
-    if (!l.found) return null;
-    r = l.value;
+    if (!readResult.ok) return null;
+    let item = readResult.value.items[0];
+    if (!item.found) return null;
+    text = item.value;
   } else
     try {
-      r = await readFile(scheduledStatusPath(), "utf8");
+      text = await readFile(scheduledStatusPath(), "utf8");
     } catch {
       return null;
     }
-  let e = safeParseJSON(r, false);
-  if (!e || typeof e !== "object") return null;
-  let n = e;
-  if (typeof n.workerPid !== "number" || typeof n.tasks !== "object" || n.tasks === null) return null;
+  let status = safeParseJSON(text, false);
+  if (!status || typeof status !== "object") return null;
+  let parsed = status;
+  if (typeof parsed.workerPid !== "number" || typeof parsed.tasks !== "object" || parsed.tasks === null)
+    return null;
   try {
-    process.kill(n.workerPid, 0);
+    process.kill(parsed.workerPid, 0);
   } catch {
     return null;
   }
-  if (!(await isSameProcessAsync(n.workerPid, n.workerProcStart))) return null;
-  return e;
+  if (!(await isSameProcessAsync(parsed.workerPid, parsed.workerProcStart))) return null;
+  return status;
 }
 //@ chunk-f1dqjgj0.js:4549-7250 placement
-var runScheduledWorker = async (s, r, e, n, a) => {
-  let { tasks, maxConcurrent } = scheduledConfigSchema().parse(s);
-  let { initializeErrorLogSink } = await import("./chunk-nynswhsz.js");
-  let { initializeAnalyticsSink } = await import("./chunk-dn8vrmng.js");
+var runScheduledWorker = async (config, signal, log, authClient, storageV5) => {
+  let { tasks, maxConcurrent } = scheduledConfigSchema().parse(config);
+  let { initializeErrorLogSink } = await import("../utils/errorLogSink.js");
+  let { initializeAnalyticsSink } = await import("../services/analytics/sink.js");
   initializeErrorLogSink();
   initializeAnalyticsSink();
-  if (!n.getAccessToken()) {
-    e("scheduled worker: not authed \u2014 run `claude auth login`");
+  if (!authClient.getAccessToken()) {
+    log("scheduled worker: not authed \u2014 run `claude auth login`");
     process.exit(1);
   }
-  let { awaitPolicyLimitsColdStart, stopPolicyLimits } = await import("./chunk-qchbrsbw.js");
-  if (r.aborted) return;
-  r.addEventListener("abort", () => stopPolicyLimits(), {
+  let { awaitPolicyLimitsColdStart, stopPolicyLimits } =
+    await import("../services/policyLimits/DefaultPolicyLimitsClientSlot.lazy.js");
+  if (signal.aborted) return;
+  signal.addEventListener("abort", () => stopPolicyLimits(), {
     once: true,
   });
   await awaitPolicyLimitsColdStart();
-  if (r.aborted) return;
-  let { query } = await import("./chunk-y805ph4h.js");
-  e(`scheduled worker started tasks=${tasks.length} maxConcurrent=${maxConcurrent}`);
+  if (signal.aborted) return;
+  let { query } = await import("../../vendor/@anthropic-ai/claude-agent-sdk/query.lazy.js");
+  log(`scheduled worker started tasks=${tasks.length} maxConcurrent=${maxConcurrent}`);
   if (tasks.length === 0) {
     let interval = setInterval(() => {}, 60000);
     await new Promise((resolve) => {
-      if (r.aborted) {
+      if (signal.aborted) {
         resolve();
         return;
       }
-      r.addEventListener("abort", () => resolve(), {
+      signal.addEventListener("abort", () => resolve(), {
         once: true,
       });
     });
     clearInterval(interval);
     return;
   }
-  let b = [];
-  let x = new Set();
-  let S = null;
-  function J(c) {
-    let reduced = b.reduce((acc, k) => (k.task.id === c.id ? acc + 1 : acc), 0);
-    if (reduced >= c.maxQueued) {
-      e(`task=${c.id} dropped (queue full: ${reduced}/${c.maxQueued})`);
+  let queue = [];
+  let abortControllers = new Set();
+  let wakeUp = null;
+  function enqueue(task) {
+    let reduced = queue.reduce((acc, queued) => (queued.task.id === task.id ? acc + 1 : acc), 0);
+    if (reduced >= task.maxQueued) {
+      log(`task=${task.id} dropped (queue full: ${reduced}/${task.maxQueued})`);
       return;
     }
-    b.push({
-      task: c,
+    queue.push({
+      task,
     });
-    S?.();
-    S = null;
+    wakeUp?.();
+    wakeUp = null;
   }
-  let v = new Map();
-  let F = new Set();
+  let lastFiredAt = new Map();
+  let runningIds = new Set();
   let now = Date.now();
-  function R() {
+  function writeStatus() {
     let tasks_2 = {};
     for (let task of tasks) {
-      let f = v.get(task.id);
+      let lastFired = lastFiredAt.get(task.id);
       tasks_2[task.id] = {
-        running: F.has(task.id),
-        ...(f !== undefined && {
-          lastFiredAt: f,
+        running: runningIds.has(task.id),
+        ...(lastFired !== undefined && {
+          lastFiredAt: lastFired,
         }),
       };
     }
-    writeScheduledStatus(tasks_2, a);
+    writeScheduledStatus(tasks_2, storageV5);
   }
-  R();
-  function G(c) {
-    let fromMs = v.get(c.id) ?? now;
-    return jitteredNextCronRunMs(c.cron, fromMs, c.id, DEFAULT_CRON_JITTER_CONFIG);
+  writeStatus();
+  function nextRunAt(task) {
+    let fromMs = lastFiredAt.get(task.id) ?? now;
+    return jitteredNextCronRunMs(task.cron, fromMs, task.id, DEFAULT_CRON_JITTER_CONFIG);
   }
   let interval = setInterval(
-    (c, i, f, k) => {
+    (tasks_, getNextRun, lastFiredAt_, enqueue_) => {
       let now = Date.now();
-      for (let h of c) {
-        if (!h.enabled) continue;
-        let w = i(h);
-        if (w === null) continue;
-        if (w <= now) {
-          f.set(h.id, now);
-          k(h);
+      for (let task of tasks_) {
+        if (!task.enabled) continue;
+        let nextRun = getNextRun(task);
+        if (nextRun === null) continue;
+        if (nextRun <= now) {
+          lastFiredAt_.set(task.id, now);
+          enqueue_(task);
         }
       }
     },
     MIN_RUN_TIMEOUT_MS,
     tasks,
-    G,
-    v,
-    J,
+    nextRunAt,
+    lastFiredAt,
+    enqueue,
   );
-  r.addEventListener("abort", () => {
+  signal.addEventListener("abort", () => {
     clearInterval(interval);
-    for (let c of x) c.abort();
-    S?.();
-    S = null;
+    for (let controller of abortControllers) controller.abort();
+    wakeUp?.();
+    wakeUp = null;
   });
-  let T = new Set();
-  async function X(c) {
-    let { task } = c;
-    let f = processWrapperError();
-    if (f) {
-      e(`task=${task.id} refused: ${f}`);
+  let inFlight = new Set();
+  async function runTask(queuedTask) {
+    let { task } = queuedTask;
+    let refusal = processWrapperError();
+    if (refusal) {
+      log(`task=${task.id} refused: ${refusal}`);
       return;
     }
     let abortController = new AbortController();
-    x.add(abortController);
-    F.add(task.id);
-    R();
+    abortControllers.add(abortController);
+    runningIds.add(task.id);
+    writeStatus();
     let timer = setTimeout(
-      (w) => w.abort(),
+      (controller) => controller.abort(),
       Math.min(task.runTimeoutMinutes, MAX_RUN_TIMEOUT_MINUTES) * 60000,
       abortController,
     );
-    e(`task=${task.id} start cron='${task.cron}' dir='${task.directory}'`);
+    log(`task=${task.id} start cron='${task.cron}' dir='${task.directory}'`);
     let launchCommand = getLaunchCommand({
       pinToCurrentBinary: true,
     });
     try {
-      let w = query({
+      let stream = query({
         prompt: task.prompt,
         options: {
           cwd: task.directory,
@@ -435,84 +454,84 @@ var runScheduledWorker = async (s, r, e, n, a) => {
           pathToClaudeCodeExecutable: launchCommand.cmd,
           executableArgs: launchCommand.prefixArgs,
           abortController,
-          stderr: (g) => e(`[${task.id}] ${g.trimEnd()}`),
+          stderr: (chunk) => log(`[${task.id}] ${chunk.trimEnd()}`),
           workload: WORKLOAD_CRON,
         },
       });
-      for await (let g of w)
-        if (g.type === "result")
-          e(
-            `task=${task.id} result subtype=${g.subtype} duration=${g.duration_ms}ms cost=$${g.total_cost_usd.toFixed(4)}`,
+      for await (let message of stream)
+        if (message.type === "result")
+          log(
+            `task=${task.id} result subtype=${message.subtype} duration=${message.duration_ms}ms cost=$${message.total_cost_usd.toFixed(4)}`,
           );
     } catch (error) {
-      e(`task=${task.id} threw: ${error}`);
+      log(`task=${task.id} threw: ${error}`);
     } finally {
       clearTimeout(timer);
-      x.delete(abortController);
-      F.delete(task.id);
-      R();
+      abortControllers.delete(abortController);
+      runningIds.delete(task.id);
+      writeStatus();
     }
   }
-  while (!r.aborted) {
-    while (T.size < maxConcurrent && b.length > 0 && !r.aborted) {
-      let c = b.shift();
-      let i = X(c).finally(() => {
-        T.delete(i);
-        S?.();
-        S = null;
+  while (!signal.aborted) {
+    while (inFlight.size < maxConcurrent && queue.length > 0 && !signal.aborted) {
+      let queuedTask = queue.shift();
+      let runPromise = runTask(queuedTask).finally(() => {
+        inFlight.delete(runPromise);
+        wakeUp?.();
+        wakeUp = null;
       });
-      T.add(i);
+      inFlight.add(runPromise);
     }
-    if (r.aborted) break;
-    if (b.length === 0 || T.size >= maxConcurrent)
+    if (signal.aborted) break;
+    if (queue.length === 0 || inFlight.size >= maxConcurrent)
       await new Promise((resolve) => {
-        S = resolve;
+        wakeUp = resolve;
       });
   }
-  await Promise.allSettled(Array.from(T));
+  await Promise.allSettled(Array.from(inFlight));
 };
 //@ chunk-f1dqjgj0.js:7250-7469 placement
-function readScheduledSection(s) {
-  let scheduled = s.scheduled;
-  let e = {};
+function readScheduledSection(config) {
+  let scheduled = config.scheduled;
+  let section = {};
   if (Array.isArray(scheduled) && scheduled.length > 0 && typeof scheduled[0] === "object")
-    e = scheduled[0] ?? {};
-  else if (scheduled && typeof scheduled === "object" && !Array.isArray(scheduled)) e = scheduled;
-  let tasks = Array.isArray(e.tasks) ? e.tasks : [];
+    section = scheduled[0] ?? {};
+  else if (scheduled && typeof scheduled === "object" && !Array.isArray(scheduled)) section = scheduled;
+  let tasks = Array.isArray(section.tasks) ? section.tasks : [];
   return {
-    ...e,
+    ...section,
     tasks,
   };
 }
 //@ chunk-f1dqjgj0.js:7469-7580 placement
-function writeScheduledSection(s, r) {
-  let scheduled = s.scheduled;
+function writeScheduledSection(config, section) {
+  let scheduled = config.scheduled;
   if (Array.isArray(scheduled)) {
     let sliced = scheduled.slice();
-    sliced[0] = r;
-    s.scheduled = sliced;
-  } else s.scheduled = r;
+    sliced[0] = section;
+    config.scheduled = sliced;
+  } else config.scheduled = section;
 }
 //@ chunk-f1dqjgj0.js:7580-7789 placement
 /**
  * 新增或替换一个定时任务（按 id），校验后写入 daemon.json，记录 daemon_scheduled_add。
  */
-async function addScheduledTask(s, r, storageV5) {
+async function addScheduledTask(task, customPath, storageV5) {
   return withFeatureTelemetry("daemon_scheduled_add", async () => {
-    scheduledTaskSchema().parse(s);
+    scheduledTaskSchema().parse(task);
     await updateDaemonConfig(
-      (n) => {
-        let scheduledSection = readScheduledSection(n);
+      (config) => {
+        let scheduledSection = readScheduledSection(config);
         let filtered = scheduledSection.tasks.filter(
-          (task) => !(task && typeof task === "object" && task.id === s.id),
+          (task_2) => !(task_2 && typeof task_2 === "object" && task_2.id === task.id),
         );
-        filtered.push(s);
-        writeScheduledSection(n, {
+        filtered.push(task);
+        writeScheduledSection(config, {
           ...scheduledSection,
           tasks: filtered,
         });
       },
-      r,
+      customPath,
       storageV5,
     );
   });
@@ -521,48 +540,48 @@ async function addScheduledTask(s, r, storageV5) {
 /**
  * 按 id 删除定时任务，最后一个删除时移除 scheduled 段；返回是否删除了，记录 daemon_scheduled_remove。
  */
-async function removeScheduledTask(s, r, storageV5) {
+async function removeScheduledTask(taskId, customPath, storageV5) {
   return withFeatureTelemetry("daemon_scheduled_remove", async () => {
-    let n = false;
+    let removed = false;
     await updateDaemonConfig(
-      (a) => {
-        if (!("scheduled" in a)) return false;
-        let scheduledSection = readScheduledSection(a);
+      (config) => {
+        if (!("scheduled" in config)) return false;
+        let scheduledSection = readScheduledSection(config);
         let filtered = scheduledSection.tasks.filter(
-          (task) => !(task && typeof task === "object" && task.id === s),
+          (task) => !(task && typeof task === "object" && task.id === taskId),
         );
         if (filtered.length === scheduledSection.tasks.length) return false;
         if (filtered.length === 0) {
-          let scheduled = a.scheduled;
-          if (Array.isArray(scheduled) && scheduled.length > 1) a.scheduled = scheduled.slice(1);
-          else delete a.scheduled;
+          let scheduled = config.scheduled;
+          if (Array.isArray(scheduled) && scheduled.length > 1) config.scheduled = scheduled.slice(1);
+          else delete config.scheduled;
         } else
-          writeScheduledSection(a, {
+          writeScheduledSection(config, {
             ...scheduledSection,
             tasks: filtered,
           });
-        n = true;
+        removed = true;
       },
-      r,
+      customPath,
       storageV5,
     );
-    return n;
+    return removed;
   });
 }
 //@ chunk-f1dqjgj0.js:8186-8358 placement
 /**
  * 列出 daemon.json 中通过 schema 校验的定时任务。
  */
-async function listScheduledTasks(s, r) {
-  let daemonConfig = await readDaemonConfig_2(s, r);
-  if (!("scheduled" in daemonConfig)) return [];
-  let scheduledSection = readScheduledSection(daemonConfig);
-  let a = [];
+async function listScheduledTasks(customPath, storageV5) {
+  let config = await readDaemonConfig_2(customPath, storageV5);
+  if (!("scheduled" in config)) return [];
+  let scheduledSection = readScheduledSection(config);
+  let tasks = [];
   for (let task of scheduledSection.tasks) {
-    let m = scheduledTaskSchema().safeParse(task);
-    if (m.success) a.push(m.data);
+    let parsed = scheduledTaskSchema().safeParse(task);
+    if (parsed.success) tasks.push(parsed.data);
   }
-  return a;
+  return tasks;
 }
 export {
   listScheduledTasks,

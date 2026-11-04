@@ -8,7 +8,7 @@
 import { fromPKCS8 } from "../lib/asn1.js";
 import { isObject } from "../lib/type_checks.js";
 import { decode_2 } from "../util/base64url.js";
-import { JOSENotSupported } from "../../node/esm/util/errors.js";
+import { JOSENotSupported_2 } from "../../node/esm/util/errors.js";
 import { jwkToKey } from "../lib/jwk_to_key.js";
 
 //@ chunk-5h78gfwc.js:22492-22663 esm-fingerprint
@@ -27,7 +27,7 @@ async function importJWK(jwk, alg, options) {
       return decode_2(jwk.k);
     case "RSA":
       if ("oth" in jwk && jwk.oth !== undefined)
-        throw new JOSENotSupported('RSA JWK "oth" (Other Primes Info) Parameter value is not supported');
+        throw new JOSENotSupported_2('RSA JWK "oth" (Other Primes Info) Parameter value is not supported');
       return jwkToKey({
         ...jwk,
         alg,
@@ -50,7 +50,7 @@ async function importJWK(jwk, alg, options) {
         ext,
       });
     default:
-      throw new JOSENotSupported('Unsupported "kty" (Key Type) Parameter value');
+      throw new JOSENotSupported_2('Unsupported "kty" (Key Type) Parameter value');
   }
 }
 export { importPKCS8, importJWK };

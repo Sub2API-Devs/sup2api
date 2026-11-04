@@ -17,6 +17,7 @@ import {
 import { isWithinSanitizeBudget } from "./utils.js";
 import { isPlainObject } from "../../utils/isPlainObject.js";
 import { onceExport } from "../../../vendor/lodash-es/once.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-4j20twbf.js:342-400 placement
 /**
@@ -30,22 +31,22 @@ var LISTING_SANITIZE_MAX_TAGS = 16;
 var LISTING_SANITIZE_CHUNK_CHARS = 256;
 var LISTING_SANITIZE_TEXT_CAP = 65536;
 //@ chunk-4j20twbf.js:400-509 placement
-function createSanitizeBudget(maxSize, n) {
+function createSanitizeBudget(maxSize, textToSanitize) {
   return {
     size: 0,
     maxSize,
     sixteenthsToSanitize: 0,
-    maxSixteenthsToSanitize: 16 * n,
+    maxSixteenthsToSanitize: 16 * textToSanitize,
     nonAsciiUnits: 0,
   };
 }
 //@ chunk-4j20twbf.js:509-582 placement
 function createListingSanitizer(
   maxSize = LISTING_SANITIZE_LIMITS.size,
-  n = LISTING_SANITIZE_LIMITS.textToSanitize,
+  textToSanitize = LISTING_SANITIZE_LIMITS.textToSanitize,
 ) {
-  let sanitizeBudget = createSanitizeBudget(maxSize, n);
-  return (i) => addSanitizeCostToClient(i, sanitizeBudget);
+  let sanitizeBudget = createSanitizeBudget(maxSize, textToSanitize);
+  return (client) => addSanitizeCostToClient(client, sanitizeBudget);
 }
 //@ chunk-4j20twbf.js:582-822 placement
 /**
@@ -53,79 +54,85 @@ function createListingSanitizer(
  */
 function createStreamingListingSanitizer(
   maxSize = LISTING_SANITIZE_LIMITS.size,
-  n = LISTING_SANITIZE_LIMITS.textToSanitize,
+  textToSanitize = LISTING_SANITIZE_LIMITS.textToSanitize,
 ) {
-  let sanitizeBudget = createSanitizeBudget(maxSize, n);
-  let sanitizeBudget_2 = createSanitizeBudget(maxSize, n);
-  let r = false;
-  return (m) => {
+  let sanitizeBudget = createSanitizeBudget(maxSize, textToSanitize);
+  let sanitizeBudget_2 = createSanitizeBudget(maxSize, textToSanitize);
+  let exhausted = false;
+  return (client) => {
     let { size, sixteenthsToSanitize } = sanitizeBudget;
-    if (r || !addSanitizeCostToClient(m, sanitizeBudget)) return;
-    let l = recursivelySanitizeUnicode(m);
+    if (exhausted || !addSanitizeCostToClient(client, sanitizeBudget)) return;
+    let sanitized = recursivelySanitizeUnicode(client);
     if (sanitizeBudget.sixteenthsToSanitize === sixteenthsToSanitize) {
       sanitizeBudget_2.size += sanitizeBudget.size - size;
-      r = !isWithinSanitizeBudget(sanitizeBudget_2);
-    } else r = !addSanitizeCostToClient(l, sanitizeBudget_2);
-    return r ? undefined : l;
+      exhausted = !isWithinSanitizeBudget(sanitizeBudget_2);
+    } else exhausted = !addSanitizeCostToClient(sanitized, sanitizeBudget_2);
+    return exhausted ? undefined : sanitized;
   };
 }
 //@ chunk-4j20twbf.js:822-1240 placement
-function listingTruncatedNote(e, n, t) {
-  return `Skipped the last ${n} of ${t} ${e}: the listing is too large. Only about the first 16 MB of a listing is used (less if it has many small values), and only about 1 million characters that are costly to normalize: combining marks, full-width forms, emoji and the like anywhere, and a tool's or prompt's name that is not all ASCII. The server must list fewer or shorter ${e} to get them back.`;
+function listingTruncatedNote(noun, skippedCount, totalCount) {
+  return `Skipped the last ${skippedCount} of ${totalCount} ${noun}: the listing is too large. Only about the first 16 MB of a listing is used (less if it has many small values), and only about 1 million characters that are costly to normalize: combining marks, full-width forms, emoji and the like anywhere, and a tool's or prompt's name that is not all ASCII. The server must list fewer or shorter ${noun} to get them back.`;
 }
 //@ chunk-4j20twbf.js:1330-1391 placement
 /**
  * 清洗预算足够时累加本次开销并合并客户端。
  */
-function addSanitizeCostToClient(e, sanitizeBudget) {
-  if (!isWithinSanitizeBudget(sanitizeBudget)) return false;
-  sanitizeBudget.size += LISTING_SANITIZE_CHUNK_CHARS;
-  return mergeClients(e, sanitizeBudget, true);
+function addSanitizeCostToClient(client, budget) {
+  if (!isWithinSanitizeBudget(budget)) return false;
+  budget.size += LISTING_SANITIZE_CHUNK_CHARS;
+  return mergeClients(client, budget, true);
 }
 //@ chunk-4j20twbf.js:1391-1608 placement = mergeClients (1)
-function mergeClients(e, n, t = false, i = false) {
-  n.size += LISTING_SANITIZE_MAX_TAGS;
-  if (typeof e === "string") accountTextForSanitize(e, n, i);
-  else if (Array.isArray(e)) {
-    for (let r of e) if (!mergeClients(r, n)) return false;
-  } else if (isPlainObject(e)) {
-    for (let key in e) {
-      accountTextForSanitize(key, n);
-      if (!mergeClients(e[key], n, false, t && key === "name")) return false;
+function mergeClients(value, budget, forceCost = false, isNameField = false) {
+  budget.size += LISTING_SANITIZE_MAX_TAGS;
+  if (typeof value === "string") accountTextForSanitize(value, budget, isNameField);
+  else if (Array.isArray(value)) {
+    for (let child of value) if (!mergeClients(child, budget)) return false;
+  } else if (isPlainObject(value)) {
+    for (let key in value) {
+      accountTextForSanitize(key, budget);
+      if (!mergeClients(value[key], budget, false, forceCost && key === "name")) return false;
     }
   }
-  return isWithinSanitizeBudget(n);
+  return isWithinSanitizeBudget(budget);
 }
 //@ chunk-4j20twbf.js:1608-1679 placement
-function accountTextForSanitize(e, n, t = false) {
-  n.size += e.length;
-  if (!isWithinSanitizeBudget(n) || isAsciiOnly(e)) return;
-  addSanitizeCost(e, n, t);
+function accountTextForSanitize(text, budget, isName = false) {
+  budget.size += text.length;
+  if (!isWithinSanitizeBudget(budget) || isAsciiOnly(text)) return;
+  addSanitizeCost(text, budget, isName);
 }
 //@ chunk-4j20twbf.js:1679-1907 placement
-function addSanitizeCost(e, n, t) {
-  if (t) {
-    n.sixteenthsToSanitize += 16 * e.length;
+function addSanitizeCost(text, budget, isName) {
+  if (isName) {
+    budget.sixteenthsToSanitize += 16 * text.length;
     return;
   }
-  n.sixteenthsToSanitize += e.length;
-  for (let i = 0; i < e.length && isWithinSanitizeBudget(n); i++) {
-    let code = e.charCodeAt(i);
-    if (code > 127 && (n.nonAsciiUnits++ < LISTING_SANITIZE_TEXT_CAP || getSanitizeCostTable()[code] === 1))
-      n.sixteenthsToSanitize += 15;
+  budget.sixteenthsToSanitize += text.length;
+  for (let charIndex = 0; charIndex < text.length && isWithinSanitizeBudget(budget); charIndex++) {
+    let code = text.charCodeAt(charIndex);
+    if (
+      code > 127 &&
+      (budget.nonAsciiUnits++ < LISTING_SANITIZE_TEXT_CAP || getSanitizeCostTable()[code] === 1)
+    )
+      budget.sixteenthsToSanitize += 15;
   }
 }
 //@ chunk-4j20twbf.js:1907-2089 placement
-var getSanitizeCostTable = onceExport(() => {
-  let e = /[\p{M}\u1100-\u11ff\ua960-\ua97f\ud7b0-\udfff]/u;
-  return Uint8Array.from(
-    {
-      length: 65536,
-    },
-    (n, t) => {
-      let i = String.fromCharCode(t);
-      return e.test(i) || partiallySanitizeUnicode(i) !== i ? 1 : 0;
-    },
-  );
+var getSanitizeCostTable; // deferred: uses partiallySanitizeUnicode (../../utils/sanitization.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-4j20twbf.js:1907", () => {
+  getSanitizeCostTable = onceExport(() => {
+    let costlyRe = /[\p{M}\u1100-\u11ff\ua960-\ua97f\ud7b0-\udfff]/u;
+    return Uint8Array.from(
+      {
+        length: 65536,
+      },
+      (charCode, code) => {
+        let char = String.fromCharCode(code);
+        return costlyRe.test(char) || partiallySanitizeUnicode(char) !== char ? 1 : 0;
+      },
+    );
+  });
 });
 export { createStreamingListingSanitizer, listingTruncatedNote, createListingSanitizer };

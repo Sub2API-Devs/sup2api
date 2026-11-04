@@ -17,6 +17,7 @@ import { errorMessage } from "../errors.js";
 import { invalidateSessionEnvCache } from "../sessionEnvironment.js";
 import { withDeadline } from "../sleep.js";
 import { count } from "../collections.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:941372-942117 fingerprint = registerPendingAsyncHook (0.902)
 /**
@@ -35,13 +36,13 @@ function registerPendingAsyncHook({
 }) {
   let timeout = asyncResponse.asyncTimeout || 15000;
   logForDebugging(`Hooks: Registering async hook ${processId} (${hookName}) with timeout ${timeout}ms`);
-  let q = currentAsyncHookRegistryState();
+  let state = currentAsyncHookRegistryState();
   let stopProgressInterval = startHookProgressInterval({
     hookId,
     hookName,
     hookEvent,
     getOutput: async () => {
-      let taskOutput = q.get(processId)?.shellCommand.taskOutput;
+      let taskOutput = state.get(processId)?.shellCommand.taskOutput;
       if (!taskOutput)
         return {
           stdout: "",
@@ -59,7 +60,7 @@ function registerPendingAsyncHook({
   });
   let deferred = Promise.withResolvers();
   let deferred_2 = Promise.withResolvers();
-  let we = {
+  let entry = {
     processId,
     hookId,
     hookName,
@@ -72,8 +73,10 @@ function registerPendingAsyncHook({
     read: deferred.promise,
     readNow: deferred_2.resolve,
   };
-  q.register(we);
-  checkForAsyncHookResponses(q, we, deferred_2.promise).then(deferred.resolve, () => deferred.resolve(false));
+  state.register(entry);
+  checkForAsyncHookResponses(state, entry, deferred_2.promise).then(deferred.resolve, () =>
+    deferred.resolve(false),
+  );
 }
 //@ chunk-e6aww6q8.js:942117-942378 fingerprint = finalizeHook (1)
 /**
@@ -100,19 +103,19 @@ async function finalizeHook(hook, exitCode, outcome) {
 /**
  * 等后台钩子进程结束后读取答复：被杀视为取消；SessionStart 后台钩子完成会标记会话 env 过期。
  */
-async function checkForAsyncHookResponses(e, hook, promise) {
+async function checkForAsyncHookResponses(state, hook, promise) {
   let { shellCommand } = hook;
   try {
     await shellCommand.result;
     await Promise.race([shellCommand.outputEnded, promise]);
-    if (e.get(hook.processId) !== hook) return false;
+    if (state.get(hook.processId) !== hook) return false;
     if (shellCommand.status === "killed") {
       await finalizeHook(hook, 1, "cancelled");
       return false;
     }
-    let h = await executeInBackground(hook);
-    if (h !== null && e.get(hook.processId) === hook) e.holdResponse(h);
-    e.isSessionEnvStale ||= hook.hookEvent === "SessionStart";
+    let response = await executeInBackground(hook);
+    if (response !== null && state.get(hook.processId) === hook) state.holdResponse(response);
+    state.isSessionEnvStale ||= hook.hookEvent === "SessionStart";
     return true;
   } catch (error) {
     logForDebugging(
@@ -134,13 +137,13 @@ async function checkForAsyncHookResponses(e, hook, promise) {
     });
     return false;
   } finally {
-    if (e.get(hook.processId) === hook) e.remove(hook.processId);
+    if (state.get(hook.processId) === hook) state.remove(hook.processId);
   }
 }
 //@ chunk-e6aww6q8.js:944085-944152 placement
-function refreshStaleSessionEnv(e) {
-  if (e.isSessionEnvStale) {
-    e.isSessionEnvStale = false;
+function refreshStaleSessionEnv(state) {
+  if (state.isSessionEnvStale) {
+    state.isSessionEnvStale = false;
     invalidateSessionEnvCache();
   }
 }
@@ -153,22 +156,22 @@ function isShellCommandSettled({ shellCommand: status }) {
 }
 //@ chunk-e6aww6q8.js:944234-944489 placement
 async function checkForNewAsyncHookResponses() {
-  let e = currentAsyncHookRegistryState();
+  let state = currentAsyncHookRegistryState();
   await Promise.all(
-    e
+    state
       .values()
       .filter(isShellCommandSettled)
-      .map((r) => {
-        r.readNow();
-        return r.read;
+      .map((entry) => {
+        entry.readNow();
+        return entry.read;
       }),
   );
-  refreshStaleSessionEnv(e);
-  let n = e.takeUndeliveredResponses();
+  refreshStaleSessionEnv(state);
+  let responses = state.takeUndeliveredResponses();
   logForDebugging(
-    `Hooks: checkForNewResponses returning ${n.length} responses, ${e.size()} hooks still pending`,
+    `Hooks: checkForNewResponses returning ${responses.length} responses, ${state.size()} hooks still pending`,
   );
-  return n;
+  return responses;
 }
 //@ chunk-e6aww6q8.js:944489-944501 placement
 var ASYNC_HOOK_FINALIZE_GRACE_MS = 250;
@@ -177,8 +180,8 @@ var ASYNC_HOOK_FINALIZE_GRACE_MS = 250;
  * 结束前等待挂起的异步钩子完成，超出宽限期后放弃。
  */
 async function settlePendingAsyncHooks({ hookEvent, graceMs }) {
-  let r = currentAsyncHookRegistryState();
-  let filtered = r.values().filter((w) => w.hookEvent === hookEvent);
+  let state = currentAsyncHookRegistryState();
+  let filtered = state.values().filter((entry) => entry.hookEvent === hookEvent);
   if (filtered.length === 0)
     return {
       pending: 0,
@@ -187,53 +190,56 @@ async function settlePendingAsyncHooks({ hookEvent, graceMs }) {
   logForDebugging(
     `Hooks: Settling ${filtered.length} pending async ${hookEvent} hook(s), grace ${graceMs}ms`,
   );
-  let h = false;
+  let settled = false;
   await withDeadline(
     Promise.all(
-      filtered.map(async (w) => {
-        await w.shellCommand.result.catch(() => {});
-        await withDeadline(w.read, ASYNC_HOOK_FINALIZE_GRACE_MS);
-        if (!h) {
-          w.readNow();
-          await w.read;
+      filtered.map(async (entry) => {
+        await entry.shellCommand.result.catch(() => {});
+        await withDeadline(entry.read, ASYNC_HOOK_FINALIZE_GRACE_MS);
+        if (!settled) {
+          entry.readNow();
+          await entry.read;
         }
       }),
     ),
     graceMs,
   );
-  h = true;
-  let filtered_2 = filtered.filter((w) => w.shellCommand.status === "completed");
-  for (let w of filtered_2) w.readNow();
-  let S = count(await Promise.all(filtered_2.map((w) => w.read)), (w) => w);
-  refreshStaleSessionEnv(r);
-  logForDebugging(`Hooks: Settled ${S} of ${filtered.length} async ${hookEvent} hook(s) in-band`);
+  settled = true;
+  let filtered_2 = filtered.filter((entry) => entry.shellCommand.status === "completed");
+  for (let entry of filtered_2) entry.readNow();
+  let delivered = count(await Promise.all(filtered_2.map((entry) => entry.read)), (delivered) => delivered);
+  refreshStaleSessionEnv(state);
+  logForDebugging(`Hooks: Settled ${delivered} of ${filtered.length} async ${hookEvent} hook(s) in-band`);
   return {
     pending: filtered.length,
-    delivered: S,
+    delivered,
   };
 }
 //@ chunk-e6aww6q8.js:945121-945329 placement
 async function cancelPendingAsyncHooks() {
-  let e = currentAsyncHookRegistryState();
+  let state = currentAsyncHookRegistryState();
   await Promise.all(
-    e.values().map(async (n) => {
-      if (isShellCommandSettled(n)) {
-        n.readNow();
-        await n.read;
+    state.values().map(async (entry) => {
+      if (isShellCommandSettled(entry)) {
+        entry.readNow();
+        await entry.read;
         return;
       }
-      e.remove(n.processId);
-      n.shellCommand.kill();
-      await finalizeHook(n, 1, "cancelled");
+      state.remove(entry.processId);
+      entry.shellCommand.kill();
+      await finalizeHook(entry, 1, "cancelled");
     }),
   );
-  e.removeAll();
+  state.removeAll();
 }
 //@ chunk-18hwfzwa.js:1094902-1094959 fingerprint = finalizePendingAsyncHooks (0.568)
 /**
  * 后台任务终止状态集合：failed/cancelled/killed/error。
  */
-var finalizePendingAsyncHooks = new Set(["failed", "cancelled", "killed", "error"]);
+var finalizePendingAsyncHooks; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:1094902", () => {
+  finalizePendingAsyncHooks = new Set(["failed", "cancelled", "killed", "error"]);
+});
 export {
   cancelPendingAsyncHooks,
   finalizePendingAsyncHooks,

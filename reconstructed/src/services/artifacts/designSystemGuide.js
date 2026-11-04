@@ -38,10 +38,11 @@ import { readArtifactDb } from "./artifactDb.js";
 import { isPlainObject } from "../../utils/isPlainObject.js";
 import { truncateCodePoints } from "../../utils/stringUtils.js";
 import { pickByToolset } from "./artifactToolGates.js";
-import { u } from "../../../vendor/zod/v4/classic/schemas.js";
+import { objectSchema } from "../../../vendor/zod/v4/classic/schemas.js";
 import { designSystemSchema } from "../../tools/ArtifactTool/startKitSchemas.js";
 import { ARTIFACT_CONTENT_AUTHORED_TAG } from "../../constants/xml.js";
 import { fileInlineEnvelope } from "./readArtifactForModel.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-ez320trn.js:1016-1208 placement
 /**
@@ -62,28 +63,28 @@ var READ_FAILURE_REASONS = {
  * 让一个 Promise 与截止信号赛跑：信号先触发时按原因（interrupted/timeout/failed）调用回退函数给出结果；Promise 失败时同样回退，只有 failed 才记录错误。
  */
 function raceWithDeadline(promise, deadlineSignal, context, fallback) {
-  let r = () =>
+  let failureKind = () =>
     context.abortController.signal.aborted ? "interrupted" : deadlineSignal.aborted ? "timeout" : "failed";
   return new Promise((resolve) => {
-    let i = () => resolve(fallback(r()));
+    let settleOnAbort = () => resolve(fallback(failureKind()));
     if (deadlineSignal.aborted) {
       promise.catch(() => {});
-      i();
+      settleOnAbort();
       return;
     }
-    deadlineSignal.addEventListener("abort", i, {
+    deadlineSignal.addEventListener("abort", settleOnAbort, {
       once: true,
     });
     promise.then(
-      (d) => {
-        deadlineSignal.removeEventListener("abort", i);
-        resolve(d);
+      (value) => {
+        deadlineSignal.removeEventListener("abort", settleOnAbort);
+        resolve(value);
       },
       (error) => {
-        deadlineSignal.removeEventListener("abort", i);
-        let a = r();
-        if (a === "failed") logError(error);
-        resolve(fallback(a));
+        deadlineSignal.removeEventListener("abort", settleOnAbort);
+        let kind = failureKind();
+        if (kind === "failed") logError(error);
+        resolve(fallback(kind));
       },
     );
   });
@@ -119,8 +120,8 @@ function listDesignSystemNames(systems) {
   let mapped = systems
     .slice(0, 3)
     .map(
-      (o) =>
-        `${jsonStringify(sanitizeDisplayTitle(sweepResultLineField(o.title, 40)) ?? "Untitled")} ${canonicalArtifactTargetFor(o.url, "(unrecognized address)")}`,
+      (entry) =>
+        `${jsonStringify(sanitizeDisplayTitle(sweepResultLineField(entry.title, 40)) ?? "Untitled")} ${canonicalArtifactTargetFor(entry.url, "(unrecognized address)")}`,
     );
   return systems.length > 3 ? `${mapped.join(", ")}, and ${systems.length - 3} more` : mapped.join(", ");
 }
@@ -136,19 +137,19 @@ async function checkDesignSystemReadable(url, signal, context, storeEnabled, pip
       why: "it is not an Artifact URL of this session's claude.ai",
       code: "not_a_link",
     };
-  let a = [...(artifactFilesOnForSession() ? ["files"] : []), ...(storeEnabled ? ["store"] : [])];
-  if (a.length === 0)
+  let surfaces = [...(artifactFilesOnForSession() ? ["files"] : []), ...(storeEnabled ? ["store"] : [])];
+  if (surfaces.length === 0)
     return {
       ok: false,
       ...describeDesignSystemUnreadable("off", "off"),
     };
-  if (a.every((b) => isDesignSystemReadRuled(b, parsed, url, context, pipelineRan)))
+  if (surfaces.every((surface) => isDesignSystemReadRuled(surface, parsed, url, context, pipelineRan)))
     return {
       ok: false,
       why: RULE_GOVERNS_READ_HINT,
       code: "rule",
     };
-  let c = {
+  let sharedContext = {
     signal,
     credentials: context.credentials,
   };
@@ -160,7 +161,7 @@ async function checkDesignSystemReadable(url, signal, context, storeEnabled, pip
         abortController: {
           signal,
         },
-        ...c,
+        ...sharedContext,
       },
       feature,
     ).then(() => {
@@ -168,7 +169,7 @@ async function checkDesignSystemReadable(url, signal, context, storeEnabled, pip
     }),
     signal,
     context,
-    (b) => b,
+    (kind) => kind,
   );
   if (probeFailure !== undefined)
     return {
@@ -176,33 +177,36 @@ async function checkDesignSystemReadable(url, signal, context, storeEnabled, pip
       why: `${READ_FAILURE_REASONS[probeFailure]} \u2014 read it with its own call`,
       code: `probe_${probeFailure}`,
     };
-  let shareEntry = getShareEntry(parsed.slug);
-  if (probedOtherOrg(shareEntry))
+  let bootEntry = getShareEntry(parsed.slug);
+  if (probedOtherOrg(bootEntry))
     return {
       ok: false,
       why: "it is in another of the user's organizations, which this login cannot read \u2014 say so rather than guess its values",
       code: "other_org",
     };
-  let owned = ownedByUser(shareEntry);
+  let owned = ownedByUser(bootEntry);
   if (hasAutoReactNoticePending(parsed.slug) && !isDelegatedObservationContext(context.agentContext))
     return {
       ok: false,
       why: NEEDS_APPROVAL_HINT,
       code: "notice_pending",
     };
-  await raceWithDeadline(warmOwnInstanceType(parsed, c), signal, context, () => {
+  await raceWithDeadline(warmOwnInstanceType(parsed, sharedContext), signal, context, () => {
     return;
   });
-  let h = isDesignSystemReadRuled("files", parsed, url, context, pipelineRan);
-  let A = isDesignSystemReadRuled("store", parsed, url, context, pipelineRan);
+  let filesRuled = isDesignSystemReadRuled("files", parsed, url, context, pipelineRan);
+  let storeRuled = isDesignSystemReadRuled("store", parsed, url, context, pipelineRan);
   return {
     ok: true,
     parsed,
     owned,
-    filesRuled: h,
-    storeRuled: A,
-    filesOk: artifactFilesOnForSession() && !h && hasDesignSystemReadConsent(parsed, owned, "files", context),
-    storeOk: storeEnabled && !A && hasDesignSystemReadConsent(parsed, owned, "store", context),
+    filesRuled,
+    storeRuled,
+    filesOk:
+      artifactFilesOnForSession() &&
+      !filesRuled &&
+      hasDesignSystemReadConsent(parsed, owned, "files", context),
+    storeOk: storeEnabled && !storeRuled && hasDesignSystemReadConsent(parsed, owned, "store", context),
   };
 }
 //@ chunk-ez320trn.js:3426-3541 placement
@@ -221,7 +225,7 @@ function canReadDesignSystemFiles(parsed, url, context, pipelineRan) {
  * 读取默认设计系统的 README 作为引导文档：先检查可读性，再并行读取存储里的 README 与发布文件（project/README.md 或 README.md），选出可用文档；读取他人 artifact 时记录外部读取；返回 design_system 记录（含不可用原因）。
  */
 async function readDesignSystemGuide(url, source, signal, context, storeEnabled, pipelineRan) {
-  let i = {
+  let identity = {
     default: source.default,
     title: source.title,
   };
@@ -230,7 +234,7 @@ async function readDesignSystemGuide(url, source, signal, context, storeEnabled,
     return {
       design_system: {
         url,
-        ...i,
+        ...identity,
         unavailable,
       },
     };
@@ -248,24 +252,24 @@ async function readDesignSystemGuide(url, source, signal, context, storeEnabled,
   let filesState = readState(artifactFilesOnForSession(), filesRuled, filesOk);
   let storeState = readState(storeEnabled, storeRuled, storeOk);
   if (!filesOk && !storeOk) {
-    let R = describeDesignSystemUnreadable(filesState, storeState);
-    return unavailable(R.why, R.code);
+    let unreadable = describeDesignSystemUnreadable(filesState, storeState);
+    return unavailable(unreadable.why, unreadable.code);
   }
   let [storeRead, filesRead] = await Promise.all([
     storeOk ? readStoreReadme(parsed, signal, context) : EMPTY_GUIDE_DOC,
     filesOk ? getHistory_2(parsed, signal, context) : EMPTY_GUIDE_DOCS,
   ]);
-  let v = pickReadmeResult(filesRead);
-  let isProjectReadme = v.doc?.path === PROJECT_README_MD;
+  let filesReadme = pickReadmeResult(filesRead);
+  let isProjectReadme = filesReadme.doc?.path === PROJECT_README_MD;
   let fromStore = !isProjectReadme && storeRead.doc !== undefined;
-  let doc = isProjectReadme ? v.doc : (storeRead.doc ?? v.doc);
+  let doc = isProjectReadme ? filesReadme.doc : (storeRead.doc ?? filesReadme.doc);
   if (doc === undefined) {
-    let why = storeRead.why ?? v.why;
-    let O =
+    let why = storeRead.why ?? filesReadme.why;
+    let reason =
       storeRead.moved === true && filesState === "off"
         ? MOVED_TO_FILES_RESULT
         : describeDesignSystemUnreadable(filesState, storeState);
-    return why === undefined ? unavailable(O.why, O.code) : unavailable(why, "nothing_read");
+    return why === undefined ? unavailable(reason.why, reason.code) : unavailable(why, "nothing_read");
   }
   if (!owned) recordForeignDesignSystemRead(parsed, fromStore ? "read_db" : "read_file", context);
   logFeatureOk("artifact_design_system_guide", {
@@ -273,7 +277,7 @@ async function readDesignSystemGuide(url, source, signal, context, storeEnabled,
     project: isProjectReadme,
     owned,
   });
-  let j =
+  let suffix =
     fromStore || isProjectReadme
       ? undefined
       : storeState === "ruled"
@@ -288,13 +292,13 @@ async function readDesignSystemGuide(url, source, signal, context, storeEnabled,
   return {
     design_system: {
       url,
-      ...i,
+      ...identity,
       ...(fromStore && {
         store: true,
       }),
       docs: [doc],
-      ...(j !== undefined && {
-        unavailable: j,
+      ...(suffix !== undefined && {
+        unavailable: suffix,
       }),
     },
   };
@@ -312,8 +316,8 @@ var MOVED_TO_FILES_RESULT = {
   code: "nothing_read",
 };
 //@ chunk-ez320trn.js:4989-5211 placement
-function isDesignSystemReadRuled(e, parsed, url, context, pipelineRan) {
-  return e === "files"
+function isDesignSystemReadRuled(surface, parsed, url, context, pipelineRan) {
+  return surface === "files"
     ? hasDesignSystemReadRule(parsed, url, "read_file", context, {
         pipelineRan,
       }) ||
@@ -332,15 +336,15 @@ function isDesignSystemReadRuled(e, parsed, url, context, pipelineRan) {
         });
 }
 //@ chunk-ez320trn.js:5211-5277 placement
-function readState(e, t, n) {
-  return !e ? "off" : t ? "ruled" : n ? "read" : "unconsented";
+function readState(enabled, ruled, ok) {
+  return !enabled ? "off" : ruled ? "ruled" : ok ? "read" : "unconsented";
 }
 //@ chunk-ez320trn.js:5277-5982 placement
 /**
  * 根据文件与存储的可读状态（off/read/unconsented/ruled）给出设计系统读不到的原因与代码。
  */
 function describeDesignSystemUnreadable(filesState, storeState) {
-  let filtered = [filesState, storeState].filter((o) => o !== "read" && o !== "off");
+  let filtered = [filesState, storeState].filter((state) => state !== "read" && state !== "off");
   if (filesState !== "read" && storeState !== "read" && filtered.length === 0)
     return {
       why: "this session serves neither its files nor its store",
@@ -405,15 +409,18 @@ function pickReadmeResult({ project, root }) {
   return project.why !== undefined ? project : root;
 }
 //@ chunk-ez320trn.js:7928-8022 placement
-var DESIGN_STORE_FAILURE_CODES = new Set([
-  "store_unavailable",
-  "busy",
-  "quota_or_rate",
-  "quota_exceeded",
-  "upstream_auth",
-]);
+var DESIGN_STORE_FAILURE_CODES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-ez320trn.js:7928", () => {
+  DESIGN_STORE_FAILURE_CODES = new Set([
+    "store_unavailable",
+    "busy",
+    "quota_or_rate",
+    "quota_exceeded",
+    "upstream_auth",
+  ]);
+});
 //@ chunk-ez320trn.js:8022-8223 placement
-function readDesignSystemDoc(parsed, collection, docId, signal, context) {
+function readDesignSystemDoc(parsed, collection, docId, scope, context) {
   return raceWithDeadline(
     readArtifactDb(
       context.session.host,
@@ -423,17 +430,17 @@ function readDesignSystemDoc(parsed, collection, docId, signal, context) {
         collection,
         docId,
       },
-      signal,
+      scope,
       context.storageV5,
       context.credentials,
     ),
-    signal,
+    scope,
     context,
-    (s) => ({
+    (doc) => ({
       kind: "error",
       code: "store_unavailable",
-      message: READ_FAILURE_REASONS[s],
-      reason: s,
+      message: READ_FAILURE_REASONS[doc],
+      reason: doc,
     }),
   );
 }
@@ -483,34 +490,34 @@ async function readStoreReadme(parsed, signal, context) {
   };
 }
 //@ chunk-ez320trn.js:8992-9097 placement
-function isMovedMarker(e) {
-  let movedTo = isPlainObject(e) ? e.movedTo : undefined;
+function isMovedMarker(text) {
+  let movedTo = isPlainObject(text) ? text.movedTo : undefined;
   return isPlainObject(movedTo) && typeof movedTo.path === "string" && typeof movedTo.at === "string";
 }
 //@ chunk-ez320trn.js:9097-9214 placement
 function getInlineDocText(readmeResult) {
   if (readmeResult.kind !== "ok") return;
-  let t = readmeResult.docs[0]?.data.data;
-  return typeof t === "string" && t.trim() !== "" ? t : undefined;
+  let projectDoc = readmeResult.docs[0]?.data.data;
+  return typeof projectDoc === "string" && projectDoc.trim() !== "" ? projectDoc : undefined;
 }
 //@ chunk-ez320trn.js:9214-9349 placement
 /**
  * 清洗设计系统指南文本中的信封标签，超过字符上限时截断并标记 clipped。
  */
-function clipGuideText(path, text, n) {
-  let o = scrubArtifactEnvelopeTags(text);
-  let r = Array.from(o).length;
-  return r > n
+function clipGuideText(path, text, maxChars) {
+  let cleaned = scrubArtifactEnvelopeTags(text);
+  let chars = Array.from(cleaned).length;
+  return chars > maxChars
     ? {
         path,
-        text: scrubArtifactEnvelopeTags(truncateCodePoints(o, n)),
-        chars: r,
+        text: scrubArtifactEnvelopeTags(truncateCodePoints(cleaned, maxChars)),
+        chars,
         clipped: true,
       }
     : {
         path,
-        text: o,
-        chars: r,
+        text: cleaned,
+        chars,
       };
 }
 //@ chunk-ez320trn.js:9349-9494 placement
@@ -525,27 +532,29 @@ var CLIPPED_GUIDE_MARKER = "[\u2026authored guide clipped here; its generated ta
 /**
  * 把设计系统指南裁到长度上限：超长时保留开头的手写部分并接上末尾"自动生成"小节（中间放裁剪标记），找不到生成小节时直接截断。
  */
-function clipGuideDoc(e, path = README_MD) {
-  let n = MAX_GUIDE_DOC_CHARS;
-  let o = scrubArtifactEnvelopeTags(e);
-  let r = Array.from(o).length;
-  if (r <= n)
+function clipGuideDoc(rawText, path = README_MD) {
+  let maxChars = MAX_GUIDE_DOC_CHARS;
+  let text = scrubArtifactEnvelopeTags(rawText);
+  let chars = Array.from(text).length;
+  if (chars <= maxChars)
     return {
       path,
-      text: o,
-      chars: r,
+      text,
+      chars,
     };
-  let s = GENERATED_SECTION_MARKERS.map((c) => o.lastIndexOf(c)).find((c) => c !== -1) ?? -1;
-  if (s === -1) return clipGuideText(path, o, n);
-  let i = truncateCodePoints(o.slice(s), MAX_GUIDE_PROJECT_CHARS);
-  let d = n - Array.from(i).length - Array.from(CLIPPED_GUIDE_MARKER).length - 2;
-  let a = truncateCodePoints(o.slice(0, s), d);
+  let generatedAt =
+    GENERATED_SECTION_MARKERS.map((marker) => text.lastIndexOf(marker)).find((index) => index !== -1) ?? -1;
+  if (generatedAt === -1) return clipGuideText(path, text, maxChars);
+  let generatedSection = truncateCodePoints(text.slice(generatedAt), MAX_GUIDE_PROJECT_CHARS);
+  let projectBudget =
+    maxChars - Array.from(generatedSection).length - Array.from(CLIPPED_GUIDE_MARKER).length - 2;
+  let projectSection = truncateCodePoints(text.slice(0, generatedAt), projectBudget);
   return {
     path,
-    text: scrubArtifactEnvelopeTags(`${a}
+    text: scrubArtifactEnvelopeTags(`${projectSection}
 ${CLIPPED_GUIDE_MARKER}
-${i}`),
-    chars: r,
+${generatedSection}`),
+    chars,
     clipped: true,
   };
 }
@@ -553,25 +562,25 @@ ${i}`),
 /**
  * 生成"其他卡片未附上，需要时如何读取"的说明，按数据存储方式与当前工具集给出读取方法。
  */
-function describeOtherCards(e, t, n) {
-  if (n)
-    return `Its other cards are not attached: read one when you need it with ${pickByToolset('action "read_file"', () => 'action "read"')}, \`url\`: ${jsonStringify(e)}, and a \`path\`: "project/api/tokens.md" (palette, type, fonts); "project/tokens.json" (exact token values); or, where the README's index is shown, a card it names, at "project/" followed by the path the index gives.`;
-  return t
-    ? `Its other cards are not attached: read one when you need it with ${pickByToolset('action "read_db" and `db_op`: "get"', () => `the ${ARTIFACT_DATA_TOOL_NAME} tool, action "get"`)}, \`url\`: ${jsonStringify(e)}, and a \`collection\` and \`doc_id\`: "api" and "tokens.md" (palette, type, fonts); "ds" and "tokens" (exact token values); "ds" and "meta" (the system's record). Where the README's index is shown, read a card it names by the collection and doc id the index gives.`
-    : `Its other cards are not attached: read one when you need it with ${pickByToolset('action "read_file"', () => 'action "read"')}, \`url\`: ${jsonStringify(e)}, and a \`path\`: "api/tokens.md" (palette, type, fonts); "tokens.json" (exact token values); or, where the README's index is shown, a card it names, by its path there.`;
+function describeOtherCards(filesState, storeState, otherCards) {
+  if (otherCards)
+    return `Its other cards are not attached: read one when you need it with ${pickByToolset('action "read_file"', () => 'action "read"')}, \`url\`: ${jsonStringify(filesState)}, and a \`path\`: "project/api/tokens.md" (palette, type, fonts); "project/tokens.json" (exact token values); or, where the README's index is shown, a card it names, at "project/" followed by the path the index gives.`;
+  return storeState
+    ? `Its other cards are not attached: read one when you need it with ${pickByToolset('action "read_db" and `db_op`: "get"', () => `the ${ARTIFACT_DATA_TOOL_NAME} tool, action "get"`)}, \`url\`: ${jsonStringify(filesState)}, and a \`collection\` and \`doc_id\`: "api" and "tokens.md" (palette, type, fonts); "ds" and "tokens" (exact token values); "ds" and "meta" (the system's record). Where the README's index is shown, read a card it names by the collection and doc id the index gives.`
+    : `Its other cards are not attached: read one when you need it with ${pickByToolset('action "read_file"', () => 'action "read"')}, \`url\`: ${jsonStringify(filesState)}, and a \`path\`: "api/tokens.md" (palette, type, fonts); "tokens.json" (exact token values); or, where the README's index is shown, a card it names, by its path there.`;
 }
 //@ chunk-ez320trn.js:10947-11095 placement
 /**
  * 把文本截断到上限并清洗信封标签、方括号与多余空白，用作决策面中的括号内文本。
  */
-function sanitizeBracketText(e, t) {
-  let n = Array.from(e).length > t;
+function sanitizeBracketText(text, maxChars) {
+  let clipped = Array.from(text).length > maxChars;
   return (
-    scrubArtifactEnvelopeTags(truncateCodePoints(e, t))
+    scrubArtifactEnvelopeTags(truncateCodePoints(text, maxChars))
       .replace(DECISION_SURFACE_BRACKETS_RE, " ")
       .replace(/[[\]]/g, " ")
       .replace(/\s+/g, " ")
-      .trim() + (n ? " \u2026" : "")
+      .trim() + (clipped ? " \u2026" : "")
   );
 }
 //@ chunk-ez320trn.js:11095-11349 placement
@@ -606,10 +615,10 @@ function stripDocTexts(designSystem) {
  * 把 design_system 记录渲染成附加到提示词里的文本：未找到默认或 README 时给出"未附加"及原因；否则写出系统链接、标题、用户/组织默认，附上（必要时裁剪的）README 正文与"不要再次获取"说明。
  */
 function renderDesignSystemAttachment(record) {
-  let t = u(designSystemSchema()).safeParse({
+  let parsed = objectSchema(designSystemSchema()).safeParse({
     design_system: record,
   });
-  let designSystem = t.success ? t.data.design_system : undefined;
+  let designSystem = parsed.success ? parsed.data.design_system : undefined;
   if (designSystem === undefined)
     return {
       text: "",
@@ -626,28 +635,28 @@ function renderDesignSystemAttachment(record) {
 [Design system not attached \u2014 ${unavailable ?? "no default could be found"}.]`,
       attached: false,
     };
-  let r = canonicalArtifactTargetFor(designSystem.url, "(unrecognized address)");
-  let s =
+  let target = canonicalArtifactTargetFor(designSystem.url, "(unrecognized address)");
+  let titleSuffix =
     typeof designSystem.title === "string"
       ? ` ${jsonStringify(sanitizeBracketText(sweptArtifactTitle(sanitizeDisplayTitle(sweepResultLineField(designSystem.title, 200)) ?? ""), 200) || "Untitled")}`
       : "";
-  let i = `${r}${s}, the ${designSystem.default === "user" ? "user's" : "organization's"} default design system`;
+  let location = `${target}${titleSuffix}, the ${designSystem.default === "user" ? "user's" : "organization's"} default design system`;
   let readmeDoc = (designSystem.docs ?? []).find(
-    (h) => (h.path === README_MD || h.path === PROJECT_README_MD) && h.text !== "",
+    (doc) => (doc.path === README_MD || doc.path === PROJECT_README_MD) && doc.text !== "",
   );
   if (readmeDoc === undefined)
     return {
       text: `
 
-[Design system not attached (${i}) \u2014 ${unavailable ?? "its README is not kept in this record; read it with its own call if you need it"}.]`,
+[Design system not attached (${location}) \u2014 ${unavailable ?? "its README is not kept in this record; read it with its own call if you need it"}.]`,
       attached: false,
     };
   let clipped = clipGuideDoc(readmeDoc.text);
-  let c = clipped.clipped === true || readmeDoc.clipped === true;
+  let clippedFlag = clipped.clipped === true || readmeDoc.clipped === true;
   let max = Math.max(clipped.chars, readmeDoc.chars);
-  let w =
+  let sourceNote =
     " This is the standing choice; ignore it if the user or the session named another, or declined one, in this conversation.";
-  let y = c
+  let text = clippedFlag
     ? `
 [\u2026clipped at ${Array.from(clipped.text).length} of ${max} characters; read the whole file from the design system if you need the rest]`
     : "";
@@ -655,10 +664,10 @@ function renderDesignSystemAttachment(record) {
     text: `
 
 ${ARTIFACT_CONTENT_AUTHORED_TAG}
-Design system ${i}.${w} Its ${readmeDoc.path} (${designSystem.store === true ? "a document of its store" : "a published file"}) follows \u2014 do not fetch it again${c ? " unless you need the clipped remainder" : ""}.${unavailable !== undefined ? ` (${unavailable}.)` : ""} ${describeOtherCards(r, designSystem.store === true, readmeDoc.path === PROJECT_README_MD)}
+Design system ${location}.${sourceNote} Its ${readmeDoc.path} (${designSystem.store === true ? "a document of its store" : "a published file"}) follows \u2014 do not fetch it again${clippedFlag ? " unless you need the clipped remainder" : ""}.${unavailable !== undefined ? ` (${unavailable}.)` : ""} ${describeOtherCards(target, designSystem.store === true, readmeDoc.path === PROJECT_README_MD)}
 
 ${readmeDoc.path}:
-${fileInlineEnvelope(clipped.text + y)}`,
+${fileInlineEnvelope(clipped.text + text)}`,
     attached: true,
   };
 }

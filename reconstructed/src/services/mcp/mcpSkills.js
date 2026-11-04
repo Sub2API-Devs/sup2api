@@ -9,7 +9,16 @@
  * attribution: placement 34
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, string, E, hu, union, array, literal, unknown } from "../../../vendor/zod/v4/classic/schemas.js";
+import {
+  objectSchema,
+  stringSchema,
+  numberSchema,
+  custom,
+  union,
+  array,
+  literal,
+  unknown,
+} from "../../../vendor/zod/v4/classic/schemas.js";
 import { escapeXmlAttribute as escapeXmlAttribute_2 } from "../../utils/permissions/checkRegistry.js";
 import { recursivelySanitizeUnicode } from "../../utils/sanitization.js";
 import { messagesSinceCompactBoundary } from "../projects/threadRows.js";
@@ -18,11 +27,21 @@ import { computeContentHash } from "../../utils/commitAttribution.js";
 import { normalizeMimeType } from "../../utils/mcpOutputStorage.js";
 import { identityId2 } from "../../types/ids.js";
 import { getConnectionTimeoutMs } from "./client.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
+//@ chunk-jxbwsn01.js:191-232 placement
+var IO_MODELCONTEXTPROTOCOL_SKILLS = "io.modelcontextprotocol/skills";
+//@ chunk-jxbwsn01.js:232-256 placement
+/**
+ * 恒返回 false 的开关占位。
+ */
+function alwaysFalse() {
+  return false;
+}
 //@ chunk-e6aww6q8.js:1630800-1630929 placement
-function skillRootOfUri(e) {
-  if (!e.endsWith("/SKILL.md")) return;
-  let sliced = e.slice(0, -9);
+function skillRootOfUri(uri) {
+  if (!uri.endsWith("/SKILL.md")) return;
+  let sliced = uri.slice(0, -9);
   if (!/^[a-z][a-z0-9+.-]*:\/*[^/]/i.test(sliced)) return;
   return sliced;
 }
@@ -40,113 +59,118 @@ var MAX_RESOURCE_URI_BYTES = 2048;
 /**
  * 单个技能文件的 schema（uri、frontmatter、resources）。
  */
-var MCP_SKILL_ENTRY_PROBLEMS = {
-  invalid_entry: "with an entry that is not a valid skill entry",
-  uri_too_long: `with a URI longer than ${MAX_RESOURCE_URI_BYTES} bytes`,
-  frontmatter_too_large: "with frontmatter larger than Claude Code reads",
-  invalid_name: "with a name or last URI segment that is not a valid skill name",
-  name_mismatch: "with a name that differs from the URI's last segment",
-  invalid_manifest: "with a file list that omits SKILL.md, repeats a file, or leaves the skill directory",
-  too_many_resources: `with more than ${MAX_SKILL_RESOURCES} files`,
-  too_large: "larger than 16 MiB",
-  skill_md_too_large: "with a SKILL.md over 1 MB",
-  dynamic_declined: "generated dynamically (no file list to verify)",
-  unshowable_uri:
-    "with a directory URI that holds a hidden or control character, a double quote, an angle bracket, or a character that Unicode normalization rewrites (the server can percent-encode it)",
-  placeholder_uri:
-    "with a directory URI that holds a dollar sign, which a placeholder such as $ARGUMENTS in a skill's text uses (the server can write it as %24)",
-  unparseable_uri:
-    "with a directory URI whose scheme and host part a URL parser cannot read, for example a space in the host name, or a colon that is followed by text that is not a port number up to 65535 (the server can write that part as a valid URL)",
-};
-var skillEntrySchema = DoctorLazy(() =>
-  u({
-    uri: string(),
-    digest: string().regex(/^sha256:[0-9a-f]{64}$/),
-    size: E().int().nonnegative(),
-  }),
-);
-var skillFileSchema = DoctorLazy(() =>
-  u({
-    uri: string(),
-    frontmatter: hu(isSkillEntryShape),
-    resources: union([array(skillEntrySchema()), literal("dynamic")]),
-  }),
-);
+var MCP_SKILL_ENTRY_PROBLEMS; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var skillEntrySchema;
+var skillFileSchema;
+deferInit("chunk-e6aww6q8.js:1630954", () => {
+  MCP_SKILL_ENTRY_PROBLEMS = {
+    invalid_entry: "with an entry that is not a valid skill entry",
+    uri_too_long: `with a URI longer than ${MAX_RESOURCE_URI_BYTES} bytes`,
+    frontmatter_too_large: "with frontmatter larger than Claude Code reads",
+    invalid_name: "with a name or last URI segment that is not a valid skill name",
+    name_mismatch: "with a name that differs from the URI's last segment",
+    invalid_manifest: "with a file list that omits SKILL.md, repeats a file, or leaves the skill directory",
+    too_many_resources: `with more than ${MAX_SKILL_RESOURCES} files`,
+    too_large: "larger than 16 MiB",
+    skill_md_too_large: "with a SKILL.md over 1 MB",
+    dynamic_declined: "generated dynamically (no file list to verify)",
+    unshowable_uri:
+      "with a directory URI that holds a hidden or control character, a double quote, an angle bracket, or a character that Unicode normalization rewrites (the server can percent-encode it)",
+    placeholder_uri:
+      "with a directory URI that holds a dollar sign, which a placeholder such as $ARGUMENTS in a skill's text uses (the server can write it as %24)",
+    unparseable_uri:
+      "with a directory URI whose scheme and host part a URL parser cannot read, for example a space in the host name, or a colon that is followed by text that is not a port number up to 65535 (the server can write that part as a valid URL)",
+  };
+  skillEntrySchema = DoctorLazy(() =>
+    objectSchema({
+      uri: stringSchema(),
+      digest: stringSchema().regex(/^sha256:[0-9a-f]{64}$/),
+      size: numberSchema().int().nonnegative(),
+    }),
+  );
+  skillFileSchema = DoctorLazy(() =>
+    objectSchema({
+      uri: stringSchema(),
+      frontmatter: custom(isSkillEntryShape),
+      resources: union([array(skillEntrySchema()), literal("dynamic")]),
+    }),
+  );
+});
 //@ chunk-e6aww6q8.js:1632380-1632575 placement
-function isSkillEntryShape(e) {
-  if (typeof e !== "object" || e === null || Array.isArray(e)) return false;
-  let n = Reflect.get(e, "name");
-  let r = Reflect.get(e, "description");
-  return typeof n === "string" && n.length > 0 && typeof r === "string";
+function isSkillEntryShape(entry) {
+  if (typeof entry !== "object" || entry === null || Array.isArray(entry)) return false;
+  let name = Reflect.get(entry, "name");
+  let description = Reflect.get(entry, "description");
+  return typeof name === "string" && name.length > 0 && typeof description === "string";
 }
 //@ chunk-e6aww6q8.js:1632575-1632640 placement
 /**
  * 判断技能 URI 是否含需转义或需规范化的字符。
  */
-function hasUnsafeSkillUri(e) {
+function hasUnsafeSkillUri(uri) {
   try {
-    return escapeXmlAttribute_2(e) !== e || recursivelySanitizeUnicode(e) !== e;
+    return escapeXmlAttribute_2(uri) !== uri || recursivelySanitizeUnicode(uri) !== uri;
   } catch {
     return true;
   }
 }
 //@ chunk-e6aww6q8.js:1632640-1632772 placement
-function originPrefix(e) {
-  let n = /^[a-z][a-z0-9+.-]*:(\/\/[^/?#]*)?/i.exec(e)?.[0] ?? "";
-  let urlOrNull = parseUrlOrNull(n);
+function originPrefix(uri) {
+  let prefix = /^[a-z][a-z0-9+.-]*:(\/\/[^/?#]*)?/i.exec(uri)?.[0] ?? "";
+  let urlOrNull = parseUrlOrNull(prefix);
   return urlOrNull === null
     ? undefined
     : {
         url: urlOrNull,
-        length: n.length,
+        length: prefix.length,
       };
 }
 //@ chunk-e6aww6q8.js:1632772-1632809 placement
 /**
  * 判断 URI 能否被解析。
  */
-function isParsableUri(uri) {
-  return parseUrlOrNull(uri) !== null;
+function isParsableUri(text) {
+  return parseUrlOrNull(text) !== null;
 }
 //@ chunk-e6aww6q8.js:1632809-1632845 placement
 /**
  * 解析 URL，失败返回 null。
  */
-function parseUrlOrNull(e) {
-  return URL.parse(e);
+function parseUrlOrNull(text) {
+  return URL.parse(text);
 }
 //@ chunk-e6aww6q8.js:1632845-1633326 placement
 /**
  * 从读取结果中取出技能文件字节（文本或 base64 blob），URI 不符或大小超出时返回错误原因。
  */
-function readSkillFileContents(contents, uri, r) {
-  let s = contents.length === 1 ? contents[0] : undefined;
-  if (!s || s.uri !== uri)
+function readSkillFileContents(contents, uri, maxSize) {
+  let only = contents.length === 1 ? contents[0] : undefined;
+  if (!only || only.uri !== uri)
     return {
       ok: false,
       reason: "unexpected_contents",
     };
-  if (typeof s.text === "string") {
-    if (s.text.length > r)
+  if (typeof only.text === "string") {
+    if (only.text.length > maxSize)
       return {
         ok: false,
         reason: "size_mismatch",
       };
     return {
       ok: true,
-      bytes: new TextEncoder().encode(s.text),
+      bytes: new TextEncoder().encode(only.text),
       from: "text",
     };
   }
-  if (typeof s.blob === "string") {
-    if (s.blob.length > 4 * Math.ceil(r / 3))
+  if (typeof only.blob === "string") {
+    if (only.blob.length > 4 * Math.ceil(maxSize / 3))
       return {
         ok: false,
         reason: "size_mismatch",
       };
     return {
       ok: true,
-      bytes: new Uint8Array(Buffer.from(s.blob, "base64")),
+      bytes: new Uint8Array(Buffer.from(only.blob, "base64")),
       from: "blob",
     };
   }
@@ -156,8 +180,8 @@ function readSkillFileContents(contents, uri, r) {
   };
 }
 //@ chunk-e6aww6q8.js:1633326-1633431 placement
-function toInvokedMcpSkill(name, mcpSkill, texts) {
-  let mcpSkillEntry = parseMcpSkillEntry(mcpSkill);
+function toInvokedMcpSkill(name, entry, texts) {
+  let mcpSkillEntry = parseMcpSkillEntry(entry);
   return mcpSkillEntry
     ? {
         skillName: typeof name === "string" ? name : mcpSkillEntry.uri,
@@ -170,20 +194,22 @@ function toInvokedMcpSkill(name, mcpSkill, texts) {
 /**
  * 遍历消息历史，产出已调用的 MCP 技能（来自技能消息或 invoked_skills 附件）。
  */
-function* invokedMcpSkills(e) {
-  for (let n of messagesSinceCompactBoundary([...e]))
-    if (n.type === "user" && n.mcpSkill != null) {
-      let content = n.isMeta ? n.message.content : [];
+function* invokedMcpSkills(messages) {
+  for (let message of messagesSinceCompactBoundary([...messages]))
+    if (message.type === "user" && message.mcpSkill != null) {
+      let content = message.isMeta ? message.message.content : [];
       let texts =
-        typeof content === "string" ? [content] : content.flatMap((y) => (y.type === "text" ? [y.text] : []));
-      let invokedMcpSkill = toInvokedMcpSkill(n.mcpSkill.name, n.mcpSkill, texts);
+        typeof content === "string"
+          ? [content]
+          : content.flatMap((block) => (block.type === "text" ? [block.text] : []));
+      let invokedMcpSkill = toInvokedMcpSkill(message.mcpSkill.name, message.mcpSkill, texts);
       if (invokedMcpSkill) yield invokedMcpSkill;
     } else if (
-      n.type === "attachment" &&
-      n.attachment.type === "invoked_skills" &&
-      Array.isArray(n.attachment.skills)
+      message.type === "attachment" &&
+      message.attachment.type === "invoked_skills" &&
+      Array.isArray(message.attachment.skills)
     ) {
-      for (let skill of n.attachment.skills)
+      for (let skill of message.attachment.skills)
         if (
           typeof skill === "object" &&
           skill?.mcpSkill !== undefined &&
@@ -197,27 +223,29 @@ function* invokedMcpSkills(e) {
 }
 //@ chunk-e6aww6q8.js:1633944-1633990 placement
 /**
- * 把 Map 的值去重成数组。
+ * 官方行为，保留：实现是 [...new Map().values()]（少了构造参数），恒返回空数组；唯一调用方 countUniqueFiles 因此永远只统计 extraFiles。疑似打包丢实参的 bug，忠实还原不改代码。
  */
-function uniqueValues(e) {
+function uniqueValues(ignored) {
   return [...new Map().values()];
 }
 //@ chunk-e6aww6q8.js:1633990-1634149 placement = countUniqueFiles (0.712)
 /**
  * 按服务器名合并两组位置并去重（归属疑似错误，不属于 LSPTool；被 ReadMcpResourceTool、attachments 使用）。
  */
-function countUniqueFiles(name, n, r = []) {
-  let s = uniqueValues(n);
+function countUniqueFiles(name, files, extraFiles = []) {
+  let unique = uniqueValues(files);
   return [
-    ...uniqueValues(r).filter((loc) => !s.some((S) => S.serverName === loc.serverName && S.uri === loc.uri)),
-    ...s,
-  ].filter((y) => y.serverName === name);
+    ...uniqueValues(extraFiles).filter(
+      (loc) => !unique.some((file) => file.serverName === loc.serverName && file.uri === loc.uri),
+    ),
+    ...unique,
+  ].filter((file) => file.serverName === name);
 }
 //@ chunk-e6aww6q8.js:1634149-1634181 placement
 /**
  * 空实现（保留签名）。
  */
-function noopSkillFetch(name, uri, r, s = []) {
+function noopSkillFetch(name, uri, maxSize, extraFiles = []) {
   return;
 }
 //@ chunk-e6aww6q8.js:1634181-1634206 placement
@@ -228,35 +256,36 @@ function emptyList(messages) {
   return [];
 }
 //@ chunk-e6aww6q8.js:1634206-1634306 placement
-function findInvokedMcpSkill(e, skillName, content) {
-  let s;
-  for (let h of invokedMcpSkills(e))
-    if (h.skillName === skillName && textsSuffixMatches(h.texts, content)) s = h.entry;
-  return s;
+function findInvokedMcpSkill(messages, skillName, content) {
+  let found;
+  for (let skill of invokedMcpSkills(messages))
+    if (skill.skillName === skillName && textsSuffixMatches(skill.texts, content)) found = skill.entry;
+  return found;
 }
 //@ chunk-e6aww6q8.js:1634306-1634372 placement
 /**
  * 判断文本数组的某个后缀是否等于给定字符串。
  */
-function textsSuffixMatches(texts, n) {
+function textsSuffixMatches(texts, content) {
   return texts.some(
-    (r, s) =>
-      texts.slice(s).join(`
+    (text, index) =>
+      texts.slice(index).join(`
 
-`) === n,
+`) === content,
   );
 }
 //@ chunk-e6aww6q8.js:1634372-1634701 placement
 /**
  * 技能文件读取失败时给模型的说明：MCP 技能关闭、或由技能获取器处理，否则按原因与相关技能生成提示。
  */
-async function unreadSkillFileMessage(e) {
-  let n = !alwaysFalse();
-  if (n && e.reason === "unlisted")
+async function unreadSkillFileMessage(failure) {
+  let skillsOn = !alwaysFalse();
+  if (skillsOn && failure.reason === "unlisted")
     return "This file was not read, because MCP skills are turned off for now. While they are off, this app reads no file of a loaded skill.";
   return (
-    (await (n ? undefined : getCliOwnedState().skillsFetcher)?.settleFailedRead(e)) ??
-    skillFileProblemText(e.uri, e.reason) + e.skills.map((skill) => loadedSkillNote(skill.skillName)).join("")
+    (await (skillsOn ? undefined : getCliOwnedState().skillsFetcher)?.settleFailedRead(failure)) ??
+    skillFileProblemText(failure.uri, failure.reason) +
+      failure.skills.map((skill) => loadedSkillNote(skill.skillName)).join("")
   );
 }
 //@ chunk-e6aww6q8.js:1634701-1635329 placement
@@ -319,34 +348,34 @@ function classifySkillResourceUri(uri, skills) {
 /**
  * 规范化两边后判断 URL 是否位于某前缀之下（前缀补 /）。
  */
-function isUrlUnderPrefix(e, root) {
-  return normalizeUrlForCompare(e).startsWith(normalizeUrlForCompare(`${root}/`));
+function isUrlUnderPrefix(url, root) {
+  return normalizeUrlForCompare(url).startsWith(normalizeUrlForCompare(`${root}/`));
 }
 //@ chunk-e6aww6q8.js:1635386-1635557 placement = isPermittedRedirect (0.808)
-function normalizeUrlForCompare(e) {
-  let originalHostWithoutWww = originPrefix(e);
-  if (originalHostWithoutWww === undefined) return e;
-  let { url } = originalHostWithoutWww;
-  url.hostname = url.hostname.toLowerCase();
-  url.username = "";
-  url.password = "";
-  url.port = "";
-  return url.href + e.slice(originalHostWithoutWww.length);
+function normalizeUrlForCompare(url) {
+  let originalHostWithoutWww = originPrefix(url);
+  if (originalHostWithoutWww === undefined) return url;
+  let { url: url_2 } = originalHostWithoutWww;
+  url_2.hostname = url_2.hostname.toLowerCase();
+  url_2.username = "";
+  url_2.password = "";
+  url_2.port = "";
+  return url_2.href + url.slice(originalHostWithoutWww.length);
 }
 //@ chunk-e6aww6q8.js:1635557-1636084 placement
 /**
  * 校验读取到的技能文件内容：大小与清单一致、sha256 摘要一致，按文本或 base64 blob 返回资源项。
  */
 function verifySkillFile(contents, uri, rows) {
-  let read = readSkillFileContents(contents, uri, Math.max(...rows.map((L) => L.size)));
+  let read = readSkillFileContents(contents, uri, Math.max(...rows.map((row) => row.size)));
   if (!read.ok) return read;
-  if (rows.some((L) => L.size !== read.bytes.length))
+  if (rows.some((row) => row.size !== read.bytes.length))
     return {
       ok: false,
       reason: "size_mismatch",
     };
-  let h = `sha256:${computeContentHash(read.bytes)}`;
-  if (rows.some((L) => L.digest !== h))
+  let digest = `sha256:${computeContentHash(read.bytes)}`;
+  if (rows.some((row) => row.digest !== digest))
     return {
       ok: false,
       reason: "digest_mismatch",
@@ -385,20 +414,20 @@ function verifySkillFile(contents, uri, rows) {
  * 列出技能目录下的直接子条目（文件或子目录）。
  */
 function skillDirectoryEntries(uri, skills) {
-  let r = `${uri}/`;
-  let s = new Map();
+  let dirPrefix = `${uri}/`;
+  let children = new Map();
   for (let { resources } of skills)
     for (let resource of resources) {
-      if (!resource.uri.startsWith(r)) continue;
-      let index = resource.uri.indexOf("/", r.length);
-      if (index === -1) s.set(resource.uri, false);
-      else if (!s.has(resource.uri.slice(0, index))) s.set(resource.uri.slice(0, index), true);
+      if (!resource.uri.startsWith(dirPrefix)) continue;
+      let index = resource.uri.indexOf("/", dirPrefix.length);
+      if (index === -1) children.set(resource.uri, false);
+      else if (!children.has(resource.uri.slice(0, index))) children.set(resource.uri.slice(0, index), true);
     }
-  return s.size === 0
+  return children.size === 0
     ? undefined
-    : Array.from(s, ([h, y]) => ({
-        uri: h,
-        isDirectory: y,
+    : Array.from(children, ([uri, isDirectory]) => ({
+        uri,
+        isDirectory,
       }));
 }
 //@ chunk-e6aww6q8.js:1636392-1637966 placement
@@ -434,29 +463,35 @@ function skillFileProblemText(uri, reason) {
   return `${reason === "uri_too_long" ? `An address of ${Buffer.byteLength(uri)} bytes` : escapeXmlAttribute_2(uri)}: ${MCP_SKILL_FILE_PROBLEMS[reason]}`;
 }
 //@ chunk-e6aww6q8.js:1638131-1638330 placement
-var isUriWithinLimit = (uri) => Buffer.byteLength(uri) <= MAX_RESOURCE_URI_BYTES;
-var mcpSkillEntrySchema = DoctorLazy(() =>
-  u({
-    serverName: string(),
-    uri: string().refine((e) => {
-      let n = isUriWithinLimit(e) ? skillRootOfUri(e) : undefined;
-      return n !== undefined && !hasUnsafeSkillUri(n);
+var isUriWithinLimit; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var mcpSkillEntrySchema;
+deferInit("chunk-e6aww6q8.js:1638131", () => {
+  isUriWithinLimit = (uri) => Buffer.byteLength(uri) <= MAX_RESOURCE_URI_BYTES;
+  mcpSkillEntrySchema = DoctorLazy(() =>
+    objectSchema({
+      serverName: stringSchema(),
+      uri: stringSchema().refine((uri) => {
+        let root = isUriWithinLimit(uri) ? skillRootOfUri(uri) : undefined;
+        return root !== undefined && !hasUnsafeSkillUri(root);
+      }),
+      resources: array(skillEntrySchema().refine((resource) => isUriWithinLimit(resource.uri))).max(
+        MAX_SKILL_RESOURCES,
+      ),
     }),
-    resources: array(skillEntrySchema().refine((e) => isUriWithinLimit(e.uri))).max(MAX_SKILL_RESOURCES),
-  }),
-);
+  );
+});
 //@ chunk-e6aww6q8.js:1638330-1638493 placement
-function parseMcpSkillEntry(e) {
-  let n = mcpSkillEntrySchema().safeParse(e);
-  if (n.success) return n.data;
-  let r = mcpSkillEntrySchema()
+function parseMcpSkillEntry(entry) {
+  let parseResult = mcpSkillEntrySchema().safeParse(entry);
+  if (parseResult.success) return parseResult.data;
+  let withoutResources = mcpSkillEntrySchema()
     .omit({
       resources: true,
     })
-    .safeParse(e);
-  return r.success
+    .safeParse(entry);
+  return withoutResources.success
     ? {
-        ...r.data,
+        ...withoutResources.data,
         resources: [],
       }
     : undefined;
@@ -465,30 +500,34 @@ function parseMcpSkillEntry(e) {
 /**
  * 单个技能响应的 schema。
  */
-var skillsListSchema = DoctorLazy(() =>
-  u({
-    skills: array(unknown()),
-    nextCursor: string().nullish(),
-  }),
-);
-var singleSkillSchema = DoctorLazy(() =>
-  u({
-    skill: unknown(),
-  }),
-);
+var skillsListSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var singleSkillSchema;
+deferInit("chunk-4xrxmwxg.js:928", () => {
+  skillsListSchema = DoctorLazy(() =>
+    objectSchema({
+      skills: array(unknown()),
+      nextCursor: stringSchema().nullish(),
+    }),
+  );
+  singleSkillSchema = DoctorLazy(() =>
+    objectSchema({
+      skill: unknown(),
+    }),
+  );
+});
 //@ chunk-4xrxmwxg.js:1011-1130 placement
 /**
  * 向 MCP 服务器请求 skills/list 的一页。
  */
-function listMcpSkillPage(t, e) {
-  return identityId2(t.client).request(
+function listMcpSkillPage(connection, cursor) {
+  return identityId2(connection.client).request(
     {
       method: "skills/list",
       params:
-        e === undefined
+        cursor === undefined
           ? {}
           : {
-              cursor: e,
+              cursor,
             },
     },
     skillsListSchema(),
@@ -501,8 +540,8 @@ function listMcpSkillPage(t, e) {
 /**
  * 向 MCP 服务器请求 skills/get 获取指定技能。
  */
-function getMcpSkill(t, uri, l) {
-  return identityId2(t.client).request(
+function getMcpSkill(connection, uri, options) {
+  return identityId2(connection.client).request(
     {
       method: "skills/get",
       params: {
@@ -512,18 +551,9 @@ function getMcpSkill(t, uri, l) {
     singleSkillSchema(),
     {
       timeout: getConnectionTimeoutMs(),
-      signal: l?.signal,
+      signal: options?.signal,
     },
   );
-}
-//@ chunk-jxbwsn01.js:191-232 placement
-var IO_MODELCONTEXTPROTOCOL_SKILLS = "io.modelcontextprotocol/skills";
-//@ chunk-jxbwsn01.js:232-256 placement
-/**
- * 恒返回 false 的开关占位。
- */
-function alwaysFalse() {
-  return false;
 }
 export {
   emptyList,
@@ -541,4 +571,6 @@ export {
   findInvokedMcpSkill,
   MCP_SKILL_FILE_PROBLEMS,
   IO_MODELCONTEXTPROTOCOL_SKILLS,
+  getMcpSkill,
+  listMcpSkillPage,
 };

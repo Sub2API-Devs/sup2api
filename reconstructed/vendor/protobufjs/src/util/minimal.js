@@ -5,7 +5,7 @@
  * pieces: chunk-798ashq9.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 import { require_aspromise } from "./aspromise.js";
 import { require_base64 } from "./base64.js";
 import { require_eventemitter } from "./eventemitter.js";
@@ -16,7 +16,7 @@ import { require_pool } from "./pool.js";
 import { require_longbits } from "./longbits.js";
 
 //@ chunk-798ashq9.js:27725-30944 cjs-fingerprint
-var require_minimal = x(function (cjsExports) {
+var require_minimal = __commonJS(function (cjsExports) {
   var util = cjsExports;
   util.asPromise = require_aspromise();
   util.base64 = require_base64();
@@ -61,8 +61,8 @@ var require_minimal = x(function (cjsExports) {
   };
   util.Buffer = (function () {
     try {
-      var l = util.inquire("buffer").Buffer;
-      return l.prototype.utf8Write ? l : null;
+      var BufferClass = util.inquire("buffer").Buffer;
+      return BufferClass.prototype.utf8Write ? BufferClass : null;
     } catch (e) {
       return null;
     }
@@ -94,9 +94,9 @@ var require_minimal = x(function (cjsExports) {
     return bits.toNumber(Boolean(unsigned));
   };
   function merge(dst, src, ifNotSet) {
-    for (var keys = Object.keys(src), i = 0; i < keys.length; ++i)
-      if (dst[keys[i]] === undefined || !ifNotSet) {
-        if (keys[i] !== "__proto__") dst[keys[i]] = src[keys[i]];
+    for (var keys = Object.keys(src), idx = 0; idx < keys.length; ++idx)
+      if (dst[keys[idx]] === undefined || !ifNotSet) {
+        if (keys[idx] !== "__proto__") dst[keys[idx]] = src[keys[idx]];
       }
     return dst;
   }
@@ -175,20 +175,20 @@ var require_minimal = x(function (cjsExports) {
     json: true,
   };
   util._configure = function () {
-    var l = util.Buffer;
-    if (!l) {
+    var BufferClass = util.Buffer;
+    if (!BufferClass) {
       util._Buffer_from = util._Buffer_allocUnsafe = null;
       return;
     }
     util._Buffer_from =
-      (l.from !== Uint8Array.from && l.from) ||
+      (BufferClass.from !== Uint8Array.from && BufferClass.from) ||
       function (value, encoding) {
-        return new l(value, encoding);
+        return new BufferClass(value, encoding);
       };
     util._Buffer_allocUnsafe =
-      l.allocUnsafe ||
+      BufferClass.allocUnsafe ||
       function (size) {
-        return new l(size);
+        return new BufferClass(size);
       };
   };
 });

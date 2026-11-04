@@ -5,79 +5,13 @@
  *
  * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
  * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-bzr73sfg.js (14)
- * attribution: placement 14
+ * pieces: chunk-bzr73sfg.js (12)
+ * attribution: placement 12
  */
-import { levelGeneration, applyTextStyles } from "./colorize.js";
-import { applyBackgroundColor } from "../utils/theme.js";
-import { truncate } from "./wrap-text.js";
-import { applyStylesToWrappedText, wrapWithOsc8Link, renderNodeToOutput } from "./render-node-to-output.js";
-import { ELLIPSIS } from "./styles.js";
+import { renderNodeToOutput } from "./render-node-to-output.js";
 import { stripAnsiPerLine } from "../utils/stripAnsi.js";
 import { MAX_TREE_DEPTH, reportTreeDepthExceeded } from "./hit-test.js";
 
-//@ chunk-bzr73sfg.js:315335-315555 placement
-function rewriteRawAnsiBackground(state, node, text, color) {
-  let p = levelGeneration();
-  let g = state.rawBgRewriteCache.get(node);
-  if (g && g.text === text && g.color === color && g.levelGeneration === p) return g.out;
-  let E = applyBackgroundColor(text, color);
-  state.rawBgRewriteCache.set(node, {
-    text,
-    color,
-    levelGeneration: p,
-    out: E,
-  });
-  return E;
-}
-//@ chunk-bzr73sfg.js:315555-316137 placement
-/**
- * 为屏幕阅读器输出截断文本并保持区间映射。
- */
-function truncateStyledText(text, maxWidth, segments, charSegments, position) {
-  if (maxWidth < 1) return "";
-  let g = truncate(text, maxWidth, position);
-  if (g === null) return applyStylesToWrappedText(text, segments, charSegments, text);
-  let { head, tail } = g;
-  let wrappedPlain = head + ELLIPSIS + tail;
-  if (!text.startsWith(head) || !text.endsWith(tail))
-    return applyStylesToWrappedText(wrappedPlain, segments, charSegments, text);
-  let D = head.length;
-  let O = text.length - tail.length;
-  let _ = (P) =>
-    P < D
-      ? (charSegments[P] ?? 0)
-      : P === D
-        ? (charSegments[Math.max(0, O - 1)] ?? 0)
-        : (charSegments[O + (P - D - 1)] ?? 0);
-  let lines = wrappedPlain.split(`
-`);
-  let L = 0;
-  for (let idx = 0; idx < lines.length; idx++) {
-    let z = lines[idx];
-    let G = "";
-    let X = 0;
-    let K = z.length > 0 ? _(L) : -1;
-    for (let idx = 1; idx <= z.length; idx++) {
-      let Y = idx < z.length ? _(L + idx) : -1;
-      if (Y !== K) {
-        let J = segments[K];
-        let sliced = z.slice(X, idx);
-        if (J) {
-          let ee = applyTextStyles(sliced, J.styles);
-          if (J.hyperlink) ee = wrapWithOsc8Link(ee, J.hyperlink);
-          G += ee;
-        } else G += sliced;
-        X = idx;
-        K = Y;
-      }
-    }
-    lines[idx] = G;
-    L += z.length + 1;
-  }
-  return lines.join(`
-`);
-}
 //@ chunk-bzr73sfg.js:316137-316148 placement
 var renderNodeToOutputAlias = renderNodeToOutput;
 //@ chunk-bzr73sfg.js:316148-316219 placement
@@ -88,17 +22,18 @@ var SCREEN_READER_STRIP_RE = /[\x00-\x08\x0b-\x1f\x7f-\x9f\u061c\u202a-\u202e\u2
  */
 function sanitizeForScreenReader(text) {
   if (!SCREEN_READER_STRIP_RE.test(text)) return text;
-  let u = stripAnsiPerLine(text);
-  let f = "";
-  for (let idx = 0; idx < u.length; idx++) {
-    let code = u.charCodeAt(idx);
+  let stripped = stripAnsiPerLine(text);
+  let out = "";
+  for (let idx = 0; idx < stripped.length; idx++) {
+    let code = stripped.charCodeAt(idx);
     if (code < 32) {
-      if (code === 9 || code === 10) f += u[idx];
+      if (code === 9 || code === 10) out += stripped[idx];
     } else if (code === 127 || (code >= 128 && code <= 159));
-    else if (code === 1564 || (code >= 8234 && code <= 8238) || (code >= 8294 && code <= 8297)) f += "\uFFFD";
-    else f += u[idx];
+    else if (code === 1564 || (code >= 8234 && code <= 8238) || (code >= 8294 && code <= 8297))
+      out += "\uFFFD";
+    else out += stripped[idx];
   }
-  return f;
+  return out;
 }
 //@ chunk-bzr73sfg.js:316479-316553 placement
 var BLOCKQUOTE_PREFIX = "> ";
@@ -127,67 +62,74 @@ function renderNodeToScreenReaderOutput(node, parentRole, depth = 0) {
   let accessibility = node.accessibility;
   if (accessibility?.hidden) return EMPTY_SR_OUTPUT;
   if (node.isHidden || node.yogaNode?.getDisplay() === 1) return EMPTY_SR_OUTPUT;
-  let p = "";
-  let g = NO_PRESERVE_RANGES;
-  let E = NO_ROW_PREFIXES;
-  if (accessibility?.label !== undefined) p = sanitizeForScreenReader(accessibility.label);
+  let text = "";
+  let preserveRanges = NO_PRESERVE_RANGES;
+  let rowPrefixRanges = NO_ROW_PREFIXES;
+  if (accessibility?.label !== undefined) text = sanitizeForScreenReader(accessibility.label);
   else if (
     node.nodeName === "ink-text" ||
     node.nodeName === "ink-virtual-text" ||
     node.nodeName === "ink-link"
   )
     for (let childNode of node.childNodes) {
-      let A = renderNodeToScreenReaderOutput(childNode, accessibility?.role ?? parentRole, depth + 1);
-      if (A.preserveRanges.length > 0) g = offsetRanges(g, A.preserveRanges, p.length);
-      if (A.rowPrefixRanges.length > 0) E = offsetRowPrefixes(E, A.rowPrefixRanges, p.length);
-      p += A.text;
+      let childOutput = renderNodeToScreenReaderOutput(
+        childNode,
+        accessibility?.role ?? parentRole,
+        depth + 1,
+      );
+      if (childOutput.preserveRanges.length > 0)
+        preserveRanges = offsetRanges(preserveRanges, childOutput.preserveRanges, text.length);
+      if (childOutput.rowPrefixRanges.length > 0)
+        rowPrefixRanges = offsetRowPrefixes(rowPrefixRanges, childOutput.rowPrefixRanges, text.length);
+      text += childOutput.text;
     }
   else if (node.nodeName === "ink-box" || node.nodeName === "ink-root") {
-    let T = renderBoxToScreenReaderOutput(node, accessibility?.role ?? parentRole, depth);
-    p = T.text;
-    g = T.preserveRanges;
-    E = T.rowPrefixRanges;
+    let boxOutput = renderBoxToScreenReaderOutput(node, accessibility?.role ?? parentRole, depth);
+    text = boxOutput.text;
+    preserveRanges = boxOutput.preserveRanges;
+    rowPrefixRanges = boxOutput.rowPrefixRanges;
   }
   if (accessibility?.state) {
     let filtered = Object.keys(accessibility.state).filter((key) => accessibility.state[key]);
     if (filtered.length > 0) {
-      let A = `(${filtered.join(", ")}) `;
-      p = A + p;
-      g = offsetRanges(NO_PRESERVE_RANGES, g, A.length);
-      E = offsetRowPrefixes(NO_ROW_PREFIXES, E, A.length);
+      let statePrefix = `(${filtered.join(", ")}) `;
+      text = statePrefix + text;
+      preserveRanges = offsetRanges(NO_PRESERVE_RANGES, preserveRanges, statePrefix.length);
+      rowPrefixRanges = offsetRowPrefixes(NO_ROW_PREFIXES, rowPrefixRanges, statePrefix.length);
     }
   }
   if (accessibility?.role && accessibility.role !== parentRole && accessibility.role !== "blockquote") {
-    let T = `${accessibility.role}: `;
-    p = T + p;
-    g = offsetRanges(NO_PRESERVE_RANGES, g, T.length);
-    E = offsetRowPrefixes(NO_ROW_PREFIXES, E, T.length);
+    let rolePrefix = `${accessibility.role}: `;
+    text = rolePrefix + text;
+    preserveRanges = offsetRanges(NO_PRESERVE_RANGES, preserveRanges, rolePrefix.length);
+    rowPrefixRanges = offsetRowPrefixes(NO_ROW_PREFIXES, rowPrefixRanges, rolePrefix.length);
   }
-  if (accessibility?.preserveWhitespace && p !== "") g = [[0, p.length]];
-  if (accessibility?.role === "blockquote" && p !== "") E = [[0, p.length, BLOCKQUOTE_PREFIX]];
+  if (accessibility?.preserveWhitespace && text !== "") preserveRanges = [[0, text.length]];
+  if (accessibility?.role === "blockquote" && text !== "")
+    rowPrefixRanges = [[0, text.length, BLOCKQUOTE_PREFIX]];
   return {
-    text: p,
-    preserveRanges: g,
-    rowPrefixRanges: E,
+    text,
+    preserveRanges,
+    rowPrefixRanges,
   };
 }
 //@ chunk-bzr73sfg.js:317716-317760 placement
-function screenReaderText(n, role, f = 0) {
-  return renderNodeToScreenReaderOutput(n, role, f).text;
+function screenReaderText(node, role, depth = 0) {
+  return renderNodeToScreenReaderOutput(node, role, depth).text;
 }
 //@ chunk-bzr73sfg.js:317760-317871 placement
-function offsetRanges(n, preserveRanges, f) {
-  if (preserveRanges.length === 0) return n;
-  let m = n === NO_PRESERVE_RANGES ? [] : [...n];
-  for (let [p, g] of preserveRanges) m.push([p + f, g + f]);
-  return m;
+function offsetRanges(base, preserveRanges, offset) {
+  if (preserveRanges.length === 0) return base;
+  let merged = base === NO_PRESERVE_RANGES ? [] : [...base];
+  for (let [start, end] of preserveRanges) merged.push([start + offset, end + offset]);
+  return merged;
 }
 //@ chunk-bzr73sfg.js:317871-317986 placement
-function offsetRowPrefixes(n, rowPrefixRanges, f) {
-  if (rowPrefixRanges.length === 0) return n;
-  let m = n === NO_ROW_PREFIXES ? [] : [...n];
-  for (let [p, g, E] of rowPrefixRanges) m.push([p + f, g + f, E]);
-  return m;
+function offsetRowPrefixes(base, rowPrefixRanges, offset) {
+  if (rowPrefixRanges.length === 0) return base;
+  let merged = base === NO_ROW_PREFIXES ? [] : [...base];
+  for (let [start, end, prefix] of rowPrefixRanges) merged.push([start + offset, end + offset, prefix]);
+  return merged;
 }
 //@ chunk-bzr73sfg.js:317986-318461 placement
 /**
@@ -195,31 +137,33 @@ function offsetRowPrefixes(n, rowPrefixRanges, f) {
  */
 function renderBoxToScreenReaderOutput(node, role, depth) {
   let flexDirection = node.style.flexDirection ?? "row";
-  let p = flexDirection === "column" || flexDirection === "column-reverse";
-  let g = flexDirection === "row-reverse" || flexDirection === "column-reverse";
-  let E = p
+  let isColumn = flexDirection === "column" || flexDirection === "column-reverse";
+  let isReversed = flexDirection === "row-reverse" || flexDirection === "column-reverse";
+  let separator = isColumn
     ? `
 `
     : " ";
-  let T = [];
+  let childOutputs = [];
   for (let childNode of node.childNodes) {
-    let U = renderNodeToScreenReaderOutput(childNode, role, depth + 1);
-    if (U.text !== "") T.push(U);
+    let childOutput = renderNodeToScreenReaderOutput(childNode, role, depth + 1);
+    if (childOutput.text !== "") childOutputs.push(childOutput);
   }
-  if (g) T.reverse();
-  let A = "";
-  let D = NO_PRESERVE_RANGES;
-  let O = NO_ROW_PREFIXES;
-  for (let _ of T) {
-    if (A !== "") A += E;
-    if (_.preserveRanges.length > 0) D = offsetRanges(D, _.preserveRanges, A.length);
-    if (_.rowPrefixRanges.length > 0) O = offsetRowPrefixes(O, _.rowPrefixRanges, A.length);
-    A += _.text;
+  if (isReversed) childOutputs.reverse();
+  let text = "";
+  let preserveRanges = NO_PRESERVE_RANGES;
+  let rowPrefixRanges = NO_ROW_PREFIXES;
+  for (let childOutput of childOutputs) {
+    if (text !== "") text += separator;
+    if (childOutput.preserveRanges.length > 0)
+      preserveRanges = offsetRanges(preserveRanges, childOutput.preserveRanges, text.length);
+    if (childOutput.rowPrefixRanges.length > 0)
+      rowPrefixRanges = offsetRowPrefixes(rowPrefixRanges, childOutput.rowPrefixRanges, text.length);
+    text += childOutput.text;
   }
   return {
-    text: A,
-    preserveRanges: D,
-    rowPrefixRanges: O,
+    text,
+    preserveRanges,
+    rowPrefixRanges,
   };
 }
 //@ chunk-bzr73sfg.js:318461-319359 placement
@@ -238,39 +182,39 @@ function screenReaderOffsetOf(node, target, role, depth = 0) {
     return null;
   if (node.nodeName !== "ink-box" && node.nodeName !== "ink-root") return null;
   let role_2 = accessibility?.role ?? role;
-  let E = 0;
+  let prefixLength = 0;
   if (accessibility?.state) {
     let filtered = Object.keys(accessibility.state).filter((key) => accessibility.state[key]);
-    if (filtered.length > 0) E += `(${filtered.join(", ")}) `.length;
+    if (filtered.length > 0) prefixLength += `(${filtered.join(", ")}) `.length;
   }
-  if (accessibility?.role && accessibility.role !== role) E += `${accessibility.role}: `.length;
+  if (accessibility?.role && accessibility.role !== role) prefixLength += `${accessibility.role}: `.length;
   let flexDirection = node.style.flexDirection ?? "row";
-  let A = flexDirection === "column" || flexDirection === "column-reverse";
-  let D = flexDirection === "row-reverse" || flexDirection === "column-reverse";
-  let O = A ? 1 : 1;
-  let _ = [];
+  let isColumn = flexDirection === "column" || flexDirection === "column-reverse";
+  let isReversed = flexDirection === "row-reverse" || flexDirection === "column-reverse";
+  let separatorLength = isColumn ? 1 : 1;
+  let children = [];
   for (let childNode of node.childNodes) {
-    let P = screenReaderText(childNode, role_2, depth + 1);
-    if (P !== "")
-      _.push({
+    let childText = screenReaderText(childNode, role_2, depth + 1);
+    if (childText !== "")
+      children.push({
         node: childNode,
-        out: P,
+        out: childText,
       });
   }
-  if (D) _.reverse();
-  let U = 0;
-  for (let L of _) {
-    let P = screenReaderOffsetOf(L.node, target, role_2, depth + 1);
-    if (P !== null) return E + U + P;
-    U += L.out.length + O;
+  if (isReversed) children.reverse();
+  let offsetSoFar = 0;
+  for (let child of children) {
+    let childOffset = screenReaderOffsetOf(child.node, target, role_2, depth + 1);
+    if (childOffset !== null) return prefixLength + offsetSoFar + childOffset;
+    offsetSoFar += child.out.length + separatorLength;
   }
   return null;
 }
 //@ chunk-bzr73sfg.js:319359-319480 placement
-function setTranscriptFrontCut(n) {
-  let u = n;
-  while (u.parentNode !== undefined) u = u.parentNode;
-  if (u.nodeName === "ink-root") u.transcriptFrontCutRows = n;
+function setTranscriptFrontCut(node) {
+  let root = node;
+  while (root.parentNode !== undefined) root = root.parentNode;
+  if (root.nodeName === "ink-root") root.transcriptFrontCutRows = node;
 }
 //@ chunk-bzr73sfg.js:319480-319573 placement
 function takeTranscriptFrontCut(rootNode) {
@@ -282,8 +226,6 @@ export {
   setTranscriptFrontCut,
   screenReaderText,
   renderNodeToOutputAlias,
-  rewriteRawAnsiBackground,
-  truncateStyledText,
   renderNodeToScreenReaderOutput,
   sanitizeForScreenReader,
   takeTranscriptFrontCut,

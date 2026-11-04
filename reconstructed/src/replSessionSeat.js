@@ -28,8 +28,8 @@ function createReplMessageQueue(storageV5) {
   return isStorageV5Enabled() && storageV5 !== undefined
     ? installCommandQueue((adopt) =>
         createMessageQueueManager({
-          recordOperation: createQueueRecorder((r) => {
-            recordQueueOperation(r, storageV5);
+          recordOperation: createQueueRecorder((operation) => {
+            recordQueueOperation(operation, storageV5);
           }),
           adopt,
         }),

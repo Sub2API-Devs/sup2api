@@ -8,12 +8,12 @@
  * pieces: chunk-18hwfzwa.js (1)
  * attribution: fingerprint 1
  */
-import { Ji } from "../../vendor/lodash-es/uniqBy.js";
+import { uniqByExport } from "../../vendor/lodash-es/uniqBy.js";
 
 //@ chunk-18hwfzwa.js:185079-185159 fingerprint = mergeClients (1)
 function mergeClients(initialClients, mcpClients) {
   if (initialClients && mcpClients && mcpClients.length > 0)
-    return Ji([...initialClients, ...mcpClients], "name");
+    return uniqByExport([...initialClients, ...mcpClients], "name");
   return initialClients || [];
 }
 export { mergeClients };

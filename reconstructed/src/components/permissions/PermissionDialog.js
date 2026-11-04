@@ -8,13 +8,13 @@
  * pieces: chunk-3v13eg2e.js (3)
  * attribution: affinity 1, fingerprint 1, sole-consumer 1
  */
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import {
   useAskPositionLabel,
   PermissionRequestTitle,
   describeRequestSource,
 } from "./PermissionRequestTitle.js";
-import { Se, Fy } from "../../../vendor/react/cjs/react.production.js";
+import { useContext, childrenExport } from "../../../vendor/react/cjs/react.production.js";
 import { TerminalSizeContext } from "../../ink/terminalModes.js";
 import { useScrollViewportSize, useHasScrollViewport } from "../ScrollViewportContext.js";
 import {
@@ -40,7 +40,7 @@ var SHORTCUT_FORMAT = {
  * 权限对话框外框：圆角边框（permission 色）、标题 "Permission Required: …"、可选副标题与队友徽章。
  */
 function PermissionDialog_2(props) {
-  let $ = w(36);
+  let $ = useMemoCache(36);
   let {
     title,
     subtitle,
@@ -54,67 +54,67 @@ function PermissionDialog_2(props) {
     frame,
     children,
   } = props;
-  let f = color === undefined ? "permission" : color;
+  let borderColor = color === undefined ? "permission" : color;
   let paddingX = innerPaddingX === undefined ? 1 : innerPaddingX;
-  let k = srPrefix === undefined ? "Permission Required:" : srPrefix;
+  let screenReaderPrefix = srPrefix === undefined ? "Permission Required:" : srPrefix;
   let marginTop_2 = marginTop === undefined ? 1 : marginTop;
   let askPositionLabel = useAskPositionLabel();
-  let L = Se(TerminalSizeContext);
-  let m;
-  if ($[0] !== L) {
-    m = L ?? {
+  let terminalSize = useContext(TerminalSizeContext);
+  let fallbackSize;
+  if ($[0] !== terminalSize) {
+    fallbackSize = terminalSize ?? {
       rows: 0,
       columns: 0,
     };
-    $[0] = L;
-    $[1] = m;
-  } else m = $[1];
-  let { columns } = useScrollViewportSize(m);
+    $[0] = terminalSize;
+    $[1] = fallbackSize;
+  } else fallbackSize = $[1];
+  let { columns } = useScrollViewportSize(fallbackSize);
   let insideModal = useHasScrollViewport();
   if (frame !== undefined) {
-    let D;
+    let permissionDialogElement;
     if (
       $[2] !== askPositionLabel ||
       $[3] !== children ||
-      $[4] !== f ||
+      $[4] !== borderColor ||
       $[5] !== columns ||
       $[6] !== frame ||
       $[7] !== insideModal ||
       $[8] !== requestSource ||
-      $[9] !== k ||
+      $[9] !== screenReaderPrefix ||
       $[10] !== subtitle ||
       $[11] !== title ||
       $[12] !== titleRight
     ) {
-      D = jsxProd_default(PermissionDialog, {
+      permissionDialogElement = jsxProd_default(PermissionDialog, {
         title,
         subtitle,
-        color: f,
+        color: borderColor,
         requestSource,
         titleRight,
         askPosition: askPositionLabel,
         columns,
         insideModal,
-        srPrefix: k,
+        srPrefix: screenReaderPrefix,
         frame,
         children,
       });
       $[2] = askPositionLabel;
       $[3] = children;
-      $[4] = f;
+      $[4] = borderColor;
       $[5] = columns;
       $[6] = frame;
       $[7] = insideModal;
       $[8] = requestSource;
-      $[9] = k;
+      $[9] = screenReaderPrefix;
       $[10] = subtitle;
       $[11] = title;
       $[12] = titleRight;
-      $[13] = D;
-    } else D = $[13];
-    return D;
+      $[13] = permissionDialogElement;
+    } else permissionDialogElement = $[13];
+    return permissionDialogElement;
   }
-  const srPrefix_2 = k ?? undefined;
+  const srPrefix_2 = screenReaderPrefix ?? undefined;
   let aside;
   if ($[14] !== askPositionLabel || $[15] !== columns || $[16] !== titleRight) {
     aside =
@@ -129,7 +129,7 @@ function PermissionDialog_2(props) {
     $[16] = titleRight;
     $[17] = aside;
   } else aside = $[17];
-  let I;
+  let permissionRequestTitleElement;
   if (
     $[18] !== requestSource ||
     $[19] !== subtitle ||
@@ -138,7 +138,7 @@ function PermissionDialog_2(props) {
     $[22] !== title ||
     $[23] !== titleColor
   ) {
-    I = jsxProd_default(PermissionRequestTitle, {
+    permissionRequestTitleElement = jsxProd_default(PermissionRequestTitle, {
       title,
       subtitle,
       color: titleColor,
@@ -152,59 +152,59 @@ function PermissionDialog_2(props) {
     $[21] = aside;
     $[22] = title;
     $[23] = titleColor;
-    $[24] = I;
-  } else I = $[24];
-  let v;
-  if ($[25] !== I || $[26] !== titleRight) {
-    v = jsxProd_default(Box, {
+    $[24] = permissionRequestTitleElement;
+  } else permissionRequestTitleElement = $[24];
+  let titleBox;
+  if ($[25] !== permissionRequestTitleElement || $[26] !== titleRight) {
+    titleBox = jsxProd_default(Box, {
       paddingX: 1,
       flexDirection: "column",
       children: jsxProd_default_2(Box, {
         justifyContent: "space-between",
-        children: [I, titleRight],
+        children: [permissionRequestTitleElement, titleRight],
       }),
     });
-    $[25] = I;
+    $[25] = permissionRequestTitleElement;
     $[26] = titleRight;
-    $[27] = v;
-  } else v = $[27];
-  let E;
+    $[27] = titleBox;
+  } else titleBox = $[27];
+  let bodyBox;
   if ($[28] !== children || $[29] !== paddingX) {
-    E = jsxProd_default(Box, {
+    bodyBox = jsxProd_default(Box, {
       flexDirection: "column",
       paddingX,
       children,
     });
     $[28] = children;
     $[29] = paddingX;
-    $[30] = E;
-  } else E = $[30];
-  let X;
-  if ($[31] !== f || $[32] !== marginTop_2 || $[33] !== E || $[34] !== v) {
-    X = jsxProd_default_2(Box, {
+    $[30] = bodyBox;
+  } else bodyBox = $[30];
+  let dialogBox;
+  if ($[31] !== borderColor || $[32] !== marginTop_2 || $[33] !== bodyBox || $[34] !== titleBox) {
+    dialogBox = jsxProd_default_2(Box, {
       flexDirection: "column",
       borderStyle: "round",
-      borderColor: f,
+      borderColor,
       borderLeft: false,
       borderRight: false,
       borderBottom: false,
       marginTop: marginTop_2,
-      children: [v, E],
+      children: [titleBox, bodyBox],
     });
-    $[31] = f;
+    $[31] = borderColor;
     $[32] = marginTop_2;
-    $[33] = E;
-    $[34] = v;
-    $[35] = X;
-  } else X = $[35];
-  return X;
+    $[33] = bodyBox;
+    $[34] = titleBox;
+    $[35] = dialogBox;
+  } else dialogBox = $[35];
+  return dialogBox;
 }
 //@ chunk-3v13eg2e.js:4849-6814 sole-consumer
 /**
  * 权限对话框外框：标题（含后缀与请求来源）、子标题、提问位置、Esc/permissions 等底部提示，并按内边距收窄子内容的终端尺寸上下文。
  */
 function PermissionDialog(props) {
-  let m = w(33);
+  let $ = useMemoCache(33);
   let {
     title,
     subtitle,
@@ -218,54 +218,54 @@ function PermissionDialog(props) {
     frame,
     children,
   } = props;
-  let f =
+  let titleSuffixText =
     frame.titleSuffix === undefined ? "" : sanitizeDisplayText(frame.titleSuffix.replace(/\s+/g, " ").trim());
-  let g = describeRequestSource(requestSource);
-  let k = Se(TerminalSizeContext);
+  let sourceLabel = describeRequestSource(requestSource);
+  let terminalSize = useContext(TerminalSizeContext);
   let max = Math.max(1, columns - 2 * (insideModal ? PANE_PADDING_X : PANE_PADDING));
-  let N =
+  let titleWidth =
     bunStringWidth(title) +
-    (f === "" ? 0 : 3 + bunStringWidth(f)) +
-    (g === undefined ? 0 : 3 + bunStringWidth(g));
+    (titleSuffixText === "" ? 0 : 3 + bunStringWidth(titleSuffixText)) +
+    (sourceLabel === undefined ? 0 : 3 + bunStringWidth(sourceLabel));
   let titleEnd =
     titleRight ??
-    (askPosition !== null && N + 2 + bunStringWidth(askPosition) <= max ? askPosition : undefined);
-  const x = srPrefix === null ? undefined : `${srPrefix} ${title}`;
+    (askPosition !== null && titleWidth + 2 + bunStringWidth(askPosition) <= max ? askPosition : undefined);
+  const screenReaderLabel = srPrefix === null ? undefined : `${srPrefix} ${title}`;
   let title_2;
-  if (m[0] !== x || m[1] !== title) {
+  if ($[0] !== screenReaderLabel || $[1] !== title) {
     title_2 = jsxProd_default(Text, {
-      "aria-label": x,
+      "aria-label": screenReaderLabel,
       children: title,
     });
-    m[0] = x;
-    m[1] = title;
-    m[2] = title_2;
-  } else title_2 = m[2];
+    $[0] = screenReaderLabel;
+    $[1] = title;
+    $[2] = title_2;
+  } else title_2 = $[2];
   let titleSuffix;
-  if (m[3] !== g || m[4] !== f) {
+  if ($[3] !== sourceLabel || $[4] !== titleSuffixText) {
     titleSuffix =
-      f === "" && g === undefined
+      titleSuffixText === "" && sourceLabel === undefined
         ? undefined
         : jsxProd_default_2(Fragment, {
             children: [
-              f !== "" &&
+              titleSuffixText !== "" &&
                 jsxProd_default_2(Text, {
                   dimColor: true,
-                  children: [" \xB7 ", f],
+                  children: [" \xB7 ", titleSuffixText],
                 }),
-              g !== undefined &&
+              sourceLabel !== undefined &&
                 jsxProd_default_2(Text, {
                   dimColor: true,
-                  children: [" \xB7 ", g],
+                  children: [" \xB7 ", sourceLabel],
                 }),
             ],
           });
-    m[3] = g;
-    m[4] = f;
-    m[5] = titleSuffix;
-  } else titleSuffix = m[5];
+    $[3] = sourceLabel;
+    $[4] = titleSuffixText;
+    $[5] = titleSuffix;
+  } else titleSuffix = $[5];
   let subtitle_2;
-  if (m[6] !== subtitle) {
+  if ($[6] !== subtitle) {
     subtitle_2 =
       typeof subtitle === "string"
         ? jsxProd_default(Text, {
@@ -274,13 +274,13 @@ function PermissionDialog(props) {
             children: subtitle,
           })
         : (subtitle ?? undefined);
-    m[6] = subtitle;
-    m[7] = subtitle_2;
-  } else subtitle_2 = m[7];
+    $[6] = subtitle;
+    $[7] = subtitle_2;
+  } else subtitle_2 = $[7];
   const onCancel = frame.onCancel;
-  let I;
-  if (m[8] === MEMO_CACHE_SENTINEL) {
-    I = jsxProd_default(
+  let keyboardShortcutHintElement;
+  if ($[8] === MEMO_CACHE_SENTINEL) {
+    keyboardShortcutHintElement = jsxProd_default(
       KeyboardShortcutHint,
       {
         chord: "escape",
@@ -290,11 +290,11 @@ function PermissionDialog(props) {
       },
       "cancel",
     );
-    m[8] = I;
-  } else I = m[8];
-  let v;
-  if (m[9] !== frame.showPermissionsHint) {
-    v =
+    $[8] = keyboardShortcutHintElement;
+  } else keyboardShortcutHintElement = $[8];
+  let permissionsHint;
+  if ($[9] !== frame.showPermissionsHint) {
+    permissionsHint =
       frame.showPermissionsHint !== false &&
       jsxProd_default(
         Text,
@@ -303,68 +303,68 @@ function PermissionDialog(props) {
         },
         "permissions",
       );
-    m[9] = frame.showPermissionsHint;
-    m[10] = v;
-  } else v = m[10];
-  let E;
-  if (m[11] !== frame.hints) {
-    E = Fy.toArray(frame.hints);
-    m[11] = frame.hints;
-    m[12] = E;
-  } else E = m[12];
+    $[9] = frame.showPermissionsHint;
+    $[10] = permissionsHint;
+  } else permissionsHint = $[10];
+  let hintList;
+  if ($[11] !== frame.hints) {
+    hintList = childrenExport.toArray(frame.hints);
+    $[11] = frame.hints;
+    $[12] = hintList;
+  } else hintList = $[12];
   let inputGuide;
-  if (m[13] !== v || m[14] !== E) {
+  if ($[13] !== permissionsHint || $[14] !== hintList) {
     inputGuide = jsxProd_default_2(Byline, {
-      children: [I, v, E],
+      children: [keyboardShortcutHintElement, permissionsHint, hintList],
     });
-    m[13] = v;
-    m[14] = E;
-    m[15] = inputGuide;
-  } else inputGuide = m[15];
+    $[13] = permissionsHint;
+    $[14] = hintList;
+    $[15] = inputGuide;
+  } else inputGuide = $[15];
   let value;
-  if (m[16] !== max || m[17] !== k) {
+  if ($[16] !== max || $[17] !== terminalSize) {
     value =
-      k === null
+      terminalSize === null
         ? null
         : {
-            rows: k.rows,
+            rows: terminalSize.rows,
             columns: max,
           };
-    m[16] = max;
-    m[17] = k;
-    m[18] = value;
-  } else value = m[18];
+    $[16] = max;
+    $[17] = terminalSize;
+    $[18] = value;
+  } else value = $[18];
   let children_2;
-  if (m[19] !== children) {
+  if ($[19] !== children) {
     children_2 = jsxProd_default(Box, {
       flexDirection: "column",
       children,
     });
-    m[19] = children;
-    m[20] = children_2;
-  } else children_2 = m[20];
+    $[19] = children;
+    $[20] = children_2;
+  } else children_2 = $[20];
   let children_3;
-  if (m[21] !== value || m[22] !== children_2) {
+  if ($[21] !== value || $[22] !== children_2) {
     children_3 = jsxProd_default(TerminalSizeContext.Provider, {
       value,
       children: children_2,
     });
-    m[21] = value;
-    m[22] = children_2;
-    m[23] = children_3;
-  } else children_3 = m[23];
-  let Ce;
+    $[21] = value;
+    $[22] = children_2;
+    $[23] = children_3;
+  } else children_3 = $[23];
+  let dialogElement;
   if (
-    m[24] !== color ||
-    m[25] !== frame.onCancel ||
-    m[26] !== children_3 ||
-    m[27] !== title_2 ||
-    m[28] !== titleSuffix ||
-    m[29] !== subtitle_2 ||
-    m[30] !== inputGuide ||
-    m[31] !== titleEnd
+    $[24] !== color ||
+    $[25] !== frame.onCancel ||
+    $[26] !== children_3 ||
+    $[27] !== title_2 ||
+    $[28] !== titleSuffix ||
+    $[29] !== subtitle_2 ||
+    $[30] !== inputGuide ||
+    $[31] !== titleEnd
   ) {
-    Ce = jsxProd_default(Dialog, {
+    dialogElement = jsxProd_default(Dialog, {
       title: title_2,
       titleSuffix,
       subtitle: subtitle_2,
@@ -377,16 +377,16 @@ function PermissionDialog(props) {
       inputGuide,
       children: children_3,
     });
-    m[24] = color;
-    m[25] = frame.onCancel;
-    m[26] = children_3;
-    m[27] = title_2;
-    m[28] = titleSuffix;
-    m[29] = subtitle_2;
-    m[30] = inputGuide;
-    m[31] = titleEnd;
-    m[32] = Ce;
-  } else Ce = m[32];
-  return Ce;
+    $[24] = color;
+    $[25] = frame.onCancel;
+    $[26] = children_3;
+    $[27] = title_2;
+    $[28] = titleSuffix;
+    $[29] = subtitle_2;
+    $[30] = inputGuide;
+    $[31] = titleEnd;
+    $[32] = dialogElement;
+  } else dialogElement = $[32];
+  return dialogElement;
 }
 export { PermissionDialog_2 };

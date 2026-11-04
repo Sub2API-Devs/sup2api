@@ -48,7 +48,7 @@ import { RemoteAskSeat } from "../../services/remoteTools/remoteAskSeat.js";
 
 //@ chunk-qqkcdb5s.js:6117-6186 placement
 function loadMcpClientModule() {
-  return require("./chunk-asne9cp8.js").mcpClientModule();
+  return require("../../services/mcp/emitTripwireEvent.lazy.js").mcpClientModule();
 }
 //@ chunk-qqkcdb5s.js:6186-6333 placement
 var SESSION_CHANNEL_SERVER_CONFIG = {
@@ -62,65 +62,68 @@ var SESSION_CHANNEL_SERVER_CONFIG = {
   cliOwned: false,
 };
 //@ chunk-qqkcdb5s.js:6333-6545 placement
-function buildSessionChannelTools(e, r) {
+function buildSessionChannelTools(registry, limits) {
   return [
-    ...e
+    ...registry
       .entries()
-      .toSorted((s, h) => s.name.localeCompare(h.name))
+      .toSorted((left, right) => left.name.localeCompare(right.name))
       .flatMap(powerShellPromptToolsFor),
-    ...e.entries().flatMap((s) =>
-      [...s.passthrough.values()].map((h) => ({
-        tool: toSessionChannelTool(s.name, h, r?.[h.name]),
-        machine: s.name,
+    ...registry.entries().flatMap((machine) =>
+      [...machine.passthrough.values()].map((tool) => ({
+        tool: toSessionChannelTool(machine.name, tool, limits?.[tool.name]),
+        machine: machine.name,
       })),
     ),
   ];
 }
 //@ chunk-qqkcdb5s.js:6545-6659 placement
-function powerShellPromptToolsFor(e) {
-  return e.servedTools.has(POWERSHELL_TOOL_NAME) && !isPowerShellToolEnabled()
+function powerShellPromptToolsFor(machine) {
+  return machine.servedTools.has(POWERSHELL_TOOL_NAME) && !isPowerShellToolEnabled()
     ? [
         {
-          tool: sessionChannelPowerShellPrompt(e.name, parseShellCapabilityTag(e.description.shell)),
-          machine: e.name,
+          tool: sessionChannelPowerShellPrompt(
+            machine.name,
+            parseShellCapabilityTag(machine.description.shell),
+          ),
+          machine: machine.name,
         },
       ]
     : [];
 }
 //@ chunk-qqkcdb5s.js:6659-6837 placement
 function createCachedSessionChannelTools(
-  e,
-  r = () => {
+  registry,
+  onChanged = () => {
     return;
   },
 ) {
-  let s;
+  let cache;
   return () => {
-    let h = e.generation();
-    let g = r();
-    if (s === undefined || s.generation !== h || s.ceilings !== g)
-      s = {
-        generation: h,
-        ceilings: g,
-        tools: buildSessionChannelTools(e, g),
+    let generation = registry.generation();
+    let ceilings = onChanged();
+    if (cache === undefined || cache.generation !== generation || cache.ceilings !== ceilings)
+      cache = {
+        generation,
+        ceilings,
+        tools: buildSessionChannelTools(registry, ceilings),
       };
-    return s.tools;
+    return cache.tools;
   };
 }
 //@ chunk-qqkcdb5s.js:6837-7364 placement
-function toSessionChannelTool(name, r, effectiveMaxPermission) {
+function toSessionChannelTool(name, tool, effectiveMaxPermission) {
   let listed = recursivelySanitizeUnicode({
-    name: r.name,
-    description: r.description ?? "",
+    name: tool.name,
+    description: tool.description ?? "",
     inputSchema: {
-      ...r.input_schema,
+      ...tool.input_schema,
       type: "object",
     },
-    ...(r.annotations !== undefined && {
-      annotations: r.annotations,
+    ...(tool.annotations !== undefined && {
+      annotations: tool.annotations,
     }),
-    ...(r.hints !== undefined && {
-      _meta: sessionToolMeta(r.hints),
+    ...(tool.hints !== undefined && {
+      _meta: sessionToolMeta(tool.hints),
     }),
   });
   return loadMcpClientModule().composeMcpTool({
@@ -135,7 +138,7 @@ function toSessionChannelTool(name, r, effectiveMaxPermission) {
     listed,
     async call() {
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        `${r.name} is one of ${name}'s own MCP tools; the session runs it on that machine and it cannot run here.`,
+        `${tool.name} is one of ${name}'s own MCP tools; the session runs it on that machine and it cannot run here.`,
         "session-channel MCP tool called without being routed to its machine",
       );
     },
@@ -163,15 +166,15 @@ var MAX_ANNOUNCE_DEPTH = 32;
 var MAX_ANNOUNCE_ITEMS = 200;
 var EMPTY_ANNOUNCE_ITEMS = [];
 //@ chunk-qqkcdb5s.js:7714-7815 placement
-function memoizeLast(e) {
-  let r;
-  return (s) => {
-    if (r === undefined || r.input !== s)
-      r = {
-        input: s,
-        result: e(s),
+function memoizeLast(compute) {
+  let last;
+  return (input) => {
+    if (last === undefined || last.input !== input)
+      last = {
+        input,
+        result: compute(input),
       };
-    return r.result;
+    return last.result;
   };
 }
 //@ chunk-qqkcdb5s.js:7815-7882 placement
@@ -183,14 +186,14 @@ var MACHINE_TOOLS_POLICY_STATES = {
 var ANNOUNCE_PENDING_WINDOW_MS = 30000;
 //@ chunk-qqkcdb5s.js:7882-7964 placement
 function collectPassthroughToolNames(registry) {
-  return new Set(registry.entries().flatMap((r) => [...r.passthrough.keys()]));
+  return new Set(registry.entries().flatMap((machine) => [...machine.passthrough.keys()]));
 }
 //@ chunk-qqkcdb5s.js:7964-13673 placement
 /**
  * 处理附着机器发来的 remote_tools_announce：校验嵌套深度/大小/epoch，登记其工具（served/passthrough/plumbing）。
  */
-function handleRemoteToolsAnnounce(e) {
-  let r = {
+function handleRemoteToolsAnnounce(announcement) {
+  let counts = {
     served: 0,
     ignored: 0,
     passthrough: 0,
@@ -200,109 +203,109 @@ function handleRemoteToolsAnnounce(e) {
     plumbing: 0,
     displaced: false,
   };
-  let s = (outcome, error) => {
-    e.telemetry.announce({
+  let report = (outcome, error) => {
+    announcement.telemetry.announce({
       outcome,
-      ...r,
+      ...counts,
     });
     return {
       kind: "error",
       error,
     };
   };
-  let h = (passthroughToolNames, reason) => {
-    let passthroughToolNames_2 = collectPassthroughToolNames(e.registry);
-    let p = count([...passthroughToolNames], (i) => !passthroughToolNames_2.has(i));
-    if (p > 0 || passthroughToolNames_2.size !== passthroughToolNames.size)
-      e.telemetry.published({
+  let reportPublished = (passthroughToolNames, reason) => {
+    let passthroughToolNames_2 = collectPassthroughToolNames(announcement.registry);
+    let removedCount = count([...passthroughToolNames], (name) => !passthroughToolNames_2.has(name));
+    if (removedCount > 0 || passthroughToolNames_2.size !== passthroughToolNames.size)
+      announcement.telemetry.published({
         count: passthroughToolNames_2.size,
-        removed: p,
+        removed: removedCount,
         reason,
       });
   };
-  let g = (outcome, error, announcedTools, instanceId, passthroughToolNames) => {
-    e.registry.clear();
-    h(passthroughToolNames, "gate_off");
-    if (isEmptyAnnouncement(announcedTools)) e.forwardingOff.withdrew(instanceId);
-    else if (outcome !== "disabled_channel_off") e.forwardingOff.refused(instanceId, outcome);
-    return s(outcome, error);
+  let reportRefused = (outcome, error, announcement_2, instanceId, passthroughToolNames) => {
+    announcement.registry.clear();
+    reportPublished(passthroughToolNames, "gate_off");
+    if (isEmptyAnnouncement(announcement_2)) announcement.forwardingOff.withdrew(instanceId);
+    else if (outcome !== "disabled_channel_off") announcement.forwardingOff.refused(instanceId, outcome);
+    return report(outcome, error);
   };
-  let v = (d, n) => {
-    let legsAbandoned = e.abandonCalls?.(d, n) ?? 0;
-    let p = e.forwardedCalls.addressedTo(d);
+  let endServingInstance = (instanceId, reason) => {
+    let legsAbandoned = announcement.abandonCalls?.(instanceId, reason) ?? 0;
+    let calls = announcement.forwardedCalls.addressedTo(instanceId);
     let asksEnded = 0;
     let inheritedWithdrawn = 0;
-    for (let w of p) {
-      if (w.withdrawInherited()) inheritedWithdrawn += 1;
-      if (!w.askOutstanding) continue;
-      w.endAsk(normalizeWithdrawReason(n));
+    for (let call of calls) {
+      if (call.withdrawInherited()) inheritedWithdrawn += 1;
+      if (!call.askOutstanding) continue;
+      call.endAsk(normalizeWithdrawReason(reason));
       asksEnded += 1;
     }
     logRemoteTools(undefined, "serving instance gone", {
-      host_inst: d,
-      why: n,
+      host_inst: instanceId,
+      why: reason,
       legs_abandoned: legsAbandoned,
-      calls_addressed: p.length,
+      calls_addressed: calls.length,
       asks_ended: asksEnded,
       inherited_withdrawn: inheritedWithdrawn,
     });
   };
   return {
-    async handle(d) {
-      if (!withinDepth(d, MAX_ANNOUNCE_DEPTH))
-        return s("invalid", "invalid_announce: request nested too deep");
-      if (jsonStringifyRaw(d).length > MAX_RESULT_SIZE_HINT)
-        return s("invalid", "invalid_announce: request larger than 1 MiB");
-      let n = SDKRemoteToolsAnnounceRemoteToolsAnnounceMessageSchema().safeParse(d);
-      if (!n.success) {
-        let c = n.error.issues[0];
-        return s(
+    async handle(request) {
+      if (!withinDepth(request, MAX_ANNOUNCE_DEPTH))
+        return report("invalid", "invalid_announce: request nested too deep");
+      if (jsonStringifyRaw(request).length > MAX_RESULT_SIZE_HINT)
+        return report("invalid", "invalid_announce: request larger than 1 MiB");
+      let parsed = SDKRemoteToolsAnnounceRemoteToolsAnnounceMessageSchema().safeParse(request);
+      if (!parsed.success) {
+        let issue = parsed.error.issues[0];
+        return report(
           "invalid",
           `invalid_announce: ${sanitizeDisplayText(
-            `${c?.path.join(".") ?? ""} ${c?.message ?? "malformed"}`,
+            `${issue?.path.join(".") ?? ""} ${issue?.message ?? "malformed"}`,
             {
               maxCodeUnits: MAX_ANNOUNCE_ITEMS,
             },
           )}`,
         );
       }
-      let u = !e.adoptsMcpTools()
+      let passthroughDeclined = !announcement.adoptsMcpTools()
         ? "switched_off"
-        : n.data.passthrough.length === 0
+        : parsed.data.passthrough.length === 0
           ? undefined
-          : MACHINE_TOOLS_POLICY_STATES[e.machineMcpToolsPolicy()];
+          : MACHINE_TOOLS_POLICY_STATES[announcement.machineMcpToolsPolicy()];
       let deviceBridgeServerPresent =
-        n.data.passthrough.length > 0 ? e.deviceBridgeServerPresent() : undefined;
-      let announcedTools = parseAnnouncedTools(
-        n.data,
-        u === undefined
-          ? e.passthroughAdoption
+        parsed.data.passthrough.length > 0 ? announcement.deviceBridgeServerPresent() : undefined;
+      let announcement_2 = parseAnnouncedTools(
+        parsed.data,
+        passthroughDeclined === undefined
+          ? announcement.passthroughAdoption
           : {
-              ...e.passthroughAdoption,
+              ...announcement.passthroughAdoption,
               admitsName: () => false,
             },
       );
-      if (announcedTools === undefined)
-        return s(
+      if (announcement_2 === undefined)
+        return report(
           "invalid",
-          typeof n.data.host.epoch !== "string" && parseAdvert(n.data.host) !== undefined
+          typeof parsed.data.host.epoch !== "string" && parseAdvert(parsed.data.host) !== undefined
             ? "invalid_announce: host.epoch is required on this channel"
             : "invalid_announce: host is not a readable machine description (name a lowercase slug other than container/this-machine, an epoch, kind, platform, working_dir and limits)",
         );
-      if (n.data.worker_epoch !== undefined && n.data.worker_epoch !== e.workerEpoch)
-        return s("stale_epoch", `stale_worker_epoch: worker epoch is ${e.workerEpoch}`);
-      if (announcedTools.host.capabilities?.includes(STILL_HERE) === true) {
-        let found = e.registry.entries().find((R) => R.name === announcedTools.host.name);
-        if (found?.instanceId !== n.data.instance_id)
+      if (parsed.data.worker_epoch !== undefined && parsed.data.worker_epoch !== announcement.workerEpoch)
+        return report("stale_epoch", `stale_worker_epoch: worker epoch is ${announcement.workerEpoch}`);
+      if (announcement_2.host.capabilities?.includes(STILL_HERE) === true) {
+        let found = announcement.registry.entries().find((entry) => entry.name === announcement_2.host.name);
+        if (found?.instanceId !== parsed.data.instance_id)
           return {
             kind: "error",
             error: "invalid_announce: only the client that holds a machine can say it is still here",
           };
         let noted =
-          e.switches() === "on" &&
-          e.stillHereOn() &&
-          e.forwardedCalls.addressedTo(found.instanceId).some((R) => !R.askOutstanding) &&
-          e.registry.noteStillHere(found.instanceId, e.now());
+          announcement.switches() === "on" &&
+          announcement.stillHereOn() &&
+          announcement.forwardedCalls.addressedTo(found.instanceId).some((call) => !call.askOutstanding) &&
+          announcement.registry.noteStillHere(found.instanceId, announcement.now());
         logRemoteTools(undefined, "machine still here", {
           host_inst: found.instanceId,
           noted,
@@ -311,27 +314,27 @@ function handleRemoteToolsAnnounce(e) {
           kind: "success",
           response: {
             status: "announced",
-            worker_epoch: e.workerEpoch,
+            worker_epoch: announcement.workerEpoch,
             protocol_version: found.protocol.kind === "compatible" ? found.protocol.version : null,
           },
         };
       }
-      let passthroughToolNames = collectPassthroughToolNames(e.registry);
-      switch (e.switches()) {
+      let passthroughToolNames = collectPassthroughToolNames(announcement.registry);
+      switch (announcement.switches()) {
         case "channel_off":
-          return g(
+          return reportRefused(
             "disabled_channel_off",
             "remote_tools_disabled: session_channel_off",
-            announcedTools,
-            n.data.instance_id,
+            announcement_2,
+            parsed.data.instance_id,
             passthroughToolNames,
           );
         case "switch_off":
-          return g(
+          return reportRefused(
             "disabled_switch_off",
             "remote_tools_disabled: switch_off",
-            announcedTools,
-            n.data.instance_id,
+            announcement_2,
+            parsed.data.instance_id,
             passthroughToolNames,
           );
         case "on":
@@ -339,35 +342,39 @@ function handleRemoteToolsAnnounce(e) {
       }
       switch (
         (await withDeadline(
-          e.readAccountFlag().catch(() => "pending"),
-          e.flagWaitCapMs,
+          announcement.readAccountFlag().catch(() => "pending"),
+          announcement.flagWaitCapMs,
         )) ??
         "pending"
       ) {
         case "pending":
-          if (isEmptyAnnouncement(announcedTools)) e.forwardingOff.withdrew(n.data.instance_id);
-          else if ((e.forwardingOff.reason() ?? "not_ready") === "not_ready")
-            e.forwardingOff.refused(n.data.instance_id, "not_ready");
-          return s("not_ready", "remote_tools_not_ready: feature flags not yet available; retry");
+          if (isEmptyAnnouncement(announcement_2))
+            announcement.forwardingOff.withdrew(parsed.data.instance_id);
+          else if ((announcement.forwardingOff.reason() ?? "not_ready") === "not_ready")
+            announcement.forwardingOff.refused(parsed.data.instance_id, "not_ready");
+          return report("not_ready", "remote_tools_not_ready: feature flags not yet available; retry");
         case "off":
-          return g(
+          return reportRefused(
             "disabled_flag_off",
             "remote_tools_disabled: flag_off",
-            announcedTools,
-            n.data.instance_id,
+            announcement_2,
+            parsed.data.instance_id,
             passthroughToolNames,
           );
         case "on":
           break;
       }
-      if (announcedTools.host.capabilities?.includes(MACHINE_PRESENCE_STATES) === true && e.sleepNoticeOn()) {
-        let found = e.registry.entries().find((b) => b.name === announcedTools.host.name);
-        if (found?.instanceId !== n.data.instance_id)
+      if (
+        announcement_2.host.capabilities?.includes(MACHINE_PRESENCE_STATES) === true &&
+        announcement.sleepNoticeOn()
+      ) {
+        let found = announcement.registry.entries().find((entry) => entry.name === announcement_2.host.name);
+        if (found?.instanceId !== parsed.data.instance_id)
           return {
             kind: "error",
             error: "invalid_announce: only the client that holds a machine can say it sleeps",
           };
-        e.registry.markAsleep(found.instanceId, e.now());
+        announcement.registry.markAsleep(found.instanceId, announcement.now());
         logRemoteTools(undefined, "machine asleep", {
           host_inst: found.instanceId,
         });
@@ -375,94 +382,97 @@ function handleRemoteToolsAnnounce(e) {
           kind: "success",
           response: {
             status: "announced",
-            worker_epoch: e.workerEpoch,
+            worker_epoch: announcement.workerEpoch,
             protocol_version: found.protocol.kind === "compatible" ? found.protocol.version : null,
           },
         };
       }
-      e.forwardingOff.clear();
-      let a = e.registry.accept(announcedTools, {
-        instanceId: n.data.instance_id,
-        now: e.now(),
-        transport: e.transportFor(announcedTools.host.name),
+      announcement.forwardingOff.clear();
+      let acceptResult = announcement.registry.accept(announcement_2, {
+        instanceId: parsed.data.instance_id,
+        now: announcement.now(),
+        transport: announcement.transportFor(announcement_2.host.name),
       });
-      let S = {
-        ignored: a.ignoredTools.length,
-        passthrough: n.data.passthrough.length,
-        passthrough_ignored: n.data.passthrough.length - announcedTools.passthrough.length,
-        passthrough_declined: n.data.passthrough.length > 0 ? u : undefined,
+      let counts = {
+        ignored: acceptResult.ignoredTools.length,
+        passthrough: parsed.data.passthrough.length,
+        passthrough_ignored: parsed.data.passthrough.length - announcement_2.passthrough.length,
+        passthrough_declined: parsed.data.passthrough.length > 0 ? passthroughDeclined : undefined,
         device_bridge_server_present: deviceBridgeServerPresent,
-        plumbing: announcedTools.plumbing.length,
+        plumbing: announcement_2.plumbing.length,
       };
-      let T = {
-        ...(u !== "switched_off" &&
-          u !== "pending" && {
-            passthrough_adopted: a.status === "announced" ? a.passthroughAdopted : 0,
+      let adoptedFields = {
+        ...(passthroughDeclined !== "switched_off" &&
+          passthroughDeclined !== "pending" && {
+            passthrough_adopted: acceptResult.status === "announced" ? acceptResult.passthroughAdopted : 0,
           }),
-        ...(S.passthrough_declined === "policy" && {
+        ...(counts.passthrough_declined === "policy" && {
           passthrough_declined: "policy",
         }),
-        ...(S.passthrough_declined === "pending" && {
+        ...(counts.passthrough_declined === "pending" && {
           passthrough_declined: "pending",
         }),
       };
-      let E =
-        a.ignoredTools.length > 0
+      let ignoredFields =
+        acceptResult.ignoredTools.length > 0
           ? {
-              ignored_tools: a.ignoredTools.slice(0, 32),
+              ignored_tools: acceptResult.ignoredTools.slice(0, 32),
             }
           : {};
-      switch (a.status) {
+      switch (acceptResult.status) {
         case "withdrawn":
-          if (a.heldByAnother)
+          if (acceptResult.heldByAnother)
             logForDebugging(
-              `[remote-tools] ${announcedTools.host.name}: a withdrawal from client instance ${n.data.instance_id} names a machine another instance announced since; kept`,
+              `[remote-tools] ${announcement_2.host.name}: a withdrawal from client instance ${parsed.data.instance_id} names a machine another instance announced since; kept`,
             );
-          if (a.removed.length > 0) v(n.data.instance_id, "withdrawn");
-          h(passthroughToolNames, "withdrawn");
-          e.telemetry.announce({
+          if (acceptResult.removed.length > 0) endServingInstance(parsed.data.instance_id, "withdrawn");
+          reportPublished(passthroughToolNames, "withdrawn");
+          announcement.telemetry.announce({
             outcome: "withdrawn",
             served: 0,
             passthrough_adopted: 0,
-            ...S,
+            ...counts,
             displaced: false,
           });
           return {
             kind: "success",
             response: {
               status: "withdrawn",
-              worker_epoch: e.workerEpoch,
+              worker_epoch: announcement.workerEpoch,
               protocol_version: null,
-              ...T,
-              ...E,
+              ...adoptedFields,
+              ...ignoredFields,
             },
           };
         case "announced":
-          if (a.displaced !== undefined) {
+          if (acceptResult.displaced !== undefined) {
             logForDebugging(
-              `[remote-tools] ${announcedTools.host.name}: client instance ${n.data.instance_id} now announces this machine (was ${a.displaced}); calls go to the newcomer`,
+              `[remote-tools] ${announcement_2.host.name}: client instance ${parsed.data.instance_id} now announces this machine (was ${acceptResult.displaced}); calls go to the newcomer`,
             );
-            v(a.displaced, "displaced");
+            endServingInstance(acceptResult.displaced, "displaced");
           }
-          h(passthroughToolNames, a.displaced !== undefined ? "displaced" : "announced");
-          e.telemetry.announce({
+          reportPublished(
+            passthroughToolNames,
+            acceptResult.displaced !== undefined ? "displaced" : "announced",
+          );
+          announcement.telemetry.announce({
             outcome: "announced",
-            served: a.served,
-            passthrough_adopted: a.passthroughAdopted,
-            ...S,
-            displaced: a.displaced !== undefined,
-            host_interface: announcedTools.host.tool_host_interface,
+            served: acceptResult.served,
+            passthrough_adopted: acceptResult.passthroughAdopted,
+            ...counts,
+            displaced: acceptResult.displaced !== undefined,
+            host_interface: announcement_2.host.tool_host_interface,
           });
           return {
             kind: "success",
             response: {
               status: "announced",
-              worker_epoch: e.workerEpoch,
-              protocol_version: a.protocolVersion,
-              ...T,
-              ...E,
-              ...(announcedTools.host.capabilities?.includes(SAYS_STILL_HERE) === true &&
-                e.stillHereOn() && {
+              worker_epoch: announcement.workerEpoch,
+              protocol_version: acceptResult.protocolVersion,
+              ...adoptedFields,
+              ...ignoredFields,
+              ...(announcement_2.host.capabilities?.includes(SAYS_STILL_HERE) === true &&
+                announcement.stillHereOn() && {
                   worker_capabilities: [STILL_HERE_TEXT],
                 }),
             },
@@ -475,80 +485,81 @@ function handleRemoteToolsAnnounce(e) {
 /**
  * 为云会话构建会话通道工具：附着机器公告的工具成为本会话可调用的 MCP 风格工具。
  */
-async function createSessionChannelTools(e) {
-  let r = e.toolState.get(RemoteBackgroundCommands);
+async function createSessionChannelTools(options) {
+  let backgroundCommands = options.toolState.get(RemoteBackgroundCommands);
   let [
-    { isAccountGateServed: s, isViolinWoodEnabled: h },
-    { isSleepNoticeOnCached: g },
-    { isStillHereOnCached: v },
-    { refreshGrowthBookFeatures: d },
+    { isAccountGateServed, isViolinWoodEnabled },
+    { isSleepNoticeOnCached },
+    { isStillHereOnCached },
+    { refreshGrowthBookFeatures },
     {
-      adoptMcpOverChannelSwitchOn: n,
-      isRemoteToolForwardingEnabledCached: u,
-      isRemoteToolForwardingSwitchOn: p,
-      isSessionChannelDisabled: i,
+      adoptMcpOverChannelSwitchOn,
+      isRemoteToolForwardingEnabledCached,
+      isRemoteToolForwardingSwitchOn,
+      isSessionChannelDisabled,
     },
-    { createSessionEventTransport: f },
-    { logEvent: w },
-    { fromEnum: a, fromEnumOpt: S, lit: T },
-    { logFeatureBad: E, logFeatureOk: c, logFeatureSad: b },
-    { judgeToolSchemaSendability: R },
-    { mayBePassthroughTool: L },
-    { isMcpServerBlockedAtConnectTime: x, isMcpServerDenied: j, isMcpServerDisabled: B },
-    { isLockedOutByOrgMcpPolicy: W },
-    { isRemoteManagedSettingsColdStartPending: V },
-    { AwayRecheck: z },
-    { isAwayRecheckOnCached: K },
+    { createSessionEventTransport },
+    { logEvent },
+    { fromEnum, fromEnumOpt, lit },
+    { logFeatureBad, logFeatureOk, logFeatureSad },
+    { judgeToolSchemaSendability },
+    { mayBePassthroughTool },
+    { isMcpServerBlockedAtConnectTime, isMcpServerDenied, isMcpServerDisabled },
+    { isLockedOutByOrgMcpPolicy },
+    { isRemoteManagedSettingsColdStartPending },
+    { AwayRecheck },
+    { isAwayRecheckOnCached },
   ] = await Promise.all([
-    import("./chunk-m288yvvf.js"),
-    import("./chunk-dfs6nw1a.js"),
-    import("./chunk-k7wbhh0r.js"),
-    import("./chunk-6df1d6re.js"),
-    import("./chunk-wcfcn49z.js"),
-    import("./chunk-tg9pcd2j.js"),
-    import("./chunk-ezz35vxh.js"),
-    import("./chunk-01ass7n1.js"),
-    import("./chunk-53at0fec.js"),
-    import("./chunk-xv2h6pvf.js"),
-    import("./chunk-ca1aqn71.js"),
-    import("./chunk-hj6c79b7.js"),
-    import("./chunk-zd7g8x0w.js"),
-    import("./chunk-r42q9dtm.js"),
-    import("./chunk-gvr0ybct.js"),
-    import("./chunk-prmw23m3.js"),
+    import("../../services/analytics/violinGates.js"),
+    import("../../services/analytics/violinTipGate.js"),
+    import("../../services/analytics/lazyDoveGate.js"),
+    import("../../services/analytics/ATIS_REQUEST_HEADER.lazy.js"),
+    import("../../services/remoteTools/servingGates.js"),
+    import("./sessionEventTransport.js"),
+    import("../../services/analytics/index.js"),
+    import("../../services/analytics/safeMetadata.js"),
+    import("../../services/analytics/featureTelemetry.js"),
+    import("../../services/mcp/toolSchemaSendability.js"),
+    import("../../services/deviceBridge/passthroughMarker.js"),
+    import("../../services/mcp/config.js"),
+    import("../../services/mcp/orgMcpPolicyLockout.js"),
+    import("../../services/remoteManagedSettings/loader.js"),
+    import("../../services/remoteTools/AwayRecheck.js"),
+    import("../../services/remoteTools/awayRecheckFlag.js"),
   ]);
-  let k = e.toolState.get(z);
-  k.start({
-    registry: r,
-    isEnabled: () => K() && u(),
+  let awayRecheck = options.toolState.get(AwayRecheck);
+  awayRecheck.start({
+    registry: backgroundCommands,
+    isEnabled: () => isAwayRecheckOnCached() && isRemoteToolForwardingEnabledCached(),
     random: Math.random,
-    schedule: (o, m) => {
-      let timer = setTimeout(o, m);
+    schedule: (tick, delayMs) => {
+      let timer = setTimeout(tick, delayMs);
       timer.unref();
       return () => clearTimeout(timer);
     },
   });
   let now = Date.now();
-  let A = () => {
+  let machineMcpToolsPolicy = () => {
     if (isSafeMode()) return "denied";
-    if (Date.now() - now < ANNOUNCE_PENDING_WINDOW_MS && V()) return "pending";
-    let o = e.bridgeServer?.();
-    if (o === undefined) {
-      let m = ownSessionIdPrefixes();
-      let flattened = m.flatMap((_) => buildCcrMcpProxyUrls(_));
+    if (Date.now() - now < ANNOUNCE_PENDING_WINDOW_MS && isRemoteManagedSettingsColdStartPending())
+      return "pending";
+    let bridgeServer = options.bridgeServer?.();
+    if (bridgeServer === undefined) {
+      let sessionPrefixes = ownSessionIdPrefixes();
+      let flattened = sessionPrefixes.flatMap((prefix) => buildCcrMcpProxyUrls(prefix));
       let flattened_2 = ["cse_", "session_"]
-        .filter((_) => !m.includes(_))
-        .flatMap((_) => buildCcrMcpProxyUrls(_));
+        .filter((prefix) => !sessionPrefixes.includes(prefix))
+        .flatMap((prefix) => buildCcrMcpProxyUrls(prefix));
       return flattened.length === 0 ||
         flattened.some((url) =>
-          W(REMOTE_DEVICES, {
+          isLockedOutByOrgMcpPolicy(REMOTE_DEVICES, {
             type: "http",
             url,
             scope: "dynamic",
           }),
         ) ||
         flattened_2.some((url) =>
-          j(REMOTE_DEVICES, {
+          isMcpServerDenied(REMOTE_DEVICES, {
             type: "http",
             url,
             scope: "dynamic",
@@ -557,114 +568,127 @@ async function createSessionChannelTools(e) {
         ? "denied"
         : "allowed";
     }
-    return x(o.name, o.config) ? "denied" : "allowed";
+    return isMcpServerBlockedAtConnectTime(bridgeServer.name, bridgeServer.config) ? "denied" : "allowed";
   };
-  let cachedSessionChannelTools = createCachedSessionChannelTools(r, () => {
-    let config = e.bridgeServer?.()?.config;
+  let cachedSessionChannelTools = createCachedSessionChannelTools(backgroundCommands, () => {
+    let config = options.bridgeServer?.()?.config;
     return config !== undefined && "toolPermissions" in config ? config.toolPermissions : undefined;
   });
-  let G = () => {
-    let o = e.bridgeServer?.();
-    return o !== undefined ? o.disabled === true : B(REMOTE_DEVICES);
+  let machineMcpToolsDenied = () => {
+    let bridgeServer = options.bridgeServer?.();
+    return bridgeServer !== undefined ? bridgeServer.disabled === true : isMcpServerDisabled(REMOTE_DEVICES);
   };
-  let O = () => u() && n() && A() === "allowed" && !G();
-  let P = (o, m) => () => {
+  let isMachineToolsAllowed = () =>
+    isRemoteToolForwardingEnabledCached() &&
+    adoptMcpOverChannelSwitchOn() &&
+    machineMcpToolsPolicy() === "allowed" &&
+    !machineMcpToolsDenied();
+  let guard = (produce, fallback) => () => {
     try {
-      return o();
+      return produce();
     } catch (error) {
       logError(toError(error));
-      return m;
+      return fallback;
     }
   };
-  let U = memoizeLast((o) => o.filter(({ tool }) => isHostOnlyNativeTool(tool)));
-  e.toolState.get(BridgeToolProvider).provide(
-    P(
-      () => (O() ? cachedSessionChannelTools() : u() ? U(cachedSessionChannelTools()) : EMPTY_ANNOUNCE_ITEMS),
+  let hostOnlyTools = memoizeLast((items) => items.filter(({ tool }) => isHostOnlyNativeTool(tool)));
+  options.toolState.get(BridgeToolProvider).provide(
+    guard(
+      () =>
+        isMachineToolsAllowed()
+          ? cachedSessionChannelTools()
+          : isRemoteToolForwardingEnabledCached()
+            ? hostOnlyTools(cachedSessionChannelTools())
+            : EMPTY_ANNOUNCE_ITEMS,
       EMPTY_ANNOUNCE_ITEMS,
     ),
-    P(O, false),
-    (o) => r.withdrawnThisLife(o) || r.entries().some((m) => m.name === o),
+    guard(isMachineToolsAllowed, false),
+    (toolName) =>
+      backgroundCommands.withdrawnThisLife(toolName) ||
+      backgroundCommands.entries().some((entry) => entry.name === toolName),
   );
   return {
     readAccountFlag: async () => {
-      if (await h()) return "on";
-      if (s("tengu_violin_wood")) return "off";
-      d().catch(() => {});
+      if (await isViolinWoodEnabled()) return "on";
+      if (isAccountGateServed("tengu_violin_wood")) return "off";
+      refreshGrowthBookFeatures().catch(() => {});
       return "pending";
     },
     flagWaitCapMs: 5000,
-    switches: () => (i() ? "channel_off" : p() ? "on" : "switch_off"),
+    switches: () =>
+      isSessionChannelDisabled() ? "channel_off" : isRemoteToolForwardingSwitchOn() ? "on" : "switch_off",
     now: Date.now,
     workerEpoch:
-      e.workerEpoch !== undefined && Number.isInteger(e.workerEpoch) && e.workerEpoch >= 1
-        ? e.workerEpoch
+      options.workerEpoch !== undefined && Number.isInteger(options.workerEpoch) && options.workerEpoch >= 1
+        ? options.workerEpoch
         : 1,
-    registry: r,
-    forwardingOff: e.toolState.get(ToolHostsForwardingState),
-    machineMcpToolsPolicy: A,
-    deviceBridgeServerPresent: () => e.bridgeServer?.() !== undefined,
-    adoptsMcpTools: n,
-    sleepNoticeOn: g,
-    stillHereOn: v,
+    registry: backgroundCommands,
+    forwardingOff: options.toolState.get(ToolHostsForwardingState),
+    machineMcpToolsPolicy,
+    deviceBridgeServerPresent: () => options.bridgeServer?.() !== undefined,
+    adoptsMcpTools: adoptMcpOverChannelSwitchOn,
+    sleepNoticeOn: isSleepNoticeOnCached,
+    stillHereOn: isStillHereOnCached,
     passthroughAdoption: {
-      admitsName: L,
-      judgeSchema: (o) =>
-        R(o, {
+      admitsName: mayBePassthroughTool,
+      judgeSchema: (tool) =>
+        judgeToolSchemaSendability(tool, {
           normalizeEnabled: true,
           apiValidateEnabled: true,
         }),
     },
-    forwardedCalls: e.toolState.get(RemoteAskSeat),
-    transportFor: (o) =>
-      f({
-        host: () => r.handleFor(o),
-        signedOff: () => r.withdrawnThisLife(o),
-        leftFor: () => r.withdrawnFor(o),
-        sender: e.sender,
-        rechecked: () => k.checking(o),
+    forwardedCalls: options.toolState.get(RemoteAskSeat),
+    transportFor: (callId) =>
+      createSessionEventTransport({
+        host: () => backgroundCommands.handleFor(callId),
+        signedOff: () => backgroundCommands.withdrawnThisLife(callId),
+        leftFor: () => backgroundCommands.withdrawnFor(callId),
+        sender: options.sender,
+        rechecked: () => awayRecheck.checking(callId),
       }),
-    ...(e.sender.abandonServedCalls !== undefined && {
-      abandonCalls: (o, m) => e.sender.abandonServedCalls?.(o, m) ?? 0,
+    ...(options.sender.abandonServedCalls !== undefined && {
+      abandonCalls: (callId, args) => options.sender.abandonServedCalls?.(callId, args) ?? 0,
     }),
     telemetry: {
-      announce: (o) => {
-        w("tengu_remote_tools_announce", {
-          outcome: a(o.outcome),
-          served: o.served,
-          ignored: o.ignored,
-          passthrough: o.passthrough,
-          passthrough_adopted: o.passthrough_adopted,
-          passthrough_ignored: o.passthrough_ignored,
-          passthrough_declined: S(o.passthrough_declined),
-          device_bridge_server_present: o.device_bridge_server_present,
-          plumbing: o.plumbing,
-          displaced: o.displaced,
-          host_interface_version: o.host_interface?.version,
-          host_interface_min_version: o.host_interface?.min_version,
+      announce: (event) => {
+        logEvent("tengu_remote_tools_announce", {
+          outcome: fromEnum(event.outcome),
+          served: event.served,
+          ignored: event.ignored,
+          passthrough: event.passthrough,
+          passthrough_adopted: event.passthrough_adopted,
+          passthrough_ignored: event.passthrough_ignored,
+          passthrough_declined: fromEnumOpt(event.passthrough_declined),
+          device_bridge_server_present: event.device_bridge_server_present,
+          plumbing: event.plumbing,
+          displaced: event.displaced,
+          host_interface_version: event.host_interface?.version,
+          host_interface_min_version: event.host_interface?.min_version,
         });
-        if (o.displaced)
-          w("tengu_remote_tool_targets", {
-            event: T("displaced"),
-            source: T("session"),
+        if (event.displaced)
+          logEvent("tengu_remote_tool_targets", {
+            event: lit("displaced"),
+            source: lit("session"),
           });
-        switch (o.outcome) {
+        switch (event.outcome) {
           case "announced":
           case "withdrawn":
-            c("remote_tools_announce");
+            logFeatureOk("remote_tools_announce");
             break;
           case "not_ready":
-            b("remote_tools_announce", o.outcome);
+            logFeatureSad("remote_tools_announce", event.outcome);
             break;
           default:
-            E("remote_tools_announce", o.outcome);
+            logFeatureBad("remote_tools_announce", event.outcome);
         }
       },
-      published: (o) =>
-        w("tengu_remote_passthrough_published", {
-          count: o.count,
-          removed: o.removed,
-          reason: a(o.reason),
+      published: (event) =>
+        logEvent("tengu_remote_passthrough_published", {
+          count: event.count,
+          removed: event.removed,
+          reason: fromEnum(event.reason),
         }),
     },
   };
 }
+export { handleRemoteToolsAnnounce, createSessionChannelTools };

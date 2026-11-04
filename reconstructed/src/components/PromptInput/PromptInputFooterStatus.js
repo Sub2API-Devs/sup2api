@@ -8,7 +8,7 @@
  * pieces: chunk-18hwfzwa.js (29)
  * attribution: placement 29
  */
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { useAppState } from "../../state/AppState.js";
 import { selectRemoteSessionUrl_2 } from "../../commands/session/session.js";
 import { useIsFullscreen } from "../../ink/renderModeContext.js";
@@ -31,7 +31,7 @@ import { HIPAA_CONFIGURED_LABEL } from "../../services/policyLimits/complianceTa
 import { useShortcutDisplay } from "../../keybindings/useKeybindingDisplay.js";
 import { RemoteControlStatus, shortRcLabel } from "./RemoteControlPill.js";
 import { KeyboardShortcutHint } from "../design-system/KeyboardShortcutHint.js";
-import { DOWN_ARROW } from "../../utils/permissions/autoModeRulesPrompt.js";
+import { DOWN_ARROW } from "../../constants/figures.js";
 import { bunStringWidth } from "../../ink/stringWidth.js";
 import { DEFAULT_MATCH_TEXT_STYLE, INVERSE_MATCH_TEXT_STYLE } from "../../utils/highlightMatch.js";
 import {
@@ -47,28 +47,29 @@ import { useStoreSelector } from "../../hooks/useStoreSelector.js";
 import { useHasRenderHooks } from "../pluginUi/render/RenderInstance.js";
 import { useIdeConnectionStatus } from "../../hooks/useIdeConnectionStatus.js";
 import { isRemoteSessionAvailable } from "../../remote/remoteMode.js";
-import { Q, init_react_production } from "../../../vendor/react/cjs/react.production.js";
+import { useMemo, init_react_production } from "../../../vendor/react/cjs/react.production.js";
 import { IdeStatusIndicator } from "../IdeStatusIndicator.js";
 import { sequential } from "../../utils/sequential.js";
 import { truncateToWidth } from "../../utils/format.js";
 import { EDITOR_MODES } from "../../utils/configConstants.js";
 import { checkHasTrustDialogAccepted } from "../../utils/config.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-18hwfzwa.js:795209-795259 placement = _temp5 (1)
 function selectRemoteConnectionStatus(s) {
   return s.remoteConnectionStatus;
 }
 //@ chunk-18hwfzwa.js:795259-795295 placement
-function selectPrStatus(ao) {
-  return ao.prStatus;
+function selectPrStatus(state) {
+  return state.prStatus;
 }
 //@ chunk-18hwfzwa.js:795295-795334 placement
-function selectPrNeedsAuth(co) {
-  return co.prNeedsAuth;
+function selectPrNeedsAuth(state) {
+  return state.prNeedsAuth;
 }
 //@ chunk-18hwfzwa.js:795334-795379 placement
-function selectSlackTagConnected_2(bo) {
-  return bo.slackTagConnected;
+function selectSlackTagConnected_2(state) {
+  return state.slackTagConnected;
 }
 //@ chunk-18hwfzwa.js:795379-795615 placement
 function ideStatusSuffix(appState) {
@@ -93,53 +94,53 @@ function ideStatusSuffix(appState) {
 }
 //@ chunk-18hwfzwa.js:795615-797818 placement
 function FooterStatusLine(props) {
-  let $ = w(42);
+  let $ = useMemoCache(42);
   let { debug, bridgeSelected, modeLabels } = props;
   let appState = useAppState(selectRemoteSessionUrl_2);
   let appState_2 = useAppState(selectRemoteConnectionStatus);
   let isFullscreen = useIsFullscreen();
-  let Be = BridgeStatusIndicator(!isFullscreen);
+  let bridgeStatus = BridgeStatusIndicator(!isFullscreen);
   let hasComplianceTaint = useHasComplianceTaint("hipaa");
   useForceRender();
-  let ze;
+  let prBadgesEnabled;
   if ($[0] === MEMO_CACHE_SENTINEL) {
-    ze = getFeatureValue_CACHED_MAY_BE_STALE("tengu_copper_thistle", false);
-    $[0] = ze;
-  } else ze = $[0];
-  let Xe = ze;
+    prBadgesEnabled = getFeatureValue_CACHED_MAY_BE_STALE("tengu_copper_thistle", false);
+    $[0] = prBadgesEnabled;
+  } else prBadgesEnabled = $[0];
+  let prBadgesFlag = prBadgesEnabled;
   let appState_3 = useAppState(selectPrStatus);
-  let appState_4 = useAppState(selectPrNeedsAuth);
-  let At = Xe && (appState_3 !== null || appState_4);
+  let hint = useAppState(selectPrNeedsAuth);
+  let showPrStatus = prBadgesFlag && (appState_3 !== null || hint);
   useAppState(selectSlackTagConnected_2);
-  let It;
+  let segments;
   if (
     $[1] !== bridgeSelected ||
-    $[2] !== Be ||
+    $[2] !== bridgeStatus ||
     $[3] !== debug ||
     $[4] !== hasComplianceTaint ||
-    $[5] !== appState_4 ||
+    $[5] !== hint ||
     $[6] !== appState_3 ||
     $[7] !== appState_2 ||
     $[8] !== appState ||
-    $[9] !== At
+    $[9] !== showPrStatus
   ) {
-    It = [];
+    segments = [];
     if (hasComplianceTaint) {
-      let Ot;
+      let hipaaBadge;
       if ($[11] === MEMO_CACHE_SENTINEL) {
-        Ot = jsxProd_default(PermissionPromptPendingText, {}, "hipaa");
-        $[11] = Ot;
-      } else Ot = $[11];
-      It.push(Ot);
+        hipaaBadge = jsxProd_default(PermissionPromptPendingText, {}, "hipaa");
+        $[11] = hipaaBadge;
+      } else hipaaBadge = $[11];
+      segments.push(hipaaBadge);
     }
     if (appState) {
-      let Ot;
+      let ideSuffix;
       if ($[12] !== appState_2) {
-        Ot = ideStatusSuffix(appState_2);
+        ideSuffix = ideStatusSuffix(appState_2);
         $[12] = appState_2;
-        $[13] = Ot;
-      } else Ot = $[13];
-      let { suffix, color } = Ot;
+        $[13] = ideSuffix;
+      } else ideSuffix = $[13];
+      let { suffix, color } = ideSuffix;
       let children;
       if ($[14] !== appState || $[15] !== suffix) {
         children = jsxProd_default_2(Link, {
@@ -150,9 +151,9 @@ function FooterStatusLine(props) {
         $[15] = suffix;
         $[16] = children;
       } else children = $[16];
-      let oo;
+      let ideElement;
       if ($[17] !== color || $[18] !== children) {
-        oo = jsxProd_default(
+        ideElement = jsxProd_default(
           Text,
           {
             color,
@@ -163,14 +164,14 @@ function FooterStatusLine(props) {
         );
         $[17] = color;
         $[18] = children;
-        $[19] = oo;
-      } else oo = $[19];
-      It.push(oo);
+        $[19] = ideElement;
+      } else ideElement = $[19];
+      segments.push(ideElement);
     }
     if (debug) {
-      let Ot;
+      let ideText;
       if ($[20] === MEMO_CACHE_SENTINEL) {
-        Ot = jsxProd_default(
+        ideText = jsxProd_default(
           Text,
           {
             color: "warning",
@@ -179,37 +180,37 @@ function FooterStatusLine(props) {
           },
           "debug",
         );
-        $[20] = Ot;
-      } else Ot = $[20];
-      It.push(Ot);
+        $[20] = ideText;
+      } else ideText = $[20];
+      segments.push(ideText);
     }
-    if (Be !== null) {
-      let Ot;
-      if ($[21] !== bridgeSelected || $[22] !== Be) {
-        Ot = jsxProd_default(
+    if (bridgeStatus !== null) {
+      let bridgeElement;
+      if ($[21] !== bridgeSelected || $[22] !== bridgeStatus) {
+        bridgeElement = jsxProd_default(
           FooterOpenSelected,
           {
-            status: Be,
+            status: bridgeStatus,
             bridgeSelected,
           },
           "bridge",
         );
         $[21] = bridgeSelected;
-        $[22] = Be;
-        $[23] = Ot;
-      } else Ot = $[23];
-      It.push(Ot);
+        $[22] = bridgeStatus;
+        $[23] = bridgeElement;
+      } else bridgeElement = $[23];
+      segments.push(bridgeElement);
     }
-    if (At) {
+    if (showPrStatus) {
       if (appState_3) {
-        let Ot;
+        let prBadge;
         if (
           $[24] !== appState_3.kind ||
           $[25] !== appState_3.number ||
           $[26] !== appState_3.reviewState ||
           $[27] !== appState_3.url
         ) {
-          Ot = jsxProd_default(
+          prBadge = jsxProd_default(
             PrBadge,
             {
               number: appState_3.number,
@@ -223,19 +224,19 @@ function FooterStatusLine(props) {
           $[25] = appState_3.number;
           $[26] = appState_3.reviewState;
           $[27] = appState_3.url;
-          $[28] = Ot;
-        } else Ot = $[28];
-        It.push(Ot);
-      } else if (appState_4) {
+          $[28] = prBadge;
+        } else prBadge = $[28];
+        segments.push(prBadge);
+      } else if (hint) {
         let children;
-        if ($[29] !== appState_4) {
-          children = prStatusHint(appState_4);
-          $[29] = appState_4;
+        if ($[29] !== hint) {
+          children = prStatusHint(hint);
+          $[29] = hint;
           $[30] = children;
         } else children = $[30];
-        let Lt;
+        let prHintText;
         if ($[31] !== children) {
-          Lt = jsxProd_default(
+          prHintText = jsxProd_default(
             Text,
             {
               dimColor: true,
@@ -244,132 +245,132 @@ function FooterStatusLine(props) {
             "pr",
           );
           $[31] = children;
-          $[32] = Lt;
-        } else Lt = $[32];
-        It.push(Lt);
+          $[32] = prHintText;
+        } else prHintText = $[32];
+        segments.push(prHintText);
       }
     }
     $[1] = bridgeSelected;
-    $[2] = Be;
+    $[2] = bridgeStatus;
     $[3] = debug;
     $[4] = hasComplianceTaint;
-    $[5] = appState_4;
+    $[5] = hint;
     $[6] = appState_3;
     $[7] = appState_2;
     $[8] = appState;
-    $[9] = At;
-    $[10] = It;
-  } else It = $[10];
-  let Xt = actionKeysNamespace.useHasRenderHooks("SessionMode");
-  let Ot;
-  if ($[33] !== Xt || $[34] !== modeLabels || $[35] !== It.length) {
-    Ot =
-      modeLabels.length > 0 || Xt
+    $[9] = showPrStatus;
+    $[10] = segments;
+  } else segments = $[10];
+  let hasSessionModeHooks = actionKeysNamespace.useHasRenderHooks("SessionMode");
+  let sessionModesElement;
+  if ($[33] !== hasSessionModeHooks || $[34] !== modeLabels || $[35] !== segments.length) {
+    sessionModesElement =
+      modeLabels.length > 0 || hasSessionModeHooks
         ? jsxProd_default(SessionModesText, {
             modes: modeLabels,
-            separated: It.length > 0,
+            separated: segments.length > 0,
           })
         : null;
-    $[33] = Xt;
+    $[33] = hasSessionModeHooks;
     $[34] = modeLabels;
-    $[35] = It.length;
-    $[36] = Ot;
-  } else Ot = $[36];
-  let io = Ot;
-  if (It.length === 0 && io === null) {
+    $[35] = segments.length;
+    $[36] = sessionModesElement;
+  } else sessionModesElement = $[36];
+  let sessionModesNode = sessionModesElement;
+  if (segments.length === 0 && sessionModesNode === null) {
     return null;
   }
-  let Lt;
-  if ($[37] !== It) {
-    Lt = jsxProd_default(Byline, {
-      children: It,
+  let segmentsLine;
+  if ($[37] !== segments) {
+    segmentsLine = jsxProd_default(Byline, {
+      children: segments,
     });
-    $[37] = It;
-    $[38] = Lt;
-  } else Lt = $[38];
-  let oo;
-  if ($[39] !== io || $[40] !== Lt) {
-    oo = jsxProd_default_2(Box, {
+    $[37] = segments;
+    $[38] = segmentsLine;
+  } else segmentsLine = $[38];
+  let statusRow;
+  if ($[39] !== sessionModesNode || $[40] !== segmentsLine) {
+    statusRow = jsxProd_default_2(Box, {
       flexShrink: 0,
-      children: [Lt, io],
+      children: [segmentsLine, sessionModesNode],
     });
-    $[39] = io;
-    $[40] = Lt;
-    $[41] = oo;
-  } else oo = $[41];
-  return oo;
+    $[39] = sessionModesNode;
+    $[40] = segmentsLine;
+    $[41] = statusRow;
+  } else statusRow = $[41];
+  return statusRow;
 }
 //@ chunk-18hwfzwa.js:797818-797942 placement
 function PermissionPromptPendingText() {
-  let $ = w(1);
-  let x;
+  let $ = useMemoCache(1);
+  let hipaaElement;
   if ($[0] === MEMO_CACHE_SENTINEL) {
-    x = jsxProd_default(Text, {
+    hipaaElement = jsxProd_default(Text, {
       color: "permission",
       wrap: "truncate",
       children: HIPAA_CONFIGURED_LABEL,
     });
-    $[0] = x;
-  } else x = $[0];
-  return x;
+    $[0] = hipaaElement;
+  } else hipaaElement = $[0];
+  return hipaaElement;
 }
 //@ chunk-18hwfzwa.js:797942-798349 placement
 /**
  * 页脚中显示会话模式（以 & 连接）的组件，通过动作键渲染钩子挂载，可加前导分隔点。
  */
 var SessionModesText = (props) => {
-  let L = w(5);
+  let $ = useMemoCache(5);
   let { modes, separated } = props;
-  let ee;
-  let ke;
-  if (L[0] !== modes) {
-    ee = () => ({
+  let buildInput;
+  let inputDeps;
+  if ($[0] !== modes) {
+    buildInput = () => ({
       requestId: "session-mode",
       props: {
         modes,
       },
     });
-    ke = [modes];
-    L[0] = modes;
-    L[1] = ee;
-    L[2] = ke;
+    inputDeps = [modes];
+    $[0] = modes;
+    $[1] = buildInput;
+    $[2] = inputDeps;
   } else {
-    ee = L[1];
-    ke = L[2];
+    buildInput = $[1];
+    inputDeps = $[2];
   }
-  const Re = actionKeysNamespace.useRenderInput("SessionMode", ee, ke);
-  let Be;
-  if (L[3] !== separated) {
-    Be = (He) =>
-      He.props.modes.length === 0
+  const renderInput = actionKeysNamespace.useRenderInput("SessionMode", buildInput, inputDeps);
+  let renderHook;
+  if ($[3] !== separated) {
+    renderHook = (args) =>
+      args.props.modes.length === 0
         ? null
         : jsxProd_default_2(Text, {
             dimColor: true,
-            children: [separated ? " \xB7 " : "", He.props.modes.join(" & ")],
+            children: [separated ? " \xB7 " : "", args.props.modes.join(" & ")],
           });
-    L[3] = separated;
-    L[4] = Be;
-  } else Be = L[4];
-  return actionKeysNamespace.useRenderHook(Re, Be);
+    $[3] = separated;
+    $[4] = renderHook;
+  } else renderHook = $[4];
+  return actionKeysNamespace.useRenderHook(renderInput, renderHook);
 };
 //@ chunk-18hwfzwa.js:798349-798827 placement
 function FooterOpenSelected(props) {
-  let $ = w(9);
+  let $ = useMemoCache(9);
   let { status, bridgeSelected } = props;
   let shortcutDisplay = useShortcutDisplay("footer:openSelected", "Footer", "enter");
-  let ke;
+  let statusElement;
   if ($[0] !== bridgeSelected || $[1] !== status) {
-    ke = jsxProd_default(RemoteControlStatus, {
+    statusElement = jsxProd_default(RemoteControlStatus, {
       status,
       highlighted: bridgeSelected,
     });
     $[0] = bridgeSelected;
     $[1] = status;
-    $[2] = ke;
-  } else ke = $[2];
-  let Re;
+    $[2] = statusElement;
+  } else statusElement = $[2];
+  let openHint;
   if ($[3] !== bridgeSelected || $[4] !== shortcutDisplay) {
-    Re =
+    openHint =
       bridgeSelected &&
       shortcutDisplay &&
       jsxProd_default_2(Text, {
@@ -385,32 +386,37 @@ function FooterOpenSelected(props) {
       });
     $[3] = bridgeSelected;
     $[4] = shortcutDisplay;
-    $[5] = Re;
-  } else Re = $[5];
-  let Be;
-  if ($[6] !== ke || $[7] !== Re) {
-    Be = jsxProd_default_2(Box, {
-      children: [ke, Re],
+    $[5] = openHint;
+  } else openHint = $[5];
+  let rowElement;
+  if ($[6] !== statusElement || $[7] !== openHint) {
+    rowElement = jsxProd_default_2(Box, {
+      children: [statusElement, openHint],
     });
-    $[6] = ke;
-    $[7] = Re;
-    $[8] = Be;
-  } else Be = $[8];
-  return Be;
+    $[6] = statusElement;
+    $[7] = openHint;
+    $[8] = rowElement;
+  } else rowElement = $[8];
+  return rowElement;
 }
 //@ chunk-18hwfzwa.js:798827-798873 placement = SEP_WIDTH (1)
-var DOWN_ARROW_PREFIX = `${DOWN_ARROW} `;
-var DOWN_ARROW_PREFIX_WIDTH = bunStringWidth(DOWN_ARROW_PREFIX);
-var SEPARATOR_WIDTH = bunStringWidth(" \xB7 ");
+var DOWN_ARROW_PREFIX; // deferred: uses BLACK_CIRCLE (../../constants/figures.js) of its import cycle while loading; runs once the cycle is complete
+var DOWN_ARROW_PREFIX_WIDTH;
+var SEPARATOR_WIDTH;
+deferInit("chunk-18hwfzwa.js:798827", () => {
+  DOWN_ARROW_PREFIX = `${DOWN_ARROW} `;
+  DOWN_ARROW_PREFIX_WIDTH = bunStringWidth(DOWN_ARROW_PREFIX);
+  SEPARATOR_WIDTH = bunStringWidth(" \xB7 ");
+});
 //@ chunk-18hwfzwa.js:798873-798958 placement
-function rowTotalWidth(h) {
-  let x = 0;
-  for (let D of h) x += D.width;
-  return x + Math.max(0, h.length - 1) * SEPARATOR_WIDTH;
+function rowTotalWidth(segments) {
+  let total = 0;
+  for (let segment of segments) total += segment.width;
+  return total + Math.max(0, segments.length - 1) * SEPARATOR_WIDTH;
 }
 //@ chunk-18hwfzwa.js:799024-799102 placement
-function footerStatusStyle(h, colorless, color) {
-  if (!h) return DEFAULT_MATCH_TEXT_STYLE;
+function footerStatusStyle(isMatched, colorless, color) {
+  if (!isMatched) return DEFAULT_MATCH_TEXT_STYLE;
   return colorless
     ? INVERSE_MATCH_TEXT_STYLE
     : {
@@ -424,11 +430,11 @@ function footerStatusStyle(h, colorless, color) {
  * 页脚状态行：可选的前导符号（按下时变亮）加分隔排列的段，单行截断。
  */
 function FooterStatusRow(props) {
-  let $ = w(11);
+  let $ = useMemoCache(11);
   let { left, width, leading, leadingPressed } = props;
-  let Re;
+  let leadingArrow;
   if ($[0] !== leading || $[1] !== leadingPressed) {
-    Re =
+    leadingArrow =
       leading &&
       jsxProd_default(Text, {
         dimColor: !leadingPressed,
@@ -436,29 +442,29 @@ function FooterStatusRow(props) {
       });
     $[0] = leading;
     $[1] = leadingPressed;
-    $[2] = Re;
-  } else Re = $[2];
-  let Be;
+    $[2] = leadingArrow;
+  } else leadingArrow = $[2];
+  let leftElement;
   if ($[3] !== left) {
-    Be = jsxProd_default(Byline, {
+    leftElement = jsxProd_default(Byline, {
       children: left,
     });
     $[3] = left;
-    $[4] = Be;
-  } else Be = $[4];
+    $[4] = leftElement;
+  } else leftElement = $[4];
   let children;
-  if ($[5] !== Re || $[6] !== Be) {
+  if ($[5] !== leadingArrow || $[6] !== leftElement) {
     children = jsxProd_default_2(Text, {
       wrap: "truncate-end",
-      children: [Re, Be],
+      children: [leadingArrow, leftElement],
     });
-    $[5] = Re;
-    $[6] = Be;
+    $[5] = leadingArrow;
+    $[6] = leftElement;
     $[7] = children;
   } else children = $[7];
-  let We;
+  let rowElement;
   if ($[8] !== children || $[9] !== width) {
-    We = jsxProd_default(Box, {
+    rowElement = jsxProd_default(Box, {
       height: 1,
       width,
       overflow: "hidden",
@@ -466,29 +472,33 @@ function FooterStatusRow(props) {
     });
     $[8] = children;
     $[9] = width;
-    $[10] = We;
-  } else We = $[10];
-  return We;
+    $[10] = rowElement;
+  } else rowElement = $[10];
+  return rowElement;
 }
 //@ chunk-18hwfzwa.js:799620-799716 placement
-var PRINTABLE_SYMBOL_RE = /^[\u0021-\u007E\u00A2\u00A3\u00A5\u20AC]+$/u;
-var regExp_4 = new RegExp(`(?:${STANDALONE_SYMBOL_PATTERN}\\p{M}*)+`, "gu");
+var PRINTABLE_SYMBOL_RE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var regExp_4;
+deferInit("chunk-18hwfzwa.js:799620", () => {
+  PRINTABLE_SYMBOL_RE = /^[\u0021-\u007E\u00A2\u00A3\u00A5\u20AC]+$/u;
+  regExp_4 = new RegExp(`(?:${STANDALONE_SYMBOL_PATTERN}\\p{M}*)+`, "gu");
+});
 //@ chunk-18hwfzwa.js:799716-799954 placement
 function normalizeIdeSelectionLabel(label) {
   return cleanForDisplay(
     label.replace(BLANK_LOOKALIKE_RE, " ").replace(INVISIBLE_SYMBOL_RE, " ").replace(/\s+/gu, " "),
   )
-    .replace(regExp_6, (x, D) => (PRINTABLE_SYMBOL_RE.test(x.slice(D.length)) ? x : D))
+    .replace(regExp_6, (match, lead) => (PRINTABLE_SYMBOL_RE.test(match.slice(lead.length)) ? match : lead))
     .replace(COMBINING_MARK_RE, "$1")
-    .replace(regExp_4, (x, D, L) =>
-      isSpaceOrOutOfRange(L, D - 1) || isSpaceOrOutOfRange(L, D + x.length) ? "" : x,
+    .replace(regExp_4, (match, offset, text) =>
+      isSpaceOrOutOfRange(text, offset - 1) || isSpaceOrOutOfRange(text, offset + match.length) ? "" : match,
     )
     .replace(/\s+/gu, " ")
     .trim();
 }
 //@ chunk-18hwfzwa.js:799954-800008 placement
-function isSpaceOrOutOfRange(h, x) {
-  return x < 0 || x >= h.length || h[x] === " ";
+function isSpaceOrOutOfRange(text, index) {
+  return index < 0 || index >= text.length || text[index] === " ";
 }
 //@ chunk-18hwfzwa.js:800008-800408 placement
 /**
@@ -524,79 +534,79 @@ var IDE_STATUS_SUFFIXES = {
 function FooterIndicators({ width, chrome, initialMcpClients, bridgeSelected, ideSelectionSelected }) {
   let mergedClients = useMergedClients(
     initialMcpClients,
-    useAppState((so) => so.mcp.clients),
+    useAppState((appState) => appState.mcp.clients),
   );
-  let Re = useStoreSelector(chrome, (so) => so.ideSelection);
-  let Be = useAppState((so) => so.viewingAgentTaskId !== undefined);
-  let He = useAppState((so) => so.remoteSessionUrl);
-  let We = useAppState((so) => so.remoteConnectionStatus);
-  let ze = BridgeStatusIndicator(true);
+  let ideSelection = useStoreSelector(chrome, (chromeState) => chromeState.ideSelection);
+  let isViewingAgent = useAppState((appState) => appState.viewingAgentTaskId !== undefined);
+  let remoteSessionUrl = useAppState((appState) => appState.remoteSessionUrl);
+  let remoteConnectionStatus = useAppState((appState) => appState.remoteConnectionStatus);
+  let bridgeStatus = BridgeStatusIndicator(true);
   let hasComplianceTaint = useHasComplianceTaint("hipaa");
   let hasRenderHooks = useHasRenderHooks("SessionMode");
   let ideConnectionStatus = useIdeConnectionStatus(mergedClients);
-  let At = isRemoteSessionAvailable();
-  let status = ideConnectionStatus.ideName !== null && !At ? ideConnectionStatus.status : null;
-  let Ot = Q(
+  let isRemote = isRemoteSessionAvailable();
+  let status = ideConnectionStatus.ideName !== null && !isRemote ? ideConnectionStatus.status : null;
+  let ideSegment = useMemo(
     () =>
       IdeStatusIndicator({
         ideStatus: ideConnectionStatus.status,
         ideName: ideConnectionStatus.ideName,
-        isRemoteWorkspace: At,
-        isViewingAgent: Be,
-        ideSelection: Re,
+        isRemoteWorkspace: isRemote,
+        isViewingAgent,
+        ideSelection,
       }),
-    [ideConnectionStatus.status, ideConnectionStatus.ideName, At, Be, Re],
+    [ideConnectionStatus.status, ideConnectionStatus.ideName, isRemote, isViewingAgent, ideSelection],
   );
-  let Et = sequential.level === 0;
-  let Dt = null;
+  let colorless = sequential.level === 0;
+  let ideItem = null;
   if (status !== null) {
-    let so = `ide${Et ? BRIDGE_STATUS_SUFFIXES[status] : ""}`;
-    let po = footerStatusStyle(ideSelectionSelected, Et, BRIDGE_STATUS_COLORS[status]);
-    Dt = {
+    let ideLabel = `ide${colorless ? BRIDGE_STATUS_SUFFIXES[status] : ""}`;
+    let ideStyle = footerStatusStyle(ideSelectionSelected, colorless, BRIDGE_STATUS_COLORS[status]);
+    ideItem = {
       key: "ide",
-      width: bunStringWidth(so),
+      width: bunStringWidth(ideLabel),
       node: jsxProd_default(
         Text,
         {
-          ...po,
-          color: po.color ?? BRIDGE_STATUS_COLORS[status],
-          children: so,
+          ...ideStyle,
+          color: ideStyle.color ?? BRIDGE_STATUS_COLORS[status],
+          children: ideLabel,
         },
         "ide",
       ),
     };
   }
-  let Lt = [];
-  if (ze !== null) {
-    let so = shortRcLabel(ze);
-    Lt.push({
+  let extraItems = [];
+  if (bridgeStatus !== null) {
+    let rcLabel = shortRcLabel(bridgeStatus);
+    extraItems.push({
       key: "bridge",
-      width: bunStringWidth(so),
+      width: bunStringWidth(rcLabel),
       node: jsxProd_default(
         RemoteControlStatus,
         {
-          status: ze,
+          status: bridgeStatus,
           compact: {
-            label: so,
-            ink: footerStatusStyle(bridgeSelected, Et, ze.color),
+            label: rcLabel,
+            ink: footerStatusStyle(bridgeSelected, colorless, bridgeStatus.color),
           },
         },
         "bridge",
       ),
     });
   }
-  if (He) {
-    let so = `cloud${Et ? IDE_STATUS_SUFFIXES[We] : ""}`;
-    Lt.push({
+  if (remoteSessionUrl) {
+    let cloudLabel = `cloud${colorless ? IDE_STATUS_SUFFIXES[remoteConnectionStatus] : ""}`;
+    extraItems.push({
       key: "cloud",
-      width: bunStringWidth(so),
+      width: bunStringWidth(cloudLabel),
       node: jsxProd_default(
         Text,
         {
-          color: IDE_STATUS_COLORS[We],
+          color: IDE_STATUS_COLORS[remoteConnectionStatus],
           children: jsxProd_default(Link, {
-            url: He,
-            children: so,
+            url: remoteSessionUrl,
+            children: cloudLabel,
           }),
         },
         "cloud",
@@ -604,98 +614,102 @@ function FooterIndicators({ width, chrome, initialMcpClients, bridgeSelected, id
     });
   }
   if (hasComplianceTaint)
-    Lt.push({
+    extraItems.push({
       key: "hipaa",
       width: bunStringWidth(HIPAA_CONFIGURED_LABEL),
       node: jsxProd_default(PermissionPromptPendingText, {}, "hipaa"),
     });
   let floored = Math.floor(width * FOOTER_FILENAME_SHARE);
-  let Xt;
-  if (Dt === null || Ot === null) Xt = Dt === null ? Lt : [Dt, ...Lt];
+  let items;
+  if (ideItem === null || ideSegment === null)
+    items = ideItem === null ? extraItems : [ideItem, ...extraItems];
   else {
-    let so = withIdeSelectionSegment(Dt, Ot, Lt, floored);
-    Xt =
-      rowTotalWidth(so) <= floored
-        ? so
+    let combinedItems = withIdeSelectionSegment(ideItem, ideSegment, extraItems, floored);
+    items =
+      rowTotalWidth(combinedItems) <= floored
+        ? combinedItems
         : withIdeSelectionSegment(
-            Dt,
-            Ot,
-            Lt.filter((po) => po.key !== "cloud"),
+            ideItem,
+            ideSegment,
+            extraItems.filter((item) => item.key !== "cloud"),
             floored,
           );
   }
-  let io = hasRenderHooks
+  let modesText = hasRenderHooks
     ? jsxProd_default(SessionModesText, {
         modes: EMPTY_SEGMENTS,
-        separated: Xt.length > 0,
+        separated: items.length > 0,
       })
     : null;
-  if (Xt.length === 0 && io === null) return null;
+  if (items.length === 0 && modesText === null) return null;
   return jsxProd_default_2(Box, {
     flexShrink: 0,
     children: [
       jsxProd_default(Box, {
-        maxWidth: Math.max(floored, rowTotalWidth(Xt)),
+        maxWidth: Math.max(floored, rowTotalWidth(items)),
         children: jsxProd_default(Text, {
           wrap: "truncate-end",
           children: jsxProd_default(Byline, {
-            children: Xt.map((so) => so.node),
+            children: items.map((item) => item.node),
           }),
         }),
       }),
-      io,
+      modesText,
     ],
   });
 }
 //@ chunk-18hwfzwa.js:801898-802132 placement
-function withIdeSelectionSegment(h, x, D, L) {
-  let ee = L - rowTotalWidth([h, ...D]) - SEPARATOR_WIDTH;
-  let ke =
-    x.kind === "fileName"
+function withIdeSelectionSegment(leading, selection, trailing, columns) {
+  let availableWidth = columns - rowTotalWidth([leading, ...trailing]) - SEPARATOR_WIDTH;
+  let labelText =
+    selection.kind === "fileName"
       ? truncateToWidth(
-          normalizeIdeSelectionLabel(x.label),
-          Math.max(MIN_FILENAME_WIDTH, Math.min(MAX_FILENAME_WIDTH, ee)),
+          normalizeIdeSelectionLabel(selection.label),
+          Math.max(MIN_FILENAME_WIDTH, Math.min(MAX_FILENAME_WIDTH, availableWidth)),
         )
-      : x.label;
-  let Re = {
+      : selection.label;
+  let segment = {
     key: "ide-selection",
-    width: bunStringWidth(ke),
+    width: bunStringWidth(labelText),
     node: jsxProd_default(
       Text,
       {
         dimColor: true,
-        children: ke,
+        children: labelText,
       },
       "ide-selection",
     ),
   };
-  return [h, Re, ...D];
+  return [leading, segment, ...trailing];
 }
 //@ chunk-18hwfzwa.js:802132-802136 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:802132", () => {
+  init_react_production();
+});
 //@ chunk-18hwfzwa.js:802136-802190 placement
-function selectToolPermissionContextMode4(vo) {
-  return vo.toolPermissionContext.mode;
+function selectToolPermissionContextMode4(state) {
+  return state.toolPermissionContext.mode;
 }
 //@ chunk-18hwfzwa.js:802190-802268 placement
-function selectToolPermissionContextAdditionalWorkingDirectories(Yo) {
-  return Yo.toolPermissionContext.additionalWorkingDirectories;
+function selectToolPermissionContextAdditionalWorkingDirectories(state) {
+  return state.toolPermissionContext.additionalWorkingDirectories;
 }
 //@ chunk-18hwfzwa.js:802268-802308 placement
-function selectFastMode_2(kn) {
-  return kn.fastMode ?? false;
+function selectFastMode_2(state) {
+  return state.fastMode ?? false;
 }
 //@ chunk-18hwfzwa.js:802308-802351 placement
-function selectThinkingEnabled(Fn) {
-  return Fn.thinkingEnabled;
+function selectThinkingEnabled(state) {
+  return state.thinkingEnabled;
 }
 //@ chunk-18hwfzwa.js:802351-802387 placement
-function selectPrStatus2(bn) {
-  return bn.prStatus;
+function selectPrStatus2(state) {
+  return state.prStatus;
 }
 //@ chunk-18hwfzwa.js:802387-802432 placement
-function selectRemoteSessionName(Go) {
-  return Go.remoteSessionName;
+function selectRemoteSessionName(state) {
+  return state.remoteSessionName;
 }
 //@ chunk-18hwfzwa.js:802432-802459 placement
 function getEditorModes() {
@@ -706,13 +720,13 @@ function isProjectTrustAccepted() {
   return checkHasTrustDialogAccepted();
 }
 //@ chunk-18hwfzwa.js:802486-802616 placement
-function capStatuslineIssueCount(hn) {
-  return hn.setupIssues.statuslineIssueCount === 1
-    ? hn
+function capStatuslineIssueCount(state) {
+  return state.setupIssues.statuslineIssueCount === 1
+    ? state
     : {
-        ...hn,
+        ...state,
         setupIssues: {
-          ...hn.setupIssues,
+          ...state.setupIssues,
           statuslineIssueCount: 1,
         },
       };

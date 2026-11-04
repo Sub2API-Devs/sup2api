@@ -8,14 +8,14 @@
  * pieces: chunk-00qhwn8e.js (9), chunk-ygke3hz8.js (1)
  * attribution: sole-consumer 4, placement 2, layout 3, fingerprint 1
  */
-import { init_react_production, y, R } from "../../../vendor/react/cjs/react.production.js";
+import { init_react_production, useState, useRef } from "../../../vendor/react/cjs/react.production.js";
 import { isNotProtoKey } from "../../utils/commandPredicates.js";
 import {
   jsxProd_default,
   jsxProd_default_2,
 } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { StatusIcon } from "../../components/design-system/StatusIcon.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { useTheme_2 } from "../../components/design-system/ThemeProvider.js";
 import {
   sortSkillsForListing,
@@ -59,19 +59,24 @@ import { getRemoteCaps } from "../../remote/remoteMode.js";
 import { SkillsMenu_2 } from "../../components/skills/SkillsMenu.js";
 import { bytesPerTokenForModel } from "../../utils/model/modelDisplay.js";
 
+//@ chunk-ygke3hz8.js:528-583 placement
+/**
+ * 技能状态的四个取值（on/name-only/user-invocable-only/off），/skills 与插件页循环切换用。
+ */
+var SKILL_STATE_OPTIONS = ["on", "name-only", "user-invocable-only", "off"];
 //@ chunk-00qhwn8e.js:19170-19174 sole-consumer
 init_react_production();
 //@ chunk-00qhwn8e.js:19174-19200 sole-consumer
-function negateValue(fo) {
-  return !fo;
+function negateValue(value) {
+  return !value;
 }
 //@ chunk-00qhwn8e.js:19200-19231 sole-consumer
-function skillNameOf(uo) {
-  return uo.name;
+function skillNameOf(command) {
+  return command.name;
 }
 //@ chunk-00qhwn8e.js:19231-19262 sole-consumer
-function isStorableSkillName(po) {
-  return !isNotProtoKey(po);
+function isStorableSkillName(name) {
+  return !isNotProtoKey(name);
 }
 //@ chunk-00qhwn8e.js:19262-19306 placement = _temp0 (1)
 function isPluginSkill(a_5) {
@@ -105,183 +110,191 @@ var SKILL_STATE_DISPLAY = {
   },
 };
 //@ chunk-00qhwn8e.js:19551-19655 layout
-function lockReasonText(C) {
-  if (!C) return "";
-  return C.source === "reserved-name" ? "reserved name" : `locked by ${C.source}`;
+function lockReasonText(lock) {
+  if (!lock) return "";
+  return lock.source === "reserved-name" ? "reserved name" : `locked by ${lock.source}`;
 }
 //@ chunk-00qhwn8e.js:19655-27856 layout
 /**
  * /skills 菜单：列出技能、上下文开销、排序、搜索与开关状态。
  */
 function SkillsMenu(props) {
-  let t = w(144);
+  let $ = useMemoCache(144);
   let { onExit, commands, bytesPerToken } = props;
   let { storageV5 } = useTheme_2();
-  let [k, ve] = y(false);
-  let J;
-  if (t[0] !== commands || t[1] !== k) {
-    J = sortSkillsForListing(commands, {
-      sortByTokens: k,
+  let [sortByTokens, setSortByTokens] = useState(false);
+  let sortedCommands;
+  if ($[0] !== commands || $[1] !== sortByTokens) {
+    sortedCommands = sortSkillsForListing(commands, {
+      sortByTokens,
     });
-    t[0] = commands;
-    t[1] = k;
-    t[2] = J;
-  } else J = t[2];
-  let commands_2 = J;
-  let X;
-  if (t[3] !== commands || t[4] !== commands_2) {
-    X = describeSyncedSkillConflicts(commands_2, commands);
-    t[3] = commands;
-    t[4] = commands_2;
-    t[5] = X;
-  } else X = t[5];
-  let u = X;
-  let Ce;
-  if (t[6] === MEMO_CACHE_SENTINEL) {
-    Ce = localSkillOverrides();
-    t[6] = Ce;
-  } else Ce = t[6];
-  let localOverrides = Ce;
-  let Ye;
-  if (t[7] !== commands_2) {
-    Ye = buildSkillOverrideContext(commands_2, localOverrides);
-    t[7] = commands_2;
-    t[8] = Ye;
-  } else Ye = t[8];
-  let context = Ye;
+    $[0] = commands;
+    $[1] = sortByTokens;
+    $[2] = sortedCommands;
+  } else sortedCommands = $[2];
+  let commands_2 = sortedCommands;
+  let conflictWarning;
+  if ($[3] !== commands || $[4] !== commands_2) {
+    conflictWarning = describeSyncedSkillConflicts(commands_2, commands);
+    $[3] = commands;
+    $[4] = commands_2;
+    $[5] = conflictWarning;
+  } else conflictWarning = $[5];
+  let conflictText = conflictWarning;
+  let localOverrides;
+  if ($[6] === MEMO_CACHE_SENTINEL) {
+    localOverrides = localSkillOverrides();
+    $[6] = localOverrides;
+  } else localOverrides = $[6];
+  let localOverrides_2 = localOverrides;
+  let overrideContext;
+  if ($[7] !== commands_2) {
+    overrideContext = buildSkillOverrideContext(commands_2, localOverrides_2);
+    $[7] = commands_2;
+    $[8] = overrideContext;
+  } else overrideContext = $[8];
+  let context = overrideContext;
   let { locked } = context;
-  let Qt;
-  if (t[9] !== commands_2 || t[10] !== context) {
-    Qt = () => getEffectiveSkillStates(commands_2, context);
-    t[9] = commands_2;
-    t[10] = context;
-    t[11] = Qt;
-  } else Qt = t[11];
-  let [W, _e, et] = useLatestState(Qt);
-  let [, A, tt] = useLatestState(commands_2[0]);
+  let computeStates;
+  if ($[9] !== commands_2 || $[10] !== context) {
+    computeStates = () => getEffectiveSkillStates(commands_2, context);
+    $[9] = commands_2;
+    $[10] = context;
+    $[11] = computeStates;
+  } else computeStates = $[11];
+  let [states, setStates, getStates] = useLatestState(computeStates);
+  let [, setFocusedCommand, getFocusedCommand] = useLatestState(commands_2[0]);
   let isTerminalFocused = useTerminalFocus();
-  let It = R(null);
-  let V = R(null);
-  let hasFocus = useHasFocus(V);
-  let Kt;
-  if (t[12] === MEMO_CACHE_SENTINEL) {
-    Kt = () => {
-      let ot = V.current;
-      return ot !== null && getFocusManager(ot).activeElement === ot;
+  let containerRef = useRef(null);
+  let searchRef = useRef(null);
+  let hasFocus = useHasFocus(searchRef);
+  let isSearchFocused;
+  if ($[12] === MEMO_CACHE_SENTINEL) {
+    isSearchFocused = () => {
+      let searchNode = searchRef.current;
+      return searchNode !== null && getFocusManager(searchNode).activeElement === searchNode;
     };
-    t[12] = Kt;
-  } else Kt = t[12];
-  let Re = Kt;
-  let Bt;
-  if (t[13] === MEMO_CACHE_SENTINEL) {
-    Bt = () => {
-      let rt = V.current;
-      if (rt) getFocusManager(rt).focus(rt);
+    $[12] = isSearchFocused;
+  } else isSearchFocused = $[12];
+  let searchHasFocus = isSearchFocused;
+  let focusSearch;
+  if ($[13] === MEMO_CACHE_SENTINEL) {
+    focusSearch = () => {
+      let node = searchRef.current;
+      if (node) getFocusManager(node).focus(node);
     };
-    t[13] = Bt;
-  } else Bt = t[13];
-  let it = Bt;
-  let Lt;
-  if (t[14] === MEMO_CACHE_SENTINEL) {
-    Lt = {
+    $[13] = focusSearch;
+  } else focusSearch = $[13];
+  let focusSearch_2 = focusSearch;
+  let searchInputOptions;
+  if ($[14] === MEMO_CACHE_SENTINEL) {
+    searchInputOptions = {
       isActive: true,
       onExit: () => {
-        let lt = It.current;
-        if (lt) getFocusManager(lt).focus(lt);
+        let containerNode = containerRef.current;
+        if (containerNode) getFocusManager(containerNode).focus(containerNode);
       },
       passthroughCtrlKeys: ["c", "d"],
     };
-    t[14] = Lt;
-  } else Lt = t[14];
-  let { query, queryRef, setQuery, cursorOffset, handleKeyDown, handlePaste } = useSearchInput(Lt);
+    $[14] = searchInputOptions;
+  } else searchInputOptions = $[14];
+  let { query, queryRef, setQuery, cursorOffset, handleKeyDown, handlePaste } =
+    useSearchInput(searchInputOptions);
   useGlobalExitKeybindings();
-  let at;
+  let filteredCommands;
   Dr: {
     if (!query) {
-      at = commands_2;
+      filteredCommands = commands_2;
       break Dr;
     }
-    let ee;
-    if (t[15] !== query || t[16] !== commands_2) {
+    let searchMatches;
+    if ($[15] !== query || $[16] !== commands_2) {
       let lower = query.toLowerCase();
-      ee = commands_2.filter(
-        (xe) =>
-          xe.name.toLowerCase().includes(lower) ||
-          claudeAiSkillDisplayName(xe).toLowerCase().includes(lower) ||
-          (xe.description ?? "").toLowerCase().includes(lower) ||
-          getSkillSourceLabel(xe).toLowerCase().includes(lower),
+      searchMatches = commands_2.filter(
+        (command) =>
+          command.name.toLowerCase().includes(lower) ||
+          claudeAiSkillDisplayName(command).toLowerCase().includes(lower) ||
+          (command.description ?? "").toLowerCase().includes(lower) ||
+          getSkillSourceLabel(command).toLowerCase().includes(lower),
       );
-      t[15] = query;
-      t[16] = commands_2;
-      t[17] = ee;
-    } else ee = t[17];
-    at = ee;
+      $[15] = query;
+      $[16] = commands_2;
+      $[17] = searchMatches;
+    } else searchMatches = $[17];
+    filteredCommands = searchMatches;
   }
-  let a = at;
+  let visibleCommands = filteredCommands;
   let isScreenReaderEnabled = useIsScreenReaderEnabled();
   let { rows, columns } = useScrollViewportSize(useTerminalSize());
-  let ee;
-  if (t[18] !== columns || t[19] !== u) {
-    ee =
-      u === undefined
+  let conflictHeight;
+  if ($[18] !== columns || $[19] !== conflictText) {
+    conflictHeight =
+      conflictText === undefined
         ? 0
         : 2 +
           countCharInString(
-            wrapAnsi(u, Math.max(1, columns - 2 * PANE_PADDING), {
+            wrapAnsi(conflictText, Math.max(1, columns - 2 * PANE_PADDING), {
               hard: true,
               trim: true,
             }),
             `
 `,
           );
-    t[18] = columns;
-    t[19] = u;
-    t[20] = ee;
-  } else ee = t[20];
-  let _s = ee;
-  const mt = rows - 13 - _s;
-  let jt;
-  if (t[21] !== a.length || t[22] !== mt) {
-    jt = clamp(mt, 4, a.length);
-    t[21] = a.length;
-    t[22] = mt;
-    t[23] = jt;
-  } else jt = t[23];
-  let visibleCount = jt;
-  let qt;
-  if (t[24] !== a || t[25] !== tt || t[26] !== locked || t[27] !== _e) {
-    qt = () => {
-      let oe = tt();
-      if (!oe || !a.includes(oe)) {
+    $[18] = columns;
+    $[19] = conflictText;
+    $[20] = conflictHeight;
+  } else conflictHeight = $[20];
+  let conflictRows = conflictHeight;
+  const listHeight = rows - 13 - conflictRows;
+  let visibleCount;
+  if ($[21] !== visibleCommands.length || $[22] !== listHeight) {
+    visibleCount = clamp(listHeight, 4, visibleCommands.length);
+    $[21] = visibleCommands.length;
+    $[22] = listHeight;
+    $[23] = visibleCount;
+  } else visibleCount = $[23];
+  let visibleCount_2 = visibleCount;
+  let cycleState;
+  if ($[24] !== visibleCommands || $[25] !== getFocusedCommand || $[26] !== locked || $[27] !== setStates) {
+    cycleState = () => {
+      let focused = getFocusedCommand();
+      if (!focused || !visibleCommands.includes(focused)) {
         return;
       }
-      if (locked.has(oe)) {
+      if (locked.has(focused)) {
         return;
       }
-      _e((Gt) => {
-        let eo = Gt[oe.name] ?? "on";
-        let to = SKILL_STATE_OPTIONS[(SKILL_STATE_OPTIONS.indexOf(eo) + 1) % SKILL_STATE_OPTIONS.length];
-        return Object.assign(Object.create(null), Gt, {
-          [oe.name]: to,
+      setStates((previousStates) => {
+        let currentState = previousStates[focused.name] ?? "on";
+        let nextState =
+          SKILL_STATE_OPTIONS[(SKILL_STATE_OPTIONS.indexOf(currentState) + 1) % SKILL_STATE_OPTIONS.length];
+        return Object.assign(Object.create(null), previousStates, {
+          [focused.name]: nextState,
         });
       });
     };
-    t[24] = a;
-    t[25] = tt;
-    t[26] = locked;
-    t[27] = _e;
-    t[28] = qt;
-  } else qt = t[28];
-  let dt = qt;
-  let Jt = R(false);
-  let Xt;
-  if (t[29] !== et || t[30] !== onExit || t[31] !== commands_2 || t[32] !== storageV5 || t[33] !== context) {
-    Xt = async () => {
-      if (Jt.current) {
+    $[24] = visibleCommands;
+    $[25] = getFocusedCommand;
+    $[26] = locked;
+    $[27] = setStates;
+    $[28] = cycleState;
+  } else cycleState = $[28];
+  let cycleFocusedState = cycleState;
+  let savingRef = useRef(false);
+  let handleSave;
+  if (
+    $[29] !== getStates ||
+    $[30] !== onExit ||
+    $[31] !== commands_2 ||
+    $[32] !== storageV5 ||
+    $[33] !== context
+  ) {
+    handleSave = async () => {
+      if (savingRef.current) {
         return;
       }
-      Jt.current = true;
-      let { diff, writes, effectiveChanged } = diffSkillOverrides(commands_2, et(), context);
+      savingRef.current = true;
+      let { diff, writes, effectiveChanged } = diffSkillOverrides(commands_2, getStates(), context);
       if (writes > 0) {
         let { error } = await updateSettingsForSource(
           "localSettings",
@@ -308,82 +321,82 @@ function SkillsMenu(props) {
         },
       );
     };
-    t[29] = et;
-    t[30] = onExit;
-    t[31] = commands_2;
-    t[32] = storageV5;
-    t[33] = context;
-    t[34] = Xt;
-  } else Xt = t[34];
-  let ut = Xt;
+    $[29] = getStates;
+    $[30] = onExit;
+    $[31] = commands_2;
+    $[32] = storageV5;
+    $[33] = context;
+    $[34] = handleSave;
+  } else handleSave = $[34];
+  let saveOverrides = handleSave;
   let shortcutDisplay = useShortcutDisplay("confirm:no", "Settings", "esc");
   let shortcutDisplay_2 = useShortcutDisplay("settings:sortByTokens", "Settings", "t");
-  let Pe;
-  if (t[35] !== dt) {
-    Pe = () => {
-      if (Re()) {
+  let onAccept;
+  if ($[35] !== cycleFocusedState) {
+    onAccept = () => {
+      if (searchHasFocus()) {
         return false;
       }
-      dt();
+      cycleFocusedState();
     };
-    t[35] = dt;
-    t[36] = Pe;
-  } else Pe = t[36];
-  let Ut;
-  if (t[37] === MEMO_CACHE_SENTINEL) {
-    Ut = () => {
-      if (Re()) {
+    $[35] = cycleFocusedState;
+    $[36] = onAccept;
+  } else onAccept = $[36];
+  let toggleSort;
+  if ($[37] === MEMO_CACHE_SENTINEL) {
+    toggleSort = () => {
+      if (searchHasFocus()) {
         return false;
       }
-      ve(negateValue);
+      setSortByTokens(negateValue);
     };
-    t[37] = Ut;
-  } else Ut = t[37];
-  let Wt;
-  if (t[38] !== Pe) {
-    Wt = {
-      "select:accept": Pe,
-      "settings:sortByTokens": Ut,
+    $[37] = toggleSort;
+  } else toggleSort = $[37];
+  let settingsKeymap;
+  if ($[38] !== onAccept) {
+    settingsKeymap = {
+      "select:accept": onAccept,
+      "settings:sortByTokens": toggleSort,
     };
-    t[38] = Pe;
-    t[39] = Wt;
-  } else Wt = t[39];
-  const isActive = a.length > 0;
-  let At;
-  if (t[40] !== isActive) {
-    At = {
+    $[38] = onAccept;
+    $[39] = settingsKeymap;
+  } else settingsKeymap = $[39];
+  const isActive = visibleCommands.length > 0;
+  let settingsKeymapContext;
+  if ($[40] !== isActive) {
+    settingsKeymapContext = {
       context: "Settings",
       isActive,
     };
-    t[40] = isActive;
-    t[41] = At;
-  } else At = t[41];
-  MessageActionsKeybindings(Wt, At);
-  let Ht;
-  if (t[42] !== ut) {
-    Ht = {
+    $[40] = isActive;
+    $[41] = settingsKeymapContext;
+  } else settingsKeymapContext = $[41];
+  MessageActionsKeybindings(settingsKeymap, settingsKeymapContext);
+  let cancelKeymap;
+  if ($[42] !== saveOverrides) {
+    cancelKeymap = {
       "confirm:no": () => {
-        if (Re()) {
+        if (searchHasFocus()) {
           return false;
         }
-        ut();
+        saveOverrides();
       },
     };
-    t[42] = ut;
-    t[43] = Ht;
-  } else Ht = t[43];
-  let Zt;
-  if (t[44] === MEMO_CACHE_SENTINEL) {
-    Zt = {
+    $[42] = saveOverrides;
+    $[43] = cancelKeymap;
+  } else cancelKeymap = $[43];
+  let cancelKeymapContext;
+  if ($[44] === MEMO_CACHE_SENTINEL) {
+    cancelKeymapContext = {
       context: "Settings",
     };
-    t[44] = Zt;
-  } else Zt = t[44];
-  MessageActionsKeybindings(Ht, Zt);
-  let zt;
-  if (t[45] !== queryRef || t[46] !== setQuery) {
-    zt = (event) => {
-      if (event.defaultPrevented || event.target === V.current) {
+    $[44] = cancelKeymapContext;
+  } else cancelKeymapContext = $[44];
+  MessageActionsKeybindings(cancelKeymap, cancelKeymapContext);
+  let handleKeyInput;
+  if ($[45] !== queryRef || $[46] !== setQuery) {
+    handleKeyInput = (event) => {
+      if (event.defaultPrevented || event.target === searchRef.current) {
         return;
       }
       if (event.name === "tab") {
@@ -396,7 +409,7 @@ function SkillsMenu(props) {
       if (event.name === "backspace") {
         if (queryRef.current) {
           event.preventDefault();
-          it();
+          focusSearch_2();
           setQuery(queryRef.current.slice(0, -1));
         }
         return;
@@ -406,166 +419,166 @@ function SkillsMenu(props) {
       }
       if (event.key.length >= 1 && event.key !== " ") {
         event.preventDefault();
-        it();
-        let ro = event.key.startsWith("/") ? event.key.slice(1) : event.key;
-        setQuery(queryRef.current + ro);
+        focusSearch_2();
+        let typedChar = event.key.startsWith("/") ? event.key.slice(1) : event.key;
+        setQuery(queryRef.current + typedChar);
       }
     };
-    t[45] = queryRef;
-    t[46] = setQuery;
-    t[47] = zt;
-  } else zt = t[47];
-  let yt = zt;
-  let Yt;
-  if (t[48] !== queryRef || t[49] !== setQuery) {
-    Yt = (event) => {
-      if (event.defaultPrevented || event.target === V.current) {
+    $[45] = queryRef;
+    $[46] = setQuery;
+    $[47] = handleKeyInput;
+  } else handleKeyInput = $[47];
+  let onKeyInput = handleKeyInput;
+  let onPasteInput;
+  if ($[48] !== queryRef || $[49] !== setQuery) {
+    onPasteInput = (event) => {
+      if (event.defaultPrevented || event.target === searchRef.current) {
         return;
       }
-      let $e = event.text.split(/\r\n|\r|\n/, 2)[0] ?? "";
-      if ($e.length === 0) {
+      let pastedText = event.text.split(/\r\n|\r|\n/, 2)[0] ?? "";
+      if (pastedText.length === 0) {
         return;
       }
       event.preventDefault();
-      it();
-      let io = $e.startsWith("/") ? $e.slice(1) : $e;
-      setQuery(queryRef.current + io);
+      focusSearch_2();
+      let pasteChar = pastedText.startsWith("/") ? pastedText.slice(1) : pastedText;
+      setQuery(queryRef.current + pasteChar);
     };
-    t[48] = queryRef;
-    t[49] = setQuery;
-    t[50] = Yt;
-  } else Yt = t[50];
-  let St = Yt;
+    $[48] = queryRef;
+    $[49] = setQuery;
+    $[50] = onPasteInput;
+  } else onPasteInput = $[50];
+  let onPaste = onPasteInput;
   if (commands_2.length === 0) {
     let onCancel;
-    if (t[51] !== onExit) {
+    if ($[51] !== onExit) {
       onCancel = () =>
         onExit("Skills dialog dismissed", {
           display: "system",
         });
-      t[51] = onExit;
-      t[52] = onCancel;
-    } else onCancel = t[52];
+      $[51] = onExit;
+      $[52] = onCancel;
+    } else onCancel = $[52];
     let inputGuide;
-    if (t[53] === MEMO_CACHE_SENTINEL) {
+    if ($[53] === MEMO_CACHE_SENTINEL) {
       inputGuide = jsxProd_default(ConfigurableShortcutHint, {
         action: "confirm:no",
         context: "Confirmation",
         fallback: "Esc",
         description: "close",
       });
-      t[53] = inputGuide;
-    } else inputGuide = t[53];
+      $[53] = inputGuide;
+    } else inputGuide = $[53];
     let children;
-    if (t[54] === MEMO_CACHE_SENTINEL) {
+    if ($[54] === MEMO_CACHE_SENTINEL) {
       children = jsxProd_default(HintText, {
         hint: isSafeMode()
           ? `Custom skills are disabled in safe mode \u2014 ${getSafeModeExitHint()} to load them`
           : "Create skills in .claude/skills/ or ~/.claude/skills/",
         children: "No skills found",
       });
-      t[54] = children;
-    } else children = t[54];
-    let M;
-    if (t[55] !== onCancel) {
-      M = jsxProd_default(Dialog, {
+      $[54] = children;
+    } else children = $[54];
+    let emptyDialog;
+    if ($[55] !== onCancel) {
+      emptyDialog = jsxProd_default(Dialog, {
         title: "Skills",
         onCancel,
         inputGuide,
         children,
       });
-      t[55] = onCancel;
-      t[56] = M;
-    } else M = t[56];
-    return M;
+      $[55] = onCancel;
+      $[56] = emptyDialog;
+    } else emptyDialog = $[56];
+    return emptyDialog;
   }
-  let Oe;
-  let Te;
+  let Container;
+  let DialogComponent;
   let ref;
   let flexDirection;
   let tabIndex;
   let autoFocus;
   let onKeyDown;
-  let onPaste;
-  let re;
-  let ie;
-  let ne;
-  let le;
-  let Ie;
+  let onPaste_2;
+  let searchBox;
+  let listOrEmpty;
+  let pluginHint;
+  let conflictTextNode;
+  let unstorableNote;
   let title;
   let subtitle;
   let onCancel;
   let isCancelActive;
   let hideInputGuide;
   if (
-    t[57] !== bytesPerToken ||
-    t[58] !== shortcutDisplay ||
-    t[59] !== W ||
-    t[60] !== a ||
-    t[61] !== yt ||
-    t[62] !== St ||
-    t[63] !== isScreenReaderEnabled ||
-    t[64] !== hasFocus ||
-    t[65] !== isTerminalFocused ||
-    t[66] !== locked ||
-    t[67] !== onExit ||
-    t[68] !== cursorOffset ||
-    t[69] !== handleKeyDown ||
-    t[70] !== handlePaste ||
-    t[71] !== query ||
-    t[72] !== A ||
-    t[73] !== u ||
-    t[74] !== commands_2 ||
-    t[75] !== k ||
-    t[76] !== shortcutDisplay_2 ||
-    t[77] !== visibleCount
+    $[57] !== bytesPerToken ||
+    $[58] !== shortcutDisplay ||
+    $[59] !== states ||
+    $[60] !== visibleCommands ||
+    $[61] !== onKeyInput ||
+    $[62] !== onPaste ||
+    $[63] !== isScreenReaderEnabled ||
+    $[64] !== hasFocus ||
+    $[65] !== isTerminalFocused ||
+    $[66] !== locked ||
+    $[67] !== onExit ||
+    $[68] !== cursorOffset ||
+    $[69] !== handleKeyDown ||
+    $[70] !== handlePaste ||
+    $[71] !== query ||
+    $[72] !== setFocusedCommand ||
+    $[73] !== conflictText ||
+    $[74] !== commands_2 ||
+    $[75] !== sortByTokens ||
+    $[76] !== shortcutDisplay_2 ||
+    $[77] !== visibleCount_2
   ) {
-    let _t = uniq(commands_2.map(skillNameOf).filter(isStorableSkillName));
-    let ce;
-    if (t[96] !== a.length || t[97] !== query || t[98] !== commands_2.length) {
-      ce = query
-        ? `${a.length}/${commands_2.length} ${plural(commands_2.length, "skill")}`
+    let unstorableNames = uniq(commands_2.map(skillNameOf).filter(isStorableSkillName));
+    let countText;
+    if ($[96] !== visibleCommands.length || $[97] !== query || $[98] !== commands_2.length) {
+      countText = query
+        ? `${visibleCommands.length}/${commands_2.length} ${plural(commands_2.length, "skill")}`
         : `${commands_2.length} ${plural(commands_2.length, "skill")}`;
-      t[96] = a.length;
-      t[97] = query;
-      t[98] = commands_2.length;
-      t[99] = ce;
-    } else ce = t[99];
-    let no = ce;
-    let lo = hasFocus
+      $[96] = visibleCommands.length;
+      $[97] = query;
+      $[98] = commands_2.length;
+      $[99] = countText;
+    } else countText = $[99];
+    let countLabel = countText;
+    let helpText = hasFocus
       ? "type to filter \xB7 \u2193/enter to select \xB7 esc to clear"
-      : a.length === 0
+      : visibleCommands.length === 0
         ? `/ to search, ${shortcutDisplay} to close`
         : `enter/space to cycle, / to search, ${shortcutDisplay_2} to sort, ${shortcutDisplay} to close`;
-    Te = Dialog;
+    DialogComponent = Dialog;
     title = "Skills";
-    subtitle = `${no}${k ? " \xB7 sorted by tokens" : ""} \xB7 ${lo}`;
-    if (t[100] !== onExit) {
+    subtitle = `${countLabel}${sortByTokens ? " \xB7 sorted by tokens" : ""} \xB7 ${helpText}`;
+    if ($[100] !== onExit) {
       onCancel = () =>
         onExit("Skills dialog dismissed", {
           display: "system",
         });
-      t[100] = onExit;
-      t[101] = onCancel;
-    } else onCancel = t[101];
+      $[100] = onExit;
+      $[101] = onCancel;
+    } else onCancel = $[101];
     isCancelActive = false;
     hideInputGuide = true;
-    Oe = Box;
-    ref = It;
+    Container = Box;
+    ref = containerRef;
     flexDirection = "column";
     tabIndex = 0;
     autoFocus = true;
-    onKeyDown = yt;
-    onPaste = St;
+    onKeyDown = onKeyInput;
+    onPaste_2 = onPaste;
     if (
-      t[102] !== isTerminalFocused ||
-      t[103] !== cursorOffset ||
-      t[104] !== handleKeyDown ||
-      t[105] !== handlePaste ||
-      t[106] !== query
+      $[102] !== isTerminalFocused ||
+      $[103] !== cursorOffset ||
+      $[104] !== handleKeyDown ||
+      $[105] !== handlePaste ||
+      $[106] !== query
     ) {
-      re = jsxProd_default(SearchBox, {
-        ref: V,
+      searchBox = jsxProd_default(SearchBox, {
+        ref: searchRef,
         query,
         onKeyDown: handleKeyDown,
         onPaste: handlePaste,
@@ -573,26 +586,26 @@ function SkillsMenu(props) {
         cursorOffset,
         placeholder: "Search skills\u2026",
       });
-      t[102] = isTerminalFocused;
-      t[103] = cursorOffset;
-      t[104] = handleKeyDown;
-      t[105] = handlePaste;
-      t[106] = query;
-      t[107] = re;
-    } else re = t[107];
+      $[102] = isTerminalFocused;
+      $[103] = cursorOffset;
+      $[104] = handleKeyDown;
+      $[105] = handlePaste;
+      $[106] = query;
+      $[107] = searchBox;
+    } else searchBox = $[107];
     if (
-      t[108] !== bytesPerToken ||
-      t[109] !== W ||
-      t[110] !== a ||
-      t[111] !== isScreenReaderEnabled ||
-      t[112] !== locked ||
-      t[113] !== query ||
-      t[114] !== A ||
-      t[115] !== k ||
-      t[116] !== visibleCount
+      $[108] !== bytesPerToken ||
+      $[109] !== states ||
+      $[110] !== visibleCommands ||
+      $[111] !== isScreenReaderEnabled ||
+      $[112] !== locked ||
+      $[113] !== query ||
+      $[114] !== setFocusedCommand ||
+      $[115] !== sortByTokens ||
+      $[116] !== visibleCount_2
     ) {
-      ie =
-        a.length === 0
+      listOrEmpty =
+        visibleCommands.length === 0
           ? jsxProd_default(Box, {
               marginTop: 1,
               children: jsxProd_default(HintText, {
@@ -602,46 +615,46 @@ function SkillsMenu(props) {
           : jsxProd_default(
               OrderedListWithItem,
               {
-                visibleCount,
-                isDisabled: Re,
+                visibleCount: visibleCount_2,
+                isDisabled: searchHasFocus,
                 wrap: true,
                 overflowHint: "count",
-                onFocus: (ao) => A(a[ao]),
-                children: a.map((I) => {
-                  let es = locked.get(I);
-                  let { icon, word } = SKILL_STATE_DISPLAY[es?.value ?? W[I.name] ?? "on"];
-                  let mo = word === undefined ? "" : word;
+                onFocus: (focusIndex) => setFocusedCommand(visibleCommands[focusIndex]),
+                children: visibleCommands.map((command) => {
+                  let skillLock = locked.get(command);
+                  let { icon, word } = SKILL_STATE_DISPLAY[skillLock?.value ?? states[command.name] ?? "on"];
+                  let stateWord = word === undefined ? "" : word;
                   return jsxProd_default(
                     OrderedListWithItem.Item,
                     {
-                      label: claudeAiSkillDisplayName(I),
+                      label: claudeAiSkillDisplayName(command),
                       icon,
                       meta: [
-                        lockReasonText(es),
-                        isScreenReaderEnabled ? "" : mo,
-                        getSkillSourceLabel(I),
-                        `${formatTokenEstimate(estimateSkillListingTokens(I, bytesPerToken))} tok`,
+                        lockReasonText(skillLock),
+                        isScreenReaderEnabled ? "" : stateWord,
+                        getSkillSourceLabel(command),
+                        `${formatTokenEstimate(estimateSkillListingTokens(command, bytesPerToken))} tok`,
                       ],
                     },
-                    `${I.name}-${I.source}`,
+                    `${command.name}-${command.source}`,
                   );
                 }),
               },
-              k ? "tok" : "name",
+              sortByTokens ? "tok" : "name",
             );
-      t[108] = bytesPerToken;
-      t[109] = W;
-      t[110] = a;
-      t[111] = isScreenReaderEnabled;
-      t[112] = locked;
-      t[113] = query;
-      t[114] = A;
-      t[115] = k;
-      t[116] = visibleCount;
-      t[117] = ie;
-    } else ie = t[117];
-    if (t[118] !== commands_2) {
-      ne =
+      $[108] = bytesPerToken;
+      $[109] = states;
+      $[110] = visibleCommands;
+      $[111] = isScreenReaderEnabled;
+      $[112] = locked;
+      $[113] = query;
+      $[114] = setFocusedCommand;
+      $[115] = sortByTokens;
+      $[116] = visibleCount_2;
+      $[117] = listOrEmpty;
+    } else listOrEmpty = $[117];
+    if ($[118] !== commands_2) {
+      pluginHint =
         commands_2.some(isPluginSkill) &&
         jsxProd_default(Box, {
           marginTop: 1,
@@ -650,93 +663,93 @@ function SkillsMenu(props) {
             children: "Plugin skills are managed via /plugin",
           }),
         });
-      t[118] = commands_2;
-      t[119] = ne;
-    } else ne = t[119];
-    if (t[120] !== u) {
-      le =
-        u !== undefined &&
+      $[118] = commands_2;
+      $[119] = pluginHint;
+    } else pluginHint = $[119];
+    if ($[120] !== conflictText) {
+      conflictTextNode =
+        conflictText !== undefined &&
         jsxProd_default(Box, {
           marginTop: 1,
           children: jsxProd_default(Text, {
             dimColor: true,
-            children: u,
+            children: conflictText,
           }),
         });
-      t[120] = u;
-      t[121] = le;
-    } else le = t[121];
-    Ie =
-      _t.length > 0 &&
+      $[120] = conflictText;
+      $[121] = conflictTextNode;
+    } else conflictTextNode = $[121];
+    unstorableNote =
+      unstorableNames.length > 0 &&
       jsxProd_default(Box, {
         marginTop: 1,
         children: jsxProd_default(Text, {
           dimColor: true,
-          children: `Settings can't store an entry named ${_t.join(" or ")}, so a skill with that name can't be changed here. Rename its folder or command file to configure it.`,
+          children: `Settings can't store an entry named ${unstorableNames.join(" or ")}, so a skill with that name can't be changed here. Rename its folder or command file to configure it.`,
         }),
       });
-    t[57] = bytesPerToken;
-    t[58] = shortcutDisplay;
-    t[59] = W;
-    t[60] = a;
-    t[61] = yt;
-    t[62] = St;
-    t[63] = isScreenReaderEnabled;
-    t[64] = hasFocus;
-    t[65] = isTerminalFocused;
-    t[66] = locked;
-    t[67] = onExit;
-    t[68] = cursorOffset;
-    t[69] = handleKeyDown;
-    t[70] = handlePaste;
-    t[71] = query;
-    t[72] = A;
-    t[73] = u;
-    t[74] = commands_2;
-    t[75] = k;
-    t[76] = shortcutDisplay_2;
-    t[77] = visibleCount;
-    t[78] = Oe;
-    t[79] = Te;
-    t[80] = ref;
-    t[81] = flexDirection;
-    t[82] = tabIndex;
-    t[83] = autoFocus;
-    t[84] = onKeyDown;
-    t[85] = onPaste;
-    t[86] = re;
-    t[87] = ie;
-    t[88] = ne;
-    t[89] = le;
-    t[90] = Ie;
-    t[91] = title;
-    t[92] = subtitle;
-    t[93] = onCancel;
-    t[94] = isCancelActive;
-    t[95] = hideInputGuide;
+    $[57] = bytesPerToken;
+    $[58] = shortcutDisplay;
+    $[59] = states;
+    $[60] = visibleCommands;
+    $[61] = onKeyInput;
+    $[62] = onPaste;
+    $[63] = isScreenReaderEnabled;
+    $[64] = hasFocus;
+    $[65] = isTerminalFocused;
+    $[66] = locked;
+    $[67] = onExit;
+    $[68] = cursorOffset;
+    $[69] = handleKeyDown;
+    $[70] = handlePaste;
+    $[71] = query;
+    $[72] = setFocusedCommand;
+    $[73] = conflictText;
+    $[74] = commands_2;
+    $[75] = sortByTokens;
+    $[76] = shortcutDisplay_2;
+    $[77] = visibleCount_2;
+    $[78] = Container;
+    $[79] = DialogComponent;
+    $[80] = ref;
+    $[81] = flexDirection;
+    $[82] = tabIndex;
+    $[83] = autoFocus;
+    $[84] = onKeyDown;
+    $[85] = onPaste_2;
+    $[86] = searchBox;
+    $[87] = listOrEmpty;
+    $[88] = pluginHint;
+    $[89] = conflictTextNode;
+    $[90] = unstorableNote;
+    $[91] = title;
+    $[92] = subtitle;
+    $[93] = onCancel;
+    $[94] = isCancelActive;
+    $[95] = hideInputGuide;
   } else {
-    Oe = t[78];
-    Te = t[79];
-    ref = t[80];
-    flexDirection = t[81];
-    tabIndex = t[82];
-    autoFocus = t[83];
-    onKeyDown = t[84];
-    onPaste = t[85];
-    re = t[86];
-    ie = t[87];
-    ne = t[88];
-    le = t[89];
-    Ie = t[90];
-    title = t[91];
-    subtitle = t[92];
-    onCancel = t[93];
-    isCancelActive = t[94];
-    hideInputGuide = t[95];
+    Container = $[78];
+    DialogComponent = $[79];
+    ref = $[80];
+    flexDirection = $[81];
+    tabIndex = $[82];
+    autoFocus = $[83];
+    onKeyDown = $[84];
+    onPaste_2 = $[85];
+    searchBox = $[86];
+    listOrEmpty = $[87];
+    pluginHint = $[88];
+    conflictTextNode = $[89];
+    unstorableNote = $[90];
+    title = $[91];
+    subtitle = $[92];
+    onCancel = $[93];
+    isCancelActive = $[94];
+    hideInputGuide = $[95];
   }
-  let ce;
-  if (t[122] === MEMO_CACHE_SENTINEL) {
-    ce =
+  let safeModeNote;
+  if ($[122] === MEMO_CACHE_SENTINEL) {
+    safeModeNote =
       isSafeMode() &&
       jsxProd_default(Box, {
         marginTop: 1,
@@ -749,57 +762,57 @@ function SkillsMenu(props) {
           ],
         }),
       });
-    t[122] = ce;
-  } else ce = t[122];
+    $[122] = safeModeNote;
+  } else safeModeNote = $[122];
   let children;
   if (
-    t[123] !== Oe ||
-    t[124] !== ref ||
-    t[125] !== flexDirection ||
-    t[126] !== tabIndex ||
-    t[127] !== autoFocus ||
-    t[128] !== onKeyDown ||
-    t[129] !== onPaste ||
-    t[130] !== re ||
-    t[131] !== ie ||
-    t[132] !== ne ||
-    t[133] !== le ||
-    t[134] !== Ie
+    $[123] !== Container ||
+    $[124] !== ref ||
+    $[125] !== flexDirection ||
+    $[126] !== tabIndex ||
+    $[127] !== autoFocus ||
+    $[128] !== onKeyDown ||
+    $[129] !== onPaste_2 ||
+    $[130] !== searchBox ||
+    $[131] !== listOrEmpty ||
+    $[132] !== pluginHint ||
+    $[133] !== conflictTextNode ||
+    $[134] !== unstorableNote
   ) {
-    children = jsxProd_default_2(Oe, {
+    children = jsxProd_default_2(Container, {
       ref,
       flexDirection,
       tabIndex,
       autoFocus,
       onKeyDown,
-      onPaste,
-      children: [re, ie, ne, le, Ie, ce],
+      onPaste: onPaste_2,
+      children: [searchBox, listOrEmpty, pluginHint, conflictTextNode, unstorableNote, safeModeNote],
     });
-    t[123] = Oe;
-    t[124] = ref;
-    t[125] = flexDirection;
-    t[126] = tabIndex;
-    t[127] = autoFocus;
-    t[128] = onKeyDown;
-    t[129] = onPaste;
-    t[130] = re;
-    t[131] = ie;
-    t[132] = ne;
-    t[133] = le;
-    t[134] = Ie;
-    t[135] = children;
-  } else children = t[135];
-  let ts;
+    $[123] = Container;
+    $[124] = ref;
+    $[125] = flexDirection;
+    $[126] = tabIndex;
+    $[127] = autoFocus;
+    $[128] = onKeyDown;
+    $[129] = onPaste_2;
+    $[130] = searchBox;
+    $[131] = listOrEmpty;
+    $[132] = pluginHint;
+    $[133] = conflictTextNode;
+    $[134] = unstorableNote;
+    $[135] = children;
+  } else children = $[135];
+  let dialog;
   if (
-    t[136] !== Te ||
-    t[137] !== title ||
-    t[138] !== subtitle ||
-    t[139] !== onCancel ||
-    t[140] !== isCancelActive ||
-    t[141] !== hideInputGuide ||
-    t[142] !== children
+    $[136] !== DialogComponent ||
+    $[137] !== title ||
+    $[138] !== subtitle ||
+    $[139] !== onCancel ||
+    $[140] !== isCancelActive ||
+    $[141] !== hideInputGuide ||
+    $[142] !== children
   ) {
-    ts = jsxProd_default(Te, {
+    dialog = jsxProd_default(DialogComponent, {
       title,
       subtitle,
       onCancel,
@@ -807,16 +820,16 @@ function SkillsMenu(props) {
       hideInputGuide,
       children,
     });
-    t[136] = Te;
-    t[137] = title;
-    t[138] = subtitle;
-    t[139] = onCancel;
-    t[140] = isCancelActive;
-    t[141] = hideInputGuide;
-    t[142] = children;
-    t[143] = ts;
-  } else ts = t[143];
-  return ts;
+    $[136] = DialogComponent;
+    $[137] = title;
+    $[138] = subtitle;
+    $[139] = onCancel;
+    $[140] = isCancelActive;
+    $[141] = hideInputGuide;
+    $[142] = children;
+    $[143] = dialog;
+  } else dialog = $[143];
+  return dialog;
 }
 //@ chunk-00qhwn8e.js:27856-28005 fingerprint = call (0.637)
 /**
@@ -833,8 +846,4 @@ async function call(onDone, context) {
     bytesPerToken: bytesPerTokenForModel(context.options.mainLoopModel),
   });
 }
-//@ chunk-ygke3hz8.js:528-583 placement
-/**
- * 技能状态的四个取值（on/name-only/user-invocable-only/off），/skills 与插件页循环切换用。
- */
-var SKILL_STATE_OPTIONS = ["on", "name-only", "user-invocable-only", "off"];
+export { call };

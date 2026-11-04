@@ -46,7 +46,7 @@ import {
 } from "./easelMessages.js";
 import {
   pickTickStep,
-  rp,
+  TICK_STEPS_BY_SPAN,
   stepSpan,
   periodStarts,
   isWeekendOrFirst,
@@ -61,17 +61,21 @@ import {
   isPlainObject,
   cleanCellText,
 } from "./chartSchema.js";
+import { deferInit, beginDeferredInits } from "../../../../runtime/deferred-init.js";
 
+// This module is the first evaluated of an import cycle of 7 modules closed by ./chartSchema.js;
+// the load-time work of the cycle's statements marked "deferred" waits until the cycle is complete (runtime/deferred-init.js).
+beginDeferredInits("src/plugins/bundled/easel/chartSchema.js");
 //@ chunk-3s7ydtfd.js:14396-14457 placement = UNDEFINED_VALUE (0.472)
-function snapToStep(e, t) {
-  return t.unit.fieldIndex === DAY_FIELD_INDEX ? e : e - (e % t.count);
+function snapToStep(value, step) {
+  return step.unit.fieldIndex === DAY_FIELD_INDEX ? value : value - (value % step.count);
 }
 //@ chunk-3s7ydtfd.js:14457-14514 placement
 /**
  * 时间刻度起点对象
  */
-var timeTickStart = (e, fieldsBefore) => ({
-  zone: e.zone,
+var timeTickStart = (tick, fieldsBefore) => ({
+  zone: tick.zone,
   areTicks: ARE_TICK_LABELS,
   fieldsBefore,
 });
@@ -79,25 +83,25 @@ var timeTickStart = (e, fieldsBefore) => ({
 /**
  * 时间刻度序列起点（按步长对齐）。
  */
-var buildTickSeries = (e, t, o) => ({
-  start: [...e.slice(0, t.unit.fieldIndex), snapToStep(e[t.unit.fieldIndex], t)],
-  step: t,
-  untilMs: o.untilMs,
-  zone: o.zone,
+var buildTickSeries = (start, step, bounds) => ({
+  start: [...start.slice(0, step.unit.fieldIndex), snapToStep(start[step.unit.fieldIndex], step)],
+  step,
+  untilMs: bounds.untilMs,
+  zone: bounds.zone,
 });
 //@ chunk-3s7ydtfd.js:14638-14810 placement
 /**
  * 计算刻度标签的位置（居中或左对齐，夹在列内）。
  */
-var placeTickLabel = (e, t) => (o, r) => {
-  let s = e[r] ?? "";
-  let p = t.columnOf(o);
+var placeTickLabel = (labels, layout) => (value, index) => {
+  let text = labels[index] ?? "";
+  let column = layout.columnOf(value);
   return {
-    text: s,
-    column: p,
+    text,
+    column,
     start: Math.min(
-      Math.max(0, p - (t.areCentred ? Math.floor((s.length - 1) / HALF_DIVISOR) : 0)),
-      t.columns - s.length,
+      Math.max(0, column - (layout.areCentred ? Math.floor((text.length - 1) / HALF_DIVISOR) : 0)),
+      layout.columns - text.length,
     ),
   };
 };
@@ -105,71 +109,91 @@ var placeTickLabel = (e, t) => (o, r) => {
 /**
  * 布置刻度标签，重叠时返回空数组。
  */
-var layoutTickLabels = (e, t) => (o, r) => {
-  let mapped = o.map(placeTickLabel(pickTickStep(o, r, e), t));
+var layoutTickLabels = (dataSpan, layout) => (ticks, step) => {
+  let mapped = ticks.map(placeTickLabel(pickTickStep(ticks, step, dataSpan), layout));
   return mapped.every(
-    (m, n) => m.start >= 0 && m.start + m.text.length + MIN_CELL_GAP <= (mapped[n + 1]?.start ?? 1 / 0),
+    (label, index) =>
+      label.start >= 0 &&
+      label.start + label.text.length + MIN_CELL_GAP <= (mapped[index + 1]?.start ?? 1 / 0),
   )
     ? mapped
     : [];
 };
 //@ chunk-3s7ydtfd.js:14949-15242 placement
-function parseNumberCell(dataSpan, step, o) {
-  let fieldsBefore = logEaselError(dataSpan.fromMs, dataSpan.zone);
-  let s = layoutTickLabels(timeTickStart(dataSpan, fieldsBefore), o);
-  for (let p of rp) {
-    if (stepSpan(p) < stepSpan(step) || (dataSpan.untilMs - dataSpan.fromMs) / stepSpan(p) > o.columns)
+function parseNumberCell(dataSpan, step, layout) {
+  let errorContext = logEaselError(dataSpan.fromMs, dataSpan.zone);
+  let placeLabels = layoutTickLabels(timeTickStart(dataSpan, errorContext), layout);
+  for (let stepCandidate of TICK_STEPS_BY_SPAN) {
+    if (
+      stepSpan(stepCandidate) < stepSpan(step) ||
+      (dataSpan.untilMs - dataSpan.fromMs) / stepSpan(stepCandidate) > layout.columns
+    )
       continue;
-    let n = s(
-      periodStarts(buildTickSeries(fieldsBefore, p, dataSpan)).filter(
-        (f) =>
-          f >= dataSpan.fromMs &&
+    let candidate = placeLabels(
+      periodStarts(buildTickSeries(errorContext, stepCandidate, dataSpan)).filter(
+        (ms) =>
+          ms >= dataSpan.fromMs &&
           !(
             step.skipsWeekends &&
-            p.unit.fieldIndex === DAY_FIELD_INDEX &&
-            isWeekendOrFirst(f, dataSpan.zone)
+            stepCandidate.unit.fieldIndex === DAY_FIELD_INDEX &&
+            isWeekendOrFirst(ms, dataSpan.zone)
           ),
       ),
-      p,
+      stepCandidate,
     );
-    if (n.length > 0) return n;
+    if (candidate.length > 0) return candidate;
   }
-  return s([dataSpan.fromMs], step);
+  return placeLabels([dataSpan.fromMs], step);
 }
 //@ chunk-3s7ydtfd.js:15242-15277 placement
 /**
  * 月份名+日期模式
  */
-var MONTH_DAY_PATTERN = `(?:${parts.join("|")})[a-z]*`;
+var MONTH_DAY_PATTERN; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-3s7ydtfd.js:15242", () => {
+  MONTH_DAY_PATTERN = `(?:${parts.join("|")})[a-z]*`;
+});
 //@ chunk-3s7ydtfd.js:15277-15443 placement
-var regExp_2 = new RegExp(
-  String.raw`^(?:\d{1,2}([./-])\d{1,2}\1\d{4}\b|\d{1,2}/\d{1,2}/\d{2}\b|` +
-    String.raw`\d{1,2}[./]\d{4}\b|${MONTH_DAY_PATTERN} \d{1,2}$|` +
-    String.raw`\d{1,2} ${MONTH_DAY_PATTERN}$)`,
-);
+var regExp_2; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-3s7ydtfd.js:15277", () => {
+  regExp_2 = new RegExp(
+    String.raw`^(?:\d{1,2}([./-])\d{1,2}\1\d{4}\b|\d{1,2}/\d{1,2}/\d{2}\b|` +
+      String.raw`\d{1,2}[./]\d{4}\b|${MONTH_DAY_PATTERN} \d{1,2}$|` +
+      String.raw`\d{1,2} ${MONTH_DAY_PATTERN}$)`,
+  );
+});
 //@ chunk-3s7ydtfd.js:15443-15485 placement
 /**
  * 是否为时间格式的单元格
  */
-var isTimeCell = (e) => regExp_2.test(String(e ?? "").trim());
+var isTimeCell = (value) => regExp_2.test(String(value ?? "").trim());
 //@ chunk-3s7ydtfd.js:15485-15587 placement
-var TIME_OF_DAY_PATTERN =
-  String.raw`(?<hour>\d\d):(?<minute>\d\d)` + String.raw`(?::(?<second>\d\d)(?<fraction>\.\d+)?)?`;
+var TIME_OF_DAY_PATTERN; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-3s7ydtfd.js:15485", () => {
+  TIME_OF_DAY_PATTERN =
+    String.raw`(?<hour>\d\d):(?<minute>\d\d)` + String.raw`(?::(?<second>\d\d)(?<fraction>\.\d+)?)?`;
+});
 //@ chunk-3s7ydtfd.js:15587-15670 placement
 /**
  * 时区后缀模式
  */
-var ZONE_PATTERN = String.raw`\s?(?<zone>Z|UTC|GMT|[-+]\d\d(?::?\d\d)?)` + String.raw`(?: UTC)?`;
+var ZONE_PATTERN; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-3s7ydtfd.js:15587", () => {
+  ZONE_PATTERN = String.raw`\s?(?<zone>Z|UTC|GMT|[-+]\d\d(?::?\d\d)?)` + String.raw`(?: UTC)?`;
+});
 //@ chunk-3s7ydtfd.js:15670-15725 placement
 /**
  * 空/NaN/None 等空值模式
  */
 var EMPTY_CELL_RE = /^(?:--?|null|none|nan|n\/a|na|\\n|[-+]inf)?$/i;
 //@ chunk-3s7ydtfd.js:15725-15860 placement
-var regExp_3 = new RegExp(
-  String.raw`^(?:(?<days>\d+)d ?)?(?:(?<hours>\d+)h ?)?` +
-    String.raw`(?:(?<minutes>\d+)m ?)?(?:(?<seconds>[\d.]+)s)?$`,
-);
+var regExp_3; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-3s7ydtfd.js:15725", () => {
+  regExp_3 = new RegExp(
+    String.raw`^(?:(?<days>\d+)d ?)?(?:(?<hours>\d+)h ?)?` +
+      String.raw`(?:(?<minutes>\d+)m ?)?(?:(?<seconds>[\d.]+)s)?$`,
+  );
+});
 //@ chunk-3s7ydtfd.js:15860-15880 placement
 /**
  * 只含数字与 .E+
@@ -199,15 +223,18 @@ var TIME_UNIT_SECONDS = {
 /**
  * k/K/M/B/T 的倍数
  */
-var SI_MULTIPLIERS = new Map(
-  Object.entries({
-    k: SI_KILO,
-    K: SI_KILO,
-    M: SI_MEGA,
-    B: SI_GIGA,
-    T: SI_TERA,
-  }),
-);
+var SI_MULTIPLIERS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-3s7ydtfd.js:16051", () => {
+  SI_MULTIPLIERS = new Map(
+    Object.entries({
+      k: SI_KILO,
+      K: SI_KILO,
+      M: SI_MEGA,
+      B: SI_GIGA,
+      T: SI_TERA,
+    }),
+  );
+});
 //@ chunk-3s7ydtfd.js:16110-16123 placement
 /**
  * 1024⁴
@@ -295,36 +322,39 @@ var NUMBER_PATTERN = [
 /**
  * 单位 → {unit, size}
  */
-var UNIT_SIZE_TABLE = new Map(
-  NUMBER_PATTERN.flatMap(([e, t]) =>
-    Object.entries(t).map(([key, value]) => [
-      key,
-      {
-        unit: e,
-        size: value,
-      },
-    ]),
-  ),
-);
+var UNIT_SIZE_TABLE; // deferred: uses NUMBER_PATTERN of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-3s7ydtfd.js:16427", () => {
+  UNIT_SIZE_TABLE = new Map(
+    NUMBER_PATTERN.flatMap(([unit, sizes]) =>
+      Object.entries(sizes).map(([key, value]) => [
+        key,
+        {
+          unit,
+          size: value,
+        },
+      ]),
+    ),
+  );
+});
 //@ chunk-3s7ydtfd.js:16516-16596 placement
 /**
  * 乘单位大小后校验量级
  */
-function applyUnitSize(e, t) {
-  let { unit, size } = UNIT_SIZE_TABLE.get(t) ?? {
-    unit: t,
+function applyUnitSize(value, suffix) {
+  let { unit, size } = UNIT_SIZE_TABLE.get(suffix) ?? {
+    unit: suffix,
     size: 1,
   };
-  return checkMagnitude(e * size, unit);
+  return checkMagnitude(value * size, unit);
 }
 //@ chunk-3s7ydtfd.js:16596-16664 placement
 /**
  * 货币优先按 SI 倍数，否则按单位表
  */
-function scaledNumber(e, t, currency) {
+function scaledNumber(value, suffix, currency) {
   return currency !== undefined
-    ? checkMagnitude(e * (SI_MULTIPLIERS.get(t) ?? 1), currency)
-    : applyUnitSize(e, t);
+    ? checkMagnitude(value * (SI_MULTIPLIERS.get(suffix) ?? 1), currency)
+    : applyUnitSize(value, suffix);
 }
 //@ chunk-3s7ydtfd.js:16664-16844 placement
 /**
@@ -333,45 +363,60 @@ function scaledNumber(e, t, currency) {
 function numberFromMatch(groups) {
   let { sign, currency, suffix = "" } = groups;
   let { integer = "0", fraction = "", exponent = "0" } = groups;
-  let n = Number(`${integer.replaceAll(",", "")}${fraction}e${exponent}`);
-  return scaledNumber(sign === "" || sign === "+" ? n : -n, suffix, currency);
+  let combined = Number(`${integer.replaceAll(",", "")}${fraction}e${exponent}`);
+  return scaledNumber(sign === "" || sign === "+" ? combined : -combined, suffix, currency);
 }
 //@ chunk-3s7ydtfd.js:16844-16940 placement
 /**
  * 数字正则的整数/小数部分
  */
-var NUMBER_INTEGER_PART =
-  String.raw`(?=\.?\d)(?<integer>\d{1,3}(?:,\d{3})+|\d+)?` + String.raw`(?<fraction>\.\d+)?`;
+var NUMBER_INTEGER_PART; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-3s7ydtfd.js:16844", () => {
+  NUMBER_INTEGER_PART =
+    String.raw`(?=\.?\d)(?<integer>\d{1,3}(?:,\d{3})+|\d+)?` + String.raw`(?<fraction>\.\d+)?`;
+});
 //@ chunk-3s7ydtfd.js:16940-16987 placement
 /**
  * 指数部分
  */
-var NUMBER_EXPONENT_PART = String.raw`(?:e(?<exponent>[-+]?\d+))?`;
+var NUMBER_EXPONENT_PART; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-3s7ydtfd.js:16940", () => {
+  NUMBER_EXPONENT_PART = String.raw`(?:e(?<exponent>[-+]?\d+))?`;
+});
 //@ chunk-3s7ydtfd.js:16987-17064 placement
 /**
  * 符号与货币前缀
  */
-var NUMBER_SIGN_CURRENCY = String.raw`^(?<sign>[-+\u2212(]?)(?<currency>[$\u20AC\u00A3\u00A5])?`;
+var NUMBER_SIGN_CURRENCY; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-3s7ydtfd.js:16987", () => {
+  NUMBER_SIGN_CURRENCY = String.raw`^(?<sign>[-+\u2212(]?)(?<currency>[$\u20AC\u00A3\u00A5])?`;
+});
 //@ chunk-3s7ydtfd.js:17064-17151 placement
 /**
  * 空格、后缀与收尾
  */
-var NUMBER_SUFFIX_PART = String.raw`(?<space>\s?)` + String.raw`(?<suffix>[a-z\u00B5%]*(?:\/[a-z]+)?)\)?$`;
+var NUMBER_SUFFIX_PART; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-3s7ydtfd.js:17064", () => {
+  NUMBER_SUFFIX_PART = String.raw`(?<space>\s?)` + String.raw`(?<suffix>[a-z\u00B5%]*(?:\/[a-z]+)?)\)?$`;
+});
 //@ chunk-3s7ydtfd.js:17151-17256 placement
 var TIME_FORMATS_HINT =
   'Times are read as ISO 8601 (2026-09-07, 2026-W37), epoch numbers, "7 Sep 2026" or "Sep 7, 2026"';
 //@ chunk-3s7ydtfd.js:17256-17291 placement
-var regExp_4 = new RegExp(
-  NUMBER_SIGN_CURRENCY + NUMBER_INTEGER_PART + NUMBER_EXPONENT_PART + NUMBER_SUFFIX_PART,
-  "i",
-);
+var regExp_4; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-3s7ydtfd.js:17256", () => {
+  regExp_4 = new RegExp(
+    NUMBER_SIGN_CURRENCY + NUMBER_INTEGER_PART + NUMBER_EXPONENT_PART + NUMBER_SUFFIX_PART,
+    "i",
+  );
+});
 //@ chunk-3s7ydtfd.js:17291-17728 placement
 /**
  * 解析数字（千分位、指数、货币、单位后缀），返回值或 empty/not a number。
  */
-function parseNumberWithUnit(e, t = false) {
-  if (typeof e === "number") return checkMagnitude(e, "");
-  let trimmed = String(e ?? "").trim();
+function parseNumberWithUnit(value, allowBareSuffix = false) {
+  if (typeof value === "number") return checkMagnitude(value, "");
+  let trimmed = String(value ?? "").trim();
   if (EMPTY_CELL_RE.test(trimmed))
     return {
       kind: "empty",
@@ -384,8 +429,8 @@ function parseNumberWithUnit(e, t = false) {
   if (mapped.length >= DEFAULT_DECIMALS) return checkMagnitude(stableSum(mapped), "s");
   let groups_2 = regExp_4.exec(trimmed)?.groups;
   if (!groups_2) return unreadNumber("not a number");
-  let [f = ""] = (groups_2.suffix ?? "").split("/");
-  return groups_2.space === "" && !t && f !== "" && !UNIT_SIZE_TABLE.has(f)
+  let [unitPart = ""] = (groups_2.suffix ?? "").split("/");
+  return groups_2.space === "" && !allowBareSuffix && unitPart !== "" && !UNIT_SIZE_TABLE.has(unitPart)
     ? unreadNumber("not a number")
     : numberFromMatch(groups_2);
 }
@@ -422,39 +467,40 @@ var weekdayIndex = (isoString) =>
 /**
  * ISO 周对应年份
  */
-var isoWeekYear = (e, t) => logEaselError(parseISOString([e, 0, t + DAYS_PER_WEEK_OFFSET - 1]), "UTC")[0];
+var isoWeekYear = (year, dayOfYear) =>
+  logEaselError(parseISOString([year, 0, dayOfYear + DAYS_PER_WEEK_OFFSET - 1]), "UTC")[0];
 //@ chunk-3s7ydtfd.js:17915-18081 placement
 /**
  * ISO 周（年-W周-日）转时间戳，不存在的周返回错误。
  */
 function isoWeekToMs(groups) {
-  let t = Number(groups.year);
-  let o = Number(groups.week);
-  let r =
+  let year = Number(groups.year);
+  let week = Number(groups.week);
+  let dayOfYear =
     DAYS_PER_YEAR_LEAP_BOUND -
-    weekdayIndex(parseISOString([t, 0, DAYS_PER_YEAR_LEAP_BOUND])) +
-    (o - 1) * DAYS_PER_WEEK_ISO;
-  return o < 1 || isoWeekYear(t, r) !== t
+    weekdayIndex(parseISOString([year, 0, DAYS_PER_YEAR_LEAP_BOUND])) +
+    (week - 1) * DAYS_PER_WEEK_ISO;
+  return week < 1 || isoWeekYear(year, dayOfYear) !== year
     ? unreadNumber("no such week")
-    : timeValue(parseISOString([t, 0, r + Number(groups.weekday ?? 1) - 1]), ZONE_UNKNOWN);
+    : timeValue(parseISOString([year, 0, dayOfYear + Number(groups.weekday ?? 1) - 1]), ZONE_UNKNOWN);
 }
 //@ chunk-3s7ydtfd.js:18081-18109 placement
 /**
  * 某字段是否不同
  */
-var fieldDiffersAt = (e) => (t, o) => t !== e[o];
+var fieldDiffersAt = (expected) => (combined, index) => combined !== expected[index];
 //@ chunk-3s7ydtfd.js:18109-18300 placement
 /**
  * 按时区偏移与小数秒修正时间戳。
  */
-function applyZoneOffset(isoString, t) {
-  let groups = ZONE_OFFSET_RE.exec(t.zone ?? "")?.groups ?? {};
-  let r = Number(groups.hours ?? 0) * MINUTES_PER_HOUR + Number(groups.minutes ?? 0);
+function applyZoneOffset(isoString, groups) {
+  let groups_2 = ZONE_OFFSET_RE.exec(groups.zone ?? "")?.groups ?? {};
+  let offsetMinutes = Number(groups_2.hours ?? 0) * MINUTES_PER_HOUR + Number(groups_2.minutes ?? 0);
   return timeValue(
     isoString -
-      (groups.sign === "-" ? -r : r) * MS_PER_MINUTE +
-      Math.round(Number(t.fraction ?? "0") * MS_PER_SECOND),
-    t.zone !== undefined,
+      (groups_2.sign === "-" ? -offsetMinutes : offsetMinutes) * MS_PER_MINUTE +
+      Math.round(Number(groups.fraction ?? "0") * MS_PER_SECOND),
+    groups.zone !== undefined,
   );
 }
 //@ chunk-3s7ydtfd.js:18300-18551 placement
@@ -463,7 +509,7 @@ function describeDate(groups) {
   let { hour = "0", minute = "0", second = "0" } = groups;
   let mapped = [
     year,
-    monthName === undefined ? Number(month) - 1 : parts.findIndex((l) => monthName.startsWith(l)),
+    monthName === undefined ? Number(month) - 1 : parts.findIndex((prefix) => monthName.startsWith(prefix)),
     day,
     hour,
     minute,
@@ -478,35 +524,41 @@ function describeDate(groups) {
 /**
  * 带时区的时刻模式
  */
-var FULL_TIME_PATTERN = TIME_OF_DAY_PATTERN + `(?:${ZONE_PATTERN})?`;
+var FULL_TIME_PATTERN; // deferred: uses TIME_OF_DAY_PATTERN of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-3s7ydtfd.js:18551", () => {
+  FULL_TIME_PATTERN = TIME_OF_DAY_PATTERN + `(?:${ZONE_PATTERN})?`;
+});
 //@ chunk-3s7ydtfd.js:18574-19053 placement
-var DATE_PATTERNS = [
-  String.raw`^(?<year>\d{4})(?:[-/](?<month>\d\d)(?:[-/](?<day>\d\d)` +
-    String.raw`(?:[T ]${FULL_TIME_PATTERN})?)?)?$`,
-  String.raw`^(?:[A-Z][a-z]{2}, )?(?<day>\d{1,2}) ` +
-    String.raw`(?<monthName>[A-Z][a-z]+) (?<year>\d{4})` +
-    String.raw`(?: ${FULL_TIME_PATTERN})?$`,
-  String.raw`^(?<monthName>[A-Z][a-z]+) (?<day>\d{1,2}), (?<year>\d{4})` +
-    String.raw`(?: ${FULL_TIME_PATTERN})?$`,
-  String.raw`^(?<year>\d{4})(?<month>\d\d)(?<day>\d\d)T` +
-    String.raw`(?<hour>\d\d)(?<minute>\d\d)(?<second>\d\d)(?<zone>Z)$`,
-].map((e) => new RegExp(e));
+var DATE_PATTERNS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-3s7ydtfd.js:18574", () => {
+  DATE_PATTERNS = [
+    String.raw`^(?<year>\d{4})(?:[-/](?<month>\d\d)(?:[-/](?<day>\d\d)` +
+      String.raw`(?:[T ]${FULL_TIME_PATTERN})?)?)?$`,
+    String.raw`^(?:[A-Z][a-z]{2}, )?(?<day>\d{1,2}) ` +
+      String.raw`(?<monthName>[A-Z][a-z]+) (?<year>\d{4})` +
+      String.raw`(?: ${FULL_TIME_PATTERN})?$`,
+    String.raw`^(?<monthName>[A-Z][a-z]+) (?<day>\d{1,2}), (?<year>\d{4})` +
+      String.raw`(?: ${FULL_TIME_PATTERN})?$`,
+    String.raw`^(?<year>\d{4})(?<month>\d\d)(?<day>\d\d)T` +
+      String.raw`(?<hour>\d\d)(?<minute>\d\d)(?<second>\d\d)(?<zone>Z)$`,
+  ].map((pattern) => new RegExp(pattern));
+});
 //@ chunk-3s7ydtfd.js:19053-19373 placement
 /**
  * 解析时间单元格（ISO 日期、周、epoch 数字等），返回毫秒或错误。
  */
-function parseTimeCell(e) {
-  let trimmed = String(e ?? "").trim();
+function parseTimeCell(value) {
+  let trimmed = String(value ?? "").trim();
   if (EMPTY_CELL_RE.test(trimmed))
     return {
       kind: "empty",
       why: "empty",
     };
-  let r = NUMERICISH_RE.test(trimmed) ? Number(trimmed) : NaN;
-  let s = DIGIT_COUNT_TO_MS[String(Math.trunc(r)).length];
-  if (!Number.isNaN(r) && s !== undefined) return timeValue(r * s, IS_ZONED_TIME);
-  for (let n of DATE_PATTERNS) {
-    let groups = n.exec(trimmed)?.groups;
+  let numeric = NUMERICISH_RE.test(trimmed) ? Number(trimmed) : NaN;
+  let unitMs = DIGIT_COUNT_TO_MS[String(Math.trunc(numeric)).length];
+  if (!Number.isNaN(numeric) && unitMs !== undefined) return timeValue(numeric * unitMs, IS_ZONED_TIME);
+  for (let pattern of DATE_PATTERNS) {
+    let groups = pattern.exec(trimmed)?.groups;
     if (groups) return describeDate(groups);
   }
   let groups = ISO_WEEK_RE.exec(trimmed)?.groups;
@@ -523,48 +575,51 @@ It reads no file, and no result that the host cut or saved to a file: query less
 /**
  * easel chart 工具定义
  */
-var CHART_TOOL_DEF = {
-  name: "chart",
-  description: CHART_TOOL_DESCRIPTION,
-  inputSchema: CHART_INPUT_SCHEMA,
-};
+var CHART_TOOL_DEF; // deferred: uses CHART_INPUT_SCHEMA (./chartSchema.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-3s7ydtfd.js:20372", () => {
+  CHART_TOOL_DEF = {
+    name: "chart",
+    description: CHART_TOOL_DESCRIPTION,
+    inputSchema: CHART_INPUT_SCHEMA,
+  };
+});
 //@ chunk-3s7ydtfd.js:20424-20682 placement
-function lastUserMessageIndex(e, toolUseId) {
-  let o = Array.isArray(e) ? e : [];
-  let lastIndex = o.findLastIndex((m) => m.role === "user" && !m.toolResults?.length);
-  let flattened = o.slice(lastIndex + 1).flatMap((m) => m.toolUses);
-  let index = flattened.findIndex((m) => m.tool_use_id === toolUseId);
+function lastUserMessageIndex(messages, toolUseId) {
+  let list = Array.isArray(messages) ? messages : [];
+  let lastIndex = list.findLastIndex((message) => message.role === "user" && !message.toolResults?.length);
+  let flattened = list.slice(lastIndex + 1).flatMap((message) => message.toolUses);
+  let index = flattened.findIndex((toolUse) => toolUse.tool_use_id === toolUseId);
   return flattened
     .slice(0, index < 0 ? undefined : index)
-    .some((m) => m.text === undefined && m.tool !== MCP_EASEL_CHART);
+    .some((toolUse) => toolUse.text === undefined && toolUse.tool !== MCP_EASEL_CHART);
 }
 //@ chunk-3s7ydtfd.js:20682-20911 placement
 /**
  * 读会话消息中的工具调用；若该调用的消息尚未出现则按延迟表等待重试。
  */
-async function waitForToolUses(e, t, o) {
-  let { agentId } = t;
-  let [s, ...p] = o;
-  let m = await e.session.messages(
+async function waitForToolUses(ctx, target, waits) {
+  let { agentId } = target;
+  let [firstWait, ...restWaits] = waits;
+  let messages = await ctx.session.messages(
     agentId
       ? {
           agentId,
         }
       : {},
   );
-  if (s === undefined || !lastUserMessageIndex(m, t.tool_use_id))
-    return Array.isArray(m) ? collectToolUses(m) : undefined;
-  await e.clock.sleep(s, {
-    signal: t.signal,
+  if (firstWait === undefined || !lastUserMessageIndex(messages, target.tool_use_id))
+    return Array.isArray(messages) ? collectToolUses(messages) : undefined;
+  await ctx.clock.sleep(firstWait, {
+    signal: target.signal,
   });
-  return waitForToolUses(e, t, p);
+  return waitForToolUses(ctx, target, restWaits);
 }
 //@ chunk-3s7ydtfd.js:20911-20955 placement
 /**
  * 改成 bars 且去 log
  */
-var asBarsForm = (e) => ({
-  ...e,
+var asBarsForm = (form) => ({
+  ...form,
   form: "bars",
   log: undefined,
 });
@@ -572,18 +627,18 @@ var asBarsForm = (e) => ({
 /**
  * 单元格值标准化：基本类型原样，空为 null，其他转 JSON 字符串。
  */
-function toCellValue(e) {
-  return typeof e === "string" || typeof e === "number" || typeof e === "boolean"
-    ? e
-    : e === undefined || e === null
+function toCellValue(value) {
+  return typeof value === "string" || typeof value === "number" || typeof value === "boolean"
+    ? value
+    : value === undefined || value === null
       ? null
-      : JSON.stringify(e);
+      : JSON.stringify(value);
 }
 //@ chunk-3s7ydtfd.js:21086-21127 placement
 /**
  * 按索引表取列值
  */
-var mapKeysToValues = (e, t) => e.map((o) => t.get(o) ?? null);
+var mapKeysToValues = (keys, valueByKey) => keys.map((key) => valueByKey.get(key) ?? null);
 //@ chunk-3s7ydtfd.js:21127-21286 placement
 /**
  * 分隔符表格式：制表符、竖线表、CSV、分号。
@@ -610,7 +665,8 @@ var DELIMITED_FORMATS = [
 /**
  * 数值与时间都解析不了
  */
-var isUnreadableCell = (e) => parseNumberWithUnit(e).kind === "unread" && parseTimeCell(e).kind === "unread";
+var isUnreadableCell = (cell) =>
+  parseNumberWithUnit(cell).kind === "unread" && parseTimeCell(cell).kind === "unread";
 //@ chunk-3s7ydtfd.js:21343-21360 placement
 var GRAFANA = "Grafana";
 //@ chunk-3s7ydtfd.js:21360-21371 placement
@@ -624,15 +680,18 @@ var VALUE = "value";
 /**
  * 取路径上的标签：对象展开为键值对，标量转为单项。
  */
-function labelEntries(e, label) {
-  let [o] = selectPath(e, label);
-  let r = isPlainObject(o);
-  let s = o === undefined || o === WILDCARD;
-  return r
-    ? Object.entries(o).map(([key, value]) => [key, typeof value === "string" ? cleanCellText(value) : value])
-    : s
+function labelEntries(row, label) {
+  let [labelValue] = selectPath(row, label);
+  let isObject = isPlainObject(labelValue);
+  let isMissing = labelValue === undefined || labelValue === WILDCARD;
+  return isObject
+    ? Object.entries(labelValue).map(([key, value]) => [
+        key,
+        typeof value === "string" ? cleanCellText(value) : value,
+      ])
+    : isMissing
       ? []
-      : [[label, cleanCellText(String(o))]];
+      : [[label, cleanCellText(String(labelValue))]];
 }
 //@ chunk-3s7ydtfd.js:21543-21553 placement
 /**
@@ -715,12 +774,16 @@ var METRICS_FORMATS = [
 /**
  * 指标格式名（含 grafana）
  */
-var METRICS_FORMAT_NAMES = [...METRICS_FORMATS.map((e) => e.name), GRAFANA];
+var METRICS_FORMAT_NAMES; // deferred: uses METRICS_FORMATS of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-3s7ydtfd.js:22669", () => {
+  METRICS_FORMAT_NAMES = [...METRICS_FORMATS.map((format) => format.name), GRAFANA];
+});
 //@ chunk-3s7ydtfd.js:22704-22782 placement
 /**
  * 各系列点数一致
  */
-var hasUniformPointCounts = (e) => e.every((t) => t.cellsByKey.every(([, o]) => o.length === t.pointCount));
+var hasUniformPointCounts = (seriesList) =>
+  seriesList.every((series) => series.cellsByKey.every(([, values]) => values.length === series.pointCount));
 //@ chunk-3s7ydtfd.js:22782-22816 placement
 /**
  * key:value 形式的指标名

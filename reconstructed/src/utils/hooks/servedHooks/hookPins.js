@@ -14,7 +14,13 @@ import { constants } from "fs";
 import { tmpdir as tmpdir_2 } from "os";
 import { randomUUID } from "crypto";
 import { DoctorLazy } from "../../../cli/handlers/util.js";
-import { u, literal, string, record, discriminatedUnion } from "../../../../vendor/zod/v4/classic/schemas.js";
+import {
+  objectSchema,
+  literal,
+  stringSchema,
+  record,
+  discriminatedUnion,
+} from "../../../../vendor/zod/v4/classic/schemas.js";
 import { servedCallsDir } from "../../../remote/tools/servedCallLog.js";
 import { computeContentHash } from "../../commitAttribution.js";
 import { getFileReader } from "../../fileStore.js";
@@ -65,59 +71,66 @@ import { claudeTempDir, tmpdir } from "../../tempDir.js";
 import { getPlatform } from "../../platform.js";
 import { createCombinedAbortSignal } from "../../combinedAbortSignal.js";
 import { shellQuoteArgs } from "../../bash/bashPipeCommand.js";
+import { deferInit } from "../../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:906646-906863 placement
-var HOOK_PINS_VERSION = 1;
-var hookPinsFileSchema = DoctorLazy(() =>
-  u({
-    version: literal(HOOK_PINS_VERSION),
-    project: string(),
-    pins: record(
-      string().regex(/^[0-9a-f]{64}$/),
-      discriminatedUnion("kind", [
-        u({
-          kind: literal("script"),
-          path: string(),
-          sha256: string().regex(/^[0-9a-f]{64}$/),
-        }),
-        u({
-          kind: literal("inline"),
-        }),
-        u({
-          kind: literal("unpinnable"),
-        }),
-      ]),
-    ),
-  }),
-);
+var HOOK_PINS_VERSION; // deferred: uses DoctorLazy (../../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var hookPinsFileSchema;
+deferInit("chunk-e6aww6q8.js:906646", () => {
+  HOOK_PINS_VERSION = 1;
+  hookPinsFileSchema = DoctorLazy(() =>
+    objectSchema({
+      version: literal(HOOK_PINS_VERSION),
+      project: stringSchema(),
+      pins: record(
+        stringSchema().regex(/^[0-9a-f]{64}$/),
+        discriminatedUnion("kind", [
+          objectSchema({
+            kind: literal("script"),
+            path: stringSchema(),
+            sha256: stringSchema().regex(/^[0-9a-f]{64}$/),
+          }),
+          objectSchema({
+            kind: literal("inline"),
+          }),
+          objectSchema({
+            kind: literal("unpinnable"),
+          }),
+        ]),
+      ),
+    }),
+  );
+});
 //@ chunk-e6aww6q8.js:906863-906935 placement
-function hookPinsPath(e) {
-  return join(servedCallsDir(), `hook-pins-${computeContentHash(e).slice(0, 32)}.jsonl`);
+function hookPinsPath(projectDir) {
+  return join(servedCallsDir(), `hook-pins-${computeContentHash(projectDir).slice(0, 32)}.jsonl`);
 }
 //@ chunk-e6aww6q8.js:906935-907173 placement
-async function readAcceptedHookPins(e) {
-  let n;
+async function readAcceptedHookPins(projectDir) {
+  let rawText;
   try {
-    n = await getFileReader().read(hookPinsPath(e));
+    rawText = await getFileReader().read(hookPinsPath(projectDir));
   } catch (error) {
     return isENOENT(error) ? undefined : new Map();
   }
   try {
-    let r = hookPinsFileSchema().safeParse(jsonParseRaw(n.trim()));
-    return r.success && r.data.project === e ? new Map(Object.entries(r.data.pins)) : new Map();
+    let parsed = hookPinsFileSchema().safeParse(jsonParseRaw(rawText.trim()));
+    return parsed.success && parsed.data.project === projectDir
+      ? new Map(Object.entries(parsed.data.pins))
+      : new Map();
   } catch {
     return new Map();
   }
 }
 //@ chunk-e6aww6q8.js:907173-907314 placement
-async function writeAcceptedHookPins(projectDir, n) {
+async function writeAcceptedHookPins(projectDir, pins) {
   await getFileReader().mkdir(servedCallsDir(), 448);
   await getFileReader().atomicWrite(
     hookPinsPath(projectDir),
     toJsonLine({
       version: HOOK_PINS_VERSION,
       project: projectDir,
-      pins: Object.fromEntries(n),
+      pins: Object.fromEntries(pins),
     }),
     384,
   );
@@ -137,20 +150,22 @@ var MAX_SET_ASIDE_ASKS = 3;
 /**
  * 接入时创建项目 hook 固定状态：记录项目命令 hook，失败时记录日志。
  */
-function createProjectHookPinsState(e) {
+function createProjectHookPinsState(projectAttach) {
   if (!isViolinPegOn()) return;
   return {
-    pinned: pinProjectCommandHooks(e.projectDir, e.launchDir, resolveOptions(e.envAtAttach)).catch(
-      (error) => {
-        logForDebugging(
-          `[remote-tools] could not record this project's command hooks at attach (${errorMessage(error)}); none is run`,
-        );
-        return {
-          current: new Map(),
-          accepted: new Map(),
-        };
-      },
-    ),
+    pinned: pinProjectCommandHooks(
+      projectAttach.projectDir,
+      projectAttach.launchDir,
+      resolveOptions(projectAttach.envAtAttach),
+    ).catch((error) => {
+      logForDebugging(
+        `[remote-tools] could not record this project's command hooks at attach (${errorMessage(error)}); none is run`,
+      );
+      return {
+        current: new Map(),
+        accepted: new Map(),
+      };
+    }),
     strikes: new Map(),
     stopped: new Set(),
     changedSinceAttach: new Set(),
@@ -170,13 +185,13 @@ function createProjectHookPinsState(e) {
  * 汇总各设置源的 PreToolUse 命令 hook 并固定其脚本摘要。
  */
 async function pinProjectCommandHooks(projectDir, launchDir, home) {
-  let flattened = SETTING_SOURCES.flatMap((S) =>
-    (getSettingsForSource(S)?.hooks?.PreToolUse ?? []).flatMap((w) =>
-      w.hooks.flatMap((hook) =>
+  let flattened = SETTING_SOURCES.flatMap((settingSource) =>
+    (getSettingsForSource(settingSource)?.hooks?.PreToolUse ?? []).flatMap((matcherEntry) =>
+      matcherEntry.hooks.flatMap((hook) =>
         hook.type === "command"
           ? [
               {
-                key: hookPinKey(w.matcher ?? "", hook),
+                key: hookPinKey(matcherEntry.matcher ?? "", hook),
                 hook,
               },
             ]
@@ -184,11 +199,11 @@ async function pinProjectCommandHooks(projectDir, launchDir, home) {
       ),
     ),
   );
-  let results = await Promise.all([projectDir, launchDir].map((S) => realpath(S).catch(() => S)));
-  let y = new Map();
-  for (let { key, hook } of flattened) y.set(key, await pinCommandHook(hook, projectDir, home, results));
+  let results = await Promise.all([projectDir, launchDir].map((dir) => realpath(dir).catch(() => dir)));
+  let pins = new Map();
+  for (let { key, hook } of flattened) pins.set(key, await pinCommandHook(hook, projectDir, home, results));
   return {
-    current: y,
+    current: pins,
     accepted: await readAcceptedHookPins(projectDir),
   };
 }
@@ -200,15 +215,15 @@ async function saveSeenHookPins(reach) {
   let projectHooks = reach.projectHooks;
   if (projectHooks === undefined) return;
   try {
-    let { current: r, accepted } = await projectHooks.pinned;
+    let { current: currentPins, accepted } = await projectHooks.pinned;
     if (projectHooks.seen.size === 0) return;
-    let h = accepted === undefined ? projectHooks.seen : projectHooks.shownChanged;
-    let y = new Map(accepted);
-    for (let S of h) {
-      let pin = r.get(S)?.pin;
-      if (pin !== undefined) y.set(S, pin);
+    let keysToPin = accepted === undefined ? projectHooks.seen : projectHooks.shownChanged;
+    let pins = new Map(accepted);
+    for (let key of keysToPin) {
+      let pin = currentPins.get(key)?.pin;
+      if (pin !== undefined) pins.set(key, pin);
     }
-    await writeAcceptedHookPins(reach.projectDir, y);
+    await writeAcceptedHookPins(reach.projectDir, pins);
   } catch (error) {
     logForDebugging(
       `[remote-tools] could not record this project's command hooks for next time (${errorMessage(error)})`,
@@ -227,21 +242,21 @@ function hookPinKey(matcher, hook) {
   );
 }
 //@ chunk-e6aww6q8.js:908631-908777 placement
-function isSameHookPin(e, n) {
+function isSameHookPin(left, right) {
   return (
-    (e.kind === "inline" && n.kind === "inline") ||
-    (e.kind === "script" &&
-      n.kind === "script" &&
-      e.sha256 === n.sha256 &&
-      foldPathSegments(e.path) === foldPathSegments(n.path))
+    (left.kind === "inline" && right.kind === "inline") ||
+    (left.kind === "script" &&
+      right.kind === "script" &&
+      left.sha256 === right.sha256 &&
+      foldPathSegments(left.path) === foldPathSegments(right.path))
   );
 }
 //@ chunk-e6aww6q8.js:908777-908933 placement
-function describeHookPin(e) {
-  if (e === undefined) return "none";
-  switch (e.kind) {
+function describeHookPin(pin) {
+  if (pin === undefined) return "none";
+  switch (pin.kind) {
     case "script":
-      return truncateToLength(e.sha256, 12);
+      return truncateToLength(pin.sha256, 12);
     case "inline":
       return "inline";
     case "unpinnable":
@@ -249,9 +264,9 @@ function describeHookPin(e) {
   }
 }
 //@ chunk-e6aww6q8.js:908933-909023 placement
-function openPinnedScript(e) {
+function openPinnedScript(scriptPath) {
   return open(
-    e,
+    scriptPath,
     constants.O_RDONLY |
       constants.O_NONBLOCK |
       READ_LIMITS |
@@ -262,24 +277,24 @@ function openPinnedScript(e) {
 /**
  * 为一个项目 PreToolUse 命令钩子计算"固定标识"：无法分析的命令记为 inline；能解析到脚本且脚本在允许目录内、是唯一硬链接的稳定文件时记录路径与 sha256，否则 unpinnable。
  */
-async function pinCommandHook(hook, n, home, s) {
-  let h = getProjectConfigRoot() ?? n;
-  let y = analyzeHookCommand(hook, {
+async function pinCommandHook(hook, projectDir, home, projectRealPaths) {
+  let projectRoot = getProjectConfigRoot() ?? projectDir;
+  let analysis = analyzeHookCommand(hook, {
     home,
-    projectDir: h,
-    hookCwd: h,
+    projectDir: projectRoot,
+    hookCwd: projectRoot,
     defaultShell: "bash",
     shellPrefix: undefined,
   });
-  if (y.kind === "opaque")
+  if (analysis.kind === "opaque")
     return {
       pin: {
         kind: "inline",
       },
     };
-  let S;
+  let resolvedPath;
   try {
-    S = await realpath(y.resolvedPath);
+    resolvedPath = await realpath(analysis.resolvedPath);
   } catch {
     return {
       pin: {
@@ -287,14 +302,14 @@ async function pinCommandHook(hook, n, home, s) {
       },
     };
   }
-  if (!pathsOverlapForPlatform([S], s))
+  if (!pathsOverlapForPlatform([resolvedPath], projectRealPaths))
     return {
       pin: {
         kind: "unpinnable",
       },
     };
-  let w = await hashStableScriptFile(S);
-  return w === undefined
+  let hashed = await hashStableScriptFile(resolvedPath);
+  return hashed === undefined
     ? {
         pin: {
           kind: "unpinnable",
@@ -303,12 +318,12 @@ async function pinCommandHook(hook, n, home, s) {
     : {
         pin: {
           kind: "script",
-          path: S,
-          sha256: w.sha256,
+          path: resolvedPath,
+          sha256: hashed.sha256,
         },
         script: {
-          bytes: w.bytes,
-          site: y.site,
+          bytes: hashed.bytes,
+          site: analysis.site,
         },
       };
 }
@@ -317,38 +332,45 @@ async function pinCommandHook(hook, n, home, s) {
  * 对稳定的脚本文件计算哈希：只接受无硬链接的普通文件且目录无符号链接。
  */
 async function hashStableScriptFile(
-  e,
-  n = {
-    lstat: (r) =>
-      lstat(r, {
+  scriptPath,
+  deps = {
+    lstat: (targetPath) =>
+      lstat(targetPath, {
         bigint: true,
       }),
     open: openPinnedScript,
   },
 ) {
   try {
-    let stats = await n.lstat(e);
-    if (!stats.isFile() || stats.nlink !== 1n || (await realpath(dirname(e))) !== dirname(e)) return;
-    let s = await n.open(e);
-    let h = false;
+    let stats = await deps.lstat(scriptPath);
+    if (
+      !stats.isFile() ||
+      stats.nlink !== 1n ||
+      (await realpath(dirname(scriptPath))) !== dirname(scriptPath)
+    )
+      return;
+    let handle = await deps.open(scriptPath);
+    let isVerified = false;
     try {
-      let stats_2 = await s.stat({
+      let stats_2 = await handle.stat({
         bigint: true,
       });
-      let w =
-        stats_2.ino === stats.ino && stats_2.dev === stats.dev ? await verifyOpenedPath(s, e) : undefined;
-      h = w?.ok === true && w.value === true;
+      let verification =
+        stats_2.ino === stats.ino && stats_2.dev === stats.dev
+          ? await verifyOpenedPath(handle, scriptPath)
+          : undefined;
+      isVerified = verification?.ok === true && verification.value === true;
     } finally {
-      if (!h) await s.close().catch(() => {});
+      if (!isVerified) await handle.close().catch(() => {});
     }
-    if (!h) return;
-    let y = await checkScriptFile(e, {
-      open: async () => s,
+    if (!isVerified) return;
+    let checked = await checkScriptFile(scriptPath, {
+      open: async () => handle,
     });
-    return y.ok
+    return checked.ok
       ? {
-          sha256: y.sha256,
-          bytes: y.bytes,
+          sha256: checked.sha256,
+          bytes: checked.bytes,
         }
       : undefined;
   } catch {
@@ -359,52 +381,59 @@ async function hashStableScriptFile(
 /**
  * 固定（pin）钩子命令：确定程序与脚本内容，Windows 下无法解析时标记。
  */
-async function pinHookCommand(e) {
-  let projectHooks = e.reach.projectHooks;
-  if (!isViolinPegOn() || projectHooks === undefined || !e.fromSettingsFile || e.held === "windows_unparsed")
+async function pinHookCommand(request) {
+  let projectHooks = request.reach.projectHooks;
+  if (
+    !isViolinPegOn() ||
+    projectHooks === undefined ||
+    !request.fromSettingsFile ||
+    request.held === "windows_unparsed"
+  )
     return;
-  if (e.held === "unreadable") return onUnavailableNoop(e, "unpinnable");
-  if ((e.hook.shell ?? "bash") !== "bash") return onUnavailableNoop(e, "shell");
-  if (e.shellPrefix !== undefined && e.shellPrefix !== "") return onUnavailableNoop(e, "shell_prefix");
-  let mapped = e.matcherTexts.map((matcherText) => hookPinKey(matcherText, e.hook));
-  if (mapped.some((qt) => projectHooks.stopped.has(qt))) return onUnavailableNoop(e, "stopped");
-  let s = isViolinOverstandOn();
-  if (s && mapped.some((qt) => projectHooks.setAside.has(qt))) {
-    logServedHookHeld_2(e, "set_aside_after_change", {});
+  if (request.held === "unreadable") return onUnavailableNoop(request, "unpinnable");
+  if ((request.hook.shell ?? "bash") !== "bash") return onUnavailableNoop(request, "shell");
+  if (request.shellPrefix !== undefined && request.shellPrefix !== "")
+    return onUnavailableNoop(request, "shell_prefix");
+  let mapped = request.matcherTexts.map((matcherText) => hookPinKey(matcherText, request.hook));
+  if (mapped.some((pinKey) => projectHooks.stopped.has(pinKey))) return onUnavailableNoop(request, "stopped");
+  let setAsideMode = isViolinOverstandOn();
+  if (setAsideMode && mapped.some((setAsideKey) => projectHooks.setAside.has(setAsideKey))) {
+    logServedHookHeld_2(request, "set_aside_after_change", {});
     return {
-      hook: e.hook,
+      hook: request.hook,
       outcome: "success",
     };
   }
-  let { hook } = e;
-  let y = await e.reach.current();
-  let S = y.includes("/")
+  let { hook } = request;
+  let reachPath = await request.reach.current();
+  let sandboxMode = reachPath.includes("/")
     ? {
         unavailable: "unknown_reach",
       }
-    : resolveHookSandboxMode(e.readRules);
-  if ("unavailable" in S) return projectHookUnavailable(e, projectHooks, S.unavailable);
-  let { mode } = S;
-  let L = uniq([
-    ...e.readableDirs,
+    : resolveHookSandboxMode(request.readRules);
+  if ("unavailable" in sandboxMode)
+    return projectHookUnavailable(request, projectHooks, sandboxMode.unavailable);
+  let { mode } = sandboxMode;
+  let readableDirs = uniq([
+    ...request.readableDirs,
     ...(await Promise.all(
-      e.readableDirs.map((readableDir) => realpath(readableDir).catch(() => readableDir)),
+      request.readableDirs.map((readableDir) => realpath(readableDir).catch(() => readableDir)),
     )),
   ]);
-  let { current: G, accepted } = await projectHooks.pinned;
-  let found = mapped.find((qt) => G.has(qt));
-  let Se = found === undefined ? undefined : G.get(found);
-  let ke =
-    Se === undefined || (found !== undefined && projectHooks.changedSinceAttach.has(found))
+  let { current: currentPins, accepted } = await projectHooks.pinned;
+  let found = mapped.find((currentKey) => currentPins.has(currentKey));
+  let seenPin = found === undefined ? undefined : currentPins.get(found);
+  let freshPin =
+    seenPin === undefined || (found !== undefined && projectHooks.changedSinceAttach.has(found))
       ? undefined
-      : await pinCommandHook(hook, e.reach.projectDir, e.home, L);
-  if (found === undefined || Se === undefined) return;
-  if (Se.pin.kind === "unpinnable") return onUnavailableNoop(e, "unpinnable");
+      : await pinCommandHook(hook, request.reach.projectDir, request.home, readableDirs);
+  if (found === undefined || seenPin === undefined) return;
+  if (seenPin.pin.kind === "unpinnable") return onUnavailableNoop(request, "unpinnable");
   projectHooks.seen.add(found);
-  let we = ke === undefined || !isSameHookPin(Se.pin, ke.pin);
-  if (we && !s) {
+  let pinChanged = freshPin === undefined || !isSameHookPin(seenPin.pin, freshPin.pin);
+  if (pinChanged && !setAsideMode) {
     projectHooks.changedSinceAttach.add(found);
-    logServedHookHeld_2(e, "held_changed_since_attach", {});
+    logServedHookHeld_2(request, "held_changed_since_attach", {});
     return {
       hook,
       outcome: "success",
@@ -413,192 +442,215 @@ async function pinHookCommand(e) {
       heldForServedCall: true,
     };
   }
-  let Ee = we ? Se : ke;
-  let Ae = accepted?.get(found);
+  let effectivePin = pinChanged ? seenPin : freshPin;
+  let acceptedPin = accepted?.get(found);
   if (
     accepted !== undefined &&
-    (Ae === undefined || !isSameHookPin(Ae, Se.pin)) &&
-    !(s && projectHooks.acceptedUpdated.has(found))
+    (acceptedPin === undefined || !isSameHookPin(acceptedPin, seenPin.pin)) &&
+    !(setAsideMode && projectHooks.acceptedUpdated.has(found))
   ) {
-    let qt =
-      !s || projectHooks.declinedChangedSinceLast.has(found)
+    let updatedAsk =
+      !setAsideMode || projectHooks.declinedChangedSinceLast.has(found)
         ? undefined
         : (projectHooks.updatedAsks.get(found) ?? {
-            question: hookScriptChangedQuestion(describeHookPin(Ae), describeHookPin(Se.pin)),
+            question: hookScriptChangedQuestion(describeHookPin(acceptedPin), describeHookPin(seenPin.pin)),
             puts: 0,
           });
-    if (qt !== undefined) projectHooks.updatedAsks.set(found, qt);
+    if (updatedAsk !== undefined) projectHooks.updatedAsks.set(found, updatedAsk);
     logServedHookHeld_2(
-      e,
+      request,
       "held_changed_since_last_serve",
-      s && qt === undefined
+      setAsideMode && updatedAsk === undefined
         ? {}
         : {
             key: found,
           },
     );
-    let Zt = !projectHooks.said.has("changed_note");
+    let firstChangedNotice = !projectHooks.said.has("changed_note");
     projectHooks.said.add("changed_note");
     return {
       hook,
       outcome: "success",
       permissionBehavior: "ask",
-      hookPermissionDecisionReason: !s
+      hookPermissionDecisionReason: !setAsideMode
         ? HOOK_CHANGED_QUESTION
-        : (qt?.question ?? HOOK_UPDATED_NOT_ACCEPTED_QUESTION),
+        : (updatedAsk?.question ?? HOOK_UPDATED_NOT_ACCEPTED_QUESTION),
       heldForServedCall: true,
-      ...(Zt && {
-        additionalContext: s ? HOOK_CHANGED_ASKING_PERSON : HOOK_CHANGED_ASKS_INSTEAD,
+      ...(firstChangedNotice && {
+        additionalContext: setAsideMode ? HOOK_CHANGED_ASKING_PERSON : HOOK_CHANGED_ASKS_INSTEAD,
       }),
     };
   }
-  let Ie = await realpath(e.reach.projectDir);
+  let projectRealDir = await realpath(request.reach.projectDir);
   if (
-    (Ee.pin.kind === "script" && !pathsOverlapForPlatform([Ee.pin.path], L)) ||
-    !pathsOverlapForPlatform([Ie], L)
+    (effectivePin.pin.kind === "script" && !pathsOverlapForPlatform([effectivePin.pin.path], readableDirs)) ||
+    !pathsOverlapForPlatform([projectRealDir], readableDirs)
   )
-    return onUnavailableNoop(e, "outside_readable");
-  let Me =
+    return onUnavailableNoop(request, "outside_readable");
+  let sandboxAvailability =
     mode === "linux"
       ? await checkHookSandboxAvailable({
-          pathValue: e.environment.extra.PATH ?? EMPTY_PATH_DIR,
-          reach: y,
-          home: e.home,
-          readableDirs: e.readableDirs,
+          pathValue: request.environment.extra.PATH ?? EMPTY_PATH_DIR,
+          reach: reachPath,
+          home: request.home,
+          readableDirs: request.readableDirs,
         })
       : undefined;
-  if (Me !== undefined && "unavailable" in Me) return projectHookUnavailable(e, projectHooks, Me.unavailable);
-  let We = Ee.pin.kind === "script" ? relative(Ie, Ee.pin.path) : "";
-  let ze =
-    We === "" || We.startsWith("..")
+  if (sandboxAvailability !== undefined && "unavailable" in sandboxAvailability)
+    return projectHookUnavailable(request, projectHooks, sandboxAvailability.unavailable);
+  let scriptRelPath =
+    effectivePin.pin.kind === "script" ? relative(projectRealDir, effectivePin.pin.path) : "";
+  let checkLabel =
+    scriptRelPath === "" || scriptRelPath.startsWith("..")
       ? "an inline check"
-      : truncateToLength(printableText(We), MAX_INLINE_CHECK_LABEL_CHARS);
-  let lt = mergeHookEnv(e.environment);
-  let Je = [...y, e.home, await realpath(e.home).catch(() => e.home), claudeTempDir(), ...(Me?.homes ?? [])];
-  let nt = (...qt) =>
-    anyPairMatches(qt, Je) ||
-    (Me !== undefined && qt.some((Zt) => Je.some((rn) => isPathWithinNormalizedCase(Zt, rn))));
-  let pt = getPlatform() === "linux";
-  let Et;
-  for (let qt of [lt.TMPDIR, tmpdir_2(), ...(pt ? [EXTRA_TMP_DIR] : [])]) {
-    if (qt === undefined || !isAbsolute(qt)) continue;
-    let Zt = await realpath(qt).catch(() => {
+      : truncateToLength(printableText(scriptRelPath), MAX_INLINE_CHECK_LABEL_CHARS);
+  let hookEnv = mergeHookEnv(request.environment);
+  let allowedRoots = [
+    ...reachPath,
+    request.home,
+    await realpath(request.home).catch(() => request.home),
+    claudeTempDir(),
+    ...(sandboxAvailability?.homes ?? []),
+  ];
+  let isOutsideAllowedRoots = (...paths) =>
+    anyPairMatches(paths, allowedRoots) ||
+    (sandboxAvailability !== undefined &&
+      paths.some((candidatePath) =>
+        allowedRoots.some((allowedRoot) => isPathWithinNormalizedCase(candidatePath, allowedRoot)),
+      ));
+  let isLinux = getPlatform() === "linux";
+  let tempDirChoice;
+  for (let candidateDir of [hookEnv.TMPDIR, tmpdir_2(), ...(isLinux ? [EXTRA_TMP_DIR] : [])]) {
+    if (candidateDir === undefined || !isAbsolute(candidateDir)) continue;
+    let realCandidateDir = await realpath(candidateDir).catch(() => {
       return;
     });
-    if (Zt !== undefined && !nt(qt, Zt)) {
-      Et = {
-        spelled: qt,
-        real: Zt,
+    if (realCandidateDir !== undefined && !isOutsideAllowedRoots(candidateDir, realCandidateDir)) {
+      tempDirChoice = {
+        spelled: candidateDir,
+        real: realCandidateDir,
       };
       break;
     }
   }
-  let yt;
-  let gt;
+  let privateTmpDir;
+  let effectiveHook;
   try {
-    if (Et === undefined) throw Error("no temp directory here lies outside what the session can write");
-    yt = await realpath(await mkdtemp(join(Et.real, "hook-")));
+    if (tempDirChoice === undefined)
+      throw Error("no temp directory here lies outside what the session can write");
+    privateTmpDir = await realpath(await mkdtemp(join(tempDirChoice.real, "hook-")));
   } catch (error) {
     logForDebugging(`[remote-tools] no private temp directory for a project hook (${errorMessage(error)})`, {
       level: "error",
     });
-    return runServedHook(e, projectHooks, found, ze, mode, we, sandboxFallbackAsk(ze, "no_private_tmp", ""));
+    return runServedHook(
+      request,
+      projectHooks,
+      found,
+      checkLabel,
+      mode,
+      pinChanged,
+      sandboxFallbackAsk(checkLabel, "no_private_tmp", ""),
+    );
   }
   let min = Math.min(hook.timeout ?? DEFAULT_PINNED_HOOK_TIMEOUT, DEFAULT_PINNED_HOOK_TIMEOUT);
-  let combinedAbortSignal = createCombinedAbortSignal(e.signal, {
+  let combinedAbortSignal = createCombinedAbortSignal(request.signal, {
     timeoutMs: min * 1000,
   });
-  let Yt = false;
+  let wrapFailed = false;
   try {
-    if (nt(yt))
+    if (isOutsideAllowedRoots(privateTmpDir))
       return runServedHook(
-        e,
+        request,
         projectHooks,
         found,
-        ze,
+        checkLabel,
         mode,
-        we,
-        sandboxFallbackAsk(ze, "private_tmp_in_reach", ""),
+        pinChanged,
+        sandboxFallbackAsk(checkLabel, "private_tmp_in_reach", ""),
       );
-    if (Ee.script === undefined) gt = hook;
+    if (effectivePin.script === undefined) effectiveHook = hook;
     else {
-      let rn = join(yt, basename(We).replace(/[^A-Za-z0-9._-]/g, "_") || "check");
-      await writeFile(rn, Ee.script.bytes, {
+      let stagedCheckPath = join(
+        privateTmpDir,
+        basename(scriptRelPath).replace(/[^A-Za-z0-9._-]/g, "_") || "check",
+      );
+      await writeFile(stagedCheckPath, effectivePin.script.bytes, {
         mode: 320,
         flag: "wx",
       });
-      gt = replaceCommandProgram(hook, Ee.script.site, rn);
+      effectiveHook = replaceCommandProgram(hook, effectivePin.script.site, stagedCheckPath);
     }
-    let qt =
+    let sandboxConfig =
       mode === "linux"
         ? undefined
         : {
             mode,
             config: await buildHookSandboxDevices({
               mode,
-              projectRoots: L,
-              home: e.home,
-              privateTmp: yt,
-              tempRoots: [Et.spelled, tmpdir_2(), tmpdir()].flatMap((rn) =>
-                basename(rn) === "T" ? [rn, dirname(rn)] : [rn],
+              projectRoots: readableDirs,
+              home: request.home,
+              privateTmp: privateTmpDir,
+              tempRoots: [tempDirChoice.spelled, tmpdir_2(), tmpdir()].flatMap((tempRoot) =>
+                basename(tempRoot) === "T" ? [tempRoot, dirname(tempRoot)] : [tempRoot],
               ),
             }),
           };
-    let match = await e.exec({
+    let match = await request.exec({
       hook: {
-        ...gt,
+        ...effectiveHook,
         timeout: min,
       },
-      cwd: e.reach.projectDir,
+      cwd: request.reach.projectDir,
       base: buildSandboxedHookEnv({
-        judged: lt,
-        pathValue: e.environment.extra.PATH ?? EMPTY_PATH_DIR,
-        home: Me === undefined ? e.home : yt,
-        privateTmp: yt,
+        judged: hookEnv,
+        pathValue: request.environment.extra.PATH ?? EMPTY_PATH_DIR,
+        home: sandboxAvailability === undefined ? request.home : privateTmpDir,
+        privateTmp: privateTmpDir,
       }),
       signal: combinedAbortSignal.signal,
-      wrap: async (rn) => {
-        let pn;
-        if (Me !== undefined)
-          pn = wrapLinuxHookCommand(
-            rn,
+      wrap: async (command) => {
+        let wrappedCommand;
+        if (sandboxAvailability !== undefined)
+          wrappedCommand = wrapLinuxHookCommand(
+            command,
             {
-              ...Me,
-              privateTmp: yt,
-              cwd: Ie,
+              ...sandboxAvailability,
+              privateTmp: privateTmpDir,
+              cwd: projectRealDir,
             },
-            e.readRules,
+            request.readRules,
           );
-        else if (qt !== undefined)
-          pn = await wrapProjectHookInSandbox(
-            `export TMPDIR=${shellQuoteArgs([yt])}; ${rn}`,
-            qt.config,
+        else if (sandboxConfig !== undefined)
+          wrappedCommand = await wrapProjectHookInSandbox(
+            `export TMPDIR=${shellQuoteArgs([privateTmpDir])}; ${command}`,
+            sandboxConfig.config,
             combinedAbortSignal.signal,
-            e.readRules,
+            request.readRules,
             {
-              mode: qt.mode,
+              mode: sandboxConfig.mode,
               commandId: `served-hook:${randomUUID()}`,
             },
           );
-        Yt = pn === undefined;
-        return pn;
+        wrapFailed = wrappedCommand === undefined;
+        return wrappedCommand;
       },
     });
-    if (e.signal?.aborted === true)
+    if (request.signal?.aborted === true)
       return {
         hook,
         outcome: "cancelled",
       };
     return runServedHook(
-      e,
+      request,
       projectHooks,
       found,
-      ze,
+      checkLabel,
       mode,
-      we,
-      Yt
-        ? sandboxFallbackAsk(ze, combinedAbortSignal.signal.aborted ? "timeout" : "not_wrapped", "")
-        : runServedHookProcess(match, ze, we),
+      pinChanged,
+      wrapFailed
+        ? sandboxFallbackAsk(checkLabel, combinedAbortSignal.signal.aborted ? "timeout" : "not_wrapped", "")
+        : runServedHookProcess(match, checkLabel, pinChanged),
     );
   } catch (error) {
     logForDebugging(
@@ -607,10 +659,18 @@ async function pinHookCommand(e) {
         level: "error",
       },
     );
-    return runServedHook(e, projectHooks, found, ze, mode, we, sandboxFallbackAsk(ze, "wrap_failed", ""));
+    return runServedHook(
+      request,
+      projectHooks,
+      found,
+      checkLabel,
+      mode,
+      pinChanged,
+      sandboxFallbackAsk(checkLabel, "wrap_failed", ""),
+    );
   } finally {
     combinedAbortSignal.cleanup();
-    await rm_2(yt, {
+    await rm_2(privateTmpDir, {
       recursive: true,
       force: true,
     }).catch(() => {});

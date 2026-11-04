@@ -14,7 +14,7 @@ import { jsonStringify, alwaysTrue as alwaysTrue_2, jsonParse } from "../../util
 import { isNetworkOrDevicePath } from "./ui/imageSource.js";
 import { forwardAbort } from "./dispatch/chain.js";
 import { getProxyFetchOptions } from "../../utils/proxy.js";
-import { Uo } from "../../../vendor/@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
+import { omitAlias } from "../../../vendor/@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
 import { splitPluginId, officialPluginId } from "../../utils/plugins/pluginIdentifier.js";
 import { env } from "../../utils/env.js";
 import { isEssentialTrafficOnly } from "../../utils/privacyLevel.js";
@@ -22,15 +22,15 @@ import { policyDeniedReason } from "../../services/policyLimits/policyEvidence.j
 import { ALLOW_WEB_FETCH } from "../../tools/WebFetchTool/prompt.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
 import {
-  u,
+  objectSchema,
   array,
-  string,
+  stringSchema,
   unknown,
   looseObject,
   union,
-  E,
-  M,
-  zg,
+  numberSchema,
+  booleanSchema,
+  nullSchema,
   record,
 } from "../../../vendor/zod/v4/classic/schemas.js";
 import {
@@ -47,27 +47,28 @@ import { MAX_AUDIO_FILE_BYTES } from "./audioApi.js";
 import { filterEntriesToNullProto } from "../../utils/hooks/functionHookMatchers.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { getErrnoCode, errorMessage } from "../../utils/errors.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:3732425-3732889 placement
 /**
  * 校验 $.http.fetch 的 socketPath：必须是绝对路径、无 NUL、非网络位置，且本构建支持 Unix 套接字。
  */
-function checkSocketPath(socketPath, pluginName, r) {
+function checkSocketPath(socketPath, pluginName, label) {
   if (!(typeof socketPath === "string" && socketPath !== "" && isAbsolute(socketPath)))
     throw new HooksError(
-      `${pluginName}: ${r}: socketPath ${String(socketPath)} refused: takes an absolute path`,
+      `${pluginName}: ${label}: socketPath ${String(socketPath)} refused: takes an absolute path`,
     );
   if (socketPath.includes("\x00"))
     throw new HooksError(
-      `${pluginName}: ${r}: socketPath ${jsonStringify(socketPath)} refused: a NUL byte in the path`,
+      `${pluginName}: ${label}: socketPath ${jsonStringify(socketPath)} refused: a NUL byte in the path`,
     );
   if (isNetworkOrDevicePath(socketPath))
     throw new HooksError(
-      `${pluginName}: ${r}: socketPath ${socketPath} refused: a network location is not reached from here`,
+      `${pluginName}: ${label}: socketPath ${socketPath} refused: a network location is not reached from here`,
     );
   if (!alwaysTrue_2())
     throw new HooksError(
-      `${pluginName}: ${r}: socketPath ${socketPath} refused: no Unix socket transport in this build`,
+      `${pluginName}: ${label}: socketPath ${socketPath} refused: no Unix socket transport in this build`,
     );
   return socketPath;
 }
@@ -90,20 +91,20 @@ var HTTP_FETCH_LABEL = "$.http.fetch";
 /**
  * 带超时的 AbortController：转发外部中止，超时后中止并可查询 timedOut，release 清理。
  */
-function createTimeoutController(e, n = FETCH_TIMEOUT_MS_2) {
+function createTimeoutController(signal, ms = FETCH_TIMEOUT_MS_2) {
   let abortController = new AbortController();
-  let s = forwardAbort(e, abortController);
-  let h = false;
+  let unforward = forwardAbort(signal, abortController);
+  let didTimeout = false;
   let timer = setTimeout(() => {
-    h = true;
+    didTimeout = true;
     abortController.abort();
-  }, n);
+  }, ms);
   return {
     controller: abortController,
-    timedOut: () => h,
+    timedOut: () => didTimeout,
     release: () => {
       clearTimeout(timer);
-      s();
+      unforward();
     },
   };
 }
@@ -111,7 +112,7 @@ function createTimeoutController(e, n = FETCH_TIMEOUT_MS_2) {
 /**
  * 数组包含
  */
-var includesValue = (e, n) => e.includes(n);
+var includesValue = (list, value) => list.includes(value);
 //@ chunk-e6aww6q8.js:3733189-3733219 placement
 /**
  * 301/302/303/307/308
@@ -141,16 +142,16 @@ var SEE_OTHER_STATUS = 303;
 /**
  * 发起 fetch（手动处理重定向）：应用代理选项，或经 Unix 套接字（凭证请求强制校验证书、禁用 keepalive）。
  */
-async function fetchManualRedirect(e, n) {
+async function fetchManualRedirect(url, options) {
   let proxyFetchOptions = getProxyFetchOptions({
-    url: e.href,
+    url: url.href,
   });
-  let { socket } = n;
-  let y =
+  let { socket } = options;
+  let secondSocket =
     socket === undefined
       ? proxyFetchOptions
       : {
-          ...Uo(proxyFetchOptions, "proxy"),
+          ...omitAlias(proxyFetchOptions, "proxy"),
           unix: socket.path,
           ...(socket.isCredentialed && {
             tls: {
@@ -160,17 +161,17 @@ async function fetchManualRedirect(e, n) {
             keepalive: false,
           }),
         };
-  return fetch(e.href, {
-    ...y,
-    method: n.method,
-    ...(n.headers !== undefined && {
-      headers: n.headers,
+  return fetch(url.href, {
+    ...secondSocket,
+    method: options.method,
+    ...(options.headers !== undefined && {
+      headers: options.headers,
     }),
-    ...(n.body !== undefined && {
-      body: n.body,
+    ...(options.body !== undefined && {
+      body: options.body,
     }),
     redirect: "manual",
-    signal: n.signal,
+    signal: options.signal,
   });
 }
 //@ chunk-e6aww6q8.js:3733629-3733697 placement
@@ -182,37 +183,36 @@ var NONESSENTIAL_TRAFFIC_TEXT = "nonessential network traffic is disabled for th
 /**
  * 是否官方插件引用
  */
-function isOfficialPluginRef(e) {
-  let { name: n, marketplace } = splitPluginId(e);
-  return n === "" || (marketplace ?? "") === "" || officialPluginId(e) !== undefined;
+function isOfficialPluginRef(pluginId) {
+  let { name, marketplace } = splitPluginId(pluginId);
+  return name === "" || (marketplace ?? "") === "" || officialPluginId(pluginId) !== undefined;
 }
 //@ chunk-e6aww6q8.js:3733790-3733915 placement
-function networkRefusalReason(pluginStorageId) {
-  return env.CLAUDE_CODE_EVAL_CONFINED === true ||
-    (isEssentialTrafficOnly() && isOfficialPluginRef(pluginStorageId))
+function networkRefusalReason(pluginId) {
+  return env.CLAUDE_CODE_EVAL_CONFINED === true || (isEssentialTrafficOnly() && isOfficialPluginRef(pluginId))
     ? NONESSENTIAL_TRAFFIC_TEXT
     : (policyDeniedReason(ALLOW_WEB_FETCH, "Network access from plugins", "is") ?? undefined);
 }
 //@ chunk-e6aww6q8.js:3733915-3734035 placement
-function parseUrlArg(e, pluginName, r) {
+function parseUrlArg(value, pluginName, label) {
   try {
-    return e instanceof URL ? e : new URL(e);
+    return value instanceof URL ? value : new URL(value);
   } catch {
-    throw new HooksError(`${pluginName}: ${r}: not a URL: ${String(e)}`);
+    throw new HooksError(`${pluginName}: ${label}: not a URL: ${String(value)}`);
   }
 }
 //@ chunk-e6aww6q8.js:3734035-3734400 placement
 /**
  * 校验插件网络请求的 URL：受会话策略（仅必要流量、禁止 web fetch）限制，只允许 http/https 且不得包含凭证。
  */
-function checkPluginFetchUrl(url, { pluginName, pluginStorageId }, s) {
-  let h = networkRefusalReason(pluginStorageId);
-  if (h !== undefined) throw new HooksError(`${pluginName}: ${s}: refused: ${h}`);
-  let urlArg = parseUrlArg(url, pluginName, s);
+function checkPluginFetchUrl(url, { pluginName, pluginStorageId }, label) {
+  let refused = networkRefusalReason(pluginStorageId);
+  if (refused !== undefined) throw new HooksError(`${pluginName}: ${label}: refused: ${refused}`);
+  let urlArg = parseUrlArg(url, pluginName, label);
   if (urlArg.protocol !== "https:" && urlArg.protocol !== "http:")
-    throw new HooksError(`${pluginName}: ${s}: ${urlArg.href} refused: http or https only`);
+    throw new HooksError(`${pluginName}: ${label}: ${urlArg.href} refused: http or https only`);
   if (urlArg.username !== "" || urlArg.password !== "")
-    throw new HooksError(`${pluginName}: ${s}: ${urlArg.host} refused: credentials in the URL`);
+    throw new HooksError(`${pluginName}: ${label}: ${urlArg.host} refused: credentials in the URL`);
   return urlArg;
 }
 //@ chunk-e6aww6q8.js:3734400-3734471 placement
@@ -230,16 +230,19 @@ var MAX_REDIRECTS_2 = 5;
 /**
  * 事件批量请求体 schema
  */
-var EVENT_BATCH_BODY_SCHEMA = DoctorLazy(() =>
-  u({
-    events: array(
-      u({
-        event_type: string(),
-        event_data: unknown(),
-      }),
-    ),
-  }),
-);
+var EVENT_BATCH_BODY_SCHEMA; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:3734481", () => {
+  EVENT_BATCH_BODY_SCHEMA = DoctorLazy(() =>
+    objectSchema({
+      events: array(
+        objectSchema({
+          event_type: stringSchema(),
+          event_data: unknown(),
+        }),
+      ),
+    }),
+  );
+});
 //@ chunk-e6aww6q8.js:3734547-3734585 placement
 /**
  * /api/event_logging/v2/batch
@@ -250,14 +253,14 @@ var EVENT_LOG_PATH = "/api/event_logging/v2/batch";
  * 判断路径（多次解码规范化后）是否指向事件上报批量接口，用于防止绕过隐私过滤。
  */
 function isEventLoggingPath(pathname) {
-  let n;
+  let decoded;
   try {
-    n = decodeURIComponent(pathname);
+    decoded = decodeURIComponent(pathname);
   } catch {
     return true;
   }
-  for (let r = pathname; ;) {
-    let replaced = n
+  for (let normalized = pathname; ;) {
+    let replaced = decoded
       .replaceAll("%", "%25")
       .replaceAll("?", "%3F")
       .replaceAll("#", "%23")
@@ -268,13 +271,13 @@ function isEventLoggingPath(pathname) {
       EVENT_LOG_PATH.toLowerCase()
     )
       return true;
-    if (n === r) return false;
-    r = n;
-    n = n.replaceAll(/(?:%[0-9a-f]{2})+/gi, (y) => {
+    if (decoded === normalized) return false;
+    normalized = decoded;
+    decoded = decoded.replaceAll(/(?:%[0-9a-f]{2})+/gi, (problem) => {
       try {
-        return decodeURIComponent(y);
+        return decodeURIComponent(problem);
       } catch {
-        return y;
+        return problem;
       }
     });
   }
@@ -283,63 +286,71 @@ function isEventLoggingPath(pathname) {
 /**
  * 模型元数据请求体 schema
  */
-var MODEL_METADATA_BODY_SCHEMA = DoctorLazy(() =>
-  looseObject({
-    events: array(
-      looseObject({
-        event_data: looseObject({
-          model: string(),
-          additional_metadata: string().optional(),
+var MODEL_METADATA_BODY_SCHEMA; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:3735009", () => {
+  MODEL_METADATA_BODY_SCHEMA = DoctorLazy(() =>
+    looseObject({
+      events: array(
+        looseObject({
+          event_data: looseObject({
+            model: stringSchema(),
+            additional_metadata: stringSchema().optional(),
+          }),
         }),
-      }),
-    ),
-  }),
-);
+      ),
+    }),
+  );
+});
 //@ chunk-e6aww6q8.js:3735108-3735158 placement
 /**
  * 是否该形状
  */
-function isModelMetadataBody(e) {
-  return MODEL_METADATA_BODY_SCHEMA().safeParse(e).success;
+function isModelMetadataBody(body) {
+  return MODEL_METADATA_BODY_SCHEMA().safeParse(body).success;
 }
 //@ chunk-e6aww6q8.js:3735158-3735232 placement
 /**
  * 工具结果请求体 schema
  */
-var TOOL_RESULT_BODY_SCHEMA = DoctorLazy(() => {
-  let e = union([string(), E(), M(), zg()]);
-  return record(string(), union([e, array(e)]));
+var TOOL_RESULT_BODY_SCHEMA; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:3735158", () => {
+  TOOL_RESULT_BODY_SCHEMA = DoctorLazy(() => {
+    let valueSchema = union([stringSchema(), numberSchema(), booleanSchema(), nullSchema()]);
+    return record(stringSchema(), union([valueSchema, array(valueSchema)]));
+  });
 });
 //@ chunk-e6aww6q8.js:3735232-3735282 placement
 /**
  * 是否该形状
  */
-function isToolResultBody(e) {
-  return TOOL_RESULT_BODY_SCHEMA().safeParse(e).success;
+function isToolResultBody(body) {
+  return TOOL_RESULT_BODY_SCHEMA().safeParse(body).success;
 }
 //@ chunk-e6aww6q8.js:3735282-3735329 placement
 /**
  * 纯数据校验
  */
-function plainDataOrThrow(e) {
+function plainDataOrThrow(text) {
   try {
-    return jsonParse(e);
+    return jsonParse(text);
   } catch {
     return;
   }
 }
 //@ chunk-e6aww6q8.js:3735329-3735553 placement = base64URLEncode (0.79)
 function base64URLEncode(buffer) {
-  let n = plainDataOrThrow(Buffer.from(buffer, "base64").toString("utf8"));
-  if (!isToolResultBody(n)) return;
-  let r = Object.fromEntries(Object.entries(n).filter(([, value]) => value !== CONFIDENTIAL_MODEL_ID));
-  let s = maskModelFields(r);
-  return s === r
+  let decoded = plainDataOrThrow(Buffer.from(buffer, "base64").toString("utf8"));
+  if (!isToolResultBody(decoded)) return;
+  let filtered = Object.fromEntries(
+    Object.entries(decoded).filter(([, value]) => value !== CONFIDENTIAL_MODEL_ID),
+  );
+  let encoded = maskModelFields(filtered);
+  return encoded === filtered
     ? buffer
     : Buffer.from(
         jsonStringify({
-          ...n,
-          ...s,
+          ...decoded,
+          ...encoded,
         }),
       ).toString("base64");
 }
@@ -353,41 +364,41 @@ function maskModelForLog(model) {
 //@ chunk-e6aww6q8.js:3735592-3735860 placement
 function maskEventFields(event) {
   let { model, additional_metadata: additionalMetadata } = event.event_data;
-  let s = maskModelForLog(model);
+  let maskedModel = maskModelForLog(model);
   if (additionalMetadata === undefined)
-    return s === model
+    return maskedModel === model
       ? event
       : {
           ...event,
           event_data: {
             ...event.event_data,
-            model: s,
+            model: maskedModel,
           },
         };
-  let h = base64URLEncode(additionalMetadata);
-  if (h === undefined) return;
-  return s === model && h === additionalMetadata
+  let masked = base64URLEncode(additionalMetadata);
+  if (masked === undefined) return;
+  return maskedModel === model && masked === additionalMetadata
     ? event
     : {
         ...event,
         event_data: {
           ...event.event_data,
-          model: s,
-          additional_metadata: h,
+          model: maskedModel,
+          additional_metadata: masked,
         },
       };
 }
 //@ chunk-e6aww6q8.js:3735860-3736060 placement
-async function maskEventBatch(e) {
-  if (!isModelMetadataBody(e)) return;
+async function maskEventBatch(body) {
+  if (!isModelMetadataBody(body)) return;
   await hydrateMaskedIds();
-  e.events.forEach((event) => maskEventFields(event));
-  let mapped = e.events.map((event) => maskEventFields(event));
+  body.events.forEach((event) => maskEventFields(event));
+  let mapped = body.events.map((event) => maskEventFields(event));
   if (mapped.includes(undefined)) return;
-  return mapped.every((r, s) => r === e.events[s])
-    ? e
+  return mapped.every((event, index) => event === body.events[index])
+    ? body
     : {
-        ...e,
+        ...body,
         events: mapped,
       };
 }
@@ -395,162 +406,179 @@ async function maskEventBatch(e) {
 /**
  * 插件向事件上报接口发送数据时：内置插件掩码模型与元数据，HIPAA 模式下按隐私规则过滤事件，否则原样发送。
  */
-async function redactEventBatchBody(e, body, { pluginName, pluginStorageId }, h) {
-  let y = isBuiltinSuffixed(pluginStorageId);
-  if (!(body !== undefined && (y || isHipaaMode()) && isEventLoggingPath(e.pathname))) return body;
-  let w = plainDataOrThrow(body);
-  let L = y ? await maskEventBatch(w) : w;
-  if (L !== undefined && !isHipaaMode()) return L === w ? body : jsonStringify(L);
-  let G = EVENT_BATCH_BODY_SCHEMA().safeParse(L);
-  if (!G.success)
+async function redactEventBatchBody(url, text, { pluginName, pluginStorageId }, label) {
+  let text_2 = isBuiltinSuffixed(pluginStorageId);
+  if (!(text !== undefined && (text_2 || isHipaaMode()) && isEventLoggingPath(url.pathname))) return text;
+  let masked = plainDataOrThrow(text);
+  let event = text_2 ? await maskEventBatch(masked) : masked;
+  if (event !== undefined && !isHipaaMode()) return event === masked ? text : jsonStringify(event);
+  let encoded = EVENT_BATCH_BODY_SCHEMA().safeParse(event);
+  if (!encoded.success)
     throw new HooksError(
-      `${pluginName}: ${h}: ${e.origin}${EVENT_LOG_PATH} refused: the body is not an event batch, so it cannot be redacted`,
+      `${pluginName}: ${label}: ${url.origin}${EVENT_LOG_PATH} refused: the body is not an event batch, so it cannot be redacted`,
     );
   return jsonStringify({
-    events: filterEventsForPrivacy(G.data.events),
+    events: filterEventsForPrivacy(encoded.data.events),
   });
 }
 //@ chunk-e6aww6q8.js:3736450-3736800 placement
 /**
  * 读取响应体至多 n 字节（超出则截断并取消），返回 UTF-8 文本。
  */
-async function readBodyCapped(e, n, signal) {
-  let body = e.body;
+async function readBodyCapped(response, maxBytes, signal) {
+  let body = response.body;
   if (body === null) return "";
   let reader = body.getReader();
-  let y = [];
-  let S = 0;
+  let chunks = [];
+  let total = 0;
   try {
     for (;;) {
       signal?.throwIfAborted();
-      let { done: w, value: L } = await reader.read();
-      if (w) break;
-      let G = n - S;
-      if (L.byteLength >= G) {
-        y.push(L.subarray(0, G));
-        S += G;
+      let { done, value: chunk } = await reader.read();
+      if (done) break;
+      let text = maxBytes - total;
+      if (chunk.byteLength >= text) {
+        chunks.push(chunk.subarray(0, text));
+        total += text;
         await reader.cancel();
         break;
       }
-      y.push(L);
-      S += L.byteLength;
+      chunks.push(chunk);
+      total += chunk.byteLength;
     }
   } finally {
     reader.releaseLock();
   }
-  return new TextDecoder().decode(Buffer.concat(y));
+  return new TextDecoder().decode(Buffer.concat(chunks));
 }
 //@ chunk-e6aww6q8.js:3736800-3739084 placement
 /**
  * 插件 $.http.fetch：校验授权句柄与请求体大小上限后发起请求。
  */
-async function httpFetchForPlugin({ url, init }, r, signal) {
-  let { pluginName } = r;
-  let y = checkPluginFetchUrl(url, r, HTTP_FETCH_LABEL);
+async function httpFetchForPlugin({ url, init }, caller, signal) {
+  let { pluginName } = caller;
+  let parsedUrl = checkPluginFetchUrl(url, caller, HTTP_FETCH_LABEL);
   let auth = init?.auth;
-  let w = auth === undefined;
-  let L = w ? undefined : credentialWithheldText();
-  if (L !== undefined) throw new HooksError(`${pluginName}: ${HTTP_FETCH_LABEL}: refused: ${L}`);
-  let G = w ? undefined : authHandleRegistry.resolve(pluginName, auth);
-  if (init?.auth !== undefined && G === undefined)
+  let noAuth = auth === undefined;
+  let withheld = noAuth ? undefined : credentialWithheldText();
+  if (withheld !== undefined)
+    throw new HooksError(`${pluginName}: ${HTTP_FETCH_LABEL}: refused: ${withheld}`);
+  let credential = noAuth ? undefined : authHandleRegistry.resolve(pluginName, auth);
+  if (init?.auth !== undefined && credential === undefined)
     throw new HooksError(
       `${pluginName}: ${HTTP_FETCH_LABEL}: unknown auth handle; $.session.authorize() mints one`,
     );
   if (init?.body !== undefined && init.body.length > MAX_AUDIO_FILE_BYTES)
     throw new HooksError(
-      `${pluginName}: ${HTTP_FETCH_LABEL}: ${y.href} refused: a request body of ${init.body.length} characters is over the ${MAX_AUDIO_FILE_BYTES}-character limit`,
+      `${pluginName}: ${HTTP_FETCH_LABEL}: ${parsedUrl.href} refused: a request body of ${init.body.length} characters is over the ${MAX_AUDIO_FILE_BYTES}-character limit`,
     );
-  let Se =
+  let socketPath =
     init?.socketPath === undefined
       ? undefined
       : checkSocketPath(init.socketPath, pluginName, HTTP_FETCH_LABEL);
-  let ke = Se === undefined ? "" : ` over ${Se}`;
-  let origin = y.origin;
-  let Ee = G !== undefined && y.protocol === "https:" && y.host === G.host;
+  let overText = socketPath === undefined ? "" : ` over ${socketPath}`;
+  let origin = parsedUrl.origin;
+  let sendsCredential =
+    credential !== undefined && parsedUrl.protocol === "https:" && parsedUrl.host === credential.host;
   let upper = (init?.method ?? "GET").toUpperCase();
-  let Ie = init?.headers && filterEntriesToNullProto(init.headers, (Je, nt) => nt.toLowerCase() !== "host");
+  let headers =
+    init?.headers &&
+    filterEntriesToNullProto(init.headers, (headerValue, headerName) => headerName.toLowerCase() !== "host");
   let body = init?.body;
   let timeoutController = createTimeoutController(signal);
   let now = Date.now();
-  logForDebugging(`${HTTP_FETCH_LABEL} (${pluginName}): ${upper} ${y.href}${ke}`);
-  let lt;
+  logForDebugging(`${HTTP_FETCH_LABEL} (${pluginName}): ${upper} ${parsedUrl.href}${overText}`);
+  let response;
   try {
     for (let idx = 0; ; idx++) {
-      body = await redactEventBatchBody(y, body, r, HTTP_FETCH_LABEL);
-      let gt = Ee && G !== undefined && y.protocol === "https:" && y.host === G.host;
-      lt = await fetchManualRedirect(y, {
+      body = await redactEventBatchBody(parsedUrl, body, caller, HTTP_FETCH_LABEL);
+      let isCredentialedHost =
+        sendsCredential &&
+        credential !== undefined &&
+        parsedUrl.protocol === "https:" &&
+        parsedUrl.host === credential.host;
+      response = await fetchManualRedirect(parsedUrl, {
         method: upper,
-        headers: gt
+        headers: isCredentialedHost
           ? {
-              ...Ie,
-              ...G.headers,
+              ...headers,
+              ...credential.headers,
             }
-          : Ie,
+          : headers,
         body,
         signal: timeoutController.controller.signal,
-        ...(Se !== undefined && {
+        ...(socketPath !== undefined && {
           socket: {
-            path: Se,
-            isCredentialed: gt,
+            path: socketPath,
+            isCredentialed: isCredentialedHost,
           },
         }),
       });
-      let At = lt.headers.get("location");
-      if (!isRedirectStatus(lt.status) || At === null) break;
-      await lt.body?.cancel();
+      let location = response.headers.get("location");
+      if (!isRedirectStatus(response.status) || location === null) break;
+      await response.body?.cancel();
       if (idx + 1 > MAX_REDIRECTS_2)
         throw new HooksError(
           `${pluginName}: ${HTTP_FETCH_LABEL}: more than ${MAX_REDIRECTS_2} redirects from ${url}`,
         );
-      y = checkPluginFetchUrl(new URL(At, y), r, HTTP_FETCH_LABEL);
+      parsedUrl = checkPluginFetchUrl(new URL(location, parsedUrl), caller, HTTP_FETCH_LABEL);
       if (
-        lt.status === SEE_OTHER_STATUS ||
-        (includesValue(PRESERVED_METHOD_REDIRECTS, lt.status) && upper === "POST")
+        response.status === SEE_OTHER_STATUS ||
+        (includesValue(PRESERVED_METHOD_REDIRECTS, response.status) && upper === "POST")
       ) {
         upper = "GET";
         body = undefined;
       }
-      if (G !== undefined && (y.protocol !== "https:" || y.host !== G.host)) Ee = false;
-      if (y.origin !== origin && Ie !== undefined)
-        Ie = filterEntriesToNullProto(Ie, (qt, Zt) => includesValue(ALLOWED_FETCH_HEADERS, Zt.toLowerCase()));
-      logForDebugging(`${HTTP_FETCH_LABEL} (${pluginName}): redirect ${lt.status} to ${y.href}`);
-    }
-    let Je = Number(lt.headers.get("content-length"));
-    if (
-      upper !== "HEAD" &&
-      !includesValue(NO_BODY_STATUSES, lt.status) &&
-      Number.isFinite(Je) &&
-      Je > MAX_AUDIO_FILE_BYTES
-    ) {
-      await lt.body?.cancel();
-      throw new HooksError(
-        `${pluginName}: ${HTTP_FETCH_LABEL}: ${y.href} refused: body of ${Je} bytes is over the ${MAX_AUDIO_FILE_BYTES}-byte limit`,
+      if (credential !== undefined && (parsedUrl.protocol !== "https:" || parsedUrl.host !== credential.host))
+        sendsCredential = false;
+      if (parsedUrl.origin !== origin && headers !== undefined)
+        headers = filterEntriesToNullProto(headers, (headerName, headerKey) =>
+          includesValue(ALLOWED_FETCH_HEADERS, headerKey.toLowerCase()),
+        );
+      logForDebugging(
+        `${HTTP_FETCH_LABEL} (${pluginName}): redirect ${response.status} to ${parsedUrl.href}`,
       );
     }
-    let bodyCapped = await readBodyCapped(lt, MAX_AUDIO_FILE_BYTES, timeoutController.controller.signal);
-    let Et = {};
-    lt.headers.forEach((header, gt) => {
-      Et[gt.toLowerCase()] = header;
+    let contentLength = Number(response.headers.get("content-length"));
+    if (
+      upper !== "HEAD" &&
+      !includesValue(NO_BODY_STATUSES, response.status) &&
+      Number.isFinite(contentLength) &&
+      contentLength > MAX_AUDIO_FILE_BYTES
+    ) {
+      await response.body?.cancel();
+      throw new HooksError(
+        `${pluginName}: ${HTTP_FETCH_LABEL}: ${parsedUrl.href} refused: body of ${contentLength} bytes is over the ${MAX_AUDIO_FILE_BYTES}-byte limit`,
+      );
+    }
+    let bodyCapped = await readBodyCapped(
+      response,
+      MAX_AUDIO_FILE_BYTES,
+      timeoutController.controller.signal,
+    );
+    let responseHeaders = {};
+    response.headers.forEach((header, headerName) => {
+      responseHeaders[headerName.toLowerCase()] = header;
     });
     logForDebugging(
-      `${HTTP_FETCH_LABEL} (${pluginName}): ${lt.status} in ${Date.now() - now}ms, ${bodyCapped.length} chars`,
+      `${HTTP_FETCH_LABEL} (${pluginName}): ${response.status} in ${Date.now() - now}ms, ${bodyCapped.length} chars`,
     );
     return {
-      status: lt.status,
-      ok: lt.ok,
-      headers: Et,
+      status: response.status,
+      ok: response.ok,
+      headers: responseHeaders,
       text: bodyCapped,
     };
   } catch (error) {
     if (error instanceof HooksError) throw error;
     if (timeoutController.timedOut())
       throw new HooksError(
-        `${pluginName}: ${HTTP_FETCH_LABEL}(${y.href})${ke} aborted: no complete answer within ${FETCH_TIMEOUT_MS_2}ms`,
+        `${pluginName}: ${HTTP_FETCH_LABEL}(${parsedUrl.href})${overText} aborted: no complete answer within ${FETCH_TIMEOUT_MS_2}ms`,
       );
     let errnoCode = getErrnoCode(error);
-    let pt = errnoCode !== undefined;
+    let isErrno = errnoCode !== undefined;
     throw new HooksError(
-      `${pluginName}: ${HTTP_FETCH_LABEL}(${y.href})${ke} failed: ${pt ? `${errnoCode}: ` : ""}${errorMessage(error)}`,
+      `${pluginName}: ${HTTP_FETCH_LABEL}(${parsedUrl.href})${overText} failed: ${isErrno ? `${errnoCode}: ` : ""}${errorMessage(error)}`,
     );
   } finally {
     timeoutController.release();

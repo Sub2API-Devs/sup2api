@@ -5,11 +5,11 @@
  * pieces: chunk-vwj6ccer.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 import { require_utils } from "./utils.js";
 
 //@ chunk-vwj6ccer.js:44606-45299 cjs-fingerprint
-var require_NamedNodeMap = x(function (cjsExports, cjsModule) {
+var require_NamedNodeMap = __commonJS(function (cjsExports, cjsModule) {
   cjsModule.exports = NamedNodeMap;
   var utils = require_utils();
   function NamedNodeMap(element) {

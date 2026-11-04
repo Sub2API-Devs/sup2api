@@ -18,15 +18,15 @@ import { matcherLog } from "../../utils/hooks/functionHookMatchers.js";
  */
 var getImageProcessor = () =>
   createUiMessagePort({
-    run: (e) => dispatchUiMessage(e),
-    schedule: (e) => {
-      let sharp = setImmediate(e);
+    run: (message) => dispatchUiMessage(message),
+    schedule: (task) => {
+      let sharp = setImmediate(task);
       return () => {
         clearImmediate(sharp);
       };
     },
-    warn: (e) => {
-      matcherLog().log(e, "warn");
+    warn: (record) => {
+      matcherLog().log(record, "warn");
     },
   });
 export { getImageProcessor };

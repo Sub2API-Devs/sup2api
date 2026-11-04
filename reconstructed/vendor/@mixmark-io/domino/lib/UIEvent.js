@@ -5,19 +5,19 @@
  * pieces: chunk-vwj6ccer.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 import { require_Event } from "./Event.js";
 
 //@ chunk-vwj6ccer.js:1261-1526 cjs-fingerprint
-var require_UIEvent = x(function (cjsExports, cjsModule) {
-  var Mi = require_Event();
+var require_UIEvent = __commonJS(function (cjsExports, cjsModule) {
+  var EventModule = require_Event();
   cjsModule.exports = UIEvent;
   function UIEvent() {
-    Mi.call(this);
+    EventModule.call(this);
     this.view = null;
     this.detail = 0;
   }
-  UIEvent.prototype = Object.create(Mi.prototype, {
+  UIEvent.prototype = Object.create(EventModule.prototype, {
     constructor: {
       value: UIEvent,
     },

@@ -8,7 +8,7 @@
  * pieces: chunk-e6aww6q8.js (7)
  * attribution: placement 7
  */
-import { wIi, u, literal } from "../../../vendor/zod/v4/classic/schemas.js";
+import { int32Schema, objectSchema, literal } from "../../../vendor/zod/v4/classic/schemas.js";
 import { isCcpoolId } from "./environmentSelection.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../services/analytics/growthbook.js";
 
@@ -17,30 +17,30 @@ import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../services/analytics/gr
  * 解析环境 id（正整数品牌类型）。
  */
 function parsedEnvironmentId(maxTurns) {
-  return wIi().positive().brand().safeParse(maxTurns).data;
+  return int32Schema().positive().brand().safeParse(maxTurns).data;
 }
 //@ chunk-e6aww6q8.js:1880604-1880731 placement
-function acceptsMaxTurns(e, n, maxTurns) {
-  let s = u({
+function acceptsMaxTurns(apiVersion, body, maxTurns) {
+  let configShape = objectSchema({
     max_turns: literal(maxTurns),
   });
   return (
-    e === "v1alpha2"
-      ? u({
-          config: s,
+    apiVersion === "v1alpha2"
+      ? objectSchema({
+          config: configShape,
         })
-      : u({
-          session_context: s,
+      : objectSchema({
+          session_context: configShape,
         })
-  ).safeParse(n).success;
+  ).safeParse(body).success;
 }
 //@ chunk-e6aww6q8.js:1880731-1880754 placement
-function noEnvironmentOverride(e) {
+function noEnvironmentOverride(request) {
   return;
 }
 //@ chunk-e6aww6q8.js:1880754-1880912 placement
-function parseEnvironmentSelector(e) {
-  let trimmed = e.trim();
+function parseEnvironmentSelector(selector) {
+  let trimmed = selector.trim();
   if (trimmed === "") return null;
   if (isCcpoolId(trimmed))
     return {
@@ -61,7 +61,7 @@ function parseEnvironmentSelector(e) {
 /**
  * 环境无法解析时的拒绝结果（需自托管 ccpool_ id）。
  */
-async function environmentUnresolvedOutcome(environmentQuery, n, r) {
+async function environmentUnresolvedOutcome(environmentQuery, options, context) {
   return {
     ok: false,
     error: "--environment expects a self-hosted environment id (ccpool_...)",

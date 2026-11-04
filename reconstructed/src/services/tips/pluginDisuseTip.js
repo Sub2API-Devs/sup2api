@@ -28,34 +28,34 @@ var MIN_DISUSE_SESSIONS = 10;
 //@ chunk-4r6qcn1a.js:476-1160 placement
 async function computeDisusedPlugins() {
   try {
-    let e = isPluginLoadCacheOnly();
-    if (e === undefined) return [];
+    let loadCache = isPluginLoadCacheOnly();
+    if (loadCache === undefined) return [];
     if (getStrictKnownMarketplaces() !== null) return [];
-    let { enabled } = await e;
+    let { enabled } = await loadCache;
     if (enabled.length === 0) return [];
     let managedNames = policyEnabledPluginNameSet();
     let seedDirs = getPluginSeedDirs();
     let numStartups = getGlobalConfig().numStartups;
     let now = Date.now();
-    let r = [];
-    for (let n of enabled) {
-      let { marketplace } = parsePluginIdentifier(n.repository);
+    let disused = [];
+    for (let plugin of enabled) {
+      let { marketplace } = parsePluginIdentifier(plugin.repository);
       if (!marketplace || isOfficialMarketplace(marketplace)) continue;
-      if (getEnabledVia(n, managedNames, seedDirs) !== "user-install") continue;
-      if (hasNonSkillComponents(n)) continue;
-      let i = pluginUsageRecord(n.repository);
-      if (!i) continue;
-      if (hasPendingUsage(n.repository)) continue;
-      let { sessionsSinceLastUse, daysSinceLastUse } = disuseStats(i, numStartups, now);
+      if (getEnabledVia(plugin, managedNames, seedDirs) !== "user-install") continue;
+      if (hasNonSkillComponents(plugin)) continue;
+      let usage = pluginUsageRecord(plugin.repository);
+      if (!usage) continue;
+      if (hasPendingUsage(plugin.repository)) continue;
+      let { sessionsSinceLastUse, daysSinceLastUse } = disuseStats(usage, numStartups, now);
       if (daysSinceLastUse >= MIN_DISUSE_DAYS && sessionsSinceLastUse >= MIN_DISUSE_SESSIONS)
-        r.push({
-          pluginId: n.repository,
-          name: n.name,
+        disused.push({
+          pluginId: plugin.repository,
+          name: plugin.name,
           daysSinceLastUse,
         });
     }
-    r.sort((n, o) => o.daysSinceLastUse - n.daysSinceLastUse);
-    return r;
+    disused.sort((left, right) => right.daysSinceLastUse - left.daysSinceLastUse);
+    return disused;
   } catch (error) {
     logForDebugging(`plugin-disuse tip: failed to compute disused plugins: ${error}`, {
       level: "error",
@@ -67,23 +67,23 @@ async function computeDisusedPlugins() {
 /**
  * 返回插件距上次使用的天数（没有严格市场限制时）：找不到记录返回 null，当前正在使用返回 0。
  */
-function getPluginDaysSinceUse(repository) {
+function getPluginDaysSinceUse(pluginId) {
   if (getStrictKnownMarketplaces() !== null) return null;
-  let s = pluginUsageRecord(repository);
-  if (!s) return null;
-  if (hasPendingUsage(repository)) return 0;
-  return disuseStats(s, getGlobalConfig().numStartups, Date.now()).daysSinceLastUse;
+  let usage = pluginUsageRecord(pluginId);
+  if (!usage) return null;
+  if (hasPendingUsage(pluginId)) return 0;
+  return disuseStats(usage, getGlobalConfig().numStartups, Date.now()).daysSinceLastUse;
 }
 //@ chunk-4r6qcn1a.js:1312-1490 placement
-function hasNonSkillComponents(e) {
+function hasNonSkillComponents(plugin) {
   return Boolean(
-    e.themesPath ||
-    e.themesPaths?.length ||
-    e.outputStylesPath ||
-    e.outputStylesPaths?.length ||
-    e.monitors?.length ||
-    e.workflowsPath ||
-    e.workflowsPaths?.length,
+    plugin.themesPath ||
+    plugin.themesPaths?.length ||
+    plugin.outputStylesPath ||
+    plugin.outputStylesPaths?.length ||
+    plugin.monitors?.length ||
+    plugin.workflowsPath ||
+    plugin.workflowsPaths?.length,
   );
 }
 export { computeDisusedPlugins, getPluginDaysSinceUse };

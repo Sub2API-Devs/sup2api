@@ -20,15 +20,15 @@ import { TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS } from "../
 /**
  * 创建作业目录：存储 v5 启用时在存储中建 job 作用域，否则在磁盘上建目录。
  */
-async function ensureJobFolder(e, storageV5) {
-  if (isStorageV5Enabled() && storageV5 !== undefined && isValidKeySegment(e)) {
-    await ensureStorageScope(storageV5, {
+async function ensureJobFolder(jobId, storage) {
+  if (isStorageV5Enabled() && storage !== undefined && isValidKeySegment(jobId)) {
+    await ensureStorageScope(storage, {
       namespace: "job",
-      jobId: e,
+      jobId,
     });
     return;
   }
-  await mkdir(getJobDir(e), {
+  await mkdir(getJobDir(jobId), {
     recursive: true,
   });
 }
@@ -36,12 +36,12 @@ async function ensureJobFolder(e, storageV5) {
 /**
  * 确保任务的临时目录存在（启用存储 v5 时走存储层）。
  */
-async function ensureJobTmpFolder(jobId, r) {
-  if (isStorageV5Enabled() && r !== undefined && isValidKeySegment(jobId)) {
-    await ensureStorageScope(r, jobTmpScope(jobId));
+async function ensureJobTmpFolder(short, storage) {
+  if (isStorageV5Enabled() && storage !== undefined && isValidKeySegment(short)) {
+    await ensureStorageScope(storage, jobTmpScope(short));
     return;
   }
-  await mkdir(join(getJobDir(jobId), "tmp"), {
+  await mkdir(join(getJobDir(short), "tmp"), {
     recursive: true,
   });
 }
@@ -57,18 +57,18 @@ function jobTmpScope(jobId) {
   };
 }
 //@ chunk-f2zt4n31.js:736-928 placement
-async function ensureStorageScope(e, r) {
-  let o = await e.ensureScope(r);
-  if (!o.ok) {
-    let t = storageErrorCode(o.error);
+async function ensureStorageScope(storage, scope) {
+  let result = await storage.ensureScope(scope);
+  if (!result.ok) {
+    let errorCode = storageErrorCode(result.error);
     throw Object.assign(
       new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        `job folder not made (${formatStorageError(o.error)})`,
+        `job folder not made (${formatStorageError(result.error)})`,
         "job folder not made",
       ),
-      t !== undefined
+      errorCode !== undefined
         ? {
-            code: t,
+            code: errorCode,
           }
         : {},
     );

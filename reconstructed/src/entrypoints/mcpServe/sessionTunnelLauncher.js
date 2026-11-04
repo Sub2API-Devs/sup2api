@@ -9,7 +9,7 @@
  * attribution: placement 5
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, E, string } from "../../../vendor/zod/v4/classic/schemas.js";
+import { objectSchema, numberSchema, stringSchema } from "../../../vendor/zod/v4/classic/schemas.js";
 import { env } from "../../utils/env.js";
 import { jsonParse } from "../../utils/slowOperations.js";
 import { toolServerEnvAccessor } from "../../utils/subprocessEnvLoader.js";
@@ -37,10 +37,10 @@ function handedOverBy(launcher) {
 }
 //@ chunk-4r034kvt.js:602-690 placement
 var SessionTunnelLauncherResponseSchema = DoctorLazy(() =>
-  u({
-    runner: u({
-      pid: E().int().positive(),
-      proc_start: string().min(1),
+  objectSchema({
+    runner: objectSchema({
+      pid: numberSchema().int().positive(),
+      proc_start: stringSchema().min(1),
     }).optional(),
   }),
 );
@@ -49,12 +49,13 @@ var SessionTunnelLauncherResponseSchema = DoctorLazy(() =>
  * --session-tunnel 启动时从标准输入读取交接信封，确定启动它的 runner 并取出工具服务器启动器。
  */
 async function dialingLauncherFrom({ transport, port, line }) {
-  let { parseSessionTunnelEnvelope, sessionTunnelRefusal } = await import("./chunk-e6a6pbbv.js");
+  let { parseSessionTunnelEnvelope, sessionTunnelRefusal } =
+    await import("../../cli/handlers/EX_CONFIG.lazy.js");
   let sessionTunnelEnvelope = parseSessionTunnelEnvelope(line);
-  let d = sessionTunnelRefusal(transport, port, sessionTunnelEnvelope);
-  if (d !== undefined || sessionTunnelEnvelope === undefined)
+  let refusal = sessionTunnelRefusal(transport, port, sessionTunnelEnvelope);
+  if (refusal !== undefined || sessionTunnelEnvelope === undefined)
     return {
-      refusal: `--session-tunnel ${d ?? "needs an envelope on standard input"}`,
+      refusal: `--session-tunnel ${refusal ?? "needs an envelope on standard input"}`,
     };
   let handoverRunner = readHandoverRunner(line);
   if (handoverRunner === "unreadable")
@@ -66,7 +67,7 @@ async function dialingLauncherFrom({ transport, port, line }) {
       kind: "tool-container",
       tunnel: sessionTunnelEnvelope,
     };
-  let s = {
+  let runner = {
     pid: handoverRunner.pid,
     procStart: handoverRunner.proc_start,
   };
@@ -75,32 +76,32 @@ async function dialingLauncherFrom({ transport, port, line }) {
       refusal:
         "--session-tunnel does not serve a runner whose session routes git through the agent proxy: it cannot start that relay",
     };
-  let { isRunnerSeen } = await import("./chunk-66nm9g6r.js");
-  if (!(await isRunnerSeen(s)))
+  let { isRunnerSeen } = await import("../../selfHostedRunner/exitWhenRunnerIsGone.lazy.js");
+  if (!(await isRunnerSeen(runner)))
     return {
-      refusal: `--session-tunnel cannot see the runner that started it (process ${s.pid}), so it could not tell when that runner is gone`,
+      refusal: `--session-tunnel cannot see the runner that started it (process ${runner.pid}), so it could not tell when that runner is gone`,
     };
   return {
     kind: "runner",
     tunnel: sessionTunnelEnvelope,
-    runner: s,
+    runner,
   };
 }
 //@ chunk-4r034kvt.js:1592-1728 placement
 function readHandoverRunner(line) {
   if (line === undefined) return;
   try {
-    let e = SessionTunnelLauncherResponseSchema().safeParse(jsonParse(line));
-    return e.success ? e.data.runner : "unreadable";
+    let parsed = SessionTunnelLauncherResponseSchema().safeParse(jsonParse(line));
+    return parsed.success ? parsed.data.runner : "unreadable";
   } catch {
     return "unreadable";
   }
 }
 //@ chunk-4r034kvt.js:1728-1930 placement
-function takeToolServerLauncher(n) {
+function takeToolServerLauncher(launcher) {
   let CLAUDE_CODE_MCP_SERVE_AUTH_TOKEN = toolServerEnvAccessor.CLAUDE_CODE_MCP_SERVE_AUTH_TOKEN;
   toolServerEnvAccessor.unset("CLAUDE_CODE_MCP_SERVE_AUTH_TOKEN");
-  if (n !== undefined) return n;
+  if (launcher !== undefined) return launcher;
   return CLAUDE_CODE_MCP_SERVE_AUTH_TOKEN === undefined
     ? {
         kind: "stdout-reader",
@@ -110,4 +111,4 @@ function takeToolServerLauncher(n) {
         authToken: CLAUDE_CODE_MCP_SERVE_AUTH_TOKEN,
       };
 }
-export { handedOverBy };
+export { handedOverBy, dialingLauncherFrom, takeToolServerLauncher };

@@ -11,14 +11,14 @@
 import { plainServiceText } from "../../bridge/debugUtils.js";
 
 //@ chunk-fp6aqx1j.js:25628-25921 fingerprint = convertWsUrlToPostUrl (0.356)
-function convertWsUrlToPostUrl(e, getAuthHeaders) {
-  if (e.protocol !== "http:" && e.protocol !== "https:") {
-    let r = plainServiceText(e.protocol, "session_url_protocol");
-    throw Error(`CCRClient: Expected http(s) URL${r === undefined ? "" : `, got ${r}`}`);
+function convertWsUrlToPostUrl(url, getAuthHeaders) {
+  if (url.protocol !== "http:" && url.protocol !== "https:") {
+    let text = plainServiceText(url.protocol, "session_url_protocol");
+    throw Error(`CCRClient: Expected http(s) URL${text === undefined ? "" : `, got ${text}`}`);
   }
-  let replaced = e.pathname.replace(/\/$/, "");
+  let replaced = url.pathname.replace(/\/$/, "");
   return {
-    sessionBaseUrl: `${e.protocol}//${e.host}${replaced}`,
+    sessionBaseUrl: `${url.protocol}//${url.host}${replaced}`,
     getAuthHeaders,
   };
 }

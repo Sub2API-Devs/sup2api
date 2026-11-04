@@ -5,12 +5,12 @@
  * pieces: chunk-edce4vxq.js (2)
  * attribution: cjs-fingerprint 1, cjs-require-graph 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
-import { require_protocol_http } from "../../../@smithy/protocol-http/dist-cjs/index.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
+import { require_protocol_http as require_protocol_http_3 } from "../../../@smithy/protocol-http/dist-cjs/index.js";
 
 //@ chunk-edce4vxq.js:724-1420 cjs-fingerprint
-var require_middleware_host_header = x(function (cjsExports) {
-  var protocolHttp = require_protocol_http();
+var require_middleware_host_header = __commonJS(function (cjsExports) {
+  var protocolHttp = require_protocol_http_3();
   function resolveHostHeaderConfig(input) {
     return input;
   }
@@ -46,35 +46,35 @@ var require_middleware_host_header = x(function (cjsExports) {
   cjsExports.resolveHostHeaderConfig = resolveHostHeaderConfig;
 });
 //@ chunk-edce4vxq.js:115054-115651 cjs-require-graph
-var require_middleware_host_header_2 = x(function (cjsExports) {
-  var protocolHttp = require_protocol_http();
-  var Zs = "content-length";
-  function en(bodyLengthChecker) {
-    return (t) => async (r) => {
-      let request = r.request;
+var require_middleware_host_header_2 = __commonJS(function (cjsExports) {
+  var protocolHttp = require_protocol_http_3();
+  var CONTENT_LENGTH_HEADER = "content-length";
+  function contentLengthMiddleware(bodyLengthChecker) {
+    return (next) => async (args) => {
+      let request = args.request;
       if (protocolHttp.HttpRequest.isInstance(request)) {
         let { body, headers } = request;
         if (
           body &&
           Object.keys(headers)
             .map((key) => key.toLowerCase())
-            .indexOf(Zs) === -1
+            .indexOf(CONTENT_LENGTH_HEADER) === -1
         )
           try {
-            let c = bodyLengthChecker(body);
+            let existingKey = bodyLengthChecker(body);
             request.headers = {
               ...request.headers,
-              [Zs]: String(c),
+              [CONTENT_LENGTH_HEADER]: String(existingKey),
             };
           } catch (error) {}
       }
-      return t({
-        ...r,
+      return next({
+        ...args,
         request,
       });
     };
   }
-  var tn = {
+  var contentLengthMiddlewareOptions = {
     step: "build",
     tags: ["SET_CONTENT_LENGTH", "CONTENT_LENGTH"],
     name: "contentLengthMiddleware",
@@ -82,11 +82,11 @@ var require_middleware_host_header_2 = x(function (cjsExports) {
   };
   var getContentLengthPlugin = (options) => ({
     applyToStack: (clientStack) => {
-      clientStack.add(en(options.bodyLengthChecker), tn);
+      clientStack.add(contentLengthMiddleware(options.bodyLengthChecker), contentLengthMiddlewareOptions);
     },
   });
-  cjsExports.contentLengthMiddleware = en;
-  cjsExports.contentLengthMiddlewareOptions = tn;
+  cjsExports.contentLengthMiddleware = contentLengthMiddleware;
+  cjsExports.contentLengthMiddlewareOptions = contentLengthMiddlewareOptions;
   cjsExports.getContentLengthPlugin = getContentLengthPlugin;
 });
 export { require_middleware_host_header, require_middleware_host_header_2 };

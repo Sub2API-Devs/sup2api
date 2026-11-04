@@ -13,7 +13,7 @@
 /**
  * 恒等函数（identity）。
  */
-function identity(e, t) {
-  return e;
+function identity(value, ignored) {
+  return value;
 }
 export { identity };

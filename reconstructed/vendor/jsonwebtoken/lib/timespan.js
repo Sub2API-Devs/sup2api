@@ -5,11 +5,11 @@
  * pieces: chunk-mrx6y2r5.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../runtime/bun-runtime.js";
 import { require_ms } from "../../ms/index.js";
 
 //@ chunk-mrx6y2r5.js:4528-4769 cjs-fingerprint
-var require_timespan = x(function (cjsExports, cjsModule) {
+var require_timespan = __commonJS(function (cjsExports, cjsModule) {
   var ms = require_ms();
   cjsModule.exports = function (time, iat) {
     var timestamp = iat || Math.floor(Date.now() / 1000);

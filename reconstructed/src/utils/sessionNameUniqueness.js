@@ -29,6 +29,7 @@ import { logFeatureOk, logFeatureBad } from "../services/analytics/featureTeleme
 import { errorMessage, getErrnoCode } from "./errors.js";
 import { isCrossSessionMessagingEnabled } from "./crossSessionMessagingGate.js";
 import { fragmentForLog } from "./udsMessaging/peerGuard.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-897ngh1d.js:699-713 placement
 var MAX_NAME_SUFFIX_LENGTH = 16;
@@ -37,77 +38,83 @@ var MAX_SESSION_NAME_LENGTH = 64;
 /**
  * 哪个会话先启动
  */
-function startedEarlier(e, n) {
-  if (e.startedAt !== n.startedAt) return e.startedAt < n.startedAt;
-  let procStart = e.procStart ?? "";
-  let procStart_2 = n.procStart ?? "";
+function startedEarlier(a, b) {
+  if (a.startedAt !== b.startedAt) return a.startedAt < b.startedAt;
+  let procStart = a.procStart ?? "";
+  let procStart_2 = b.procStart ?? "";
   if (procStart !== procStart_2) return procStart < procStart_2;
-  return e.pid < n.pid;
+  return a.pid < b.pid;
 }
 //@ chunk-897ngh1d.js:868-973 placement
-function otherSessionsNamed(e, live, pid) {
+function otherSessionsNamed(slug, live, pid) {
   return live.filter(
-    (i) =>
-      i.pid !== pid && i.name !== undefined && i.procStart !== undefined && slugifySessionName(i.name) === e,
+    (session) =>
+      session.pid !== pid &&
+      session.name !== undefined &&
+      session.procStart !== undefined &&
+      slugifySessionName(session.name) === slug,
   );
 }
 //@ chunk-897ngh1d.js:973-1051 placement
 function liveNameSet(live) {
-  return new Set(live.flatMap((n) => (n.name === undefined ? [] : [slugifySessionName(n.name)])));
+  return new Set(
+    live.flatMap((session) => (session.name === undefined ? [] : [slugifySessionName(session.name)])),
+  );
 }
 //@ chunk-897ngh1d.js:1051-1242 placement
 /**
  * 生成不冲突的带后缀名字
  */
-function pickUniqueSuffixName(suffixBase, n, slug = randomWordSlug) {
-  let i = (r) => `${truncateToLength(suffixBase, MAX_SEED_NAME_CHARS - r.length - 1)}-${r}`;
+function pickUniqueSuffixName(suffixBase, taken, slug = randomWordSlug) {
+  let buildName = (suffix) =>
+    `${truncateToLength(suffixBase, MAX_SEED_NAME_CHARS - suffix.length - 1)}-${suffix}`;
   for (let j = 0; j < MAX_NAME_SUFFIX_LENGTH; j++) {
-    let u = i(slug());
-    if (!n.has(slugifySessionName(u))) return u;
+    let candidate = buildName(slug());
+    if (!taken.has(slugifySessionName(candidate))) return candidate;
   }
   for (let j = 2; ; j++) {
-    let u = i(`${slug()}-${j}`);
-    if (!n.has(slugifySessionName(u))) return u;
+    let candidate = buildName(`${slug()}-${j}`);
+    if (!taken.has(slugifySessionName(candidate))) return candidate;
   }
 }
 //@ chunk-897ngh1d.js:1242-1620 placement
 /**
  * 判定保留、改名或让出会话名
  */
-function decideSessionName(e) {
-  let { desiredName, self: s, live, moment, slug } = e;
-  let suffixBase = e.suffixBase ?? desiredName;
-  let p = slugifySessionName(desiredName);
-  if (!p)
+function decideSessionName(request) {
+  let { desiredName, self: selfSession, live, moment, slug } = request;
+  let suffixBase = request.suffixBase ?? desiredName;
+  let desiredSlug = slugifySessionName(desiredName);
+  if (!desiredSlug)
     return {
       kind: "keep",
     };
-  let f = otherSessionsNamed(p, live, s.pid);
-  let o =
+  let holders = otherSessionsNamed(desiredSlug, live, selfSession.pid);
+  let blockers =
     moment === "rename"
-      ? f
+      ? holders
       : moment === "startup"
-        ? f.filter((a) => startedEarlier(a, s))
-        : f.filter((a) =>
+        ? holders.filter((holder) => startedEarlier(holder, selfSession))
+        : holders.filter((holder) =>
             startedEarlier(
               {
-                ...a,
-                startedAt: a.nameSince ?? a.startedAt,
+                ...holder,
+                startedAt: holder.nameSince ?? holder.startedAt,
               },
               {
-                ...s,
-                startedAt: s.nameSince ?? s.startedAt,
+                ...selfSession,
+                startedAt: selfSession.nameSince ?? selfSession.startedAt,
               },
             ),
           );
-  if (o.length === 0)
+  if (blockers.length === 0)
     return {
       kind: "keep",
     };
   return {
     kind: "yield",
     newName: pickUniqueSuffixName(suffixBase, liveNameSet(live), slug),
-    holders: o,
+    holders: blockers,
   };
 }
 //@ chunk-897ngh1d.js:1620-2248 placement
@@ -122,21 +129,21 @@ class SessionNamingState {
   lastYield = undefined;
   yielded = createSignal();
   pendingYield = undefined;
-  noteCorrespondent(e, pid, procStart) {
-    if (!e || parseAddress(e).scheme !== "uds") return;
-    this.correspondents.delete(e);
-    this.correspondents.set(e, {
+  noteCorrespondent(address, pid, procStart) {
+    if (!address || parseAddress(address).scheme !== "uds") return;
+    this.correspondents.delete(address);
+    this.correspondents.set(address, {
       pid,
       procStart,
     });
     if (this.correspondents.size > MAX_SESSION_NAME_LENGTH) {
-      let i = this.correspondents.keys().next().value;
-      if (i !== undefined) this.correspondents.delete(i);
+      let oldest = this.correspondents.keys().next().value;
+      if (oldest !== undefined) this.correspondents.delete(oldest);
     }
   }
-  announceYield(e, n) {
-    this.pendingYield = [e, n];
-    this.yielded.emit(e, n);
+  announceYield(name, previousName) {
+    this.pendingYield = [name, previousName];
+    this.yielded.emit(name, previousName);
   }
   reset() {
     this.correspondents.clear();
@@ -149,7 +156,10 @@ class SessionNamingState {
   }
 }
 //@ chunk-897ngh1d.js:2248-2271 placement
-var sessionNamingStateSlot = new HostScoped(() => new SessionNamingState());
+var sessionNamingStateSlot; // deferred: uses SessionNamingState of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-897ngh1d.js:2248", () => {
+  sessionNamingStateSlot = new HostScoped(() => new SessionNamingState());
+});
 //@ chunk-897ngh1d.js:2271-2307 placement
 function getSessionNamingState() {
   return sessionNamingStateSlot.of(getRootSession().host);
@@ -184,67 +194,79 @@ function sessionNameUniquenessEnabled() {
   return getFeatureValue_CACHED_MAY_BE_STALE("tengu_session_name_uniqueness", true);
 }
 //@ chunk-897ngh1d.js:2661-3496 placement
-async function claimUniqueSessionName(e, moment, deps = sessionNamingProviders, i = e) {
+async function claimUniqueSessionName(
+  desiredName,
+  moment,
+  deps = sessionNamingProviders,
+  suffixBase = desiredName,
+) {
   if (!sessionNameUniquenessEnabled())
     return {
-      name: e,
+      name: desiredName,
       yielded: false,
     };
-  i = baseNameOfSuffixed(i) ?? i;
+  suffixBase = baseNameOfSuffixed(suffixBase) ?? suffixBase;
   if (!(await deps.whenRegistered()))
     return {
-      name: e,
+      name: desiredName,
       yielded: false,
     };
   try {
     let sessionId = getSessionId();
-    let filtered = (await deps.listLive()).filter((a) => a.pid === process.pid || a.sessionId !== sessionId);
-    let found = filtered.find((a) => a.pid === process.pid);
-    if (!found)
+    let filtered = (await deps.listLive()).filter(
+      (session) => session.pid === process.pid || session.sessionId !== sessionId,
+    );
+    let session = filtered.find((session) => session.pid === process.pid);
+    if (!session)
       return {
-        name: e,
+        name: desiredName,
         yielded: false,
       };
-    let p = decideSessionName({
-      desiredName: e,
-      self: found,
+    let decision = decideSessionName({
+      desiredName,
+      self: session,
       live: filtered,
       moment,
       slug: deps.slug,
-      suffixBase: i,
+      suffixBase,
     });
-    if (p.kind === "keep")
+    if (decision.kind === "keep")
       return {
-        name: e,
+        name: desiredName,
         yielded: false,
       };
-    let f = derivedNameMatch(e, found);
-    let o =
+    let derivedName = derivedNameMatch(desiredName, session);
+    let finalName =
       sanitizeSessionTitle(
-        f !== undefined && slugifySessionName(f) !== slugifySessionName(e) ? f : p.newName,
-      ) || p.newName;
+        derivedName !== undefined && slugifySessionName(derivedName) !== slugifySessionName(desiredName)
+          ? derivedName
+          : decision.newName,
+      ) || decision.newName;
     logForDebugging(
-      `[session-name] "${e}" is held by live pid ${p.holders[0]?.pid}; this session takes "${o}"`,
+      `[session-name] "${desiredName}" is held by live pid ${decision.holders[0]?.pid}; this session takes "${finalName}"`,
       {
         level: "info",
       },
     );
     logFeatureOk("session_name_collision");
     getSessionNamingState().lastYield = {
-      base: slugifySessionName(i),
-      name: o,
+      base: slugifySessionName(suffixBase),
+      name: finalName,
     };
     return {
-      name: o,
+      name: finalName,
       yielded: true,
     };
   } catch (error) {
-    logForDebugging(`[session-name] uniqueness check failed, keeping "${e}": ${errorMessage(error)}`, {
-      level: "warn",
-    });
+    logForDebugging(
+      `[session-name] uniqueness check failed, keeping "${desiredName}": ${errorMessage(error)}`,
+      {
+        level: "warn",
+      },
+    );
     logFeatureBad("session_name_collision", "check_failed");
     return {
-      name: e,
+      name: desiredName,
       yielded: false,
     };
   }
@@ -253,24 +275,24 @@ async function claimUniqueSessionName(e, moment, deps = sessionNamingProviders, 
 /**
  * 是否为派生名
  */
-function derivedNameMatch(e, n) {
-  let s = settledYieldFor(e, n.name);
-  if (s !== undefined) return s;
-  let i = n.name;
-  let r = i === undefined ? undefined : splitNameSuffix(i);
-  if (i === undefined || r === undefined) return;
-  let u = baseNameOfSuffixed(e) ?? e;
-  let c = truncateToLength(u, MAX_SEED_NAME_CHARS - r.suffix.length - 1);
-  return r.base.toLowerCase() === c.toLowerCase() ? i : undefined;
+function derivedNameMatch(desiredName, session) {
+  let matched = settledYieldFor(desiredName, session.name);
+  if (matched !== undefined) return matched;
+  let registered = session.name;
+  let split = registered === undefined ? undefined : splitNameSuffix(registered);
+  if (registered === undefined || split === undefined) return;
+  let base = baseNameOfSuffixed(desiredName) ?? desiredName;
+  let truncated = truncateToLength(base, MAX_SEED_NAME_CHARS - split.suffix.length - 1);
+  return split.base.toLowerCase() === truncated.toLowerCase() ? registered : undefined;
 }
 //@ chunk-897ngh1d.js:3724-3916 placement
 /**
  * 拆出名字后缀
  */
-function splitNameSuffix(e) {
-  let match = /-([a-z]+-[a-z]+)(-\d{1,4})?$/i.exec(e);
+function splitNameSuffix(name) {
+  let match = /-([a-z]+-[a-z]+)(-\d{1,4})?$/i.exec(name);
   if (!match || !isWordSlug(match[1].toLowerCase())) return;
-  let sliced = e.slice(0, e.length - match[0].length);
+  let sliced = name.slice(0, name.length - match[0].length);
   return sliced.length > 0
     ? {
         base: sliced,
@@ -279,75 +301,76 @@ function splitNameSuffix(e) {
     : undefined;
 }
 //@ chunk-897ngh1d.js:3916-4055 placement
-function settledYieldFor(e, name) {
+function settledYieldFor(desiredName, name) {
   if (!sessionNameUniquenessEnabled()) return;
   let lastYield = getSessionNamingState().lastYield;
-  let i = baseNameOfSuffixed(e) ?? e;
+  let base = baseNameOfSuffixed(desiredName) ?? desiredName;
   return lastYield !== undefined &&
     name !== undefined &&
     slugifySessionName(lastYield.name) === slugifySessionName(name) &&
-    lastYield.base === slugifySessionName(i)
+    lastYield.base === slugifySessionName(base)
     ? name
     : undefined;
 }
 //@ chunk-897ngh1d.js:4055-4118 placement
-function isRegisteredSessionName(e) {
+function isRegisteredSessionName(name) {
   let registeredSessionName = getRegisteredSessionName();
   return (
     registeredSessionName !== undefined &&
-    slugifySessionName(registeredSessionName.name) === slugifySessionName(e)
+    slugifySessionName(registeredSessionName.name) === slugifySessionName(name)
   );
 }
 //@ chunk-897ngh1d.js:4118-4150 placement
-function baseNameOfSuffixed(e) {
-  return splitNameSuffix(e)?.base;
+function baseNameOfSuffixed(name) {
+  return splitNameSuffix(name)?.base;
 }
 //@ chunk-897ngh1d.js:4150-4161 placement
 var SESSION_NAME_REGISTRY_TTL_MS = 3000;
 //@ chunk-897ngh1d.js:4161-4199 placement
-function _(e) {
-  setTimeout(e, SESSION_NAME_REGISTRY_TTL_MS).unref();
+function _(fn) {
+  setTimeout(fn, SESSION_NAME_REGISTRY_TTL_MS).unref();
 }
 //@ chunk-897ngh1d.js:4199-4766 placement
-async function claimSessionNameAtStartup(e) {
-  let { sessionNameArg, interactive, writeName, onRenamed, deps } = e;
-  let scheduleRecheck = e.scheduleRecheck ?? _;
+async function claimSessionNameAtStartup(request) {
+  let { sessionNameArg, interactive, writeName, onRenamed, deps } = request;
+  let scheduleRecheck = request.scheduleRecheck ?? _;
   if (sessionNameArg && interactive) getSessionNamingState().userTypedName = sessionNameArg;
-  if (sessionNameArg) await writeName(sessionNameArg, e.sessionNameArgSource ?? "user");
+  if (sessionNameArg) await writeName(sessionNameArg, request.sessionNameArgSource ?? "user");
   let registeredSessionName = getRegisteredSessionName();
   if (!interactive || !registeredSessionName || registeredSessionName.source === "derived") return;
-  let f = async (name, a, S = name) => {
-    if (a && !isRegisteredSessionName(name)) return;
-    let l = await claimUniqueSessionName(name, a ? "recheck" : "startup", deps, S);
-    if (!isRegisteredSessionName(name)) return;
-    if (!l.yielded) {
-      if (!a) scheduleRecheck(() => void f(name, true));
+  let check = async (suffixBase, recheck, suffixBase_2 = suffixBase) => {
+    if (recheck && !isRegisteredSessionName(suffixBase)) return;
+    let claim = await claimUniqueSessionName(suffixBase, recheck ? "recheck" : "startup", deps, suffixBase_2);
+    if (!isRegisteredSessionName(suffixBase)) return;
+    if (!claim.yielded) {
+      if (!recheck) scheduleRecheck(() => void check(suffixBase, true));
       return;
     }
-    if (getSessionNamingState().userTypedName === name) getSessionNamingState().userTypedName = l.name;
-    await writeName(l.name, "collision");
-    onRenamed?.(l.name, name);
-    getSessionNamingState().announceYield(l.name, name);
-    if (!a) scheduleRecheck(() => void f(l.name, true, name));
+    if (getSessionNamingState().userTypedName === suffixBase)
+      getSessionNamingState().userTypedName = claim.name;
+    await writeName(claim.name, "collision");
+    onRenamed?.(claim.name, suffixBase);
+    getSessionNamingState().announceYield(claim.name, suffixBase);
+    if (!recheck) scheduleRecheck(() => void check(claim.name, true, suffixBase));
   };
-  await f(registeredSessionName.name, false);
+  await check(registeredSessionName.name, false);
 }
 //@ chunk-897ngh1d.js:4766-5023 placement
-function scheduleSettledRecheck(e) {
-  let { name: n, onYield, deps } = e;
-  let suffixBase = e.suffixBase ?? n;
-  (e.scheduleRecheck ?? _)(() => {
+function scheduleSettledRecheck(request) {
+  let { name, onYield, deps } = request;
+  let suffixBase = request.suffixBase ?? name;
+  (request.scheduleRecheck ?? _)(() => {
     (async () => {
-      if (!isRegisteredSessionName(n)) return;
-      let c = await claimUniqueSessionName(n, "recheck", deps, suffixBase);
-      if (!c.yielded || !isRegisteredSessionName(n)) return;
-      if (getSessionNamingState().userTypedName === n) getSessionNamingState().userTypedName = c.name;
-      await onYield(c.name, n);
+      if (!isRegisteredSessionName(name)) return;
+      let claim = await claimUniqueSessionName(name, "recheck", deps, suffixBase);
+      if (!claim.yielded || !isRegisteredSessionName(name)) return;
+      if (getSessionNamingState().userTypedName === name) getSessionNamingState().userTypedName = claim.name;
+      await onYield(claim.name, name);
     })();
   });
 }
 //@ chunk-897ngh1d.js:5023-5267 placement
-function renameSupersededDuringScan(registeredSessionName, n, name) {
+function renameSupersededDuringScan(registeredSessionName, baseName, name) {
   let registeredSessionName_2 = getRegisteredSessionName();
   if (
     registeredSessionName_2 === undefined ||
@@ -357,14 +380,15 @@ function renameSupersededDuringScan(registeredSessionName, n, name) {
     return;
   if (
     registeredSessionName_2.source === "collision" &&
-    settledYieldFor(registeredSessionName?.name ?? n, registeredSessionName_2.name) !== undefined
+    settledYieldFor(registeredSessionName?.name ?? baseName, registeredSessionName_2.name) !== undefined
   )
     return;
-  let r = slugifySessionName(registeredSessionName_2.name);
+  let registeredSlug = slugifySessionName(registeredSessionName_2.name);
   if (
-    (registeredSessionName !== undefined && r === slugifySessionName(registeredSessionName.name)) ||
-    r === slugifySessionName(n) ||
-    r === slugifySessionName(name)
+    (registeredSessionName !== undefined &&
+      registeredSlug === slugifySessionName(registeredSessionName.name)) ||
+    registeredSlug === slugifySessionName(baseName) ||
+    registeredSlug === slugifySessionName(name)
   )
     return;
   return registeredSessionName_2;
@@ -373,20 +397,20 @@ function renameSupersededDuringScan(registeredSessionName, n, name) {
 /**
  * 恢复会话时重新声明会话名；名字被本机其他活会话占用时改名并通知通信过的会话。
  */
-async function reclaimSessionNameOnResume(e, storageV5, s = {}) {
-  let deps = s.deps ?? sessionNamingProviders;
-  let r = e ? sanitizeSessionTitle(e) : "";
-  if (!r) return;
+async function reclaimSessionNameOnResume(title, storageV5, options = {}) {
+  let deps = options.deps ?? sessionNamingProviders;
+  let sanitizedTitle = title ? sanitizeSessionTitle(title) : "";
+  if (!sanitizedTitle) return;
   let sessionRegistryState = getSessionRegistryState();
   let adoptions = sessionRegistryState.adoptions;
-  let p = ++sessionRegistryState.restores;
-  let f = () =>
+  let restoreSeq = ++sessionRegistryState.restores;
+  let stillCurrent = () =>
     sessionRegistryState.adoptions === adoptions &&
-    (!s.yieldToLaterRestore || sessionRegistryState.restores === p);
-  if (!(await deps.whenRegistered()) || !f()) return;
-  if (s.keepLaunchName && getRegisteredSessionName()?.givenAtLaunch) return;
-  if (s.autoOnly) {
-    await updateSessionName(r, storageV5, "auto");
+    (!options.yieldToLaterRestore || sessionRegistryState.restores === restoreSeq);
+  if (!(await deps.whenRegistered()) || !stillCurrent()) return;
+  if (options.keepLaunchName && getRegisteredSessionName()?.givenAtLaunch) return;
+  if (options.autoOnly) {
+    await updateSessionName(sanitizedTitle, storageV5, "auto");
     return;
   }
   let registeredSessionName = getRegisteredSessionName();
@@ -394,54 +418,56 @@ async function reclaimSessionNameOnResume(e, storageV5, s = {}) {
     registeredSessionName !== undefined &&
     registeredSessionName.source !== "auto" &&
     registeredSessionName.source !== "derived" &&
-    slugifySessionName(registeredSessionName.name) === slugifySessionName(r)
+    slugifySessionName(registeredSessionName.name) === slugifySessionName(sanitizedTitle)
   )
     return;
-  let a = await claimUniqueSessionName(r, "rename", deps);
-  if (!f() || renameSupersededDuringScan(registeredSessionName, r, a.name)) return;
+  let claim = await claimUniqueSessionName(sanitizedTitle, "rename", deps);
+  if (!stillCurrent() || renameSupersededDuringScan(registeredSessionName, sanitizedTitle, claim.name))
+    return;
   let registeredSessionName_2 = getRegisteredSessionName();
   if (
-    s.source === "auto" &&
+    options.source === "auto" &&
     registeredSessionName_2 !== undefined &&
     registeredSessionName_2.source !== "derived" &&
     (registeredSessionName_2.name !== registeredSessionName?.name ||
       registeredSessionName_2.source !== registeredSessionName.source)
   )
     return;
-  let l = s.source === "auto" ? "auto" : "collision";
-  let onYield = async (y, N) => {
-    if (l === "auto" && getRegisteredSessionName()?.source !== "auto") return;
-    await updateSessionName(y, storageV5, l);
-    getSessionNamingState().announceYield(y, N);
+  let source = options.source === "auto" ? "auto" : "collision";
+  let onYield = async (newName, previousName) => {
+    if (source === "auto" && getRegisteredSessionName()?.source !== "auto") return;
+    await updateSessionName(newName, storageV5, source);
+    getSessionNamingState().announceYield(newName, previousName);
   };
-  if (!a.yielded) {
-    await updateSessionName(r, storageV5, s.source);
+  if (!claim.yielded) {
+    await updateSessionName(sanitizedTitle, storageV5, options.source);
     scheduleSettledRecheck({
-      name: r,
+      name: sanitizedTitle,
       deps,
       onYield,
     });
     return;
   }
-  await updateSessionName(a.name, storageV5, l);
-  if (getSessionNamingState().userTypedName === r) getSessionNamingState().userTypedName = a.name;
+  await updateSessionName(claim.name, storageV5, source);
+  if (getSessionNamingState().userTypedName === sanitizedTitle)
+    getSessionNamingState().userTypedName = claim.name;
   scheduleSettledRecheck({
-    name: a.name,
-    suffixBase: r,
+    name: claim.name,
+    suffixBase: sanitizedTitle,
     deps,
     onYield,
   });
-  if (a.name === registeredSessionName?.name) return;
-  getSessionNamingState().announceYield(a.name, r);
+  if (claim.name === registeredSessionName?.name) return;
+  getSessionNamingState().announceYield(claim.name, sanitizedTitle);
 }
 //@ chunk-897ngh1d.js:6241-7062 placement
 async function notifyCorrespondentsOfRename(
   formerName,
-  n,
+  newName,
   contested,
-  i,
-  r = sendToUdsSocket,
-  u = sessionNamingProviders.listLive,
+  storageV5,
+  send = sendToUdsSocket,
+  listLive = sessionNamingProviders.listLive,
 ) {
   if (
     !sessionNameUniquenessEnabled() ||
@@ -449,12 +475,12 @@ async function notifyCorrespondentsOfRename(
     getSessionNamingState().correspondents.size === 0
   )
     return;
-  let c = ownMessagingSocket();
-  let [p, f, o] = [formerName, n, contested].map(sanitizeSessionTitle);
-  let a = `This session was renamed from "${p}" to "${f}" ("${o}" is held by another live session on this machine). Address this one as "${f}" from now on.`;
-  let S;
+  let ownSock = ownMessagingSocket();
+  let [oldTitle, newTitle, contestedTitle] = [formerName, newName, contested].map(sanitizeSessionTitle);
+  let message = `This session was renamed from "${oldTitle}" to "${newTitle}" ("${contestedTitle}" is held by another live session on this machine). Address this one as "${newTitle}" from now on.`;
+  let socksByPid;
   try {
-    S = new Map((await u(i)).map((l) => [l.pid, l.sock]));
+    socksByPid = new Map((await listLive(storageV5)).map((session) => [session.pid, session.sock]));
   } catch (error) {
     logForDebugging(
       `[session-name] rename notice skipped: registry unreadable (${getErrnoCode(error) ?? errorMessage(error)})`,
@@ -462,21 +488,35 @@ async function notifyCorrespondentsOfRename(
     return;
   }
   await Promise.all(
-    [...getSessionNamingState().correspondents].map(async ([l, { pid: h, procStart: y }]) => {
-      let { scheme, target } = parseAddress(l);
-      if (scheme !== "uds" || !target || (c !== undefined && mayBeSamePath(target, c)) || S.get(h) !== target)
+    [...getSessionNamingState().correspondents].map(async ([address, { pid, procStart }]) => {
+      let { scheme, target } = parseAddress(address);
+      if (
+        scheme !== "uds" ||
+        !target ||
+        (ownSock !== undefined && mayBeSamePath(target, ownSock)) ||
+        socksByPid.get(pid) !== target
+      )
         return;
       try {
-        await r(target, a, i, f, undefined, undefined, getSessionNamingState().senderMode?.(), {
-          trackReceipts: false,
-          expectPeerPid: h,
-          ...(y !== undefined && {
-            expectPeerProcStart: y,
-          }),
-        });
+        await send(
+          target,
+          message,
+          storageV5,
+          newTitle,
+          undefined,
+          undefined,
+          getSessionNamingState().senderMode?.(),
+          {
+            trackReceipts: false,
+            expectPeerPid: pid,
+            ...(procStart !== undefined && {
+              expectPeerProcStart: procStart,
+            }),
+          },
+        );
       } catch (error) {
         logForDebugging(
-          `[session-name] rename notice to ${fragmentForLog(l)} failed: ${getErrnoCode(error) ?? "send error"}`,
+          `[session-name] rename notice to ${fragmentForLog(address)} failed: ${getErrnoCode(error) ?? "send error"}`,
         );
       }
     }),

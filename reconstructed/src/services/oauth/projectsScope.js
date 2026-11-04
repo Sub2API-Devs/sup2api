@@ -99,7 +99,7 @@ async function ensureProjectsAccessToken(credentials) {
       ok: false,
       reason: "no_refresh",
     };
-  let u = false;
+  let refreshAttempted = false;
   try {
     return await withOAuthRefreshLock(async ({ lockedTokens, isCompromised, signal }) => {
       if (!lockedTokens?.refreshToken)
@@ -128,10 +128,10 @@ async function ensureProjectsAccessToken(credentials) {
           ok: false,
           reason: "no_refresh",
         };
-      let y;
+      let refreshed;
       try {
-        u = true;
-        y = await refreshOAuthToken(lockedTokens.refreshToken, {
+        refreshAttempted = true;
+        refreshed = await refreshOAuthToken(lockedTokens.refreshToken, {
           clientId: lockedTokens.clientId,
           scopes: uniq([
             ...claudeAiLoginScopes(),
@@ -152,25 +152,25 @@ async function ensureProjectsAccessToken(credentials) {
           };
         throw error;
       }
-      let w = await saveRefreshedOAuthTokensRespectingLock({
+      let saveOutcome = await saveRefreshedOAuthTokensRespectingLock({
         isCompromised,
         postedRefreshToken: lockedTokens.refreshToken,
-        refreshedTokens: y,
+        refreshedTokens: refreshed,
         credentials,
       });
-      if (w === "adopted_sibling")
+      if (saveOutcome === "adopted_sibling")
         return {
           ok: false,
           reason: "lock_contended",
         };
-      if (w === "save_failed") {
+      if (saveOutcome === "save_failed") {
         logFeatureSad("projects_scope_expansion", "save_failed");
         return {
           ok: false,
           reason: "save_failed",
         };
       }
-      if (!hasProjectsScopes(y.scopes)) {
+      if (!hasProjectsScopes(refreshed.scopes)) {
         logFeatureSad("projects_scope_expansion", "expand_failed");
         return {
           ok: false,
@@ -181,7 +181,7 @@ async function ensureProjectsAccessToken(credentials) {
       logFeatureOk("projects_scope_expansion");
       return {
         ok: true,
-        accessToken: y.accessToken,
+        accessToken: refreshed.accessToken,
         expanded: true,
       };
     }, credentials);
@@ -191,7 +191,7 @@ async function ensureProjectsAccessToken(credentials) {
         ok: false,
         reason: "lock_contended",
       };
-    if (!u)
+    if (!refreshAttempted)
       return {
         ok: false,
         reason: "lock_contended",

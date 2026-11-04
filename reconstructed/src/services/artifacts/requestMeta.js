@@ -11,6 +11,7 @@
 import { getEntrypointKind, isAgentSdkEntrypoint } from "../../utils/entrypointKinds.js";
 import { frameSessionId, formatFrameErrorBody, UNKNOWN_FIELD_ERROR_RE, mentionsField } from "./frameApi.js";
 import { getLiveState } from "../liveReplica/liveReplica.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-5v4t11fy.js:314-393 placement
 /**
@@ -29,10 +30,10 @@ function entrypointHint() {
  * 导出函数 `sessionIdHint`：返回 n && !isAgentSdkEntrypoint() ? { session_id: n } : {}。
  */
 function sessionIdHint() {
-  let n = frameSessionId();
-  return n && !isAgentSdkEntrypoint()
+  let sessionId = frameSessionId();
+  return sessionId && !isAgentSdkEntrypoint()
     ? {
-        session_id: n,
+        session_id: sessionId,
       }
     : {};
 }
@@ -65,20 +66,24 @@ function noteSessionHintsRefused() {
 /**
  * 导出常量或表 `SESSION_HINT_FIELDS`：值为 ["entrypoint", "session_id", "request_id"], u = new Set(YFr)。
  */
-var SESSION_HINT_FIELDS = ["entrypoint", "session_id", "request_id"];
-var SESSION_HINT_FIELD_SET = new Set(SESSION_HINT_FIELDS);
+var SESSION_HINT_FIELDS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var SESSION_HINT_FIELD_SET;
+deferInit("chunk-5v4t11fy.js:638", () => {
+  SESSION_HINT_FIELDS = ["entrypoint", "session_id", "request_id"];
+  SESSION_HINT_FIELD_SET = new Set(SESSION_HINT_FIELDS);
+});
 //@ chunk-5v4t11fy.js:702-941 placement
 /**
  * 根据 400 响应里"未知字段/不在允许列表"的错误判断哪些会话提示字段被拒绝：能从消息中识别的返回这些字段，消息只提到其他字段时返回空，否则返回全部已发送的提示字段。
  */
-function findRejectedHintFields(status, s, i) {
-  let filtered = SESSION_HINT_FIELDS.filter((t) => i[t] !== undefined);
+function findRejectedHintFields(status, httpStatus, hints) {
+  let filtered = SESSION_HINT_FIELDS.filter((field) => hints[field] !== undefined);
   if (status !== 400 || filtered.length === 0) return [];
-  let e = formatFrameErrorBody(s);
-  if (!UNKNOWN_FIELD_ERROR_RE.test(e)) return [];
-  let filtered_2 = filtered.filter((t) => mentionsField(e, t));
+  let body = formatFrameErrorBody(httpStatus);
+  if (!UNKNOWN_FIELD_ERROR_RE.test(body)) return [];
+  let filtered_2 = filtered.filter((field) => mentionsField(body, field));
   if (filtered_2.length > 0) return filtered_2;
-  return Object.keys(i).some((key) => !SESSION_HINT_FIELD_SET.has(key) && mentionsField(e, key))
+  return Object.keys(hints).some((key) => !SESSION_HINT_FIELD_SET.has(key) && mentionsField(body, key))
     ? []
     : filtered;
 }
@@ -86,16 +91,16 @@ function findRejectedHintFields(status, s, i) {
 /**
  * 导出函数 `mentionsSessionHintField`：参数 n，返回 n.includes("entrypoint") || n.includes("session_id")。
  */
-function mentionsSessionHintField(n) {
-  return n.includes("entrypoint") || n.includes("session_id");
+function mentionsSessionHintField(hints) {
+  return hints.includes("entrypoint") || hints.includes("session_id");
 }
 //@ chunk-5v4t11fy.js:1015-1091 placement
 /**
  * 导出函数 `stripSessionHints`：参数 n，返回 e; } export { lNo, I1t, qFr, getSessionHintHeaders, findRejectedHintFields, yun, q5n, YFr, iKs }。
  */
-function stripSessionHints(n) {
-  let { entrypoint, session_id: sessionId, request_id: requestId, ...e } = n;
-  return e;
+function stripSessionHints(hints) {
+  let { entrypoint, session_id: sessionId, request_id: requestId, ...rest } = hints;
+  return rest;
 }
 export {
   SESSION_HINT_COOLDOWN_MS,

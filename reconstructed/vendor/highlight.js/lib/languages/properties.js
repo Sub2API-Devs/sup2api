@@ -5,10 +5,10 @@
  * pieces: chunk-egr0twnb.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:373395-374067 cjs-fingerprint
-var require_properties = x(function (cjsExports, cjsModule) {
+var require_properties = __commonJS(function (cjsExports, cjsModule) {
   function properties(hljs) {
     let EQUAL_DELIM = "[ \\t\\f]*[:=][ \\t\\f]*";
     let WS1 = "[ \\t\\f]+";

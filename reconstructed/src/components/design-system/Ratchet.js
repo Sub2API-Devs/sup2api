@@ -8,38 +8,50 @@
  * pieces: chunk-04svxz07.js (2)
  * attribution: placement 1, fingerprint 1
  */
-import { init_react_production, R, y, Se, zt } from "../../../vendor/react/cjs/react.production.js";
+import {
+  init_react_production,
+  useRef,
+  useState,
+  useContext,
+  useLayoutEffect,
+} from "../../../vendor/react/cjs/react.production.js";
 import { useTerminalViewport } from "../../ink/components/Input.js";
 import { useTerminalSize } from "../../hooks/useTerminalSize.js";
 import { SpinnerPaceContext } from "../Spinner/paceContext.js";
 import { measureElement } from "../../ink/hooks/useTerminalHooks.js";
 import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Box } from "../../ink/components/Text.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-04svxz07.js:384-388 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-04svxz07.js:384", () => {
+  init_react_production();
+});
 //@ chunk-04svxz07.js:388-1067 fingerprint = Ratchet (0.75)
 function Ratchet({ children, lock = "always", restartKey }) {
-  let [H, { isVisible: x }, d] = useTerminalViewport();
+  let [viewportRef, { isVisible }, restart] = useTerminalViewport();
   let { rows, columns } = useTerminalSize();
-  let innerRef = R(null);
-  let [t, u] = y({
+  let innerRef = useRef(null);
+  let [layout, setLayout] = useState({
     minHeight: 0,
     rows,
     columns,
     restartKey,
   });
-  let l = lock === "always" && (t.rows !== rows || t.columns !== columns || t.restartKey !== restartKey);
-  let p = (lock === "always" || !x) && !l;
-  let maxHeight = R(0);
-  let max = Math.max(t.minHeight, maxHeight.current);
-  let E = Se(SpinnerPaceContext) !== null;
-  zt(() => {
+  let needsRestart =
+    lock === "always" &&
+    (layout.rows !== rows || layout.columns !== columns || layout.restartKey !== restartKey);
+  let locked = (lock === "always" || !isVisible) && !needsRestart;
+  let maxHeight = useRef(0);
+  let max = Math.max(layout.minHeight, maxHeight.current);
+  let spinnerPaced = useContext(SpinnerPaceContext) !== null;
+  useLayoutEffect(() => {
     if (!innerRef.current) return;
     let { height } = measureElement(innerRef.current);
     let min = Math.min(height, rows);
-    if (l) {
-      u({
+    if (needsRestart) {
+      setLayout({
         minHeight: min,
         rows,
         columns,
@@ -48,12 +60,12 @@ function Ratchet({ children, lock = "always", restartKey }) {
       return;
     }
     if (height > max) {
-      if (E && lock === "offscreen" && !p && min >= t.minHeight && d()) {
+      if (spinnerPaced && lock === "offscreen" && !locked && min >= layout.minHeight && restart()) {
         maxHeight.current = min;
         return;
       }
       maxHeight.current = 0;
-      u((el) =>
+      setLayout((el) =>
         el.minHeight === min
           ? el
           : {
@@ -64,8 +76,8 @@ function Ratchet({ children, lock = "always", restartKey }) {
     }
   });
   return jsxProd_default(Box, {
-    minHeight: p ? max : undefined,
-    ref: H,
+    minHeight: locked ? max : undefined,
+    ref: viewportRef,
     children: jsxProd_default(Box, {
       ref: innerRef,
       flexDirection: "column",

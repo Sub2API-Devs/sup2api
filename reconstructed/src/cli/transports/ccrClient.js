@@ -21,15 +21,15 @@ import { REMOTE_TOOLS_LOG_EVENTS } from "../../services/remoteTools/remoteToolsD
 import { getErrnoCode, errorMessage } from "../../utils/errors.js";
 import { DoctorLazy } from "../handlers/util.js";
 import {
-  u,
-  string,
+  objectSchema,
+  stringSchema,
   looseObject,
   record,
   unknown,
-  M,
+  booleanSchema,
   array,
   literal,
-  E,
+  numberSchema,
 } from "../../../vendor/zod/v4/classic/schemas.js";
 import { requestIdOf, notifySessionStateChanged } from "../../utils/sessionState.js";
 import { buildRequiresActionDetails } from "../structuredIO.js";
@@ -37,7 +37,7 @@ import { env } from "../../utils/env.js";
 import { getSessionIngressAuthHeaders, getSessionIngressAuthToken } from "../../utils/sessionIngressAuth.js";
 import { convertWsUrlToPostUrl } from "./HybridTransport.js";
 import { WorkerStateUploader } from "./WorkerStateUploader.js";
-import { Uo } from "../../../vendor/@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
+import { omitAlias } from "../../../vendor/@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
 import { logForDiagnosticsNoPII, flushDiagnosticLogs } from "../../utils/diagLogs.js";
 import {
   ClientEventUploader,
@@ -45,7 +45,7 @@ import {
   ClientEventBatchRejectedError,
   ClientEventResendSoonError,
   ClientEventTooSmallError,
-} from "../../utils/telemetry/memorySummary.js";
+} from "../../utils/telemetry/clientEventUploader.js";
 import { dedupeEventsByUuid } from "../../utils/teleport/api.js";
 import { normalizeUuidOrNull } from "../../utils/agentId.js";
 import { logEvent } from "../../services/analytics/index.js";
@@ -77,16 +77,34 @@ import { readRequestIdSource, isNonOriginSource } from "../../services/api/reque
 import { decodeJwtExpiry } from "../../bridge/jwtUtils.js";
 import { isHearthDegraded } from "../../services/mcp/hearthDegraded.js";
 import { pickByHelper } from "../../utils/git/gitSafeEnv.js";
-import { En } from "../../../vendor/lodash-es/_inlinedHelpers.js";
+import { import_sortedIndex_2 } from "../../../vendor/lodash-es/_inlinedHelpers.js";
 import { sessionIdBody } from "../../bridge/sessionIdCompat.js";
-import { Ji } from "../../../vendor/lodash-es/uniqBy.js";
+import { uniqByExport } from "../../../vendor/lodash-es/uniqBy.js";
 import { capLiveOnlyResponseSize, isLiveOnlyResponse } from "../../bridge/controlRequests.js";
 import { isEssentialTrafficOnly } from "../../utils/privacyLevel.js";
 import { chunk_default } from "../../../vendor/lodash-es/chunk.js";
 import { isClassifierDumpEvent } from "../../utils/teleport/autoModeDumps.js";
 import { registerCleanup, registerPreExitFlush } from "../../utils/cleanupRegistry.js";
 import { createSignal } from "../../utils/signal.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
+//@ chunk-3wek6r2k.js:29172-29300 fingerprint = scopeKey (0.642)
+/**
+ * 构造一条 replay 用户消息（isReplay）。
+ */
+function scopeKey(sessionId, uuid, content) {
+  return {
+    type: "user",
+    uuid,
+    session_id: sessionId,
+    isReplay: true,
+    parent_tool_use_id: null,
+    message: {
+      role: "user",
+      content,
+    },
+  };
+}
 //@ chunk-fp6aqx1j.js:1962-2061 placement
 var CCR_TICKET_HEADER_NAMES = ["x-ccr-ticket-rev", "x-ccr-ticket-session", "x-ccr-ticket-seq"];
 var TICKET_VALUE_PATTERN = /^[A-Za-z0-9_-]{1,4096}$/;
@@ -94,24 +112,24 @@ var TICKET_VALUE_PATTERN = /^[A-Za-z0-9_-]{1,4096}$/;
 class TicketHeaders {
   authorization;
   held = new Map();
-  headersFor(e) {
-    if (e === undefined) return {};
-    if (e !== this.authorization) {
+  headersFor(headers) {
+    if (headers === undefined) return {};
+    if (headers !== this.authorization) {
       this.held.clear();
-      this.authorization = e;
+      this.authorization = headers;
     }
     return Object.fromEntries(this.held);
   }
-  note(e, n) {
-    if (e === undefined || e !== this.authorization) return;
-    if (n.redirected || (n.status >= 400 && n.status < 500 && n.status !== 429)) {
+  note(kind, response) {
+    if (kind === undefined || kind !== this.authorization) return;
+    if (response.redirected || (response.status >= 400 && response.status < 500 && response.status !== 429)) {
       this.held.clear();
       return;
     }
-    for (let s of CCR_TICKET_HEADER_NAMES) {
-      let r = n.headers.get(s);
-      if (r === "") this.held.delete(s);
-      else if (r !== null && TICKET_VALUE_PATTERN.test(r)) this.held.set(s, r);
+    for (let headerName of CCR_TICKET_HEADER_NAMES) {
+      let value = response.headers.get(headerName);
+      if (value === "") this.held.delete(headerName);
+      else if (value !== null && TICKET_VALUE_PATTERN.test(value)) this.held.set(headerName, value);
     }
   }
 }
@@ -128,26 +146,26 @@ class UploadBacklogStats {
   constructor(rowsAhead) {
     this.rowsAhead = rowsAhead;
   }
-  noteQueued(e) {
-    for (let n of e) this.queuedSince.add(n);
+  noteQueued(ids) {
+    for (let id of ids) this.queuedSince.add(id);
   }
-  noteAttempt(e, startedAt, s) {
-    let r = count(e, (h) => this.queuedSince.has(h));
+  noteAttempt(ids, startedAt, attemptStart) {
+    let ahead = count(ids, (id) => this.queuedSince.has(id));
     this.posts++;
-    if (s) this.rows += r;
+    if (attemptStart) this.rows += ahead;
     else this.failedPosts++;
     if (this.attempts.length < MAX_REMEMBERED_ATTEMPTS)
       this.attempts.push({
         startedAt,
         endedAt: performance.now(),
-        ahead: r === 0,
+        ahead: ahead === 0,
       });
   }
-  seen(e) {
+  seen(stamp) {
     let aheadMs = 0;
     let postMs = 0;
     for (let { startedAt, endedAt, ahead } of this.attempts) {
-      let max = Math.max(0, endedAt - Math.max(startedAt, e));
+      let max = Math.max(0, endedAt - Math.max(startedAt, stamp));
       if (ahead) aheadMs += max;
       else postMs += max;
     }
@@ -167,40 +185,40 @@ class UploadBacklogStats {
  */
 var MAX_PRESERVED_MESSAGE_UUIDS = 1536;
 //@ chunk-fp6aqx1j.js:3147-3221 placement
-function isStringArray(e) {
-  return Array.isArray(e) && e.every((n) => typeof n === "string");
+function isStringArray(value) {
+  return Array.isArray(value) && value.every((item) => typeof item === "string");
 }
 //@ chunk-fp6aqx1j.js:3221-3630 placement
 /**
  * 压缩后的 boundary 行如果 preservedMessages.uuids 过多，只保留最后 n 个并同步裁剪 allUuids 与 preservedSegment.headUuid。
  */
-function trimPreservedMessagesMetadata(e, n = MAX_PRESERVED_MESSAGE_UUIDS) {
-  let compactMetadata = e.compactMetadata;
+function trimPreservedMessagesMetadata(metadata, max = MAX_PRESERVED_MESSAGE_UUIDS) {
+  let compactMetadata = metadata.compactMetadata;
   if (!isPlainObject(compactMetadata)) return null;
   let preservedMessages = compactMetadata.preservedMessages;
   if (!isPlainObject(preservedMessages)) return null;
   let uuids = preservedMessages.uuids;
-  if (!isStringArray(uuids) || uuids.length <= n) return null;
-  let sliced = uuids.slice(-n);
-  let v = sliced[0];
+  if (!isStringArray(uuids) || uuids.length <= max) return null;
+  let sliced = uuids.slice(-max);
+  let first = sliced[0];
   let allUuids = preservedMessages.allUuids;
-  let O = isStringArray(allUuids) ? allUuids.indexOf(v) : -1;
+  let anchorIndex = isStringArray(allUuids) ? allUuids.indexOf(first) : -1;
   let preservedSegment = compactMetadata.preservedSegment;
   return {
-    ...e,
+    ...metadata,
     compactMetadata: {
       ...compactMetadata,
       preservedMessages: {
         ...preservedMessages,
         uuids: sliced,
         ...(isStringArray(allUuids) && {
-          allUuids: O >= 0 ? allUuids.slice(O) : allUuids.slice(-n),
+          allUuids: anchorIndex >= 0 ? allUuids.slice(anchorIndex) : allUuids.slice(-max),
         }),
       },
       ...(isPlainObject(preservedSegment) && {
         preservedSegment: {
           ...preservedSegment,
-          headUuid: v,
+          headUuid: first,
         },
       }),
     },
@@ -216,8 +234,8 @@ var MAX_UNANSWERED_ROWS = 1e4;
 var MAX_ROW_AGE_MS = 400;
 var MAX_ROW_BYTES = 2097152;
 //@ chunk-fp6aqx1j.js:3693-3796 placement
-function isIsoTimestamp(e) {
-  return typeof e === "string" && /^\d{4}-\d{2}-\d{2}T/.test(e) && !Number.isNaN(Date.parse(e));
+function isIsoTimestamp(value) {
+  return typeof value === "string" && /^\d{4}-\d{2}-\d{2}T/.test(value) && !Number.isNaN(Date.parse(value));
 }
 //@ chunk-fp6aqx1j.js:3796-4060 placement
 function parseClientRowsOwedSpans(clientRowsOwed) {
@@ -264,42 +282,42 @@ class TurnLedger {
   get writesNoMore() {
     return this.refused;
   }
-  workerRecordRead(e, n) {
-    if (e.readFailed === true) return;
+  workerRecordRead(key, rows) {
+    if (key.readFailed === true) return;
     this.writes = true;
-    this.startedAt = n.toISOString();
-    this.stampsCountFrom = n.getTime();
+    this.startedAt = rows.toISOString();
+    this.stampsCountFrom = rows.getTime();
     this.runOpenedAt = this.startedAt;
-    let clientRowsOwedSpans = parseClientRowsOwedSpans(e.internal?.client_rows_owed);
+    let clientRowsOwedSpans = parseClientRowsOwedSpans(key.internal?.client_rows_owed);
     this.earlier = clientRowsOwedSpans.filter(
       (clientRowsOwedSpan) => clientRowsOwedSpan.tries < MAX_LEDGER_RETRIES,
     );
     this.spansGivenUpAtStart = clientRowsOwedSpans.length - this.earlier.length;
   }
-  stateReported(e, n, s) {
-    if (this.runOpen === (e === "idle")) {
+  stateReported(state, rows, stamp) {
+    if (this.runOpen === (state === "idle")) {
       this.runOpen = !this.runOpen;
-      this.runOpenedAt = this.runOpen ? n.toISOString() : this.runOpenedAt;
+      this.runOpenedAt = this.runOpen ? rows.toISOString() : this.runOpenedAt;
     }
-    if (!s) return this.guardEnded(n);
+    if (!stamp) return this.guardEnded(rows);
     return (
-      (this.runOpen ? this.openOwnSpan(n) : this.rowsAnswered([])) ??
+      (this.runOpen ? this.openOwnSpan(rows) : this.rowsAnswered([])) ??
       (this.writes && (this.own !== undefined || this.earlier.length > 0) ? this.note() : undefined)
     );
   }
-  rowsEntered(e, n) {
-    let filtered = e.filter((h) => getMainThreadTurnUuid(h) !== undefined);
-    for (let h of filtered) this.unanswered.add(String(h.uuid));
+  rowsEntered(rows, stamp) {
+    let filtered = rows.filter((row) => getMainThreadTurnUuid(row) !== undefined);
+    for (let row of filtered) this.unanswered.add(String(row.uuid));
     if (this.unanswered.size > MAX_UNANSWERED_ROWS) {
       this.unanswered.clear();
       this.writes = false;
     }
     if (filtered.length === 0) return;
     let min = Math.min(
-      n.getTime(),
+      stamp.getTime(),
       ...filtered
-        .flatMap((h) => (isIsoTimestamp(h.timestamp) ? [Date.parse(h.timestamp)] : []))
-        .filter((h) => h >= this.stampsCountFrom),
+        .flatMap((row) => (isIsoTimestamp(row.timestamp) ? [Date.parse(row.timestamp)] : []))
+        .filter((time) => time >= this.stampsCountFrom),
     );
     if (this.own === undefined) return this.openOwnSpan(new Date(min));
     if (!this.writes || min >= Date.parse(this.own.since)) return;
@@ -309,38 +327,38 @@ class TurnLedger {
     };
     return this.note();
   }
-  rowsAnswered(e) {
-    let n = this.sentAgain.size > 0;
-    for (let h of e) {
-      this.unanswered.delete(h);
-      this.sentAgain.delete(h);
+  rowsAnswered(ids) {
+    let hadResend = this.sentAgain.size > 0;
+    for (let id of ids) {
+      this.unanswered.delete(id);
+      this.sentAgain.delete(id);
     }
-    let s = n && this.sentAgain.size === 0;
-    let r = this.own !== undefined && !this.runOpen && this.unanswered.size === 0;
-    if (!this.writes || (!s && !r)) return;
-    this.earlier = s ? [] : this.earlier;
-    this.own = r ? undefined : this.own;
+    let settled = hadResend && this.sentAgain.size === 0;
+    let allAnswered = this.own !== undefined && !this.runOpen && this.unanswered.size === 0;
+    if (!this.writes || (!settled && !allAnswered)) return;
+    this.earlier = settled ? [] : this.earlier;
+    this.own = allAnswered ? undefined : this.own;
     return this.note();
   }
-  guardEnded(e) {
+  guardEnded(reason) {
     this.guardLapsed = true;
-    this.stampsCountFrom = e.getTime();
+    this.stampsCountFrom = reason.getTime();
     this.unanswered.clear();
     if (!this.writes || this.own === undefined) return;
     this.own = undefined;
     return this.note();
   }
-  earlierSpansTried(e) {
+  earlierSpansTried(spans) {
     return this.replaceEarlier(
-      this.earlier.map((n) => ({
-        ...n,
-        until: n.until ?? e ?? this.startedAt,
-        tries: n.tries + 1,
+      this.earlier.map((span) => ({
+        ...span,
+        until: span.until ?? spans ?? this.startedAt,
+        tries: span.tries + 1,
       })),
     );
   }
-  earlierRowsSentAgain(e) {
-    for (let n of e) this.sentAgain.add(n);
+  earlierRowsSentAgain(ids) {
+    for (let id of ids) this.sentAgain.add(id);
   }
   earlierRowsWithdrawn() {
     this.sentAgain.clear();
@@ -357,11 +375,11 @@ class TurnLedger {
     this.earlier = earlier;
     return this.note();
   }
-  openOwnSpan(e) {
+  openOwnSpan(stamp) {
     if (!this.writes || this.own !== undefined) return;
     this.own = {
       since: this.guardLapsed
-        ? e.toISOString()
+        ? stamp.toISOString()
         : new Date(Math.max(Date.parse(this.runOpenedAt), this.stampsCountFrom)).toISOString(),
       tries: 0,
     };
@@ -369,94 +387,99 @@ class TurnLedger {
     return this.note();
   }
   note() {
-    let mapped = this.earlier.map((s) => ({
-      ...s,
-      until: s.until ?? this.startedAt,
+    let mapped = this.earlier.map((span) => ({
+      ...span,
+      until: span.until ?? this.startedAt,
     }));
-    let n = this.own ? [...mapped, this.own] : mapped;
+    let spans = this.own ? [...mapped, this.own] : mapped;
     return {
       client_rows_owed:
-        n.length > 0
+        spans.length > 0
           ? {
               v: 1,
-              spans: n,
+              spans,
             }
           : null,
     };
   }
 }
 //@ chunk-fp6aqx1j.js:6802-7052 placement
-function getMainThreadTurnUuid(e) {
-  let content = isPlainObject(e.message) ? e.message.content : undefined;
-  return typeof e.uuid === "string" &&
+function getMainThreadTurnUuid(message) {
+  let content = isPlainObject(message.message) ? message.message.content : undefined;
+  return typeof message.uuid === "string" &&
     Array.isArray(content) &&
-    e.isSidechain !== true &&
-    !e.parent_tool_use_id &&
-    (e.type === "assistant" ||
-      (e.type === "user" && content.some((s) => isPlainObject(s) && s.type === "tool_result")))
-    ? e.uuid
+    message.isSidechain !== true &&
+    !message.parent_tool_use_id &&
+    (message.type === "assistant" ||
+      (message.type === "user" &&
+        content.some((block) => isPlainObject(block) && block.type === "tool_result")))
+    ? message.uuid
     : undefined;
 }
 //@ chunk-fp6aqx1j.js:7052-7911 placement
-function selectRowsToResend(e, n, s = () => true) {
-  let r = "nothing";
-  let flattened = e.flatMap(({ since, until }) => {
-    let index = n.findIndex(isAtOrAfterTimestamp(since));
-    let C = index < 0 ? [] : n.slice(index);
-    let U =
+function selectRowsToResend(fromUuid, rows, keep = () => true) {
+  let reason = "nothing";
+  let flattened = fromUuid.flatMap(({ since, until }) => {
+    let index = rows.findIndex(isAtOrAfterTimestamp(since));
+    let candidates = index < 0 ? [] : rows.slice(index);
+    let endIndex =
       until === undefined
         ? -1
         : isIsoTimestamp(until)
-          ? C.findIndex(isAtOrAfterTimestamp(until))
-          : C.findIndex((W) => W.uuid === until) + 1;
-    let S = U < 0 ? C : C.slice(0, U);
+          ? candidates.findIndex(isAtOrAfterTimestamp(until))
+          : candidates.findIndex((row) => row.uuid === until) + 1;
+    let toSend = endIndex < 0 ? candidates : candidates.slice(0, endIndex);
     if (
-      (until !== undefined && !isIsoTimestamp(until) && !n.some((W) => W.uuid === until)) ||
-      S.some((W) => W.type === "system" && W.subtype === "compact_boundary")
+      (until !== undefined && !isIsoTimestamp(until) && !rows.some((row) => row.uuid === until)) ||
+      toSend.some((row) => row.type === "system" && row.subtype === "compact_boundary")
     )
-      r = "rows_before_a_compaction";
-    let P = [];
-    for (let W of S) {
-      let x = getMainThreadTurnUuid(W) !== undefined && s(W);
-      if (x === "nor_any_after_it") {
-        r = "reply_without_this_sessions_mark";
+      reason = "rows_before_a_compaction";
+    let out = [];
+    for (let row of toSend) {
+      let keepRow = getMainThreadTurnUuid(row) !== undefined && keep(row);
+      if (keepRow === "nor_any_after_it") {
+        reason = "reply_without_this_sessions_mark";
         break;
       }
-      if (x) P.push(W);
+      if (keepRow) out.push(row);
     }
-    return P.length > 0 ? [P] : [];
+    return out.length > 0 ? [out] : [];
   });
-  let w = new Set();
-  for (let v of flattened) {
-    let y = 0;
-    let O = 0;
-    let index = v.toReversed().findIndex((U, S) => {
-      y += Buffer.byteLength(jsonStringify(U));
-      O += isPlainObject(U.message) && Array.isArray(U.message.content) ? U.message.content.length : 1;
+  let ids = new Set();
+  for (let spanIds of flattened) {
+    let from = 0;
+    let to = 0;
+    let index = spanIds.toReversed().findIndex((start, end) => {
+      from += Buffer.byteLength(jsonStringify(start));
+      to +=
+        isPlainObject(start.message) && Array.isArray(start.message.content)
+          ? start.message.content.length
+          : 1;
       return (
-        S > 0 && (O > Math.floor(MAX_ROW_AGE_MS / flattened.length) || y > MAX_ROW_BYTES / flattened.length)
+        end > 0 &&
+        (to > Math.floor(MAX_ROW_AGE_MS / flattened.length) || from > MAX_ROW_BYTES / flattened.length)
       );
     });
-    for (let U of index < 0 ? v : v.slice(v.length - index)) w.add(U);
-    if (index >= 0) r = "rows_over_the_limits";
+    for (let id of index < 0 ? spanIds : spanIds.slice(spanIds.length - index)) ids.add(id);
+    if (index >= 0) reason = "rows_over_the_limits";
   }
   return {
-    rows: [...w],
-    leftOut: r,
+    rows: [...ids],
+    leftOut: reason,
   };
 }
 //@ chunk-fp6aqx1j.js:7911-8078 placement
-function findLastRowBeforeSpans(e, rowsLoaded, s) {
+function findLastRowBeforeSpans(spans, rowsLoaded, fromMs) {
   let index = rowsLoaded.findIndex(
-    isAtOrAfterTimestamp(Math.min(...e.map(({ since }) => Date.parse(since)))),
+    isAtOrAfterTimestamp(Math.min(...spans.map(({ since }) => Date.parse(since)))),
   );
-  let uuid = (index < 0 ? rowsLoaded : rowsLoaded.slice(0, index)).findLast(s)?.uuid;
+  let uuid = (index < 0 ? rowsLoaded : rowsLoaded.slice(0, index)).findLast(fromMs)?.uuid;
   return typeof uuid === "string" ? uuid : undefined;
 }
 //@ chunk-fp6aqx1j.js:8078-8190 placement
-function isAtOrAfterTimestamp(e) {
-  let time = new Date(e).getTime();
-  return (s) => typeof s.timestamp === "string" && Date.parse(s.timestamp) >= time;
+function isAtOrAfterTimestamp(time) {
+  let time_2 = new Date(time).getTime();
+  return (message) => typeof message.timestamp === "string" && Date.parse(message.timestamp) >= time_2;
 }
 //@ chunk-fp6aqx1j.js:8190-8432 placement
 var STREAM_EVENT_TYPES = {
@@ -476,42 +499,42 @@ var STREAM_DELTA_TYPES = {
   compaction_delta: true,
 };
 //@ chunk-fp6aqx1j.js:8432-8725 placement
-function stripInputTransformations(e) {
-  let { event } = e;
-  if (event.type === "message_start" && event.message?.input_transformations) {
-    let { input_transformations: inputTransformations, ...r } = event.message;
+function stripInputTransformations(event) {
+  let { event: event_2 } = event;
+  if (event_2.type === "message_start" && event_2.message?.input_transformations) {
+    let { input_transformations: inputTransformations, ...rest } = event_2.message;
     return {
-      ...e,
+      ...event,
       event: {
-        ...event,
-        message: r,
+        ...event_2,
+        message: rest,
       },
     };
   }
-  if (event.type === "message_delta" && event.input_transformations) {
-    let { input_transformations: inputTransformations, ...r } = event;
+  if (event_2.type === "message_delta" && event_2.input_transformations) {
+    let { input_transformations: inputTransformations, ...rest } = event_2;
     return {
-      ...e,
-      event: r,
+      ...event,
+      event: rest,
     };
   }
-  return e;
+  return event;
 }
 //@ chunk-fp6aqx1j.js:8725-9005 placement
-function dropOversizeStreamEvent(e, n) {
-  let s = describeStreamEventForTelemetry(e.event);
-  let joined = Object.entries(s)
+function dropOversizeStreamEvent(frame, maxBytes) {
+  let label = describeStreamEventForTelemetry(frame.event);
+  let joined = Object.entries(label)
     .map(([key, value]) => `${key}=${value}`)
     .join(" ");
   logForDebugging(
-    `CCRClient: dropping oversize ephemeral stream_event (${joined}, ${n} bytes, over the ${MAX_FRAME_BYTES}-byte limit)`,
+    `CCRClient: dropping oversize ephemeral stream_event (${joined}, ${maxBytes} bytes, over the ${MAX_FRAME_BYTES}-byte limit)`,
     {
       level: "warn",
     },
   );
   logFeatureSad("ccr_partial_messages", "oversize_ephemeral_skipped", {
-    ...s,
-    bytes: n,
+    ...label,
+    bytes: maxBytes,
   });
 }
 //@ chunk-fp6aqx1j.js:9005-9295 placement
@@ -520,37 +543,37 @@ function describeStreamEventForTelemetry(event) {
     return {
       event_type: lit("other"),
     };
-  let { type: n, delta, content_block: contentBlock } = event;
-  let h = isPlainObject(contentBlock) ? contentBlock.type : undefined;
+  let { type, delta, content_block: contentBlock } = event;
+  let contentType = isPlainObject(contentBlock) ? contentBlock.type : undefined;
   return {
-    event_type: fromEnum(matchedKeyOrOther(STREAM_EVENT_TYPES, n)),
-    ...(n === "content_block_delta" && {
+    event_type: fromEnum(matchedKeyOrOther(STREAM_EVENT_TYPES, type)),
+    ...(type === "content_block_delta" && {
       delta_type: fromEnum(
         matchedKeyOrOther(STREAM_DELTA_TYPES, isPlainObject(delta) ? delta.type : undefined),
       ),
     }),
-    ...(n === "content_block_start" && {
-      content_block_type: isKnownContentBlockType(h) ? fromEnum(h) : lit("other"),
+    ...(type === "content_block_start" && {
+      content_block_type: isKnownContentBlockType(contentType) ? fromEnum(contentType) : lit("other"),
     }),
   };
 }
 //@ chunk-fp6aqx1j.js:9295-9359 placement
-function matchedKeyOrOther(e, n) {
-  for (let key in e) if (key === n) return key;
+function matchedKeyOrOther(key, known) {
+  for (let key_2 in key) if (key_2 === known) return key_2;
   return "other";
 }
 //@ chunk-fp6aqx1j.js:9359-9379 layout
 var TEXT_POST_GAP_MS = 500;
 var MAX_TIMER_LATENESS_MS = 60000;
 //@ chunk-fp6aqx1j.js:9379-9497 layout
-function getTextRhythm(e) {
-  e.textRhythm ??= {
+function getTextRhythm(timing) {
+  timing.textRhythm ??= {
     posts: 0,
     gapsOver500Ms: 0,
     lastPostAtMs: undefined,
     timerMaxLateMs: undefined,
   };
-  return e.textRhythm;
+  return timing.textRhythm;
 }
 //@ chunk-fp6aqx1j.js:9497-9736 fingerprint = accumulateStreamEvents (0.846)
 function accumulateStreamEvents(payload) {
@@ -566,30 +589,30 @@ function accumulateStreamEvents(payload) {
   );
 }
 //@ chunk-fp6aqx1j.js:9736-9828 affinity
-function markTextDeltaRows(e, countedTextEvents) {
-  let s = false;
-  for (let r of e)
-    if (accumulateStreamEvents(r.payload) && !countedTextEvents.has(r)) {
-      countedTextEvents.add(r);
-      s = true;
+function markTextDeltaRows(events, countedTextEvents) {
+  let marked = false;
+  for (let event of events)
+    if (accumulateStreamEvents(event.payload) && !countedTextEvents.has(event)) {
+      countedTextEvents.add(event);
+      marked = true;
     }
-  return s;
+  return marked;
 }
 //@ chunk-fp6aqx1j.js:9828-9950 affinity
-function recordTextPost(timing, n) {
+function recordTextPost(timing, postedAtMs) {
   let textRhythm = getTextRhythm(timing);
   textRhythm.posts++;
-  if (textRhythm.lastPostAtMs !== undefined && n - textRhythm.lastPostAtMs > TEXT_POST_GAP_MS)
+  if (textRhythm.lastPostAtMs !== undefined && postedAtMs - textRhythm.lastPostAtMs > TEXT_POST_GAP_MS)
     textRhythm.gapsOver500Ms++;
-  textRhythm.lastPostAtMs = n;
+  textRhythm.lastPostAtMs = postedAtMs;
 }
 //@ chunk-fp6aqx1j.js:9950-10071 affinity
-function recordTimerLateness(timing, n) {
-  if (!(n >= 0)) return;
+function recordTimerLateness(timing, latenessMs) {
+  if (!(latenessMs >= 0)) return;
   let textRhythm = getTextRhythm(timing);
   textRhythm.timerMaxLateMs = Math.max(
     textRhythm.timerMaxLateMs ?? 0,
-    Math.min(Math.round(n), MAX_TIMER_LATENESS_MS),
+    Math.min(Math.round(latenessMs), MAX_TIMER_LATENESS_MS),
   );
 }
 //@ chunk-fp6aqx1j.js:10071-10761 affinity
@@ -611,12 +634,12 @@ class HoldStats {
     },
   };
   wholeTurnHoldStands = false;
-  released(e, n, s) {
-    let r = e === "client_events" ? this.counts.clientEvents : this.counts.internalEvents;
-    r.releases += 1;
-    r.heldRows += n;
-    r.maxHeldRows = Math.max(r.maxHeldRows, n);
-    r.maxHeldMs = Math.max(r.maxHeldMs, s);
+  released(channel, count, released) {
+    let counter = channel === "client_events" ? this.counts.clientEvents : this.counts.internalEvents;
+    counter.releases += 1;
+    counter.heldRows += count;
+    counter.maxHeldRows = Math.max(counter.maxHeldRows, count);
+    counter.maxHeldMs = Math.max(counter.maxHeldMs, released);
   }
   wholeTurnHoldStarted() {
     if (!this.wholeTurnHoldStands) {
@@ -635,86 +658,134 @@ class HoldStats {
   }
 }
 //@ chunk-fp6aqx1j.js:15795-15943 placement
-var EMPTY_UPLOAD_TRIM = {};
-var DEFAULT_HEARTBEAT_INTERVAL_MS = 20000;
-var MIN_HEARTBEAT_INTERVAL_MS = 1e4;
-var MAX_HEARTBEAT_LEAD_MS = 15000;
-var HEARTBEAT_SAFETY_MARGIN_MS = 5000;
-var AUTH_REFRESH_TIMEOUT_MS = HEARTBEAT_SAFETY_MARGIN_MS;
-var UNUSED_TIMEOUT_5000_MS = 5000;
-var DEFAULT_IDLE_HEARTBEAT_INTERVAL_MS = 300000;
-var SHUTDOWN_REQUEST_TIMEOUT_MS = 2000;
-var TOKEN_REFRESH_LEAD_MS =
-  MAX_HEARTBEAT_LEAD_MS + AUTH_REFRESH_TIMEOUT_MS + 2 * DEFAULT_HEARTBEAT_INTERVAL_MS;
-var DEFAULT_PROBE_BEAT_SPACING_MS = 5000;
-var HEARTBEAT_STALE_FACTOR = 1.5;
-var MAX_CONSECUTIVE_HEARTBEAT_FAILURES = 3;
-var HEARTBEAT_FATAL_STATUSES = new Set([401, 403, 404, 429]);
-var DEFAULT_STREAM_EVENT_FLUSH_INTERVAL_MS = 100;
+var EMPTY_UPLOAD_TRIM; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var DEFAULT_HEARTBEAT_INTERVAL_MS;
+var MIN_HEARTBEAT_INTERVAL_MS;
+var MAX_HEARTBEAT_LEAD_MS;
+var HEARTBEAT_SAFETY_MARGIN_MS;
+var AUTH_REFRESH_TIMEOUT_MS;
+var UNUSED_TIMEOUT_5000_MS;
+var DEFAULT_IDLE_HEARTBEAT_INTERVAL_MS;
+var SHUTDOWN_REQUEST_TIMEOUT_MS;
+var TOKEN_REFRESH_LEAD_MS;
+var DEFAULT_PROBE_BEAT_SPACING_MS;
+var HEARTBEAT_STALE_FACTOR;
+var MAX_CONSECUTIVE_HEARTBEAT_FAILURES;
+var HEARTBEAT_FATAL_STATUSES;
+var DEFAULT_STREAM_EVENT_FLUSH_INTERVAL_MS;
+deferInit("chunk-fp6aqx1j.js:15795", () => {
+  EMPTY_UPLOAD_TRIM = {};
+  DEFAULT_HEARTBEAT_INTERVAL_MS = 20000;
+  MIN_HEARTBEAT_INTERVAL_MS = 1e4;
+  MAX_HEARTBEAT_LEAD_MS = 15000;
+  HEARTBEAT_SAFETY_MARGIN_MS = 5000;
+  AUTH_REFRESH_TIMEOUT_MS = HEARTBEAT_SAFETY_MARGIN_MS;
+  UNUSED_TIMEOUT_5000_MS = 5000;
+  DEFAULT_IDLE_HEARTBEAT_INTERVAL_MS = 300000;
+  SHUTDOWN_REQUEST_TIMEOUT_MS = 2000;
+  TOKEN_REFRESH_LEAD_MS = MAX_HEARTBEAT_LEAD_MS + AUTH_REFRESH_TIMEOUT_MS + 2 * DEFAULT_HEARTBEAT_INTERVAL_MS;
+  DEFAULT_PROBE_BEAT_SPACING_MS = 5000;
+  HEARTBEAT_STALE_FACTOR = 1.5;
+  MAX_CONSECUTIVE_HEARTBEAT_FAILURES = 3;
+  HEARTBEAT_FATAL_STATUSES = new Set([401, 403, 404, 429]);
+  DEFAULT_STREAM_EVENT_FLUSH_INTERVAL_MS = 100;
+});
 //@ chunk-fp6aqx1j.js:15943-15991 placement
 function isClientErrorStatus(status) {
   return status === 400 || status === 413 || status === 422;
 }
 //@ chunk-fp6aqx1j.js:15991-16184 placement
-var EVENT_BATCH_PATH = "/worker/event-batch";
-var BATCH_UNSUPPORTED_STATUSES = new Set([404, 405, 501]);
-var RIDE_PAUSE_BASE_MS = 60000;
-var RIDE_PAUSE_MAX_MS = 1920000;
-var X_CCR_UPLOAD_ATTEMPT = "x-ccr-upload-attempt";
-var MIN_EVENT_POST_TIMEOUT_MS = 1e4;
-var ROWS_SENT_AGAIN_WAIT_MS = 60000;
-var WORKER_STATE_FLUSH_TIMEOUT_MS = 1e4;
-var URGENT_EVENT_POST_TIMEOUT_MS = 60000;
-var ONE_MIB = 1048576;
-var MAX_EVENT_BATCH_BYTES = 4 * ONE_MIB - 65536;
-var POST_TIMEOUT_MS_PER_MIB = 5000;
-var DEFAULT_MAX_EVENT_POST_TIMEOUT_MS = 120000;
-var LARGE_BATCH_RETRY_BACKOFF = 1.5;
-var LARGE_BATCH_BYTES = 262144;
+var EVENT_BATCH_PATH; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var BATCH_UNSUPPORTED_STATUSES;
+var RIDE_PAUSE_BASE_MS;
+var RIDE_PAUSE_MAX_MS;
+var X_CCR_UPLOAD_ATTEMPT;
+var MIN_EVENT_POST_TIMEOUT_MS;
+var ROWS_SENT_AGAIN_WAIT_MS;
+var WORKER_STATE_FLUSH_TIMEOUT_MS;
+var URGENT_EVENT_POST_TIMEOUT_MS;
+var ONE_MIB;
+var MAX_EVENT_BATCH_BYTES;
+var POST_TIMEOUT_MS_PER_MIB;
+var DEFAULT_MAX_EVENT_POST_TIMEOUT_MS;
+var LARGE_BATCH_RETRY_BACKOFF;
+var LARGE_BATCH_BYTES;
+deferInit("chunk-fp6aqx1j.js:15991", () => {
+  EVENT_BATCH_PATH = "/worker/event-batch";
+  BATCH_UNSUPPORTED_STATUSES = new Set([404, 405, 501]);
+  RIDE_PAUSE_BASE_MS = 60000;
+  RIDE_PAUSE_MAX_MS = 1920000;
+  X_CCR_UPLOAD_ATTEMPT = "x-ccr-upload-attempt";
+  MIN_EVENT_POST_TIMEOUT_MS = 1e4;
+  ROWS_SENT_AGAIN_WAIT_MS = 60000;
+  WORKER_STATE_FLUSH_TIMEOUT_MS = 1e4;
+  URGENT_EVENT_POST_TIMEOUT_MS = 60000;
+  ONE_MIB = 1048576;
+  MAX_EVENT_BATCH_BYTES = 4 * ONE_MIB - 65536;
+  POST_TIMEOUT_MS_PER_MIB = 5000;
+  DEFAULT_MAX_EVENT_POST_TIMEOUT_MS = 120000;
+  LARGE_BATCH_RETRY_BACKOFF = 1.5;
+  LARGE_BATCH_BYTES = 262144;
+});
 //@ chunk-fp6aqx1j.js:16184-16360 placement
 /**
  * 按批次字节数估算事件 POST 超时：基础 10s 加每 MiB 5s，大批次（≥256KiB 且不可切分）按重试次数指数放大，夹在 minMs–maxMs。
  */
-function computeEventPostTimeoutMs(e, { maxMs, minMs = MIN_EVENT_POST_TIMEOUT_MS }) {
-  let r =
-    MIN_EVENT_POST_TIMEOUT_MS + Math.round((e.bytes / ONE_MIB) * (POST_TIMEOUT_MS_PER_MIB / 1000)) * 1000;
-  let h = e.bytes >= LARGE_BATCH_BYTES && !e.cuttable ? r * LARGE_BATCH_RETRY_BACKOFF ** e.retryCount : r;
-  return Math.max(minMs, Math.min(maxMs, Math.round(h)));
+function computeEventPostTimeoutMs(events, { maxMs, minMs = MIN_EVENT_POST_TIMEOUT_MS }) {
+  let bytesMs =
+    MIN_EVENT_POST_TIMEOUT_MS +
+    Math.round((events.bytes / ONE_MIB) * (POST_TIMEOUT_MS_PER_MIB / 1000)) * 1000;
+  let computedMs =
+    events.bytes >= LARGE_BATCH_BYTES && !events.cuttable
+      ? bytesMs * LARGE_BATCH_RETRY_BACKOFF ** events.retryCount
+      : bytesMs;
+  return Math.max(minMs, Math.min(maxMs, Math.round(computedMs)));
 }
 //@ chunk-fp6aqx1j.js:16360-16420 placement
-var SERVABLE_CONTROL_SUBTYPES = new Set(["remote_tool_call", "remote_plumbing_call"]);
+var SERVABLE_CONTROL_SUBTYPES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-fp6aqx1j.js:16360", () => {
+  SERVABLE_CONTROL_SUBTYPES = new Set(["remote_tool_call", "remote_plumbing_call"]);
+});
 //@ chunk-fp6aqx1j.js:16420-16456 placement
-function isServableControlRequest(e) {
-  return SERVABLE_CONTROL_SUBTYPES.has(getControlRequestSubtypeOfEvent(e));
+function isServableControlRequest(request) {
+  return SERVABLE_CONTROL_SUBTYPES.has(getControlRequestSubtypeOfEvent(request));
 }
 //@ chunk-fp6aqx1j.js:16456-16781 placement
 /**
  * CCR 客户端的控制请求子类型集合与相关上限常量（可服务调用的子类型、可透传的设置类子类型等）。
  */
-var SERVED_CALL_REQUEST_SUBTYPES = new Set(REMOTE_TOOLS_LOG_EVENTS);
-var MAX_URGENT_REQUEST_IDS = 256;
-var SETTINGS_CONTROL_SUBTYPES = new Set([
-  "apply_flag_settings",
-  "set_max_thinking_tokens",
-  "set_permission_mode",
-  "mcp_set_servers",
-  "mcp_reconnect",
-  "reload_skills",
-]);
-var DEFAULT_SETTINGS_ANSWER_WAIT_MS = 1000;
-var MAX_SETTINGS_REQUEST_IDS = 64;
-var HOUSEKEEPING_CONTROL_SUBTYPES = new Set([
-  "initialize",
-  "stage_file",
-  "prefetch_attachments",
-  "set_chrome_browser_hints",
-  "mcp_toggle",
-  "set_mcp_permission_mode_override",
-  "set_model",
-]);
+var SERVED_CALL_REQUEST_SUBTYPES; // deferred: uses REMOTE_TOOLS_LOG_EVENTS (../../services/remoteTools/remoteToolsDebug.js) of its import cycle while loading; runs once the cycle is complete
+var MAX_URGENT_REQUEST_IDS;
+var SETTINGS_CONTROL_SUBTYPES;
+var DEFAULT_SETTINGS_ANSWER_WAIT_MS;
+var MAX_SETTINGS_REQUEST_IDS;
+var HOUSEKEEPING_CONTROL_SUBTYPES;
+deferInit("chunk-fp6aqx1j.js:16456", () => {
+  SERVED_CALL_REQUEST_SUBTYPES = new Set(REMOTE_TOOLS_LOG_EVENTS);
+  MAX_URGENT_REQUEST_IDS = 256;
+  SETTINGS_CONTROL_SUBTYPES = new Set([
+    "apply_flag_settings",
+    "set_max_thinking_tokens",
+    "set_permission_mode",
+    "mcp_set_servers",
+    "mcp_reconnect",
+    "reload_skills",
+  ]);
+  DEFAULT_SETTINGS_ANSWER_WAIT_MS = 1000;
+  MAX_SETTINGS_REQUEST_IDS = 64;
+  HOUSEKEEPING_CONTROL_SUBTYPES = new Set([
+    "initialize",
+    "stage_file",
+    "prefetch_attachments",
+    "set_chrome_browser_hints",
+    "mcp_toggle",
+    "set_mcp_permission_mode_override",
+    "set_model",
+  ]);
+});
 //@ chunk-fp6aqx1j.js:16916-17066 placement
-function getControlRequestSubtypeOfEvent(e) {
-  let request = e.payload.type === "control_request" ? e.payload.request : undefined;
+function getControlRequestSubtypeOfEvent(event) {
+  let request = event.payload.type === "control_request" ? event.payload.request : undefined;
   return typeof request === "object" && request !== null && "subtype" in request
     ? request.subtype
     : undefined;
@@ -734,9 +805,9 @@ function mergeClients(error) {
 class CCRInitError extends Error {
   reason;
   httpStatus;
-  constructor(e, httpStatus) {
-    super(`CCRClient init failed: ${e}`);
-    this.reason = e;
+  constructor(message, httpStatus) {
+    super(`CCRClient init failed: ${message}`);
+    this.reason = message;
     this.httpStatus = httpStatus;
   }
 }
@@ -783,38 +854,38 @@ var INTERNAL_EVENT_UUID_BATCH_SIZE = 100;
 /**
  * 流式读取响应体，超过字节上限时取消并返回 null；解码出空串但读到字节视为内存不足抛 RangeError。
  */
-async function readBodyCapped(e, n) {
-  let reader = e.body?.getReader();
+async function readBodyCapped(response, maxBytes) {
+  let reader = response.body?.getReader();
   let textDecoder = new TextDecoder();
-  let h = "";
-  let w = 0;
-  for (let v = await reader?.read(); v !== undefined && !v.done; v = await reader?.read()) {
-    w += v.value.byteLength;
-    if (w > n) {
+  let text = "";
+  let bytes = 0;
+  for (let chunk = await reader?.read(); chunk !== undefined && !chunk.done; chunk = await reader?.read()) {
+    bytes += chunk.value.byteLength;
+    if (bytes > maxBytes) {
       await reader?.cancel();
       return null;
     }
-    let y = textDecoder.decode(v.value, {
+    let piece = textDecoder.decode(chunk.value, {
       stream: true,
     });
-    if (y === "" && v.value.byteLength > 6) {
+    if (piece === "" && chunk.value.byteLength > 6) {
       reader?.cancel().catch(() => {});
       throw RangeError("out of memory while decoding a page");
     }
-    h += y;
+    text += piece;
   }
   return {
-    text: h + textDecoder.decode(),
-    bytes: w,
+    text: text + textDecoder.decode(),
+    bytes,
   };
 }
 //@ chunk-fp6aqx1j.js:18138-18246 placement
-function isTimestampWithinLimit(e, maxTimestampChars) {
-  let timestamp = e.payload?.timestamp;
+function isTimestampWithinLimit(timestamp, maxTimestampChars) {
+  let timestamp_2 = timestamp.payload?.timestamp;
   return (
     maxTimestampChars === undefined ||
-    timestamp === undefined ||
-    (typeof timestamp === "string" && timestamp.length <= maxTimestampChars)
+    timestamp_2 === undefined ||
+    (typeof timestamp_2 === "string" && timestamp_2.length <= maxTimestampChars)
   );
 }
 //@ chunk-fp6aqx1j.js:18246-18266 placement
@@ -825,107 +896,119 @@ function durableUploadOutcome(status) {
   return status !== undefined && status >= 400 && status < 500 ? "not_accepted" : "indeterminate";
 }
 //@ chunk-fp6aqx1j.js:18345-18551 placement
-function detectTaskBookends(e) {
-  let n = false;
-  let s = false;
-  for (let r of e)
-    if (r.payload.subtype === "task_notification") n = true;
-    else if (r.payload.subtype === "background_tasks_changed") s = true;
-  return n || s
+function detectTaskBookends(messages) {
+  let sawTaskNotification = false;
+  let sawStart = false;
+  for (let message of messages)
+    if (message.payload.subtype === "task_notification") sawTaskNotification = true;
+    else if (message.payload.subtype === "background_tasks_changed") sawStart = true;
+  return sawTaskNotification || sawStart
     ? {
-        has_terminal_bookend: n,
-        has_level: s,
+        has_terminal_bookend: sawTaskNotification,
+        has_level: sawStart,
       }
     : null;
 }
 //@ chunk-fp6aqx1j.js:18551-18623 placement
-function clampInt32(e) {
-  return Math.min(Math.max(0, Math.trunc(e) || 0), 2147483647);
+function clampInt32(value) {
+  return Math.min(Math.max(0, Math.trunc(value) || 0), 2147483647);
 }
 //@ chunk-fp6aqx1j.js:18623-18843 placement
-var ENDPOINT_CATEGORIES = {
-  "/worker": "worker_state",
-  [EVENT_BATCH_PATH]: "events",
-  "/worker/events": "events",
-  "/worker/events/delivery": "delivery",
-  "/worker/heartbeat": "heartbeat",
-  "/worker/internal-events": "internal_events",
-};
-var MAX_REFUSED_INTERNAL_EVENT_UUIDS = 512;
-var UPGRADE_RELAY_MARKER = "upgrade_relay_marker";
+var ENDPOINT_CATEGORIES; // deferred: uses EVENT_BATCH_PATH of its import cycle while loading; runs once the cycle is complete
+var MAX_REFUSED_INTERNAL_EVENT_UUIDS;
+var UPGRADE_RELAY_MARKER;
+deferInit("chunk-fp6aqx1j.js:18623", () => {
+  ENDPOINT_CATEGORIES = {
+    "/worker": "worker_state",
+    [EVENT_BATCH_PATH]: "events",
+    "/worker/events": "events",
+    "/worker/events/delivery": "delivery",
+    "/worker/heartbeat": "heartbeat",
+    "/worker/internal-events": "internal_events",
+  };
+  MAX_REFUSED_INTERNAL_EVENT_UUIDS = 512;
+  UPGRADE_RELAY_MARKER = "upgrade_relay_marker";
+});
 //@ chunk-fp6aqx1j.js:19042-19658 placement
 /**
  * 云会话 worker pending_action 及事件列表的 zod schema（事件、分页、agent_metadata、批量写入结果）。
  */
-var pendingActionSchema = DoctorLazy(() =>
-  u({
-    tool_name: string().refine((e) => !e.startsWith("dialog:")),
-    display_tool_name: string().nullish(),
-    action_description: string(),
-    raw_command: string().nullish(),
-    request_id: string(),
-    tool_use_id: string().min(1),
-    suppressed_request_id: string().nullish(),
-  }),
-);
-var sessionEventSchema = DoctorLazy(() =>
-  looseObject({
-    event_id: string(),
-    event_type: string(),
-    payload: record(string(), unknown()),
-    event_metadata: record(string(), unknown()).nullish(),
-    is_compaction: M(),
-    created_at: string(),
-    session_agent_id: string().optional(),
-  }),
-);
-var sessionEventsPageSchema = DoctorLazy(() =>
-  u({
-    data: array(sessionEventSchema()),
-    next_cursor: string().optional(),
-  }),
-);
-var agentMetadataEventsSchema = DoctorLazy(() =>
-  u({
-    data: array(
-      sessionEventSchema().extend({
-        payload: looseObject({
-          type: literal("agent_metadata"),
+var pendingActionSchema; // deferred: uses DoctorLazy (../handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var sessionEventSchema;
+var sessionEventsPageSchema;
+var agentMetadataEventsSchema;
+var eventBatchResultSchema;
+deferInit("chunk-fp6aqx1j.js:19042", () => {
+  pendingActionSchema = DoctorLazy(() =>
+    objectSchema({
+      tool_name: stringSchema().refine((toolName) => !toolName.startsWith("dialog:")),
+      display_tool_name: stringSchema().nullish(),
+      action_description: stringSchema(),
+      raw_command: stringSchema().nullish(),
+      request_id: stringSchema(),
+      tool_use_id: stringSchema().min(1),
+      suppressed_request_id: stringSchema().nullish(),
+    }),
+  );
+  sessionEventSchema = DoctorLazy(() =>
+    looseObject({
+      event_id: stringSchema(),
+      event_type: stringSchema(),
+      payload: record(stringSchema(), unknown()),
+      event_metadata: record(stringSchema(), unknown()).nullish(),
+      is_compaction: booleanSchema(),
+      created_at: stringSchema(),
+      session_agent_id: stringSchema().optional(),
+    }),
+  );
+  sessionEventsPageSchema = DoctorLazy(() =>
+    objectSchema({
+      data: array(sessionEventSchema()),
+      next_cursor: stringSchema().optional(),
+    }),
+  );
+  agentMetadataEventsSchema = DoctorLazy(() =>
+    objectSchema({
+      data: array(
+        sessionEventSchema().extend({
+          payload: looseObject({
+            type: literal("agent_metadata"),
+          }),
+          session_agent_id: stringSchema(),
         }),
-        session_agent_id: string(),
-      }),
-    ).optional(),
-  }),
-);
-var eventBatchResultSchema = DoctorLazy(() =>
-  u({
-    results: array(
-      u({
-        event_id: string(),
-        duplicate: M(),
-      }),
-    ),
-  }),
-);
+      ).optional(),
+    }),
+  );
+  eventBatchResultSchema = DoctorLazy(() =>
+    objectSchema({
+      results: array(
+        objectSchema({
+          event_id: stringSchema(),
+          duplicate: booleanSchema(),
+        }),
+      ),
+    }),
+  );
+});
 //@ chunk-fp6aqx1j.js:19658-19986 placement
 /**
  * 用 schema 解析待处理动作（工具调用审批请求），取得 requestId 后返回规范化的动作对象；不合法时返回 undefined。
  */
 function parsePendingAction(pendingAction) {
-  let n = pendingActionSchema().safeParse(pendingAction);
-  if (!n.success) return;
-  let s = n.data;
-  let r = requestIdOf(s);
-  if (r === undefined) return;
+  let parsed = pendingActionSchema().safeParse(pendingAction);
+  if (!parsed.success) return;
+  let action = parsed.data;
+  let requestId = requestIdOf(action);
+  if (requestId === undefined) return;
   return {
-    requestId: r,
+    requestId,
     details: buildRequiresActionDetails({
-      tool_name: s.tool_name,
-      display_tool_name: s.display_tool_name ?? undefined,
-      action_description: s.action_description,
-      raw_command: s.raw_command ?? undefined,
-      request_id: s.request_id,
-      tool_use_id: s.tool_use_id,
+      tool_name: action.tool_name,
+      display_tool_name: action.display_tool_name ?? undefined,
+      action_description: action.action_description,
+      raw_command: action.raw_command ?? undefined,
+      request_id: action.request_id,
+      tool_use_id: action.tool_use_id,
     }),
   };
 }
@@ -933,18 +1016,18 @@ function parsePendingAction(pendingAction) {
 /**
  * 根据 worker 外部状态里的 pending_action 判断会话是否处于 requires_action：读取中/失败/无待办/无法上报时返回 idle 与原因，否则带 requestId 与详情返回 requires_action。
  */
-function resolveWorkerRequiresActionState(e) {
-  if (e === "pending")
+function resolveWorkerRequiresActionState(state) {
+  if (state === "pending")
     return {
       status: "idle",
       reason: "get_pending",
     };
-  if (e.readFailed)
+  if (state.readFailed)
     return {
       status: "idle",
       reason: "get_failed",
     };
-  let pendingAction = e.external?.pending_action;
+  let pendingAction = state.external?.pending_action;
   if (pendingAction === undefined || pendingAction === null)
     return {
       status: "idle",
@@ -966,144 +1049,195 @@ function resolveWorkerRequiresActionState(e) {
 /**
  * CCR 客户端默认批量策略常量：事件数/年龄/字节上限、跨模型调用持有、事件脉冲与拾取等待、入站 UUID 容量、查看器检查点、可等待事件集合等。
  */
-var WorkerLimitsSchema = DoctorLazy(() =>
-  looseObject({
-    max_events: E().nullish(),
-    max_age_ms: E().nullish(),
-    max_bytes: E().nullish(),
-    flush_on_sampling_end: M().nullish(),
-    flush_on_assistant: M().nullish(),
-    event_batch_upload: M().nullish().catch(undefined),
-    hold_across_model_calls: M().nullish().catch(undefined),
-    hold_again: looseObject({
-      soft_age_ms: E().nullish(),
-      soft_events: E().nullish(),
-      after: array(string()).nullish(),
-      never_after_tools: array(string()).nullish(),
-      tools_whose_results_wait: array(string()).nullish(),
-      later_worker_holds_first_turn: M().nullish().catch(undefined),
-    })
-      .nullish()
-      .catch(undefined),
-    may_wait_types: array(string()).nullish().catch(undefined),
-    flush_after_tool_names: array(string()).nullish().catch(undefined),
-    settings_receipts_max_wait_ms: E().nullish().catch(undefined),
-    messages_received_waits: M().nullish().catch(undefined),
-    receipts_ride_uploads: M().nullish().catch(undefined),
-    flush_before_tools_wait_ms: E().nullish(),
-    flush_after_tools: string().nullish(),
-    must_flush_types: array(string()).nullish(),
-    live_twin_types: array(string()).nullish().catch(undefined),
-    live_only_types: array(string()).nullish().catch(undefined),
-    transcript_max_age_ms: E().nullish().catch(undefined),
-    no_turn_max_age_ms: E().nullish().catch(undefined),
-    merge_worker_reports: M().nullish().catch(undefined),
-    control_traffic_keeps_hold: M().nullish().catch(undefined),
-    empty_checkpoint_keeps_hold: M().nullish().catch(undefined),
-    first_turn_holds_each_call: M().nullish().catch(undefined),
-    settings_answers_max_wait_ms: E().nullish().catch(undefined),
-    init_max_wait_ms: E().nullish().catch(undefined),
-    metadata_waits_for_status: array(string()).nullish().catch(undefined),
-    metadata_never_sent: array(string()).nullish().catch(undefined),
-    metadata_max_wait_ms: E().nullish().catch(undefined),
-    cost_report_max_wait_ms: E().nullish().catch(undefined),
-    policy_version: string().nullish(),
-  }),
-);
-var DEFAULT_MAX_HOLD_EVENTS = 50;
-var DEFAULT_MAX_HOLD_EVENTS_ACROSS_CALLS = 90;
-var DEFAULT_MAX_HOLD_AGE_MS = 120000;
-var DEFAULT_TRANSCRIPT_MAX_AGE_MS = 60000;
-var MAX_HOLD_AGE_MS = 240000;
-var EVENTS_PULSE_INTERVAL_MS = 30000;
-var DEFAULT_PICKUP_WAIT_MS = 5000;
-var PICKUP_BARRIER_MAX_WRITES = 1000;
-var MAX_INBOUND_MESSAGE_UUIDS = 256;
-var DEFAULT_START_REPORTS_MAX_WAIT_MS = 2000;
-var VIEWER_CHECKPOINT_INTERVAL_MS = 5000;
-var DEFAULT_MAX_HOLD_BYTES = 1048576;
-var TOOLS_WHOSE_INPUT_MAY_WAIT = new Set(["Bash", "Write", "Edit", "NotebookEdit", "Agent"]);
-var MAX_TOOL_INPUT_CHARS_BEFORE_FLUSH = 256;
-var MAX_TOOL_INPUT_FLUSH_MS = 5000;
-var MAX_MUST_FLUSH_TYPES = 32;
-var MAX_HOLD_AGAIN_TOOL_NAMES = 32;
-var DEFAULT_SETTINGS_RECEIPTS_MAX_WAIT_MS = MAX_HOLD_AGE_MS;
-var MAX_LIVE_ONLY_TYPE_REFUSALS = 16;
+var WorkerLimitsSchema; // deferred: uses DoctorLazy (../handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var DEFAULT_MAX_HOLD_EVENTS;
+var DEFAULT_MAX_HOLD_EVENTS_ACROSS_CALLS;
+var DEFAULT_MAX_HOLD_AGE_MS;
+var DEFAULT_TRANSCRIPT_MAX_AGE_MS;
+var MAX_HOLD_AGE_MS;
+var EVENTS_PULSE_INTERVAL_MS;
+var DEFAULT_PICKUP_WAIT_MS;
+var PICKUP_BARRIER_MAX_WRITES;
+var MAX_INBOUND_MESSAGE_UUIDS;
+var DEFAULT_START_REPORTS_MAX_WAIT_MS;
+var VIEWER_CHECKPOINT_INTERVAL_MS;
+var DEFAULT_MAX_HOLD_BYTES;
+var TOOLS_WHOSE_INPUT_MAY_WAIT;
+var MAX_TOOL_INPUT_CHARS_BEFORE_FLUSH;
+var MAX_TOOL_INPUT_FLUSH_MS;
+var MAX_MUST_FLUSH_TYPES;
+var MAX_HOLD_AGAIN_TOOL_NAMES;
+var DEFAULT_SETTINGS_RECEIPTS_MAX_WAIT_MS;
+var MAX_LIVE_ONLY_TYPE_REFUSALS;
+deferInit("chunk-fp6aqx1j.js:20599", () => {
+  WorkerLimitsSchema = DoctorLazy(() =>
+    looseObject({
+      max_events: numberSchema().nullish(),
+      max_age_ms: numberSchema().nullish(),
+      max_bytes: numberSchema().nullish(),
+      flush_on_sampling_end: booleanSchema().nullish(),
+      flush_on_assistant: booleanSchema().nullish(),
+      event_batch_upload: booleanSchema().nullish().catch(undefined),
+      hold_across_model_calls: booleanSchema().nullish().catch(undefined),
+      hold_again: looseObject({
+        soft_age_ms: numberSchema().nullish(),
+        soft_events: numberSchema().nullish(),
+        after: array(stringSchema()).nullish(),
+        never_after_tools: array(stringSchema()).nullish(),
+        tools_whose_results_wait: array(stringSchema()).nullish(),
+        later_worker_holds_first_turn: booleanSchema().nullish().catch(undefined),
+      })
+        .nullish()
+        .catch(undefined),
+      may_wait_types: array(stringSchema()).nullish().catch(undefined),
+      flush_after_tool_names: array(stringSchema()).nullish().catch(undefined),
+      settings_receipts_max_wait_ms: numberSchema().nullish().catch(undefined),
+      messages_received_waits: booleanSchema().nullish().catch(undefined),
+      receipts_ride_uploads: booleanSchema().nullish().catch(undefined),
+      flush_before_tools_wait_ms: numberSchema().nullish(),
+      flush_after_tools: stringSchema().nullish(),
+      must_flush_types: array(stringSchema()).nullish(),
+      live_twin_types: array(stringSchema()).nullish().catch(undefined),
+      live_only_types: array(stringSchema()).nullish().catch(undefined),
+      transcript_max_age_ms: numberSchema().nullish().catch(undefined),
+      no_turn_max_age_ms: numberSchema().nullish().catch(undefined),
+      merge_worker_reports: booleanSchema().nullish().catch(undefined),
+      control_traffic_keeps_hold: booleanSchema().nullish().catch(undefined),
+      empty_checkpoint_keeps_hold: booleanSchema().nullish().catch(undefined),
+      first_turn_holds_each_call: booleanSchema().nullish().catch(undefined),
+      settings_answers_max_wait_ms: numberSchema().nullish().catch(undefined),
+      init_max_wait_ms: numberSchema().nullish().catch(undefined),
+      metadata_waits_for_status: array(stringSchema()).nullish().catch(undefined),
+      metadata_never_sent: array(stringSchema()).nullish().catch(undefined),
+      metadata_max_wait_ms: numberSchema().nullish().catch(undefined),
+      cost_report_max_wait_ms: numberSchema().nullish().catch(undefined),
+      policy_version: stringSchema().nullish(),
+    }),
+  );
+  DEFAULT_MAX_HOLD_EVENTS = 50;
+  DEFAULT_MAX_HOLD_EVENTS_ACROSS_CALLS = 90;
+  DEFAULT_MAX_HOLD_AGE_MS = 120000;
+  DEFAULT_TRANSCRIPT_MAX_AGE_MS = 60000;
+  MAX_HOLD_AGE_MS = 240000;
+  EVENTS_PULSE_INTERVAL_MS = 30000;
+  DEFAULT_PICKUP_WAIT_MS = 5000;
+  PICKUP_BARRIER_MAX_WRITES = 1000;
+  MAX_INBOUND_MESSAGE_UUIDS = 256;
+  DEFAULT_START_REPORTS_MAX_WAIT_MS = 2000;
+  VIEWER_CHECKPOINT_INTERVAL_MS = 5000;
+  DEFAULT_MAX_HOLD_BYTES = 1048576;
+  TOOLS_WHOSE_INPUT_MAY_WAIT = new Set(["Bash", "Write", "Edit", "NotebookEdit", "Agent"]);
+  MAX_TOOL_INPUT_CHARS_BEFORE_FLUSH = 256;
+  MAX_TOOL_INPUT_FLUSH_MS = 5000;
+  MAX_MUST_FLUSH_TYPES = 32;
+  MAX_HOLD_AGAIN_TOOL_NAMES = 32;
+  DEFAULT_SETTINGS_RECEIPTS_MAX_WAIT_MS = MAX_HOLD_AGE_MS;
+  MAX_LIVE_ONLY_TYPE_REFUSALS = 16;
+});
 //@ chunk-fp6aqx1j.js:22423-22463 placement
-function isProcessedReceipt(e, n) {
-  return n === "processed";
+function isProcessedReceipt(x, status) {
+  return status === "processed";
 }
 //@ chunk-fp6aqx1j.js:22463-23833 placement
 /**
  * CCR 客户端的实时/元数据事件集合与刷写策略常量：live-only 与 may-wait 事件类型、可上报元数据键、响应字节上限、flush 前后工具等待、订阅者标志等。
  */
-var FLAG_CONTROL_SUBTYPES = new Set(["apply_flag_settings", "set_max_thinking_tokens", "mcp_set_servers"]);
-var SYSTEM_FOREGROUND_SHELL_TASK_ROWS = "system/foreground_shell_task_rows";
-var SYSTEM_STATUS_REQUESTING_REPEAT = "system/status_requesting_repeat";
-var SYSTEM_STATUS_REQUESTING_REPEAT_RELEASING = "system/status_requesting_repeat_releasing";
-var SYSTEM_STATUS_REQUESTING_REPEAT_STARTING = "system/status_requesting_repeat_starting";
-var LIVE_ONLY_EVENT_TYPES = new Set([
-  "system/task_summary",
-  SYSTEM_FOREGROUND_SHELL_TASK_ROWS,
-  SYSTEM_STATUS_REQUESTING_REPEAT,
-  SYSTEM_STATUS_REQUESTING_REPEAT_RELEASING,
-  SYSTEM_STATUS_REQUESTING_REPEAT_STARTING,
-]);
-var MAY_WAIT_EVENT_TYPES = new Set([
-  "rate_limit_event/allowed",
-  "system/task_summary",
-  "system/post_turn_summary",
-  "system/commands_changed",
-  "system/permission_check_status",
-  "system/hook_started",
-  "system/hook_response",
-  "system/informational",
-  "system/peer_message_hold",
-  "system/permission_denied",
-  "system/session_metadata",
-  "system/session_title_changed",
-  "system/per_turn_effort_changed",
-  "system/instruction_size_warning",
-  "system/slack_tag_title",
-  "system/vcs_state_changed",
-  "tool_use_summary",
-  "system/task_started_foreground_shell",
-  "system/task_notification_foreground_shell",
-]);
-var MAX_LIVE_TWIN_TYPES = 32;
-var STATUS_PAYLOAD_METADATA_KEYS = new Set([
-  "post_turn_summary",
-  "recap",
-  "context_usage",
-  "rate_limit_info",
-  "task_summary",
-]);
-var STATUS_METADATA_KEYS_ALL = new Set([...STATUS_PAYLOAD_METADATA_KEYS, "last_served_model"]);
-var DEFAULT_COST_REPORT_MAX_WAIT_MS = MAX_HOLD_AGE_MS;
-var REPORTABLE_METADATA_KEYS = new Set([
-  "context_usage",
-  "cross_session_inbound",
-  "is_ultraplan_mode",
-  "last_served_model",
-  "permission_mode",
-  "rate_limit_info",
-]);
-var MAX_LIVE_RESPONSE_BYTES = 57344;
-var MAX_EVENT_PAYLOAD_ESTIMATED_BYTES = 64512;
-var POLICY_VERSION_PATTERN = /^[A-Za-z0-9._-]{1,16}$/;
-var DEFAULT_FLUSH_BEFORE_TOOLS_WAIT_MS = 30000;
-var DEFAULT_TOOL_CALL_ROW_GRACE_MS = 2000;
-var FLUSH_AFTER_TOOLS_MODES = ["none", "write", "all"];
-var MAX_EPHEMERAL_RECEIPT_IDS = 64;
-var MAX_VIEWER_ROWS_BEFORE_FLUSH = 50;
-var HELD_ROWS_MAX_AGE_MS = 5000;
-var SUBSCRIBER_FLAG_REQUIRED = false;
-var RECENT_INBOUND_EVENT_MS = 3000;
-var VIEWER_LEFT_GRACE_MS = 1e4;
-var isEphemeralOrKeepAlive = (e) => e.ephemeral === true || e.payload.type === "keep_alive";
-var isEphemeralKeepAliveOrControlResponse = (e) =>
-  isEphemeralOrKeepAlive(e) || e.payload.type === "control_response";
-var neverFlush = () => false;
+var FLAG_CONTROL_SUBTYPES; // deferred: uses WorkerLimitsSchema of its import cycle while loading; runs once the cycle is complete
+var SYSTEM_FOREGROUND_SHELL_TASK_ROWS;
+var SYSTEM_STATUS_REQUESTING_REPEAT;
+var SYSTEM_STATUS_REQUESTING_REPEAT_RELEASING;
+var SYSTEM_STATUS_REQUESTING_REPEAT_STARTING;
+var LIVE_ONLY_EVENT_TYPES;
+var MAY_WAIT_EVENT_TYPES;
+var MAX_LIVE_TWIN_TYPES;
+var STATUS_PAYLOAD_METADATA_KEYS;
+var STATUS_METADATA_KEYS_ALL;
+var DEFAULT_COST_REPORT_MAX_WAIT_MS;
+var REPORTABLE_METADATA_KEYS;
+var MAX_LIVE_RESPONSE_BYTES;
+var MAX_EVENT_PAYLOAD_ESTIMATED_BYTES;
+var POLICY_VERSION_PATTERN;
+var DEFAULT_FLUSH_BEFORE_TOOLS_WAIT_MS;
+var DEFAULT_TOOL_CALL_ROW_GRACE_MS;
+var FLUSH_AFTER_TOOLS_MODES;
+var MAX_EPHEMERAL_RECEIPT_IDS;
+var MAX_VIEWER_ROWS_BEFORE_FLUSH;
+var HELD_ROWS_MAX_AGE_MS;
+var SUBSCRIBER_FLAG_REQUIRED;
+var RECENT_INBOUND_EVENT_MS;
+var VIEWER_LEFT_GRACE_MS;
+var isEphemeralOrKeepAlive;
+var isEphemeralKeepAliveOrControlResponse;
+var neverFlush;
+deferInit("chunk-fp6aqx1j.js:22463", () => {
+  FLAG_CONTROL_SUBTYPES = new Set(["apply_flag_settings", "set_max_thinking_tokens", "mcp_set_servers"]);
+  SYSTEM_FOREGROUND_SHELL_TASK_ROWS = "system/foreground_shell_task_rows";
+  SYSTEM_STATUS_REQUESTING_REPEAT = "system/status_requesting_repeat";
+  SYSTEM_STATUS_REQUESTING_REPEAT_RELEASING = "system/status_requesting_repeat_releasing";
+  SYSTEM_STATUS_REQUESTING_REPEAT_STARTING = "system/status_requesting_repeat_starting";
+  LIVE_ONLY_EVENT_TYPES = new Set([
+    "system/task_summary",
+    SYSTEM_FOREGROUND_SHELL_TASK_ROWS,
+    SYSTEM_STATUS_REQUESTING_REPEAT,
+    SYSTEM_STATUS_REQUESTING_REPEAT_RELEASING,
+    SYSTEM_STATUS_REQUESTING_REPEAT_STARTING,
+  ]);
+  MAY_WAIT_EVENT_TYPES = new Set([
+    "rate_limit_event/allowed",
+    "system/task_summary",
+    "system/post_turn_summary",
+    "system/commands_changed",
+    "system/permission_check_status",
+    "system/hook_started",
+    "system/hook_response",
+    "system/informational",
+    "system/peer_message_hold",
+    "system/permission_denied",
+    "system/session_metadata",
+    "system/session_title_changed",
+    "system/per_turn_effort_changed",
+    "system/instruction_size_warning",
+    "system/slack_tag_title",
+    "system/vcs_state_changed",
+    "tool_use_summary",
+    "system/task_started_foreground_shell",
+    "system/task_notification_foreground_shell",
+  ]);
+  MAX_LIVE_TWIN_TYPES = 32;
+  STATUS_PAYLOAD_METADATA_KEYS = new Set([
+    "post_turn_summary",
+    "recap",
+    "context_usage",
+    "rate_limit_info",
+    "task_summary",
+  ]);
+  STATUS_METADATA_KEYS_ALL = new Set([...STATUS_PAYLOAD_METADATA_KEYS, "last_served_model"]);
+  DEFAULT_COST_REPORT_MAX_WAIT_MS = MAX_HOLD_AGE_MS;
+  REPORTABLE_METADATA_KEYS = new Set([
+    "context_usage",
+    "cross_session_inbound",
+    "is_ultraplan_mode",
+    "last_served_model",
+    "permission_mode",
+    "rate_limit_info",
+  ]);
+  MAX_LIVE_RESPONSE_BYTES = 57344;
+  MAX_EVENT_PAYLOAD_ESTIMATED_BYTES = 64512;
+  POLICY_VERSION_PATTERN = /^[A-Za-z0-9._-]{1,16}$/;
+  DEFAULT_FLUSH_BEFORE_TOOLS_WAIT_MS = 30000;
+  DEFAULT_TOOL_CALL_ROW_GRACE_MS = 2000;
+  FLUSH_AFTER_TOOLS_MODES = ["none", "write", "all"];
+  MAX_EPHEMERAL_RECEIPT_IDS = 64;
+  MAX_VIEWER_ROWS_BEFORE_FLUSH = 50;
+  HELD_ROWS_MAX_AGE_MS = 5000;
+  SUBSCRIBER_FLAG_REQUIRED = false;
+  RECENT_INBOUND_EVENT_MS = 3000;
+  VIEWER_LEFT_GRACE_MS = 1e4;
+  isEphemeralOrKeepAlive = (event) => event.ephemeral === true || event.payload.type === "keep_alive";
+  isEphemeralKeepAliveOrControlResponse = (event) =>
+    isEphemeralOrKeepAlive(event) || event.payload.type === "control_response";
+  neverFlush = () => false;
+});
 //@ chunk-fp6aqx1j.js:23833-23887 placement
 /**
  * 从 CLAUDE_CODE_WORKER_EPOCH 读取 worker epoch（缺失时为 NaN）。
@@ -1112,22 +1246,26 @@ function workerEpochFromEnv() {
   return env.CLAUDE_CODE_WORKER_EPOCH ?? NaN;
 }
 //@ chunk-fp6aqx1j.js:23887-24110 placement
-var CUMULATIVE_COST_KEYS = [
-  "cumulative_cost_usd",
-  "cumulative_input_tokens",
-  "cumulative_output_tokens",
-  "cumulative_cache_read_tokens",
-  "cumulative_cache_write_tokens",
-];
-var COST_STATE_METADATA_KEYS = new Set([
-  ...CUMULATIVE_COST_KEYS,
-  "cost_state",
-  "memory_extract_place",
-  "model_turn_stored",
-]);
+var CUMULATIVE_COST_KEYS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var COST_STATE_METADATA_KEYS;
+deferInit("chunk-fp6aqx1j.js:23887", () => {
+  CUMULATIVE_COST_KEYS = [
+    "cumulative_cost_usd",
+    "cumulative_input_tokens",
+    "cumulative_output_tokens",
+    "cumulative_cache_read_tokens",
+    "cumulative_cache_write_tokens",
+  ];
+  COST_STATE_METADATA_KEYS = new Set([
+    ...CUMULATIVE_COST_KEYS,
+    "cost_state",
+    "memory_extract_place",
+    "model_turn_stored",
+  ]);
+});
 //@ chunk-fp6aqx1j.js:24110-24253 placement
-function pickCostAndModelMetadata(e) {
-  return Object.entries(e).filter(
+function pickCostAndModelMetadata(metadata) {
+  return Object.entries(metadata).filter(
     ([key]) =>
       COST_STATE_METADATA_KEYS.has(key) ||
       key === "last_served_model" ||
@@ -1136,33 +1274,34 @@ function pickCostAndModelMetadata(e) {
   );
 }
 //@ chunk-fp6aqx1j.js:24253-24313 placement
-function jsonStringEncodedSize(e) {
-  return 1 + (e < 128 ? 1 : e < 16384 ? 2 : e < 2097152 ? 3 : 4) + e;
+function jsonStringEncodedSize(length) {
+  return 1 + (length < 128 ? 1 : length < 16384 ? 2 : length < 2097152 ? 3 : 4) + length;
 }
 //@ chunk-fp6aqx1j.js:24313-24601 placement
-function estimateJsonEncodedSize(e) {
-  if (typeof e === "string") return jsonStringEncodedSize(Buffer.byteLength(e));
-  if (typeof e === "number") return 9;
-  let n = 0;
-  if (Array.isArray(e)) for (let s of e) n += jsonStringEncodedSize(estimateJsonEncodedSize(s));
-  else if (isPlainObject(e)) {
-    for (let [key, value] of Object.entries(e))
-      if (value !== undefined)
-        n += jsonStringEncodedSize(
+function estimateJsonEncodedSize(value) {
+  if (typeof value === "string") return jsonStringEncodedSize(Buffer.byteLength(value));
+  if (typeof value === "number") return 9;
+  let size = 0;
+  if (Array.isArray(value))
+    for (let item of value) size += jsonStringEncodedSize(estimateJsonEncodedSize(item));
+  else if (isPlainObject(value)) {
+    for (let [key, value_2] of Object.entries(value))
+      if (value_2 !== undefined)
+        size += jsonStringEncodedSize(
           jsonStringEncodedSize(Buffer.byteLength(key)) +
-            jsonStringEncodedSize(estimateJsonEncodedSize(value)),
+            jsonStringEncodedSize(estimateJsonEncodedSize(value_2)),
         );
   } else return 2;
-  return jsonStringEncodedSize(n);
+  return jsonStringEncodedSize(size);
 }
 //@ chunk-fp6aqx1j.js:24601-24700 placement
-function isClientEventNotFoundError(e) {
-  let error = e?.error;
+function isClientEventNotFoundError(response) {
+  let error = response?.error;
   return error?.type === "not_found_error" && error.resource_type === "client_event";
 }
 //@ chunk-fp6aqx1j.js:24700-24758 placement
-function equalsIgnoreCase(e, n) {
-  return e.toLowerCase() === n.toLowerCase();
+function equalsIgnoreCase(a, b) {
+  return a.toLowerCase() === b.toLowerCase();
 }
 //@ chunk-fp6aqx1j.js:24758-24974 placement
 function describeUploadFailure(status) {
@@ -1173,30 +1312,37 @@ function describeUploadFailure(status) {
   return status >= 500 ? "http_server_error" : "http_other";
 }
 //@ chunk-fp6aqx1j.js:24974-25162 placement
-var clientEventSchema = DoctorLazy(() =>
-  u({
-    event_id: string(),
-    source: literal("client"),
-    created_at: string(),
-    payload: looseObject({
-      uuid: string(),
+var clientEventSchema; // deferred: uses DoctorLazy (../handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-fp6aqx1j.js:24974", () => {
+  clientEventSchema = DoctorLazy(() =>
+    objectSchema({
+      event_id: stringSchema(),
+      source: literal("client"),
+      created_at: stringSchema(),
+      payload: looseObject({
+        uuid: stringSchema(),
+      }),
+      sent_by_account_id: stringSchema().nullish(),
+      device_attestation_status: unknown().optional(),
+      session_agent_owned: booleanSchema(),
     }),
-    sent_by_account_id: string().nullish(),
-    device_attestation_status: unknown().optional(),
-    session_agent_owned: M(),
-  }),
-);
+  );
+});
 //@ chunk-fp6aqx1j.js:25162-25628 placement
-function parseDeliveryEvent(e, n) {
-  let s = clientEventSchema().safeParse(e);
-  if (!s.success)
+function parseDeliveryEvent(event, eventId) {
+  let parsed = clientEventSchema().safeParse(event);
+  if (!parsed.success)
     return {
       kind: "unavailable",
       why: "malformed",
     };
-  let { event_id: eventId, created_at: createdAt, payload } = s.data;
+  let { event_id: eventId_2, created_at: createdAt, payload } = parsed.data;
   let timestamp = Date.parse(createdAt);
-  if (!equalsIgnoreCase(eventId, n) || !Number.isFinite(timestamp) || !equalsIgnoreCase(payload.uuid, n))
+  if (
+    !equalsIgnoreCase(eventId_2, eventId) ||
+    !Number.isFinite(timestamp) ||
+    !equalsIgnoreCase(payload.uuid, eventId)
+  )
     return {
       kind: "unavailable",
       why: "malformed",
@@ -1204,11 +1350,11 @@ function parseDeliveryEvent(e, n) {
   return {
     kind: "event",
     event: {
-      eventId: n,
+      eventId,
       createdAtMs: timestamp,
-      sentByAccountId: s.data.sent_by_account_id ?? undefined,
-      deviceAttestationStatus: s.data.device_attestation_status,
-      sessionAgentOwned: s.data.session_agent_owned,
+      sentByAccountId: parsed.data.sent_by_account_id ?? undefined,
+      deviceAttestationStatus: parsed.data.device_attestation_status,
+      sessionAgentOwned: parsed.data.session_agent_owned,
       payload,
     },
   };
@@ -1434,143 +1580,148 @@ class CCRClient {
   adoptRefreshedAuth;
   gzipRequestBodyFetch;
   ownConnectionPool;
-  constructor(e, n, s) {
-    this.lastLineWhen = s?.onEpochMismatch ? "queued" : "now";
+  constructor(transport, url, options) {
+    this.lastLineWhen = options?.onEpochMismatch ? "queued" : "now";
     this.onEpochMismatch =
-      s?.onEpochMismatch ??
+      options?.onEpochMismatch ??
       (() => {
         process.exit(1);
       });
-    this.onHeartbeatLost = s?.onHeartbeatLost;
-    this.readTransport = e;
-    this.workerSocket = s?.workerSocket;
-    this.nonOrigin403Transient = s?.nonOrigin403Transient ?? false;
-    this.heartbeatIntervalMs = s?.heartbeatIntervalMs ?? DEFAULT_HEARTBEAT_INTERVAL_MS;
+    this.onHeartbeatLost = options?.onHeartbeatLost;
+    this.readTransport = transport;
+    this.workerSocket = options?.workerSocket;
+    this.nonOrigin403Transient = options?.nonOrigin403Transient ?? false;
+    this.heartbeatIntervalMs = options?.heartbeatIntervalMs ?? DEFAULT_HEARTBEAT_INTERVAL_MS;
     this.seedHeartbeatIntervalMs = this.heartbeatIntervalMs;
-    this.advertiseHeartbeatProbeSupport = s?.advertiseHeartbeatProbeSupport ?? false;
-    this.uploadTrim = s?.uploadTrim ?? (() => EMPTY_UPLOAD_TRIM);
-    this.keepsRequestId = () => s?.keepsRequestId?.() === true;
-    this.uploadHoldMarker = () => s?.uploadHoldMarker?.() === true;
-    let liveOnlyShellTaskRows = s?.liveOnlyShellTaskRows;
+    this.advertiseHeartbeatProbeSupport = options?.advertiseHeartbeatProbeSupport ?? false;
+    this.uploadTrim = options?.uploadTrim ?? (() => EMPTY_UPLOAD_TRIM);
+    this.keepsRequestId = () => options?.keepsRequestId?.() === true;
+    this.uploadHoldMarker = () => options?.uploadHoldMarker?.() === true;
+    let liveOnlyShellTaskRows = options?.liveOnlyShellTaskRows;
     this.shellTaskRowsLiveOnly = liveOnlyShellTaskRows
       ? () => liveOnlyShellTaskRows.enabled() === true
       : () =>
           this.followsServedPolicy &&
           this.flushPolicy?.liveOnlyTypes.has(SYSTEM_FOREGROUND_SHELL_TASK_ROWS) === true;
     this.liveOnlyShellStarts = liveOnlyShellTaskRows?.starts ?? new Map();
-    this.artifactSocketIds = s?.artifactSocketIds;
-    this.servedCallRequestsJumpQueue = () => s?.servedCallRequestsJumpQueue?.() === true;
-    this.maxEventPostTimeoutMs = s?.maxEventPostTimeoutMs ?? DEFAULT_MAX_EVENT_POST_TIMEOUT_MS;
-    this.followsServedPolicy = s?.followsServedPolicy === true;
-    this.keepAliveAtWorkStart = s?.keepAliveAtWorkStart;
-    this.launchFlushPolicy = s?.launchFlushPolicy;
-    this.processExiting = s?.processExiting ?? (() => false);
-    this.gatesToolCalls = s?.gatesToolCalls === true;
-    this.toolCallRowGraceMs = s?.toolCallRowGraceMs ?? DEFAULT_TOOL_CALL_ROW_GRACE_MS;
-    this.pickupWaitMs = s?.pickupWaitMs ?? DEFAULT_PICKUP_WAIT_MS;
-    this.beatOnStaleReconnect = s?.beatOnStaleReconnect ?? false;
-    this.idleTracker = s?.idleTracker;
-    this.beatOnReactivation = (s?.beatOnReactivation ?? false) && this.idleTracker !== undefined;
-    this.skipRedundantHeartbeats = s?.skipRedundantHeartbeats ?? false;
-    this.probeBeatSpacingMs = s?.probeBeatSpacingMs ?? DEFAULT_PROBE_BEAT_SPACING_MS;
-    this.heartbeatJitterFraction = s?.heartbeatJitterFraction ?? 0;
+    this.artifactSocketIds = options?.artifactSocketIds;
+    this.servedCallRequestsJumpQueue = () => options?.servedCallRequestsJumpQueue?.() === true;
+    this.maxEventPostTimeoutMs = options?.maxEventPostTimeoutMs ?? DEFAULT_MAX_EVENT_POST_TIMEOUT_MS;
+    this.followsServedPolicy = options?.followsServedPolicy === true;
+    this.keepAliveAtWorkStart = options?.keepAliveAtWorkStart;
+    this.launchFlushPolicy = options?.launchFlushPolicy;
+    this.processExiting = options?.processExiting ?? (() => false);
+    this.gatesToolCalls = options?.gatesToolCalls === true;
+    this.toolCallRowGraceMs = options?.toolCallRowGraceMs ?? DEFAULT_TOOL_CALL_ROW_GRACE_MS;
+    this.pickupWaitMs = options?.pickupWaitMs ?? DEFAULT_PICKUP_WAIT_MS;
+    this.beatOnStaleReconnect = options?.beatOnStaleReconnect ?? false;
+    this.idleTracker = options?.idleTracker;
+    this.beatOnReactivation = (options?.beatOnReactivation ?? false) && this.idleTracker !== undefined;
+    this.skipRedundantHeartbeats = options?.skipRedundantHeartbeats ?? false;
+    this.probeBeatSpacingMs = options?.probeBeatSpacingMs ?? DEFAULT_PROBE_BEAT_SPACING_MS;
+    this.heartbeatJitterFraction = options?.heartbeatJitterFraction ?? 0;
     this.maxAdvisedIntervalMs = this.maxAdvisedIntervalFor(this.advertiseHeartbeatProbeSupport);
-    this.getAuthHeaders = s?.getAuthHeaders ?? getSessionIngressAuthHeaders;
-    let isFirstPartyProvider = s?.isFirstPartyProvider;
+    this.getAuthHeaders = options?.getAuthHeaders ?? getSessionIngressAuthHeaders;
+    let isFirstPartyProvider = options?.isFirstPartyProvider;
     this.providerWithheldReason =
       isFirstPartyProvider === undefined
         ? () => "provider-unknown"
         : () => (isFirstPartyProvider() ? undefined : "data-residency");
-    this.onDiagnostic = s?.onDiagnostic;
-    this.onCardRecordRefused = s?.onCardRecordRefused;
-    this.onRequestAuthOk = s?.onRequestAuthOk;
-    this.adoptRefreshedAuth = s?.adoptRefreshedAuth;
-    this.gzipRequestBodyFetch = s?.gzipRequestBodyFetch;
-    this.ownConnectionPool = s?.ownConnectionPool;
-    this.reportParkAtInit = s?.reportParkAtInit ?? false;
-    this.guardsClientRows = s?.guardsClientRows ?? (() => false);
-    this.initExternalMetadata = s?.initExternalMetadata ?? {};
-    this.initialWorkerStatus = s?.initialWorkerStatus ?? "idle";
-    this.initStateGetOrderingBoundMs = s?.initStateGetOrderingBoundMs ?? INIT_STATE_ORDERING_BOUND_MS;
-    this.stateReadEndsAtRegistration = s?.stateReadEndsAtRegistration ?? false;
-    this.startReportsMaxWaitMs = s?.startReportsMaxWaitMs ?? DEFAULT_START_REPORTS_MAX_WAIT_MS;
+    this.onDiagnostic = options?.onDiagnostic;
+    this.onCardRecordRefused = options?.onCardRecordRefused;
+    this.onRequestAuthOk = options?.onRequestAuthOk;
+    this.adoptRefreshedAuth = options?.adoptRefreshedAuth;
+    this.gzipRequestBodyFetch = options?.gzipRequestBodyFetch;
+    this.ownConnectionPool = options?.ownConnectionPool;
+    this.reportParkAtInit = options?.reportParkAtInit ?? false;
+    this.guardsClientRows = options?.guardsClientRows ?? (() => false);
+    this.initExternalMetadata = options?.initExternalMetadata ?? {};
+    this.initialWorkerStatus = options?.initialWorkerStatus ?? "idle";
+    this.initStateGetOrderingBoundMs = options?.initStateGetOrderingBoundMs ?? INIT_STATE_ORDERING_BOUND_MS;
+    this.stateReadEndsAtRegistration = options?.stateReadEndsAtRegistration ?? false;
+    this.startReportsMaxWaitMs = options?.startReportsMaxWaitMs ?? DEFAULT_START_REPORTS_MAX_WAIT_MS;
     this.readSource = {
-      ...convertWsUrlToPostUrl(n, this.getAuthHeaders),
+      ...convertWsUrlToPostUrl(url, this.getAuthHeaders),
       isClosed: () => this.closed,
-      onConflict: (v) => this.handleEpochMismatch(v),
+      onConflict: (reason) => this.handleEpochMismatch(reason),
       ownConnectionPool: this.ownConnectionPool,
     };
     this.sessionBaseUrl = this.readSource.sessionBaseUrl;
-    this.sessionId = n.pathname.replace(/\/$/, "").split("/").pop() || "";
+    this.sessionId = url.pathname.replace(/\/$/, "").split("/").pop() || "";
     this.workerState = new WorkerStateUploader({
-      send: async (v) => {
-        let y =
-          this.clientRowsOwed.writesNoMore && isPlainObject(v.internal_metadata)
+      send: async (patch) => {
+        let upload =
+          this.clientRowsOwed.writesNoMore && isPlainObject(patch.internal_metadata)
             ? {
-                ...v,
-                internal_metadata: Uo(v.internal_metadata, "client_rows_owed"),
+                ...patch,
+                internal_metadata: omitAlias(patch.internal_metadata, "client_rows_owed"),
               }
-            : v;
-        let O = await this.request(
+            : patch;
+        let result = await this.request(
           "put",
           "/worker",
           {
             worker_epoch: this.workerEpoch,
-            ...y,
+            ...upload,
           },
           "PUT worker",
         );
-        if (O.ok) {
-          if (y.worker_status !== undefined) logFeatureOk("ccr_worker_state_publish");
+        if (result.ok) {
+          if (upload.worker_status !== undefined) logFeatureOk("ccr_worker_state_publish");
           return true;
         }
-        if (this.closed && O.status === 409) {
+        if (this.closed && result.status === 409) {
           logForDiagnosticsNoPII("warn", "cli_worker_state_4xx_dropped", {
-            status: O.status,
+            status: result.status,
           });
           this.droppedWorkerStatePatchCount++;
-          if (this.workerState.keepsWithoutStatus(y)) this.droppedOwedMetadataPatchCount++;
+          if (this.workerState.keepsWithoutStatus(upload)) this.droppedOwedMetadataPatchCount++;
           return true;
         }
-        if (isClientErrorStatus(O.status)) {
+        if (isClientErrorStatus(result.status)) {
           logForDiagnosticsNoPII("warn", "cli_worker_state_4xx_dropped", {
-            status: O.status,
+            status: result.status,
           });
           this.droppedWorkerStatePatchCount++;
-          if (this.workerState.keepsWithoutStatus(y)) this.droppedOwedMetadataPatchCount++;
-          if (isPlainObject(y.internal_metadata) && "client_rows_owed" in y.internal_metadata) {
+          if (this.workerState.keepsWithoutStatus(upload)) this.droppedOwedMetadataPatchCount++;
+          if (isPlainObject(upload.internal_metadata) && "client_rows_owed" in upload.internal_metadata) {
             logFeatureSad("ccr_client_rows_owed", "report_with_note_refused", {
-              status: O.status,
+              status: result.status,
             });
             this.clientRowsOwed.reportWithNoteRefused();
           }
-          let internalMetadata = isPlainObject(y.internal_metadata) ? y.internal_metadata : {};
-          let externalMetadata = isPlainObject(y.external_metadata) ? y.external_metadata : {};
-          if (isPlainObject(externalMetadata.pending_action)) this.onCardRecordRefused?.(O.status, y);
-          let { internal_metadata: internalMetadata_2, external_metadata: externalMetadata_2, ...W } = y;
-          let x = pickCostAndModelMetadata(internalMetadata);
-          let z = pickCostAndModelMetadata(externalMetadata);
+          let internalMetadata = isPlainObject(upload.internal_metadata) ? upload.internal_metadata : {};
+          let externalMetadata = isPlainObject(upload.external_metadata) ? upload.external_metadata : {};
+          if (isPlainObject(externalMetadata.pending_action))
+            this.onCardRecordRefused?.(result.status, upload);
+          let {
+            internal_metadata: internalMetadata_2,
+            external_metadata: externalMetadata_2,
+            ...rest
+          } = upload;
+          let internalCost = pickCostAndModelMetadata(internalMetadata);
+          let externalCost = pickCostAndModelMetadata(externalMetadata);
           if (
-            (x.length > 0 && z.length > 0) ||
-            (x.length + z.length > 0 &&
-              x.length + z.length <
-                Object.keys(W).length +
+            (internalCost.length > 0 && externalCost.length > 0) ||
+            (internalCost.length + externalCost.length > 0 &&
+              internalCost.length + externalCost.length <
+                Object.keys(rest).length +
                   Object.keys(internalMetadata).length +
                   Object.keys(externalMetadata).length)
           )
             this.workerState.requeueMetadata({
-              ...(x.length > 0 && {
-                internal_metadata: Object.fromEntries(x),
+              ...(internalCost.length > 0 && {
+                internal_metadata: Object.fromEntries(internalCost),
               }),
-              ...(z.length > 0 && {
-                external_metadata: Object.fromEntries(z),
+              ...(externalCost.length > 0 && {
+                external_metadata: Object.fromEntries(externalCost),
               }),
             });
-          if (y.worker_status !== undefined) {
-            let K = {
-              worker_status: y.worker_status,
-              ...("requires_action_details" in y && {
-                requires_action_details: y.requires_action_details,
+          if (upload.worker_status !== undefined) {
+            let statusOnly = {
+              worker_status: upload.worker_status,
+              ...("requires_action_details" in upload && {
+                requires_action_details: upload.requires_action_details,
               }),
               ...("reply_degraded" in internalMetadata && {
                 internal_metadata: {
@@ -1578,8 +1729,11 @@ class CCRClient {
                 },
               }),
             };
-            if (Object.keys(y).length > Object.keys(K).length || Object.keys(internalMetadata).length > 1) {
-              this.workerState.requeueStatus(K);
+            if (
+              Object.keys(upload).length > Object.keys(statusOnly).length ||
+              Object.keys(internalMetadata).length > 1
+            ) {
+              this.workerState.requeueStatus(statusOnly);
               return true;
             }
             logFeatureSad("ccr_worker_state_publish", "state_4xx_dropped");
@@ -1593,26 +1747,30 @@ class CCRClient {
       jitterMs: 500,
       ridesAStatus: ["reply_degraded", "card_turn_stamp"],
       mergesSameRun: () => this.flushPolicy?.mergeWorkerReports === true && this.followsServedPolicy,
-      waitsForStatus: (v) => {
+      waitsForStatus: (upload) => {
         let flushPolicy = this.flushPolicy;
-        let { external_metadata: externalMetadata = {}, internal_metadata: internalMetadata = {}, ...U } = v;
+        let {
+          external_metadata: externalMetadata = {},
+          internal_metadata: internalMetadata = {},
+          ...rest
+        } = upload;
         if (
           !flushPolicy ||
           !this.followsServedPolicy ||
-          Object.keys(U).length > 0 ||
+          Object.keys(rest).length > 0 ||
           !isPlainObject(externalMetadata) ||
           !isPlainObject(internalMetadata) ||
           [...Object.values(externalMetadata), ...Object.values(internalMetadata)].includes(null)
         )
           return false;
-        let S = this.startReportsWaitUntilMs - performance.now();
+        let left = this.startReportsWaitUntilMs - performance.now();
         if (
           flushPolicy.mergeWorkerReports &&
-          S > 0 &&
+          left > 0 &&
           this.inboundMessageUuids.size > 0 &&
           !("worker_permission_mode" in internalMetadata)
         )
-          return S;
+          return left;
         if (
           this.currentState !== "running" ||
           !Object.keys(externalMetadata).every((key) => flushPolicy.metadataWaitsForStatus.has(key)) ||
@@ -1629,18 +1787,22 @@ class CCRClient {
       maxBatchSize: 100,
       maxBatchBytes: () => Math.min(10 * ONE_MIB, this.workerSocket?.maxBatchBytes() ?? 1 / 0),
       maxQueueSize: 1e5,
-      send: this.settlesTakenRiders(async (v, y) => {
-        let O = dedupeEventsByUuid(v);
-        if (O > 0)
-          logForDebugging(`CCRClient: dropped ${O} repeated-uuid durable event(s) from one live-view POST`);
-        let ridingRows = y.urgent ? undefined : this.ridingRows;
+      send: this.settlesTakenRiders(async (events, opts) => {
+        let dupes = dedupeEventsByUuid(events);
+        if (dupes > 0)
+          logForDebugging(
+            `CCRClient: dropped ${dupes} repeated-uuid durable event(s) from one live-view POST`,
+          );
+        let ridingRows = opts.urgent ? undefined : this.ridingRows;
         let failedRide = this.failedRide;
         this.failedRide = undefined;
         if (
           ridingRows &&
           (this.ridesAreOff() ||
-            v.every((N) => isEphemeralOrKeepAlive(N) || N.payload.type === "control_response") ||
-            y.bytes + ridingRows.bytes >
+            events.every(
+              (event) => isEphemeralOrKeepAlive(event) || event.payload.type === "control_response",
+            ) ||
+            opts.bytes + ridingRows.bytes >
               Math.min(MAX_EVENT_BATCH_BYTES, this.workerSocket?.maxBatchBytes() ?? 1 / 0))
         ) {
           this.giveBackRidingRows();
@@ -1650,12 +1812,12 @@ class CCRClient {
           this.ridingRows = undefined;
           this.takenRiders = ridingRows;
         }
-        let S = !y.urgent && !v.every(isEphemeralKeepAliveOrControlResponse);
+        let durable = !opts.urgent && !events.every(isEphemeralKeepAliveOrControlResponse);
         if (
-          S &&
+          durable &&
           this.receiptsMayRide() &&
           this.messagesInProcessing.size > 0 &&
-          v.some((N) => N.payload.type === "result")
+          events.some((event) => event.payload.type === "result")
         ) {
           await new Promise((resolve) => {
             this.resultPostWaits = resolve;
@@ -1664,55 +1826,60 @@ class CCRClient {
           this.resultPostWaits = undefined;
           this.messagesInProcessing.clear();
         }
-        let P =
-          S && this.receiptsMayRide()
+        let receiptIds =
+          durable && this.receiptsMayRide()
             ? [...this.waitingReceipts]
-                .filter(([N, q]) => q === "processed" && normalizeUuidOrNull(N) !== null)
+                .filter(
+                  ([eventId, status]) => status === "processed" && normalizeUuidOrNull(eventId) !== null,
+                )
                 .slice(0, MAX_LIVE_ONLY_TYPE_REFUSALS)
-                .map(([N]) => N)
+                .map(([eventId]) => eventId)
             : [];
-        let W = ridingRows
+        let batch = ridingRows
           ? {
-              ...y,
-              bytes: y.bytes + ridingRows.bytes,
+              ...opts,
+              bytes: opts.bytes + ridingRows.bytes,
             }
-          : y;
-        let eventPostTimeoutMs = computeEventPostTimeoutMs(W, {
+          : opts;
+        let eventPostTimeoutMs = computeEventPostTimeoutMs(batch, {
           maxMs: this.maxEventPostTimeoutMs,
-          minMs: v.some(isServableControlRequest)
+          minMs: events.some(isServableControlRequest)
             ? URGENT_EVENT_POST_TIMEOUT_MS
-            : y.followsUrgent
+            : opts.followsUrgent
               ? Math.min(URGENT_EVENT_POST_TIMEOUT_MS, this.maxEventPostTimeoutMs)
               : undefined,
         });
-        this.reportDurableUpload(v, "sending");
-        let z = this.actsOnSubscribersReports();
+        this.reportDurableUpload(events, "sending");
+        let acts = this.actsOnSubscribersReports();
         let parseBody =
-          z || this.onSubscribersReported !== undefined || ridingRows !== undefined || P.length > 0;
+          acts ||
+          this.onSubscribersReported !== undefined ||
+          ridingRows !== undefined ||
+          receiptIds.length > 0;
         let hasSubscribersReports = this.hasSubscribersReports;
-        let R = [];
-        for (let N of this.trackedFrameUploads("ackedAtMs"))
-          if (v.some((q) => q.payload.uuid === N.uuid)) R.push(N.timing);
-        for (let N of R)
-          if (N.postedAtMs === undefined) {
-            N.postedAtMs = performance.now();
-            N.postedWallMs = Date.now();
+        let timings = [];
+        for (let upload of this.trackedFrameUploads("ackedAtMs"))
+          if (events.some((event) => event.payload.uuid === upload.uuid)) timings.push(upload.timing);
+        for (let timing of timings)
+          if (timing.postedAtMs === undefined) {
+            timing.postedAtMs = performance.now();
+            timing.postedWallMs = Date.now();
           }
         let timing = this.firstTextFrameUpload?.timing;
-        if (timing?.postedAtMs !== undefined && markTextDeltaRows(v, this.countedTextEvents))
+        if (timing?.postedAtMs !== undefined && markTextDeltaRows(events, this.countedTextEvents))
           recordTextPost(timing, performance.now());
-        let L;
+        let result;
         try {
-          L = await this.request(
+          result = await this.request(
             "post",
             ridingRows ? EVENT_BATCH_PATH : "/worker/events",
             {
-              ...this.uploadBody(v, y),
+              ...this.uploadBody(events, opts),
               ...(ridingRows && {
                 worker_events: ridingRows.rows,
               }),
-              ...(P.length > 0 && {
-                delivery_updates: P.map((eventId) => ({
+              ...(receiptIds.length > 0 && {
+                delivery_updates: receiptIds.map((eventId) => ({
                   event_id: eventId,
                   status: "processed",
                 })),
@@ -1722,37 +1889,38 @@ class CCRClient {
             {
               timeout: eventPostTimeoutMs,
               parseBody,
-              uploadAttempt: y.attempt,
+              uploadAttempt: opts.attempt,
             },
           );
         } catch (error) {
           ridingRows?.settle(false);
           throw error;
         } finally {
-          if (P.length > 0) {
-            let N = this.takeWaitingReceipts((q) => P.includes(q));
-            if (!L?.ok || L.data?.delivery_updates_applied !== true) this.queueDeliveryAcks(N);
+          if (receiptIds.length > 0) {
+            let acks = this.takeWaitingReceipts((eventId) => receiptIds.includes(eventId));
+            if (!result?.ok || result.data?.delivery_updates_applied !== true) this.queueDeliveryAcks(acks);
           }
         }
-        let workerResults = L.ok ? L.data?.worker_results : undefined;
-        let G = Array.isArray(workerResults) && workerResults.length === ridingRows?.rows.length;
-        ridingRows?.settle(G);
-        if (ridingRows !== undefined && L.ok) {
+        let workerResults = result.ok ? result.data?.worker_results : undefined;
+        let resultsMatch = Array.isArray(workerResults) && workerResults.length === ridingRows?.rows.length;
+        ridingRows?.settle(resultsMatch);
+        if (ridingRows !== undefined && result.ok) {
           this.routeOnlyFailures = 0;
           this.ridePauses = 0;
         }
-        let status = L.ok ? 200 : L.status;
-        let Q = ridingRows !== undefined && L.ok && isPlainObject(L.data) && workerResults === undefined;
+        let status = result.ok ? 200 : result.status;
+        let routeFailed =
+          ridingRows !== undefined && result.ok && isPlainObject(result.data) && workerResults === undefined;
         if (
-          (ridingRows || P.length > 0) &&
-          !L.ok &&
+          (ridingRows || receiptIds.length > 0) &&
+          !result.ok &&
           (isClientErrorStatus(status) ||
             (ridingRows !== undefined && BATCH_UNSUPPORTED_STATUSES.has(status)))
         ) {
-          L = await this.request(
+          result = await this.request(
             "post",
             "/worker/events",
-            this.uploadBody(v, y),
+            this.uploadBody(events, opts),
             "client events (resent without worker_events and delivery_updates)",
             {
               timeout: eventPostTimeoutMs,
@@ -1760,10 +1928,10 @@ class CCRClient {
               uploadAttempt: "resend",
             },
           );
-          if (L.ok && status !== 413) {
-            if (ridingRows !== undefined && isClientErrorStatus(status)) Q = true;
+          if (result.ok && status !== 413) {
+            if (ridingRows !== undefined && isClientErrorStatus(status)) routeFailed = true;
             else if (ridingRows !== undefined) this.noteRouteOnlyFailure(status);
-            if (P.length > 0 && isClientErrorStatus(status)) {
+            if (receiptIds.length > 0 && isClientErrorStatus(status)) {
               this.receiptsRideRefused = true;
               logForDiagnosticsNoPII("warn", "cli_ccr_receipts_ride_turned_off", {
                 status,
@@ -1771,67 +1939,68 @@ class CCRClient {
             }
           }
         } else if (ridingRows !== undefined) {
-          if (!L.ok)
+          if (!result.ok)
             this.failedRide = {
               status,
             };
-        } else if (failedRide !== undefined && L.ok) this.noteRouteOnlyFailure(failedRide.status);
-        if (Q) {
+        } else if (failedRide !== undefined && result.ok) this.noteRouteOnlyFailure(failedRide.status);
+        if (routeFailed) {
           this.ridesRefused = true;
           logForDiagnosticsNoPII("warn", "cli_ccr_joint_upload_turned_off", {
             status,
           });
-        } else if (ridingRows && status === 200 && !G && !this.loggedRowsLeftOut) {
+        } else if (ridingRows && status === 200 && !resultsMatch && !this.loggedRowsLeftOut) {
           this.loggedRowsLeftOut = true;
           logForDiagnosticsNoPII("warn", "cli_ccr_joint_upload_rows_left_out");
         }
-        if (L.ok) {
-          for (let q of R) if (q.ackedAtMs === undefined) q.ackedAtMs = performance.now();
-          let taskBookends = detectTaskBookends(v);
+        if (result.ok) {
+          for (let timing of timings)
+            if (timing.ackedAtMs === undefined) timing.ackedAtMs = performance.now();
+          let taskBookends = detectTaskBookends(events);
           if (taskBookends) logFeatureOk("ccr_task_status_publish", taskBookends);
-          this.noteBeatingEventsPostOk(v);
-          this.reportDurableUpload(v, "accepted");
-          this.noteToolCallRowsSettled("client_events", "stored", v);
-          this.noteClientRowsSettled("stored", v);
-          if (z && hasSubscribersReports === this.hasSubscribersReports)
-            this.setHasSubscribers(L.data?.has_subscribers, "no_report");
-          this.tellSubscribersReported(L.data?.has_subscribers);
+          this.noteBeatingEventsPostOk(events);
+          this.reportDurableUpload(events, "accepted");
+          this.noteToolCallRowsSettled("client_events", "stored", events);
+          this.noteClientRowsSettled("stored", events);
+          if (acts && hasSubscribersReports === this.hasSubscribersReports)
+            this.setHasSubscribers(result.data?.has_subscribers, "no_report");
+          this.tellSubscribersReported(result.data?.has_subscribers);
           return;
         }
-        this.reportDurableUpload(v, durableUploadOutcome(L.status));
-        if (isClientErrorStatus(L.status)) {
-          let filtered = v.filter((ee) => !ee.ephemeral);
-          let q = v.length - filtered.length;
-          let status = L.status;
-          if (q > 0) {
+        this.reportDurableUpload(events, durableUploadOutcome(result.status));
+        if (isClientErrorStatus(result.status)) {
+          let filtered = events.filter((event) => !event.ephemeral);
+          let ephemeralCount = events.length - filtered.length;
+          let status = result.status;
+          if (ephemeralCount > 0) {
             logForDebugging(
-              `CCRClient: client event POST rejected (${L.status}) \u2014 dropping ${q} ephemeral event(s), retrying ${filtered.length} durable event(s)`,
+              `CCRClient: client event POST rejected (${result.status}) \u2014 dropping ${ephemeralCount} ephemeral event(s), retrying ${filtered.length} durable event(s)`,
               {
                 level: "warn",
               },
             );
             logFeatureSad("ccr_partial_messages", "ephemeral_dropped_on_4xx", {
-              status: L.status,
-              count: q,
+              status: result.status,
+              count: ephemeralCount,
             });
-            v.splice(0, v.length, ...filtered);
+            events.splice(0, events.length, ...filtered);
             logForDiagnosticsNoPII("warn", "cli_worker_events_4xx_ephemeral_dropped", {
-              status: L.status,
-              count: q,
+              status: result.status,
+              count: ephemeralCount,
             });
             if (filtered.length === 0) return;
             this.reportDurableUpload(filtered, "sending");
-            let ee = await this.request(
+            let retryResult = await this.request(
               "post",
               "/worker/events",
-              this.uploadBody(filtered, y),
+              this.uploadBody(filtered, opts),
               "client events (durable retry)",
               {
                 timeout: eventPostTimeoutMs,
                 uploadAttempt: "resend",
               },
             );
-            if (ee.ok) {
+            if (retryResult.ok) {
               let taskBookends = detectTaskBookends(filtered);
               if (taskBookends) logFeatureOk("ccr_task_status_publish", taskBookends);
               this.noteBeatingEventsPostOk(filtered);
@@ -1840,14 +2009,14 @@ class CCRClient {
               this.noteClientRowsSettled("stored", filtered);
               return;
             }
-            this.reportDurableUpload(filtered, durableUploadOutcome(ee.status));
-            if (!isClientErrorStatus(ee.status))
-              throw ee.fetchFailed
-                ? this.retrySmaller("client_events", filtered, y, eventPostTimeoutMs, {
-                    bytes: filtered.reduce((acc, he) => acc + Buffer.byteLength(jsonStringify(he)), 0),
+            this.reportDurableUpload(filtered, durableUploadOutcome(retryResult.status));
+            if (!isClientErrorStatus(retryResult.status))
+              throw retryResult.fetchFailed
+                ? this.retrySmaller("client_events", filtered, opts, eventPostTimeoutMs, {
+                    bytes: filtered.reduce((acc, event) => acc + Buffer.byteLength(jsonStringify(event)), 0),
                   })
-                : new ClientEventUploadError("client event POST failed", ee.retryAfterMs);
-            status = ee.status;
+                : new ClientEventUploadError("client event POST failed", retryResult.retryAfterMs);
+            status = retryResult.status;
           }
           if (filtered.length > 0) {
             this.droppedDurableEventBatches++;
@@ -1876,12 +2045,12 @@ class CCRClient {
             logFeatureBad("ccr_task_status_publish", "status_events_4xx_dropped", taskBookends);
           return;
         }
-        this.rowsSentAgainStepAside(v);
-        if (v.length === 0) return;
-        if (L.fetchFailed) throw this.retrySmaller("client_events", v, y, eventPostTimeoutMs);
-        if (status === undefined && L.reason === "no_auth_headers")
+        this.rowsSentAgainStepAside(events);
+        if (events.length === 0) return;
+        if (result.fetchFailed) throw this.retrySmaller("client_events", events, opts, eventPostTimeoutMs);
+        if (status === undefined && result.reason === "no_auth_headers")
           throw new ClientEventBatchRejectedError("client event POST not sent");
-        throw new ClientEventUploadError("client event POST failed", L.retryAfterMs);
+        throw new ClientEventUploadError("client event POST failed", result.retryAfterMs);
       }),
       baseDelayMs: 500,
       maxDelayMs: 30000,
@@ -1893,7 +2062,7 @@ class CCRClient {
         if (this.receiptsRide) this.sendWaitingReceipts(isProcessedReceipt);
       },
     });
-    let internalEventUploader = s?.internalEventUploader;
+    let internalEventUploader = options?.internalEventUploader;
     this.internalEventUploader = new ClientEventUploader({
       maxBatchSize: 100,
       maxBatchBytes: () =>
@@ -1913,85 +2082,85 @@ class CCRClient {
           consecutive_failures: consecutiveFailures,
         });
       },
-      send: async (v, y) => {
-        let O = this.dropOrphanedHandedOffLines(v);
-        if (O > 0) {
+      send: async (events, opts) => {
+        let dropped = this.dropOrphanedHandedOffLines(events);
+        if (dropped > 0) {
           logForDiagnosticsNoPII("warn", "cli_worker_internal_events_handoff_orphans_dropped", {
-            count: O,
+            count: dropped,
           });
           logEvent("tengu_ccr_internal_events_dropped", {
             reason: lit("handoff_orphan"),
-            count: O,
+            count: dropped,
           });
-          if (v.length === 0) return;
+          if (events.length === 0) return;
         }
         let startTime = performance.now();
-        let eventPostTimeoutMs = computeEventPostTimeoutMs(y, {
+        let eventPostTimeoutMs = computeEventPostTimeoutMs(opts, {
           maxMs: this.maxEventPostTimeoutMs,
           minMs: internalEventUploader?.requestTimeoutMs,
         });
-        let S = this.offerToEventsPost(v, y);
-        let P =
-          S && (await S)
+        let ride = this.offerToEventsPost(events, opts);
+        let result =
+          ride && (await ride)
             ? {
                 ok: true,
               }
             : await this.request(
                 "post",
                 "/worker/internal-events",
-                this.uploadBody(v, y),
+                this.uploadBody(events, opts),
                 "internal events",
                 {
                   timeout: eventPostTimeoutMs,
-                  uploadAttempt: y.attempt,
+                  uploadAttempt: opts.attempt,
                 },
               );
-        this.markInternalEventPostWatch((W) => W.noteAttempt(v, startTime, P.ok));
-        if (P.ok) {
-          this.noteToolCallRowsSettled("internal_events", "stored", v);
+        this.markInternalEventPostWatch((watch) => watch.noteAttempt(events, startTime, result.ok));
+        if (result.ok) {
+          this.noteToolCallRowsSettled("internal_events", "stored", events);
           Promise.resolve()
-            .then(() => this.onInternalBatchAcked?.(v))
+            .then(() => this.onInternalBatchAcked?.(events))
             .catch(() => {});
           return;
         }
-        if (isClientErrorStatus(P.status) && O === 0 && y.mayResendInTwo()) {
+        if (isClientErrorStatus(result.status) && dropped === 0 && opts.mayResendInTwo()) {
           logEvent("tengu_ccr_internal_events_refused_will_split", {
-            count: v.length,
-            status: P.status,
+            count: events.length,
+            status: result.status,
           });
           throw new ClientEventResendSoonError();
         }
-        if (isClientErrorStatus(P.status)) {
+        if (isClientErrorStatus(result.status)) {
           this.droppedInternalEventBatches++;
-          this.noteRefusedInternalEvents(v);
-          this.noteToolCallRowsSettled("internal_events", "dropped", v);
+          this.noteRefusedInternalEvents(events);
+          this.noteToolCallRowsSettled("internal_events", "dropped", events);
           logForDiagnosticsNoPII("warn", "cli_worker_internal_events_4xx_dropped", {
-            status: P.status,
-            count: v.length,
-            ...describeSingleRowForTelemetry(v),
+            status: result.status,
+            count: events.length,
+            ...describeSingleRowForTelemetry(events),
           });
           logEvent("tengu_ccr_internal_events_dropped", {
             reason: lit("4xx"),
-            count: v.length,
-            status: P.status,
+            count: events.length,
+            status: result.status,
           });
-          let W = count(
-            v,
-            (x) => isAssistantWithMessageId(x.payload) && typeof x.payload.requestId === "string",
+          let kept = count(
+            events,
+            (event) => isAssistantWithMessageId(event.payload) && typeof event.payload.requestId === "string",
           );
-          if (this.loggedRequestIdKept && W > 0)
-            logFeatureBad("ccr_worker_error_request_id_kept", `upload_refused_${P.status}`, {
-              count: W,
-              status: P.status,
+          if (this.loggedRequestIdKept && kept > 0)
+            logFeatureBad("ccr_worker_error_request_id_kept", `upload_refused_${result.status}`, {
+              count: kept,
+              status: result.status,
             });
           return;
         }
-        if (P.fetchFailed) throw this.retrySmaller("internal_events", v, y, eventPostTimeoutMs);
-        if (P.reason === "no_auth_headers")
+        if (result.fetchFailed) throw this.retrySmaller("internal_events", events, opts, eventPostTimeoutMs);
+        if (result.reason === "no_auth_headers")
           throw new ClientEventBatchRejectedError("internal event POST not sent");
         throw new ClientEventUploadError(
           "internal event POST failed",
-          P.nonOriginRefusal ? MAX_RETRY_DELAY_MS : P.retryAfterMs,
+          result.nonOriginRefusal ? MAX_RETRY_DELAY_MS : result.retryAfterMs,
         );
       },
       baseDelayMs: 500,
@@ -2011,9 +2180,9 @@ class CCRClient {
           "/worker/events/delivery",
           {
             worker_epoch: this.workerEpoch,
-            updates: batch.map((O) => ({
-              event_id: O.eventId,
-              status: O.status,
+            updates: batch.map((update) => ({
+              event_id: update.eventId,
+              status: update.status,
             })),
           },
           "delivery batch",
@@ -2033,54 +2202,58 @@ class CCRClient {
       maxDelayMs: 30000,
       jitterMs: 500,
     });
-    this.setStreamEventFlushIntervalMs(s?.streamEventFlushIntervalMs);
-    this.setStreamEventFirstFlushMs(s?.streamEventFirstFlushMs);
-    this.setToolInputFlushMs(s?.toolInputFlushMs);
-    this.setNoSubscriberStreamEventFlushIntervalMs(s?.noSubscriberStreamEventFlushIntervalMs);
-    this.setNoSubscriberUploadHoldMs(s?.noSubscriberUploadHoldMs);
-    this.setDropUnwatchedStreamEvents(s?.dropUnwatchedStreamEvents);
-    e.setOnEvent((v) => {
-      if (this.processExiting() && isUserPayload(v)) return;
-      this.noteSettingsRequest(v.payload);
+    this.setStreamEventFlushIntervalMs(options?.streamEventFlushIntervalMs);
+    this.setStreamEventFirstFlushMs(options?.streamEventFirstFlushMs);
+    this.setToolInputFlushMs(options?.toolInputFlushMs);
+    this.setNoSubscriberStreamEventFlushIntervalMs(options?.noSubscriberStreamEventFlushIntervalMs);
+    this.setNoSubscriberUploadHoldMs(options?.noSubscriberUploadHoldMs);
+    this.setDropUnwatchedStreamEvents(options?.dropUnwatchedStreamEvents);
+    transport.setOnEvent((event) => {
+      if (this.processExiting() && isUserPayload(event)) return;
+      this.noteSettingsRequest(event.payload);
       let subtype =
-        isPlainObject(v.payload) && v.payload.type === "control_request" && isPlainObject(v.payload.request)
-          ? v.payload.request.subtype
+        isPlainObject(event.payload) &&
+        event.payload.type === "control_request" &&
+        isPlainObject(event.payload.request)
+          ? event.payload.request.subtype
           : undefined;
       if (HOUSEKEEPING_CONTROL_SUBTYPES.has(subtype)) {
-        for (let O of [v.event_id, v.payload.uuid])
-          if (typeof O === "string") {
-            this.housekeepingRequestIds.add(O);
+        for (let id of [event.event_id, event.payload.uuid])
+          if (typeof id === "string") {
+            this.housekeepingRequestIds.add(id);
             evictOldestIfFull(this.housekeepingRequestIds);
           }
       }
       this.reportDelivery(
-        v.event_id,
+        event.event_id,
         "received",
-        isPlainObject(v.payload) && v.payload.type === "user" && typeof v.payload.uuid === "string"
-          ? v.payload.uuid
+        isPlainObject(event.payload) &&
+          event.payload.type === "user" &&
+          typeof event.payload.uuid === "string"
+          ? event.payload.uuid
           : undefined,
         {
-          controlTraffic: isRelayableControlFrame(v.payload),
+          controlTraffic: isRelayableControlFrame(event.payload),
           settingsRequest: FLAG_CONTROL_SUBTYPES.has(subtype),
         },
       );
     });
-    e.setOnHeartbeatProbe(() => {
+    transport.setOnHeartbeatProbe(() => {
       this.setHasSubscribers(undefined, "reset");
       this.heartbeatNow("probe");
     });
-    e.setOnCheckpointRequest(() => this.checkpointForViewer("watcher"));
-    e.setOnReconnected(() => {
+    transport.setOnCheckpointRequest(() => this.checkpointForViewer("watcher"));
+    transport.setOnReconnected(() => {
       this.resyncAfterReconnect();
-      s?.onStreamReconnected?.();
+      options?.onStreamReconnected?.();
       if (this.holdsAcrossModelCalls()) this.checkpointForViewer("reconnect");
     });
     this.unsubscribeIdleTracker = this.beatOnReactivation
       ? this.idleTracker?.onActivity(() => this.sendReactivationBeat())
       : undefined;
   }
-  maxAdvisedIntervalFor(e) {
-    return e
+  maxAdvisedIntervalFor(probeSupported) {
+    return probeSupported
       ? Math.floor(MAX_TIMER_DELAY_MS / (1 + this.heartbeatJitterFraction))
       : DEFAULT_IDLE_HEARTBEAT_INTERVAL_MS;
   }
@@ -2094,23 +2267,23 @@ class CCRClient {
     this.maxAdvisedIntervalMs = this.maxAdvisedIntervalFor(advertiseHeartbeatProbeSupport);
     this.beatOnStaleReconnect = beatOnStaleReconnect;
     this.skipRedundantHeartbeats = skipRedundantHeartbeats;
-    let h = beatOnReactivation && this.idleTracker !== undefined;
-    if (h !== this.beatOnReactivation) {
-      this.beatOnReactivation = h;
+    let beatOn = beatOnReactivation && this.idleTracker !== undefined;
+    if (beatOn !== this.beatOnReactivation) {
+      this.beatOnReactivation = beatOn;
       this.unsubscribeIdleTracker?.();
       this.unsubscribeIdleTracker =
-        h && !this.closed ? this.idleTracker?.onActivity(() => this.sendReactivationBeat()) : undefined;
+        beatOn && !this.closed ? this.idleTracker?.onActivity(() => this.sendReactivationBeat()) : undefined;
     }
   }
-  async initialize(e) {
+  async initialize(epoch) {
     let now = Date.now();
     if (Object.keys(this.getAuthHeaders()).length === 0) throw new CCRInitError("no_auth_headers");
-    if (e === undefined) e = workerEpochFromEnv();
-    if (isNaN(e)) throw new CCRInitError("missing_epoch");
-    this.workerEpoch = e;
+    if (epoch === undefined) epoch = workerEpochFromEnv();
+    if (isNaN(epoch)) throw new CCRInitError("missing_epoch");
+    this.workerEpoch = epoch;
     if (!this.flushPolicy) this.takeUpFlushPolicy(undefined);
     let abortController = new AbortController();
-    let r = false;
+    let readDone = false;
     let abortController_2 = new AbortController();
     let workerState = this.getWorkerState(
       "worker_state",
@@ -2119,12 +2292,12 @@ class CCRClient {
     );
     let winner = await Promise.race([
       workerState.then(
-        (I) => {
-          r = true;
-          return I.metadata;
+        (winner) => {
+          readDone = true;
+          return winner.metadata;
         },
         () => {
-          r = true;
+          readDone = true;
           return {
             external: null,
             internal: null,
@@ -2135,91 +2308,91 @@ class CCRClient {
       sleep(this.initStateGetOrderingBoundMs, abortController_2.signal).then(() => "pending"),
     ]);
     abortController_2.abort();
-    let y = this.reportParkAtInit ? resolveWorkerRequiresActionState(winner) : undefined;
+    let park = this.reportParkAtInit ? resolveWorkerRequiresActionState(winner) : undefined;
     let metadataNeverSent = this.followsServedPolicy ? this.flushPolicy?.metadataNeverSent : undefined;
-    let C = {
+    let externalMetadata = {
       ...this.initExternalMetadata,
-      ...Object.fromEntries(Array.from(metadataNeverSent ?? [], (I) => [I, null])),
+      ...Object.fromEntries(Array.from(metadataNeverSent ?? [], (key) => [key, null])),
     };
-    let U = {
+    let idleBody = {
       worker_status: "idle",
       worker_epoch: this.workerEpoch,
       external_metadata: {
-        ...C,
+        ...externalMetadata,
         task_summary: null,
       },
     };
-    let S =
-      y === undefined
+    let registration =
+      park === undefined
         ? {
             worker_status: this.initialWorkerStatus,
             worker_epoch: this.workerEpoch,
             external_metadata: {
-              ...C,
+              ...externalMetadata,
               pending_action: null,
               pending_actions: null,
               task_summary: null,
             },
           }
-        : y.status === "requires_action"
+        : park.status === "requires_action"
           ? {
-              ...U,
+              ...idleBody,
               worker_status: "requires_action",
-              requires_action_details: y.details,
+              requires_action_details: park.details,
             }
-          : U;
-    let P = {
+          : idleBody;
+    let result = {
       ok: false,
     };
-    let W = new Set();
-    let x = 10;
-    let z = 0;
-    for (let j = 1; j <= x; j++) {
+    let reasons = new Set();
+    let attempts = 10;
+    let attempt = 0;
+    for (let j = 1; j <= attempts; j++) {
       if (this.closed) break;
-      z = j;
-      P = await this.request("put", "/worker", S, "PUT worker (init)");
-      if (P.ok || this.closed) break;
-      if (P.reason) W.add(P.reason);
+      attempt = j;
+      result = await this.request("put", "/worker", registration, "PUT worker (init)");
+      if (result.ok || this.closed) break;
+      if (result.reason) reasons.add(result.reason);
       this.onDiagnostic?.(
-        `PUT /worker failed (${P.reason ?? "unknown"}) attempt=${j}/${x}, ${Math.round((Date.now() - now) / 1000)}s elapsed`,
+        `PUT /worker failed (${result.reason ?? "unknown"}) attempt=${j}/${attempts}, ${Math.round((Date.now() - now) / 1000)}s elapsed`,
         "warn",
         "worker_registration_attempt_failed",
       );
-      if (isClientErrorStatus(P.status)) {
-        if (y?.status === "requires_action") {
-          y = {
+      if (isClientErrorStatus(result.status)) {
+        if (park?.status === "requires_action") {
+          park = {
             status: "idle",
             reason: "park_rejected",
           };
-          S = U;
+          registration = idleBody;
           j--;
           continue;
         }
         break;
       }
-      if (j < x) {
-        let G = Math.min(500 * 2 ** (j - 1), 30000) + Math.random() * 500;
-        await sleep(G);
+      if (j < attempts) {
+        let delay = Math.min(500 * 2 ** (j - 1), 30000) + Math.random() * 500;
+        await sleep(delay);
       }
     }
-    if (!P.ok) {
+    if (!result.ok) {
       if (!this.closed) {
         logForDiagnosticsNoPII("error", "cli_worker_init_put_retries_exhausted");
         this.onDiagnostic?.(
-          `PUT /worker retries exhausted: ${z} attempts over ${Math.round((Date.now() - now) / 1000)}s, errors=[${[...W].join(",") || "unknown"}]`,
+          `PUT /worker retries exhausted: ${attempt} attempts over ${Math.round((Date.now() - now) / 1000)}s, errors=[${[...reasons].join(",") || "unknown"}]`,
           "warn",
           "worker_registration_gave_up",
         );
       }
-      throw new CCRInitError("worker_register_failed", P.status);
+      throw new CCRInitError("worker_register_failed", result.status);
     }
-    this.currentState = y?.status ?? this.initialWorkerStatus;
+    this.currentState = park?.status ?? this.initialWorkerStatus;
     this.startReportsWaitUntilMs =
       this.currentState === "idle" ? performance.now() + this.startReportsMaxWaitMs : 0;
-    let { worker_epoch: workerEpoch, ...Y } = S;
-    this.workerState.remember(Y);
+    let { worker_epoch: workerEpoch, ...body } = registration;
+    this.workerState.remember(body);
     this.applyUploadHold("idle");
-    this.parkReportedAtInitRequestId = y?.status === "requires_action" ? y.requestId : undefined;
+    this.parkReportedAtInitRequestId = park?.status === "requires_action" ? park.requestId : undefined;
     this.startHeartbeat();
     if (!this.closed) {
       setActivityCallback(() => {
@@ -2244,7 +2417,8 @@ class CCRClient {
             logError(error);
           }
         });
-      if (this.gatesToolCalls) this.stopToolCallGate = setBridgeSessionListener((G) => this.gateToolCall(G));
+      if (this.gatesToolCalls)
+        this.stopToolCallGate = setBridgeSessionListener((call) => this.gateToolCall(call));
     }
     logForDebugging(`CCRClient: initialized, epoch=${this.workerEpoch}`);
     logForDiagnosticsNoPII("info", "cli_worker_lifecycle_initialized", {
@@ -2253,13 +2427,13 @@ class CCRClient {
       reported_status: this.currentState,
     });
     recordPhase("worker_init_ms", Date.now() - now, now - performance.timeOrigin);
-    if (y)
+    if (park)
       logEvent("tengu_ccr_init_park_report", {
-        reported: fromEnum(y.status),
-        reason: fromEnum(y.reason),
+        reported: fromEnum(park.status),
+        reason: fromEnum(park.reason),
       });
-    let R = this.stateReadEndsAtRegistration && !r;
-    if (R) abortController.abort();
+    let abandoned = this.stateReadEndsAtRegistration && !readDone;
+    if (abandoned) abortController.abort();
     let { metadata, durationMs } = await workerState;
     if (this.stateReadEndsAtRegistration && metadata.readFailed)
       logForDebugging(
@@ -2277,23 +2451,23 @@ class CCRClient {
     if (!metadata.readFailed)
       this.recordAtStart = {
         ...metadata.external,
-        ...C,
+        ...externalMetadata,
       };
     if (!this.closed)
       logForDiagnosticsNoPII("info", "cli_worker_state_restored", {
         duration_ms: durationMs,
         had_state: metadata.external !== null || metadata.internal !== null,
         read_failed: metadata.readFailed === true,
-        read_abandoned_at_registration: R && metadata.readFailed === true,
+        read_abandoned_at_registration: abandoned && metadata.readFailed === true,
       });
-    return y
+    return park
       ? {
           ...metadata,
-          initParkReport: notifySessionStateChanged(y.status, metadata),
+          initParkReport: notifySessionStateChanged(park.status, metadata),
         }
       : metadata;
   }
-  async getWorkerState(e = "worker_state", n = false, signal = this.closeAbort.signal) {
+  async getWorkerState(context = "worker_state", force = false, signal = this.closeAbort.signal) {
     let startMs = Date.now();
     let authHeaders = this.getAuthHeaders();
     if (Object.keys(authHeaders).length === 0)
@@ -2306,11 +2480,11 @@ class CCRClient {
         projectsAssertion: undefined,
         durationMs: 0,
       };
-    let w = await CCRClient.getWithRetry(
+    let response = await CCRClient.getWithRetry(
       this.readSource,
-      `${this.sessionBaseUrl}/worker${hearthQuerySuffix(n)}`,
+      `${this.sessionBaseUrl}/worker${hearthQuerySuffix(force)}`,
       authHeaders,
-      e,
+      context,
       undefined,
       undefined,
       {
@@ -2319,86 +2493,86 @@ class CCRClient {
     );
     return {
       metadata: {
-        external: w?.worker?.external_metadata ?? null,
-        internal: w?.worker?.internal_metadata ?? null,
-        ...(w === null && {
+        external: response?.worker?.external_metadata ?? null,
+        internal: response?.worker?.internal_metadata ?? null,
+        ...(response === null && {
           readFailed: true,
         }),
       },
-      projectsAssertion: isHearthRequest(w),
+      projectsAssertion: isHearthRequest(response),
       durationMs: Date.now() - startMs,
     };
   }
   get currentWorkerEpoch() {
     return this.workerEpoch;
   }
-  readOwnClientEvent(e) {
-    return CCRClient.readOwnClientEventFrom(this.readSource, e);
+  readOwnClientEvent(row) {
+    return CCRClient.readOwnClientEventFrom(this.readSource, row);
   }
-  static async readOwnClientEventFrom(e, n) {
-    let s = `${e.sessionBaseUrl}/worker/events/${encodeURIComponent(n.toLowerCase())}`;
-    let r = {
+  static async readOwnClientEventFrom(source, eventId) {
+    let url = `${source.sessionBaseUrl}/worker/events/${encodeURIComponent(eventId.toLowerCase())}`;
+    let failure = {
       kind: "unavailable",
       why: "network",
     };
     for (let j = 1; j <= WORKER_STATE_MAX_ATTEMPTS; j++) {
-      let w;
+      let headers;
       try {
-        w = e.getAuthHeaders();
+        headers = source.getAuthHeaders();
       } catch {
         return {
           kind: "unavailable",
           why: "no_auth_headers",
         };
       }
-      if (Object.keys(w).length === 0)
+      if (Object.keys(headers).length === 0)
         return {
           kind: "unavailable",
           why: "no_auth_headers",
         };
-      let v;
+      let response;
       try {
-        v = await proxyAwareFetch(
-          s,
+        response = await proxyAwareFetch(
+          url,
           {
             headers: {
-              ...w,
+              ...headers,
               "anthropic-version": "2023-06-01",
               "anthropic-client-platform": getClientPlatform(),
               "User-Agent": claudeCodeUserAgent(),
             },
             signal: AbortSignal.timeout(1e4),
             ...getProxyFetchOptions({
-              url: s,
+              url,
             }),
           },
-          e.ownConnectionPool,
+          source.ownConnectionPool,
         );
       } catch {
-        r = {
+        failure = {
           kind: "unavailable",
           why: "network",
         };
       }
-      if (v !== undefined) {
-        let y = await v.json().catch(() => {
+      if (response !== undefined) {
+        let body = await response.json().catch(() => {
           return;
         });
-        if (v.ok) return parseDeliveryEvent(y, n);
-        if (v.status === 404 && isClientEventNotFoundError(y))
+        if (response.ok) return parseDeliveryEvent(body, eventId);
+        if (response.status === 404 && isClientEventNotFoundError(body))
           return {
             kind: "absent",
           };
-        r = {
+        failure = {
           kind: "unavailable",
-          why: describeUploadFailure(v.status),
+          why: describeUploadFailure(response.status),
         };
-        if (v.status < 500 || v.status === 501) return r;
+        if (response.status < 500 || response.status === 501) return failure;
       }
       if (j < WORKER_STATE_MAX_ATTEMPTS)
         await sleep(Math.min(500 * 2 ** (j - 1), 4000) + Math.random() * 500);
     }
-    return r;
+    return failure;
   }
   async readProjectsBinding() {
     let { metadata, projectsAssertion } = await this.getWorkerState("projects_binding", true);
@@ -2414,35 +2588,35 @@ class CCRClient {
   async readWorkerState() {
     return (await this.getWorkerState("worker_state_reread")).metadata;
   }
-  static async readProjectsBindingFor(e, getAuthHeaders) {
-    let s = convertWsUrlToPostUrl(e, getAuthHeaders);
+  static async readProjectsBindingFor(url, getAuthHeaders) {
+    let source = convertWsUrlToPostUrl(url, getAuthHeaders);
     if (Object.keys(getAuthHeaders()).length === 0)
       return {
         read: false,
       };
-    let r = await CCRClient.getWithRetry(
-      s,
-      `${s.sessionBaseUrl}/worker${hearthQuerySuffix(true)}`,
+    let response = await CCRClient.getWithRetry(
+      source,
+      `${source.sessionBaseUrl}/worker${hearthQuerySuffix(true)}`,
       getAuthHeaders(),
       "projects_binding",
     );
-    return r === null
+    return response === null
       ? {
           read: false,
         }
       : {
           read: true,
-          assertion: isHearthRequest(r),
+          assertion: isHearthRequest(response),
         };
   }
-  request(e, n, s, r, h = {}) {
-    return this.sendRequest(e, n, s, r, h);
+  request(method, path, body, context, opts = {}) {
+    return this.sendRequest(method, path, body, context, opts);
   }
   async sendRequest(
-    e,
-    n,
-    s,
-    r,
+    method,
+    path,
+    body,
+    context,
     {
       timeout = MIN_EVENT_POST_TIMEOUT_MS,
       parseBody = false,
@@ -2458,33 +2632,33 @@ class CCRClient {
         ok: false,
         reason: "no_auth_headers",
       };
-    let S = `${this.sessionBaseUrl}${n}`;
-    let P = signal
+    let url = `${this.sessionBaseUrl}${path}`;
+    let timeoutSignal = signal
       ? createCombinedAbortSignal(signal, {
           timeoutMs: timeout,
           refTimer: true,
         })
       : undefined;
-    let W = false;
+    let posted = false;
     let Authorization = authHeaders.Authorization;
     try {
-      let z = jsonStringify(s);
+      let encoded = jsonStringify(body);
       let startTime = performance.now();
-      let Y = signal
+      let carry = signal
         ? undefined
-        : n === "/worker/heartbeat"
-          ? this.workerSocket?.beat(z, timeout, (Q) => onLateSocketAnswer?.(Q))
-          : this.workerSocket?.carry(n, z, timeout);
-      let R = Y && (await Y);
-      let B = R;
-      if (!B) {
-        if (Y && n === "/worker/heartbeat" && this.closed)
+        : path === "/worker/heartbeat"
+          ? this.workerSocket?.beat(encoded, timeout, (reply) => onLateSocketAnswer?.(reply))
+          : this.workerSocket?.carry(path, encoded, timeout);
+      let carried = carry && (await carry);
+      let response = carried;
+      if (!response) {
+        if (carry && path === "/worker/heartbeat" && this.closed)
           return {
             ok: false,
             reason: "closed",
           };
-        let Q = {
-          method: e.toUpperCase(),
+        let init = {
+          method: method.toUpperCase(),
           headers: {
             ...authHeaders,
             "Content-Type": "application/json",
@@ -2495,16 +2669,16 @@ class CCRClient {
               [X_CCR_UPLOAD_ATTEMPT]: uploadAttempt,
             }),
           },
-          body: z,
-          signal: P?.signal ?? AbortSignal.timeout(timeout),
+          body: encoded,
+          signal: timeoutSignal?.signal ?? AbortSignal.timeout(timeout),
           ...getProxyFetchOptions({
-            url: S,
+            url,
           }),
         };
-        if (Y) {
-          let N = {};
+        if (carry) {
+          let headers = {};
           try {
-            N = this.getAuthHeaders();
+            headers = this.getAuthHeaders();
           } catch (error) {
             logForDebugging(
               `CCRClient: could not read credentials again for a request the worker socket handed to POST: ${errorMessage(error)}`,
@@ -2513,56 +2687,58 @@ class CCRClient {
               },
             );
           }
-          if (Object.keys(N).length > 0) {
-            let headers = Q.headers;
-            for (let key of Object.keys(authHeaders)) delete headers[key];
-            Object.assign(headers, N);
-            Authorization = N.Authorization;
+          if (Object.keys(headers).length > 0) {
+            let headers_2 = init.headers;
+            for (let key of Object.keys(authHeaders)) delete headers_2[key];
+            Object.assign(headers_2, headers);
+            Authorization = headers.Authorization;
           }
-          Q.signal = AbortSignal.timeout(
-            n === "/worker/heartbeat" ? Math.max(0, timeout - (performance.now() - startTime)) : timeout,
+          init.signal = AbortSignal.timeout(
+            path === "/worker/heartbeat" ? Math.max(0, timeout - (performance.now() - startTime)) : timeout,
           );
         }
-        Object.assign(Q.headers, this.tickets.headersFor(Authorization));
-        B = this.gzipRequestBodyFetch
-          ? await this.gzipRequestBodyFetch(S, Q, (N) => proxyAwareFetch(S, N, this.ownConnectionPool))
-          : await proxyAwareFetch(S, Q, this.ownConnectionPool);
+        Object.assign(init.headers, this.tickets.headersFor(Authorization));
+        response = this.gzipRequestBodyFetch
+          ? await this.gzipRequestBodyFetch(url, init, (init) =>
+              proxyAwareFetch(url, init, this.ownConnectionPool),
+            )
+          : await proxyAwareFetch(url, init, this.ownConnectionPool);
       }
-      W = true;
-      if (!R) this.tickets.note(Authorization, B);
-      if (B.ok) {
+      posted = true;
+      if (!carried) this.tickets.note(Authorization, response);
+      if (response.ok) {
         this.consecutiveAuthFailures = 0;
         this.consecutiveNotFound = 0;
-        this.reportNonOriginRun("onCleared", ENDPOINT_CATEGORIES[n]);
-        this.nonOriginRuns.delete(ENDPOINT_CATEGORIES[n]);
+        this.reportNonOriginRun("onCleared", ENDPOINT_CATEGORIES[path]);
+        this.nonOriginRuns.delete(ENDPOINT_CATEGORIES[path]);
         for (let nonOriginRun of this.nonOriginRuns.values()) nonOriginRun.othersPassed = true;
         if (parseBody)
           try {
             return {
               ok: true,
-              data: await B.json(),
+              data: await response.json(),
             };
           } catch {
             return {
               ok: true,
             };
           }
-        await drainResponseBody(B);
+        await drainResponseBody(response);
         return {
           ok: true,
         };
       }
-      let L;
-      if (B.status === 409 && !this.closed) L = await readConflictReason(B);
-      else await drainResponseBody(B);
+      let conflictReason;
+      if (response.status === 409 && !this.closed) conflictReason = await readConflictReason(response);
+      else await drainResponseBody(response);
       if (this.closed)
         return {
           ok: false,
-          status: B.status,
-          reason: `http_${B.status}`,
+          status: response.status,
+          reason: `http_${response.status}`,
         };
-      if (B.status === 409) this.handleEpochMismatch(L);
-      if (B.status === 404 && countTowardEscalation && n !== EVENT_BATCH_PATH) {
+      if (response.status === 409) this.handleEpochMismatch(conflictReason);
+      if (response.status === 404 && countTowardEscalation && path !== EVENT_BATCH_PATH) {
         this.consecutiveNotFound++;
         if (this.consecutiveNotFound >= MAX_CONSECUTIVE_NOT_FOUND) {
           logForDebugging(
@@ -2573,47 +2749,52 @@ class CCRClient {
           );
           logForDiagnosticsNoPII("error", "cli_worker_session_not_found", undefined, this.lastLineWhen);
           this.onDiagnostic?.(
-            `${this.consecutiveNotFound} consecutive 404s on ${n} \u2014 session gone, exiting`,
+            `${this.consecutiveNotFound} consecutive 404s on ${path} \u2014 session gone, exiting`,
             "warn",
             "session_not_found",
           );
           this.escalateEpochMismatch("session_not_found");
         }
       }
-      let I = B.status !== 403 ? undefined : R ? "origin" : readRequestIdSource((Q) => B.headers.get(Q));
+      let source =
+        response.status !== 403
+          ? undefined
+          : carried
+            ? "origin"
+            : readRequestIdSource((header) => response.headers.get(header));
       let nonOrigin403Transient = this.nonOrigin403Transient;
-      let X = nonOrigin403Transient !== false && isNonOriginSource(I);
-      if (X && typeof nonOrigin403Transient === "object") {
-        let Q = ENDPOINT_CATEGORIES[n];
+      let counts = nonOrigin403Transient !== false && isNonOriginSource(source);
+      if (counts && typeof nonOrigin403Transient === "object") {
+        let category = ENDPOINT_CATEGORIES[path];
         let startTime = performance.now();
-        let q = this.nonOriginRuns.get(Q) ?? {
+        let run = this.nonOriginRuns.get(category) ?? {
           sinceMs: startTime,
           refusals: 0,
           windowsSpent: 0,
           othersPassed: false,
         };
-        this.nonOriginRuns.set(Q, q);
-        q.refusals++;
-        X = startTime - q.sinceMs < nonOrigin403Transient.windowMs;
-        if (X)
+        this.nonOriginRuns.set(category, run);
+        run.refusals++;
+        counts = startTime - run.sinceMs < nonOrigin403Transient.windowMs;
+        if (counts)
           try {
-            nonOrigin403Transient.onRefused(Q);
+            nonOrigin403Transient.onRefused(category);
           } catch (error) {
             logForDebugging(`CCRClient: onRefused threw: ${errorMessage(error)}`, {
               level: "error",
             });
           }
-        else if (startTime - q.sinceMs >= (q.windowsSpent + 1) * nonOrigin403Transient.windowMs) {
-          q.windowsSpent++;
-          this.reportNonOriginRun("onWindowSpent", Q);
+        else if (startTime - run.sinceMs >= (run.windowsSpent + 1) * nonOrigin403Transient.windowMs) {
+          run.windowsSpent++;
+          this.reportNonOriginRun("onWindowSpent", category);
         }
       }
-      if (B.status === 401 || B.status === 403) {
+      if (response.status === 401 || response.status === 403) {
         let sessionIngressAuthToken = getSessionIngressAuthToken();
-        let N = sessionIngressAuthToken ? decodeJwtExpiry(sessionIngressAuthToken) : null;
-        if (N !== null && N * 1000 < Date.now()) {
+        let expiry = sessionIngressAuthToken ? decodeJwtExpiry(sessionIngressAuthToken) : null;
+        if (expiry !== null && expiry * 1000 < Date.now()) {
           logForDebugging(
-            `CCRClient: session_token expired (exp=${new Date(N * 1000).toISOString()}) \u2014 no refresh was delivered, exiting`,
+            `CCRClient: session_token expired (exp=${new Date(expiry * 1000).toISOString()}) \u2014 no refresh was delivered, exiting`,
             {
               level: "error",
             },
@@ -2625,13 +2806,13 @@ class CCRClient {
             this.lastLineWhen,
           );
           this.onDiagnostic?.(
-            `session_token expired (exp=${new Date(N * 1000).toISOString()}) \u2014 no refresh delivered, exiting`,
+            `session_token expired (exp=${new Date(expiry * 1000).toISOString()}) \u2014 no refresh delivered, exiting`,
             "warn",
             "token_expired",
           );
           this.escalateEpochMismatch("token_expired");
         }
-        if (countTowardEscalation && !X) {
+        if (countTowardEscalation && !counts) {
           this.consecutiveAuthFailures++;
           if (this.consecutiveAuthFailures >= MAX_CONSECUTIVE_AUTH_FAILURES) {
             logForDebugging(
@@ -2647,7 +2828,7 @@ class CCRClient {
               this.lastLineWhen,
             );
             this.onDiagnostic?.(
-              `${this.consecutiveAuthFailures} consecutive auth failures (HTTP ${B.status}) with valid-looking token \u2014 exiting`,
+              `${this.consecutiveAuthFailures} consecutive auth failures (HTTP ${response.status}) with valid-looking token \u2014 exiting`,
               "warn",
               "auth_exhausted",
             );
@@ -2655,47 +2836,47 @@ class CCRClient {
           }
         }
       }
-      logForDebugging(`CCRClient: ${r} returned ${B.status}`, {
+      logForDebugging(`CCRClient: ${context} returned ${response.status}`, {
         level: "warn",
       });
       logForDiagnosticsNoPII("warn", "cli_worker_request_failed", {
-        method: e,
-        path: n,
-        status: B.status,
-        ...(I !== undefined && {
-          source: I,
+        method,
+        path,
+        status: response.status,
+        ...(source !== undefined && {
+          source,
         }),
       });
-      if (B.status === 429) {
-        let Q = B.headers.get("retry-after");
-        let N = Q ? parseInt(Q, 10) : NaN;
-        if (!isNaN(N) && N >= 0)
+      if (response.status === 429) {
+        let retryAfter = response.headers.get("retry-after");
+        let retryAfterMs = retryAfter ? parseInt(retryAfter, 10) : NaN;
+        if (!isNaN(retryAfterMs) && retryAfterMs >= 0)
           return {
             ok: false,
-            retryAfterMs: N * 1000,
-            status: B.status,
-            reason: `http_${B.status}`,
+            retryAfterMs: retryAfterMs * 1000,
+            status: response.status,
+            reason: `http_${response.status}`,
           };
       }
       return {
         ok: false,
-        status: B.status,
-        reason: `http_${B.status}`,
-        ...(X && {
-          nonOriginRefusal: X,
+        status: response.status,
+        reason: `http_${response.status}`,
+        ...(counts && {
+          nonOriginRefusal: counts,
         }),
       };
     } catch (error) {
-      logForDebugging(`CCRClient: ${r} failed: ${errorMessage(error)}`, {
+      logForDebugging(`CCRClient: ${context} failed: ${errorMessage(error)}`, {
         level: "warn",
       });
       logForDiagnosticsNoPII("warn", "cli_worker_request_error", {
-        method: e,
-        path: n,
+        method,
+        path,
         error_code: mergeClients(error),
       });
       let reason = `fetch_failed:${mergeClients(error)}`;
-      return W
+      return posted
         ? {
             ok: false,
             reason,
@@ -2706,58 +2887,58 @@ class CCRClient {
             reason,
           };
     } finally {
-      P?.cleanup();
+      timeoutSignal?.cleanup();
     }
   }
-  reportNonOriginRun(e, n) {
-    let s = this.nonOriginRuns.get(n);
-    if (s === undefined || typeof this.nonOrigin403Transient !== "object") return;
-    let rounded = Math.round(performance.now() - s.sinceMs);
+  reportNonOriginRun(event, category) {
+    let run = this.nonOriginRuns.get(category);
+    if (run === undefined || typeof this.nonOrigin403Transient !== "object") return;
+    let rounded = Math.round(performance.now() - run.sinceMs);
     let { unsentClientEvents, unsentInternalEvents } = this.uploadBacklog();
     logForDebugging(
-      `CCRClient: ${n} ${e === "onCleared" ? "accepted again" : "still refused"} after ${rounded}ms of non-origin 403s (${s.refusals} refusals)`,
+      `CCRClient: ${category} ${event === "onCleared" ? "accepted again" : "still refused"} after ${rounded}ms of non-origin 403s (${run.refusals} refusals)`,
       {
         level: "warn",
       },
     );
     try {
-      this.nonOrigin403Transient[e]({
-        lane: n,
-        refusals: s.refusals,
+      this.nonOrigin403Transient[event]({
+        lane: category,
+        refusals: run.refusals,
         runMs: rounded,
-        windowsSpent: s.windowsSpent,
-        othersPassed: s.othersPassed,
+        windowsSpent: run.windowsSpent,
+        othersPassed: run.othersPassed,
         backlog: unsentClientEvents + unsentInternalEvents,
       });
     } catch (error) {
-      logForDebugging(`CCRClient: ${e} threw: ${errorMessage(error)}`, {
+      logForDebugging(`CCRClient: ${event} threw: ${errorMessage(error)}`, {
         level: "error",
       });
     }
   }
-  reportState(e, n) {
-    if (e === this.currentState && !n) return;
+  reportState(state, details) {
+    if (state === this.currentState && !details) return;
     let parkReportedAtInitRequestId = this.parkReportedAtInitRequestId;
     this.parkReportedAtInitRequestId = undefined;
     if (
       parkReportedAtInitRequestId !== undefined &&
-      e === "requires_action" &&
+      state === "requires_action" &&
       this.currentState === "requires_action" &&
-      requestIdOf(n) === parkReportedAtInitRequestId
+      requestIdOf(details) === parkReportedAtInitRequestId
     )
       return;
-    if (e === "idle") {
+    if (state === "idle") {
       this.openPickupBarriers(this.pickupBarriers.length);
       this.openTurn();
     }
-    this.currentState = e;
+    this.currentState = state;
     this.startReportsWaitUntilMs = 0;
     this.workerState.enqueue({
-      worker_status: e,
-      requires_action_details: n ? buildRequiresActionDetails(n) : null,
+      worker_status: state,
+      requires_action_details: details ? buildRequiresActionDetails(details) : null,
       internal_metadata: {
         reply_degraded: isHearthDegraded(),
-        ...this.clientRowsOwed.stateReported(e, new Date(), this.clientRowsAreGuarded()),
+        ...this.clientRowsOwed.stateReported(state, new Date(), this.clientRowsAreGuarded()),
       },
       ...(this.autocompactStateStored !== undefined && {
         external_metadata: {
@@ -2766,82 +2947,83 @@ class CCRClient {
       }),
     });
     this.autocompactStateStored = undefined;
-    this.applyUploadHold(e === "running" ? "idle" : e);
+    this.applyUploadHold(state === "running" ? "idle" : state);
   }
-  reportMetadata(e) {
+  reportMetadata(metadata) {
     let metadataNeverSent = this.flushPolicy?.metadataNeverSent;
-    let s = this.withoutRepeatsOfRecord(
+    let filtered = this.withoutRepeatsOfRecord(
       metadataNeverSent?.size && this.followsServedPolicy
-        ? pickByHelper(e, (r, h) => r === null || !metadataNeverSent.has(h))
-        : e,
+        ? pickByHelper(metadata, (value, key) => value === null || !metadataNeverSent.has(key))
+        : metadata,
     );
-    if (s !== e && Object.keys(s).length === 0) return;
+    if (filtered !== metadata && Object.keys(filtered).length === 0) return;
     this.workerState.enqueue({
-      external_metadata: blockedToNeedInput(s),
+      external_metadata: blockedToNeedInput(filtered),
     });
   }
-  withoutRepeatsOfRecord(e) {
-    let filtered = Object.keys(e).filter((key) => {
+  withoutRepeatsOfRecord(metadata) {
+    let filtered = Object.keys(metadata).filter((key) => {
       if (!REPORTABLE_METADATA_KEYS.has(key) || this.reportedKeys.has(key)) return false;
       this.reportedKeys.add(key);
       return (
-        this.recordAtStart !== undefined && En(e[key] ?? undefined, this.recordAtStart[key] ?? undefined)
+        this.recordAtStart !== undefined &&
+        import_sortedIndex_2(metadata[key] ?? undefined, this.recordAtStart[key] ?? undefined)
       );
     });
-    return filtered.length > 0 ? pickByHelper(e, (s, r) => !filtered.includes(r)) : e;
+    return filtered.length > 0 ? pickByHelper(metadata, (value, key) => !filtered.includes(key)) : metadata;
   }
   reportInternalMetadata(internalMetadata) {
     this.workerState.enqueue({
       internal_metadata: internalMetadata,
     });
   }
-  handleEpochMismatch(e) {
-    let n = e ?? "epoch_conflict";
-    let s = e ?? "unattributed";
-    logForDebugging(`CCRClient: Epoch mismatch (409, reason=${s}), shutting down`, {
+  handleEpochMismatch(reason) {
+    let code = reason ?? "epoch_conflict";
+    let cause = reason ?? "unattributed";
+    logForDebugging(`CCRClient: Epoch mismatch (409, reason=${cause}), shutting down`, {
       level: "error",
     });
     logForDiagnosticsNoPII(
       "error",
-      n === "epoch_stale"
+      code === "epoch_stale"
         ? "cli_worker_epoch_stale"
-        : n === "session_not_active"
+        : code === "session_not_active"
           ? "cli_worker_session_not_active"
           : "cli_worker_epoch_mismatch",
       {
-        reason: s,
+        reason: cause,
       },
       this.lastLineWhen,
     );
-    let r =
-      n === "epoch_stale"
+    let detail =
+      code === "epoch_stale"
         ? "stale registration (no live successor)"
-        : n === "session_not_active"
+        : code === "session_not_active"
           ? "session archived or no longer active"
-          : n === "superseded_by_worker"
+          : code === "superseded_by_worker"
             ? "superseded by a newer worker"
             : "unattributed conflict, treated as superseded";
     this.onDiagnostic?.(
-      `worker epoch mismatch (409) reason=${s} epoch=${this.workerEpoch} \u2014 ${r}, exiting`,
+      `worker epoch mismatch (409) reason=${cause} epoch=${this.workerEpoch} \u2014 ${detail}, exiting`,
       "warn",
-      n,
+      code,
     );
-    this.escalateEpochMismatch(n);
+    this.escalateEpochMismatch(code);
   }
-  escalateEpochMismatch(e) {
-    this.lastEpochMismatchCause = e;
+  escalateEpochMismatch(code) {
+    this.lastEpochMismatchCause = code;
     this.epochMismatchCount++;
     this.epochSuperseded = true;
-    return this.onEpochMismatch(e);
+    return this.onEpochMismatch(code);
   }
   startHeartbeat() {
     this.stopHeartbeat();
     if (this.closed) return;
-    let e = () => {
+    let schedule = () => {
       let jitter = this.heartbeatIntervalMs * this.heartbeatJitterFraction * (2 * Math.random() - 1);
-      this.heartbeatTimer = setTimeout(n, this.heartbeatIntervalMs + jitter);
+      this.heartbeatTimer = setTimeout(tick, this.heartbeatIntervalMs + jitter);
     };
-    let n = () => {
+    let tick = () => {
       let lastCadenceTickAtMs = this.lastCadenceTickAtMs;
       this.lastCadenceTickAtMs = Date.now();
       if (this.canSkipCadenceBeat(lastCadenceTickAtMs)) {
@@ -2862,32 +3044,32 @@ class CCRClient {
           type: "keep_alive",
         });
       }
-      e();
+      schedule();
     };
     this.lastCadenceTickAtMs = Date.now();
-    e();
+    schedule();
   }
-  noteBeatingEventsPostOk(e) {
+  noteBeatingEventsPostOk(events) {
     this.lastEventsAnswerOrPulseAtMs = Date.now();
-    if (!this.workerSocket?.isTransport() && e.some((n) => !n.ephemeral))
+    if (!this.workerSocket?.isTransport() && events.some((event) => !event.ephemeral))
       this.lastBeatingEventsPostOkAtMs = Date.now();
   }
-  canSkipCadenceBeat(e) {
-    let n = this.heartbeatIntervalMs * (1 + this.heartbeatJitterFraction);
+  canSkipCadenceBeat(now) {
+    let interval = this.heartbeatIntervalMs * (1 + this.heartbeatJitterFraction);
     if (
       !this.skipRedundantHeartbeats ||
       this.closed ||
-      this.lastBeatingEventsPostOkAtMs < e ||
+      this.lastBeatingEventsPostOkAtMs < now ||
       this.lastBeatingEventsPostOkAtMs > this.lastCadenceTickAtMs ||
-      this.lastCadenceTickAtMs - this.lastBeatingEventsPostOkAtMs > n * HEARTBEAT_STALE_FACTOR ||
+      this.lastCadenceTickAtMs - this.lastBeatingEventsPostOkAtMs > interval * HEARTBEAT_STALE_FACTOR ||
       this.heartbeatIntervalMs > this.seedHeartbeatIntervalMs ||
       this.isIdleAdvised() ||
       this.consecutiveHeartbeatFailures > 0 ||
       this.skippedPreviousCadenceBeat
     )
       return false;
-    let s = n * 2;
-    return this.clampToTokenLifetime(s) >= s;
+    let span = interval * 2;
+    return this.clampToTokenLifetime(span) >= span;
   }
   stopHeartbeat() {
     if (this.heartbeatTimer) {
@@ -2904,7 +3086,7 @@ class CCRClient {
   async releaseLease({ drained = false } = {}) {
     if (this.workerEpoch <= 0 || this.epochSuperseded) return;
     try {
-      let n = await this.request(
+      let result = await this.request(
         "post",
         "/worker/heartbeat",
         {
@@ -2921,11 +3103,11 @@ class CCRClient {
           countTowardEscalation: false,
         },
       );
-      if (n.ok) logFeatureOk("ccr_worker_lease_release");
-      else if (n.status !== 409)
+      if (result.ok) logFeatureOk("ccr_worker_lease_release");
+      else if (result.status !== 409)
         logFeatureSad(
           "ccr_worker_lease_release",
-          n.status !== undefined ? `http_${n.status}` : "send_failed",
+          result.status !== undefined ? `http_${result.status}` : "send_failed",
         );
     } catch (error) {
       logError(error);
@@ -2952,43 +3134,46 @@ class CCRClient {
         countTowardEscalation: false,
       },
     )
-      .then((e) => {
-        if (e.ok) logFeatureOk("ccr_worker_goodbye");
-        else if (e.status !== 409)
-          logFeatureSad("ccr_worker_goodbye", e.status !== undefined ? `http_${e.status}` : "send_failed");
+      .then((result) => {
+        if (result.ok) logFeatureOk("ccr_worker_goodbye");
+        else if (result.status !== 409)
+          logFeatureSad(
+            "ccr_worker_goodbye",
+            result.status !== undefined ? `http_${result.status}` : "send_failed",
+          );
       })
       .catch(() => {
         logFeatureSad("ccr_worker_goodbye", "send_threw");
       });
   }
-  heartbeatNow(e = "probe") {
+  heartbeatNow(trigger = "probe") {
     if (this.closed) return;
     if (
-      e === "probe"
+      trigger === "probe"
         ? this.pendingBeatTrigger === "reactivate"
-        : e === "reactivate" && this.pendingBeatTrigger === "probe"
+        : trigger === "reactivate" && this.pendingBeatTrigger === "probe"
     )
       this.restoreReactivationArm();
     if (
-      e === "probe" ||
+      trigger === "probe" ||
       this.pendingBeatTrigger === null ||
-      (e === "reactivate" && this.pendingBeatTrigger !== "probe")
+      (trigger === "reactivate" && this.pendingBeatTrigger !== "probe")
     )
-      this.pendingBeatTrigger = e;
+      this.pendingBeatTrigger = trigger;
     if (this.heartbeatInFlight) {
       this.pendingForcedBeat = true;
       return;
     }
-    let s = Date.now() - this.lastHeartbeatSentAtMs;
-    if (s < this.probeBeatSpacingMs) {
+    let since = Date.now() - this.lastHeartbeatSentAtMs;
+    if (since < this.probeBeatSpacingMs) {
       if (this.probeBeatTimer) return;
       this.probeBeatTimer = setTimeout(() => {
         this.probeBeatTimer = null;
         this.refireForcedBeat();
-      }, this.probeBeatSpacingMs - s);
+      }, this.probeBeatSpacingMs - since);
       return;
     }
-    let pendingBeatTrigger = this.pendingBeatTrigger ?? e;
+    let pendingBeatTrigger = this.pendingBeatTrigger ?? trigger;
     this.pendingBeatTrigger = null;
     this.clearProbeBeatTimer();
     this.sendHeartbeat(pendingBeatTrigger);
@@ -3022,8 +3207,9 @@ class CCRClient {
   restoreReactivationArm() {
     this.reactivationBeatArmed = this.idleGrantLatched;
   }
-  armReactivationIfEarned(e, n) {
-    if (this.beatOnReactivation && e !== undefined && e >= n) this.reactivationBeatArmed = true;
+  armReactivationIfEarned(seconds, intervalSec) {
+    if (this.beatOnReactivation && seconds !== undefined && seconds >= intervalSec)
+      this.reactivationBeatArmed = true;
   }
   sendReactivationBeat() {
     if (!this.reactivationBeatWanted()) return;
@@ -3033,34 +3219,34 @@ class CCRClient {
   isIdleAdvised() {
     return this.advertiseHeartbeatProbeSupport && this.idleGrantLatched;
   }
-  applyShorterIntervalNow(e) {
-    if (e >= this.heartbeatIntervalMs) return;
-    this.heartbeatIntervalMs = e;
+  applyShorterIntervalNow(intervalMs) {
+    if (intervalMs >= this.heartbeatIntervalMs) return;
+    this.heartbeatIntervalMs = intervalMs;
     if (this.heartbeatTimer !== null) this.startHeartbeat();
   }
-  clampToTokenLifetime(e) {
-    if (!this.advertiseHeartbeatProbeSupport || !this.adoptRefreshedAuth) return e;
+  clampToTokenLifetime(intervalMs) {
+    if (!this.advertiseHeartbeatProbeSupport || !this.adoptRefreshedAuth) return intervalMs;
     let sessionIngressAuthToken = getSessionIngressAuthToken();
-    let s = sessionIngressAuthToken ? decodeJwtExpiry(sessionIngressAuthToken) : null;
-    if (s === null) return e;
-    let r = s * 1000 - Date.now() - TOKEN_REFRESH_LEAD_MS;
-    if (r >= e) return e;
-    return Math.max(MIN_HEARTBEAT_INTERVAL_MS, r);
+    let expiry = sessionIngressAuthToken ? decodeJwtExpiry(sessionIngressAuthToken) : null;
+    if (expiry === null) return intervalMs;
+    let left = expiry * 1000 - Date.now() - TOKEN_REFRESH_LEAD_MS;
+    if (left >= intervalMs) return intervalMs;
+    return Math.max(MIN_HEARTBEAT_INTERVAL_MS, left);
   }
   reclampCurrentIntervalToTokenLifetime() {
-    let e = this.clampToTokenLifetime(this.heartbeatIntervalMs);
-    if (e < this.heartbeatIntervalMs) {
+    let intervalMs = this.clampToTokenLifetime(this.heartbeatIntervalMs);
+    if (intervalMs < this.heartbeatIntervalMs) {
       logForDiagnosticsNoPII("info", "cli_heartbeat_interval_updated", {
         from_ms: this.heartbeatIntervalMs,
-        to_ms: e,
+        to_ms: intervalMs,
       });
-      this.applyShorterIntervalNow(e);
+      this.applyShorterIntervalNow(intervalMs);
     }
   }
   renewStream() {
-    let e = () => this.readTransport.renewConnection();
-    if (this.workerSocket) this.workerSocket.whenQuiet(e);
-    else e();
+    let renew = () => this.readTransport.renewConnection();
+    if (this.workerSocket) this.workerSocket.whenQuiet(renew);
+    else renew();
   }
   resyncAfterReconnect() {
     if (this.isIdleAdvised()) {
@@ -3080,7 +3266,7 @@ class CCRClient {
     this.consecutiveHeartbeatFailures = 0;
     this.heartbeatLostFiredForStreak = false;
   }
-  async sendHeartbeat(e) {
+  async sendHeartbeat(trigger) {
     if (this.closed) {
       this.stopHeartbeat();
       return;
@@ -3090,24 +3276,24 @@ class CCRClient {
     this.heartbeatInFlight = true;
     this.lastHeartbeatSentAtMs = Date.now();
     let lastHeartbeatSentAtMs = this.lastHeartbeatSentAtMs;
-    let s = ++this.heartbeatsSent;
-    let r = {
+    let beat = ++this.heartbeatsSent;
+    let state = {
       succeededLateOnSocket: false,
     };
     this.skippedPreviousCadenceBeat = false;
-    if (e === "resync_stale")
+    if (trigger === "resync_stale")
       logForDiagnosticsNoPII("info", "cli_heartbeat_reconnect_stale_beat", {
         gap_ms: this.lastHeartbeatSentAtMs - this.lastHeartbeatSuccessAtMs,
         interval_ms: this.heartbeatIntervalMs,
       });
     try {
-      if (e === "reactivate")
+      if (trigger === "reactivate")
         logForDiagnosticsNoPII("info", "cli_heartbeat_reactivation_beat", {
           interval_ms: this.heartbeatIntervalMs,
         });
-      let h = this.idleTracker?.sampleIdleSeconds();
-      let w = this.advertiseHeartbeatProbeSupport ? h : undefined;
-      let v = await this.request(
+      let idleSeconds = this.idleTracker?.sampleIdleSeconds();
+      let idleArg = this.advertiseHeartbeatProbeSupport ? idleSeconds : undefined;
+      let result = await this.request(
         "post",
         "/worker/heartbeat",
         {
@@ -3116,8 +3302,8 @@ class CCRClient {
           ...(this.advertiseHeartbeatProbeSupport && {
             supports_heartbeat_probe: true,
             current_interval_seconds: Math.round(this.heartbeatIntervalMs / 1000),
-            ...(w !== undefined && {
-              idle_seconds: w,
+            ...(idleArg !== undefined && {
+              idle_seconds: idleArg,
             }),
           }),
         },
@@ -3131,39 +3317,43 @@ class CCRClient {
             ),
           ),
           parseBody: true,
-          countTowardEscalation: e === undefined,
-          onLateSocketAnswer: (y) => {
-            r.succeededLateOnSocket = true;
-            this.takeUpLateBeat(y, lastHeartbeatSentAtMs, s, w);
+          countTowardEscalation: trigger === undefined,
+          onLateSocketAnswer: (answer) => {
+            state.succeededLateOnSocket = true;
+            this.takeUpLateBeat(answer, lastHeartbeatSentAtMs, beat, idleArg);
           },
         },
       );
-      if (!v.ok && v.reason === "closed") return;
-      this.lastSettledBeat = Math.max(this.lastSettledBeat, s);
-      if (!v.ok && r.succeededLateOnSocket) {
-        if (v.status === 429) this.lastHeartbeat429AtMs = Date.now();
+      if (!result.ok && result.reason === "closed") return;
+      this.lastSettledBeat = Math.max(this.lastSettledBeat, beat);
+      if (!result.ok && state.succeededLateOnSocket) {
+        if (result.status === 429) this.lastHeartbeat429AtMs = Date.now();
         logForDebugging(
           "CCRClient: Heartbeat succeeded late on the worker socket; its POST failed, which is not counted as a missed heartbeat",
         );
       }
-      if (!v.ok && !r.succeededLateOnSocket) {
-        if (e === "probe") logFeatureBad("ccr_heartbeat_probe", "beat_failed");
-        else if (e === "resync_stale") logFeatureBad("ccr_reconnect_beat", "beat_failed");
-        else if (e === "reactivate") logFeatureBad("ccr_reactivation_beat", "beat_failed");
-        if (v.status === 429) {
+      if (!result.ok && !state.succeededLateOnSocket) {
+        if (trigger === "probe") logFeatureBad("ccr_heartbeat_probe", "beat_failed");
+        else if (trigger === "resync_stale") logFeatureBad("ccr_reconnect_beat", "beat_failed");
+        else if (trigger === "reactivate") logFeatureBad("ccr_reactivation_beat", "beat_failed");
+        if (result.status === 429) {
           this.lastHeartbeat429AtMs = Date.now();
-          if (e === "reactivate") this.restoreReactivationArm();
+          if (trigger === "reactivate") this.restoreReactivationArm();
         }
-        if (this.isIdleAdvised() && v.status !== 429) {
+        if (this.isIdleAdvised() && result.status !== 429) {
           logForDiagnosticsNoPII("warn", "cli_heartbeat_idle_reverted_on_failure", {
-            status: v.status,
+            status: result.status,
           });
           this.idleGrantLatched = false;
           this.reactivationBeatArmed = false;
           this.applyShorterIntervalNow(this.seedHeartbeatIntervalMs);
         }
         this.reclampCurrentIntervalToTokenLifetime();
-        if (v.status !== undefined && HEARTBEAT_FATAL_STATUSES.has(v.status) && !v.nonOriginRefusal) {
+        if (
+          result.status !== undefined &&
+          HEARTBEAT_FATAL_STATUSES.has(result.status) &&
+          !result.nonOriginRefusal
+        ) {
           this.resetHeartbeatStreak();
           return;
         }
@@ -3188,12 +3378,12 @@ class CCRClient {
         }
         return;
       }
-      if (e === "probe") logFeatureOk("ccr_heartbeat_probe");
-      else if (e === "resync_stale") logFeatureOk("ccr_reconnect_beat");
-      else if (e === "reactivate") logFeatureOk("ccr_reactivation_beat");
-      if (v.ok) {
+      if (trigger === "probe") logFeatureOk("ccr_heartbeat_probe");
+      else if (trigger === "resync_stale") logFeatureOk("ccr_reconnect_beat");
+      else if (trigger === "reactivate") logFeatureOk("ccr_reactivation_beat");
+      if (result.ok) {
         logForDebugging("CCRClient: Heartbeat sent");
-        await this.takeUpBeatAnswer(v.data, lastHeartbeatSentAtMs, s, w);
+        await this.takeUpBeatAnswer(result.data, lastHeartbeatSentAtMs, beat, idleArg);
       }
     } finally {
       this.heartbeatInFlight = false;
@@ -3203,23 +3393,23 @@ class CCRClient {
       }
     }
   }
-  async takeUpBeatAnswer(e, lastHeartbeatSuccessAtMs, s, r) {
-    let h = () => this.lastSucceededBeat > s;
-    if (this.lastSettledBeat <= s) this.resetHeartbeatStreak();
-    if (!h()) {
-      this.lastSucceededBeat = s;
+  async takeUpBeatAnswer(body, lastHeartbeatSuccessAtMs, beat, idleArg) {
+    let answered = () => this.lastSucceededBeat > beat;
+    if (this.lastSettledBeat <= beat) this.resetHeartbeatStreak();
+    if (!answered()) {
+      this.lastSucceededBeat = beat;
       this.lastHeartbeatSuccessAtMs = lastHeartbeatSuccessAtMs;
     }
     this.onRequestAuthOk?.();
-    if (!h() && isPlainObject(e)) this.takeUpFlushPolicy(e.event_flush_policy);
-    if (e?.refreshed_auth && this.adoptRefreshedAuth) {
-      let y = false;
+    if (!answered() && isPlainObject(body)) this.takeUpFlushPolicy(body.event_flush_policy);
+    if (body?.refreshed_auth && this.adoptRefreshedAuth) {
+      let renewNeeded = false;
       try {
-        let O = false;
-        let C = this.adoptRefreshedAuth(e.refreshed_auth.expires_in_seconds);
-        C.then(
-          (P) => {
-            if (O && P.adopted) {
+        let late = false;
+        let adopt = this.adoptRefreshedAuth(body.refreshed_auth.expires_in_seconds);
+        adopt.then(
+          (row) => {
+            if (late && row.adopted) {
               this.lastAuthRefreshBadReason = null;
               logFeatureOk("ccr_worker_auth_refresh");
               logForDiagnosticsNoPII("info", "cli_heartbeat_refreshed_auth_late_adopted");
@@ -3228,27 +3418,31 @@ class CCRClient {
           },
           () => {},
         );
-        let U = await withDeadline(C, Math.min(AUTH_REFRESH_TIMEOUT_MS, this.heartbeatIntervalMs));
-        let S;
-        if (U === undefined) {
-          O = true;
-          S = {
+        let outcome = await withDeadline(adopt, Math.min(AUTH_REFRESH_TIMEOUT_MS, this.heartbeatIntervalMs));
+        let result;
+        if (outcome === undefined) {
+          late = true;
+          result = {
             adopted: false,
             reason: "adopt_timeout",
           };
-        } else S = U;
+        } else result = outcome;
         logForDiagnosticsNoPII("info", "cli_heartbeat_refreshed_auth_signal", {
-          adopted: S.adopted,
-          reason: S.reason,
-          expires_in_seconds: e.refreshed_auth.expires_in_seconds,
+          adopted: result.adopted,
+          reason: result.reason,
+          expires_in_seconds: body.refreshed_auth.expires_in_seconds,
         });
-        if (S.adopted) {
+        if (result.adopted) {
           logFeatureOk("ccr_worker_auth_refresh");
           this.lastAuthRefreshBadReason = null;
-          y = true;
-        } else if (S.reason && S.reason !== "unchanged" && S.reason !== this.lastAuthRefreshBadReason) {
-          this.lastAuthRefreshBadReason = S.reason;
-          logFeatureBad("ccr_worker_auth_refresh", S.reason);
+          renewNeeded = true;
+        } else if (
+          result.reason &&
+          result.reason !== "unchanged" &&
+          result.reason !== this.lastAuthRefreshBadReason
+        ) {
+          this.lastAuthRefreshBadReason = result.reason;
+          logFeatureBad("ccr_worker_auth_refresh", result.reason);
         }
       } catch {
         if (this.lastAuthRefreshBadReason !== "adopt_threw") {
@@ -3257,48 +3451,48 @@ class CCRClient {
         }
         logForDiagnosticsNoPII("error", "cli_heartbeat_refreshed_auth_adopt_threw");
       }
-      if (y) this.renewSocketForNewToken();
+      if (renewNeeded) this.renewSocketForNewToken();
     }
-    if (h()) return;
-    let heartbeatIntervalSeconds = e?.heartbeat_interval_seconds;
+    if (answered()) return;
+    let heartbeatIntervalSeconds = body?.heartbeat_interval_seconds;
     if (
       typeof heartbeatIntervalSeconds !== "number" ||
       !Number.isFinite(heartbeatIntervalSeconds) ||
       heartbeatIntervalSeconds <= 0
     ) {
-      if (this.idleGrantLatched) this.armReactivationIfEarned(r, this.heartbeatIntervalMs / 1000);
+      if (this.idleGrantLatched) this.armReactivationIfEarned(idleArg, this.heartbeatIntervalMs / 1000);
       this.reclampCurrentIntervalToTokenLifetime();
       return;
     }
     if (this.advertiseHeartbeatProbeSupport) {
-      let y = heartbeatIntervalSeconds * 1000 > this.seedHeartbeatIntervalMs;
-      if (y) this.armReactivationIfEarned(r, heartbeatIntervalSeconds);
+      let idle = heartbeatIntervalSeconds * 1000 > this.seedHeartbeatIntervalMs;
+      if (idle) this.armReactivationIfEarned(idleArg, heartbeatIntervalSeconds);
       else this.reactivationBeatArmed = false;
-      this.idleGrantLatched = y;
+      this.idleGrantLatched = idle;
     }
-    let v = this.clampToTokenLifetime(
+    let interval = this.clampToTokenLifetime(
       Math.min(
         Math.max(heartbeatIntervalSeconds * 1000, MIN_HEARTBEAT_INTERVAL_MS),
         this.maxAdvisedIntervalMs,
       ),
     );
-    if (v === this.heartbeatIntervalMs) return;
+    if (interval === this.heartbeatIntervalMs) return;
     logForDiagnosticsNoPII("info", "cli_heartbeat_interval_updated", {
       from_ms: this.heartbeatIntervalMs,
-      to_ms: v,
+      to_ms: interval,
     });
-    if (v < this.heartbeatIntervalMs) this.applyShorterIntervalNow(v);
-    else this.heartbeatIntervalMs = v;
+    if (interval < this.heartbeatIntervalMs) this.applyShorterIntervalNow(interval);
+    else this.heartbeatIntervalMs = interval;
   }
-  async takeUpLateBeat(e, n, s, r) {
+  async takeUpLateBeat(answer, at, beat, idle) {
     try {
-      if (this.closed || !e.ok) return;
-      let body = await e.json();
+      if (this.closed || !answer.ok) return;
+      let body = await answer.json();
       if (this.closed) return;
       logForDebugging("CCRClient: Heartbeat answered late on the worker socket");
       this.consecutiveAuthFailures = 0;
       this.consecutiveNotFound = 0;
-      await this.takeUpBeatAnswer(body, n, s, r);
+      await this.takeUpBeatAnswer(body, at, beat, idle);
     } catch (error) {
       logForDebugging(
         `CCRClient: could not act on a heartbeat answer that arrived late on the worker socket: ${errorMessage(error)}`,
@@ -3321,178 +3515,180 @@ class CCRClient {
       );
     }
   }
-  reportDurableUpload(e, n) {
+  reportDurableUpload(events, outcome) {
     let resultThatMarks = this.resultThatMarks;
     if (
-      n === "accepted" &&
+      outcome === "accepted" &&
       resultThatMarks &&
       resultThatMarks.marked !== this.sessionModelTurnStored &&
-      e.some((h) => h.payload.uuid === resultThatMarks.uuid)
+      events.some((event) => event.payload.uuid === resultThatMarks.uuid)
     ) {
       this.sessionModelTurnStored = resultThatMarks.marked;
       this.reportInternalMetadata({
         model_turn_stored: resultThatMarks.marked,
       });
     }
-    if (n === "accepted")
+    if (outcome === "accepted")
       this.autocompactStateStored =
-        e.findLast((h) => !h.ephemeral && h.payload.type === "autocompact_state")?.payload.value ??
-        this.autocompactStateStored;
+        events.findLast((event) => !event.ephemeral && event.payload.type === "autocompact_state")?.payload
+          .value ?? this.autocompactStateStored;
     if (this.onDurableEventsUpload === undefined) return;
-    let filtered = e.filter((h) => !h.ephemeral);
+    let filtered = events.filter((event) => !event.ephemeral);
     if (filtered.length === 0) return;
     try {
-      this.onDurableEventsUpload(filtered, n);
+      this.onDurableEventsUpload(filtered, outcome);
     } catch (error) {
       logForDebugging(
-        `CCRClient: onDurableEventsUpload(${n}) threw; the batch's fate is unchanged: ${errorMessage(error)}`,
+        `CCRClient: onDurableEventsUpload(${outcome}) threw; the batch's fate is unchanged: ${errorMessage(error)}`,
         {
           level: "warn",
         },
       );
     }
   }
-  writeEvent(e) {
-    return this.writeEvents([e]);
+  writeEvent(event) {
+    return this.writeEvents([event]);
   }
   trackFirstFrameUpload(uuid) {
-    let n = {};
+    let timing = {};
     this.firstFrameUpload = {
       uuid,
-      timing: n,
+      timing,
     };
-    return n;
+    return timing;
   }
   trackFirstTextFrameUpload(uuid) {
-    let n = {};
+    let timing = {};
     this.firstTextFrameUpload = {
       uuid,
-      timing: n,
+      timing,
     };
-    return n;
+    return timing;
   }
   trackFirstBlockFrameUpload(uuid) {
-    let n = {};
+    let timing = {};
     this.firstBlockFrameUpload = {
       uuid,
-      timing: n,
+      timing,
     };
-    return n;
+    return timing;
   }
-  trackedFrameUploads(e) {
-    let n = [];
-    for (let s of [this.firstFrameUpload, this.firstTextFrameUpload, this.firstBlockFrameUpload])
-      if (s && s.timing[e] === undefined) n.push(s);
-    return n;
+  trackedFrameUploads(field) {
+    let list = [];
+    for (let upload of [this.firstFrameUpload, this.firstTextFrameUpload, this.firstBlockFrameUpload])
+      if (upload && upload.timing[field] === undefined) list.push(upload);
+    return list;
   }
-  writeEvents(e, n) {
-    let flattened = e.flatMap((S) => {
+  writeEvents(events, opts) {
+    let flattened = events.flatMap((event) => {
       if (
-        S.type !== "system" ||
-        (S.subtype !== "task_started" && S.subtype !== "task_updated" && S.subtype !== "task_notification")
+        event.type !== "system" ||
+        (event.subtype !== "task_started" &&
+          event.subtype !== "task_updated" &&
+          event.subtype !== "task_notification")
       )
-        return [S];
-      let P =
-        S.subtype !== "task_started"
-          ? this.liveOnlyShellStarts.get(S.task_id)
-          : classifyRowTypeForTelemetry(S) === "system/task_started_foreground_shell" &&
+        return [event];
+      let liveOnly =
+        event.subtype !== "task_started"
+          ? this.liveOnlyShellStarts.get(event.task_id)
+          : classifyRowTypeForTelemetry(event) === "system/task_started_foreground_shell" &&
               this.shellTaskRowsLiveOnly()
-            ? S
+            ? event
             : undefined;
-      this.liveOnlyShellStarts.delete(S.task_id);
-      if (!P) return [S];
+      this.liveOnlyShellStarts.delete(event.task_id);
+      if (!liveOnly) return [event];
       if (
-        (S.subtype === "task_updated" && S.patch.is_backgrounded) ||
-        Buffer.byteLength(jsonStringify(S)) > MAX_LIVE_RESPONSE_BYTES
+        (event.subtype === "task_updated" && event.patch.is_backgrounded) ||
+        Buffer.byteLength(jsonStringify(event)) > MAX_LIVE_RESPONSE_BYTES
       )
-        return P === S
-          ? [S]
+        return liveOnly === event
+          ? [event]
           : [
               {
-                ...P,
+                ...liveOnly,
               },
-              S,
+              event,
             ];
-      if (S.subtype !== "task_notification") this.liveOnlyShellStarts.set(S.task_id, P);
-      this.rowsMarkedLiveOnly.add(S);
-      return [S];
+      if (event.subtype !== "task_notification") this.liveOnlyShellStarts.set(event.task_id, liveOnly);
+      this.rowsMarkedLiveOnly.add(event);
+      return [event];
     });
     let artifactSocketIds = this.artifactSocketIds;
     let filtered = (
       !artifactSocketIds
         ? flattened
-        : flattened.flatMap((S) => {
-            if (S.type !== "system") return [S];
-            switch (S.subtype) {
+        : flattened.flatMap((event) => {
+            if (event.type !== "system") return [event];
+            switch (event.subtype) {
               case "background_tasks_changed": {
                 artifactSocketIds.clear();
-                let filtered = S.tasks.filter((task) => {
+                let filtered = event.tasks.filter((task) => {
                   if (task.task_type !== "monitor_ws" || task.ambient !== true) return true;
                   artifactSocketIds.add(task.task_id);
                   return false;
                 });
-                let W = {
-                  whole: jsonStringify(S.tasks),
+                let signature = {
+                  whole: jsonStringify(event.tasks),
                   withoutSockets: jsonStringify(filtered),
                 };
-                let x =
+                let unchanged =
                   this.lastTaskList !== undefined &&
-                  W.whole !== this.lastTaskList.whole &&
-                  W.withoutSockets === this.lastTaskList.withoutSockets;
-                this.lastTaskList = W;
-                return x
+                  signature.whole !== this.lastTaskList.whole &&
+                  signature.withoutSockets === this.lastTaskList.withoutSockets;
+                this.lastTaskList = signature;
+                return unchanged
                   ? []
                   : [
                       {
-                        ...S,
+                        ...event,
                         tasks: filtered,
                       },
                     ];
               }
               case "task_started":
-                if (S.task_type !== "monitor_ws" || S.ambient !== true) return [S];
-                artifactSocketIds.add(S.task_id);
+                if (event.task_type !== "monitor_ws" || event.ambient !== true) return [event];
+                artifactSocketIds.add(event.task_id);
                 return [];
               case "task_updated":
-                return artifactSocketIds.has(S.task_id) ? [] : [S];
+                return artifactSocketIds.has(event.task_id) ? [] : [event];
               case "task_notification":
-                return S.ambient === true && S.task_id.startsWith("s") ? [] : [S];
+                return event.ambient === true && event.task_id.startsWith("s") ? [] : [event];
               default:
-                return [S];
+                return [event];
             }
           })
-    ).filter((S) => {
+    ).filter((event) => {
       if (
-        S.type === "system" &&
-        S.subtype === "task_progress" &&
-        S.summary === undefined &&
-        S.workflow_progress === undefined
+        event.type === "system" &&
+        event.subtype === "task_progress" &&
+        event.summary === undefined &&
+        event.workflow_progress === undefined
       )
         return false;
-      if (S.type === "active_goal" || S.type === "autocompact_state") {
-        let x = !this.stateRowTypesWritten.has(S.type);
-        this.stateRowTypesWritten.add(S.type);
+      if (event.type === "active_goal" || event.type === "autocompact_state") {
+        let first = !this.stateRowTypesWritten.has(event.type);
+        this.stateRowTypesWritten.add(event.type);
         let goal = this.recordAtStart?.goal;
         return !(
-          x &&
-          (S.type === "autocompact_state"
-            ? En(S.value, this.recordAtStart?.autocompact_state)
-            : S.value === null &&
+          first &&
+          (event.type === "autocompact_state"
+            ? import_sortedIndex_2(event.value, this.recordAtStart?.autocompact_state)
+            : event.value === null &&
               this.recordAtStart !== undefined &&
               (!isPlainObject(goal) || goal.met === true))
         );
       }
-      if (S.type !== "rate_limit_event") return true;
-      let P = classifyRowTypeForTelemetry(S);
-      let W =
-        P === "rate_limit_event/allowed" &&
-        P === this.lastRateLimitKind &&
-        S.rate_limit_info.overagePeriodMonthly === undefined &&
-        S.rate_limit_info.overagePeriodChannel === undefined;
-      this.lastRateLimitKind = P;
-      return !W || this.currentUploadTrim().rate_limit_repeats !== true;
+      if (event.type !== "rate_limit_event") return true;
+      let kind = classifyRowTypeForTelemetry(event);
+      let repeated =
+        kind === "rate_limit_event/allowed" &&
+        kind === this.lastRateLimitKind &&
+        event.rate_limit_info.overagePeriodMonthly === undefined &&
+        event.rate_limit_info.overagePeriodChannel === undefined;
+      this.lastRateLimitKind = kind;
+      return !repeated || this.currentUploadTrim().rate_limit_repeats !== true;
     });
-    if (e.length > 0 && filtered.length === 0) return Promise.resolve();
+    if (events.length > 0 && filtered.length === 0) return Promise.resolve();
     this.reportClientRowsOwed(
       this.clientRowsAreGuarded()
         ? this.clientRowsOwed.rowsEntered(filtered, new Date())
@@ -3507,31 +3703,31 @@ class CCRClient {
       !this.closed &&
       this.pickupBarriers.length === 0
     ) {
-      let mapped = filtered.map((P) =>
-        this.isSettingsAnswer(P)
+      let mapped = filtered.map((row) =>
+        this.isSettingsAnswer(row)
           ? settingsAnswersMaxWaitMs
-          : isTopLevelSystemInit(P) ||
-              (P.type === "user" && "isReplay" in P && P.isReplay && this.turnHold === "open")
+          : isTopLevelSystemInit(row) ||
+              (row.type === "user" && "isReplay" in row && row.isReplay && this.turnHold === "open")
             ? initMaxWaitMs
             : 0,
       );
-      if (mapped.every((P) => P > 0)) {
+      if (mapped.every((value) => value > 0)) {
         this.waitingAnswers.push(...filtered);
         this.waitingAnswersTimer ??= setTimeout(() => this.sendWaitingAnswers(), Math.min(...mapped));
         return Promise.resolve();
       }
     }
-    let O =
+    let merged =
       this.waitingAnswers.length > 0 &&
-      (filtered.length === 0 || filtered.some((S) => S.type !== "stream_event"))
+      (filtered.length === 0 || filtered.some((row) => row.type !== "stream_event"))
         ? [...this.takeWaitingAnswers(), ...filtered]
         : filtered;
     let last = this.pickupBarriers.at(-1);
-    if (!last) return this.writeEventsNow(O, n);
+    if (!last) return this.writeEventsNow(merged, opts);
     let deferred = Promise.withResolvers();
     last.writes.push({
-      messages: O,
-      opts: n,
+      messages: merged,
+      opts,
       written: deferred,
     });
     if (
@@ -3550,15 +3746,15 @@ class CCRClient {
     )
       return;
     this.settingsRequestIds.add(frame.request_id);
-    let n = this.settingsRequestIds.values().next().value;
-    if (this.settingsRequestIds.size > MAX_SETTINGS_REQUEST_IDS && n !== undefined)
-      this.settingsRequestIds.delete(n);
+    let requestId = this.settingsRequestIds.values().next().value;
+    if (this.settingsRequestIds.size > MAX_SETTINGS_REQUEST_IDS && requestId !== undefined)
+      this.settingsRequestIds.delete(requestId);
   }
-  isSettingsAnswer(e) {
+  isSettingsAnswer(event) {
     return (
-      e.type === "control_response" &&
-      e.response.subtype === "success" &&
-      this.settingsRequestIds.has(e.response.request_id)
+      event.type === "control_response" &&
+      event.response.subtype === "success" &&
+      this.settingsRequestIds.has(event.response.request_id)
     );
   }
   sendWaitingAnswers() {
@@ -3571,352 +3767,363 @@ class CCRClient {
     }
     return this.waitingAnswers.splice(0);
   }
-  async writeEventsNow(e, n) {
-    let s = [];
-    let r = [];
-    let h;
-    let w;
-    let v = false;
-    let y;
-    let O;
-    let C = false;
-    let U = [];
-    let S = [];
-    let P = [];
-    let W = [];
-    let x;
-    for (let Y of e) {
-      let R = Y.type === "stream_event" ? stripInputTransformations(Y) : Y;
-      if (R.type === "stream_event" && R.event.type === "message_start" && !R.parent_tool_use_id) {
+  async writeEventsNow(events, opts) {
+    let ready = [];
+    let urgent = [];
+    let bufferedSince;
+    let release;
+    let samplingEnd = false;
+    let releasedBy;
+    let releasedByType;
+    let cutBackoff = false;
+    let toolUseIds = [];
+    let twinIndexes = [];
+    let shellRows = [];
+    let twinStamps = [];
+    let repeatIndex;
+    for (let event of events) {
+      let row = event.type === "stream_event" ? stripInputTransformations(event) : event;
+      if (row.type === "stream_event" && row.event.type === "message_start" && !row.parent_tool_use_id) {
         this.modelCallStreamed = true;
-        this.streamedResponseId = R.event.message.id;
+        this.streamedResponseId = row.event.message.id;
         if (this.liveTwinTypes()?.size) {
-          R = {
-            ...R,
+          row = {
+            ...row,
           };
-          W.push({
-            frame: R,
-            at: s.length,
+          twinStamps.push({
+            frame: row,
+            at: ready.length,
             turnId: this.liveTurnId,
             index: this.nextLiveIndex,
           });
         }
       }
-      if ((R.type === "assistant" || R.type === "user") && R.parent_tool_use_id)
+      if ((row.type === "assistant" || row.type === "user") && row.parent_tool_use_id)
         this.subAgentWroteSinceStoredRequesting = true;
-      let B = this.noteRequestingRow(R);
-      if (B) {
-        let j = this.toClientEvent(B);
-        s.push(B === this.liveOnlyStartingRow ? this.withStamp(j) : j);
+      let requesting = this.noteRequestingRow(row);
+      if (requesting) {
+        let clientEvent = this.toClientEvent(requesting);
+        ready.push(requesting === this.liveOnlyStartingRow ? this.withStamp(clientEvent) : clientEvent);
       }
-      let L = w ? undefined : this.holdAgainAt(R);
-      let I = this.turnHold === "open";
-      let G = this.releaseFor(R, L);
-      if (G === "event" && !w) y = classifyRowTypeForTelemetry(R);
-      w ??= G;
-      if (I && G === "round_trip" && this.flushPolicy?.holdAcrossModelCalls) {
-        w = G;
-        y = undefined;
+      let hold = release ? undefined : this.holdAgainAt(row);
+      let turnOpen = this.turnHold === "open";
+      let releaseState = this.releaseFor(row, hold);
+      if (releaseState === "event" && !release) releasedBy = classifyRowTypeForTelemetry(row);
+      release ??= releaseState;
+      if (turnOpen && releaseState === "round_trip" && this.flushPolicy?.holdAcrossModelCalls) {
+        release = releaseState;
+        releasedBy = undefined;
       }
       if (
-        (I && G === "round_trip") ||
-        R.type === "result" ||
-        R.type.startsWith("control_") ||
-        (R.type === "system" && "subtype" in R && (R.subtype === "init" || R.subtype === "task_notification"))
+        (turnOpen && releaseState === "round_trip") ||
+        row.type === "result" ||
+        row.type.startsWith("control_") ||
+        (row.type === "system" &&
+          "subtype" in row &&
+          (row.subtype === "init" || row.subtype === "task_notification"))
       )
-        O ??= classifyRowTypeForTelemetry(R);
+        releasedByType ??= classifyRowTypeForTelemetry(row);
       if (
-        ((this.streamEventFirstFlushMs > 0 && !G) ||
+        ((this.streamEventFirstFlushMs > 0 && !releaseState) ||
           this.noSubscriberStreamEventFlushIntervalMs > 0 ||
           this.dropUnwatchedStreamEvents ||
           (this.unwatched() && this.currentState === "running")) &&
         this.streamEventFlushIntervalMs > 0 &&
-        isThinkingTokensSystemMessage(R)
+        isThinkingTokensSystemMessage(row)
       ) {
-        this.bufferEphemeral(R);
+        this.bufferEphemeral(row);
         continue;
       }
-      if (R.type === "stream_event") {
+      if (row.type === "stream_event") {
         this.streamedEphemeralSinceLastAssistant = true;
         if (
-          R.event.type === "message_stop" &&
+          row.event.type === "message_stop" &&
           this.holdRule === "served_policy" &&
           this.flushPolicy?.flushOnSamplingEnd
         ) {
-          this.bufferEphemeral(R);
-          h ??= this.streamEventBufferedAt;
-          v = true;
-          let j = this.takeStreamEventBuffer();
-          w ??= j.release;
-          s.push(...j.events);
+          this.bufferEphemeral(row);
+          bufferedSince ??= this.streamEventBufferedAt;
+          samplingEnd = true;
+          let taken = this.takeStreamEventBuffer();
+          release ??= taken.release;
+          ready.push(...taken.events);
           continue;
         }
         if (this.streamEventFlushIntervalMs <= 0) {
-          let j = Buffer.byteLength(jsonStringify(R));
-          if (j <= MAX_FRAME_BYTES)
-            s.push({
-              payload: R,
+          let size = Buffer.byteLength(jsonStringify(row));
+          if (size <= MAX_FRAME_BYTES)
+            ready.push({
+              payload: row,
               ephemeral: true,
             });
-          else dropOversizeStreamEvent(R, j);
+          else dropOversizeStreamEvent(row, size);
           continue;
         }
-        this.bufferEphemeral(R);
-        if (R.event.type === "content_block_start" && this.parkedRows.length > 0) {
-          h ??= this.streamEventBufferedAt;
-          let j = this.takeStreamEventBuffer();
-          w ??= j.release;
-          s.push(...j.events);
+        this.bufferEphemeral(row);
+        if (row.event.type === "content_block_start" && this.parkedRows.length > 0) {
+          bufferedSince ??= this.streamEventBufferedAt;
+          let taken = this.takeStreamEventBuffer();
+          release ??= taken.release;
+          ready.push(...taken.events);
         }
         continue;
       }
-      let X = R.type === "control_request" ? this.toClientEvent(R) : undefined;
+      let clientEvent = row.type === "control_request" ? this.toClientEvent(row) : undefined;
       if (
-        R.type === "control_request" &&
-        X !== undefined &&
-        SERVED_CALL_REQUEST_SUBTYPES.has(getControlRequestSubtypeOfEvent(X)) &&
+        row.type === "control_request" &&
+        clientEvent !== undefined &&
+        SERVED_CALL_REQUEST_SUBTYPES.has(getControlRequestSubtypeOfEvent(clientEvent)) &&
         this.servedCallRequestsJumpQueue()
       ) {
         if (!this.holdsAcrossModelCalls() && this.clientRowsOwed.rowsSentAgain.size === 0) {
-          r.push(X);
-          this.urgentRequestIds.add(R.request_id);
-          let j = this.urgentRequestIds.values().next().value;
-          if (this.urgentRequestIds.size > MAX_URGENT_REQUEST_IDS && j !== undefined)
-            this.urgentRequestIds.delete(j);
+          urgent.push(clientEvent);
+          this.urgentRequestIds.add(row.request_id);
+          let oldest = this.urgentRequestIds.values().next().value;
+          if (this.urgentRequestIds.size > MAX_URGENT_REQUEST_IDS && oldest !== undefined)
+            this.urgentRequestIds.delete(oldest);
           continue;
         }
-        C = true;
+        cutBackoff = true;
       }
-      if (R.type === "control_cancel_request" && this.urgentRequestIds.delete(R.request_id)) {
-        r.push(this.toClientEvent(R));
+      if (row.type === "control_cancel_request" && this.urgentRequestIds.delete(row.request_id)) {
+        urgent.push(this.toClientEvent(row));
         continue;
       }
-      if (R.type === "control_cancel_request" && this.holdsAcrossModelCalls()) C = true;
-      if (R.type === "assistant" && this.streamedEphemeralSinceLastAssistant) {
+      if (row.type === "control_cancel_request" && this.holdsAcrossModelCalls()) cutBackoff = true;
+      if (row.type === "assistant" && this.streamedEphemeralSinceLastAssistant) {
         logFeatureOk("ccr_partial_messages", {
           stream_events_dropped_unwatched: this.streamEventsDroppedUnwatched,
         });
         this.streamedEphemeralSinceLastAssistant = false;
         this.streamEventsDroppedUnwatched = 0;
       }
-      if (G === undefined && this.mayParkTextRow(R)) {
+      if (releaseState === undefined && this.mayParkTextRow(row)) {
         this.parkedRows.push({
-          message: R,
-          event: this.toClientEvent(R),
+          message: row,
+          event: this.toClientEvent(row),
         });
         continue;
       }
       if (this.streamEventTimer) {
-        h ??= this.streamEventBufferedAt;
-        let j = this.takeStreamEventBuffer();
-        w ??= j.release;
-        s.push(...j.events);
+        bufferedSince ??= this.streamEventBufferedAt;
+        let buffered = this.takeStreamEventBuffer();
+        release ??= buffered.release;
+        ready.push(...buffered.events);
       }
       if (this.gatesToolCalls) {
-        let mainThreadToolUseIds = getMainThreadToolUseIds(R);
+        let mainThreadToolUseIds = getMainThreadToolUseIds(row);
         if (
           mainThreadToolUseIds.some((mainThreadToolUseId) => this.awaitedToolCalls.has(mainThreadToolUseId))
         )
-          w ??= "tool_call";
-        U.push(...mainThreadToolUseIds);
+          release ??= "tool_call";
+        toolUseIds.push(...mainThreadToolUseIds);
       }
       let flushAfterToolNames = this.flushPolicy?.flushAfterToolNames;
       if (flushAfterToolNames && flushAfterToolNames.size > 0)
-        for (let j of getMainThreadToolUseIds(R, flushAfterToolNames)) {
-          this.toolCallsWhoseResultReleases.add(j);
+        for (let id of getMainThreadToolUseIds(row, flushAfterToolNames)) {
+          this.toolCallsWhoseResultReleases.add(id);
           evictOldestIfFull(this.toolCallsWhoseResultReleases);
         }
       if (this.flushPolicy?.transcriptMaxAgeMs)
-        for (let j of getMainThreadToolUseIds(R, READ_NOTIFICATIONS_TOOL_NAMES)) {
-          this.toolCallsWhoseResultReleases.add(j);
+        for (let id of getMainThreadToolUseIds(row, READ_NOTIFICATIONS_TOOL_NAMES)) {
+          this.toolCallsWhoseResultReleases.add(id);
           evictOldestIfFull(this.toolCallsWhoseResultReleases);
         }
       let holdAgain = this.flushPolicy?.holdAgain;
-      if (holdAgain && R.type === "assistant" && !R.parent_tool_use_id) {
-        if (R.message.id !== this.newestResponseId) {
-          this.newestResponseId = R.message.id;
+      if (holdAgain && row.type === "assistant" && !row.parent_tool_use_id) {
+        if (row.message.id !== this.newestResponseId) {
+          this.newestResponseId = row.message.id;
           this.unansweredCalls.clear();
         }
-        for (let j of getMainThreadToolUseIds(R)) this.unansweredCalls.add(j);
-        if (getMainThreadToolUseIds(R, holdAgain.neverAfterTools).length > 0) this.holdsNoMoreThisTurn = true;
+        for (let id of getMainThreadToolUseIds(row)) this.unansweredCalls.add(id);
+        if (getMainThreadToolUseIds(row, holdAgain.neverAfterTools).length > 0)
+          this.holdsNoMoreThisTurn = true;
         if (holdAgain.toolsWhoseResultsWait)
-          for (let j of getMainThreadToolUseIds(R, holdAgain.toolsWhoseResultsWait)) {
-            this.callsWhoseResultsWait.add(j);
+          for (let id of getMainThreadToolUseIds(row, holdAgain.toolsWhoseResultsWait)) {
+            this.callsWhoseResultsWait.add(id);
             evictOldestIfFull(this.callsWhoseResultsWait);
           }
       }
-      if (holdAgain && R.type === "user") {
-        for (let j of collectContentBlockField(R.message, "tool_result", "tool_use_id"))
-          this.unansweredCalls.delete(j);
+      if (holdAgain && row.type === "user") {
+        for (let id of collectContentBlockField(row.message, "tool_result", "tool_use_id"))
+          this.unansweredCalls.delete(id);
         if (
           holdAgain.toolsWhoseResultsWait &&
-          !R.parent_tool_use_id &&
-          Array.isArray(R.message.content) &&
-          R.message.content.some(
-            (j) =>
-              j.type === "tool_result" &&
-              (j.is_error === true || !this.callsWhoseResultsWait.has(j.tool_use_id)),
+          !row.parent_tool_use_id &&
+          Array.isArray(row.message.content) &&
+          row.message.content.some(
+            (block) =>
+              block.type === "tool_result" &&
+              (block.is_error === true || !this.callsWhoseResultsWait.has(block.tool_use_id)),
           )
         )
           this.heldResultNeedsStore = true;
       }
-      if (this.isLiveTwinRow(R)) S.push(s.length);
+      if (this.isLiveTwinRow(row)) twinIndexes.push(ready.length);
       if (
-        R === this.liveOnlyRequestingRow &&
+        row === this.liveOnlyRequestingRow &&
         this.holdsAcrossModelCalls() &&
         !(
-          G === "round_trip" &&
-          !I &&
+          releaseState === "round_trip" &&
+          !turnOpen &&
           !this.subAgentWroteSinceStoredRequesting &&
           this.flushPolicy?.liveOnlyTypes.has(SYSTEM_STATUS_REQUESTING_REPEAT_RELEASING) &&
-          (L !== "starts" ||
+          (hold !== "starts" ||
             (this.nextLiveIndex === this.indexBehindHeldToolResult &&
               this.flushPolicy.liveOnlyTypes.has(SYSTEM_STATUS_REQUESTING_REPEAT_STARTING)))
         )
       ) {
         this.liveOnlyRequestingRow = undefined;
-        x = s.length;
+        repeatIndex = ready.length;
       }
       if (
-        G === "round_trip" &&
-        R !== this.liveOnlyRequestingRow &&
-        !("parent_tool_use_id" in R && R.parent_tool_use_id)
+        releaseState === "round_trip" &&
+        row !== this.liveOnlyRequestingRow &&
+        !("parent_tool_use_id" in row && row.parent_tool_use_id)
       )
         this.subAgentWroteSinceStoredRequesting = false;
       if (
-        R.type === "system" &&
-        R.subtype === "task_started" &&
-        classifyRowTypeForTelemetry(R) === "system/task_started_foreground_shell" &&
-        !this.isLiveOnlyRow(R)
+        row.type === "system" &&
+        row.subtype === "task_started" &&
+        classifyRowTypeForTelemetry(row) === "system/task_started_foreground_shell" &&
+        !this.isLiveOnlyRow(row)
       )
-        P.push([s.length, R.task_id]);
-      let q = X ?? this.toClientEvent(R);
-      if (L === "starts")
-        if (R === this.liveOnlyRequestingRow) this.liveOnlyStartingRow = R;
-        else q = this.withStamp(q);
-      if (R.type === "system" && "subtype" in R && R.subtype === "init" && !q.payload.parent_tool_use_id) {
-        this.liveTurnId = q.payload.uuid;
+        shellRows.push([ready.length, row.task_id]);
+      let emittedEvent = clientEvent ?? this.toClientEvent(row);
+      if (hold === "starts")
+        if (row === this.liveOnlyRequestingRow) this.liveOnlyStartingRow = row;
+        else emittedEvent = this.withStamp(emittedEvent);
+      if (
+        row.type === "system" &&
+        "subtype" in row &&
+        row.subtype === "init" &&
+        !emittedEvent.payload.parent_tool_use_id
+      ) {
+        this.liveTurnId = emittedEvent.payload.uuid;
         this.nextLiveIndex = 0;
         this.openTurn();
         this.droppedBeforeLiveTurn = this.droppedDurableBatches;
       }
-      if (!q.ephemeral) this.indexBehindHeldToolResult = undefined;
-      s.push(q);
+      if (!emittedEvent.ephemeral) this.indexBehindHeldToolResult = undefined;
+      ready.push(emittedEvent);
     }
-    let z = [];
+    let stamped = [];
     let heldRepeatUuid = this.heldRepeatUuid;
-    if (!w && !v) {
-      let filtered = S.filter((R) => {
-        let B = s[R];
-        return B && !B.historical && this.eventUploader.holdsOnArrival(B);
+    if (!release && !samplingEnd) {
+      let filtered = twinIndexes.filter((index) => {
+        let event = ready[index];
+        return event && !event.historical && this.eventUploader.holdsOnArrival(event);
       });
       if (
         !this.viewerAbsentReported &&
         filtered.some(
-          (R) =>
-            Buffer.byteLength(jsonStringify(s[R]?.payload)) > MAX_LIVE_RESPONSE_BYTES ||
-            estimateJsonEncodedSize(s[R]?.payload) > MAX_EVENT_PAYLOAD_ESTIMATED_BYTES,
+          (index) =>
+            Buffer.byteLength(jsonStringify(ready[index]?.payload)) > MAX_LIVE_RESPONSE_BYTES ||
+            estimateJsonEncodedSize(ready[index]?.payload) > MAX_EVENT_PAYLOAD_ESTIMATED_BYTES,
         )
       )
-        w = "twin_too_large";
+        release = "twin_too_large";
       else {
-        for (let [B, L] of P) {
-          let I = s[B];
-          if (I && this.eventUploader.holdsOnArrival(I)) this.heldShellTaskIds.add(L);
+        for (let [index, taskId] of shellRows) {
+          let event = ready[index];
+          if (event && this.eventUploader.holdsOnArrival(event)) this.heldShellTaskIds.add(taskId);
         }
-        z = filtered;
-        for (let B of filtered) {
-          let L = s[B];
-          if (L) {
-            if (B === x) this.heldRepeatUuid = L.payload.uuid;
-            s[B] = this.withStamp(L);
+        stamped = filtered;
+        for (let index of filtered) {
+          let event = ready[index];
+          if (event) {
+            if (index === repeatIndex) this.heldRepeatUuid = event.payload.uuid;
+            ready[index] = this.withStamp(event);
           }
         }
-        let R = filtered.length > 0 ? s.findLast((B) => !B.ephemeral) : undefined;
-        if (R?.payload.live_index !== undefined && hasToolResultContent(R.payload.message))
+        let last = filtered.length > 0 ? ready.findLast((event) => !event.ephemeral) : undefined;
+        if (last?.payload.live_index !== undefined && hasToolResultContent(last.payload.message))
           this.indexBehindHeldToolResult = this.nextLiveIndex;
         if (!this.viewerAbsentReported)
-          for (let B of filtered.toReversed()) {
-            let L = s[B];
-            if (L)
-              s.splice(B, 0, {
-                payload: L.payload,
+          for (let index of filtered.toReversed()) {
+            let event = ready[index];
+            if (event)
+              ready.splice(index, 0, {
+                payload: event.payload,
                 ephemeral: true,
               });
           }
       }
     }
-    if (heldRepeatUuid !== undefined && this.toolResultEndsCall && z.length > 0) {
+    if (heldRepeatUuid !== undefined && this.toolResultEndsCall && stamped.length > 0) {
       this.heldRepeatUuid = undefined;
-      this.eventUploader.withdraw((Y) => !Y.ephemeral && Y.payload.uuid === heldRepeatUuid);
+      this.eventUploader.withdraw((event) => !event.ephemeral && event.payload.uuid === heldRepeatUuid);
     }
-    for (let { frame, at, turnId, index } of W) {
+    for (let { frame, at, turnId, index } of twinStamps) {
       frame.live_turn_id = turnId;
-      frame.live_next_index = index + count(z, (I) => I < at);
+      frame.live_next_index = index + count(stamped, (stamp) => stamp < at);
     }
-    if (r.length > 0)
-      this.enqueueClientEvents(r, {
+    if (urgent.length > 0)
+      this.enqueueClientEvents(urgent, {
         urgent: true,
       });
-    if (s.length > 0) {
-      if (w) {
-        if (w !== "round_trip" && S.some((R) => ["assistant", "user"].includes(s[R]?.payload.type ?? "")))
-          this.endWholeTurnHold(w);
-        this.releaseTranscriptLane(w, y, O);
+    if (ready.length > 0) {
+      if (release) {
+        if (
+          release !== "round_trip" &&
+          twinIndexes.some((index) => ["assistant", "user"].includes(ready[index]?.payload.type ?? ""))
+        )
+          this.endWholeTurnHold(release);
+        this.releaseTranscriptLane(release, releasedBy, releasedByType);
         this.heldResultNeedsStore = false;
-      } else if (v) w = "sampling_end";
-      let Y = this.enqueueClientEvents(s, {
-        ...(w
+      } else if (samplingEnd) release = "sampling_end";
+      let promise = this.enqueueClientEvents(ready, {
+        ...(release
           ? {
-              release: w,
-              releasedBy: y,
+              release,
+              releasedBy,
             }
           : {
-              since: h,
+              since: bufferedSince,
             }),
-        ...(n?.together && {
+        ...(opts?.together && {
           together: true,
         }),
       });
       if (this.flushPolicy?.noTurnMaxAgeMs) this.applyUploadHold("reset");
-      if (C) this.eventUploader.cutBackoff();
-      await Y;
-      this.noteToolCallRows("client_events", U, "queued");
-    } else if (r.length > 0 && w) {
+      if (cutBackoff) this.eventUploader.cutBackoff();
+      await promise;
+      this.noteToolCallRows("client_events", toolUseIds, "queued");
+    } else if (urgent.length > 0 && release) {
       if (this.parkedRows.length > 0) this.flushStreamEventBuffer();
-      this.releaseTranscriptLane(w, undefined, O);
-      this.releaseClientEvents(w);
-    } else if (v) this.releaseClientEvents("sampling_end");
+      this.releaseTranscriptLane(release, undefined, releasedByType);
+      this.releaseClientEvents(release);
+    } else if (samplingEnd) this.releaseClientEvents("sampling_end");
   }
-  releaseTranscriptLane(e, n, s) {
+  releaseTranscriptLane(release, releasedBy, event) {
     if (this.holdRule !== "served_policy" || !this.flushPolicy?.transcriptMaxAgeMs)
-      this.internalEventUploader.release(e, n);
-    else if (s !== undefined) this.internalEventUploader.release("event", s);
+      this.internalEventUploader.release(release, releasedBy);
+    else if (event !== undefined) this.internalEventUploader.release("event", event);
   }
-  releaseFor(e, n) {
-    if (e.type === "result") {
-      let s = this.turnHold !== "open";
-      this.modelTurnEnded ||= s;
-      if (this.flushPolicy?.holdAgain?.laterWorkerHoldsFirstTurn && (s || e.is_error))
+  releaseFor(event, release) {
+    if (event.type === "result") {
+      let ended = this.turnHold !== "open";
+      this.modelTurnEnded ||= ended;
+      if (this.flushPolicy?.holdAgain?.laterWorkerHoldsFirstTurn && (ended || event.is_error))
         this.resultThatMarks = {
-          uuid: e.uuid,
-          marked: s,
+          uuid: event.uuid,
+          marked: ended,
         };
       this.openTurn();
     }
     if (
-      e.type === "system" &&
-      "subtype" in e &&
-      e.subtype === "status" &&
-      "status" in e &&
-      e.status === "requesting"
+      event.type === "system" &&
+      "subtype" in event &&
+      event.subtype === "status" &&
+      "status" in event &&
+      event.status === "requesting"
     ) {
       if (!this.seesModelCallBoundaries) {
         this.seesModelCallBoundaries = true;
         this.applyUploadHold("reset");
       }
       if (this.holdRule === "served_policy") {
-        let s = this.turnHold === "whole" && !n && this.requestingRowMayWait(e);
+        let mayWait = this.turnHold === "whole" && !release && this.requestingRowMayWait(event);
         if (
           this.turnHold === "open" &&
           this.flushPolicy?.firstTurnHoldsEachCall &&
@@ -3925,91 +4132,97 @@ class CCRClient {
         ) {
           this.turnHold = "each_call";
           this.holdsNoMoreThisTurn = true;
-        } else if (this.turnHold === "open" || n === "starts") {
+        } else if (this.turnHold === "open" || release === "starts") {
           this.secondCallStartsHold = this.turnHold === "open" && !this.modelTurnEnded;
           this.turnHold = "whole";
           if (this.holdsAcrossModelCalls()) this.uploadHoldTally.wholeTurnHoldStarted();
-        } else if (n === "ends") {
+        } else if (release === "ends") {
           this.turnHold = "each_call";
           this.uploadHoldTally.wholeTurnHoldEndedEarly();
         }
-        return s ? undefined : "round_trip";
+        return mayWait ? undefined : "round_trip";
       }
     }
-    if (e.type === "user" && this.toolResultReleases(e.message)) return "tool_result";
-    if (e.type === "assistant" && e.message.id !== this.streamedResponseId && this.isLiveTwinRow(e))
+    if (event.type === "user" && this.toolResultReleases(event.message)) return "tool_result";
+    if (
+      event.type === "assistant" &&
+      event.message.id !== this.streamedResponseId &&
+      this.isLiveTwinRow(event)
+    )
       return "event";
-    if (this.holdRule === undefined || this.mayWaitUnderHold(e)) return;
+    if (this.holdRule === undefined || this.mayWaitUnderHold(event)) return;
     return "event";
   }
-  requestingRowMayWait(e) {
+  requestingRowMayWait(event) {
     return (
-      this.holdsAcrossModelCalls() && hasUserMessageUuids(e) && !this.flushPolicy?.mustFlushTypes.has(e.type)
+      this.holdsAcrossModelCalls() &&
+      hasUserMessageUuids(event) &&
+      !this.flushPolicy?.mustFlushTypes.has(event.type)
     );
   }
-  holdAgainAt(e) {
+  holdAgainAt(event) {
     let holdAgain = this.flushPolicy?.holdAgain;
     if (
       !holdAgain ||
-      e.type !== "system" ||
-      !("subtype" in e) ||
-      e.subtype !== "status" ||
-      !("status" in e) ||
-      e.status !== "requesting" ||
+      event.type !== "system" ||
+      !("subtype" in event) ||
+      event.subtype !== "status" ||
+      !("status" in event) ||
+      event.status !== "requesting" ||
       !this.holdsAcrossModelCalls() ||
-      !this.isLiveTwinRow(e)
+      !this.isLiveTwinRow(event)
     )
       return;
     if (this.holdsNoMoreThisTurn || this.droppedDurableBatches !== this.droppedBeforeLiveTurn) return "ends";
-    let s = this.requestingRowMayWait(e);
-    if (this.unansweredCalls.size > 0) return s ? undefined : "ends";
-    let r = this.eventUploader.held();
+    let mayWait = this.requestingRowMayWait(event);
+    if (this.unansweredCalls.size > 0) return mayWait ? undefined : "ends";
+    let held = this.eventUploader.held();
     return this.turnHold === "each_call" ||
-      !s ||
+      !mayWait ||
       this.heldResultNeedsStore ||
       (holdAgain.laterWorkerHoldsFirstTurn && this.secondCallStartsHold) ||
-      (holdAgain.softAgeMs > 0 && r.ageMs >= holdAgain.softAgeMs) ||
-      (holdAgain.softEvents > 0 && r.count >= holdAgain.softEvents)
+      (holdAgain.softAgeMs > 0 && held.ageMs >= holdAgain.softAgeMs) ||
+      (holdAgain.softEvents > 0 && held.count >= holdAgain.softEvents)
       ? "starts"
       : undefined;
   }
-  toolResultReleases(e) {
+  toolResultReleases(message) {
     if (this.holdRule !== "served_policy") return false;
-    let n = this.flushPolicy?.flushAfterTools === "all";
-    return collectContentBlockField(e, "tool_result", "tool_use_id").some(
-      (s) => n || this.toolCallsWhoseResultReleases.has(s),
+    let all = this.flushPolicy?.flushAfterTools === "all";
+    return collectContentBlockField(message, "tool_result", "tool_use_id").some(
+      (id) => all || this.toolCallsWhoseResultReleases.has(id),
     );
   }
-  gateToolCall(e) {
+  gateToolCall(call) {
     let flushPolicy = this.flushPolicy;
     if (
       !flushPolicy ||
       (flushPolicy.flushAfterTools !== "write" && flushPolicy.flushBeforeToolsWaitMs <= 0) ||
-      e.agentId !== undefined ||
+      call.agentId !== undefined ||
       this.closed ||
       !this.followsServedPolicy ||
-      !e.mayWrite()
+      !call.mayWrite()
     )
       return;
     if (flushPolicy.flushAfterTools === "write") {
-      this.toolCallsWhoseResultReleases.add(e.toolUseId);
+      this.toolCallsWhoseResultReleases.add(call.toolUseId);
       evictOldestIfFull(this.toolCallsWhoseResultReleases);
     }
-    let s = this.transcriptLaneInUse ? ["client_events", "internal_events"] : ["client_events"];
+    let lanes = this.transcriptLaneInUse ? ["client_events", "internal_events"] : ["client_events"];
     if (
       flushPolicy.flushBeforeToolsWaitMs <= 0 ||
       this.lanesNotAnswering.size > 0 ||
-      e.signal.aborted ||
-      s.every((r) => this.toolCallRows[r].get(e.toolUseId) === "stored")
+      call.signal.aborted ||
+      lanes.every((lane) => this.toolCallRows[lane].get(call.toolUseId) === "stored")
     )
       return;
-    return this.awaitToolCallStored(e, s, flushPolicy.flushBeforeToolsWaitMs);
+    return this.awaitToolCallStored(call, lanes, flushPolicy.flushBeforeToolsWaitMs);
   }
-  async awaitToolCallStored(e, n, s) {
-    let toolUseId = e.toolUseId;
+  async awaitToolCallStored(call, lanes, waitMs) {
+    let toolUseId = call.toolUseId;
     let now = Date.now();
-    let combinedAbortSignal = createCombinedAbortSignal(e.signal, {
-      timeoutMs: s,
+    let combinedAbortSignal = createCombinedAbortSignal(call.signal, {
+      timeoutMs: waitMs,
       refTimer: true,
     });
     this.awaitedToolCalls.add(toolUseId);
@@ -4022,8 +4235,8 @@ class CCRClient {
       timeoutMs: this.toolCallRowGraceMs,
       refTimer: true,
     });
-    let O = false;
-    let C = false;
+    let queued = false;
+    let graceTimedOut = false;
     try {
       this.releaseClientEvents("tool_call");
       this.internalEventUploader.release("tool_call");
@@ -4031,90 +4244,92 @@ class CCRClient {
         this.toolCallRowReaches("client_events", toolUseId, "queued"),
         createChildAbortController(combinedAbortSignal_2.signal),
       ]);
-      O = this.toolCallRows.client_events.has(toolUseId);
-      C = combinedAbortSignal_2.signal.aborted && !combinedAbortSignal.signal.aborted;
-      if (O && !this.closed)
+      queued = this.toolCallRows.client_events.has(toolUseId);
+      graceTimedOut = combinedAbortSignal_2.signal.aborted && !combinedAbortSignal.signal.aborted;
+      if (queued && !this.closed)
         await Promise.race([
-          Promise.all(n.map((P) => this.toolCallRowReaches(P, toolUseId, "settled"))),
+          Promise.all(lanes.map((lane) => this.toolCallRowReaches(lane, toolUseId, "settled"))),
           createChildAbortController(combinedAbortSignal.signal),
         ]);
     } finally {
       combinedAbortSignal_2.cleanup();
       combinedAbortSignal.cleanup();
       this.awaitedToolCalls.delete(toolUseId);
-      for (let P of n) this.toolCallRowWaiters.delete(`${P} ${toolUseId}`);
+      for (let lane of lanes) this.toolCallRowWaiters.delete(`${lane} ${toolUseId}`);
     }
-    let S = n.every((P) => this.toolCallRows[P].get(toolUseId) === "stored")
+    let outcome = lanes.every((lane) => this.toolCallRows[lane].get(toolUseId) === "stored")
       ? "stored"
       : this.closed
         ? "closed"
-        : e.signal.aborted
+        : call.signal.aborted
           ? "aborted"
-          : n.some((P) => this.toolCallRows[P].get(toolUseId) === "dropped")
+          : lanes.some((lane) => this.toolCallRows[lane].get(toolUseId) === "dropped")
             ? "dropped"
-            : C && !O
+            : graceTimedOut && !queued
               ? "row_never_queued"
               : "timeout";
-    if (S === "timeout" || S === "dropped") {
-      for (let P of n) if (this.toolCallRows[P].get(toolUseId) === "queued") this.lanesNotAnswering.add(P);
+    if (outcome === "timeout" || outcome === "dropped") {
+      for (let lane of lanes)
+        if (this.toolCallRows[lane].get(toolUseId) === "queued") this.lanesNotAnswering.add(lane);
     }
     logForDiagnosticsNoPII(
-      S === "stored" || S === "closed" || S === "aborted" ? "info" : "warn",
+      outcome === "stored" || outcome === "closed" || outcome === "aborted" ? "info" : "warn",
       "cli_ccr_tool_call_upload_wait",
       {
-        outcome: S,
+        outcome,
         waited_ms: Date.now() - now,
-        limit_ms: s,
+        limit_ms: waitMs,
         live_view_row: this.toolCallRows.client_events.get(toolUseId) ?? "none",
-        transcript_row: n.includes("internal_events")
+        transcript_row: lanes.includes("internal_events")
           ? (this.toolCallRows.internal_events.get(toolUseId) ?? "none")
           : "lane_unused",
       },
     );
   }
-  toolCallRowReaches(e, n, s) {
-    let r = this.toolCallRows[e].get(n);
-    if (r !== undefined && (r !== "queued" || s === "queued")) return Promise.resolve();
+  toolCallRowReaches(lane, toolUseId, until) {
+    let state = this.toolCallRows[lane].get(toolUseId);
+    if (state !== undefined && (state !== "queued" || until === "queued")) return Promise.resolve();
     return new Promise((resolve) => {
-      let w = `${e} ${n}`;
-      let v = {
-        until: s,
+      let key = `${lane} ${toolUseId}`;
+      let waiter = {
+        until,
         reached: resolve,
       };
-      let y = this.toolCallRowWaiters.get(w);
-      if (y) y.push(v);
-      else this.toolCallRowWaiters.set(w, [v]);
+      let waiters = this.toolCallRowWaiters.get(key);
+      if (waiters) waiters.push(waiter);
+      else this.toolCallRowWaiters.set(key, [waiter]);
     });
   }
-  noteToolCallRows(e, n, s) {
-    let r = this.toolCallRows[e];
-    for (let h of n) {
-      if ((s === "queued" && r.has(h)) || (s === "dropped" && r.get(h) === "stored")) continue;
-      r.set(h, s);
-      evictOldestIfFull(r);
-      let w = `${e} ${h}`;
-      let filtered = (this.toolCallRowWaiters.get(w) ?? []).filter((y) => {
-        if (y.until === "queued" || s !== "queued") {
-          y.reached();
+  noteToolCallRows(lane, ids, state) {
+    let rows = this.toolCallRows[lane];
+    for (let id of ids) {
+      if ((state === "queued" && rows.has(id)) || (state === "dropped" && rows.get(id) === "stored"))
+        continue;
+      rows.set(id, state);
+      evictOldestIfFull(rows);
+      let key = `${lane} ${id}`;
+      let filtered = (this.toolCallRowWaiters.get(key) ?? []).filter((waiter) => {
+        if (waiter.until === "queued" || state !== "queued") {
+          waiter.reached();
           return false;
         }
         return true;
       });
-      if (filtered.length > 0) this.toolCallRowWaiters.set(w, filtered);
-      else this.toolCallRowWaiters.delete(w);
+      if (filtered.length > 0) this.toolCallRowWaiters.set(key, filtered);
+      else this.toolCallRowWaiters.delete(key);
     }
   }
-  noteToolCallRowsSettled(e, n, s) {
+  noteToolCallRowsSettled(lane, state, events) {
     if (!this.gatesToolCalls) return;
-    if (n === "stored") this.lanesNotAnswering.delete(e);
+    if (state === "stored") this.lanesNotAnswering.delete(lane);
     this.noteToolCallRows(
-      e,
-      s.flatMap((r) =>
-        ("session_agent_id" in r && r.session_agent_id) || ("ephemeral" in r && r.ephemeral)
+      lane,
+      events.flatMap((event) =>
+        ("session_agent_id" in event && event.session_agent_id) || ("ephemeral" in event && event.ephemeral)
           ? []
-          : getMainThreadToolUseIds(r.payload),
+          : getMainThreadToolUseIds(event.payload),
       ),
-      n,
+      state,
     );
   }
   clientRowsAreGuarded() {
@@ -4128,48 +4343,48 @@ class CCRClient {
   setDisplayHooksProbe(hasDisplayHooks) {
     this.hasDisplayHooks = hasDisplayHooks;
   }
-  noteClientRowsSettled(e, n) {
+  noteClientRowsSettled(state, events) {
     if (!this.clientRowsAreGuarded()) this.reportClientRowsOwed(this.clientRowsOwed.guardEnded(new Date()));
-    let flattened = n.flatMap((h) => (h.ephemeral ? [] : [h.payload.uuid]));
-    let r = count(flattened, (h) => this.clientRowsOwed.rowsSentAgain.has(h));
-    if (r > 0) {
+    let flattened = events.flatMap((event) => (event.ephemeral ? [] : [event.payload.uuid]));
+    let againCount = count(flattened, (uuid) => this.clientRowsOwed.rowsSentAgain.has(uuid));
+    if (againCount > 0) {
       this.ownRowsWaitBehindRowsSentAgainSince = undefined;
-      if (e === "stored")
+      if (state === "stored")
         logFeatureOk("ccr_client_rows_owed", {
-          rows: r,
+          rows: againCount,
         });
       else
         logFeatureBad("ccr_client_rows_owed", "upload_refused", {
-          rows: r,
+          rows: againCount,
         });
     }
     this.reportClientRowsOwed(this.clientRowsOwed.rowsAnswered(flattened));
   }
-  reportClientRowsOwed(e) {
-    if (e !== undefined)
+  reportClientRowsOwed(metadata) {
+    if (metadata !== undefined)
       this.workerState.enqueue({
-        internal_metadata: e,
+        internal_metadata: metadata,
       });
   }
-  async clientRowsOwedByEarlierWorkers(e) {
+  async clientRowsOwedByEarlierWorkers(flagsLoaded) {
     if (this.clientRowsOwed.earlierSpans.length === 0) return [];
-    await e();
+    await flagsLoaded();
     return this.guardsClientRows() ? this.clientRowsOwed.earlierSpans : [];
   }
-  async tryClientRowsOwedByEarlierWorkers(e) {
-    this.reportClientRowsOwed(this.clientRowsOwed.earlierSpansTried(e));
+  async tryClientRowsOwedByEarlierWorkers(afterUuid) {
+    this.reportClientRowsOwed(this.clientRowsOwed.earlierSpansTried(afterUuid));
     if (!(await withDeadline(this.flushWorkerState(), WORKER_STATE_FLUSH_TIMEOUT_MS)))
       logFeatureSad("ccr_client_rows_owed", "try_report_unanswered");
   }
-  async sendOwedClientRowsAgain(e) {
+  async sendOwedClientRowsAgain(rows) {
     if (!this.guardsClientRows()) return;
-    let n = Ji(
-      e.map((s) => this.toClientEvent(s)),
-      (s) => s.payload.uuid,
+    let events = uniqByExport(
+      rows.map((row) => this.toClientEvent(row)),
+      (event) => event.payload.uuid,
     );
-    this.clientRowsOwed.earlierRowsSentAgain(n.map((s) => s.payload.uuid));
+    this.clientRowsOwed.earlierRowsSentAgain(events.map((event) => event.payload.uuid));
     try {
-      await this.enqueueClientEvents(n, {
+      await this.enqueueClientEvents(events, {
         urgent: true,
       });
     } catch (error) {
@@ -4180,9 +4395,9 @@ class CCRClient {
   giveUpClientRowsOwedByEarlierWorkers() {
     this.reportClientRowsOwed(this.clientRowsOwed.earlierSpansGivenUp());
   }
-  rowsSentAgainStepAside(e) {
+  rowsSentAgainStepAside(events) {
     let { rowsSentAgain } = this.clientRowsOwed;
-    if (!e.some((r) => rowsSentAgain.has(r.payload.uuid))) return;
+    if (!events.some((event) => rowsSentAgain.has(event.payload.uuid))) return;
     if (this.eventUploader.backlog().unsent <= rowsSentAgain.size) {
       this.ownRowsWaitBehindRowsSentAgainSince = undefined;
       return;
@@ -4190,42 +4405,43 @@ class CCRClient {
     this.ownRowsWaitBehindRowsSentAgainSince ??= Date.now();
     if (Date.now() - this.ownRowsWaitBehindRowsSentAgainSince < ROWS_SENT_AGAIN_WAIT_MS) return;
     this.ownRowsWaitBehindRowsSentAgainSince = undefined;
-    let s = new Set(rowsSentAgain);
-    e.splice(0, e.length, ...e.filter((r) => !isHistoricalPayloadSeen(r, s)));
-    this.eventUploader.withdraw((r) => isHistoricalPayloadSeen(r, s));
+    let uuids = new Set(rowsSentAgain);
+    events.splice(0, events.length, ...events.filter((event) => !isHistoricalPayloadSeen(event, uuids)));
+    this.eventUploader.withdraw((event) => isHistoricalPayloadSeen(event, uuids));
     logFeatureSad("ccr_client_rows_owed", "upload_kept_failing", {
-      rows: s.size,
+      rows: uuids.size,
     });
     this.clientRowsOwed.earlierRowsWithdrawn();
   }
-  mayParkTextRow(e) {
+  mayParkTextRow(row) {
     if (
-      e.type !== "assistant" ||
+      row.type !== "assistant" ||
       !this.streamEventTimer ||
       this.streamEventTimerIsSlow ||
       this.lastReportedHasSubscribers === false ||
       this.closed ||
-      this.isLiveTwinRow(e)
+      this.isLiveTwinRow(row)
     )
       return false;
-    let content = e.message.content;
-    return Array.isArray(content) && content.length > 0 && content.every((s) => s.type === "text");
+    let content = row.message.content;
+    return Array.isArray(content) && content.length > 0 && content.every((block) => block.type === "text");
   }
   liveTwinTypes() {
     return this.holdRule === "served_policy" && this.liveTurnId !== undefined && this.turnHold !== "open"
       ? this.flushPolicy?.liveTwinTypes
       : undefined;
   }
-  isLiveTwinRow(e) {
-    let n = this.liveTwinTypes();
+  isLiveTwinRow(row) {
+    let types = this.liveTwinTypes();
     return (
-      n !== undefined &&
-      (e.type === "tool_progress"
-        ? e.heartbeat === true
-        : !("parent_tool_use_id" in e && e.parent_tool_use_id)) &&
-      (e.type !== "user" ||
-        (Array.isArray(e.message.content) && e.message.content.every((s) => s.type === "tool_result"))) &&
-      (n.has(e.type) || ("subtype" in e && n.has(`${e.type}/${e.subtype}`)))
+      types !== undefined &&
+      (row.type === "tool_progress"
+        ? row.heartbeat === true
+        : !("parent_tool_use_id" in row && row.parent_tool_use_id)) &&
+      (row.type !== "user" ||
+        (Array.isArray(row.message.content) &&
+          row.message.content.every((block) => block.type === "tool_result"))) &&
+      (types.has(row.type) || ("subtype" in row && types.has(`${row.type}/${row.subtype}`)))
     );
   }
   takeParkedRows() {
@@ -4233,165 +4449,170 @@ class CCRClient {
     this.parkedRows = [];
     return mapped;
   }
-  mayWaitUnderHold(e) {
-    if (this.isLiveOnlyRow(e)) return true;
-    if (e.type === "keep_alive" && this.holdRule === "served_policy")
-      return this.seesModelCallBoundaries && !this.flushPolicy?.mustFlushTypes.has(e.type);
+  mayWaitUnderHold(row) {
+    if (this.isLiveOnlyRow(row)) return true;
+    if (row.type === "keep_alive" && this.holdRule === "served_policy")
+      return this.seesModelCallBoundaries && !this.flushPolicy?.mustFlushTypes.has(row.type);
     if (
-      e.type === "control_response" &&
+      row.type === "control_response" &&
       this.flushPolicy?.controlTrafficKeepsHold &&
       this.holdsAcrossModelCalls()
     )
       return (
-        !this.flushPolicy.mustFlushTypes.has(e.type) && this.settingsRequestIds.has(e.response.request_id)
+        !this.flushPolicy.mustFlushTypes.has(row.type) && this.settingsRequestIds.has(row.response.request_id)
       );
-    if (!isEphemeralStreamMessage(e))
+    if (!isEphemeralStreamMessage(row))
       return (
         this.holdRule === "served_policy" &&
         this.seesModelCallBoundaries &&
         this.turnHold !== "open" &&
         this.flushPolicy?.mayWaitTypes.has(
-          e.type === "system" && e.subtype === "task_notification" && this.heldShellTaskIds.has(e.task_id)
+          row.type === "system" &&
+            row.subtype === "task_notification" &&
+            this.heldShellTaskIds.has(row.task_id)
             ? "system/task_notification_foreground_shell"
-            : classifyRowTypeForTelemetry(e),
+            : classifyRowTypeForTelemetry(row),
         ) === true &&
-        !this.flushPolicy.mustFlushTypes.has(e.type)
+        !this.flushPolicy.mustFlushTypes.has(row.type)
       );
     if (this.holdRule === "no_subscriber_flag" && !SUBSCRIBER_FLAG_REQUIRED) return true;
-    if (e.type === "user" && "isReplay" in e && e.isReplay) return false;
+    if (row.type === "user" && "isReplay" in row && row.isReplay) return false;
     let flushPolicy = this.flushPolicy;
     if (!flushPolicy) return true;
-    if (e.type === "assistant" && flushPolicy.flushOnAssistant) return false;
-    return !flushPolicy.mustFlushTypes.has(e.type);
+    if (row.type === "assistant" && flushPolicy.flushOnAssistant) return false;
+    return !flushPolicy.mustFlushTypes.has(row.type);
   }
-  isLiveOnlyRow(e) {
+  isLiveOnlyRow(row) {
     return (
-      this.rowsMarkedLiveOnly.has(e) ||
+      this.rowsMarkedLiveOnly.has(row) ||
       (this.followsServedPolicy &&
-        this.flushPolicy?.liveOnlyTypes.has(classifyRowTypeForTelemetry(e)) === true)
+        this.flushPolicy?.liveOnlyTypes.has(classifyRowTypeForTelemetry(row)) === true)
     );
   }
-  noteRequestingRow(e) {
-    if ("parent_tool_use_id" in e && e.parent_tool_use_id) return;
-    if ("resume_reason" in e && e.resume_reason) this.turnTookInput = true;
-    if (e.type === "assistant" || e.type === "user") {
-      this.toolResultEndsCall = e.type === "user" && hasToolResultContent(e.message);
+  noteRequestingRow(row) {
+    if ("parent_tool_use_id" in row && row.parent_tool_use_id) return;
+    if ("resume_reason" in row && row.resume_reason) this.turnTookInput = true;
+    if (row.type === "assistant" || row.type === "user") {
+      this.toolResultEndsCall = row.type === "user" && hasToolResultContent(row.message);
       this.liveOnlyRequestingRow = undefined;
     }
-    if (e.type !== "system" || !("subtype" in e)) return;
-    let status = e.subtype === "status" && "status" in e ? e.status : undefined;
-    if (status === "compacting" || e.subtype === "compact_boundary") {
+    if (row.type !== "system" || !("subtype" in row)) return;
+    let status = row.subtype === "status" && "status" in row ? row.status : undefined;
+    if (status === "compacting" || row.subtype === "compact_boundary") {
       let liveOnlyRequestingRow = this.liveOnlyRequestingRow;
       this.liveOnlyRequestingRow = undefined;
       return liveOnlyRequestingRow;
     }
     if (status !== "requesting") return;
-    let s = jsonStringify("user_message_uuids" in e ? (e.user_message_uuids ?? null) : null);
-    let r =
-      s === this.lastRequestingList &&
+    let list = jsonStringify("user_message_uuids" in row ? (row.user_message_uuids ?? null) : null);
+    let repeat =
+      list === this.lastRequestingList &&
       this.toolResultEndsCall &&
       !this.turnTookInput &&
       this.followsServedPolicy &&
       this.flushPolicy?.liveOnlyTypes.has(SYSTEM_STATUS_REQUESTING_REPEAT) === true;
-    this.lastRequestingList = s;
+    this.lastRequestingList = list;
     this.toolResultEndsCall = false;
-    this.liveOnlyRequestingRow = r ? e : undefined;
+    this.liveOnlyRequestingRow = repeat ? row : undefined;
     this.heldRepeatUuid = undefined;
     return;
   }
-  withStamp(e) {
+  withStamp(event) {
     return {
-      ...e,
+      ...event,
       payload: {
-        ...e.payload,
+        ...event.payload,
         live_turn_id: this.liveTurnId,
         live_index: this.nextLiveIndex++,
         emitted_at_ms: Date.now(),
       },
     };
   }
-  toClientEvent(e) {
-    let n = capLiveOnlyResponseSize(e, MAX_LIVE_RESPONSE_BYTES);
-    let s = n.historical === true;
-    let r =
-      isThinkingTokensSystemMessage(e) ||
-      isLiveOnlyResponse(n) ||
-      this.isLiveOnlyRow(e) ||
-      e === this.liveOnlyRequestingRow;
-    let h =
-      n.type === "user" && n.is_virtual !== true
-        ? this.uploadedToolResult(n.tool_use_result, n.message)
-        : n.tool_use_result;
+  toClientEvent(row) {
+    let capped = capLiveOnlyResponseSize(row, MAX_LIVE_RESPONSE_BYTES);
+    let historical = capped.historical === true;
+    let ephemeral =
+      isThinkingTokensSystemMessage(row) ||
+      isLiveOnlyResponse(capped) ||
+      this.isLiveOnlyRow(row) ||
+      row === this.liveOnlyRequestingRow;
+    let toolResult =
+      capped.type === "user" && capped.is_virtual !== true
+        ? this.uploadedToolResult(capped.tool_use_result, capped.message)
+        : capped.tool_use_result;
     return {
       payload: {
-        ...n,
-        ...(h !== n.tool_use_result && {
-          tool_use_result: h,
+        ...capped,
+        ...(toolResult !== capped.tool_use_result && {
+          tool_use_result: toolResult,
         }),
-        uuid: typeof n.uuid === "string" ? n.uuid : randomUUID(),
+        uuid: typeof capped.uuid === "string" ? capped.uuid : randomUUID(),
       },
-      ...(s && {
+      ...(historical && {
         historical: true,
       }),
-      ...(r && {
+      ...(ephemeral && {
         ephemeral: true,
       }),
     };
   }
-  uploadedToolResult(e, n) {
-    let s = this.currentUploadTrim();
-    let r = stripInlineMediaBase64(e, s);
-    if (r !== e && !this.loggedToolResultBlank) {
+  uploadedToolResult(result, message) {
+    let trim = this.currentUploadTrim();
+    let stripped = stripInlineMediaBase64(result, trim);
+    if (stripped !== result && !this.loggedToolResultBlank) {
       this.loggedToolResultBlank = true;
       logFeatureOk("ccr_tool_result_blank");
     }
-    let h = dedupeMcpImageData(r, n, s);
-    if (h !== r && !this.loggedMcpImageBlank) {
+    let deduped = dedupeMcpImageData(stripped, message, trim);
+    if (deduped !== stripped && !this.loggedMcpImageBlank) {
       this.loggedMcpImageBlank = true;
       logFeatureOk("ccr_mcp_image_blank");
     }
-    return h;
+    return deduped;
   }
-  setStreamEventFlushIntervalMs(e) {
+  setStreamEventFlushIntervalMs(ms) {
     this.streamEventFlushIntervalMs = parseFlushIntervalMs(
       "streamEventFlushIntervalMs",
-      e,
+      ms,
       DEFAULT_STREAM_EVENT_FLUSH_INTERVAL_MS,
     );
     if (this.streamEventFlushIntervalMs <= 0 && this.streamEventTimer) this.flushStreamEventBuffer();
     if (this.streamEventFlushIntervalMs <= 0) this.toolInputMayWait = false;
   }
-  setStreamEventFirstFlushMs(e) {
-    this.streamEventFirstFlushMs = parseFlushIntervalMs("streamEventFirstFlushMs", e, 0);
+  setStreamEventFirstFlushMs(ms) {
+    this.streamEventFirstFlushMs = parseFlushIntervalMs("streamEventFirstFlushMs", ms, 0);
   }
-  setToolInputFlushMs(e) {
-    this.toolInputFlushMs = Math.min(parseFlushIntervalMs("toolInputFlushMs", e, 0), MAX_TOOL_INPUT_FLUSH_MS);
+  setToolInputFlushMs(ms) {
+    this.toolInputFlushMs = Math.min(
+      parseFlushIntervalMs("toolInputFlushMs", ms, 0),
+      MAX_TOOL_INPUT_FLUSH_MS,
+    );
   }
-  setNoSubscriberStreamEventFlushIntervalMs(e) {
-    let flushIntervalMs = parseFlushIntervalMs("noSubscriberStreamEventFlushIntervalMs", e, 0);
+  setNoSubscriberStreamEventFlushIntervalMs(ms) {
+    let flushIntervalMs = parseFlushIntervalMs("noSubscriberStreamEventFlushIntervalMs", ms, 0);
     if (flushIntervalMs === this.noSubscriberStreamEventFlushIntervalMs) return;
     this.noSubscriberStreamEventFlushIntervalMs = flushIntervalMs;
     this.setHasSubscribers(undefined, "reset");
   }
-  setNoSubscriberUploadHoldMs(e) {
-    let flushIntervalMs = parseFlushIntervalMs("noSubscriberUploadHoldMs", e, 0);
+  setNoSubscriberUploadHoldMs(ms) {
+    let flushIntervalMs = parseFlushIntervalMs("noSubscriberUploadHoldMs", ms, 0);
     if (flushIntervalMs === this.noSubscriberUploadHoldMs) return;
     this.noSubscriberUploadHoldMs = flushIntervalMs;
     this.setHasSubscribers(undefined, "reset");
   }
-  setDropUnwatchedStreamEvents(e) {
-    let n = e === true;
-    if (n === this.dropUnwatchedStreamEvents) return;
+  setDropUnwatchedStreamEvents(value) {
+    let enabled = value === true;
+    if (enabled === this.dropUnwatchedStreamEvents) return;
     this.setHasSubscribers(undefined, "reset");
-    this.dropUnwatchedStreamEvents = n;
+    this.dropUnwatchedStreamEvents = enabled;
   }
   onSubscribersReported;
   setSubscribersReportedListener(onSubscribersReported) {
     this.onSubscribersReported = onSubscribersReported;
   }
-  tellSubscribersReported(e) {
-    if (typeof e !== "boolean" || this.onSubscribersReported === undefined) return;
-    if (e || !this.senderMayNotBeAttachedYet()) this.onSubscribersReported(e);
+  tellSubscribersReported(has) {
+    if (typeof has !== "boolean" || this.onSubscribersReported === undefined) return;
+    if (has || !this.senderMayNotBeAttachedYet()) this.onSubscribersReported(has);
   }
   senderMayNotBeAttachedYet() {
     return Date.now() - this.lastInboundEventAtMs < RECENT_INBOUND_EVENT_MS;
@@ -4405,28 +4626,28 @@ class CCRClient {
   servedPolicyHolds() {
     return (this.flushPolicy?.maxEvents ?? 0) > 1 && this.followsServedPolicy;
   }
-  checkpointForViewer(e) {
+  checkpointForViewer(trigger) {
     if (this.closed || this.viewerCheckpointTimer || !this.holdsAcrossModelCalls()) return;
     this.viewerCheckpointTimer = setTimeout(
-      (n, s) => {
-        n.viewerCheckpointTimer = null;
-        if (n.holdsAcrossModelCalls()) n.uploadHeldRowsForViewer(s).catch(logError);
+      (uploader, trigger) => {
+        uploader.viewerCheckpointTimer = null;
+        if (uploader.holdsAcrossModelCalls()) uploader.uploadHeldRowsForViewer(trigger).catch(logError);
       },
       Math.max(0, this.lastViewerCheckpointAtMs + VIEWER_CHECKPOINT_INTERVAL_MS - Date.now()),
       this,
-      e,
+      trigger,
     );
   }
-  async uploadHeldRowsForViewer(e) {
+  async uploadHeldRowsForViewer(trigger) {
     this.lastViewerCheckpointAtMs = Date.now();
     if (this.flushPolicy?.emptyCheckpointKeepsHold && !this.modelCallStreamed)
       this.setHasSubscribers(undefined, "watcher");
-    else this.endWholeTurnHold(e);
+    else this.endWholeTurnHold(trigger);
     let liveTurnId = this.liveTurnId;
-    let s = this.nextLiveIndex - 1;
+    let lastIndex = this.nextLiveIndex - 1;
     let droppedBeforeLiveTurn = this.droppedBeforeLiveTurn;
-    this.internalEventUploader.release(e);
-    this.releaseClientEvents(e);
+    this.internalEventUploader.release(trigger);
+    this.releaseClientEvents(trigger);
     await this.flush();
     await this.enqueueClientEvents(
       [
@@ -4436,7 +4657,7 @@ class CCRClient {
             subtype: "checkpoint_done",
             uuid: randomUUID(),
             live_turn_id: liveTurnId,
-            stored_through_live_index: this.droppedDurableBatches === droppedBeforeLiveTurn ? s : -1,
+            stored_through_live_index: this.droppedDurableBatches === droppedBeforeLiveTurn ? lastIndex : -1,
           },
           ephemeral: true,
         },
@@ -4444,11 +4665,11 @@ class CCRClient {
       {},
     );
   }
-  endWholeTurnHold(e) {
+  endWholeTurnHold(reason) {
     if (this.turnHold === "open") return;
     this.turnHold = "each_call";
     this.uploadHoldTally.wholeTurnHoldEndedEarly();
-    if (!e || !this.flushPolicy?.holdAgain?.after.has(e)) this.holdsNoMoreThisTurn = true;
+    if (!reason || !this.flushPolicy?.holdAgain?.after.has(reason)) this.holdsNoMoreThisTurn = true;
   }
   openTurn() {
     this.lastRequestingList = undefined;
@@ -4477,13 +4698,13 @@ class CCRClient {
       return "served_policy";
     return this.unwatched() ? "no_subscriber_flag" : undefined;
   }
-  applyUploadHold(e) {
-    let n = this.decideHoldRule();
-    this.holdRule = n;
+  applyUploadHold(reason) {
+    let rule = this.decideHoldRule();
+    this.holdRule = rule;
     this.eventUploader.setHold(
-      n &&
+      rule &&
         this.laneHold(
-          n,
+          rule,
           !this.seesModelCallBoundaries
             ? neverFlush
             : this.flushPolicy?.controlTrafficKeepsHold
@@ -4491,20 +4712,20 @@ class CCRClient {
               : isEphemeralOrKeepAlive,
           this.turnHold === "open" ? this.flushPolicy?.noTurnMaxAgeMs : undefined,
         ),
-      e,
+      reason,
     );
     this.internalEventUploader.setHold(
-      n && this.laneHold(n, neverFlush, this.flushPolicy?.transcriptMaxAgeMs),
-      e,
+      rule && this.laneHold(rule, neverFlush, this.flushPolicy?.transcriptMaxAgeMs),
+      reason,
     );
   }
-  laneHold(e, passes, s) {
+  laneHold(rule, passes, maxAgeMs) {
     let flushPolicy = this.flushPolicy;
-    if (e === "served_policy" && flushPolicy)
+    if (rule === "served_policy" && flushPolicy)
       return {
-        rule: e,
+        rule,
         maxAgeMs: Math.min(
-          s || flushPolicy.maxAgeMs,
+          maxAgeMs || flushPolicy.maxAgeMs,
           !this.seesModelCallBoundaries
             ? DEFAULT_TRANSCRIPT_MAX_AGE_MS
             : flushPolicy.holdAcrossModelCalls
@@ -4520,64 +4741,64 @@ class CCRClient {
       maxAgeMs: this.noSubscriberUploadHoldMs,
     };
   }
-  takeUpFlushPolicy(e) {
-    let n = e ?? this.launchFlushPolicy;
-    let s = n == null ? undefined : parseHoldPolicy(n);
-    if (n != null && !s && !this.loggedUnreadableFlushPolicy) {
+  takeUpFlushPolicy(policy) {
+    let raw = policy ?? this.launchFlushPolicy;
+    let parsed = raw == null ? undefined : parseHoldPolicy(raw);
+    if (raw != null && !parsed && !this.loggedUnreadableFlushPolicy) {
       this.loggedUnreadableFlushPolicy = true;
       logForDiagnosticsNoPII("warn", "cli_ccr_flush_policy_unreadable");
     }
     let flushPolicy = this.flushPolicy;
-    if (!summarizeAssistantMessage(flushPolicy, s)) {
-      this.flushPolicy = s;
+    if (!summarizeAssistantMessage(flushPolicy, parsed)) {
+      this.flushPolicy = parsed;
       this.callsWhoseResultsWait.clear();
       if (
-        flushPolicy?.flushAfterTools !== s?.flushAfterTools ||
-        !setsEqual(flushPolicy?.flushAfterToolNames, s?.flushAfterToolNames)
+        flushPolicy?.flushAfterTools !== parsed?.flushAfterTools ||
+        !setsEqual(flushPolicy?.flushAfterToolNames, parsed?.flushAfterToolNames)
       )
         this.toolCallsWhoseResultReleases.clear();
       logForDiagnosticsNoPII(
         "info",
-        s
+        parsed
           ? flushPolicy
             ? "cli_ccr_flush_policy_changed"
             : "cli_ccr_flush_policy_adopted"
           : "cli_ccr_flush_policy_cleared",
         {
-          ...(s && {
-            max_events: s.maxEvents,
-            max_age_ms: s.maxAgeMs,
-            max_bytes: s.maxBytes ?? 0,
-            flush_on_sampling_end: s.flushOnSamplingEnd,
-            flush_on_assistant: s.flushOnAssistant,
-            event_batch_upload: s.eventBatchUpload,
-            hold_across_model_calls: s.holdAcrossModelCalls,
-            hold_again: s.holdAgain !== undefined,
-            may_wait_types: s.mayWaitTypes.size,
-            may_wait_types_refused: s.mayWaitTypesRefused,
-            flush_after_tool_names: s.flushAfterToolNames.size,
-            settings_receipts_max_wait_ms: s.settingsReceiptsMaxWaitMs,
-            messages_received_waits: s.messagesReceivedWaits,
-            receipts_ride_uploads: s.receiptsRideUploads,
-            flush_before_tools_wait_ms: s.flushBeforeToolsWaitMs,
-            flush_after_tools: s.flushAfterTools,
-            must_flush_types: s.mustFlushTypes.size,
-            live_twin_types: s.liveTwinTypes.size,
-            live_only_types: s.liveOnlyTypes.size,
-            transcript_max_age_ms: s.transcriptMaxAgeMs,
-            no_turn_max_age_ms: s.noTurnMaxAgeMs,
-            merge_worker_reports: s.mergeWorkerReports,
-            control_traffic_keeps_hold: s.controlTrafficKeepsHold,
-            empty_checkpoint_keeps_hold: s.emptyCheckpointKeepsHold,
-            first_turn_holds_each_call: s.firstTurnHoldsEachCall,
-            later_worker_holds_first_turn: s.holdAgain?.laterWorkerHoldsFirstTurn === true,
-            settings_answers_max_wait_ms: s.settingsAnswersMaxWaitMs,
-            init_max_wait_ms: s.initMaxWaitMs,
-            metadata_waits_for_status: s.metadataWaitsForStatus.size,
-            metadata_never_sent: s.metadataNeverSent.size,
-            metadata_max_wait_ms: s.metadataMaxWaitMs,
-            cost_report_max_wait_ms: s.costReportMaxWaitMs,
-            policy_version: s.policyVersion ?? "",
+          ...(parsed && {
+            max_events: parsed.maxEvents,
+            max_age_ms: parsed.maxAgeMs,
+            max_bytes: parsed.maxBytes ?? 0,
+            flush_on_sampling_end: parsed.flushOnSamplingEnd,
+            flush_on_assistant: parsed.flushOnAssistant,
+            event_batch_upload: parsed.eventBatchUpload,
+            hold_across_model_calls: parsed.holdAcrossModelCalls,
+            hold_again: parsed.holdAgain !== undefined,
+            may_wait_types: parsed.mayWaitTypes.size,
+            may_wait_types_refused: parsed.mayWaitTypesRefused,
+            flush_after_tool_names: parsed.flushAfterToolNames.size,
+            settings_receipts_max_wait_ms: parsed.settingsReceiptsMaxWaitMs,
+            messages_received_waits: parsed.messagesReceivedWaits,
+            receipts_ride_uploads: parsed.receiptsRideUploads,
+            flush_before_tools_wait_ms: parsed.flushBeforeToolsWaitMs,
+            flush_after_tools: parsed.flushAfterTools,
+            must_flush_types: parsed.mustFlushTypes.size,
+            live_twin_types: parsed.liveTwinTypes.size,
+            live_only_types: parsed.liveOnlyTypes.size,
+            transcript_max_age_ms: parsed.transcriptMaxAgeMs,
+            no_turn_max_age_ms: parsed.noTurnMaxAgeMs,
+            merge_worker_reports: parsed.mergeWorkerReports,
+            control_traffic_keeps_hold: parsed.controlTrafficKeepsHold,
+            empty_checkpoint_keeps_hold: parsed.emptyCheckpointKeepsHold,
+            first_turn_holds_each_call: parsed.firstTurnHoldsEachCall,
+            later_worker_holds_first_turn: parsed.holdAgain?.laterWorkerHoldsFirstTurn === true,
+            settings_answers_max_wait_ms: parsed.settingsAnswersMaxWaitMs,
+            init_max_wait_ms: parsed.initMaxWaitMs,
+            metadata_waits_for_status: parsed.metadataWaitsForStatus.size,
+            metadata_never_sent: parsed.metadataNeverSent.size,
+            metadata_max_wait_ms: parsed.metadataMaxWaitMs,
+            cost_report_max_wait_ms: parsed.costReportMaxWaitMs,
+            policy_version: parsed.policyVersion ?? "",
           }),
           hold_enabled: this.followsServedPolicy,
         },
@@ -4585,153 +4806,155 @@ class CCRClient {
       this.applyUploadHold("reset");
     }
   }
-  logUploadHoldEnd(e, n, s, r, h, w) {
-    if (h === "no_subscriber_flag") {
+  logUploadHoldEnd(lane, reason, heldCount, heldMs, rule, releasedBy) {
+    if (rule === "no_subscriber_flag") {
       logFeatureOk("ccr_no_subscriber_hold", {
-        lane: fromEnum(e),
-        reason: fromEnum(n),
-        held_events: s,
-        held_ms: r,
+        lane: fromEnum(lane),
+        reason: fromEnum(reason),
+        held_events: heldCount,
+        held_ms: heldMs,
       });
       return;
     }
-    if (e === "client_events") {
+    if (lane === "client_events") {
       this.heldShellTaskIds.clear();
       this.heldRepeatUuid = undefined;
       this.indexBehindHeldToolResult = undefined;
-      if (n !== "round_trip") this.endWholeTurnHold(n);
+      if (reason !== "round_trip") this.endWholeTurnHold(reason);
     }
-    this.uploadHoldTally.released(e, s, r);
+    this.uploadHoldTally.released(lane, heldCount, heldMs);
     logForDiagnosticsNoPII("info", "cli_ccr_event_hold_release", {
-      lane: e,
-      reason: n,
-      ...(w !== undefined && {
-        released_by: w,
+      lane,
+      reason,
+      ...(releasedBy !== undefined && {
+        released_by: releasedBy,
       }),
-      held_events: s,
-      held_ms: r,
+      held_events: heldCount,
+      held_ms: heldMs,
     });
   }
-  uploadBody(events, n) {
-    let s = {
+  uploadBody(events, hold) {
+    let body = {
       worker_epoch: this.workerEpoch,
       events,
     };
     if (this.uploadHoldMarker())
-      s.upload_hold = {
-        held: n.held,
-        flush_reason: n.reason,
-        held_count: clampInt32(n.heldCount),
-        hold_age_ms: clampInt32(n.holdAgeMs),
-        inflight_retry_count: clampInt32(n.retryCount),
-        hold_rule: n.rule,
-        post_index: clampInt32(n.postIndex),
+      body.upload_hold = {
+        held: hold.held,
+        flush_reason: hold.reason,
+        held_count: clampInt32(hold.heldCount),
+        hold_age_ms: clampInt32(hold.holdAgeMs),
+        inflight_retry_count: clampInt32(hold.retryCount),
+        hold_rule: hold.rule,
+        post_index: clampInt32(hold.postIndex),
         ...(this.flushPolicy?.policyVersion !== undefined && {
           policy_version: this.flushPolicy.policyVersion,
         }),
       };
-    return s;
+    return body;
   }
   retrySmaller(
-    e,
-    n,
-    s,
-    r,
-    h = {
-      bytes: s.bytes,
+    lane,
+    events,
+    opts,
+    timeoutMs,
+    size = {
+      bytes: opts.bytes,
     },
   ) {
-    let w = {
-      count: n.length,
-      kib: Math.round(h.bytes / 1024),
-      retry_count: s.retryCount,
-      timeout_ms: r,
+    let fields = {
+      count: events.length,
+      kib: Math.round(size.bytes / 1024),
+      retry_count: opts.retryCount,
+      timeout_ms: timeoutMs,
     };
     logForDebugging(
-      `CCRClient: ${e} POST of ${w.count} event(s), ${w.kib} KiB got no response (the connection failed, or no answer within ${r}ms) after ${w.retry_count} earlier failure(s); ${h.bytes >= LARGE_BATCH_BYTES && s.cuttable ? "retrying it in smaller batches" : "retrying it"}`,
+      `CCRClient: ${lane} POST of ${fields.count} event(s), ${fields.kib} KiB got no response (the connection failed, or no answer within ${timeoutMs}ms) after ${fields.retry_count} earlier failure(s); ${size.bytes >= LARGE_BATCH_BYTES && opts.cuttable ? "retrying it in smaller batches" : "retrying it"}`,
       {
         level: "warn",
       },
     );
     logForDiagnosticsNoPII(
       "warn",
-      e === "client_events" ? "cli_worker_events_no_response" : "cli_worker_internal_events_no_response",
-      w,
+      lane === "client_events" ? "cli_worker_events_no_response" : "cli_worker_internal_events_no_response",
+      fields,
     );
-    return new ClientEventTooSmallError(`${e} POST got no response`, LARGE_BATCH_BYTES);
+    return new ClientEventTooSmallError(`${lane} POST got no response`, LARGE_BATCH_BYTES);
   }
-  logUploadDrain(e, n) {
+  logUploadDrain(lane, stats) {
     if (!this.uploadHoldMarker()) return;
     logFeatureOk("ccr_upload_drain", {
-      lane: fromEnum(e),
-      trigger: fromEnum(n.trigger),
-      rule: fromEnum(n.rule),
-      held_events: n.heldEvents,
-      held_ms: n.heldMs,
-      posts: n.posts,
-      rows: n.rows,
-      max_rows_post: n.maxRowsPost,
-      failed_posts: n.failedPosts,
-      dropped_rows: n.droppedRows,
-      other_posts: n.otherPosts,
-      other_rows: n.otherRows,
-      drain_ms: n.drainMs,
+      lane: fromEnum(lane),
+      trigger: fromEnum(stats.trigger),
+      rule: fromEnum(stats.rule),
+      held_events: stats.heldEvents,
+      held_ms: stats.heldMs,
+      posts: stats.posts,
+      rows: stats.rows,
+      max_rows_post: stats.maxRowsPost,
+      failed_posts: stats.failedPosts,
+      dropped_rows: stats.droppedRows,
+      other_posts: stats.otherPosts,
+      other_rows: stats.otherRows,
+      drain_ms: stats.drainMs,
     });
   }
-  logUndeliveredAtClose(e, n) {
-    if (e === "client_events") this.undeliveredClientEventsAtClose ??= n;
-    else this.undeliveredInternalEventsAtClose ??= n;
+  logUndeliveredAtClose(lane, count) {
+    if (lane === "client_events") this.undeliveredClientEventsAtClose ??= count;
+    else this.undeliveredInternalEventsAtClose ??= count;
     if (this.shutdownKeepsClientEvents)
-      logForDebugging(`CCRClient: ${e} lane closed at shutdown, ${n} undelivered`, {
-        level: n > 0 ? "warn" : "info",
+      logForDebugging(`CCRClient: ${lane} lane closed at shutdown, ${count} undelivered`, {
+        level: count > 0 ? "warn" : "info",
       });
-    if (n <= 0) return;
+    if (count <= 0) return;
     if (this.noSubscriberUploadHoldMs > 0 && this.viewerAbsentReported)
       logFeatureSad(
         "ccr_no_subscriber_hold",
         this.closingForSuccessor ? "undelivered_at_rebuild" : "undelivered_at_close",
         {
-          lane: fromEnum(e),
-          undelivered_events: n,
+          lane: fromEnum(lane),
+          undelivered_events: count,
         },
       );
     if (this.servedPolicyHolds())
       logForDiagnosticsNoPII("warn", "cli_ccr_event_hold_undelivered_at_close", {
-        lane: e,
-        undelivered_events: n,
+        lane,
+        undelivered_events: count,
         for_successor: this.closingForSuccessor,
       });
   }
-  bufferEphemeral(e) {
-    let n = this.streamEventFirstFlushMs > 0 && e.type === "stream_event" ? e.event.type : undefined;
-    let s = n === "content_block_start";
-    if (s) this.firstContentFlushPending = true;
-    let event = e.type === "stream_event" && !e.parent_tool_use_id ? e.event : undefined;
-    if (event?.type === "content_block_start") {
+  bufferEphemeral(event) {
+    let deltaType =
+      this.streamEventFirstFlushMs > 0 && event.type === "stream_event" ? event.event.type : undefined;
+    let blockStart = deltaType === "content_block_start";
+    if (blockStart) this.firstContentFlushPending = true;
+    let event_2 = event.type === "stream_event" && !event.parent_tool_use_id ? event.event : undefined;
+    if (event_2?.type === "content_block_start") {
       this.toolInputMayWait =
-        event.content_block.type === "tool_use" && TOOLS_WHOSE_INPUT_MAY_WAIT.has(event.content_block.name);
+        event_2.content_block.type === "tool_use" &&
+        TOOLS_WHOSE_INPUT_MAY_WAIT.has(event_2.content_block.name);
       this.toolInputChars = 0;
     }
-    let h = this.toolInputChars >= MAX_TOOL_INPUT_CHARS_BEFORE_FLUSH;
-    let w = false;
-    if (event?.type === "content_block_delta" && event.delta.type === "input_json_delta") {
-      this.toolInputChars += event.delta.partial_json.length;
-      w = this.toolInputMayWait && this.toolInputFlushMs > 0;
+    let overChars = this.toolInputChars >= MAX_TOOL_INPUT_CHARS_BEFORE_FLUSH;
+    let inputMayWait = false;
+    if (event_2?.type === "content_block_delta" && event_2.delta.type === "input_json_delta") {
+      this.toolInputChars += event_2.delta.partial_json.length;
+      inputMayWait = this.toolInputMayWait && this.toolInputFlushMs > 0;
     }
     if (this.dropUnwatchedStreamEvents && this.unwatchedPastGrace) {
-      if (e.type === "stream_event") this.streamEventsDroppedUnwatched++;
+      if (event.type === "stream_event") this.streamEventsDroppedUnwatched++;
       return;
     }
-    this.streamEventBuffer.push(e);
-    let v = this.firstContentFlushPending && n === "content_block_delta";
-    if (v) this.firstContentFlushPending = false;
-    let y = s || (v && !w);
+    this.streamEventBuffer.push(event);
+    let firstDelta = this.firstContentFlushPending && deltaType === "content_block_delta";
+    if (firstDelta) this.firstContentFlushPending = false;
+    let flushNow = blockStart || (firstDelta && !inputMayWait);
     if (
-      v &&
+      firstDelta &&
       this.firstDeltaFlushTimer === null &&
-      e.type === "stream_event" &&
-      e.event.type === "content_block_delta" &&
-      e.event.delta.type !== "input_json_delta" &&
+      event.type === "stream_event" &&
+      event.event.type === "content_block_delta" &&
+      event.event.delta.type !== "input_json_delta" &&
       !(
         this.lastReportedHasSubscribers === false &&
         (this.noSubscriberStreamEventFlushIntervalMs > 0 || this.noSubscriberUploadHoldMs > 0)
@@ -4741,55 +4964,56 @@ class CCRClient {
         this.firstDeltaFlushTimer = null;
         this.flushStreamEventBuffer(true);
       }, 0);
-    let O = this.streamEventTimerIsSlow && !w;
-    if (this.streamEventTimer && !y && !O) return;
-    let C = w && h;
-    this.streamEventTimerIsSlow = C;
+    let slow = this.streamEventTimerIsSlow && !inputMayWait;
+    if (this.streamEventTimer && !flushNow && !slow) return;
+    let toolInputSlow = inputMayWait && overChars;
+    this.streamEventTimerIsSlow = toolInputSlow;
     let now = Date.now();
     let max = Math.max(this.toolInputFlushMs, this.streamEventFlushIntervalMs);
-    let P = y
+    let delay = flushNow
       ? Math.min(this.streamEventFirstFlushMs, this.streamEventFlushIntervalMs)
-      : C
+      : toolInputSlow
         ? Math.min(Math.max(this.streamEventsTakenAt + max - now, this.streamEventFlushIntervalMs), max)
         : this.streamEventFlushIntervalMs;
-    if (P > this.streamEventFlushIntervalMs && !this.loggedToolInputFlush) {
+    if (delay > this.streamEventFlushIntervalMs && !this.loggedToolInputFlush) {
       this.loggedToolInputFlush = true;
       logFeatureOk("ccr_tool_input_flush");
     }
-    let W =
+    let wait =
       this.lastReportedHasSubscribers === false
-        ? Math.max(this.noSubscriberStreamEventFlushIntervalMs, this.noSubscriberUploadHoldMs, P)
-        : P;
+        ? Math.max(this.noSubscriberStreamEventFlushIntervalMs, this.noSubscriberUploadHoldMs, delay)
+        : delay;
     if (this.streamEventTimer) {
-      if (now + W >= this.streamEventFlushDueAt) return;
+      if (now + wait >= this.streamEventFlushDueAt) return;
       clearTimeout(this.streamEventTimer);
     } else this.streamEventBufferedAt = now;
-    this.streamEventFlushDueAt = now + W;
-    this.streamEventTimer = setTimeout(() => void this.flushStreamEventBuffer(), W);
+    this.streamEventFlushDueAt = now + wait;
+    this.streamEventTimer = setTimeout(() => void this.flushStreamEventBuffer(), wait);
   }
-  setHasSubscribers(e, n) {
+  setHasSubscribers(reported, source) {
     this.hasSubscribersReports++;
-    let s = typeof e === "boolean" && (e || !this.senderMayNotBeAttachedYet()) ? e : undefined;
+    let value =
+      typeof reported === "boolean" && (reported || !this.senderMayNotBeAttachedYet()) ? reported : undefined;
     let lastReportedHasSubscribers = this.lastReportedHasSubscribers;
-    this.lastReportedHasSubscribers = s;
-    if (s === true) this.viewerReportedSinceLastFalse = true;
-    else if (s === false && this.viewerReportedSinceLastFalse) {
+    this.lastReportedHasSubscribers = value;
+    if (value === true) this.viewerReportedSinceLastFalse = true;
+    else if (value === false && this.viewerReportedSinceLastFalse) {
       this.viewerReportedSinceLastFalse = false;
       this.lastViewerLeftAtMs = Date.now();
     }
     let unwatchedPastGrace = this.unwatchedPastGrace;
-    this.unwatchedPastGrace = s === false && Date.now() - this.lastViewerLeftAtMs >= VIEWER_LEFT_GRACE_MS;
+    this.unwatchedPastGrace = value === false && Date.now() - this.lastViewerLeftAtMs >= VIEWER_LEFT_GRACE_MS;
     if (this.dropUnwatchedStreamEvents && unwatchedPastGrace !== this.unwatchedPastGrace)
       logForDebugging(
         this.unwatchedPastGrace
           ? "CCRClient: no subscribers reported; dropping stream deltas until one is"
-          : `CCRClient: resuming stream deltas (${s === true ? "watcher" : n})`,
+          : `CCRClient: resuming stream deltas (${value === true ? "watcher" : source})`,
       );
-    if (lastReportedHasSubscribers === false && s !== false && this.streamEventTimer)
+    if (lastReportedHasSubscribers === false && value !== false && this.streamEventTimer)
       this.flushStreamEventBuffer();
-    let w = s === true ? "watcher" : n;
-    if (s === false) this.viewerAbsentReported = true;
-    else if (this.viewerAbsentReported && w === "watcher") {
+    let holdSource = value === true ? "watcher" : source;
+    if (value === false) this.viewerAbsentReported = true;
+    else if (this.viewerAbsentReported && holdSource === "watcher") {
       this.viewerAbsentReported = false;
       if (this.holdRule === "served_policy") {
         if (this.parkedRows.length > 0) this.flushStreamEventBuffer();
@@ -4797,10 +5021,10 @@ class CCRClient {
         this.internalEventUploader.release("watcher");
       }
     }
-    this.applyUploadHold(w);
+    this.applyUploadHold(holdSource);
   }
-  async flushStreamEventBuffer(e = false) {
-    let { events, release } = this.takeStreamEventBuffer(e);
+  async flushStreamEventBuffer(atTurnEnd = false) {
+    let { events, release } = this.takeStreamEventBuffer(atTurnEnd);
     if (events.length > 0) {
       if (release) this.releaseTranscriptLane(release);
       await this.enqueueClientEvents(
@@ -4815,40 +5039,41 @@ class CCRClient {
       );
     }
   }
-  enqueueClientEvents(e, n) {
-    for (let s of this.trackedFrameUploads("enqueuedAtMs")) {
-      let found = e.find((v) => v.payload.uuid === s.uuid);
+  enqueueClientEvents(events, opts) {
+    for (let upload of this.trackedFrameUploads("enqueuedAtMs")) {
+      let found = events.find((event) => event.payload.uuid === upload.uuid);
       if (!found) continue;
-      let h = this.eventUploader.inFlightBatch();
-      let w;
-      if (n.release === undefined && this.eventUploader.holdsOnArrival(found)) w = "hold";
-      else if (h !== undefined) w = h.some((v) => !v.ephemeral) ? "durable_post" : "ephemeral_post";
-      else if (this.eventUploader.backlog().backingOff) w = "retry_backoff";
-      else w = "none";
-      s.timing.enqueuedAtMs = performance.now();
-      s.timing.queuedBehind = w;
+      let inFlight = this.eventUploader.inFlightBatch();
+      let queuedBehind;
+      if (opts.release === undefined && this.eventUploader.holdsOnArrival(found)) queuedBehind = "hold";
+      else if (inFlight !== undefined)
+        queuedBehind = inFlight.some((event) => !event.ephemeral) ? "durable_post" : "ephemeral_post";
+      else if (this.eventUploader.backlog().backingOff) queuedBehind = "retry_backoff";
+      else queuedBehind = "none";
+      upload.timing.enqueuedAtMs = performance.now();
+      upload.timing.queuedBehind = queuedBehind;
     }
-    return this.eventUploader.enqueue(e, n);
+    return this.eventUploader.enqueue(events, opts);
   }
-  releaseClientEvents(e, n) {
-    this.eventUploader.release(e, n);
+  releaseClientEvents(release, releasedBy) {
+    this.eventUploader.release(release, releasedBy);
   }
-  offerToEventsPost(e, n) {
+  offerToEventsPost(events, opts) {
     if (
-      n.rule !== "served_policy" ||
-      n.retryCount > 0 ||
+      opts.rule !== "served_policy" ||
+      opts.retryCount > 0 ||
       this.flushPolicy?.eventBatchUpload !== true ||
       this.ridesAreOff()
     )
       return;
     let { promise, resolve } = Promise.withResolvers();
     this.ridingRows = {
-      rows: e,
-      bytes: n.bytes,
+      rows: events,
+      bytes: opts.bytes,
       settle: resolve,
     };
     queueMicrotask(() => {
-      if (this.ridingRows?.rows === e && !this.liveViewLaneSendsMore()) this.giveBackRidingRows();
+      if (this.ridingRows?.rows === events && !this.liveViewLaneSendsMore()) this.giveBackRidingRows();
     });
     return promise;
   }
@@ -4862,14 +5087,14 @@ class CCRClient {
   ridesAreOff() {
     return this.ridesRefused || performance.now() < this.ridesPausedUntilMs;
   }
-  noteRouteOnlyFailure(e) {
+  noteRouteOnlyFailure(status) {
     this.routeOnlyFailures++;
-    if (this.routeOnlyFailures < 2 && e !== 405 && e !== 501) return;
+    if (this.routeOnlyFailures < 2 && status !== 405 && status !== 501) return;
     let min = Math.min(RIDE_PAUSE_BASE_MS * 2 ** this.ridePauses, RIDE_PAUSE_MAX_MS);
     this.ridePauses++;
     this.ridesPausedUntilMs = performance.now() + min;
     logForDiagnosticsNoPII("warn", "cli_ccr_joint_upload_paused", {
-      status: e,
+      status,
       pause_ms: min,
     });
   }
@@ -4877,15 +5102,15 @@ class CCRClient {
     this.ridingRows?.settle(false);
     this.ridingRows = undefined;
   }
-  settlesTakenRiders(e) {
-    let n = () => {
+  settlesTakenRiders(send) {
+    let settle = () => {
       this.takenRiders?.settle(false);
       this.takenRiders = undefined;
     };
-    return (s, r) => {
-      let h = e(s, r);
-      h.then(n, n);
-      return h;
+    return (events, opts) => {
+      let promise = send(events, opts);
+      promise.then(settle, settle);
+      return promise;
     };
   }
   actsOnSubscribersReports() {
@@ -4896,8 +5121,8 @@ class CCRClient {
       this.servedPolicyHolds()
     );
   }
-  takeStreamEventBuffer(e = false) {
-    if (!e) {
+  takeStreamEventBuffer(atTurnEnd = false) {
+    if (!atTurnEnd) {
       if (this.streamEventTimer) {
         if (this.firstTextFrameUpload)
           recordTimerLateness(this.firstTextFrameUpload.timing, Date.now() - this.streamEventFlushDueAt);
@@ -4911,99 +5136,102 @@ class CCRClient {
       }
     }
     let release;
-    let parkedRows = e ? [] : this.parkedRows;
+    let parkedRows = atTurnEnd ? [] : this.parkedRows;
     for (let { message } of parkedRows) release ??= this.releaseFor(message);
     if (this.streamEventBuffer.length === 0)
       return {
-        events: e ? [] : this.takeParkedRows(),
+        events: atTurnEnd ? [] : this.takeParkedRows(),
         release,
       };
-    let r = [];
-    let h;
-    let w = 0;
-    for (let C of this.streamEventBuffer) {
-      if (C.type === "stream_event") {
-        r.push(C);
+    let streamEvents = [];
+    let lastCount;
+    let delta = 0;
+    for (let event of this.streamEventBuffer) {
+      if (event.type === "stream_event") {
+        streamEvents.push(event);
         continue;
       }
-      w =
-        (h !== undefined && C.estimated_tokens - C.estimated_tokens_delta === h.estimated_tokens ? w : 0) +
-        C.estimated_tokens_delta;
-      h = C;
+      delta =
+        (lastCount !== undefined &&
+        event.estimated_tokens - event.estimated_tokens_delta === lastCount.estimated_tokens
+          ? delta
+          : 0) + event.estimated_tokens_delta;
+      lastCount = event;
     }
     this.streamEventBuffer = [];
     this.streamEventsTakenAt = Date.now();
-    for (let C of this.trackedFrameUploads("enqueuedAtMs")) C.uuid = findCoalescedRunHead(r, C.uuid);
-    let mapped = coalesceStreamEvents(r)
-      .filter((C) => {
-        let U = Buffer.byteLength(jsonStringify(C));
-        if (U <= MAX_FRAME_BYTES) return true;
-        dropOversizeStreamEvent(C, U);
+    for (let upload of this.trackedFrameUploads("enqueuedAtMs"))
+      upload.uuid = findCoalescedRunHead(streamEvents, upload.uuid);
+    let mapped = coalesceStreamEvents(streamEvents)
+      .filter((event) => {
+        let size = Buffer.byteLength(jsonStringify(event));
+        if (size <= MAX_FRAME_BYTES) return true;
+        dropOversizeStreamEvent(event, size);
         return false;
       })
       .map((payload) => ({
         payload,
         ephemeral: true,
       }));
-    if (h)
+    if (lastCount)
       mapped.push(
         this.toClientEvent({
-          ...h,
-          estimated_tokens_delta: w,
+          ...lastCount,
+          estimated_tokens_delta: delta,
         }),
       );
-    if (!e) mapped.push(...this.takeParkedRows());
+    if (!atTurnEnd) mapped.push(...this.takeParkedRows());
     return {
       events: mapped,
       release,
     };
   }
   currentUploadTrim() {
-    let e = this.uploadTrim();
-    return isPlainObject(e) ? e : EMPTY_UPLOAD_TRIM;
+    let trim = this.uploadTrim();
+    return isPlainObject(trim) ? trim : EMPTY_UPLOAD_TRIM;
   }
-  async writeInternalEvent(e, n, { isCompaction = false, agentId, preservedEventIds } = {}) {
-    let w = preservedEventIds;
-    let v = trimPreservedMessagesMetadata(n);
-    if (w && w.length > MAX_PRESERVED_MESSAGE_UUIDS) {
+  async writeInternalEvent(kind, payload, { isCompaction = false, agentId, preservedEventIds } = {}) {
+    let preservedIds = preservedEventIds;
+    let trimmed = trimPreservedMessagesMetadata(payload);
+    if (preservedIds && preservedIds.length > MAX_PRESERVED_MESSAGE_UUIDS) {
       logEvent("tengu_ccr_preserved_event_ids_clamped", {
-        originalCount: w.length,
+        originalCount: preservedIds.length,
         cap: MAX_PRESERVED_MESSAGE_UUIDS,
-        payloadClamped: v !== null,
+        payloadClamped: trimmed !== null,
       });
-      w = w.slice(-MAX_PRESERVED_MESSAGE_UUIDS);
+      preservedIds = preservedIds.slice(-MAX_PRESERVED_MESSAGE_UUIDS);
     }
-    let y = v ?? n;
+    let outPayload = trimmed ?? payload;
     if (this.currentUploadTrim().envelope === true) {
-      let x = stripTranscriptOnlyFields(y, this.keepsRequestId);
-      if (x !== y && !this.loggedTranscriptEnvelopeStrip) {
+      let stripped = stripTranscriptOnlyFields(outPayload, this.keepsRequestId);
+      if (stripped !== outPayload && !this.loggedTranscriptEnvelopeStrip) {
         this.loggedTranscriptEnvelopeStrip = true;
         logFeatureOk("ccr_worker_envelope_strip");
       }
       if (
         !this.loggedRequestIdKept &&
-        isAssistantWithMessageId(x) &&
-        typeof x.requestId === "string" &&
+        isAssistantWithMessageId(stripped) &&
+        typeof stripped.requestId === "string" &&
         this.keepsRequestId()
       ) {
         this.loggedRequestIdKept = true;
         logFeatureOk("ccr_worker_error_request_id_kept");
       }
-      y = x;
+      outPayload = stripped;
     }
-    if (e === "transcript" && y.type === "user" && y.isVirtual !== true) {
-      let x = this.uploadedToolResult(y.toolUseResult, y.message);
-      if (x !== y.toolUseResult)
-        y = {
-          ...y,
-          toolUseResult: x,
+    if (kind === "transcript" && outPayload.type === "user" && outPayload.isVirtual !== true) {
+      let result = this.uploadedToolResult(outPayload.toolUseResult, outPayload.message);
+      if (result !== outPayload.toolUseResult)
+        outPayload = {
+          ...outPayload,
+          toolUseResult: result,
         };
     }
-    let O = {
+    let event = {
       payload: {
-        type: e,
-        ...y,
-        uuid: typeof y.uuid === "string" ? y.uuid : randomUUID(),
+        type: kind,
+        ...outPayload,
+        uuid: typeof outPayload.uuid === "string" ? outPayload.uuid : randomUUID(),
       },
       ...(isCompaction && {
         is_compaction: true,
@@ -5011,56 +5239,58 @@ class CCRClient {
       ...(agentId && {
         session_agent_id: agentId,
       }),
-      ...(w?.length && {
-        preserved_event_ids: w,
+      ...(preservedIds?.length && {
+        preserved_event_ids: preservedIds,
       }),
     };
-    let C = [O];
-    let U = agentId || "";
-    let S = this.rowsAwaitingCompactSummary.get(U);
+    let events = [event];
+    let agentKey = agentId || "";
+    let awaiting = this.rowsAwaitingCompactSummary.get(agentKey);
     if (
-      e === "transcript" &&
-      (S !== undefined || (isCompaction && this.rowsAwaitingCompactSummaryAtClose === undefined))
+      kind === "transcript" &&
+      (awaiting !== undefined || (isCompaction && this.rowsAwaitingCompactSummaryAtClose === undefined))
     ) {
-      if (S === undefined) {
-        S = {
+      if (awaiting === undefined) {
+        awaiting = {
           rows: [],
-          timer: this.startCompactSummaryWaitTimer(U),
+          timer: this.startCompactSummaryWaitTimer(agentKey),
         };
-        this.rowsAwaitingCompactSummary.set(U, S);
+        this.rowsAwaitingCompactSummary.set(agentKey, awaiting);
       }
-      S.rows.push(O);
-      let x =
-        y.isCompactSummary === true
+      awaiting.rows.push(event);
+      let reason =
+        outPayload.isCompactSummary === true
           ? "summary"
-          : y.type === "user" || y.type === "assistant"
+          : outPayload.type === "user" || outPayload.type === "assistant"
             ? "user_or_assistant_row"
-            : S.rows.length >= MAX_VIEWER_ROWS_BEFORE_FLUSH
+            : awaiting.rows.length >= MAX_VIEWER_ROWS_BEFORE_FLUSH
               ? "row_cap"
               : undefined;
-      if (x === undefined) return;
-      C = this.takeRowsAwaitingCompactSummary(U, x);
+      if (reason === undefined) return;
+      events = this.takeRowsAwaitingCompactSummary(agentKey, reason);
     }
-    let P = e === "transcript" && y.type === "user" && this.toolResultReleases(y.message);
-    let W = this.gatesToolCalls && e === "transcript" && !agentId ? getMainThreadToolUseIds(y) : [];
+    let releases =
+      kind === "transcript" && outPayload.type === "user" && this.toolResultReleases(outPayload.message);
+    let ids =
+      this.gatesToolCalls && kind === "transcript" && !agentId ? getMainThreadToolUseIds(outPayload) : [];
     await this.queueInternalEvents(
-      C,
-      P
+      events,
+      releases
         ? "tool_result"
-        : W.some((x) => this.awaitedToolCalls.has(x))
+        : ids.some((id) => this.awaitedToolCalls.has(id))
           ? "tool_call"
-          : !this.transcriptRowMayWait(e, y, agentId)
+          : !this.transcriptRowMayWait(kind, outPayload, agentId)
             ? "event"
             : undefined,
     );
-    if (e === "transcript") this.transcriptLaneInUse = true;
-    this.noteToolCallRows("internal_events", W, "queued");
+    if (kind === "transcript") this.transcriptLaneInUse = true;
+    this.noteToolCallRows("internal_events", ids, "queued");
   }
-  async queueInternalEvents(e, n) {
-    let s = e[0]?.is_compaction === true && this.holdRule !== undefined;
-    if (s) this.releaseClientEvents("event", "compaction");
+  async queueInternalEvents(events, release) {
+    let compaction = events[0]?.is_compaction === true && this.holdRule !== undefined;
+    if (compaction) this.releaseClientEvents("event", "compaction");
     let mapped = (
-      e[0]?.is_compaction === true && e[0].session_agent_id === undefined
+      events[0]?.is_compaction === true && events[0].session_agent_id === undefined
         ? (this.rowsRepeatedAfterCompaction?.() ?? [])
         : []
     ).map(({ eventType, payload }) => ({
@@ -5070,77 +5300,79 @@ class CCRClient {
         uuid: randomUUID(),
       },
     }));
-    let w = [...e, ...mapped];
-    this.markInternalEventPostWatch((v) => v.noteQueued(w));
-    await this.internalEventUploader.enqueue(w, {
+    let allEvents = [...events, ...mapped];
+    this.markInternalEventPostWatch((watch) => watch.noteQueued(allEvents));
+    await this.internalEventUploader.enqueue(allEvents, {
       together: true,
-      release: s ? "event" : n,
+      release: compaction ? "event" : release,
     });
   }
-  startCompactSummaryWaitTimer(e) {
+  startCompactSummaryWaitTimer(agentKey) {
     let timer = setTimeout(
-      (s, r) => {
-        let h = s.rowsAwaitingCompactSummary.get(r);
-        if (s.closed || h === undefined) return;
-        if (!s.internalEventUploader.hasRoomFor(1)) {
-          h.timer = s.startCompactSummaryWaitTimer(r);
+      (uploader, agentKey) => {
+        let awaiting = uploader.rowsAwaitingCompactSummary.get(agentKey);
+        if (uploader.closed || awaiting === undefined) return;
+        if (!uploader.internalEventUploader.hasRoomFor(1)) {
+          awaiting.timer = uploader.startCompactSummaryWaitTimer(agentKey);
           return;
         }
-        s.queueInternalEvents(s.takeRowsAwaitingCompactSummary(r, "timeout"), undefined).catch(logError);
+        uploader
+          .queueInternalEvents(uploader.takeRowsAwaitingCompactSummary(agentKey, "timeout"), undefined)
+          .catch(logError);
       },
       HELD_ROWS_MAX_AGE_MS,
       this,
-      e,
+      agentKey,
     );
     timer.unref?.();
     return timer;
   }
-  takeRowsAwaitingCompactSummary(e, n) {
-    let s = this.rowsAwaitingCompactSummary.get(e);
-    this.rowsAwaitingCompactSummary.delete(e);
-    clearTimeout(s?.timer);
-    let rows = s?.rows ?? [];
-    if (n !== "summary" && n !== "close")
+  takeRowsAwaitingCompactSummary(agentKey, reason) {
+    let awaiting = this.rowsAwaitingCompactSummary.get(agentKey);
+    this.rowsAwaitingCompactSummary.delete(agentKey);
+    clearTimeout(awaiting?.timer);
+    let rows = awaiting?.rows ?? [];
+    if (reason !== "summary" && reason !== "close")
       logForDiagnosticsNoPII("info", "cli_worker_compaction_marker_uploaded_without_summary", {
-        reason: n,
+        reason,
         count: rows.length,
-        subagent: e !== "",
+        subagent: agentKey !== "",
       });
     return rows;
   }
-  transcriptRowMayWait(e, n, s) {
+  transcriptRowMayWait(kind, payload, agentId) {
     let flushPolicy = this.flushPolicy;
     if (this.holdRule !== "served_policy" || !flushPolicy) return true;
-    let h = e === "transcript" ? n.type : e;
-    if (typeof h !== "string" || flushPolicy.mustFlushTypes.has(h)) return false;
-    if (h === "user") {
-      if (flushPolicy.holdAcrossModelCalls && this.turnHold === "open" && !s) return false;
+    let type = kind === "transcript" ? payload.type : kind;
+    if (typeof type !== "string" || flushPolicy.mustFlushTypes.has(type)) return false;
+    if (type === "user") {
+      if (flushPolicy.holdAcrossModelCalls && this.turnHold === "open" && !agentId) return false;
       return (
-        n.toolUseResult !== undefined ||
-        hasToolResultContent(n.message) ||
-        n.isMeta === true ||
-        n.isVirtual === true ||
-        n.isCompactSummary === true
+        payload.toolUseResult !== undefined ||
+        hasToolResultContent(payload.message) ||
+        payload.isMeta === true ||
+        payload.isVirtual === true ||
+        payload.isCompactSummary === true
       );
     }
-    return !(h === "assistant" && flushPolicy.flushOnAssistant);
+    return !(type === "assistant" && flushPolicy.flushOnAssistant);
   }
-  flushInternalEvents(e) {
-    return this.internalEventUploader.flush(e);
+  flushInternalEvents(x) {
+    return this.internalEventUploader.flush(x);
   }
   watchInternalEventPosts() {
-    let e = new UploadBacklogStats(this.internalEventUploader.backlog().unsent);
-    this.internalEventPostWatch = e;
-    return (n) => {
-      if (this.internalEventPostWatch === e) this.internalEventPostWatch = undefined;
-      return e.seen(n);
+    let stats = new UploadBacklogStats(this.internalEventUploader.backlog().unsent);
+    this.internalEventPostWatch = stats;
+    return (since) => {
+      if (this.internalEventPostWatch === stats) this.internalEventPostWatch = undefined;
+      return stats.seen(since);
     };
   }
-  markInternalEventPostWatch(e) {
+  markInternalEventPostWatch(fn) {
     let internalEventPostWatch = this.internalEventPostWatch;
     if (internalEventPostWatch === undefined) return;
     try {
-      e(internalEventPostWatch);
+      fn(internalEventPostWatch);
     } catch (error) {
       this.internalEventPostWatch = undefined;
       logError(error);
@@ -5157,22 +5389,22 @@ class CCRClient {
     );
   }
   uploadBacklog() {
-    let e = this.eventUploader.backlog();
-    let n = this.internalEventUploader.backlog();
-    let filtered = [e.inFlightMs, n.inFlightMs].filter((r) => r !== undefined);
+    let client = this.eventUploader.backlog();
+    let internal = this.internalEventUploader.backlog();
+    let filtered = [client.inFlightMs, internal.inFlightMs].filter((ms) => ms !== undefined);
     return {
-      unsentClientEvents: e.unsent,
-      unsentInternalEvents: n.unsent + this.countRowsAwaitingCompactSummary(),
+      unsentClientEvents: client.unsent,
+      unsentInternalEvents: internal.unsent + this.countRowsAwaitingCompactSummary(),
       oldestInFlightMs: filtered.length ? Math.max(...filtered) : undefined,
-      backingOff: e.backingOff || n.backingOff,
+      backingOff: client.backingOff || internal.backingOff,
     };
   }
-  async postInternalEventsBatch(events, n = {}) {
-    let s = this.refuseInternalEventsCall(true);
-    if (s) return s;
+  async postInternalEventsBatch(events, opts = {}) {
+    let refusal = this.refuseInternalEventsCall(true);
+    if (refusal) return refusal;
     let epochMismatchCount = this.epochMismatchCount;
     try {
-      let h = await this.request(
+      let result = await this.request(
         "post",
         "/worker/internal-events",
         {
@@ -5183,17 +5415,17 @@ class CCRClient {
         {
           parseBody: true,
           countTowardEscalation: false,
-          signal: n.signal,
+          signal: opts.signal,
         },
       );
-      if (h.ok) {
-        let w = eventBatchResultSchema().safeParse(h.data);
+      if (result.ok) {
+        let parsed = eventBatchResultSchema().safeParse(result.data);
         return {
           ok: true,
-          results: w.success ? w.data.results : undefined,
+          results: parsed.success ? parsed.data.results : undefined,
         };
       }
-      return this.internalEventsFailure(h, epochMismatchCount);
+      return this.internalEventsFailure(result, epochMismatchCount);
     } catch (error) {
       return this.internalEventsFailure(
         {
@@ -5203,17 +5435,17 @@ class CCRClient {
       );
     }
   }
-  async getInternalEventsPage(e, n = {}) {
-    let s = this.refuseInternalEventsCall(false);
-    if (s) return s;
-    let r = new URL(`${this.sessionBaseUrl}/worker/internal-events`);
-    if (e.limit !== undefined) r.searchParams.set("limit", String(e.limit));
-    if (e.agentId) r.searchParams.set("session_agent_id", e.agentId);
-    if (e.subagents) r.searchParams.set("subagents", "true");
-    if (e.cursor) r.searchParams.set("cursor", e.cursor);
-    else if (e.afterEventId) r.searchParams.set("after_event_id", e.afterEventId);
+  async getInternalEventsPage(query, opts = {}) {
+    let refusal = this.refuseInternalEventsCall(false);
+    if (refusal) return refusal;
+    let url = new URL(`${this.sessionBaseUrl}/worker/internal-events`);
+    if (query.limit !== undefined) url.searchParams.set("limit", String(query.limit));
+    if (query.agentId) url.searchParams.set("session_agent_id", query.agentId);
+    if (query.subagents) url.searchParams.set("subagents", "true");
+    if (query.cursor) url.searchParams.set("cursor", query.cursor);
+    else if (query.afterEventId) url.searchParams.set("after_event_id", query.afterEventId);
     let epochMismatchCount = this.epochMismatchCount;
-    let w;
+    let signal;
     try {
       let authHeaders = this.getAuthHeaders();
       if (Object.keys(authHeaders).length === 0)
@@ -5221,33 +5453,33 @@ class CCRClient {
           ok: false,
           reason: "no_auth_headers",
         };
-      w = n.signal
-        ? createCombinedAbortSignal(n.signal, {
+      signal = opts.signal
+        ? createCombinedAbortSignal(opts.signal, {
             timeoutMs: 30000,
             refTimer: true,
           })
         : undefined;
-      let response = await fetch(r, {
+      let response = await fetch(url, {
         headers: {
           ...authHeaders,
           "anthropic-version": "2023-06-01",
           "anthropic-client-platform": getClientPlatform(),
           "User-Agent": claudeCodeUserAgent(),
         },
-        signal: w?.signal ?? AbortSignal.timeout(30000),
+        signal: signal?.signal ?? AbortSignal.timeout(30000),
         ...getProxyFetchOptions({
-          url: r.toString(),
+          url: url.toString(),
         }),
       });
       if (response.ok) {
-        let P;
+        let body;
         try {
-          P = await response.json();
+          body = await response.json();
         } catch (error) {
           if (!(error instanceof SyntaxError)) throw error;
         }
-        let W = sessionEventsPageSchema().safeParse(P);
-        if (!W.success) {
+        let parsed = sessionEventsPageSchema().safeParse(body);
+        if (!parsed.success) {
           logForDiagnosticsNoPII("warn", "cli_worker_internal_events_page_foreign");
           return {
             ok: false,
@@ -5255,14 +5487,14 @@ class CCRClient {
             reason: "foreign_body",
           };
         }
-        let x = Number(response.headers.get("content-length") ?? Number.NaN);
+        let length = Number(response.headers.get("content-length") ?? Number.NaN);
         return {
           ok: true,
-          data: W.data.data.map(normalizePayload),
-          ...(W.data.next_cursor && {
-            nextCursor: W.data.next_cursor,
+          data: parsed.data.data.map(normalizePayload),
+          ...(parsed.data.next_cursor && {
+            nextCursor: parsed.data.next_cursor,
           }),
-          bytes: Number.isFinite(x) ? x : null,
+          bytes: Number.isFinite(length) ? length : null,
         };
       }
       let errorType;
@@ -5286,8 +5518,8 @@ class CCRClient {
         } catch {}
       else {
         if (response.status === 429) {
-          let P = parseInt(response.headers.get("retry-after") ?? "", 10);
-          if (!isNaN(P) && P >= 0) retryAfterMs = P * 1000;
+          let retry = parseInt(response.headers.get("retry-after") ?? "", 10);
+          if (!isNaN(retry) && retry >= 0) retryAfterMs = retry * 1000;
         }
         response.body?.cancel();
       }
@@ -5323,10 +5555,10 @@ class CCRClient {
         epochMismatchCount,
       );
     } finally {
-      w?.cleanup();
+      signal?.cleanup();
     }
   }
-  refuseInternalEventsCall(e) {
+  refuseInternalEventsCall(needsEpoch) {
     if (this.closed)
       return {
         ok: false,
@@ -5335,33 +5567,33 @@ class CCRClient {
           conflict: this.lastEpochMismatchCause,
         }),
       };
-    if (e && this.workerEpoch <= 0)
+    if (needsEpoch && this.workerEpoch <= 0)
       return {
         ok: false,
         reason: "not_initialized",
       };
     return;
   }
-  internalEventsFailure(e, n, { errorType, resourceType, closedConflict } = {}) {
-    let w =
+  internalEventsFailure(failure, epoch, { errorType, resourceType, closedConflict } = {}) {
+    let conflict =
       closedConflict ??
-      (this.epochMismatchCount > n
+      (this.epochMismatchCount > epoch
         ? this.lastEpochMismatchCause
-        : e.status === 409
+        : failure.status === 409
           ? (this.lastEpochMismatchCause ?? "epoch_conflict")
           : undefined);
-    let v = e.status ?? (w && CONFLICT_REASON_IS_SUPERSEDED[w] ? 409 : undefined);
+    let status = failure.status ?? (conflict && CONFLICT_REASON_IS_SUPERSEDED[conflict] ? 409 : undefined);
     return {
       ok: false,
-      reason: v === 409 ? "http_409" : (e.reason ?? "unknown"),
-      ...(v !== undefined && {
-        status: v,
+      reason: status === 409 ? "http_409" : (failure.reason ?? "unknown"),
+      ...(status !== undefined && {
+        status,
       }),
-      ...(e.retryAfterMs !== undefined && {
-        retryAfterMs: e.retryAfterMs,
+      ...(failure.retryAfterMs !== undefined && {
+        retryAfterMs: failure.retryAfterMs,
       }),
-      ...(w && {
-        conflict: w,
+      ...(conflict && {
+        conflict,
       }),
       ...(errorType && {
         errorType,
@@ -5376,39 +5608,39 @@ class CCRClient {
     return this.droppedInternalEventBatches;
   }
   refusedInternalEventUuids = new Set();
-  refusedInternalEvents(e) {
-    return e.filter((n) => this.refusedInternalEventUuids.has(n));
+  refusedInternalEvents(events) {
+    return events.filter((uuid) => this.refusedInternalEventUuids.has(uuid));
   }
-  noteRefusedInternalEvents(e) {
-    for (let { payload, session_agent_id: sessionAgentId } of e)
+  noteRefusedInternalEvents(events) {
+    for (let { payload, session_agent_id: sessionAgentId } of events)
       if (sessionAgentId === undefined) this.refusedInternalEventUuids.add(payload.uuid);
-    let n = this.refusedInternalEventUuids.size - MAX_REFUSED_INTERNAL_EVENT_UUIDS;
+    let excess = this.refusedInternalEventUuids.size - MAX_REFUSED_INTERNAL_EVENT_UUIDS;
     for (let refusedInternalEventUuid of this.refusedInternalEventUuids) {
-      if (n-- <= 0) break;
+      if (excess-- <= 0) break;
       this.refusedInternalEventUuids.delete(refusedInternalEventUuid);
     }
   }
-  dropOrphanedHandedOffLines(e) {
-    let n = 0;
-    for (let s = 0; s < e.length;) {
-      let r = e[s];
-      let { payload } = r;
+  dropOrphanedHandedOffLines(events) {
+    let dropped = 0;
+    for (let index = 0; index < events.length;) {
+      let event = events[index];
+      let { payload } = event;
       if (
-        r.session_agent_id === undefined &&
+        event.session_agent_id === undefined &&
         (payload.handedOff === true ||
           (payload.type === "system" && payload.subtype === UPGRADE_RELAY_MARKER)) &&
         !(payload.type === "user" && !hasToolResultContent(payload.message)) &&
         typeof payload.parentUuid === "string" &&
         this.refusedInternalEventUuids.has(payload.parentUuid)
       ) {
-        e.splice(s, 1);
-        n++;
-        this.noteRefusedInternalEvents([r]);
+        events.splice(index, 1);
+        dropped++;
+        this.noteRefusedInternalEvents([event]);
         continue;
       }
-      s++;
+      index++;
     }
-    return n;
+    return dropped;
   }
   droppedDeliveryAckBatches = 0;
   deliveryAcksWaitingForRoom = new Set();
@@ -5420,35 +5652,36 @@ class CCRClient {
     await this.deliveryUploader.flush();
     return this.droppedDeliveryAckBatches === droppedDeliveryAckBatches && !this.closed;
   }
-  flushDeliveryAcks(e) {
-    if (this.receiptsRide) return this.receiptsRide.promise.then(() => this.flushDeliveryAcks(e));
+  flushDeliveryAcks(x) {
+    if (this.receiptsRide) return this.receiptsRide.promise.then(() => this.flushDeliveryAcks(x));
     this.sendWaitingReceipts();
-    return this.deliveryUploader.flush(e);
+    return this.deliveryUploader.flush(x);
   }
-  async flush(e) {
+  async flush(x) {
     if (this.waitingAnswers.length > 0) await this.writeEvents([]);
     await this.flushStreamEventBuffer();
-    return this.eventUploader.flush(e);
+    return this.eventUploader.flush(x);
   }
-  withdrawQueuedControlRequest(e) {
-    let n = (s) => !s.ephemeral && s.payload.type === "control_request" && s.payload.request_id === e;
-    return this.eventUploader.withdraw(n);
+  withdrawQueuedControlRequest(requestId) {
+    let predicate = (event) =>
+      !event.ephemeral && event.payload.type === "control_request" && event.payload.request_id === requestId;
+    return this.eventUploader.withdraw(predicate);
   }
   droppedDurableEventBatches = 0;
   get droppedDurableBatches() {
     return this.droppedDurableEventBatches;
   }
   takeUndeliveredClientEvents() {
-    return this.eventUploader.takeUndelivered().filter((e) => !e.ephemeral);
+    return this.eventUploader.takeUndelivered().filter((event) => !event.ephemeral);
   }
   discardUndeliveredClientEvents() {
-    let filtered = this.eventUploader.peekUndelivered().filter((n) => !n.ephemeral);
+    let filtered = this.eventUploader.peekUndelivered().filter((event) => !event.ephemeral);
     this.eventUploader.discardUndelivered();
     return filtered;
   }
-  adoptClientEvents(e) {
-    if (e.length === 0) return;
-    this.eventUploader.enqueue(e);
+  adoptClientEvents(events) {
+    if (events.length === 0) return;
+    this.eventUploader.enqueue(events);
   }
   async flushWorkerState() {
     return this.workerState.flush();
@@ -5458,17 +5691,17 @@ class CCRClient {
   get droppedWorkerStatePatches() {
     return this.droppedWorkerStatePatchCount;
   }
-  async readInternalEvents(e, n, s) {
-    return CCRClient.readInternalEventsFrom(this.readSource, e, n, s);
+  async readInternalEvents(afterEventId, signal, pageOpts) {
+    return CCRClient.readInternalEventsFrom(this.readSource, afterEventId, signal, pageOpts);
   }
-  async readInternalEventsForCatchUp(signal, n, s) {
+  async readInternalEventsForCatchUp(signal, afterEventId, pageOpts) {
     return CCRClient.paginatedGet(
       this.readSource,
       "/worker/internal-events",
       {
         limit: "1000",
-        ...(n && {
-          after_event_id: n,
+        ...(afterEventId && {
+          after_event_id: afterEventId,
         }),
       },
       "internal_events",
@@ -5476,32 +5709,32 @@ class CCRClient {
         maxAttempts: WORKER_STATE_MAX_ATTEMPTS,
         signal,
       },
-      s,
+      pageOpts,
     );
   }
-  static readInternalEventsFrom(e, n, signal, r) {
+  static readInternalEventsFrom(source, afterEventId, signal, pageOpts) {
     return CCRClient.paginatedGet(
-      e,
+      source,
       "/worker/internal-events",
       {
         limit: "1000",
-        ...(n && {
-          after_event_id: n,
+        ...(afterEventId && {
+          after_event_id: afterEventId,
         }),
       },
       "internal_events",
       {
         signal,
       },
-      r,
+      pageOpts,
     );
   }
   async readSubagentInternalEvents() {
     return CCRClient.readSubagentInternalEventsFrom(this.readSource);
   }
-  static readSubagentInternalEventsFrom(e) {
+  static readSubagentInternalEventsFrom(source) {
     return CCRClient.paginatedGet(
-      e,
+      source,
       "/worker/internal-events",
       {
         subagents: "true",
@@ -5510,15 +5743,15 @@ class CCRClient {
       "subagent_events",
     );
   }
-  async readAgentInternalEvents(sessionAgentId, signal, s, r) {
+  async readAgentInternalEvents(sessionAgentId, signal, pageOpts, afterUuid) {
     return CCRClient.paginatedGet(
       this.readSource,
       "/worker/internal-events",
       {
         session_agent_id: sessionAgentId,
         limit: "1000",
-        ...(r && {
-          after_event_id: r,
+        ...(afterUuid && {
+          after_event_id: afterUuid,
         }),
       },
       "agent_events",
@@ -5526,25 +5759,25 @@ class CCRClient {
         maxAttempts: WORKER_STATE_MAX_ATTEMPTS,
         signal,
       },
-      s,
-      Boolean(r),
+      pageOpts,
+      Boolean(afterUuid),
     );
   }
-  async readAgentMetadataEvents(e, signal) {
-    let r = isEssentialTrafficOnly() ? "essential-traffic-only" : this.providerWithheldReason();
-    if (r !== undefined) {
+  async readAgentMetadataEvents(ids, signal) {
+    let reason = isEssentialTrafficOnly() ? "essential-traffic-only" : this.providerWithheldReason();
+    if (reason !== undefined) {
       logForDiagnosticsNoPII("info", "cli_worker_request_withheld", {
         method: "post",
         path: "/worker/agent-metadata-events/batch-get",
-        reason: r,
+        reason,
       });
       return null;
     }
-    let h = [];
-    for (let sessionAgentIds of chunk_default(uniq(e), INTERNAL_EVENT_UUID_BATCH_SIZE)) {
+    let events = [];
+    for (let sessionAgentIds of chunk_default(uniq(ids), INTERNAL_EVENT_UUID_BATCH_SIZE)) {
       let authHeaders = this.readSource.getAuthHeaders();
       if (Object.keys(authHeaders).length === 0) return null;
-      let y = await CCRClient.getWithRetry(
+      let result = await CCRClient.getWithRetry(
         {
           ...this.readSource,
           onConflict: undefined,
@@ -5566,188 +5799,197 @@ class CCRClient {
             session_agent_ids: sessionAgentIds,
           }),
           permanentStatuses: [403, 404, 501],
-          readBody: async (O) => {
-            let C;
+          readBody: async (response) => {
+            let body;
             try {
-              C = await O.json();
+              body = await response.json();
             } catch (error) {
               if (!(error instanceof SyntaxError)) throw error;
             }
-            let U = agentMetadataEventsSchema().safeParse(C);
-            if (!U.success) {
+            let parsed = agentMetadataEventsSchema().safeParse(body);
+            if (!parsed.success) {
               logForDiagnosticsNoPII("warn", "cli_worker_agent_metadata_events_foreign");
               return null;
             }
-            return U.data.data ?? [];
+            return parsed.data.data ?? [];
           },
         },
       );
-      if (y === null) return null;
-      h.push(...y);
+      if (result === null) return null;
+      events.push(...result);
     }
-    return h;
+    return events;
   }
-  static async paginatedGet(e, n, s, r, h = {}, w, v = false) {
-    let authHeaders = e.getAuthHeaders();
+  static async paginatedGet(source, path, query, context, opts = {}, pageOpts, singlePage = false) {
+    let authHeaders = source.getAuthHeaders();
     if (Object.keys(authHeaders).length === 0) return null;
-    let O = v
+    let pageOpts2 = singlePage
       ? {
-          ...h,
+          ...opts,
           maxAttempts: 1,
         }
-      : h;
-    let C = [];
-    let U;
-    let S = 0;
-    let P = 0;
-    let W = 0;
-    let x = 0;
-    let z = null;
+      : opts;
+    let events = [];
+    let cursor;
+    let pages = 0;
+    let count = 0;
+    let bytes = 0;
+    let received = 0;
+    let encoding = null;
     do {
-      let K = new URL(`${e.sessionBaseUrl}${n}`);
-      for (let [key, value] of Object.entries(s)) K.searchParams.set(key, value);
-      if (U) {
-        K.searchParams.set("cursor", U);
-        K.searchParams.delete("after_event_id");
+      let url = new URL(`${source.sessionBaseUrl}${path}`);
+      for (let [key, value] of Object.entries(query)) url.searchParams.set(key, value);
+      if (cursor) {
+        url.searchParams.set("cursor", cursor);
+        url.searchParams.delete("after_event_id");
       }
-      let Y = !U && s.after_event_id !== undefined;
-      let R;
-      let B = await CCRClient.getWithRetry(
-        e,
-        K.toString(),
+      let anchored = !cursor && query.after_event_id !== undefined;
+      let fallback;
+      let page = await CCRClient.getWithRetry(
+        source,
+        url.toString(),
         authHeaders,
-        r,
-        (L) => {
-          S++;
-          z ??= L.headers.get("content-encoding");
-          let I = L.headers.get("content-length");
-          if (I !== null && x !== null) x += Number(I);
-          else x = null;
+        context,
+        (response) => {
+          pages++;
+          encoding ??= response.headers.get("content-encoding");
+          let length = response.headers.get("content-length");
+          if (length !== null && received !== null) received += Number(length);
+          else received = null;
         },
-        (L, I) => {
-          if (!Y) return;
-          if (L === 400) R = "rejected";
-          else if (I === "after_event_id_not_found") R = "not-found";
+        (status, reason) => {
+          if (!anchored) return;
+          if (status === 400) fallback = "rejected";
+          else if (reason === "after_event_id_not_found") fallback = "not-found";
         },
-        w === undefined
-          ? O
+        pageOpts === undefined
+          ? pageOpts2
           : {
-              ...O,
-              unencoded: !w.takesCompressedPages,
-              readBody: async (L) => {
-                let I = L.headers.get("content-encoding");
-                if (!w.takesCompressedPages && I !== null && I !== "identity") {
-                  await L.body?.cancel();
+              ...pageOpts2,
+              unencoded: !pageOpts.takesCompressedPages,
+              readBody: async (response) => {
+                let encoding = response.headers.get("content-encoding");
+                if (!pageOpts.takesCompressedPages && encoding !== null && encoding !== "identity") {
+                  await response.body?.cancel();
                   return {
                     encodedBody: true,
                   };
                 }
-                let bodyCapped = await readBodyCapped(L, w.maxBytes - W);
+                let bodyCapped = await readBodyCapped(response, pageOpts.maxBytes - bytes);
                 if (bodyCapped === null)
                   return {
                     pastMaxBytes: true,
                   };
-                let X = w.parsePage ? await w.parsePage(bodyCapped.text) : jsonParse(bodyCapped.text);
-                if (!isPlainObject(X) || !Array.isArray(X.data) || !X.data.every(isPlainObject))
+                let parsed = pageOpts.parsePage
+                  ? await pageOpts.parsePage(bodyCapped.text)
+                  : jsonParse(bodyCapped.text);
+                if (
+                  !isPlainObject(parsed) ||
+                  !Array.isArray(parsed.data) ||
+                  !parsed.data.every(isPlainObject)
+                )
                   throw Error("CCRClient: a page is no list of events");
-                W += bodyCapped.bytes;
-                return X;
+                bytes += bodyCapped.bytes;
+                return parsed;
               },
             },
       );
-      if (B?.encodedBody)
+      if (page?.encodedBody)
         return {
           events: [],
           stats: {
-            pageCount: S,
-            bytesReceived: x,
-            contentEncoding: z ?? "none",
+            pageCount: pages,
+            bytesReceived: received,
+            contentEncoding: encoding ?? "none",
           },
           encodedBody: true,
         };
-      if (!B) {
-        if (R) {
+      if (!page) {
+        if (fallback) {
           logForDebugging(
-            `CCRClient: after_event_id ${R === "rejected" ? "rejected by server (gate off)" : "not found (stale anchor)"} \u2014 refetching without anchor`,
+            `CCRClient: after_event_id ${fallback === "rejected" ? "rejected by server (gate off)" : "not found (stale anchor)"} \u2014 refetching without anchor`,
             {
               level: "warn",
             },
           );
           logForDiagnosticsNoPII(
             "warn",
-            R === "rejected" ? "cli_worker_after_event_id_rejected" : "cli_worker_after_event_id_not_found",
+            fallback === "rejected"
+              ? "cli_worker_after_event_id_rejected"
+              : "cli_worker_after_event_id_not_found",
             {
-              context: r,
+              context,
             },
           );
-          let { after_event_id: afterEventId, ...I } = s;
-          let G = await CCRClient.paginatedGet(e, n, I, r, h, w);
-          if (!G) return null;
+          let { after_event_id: afterEventId, ...query2 } = query;
+          let fallbackResult = await CCRClient.paginatedGet(source, path, query2, context, opts, pageOpts);
+          if (!fallbackResult) return null;
           return {
-            ...G,
-            anchorFallback: R,
+            ...fallbackResult,
+            anchorFallback: fallback,
           };
         }
         return null;
       }
-      for (let L of B.data ?? []) if (!isClassifierDumpEvent(L.payload)) C.push(normalizePayload(L));
-      P += Math.max(1, B.data?.length ?? 0);
+      for (let event of page.data ?? [])
+        if (!isClassifierDumpEvent(event.payload)) events.push(normalizePayload(event));
+      count += Math.max(1, page.data?.length ?? 0);
       if (
-        (v && B.next_cursor) ||
-        (w !== undefined &&
-          (P > w.maxEvents ||
-            B.pastMaxBytes === true ||
-            (B.data ?? []).some((L) => !isTimestampWithinLimit(L, w.maxTimestampChars))))
+        (singlePage && page.next_cursor) ||
+        (pageOpts !== undefined &&
+          (count > pageOpts.maxEvents ||
+            page.pastMaxBytes === true ||
+            (page.data ?? []).some((event) => !isTimestampWithinLimit(event, pageOpts.maxTimestampChars))))
       )
         return {
           events: [],
           stats: {
-            pageCount: S,
-            bytesReceived: x,
-            contentEncoding: z ?? "none",
+            pageCount: pages,
+            bytesReceived: received,
+            contentEncoding: encoding ?? "none",
           },
           overBound: true,
         };
-      U = B.next_cursor;
-    } while (U);
+      cursor = page.next_cursor;
+    } while (cursor);
     logForDebugging(
-      `CCRClient: Read ${C.length} internal events from ${n}${s.subagents ? " (subagents)" : ""}`,
+      `CCRClient: Read ${events.length} internal events from ${path}${query.subagents ? " (subagents)" : ""}`,
     );
     return {
-      events: C,
+      events,
       stats: {
-        pageCount: S,
-        bytesReceived: x,
-        contentEncoding: z ?? "none",
+        pageCount: pages,
+        bytesReceived: received,
+        contentEncoding: encoding ?? "none",
       },
     };
   }
-  static getWithRetry(e, n, s, r, h, w, v = {}) {
-    return CCRClient.getWithRetryNow(e, n, s, r, h, w, v);
+  static getWithRetry(source, url, headers, context, onResponse, onPermanent, opts = {}) {
+    return CCRClient.getWithRetryNow(source, url, headers, context, onResponse, onPermanent, opts);
   }
   static async getWithRetryNow(
-    e,
-    n,
-    s,
+    source,
+    url,
+    headers,
     context,
-    h,
-    w,
+    onResponse,
+    onPermanent,
     { maxAttempts = DEFAULT_MAX_ATTEMPTS, signal, readBody, unencoded, postJson, permanentStatuses },
   ) {
-    let P = 0;
+    let rangeRetries = 0;
     for (let j = 1; j <= maxAttempts; j++) {
       if (signal?.aborted) return null;
-      let x;
+      let response;
       try {
-        x = await proxyAwareFetch(
-          n,
+        response = await proxyAwareFetch(
+          url,
           {
             ...(postJson !== undefined && {
               method: "POST",
               body: postJson,
             }),
             headers: {
-              ...s,
+              ...headers,
               ...(postJson !== undefined && {
                 "Content-Type": "application/json",
               }),
@@ -5765,70 +6007,73 @@ class CCRClient {
               ? AbortSignal.any([AbortSignal.timeout(30000), signal])
               : AbortSignal.timeout(30000),
             ...getProxyFetchOptions({
-              url: n,
+              url,
             }),
           },
-          e.ownConnectionPool,
+          source.ownConnectionPool,
         );
-        if (x.ok) {
-          let K = readBody ? await readBody(x) : await x.json();
-          h?.(x);
-          return K;
+        if (response.ok) {
+          let body = readBody ? await readBody(response) : await response.json();
+          onResponse?.(response);
+          return body;
         }
       } catch (error) {
         if (signal?.aborted) return null;
-        logForDebugging(`CCRClient: GET ${n} failed (attempt ${j}/${maxAttempts}): ${errorMessage(error)}`, {
-          level: "warn",
-        });
-        if (error instanceof RangeError && ++P >= RETRY_COUNT_3) break;
+        logForDebugging(
+          `CCRClient: GET ${url} failed (attempt ${j}/${maxAttempts}): ${errorMessage(error)}`,
+          {
+            level: "warn",
+          },
+        );
+        if (error instanceof RangeError && ++rangeRetries >= RETRY_COUNT_3) break;
         if (j < maxAttempts) {
-          let Y = Math.min(500 * 2 ** (j - 1), 30000) + Math.random() * 500;
-          await sleep(Y, signal);
+          let delay = Math.min(500 * 2 ** (j - 1), 30000) + Math.random() * 500;
+          await sleep(delay, signal);
         }
         continue;
       }
-      let z;
-      if (x.status === 404 && w)
+      let errorType;
+      if (response.status === 404 && onPermanent)
         try {
-          let body = await x.json();
-          if (typeof body?.error?.type === "string") z = body.error.type;
+          let body = await response.json();
+          if (typeof body?.error?.type === "string") errorType = body.error.type;
         } catch {}
-      else if (x.status === 409) {
-        if (e.isClosed?.()) {
-          await drainResponseBody(x);
+      else if (response.status === 409) {
+        if (source.isClosed?.()) {
+          await drainResponseBody(response);
           return null;
         }
-        let conflictReason = await readConflictReason(x);
-        if (e.isClosed?.()) return null;
+        let conflictReason = await readConflictReason(response);
+        if (source.isClosed?.()) return null;
         if (conflictReason === undefined && signal?.aborted) {
           logForDebugging(
-            `CCRClient: GET ${n} returned 409 after its caller ended the read; its reason was not read, so the next request's 409 decides`,
+            `CCRClient: GET ${url} returned 409 after its caller ended the read; its reason was not read, so the next request's 409 decides`,
             {
               level: "warn",
             },
           );
           return null;
         }
-        e.onConflict?.(conflictReason);
+        source.onConflict?.(conflictReason);
         return null;
-      } else await drainResponseBody(x);
+      } else await drainResponseBody(response);
       if (
-        isClientErrorStatus(x.status) ||
-        z === "after_event_id_not_found" ||
-        permanentStatuses?.includes(x.status) === true
+        isClientErrorStatus(response.status) ||
+        errorType === "after_event_id_not_found" ||
+        permanentStatuses?.includes(response.status) === true
       ) {
-        logForDebugging(`CCRClient: GET ${n} returned ${x.status} \u2014 permanent, not retrying`, {
+        logForDebugging(`CCRClient: GET ${url} returned ${response.status} \u2014 permanent, not retrying`, {
           level: "warn",
         });
-        w?.(x.status, z);
+        onPermanent?.(response.status, errorType);
         return null;
       }
-      logForDebugging(`CCRClient: GET ${n} returned ${x.status} (attempt ${j}/${maxAttempts})`, {
+      logForDebugging(`CCRClient: GET ${url} returned ${response.status} (attempt ${j}/${maxAttempts})`, {
         level: "warn",
       });
       if (j < maxAttempts) {
-        let K = Math.min(500 * 2 ** (j - 1), 30000) + Math.random() * 500;
-        await sleep(K, signal);
+        let delay = Math.min(500 * 2 ** (j - 1), 30000) + Math.random() * 500;
+        await sleep(delay, signal);
       }
     }
     logForDebugging("CCRClient: GET retries exhausted", {
@@ -5839,83 +6084,85 @@ class CCRClient {
     });
     return null;
   }
-  reportDelivery(e, n, s, r) {
+  reportDelivery(eventId, status, messageUuid, flags) {
     if (
-      s !== undefined &&
+      messageUuid !== undefined &&
       this.flushPolicy?.holdAcrossModelCalls &&
       this.waitingAnswers.some(isTopLevelSystemInit)
     )
       this.sendWaitingAnswers();
     if (
-      !this.housekeepingRequestIds.has(e) &&
-      (n === "processing" || (n === "received" && !r?.controlTraffic))
+      !this.housekeepingRequestIds.has(eventId) &&
+      (status === "processing" || (status === "received" && !flags?.controlTraffic))
     ) {
       this.turnTookInput = true;
       this.liveOnlyRequestingRow = undefined;
     }
-    if (n === "received") {
+    if (status === "received") {
       this.lastInboundEventAtMs = Date.now();
-      let O = r?.controlTraffic === true && this.flushPolicy?.controlTrafficKeepsHold === true;
-      this.setHasSubscribers(undefined, O ? "reset" : "watcher");
-      if (this.holdsAcrossModelCalls() && !O) {
+      let controlTraffic =
+        flags?.controlTraffic === true && this.flushPolicy?.controlTrafficKeepsHold === true;
+      this.setHasSubscribers(undefined, controlTraffic ? "reset" : "watcher");
+      if (this.holdsAcrossModelCalls() && !controlTraffic) {
         if (this.parkedRows.length > 0) this.flushStreamEventBuffer();
         this.internalEventUploader.release("event", "inbound_event");
         this.releaseClientEvents("event", "inbound_event");
       }
-      if (s !== undefined) {
+      if (messageUuid !== undefined) {
         this.holdsNoMoreThisTurn = true;
-        this.inboundMessageUuids.add(s);
-        let C = this.inboundMessageUuids.values().next().value;
-        if (this.inboundMessageUuids.size > MAX_INBOUND_MESSAGE_UUIDS && C !== undefined)
-          this.inboundMessageUuids.delete(C);
+        this.inboundMessageUuids.add(messageUuid);
+        let oldest = this.inboundMessageUuids.values().next().value;
+        if (this.inboundMessageUuids.size > MAX_INBOUND_MESSAGE_UUIDS && oldest !== undefined)
+          this.inboundMessageUuids.delete(oldest);
       }
     }
-    let h = n !== "received" && this.inboundMessageUuids.delete(e);
-    if (n === "processing") {
+    let wasInbound = status !== "received" && this.inboundMessageUuids.delete(eventId);
+    if (status === "processing") {
       if (this.closed) return;
-      if (h && this.receiptsMayRide()) this.messagesInProcessing.add(e);
-      let O = this.pendingProcessingAcks.push(e) === 1;
+      if (wasInbound && this.receiptsMayRide()) this.messagesInProcessing.add(eventId);
+      let first = this.pendingProcessingAcks.push(eventId) === 1;
       if (this.pickupTakesTick) return;
-      if (h && this.holdsAcrossModelCalls() && this.turnHold !== "open") {
+      if (wasInbound && this.holdsAcrossModelCalls() && this.turnHold !== "open") {
         this.pickupTakesTick = true;
         this.endWholeTurnHold();
         this.ackPickupBehindWrittenRows().catch(logError);
-      } else if (O)
+      } else if (first)
         queueMicrotask(() => {
           if (!this.pickupTakesTick) this.sendProcessingAcks(this.pendingProcessingAcks);
         });
       return;
     }
-    let w = this.waitingReceipts.has(e);
-    let v =
-      n === "processed" &&
-      this.messagesInProcessing.delete(e) &&
+    let waiting = this.waitingReceipts.has(eventId);
+    let rides =
+      status === "processed" &&
+      this.messagesInProcessing.delete(eventId) &&
       !this.closed &&
       this.receiptsMayRide() &&
-      normalizeUuidOrNull(e) !== null &&
+      normalizeUuidOrNull(eventId) !== null &&
       (this.resultPostWaits !== undefined || this.liveViewLaneSendsMore());
     if (this.messagesInProcessing.size === 0) this.resultPostWaits?.();
-    let y =
-      (v ||
-        (n === "received" &&
-          (r?.settingsRequest || (s !== undefined && this.flushPolicy?.messagesReceivedWaits)))) &&
+    let waitMs =
+      (rides ||
+        (status === "received" &&
+          (flags?.settingsRequest ||
+            (messageUuid !== undefined && this.flushPolicy?.messagesReceivedWaits)))) &&
       !this.closed &&
       this.followsServedPolicy
         ? (this.flushPolicy?.settingsReceiptsMaxWaitMs ?? 0)
         : 0;
-    if (!w && y <= 0) {
+    if (!waiting && waitMs <= 0) {
       this.queueDeliveryAcks([
         ...this.takeWaitingReceipts(isProcessedReceipt),
         {
-          eventId: e,
-          status: n,
+          eventId,
+          status,
         },
       ]);
       return;
     }
-    if (!w || n === "processed") this.waitingReceipts.set(e, n);
-    if (v) this.receiptsRide ??= Promise.withResolvers();
-    this.waitingReceiptsTimer ??= setTimeout(() => this.sendWaitingReceipts(), y);
+    if (!waiting || status === "processed") this.waitingReceipts.set(eventId, status);
+    if (rides) this.receiptsRide ??= Promise.withResolvers();
+    this.waitingReceiptsTimer ??= setTimeout(() => this.sendWaitingReceipts(), waitMs);
   }
   receiptsMayRide() {
     return (
@@ -5925,12 +6172,12 @@ class CCRClient {
       this.followsServedPolicy
     );
   }
-  takeWaitingReceipts(e = () => true) {
+  takeWaitingReceipts(filter = () => true) {
     let mapped = [...this.waitingReceipts]
-      .filter(([s, r]) => e(s, r))
-      .map(([s, r]) => ({
-        eventId: s,
-        status: r,
+      .filter(([eventId, status]) => filter(eventId, status))
+      .map(([eventId, status]) => ({
+        eventId,
+        status,
       }));
     for (let { eventId } of mapped) this.waitingReceipts.delete(eventId);
     if (this.waitingReceipts.size === 0) {
@@ -5943,21 +6190,21 @@ class CCRClient {
     }
     return mapped;
   }
-  sendWaitingReceipts(e) {
-    this.queueDeliveryAcks(this.takeWaitingReceipts(e));
+  sendWaitingReceipts(filter) {
+    this.queueDeliveryAcks(this.takeWaitingReceipts(filter));
   }
-  queueDeliveryAcks(e) {
-    let n = !this.deliveryUploader.hasRoomFor(e.length);
-    let s = this.deliveryUploader.enqueue(e);
-    if (n) {
-      this.deliveryAcksWaitingForRoom.add(s);
-      s.finally(() => this.deliveryAcksWaitingForRoom.delete(s));
+  queueDeliveryAcks(acks) {
+    let noRoom = !this.deliveryUploader.hasRoomFor(acks.length);
+    let promise = this.deliveryUploader.enqueue(acks);
+    if (noRoom) {
+      this.deliveryAcksWaitingForRoom.add(promise);
+      promise.finally(() => this.deliveryAcksWaitingForRoom.delete(promise));
     }
   }
-  async sendProcessingAcks(e) {
-    let n = e.splice(0);
-    if (this.closed || n.length === 0) return;
-    let s = this.takeWaitingReceipts(isProcessedReceipt);
+  async sendProcessingAcks(ids) {
+    let ackIds = ids.splice(0);
+    if (this.closed || ackIds.length === 0) return;
+    let acks = this.takeWaitingReceipts(isProcessedReceipt);
     if (
       (
         await this.request(
@@ -5966,13 +6213,13 @@ class CCRClient {
           {
             worker_epoch: this.workerEpoch,
             updates: [
-              ...n.map((eventId) => ({
+              ...ackIds.map((eventId) => ({
                 event_id: eventId,
                 status: "processing",
               })),
-              ...s.map((h) => ({
-                event_id: h.eventId,
-                status: h.status,
+              ...acks.map((ack) => ({
+                event_id: ack.eventId,
+                status: ack.status,
               })),
             ],
           },
@@ -5980,43 +6227,43 @@ class CCRClient {
         )
       ).ok
     )
-      this.takeWaitingReceipts((h, w) => w === "received" && n.includes(h));
-    else this.queueDeliveryAcks(s);
+      this.takeWaitingReceipts((eventId, status) => status === "received" && ackIds.includes(eventId));
+    else this.queueDeliveryAcks(acks);
   }
   async ackPickupBehindWrittenRows() {
     this.sendWaitingAnswers();
     let promise = this.pickupBarriers.at(-1)?.opened.promise;
-    let n = {
+    let state = {
       opened: Promise.withResolvers(),
       writes: [],
       eventIds: [],
     };
-    this.pickupBarriers.push(n);
-    let s;
+    this.pickupBarriers.push(state);
+    let result;
     try {
       await Promise.resolve();
-      n.eventIds = this.pendingProcessingAcks.splice(0);
+      state.eventIds = this.pendingProcessingAcks.splice(0);
       this.pickupTakesTick = false;
       await promise;
-      if (this.pickupBarriers.includes(n))
-        s = await withDeadline(this.storeWrittenRowsThenAck(n.eventIds), this.pickupWaitMs);
+      if (this.pickupBarriers.includes(state))
+        result = await withDeadline(this.storeWrittenRowsThenAck(state.eventIds), this.pickupWaitMs);
       else {
-        s = true;
-        await this.sendProcessingAcks(n.eventIds);
+        result = true;
+        await this.sendProcessingAcks(state.eventIds);
       }
     } finally {
-      let index = this.pickupBarriers.indexOf(n);
-      this.openPickupBarriers(index < 0 || s ? index + 1 : this.pickupBarriers.length);
+      let index = this.pickupBarriers.indexOf(state);
+      this.openPickupBarriers(index < 0 || result ? index + 1 : this.pickupBarriers.length);
     }
   }
-  async storeWrittenRowsThenAck(e) {
+  async storeWrittenRowsThenAck(ids) {
     this.internalEventUploader.release("event", "pickup");
     await this.flush();
-    await this.sendProcessingAcks(e);
+    await this.sendProcessingAcks(ids);
     return true;
   }
-  openPickupBarriers(e) {
-    for (let pickupBarrier of this.pickupBarriers.splice(0, e)) {
+  openPickupBarriers(count) {
+    for (let pickupBarrier of this.pickupBarriers.splice(0, count)) {
       this.sendProcessingAcks(pickupBarrier.eventIds).catch(logError);
       for (let { messages, opts, written } of pickupBarrier.writes)
         this.writeEventsNow(messages, opts).then(written.resolve, written.reject);
@@ -6055,27 +6302,27 @@ class CCRClient {
     };
   }
   countRowsAwaitingCompactSummary() {
-    let e = 0;
-    for (let n of this.rowsAwaitingCompactSummary.values()) e += n.rows.length;
-    return e;
+    let count = 0;
+    for (let awaiting of this.rowsAwaitingCompactSummary.values()) count += awaiting.rows.length;
+    return count;
   }
   get awaitsCompactSummary() {
     return this.rowsAwaitingCompactSummary.has("");
   }
-  hasInternalEventRoom(e) {
-    return !this.awaitsCompactSummary && this.internalEventUploader.hasRoomFor(e);
+  hasInternalEventRoom(count) {
+    return !this.awaitsCompactSummary && this.internalEventUploader.hasRoomFor(count);
   }
-  close(e) {
-    this.closeExceptInternalEvents(e);
-    let n = this.countRowsAwaitingCompactSummary();
+  close(opts) {
+    this.closeExceptInternalEvents(opts);
+    let count = this.countRowsAwaitingCompactSummary();
     for (let key of this.rowsAwaitingCompactSummary.keys()) this.takeRowsAwaitingCompactSummary(key, "close");
-    this.rowsAwaitingCompactSummaryAtClose ??= n;
-    this.logUndeliveredAtClose("internal_events", this.internalEventUploader.close() + n);
+    this.rowsAwaitingCompactSummaryAtClose ??= count;
+    this.logUndeliveredAtClose("internal_events", this.internalEventUploader.close() + count);
   }
   flushGoodbye() {
     return this.goodbyeFlushed;
   }
-  closeExceptInternalEvents(e) {
+  closeExceptInternalEvents(opts) {
     this.sendWaitingAnswers();
     this.openPickupBarriers(this.pickupBarriers.length);
     let closed = this.closed;
@@ -6083,12 +6330,12 @@ class CCRClient {
     this.giveBackRidingRows();
     this.workerSocket?.usePostFromNowOn();
     this.closeAbort.abort();
-    this.closingForSuccessor = e?.retainUndeliveredClientEvents === true;
-    let s = this.takeParkedRows();
-    if (s.length > 0) this.eventUploader.enqueue(s);
-    if (e?.keepWaitingWorkerMetadata === true) this.workerState.closeToNewPatches();
+    this.closingForSuccessor = opts?.retainUndeliveredClientEvents === true;
+    let parked = this.takeParkedRows();
+    if (parked.length > 0) this.eventUploader.enqueue(parked);
+    if (opts?.keepWaitingWorkerMetadata === true) this.workerState.closeToNewPatches();
     else this.workerState.close();
-    if (!closed && e?.goodbye !== false) this.sendGoodbye();
+    if (!closed && opts?.goodbye !== false) this.sendGoodbye();
     this.stopHeartbeat();
     this.clearProbeBeatTimer();
     if (this.viewerCheckpointTimer) {
@@ -6100,7 +6347,7 @@ class CCRClient {
     this.stopWorkStartKeepAlive?.();
     this.stopToolCallGate?.();
     for (let toolCallRowWaiter of this.toolCallRowWaiters.values())
-      for (let h of toolCallRowWaiter) h.reached();
+      for (let waiter of toolCallRowWaiter) waiter.reached();
     this.toolCallRowWaiters.clear();
     if (this.streamEventTimer) {
       clearTimeout(this.streamEventTimer);
@@ -6114,24 +6361,24 @@ class CCRClient {
     this.pendingProcessingAcks = [];
     if (this.receiptsRide) this.sendWaitingReceipts(isProcessedReceipt);
     clearTimeout(this.waitingReceiptsTimer);
-    if (e?.keepClientEvents !== true)
+    if (opts?.keepClientEvents !== true)
       this.logUndeliveredAtClose(
         "client_events",
         this.eventUploader.close({
-          retainUndelivered: e?.retainUndeliveredClientEvents === true,
+          retainUndelivered: opts?.retainUndeliveredClientEvents === true,
         }),
       );
     this.deliveryUploader.close();
   }
   registerShutdownCleanup(
-    e = {
+    deps = {
       registerCleanup,
       registerPreExitFlush,
     },
-    n = CCR_RETRY_DELAY_MS,
+    delay = CCR_RETRY_DELAY_MS,
   ) {
-    e.registerCleanup(() => this.beginShutdown());
-    e.registerPreExitFlush(() => this.finishShutdown(n));
+    deps.registerCleanup(() => this.beginShutdown());
+    deps.registerPreExitFlush(() => this.finishShutdown(delay));
   }
   beginShutdown() {
     this.shutdownBeganAtMs = performance.now();
@@ -6151,7 +6398,7 @@ class CCRClient {
       });
     }
   }
-  async finishShutdown(e = CCR_RETRY_DELAY_MS, n = 1 / 0) {
+  async finishShutdown(timeout = CCR_RETRY_DELAY_MS, deadline = 1 / 0) {
     let startTime = performance.now();
     await this.flushGoodbye();
     let owesMetadata = this.workerState.owesMetadata;
@@ -6165,24 +6412,24 @@ class CCRClient {
                 Math.max(
                   0,
                   Math.min(
-                    e - (performance.now() - this.shutdownBeganAtMs),
-                    n - (performance.now() - startTime),
+                    timeout - (performance.now() - this.shutdownBeganAtMs),
+                    deadline - (performance.now() - startTime),
                   ),
                 ),
               )
             : undefined,
         ]),
-        e,
+        timeout,
       );
     } finally {
-      let h = this.droppedOwedMetadataPatchCount > this.owedMetadataDropsAtShutdown;
-      if (owesMetadata || this.workerState.hasCutKeptMetadata || h)
+      let refused = this.droppedOwedMetadataPatchCount > this.owedMetadataDropsAtShutdown;
+      if (owesMetadata || this.workerState.hasCutKeptMetadata || refused)
         logForDiagnosticsNoPII("info", "cli_worker_metadata_at_shutdown", {
           outcome: this.workerState.owesMetadata
             ? "timed_out"
             : this.workerState.hasCutKeptMetadata
               ? "cut"
-              : h
+              : refused
                 ? "refused"
                 : "drained",
         });
@@ -6201,11 +6448,11 @@ class CCRClient {
 //@ chunk-fp6aqx1j.js:134287-134299 layout
 var CCR_RETRY_DELAY_MS = 3000;
 //@ chunk-fp6aqx1j.js:134299-134457 layout
-function blockedToNeedInput(e) {
-  let postTurnSummary = e.post_turn_summary;
-  if (!hasStatusCategory(postTurnSummary) || postTurnSummary.status_category !== "blocked") return e;
+function blockedToNeedInput(metadata) {
+  let postTurnSummary = metadata.post_turn_summary;
+  if (!hasStatusCategory(postTurnSummary) || postTurnSummary.status_category !== "blocked") return metadata;
   return {
-    ...e,
+    ...metadata,
     post_turn_summary: {
       ...postTurnSummary,
       status_category: "need_input",
@@ -6222,145 +6469,158 @@ function hasStatusCategory(postTurnSummary) {
   );
 }
 //@ chunk-fp6aqx1j.js:134569-134772 layout
-async function readConflictReason(e) {
-  let n = asConflictReason(e.headers.get("x-ccr-conflict-reason"));
-  if (n !== undefined) {
-    await drainResponseBody(e);
-    return n;
+async function readConflictReason(response) {
+  let reason = asConflictReason(response.headers.get("x-ccr-conflict-reason"));
+  if (reason !== undefined) {
+    await drainResponseBody(response);
+    return reason;
   }
   try {
-    let body = await e.json();
+    let body = await response.json();
     return asConflictReason(body?.error?.reason ?? body?.reason) ?? asConflictReason(body?.error?.type);
   } catch {}
   return;
 }
 //@ chunk-fp6aqx1j.js:134772-134892 layout
-function asConflictReason(e) {
-  switch (e) {
+function asConflictReason(value) {
+  switch (value) {
     case "superseded_by_worker":
     case "epoch_stale":
     case "session_not_active":
-      return e;
+      return value;
     default:
       return;
   }
 }
 //@ chunk-fp6aqx1j.js:134892-137300 layout
-function parseHoldPolicy(e) {
-  let n = WorkerLimitsSchema().safeParse(e);
-  if (!n.success) return;
-  let s = n.data;
-  let r = s.hold_across_model_calls === true;
-  let h = clampNonNegativeInt(s.max_age_ms, r ? MAX_HOLD_AGE_MS : DEFAULT_MAX_HOLD_AGE_MS);
-  let w =
-    h > 0
-      ? clampNonNegativeInt(s.max_events, r ? DEFAULT_MAX_HOLD_EVENTS_ACROSS_CALLS : DEFAULT_MAX_HOLD_EVENTS)
+function parseHoldPolicy(raw) {
+  let parsed = WorkerLimitsSchema().safeParse(raw);
+  if (!parsed.success) return;
+  let data = parsed.data;
+  let acrossCalls = data.hold_across_model_calls === true;
+  let maxAgeMs = clampNonNegativeInt(
+    data.max_age_ms,
+    acrossCalls ? MAX_HOLD_AGE_MS : DEFAULT_MAX_HOLD_AGE_MS,
+  );
+  let maxEvents =
+    maxAgeMs > 0
+      ? clampNonNegativeInt(
+          data.max_events,
+          acrossCalls ? DEFAULT_MAX_HOLD_EVENTS_ACROSS_CALLS : DEFAULT_MAX_HOLD_EVENTS,
+        )
       : 0;
-  let v = clampNonNegativeInt(s.max_bytes, DEFAULT_MAX_HOLD_BYTES);
-  let y = r ? 0 : clampNonNegativeInt(s.transcript_max_age_ms, DEFAULT_TRANSCRIPT_MAX_AGE_MS);
-  let transcriptMaxAgeMs = y > h ? y : 0;
-  let C = clampNonNegativeInt(s.no_turn_max_age_ms, h);
-  let policyVersion = s.policy_version ?? undefined;
+  let maxBytes = clampNonNegativeInt(data.max_bytes, DEFAULT_MAX_HOLD_BYTES);
+  let transcriptMaxAge = acrossCalls
+    ? 0
+    : clampNonNegativeInt(data.transcript_max_age_ms, DEFAULT_TRANSCRIPT_MAX_AGE_MS);
+  let transcriptMaxAgeMs = transcriptMaxAge > maxAgeMs ? transcriptMaxAge : 0;
+  let turnMaxAgeMs = clampNonNegativeInt(data.no_turn_max_age_ms, maxAgeMs);
+  let policyVersion = data.policy_version ?? undefined;
   return {
-    maxEvents: w,
-    maxAgeMs: h,
-    maxBytes: v > 0 ? v : undefined,
-    flushOnSamplingEnd: s.flush_on_sampling_end === true && !r,
-    flushOnAssistant: s.flush_on_assistant === true,
-    eventBatchUpload: s.event_batch_upload === true,
-    holdAcrossModelCalls: r,
+    maxEvents,
+    maxAgeMs,
+    maxBytes: maxBytes > 0 ? maxBytes : undefined,
+    flushOnSamplingEnd: data.flush_on_sampling_end === true && !acrossCalls,
+    flushOnAssistant: data.flush_on_assistant === true,
+    eventBatchUpload: data.event_batch_upload === true,
+    holdAcrossModelCalls: acrossCalls,
     holdAgain:
-      r && s.hold_again
+      acrossCalls && data.hold_again
         ? {
-            softAgeMs: clampNonNegativeInt(s.hold_again.soft_age_ms, h),
-            softEvents: clampNonNegativeInt(s.hold_again.soft_events, w),
-            after: new Set((s.hold_again.after ?? []).slice(0, MAX_MUST_FLUSH_TYPES)),
+            softAgeMs: clampNonNegativeInt(data.hold_again.soft_age_ms, maxAgeMs),
+            softEvents: clampNonNegativeInt(data.hold_again.soft_events, maxEvents),
+            after: new Set((data.hold_again.after ?? []).slice(0, MAX_MUST_FLUSH_TYPES)),
             neverAfterTools: new Set(
-              (s.hold_again.never_after_tools ?? []).slice(0, MAX_HOLD_AGAIN_TOOL_NAMES),
+              (data.hold_again.never_after_tools ?? []).slice(0, MAX_HOLD_AGAIN_TOOL_NAMES),
             ),
-            toolsWhoseResultsWait: s.hold_again.tools_whose_results_wait
-              ? new Set(s.hold_again.tools_whose_results_wait.slice(0, MAX_HOLD_AGAIN_TOOL_NAMES))
+            toolsWhoseResultsWait: data.hold_again.tools_whose_results_wait
+              ? new Set(data.hold_again.tools_whose_results_wait.slice(0, MAX_HOLD_AGAIN_TOOL_NAMES))
               : undefined,
             laterWorkerHoldsFirstTurn:
-              s.hold_again.later_worker_holds_first_turn === true &&
-              s.live_twin_types?.includes("system/status") === true,
+              data.hold_again.later_worker_holds_first_turn === true &&
+              data.live_twin_types?.includes("system/status") === true,
           }
         : undefined,
-    mayWaitTypes: new Set((s.may_wait_types ?? []).filter((S) => MAY_WAIT_EVENT_TYPES.has(S))),
-    mayWaitTypesRefused: count(s.may_wait_types ?? [], (S) => !MAY_WAIT_EVENT_TYPES.has(S)),
+    mayWaitTypes: new Set((data.may_wait_types ?? []).filter((type) => MAY_WAIT_EVENT_TYPES.has(type))),
+    mayWaitTypesRefused: count(data.may_wait_types ?? [], (type) => !MAY_WAIT_EVENT_TYPES.has(type)),
     settingsReceiptsMaxWaitMs: clampNonNegativeInt(
-      s.settings_receipts_max_wait_ms,
+      data.settings_receipts_max_wait_ms,
       DEFAULT_SETTINGS_RECEIPTS_MAX_WAIT_MS,
     ),
-    messagesReceivedWaits: s.messages_received_waits === true,
-    receiptsRideUploads: s.receipts_ride_uploads === true,
+    messagesReceivedWaits: data.messages_received_waits === true,
+    receiptsRideUploads: data.receipts_ride_uploads === true,
     flushBeforeToolsWaitMs: clampNonNegativeInt(
-      s.flush_before_tools_wait_ms,
+      data.flush_before_tools_wait_ms,
       DEFAULT_FLUSH_BEFORE_TOOLS_WAIT_MS,
     ),
-    flushAfterTools: FLUSH_AFTER_TOOLS_MODES.find((S) => S === s.flush_after_tools) ?? "none",
-    flushAfterToolNames: new Set((s.flush_after_tool_names ?? []).slice(0, MAX_HOLD_AGAIN_TOOL_NAMES)),
-    mustFlushTypes: new Set((s.must_flush_types ?? []).slice(0, MAX_MUST_FLUSH_TYPES)),
+    flushAfterTools: FLUSH_AFTER_TOOLS_MODES.find((mode) => mode === data.flush_after_tools) ?? "none",
+    flushAfterToolNames: new Set((data.flush_after_tool_names ?? []).slice(0, MAX_HOLD_AGAIN_TOOL_NAMES)),
+    mustFlushTypes: new Set((data.must_flush_types ?? []).slice(0, MAX_MUST_FLUSH_TYPES)),
     liveTwinTypes: new Set(
-      (s.live_twin_types ?? []).filter((S) => !S.startsWith("control_")).slice(0, MAX_LIVE_TWIN_TYPES),
+      (data.live_twin_types ?? [])
+        .filter((type) => !type.startsWith("control_"))
+        .slice(0, MAX_LIVE_TWIN_TYPES),
     ),
-    liveOnlyTypes: new Set((s.live_only_types ?? []).filter((S) => LIVE_ONLY_EVENT_TYPES.has(S))),
+    liveOnlyTypes: new Set((data.live_only_types ?? []).filter((type) => LIVE_ONLY_EVENT_TYPES.has(type))),
     transcriptMaxAgeMs,
-    noTurnMaxAgeMs: C < h ? C : 0,
-    mergeWorkerReports: s.merge_worker_reports === true,
-    controlTrafficKeepsHold: r && s.control_traffic_keeps_hold === true,
-    emptyCheckpointKeepsHold: r && s.empty_checkpoint_keeps_hold === true,
-    firstTurnHoldsEachCall: r && s.first_turn_holds_each_call === true,
+    noTurnMaxAgeMs: turnMaxAgeMs < maxAgeMs ? turnMaxAgeMs : 0,
+    mergeWorkerReports: data.merge_worker_reports === true,
+    controlTrafficKeepsHold: acrossCalls && data.control_traffic_keeps_hold === true,
+    emptyCheckpointKeepsHold: acrossCalls && data.empty_checkpoint_keeps_hold === true,
+    firstTurnHoldsEachCall: acrossCalls && data.first_turn_holds_each_call === true,
     settingsAnswersMaxWaitMs: clampNonNegativeInt(
-      s.settings_answers_max_wait_ms,
+      data.settings_answers_max_wait_ms,
       DEFAULT_SETTINGS_ANSWER_WAIT_MS,
     ),
-    initMaxWaitMs: clampNonNegativeInt(s.init_max_wait_ms, DEFAULT_SETTINGS_ANSWER_WAIT_MS),
+    initMaxWaitMs: clampNonNegativeInt(data.init_max_wait_ms, DEFAULT_SETTINGS_ANSWER_WAIT_MS),
     metadataWaitsForStatus: new Set(
-      (s.metadata_waits_for_status ?? []).filter((S) => STATUS_METADATA_KEYS_ALL.has(S)),
+      (data.metadata_waits_for_status ?? []).filter((key) => STATUS_METADATA_KEYS_ALL.has(key)),
     ),
     metadataNeverSent: new Set(
-      (s.metadata_never_sent ?? []).filter((S) => STATUS_PAYLOAD_METADATA_KEYS.has(S)),
+      (data.metadata_never_sent ?? []).filter((key) => STATUS_PAYLOAD_METADATA_KEYS.has(key)),
     ),
-    metadataMaxWaitMs: clampNonNegativeInt(s.metadata_max_wait_ms, MAX_HOLD_AGE_MS),
-    costReportMaxWaitMs: clampNonNegativeInt(s.cost_report_max_wait_ms, DEFAULT_COST_REPORT_MAX_WAIT_MS),
+    metadataMaxWaitMs: clampNonNegativeInt(data.metadata_max_wait_ms, MAX_HOLD_AGE_MS),
+    costReportMaxWaitMs: clampNonNegativeInt(data.cost_report_max_wait_ms, DEFAULT_COST_REPORT_MAX_WAIT_MS),
     policyVersion:
       policyVersion !== undefined && POLICY_VERSION_PATTERN.test(policyVersion) ? policyVersion : undefined,
   };
 }
 //@ chunk-fp6aqx1j.js:137300-137376 layout
-function normalizePayload(e) {
-  let n = normalizeUserToolUseResult(e.payload);
-  return n === e.payload
-    ? e
+function normalizePayload(event) {
+  let payload = normalizeUserToolUseResult(event.payload);
+  return payload === event.payload
+    ? event
     : {
-        ...e,
-        payload: n,
+        ...event,
+        payload,
       };
 }
 //@ chunk-fp6aqx1j.js:137376-137544 layout
-function hasUserMessageUuids(e) {
+function hasUserMessageUuids(message) {
   return (
-    "user_message_uuids" in e &&
-    Array.isArray(e.user_message_uuids) &&
-    e.user_message_uuids.length > 0 &&
-    e.user_message_uuids.every((userMessageUuid) => typeof userMessageUuid === "string")
+    "user_message_uuids" in message &&
+    Array.isArray(message.user_message_uuids) &&
+    message.user_message_uuids.length > 0 &&
+    message.user_message_uuids.every((userMessageUuid) => typeof userMessageUuid === "string")
   );
 }
 //@ chunk-fp6aqx1j.js:137544-137672 layout
-function isTopLevelSystemInit(e) {
+function isTopLevelSystemInit(message) {
   return (
-    e.type === "system" &&
-    "subtype" in e &&
-    e.subtype === "init" &&
-    !("parent_tool_use_id" in e && e.parent_tool_use_id)
+    message.type === "system" &&
+    "subtype" in message &&
+    message.subtype === "init" &&
+    !("parent_tool_use_id" in message && message.parent_tool_use_id)
   );
 }
 //@ chunk-fp6aqx1j.js:137672-137740 placement
-var SDK_ROW_TYPES = new Set(["assistant", "attachment", "result", "system", "user"]);
+var SDK_ROW_TYPES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-fp6aqx1j.js:137672", () => {
+  SDK_ROW_TYPES = new Set(["assistant", "attachment", "result", "system", "user"]);
+});
 //@ chunk-fp6aqx1j.js:137740-137913 placement
-function describeSingleRowForTelemetry(e) {
-  let payload = e.length === 1 ? e[0].payload : undefined;
+function describeSingleRowForTelemetry(events) {
+  let payload = events.length === 1 ? events[0].payload : undefined;
   return (
     payload && {
       row_type: SDK_ROW_TYPES.has(payload.type) ? payload.type : "other",
@@ -6385,13 +6645,13 @@ function classifyRowTypeForTelemetry(message) {
   if (message.type === "rate_limit_event") {
     let rateLimitInfo = message.rate_limit_info;
     if (!isPlainObject(rateLimitInfo) || typeof rateLimitInfo.status !== "string") return message.type;
-    let s =
+    let suffix =
       rateLimitInfo.rateLimitGraceActive === true
         ? "_grace"
         : rateLimitInfo.overageInUse === true || rateLimitInfo.isUsingOverage === true
           ? "_overage"
           : "";
-    return `${message.type}/${rateLimitInfo.status}${s}`;
+    return `${message.type}/${rateLimitInfo.status}${suffix}`;
   }
   return "subtype" in message && typeof message.subtype === "string"
     ? `${message.type}/${message.subtype}`
@@ -6400,31 +6660,36 @@ function classifyRowTypeForTelemetry(message) {
 //@ chunk-fp6aqx1j.js:138447-138557 placement
 function hasToolResultContent(message) {
   let content = isPlainObject(message) ? message.content : undefined;
-  return Array.isArray(content) && content.some((s) => isPlainObject(s) && s.type === "tool_result");
+  return (
+    Array.isArray(content) && content.some((block) => isPlainObject(block) && block.type === "tool_result")
+  );
 }
 //@ chunk-fp6aqx1j.js:138557-138595 placement
-var READ_NOTIFICATIONS_TOOL_NAMES = new Set(["ReadNotifications"]);
+var READ_NOTIFICATIONS_TOOL_NAMES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-fp6aqx1j.js:138557", () => {
+  READ_NOTIFICATIONS_TOOL_NAMES = new Set(["ReadNotifications"]);
+});
 //@ chunk-fp6aqx1j.js:138595-138709 placement
-function getMainThreadToolUseIds(e, n) {
-  return isPlainObject(e) && e.type === "assistant" && e.parent_tool_use_id == null
-    ? collectContentBlockField(e.message, "tool_use", "id", n)
+function getMainThreadToolUseIds(message, filter) {
+  return isPlainObject(message) && message.type === "assistant" && message.parent_tool_use_id == null
+    ? collectContentBlockField(message.message, "tool_use", "id", filter)
     : [];
 }
 //@ chunk-fp6aqx1j.js:138709-138941 placement
-function collectContentBlockField(message, n, s, r) {
+function collectContentBlockField(message, blockType, field, names) {
   let content = isPlainObject(message) ? message.content : undefined;
   if (!Array.isArray(content)) return [];
-  let w = [];
-  for (let v of content)
+  let blocks = [];
+  for (let block of content)
     if (
-      isPlainObject(v) &&
-      v.type === n &&
-      (r === undefined || (typeof v.name === "string" && r.has(v.name)))
+      isPlainObject(block) &&
+      block.type === blockType &&
+      (names === undefined || (typeof block.name === "string" && names.has(block.name)))
     ) {
-      let y = v[s];
-      if (typeof y === "string") w.push(y);
+      let value = block[field];
+      if (typeof value === "string") blocks.push(value);
     }
-  return w;
+  return blocks;
 }
 //@ chunk-fp6aqx1j.js:138941-139051 placement = createChildAbortController (0.879)
 function createChildAbortController(signal) {
@@ -6437,121 +6702,127 @@ function createChildAbortController(signal) {
   });
 }
 //@ chunk-fp6aqx1j.js:139051-139135 placement
-function evictOldestIfFull(e) {
-  if (e.size > MAX_EPHEMERAL_RECEIPT_IDS) {
-    let n = e.keys().next().value;
-    if (n !== undefined) e.delete(n);
+function evictOldestIfFull(set) {
+  if (set.size > MAX_EPHEMERAL_RECEIPT_IDS) {
+    let oldest = set.keys().next().value;
+    if (oldest !== undefined) set.delete(oldest);
   }
 }
 //@ chunk-fp6aqx1j.js:139135-139239 placement
-function clampNonNegativeInt(e, n) {
-  return typeof e === "number" && Number.isFinite(e) ? Math.min(Math.max(0, Math.trunc(e)), n) : 0;
+function clampNonNegativeInt(value, max) {
+  return typeof value === "number" && Number.isFinite(value)
+    ? Math.min(Math.max(0, Math.trunc(value)), max)
+    : 0;
 }
 //@ chunk-fp6aqx1j.js:139239-141177 placement
-function summarizeAssistantMessage(flushPolicy, n) {
-  if (!flushPolicy || !n) return flushPolicy === n;
+function summarizeAssistantMessage(flushPolicy, other) {
+  if (!flushPolicy || !other) return flushPolicy === other;
   return (
-    flushPolicy.maxEvents === n.maxEvents &&
-    flushPolicy.maxAgeMs === n.maxAgeMs &&
-    flushPolicy.maxBytes === n.maxBytes &&
-    flushPolicy.flushOnSamplingEnd === n.flushOnSamplingEnd &&
-    flushPolicy.flushOnAssistant === n.flushOnAssistant &&
-    flushPolicy.eventBatchUpload === n.eventBatchUpload &&
-    flushPolicy.holdAcrossModelCalls === n.holdAcrossModelCalls &&
-    flushPolicy.holdAgain?.softAgeMs === n.holdAgain?.softAgeMs &&
-    flushPolicy.holdAgain?.softEvents === n.holdAgain?.softEvents &&
-    setsEqual(flushPolicy.holdAgain?.after, n.holdAgain?.after) &&
-    setsEqual(flushPolicy.holdAgain?.neverAfterTools, n.holdAgain?.neverAfterTools) &&
-    setsEqual(flushPolicy.holdAgain?.toolsWhoseResultsWait, n.holdAgain?.toolsWhoseResultsWait) &&
-    flushPolicy.holdAgain?.laterWorkerHoldsFirstTurn === n.holdAgain?.laterWorkerHoldsFirstTurn &&
-    setsEqual(flushPolicy.mayWaitTypes, n.mayWaitTypes) &&
-    setsEqual(flushPolicy.liveOnlyTypes, n.liveOnlyTypes) &&
-    setsEqual(flushPolicy.flushAfterToolNames, n.flushAfterToolNames) &&
-    flushPolicy.settingsReceiptsMaxWaitMs === n.settingsReceiptsMaxWaitMs &&
-    flushPolicy.messagesReceivedWaits === n.messagesReceivedWaits &&
-    flushPolicy.receiptsRideUploads === n.receiptsRideUploads &&
-    flushPolicy.flushBeforeToolsWaitMs === n.flushBeforeToolsWaitMs &&
-    flushPolicy.flushAfterTools === n.flushAfterTools &&
-    flushPolicy.mergeWorkerReports === n.mergeWorkerReports &&
-    flushPolicy.transcriptMaxAgeMs === n.transcriptMaxAgeMs &&
-    flushPolicy.noTurnMaxAgeMs === n.noTurnMaxAgeMs &&
-    flushPolicy.controlTrafficKeepsHold === n.controlTrafficKeepsHold &&
-    flushPolicy.emptyCheckpointKeepsHold === n.emptyCheckpointKeepsHold &&
-    flushPolicy.firstTurnHoldsEachCall === n.firstTurnHoldsEachCall &&
-    flushPolicy.settingsAnswersMaxWaitMs === n.settingsAnswersMaxWaitMs &&
-    flushPolicy.initMaxWaitMs === n.initMaxWaitMs &&
-    flushPolicy.policyVersion === n.policyVersion &&
-    flushPolicy.mustFlushTypes.size === n.mustFlushTypes.size &&
-    [...flushPolicy.mustFlushTypes].every((mustFlushType) => n.mustFlushTypes.has(mustFlushType)) &&
-    flushPolicy.liveTwinTypes.size === n.liveTwinTypes.size &&
-    [...flushPolicy.liveTwinTypes].every((liveTwinType) => n.liveTwinTypes.has(liveTwinType)) &&
-    flushPolicy.metadataMaxWaitMs === n.metadataMaxWaitMs &&
-    flushPolicy.costReportMaxWaitMs === n.costReportMaxWaitMs &&
-    flushPolicy.metadataWaitsForStatus.size === n.metadataWaitsForStatus.size &&
-    [...flushPolicy.metadataWaitsForStatus].every((s) => n.metadataWaitsForStatus.has(s)) &&
-    setsEqual(flushPolicy.metadataNeverSent, n.metadataNeverSent)
+    flushPolicy.maxEvents === other.maxEvents &&
+    flushPolicy.maxAgeMs === other.maxAgeMs &&
+    flushPolicy.maxBytes === other.maxBytes &&
+    flushPolicy.flushOnSamplingEnd === other.flushOnSamplingEnd &&
+    flushPolicy.flushOnAssistant === other.flushOnAssistant &&
+    flushPolicy.eventBatchUpload === other.eventBatchUpload &&
+    flushPolicy.holdAcrossModelCalls === other.holdAcrossModelCalls &&
+    flushPolicy.holdAgain?.softAgeMs === other.holdAgain?.softAgeMs &&
+    flushPolicy.holdAgain?.softEvents === other.holdAgain?.softEvents &&
+    setsEqual(flushPolicy.holdAgain?.after, other.holdAgain?.after) &&
+    setsEqual(flushPolicy.holdAgain?.neverAfterTools, other.holdAgain?.neverAfterTools) &&
+    setsEqual(flushPolicy.holdAgain?.toolsWhoseResultsWait, other.holdAgain?.toolsWhoseResultsWait) &&
+    flushPolicy.holdAgain?.laterWorkerHoldsFirstTurn === other.holdAgain?.laterWorkerHoldsFirstTurn &&
+    setsEqual(flushPolicy.mayWaitTypes, other.mayWaitTypes) &&
+    setsEqual(flushPolicy.liveOnlyTypes, other.liveOnlyTypes) &&
+    setsEqual(flushPolicy.flushAfterToolNames, other.flushAfterToolNames) &&
+    flushPolicy.settingsReceiptsMaxWaitMs === other.settingsReceiptsMaxWaitMs &&
+    flushPolicy.messagesReceivedWaits === other.messagesReceivedWaits &&
+    flushPolicy.receiptsRideUploads === other.receiptsRideUploads &&
+    flushPolicy.flushBeforeToolsWaitMs === other.flushBeforeToolsWaitMs &&
+    flushPolicy.flushAfterTools === other.flushAfterTools &&
+    flushPolicy.mergeWorkerReports === other.mergeWorkerReports &&
+    flushPolicy.transcriptMaxAgeMs === other.transcriptMaxAgeMs &&
+    flushPolicy.noTurnMaxAgeMs === other.noTurnMaxAgeMs &&
+    flushPolicy.controlTrafficKeepsHold === other.controlTrafficKeepsHold &&
+    flushPolicy.emptyCheckpointKeepsHold === other.emptyCheckpointKeepsHold &&
+    flushPolicy.firstTurnHoldsEachCall === other.firstTurnHoldsEachCall &&
+    flushPolicy.settingsAnswersMaxWaitMs === other.settingsAnswersMaxWaitMs &&
+    flushPolicy.initMaxWaitMs === other.initMaxWaitMs &&
+    flushPolicy.policyVersion === other.policyVersion &&
+    flushPolicy.mustFlushTypes.size === other.mustFlushTypes.size &&
+    [...flushPolicy.mustFlushTypes].every((mustFlushType) => other.mustFlushTypes.has(mustFlushType)) &&
+    flushPolicy.liveTwinTypes.size === other.liveTwinTypes.size &&
+    [...flushPolicy.liveTwinTypes].every((liveTwinType) => other.liveTwinTypes.has(liveTwinType)) &&
+    flushPolicy.metadataMaxWaitMs === other.metadataMaxWaitMs &&
+    flushPolicy.costReportMaxWaitMs === other.costReportMaxWaitMs &&
+    flushPolicy.metadataWaitsForStatus.size === other.metadataWaitsForStatus.size &&
+    [...flushPolicy.metadataWaitsForStatus].every((type) => other.metadataWaitsForStatus.has(type)) &&
+    setsEqual(flushPolicy.metadataNeverSent, other.metadataNeverSent)
   );
 }
 //@ chunk-fp6aqx1j.js:141177-141418 placement
-function parseFlushIntervalMs(e, n, s) {
-  let r = typeof n === "string" ? Number(n) : n;
-  if (typeof r === "number" && Number.isFinite(r)) return Math.min(Math.max(r, 0), 60000);
-  if (n !== undefined)
-    logForDebugging(`CCRClient: non-finite ${e} (${typeof n}) \u2014 using ${s}ms`, {
+function parseFlushIntervalMs(field, value, fallback) {
+  let numeric = typeof value === "string" ? Number(value) : value;
+  if (typeof numeric === "number" && Number.isFinite(numeric)) return Math.min(Math.max(numeric, 0), 60000);
+  if (value !== undefined)
+    logForDebugging(`CCRClient: non-finite ${field} (${typeof value}) \u2014 using ${fallback}ms`, {
       level: "warn",
     });
-  return s;
+  return fallback;
 }
 //@ chunk-fp6aqx1j.js:141418-141504 placement
-function isThinkingTokensSystemMessage(e) {
-  return e.type === "system" && "subtype" in e && e.subtype === "thinking_tokens";
+function isThinkingTokensSystemMessage(message) {
+  return message.type === "system" && "subtype" in message && message.subtype === "thinking_tokens";
 }
 //@ chunk-fp6aqx1j.js:141504-141867 placement
 /**
  * 判断一条 SDK 消息是否属于实时/进度类（user、stream_event、tool_progress、不含 SendUserMessage/PushNotification 的 assistant、thinking_tokens/task_progress/hook_progress 系统消息），决定 CCRClient 的保留与刷写策略。
  */
-function isEphemeralStreamMessage(e) {
-  switch (e.type) {
+function isEphemeralStreamMessage(message) {
+  switch (message.type) {
     case "user":
     case "stream_event":
     case "tool_progress":
       return true;
     case "assistant":
-      return !e.message.content.some(
-        (n) => n.type === "tool_use" && (n.name === "SendUserMessage" || n.name === "PushNotification"),
+      return !message.message.content.some(
+        (block) =>
+          block.type === "tool_use" &&
+          (block.name === "SendUserMessage" || block.name === "PushNotification"),
       );
     case "system":
       return (
-        "subtype" in e &&
-        (e.subtype === "thinking_tokens" || e.subtype === "task_progress" || e.subtype === "hook_progress")
+        "subtype" in message &&
+        (message.subtype === "thinking_tokens" ||
+          message.subtype === "task_progress" ||
+          message.subtype === "hook_progress")
       );
     default:
       return false;
   }
 }
 //@ chunk-fp6aqx1j.js:141867-141925 placement
-function hearthQuerySuffix(e) {
-  if (e) return "?include_hearth=true";
+function hearthQuerySuffix(include) {
+  if (include) return "?include_hearth=true";
   return "";
 }
 //@ chunk-fp6aqx1j.js:141925-141957 placement
-function isHearthRequest(e) {
-  return e?.hearth;
+function isHearthRequest(response) {
+  return response?.hearth;
 }
 //@ chunk-fp6aqx1j.js:141957-142022 placement
-function isHistoricalPayloadSeen(e, n) {
-  return e.historical === true && n.has(e.payload.uuid);
+function isHistoricalPayloadSeen(event, uuids) {
+  return event.historical === true && uuids.has(event.payload.uuid);
 }
 //@ chunk-fp6aqx1j.js:142022-142068 placement
-function isUserPayload(e) {
-  return e.payload.type === "user";
+function isUserPayload(event) {
+  return event.payload.type === "user";
 }
 //@ chunk-fp6aqx1j.js:142068-142330 placement
 /**
  * 创建空闲跟踪器：noteActivity 记录活动并通知订阅者，sampleIdleSeconds 在回合运行时返回 0，否则返回距上次活动的秒数；用于 CCR 心跳的 idle 上报。
  */
-function createIdleTracker(e) {
-  let n = e?.isTurnRunning ?? (() => getMainLoopRefcount() > 0);
+function createIdleTracker(options) {
+  let isTurnRunning = options?.isTurnRunning ?? (() => getMainLoopRefcount() > 0);
   let signal = createSignal();
   let now = Date.now();
   return {
@@ -6565,30 +6836,13 @@ function createIdleTracker(e) {
     },
     sampleIdleSeconds() {
       let now_2 = Date.now();
-      if (n()) {
+      if (isTurnRunning()) {
         now = now_2;
         return 0;
       }
       return Math.max(0, Math.floor((now_2 - now) / 1000));
     },
     onActivity: signal.subscribe,
-  };
-}
-//@ chunk-3wek6r2k.js:29172-29300 fingerprint = scopeKey (0.642)
-/**
- * 构造一条 replay 用户消息（isReplay）。
- */
-function scopeKey(sessionId, uuid, content) {
-  return {
-    type: "user",
-    uuid,
-    session_id: sessionId,
-    isReplay: true,
-    parent_tool_use_id: null,
-    message: {
-      role: "user",
-      content,
-    },
   };
 }
 export {

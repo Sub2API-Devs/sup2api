@@ -18,8 +18,8 @@ import { sanitizeDisplayText } from "../sanitizeDisplayText.js";
 import { findToolByName } from "../../Tool.js";
 import { humanizeToolName } from "../../bridge/bridgePermissionResponse.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, string, _enum, literal } from "../../../vendor/zod/v4/classic/schemas.js";
-import { NON_EXECUTION_KINDS, extractMarkupText } from "../../entrypoints/sdk/coreSchemas.js";
+import { objectSchema, stringSchema, _enum, literal } from "../../../vendor/zod/v4/classic/schemas.js";
+import { NON_EXECUTION_KINDS, isKnownMessageKind } from "../../entrypoints/sdk/coreSchemas.js";
 import { countToolCallsSince } from "../taggedId.js";
 import {
   countToolCallsSince_2,
@@ -45,10 +45,19 @@ import { unescapeHtmlEntities } from "../confusables.js";
 import { stripMemoryTagsFromBlocks } from "../../services/orgMemory/promptIndex.js";
 import { EXITPLANMODE_2 } from "../../tools/ExitPlanModeTool/constants.js";
 import { isDisklessSession, notePlanFileForgotten, getPlanFilePath, getPlan } from "../plans.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
+//@ chunk-w5ndchqs.js:33580-33674 fingerprint = toSDKRateLimitInfo (0.578)
+/**
+ * 去掉 overageStatus/overageResetsAt/overageDisabledReason 后的限额信息（SDK rate_limit_info）。
+ */
+function toSDKRateLimitInfo(limits) {
+  let { overageStatus, overageResetsAt, overageDisabledReason, ...rest } = limits;
+  return rest;
+}
 //@ chunk-0h4e7gnq.js:31691-31797 placement
-function toSafeLines(e) {
-  return e
+function toSafeLines(text) {
+  return text
     .replace(
       /\r\n?|[\v\f\u0085\u2028\u2029]/g,
       `
@@ -61,20 +70,20 @@ function toSafeLines(e) {
     .map((line) => replaceControlChars(stripCombiningRepeated(stripAnsi(line))));
 }
 //@ chunk-0h4e7gnq.js:31797-31900 placement
-function formatHookSaysLines(e) {
-  let n = `${toSafeLines(e.hookName).join(" ")} says: `;
-  return toSafeLines(e.content).map((s) => n + s).join(`
+function formatHookSaysLines(event) {
+  let prefix = `${toSafeLines(event.hookName).join(" ")} says: `;
+  return toSafeLines(event.content).map((line) => prefix + line).join(`
 `);
 }
 //@ chunk-0h4e7gnq.js:31900-31991 placement
 /**
  * 构造 informational 系统消息（notice 级别）。
  */
-function informationalSystemMessage(attachment) {
+function informationalSystemMessage(event) {
   return {
     type: "system",
     subtype: "informational",
-    content: formatHookSaysLines(attachment),
+    content: formatHookSaysLines(event),
     level: "notice",
   };
 }
@@ -82,50 +91,53 @@ function informationalSystemMessage(attachment) {
 /**
  * 判断模型是否启用 quizzical_shore 能力。
  */
-function isQuizzicalShoreModel(e) {
-  return typeof e === "string" && isModelCapabilityEnabled("quizzical_shore", getCanonicalName(e), e);
+function isQuizzicalShoreModel(modelName) {
+  return (
+    typeof modelName === "string" &&
+    isModelCapabilityEnabled("quizzical_shore", getCanonicalName(modelName), modelName)
+  );
 }
 //@ chunk-0h4e7gnq.js:32102-32148 placement
-function hiddenOrFaintLevel(e) {
-  return isQuizzicalShoreModel(e) ? "hidden" : "faint";
+function hiddenOrFaintLevel(modelName) {
+  return isQuizzicalShoreModel(modelName) ? "hidden" : "faint";
 }
 //@ chunk-0h4e7gnq.js:32148-32219 placement
-function isApiErrorMessageFlagged(e) {
-  return "isApiErrorMessage" in e && e.isApiErrorMessage === true;
+function isApiErrorMessageFlagged(message) {
+  return "isApiErrorMessage" in message && message.isApiErrorMessage === true;
 }
 //@ chunk-0h4e7gnq.js:32219-32289 placement
 /**
  * 判断是否为无附带错误信息的 API 错误消息。
  */
-function isBareApiErrorMessage(e) {
-  return isApiErrorMessageFlagged(e) && e.error == null && e.api_error_status == null;
+function isBareApiErrorMessage(message) {
+  return isApiErrorMessageFlagged(message) && message.error == null && message.api_error_status == null;
 }
 //@ chunk-0h4e7gnq.js:32289-32347 placement
 /**
  * 判断消息是否为 API 错误消息。
  */
-function isApiErrorMessage(e) {
-  return e.is_api_error_message === true || isApiErrorMessageFlagged(e);
+function isApiErrorMessage(message) {
+  return message.is_api_error_message === true || isApiErrorMessageFlagged(message);
 }
 //@ chunk-0h4e7gnq.js:32347-32380 placement
 /**
  * 取消息的安全清洗文本。
  */
-function sanitizedMessageText(e) {
-  return sanitizeDisplayText(stripAnsiPerLine(e));
+function sanitizedMessageText(text) {
+  return sanitizeDisplayText(stripAnsiPerLine(text));
 }
 //@ chunk-0h4e7gnq.js:32380-32497 placement
 /**
  * 对文本块内容做安全清洗，其他块原样保留。
  */
 function sanitizeTextBlocks(content) {
-  return content.map((n) =>
-    n.type === "text" && "text" in n && typeof n.text === "string"
+  return content.map((block) =>
+    block.type === "text" && "text" in block && typeof block.text === "string"
       ? {
-          ...n,
-          text: sanitizedMessageText(n.text),
+          ...block,
+          text: sanitizedMessageText(block.text),
         }
-      : n,
+      : block,
   );
 }
 //@ chunk-0h4e7gnq.js:32497-33032 placement
@@ -135,39 +147,40 @@ function toolResultRemedy(message) {
     return [];
   let content = message.message.content;
   if (!Array.isArray(content)) return [];
-  let filtered = content.filter((k) => k.type === "tool_result");
+  let filtered = content.filter((block) => block.type === "tool_result");
   if (filtered.length !== 1) return [];
-  let h = {
+  let meta = {
     id: filtered[0].tool_use_id,
   };
   if (toolDenialKind !== undefined) {
-    h.non_execution_kind = toolDenialKind;
-    if (message.userFeedback !== undefined) h.user_feedback = message.userFeedback;
+    meta.non_execution_kind = toolDenialKind;
+    if (message.userFeedback !== undefined) meta.user_feedback = message.userFeedback;
   }
-  if (toolResultRemedy !== undefined) h.remedy = toolResultRemedy;
+  if (toolResultRemedy !== undefined) meta.remedy = toolResultRemedy;
   if (permissionDecision !== undefined)
-    h.permission_decision = {
+    meta.permission_decision = {
       decision: permissionDecision.decision,
       source: permissionDecision.source,
       ...(permissionDecision.reasonType !== undefined && {
         reason_type: permissionDecision.reasonType,
       }),
     };
-  return [h];
+  return [meta];
 }
 //@ chunk-0h4e7gnq.js:33032-33277 placement
 /**
  * 只保留在给定内容中有对应 tool_result 的工具调用。
  */
-function filterToolUsesWithResults(e, content) {
-  if (e.length === 0 || !Array.isArray(content)) return [];
-  let s = new Set();
-  for (let y of content)
-    if (y != null && typeof y === "object") {
-      let r = y;
-      if (r.type === "tool_result" && typeof r.tool_use_id === "string") s.add(r.tool_use_id);
+function filterToolUsesWithResults(toolUseBlocks, content) {
+  if (toolUseBlocks.length === 0 || !Array.isArray(content)) return [];
+  let resultIds = new Set();
+  for (let block of content)
+    if (block != null && typeof block === "object") {
+      let toolResult = block;
+      if (toolResult.type === "tool_result" && typeof toolResult.tool_use_id === "string")
+        resultIds.add(toolResult.tool_use_id);
     }
-  return e.filter((y) => s.has(y.id));
+  return toolUseBlocks.filter((toolUse) => resultIds.has(toolUse.id));
 }
 //@ chunk-0h4e7gnq.js:33277-33819 placement
 /**
@@ -175,17 +188,17 @@ function filterToolUsesWithResults(e, content) {
  */
 function buildToolDisplayNames(content, tools) {
   if (!Array.isArray(content)) return [];
-  let s = [];
-  for (let y of content) {
-    if (y == null || typeof y !== "object" || y.type !== "tool_use") continue;
-    let { id, name: S } = y;
-    if (typeof id !== "string" || typeof S !== "string") continue;
-    let mcpInfo = tools ? findToolByName(tools, S)?.mcpInfo : undefined;
-    let k = mcpInfo?.title || humanizeToolName(S);
-    if (k === S) continue;
+  let names = [];
+  for (let block of content) {
+    if (block == null || typeof block !== "object" || block.type !== "tool_use") continue;
+    let { id, name: toolName } = block;
+    if (typeof id !== "string" || typeof toolName !== "string") continue;
+    let mcpInfo = tools ? findToolByName(tools, toolName)?.mcpInfo : undefined;
+    let displayName = mcpInfo?.title || humanizeToolName(toolName);
+    if (displayName === toolName) continue;
     let entry = {
       id,
-      display_name: k,
+      display_name: displayName,
     };
     if (mcpInfo) {
       entry.server_display_name = mcpInfo.displayName || mcpInfo.serverInfoName || mcpInfo.serverName;
@@ -194,37 +207,44 @@ function buildToolDisplayNames(content, tools) {
       if (mcpInfo.serverIdStamp) entry.server_id_stamp = mcpInfo.serverIdStamp;
       entry.tool_name = mcpInfo.toolName;
     }
-    s.push(entry);
+    names.push(entry);
   }
-  return s;
+  return names;
 }
 //@ chunk-0h4e7gnq.js:33819-33967 placement
 /**
  * 工具结果附加信息的 schema：未执行原因，以及被分类器拒绝的权限决定。
  */
-var NON_EXECUTION_ENTRY_SCHEMA = DoctorLazy(() =>
-  u({
-    id: string(),
-    non_execution_kind: _enum(NON_EXECUTION_KINDS),
-  }),
-);
-var CLASSIFIER_REJECT_SCHEMA = DoctorLazy(() =>
-  u({
-    id: string(),
-    permission_decision: u({
-      decision: literal("reject"),
-      reason_type: literal("classifier"),
+var NON_EXECUTION_ENTRY_SCHEMA; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var CLASSIFIER_REJECT_SCHEMA;
+deferInit("chunk-0h4e7gnq.js:33819", () => {
+  NON_EXECUTION_ENTRY_SCHEMA = DoctorLazy(() =>
+    objectSchema({
+      id: stringSchema(),
+      non_execution_kind: _enum(NON_EXECUTION_KINDS),
     }),
-  }),
-);
+  );
+  CLASSIFIER_REJECT_SCHEMA = DoctorLazy(() =>
+    objectSchema({
+      id: stringSchema(),
+      permission_decision: objectSchema({
+        decision: literal("reject"),
+        reason_type: literal("classifier"),
+      }),
+    }),
+  );
+});
 //@ chunk-0h4e7gnq.js:33967-34191 placement
-function findToolResultMeta(e, n, s) {
-  let filtered = s.filter((k) => k.type === "tool_result");
-  let [r] = filtered;
-  let h = Array.isArray(n) && filtered.length === 1 && r?.is_error === true ? n : [];
-  for (let k of h) {
-    let w = e.safeParse(k);
-    if (w.success && w.data.id === r?.tool_use_id) return w.data;
+function findToolResultMeta(schema, toolResultMetaInput, content) {
+  let filtered = content.filter((block) => block.type === "tool_result");
+  let [toolResult] = filtered;
+  let candidates =
+    Array.isArray(toolResultMetaInput) && filtered.length === 1 && toolResult?.is_error === true
+      ? toolResultMetaInput
+      : [];
+  for (let candidate of candidates) {
+    let parsed = schema.safeParse(candidate);
+    if (parsed.success && parsed.data.id === toolResult?.tool_use_id) return parsed.data;
   }
   return;
 }
@@ -232,8 +252,8 @@ function findToolResultMeta(e, n, s) {
 /**
  * 取工具结果的 non_execution_kind 标记。
  */
-function nonExecutionKindOf(toolResultMeta, content) {
-  return findToolResultMeta(NON_EXECUTION_ENTRY_SCHEMA(), toolResultMeta, content)?.non_execution_kind;
+function nonExecutionKindOf(toolResultMetaInput, content) {
+  return findToolResultMeta(NON_EXECUTION_ENTRY_SCHEMA(), toolResultMetaInput, content)?.non_execution_kind;
 }
 //@ chunk-0h4e7gnq.js:34249-34329 placement
 /**
@@ -274,7 +294,7 @@ function toInternalMessages(messages) {
                   }),
                 },
               }),
-              ...(extractMarkupText(message.local_command_outcome) && {
+              ...(isKnownMessageKind(message.local_command_outcome) && {
                 commandOutcome: {
                   kind: message.local_command_outcome.kind,
                   ...(typeof message.local_command_outcome.suggestion === "string" && {
@@ -285,28 +305,36 @@ function toInternalMessages(messages) {
             },
           ];
         if (message.is_meta === true) return [];
-        let s = countToolCallsSince(message.message.content);
-        let y =
-          s === message.message.content
+        let content = countToolCallsSince(message.message.content);
+        let normalizedMessage =
+          content === message.message.content
             ? message.message
             : {
                 ...message.message,
-                content: s,
+                content,
               };
-        let r = countToolCallsSince_2(message.wire_tool_inputs, y.content, message.batch_tool_uses);
-        let S = restoreWireInputStamps(message.wire_ingest_context, r, y.content);
-        let content = y.content;
-        let k =
-          typeof content === "string"
+        let wireToolInputs = countToolCallsSince_2(
+          message.wire_tool_inputs,
+          normalizedMessage.content,
+          message.batch_tool_uses,
+        );
+        let wireIngestContext = restoreWireInputStamps(
+          message.wire_ingest_context,
+          wireToolInputs,
+          normalizedMessage.content,
+        );
+        let content_2 = normalizedMessage.content;
+        let withBlocks =
+          typeof content_2 === "string"
             ? {
-                ...y,
-                content: toTextBlocks(content),
+                ...normalizedMessage,
+                content: toTextBlocks(content_2),
               }
-            : y;
-        let w = k.id
-          ? k
+            : normalizedMessage;
+        let withId = withBlocks.id
+          ? withBlocks
           : {
-              ...k,
+              ...withBlocks,
               id: randomUUID(),
             };
         return [
@@ -314,13 +342,13 @@ function toInternalMessages(messages) {
             type: "assistant",
             message:
               message.error === "verification_required"
-                ? sanitizeApiErrorMessage(w)
+                ? sanitizeApiErrorMessage(withId)
                 : isBareApiErrorMessage(message)
                   ? {
-                      ...w,
-                      content: sanitizeTextBlocks(w.content),
+                      ...withId,
+                      content: sanitizeTextBlocks(withId.content),
                     }
-                  : w,
+                  : withId,
             uuid: message.uuid ?? randomUUID(),
             requestId: undefined,
             timestamp: message.timestamp ?? new Date().toISOString(),
@@ -358,17 +386,19 @@ function toInternalMessages(messages) {
               message.batch_tool_uses.length > 0 && {
                 batchToolUses: message.batch_tool_uses,
               }),
-            ...(r !== undefined && {
-              wireToolInputs: r,
+            ...(wireToolInputs !== undefined && {
+              wireToolInputs,
             }),
-            ...(S !== undefined && {
-              wireIngestContext: S,
+            ...(wireIngestContext !== undefined && {
+              wireIngestContext,
             }),
           },
         ];
       case "user": {
         let content = message.message.content;
-        let L = Array.isArray(content) ? nonExecutionKindOf(message.tool_result_meta, content) : undefined;
+        let remoteDenialKind = Array.isArray(content)
+          ? nonExecutionKindOf(message.tool_result_meta, content)
+          : undefined;
         return [
           {
             type: "user",
@@ -379,8 +409,8 @@ function toInternalMessages(messages) {
             ...(message.is_virtual === true && {
               isVirtual: true,
             }),
-            ...(L !== undefined && {
-              remoteToolDenialKind: L,
+            ...(remoteDenialKind !== undefined && {
+              remoteToolDenialKind: remoteDenialKind,
             }),
           },
         ];
@@ -409,22 +439,22 @@ function toInternalMessages(messages) {
 /**
  * 对 API 错误消息里的文本块做验证信息清洗：保留"API Error: "前缀，清洗其后内容，清洗为空时只留前缀。
  */
-function sanitizeApiErrorMessage(e) {
-  let n = `${API_ERROR_MESSAGE_PREFIX}: `;
+function sanitizeApiErrorMessage(message) {
+  let prefix = `${API_ERROR_MESSAGE_PREFIX}: `;
   return {
-    ...e,
-    content: e.content.map((s) => {
-      if (s.type !== "text") return s;
-      let y = s.text.startsWith(n);
-      let r = sanitizeVerificationMessage(y ? s.text.slice(n.length) : s.text);
-      if (r === undefined)
+    ...message,
+    content: message.content.map((block) => {
+      if (block.type !== "text") return block;
+      let hasPrefix = block.text.startsWith(prefix);
+      let sanitized = sanitizeVerificationMessage(hasPrefix ? block.text.slice(prefix.length) : block.text);
+      if (sanitized === undefined)
         return {
-          ...s,
-          text: y ? n.trimEnd() : "",
+          ...block,
+          text: hasPrefix ? prefix.trimEnd() : "",
         };
       return {
-        ...s,
-        text: y ? `${n}${r}` : r,
+        ...block,
+        text: hasPrefix ? `${prefix}${sanitized}` : sanitized,
       };
     }),
   };
@@ -541,11 +571,11 @@ function fromSDKCompactMetadata(meta) {
 }
 //@ chunk-0h4e7gnq.js:41678-42470 placement
 function isAssistantResultComplete(message, content) {
-  let s =
+  let wireInputs =
     content === undefined
       ? message.wireToolInputs
       : countToolCallsSince_3(message.wireToolInputs, content, message.batchToolUses);
-  let y = {
+  let fields = {
     aborted: message.isAbortedMidStream ? true : undefined,
     is_api_error_message: message.isApiErrorMessage === true ? true : undefined,
     api_error_status: message.apiErrorStatus,
@@ -560,27 +590,29 @@ function isAssistantResultComplete(message, content) {
       message.batchToolUses !== undefined && message.batchToolUses.length > 0
         ? message.batchToolUses
         : undefined,
-    wire_tool_inputs: s !== undefined && Object.keys(s).length > 0 ? s : undefined,
+    wire_tool_inputs: wireInputs !== undefined && Object.keys(wireInputs).length > 0 ? wireInputs : undefined,
     wire_ingest_context:
-      s !== undefined && message.wireIngestContext !== undefined
-        ? nonEmptyObjectOrUndefined(pickByHelper(message.wireIngestContext, (r, S) => Object.hasOwn(s, S)))
+      wireInputs !== undefined && message.wireIngestContext !== undefined
+        ? nonEmptyObjectOrUndefined(
+            pickByHelper(message.wireIngestContext, (value, key) => Object.hasOwn(wireInputs, key)),
+          )
         : undefined,
   };
-  return pickByHelper(y, (r) => r !== undefined);
+  return pickByHelper(fields, (value) => value !== undefined);
 }
 //@ chunk-0h4e7gnq.js:42470-42665 placement
 /**
  * 生成 SDK 消息的旁白字段：旁白块下标，以及 VS Code 入口下的旁白提示。
  */
-function getNarrationFields(content, model) {
-  if (!Array.isArray(content)) return {};
-  let s = narrationThinkingIndexes(content);
-  if (s.length === 0) return {};
-  let y = getEntrypointKind() === "claude-vscode" ? hiddenOrFaintLevel(model) : undefined;
+function getNarrationFields(messages, model) {
+  if (!Array.isArray(messages)) return {};
+  let indexes = narrationThinkingIndexes(messages);
+  if (indexes.length === 0) return {};
+  let narrationHint = getEntrypointKind() === "claude-vscode" ? hiddenOrFaintLevel(model) : undefined;
   return {
-    narration_block_indexes: s,
-    ...(y !== undefined && {
-      narration_hint: y,
+    narration_block_indexes: indexes,
+    ...(narrationHint !== undefined && {
+      narration_hint: narrationHint,
     }),
   };
 }
@@ -612,8 +644,8 @@ function getThinkingFields(message, content) {
 /**
  * 把队列命令附件转成回放用的 SDK user 消息（内容、uuid、时间戳、isReplay，元消息标 isSynthetic，附文件附件与来源）。
  */
-function queuedCommandToSdkUser(attachment, n) {
-  let queuedCommandAttachment = parseQueuedCommandAttachment(attachment, n.uuid);
+function queuedCommandToSdkUser(attachment, message) {
+  let queuedCommandAttachment = parseQueuedCommandAttachment(attachment, message.uuid);
   if (queuedCommandAttachment === undefined) return;
   return {
     type: "user",
@@ -624,7 +656,7 @@ function queuedCommandToSdkUser(attachment, n) {
     session_id: getSessionId(),
     parent_tool_use_id: null,
     uuid: queuedCommandAttachment.uuid,
-    timestamp: n.timestamp,
+    timestamp: message.timestamp,
     isReplay: true,
     ...(queuedCommandAttachment.isMeta && {
       isSynthetic: true,
@@ -641,35 +673,35 @@ function queuedCommandToSdkUser(attachment, n) {
 /**
  * 把用户消息转成 SDK 回放 user 消息（压缩摘要不算回放，标记是否为合成消息）。
  */
-function userMessageToSdkReplay(e, content) {
+function userMessageToSdkReplay(message, content) {
   return {
     type: "user",
     message: {
-      ...e.message,
+      ...message.message,
       content: stripAnsi(content),
     },
     session_id: getSessionId(),
     parent_tool_use_id: null,
-    uuid: e.uuid,
-    timestamp: e.timestamp,
-    isReplay: !e.isCompactSummary,
-    isSynthetic: selectableUserMessagesFilter(e),
+    uuid: message.uuid,
+    timestamp: message.timestamp,
+    isReplay: !message.isCompactSummary,
+    isSynthetic: selectableUserMessagesFilter(message),
   };
 }
 //@ chunk-0h4e7gnq.js:43479-45297 fingerprint = toSDKMessages (0.431)
 /**
  * 内部消息转 SDK 消息：assistant（带 session_id、request_id、tool_use_meta）、user（按来源分类）、system 子类型、附件等。
  */
-function toSDKMessages(messages, n) {
+function toSDKMessages(messages, tools) {
   return messages.flatMap((message) => {
     switch (message.type) {
       case "assistant": {
-        let y = normalizeAssistantMessageForSDK(message);
-        let toolDisplayNames = buildToolDisplayNames(y.content, n);
+        let normalized = normalizeAssistantMessageForSDK(message);
+        let toolDisplayNames = buildToolDisplayNames(normalized.content, tools);
         return [
           {
             type: "assistant",
-            message: y,
+            message: normalized,
             session_id: getSessionId(),
             parent_tool_use_id: null,
             uuid: message.uuid,
@@ -679,8 +711,8 @@ function toSDKMessages(messages, n) {
               request_id: message.requestId,
             }),
             ...isAssistantResultComplete(message),
-            ...getNarrationFields(y.content, y.model),
-            ...getThinkingFields(message, y.content),
+            ...getNarrationFields(normalized.content, normalized.model),
+            ...getThinkingFields(message, normalized.content),
             ...(toolDisplayNames.length > 0 && {
               tool_use_meta: toolDisplayNames,
             }),
@@ -688,8 +720,8 @@ function toSDKMessages(messages, n) {
         ];
       }
       case "user": {
-        let y = localCommandOutputOf(message);
-        switch (y) {
+        let localOutput = localCommandOutputOf(message);
+        switch (localOutput) {
           case "terminal-hint":
             if (typeof message.message.content === "string")
               return [userMessageToSdkReplay(message, message.message.content)];
@@ -700,7 +732,7 @@ function toSDKMessages(messages, n) {
             break;
           default:
         }
-        let r = toolResultRemedy(message);
+        let remedyMeta = toolResultRemedy(message);
         return [
           {
             type: "user",
@@ -714,8 +746,8 @@ function toSDKMessages(messages, n) {
             ...(message.toolUseResult !== undefined && {
               tool_use_result: message.toolUseResult,
             }),
-            ...(r.length > 0 && {
-              tool_result_meta: r,
+            ...(remedyMeta.length > 0 && {
+              tool_result_meta: remedyMeta,
             }),
             ...(message.origin !== undefined && {
               origin: message.origin,
@@ -742,7 +774,7 @@ function toSDKMessages(messages, n) {
           (message.content.includes(`<${LOCAL_COMMAND_STDOUT}>`) ||
             message.content.includes(`<${LOCAL_COMMAND_STDERR}>`))
         ) {
-          let y = localCommandOutputToSDKAssistantMessage(
+          let assistantMessage = localCommandOutputToSDKAssistantMessage(
             message.content,
             message.uuid,
             message.timestamp,
@@ -751,7 +783,7 @@ function toSDKMessages(messages, n) {
             message.usageReport,
             message.commandOutcome,
           );
-          return y ? [y] : [];
+          return assistantMessage ? [assistantMessage] : [];
         }
         if (message.subtype === "model_consent_fallback")
           return [
@@ -778,8 +810,8 @@ function toSDKMessages(messages, n) {
             },
           ];
         if (message.attachment.type === "queued_command") {
-          let y = queuedCommandToSdkUser(message.attachment, message);
-          return y ? [y] : [];
+          let sdkUserMessage = queuedCommandToSdkUser(message.attachment, message);
+          return sdkUserMessage ? [sdkUserMessage] : [];
         }
         if (message.attachment.type === "tool_host_result_lines")
           return [toSDKToolHostResultMessage(message.attachment, message.uuid, getSessionId())];
@@ -831,29 +863,35 @@ function localCommandOutputToSDKAssistantMessage(
   usageReport,
   commandOutcome,
 ) {
-  let k = stripAnsi(content);
+  let strippedContent = stripAnsi(content);
   let regExp = new RegExp(`<(${LOCAL_COMMAND_STDOUT}|${LOCAL_COMMAND_STDERR})>`, "g");
-  let x = new Set();
-  let L = new Set();
-  let I = "";
-  let G = 0;
-  for (let match = regExp.exec(k); match !== null && x.size < 2; match = regExp.exec(k)) {
-    let z = match[1];
-    if (L.has(z)) continue;
-    let index = k.indexOf(`</${z}>`, regExp.lastIndex);
+  let seenTags = new Set();
+  let unclosedTags = new Set();
+  let parts = "";
+  let copyFrom = 0;
+  for (
+    let match = regExp.exec(strippedContent);
+    match !== null && seenTags.size < 2;
+    match = regExp.exec(strippedContent)
+  ) {
+    let tagName = match[1];
+    if (unclosedTags.has(tagName)) continue;
+    let index = strippedContent.indexOf(`</${tagName}>`, regExp.lastIndex);
     if (index === -1) {
-      L.add(z);
+      unclosedTags.add(tagName);
       continue;
     }
-    let V = index + `</${z}>`.length;
-    if (!x.has(z)) {
-      x.add(z);
-      I += k.slice(G, match.index) + unescapeHtmlEntities(k.slice(regExp.lastIndex, index));
-      G = V;
+    let closeEnd = index + `</${tagName}>`.length;
+    if (!seenTags.has(tagName)) {
+      seenTags.add(tagName);
+      parts +=
+        strippedContent.slice(copyFrom, match.index) +
+        unescapeHtmlEntities(strippedContent.slice(regExp.lastIndex, index));
+      copyFrom = closeEnd;
     }
-    regExp.lastIndex = V;
+    regExp.lastIndex = closeEnd;
   }
-  let cleanContent = (I + k.slice(G)).trim();
+  let cleanContent = (parts + strippedContent.slice(copyFrom)).trim();
   if (cleanContent === "") return null;
   return {
     type: "assistant",
@@ -893,16 +931,16 @@ function localCommandOutputToSDKAssistantMessage(
 /**
  * 内部 model_consent_fallback 系统消息转 SDK 字段（original_model、fallback_model、persisted_as_default）。
  */
-function toSDKModelConsentFallbackMessage(e) {
+function toSDKModelConsentFallbackMessage(message) {
   return {
     type: "system",
     subtype: "model_consent_fallback",
-    choice: e.choice,
-    original_model: e.originalModel,
-    original_model_name: e.originalModelName,
-    fallback_model: e.fallbackModel,
-    persisted_as_default: e.persistedAsDefault,
-    content: e.content,
+    choice: message.choice,
+    original_model: message.originalModel,
+    original_model_name: message.originalModelName,
+    fallback_model: message.fallbackModel,
+    persisted_as_default: message.persistedAsDefault,
+    content: message.content,
   };
 }
 //@ chunk-0h4e7gnq.js:49182-49444 fingerprint = normalizeAssistantMessageForSDK (1)
@@ -933,14 +971,6 @@ function normalizeAssistantMessageForSDK(message) {
     content: normalizedContent,
   };
 }
-//@ chunk-w5ndchqs.js:33580-33674 fingerprint = toSDKRateLimitInfo (0.578)
-/**
- * 去掉 overageStatus/overageResetsAt/overageDisabledReason 后的限额信息（SDK rate_limit_info）。
- */
-function toSDKRateLimitInfo(limits) {
-  let { overageStatus, overageResetsAt, overageDisabledReason, ...d } = limits;
-  return d;
-}
 export {
   toolResultRemedy,
   buildToolDisplayNames,
@@ -951,13 +981,13 @@ export {
   getThinkingFields,
   toSDKToolHostResultMessage,
   informationalSystemMessage,
+  fromSDKCompactMetadata,
   isBareApiErrorMessage,
   sanitizeApiErrorMessage,
   sanitizeTextBlocks,
   isApiErrorMessage,
   isHttpStatus,
   sanitizedMessageText,
-  fromSDKCompactMetadata,
   nonExecutionKindOf,
   toSDKRateLimitInfo,
   toInternalMessages,

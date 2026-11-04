@@ -18,7 +18,7 @@ import { jsonStringify } from "../../slowOperations.js";
 import { isDiskless } from "../../../bootstrap/state.js";
 import { getFileReader } from "../../fileStore.js";
 import { DoctorLazy } from "../../../cli/handlers/util.js";
-import { u, literal, array, unknown } from "../../../../vendor/zod/v4/classic/schemas.js";
+import { objectSchema, literal, array, unknown } from "../../../../vendor/zod/v4/classic/schemas.js";
 import { getClaudeConfigDir } from "../../envUtils.js";
 import { getProviderState } from "../providerCaches.js";
 import { logForDebugging } from "../../debug.js";
@@ -26,38 +26,41 @@ import { addMaskedModelIds, isMaskFreeModelId, normalizeModelId } from "./catalo
 import { isENOENT, getErrnoCode } from "../../errors.js";
 import { safeParseJSON } from "../../json.js";
 import { uniq } from "../../collections.js";
+import { deferInit } from "../../../../runtime/deferred-init.js";
 
 //@ chunk-aepeg2w5.js:754516-754570 placement
 /**
  * 对文本中的 URL 先遮盖，再按主机是否 Anthropic 决定是否清洗。
  */
 function hashOrRedactUrl(customApiBaseUrl) {
-  let n = redactUrlsInText(customApiBaseUrl);
-  return isAnthropicHost(n) ? fromSanitizer_SANITIZER_OUTPUT_ONLY(n) : shortHash(n);
+  let redacted = redactUrlsInText(customApiBaseUrl);
+  return isAnthropicHost(redacted) ? fromSanitizer_SANITIZER_OUTPUT_ONLY(redacted) : shortHash(redacted);
 }
 //@ chunk-aepeg2w5.js:754570-754637 placement
 /**
  * 工具名列表的哈希（自定义工具归为 custom）。
  */
 function hashToolNames(betas) {
-  return fromSanitizer_SANITIZER_OUTPUT_ONLY(betas.map((n) => (getBetaByName(n) ? n : "custom")).join(","));
+  return fromSanitizer_SANITIZER_OUTPUT_ONLY(
+    betas.map((beta) => (getBetaByName(beta) ? beta : "custom")).join(","),
+  );
 }
 //@ chunk-aepeg2w5.js:754637-754817 placement
 /**
  * 把工具名转换为遥测安全形式（MCP、评测注册与动态工具归为类别）。
  */
-function sanitizeToolNameForTelemetry(e) {
-  if (e.startsWith("mcp__")) return lit("mcp");
-  if (e.startsWith("eval_registered__")) return lit("eval_registered");
-  if (e.includes("__")) return lit("dynamic_tool");
-  return fromSanitizer_SANITIZER_OUTPUT_ONLY(e);
+function sanitizeToolNameForTelemetry(toolName) {
+  if (toolName.startsWith("mcp__")) return lit("mcp");
+  if (toolName.startsWith("eval_registered__")) return lit("eval_registered");
+  if (toolName.includes("__")) return lit("dynamic_tool");
+  return fromSanitizer_SANITIZER_OUTPUT_ONLY(toolName);
 }
 //@ chunk-aepeg2w5.js:754817-754869 placement
 /**
  * 键值对的哈希。
  */
-function hashEntries(e) {
-  return fromSanitizer_SANITIZER_OUTPUT_ONLY(jsonStringify(Object.fromEntries(e)));
+function hashEntries(entries) {
+  return fromSanitizer_SANITIZER_OUTPUT_ONLY(jsonStringify(Object.fromEntries(entries)));
 }
 //@ chunk-aepeg2w5.js:754898-755007 placement
 function rejectDiskless(code) {
@@ -69,12 +72,15 @@ function rejectDiskless(code) {
     );
 }
 //@ chunk-aepeg2w5.js:755007-755109 placement
-var DISKLESS_MASK_STORE = {
-  readRange: rejectDiskless("ENOENT"),
-  delete: rejectDiskless("ENOENT"),
-  mkdir: rejectDiskless("EDISKLESS"),
-  atomicWrite: rejectDiskless("EDISKLESS"),
-};
+var DISKLESS_MASK_STORE; // deferred: uses rejectDiskless of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-aepeg2w5.js:755007", () => {
+  DISKLESS_MASK_STORE = {
+    readRange: rejectDiskless("ENOENT"),
+    delete: rejectDiskless("ENOENT"),
+    mkdir: rejectDiskless("EDISKLESS"),
+    atomicWrite: rejectDiskless("EDISKLESS"),
+  };
+});
 //@ chunk-aepeg2w5.js:755109-755142 placement
 /**
  * 遮盖 id 文件使用的存储后端。
@@ -83,21 +89,33 @@ function maskStorage() {
   return isDiskless() ? DISKLESS_MASK_STORE : getFileReader();
 }
 //@ chunk-aepeg2w5.js:755142-755315 placement
-var MASKED_IDS_JSON_2 = "masked-ids.json";
-var MASKED_IDS_JSON = 512;
-var MAX_MASKED_TOOL_NAMES = 64;
-var MASK_RETRY_DELAY_MS = 5000;
-var MASKED_ID_RE = /^[a-z0-9._:@/[\]-]{1,200}$/;
-var MASKED_IDS_VERSION = 1;
-var MAX_MASKED_IDS_FILE_BYTES = 131072;
-var MASKED_IDS_UNPARSEABLE_JSON = "masked-ids.unparseable.json";
-var MAX_UNPARSEABLE_WRITES = 3;
-var maskedIdsSchema = DoctorLazy(() =>
-  u({
-    version: literal(MASKED_IDS_VERSION),
-    ids: array(unknown()),
-  }),
-);
+var MASKED_IDS_JSON_2; // deferred: uses DoctorLazy (../../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var MASKED_IDS_JSON;
+var MAX_MASKED_TOOL_NAMES;
+var MASK_RETRY_DELAY_MS;
+var MASKED_ID_RE;
+var MASKED_IDS_VERSION;
+var MAX_MASKED_IDS_FILE_BYTES;
+var MASKED_IDS_UNPARSEABLE_JSON;
+var MAX_UNPARSEABLE_WRITES;
+var maskedIdsSchema;
+deferInit("chunk-aepeg2w5.js:755142", () => {
+  MASKED_IDS_JSON_2 = "masked-ids.json";
+  MASKED_IDS_JSON = 512;
+  MAX_MASKED_TOOL_NAMES = 64;
+  MASK_RETRY_DELAY_MS = 5000;
+  MASKED_ID_RE = /^[a-z0-9._:@/[\]-]{1,200}$/;
+  MASKED_IDS_VERSION = 1;
+  MAX_MASKED_IDS_FILE_BYTES = 131072;
+  MASKED_IDS_UNPARSEABLE_JSON = "masked-ids.unparseable.json";
+  MAX_UNPARSEABLE_WRITES = 3;
+  maskedIdsSchema = DoctorLazy(() =>
+    objectSchema({
+      version: literal(MASKED_IDS_VERSION),
+      ids: array(unknown()),
+    }),
+  );
+});
 //@ chunk-aepeg2w5.js:755315-755369 placement
 /**
  * 模型目录缓存目录。
@@ -117,10 +135,10 @@ function maskedIdsUnparseablePath() {
 /**
  * 判断遮盖 id 的加载是否已完成或暂不需要（无盘、已加载或在重试冷却中）。
  */
-function isMaskHydrationSettled(e = Date.now()) {
+function isMaskHydrationSettled(now = Date.now()) {
   let providerState = getProviderState();
   return (
-    isDiskless() || providerState.servedCatalogMaskHydrated || e < providerState.servedCatalogMaskRetryAt
+    isDiskless() || providerState.servedCatalogMaskHydrated || now < providerState.servedCatalogMaskRetryAt
   );
 }
 //@ chunk-aepeg2w5.js:755544-756043 placement
@@ -167,9 +185,9 @@ async function hydrateMaskedIds_2() {
  * 读取 masked-ids.json（大小上限）。
  */
 async function readMaskedIdsFile() {
-  let e;
+  let raw;
   try {
-    e = await maskStorage().readRange(maskedIdsPath(), 0, MAX_MASKED_IDS_FILE_BYTES + 1);
+    raw = await maskStorage().readRange(maskedIdsPath(), 0, MAX_MASKED_IDS_FILE_BYTES + 1);
   } catch (error) {
     if (isENOENT(error))
       return {
@@ -181,7 +199,7 @@ async function readMaskedIdsFile() {
       status: "unreadable",
     };
   }
-  if (e.length > MAX_MASKED_IDS_FILE_BYTES) {
+  if (raw.length > MAX_MASKED_IDS_FILE_BYTES) {
     logForDebugging("[servedCatalog] mask file oversized; not in this format");
     return {
       status: "foreign",
@@ -189,32 +207,35 @@ async function readMaskedIdsFile() {
       bytes: undefined,
     };
   }
-  let n = safeParseJSON(e.toString("utf8"), false);
-  let r = maskedIdsSchema().safeParse(n);
-  if (r.success)
+  let parsedJson = safeParseJSON(raw.toString("utf8"), false);
+  let parsed = maskedIdsSchema().safeParse(parsedJson);
+  if (parsed.success)
     return {
       status: "ok",
-      ids: sanitizeMaskedIds(r.data.ids),
+      ids: sanitizeMaskedIds(parsed.data.ids),
     };
-  let s =
-    n !== null && typeof n === "object" && !Array.isArray(n) && Array.isArray(n.ids)
-      ? sanitizeMaskedIds(n.ids)
+  let fallbackIds =
+    parsedJson !== null &&
+    typeof parsedJson === "object" &&
+    !Array.isArray(parsedJson) &&
+    Array.isArray(parsedJson.ids)
+      ? sanitizeMaskedIds(parsedJson.ids)
       : [];
-  logForDebugging(`[servedCatalog] mask file not in this format; keeping ${s.length} ids it names`);
+  logForDebugging(`[servedCatalog] mask file not in this format; keeping ${fallbackIds.length} ids it names`);
   return {
     status: "foreign",
-    ids: s,
-    bytes: e,
+    ids: fallbackIds,
+    bytes: raw,
   };
 }
 //@ chunk-aepeg2w5.js:756886-757140 placement
-function sanitizeMaskedIds(e) {
+function sanitizeMaskedIds(ids) {
   let sliced = uniq(
-    e.filter((r) => typeof r === "string" && MASKED_ID_RE.test(r) && !isMaskFreeModelId(r)),
+    ids.filter((id) => typeof id === "string" && MASKED_ID_RE.test(id) && !isMaskFreeModelId(id)),
   ).slice(0, MASKED_IDS_JSON);
-  if (sliced.length < e.length)
+  if (sliced.length < ids.length)
     logForDebugging(
-      `[servedCatalog] mask file: ${e.length - sliced.length} entries are not ids (or repeat one, or name a family this build ships), dropped`,
+      `[servedCatalog] mask file: ${ids.length - sliced.length} entries are not ids (or repeat one, or name a family this build ships), dropped`,
     );
   return sliced;
 }
@@ -223,26 +244,30 @@ function sanitizeMaskedIds(e) {
  * 增加遮盖 id 并持久化。
  */
 function addMaskedIds(maskedIdSet) {
-  let n = uniq([...maskedIdSet].map(normalizeModelId).filter((y) => y.length > 0 && !isMaskFreeModelId(y)));
-  if (n.length === 0) return Promise.resolve();
-  addMaskedModelIds(n);
+  let toPersist = uniq(
+    [...maskedIdSet].map(normalizeModelId).filter((id) => id.length > 0 && !isMaskFreeModelId(id)),
+  );
+  if (toPersist.length === 0) return Promise.resolve();
+  addMaskedModelIds(toPersist);
   if (isDiskless()) return Promise.resolve();
-  let sliced = n.filter((y) => MASKED_ID_RE.test(y)).slice(0, MAX_MASKED_TOOL_NAMES);
-  if (sliced.length < n.length)
+  let sliced = toPersist.filter((id) => MASKED_ID_RE.test(id)).slice(0, MAX_MASKED_TOOL_NAMES);
+  if (sliced.length < toPersist.length)
     logForDebugging(
-      `[servedCatalog] ${n.length - sliced.length} confidential ids masked this session but not persisted (outside the id charset or over the per-entry cap)`,
+      `[servedCatalog] ${toPersist.length - sliced.length} confidential ids masked this session but not persisted (outside the id charset or over the per-entry cap)`,
     );
   if (sliced.length === 0) return Promise.resolve();
   let providerState = getProviderState();
-  let h = (providerState.servedCatalogMaskWrite ?? Promise.resolve()).then(() => persistMaskedIds(sliced));
-  providerState.servedCatalogMaskWrite = h;
-  return h;
+  let pending = (providerState.servedCatalogMaskWrite ?? Promise.resolve()).then(() =>
+    persistMaskedIds(sliced),
+  );
+  providerState.servedCatalogMaskWrite = pending;
+  return pending;
 }
 //@ chunk-aepeg2w5.js:757656-758527 placement
 /**
  * 写回遮盖 id 文件。
  */
-async function persistMaskedIds(e) {
+async function persistMaskedIds(ids) {
   try {
     await hydrateMaskedIds();
     let providerState = getProviderState();
@@ -251,9 +276,9 @@ async function persistMaskedIds(e) {
       logForDebugging("[servedCatalog] mask file unreadable; not rewriting it this session");
       return;
     }
-    if (e.every((y) => servedCatalogPersistedMaskedIds.includes(y))) return;
-    let s = servedCatalogPersistedMaskedIds;
-    let h = maskStorage();
+    if (ids.every((id) => servedCatalogPersistedMaskedIds.includes(id))) return;
+    let previousIds = servedCatalogPersistedMaskedIds;
+    let storage = maskStorage();
     for (let j = 0; j < MAX_UNPARSEABLE_WRITES; j++) {
       let maskedIdsFile = await readMaskedIdsFile();
       if (maskedIdsFile.status === "unreadable") {
@@ -262,9 +287,9 @@ async function persistMaskedIds(e) {
       }
       addMaskedModelIds(maskedIdsFile.ids);
       if (maskedIdsFile.status === "foreign") await preserveUnparsableMaskFile(maskedIdsFile.bytes);
-      let sliced = uniq([...e, ...maskedIdsFile.ids, ...s]).slice(0, MASKED_IDS_JSON);
-      await h.mkdir(modelCatalogCacheDir());
-      await h.atomicWrite(
+      let sliced = uniq([...ids, ...maskedIdsFile.ids, ...previousIds]).slice(0, MASKED_IDS_JSON);
+      await storage.mkdir(modelCatalogCacheDir());
+      await storage.atomicWrite(
         maskedIdsPath(),
         jsonStringify({
           version: MASKED_IDS_VERSION,
@@ -279,8 +304,8 @@ async function persistMaskedIds(e) {
       }
       addMaskedModelIds(maskedIdsFile_2.ids);
       providerState.servedCatalogPersistedMaskedIds = maskedIdsFile_2.ids;
-      if (sliced.every((x) => maskedIdsFile_2.ids.includes(x))) return;
-      s = maskedIdsFile_2.ids;
+      if (sliced.every((id) => maskedIdsFile_2.ids.includes(id))) return;
+      previousIds = maskedIdsFile_2.ids;
       logForDebugging("[servedCatalog] mask file changed under the write; merging again");
     }
   } catch (error) {

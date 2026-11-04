@@ -51,9 +51,9 @@ var fromCodePoint =
         return output;
       };
 //@ chunk-6ja29j2n.js:57661-57771 esm-fingerprint
-function Re(codePoint) {
+function decodeCodePoint(codePoint) {
   var _a;
   if ((codePoint >= 55296 && codePoint <= 57343) || codePoint > 1114111) return 65533;
   return (_a = decodeMap.get(codePoint)) !== null && _a !== undefined ? _a : codePoint;
 }
-export { Re, fromCodePoint };
+export { decodeCodePoint, fromCodePoint };

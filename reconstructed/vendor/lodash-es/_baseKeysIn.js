@@ -5,13 +5,13 @@
  * pieces: chunk-3a1caa6f.js (1)
  * attribution: placement 1
  */
-import { RR } from "../@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
+import { isObjectAlias } from "../@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
 import { keysInOf, hasOwnProperty_2 } from "../../src/utils/git/gitSafeEnv.js";
 import { isPrototype_default } from "./_isPrototype.js";
 
 //@ chunk-3a1caa6f.js:892-1022 placement
 function baseKeysIn(object) {
-  if (!RR(object)) return keysInOf(object);
+  if (!isObjectAlias(object)) return keysInOf(object);
   var isProto = isPrototype_default(object);
   var result = [];
   for (var key in object)

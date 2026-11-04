@@ -34,307 +34,314 @@ import { killProcessGroup } from "../../utils/auth/lockHolderLiveness.js";
 /**
  * 校验 spawn-hint 声明（jti、session_id、仓库源、关联 id 等），写入工作单文件并执行 spawn-runner 钩子，记录输出。
  */
-async function runSpawnRunnerHook(e) {
-  validateRunnerLabel(e.claims.jti, "spawn-hint jti");
-  if (e.claims.session_id) validateRunnerLabel(e.claims.session_id, "spawn-hint session_id");
-  if (e.claims.pool_id) validateRunnerLabel(e.claims.pool_id, "spawn-hint environment_id");
-  if (e.claims.account_id) validateRunnerLabel(e.claims.account_id, "spawn-hint account_id");
-  if (hasControlChars(e.claims.account_email)) throw Error("spawn-hint account_email: control character");
-  for (let repoSource of e.claims.repo_sources) {
+async function runSpawnRunnerHook(hint) {
+  validateRunnerLabel(hint.claims.jti, "spawn-hint jti");
+  if (hint.claims.session_id) validateRunnerLabel(hint.claims.session_id, "spawn-hint session_id");
+  if (hint.claims.pool_id) validateRunnerLabel(hint.claims.pool_id, "spawn-hint environment_id");
+  if (hint.claims.account_id) validateRunnerLabel(hint.claims.account_id, "spawn-hint account_id");
+  if (hasControlChars(hint.claims.account_email)) throw Error("spawn-hint account_email: control character");
+  for (let repoSource of hint.claims.repo_sources) {
     if (repoSource.url && (!isGitRemoteUrl(repoSource.url) || hasControlChars(repoSource.url)))
       throw Error("spawn-hint repo_sources: unsafe git URL");
     if (repoSource.revision && !isSafeRefName(repoSource.revision))
       throw Error("spawn-hint repo_sources: unsafe revision");
   }
   if (
-    hasControlChars(e.claims.correlation_id) ||
-    e.claims.correlation_id.startsWith("-") ||
-    /\s/.test(e.claims.correlation_id)
+    hasControlChars(hint.claims.correlation_id) ||
+    hint.claims.correlation_id.startsWith("-") ||
+    /\s/.test(hint.claims.correlation_id)
   )
     throw Error("spawn-hint correlation_id: unsafe value");
-  if (hasControlChars(e.claims.server_time)) throw Error("spawn-hint server_time: unsafe value");
-  if (typeof e.claims.attempt !== "number" || !Number.isInteger(e.claims.attempt) || e.claims.attempt < 0)
+  if (hasControlChars(hint.claims.server_time)) throw Error("spawn-hint server_time: unsafe value");
+  if (
+    typeof hint.claims.attempt !== "number" ||
+    !Number.isInteger(hint.claims.attempt) ||
+    hint.claims.attempt < 0
+  )
     throw Error("spawn-hint attempt: unsafe value");
-  let t = sanitizeMetricLabel(e.claims.client_platform);
-  if (e.claims.client_platform && e.claims.client_platform !== UNKNOWN && t === undefined) {
-    let S = escapeMetricValue(e.claims.client_platform);
-    e.onDebug(
-      `[runner:orchestrator] spawn-hint client_platform rejected by the env-export gate (CLAUDE_RUNNER_CLIENT_PLATFORM left unset): "${S}" (len=${e.claims.client_platform.length})`,
+  let platformLabel = sanitizeMetricLabel(hint.claims.client_platform);
+  if (hint.claims.client_platform && hint.claims.client_platform !== UNKNOWN && platformLabel === undefined) {
+    let platformEscaped = escapeMetricValue(hint.claims.client_platform);
+    hint.onDebug(
+      `[runner:orchestrator] spawn-hint client_platform rejected by the env-export gate (CLAUDE_RUNNER_CLIENT_PLATFORM left unset): "${platformEscaped}" (len=${hint.claims.client_platform.length})`,
     );
-    e.claims = {
-      ...e.claims,
-      client_platform: S,
+    hint.claims = {
+      ...hint.claims,
+      client_platform: platformEscaped,
     };
   }
-  if (!/^[A-Za-z0-9_.-]+$/.test(e.jwt))
+  if (!/^[A-Za-z0-9_.-]+$/.test(hint.jwt))
     throw Error("spawn-hint work_order_jwt: unsafe character (not base64url + dot)");
   let now = Date.now();
-  let n = await writeWorkOrderFile(`work-order-${e.claims.jti}`, e.jwt);
-  e.onDebug(`[runner:orchestrator] spawn-runner jti=${e.claims.jti} workOrderFile=${n}`);
+  let workOrderFile = await writeWorkOrderFile(`work-order-${hint.claims.jti}`, hint.jwt);
+  hint.onDebug(`[runner:orchestrator] spawn-runner jti=${hint.claims.jti} workOrderFile=${workOrderFile}`);
   let env = {
     ...process.env,
     SELF_HOSTED_RUNNER_POOL_SECRET: undefined,
     SELF_HOSTED_RUNNER_ENVIRONMENT_SECRET: undefined,
-    CLAUDE_RUNNER_WORK_ORDER_FILE: n,
-    CLAUDE_RUNNER_ORDER_ID: e.claims.jti,
-    CLAUDE_RUNNER_SESSION_ID: connectorScopedAgentId("session", e.claims.session_id) ?? e.claims.session_id,
-    CLAUDE_RUNNER_SESSION_UUID: e.claims.session_id,
-    CLAUDE_RUNNER_ATTEMPT: String(e.claims.attempt),
-    CLAUDE_RUNNER_POOL_ID: e.claims.pool_id,
-    CLAUDE_RUNNER_ACCOUNT_EMAIL: e.claims.account_email,
-    CLAUDE_RUNNER_ACCOUNT_ID: e.claims.account_id,
-    CLAUDE_RUNNER_ORDER_SERVER_TIME: e.claims.server_time,
-    CLAUDE_RUNNER_PRIMARY_REPO_URL: e.claims.primary_repo_url,
-    CLAUDE_RUNNER_PRIMARY_REPO_REVISION: e.claims.primary_repo_revision,
-    CLAUDE_RUNNER_REPO_SOURCES: e.claims.repo_sources.length > 0 ? jsonStringify(e.claims.repo_sources) : "",
-    CLAUDE_RUNNER_CORRELATION_ID: e.claims.correlation_id,
-    CLAUDE_RUNNER_CLIENT_PLATFORM: t,
+    CLAUDE_RUNNER_WORK_ORDER_FILE: workOrderFile,
+    CLAUDE_RUNNER_ORDER_ID: hint.claims.jti,
+    CLAUDE_RUNNER_SESSION_ID:
+      connectorScopedAgentId("session", hint.claims.session_id) ?? hint.claims.session_id,
+    CLAUDE_RUNNER_SESSION_UUID: hint.claims.session_id,
+    CLAUDE_RUNNER_ATTEMPT: String(hint.claims.attempt),
+    CLAUDE_RUNNER_POOL_ID: hint.claims.pool_id,
+    CLAUDE_RUNNER_ACCOUNT_EMAIL: hint.claims.account_email,
+    CLAUDE_RUNNER_ACCOUNT_ID: hint.claims.account_id,
+    CLAUDE_RUNNER_ORDER_SERVER_TIME: hint.claims.server_time,
+    CLAUDE_RUNNER_PRIMARY_REPO_URL: hint.claims.primary_repo_url,
+    CLAUDE_RUNNER_PRIMARY_REPO_REVISION: hint.claims.primary_repo_revision,
+    CLAUDE_RUNNER_REPO_SOURCES:
+      hint.claims.repo_sources.length > 0 ? jsonStringify(hint.claims.repo_sources) : "",
+    CLAUDE_RUNNER_CORRELATION_ID: hint.claims.correlation_id,
+    CLAUDE_RUNNER_CLIENT_PLATFORM: platformLabel,
   };
-  let o = "";
-  let l = false;
-  let g = null;
-  let c = false;
+  let stderrTail = "";
+  let timedOut = false;
+  let exitCode = null;
+  let execError = false;
   try {
     await new Promise((resolve) => {
-      let s;
+      let child;
       try {
-        s = spawn(e.hookPath, [], {
+        child = spawn(hint.hookPath, [], {
           cwd: undefined,
           env,
           stdio: ["ignore", "pipe", "pipe"],
           detached: true,
           windowsHide: true,
         });
-        moveKeeperPid(s.pid);
+        moveKeeperPid(child.pid);
       } catch (error) {
-        c = true;
-        o = `spawn-runner hook exec failed: ${errorMessage(error)}`;
+        execError = true;
+        stderrTail = `spawn-runner hook exec failed: ${errorMessage(error)}`;
         resolve();
         return;
       }
-      let u = () => {};
-      let U;
-      let j;
-      let H;
-      let W;
-      let sigkillGraceMs = e.sigkillGraceMs ?? ORCHESTRATOR_DEBUG_LIMITS;
-      let D = false;
-      let w = 65536;
-      s.stdout?.setEncoding("utf8");
-      s.stderr?.setEncoding("utf8");
-      let x = "";
-      let O = "";
-      let I = false;
-      let G = 0;
-      let L = false;
-      let B = false;
-      let q = () => I && G > DEBUG_LOG_CHUNK_BYTES;
-      let b = (f, N) => {
-        let lines = f.split(`
+      let onAbort = () => {};
+      let killTimer;
+      let abortKillTimer;
+      let giveUpTimer;
+      let flushTimer;
+      let sigkillGraceMs = hint.sigkillGraceMs ?? ORCHESTRATOR_DEBUG_LIMITS;
+      let isKilled = false;
+      let tailLimit = 65536;
+      child.stdout?.setEncoding("utf8");
+      child.stderr?.setEncoding("utf8");
+      let stdoutBuffer = "";
+      let stderrBuffer = "";
+      let isSettled = false;
+      let afterExitBytes = 0;
+      let skipFirstStdoutLine = false;
+      let skipFirstStderrLine = false;
+      let isOverLimit = () => isSettled && afterExitBytes > DEBUG_LOG_CHUNK_BYTES;
+      let consumeLines = (chunk, isStderr) => {
+        let lines = chunk.split(`
 `);
-        let R = lines.pop() ?? "";
+        let rest = lines.pop() ?? "";
         for (let line of lines) {
           let replaced = redactSecretsInText(line).replace(/[\x00-\x08\x0b-\x1f\x7f]/g, "");
-          if (I) {
-            G += Buffer.byteLength(replaced) + 1;
-            e.onStatus(
-              q()
-                ? `[runner:orchestrator] spawn-runner jti=${e.claims.jti}: a process the hook left running has written more than ${DEBUG_LOG_CHUNK_BYTES / 1024} KB since the hook exited; its further output is not logged.`
-                : `[runner:hook:spawn-runner:after-exit jti=${e.claims.jti}] ${replaced}`,
+          if (isSettled) {
+            afterExitBytes += Buffer.byteLength(replaced) + 1;
+            hint.onStatus(
+              isOverLimit()
+                ? `[runner:orchestrator] spawn-runner jti=${hint.claims.jti}: a process the hook left running has written more than ${DEBUG_LOG_CHUNK_BYTES / 1024} KB since the hook exited; its further output is not logged.`
+                : `[runner:hook:spawn-runner:after-exit jti=${hint.claims.jti}] ${replaced}`,
             );
-            if (q()) return "";
+            if (isOverLimit()) return "";
             continue;
           }
-          e.onStatus(`[runner:hook:spawn-runner] ${replaced}`);
-          if (N)
-            o = (
-              o +
+          hint.onStatus(`[runner:hook:spawn-runner] ${replaced}`);
+          if (isStderr)
+            stderrTail = (
+              stderrTail +
               replaced +
               `
 `
             ).slice(-DEBUG_LOG_MAX_BYTES);
         }
-        return R;
+        return rest;
       };
-      s.stdout?.on("data", (f) => {
-        if (q()) return;
-        let N = f;
-        if (L) {
-          let index = N.indexOf(`
+      child.stdout?.on("data", (chunk) => {
+        if (isOverLimit()) return;
+        let text = chunk;
+        if (skipFirstStdoutLine) {
+          let index = text.indexOf(`
 `);
           if (index < 0) return;
-          L = false;
-          N = N.slice(index + 1);
+          skipFirstStdoutLine = false;
+          text = text.slice(index + 1);
         }
-        x = b(x + N, false);
-        if (x.length > w) x = x.slice(-w);
+        stdoutBuffer = consumeLines(stdoutBuffer + text, false);
+        if (stdoutBuffer.length > tailLimit) stdoutBuffer = stdoutBuffer.slice(-tailLimit);
       });
-      s.stderr?.on("data", (f) => {
-        if (q()) return;
-        let N = f;
-        if (B) {
-          let index = N.indexOf(`
+      child.stderr?.on("data", (chunk) => {
+        if (isOverLimit()) return;
+        let text = chunk;
+        if (skipFirstStderrLine) {
+          let index = text.indexOf(`
 `);
           if (index < 0) return;
-          B = false;
-          N = N.slice(index + 1);
+          skipFirstStderrLine = false;
+          text = text.slice(index + 1);
         }
-        O = b(O + N, true);
-        if (O.length > w) O = O.slice(-w);
+        stderrBuffer = consumeLines(stderrBuffer + text, true);
+        if (stderrBuffer.length > tailLimit) stderrBuffer = stderrBuffer.slice(-tailLimit);
       });
-      let K = (f) =>
-        e.onDebug(
-          `[runner:orchestrator] spawn-runner jti=${e.claims.jti} output read failed: ${errorMessage(f)}`,
+      let onReadError = (error) =>
+        hint.onDebug(
+          `[runner:orchestrator] spawn-runner jti=${hint.claims.jti} output read failed: ${errorMessage(error)}`,
         );
-      s.stdout?.on("error", K);
-      s.stderr?.on("error", K);
-      let m = (f) => {
-        if (I) return;
+      child.stdout?.on("error", onReadError);
+      child.stderr?.on("error", onReadError);
+      let settle = (isError) => {
+        if (isSettled) return;
         clearTimeout(timer);
-        clearTimeout(W);
-        clearTimeout(U);
-        clearTimeout(j);
-        clearTimeout(H);
-        e.signal?.removeEventListener("abort", u);
-        for (let [p, R, k] of [
-          ["stdout", s.stdout, x],
-          ["stderr", s.stderr, O],
+        clearTimeout(flushTimer);
+        clearTimeout(killTimer);
+        clearTimeout(abortKillTimer);
+        clearTimeout(giveUpTimer);
+        hint.signal?.removeEventListener("abort", onAbort);
+        for (let [name, stream, buffer] of [
+          ["stdout", child.stdout, stdoutBuffer],
+          ["stderr", child.stderr, stderrBuffer],
         ]) {
-          if (!k) continue;
-          if (f || R?.readableEnded) {
-            b(
-              k +
+          if (!buffer) continue;
+          if (isError || stream?.readableEnded) {
+            consumeLines(
+              buffer +
                 `
 `,
-              p === "stderr",
+              name === "stderr",
             );
             continue;
           }
-          let E = k.length >= w ? " or more" : "";
-          e.onStatus(
-            `[runner:hook:spawn-runner] (The last ${k.length}${E} characters written to ${p} are not shown: they did not end in a newline, and a process still has ${p} open, so the line may be incomplete. End each message the hook writes with a newline.)`,
+          let moreNote = buffer.length >= tailLimit ? " or more" : "";
+          hint.onStatus(
+            `[runner:hook:spawn-runner] (The last ${buffer.length}${moreNote} characters written to ${name} are not shown: they did not end in a newline, and a process still has ${name} open, so the line may be incomplete. End each message the hook writes with a newline.)`,
           );
-          if (p === "stdout") L = true;
-          else B = true;
+          if (name === "stdout") skipFirstStdoutLine = true;
+          else skipFirstStderrLine = true;
         }
-        x = "";
-        O = "";
-        I = true;
-        let N = s.exitCode !== null || s.signalCode !== null;
-        if (!f && N)
-          e.onStatus(
-            `[runner:orchestrator] spawn-runner jti=${e.claims.jti} exited, but a process it started still has the hook's stdout or stderr open. Up to ${DEBUG_LOG_CHUNK_BYTES / 1024} KB more of that output is logged as [runner:hook:spawn-runner:after-exit jti=${e.claims.jti}]. Send a runner's output to a file: once the orchestrator exits, writes there fail.`,
+        stdoutBuffer = "";
+        stderrBuffer = "";
+        isSettled = true;
+        let hasExited = child.exitCode !== null || child.signalCode !== null;
+        if (!isError && hasExited)
+          hint.onStatus(
+            `[runner:orchestrator] spawn-runner jti=${hint.claims.jti} exited, but a process it started still has the hook's stdout or stderr open. Up to ${DEBUG_LOG_CHUNK_BYTES / 1024} KB more of that output is logged as [runner:hook:spawn-runner:after-exit jti=${hint.claims.jti}]. Send a runner's output to a file: once the orchestrator exits, writes there fail.`,
           );
-        if (!f) {
-          for (let p of [s.stdout, s.stderr])
-            if (p && "unref" in p && typeof p.unref === "function") p.unref();
+        if (!isError) {
+          for (let stream of [child.stdout, child.stderr])
+            if (stream && "unref" in stream && typeof stream.unref === "function") stream.unref();
         }
         resolve();
       };
       let timer = setTimeout(
-        (f, N, p, R, k, E) => {
-          l = true;
-          D = true;
-          R(
-            `[runner:orchestrator] spawn-runner jti=${N} timed out after ${p}ms, sending SIGTERM to process tree`,
+        (child_, jti, timeoutMs, status, settle_, graceMs) => {
+          timedOut = true;
+          isKilled = true;
+          status(
+            `[runner:orchestrator] spawn-runner jti=${jti} timed out after ${timeoutMs}ms, sending SIGTERM to process tree`,
           );
-          if (f.pid !== undefined) killProcessGroup(f.pid, "SIGTERM");
-          U = setTimeout(
-            (F, Q, P, y, A) => {
-              if (F.pid !== undefined) killProcessGroup(F.pid, "SIGKILL");
-              H = setTimeout(
-                (C, V, X, ie, ee) => {
-                  if (C.exitCode === null && C.signalCode === null)
-                    X(
-                      `[runner:orchestrator] spawn-runner jti=${V} did not exit after SIGKILL within ${ee}ms (likely D-state); abandoning child and resolving as timed out`,
+          if (child_.pid !== undefined) killProcessGroup(child_.pid, "SIGTERM");
+          killTimer = setTimeout(
+            (child__, jti_, timeoutMs_, status_, graceMs_) => {
+              if (child__.pid !== undefined) killProcessGroup(child__.pid, "SIGKILL");
+              giveUpTimer = setTimeout(
+                (child___, jti__, status__, settle__, graceMs__) => {
+                  if (child___.exitCode === null && child___.signalCode === null)
+                    status__(
+                      `[runner:orchestrator] spawn-runner jti=${jti__} did not exit after SIGKILL within ${graceMs__}ms (likely D-state); abandoning child and resolving as timed out`,
                     );
-                  ie(false);
+                  settle__(false);
                 },
-                A,
-                F,
-                Q,
-                P,
-                y,
-                A,
+                graceMs_,
+                child__,
+                jti_,
+                timeoutMs_,
+                status_,
+                graceMs_,
               );
             },
-            E,
-            f,
-            N,
-            R,
-            k,
-            E,
+            graceMs,
+            child_,
+            jti,
+            status,
+            settle_,
+            graceMs,
           );
         },
-        e.timeoutMs,
-        s,
-        e.claims.jti,
-        e.timeoutMs,
-        e.onStatus,
-        m,
+        hint.timeoutMs,
+        child,
+        hint.claims.jti,
+        hint.timeoutMs,
+        hint.onStatus,
+        settle,
         sigkillGraceMs,
       );
-      u = () => {
-        D = true;
-        e.onStatus(
-          `[runner:orchestrator] spawn-runner jti=${e.claims.jti} aborted by shutdown, sending SIGTERM to process tree`,
+      onAbort = () => {
+        isKilled = true;
+        hint.onStatus(
+          `[runner:orchestrator] spawn-runner jti=${hint.claims.jti} aborted by shutdown, sending SIGTERM to process tree`,
         );
-        if (s.pid !== undefined) killProcessGroup(s.pid, "SIGTERM");
-        j = setTimeout(
-          (f) => {
-            if (f !== undefined) killProcessGroup(f, "SIGKILL");
+        if (child.pid !== undefined) killProcessGroup(child.pid, "SIGTERM");
+        abortKillTimer = setTimeout(
+          (pid) => {
+            if (pid !== undefined) killProcessGroup(pid, "SIGKILL");
           },
           sigkillGraceMs,
-          s.pid,
+          child.pid,
         );
-        j.unref();
+        abortKillTimer.unref();
       };
-      e.signal?.addEventListener("abort", u, {
+      hint.signal?.addEventListener("abort", onAbort, {
         once: true,
       });
-      if (e.signal?.aborted) u();
-      s.on("error", (f) => {
-        if (I) return;
-        clearTimeout(U);
-        clearTimeout(j);
-        c = true;
-        o = isENOENT(f)
+      if (hint.signal?.aborted) onAbort();
+      child.on("error", (error) => {
+        if (isSettled) return;
+        clearTimeout(killTimer);
+        clearTimeout(abortKillTimer);
+        execError = true;
+        stderrTail = isENOENT(error)
           ? "spawn-runner hook missing (ENOENT)"
-          : `spawn-runner hook exec failed: ${errorMessage(f)}`;
-        m(true);
+          : `spawn-runner hook exec failed: ${errorMessage(error)}`;
+        settle(true);
       });
-      s.once("exit", (f, N) => {
-        if (I) return;
-        g = f;
-        if (D || N !== null) return;
+      child.once("exit", (code, signalName) => {
+        if (isSettled) return;
+        exitCode = code;
+        if (isKilled || signalName !== null) return;
         clearTimeout(timer);
-        e.signal?.removeEventListener("abort", u);
-        W = setTimeout(
-          (p) => {
-            W = setTimeout((R) => R(false), 0, p);
+        hint.signal?.removeEventListener("abort", onAbort);
+        flushTimer = setTimeout(
+          (settle_) => {
+            flushTimer = setTimeout((settle__) => settle__(false), 0, settle_);
           },
           DEBUG_LOG_FLUSH_MS,
-          m,
+          settle,
         );
       });
-      s.once("close", (f) => {
-        if (!I) g ??= f;
-        m(true);
+      child.once("close", (code_) => {
+        if (!isSettled) exitCode ??= code_;
+        settle(true);
       });
     });
   } finally {
-    await unlink(n).catch((error) =>
-      e.onDebug(`[runner:orchestrator] failed to delete ${n}: ${errorMessage(error)}`),
+    await unlink(workOrderFile).catch((error) =>
+      hint.onDebug(`[runner:orchestrator] failed to delete ${workOrderFile}: ${errorMessage(error)}`),
     );
   }
-  if (l && !o) o = `spawn-runner hook timed out after ${e.timeoutMs}ms`;
-  if (e.debugDir) await writeDebugArtifacts(e.debugDir, e.claims, e.jwt, o, e.onDebug);
+  if (timedOut && !stderrTail) stderrTail = `spawn-runner hook timed out after ${hint.timeoutMs}ms`;
+  if (hint.debugDir)
+    await writeDebugArtifacts(hint.debugDir, hint.claims, hint.jwt, stderrTail, hint.onDebug);
   return {
-    ok: g === 0 && !l && !c,
-    exitCode: g,
-    timedOut: l,
-    execError: c,
-    stderrTail: o,
+    ok: exitCode === 0 && !timedOut && !execError,
+    exitCode,
+    timedOut,
+    execError,
+    stderrTail,
     durationMs: Date.now() - now,
   };
 }

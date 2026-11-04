@@ -5,10 +5,10 @@
  * pieces: chunk-hwmsct5x.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-hwmsct5x.js:4328-7869 cjs-fingerprint
-var require_base64 = x(function (cjsExports) {
+var require_base64 = __commonJS(function (cjsExports) {
   var __extends =
     (cjsExports && cjsExports.__extends) ||
     (function () {

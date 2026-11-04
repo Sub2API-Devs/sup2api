@@ -22,15 +22,15 @@ import { withTelemetryMessage, toError } from "../utils/errors.js";
 /**
  * Projects 回复门：对 SDK 轮次错误写记录（bridge_projects_reply_gate）
  */
-function recordProjectsReplyTurnError(r, t, e) {
+function recordProjectsReplyTurnError(turn, surface, context) {
   try {
     if (
-      !isErrorTerminalReason(r.reason) ||
-      t !== "sdk" ||
-      e.agentId ||
+      !isErrorTerminalReason(turn.reason) ||
+      surface !== "sdk" ||
+      context.agentId ||
       !isProjectsReplyGateEnabled() ||
-      !isProjectsReplyMountConnected(e.engineState()) ||
-      !isUnansweredProjectsRun(e.messages)
+      !isProjectsReplyMountConnected(context.engineState()) ||
+      !isUnansweredProjectsRun(context.messages)
     )
       return;
     logFeatureBad("bridge_projects_reply_gate", "turn_errored");
@@ -38,3 +38,4 @@ function recordProjectsReplyTurnError(r, t, e) {
     logError(withTelemetryMessage(toError(error), "projects reply turn-error record failed"));
   }
 }
+export { recordProjectsReplyTurnError };

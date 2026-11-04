@@ -8,10 +8,138 @@
  * pieces: chunk-18hwfzwa.js (1), chunk-23fm9f0d.js (1), chunk-3pdgd98q.js (3), chunk-5bdzenzx.js (1), chunk-7zr1t9gr.js (4), chunk-8t8n4kdh.js (214), chunk-cyj440je.js (5), chunk-e6aww6q8.js (21), chunk-mdk8a5r0.js (1), chunk-qsdkv90t.js (2), chunk-z1n5m6nf.js (80)
  * attribution: fingerprint 35, placement 76, layout 177, callgraph-fingerprint 3, sole-consumer 37, affinity 2, file-local 3
  */
-import { dirname, join } from "path";
-import { randomUUID, createHash } from "crypto";
+import { createHash, randomUUID } from "crypto";
+import { join, dirname } from "path";
 import { pathToFileURL } from "url";
 import { Readable } from "stream";
+import {
+  TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
+  isENOENT,
+  sanitizedFeatureErrorCodeForTelemetry,
+  errorMessage,
+  getErrnoCode,
+  sanitizedErrorClassNameForTelemetry,
+  AbortError,
+  toError,
+  isAbortError,
+} from "../../utils/errors.js";
+import { getPlatform } from "../../utils/platform.js";
+import { env } from "../../utils/env.js";
+import {
+  getMcpClientsFromAccessor,
+  getRootSession,
+  getToolsMachine,
+  getOriginalCwdOrNull,
+  isDiskless,
+  getSessionId,
+  getProjectConfigRoot,
+  getProjectRoot,
+  getConnectedClientWiring,
+  getEnsureConnectedClient,
+  setEnsureConnectedClient,
+  getPermissionPromptToolName,
+  getTeammateAgentId,
+  getIsNonInteractiveSession,
+  isPrintInputClosed,
+  isSingleShotPrintSession,
+  isSessionPersistenceDisabled,
+} from "../../bootstrap/state.js";
+import { CLAUDE_ARTIFACTS, REMOTE_DEVICES, officeBridgeListingState } from "./firstPartyServerIds.js";
+import { hasLiveState, getLiveState } from "../liveReplica/liveReplica.js";
+import {
+  getFeatureValue_CACHED_MAY_BE_STALE,
+  getFeatureValueWithSource_CACHED_MAY_BE_STALE,
+} from "../analytics/growthbook.js";
+import { findServersByName, normalizeNameForMCP } from "./normalization.js";
+import { isConnectedOrCached } from "../../skills/bundled/scheduleRemoteAgents.js";
+import {
+  firstLineOf,
+  urlPatternToRegex as urlPatternToRegex_2,
+  truncateToLength,
+  plural,
+} from "../../utils/stringUtils.js";
+import { jsonStringify } from "../../utils/slowOperations.js";
+import { COMPUTER_USE_MCP_SERVER_NAME } from "../../utils/computerUse/common.js";
+import {
+  registerCliOwnedConfig,
+  getCliOwnedState,
+  runBeforeRequestHook,
+  resolveBearerTokenFor,
+  withheldBearerRefusalFor,
+  cliOwnedRequestHeaders,
+  isCredentialRequestHeader,
+  notifyResponseObserver,
+  shouldResendRequest,
+  hasCliOwnedBearer,
+  isCliOwnedConfig,
+} from "./cliOwnedClients.js";
+import { READ_ONLY_CU_ACTIONS } from "../../utils/computerUse/toolRendering.js";
+import { buildMcpToolName } from "./mcpStringUtils.js";
+import {
+  safeOrigin,
+  ccrProxyTargetHost,
+  isCcrInjectedMcpUrl,
+  isCcrMcpPath,
+  isSameOriginAsCcr,
+} from "./ccrMcpUrls.js";
+import {
+  getLoggingSafeMcpBaseUrl,
+  isFileUploadServer,
+  buildMcpToolPermissionOverrides,
+  FILE_UPLOAD_TOOLS,
+  ANTHROPIC_HOSTASKSPERUPLOADEDFILE,
+} from "./utils.js";
+import { HostScoped } from "../../utils/hostScoped.js";
+import {
+  MAX_STRUCTURED_RESULT_CHARS,
+  MAX_CALL_MARK_CHARS,
+  CLAUDECODE_CALLMARK,
+  BEFORE_HANDLER,
+  sanitizeCallMark,
+  INTERRUPTED_CALL_NOTICE,
+  describeUnansweredCall,
+  MCP_ANSWER_STREAM_ENDED,
+  ANSWER_STREAM_GRACE_MS_2,
+  MCP_CALL_UNANSWERED,
+  CALL_OUTCOME_UNKNOWN_NOTICE,
+  QUESTION_UNANSWERED_TEXT,
+  MCP_QUESTION_UNANSWERED,
+  MCP_CALL_NOT_SENT_AGAIN,
+} from "./mcpCallConstants.js";
+import { logEvent } from "../analytics/index.js";
+import {
+  loggableMcpToolName,
+  toolNameForTelemetry,
+  isToolDetailsLoggingEnabled,
+  THIRD_PARTY,
+  restrictRemoteRepoCalls,
+  sanitizeVersion,
+  filterRemoteRepoTools,
+  isMcpServerLoggableInAnalytics,
+  isRunnerDynamicServer,
+  isOwnCcrMcpServer,
+  isOwnArtifactMcpTool,
+  markMcpServerLoggable,
+} from "../analytics/metadata.js";
+import {
+  mcpNameForAnalytics_GATE_EVALUATED,
+  fromEnum,
+  lit,
+  fromEnumOpt,
+  fromNumber,
+} from "../analytics/safeMetadata.js";
+import { logMCPDebug, logError, logMCPError, keepsMCPDebug } from "../../utils/log.js";
+import {
+  emptyCleanupResult,
+  getCutoffDate,
+  unlinkIfOld,
+  isCleanupQuietFsErrno,
+} from "../../utils/cleanup.js";
+import { getClaudeConfigDir } from "../../utils/envUtils.js";
+import { getFsImplementation } from "../../utils/fsOperations.js";
+import { logForDebugging } from "../../utils/debug.js";
+import { isDiscoveryCacheOn, isDiscoveryCacheUsable, isUnresolved } from "./mcpAccountKey.js";
+import { decorateMcpTools, dynamicServerConnectorId } from "./mcpToolDecoration.js";
 import { identityId, identityId2 } from "../../types/ids.js";
 import {
   SdkHttpError,
@@ -21,19 +149,12 @@ import {
   ProtocolErrorCode,
   isJSONRPCRequest,
   isJSONRPCErrorResponse,
-  lYn,
-  qNr,
+  isInitializeMessage,
+  isInitializedNotification,
   createFetchWithInit,
   isJSONRPCResultResponse,
   OAuthError,
 } from "../../../vendor/@modelcontextprotocol/client/dist/src-D_zzAWoS.mjs";
-import { logMCPDebug, logMCPError, keepsMCPDebug, logError } from "../../utils/log.js";
-import {
-  truncateToLength,
-  firstLineOf,
-  plural,
-  urlPatternToRegex as urlPatternToRegex_2,
-} from "../../utils/stringUtils.js";
 import {
   isListAuthError,
   isClaudeAiBearerRejectedError,
@@ -70,7 +191,6 @@ import {
   MCP_BODY_LIMIT,
   STOPPED_READING_NOTE,
 } from "./boundedTransports.js";
-import { env } from "../../utils/env.js";
 import { MAX_TIMER_DELAY_MS } from "../../utils/timerDelayClamp.js";
 import {
   readNeedsAuthCache,
@@ -84,24 +204,9 @@ import {
   hasLapsedCcrSignIn,
   mcpAuthToolsFor,
 } from "./needsAuthCache.js";
-import { jsonStringify } from "../../utils/slowOperations.js";
 import { formatStorageError } from "../../utils/storage/storageErrors.js";
-import {
-  getCliOwnedState,
-  runBeforeRequestHook,
-  resolveBearerTokenFor,
-  withheldBearerRefusalFor,
-  cliOwnedRequestHeaders,
-  isCredentialRequestHeader,
-  notifyResponseObserver,
-  shouldResendRequest,
-  hasCliOwnedBearer,
-  isCliOwnedConfig,
-  registerCliOwnedConfig,
-} from "./cliOwnedClients.js";
 import { isStorageV5Enabled } from "../../utils/hoverRest.js";
 import { getFileReader } from "../../utils/fileStore.js";
-import { isDiscoveryCacheOn, isDiscoveryCacheUsable, isUnresolved } from "./mcpAccountKey.js";
 import {
   noteIdentityChanged,
   bumpIdentityEpoch,
@@ -110,20 +215,6 @@ import {
   getMcpIdentitySnapshot,
 } from "./identityChange.js";
 import { retainCacheKeys } from "../../utils/memoize.js";
-import {
-  toolNameForTelemetry,
-  isToolDetailsLoggingEnabled,
-  THIRD_PARTY,
-  restrictRemoteRepoCalls,
-  sanitizeVersion,
-  filterRemoteRepoTools,
-  isMcpServerLoggableInAnalytics,
-  isRunnerDynamicServer,
-  isOwnCcrMcpServer,
-  isOwnArtifactMcpTool,
-  markMcpServerLoggable,
-  loggableMcpToolName,
-} from "../analytics/metadata.js";
 import { parsePluginIdentifier_2, parsePluginIdentifier } from "../../utils/plugins/pluginIdentifier.js";
 import {
   isAnthropicPluginSource,
@@ -135,14 +226,6 @@ import {
 } from "../../utils/telemetry/pluginTelemetry.js";
 import { logOTelEvent } from "../../utils/telemetry/events.js";
 import { ZodError } from "../../../vendor/zod/v4/classic/errors.js";
-import { logEvent } from "../analytics/index.js";
-import {
-  fromEnum,
-  lit,
-  fromEnumOpt,
-  fromNumber,
-  mcpNameForAnalytics_GATE_EVALUATED,
-} from "../analytics/safeMetadata.js";
 import { logFeatureSad, logFeatureBad, logFeatureOk } from "../analytics/featureTelemetry.js";
 import {
   flushDiscoveryCache,
@@ -206,20 +289,16 @@ import {
   isRemoteMcpTransport,
 } from "./discoveryIdentity.js";
 import { getCurrentCallId, X_CCR_TURN_ID } from "./ccrTurnId.js";
-import { u, string, literal, array, looseObject, union } from "../../../vendor/zod/v4/classic/schemas.js";
+import {
+  objectSchema,
+  stringSchema,
+  literal,
+  array,
+  looseObject,
+  union,
+} from "../../../vendor/zod/v4/classic/schemas.js";
 import { safeParseJSON } from "../../utils/json.js";
 import { shortHash } from "../../utils/shortHash.js";
-import {
-  TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
-  sanitizedFeatureErrorCodeForTelemetry,
-  errorMessage,
-  getErrnoCode,
-  sanitizedErrorClassNameForTelemetry,
-  AbortError,
-  toError,
-  isAbortError,
-  isENOENT,
-} from "../../utils/errors.js";
 import {
   checkAndRefreshOAuthTokenIfNeeded,
   getClaudeAIOAuthTokensAsync,
@@ -246,9 +325,9 @@ import { getToolPermissionContext } from "../../utils/permissions/toolPermission
 import { isFirstPartyProvider, shouldPropagateTraceContext } from "../../utils/model/providers.js";
 import { getMCPUserAgent } from "../../utils/http.js";
 import {
-  SUPPORTED_IMAGE_TYPES,
-  Ph,
   SUPPORTED_IMAGE_TYPES_2,
+  sniffImageMediaType,
+  SUPPORTED_IMAGE_TYPES_3,
 } from "../../../vendor/@anthropic-ai/sdk/helpers/beta/mcp.mjs";
 import {
   getActiveSpanId,
@@ -267,41 +346,9 @@ import {
   withholdsFileReferenceErrorText,
   withheldFileReferenceErrorForLog,
 } from "./fileReference/wrapFileReferenceTool.js";
-import {
-  getFeatureValue_CACHED_MAY_BE_STALE,
-  getFeatureValueWithSource_CACHED_MAY_BE_STALE,
-} from "../analytics/growthbook.js";
-import {
-  ccrProxyTargetHost,
-  isCcrInjectedMcpUrl,
-  isCcrMcpPath,
-  isSameOriginAsCcr,
-  safeOrigin,
-} from "./ccrMcpUrls.js";
 import { pluginToolStagingRoot } from "../../utils/tempDir.js";
-import { logForDebugging } from "../../utils/debug.js";
-import {
-  getToolsMachine,
-  getOriginalCwdOrNull,
-  isDiskless,
-  getSessionId,
-  getProjectConfigRoot,
-  getProjectRoot,
-  getConnectedClientWiring,
-  getEnsureConnectedClient,
-  setEnsureConnectedClient,
-  getPermissionPromptToolName,
-  getTeammateAgentId,
-  getIsNonInteractiveSession,
-  isPrintInputClosed,
-  isSingleShotPrintSession,
-  isSessionPersistenceDisabled,
-  getRootSession,
-  getMcpClientsFromAccessor,
-} from "../../bootstrap/state.js";
 import { getAnnouncedDirectories } from "../../utils/announcedDirectories.js";
-import { getPlatform } from "../../utils/platform.js";
-import { Udn } from "../../../vendor/@modelcontextprotocol/client/dist/ajvProvider-BIwGVY6G.mjs";
+import { AjvJsonSchemaValidator } from "../../../vendor/@modelcontextprotocol/client/dist/ajvProvider-BIwGVY6G.mjs";
 import {
   clientCapabilitiesFor,
   stripTasksCapability,
@@ -339,7 +386,7 @@ import {
 import { isStdioConfig, isClaudeAiProxyServer } from "./builtinServerNames.js";
 import {
   ListToolsResultSchema,
-  fZe,
+  JSONRPCMessageSchema,
   ListResourcesResultSchema,
   ListResourceTemplatesResultSchema,
   ListPromptsResultSchema,
@@ -426,7 +473,6 @@ import {
   shouldPauseForQuestions,
   installQuestionPause,
 } from "./resultNormalization.js";
-import { REMOTE_DEVICES, CLAUDE_ARTIFACTS, officeBridgeListingState } from "./firstPartyServerIds.js";
 import { registerChildMemory } from "../../utils/telemetry/memorySummary.js";
 import { isCleanupStarted, registerCleanup } from "../../utils/cleanupRegistry.js";
 import {
@@ -437,25 +483,9 @@ import {
 } from "./officialPluginPromptOverrides.js";
 import { toolTimeoutForServer } from "./mcpTimeouts.js";
 import { maybeNotifyIDEConnected } from "../../utils/ide.js";
-import {
-  CLAUDECODE_CALLMARK,
-  BEFORE_HANDLER,
-  sanitizeCallMark,
-  INTERRUPTED_CALL_NOTICE,
-  describeUnansweredCall,
-  MCP_ANSWER_STREAM_ENDED,
-  ANSWER_STREAM_GRACE_MS_2,
-  MCP_CALL_UNANSWERED,
-  CALL_OUTCOME_UNKNOWN_NOTICE,
-  QUESTION_UNANSWERED_TEXT,
-  MCP_QUESTION_UNANSWERED,
-  MCP_CALL_NOT_SENT_AGAIN,
-  MAX_STRUCTURED_RESULT_CHARS,
-  MAX_CALL_MARK_CHARS,
-} from "./mcpCallConstants.js";
 import { omitKeys } from "../../utils/hooks/hookCommandResolution.js";
 import { SSL_CERT_ERROR_CODES, sanitizableErrorCode } from "../api/errorUtils.js";
-import { iu } from "../../../vendor/@modelcontextprotocol/core/dist/schemas-DscsoNZN.mjs";
+import { protocolVersionLiteral } from "../../../vendor/@modelcontextprotocol/core/dist/schemas-DscsoNZN.mjs";
 import { scrubErrorText } from "../../utils/accessibility/screenReader.js";
 import { registrationStatusFields } from "./registrationStatus.js";
 import { primeDiscoveryCacheFlag, MCP_URL_ELICITATION_DIALOG } from "./elicitationDialogs.js";
@@ -477,7 +507,6 @@ import {
   McpResponseSchemaError,
 } from "./mcpResultErrors.js";
 import { hasChannelCapability } from "./channelNotification.js";
-import { buildMcpToolName } from "./mcpStringUtils.js";
 import { toolUiMeta, describeHiddenMcpTool } from "./toolNameLimits.js";
 import { requiresConnectorGrant, connectorServerId, recordClaudeAiMcpConnected } from "./claudeai.js";
 import {
@@ -504,11 +533,10 @@ import {
   createStreamingListingSanitizer,
   listingTruncatedNote,
 } from "../../tools/WebFetchTool/sanitizeListing.js";
-import { normalizeNameForMCP, findServersByName } from "./normalization.js";
 import { applyBlockedToolPolicy } from "./blockedServers.js";
 import { judgeToolSchemaSendability } from "./toolSchemaSendability.js";
 import { joinDescription } from "../../remote/tools/inputSchemaFlatten.js";
-import { Ji } from "../../../vendor/lodash-es/uniqBy.js";
+import { uniqByExport } from "../../../vendor/lodash-es/uniqBy.js";
 import { policyEnabledPluginNameSet } from "../../utils/plugins/pluginPolicy.js";
 import {
   isMemoryToolServer,
@@ -527,7 +555,6 @@ import {
   isRemoteTransport,
   registerConfiguredMcpServers,
 } from "./mcpStandardKeys.js";
-import { dynamicServerConnectorId, decorateMcpTools } from "./mcpToolDecoration.js";
 import { stripIgnorables } from "../../utils/sanitization.js";
 import {
   createChromePermissionHandler,
@@ -538,14 +565,7 @@ import {
   chromeSiteAsk,
   CLAUDECODE_CHROMESITE,
 } from "../../utils/claudeInChrome/chromePermissions.js";
-import { IMAGE_LIMITS } from "../../utils/truncateGraphemes.js";
-import {
-  isFileUploadServer,
-  buildMcpToolPermissionOverrides,
-  FILE_UPLOAD_TOOLS,
-  ANTHROPIC_HOSTASKSPERUPLOADEDFILE,
-  getLoggingSafeMcpBaseUrl,
-} from "./utils.js";
+import { IMAGE_LIMITS } from "../../utils/mediaLimits.js";
 import { isSlackSendToolName, createSlackSendToolUi } from "../../tools/MCPTool/slackSend.js";
 import { isClaudeTestWriteCall } from "../../plugins/bundled/claudeTest/constants.js";
 import { claudeTestWriteToolOverrides } from "./claudeTestWriteTool.js";
@@ -637,7 +657,7 @@ import {
   truncateMcpContent,
 } from "../../utils/mcpValidation.js";
 import { notRecordedLength } from "../../utils/telemetry/accountMemoryRedaction.js";
-import { En } from "../../../vendor/lodash-es/_inlinedHelpers.js";
+import { import_sortedIndex_2 } from "../../../vendor/lodash-es/_inlinedHelpers.js";
 import {
   runElicitationHooks_2,
   runElicitationResultHooks_2,
@@ -653,7 +673,7 @@ import {
   McpError,
   ErrorCode,
   isJSONRPCErrorResponse as isJSONRPCErrorResponse_2,
-  JSONRPCMessageSchema,
+  JSONRPCMessageSchema as JSONRPCMessageSchema_2,
   ListRootsRequestSchema,
   ElicitRequestSchema,
   ElicitRequestURLParamsSchema as ElicitRequestURLParamsSchema_2,
@@ -712,7 +732,7 @@ import {
   refuseCachedRowV1,
   emitCachedAdoptSignal,
   recordCachedDialFailureV1,
-  settleWithinDeadline,
+  settleDialOrUndefined,
 } from "./connectionRegistry.js";
 import { createFetchWithDefaults } from "../../utils/fetchWithDefaults.js";
 import {
@@ -734,11 +754,6 @@ import { getDefaultEnvironment_2 } from "../../../vendor/@modelcontextprotocol/s
 import { Client } from "../../../vendor/@modelcontextprotocol/sdk/dist/esm/client/index.js";
 import { UnauthorizedError } from "../../../vendor/@modelcontextprotocol/sdk/dist/esm/client/auth.js";
 import { validateHostManifest_2, logManifestOutcomeV1 } from "./sdkManifest.js";
-import { isConnectedOrCached } from "../../skills/bundled/scheduleRemoteAgents.js";
-import { COMPUTER_USE_MCP_SERVER_NAME } from "../../utils/computerUse/common.js";
-import { READ_ONLY_CU_ACTIONS } from "../../utils/computerUse/toolRendering.js";
-import { HostScoped } from "../../utils/hostScoped.js";
-import { hasLiveState, getLiveState } from "../liveReplica/liveReplica.js";
 import { listSubagentTranscripts } from "../../utils/subagentTranscripts.js";
 import { isSafeIdSegment } from "../../utils/agentId.js";
 import {
@@ -746,21 +761,724 @@ import {
   MAX_META_READ_CONCURRENCY,
   buildAgentTree,
 } from "../../tasks/LocalAgentTask/agentMetaFiles.js";
-import {
-  emptyCleanupResult,
-  getCutoffDate,
-  unlinkIfOld,
-  isCleanupQuietFsErrno,
-} from "../../utils/cleanup.js";
-import { getClaudeConfigDir } from "../../utils/envUtils.js";
-import { getFsImplementation } from "../../utils/fsOperations.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
+//@ chunk-cyj440je.js:715-954 fingerprint = McpAuthError (0.526)
+/**
+ * McpAuthError：MCP 认证错误（带服务器名）。
+ */
+class McpAuthError extends Error {
+  authErrorKind;
+  firstPartyBearer;
+  requestedScope;
+  serverName;
+  constructor(serverName, message, authErrorKind = "token_expired", firstPartyBearer, requestedScope) {
+    super(message);
+    this.authErrorKind = authErrorKind;
+    this.firstPartyBearer = firstPartyBearer;
+    this.requestedScope = requestedScope;
+    this.name = "McpAuthError";
+    this.serverName = serverName;
+  }
+}
+//@ chunk-cyj440je.js:954-1049 layout
+/**
+ * McpToolFileInputRejectedError：MCP 工具文件输入被拒绝。
+ */
+let McpToolFileInputRejectedError; // deferred: uses TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS (../../utils/errors.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-cyj440je.js:954", () => {
+  McpToolFileInputRejectedError = class McpToolFileInputRejectedError extends (
+    TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
+  ) {
+    code;
+    constructor(error, code) {
+      super(error, "MCP tool file input rejected");
+      this.code = code;
+    }
+  };
+});
+//@ chunk-cyj440je.js:1049-1697 fingerprint = McpSessionExpiredError (0.409)
+/**
+ * McpSessionExpiredError：HTTP 会话过期（404）或连接关闭时抛出，expiryKind 区分原因。
+ */
+let McpSessionExpiredError; // deferred: uses TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS (../../utils/errors.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-cyj440je.js:1049", () => {
+  McpSessionExpiredError = class McpSessionExpiredError extends (
+    TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
+  ) {
+    expiryKind;
+    constructor(serverName, expiryKind = "session_expired_404") {
+      super(
+        expiryKind === "connection_closed_http"
+          ? `MCP server "${serverName}" connection closed before the tool call was answered. The tool may have run: check whether it did before running it again.`
+          : expiryKind === "connection_closed_call_not_run"
+            ? `MCP server "${serverName}" connection closed before the tool call ran`
+            : `MCP server "${serverName}" session expired`,
+        "MCP session expired",
+      );
+      this.expiryKind = expiryKind;
+      this.name = "McpSessionExpiredError";
+    }
+    get mayHaveRun() {
+      switch (this.expiryKind) {
+        case "session_expired_404":
+        case "connection_closed_call_refused":
+        case "connection_closed_call_not_run":
+          return false;
+        case "connection_closed_http":
+          return true;
+      }
+    }
+  };
+});
+//@ chunk-cyj440je.js:1697-2321 layout
+/**
+ * McpCredentialStoreUnavailableError：凭证存储读不了（如 macOS 钥匙串锁定）时抛出，消息给出处理办法。
+ */
+let McpCredentialStoreUnavailableError; // deferred: uses TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS (../../utils/errors.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-cyj440je.js:1697", () => {
+  McpCredentialStoreUnavailableError = class McpCredentialStoreUnavailableError extends (
+    TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
+  ) {
+    code;
+    constructor(serverName, reason = "unreadable") {
+      if (reason === "unreadable")
+        super(
+          `Couldn't read the stored credentials for MCP server "${serverName}", so the request didn't run. ${getPlatform() === "macos" ? "If your Mac's keychain is locked, unlock it, then try again." : "Try again."}`,
+          "MCP credential store could not be read",
+        );
+      else
+        super(
+          `A request to MCP server "${serverName}" was sent without your stored credentials, so the server rejected it. The credentials are available now. Try again.`,
+          "MCP credentials were read only after a request went out without them",
+        );
+      this.code = "CREDENTIAL_STORE_UNAVAILABLE";
+      this.name = "McpCredentialStoreUnavailableError";
+    }
+  };
+});
+//@ chunk-cyj440je.js:2321-2427 fingerprint = McpToolCallError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS (0.82)
+/**
+ * MCP 工具调用失败的错误类（name 为 McpToolCallError），在通用错误基础上携带服务器返回的 `_meta`（mcpMeta），供遥测与结果展示。
+ */
+let McpToolCallError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS; // deferred: uses TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS (../../utils/errors.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-cyj440je.js:2321", () => {
+  McpToolCallError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS = class McpToolCallError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS extends (
+    TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
+  ) {
+    mcpMeta;
+    constructor(message, telemetryMessage, mcpMeta, cause) {
+      super(message, telemetryMessage, cause);
+      this.mcpMeta = mcpMeta;
+      this.name = "McpToolCallError";
+    }
+  };
+});
+//@ chunk-3pdgd98q.js:226-303 fingerprint = getConnectionTimeoutMs (1)
+/**
+ * MCP 连接超时：env `MCP_TIMEOUT`（>0，上限 2^31-1）否则默认 30000ms。
+ */
+function getConnectionTimeoutMs() {
+  let MCP_TIMEOUT = env.MCP_TIMEOUT;
+  return MCP_TIMEOUT && MCP_TIMEOUT > 0 ? Math.min(MCP_TIMEOUT, 2147483647) : 30000;
+}
+//@ chunk-3pdgd98q.js:303-391 placement
+/**
+ * 连接超时（MCP_CONNECT_TIMEOUT_MS，默认 5000）。
+ */
+function getConnectTimeoutMs() {
+  let MCP_CONNECT_TIMEOUT_MS = env.MCP_CONNECT_TIMEOUT_MS;
+  return MCP_CONNECT_TIMEOUT_MS && MCP_CONNECT_TIMEOUT_MS > 0
+    ? Math.min(MCP_CONNECT_TIMEOUT_MS, 2147483647)
+    : 5000;
+}
+//@ chunk-3pdgd98q.js:391-421 placement
+/**
+ * 短暂重试间隔（500 毫秒）。
+ */
+var TRANSPORT_FALLBACK_TIMEOUT_MS = 2000;
+var REMOTE_CONNECT_TIMEOUT_MS = 8000;
+var SHORT_RETRY_MS = 500;
+//@ chunk-7zr1t9gr.js:302-360 placement
+/**
+ * MCP 服务器不被允许时的错误文案。
+ */
+var MCP_SERVER_NOT_ALLOWED_MESSAGE = "Error POSTing to endpoint: MCP server not allowed";
+//@ chunk-7zr1t9gr.js:667-722 placement
+/**
+ * 取 artifacts 的 MCP 客户端。
+ */
+function artifactsMcpClient() {
+  return (getMcpClientsFromAccessor() ?? []).find((client) => client.name === CLAUDE_ARTIFACTS);
+}
+//@ chunk-7zr1t9gr.js:722-780 placement
+/**
+ * 取“该行未被服务”的记录。
+ */
+function getMcpEntryRowNotServed() {
+  return hasLiveState() ? getLiveState().mcpEntryRowNotServed : null;
+}
+//@ chunk-7zr1t9gr.js:780-813 placement
+/**
+ * 判断某行是否正是未服务的记录。
+ */
+function isEntryRowNotServed(entryRow) {
+  return getMcpEntryRowNotServed() === entryRow;
+}
+//@ chunk-e6aww6q8.js:2145813-2145923 placement
+/**
+ * 判断 MCP 输出截断时是否使用子代理提示（环境变量覆盖优先，否则看开关）。
+ */
+function useSubagentTruncationPrompt() {
+  let MCP_TRUNCATION_PROMPT_OVERRIDE = env.MCP_TRUNCATION_PROMPT_OVERRIDE;
+  return MCP_TRUNCATION_PROMPT_OVERRIDE
+    ? MCP_TRUNCATION_PROMPT_OVERRIDE !== "legacy"
+    : getFeatureValue_CACHED_MAY_BE_STALE("tengu_mcp_subagent_prompt", false);
+}
+//@ chunk-e6aww6q8.js:3289283-3289667 fingerprint = ensureConnectedClient (0.344)
+/**
+ * ensureConnectedClient：按名字找客户端并确认已连接，找不到列出可用服务器名报错。
+ */
+function ensureConnectedClient_2(clients, serverName) {
+  let [client] = findServersByName(clients, serverName);
+  if (!client)
+    throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
+      `Server "${serverName}" not found. Available servers: ${clients.map((client) => client.name).join(", ")}`,
+      "MCP server not found",
+    );
+  if (!isConnectedOrCached(client))
+    throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
+      `Server "${client.name}" is not connected`,
+      "MCP server not connected",
+    );
+  if (!client.capabilities?.resources)
+    throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
+      `Server "${client.name}" does not support resources`,
+      "MCP server has no resources capability",
+    );
+  return client;
+}
+//@ chunk-e6aww6q8.js:3806756-3806859 placement
+/**
+ * 判断 MCP 配置的 URL 是否为空（未配置）。
+ */
+function isUnconfiguredUrl(serverRef) {
+  return (
+    serverRef.configErrorReason === "url_empty" ||
+    (!serverRef.configError && "url" in serverRef && serverRef.url.trim() === "")
+  );
+}
+//@ chunk-e6aww6q8.js:3806859-3807903 placement
+/**
+ * 生成 MCP 服务器配置的规范化 JSON 指纹：去掉来源/缓存/资格等元字段，stdio 补默认 type 与 args，URL 查询参数排序，对象键排序，未配置的 URL 标记 unconfigured。
+ */
+function canonicalMcpConfigKey(config) {
+  let {
+    scope,
+    pluginSource,
+    pluginPath,
+    relayed,
+    pluginEndpointTemplated,
+    pluginOfficialSourceVouched,
+    agentSource,
+    declaredIn,
+    configError,
+    configErrorReason,
+    expandedFromEnv,
+    configuredCommand,
+    redialToRelearnRegistration,
+    ...rest
+  } = config;
+  let canonical = rest;
+  delete canonical.tools;
+  delete canonical.discoveryCache;
+  delete canonical.cachedInitResponse;
+  delete canonical.cachedDiscoverResponse;
+  delete canonical.discoverSupport;
+  delete canonical.eligible;
+  delete canonical.ineligibleReason;
+  delete canonical.enterpriseManaged;
+  if (canonical.type === "stdio" || (canonical.type === undefined && "command" in canonical)) {
+    canonical.type = "stdio";
+    canonical.args = canonical.args ?? [];
+  }
+  let urlParts =
+    typeof canonical.url === "string" && URL.canParse(canonical.url)
+      ? /^([^?#]*\?)([^#]*)(.*)$/s.exec(canonical.url)
+      : null;
+  if (urlParts) {
+    let [, urlPrefix = "", query = "", hashAndRest = ""] = urlParts;
+    canonical.url =
+      urlPrefix +
+      query
+        .split("&")
+        .sort((paramA, paramB) => {
+          let keyA = firstLineOf(paramA, "=");
+          let keyB = firstLineOf(paramB, "=");
+          return keyA < keyB ? -1 : keyA > keyB ? 1 : 0;
+        })
+        .join("&") +
+      hashAndRest;
+  }
+  if (isUnconfiguredUrl(config)) canonical.unconfigured = true;
+  if (agentSource !== undefined) canonical.agentSource = agentSource;
+  return jsonStringify(canonical, (key, value) => {
+    if (value && typeof value === "object" && !Array.isArray(value)) {
+      let object = value;
+      let sorted = Object.create(null);
+      for (let key of Object.keys(object).sort()) sorted[key] = object[key];
+      return sorted;
+    }
+    return value;
+  });
+}
+//@ chunk-e6aww6q8.js:3807903-3807980 placement
+/**
+ * 配置内容的 SHA-256 前 16 位（缓存键）。
+ */
+function configHash(config) {
+  return createHash("sha256").update(canonicalMcpConfigKey(config)).digest("hex").slice(0, 16);
+}
+//@ chunk-e6aww6q8.js:3807980-3808019 placement
+/**
+ * 服务器缓存键（名字 + 配置哈希）。
+ */
+function serverCacheKey(serverName, config) {
+  return `${serverName}-${configHash(config)}`;
+}
+//@ chunk-e6aww6q8.js:3808134-3808155 placement
+var CU_DESKTOP_BINARY_NAME = "cu-desktop";
+//@ chunk-e6aww6q8.js:3808155-3808308 placement
+/**
+ * 托管桌面会话的 computer-use 接入：mcpConfig {"computer-use": stdio /opt/cu-desktop/cu-desktop mcp, scope dynamic}，并把只读动作加入允许列表。
+ */
+function getHostedDesktopComputerUseConfig() {
+  return {
+    mcpConfig: {
+      [COMPUTER_USE_MCP_SERVER_NAME]: registerCliOwnedConfig({
+        type: "stdio",
+        command: `/opt/${CU_DESKTOP_BINARY_NAME}/${CU_DESKTOP_BINARY_NAME}`,
+        args: ["mcp"],
+        scope: "dynamic",
+      }),
+    },
+    allowedTools: READ_ONLY_CU_ACTIONS.map((actionName) =>
+      buildMcpToolName(COMPUTER_USE_MCP_SERVER_NAME, actionName),
+    ),
+  };
+}
+//@ chunk-e6aww6q8.js:3808308-3808421 placement = getServerCommandArray (1)
+function isDesktopComputerUseCommand(config) {
+  return (
+    (config.type === undefined || config.type === "stdio") &&
+    [config.command, ...(config.args ?? [])].some((arg) => arg?.includes(CU_DESKTOP_BINARY_NAME))
+  );
+}
+//@ chunk-e6aww6q8.js:3874164-3874197 placement
+/**
+ * 取可安全记录进日志的服务器源地址。
+ */
+function loggingSafeOrigin(serverConfig) {
+  return safeOrigin(getLoggingSafeMcpBaseUrl(serverConfig));
+}
+//@ chunk-e6aww6q8.js:3874197-3874221 placement
+/**
+ * 按宿主保存的回合调度器映射。
+ */
+var turnsByHost; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:3874197", () => {
+  turnsByHost = new HostScoped(() => ({}));
+});
+//@ chunk-e6aww6q8.js:3874221-3874328 placement
+/**
+ * 在当前回合调度器中映射执行（没有调度器时直接映射）。
+ */
+async function mapInTurns(items, mapper) {
+  let { turns } = turnsByHost.of(getRootSession().host);
+  return turns === undefined ? items.map((item) => mapper(item)) : turns.mapInTurns(items, mapper);
+}
+//@ chunk-e6aww6q8.js:3874328-3874407 placement
+/**
+ * 工具描述的最大长度（环境变量可覆盖）。
+ */
+function maxDescriptionLength(forLoadedDescription = false) {
+  return (
+    env.CLAUDE_CODE_MAX_MCP_DESCRIPTION_LENGTH ??
+    (forLoadedDescription ? MAX_STRUCTURED_RESULT_CHARS : MAX_CALL_MARK_CHARS)
+  );
+}
+//@ chunk-e6aww6q8.js:3874407-3874856 placement
+/**
+ * 检测工具描述中工具调用 XML 的标记：invoke 标签与常见 HTML 标签名（不视为参数名）。
+ */
+var INVOKE_TAG_MARKERS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var COMMON_HTML_TAGS;
+deferInit("chunk-e6aww6q8.js:3874407", () => {
+  INVOKE_TAG_MARKERS = [
+    "<invoke>",
+    "<invoke ",
+    "<invoke\t",
+    `<invoke
+`,
+    "</invoke>",
+  ];
+  COMMON_HTML_TAGS = new Set([
+    "address",
+    "area",
+    "article",
+    "audio",
+    "base",
+    "body",
+    "button",
+    "cite",
+    "code",
+    "data",
+    "details",
+    "dialog",
+    "figure",
+    "footer",
+    "form",
+    "head",
+    "header",
+    "html",
+    "image",
+    "input",
+    "label",
+    "link",
+    "main",
+    "mark",
+    "menu",
+    "meta",
+    "object",
+    "option",
+    "output",
+    "path",
+    "picture",
+    "script",
+    "section",
+    "select",
+    "slot",
+    "source",
+    "span",
+    "style",
+    "summary",
+    "table",
+    "template",
+    "text",
+    "time",
+    "title",
+    "video",
+  ]);
+});
+//@ chunk-e6aww6q8.js:3874856-3875447 placement
+/**
+ * 检查 MCP 工具描述与参数描述中是否含工具调用式 XML：invoke 标签，或以参数名为标签名的标记。
+ */
+function detectToolCallXml(tool, maxDescChars) {
+  let properties = tool.inputSchema?.properties ?? {};
+  let propertyNames = Object.keys(properties);
+  let texts = [];
+  if (tool.description) texts.push(tool.description.slice(0, maxDescChars));
+  for (let propertyName of propertyNames) {
+    let propertySchema = properties[propertyName];
+    let description =
+      propertySchema && typeof propertySchema === "object" && "description" in propertySchema
+        ? propertySchema.description
+        : undefined;
+    if (typeof description === "string") texts.push(description);
+  }
+  if (texts.length === 0) return;
+  let joined = texts.join(`
+`);
+  if (!joined.includes("<")) return;
+  let lower = joined.toLowerCase();
+  if (INVOKE_TAG_MARKERS.some((marker) => lower.includes(marker))) return "invoke";
+  let paramTags = new Set();
+  for (let propertyName of propertyNames) {
+    let lower = propertyName.toLowerCase();
+    if (propertyName.length >= 4 && !COMMON_HTML_TAGS.has(lower)) paramTags.add(lower);
+  }
+  for (let [, tagName = ""] of lower.matchAll(/<([^<>]*)>/g))
+    if (paramTags.has(tagName) || (tagName.startsWith("/") && paramTags.has(tagName.slice(1))))
+      return "param";
+  return;
+}
+//@ chunk-e6aww6q8.js:3875447-3875943 placement
+/**
+ * 统计并上报 MCP 服务器工具描述与说明中含工具调用式 XML 的情况。
+ */
+async function logToolCallXmlInDescriptions(tools, name, loggable, serverBaseUrl, instructions) {
+  let maxDescChars = maxDescriptionLength(true);
+  let invokeCount = 0;
+  let paramCount = 0;
+  let sampleToolName;
+  let matches = await mapInTurns(tools, (tool) => detectToolCallXml(tool, maxDescChars));
+  for (let [index, matchKind] of matches.entries()) {
+    if (matchKind === undefined) continue;
+    if (matchKind === "invoke") invokeCount++;
+    else paramCount++;
+    sampleToolName ??= tools[index]?.name;
+  }
+  let lower = instructions?.slice(0, maxDescriptionLength()).toLowerCase();
+  let instructionsMatch = lower !== undefined && INVOKE_TAG_MARKERS.some((marker) => lower.includes(marker));
+  let matchedCount = invokeCount + paramCount;
+  if (matchedCount === 0 && !instructionsMatch) return;
+  logEvent("tengu_mcp_description_contains_toolcall_xml", {
+    matchedToolCount: matchedCount,
+    invokeCount,
+    paramCount,
+    instructionsMatch,
+    sampleToolName: sampleToolName ? loggableMcpToolName(name, sampleToolName, loggable) : undefined,
+    mcpServerName: mcpNameForAnalytics_GATE_EVALUATED(name, loggable),
+    ...(serverBaseUrl && {
+      mcpServerBaseUrl: serverBaseUrl,
+    }),
+  });
+}
+//@ chunk-e6aww6q8.js:3875943-3875971 placement
+/**
+ * 类似标签名的最大长度（256）。
+ */
+var INVOKE_CLOSE_TAG = "</invoke>";
+var MAX_URL_LIKE_TAG_CHARS = 256;
+//@ chunk-e6aww6q8.js:3875971-3876067 placement
+function mcpToolInputToAutoClassifierInput_2(input, toolName) {
+  return (
+    input.length >= toolName.length && input.slice(-toolName.length).toLowerCase() === toolName.toLowerCase()
+  );
+}
+//@ chunk-e6aww6q8.js:3876067-3876972 placement
+/**
+ * 去掉 MCP 工具参数末尾多余的 invoke 结束标签。
+ */
+function stripTrailingInvokeSuffix(
+  input,
+  name,
+  name_2,
+  loggable,
+  featureValue_CACHED_MAY_BE_STALE,
+  serverBaseUrl,
+) {
+  let result = input;
+  for (let [key, value] of Object.entries(input)) {
+    if (typeof value !== "string") continue;
+    let endIndex = value.length - 1;
+    while (
+      endIndex >= 0 &&
+      (value.charCodeAt(endIndex) === 32 ||
+        value.charCodeAt(endIndex) === 9 ||
+        value.charCodeAt(endIndex) === 10 ||
+        value.charCodeAt(endIndex) === 13)
+    )
+      endIndex--;
+    if (endIndex >= 0) {
+      let code = value.charCodeAt(endIndex);
+      if (code >= 33 && code <= 126 && code !== 62) continue;
+    }
+    let trimmed = value.trimEnd();
+    if (!mcpToolInputToAutoClassifierInput_2(trimmed, INVOKE_CLOSE_TAG)) continue;
+    trimmed = trimmed.slice(0, -INVOKE_CLOSE_TAG.length).trimEnd();
+    let toolName = `</${key}>`;
+    let hasParamClose = mcpToolInputToAutoClassifierInput_2(trimmed, toolName);
+    if (hasParamClose) trimmed = trimmed.slice(0, -toolName.length).trimEnd();
+    let looksLikeUrl =
+      hasParamClose &&
+      (key.length > MAX_URL_LIKE_TAG_CHARS ||
+        new RegExp(`<${urlPatternToRegex_2(key)}[\\s>/]`, "i").test(value));
+    let missKind = !hasParamClose ? lit("param_close") : looksLikeUrl ? lit("open_guard") : undefined;
+    logEvent("tengu_mcp_arg_trailing_invoke_suffix", {
+      wouldStrip: missKind === undefined,
+      missKind,
+      flagOn: featureValue_CACHED_MAY_BE_STALE,
+      paramNameLen: key.length,
+      strippedToLen: trimmed.length,
+      mcpToolName: loggableMcpToolName(name_2, name, loggable),
+      mcpServerName: mcpNameForAnalytics_GATE_EVALUATED(name_2, loggable),
+      ...(serverBaseUrl && {
+        mcpServerBaseUrl: serverBaseUrl,
+      }),
+    });
+    if (missKind !== undefined || !featureValue_CACHED_MAY_BE_STALE) continue;
+    if (result === input)
+      result = {
+        ...input,
+      };
+    result[key] = trimmed;
+    logMCPDebug(name_2, `stripped trailing </${key}></invoke> from ${name}.${key} (model emission artifact)`);
+  }
+  return result;
+}
+//@ chunk-e6aww6q8.js:3876972-3877861 placement
+/**
+ * 工具输入缺少必填参数时收集诊断：必填数、缺失数、已有键数、最长字符串长度，以及字符串值里是否残留 </parameter>、</invoke> 或参数名闭合标签之类伪标签碎片。
+ */
+function describeMissingRequiredArgs(input, schema) {
+  try {
+    if (input === null || typeof input !== "object" || Array.isArray(input) || schema === undefined)
+      return null;
+    let required = schema.required;
+    if (!Array.isArray(required) || required.length === 0) return null;
+    let filtered = required.filter((requiredName) => typeof requiredName === "string");
+    if (filtered.length === 0) return null;
+    let inputObject = input;
+    let reduced = filtered.reduce(
+      (acc, requiredName) => acc + (Object.hasOwn(inputObject, requiredName) ? 0 : 1),
+      0,
+    );
+    if (reduced === 0) return null;
+    let tagCandidates = new Set(
+      [...Object.keys(schema.properties ?? {}), ...filtered]
+        .filter((name) => name.length >= 4 && !COMMON_HTML_TAGS.has(name.toLowerCase()))
+        .map((name) => name.toLowerCase()),
+    );
+    let longestValueLength = 0;
+    let hasToolCallMarkup = false;
+    for (let value of Object.values(inputObject)) {
+      if (typeof value !== "string") continue;
+      if (value.length > longestValueLength) longestValueLength = value.length;
+      if (hasToolCallMarkup) continue;
+      let lower = value.toLowerCase();
+      if (
+        lower.includes("</parameter>") ||
+        lower.includes("<parameter name=") ||
+        lower.includes("</invoke>")
+      ) {
+        hasToolCallMarkup = true;
+        continue;
+      }
+      for (let [, tagName = ""] of lower.matchAll(/<\/([^<>]*)>/g))
+        if (tagCandidates.has(tagName)) {
+          hasToolCallMarkup = true;
+          break;
+        }
+    }
+    return {
+      requiredCount: filtered.length,
+      missingCount: reduced,
+      presentKeyCount: Object.keys(inputObject).length,
+      maxStringValueLen: longestValueLength,
+      hasPseudoTagDebris: hasToolCallMarkup,
+    };
+  } catch {
+    return null;
+  }
+}
+//@ chunk-e6aww6q8.js:4340451-4340529 fingerprint = getMcpAuthCache (1)
+function getMcpAuthCache(value) {
+  return typeof value === "string" ? value : Buffer.from(value).toString("utf-8");
+}
+//@ chunk-23fm9f0d.js:17344-17604 fingerprint = getMcpAuthCachePath (0.644)
+/**
+ * getMcpAuthCachePath：needs-auth 缓存文件路径（<配置目录>/mcp-needs-auth-cache.json）。
+ */
+async function getMcpAuthCachePath() {
+  let result = emptyCleanupResult();
+  let cutoffDate = getCutoffDate();
+  if (cutoffDate === null) return result;
+  let cachePath = join(getClaudeConfigDir(), "mcp-needs-auth-cache.json");
+  try {
+    if (await unlinkIfOld(cachePath, cutoffDate, getFsImplementation(), result)) result.messages++;
+  } catch (error) {
+    if (!isENOENT(error)) {
+      result.errors++;
+      if (isCleanupQuietFsErrno(error))
+        logForDebugging(`cleanup mcp-auth-cache failed: ${error.code}`, {
+          level: "error",
+        });
+      else logError(error);
+    }
+  }
+  return result;
+}
+//@ chunk-qsdkv90t.js:302-371 placement
+/**
+ * 懒加载 MCP 客户端模块。
+ */
+function mcpClientModule() {
+  return require("./emitTripwireEvent.lazy.js").mcpClientModule();
+}
+//@ chunk-qsdkv90t.js:371-1385 placement
+async function refreshMcpServerTools(client, setServerTools, storageV5) {
+  let cacheKey = serverCacheKey(client.name, client.config);
+  let {
+    captureDiscoveryGrantLeg,
+    ensureDiscoveryCacheAccount,
+    getMcpIdentityEpoch,
+    persistRefreshedToolsIfPresent,
+  } = mcpClientModule();
+  ensureDiscoveryCacheAccount();
+  let grantLegPromise = isDiscoveryCacheOn()
+    ? captureDiscoveryGrantLeg(client.name, client.config)
+    : undefined;
+  let toolRefreshSequences = getCliOwnedState().toolRefreshSequences;
+  let sequence = toolRefreshSequences.get(client) ?? {
+    started: 0,
+    applied: 0,
+  };
+  toolRefreshSequences.set(client, sequence);
+  sequence.started += 1;
+  let started = sequence.started;
+  let { fetchToolsForClient } = mcpClientModule();
+  let previousToolsPromise = fetchToolsForClient.cache.get(cacheKey);
+  let identityEpoch = getMcpIdentityEpoch();
+  fetchToolsForClient.cache.delete(cacheKey);
+  let toolsForClient = await fetchToolsForClient(client, storageV5);
+  let toolsListErrorForResult = mcpClientModule().getToolsListErrorForResult(toolsForClient);
+  if (toolsListErrorForResult)
+    return {
+      status: "kept-previous",
+      error: toolsListErrorForResult,
+    };
+  if (client.discoveryAuthFailure && toolsForClient.length === 0)
+    return {
+      status: "kept-previous",
+      error:
+        "the server rejected tool discovery as unauthorized \u2014 the user needs to authorize this connector (e.g. via /mcp) before its tools are available",
+    };
+  if (sequence.applied > started)
+    return {
+      status: "kept-previous",
+      error:
+        "superseded by a newer concurrent refresh of this server \u2014 the newer refresh result is the one applied",
+    };
+  sequence.applied = started;
+  setServerTools(client.name, decorateMcpTools(client, toolsForClient));
+  if (grantLegPromise)
+    grantLegPromise.then((grantLeg) =>
+      persistRefreshedToolsIfPresent(client, toolsForClient, {
+        identityEpoch,
+        grantLeg,
+      }),
+    );
+  return {
+    status: "refreshed",
+    newTools: toolsForClient,
+    previousToolsPromise,
+  };
+}
+//@ chunk-mdk8a5r0.js:284-480 fingerprint = setupSdkMcpClients (0.425)
+/**
+ * 用于吞掉异常的特殊 Symbol。
+ */
+var EMPTY_CAPABILITIES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var CLAUDE_CODE_SERVER_INFO;
+var SWALLOW_SYMBOL;
+deferInit("chunk-mdk8a5r0.js:284", () => {
+  EMPTY_CAPABILITIES = Object.freeze({});
+  CLAUDE_CODE_SERVER_INFO = Object.freeze({
+    name: "claude-code",
+    title: "Claude Code",
+    description: "Anthropic's agentic coding tool",
+    websiteUrl: "https://claude.com/claude-code",
+  });
+  SWALLOW_SYMBOL = Symbol("swallow");
+});
 //@ chunk-8t8n4kdh.js:45888-45917 placement
 /**
  * 取客户端的服务器 id。
  */
-function clientServerId(e) {
-  return identityId(e);
+function clientServerId(server) {
+  return identityId(server);
 }
 //@ chunk-8t8n4kdh.js:45917-45945 placement
 /**
@@ -770,11 +1488,18 @@ function clientOf(client) {
   return identityId2(client);
 }
 //@ chunk-8t8n4kdh.js:45945-46119 placement
-var mcpTaskPersistenceModule = require("./chunk-mzh22y2k.js");
-var mcpTasksModule = require("./chunk-g25jqyhb.js");
-var mcpTaskDriveModule = require("./chunk-e7xds3sf.js");
-var workerWakesModule = require("./chunk-1w450km7.js");
-var mcpAutoBackgroundModule = require("./chunk-tn4j580p.js");
+var mcpTaskPersistenceModule; // deferred: loads other modules while loading; runs once its import cycle is complete
+var mcpTasksModule;
+var mcpTaskDriveModule;
+var workerWakesModule;
+var mcpAutoBackgroundModule;
+deferInit("chunk-8t8n4kdh.js:45945", () => {
+  mcpTaskPersistenceModule = require("./mcpTaskPersistence.js");
+  mcpTasksModule = require("./buildSep2663EndingNotice.lazy.js");
+  mcpTaskDriveModule = require("./mcpTaskDrive.js");
+  workerWakesModule = require("./workerWakes.js");
+  mcpAutoBackgroundModule = require("./callMcpToolWithAutoBackground.lazy.js");
+});
 //@ chunk-8t8n4kdh.js:46119-46250 placement
 function isSseOpenFailure(error) {
   return (
@@ -790,59 +1515,65 @@ function isSseOpenFailure(error) {
 function isMcpSessionExpiredError(err) {
   if (err instanceof McpSessionExpiredError) return true;
   if (err instanceof ProtocolError) return false;
-  let n = err instanceof SdkHttpError ? err.status : "code" in err ? err.code : undefined;
-  if (n === 404) return !isSseOpenFailure(err);
+  let statusOrCode = err instanceof SdkHttpError ? err.status : "code" in err ? err.code : undefined;
+  if (statusOrCode === 404) return !isSseOpenFailure(err);
   return (
-    n === 400 &&
+    statusOrCode === 400 &&
     /Server not initialized|No valid session ID|Mcp-Session-Id header is required/i.test(err.message)
   );
 }
 //@ chunk-8t8n4kdh.js:46515-46593 placement
-function truncateServerInstructions(e, n, r = maxDescriptionLength()) {
-  if (!e) return e;
-  return truncateDescription(e, "Server instructions", n, r);
+function truncateServerInstructions(instructions, serverName, maxLength = maxDescriptionLength()) {
+  if (!instructions) return instructions;
+  return truncateDescription(instructions, "Server instructions", serverName, maxLength);
 }
 //@ chunk-8t8n4kdh.js:46593-46747 placement
-function truncateDescription(e, n, serverName, s = maxDescriptionLength()) {
-  if (e.length <= s) return e;
-  if (serverName !== undefined) logMCPDebug(serverName, `${n} truncated from ${e.length} to ${s} chars`);
-  return truncateToLength(e, s) + "\u2026 [truncated]";
+function truncateDescription(description, label, serverName, maxLength = maxDescriptionLength()) {
+  if (description.length <= maxLength) return description;
+  if (serverName !== undefined)
+    logMCPDebug(serverName, `${label} truncated from ${description.length} to ${maxLength} chars`);
+  return truncateToLength(description, maxLength) + "\u2026 [truncated]";
 }
 //@ chunk-8t8n4kdh.js:46747-46925 placement
 /**
  * 匹配 “Error POSTing to endpoint (HTTP xxx)” 的正则。
  */
-var TRANSIENT_NETWORK_ERROR_CODES = ["ECONNRESET", "ETIMEDOUT", "EPIPE", "EHOSTUNREACH", "ECONNREFUSED"];
-var TRANSIENT_ERROR_CODES = new Set([
-  ...TRANSIENT_NETWORK_ERROR_CODES,
-  "ConnectionRefused",
-  "ConnectionClosed",
-]);
-var POST_HTTP_STATUS_RE = /^Error POSTing to endpoint \(HTTP (\d+)\)/;
+var TRANSIENT_NETWORK_ERROR_CODES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var TRANSIENT_ERROR_CODES;
+var POST_HTTP_STATUS_RE;
+deferInit("chunk-8t8n4kdh.js:46747", () => {
+  TRANSIENT_NETWORK_ERROR_CODES = ["ECONNRESET", "ETIMEDOUT", "EPIPE", "EHOSTUNREACH", "ECONNREFUSED"];
+  TRANSIENT_ERROR_CODES = new Set([
+    ...TRANSIENT_NETWORK_ERROR_CODES,
+    "ConnectionRefused",
+    "ConnectionClosed",
+  ]);
+  POST_HTTP_STATUS_RE = /^Error POSTing to endpoint \(HTTP (\d+)\)/;
+});
 //@ chunk-8t8n4kdh.js:46925-46983 placement
 /**
  * 判断数值是否为合法 HTTP 状态码。
  */
-function isValidHttpStatus(e) {
-  return typeof e === "number" && e >= 100 && e <= 599;
+function isValidHttpStatus(status) {
+  return typeof status === "number" && status >= 100 && status <= 599;
 }
 //@ chunk-8t8n4kdh.js:46983-47437 placement
-function isTransientMcpError(e) {
-  if (e.name === "AbortError") return true;
-  let code = "code" in e ? e.code : undefined;
-  let status = "status" in e ? e.status : undefined;
-  let s = POST_HTTP_STATUS_RE.exec(e.message)?.[1];
+function isTransientMcpError(error) {
+  if (error.name === "AbortError") return true;
+  let code = "code" in error ? error.code : undefined;
+  let status = "status" in error ? error.status : undefined;
+  let statusFromMessage = POST_HTTP_STATUS_RE.exec(error.message)?.[1];
   if (
     isValidHttpStatus(status) ||
     isValidHttpStatus(code) ||
     (typeof code === "number" && code < 0) ||
-    (s !== undefined && isValidHttpStatus(Number(s)))
+    (statusFromMessage !== undefined && isValidHttpStatus(Number(statusFromMessage)))
   )
     return false;
   if (typeof code === "string" && TRANSIENT_ERROR_CODES.has(code)) return true;
-  let message = e.message;
+  let message = error.message;
   return (
-    TRANSIENT_NETWORK_ERROR_CODES.some((y) => message.includes(y)) ||
+    TRANSIENT_NETWORK_ERROR_CODES.some((fragment) => message.includes(fragment)) ||
     message.includes("Body Timeout Error") ||
     /\bterminated\b/.test(message) ||
     message.includes("SSE stream disconnected") ||
@@ -895,50 +1626,55 @@ function isTimeoutError(error) {
   );
 }
 //@ chunk-8t8n4kdh.js:48306-48365 placement
-function hasNoTransport(e) {
-  return "transport" in e && e.transport === undefined;
+function hasNoTransport(client) {
+  return "transport" in client && client.transport === undefined;
 }
 //@ chunk-8t8n4kdh.js:53597-53735 fingerprint = getMcpToolTimeoutMs (1)
 /**
  * getMcpToolTimeoutMs：工具调用总超时：配置 timeout（≥1000）> MCP_TOOL_TIMEOUT > 默认约 27.8 小时，夹在 [1000, 上限]。
  */
-function getMcpToolTimeoutMs(e) {
-  let r =
-    (e?.timeout !== undefined && e.timeout >= 1000 ? e.timeout : undefined) ??
+function getMcpToolTimeoutMs(config) {
+  let timeoutMs =
+    (config?.timeout !== undefined && config.timeout >= 1000 ? config.timeout : undefined) ??
     env.MCP_TOOL_TIMEOUT ??
     DEFAULT_TOOL_TIMEOUT_MS;
-  return Math.min(Math.max(r, 1000), MAX_TIMER_DELAY_MS);
+  return Math.min(Math.max(timeoutMs, 1000), MAX_TIMER_DELAY_MS);
 }
 //@ chunk-8t8n4kdh.js:53735-53799 layout
-var REMOTE_TOOL_IDLE_TIMEOUT_MS = 300000;
-var STDIO_TOOL_IDLE_TIMEOUT_MS = 1800000;
-var NO_IDLE_TIMEOUT_TRANSPORTS = new Set(["sse-ide", "ws-ide", "sdk"]);
+var REMOTE_TOOL_IDLE_TIMEOUT_MS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var STDIO_TOOL_IDLE_TIMEOUT_MS;
+var NO_IDLE_TIMEOUT_TRANSPORTS;
+deferInit("chunk-8t8n4kdh.js:53735", () => {
+  REMOTE_TOOL_IDLE_TIMEOUT_MS = 300000;
+  STDIO_TOOL_IDLE_TIMEOUT_MS = 1800000;
+  NO_IDLE_TIMEOUT_TRANSPORTS = new Set(["sse-ide", "ws-ide", "sdk"]);
+});
 //@ chunk-8t8n4kdh.js:53799-54036 layout
 /**
  * getMcpToolIdleTimeoutMs：工具调用空闲超时（无响应也无进度）：CLAUDE_CODE_MCP_TOOL_IDLE_TIMEOUT 或 stdio 30 分钟/远程 5 分钟，sse-ide/ws-ide/sdk 不设；不小于配置 timeout，不超过总超时。
  */
 function getMcpToolIdleTimeoutMs(config) {
-  let n = config?.type ?? "stdio";
-  if (NO_IDLE_TIMEOUT_TRANSPORTS.has(n)) return 0;
-  let r =
+  let transportType = config?.type ?? "stdio";
+  if (NO_IDLE_TIMEOUT_TRANSPORTS.has(transportType)) return 0;
+  let idleTimeoutMs =
     env.CLAUDE_CODE_MCP_TOOL_IDLE_TIMEOUT ??
-    (n === "stdio" ? STDIO_TOOL_IDLE_TIMEOUT_MS : REMOTE_TOOL_IDLE_TIMEOUT_MS);
-  if (r <= 0) return 0;
+    (transportType === "stdio" ? STDIO_TOOL_IDLE_TIMEOUT_MS : REMOTE_TOOL_IDLE_TIMEOUT_MS);
+  if (idleTimeoutMs <= 0) return 0;
   let timeout = config?.timeout !== undefined && config.timeout >= 1000 ? config.timeout : 0;
-  return Math.min(Math.max(r, timeout, 1000), getMcpToolTimeoutMs(config));
+  return Math.min(Math.max(idleTimeoutMs, timeout, 1000), getMcpToolTimeoutMs(config));
 }
 //@ chunk-8t8n4kdh.js:54036-54078 layout
 /**
  * 懒加载 needs-auth 缓存模块。
  */
-var needsAuthCacheModule = () => require("./chunk-3k33hyyp.js");
+var needsAuthCacheModule = () => require("../../utils/claudeInChrome/toolRendering.js");
 //@ chunk-8t8n4kdh.js:54078-54244 layout
 /**
  * needs-auth 缓存常量与懒加载模块：缓存版本 v2、TTL 15 分钟（默认）/4 小时（claude.ai 代理与插件远程）/90 秒（有 refresh token）、时钟偏差容忍 1 分钟。
  */
-var artifactPermissionRulesModule = () => require("./chunk-p5cstt88.js");
-var artifactsMcpLaptopModule = () => require("./chunk-d5fbj7hf.js");
-var claudeDocsWakeModule = () => require("./chunk-t6p2wq66.js");
+var artifactPermissionRulesModule = () => require("../../tools/ArtifactTool/COUNTERPARTS.lazy.js");
+var artifactsMcpLaptopModule = () => require("../artifacts/artifactsMcpLaptop.js");
+var claudeDocsWakeModule = () => require("../../tools/ArtifactTool/docsCreateWake.js");
 var AUTH_CACHE_VERSION = "v2";
 var NEEDS_AUTH_CACHE_TTL_MS = 900000;
 var NEEDS_AUTH_CACHE_LONG_TTL_MS = 14400000;
@@ -949,39 +1685,40 @@ var AUTH_CACHE_CLOCK_SKEW_MS = 60000;
  * isMcpAuthCached：needs-auth 缓存命中：claude.ai 代理按 id、插件 stdio 按配置哈希；TTL 默认 15 分钟，claude.ai 代理与插件远程服务器 4 小时，有 refresh token 时 90 秒。
  */
 async function isMcpAuthCached(serverName, config, storageV5) {
-  let h = (await readNeedsAuthCache(storageV5))[serverName];
-  if (!h) return false;
-  if (config.type === "claudeai-proxy" && h.id !== config.id) return false;
+  let cacheEntry = (await readNeedsAuthCache(storageV5))[serverName];
+  if (!cacheEntry) return false;
+  if (config.type === "claudeai-proxy" && cacheEntry.id !== config.id) return false;
   if ((config.type === "stdio" || config.type === undefined) && config.pluginSource === undefined)
     return false;
   if (
     (config.type === "stdio" || config.type === undefined) &&
     config.pluginSource !== undefined &&
-    h.id !== configHash(config)
+    cacheEntry.id !== configHash(config)
   )
     return false;
   if (
     (config.type === "http" || config.type === "sse") &&
     config.pluginSource !== undefined &&
-    h.id !== undefined
+    cacheEntry.id !== undefined
   )
     return false;
-  let y =
+  let usesLongTtl =
     config.type === "claudeai-proxy" ||
     (config.pluginSource !== undefined &&
       (config.type === "http" || config.type === "sse") &&
       !usesNonOAuthAuth(config));
-  let S = h.ttlMs ?? (y ? NEEDS_AUTH_CACHE_LONG_TTL_MS : NEEDS_AUTH_CACHE_TTL_MS);
-  let w = Date.now() - h.timestamp;
-  return w > -AUTH_CACHE_CLOCK_SKEW_MS && w < S;
+  let ttlMs = cacheEntry.ttlMs ?? (usesLongTtl ? NEEDS_AUTH_CACHE_LONG_TTL_MS : NEEDS_AUTH_CACHE_TTL_MS);
+  let ageMs = Date.now() - cacheEntry.timestamp;
+  return ageMs > -AUTH_CACHE_CLOCK_SKEW_MS && ageMs < ttlMs;
 }
 //@ chunk-8t8n4kdh.js:54769-54943 layout
-async function writeAuthCacheV5(e, n) {
-  let r = await e.write(needsAuthCacheSpace(), jsonStringify(n), {
+async function writeAuthCacheV5(storage, cache) {
+  let writeResult = await storage.write(needsAuthCacheSpace(), jsonStringify(cache), {
     publishDiscipline: "inPlace",
   });
-  if (!r.ok) logMCPDebug("auth-cache", `needs-auth cache v5 write failed: ${formatStorageError(r.error)}`);
-  return r.ok;
+  if (!writeResult.ok)
+    logMCPDebug("auth-cache", `needs-auth cache v5 write failed: ${formatStorageError(writeResult.error)}`);
+  return writeResult.ok;
 }
 //@ chunk-8t8n4kdh.js:54943-55253 callgraph-fingerprint = setMcpAuthCacheEntry (0.268)
 /**
@@ -1019,38 +1756,38 @@ function setMcpAuthCacheEntry(serverName, serverId, ttlMs, storageV5) {
  */
 function clearMcpAuthCacheEntry(name, storageV5) {
   let cliOwnedState = getCliOwnedState();
-  let s = cliOwnedState.authCacheWriteChain
+  let writePromise = cliOwnedState.authCacheWriteChain
     .then(async () => {
-      let needsAuthCache = await readNeedsAuthCache(storageV5);
-      if (!(name in needsAuthCache)) return;
-      delete needsAuthCache[name];
+      let cache = await readNeedsAuthCache(storageV5);
+      if (!(name in cache)) return;
+      delete cache[name];
       if (isStorageV5Enabled() && storageV5 !== undefined) {
-        if (!(await writeAuthCacheV5(storageV5, needsAuthCache))) return;
-      } else await getFileReader().write(needsAuthCachePath(), jsonStringify(needsAuthCache));
+        if (!(await writeAuthCacheV5(storageV5, cache))) return;
+      } else await getFileReader().write(needsAuthCachePath(), jsonStringify(cache));
       clearAuthCacheRead();
     })
     .catch(() => {});
-  cliOwnedState.authCacheWriteChain = s;
-  return s;
+  cliOwnedState.authCacheWriteChain = writePromise;
+  return writePromise;
 }
 //@ chunk-8t8n4kdh.js:55505-55748 layout
 /**
  * clearMcpDiscoveryCaches：清空连接、工具、提示词、资源、资源模板的记忆化缓存（保留指定键）。
  */
-function clearMcpDiscoveryCaches(e = new Set(), n = true) {
+function clearMcpDiscoveryCaches(preservedKeys = new Set(), notifyIdentityChange = true) {
   if (!isDiscoveryCacheOn()) return;
-  if (n) noteIdentityChanged();
+  if (notifyIdentityChange) noteIdentityChanged();
   bumpIdentityEpoch();
-  let r = (cache) => {
-    if (cache) retainCacheKeys(cache, e);
+  let retainKeys = (cache) => {
+    if (cache) retainCacheKeys(cache, preservedKeys);
   };
   if (!getCliOwnedState().holdStaleReauthEntryForTest) getConnectionCache().reauthInFlight.clear();
   getConnectionCache().lapsedCcrSignIns.clear();
-  r(connectToServer.cache);
-  r(fetchToolsForClient.cache);
-  r(fetchCommandsForClient.cache);
-  r(fetchResourcesForClient.cache);
-  r(fetchResourceTemplatesForClient.cache);
+  retainKeys(connectToServer.cache);
+  retainKeys(fetchToolsForClient.cache);
+  retainKeys(fetchCommandsForClient.cache);
+  retainKeys(fetchResourcesForClient.cache);
+  retainKeys(fetchResourceTemplatesForClient.cache);
 }
 //@ chunk-8t8n4kdh.js:55748-55855 fingerprint = mcpBaseUrlAnalytics (0.65)
 /**
@@ -1058,7 +1795,7 @@ function clearMcpDiscoveryCaches(e = new Set(), n = true) {
  */
 function mcpBaseUrlAnalytics_2(serverRef, name) {
   let url = loggingSafeOrigin(serverRef);
-  let s = name
+  let serverFields = name
     ? {
         mcpServerKeyHash: toolNameForTelemetry(name),
       }
@@ -1066,35 +1803,38 @@ function mcpBaseUrlAnalytics_2(serverRef, name) {
   if (url)
     return {
       mcpServerBaseUrl: url,
-      ...s,
+      ...serverFields,
     };
-  return s;
+  return serverFields;
 }
 //@ chunk-8t8n4kdh.js:55855-56314 layout
 /**
  * logMcpConnectionOtelEvent：发出 mcp_server_connection OTel 事件（状态、传输、作用域、耗时、插件信息、错误码）。
  */
-function logMcpConnectionOtelEvent(serverName, serverRef, r) {
-  let s = isToolDetailsLoggingEnabled();
-  let h = serverRef.pluginSource ? parsePluginIdentifier_2(serverRef.pluginSource) : undefined;
-  let y = h && (isAnthropicPluginSource(getTelemetryPluginScope(h.name, h.marketplace, null)) || s);
+function logMcpConnectionOtelEvent(serverName, serverRef, result) {
+  let detailsLogging = isToolDetailsLoggingEnabled();
+  let pluginId = serverRef.pluginSource ? parsePluginIdentifier_2(serverRef.pluginSource) : undefined;
+  let isAnthropicPlugin =
+    pluginId &&
+    (isAnthropicPluginSource(getTelemetryPluginScope(pluginId.name, pluginId.marketplace, null)) ||
+      detailsLogging);
   logOTelEvent("mcp_server_connection", {
-    status: r.status,
+    status: result.status,
     transport_type: serverRef.type ?? "stdio",
     server_scope: serverRef.scope,
-    duration_ms: String(Math.round(r.durationMs)),
-    is_plugin: h !== undefined,
-    ...(h && {
-      plugin_id_hash: pluginIdHash(h.name, h.marketplace),
-      "plugin.name": y ? h.name : THIRD_PARTY,
+    duration_ms: String(Math.round(result.durationMs)),
+    is_plugin: pluginId !== undefined,
+    ...(pluginId && {
+      plugin_id_hash: pluginIdHash(pluginId.name, pluginId.marketplace),
+      "plugin.name": isAnthropicPlugin ? pluginId.name : THIRD_PARTY,
     }),
-    ...(r.errorCode && {
-      error_code: String(sanitizeConnectErrorCodeForTelemetry(r.errorCode)),
+    ...(result.errorCode && {
+      error_code: String(sanitizeConnectErrorCodeForTelemetry(result.errorCode)),
     }),
-    ...(s && {
+    ...(detailsLogging && {
       server_name: serverName,
-      ...(r.error && {
-        error: r.error,
+      ...(result.error && {
+        error: result.error,
       }),
     }),
   });
@@ -1114,15 +1854,15 @@ async function handleRemoteAuthFailure(
   storageV5,
 ) {
   primeClientResolvers();
-  let P = error instanceof ZodError;
-  let M = P ? error.issues[0] : undefined;
-  let error_2 = M
-    ? `Server OAuth metadata invalid: ${M.path.join(".") || "(root)"} \u2014 ${M.message}`
+  let isZodError = error instanceof ZodError;
+  let firstIssue = isZodError ? error.issues[0] : undefined;
+  let error_2 = firstIssue
+    ? `Server OAuth metadata invalid: ${firstIssue.path.join(".") || "(root)"} \u2014 ${firstIssue.message}`
     : undefined;
   logEvent("tengu_mcp_server_needs_auth", {
     transportType: fromEnum(transportType),
     ...(negotiation ?? {}),
-    ...(P && {
+    ...(isZodError && {
       cause: lit("discovery_schema"),
     }),
     ...mcpBaseUrlAnalytics_2(serverRef, name),
@@ -1137,7 +1877,7 @@ async function handleRemoteAuthFailure(
       }[transportType]
     } server`,
   );
-  let ce =
+  let canRefresh =
     isRefreshPath401 &&
     (serverRef.type === "http" || serverRef.type === "sse") &&
     (await hasStoredRefreshToken(name, serverRef));
@@ -1145,7 +1885,7 @@ async function handleRemoteAuthFailure(
     setMcpAuthCacheEntry(
       name,
       serverRef.type === "claudeai-proxy" ? serverRef.id : undefined,
-      ce ? NEEDS_AUTH_CACHE_REFRESHABLE_TTL_MS : undefined,
+      canRefresh ? NEEDS_AUTH_CACHE_REFRESHABLE_TTL_MS : undefined,
       storageV5,
     );
   await purgeDiscoveryCacheOnAuthFailure(name, serverRef, roundEpoch);
@@ -1158,13 +1898,13 @@ async function handleRemoteAuthFailure(
   };
 }
 //@ chunk-8t8n4kdh.js:56960-57192 layout
-async function purgeDiscoveryCacheOnAuthFailure(e, serverRef, roundEpoch) {
-  let s = roundEpoch === undefined || isCurrentIdentityEpoch(roundEpoch);
+async function purgeDiscoveryCacheOnAuthFailure(serverName, serverRef, roundEpoch) {
+  let identityCurrent = roundEpoch === undefined || isCurrentIdentityEpoch(roundEpoch);
   if (isDiscoveryCacheUsable())
-    if (s) await flushDiscoveryCache(deleteDiscoveryCache(e, serverRef));
+    if (identityCurrent) await flushDiscoveryCache(deleteDiscoveryCache(serverName, serverRef));
     else
       logMCPDebug(
-        e,
+        serverName,
         "Discovery cache 401/403 purge skipped: identity changed since this connect round started (the current entry belongs to the new principal)",
       );
 }
@@ -1192,7 +1932,7 @@ var AUTH_REJECTION_SEVERITY = {
  * failWithAuthRejection：记录连接失败遥测并返回带错误码（AUTH_HEADER_REJECTED 等）的 failed 连接。
  */
 function failWithAuthRejection({
-  name: e,
+  name: serverName,
   serverRef,
   transportType,
   errorCode,
@@ -1213,15 +1953,15 @@ function failWithAuthRejection({
     toolsListAhead: negotiation.toolsListAhead,
     toolsListAheadListed: negotiation.toolsListAheadListed,
     toolsListAheadFlagSource: negotiation.toolsListAheadFlagSource,
-    ...mcpBaseUrlAnalytics_2(serverRef, e),
+    ...mcpBaseUrlAnalytics_2(serverRef, serverName),
     ...buildPluginSourceFields(serverRef),
   });
   let { severity, featureErrorCode } = AUTH_REJECTION_SEVERITY[errorCode];
   if (severity === "bad") logFeatureBad("mcp_connect", featureErrorCode);
   else logFeatureSad("mcp_connect", featureErrorCode);
-  logMCPError(e, message);
+  logMCPError(serverName, message);
   return {
-    name: e,
+    name: serverName,
     type: "failed",
     config: serverRef,
     error: message,
@@ -1236,36 +1976,36 @@ function failWithAuthRejection({
  * failFirstPartyAuthRejected：一方服务器拒绝 claude.ai 登录/Design 凭证时生成具体提示（/login、/design-login）。
  */
 function failFirstPartyAuthRejected(credentialKind, name, serverRef, transportType, statusCode, negotiation) {
-  let S = "api.anthropic.com";
+  let host = "api.anthropic.com";
   try {
-    if ("url" in serverRef) S = new URL(serverRef.url).host;
+    if ("url" in serverRef) host = new URL(serverRef.url).host;
   } catch {}
-  let w = `HTTP ${statusCode ?? 401}`;
-  let P = isDesignServerConfig(serverRef);
-  let M;
+  let statusLabel = `HTTP ${statusCode ?? 401}`;
+  let isDesignServer = isDesignServerConfig(serverRef);
+  let message;
   switch (credentialKind) {
     case "design_credential":
-      M =
+      message =
         statusCode === 403
-          ? `${S} rejected your /design-login credential (HTTP 403). Check that your account has access to Claude Design, or run /design-login to re-authorize it and retry.`
-          : `${S} rejected your /design-login credential (${w}). Run /design-login to re-authorize it and retry.`;
+          ? `${host} rejected your /design-login credential (HTTP 403). Check that your account has access to Claude Design, or run /design-login to re-authorize it and retry.`
+          : `${host} rejected your /design-login credential (${statusLabel}). Run /design-login to re-authorize it and retry.`;
       break;
     case "none":
-      M = `${S} needs a claude.ai sign-in and Claude Code had no usable credential to send (${w}). Run ${P ? "/design-login" : "/login"} and retry.`;
+      message = `${host} needs a claude.ai sign-in and Claude Code had no usable credential to send (${statusLabel}). Run ${isDesignServer ? "/design-login" : "/login"} and retry.`;
       break;
     case "design_scoped_login":
     case "login": {
-      if (statusCode === 403 && P)
-        M =
+      if (statusCode === 403 && isDesignServer)
+        message =
           credentialKind === "design_scoped_login"
-            ? `${S} rejected your claude.ai login for Claude Design (HTTP 403) even though that login already includes Claude Design permissions, so this is most likely an account or project access problem. Check that your account has access to Claude Design; if it does, run /design-login and retry.`
-            : `${S} rejected your claude.ai login for Claude Design (HTTP 403), most likely because a /login token carries no Claude Design access. Run /design-login and retry, or check that your account has access to Claude Design.`;
+            ? `${host} rejected your claude.ai login for Claude Design (HTTP 403) even though that login already includes Claude Design permissions, so this is most likely an account or project access problem. Check that your account has access to Claude Design; if it does, run /design-login and retry.`
+            : `${host} rejected your claude.ai login for Claude Design (HTTP 403), most likely because a /login token carries no Claude Design access. Run /design-login and retry, or check that your account has access to Claude Design.`;
       else
-        M =
+        message =
           statusCode === 403
-            ? `${S} rejected your claude.ai login (HTTP 403). Check that your account has access to this server. If it does, your ` +
+            ? `${host} rejected your claude.ai login (HTTP 403). Check that your account has access to this server. If it does, your ` +
               `token may be missing a scope \u2014 run ${"/login"} and retry.`
-            : `${S} rejected your claude.ai login (${w}). Run /login and retry.`;
+            : `${host} rejected your claude.ai login (${statusLabel}). Run /login and retry.`;
       break;
     }
     default:
@@ -1276,20 +2016,25 @@ function failFirstPartyAuthRejected(credentialKind, name, serverRef, transportTy
     serverRef,
     transportType,
     errorCode: "FIRST_PARTY_AUTH_REJECTED",
-    message: M,
+    message,
     negotiation,
   });
 }
 //@ chunk-8t8n4kdh.js:59946-60026 layout
-function isAuthFailure(error, n, r) {
-  return error instanceof UnauthorizedError_2 || (error instanceof ZodError && r) || n === 401 || n === 403;
+function isAuthFailure(error, statusCode, sawAuthChallenge) {
+  return (
+    error instanceof UnauthorizedError_2 ||
+    (error instanceof ZodError && sawAuthChallenge) ||
+    statusCode === 401 ||
+    statusCode === 403
+  );
 }
 //@ chunk-8t8n4kdh.js:60026-61695 layout
 /**
  * handleRemoteConnectAuthError：SSE/HTTP 连接认证失败分类：配置的 Authorization 头被拒、headersHelper 头被拒、CLI 自有令牌被拒、一方登录被拒，或交给 OAuth 刷新/needs-auth。
  */
 async function handleRemoteConnectAuthError({
-  name,
+  name: serverName,
   serverRef,
   transportType,
   error,
@@ -1305,12 +2050,12 @@ async function handleRemoteConnectAuthError({
   roundEpoch,
   storageV5,
 }) {
-  await recordTokenlessRejection(name, serverRef, authProvider);
+  await recordTokenlessRejection(serverName, serverRef, authProvider);
   if (!isAuthFailure(error, statusCode, sawAuthChallenge)) return;
   if (hasUserAuthHeader) {
-    let G = sanitizeErrorDetail(
+    let errorDetail = sanitizeErrorDetail(
       redactMcpErrorDetail(
-        name,
+        serverName,
         serverRef,
         error instanceof SdkHttpError && typeof error.data?.text === "string"
           ? error.data.text
@@ -1318,7 +2063,7 @@ async function handleRemoteConnectAuthError({
       ),
     );
     return failWithAuthRejection({
-      name,
+      name: serverName,
       serverRef,
       transportType,
       negotiation,
@@ -1327,15 +2072,15 @@ async function handleRemoteConnectAuthError({
         `Server rejected the configured Authorization header (HTTP ${statusCode ?? 401}). ` +
         "Check that the token is valid for this MCP endpoint \u2014 OAuth fallback is " +
         "disabled when headers.Authorization is set.",
-      ...(G !== "" && {
-        displayDetail: `Error detail: ${G}`,
+      ...(errorDetail !== "" && {
+        displayDetail: `Error detail: ${errorDetail}`,
       }),
     });
   }
   if (helperMintsAuthHeader) {
-    let G = sanitizeErrorDetail(redactMcpErrorDetail(name, serverRef, error.message));
+    let errorDetail = sanitizeErrorDetail(redactMcpErrorDetail(serverName, serverRef, error.message));
     return failWithAuthRejection({
-      name,
+      name: serverName,
       serverRef,
       transportType,
       negotiation,
@@ -1344,14 +2089,14 @@ async function handleRemoteConnectAuthError({
         `Server rejected the Authorization header minted by the configured headersHelper (HTTP ${statusCode ?? 401}). ` +
         "Check that the helper command returns a valid credential for this MCP endpoint \u2014 OAuth fallback is " +
         "disabled when the helper supplies Authorization.",
-      ...(G !== "" && {
-        displayDetail: `Error detail: ${G}`,
+      ...(errorDetail !== "" && {
+        displayDetail: `Error detail: ${errorDetail}`,
       }),
     });
   }
   if (cliOwnedBearer)
     return failWithAuthRejection({
-      name,
+      name: serverName,
       serverRef,
       transportType,
       negotiation,
@@ -1361,31 +2106,40 @@ async function handleRemoteConnectAuthError({
   if (useFirstPartyAuth)
     return failFirstPartyAuthRejected(
       firstPartyBearer ?? "none",
-      name,
+      serverName,
       serverRef,
       transportType,
       statusCode,
       negotiation,
     );
-  let ge = error instanceof UnauthorizedError_2 || statusCode === 401;
-  let Ie = await handleRejectedToken({
-    name,
+  let isRefreshPath401 = error instanceof UnauthorizedError_2 || statusCode === 401;
+  let rejectedTokenResult = await handleRejectedToken({
+    name: serverName,
     serverRef,
     authProvider,
-    isRefreshPath401: ge,
+    isRefreshPath401,
     needsAuth: () =>
-      handleRemoteAuthFailure(name, serverRef, transportType, error, ge, roundEpoch, negotiation, storageV5),
+      handleRemoteAuthFailure(
+        serverName,
+        serverRef,
+        transportType,
+        error,
+        isRefreshPath401,
+        roundEpoch,
+        negotiation,
+        storageV5,
+      ),
   });
-  if (Ie !== undefined) {
-    await purgeDiscoveryCacheOnAuthFailure(name, serverRef, roundEpoch);
-    return Ie;
+  if (rejectedTokenResult !== undefined) {
+    await purgeDiscoveryCacheOnAuthFailure(serverName, serverRef, roundEpoch);
+    return rejectedTokenResult;
   }
   return handleRemoteAuthFailure(
-    name,
+    serverName,
     serverRef,
     transportType,
     error,
-    ge,
+    isRefreshPath401,
     roundEpoch,
     negotiation,
     storageV5,
@@ -1397,8 +2151,8 @@ async function handleRemoteConnectAuthError({
  */
 function wrapFetchWithCcrSessionAuth(fetchFn, dialOptions, connectionKey) {
   fetchFn = stripRedirectLocation(fetchFn);
-  return async (s, h) => {
-    let headers = new Headers(h?.headers);
+  return async (url, init) => {
+    let headers = new Headers(init?.headers);
     if (!headers.has("Authorization")) {
       let sessionIngressAuthToken = getSessionIngressAuthToken();
       if (sessionIngressAuthToken) {
@@ -1411,37 +2165,37 @@ function wrapFetchWithCcrSessionAuth(fetchFn, dialOptions, connectionKey) {
     if (currentCallId) headers.set(X_CCR_TURN_ID, currentCallId);
     headers.delete(X_CCR_DIAL_TOOL_USE_ID);
     if (dialOptions?.toolUseId !== undefined) {
-      let j = classifyHandshakeRequest(h);
-      if (j === "handshake" || (j === "listing" && dialOptions.withListings))
+      let handshakeKind = classifyHandshakeRequest(init);
+      if (handshakeKind === "handshake" || (handshakeKind === "listing" && dialOptions.withListings))
         headers.set(X_CCR_DIAL_TOOL_USE_ID, dialOptions.toolUseId);
     }
-    getConnectionCache().attachCcrTicket(s, headers);
-    let redirect = h?.redirect === "error" ? "error" : "manual";
-    let P = await fetchFn(s, {
-      ...h,
+    getConnectionCache().attachCcrTicket(url, headers);
+    let redirect = init?.redirect === "error" ? "error" : "manual";
+    let response = await fetchFn(url, {
+      ...init,
       headers,
       redirect,
     });
     let connectionCache = getConnectionCache();
-    connectionCache.noteCcrTicket(s, headers, P);
+    connectionCache.noteCcrTicket(url, headers, response);
     if (
       connectionKey !== undefined &&
-      (P.status === 401 || connectionCache.lapsedCcrSignIns.has(connectionKey)) &&
-      classifyHandshakeRequest(h) !== undefined
+      (response.status === 401 || connectionCache.lapsedCcrSignIns.has(connectionKey)) &&
+      classifyHandshakeRequest(init) !== undefined
     )
-      connectionCache.noteCcrDialAnswer(connectionKey, P);
-    return P;
+      connectionCache.noteCcrDialAnswer(connectionKey, response);
+    return response;
   };
 }
 //@ chunk-8t8n4kdh.js:62288-62545 layout
 /**
  * classifyHandshakeRequest：POST 体方法为 initialize/notifications/initialized 返回 handshake，tools/list 返回 listing。
  */
-function classifyHandshakeRequest(e) {
-  if (e?.method?.toUpperCase() !== "POST" || typeof e.body !== "string") return;
-  let method = u({
-    method: string(),
-  }).safeParse(safeParseJSON(e.body, false)).data?.method;
+function classifyHandshakeRequest(init) {
+  if (init?.method?.toUpperCase() !== "POST" || typeof init.body !== "string") return;
+  let method = objectSchema({
+    method: stringSchema(),
+  }).safeParse(safeParseJSON(init.body, false)).data?.method;
   if (method === "initialize" || method === "notifications/initialized") return "handshake";
   return method === "tools/list" ? "listing" : undefined;
 }
@@ -1453,15 +2207,15 @@ var TOOL_USE_ID_PATTERN = /^toolu_[A-Za-z0-9_-]{1,64}$/;
  * wrapFetchWithCliOwnedBearer：给 CLI 自有服务器的请求附加会话 bearer（被扣留时不发请求）。
  */
 function wrapFetchWithCliOwnedBearer(fetchFn, config) {
-  let r = async (...[s, h]) => {
-    let y = {
-      method: (h?.method ?? "GET").toUpperCase(),
-      body: h?.body,
+  let attemptRequest = async (...[url, init]) => {
+    let requestMeta = {
+      method: (init?.method ?? "GET").toUpperCase(),
+      body: init?.body,
     };
-    await runBeforeRequestHook(config, y);
-    let headers = new Headers(h?.headers);
+    await runBeforeRequestHook(config, requestMeta);
+    let headers = new Headers(init?.headers);
     let bearerFingerprint = null;
-    let P = false;
+    let isBearerWithheld = false;
     if (!headers.has("Authorization")) {
       let bearerTokenFor = await resolveBearerTokenFor(config);
       if (bearerTokenFor) {
@@ -1469,52 +2223,54 @@ function wrapFetchWithCliOwnedBearer(fetchFn, config) {
         headers.set("Authorization", `Bearer ${bearerTokenFor}`);
         bearerFingerprint = shortHash(bearerTokenFor);
       } else {
-        P = true;
-        let ce = withheldBearerRefusalFor(config);
-        if (ce !== undefined)
+        isBearerWithheld = true;
+        let refusalMessage = withheldBearerRefusalFor(config);
+        if (refusalMessage !== undefined)
           throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-            ce,
+            refusalMessage,
             "CLI-owned MCP request not sent: its bearer was withheld",
           );
       }
     }
-    let M = {};
-    for (let [key, value] of Object.entries(cliOwnedRequestHeaders(config, y)))
+    let ownedHeaders = {};
+    for (let [key, value] of Object.entries(cliOwnedRequestHeaders(config, requestMeta)))
       if (
         !headers.has(key) &&
         key.toLowerCase() !== "authorization" &&
-        !(P && isCredentialRequestHeader(config, key))
+        !(isBearerWithheld && isCredentialRequestHeader(config, key))
       ) {
         headers.set(key, value);
-        M[key] = value;
+        ownedHeaders[key] = value;
       }
-    let j = await fetchFn(s, {
-      ...h,
+    let response = await fetchFn(url, {
+      ...init,
       headers,
       redirect: "error",
     });
     notifyResponseObserver(config, {
-      method: y.method,
-      status: j.status,
-      headers: j.headers,
+      method: requestMeta.method,
+      status: response.status,
+      headers: response.headers,
       requestHeaders: {
-        get: (R) =>
-          R.toLowerCase() === "authorization" || isCredentialRequestHeader(config, R) ? null : headers.get(R),
+        get: (headerName) =>
+          headerName.toLowerCase() === "authorization" || isCredentialRequestHeader(config, headerName)
+            ? null
+            : headers.get(headerName),
       },
       bearerFingerprint,
     });
     return {
-      response: j,
-      owned: M,
+      response,
+      owned: ownedHeaders,
     };
   };
-  return async (s, h) => {
-    let { response, owned } = await r(s, h);
+  return async (url, init) => {
+    let { response, owned } = await attemptRequest(url, init);
     if (!(await shouldResendRequest(config, response, owned))) return response;
     await response.body?.cancel().catch(() => {});
-    let w = await r(s, h);
-    shouldResendRequest(config, w.response, w.owned);
-    return w.response;
+    let retryResult = await attemptRequest(url, init);
+    shouldResendRequest(config, retryResult.response, retryResult.owned);
+    return retryResult.response;
   };
 }
 //@ chunk-8t8n4kdh.js:63560-63822 layout
@@ -1560,7 +2316,7 @@ function createClaudeAiProxyFetch(fetchFn, credentials) {
         sentToken: currentTokens.accessToken,
       };
     };
-    async function y(response) {
+    async function normalizeErrorResponse(response) {
       if (response.status >= 400 && response.headers.get("content-type")?.includes("text/event-stream")) {
         let text = await response.text();
         let found = text
@@ -1578,12 +2334,12 @@ function createClaudeAiProxyFetch(fetchFn, credentials) {
       return response;
     }
     let { response, sentToken } = await doRequest();
-    if (response.status !== 401) return y(response);
-    let P = response.headers.get("X-Mcp-Error-Code") ?? undefined;
-    if (P) {
+    if (response.status !== 401) return normalizeErrorResponse(response);
+    let proxyErrorCode = response.headers.get("X-Mcp-Error-Code") ?? undefined;
+    if (proxyErrorCode) {
       logEvent("tengu_mcp_claudeai_proxy_401", {
         tokenChanged: false,
-        proxyErrorCode: sanitizedFeatureErrorCodeForTelemetry(P),
+        proxyErrorCode: sanitizedFeatureErrorCodeForTelemetry(proxyErrorCode),
       });
       return response;
     }
@@ -1601,18 +2357,18 @@ function createClaudeAiProxyFetch(fetchFn, credentials) {
     let response_2 = (await doRequest()).response;
     if (response_2.status === 401 && !response_2.headers.get("X-Mcp-Error-Code"))
       throw new ClaudeAiProxyBearerRejectedError();
-    return y(response_2);
+    return normalizeErrorResponse(response_2);
   };
 }
 //@ chunk-8t8n4kdh.js:65001-65513 sole-consumer
 /**
  * expandFirstPartyDesignScopes：Design 连接器需要时为 claude.ai 登录追加 user:design:read/write 作用域。
  */
-async function expandFirstPartyDesignScopes(e, credentials) {
-  if (isDesignMcpUrl(e)) {
-    let s = await getScaffoldResolver()?.(credentials);
-    if (s?.ok) {
-      if (s.expanded) {
+async function expandFirstPartyDesignScopes(url, credentials) {
+  if (isDesignMcpUrl(url)) {
+    let scaffoldResult = await getScaffoldResolver()?.(credentials);
+    if (scaffoldResult?.ok) {
+      if (scaffoldResult.expanded) {
         noteScopeExpansion(
           "Added user:design:read and user:design:write to your claude.ai login (for the Design MCP connector).",
         );
@@ -1621,22 +2377,22 @@ async function expandFirstPartyDesignScopes(e, credentials) {
         });
       }
       return {
-        accessToken: s.accessToken,
-        bearer: s.bearer,
+        accessToken: scaffoldResult.accessToken,
+        bearer: scaffoldResult.bearer,
       };
     }
   }
   await checkAndRefreshOAuthTokenIfNeeded({
     credentials,
   });
-  let r =
+  let tokens =
     isStorageV5Enabled() && credentials !== undefined
       ? await getClaudeAIOAuthTokensAsync(credentials)
       : getClaudeAIOAuthTokens();
-  if (!r?.accessToken) return;
+  if (!tokens?.accessToken) return;
   return {
-    accessToken: r.accessToken,
-    bearer: r.scopes?.includes("user:design:read") ? "design_scoped_login" : "login",
+    accessToken: tokens.accessToken,
+    bearer: tokens.scopes?.includes("user:design:read") ? "design_scoped_login" : "login",
   };
 }
 //@ chunk-8t8n4kdh.js:65513-65742 sole-consumer
@@ -1644,38 +2400,41 @@ async function expandFirstPartyDesignScopes(e, credentials) {
  * readNeedsConsentBit：Design 服务器响应体为 {error:"needs_consent", consent} 时返回 consent 位。
  */
 async function readNeedsConsentBit(response) {
-  let n = peekScopeExpansionNotice();
-  if (n === null) return null;
-  let r;
+  let notice = peekScopeExpansionNotice();
+  if (notice === null) return null;
+  let body;
   try {
-    r = await response.clone().json();
+    body = await response.clone().json();
   } catch {
     return null;
   }
-  if (r == null || typeof r !== "object" || r.error !== "needs_consent") return null;
-  let consent = r.consent;
-  return n.isConsentBit(consent) ? consent : null;
+  if (body == null || typeof body !== "object" || body.error !== "needs_consent") return null;
+  let consent = body.consent;
+  return notice.isConsentBit(consent) ? consent : null;
 }
 //@ chunk-8t8n4kdh.js:65742-65879 sole-consumer
-function noteDesignProjectId(e, n, name, s) {
-  if (!n || !MEMBERSHIP_METHODS.has(name)) return;
-  let projectId = s.project_id;
+function noteDesignProjectId(designSession, isDesignServer, name, payload) {
+  if (!isDesignServer || !MEMBERSHIP_METHODS.has(name)) return;
+  let projectId = payload.project_id;
   if (typeof projectId === "string" && projectId.length > 0) {
-    clearApprovedPlans(e, projectId);
-    clearPlansForProject(e, projectId);
-    clearVerifiedProjectGrant(e, projectId);
-    markRecardProject(e, projectId);
+    clearApprovedPlans(designSession, projectId);
+    clearPlansForProject(designSession, projectId);
+    clearVerifiedProjectGrant(designSession, projectId);
+    markRecardProject(designSession, projectId);
   }
 }
 //@ chunk-8t8n4kdh.js:65879-65944 sole-consumer
-var DESIGN_WRITE_TOOLS = new Set(["write_files", "create_support_js", "copy_files"]);
+var DESIGN_WRITE_TOOLS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-8t8n4kdh.js:65879", () => {
+  DESIGN_WRITE_TOOLS = new Set(["write_files", "create_support_js", "copy_files"]);
+});
 //@ chunk-8t8n4kdh.js:65944-66471 sole-consumer
 /**
  * gateDesignWriteWithoutPlanToken：Design 写工具缺 plan_token 时拒绝（只允许原生 Claude Design 工具无令牌写）。
  */
-function gateDesignWriteWithoutPlanToken(isFirstPartyDesignServer, name, r) {
+function gateDesignWriteWithoutPlanToken(isFirstPartyDesignServer, name, input) {
   if (!isFirstPartyDesignServer || !DESIGN_WRITE_TOOLS.has(name)) return null;
-  let planToken = r?.plan_token;
+  let planToken = input?.plan_token;
   if (typeof planToken === "string" && planToken.length > 0) return null;
   return {
     behavior: "deny",
@@ -1689,12 +2448,15 @@ function gateDesignWriteWithoutPlanToken(isFirstPartyDesignServer, name, r) {
   };
 }
 //@ chunk-8t8n4kdh.js:66471-66533 sole-consumer
-var DESIGN_PLAN_TOOLS = new Set([
-  ...DESIGN_WRITE_TOOLS,
-  "finalize_plan",
-  "delete_files",
-  ...MEMBERSHIP_METHODS,
-]);
+var DESIGN_PLAN_TOOLS; // deferred: uses DESIGN_WRITE_TOOLS of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-8t8n4kdh.js:66471", () => {
+  DESIGN_PLAN_TOOLS = new Set([
+    ...DESIGN_WRITE_TOOLS,
+    "finalize_plan",
+    "delete_files",
+    ...MEMBERSHIP_METHODS,
+  ]);
+});
 //@ chunk-8t8n4kdh.js:66533-66570 sole-consumer
 function isDesignGatedTool(isFirstPartyDesignServer, name) {
   return isFirstPartyDesignServer && DESIGN_PLAN_TOOLS.has(name);
@@ -1703,12 +2465,12 @@ function isDesignGatedTool(isFirstPartyDesignServer, name) {
 /**
  * askDesignConsent：生成 Design 同意请求的权限结果（ask，附 __consentNonce，仅本地显示，不可被分类器批准）。
  */
-function askDesignConsent(message, n, __consentNonce) {
+function askDesignConsent(message, input, __consentNonce) {
   return {
     behavior: "ask",
     message,
     updatedInput: {
-      ...n,
+      ...input,
       __consentNonce,
     },
     localDisplayOnly: true,
@@ -1732,10 +2494,10 @@ function isDesignServerConfig(config) {
 /**
  * canAskDesignConsent：交互会话且不在 bypass 模式时可以弹 Design 同意请求。
  */
-function canAskDesignConsent(e) {
-  let toolPermissionContext = getToolPermissionContext(e);
+function canAskDesignConsent(tool) {
+  let toolPermissionContext = getToolPermissionContext(tool);
   return (
-    !e.options.isNonInteractiveSession &&
+    !tool.options.isNonInteractiveSession &&
     toolPermissionContext.mode !== "bypassPermissions" &&
     !(toolPermissionContext.mode === "plan" && toolPermissionContext.isBypassPermissionsModeAvailable)
   );
@@ -1744,8 +2506,8 @@ function canAskDesignConsent(e) {
 /**
  * canPromptForPermission：非 bypass/dontAsk 且未要求避免权限提示。
  */
-function canPromptForPermission(e) {
-  let toolPermissionContext = getToolPermissionContext(e);
+function canPromptForPermission(tool) {
+  let toolPermissionContext = getToolPermissionContext(tool);
   return (
     toolPermissionContext.mode !== "bypassPermissions" &&
     toolPermissionContext.mode !== "dontAsk" &&
@@ -1759,71 +2521,71 @@ var MAX_DESIGN_CONSENT_ASKS = 100;
 /**
  * rememberDesignConsentAsk：按 toolUseId 记录待确认的 consent 位与 nonce（最多 100 条）。
  */
-function rememberDesignConsentAsk(toolUseId, n, r) {
+function rememberDesignConsentAsk(toolUseId, consentBit, askReachesUser) {
   let firstPartyDesignConsentAsks = getCliOwnedState().firstPartyDesignConsentAsks;
-  let h = firstPartyDesignConsentAsks.get(toolUseId);
-  let y = h !== undefined && h.bit === n;
-  let S = y ? h.nonce : randomUUID();
+  let existingAsk = firstPartyDesignConsentAsks.get(toolUseId);
+  let sameBit = existingAsk !== undefined && existingAsk.bit === consentBit;
+  let nonce = sameBit ? existingAsk.nonce : randomUUID();
   firstPartyDesignConsentAsks.delete(toolUseId);
   firstPartyDesignConsentAsks.set(toolUseId, {
-    bit: n,
-    nonce: S,
-    askReachesUser: y ? h.askReachesUser && r : r,
+    bit: consentBit,
+    nonce,
+    askReachesUser: sameBit ? existingAsk.askReachesUser && askReachesUser : askReachesUser,
   });
   while (firstPartyDesignConsentAsks.size > MAX_DESIGN_CONSENT_ASKS) {
-    let w = firstPartyDesignConsentAsks.keys().next().value;
-    if (w === undefined) break;
-    firstPartyDesignConsentAsks.delete(w);
+    let oldestToolUseId = firstPartyDesignConsentAsks.keys().next().value;
+    if (oldestToolUseId === undefined) break;
+    firstPartyDesignConsentAsks.delete(oldestToolUseId);
   }
-  return S;
+  return nonce;
 }
 //@ chunk-8t8n4kdh.js:67545-67755 sole-consumer
 /**
  * takeDesignConsentAsk：取出并删除 toolUseId 对应的同意记录，nonce 必须一致。
  */
-function takeDesignConsentAsk(e, n) {
-  if (e === undefined) return null;
+function takeDesignConsentAsk(toolUseId, nonce) {
+  if (toolUseId === undefined) return null;
   let firstPartyDesignConsentAsks = getCliOwnedState().firstPartyDesignConsentAsks;
-  let s = firstPartyDesignConsentAsks.get(e) ?? null;
-  firstPartyDesignConsentAsks.delete(e);
-  if (s === null || n === undefined || s.nonce !== n) return null;
+  let ask = firstPartyDesignConsentAsks.get(toolUseId) ?? null;
+  firstPartyDesignConsentAsks.delete(toolUseId);
+  if (ask === null || nonce === undefined || ask.nonce !== nonce) return null;
   return {
-    bit: s.bit,
-    askReachesUser: s.askReachesUser,
+    bit: ask.bit,
+    askReachesUser: ask.askReachesUser,
   };
 }
 //@ chunk-8t8n4kdh.js:67755-68588 sole-consumer
 /**
  * wrapCallWithDesignConsent：Design 工具调用遇 needs_consent 时：已批准的位直接提交同意并重试，否则提示用户重试或运行 /design consent。
  */
-function wrapCallWithDesignConsent(e, n) {
-  let { designSession, approvedConsentBit, consentAskReachesUser, credentials } = n;
-  return async (S) => {
-    let w = peekScopeExpansionNotice();
+function wrapCallWithDesignConsent(callTool, options) {
+  let { designSession, approvedConsentBit, consentAskReachesUser, credentials } = options;
+  return async (requestOptions) => {
+    let notice = peekScopeExpansionNotice();
     try {
-      let P = await e(S);
-      if (approvedConsentBit !== null && !S.aborted)
-        w?.seedDesignConsentBit(designSession, approvedConsentBit, true);
-      return P;
+      let result = await callTool(requestOptions);
+      if (approvedConsentBit !== null && !requestOptions.aborted)
+        notice?.seedDesignConsentBit(designSession, approvedConsentBit, true);
+      return result;
     } catch (error) {
-      if (!(error instanceof FirstPartyDesignNeedsConsentError) || !w) throw error;
+      if (!(error instanceof FirstPartyDesignNeedsConsentError) || !notice) throw error;
       let consent = error.consent;
       if (consent !== approvedConsentBit) {
-        w.seedDesignConsentBit(designSession, consent, false);
+        notice.seedDesignConsentBit(designSession, consent, false);
         throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-          `${w.consentPromptFor(consent)} The user hasn't granted this yet \u2014 ask them to retry (the prompt will show on the next call) or run /design consent.`,
+          `${notice.consentPromptFor(consent)} The user hasn't granted this yet \u2014 ask them to retry (the prompt will show on the next call) or run /design consent.`,
           "first-party design MCP needs_consent (not shown)",
         );
       }
       if (!consentAskReachesUser) {
-        w.seedDesignConsentBit(designSession, consent, false);
+        notice.seedDesignConsentBit(designSession, consent, false);
         throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-          `${w.consentPromptFor(consent)} The user hasn't granted this \u2014 run /design consent to grant it (it can't be approved automatically in this permission mode).`,
+          `${notice.consentPromptFor(consent)} The user hasn't granted this \u2014 run /design consent to grant it (it can't be approved automatically in this permission mode).`,
           "first-party design MCP needs_consent (no prompt)",
         );
       }
-      await w.postDesignConsent(designSession, consent, credentials);
-      return e(S);
+      await notice.postDesignConsent(designSession, consent, credentials);
+      return callTool(requestOptions);
     }
   };
 }
@@ -1831,81 +2593,81 @@ function wrapCallWithDesignConsent(e, n) {
 /**
  * wrapFetchWithFirstPartyAuth：一方 MCP 服务器请求附加 claude.ai 登录 bearer，记录最后使用的凭证类型。
  */
-function wrapFetchWithFirstPartyAuth(fetchFn, credentials, r) {
+function wrapFetchWithFirstPartyAuth(fetchFn, credentials, bearerTracker) {
   fetchFn = stripRedirectLocation(fetchFn);
-  return async (s, h) => {
-    let headers = new Headers(h?.headers);
-    let redirect = h?.redirect === "error" ? "error" : "manual";
-    if (headers.has("Authorization") || !isFirstPartyMcpUrl(s) || !isFirstPartyProvider())
-      return fetchFn(s, {
-        ...h,
+  return async (url, init) => {
+    let headers = new Headers(init?.headers);
+    let redirect = init?.redirect === "error" ? "error" : "manual";
+    if (headers.has("Authorization") || !isFirstPartyMcpUrl(url) || !isFirstPartyProvider())
+      return fetchFn(url, {
+        ...init,
         redirect,
       });
-    let w = async () => {
-      let ie = await expandFirstPartyDesignScopes(s, credentials);
-      r.last = ie?.bearer ?? "none";
-      if (!ie)
+    let sendWithAuth = async () => {
+      let designAuth = await expandFirstPartyDesignScopes(url, credentials);
+      bearerTracker.last = designAuth?.bearer ?? "none";
+      if (!designAuth)
         return {
-          response: await fetchFn(s, {
-            ...h,
+          response: await fetchFn(url, {
+            ...init,
             redirect,
           }),
           sentToken: undefined,
         };
-      let accessToken = ie.accessToken;
+      let accessToken = designAuth.accessToken;
       getPresentedCredentialLog().record(accessToken);
       let headers = {
-        ...Object.fromEntries(new Headers(h?.headers)),
+        ...Object.fromEntries(new Headers(init?.headers)),
         Authorization: `Bearer ${accessToken}`,
       };
       return {
-        response: await fetchFn(s, {
-          ...h,
+        response: await fetchFn(url, {
+          ...init,
           headers,
           redirect,
         }),
         sentToken: accessToken,
       };
     };
-    let P = async (ie) => {
-      if (ie.response.status === 403 && ie.sentToken && isDesignMcpUrl(s)) {
-        let consent = await readNeedsConsentBit(ie.response);
+    let checkConsent = async (attempt) => {
+      if (attempt.response.status === 403 && attempt.sentToken && isDesignMcpUrl(url)) {
+        let consent = await readNeedsConsentBit(attempt.response);
         if (consent !== null) throw new FirstPartyDesignNeedsConsentError(consent);
       }
     };
-    let M = await w();
-    await P(M);
-    let { response, sentToken } = M;
+    let firstAttempt = await sendWithAuth();
+    await checkConsent(firstAttempt);
+    let { response, sentToken } = firstAttempt;
     if (response.status !== 401 || !sentToken) return response;
     if (!(await handleOAuth401Error(sentToken, credentials).catch(() => false))) {
-      let ie =
+      let freshToken =
         isStorageV5Enabled() && credentials !== undefined
           ? await readFreshOAuthAccessToken(credentials)
           : getClaudeAIOAuthTokens()?.accessToken;
-      if (!ie || ie === sentToken) return response;
+      if (!freshToken || freshToken === sentToken) return response;
     }
-    let Q;
+    let retryAttempt;
     try {
-      Q = await w();
+      retryAttempt = await sendWithAuth();
     } catch {
       return response;
     }
-    await P(Q);
-    return Q.response;
+    await checkConsent(retryAttempt);
+    return retryAttempt.response;
   };
 }
 //@ chunk-8t8n4kdh.js:69493-69716 sole-consumer
 /**
  * mergeRequestHeaders：合并请求头，固定 User-Agent 与 Accept-Encoding: identity。
  */
-function mergeRequestHeaders(headers, n, r) {
+function mergeRequestHeaders(headers, baseHeaders, extraHeaders) {
   let headers_2 = new Headers({
     "User-Agent": getMCPUserAgent(),
     "Accept-Encoding": "identity",
-    ...n,
+    ...baseHeaders,
   });
-  new Headers(headers).forEach((h, y) => headers_2.set(y, h));
-  for (let [key, value] of Object.entries(r)) headers_2.set(key, value);
+  new Headers(headers).forEach((value, key) => headers_2.set(key, value));
+  for (let [key, value] of Object.entries(extraHeaders)) headers_2.set(key, value);
   headers_2.set("Accept", "text/event-stream");
   return headers_2;
 }
@@ -1913,40 +2675,46 @@ function mergeRequestHeaders(headers, n, r) {
 function normalizeImageMimeType(mimeType) {
   if (!mimeType) return false;
   let lower = firstLineOf(mimeType, ";").trim().toLowerCase();
-  return SUPPORTED_IMAGE_TYPES.has(lower === "image/jpg" ? "image/jpeg" : lower);
+  return SUPPORTED_IMAGE_TYPES_2.has(lower === "image/jpg" ? "image/jpeg" : lower);
 }
 //@ chunk-8t8n4kdh.js:69897-69936 sole-consumer
 /**
  * 工具调用超时的下限（60 秒）。
  */
-var RETRYABLE_HTTP_STATUSES = new Set([500, 502, 504]);
-var MIN_TOOL_TIMEOUT_MS = 60000;
+var RETRYABLE_HTTP_STATUSES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var MIN_TOOL_TIMEOUT_MS;
+deferInit("chunk-8t8n4kdh.js:69897", () => {
+  RETRYABLE_HTTP_STATUSES = new Set([500, 502, 504]);
+  MIN_TOOL_TIMEOUT_MS = 60000;
+});
 //@ chunk-8t8n4kdh.js:69936-70082 sole-consumer = getMcpToolTimeoutMs (1)
 /**
  * MCP 工具调用总超时：配置 timeout（≥1000ms 才算）优先，其次 env `MCP_TOOL_TIMEOUT`，再夹在下限与上限之间；都没有用默认值。（v2）
  */
-function getMcpToolTimeoutMs_2(e) {
-  let r = (e?.timeout !== undefined && e.timeout >= 1000 ? e.timeout : undefined) ?? env.MCP_TOOL_TIMEOUT;
-  return r !== undefined
-    ? Math.min(Math.max(r, MIN_TOOL_TIMEOUT_MS), MAX_TIMER_DELAY_MS)
+function getMcpToolTimeoutMs_2(config) {
+  let timeoutMs =
+    (config?.timeout !== undefined && config.timeout >= 1000 ? config.timeout : undefined) ??
+    env.MCP_TOOL_TIMEOUT;
+  return timeoutMs !== undefined
+    ? Math.min(Math.max(timeoutMs, MIN_TOOL_TIMEOUT_MS), MAX_TIMER_DELAY_MS)
     : MIN_TOOL_TIMEOUT_MS;
 }
 //@ chunk-8t8n4kdh.js:70082-70125 affinity
 /**
  * MCP 普通请求超时：取工具超时与连接超时（MCP_TIMEOUT）两者的较大值。（v2）
  */
-function getMcpRequestTimeoutMs(e) {
-  return Math.max(getMcpToolTimeoutMs_2(e), getConnectionTimeoutMs());
+function getMcpRequestTimeoutMs(config) {
+  return Math.max(getMcpToolTimeoutMs_2(config), getConnectionTimeoutMs());
 }
 //@ chunk-8t8n4kdh.js:70125-70170 fingerprint = MCP_STREAMABLE_HTTP_ACCEPT (1)
 var MCP_STREAMABLE_HTTP_ACCEPT = "application/json, text/event-stream";
 //@ chunk-8t8n4kdh.js:70170-70248 layout
 function wrapFetchNoop(fetchWithInit) {
-  return async (n, r) => {
+  return async (url, init) => {
     try {
-      return await fetchWithInit(n, r);
+      return await fetchWithInit(url, init);
     } catch (error) {
-      rethrowRedactedFetchError(error, n);
+      rethrowRedactedFetchError(error, url);
     }
   };
 }
@@ -1966,7 +2734,7 @@ function wrapFetchWithTimeout(fetchFn, config) {
     }
     let controller = new AbortController();
     let timer = setTimeout(
-      (j) => j.abort(new DOMException("The operation timed out.", "TimeoutError")),
+      (controller) => controller.abort(new DOMException("The operation timed out.", "TimeoutError")),
       requestTimeoutForBody(mcpRequestTimeoutMs, init?.body),
       controller,
     );
@@ -2014,40 +2782,40 @@ function isIncludedMcpTool_2(tool) {
   return !tool.startsWith("mcp__ide__") || ALLOWED_IDE_TOOLS.includes(tool);
 }
 //@ chunk-8t8n4kdh.js:71120-71153 layout
-function isIdeServer(e) {
-  return isIncludedMcpTool_2(e.name);
+function isIdeServer(serverRef) {
+  return isIncludedMcpTool_2(serverRef.name);
 }
 //@ chunk-8t8n4kdh.js:71153-71191 layout
 /**
  * 判断服务器地址是否命中某开关的主机列表。
  */
-function featureHostListMatches(e, n) {
-  return matchesHostList(getFeatureValue_CACHED_MAY_BE_STALE(e, []), n);
+function featureHostListMatches(gateFeature, serverRef) {
+  return matchesHostList(getFeatureValue_CACHED_MAY_BE_STALE(gateFeature, []), serverRef);
 }
 //@ chunk-8t8n4kdh.js:71191-71577 layout
 /**
  * 判断 MCP 服务器地址的主机（或 CCR 代理目标主机）是否匹配主机列表（支持 * 与子域）。
  */
-function matchesHostList(e, n) {
-  if (!Array.isArray(e) || e.length === 0) return false;
-  if (e.includes("*")) return true;
-  if (!("url" in n) || typeof n.url !== "string") return false;
+function matchesHostList(hosts, serverRef) {
+  if (!Array.isArray(hosts) || hosts.length === 0) return false;
+  if (hosts.includes("*")) return true;
+  if (!("url" in serverRef) || typeof serverRef.url !== "string") return false;
   let flattened = [
-    URL.canParse(n.url) ? new URL(n.url).hostname.toLowerCase() : undefined,
-    ccrProxyTargetHost(n.url),
-  ].flatMap((s) => (s === undefined ? [] : [s]));
-  return e.some((s) => {
-    if (typeof s !== "string" || s === "") return false;
-    let lower = s.toLowerCase();
-    return flattened.some((y) => y === lower || y.endsWith(`.${lower}`));
+    URL.canParse(serverRef.url) ? new URL(serverRef.url).hostname.toLowerCase() : undefined,
+    ccrProxyTargetHost(serverRef.url),
+  ].flatMap((host) => (host === undefined ? [] : [host]));
+  return hosts.some((listedHost) => {
+    if (typeof listedHost !== "string" || listedHost === "") return false;
+    let lower = listedHost.toLowerCase();
+    return flattened.some((host) => host === lower || host.endsWith(`.${lower}`));
   });
 }
 //@ chunk-8t8n4kdh.js:71577-71656 layout
 /**
  * 该服务器是否在 elicitation 拒绝名单里。
  */
-function isElicitationDenylisted(e) {
-  return featureHostListMatches("tengu_mcp_legacy_url_elicitation_server_denylist", e);
+function isElicitationDenylisted(serverRef) {
+  return featureHostListMatches("tengu_mcp_legacy_url_elicitation_server_denylist", serverRef);
 }
 //@ chunk-8t8n4kdh.js:71656-71723 layout
 function shouldNormalizeRootCombinators(config) {
@@ -2061,9 +2829,9 @@ function shouldDropInvalidToolSchemas(config) {
 /**
  * 测试专用：设置是否保留过期的重新认证条目（非测试调用时抛错）。
  */
-function setHoldStaleReauthEntryForTest(e) {
-  if (e) throw Error("setHoldStaleReauthEntryForTest is test-only");
-  getCliOwnedState().holdStaleReauthEntryForTest = e;
+function setHoldStaleReauthEntryForTest(enabled) {
+  if (enabled) throw Error("setHoldStaleReauthEntryForTest is test-only");
+  getCliOwnedState().holdStaleReauthEntryForTest = enabled;
 }
 //@ chunk-8t8n4kdh.js:71903-71951 layout
 /**
@@ -2076,38 +2844,45 @@ function setReauthDecisionSinkForTest(reauthDecisionSinkForTest) {
 /**
  * getMcpRoots（v2 副本）。
  */
-function getMcpRoots(e = false) {
-  let n = [];
-  if (e)
+function getMcpRoots(includeStagingRoot = false) {
+  let extraRoots = [];
+  if (includeStagingRoot)
     try {
-      n = [pluginToolStagingRoot()];
+      extraRoots = [pluginToolStagingRoot()];
     } catch (error) {
       logForDebugging(`MCP: staging root unavailable, omitted from roots/list: ${errorMessage(error)}`);
     }
-  let r = new Set();
-  let s = [];
+  let seenUris = new Set();
+  let roots = [];
   let toolsMachine = getToolsMachine();
-  let y = toolsMachine ? (toolsMachine.directory?.path ?? null) : getOriginalCwdOrNull();
-  for (let S of [...(y === null ? [] : [y]), ...getAnnouncedDirectories(), ...n]) {
-    let href = pathToFileURL(S).href;
-    if (r.has(href)) continue;
-    r.add(href);
-    s.push({
+  let workingDirectory = toolsMachine ? (toolsMachine.directory?.path ?? null) : getOriginalCwdOrNull();
+  for (let directoryPath of [
+    ...(workingDirectory === null ? [] : [workingDirectory]),
+    ...getAnnouncedDirectories(),
+    ...extraRoots,
+  ]) {
+    let href = pathToFileURL(directoryPath).href;
+    if (seenUris.has(href)) continue;
+    seenUris.add(href);
+    roots.push({
       uri: href,
     });
   }
   return {
-    roots: s,
+    roots,
   };
 }
 //@ chunk-8t8n4kdh.js:72261-72291 layout
-var ROOTLESS_PLUGIN_NAMES = new Set(["documents"]);
+var ROOTLESS_PLUGIN_NAMES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-8t8n4kdh.js:72261", () => {
+  ROOTLESS_PLUGIN_NAMES = new Set(["documents"]);
+});
 //@ chunk-8t8n4kdh.js:72291-72435 layout
-function isDocumentsPluginServer(e) {
+function isDocumentsPluginServer(serverRef) {
   if (getPlatform() === "windows") return false;
-  if (!e.pluginSource) return false;
+  if (!serverRef.pluginSource) return false;
   try {
-    return ROOTLESS_PLUGIN_NAMES.has(parsePluginIdentifier(e.pluginSource).name.toLowerCase());
+    return ROOTLESS_PLUGIN_NAMES.has(parsePluginIdentifier(serverRef.pluginSource).name.toLowerCase());
   } catch {
     return false;
   }
@@ -2123,32 +2898,36 @@ function notifyRootsListChanged() {
 /**
  * MCP SDK 错误码集合与可识别的 JSON Schema 草案地址集合。
  */
-var MCP_SDK_ERROR_CODES = new Set(Object.values(SdkErrorCode));
-var KNOWN_JSON_SCHEMA_DIALECTS = new Set([
-  "http://json-schema.org/draft-04/schema",
-  "https://json-schema.org/draft-04/schema",
-  "http://json-schema.org/draft-06/schema",
-  "https://json-schema.org/draft-06/schema",
-  "http://json-schema.org/draft-07/schema",
-  "https://json-schema.org/draft-07/schema",
-  "http://json-schema.org/draft/2019-09/schema",
-  "https://json-schema.org/draft/2019-09/schema",
-  "http://json-schema.org/schema",
-  "https://json-schema.org/schema",
-]);
+var MCP_SDK_ERROR_CODES; // deferred: uses OAuthErrorCode (../../../vendor/@modelcontextprotocol/client/dist/src-D_zzAWoS.mjs) of its import cycle while loading; runs once the cycle is complete
+var KNOWN_JSON_SCHEMA_DIALECTS;
+deferInit("chunk-8t8n4kdh.js:72572", () => {
+  MCP_SDK_ERROR_CODES = new Set(Object.values(SdkErrorCode));
+  KNOWN_JSON_SCHEMA_DIALECTS = new Set([
+    "http://json-schema.org/draft-04/schema",
+    "https://json-schema.org/draft-04/schema",
+    "http://json-schema.org/draft-06/schema",
+    "https://json-schema.org/draft-06/schema",
+    "http://json-schema.org/draft-07/schema",
+    "https://json-schema.org/draft-07/schema",
+    "http://json-schema.org/draft/2019-09/schema",
+    "https://json-schema.org/draft/2019-09/schema",
+    "http://json-schema.org/schema",
+    "https://json-schema.org/schema",
+  ]);
+});
 //@ chunk-8t8n4kdh.js:73027-73216 layout
 /**
  * JSON Schema 校验器包装：工具 schema 的 $schema 是已知草案（draft-04/06/07/2019-09）时先去掉该字段再交给内层校验器，避免因方言声明报错。
  */
 class LegacyDialectToleratingValidator {
-  inner = new Udn();
-  getValidator(e) {
-    let $schema = e.$schema;
+  inner = new AjvJsonSchemaValidator();
+  getValidator(schema) {
+    let $schema = schema.$schema;
     if ($schema !== undefined && KNOWN_JSON_SCHEMA_DIALECTS.has($schema.replace(/#$/, ""))) {
-      let { $schema, ...s } = e;
-      return this.inner.getValidator(s);
+      let { $schema, ...schemaWithoutDialect } = schema;
+      return this.inner.getValidator(schemaWithoutDialect);
     }
-    return this.inner.getValidator(e);
+    return this.inner.getValidator(schema);
   }
 }
 //@ chunk-8t8n4kdh.js:73216-73692 layout
@@ -2173,9 +2952,9 @@ var DEFAULT_STDIO_PROBE_TIMEOUT_MS = 3000;
 /**
  * 测试专用：设置 stdio 探测超时（非测试调用时抛错）。
  */
-function setStdioProbeTimeoutMsForTest(e) {
-  if (e !== undefined) throw Error("setStdioProbeTimeoutMsForTest is test-only");
-  getCliOwnedState().stdioProbeTimeoutMsForTest = e;
+function setStdioProbeTimeoutMsForTest(timeoutMs) {
+  if (timeoutMs !== undefined) throw Error("setStdioProbeTimeoutMsForTest is test-only");
+  getCliOwnedState().stdioProbeTimeoutMsForTest = timeoutMs;
 }
 //@ chunk-8t8n4kdh.js:73825-73882 layout
 function getStdioProbeTimeoutMs() {
@@ -2185,13 +2964,18 @@ function getStdioProbeTimeoutMs() {
 /**
  * 默认握手超时（5000 毫秒）。
  */
-var REMOTE_PROBE_TIMEOUT_MS = 5000;
-var DEFAULT_HANDSHAKE_TIMEOUT_MS = 5000;
-var NEGOTIABLE_TRANSPORTS = new Set(["http", "claudeai-proxy", "ccr-proxy", "stdio"]);
+var REMOTE_PROBE_TIMEOUT_MS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var DEFAULT_HANDSHAKE_TIMEOUT_MS;
+var NEGOTIABLE_TRANSPORTS;
+deferInit("chunk-8t8n4kdh.js:73882", () => {
+  REMOTE_PROBE_TIMEOUT_MS = 5000;
+  DEFAULT_HANDSHAKE_TIMEOUT_MS = 5000;
+  NEGOTIABLE_TRANSPORTS = new Set(["http", "claudeai-proxy", "ccr-proxy", "stdio"]);
+});
 //@ chunk-8t8n4kdh.js:73960-74026 layout
-function getHandshakeTimeoutMs(e = DEFAULT_HANDSHAKE_TIMEOUT_MS) {
+function getHandshakeTimeoutMs(probeReserveMs = DEFAULT_HANDSHAKE_TIMEOUT_MS) {
   let connectionTimeoutMs = getConnectionTimeoutMs();
-  return Math.max(connectionTimeoutMs - e, Math.floor(connectionTimeoutMs / 3));
+  return Math.max(connectionTimeoutMs - probeReserveMs, Math.floor(connectionTimeoutMs / 3));
 }
 //@ chunk-8t8n4kdh.js:74026-74364 layout
 /**
@@ -2219,33 +3003,37 @@ function classifyTransportKind(type, { inProcess, ccrProxy, ccrToolport }) {
   }
 }
 //@ chunk-8t8n4kdh.js:74364-74598 layout
-function rewriteInitializeCapabilities(e, serverRef, r) {
-  let s = e.send.bind(e);
-  e.send = (h, y) => {
-    if (isJSONRPCRequest(h) && h.method === "initialize" && h.params?.capabilities !== undefined) {
-      let S = clientCapabilitiesFor(serverRef, {
+function rewriteInitializeCapabilities(client, serverRef, stripTasks) {
+  let originalSend = client.send.bind(client);
+  client.send = (message, requestOptions) => {
+    if (
+      isJSONRPCRequest(message) &&
+      message.method === "initialize" &&
+      message.params?.capabilities !== undefined
+    ) {
+      let capabilities = clientCapabilitiesFor(serverRef, {
         denylisted: isElicitationDenylisted(serverRef),
       });
-      return s(
+      return originalSend(
         {
-          ...h,
+          ...message,
           params: {
-            ...h.params,
-            capabilities: r ? stripTasksCapability(S) : S,
+            ...message.params,
+            capabilities: stripTasks ? stripTasksCapability(capabilities) : capabilities,
           },
         },
-        y,
+        requestOptions,
       );
     }
-    return s(h, y);
+    return originalSend(message, requestOptions);
   };
 }
 //@ chunk-8t8n4kdh.js:74598-74666 layout
 /**
  * isNegotiationDenylisted：服务器主机在 tengu_mcp_negotiation_server_denylist 中。
  */
-function isNegotiationDenylisted(e) {
-  return featureHostListMatches("tengu_mcp_negotiation_server_denylist", e);
+function isNegotiationDenylisted(serverRef) {
+  return featureHostListMatches("tengu_mcp_negotiation_server_denylist", serverRef);
 }
 //@ chunk-8t8n4kdh.js:74666-74729 layout
 /**
@@ -2259,9 +3047,12 @@ function isListenDenylisted(serverRef) {
  * 按 tengu_tender_truffle 名单判断服务器是否命中。
  */
 function tenderTruffleMatch(serverRef) {
-  let { value: n, source } = getFeatureValueWithSource_CACHED_MAY_BE_STALE("tengu_tender_truffle", []);
+  let { value: listedValue, source } = getFeatureValueWithSource_CACHED_MAY_BE_STALE(
+    "tengu_tender_truffle",
+    [],
+  );
   return {
-    listed: matchesHostList(n, serverRef),
+    listed: matchesHostList(listedValue, serverRef),
     source,
   };
 }
@@ -2271,18 +3062,18 @@ function tenderTruffleMatch(serverRef) {
  */
 function resolveVersionNegotiation(transportKind, config, denylisted) {
   let MCP_PROTOCOL_NEGOTIATION = env.MCP_PROTOCOL_NEGOTIATION;
-  let h =
+  let requestedMode =
     MCP_PROTOCOL_NEGOTIATION === "legacy" || MCP_PROTOCOL_NEGOTIATION === "auto"
       ? MCP_PROTOCOL_NEGOTIATION
       : undefined;
-  if (MCP_PROTOCOL_NEGOTIATION !== undefined && h === undefined)
+  if (MCP_PROTOCOL_NEGOTIATION !== undefined && requestedMode === undefined)
     logForDebugging(
       `MCP_PROTOCOL_NEGOTIATION=${MCP_PROTOCOL_NEGOTIATION} is invalid; expected 'legacy' or 'auto' \u2014 ignoring`,
       {
         level: "warn",
       },
     );
-  if (h === "legacy")
+  if (requestedMode === "legacy")
     return {
       mode: "legacy",
     };
@@ -2292,7 +3083,7 @@ function resolveVersionNegotiation(transportKind, config, denylisted) {
   let probe_2 = {
     timeoutMs: Math.min(getStdioProbeTimeoutMs(), Math.floor(getConnectionTimeoutMs() / 3)),
   };
-  if (h === "auto") {
+  if (requestedMode === "auto") {
     if (!NEGOTIABLE_TRANSPORTS.has(transportKind))
       return {
         mode: "legacy",
@@ -2307,7 +3098,7 @@ function resolveVersionNegotiation(transportKind, config, denylisted) {
           probe,
         };
   }
-  let w = (() => {
+  let modeChoice = (() => {
     switch (transportKind) {
       case "http":
         return getFeatureValue_CACHED_MAY_BE_STALE("tengu_mcp_protocol_negotiation_http", true) === false
@@ -2356,51 +3147,59 @@ function resolveVersionNegotiation(transportKind, config, denylisted) {
         };
     }
   })();
-  if (w.mode === "auto" && config !== undefined && (denylisted ?? isNegotiationDenylisted(config))) {
-    let P = "a url-less server (the '*' entry)";
+  if (modeChoice.mode === "auto" && config !== undefined && (denylisted ?? isNegotiationDenylisted(config))) {
+    let denylistedLabel = "a url-less server (the '*' entry)";
     if ("url" in config && typeof config.url === "string") {
       try {
-        P = new URL(config.url).hostname;
+        denylistedLabel = new URL(config.url).hostname;
       } catch {
-        P = "a server with an unparseable url";
+        denylistedLabel = "a server with an unparseable url";
       }
-      let M = ccrProxyTargetHost(config.url);
-      if (M !== undefined) P = `the proxy host ${P} or the mcp_url host ${M}`;
+      let proxyTargetHost = ccrProxyTargetHost(config.url);
+      if (proxyTargetHost !== undefined)
+        denylistedLabel = `the proxy host ${denylistedLabel} or the mcp_url host ${proxyTargetHost}`;
     }
-    logForDebugging(`MCP era negotiation denylist matched ${P}; the legacy handshake applies`);
+    logForDebugging(`MCP era negotiation denylist matched ${denylistedLabel}; the legacy handshake applies`);
     return {
       mode: "legacy",
     };
   }
-  return w;
+  return modeChoice;
 }
 //@ chunk-8t8n4kdh.js:76257-76655 layout
 /**
  * Java MCP SDK 拒绝 elicitation 能力的错误识别：错误正则、错误体 schema、读取上限与给用户的修复提示。
  */
-var JAVA_ELICITATION_REJECT_REGEX =
-  /Unrecognized field \\?"(?:form|url)\\?" \(class [\w.$]*ClientCapabilities\$Elicitation\)/;
-var javaErrorBodySchema = DoctorLazy(() =>
-  u({
-    message: literal("Invalid message format"),
-    stackTrace: array(
-      u({
-        className: string(),
-      }),
-    ),
-  }),
-);
-var MAX_JAVA_ERROR_BODY = 262144;
-var JAVA_SDK_ELICITATION_HINT = `This server (Java MCP SDK 0.17.0 or older) rejected Claude Code's elicitation capability. Set "bareElicitationCapability": true for it, or upgrade to Java MCP SDK 0.17.1+ (Spring AI 1.0.7+ or 1.1.6+).`;
+var JAVA_ELICITATION_REJECT_REGEX; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var javaErrorBodySchema;
+var MAX_JAVA_ERROR_BODY;
+var JAVA_SDK_ELICITATION_HINT;
+deferInit("chunk-8t8n4kdh.js:76257", () => {
+  JAVA_ELICITATION_REJECT_REGEX =
+    /Unrecognized field \\?"(?:form|url)\\?" \(class [\w.$]*ClientCapabilities\$Elicitation\)/;
+  javaErrorBodySchema = DoctorLazy(() =>
+    objectSchema({
+      message: literal("Invalid message format"),
+      stackTrace: array(
+        objectSchema({
+          className: stringSchema(),
+        }),
+      ),
+    }),
+  );
+  MAX_JAVA_ERROR_BODY = 262144;
+  JAVA_SDK_ELICITATION_HINT = `This server (Java MCP SDK 0.17.0 or older) rejected Claude Code's elicitation capability. Set "bareElicitationCapability": true for it, or upgrade to Java MCP SDK 0.17.1+ (Spring AI 1.0.7+ or 1.1.6+).`;
+});
 //@ chunk-8t8n4kdh.js:76655-76895 layout
-function isJavaSdkElicitationRejection(error, serverRef, r) {
-  let s = r instanceof StreamableHTTPClientTransport_2 && r.protocolVersion !== undefined;
+function isJavaSdkElicitationRejection(error, serverRef, transport) {
+  let usesModernProtocol =
+    transport instanceof StreamableHTTPClientTransport_2 && transport.protocolVersion !== undefined;
   return (
     (((error instanceof ProtocolError || error instanceof SdkHttpError) &&
       JAVA_ELICITATION_REJECT_REGEX.test(error.message)) ||
       (error instanceof SdkHttpError &&
         error.status === 400 &&
-        !s &&
+        !usesModernProtocol &&
         isJavaSdkStackTraceBody(error.data.text))) &&
     clientCapabilitiesFor(serverRef, {
       denylisted: isElicitationDenylisted(serverRef),
@@ -2410,10 +3209,12 @@ function isJavaSdkElicitationRejection(error, serverRef, r) {
 //@ chunk-8t8n4kdh.js:76895-77101 layout
 function isJavaSdkStackTraceBody(text) {
   if (typeof text !== "string" || text.length > MAX_JAVA_ERROR_BODY) return false;
-  let n = javaErrorBodySchema().safeParse(safeParseJSON(text, false));
+  let parseResult = javaErrorBodySchema().safeParse(safeParseJSON(text, false));
   return (
-    n.success &&
-    n.data.stackTrace.some((r) => r.className.startsWith("io.modelcontextprotocol.server.transport."))
+    parseResult.success &&
+    parseResult.data.stackTrace.some((stackFrame) =>
+      stackFrame.className.startsWith("io.modelcontextprotocol.server.transport."),
+    )
   );
 }
 //@ chunk-8t8n4kdh.js:77101-77281 layout
@@ -2428,14 +3229,14 @@ function isNonJsonRpcClientError(error) {
 //@ chunk-8t8n4kdh.js:77281-77469 layout
 function isJsonRpcErrorBody(text) {
   let found = text.split(/\r?\n/).find((line) => line.startsWith("data:"));
-  let r = safeParseJSON(found === undefined ? text : found.slice(5), false);
+  let payload = safeParseJSON(found === undefined ? text : found.slice(5), false);
   return isJSONRPCErrorResponse(
-    typeof r === "object" && r !== null && "id" in r && r.id === null
+    typeof payload === "object" && payload !== null && "id" in payload && payload.id === null
       ? {
-          ...r,
+          ...payload,
           id: undefined,
         }
-      : r,
+      : payload,
   );
 }
 //@ chunk-8t8n4kdh.js:77469-77794 layout
@@ -2502,7 +3303,7 @@ function isSessionHandshakeMethod(agents) {
 /**
  * MCP JSON-RPC 错误码分类（rpc_era / rpc_session）。
  */
-function classifyMcpRpcErrorCode(code, n) {
+function classifyMcpRpcErrorCode(code, method) {
   if (
     code === ProtocolErrorCode.UnsupportedProtocolVersion ||
     code === ProtocolErrorCode.MissingRequiredClientCapability
@@ -2510,7 +3311,7 @@ function classifyMcpRpcErrorCode(code, n) {
     return "rpc_era";
   if (
     code === ProtocolErrorCode.InvalidRequest ||
-    (code === ProtocolErrorCode.MethodNotFound && isSessionHandshakeMethod(n))
+    (code === ProtocolErrorCode.MethodNotFound && isSessionHandshakeMethod(method))
   )
     return "rpc_session";
   return;
@@ -2519,12 +3320,12 @@ function classifyMcpRpcErrorCode(code, n) {
 /**
  * MCP 连接错误分类（ProtocolError / SdkHttpError）。
  */
-function classifyMcpConnectError(error, n) {
-  if (error instanceof ProtocolError) return classifyMcpRpcErrorCode(error.code, n);
+function classifyMcpConnectError(error, method) {
+  if (error instanceof ProtocolError) return classifyMcpRpcErrorCode(error.code, method);
   if (error instanceof SdkHttpError) {
     if (
       error.status === 400 ||
-      ((error.status === 404 || error.status === 405) && isSessionHandshakeMethod(n))
+      ((error.status === 404 || error.status === 405) && isSessionHandshakeMethod(method))
     )
       return "http_4xx";
   }
@@ -2547,101 +3348,106 @@ function isUnsupportedVersionHttp400(error) {
 /**
  * makeConnectTimeoutError（v2 副本）。
  */
-function makeConnectTimeoutError_2(e) {
-  let n = new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(e, "MCP connection timeout");
+function makeConnectTimeoutError_2(message) {
+  let error = new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
+    message,
+    "MCP connection timeout",
+  );
   if (getFeatureValue_CACHED_MAY_BE_STALE("tengu_mcp_connect_timeout_retry", true))
-    return Object.assign(n, {
+    return Object.assign(error, {
       code: "CONNECT_TIMEOUT",
     });
-  return n;
+  return error;
 }
 //@ chunk-8t8n4kdh.js:78931-79035 sole-consumer = getServerCommandArray (0.781)
 /**
  * 插件来源的 stdio 服务器连接失败时，按服务器签名在认证/失败缓存文件里写一条带时间戳的记录（经 authCacheWriteChain 串行化写入），下次可跳过。
  */
-function recordPluginStdioServerFailure(serverName, n, storageV5) {
-  if ((n.type === "stdio" || n.type === undefined) && n.pluginSource !== undefined)
-    setMcpAuthCacheEntry(serverName, configHash(n), undefined, storageV5);
+function recordPluginStdioServerFailure(serverName, config, storageV5) {
+  if ((config.type === "stdio" || config.type === undefined) && config.pluginSource !== undefined)
+    setMcpAuthCacheEntry(serverName, configHash(config), undefined, storageV5);
 }
 //@ chunk-8t8n4kdh.js:79035-79874 sole-consumer
 /**
  * 包装传输 send：initialize 请求发出后立刻预发 tools/list（超时取 2×连接超时与上限的较小者），减少一次往返；出错时撤销包装，结果记入连接统计 sentAhead。
  */
-async function pipelineEarlyToolsList(client, n, connectionTimeoutMs, s, h) {
-  let send = n.send;
-  let S;
-  let page;
-  let P;
-  function M() {
+async function pipelineEarlyToolsList(client, transport, connectionTimeoutMs, aheadState, windowed) {
+  let send = transport.send;
+  let initializePromise;
+  let toolsListPromise;
+  let pageController;
+  function startAheadPage() {
     let startTime = performance.now();
-    P = new AbortController();
-    page = client.request(
+    pageController = new AbortController();
+    toolsListPromise = client.request(
       {
         method: "tools/list",
       },
       ListToolsResultSchema,
       {
         timeout: Math.min(2 * getConnectionTimeoutMs(), MAX_TIMER_DELAY_MS),
-        signal: P.signal,
+        signal: pageController.signal,
       },
     );
-    page.catch(() => {});
-    s.sentAhead = true;
-    setAheadPage(s, page, startTime);
+    toolsListPromise.catch(() => {});
+    aheadState.sentAhead = true;
+    setAheadPage(aheadState, toolsListPromise, startTime);
   }
-  let j = (Q, ie) => {
-    if (h && lYn(Q)) {
-      let ge = send.call(n, Q, ie);
-      M();
-      return ge;
+  let sendWrapper = (message, requestOptions) => {
+    if (windowed && isInitializeMessage(message)) {
+      let sentPromise = send.call(transport, message, requestOptions);
+      startAheadPage();
+      return sentPromise;
     }
-    if (S !== undefined || !qNr(Q)) return send.call(n, Q, ie);
-    if (n.send === j) n.send = send;
-    S = send.call(n, Q, ie);
-    S.catch(() => {});
+    if (initializePromise !== undefined || !isInitializedNotification(message))
+      return send.call(transport, message, requestOptions);
+    if (transport.send === sendWrapper) transport.send = send;
+    initializePromise = send.call(transport, message, requestOptions);
+    initializePromise.catch(() => {});
     return Promise.resolve();
   };
-  n.send = j;
+  transport.send = sendWrapper;
   let onerror = client.onerror;
-  client.onerror = (Q) => {
-    takeAheadPage(s);
-    onerror?.(Q);
+  client.onerror = (error) => {
+    takeAheadPage(aheadState);
+    onerror?.(error);
   };
-  function ce() {
-    takeAheadPage(s);
+  function apptAbort() {
+    takeAheadPage(aheadState);
     client.close().catch(() => {});
   }
   try {
-    await client.connect(n, {
+    await client.connect(transport, {
       timeout: connectionTimeoutMs,
     });
-    if (S === undefined) return;
-    if (h) {
-      let timer = setTimeout(ce, connectionTimeoutMs);
+    if (initializePromise === undefined) return;
+    if (windowed) {
+      let timer = setTimeout(apptAbort, connectionTimeoutMs);
       timer.unref?.();
-      S.catch(ce).finally(() => clearTimeout(timer));
+      initializePromise.catch(apptAbort).finally(() => clearTimeout(timer));
     } else {
-      if (client.getServerCapabilities()?.tools !== undefined) M();
+      if (client.getServerCapabilities()?.tools !== undefined) startAheadPage();
       try {
-        await S;
+        await initializePromise;
       } catch (error) {
-        ce();
+        apptAbort();
         throw error;
       }
     }
   } finally {
     client.onerror = onerror;
-    if (n.send === j) n.send = send;
+    if (transport.send === sendWrapper) transport.send = send;
   }
-  if (page !== undefined && P !== undefined) armRequestTimeout(page, P);
-  armAheadExpiry(s);
+  if (toolsListPromise !== undefined && pageController !== undefined)
+    armRequestTimeout(toolsListPromise, pageController);
+  armAheadExpiry(aheadState);
 }
 //@ chunk-8t8n4kdh.js:79874-79910 sole-consumer
 /**
  * 2×连接超时不超过该服务器的有效工具超时时才允许预发 tools/list。
  */
-function hasBudgetForEarlyToolsList(serverRef) {
-  return 2 * getConnectionTimeoutMs() <= getMcpRequestTimeoutMs(serverRef);
+function hasBudgetForEarlyToolsList(config) {
+  return 2 * getConnectionTimeoutMs() <= getMcpRequestTimeoutMs(config);
 }
 //@ chunk-8t8n4kdh.js:80092-80104 sole-consumer
 /**
@@ -2652,2176 +3458,2343 @@ var INITIALIZED_EVENT_DELAY_MS = 2000;
 /**
  * 在 initialized 通知应答后的固定延迟时记录消息流结果事件。
  */
-function scheduleMessageStreamOutcomeLog(client, name, r, s) {
-  let h =
-    r.initializedNotificationAnsweredAtMs ??
-    (r.pendingMethod === "notifications/initialized" ? performance.now() : undefined);
-  if (h === undefined) return;
+function scheduleMessageStreamOutcomeLog(client, name, traceState, events) {
+  let answeredAtMs =
+    traceState.initializedNotificationAnsweredAtMs ??
+    (traceState.pendingMethod === "notifications/initialized" ? performance.now() : undefined);
+  if (answeredAtMs === undefined) return;
   setTimeout(
-    (S, w, P, M) =>
+    (clientArg, serverNameArg, traceStateArg, eventsArg) =>
       logEvent("tengu_mcp_message_stream_outcome", {
-        ...M,
-        messageStreamGetOutcome: hasNoTransport(S)
+        ...eventsArg,
+        messageStreamGetOutcome: hasNoTransport(clientArg)
           ? lit("client_closed")
-          : fromEnum(P.messageStreamGetOutcome),
-        mcpServerKeyHash: toolNameForTelemetry(w),
+          : fromEnum(traceStateArg.messageStreamGetOutcome),
+        mcpServerKeyHash: toolNameForTelemetry(serverNameArg),
       }),
-    Math.max(0, h + INITIALIZED_EVENT_DELAY_MS - performance.now()),
+    Math.max(0, answeredAtMs + INITIALIZED_EVENT_DELAY_MS - performance.now()),
     client,
     name,
-    r,
-    s,
+    traceState,
+    events,
   ).unref?.();
 }
 //@ chunk-8t8n4kdh.js:80486-119566 sole-consumer
 /**
  * connectToServer（v2）：按 name+config 记忆化的连接入口。建传输（sse/sse-ide/ws-ide/ws/http/claudeai-proxy/进程内 Chrome/stdio），组装 fetch 包装（超时、OAuth、头、一方登录、CCR 认证、discover -32601 侦测、握手计时）；按 resolveVersionNegotiation 决定 auto（先 server/discover 再按结果 modern 或 legacy initialize）或 legacy；处理 listing 先验、记住的 legacy 判定、stateless 代理本地应答、探测超时/拒绝后的重启与回退、HTTP→SSE 回退；成功后注册 roots/list、elicitation、onclose/onerror 清理与 list_changed 订阅，失败分类为 failed/needs-auth。
  */
-var connectToServer = memoizeWithExternalCache(
-  async (name, serverRef, serverStats, storageV5, credentials, dialOptions, connectOptions) => {
-    primeEnsureConnected();
-    let now = Date.now();
-    let clockSnapshot = startClockSnapshot(connectOptions?.clock ?? systemClock);
-    let M;
-    let roundEpoch = identityEpoch();
-    let announcedDirectories = getAnnouncedDirectories();
-    let transport = serverRef.type ?? "stdio";
-    logForDiagnosticsNoPII("info", "mcp_connect_starting", {
-      transport,
-    });
-    if (isUnconfiguredUrl(serverRef)) {
-      let configError = serverRef.configError ?? "No URL configured for this server";
-      logMCPDebug(name, configError);
-      logForDiagnosticsNoPII("info", "mcp_connect_skipped", {
+var connectToServer; // deferred: uses memoizeWithExternalCache (./needsAuthCache.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-8t8n4kdh.js:80486", () => {
+  connectToServer = memoizeWithExternalCache(
+    async (name, serverRef, serverStats, storageV5, credentials, dialOptions, connectOptions) => {
+      primeEnsureConnected();
+      let now = Date.now();
+      let clockSnapshot = startClockSnapshot(connectOptions?.clock ?? systemClock);
+      let activeClockSnapshot;
+      let roundEpoch = identityEpoch();
+      let announcedDirectories = getAnnouncedDirectories();
+      let transport = serverRef.type ?? "stdio";
+      logForDiagnosticsNoPII("info", "mcp_connect_starting", {
         transport,
-        reason: "unconfigured",
       });
-      return {
-        name,
-        type: "failed",
-        config: serverRef,
-        error: configError,
-        errorCode: "UNCONFIGURED",
-      };
-    }
-    {
-      let configError = serverRef.configError;
-      if (!configError && "url" in serverRef)
-        try {
-          new URL(serverRef.url);
-        } catch {
-          configError = "'url' is not a valid URL. Update the server's config and reconnect.";
-        }
-      if (configError) {
-        logEvent("tengu_mcp_server_config_invalid", {
-          transportType: fromEnum(serverRef.type ?? "stdio"),
-          field: lit("url"),
-          source: lit(serverRef.configError ? "loader" : "connect"),
-        });
+      if (isUnconfiguredUrl(serverRef)) {
+        let configError = serverRef.configError ?? "No URL configured for this server";
         logMCPDebug(name, configError);
-        logMCPError(name, configError);
-        logForDiagnosticsNoPII("warn", "mcp_connect_failed", {
+        logForDiagnosticsNoPII("info", "mcp_connect_skipped", {
           transport,
-          duration_ms: Date.now() - now,
-          reason: "invalid_config",
+          reason: "unconfigured",
         });
-        logFeatureBad("mcp_connect", "mcp_connect_invalid_config");
         return {
           name,
           type: "failed",
           config: serverRef,
           error: configError,
-          errorCode: "INVALID_CONFIG",
+          errorCode: "UNCONFIGURED",
         };
       }
-    }
-    let inProcessServer;
-    let authProvider;
-    let ge = false;
-    let Ie = false;
-    let transport_2;
-    let processUptimeAtConnectStartMs = isDiskless() ? undefined : Math.round(process.uptime() * 1000);
-    let handshakeTrace;
-    let nt;
-    let ee;
-    let he;
-    let Ae;
-    let yt = false;
-    let q;
-    let discoverPrior;
-    let discoverSource;
-    let Ee;
-    let Tt = (Te) => {
-      discoverSource = Te;
-      Ee = fromEnumOpt(Te);
-    };
-    let Qe = false;
-    let usedRememberedLegacy = false;
-    let discoverMethodNotFound = false;
-    let wt = () =>
-      usedRememberedLegacy ? "the remembered legacy verdict" : "the /v1/mcp_servers discover projection";
-    let Se = false;
-    let negotiation;
-    let At = false;
-    let ft;
-    let Ot = isListenDenylisted(serverRef);
-    let vt = isNegotiationDenylisted(serverRef);
-    let me = () => {
-      if (negotiation?.mode !== "auto" || q !== undefined) return;
-      let _anthropicProbeLegacyEvidence = transport_2?._anthropicProbeLegacyEvidence;
-      if (_anthropicProbeLegacyEvidence === "id-mismatch") q = lit("probe_id_mismatch");
-      else if (_anthropicProbeLegacyEvidence === "malformed") q = lit("probe_malformed");
-      else if (_anthropicProbeLegacyEvidence === "stream-end") q = lit("probe_stream_end");
-      if (q !== undefined)
-        logMCPDebug(
-          name,
-          `era probe classified the server legacy in-SDK (${String(_anthropicProbeLegacyEvidence)}); the 2025 handshake was used for this connect attempt`,
-        );
-    };
-    try {
-      let Bt = function () {
-        let armedAt = Date.now();
-        for (let activeCallWatchdog of We.activeCallWatchdogs)
-          if (activeCallWatchdog.armedAt === 0) activeCallWatchdog.armedAt = armedAt;
-      };
-      let Te = isCcrInjectedMcpUrl(name, serverRef);
-      let Ve = hasCliOwnedBearer(serverRef);
-      let De =
-        (serverRef.type === "sse" || serverRef.type === "http") && configHasAuthorizationHeader(serverRef);
-      let Le =
-        serverRef.type === "sse" || serverRef.type === "http" || serverRef.type === "ws"
-          ? await getMcpServerHeaders(name, serverRef)
-          : {};
-      let re =
-        (serverRef.type === "sse" || serverRef.type === "http") &&
-        !!serverRef.headersHelper &&
-        hasAuthorizationHeader(Le);
-      let ue =
-        (serverRef.type === "sse" || serverRef.type === "http") &&
-        !De &&
-        !re &&
-        !Ve &&
-        !Te &&
-        isFirstPartyMcpUrl(serverRef.url) &&
-        isFirstPartyProvider() &&
-        (!!(
-          isStorageV5Enabled() && credentials !== undefined
-            ? await getClaudeAIOAuthTokensAsync(credentials)
-            : getClaudeAIOAuthTokens()
-        )?.accessToken ||
-          (isDesignMcpUrl(serverRef.url) && (await checkConsent(credentials))));
-      if (ue)
-        logEvent("tengu_mcp_first_party_auto_auth", {
-          transportType: fromEnum(serverRef.type),
-          ...mcpBaseUrlAnalytics_2(serverRef, name),
-        });
-      let ot = {};
-      if (serverRef.type === "sse") {
-        recordPresentedHeaderSecrets(serverRef.headers, Le);
-        let authProvider_2 = De || re || ue || Ve ? undefined : new ClaudeAuthProvider_2(name, serverRef);
-        authProvider = authProvider_2;
-        let U = await mcpProxyFetchOptions(serverRef.url);
-        let fetchFn = createBoundedFetch(wrapFetchNoop(createFetchWithInit(undefined, U)));
-        if (authProvider_2) fetchFn = wrapFetchWithStepUpDetection_2(fetchFn, authProvider_2);
-        fetchFn = wrapFetchWithTimeout(fetchFn, serverRef);
-        if (ue) fetchFn = wrapFetchWithFirstPartyAuth(fetchFn, credentials, ot);
-        let fe = {
-          authProvider: authProvider_2,
-          skipIssuerMetadataValidation: true,
-          fetch: fetchFn,
-          requestInit: {
-            ...U,
-            headers: {
-              "User-Agent": getMCPUserAgent(),
-              "Accept-Encoding": "identity",
-              ...Le,
-            },
-          },
-        };
-        let fetchFn_2 = wrapFetchNoop(async (Je, le) => {
-          let dt = {};
-          let Et = await authProvider_2?.tokens();
-          if (Et) dt.Authorization = `Bearer ${Et.access_token}`;
-          let It = await mcpProxyFetchOptions(String(Je));
-          return fetch(Je, {
-            ...le,
-            ...It,
-            headers: mergeRequestHeaders(le?.headers, dt, Le),
+      {
+        let configError = serverRef.configError;
+        if (!configError && "url" in serverRef)
+          try {
+            new URL(serverRef.url);
+          } catch {
+            configError = "'url' is not a valid URL. Update the server's config and reconnect.";
+          }
+        if (configError) {
+          logEvent("tengu_mcp_server_config_invalid", {
+            transportType: fromEnum(serverRef.type ?? "stdio"),
+            field: lit("url"),
+            source: lit(serverRef.configError ? "loader" : "connect"),
           });
-        });
-        fe.eventSourceInit = {
-          fetch: createBoundedFetch(
-            authProvider_2
-              ? wrapFetchWithStepUpDetection_2(fetchFn_2, authProvider_2)
-              : ue
-                ? wrapFetchWithFirstPartyAuth(fetchFn_2, credentials, ot)
-                : fetchFn_2,
-          ),
-        };
-        Ae = () => new SSEClientTransport_2(new URL(serverRef.url), fe);
-        transport_2 = Ae();
-        logMCPDebug(name, "SSE transport initialized, awaiting connection");
-      } else if (serverRef.type === "sse-ide") {
-        logMCPDebug(name, `Setting up SSE-IDE transport to ${redactUrlSecrets(serverRef.url)}`);
-        let x = {
-          fetch: createBoundedFetch(globalThis.fetch),
-          requestInit: {
-            headers: {
-              "User-Agent": getMCPUserAgent(),
-              "Accept-Encoding": "identity",
-            },
-          },
-        };
-        transport_2 = new SSEClientTransport_2(new URL(serverRef.url), x);
-      } else if (serverRef.type === "ws-ide") {
-        let webSocketTLSOptions = getWebSocketTLSOptions(serverRef.url);
-        getPresentedCredentialLog().record(serverRef.authToken);
-        let headers = {
-          "User-Agent": getMCPUserAgent(),
-          ...(serverRef.authToken && {
-            "X-Claude-Code-Ide-Authorization": serverRef.authToken,
-          }),
-        };
-        let Z = new globalThis.WebSocket(serverRef.url, {
-          protocols: ["mcp"],
-          headers,
-          proxy: getWebSocketProxyUrl(serverRef.url),
-          tls: webSocketTLSOptions || undefined,
-        });
-        transport_2 = new WebSocketTransport(Z, (fe) => fZe.parse(fe));
-      } else if (serverRef.type === "ws") {
-        recordPresentedHeaderSecrets(serverRef.headers, Le);
-        logMCPDebug(name, `Initializing WebSocket transport to ${redactUrlSecrets(serverRef.url)}`);
-        let webSocketTLSOptions = getWebSocketTLSOptions(serverRef.url);
-        let U = Te ? getSessionIngressAuthToken() : null;
-        getPresentedCredentialLog().record(U ?? undefined);
-        let Z = {
-          "User-Agent": getMCPUserAgent(),
-          ...(U && {
-            Authorization: `Bearer ${U}`,
-          }),
-          ...Le,
-        };
-        let headers = redactHeaders(Z);
-        logMCPDebug(
-          name,
-          `WebSocket transport options: ${jsonStringify({
-            url: redactUrlSecrets(serverRef.url),
-            headers,
-            hasSessionAuth: !!U,
-          })}`,
-        );
-        let ve = new globalThis.WebSocket(serverRef.url, {
-          protocols: ["mcp"],
-          headers: Z,
-          proxy: getWebSocketProxyUrl(serverRef.url),
-          tls: webSocketTLSOptions || undefined,
-        });
-        transport_2 = new WebSocketTransport(ve, (Ne) => fZe.parse(Ne));
-      } else if (serverRef.type === "http") {
-        recordPresentedHeaderSecrets(serverRef.headers, Le);
-        if (keepsMCPDebug()) {
-          logMCPDebug(name, `Initializing HTTP transport to ${redactUrlSecrets(serverRef.url)}`);
-          logMCPDebug(name, `Node version: ${process.version}, Platform: linux`);
-          logMCPDebug(
-            name,
-            `Environment: ${jsonStringify({
-              NODE_OPTIONS: env.NODE_OPTIONS || "not set",
-              UV_THREADPOOL_SIZE: env.UV_THREADPOOL_SIZE || "default",
-              HTTP_PROXY: redactUrlsInText(env.HTTP_PROXY || "not set"),
-              HTTPS_PROXY: redactUrlsInText(env.HTTPS_PROXY || "not set"),
-              NO_PROXY: env.NO_PROXY || "not set",
-            })}`,
-          );
-        }
-        let authProvider_2 =
-          De || re || ue || Ve || Te ? undefined : new ClaudeAuthProvider_2(name, serverRef);
-        authProvider = authProvider_2;
-        let U = await mcpProxyFetchOptions(serverRef.url);
-        let fetchFn = createBoundedFetch(
-          wrapFetchNoop(createFetchWithInit(Te ? hostedWorkerFetch : undefined, U)),
-          {
-            refusesCodings: issuerKey_3(serverRef.url),
-          },
-        );
-        if (authProvider_2) fetchFn = wrapFetchWithStepUpDetection_2(fetchFn, authProvider_2);
-        fetchFn = wrapFetchWithTimeout(fetchFn, serverRef);
-        if (ue) fetchFn = wrapFetchWithFirstPartyAuth(fetchFn, credentials, ot);
-        if (Te)
-          fetchFn = wrapFetchSkipListenGet(
-            wrapFetchWithCcrSessionAuth(fetchFn, dialOptions, serverCacheKey(name, serverRef)),
-            name,
-            serverRef.url,
-          );
-        fetchFn = restrictRemoteRepoCalls(fetchFn, serverRef);
-        if (issuerKey_3(serverRef.url)) {
-          let Ne = fetchFn;
-          fetchFn = (Je, le) => {
-            let dt = le?.method === "POST" ? getRequestTimingStore()?.mark("own") : undefined;
-            return Ne(Je, le).finally(dt);
-          };
-        }
-        if (Ve) fetchFn = wrapFetchWithCliOwnedBearer(fetchFn, serverRef);
-        if (getDiscoverVerdictKey(serverRef) !== undefined)
-          fetchFn = wrapFetchDetectDiscoverMethodNotFound(fetchFn, () => {
-            discoverMethodNotFound = true;
+          logMCPDebug(name, configError);
+          logMCPError(name, configError);
+          logForDiagnosticsNoPII("warn", "mcp_connect_failed", {
+            transport,
+            duration_ms: Date.now() - now,
+            reason: "invalid_config",
           });
-        let handshakeTrace_2 = createHandshakeTrace({
-          mcpUrl: serverRef.url,
-          keepAliveDisabled: U.keepalive === false,
-          getAnsweredLocally: false,
-          statelessGated: false,
-        });
-        handshakeTrace = handshakeTrace_2;
-        fetchFn = wrapFetchWithHandshakeTrace(fetchFn, handshakeTrace_2);
-        let ve = {
-          authProvider: authProvider_2,
-          skipIssuerMetadataValidation: true,
-          fetch: fetchFn,
-          requestInit: {
-            ...U,
-            headers: {
-              "User-Agent": getMCPUserAgent(),
-              "Accept-Encoding": "identity",
-              ...Le,
-            },
-          },
-        };
-        if (keepsMCPDebug()) {
-          let headers = ve.requestInit?.headers ? redactHeaders(ve.requestInit.headers) : undefined;
-          logMCPDebug(
-            name,
-            `HTTP transport options: ${jsonStringify({
-              url: redactUrlSecrets(serverRef.url),
-              headers,
-              hasAuthProvider: !!authProvider_2,
-              timeoutMs: getMcpRequestTimeoutMs(serverRef),
-            })}`,
-          );
-        }
-        he = () => {
-          resetHandshakeTrace(handshakeTrace_2);
-          return new StreamableHTTPClientTransport_2(new URL(serverRef.url), ve);
-        };
-        transport_2 = he();
-        logMCPDebug(name, "HTTP transport created successfully");
-        if (!isCcrHostedConfig(serverRef) && !isFirstPartyMcpUrl(serverRef.url) && !Ve)
-          nt = ({ postMethodNotAllowed, dialSignal, dialConnected }) => {
-            let dt = (Gt) =>
-              dialConnected()
-                ? Gt
-                : {
-                    ...Gt,
-                    signal: Gt?.signal ? AbortSignal.any([Gt.signal, dialSignal]) : dialSignal,
-                  };
-            let Et = false;
-            let It = async (Gt, tn) => {
-              let An = await fetchFn(Gt, dt(tn));
-              if (!postMethodNotAllowed && !Et) {
-                if (An.status === 401) {
-                  await An.body?.cancel().catch(() => {});
-                  throw Error(
-                    "legacy HTTP+SSE stream GET answered 401 after the initialize POST was not a 405; not starting OAuth against this URL",
-                  );
-                }
-                Et = An.ok;
-              }
-              return An;
-            };
-            let Zt = (Gt, tn) =>
-              tn?.body instanceof URLSearchParams && tn.body.has("grant_type")
-                ? fetchFn(Gt, tn)
-                : fetchFn(Gt, dt(tn));
-            return new SSEClientTransport_2(new URL(serverRef.url), {
-              authProvider: authProvider_2,
-              skipIssuerMetadataValidation: true,
-              fetch: Zt,
-              eventSourceInit: {
-                fetch: It,
-              },
-              requestInit: ve.requestInit,
-            });
-          };
-      } else if (serverRef.type === "sdk") throw Error("SDK servers should be handled in print.ts");
-      else if (serverRef.type === "claudeai-proxy") {
-        if (!isFirstPartyProvider())
-          throw Error("claude.ai MCP proxy is not available on third-party providers");
-        logMCPDebug(name, `Initializing claude.ai proxy transport for server ${serverRef.id}`);
-        if (
-          !(isStorageV5Enabled() && credentials !== undefined
-            ? await getClaudeAIOAuthTokensAsync(credentials)
-            : getClaudeAIOAuthTokens())
-        )
-          throw Error("No claude.ai OAuth token found");
-        let oauthConfig = getOauthConfig();
-        let Z = `${oauthConfig.MCP_PROXY_URL}${oauthConfig.MCP_PROXY_PATH.replace("{server_id}", serverRef.id)}`;
-        logMCPDebug(name, `Using claude.ai proxy at ${Z}`);
-        let proxyFetchOptions = getProxyFetchOptions({
-          url: Z,
-        });
-        let claudeAiProxyFetch = createClaudeAiProxyFetch(
-          createBoundedFetch(createFetchWithInit(undefined, proxyFetchOptions)),
-          credentials,
-        );
-        let Ne = isSereneTeapotEnabled();
-        let Je = Ne || isStatelessClaudeAiProxy(serverRef);
-        if (Je)
-          logMCPDebug(
-            name,
-            Ne
-              ? "GET notification stream disabled for claude.ai connectors; a GET the SDK sends to the proxy URL is answered locally with 405"
-              : "GET notification stream disabled (stateless connector); if the SDK requests it, it gets a local 405",
-          );
-        let handshakeTrace_2 = createHandshakeTrace({
-          mcpUrl: Z,
-          keepAliveDisabled: proxyFetchOptions.keepalive === false,
-          getAnsweredLocally: Je,
-          statelessGated: isStatelessClaudeAiProxy(serverRef),
-        });
-        handshakeTrace = handshakeTrace_2;
-        let Et = {
-          fetch: wrapFetchWithHandshakeTrace(
-            wrapFetchDetectDiscoverMethodNotFound(
-              Je
-                ? answerGetStreamLocally(wrapFetchWithTimeout(claudeAiProxyFetch, serverRef), Z)
-                : wrapFetchWithTimeout(claudeAiProxyFetch, serverRef),
-              () => {
-                discoverMethodNotFound = true;
-              },
-            ),
-            handshakeTrace_2,
-          ),
-          requestInit: {
-            ...proxyFetchOptions,
-            headers: {
-              "User-Agent": getMCPUserAgent(),
-              "Accept-Encoding": "identity",
-              "X-Mcp-Client-Session-Id": getSessionId(),
-            },
-          },
-        };
-        he = () => {
-          resetHandshakeTrace(handshakeTrace_2);
-          return new StreamableHTTPClientTransport_2(new URL(Z), Et);
-        };
-        transport_2 = he();
-        logMCPDebug(name, "claude.ai proxy transport created successfully");
-      } else if (isStdioConfig(serverRef) && isClaudeInChromeMCPServer(name)) {
-        let { isClaudeInChromeAllowed } = await import("./chunk-2jvt0tn4.js");
-        if (!isClaudeInChromeAllowed()) {
-          logMCPDebug(name, "Skipping connection (Claude in Chrome is blocked by org policy)");
+          logFeatureBad("mcp_connect", "mcp_connect_invalid_config");
           return {
             name,
             type: "failed",
             config: serverRef,
-            error: BLOCKED_BY_POLICY_REASON,
-            errorCode: "POLICY_BLOCKED",
+            error: configError,
+            errorCode: "INVALID_CONFIG",
           };
-        }
-        let { createChromeContext } = await import("./chunk-ztt2k9pv.js");
-        let { createChromeSocketClient, createClaudeForChromeMcpServer } =
-          env.CLAUDE_CODE_CHROME_LATE_MCP_SERVER === true
-            ? await import("./chunk-t8hkp4g3.js")
-            : await import("./chunk-3ewc7v9f.js");
-        let { createLinkedTransportPair } = await import("./chunk-qa6ep5c8.js");
-        let { setChromeBinding } = await import("./chunk-yx8pxhkm.js");
-        let { registerChromeTabGroupCleanup } = await import("./chunk-9a6n2431.js");
-        let chromeContext = createChromeContext(serverRef.env, {
-          availabilityFunnel: true,
-          credentials,
-          bearerGate: async () => isClaudeInChromeAllowed(),
-        });
-        let chromeSocketClient = createChromeSocketClient(chromeContext);
-        setChromeBinding(chromeContext, chromeSocketClient);
-        registerChromeTabGroupCleanup();
-        inProcessServer = createClaudeForChromeMcpServer(chromeContext, chromeSocketClient);
-        let [Et, It] = createLinkedTransportPair();
-        await inProcessServer.connect(It);
-        transport_2 = Et;
-        logMCPDebug(name, "In-process Chrome MCP server started");
-      } else if (serverRef.type === "stdio" || !serverRef.type) {
-        assertProgramLaunchAllowed();
-        let x = () => ({
-          shellPrefix: env.CLAUDE_CODE_SHELL_PREFIX,
-          baseEnv: shouldUseMcpAllowlistEnv()
-            ? {
-                ...getDefaultEnvironment(),
-                ...agentProxyEnv(),
-              }
-            : {
-                ...subprocessEnv(),
-              },
-        });
-        let { shellPrefix, baseEnv } = runWithPluginWriteScope(serverRef, x);
-        let fe = shellPrefix || serverRef.command;
-        let ve = shellPrefix ? [shellQuoteArgs([serverRef.command, ...serverRef.args])] : serverRef.args;
-        let { command, args, pending, capped } = isMcpServerBackingToolHook(name)
-          ? {
-              command: fe,
-              args: ve,
-              pending: false,
-              capped: false,
-            }
-          : wrapCommandInCgroup("mcp", fe, ve);
-        ge = pending;
-        Ie = capped;
-        let { CLAUDE_CODE_CHILD_SESSION, CLAUDE_CODE_CHROME_MCP_ORG_DENIED, ...Zt } = baseEnv;
-        let projectConfigRoot = getProjectConfigRoot();
-        let tn = {
-          ...Zt,
-          CLAUDE_PROJECT_DIR: projectConfigRoot ?? getProjectRoot(),
-          CLAUDE_CODE_SESSION_ID: getSessionId(),
-          CLAUDECODE: "1",
-          ...serverRef.env,
-          ...(!isPolicyAllowed("allow_claude_browser_extension") && {
-            CLAUDE_CODE_CHROME_MCP_ORG_DENIED: "1",
-          }),
-        };
-        checkPluginBunOptions(serverRef.pluginSource, tn, Zt);
-        ee = {
-          command,
-          args,
-          env: tn,
-          stderr: "pipe",
-          ...(projectConfigRoot !== null && {
-            cwd: projectConfigRoot,
-          }),
-        };
-        transport_2 = new BoundedStdioClientTransport(ee);
-      } else throw Error(`Unsupported server type: ${serverRef.type}`);
-      let it;
-      let ye;
-      let be = "";
-      let ct = () => {
-        if (serverRef.type === "stdio" || !serverRef.type) {
-          let x = transport_2;
-          if (x.stderr instanceof Readable) {
-            ye = x.stderr;
-            it = (U) => {
-              if (be.length < 67108864)
-                try {
-                  be += U.toString();
-                } catch {}
-            };
-            ye.on("data", it);
-          }
-        }
-      };
-      ct();
-      let transportKind = classifyTransportKind(serverRef.type, {
-        inProcess: inProcessServer !== undefined,
-        ccrProxy: isCcrHostedConfig(serverRef),
-        ccrToolport: serverRef.type === "http" && isCcrMcpPath(serverRef.url),
-      });
-      negotiation = resolveVersionNegotiation(transportKind, serverRef, vt);
-      if (negotiation.mode === "auto") {
-        discoverPrior = getListingDiscoverPrior(serverRef);
-        if (discoverPrior === undefined) {
-          discoverPrior = await getRememberedLegacyPrior(serverRef, storageV5);
-          usedRememberedLegacy = discoverPrior !== undefined;
         }
       }
-      let Vt = shouldRestrictRemoteHost(serverRef);
-      let Fe = (x) => {
-        let U = yt
-          ? clientCapabilitiesForSdk()
-          : x.mode === "auto"
-            ? clientCapabilitiesWithElicitation()
-            : clientCapabilitiesFor(serverRef, {
-                denylisted: isElicitationDenylisted(serverRef),
-              });
-        let Z = new Client_2(
-          {
-            name: "claude-code",
-            title: "Claude Code",
-            version:
-              {
-                ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
-                PACKAGE_URL: "@anthropic-ai/claude-code",
-                README_URL: "https://code.claude.com/docs/en/overview",
-                VERSION: "2.1.316",
-                FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-                BUILD_TIME: "2026-10-30T23:28:13Z",
-                GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
-                HOOKS_WORKER_URL:
-                  import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
-                DD_SOURCEMAP_GROUP: "default",
-              }.VERSION ?? "unknown",
-            description: "Anthropic's agentic coding tool",
-            websiteUrl: HTTPS_CLAUDE_COM_CLAUDE_CODE,
-          },
-          {
-            capabilities: Vt ? stripTasksCapability(U) : U,
-            jsonSchemaValidator: isDisklessContext()
-              ? NO_OP_SCHEMA_VALIDATOR
-              : new LegacyDialectToleratingValidator(),
-            responseCacheStore: makeStepUpDialog(name),
-            versionNegotiation: x,
-            ...(Ot
-              ? {}
-              : {
-                  listChanged: {
-                    tools: {
-                      autoRefresh: false,
-                      debounceMs: 0,
-                      onChanged: () => noteListChangedAhead_2(Z),
-                    },
-                    prompts: {
-                      autoRefresh: false,
-                      debounceMs: 0,
-                      onChanged: () => {},
-                    },
-                    resources: {
-                      autoRefresh: false,
-                      debounceMs: 0,
-                      onChanged: () => {},
-                    },
-                  },
-                }),
-          },
-        );
-        Z.setRequestHandler("roots/list", async () => {
-          logMCPDebug(name, "Received ListRoots request from server");
-          return getMcpRoots(isDocumentsPluginServer(serverRef));
-        });
-        if (Vt) getCliOwnedState().clientTasksDeclaredBeforeServerList.set(Z, U);
-        return Z;
+      let inProcessServer;
+      let authProvider;
+      let stdioPendingCgroup = false;
+      let stdioCgroupCapped = false;
+      let transport_2;
+      let processUptimeAtConnectStartMs = isDiskless() ? undefined : Math.round(process.uptime() * 1000);
+      let handshakeTrace;
+      let legacySseTransportFactory;
+      let stdioTransportOptions;
+      let modernTransportFactory;
+      let sseTransportFactory;
+      let retriedWithoutElicitation = false;
+      let probeFallbackReason;
+      let discoverPrior;
+      let discoverSource;
+      let discoverSourceEnum;
+      let setDiscoverSource = (sourceValue) => {
+        discoverSource = sourceValue;
+        discoverSourceEnum = fromEnumOpt(sourceValue);
       };
-      let client = Fe(negotiation);
-      logMCPDebug(name, `Starting connection with timeout of ${getConnectionTimeoutMs()}ms`);
-      if (serverRef.type === "http" && keepsMCPDebug()) {
-        logMCPDebug(name, `Testing basic HTTP connectivity to ${redactUrlSecrets(serverRef.url)}`);
-        try {
-          let x = new URL(serverRef.url);
-          let U = redactUrlSecrets(x.href);
-          let Z = URL.canParse(U) ? new URL(U) : undefined;
+      let listingPriorBurned = false;
+      let usedRememberedLegacy = false;
+      let discoverMethodNotFound = false;
+      let discoverPriorLabel = () =>
+        usedRememberedLegacy ? "the remembered legacy verdict" : "the /v1/mcp_servers discover projection";
+      let wireReprobe = false;
+      let negotiation;
+      let connectBudgetExpired = false;
+      let toolsListAheadState;
+      let listenDenylisted = isListenDenylisted(serverRef);
+      let negotiationDenylisted = isNegotiationDenylisted(serverRef);
+      let classifyProbeEvidence = () => {
+        if (negotiation?.mode !== "auto" || probeFallbackReason !== undefined) return;
+        let _anthropicProbeLegacyEvidence = transport_2?._anthropicProbeLegacyEvidence;
+        if (_anthropicProbeLegacyEvidence === "id-mismatch") probeFallbackReason = lit("probe_id_mismatch");
+        else if (_anthropicProbeLegacyEvidence === "malformed") probeFallbackReason = lit("probe_malformed");
+        else if (_anthropicProbeLegacyEvidence === "stream-end")
+          probeFallbackReason = lit("probe_stream_end");
+        if (probeFallbackReason !== undefined)
           logMCPDebug(
             name,
-            Z
-              ? `Parsed URL: host=${Z.hostname}, port=${Z.port || "default"}, protocol=${Z.protocol}`
-              : `Parsed URL: ${U}`,
+            `era probe classified the server legacy in-SDK (${String(_anthropicProbeLegacyEvidence)}); the 2025 handshake was used for this connect attempt`,
           );
-          if (x.hostname === "127.0.0.1" || x.hostname === "localhost")
-            logMCPDebug(name, `Using loopback address: ${x.hostname}`);
-        } catch {
-          logMCPDebug(name, `Failed to parse URL: ${redactUrlSecrets(serverRef.url)}`);
-        }
-      }
-      let cachedInitialize = getCachedInitializeResult(serverRef);
-      let discoverAnswer = getLocalDiscoverAnswer(serverRef);
-      if (isStatelessClaudeAiProxy(serverRef)) {
-        logMCPDebug(
-          name,
-          cachedInitialize
-            ? "Stateless claudeai-proxy \u2014 resolving MCP initialize from cached projection"
-            : "Stateless claudeai-proxy \u2014 no cached projection; real initialize, GET SSE suppressed",
-        );
-        if (discoverAnswer !== undefined)
-          logMCPDebug(
-            name,
-            discoverAnswer === "method-not-found"
-              ? "Stateless claudeai-proxy \u2014 server/discover resolved locally as legacy (method-not-found)"
-              : "Stateless claudeai-proxy \u2014 resolving server/discover from cached projection",
-          );
-        answerHandshakeLocally(transport_2, cachedInitialize, discoverAnswer);
-      }
-      guardTransportSend(
-        {
-          name,
-        },
-        transport_2,
-      );
-      let Oe = (error) => {
-        let status = error instanceof SdkHttpError ? error.status : undefined;
-        return (
-          error instanceof UnauthorizedError_2 ||
-          (error instanceof Error && error.name === "UnauthorizedError") ||
-          (error instanceof ZodError && authProvider?.sawAuthChallenge === true) ||
-          error instanceof IssuerEchoCrossOriginError ||
-          (serverRef.type === "claudeai-proxy" && isClaudeAiBearerRejectedError(error)) ||
-          status === 401 ||
-          status === 403
-        );
-      };
-      if (negotiation.mode === "auto")
-        Tt(
-          discoverPrior !== undefined
-            ? usedRememberedLegacy
-              ? "remembered_legacy"
-              : discoverPrior.kind === "modern"
-                ? "listing_body"
-                : "listing_legacy"
-            : isStatelessClaudeAiProxy(serverRef) &&
-                (discoverAnswer !== undefined || cachedInitialize !== undefined)
-              ? "stateless_local"
-              : "wire",
-        );
-      let we;
-      let Ke = async (discoverPrior, U) => {
-        logMCPDebug(
-          name,
-          discoverPrior.kind === "modern"
-            ? "claude.ai proxy \u2014 adopting the /v1/mcp_servers discover projection (2026-07-28 era; no server/discover round trip)"
-            : usedRememberedLegacy
-              ? "remembered as a legacy peer from an earlier connect (its server/discover probe was answered method-not-found or not at all); skipping the probe"
-              : "claude.ai proxy \u2014 /v1/mcp_servers projects a legacy peer; skipping the server/discover probe",
-        );
-        await client.connect(U, {
-          timeout:
-            U instanceof BoundedStdioClientTransport ? getConnectionTimeoutMs() : getHandshakeTimeoutMs(),
-          prior: discoverPrior,
-        });
-        if (discoverPrior.kind !== "modern" || Ot) return;
-        let Z = listChangedCapabilities(client);
-        if (Z === undefined) return;
-        try {
-          let fe = await client.listen(Z, {
-            timeout: getHandshakeTimeoutMs(),
-          });
-          if (client.transport === undefined) return;
-          we = fe;
-        } catch (error) {
-          if (Oe(error) || classifyMcpConnectError(error, "subscriptions/listen") !== undefined) throw error;
-          logMCPDebug(
-            name,
-            `connect-time subscriptions/listen did not establish (${truncateToLength(describeConnectError(error, serverRef), 200)}); proceeding without it`,
-          );
-        }
-      };
-      let He = (x, U, Z) => {
-        M ??= startClockSnapshot(clockSnapshot.clock);
-        let fe = x();
-        let promise = new Promise((resolve, reject) => {
-          let le = clockSnapshot.clock.setTimeout(() => {
-            logMCPDebug(
-              name,
-              `Connection timeout triggered after ${formatConnectElapsed(clockSnapshot)} (limit: ${Z}ms)`,
-            );
-            if (inProcessServer) inProcessServer.close().catch(() => {});
-            U.close().catch(() => {});
-            At = true;
-            reject(
-              makeConnectTimeoutError_2(
-                `MCP server "${name}" connection timed out after ${getConnectionTimeoutMs()}ms`,
-              ),
-            );
-          }, Z);
-          fe.then(le, le);
-        });
-        return Promise.race([fe, promise]);
-      };
-      let tt = async (transport, negotiation_2) => {
-        if (negotiation_2.mode === "auto") {
-          rewriteInitializeCapabilities(transport, serverRef, Vt);
-          installModernResultBackfill(transport, name);
-        }
-        let Z = false;
-        let fe = false;
-        let ve = connectOptions?.toolsListFirst === true && name === REMOTE_DEVICES;
-        let Ne =
-          (ve || connectOptions?.toolsListAhead === true) &&
-          transportKind === "ccr-proxy" &&
-          negotiation_2.mode === "legacy" &&
-          discoverPrior === undefined &&
-          !Ot &&
-          transport instanceof StreamableHTTPClientTransport_2
-            ? ve
-              ? {
-                  listed: true,
-                  source: undefined,
-                }
-              : tenderTruffleMatch(serverRef)
-            : undefined;
-        let Je = Ne === undefined ? undefined : armToolsListAhead(client, Ne.source, vt, Ne.listed);
-        ft = Je;
-        try {
-          await He(
-            () =>
-              discoverPrior !== undefined
-                ? Ke(discoverPrior, transport)
-                : Je !== undefined && Ne?.listed && hasBudgetForEarlyToolsList(serverRef)
-                  ? pipelineEarlyToolsList(client, transport, getConnectionTimeoutMs(), Je, ve)
-                  : client.connect(transport, {
-                      timeout:
-                        negotiation_2.mode === "auto"
-                          ? getHandshakeTimeoutMs(
-                              transport instanceof BoundedStdioClientTransport
-                                ? negotiation_2.probe?.timeoutMs
-                                : undefined,
-                            )
-                          : getConnectionTimeoutMs(),
-                    }),
-            transport,
-            getConnectionTimeoutMs(),
-          );
-          if (transport instanceof BoundedStdioClientTransport && client.autoOpenedSubscription !== undefined)
-            try {
-              await client.discover({
-                timeout: negotiation_2.probe?.timeoutMs ?? getStdioProbeTimeoutMs(),
-              });
-            } catch (error) {
-              if (error instanceof SdkError && error.code === SdkErrorCode.RequestTimeout) {
-                Z = true;
-                throw error;
-              }
-              if (client.transport === undefined) {
-                fe = true;
-                throw error;
-              }
-              logMCPDebug(
-                name,
-                `server/discover sent after the subscriptions/listen acknowledgement got an error (${truncateToLength(describeConnectError(error, serverRef), 200)}); the server still reads requests, so it is not restarted`,
-              );
-            }
-        } catch (error) {
-          let dt =
-            negotiation?.mode === "auto" &&
-            error instanceof SdkError &&
-            error.code === SdkErrorCode.EraNegotiationFailed;
-          let Et =
-            !Z &&
-            negotiation?.mode === "auto" &&
-            error instanceof SdkError &&
-            error.code === SdkErrorCode.RequestTimeout &&
-            transport_2?._anthropicProbeTimedOut === true;
-          let It =
-            !fe &&
-            negotiation?.mode === "auto" &&
-            error instanceof SdkError &&
-            error.code === SdkErrorCode.ConnectionClosed &&
-            transport_2 instanceof BoundedStdioClientTransport &&
-            transport_2._anthropicProbeTimedOut === true;
-          let Zt =
-            negotiation?.mode === "auto" &&
-            error instanceof ProtocolError &&
-            transport_2 instanceof BoundedStdioClientTransport &&
-            transport_2._anthropicProbeTimedOut === true &&
-            !isJavaSdkElicitationRejection(error, serverRef, transport);
-          let Gt =
-            Zt &&
-            error instanceof ProtocolError &&
-            error.code === ProtocolErrorCode.UnsupportedProtocolVersion;
-          let _anthropicRediscoverError = Zt ? transport_2._anthropicRediscoverError : undefined;
-          let An =
-            transport_2 instanceof BoundedStdioClientTransport && transport_2.overflowError !== undefined;
-          if (dt) {
-            let xt = error.data;
-            let cause = typeof xt === "object" && xt !== null && "cause" in xt ? xt.cause : error.cause;
-            if (cause instanceof IssuerEchoCrossOriginError) throw error;
-            if (
-              typeof cause === "object" &&
-              cause !== null &&
-              "code" in cause &&
-              cause.code === "ERR_PROXY_TUNNEL" &&
-              "status" in cause &&
-              cause.status === 403
-            )
-              throw cause;
-          }
-          let Xi = discoverPrior !== undefined && he !== undefined && !At && !Oe(error);
-          let Nr =
-            discoverPrior !== undefined &&
-            usedRememberedLegacy &&
-            ee !== undefined &&
-            error instanceof ProtocolError &&
-            !isJavaSdkElicitationRejection(error, serverRef, transport);
-          let Un = {
-            mode: "legacy",
-          };
-          let $n = ee;
-          let Qn = $n !== undefined ? () => new BoundedStdioClientTransport($n) : (he ?? Ae);
-          let Fr = (xt, Ut) => {
-            if (it && ye) ye.off("data", it);
-            if (be) {
-              logMCPDebug(name, `${Ut}: ${be}`);
-              be = "";
-            }
-            transport_2 = new BoundedStdioClientTransport(xt);
-            ct();
-            return transport_2;
-          };
-          let xr =
-            he ??
-            ($n !== undefined
-              ? () =>
-                  Fr(
-                    $n,
-                    "stderr of the stdio server that answered the legacy initialize of the remembered dial with an error, before restarting it",
-                  )
-              : undefined);
-          let Ur = async (xt, Ut) => {
-            yt = true;
-            await xt.close().catch(() => {});
-            if (it && ye) ye.off("data", it);
-            if (be) {
-              logMCPDebug(
-                name,
-                `stderr of the stdio server that refused elicitation form and url, before restarting it: ${be}`,
-              );
-              be = "";
-            }
-            transport_2 = Ut();
-            ct();
-            return transport_2;
-          };
-          if (discoverPrior !== undefined && (Xi || Nr) && xr !== undefined) {
-            let xt =
-              classifyMcpConnectError(
-                error,
-                discoverPrior.kind === "modern" ? "subscriptions/listen" : "initialize",
-              ) ??
-              (error instanceof SdkError && error.code === SdkErrorCode.EraNegotiationFailed
-                ? "rpc_era"
-                : Nr
-                  ? "rpc_other"
-                  : undefined);
-            let Ut = truncateToLength(describeConnectError(error, serverRef), 200);
-            if (xt !== undefined) {
-              logMCPDebug(
-                name,
-                $n !== undefined
-                  ? `the stdio server answered the initialize of a connect built from ${wt()} with an error (${Ut}); discarding it and restarting the server once with the server/discover probe`
-                  : `the upstream rejected a connect built from ${wt()} (${Ut}); discarding it for this connector and re-probing server/discover on a fresh transport`,
-              );
-              burnDiscoverPrior(serverRef, discoverPrior.kind, storageV5);
-              Qe = true;
-              logEvent("tengu_mcp_listing_prior_rejected", {
-                phase: lit("connect"),
-                priorKind: fromEnum(discoverPrior.kind),
-                priorSource: Ee,
-                reason: fromEnum(xt),
-                transportType: fromEnum(serverRef.type ?? "stdio"),
-                ...mcpBaseUrlAnalytics_2(serverRef, name),
-              });
-            } else
-              logMCPDebug(
-                name,
-                `connect built from ${wt()} failed (${Ut}); retrying this dial with a wire probe, prior kept`,
-              );
-            Se = true;
-            discoverPrior = undefined;
-            Tt("wire");
-            we = undefined;
-            Un = negotiation ?? Un;
-            await transport.close().catch(() => {});
-            transport_2 = xr();
-          } else if (
-            (dt || It || Zt || Z || fe) &&
-            (serverRef.type === "stdio" || !serverRef.type) &&
-            ee !== undefined &&
-            !An
-          ) {
-            logMCPDebug(
-              name,
-              Zt && error instanceof ProtocolError
-                ? `stdio server rejected initialize with JSON-RPC error ${error.code} (${truncateToLength(describeConnectError(error, serverRef), 200)}) after the version negotiation probe timed out (likely a slow-starting server that read the stale probe first), and a second server/discover on the same process ${_anthropicRediscoverError === undefined ? "was not attempted (the error named only protocol versions this client lacks)" : `got no usable answer (${truncateToLength(describeConnectError(_anthropicRediscoverError, serverRef), 200)})`}; restarting it once without the probe, within the remaining connect budget`
-                : It
-                  ? "stdio server exited during initialize after the version negotiation probe timed out (likely a slow-starting server that exits on requests before initialize); restarting it once without the probe, within the remaining connect budget"
-                  : Z
-                    ? `stdio server negotiated ${client.getNegotiatedProtocolVersion()} and acknowledged subscriptions/listen, then did not answer a follow-up server/discover within ${negotiation_2.probe?.timeoutMs ?? getStdioProbeTimeoutMs()}ms (a server that stops reading requests while it holds the listen, as mark3labs/mcp-go 1.x before 1.1.1 does); restarting it once with the legacy handshake, which sends no listen, within the remaining connect budget`
-                    : fe
-                      ? `stdio server acknowledged subscriptions/listen and then exited before answering a follow-up server/discover (${truncateToLength(describeConnectError(error, serverRef), 200)}); restarting it once with the legacy handshake, which sends no server/discover and no listen, within the remaining connect budget`
-                      : "version negotiation probe closed the stdio server (rmcp-class pre-init hard close); respawning pinned legacy",
-            );
-            q = Gt
-              ? lit("era_locked_after_probe_timeout")
-              : Zt
-                ? lit("rejected_after_probe_timeout")
-                : It
-                  ? lit("closed_after_probe_timeout")
-                  : Z
-                    ? lit("stalled_after_listen")
-                    : fe
-                      ? lit("closed_after_listen")
-                      : lit("closed");
-            await transport.close().catch(() => {});
-            transport_2 = Fr(ee, "stderr of the stdio server before restarting it");
-          } else if ((dt || Et) && he !== undefined) {
-            logMCPDebug(
-              name,
-              Et
-                ? `version negotiation probe timed out on the ${serverRef.type ?? "http"} transport; reconnecting pinned legacy within the remaining budget`
-                : `version negotiation probe failed on the ${serverRef.type ?? "http"} transport; reconnecting pinned legacy`,
-            );
-            q = Et ? lit("probe_timeout") : lit("probe_failed");
-            await transport.close().catch(() => {});
-            transport_2 = he();
-            if (isStatelessClaudeAiProxy(serverRef)) answerHandshakeLocally(transport_2, cachedInitialize);
-          } else if (
-            !Oe(error) &&
-            isJavaSdkElicitationRejection(error, serverRef, transport) &&
-            Qn !== undefined
-          ) {
-            logMCPDebug(
-              name,
-              "server rejected elicitation form and url at initialize (Java MCP SDK 0.17.0 or older); reconnecting once without elicitation form and url",
-            );
-            transport_2 = await Ur(transport, Qn);
-          } else throw error;
-          client = Fe(Un);
-          guardTransportSend(
-            {
-              name,
-            },
-            transport_2,
-          );
-          if (Un.mode === "auto") {
-            rewriteInitializeCapabilities(transport_2, serverRef, Vt);
-            installModernResultBackfill(transport_2, name);
-          }
-          let max = Math.max(
-            1000,
-            getConnectionTimeoutMs() - (clockSnapshot.clock.monotonicNow() - clockSnapshot.awakeStart),
-          );
-          let $r = client.connect(transport_2, {
-            timeout: Un.mode === "auto" ? Math.min(max, getHandshakeTimeoutMs()) : max,
-          });
-          let Zn = transport_2;
-          let Br = false;
-          try {
-            await Promise.race([
-              $r,
-              new Promise((resolve, reject) => {
-                let timer = setTimeout(
-                  (bo, hn, eo) => {
-                    Br = true;
-                    bo.close().catch(() => {});
-                    hn(
-                      makeConnectTimeoutError_2(
-                        `MCP server "${eo}" connection timed out after ${getConnectionTimeoutMs()}ms`,
-                      ),
-                    );
-                  },
-                  max,
-                  Zn,
-                  reject,
-                  name,
-                );
-                $r.then(
-                  () => clearTimeout(timer),
-                  () => clearTimeout(timer),
-                );
-              }),
-            ]);
-          } catch (error_2) {
-            let Ut = Br;
-            let On = Oe(error_2);
-            if (
-              !yt &&
-              !On &&
-              !Ut &&
-              Qn !== undefined &&
-              isJavaSdkElicitationRejection(error_2, serverRef, Zn)
-            ) {
-              logMCPDebug(
-                name,
-                "server rejected elicitation form and url on the reconnect (Java MCP SDK 0.17.0 or older); reconnecting once more without elicitation form and url",
-              );
-              let hn = await Ur(Zn, Qn);
-              guardTransportSend(
-                {
-                  name,
-                },
-                hn,
-              );
-              client = Fe({
-                mode: "legacy",
-              });
-              let max = Math.max(1000, getConnectionTimeoutMs() - (Date.now() - now));
-              At = false;
-              try {
-                await He(
-                  () =>
-                    client.connect(hn, {
-                      timeout: max,
-                    }),
-                  hn,
-                  max,
-                );
-                return;
-              } catch (error_2) {
-                if (Et && !At && !Oe(error_2)) {
-                  logMCPDebug(
-                    name,
-                    `the dial without elicitation form and url after the probe timeout failed (${truncateToLength(describeConnectError(error_2, serverRef), 200)}); keeping the probe timeout as the error so the connect can be retried`,
-                  );
-                  throw error;
-                }
-                throw error_2;
-              }
-            }
-            if (Et && !On && !Ut) {
-              let hn = truncateToLength(describeConnectError(error_2, serverRef), 200);
-              logMCPDebug(
-                name,
-                `pinned-legacy retry after the probe timeout failed typed (${hn}); preserving the timeout classification so the connect stays ladder-retryable`,
-              );
-              throw error;
-            }
-            let bo =
-              error_2 instanceof SdkError &&
-              error_2.code === SdkErrorCode.RequestTimeout &&
-              Zn._anthropicProbeTimedOut === true;
-            if (
-              Se &&
-              !On &&
-              !Ut &&
-              error_2 instanceof SdkError &&
-              (error_2.code === SdkErrorCode.EraNegotiationFailed || bo)
-            ) {
-              if (!Qe) throw error;
-              logMCPDebug(
-                name,
-                `wire probe after discarding ${wt()} failed (${truncateToLength(describeConnectError(error_2, serverRef), 200)}); booking a retryable connect timeout so the next dial re-probes prior-free with the legacy rescue`,
-              );
-              throw makeConnectTimeoutError_2(
-                `MCP server "${name}" connection timed out after ${getConnectionTimeoutMs()}ms`,
-              );
-            }
-            throw error_2;
-          }
-        }
       };
       try {
-        try {
-          await tt(transport_2, negotiation);
-        } catch (error) {
-          if (
-            nt === undefined ||
-            (transport_2 instanceof StreamableHTTPClientTransport_2 &&
-              transport_2.protocolVersion !== undefined) ||
-            !isNonJsonRpcClientError(error) ||
-            !getFeatureValue_CACHED_MAY_BE_STALE("tengu_mcp_legacy_sse_fallback", true)
-          )
-            throw error;
-          logMCPDebug(
-            name,
-            `initialize POST rejected (${truncateToLength(describeConnectError(error, serverRef), 200)}); trying legacy HTTP+SSE`,
-          );
-          let Z = error.status === 405;
-          await transport_2.close().catch(() => {});
-          let fe = handshakeTrace;
-          markConnectEnded(fe);
-          handshakeTrace = undefined;
-          let abortController = new AbortController();
-          let Ne = false;
-          let Je = nt({
-            postMethodNotAllowed: Z,
-            dialSignal: abortController.signal,
-            dialConnected: () => Ne,
-          });
-          transport_2 = Je;
-          guardTransportSend(
-            {
-              name,
-            },
-            Je,
-          );
-          client = Fe({
-            mode: "legacy",
-          });
-          let le = authProvider?.sawAuthChallenge === true;
-          let min = Math.min(
-            REMOTE_PROBE_TIMEOUT_MS,
-            Math.max(1000, getConnectionTimeoutMs() - (Date.now() - now)),
-          );
-          At = false;
-          try {
-            await He(
-              () =>
-                client.connect(Je, {
-                  timeout: min,
-                }),
-              Je,
-              min,
-            );
-          } catch (error_2) {
-            await Je.close().catch(() => {});
-            abortController.abort();
-            let It = !le && authProvider?.sawAuthChallenge === true;
-            let Zt = isAuthFailure(error_2, error_2 instanceof SseError_2 ? error_2.code : undefined, It);
-            if (At && Z && It) {
-              logMCPDebug(
-                name,
-                "legacy HTTP+SSE stream GET answered with an auth challenge; its auth flow outran the fallback budget, so routing to needs-auth",
-              );
-              throw new UnauthorizedError_2(
-                `MCP server "${name}" requires authorization: its legacy HTTP+SSE stream answered with an auth challenge and the authorization flow did not finish within the connect budget`,
-              );
-            }
-            if (At || (error_2 instanceof SseError_2 && !Zt) || (Zt && !Z)) {
-              logMCPDebug(
-                name,
-                `legacy HTTP+SSE not confirmed (${truncateToLength(describeConnectError(error_2, serverRef), 200)}); surfacing the POST failure`,
-              );
-              handshakeTrace = fe;
-              throw error;
-            }
-            throw error_2;
-          }
-          Ne = true;
-          logMCPDebug(name, "connected over legacy HTTP+SSE");
-        }
-        me();
-        if (
-          negotiation?.mode === "auto" &&
-          q === undefined &&
-          transport_2 instanceof BoundedStdioClientTransport &&
-          transport_2._anthropicProbeTimedOut === true &&
-          client.getProtocolEra() === "modern"
-        ) {
-          q = lit("rediscovered_after_probe_timeout");
-          logMCPDebug(
-            name,
-            `stdio server rejected initialize after the version negotiation probe timed out, then answered a second server/discover on the same process; connected on ${client.getNegotiatedProtocolVersion()} without restarting it`,
-          );
-        }
-        if (be) {
-          logMCPError(name, `Server stderr: ${be}`);
-          be = "";
-        }
-        if (it && ye) {
-          ye.off("data", it);
-          ye.resume();
-        }
-        let x = Date.now() - now;
-        logMCPDebug(name, `Successfully connected (transport: ${serverRef.type || "stdio"}) in ${x}ms`);
-        if (Ot) {
-          if (client.getProtocolEra?.() === "modern")
-            logMCPDebug(
-              name,
-              "subscriptions/listen suppressed by the listen denylist; list_changed delivery is off for this connection",
-            );
-        } else ensureListenSubscription(client, name, serverRef, we, discoverSource);
-        if (
-          (serverRef.type === "stdio" || !serverRef.type) &&
-          transport_2 instanceof BoundedStdioClientTransport &&
-          transport_2.pid
-        ) {
-          registerChildMemory("mcp_stdio", transport_2.pid);
-          if (ge) parkPendingPid("mcp", transport_2.pid, () => isMcpServerBackingToolHook(name));
-          if (Ie || ge) releaseMcpToolCgroup(name, transport_2.pid);
-        }
-      } catch (error) {
-        me();
-        let U = error;
-        if (U instanceof SdkError && U.code === SdkErrorCode.EraNegotiationFailed) {
-          let ve = U.data;
-          let cause = typeof ve === "object" && ve !== null && "cause" in ve ? ve.cause : U.cause;
-          if (cause != null) U = cause;
-        }
-        let Z = Date.now() - now;
-        let negotiation_2 = {
-          negotiationMode: fromEnumOpt(negotiation?.mode),
-          probeFellBack: q,
-          listenSuppressed: Ot,
-          negotiationDenylisted: vt,
-          discoverSource: Ee,
-          listingPriorBurned: Qe,
-          ...toolsListAheadFields(ft),
+        let armWatchdogs = function () {
+          let armedAt = Date.now();
+          for (let activeCallWatchdog of transportErrorState.activeCallWatchdogs)
+            if (activeCallWatchdog.armedAt === 0) activeCallWatchdog.armedAt = armedAt;
         };
-        if (transport_2 instanceof BoundedStdioClientTransport && transport_2.overflowError) {
-          logMCPError(name, transport_2.overflowError.message);
-          if (be) logMCPError(name, `Server stderr: ${be}`);
-          throw transport_2.overflowError;
-        }
-        if (serverRef.type === "sse" && U instanceof Error) {
+        let isCcrInjectedUrl = isCcrInjectedMcpUrl(name, serverRef);
+        let hasCliBearer = hasCliOwnedBearer(serverRef);
+        let configHasAuthHeader =
+          (serverRef.type === "sse" || serverRef.type === "http") && configHasAuthorizationHeader(serverRef);
+        let serverHeaders =
+          serverRef.type === "sse" || serverRef.type === "http" || serverRef.type === "ws"
+            ? await getMcpServerHeaders(name, serverRef)
+            : {};
+        let helperMintsAuthHeader =
+          (serverRef.type === "sse" || serverRef.type === "http") &&
+          !!serverRef.headersHelper &&
+          hasAuthorizationHeader(serverHeaders);
+        let useFirstPartyAuth =
+          (serverRef.type === "sse" || serverRef.type === "http") &&
+          !configHasAuthHeader &&
+          !helperMintsAuthHeader &&
+          !hasCliBearer &&
+          !isCcrInjectedUrl &&
+          isFirstPartyMcpUrl(serverRef.url) &&
+          isFirstPartyProvider() &&
+          (!!(
+            isStorageV5Enabled() && credentials !== undefined
+              ? await getClaudeAIOAuthTokensAsync(credentials)
+              : getClaudeAIOAuthTokens()
+          )?.accessToken ||
+            (isDesignMcpUrl(serverRef.url) && (await checkConsent(credentials))));
+        if (useFirstPartyAuth)
+          logEvent("tengu_mcp_first_party_auto_auth", {
+            transportType: fromEnum(serverRef.type),
+            ...mcpBaseUrlAnalytics_2(serverRef, name),
+          });
+        let firstPartyBearerState = {};
+        if (serverRef.type === "sse") {
+          recordPresentedHeaderSecrets(serverRef.headers, serverHeaders);
+          let authProvider_2 =
+            configHasAuthHeader || helperMintsAuthHeader || useFirstPartyAuth || hasCliBearer
+              ? undefined
+              : new ClaudeAuthProvider_2(name, serverRef);
+          authProvider = authProvider_2;
+          let sseProxyOptions = await mcpProxyFetchOptions(serverRef.url);
+          let fetchFn = createBoundedFetch(wrapFetchNoop(createFetchWithInit(undefined, sseProxyOptions)));
+          if (authProvider_2) fetchFn = wrapFetchWithStepUpDetection_2(fetchFn, authProvider_2);
+          fetchFn = wrapFetchWithTimeout(fetchFn, serverRef);
+          if (useFirstPartyAuth)
+            fetchFn = wrapFetchWithFirstPartyAuth(fetchFn, credentials, firstPartyBearerState);
+          let sseTransportOptions = {
+            authProvider: authProvider_2,
+            skipIssuerMetadataValidation: true,
+            fetch: fetchFn,
+            requestInit: {
+              ...sseProxyOptions,
+              headers: {
+                "User-Agent": getMCPUserAgent(),
+                "Accept-Encoding": "identity",
+                ...serverHeaders,
+              },
+            },
+          };
+          let fetchFn_2 = wrapFetchNoop(async (url, init) => {
+            let authHeaders = {};
+            let tokens = await authProvider_2?.tokens();
+            if (tokens) authHeaders.Authorization = `Bearer ${tokens.access_token}`;
+            let proxyOptions = await mcpProxyFetchOptions(String(url));
+            return fetch(url, {
+              ...init,
+              ...proxyOptions,
+              headers: mergeRequestHeaders(init?.headers, authHeaders, serverHeaders),
+            });
+          });
+          sseTransportOptions.eventSourceInit = {
+            fetch: createBoundedFetch(
+              authProvider_2
+                ? wrapFetchWithStepUpDetection_2(fetchFn_2, authProvider_2)
+                : useFirstPartyAuth
+                  ? wrapFetchWithFirstPartyAuth(fetchFn_2, credentials, firstPartyBearerState)
+                  : fetchFn_2,
+            ),
+          };
+          sseTransportFactory = () => new SSEClientTransport_2(new URL(serverRef.url), sseTransportOptions);
+          transport_2 = sseTransportFactory();
+          logMCPDebug(name, "SSE transport initialized, awaiting connection");
+        } else if (serverRef.type === "sse-ide") {
+          logMCPDebug(name, `Setting up SSE-IDE transport to ${redactUrlSecrets(serverRef.url)}`);
+          let sseIdeOptions = {
+            fetch: createBoundedFetch(globalThis.fetch),
+            requestInit: {
+              headers: {
+                "User-Agent": getMCPUserAgent(),
+                "Accept-Encoding": "identity",
+              },
+            },
+          };
+          transport_2 = new SSEClientTransport_2(new URL(serverRef.url), sseIdeOptions);
+        } else if (serverRef.type === "ws-ide") {
+          let webSocketTLSOptions = getWebSocketTLSOptions(serverRef.url);
+          getPresentedCredentialLog().record(serverRef.authToken);
+          let headers = {
+            "User-Agent": getMCPUserAgent(),
+            ...(serverRef.authToken && {
+              "X-Claude-Code-Ide-Authorization": serverRef.authToken,
+            }),
+          };
+          let webSocket = new globalThis.WebSocket(serverRef.url, {
+            protocols: ["mcp"],
+            headers,
+            proxy: getWebSocketProxyUrl(serverRef.url),
+            tls: webSocketTLSOptions || undefined,
+          });
+          transport_2 = new WebSocketTransport(webSocket, (data) => JSONRPCMessageSchema.parse(data));
+        } else if (serverRef.type === "ws") {
+          recordPresentedHeaderSecrets(serverRef.headers, serverHeaders);
+          logMCPDebug(name, `Initializing WebSocket transport to ${redactUrlSecrets(serverRef.url)}`);
+          let webSocketTLSOptions = getWebSocketTLSOptions(serverRef.url);
+          let sessionAuthToken = isCcrInjectedUrl ? getSessionIngressAuthToken() : null;
+          getPresentedCredentialLog().record(sessionAuthToken ?? undefined);
+          let wsHeaders = {
+            "User-Agent": getMCPUserAgent(),
+            ...(sessionAuthToken && {
+              Authorization: `Bearer ${sessionAuthToken}`,
+            }),
+            ...serverHeaders,
+          };
+          let headers = redactHeaders(wsHeaders);
           logMCPDebug(
             name,
-            `SSE Connection failed after ${Z}ms: ${jsonStringify({
+            `WebSocket transport options: ${jsonStringify({
               url: redactUrlSecrets(serverRef.url),
-              error: describeConnectError(U, serverRef),
-              errorType: U.constructor.name,
-              stack: rethrowRedactedConnectError(U, serverRef) === U ? U.stack : undefined,
+              headers,
+              hasSessionAuth: !!sessionAuthToken,
             })}`,
           );
-          logMCPError(name, rethrowRedactedConnectError(U, serverRef));
-          let ve = await handleRemoteConnectAuthError({
-            name,
-            serverRef,
-            transportType: "sse",
-            error: U,
-            statusCode: U instanceof SdkHttpError ? U.status : U.code,
-            sawAuthChallenge: authProvider?.sawAuthChallenge === true,
-            hasUserAuthHeader: De,
-            helperMintsAuthHeader: re,
-            cliOwnedBearer: Ve,
-            useFirstPartyAuth: ue,
-            firstPartyBearer: ot.last,
-            authProvider,
-            negotiation: negotiation_2,
-            roundEpoch,
-            storageV5,
+          let webSocket = new globalThis.WebSocket(serverRef.url, {
+            protocols: ["mcp"],
+            headers: wsHeaders,
+            proxy: getWebSocketProxyUrl(serverRef.url),
+            tls: webSocketTLSOptions || undefined,
           });
-          if (ve) return ve;
-        } else if (serverRef.type === "http" && U instanceof Error) {
-          let ve = U;
-          logMCPDebug(
-            name,
-            `HTTP Connection failed after ${Z}ms: ${describeConnectError(U, serverRef)} (code: ${ve.code || "none"}, errno: ${ve.errno || "none"})`,
+          transport_2 = new WebSocketTransport(webSocket, (data) => JSONRPCMessageSchema.parse(data));
+        } else if (serverRef.type === "http") {
+          recordPresentedHeaderSecrets(serverRef.headers, serverHeaders);
+          if (keepsMCPDebug()) {
+            logMCPDebug(name, `Initializing HTTP transport to ${redactUrlSecrets(serverRef.url)}`);
+            logMCPDebug(name, `Node version: ${process.version}, Platform: linux`);
+            logMCPDebug(
+              name,
+              `Environment: ${jsonStringify({
+                NODE_OPTIONS: env.NODE_OPTIONS || "not set",
+                UV_THREADPOOL_SIZE: env.UV_THREADPOOL_SIZE || "default",
+                HTTP_PROXY: redactUrlsInText(env.HTTP_PROXY || "not set"),
+                HTTPS_PROXY: redactUrlsInText(env.HTTPS_PROXY || "not set"),
+                NO_PROXY: env.NO_PROXY || "not set",
+              })}`,
+            );
+          }
+          let authProvider_2 =
+            configHasAuthHeader ||
+            helperMintsAuthHeader ||
+            useFirstPartyAuth ||
+            hasCliBearer ||
+            isCcrInjectedUrl
+              ? undefined
+              : new ClaudeAuthProvider_2(name, serverRef);
+          authProvider = authProvider_2;
+          let httpProxyOptions = await mcpProxyFetchOptions(serverRef.url);
+          let fetchFn = createBoundedFetch(
+            wrapFetchNoop(
+              createFetchWithInit(isCcrInjectedUrl ? hostedWorkerFetch : undefined, httpProxyOptions),
+            ),
+            {
+              refusesCodings: issuerKey_3(serverRef.url),
+            },
           );
-          logMCPError(name, rethrowRedactedConnectError(U, serverRef));
-          let Ne = await handleRemoteConnectAuthError({
-            name,
-            serverRef,
-            transportType: "http",
-            error: U,
-            statusCode: U instanceof SdkHttpError ? U.status : U.code,
-            sawAuthChallenge: authProvider?.sawAuthChallenge === true,
-            hasUserAuthHeader: De,
-            helperMintsAuthHeader: re,
-            cliOwnedBearer: Ve,
-            useFirstPartyAuth: ue,
-            firstPartyBearer: ot.last,
-            authProvider,
-            negotiation: negotiation_2,
-            roundEpoch,
-            storageV5,
-          });
-          if (Ne) return Ne;
-        } else if (serverRef.type === "claudeai-proxy" && U instanceof Error) {
-          logMCPDebug(
-            name,
-            `claude.ai proxy connection failed after ${Z}ms: ${describeConnectError(U, serverRef)}`,
-          );
-          if (!isClaudeAiBearerRejectedError(U)) logMCPError(name, rethrowRedactedConnectError(U, serverRef));
-          let ve = U instanceof SdkHttpError ? U.status : U.code;
-          if (isClaudeAiBearerRejectedError(U)) {
-            markConnectEnded(handshakeTrace);
-            logEvent("tengu_mcp_server_connection_failed", {
-              processUptimeAtConnectStartMs,
-              ...handshakeTraceTelemetry(handshakeTrace),
-              transportType: lit("claudeai-proxy"),
-              errorCode: lit("CLAUDEAI_BEARER_REJECTED"),
-              sdkGeneration: fromEnum(mcpSdkGeneration()),
-              negotiationMode: negotiation_2.negotiationMode,
-              probeFellBack: negotiation_2.probeFellBack,
-              listenSuppressed: negotiation_2.listenSuppressed,
-              negotiationDenylisted: negotiation_2.negotiationDenylisted,
-              discoverSource: negotiation_2.discoverSource,
-              listingPriorBurned: negotiation_2.listingPriorBurned,
-              ...mcpBaseUrlAnalytics_2(serverRef, name),
-              ...buildPluginSourceFields(serverRef),
+          if (authProvider_2) fetchFn = wrapFetchWithStepUpDetection_2(fetchFn, authProvider_2);
+          fetchFn = wrapFetchWithTimeout(fetchFn, serverRef);
+          if (useFirstPartyAuth)
+            fetchFn = wrapFetchWithFirstPartyAuth(fetchFn, credentials, firstPartyBearerState);
+          if (isCcrInjectedUrl)
+            fetchFn = wrapFetchSkipListenGet(
+              wrapFetchWithCcrSessionAuth(fetchFn, dialOptions, serverCacheKey(name, serverRef)),
+              name,
+              serverRef.url,
+            );
+          fetchFn = restrictRemoteRepoCalls(fetchFn, serverRef);
+          if (issuerKey_3(serverRef.url)) {
+            let innerFetch = fetchFn;
+            fetchFn = (url, init) => {
+              let finishTiming = init?.method === "POST" ? getRequestTimingStore()?.mark("own") : undefined;
+              return innerFetch(url, init).finally(finishTiming);
+            };
+          }
+          if (hasCliBearer) fetchFn = wrapFetchWithCliOwnedBearer(fetchFn, serverRef);
+          if (getDiscoverVerdictKey(serverRef) !== undefined)
+            fetchFn = wrapFetchDetectDiscoverMethodNotFound(fetchFn, () => {
+              discoverMethodNotFound = true;
             });
-            logFeatureSad("mcp_connect", "mcp_connect_claudeai_bearer_rejected");
-            let Ne = serverCacheKey(name, serverRef);
-            let Je = {
+          let handshakeTrace_2 = createHandshakeTrace({
+            mcpUrl: serverRef.url,
+            keepAliveDisabled: httpProxyOptions.keepalive === false,
+            getAnsweredLocally: false,
+            statelessGated: false,
+          });
+          handshakeTrace = handshakeTrace_2;
+          fetchFn = wrapFetchWithHandshakeTrace(fetchFn, handshakeTrace_2);
+          let httpTransportOptions = {
+            authProvider: authProvider_2,
+            skipIssuerMetadataValidation: true,
+            fetch: fetchFn,
+            requestInit: {
+              ...httpProxyOptions,
+              headers: {
+                "User-Agent": getMCPUserAgent(),
+                "Accept-Encoding": "identity",
+                ...serverHeaders,
+              },
+            },
+          };
+          if (keepsMCPDebug()) {
+            let headers = httpTransportOptions.requestInit?.headers
+              ? redactHeaders(httpTransportOptions.requestInit.headers)
+              : undefined;
+            logMCPDebug(
+              name,
+              `HTTP transport options: ${jsonStringify({
+                url: redactUrlSecrets(serverRef.url),
+                headers,
+                hasAuthProvider: !!authProvider_2,
+                timeoutMs: getMcpRequestTimeoutMs(serverRef),
+              })}`,
+            );
+          }
+          modernTransportFactory = () => {
+            resetHandshakeTrace(handshakeTrace_2);
+            return new StreamableHTTPClientTransport_2(new URL(serverRef.url), httpTransportOptions);
+          };
+          transport_2 = modernTransportFactory();
+          logMCPDebug(name, "HTTP transport created successfully");
+          if (!isCcrHostedConfig(serverRef) && !isFirstPartyMcpUrl(serverRef.url) && !hasCliBearer)
+            legacySseTransportFactory = ({ postMethodNotAllowed, dialSignal, dialConnected }) => {
+              let withDialSignal = (init) =>
+                dialConnected()
+                  ? init
+                  : {
+                      ...init,
+                      signal: init?.signal ? AbortSignal.any([init.signal, dialSignal]) : dialSignal,
+                    };
+              let sawNonOk = false;
+              let eventSourceFetch = async (url, init) => {
+                let response = await fetchFn(url, withDialSignal(init));
+                if (!postMethodNotAllowed && !sawNonOk) {
+                  if (response.status === 401) {
+                    await response.body?.cancel().catch(() => {});
+                    throw Error(
+                      "legacy HTTP+SSE stream GET answered 401 after the initialize POST was not a 405; not starting OAuth against this URL",
+                    );
+                  }
+                  sawNonOk = response.ok;
+                }
+                return response;
+              };
+              let transportFetch = (url, init) =>
+                init?.body instanceof URLSearchParams && init.body.has("grant_type")
+                  ? fetchFn(url, init)
+                  : fetchFn(url, withDialSignal(init));
+              return new SSEClientTransport_2(new URL(serverRef.url), {
+                authProvider: authProvider_2,
+                skipIssuerMetadataValidation: true,
+                fetch: transportFetch,
+                eventSourceInit: {
+                  fetch: eventSourceFetch,
+                },
+                requestInit: httpTransportOptions.requestInit,
+              });
+            };
+        } else if (serverRef.type === "sdk") throw Error("SDK servers should be handled in print.ts");
+        else if (serverRef.type === "claudeai-proxy") {
+          if (!isFirstPartyProvider())
+            throw Error("claude.ai MCP proxy is not available on third-party providers");
+          logMCPDebug(name, `Initializing claude.ai proxy transport for server ${serverRef.id}`);
+          if (
+            !(isStorageV5Enabled() && credentials !== undefined
+              ? await getClaudeAIOAuthTokensAsync(credentials)
+              : getClaudeAIOAuthTokens())
+          )
+            throw Error("No claude.ai OAuth token found");
+          let oauthConfig = getOauthConfig();
+          let proxyUrl = `${oauthConfig.MCP_PROXY_URL}${oauthConfig.MCP_PROXY_PATH.replace("{server_id}", serverRef.id)}`;
+          logMCPDebug(name, `Using claude.ai proxy at ${proxyUrl}`);
+          let proxyFetchOptions = getProxyFetchOptions({
+            url: proxyUrl,
+          });
+          let claudeAiProxyFetch = createClaudeAiProxyFetch(
+            createBoundedFetch(createFetchWithInit(undefined, proxyFetchOptions)),
+            credentials,
+          );
+          let streamDisabled = isSereneTeapotEnabled();
+          let answeredLocally = streamDisabled || isStatelessClaudeAiProxy(serverRef);
+          if (answeredLocally)
+            logMCPDebug(
+              name,
+              streamDisabled
+                ? "GET notification stream disabled for claude.ai connectors; a GET the SDK sends to the proxy URL is answered locally with 405"
+                : "GET notification stream disabled (stateless connector); if the SDK requests it, it gets a local 405",
+            );
+          let handshakeTrace_2 = createHandshakeTrace({
+            mcpUrl: proxyUrl,
+            keepAliveDisabled: proxyFetchOptions.keepalive === false,
+            getAnsweredLocally: answeredLocally,
+            statelessGated: isStatelessClaudeAiProxy(serverRef),
+          });
+          handshakeTrace = handshakeTrace_2;
+          let proxyTransportOptions = {
+            fetch: wrapFetchWithHandshakeTrace(
+              wrapFetchDetectDiscoverMethodNotFound(
+                answeredLocally
+                  ? answerGetStreamLocally(wrapFetchWithTimeout(claudeAiProxyFetch, serverRef), proxyUrl)
+                  : wrapFetchWithTimeout(claudeAiProxyFetch, serverRef),
+                () => {
+                  discoverMethodNotFound = true;
+                },
+              ),
+              handshakeTrace_2,
+            ),
+            requestInit: {
+              ...proxyFetchOptions,
+              headers: {
+                "User-Agent": getMCPUserAgent(),
+                "Accept-Encoding": "identity",
+                "X-Mcp-Client-Session-Id": getSessionId(),
+              },
+            },
+          };
+          modernTransportFactory = () => {
+            resetHandshakeTrace(handshakeTrace_2);
+            return new StreamableHTTPClientTransport_2(new URL(proxyUrl), proxyTransportOptions);
+          };
+          transport_2 = modernTransportFactory();
+          logMCPDebug(name, "claude.ai proxy transport created successfully");
+        } else if (isStdioConfig(serverRef) && isClaudeInChromeMCPServer(name)) {
+          let { isClaudeInChromeAllowed } = await import("../../utils/claudeInChrome/setup.js");
+          if (!isClaudeInChromeAllowed()) {
+            logMCPDebug(name, "Skipping connection (Claude in Chrome is blocked by org policy)");
+            return {
               name,
               type: "failed",
               config: serverRef,
-              error: U.message,
-              errorCode: "CLAUDEAI_BEARER_REJECTED",
+              error: BLOCKED_BY_POLICY_REASON,
+              errorCode: "POLICY_BLOCKED",
             };
-            let le = getConnectionCache().connections.get(Ne);
-            if (le)
-              le.then(
-                (dt) => {
-                  if (dt === Je && getConnectionCache().connections.get(Ne) === le)
-                    getConnectionCache().connections.delete(Ne);
-                },
-                () => {},
-              );
-            return Je;
           }
-          if (ve === 401 || ve === 403)
-            return handleRemoteAuthFailure(
-              name,
-              serverRef,
-              "claudeai-proxy",
-              undefined,
-              false,
-              roundEpoch,
-              negotiation_2,
-              storageV5,
-            );
-        } else if (serverRef.type === "sse-ide" || serverRef.type === "ws-ide")
-          logEvent("tengu_mcp_ide_server_connection_failed", {
-            connectionDurationMs: Z,
+          let { createChromeContext } = await import("../../utils/claudeInChrome/mcpServer.js");
+          let { createChromeSocketClient, createClaudeForChromeMcpServer } =
+            env.CLAUDE_CODE_CHROME_LATE_MCP_SERVER === true
+              ? await import("../../utils/claudeInChrome/chromeSocketMcpServer.js")
+              : await import("../../utils/claudeInChrome/BROWSER_TOOLS.lazy.js");
+          let { createLinkedTransportPair } = await import("./InProcessTransport.js");
+          let { setChromeBinding } = await import("../../utils/claudeInChrome/permissionOverrides.js");
+          let { registerChromeTabGroupCleanup } =
+            await import("../../utils/claudeInChrome/closeSessionTabGroup.lazy.js");
+          let chromeContext = createChromeContext(serverRef.env, {
+            availabilityFunnel: true,
+            credentials,
+            bearerGate: async () => isClaudeInChromeAllowed(),
           });
-        if (inProcessServer) inProcessServer.close().catch(() => {});
-        transport_2.close().catch(() => {});
-        if (be && !isCleanupStarted()) logMCPError(name, `Server stderr: ${be}`);
-        throw U;
-      }
-      let serverCapabilities = client.getServerCapabilities();
-      let serverVersion = client.getServerVersion();
-      let Ft = officialPluginPromptOverrides(serverRef);
-      let Me = serverInstructionsOverride(Ft, name) ?? client.getInstructions();
-      let Ye = toolTimeoutForServer(serverRef);
-      let instructions = truncateServerInstructions(Me, name, Ye);
-      logMCPDebug(
-        name,
-        `Connection established with capabilities: ${jsonStringify({
-          hasTools: !!serverCapabilities?.tools,
-          hasPrompts: !!serverCapabilities?.prompts,
-          hasResources: !!serverCapabilities?.resources,
-          hasResourceSubscribe: !!serverCapabilities?.resources?.subscribe,
-          serverVersion: serverVersion || "unknown",
-          protocolEra: client.getProtocolEra(),
-          negotiatedProtocolVersion: client.getNegotiatedProtocolVersion(),
-        })}`,
-      );
-      logForDebugging(
-        `[MCP] Server "${name}" connected with subscribe=${!!serverCapabilities?.resources?.subscribe}`,
-      );
-      client.setRequestHandler("elicitation/create", async (x) => {
-        logMCPDebug(name, `Elicitation request received during initialization: ${jsonStringify(x)}`);
-        return {
-          action: "cancel",
-        };
-      });
-      if (serverRef.type === "sse-ide" || serverRef.type === "ws-ide") {
-        let connectionDurationMs = Date.now() - now;
-        logEvent("tengu_mcp_ide_server_connection_succeeded", {
-          connectionDurationMs,
-          serverVersion: sanitizeVersion(serverVersion?.version),
-        });
-        maybeNotifyIDEConnected(client).catch((error) => {
-          logMCPError(
-            name,
-            `Failed to send ide_connected notification: ${describeConnectError(error, serverRef)}`,
-          );
-        });
-      }
-      let now_2 = Date.now();
-      let at = false;
-      let onerror = client.onerror;
-      let onclose = client.onclose;
-      let Lt = 3;
-      let We = {
-        consecutiveErrors: 0,
-        activeCallWatchdogs: new Set(),
-        callsInProgress: 0,
-        pendingElicitations: 0,
-        lastElicitationClosedAt: 0,
-        dialledUnder: getRequestTimingStore(),
-      };
-      let Kt = false;
-      let zt = (x) => {
-        if (Kt) return;
-        Kt = true;
-        We.closeReason = x;
-        logMCPDebug(name, `Closing transport (${x})`);
-        client.close().catch((error) => {
-          logMCPDebug(name, `Error during close: ${describeConnectError(error, serverRef)}`);
-        });
-      };
-      let kind = discoverPrior?.kind;
-      let sn = kind !== undefined && usedRememberedLegacy;
-      let an = kind !== undefined;
-      let un = sn;
-      let en = new Map();
-      let ut = false;
-      let qt;
-      let Qt = () => {
-        an = false;
-        en.clear();
-        if (qt !== undefined) {
-          clearTimeout(qt);
-          qt = undefined;
-        }
-      };
-      let lt = (x) => (kind === "modern" || x === "rpc_era" ? x : undefined);
-      let cn = () => {
-        if ((We.callsInProgress ?? 0) > 0) We.onCallsIdle = cn;
-        else if (client.transport !== undefined) zt("discover prior rejected");
-      };
-      let vn = (x, U, Z, fe = false) => {
-        Qt();
-        un = false;
-        burnDiscoverPrior(serverRef, kind, storageV5);
-        logMCPDebug(
-          name,
-          `${U} on a connection built from ${wt()} was rejected (${Z}); discarding it for this server \u2014 this connection closes once no tool call or background task is using it, and the next dial probes server/discover on the wire`,
-        );
-        logEvent("tengu_mcp_listing_prior_rejected", {
-          phase: fe ? lit("post_window") : lit("post_connect"),
-          priorKind: fromEnumOpt(kind),
-          priorSource: Ee,
-          reason: fromEnum(x),
-          transportType: fromEnum(serverRef.type ?? "stdio"),
-          ...mcpBaseUrlAnalytics_2(serverRef, name),
-        });
-        setTimeout(cn, 0);
-      };
-      let kn = () => {
-        if (qt !== undefined) clearTimeout(qt);
-        qt = setTimeout(() => {
-          Qt();
-          if (sn && ut && client.transport !== undefined) {
-            logMCPDebug(
-              name,
-              `tools/list on a connection built from ${wt()} got no result in time; forgetting the verdict, so the next dial probes server/discover`,
-            );
-            forgetDiscoverVerdict(serverRef, storageV5);
-          }
-        }, getConnectionTimeoutMs());
-        qt.unref();
-      };
-      let vr = (x, U, Z) => {
-        if (isSessionHandshakeMethod(x) && !U) {
-          Qt();
-          if (sn && Z !== undefined) {
-            logMCPDebug(
-              name,
-              `${x} on a connection built from ${wt()} was refused (${Z}); forgetting the verdict, so the next dial probes server/discover`,
-            );
-            forgetDiscoverVerdict(serverRef, storageV5);
-          }
-        }
-      };
-      if (an && client.transport) {
-        kn();
-        let transport = client.transport;
-        let U = transport.send.bind(transport);
-        transport.send = async (Z, fe) => {
-          let ve = an && isJSONRPCRequest(Z) ? Z : undefined;
-          if (ve !== undefined) {
-            en.set(ve.id, ve.method);
-            if (isSessionHandshakeMethod(ve.method)) {
-              ut = true;
-              kn();
+          let chromeSocketClient = createChromeSocketClient(chromeContext);
+          setChromeBinding(chromeContext, chromeSocketClient);
+          registerChromeTabGroupCleanup();
+          inProcessServer = createClaudeForChromeMcpServer(chromeContext, chromeSocketClient);
+          let [localTransport, clientSideTransport] = createLinkedTransportPair();
+          await inProcessServer.connect(clientSideTransport);
+          transport_2 = localTransport;
+          logMCPDebug(name, "In-process Chrome MCP server started");
+        } else if (serverRef.type === "stdio" || !serverRef.type) {
+          assertProgramLaunchAllowed();
+          let buildStdioEnv = () => ({
+            shellPrefix: env.CLAUDE_CODE_SHELL_PREFIX,
+            baseEnv: shouldUseMcpAllowlistEnv()
+              ? {
+                  ...getDefaultEnvironment(),
+                  ...agentProxyEnv(),
+                }
+              : {
+                  ...subprocessEnv(),
+                },
+          });
+          let { shellPrefix, baseEnv } = runWithPluginWriteScope(serverRef, buildStdioEnv);
+          let commandLine = shellPrefix || serverRef.command;
+          let commandArgs = shellPrefix
+            ? [shellQuoteArgs([serverRef.command, ...serverRef.args])]
+            : serverRef.args;
+          let { command, args, pending, capped } = isMcpServerBackingToolHook(name)
+            ? {
+                command: commandLine,
+                args: commandArgs,
+                pending: false,
+                capped: false,
+              }
+            : wrapCommandInCgroup("mcp", commandLine, commandArgs);
+          stdioPendingCgroup = pending;
+          stdioCgroupCapped = capped;
+          let { CLAUDE_CODE_CHILD_SESSION, CLAUDE_CODE_CHROME_MCP_ORG_DENIED, ...envWithoutChromeFlags } =
+            baseEnv;
+          let projectConfigRoot = getProjectConfigRoot();
+          let stdioEnv = {
+            ...envWithoutChromeFlags,
+            CLAUDE_PROJECT_DIR: projectConfigRoot ?? getProjectRoot(),
+            CLAUDE_CODE_SESSION_ID: getSessionId(),
+            CLAUDECODE: "1",
+            ...serverRef.env,
+            ...(!isPolicyAllowed("allow_claude_browser_extension") && {
+              CLAUDE_CODE_CHROME_MCP_ORG_DENIED: "1",
+            }),
+          };
+          checkPluginBunOptions(serverRef.pluginSource, stdioEnv, envWithoutChromeFlags);
+          stdioTransportOptions = {
+            command,
+            args,
+            env: stdioEnv,
+            stderr: "pipe",
+            ...(projectConfigRoot !== null && {
+              cwd: projectConfigRoot,
+            }),
+          };
+          transport_2 = new BoundedStdioClientTransport(stdioTransportOptions);
+        } else throw Error(`Unsupported server type: ${serverRef.type}`);
+        let stderrDataHandler;
+        let stderrStream;
+        let stderrBuffer = "";
+        let attachStderrCollector = () => {
+          if (serverRef.type === "stdio" || !serverRef.type) {
+            let stdioTransport = transport_2;
+            if (stdioTransport.stderr instanceof Readable) {
+              stderrStream = stdioTransport.stderr;
+              stderrDataHandler = (chunk) => {
+                if (stderrBuffer.length < 67108864)
+                  try {
+                    stderrBuffer += chunk.toString();
+                  } catch {}
+              };
+              stderrStream.on("data", stderrDataHandler);
             }
           }
+        };
+        attachStderrCollector();
+        let transportKind = classifyTransportKind(serverRef.type, {
+          inProcess: inProcessServer !== undefined,
+          ccrProxy: isCcrHostedConfig(serverRef),
+          ccrToolport: serverRef.type === "http" && isCcrMcpPath(serverRef.url),
+        });
+        negotiation = resolveVersionNegotiation(transportKind, serverRef, negotiationDenylisted);
+        if (negotiation.mode === "auto") {
+          discoverPrior = getListingDiscoverPrior(serverRef);
+          if (discoverPrior === undefined) {
+            discoverPrior = await getRememberedLegacyPrior(serverRef, storageV5);
+            usedRememberedLegacy = discoverPrior !== undefined;
+          }
+        }
+        let restrictRemoteHost = shouldRestrictRemoteHost(serverRef);
+        let createClient = (negotiationArg) => {
+          let capabilities = retriedWithoutElicitation
+            ? clientCapabilitiesForSdk()
+            : negotiationArg.mode === "auto"
+              ? clientCapabilitiesWithElicitation()
+              : clientCapabilitiesFor(serverRef, {
+                  denylisted: isElicitationDenylisted(serverRef),
+                });
+          let clientInstance = new Client_2(
+            {
+              name: "claude-code",
+              title: "Claude Code",
+              version:
+                {
+                  ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
+                  PACKAGE_URL: "@anthropic-ai/claude-code",
+                  README_URL: "https://code.claude.com/docs/en/overview",
+                  VERSION: "2.1.316",
+                  FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
+                  BUILD_TIME: "2026-10-30T23:28:13Z",
+                  GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+                  HOOKS_WORKER_URL:
+                    import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
+                  DD_SOURCEMAP_GROUP: "default",
+                }.VERSION ?? "unknown",
+              description: "Anthropic's agentic coding tool",
+              websiteUrl: HTTPS_CLAUDE_COM_CLAUDE_CODE,
+            },
+            {
+              capabilities: restrictRemoteHost ? stripTasksCapability(capabilities) : capabilities,
+              jsonSchemaValidator: isDisklessContext()
+                ? NO_OP_SCHEMA_VALIDATOR
+                : new LegacyDialectToleratingValidator(),
+              responseCacheStore: makeStepUpDialog(name),
+              versionNegotiation: negotiationArg,
+              ...(listenDenylisted
+                ? {}
+                : {
+                    listChanged: {
+                      tools: {
+                        autoRefresh: false,
+                        debounceMs: 0,
+                        onChanged: () => noteListChangedAhead_2(clientInstance),
+                      },
+                      prompts: {
+                        autoRefresh: false,
+                        debounceMs: 0,
+                        onChanged: () => {},
+                      },
+                      resources: {
+                        autoRefresh: false,
+                        debounceMs: 0,
+                        onChanged: () => {},
+                      },
+                    },
+                  }),
+            },
+          );
+          clientInstance.setRequestHandler("roots/list", async () => {
+            logMCPDebug(name, "Received ListRoots request from server");
+            return getMcpRoots(isDocumentsPluginServer(serverRef));
+          });
+          if (restrictRemoteHost)
+            getCliOwnedState().clientTasksDeclaredBeforeServerList.set(clientInstance, capabilities);
+          return clientInstance;
+        };
+        let client = createClient(negotiation);
+        logMCPDebug(name, `Starting connection with timeout of ${getConnectionTimeoutMs()}ms`);
+        if (serverRef.type === "http" && keepsMCPDebug()) {
+          logMCPDebug(name, `Testing basic HTTP connectivity to ${redactUrlSecrets(serverRef.url)}`);
           try {
-            await U(Z, fe);
-          } catch (error) {
-            if (ve !== undefined && an) {
-              let method = ve.method;
-              en.delete(ve.id);
-              let le =
-                sn && isSessionHandshakeMethod(method) && isUnsupportedVersionHttp400(error)
-                  ? "rpc_era"
-                  : classifyMcpConnectError(error, method);
-              let dt = lt(le);
-              if (dt !== undefined)
-                vn(dt, method, truncateToLength(describeConnectError(error, serverRef), 200));
-              else vr(method, isRetryableListError(error), le);
-            }
-            throw error;
+            let parsedUrl = new URL(serverRef.url);
+            let redactedHref = redactUrlSecrets(parsedUrl.href);
+            let sanitizedUrl = URL.canParse(redactedHref) ? new URL(redactedHref) : undefined;
+            logMCPDebug(
+              name,
+              sanitizedUrl
+                ? `Parsed URL: host=${sanitizedUrl.hostname}, port=${sanitizedUrl.port || "default"}, protocol=${sanitizedUrl.protocol}`
+                : `Parsed URL: ${redactedHref}`,
+            );
+            if (parsedUrl.hostname === "127.0.0.1" || parsedUrl.hostname === "localhost")
+              logMCPDebug(name, `Using loopback address: ${parsedUrl.hostname}`);
+          } catch {
+            logMCPDebug(name, `Failed to parse URL: ${redactUrlSecrets(serverRef.url)}`);
           }
-        };
-      }
-      client.onerror = (x) => {
-        let U = serverRef.type || "stdio";
-        if (U === "stdio" && x instanceof SyntaxError) {
-          logMCPError(name, `Ignoring non-JSON line on stdout: ${x.message}`);
-          return;
         }
-        if (x instanceof FirstPartyDesignNeedsConsentError) return;
-        if (U === "stdio" && x instanceof StdoutOverflowError) {
-          logMCPError(name, x.message);
-          at = true;
-          zt("stdout overflow");
-          if (onerror) onerror(x);
-          return;
-        }
-        if ((U === "http" || U === "claudeai-proxy") && x instanceof HttpBodyOverflowError) {
-          logMCPError(
-            name,
-            `sent a response larger than ${Math.round(MCP_BODY_LIMIT / 1024 / 1024)}MB. Claude Code stopped reading it and failed the request it answered; the connection stays open.`,
-          );
-          if (onerror) onerror(x);
-          return;
-        }
-        if (
-          (U === "sse" || U === "sse-ide" || U === "http" || U === "claudeai-proxy") &&
-          x.message.includes(STOPPED_READING_NOTE)
-        ) {
-          logMCPError(name, x.message);
-          at = true;
-          zt("http body overflow");
-          if (onerror) onerror(x);
-          return;
-        }
-        if ((U === "sse" || U === "http" || U === "claudeai-proxy") && x instanceof SyntaxError) {
-          at = true;
-          Bt();
-          zt(
-            authProvider?.authChallengeOpen === true && We.activeCallWatchdogs.size <= 1
-              ? "malformed message after an auth challenge"
-              : "malformed JSON-RPC message (response truncated)",
-          );
-          if (onerror) onerror(x);
-          return;
-        }
-        let Z = Date.now() - now_2;
-        at = true;
-        logMCPDebug(name, `${U.toUpperCase()} connection dropped after ${Math.floor(Z / 1000)}s uptime`);
-        if (x.message) {
-          let fe = CONNECTION_ERROR_HINTS_2.find(([ve]) => x.message.includes(ve))?.[1];
-          logMCPDebug(name, fe ?? `Connection error: ${describeConnectError(x, serverRef)}`);
-        }
-        if (
-          (U === "http" || U === "claudeai-proxy") &&
-          client.transport?.sessionId !== undefined &&
-          isMcpSessionExpiredError(x)
-        ) {
+        let cachedInitialize = getCachedInitializeResult(serverRef);
+        let discoverAnswer = getLocalDiscoverAnswer(serverRef);
+        if (isStatelessClaudeAiProxy(serverRef)) {
           logMCPDebug(
             name,
-            "MCP session expired (server no longer recognizes session ID), triggering reconnection",
+            cachedInitialize
+              ? "Stateless claudeai-proxy \u2014 resolving MCP initialize from cached projection"
+              : "Stateless claudeai-proxy \u2014 no cached projection; real initialize, GET SSE suppressed",
           );
-          zt("session expired");
-          if (onerror) onerror(x);
-          return;
-        }
-        if (
-          (U === "http" || U === "claudeai-proxy") &&
-          client.transport?.sessionId !== undefined &&
-          x instanceof SdkHttpError &&
-          x.status === 404 &&
-          isSseOpenFailure(x)
-        )
-          logFeatureSad("mcp_session_recovery", "get_stream_404_not_reinit");
-        if (U === "sse" || U === "http" || U === "claudeai-proxy") {
-          if (x.message.includes("Maximum reconnection attempts")) {
+          if (discoverAnswer !== undefined)
             logMCPDebug(
               name,
-              "SSE GET-stream reconnection exhausted; leaving transport up (POST still works)",
+              discoverAnswer === "method-not-found"
+                ? "Stateless claudeai-proxy \u2014 server/discover resolved locally as legacy (method-not-found)"
+                : "Stateless claudeai-proxy \u2014 resolving server/discover from cached projection",
             );
-            We.consecutiveErrors = 0;
-            Bt();
-            if (onerror) onerror(x);
-            return;
-          }
-          if (isTransientMcpError(x)) {
-            We.consecutiveErrors++;
-            Bt();
-            logMCPDebug(name, `Terminal connection error ${We.consecutiveErrors}/${Lt}`);
-            if (We.consecutiveErrors >= Lt) {
-              We.consecutiveErrors = 0;
-              zt("max consecutive terminal errors");
-            }
-          } else We.consecutiveErrors = 0;
+          answerHandshakeLocally(transport_2, cachedInitialize, discoverAnswer);
         }
-        if (onerror) onerror(x);
-      };
-      let Rr = serverRef.type === "http" && isCcrMcpPath(serverRef.url);
-      if (Rr && client.transport) {
-        let transport = client.transport;
-        let U = transport.send.bind(transport);
-        transport.send = async (Z, fe) => {
-          let _meta = isJSONRPCRequest(Z) && Z.method === "tools/call" ? Z.params?._meta : undefined;
-          let Ne = _meta?.["claudecode/toolUseId"];
-          let Je = _meta?.[CLAUDECODE_CALLMARK];
-          let le =
-            isJSONRPCRequest(Z) && _meta !== undefined && Je !== undefined
-              ? {
-                  ...Z,
-                  params: {
-                    ...Z.params,
-                    _meta: omitKeys(_meta, CLAUDECODE_CALLMARK),
-                  },
-                }
-              : Z;
-          let dt =
-            Ne !== undefined
-              ? [...We.activeCallWatchdogs].find((activeCallWatchdog) => activeCallWatchdog.toolUseId === Ne)
-              : Je !== undefined
-                ? [...We.activeCallWatchdogs].find((activeCallWatchdog) => activeCallWatchdog.mark === Je)
-                : undefined;
-          if (!isJSONRPCRequest(Z) || dt === undefined) return U(le, fe);
-          let { id } = Z;
-          dt.requestSent?.(id);
+        guardTransportSend(
+          {
+            name,
+          },
+          transport_2,
+        );
+        let isAuthError = (error) => {
+          let status = error instanceof SdkHttpError ? error.status : undefined;
+          return (
+            error instanceof UnauthorizedError_2 ||
+            (error instanceof Error && error.name === "UnauthorizedError") ||
+            (error instanceof ZodError && authProvider?.sawAuthChallenge === true) ||
+            error instanceof IssuerEchoCrossOriginError ||
+            (serverRef.type === "claudeai-proxy" && isClaudeAiBearerRejectedError(error)) ||
+            status === 401 ||
+            status === 403
+          );
+        };
+        if (negotiation.mode === "auto")
+          setDiscoverSource(
+            discoverPrior !== undefined
+              ? usedRememberedLegacy
+                ? "remembered_legacy"
+                : discoverPrior.kind === "modern"
+                  ? "listing_body"
+                  : "listing_legacy"
+              : isStatelessClaudeAiProxy(serverRef) &&
+                  (discoverAnswer !== undefined || cachedInitialize !== undefined)
+                ? "stateless_local"
+                : "wire",
+          );
+        let listenResult;
+        let connectWithPrior = async (discoverPrior, transportArg) => {
+          logMCPDebug(
+            name,
+            discoverPrior.kind === "modern"
+              ? "claude.ai proxy \u2014 adopting the /v1/mcp_servers discover projection (2026-07-28 era; no server/discover round trip)"
+              : usedRememberedLegacy
+                ? "remembered as a legacy peer from an earlier connect (its server/discover probe was answered method-not-found or not at all); skipping the probe"
+                : "claude.ai proxy \u2014 /v1/mcp_servers projects a legacy peer; skipping the server/discover probe",
+          );
+          await client.connect(transportArg, {
+            timeout:
+              transportArg instanceof BoundedStdioClientTransport
+                ? getConnectionTimeoutMs()
+                : getHandshakeTimeoutMs(),
+            prior: discoverPrior,
+          });
+          if (discoverPrior.kind !== "modern" || listenDenylisted) return;
+          let listenCapabilities = listChangedCapabilities(client);
+          if (listenCapabilities === undefined) return;
           try {
-            await U(le, {
-              ...fe,
-              onRequestStreamEnd: () => {
-                fe?.onRequestStreamEnd?.();
-                dt.answerStreamEnded?.(id);
-              },
+            let listenResultInner = await client.listen(listenCapabilities, {
+              timeout: getHandshakeTimeoutMs(),
             });
+            if (client.transport === undefined) return;
+            listenResult = listenResultInner;
+          } catch (error) {
+            if (isAuthError(error) || classifyMcpConnectError(error, "subscriptions/listen") !== undefined)
+              throw error;
+            logMCPDebug(
+              name,
+              `connect-time subscriptions/listen did not establish (${truncateToLength(describeConnectError(error, serverRef), 200)}); proceeding without it`,
+            );
+          }
+        };
+        let withConnectTimeout = (connectFn, transportArg, timeoutMs) => {
+          activeClockSnapshot ??= startClockSnapshot(clockSnapshot.clock);
+          let connectPromise = connectFn();
+          let promise = new Promise((resolve, reject) => {
+            let finish = clockSnapshot.clock.setTimeout(() => {
+              logMCPDebug(
+                name,
+                `Connection timeout triggered after ${formatConnectElapsed(clockSnapshot)} (limit: ${timeoutMs}ms)`,
+              );
+              if (inProcessServer) inProcessServer.close().catch(() => {});
+              transportArg.close().catch(() => {});
+              connectBudgetExpired = true;
+              reject(
+                makeConnectTimeoutError_2(
+                  `MCP server "${name}" connection timed out after ${getConnectionTimeoutMs()}ms`,
+                ),
+              );
+            }, timeoutMs);
+            connectPromise.then(finish, finish);
+          });
+          return Promise.race([connectPromise, promise]);
+        };
+        let connectWithRetries = async (transport, negotiation_2) => {
+          if (negotiation_2.mode === "auto") {
+            rewriteInitializeCapabilities(transport, serverRef, restrictRemoteHost);
+            installModernResultBackfill(transport, name);
+          }
+          let discoverTimedOut = false;
+          let transportClosed = false;
+          let toolsListFirstRequested = connectOptions?.toolsListFirst === true && name === REMOTE_DEVICES;
+          let toolsListAheadSpec =
+            (toolsListFirstRequested || connectOptions?.toolsListAhead === true) &&
+            transportKind === "ccr-proxy" &&
+            negotiation_2.mode === "legacy" &&
+            discoverPrior === undefined &&
+            !listenDenylisted &&
+            transport instanceof StreamableHTTPClientTransport_2
+              ? toolsListFirstRequested
+                ? {
+                    listed: true,
+                    source: undefined,
+                  }
+                : tenderTruffleMatch(serverRef)
+              : undefined;
+          let toolsListAhead =
+            toolsListAheadSpec === undefined
+              ? undefined
+              : armToolsListAhead(
+                  client,
+                  toolsListAheadSpec.source,
+                  negotiationDenylisted,
+                  toolsListAheadSpec.listed,
+                );
+          toolsListAheadState = toolsListAhead;
+          try {
+            await withConnectTimeout(
+              () =>
+                discoverPrior !== undefined
+                  ? connectWithPrior(discoverPrior, transport)
+                  : toolsListAhead !== undefined &&
+                      toolsListAheadSpec?.listed &&
+                      hasBudgetForEarlyToolsList(serverRef)
+                    ? pipelineEarlyToolsList(
+                        client,
+                        transport,
+                        getConnectionTimeoutMs(),
+                        toolsListAhead,
+                        toolsListFirstRequested,
+                      )
+                    : client.connect(transport, {
+                        timeout:
+                          negotiation_2.mode === "auto"
+                            ? getHandshakeTimeoutMs(
+                                transport instanceof BoundedStdioClientTransport
+                                  ? negotiation_2.probe?.timeoutMs
+                                  : undefined,
+                              )
+                            : getConnectionTimeoutMs(),
+                      }),
+              transport,
+              getConnectionTimeoutMs(),
+            );
+            if (
+              transport instanceof BoundedStdioClientTransport &&
+              client.autoOpenedSubscription !== undefined
+            )
+              try {
+                await client.discover({
+                  timeout: negotiation_2.probe?.timeoutMs ?? getStdioProbeTimeoutMs(),
+                });
+              } catch (error) {
+                if (error instanceof SdkError && error.code === SdkErrorCode.RequestTimeout) {
+                  discoverTimedOut = true;
+                  throw error;
+                }
+                if (client.transport === undefined) {
+                  transportClosed = true;
+                  throw error;
+                }
+                logMCPDebug(
+                  name,
+                  `server/discover sent after the subscriptions/listen acknowledgement got an error (${truncateToLength(describeConnectError(error, serverRef), 200)}); the server still reads requests, so it is not restarted`,
+                );
+              }
+          } catch (error) {
+            let eraNegotiationFailed =
+              negotiation?.mode === "auto" &&
+              error instanceof SdkError &&
+              error.code === SdkErrorCode.EraNegotiationFailed;
+            let probeTimedOutError =
+              !discoverTimedOut &&
+              negotiation?.mode === "auto" &&
+              error instanceof SdkError &&
+              error.code === SdkErrorCode.RequestTimeout &&
+              transport_2?._anthropicProbeTimedOut === true;
+            let closedAfterProbeTimeout =
+              !transportClosed &&
+              negotiation?.mode === "auto" &&
+              error instanceof SdkError &&
+              error.code === SdkErrorCode.ConnectionClosed &&
+              transport_2 instanceof BoundedStdioClientTransport &&
+              transport_2._anthropicProbeTimedOut === true;
+            let protocolErrorAfterProbeTimeout =
+              negotiation?.mode === "auto" &&
+              error instanceof ProtocolError &&
+              transport_2 instanceof BoundedStdioClientTransport &&
+              transport_2._anthropicProbeTimedOut === true &&
+              !isJavaSdkElicitationRejection(error, serverRef, transport);
+            let unsupportedVersionAfterProbe =
+              protocolErrorAfterProbeTimeout &&
+              error instanceof ProtocolError &&
+              error.code === ProtocolErrorCode.UnsupportedProtocolVersion;
+            let _anthropicRediscoverError = protocolErrorAfterProbeTimeout
+              ? transport_2._anthropicRediscoverError
+              : undefined;
+            let stdioOverflow =
+              transport_2 instanceof BoundedStdioClientTransport && transport_2.overflowError !== undefined;
+            if (eraNegotiationFailed) {
+              let errorData = error.data;
+              let cause =
+                typeof errorData === "object" && errorData !== null && "cause" in errorData
+                  ? errorData.cause
+                  : error.cause;
+              if (cause instanceof IssuerEchoCrossOriginError) throw error;
+              if (
+                typeof cause === "object" &&
+                cause !== null &&
+                "code" in cause &&
+                cause.code === "ERR_PROXY_TUNNEL" &&
+                "status" in cause &&
+                cause.status === 403
+              )
+                throw cause;
+            }
+            let retryPriorConnect =
+              discoverPrior !== undefined &&
+              modernTransportFactory !== undefined &&
+              !connectBudgetExpired &&
+              !isAuthError(error);
+            let rememberedLegacyRejected =
+              discoverPrior !== undefined &&
+              usedRememberedLegacy &&
+              stdioTransportOptions !== undefined &&
+              error instanceof ProtocolError &&
+              !isJavaSdkElicitationRejection(error, serverRef, transport);
+            let retryNegotiation = {
+              mode: "legacy",
+            };
+            let stdioRestartOptions = stdioTransportOptions;
+            let makeFreshTransport =
+              stdioRestartOptions !== undefined
+                ? () => new BoundedStdioClientTransport(stdioRestartOptions)
+                : (modernTransportFactory ?? sseTransportFactory);
+            let restartStdioTransport = (options, stderrNote) => {
+              if (stderrDataHandler && stderrStream) stderrStream.off("data", stderrDataHandler);
+              if (stderrBuffer) {
+                logMCPDebug(name, `${stderrNote}: ${stderrBuffer}`);
+                stderrBuffer = "";
+              }
+              transport_2 = new BoundedStdioClientTransport(options);
+              attachStderrCollector();
+              return transport_2;
+            };
+            let restartTransportFactory =
+              modernTransportFactory ??
+              (stdioRestartOptions !== undefined
+                ? () =>
+                    restartStdioTransport(
+                      stdioRestartOptions,
+                      "stderr of the stdio server that answered the legacy initialize of the remembered dial with an error, before restarting it",
+                    )
+                : undefined);
+            let reconnectWithoutElicitation = async (failedTransport, transportFactory) => {
+              retriedWithoutElicitation = true;
+              await failedTransport.close().catch(() => {});
+              if (stderrDataHandler && stderrStream) stderrStream.off("data", stderrDataHandler);
+              if (stderrBuffer) {
+                logMCPDebug(
+                  name,
+                  `stderr of the stdio server that refused elicitation form and url, before restarting it: ${stderrBuffer}`,
+                );
+                stderrBuffer = "";
+              }
+              transport_2 = transportFactory();
+              attachStderrCollector();
+              return transport_2;
+            };
+            if (
+              discoverPrior !== undefined &&
+              (retryPriorConnect || rememberedLegacyRejected) &&
+              restartTransportFactory !== undefined
+            ) {
+              let failureKind =
+                classifyMcpConnectError(
+                  error,
+                  discoverPrior.kind === "modern" ? "subscriptions/listen" : "initialize",
+                ) ??
+                (error instanceof SdkError && error.code === SdkErrorCode.EraNegotiationFailed
+                  ? "rpc_era"
+                  : rememberedLegacyRejected
+                    ? "rpc_other"
+                    : undefined);
+              let errorText = truncateToLength(describeConnectError(error, serverRef), 200);
+              if (failureKind !== undefined) {
+                logMCPDebug(
+                  name,
+                  stdioRestartOptions !== undefined
+                    ? `the stdio server answered the initialize of a connect built from ${discoverPriorLabel()} with an error (${errorText}); discarding it and restarting the server once with the server/discover probe`
+                    : `the upstream rejected a connect built from ${discoverPriorLabel()} (${errorText}); discarding it for this connector and re-probing server/discover on a fresh transport`,
+                );
+                burnDiscoverPrior(serverRef, discoverPrior.kind, storageV5);
+                listingPriorBurned = true;
+                logEvent("tengu_mcp_listing_prior_rejected", {
+                  phase: lit("connect"),
+                  priorKind: fromEnum(discoverPrior.kind),
+                  priorSource: discoverSourceEnum,
+                  reason: fromEnum(failureKind),
+                  transportType: fromEnum(serverRef.type ?? "stdio"),
+                  ...mcpBaseUrlAnalytics_2(serverRef, name),
+                });
+              } else
+                logMCPDebug(
+                  name,
+                  `connect built from ${discoverPriorLabel()} failed (${errorText}); retrying this dial with a wire probe, prior kept`,
+                );
+              wireReprobe = true;
+              discoverPrior = undefined;
+              setDiscoverSource("wire");
+              listenResult = undefined;
+              retryNegotiation = negotiation ?? retryNegotiation;
+              await transport.close().catch(() => {});
+              transport_2 = restartTransportFactory();
+            } else if (
+              (eraNegotiationFailed ||
+                closedAfterProbeTimeout ||
+                protocolErrorAfterProbeTimeout ||
+                discoverTimedOut ||
+                transportClosed) &&
+              (serverRef.type === "stdio" || !serverRef.type) &&
+              stdioTransportOptions !== undefined &&
+              !stdioOverflow
+            ) {
+              logMCPDebug(
+                name,
+                protocolErrorAfterProbeTimeout && error instanceof ProtocolError
+                  ? `stdio server rejected initialize with JSON-RPC error ${error.code} (${truncateToLength(describeConnectError(error, serverRef), 200)}) after the version negotiation probe timed out (likely a slow-starting server that read the stale probe first), and a second server/discover on the same process ${_anthropicRediscoverError === undefined ? "was not attempted (the error named only protocol versions this client lacks)" : `got no usable answer (${truncateToLength(describeConnectError(_anthropicRediscoverError, serverRef), 200)})`}; restarting it once without the probe, within the remaining connect budget`
+                  : closedAfterProbeTimeout
+                    ? "stdio server exited during initialize after the version negotiation probe timed out (likely a slow-starting server that exits on requests before initialize); restarting it once without the probe, within the remaining connect budget"
+                    : discoverTimedOut
+                      ? `stdio server negotiated ${client.getNegotiatedProtocolVersion()} and acknowledged subscriptions/listen, then did not answer a follow-up server/discover within ${negotiation_2.probe?.timeoutMs ?? getStdioProbeTimeoutMs()}ms (a server that stops reading requests while it holds the listen, as mark3labs/mcp-go 1.x before 1.1.1 does); restarting it once with the legacy handshake, which sends no listen, within the remaining connect budget`
+                      : transportClosed
+                        ? `stdio server acknowledged subscriptions/listen and then exited before answering a follow-up server/discover (${truncateToLength(describeConnectError(error, serverRef), 200)}); restarting it once with the legacy handshake, which sends no server/discover and no listen, within the remaining connect budget`
+                        : "version negotiation probe closed the stdio server (rmcp-class pre-init hard close); respawning pinned legacy",
+              );
+              probeFallbackReason = unsupportedVersionAfterProbe
+                ? lit("era_locked_after_probe_timeout")
+                : protocolErrorAfterProbeTimeout
+                  ? lit("rejected_after_probe_timeout")
+                  : closedAfterProbeTimeout
+                    ? lit("closed_after_probe_timeout")
+                    : discoverTimedOut
+                      ? lit("stalled_after_listen")
+                      : transportClosed
+                        ? lit("closed_after_listen")
+                        : lit("closed");
+              await transport.close().catch(() => {});
+              transport_2 = restartStdioTransport(
+                stdioTransportOptions,
+                "stderr of the stdio server before restarting it",
+              );
+            } else if ((eraNegotiationFailed || probeTimedOutError) && modernTransportFactory !== undefined) {
+              logMCPDebug(
+                name,
+                probeTimedOutError
+                  ? `version negotiation probe timed out on the ${serverRef.type ?? "http"} transport; reconnecting pinned legacy within the remaining budget`
+                  : `version negotiation probe failed on the ${serverRef.type ?? "http"} transport; reconnecting pinned legacy`,
+              );
+              probeFallbackReason = probeTimedOutError ? lit("probe_timeout") : lit("probe_failed");
+              await transport.close().catch(() => {});
+              transport_2 = modernTransportFactory();
+              if (isStatelessClaudeAiProxy(serverRef)) answerHandshakeLocally(transport_2, cachedInitialize);
+            } else if (
+              !isAuthError(error) &&
+              isJavaSdkElicitationRejection(error, serverRef, transport) &&
+              makeFreshTransport !== undefined
+            ) {
+              logMCPDebug(
+                name,
+                "server rejected elicitation form and url at initialize (Java MCP SDK 0.17.0 or older); reconnecting once without elicitation form and url",
+              );
+              transport_2 = await reconnectWithoutElicitation(transport, makeFreshTransport);
+            } else throw error;
+            client = createClient(retryNegotiation);
+            guardTransportSend(
+              {
+                name,
+              },
+              transport_2,
+            );
+            if (retryNegotiation.mode === "auto") {
+              rewriteInitializeCapabilities(transport_2, serverRef, restrictRemoteHost);
+              installModernResultBackfill(transport_2, name);
+            }
+            let max = Math.max(
+              1000,
+              getConnectionTimeoutMs() - (clockSnapshot.clock.monotonicNow() - clockSnapshot.awakeStart),
+            );
+            let retryConnectPromise = client.connect(transport_2, {
+              timeout: retryNegotiation.mode === "auto" ? Math.min(max, getHandshakeTimeoutMs()) : max,
+            });
+            let retryTransport = transport_2;
+            let retryTimedOut = false;
+            try {
+              await Promise.race([
+                retryConnectPromise,
+                new Promise((resolve, reject) => {
+                  let timer = setTimeout(
+                    (transportArg, reject, serverName) => {
+                      retryTimedOut = true;
+                      transportArg.close().catch(() => {});
+                      reject(
+                        makeConnectTimeoutError_2(
+                          `MCP server "${serverName}" connection timed out after ${getConnectionTimeoutMs()}ms`,
+                        ),
+                      );
+                    },
+                    max,
+                    retryTransport,
+                    reject,
+                    name,
+                  );
+                  retryConnectPromise.then(
+                    () => clearTimeout(timer),
+                    () => clearTimeout(timer),
+                  );
+                }),
+              ]);
+            } catch (error_2) {
+              let timedOut = retryTimedOut;
+              let isAuthFailureResult = isAuthError(error_2);
+              if (
+                !retriedWithoutElicitation &&
+                !isAuthFailureResult &&
+                !timedOut &&
+                makeFreshTransport !== undefined &&
+                isJavaSdkElicitationRejection(error_2, serverRef, retryTransport)
+              ) {
+                logMCPDebug(
+                  name,
+                  "server rejected elicitation form and url on the reconnect (Java MCP SDK 0.17.0 or older); reconnecting once more without elicitation form and url",
+                );
+                let elicitationRetryTransport = await reconnectWithoutElicitation(
+                  retryTransport,
+                  makeFreshTransport,
+                );
+                guardTransportSend(
+                  {
+                    name,
+                  },
+                  elicitationRetryTransport,
+                );
+                client = createClient({
+                  mode: "legacy",
+                });
+                let max = Math.max(1000, getConnectionTimeoutMs() - (Date.now() - now));
+                connectBudgetExpired = false;
+                try {
+                  await withConnectTimeout(
+                    () =>
+                      client.connect(elicitationRetryTransport, {
+                        timeout: max,
+                      }),
+                    elicitationRetryTransport,
+                    max,
+                  );
+                  return;
+                } catch (error_2) {
+                  if (probeTimedOutError && !connectBudgetExpired && !isAuthError(error_2)) {
+                    logMCPDebug(
+                      name,
+                      `the dial without elicitation form and url after the probe timeout failed (${truncateToLength(describeConnectError(error_2, serverRef), 200)}); keeping the probe timeout as the error so the connect can be retried`,
+                    );
+                    throw error;
+                  }
+                  throw error_2;
+                }
+              }
+              if (probeTimedOutError && !isAuthFailureResult && !timedOut) {
+                let retryErrorText = truncateToLength(describeConnectError(error_2, serverRef), 200);
+                logMCPDebug(
+                  name,
+                  `pinned-legacy retry after the probe timeout failed typed (${retryErrorText}); preserving the timeout classification so the connect stays ladder-retryable`,
+                );
+                throw error;
+              }
+              let probeTimeoutAfterRetry =
+                error_2 instanceof SdkError &&
+                error_2.code === SdkErrorCode.RequestTimeout &&
+                retryTransport._anthropicProbeTimedOut === true;
+              if (
+                wireReprobe &&
+                !isAuthFailureResult &&
+                !timedOut &&
+                error_2 instanceof SdkError &&
+                (error_2.code === SdkErrorCode.EraNegotiationFailed || probeTimeoutAfterRetry)
+              ) {
+                if (!listingPriorBurned) throw error;
+                logMCPDebug(
+                  name,
+                  `wire probe after discarding ${discoverPriorLabel()} failed (${truncateToLength(describeConnectError(error_2, serverRef), 200)}); booking a retryable connect timeout so the next dial re-probes prior-free with the legacy rescue`,
+                );
+                throw makeConnectTimeoutError_2(
+                  `MCP server "${name}" connection timed out after ${getConnectionTimeoutMs()}ms`,
+                );
+              }
+              throw error_2;
+            }
+          }
+        };
+        try {
+          try {
+            await connectWithRetries(transport_2, negotiation);
           } catch (error) {
             if (
-              error instanceof Error &&
-              (isMcpSessionExpiredError(error) ||
-                NOTHING_SENT_ERROR_CODES.has(getErrnoCode(error) ?? "") ||
-                SSL_CERT_ERROR_CODES.has(getErrnoCode(error) ?? ""))
+              legacySseTransportFactory === undefined ||
+              (transport_2 instanceof StreamableHTTPClientTransport_2 &&
+                transport_2.protocolVersion !== undefined) ||
+              !isNonJsonRpcClientError(error) ||
+              !getFeatureValue_CACHED_MAY_BE_STALE("tengu_mcp_legacy_sse_fallback", true)
             )
-              dt.requestNotRun?.(id);
-            throw error;
-          }
-          dt.requestTaken?.(id);
-        };
-      }
-      if ((serverRef.type === "http" || serverRef.type === "claudeai-proxy") && client.transport)
-        We.toolCallSends = trackToolCallSends(
-          client.transport,
-          isMcpSessionExpiredError,
-          We.activeCallWatchdogs,
-        );
-      if (client.transport) {
-        let onmessage = client.transport.onmessage;
-        client.transport.onmessage = (U, Z) => {
-          if (We.consecutiveErrors !== 0) We.consecutiveErrors = 0;
-          if (Rr && (isJSONRPCResultResponse(U) || isJSONRPCErrorResponse(U)) && U.id !== undefined)
-            for (let activeCallWatchdog of We.activeCallWatchdogs) activeCallWatchdog.requestAnswered?.(U.id);
-          if (an && (isJSONRPCResultResponse(U) || isJSONRPCErrorResponse(U)) && U.id !== undefined) {
-            let fe = en.get(U.id);
-            if (fe !== undefined) {
-              en.delete(U.id);
-              if (isJSONRPCResultResponse(U)) {
-                if (isSessionHandshakeMethod(fe)) Qt();
-              } else {
-                let ve = classifyMcpRpcErrorCode(U.error.code, fe);
-                let Ne = lt(ve);
-                if (Ne !== undefined) {
-                  onmessage?.(U, Z);
-                  vn(Ne, fe, `JSON-RPC ${U.error.code}`);
-                  return;
-                }
-                vr(fe, isRetryableListError(new ProtocolError(U.error.code, U.error.message)), ve);
+              throw error;
+            logMCPDebug(
+              name,
+              `initialize POST rejected (${truncateToLength(describeConnectError(error, serverRef), 200)}); trying legacy HTTP+SSE`,
+            );
+            let postMethodNotAllowed = error.status === 405;
+            await transport_2.close().catch(() => {});
+            let savedHandshakeTrace = handshakeTrace;
+            markConnectEnded(savedHandshakeTrace);
+            handshakeTrace = undefined;
+            let abortController = new AbortController();
+            let legacySseConnected = false;
+            let legacySseTransport = legacySseTransportFactory({
+              postMethodNotAllowed,
+              dialSignal: abortController.signal,
+              dialConnected: () => legacySseConnected,
+            });
+            transport_2 = legacySseTransport;
+            guardTransportSend(
+              {
+                name,
+              },
+              legacySseTransport,
+            );
+            client = createClient({
+              mode: "legacy",
+            });
+            let sawAuthChallengeBefore = authProvider?.sawAuthChallenge === true;
+            let min = Math.min(
+              REMOTE_PROBE_TIMEOUT_MS,
+              Math.max(1000, getConnectionTimeoutMs() - (Date.now() - now)),
+            );
+            connectBudgetExpired = false;
+            try {
+              await withConnectTimeout(
+                () =>
+                  client.connect(legacySseTransport, {
+                    timeout: min,
+                  }),
+                legacySseTransport,
+                min,
+              );
+            } catch (error_2) {
+              await legacySseTransport.close().catch(() => {});
+              abortController.abort();
+              let sawAuthChallengeAfter = !sawAuthChallengeBefore && authProvider?.sawAuthChallenge === true;
+              let authFailure = isAuthFailure(
+                error_2,
+                error_2 instanceof SseError_2 ? error_2.code : undefined,
+                sawAuthChallengeAfter,
+              );
+              if (connectBudgetExpired && postMethodNotAllowed && sawAuthChallengeAfter) {
+                logMCPDebug(
+                  name,
+                  "legacy HTTP+SSE stream GET answered with an auth challenge; its auth flow outran the fallback budget, so routing to needs-auth",
+                );
+                throw new UnauthorizedError_2(
+                  `MCP server "${name}" requires authorization: its legacy HTTP+SSE stream answered with an auth challenge and the authorization flow did not finish within the connect budget`,
+                );
               }
+              if (
+                connectBudgetExpired ||
+                (error_2 instanceof SseError_2 && !authFailure) ||
+                (authFailure && !postMethodNotAllowed)
+              ) {
+                logMCPDebug(
+                  name,
+                  `legacy HTTP+SSE not confirmed (${truncateToLength(describeConnectError(error_2, serverRef), 200)}); surfacing the POST failure`,
+                );
+                handshakeTrace = savedHandshakeTrace;
+                throw error;
+              }
+              throw error_2;
             }
-          } else if (
-            un &&
-            client.transport !== undefined &&
-            isJSONRPCErrorResponse(U) &&
-            U.id !== undefined &&
-            classifyMcpRpcErrorCode(U.error.code, "") === "rpc_era"
-          ) {
-            onmessage?.(U, Z);
-            vn("rpc_era", "a later request", `JSON-RPC ${U.error.code}`, true);
-            return;
+            legacySseConnected = true;
+            logMCPDebug(name, "connected over legacy HTTP+SSE");
           }
-          onmessage?.(U, Z);
-        };
-      }
-      client.onclose = () => {
-        let x = Date.now() - now_2;
-        let U = serverRef.type ?? "unknown";
+          classifyProbeEvidence();
+          if (
+            negotiation?.mode === "auto" &&
+            probeFallbackReason === undefined &&
+            transport_2 instanceof BoundedStdioClientTransport &&
+            transport_2._anthropicProbeTimedOut === true &&
+            client.getProtocolEra() === "modern"
+          ) {
+            probeFallbackReason = lit("rediscovered_after_probe_timeout");
+            logMCPDebug(
+              name,
+              `stdio server rejected initialize after the version negotiation probe timed out, then answered a second server/discover on the same process; connected on ${client.getNegotiatedProtocolVersion()} without restarting it`,
+            );
+          }
+          if (stderrBuffer) {
+            logMCPError(name, `Server stderr: ${stderrBuffer}`);
+            stderrBuffer = "";
+          }
+          if (stderrDataHandler && stderrStream) {
+            stderrStream.off("data", stderrDataHandler);
+            stderrStream.resume();
+          }
+          let connectDurationMs = Date.now() - now;
+          logMCPDebug(
+            name,
+            `Successfully connected (transport: ${serverRef.type || "stdio"}) in ${connectDurationMs}ms`,
+          );
+          if (listenDenylisted) {
+            if (client.getProtocolEra?.() === "modern")
+              logMCPDebug(
+                name,
+                "subscriptions/listen suppressed by the listen denylist; list_changed delivery is off for this connection",
+              );
+          } else ensureListenSubscription(client, name, serverRef, listenResult, discoverSource);
+          if (
+            (serverRef.type === "stdio" || !serverRef.type) &&
+            transport_2 instanceof BoundedStdioClientTransport &&
+            transport_2.pid
+          ) {
+            registerChildMemory("mcp_stdio", transport_2.pid);
+            if (stdioPendingCgroup)
+              parkPendingPid("mcp", transport_2.pid, () => isMcpServerBackingToolHook(name));
+            if (stdioCgroupCapped || stdioPendingCgroup) releaseMcpToolCgroup(name, transport_2.pid);
+          }
+        } catch (error) {
+          classifyProbeEvidence();
+          let connectError = error;
+          if (connectError instanceof SdkError && connectError.code === SdkErrorCode.EraNegotiationFailed) {
+            let errorData = connectError.data;
+            let cause =
+              typeof errorData === "object" && errorData !== null && "cause" in errorData
+                ? errorData.cause
+                : connectError.cause;
+            if (cause != null) connectError = cause;
+          }
+          let failureDurationMs = Date.now() - now;
+          let negotiation_2 = {
+            negotiationMode: fromEnumOpt(negotiation?.mode),
+            probeFellBack: probeFallbackReason,
+            listenSuppressed: listenDenylisted,
+            negotiationDenylisted,
+            discoverSource: discoverSourceEnum,
+            listingPriorBurned,
+            ...toolsListAheadFields(toolsListAheadState),
+          };
+          if (transport_2 instanceof BoundedStdioClientTransport && transport_2.overflowError) {
+            logMCPError(name, transport_2.overflowError.message);
+            if (stderrBuffer) logMCPError(name, `Server stderr: ${stderrBuffer}`);
+            throw transport_2.overflowError;
+          }
+          if (serverRef.type === "sse" && connectError instanceof Error) {
+            logMCPDebug(
+              name,
+              `SSE Connection failed after ${failureDurationMs}ms: ${jsonStringify({
+                url: redactUrlSecrets(serverRef.url),
+                error: describeConnectError(connectError, serverRef),
+                errorType: connectError.constructor.name,
+                stack:
+                  rethrowRedactedConnectError(connectError, serverRef) === connectError
+                    ? connectError.stack
+                    : undefined,
+              })}`,
+            );
+            logMCPError(name, rethrowRedactedConnectError(connectError, serverRef));
+            let sseFailureResult = await handleRemoteConnectAuthError({
+              name,
+              serverRef,
+              transportType: "sse",
+              error: connectError,
+              statusCode: connectError instanceof SdkHttpError ? connectError.status : connectError.code,
+              sawAuthChallenge: authProvider?.sawAuthChallenge === true,
+              hasUserAuthHeader: configHasAuthHeader,
+              helperMintsAuthHeader,
+              cliOwnedBearer: hasCliBearer,
+              useFirstPartyAuth,
+              firstPartyBearer: firstPartyBearerState.last,
+              authProvider,
+              negotiation: negotiation_2,
+              roundEpoch,
+              storageV5,
+            });
+            if (sseFailureResult) return sseFailureResult;
+          } else if (serverRef.type === "http" && connectError instanceof Error) {
+            let httpError = connectError;
+            logMCPDebug(
+              name,
+              `HTTP Connection failed after ${failureDurationMs}ms: ${describeConnectError(connectError, serverRef)} (code: ${httpError.code || "none"}, errno: ${httpError.errno || "none"})`,
+            );
+            logMCPError(name, rethrowRedactedConnectError(connectError, serverRef));
+            let httpFailureResult = await handleRemoteConnectAuthError({
+              name,
+              serverRef,
+              transportType: "http",
+              error: connectError,
+              statusCode: connectError instanceof SdkHttpError ? connectError.status : connectError.code,
+              sawAuthChallenge: authProvider?.sawAuthChallenge === true,
+              hasUserAuthHeader: configHasAuthHeader,
+              helperMintsAuthHeader,
+              cliOwnedBearer: hasCliBearer,
+              useFirstPartyAuth,
+              firstPartyBearer: firstPartyBearerState.last,
+              authProvider,
+              negotiation: negotiation_2,
+              roundEpoch,
+              storageV5,
+            });
+            if (httpFailureResult) return httpFailureResult;
+          } else if (serverRef.type === "claudeai-proxy" && connectError instanceof Error) {
+            logMCPDebug(
+              name,
+              `claude.ai proxy connection failed after ${failureDurationMs}ms: ${describeConnectError(connectError, serverRef)}`,
+            );
+            if (!isClaudeAiBearerRejectedError(connectError))
+              logMCPError(name, rethrowRedactedConnectError(connectError, serverRef));
+            let proxyStatus = connectError instanceof SdkHttpError ? connectError.status : connectError.code;
+            if (isClaudeAiBearerRejectedError(connectError)) {
+              markConnectEnded(handshakeTrace);
+              logEvent("tengu_mcp_server_connection_failed", {
+                processUptimeAtConnectStartMs,
+                ...handshakeTraceTelemetry(handshakeTrace),
+                transportType: lit("claudeai-proxy"),
+                errorCode: lit("CLAUDEAI_BEARER_REJECTED"),
+                sdkGeneration: fromEnum(mcpSdkGeneration()),
+                negotiationMode: negotiation_2.negotiationMode,
+                probeFellBack: negotiation_2.probeFellBack,
+                listenSuppressed: negotiation_2.listenSuppressed,
+                negotiationDenylisted: negotiation_2.negotiationDenylisted,
+                discoverSource: negotiation_2.discoverSource,
+                listingPriorBurned: negotiation_2.listingPriorBurned,
+                ...mcpBaseUrlAnalytics_2(serverRef, name),
+                ...buildPluginSourceFields(serverRef),
+              });
+              logFeatureSad("mcp_connect", "mcp_connect_claudeai_bearer_rejected");
+              let cacheKey = serverCacheKey(name, serverRef);
+              let failedResult = {
+                name,
+                type: "failed",
+                config: serverRef,
+                error: connectError.message,
+                errorCode: "CLAUDEAI_BEARER_REJECTED",
+              };
+              let cachedPromise = getConnectionCache().connections.get(cacheKey);
+              if (cachedPromise)
+                cachedPromise.then(
+                  (cachedResult) => {
+                    if (
+                      cachedResult === failedResult &&
+                      getConnectionCache().connections.get(cacheKey) === cachedPromise
+                    )
+                      getConnectionCache().connections.delete(cacheKey);
+                  },
+                  () => {},
+                );
+              return failedResult;
+            }
+            if (proxyStatus === 401 || proxyStatus === 403)
+              return handleRemoteAuthFailure(
+                name,
+                serverRef,
+                "claudeai-proxy",
+                undefined,
+                false,
+                roundEpoch,
+                negotiation_2,
+                storageV5,
+              );
+          } else if (serverRef.type === "sse-ide" || serverRef.type === "ws-ide")
+            logEvent("tengu_mcp_ide_server_connection_failed", {
+              connectionDurationMs: failureDurationMs,
+            });
+          if (inProcessServer) inProcessServer.close().catch(() => {});
+          transport_2.close().catch(() => {});
+          if (stderrBuffer && !isCleanupStarted()) logMCPError(name, `Server stderr: ${stderrBuffer}`);
+          throw connectError;
+        }
+        let serverCapabilities = client.getServerCapabilities();
+        let serverVersion = client.getServerVersion();
+        let promptOverrides = officialPluginPromptOverrides(serverRef);
+        let instructionsOverride =
+          serverInstructionsOverride(promptOverrides, name) ?? client.getInstructions();
+        let instructionsLimit = toolTimeoutForServer(serverRef);
+        let instructions = truncateServerInstructions(instructionsOverride, name, instructionsLimit);
         logMCPDebug(
           name,
-          `${U.toUpperCase()} connection closed after ${Math.floor(x / 1000)}s (${at ? "with errors" : "cleanly"})`,
+          `Connection established with capabilities: ${jsonStringify({
+            hasTools: !!serverCapabilities?.tools,
+            hasPrompts: !!serverCapabilities?.prompts,
+            hasResources: !!serverCapabilities?.resources,
+            hasResourceSubscribe: !!serverCapabilities?.resources?.subscribe,
+            serverVersion: serverVersion || "unknown",
+            protocolEra: client.getProtocolEra(),
+            negotiatedProtocolVersion: client.getNegotiatedProtocolVersion(),
+          })}`,
         );
-        logMcpConnectionOtelEvent(name, serverRef, {
-          status: "disconnected",
-          durationMs: x,
+        logForDebugging(
+          `[MCP] Server "${name}" connected with subscribe=${!!serverCapabilities?.resources?.subscribe}`,
+        );
+        client.setRequestHandler("elicitation/create", async (request) => {
+          logMCPDebug(name, `Elicitation request received during initialization: ${jsonStringify(request)}`);
+          return {
+            action: "cancel",
+          };
         });
-        let Z = serverCacheKey(name, serverRef);
-        getConnectionCache().liveClients.delete(client);
-        getConnectionCache().toolLists.delete(Z);
-        getConnectionCache().resourceLists.delete(Z);
-        getConnectionCache().resourceTemplateLists.delete(Z);
-        getConnectionCache().commandLists.delete(Z);
-        getConnectionCache().connections.delete(Z);
-        logMCPDebug(name, "Cleared connection cache for reconnection");
-        if (onclose) onclose();
-      };
-      let kr = async () => {
-        if (inProcessServer) {
-          try {
-            await inProcessServer.close();
-          } catch (error) {
-            logMCPDebug(name, `Error closing in-process server: ${error}`);
+        if (serverRef.type === "sse-ide" || serverRef.type === "ws-ide") {
+          let connectionDurationMs = Date.now() - now;
+          logEvent("tengu_mcp_ide_server_connection_succeeded", {
+            connectionDurationMs,
+            serverVersion: sanitizeVersion(serverVersion?.version),
+          });
+          maybeNotifyIDEConnected(client).catch((error) => {
+            logMCPError(
+              name,
+              `Failed to send ide_connected notification: ${describeConnectError(error, serverRef)}`,
+            );
+          });
+        }
+        let now_2 = Date.now();
+        let sawTransportError = false;
+        let onerror = client.onerror;
+        let onclose = client.onclose;
+        let maxConsecutiveErrors = 3;
+        let transportErrorState = {
+          consecutiveErrors: 0,
+          activeCallWatchdogs: new Set(),
+          callsInProgress: 0,
+          pendingElicitations: 0,
+          lastElicitationClosedAt: 0,
+          dialledUnder: getRequestTimingStore(),
+        };
+        let closeStarted = false;
+        let closeTransport = (reason) => {
+          if (closeStarted) return;
+          closeStarted = true;
+          transportErrorState.closeReason = reason;
+          logMCPDebug(name, `Closing transport (${reason})`);
+          client.close().catch((error) => {
+            logMCPDebug(name, `Error during close: ${describeConnectError(error, serverRef)}`);
+          });
+        };
+        let kind = discoverPrior?.kind;
+        let fromRememberedLegacy = kind !== undefined && usedRememberedLegacy;
+        let trackHandshakeMethods = kind !== undefined;
+        let pendingPriorRpcEra = fromRememberedLegacy;
+        let pendingMethodsById = new Map();
+        let sawSessionHandshake = false;
+        let pendingToolsListTimer;
+        let clearPendingWatch = () => {
+          trackHandshakeMethods = false;
+          pendingMethodsById.clear();
+          if (pendingToolsListTimer !== undefined) {
+            clearTimeout(pendingToolsListTimer);
+            pendingToolsListTimer = undefined;
           }
+        };
+        let classifyPriorRejection = (rejectionKindInput) =>
+          kind === "modern" || rejectionKindInput === "rpc_era" ? rejectionKindInput : undefined;
+        let schedulePriorDiscardClose = () => {
+          if ((transportErrorState.callsInProgress ?? 0) > 0)
+            transportErrorState.onCallsIdle = schedulePriorDiscardClose;
+          else if (client.transport !== undefined) closeTransport("discover prior rejected");
+        };
+        let discardPriorAfterRejection = (reason, method, discardKind, postWindow = false) => {
+          clearPendingWatch();
+          pendingPriorRpcEra = false;
+          burnDiscoverPrior(serverRef, kind, storageV5);
+          logMCPDebug(
+            name,
+            `${method} on a connection built from ${discoverPriorLabel()} was rejected (${discardKind}); discarding it for this server \u2014 this connection closes once no tool call or background task is using it, and the next dial probes server/discover on the wire`,
+          );
+          logEvent("tengu_mcp_listing_prior_rejected", {
+            phase: postWindow ? lit("post_window") : lit("post_connect"),
+            priorKind: fromEnumOpt(kind),
+            priorSource: discoverSourceEnum,
+            reason: fromEnum(reason),
+            transportType: fromEnum(serverRef.type ?? "stdio"),
+            ...mcpBaseUrlAnalytics_2(serverRef, name),
+          });
+          setTimeout(schedulePriorDiscardClose, 0);
+        };
+        let armToolsListWatchdog = () => {
+          if (pendingToolsListTimer !== undefined) clearTimeout(pendingToolsListTimer);
+          pendingToolsListTimer = setTimeout(() => {
+            clearPendingWatch();
+            if (fromRememberedLegacy && sawSessionHandshake && client.transport !== undefined) {
+              logMCPDebug(
+                name,
+                `tools/list on a connection built from ${discoverPriorLabel()} got no result in time; forgetting the verdict, so the next dial probes server/discover`,
+              );
+              forgetDiscoverVerdict(serverRef, storageV5);
+            }
+          }, getConnectionTimeoutMs());
+          pendingToolsListTimer.unref();
+        };
+        let noteSessionHandshakeRefusal = (method, retryable, kind) => {
+          if (isSessionHandshakeMethod(method) && !retryable) {
+            clearPendingWatch();
+            if (fromRememberedLegacy && kind !== undefined) {
+              logMCPDebug(
+                name,
+                `${method} on a connection built from ${discoverPriorLabel()} was refused (${kind}); forgetting the verdict, so the next dial probes server/discover`,
+              );
+              forgetDiscoverVerdict(serverRef, storageV5);
+            }
+          }
+        };
+        if (trackHandshakeMethods && client.transport) {
+          armToolsListWatchdog();
+          let transport = client.transport;
+          let sendOriginal = transport.send.bind(transport);
+          transport.send = async (message, options) => {
+            let request = trackHandshakeMethods && isJSONRPCRequest(message) ? message : undefined;
+            if (request !== undefined) {
+              pendingMethodsById.set(request.id, request.method);
+              if (isSessionHandshakeMethod(request.method)) {
+                sawSessionHandshake = true;
+                armToolsListWatchdog();
+              }
+            }
+            try {
+              await sendOriginal(message, options);
+            } catch (error) {
+              if (request !== undefined && trackHandshakeMethods) {
+                let method = request.method;
+                pendingMethodsById.delete(request.id);
+                let rejectionKind =
+                  fromRememberedLegacy &&
+                  isSessionHandshakeMethod(method) &&
+                  isUnsupportedVersionHttp400(error)
+                    ? "rpc_era"
+                    : classifyMcpConnectError(error, method);
+                let priorReason = classifyPriorRejection(rejectionKind);
+                if (priorReason !== undefined)
+                  discardPriorAfterRejection(
+                    priorReason,
+                    method,
+                    truncateToLength(describeConnectError(error, serverRef), 200),
+                  );
+                else noteSessionHandshakeRefusal(method, isRetryableListError(error), rejectionKind);
+              }
+              throw error;
+            }
+          };
+        }
+        client.onerror = (error) => {
+          let transportType = serverRef.type || "stdio";
+          if (transportType === "stdio" && error instanceof SyntaxError) {
+            logMCPError(name, `Ignoring non-JSON line on stdout: ${error.message}`);
+            return;
+          }
+          if (error instanceof FirstPartyDesignNeedsConsentError) return;
+          if (transportType === "stdio" && error instanceof StdoutOverflowError) {
+            logMCPError(name, error.message);
+            sawTransportError = true;
+            closeTransport("stdout overflow");
+            if (onerror) onerror(error);
+            return;
+          }
+          if (
+            (transportType === "http" || transportType === "claudeai-proxy") &&
+            error instanceof HttpBodyOverflowError
+          ) {
+            logMCPError(
+              name,
+              `sent a response larger than ${Math.round(MCP_BODY_LIMIT / 1024 / 1024)}MB. Claude Code stopped reading it and failed the request it answered; the connection stays open.`,
+            );
+            if (onerror) onerror(error);
+            return;
+          }
+          if (
+            (transportType === "sse" ||
+              transportType === "sse-ide" ||
+              transportType === "http" ||
+              transportType === "claudeai-proxy") &&
+            error.message.includes(STOPPED_READING_NOTE)
+          ) {
+            logMCPError(name, error.message);
+            sawTransportError = true;
+            closeTransport("http body overflow");
+            if (onerror) onerror(error);
+            return;
+          }
+          if (
+            (transportType === "sse" || transportType === "http" || transportType === "claudeai-proxy") &&
+            error instanceof SyntaxError
+          ) {
+            sawTransportError = true;
+            armWatchdogs();
+            closeTransport(
+              authProvider?.authChallengeOpen === true && transportErrorState.activeCallWatchdogs.size <= 1
+                ? "malformed message after an auth challenge"
+                : "malformed JSON-RPC message (response truncated)",
+            );
+            if (onerror) onerror(error);
+            return;
+          }
+          let uptimeMs = Date.now() - now_2;
+          sawTransportError = true;
+          logMCPDebug(
+            name,
+            `${transportType.toUpperCase()} connection dropped after ${Math.floor(uptimeMs / 1000)}s uptime`,
+          );
+          if (error.message) {
+            let hint = CONNECTION_ERROR_HINTS_2.find(([needle]) => error.message.includes(needle))?.[1];
+            logMCPDebug(name, hint ?? `Connection error: ${describeConnectError(error, serverRef)}`);
+          }
+          if (
+            (transportType === "http" || transportType === "claudeai-proxy") &&
+            client.transport?.sessionId !== undefined &&
+            isMcpSessionExpiredError(error)
+          ) {
+            logMCPDebug(
+              name,
+              "MCP session expired (server no longer recognizes session ID), triggering reconnection",
+            );
+            closeTransport("session expired");
+            if (onerror) onerror(error);
+            return;
+          }
+          if (
+            (transportType === "http" || transportType === "claudeai-proxy") &&
+            client.transport?.sessionId !== undefined &&
+            error instanceof SdkHttpError &&
+            error.status === 404 &&
+            isSseOpenFailure(error)
+          )
+            logFeatureSad("mcp_session_recovery", "get_stream_404_not_reinit");
+          if (transportType === "sse" || transportType === "http" || transportType === "claudeai-proxy") {
+            if (error.message.includes("Maximum reconnection attempts")) {
+              logMCPDebug(
+                name,
+                "SSE GET-stream reconnection exhausted; leaving transport up (POST still works)",
+              );
+              transportErrorState.consecutiveErrors = 0;
+              armWatchdogs();
+              if (onerror) onerror(error);
+              return;
+            }
+            if (isTransientMcpError(error)) {
+              transportErrorState.consecutiveErrors++;
+              armWatchdogs();
+              logMCPDebug(
+                name,
+                `Terminal connection error ${transportErrorState.consecutiveErrors}/${maxConsecutiveErrors}`,
+              );
+              if (transportErrorState.consecutiveErrors >= maxConsecutiveErrors) {
+                transportErrorState.consecutiveErrors = 0;
+                closeTransport("max consecutive terminal errors");
+              }
+            } else transportErrorState.consecutiveErrors = 0;
+          }
+          if (onerror) onerror(error);
+        };
+        let isCcrToolport = serverRef.type === "http" && isCcrMcpPath(serverRef.url);
+        if (isCcrToolport && client.transport) {
+          let transport = client.transport;
+          let sendOriginal = transport.send.bind(transport);
+          transport.send = async (message, options) => {
+            let _meta =
+              isJSONRPCRequest(message) && message.method === "tools/call"
+                ? message.params?._meta
+                : undefined;
+            let toolUseId = _meta?.["claudecode/toolUseId"];
+            let callMark = _meta?.[CLAUDECODE_CALLMARK];
+            let sanitizedMessage =
+              isJSONRPCRequest(message) && _meta !== undefined && callMark !== undefined
+                ? {
+                    ...message,
+                    params: {
+                      ...message.params,
+                      _meta: omitKeys(_meta, CLAUDECODE_CALLMARK),
+                    },
+                  }
+                : message;
+            let watchdog =
+              toolUseId !== undefined
+                ? [...transportErrorState.activeCallWatchdogs].find(
+                    (activeCallWatchdog) => activeCallWatchdog.toolUseId === toolUseId,
+                  )
+                : callMark !== undefined
+                  ? [...transportErrorState.activeCallWatchdogs].find(
+                      (activeCallWatchdog) => activeCallWatchdog.mark === callMark,
+                    )
+                  : undefined;
+            if (!isJSONRPCRequest(message) || watchdog === undefined)
+              return sendOriginal(sanitizedMessage, options);
+            let { id } = message;
+            watchdog.requestSent?.(id);
+            try {
+              await sendOriginal(sanitizedMessage, {
+                ...options,
+                onRequestStreamEnd: () => {
+                  options?.onRequestStreamEnd?.();
+                  watchdog.answerStreamEnded?.(id);
+                },
+              });
+            } catch (error) {
+              if (
+                error instanceof Error &&
+                (isMcpSessionExpiredError(error) ||
+                  NOTHING_SENT_ERROR_CODES.has(getErrnoCode(error) ?? "") ||
+                  SSL_CERT_ERROR_CODES.has(getErrnoCode(error) ?? ""))
+              )
+                watchdog.requestNotRun?.(id);
+              throw error;
+            }
+            watchdog.requestTaken?.(id);
+          };
+        }
+        if ((serverRef.type === "http" || serverRef.type === "claudeai-proxy") && client.transport)
+          transportErrorState.toolCallSends = trackToolCallSends(
+            client.transport,
+            isMcpSessionExpiredError,
+            transportErrorState.activeCallWatchdogs,
+          );
+        if (client.transport) {
+          let onmessage = client.transport.onmessage;
+          client.transport.onmessage = (message, extra) => {
+            if (transportErrorState.consecutiveErrors !== 0) transportErrorState.consecutiveErrors = 0;
+            if (
+              isCcrToolport &&
+              (isJSONRPCResultResponse(message) || isJSONRPCErrorResponse(message)) &&
+              message.id !== undefined
+            )
+              for (let activeCallWatchdog of transportErrorState.activeCallWatchdogs)
+                activeCallWatchdog.requestAnswered?.(message.id);
+            if (
+              trackHandshakeMethods &&
+              (isJSONRPCResultResponse(message) || isJSONRPCErrorResponse(message)) &&
+              message.id !== undefined
+            ) {
+              let pendingMethod = pendingMethodsById.get(message.id);
+              if (pendingMethod !== undefined) {
+                pendingMethodsById.delete(message.id);
+                if (isJSONRPCResultResponse(message)) {
+                  if (isSessionHandshakeMethod(pendingMethod)) clearPendingWatch();
+                } else {
+                  let errorKind = classifyMcpRpcErrorCode(message.error.code, pendingMethod);
+                  let priorReason = classifyPriorRejection(errorKind);
+                  if (priorReason !== undefined) {
+                    onmessage?.(message, extra);
+                    discardPriorAfterRejection(priorReason, pendingMethod, `JSON-RPC ${message.error.code}`);
+                    return;
+                  }
+                  noteSessionHandshakeRefusal(
+                    pendingMethod,
+                    isRetryableListError(new ProtocolError(message.error.code, message.error.message)),
+                    errorKind,
+                  );
+                }
+              }
+            } else if (
+              pendingPriorRpcEra &&
+              client.transport !== undefined &&
+              isJSONRPCErrorResponse(message) &&
+              message.id !== undefined &&
+              classifyMcpRpcErrorCode(message.error.code, "") === "rpc_era"
+            ) {
+              onmessage?.(message, extra);
+              discardPriorAfterRejection(
+                "rpc_era",
+                "a later request",
+                `JSON-RPC ${message.error.code}`,
+                true,
+              );
+              return;
+            }
+            onmessage?.(message, extra);
+          };
+        }
+        client.onclose = () => {
+          let uptimeMs = Date.now() - now_2;
+          let transportType = serverRef.type ?? "unknown";
+          logMCPDebug(
+            name,
+            `${transportType.toUpperCase()} connection closed after ${Math.floor(uptimeMs / 1000)}s (${sawTransportError ? "with errors" : "cleanly"})`,
+          );
+          logMcpConnectionOtelEvent(name, serverRef, {
+            status: "disconnected",
+            durationMs: uptimeMs,
+          });
+          let cacheKey = serverCacheKey(name, serverRef);
+          getConnectionCache().liveClients.delete(client);
+          getConnectionCache().toolLists.delete(cacheKey);
+          getConnectionCache().resourceLists.delete(cacheKey);
+          getConnectionCache().resourceTemplateLists.delete(cacheKey);
+          getConnectionCache().commandLists.delete(cacheKey);
+          getConnectionCache().connections.delete(cacheKey);
+          logMCPDebug(name, "Cleared connection cache for reconnection");
+          if (onclose) onclose();
+        };
+        let closeConnection = async () => {
+          if (inProcessServer) {
+            try {
+              await inProcessServer.close();
+            } catch (error) {
+              logMCPDebug(name, `Error closing in-process server: ${error}`);
+            }
+            try {
+              await client.close();
+            } catch (error) {
+              logMCPDebug(name, `Error closing client: ${describeConnectError(error, serverRef)}`);
+            }
+            return;
+          }
+          if (transport_2 instanceof BoundedStdioClientTransport)
+            try {
+              let pid = transport_2.pid;
+              if (transport_2.serverProcess && getPlatform() === "windows") {
+                logMCPDebug(name, "Closing MCP server stdin");
+                await closeStdioServer(transport_2.serverProcess);
+              } else if (pid) {
+                logMCPDebug(name, "Sending SIGINT to MCP server process");
+                try {
+                  process.kill(pid, "SIGINT");
+                } catch (error) {
+                  logMCPDebug(name, `Error sending SIGINT: ${error}`);
+                  return;
+                }
+                await new Promise(async (resolve) => {
+                  let settled = false;
+                  let finish = () => {
+                    if (settled) return;
+                    settled = true;
+                    clearInterval(interval);
+                    clearTimeout(timer);
+                    resolve();
+                  };
+                  let isAlive = (pid) => {
+                    try {
+                      process.kill(pid, 0);
+                      return true;
+                    } catch {
+                      return false;
+                    }
+                  };
+                  let interval = setInterval(
+                    (isAlive, pid, debugName, done) => {
+                      if (!isAlive(pid)) {
+                        logMCPDebug(debugName, "MCP server process exited cleanly");
+                        done();
+                      }
+                    },
+                    50,
+                    isAlive,
+                    pid,
+                    name,
+                    finish,
+                  );
+                  let timer = setTimeout(
+                    (debugName, done) => {
+                      logMCPDebug(debugName, "Cleanup timeout reached, stopping process monitoring");
+                      done();
+                    },
+                    600,
+                    name,
+                    finish,
+                  );
+                  try {
+                    await sleep(100);
+                    if (!settled) {
+                      if (!isAlive(pid)) {
+                        finish();
+                        return;
+                      }
+                      logMCPDebug(name, "SIGINT failed, sending SIGTERM to MCP server process");
+                      try {
+                        process.kill(pid, "SIGTERM");
+                      } catch (error) {
+                        logMCPDebug(name, `Error sending SIGTERM: ${error}`);
+                        finish();
+                        return;
+                      }
+                      await sleep(400);
+                      if (!settled)
+                        if (!isAlive(pid)) finish();
+                        else {
+                          logMCPDebug(name, "SIGTERM failed, sending SIGKILL to MCP server process");
+                          try {
+                            process.kill(pid, "SIGKILL");
+                          } catch (error) {
+                            logMCPDebug(name, `Error sending SIGKILL: ${error}`);
+                          }
+                        }
+                    }
+                    finish();
+                  } catch {
+                    finish();
+                  }
+                });
+              }
+            } catch (error) {
+              logMCPDebug(name, `Error terminating process: ${error}`);
+            }
           try {
             await client.close();
           } catch (error) {
             logMCPDebug(name, `Error closing client: ${describeConnectError(error, serverRef)}`);
           }
-          return;
-        }
-        if (transport_2 instanceof BoundedStdioClientTransport)
-          try {
-            let pid = transport_2.pid;
-            if (transport_2.serverProcess && getPlatform() === "windows") {
-              logMCPDebug(name, "Closing MCP server stdin");
-              await closeStdioServer(transport_2.serverProcess);
-            } else if (pid) {
-              logMCPDebug(name, "Sending SIGINT to MCP server process");
-              try {
-                process.kill(pid, "SIGINT");
-              } catch (error) {
-                logMCPDebug(name, `Error sending SIGINT: ${error}`);
-                return;
-              }
-              await new Promise(async (resolve) => {
-                let Z = false;
-                let fe = () => {
-                  if (Z) return;
-                  Z = true;
-                  clearInterval(interval);
-                  clearTimeout(timer);
-                  resolve();
-                };
-                let ve = (pid) => {
-                  try {
-                    process.kill(pid, 0);
-                    return true;
-                  } catch {
-                    return false;
-                  }
-                };
-                let interval = setInterval(
-                  (le, dt, Et, It) => {
-                    if (!le(dt)) {
-                      logMCPDebug(Et, "MCP server process exited cleanly");
-                      It();
-                    }
-                  },
-                  50,
-                  ve,
-                  pid,
+        };
+        let unregisterCleanup = registerCleanup(closeConnection);
+        if (transport_2 instanceof BoundedStdioClientTransport) transport_2.handOffExitCleanup();
+        let cleanup = async () => {
+          getConnectionCache().liveClients.delete(client);
+          unregisterCleanup?.();
+          await closeConnection();
+        };
+        getConnectionCache().liveClients.add(client);
+        if (getAnnouncedDirectories() !== announcedDirectories) client.sendRootsListChanged().catch(() => {});
+        let discoverVerdictKey = getDiscoverVerdictKey(serverRef);
+        if (discoverSource === "wire" && client.getProtocolEra() === "modern")
+          forgetDiscoverVerdict(serverRef, storageV5);
+        let probeTimedOut =
+          transport_2 instanceof BoundedStdioClientTransport && transport_2._anthropicProbeTimedOut === true;
+        let answeredProbeLate =
+          transport_2 instanceof BoundedStdioClientTransport && transport_2.answeredProbeLate;
+        if (
+          discoverVerdictKey !== undefined &&
+          !(serverRef.type === "claudeai-proxy" && serverRef.stateless === true) &&
+          discoverSource === "wire" &&
+          (discoverMethodNotFound || probeTimedOut) &&
+          probeFallbackReason === undefined &&
+          client.getProtocolEra() === "legacy" &&
+          !getCliOwnedState().burnedListingDiscoverPriors.has(discoverVerdictKey)
+        ) {
+          if (answeredProbeLate) {
+            logMCPDebug(
+              name,
+              "stdio server answered the server/discover probe after its bound, so it was only slow to start and speaks the new protocol; not remembering it as a legacy peer",
+            );
+            forgetDiscoverVerdict(serverRef, storageV5);
+          } else {
+            rememberLegacyPeer(serverRef, storageV5);
+            if (probeTimedOut && transport_2 instanceof BoundedStdioClientTransport)
+              transport_2.onAnsweredProbeLate = () => {
+                logMCPDebug(
                   name,
-                  fe,
+                  "stdio server answered the server/discover probe after it had connected legacy; it speaks the new protocol, so forgetting it as a legacy peer",
                 );
-                let timer = setTimeout(
-                  (le, dt) => {
-                    logMCPDebug(le, "Cleanup timeout reached, stopping process monitoring");
-                    dt();
-                  },
-                  600,
-                  name,
-                  fe,
-                );
-                try {
-                  await sleep(100);
-                  if (!Z) {
-                    if (!ve(pid)) {
-                      fe();
-                      return;
-                    }
-                    logMCPDebug(name, "SIGINT failed, sending SIGTERM to MCP server process");
-                    try {
-                      process.kill(pid, "SIGTERM");
-                    } catch (error) {
-                      logMCPDebug(name, `Error sending SIGTERM: ${error}`);
-                      fe();
-                      return;
-                    }
-                    await sleep(400);
-                    if (!Z)
-                      if (!ve(pid)) fe();
-                      else {
-                        logMCPDebug(name, "SIGTERM failed, sending SIGKILL to MCP server process");
-                        try {
-                          process.kill(pid, "SIGKILL");
-                        } catch (error) {
-                          logMCPDebug(name, `Error sending SIGKILL: ${error}`);
-                        }
-                      }
-                  }
-                  fe();
-                } catch {
-                  fe();
-                }
-              });
-            }
-          } catch (error) {
-            logMCPDebug(name, `Error terminating process: ${error}`);
+                forgetDiscoverVerdict(serverRef, storageV5);
+              };
           }
-        try {
-          await client.close();
-        } catch (error) {
-          logMCPDebug(name, `Error closing client: ${describeConnectError(error, serverRef)}`);
         }
-      };
-      let Wi = registerCleanup(kr);
-      if (transport_2 instanceof BoundedStdioClientTransport) transport_2.handOffExitCleanup();
-      let cleanup = async () => {
-        getConnectionCache().liveClients.delete(client);
-        Wi?.();
-        await kr();
-      };
-      getConnectionCache().liveClients.add(client);
-      if (getAnnouncedDirectories() !== announcedDirectories) client.sendRootsListChanged().catch(() => {});
-      let discoverVerdictKey = getDiscoverVerdictKey(serverRef);
-      if (discoverSource === "wire" && client.getProtocolEra() === "modern")
-        forgetDiscoverVerdict(serverRef, storageV5);
-      let Ir =
-        transport_2 instanceof BoundedStdioClientTransport && transport_2._anthropicProbeTimedOut === true;
-      let answeredProbeLate =
-        transport_2 instanceof BoundedStdioClientTransport && transport_2.answeredProbeLate;
-      if (
-        discoverVerdictKey !== undefined &&
-        !(serverRef.type === "claudeai-proxy" && serverRef.stateless === true) &&
-        discoverSource === "wire" &&
-        (discoverMethodNotFound || Ir) &&
-        q === undefined &&
-        client.getProtocolEra() === "legacy" &&
-        !getCliOwnedState().burnedListingDiscoverPriors.has(discoverVerdictKey)
-      ) {
-        if (answeredProbeLate) {
+        let connectDurationMs = Date.now() - now;
+        logMcpConnectionOtelEvent(name, serverRef, {
+          status: "connected",
+          durationMs: connectDurationMs,
+        });
+        let instructionsLength = instructionsOverride?.length ?? 0;
+        markConnectEnded(handshakeTrace);
+        logEvent("tengu_mcp_server_connection_succeeded", {
+          connectionDurationMs: connectDurationMs,
+          processUptimeAtConnectStartMs,
+          ...handshakeTraceTelemetry(handshakeTrace),
+          instructionsLength,
+          instructionsTruncated: instructionsLength > instructionsLimit,
+          transportType: fromEnum(serverRef.type ?? "stdio"),
+          negotiatedLegacySse: serverRef.type === "http" && transport_2 instanceof SSEClientTransport_2,
+          sdkGeneration: fromEnum(mcpSdkGeneration()),
+          negotiationMode: fromEnumOpt(negotiation?.mode),
+          scope: fromEnum(serverRef.scope),
+          protocolEra: fromEnumOpt(client.getProtocolEra()),
+          negotiatedProtocolVersion: protocolVersionLiteral(client.getNegotiatedProtocolVersion()),
+          probeFellBack: probeFallbackReason,
+          bareElicitationRetry: retriedWithoutElicitation,
+          discoverSource: discoverSourceEnum,
+          listingPriorBurned,
+          listenSuppressed: listenDenylisted,
+          negotiationDenylisted,
+          ...toolsListAheadFields(toolsListAheadState),
+          isPlugin: serverRef.pluginSource !== undefined,
+          ...buildPluginSourceFields(serverRef),
+          totalServers: serverStats?.totalServers,
+          stdioCount: serverStats?.stdioCount,
+          sseCount: serverStats?.sseCount,
+          httpCount: serverStats?.httpCount,
+          sseIdeCount: serverStats?.sseIdeCount,
+          wsIdeCount: serverStats?.wsIdeCount,
+          ...mcpBaseUrlAnalytics_2(serverRef, name),
+        });
+        if (toolsListAheadState !== undefined && !getCliOwnedState().toolsListAhead.has(client))
+          armToolsListAhead(
+            client,
+            toolsListAheadState.flagSource,
+            negotiationDenylisted,
+            toolsListAheadState.listed,
+          );
+        if (handshakeTrace !== undefined) {
+          let trace = handshakeTrace;
+          let protocolEra = client.getProtocolEra();
+          let aheadState = getCliOwnedState().toolsListAhead.get(client);
+          armFirstToolsListReport(client, (report) => {
+            logEvent("tengu_mcp_first_tools_list", {
+              ...report,
+              messageStreamGetOutcome: fromEnum(trace.messageStreamGetOutcome),
+              processUptimeAtConnectStartMs,
+              keepAliveDisabled: trace.keepAliveDisabled,
+              transportType: fromEnum(serverRef.type ?? "stdio"),
+              sdkGeneration: fromEnum(mcpSdkGeneration()),
+              protocolEra: fromEnumOpt(protocolEra),
+              negotiationDenylisted,
+              ...toolsListAheadFields(aheadState),
+              mcpServerKeyHash: toolNameForTelemetry(name),
+            });
+          });
+          if (aheadState !== undefined)
+            scheduleMessageStreamOutcomeLog(client, name, trace, {
+              ...toolsListAheadFields(aheadState),
+              negotiationDenylisted,
+            });
+        }
+        logFeatureOk("mcp_connect");
+        logForDiagnosticsNoPII("info", "mcp_connect_complete", {
+          transport,
+          duration_ms: connectDurationMs,
+        });
+        if (authProvider) getCliOwnedState().clientAuthProviders.set(client, authProvider);
+        getCliOwnedState().clientFirstPartyBearers.set(client, firstPartyBearerState);
+        let connection = {
+          name,
+          client: clientServerId(client),
+          type: "connected",
+          capabilities: serverCapabilities ?? {},
+          serverInfo: serverVersion,
+          instructions,
+          negotiatedProtocolVersion: client.getNegotiatedProtocolVersion(),
+          protocolEra: client.getProtocolEra(),
+          config: serverRef,
+          cleanup,
+          transportErrorState,
+        };
+        clearDiscoveryPathMemo(name);
+        try {
+          getConnectedClientWiring()?.(connection);
+        } catch (error) {
+          logMCPError(
+            name,
+            `connected-client wiring failed (placeholder retained, adoption will retry): ${errorMessage(error)}`,
+          );
+        }
+        return connection;
+      } catch (error) {
+        let abandonedAfterMs = Date.now() - now;
+        if (isCleanupStarted()) {
           logMCPDebug(
             name,
-            "stdio server answered the server/discover probe after its bound, so it was only slow to start and speaks the new protocol; not remembering it as a legacy peer",
+            `Connection abandoned after ${abandonedAfterMs}ms (Claude Code is shutting down)`,
           );
-          forgetDiscoverVerdict(serverRef, storageV5);
-        } else {
-          rememberLegacyPeer(serverRef, storageV5);
-          if (Ir && transport_2 instanceof BoundedStdioClientTransport)
-            transport_2.onAnsweredProbeLate = () => {
-              logMCPDebug(
-                name,
-                "stdio server answered the server/discover probe after it had connected legacy; it speaks the new protocol, so forgetting it as a legacy peer",
-              );
-              forgetDiscoverVerdict(serverRef, storageV5);
-            };
+          if (inProcessServer) inProcessServer.close().catch(() => {});
+          return {
+            name,
+            type: "failed",
+            config: serverRef,
+            error: "Claude Code is shutting down",
+            errorCode: "SHUTTING_DOWN",
+          };
         }
-      }
-      let Mo = Date.now() - now;
-      logMcpConnectionOtelEvent(name, serverRef, {
-        status: "connected",
-        durationMs: Mo,
-      });
-      let Lr = Me?.length ?? 0;
-      markConnectEnded(handshakeTrace);
-      logEvent("tengu_mcp_server_connection_succeeded", {
-        connectionDurationMs: Mo,
-        processUptimeAtConnectStartMs,
-        ...handshakeTraceTelemetry(handshakeTrace),
-        instructionsLength: Lr,
-        instructionsTruncated: Lr > Ye,
-        transportType: fromEnum(serverRef.type ?? "stdio"),
-        negotiatedLegacySse: serverRef.type === "http" && transport_2 instanceof SSEClientTransport_2,
-        sdkGeneration: fromEnum(mcpSdkGeneration()),
-        negotiationMode: fromEnumOpt(negotiation?.mode),
-        scope: fromEnum(serverRef.scope),
-        protocolEra: fromEnumOpt(client.getProtocolEra()),
-        negotiatedProtocolVersion: iu(client.getNegotiatedProtocolVersion()),
-        probeFellBack: q,
-        bareElicitationRetry: yt,
-        discoverSource: Ee,
-        listingPriorBurned: Qe,
-        listenSuppressed: Ot,
-        negotiationDenylisted: vt,
-        ...toolsListAheadFields(ft),
-        isPlugin: serverRef.pluginSource !== undefined,
-        ...buildPluginSourceFields(serverRef),
-        totalServers: serverStats?.totalServers,
-        stdioCount: serverStats?.stdioCount,
-        sseCount: serverStats?.sseCount,
-        httpCount: serverStats?.httpCount,
-        sseIdeCount: serverStats?.sseIdeCount,
-        wsIdeCount: serverStats?.wsIdeCount,
-        ...mcpBaseUrlAnalytics_2(serverRef, name),
-      });
-      if (ft !== undefined && !getCliOwnedState().toolsListAhead.has(client))
-        armToolsListAhead(client, ft.flagSource, vt, ft.listed);
-      if (handshakeTrace !== undefined) {
-        let x = handshakeTrace;
-        let protocolEra = client.getProtocolEra();
-        let Z = getCliOwnedState().toolsListAhead.get(client);
-        armFirstToolsListReport(client, (fe) => {
-          logEvent("tengu_mcp_first_tools_list", {
-            ...fe,
-            messageStreamGetOutcome: fromEnum(x.messageStreamGetOutcome),
-            processUptimeAtConnectStartMs,
-            keepAliveDisabled: x.keepAliveDisabled,
-            transportType: fromEnum(serverRef.type ?? "stdio"),
-            sdkGeneration: fromEnum(mcpSdkGeneration()),
-            protocolEra: fromEnumOpt(protocolEra),
-            negotiationDenylisted: vt,
-            ...toolsListAheadFields(Z),
-            mcpServerKeyHash: toolNameForTelemetry(name),
-          });
+        let errorDetail = describeConnectError(error, serverRef);
+        let cause = error instanceof Error ? error.cause : undefined;
+        let rawErrorCode =
+          (error instanceof SdkHttpError ? error.status : undefined) ??
+          (error && typeof error === "object" && "code" in error ? error.code : undefined) ??
+          (cause && typeof cause === "object" && "code" in cause ? cause.code : undefined);
+        let failureCode =
+          error instanceof IssuerEchoCrossOriginError
+            ? "ISSUER_ECHO_DENIED"
+            : rawErrorCode !== undefined
+              ? String(rawErrorCode)
+              : undefined;
+        if (
+          error instanceof SdkError &&
+          error.code === SdkErrorCode.RequestTimeout &&
+          getFeatureValue_CACHED_MAY_BE_STALE("tengu_mcp_connect_timeout_retry", true)
+        )
+          failureCode = "CONNECT_TIMEOUT";
+        if (
+          serverRef.type === "http" &&
+          failureCode === "404" &&
+          transport_2?.sessionId === undefined &&
+          !isCcrHostedConfig(serverRef)
+        ) {
+          failureCode = "ENDPOINT_NOT_FOUND";
+          errorDetail = `MCP endpoint not found at ${
+            describeMcpServerOrigin(name, serverRef, {
+              detail: "origin",
+            }) ?? "(unparseable url)"
+          }. Check the URL in your MCP config.`;
+        }
+        let suspendedMessage =
+          failureCode === "CONNECT_TIMEOUT" && activeClockSnapshot !== undefined
+            ? suspendedConnectMessage(name, activeClockSnapshot)
+            : undefined;
+        if (suspendedMessage !== undefined) {
+          failureCode = CONNECT_SUSPENDED;
+          errorDetail = suspendedMessage;
+        }
+        errorDetail = redactMcpErrorDetail(name, serverRef, errorDetail);
+        if (!retriedWithoutElicitation && isJavaSdkElicitationRejection(error, serverRef, transport_2))
+          errorDetail = JAVA_SDK_ELICITATION_HINT;
+        logMcpConnectionOtelEvent(name, serverRef, {
+          status: "failed",
+          durationMs: abandonedAfterMs,
+          errorCode: failureCode,
+          error: errorDetail,
         });
-        if (Z !== undefined)
-          scheduleMessageStreamOutcomeLog(client, name, x, {
-            ...toolsListAheadFields(Z),
-            negotiationDenylisted: vt,
-          });
-      }
-      logFeatureOk("mcp_connect");
-      logForDiagnosticsNoPII("info", "mcp_connect_complete", {
-        transport,
-        duration_ms: Mo,
-      });
-      if (authProvider) getCliOwnedState().clientAuthProviders.set(client, authProvider);
-      getCliOwnedState().clientFirstPartyBearers.set(client, ot);
-      let Dr = {
-        name,
-        client: clientServerId(client),
-        type: "connected",
-        capabilities: serverCapabilities ?? {},
-        serverInfo: serverVersion,
-        instructions,
-        negotiatedProtocolVersion: client.getNegotiatedProtocolVersion(),
-        protocolEra: client.getProtocolEra(),
-        config: serverRef,
-        cleanup,
-        transportErrorState: We,
-      };
-      clearDiscoveryPathMemo(name);
-      try {
-        getConnectedClientWiring()?.(Dr);
-      } catch (error) {
+        let featureErrorId =
+          failureCode === "ENOENT" && (serverRef.type === "stdio" || serverRef.type === undefined)
+            ? "mcp_connect_spawn_enoent"
+            : failureCode === "ENDPOINT_NOT_FOUND"
+              ? "mcp_connect_endpoint_not_found"
+              : undefined;
+        if (featureErrorId !== undefined) logFeatureBad("mcp_connect", featureErrorId);
+        else {
+          let featureSadId =
+            failureCode === "ECONNREFUSED"
+              ? "mcp_connect_refused"
+              : failureCode === CONNECT_SUSPENDED
+                ? "mcp_connect_suspended"
+                : errorDetail.includes("timed out")
+                  ? "mcp_connect_timeout"
+                  : "mcp_connect_failed";
+          logFeatureSad("mcp_connect", `${featureSadId}_${serverRef.type ?? "stdio"}`);
+        }
+        markConnectEnded(handshakeTrace);
+        logEvent("tengu_mcp_server_connection_failed", {
+          connectionDurationMs: abandonedAfterMs,
+          processUptimeAtConnectStartMs,
+          ...handshakeTraceTelemetry(handshakeTrace),
+          negotiationMode: fromEnumOpt(negotiation?.mode),
+          listenSuppressed: listenDenylisted,
+          negotiationDenylisted,
+          probeFellBack: probeFallbackReason,
+          bareElicitationRetry: retriedWithoutElicitation,
+          discoverSource: discoverSourceEnum,
+          listingPriorBurned,
+          ...toolsListAheadFields(toolsListAheadState),
+          errorCode: sanitizeConnectErrorCodeForTelemetry(failureCode),
+          errorClassName: sanitizedErrorClassNameForTelemetry(error),
+          errorMessageHash: shortHash(scrubErrorText(errorDetail)),
+          totalServers: serverStats?.totalServers || 1,
+          stdioCount: serverStats?.stdioCount || (serverRef.type === "stdio" ? 1 : 0),
+          sseCount: serverStats?.sseCount || (serverRef.type === "sse" ? 1 : 0),
+          httpCount: serverStats?.httpCount || (serverRef.type === "http" ? 1 : 0),
+          sseIdeCount: serverStats?.sseIdeCount || (serverRef.type === "sse-ide" ? 1 : 0),
+          wsIdeCount: serverStats?.wsIdeCount || (serverRef.type === "ws-ide" ? 1 : 0),
+          transportType: fromEnum(serverRef.type ?? "stdio"),
+          sdkGeneration: fromEnum(mcpSdkGeneration()),
+          scope: fromEnum(serverRef.scope),
+          isPlugin: serverRef.pluginSource !== undefined,
+          ...buildPluginSourceFields(serverRef),
+          ...mcpBaseUrlAnalytics_2(serverRef, name),
+        });
+        logMCPDebug(
+          name,
+          `Connection failed after ${formatConnectElapsed(clockSnapshot)}${failureCode !== undefined ? ` (${failureCode})` : ""}: ${errorDetail}`,
+        );
         logMCPError(
           name,
-          `connected-client wiring failed (placeholder retained, adoption will retry): ${errorMessage(error)}`,
+          `Connection failed${failureCode !== undefined ? ` (${failureCode})` : ""}: ${errorDetail}`,
         );
-      }
-      return Dr;
-    } catch (error) {
-      let Ve = Date.now() - now;
-      if (isCleanupStarted()) {
-        logMCPDebug(name, `Connection abandoned after ${Ve}ms (Claude Code is shutting down)`);
+        logForDiagnosticsNoPII("error", "mcp_connect_failed", {
+          transport,
+          duration_ms: abandonedAfterMs,
+          ...(failureCode === "CONNECT_TIMEOUT" && {
+            reason: "timeout",
+          }),
+          ...(failureCode === CONNECT_SUSPENDED && {
+            reason: "suspended",
+          }),
+        });
         if (inProcessServer) inProcessServer.close().catch(() => {});
+        let discoverVerdictKey = getDiscoverVerdictKey(serverRef);
+        if (
+          discoverVerdictKey !== undefined &&
+          negotiation?.mode === "auto" &&
+          discoverSource === "wire" &&
+          transport_2 instanceof BoundedStdioClientTransport &&
+          transport_2._anthropicProbeTimedOut === true &&
+          (connectBudgetExpired ||
+            (error instanceof SdkError && error.code === SdkErrorCode.RequestTimeout)) &&
+          failureCode !== CONNECT_SUSPENDED &&
+          !getCliOwnedState().burnedListingDiscoverPriors.has(discoverVerdictKey)
+        )
+          if (transport_2.answeredProbeLate)
+            logMCPDebug(
+              name,
+              "stdio server answered the server/discover probe after its bound but not initialize; it speaks the new protocol, so not remembering it as a legacy peer",
+            );
+          else rememberLegacyPeer(serverRef, storageV5);
+        if (failureCode !== CONNECT_SUSPENDED) recordPluginStdioServerFailure(name, serverRef, storageV5);
+        let proxyConnectStatus =
+          failureCode === "ERR_PROXY_TUNNEL"
+            ? [error, cause]
+                .map((candidate) =>
+                  candidate && typeof candidate === "object" && "status" in candidate
+                    ? candidate.status
+                    : undefined,
+                )
+                .find((statusValue) => typeof statusValue === "number")
+            : undefined;
         return {
           name,
           type: "failed",
           config: serverRef,
-          error: "Claude Code is shutting down",
-          errorCode: "SHUTTING_DOWN",
+          error: errorDetail,
+          errorCode: failureCode,
+          ...(proxyConnectStatus !== undefined && {
+            proxyConnectStatus,
+          }),
+          ...(failureCode === undefined &&
+            authProvider?.sawAuthChallenge === true &&
+            (await registrationStatusFields(name, serverRef, now))),
         };
       }
-      let De = describeConnectError(error, serverRef);
-      let cause = error instanceof Error ? error.cause : undefined;
-      let re =
-        (error instanceof SdkHttpError ? error.status : undefined) ??
-        (error && typeof error === "object" && "code" in error ? error.code : undefined) ??
-        (cause && typeof cause === "object" && "code" in cause ? cause.code : undefined);
-      let ue =
-        error instanceof IssuerEchoCrossOriginError
-          ? "ISSUER_ECHO_DENIED"
-          : re !== undefined
-            ? String(re)
-            : undefined;
-      if (
-        error instanceof SdkError &&
-        error.code === SdkErrorCode.RequestTimeout &&
-        getFeatureValue_CACHED_MAY_BE_STALE("tengu_mcp_connect_timeout_retry", true)
-      )
-        ue = "CONNECT_TIMEOUT";
-      if (
-        serverRef.type === "http" &&
-        ue === "404" &&
-        transport_2?.sessionId === undefined &&
-        !isCcrHostedConfig(serverRef)
-      ) {
-        ue = "ENDPOINT_NOT_FOUND";
-        De = `MCP endpoint not found at ${
-          describeMcpServerOrigin(name, serverRef, {
-            detail: "origin",
-          }) ?? "(unparseable url)"
-        }. Check the URL in your MCP config.`;
-      }
-      let ot = ue === "CONNECT_TIMEOUT" && M !== undefined ? suspendedConnectMessage(name, M) : undefined;
-      if (ot !== undefined) {
-        ue = CONNECT_SUSPENDED;
-        De = ot;
-      }
-      De = redactMcpErrorDetail(name, serverRef, De);
-      if (!yt && isJavaSdkElicitationRejection(error, serverRef, transport_2)) De = JAVA_SDK_ELICITATION_HINT;
-      logMcpConnectionOtelEvent(name, serverRef, {
-        status: "failed",
-        durationMs: Ve,
-        errorCode: ue,
-        error: De,
-      });
-      let it =
-        ue === "ENOENT" && (serverRef.type === "stdio" || serverRef.type === undefined)
-          ? "mcp_connect_spawn_enoent"
-          : ue === "ENDPOINT_NOT_FOUND"
-            ? "mcp_connect_endpoint_not_found"
-            : undefined;
-      if (it !== undefined) logFeatureBad("mcp_connect", it);
-      else {
-        let ct =
-          ue === "ECONNREFUSED"
-            ? "mcp_connect_refused"
-            : ue === CONNECT_SUSPENDED
-              ? "mcp_connect_suspended"
-              : De.includes("timed out")
-                ? "mcp_connect_timeout"
-                : "mcp_connect_failed";
-        logFeatureSad("mcp_connect", `${ct}_${serverRef.type ?? "stdio"}`);
-      }
-      markConnectEnded(handshakeTrace);
-      logEvent("tengu_mcp_server_connection_failed", {
-        connectionDurationMs: Ve,
-        processUptimeAtConnectStartMs,
-        ...handshakeTraceTelemetry(handshakeTrace),
-        negotiationMode: fromEnumOpt(negotiation?.mode),
-        listenSuppressed: Ot,
-        negotiationDenylisted: vt,
-        probeFellBack: q,
-        bareElicitationRetry: yt,
-        discoverSource: Ee,
-        listingPriorBurned: Qe,
-        ...toolsListAheadFields(ft),
-        errorCode: sanitizeConnectErrorCodeForTelemetry(ue),
-        errorClassName: sanitizedErrorClassNameForTelemetry(error),
-        errorMessageHash: shortHash(scrubErrorText(De)),
-        totalServers: serverStats?.totalServers || 1,
-        stdioCount: serverStats?.stdioCount || (serverRef.type === "stdio" ? 1 : 0),
-        sseCount: serverStats?.sseCount || (serverRef.type === "sse" ? 1 : 0),
-        httpCount: serverStats?.httpCount || (serverRef.type === "http" ? 1 : 0),
-        sseIdeCount: serverStats?.sseIdeCount || (serverRef.type === "sse-ide" ? 1 : 0),
-        wsIdeCount: serverStats?.wsIdeCount || (serverRef.type === "ws-ide" ? 1 : 0),
-        transportType: fromEnum(serverRef.type ?? "stdio"),
-        sdkGeneration: fromEnum(mcpSdkGeneration()),
-        scope: fromEnum(serverRef.scope),
-        isPlugin: serverRef.pluginSource !== undefined,
-        ...buildPluginSourceFields(serverRef),
-        ...mcpBaseUrlAnalytics_2(serverRef, name),
-      });
-      logMCPDebug(
-        name,
-        `Connection failed after ${formatConnectElapsed(clockSnapshot)}${ue !== undefined ? ` (${ue})` : ""}: ${De}`,
-      );
-      logMCPError(name, `Connection failed${ue !== undefined ? ` (${ue})` : ""}: ${De}`);
-      logForDiagnosticsNoPII("error", "mcp_connect_failed", {
-        transport,
-        duration_ms: Ve,
-        ...(ue === "CONNECT_TIMEOUT" && {
-          reason: "timeout",
-        }),
-        ...(ue === CONNECT_SUSPENDED && {
-          reason: "suspended",
-        }),
-      });
-      if (inProcessServer) inProcessServer.close().catch(() => {});
-      let discoverVerdictKey = getDiscoverVerdictKey(serverRef);
-      if (
-        discoverVerdictKey !== undefined &&
-        negotiation?.mode === "auto" &&
-        discoverSource === "wire" &&
-        transport_2 instanceof BoundedStdioClientTransport &&
-        transport_2._anthropicProbeTimedOut === true &&
-        (At || (error instanceof SdkError && error.code === SdkErrorCode.RequestTimeout)) &&
-        ue !== CONNECT_SUSPENDED &&
-        !getCliOwnedState().burnedListingDiscoverPriors.has(discoverVerdictKey)
-      )
-        if (transport_2.answeredProbeLate)
-          logMCPDebug(
-            name,
-            "stdio server answered the server/discover probe after its bound but not initialize; it speaks the new protocol, so not remembering it as a legacy peer",
-          );
-        else rememberLegacyPeer(serverRef, storageV5);
-      if (ue !== CONNECT_SUSPENDED) recordPluginStdioServerFailure(name, serverRef, storageV5);
-      let be =
-        ue === "ERR_PROXY_TUNNEL"
-          ? [error, cause]
-              .map((ct) => (ct && typeof ct === "object" && "status" in ct ? ct.status : undefined))
-              .find((ct) => typeof ct === "number")
-          : undefined;
-      return {
-        name,
-        type: "failed",
-        config: serverRef,
-        error: De,
-        errorCode: ue,
-        ...(be !== undefined && {
-          proxyConnectStatus: be,
-        }),
-        ...(ue === undefined &&
-          authProvider?.sawAuthChallenge === true &&
-          (await registrationStatusFields(name, serverRef, now))),
-      };
-    }
-  },
-  serverCacheKey,
-  () => getConnectionCache().connections,
-  (e, n, [r, s, , h]) =>
-    connectWithSignedOutFallback(
-      () => redialAfterSuspend(e, n, () => recordPluginStdioServerFailure(r, s, h)),
-      n,
-      r,
-      s,
-    ),
-);
+    },
+    serverCacheKey,
+    () => getConnectionCache().connections,
+    (name, serverRef, [cacheName, cacheServerRef, , storageV5]) =>
+      connectWithSignedOutFallback(
+        () =>
+          redialAfterSuspend(name, serverRef, () =>
+            recordPluginStdioServerFailure(cacheName, cacheServerRef, storageV5),
+          ),
+        serverRef,
+        cacheName,
+        cacheServerRef,
+      ),
+  );
+});
 //@ chunk-8t8n4kdh.js:119566-119630 sole-consumer
 /**
  * 按 http 传输决定协议时代（modern/legacy）。
@@ -4851,57 +5824,57 @@ function primeEnsureConnected() {
 /**
  * 发出“缓存行被采纳”信号。
  */
-function emitCachedAdopt(e, n) {
+function emitCachedAdopt(name, config) {
   try {
-    CACHED_ADOPT_SIGNAL.emit(e, n);
+    CACHED_ADOPT_SIGNAL.emit(name, config);
   } catch (error) {
-    logMCPDebug(e, `cached-row adopt subscriber threw: ${errorMessage(error)}`);
+    logMCPDebug(name, `cached-row adopt subscriber threw: ${errorMessage(error)}`);
   }
 }
 //@ chunk-8t8n4kdh.js:119816-120052 sole-consumer
-function recordCachedDialFailure(e, n) {
-  if (n) logFeatureSad("mcp_discovery_cache", "lazy_dial_failed");
-  getConnectionCache().settledCachedDialFailures.set(serverCacheKey(e.name, e.config), {
-    failure: e,
-    ownStrike: n,
+function recordCachedDialFailure(failure, ownStrike) {
+  if (ownStrike) logFeatureSad("mcp_discovery_cache", "lazy_dial_failed");
+  getConnectionCache().settledCachedDialFailures.set(serverCacheKey(failure.name, failure.config), {
+    failure,
+    ownStrike,
   });
   try {
-    CACHED_DIAL_FAILED_SIGNAL.emit(e, n);
+    CACHED_DIAL_FAILED_SIGNAL.emit(failure, ownStrike);
   } catch (error) {
-    logMCPDebug(e.name, `cached-row dial-failed subscriber threw: ${errorMessage(error)}`);
+    logMCPDebug(failure.name, `cached-row dial-failed subscriber threw: ${errorMessage(error)}`);
   }
 }
 //@ chunk-8t8n4kdh.js:120052-120148 sole-consumer
 /**
  * 取出并删除某服务器已结算的缓存拨号失败记录。
  */
-function takeSettledCachedDialFailure(e, n) {
+function takeSettledCachedDialFailure(name, config) {
   let settledCachedDialFailures = getConnectionCache().settledCachedDialFailures;
-  let s = serverCacheKey(e, n);
-  let h = settledCachedDialFailures.get(s);
-  settledCachedDialFailures.delete(s);
-  return h;
+  let cacheKey = serverCacheKey(name, config);
+  let failure = settledCachedDialFailures.get(cacheKey);
+  settledCachedDialFailures.delete(cacheKey);
+  return failure;
 }
 //@ chunk-8t8n4kdh.js:120148-120242 sole-consumer
 /**
  * 缓存失败是否已被清理（测试用判断）。
  */
-async function hasClearedCachedFailure(e, n) {
-  let r = connectToServer.cache?.get?.(serverCacheKey(e, n));
-  return r !== undefined && (await clearMcpAuthCache(r)) === undefined;
+async function hasClearedCachedFailure(name, config) {
+  let cachedConnection = connectToServer.cache?.get?.(serverCacheKey(name, config));
+  return cachedConnection !== undefined && (await clearMcpAuthCache(cachedConnection)) === undefined;
 }
 //@ chunk-8t8n4kdh.js:120242-120496 sole-consumer
-function refuseCachedRow(name, config, r) {
-  let s = serverCacheKey(name, config);
-  if (getConnectionCache().refusedCachedRows.has(s)) return;
-  getConnectionCache().refusedCachedRows.add(s);
-  if (r === "policy") clearDiscoveryForServer(name, config).catch(() => {});
+function refuseCachedRow(name, config, reason) {
+  let cacheKey = serverCacheKey(name, config);
+  if (getConnectionCache().refusedCachedRows.has(cacheKey)) return;
+  getConnectionCache().refusedCachedRows.add(cacheKey);
+  if (reason === "policy") clearDiscoveryForServer(name, config).catch(() => {});
   recordCachedDialFailure(
     {
       name,
       type: "failed",
       config,
-      ...(r === "policy"
+      ...(reason === "policy"
         ? mcpGateError("managed-policy", name, config)
         : {
             error: DISABLED_IN_MCP_REASON,
@@ -4915,29 +5888,30 @@ function refuseCachedRow(name, config, r) {
 /**
  * 判断服务器是否有已连接且没有正在后台刷新的连接。
  */
-async function hasLiveConnection(e, n) {
-  let r = serverCacheKey(e, n);
-  let s = getConnectionCache().connections.get(r);
-  if (!s) return false;
-  if ((await clearMcpAuthCache(s))?.type !== "connected") return false;
-  return !getCliOwnedState().swrRefreshDialsInFlight.has(s);
+async function hasLiveConnection(name, config) {
+  let cacheKey = serverCacheKey(name, config);
+  let pendingConnection = getConnectionCache().connections.get(cacheKey);
+  if (!pendingConnection) return false;
+  if ((await clearMcpAuthCache(pendingConnection))?.type !== "connected") return false;
+  return !getCliOwnedState().swrRefreshDialsInFlight.has(pendingConnection);
 }
 //@ chunk-8t8n4kdh.js:120663-120858 affinity
 /**
  * 服务时清除失败的连接记忆（已连接或未结算的保留）。
  */
-async function evictStaleFailedConnectMemoForServe(e, config) {
-  let r = serverCacheKey(e, config);
-  let s = getConnectionCache().connections.get(r);
-  if (!s) return;
-  let h = await clearMcpAuthCache(s);
-  if (h === undefined || h.type === "connected") return;
-  if (getConnectionCache().connections.get(r) === s) getConnectionCache().connections.delete(r);
+async function evictStaleFailedConnectMemoForServe(name, config) {
+  let cacheKey = serverCacheKey(name, config);
+  let pendingConnection = getConnectionCache().connections.get(cacheKey);
+  if (!pendingConnection) return;
+  let connection = await clearMcpAuthCache(pendingConnection);
+  if (connection === undefined || connection.type === "connected") return;
+  if (getConnectionCache().connections.get(cacheKey) === pendingConnection)
+    getConnectionCache().connections.delete(cacheKey);
 }
 //@ chunk-8t8n4kdh.js:120858-120914 file-local
-async function clearMcpAuthCache(e) {
+async function clearMcpAuthCache(connectionPromise) {
   return withDeadline(
-    e.catch(() => {
+    connectionPromise.catch(() => {
       return;
     }),
     0,
@@ -4948,77 +5922,81 @@ async function clearMcpAuthCache(e) {
  * 清理某服务器缓存中的失败连接。
  */
 async function clearCachedFailureFor(name, config) {
-  let r = connectToServer.cache?.get?.(serverCacheKey(name, config));
-  return r === undefined ? undefined : clearMcpAuthCache(r);
+  let cachedConnection = connectToServer.cache?.get?.(serverCacheKey(name, config));
+  return cachedConnection === undefined ? undefined : clearMcpAuthCache(cachedConnection);
 }
 //@ chunk-8t8n4kdh.js:120999-121160 layout
-function clearConnectionCaches(e) {
-  getConnectionCache().connections.delete(e);
-  getConnectionCache().toolLists.delete(e);
-  getConnectionCache().resourceLists.delete(e);
-  getConnectionCache().resourceTemplateLists.delete(e);
-  getConnectionCache().commandLists.delete(e);
+function clearConnectionCaches(cacheKey) {
+  getConnectionCache().connections.delete(cacheKey);
+  getConnectionCache().toolLists.delete(cacheKey);
+  getConnectionCache().resourceLists.delete(cacheKey);
+  getConnectionCache().resourceTemplateLists.delete(cacheKey);
+  getConnectionCache().commandLists.delete(cacheKey);
 }
 //@ chunk-8t8n4kdh.js:121160-121539 layout
 /**
  * 清除服务器的连接缓存：有活动调用时保留连接，否则关闭已连接的客户端并删除记忆。
  */
-async function clearServerCache(e, config, r) {
+async function clearServerCache(name, config, options) {
   primeClientResolvers();
-  let s = serverCacheKey(e, config);
-  let h = getConnectionCache().connections.get(s);
-  if (h) {
-    let y = await clearMcpAuthCache(h);
-    if (y === undefined) disposeServerConnectionDetached(e, config, h);
-    else if (y.type === "connected") {
+  let cacheKey = serverCacheKey(name, config);
+  let pendingConnection = getConnectionCache().connections.get(cacheKey);
+  if (pendingConnection) {
+    let connection = await clearMcpAuthCache(pendingConnection);
+    if (connection === undefined) disposeServerConnectionDetached(name, config, pendingConnection);
+    else if (connection.type === "connected") {
       if (
-        r !== undefined &&
-        getConnectionCache().connections.get(s) === h &&
-        clientOf(y.client).transport !== undefined &&
-        (y.transportErrorState?.activeCallWatchdogs.size ?? 0) > 0
+        options !== undefined &&
+        getConnectionCache().connections.get(cacheKey) === pendingConnection &&
+        clientOf(connection.client).transport !== undefined &&
+        (connection.transportErrorState?.activeCallWatchdogs.size ?? 0) > 0
       ) {
-        r.connection = y;
+        options.connection = connection;
         return;
       }
-      await detachAndCloseConnection(y);
+      await detachAndCloseConnection(connection);
     }
-    let S = getConnectionCache().connections.get(s);
-    if (S !== undefined && S !== h) return;
+    let currentConnection = getConnectionCache().connections.get(cacheKey);
+    if (currentConnection !== undefined && currentConnection !== pendingConnection) return;
   }
-  clearConnectionCaches(s);
+  clearConnectionCaches(cacheKey);
 }
 //@ chunk-8t8n4kdh.js:121539-121746 layout
 /**
  * 解除连接的 onclose 并关闭连接，必要时清理对应的连接记忆。
  */
-function detachAndCloseConnection(e) {
-  clientOf(e.client).onclose = undefined;
+function detachAndCloseConnection(connection) {
+  clientOf(connection.client).onclose = undefined;
   if (isDiscoveryCacheOn()) {
-    let n = serverCacheKey(e.name, e.config);
-    let r = connectToServer.cache?.get?.(n);
-    if (r !== undefined)
-      clearMcpAuthCache(r).then((s) => {
-        if (isSameConnectedClient(s, e) && connectToServer.cache?.get?.(n) === r) clearConnectionCaches(n);
+    let cacheKey = serverCacheKey(connection.name, connection.config);
+    let cachedConnection = connectToServer.cache?.get?.(cacheKey);
+    if (cachedConnection !== undefined)
+      clearMcpAuthCache(cachedConnection).then((settledConnection) => {
+        if (
+          isSameConnectedClient(settledConnection, connection) &&
+          connectToServer.cache?.get?.(cacheKey) === cachedConnection
+        )
+          clearConnectionCaches(cacheKey);
       });
   }
-  return e.cleanup().catch(() => {});
+  return connection.cleanup().catch(() => {});
 }
 //@ chunk-8t8n4kdh.js:121746-121941 layout
 /**
  * 在后台丢弃服务器连接：标记为被取代，删除记忆，结算后关闭已连接的客户端。
  */
-function disposeServerConnectionDetached(e, n, r) {
+function disposeServerConnectionDetached(name, config, expectedConnection) {
   primeClientResolvers();
-  let s = serverCacheKey(e, n);
-  let h = getConnectionCache().connections.get(s);
-  if (r !== undefined && h !== r) return;
-  if (h) getCliOwnedState().supersededDials.add(h);
-  clearConnectionCaches(s);
-  if (h)
-    h.then(
-      (y) => {
-        if (y.type !== "connected") return;
-        detachAndCloseConnection(y);
+  let cacheKey = serverCacheKey(name, config);
+  let pendingConnection = getConnectionCache().connections.get(cacheKey);
+  if (expectedConnection !== undefined && pendingConnection !== expectedConnection) return;
+  if (pendingConnection) getCliOwnedState().supersededDials.add(pendingConnection);
+  clearConnectionCaches(cacheKey);
+  if (pendingConnection)
+    pendingConnection.then(
+      (connection) => {
+        if (connection.type !== "connected") return;
+        detachAndCloseConnection(connection);
       },
       () => {},
     );
@@ -5027,46 +6005,46 @@ function disposeServerConnectionDetached(e, n, r) {
 /**
  * 清理服务器缓存并删除发现缓存。
  */
-async function clearDiscoveryForServer(e, n) {
+async function clearDiscoveryForServer(name, config) {
   primeClientResolvers();
-  await deleteDiscoveryCache(e, n);
+  await deleteDiscoveryCache(name, config);
 }
 //@ chunk-8t8n4kdh.js:121984-122252 layout
 /**
  * 丢弃已结束且未连接的连接记忆，返回是否删除。
  */
-async function discardMemoizedConnectResult(e, n) {
-  let r = serverCacheKey(e, n);
+async function discardMemoizedConnectResult(name, config) {
+  let cacheKey = serverCacheKey(name, config);
   if (!isDiscoveryCacheOn()) {
-    getConnectionCache().connections.delete(r);
+    getConnectionCache().connections.delete(cacheKey);
     return true;
   }
-  let s = getConnectionCache().connections.get(r);
-  if (s !== undefined) {
-    let h = await clearMcpAuthCache(s);
-    if (h === undefined || h.type === "connected") return false;
-    if (getConnectionCache().connections.get(r) !== s) return false;
+  let pendingConnection = getConnectionCache().connections.get(cacheKey);
+  if (pendingConnection !== undefined) {
+    let connection = await clearMcpAuthCache(pendingConnection);
+    if (connection === undefined || connection.type === "connected") return false;
+    if (getConnectionCache().connections.get(cacheKey) !== pendingConnection) return false;
   }
-  getConnectionCache().connections.delete(r);
+  getConnectionCache().connections.delete(cacheKey);
   return true;
 }
 //@ chunk-8t8n4kdh.js:122252-122359 layout
 /**
  * 清除服务器的资源与资源模板列表缓存。
  */
-function invalidateMcpResourceListCaches(e) {
-  let n = serverCacheKey(e.name, e.config);
-  getConnectionCache().resourceLists.delete(n);
-  getConnectionCache().resourceTemplateLists.delete(n);
+function invalidateMcpResourceListCaches(server) {
+  let cacheKey = serverCacheKey(server.name, server.config);
+  getConnectionCache().resourceLists.delete(cacheKey);
+  getConnectionCache().resourceTemplateLists.delete(cacheKey);
 }
 //@ chunk-8t8n4kdh.js:122359-122466 layout
 /**
  * 注册 MCP elicitation/create 请求处理器。
  */
-function onMcpElicitRequest(e, n) {
-  clientOf(e.client).setRequestHandler("elicitation/create", (r, s) =>
-    n(r, {
-      signal: s.mcpReq.signal,
+function onMcpElicitRequest(server, onElicit) {
+  clientOf(server.client).setRequestHandler("elicitation/create", (request, extra) =>
+    onElicit(request, {
+      signal: extra.mcpReq.signal,
     }),
   );
 }
@@ -5074,69 +6052,77 @@ function onMcpElicitRequest(e, n) {
 /**
  * 注册 elicitation 完成通知处理器。
  */
-function onMcpElicitationComplete(e, n) {
-  clientOf(e.client).setNotificationHandler("notifications/elicitation/complete", (r) =>
-    n(r.params.elicitationId),
+function onMcpElicitationComplete(server, onComplete) {
+  clientOf(server.client).setNotificationHandler("notifications/elicitation/complete", (notification) =>
+    onComplete(notification.params.elicitationId),
   );
 }
 //@ chunk-8t8n4kdh.js:122588-122761 layout
 /**
  * 注册工具列表变化通知处理器（处理器注册前已收到的变化会补发一次）。
  */
-function onMcpToolListChanged(e, n) {
-  let r = clientOf(e.client);
-  recordListChangedRefetcher(r, "tools", n);
-  let listChangedRefetcher = createListChangedRefetcher(e, n);
-  r.setNotificationHandler("notifications/tools/list_changed", (h) => {
-    noteListChangedAhead_2(r);
-    return listChangedRefetcher(h);
+function onMcpToolListChanged(server, refetch) {
+  let client = clientOf(server.client);
+  recordListChangedRefetcher(client, "tools", refetch);
+  let listChangedRefetcher = createListChangedRefetcher(server, refetch);
+  client.setNotificationHandler("notifications/tools/list_changed", (notification) => {
+    noteListChangedAhead_2(client);
+    return listChangedRefetcher(notification);
   });
-  if (markHandlerRegistered(r) && !isClientWithoutTransport(e)) listChangedRefetcher(BEFORE_HANDLER);
+  if (markHandlerRegistered(client) && !isClientWithoutTransport(server))
+    listChangedRefetcher(BEFORE_HANDLER);
 }
 //@ chunk-8t8n4kdh.js:122761-122887 layout
 /**
  * 注册提示词列表变化通知处理器。
  */
-function onMcpPromptListChanged(e, n) {
-  let r = clientOf(e.client);
-  recordListChangedRefetcher(r, "prompts", n);
-  r.setNotificationHandler("notifications/prompts/list_changed", createListChangedRefetcher(e, n));
+function onMcpPromptListChanged(server, refetch) {
+  let client = clientOf(server.client);
+  recordListChangedRefetcher(client, "prompts", refetch);
+  client.setNotificationHandler(
+    "notifications/prompts/list_changed",
+    createListChangedRefetcher(server, refetch),
+  );
 }
 //@ chunk-8t8n4kdh.js:122887-123017 layout
 /**
  * 注册资源列表变化通知处理器。
  */
-function onMcpResourceListChanged(e, n) {
-  let r = clientOf(e.client);
-  recordListChangedRefetcher(r, "resources", n);
-  r.setNotificationHandler("notifications/resources/list_changed", createListChangedRefetcher(e, n));
+function onMcpResourceListChanged(server, refetch) {
+  let client = clientOf(server.client);
+  recordListChangedRefetcher(client, "resources", refetch);
+  client.setNotificationHandler(
+    "notifications/resources/list_changed",
+    createListChangedRefetcher(server, refetch),
+  );
 }
 //@ chunk-8t8n4kdh.js:123017-123503 layout
 /**
  * 为 MCP 连接注册自定义通知处理器（新版协议连接不支持未请求的自定义通知，跳过并警告）。
  */
-function onMcpNotification(e, n, r) {
-  let s = n.shape.method.value;
-  let h = clientOf(e.client);
-  if (h.getProtocolEra?.() === "modern") {
-    let negotiatedProtocolVersion = h.getNegotiatedProtocolVersion?.();
-    let S = negotiatedProtocolVersion === undefined ? undefined : sanitizeCallMark(negotiatedProtocolVersion);
+function onMcpNotification(server, schema, handler) {
+  let method = schema.shape.method.value;
+  let client = clientOf(server.client);
+  if (client.getProtocolEra?.() === "modern") {
+    let negotiatedProtocolVersion = client.getNegotiatedProtocolVersion?.();
+    let protocolLabel =
+      negotiatedProtocolVersion === undefined ? undefined : sanitizeCallMark(negotiatedProtocolVersion);
     logForDebugging(
-      `[MCP] ${e.name}: skipping ${s} handler registration \u2014 this connection negotiated ${S ? `protocol revision ${S}` : "a modern-era protocol revision"}, which has no delivery path for unsolicited custom notifications`,
+      `[MCP] ${server.name}: skipping ${method} handler registration \u2014 this connection negotiated ${protocolLabel ? `protocol revision ${protocolLabel}` : "a modern-era protocol revision"}, which has no delivery path for unsolicited custom notifications`,
       {
         level: "warn",
       },
     );
     return;
   }
-  h.setNotificationHandler(
-    s,
+  client.setNotificationHandler(
+    method,
     {
-      params: n.shape.params,
+      params: schema.shape.params,
     },
     (params) =>
-      r({
-        method: s,
+      handler({
+        method,
         params,
       }),
   );
@@ -5186,14 +6172,14 @@ async function ensureConnectedClient(server, options) {
       ? connectToServer(server.name, server.config)
       : connectToServer(server.name, server.config, undefined, undefined, undefined, toolUseBinding);
   if (toolUseBinding !== undefined) {
-    let S = () => {
+    let clearBinding = () => {
       toolUseBinding.toolUseId = undefined;
     };
-    (options?.toolUseIdWithListingsUntil ?? dial).then(S, S);
+    (options?.toolUseIdWithListingsUntil ?? dial).then(clearBinding, clearBinding);
   }
   if (server.type === "cached")
     dial.then(
-      (S) => runCachedFirstDialArms(S, dial, epochAtDial),
+      (connected) => runCachedFirstDialArms(connected, dial, epochAtDial),
       () => {},
     );
   let connection = await boundDial(dial, {
@@ -5244,47 +6230,49 @@ async function ensureConnectedClient(server, options) {
 /**
  * 判断缓存条目是否已被新拨号取代。
  */
-function isSupersededCacheEntry(e, n, r) {
+function isSupersededCacheEntry(cacheEntry, name, config) {
   let cache = connectToServer.cache;
   if (!cache?.get) return false;
-  return cache.get(serverCacheKey(n, r)) !== e;
+  return cache.get(serverCacheKey(name, config)) !== cacheEntry;
 }
 //@ chunk-8t8n4kdh.js:125228-125278 layout
 /**
  * 判断该次拨号是否已被取代。
  */
-function isSupersededDial(e) {
-  return getCliOwnedState().supersededDials.has(e);
+function isSupersededDial(dial) {
+  return getCliOwnedState().supersededDials.has(dial);
 }
 //@ chunk-8t8n4kdh.js:125278-125684 layout
 /**
  * 缓存首次拨号结束后的处理（每个结果只运行一次）：身份变化或被取代时关闭，连接成功或需认证时记录，失败时删除记忆并上报。
  */
-function runCachedFirstDialArms(e, dial, epochAtDial) {
+function runCachedFirstDialArms(result, dial, epochAtDial) {
   let cachedFirstDialArmsRan = getCliOwnedState().cachedFirstDialArmsRan;
-  if (cachedFirstDialArmsRan.has(e)) return;
-  cachedFirstDialArmsRan.add(e);
-  let h = serverCacheKey(e.name, e.config);
-  let y = getConnectionCache().connections.get(h);
-  let S = identityEpoch() !== epochAtDial;
-  let w = y === undefined && S;
-  if (isSupersededDial(dial) || (y !== undefined && y !== dial) || w) {
-    if (!isSupersededDial(dial) && S && e.type === "connected") detachAndCloseConnection(e);
+  if (cachedFirstDialArmsRan.has(result)) return;
+  cachedFirstDialArmsRan.add(result);
+  let cacheKey = serverCacheKey(result.name, result.config);
+  let currentDial = getConnectionCache().connections.get(cacheKey);
+  let identityChanged = identityEpoch() !== epochAtDial;
+  let isStaleAdopt = currentDial === undefined && identityChanged;
+  if (isSupersededDial(dial) || (currentDial !== undefined && currentDial !== dial) || isStaleAdopt) {
+    if (!isSupersededDial(dial) && identityChanged && result.type === "connected")
+      detachAndCloseConnection(result);
     return;
   }
-  if (e.type === "connected" || e.type === "needs-auth") {
-    emitCachedAdopt(e.name, e.config);
+  if (result.type === "connected" || result.type === "needs-auth") {
+    emitCachedAdopt(result.name, result.config);
     return;
   }
-  getConnectionCache().connections.delete(h);
-  if (e.type === "failed") recordCachedDialFailure(e, !getCliOwnedState().swrRefreshDialsInFlight.has(dial));
+  getConnectionCache().connections.delete(cacheKey);
+  if (result.type === "failed")
+    recordCachedDialFailure(result, !getCliOwnedState().swrRefreshDialsInFlight.has(dial));
 }
 //@ chunk-8t8n4kdh.js:125684-125722 layout
 /**
  * 判断两个配置的指纹是否相同。
  */
-function sameConfigHash(e, n) {
-  return configHash(e) === configHash(n);
+function sameConfigHash(configA, configB) {
+  return configHash(configA) === configHash(configB);
 }
 //@ chunk-8t8n4kdh.js:125722-126790 layout
 /**
@@ -5343,72 +6331,75 @@ var KNOWN_CONNECT_ERROR_CODES = [
 /**
  * 把连接错误码收敛为可上报值：数字码、白名单码或 other。
  */
-function sanitizeConnectErrorCodeForTelemetry(e) {
-  if (e === undefined) return lit("missing");
-  if (/^-?\d+$/.test(e)) return fromNumber(Number(e));
-  let found = KNOWN_CONNECT_ERROR_CODES.find((r) => r === e);
+function sanitizeConnectErrorCodeForTelemetry(code) {
+  if (code === undefined) return lit("missing");
+  if (/^-?\d+$/.test(code)) return fromNumber(Number(code));
+  let found = KNOWN_CONNECT_ERROR_CODES.find((knownCode) => knownCode === code);
   if (found !== undefined) return fromEnum(found);
-  return sanitizableErrorCode(e) ?? lit("other");
+  return sanitizableErrorCode(code) ?? lit("other");
 }
 //@ chunk-8t8n4kdh.js:126959-127364 layout
 /**
  * MCP 列表请求失败的错误码到原因名的映射。
  */
-var LIST_FAILURE_REASONS = {
-  [SdkErrorCode.ConnectionClosed]: "connection_closed",
-  [SdkErrorCode.RequestTimeout]: "request_timeout",
-  [SdkErrorCode.ListPaginationExceeded]: "list_pagination_exceeded",
-  [-32000]: "connection_closed",
-  [-32001]: "request_timeout",
-  [CCR_NEEDS_APPROVAL_CODE]: "ccr_needs_approval",
-  [ProtocolErrorCode.ParseError]: "parse_error",
-  [ProtocolErrorCode.InvalidRequest]: "invalid_request",
-  [ProtocolErrorCode.MethodNotFound]: "method_not_found",
-  [ProtocolErrorCode.InvalidParams]: "invalid_params",
-  [ProtocolErrorCode.InternalError]: "internal_error",
-};
+var LIST_FAILURE_REASONS; // deferred: uses OAuthErrorCode (../../../vendor/@modelcontextprotocol/client/dist/src-D_zzAWoS.mjs) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-8t8n4kdh.js:126959", () => {
+  LIST_FAILURE_REASONS = {
+    [SdkErrorCode.ConnectionClosed]: "connection_closed",
+    [SdkErrorCode.RequestTimeout]: "request_timeout",
+    [SdkErrorCode.ListPaginationExceeded]: "list_pagination_exceeded",
+    [-32000]: "connection_closed",
+    [-32001]: "request_timeout",
+    [CCR_NEEDS_APPROVAL_CODE]: "ccr_needs_approval",
+    [ProtocolErrorCode.ParseError]: "parse_error",
+    [ProtocolErrorCode.InvalidRequest]: "invalid_request",
+    [ProtocolErrorCode.MethodNotFound]: "method_not_found",
+    [ProtocolErrorCode.InvalidParams]: "invalid_params",
+    [ProtocolErrorCode.InternalError]: "internal_error",
+  };
+});
 //@ chunk-8t8n4kdh.js:127364-127547 layout
 /**
  * 把 MCP 工具输入转换为自动模式分类器的输入文本（key=value，空输入时用工具名）。
  */
-function mcpToolInputToAutoClassifierInput(e, name) {
-  let keys = Object.keys(e);
+function mcpToolInputToAutoClassifierInput(input, name) {
+  let keys = Object.keys(input);
   if (keys.length === 0) return name;
   return keys
-    .map((s) => {
-      let h = e[s];
-      let y = typeof h === "object" && h !== null ? JSON.stringify(h) : String(h);
-      return `${s}=${y}`;
+    .map((key) => {
+      let value = input[key];
+      let text = typeof value === "object" && value !== null ? JSON.stringify(value) : String(value);
+      return `${key}=${text}`;
     })
     .join(" ");
 }
 //@ chunk-8t8n4kdh.js:127547-127690 layout
-function beginDroppedToolsRound(e) {
+function beginDroppedToolsRound(connection) {
   let droppedToolsSeqByConnection = getCliOwnedState().droppedToolsSeqByConnection;
-  let r = droppedToolsSeqByConnection.get(e) ?? {
+  let sequence = droppedToolsSeqByConnection.get(connection) ?? {
     started: 0,
     applied: 0,
   };
-  droppedToolsSeqByConnection.set(e, r);
-  r.started += 1;
+  droppedToolsSeqByConnection.set(connection, sequence);
+  sequence.started += 1;
   return {
-    seq: r.started,
-    state: r,
+    seq: sequence.started,
+    state: sequence,
   };
 }
 //@ chunk-8t8n4kdh.js:127690-127747 layout
 /**
  * 取服务器的 tools/list 错误记录。
  */
-function getToolsListError(e) {
-  return getCliOwnedState().toolsListErrorByResult.get(e);
+function getToolsListError(toolsResult) {
+  return getCliOwnedState().toolsListErrorByResult.get(toolsResult);
 }
 //@ chunk-8t8n4kdh.js:127747-127802 layout
 /**
  * 取服务器的发现阶段请求错误。
  */
-function getDiscoveryFetchError(e) {
-  return getCliOwnedState().discoveryFetchErrors.get(e);
+function getDiscoveryFetchError(templatesResult) {
+  return getCliOwnedState().discoveryFetchErrors.get(templatesResult);
 }
 //@ chunk-8t8n4kdh.js:127802-127862 layout
 /**
@@ -5427,78 +6418,78 @@ function seedMcpIdentityCheck() {
   let cliOwnedState = getCliOwnedState();
   if (cliOwnedState.identitySeedAttempted) return;
   cliOwnedState.identitySeedAttempted = true;
-  let n = currentIdentityToken();
-  if (n !== undefined) cliOwnedState.identityBaseline = n;
+  let identityToken = currentIdentityToken();
+  if (identityToken !== undefined) cliOwnedState.identityBaseline = identityToken;
 }
 //@ chunk-8t8n4kdh.js:127994-128204 layout
 /**
  * 判断 MCP 身份自上次检查以来是否变化，并更新基线。
  */
 function mcpIdentityChangedSinceLastCheck() {
-  let e = currentIdentityToken();
+  let identityToken = currentIdentityToken();
   let cliOwnedState = getCliOwnedState();
-  if (e === undefined) {
+  if (identityToken === undefined) {
     cliOwnedState.identityBaseline = undefined;
     return true;
   }
   if (cliOwnedState.identityBaseline === undefined) {
-    cliOwnedState.identityBaseline = e;
+    cliOwnedState.identityBaseline = identityToken;
     return true;
   }
-  if (cliOwnedState.identityBaseline === e) return false;
-  cliOwnedState.identityBaseline = e;
+  if (cliOwnedState.identityBaseline === identityToken) return false;
+  cliOwnedState.identityBaseline = identityToken;
   return true;
 }
 //@ chunk-8t8n4kdh.js:128204-128317 layout
 /**
  * 记录原始工具列表与拉取时间，供发现缓存写回。
  */
-function recordRawToolsForResult(e, n) {
+function recordRawToolsForResult(result, rawTools) {
   if (!isDiscoveryCacheOn()) return;
   let cliOwnedState = getCliOwnedState();
-  cliOwnedState.rawToolsByResult.set(e, n);
-  cliOwnedState.rawFetchedAtByResult.set(e, Date.now());
+  cliOwnedState.rawToolsByResult.set(result, rawTools);
+  cliOwnedState.rawFetchedAtByResult.set(result, Date.now());
 }
 //@ chunk-8t8n4kdh.js:128317-128433 layout
 /**
  * 记录原始命令列表与拉取时间，供发现缓存写回。
  */
-function recordRawCommandsForResult(e, n) {
+function recordRawCommandsForResult(result, rawCommands) {
   if (!isDiscoveryCacheOn()) return;
   let cliOwnedState = getCliOwnedState();
-  cliOwnedState.rawCommandsByResult.set(e, n);
-  cliOwnedState.rawFetchedAtByResult.set(e, Date.now());
+  cliOwnedState.rawCommandsByResult.set(result, rawCommands);
+  cliOwnedState.rawFetchedAtByResult.set(result, Date.now());
 }
 //@ chunk-8t8n4kdh.js:128433-128550 layout
 /**
  * 记录原始资源列表与拉取时间，供发现缓存写回。
  */
-function recordRawResourcesForResult(e, n) {
+function recordRawResourcesForResult(result, rawResources) {
   if (!isDiscoveryCacheOn()) return;
   let cliOwnedState = getCliOwnedState();
-  cliOwnedState.rawResourcesByResult.set(e, n);
-  cliOwnedState.rawFetchedAtByResult.set(e, Date.now());
+  cliOwnedState.rawResourcesByResult.set(result, rawResources);
+  cliOwnedState.rawFetchedAtByResult.set(result, Date.now());
 }
 //@ chunk-8t8n4kdh.js:128550-128602 layout
 /**
  * 记录服务器的发现阶段请求错误。
  */
-function setDiscoveryFetchError(e, n) {
-  getCliOwnedState().discoveryFetchErrors.set(e, n);
+function setDiscoveryFetchError(result, error) {
+  getCliOwnedState().discoveryFetchErrors.set(result, error);
 }
 //@ chunk-8t8n4kdh.js:128602-128755 layout
 /**
  * 发现缓存命中但服务器具备频道能力时，改为未命中。
  */
-function applyCapabilityServeTimeMiss(e) {
-  if (e.kind !== "fresh" && e.kind !== "stale") return e;
-  let capabilities = e.entry.capabilities;
+function applyCapabilityServeTimeMiss(probe) {
+  if (probe.kind !== "fresh" && probe.kind !== "stale") return probe;
+  let capabilities = probe.entry.capabilities;
   if (hasChannelCapability(capabilities))
     return {
       kind: "miss",
       reason: "channel-capable",
     };
-  return e;
+  return probe;
 }
 //@ chunk-8t8n4kdh.js:128755-130342 layout
 /**
@@ -5526,9 +6517,9 @@ async function persistRawDiscoveryIfComplete(connection, round) {
   );
   if (!Number.isFinite(min)) return true;
   let now = min;
-  let mapped = [round.tools, round.commands, round.resources].map((j) => [
-    j,
-    state.rawFetchedAtByResult.get(j),
+  let mapped = [round.tools, round.commands, round.resources].map((resultKey) => [
+    resultKey,
+    state.rawFetchedAtByResult.get(resultKey),
   ]);
   state.rawToolsByResult.delete(round.tools);
   state.rawCommandsByResult.delete(round.commands);
@@ -5554,7 +6545,7 @@ async function persistRawDiscoveryIfComplete(connection, round) {
       tools: rawTools,
       commands: rawCommands,
       resources: rawResources,
-      templates: round.templates.map(({ server, ...R }) => R),
+      templates: round.templates.map(({ server, ...templateRest }) => templateRest),
     },
     {
       identityEpoch: round.identityEpoch,
@@ -5570,7 +6561,8 @@ async function persistRawDiscoveryIfComplete(connection, round) {
     state.rawToolsByResult.set(round.tools, rawTools);
     state.rawCommandsByResult.set(round.commands, rawCommands);
     state.rawResourcesByResult.set(round.resources, rawResources);
-    for (let [j, R] of mapped) if (R !== undefined) state.rawFetchedAtByResult.set(j, R);
+    for (let [resultKey, fetchedAt] of mapped)
+      if (fetchedAt !== undefined) state.rawFetchedAtByResult.set(resultKey, fetchedAt);
     state.persistedDiscoveryRounds.delete(round.tools);
   }
   return true;
@@ -5579,24 +6571,24 @@ async function persistRawDiscoveryIfComplete(connection, round) {
 /**
  * 身份未变化时把刷新得到的工具列表合并写入发现缓存。
  */
-async function persistRefreshedToolsIfPresent(e, n, r) {
+async function persistRefreshedToolsIfPresent(server, toolsResult, options) {
   primeClientResolvers();
-  if (!isCurrentIdentityEpoch(r.identityEpoch)) return;
+  if (!isCurrentIdentityEpoch(options.identityEpoch)) return;
   let cliOwnedState = getCliOwnedState();
-  let tools = cliOwnedState.rawToolsByResult.get(n);
-  let y = cliOwnedState.rawFetchedAtByResult.get(n);
-  if (tools === undefined || y === undefined) return;
-  await mergeDiscoveryTools(e.name, e.config, tools, {
-    identityEpoch: r.identityEpoch,
-    grantLeg: r.grantLeg,
-    fetchedAt: y,
+  let tools = cliOwnedState.rawToolsByResult.get(toolsResult);
+  let fetchedAt = cliOwnedState.rawFetchedAtByResult.get(toolsResult);
+  if (tools === undefined || fetchedAt === undefined) return;
+  await mergeDiscoveryTools(server.name, server.config, tools, {
+    identityEpoch: options.identityEpoch,
+    grantLeg: options.grantLeg,
+    fetchedAt,
   });
 }
 //@ chunk-8t8n4kdh.js:130600-130985 layout
 /**
  * 把实时连接得到的列表写入发现缓存：需要时拉取资源模板，写入前确认连接未变且服务器未被禁用或拦截。
  */
-async function persistLiveListing(connection, n) {
+async function persistLiveListing(connection, listing) {
   if (
     !isDiscoveryCacheOn() ||
     !isDiscoveryCacheEligible(connection.config) ||
@@ -5605,10 +6597,12 @@ async function persistLiveListing(connection, n) {
   )
     return;
   try {
-    let r = !!connection.capabilities?.resources;
-    if (!r) recordRawResourcesForResult(n.resources, []);
-    let s =
-      r && isCacheableServer(connection.config) ? await fetchResourceTemplatesForClient(connection) : [];
+    let hasResources = !!connection.capabilities?.resources;
+    if (!hasResources) recordRawResourcesForResult(listing.resources, []);
+    let templates =
+      hasResources && isCacheableServer(connection.config)
+        ? await fetchResourceTemplatesForClient(connection)
+        : [];
     if (
       (await clearCachedFailureFor(connection.name, connection.config)) !== connection ||
       isMcpServerDisabled(connection.name) ||
@@ -5616,8 +6610,8 @@ async function persistLiveListing(connection, n) {
     )
       return;
     await persistRawDiscoveryIfComplete(connection, {
-      ...n,
-      templates: getDiscoveryFetchError(s) === undefined ? s : undefined,
+      ...listing,
+      templates: getDiscoveryFetchError(templates) === undefined ? templates : undefined,
     });
   } catch (error) {
     logMCPDebug(connection.name, `Discovery cache write-through skipped: ${errorMessage(error)}`);
@@ -5627,8 +6621,8 @@ async function persistLiveListing(connection, n) {
 /**
  * isDiscoveryCacheMissRecoverable：发现缓存未命中原因是否需要重写缓存（absent/expired/corrupt 等为 true）。
  */
-function isDiscoveryCacheMissRecoverable(e) {
-  switch (e.reason) {
+function isDiscoveryCacheMissRecoverable(probe) {
+  switch (probe.reason) {
     case "absent":
     case "expired":
     case "corrupt":
@@ -5644,16 +6638,16 @@ function isDiscoveryCacheMissRecoverable(e) {
     case "channel-capable":
       return false;
     default:
-      return e.reason;
+      return probe.reason;
   }
 }
 //@ chunk-8t8n4kdh.js:131278-131805 layout
 /**
  * discoverySourceLabel：发现缓存查询结果到遥测标签（live、miss_expired、miss_corrupt 等）。
  */
-function discoverySourceLabel(e) {
-  if (e.kind !== "miss") return "live";
-  switch (e.reason) {
+function discoverySourceLabel(probe) {
+  if (probe.kind !== "miss") return "live";
+  switch (probe.reason) {
     case "disabled":
       return "miss_disabled";
     case "key-unavailable":
@@ -5679,13 +6673,17 @@ function discoverySourceLabel(e) {
     case "channel-capable":
       return "live";
     default:
-      return e.reason;
+      return probe.reason;
   }
 }
 //@ chunk-8t8n4kdh.js:131805-131929 layout
-function getMaxResultSizeCharsMeta(e) {
-  let n = e._meta?.["anthropic/maxResultSizeChars"];
-  return typeof n === "number" && Number.isFinite(n) && n > 0 ? n : undefined;
+function getMaxResultSizeCharsMeta(tool) {
+  let maxResultSizeChars = tool._meta?.["anthropic/maxResultSizeChars"];
+  return typeof maxResultSizeChars === "number" &&
+    Number.isFinite(maxResultSizeChars) &&
+    maxResultSizeChars > 0
+    ? maxResultSizeChars
+    : undefined;
 }
 //@ chunk-8t8n4kdh.js:131929-136285 fingerprint = fetchToolsForClient (0.385)
 /**
@@ -5721,43 +6719,49 @@ function buildMcpTool({
   serverInfoName,
   role,
   listed,
-  call: Tt,
+  call,
   overrides,
 }) {
   let mcpToolName = buildMcpToolName(serverName, listed.name);
   let maxResultSizeCharsMeta = getMaxResultSizeCharsMeta(listed);
-  let wt = maxResultSizeCharsMeta !== undefined;
-  let Se = listed._meta?.["anthropic/requiresUserInteraction"] === true;
+  let hasMaxResultSizeCap = maxResultSizeCharsMeta !== undefined;
+  let requiresUserInteraction = listed._meta?.["anthropic/requiresUserInteraction"] === true;
   let toolsToProcess = toolUiMeta(listed._meta);
-  let At = promptOverrides?.tools?.[listed.name] ?? listed.description ?? "";
-  let ft = truncateDescription(At, `Tool "${listed.name}" description`, serverName, maxDescriptionLength_2);
-  let Ot = truncateDescription(
-    At,
+  let descriptionText = promptOverrides?.tools?.[listed.name] ?? listed.description ?? "";
+  let truncatedDescription = truncateDescription(
+    descriptionText,
+    `Tool "${listed.name}" description`,
+    serverName,
+    maxDescriptionLength_2,
+  );
+  let truncatedLoadedDescription = truncateDescription(
+    descriptionText,
     `Tool "${listed.name}" description`,
     serverName,
     maxLoadedDescriptionLength,
   );
-  let vt =
+  let searchHint =
     promptOverrides?.search_hints?.[listed.name] ??
     (typeof listed._meta?.["anthropic/searchHint"] === "string"
       ? listed._meta["anthropic/searchHint"]
       : undefined);
-  let me = withOverlapSlots(serverName, listed.name, Tt);
+  let callWithOverlapSlots = withOverlapSlots(serverName, listed.name, call);
   let fullyQualifiedName = requiresConnectorGrant(serverName, {
     scope,
     pluginSource,
   });
-  let Ve = fullyQualifiedName || legacyGrantRefused;
-  let De =
+  let requiresConnectorGrant_2 = fullyQualifiedName || legacyGrantRefused;
+  let canRebindLegacyGrant =
     legacyGrantRefused &&
     legacyGrantRebindable &&
-    !Se &&
+    !requiresUserInteraction &&
     effectiveMaxPermission !== "ask" &&
     overrides?.suppressesAlwaysAllowRule === undefined &&
     overrides?.requiresUserInteraction === undefined &&
     !isDesignGatedTool(isFirstPartyDesignServer, listed.name);
-  let Le = Ve || isDesignGatedTool(isFirstPartyDesignServer, listed.name);
-  let re = () =>
+  let suppressesAllowRules =
+    requiresConnectorGrant_2 || isDesignGatedTool(isFirstPartyDesignServer, listed.name);
+  let ignoresWholeToolAllowRule = () =>
     fullyQualifiedName ||
     (legacyGrantRefused &&
       !ownsLegacyKey({
@@ -5775,7 +6779,7 @@ function buildMcpTool({
       serverType,
       serverId,
     });
-  if (Ve)
+  if (requiresConnectorGrant_2)
     logMCPDebug(
       serverName,
       fullyQualifiedName
@@ -5814,7 +6818,7 @@ function buildMcpTool({
       ...(legacyGrantRefused && {
         legacyGrantRefused,
       }),
-      ...(De && {
+      ...(canRebindLegacyGrant && {
         legacyGrantRebindable,
       }),
       ...(denyKey !== undefined && {
@@ -5842,27 +6846,27 @@ function buildMcpTool({
       }),
     },
     isMcp: true,
-    searchHint: vt?.replace(/\s+/g, " ").trim() || undefined,
+    searchHint: searchHint?.replace(/\s+/g, " ").trim() || undefined,
     alwaysLoad:
       !serverDefersAllTools &&
       ((serverAlwaysLoad && !(scope === "dynamic" && listed._meta?.["anthropic/alwaysLoad"] === false)) ||
         listed._meta?.["anthropic/alwaysLoad"] === true),
     async description() {
-      return At;
+      return descriptionText;
     },
     async prompt({ loadedThroughToolSearch }) {
-      return loadedThroughToolSearch ? Ot : ft;
+      return loadedThroughToolSearch ? truncatedLoadedDescription : truncatedDescription;
     },
     isConcurrencySafe() {
-      return me.mayOverlap || (listed.annotations?.readOnlyHint ?? false);
+      return callWithOverlapSlots.mayOverlap || (listed.annotations?.readOnlyHint ?? false);
     },
     isReadOnly() {
       return listed.annotations?.readOnlyHint ?? false;
     },
     readOnlyHint: listed.annotations?.readOnlyHint,
     openWorldHint: listed.annotations?.openWorldHint,
-    toAutoClassifierInput(ue) {
-      return mcpToolInputToAutoClassifierInput(ue, listed.name);
+    toAutoClassifierInput(input) {
+      return mcpToolInputToAutoClassifierInput(input, listed.name);
     },
     isDestructive() {
       return listed.annotations?.destructiveHint ?? false;
@@ -5871,35 +6875,35 @@ function buildMcpTool({
       return listed.annotations?.openWorldHint ?? false;
     },
     requiresUserInteraction() {
-      return Se;
+      return requiresUserInteraction;
     },
-    async validateInput(ue, ot) {
-      let it = refuseNonMainAccountMemoryWrite(accountMemoryServer, listed.name, ot);
-      if (it === undefined)
+    async validateInput(input, context) {
+      let refusalMessage = refuseNonMainAccountMemoryWrite(accountMemoryServer, listed.name, context);
+      if (refusalMessage === undefined)
         return {
           result: true,
         };
       logEvent("tengu_account_memory_spawned_write_refused", {
-        caller: fromEnumOpt(ot.memoryCaller) ?? lit("unmarked"),
+        caller: fromEnumOpt(context.memoryCaller) ?? lit("unmarked"),
       });
       return {
         result: false,
-        message: it,
+        message: refusalMessage,
         errorCode: 1,
       };
     },
-    suppressesAlwaysAllowRule: (ue, ot) =>
-      Se ||
-      (effectiveMaxPermission === "ask" && !ot) ||
-      re() ||
+    suppressesAlwaysAllowRule: (input, hasAlwaysAllowRule) =>
+      requiresUserInteraction ||
+      (effectiveMaxPermission === "ask" && !hasAlwaysAllowRule) ||
+      ignoresWholeToolAllowRule() ||
       isDesignGatedTool(isFirstPartyDesignServer, listed.name),
-    ...((Ve || isServerIdentityActive()) && {
-      ignoresWholeToolAllowRule: re,
+    ...((requiresConnectorGrant_2 || isServerIdentityActive()) && {
+      ignoresWholeToolAllowRule,
     }),
-    maxResultSizeChars: wt
+    maxResultSizeChars: hasMaxResultSizeCap
       ? Math.min(maxResultSizeCharsMeta, MAX_MCP_RESULT_CHARS)
       : MCPTool.maxResultSizeChars,
-    persistenceThresholdCeiling: wt ? MAX_MCP_RESULT_CHARS : undefined,
+    persistenceThresholdCeiling: hasMaxResultSizeCap ? MAX_MCP_RESULT_CHARS : undefined,
     inputJSONSchema: addComputerUseActionSummary(
       addActionSummaryToSchema(
         applyParamDescriptionOverrides(
@@ -5910,19 +6914,26 @@ function buildMcpTool({
       ),
       mcpToolName,
     ),
-    async checkPermissions(ue, ot) {
-      let it = gateDesignWriteWithoutPlanToken(isFirstPartyDesignServer, listed.name, ue);
-      if (it) return it;
+    async checkPermissions(input, context) {
+      let planTokenDenial = gateDesignWriteWithoutPlanToken(isFirstPartyDesignServer, listed.name, input);
+      if (planTokenDenial) return planTokenDenial;
       if (isFirstPartyDesignServer) {
-        let ye = peekScopeExpansionNotice();
-        let be =
-          (await ye?.wouldNeedDesignConsent(ot.toolState.get(DesignGateState), ot.credentials)) ?? null;
-        if (be !== null && ye && ot.toolUseId) {
-          let ct = rememberDesignConsentAsk(ot.toolUseId, be, canAskDesignConsent(ot));
-          return askDesignConsent(ye.consentPromptFor(be), ue, ct);
+        let notice = peekScopeExpansionNotice();
+        let neededConsentBit =
+          (await notice?.wouldNeedDesignConsent(
+            context.toolState.get(DesignGateState),
+            context.credentials,
+          )) ?? null;
+        if (neededConsentBit !== null && notice && context.toolUseId) {
+          let consentNonce = rememberDesignConsentAsk(
+            context.toolUseId,
+            neededConsentBit,
+            canAskDesignConsent(context),
+          );
+          return askDesignConsent(notice.consentPromptFor(neededConsentBit), input, consentNonce);
         }
       }
-      if (Se)
+      if (requiresUserInteraction)
         return {
           behavior: "ask",
           message: "MCPTool requires permission.",
@@ -5932,7 +6943,7 @@ function buildMcpTool({
       return {
         behavior: "passthrough",
         message: "MCPTool requires permission.",
-        suggestions: Le
+        suggestions: suppressesAllowRules
           ? []
           : [
               {
@@ -5952,7 +6963,7 @@ function buildMcpTool({
             ],
       };
     },
-    call: me.call,
+    call: callWithOverlapSlots.call,
     userFacingName() {
       let trimmed = (listed.annotations?.title || listed.name).replace(/\s+/g, " ").trim();
       return `${serverName} - ${trimmed} (MCP)`;
@@ -5964,11 +6975,11 @@ function buildMcpTool({
 /**
  * buildCachedClientTools：用发现缓存条目构造 type=cached 的客户端与工具（不连线）。
  */
-async function buildCachedClientTools({ name: e, config, capabilities, serverInfo, savedAt, tools }) {
+async function buildCachedClientTools({ name, config, capabilities, serverInfo, savedAt, tools }) {
   primeEnsureConnected();
-  await evictStaleFailedConnectMemoForServe(e, config);
-  let client = {
-    name: e,
+  await evictStaleFailedConnectMemoForServe(name, config);
+  let cachedClient = {
+    name,
     type: "cached",
     config,
     capabilities,
@@ -5981,55 +6992,68 @@ async function buildCachedClientTools({ name: e, config, capabilities, serverInf
     cacheSavedAt: savedAt,
   };
   return {
-    client,
-    tools: await buildMcpToolsForClient(client, tools, Date.now(), "cache", beginDroppedToolsRound(client)),
+    client: cachedClient,
+    tools: await buildMcpToolsForClient(
+      cachedClient,
+      tools,
+      Date.now(),
+      "cache",
+      beginDroppedToolsRound(cachedClient),
+    ),
   };
 }
 //@ chunk-8t8n4kdh.js:136568-154333 layout
 /**
  * buildMcpToolsForClient：处理 tools/list 结果：校验/修正 inputSchema、数量上限、toolPermissions 与工具策略、IDE 工具白名单、角色等，逐个 buildMcpTool，并记录降级与 tengu_mcp_tools_listed 遥测。
  */
-async function buildMcpToolsForClient(client, listedTools, startedAtMs, discoverySource, h) {
+async function buildMcpToolsForClient(client, listedTools, startedAtMs, discoverySource, listingState) {
   listedTools = filterRemoteRepoTools(client.config, listedTools);
-  let y = listedTools.length;
+  let originalCount = listedTools.length;
   let streamingListingSanitizer = createStreamingListingSanitizer();
-  let w = (await mapInTurns(listedTools, (re) => streamingListingSanitizer(re) ?? [])).flat();
+  let sanitizedTools = (
+    await mapInTurns(listedTools, (tool) => streamingListingSanitizer(tool) ?? [])
+  ).flat();
   listedTools = [];
-  let P = loggingSafeOrigin(client.config);
-  let M = mcpBaseUrlAnalytics_2(client.config, client.name);
+  let loggableOrigin = loggingSafeOrigin(client.config);
+  let baseAnalytics = mcpBaseUrlAnalytics_2(client.config, client.name);
   let mcpServerName = mcpNameForAnalytics_GATE_EVALUATED(
     normalizeNameForMCP(client.name),
     isMcpServerLoggableInAnalytics(client.name, client.config),
   );
-  let R = y - w.length;
-  if (R > 0) {
-    logMCPError(client.name, listingTruncatedNote("tools", R, y));
+  let truncatedCount = originalCount - sanitizedTools.length;
+  if (truncatedCount > 0) {
+    logMCPError(client.name, listingTruncatedNote("tools", truncatedCount, originalCount));
     logEvent("tengu_mcp_degraded", {
       reason: lit("tool_listing_over_limit"),
       transportType: fromEnum(client.config.type ?? "stdio"),
-      skippedCount: R,
+      skippedCount: truncatedCount,
       mcpServerName,
-      ...M,
+      ...baseAnalytics,
     });
   }
-  if (y === 0 && discoverySource === "live")
+  if (originalCount === 0 && discoverySource === "live")
     logEvent("tengu_mcp_degraded", {
       reason: lit("connected_zero_tools"),
       transportType: fromEnum(client.config.type ?? "stdio"),
       mcpServerName,
-      ...M,
+      ...baseAnalytics,
     });
   let CLAUDE_AGENT_SDK_MCP_NO_PREFIX = client.config.type === "sdk" && env.CLAUDE_AGENT_SDK_MCP_NO_PREFIX;
   let toolPermissions =
     client.config.type === "claudeai-proxy" || client.config.type === "http" || client.config.type === "sse"
       ? client.config.toolPermissions
       : undefined;
-  let ie = isRunnerDynamicServer(client.config) ? applyBlockedToolPolicy(toolPermissions) : toolPermissions;
-  if (ie) {
-    let re = Object.keys(ie).length;
-    if (re > 0 && !w.some((ue) => ie[ue.name] !== undefined))
+  let effectiveToolPermissions = isRunnerDynamicServer(client.config)
+    ? applyBlockedToolPolicy(toolPermissions)
+    : toolPermissions;
+  if (effectiveToolPermissions) {
+    let permissionCount = Object.keys(effectiveToolPermissions).length;
+    if (
+      permissionCount > 0 &&
+      !sanitizedTools.some((tool) => effectiveToolPermissions[tool.name] !== undefined)
+    )
       logForDebugging(
-        `[claudeai-mcp] ${client.name}: toolPermissions has ${re} entries but none matched upstream tool names \u2014 backend name drift?`,
+        `[claudeai-mcp] ${client.name}: toolPermissions has ${permissionCount} entries but none matched upstream tool names \u2014 backend name drift?`,
         {
           level: "warn",
         },
@@ -6037,150 +7061,158 @@ async function buildMcpToolsForClient(client, listedTools, startedAtMs, discover
   }
   let normalizeEnabled = shouldNormalizeRootCombinators(client.config);
   let apiValidateEnabled = shouldDropInvalidToolSchemas(client.config);
-  let G = 0;
-  let Pe = 0;
-  let ke = 0;
-  let nt = 0;
-  let ee = 0;
-  let he = [];
-  let Ae = 0;
-  let yt = 0;
-  let q = await mapInTurns(w, (re) => {
-    let ue = judgeToolSchemaSendability(re.inputSchema, {
+  let normalizedCount = 0;
+  let normalizeGatedCount = 0;
+  let unsupportedCount = 0;
+  let invalidMetaCount = 0;
+  let invalidPropKeyCount = 0;
+  let droppedTools = [];
+  let invalidGatedCount = 0;
+  let propKeyGatedCount = 0;
+  let judgedTools = await mapInTurns(sanitizedTools, (tool) => {
+    let judgment = judgeToolSchemaSendability(tool.inputSchema, {
       normalizeEnabled,
       apiValidateEnabled,
     });
-    if (ue.verdict === "drop" && ue.cause !== "api_invalid") {
-      if (ue.cause === "normalize_gated") Pe++;
-      else ke++;
+    if (judgment.verdict === "drop" && judgment.cause !== "api_invalid") {
+      if (judgment.cause === "normalize_gated") normalizeGatedCount++;
+      else unsupportedCount++;
       logMCPError(
         client.name,
-        `Skipping tool "${re.name}": ${ue.reason}. Other tools from this server remain available.`,
+        `Skipping tool "${tool.name}": ${judgment.reason}. Other tools from this server remain available.`,
       );
       return [];
     }
-    if (ue.normalized) {
-      G++;
+    if (judgment.normalized) {
+      normalizedCount++;
       logMCPDebug(
         client.name,
-        `Normalized input schema for tool "${re.name}" (flattened top-level ${ue.normalized.combinators.join("/")})`,
+        `Normalized input schema for tool "${tool.name}" (flattened top-level ${judgment.normalized.combinators.join("/")})`,
       );
     }
-    if (ue.verdict === "drop") {
-      if (ue.rejection.check === "meta") nt++;
-      else ee++;
+    if (judgment.verdict === "drop") {
+      if (judgment.rejection.check === "meta") invalidMetaCount++;
+      else invalidPropKeyCount++;
       if (
-        ie?.[re.name] !== "blocked" &&
-        isIncludedMcpTool_2(CLAUDE_AGENT_SDK_MCP_NO_PREFIX ? re.name : buildMcpToolName(client.name, re.name))
+        effectiveToolPermissions?.[tool.name] !== "blocked" &&
+        isIncludedMcpTool_2(
+          CLAUDE_AGENT_SDK_MCP_NO_PREFIX ? tool.name : buildMcpToolName(client.name, tool.name),
+        )
       )
-        he.push({
-          toolName: re.name,
-          reason: ue.rejection.detail,
+        droppedTools.push({
+          toolName: tool.name,
+          reason: judgment.rejection.detail,
         });
       logMCPError(
         client.name,
-        `Skipping tool "${re.name}": its input schema would be rejected by the Anthropic API (${ue.rejection.detail}). Other tools from this server remain available.`,
+        `Skipping tool "${tool.name}": its input schema would be rejected by the Anthropic API (${judgment.rejection.detail}). Other tools from this server remain available.`,
       );
       return [];
     }
-    if (ue.apiWouldReject) {
-      if (ue.apiWouldReject.check === "meta") Ae++;
-      else yt++;
+    if (judgment.apiWouldReject) {
+      if (judgment.apiWouldReject.check === "meta") invalidGatedCount++;
+      else propKeyGatedCount++;
       logMCPDebug(
         client.name,
-        `Tool "${re.name}" input schema would be rejected by the Anthropic API (${ue.apiWouldReject.detail}); requests that include it may fail`,
+        `Tool "${tool.name}" input schema would be rejected by the Anthropic API (${judgment.apiWouldReject.detail}); requests that include it may fail`,
       );
     }
-    return ue.normalized
+    return judgment.normalized
       ? [
           {
-            ...re,
-            inputSchema: ue.normalized.schema,
-            description: joinDescription(ue.normalized.note, re.description),
+            ...tool,
+            inputSchema: judgment.normalized.schema,
+            description: joinDescription(judgment.normalized.note, tool.description),
           },
         ]
-      : [re];
+      : [tool];
   });
-  let H = Ji(q.flat(), "name");
-  if (h.seq > h.state.applied) {
-    h.state.applied = h.seq;
-    client.droppedTools = Ji(he, "toolName");
+  let keptTools = uniqByExport(judgedTools.flat(), "name");
+  if (listingState.seq > listingState.state.applied) {
+    listingState.state.applied = listingState.seq;
+    client.droppedTools = uniqByExport(droppedTools, "toolName");
   }
-  if (G > 0)
+  if (normalizedCount > 0)
     logEvent("tengu_mcp_degraded", {
       reason: lit("tool_schema_normalized"),
       transportType: fromEnum(client.config.type ?? "stdio"),
-      normalizedCount: G,
+      normalizedCount,
       mcpServerName,
-      ...M,
+      ...baseAnalytics,
     });
-  if (Pe > 0)
+  if (normalizeGatedCount > 0)
     logEvent("tengu_mcp_degraded", {
       reason: lit("tool_schema_normalize_gated"),
       transportType: fromEnum(client.config.type ?? "stdio"),
-      skippedCount: Pe,
+      skippedCount: normalizeGatedCount,
       mcpServerName,
-      ...M,
+      ...baseAnalytics,
     });
-  if (ke > 0)
+  if (unsupportedCount > 0)
     logEvent("tengu_mcp_degraded", {
       reason: lit("tool_schema_unsupported"),
       transportType: fromEnum(client.config.type ?? "stdio"),
-      skippedCount: ke,
+      skippedCount: unsupportedCount,
       mcpServerName,
-      ...M,
+      ...baseAnalytics,
     });
-  if (nt > 0)
+  if (invalidMetaCount > 0)
     logEvent("tengu_mcp_degraded", {
       reason: lit("tool_schema_invalid"),
       transportType: fromEnum(client.config.type ?? "stdio"),
-      skippedCount: nt,
+      skippedCount: invalidMetaCount,
       mcpServerName,
-      ...M,
+      ...baseAnalytics,
     });
-  if (ee > 0)
+  if (invalidPropKeyCount > 0)
     logEvent("tengu_mcp_degraded", {
       reason: lit("tool_property_key_invalid"),
       transportType: fromEnum(client.config.type ?? "stdio"),
-      skippedCount: ee,
+      skippedCount: invalidPropKeyCount,
       mcpServerName,
-      ...M,
+      ...baseAnalytics,
     });
-  if (Ae > 0)
+  if (invalidGatedCount > 0)
     logEvent("tengu_mcp_degraded", {
       reason: lit("tool_schema_invalid_gated"),
       transportType: fromEnum(client.config.type ?? "stdio"),
-      keptCount: Ae,
+      keptCount: invalidGatedCount,
       mcpServerName,
-      ...M,
+      ...baseAnalytics,
     });
-  if (yt > 0)
+  if (propKeyGatedCount > 0)
     logEvent("tengu_mcp_degraded", {
       reason: lit("tool_property_key_invalid_gated"),
       transportType: fromEnum(client.config.type ?? "stdio"),
-      keptCount: yt,
+      keptCount: propKeyGatedCount,
       mcpServerName,
-      ...M,
+      ...baseAnalytics,
     });
-  let Xe = () => isMcpServerLoggableInAnalytics(client.name, client.config);
-  let Ee = toolTimeoutForServer(client.config);
+  let isLoggable = () => isMcpServerLoggableInAnalytics(client.name, client.config);
+  let maxDescriptionLength = toolTimeoutForServer(client.config);
   let maxLoadedDescriptionLength = toolTimeoutForServer(client.config, true);
-  await logToolCallXmlInDescriptions(H, client.name, Xe(), P, client.instructions);
-  let Qe = isDesignServerConfig(client.config);
-  let Be = officialPluginPromptOverrides(client.config);
+  await logToolCallXmlInDescriptions(
+    keptTools,
+    client.name,
+    isLoggable(),
+    loggableOrigin,
+    client.instructions,
+  );
+  let isDesignServer = isDesignServerConfig(client.config);
+  let promptOverrides = officialPluginPromptOverrides(client.config);
   let pluginTelemetry = client.config.pluginSource
     ? buildPluginEventFieldsFromId(client.config.pluginSource, policyEnabledPluginNameSet())
     : undefined;
-  let wt = isCliOwnedConfig(client.config);
-  let Se = wt && client.name === CLAUDE_ARTIFACTS;
-  let ze = Se || isOwnCcrMcpServer(client.config);
-  let At = false;
-  let ft = H;
-  let Ot =
-    w.some((re) => isMemoryToolServer(client, re.name)) ||
-    ft.some((re) => isMemoryToolServer(client, re.name)) ||
-    (R > 0 && isMemoryToolServer_2(client));
-  let vt = {
+  let cliOwned = isCliOwnedConfig(client.config);
+  let isArtifactsServer = cliOwned && client.name === CLAUDE_ARTIFACTS;
+  let wrapArtifactsPublishing = isArtifactsServer || isOwnCcrMcpServer(client.config);
+  let unusedFlag = false;
+  let toolsForBuild = keptTools;
+  let memoryServer =
+    sanitizedTools.some((tool) => isMemoryToolServer(client, tool.name)) ||
+    toolsForBuild.some((tool) => isMemoryToolServer(client, tool.name)) ||
+    (truncatedCount > 0 && isMemoryToolServer_2(client));
+  let toolOptions = {
     serverName: client.name,
     scope: client.config.scope,
     pluginSource: client.config.pluginSource,
@@ -6190,15 +7222,15 @@ async function buildMcpToolsForClient(client, listedTools, startedAtMs, discover
     skipPrefix: CLAUDE_AGENT_SDK_MCP_NO_PREFIX,
     serverAlwaysLoad: client.config.alwaysLoad === true,
     serverDefersAllTools: client.config.alwaysLoad === false,
-    promptOverrides: Be,
-    isFirstPartyDesignServer: Qe,
-    maxDescriptionLength: Ee,
+    promptOverrides,
+    isFirstPartyDesignServer: isDesignServer,
+    maxDescriptionLength,
     maxLoadedDescriptionLength,
     pluginTelemetry,
-    cliOwned: wt,
+    cliOwned,
     displayName: "displayName" in client.config ? client.config.displayName : undefined,
     standardKey: isStandardKeyActive()
-      ? getServerIdentityKey(client.name, client.config, wt === true)
+      ? getServerIdentityKey(client.name, client.config, cliOwned === true)
       : undefined,
     legacyGrantRefused:
       isStandardKeyActive() &&
@@ -6227,21 +7259,21 @@ async function buildMcpToolsForClient(client, listedTools, startedAtMs, discover
     serverInfoName: stripIgnorables(client.serverInfo?.name ?? "") || undefined,
     role: "role" in client.config ? client.config.role : undefined,
   };
-  let me = isClaudeInChromeMCPServer(client.name);
-  let Te = isDocsConnectorServer(client);
+  let isClaudeInChrome = isClaudeInChromeMCPServer(client.name);
+  let isDocsConnector = isDocsConnectorServer(client);
   let filtered = (
-    await mapInTurns(ft, (re) => {
-      let fullyQualifiedName = buildMcpToolName(client.name, re.name);
-      let ot = getMaxResultSizeCharsMeta(re) !== undefined;
+    await mapInTurns(toolsForBuild, (listedTool) => {
+      let fullyQualifiedName = buildMcpToolName(client.name, listedTool.name);
+      let hasResultSizeAnnotation = getMaxResultSizeCharsMeta(listedTool) !== undefined;
       let overrides = {
-        ...(me &&
+        ...(isClaudeInChrome &&
           isStdioConfig(client.config) && {
-            ...needsAuthCacheModule().getClaudeInChromeMCPToolOverrides(re.name),
+            ...needsAuthCacheModule().getClaudeInChromeMCPToolOverrides(listedTool.name),
             builtinRenderFamily: "claude-in-chrome",
           }),
-        ...(me &&
+        ...(isClaudeInChrome &&
           isClaudeAiProxyServer(client.config) && {
-            ...createChromePermissionHandler(re.name, re._meta, (Fe, L) =>
+            ...createChromePermissionHandler(listedTool.name, listedTool._meta, (tool, args) =>
               readTabUrl(
                 async (tool, args, signal) =>
                   (
@@ -6259,8 +7291,8 @@ async function buildMcpToolsForClient(client, listedTools, startedAtMs, discover
                       credentials: undefined,
                     })
                   ).content,
-                Fe,
-                L,
+                tool,
+                args,
               ),
             ),
           }),
@@ -6271,200 +7303,223 @@ async function buildMcpToolsForClient(client, listedTools, startedAtMs, discover
         ...(client.config.type === "sdk" && isFileUploadServer(client.name)
           ? buildMcpToolPermissionOverrides(
               client.name,
-              re.name,
-              re.inputSchema.properties,
+              listedTool.name,
+              listedTool.inputSchema.properties,
               mcpToolInputToAutoClassifierInput,
             )
           : {}),
-        ...(isSlackSendToolName(re.name) ? createSlackSendToolUi() : {}),
-        ...(isClaudeTestWriteCall(client.name, client.config.pluginSource, re.name)
+        ...(isSlackSendToolName(listedTool.name) ? createSlackSendToolUi() : {}),
+        ...(isClaudeTestWriteCall(client.name, client.config.pluginSource, listedTool.name)
           ? claudeTestWriteToolOverrides()
           : {}),
         ...{},
-        ...(Se ? artifactsMcpLaptopModule()?.artifactsMcpLaptopToolOverridesFor(client.config) : {}),
+        ...(isArtifactsServer
+          ? artifactsMcpLaptopModule()?.artifactsMcpLaptopToolOverridesFor(client.config)
+          : {}),
         ...(isRunnerDynamicServer(client.config) && {
           skipAggregateToolResultBudget: true,
         }),
       };
       let tool = buildMcpTool({
-        ...vt,
-        accountMemory: isMemoryServerConnection(client, re.name),
-        accountMemoryServer: Ot,
-        effectiveMaxPermission: ie?.[re.name],
-        listed: re,
+        ...toolOptions,
+        accountMemory: isMemoryServerConnection(client, listedTool.name),
+        accountMemoryServer: memoryServer,
+        effectiveMaxPermission: effectiveToolPermissions?.[listedTool.name],
+        listed: listedTool,
         overrides,
-        async call(Fe, L, canUseTool, et, Oe, we) {
-          let Ke = L.toolUseId ?? getFirstToolUseId(et);
-          let He = refuseNonMainAccountMemoryWrite(Ot, re.name, L);
-          if (He !== undefined)
+        async call(args, context, canUseTool, parentMessage, onProgress, callOptions) {
+          let toolUseId = context.toolUseId ?? getFirstToolUseId(parentMessage);
+          let refusal = refuseNonMainAccountMemoryWrite(memoryServer, listedTool.name, context);
+          if (refusal !== undefined)
             throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-              He,
+              refusal,
               "account memory write from a spawned loop",
             );
-          let tt = {
-            ...stripHostMetaUnlessCcrScoped(client.config, L.mcpRequestMeta),
-            ...we?.mcpCallMeta,
-            ...(Ke && {
-              "claudecode/toolUseId": Ke,
+          let callMeta = {
+            ...stripHostMetaUnlessCcrScoped(client.config, context.mcpRequestMeta),
+            ...callOptions?.mcpCallMeta,
+            ...(toolUseId && {
+              "claudecode/toolUseId": toolUseId,
             }),
-            ...consumeMcpApprovalTicket(L.session, L.toolUseId, client.name, client.config),
+            ...consumeMcpApprovalTicket(context.session, context.toolUseId, client.name, client.config),
             ...(isClaudeInChromeMCPServer(client.name) &&
               isClaudeAiProxyServer(client.config) &&
-              judgedSiteMeta(L)),
+              judgedSiteMeta(context)),
             ...((isDocsConnectorServer(client) || isOwnArtifactMcpTool(client.name, client.config)) &&
-              requestIdMeta(et.requestId)),
+              requestIdMeta(parentMessage.requestId)),
             ...(isHearthbotRelayServer(client) && ccrTurnEventHeaders(turnTraceContextsOf())),
-            ...agentRequestMeta(client, L),
-            ...(isAccountMemoryServer(client) && memoryChainMeta(L.toolState, et.message.id)),
+            ...agentRequestMeta(client, context),
+            ...(isAccountMemoryServer(client) &&
+              memoryChainMeta(context.toolState, parentMessage.message.id)),
           };
-          let gt = false;
-          function Nt(data) {
-            if (!Oe || !Ke || gt) return;
-            Oe({
+          let backgrounded = false;
+          function reportProgress(data) {
+            if (!onProgress || !toolUseId || backgrounded) return;
+            onProgress({
               type: "progress",
-              toolUseID: Ke,
+              toolUseID: toolUseId,
               data,
             });
           }
-          Nt({
+          reportProgress({
             type: "mcp_progress",
             status: "started",
             serverName: client.name,
-            toolName: re.name,
+            toolName: listedTool.name,
           });
           let now = Date.now();
-          let Me = client;
-          let Ye = false;
-          let _t;
-          let Mt = null;
-          let __consentNonce = typeof Fe.__consentNonce === "string" ? Fe.__consentNonce : undefined;
-          if ("__consentNonce" in Fe) {
-            let { __consentNonce, ...sn } = Fe;
-            Fe = sn;
+          let currentClient = client;
+          let awaitingUserInput = false;
+          let stopApprovalTiming;
+          let releasePark = null;
+          let __consentNonce = typeof args.__consentNonce === "string" ? args.__consentNonce : undefined;
+          if ("__consentNonce" in args) {
+            let { __consentNonce, ...restArgs } = args;
+            args = restArgs;
           }
-          let pt = Qe ? takeDesignConsentAsk(Ke, __consentNonce) : null;
-          if (Qe) noteDesignProjectId(L.toolState.get(DesignGateState), Qe, re.name, Fe);
-          let jt;
-          let Lt = (Ct) => {
-            Ye = Ct;
-            if (Ct) {
-              _t ??= we?.timing?.mark("approval");
-              if (!gt && tool.name !== getPermissionPromptToolName() && Mt === null) Mt = parkOnUser();
+          let consentAsk = isDesignServer ? takeDesignConsentAsk(toolUseId, __consentNonce) : null;
+          if (isDesignServer)
+            noteDesignProjectId(
+              context.toolState.get(DesignGateState),
+              isDesignServer,
+              listedTool.name,
+              args,
+            );
+          let taskBackground;
+          let setAwaitingUserInput = (waiting) => {
+            awaitingUserInput = waiting;
+            if (waiting) {
+              stopApprovalTiming ??= callOptions?.timing?.mark("approval");
+              if (!backgrounded && tool.name !== getPermissionPromptToolName() && releasePark === null)
+                releasePark = parkOnUser();
             } else {
-              _t?.();
-              _t = undefined;
-              Mt?.();
-              Mt = null;
+              stopApprovalTiming?.();
+              stopApprovalTiming = undefined;
+              releasePark?.();
+              releasePark = null;
             }
           };
-          let We = true;
-          let Bt = async (Ct) => {
-            let an = false;
-            let un;
+          let firstAttempt = true;
+          let invokeTool = async (signal) => {
+            let stepUpRetried = false;
+            let stepUpScope;
             for (let idx = 0; ; idx++)
               try {
-                let toolUseId = We ? Ke : undefined;
-                We = false;
-                let qt = we?.timing?.mark(
+                let toolUseId_2 = firstAttempt ? toolUseId : undefined;
+                firstAttempt = false;
+                let stopTiming = callOptions?.timing?.mark(
                   client.config.type === "http" && issuerKey_3(client.config.url) ? "own" : "external",
                 );
-                let Qt = await ensureConnectedClient(client, {
+                let toolClient = await ensureConnectedClient(client, {
                   context: "MCP tool call",
-                  toolUseId,
-                }).finally(qt);
-                Me = Qt;
-                applyMemoryCallerMeta(tt, Ot, L, Qt);
-                let lt = await callMCPToolWithUrlElicitationRetry({
-                  client: Qt,
+                  toolUseId: toolUseId_2,
+                }).finally(stopTiming);
+                currentClient = toolClient;
+                applyMemoryCallerMeta(callMeta, memoryServer, context, toolClient);
+                let result = await callMCPToolWithUrlElicitationRetry({
+                  client: toolClient,
                   clientConnection: client,
-                  tool: re.name,
-                  args: Fe,
-                  meta: tt,
-                  signal: Ct,
-                  imageLimits: imageLimitsForModel(L.options.mainLoopModel),
-                  taskRegistry: L.taskRegistry,
-                  toolUseId: Ke,
-                  onProgress: Oe && Ke ? Nt : undefined,
-                  requestDialog: L.requestDialog,
-                  storageV5: L.storageV5,
-                  credentials: L.credentials,
-                  hasResultSizeAnnotation: ot || L.innerCall === true,
-                  onAwaitingUserInput: Lt,
-                  timing: we?.timing,
+                  tool: listedTool.name,
+                  args,
+                  meta: callMeta,
+                  signal,
+                  imageLimits: imageLimitsForModel(context.options.mainLoopModel),
+                  taskRegistry: context.taskRegistry,
+                  toolUseId,
+                  onProgress: onProgress && toolUseId ? reportProgress : undefined,
+                  requestDialog: context.requestDialog,
+                  storageV5: context.storageV5,
+                  credentials: context.credentials,
+                  hasResultSizeAnnotation: hasResultSizeAnnotation || context.innerCall === true,
+                  onAwaitingUserInput: setAwaitingUserInput,
+                  timing: callOptions?.timing,
                   offCriticalPath:
-                    (getBackgroundAgentId(L.agentContext) ??
-                      (L.isBackgroundAgent ? L.agentId : undefined)) !== undefined,
-                  taskBackground: jt,
+                    (getBackgroundAgentId(context.agentContext) ??
+                      (context.isBackgroundAgent ? context.agentId : undefined)) !== undefined,
+                  taskBackground,
                   disallowTasks:
-                    L.agentId !== undefined || (L.options.isNonInteractiveSession && jt === undefined),
+                    context.agentId !== undefined ||
+                    (context.options.isNonInteractiveSession && taskBackground === undefined),
                   ccrNeedsApprovalRetry:
                     "url" in client.config &&
                     isSameOriginAsCcr(client.config.url) &&
-                    canPromptForPermission(L) &&
+                    canPromptForPermission(context) &&
                     !(getPermissionPromptToolName() && getPermissionPromptToolName() !== "stdio")
                       ? {
                           canUseTool,
                           tool,
                           fullyQualifiedName,
-                          toolUseContext: L,
-                          parentMessage: et,
+                          toolUseContext: context,
+                          parentMessage,
                         }
                       : undefined,
                 });
-                if (lt.interrupted) throw new AbortError(INTERRUPTED_CALL_NOTICE);
-                Nt({
+                if (result.interrupted) throw new AbortError(INTERRUPTED_CALL_NOTICE);
+                reportProgress({
                   type: "mcp_progress",
                   status: "completed",
                   serverName: client.name,
-                  toolName: re.name,
+                  toolName: listedTool.name,
                   elapsedTimeMs: Date.now() - now,
                 });
-                if (!lt.isError) {
-                  logPrCreateOperation(re.name);
+                if (!result.isError) {
+                  logPrCreateOperation(listedTool.name);
                   if (isAccountMemoryServer(client))
-                    rememberMemoryChain(L.toolState, et.message.id, lt._meta);
-                  if (!gt && isClaudeInChromeMCPServer(client.name) && isClaudeAiProxyServer(client.config))
-                    lt.content = chromeNoBrowserAnswer(lt.content, lt._meta, L);
+                    rememberMemoryChain(context.toolState, parentMessage.message.id, result._meta);
+                  if (
+                    !backgrounded &&
+                    isClaudeInChromeMCPServer(client.name) &&
+                    isClaudeAiProxyServer(client.config)
+                  )
+                    result.content = chromeNoBrowserAnswer(result.content, result._meta, context);
                 }
                 if (idx > 0) logFeatureOk("mcp_session_recovery");
-                let cn = rewriteAnthropicSourcesForCcr(client.config, stripAnthropicMeta(lt._meta));
-                let vn = isMcpTasksEnabled() ? mcpTaskDriveModule.sdkAgentTaskMeta(lt._meta) : undefined;
-                let kn =
-                  cn || vn
+                let rewrittenMeta = rewriteAnthropicSourcesForCcr(
+                  client.config,
+                  stripAnthropicMeta(result._meta),
+                );
+                let taskMeta = isMcpTasksEnabled()
+                  ? mcpTaskDriveModule.sdkAgentTaskMeta(result._meta)
+                  : undefined;
+                let mergedMeta =
+                  rewrittenMeta || taskMeta
                     ? {
-                        ...cn,
-                        ...vn,
+                        ...rewrittenMeta,
+                        ...taskMeta,
                       }
                     : undefined;
                 return {
-                  data: un === undefined ? lt.content : stepUpResultMessage(lt.content, client.name, un),
-                  ...(lt.urlElicitationDeclined && {
-                    urlElicitationDeclined: lt.urlElicitationDeclined,
+                  data:
+                    stepUpScope === undefined
+                      ? result.content
+                      : stepUpResultMessage(result.content, client.name, stepUpScope),
+                  ...(result.urlElicitationDeclined && {
+                    urlElicitationDeclined: result.urlElicitationDeclined,
                   }),
-                  ...((kn || lt.structuredContent || lt.resourceLinks) && {
+                  ...((mergedMeta || result.structuredContent || result.resourceLinks) && {
                     mcpMeta: {
-                      ...(kn && {
-                        _meta: kn,
+                      ...(mergedMeta && {
+                        _meta: mergedMeta,
                       }),
-                      ...(lt.structuredContent && {
-                        structuredContent: lt.structuredContent,
+                      ...(result.structuredContent && {
+                        structuredContent: result.structuredContent,
                       }),
-                      ...(lt.resourceLinks && {
-                        resourceLinks: lt.resourceLinks,
+                      ...(result.resourceLinks && {
+                        resourceLinks: result.resourceLinks,
                       }),
                     },
                   }),
                 };
               } catch (error) {
                 if (
-                  un !== undefined &&
+                  stepUpScope !== undefined &&
                   error instanceof McpAuthError &&
                   error.requestedScope !== undefined &&
                   client.config.type === "http"
                 )
-                  markStepUpExhausted(client.name, client.config, un, error.requestedScope);
+                  markStepUpExhausted(client.name, client.config, stepUpScope, error.requestedScope);
                 if (
-                  !an &&
+                  !stepUpRetried &&
                   error instanceof McpAuthError &&
                   error.requestedScope !== undefined &&
                   isStepUpAuthDialogEnabled() &&
@@ -6472,10 +7527,10 @@ async function buildMcpToolsForClient(client, listedTools, startedAtMs, discover
                   client.config.oauth?.xaa !== true &&
                   grantedScopesCover(client.config, error.requestedScope) &&
                   !isStepUpExhausted(client.name, client.config, error.requestedScope) &&
-                  canPromptForPermission(L) &&
-                  L.agentId === undefined &&
+                  canPromptForPermission(context) &&
+                  context.agentId === undefined &&
                   tool.name !== getPermissionPromptToolName() &&
-                  !L.options.isNonInteractiveSession &&
+                  !context.options.isNonInteractiveSession &&
                   !isBrowserUnavailable() &&
                   !isUnattendedBgSession() &&
                   getTeammateAgentId() === undefined &&
@@ -6483,31 +7538,32 @@ async function buildMcpToolsForClient(client, listedTools, startedAtMs, discover
                   !isMcpDialBlockedByPolicy(client.name, client.config)
                 ) {
                   let config = client.config;
-                  Lt(true);
-                  let Qt;
+                  setAwaitingUserInput(true);
+                  let stepUpResult;
                   try {
-                    Qt = await runStepUpReauth({
+                    stepUpResult = await runStepUpReauth({
                       serverName: client.name,
                       config,
                       requestedScope: error.requestedScope,
                       canUseTool,
-                      toolUseContext: L,
-                      signal: Ct,
+                      toolUseContext: context,
+                      signal,
                       performOAuthFlow: performMCPOAuthFlow_2,
                       reconnect: (name, config) =>
-                        reconnectMcpServerImpl_2(name, config, L.storageV5, L.credentials),
-                      discard: (lt, cn) => clearServerCache(lt, cn),
-                      isPermitted: (lt, cn) => !isMcpServerDisabled(lt) && !isMcpDialBlockedByPolicy(lt, cn),
+                        reconnectMcpServerImpl_2(name, config, context.storageV5, context.credentials),
+                      discard: (name, config) => clearServerCache(name, config),
+                      isPermitted: (name, config) =>
+                        !isMcpServerDisabled(name) && !isMcpDialBlockedByPolicy(name, config),
                     });
                   } finally {
-                    Lt(false);
+                    setAwaitingUserInput(false);
                   }
-                  if (Qt === "reauthenticated") {
-                    an = true;
-                    un = error.requestedScope;
+                  if (stepUpResult === "reauthenticated") {
+                    stepUpRetried = true;
+                    stepUpScope = error.requestedScope;
                     logMCPDebug(
                       client.name,
-                      `Retrying tool '${re.name}' after the consented step-up re-auth`,
+                      `Retrying tool '${listedTool.name}' after the consented step-up re-auth`,
                     );
                     idx -= 1;
                     continue;
@@ -6516,10 +7572,12 @@ async function buildMcpToolsForClient(client, listedTools, startedAtMs, discover
                 if (
                   error instanceof McpSessionExpiredError &&
                   idx < 1 &&
-                  (!error.mayHaveRun || tool.isConcurrencySafe(Fe) || re.annotations?.idempotentHint === true)
+                  (!error.mayHaveRun ||
+                    tool.isConcurrencySafe(args) ||
+                    listedTool.annotations?.idempotentHint === true)
                 ) {
                   logFeatureSad("mcp_session_recovery", error.expiryKind);
-                  logMCPDebug(client.name, `Retrying tool '${re.name}' after session recovery`);
+                  logMCPDebug(client.name, `Retrying tool '${listedTool.name}' after session recovery`);
                   continue;
                 }
                 if (error instanceof McpSessionExpiredError)
@@ -6527,242 +7585,262 @@ async function buildMcpToolsForClient(client, listedTools, startedAtMs, discover
                     "mcp_session_recovery",
                     idx < 1 ? "may_have_run_no_retry" : "session_retry_exhausted",
                   );
-                else if (idx > 0 && !Ct.aborted) logFeatureBad("mcp_session_recovery", "retry_failed_other");
-                Nt({
+                else if (idx > 0 && !signal.aborted)
+                  logFeatureBad("mcp_session_recovery", "retry_failed_other");
+                reportProgress({
                   type: "mcp_progress",
                   status: "failed",
                   serverName: client.name,
-                  toolName: re.name,
+                  toolName: listedTool.name,
                   elapsedTimeMs: Date.now() - now,
                 });
-                if (!Ct.aborted) noteHearthDegraded(client.name, error);
+                if (!signal.aborted) noteHearthDegraded(client.name, error);
                 if (
                   error instanceof Error &&
                   !(error instanceof TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS)
                 ) {
-                  let qt = error.constructor.name;
-                  let Qt = () => (Ct.aborted ? "other" : classifyMcpErrorSourceCategory(error));
-                  if (qt === "Error") {
-                    let lt = describeConnectError(error, client.config);
+                  let errorName = error.constructor.name;
+                  let sourceCategory = () =>
+                    signal.aborted ? "other" : classifyMcpErrorSourceCategory(error);
+                  if (errorName === "Error") {
+                    let message = describeConnectError(error, client.config);
                     throw Object.assign(
-                      new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(lt, lt.slice(0, 200)),
+                      new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
+                        message,
+                        message.slice(0, 200),
+                      ),
                       {
-                        mcpErrorSource: Qt(),
+                        mcpErrorSource: sourceCategory(),
                       },
                     );
                   }
                   if (
                     "code" in error &&
-                    (((qt === "McpError" || qt === "ProtocolError") && typeof error.code === "number") ||
-                      ((qt === "SdkError" || qt === "SdkHttpError") &&
+                    (((errorName === "McpError" || errorName === "ProtocolError") &&
+                      typeof error.code === "number") ||
+                      ((errorName === "SdkError" || errorName === "SdkHttpError") &&
                         (typeof error.code === "number" ||
                           (typeof error.code === "string" && MCP_SDK_ERROR_CODES.has(error.code)))))
                   ) {
                     let merged = Object.assign(
                       new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
                         error.message,
-                        `${qt} ${error.code}`,
+                        `${errorName} ${error.code}`,
                       ),
                       {
-                        mcpErrorSource: Qt(),
+                        mcpErrorSource: sourceCategory(),
                       },
                     );
                     throw isNeedsApprovalOrExpiredSession(error) ? markRefusedByCcrProxy(merged) : merged;
                   }
                 }
-                raiseMemoryErrorCap(error, client, re.name);
+                raiseMemoryErrorCap(error, client, listedTool.name);
                 throw error;
               }
           };
-          let Kt = Bt;
-          if (Qe)
-            Kt = wrapCallWithDesignConsent(Bt, {
-              designSession: L.toolState.get(DesignGateState),
-              approvedConsentBit: pt?.bit ?? null,
-              consentAskReachesUser: (pt?.askReachesUser ?? false) && canAskDesignConsent(L),
-              credentials: L.credentials,
+          let callImpl = invokeTool;
+          if (isDesignServer)
+            callImpl = wrapCallWithDesignConsent(invokeTool, {
+              designSession: context.toolState.get(DesignGateState),
+              approvedConsentBit: consentAsk?.bit ?? null,
+              consentAskReachesUser: (consentAsk?.askReachesUser ?? false) && canAskDesignConsent(context),
+              credentials: context.credentials,
             });
-          if (re.name === GET_TASK && isToolboxServer(client)) {
-            let { withTaskFilesRemembered } = await import("./chunk-h33h7b0z.js");
-            Kt = withTaskFilesRemembered(Kt, {
+          if (listedTool.name === GET_TASK && isToolboxServer(client)) {
+            let { withTaskFilesRemembered } =
+              await import("../../tools/SaveTaskFilesTool/addTaskFileSaves.lazy.js");
+            callImpl = withTaskFilesRemembered(callImpl, {
               client,
-              args: Fe,
-              session: L.session,
+              args,
+              session: context.session,
             });
           }
-          let zt =
-            !L.agentId &&
-            L.taskRegistry !== UNLIMITED_RATE_LIMITER &&
+          let canAutoBackground =
+            !context.agentId &&
+            context.taskRegistry !== UNLIMITED_RATE_LIMITER &&
             tool.name !== getPermissionPromptToolName();
-          if (mcpAutoBackgroundModule && zt) {
+          if (mcpAutoBackgroundModule && canAutoBackground) {
             let mcpAutoBackgroundMs = mcpAutoBackgroundModule.getMcpAutoBackgroundMs(client.config, {
-              isNonInteractiveSession: L.options.isNonInteractiveSession,
+              isNonInteractiveSession: context.options.isNonInteractiveSession,
             });
-            let sn =
+            let movableWithoutTimer =
               mcpAutoBackgroundMs === 0 &&
               mcpAutoBackgroundModule.isMcpCallMovableWithoutTimer(client.config, {
-                isNonInteractiveSession: L.options.isNonInteractiveSession,
-                isInnerCall: L.innerCall === true,
+                isNonInteractiveSession: context.options.isNonInteractiveSession,
+                isInnerCall: context.innerCall === true,
               });
-            if (mcpAutoBackgroundMs > 0 || sn) {
+            if (mcpAutoBackgroundMs > 0 || movableWithoutTimer) {
               let share = {
                 becameTask: false,
               };
-              if (!sn && isMcpTasksEnabled() && !isTaskBackgroundDisabled())
-                jt = {
+              if (!movableWithoutTimer && isMcpTasksEnabled() && !isTaskBackgroundDisabled())
+                taskBackground = {
                   share,
-                  session: L.session,
-                  storageV5: L.storageV5,
-                  credentials: L.credentials,
+                  session: context.session,
+                  storageV5: context.storageV5,
+                  credentials: context.credentials,
                   onBackgrounded: () => {
-                    gt = true;
+                    backgrounded = true;
                   },
                 };
               return mcpAutoBackgroundModule.callMcpToolWithAutoBackground({
-                run: Kt,
+                run: callImpl,
                 serverName: client.name,
-                toolName: re.name,
+                toolName: listedTool.name,
                 accountMemoryTool: isLiveMemoryTool(tool),
-                toolUseId: Ke,
-                parentAbortController: L.abortController,
-                taskRegistry: L.taskRegistry,
-                autoBackgroundMs: sn ? null : mcpAutoBackgroundMs,
-                storageV5: L.storageV5,
-                credentials: L.credentials,
+                toolUseId,
+                parentAbortController: context.abortController,
+                taskRegistry: context.taskRegistry,
+                autoBackgroundMs: movableWithoutTimer ? null : mcpAutoBackgroundMs,
+                storageV5: context.storageV5,
+                credentials: context.credentials,
                 hasPendingElicitation: () =>
-                  Ye ||
-                  ((Me.type === "connected" ? Me.transportErrorState?.pendingElicitations : undefined) ?? 0) >
-                    0,
+                  awaitingUserInput ||
+                  ((currentClient.type === "connected"
+                    ? currentClient.transportErrorState?.pendingElicitations
+                    : undefined) ?? 0) > 0,
                 onBackgrounded: () => {
-                  gt = true;
+                  backgrounded = true;
                 },
                 share,
-                foregroundCalls: L.innerCall ? undefined : foregroundCallRegistrySlots.of(L.session),
+                foregroundCalls: context.innerCall
+                  ? undefined
+                  : foregroundCallRegistrySlots.of(context.session),
                 noticeGate: wrapHoldAware({
-                  hookCaller: L.hookCaller,
-                  hookServesModel: L.hookServesModel,
-                  pluginUnnamed: L.pluginUnnamed,
+                  hookCaller: context.hookCaller,
+                  hookServesModel: context.hookServesModel,
+                  pluginUnnamed: context.pluginUnnamed,
                 }),
               });
             }
           }
           if (
-            zt &&
+            canAutoBackground &&
             isMcpTasksEnabled() &&
             !isTaskBackgroundDisabled() &&
             env.CLAUDE_CODE_MCP_AUTO_BACKGROUND_MS !== 0 &&
             (!getIsNonInteractiveSession() || env.CLAUDE_AUTO_BACKGROUND_TASKS === true) &&
             !isPrintInputClosed()
           )
-            jt = {
+            taskBackground = {
               share: {
                 becameTask: false,
               },
-              session: L.session,
-              storageV5: L.storageV5,
-              credentials: L.credentials,
+              session: context.session,
+              storageV5: context.storageV5,
+              credentials: context.credentials,
               onBackgrounded: () => {
-                gt = true;
+                backgrounded = true;
               },
             };
-          return Kt(L.abortController.signal);
+          return callImpl(context.abortController.signal);
         },
       });
-      if (me && (re.name === "file_upload" || re.name === "browser_batch")) {
+      if (isClaudeInChrome && (listedTool.name === "file_upload" || listedTool.name === "browser_batch")) {
         let CLAUDE_CODE_IS_COWORK =
           !isStdioConfig(client.config) && !env.CLAUDE_CODE_REMOTE && env.CLAUDE_CODE_IS_COWORK;
-        let L = tool.call;
-        tool.call = async (mt, et, Oe, we, Ke, He) => {
+        let originalCall = tool.call;
+        tool.call = async (input, context, canUseTool, parentMessage, onProgress, callOptions) => {
           let {
             FILE_UPLOAD_MAX_TOTAL_BYTES,
             passThroughChromeFileUploadInput,
             prepareChromeFileUploadInput,
-          } = await import("./chunk-f11kwnvn.js");
-          let Ft = CLAUDE_CODE_IS_COWORK
-            ? await passThroughChromeFileUploadInput(re.name, mt ?? {}, getToolPermissionContext(et))
+          } = await import("../../utils/claudeInChrome/fileUpload.js");
+          let prepared = CLAUDE_CODE_IS_COWORK
+            ? await passThroughChromeFileUploadInput(
+                listedTool.name,
+                input ?? {},
+                getToolPermissionContext(context),
+              )
             : await prepareChromeFileUploadInput(
-                re.name,
-                mt ?? {},
-                getToolPermissionContext(et),
+                listedTool.name,
+                input ?? {},
+                getToolPermissionContext(context),
                 isClaudeAiProxyServer(client.config)
                   ? {
-                      maxTotalBytes: chromeUploadMaxBytes(re._meta, FILE_UPLOAD_MAX_TOTAL_BYTES),
+                      maxTotalBytes: chromeUploadMaxBytes(listedTool._meta, FILE_UPLOAD_MAX_TOTAL_BYTES),
                       hosted: {
-                        session: et.session,
-                        signal: et.abortController.signal,
+                        session: context.session,
+                        signal: context.abortController.signal,
                       },
                     }
                   : undefined,
               );
-          if (Ft.error)
+          if (prepared.error)
             throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-              Ft.error,
+              prepared.error,
               "Claude in Chrome file_upload path rejected",
             );
-          return L(
-            Ft.input ?? mt,
-            et,
-            Oe,
-            we,
-            Ke,
-            Ft.callMeta
+          return originalCall(
+            prepared.input ?? input,
+            context,
+            canUseTool,
+            parentMessage,
+            onProgress,
+            prepared.callMeta
               ? {
-                  ...He,
-                  mcpCallMeta: Ft.callMeta,
+                  ...callOptions,
+                  mcpCallMeta: prepared.callMeta,
                 }
-              : He,
+              : callOptions,
           );
         };
       }
       if (
         client.config.type === "sdk" &&
         isFileUploadServer(client.name) &&
-        FILE_UPLOAD_TOOLS.includes(re.name) &&
+        FILE_UPLOAD_TOOLS.includes(listedTool.name) &&
         !env.CLAUDE_CODE_REMOTE &&
         !env.CLAUDE_CODE_IS_COWORK &&
         resolveSdkUrl().status === "absent"
       ) {
-        let Fe = re._meta?.[ANTHROPIC_HOSTASKSPERUPLOADEDFILE] === true;
-        let L = tool.call;
-        tool.call = async (mt, et, Oe, we, Ke, He) => {
-          let tt = await import("./chunk-v64arqfj.js");
-          let gt = await tt.paneFileUploadCall(
-            mt,
-            getToolPermissionContext(et),
-            et.mcpRequestMeta,
-            Fe,
-            et.autoModeClassified === true,
+        let hostAsksUpload = listedTool._meta?.[ANTHROPIC_HOSTASKSPERUPLOADEDFILE] === true;
+        let originalCall = tool.call;
+        tool.call = async (input, context, canUseTool, parentMessage, onProgress, callOptions) => {
+          let paneModule = await import("../../utils/claudeInChrome/paneFileUploadCall.lazy.js");
+          let prepared = await paneModule.paneFileUploadCall(
+            input,
+            getToolPermissionContext(context),
+            context.mcpRequestMeta,
+            hostAsksUpload,
+            context.autoModeClassified === true,
           );
-          return L(
-            gt.input,
+          return originalCall(
+            prepared.input,
             {
-              ...et,
-              mcpRequestMeta: gt.mcpRequestMeta,
+              ...context,
+              mcpRequestMeta: prepared.mcpRequestMeta,
             },
-            Oe,
-            we,
-            Ke,
-            He && {
-              ...He,
+            canUseTool,
+            parentMessage,
+            onProgress,
+            callOptions && {
+              ...callOptions,
               mcpCallMeta: {},
             },
           );
         };
       }
-      if (isTaskWriteMethod(re.name)) {
-        let Fe = re.name;
+      if (isTaskWriteMethod(listedTool.name)) {
+        let toolName = listedTool.name;
         let validateInput = tool.validateInput;
-        tool.validateInput = async (Oe, we) => {
-          let Ke = validateInput
-            ? await validateInput(Oe, we)
+        tool.validateInput = async (input, context) => {
+          let validation = validateInput
+            ? await validateInput(input, context)
             : {
                 result: true,
               };
-          if (!Ke.result) return Ke;
-          let { startTaskInputRefusal } = await import("./chunk-d40fm320.js");
-          let taskInputRefusal = startTaskInputRefusal(client, Fe, Oe, tool.inputJSONSchema, we.session);
+          if (!validation.result) return validation;
+          let { startTaskInputRefusal } = await import("../taskFiles/startTaskFiles.js");
+          let taskInputRefusal = startTaskInputRefusal(
+            client,
+            toolName,
+            input,
+            tool.inputJSONSchema,
+            context.session,
+          );
           return taskInputRefusal === undefined
-            ? Ke
+            ? validation
             : {
                 result: false,
                 message: taskInputRefusal,
@@ -6770,57 +7848,64 @@ async function buildMcpToolsForClient(client, listedTools, startedAtMs, discover
               };
         };
         let prompt = tool.prompt;
-        tool.prompt = async (Oe) => {
-          let we = await prompt(Oe);
-          let toolPermissionContext = await Oe.getToolPermissionContext();
-          if (toolPermissionContext.isRemoteMode !== true) return we;
-          let { startTaskFilesPromptNote } = await import("./chunk-d40fm320.js");
-          let taskFilesPromptNote = startTaskFilesPromptNote(client, Fe, toolPermissionContext);
+        tool.prompt = async (input) => {
+          let basePrompt = await prompt(input);
+          let toolPermissionContext = await input.getToolPermissionContext();
+          if (toolPermissionContext.isRemoteMode !== true) return basePrompt;
+          let { startTaskFilesPromptNote } = await import("../taskFiles/startTaskFiles.js");
+          let taskFilesPromptNote = startTaskFilesPromptNote(client, toolName, toolPermissionContext);
           return taskFilesPromptNote === undefined
-            ? we
-            : `${we}
+            ? basePrompt
+            : `${basePrompt}
 
 ${taskFilesPromptNote}`;
         };
-        let et = tool.call;
-        tool.call = async (Oe, we, Ke, He, tt, gt) => {
-          let Nt = Oe ?? {};
-          if (!Array.isArray(Nt.files) || Nt.files.length === 0) return et(Oe, we, Ke, He, tt, gt);
+        let originalCall = tool.call;
+        tool.call = async (input, context, canUseTool, parentMessage, onProgress, callOptions) => {
+          let args = input ?? {};
+          if (!Array.isArray(args.files) || args.files.length === 0)
+            return originalCall(input, context, canUseTool, parentMessage, onProgress, callOptions);
           let {
             prepareStartTaskFileInputs,
             removeStartTaskUploadsFor,
             startTaskInputRefusal,
             startTaskSendRefusal,
-          } = await import("./chunk-d40fm320.js");
-          let toolUseId = we.toolUseId;
-          let pendingTaskFilesForArgs = findPendingTaskFilesForArgs(we.session, toolUseId, Nt.files);
+          } = await import("../taskFiles/startTaskFiles.js");
+          let toolUseId = context.toolUseId;
+          let pendingTaskFilesForArgs = findPendingTaskFilesForArgs(context.session, toolUseId, args.files);
           if (pendingTaskFilesForArgs !== undefined && toolUseId !== undefined) {
-            let taskSendRefusal = startTaskSendRefusal(pendingTaskFilesForArgs.uploadStartedAt, Fe);
+            let taskSendRefusal = startTaskSendRefusal(pendingTaskFilesForArgs.uploadStartedAt, toolName);
             if (taskSendRefusal !== undefined) {
-              await discardTaskFiles(we.session, pendingTaskFilesForArgs);
+              await discardTaskFiles(context.session, pendingTaskFilesForArgs);
               throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
                 taskSendRefusal,
                 "start_task files not sent after the approval",
               );
             }
             pendingTaskFilesForArgs.state = "sending";
-            registerDiscarder(we.session, toolUseId, () =>
-              startTaskSendRefusal(pendingTaskFilesForArgs.uploadStartedAt, Fe),
+            registerDiscarder(context.session, toolUseId, () =>
+              startTaskSendRefusal(pendingTaskFilesForArgs.uploadStartedAt, toolName),
             );
             try {
-              return await et(Oe, we, Ke, He, tt, gt);
+              return await originalCall(input, context, canUseTool, parentMessage, onProgress, callOptions);
             } catch (error) {
               if (isRefusedByCcrProxy(error)) {
                 pendingTaskFilesForArgs.state = "pending";
-                await discardTaskFiles(we.session, pendingTaskFilesForArgs);
+                await discardTaskFiles(context.session, pendingTaskFilesForArgs);
               }
               throw error;
             } finally {
-              unregisterDiscarder(we.session, toolUseId);
-              markTaskFilesSent(we.session, pendingTaskFilesForArgs);
+              unregisterDiscarder(context.session, toolUseId);
+              markTaskFilesSent(context.session, pendingTaskFilesForArgs);
             }
           }
-          let taskInputRefusal = startTaskInputRefusal(client, Fe, Nt, tool.inputJSONSchema, we.session);
+          let taskInputRefusal = startTaskInputRefusal(
+            client,
+            toolName,
+            args,
+            tool.inputJSONSchema,
+            context.session,
+          );
           if (taskInputRefusal !== undefined)
             throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
               taskInputRefusal,
@@ -6829,11 +7914,11 @@ ${taskFilesPromptNote}`;
           let now = Date.now();
           let startTaskFileInputs = await prepareStartTaskFileInputs(
             client,
-            Fe,
-            Nt,
-            getToolPermissionContext(we),
-            we.abortController.signal,
-            we.session,
+            toolName,
+            args,
+            getToolPermissionContext(context),
+            context.abortController.signal,
+            context.session,
           );
           if (startTaskFileInputs.error)
             throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
@@ -6841,40 +7926,55 @@ ${taskFilesPromptNote}`;
               "start_task file input rejected",
             );
           if (startTaskFileInputs.input === undefined || toolUseId === undefined)
-            return et(startTaskFileInputs.input ?? Oe, we, Ke, He, tt, gt);
-          registerDiscarder(we.session, toolUseId, () => startTaskSendRefusal(now, Fe));
+            return originalCall(
+              startTaskFileInputs.input ?? input,
+              context,
+              canUseTool,
+              parentMessage,
+              onProgress,
+              callOptions,
+            );
+          registerDiscarder(context.session, toolUseId, () => startTaskSendRefusal(now, toolName));
           try {
-            return await et(startTaskFileInputs.input, we, Ke, He, tt, gt);
+            return await originalCall(
+              startTaskFileInputs.input,
+              context,
+              canUseTool,
+              parentMessage,
+              onProgress,
+              callOptions,
+            );
           } catch (error) {
             if (isRefusedByCcrProxy(error))
-              await removeStartTaskUploadsFor(client, we.session, startTaskFileInputs.input.files);
+              await removeStartTaskUploadsFor(client, context.session, startTaskFileInputs.input.files);
             throw error;
           } finally {
-            unregisterDiscarder(we.session, toolUseId);
+            unregisterDiscarder(context.session, toolUseId);
           }
         };
         if (isToolboxMcpServer(client))
-          tool.askInputPreparer = async (Oe, we, Ke) => {
-            if (!Array.isArray(Oe.files) || Oe.files.length === 0) return;
-            let { startTaskAskInputPreparer, startTaskInputRefusal } = await import("./chunk-d40fm320.js");
+          tool.askInputPreparer = async (input, context, overrides) => {
+            if (!Array.isArray(input.files) || input.files.length === 0) return;
+            let { startTaskAskInputPreparer, startTaskInputRefusal } =
+              await import("../taskFiles/startTaskFiles.js");
             let taskAskInputPreparer = startTaskAskInputPreparer(
               client,
-              Fe,
-              Oe,
-              getToolPermissionContext(we),
-              we.abortController.signal,
-              we.session,
-              Ke,
+              toolName,
+              input,
+              getToolPermissionContext(context),
+              context.abortController.signal,
+              context.session,
+              overrides,
             );
             return (
               taskAskInputPreparer && {
                 prepare: () => {
                   let taskInputRefusal = startTaskInputRefusal(
                     client,
-                    Fe,
-                    Oe,
+                    toolName,
+                    input,
                     tool.inputJSONSchema,
-                    we.session,
+                    context.session,
                   );
                   return taskInputRefusal === undefined
                     ? taskAskInputPreparer.prepare()
@@ -6886,17 +7986,17 @@ ${taskFilesPromptNote}`;
             );
           };
       }
-      let { validateInput, call: ct, askInputPreparer } = tool;
-      if (re._meta?.[ANTHROPIC_FILEINPUTS] !== undefined)
+      let { validateInput, call: originalCall, askInputPreparer } = tool;
+      if (listedTool._meta?.[ANTHROPIC_FILEINPUTS] !== undefined)
         wireFileInputs(
           tool,
           {
             client,
-            name: re.name,
-            meta: re._meta,
+            name: listedTool.name,
+            meta: listedTool._meta,
             schema: tool.inputJSONSchema,
           },
-          (Fe) => async (tool, args) =>
+          (context) => async (tool, args) =>
             (
               await callMCPTool({
                 client: await ensureConnectedClient(client, {
@@ -6904,54 +8004,55 @@ ${taskFilesPromptNote}`;
                 }),
                 tool,
                 args,
-                signal: Fe.abortController.signal,
-                imageLimits: imageLimitsForModel(Fe.options.mainLoopModel),
+                signal: context.abortController.signal,
+                imageLimits: imageLimitsForModel(context.options.mainLoopModel),
                 hasResultSizeAnnotation: true,
-                storageV5: Fe.storageV5,
-                credentials: Fe.credentials,
+                storageV5: context.storageV5,
+                credentials: context.credentials,
               })
             ).structuredContent,
         );
       {
-        let Fe = fileReferenceToolToFill(client, re.name);
-        if (Fe !== undefined)
+        let refToolName = fileReferenceToolToFill(client, listedTool.name);
+        if (refToolName !== undefined)
           wrapFileReferenceTool(
             tool,
-            Fe,
+            refToolName,
             {
               validateInput,
-              call: ct,
+              call: originalCall,
               askInputPreparer,
             },
             getFirstToolUseId,
             filledCallRequestMeta(client),
           );
       }
-      if (tool.mcpInfo !== undefined && fileReferenceToolForRecords(client, re.name) !== undefined)
+      if (tool.mcpInfo !== undefined && fileReferenceToolForRecords(client, listedTool.name) !== undefined)
         tool.mcpInfo = {
           ...tool.mcpInfo,
           fileReference: true,
         };
-      if (Se || isRunnerDynamicServer(client.config))
+      if (isArtifactsServer || isRunnerDynamicServer(client.config))
         artifactPermissionRulesModule()?.applyArtifactRules(client.config, tool);
-      if (ze) artifactsMcpLaptopModule()?.wrapArtifactsMcpLaptopPublishing(client.config, tool);
-      if (Te) claudeDocsWakeModule()?.wrapClaudeDocsCreateWake(tool);
-      if (me && client.config.type !== "sdk") {
-        let Fe = tool.call;
-        tool.call = async (L, mt, et, Oe, we, Ke) => {
-          let He = policyDeniedReason("allow_claude_browser_extension", "Claude in Chrome", "is");
-          if (He !== null)
+      if (wrapArtifactsPublishing)
+        artifactsMcpLaptopModule()?.wrapArtifactsMcpLaptopPublishing(client.config, tool);
+      if (isDocsConnector) claudeDocsWakeModule()?.wrapClaudeDocsCreateWake(tool);
+      if (isClaudeInChrome && client.config.type !== "sdk") {
+        let originalCall = tool.call;
+        tool.call = async (input, context, canUseTool, parentMessage, onProgress, callOptions) => {
+          let deniedReason = policyDeniedReason("allow_claude_browser_extension", "Claude in Chrome", "is");
+          if (deniedReason !== null)
             throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-              He,
+              deniedReason,
               "Claude in Chrome call refused by org policy",
             );
-          return Fe(L, mt, et, Oe, we, Ke);
+          return originalCall(input, context, canUseTool, parentMessage, onProgress, callOptions);
         };
       }
-      let Vt = tool.call;
-      tool.call = async (Fe, L, mt, et, Oe, we) => {
-        L.options.activeMcpServer = client.name;
-        L.options.activeMcpTool = re.name;
+      let finalOriginalCall = tool.call;
+      tool.call = async (input, context, canUseTool, parentMessage, onProgress, callOptions) => {
+        context.options.activeMcpServer = client.name;
+        context.options.activeMcpTool = listedTool.name;
         if (client.config.pluginSource) {
           recordPluginUsage(client.config.pluginSource);
           recordPluginActivity(client.config.pluginSource, "mcp", {
@@ -6959,48 +8060,50 @@ ${taskFilesPromptNote}`;
             name: client.name,
           });
         }
-        let Ke = Xe();
-        if (Ke) markMcpServerLoggable(client.name);
-        let He =
-          (isTaskWriteMethod(re.name) &&
-            findPendingTaskFilesForArgs(L.session, L.toolUseId, Fe?.files) !== undefined) ||
-          (re._meta?.[ANTHROPIC_FILEINPUTS] !== undefined
-            ? (await import("./chunk-bk2cbdc2.js")).hasFileGrants(L.session, L.toolUseId)
+        let loggable = isLoggable();
+        if (loggable) markMcpServerLoggable(client.name);
+        let keepInput =
+          (isTaskWriteMethod(listedTool.name) &&
+            findPendingTaskFilesForArgs(context.session, context.toolUseId, input?.files) !== undefined) ||
+          (listedTool._meta?.[ANTHROPIC_FILEINPUTS] !== undefined
+            ? (await import("./fileGrants.js")).hasFileGrants(context.session, context.toolUseId)
             : false);
-        return Vt(
-          He
-            ? Fe
+        return finalOriginalCall(
+          keepInput
+            ? input
             : stripTrailingInvokeSuffix(
-                Fe,
-                re.name,
+                input,
+                listedTool.name,
                 client.name,
-                Ke,
+                loggable,
                 getFeatureValue_CACHED_MAY_BE_STALE("tengu_mcp_strip_trailing_xml_tags", false),
-                P,
+                loggableOrigin,
               ),
-          L,
-          mt,
-          et,
-          Oe,
-          we,
+          context,
+          canUseTool,
+          parentMessage,
+          onProgress,
+          callOptions,
         );
       };
       return tool;
     })
   ).filter(isIdeServer);
-  let mapped = H.map((re) => (Be?.tools?.[re.name] ?? re.description ?? "").length);
-  let reduced = mapped.reduce((acc, ue) => acc + ue, 0);
+  let mapped = keptTools.map(
+    (tool) => (promptOverrides?.tools?.[tool.name] ?? tool.description ?? "").length,
+  );
+  let reduced = mapped.reduce((acc, length) => acc + length, 0);
   logEvent("tengu_mcp_tools_listed", {
     transportType: fromEnum(client.config.type ?? "stdio"),
     listDurationMs: Date.now() - startedAtMs,
     toolCount: filtered.length,
-    alwaysLoadCount: count(filtered, (re) => re.alwaysLoad === true),
+    alwaysLoadCount: count(filtered, (tool) => tool.alwaysLoad === true),
     descriptionTotalLength: reduced,
-    descriptionMaxLength: mapped.reduce((acc, ue) => Math.max(acc, ue), 0),
+    descriptionMaxLength: mapped.reduce((acc, length) => Math.max(acc, length), 0),
     descriptionMeanLength: mapped.length ? Math.round(reduced / mapped.length) : 0,
-    descriptionOverLimitCount: count(mapped, (re) => re > Ee),
+    descriptionOverLimitCount: count(mapped, (length) => length > maxDescriptionLength),
     discoverySource: fromEnum(discoverySource),
-    ...M,
+    ...baseAnalytics,
     mcpServerName: mcpNameForAnalytics_GATE_EVALUATED(
       normalizeNameForMCP(client.name),
       isMcpServerLoggableInAnalytics(client.name, client.config),
@@ -7010,14 +8113,14 @@ ${taskFilesPromptNote}`;
   if (isStdioConfig(client.config) && isClaudeInChromeMCPServer(client.name))
     logChromeToolsAdded(filtered.length, discoverySource);
   if (isToolboxServer(client)) {
-    let { addTaskFileSaves } = await import("./chunk-h33h7b0z.js");
+    let { addTaskFileSaves } = await import("../../tools/SaveTaskFilesTool/addTaskFileSaves.lazy.js");
     addTaskFileSaves(filtered, {
       client,
-      listed: ft,
+      listed: toolsForBuild,
       compose: (listed, call, overrides, effectiveMaxPermission) =>
         buildMcpTool({
-          ...vt,
-          accountMemoryServer: Ot,
+          ...toolOptions,
+          accountMemoryServer: memoryServer,
           effectiveMaxPermission,
           listed,
           call,
@@ -7028,8 +8131,8 @@ ${taskFilesPromptNote}`;
   return filtered;
 }
 //@ chunk-8t8n4kdh.js:154333-154603 layout
-async function awaitToolsListAhead(e, n) {
-  let r = await n.page.then(
+async function awaitToolsListAhead(client, aheadPage) {
+  let settledPage = await aheadPage.page.then(
     (result) => ({
       result,
     }),
@@ -7037,149 +8140,166 @@ async function awaitToolsListAhead(e, n) {
       return;
     },
   );
-  if (r === undefined) return n;
-  let s = typeof r.result === "object" && r.result !== null ? officeBridgeListingState(r.result) : undefined;
-  noteListChangedAhead(e, s === "live" ? "used" : s === "stub" ? "dropped_stub" : "dropped_unmarked");
-  return s === "live" ? n : undefined;
+  if (settledPage === undefined) return aheadPage;
+  let listingState =
+    typeof settledPage.result === "object" && settledPage.result !== null
+      ? officeBridgeListingState(settledPage.result)
+      : undefined;
+  noteListChangedAhead(
+    client,
+    listingState === "live" ? "used" : listingState === "stub" ? "dropped_stub" : "dropped_unmarked",
+  );
+  return listingState === "live" ? aheadPage : undefined;
 }
 //@ chunk-8t8n4kdh.js:154603-156653 layout
 /**
  * fetchToolsForClient：按 name+config 记忆化的 tools/list（modern 协议走 listTools 聚合，legacy 翻页），结果交给 buildMcpToolsForClient；401/403 时标记 needs-auth。
  */
-var fetchToolsForClient = memoizeWithLRU(
-  async (client, storageV5, r) => {
-    if (client.type !== "connected") return [];
-    let s = identityEpoch();
-    let h = beginDroppedToolsRound(client);
-    try {
-      if (!client.capabilities?.tools) {
-        let ie = [];
-        recordRawToolsForResult(ie, []);
-        return ie;
-      }
-      let now = Date.now();
-      let S = clientOf(client.client);
-      let w = hasNoTransport(S) ? undefined : takeAheadPage_2(S);
-      let P;
-      let M = (page) =>
-        listAllPages_2(
-          S,
-          client.name,
-          client.config,
-          "tools/list",
-          ListToolsResultSchema,
-          (ge) => ge.tools,
-          page,
-          (ge) => noteFirstPageMark(S, ge),
+var fetchToolsForClient; // deferred: uses memoizeWithLRU (./needsAuthCache.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-8t8n4kdh.js:154603", () => {
+  fetchToolsForClient = memoizeWithLRU(
+    async (client, storageV5, rawOnly) => {
+      if (client.type !== "connected") return [];
+      let epochAtStart = identityEpoch();
+      let droppedToolsRound = beginDroppedToolsRound(client);
+      try {
+        if (!client.capabilities?.tools) {
+          let rawTools = [];
+          recordRawToolsForResult(rawTools, []);
+          return rawTools;
+        }
+        let now = Date.now();
+        let sdkClient = clientOf(client.client);
+        let aheadPage = hasNoTransport(sdkClient) ? undefined : takeAheadPage_2(sdkClient);
+        let usedAheadPage;
+        let listFromPage = (page) =>
+          listAllPages_2(
+            sdkClient,
+            client.name,
+            client.config,
+            "tools/list",
+            ListToolsResultSchema,
+            (page) => page.tools,
+            page,
+            (page) => noteFirstPageMark(sdkClient, page),
+          );
+        let listedTools = await reportFirstToolsList(
+          sdkClient,
+          sdkClient.getProtocolEra?.() === "modern"
+            ? listToolsModern(sdkClient, client.name, client.config)
+            : aheadPage === undefined
+              ? listFromPage(undefined)
+              : awaitToolsListAhead(sdkClient, aheadPage).then((aheadResult) => {
+                  usedAheadPage = aheadResult;
+                  return listFromPage(aheadResult?.page);
+                }),
+          () => usedAheadPage?.sentAtMs,
         );
-      let j = await reportFirstToolsList(
-        S,
-        S.getProtocolEra?.() === "modern"
-          ? listToolsModern(S, client.name, client.config)
-          : w === undefined
-            ? M(undefined)
-            : awaitToolsListAhead(S, w).then((ie) => {
-                P = ie;
-                return M(ie?.page);
-              }),
-        () => P?.sentAtMs,
-      );
-      client.toolsListError = undefined;
-      client.discoveryAuthFailure = undefined;
-      let listedTools = j;
-      if (r === true) {
-        let ie = [];
-        recordRawToolsForResult(ie, listedTools);
-        return ie;
-      }
-      let ce = listToolsWithMemo(client, listedTools, s, h, () => ({
-        normalizeEnabled: shouldNormalizeRootCombinators(client.config),
-        apiValidateEnabled: shouldDropInvalidToolSchemas(client.config),
-      }));
-      if (ce?.reuse !== undefined) {
-        recordRawToolsForResult(ce.reuse, listedTools);
-        return ce.reuse;
-      }
-      let mcpToolsForClient = await buildMcpToolsForClient(client, listedTools, now, "live", h);
-      if (h.seq === h.state.started) {
         client.toolsListError = undefined;
         client.discoveryAuthFailure = undefined;
-      }
-      recordRawToolsForResult(mcpToolsForClient, listedTools);
-      settleToolListingMemo(client, ce, mcpToolsForClient, h);
-      return mcpToolsForClient;
-    } catch (error) {
-      let S = redactMcpErrorDetail(client.name, client.config, describeConnectError(error, client.config));
-      if (client.config.type === "claudeai-proxy" && isListAuthError(error)) {
-        logEvent("tengu_mcp_server_needs_auth", {
-          transportType: lit("claudeai-proxy"),
-          cause: lit("discovery_tools_list"),
-          ...mcpBaseUrlAnalytics_2(client.config, client.name),
-        });
-        if (isCurrentIdentityEpoch(s))
-          setMcpAuthCacheEntry(client.name, client.config.id, undefined, storageV5);
-        logFeatureSad("mcp_list_tools", "mcp_list_tools_needs_auth");
-        logMCPDebug(client.name, "tools/list 401/403 on claude.ai proxy \u2014 flagging needs-auth");
-        client.discoveryAuthFailure = true;
+        let initialTools = listedTools;
+        if (rawOnly === true) {
+          let rawTools = [];
+          recordRawToolsForResult(rawTools, initialTools);
+          return rawTools;
+        }
+        let memoResult = listToolsWithMemo(client, initialTools, epochAtStart, droppedToolsRound, () => ({
+          normalizeEnabled: shouldNormalizeRootCombinators(client.config),
+          apiValidateEnabled: shouldDropInvalidToolSchemas(client.config),
+        }));
+        if (memoResult?.reuse !== undefined) {
+          recordRawToolsForResult(memoResult.reuse, initialTools);
+          return memoResult.reuse;
+        }
+        let tools = await buildMcpToolsForClient(client, initialTools, now, "live", droppedToolsRound);
+        if (droppedToolsRound.seq === droppedToolsRound.state.started) {
+          client.toolsListError = undefined;
+          client.discoveryAuthFailure = undefined;
+        }
+        recordRawToolsForResult(tools, initialTools);
+        settleToolListingMemo(client, memoResult, tools, droppedToolsRound);
+        return tools;
+      } catch (error) {
+        let errorDetail = redactMcpErrorDetail(
+          client.name,
+          client.config,
+          describeConnectError(error, client.config),
+        );
+        if (client.config.type === "claudeai-proxy" && isListAuthError(error)) {
+          logEvent("tengu_mcp_server_needs_auth", {
+            transportType: lit("claudeai-proxy"),
+            cause: lit("discovery_tools_list"),
+            ...mcpBaseUrlAnalytics_2(client.config, client.name),
+          });
+          if (isCurrentIdentityEpoch(epochAtStart))
+            setMcpAuthCacheEntry(client.name, client.config.id, undefined, storageV5);
+          logFeatureSad("mcp_list_tools", "mcp_list_tools_needs_auth");
+          logMCPDebug(client.name, "tools/list 401/403 on claude.ai proxy \u2014 flagging needs-auth");
+          client.discoveryAuthFailure = true;
+          getConnectionCache().toolLists.delete(serverCacheKey(client.name, client.config));
+          return [];
+        }
+        if (isListAuthError(error) && hasLapsedCcrSignIn(client.name, client.config))
+          client.discoveryAuthFailure = true;
+        let isBearerRejected =
+          client.config.type === "claudeai-proxy" && isClaudeAiBearerRejectedError(error);
+        let failureMetric = isBearerRejected
+          ? "mcp_list_tools_claudeai_bearer_rejected"
+          : (error instanceof ProtocolError || error instanceof SdkError) && !(error instanceof SdkHttpError)
+            ? `mcp_list_tools_${LIST_FAILURE_REASONS[error.code] ?? "mcperr_other"}`
+            : errorDetail.includes("timed out")
+              ? "mcp_list_tools_timeout"
+              : "mcp_list_tools_failed";
+        logFeatureSad("mcp_list_tools", failureMetric);
+        (isBearerRejected ? logMCPDebug : logMCPError)(client.name, `Failed to fetch tools: ${errorDetail}`);
+        client.toolsListError = errorDetail;
+        if (isBearerRejected) client.discoveryBearerRejected = true;
+        let emptyTools = [];
+        getCliOwnedState().toolsListErrorByResult.set(emptyTools, errorDetail);
+        if (!isBearerRejected) {
+          let serverFields = mcpBaseUrlAnalytics_2(client.config, client.name);
+          logEvent("tengu_mcp_degraded", {
+            reason: lit("tools_list_failed"),
+            transportType: fromEnum(client.config.type ?? "stdio"),
+            ...serverFields,
+            mcpServerName: mcpNameForAnalytics_GATE_EVALUATED(
+              normalizeNameForMCP(client.name),
+              isMcpServerLoggableInAnalytics(client.name, client.config),
+            ),
+          });
+        }
         getConnectionCache().toolLists.delete(serverCacheKey(client.name, client.config));
-        return [];
+        return emptyTools;
       }
-      if (isListAuthError(error) && hasLapsedCcrSignIn(client.name, client.config))
-        client.discoveryAuthFailure = true;
-      let w = client.config.type === "claudeai-proxy" && isClaudeAiBearerRejectedError(error);
-      let P = w
-        ? "mcp_list_tools_claudeai_bearer_rejected"
-        : (error instanceof ProtocolError || error instanceof SdkError) && !(error instanceof SdkHttpError)
-          ? `mcp_list_tools_${LIST_FAILURE_REASONS[error.code] ?? "mcperr_other"}`
-          : S.includes("timed out")
-            ? "mcp_list_tools_timeout"
-            : "mcp_list_tools_failed";
-      logFeatureSad("mcp_list_tools", P);
-      (w ? logMCPDebug : logMCPError)(client.name, `Failed to fetch tools: ${S}`);
-      client.toolsListError = S;
-      if (w) client.discoveryBearerRejected = true;
-      let j = [];
-      getCliOwnedState().toolsListErrorByResult.set(j, S);
-      if (!w) {
-        let R = mcpBaseUrlAnalytics_2(client.config, client.name);
-        logEvent("tengu_mcp_degraded", {
-          reason: lit("tools_list_failed"),
-          transportType: fromEnum(client.config.type ?? "stdio"),
-          ...R,
-          mcpServerName: mcpNameForAnalytics_GATE_EVALUATED(
-            normalizeNameForMCP(client.name),
-            isMcpServerLoggableInAnalytics(client.name, client.config),
-          ),
-        });
-      }
-      getConnectionCache().toolLists.delete(serverCacheKey(client.name, client.config));
-      return j;
-    }
-  },
-  (e) => serverCacheKey(e.name, e.config),
-  () => getConnectionCache().toolLists,
-);
+    },
+    (client) => serverCacheKey(client.name, client.config),
+    () => getConnectionCache().toolLists,
+  );
+});
 //@ chunk-8t8n4kdh.js:156653-157236 layout
 /**
  * reportListFailure：列表请求失败的指标分类（needs_auth、bearer_rejected、MCP 错误码、timeout、failed）与 tengu_mcp_degraded 遥测。
  */
-function reportListFailure(client, error, metricName, s, degradedReason, listKind) {
-  let S = describeConnectError(error, client.config);
-  let w = client.config.type === "claudeai-proxy" && isListAuthError(error);
-  let P = client.config.type === "claudeai-proxy" && isClaudeAiBearerRejectedError(error);
-  if (P) client.discoveryBearerRejected = true;
-  let M = w
+function reportListFailure(client, error, metricName, logMetric, degradedReason, listKind) {
+  let errorDetail = describeConnectError(error, client.config);
+  let needsAuth = client.config.type === "claudeai-proxy" && isListAuthError(error);
+  let isBearerRejected = client.config.type === "claudeai-proxy" && isClaudeAiBearerRejectedError(error);
+  if (isBearerRejected) client.discoveryBearerRejected = true;
+  let failureMetric = needsAuth
     ? `${metricName}_needs_auth`
-    : P
+    : isBearerRejected
       ? `${metricName}_claudeai_bearer_rejected`
       : (error instanceof ProtocolError || error instanceof SdkError) && !(error instanceof SdkHttpError)
         ? `${metricName}_${LIST_FAILURE_REASONS[error.code] ?? "mcperr_other"}`
-        : S.includes("timed out")
+        : errorDetail.includes("timed out")
           ? `${metricName}_timeout`
           : `${metricName}_failed`;
-  s(M);
-  (w || P ? logMCPDebug : logMCPError)(client.name, `Failed to fetch ${listKind}: ${S}`);
-  if (!w && !P)
+  logMetric(failureMetric);
+  (needsAuth || isBearerRejected ? logMCPDebug : logMCPError)(
+    client.name,
+    `Failed to fetch ${listKind}: ${errorDetail}`,
+  );
+  if (!needsAuth && !isBearerRejected)
     logEvent("tengu_mcp_degraded", {
       reason: degradedReason,
       transportType: fromEnum(client.config.type ?? "stdio"),
@@ -7194,100 +8314,107 @@ function reportListFailure(client, error, metricName, s, degradedReason, listKin
 /**
  * fetchResourcesForClient / fetchResourceTemplatesForClient：记忆化 resources/list 与 resources/templates/list，MethodNotFound 视为空。
  */
-var fetchResourcesForClient = memoizeWithLRU(
-  async (client) => {
-    if (client.type !== "connected") return [];
-    try {
-      if (!client.capabilities?.resources) {
-        let s = [];
-        recordRawResourcesForResult(s, []);
-        return s;
+var fetchResourcesForClient; // deferred: uses memoizeWithLRU (./needsAuthCache.js) of its import cycle while loading; runs once the cycle is complete
+var fetchResourceTemplatesForClient;
+deferInit("chunk-8t8n4kdh.js:157236", () => {
+  fetchResourcesForClient = memoizeWithLRU(
+    async (client) => {
+      if (client.type !== "connected") return [];
+      try {
+        if (!client.capabilities?.resources) {
+          let rawResources = [];
+          recordRawResourcesForResult(rawResources, []);
+          return rawResources;
+        }
+        let listedResources = await listAllPages_2(
+          clientOf(client.client),
+          client.name,
+          client.config,
+          "resources/list",
+          ListResourcesResultSchema,
+          (page) => page.resources,
+        );
+        logFeatureOk("mcp_list_resources");
+        let mapped = listedResources.map((resource) => ({
+          ...resource,
+          server: client.name,
+        }));
+        recordRawResourcesForResult(mapped, listedResources);
+        return mapped;
+      } catch (error) {
+        reportListFailure(
+          client,
+          error,
+          "mcp_list_resources",
+          (metric) => logFeatureSad("mcp_list_resources", metric),
+          lit("resources_list_failed"),
+          "resources",
+        );
+        getConnectionCache().resourceLists.delete(serverCacheKey(client.name, client.config));
+        let errorHolder = [];
+        if (error instanceof ProtocolError && error.code === ProtocolErrorCode.MethodNotFound)
+          recordRawResourcesForResult(errorHolder, []);
+        else getCliOwnedState().discoveryFetchErrors.set(errorHolder, toError(error));
+        return errorHolder;
       }
-      let n = await listAllPages_2(
-        clientOf(client.client),
-        client.name,
-        client.config,
-        "resources/list",
-        ListResourcesResultSchema,
-        (s) => s.resources,
-      );
-      logFeatureOk("mcp_list_resources");
-      let mapped = n.map((s) => ({
-        ...s,
-        server: client.name,
-      }));
-      recordRawResourcesForResult(mapped, n);
-      return mapped;
-    } catch (error) {
-      reportListFailure(
-        client,
-        error,
-        "mcp_list_resources",
-        (s) => logFeatureSad("mcp_list_resources", s),
-        lit("resources_list_failed"),
-        "resources",
-      );
-      getConnectionCache().resourceLists.delete(serverCacheKey(client.name, client.config));
-      let r = [];
-      if (error instanceof ProtocolError && error.code === ProtocolErrorCode.MethodNotFound)
-        recordRawResourcesForResult(r, []);
-      else getCliOwnedState().discoveryFetchErrors.set(r, toError(error));
-      return r;
-    }
-  },
-  (e) => serverCacheKey(e.name, e.config),
-  () => getConnectionCache().resourceLists,
-);
-var fetchResourceTemplatesForClient = memoizeWithLRU(
-  async (e) => {
-    if (e.type !== "connected") return [];
-    try {
-      if (!e.capabilities?.resources) return [];
-      let n = await listAllPages_2(
-        clientOf(e.client),
-        e.name,
-        e.config,
-        "resources/templates/list",
-        ListResourceTemplatesResultSchema,
-        (r) => r.resourceTemplates,
-      );
-      logEvent("tengu_mcp_resource_templates_fetched", {
-        template_count: n.length,
-      });
-      logFeatureOk("mcp_list_resource_templates");
-      return n.map((r) => ({
-        ...r,
-        server: e.name,
-      }));
-    } catch (error) {
-      getConnectionCache().resourceTemplateLists.delete(serverCacheKey(e.name, e.config));
-      logMCPDebug(e.name, `Failed to fetch resource templates: ${describeConnectError(error, e.config)}`);
-      let r = [];
-      if (!(error instanceof ProtocolError && error.code === ProtocolErrorCode.MethodNotFound))
-        getCliOwnedState().discoveryFetchErrors.set(r, toError(error));
-      return r;
-    }
-  },
-  (e) => serverCacheKey(e.name, e.config),
-  () => getConnectionCache().resourceTemplateLists,
-);
+    },
+    (client) => serverCacheKey(client.name, client.config),
+    () => getConnectionCache().resourceLists,
+  );
+  fetchResourceTemplatesForClient = memoizeWithLRU(
+    async (client) => {
+      if (client.type !== "connected") return [];
+      try {
+        if (!client.capabilities?.resources) return [];
+        let listedTemplates = await listAllPages_2(
+          clientOf(client.client),
+          client.name,
+          client.config,
+          "resources/templates/list",
+          ListResourceTemplatesResultSchema,
+          (page) => page.resourceTemplates,
+        );
+        logEvent("tengu_mcp_resource_templates_fetched", {
+          template_count: listedTemplates.length,
+        });
+        logFeatureOk("mcp_list_resource_templates");
+        return listedTemplates.map((template) => ({
+          ...template,
+          server: client.name,
+        }));
+      } catch (error) {
+        getConnectionCache().resourceTemplateLists.delete(serverCacheKey(client.name, client.config));
+        logMCPDebug(
+          client.name,
+          `Failed to fetch resource templates: ${describeConnectError(error, client.config)}`,
+        );
+        let errorHolder = [];
+        if (!(error instanceof ProtocolError && error.code === ProtocolErrorCode.MethodNotFound))
+          getCliOwnedState().discoveryFetchErrors.set(errorHolder, toError(error));
+        return errorHolder;
+      }
+    },
+    (client) => serverCacheKey(client.name, client.config),
+    () => getConnectionCache().resourceTemplateLists,
+  );
+});
 //@ chunk-8t8n4kdh.js:158475-158646 layout
 /**
  * fetchResourceTemplatesForClients：对尚无模板记录的已连接客户端并发拉资源模板。
  */
-function fetchResourceTemplatesForClients(e, n) {
-  let r = [];
-  for (let s of e) {
-    if (s.type !== "connected") continue;
-    if (s.name in n) continue;
-    r.push(
-      fetchResourceTemplatesForClient(s).then((templates) => ({
-        client: s,
+function fetchResourceTemplatesForClients(clients, alreadyFetched) {
+  let pending = [];
+  for (let client of clients) {
+    if (client.type !== "connected") continue;
+    if (client.name in alreadyFetched) continue;
+    pending.push(
+      fetchResourceTemplatesForClient(client).then((templates) => ({
+        client,
         templates,
       })),
     );
   }
-  return Promise.all(r);
+  return Promise.all(pending);
 }
 //@ chunk-8t8n4kdh.js:158646-159096 layout
 /**
@@ -7296,7 +8423,7 @@ function fetchResourceTemplatesForClients(e, n) {
 async function completeResourceTemplateArgument(client, uri, argumentName, argumentValue, contextArguments) {
   if (!client.capabilities?.completions) return [];
   try {
-    let y = await clientOf(client.client).complete({
+    let completionResult = await clientOf(client.client).complete({
       ref: {
         type: "ref/resource",
         uri,
@@ -7313,7 +8440,7 @@ async function completeResourceTemplateArgument(client, uri, argumentName, argum
           : undefined,
     });
     logFeatureOk("mcp_complete_resource_template");
-    return y.completion.values;
+    return completionResult.completion.values;
   } catch (error) {
     logFeatureBad("mcp_complete_resource_template", "mcp_complete_resource_template_failed");
     logMCPDebug(
@@ -7327,47 +8454,50 @@ async function completeResourceTemplateArgument(client, uri, argumentName, argum
 /**
  * fetchCommandsForClient：记忆化 prompts/list 并转成斜杠命令。
  */
-var fetchCommandsForClient = memoizeWithLRU(
-  async (client) => {
-    if (client.type !== "connected") return [];
-    try {
-      if (!client.capabilities?.prompts) {
-        let s = [];
-        recordRawCommandsForResult(s, []);
-        return s;
+var fetchCommandsForClient; // deferred: uses memoizeWithLRU (./needsAuthCache.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-8t8n4kdh.js:159096", () => {
+  fetchCommandsForClient = memoizeWithLRU(
+    async (client) => {
+      if (client.type !== "connected") return [];
+      try {
+        if (!client.capabilities?.prompts) {
+          let rawCommands = [];
+          recordRawCommandsForResult(rawCommands, []);
+          return rawCommands;
+        }
+        let promptList = await listAllPages_2(
+          clientOf(client.client),
+          client.name,
+          client.config,
+          "prompts/list",
+          ListPromptsResultSchema,
+          (page) => page.prompts,
+        );
+        logFeatureOk("mcp_list_prompts");
+        let result = buildMcpPromptCommands(client, promptList);
+        recordRawCommandsForResult(result, promptList);
+        return result;
+      } catch (error) {
+        reportListFailure(
+          client,
+          error,
+          "mcp_list_prompts",
+          (metric) => logFeatureSad("mcp_list_prompts", metric),
+          lit("prompts_list_failed"),
+          "commands",
+        );
+        getConnectionCache().commandLists.delete(serverCacheKey(client.name, client.config));
+        let errorHolder = [];
+        if (error instanceof ProtocolError && error.code === ProtocolErrorCode.MethodNotFound)
+          recordRawCommandsForResult(errorHolder, []);
+        else getCliOwnedState().discoveryFetchErrors.set(errorHolder, toError(error));
+        return errorHolder;
       }
-      let prompts = await listAllPages_2(
-        clientOf(client.client),
-        client.name,
-        client.config,
-        "prompts/list",
-        ListPromptsResultSchema,
-        (s) => s.prompts,
-      );
-      logFeatureOk("mcp_list_prompts");
-      let mcpPromptCommands = buildMcpPromptCommands(client, prompts);
-      recordRawCommandsForResult(mcpPromptCommands, prompts);
-      return mcpPromptCommands;
-    } catch (error) {
-      reportListFailure(
-        client,
-        error,
-        "mcp_list_prompts",
-        (s) => logFeatureSad("mcp_list_prompts", s),
-        lit("prompts_list_failed"),
-        "commands",
-      );
-      getConnectionCache().commandLists.delete(serverCacheKey(client.name, client.config));
-      let r = [];
-      if (error instanceof ProtocolError && error.code === ProtocolErrorCode.MethodNotFound)
-        recordRawCommandsForResult(r, []);
-      else getCliOwnedState().discoveryFetchErrors.set(r, toError(error));
-      return r;
-    }
-  },
-  (e) => serverCacheKey(e.name, e.config),
-  () => getConnectionCache().commandLists,
-);
+    },
+    (client) => serverCacheKey(client.name, client.config),
+    () => getConnectionCache().commandLists,
+  );
+});
 //@ chunk-8t8n4kdh.js:159657-161446 fingerprint = fetchCommandsForClient (0.539)
 /**
  * buildMcpPromptCommands：MCP 提示词转为 prompt 命令 mcp__<server>__<prompt>（显示为 server:prompt (MCP)），执行时按空格切参数、检查必填、getPrompt 并转换内容。
@@ -7375,20 +8505,21 @@ var fetchCommandsForClient = memoizeWithLRU(
 function buildMcpPromptCommands(client, prompts) {
   let streamingListingSanitizer = createStreamingListingSanitizer();
   let flattened = prompts.flatMap((prompt) => streamingListingSanitizer(prompt) ?? []);
-  let h = prompts.length - flattened.length;
-  if (h > 0) logMCPError(client.name, listingTruncatedNote("prompts", h, prompts.length));
+  let droppedCount = prompts.length - flattened.length;
+  if (droppedCount > 0)
+    logMCPError(client.name, listingTruncatedNote("prompts", droppedCount, prompts.length));
   let config = client.config;
-  let S = (config.type === "http" || config.type === "sse") && isDesignMcpUrl(config.url);
+  let isDesignServer = (config.type === "http" || config.type === "sse") && isDesignMcpUrl(config.url);
   let promptsToProcess = officialPluginPromptOverrides(client.config);
   let commands = flattened.map((prompt) => {
     let values = Object.values(prompt.arguments ?? {});
     let argNames = values.map((k) => k.name);
-    let ce = promptsToProcess?.prompts?.[prompt.name] ?? prompt.description;
+    let descriptionOverride = promptsToProcess?.prompts?.[prompt.name] ?? prompt.description;
     return {
       type: "prompt",
       name: "mcp__" + normalizeNameForMCP(client.name) + "__" + prompt.name,
-      description: ce ?? "",
-      hasUserSpecifiedDescription: !!ce,
+      description: descriptionOverride ?? "",
+      hasUserSpecifiedDescription: !!descriptionOverride,
       contentLength: 0,
       isEnabled: () => true,
       isHidden: false,
@@ -7396,18 +8527,22 @@ function buildMcpPromptCommands(client, prompts) {
       mcpInfo: getMcpInfoFromConnection(client),
       progressMessage: "running",
       userFacingName() {
-        return S ? prompt.name : `${client.name}:${prompt.name} (MCP)`;
+        return isDesignServer ? prompt.name : `${client.name}:${prompt.name} (MCP)`;
       },
-      aliases: S ? [`${client.name}:${prompt.name}`, `${client.name}:${prompt.name} (MCP)`] : undefined,
+      aliases: isDesignServer
+        ? [`${client.name}:${prompt.name}`, `${client.name}:${prompt.name} (MCP)`]
+        : undefined,
       argNames,
       source: "mcp",
       async getPromptForCommand(args, context) {
         let trimmed = args.trim();
-        let Ie = trimmed ? trimmed.split(/\s+/) : [];
-        let G = hostedDesktopRefusal_2(client);
-        if (G) throw G;
+        let argValues = trimmed ? trimmed.split(/\s+/) : [];
+        let desktopRefusal = hostedDesktopRefusal_2(client);
+        if (desktopRefusal) throw desktopRefusal;
         try {
-          let mapped = values.filter((Ae, yt) => Ae.required && Ie[yt] === undefined).map((Ae) => Ae.name);
+          let mapped = values
+            .filter((argument, index) => argument.required && argValues[index] === undefined)
+            .map((argument) => argument.name);
           if (mapped.length > 0)
             throw Error(
               `Missing required ${plural(mapped.length, "argument")}: ${mapped.join(", ")}. Usage: /mcp__${normalizeNameForMCP(client.name)}__${prompt.name} ${argNames.join(" ")}`,
@@ -7418,7 +8553,7 @@ function buildMcpPromptCommands(client, prompts) {
           });
           let result = await clientOf(connectedClient.client).getPrompt({
             name: prompt.name,
-            arguments: zipOperationFields(argNames, Ie),
+            arguments: zipOperationFields(argNames, argValues),
           });
           let imageBuffer = imageLimitsForModel(context.options.mainLoopModel);
           let transformed = await Promise.all(
@@ -7449,10 +8584,10 @@ function buildMcpPromptCommands(client, prompts) {
       },
     };
   });
-  return checkCommandListable(commands, (M) =>
+  return checkCommandListable(commands, (unlistableCommand) =>
     logMCPDebug(
       client.name,
-      `Prompt '${M.name}' not listed: the server name ${RESERVED_SKILL_NAMESPACE_REASON}. Rename the server in your MCP configuration to list its prompts.`,
+      `Prompt '${unlistableCommand.name}' not listed: the server name ${RESERVED_SKILL_NAMESPACE_REASON}. Rename the server in your MCP configuration to list its prompts.`,
     ),
   );
 }
@@ -7498,9 +8633,9 @@ function identityChangedReconnectResult(name, config) {
  */
 async function reconnectMcpServer(name, config, storageV5, credentials) {
   if (!isDiscoveryCacheUsable()) return reconnectMcpServerImpl_2(name, config, storageV5, credentials);
-  let h = identityEpoch();
+  let epochAtStart = identityEpoch();
   await flushDiscoveryCache(clearDiscoveryForServer(name, config));
-  if (isRemoteMcpTransport(config) && identityEpoch() !== h)
+  if (isRemoteMcpTransport(config) && identityEpoch() !== epochAtStart)
     return identityChangedReconnectResult(name, config);
   return reconnectMcpServerImpl_2(name, config, storageV5, credentials);
 }
@@ -7509,32 +8644,35 @@ async function reconnectMcpServer(name, config, storageV5, credentials) {
  * reconnectMcpServerImpl：清缓存后重新 connectToServer 并拉取工具/命令/资源；needs-auth 时清缓存再试一次；身份变化返回 IDENTITY_CHANGED。
  */
 async function reconnectMcpServerImpl_2(name, config, storageV5, credentials, options = {}) {
-  let y = identityEpoch();
-  let S = isRemoteMcpTransport(config);
-  let w = () => S && identityEpoch() !== y;
-  let P = () => identityChangedReconnectResult(name, config);
+  let epochAtStart = identityEpoch();
+  let isRemote = isRemoteMcpTransport(config);
+  let identityChanged = () => isRemote && identityEpoch() !== epochAtStart;
+  let identityChangedResult = () => identityChangedReconnectResult(name, config);
   try {
     clearKeychainCache();
-    let M = options.keepConnectionInUse ? {} : undefined;
-    await (M === undefined ? clearServerCache(name, config) : clearServerCache(name, config, M));
-    if (w()) return P();
-    let j = connectToServer(name, config, undefined, storageV5, credentials);
-    let R = await j;
-    if (R.type === "needs-auth") {
+    let keepOptions = options.keepConnectionInUse ? {} : undefined;
+    await (keepOptions === undefined
+      ? clearServerCache(name, config)
+      : clearServerCache(name, config, keepOptions));
+    if (identityChanged()) return identityChangedResult();
+    let dial = connectToServer(name, config, undefined, storageV5, credentials);
+    let connection = await dial;
+    if (connection.type === "needs-auth") {
       logMCPDebug(name, "Reconnect returned 'needs-auth'; retrying once after cache clear");
-      if (w()) return P();
-      let nt = serverCacheKey(name, config);
-      if (getConnectionCache().connections.get(nt) === j) getConnectionCache().connections.delete(nt);
-      R = await connectToServer(name, config, undefined, storageV5, credentials);
+      if (identityChanged()) return identityChangedResult();
+      let cacheKey = serverCacheKey(name, config);
+      if (getConnectionCache().connections.get(cacheKey) === dial)
+        getConnectionCache().connections.delete(cacheKey);
+      connection = await connectToServer(name, config, undefined, storageV5, credentials);
     }
-    if (w()) {
-      if (R.type === "connected") await detachAndCloseConnection(R);
-      return P();
+    if (identityChanged()) {
+      if (connection.type === "connected") await detachAndCloseConnection(connection);
+      return identityChangedResult();
     }
-    if (R.type !== "connected") {
+    if (connection.type !== "connected") {
       logFeatureSad("mcp_reconnect", "mcp_reconnect_not_connected");
       return applyMcpServerConfig(config, {
-        client: R,
+        client: connection,
         tools: [],
         commands: [],
       });
@@ -7544,22 +8682,22 @@ async function reconnectMcpServerImpl_2(name, config, storageV5, credentials, op
     clearDiscoveryPathMemo(name);
     let grantLeg;
     if (isDiscoveryCacheOn()) grantLeg = await cacheGrantLeg(name, config);
-    if (w()) {
-      await detachAndCloseConnection(R);
-      return P();
+    if (identityChanged()) {
+      await detachAndCloseConnection(connection);
+      return identityChangedResult();
     }
-    let supportsResources = !!R.capabilities?.resources;
+    let supportsResources = !!connection.capabilities?.resources;
     let [tools, mcpCommands, mcpSkills, resources] = await Promise.all([
-      fetchToolsForClient(R, storageV5),
-      fetchCommandsForClient(R),
+      fetchToolsForClient(connection, storageV5),
+      fetchCommandsForClient(connection),
       Promise.resolve([]),
-      supportsResources ? fetchResourcesForClient(R) : Promise.resolve([]),
+      supportsResources ? fetchResourcesForClient(connection) : Promise.resolve([]),
     ]);
-    if (w()) {
-      await detachAndCloseConnection(R);
-      return P();
+    if (identityChanged()) {
+      await detachAndCloseConnection(connection);
+      return identityChangedResult();
     }
-    if (R.discoveryAuthFailure) {
+    if (connection.discoveryAuthFailure) {
       logFeatureSad("mcp_reconnect", "mcp_reconnect_needs_auth_discovery");
       return {
         client: {
@@ -7571,15 +8709,15 @@ async function reconnectMcpServerImpl_2(name, config, storageV5, credentials, op
         commands: [],
       };
     }
-    if (config.type === "claudeai-proxy" && !R.discoveryBearerRejected)
+    if (config.type === "claudeai-proxy" && !connection.discoveryBearerRejected)
       clearMcpAuthCacheEntry(name, storageV5);
-    if (config.type === "claudeai-proxy" && !R.toolsListError && !R.discoveryBearerRejected)
+    if (config.type === "claudeai-proxy" && !connection.toolsListError && !connection.discoveryBearerRejected)
       recordClaudeAiMcpConnected(name, storageV5);
-    persistLiveListing(R, {
+    persistLiveListing(connection, {
       tools,
       commands: mcpCommands,
       resources,
-      identityEpoch: y,
+      identityEpoch: epochAtStart,
       grantLeg,
     });
     let commands = [...mcpCommands, ...mcpSkills];
@@ -7592,17 +8730,17 @@ async function reconnectMcpServerImpl_2(name, config, storageV5, credentials, op
       )
         resourceTools.push(ListMcpResourcesTool, ReadMcpResourceTool, listDirectoryResourceTool);
     }
-    if (R.discoveryBearerRejected) logFeatureSad("mcp_reconnect", "mcp_reconnect_bearer_rejected");
-    else if (R.toolsListError) logFeatureSad("mcp_reconnect", "mcp_reconnect_tools_list_failed");
+    if (connection.discoveryBearerRejected) logFeatureSad("mcp_reconnect", "mcp_reconnect_bearer_rejected");
+    else if (connection.toolsListError) logFeatureSad("mcp_reconnect", "mcp_reconnect_tools_list_failed");
     else logFeatureOk("mcp_reconnect");
     return applyMcpServerConfig(config, {
-      client: R,
+      client: connection,
       tools: [...tools, ...resourceTools],
       commands,
       resources: resources.length > 0 ? resources : undefined,
       resourceTemplates: [],
-      ...(M?.connection !== undefined &&
-        R === M.connection && {
+      ...(keepOptions?.connection !== undefined &&
+        connection === keepOptions.connection && {
           keptConnectionInUse: true,
         }),
     });
@@ -7630,17 +8768,17 @@ async function processBatched_2(items, concurrency, processor) {
 /**
  * countUnsettledByDeadline：等待一组 promise 到期限，返回仍未完成的个数。
  */
-async function countUnsettledByDeadline(e, n) {
-  if (e.length === 0) return 0;
-  let r;
+async function countUnsettledByDeadline(promises, timeoutMs) {
+  if (promises.length === 0) return 0;
+  let timer;
   let promise = new Promise((resolve) => {
-    r = setTimeout((y) => y("deadline"), n, resolve);
+    timer = setTimeout((resolve) => resolve("deadline"), timeoutMs, resolve);
   });
   try {
     let results = await Promise.all(
-      e.map((y) =>
+      promises.map((promise_2) =>
         Promise.race([
-          y.then(
+          promise_2.then(
             () => "settled",
             () => "settled",
           ),
@@ -7648,9 +8786,9 @@ async function countUnsettledByDeadline(e, n) {
         ]),
       ),
     );
-    return count(results, (y) => y === "deadline");
+    return count(results, (outcome) => outcome === "deadline");
   } finally {
-    clearTimeout(r);
+    clearTimeout(timer);
   }
 }
 //@ chunk-8t8n4kdh.js:164254-171714 fingerprint = getMcpToolsCommandsAndResources (0.46)
@@ -7661,23 +8799,23 @@ async function getMcpToolsCommandsAndResources_2(
   onConnectionAttempt,
   mcpConfigs,
   storageV5,
-  s,
+  credentials,
   preloadedTools,
-  y,
-  S,
-  w,
+  streamResources,
+  listOptions,
+  connectOptions,
 ) {
-  let P = identityEpoch();
-  let M = (q) => identityEpoch() !== P && isRemoteMcpTransport(q);
-  let emitResult = (q) => {
-    if (!M(q.client.config))
+  let epochAtStart = identityEpoch();
+  let identityChangedForRemote = (config) => identityEpoch() !== epochAtStart && isRemoteMcpTransport(config);
+  let emitResult = (result) => {
+    if (!identityChangedForRemote(result.client.config))
       onConnectionAttempt({
-        ...q,
-        attemptEpoch: P,
+        ...result,
+        attemptEpoch: epochAtStart,
       });
   };
   primeClientResolvers();
-  let R = false;
+  let resourceToolsAdded = false;
   let allConfigEntries = Object.entries(mcpConfigs ?? (await getAllMcpConfigs()).servers);
   let enabledEntries = [];
   for (let entry of allConfigEntries)
@@ -7694,13 +8832,13 @@ async function getMcpToolsCommandsAndResources_2(
     else enabledEntries.push(entry);
   registerConfiguredMcpServers(Object.fromEntries(enabledEntries));
   let totalServers = enabledEntries.length;
-  let stdioCount = count(enabledEntries, ([q, H]) => H.type === "stdio");
-  let sseCount = count(enabledEntries, ([q, H]) => H.type === "sse");
-  let httpCount = count(enabledEntries, ([q, H]) => H.type === "http");
-  let sseIdeCount = count(enabledEntries, ([q, H]) => H.type === "sse-ide");
-  let wsIdeCount = count(enabledEntries, ([q, H]) => H.type === "ws-ide");
-  let localServers = enabledEntries.filter(([q, config]) => isLocalMcpServer(config));
-  let remoteServers = enabledEntries.filter(([q, config]) => !isLocalMcpServer(config));
+  let stdioCount = count(enabledEntries, ([name, config]) => config.type === "stdio");
+  let sseCount = count(enabledEntries, ([name, config]) => config.type === "sse");
+  let httpCount = count(enabledEntries, ([name, config]) => config.type === "http");
+  let sseIdeCount = count(enabledEntries, ([name, config]) => config.type === "sse-ide");
+  let wsIdeCount = count(enabledEntries, ([name, config]) => config.type === "ws-ide");
+  let localServers = enabledEntries.filter(([name, config]) => isLocalMcpServer(config));
+  let remoteServers = enabledEntries.filter(([name, config]) => !isLocalMcpServer(config));
   let serverStats = {
     totalServers,
     stdioCount,
@@ -7709,7 +8847,7 @@ async function getMcpToolsCommandsAndResources_2(
     sseIdeCount,
     wsIdeCount,
   };
-  let Ae = [];
+  let pendingTasks = [];
   let connectOne = async ([serverName, config]) => {
     try {
       if (isCleanupStarted()) {
@@ -7801,12 +8939,12 @@ async function getMcpToolsCommandsAndResources_2(
         });
         return;
       }
-      let Xe = await hasLiveConnection(serverName, config);
-      let Ee =
+      let refreshLock = await hasLiveConnection(serverName, config);
+      let config_2 =
         preloadedTools !== undefined && Object.hasOwn(preloadedTools, serverName)
           ? preloadedTools[serverName]
           : undefined;
-      if (Ee !== undefined && !Xe) {
+      if (config_2 !== undefined && !refreshLock) {
         let { client, tools } = await buildCachedClientTools({
           name: serverName,
           config,
@@ -7815,7 +8953,7 @@ async function getMcpToolsCommandsAndResources_2(
           },
           serverInfo: undefined,
           savedAt: Date.now(),
-          tools: Ee,
+          tools: config_2,
         });
         emitResult({
           client,
@@ -7824,15 +8962,15 @@ async function getMcpToolsCommandsAndResources_2(
         });
         return;
       }
-      let Tt = Xe
+      let cacheServe = refreshLock
         ? {
             kind: "miss",
             reason: "live-connection",
           }
         : await readDiscoveryCache(serverName, config);
-      let Qe = applyCapabilityServeTimeMiss(Tt);
-      if (Qe.kind === "fresh" || Qe.kind === "stale") {
-        let { entry, ageMs } = Qe;
+      let cacheProbe = applyCapabilityServeTimeMiss(cacheServe);
+      if (cacheProbe.kind === "fresh" || cacheProbe.kind === "stale") {
+        let { entry, ageMs } = cacheProbe;
         let { client, tools } = await buildCachedClientTools({
           name: serverName,
           config,
@@ -7846,18 +8984,18 @@ async function getMcpToolsCommandsAndResources_2(
           ...resource,
           server: serverName,
         }));
-        let mapped_2 = (entry.templates ?? []).map((De) => ({
-          ...De,
+        let mapped_2 = (entry.templates ?? []).map((resourceTools) => ({
+          ...resourceTools,
           server: serverName,
         }));
-        let Te = !!entry.capabilities.resources || mapped.length > 0;
-        let Ve = [];
-        if (Te && !R) {
-          R = true;
-          Ve.push(ListMcpResourcesTool, ReadMcpResourceTool, listDirectoryResourceTool);
+        let cachedHasResources = !!entry.capabilities.resources || mapped.length > 0;
+        let cachedTools = [];
+        if (cachedHasResources && !resourceToolsAdded) {
+          resourceToolsAdded = true;
+          cachedTools.push(ListMcpResourcesTool, ReadMcpResourceTool, listDirectoryResourceTool);
         }
         logEvent("tengu_mcp_discovery_source", {
-          source: lit(Qe.kind === "fresh" ? "cache_fresh" : "cache_stale"),
+          source: lit(cacheProbe.kind === "fresh" ? "cache_fresh" : "cache_stale"),
           transportType: fromEnum(config.type ?? "stdio"),
           entryAgeMs: ageMs,
           ...mcpBaseUrlAnalytics_2(config, serverName),
@@ -7867,20 +9005,24 @@ async function getMcpToolsCommandsAndResources_2(
         getConnectionCache().refusedCachedRows.delete(serverCacheKey(serverName, config));
         emitResult({
           client,
-          tools: [...tools, ...Ve],
+          tools: [...tools, ...cachedTools],
           commands,
           resources: mapped.length > 0 ? mapped : undefined,
           resourceTemplates: mapped_2.length > 0 ? mapped_2 : undefined,
         });
-        if (Qe.kind === "stale")
+        if (cacheProbe.kind === "stale")
           (async () => {
             let grantLeg = await cacheGrantLeg(serverName, config);
-            let Le;
-            let re = async () => {
-              if ((Le !== undefined && isSupersededDial(Le)) || identityEpoch() !== P) return;
+            let refreshDial;
+            let recordStrike = async () => {
+              if (
+                (refreshDial !== undefined && isSupersededDial(refreshDial)) ||
+                identityEpoch() !== epochAtStart
+              )
+                return;
               logFeatureSad("mcp_discovery_cache", "strike");
               await recordRefreshFailureStrike(serverName, config, {
-                identityEpoch: P,
+                identityEpoch: epochAtStart,
                 grantLeg,
               });
             };
@@ -7896,139 +9038,155 @@ async function getMcpToolsCommandsAndResources_2(
               refuseCachedRow(serverName, config, "policy");
               return;
             }
-            let ot = (be) => {
-              if (!(!(Le !== undefined && isSupersededDial(Le)) && identityEpoch() === P)) return;
-              if (be.type !== "needs-auth")
+            let handleRefreshResult = (result) => {
+              if (!(
+                !(refreshDial !== undefined && isSupersededDial(refreshDial)) &&
+                identityEpoch() === epochAtStart
+              ))
+                return;
+              if (result.type !== "needs-auth")
                 getConnectionCache().connections.delete(serverCacheKey(serverName, config));
               let cachedFirstDialArmsRan = getCliOwnedState().cachedFirstDialArmsRan;
-              if (cachedFirstDialArmsRan.has(be)) return;
-              cachedFirstDialArmsRan.add(be);
-              if (be.type === "needs-auth") emitCachedAdopt(serverName, config);
-              else if (be.type === "failed") recordCachedDialFailure(be, false);
+              if (cachedFirstDialArmsRan.has(result)) return;
+              cachedFirstDialArmsRan.add(result);
+              if (result.type === "needs-auth") emitCachedAdopt(serverName, config);
+              else if (result.type === "failed") recordCachedDialFailure(result, false);
             };
-            let it = (be) => {
+            let emitAdopt = (result) => {
               let cachedFirstDialArmsRan = getCliOwnedState().cachedFirstDialArmsRan;
-              if (cachedFirstDialArmsRan.has(be)) return;
-              cachedFirstDialArmsRan.add(be);
+              if (cachedFirstDialArmsRan.has(result)) return;
+              cachedFirstDialArmsRan.add(result);
               emitCachedAdopt(serverName, config);
             };
-            let ye = false;
+            let dialSettled = false;
             try {
-              Le = connectToServer(serverName, config, serverStats, storageV5, s);
-              getCliOwnedState().swrRefreshDialsInFlight.add(Le);
-              Le.then(
+              refreshDial = connectToServer(serverName, config, serverStats, storageV5, credentials);
+              getCliOwnedState().swrRefreshDialsInFlight.add(refreshDial);
+              refreshDial.then(
                 () => {
-                  ye = true;
+                  dialSettled = true;
                 },
                 () => {
-                  ye = true;
+                  dialSettled = true;
                 },
               );
-              let connection = await boundDial(Le, {
+              let result = await boundDial(refreshDial, {
                 serverName,
                 context: "MCP discovery-cache stale refresh",
               });
-              if (connection.type !== "connected") {
-                ot(connection);
-                await re();
+              if (result.type !== "connected") {
+                handleRefreshResult(result);
+                await recordStrike();
                 return;
               }
-              if (isSupersededDial(Le) || identityEpoch() !== P) return;
+              if (isSupersededDial(refreshDial) || identityEpoch() !== epochAtStart) return;
               if (
                 entry.negotiatedEra !== undefined &&
-                connection.protocolEra !== undefined &&
-                connection.protocolEra !== entry.negotiatedEra
+                result.protocolEra !== undefined &&
+                result.protocolEra !== entry.negotiatedEra
               ) {
                 logMCPDebug(
                   serverName,
                   "Discovery cache entry dropped: server negotiated a different protocol era on revalidation",
                 );
                 await clearDiscoveryForServer(serverName, config).catch(() => {});
-                if (!isSupersededDial(Le) && identityEpoch() === P) it(connection);
+                if (!isSupersededDial(refreshDial) && identityEpoch() === epochAtStart) emitAdopt(result);
                 return;
               }
-              let ct = !!connection.capabilities?.resources;
+              let refreshHasResources = !!result.capabilities?.resources;
               clearDiscoveryPathMemo(serverName);
               let grantLeg = await cacheGrantLeg(serverName, config);
-              if (isSupersededDial(Le) || identityEpoch() !== P) return;
-              let [toolsForClient, commandsForClient, resourcesForClient, mt] = await Promise.all([
-                fetchToolsForClient(connection, storageV5),
-                fetchCommandsForClient(connection),
-                fetchResourcesForClient(connection),
-                ct && isCacheableServer(config)
-                  ? fetchResourceTemplatesForClient(connection)
-                  : Promise.resolve([]),
-              ]);
-              let templates = getDiscoveryFetchError(mt) === undefined ? mt : undefined;
+              if (isSupersededDial(refreshDial) || identityEpoch() !== epochAtStart) return;
+              let [toolsForClient, commandsForClient, resourcesForClient, templatesPromise] =
+                await Promise.all([
+                  fetchToolsForClient(result, storageV5),
+                  fetchCommandsForClient(result),
+                  fetchResourcesForClient(result),
+                  refreshHasResources && isCacheableServer(config)
+                    ? fetchResourceTemplatesForClient(result)
+                    : Promise.resolve([]),
+                ]);
+              let templates =
+                getDiscoveryFetchError(templatesPromise) === undefined ? templatesPromise : undefined;
               if (
-                isSupersededDial(Le) ||
-                isSupersededCacheEntry(Le, serverName, config) ||
-                identityEpoch() !== P
+                isSupersededDial(refreshDial) ||
+                isSupersededCacheEntry(refreshDial, serverName, config) ||
+                identityEpoch() !== epochAtStart
               )
                 return;
               if (!isMcpServerDisabled(serverName) && !isMcpServerBlockedAtConnectTime(serverName, config)) {
                 if (
-                  !(await persistRawDiscoveryIfComplete(connection, {
+                  !(await persistRawDiscoveryIfComplete(result, {
                     tools: toolsForClient,
                     commands: commandsForClient,
                     resources: resourcesForClient,
                     templates,
-                    identityEpoch: P,
+                    identityEpoch: epochAtStart,
                     grantLeg,
                   }))
                 )
-                  await re();
+                  await recordStrike();
               }
               if (
-                !(Le !== undefined && isSupersededDial(Le)) &&
-                !(Le !== undefined && isSupersededCacheEntry(Le, serverName, config)) &&
-                identityEpoch() === P
+                !(refreshDial !== undefined && isSupersededDial(refreshDial)) &&
+                !(refreshDial !== undefined && isSupersededCacheEntry(refreshDial, serverName, config)) &&
+                identityEpoch() === epochAtStart
               )
-                it(connection);
+                emitAdopt(result);
             } catch {
-              if (Le !== undefined && !ye) {
-                let be = Le;
-                be.then(
-                  (ct) => {
-                    if (ct.type !== "connected") {
-                      ot(ct);
-                      re().catch(() => {});
+              if (refreshDial !== undefined && !dialSettled) {
+                let pendingDial = refreshDial;
+                pendingDial.then(
+                  (lateResult) => {
+                    if (lateResult.type !== "connected") {
+                      handleRefreshResult(lateResult);
+                      recordStrike().catch(() => {});
                     } else {
-                      getCliOwnedState().swrRefreshDialsInFlight.delete(be);
+                      getCliOwnedState().swrRefreshDialsInFlight.delete(pendingDial);
                       (entry.negotiatedEra !== undefined &&
-                      ct.protocolEra !== undefined &&
-                      ct.protocolEra !== entry.negotiatedEra
+                      lateResult.protocolEra !== undefined &&
+                      lateResult.protocolEra !== entry.negotiatedEra
                         ? clearDiscoveryForServer(serverName, config).catch(() => {})
                         : Promise.resolve()
                       ).then(() => {
-                        if (!isSupersededDial(be) && identityEpoch() === P) it(ct);
+                        if (!isSupersededDial(pendingDial) && identityEpoch() === epochAtStart)
+                          emitAdopt(lateResult);
                       });
                     }
                   },
                   () => {
-                    re().catch(() => {});
+                    recordStrike().catch(() => {});
                   },
                 );
-              } else await re();
+              } else await recordStrike();
             } finally {
-              if (Le !== undefined && ye) getCliOwnedState().swrRefreshDialsInFlight.delete(Le);
+              if (refreshDial !== undefined && dialSettled)
+                getCliOwnedState().swrRefreshDialsInFlight.delete(refreshDial);
               await discoveryRefreshLock().catch(() => {});
             }
           })();
         return;
       }
-      let Be = connectToServer(serverName, config, serverStats, storageV5, s, undefined, w);
-      let connection = await Be;
-      let wt = connectToServer.cache?.get?.(serverCacheKey(serverName, config)) === Be;
-      if (isDiscoveryCacheOn() && isDiscoveryCacheMissRecoverable(Qe))
+      let dial = connectToServer(
+        serverName,
+        config,
+        serverStats,
+        storageV5,
+        credentials,
+        undefined,
+        connectOptions,
+      );
+      let connection = await dial;
+      let isLatestDial = connectToServer.cache?.get?.(serverCacheKey(serverName, config)) === dial;
+      if (isDiscoveryCacheOn() && isDiscoveryCacheMissRecoverable(cacheProbe))
         logEvent("tengu_mcp_discovery_source", {
-          source: lit(discoverySourceLabel(Qe)),
+          source: lit(discoverySourceLabel(cacheProbe)),
           transportType: fromEnum(config.type ?? "stdio"),
           ...mcpBaseUrlAnalytics_2(config, serverName),
         });
-      if (isSupersededDial(Be)) return;
-      if (M(config)) {
-        if (connection.type === "connected" && isSupersededCacheEntry(Be, serverName, config))
+      if (isSupersededDial(dial)) return;
+      if (identityChangedForRemote(config)) {
+        if (connection.type === "connected" && isSupersededCacheEntry(dial, serverName, config))
           detachAndCloseConnection(connection);
         return;
       }
@@ -8046,49 +9204,52 @@ async function getMcpToolsCommandsAndResources_2(
       if (config.type !== "claudeai-proxy") clearMcpAuthCacheEntry(serverName, storageV5);
       if (config.type === "http" || config.type === "sse")
         await clearMcpOAuthStubIfTokenless_2(serverName, config);
-      Ae.push(
+      pendingTasks.push(
         (async () => {
-          let Se = false;
+          let published = false;
           try {
             let supportsResources = !!connection.capabilities?.resources;
             clearDiscoveryPathMemo(serverName);
             let grantLeg = await cacheGrantLeg(serverName, config);
-            if (isDiscoveryCacheOn() && (isSupersededDial(Be) || M(config))) {
-              if (!isSupersededDial(Be) && isSupersededCacheEntry(Be, serverName, config))
+            if (isDiscoveryCacheOn() && (isSupersededDial(dial) || identityChangedForRemote(config))) {
+              if (!isSupersededDial(dial) && isSupersededCacheEntry(dial, serverName, config))
                 detachAndCloseConnection(connection);
               return;
             }
             let results = Promise.all([
-              fetchToolsForClient(connection, storageV5, S),
+              fetchToolsForClient(connection, storageV5, listOptions),
               fetchCommandsForClient(connection),
               Promise.resolve([]),
             ]);
-            let Ot =
-              y === true &&
+            let skipResources =
+              streamResources === true &&
               (config.type === "claudeai-proxy"
                 ? !!connection.capabilities?.tools || !!connection.capabilities?.prompts
                 : config.type === "http" &&
                   isSameOriginAsCcr(config.url) &&
                   !isDiscoveryCacheEligible(config));
             let results_2 = Promise.all([
-              supportsResources && !Ot ? fetchResourcesForClient(connection) : Promise.resolve([]),
+              supportsResources && !skipResources ? fetchResourcesForClient(connection) : Promise.resolve([]),
               supportsResources && isCacheableServer(connection.config)
                 ? fetchResourceTemplatesForClient(connection)
                 : Promise.resolve([]),
             ]);
-            let me =
-              y === true &&
+            let parallelResources =
+              streamResources === true &&
               supportsResources &&
               (config.type === "http" || config.type === "sse") &&
               !isDiscoveryCacheOn();
-            if (me) results_2.catch(() => {});
-            let [[Te, Ve, De], Le] = await Promise.all([results, me ? undefined : results_2]);
-            if (M(config)) {
-              if (isSupersededCacheEntry(Be, serverName, config)) detachAndCloseConnection(connection);
+            if (parallelResources) results_2.catch(() => {});
+            let [[tools, commands, extraCommands], resourceResults] = await Promise.all([
+              results,
+              parallelResources ? undefined : results_2,
+            ]);
+            if (identityChangedForRemote(config)) {
+              if (isSupersededCacheEntry(dial, serverName, config)) detachAndCloseConnection(connection);
               return;
             }
-            if (isDiscoveryCacheOn() && isSupersededDial(Be)) return;
-            if (isDiscoveryCacheOn() && wt && isSupersededCacheEntry(Be, serverName, config)) {
+            if (isDiscoveryCacheOn() && isSupersededDial(dial)) return;
+            if (isDiscoveryCacheOn() && isLatestDial && isSupersededCacheEntry(dial, serverName, config)) {
               if (
                 connectToServer.cache?.get?.(serverCacheKey(serverName, config)) === undefined &&
                 clientOf(connection.client).onclose !== undefined
@@ -8128,54 +9289,55 @@ async function getMcpToolsCommandsAndResources_2(
               !connection.discoveryBearerRejected
             )
               recordClaudeAiMcpConnected(serverName, storageV5);
-            let commands = [...Ve, ...De];
-            let ue = ($t) => {
-              let Vt = [];
-              if (supportsResources && !R) {
-                R = true;
-                Vt.push(ListMcpResourcesTool, ReadMcpResourceTool, listDirectoryResourceTool);
+            let commands_2 = [...commands, ...extraCommands];
+            let publishConnection = (resources) => {
+              let templatesResult = [];
+              if (supportsResources && !resourceToolsAdded) {
+                resourceToolsAdded = true;
+                templatesResult.push(ListMcpResourcesTool, ReadMcpResourceTool, listDirectoryResourceTool);
               }
               emitResult(
                 applyMcpServerConfig(config, {
                   client: connection,
-                  tools: [...Te, ...Vt],
-                  commands,
-                  resources: $t.length > 0 ? $t : undefined,
+                  tools: [...tools, ...templatesResult],
+                  commands: commands_2,
+                  resources: resources.length > 0 ? resources : undefined,
                   resourceTemplates: undefined,
                 }),
               );
             };
-            if (me) {
-              ue([]);
-              Se = true;
+            if (parallelResources) {
+              publishConnection([]);
+              published = true;
             }
-            let [ot, it] = Le ?? (await results_2);
-            if (!supportsResources) recordRawResourcesForResult(ot, []);
-            let templates = getDiscoveryFetchError(it) === undefined ? it : undefined;
-            let ct =
+            let [resources, templatesResult] = resourceResults ?? (await results_2);
+            if (!supportsResources) recordRawResourcesForResult(resources, []);
+            let templates =
+              getDiscoveryFetchError(templatesResult) === undefined ? templatesResult : undefined;
+            let persistPromise =
               !isDiscoveryCacheOn() ||
-              isSupersededDial(Be) ||
-              isSupersededCacheEntry(Be, serverName, config) ||
-              identityEpoch() !== P ||
+              isSupersededDial(dial) ||
+              isSupersededCacheEntry(dial, serverName, config) ||
+              identityEpoch() !== epochAtStart ||
               isMcpServerDisabled(serverName) ||
               isMcpServerBlockedAtConnectTime(serverName, config)
                 ? undefined
                 : persistRawDiscoveryIfComplete(connection, {
-                    tools: Te,
-                    commands: Ve,
-                    resources: ot,
+                    tools,
+                    commands,
+                    resources,
                     templates,
-                    identityEpoch: P,
+                    identityEpoch: epochAtStart,
                     grantLeg,
                   });
-            if (!me) ue(ot);
-            await ct;
+            if (!parallelResources) publishConnection(resources);
+            await persistPromise;
           } catch (error) {
             logMCPError(
               serverName,
               `Error fetching tools/commands/resources: ${describeConnectError(error, config)}`,
             );
-            if (Se) return;
+            if (published) return;
             emitResult({
               client: {
                 name: serverName,
@@ -8208,16 +9370,16 @@ async function getMcpToolsCommandsAndResources_2(
     processBatched_2(localServers, getMcpServerConnectionBatchSize(), connectOne),
     processBatched_2(remoteServers, getRemoteMcpServerConnectionBatchSize(), connectOne),
   ]);
-  await Promise.all(Ae);
+  await Promise.all(pendingTasks);
 }
 //@ chunk-8t8n4kdh.js:171714-172380 fingerprint = prefetchAllMcpResources (1)
 /**
  * prefetchAllMcpResources：非交互模式下一次性连接全部服务器并收集 clients/tools/commands。
  */
-function prefetchAllMcpResources(mcpConfigs, storageV5, r) {
+function prefetchAllMcpResources(mcpConfigs, storageV5, credentials) {
   return new Promise((resolve) => {
     let pendingCount = 0;
-    let y = 0;
+    let settledCount = 0;
     pendingCount = Object.keys(mcpConfigs).length;
     if (pendingCount === 0) {
       resolve({
@@ -8230,10 +9392,10 @@ function prefetchAllMcpResources(mcpConfigs, storageV5, r) {
     let clients = [];
     let tools = [];
     let commands = [];
-    let M = false;
-    let j = () => {
-      if (M) return;
-      M = true;
+    let done = false;
+    let finish = () => {
+      if (done) return;
+      done = true;
       let commandsMetadataLength = commands.reduce((sum, command) => {
         let commandMetadataLength =
           command.name.length + (command.description ?? "").length + (command.argumentHint ?? "").length;
@@ -8255,14 +9417,14 @@ function prefetchAllMcpResources(mcpConfigs, storageV5, r) {
         clients.push(error.client);
         tools.push(...error.tools);
         commands.push(...error.commands);
-        y++;
-        if (y >= pendingCount) j();
+        settledCount++;
+        if (settledCount >= pendingCount) finish();
       },
       mcpConfigs,
       storageV5,
-      r,
+      credentials,
     )
-      .then(j)
+      .then(finish)
       .catch((error) => {
         logMCPError("prefetchAllMcpResources", `Failed to get MCP resources: ${errorMessage(error)}`);
         resolve({
@@ -8277,18 +9439,18 @@ function prefetchAllMcpResources(mcpConfigs, storageV5, r) {
 /**
  * transformResultContent：把 MCP 内容块转成 API 内容：text、image（压缩/尺寸限制）、audio、resource（文本或 blob 落盘）、resource_link。
  */
-async function transformResultContent(resultContent, serverName, imageBuffer, s, h = false) {
+async function transformResultContent(resultContent, serverName, imageBuffer, storageV5, keepMeta = false) {
   switch (resultContent.type) {
     case "text": {
-      let y = {
+      let textBlock = {
         type: "text",
         text: resultContent.text,
       };
-      if (h) {
+      if (keepMeta) {
         let _meta = resultContent._meta;
-        if (_meta) y._meta = _meta;
+        if (_meta) textBlock._meta = _meta;
       }
-      return [y];
+      return [textBlock];
     }
     case "audio": {
       let audioData = resultContent;
@@ -8297,7 +9459,7 @@ async function transformResultContent(resultContent, serverName, imageBuffer, s,
         audioData.mimeType,
         serverName,
         `[Audio from ${serverName}] `,
-        s,
+        storageV5,
       );
     }
     case "image": {
@@ -8307,14 +9469,14 @@ async function transformResultContent(resultContent, serverName, imageBuffer, s,
           resultContent.mimeType,
           serverName,
           imageBuffer,
-          s,
+          storageV5,
         );
       return await persistBlobToTextBlock_2(
         Buffer.from(String(resultContent.data), "base64"),
         resultContent.mimeType,
         serverName,
         `[Image from ${serverName}] `,
-        s,
+        storageV5,
       );
     }
     case "resource": {
@@ -8334,7 +9496,7 @@ async function transformResultContent(resultContent, serverName, imageBuffer, s,
             resource.mimeType,
             serverName,
             imageBuffer,
-            s,
+            storageV5,
           );
           let content = [];
           if (prefix)
@@ -8348,7 +9510,13 @@ async function transformResultContent(resultContent, serverName, imageBuffer, s,
           let imageBuffer = Buffer.from(resource.blob, "base64");
           let storedMcpContent = toStoredMcpContent(imageBuffer, resource.mimeType, serverName);
           if (storedMcpContent) return [storedMcpContent];
-          return await persistBlobToTextBlock_2(imageBuffer, resource.mimeType, serverName, prefix, s);
+          return await persistBlobToTextBlock_2(
+            imageBuffer,
+            resource.mimeType,
+            serverName,
+            prefix,
+            storageV5,
+          );
         }
       return [];
     }
@@ -8371,47 +9539,55 @@ async function transformResultContent(resultContent, serverName, imageBuffer, s,
 /**
  * 生成二进制内容落盘的随机文件名。
  */
-function blobFileName(e) {
-  return `mcp-${normalizeNameForMCP(e)}-blob-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+function blobFileName(serverName) {
+  return `mcp-${normalizeNameForMCP(serverName)}-blob-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 //@ chunk-8t8n4kdh.js:173476-174068 file-local
-async function contentContainsImages(e, mimeType, serverName, limits, h) {
+async function contentContainsImages(data, mimeType, serverName, limits, storageV5) {
   if (toolResultStoreOrNull() === undefined && addToHistory_2()) {
     logFeatureSad("mcp_image_result_file", "persistence_off");
     let { block } = await maybeResizeAndDownsampleImageBlock({
-      data: e,
+      data,
       mediaType: mimeType,
       limits,
     });
     return [block];
   }
-  let [{ block: y, dimensions: S }, w] = await Promise.all([
+  let [{ block: imageBlock, dimensions }, persistResult] = await Promise.all([
     maybeResizeAndDownsampleImageBlock({
-      data: e,
+      data,
       mediaType: mimeType,
       limits,
     }),
-    persistBinaryContent(e, Ph(e) ?? mimeType, blobFileName(serverName), undefined, h).catch((block) => {
+    persistBinaryContent(
+      data,
+      sniffImageMediaType(data) ?? mimeType,
+      blobFileName(serverName),
+      undefined,
+      storageV5,
+    ).catch((block) => {
       logError(block);
       return {
         error: "not saved",
       };
     }),
   ]);
-  if ("error" in w) {
+  if ("error" in persistResult) {
     logFeatureSad("mcp_image_result_file", "not_saved");
-    return [y];
+    return [imageBlock];
   }
   logFeatureOk("mcp_image_result_file");
-  let M = (y.type === "image" ? null : await toolResultStoreOrNull()?.readPicture?.(w.filepath, e)) ?? {
-    block: y,
-    dimensions: S,
+  let blockInfo = (imageBlock.type === "image"
+    ? null
+    : await toolResultStoreOrNull()?.readPicture?.(persistResult.filepath, data)) ?? {
+    block: imageBlock,
+    dimensions,
   };
-  let imageMetadataText = createImageMetadataText(M.dimensions ?? {}, w.filepath);
+  let imageMetadataText = createImageMetadataText(blockInfo.dimensions ?? {}, persistResult.filepath);
   return imageMetadataText === null
-    ? [M.block]
+    ? [blockInfo.block]
     : [
-        M.block,
+        blockInfo.block,
         {
           type: "text",
           text: imageMetadataText,
@@ -8422,8 +9598,8 @@ async function contentContainsImages(e, mimeType, serverName, limits, h) {
 /**
  * persistBlobToTextBlock：二进制资源落盘后返回说明文本块。
  */
-async function persistBlobToTextBlock_2(bytes, mimeType, serverName, sourceDescription, h) {
-  let result = await persistBinaryContent(bytes, mimeType, blobFileName(serverName), undefined, h);
+async function persistBlobToTextBlock_2(bytes, mimeType, serverName, sourceDescription, storageV5) {
+  let result = await persistBinaryContent(bytes, mimeType, blobFileName(serverName), undefined, storageV5);
   if ("error" in result) {
     if (toolResultStoreOrNull() !== undefined)
       return [
@@ -8467,71 +9643,73 @@ function inferCompactSchema(value, depth = 2) {
   return typeof value;
 }
 //@ chunk-8t8n4kdh.js:174771-174915 layout
-async function transformContentArray(e, serverName, imageBuffer, s) {
-  let h = (
-    await Promise.all(e.map((y) => transformResultContent(y, serverName, imageBuffer, s, true)))
+async function transformContentArray(content, serverName, imageBuffer, storageV5) {
+  let blocks = (
+    await Promise.all(
+      content.map((block) => transformResultContent(block, serverName, imageBuffer, storageV5, true)),
+    )
   ).flat();
   return {
-    content: h,
+    content: blocks,
     type: "contentArray",
-    schema: inferCompactSchema(stripTextBlockMeta(h)),
+    schema: inferCompactSchema(stripTextBlockMeta(blocks)),
   };
 }
 //@ chunk-8t8n4kdh.js:174915-175928 fingerprint = transformMCPResult (0.902)
 /**
  * transformMCPResult：把 callTool 结果分为 toolResult / structuredContent / contentArray 三类并转换内容。
  */
-async function transformMCPResult(e, tool, name, imageBuffer, h) {
-  if (e && typeof e === "object") {
-    if ("toolResult" in e)
+async function transformMCPResult(result, tool, name, imageBuffer, storageV5) {
+  if (result && typeof result === "object") {
+    if ("toolResult" in result)
       return {
-        content: String(e.toolResult),
+        content: String(result.toolResult),
         type: "toolResult",
       };
-    if ("structuredContent" in e && e.structuredContent !== undefined) {
-      if ("content" in e && Array.isArray(e.content)) {
-        let M = await contentOverStructuredResult(e.content, (j) =>
-          transformContentArray(j, name, imageBuffer, h),
+    if ("structuredContent" in result && result.structuredContent !== undefined) {
+      if ("content" in result && Array.isArray(result.content)) {
+        let contentResult = await contentOverStructuredResult(result.content, (blocks) =>
+          transformContentArray(blocks, name, imageBuffer, storageV5),
         );
-        if (M !== undefined) return M;
+        if (contentResult !== undefined) return contentResult;
       }
-      let S = base64URLEncode(e.structuredContent);
-      let w = S ?? jsonStringify(e.structuredContent);
-      let schema = S === undefined ? inferCompactSchema(e.structuredContent) : undefined;
-      if ("content" in e && Array.isArray(e.content)) {
-        let filtered = e.content.filter(
-          (j) => j && typeof j === "object" && "type" in j && j.type !== "text",
+      let base64Text = base64URLEncode(result.structuredContent);
+      let text = base64Text ?? jsonStringify(result.structuredContent);
+      let schema = base64Text === undefined ? inferCompactSchema(result.structuredContent) : undefined;
+      if ("content" in result && Array.isArray(result.content)) {
+        let filtered = result.content.filter(
+          (block) => block && typeof block === "object" && "type" in block && block.type !== "text",
         );
         if (filtered.length > 0) {
           let transformedContent = (
             await Promise.all(
-              filtered.map((item) => transformResultContent(item, name, imageBuffer, h, true)),
+              filtered.map((item) => transformResultContent(item, name, imageBuffer, storageV5, true)),
             )
           ).flat();
           if (transformedContent.length > 0) {
-            let R = [
+            let contentWithText = [
               ...transformedContent,
               {
                 type: "text",
-                text: w,
+                text,
               },
             ];
             return {
-              content: R,
+              content: contentWithText,
               type: "contentArray",
-              schema: inferCompactSchema(stripTextBlockMeta(R)),
+              schema: inferCompactSchema(stripTextBlockMeta(contentWithText)),
             };
           }
         }
       }
       return {
-        content: w,
+        content: text,
         type: "structuredContent",
         schema,
       };
     }
-    if ("content" in e && Array.isArray(e.content))
-      return transformContentArray(e.content, name, imageBuffer, h);
+    if ("content" in result && Array.isArray(result.content))
+      return transformContentArray(result.content, name, imageBuffer, storageV5);
   }
   let errorMessage = `MCP server "${name}" tool "${tool}": unexpected response format`;
   logMCPError(name, errorMessage);
@@ -8548,14 +9726,14 @@ async function transformMCPResult(e, tool, name, imageBuffer, h) {
 //@ chunk-8t8n4kdh.js:175928-176037 layout = isMedia (1)
 function isMedia(block) {
   if (!block || typeof block === "string") return false;
-  return block.some((n) => n.type === "image" || n.type === "document");
+  return block.some((block) => block.type === "image" || block.type === "document");
 }
 //@ chunk-8t8n4kdh.js:176037-178083 fingerprint = processMCPResult (0.755)
 /**
  * processMCPResult：处理工具结果：超过 MCP 输出上限时（ENABLE_MCP_LARGE_OUTPUT_FILES 未关闭且不含图片）把全文写入 tool-results 文件并返回 getLargeOutputInstructions 说明，否则截断；记录 tengu_mcp_large_result_handled。
  */
 async function processMCPResult(
-  e,
+  result,
   tool,
   name,
   imageLimits,
@@ -8566,104 +9744,107 @@ async function processMCPResult(
 ) {
   if (
     resultNotForModel &&
-    e !== null &&
-    typeof e === "object" &&
-    !("toolResult" in e) &&
-    "content" in e &&
-    Array.isArray(e.content)
+    result !== null &&
+    typeof result === "object" &&
+    !("toolResult" in result) &&
+    "content" in result &&
+    Array.isArray(result.content)
   )
-    return e.content;
-  let P = await transformMCPResult(e, tool, name, imageLimits, storageV5);
-  let { type, schema } = P;
-  let R = dropExtraDocumentBlocks(P.content);
-  if (name === "ide") return R;
-  if (resultNotForModel || (hasResultSizeAnnotation && !isMedia(R))) return R;
-  if (!(await mcpContentNeedsTruncation(R, credentials))) return R;
-  let sizeEstimateTokens = getContentSizeEstimate(R);
+    return result.content;
+  let transformed = await transformMCPResult(result, tool, name, imageLimits, storageV5);
+  let { type, schema } = transformed;
+  let content = dropExtraDocumentBlocks(transformed.content);
+  if (name === "ide") return content;
+  if (resultNotForModel || (hasResultSizeAnnotation && !isMedia(content))) return content;
+  if (!(await mcpContentNeedsTruncation(content, credentials))) return content;
+  let sizeEstimateTokens = getContentSizeEstimate(content);
   if (env.ENABLE_MCP_LARGE_OUTPUT_FILES === false) {
     logEvent("tengu_mcp_large_result_handled", {
       outcome: lit("truncated"),
       reason: lit("env_disabled"),
       sizeEstimateTokens,
     });
-    return await truncateMcpContentIfNeeded(R, credentials);
+    return await truncateMcpContentIfNeeded(content, credentials);
   }
-  if (!R) return R;
-  if (isMedia(R)) {
+  if (!content) return content;
+  if (isMedia(content)) {
     logEvent("tengu_mcp_large_result_handled", {
       outcome: lit("truncated"),
       reason: lit("contains_images"),
       sizeEstimateTokens,
     });
-    return await truncateMcpContentIfNeeded(R, credentials);
+    return await truncateMcpContentIfNeeded(content, credentials);
   }
   let timestamp = Date.now();
   let persistId = `mcp-${normalizeNameForMCP(name)}-${normalizeNameForMCP(tool)}-${timestamp}`;
-  let ge = stripTextBlockMeta(R);
-  let Ie =
+  let contentWithoutMeta = stripTextBlockMeta(content);
+  let canUnwrapSingleton =
     useSubagentTruncationPrompt() || getFeatureValue_CACHED_MAY_BE_STALE("tengu_mcp_singleton_unwrap", true);
-  let blockCount = Array.isArray(ge) ? ge.length : undefined;
+  let blockCount = Array.isArray(contentWithoutMeta) ? contentWithoutMeta.length : undefined;
   let text =
-    Ie &&
-    Array.isArray(ge) &&
-    ge.length === 1 &&
-    ge[0]?.type === "text" &&
-    !("annotations" in ge[0]) &&
-    !("_meta" in ge[0])
-      ? ge[0].text
+    canUnwrapSingleton &&
+    Array.isArray(contentWithoutMeta) &&
+    contentWithoutMeta.length === 1 &&
+    contentWithoutMeta[0]?.type === "text" &&
+    !("annotations" in contentWithoutMeta[0]) &&
+    !("_meta" in contentWithoutMeta[0])
+      ? contentWithoutMeta[0].text
       : undefined;
-  let ke = typeof ge === "string" ? ge : (text ?? jsonStringify(ge, null, 2));
-  let nt = type === "toolResult" || text !== undefined;
-  let ee = nt ? "text" : "json";
+  let textForFile =
+    typeof contentWithoutMeta === "string"
+      ? contentWithoutMeta
+      : (text ?? jsonStringify(contentWithoutMeta, null, 2));
+  let countsAsText = type === "toolResult" || text !== undefined;
+  let persistedFormat = countsAsText ? "text" : "json";
   let lineStats;
-  if (nt) {
-    let lines = ke.split(`
+  if (countsAsText) {
+    let lines = textForFile.split(`
 `);
     if (lines.length > 1 && lines.at(-1) === "") lines.pop();
-    let H = 0;
-    for (let line of lines) if (line.length > H) H = line.length;
+    let maxLineLength = 0;
+    for (let line of lines) if (line.length > maxLineLength) maxLineLength = line.length;
     lineStats = {
       count: lines.length,
-      maxLen: H,
+      maxLen: maxLineLength,
     };
   }
-  let Ae = await persistToolResult(ke, persistId, toolResultsDir(), storageV5);
-  if (isPersistError(Ae)) {
+  let persistResult = await persistToolResult(textForFile, persistId, toolResultsDir(), storageV5);
+  if (isPersistError(persistResult)) {
     if (toolResultStoreOrNull() !== undefined) {
       logEvent("tengu_mcp_large_result_handled", {
         outcome: lit("truncated"),
         reason: lit("not_stored"),
         sizeEstimateTokens,
       });
-      return await truncateMcpContent(R);
+      return await truncateMcpContent(content);
     }
-    let contentLength = ke.length;
+    let contentLength = textForFile.length;
     logEvent("tengu_mcp_large_result_handled", {
       outcome: lit("truncated"),
       reason: lit("persist_failed"),
       sizeEstimateTokens,
     });
-    return `Error: result (${contentLength.toLocaleString()} characters) exceeds maximum allowed tokens. Failed to save output to file: ${Ae.error}. If this MCP server provides pagination or filtering tools, use them to retrieve specific portions of the data.`;
+    return `Error: result (${contentLength.toLocaleString()} characters) exceeds maximum allowed tokens. Failed to save output to file: ${persistResult.error}. If this MCP server provides pagination or filtering tools, use them to retrieve specific portions of the data.`;
   }
   logEvent("tengu_mcp_large_result_handled", {
     outcome: lit("persisted"),
     reason: lit("file_saved"),
     sizeEstimateTokens,
-    persistedSizeChars: Ae.originalSize,
-    truncatedAtCap: Ae.truncatedAtBytes !== undefined,
+    persistedSizeChars: persistResult.originalSize,
+    truncatedAtCap: persistResult.truncatedAtBytes !== undefined,
     resultType: fromEnum(type),
     blockCount,
-    persistedAs: fromEnum(ee),
+    persistedAs: fromEnum(persistedFormat),
   });
   let formatDescription =
     text !== undefined ? getFormatDescription("toolResult") : getFormatDescription(type, schema);
   return getLargeOutputInstructions(
-    Ae.filepath,
-    Ae.originalSize,
+    persistResult.filepath,
+    persistResult.originalSize,
     formatDescription,
     undefined,
     lineStats,
-    Ae.truncatedAtBytes,
+    persistResult.truncatedAtBytes,
   );
 }
 //@ chunk-8t8n4kdh.js:178083-178255 layout
@@ -8671,12 +9852,15 @@ async function processMCPResult(
  * 从 -32042（URL elicitation required）错误的 data.elicitations 中取出通过 schema 校验的 elicitation 列表，格式不对返回空数组。
  */
 function parseUrlElicitationRequiredError(error) {
-  let n = error.data;
+  let errorData = error.data;
   return (
-    n != null && typeof n === "object" && "elicitations" in n && Array.isArray(n.elicitations)
-      ? n.elicitations
+    errorData != null &&
+    typeof errorData === "object" &&
+    "elicitations" in errorData &&
+    Array.isArray(errorData.elicitations)
+      ? errorData.elicitations
       : []
-  ).filter((s) => ElicitRequestURLParamsSchema.safeParse(s).success);
+  ).filter((elicitation) => ElicitRequestURLParamsSchema.safeParse(elicitation).success);
 }
 //@ chunk-8t8n4kdh.js:178255-178526 layout
 /**
@@ -8690,16 +9874,16 @@ function classifyToolCallAuthError({
   hasHeadersHelper,
   pendingStepUpScope,
 }) {
-  let S = pendingStepUpScope !== undefined;
+  let hasPendingStepUp = pendingStepUpScope !== undefined;
   if (!(
     errorCode === 401 ||
     isUnauthorizedError ||
     isOAuthShapedAuthError ||
     (errorCode === 403 && hasHeadersHelper) ||
-    (S && errorCode === 403)
+    (hasPendingStepUp && errorCode === 403)
   ))
     return;
-  return S && errorCode !== 401 && !(isOAuthShapedAuthError && /^HTTP 401\b/.test(message))
+  return hasPendingStepUp && errorCode !== 401 && !(isOAuthShapedAuthError && /^HTTP 401\b/.test(message))
     ? "step_up"
     : "credential_rejected";
 }
@@ -8708,8 +9892,8 @@ function isNeedsApprovalOrExpiredSession(error) {
   if (isRefusedByCcrProxy(error)) return true;
   if (!(error instanceof Error) || !("code" in error)) return false;
   if (error.code === CCR_NEEDS_APPROVAL_CODE) {
-    let n = "data" in error ? error.data : undefined;
-    return typeof n === "object" && n !== null && "args_sha256" in n;
+    let errorData = "data" in error ? error.data : undefined;
+    return typeof errorData === "object" && errorData !== null && "args_sha256" in errorData;
   }
   return error.code === -32000 && isApprovalMismatchMessage(error.message);
 }
@@ -8742,19 +9926,19 @@ async function callMCPToolWithUrlElicitationRetry({
   disallowTasks,
 }) {
   let retriedApproval = false;
-  let isRetryableNeedsApproval = (H) =>
-    H.code === CCR_NEEDS_APPROVAL_CODE &&
-    typeof H.data === "object" &&
-    H.data !== null &&
-    "args_sha256" in H.data &&
+  let isRetryableNeedsApproval = (error) =>
+    error.code === CCR_NEEDS_APPROVAL_CODE &&
+    typeof error.data === "object" &&
+    error.data !== null &&
+    "args_sha256" in error.data &&
     !!ccrNeedsApprovalRetry &&
     !!toolUseId &&
     !retriedApproval &&
     getFeatureValue_CACHED_MAY_BE_STALE("tengu_mcp_proxy_needs_approval_retry", true);
-  using q = trackCallInProgress(client.transportErrorState);
+  using callTrack = trackCallInProgress(client.transportErrorState);
   for (let idx = 0; ; idx++)
     try {
-      let Xe = () =>
+      let invokeCallTool = () =>
         callToolFn({
           client,
           tool,
@@ -8775,21 +9959,22 @@ async function callMCPToolWithUrlElicitationRetry({
           taskBackground,
           disallowTasks,
         });
-      let Ee;
-      if (!isPerfettoTracingEnabled()) Ee = await Xe();
+      let callResult;
+      if (!isPerfettoTracingEnabled()) callResult = await invokeCallTool();
       else {
-        let Tt;
+        let argsForTelemetry;
         try {
-          Tt = truncateContentForTelemetry(jsonStringify(args)).content;
+          argsForTelemetry = truncateContentForTelemetry(jsonStringify(args)).content;
         } catch {
-          Tt = undefined;
+          argsForTelemetry = undefined;
         }
-        let Qe = isMemoryServerConnection(client, tool);
-        let Be = fileReferenceToolForRecords(client, tool);
-        let xe = Qe || withholdsFileReferenceArguments(Be, toolUseId);
-        let wt = withholdsFileReferenceErrorText(Be, toolUseId);
-        if (xe && Tt !== undefined) Tt = notRecordedLength(Tt);
-        Ee = await withToolExecutionSpan(
+        let isMemoryServer = isMemoryServerConnection(client, tool);
+        let fileReferenceTool = fileReferenceToolForRecords(client, tool);
+        let withholdArgs = isMemoryServer || withholdsFileReferenceArguments(fileReferenceTool, toolUseId);
+        let withholdErrorText = withholdsFileReferenceErrorText(fileReferenceTool, toolUseId);
+        if (withholdArgs && argsForTelemetry !== undefined)
+          argsForTelemetry = notRecordedLength(argsForTelemetry);
+        callResult = await withToolExecutionSpan(
           "claude_code.mcp.rpc",
           {
             spanType: "mcp.rpc",
@@ -8800,22 +9985,25 @@ async function callMCPToolWithUrlElicitationRetry({
               mcp_tool: tool,
               attempt: idx,
             },
-            ...(Tt !== undefined && {
+            ...(argsForTelemetry !== undefined && {
               contentAttrs: {
-                mcp_args: Tt,
+                mcp_args: argsForTelemetry,
               },
             }),
-            withholdErrorText: (Se) =>
-              wt || (Qe && Se instanceof McpToolCallError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS),
-            isExpectedError: (Se) =>
-              Se instanceof ProtocolError &&
-              (Se.code === ProtocolErrorCode.UrlElicitationRequired || isRetryableNeedsApproval(Se)),
+            withholdErrorText: (spanError) =>
+              withholdErrorText ||
+              (isMemoryServer &&
+                spanError instanceof McpToolCallError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS),
+            isExpectedError: (spanError) =>
+              spanError instanceof ProtocolError &&
+              (spanError.code === ProtocolErrorCode.UrlElicitationRequired ||
+                isRetryableNeedsApproval(spanError)),
           },
-          Xe,
+          invokeCallTool,
         );
       }
       if (retriedApproval) logFeatureOk("mcp_ccr_needs_approval");
-      return Ee;
+      return callResult;
     } catch (error) {
       if (!(error instanceof ProtocolError)) {
         if (retriedApproval && !(error instanceof McpSessionExpiredError))
@@ -8824,10 +10012,13 @@ async function callMCPToolWithUrlElicitationRetry({
       }
       if (isRetryableNeedsApproval(error) && ccrNeedsApprovalRetry && toolUseId) {
         retriedApproval = true;
-        let Qe = error.data;
+        let errorData = error.data;
         let toolName =
-          typeof Qe === "object" && Qe !== null && "tool_name" in Qe && typeof Qe.tool_name === "string"
-            ? Qe.tool_name
+          typeof errorData === "object" &&
+          errorData !== null &&
+          "tool_name" in errorData &&
+          typeof errorData.tool_name === "string"
+            ? errorData.tool_name
             : undefined;
         let {
           canUseTool,
@@ -8836,21 +10027,22 @@ async function callMCPToolWithUrlElicitationRetry({
           toolUseContext,
           parentMessage,
         } = ccrNeedsApprovalRetry;
-        let ft = chromeSiteFromError(client, error.data);
-        let Ot = ft && chromeSiteDenyCheck(ft, getToolPermissionContext(toolUseContext));
-        if (Ot) {
-          let De = ft?.kind === "unreadable";
+        let chromeSite = chromeSiteFromError(client, error.data);
+        let denyCheck =
+          chromeSite && chromeSiteDenyCheck(chromeSite, getToolPermissionContext(toolUseContext));
+        if (denyCheck) {
+          let siteUnreadable = chromeSite?.kind === "unreadable";
           logMCPDebug(
             client.name,
-            `Tool '${tool}' returned -32003 needs_approval ${De ? "naming a site this session cannot read, and the session has ClaudeInChromeDomain deny rules" : "for a site a ClaudeInChromeDomain deny rule covers"}: failing the call with no approval card`,
+            `Tool '${tool}' returned -32003 needs_approval ${siteUnreadable ? "naming a site this session cannot read, and the session has ClaudeInChromeDomain deny rules" : "for a site a ClaudeInChromeDomain deny rule covers"}: failing the call with no approval card`,
           );
-          if (De) logFeatureBad("chrome_permission_prompt", "hosted_site_unreadable");
+          if (siteUnreadable) logFeatureBad("chrome_permission_prompt", "hosted_site_unreadable");
           else logFeatureSad("chrome_permission_prompt", "domain_rule_denied");
-          await canUseTool(tool_2, args, toolUseContext, parentMessage, toolUseId, Ot);
+          await canUseTool(tool_2, args, toolUseContext, parentMessage, toolUseId, denyCheck);
           toolUseContext.onPermissionDenial?.(tool_2, toolUseId, args);
           throw markRefusedByCcrProxy(
             new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-              Ot.message,
+              denyCheck.message,
               "ccr_proxy_needs_approval_chrome_site_denied",
             ),
           );
@@ -8864,7 +10056,7 @@ async function callMCPToolWithUrlElicitationRetry({
           attempt: idx,
         });
         onAwaitingUserInput?.(true);
-        let vt = {
+        let genericAsk = {
           behavior: "ask",
           suppressAlwaysAllowRule: true,
           message: `The ${fullyQualifiedName} connector requires approval for this call.`,
@@ -8873,17 +10065,17 @@ async function callMCPToolWithUrlElicitationRetry({
             reason: "This connector call requires your approval to proceed.",
           },
         };
-        let me = ft && chromeSiteAsk(ft, tool, args, toolUseContext);
-        let Te = me ?? vt;
-        let Ve;
+        let chromeAsk = chromeSite && chromeSiteAsk(chromeSite, tool, args, toolUseContext);
+        let askRequest = chromeAsk ?? genericAsk;
+        let approval;
         try {
-          Ve = await canUseTool(tool_2, args, toolUseContext, parentMessage, toolUseId, Te);
+          approval = await canUseTool(tool_2, args, toolUseContext, parentMessage, toolUseId, askRequest);
         } finally {
           onAwaitingUserInput?.(false);
         }
         if (signal.aborted) throw markRefusedByCcrProxy(new AbortError());
-        if (Ve.behavior === "allow") {
-          if (Ve.updatedInput !== undefined && !En(Ve.updatedInput, args)) {
+        if (approval.behavior === "allow") {
+          if (approval.updatedInput !== undefined && !import_sortedIndex_2(approval.updatedInput, args)) {
             logFeatureSad("mcp_ccr_needs_approval", "edited_input");
             throw markRefusedByCcrProxy(
               new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
@@ -8892,15 +10084,16 @@ async function callMCPToolWithUrlElicitationRetry({
               ),
             );
           }
-          let De = runDiscarder(toolUseContext.session, toolUseId);
-          if (De !== undefined)
+          let resendRefusal = runDiscarder(toolUseContext.session, toolUseId);
+          if (resendRefusal !== undefined)
             throw markRefusedByCcrProxy(
               new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-                De,
+                resendRefusal,
                 "ccr_proxy_needs_approval_resend_refused",
               ),
             );
-          if (ft?.kind === "named" && me && meta) meta[CLAUDECODE_CHROMESITE] = ft.site;
+          if (chromeSite?.kind === "named" && chromeAsk && meta)
+            meta[CLAUDECODE_CHROMESITE] = chromeSite.site;
           if (meta)
             consumeTicketIntoInput(
               meta,
@@ -8911,14 +10104,14 @@ async function callMCPToolWithUrlElicitationRetry({
             );
           continue;
         }
-        if (Ve === Te) {
+        if (approval === askRequest) {
           logFeatureSad("mcp_ccr_needs_approval", "no_prompt_surface");
           throw markRefusedByCcrProxy(error);
         }
         logFeatureOk("mcp_ccr_needs_approval");
         throw markRefusedByCcrProxy(
           new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-            Ve.message || `Approval denied for ${fullyQualifiedName}`,
+            approval.message || `Approval denied for ${fullyQualifiedName}`,
             "ccr_proxy_needs_approval_denied",
           ),
         );
@@ -8941,16 +10134,19 @@ async function callMCPToolWithUrlElicitationRetry({
         serverName,
         `Tool '${tool}' requires URL elicitation (error -32042, attempt ${idx + 1}), processing ${urlElicitationRequiredError.length} elicitation(s)`,
       );
-      for (let Qe of urlElicitationRequiredError) {
-        let { elicitationId } = Qe;
-        let xe = await runElicitationHooks_2(serverName, Qe, signal);
-        if (xe) {
-          logMCPDebug(serverName, `URL elicitation ${elicitationId} resolved by hook: ${jsonStringify(xe)}`);
-          if (xe.action !== "accept")
+      for (let elicitation of urlElicitationRequiredError) {
+        let { elicitationId } = elicitation;
+        let hookResult = await runElicitationHooks_2(serverName, elicitation, signal);
+        if (hookResult) {
+          logMCPDebug(
+            serverName,
+            `URL elicitation ${elicitationId} resolved by hook: ${jsonStringify(hookResult)}`,
+          );
+          if (hookResult.action !== "accept")
             return {
-              content: `URL elicitation was ${xe.action === "decline" ? "declined" : xe.action + "ed"} by a hook. The tool "${tool}" could not complete because it requires the user to open a URL.`,
+              content: `URL elicitation was ${hookResult.action === "decline" ? "declined" : hookResult.action + "ed"} by a hook. The tool "${tool}" could not complete because it requires the user to open a URL.`,
               urlElicitationDeclined: {
-                url: Qe.url,
+                url: elicitation.url,
               },
               isError: true,
             };
@@ -8964,7 +10160,7 @@ async function callMCPToolWithUrlElicitationRetry({
                 MCP_URL_ELICITATION_DIALOG,
                 {
                   serverName,
-                  params: Qe,
+                  params: elicitation,
                 },
                 {
                   signal,
@@ -8976,16 +10172,16 @@ async function callMCPToolWithUrlElicitationRetry({
         } finally {
           onAwaitingUserInput?.(false);
         }
-        let Se = await runElicitationResultHooks_2(serverName, result, signal, "url", elicitationId);
-        if (Se.action !== "accept") {
+        let userResult = await runElicitationResultHooks_2(serverName, result, signal, "url", elicitationId);
+        if (userResult.action !== "accept") {
           logMCPDebug(
             serverName,
-            `User ${Se.action === "decline" ? "declined" : Se.action + "ed"} URL elicitation ${elicitationId}`,
+            `User ${userResult.action === "decline" ? "declined" : userResult.action + "ed"} URL elicitation ${elicitationId}`,
           );
           return {
-            content: `URL elicitation was ${Se.action === "decline" ? "declined" : Se.action + "ed"} by the user. The tool "${tool}" could not complete because it requires the user to open a URL.`,
+            content: `URL elicitation was ${userResult.action === "decline" ? "declined" : userResult.action + "ed"} by the user. The tool "${tool}" could not complete because it requires the user to open a URL.`,
             urlElicitationDeclined: {
-              url: Qe.url,
+              url: elicitation.url,
             },
             isError: true,
           };
@@ -8995,33 +10191,33 @@ async function callMCPToolWithUrlElicitationRetry({
     }
 }
 //@ chunk-8t8n4kdh.js:183698-184226 layout
-function toolErrorResultText(e, serverName, redactErrorForLog) {
-  if (!e.isError) return;
-  let s = "Unknown error";
-  if (Array.isArray(e.content) && e.content.length > 0) {
-    let flattened = e.content.flatMap((S) => {
-      if (S == null || typeof S !== "object") return [];
-      if ("text" in S) return [String(S.text)];
-      if (S.type === "resource_link") {
-        let w = S;
-        let P = `[Resource link: ${w.name}] ${w.uri}`;
-        if (w.description) P += ` (${w.description})`;
-        return [P];
+function toolErrorResultText(result, serverName, redactErrorForLog) {
+  if (!result.isError) return;
+  let errorText = "Unknown error";
+  if (Array.isArray(result.content) && result.content.length > 0) {
+    let flattened = result.content.flatMap((block) => {
+      if (block == null || typeof block !== "object") return [];
+      if ("text" in block) return [String(block.text)];
+      if (block.type === "resource_link") {
+        let link = block;
+        let linkText = `[Resource link: ${link.name}] ${link.uri}`;
+        if (link.description) linkText += ` (${link.description})`;
+        return [linkText];
       }
       return [];
     });
     if (flattened.length > 0)
-      s = flattened.join(`
+      errorText = flattened.join(`
 `);
-  } else if ("error" in e) s = String(e.error);
-  logMCPError(serverName, redactErrorForLog === undefined ? s : redactErrorForLog(s));
-  let h = stripAnthropicMeta(e._meta);
+  } else if ("error" in result) errorText = String(result.error);
+  logMCPError(serverName, redactErrorForLog === undefined ? errorText : redactErrorForLog(errorText));
+  let meta = stripAnthropicMeta(result._meta);
   throw new McpToolCallError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-    s,
+    errorText,
     "MCP tool returned error",
-    h
+    meta
       ? {
-          _meta: h,
+          _meta: meta,
         }
       : undefined,
   );
@@ -9045,14 +10241,14 @@ function buildSep2663TaskBinding() {
 /**
  * 绕过缓存执行 tools/list。
  */
-function listToolsBypassCache(e, n) {
-  return clientOf(e).request(
+function listToolsBypassCache(connection, options) {
+  return clientOf(connection).request(
     {
       method: "tools/list",
     },
     ListToolsResultSchema,
     {
-      ...n,
+      ...options,
       cacheMode: "bypass",
     },
   );
@@ -9061,13 +10257,13 @@ function listToolsBypassCache(e, n) {
 /**
  * 绕过缓存读取资源。
  */
-function readResourceBypassCache(e, uri, r) {
-  return clientOf(e).readResource(
+function readResourceBypassCache(connection, uri, options) {
+  return clientOf(connection).readResource(
     {
       uri,
     },
     {
-      ...r,
+      ...options,
       cacheMode: "bypass",
     },
   );
@@ -9076,19 +10272,19 @@ function readResourceBypassCache(e, uri, r) {
 /**
  * 调用工具 `tools/call` 的底层封装：协议时代为 modern 时在 `_meta` 里附上客户端任务能力声明，legacy 原样调用。（v2）
  */
-function invokeToolRaw(e, n, r) {
-  let s = clientOf(e);
-  let h =
-    s.getProtocolEra?.() === "modern"
+function invokeToolRaw(connection, params, options) {
+  let sdkClient = clientOf(connection);
+  let callParams =
+    sdkClient.getProtocolEra?.() === "modern"
       ? {
-          ...n,
+          ...params,
           _meta: {
-            ...n._meta,
+            ...params._meta,
             [CLIENT_CAPABILITIES_META_KEY]: stripTasksCapability(clientCapabilitiesWithElicitation()),
           },
         }
-      : n;
-  return s.callTool(h, r);
+      : params;
+  return sdkClient.callTool(callParams, options);
 }
 //@ chunk-8t8n4kdh.js:184707-184738 layout
 /**
@@ -9099,16 +10295,16 @@ var TASK_REQUEST_OPTIONS = {
   allowTask: true,
 };
 //@ chunk-8t8n4kdh.js:184738-184900 layout
-function withDeclaredClientTasks(e, n) {
-  let r = getCliOwnedState().clientTasksDeclaredBeforeServerList.get(e);
-  let _meta = n._meta;
-  return r === undefined || e.getProtocolEra?.() !== "modern"
-    ? n
+function withDeclaredClientTasks(client, params) {
+  let declaredTasks = getCliOwnedState().clientTasksDeclaredBeforeServerList.get(client);
+  let _meta = params._meta;
+  return declaredTasks === undefined || client.getProtocolEra?.() !== "modern"
+    ? params
     : {
-        ...n,
+        ...params,
         _meta: {
           ..._meta,
-          [CLIENT_CAPABILITIES_META_KEY]: r,
+          [CLIENT_CAPABILITIES_META_KEY]: declaredTasks,
         },
       };
 }
@@ -9116,35 +10312,39 @@ function withDeclaredClientTasks(e, n) {
 /**
  * 任务 id schema（1–1024 字符、无控制字符）。
  */
-var taskResultSchema = DoctorLazy(() =>
-  looseObject({
-    resultType: literal("task"),
-  }),
-);
-var taskIdSchema = DoctorLazy(() =>
-  string()
-    .min(1)
-    .max(1024)
-    .regex(/^\P{Cc}+$/u),
-);
+var taskResultSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var taskIdSchema;
+deferInit("chunk-8t8n4kdh.js:184900", () => {
+  taskResultSchema = DoctorLazy(() =>
+    looseObject({
+      resultType: literal("task"),
+    }),
+  );
+  taskIdSchema = DoctorLazy(() =>
+    stringSchema()
+      .min(1)
+      .max(1024)
+      .regex(/^\P{Cc}+$/u),
+  );
+});
 //@ chunk-8t8n4kdh.js:184992-185307 layout
 /**
  * 为 MCP 任务（Tasks）构造请求通道：request 发任意方法（带签名头与超时），resolveInputRequest 把任务中途的输入请求（elicitation 等）交给对话框处理。（v2）
  */
-function createSep2663TaskBinding(e, { taskId, requestDialog }) {
-  let s = clientOf(e.client);
+function createSep2663TaskBinding(connection, { taskId, requestDialog }) {
+  let client = clientOf(connection.client);
   return {
-    request: (method, S, w) =>
-      s.request(
+    request: (method, params, options) =>
+      client.request(
         {
           method,
-          params: withDeclaredClientTasks(s, S),
+          params: withDeclaredClientTasks(client, params),
         },
         ResultSchema,
         {
           ...TASK_REQUEST_OPTIONS,
-          signal: w.signal,
-          headers: w.headers,
+          signal: options.signal,
+          headers: options.headers,
           timeout: TASK_REQUEST_TIMEOUT_MS,
         },
       ),
@@ -9155,7 +10355,7 @@ function createSep2663TaskBinding(e, { taskId, requestDialog }) {
         task: {
           taskId,
         },
-        connected: e,
+        connected: connection,
         signal,
         requestDialog,
         transportErrorState: undefined,
@@ -9166,14 +10366,17 @@ function createSep2663TaskBinding(e, { taskId, requestDialog }) {
 /**
  * 任务中途输入请求的 schema。
  */
-var taskInputRequestSchema = DoctorLazy(() =>
-  union([
-    ElicitRequestParamsSchema,
-    ElicitRequestURLParamsSchema.omit({
-      elicitationId: true,
-    }),
-  ]),
-);
+var taskInputRequestSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-8t8n4kdh.js:185307", () => {
+  taskInputRequestSchema = DoctorLazy(() =>
+    union([
+      ElicitRequestParamsSchema,
+      ElicitRequestURLParamsSchema.omit({
+        elicitationId: true,
+      }),
+    ]),
+  );
+});
 //@ chunk-8t8n4kdh.js:185360-186410 layout
 /**
  * 处理 MCP 任务的输入请求：elicitation/create 校验参数后在交互会话中弹对话框（URL 模式被关闭或非交互时取消任务），roots/list 返回根目录，其它方法不支持。
@@ -9187,20 +10390,23 @@ async function resolveTaskInputRequest({
   requestDialog,
   transportErrorState,
 }) {
-  let w = connected.name;
+  let serverName = connected.name;
   switch (inputRequest.method) {
     case "elicitation/create": {
-      let P = taskInputRequestSchema().safeParse(inputRequest.params);
-      if (!P.success) {
+      let parseResult = taskInputRequestSchema().safeParse(inputRequest.params);
+      if (!parseResult.success) {
         logMCPDebug(
-          w,
-          `Task ${task.taskId}: input request '${key}' carries invalid elicitation params: ${P.error.message}`,
+          serverName,
+          `Task ${task.taskId}: input request '${key}' carries invalid elicitation params: ${parseResult.error.message}`,
         );
         return;
       }
-      if (P.data.mode === "url" && clientCapabilitiesWithElicitation().elicitation?.url === undefined) {
+      if (
+        parseResult.data.mode === "url" &&
+        clientCapabilitiesWithElicitation().elicitation?.url === undefined
+      ) {
         logMCPDebug(
-          w,
+          serverName,
           `Task ${task.taskId}: input request '${key}' asks for URL elicitation, which is switched off (tengu_mcp_url_elicitation); the task will be cancelled`,
         );
         return;
@@ -9208,13 +10414,13 @@ async function resolveTaskInputRequest({
       if (requestDialog && !getIsNonInteractiveSession())
         return handleElicitationRequest_2({
           connected,
-          params: P.data,
+          params: parseResult.data,
           signal,
           requestDialog,
           transportErrorState,
         });
       logMCPDebug(
-        w,
+        serverName,
         `Task ${task.taskId}: cannot show input request '${key}' (${requestDialog ? "this session is non-interactive" : "no dialog was passed to this call"}); the task will be cancelled`,
       );
       throw new mcpTaskDriveModule.TaskInputUnservableError(
@@ -9225,7 +10431,7 @@ async function resolveTaskInputRequest({
       return getMcpRoots(isDocumentsPluginServer(connected.config));
     default:
       logMCPDebug(
-        w,
+        serverName,
         `Task ${task.taskId}: input request '${key}' has unsupported method ${inputRequest.method}`,
       );
       return;
@@ -9259,16 +10465,16 @@ async function callMCPTool({
 }) {
   let { client: client_2, name: serverName, config, transportErrorState } = client;
   let sdkClient = clientOf(client_2);
-  let q = fileReferenceToolForRecords(client, tool);
-  let withheldFileRef = withholdsFileReferenceErrorText(q, toolUseId) ? q : undefined;
+  let fileRefTool = fileReferenceToolForRecords(client, tool);
+  let withheldFileRef = withholdsFileReferenceErrorText(fileRefTool, toolUseId) ? fileRefTool : undefined;
   let redactErrorForLog = isMemoryServerConnection(client, tool)
     ? describeRedactedMcpError
     : withheldFileRef !== undefined
-      ? (me) => withheldFileReferenceErrorForLog(withheldFileRef, me)
+      ? (redact) => withheldFileReferenceErrorForLog(withheldFileRef, redact)
       : undefined;
   let now = Date.now();
   let startEpoch = identityEpoch();
-  let Qe = sdkClient.transport?.sessionId === undefined;
+  let freshTransport = sdkClient.transport?.sessionId === undefined;
   let progressTimer;
   let toolUseIdMeta = meta?.["claudecode/toolUseId"];
   let hasToolUseId = typeof toolUseIdMeta === "string";
@@ -9298,33 +10504,33 @@ async function callMCPTool({
   try {
     incrementCallsInProgress(transportErrorState);
     logMCPDebug(serverName, `Calling MCP tool: ${tool}`);
-    let me = idleTimeoutMs ?? getMcpToolIdleTimeoutMs(config);
+    let resolvedIdleTimeoutMs = idleTimeoutMs ?? getMcpToolIdleTimeoutMs(config);
     let lastActivityAt = now;
     let rejectIdle;
     let promise = new Promise((resolve, reject) => {
       rejectIdle = reject;
     });
-    watchdog.requestSent = (Me) => {
-      requestStates.set(String(Me), "sent");
+    watchdog.requestSent = (id) => {
+      requestStates.set(String(id), "sent");
       ranNothing = false;
     };
-    watchdog.requestTaken = (Me) => {
-      if (requestStates.has(String(Me))) requestStates.set(String(Me), "taken");
+    watchdog.requestTaken = (id) => {
+      if (requestStates.has(String(id))) requestStates.set(String(id), "taken");
     };
-    watchdog.requestAnswered = (Me) => {
-      requestStates.delete(String(Me));
+    watchdog.requestAnswered = (id) => {
+      requestStates.delete(String(id));
     };
-    watchdog.requestNotRun = (Me) => {
-      requestStates.delete(String(Me));
+    watchdog.requestNotRun = (id) => {
+      requestStates.delete(String(id));
       ranNothing = hasToolUseId;
     };
-    let Le = (Me) =>
-      requestStates.has(String(Me)) && transportErrorState?.activeCallWatchdogs.has(watchdog) === true;
-    watchdog.answerStreamEnded = (Me) => {
-      if (!Le(Me)) return;
+    let isTracked = (id) =>
+      requestStates.has(String(id)) && transportErrorState?.activeCallWatchdogs.has(watchdog) === true;
+    watchdog.answerStreamEnded = (id) => {
+      if (!isTracked(id)) return;
       clearTimeout(answerStreamTimer);
       answerStreamTimer = setTimeout(() => {
-        if (!Le(Me)) return;
+        if (!isTracked(id)) return;
         logMCPDebug(serverName, `Tool '${tool}' aborting: its answer stream ended with no answer`);
         rejectIdle(
           Object.assign(
@@ -9353,15 +10559,15 @@ async function callMCPTool({
           serverName,
           `Tool '${tool}' aborting: transport error ${Math.floor((Date.now() - watchdog.armedAt) / 1000)}s ago, response presumed lost`,
         );
-        let Ye = sentRequests.size > 0;
+        let answered = sentRequests.size > 0;
         rejectIdle(
           Object.assign(
             new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-              Ye
+              answered
                 ? describeUnansweredCall(serverName, tool)
                 : `MCP server "${serverName}" transport dropped mid-call; response for tool "${tool}" was lost`,
               "MCP transport lost mid-call",
-              Ye ? MCP_CALL_UNANSWERED : undefined,
+              answered ? MCP_CALL_UNANSWERED : undefined,
             ),
             {
               mcpErrorSource: "downstream_unreachable",
@@ -9373,20 +10579,20 @@ async function callMCPTool({
       if (transportErrorState?.pendingElicitations) lastActivityAt = Date.now();
       else if (transportErrorState && transportErrorState.lastElicitationClosedAt > lastActivityAt)
         lastActivityAt = transportErrorState.lastElicitationClosedAt;
-      if (me > 0 && Date.now() - lastActivityAt > me) {
+      if (resolvedIdleTimeoutMs > 0 && Date.now() - lastActivityAt > resolvedIdleTimeoutMs) {
         let floored = Math.floor((Date.now() - lastActivityAt) / 1000);
         logMCPDebug(
           serverName,
-          `Tool '${tool}' aborting: no response or progress notification for ${floored}s (idle timeout ${Math.floor(me / 1000)}s)`,
+          `Tool '${tool}' aborting: no response or progress notification for ${floored}s (idle timeout ${Math.floor(resolvedIdleTimeoutMs / 1000)}s)`,
         );
-        let _t = `MCP server "${serverName}" tool "${tool}" sent no response or progress for ${floored}s; aborting. If this server is configured in your MCP settings, set a per-server "timeout" (ms) to allow longer silent runs for just this server; otherwise set CLAUDE_CODE_MCP_TOOL_IDLE_TIMEOUT (ms) globally (0 disables).`;
-        let Mt = sentRequests.size > 0;
+        let message = `MCP server "${serverName}" tool "${tool}" sent no response or progress for ${floored}s; aborting. If this server is configured in your MCP settings, set a per-server "timeout" (ms) to allow longer silent runs for just this server; otherwise set CLAUDE_CODE_MCP_TOOL_IDLE_TIMEOUT (ms) globally (0 disables).`;
+        let unknownOutcome = sentRequests.size > 0;
         rejectIdle(
           Object.assign(
             new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-              Mt ? `${_t} ${CALL_OUTCOME_UNKNOWN_NOTICE}` : _t,
+              unknownOutcome ? `${message} ${CALL_OUTCOME_UNKNOWN_NOTICE}` : message,
               "MCP tool idle timeout",
-              Mt ? MCP_CALL_UNANSWERED : undefined,
+              unknownOutcome ? MCP_CALL_UNANSWERED : undefined,
             ),
             {
               mcpErrorSource: "downstream_unreachable",
@@ -9397,24 +10603,27 @@ async function callMCPTool({
     }, 30000);
     let callTimeoutMs = getMcpToolTimeoutMs(config);
     let callTimeoutTimer;
-    let ot;
+    let rejectTimeout;
     let promise_2 = new Promise((resolve, reject) => {
-      ot = reject;
+      rejectTimeout = reject;
     });
-    let ye = (callTimeoutMs, callTimeoutMs_2) => {
+    let armCallTimeout = (callTimeoutMs, callTimeoutMs_2) => {
       clearTimeout(callTimeoutTimer);
       callTimeoutTimer = setTimeout(
-        (_t, Mt, at, pt, jt, Lt) => {
-          let We = `MCP server "${Mt}" tool "${at}" timed out after ${Math.floor(pt / 1000)}s`;
-          let Bt = jt.size > 0;
-          let Kt = (Lt.openQuestions ?? 0) > 0;
-          let zt = [...(Kt ? [QUESTION_UNANSWERED_TEXT] : []), ...(Bt ? [CALL_OUTCOME_UNKNOWN_NOTICE] : [])];
-          _t(
+        (reject, serverName, toolName, timeoutMs, sentRequests, watchdog) => {
+          let message = `MCP server "${serverName}" tool "${toolName}" timed out after ${Math.floor(timeoutMs / 1000)}s`;
+          let unanswered = sentRequests.size > 0;
+          let openQuestions = (watchdog.openQuestions ?? 0) > 0;
+          let notices = [
+            ...(openQuestions ? [QUESTION_UNANSWERED_TEXT] : []),
+            ...(unanswered ? [CALL_OUTCOME_UNKNOWN_NOTICE] : []),
+          ];
+          reject(
             Object.assign(
               new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-                zt.length > 0 ? `${We}. ${zt.join(" ")}` : We,
+                notices.length > 0 ? `${message}. ${notices.join(" ")}` : message,
                 "MCP tool timeout",
-                Bt ? MCP_CALL_UNANSWERED : Kt ? MCP_QUESTION_UNANSWERED : undefined,
+                unanswered ? MCP_CALL_UNANSWERED : openQuestions ? MCP_QUESTION_UNANSWERED : undefined,
               ),
               {
                 mcpErrorSource: "downstream_unreachable",
@@ -9423,7 +10632,7 @@ async function callMCPTool({
           );
         },
         callTimeoutMs,
-        ot,
+        rejectTimeout,
         serverName,
         tool,
         callTimeoutMs_2,
@@ -9431,16 +10640,16 @@ async function callMCPTool({
         watchdog,
       );
     };
-    ye(callTimeoutMs, callTimeoutMs);
-    let be = shouldPauseForQuestions(config, callTimeoutMs);
-    if (be)
+    armCallTimeout(callTimeoutMs, callTimeoutMs);
+    let pauseForQuestions = shouldPauseForQuestions(config, callTimeoutMs);
+    if (pauseForQuestions)
       installQuestionPause(watchdog, {
         inFlight: transportErrorState?.activeCallWatchdogs,
         timeoutMs: callTimeoutMs,
-        armTimeout: ye,
+        armTimeout: armCallTimeout,
         timedOut: promise_2,
       });
-    let ct = () => {
+    let cleanupTimers = () => {
       if (callTimeoutTimer) clearTimeout(callTimeoutTimer);
       clearTimeout(answerStreamTimer);
       if (progressTimer !== undefined) {
@@ -9449,11 +10658,11 @@ async function callMCPTool({
       }
       transportErrorState?.activeCallWatchdogs.delete(watchdog);
     };
-    let $t =
+    let noTasks =
       disallowTasks === true ||
       isSingleShotPrintSession() ||
       (getIsNonInteractiveSession() && taskBackground === undefined);
-    let Vt = (status, progressMessage, progress) => {
+    let reportProgress = (status, progressMessage, progress) => {
       watchdog.armedAt = 0;
       lastActivityAt = Date.now();
       onProgress?.({
@@ -9465,60 +10674,62 @@ async function callMCPTool({
         progressMessage,
       });
     };
-    let Fe = async () => {
-      let Me = isMcpTasksEnabled();
-      let Ye = Me && !$t && !shouldRestrictRemoteHost(config);
-      if (Me && !$t && !Ye)
+    let runCall = async () => {
+      let tasksEnabled = isMcpTasksEnabled();
+      let canUseTasks = tasksEnabled && !noTasks && !shouldRestrictRemoteHost(config);
+      if (tasksEnabled && !noTasks && !canUseTasks)
         logMCPDebug(
           serverName,
           "Tasks are off for this server: the tengu_gleaming_creek server list shuts it out, so its tool calls run without Tasks",
         );
-      let _t = sdkClient.getProtocolEra?.() === "modern";
-      let Mt = Ye && _t;
-      let at = Mt ? TASK_REQUEST_OPTIONS : {};
-      let pt = getCliOwnedState().clientTasksDeclaredBeforeServerList.get(sdkClient);
-      let jt =
-        !Ye && _t
+      let modernEra = sdkClient.getProtocolEra?.() === "modern";
+      let useTasks = canUseTasks && modernEra;
+      let taskRequestOptions = useTasks ? TASK_REQUEST_OPTIONS : {};
+      let declaredCapabilities = getCliOwnedState().clientTasksDeclaredBeforeServerList.get(sdkClient);
+      let callMeta =
+        !canUseTasks && modernEra
           ? {
               ...meta,
-              [CLIENT_CAPABILITIES_META_KEY]: stripTasksCapability(pt ?? clientCapabilitiesWithElicitation()),
+              [CLIENT_CAPABILITIES_META_KEY]: stripTasksCapability(
+                declaredCapabilities ?? clientCapabilitiesWithElicitation(),
+              ),
             }
           : meta;
-      let Lt = await sdkClient.callTool(
+      let result = await sdkClient.callTool(
         {
           name: tool,
           arguments: args,
           _meta:
             watchdog.mark === undefined
-              ? jt
+              ? callMeta
               : {
-                  ...jt,
+                  ...callMeta,
                   [CLAUDECODE_CALLMARK]: watchdog.mark,
                 },
         },
         {
-          ...at,
-          signal: be ? AbortSignal.any([signal, abortController.signal]) : signal,
-          timeout: be ? MAX_TIMER_DELAY_MS : callTimeoutMs,
-          onprogress: (We) => {
+          ...taskRequestOptions,
+          signal: pauseForQuestions ? AbortSignal.any([signal, abortController.signal]) : signal,
+          timeout: pauseForQuestions ? MAX_TIMER_DELAY_MS : callTimeoutMs,
+          onprogress: (progressEvent) => {
             watchdog.armedAt = 0;
             lastActivityAt = Date.now();
-            mcpAutoBackgroundModule?.reportBackgroundProgress(signal, We);
+            mcpAutoBackgroundModule?.reportBackgroundProgress(signal, progressEvent);
             if (onProgress)
               onProgress({
                 type: "mcp_progress",
                 status: "progress",
                 serverName,
                 toolName: tool,
-                progress: We.progress,
-                total: We.total,
-                progressMessage: We.message,
+                progress: progressEvent.progress,
+                total: progressEvent.total,
+                progressMessage: progressEvent.message,
               });
           },
         },
       );
-      if (Mt) {
-        let We = (taskId) => {
+      if (useTasks) {
+        let cancelTask = (taskId) => {
           sdkClient
             .request(
               {
@@ -9534,31 +10745,31 @@ async function callMCPTool({
             )
             .catch(() => {});
         };
-        let Bt = mcpTaskDriveModule.CreateTaskResultSchema().safeParse(Lt);
-        if (Bt.success) {
+        let taskParse = mcpTaskDriveModule.CreateTaskResultSchema().safeParse(result);
+        if (taskParse.success) {
           if (abortController.signal.aborted) {
-            We(Bt.data.taskId);
-            return Lt;
+            cancelTask(taskParse.data.taskId);
+            return result;
           }
           if (taskBackground && taskRegistry) {
-            L = mt(Bt.data, taskBackground, taskRegistry);
-            return Lt;
+            placeholder = backgroundTask(taskParse.data, taskBackground, taskRegistry);
+            return result;
           }
-          return et(Bt.data);
+          return pollInline(taskParse.data);
         }
-        let Kt = taskResultSchema().safeParse(Lt);
-        if (Kt.success) {
+        let handleParse = taskResultSchema().safeParse(result);
+        if (handleParse.success) {
           logMCPDebug(
             serverName,
-            `Tool '${tool}' returned a malformed task handle: ${Bt.error.message.slice(0, 200)}`,
+            `Tool '${tool}' returned a malformed task handle: ${taskParse.error.message.slice(0, 200)}`,
           );
-          let Ct = taskIdSchema().safeParse(Kt.data.taskId);
-          if (Ct.success) We(Ct.data);
+          let taskIdParse = taskIdSchema().safeParse(handleParse.data.taskId);
+          if (taskIdParse.success) cancelTask(taskIdParse.data);
           return {
             content: [
               {
                 type: "text",
-                text: `MCP server "${serverName}" returned a malformed task handle for tool "${tool}", so Claude Code cannot track the task or get its result. ${Ct.success ? "It tried to cancel the task, but the" : "The"} server may still be running it. Calling the tool again may start another task.`,
+                text: `MCP server "${serverName}" returned a malformed task handle for tool "${tool}", so Claude Code cannot track the task or get its result. ${taskIdParse.success ? "It tried to cancel the task, but the" : "The"} server may still be running it. Calling the tool again may start another task.`,
               },
             ],
             isError: true,
@@ -9566,7 +10777,7 @@ async function callMCPTool({
             structuredContent: undefined,
           };
         }
-        let agentTaskMeta = mcpTaskDriveModule.parseAgentTaskMeta(Lt._meta);
+        let agentTaskMeta = mcpTaskDriveModule.parseAgentTaskMeta(result._meta);
         if (agentTaskMeta?.merged === true && agentTaskMeta.taskId && taskRegistry) {
           if (
             mcpTasksModule.noteMergedIntoTask(
@@ -9582,14 +10793,14 @@ async function callMCPTool({
             );
         }
       }
-      return Lt;
+      return result;
     };
-    let L;
-    let mt = (Me, taskBackground, taskRegistry) => {
+    let placeholder;
+    let backgroundTask = (task, taskBackground, taskRegistry) => {
       let transportFingerprint = mcpTasksModule.mcpTransportFingerprint(client.config);
-      let at = mcpTasksModule.registerOrAdoptSep2663Task({
+      let registration = mcpTasksModule.registerOrAdoptSep2663Task({
         taskRegistry,
-        task: Me,
+        task,
         serverName,
         toolName: tool,
         toolUseId,
@@ -9597,23 +10808,23 @@ async function callMCPTool({
         adoptRegistryId: taskBackground.share.registryId,
         storageV5: taskBackground.storageV5,
       });
-      let { registryId, driveAbort, ttlExpiresAt, killed } = at;
+      let { registryId, driveAbort, ttlExpiresAt, killed } = registration;
       taskBackground.share.becameTask = true;
       taskBackground.onBackgrounded();
       logMCPDebug(
         serverName,
         killed
-          ? `Tool '${tool}' returned task ${Me.taskId} after background task ${registryId} was stopped; cancelling it`
-          : `Tool '${tool}' returned task ${Me.taskId} (${Me.status}); backgrounded as ${registryId}`,
+          ? `Tool '${tool}' returned task ${task.taskId} after background task ${registryId} was stopped; cancelling it`
+          : `Tool '${tool}' returned task ${task.taskId} (${task.status}); backgrounded as ${registryId}`,
       );
-      if (!at.killed && taskBackground.session !== undefined && isTaskWorkerWakeEnabled())
+      if (!registration.killed && taskBackground.session !== undefined && isTaskWorkerWakeEnabled())
         workerWakesModule.mcpTaskWorkerWakeKeepers.of(taskBackground.session).taskBackgrounded({
           taskRegistry,
-          record: at.sidecarRecord,
+          record: registration.sidecarRecord,
           storageV5: taskBackground.storageV5,
         });
-      let Bt = (client, taskId) =>
-        createSep2663TaskBinding(client, {
+      let makeBinding = (connection, taskId) =>
+        createSep2663TaskBinding(connection, {
           taskId,
           requestDialog,
         });
@@ -9622,50 +10833,52 @@ async function callMCPTool({
         registryId,
         serverName,
         toolName: tool,
-        mcpTaskId: Me.taskId,
-        pollIntervalMs: Me.pollIntervalMs,
+        mcpTaskId: task.taskId,
+        pollIntervalMs: task.pollIntervalMs,
         ttlExpiresAt,
         driveAbort,
-        initialBinding: Bt(client, Me.taskId),
+        initialBinding: makeBinding(client, task.taskId),
         initialConfig: client.config,
-        bindingFactory: Bt,
+        bindingFactory: makeBinding,
         transportFingerprint,
         storageV5: taskBackground.storageV5,
         credentials: taskBackground.credentials,
       });
-      let Kt = isPlainObject(Me._meta) ? Me._meta[mcpTaskDriveModule.AGENT_TASK_META_KEY] : undefined;
+      let agentMeta = isPlainObject(task._meta)
+        ? task._meta[mcpTaskDriveModule.AGENT_TASK_META_KEY]
+        : undefined;
       return {
         ...mcpTasksModule.buildSep2663PlaceholderResult({
           serverName,
           toolName: tool,
           registryId,
-          mcpTaskId: Me.taskId,
+          mcpTaskId: task.taskId,
           stopped: killed,
-          modelImmediateResponse: mcpTaskDriveModule.parseAgentTaskMeta(Me._meta)?.modelImmediateResponse,
+          modelImmediateResponse: mcpTaskDriveModule.parseAgentTaskMeta(task._meta)?.modelImmediateResponse,
         }),
         ...(!killed &&
-          Kt !== undefined && {
+          agentMeta !== undefined && {
             _meta: {
-              [mcpTaskDriveModule.AGENT_TASK_META_KEY]: Kt,
+              [mcpTaskDriveModule.AGENT_TASK_META_KEY]: agentMeta,
             },
           }),
       };
     };
-    let et = async (Me) => {
-      logMCPDebug(serverName, `Tool '${tool}' returned task ${Me.taskId} (${Me.status}); polling inline`);
-      Vt(
+    let pollInline = async (task) => {
+      logMCPDebug(serverName, `Tool '${tool}' returned task ${task.taskId} (${task.status}); polling inline`);
+      reportProgress(
         "progress",
-        mcpTaskPersistenceModule.boundMcpStatusMessage(Me.statusMessage) ??
-          `Task ${shortTaskLabel(Me.taskId)} ${Me.status}`,
+        mcpTaskPersistenceModule.boundMcpStatusMessage(task.statusMessage) ??
+          `Task ${shortTaskLabel(task.taskId)} ${task.status}`,
         0,
       );
       let progress = 0;
-      let _t = await mcpTaskDriveModule.driveMcpTask({
-        errorText: (at) => describeConnectError(at, config),
-        task: Me,
+      let outcome = await mcpTaskDriveModule.driveMcpTask({
+        errorText: (errorText) => describeConnectError(errorText, config),
+        task,
         signal: abortController.signal,
-        log: (at) => logMCPDebug(serverName, at),
-        request: (method, params, jt) =>
+        log: (logLine) => logMCPDebug(serverName, logLine),
+        request: (method, params, options) =>
           sdkClient.request(
             {
               method,
@@ -9674,17 +10887,17 @@ async function callMCPTool({
             ResultSchema,
             {
               ...TASK_REQUEST_OPTIONS,
-              signal: jt.signal,
-              headers: jt.headers,
+              signal: options.signal,
+              headers: options.headers,
               timeout: TASK_REQUEST_TIMEOUT_MS,
             },
           ),
-        onStatus: (at) => {
+        onStatus: (status) => {
           progress += 1;
-          Vt(
+          reportProgress(
             "progress",
-            mcpTaskPersistenceModule.boundMcpStatusMessage(at.statusMessage) ??
-              `Task ${shortTaskLabel(at.taskId)} ${at.status.replace("_", " ")}`,
+            mcpTaskPersistenceModule.boundMcpStatusMessage(status.statusMessage) ??
+              `Task ${shortTaskLabel(status.taskId)} ${status.status.replace("_", " ")}`,
             progress,
           );
         },
@@ -9692,51 +10905,54 @@ async function callMCPTool({
           resolveTaskInputRequest({
             key,
             inputRequest,
-            task: Me,
+            task,
             connected: client,
             signal: abortController.signal,
             requestDialog,
             transportErrorState,
           }),
       });
-      if (_t.status === "completed") {
-        logMCPDebug(serverName, `Task ${Me.taskId} completed`);
-        return CompatibilityCallToolResultSchema.parse(_t.result);
+      if (outcome.status === "completed") {
+        logMCPDebug(serverName, `Task ${task.taskId} completed`);
+        return CompatibilityCallToolResultSchema.parse(outcome.result);
       }
-      let Mt = mcpTaskPersistenceModule.boundMcpStatusMessage(_t.error.message) ?? "";
-      logMCPDebug(serverName, `Task ${Me.taskId} ended without a result: ${_t.error.kind} \u2014 ${Mt}`);
+      let message = mcpTaskPersistenceModule.boundMcpStatusMessage(outcome.error.message) ?? "";
+      logMCPDebug(
+        serverName,
+        `Task ${task.taskId} ended without a result: ${outcome.error.kind} \u2014 ${message}`,
+      );
       if (signal.aborted) throw new AbortError();
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        `MCP server "${serverName}" task for tool "${tool}" ${_t.error.kind === "cancelled" || _t.error.kind === "input_unservable" ? "was cancelled" : "failed"}: ${Mt}`,
+        `MCP server "${serverName}" task for tool "${tool}" ${outcome.error.kind === "cancelled" || outcome.error.kind === "input_unservable" ? "was cancelled" : "failed"}: ${message}`,
         "MCP task did not complete",
       );
     };
     let abortController = new AbortController();
-    let we = () => abortController.abort();
-    signal.addEventListener("abort", we, {
+    let abortCall = () => abortController.abort();
+    signal.addEventListener("abort", abortCall, {
       once: true,
     });
-    let Ke = timing?.mark("external");
-    let He = await Promise.race([Fe(), promise_2, promise]).finally(() => {
-      signal.removeEventListener("abort", we);
-      we();
-      ct();
-      Ke?.();
+    let stopTiming = timing?.mark("external");
+    let callResult = await Promise.race([runCall(), promise_2, promise]).finally(() => {
+      signal.removeEventListener("abort", abortCall);
+      abortCall();
+      cleanupTimers();
+      stopTiming?.();
     });
     watchdog.returned?.();
-    if (L) {
+    if (placeholder) {
       noteHearthDegraded(serverName, undefined);
-      return L;
+      return placeholder;
     }
-    toolErrorResultText(He, serverName, redactErrorForLog);
-    let tt = Date.now() - now;
-    let gt =
-      tt < 1000
-        ? `${tt}ms`
-        : tt < 60000
-          ? `${Math.floor(tt / 1000)}s`
-          : `${Math.floor(tt / 60000)}m ${Math.floor((tt % 60000) / 1000)}s`;
-    logMCPDebug(serverName, `Tool '${tool}' completed successfully in ${gt}`);
+    toolErrorResultText(callResult, serverName, redactErrorForLog);
+    let elapsedMs = Date.now() - now;
+    let elapsedText =
+      elapsedMs < 1000
+        ? `${elapsedMs}ms`
+        : elapsedMs < 60000
+          ? `${Math.floor(elapsedMs / 1000)}s`
+          : `${Math.floor(elapsedMs / 60000)}m ${Math.floor((elapsedMs % 60000) / 1000)}s`;
+    logMCPDebug(serverName, `Tool '${tool}' completed successfully in ${elapsedText}`);
     let codeIndexingFromMcpServerName = detectCodeIndexingFromMcpServerName(serverName);
     if (codeIndexingFromMcpServerName)
       logEvent("tengu_code_indexing_tool_used", {
@@ -9745,7 +10961,7 @@ async function callMCPTool({
         success: true,
       });
     let content = await processMCPResult(
-      He,
+      callResult,
       tool,
       serverName,
       imageLimits,
@@ -9757,23 +10973,23 @@ async function callMCPTool({
     noteHearthDegraded(serverName, undefined);
     return {
       content,
-      _meta: He._meta,
-      structuredContent: He.structuredContent,
-      resourceLinks: anthropicResourceLinks(He.content),
+      _meta: callResult._meta,
+      structuredContent: callResult.structuredContent,
+      resourceLinks: anthropicResourceLinks(callResult.content),
     };
   } catch (error) {
     if (!signal.aborted) noteHearthDegraded(serverName, error);
     if (progressTimer !== undefined) clearInterval(progressTimer);
     clearTimeout(answerStreamTimer);
     transportErrorState?.activeCallWatchdogs.delete(watchdog);
-    let Te = Date.now() - now;
+    let failedAfterMs = Date.now() - now;
     if (signal?.aborted !== true && error instanceof Error && error.name !== "AbortError")
       logMCPDebug(
         serverName,
-        `Tool '${tool}' failed after ${Math.floor(Te / 1000)}s: ${redactErrorForLog !== undefined && error instanceof McpToolCallError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS ? redactErrorForLog(error.message) : withheldFileRef !== undefined ? withheldFileReferenceErrorForLog(withheldFileRef, error.message, error.name) : describeConnectError(error, config)}`,
+        `Tool '${tool}' failed after ${Math.floor(failedAfterMs / 1000)}s: ${redactErrorForLog !== undefined && error instanceof McpToolCallError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS ? redactErrorForLog(error.message) : withheldFileRef !== undefined ? withheldFileReferenceErrorForLog(withheldFileRef, error.message, error.name) : describeConnectError(error, config)}`,
       );
     if (error instanceof Error) {
-      let De =
+      let errorCode =
         error instanceof ProtocolError
           ? undefined
           : error instanceof SdkHttpError
@@ -9781,47 +10997,48 @@ async function callMCPTool({
             : "code" in error && typeof error.code === "number"
               ? error.code
               : undefined;
-      let Le =
+      let hasHelper =
         (config.type === "http" || config.type === "sse" || config.type === "ws") && !!config.headersHelper;
-      let re = hasCliOwnedBearer(config);
-      let ue =
+      let cliBearer = hasCliOwnedBearer(config);
+      let oauthCode =
         error instanceof OAuthError
           ? error.code
           : "errorCode" in error && typeof error.errorCode === "string"
             ? error.errorCode
             : undefined;
       let isOAuthShapedAuthError =
-        ue !== undefined &&
-        !["invalid_grant", "invalid_client", "unauthorized_client"].includes(ue) &&
+        oauthCode !== undefined &&
+        !["invalid_grant", "invalid_client", "unauthorized_client"].includes(oauthCode) &&
         /^HTTP 40[13]\b/.test(error.message);
       let pendingStepUpScope = getCliOwnedState().clientAuthProviders.get(
         clientOf(client_2),
       )?.pendingStepUpScope;
-      let ye = classifyToolCallAuthError({
-        errorCode: De,
+      let authKind = classifyToolCallAuthError({
+        errorCode,
         message: error.message,
         isUnauthorizedError: error instanceof UnauthorizedError_2,
         isOAuthShapedAuthError,
-        hasHeadersHelper: Le,
+        hasHeadersHelper: hasHelper,
         pendingStepUpScope,
       });
-      let be =
+      let reconnectConfig =
         (config.type === "http" || config.type === "sse") &&
         !config.headersHelper &&
         !configHasAuthorizationHeader(config)
           ? config
           : undefined;
-      let ct = !isAuthRetry && ye === "credential_rejected" && !Le && be !== undefined;
-      let $t = ct && (await hasStoredRefreshToken(serverName, be));
-      let Vt =
-        $t ||
-        (ct &&
+      let canReauth =
+        !isAuthRetry && authKind === "credential_rejected" && !hasHelper && reconnectConfig !== undefined;
+      let refreshTokenStored = canReauth && (await hasStoredRefreshToken(serverName, reconnectConfig));
+      let signedOutFallback =
+        refreshTokenStored ||
+        (canReauth &&
           isSignedOutFallbackEnabled() &&
           getCliOwnedState().clientAuthProviders.get(clientOf(client_2))?.lastAuthRejection?.status === 401 &&
           getCliOwnedState().clientAuthProviders.get(clientOf(client_2))?.lastAuthRejection?.accessToken !==
             undefined);
-      if ((Le || re || be !== undefined) && !isAuthRetry) {
-        let Oe = serverCacheKey(serverName, config);
+      if ((hasHelper || cliBearer || reconnectConfig !== undefined) && !isAuthRetry) {
+        let cacheKey = serverCacheKey(serverName, config);
         if (identityEpoch() !== startEpoch)
           throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
             `MCP tool call to server "${serverName}" was aborted: the account changed before re-authentication`,
@@ -9829,75 +11046,83 @@ async function callMCPTool({
           );
         let reauthInFlight = getConnectionCache().reauthInFlight;
         let cliOwnedState = getCliOwnedState();
-        let He = reauthInFlight.get(Oe);
-        let promise = He !== undefined && He.epoch === startEpoch ? He.promise : undefined;
+        let existing = reauthInFlight.get(cacheKey);
+        let promise = existing !== undefined && existing.epoch === startEpoch ? existing.promise : undefined;
         cliOwnedState.reauthDecisionSinkForTest?.(
-          promise !== undefined ? "joined" : He !== undefined ? "stale_refused" : "started",
+          promise !== undefined ? "joined" : existing !== undefined ? "stale_refused" : "started",
         );
-        let gt =
+        let collateral =
           promise !== undefined &&
           ((error instanceof SdkError && error.code === SdkErrorCode.ConnectionClosed) ||
             (error instanceof ProtocolError && error.code === -32000)) &&
           !isTruncatedBodyError(transportErrorState?.closeReason);
         if (
-          (gt || (ye === "credential_rejected" && Le) || (ye === "credential_rejected" && re) || Vt) &&
+          (collateral ||
+            (authKind === "credential_rejected" && hasHelper) ||
+            (authKind === "credential_rejected" && cliBearer) ||
+            signedOutFallback) &&
           !isMcpServerDisabled(serverName) &&
           !isMcpServerBlockedAtConnectTime(serverName, config)
         ) {
           logMCPDebug(
             serverName,
-            Le
-              ? `Tool '${tool}' returned ${De ?? 401}; re-running headersHelper and retrying once`
-              : re
-                ? `Tool '${tool}' returned ${De ?? 401}; session credential rejected \u2014 reconnecting and retrying once`
-                : gt
+            hasHelper
+              ? `Tool '${tool}' returned ${errorCode ?? 401}; re-running headersHelper and retrying once`
+              : cliBearer
+                ? `Tool '${tool}' returned ${errorCode ?? 401}; session credential rejected \u2014 reconnecting and retrying once`
+                : collateral
                   ? `Tool '${tool}' failed because a reconnect in progress closed its connection; retrying once on the new connection`
-                  : `Tool '${tool}' returned ${De ?? 401}; ${$t ? "refresh token stored" : "stored sign-in rejected, no refresh token"} \u2014 reconnecting and retrying once`,
+                  : `Tool '${tool}' returned ${errorCode ?? 401}; ${refreshTokenStored ? "refresh token stored" : "stored sign-in rejected, no refresh token"} \u2014 reconnecting and retrying once`,
           );
-          if (gt) logFeatureSad(Le ? "mcp_headers_helper" : "mcp_oauth_refresh", "collateral_rejoin");
+          if (collateral)
+            logFeatureSad(hasHelper ? "mcp_headers_helper" : "mcp_oauth_refresh", "collateral_rejoin");
           if (!promise) {
             logFeatureSad(
-              Le ? "mcp_headers_helper" : Vt && !$t ? "mcp_signed_out_fallback" : "mcp_oauth_refresh",
+              hasHelper
+                ? "mcp_headers_helper"
+                : signedOutFallback && !refreshTokenStored
+                  ? "mcp_signed_out_fallback"
+                  : "mcp_oauth_refresh",
               "reauth_retry",
             );
             sdkClient.onclose = undefined;
-            let Me = startEpoch;
+            let epoch = startEpoch;
             promise = (async () => {
               await clearServerCache(serverName, config);
               return connectToServer(serverName, config, undefined, undefined, credentials);
             })();
-            let Ye = {
+            let entry = {
               promise,
-              epoch: Me,
+              epoch,
             };
-            reauthInFlight.set(Oe, Ye);
+            reauthInFlight.set(cacheKey, entry);
             promise
-              .then((_t) => {
-                if (_t.type === "connected" && identityEpoch() === Me)
+              .then((reconnected) => {
+                if (reconnected.type === "connected" && identityEpoch() === epoch)
                   REAUTH_RECONNECT_SIGNAL.emit(serverName, config);
               })
               .finally(() => {
-                if (reauthInFlight.get(Oe) === Ye && !cliOwnedState.holdStaleReauthEntryForTest)
-                  reauthInFlight.delete(Oe);
+                if (reauthInFlight.get(cacheKey) === entry && !cliOwnedState.holdStaleReauthEntryForTest)
+                  reauthInFlight.delete(cacheKey);
               })
               .catch(() => {});
           }
-          let Ft = await promise;
+          let reconnected = await promise;
           if (identityEpoch() !== startEpoch) {
-            if (Ft.type === "connected") await detachAndCloseConnection(Ft);
+            if (reconnected.type === "connected") await detachAndCloseConnection(reconnected);
             throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
               `MCP tool call to server "${serverName}" was aborted: the account changed during re-authentication`,
               "MCP tool call aborted: account changed during reauth",
             );
           }
           if (
-            Ft.type === "connected" &&
+            reconnected.type === "connected" &&
             (isMcpServerDisabled(serverName) || isMcpServerBlockedAtConnectTime(serverName, config))
           )
             await clearServerCache(serverName, config);
-          else if (Ft.type === "connected")
+          else if (reconnected.type === "connected")
             return callMCPTool({
-              client: Ft,
+              client: reconnected,
               tool,
               args,
               meta,
@@ -9918,27 +11143,30 @@ async function callMCPTool({
               credentials,
               disallowTasks,
             });
-          logMCPDebug(serverName, `Auth reconnect returned '${Ft.type}'; falling through to needs-auth`);
-          if (isDiscoveryCacheOn() && Ft.type !== "needs-auth") {
-            let Me = connectToServer.cache?.get?.(Oe);
+          logMCPDebug(
+            serverName,
+            `Auth reconnect returned '${reconnected.type}'; falling through to needs-auth`,
+          );
+          if (isDiscoveryCacheOn() && reconnected.type !== "needs-auth") {
+            let cached = connectToServer.cache?.get?.(cacheKey);
             if (
-              Me !== undefined &&
-              (await clearMcpAuthCache(Me)) === Ft &&
-              connectToServer.cache?.get?.(Oe) === Me
+              cached !== undefined &&
+              (await clearMcpAuthCache(cached)) === reconnected &&
+              connectToServer.cache?.get?.(cacheKey) === cached
             )
-              getConnectionCache().connections.delete(Oe);
+              getConnectionCache().connections.delete(cacheKey);
           }
         }
       }
-      if (ye === "credential_rejected" && re) {
+      if (authKind === "credential_rejected" && cliBearer) {
         await clearServerCache(serverName, config);
         logMCPDebug(
           serverName,
-          `Tool '${tool}' rejected the session credential (${De ?? 401}); failing the call and clearing the connection for a fresh retry later`,
+          `Tool '${tool}' rejected the session credential (${errorCode ?? 401}); failing the call and clearing the connection for a fresh retry later`,
         );
         throw Object.assign(
           new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-            AUTH_MESSAGES.sessionCredentialRejected(serverName, De ?? 401),
+            AUTH_MESSAGES.sessionCredentialRejected(serverName, errorCode ?? 401),
             "MCP server rejected the session credential",
           ),
           {
@@ -9946,35 +11174,44 @@ async function callMCPTool({
           },
         );
       }
-      if (ye !== undefined) {
-        let Oe = config.type === "claudeai-proxy" && config.eligible === false;
-        let authErrorKind = Oe ? "not_connected" : ye === "step_up" ? "insufficient_scope" : "token_expired";
+      if (authKind !== undefined) {
+        let notConnected = config.type === "claudeai-proxy" && config.eligible === false;
+        let authErrorKind = notConnected
+          ? "not_connected"
+          : authKind === "step_up"
+            ? "insufficient_scope"
+            : "token_expired";
         logMCPDebug(
           serverName,
           authErrorKind === "insufficient_scope"
             ? `Tool call returned 403 insufficient_scope (scope: ${redactSensitiveUrlParams("scope", pendingStepUpScope ?? "")})`
             : "Tool call returned 401 Unauthorized - token may have expired",
         );
-        let Ke = mcpBaseUrlAnalytics_2(config, serverName);
-        let He = isMcpServerLoggableInAnalytics(serverName, config);
+        let analytics = mcpBaseUrlAnalytics_2(config, serverName);
+        let loggable = isMcpServerLoggableInAnalytics(serverName, config);
         logEvent("tengu_mcp_tool_call_auth_error", {
-          errorCode: fromNumber(De ?? (ye === "step_up" ? 403 : 401)),
+          errorCode: fromNumber(errorCode ?? (authKind === "step_up" ? 403 : 401)),
           transportType: fromEnum(config.type ?? "stdio"),
           authErrorKind: fromEnum(authErrorKind),
-          ...Ke,
-          mcpServerName: mcpNameForAnalytics_GATE_EVALUATED(normalizeNameForMCP(serverName), He),
-          mcpToolName: loggableMcpToolName(normalizeNameForMCP(serverName), normalizeNameForMCP(tool), He),
+          ...analytics,
+          mcpServerName: mcpNameForAnalytics_GATE_EVALUATED(normalizeNameForMCP(serverName), loggable),
+          mcpToolName: loggableMcpToolName(
+            normalizeNameForMCP(serverName),
+            normalizeNameForMCP(tool),
+            loggable,
+          ),
         });
-        let tt = (config.type === "http" || config.type === "sse") && configHasAuthorizationHeader(config);
+        let headerRejected =
+          (config.type === "http" || config.type === "sse") && configHasAuthorizationHeader(config);
         throw new McpAuthError(
           serverName,
-          Oe
+          notConnected
             ? AUTH_MESSAGES.notConnected(serverName)
             : authErrorKind === "insufficient_scope"
               ? AUTH_MESSAGES.stepUp(serverName, pendingStepUpScope)
-              : Le
+              : hasHelper
                 ? AUTH_MESSAGES.helperRejected(serverName)
-                : tt
+                : headerRejected
                   ? AUTH_MESSAGES.headerRejected(serverName)
                   : AUTH_MESSAGES.signInAgain(serverName),
           authErrorKind,
@@ -9982,8 +11219,9 @@ async function callMCPTool({
           authErrorKind === "insufficient_scope" ? pendingStepUpScope : undefined,
         );
       }
-      let L = !(config.type === "http" && De === 404 && Qe) && isMcpSessionExpiredError(error);
-      let mt =
+      let sessionExpired =
+        !(config.type === "http" && errorCode === 404 && freshTransport) && isMcpSessionExpiredError(error);
+      let connectionClosed =
         ((error instanceof SdkError && error.code === SdkErrorCode.ConnectionClosed) ||
           (error instanceof ProtocolError &&
             error.code === -32000 &&
@@ -9994,12 +11232,12 @@ async function callMCPTool({
           kind: "too_large",
           capBytes: MCP_BODY_LIMIT,
         });
-      if (mt && isTruncatedBodyError(transportErrorState?.closeReason))
+      if (connectionClosed && isTruncatedBodyError(transportErrorState?.closeReason))
         throw new McpToolResultNotReadError(serverName, tool, {
           kind: "connection_closed",
         });
-      let et = [...sentRequests.values()];
-      if (mt && et.length > 0) {
+      let states = [...sentRequests.values()];
+      if (connectionClosed && states.length > 0) {
         logMCPDebug(
           serverName,
           `Tool '${tool}' not sent again: the connection closed before the call was answered`,
@@ -10016,15 +11254,15 @@ async function callMCPTool({
         );
       }
       if (
-        et.includes("sent") &&
-        !L &&
-        (De === undefined || error.name === "TimeoutError"
+        states.includes("sent") &&
+        !sessionExpired &&
+        (errorCode === undefined || error.name === "TimeoutError"
           ? !(
               error instanceof SdkError ||
               error instanceof ProtocolError ||
               error instanceof TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
             )
-          : RETRYABLE_HTTP_STATUSES.has(De))
+          : RETRYABLE_HTTP_STATUSES.has(errorCode))
       ) {
         logMCPDebug(
           serverName,
@@ -10041,41 +11279,49 @@ async function callMCPTool({
           },
         );
       }
-      if (L || mt) {
+      if (sessionExpired || connectionClosed) {
         logMCPDebug(
           serverName,
-          `MCP session expired during tool call (${L ? "stale session" : "connection closed"}), clearing connection cache for re-initialization`,
+          `MCP session expired during tool call (${sessionExpired ? "stale session" : "connection closed"}), clearing connection cache for re-initialization`,
         );
-        let Oe = mcpBaseUrlAnalytics_2(config, serverName);
-        let we = isMcpServerLoggableInAnalytics(serverName, config);
-        let mcpToolName = loggableMcpToolName(normalizeNameForMCP(serverName), normalizeNameForMCP(tool), we);
+        let analytics = mcpBaseUrlAnalytics_2(config, serverName);
+        let loggable = isMcpServerLoggableInAnalytics(serverName, config);
+        let mcpToolName = loggableMcpToolName(
+          normalizeNameForMCP(serverName),
+          normalizeNameForMCP(tool),
+          loggable,
+        );
         logEvent("tengu_mcp_session_expired", {
-          errorCode: De !== undefined ? fromNumber(De) : undefined,
+          errorCode: errorCode !== undefined ? fromNumber(errorCode) : undefined,
           transportType: fromEnum(config.type ?? "stdio"),
-          ...Oe,
-          mcpServerName: mcpNameForAnalytics_GATE_EVALUATED(normalizeNameForMCP(serverName), we),
+          ...analytics,
+          mcpServerName: mcpNameForAnalytics_GATE_EVALUATED(normalizeNameForMCP(serverName), loggable),
           mcpToolName,
         });
         await clearServerCache(serverName, config);
-        let He = didCallRunNothing(transportErrorState?.toolCallSends, started, watchdog.ownSends);
+        let callerRanNothing = didCallRunNothing(
+          transportErrorState?.toolCallSends,
+          started,
+          watchdog.ownSends,
+        );
         throw new McpSessionExpiredError(
           serverName,
-          L
+          sessionExpired
             ? "session_expired_404"
             : isMalformedAfterAuthChallenge(transportErrorState?.closeReason) ||
-                (transportErrorState?.closeReason === "session expired" && He)
+                (transportErrorState?.closeReason === "session expired" && callerRanNothing)
               ? "connection_closed_call_refused"
-              : ranNothing || (!isAuthRetry && He)
+              : ranNothing || (!isAuthRetry && callerRanNothing)
                 ? "connection_closed_call_not_run"
                 : "connection_closed_http",
         );
       }
     }
-    let Ve = error;
+    let original = error;
     if (
       (error instanceof SdkError && error.code === SdkErrorCode.InvalidResult) ||
       error instanceof ZodError ||
-      ((Ve?.name === "ZodError" || Ve?.name === "$ZodError") && Array.isArray(Ve?.issues))
+      ((original?.name === "ZodError" || original?.name === "$ZodError") && Array.isArray(original?.issues))
     )
       throw new McpResponseSchemaError(serverName, error);
     if (
@@ -10094,9 +11340,9 @@ async function callMCPTool({
   }
 }
 //@ chunk-8t8n4kdh.js:202078-202174 layout = countToolCallsSince (1)
-function getFirstToolUseId(e) {
-  if (e.message.content[0]?.type !== "tool_use") return;
-  return e.message.content[0].id;
+function getFirstToolUseId(message) {
+  if (message.message.content[0]?.type !== "tool_use") return;
+  return message.message.content[0].id;
 }
 //@ chunk-8t8n4kdh.js:202174-203150 layout
 /**
@@ -10104,10 +11350,10 @@ function getFirstToolUseId(e) {
  */
 function validateHostManifest(serverName, manifest) {
   if (manifest === undefined) return;
-  let r = InitializeResultSchema.safeParse(manifest.initializeResult);
+  let parseResult = InitializeResultSchema.safeParse(manifest.initializeResult);
   if (
-    !r.success ||
-    !SUPPORTED_PROTOCOL_VERSIONS_2.includes(r.data.protocolVersion) ||
+    !parseResult.success ||
+    !SUPPORTED_PROTOCOL_VERSIONS_2.includes(parseResult.data.protocolVersion) ||
     !isJsonRpcResult(manifest.initializeResult)
   ) {
     logMCPDebug(
@@ -10146,7 +11392,7 @@ function validateHostManifest(serverName, manifest) {
  * 校验对象是否是合法的 JSON-RPC 结果。
  */
 function isJsonRpcResult(result) {
-  return fZe.safeParse({
+  return JSONRPCMessageSchema.safeParse({
     jsonrpc: "2.0",
     id: 0,
     result,
@@ -10156,13 +11402,13 @@ function isJsonRpcResult(result) {
 /**
  * 记录 SDK 宿主 MCP 清单的结果：重放成功或失败，以及协议版本不符、声明了客户端能力、结果格式不对等情况。
  */
-function logManifestOutcome(manifestOutcome, n) {
+function logManifestOutcome(manifestOutcome, ok) {
   switch (manifestOutcome) {
     case "none":
     case "pending":
       return;
     case "replayed":
-      if (n) logFeatureOk("mcp_sdk_manifest");
+      if (ok) logFeatureOk("mcp_sdk_manifest");
       else logFeatureBad("mcp_sdk_manifest", "mcp_sdk_manifest_replay_failed");
       return;
     case "protocol_version_mismatch":
@@ -10184,7 +11430,7 @@ async function setupSdkMcpClients(servers, sendControlRequest, manifests, toolCo
   primeEnsureConnected();
   let settled = await Promise.allSettled(
     Object.entries(servers).map(async ([key, value]) => {
-      let R = new SdkControlClientTransport(
+      let transport = new SdkControlClientTransport(
         key,
         sendControlRequest,
         validateHostManifest(key, manifests?.get(key)),
@@ -10193,11 +11439,11 @@ async function setupSdkMcpClients(servers, sendControlRequest, manifests, toolCo
         {
           name: key,
         },
-        R,
+        transport,
       );
-      let ce = new Client_2(
+      let client = new Client_2(
         {
-          ...A_t,
+          ...CLAUDE_CODE_SERVER_INFO,
           version:
             {
               ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
@@ -10212,69 +11458,69 @@ async function setupSdkMcpClients(servers, sendControlRequest, manifests, toolCo
             }.VERSION ?? "unknown",
         },
         {
-          capabilities: T_t,
+          capabilities: EMPTY_CAPABILITIES,
           jsonSchemaValidator: isDisklessContext()
             ? NO_OP_SCHEMA_VALIDATOR
             : new LegacyDialectToleratingValidator(),
           versionNegotiation: resolveVersionNegotiation("sdk-control"),
         },
       );
-      let Q = false;
+      let timedOut = false;
       try {
-        let ie = ce.connect(R, {
+        let connectPromise = client.connect(transport, {
           timeout: getConnectionTimeoutMs(),
         });
         if (
           !(await withDeadline(
-            ie.then(() => true),
+            connectPromise.then(() => true),
             getConnectionTimeoutMs(),
           ))
         ) {
-          ie.catch(() => {});
-          R.close().catch(() => {});
-          Q = true;
+          connectPromise.catch(() => {});
+          transport.close().catch(() => {});
+          timedOut = true;
           throw makeConnectTimeoutError_2(
             `SDK MCP server "${key}" connection timed out after ${getConnectionTimeoutMs()}ms`,
           );
         }
-        let serverCapabilities = ce.getServerCapabilities();
-        let instructions = ce.getInstructions();
+        let serverCapabilities = client.getServerCapabilities();
+        let instructions = client.getInstructions();
         let instructions_2 = truncateServerInstructions(instructions, key);
-        let ke = {
+        let connection = {
           type: "connected",
-          serverInfo: ce.getServerVersion(),
+          serverInfo: client.getServerVersion(),
           name: key,
           capabilities: serverCapabilities || {},
           instructions: instructions_2,
-          negotiatedProtocolVersion: ce.getNegotiatedProtocolVersion(),
-          protocolEra: ce.getProtocolEra(),
-          client: clientServerId(ce),
+          negotiatedProtocolVersion: client.getNegotiatedProtocolVersion(),
+          protocolEra: client.getProtocolEra(),
+          client: clientServerId(client),
           config: {
             ...value,
             scope: "dynamic",
           },
           cleanup: async () => {
-            await ce.close();
+            await client.close();
           },
         };
-        let nt = serverCacheKey(ke.name, ke.config);
-        getConnectionCache().toolLists.delete(nt);
-        let ee = [];
+        let cacheKey = serverCacheKey(connection.name, connection.config);
+        getConnectionCache().toolLists.delete(cacheKey);
+        let tools = [];
         if (serverCapabilities?.tools) {
-          let toolsForClient = await fetchToolsForClient(ke, toolContext);
-          ee.push(...toolsForClient);
+          let toolsForClient = await fetchToolsForClient(connection, toolContext);
+          tools.push(...toolsForClient);
         }
         let commands = [];
         logFeatureOk("mcp_sdk_connect");
-        logManifestOutcome(R.manifestOutcome, true);
+        logManifestOutcome(transport.manifestOutcome, true);
         return {
-          client: ke,
-          tools: ee,
+          client: connection,
+          tools,
           commands,
         };
       } catch (error) {
-        logFeatureBad("mcp_sdk_connect", Q ? "mcp_sdk_connect_timeout" : "mcp_sdk_connect_failed");
-        logManifestOutcome(R.manifestOutcome, false);
+        logFeatureBad("mcp_sdk_connect", timedOut ? "mcp_sdk_connect_timeout" : "mcp_sdk_connect_failed");
+        logManifestOutcome(transport.manifestOutcome, false);
         logMCPError(key, `Failed to connect SDK MCP server: ${error}`);
         return {
           client: {
@@ -10291,16 +11537,16 @@ async function setupSdkMcpClients(servers, sendControlRequest, manifests, toolCo
       }
     }),
   );
-  for (let M of settled)
-    if (M.status === "fulfilled") {
-      clients.push(M.value.client);
-      tools.push(...M.value.tools);
-      commands.push(...M.value.commands);
+  for (let outcome of settled)
+    if (outcome.status === "fulfilled") {
+      clients.push(outcome.value.client);
+      tools.push(...outcome.value.tools);
+      commands.push(...outcome.value.commands);
     }
   if (clients.some((client) => client.type === "connected" && !!client.capabilities?.resources)) {
     if (
-      ![ListMcpResourcesTool, ReadMcpResourceTool].some((j) =>
-        tools.some((tool) => toolMatchesName(tool, j.name)),
+      ![ListMcpResourcesTool, ReadMcpResourceTool].some((resourceTool) =>
+        tools.some((tool) => toolMatchesName(tool, resourceTool.name)),
       )
     )
       tools.push(ListMcpResourcesTool, ReadMcpResourceTool, listDirectoryResourceTool);
@@ -10315,14 +11561,14 @@ async function setupSdkMcpClients(servers, sendControlRequest, manifests, toolCo
 /**
  * clearServerCache：断开并清除某服务器的连接与所有记忆化列表缓存。
  */
-async function clearServerCache_3(e) {
+async function clearServerCache_3(clients) {
   await Promise.all(
-    e.map(async (n) => {
-      if (n.type !== "connected") return;
+    clients.map(async (client) => {
+      if (client.type !== "connected") return;
       try {
-        await n.cleanup();
+        await client.cleanup();
       } catch (error) {
-        logForDebugging(`MCP client cleanup failed for ${n.name}: ${error}`, {
+        logForDebugging(`MCP client cleanup failed for ${client.name}: ${error}`, {
           level: "error",
         });
       }
@@ -10348,33 +11594,39 @@ function isMcpSessionExpiredError_2(error) {
 /**
  * 截断服务器 instructions（超过上限按描述截断规则处理，标注 `Server instructions`）；空值原样返回。（v1）
  */
-function truncateServerInstructions_2(e, r, n = maxDescriptionLength()) {
-  if (!e) return e;
-  return truncateDescription_2(e, "Server instructions", r, n);
+function truncateServerInstructions_2(instructions, serverName, maxLength = maxDescriptionLength()) {
+  if (!instructions) return instructions;
+  return truncateDescription_2(instructions, "Server instructions", serverName, maxLength);
 }
 //@ chunk-z1n5m6nf.js:41937-42091 layout
-function truncateDescription_2(e, r, serverName, s = maxDescriptionLength()) {
-  if (e.length <= s) return e;
-  if (serverName !== undefined) logMCPDebug(serverName, `${r} truncated from ${e.length} to ${s} chars`);
-  return truncateToLength(e, s) + "\u2026 [truncated]";
+function truncateDescription_2(description, label, serverName, maxLength = maxDescriptionLength()) {
+  if (description.length <= maxLength) return description;
+  if (serverName !== undefined)
+    logMCPDebug(serverName, `${label} truncated from ${description.length} to ${maxLength} chars`);
+  return truncateToLength(description, maxLength) + "\u2026 [truncated]";
 }
 //@ chunk-z1n5m6nf.js:42091-42269 layout
 /**
  * 匹配 HTTP 状态错误的正则（旧客户端副本）。
  */
-var TRANSIENT_NETWORK_ERROR_CODES_2 = ["ECONNRESET", "ETIMEDOUT", "EPIPE", "EHOSTUNREACH", "ECONNREFUSED"];
-var TRANSIENT_ERROR_CODES_V1 = new Set([
-  ...TRANSIENT_NETWORK_ERROR_CODES_2,
-  "ConnectionRefused",
-  "ConnectionClosed",
-]);
-var POST_HTTP_STATUS_RE_V1 = /^Error POSTing to endpoint \(HTTP (\d+)\)/;
+var TRANSIENT_NETWORK_ERROR_CODES_2; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var TRANSIENT_ERROR_CODES_V1;
+var POST_HTTP_STATUS_RE_V1;
+deferInit("chunk-z1n5m6nf.js:42091", () => {
+  TRANSIENT_NETWORK_ERROR_CODES_2 = ["ECONNRESET", "ETIMEDOUT", "EPIPE", "EHOSTUNREACH", "ECONNREFUSED"];
+  TRANSIENT_ERROR_CODES_V1 = new Set([
+    ...TRANSIENT_NETWORK_ERROR_CODES_2,
+    "ConnectionRefused",
+    "ConnectionClosed",
+  ]);
+  POST_HTTP_STATUS_RE_V1 = /^Error POSTing to endpoint \(HTTP (\d+)\)/;
+});
 //@ chunk-z1n5m6nf.js:42269-42327 layout
 /**
  * 判断数值是否为合法 HTTP 状态码（旧副本）。
  */
-function isValidHttpStatusV1(e) {
-  return typeof e === "number" && e >= 100 && e <= 599;
+function isValidHttpStatusV1(status) {
+  return typeof status === "number" && status >= 100 && status <= 599;
 }
 //@ chunk-z1n5m6nf.js:42327-42781 layout
 /**
@@ -10384,18 +11636,18 @@ function isTransientMcpError_2(msg) {
   if (msg.name === "AbortError") return true;
   let code = "code" in msg ? msg.code : undefined;
   let status = "status" in msg ? msg.status : undefined;
-  let s = POST_HTTP_STATUS_RE_V1.exec(msg.message)?.[1];
+  let statusFromMessage = POST_HTTP_STATUS_RE_V1.exec(msg.message)?.[1];
   if (
     isValidHttpStatusV1(status) ||
     isValidHttpStatusV1(code) ||
     (typeof code === "number" && code < 0) ||
-    (s !== undefined && isValidHttpStatusV1(Number(s)))
+    (statusFromMessage !== undefined && isValidHttpStatusV1(Number(statusFromMessage)))
   )
     return false;
   if (typeof code === "string" && TRANSIENT_ERROR_CODES_V1.has(code)) return true;
   let message = msg.message;
   return (
-    TRANSIENT_NETWORK_ERROR_CODES_2.some((y) => message.includes(y)) ||
+    TRANSIENT_NETWORK_ERROR_CODES_2.some((fragment) => message.includes(fragment)) ||
     message.includes("Body Timeout Error") ||
     /\bterminated\b/.test(message) ||
     message.includes("SSE stream disconnected") ||
@@ -10437,115 +11689,123 @@ function isRetryableListErrorV1(error) {
   return true;
 }
 //@ chunk-z1n5m6nf.js:43219-43929 layout
-async function listAllPages(e, name, config, s, h, y) {
-  let S = false;
+async function listAllPages(connection, name, config, method, requestOptions, extractItems) {
+  let hasLoggedError = false;
   for (let j = 0; ; j++) {
-    let M = [];
-    let w = new Set();
-    let R;
+    let items = [];
+    let seenCursors = new Set();
+    let cursor;
     let pageCount = 0;
-    let Q;
+    let stopReason;
     try {
       do {
-        let H = await e.request(
+        let page = await connection.request(
           {
-            method: s,
-            ...(R && {
+            method,
+            ...(cursor && {
               params: {
-                cursor: R,
+                cursor,
               },
             }),
           },
-          h,
+          requestOptions,
           {
             timeout: getConnectionTimeoutMs(),
           },
         );
         pageCount++;
-        let U = y(H);
-        if (U) M.push(...U);
-        if (R) w.add(R);
-        R = H.nextCursor;
-        if (R && w.has(R)) {
-          Q = "repeated_cursor";
+        let pageItems = extractItems(page);
+        if (pageItems) items.push(...pageItems);
+        if (cursor) seenCursors.add(cursor);
+        cursor = page.nextCursor;
+        if (cursor && seenCursors.has(cursor)) {
+          stopReason = "repeated_cursor";
           break;
         }
-        if (R && pageCount >= MAX_LIST_PAGES_V1) {
-          Q = "capped";
+        if (cursor && pageCount >= MAX_LIST_PAGES_V1) {
+          stopReason = "capped";
           break;
         }
-      } while (R);
-      if (Q === "repeated_cursor")
+      } while (cursor);
+      if (stopReason === "repeated_cursor")
         logMCPDebug(
           name,
-          `${s} returned a nextCursor already sent in this walk (page ${pageCount}); stopping`,
+          `${method} returned a nextCursor already sent in this walk (page ${pageCount}); stopping`,
         );
-      if (Q === "capped")
-        logMCPDebug(name, `${s} still returning nextCursor after ${MAX_LIST_PAGES_V1} pages; stopping`);
-      if (pageCount > 1) logListPagination(s, pageCount, M.length, Q ?? "complete");
-      return M;
+      if (stopReason === "capped")
+        logMCPDebug(name, `${method} still returning nextCursor after ${MAX_LIST_PAGES_V1} pages; stopping`);
+      if (pageCount > 1) logListPagination(method, pageCount, items.length, stopReason ?? "complete");
+      return items;
     } catch (error) {
-      if (pageCount > 0 && !S) {
-        S = true;
-        logListPagination(s, pageCount, M.length, "error");
+      if (pageCount > 0 && !hasLoggedError) {
+        hasLoggedError = true;
+        logListPagination(method, pageCount, items.length, "error");
       }
-      let U = LIST_PAGE_DELAYS_MS_V1[j];
-      if (U === undefined || !isRetryableListErrorV1(error)) throw error;
-      logMCPDebug(name, `${s} failed (${describeConnectError(error, config)}); retrying in ${U}ms`);
-      await sleep(U);
+      let retryDelayMs = LIST_PAGE_DELAYS_MS_V1[j];
+      if (retryDelayMs === undefined || !isRetryableListErrorV1(error)) throw error;
+      logMCPDebug(
+        name,
+        `${method} failed (${describeConnectError(error, config)}); retrying in ${retryDelayMs}ms`,
+      );
+      await sleep(retryDelayMs);
     }
   }
 }
 //@ chunk-z1n5m6nf.js:43929-44031 layout
-function logListPagination(e, pageCount, itemCount, s) {
+function logListPagination(method, pageCount, itemCount, outcome) {
   logEvent("tengu_mcp_list_paginated", {
-    method: fromEnum(e),
+    method: fromEnum(method),
     pageCount,
     itemCount,
-    outcome: fromEnum(s),
+    outcome: fromEnum(outcome),
   });
 }
 //@ chunk-z1n5m6nf.js:44031-44169 layout = getMcpToolTimeoutMs (1)
 /**
  * MCP 工具调用总超时（v1 副本）：配置 timeout ≥1000 优先，其次 MCP_TOOL_TIMEOUT，再默认值，夹在 1000ms 与上限之间。
  */
-function getMcpToolTimeoutMs_3(e) {
-  let n =
-    (e?.timeout !== undefined && e.timeout >= 1000 ? e.timeout : undefined) ??
+function getMcpToolTimeoutMs_3(config) {
+  let timeoutMs =
+    (config?.timeout !== undefined && config.timeout >= 1000 ? config.timeout : undefined) ??
     env.MCP_TOOL_TIMEOUT ??
     DEFAULT_TOOL_TIMEOUT_MS_V1;
-  return Math.min(Math.max(n, 1000), MAX_TIMER_DELAY_MS);
+  return Math.min(Math.max(timeoutMs, 1000), MAX_TIMER_DELAY_MS);
 }
 //@ chunk-z1n5m6nf.js:44169-44233 layout
-var REMOTE_TOOL_IDLE_TIMEOUT_MS_2 = 300000;
-var STDIO_TOOL_IDLE_TIMEOUT_MS_2 = 1800000;
-var NO_IDLE_TIMEOUT_TRANSPORTS_2 = new Set(["sse-ide", "ws-ide", "sdk"]);
+var REMOTE_TOOL_IDLE_TIMEOUT_MS_2; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var STDIO_TOOL_IDLE_TIMEOUT_MS_2;
+var NO_IDLE_TIMEOUT_TRANSPORTS_2;
+deferInit("chunk-z1n5m6nf.js:44169", () => {
+  REMOTE_TOOL_IDLE_TIMEOUT_MS_2 = 300000;
+  STDIO_TOOL_IDLE_TIMEOUT_MS_2 = 1800000;
+  NO_IDLE_TIMEOUT_TRANSPORTS_2 = new Set(["sse-ide", "ws-ide", "sdk"]);
+});
 //@ chunk-z1n5m6nf.js:44233-44470 layout
 /**
  * getMcpToolIdleTimeoutMs（v1 副本）。
  */
 function getMcpToolIdleTimeoutMs_2(config) {
-  let r = config?.type ?? "stdio";
-  if (NO_IDLE_TIMEOUT_TRANSPORTS_2.has(r)) return 0;
-  let n =
+  let transportType = config?.type ?? "stdio";
+  if (NO_IDLE_TIMEOUT_TRANSPORTS_2.has(transportType)) return 0;
+  let idleTimeoutMs =
     env.CLAUDE_CODE_MCP_TOOL_IDLE_TIMEOUT ??
-    (r === "stdio" ? STDIO_TOOL_IDLE_TIMEOUT_MS_2 : REMOTE_TOOL_IDLE_TIMEOUT_MS_2);
-  if (n <= 0) return 0;
+    (transportType === "stdio" ? STDIO_TOOL_IDLE_TIMEOUT_MS_2 : REMOTE_TOOL_IDLE_TIMEOUT_MS_2);
+  if (idleTimeoutMs <= 0) return 0;
   let timeout = config?.timeout !== undefined && config.timeout >= 1000 ? config.timeout : 0;
-  return Math.min(Math.max(n, timeout, 1000), getMcpToolTimeoutMs_3(config));
+  return Math.min(Math.max(idleTimeoutMs, timeout, 1000), getMcpToolTimeoutMs_3(config));
 }
 //@ chunk-z1n5m6nf.js:44470-44512 layout
 /**
  * 懒加载 needs-auth 缓存模块（旧副本）。
  */
-var needsAuthCacheModuleV1 = () => require("./chunk-3k33hyyp.js");
+var needsAuthCacheModuleV1 = () => require("../../utils/claudeInChrome/toolRendering.js");
 //@ chunk-z1n5m6nf.js:44512-44678 layout
 /**
  * needs-auth 缓存常量与懒加载模块（v1 副本）：TTL 15 分钟 / 4 小时 / 90 秒、时钟偏差 1 分钟。
  */
-var artifactPermissionRulesModuleV1 = () => require("./chunk-p5cstt88.js");
-var artifactsMcpLaptopModuleV1 = () => require("./chunk-d5fbj7hf.js");
-var claudeDocsWakeModuleV1 = () => require("./chunk-t6p2wq66.js");
+var artifactPermissionRulesModuleV1 = () => require("../../tools/ArtifactTool/COUNTERPARTS.lazy.js");
+var artifactsMcpLaptopModuleV1 = () => require("../artifacts/artifactsMcpLaptop.js");
+var claudeDocsWakeModuleV1 = () => require("../../tools/ArtifactTool/docsCreateWake.js");
 var AUTH_CACHE_VERSION_2 = "v1";
 var NEEDS_AUTH_CACHE_TTL_MS_2 = 900000;
 var NEEDS_AUTH_CACHE_LONG_TTL_MS_2 = 14400000;
@@ -10555,52 +11815,64 @@ var AUTH_CACHE_CLOCK_SKEW_MS_2 = 60000;
 /**
  * isMcpAuthCached（v1 副本）。
  */
-async function isMcpAuthCached_2(e, r, n) {
-  let h = (await readNeedsAuthCache(n))[e];
-  if (!h) return false;
-  if (r.type === "claudeai-proxy" && h.id !== r.id) return false;
-  if ((r.type === "stdio" || r.type === undefined) && r.pluginSource === undefined) return false;
-  if ((r.type === "stdio" || r.type === undefined) && r.pluginSource !== undefined && h.id !== configHash(r))
+async function isMcpAuthCached_2(serverName, config, storage) {
+  let cacheEntry = (await readNeedsAuthCache(storage))[serverName];
+  if (!cacheEntry) return false;
+  if (config.type === "claudeai-proxy" && cacheEntry.id !== config.id) return false;
+  if ((config.type === "stdio" || config.type === undefined) && config.pluginSource === undefined)
     return false;
-  if ((r.type === "http" || r.type === "sse") && r.pluginSource !== undefined && h.id !== undefined)
+  if (
+    (config.type === "stdio" || config.type === undefined) &&
+    config.pluginSource !== undefined &&
+    cacheEntry.id !== configHash(config)
+  )
     return false;
-  let y =
-    r.type === "claudeai-proxy" ||
-    (r.pluginSource !== undefined && (r.type === "http" || r.type === "sse") && !usesNonOAuthAuth(r));
-  let S = h.ttlMs ?? (y ? NEEDS_AUTH_CACHE_LONG_TTL_MS_2 : NEEDS_AUTH_CACHE_TTL_MS_2);
-  let T = Date.now() - h.timestamp;
-  return T > -AUTH_CACHE_CLOCK_SKEW_MS_2 && T < S;
+  if (
+    (config.type === "http" || config.type === "sse") &&
+    config.pluginSource !== undefined &&
+    cacheEntry.id !== undefined
+  )
+    return false;
+  let usesLongTtl =
+    config.type === "claudeai-proxy" ||
+    (config.pluginSource !== undefined &&
+      (config.type === "http" || config.type === "sse") &&
+      !usesNonOAuthAuth(config));
+  let ttlMs = cacheEntry.ttlMs ?? (usesLongTtl ? NEEDS_AUTH_CACHE_LONG_TTL_MS_2 : NEEDS_AUTH_CACHE_TTL_MS_2);
+  let ageMs = Date.now() - cacheEntry.timestamp;
+  return ageMs > -AUTH_CACHE_CLOCK_SKEW_MS_2 && ageMs < ttlMs;
 }
 //@ chunk-z1n5m6nf.js:45203-45377 layout
-async function writeAuthCacheV5_2(e, r) {
-  let n = await e.write(needsAuthCacheSpace(), jsonStringify(r), {
+async function writeAuthCacheV5_2(storage, cache) {
+  let writeResult = await storage.write(needsAuthCacheSpace(), jsonStringify(cache), {
     publishDiscipline: "inPlace",
   });
-  if (!n.ok) logMCPDebug("auth-cache", `needs-auth cache v5 write failed: ${formatStorageError(n.error)}`);
-  return n.ok;
+  if (!writeResult.ok)
+    logMCPDebug("auth-cache", `needs-auth cache v5 write failed: ${formatStorageError(writeResult.error)}`);
+  return writeResult.ok;
 }
 //@ chunk-z1n5m6nf.js:45377-45687 file-local
-function isMcpAuthCached_3(serverId, r, n, s) {
+function isMcpAuthCached_3(serverId, id, ttlMs, storage) {
   let cliOwnedState = getCliOwnedState();
   cliOwnedState.authCacheWriteChain = cliOwnedState.authCacheWriteChain
     .then(async () => {
-      let cache = await readNeedsAuthCache(s);
+      let cache = await readNeedsAuthCache(storage);
       cache[serverId] = {
         timestamp: Date.now(),
-        ...(r && {
-          id: r,
+        ...(id && {
+          id,
         }),
-        ...(n !== undefined && {
-          ttlMs: n,
+        ...(ttlMs !== undefined && {
+          ttlMs,
         }),
       };
-      if (isStorageV5Enabled() && s !== undefined) {
-        if (!(await writeAuthCacheV5_2(s, cache))) return;
+      if (isStorageV5Enabled() && storage !== undefined) {
+        if (!(await writeAuthCacheV5_2(storage, cache))) return;
       } else {
         let fileReader = getFileReader();
-        let T = needsAuthCachePath();
-        await fileReader.mkdir(dirname(T));
-        await fileReader.write(T, jsonStringify(cache));
+        let cachePath = needsAuthCachePath();
+        await fileReader.mkdir(dirname(cachePath));
+        await fileReader.write(cachePath, jsonStringify(cache));
       }
       clearAuthCacheRead();
     })
@@ -10610,61 +11882,61 @@ function isMcpAuthCached_3(serverId, r, n, s) {
 /**
  * clearMcpAuthCacheEntry（v1 副本）。
  */
-function clearMcpAuthCacheEntry_2(e, r) {
+function clearMcpAuthCacheEntry_2(serverName, storage) {
   let cliOwnedState = getCliOwnedState();
-  let s = cliOwnedState.authCacheWriteChain
+  let writePromise = cliOwnedState.authCacheWriteChain
     .then(async () => {
-      let needsAuthCache = await readNeedsAuthCache(r);
-      if (!(e in needsAuthCache)) return;
-      delete needsAuthCache[e];
-      if (isStorageV5Enabled() && r !== undefined) {
-        if (!(await writeAuthCacheV5_2(r, needsAuthCache))) return;
-      } else await getFileReader().write(needsAuthCachePath(), jsonStringify(needsAuthCache));
+      let cache = await readNeedsAuthCache(storage);
+      if (!(serverName in cache)) return;
+      delete cache[serverName];
+      if (isStorageV5Enabled() && storage !== undefined) {
+        if (!(await writeAuthCacheV5_2(storage, cache))) return;
+      } else await getFileReader().write(needsAuthCachePath(), jsonStringify(cache));
       clearAuthCacheRead();
     })
     .catch(() => {});
-  cliOwnedState.authCacheWriteChain = s;
-  return s;
+  cliOwnedState.authCacheWriteChain = writePromise;
+  return writePromise;
 }
 //@ chunk-z1n5m6nf.js:45939-46182 placement
 /**
  * clearMcpDiscoveryCaches（v1 副本）。
  */
-function clearMcpDiscoveryCaches_2(e = new Set(), r = true) {
+function clearMcpDiscoveryCaches_2(preservedKeys = new Set(), notifyIdentityChange = true) {
   if (!isDiscoveryCacheOn()) return;
-  if (r) noteIdentityChanged();
+  if (notifyIdentityChange) noteIdentityChanged();
   bumpIdentityEpoch();
-  let n = (cache) => {
-    if (cache) retainCacheKeys(cache, e);
+  let retainKeys = (cache) => {
+    if (cache) retainCacheKeys(cache, preservedKeys);
   };
   if (!getCliOwnedState().holdStaleReauthEntryForTest) getConnectionCache().reauthInFlight.clear();
   getConnectionCache().lapsedCcrSignIns.clear();
-  n(connectToServer_2.cache);
-  n(listMcpTools.cache);
-  n(fetchCommandsForClient_2.cache);
-  n(fetchResourcesForClient_2.cache);
-  n(fetchResourceTemplatesForClient_2.cache);
+  retainKeys(connectToServer_2.cache);
+  retainKeys(listMcpTools.cache);
+  retainKeys(fetchCommandsForClient_2.cache);
+  retainKeys(fetchResourcesForClient_2.cache);
+  retainKeys(fetchResourceTemplatesForClient_2.cache);
 }
 //@ chunk-z1n5m6nf.js:46182-46289 placement
-function mcpBaseUrlAnalytics(e, name) {
-  let n = loggingSafeOrigin(e);
-  let s = name
+function mcpBaseUrlAnalytics(url, serverName) {
+  let origin = loggingSafeOrigin(url);
+  let serverFields = serverName
     ? {
-        mcpServerKeyHash: toolNameForTelemetry(name),
+        mcpServerKeyHash: toolNameForTelemetry(serverName),
       }
     : {};
-  if (n)
+  if (origin)
     return {
-      mcpServerBaseUrl: n,
-      ...s,
+      mcpServerBaseUrl: origin,
+      ...serverFields,
     };
-  return s;
+  return serverFields;
 }
 //@ chunk-z1n5m6nf.js:59674-59787 placement
 function normalizeImageMimeType_2(mimeType) {
   if (!mimeType) return false;
   let lower = firstLineOf(mimeType, ";").trim().toLowerCase();
-  return SUPPORTED_IMAGE_TYPES_2.has(lower === "image/jpg" ? "image/jpeg" : lower);
+  return SUPPORTED_IMAGE_TYPES_3.has(lower === "image/jpg" ? "image/jpeg" : lower);
 }
 //@ chunk-z1n5m6nf.js:59787-59800 placement
 /**
@@ -10672,15 +11944,17 @@ function normalizeImageMimeType_2(mimeType) {
  */
 var MIN_TOOL_TIMEOUT_MS_V1 = 60000;
 //@ chunk-z1n5m6nf.js:59800-59946 placement = getMcpToolTimeoutMs (1)
-function getMcpToolTimeoutMs_4(e) {
-  let n = (e?.timeout !== undefined && e.timeout >= 1000 ? e.timeout : undefined) ?? env.MCP_TOOL_TIMEOUT;
-  return n !== undefined
-    ? Math.min(Math.max(n, MIN_TOOL_TIMEOUT_MS_V1), MAX_TIMER_DELAY_MS)
+function getMcpToolTimeoutMs_4(config) {
+  let timeoutMs =
+    (config?.timeout !== undefined && config.timeout >= 1000 ? config.timeout : undefined) ??
+    env.MCP_TOOL_TIMEOUT;
+  return timeoutMs !== undefined
+    ? Math.min(Math.max(timeoutMs, MIN_TOOL_TIMEOUT_MS_V1), MAX_TIMER_DELAY_MS)
     : MIN_TOOL_TIMEOUT_MS_V1;
 }
 //@ chunk-z1n5m6nf.js:59946-59989 placement
-function getMcpRequestTimeoutMs_2(e) {
-  return Math.max(getMcpToolTimeoutMs_4(e), getConnectionTimeoutMs());
+function getMcpRequestTimeoutMs_2(config) {
+  return Math.max(getMcpToolTimeoutMs_4(config), getConnectionTimeoutMs());
 }
 //@ chunk-z1n5m6nf.js:59989-60034 placement = MCP_STREAMABLE_HTTP_ACCEPT (1)
 var MCP_STREAMABLE_HTTP_ACCEPT_2 = "application/json, text/event-stream";
@@ -10689,11 +11963,11 @@ var MCP_STREAMABLE_HTTP_ACCEPT_2 = "application/json, text/event-stream";
  * 包装 fetch：出错时抛脱敏错误。
  */
 function wrapFetchRethrowRedacted(fetchWithDefaults) {
-  return async (r, n) => {
+  return async (url, init) => {
     try {
-      return await fetchWithDefaults(r, n);
+      return await fetchWithDefaults(url, init);
     } catch (error) {
-      rethrowRedactedFetchError(error, r);
+      rethrowRedactedFetchError(error, url);
     }
   };
 }
@@ -10701,8 +11975,8 @@ function wrapFetchRethrowRedacted(fetchWithDefaults) {
 /**
  * wrapFetchWithTimeout（v1 副本）。
  */
-function wrapFetchWithTimeout_2(baseFetch, serverRef) {
-  let mcpRequestTimeoutMs = getMcpRequestTimeoutMs_2(serverRef);
+function wrapFetchWithTimeout_2(baseFetch, config) {
+  let mcpRequestTimeoutMs = getMcpRequestTimeoutMs_2(config);
   return async (url, init) => {
     if ((init?.method ?? "GET").toUpperCase() === "GET") return baseFetch(url, init);
     let headers = new Headers(init?.headers);
@@ -10713,7 +11987,7 @@ function wrapFetchWithTimeout_2(baseFetch, serverRef) {
     }
     let controller = new AbortController();
     let timer = setTimeout(
-      (R) => R.abort(new DOMException("The operation timed out.", "TimeoutError")),
+      (controller) => controller.abort(new DOMException("The operation timed out.", "TimeoutError")),
       requestTimeoutForBody(mcpRequestTimeoutMs, init?.body),
       controller,
     );
@@ -10724,7 +11998,7 @@ function wrapFetchWithTimeout_2(baseFetch, serverRef) {
         ...init,
         headers,
         signal,
-        ...(getMcpToolTimeoutMs_4(serverRef) > 300000 && {
+        ...(getMcpToolTimeoutMs_4(config) > 300000 && {
           timeout: false,
         }),
       });
@@ -10752,21 +12026,21 @@ function isIncludedMcpTool_3(tool) {
   return !tool.startsWith("mcp__ide__") || ALLOWED_IDE_TOOLS_2.includes(tool);
 }
 //@ chunk-z1n5m6nf.js:60984-61017 placement
-function isIdeServer_2(e) {
-  return isIncludedMcpTool_3(e.name);
+function isIdeServer_2(serverRef) {
+  return isIncludedMcpTool_3(serverRef.name);
 }
 //@ chunk-z1n5m6nf.js:61017-61352 placement = getServerUrl (0.793)
-function isServerHostInGateList(e, r) {
-  let featureValue_CACHED_MAY_BE_STALE = getFeatureValue_CACHED_MAY_BE_STALE(e, []);
+function isServerHostInGateList(gateFeature, serverRef) {
+  let featureValue_CACHED_MAY_BE_STALE = getFeatureValue_CACHED_MAY_BE_STALE(gateFeature, []);
   if (!Array.isArray(featureValue_CACHED_MAY_BE_STALE) || featureValue_CACHED_MAY_BE_STALE.length === 0)
     return false;
   if (featureValue_CACHED_MAY_BE_STALE.includes("*")) return true;
-  if (!("url" in r) || typeof r.url !== "string") return false;
+  if (!("url" in serverRef) || typeof serverRef.url !== "string") return false;
   try {
-    let lower = new URL(r.url).hostname.toLowerCase();
-    return featureValue_CACHED_MAY_BE_STALE.some((h) => {
-      if (typeof h !== "string" || h === "") return false;
-      let lower_2 = h.toLowerCase();
+    let lower = new URL(serverRef.url).hostname.toLowerCase();
+    return featureValue_CACHED_MAY_BE_STALE.some((gateHost) => {
+      if (typeof gateHost !== "string" || gateHost === "") return false;
+      let lower_2 = gateHost.toLowerCase();
       return lower === lower_2 || lower.endsWith(`.${lower_2}`);
     });
   } catch {
@@ -10774,20 +12048,20 @@ function isServerHostInGateList(e, r) {
   }
 }
 //@ chunk-z1n5m6nf.js:61352-61419 placement
-function shouldNormalizeRootCombinators_2(config) {
-  return isServerHostInGateList("tengu_mcp_normalize_root_combinators", config);
+function shouldNormalizeRootCombinators_2(serverRef) {
+  return isServerHostInGateList("tengu_mcp_normalize_root_combinators", serverRef);
 }
 //@ chunk-z1n5m6nf.js:61419-61485 placement
-function shouldDropInvalidToolSchemas_2(config) {
-  return isServerHostInGateList("tengu_mcp_drop_invalid_tool_schemas", config);
+function shouldDropInvalidToolSchemas_2(serverRef) {
+  return isServerHostInGateList("tengu_mcp_drop_invalid_tool_schemas", serverRef);
 }
 //@ chunk-z1n5m6nf.js:61485-61599 placement
 /**
  * 测试专用：设置是否保留过期的重新认证条目（v1 副本）。
  */
-function setHoldStaleReauthEntryForTest_2(e) {
-  if (e) throw Error("setHoldStaleReauthEntryForTest is test-only");
-  getCliOwnedState().holdStaleReauthEntryForTest = e;
+function setHoldStaleReauthEntryForTest_2(enabled) {
+  if (enabled) throw Error("setHoldStaleReauthEntryForTest is test-only");
+  getCliOwnedState().holdStaleReauthEntryForTest = enabled;
 }
 //@ chunk-z1n5m6nf.js:61599-61647 placement
 /**
@@ -10800,32 +12074,39 @@ function setReauthDecisionSinkForTestV1(reauthDecisionSinkForTest) {
 /**
  * getMcpRoots：roots/list 响应：项目根（或会话目录）、额外工作目录与可选 staging 根，转成去重的 file:// URI。
  */
-function getMcpRoots_2(e = false) {
-  let r = [];
-  if (e)
+function getMcpRoots_2(includeStagingRoot = false) {
+  let extraRoots = [];
+  if (includeStagingRoot)
     try {
-      r = [pluginToolStagingRoot()];
+      extraRoots = [pluginToolStagingRoot()];
     } catch (error) {
       logForDebugging(`MCP: staging root unavailable, omitted from roots/list: ${errorMessage(error)}`);
     }
-  let n = new Set();
-  let s = [];
+  let seenUris = new Set();
+  let roots = [];
   let toolsMachine = getToolsMachine();
-  let y = toolsMachine ? (toolsMachine.directory?.path ?? null) : getOriginalCwdOrNull();
-  for (let S of [...(y === null ? [] : [y]), ...getAnnouncedDirectories(), ...r]) {
-    let href = pathToFileURL(S).href;
-    if (n.has(href)) continue;
-    n.add(href);
-    s.push({
+  let workingDirectory = toolsMachine ? (toolsMachine.directory?.path ?? null) : getOriginalCwdOrNull();
+  for (let directoryPath of [
+    ...(workingDirectory === null ? [] : [workingDirectory]),
+    ...getAnnouncedDirectories(),
+    ...extraRoots,
+  ]) {
+    let href = pathToFileURL(directoryPath).href;
+    if (seenUris.has(href)) continue;
+    seenUris.add(href);
+    roots.push({
       uri: href,
     });
   }
   return {
-    roots: s,
+    roots,
   };
 }
 //@ chunk-z1n5m6nf.js:61957-61987 placement
-var ROOTLESS_PLUGIN_NAMES_2 = new Set(["documents"]);
+var ROOTLESS_PLUGIN_NAMES_2; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-z1n5m6nf.js:61957", () => {
+  ROOTLESS_PLUGIN_NAMES_2 = new Set(["documents"]);
+});
 //@ chunk-z1n5m6nf.js:61987-62131 placement
 function isDocumentsPluginServer_2(serverRef) {
   if (getPlatform() === "windows") return false;
@@ -10864,16 +12145,16 @@ function isNonJsonRpc4xxPostError(error) {
   return !isJsonRpcErrorBody_2(error.message.slice(index + POST_ERROR_PREFIX.length));
 }
 //@ chunk-z1n5m6nf.js:62983-63171 placement
-function isJsonRpcErrorBody_2(e) {
-  let found = e.split(/\r?\n/).find((line) => line.startsWith("data:"));
-  let n = safeParseJSON(found === undefined ? e : found.slice(5), false);
+function isJsonRpcErrorBody_2(body) {
+  let found = body.split(/\r?\n/).find((line) => line.startsWith("data:"));
+  let payload = safeParseJSON(found === undefined ? body : found.slice(5), false);
   return isJSONRPCErrorResponse_2(
-    typeof n === "object" && n !== null && "id" in n && n.id === null
+    typeof payload === "object" && payload !== null && "id" in payload && payload.id === null
       ? {
-          ...n,
+          ...payload,
           id: undefined,
         }
-      : n,
+      : payload,
   );
 }
 //@ chunk-z1n5m6nf.js:63171-63183 placement
@@ -10885,1273 +12166,1352 @@ var PROBE_TIMEOUT_CAP_MS = 5000;
 /**
  * makeConnectTimeoutError：连接超时错误，开关 tengu_mcp_connect_timeout_retry 打开时带 code CONNECT_TIMEOUT 以便重试。
  */
-function makeConnectTimeoutError(e) {
-  let r = new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(e, "MCP connection timeout");
+function makeConnectTimeoutError(message) {
+  let error = new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
+    message,
+    "MCP connection timeout",
+  );
   if (getFeatureValue_CACHED_MAY_BE_STALE("tengu_mcp_connect_timeout_retry", true))
-    return Object.assign(r, {
+    return Object.assign(error, {
       code: "CONNECT_TIMEOUT",
     });
-  return r;
+  return error;
 }
 //@ chunk-z1n5m6nf.js:63339-63443 layout = getServerCommandArray (0.781)
-function getServerCommandArray(serverId, r, n) {
-  if ((r.type === "stdio" || r.type === undefined) && r.pluginSource !== undefined)
-    isMcpAuthCached_3(serverId, configHash(r), undefined, n);
+function getServerCommandArray(serverId, config, storage) {
+  if ((config.type === "stdio" || config.type === undefined) && config.pluginSource !== undefined)
+    isMcpAuthCached_3(serverId, configHash(config), undefined, storage);
 }
 //@ chunk-z1n5m6nf.js:63443-85309 fingerprint = connectToServer (0.606)
 /**
  * connectToServer（v1）：同 v2 的连接入口，但客户端为旧 SDK（只有 initialize 握手，server/discover 只在 stateless claude.ai 代理本地应答中出现）。
  */
-var connectToServer_2 = memoizeWithExternalCache(
-  async (name, serverRef, serverStats, storageV5, credentials, y, S) => {
-    primeEnsureConnectedClient();
-    let connectStartTime = Date.now();
-    let clockSnapshot = startClockSnapshot(S?.clock ?? systemClock);
-    let w;
-    let R = identityEpoch();
-    let announcedDirectories = getAnnouncedDirectories();
-    let transport = serverRef.type ?? "stdio";
-    logForDiagnosticsNoPII("info", "mcp_connect_starting", {
-      transport,
-    });
-    if (isUnconfiguredUrl(serverRef)) {
-      let configError = serverRef.configError ?? "No URL configured for this server";
-      logMCPDebug(name, configError);
-      logForDiagnosticsNoPII("info", "mcp_connect_skipped", {
+var connectToServer_2; // deferred: uses memoizeWithExternalCache (./needsAuthCache.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-z1n5m6nf.js:63443", () => {
+  connectToServer_2 = memoizeWithExternalCache(
+    async (name, serverRef, serverStats, storageV5, credentials, dialOptions, connectOptions) => {
+      primeEnsureConnectedClient();
+      let connectStartTime = Date.now();
+      let clockSnapshot = startClockSnapshot(connectOptions?.clock ?? systemClock);
+      let activeClockSnapshot;
+      let roundEpoch = identityEpoch();
+      let announcedDirectories = getAnnouncedDirectories();
+      let transport = serverRef.type ?? "stdio";
+      logForDiagnosticsNoPII("info", "mcp_connect_starting", {
         transport,
-        reason: "unconfigured",
       });
-      return {
-        name,
-        type: "failed",
-        config: serverRef,
-        error: configError,
-        errorCode: "UNCONFIGURED",
-      };
-    }
-    {
-      let configError = serverRef.configError;
-      if (!configError && "url" in serverRef)
-        try {
-          new URL(serverRef.url);
-        } catch {
-          configError = "'url' is not a valid URL. Update the server's config and reconnect.";
-        }
-      if (configError) {
-        logEvent("tengu_mcp_server_config_invalid", {
-          transportType: fromEnum(serverRef.type ?? "stdio"),
-          field: lit("url"),
-          source: lit(serverRef.configError ? "loader" : "connect"),
-        });
+      if (isUnconfiguredUrl(serverRef)) {
+        let configError = serverRef.configError ?? "No URL configured for this server";
         logMCPDebug(name, configError);
-        logMCPError(name, configError);
-        logForDiagnosticsNoPII("warn", "mcp_connect_failed", {
+        logForDiagnosticsNoPII("info", "mcp_connect_skipped", {
           transport,
-          duration_ms: Date.now() - connectStartTime,
-          reason: "invalid_config",
+          reason: "unconfigured",
         });
-        logFeatureBad("mcp_connect", "mcp_connect_invalid_config");
         return {
           name,
           type: "failed",
           config: serverRef,
           error: configError,
-          errorCode: "INVALID_CONFIG",
+          errorCode: "UNCONFIGURED",
         };
       }
-    }
-    let H;
-    let U;
-    let re = false;
-    let he = false;
-    let transport_2;
-    let q;
-    try {
-      let Pe = function () {
-        let armedAt = Date.now();
-        for (let activeCallWatchdog of te.activeCallWatchdogs)
-          if (activeCallWatchdog.armedAt === 0) activeCallWatchdog.armedAt = armedAt;
-      };
-      let j = isCcrInjectedMcpUrl(name, serverRef);
-      let fe = hasCliOwnedBearer(serverRef);
-      let pe =
-        (serverRef.type === "sse" || serverRef.type === "http") && configHasAuthorizationHeader(serverRef);
-      let ge =
-        serverRef.type === "sse" || serverRef.type === "http" || serverRef.type === "ws"
-          ? await getMcpServerHeaders(name, serverRef)
-          : {};
-      let ce =
-        (serverRef.type === "sse" || serverRef.type === "http") &&
-        !!serverRef.headersHelper &&
-        hasAuthorizationHeader(ge);
-      let le =
-        (serverRef.type === "sse" || serverRef.type === "http") &&
-        !pe &&
-        !ce &&
-        !fe &&
-        !j &&
-        isFirstPartyMcpUrl(serverRef.url) &&
-        isFirstPartyProvider() &&
-        (!!(
-          isStorageV5Enabled() && credentials !== undefined
-            ? await getClaudeAIOAuthTokensAsync(credentials)
-            : getClaudeAIOAuthTokens()
-        )?.accessToken ||
-          (isDesignMcpUrl(serverRef.url) && (await checkConsent(credentials))));
-      if (le)
-        logEvent("tengu_mcp_first_party_auto_auth", {
-          transportType: fromEnum(serverRef.type),
-          ...mcpBaseUrlAnalytics(serverRef, name),
-        });
-      let k = {};
-      if (serverRef.type === "sse") {
-        recordPresentedHeaderSecrets(serverRef.headers, ge);
-        let authProvider = pe || ce || le || fe ? undefined : new ClaudeAuthProvider(name, serverRef);
-        U = authProvider;
-        let x = await mcpProxyFetchOptions(serverRef.url);
-        let fetchFn = boundedFetch(wrapFetchRethrowRedacted(createFetchWithDefaults(undefined, x)));
-        if (authProvider) fetchFn = wrapFetchWithStepUpDetection(fetchFn, authProvider);
-        fetchFn = wrapFetchWithTimeout_2(fetchFn, serverRef);
-        if (le) fetchFn = wrapFetchWithFirstPartyAuth_2(fetchFn, credentials, k);
-        let transportOptions = {
-          authProvider,
-          fetch: fetchFn,
-          requestInit: {
-            ...x,
-            headers: {
-              "User-Agent": getMCPUserAgent(),
-              "Accept-Encoding": "identity",
-              ...ge,
-            },
-          },
-        };
-        let fetchFn_2 = wrapFetchRethrowRedacted(async (url, init) => {
-          let authHeaders = {};
-          let tokens = await authProvider?.tokens();
-          if (tokens) authHeaders.Authorization = `Bearer ${tokens.access_token}`;
-          let proxyOptions = await mcpProxyFetchOptions(String(url));
-          return fetch(url, {
-            ...init,
-            ...proxyOptions,
-            headers: mergeRequestHeaders_2(init?.headers, authHeaders, ge),
+      {
+        let configError = serverRef.configError;
+        if (!configError && "url" in serverRef)
+          try {
+            new URL(serverRef.url);
+          } catch {
+            configError = "'url' is not a valid URL. Update the server's config and reconnect.";
+          }
+        if (configError) {
+          logEvent("tengu_mcp_server_config_invalid", {
+            transportType: fromEnum(serverRef.type ?? "stdio"),
+            field: lit("url"),
+            source: lit(serverRef.configError ? "loader" : "connect"),
           });
-        });
-        transportOptions.eventSourceInit = {
-          fetch: boundedFetch(
-            authProvider
-              ? wrapFetchWithStepUpDetection(fetchFn_2, authProvider)
-              : le
-                ? wrapFetchWithFirstPartyAuth_2(fetchFn_2, credentials, k)
-                : fetchFn_2,
-          ),
-        };
-        transport_2 = new SSEClientTransport(new URL(serverRef.url), transportOptions);
-        logMCPDebug(name, "SSE transport initialized, awaiting connection");
-      } else if (serverRef.type === "sse-ide") {
-        logMCPDebug(name, `Setting up SSE-IDE transport to ${redactUrlSecrets(serverRef.url)}`);
-        let opts = {
-          fetch: boundedFetch(globalThis.fetch),
-          requestInit: {
-            headers: {
-              "User-Agent": getMCPUserAgent(),
-              "Accept-Encoding": "identity",
-            },
-          },
-        };
-        transport_2 = new SSEClientTransport(new URL(serverRef.url), opts);
-      } else if (serverRef.type === "ws-ide") {
-        let tlsOptions = getWebSocketTLSOptions(serverRef.url);
-        getPresentedCredentialLog().record(serverRef.authToken);
-        let wsHeaders = {
-          "User-Agent": getMCPUserAgent(),
-          ...(serverRef.authToken && {
-            "X-Claude-Code-Ide-Authorization": serverRef.authToken,
-          }),
-        };
-        let D = new globalThis.WebSocket(serverRef.url, {
-          protocols: ["mcp"],
-          headers: wsHeaders,
-          proxy: getWebSocketProxyUrl(serverRef.url),
-          tls: tlsOptions || undefined,
-        });
-        transport_2 = new WebSocketTransport(D, (z) => JSONRPCMessageSchema.parse(z));
-      } else if (serverRef.type === "ws") {
-        recordPresentedHeaderSecrets(serverRef.headers, ge);
-        logMCPDebug(name, `Initializing WebSocket transport to ${redactUrlSecrets(serverRef.url)}`);
-        let webSocketTLSOptions = getWebSocketTLSOptions(serverRef.url);
-        let x = j ? getSessionIngressAuthToken() : null;
-        getPresentedCredentialLog().record(x ?? undefined);
-        let wsHeaders = {
-          "User-Agent": getMCPUserAgent(),
-          ...(x && {
-            Authorization: `Bearer ${x}`,
-          }),
-          ...ge,
-        };
-        let wsHeadersForLogging = redactHeaders(wsHeaders);
-        logMCPDebug(
-          name,
-          `WebSocket transport options: ${jsonStringify({
-            url: redactUrlSecrets(serverRef.url),
-            headers: wsHeadersForLogging,
-            hasSessionAuth: !!x,
-          })}`,
-        );
-        let ie = new globalThis.WebSocket(serverRef.url, {
-          protocols: ["mcp"],
-          headers: wsHeaders,
-          proxy: getWebSocketProxyUrl(serverRef.url),
-          tls: webSocketTLSOptions || undefined,
-        });
-        transport_2 = new WebSocketTransport(ie, (ue) => JSONRPCMessageSchema.parse(ue));
-      } else if (serverRef.type === "http") {
-        recordPresentedHeaderSecrets(serverRef.headers, ge);
-        if (keepsMCPDebug()) {
-          logMCPDebug(name, `Initializing HTTP transport to ${redactUrlSecrets(serverRef.url)}`);
-          logMCPDebug(name, `Node version: ${process.version}, Platform: linux`);
-          logMCPDebug(
-            name,
-            `Environment: ${jsonStringify({
-              NODE_OPTIONS: env.NODE_OPTIONS || "not set",
-              UV_THREADPOOL_SIZE: env.UV_THREADPOOL_SIZE || "default",
-              HTTP_PROXY: redactUrlsInText(env.HTTP_PROXY || "not set"),
-              HTTPS_PROXY: redactUrlsInText(env.HTTPS_PROXY || "not set"),
-              NO_PROXY: env.NO_PROXY || "not set",
-            })}`,
-          );
-        }
-        let authProvider = pe || ce || le || fe || j ? undefined : new ClaudeAuthProvider(name, serverRef);
-        U = authProvider;
-        let x = await mcpProxyFetchOptions(serverRef.url);
-        let wsHeadersForLogging = boundedFetch(
-          wrapFetchRethrowRedacted(createFetchWithDefaults(j ? hostedWorkerFetch : undefined, x)),
-          {
-            refusesCodings: issuerKey_3(serverRef.url),
-          },
-        );
-        if (authProvider)
-          wsHeadersForLogging = wrapFetchWithStepUpDetection(wsHeadersForLogging, authProvider);
-        wsHeadersForLogging = wrapFetchWithTimeout_2(wsHeadersForLogging, serverRef);
-        if (le) wsHeadersForLogging = wrapFetchWithFirstPartyAuth_2(wsHeadersForLogging, credentials, k);
-        if (j)
-          wsHeadersForLogging = wrapFetchSkipListenGet(
-            wrapFetchWithCcrSessionAuth_2(wsHeadersForLogging, y, serverCacheKey(name, serverRef)),
-            name,
-            serverRef.url,
-          );
-        wsHeadersForLogging = restrictRemoteRepoCalls(wsHeadersForLogging, serverRef);
-        if (issuerKey_3(serverRef.url)) {
-          let ie = wsHeadersForLogging;
-          wsHeadersForLogging = (value, key) => {
-            let me = key?.method === "POST" ? getRequestTimingStore()?.mark("own") : undefined;
-            return ie(value, key).finally(me);
-          };
-        }
-        if (fe) wsHeadersForLogging = wrapFetchWithCliOwnedBearer_2(wsHeadersForLogging, serverRef);
-        let transportOptions = {
-          authProvider,
-          fetch: wsHeadersForLogging,
-          requestInit: {
-            ...x,
-            headers: {
-              "User-Agent": getMCPUserAgent(),
-              "Accept-Encoding": "identity",
-              ...ge,
-            },
-          },
-        };
-        if (keepsMCPDebug()) {
-          let headersForLogging = transportOptions.requestInit?.headers
-            ? redactHeaders(transportOptions.requestInit.headers)
-            : undefined;
-          logMCPDebug(
-            name,
-            `HTTP transport options: ${jsonStringify({
-              url: redactUrlSecrets(serverRef.url),
-              headers: headersForLogging,
-              hasAuthProvider: !!authProvider,
-              timeoutMs: getMcpRequestTimeoutMs_2(serverRef),
-            })}`,
-          );
-        }
-        transport_2 = new StreamableHTTPClientTransport(new URL(serverRef.url), transportOptions);
-        logMCPDebug(name, "HTTP transport created successfully");
-        if (!isCcrHostedConfig(serverRef) && !isFirstPartyMcpUrl(serverRef.url) && !fe)
-          q = ({ postMethodNotAllowed, dialSignal, dialConnected }) => {
-            let me = (Je) =>
-              dialConnected()
-                ? Je
-                : {
-                    ...Je,
-                    signal: Je?.signal ? AbortSignal.any([Je.signal, dialSignal]) : dialSignal,
-                  };
-            let Me = false;
-            let Be = async (value, key) => {
-              let We = await wsHeadersForLogging(value, me(key));
-              if (!postMethodNotAllowed && !Me) {
-                if (We.status === 401) {
-                  await We.body?.cancel().catch(() => {});
-                  throw Error(
-                    "legacy HTTP+SSE stream GET answered 401 after the initialize POST was not a 405; not starting OAuth against this URL",
-                  );
-                }
-                Me = We.ok;
-              }
-              return We;
-            };
-            let et = (Je, Ye) =>
-              Ye?.body instanceof URLSearchParams && Ye.body.has("grant_type")
-                ? wsHeadersForLogging(Je, Ye)
-                : wsHeadersForLogging(Je, me(Ye));
-            return new SSEClientTransport(new URL(serverRef.url), {
-              authProvider,
-              fetch: et,
-              eventSourceInit: {
-                fetch: Be,
-              },
-              requestInit: transportOptions.requestInit,
-            });
-          };
-      } else if (serverRef.type === "sdk") throw Error("SDK servers should be handled in print.ts");
-      else if (serverRef.type === "claudeai-proxy") {
-        if (!isFirstPartyProvider())
-          throw Error("claude.ai MCP proxy is not available on third-party providers");
-        logMCPDebug(name, `Initializing claude.ai proxy transport for server ${serverRef.id}`);
-        if (
-          !(isStorageV5Enabled() && credentials !== undefined
-            ? await getClaudeAIOAuthTokensAsync(credentials)
-            : getClaudeAIOAuthTokens())
-        )
-          throw Error("No claude.ai OAuth token found");
-        let oauthConfig = getOauthConfig();
-        let proxyUrl = `${oauthConfig.MCP_PROXY_URL}${oauthConfig.MCP_PROXY_PATH.replace("{server_id}", serverRef.id)}`;
-        logMCPDebug(name, `Using claude.ai proxy at ${proxyUrl}`);
-        let fetchWithAuth = getProxyFetchOptions({
-          url: proxyUrl,
-        });
-        let claudeAiProxyFetch = createClaudeAiProxyFetch_2(
-          boundedFetch(createFetchWithDefaults(undefined, fetchWithAuth)),
-          credentials,
-        );
-        let proxyOptions = isSereneTeapotEnabled();
-        let Se = proxyOptions || isStatelessClaudeAiProxy_2(serverRef);
-        if (Se)
-          logMCPDebug(
-            name,
-            proxyOptions
-              ? "GET notification stream disabled for claude.ai connectors; a GET the SDK sends to the proxy URL is answered locally with 405"
-              : "GET notification stream disabled (stateless connector); if the SDK requests it, it gets a local 405",
-          );
-        let transportOptions = {
-          fetch: Se
-            ? answerGetStreamLocally_2(wrapFetchWithTimeout_2(claudeAiProxyFetch, serverRef), proxyUrl)
-            : wrapFetchWithTimeout_2(claudeAiProxyFetch, serverRef),
-          requestInit: {
-            ...fetchWithAuth,
-            headers: {
-              "User-Agent": getMCPUserAgent(),
-              "Accept-Encoding": "identity",
-              "X-Mcp-Client-Session-Id": getSessionId(),
-            },
-          },
-        };
-        transport_2 = new StreamableHTTPClientTransport(new URL(proxyUrl), transportOptions);
-        logMCPDebug(name, "claude.ai proxy transport created successfully");
-      } else if (isStdioConfig(serverRef) && isClaudeInChromeMCPServer(name)) {
-        let { isClaudeInChromeAllowed } = await import("./chunk-2jvt0tn4.js");
-        if (!isClaudeInChromeAllowed()) {
-          logMCPDebug(name, "Skipping connection (Claude in Chrome is blocked by org policy)");
+          logMCPDebug(name, configError);
+          logMCPError(name, configError);
+          logForDiagnosticsNoPII("warn", "mcp_connect_failed", {
+            transport,
+            duration_ms: Date.now() - connectStartTime,
+            reason: "invalid_config",
+          });
+          logFeatureBad("mcp_connect", "mcp_connect_invalid_config");
           return {
             name,
             type: "failed",
             config: serverRef,
-            error: BLOCKED_BY_POLICY_REASON,
-            errorCode: "POLICY_BLOCKED",
+            error: configError,
+            errorCode: "INVALID_CONFIG",
           };
         }
-        let { createChromeContext } = await import("./chunk-ztt2k9pv.js");
-        let { createChromeSocketClient, createClaudeForChromeMcpServer } =
-          await import("./chunk-3ewc7v9f.js");
-        let { createLinkedTransportPair } = await import("./chunk-qa6ep5c8.js");
-        let { setChromeBinding } = await import("./chunk-yx8pxhkm.js");
-        let { registerChromeTabGroupCleanup } = await import("./chunk-9a6n2431.js");
-        let chromeContext = createChromeContext(serverRef.env, {
-          availabilityFunnel: true,
-          credentials,
-          bearerGate: async () => isClaudeInChromeAllowed(),
-        });
-        let context = createChromeSocketClient(chromeContext);
-        setChromeBinding(chromeContext, context);
-        registerChromeTabGroupCleanup();
-        H = createClaudeForChromeMcpServer(chromeContext, context);
-        let [clientTransport, serverTransport] = createLinkedTransportPair();
-        await H.connect(serverTransport);
-        transport_2 = clientTransport;
-        logMCPDebug(name, "In-process Chrome MCP server started");
-      } else if (serverRef.type === "stdio" || !serverRef.type) {
-        assertProgramLaunchAllowed();
-        let P = () => ({
-          shellPrefix: env.CLAUDE_CODE_SHELL_PREFIX,
-          baseEnv: shouldUseMcpAllowlistEnv()
-            ? {
-                ...getDefaultEnvironment_2(),
-                ...agentProxyEnv(),
-              }
-            : {
-                ...subprocessEnv(),
-              },
-        });
-        let { shellPrefix, baseEnv } = runWithPluginWriteScope(serverRef, P);
-        let z = shellPrefix || serverRef.command;
-        let ie = shellPrefix ? [shellQuoteArgs([serverRef.command, ...serverRef.args])] : serverRef.args;
-        let { command, args, pending, capped } = isMcpServerBackingToolHook(name)
-          ? {
-              command: z,
-              args: ie,
-              pending: false,
-              capped: false,
-            }
-          : wrapCommandInCgroup("mcp", z, ie);
-        re = pending;
-        he = capped;
-        let { CLAUDE_CODE_CHILD_SESSION, CLAUDE_CODE_CHROME_MCP_ORG_DENIED, ...Je } = baseEnv;
-        let projectConfigRoot = getProjectConfigRoot();
-        let We = {
-          ...Je,
-          CLAUDE_PROJECT_DIR: projectConfigRoot ?? getProjectRoot(),
-          CLAUDE_CODE_SESSION_ID: getSessionId(),
-          CLAUDECODE: "1",
-          ...serverRef.env,
-          ...(!isPolicyAllowed("allow_claude_browser_extension") && {
-            CLAUDE_CODE_CHROME_MCP_ORG_DENIED: "1",
-          }),
-        };
-        checkPluginBunOptions(serverRef.pluginSource, We, Je);
-        transport_2 = new BoundedStdioTransport({
-          command,
-          args,
-          env: We,
-          stderr: "pipe",
-          ...(projectConfigRoot !== null && {
-            cwd: projectConfigRoot,
-          }),
-        });
-      } else throw Error(`Unsupported server type: ${serverRef.type}`);
-      let L;
-      let be;
-      let stderrOutput = "";
-      if (serverRef.type === "stdio" || !serverRef.type) {
-        let P = transport_2;
-        if (P.stderr instanceof Readable) {
-          be = P.stderr;
-          L = (data) => {
-            if (stderrOutput.length < 67108864)
-              try {
-                stderrOutput += data.toString();
-              } catch {}
-          };
-          be.on("data", L);
-        }
       }
-      let ze = () => {
-        let client = new Client(
-          {
-            name: "claude-code",
-            title: "Claude Code",
-            version:
-              {
-                ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
-                PACKAGE_URL: "@anthropic-ai/claude-code",
-                README_URL: "https://code.claude.com/docs/en/overview",
-                VERSION: "2.1.316",
-                FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-                BUILD_TIME: "2026-10-30T23:28:13Z",
-                GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
-                HOOKS_WORKER_URL:
-                  import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
-                DD_SOURCEMAP_GROUP: "default",
-              }.VERSION ?? "unknown",
-            description: "Anthropic's agentic coding tool",
-            websiteUrl: HTTPS_CLAUDE_COM_CLAUDE_CODE,
-          },
-          {
-            capabilities: clientCapabilitiesFor(serverRef, {
-              denylisted: isServerHostInGateList(
-                "tengu_mcp_legacy_url_elicitation_server_denylist",
-                serverRef,
-              ),
-            }),
-            ...(isDisklessContext() && {
-              jsonSchemaValidator: NO_OP_SCHEMA_VALIDATOR,
-            }),
-          },
-        );
-        client.setRequestHandler(ListRootsRequestSchema, async () => {
-          logMCPDebug(name, "Received ListRoots request from server");
-          return getMcpRoots_2(isDocumentsPluginServer_2(serverRef));
-        });
-        return client;
-      };
-      let client = ze();
-      logMCPDebug(name, `Starting connection with timeout of ${getConnectionTimeoutMs()}ms`);
-      if (serverRef.type === "http" && keepsMCPDebug()) {
-        logMCPDebug(name, `Testing basic HTTP connectivity to ${redactUrlSecrets(serverRef.url)}`);
-        try {
-          let testUrl = new URL(serverRef.url);
-          let x = redactUrlSecrets(testUrl.href);
-          let D = URL.canParse(x) ? new URL(x) : undefined;
-          logMCPDebug(
-            name,
-            D
-              ? `Parsed URL: host=${D.hostname}, port=${D.port || "default"}, protocol=${D.protocol}`
-              : `Parsed URL: ${x}`,
-          );
-          if (testUrl.hostname === "127.0.0.1" || testUrl.hostname === "localhost")
-            logMCPDebug(name, `Using loopback address: ${testUrl.hostname}`);
-        } catch {
-          logMCPDebug(name, `Failed to parse URL: ${redactUrlSecrets(serverRef.url)}`);
-        }
-      }
-      let cachedInitialize = getCachedInitializeResult_2(serverRef);
-      let discoverAnswer = cachedDiscoverOutcome(serverRef);
-      if (isStatelessClaudeAiProxy_2(serverRef)) {
-        logMCPDebug(
-          name,
-          cachedInitialize
-            ? "Stateless claudeai-proxy \u2014 resolving MCP initialize from cached projection"
-            : "Stateless claudeai-proxy \u2014 no cached projection; real initialize, GET SSE suppressed",
-        );
-        if (discoverAnswer !== undefined)
-          logMCPDebug(
-            name,
-            discoverAnswer === "method-not-found"
-              ? "Stateless claudeai-proxy \u2014 server/discover resolved locally as legacy (method-not-found)"
-              : "Stateless claudeai-proxy \u2014 resolving server/discover from cached projection",
-          );
-        answerHandshakeLocally_2(transport_2, cachedInitialize, discoverAnswer);
-      }
-      guardTransportSend(
-        {
-          name,
-        },
-        transport_2,
-      );
-      let Ne = false;
-      let Te = (P, x, D) => {
-        w ??= startClockSnapshot(clockSnapshot.clock);
-        let z = P.connect(x, {
-          timeout: D,
-        });
-        let timeoutPromise = new Promise((resolve, reject) => {
-          let me = clockSnapshot.clock.setTimeout(() => {
-            logMCPDebug(
-              name,
-              `Connection timeout triggered after ${formatConnectElapsed(clockSnapshot)} (limit: ${D}ms)`,
-            );
-            if (H) H.close().catch(() => {});
-            x.close().catch(() => {});
-            Ne = true;
-            reject(
-              makeConnectTimeoutError(
-                `MCP server "${name}" connection timed out after ${getConnectionTimeoutMs()}ms`,
-              ),
-            );
-          }, D);
-          z.then(me, me);
-        });
-        return Promise.race([z, timeoutPromise]);
-      };
+      let inProcessServer;
+      let authProvider;
+      let stdioPendingCgroup = false;
+      let stdioCgroupCapped = false;
+      let serverTransport;
+      let legacySseTransportFactory;
       try {
-        try {
-          await Te(client, transport_2, getConnectionTimeoutMs());
-        } catch (error) {
-          if (
-            q === undefined ||
-            (transport_2 instanceof StreamableHTTPClientTransport &&
-              transport_2.protocolVersion !== undefined) ||
-            !isNonJsonRpc4xxPostError(error) ||
-            !getFeatureValue_CACHED_MAY_BE_STALE("tengu_mcp_legacy_sse_fallback", true)
-          )
-            throw error;
-          logMCPDebug(
-            name,
-            `initialize POST rejected (${truncateToLength(describeConnectError(error, serverRef), 200)}); trying legacy HTTP+SSE`,
-          );
-          let D = error.code === 405;
-          await transport_2.close().catch(() => {});
-          let abortController = new AbortController();
-          let ie = false;
-          let ue = q({
-            postMethodNotAllowed: D,
-            dialSignal: abortController.signal,
-            dialConnected: () => ie,
+        let armWatchdogs = function () {
+          let armedAt = Date.now();
+          for (let activeCallWatchdog of transportErrorState.activeCallWatchdogs)
+            if (activeCallWatchdog.armedAt === 0) activeCallWatchdog.armedAt = armedAt;
+        };
+        let isCcrInjectedUrl = isCcrInjectedMcpUrl(name, serverRef);
+        let hasCliBearer = hasCliOwnedBearer(serverRef);
+        let configHasAuthHeader =
+          (serverRef.type === "sse" || serverRef.type === "http") && configHasAuthorizationHeader(serverRef);
+        let serverHeaders =
+          serverRef.type === "sse" || serverRef.type === "http" || serverRef.type === "ws"
+            ? await getMcpServerHeaders(name, serverRef)
+            : {};
+        let helperMintsAuthHeader =
+          (serverRef.type === "sse" || serverRef.type === "http") &&
+          !!serverRef.headersHelper &&
+          hasAuthorizationHeader(serverHeaders);
+        let useFirstPartyAuth =
+          (serverRef.type === "sse" || serverRef.type === "http") &&
+          !configHasAuthHeader &&
+          !helperMintsAuthHeader &&
+          !hasCliBearer &&
+          !isCcrInjectedUrl &&
+          isFirstPartyMcpUrl(serverRef.url) &&
+          isFirstPartyProvider() &&
+          (!!(
+            isStorageV5Enabled() && credentials !== undefined
+              ? await getClaudeAIOAuthTokensAsync(credentials)
+              : getClaudeAIOAuthTokens()
+          )?.accessToken ||
+            (isDesignMcpUrl(serverRef.url) && (await checkConsent(credentials))));
+        if (useFirstPartyAuth)
+          logEvent("tengu_mcp_first_party_auto_auth", {
+            transportType: fromEnum(serverRef.type),
+            ...mcpBaseUrlAnalytics(serverRef, name),
           });
-          transport_2 = ue;
-          guardTransportSend(
-            {
-              name,
-            },
-            ue,
+        let firstPartyBearerState = {};
+        if (serverRef.type === "sse") {
+          recordPresentedHeaderSecrets(serverRef.headers, serverHeaders);
+          let authProvider_2 =
+            configHasAuthHeader || helperMintsAuthHeader || useFirstPartyAuth || hasCliBearer
+              ? undefined
+              : new ClaudeAuthProvider(name, serverRef);
+          authProvider = authProvider_2;
+          let sseProxyOptions = await mcpProxyFetchOptions(serverRef.url);
+          let fetchFn = boundedFetch(
+            wrapFetchRethrowRedacted(createFetchWithDefaults(undefined, sseProxyOptions)),
           );
-          client = ze();
-          let Se = U?.sawAuthChallenge === true;
-          Ne = false;
-          try {
-            await Te(
-              client,
-              ue,
-              Math.min(
-                PROBE_TIMEOUT_CAP_MS,
-                Math.max(1000, getConnectionTimeoutMs() - (Date.now() - connectStartTime)),
-              ),
-            );
-          } catch (error_2) {
-            await ue.close().catch(() => {});
-            abortController.abort();
-            let Me = !Se && U?.sawAuthChallenge === true;
-            let Be = isAuthFailure_2(error_2, error_2 instanceof SseError ? error_2.code : undefined, Me);
-            if (Ne && D && Me) {
-              logMCPDebug(
-                name,
-                "legacy HTTP+SSE stream GET answered with an auth challenge; its auth flow outran the fallback budget, so routing to needs-auth",
-              );
-              throw new UnauthorizedError(
-                `MCP server "${name}" requires authorization: its legacy HTTP+SSE stream answered with an auth challenge and the authorization flow did not finish within the connect budget`,
-              );
-            }
-            if (Ne || (error_2 instanceof SseError && !Be) || (Be && !D)) {
-              logMCPDebug(
-                name,
-                `legacy HTTP+SSE not confirmed (${truncateToLength(describeConnectError(error_2, serverRef), 200)}); surfacing the POST failure`,
-              );
-              throw error;
-            }
-            throw error_2;
-          }
-          ie = true;
-          logMCPDebug(name, "connected over legacy HTTP+SSE");
-        }
-        if (stderrOutput) {
-          logMCPError(name, `Server stderr: ${stderrOutput}`);
-          stderrOutput = "";
-        }
-        if (L && be) {
-          be.off("data", L);
-          be.resume();
-        }
-        let elapsed = Date.now() - connectStartTime;
-        logMCPDebug(name, `Successfully connected (transport: ${serverRef.type || "stdio"}) in ${elapsed}ms`);
-        if (
-          (serverRef.type === "stdio" || !serverRef.type) &&
-          transport_2 instanceof BoundedStdioTransport &&
-          transport_2.pid
-        ) {
-          registerChildMemory("mcp_stdio", transport_2.pid);
-          if (re) parkPendingPid("mcp", transport_2.pid, () => isMcpServerBackingToolHook(name));
-          if (he || re) releaseMcpToolCgroup(name, transport_2.pid);
-        }
-      } catch (error) {
-        let elapsed = Date.now() - connectStartTime;
-        if (transport_2 instanceof BoundedStdioTransport && transport_2.overflowError) {
-          logMCPError(name, transport_2.overflowError.message);
-          if (stderrOutput) logMCPError(name, `Server stderr: ${stderrOutput}`);
-          throw transport_2.overflowError;
-        }
-        if (serverRef.type === "sse" && error instanceof Error) {
+          if (authProvider_2) fetchFn = wrapFetchWithStepUpDetection(fetchFn, authProvider_2);
+          fetchFn = wrapFetchWithTimeout_2(fetchFn, serverRef);
+          if (useFirstPartyAuth)
+            fetchFn = wrapFetchWithFirstPartyAuth_2(fetchFn, credentials, firstPartyBearerState);
+          let transportOptions = {
+            authProvider: authProvider_2,
+            fetch: fetchFn,
+            requestInit: {
+              ...sseProxyOptions,
+              headers: {
+                "User-Agent": getMCPUserAgent(),
+                "Accept-Encoding": "identity",
+                ...serverHeaders,
+              },
+            },
+          };
+          let fetchFn_2 = wrapFetchRethrowRedacted(async (url, init) => {
+            let authHeaders = {};
+            let tokens = await authProvider_2?.tokens();
+            if (tokens) authHeaders.Authorization = `Bearer ${tokens.access_token}`;
+            let proxyOptions = await mcpProxyFetchOptions(String(url));
+            return fetch(url, {
+              ...init,
+              ...proxyOptions,
+              headers: mergeRequestHeaders_2(init?.headers, authHeaders, serverHeaders),
+            });
+          });
+          transportOptions.eventSourceInit = {
+            fetch: boundedFetch(
+              authProvider_2
+                ? wrapFetchWithStepUpDetection(fetchFn_2, authProvider_2)
+                : useFirstPartyAuth
+                  ? wrapFetchWithFirstPartyAuth_2(fetchFn_2, credentials, firstPartyBearerState)
+                  : fetchFn_2,
+            ),
+          };
+          serverTransport = new SSEClientTransport(new URL(serverRef.url), transportOptions);
+          logMCPDebug(name, "SSE transport initialized, awaiting connection");
+        } else if (serverRef.type === "sse-ide") {
+          logMCPDebug(name, `Setting up SSE-IDE transport to ${redactUrlSecrets(serverRef.url)}`);
+          let opts = {
+            fetch: boundedFetch(globalThis.fetch),
+            requestInit: {
+              headers: {
+                "User-Agent": getMCPUserAgent(),
+                "Accept-Encoding": "identity",
+              },
+            },
+          };
+          serverTransport = new SSEClientTransport(new URL(serverRef.url), opts);
+        } else if (serverRef.type === "ws-ide") {
+          let tlsOptions = getWebSocketTLSOptions(serverRef.url);
+          getPresentedCredentialLog().record(serverRef.authToken);
+          let wsHeaders = {
+            "User-Agent": getMCPUserAgent(),
+            ...(serverRef.authToken && {
+              "X-Claude-Code-Ide-Authorization": serverRef.authToken,
+            }),
+          };
+          let webSocket = new globalThis.WebSocket(serverRef.url, {
+            protocols: ["mcp"],
+            headers: wsHeaders,
+            proxy: getWebSocketProxyUrl(serverRef.url),
+            tls: tlsOptions || undefined,
+          });
+          serverTransport = new WebSocketTransport(webSocket, (data) => JSONRPCMessageSchema_2.parse(data));
+        } else if (serverRef.type === "ws") {
+          recordPresentedHeaderSecrets(serverRef.headers, serverHeaders);
+          logMCPDebug(name, `Initializing WebSocket transport to ${redactUrlSecrets(serverRef.url)}`);
+          let webSocketTLSOptions = getWebSocketTLSOptions(serverRef.url);
+          let sessionAuthToken = isCcrInjectedUrl ? getSessionIngressAuthToken() : null;
+          getPresentedCredentialLog().record(sessionAuthToken ?? undefined);
+          let wsHeaders = {
+            "User-Agent": getMCPUserAgent(),
+            ...(sessionAuthToken && {
+              Authorization: `Bearer ${sessionAuthToken}`,
+            }),
+            ...serverHeaders,
+          };
+          let wsHeadersForLogging = redactHeaders(wsHeaders);
           logMCPDebug(
             name,
-            `SSE Connection failed after ${elapsed}ms: ${jsonStringify({
+            `WebSocket transport options: ${jsonStringify({
               url: redactUrlSecrets(serverRef.url),
-              error: describeConnectError(error, serverRef),
-              errorType: error.constructor.name,
-              stack: rethrowRedactedConnectError(error, serverRef) === error ? error.stack : undefined,
+              headers: wsHeadersForLogging,
+              hasSessionAuth: !!sessionAuthToken,
             })}`,
           );
-          logMCPError(name, rethrowRedactedConnectError(error, serverRef));
-          let D = await handleRemoteConnectAuthError_2({
-            name,
-            serverRef,
-            transportType: "sse",
-            error,
-            statusCode: error.code,
-            sawAuthChallenge: U?.sawAuthChallenge === true,
-            hasUserAuthHeader: pe,
-            helperMintsAuthHeader: ce,
-            cliOwnedBearer: fe,
-            useFirstPartyAuth: le,
-            firstPartyBearer: k.last,
-            authProvider: U,
-            roundEpoch: R,
-            storageV5,
+          let webSocket = new globalThis.WebSocket(serverRef.url, {
+            protocols: ["mcp"],
+            headers: wsHeaders,
+            proxy: getWebSocketProxyUrl(serverRef.url),
+            tls: webSocketTLSOptions || undefined,
           });
-          if (D) return D;
-        } else if (serverRef.type === "http" && error instanceof Error) {
-          let errorObj = error;
-          logMCPDebug(
-            name,
-            `HTTP Connection failed after ${elapsed}ms: ${describeConnectError(error, serverRef)} (code: ${errorObj.code || "none"}, errno: ${errorObj.errno || "none"})`,
+          serverTransport = new WebSocketTransport(webSocket, (data) => JSONRPCMessageSchema_2.parse(data));
+        } else if (serverRef.type === "http") {
+          recordPresentedHeaderSecrets(serverRef.headers, serverHeaders);
+          if (keepsMCPDebug()) {
+            logMCPDebug(name, `Initializing HTTP transport to ${redactUrlSecrets(serverRef.url)}`);
+            logMCPDebug(name, `Node version: ${process.version}, Platform: linux`);
+            logMCPDebug(
+              name,
+              `Environment: ${jsonStringify({
+                NODE_OPTIONS: env.NODE_OPTIONS || "not set",
+                UV_THREADPOOL_SIZE: env.UV_THREADPOOL_SIZE || "default",
+                HTTP_PROXY: redactUrlsInText(env.HTTP_PROXY || "not set"),
+                HTTPS_PROXY: redactUrlsInText(env.HTTPS_PROXY || "not set"),
+                NO_PROXY: env.NO_PROXY || "not set",
+              })}`,
+            );
+          }
+          let authProvider_2 =
+            configHasAuthHeader ||
+            helperMintsAuthHeader ||
+            useFirstPartyAuth ||
+            hasCliBearer ||
+            isCcrInjectedUrl
+              ? undefined
+              : new ClaudeAuthProvider(name, serverRef);
+          authProvider = authProvider_2;
+          let httpProxyOptions = await mcpProxyFetchOptions(serverRef.url);
+          let wsHeadersForLogging = boundedFetch(
+            wrapFetchRethrowRedacted(
+              createFetchWithDefaults(isCcrInjectedUrl ? hostedWorkerFetch : undefined, httpProxyOptions),
+            ),
+            {
+              refusesCodings: issuerKey_3(serverRef.url),
+            },
           );
-          logMCPError(name, rethrowRedactedConnectError(error, serverRef));
-          let z = await handleRemoteConnectAuthError_2({
-            name,
-            serverRef,
-            transportType: "http",
-            error,
-            statusCode: error.code,
-            sawAuthChallenge: U?.sawAuthChallenge === true,
-            hasUserAuthHeader: pe,
-            helperMintsAuthHeader: ce,
-            cliOwnedBearer: fe,
-            useFirstPartyAuth: le,
-            firstPartyBearer: k.last,
-            authProvider: U,
-            roundEpoch: R,
-            storageV5,
+          if (authProvider_2)
+            wsHeadersForLogging = wrapFetchWithStepUpDetection(wsHeadersForLogging, authProvider_2);
+          wsHeadersForLogging = wrapFetchWithTimeout_2(wsHeadersForLogging, serverRef);
+          if (useFirstPartyAuth)
+            wsHeadersForLogging = wrapFetchWithFirstPartyAuth_2(
+              wsHeadersForLogging,
+              credentials,
+              firstPartyBearerState,
+            );
+          if (isCcrInjectedUrl)
+            wsHeadersForLogging = wrapFetchSkipListenGet(
+              wrapFetchWithCcrSessionAuth_2(
+                wsHeadersForLogging,
+                dialOptions,
+                serverCacheKey(name, serverRef),
+              ),
+              name,
+              serverRef.url,
+            );
+          wsHeadersForLogging = restrictRemoteRepoCalls(wsHeadersForLogging, serverRef);
+          if (issuerKey_3(serverRef.url)) {
+            let innerFetch = wsHeadersForLogging;
+            wsHeadersForLogging = (value, key) => {
+              let finishTiming = key?.method === "POST" ? getRequestTimingStore()?.mark("own") : undefined;
+              return innerFetch(value, key).finally(finishTiming);
+            };
+          }
+          if (hasCliBearer)
+            wsHeadersForLogging = wrapFetchWithCliOwnedBearer_2(wsHeadersForLogging, serverRef);
+          let transportOptions = {
+            authProvider: authProvider_2,
+            fetch: wsHeadersForLogging,
+            requestInit: {
+              ...httpProxyOptions,
+              headers: {
+                "User-Agent": getMCPUserAgent(),
+                "Accept-Encoding": "identity",
+                ...serverHeaders,
+              },
+            },
+          };
+          if (keepsMCPDebug()) {
+            let headersForLogging = transportOptions.requestInit?.headers
+              ? redactHeaders(transportOptions.requestInit.headers)
+              : undefined;
+            logMCPDebug(
+              name,
+              `HTTP transport options: ${jsonStringify({
+                url: redactUrlSecrets(serverRef.url),
+                headers: headersForLogging,
+                hasAuthProvider: !!authProvider_2,
+                timeoutMs: getMcpRequestTimeoutMs_2(serverRef),
+              })}`,
+            );
+          }
+          serverTransport = new StreamableHTTPClientTransport(new URL(serverRef.url), transportOptions);
+          logMCPDebug(name, "HTTP transport created successfully");
+          if (!isCcrHostedConfig(serverRef) && !isFirstPartyMcpUrl(serverRef.url) && !hasCliBearer)
+            legacySseTransportFactory = ({ postMethodNotAllowed, dialSignal, dialConnected }) => {
+              let withDialSignal = (init) =>
+                dialConnected()
+                  ? init
+                  : {
+                      ...init,
+                      signal: init?.signal ? AbortSignal.any([init.signal, dialSignal]) : dialSignal,
+                    };
+              let sawNonOk = false;
+              let eventSourceFetch = async (value, key) => {
+                let response = await wsHeadersForLogging(value, withDialSignal(key));
+                if (!postMethodNotAllowed && !sawNonOk) {
+                  if (response.status === 401) {
+                    await response.body?.cancel().catch(() => {});
+                    throw Error(
+                      "legacy HTTP+SSE stream GET answered 401 after the initialize POST was not a 405; not starting OAuth against this URL",
+                    );
+                  }
+                  sawNonOk = response.ok;
+                }
+                return response;
+              };
+              let url = (init, initWithDial) =>
+                initWithDial?.body instanceof URLSearchParams && initWithDial.body.has("grant_type")
+                  ? wsHeadersForLogging(init, initWithDial)
+                  : wsHeadersForLogging(init, withDialSignal(initWithDial));
+              return new SSEClientTransport(new URL(serverRef.url), {
+                authProvider: authProvider_2,
+                fetch: url,
+                eventSourceInit: {
+                  fetch: eventSourceFetch,
+                },
+                requestInit: transportOptions.requestInit,
+              });
+            };
+        } else if (serverRef.type === "sdk") throw Error("SDK servers should be handled in print.ts");
+        else if (serverRef.type === "claudeai-proxy") {
+          if (!isFirstPartyProvider())
+            throw Error("claude.ai MCP proxy is not available on third-party providers");
+          logMCPDebug(name, `Initializing claude.ai proxy transport for server ${serverRef.id}`);
+          if (
+            !(isStorageV5Enabled() && credentials !== undefined
+              ? await getClaudeAIOAuthTokensAsync(credentials)
+              : getClaudeAIOAuthTokens())
+          )
+            throw Error("No claude.ai OAuth token found");
+          let oauthConfig = getOauthConfig();
+          let proxyUrl = `${oauthConfig.MCP_PROXY_URL}${oauthConfig.MCP_PROXY_PATH.replace("{server_id}", serverRef.id)}`;
+          logMCPDebug(name, `Using claude.ai proxy at ${proxyUrl}`);
+          let fetchWithAuth = getProxyFetchOptions({
+            url: proxyUrl,
           });
-          if (z) return z;
-        } else if (serverRef.type === "claudeai-proxy" && error instanceof Error) {
-          logMCPDebug(
-            name,
-            `claude.ai proxy connection failed after ${elapsed}ms: ${describeConnectError(error, serverRef)}`,
+          let claudeAiProxyFetch = createClaudeAiProxyFetch_2(
+            boundedFetch(createFetchWithDefaults(undefined, fetchWithAuth)),
+            credentials,
           );
-          if (!isClaudeAiBearerRejectedError_2(error))
-            logMCPError(name, rethrowRedactedConnectError(error, serverRef));
-          let errorCode = error.code;
-          if (isClaudeAiBearerRejectedError_2(error)) {
-            logEvent("tengu_mcp_server_connection_failed", {
-              transportType: lit("claudeai-proxy"),
-              errorCode: lit("CLAUDEAI_BEARER_REJECTED"),
-              sdkGeneration: fromEnum(mcpSdkGeneration()),
-              ...mcpBaseUrlAnalytics(serverRef, name),
-              ...buildPluginSourceFields(serverRef),
-            });
-            logFeatureSad("mcp_connect", "mcp_connect_claudeai_bearer_rejected");
-            let z = serverCacheKey(name, serverRef);
-            let ie = {
+          let proxyOptions = isSereneTeapotEnabled();
+          let answeredLocally = proxyOptions || isStatelessClaudeAiProxy_2(serverRef);
+          if (answeredLocally)
+            logMCPDebug(
+              name,
+              proxyOptions
+                ? "GET notification stream disabled for claude.ai connectors; a GET the SDK sends to the proxy URL is answered locally with 405"
+                : "GET notification stream disabled (stateless connector); if the SDK requests it, it gets a local 405",
+            );
+          let transportOptions = {
+            fetch: answeredLocally
+              ? answerGetStreamLocally_2(wrapFetchWithTimeout_2(claudeAiProxyFetch, serverRef), proxyUrl)
+              : wrapFetchWithTimeout_2(claudeAiProxyFetch, serverRef),
+            requestInit: {
+              ...fetchWithAuth,
+              headers: {
+                "User-Agent": getMCPUserAgent(),
+                "Accept-Encoding": "identity",
+                "X-Mcp-Client-Session-Id": getSessionId(),
+              },
+            },
+          };
+          serverTransport = new StreamableHTTPClientTransport(new URL(proxyUrl), transportOptions);
+          logMCPDebug(name, "claude.ai proxy transport created successfully");
+        } else if (isStdioConfig(serverRef) && isClaudeInChromeMCPServer(name)) {
+          let { isClaudeInChromeAllowed } = await import("../../utils/claudeInChrome/setup.js");
+          if (!isClaudeInChromeAllowed()) {
+            logMCPDebug(name, "Skipping connection (Claude in Chrome is blocked by org policy)");
+            return {
               name,
               type: "failed",
               config: serverRef,
-              error: error.message,
-              errorCode: "CLAUDEAI_BEARER_REJECTED",
+              error: BLOCKED_BY_POLICY_REASON,
+              errorCode: "POLICY_BLOCKED",
             };
-            let ue = getConnectionCache().connections.get(z);
-            if (ue)
-              ue.then(
-                (Se) => {
-                  if (Se === ie && getConnectionCache().connections.get(z) === ue)
-                    getConnectionCache().connections.delete(z);
-                },
-                () => {},
-              );
-            return ie;
           }
-          if (errorCode === 401 || errorCode === 403)
-            return handleRemoteAuthFailure_2(
-              name,
-              serverRef,
-              "claudeai-proxy",
-              undefined,
-              false,
-              R,
-              storageV5,
-            );
-        } else if (serverRef.type === "sse-ide" || serverRef.type === "ws-ide")
-          logEvent("tengu_mcp_ide_server_connection_failed", {
-            connectionDurationMs: elapsed,
+          let { createChromeContext } = await import("../../utils/claudeInChrome/mcpServer.js");
+          let { createChromeSocketClient, createClaudeForChromeMcpServer } =
+            await import("../../utils/claudeInChrome/BROWSER_TOOLS.lazy.js");
+          let { createLinkedTransportPair } = await import("./InProcessTransport.js");
+          let { setChromeBinding } = await import("../../utils/claudeInChrome/permissionOverrides.js");
+          let { registerChromeTabGroupCleanup } =
+            await import("../../utils/claudeInChrome/closeSessionTabGroup.lazy.js");
+          let chromeContext = createChromeContext(serverRef.env, {
+            availabilityFunnel: true,
+            credentials,
+            bearerGate: async () => isClaudeInChromeAllowed(),
           });
-        if (H) H.close().catch(() => {});
-        transport_2.close().catch(() => {});
-        if (stderrOutput && !isCleanupStarted()) logMCPError(name, `Server stderr: ${stderrOutput}`);
-        throw error;
-      }
-      let capabilities = client.getServerCapabilities();
-      let serverVersion = client.getServerVersion();
-      let De = officialPluginPromptOverrides(serverRef);
-      let xe = serverInstructionsOverride(De, name) ?? client.getInstructions();
-      let He = toolTimeoutForServer(serverRef);
-      let instructions = truncateServerInstructions_2(xe, name, He);
-      logMCPDebug(
-        name,
-        `Connection established with capabilities: ${jsonStringify({
-          hasTools: !!capabilities?.tools,
-          hasPrompts: !!capabilities?.prompts,
-          hasResources: !!capabilities?.resources,
-          hasResourceSubscribe: !!capabilities?.resources?.subscribe,
-          serverVersion: serverVersion || "unknown",
-        })}`,
-      );
-      logForDebugging(
-        `[MCP] Server "${name}" connected with subscribe=${!!capabilities?.resources?.subscribe}`,
-      );
-      client.setRequestHandler(ElicitRequestSchema, async (request) => {
-        logMCPDebug(name, `Elicitation request received during initialization: ${jsonStringify(request)}`);
-        return {
-          action: "cancel",
+          let context = createChromeSocketClient(chromeContext);
+          setChromeBinding(chromeContext, context);
+          registerChromeTabGroupCleanup();
+          inProcessServer = createClaudeForChromeMcpServer(chromeContext, context);
+          let [clientTransport, serverTransport_2] = createLinkedTransportPair();
+          await inProcessServer.connect(serverTransport_2);
+          serverTransport = clientTransport;
+          logMCPDebug(name, "In-process Chrome MCP server started");
+        } else if (serverRef.type === "stdio" || !serverRef.type) {
+          assertProgramLaunchAllowed();
+          let buildStdioEnv = () => ({
+            shellPrefix: env.CLAUDE_CODE_SHELL_PREFIX,
+            baseEnv: shouldUseMcpAllowlistEnv()
+              ? {
+                  ...getDefaultEnvironment_2(),
+                  ...agentProxyEnv(),
+                }
+              : {
+                  ...subprocessEnv(),
+                },
+          });
+          let { shellPrefix, baseEnv } = runWithPluginWriteScope(serverRef, buildStdioEnv);
+          let commandLine = shellPrefix || serverRef.command;
+          let commandArgs = shellPrefix
+            ? [shellQuoteArgs([serverRef.command, ...serverRef.args])]
+            : serverRef.args;
+          let { command, args, pending, capped } = isMcpServerBackingToolHook(name)
+            ? {
+                command: commandLine,
+                args: commandArgs,
+                pending: false,
+                capped: false,
+              }
+            : wrapCommandInCgroup("mcp", commandLine, commandArgs);
+          stdioPendingCgroup = pending;
+          stdioCgroupCapped = capped;
+          let { CLAUDE_CODE_CHILD_SESSION, CLAUDE_CODE_CHROME_MCP_ORG_DENIED, ...envWithoutChromeFlags } =
+            baseEnv;
+          let projectConfigRoot = getProjectConfigRoot();
+          let stdioEnv = {
+            ...envWithoutChromeFlags,
+            CLAUDE_PROJECT_DIR: projectConfigRoot ?? getProjectRoot(),
+            CLAUDE_CODE_SESSION_ID: getSessionId(),
+            CLAUDECODE: "1",
+            ...serverRef.env,
+            ...(!isPolicyAllowed("allow_claude_browser_extension") && {
+              CLAUDE_CODE_CHROME_MCP_ORG_DENIED: "1",
+            }),
+          };
+          checkPluginBunOptions(serverRef.pluginSource, stdioEnv, envWithoutChromeFlags);
+          serverTransport = new BoundedStdioTransport({
+            command,
+            args,
+            env: stdioEnv,
+            stderr: "pipe",
+            ...(projectConfigRoot !== null && {
+              cwd: projectConfigRoot,
+            }),
+          });
+        } else throw Error(`Unsupported server type: ${serverRef.type}`);
+        let stderrDataHandler;
+        let stderrStream;
+        let stderrOutput = "";
+        if (serverRef.type === "stdio" || !serverRef.type) {
+          let stdioTransport = serverTransport;
+          if (stdioTransport.stderr instanceof Readable) {
+            stderrStream = stdioTransport.stderr;
+            stderrDataHandler = (data) => {
+              if (stderrOutput.length < 67108864)
+                try {
+                  stderrOutput += data.toString();
+                } catch {}
+            };
+            stderrStream.on("data", stderrDataHandler);
+          }
+        }
+        let createClient = () => {
+          let client = new Client(
+            {
+              name: "claude-code",
+              title: "Claude Code",
+              version:
+                {
+                  ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
+                  PACKAGE_URL: "@anthropic-ai/claude-code",
+                  README_URL: "https://code.claude.com/docs/en/overview",
+                  VERSION: "2.1.316",
+                  FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
+                  BUILD_TIME: "2026-10-30T23:28:13Z",
+                  GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+                  HOOKS_WORKER_URL:
+                    import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
+                  DD_SOURCEMAP_GROUP: "default",
+                }.VERSION ?? "unknown",
+              description: "Anthropic's agentic coding tool",
+              websiteUrl: HTTPS_CLAUDE_COM_CLAUDE_CODE,
+            },
+            {
+              capabilities: clientCapabilitiesFor(serverRef, {
+                denylisted: isServerHostInGateList(
+                  "tengu_mcp_legacy_url_elicitation_server_denylist",
+                  serverRef,
+                ),
+              }),
+              ...(isDisklessContext() && {
+                jsonSchemaValidator: NO_OP_SCHEMA_VALIDATOR,
+              }),
+            },
+          );
+          client.setRequestHandler(ListRootsRequestSchema, async () => {
+            logMCPDebug(name, "Received ListRoots request from server");
+            return getMcpRoots_2(isDocumentsPluginServer_2(serverRef));
+          });
+          return client;
         };
-      });
-      if (serverRef.type === "sse-ide" || serverRef.type === "ws-ide") {
-        let ideConnectionDurationMs = Date.now() - connectStartTime;
-        logEvent("tengu_mcp_ide_server_connection_succeeded", {
-          connectionDurationMs: ideConnectionDurationMs,
-          serverVersion: sanitizeVersion(serverVersion?.version),
-        });
-        maybeNotifyIDEConnected(client).catch((error) => {
-          logMCPError(
-            name,
-            `Failed to send ide_connected notification: ${describeConnectError(error, serverRef)}`,
-          );
-        });
-      }
-      let connectionStartTime = Date.now();
-      let Ie = false;
-      let originalOnerror = client.onerror;
-      let originalOnclose = client.onclose;
-      let MAX_ERRORS_BEFORE_RECONNECT = 3;
-      let te = {
-        consecutiveErrors: 0,
-        activeCallWatchdogs: new Set(),
-        pendingElicitations: 0,
-        lastElicitationClosedAt: 0,
-      };
-      let hasTriggeredClose = false;
-      let closeTransportAndRejectPending = (reason) => {
-        if (hasTriggeredClose) return;
-        hasTriggeredClose = true;
-        te.closeReason = reason;
-        logMCPDebug(name, `Closing transport (${reason})`);
-        client.close().catch((e) => {
-          logMCPDebug(name, `Error during close: ${describeConnectError(e, serverRef)}`);
-        });
-      };
-      client.onerror = (msg) => {
-        let x = serverRef.type || "stdio";
-        if (x === "stdio" && msg instanceof SyntaxError) {
-          logMCPError(name, `Ignoring non-JSON line on stdout: ${msg.message}`);
-          return;
-        }
-        if (msg instanceof FirstPartyDesignNeedsConsentError) return;
-        if (x === "stdio" && msg instanceof StdoutOverflowError_2) {
-          logMCPError(name, msg.message);
-          Ie = true;
-          closeTransportAndRejectPending("stdout overflow");
-          if (originalOnerror) originalOnerror(msg);
-          return;
-        }
-        if ((x === "http" || x === "claudeai-proxy") && msg instanceof HttpBodyOverflowError_2) {
-          logMCPError(
-            name,
-            `sent a response larger than ${Math.round(HTTP_BODY_LIMITS / 1024 / 1024)}MB. Claude Code stopped reading it and failed the request it answered; the connection stays open.`,
-          );
-          if (originalOnerror) originalOnerror(msg);
-          return;
-        }
-        if (
-          (x === "sse" || x === "sse-ide" || x === "http" || x === "claudeai-proxy") &&
-          msg.message.includes(STOPPED_READING_NOTE_2)
-        ) {
-          logMCPError(name, msg.message);
-          Ie = true;
-          closeTransportAndRejectPending("http body overflow");
-          if (originalOnerror) originalOnerror(msg);
-          return;
-        }
-        if ((x === "sse" || x === "http" || x === "claudeai-proxy") && msg instanceof SyntaxError) {
-          Ie = true;
-          Pe();
-          closeTransportAndRejectPending(
-            U?.authChallengeOpen === true && te.activeCallWatchdogs.size <= 1
-              ? "malformed message after an auth challenge"
-              : "malformed JSON-RPC message (response truncated)",
-          );
-          if (originalOnerror) originalOnerror(msg);
-          return;
-        }
-        let uptime = Date.now() - connectionStartTime;
-        Ie = true;
-        logMCPDebug(name, `${x.toUpperCase()} connection dropped after ${Math.floor(uptime / 1000)}s uptime`);
-        if (msg.message) {
-          let z = CONNECTION_ERROR_HINTS.find(([ie]) => msg.message.includes(ie))?.[1];
-          logMCPDebug(name, z ?? `Connection error: ${describeConnectError(msg, serverRef)}`);
-        }
-        if (
-          (x === "http" || x === "claudeai-proxy") &&
-          client.transport?.sessionId !== undefined &&
-          isMcpSessionExpiredError_2(msg)
-        ) {
-          logMCPDebug(
-            name,
-            "MCP session expired (server no longer recognizes session ID), triggering reconnection",
-          );
-          closeTransportAndRejectPending("session expired");
-          if (originalOnerror) originalOnerror(msg);
-          return;
-        }
-        if (
-          (x === "http" || x === "claudeai-proxy") &&
-          client.transport?.sessionId !== undefined &&
-          msg instanceof StreamableHTTPError &&
-          msg.code === 404 &&
-          msg.message.includes("Failed to open SSE stream")
-        )
-          logFeatureSad("mcp_session_recovery", "get_stream_404_not_reinit");
-        if (x === "sse" || x === "http" || x === "claudeai-proxy") {
-          if (msg.message.includes("Maximum reconnection attempts")) {
+        let client = createClient();
+        logMCPDebug(name, `Starting connection with timeout of ${getConnectionTimeoutMs()}ms`);
+        if (serverRef.type === "http" && keepsMCPDebug()) {
+          logMCPDebug(name, `Testing basic HTTP connectivity to ${redactUrlSecrets(serverRef.url)}`);
+          try {
+            let testUrl = new URL(serverRef.url);
+            let redactedHref = redactUrlSecrets(testUrl.href);
+            let sanitizedUrl = URL.canParse(redactedHref) ? new URL(redactedHref) : undefined;
             logMCPDebug(
               name,
-              "SSE GET-stream reconnection exhausted; leaving transport up (POST still works)",
+              sanitizedUrl
+                ? `Parsed URL: host=${sanitizedUrl.hostname}, port=${sanitizedUrl.port || "default"}, protocol=${sanitizedUrl.protocol}`
+                : `Parsed URL: ${redactedHref}`,
             );
-            te.consecutiveErrors = 0;
-            Pe();
+            if (testUrl.hostname === "127.0.0.1" || testUrl.hostname === "localhost")
+              logMCPDebug(name, `Using loopback address: ${testUrl.hostname}`);
+          } catch {
+            logMCPDebug(name, `Failed to parse URL: ${redactUrlSecrets(serverRef.url)}`);
+          }
+        }
+        let cachedInitialize = getCachedInitializeResult_2(serverRef);
+        let discoverAnswer = cachedDiscoverOutcome(serverRef);
+        if (isStatelessClaudeAiProxy_2(serverRef)) {
+          logMCPDebug(
+            name,
+            cachedInitialize
+              ? "Stateless claudeai-proxy \u2014 resolving MCP initialize from cached projection"
+              : "Stateless claudeai-proxy \u2014 no cached projection; real initialize, GET SSE suppressed",
+          );
+          if (discoverAnswer !== undefined)
+            logMCPDebug(
+              name,
+              discoverAnswer === "method-not-found"
+                ? "Stateless claudeai-proxy \u2014 server/discover resolved locally as legacy (method-not-found)"
+                : "Stateless claudeai-proxy \u2014 resolving server/discover from cached projection",
+            );
+          answerHandshakeLocally_2(serverTransport, cachedInitialize, discoverAnswer);
+        }
+        guardTransportSend(
+          {
+            name,
+          },
+          serverTransport,
+        );
+        let connectBudgetExpired = false;
+        let withConnectTimeout = (clientArg, transportArg, timeoutMs) => {
+          activeClockSnapshot ??= startClockSnapshot(clockSnapshot.clock);
+          let connectPromise = clientArg.connect(transportArg, {
+            timeout: timeoutMs,
+          });
+          let timeoutPromise = new Promise((resolve, reject) => {
+            let timer = clockSnapshot.clock.setTimeout(() => {
+              logMCPDebug(
+                name,
+                `Connection timeout triggered after ${formatConnectElapsed(clockSnapshot)} (limit: ${timeoutMs}ms)`,
+              );
+              if (inProcessServer) inProcessServer.close().catch(() => {});
+              transportArg.close().catch(() => {});
+              connectBudgetExpired = true;
+              reject(
+                makeConnectTimeoutError(
+                  `MCP server "${name}" connection timed out after ${getConnectionTimeoutMs()}ms`,
+                ),
+              );
+            }, timeoutMs);
+            connectPromise.then(timer, timer);
+          });
+          return Promise.race([connectPromise, timeoutPromise]);
+        };
+        try {
+          try {
+            await withConnectTimeout(client, serverTransport, getConnectionTimeoutMs());
+          } catch (error) {
+            if (
+              legacySseTransportFactory === undefined ||
+              (serverTransport instanceof StreamableHTTPClientTransport &&
+                serverTransport.protocolVersion !== undefined) ||
+              !isNonJsonRpc4xxPostError(error) ||
+              !getFeatureValue_CACHED_MAY_BE_STALE("tengu_mcp_legacy_sse_fallback", true)
+            )
+              throw error;
+            logMCPDebug(
+              name,
+              `initialize POST rejected (${truncateToLength(describeConnectError(error, serverRef), 200)}); trying legacy HTTP+SSE`,
+            );
+            let postMethodNotAllowed = error.code === 405;
+            await serverTransport.close().catch(() => {});
+            let abortController = new AbortController();
+            let legacySseConnected = false;
+            let legacySseTransport = legacySseTransportFactory({
+              postMethodNotAllowed,
+              dialSignal: abortController.signal,
+              dialConnected: () => legacySseConnected,
+            });
+            serverTransport = legacySseTransport;
+            guardTransportSend(
+              {
+                name,
+              },
+              legacySseTransport,
+            );
+            client = createClient();
+            let sawAuthChallengeBefore = authProvider?.sawAuthChallenge === true;
+            connectBudgetExpired = false;
+            try {
+              await withConnectTimeout(
+                client,
+                legacySseTransport,
+                Math.min(
+                  PROBE_TIMEOUT_CAP_MS,
+                  Math.max(1000, getConnectionTimeoutMs() - (Date.now() - connectStartTime)),
+                ),
+              );
+            } catch (error_2) {
+              await legacySseTransport.close().catch(() => {});
+              abortController.abort();
+              let sawAuthChallengeAfter = !sawAuthChallengeBefore && authProvider?.sawAuthChallenge === true;
+              let authFailure = isAuthFailure_2(
+                error_2,
+                error_2 instanceof SseError ? error_2.code : undefined,
+                sawAuthChallengeAfter,
+              );
+              if (connectBudgetExpired && postMethodNotAllowed && sawAuthChallengeAfter) {
+                logMCPDebug(
+                  name,
+                  "legacy HTTP+SSE stream GET answered with an auth challenge; its auth flow outran the fallback budget, so routing to needs-auth",
+                );
+                throw new UnauthorizedError(
+                  `MCP server "${name}" requires authorization: its legacy HTTP+SSE stream answered with an auth challenge and the authorization flow did not finish within the connect budget`,
+                );
+              }
+              if (
+                connectBudgetExpired ||
+                (error_2 instanceof SseError && !authFailure) ||
+                (authFailure && !postMethodNotAllowed)
+              ) {
+                logMCPDebug(
+                  name,
+                  `legacy HTTP+SSE not confirmed (${truncateToLength(describeConnectError(error_2, serverRef), 200)}); surfacing the POST failure`,
+                );
+                throw error;
+              }
+              throw error_2;
+            }
+            legacySseConnected = true;
+            logMCPDebug(name, "connected over legacy HTTP+SSE");
+          }
+          if (stderrOutput) {
+            logMCPError(name, `Server stderr: ${stderrOutput}`);
+            stderrOutput = "";
+          }
+          if (stderrDataHandler && stderrStream) {
+            stderrStream.off("data", stderrDataHandler);
+            stderrStream.resume();
+          }
+          let elapsed = Date.now() - connectStartTime;
+          logMCPDebug(
+            name,
+            `Successfully connected (transport: ${serverRef.type || "stdio"}) in ${elapsed}ms`,
+          );
+          if (
+            (serverRef.type === "stdio" || !serverRef.type) &&
+            serverTransport instanceof BoundedStdioTransport &&
+            serverTransport.pid
+          ) {
+            registerChildMemory("mcp_stdio", serverTransport.pid);
+            if (stdioPendingCgroup)
+              parkPendingPid("mcp", serverTransport.pid, () => isMcpServerBackingToolHook(name));
+            if (stdioCgroupCapped || stdioPendingCgroup) releaseMcpToolCgroup(name, serverTransport.pid);
+          }
+        } catch (error) {
+          let elapsed = Date.now() - connectStartTime;
+          if (serverTransport instanceof BoundedStdioTransport && serverTransport.overflowError) {
+            logMCPError(name, serverTransport.overflowError.message);
+            if (stderrOutput) logMCPError(name, `Server stderr: ${stderrOutput}`);
+            throw serverTransport.overflowError;
+          }
+          if (serverRef.type === "sse" && error instanceof Error) {
+            logMCPDebug(
+              name,
+              `SSE Connection failed after ${elapsed}ms: ${jsonStringify({
+                url: redactUrlSecrets(serverRef.url),
+                error: describeConnectError(error, serverRef),
+                errorType: error.constructor.name,
+                stack: rethrowRedactedConnectError(error, serverRef) === error ? error.stack : undefined,
+              })}`,
+            );
+            logMCPError(name, rethrowRedactedConnectError(error, serverRef));
+            let sseFailureResult = await handleRemoteConnectAuthError_2({
+              name,
+              serverRef,
+              transportType: "sse",
+              error,
+              statusCode: error.code,
+              sawAuthChallenge: authProvider?.sawAuthChallenge === true,
+              hasUserAuthHeader: configHasAuthHeader,
+              helperMintsAuthHeader,
+              cliOwnedBearer: hasCliBearer,
+              useFirstPartyAuth,
+              firstPartyBearer: firstPartyBearerState.last,
+              authProvider,
+              roundEpoch,
+              storageV5,
+            });
+            if (sseFailureResult) return sseFailureResult;
+          } else if (serverRef.type === "http" && error instanceof Error) {
+            let errorObj = error;
+            logMCPDebug(
+              name,
+              `HTTP Connection failed after ${elapsed}ms: ${describeConnectError(error, serverRef)} (code: ${errorObj.code || "none"}, errno: ${errorObj.errno || "none"})`,
+            );
+            logMCPError(name, rethrowRedactedConnectError(error, serverRef));
+            let httpFailureResult = await handleRemoteConnectAuthError_2({
+              name,
+              serverRef,
+              transportType: "http",
+              error,
+              statusCode: error.code,
+              sawAuthChallenge: authProvider?.sawAuthChallenge === true,
+              hasUserAuthHeader: configHasAuthHeader,
+              helperMintsAuthHeader,
+              cliOwnedBearer: hasCliBearer,
+              useFirstPartyAuth,
+              firstPartyBearer: firstPartyBearerState.last,
+              authProvider,
+              roundEpoch,
+              storageV5,
+            });
+            if (httpFailureResult) return httpFailureResult;
+          } else if (serverRef.type === "claudeai-proxy" && error instanceof Error) {
+            logMCPDebug(
+              name,
+              `claude.ai proxy connection failed after ${elapsed}ms: ${describeConnectError(error, serverRef)}`,
+            );
+            if (!isClaudeAiBearerRejectedError_2(error))
+              logMCPError(name, rethrowRedactedConnectError(error, serverRef));
+            let errorCode = error.code;
+            if (isClaudeAiBearerRejectedError_2(error)) {
+              logEvent("tengu_mcp_server_connection_failed", {
+                transportType: lit("claudeai-proxy"),
+                errorCode: lit("CLAUDEAI_BEARER_REJECTED"),
+                sdkGeneration: fromEnum(mcpSdkGeneration()),
+                ...mcpBaseUrlAnalytics(serverRef, name),
+                ...buildPluginSourceFields(serverRef),
+              });
+              logFeatureSad("mcp_connect", "mcp_connect_claudeai_bearer_rejected");
+              let cacheKey = serverCacheKey(name, serverRef);
+              let failedResult = {
+                name,
+                type: "failed",
+                config: serverRef,
+                error: error.message,
+                errorCode: "CLAUDEAI_BEARER_REJECTED",
+              };
+              let cachedPromise = getConnectionCache().connections.get(cacheKey);
+              if (cachedPromise)
+                cachedPromise.then(
+                  (cachedResult) => {
+                    if (
+                      cachedResult === failedResult &&
+                      getConnectionCache().connections.get(cacheKey) === cachedPromise
+                    )
+                      getConnectionCache().connections.delete(cacheKey);
+                  },
+                  () => {},
+                );
+              return failedResult;
+            }
+            if (errorCode === 401 || errorCode === 403)
+              return handleRemoteAuthFailure_2(
+                name,
+                serverRef,
+                "claudeai-proxy",
+                undefined,
+                false,
+                roundEpoch,
+                storageV5,
+              );
+          } else if (serverRef.type === "sse-ide" || serverRef.type === "ws-ide")
+            logEvent("tengu_mcp_ide_server_connection_failed", {
+              connectionDurationMs: elapsed,
+            });
+          if (inProcessServer) inProcessServer.close().catch(() => {});
+          serverTransport.close().catch(() => {});
+          if (stderrOutput && !isCleanupStarted()) logMCPError(name, `Server stderr: ${stderrOutput}`);
+          throw error;
+        }
+        let capabilities = client.getServerCapabilities();
+        let serverVersion = client.getServerVersion();
+        let promptOverrides = officialPluginPromptOverrides(serverRef);
+        let instructionsOverride =
+          serverInstructionsOverride(promptOverrides, name) ?? client.getInstructions();
+        let instructionsLimit = toolTimeoutForServer(serverRef);
+        let instructions = truncateServerInstructions_2(instructionsOverride, name, instructionsLimit);
+        logMCPDebug(
+          name,
+          `Connection established with capabilities: ${jsonStringify({
+            hasTools: !!capabilities?.tools,
+            hasPrompts: !!capabilities?.prompts,
+            hasResources: !!capabilities?.resources,
+            hasResourceSubscribe: !!capabilities?.resources?.subscribe,
+            serverVersion: serverVersion || "unknown",
+          })}`,
+        );
+        logForDebugging(
+          `[MCP] Server "${name}" connected with subscribe=${!!capabilities?.resources?.subscribe}`,
+        );
+        client.setRequestHandler(ElicitRequestSchema, async (request) => {
+          logMCPDebug(name, `Elicitation request received during initialization: ${jsonStringify(request)}`);
+          return {
+            action: "cancel",
+          };
+        });
+        if (serverRef.type === "sse-ide" || serverRef.type === "ws-ide") {
+          let ideConnectionDurationMs = Date.now() - connectStartTime;
+          logEvent("tengu_mcp_ide_server_connection_succeeded", {
+            connectionDurationMs: ideConnectionDurationMs,
+            serverVersion: sanitizeVersion(serverVersion?.version),
+          });
+          maybeNotifyIDEConnected(client).catch((error) => {
+            logMCPError(
+              name,
+              `Failed to send ide_connected notification: ${describeConnectError(error, serverRef)}`,
+            );
+          });
+        }
+        let connectionStartTime = Date.now();
+        let sawTransportError = false;
+        let originalOnerror = client.onerror;
+        let originalOnclose = client.onclose;
+        let MAX_ERRORS_BEFORE_RECONNECT = 3;
+        let transportErrorState = {
+          consecutiveErrors: 0,
+          activeCallWatchdogs: new Set(),
+          pendingElicitations: 0,
+          lastElicitationClosedAt: 0,
+        };
+        let hasTriggeredClose = false;
+        let closeTransportAndRejectPending = (reason) => {
+          if (hasTriggeredClose) return;
+          hasTriggeredClose = true;
+          transportErrorState.closeReason = reason;
+          logMCPDebug(name, `Closing transport (${reason})`);
+          client.close().catch((e) => {
+            logMCPDebug(name, `Error during close: ${describeConnectError(e, serverRef)}`);
+          });
+        };
+        client.onerror = (msg) => {
+          let transportType = serverRef.type || "stdio";
+          if (transportType === "stdio" && msg instanceof SyntaxError) {
+            logMCPError(name, `Ignoring non-JSON line on stdout: ${msg.message}`);
+            return;
+          }
+          if (msg instanceof FirstPartyDesignNeedsConsentError) return;
+          if (transportType === "stdio" && msg instanceof StdoutOverflowError_2) {
+            logMCPError(name, msg.message);
+            sawTransportError = true;
+            closeTransportAndRejectPending("stdout overflow");
             if (originalOnerror) originalOnerror(msg);
             return;
           }
-          if (isTransientMcpError_2(msg)) {
-            te.consecutiveErrors++;
-            Pe();
+          if (
+            (transportType === "http" || transportType === "claudeai-proxy") &&
+            msg instanceof HttpBodyOverflowError_2
+          ) {
+            logMCPError(
+              name,
+              `sent a response larger than ${Math.round(HTTP_BODY_LIMITS / 1024 / 1024)}MB. Claude Code stopped reading it and failed the request it answered; the connection stays open.`,
+            );
+            if (originalOnerror) originalOnerror(msg);
+            return;
+          }
+          if (
+            (transportType === "sse" ||
+              transportType === "sse-ide" ||
+              transportType === "http" ||
+              transportType === "claudeai-proxy") &&
+            msg.message.includes(STOPPED_READING_NOTE_2)
+          ) {
+            logMCPError(name, msg.message);
+            sawTransportError = true;
+            closeTransportAndRejectPending("http body overflow");
+            if (originalOnerror) originalOnerror(msg);
+            return;
+          }
+          if (
+            (transportType === "sse" || transportType === "http" || transportType === "claudeai-proxy") &&
+            msg instanceof SyntaxError
+          ) {
+            sawTransportError = true;
+            armWatchdogs();
+            closeTransportAndRejectPending(
+              authProvider?.authChallengeOpen === true && transportErrorState.activeCallWatchdogs.size <= 1
+                ? "malformed message after an auth challenge"
+                : "malformed JSON-RPC message (response truncated)",
+            );
+            if (originalOnerror) originalOnerror(msg);
+            return;
+          }
+          let uptime = Date.now() - connectionStartTime;
+          sawTransportError = true;
+          logMCPDebug(
+            name,
+            `${transportType.toUpperCase()} connection dropped after ${Math.floor(uptime / 1000)}s uptime`,
+          );
+          if (msg.message) {
+            let hint = CONNECTION_ERROR_HINTS.find(([needle]) => msg.message.includes(needle))?.[1];
+            logMCPDebug(name, hint ?? `Connection error: ${describeConnectError(msg, serverRef)}`);
+          }
+          if (
+            (transportType === "http" || transportType === "claudeai-proxy") &&
+            client.transport?.sessionId !== undefined &&
+            isMcpSessionExpiredError_2(msg)
+          ) {
             logMCPDebug(
               name,
-              `Terminal connection error ${te.consecutiveErrors}/${MAX_ERRORS_BEFORE_RECONNECT}`,
+              "MCP session expired (server no longer recognizes session ID), triggering reconnection",
             );
-            if (te.consecutiveErrors >= MAX_ERRORS_BEFORE_RECONNECT) {
-              te.consecutiveErrors = 0;
-              closeTransportAndRejectPending("max consecutive terminal errors");
-            }
-          } else te.consecutiveErrors = 0;
-        }
-        if (originalOnerror) originalOnerror(msg);
-      };
-      if ((serverRef.type === "http" || serverRef.type === "claudeai-proxy") && client.transport)
-        te.toolCallSends = trackToolCallSends(
-          client.transport,
-          isMcpSessionExpiredError_2,
-          te.activeCallWatchdogs,
-        );
-      if (client.transport) {
-        let onmessage = client.transport.onmessage;
-        client.transport.onmessage = (x, D) => {
-          if (te.consecutiveErrors !== 0) te.consecutiveErrors = 0;
-          onmessage?.(x, D);
-        };
-      }
-      client.onclose = () => {
-        let uptime = Date.now() - connectionStartTime;
-        let transportType = serverRef.type ?? "unknown";
-        logMCPDebug(
-          name,
-          `${transportType.toUpperCase()} connection closed after ${Math.floor(uptime / 1000)}s (${Ie ? "with errors" : "cleanly"})`,
-        );
-        logMcpConnectionOtelEvent_2(name, serverRef, {
-          status: "disconnected",
-          durationMs: uptime,
-        });
-        let key = serverCacheKey(name, serverRef);
-        getConnectionCache().liveClients.delete(client);
-        getConnectionCache().toolLists.delete(key);
-        getConnectionCache().resourceLists.delete(key);
-        getConnectionCache().resourceTemplateLists.delete(key);
-        getConnectionCache().commandLists.delete(key);
-        getConnectionCache().connections.delete(key);
-        logMCPDebug(name, "Cleared connection cache for reconnection");
-        if (originalOnclose) originalOnclose();
-      };
-      let cleanup = async () => {
-        if (H) {
-          try {
-            await H.close();
-          } catch (error) {
-            logMCPDebug(name, `Error closing in-process server: ${error}`);
+            closeTransportAndRejectPending("session expired");
+            if (originalOnerror) originalOnerror(msg);
+            return;
           }
+          if (
+            (transportType === "http" || transportType === "claudeai-proxy") &&
+            client.transport?.sessionId !== undefined &&
+            msg instanceof StreamableHTTPError &&
+            msg.code === 404 &&
+            msg.message.includes("Failed to open SSE stream")
+          )
+            logFeatureSad("mcp_session_recovery", "get_stream_404_not_reinit");
+          if (transportType === "sse" || transportType === "http" || transportType === "claudeai-proxy") {
+            if (msg.message.includes("Maximum reconnection attempts")) {
+              logMCPDebug(
+                name,
+                "SSE GET-stream reconnection exhausted; leaving transport up (POST still works)",
+              );
+              transportErrorState.consecutiveErrors = 0;
+              armWatchdogs();
+              if (originalOnerror) originalOnerror(msg);
+              return;
+            }
+            if (isTransientMcpError_2(msg)) {
+              transportErrorState.consecutiveErrors++;
+              armWatchdogs();
+              logMCPDebug(
+                name,
+                `Terminal connection error ${transportErrorState.consecutiveErrors}/${MAX_ERRORS_BEFORE_RECONNECT}`,
+              );
+              if (transportErrorState.consecutiveErrors >= MAX_ERRORS_BEFORE_RECONNECT) {
+                transportErrorState.consecutiveErrors = 0;
+                closeTransportAndRejectPending("max consecutive terminal errors");
+              }
+            } else transportErrorState.consecutiveErrors = 0;
+          }
+          if (originalOnerror) originalOnerror(msg);
+        };
+        if ((serverRef.type === "http" || serverRef.type === "claudeai-proxy") && client.transport)
+          transportErrorState.toolCallSends = trackToolCallSends(
+            client.transport,
+            isMcpSessionExpiredError_2,
+            transportErrorState.activeCallWatchdogs,
+          );
+        if (client.transport) {
+          let onmessage = client.transport.onmessage;
+          client.transport.onmessage = (message, extra) => {
+            if (transportErrorState.consecutiveErrors !== 0) transportErrorState.consecutiveErrors = 0;
+            onmessage?.(message, extra);
+          };
+        }
+        client.onclose = () => {
+          let uptime = Date.now() - connectionStartTime;
+          let transportType = serverRef.type ?? "unknown";
+          logMCPDebug(
+            name,
+            `${transportType.toUpperCase()} connection closed after ${Math.floor(uptime / 1000)}s (${sawTransportError ? "with errors" : "cleanly"})`,
+          );
+          logMcpConnectionOtelEvent_2(name, serverRef, {
+            status: "disconnected",
+            durationMs: uptime,
+          });
+          let key = serverCacheKey(name, serverRef);
+          getConnectionCache().liveClients.delete(client);
+          getConnectionCache().toolLists.delete(key);
+          getConnectionCache().resourceLists.delete(key);
+          getConnectionCache().resourceTemplateLists.delete(key);
+          getConnectionCache().commandLists.delete(key);
+          getConnectionCache().connections.delete(key);
+          logMCPDebug(name, "Cleared connection cache for reconnection");
+          if (originalOnclose) originalOnclose();
+        };
+        let cleanup = async () => {
+          if (inProcessServer) {
+            try {
+              await inProcessServer.close();
+            } catch (error) {
+              logMCPDebug(name, `Error closing in-process server: ${error}`);
+            }
+            try {
+              await client.close();
+            } catch (error) {
+              logMCPDebug(name, `Error closing client: ${describeConnectError(error, serverRef)}`);
+            }
+            return;
+          }
+          if (serverTransport instanceof BoundedStdioTransport)
+            try {
+              let childPid = serverTransport.pid;
+              if (serverTransport.serverProcess && getPlatform() === "windows") {
+                logMCPDebug(name, "Closing MCP server stdin");
+                await closeStdioServer(serverTransport.serverProcess);
+              } else if (childPid) {
+                logMCPDebug(name, "Sending SIGINT to MCP server process");
+                try {
+                  process.kill(childPid, "SIGINT");
+                } catch (error) {
+                  logMCPDebug(name, `Error sending SIGINT: ${error}`);
+                  return;
+                }
+                await new Promise(async (resolve) => {
+                  let settled = false;
+                  let finish = () => {
+                    if (settled) return;
+                    settled = true;
+                    clearInterval(interval);
+                    clearTimeout(timer);
+                    resolve();
+                  };
+                  let isAlive = (childPid) => {
+                    try {
+                      process.kill(childPid, 0);
+                      return true;
+                    } catch {
+                      return false;
+                    }
+                  };
+                  let interval = setInterval(
+                    (isAlive, childPid, debugName, done) => {
+                      if (!isAlive(childPid)) {
+                        logMCPDebug(debugName, "MCP server process exited cleanly");
+                        done();
+                      }
+                    },
+                    50,
+                    isAlive,
+                    childPid,
+                    name,
+                    finish,
+                  );
+                  let timer = setTimeout(
+                    (debugName, done) => {
+                      logMCPDebug(debugName, "Cleanup timeout reached, stopping process monitoring");
+                      done();
+                    },
+                    600,
+                    name,
+                    finish,
+                  );
+                  try {
+                    await sleep(100);
+                    if (!settled) {
+                      if (!isAlive(childPid)) {
+                        finish();
+                        return;
+                      }
+                      logMCPDebug(name, "SIGINT failed, sending SIGTERM to MCP server process");
+                      try {
+                        process.kill(childPid, "SIGTERM");
+                      } catch (termError) {
+                        logMCPDebug(name, `Error sending SIGTERM: ${termError}`);
+                        finish();
+                        return;
+                      }
+                      await sleep(400);
+                      if (!settled)
+                        if (!isAlive(childPid)) finish();
+                        else {
+                          logMCPDebug(name, "SIGTERM failed, sending SIGKILL to MCP server process");
+                          try {
+                            process.kill(childPid, "SIGKILL");
+                          } catch (killError) {
+                            logMCPDebug(name, `Error sending SIGKILL: ${killError}`);
+                          }
+                        }
+                    }
+                    finish();
+                  } catch {
+                    finish();
+                  }
+                });
+              }
+            } catch (processError) {
+              logMCPDebug(name, `Error terminating process: ${processError}`);
+            }
           try {
             await client.close();
           } catch (error) {
             logMCPDebug(name, `Error closing client: ${describeConnectError(error, serverRef)}`);
           }
-          return;
-        }
-        if (transport_2 instanceof BoundedStdioTransport)
-          try {
-            let childPid = transport_2.pid;
-            if (transport_2.serverProcess && getPlatform() === "windows") {
-              logMCPDebug(name, "Closing MCP server stdin");
-              await closeStdioServer(transport_2.serverProcess);
-            } else if (childPid) {
-              logMCPDebug(name, "Sending SIGINT to MCP server process");
-              try {
-                process.kill(childPid, "SIGINT");
-              } catch (error) {
-                logMCPDebug(name, `Error sending SIGINT: ${error}`);
-                return;
-              }
-              await new Promise(async (resolve) => {
-                let D = false;
-                let z = () => {
-                  if (D) return;
-                  D = true;
-                  clearInterval(interval);
-                  clearTimeout(timer);
-                  resolve();
-                };
-                let ie = (childPid) => {
-                  try {
-                    process.kill(childPid, 0);
-                    return true;
-                  } catch {
-                    return false;
-                  }
-                };
-                let interval = setInterval(
-                  (me, Me, Be, et) => {
-                    if (!me(Me)) {
-                      logMCPDebug(Be, "MCP server process exited cleanly");
-                      et();
-                    }
-                  },
-                  50,
-                  ie,
-                  childPid,
-                  name,
-                  z,
-                );
-                let timer = setTimeout(
-                  (me, Me) => {
-                    logMCPDebug(me, "Cleanup timeout reached, stopping process monitoring");
-                    Me();
-                  },
-                  600,
-                  name,
-                  z,
-                );
-                try {
-                  await sleep(100);
-                  if (!D) {
-                    if (!ie(childPid)) {
-                      z();
-                      return;
-                    }
-                    logMCPDebug(name, "SIGINT failed, sending SIGTERM to MCP server process");
-                    try {
-                      process.kill(childPid, "SIGTERM");
-                    } catch (termError) {
-                      logMCPDebug(name, `Error sending SIGTERM: ${termError}`);
-                      z();
-                      return;
-                    }
-                    await sleep(400);
-                    if (!D)
-                      if (!ie(childPid)) z();
-                      else {
-                        logMCPDebug(name, "SIGTERM failed, sending SIGKILL to MCP server process");
-                        try {
-                          process.kill(childPid, "SIGKILL");
-                        } catch (killError) {
-                          logMCPDebug(name, `Error sending SIGKILL: ${killError}`);
-                        }
-                      }
-                  }
-                  z();
-                } catch {
-                  z();
-                }
-              });
-            }
-          } catch (processError) {
-            logMCPDebug(name, `Error terminating process: ${processError}`);
-          }
+        };
+        let cleanupUnregister = registerCleanup(cleanup);
+        if (serverTransport instanceof BoundedStdioTransport) serverTransport.handOffExitCleanup();
+        let wrappedCleanup = async () => {
+          getConnectionCache().liveClients.delete(client);
+          cleanupUnregister?.();
+          await cleanup();
+        };
+        getConnectionCache().liveClients.add(client);
+        if (getAnnouncedDirectories() !== announcedDirectories) client.sendRootsListChanged().catch(() => {});
+        let connectDurationMs = Date.now() - connectStartTime;
+        logMcpConnectionOtelEvent_2(name, serverRef, {
+          status: "connected",
+          durationMs: connectDurationMs,
+        });
+        let instructionsLength = instructionsOverride?.length ?? 0;
+        logEvent("tengu_mcp_server_connection_succeeded", {
+          connectionDurationMs: connectDurationMs,
+          instructionsLength,
+          instructionsTruncated: instructionsLength > instructionsLimit,
+          transportType: fromEnum(serverRef.type ?? "stdio"),
+          negotiatedLegacySse: serverRef.type === "http" && serverTransport instanceof SSEClientTransport,
+          sdkGeneration: fromEnum(mcpSdkGeneration()),
+          scope: fromEnum(serverRef.scope),
+          isPlugin: serverRef.pluginSource !== undefined,
+          ...buildPluginSourceFields(serverRef),
+          totalServers: serverStats?.totalServers,
+          stdioCount: serverStats?.stdioCount,
+          sseCount: serverStats?.sseCount,
+          httpCount: serverStats?.httpCount,
+          sseIdeCount: serverStats?.sseIdeCount,
+          wsIdeCount: serverStats?.wsIdeCount,
+          ...mcpBaseUrlAnalytics(serverRef, name),
+        });
+        logFeatureOk("mcp_connect");
+        logForDiagnosticsNoPII("info", "mcp_connect_complete", {
+          transport,
+          duration_ms: connectDurationMs,
+        });
+        if (authProvider) getCliOwnedState().clientAuthProviders.set(client, authProvider);
+        getCliOwnedState().clientFirstPartyBearers.set(client, firstPartyBearerState);
+        let connection = {
+          name,
+          client: identityId(client),
+          type: "connected",
+          capabilities: capabilities ?? {},
+          serverInfo: serverVersion,
+          instructions,
+          config: serverRef,
+          cleanup: wrappedCleanup,
+          transportErrorState,
+        };
+        clearDiscoveryPathMemo(name);
         try {
-          await client.close();
+          getConnectedClientWiring()?.(connection);
         } catch (error) {
-          logMCPDebug(name, `Error closing client: ${describeConnectError(error, serverRef)}`);
+          logMCPError(
+            name,
+            `connected-client wiring failed (placeholder retained, adoption will retry): ${errorMessage(error)}`,
+          );
         }
-      };
-      let cleanupUnregister = registerCleanup(cleanup);
-      if (transport_2 instanceof BoundedStdioTransport) transport_2.handOffExitCleanup();
-      let wrappedCleanup = async () => {
-        getConnectionCache().liveClients.delete(client);
-        cleanupUnregister?.();
-        await cleanup();
-      };
-      getConnectionCache().liveClients.add(client);
-      if (getAnnouncedDirectories() !== announcedDirectories) client.sendRootsListChanged().catch(() => {});
-      let ot = Date.now() - connectStartTime;
-      logMcpConnectionOtelEvent_2(name, serverRef, {
-        status: "connected",
-        durationMs: ot,
-      });
-      let _e = xe?.length ?? 0;
-      logEvent("tengu_mcp_server_connection_succeeded", {
-        connectionDurationMs: ot,
-        instructionsLength: _e,
-        instructionsTruncated: _e > He,
-        transportType: fromEnum(serverRef.type ?? "stdio"),
-        negotiatedLegacySse: serverRef.type === "http" && transport_2 instanceof SSEClientTransport,
-        sdkGeneration: fromEnum(mcpSdkGeneration()),
-        scope: fromEnum(serverRef.scope),
-        isPlugin: serverRef.pluginSource !== undefined,
-        ...buildPluginSourceFields(serverRef),
-        totalServers: serverStats?.totalServers,
-        stdioCount: serverStats?.stdioCount,
-        sseCount: serverStats?.sseCount,
-        httpCount: serverStats?.httpCount,
-        sseIdeCount: serverStats?.sseIdeCount,
-        wsIdeCount: serverStats?.wsIdeCount,
-        ...mcpBaseUrlAnalytics(serverRef, name),
-      });
-      logFeatureOk("mcp_connect");
-      logForDiagnosticsNoPII("info", "mcp_connect_complete", {
-        transport,
-        duration_ms: ot,
-      });
-      if (U) getCliOwnedState().clientAuthProviders.set(client, U);
-      getCliOwnedState().clientFirstPartyBearers.set(client, k);
-      let ee = {
-        name,
-        client: identityId(client),
-        type: "connected",
-        capabilities: capabilities ?? {},
-        serverInfo: serverVersion,
-        instructions,
-        config: serverRef,
-        cleanup: wrappedCleanup,
-        transportErrorState: te,
-      };
-      clearDiscoveryPathMemo(name);
-      try {
-        getConnectedClientWiring()?.(ee);
+        return connection;
       } catch (error) {
+        let abandonedAfterMs = Date.now() - connectStartTime;
+        if (isCleanupStarted()) {
+          logMCPDebug(
+            name,
+            `Connection abandoned after ${abandonedAfterMs}ms (Claude Code is shutting down)`,
+          );
+          if (inProcessServer) inProcessServer.close().catch(() => {});
+          return {
+            name,
+            type: "failed",
+            config: serverRef,
+            error: "Claude Code is shutting down",
+            errorCode: "SHUTTING_DOWN",
+          };
+        }
+        let errorDetail = describeConnectError(error, serverRef);
+        let cause = error instanceof Error ? error.cause : undefined;
+        let rawErrorCode =
+          (error && typeof error === "object" && "code" in error ? error.code : undefined) ??
+          (cause && typeof cause === "object" && "code" in cause ? cause.code : undefined);
+        let failureCode = rawErrorCode !== undefined ? String(rawErrorCode) : undefined;
+        if (
+          serverRef.type === "http" &&
+          failureCode === "404" &&
+          serverTransport?.sessionId === undefined &&
+          !isCcrHostedConfig(serverRef)
+        ) {
+          failureCode = "ENDPOINT_NOT_FOUND";
+          errorDetail = `MCP endpoint not found at ${
+            describeMcpServerOrigin(name, serverRef, {
+              detail: "origin",
+            }) ?? "(unparseable url)"
+          }. Check the URL in your MCP config.`;
+        }
+        let suspendedMessage =
+          failureCode === "CONNECT_TIMEOUT" && activeClockSnapshot !== undefined
+            ? suspendedConnectMessage(name, activeClockSnapshot)
+            : undefined;
+        if (suspendedMessage !== undefined) {
+          failureCode = CONNECT_SUSPENDED;
+          errorDetail = suspendedMessage;
+        }
+        errorDetail = redactMcpErrorDetail(name, serverRef, errorDetail);
+        logMcpConnectionOtelEvent_2(name, serverRef, {
+          status: "failed",
+          durationMs: abandonedAfterMs,
+          errorCode: failureCode,
+          error: errorDetail,
+        });
+        let featureErrorId =
+          failureCode === "ENOENT" && (serverRef.type === "stdio" || serverRef.type === undefined)
+            ? "mcp_connect_spawn_enoent"
+            : failureCode === "ENDPOINT_NOT_FOUND"
+              ? "mcp_connect_endpoint_not_found"
+              : undefined;
+        if (featureErrorId !== undefined) logFeatureBad("mcp_connect", featureErrorId);
+        else {
+          let featureSadId =
+            failureCode === "ECONNREFUSED"
+              ? "mcp_connect_refused"
+              : failureCode === CONNECT_SUSPENDED
+                ? "mcp_connect_suspended"
+                : errorDetail.includes("timed out")
+                  ? "mcp_connect_timeout"
+                  : "mcp_connect_failed";
+          logFeatureSad("mcp_connect", `${featureSadId}_${serverRef.type ?? "stdio"}`);
+        }
+        logEvent("tengu_mcp_server_connection_failed", {
+          connectionDurationMs: abandonedAfterMs,
+          errorCode: sanitizeConnectErrorCodeForTelemetry_2(failureCode),
+          errorClassName: sanitizedErrorClassNameForTelemetry(error),
+          errorMessageHash: shortHash(scrubErrorText(errorDetail)),
+          totalServers: serverStats?.totalServers || 1,
+          stdioCount: serverStats?.stdioCount || (serverRef.type === "stdio" ? 1 : 0),
+          sseCount: serverStats?.sseCount || (serverRef.type === "sse" ? 1 : 0),
+          httpCount: serverStats?.httpCount || (serverRef.type === "http" ? 1 : 0),
+          sseIdeCount: serverStats?.sseIdeCount || (serverRef.type === "sse-ide" ? 1 : 0),
+          wsIdeCount: serverStats?.wsIdeCount || (serverRef.type === "ws-ide" ? 1 : 0),
+          transportType: fromEnum(serverRef.type ?? "stdio"),
+          sdkGeneration: fromEnum(mcpSdkGeneration()),
+          scope: fromEnum(serverRef.scope),
+          isPlugin: serverRef.pluginSource !== undefined,
+          ...buildPluginSourceFields(serverRef),
+          ...mcpBaseUrlAnalytics(serverRef, name),
+        });
+        logMCPDebug(
+          name,
+          `Connection failed after ${formatConnectElapsed(clockSnapshot)}${failureCode !== undefined ? ` (${failureCode})` : ""}: ${errorDetail}`,
+        );
         logMCPError(
           name,
-          `connected-client wiring failed (placeholder retained, adoption will retry): ${errorMessage(error)}`,
+          `Connection failed${failureCode !== undefined ? ` (${failureCode})` : ""}: ${errorDetail}`,
         );
-      }
-      return ee;
-    } catch (error) {
-      let fe = Date.now() - connectStartTime;
-      if (isCleanupStarted()) {
-        logMCPDebug(name, `Connection abandoned after ${fe}ms (Claude Code is shutting down)`);
-        if (H) H.close().catch(() => {});
+        logForDiagnosticsNoPII("error", "mcp_connect_failed", {
+          transport,
+          duration_ms: abandonedAfterMs,
+          ...(failureCode === "CONNECT_TIMEOUT" && {
+            reason: "timeout",
+          }),
+          ...(failureCode === CONNECT_SUSPENDED && {
+            reason: "suspended",
+          }),
+        });
+        if (inProcessServer) inProcessServer.close().catch(() => {});
+        if (failureCode !== CONNECT_SUSPENDED) getServerCommandArray(name, serverRef, storageV5);
+        let proxyConnectStatus =
+          failureCode === "ERR_PROXY_TUNNEL"
+            ? [error, cause]
+                .map((candidate) =>
+                  candidate && typeof candidate === "object" && "status" in candidate
+                    ? candidate.status
+                    : undefined,
+                )
+                .find((statusValue) => typeof statusValue === "number")
+            : undefined;
         return {
           name,
           type: "failed",
           config: serverRef,
-          error: "Claude Code is shutting down",
-          errorCode: "SHUTTING_DOWN",
+          error: errorDetail,
+          errorCode: failureCode,
+          ...(proxyConnectStatus !== undefined && {
+            proxyConnectStatus,
+          }),
+          ...(failureCode === undefined &&
+            authProvider?.sawAuthChallenge === true &&
+            (await registrationStatusFields(name, serverRef, connectStartTime))),
         };
       }
-      let pe = describeConnectError(error, serverRef);
-      let cause = error instanceof Error ? error.cause : undefined;
-      let ce =
-        (error && typeof error === "object" && "code" in error ? error.code : undefined) ??
-        (cause && typeof cause === "object" && "code" in cause ? cause.code : undefined);
-      let le = ce !== undefined ? String(ce) : undefined;
-      if (
-        serverRef.type === "http" &&
-        le === "404" &&
-        transport_2?.sessionId === undefined &&
-        !isCcrHostedConfig(serverRef)
-      ) {
-        le = "ENDPOINT_NOT_FOUND";
-        pe = `MCP endpoint not found at ${
-          describeMcpServerOrigin(name, serverRef, {
-            detail: "origin",
-          }) ?? "(unparseable url)"
-        }. Check the URL in your MCP config.`;
-      }
-      let k = le === "CONNECT_TIMEOUT" && w !== undefined ? suspendedConnectMessage(name, w) : undefined;
-      if (k !== undefined) {
-        le = CONNECT_SUSPENDED;
-        pe = k;
-      }
-      pe = redactMcpErrorDetail(name, serverRef, pe);
-      logMcpConnectionOtelEvent_2(name, serverRef, {
-        status: "failed",
-        durationMs: fe,
-        errorCode: le,
-        error: pe,
-      });
-      let L =
-        le === "ENOENT" && (serverRef.type === "stdio" || serverRef.type === undefined)
-          ? "mcp_connect_spawn_enoent"
-          : le === "ENDPOINT_NOT_FOUND"
-            ? "mcp_connect_endpoint_not_found"
-            : undefined;
-      if (L !== undefined) logFeatureBad("mcp_connect", L);
-      else {
-        let W =
-          le === "ECONNREFUSED"
-            ? "mcp_connect_refused"
-            : le === CONNECT_SUSPENDED
-              ? "mcp_connect_suspended"
-              : pe.includes("timed out")
-                ? "mcp_connect_timeout"
-                : "mcp_connect_failed";
-        logFeatureSad("mcp_connect", `${W}_${serverRef.type ?? "stdio"}`);
-      }
-      logEvent("tengu_mcp_server_connection_failed", {
-        connectionDurationMs: fe,
-        errorCode: sanitizeConnectErrorCodeForTelemetry_2(le),
-        errorClassName: sanitizedErrorClassNameForTelemetry(error),
-        errorMessageHash: shortHash(scrubErrorText(pe)),
-        totalServers: serverStats?.totalServers || 1,
-        stdioCount: serverStats?.stdioCount || (serverRef.type === "stdio" ? 1 : 0),
-        sseCount: serverStats?.sseCount || (serverRef.type === "sse" ? 1 : 0),
-        httpCount: serverStats?.httpCount || (serverRef.type === "http" ? 1 : 0),
-        sseIdeCount: serverStats?.sseIdeCount || (serverRef.type === "sse-ide" ? 1 : 0),
-        wsIdeCount: serverStats?.wsIdeCount || (serverRef.type === "ws-ide" ? 1 : 0),
-        transportType: fromEnum(serverRef.type ?? "stdio"),
-        sdkGeneration: fromEnum(mcpSdkGeneration()),
-        scope: fromEnum(serverRef.scope),
-        isPlugin: serverRef.pluginSource !== undefined,
-        ...buildPluginSourceFields(serverRef),
-        ...mcpBaseUrlAnalytics(serverRef, name),
-      });
-      logMCPDebug(
-        name,
-        `Connection failed after ${formatConnectElapsed(clockSnapshot)}${le !== undefined ? ` (${le})` : ""}: ${pe}`,
-      );
-      logMCPError(name, `Connection failed${le !== undefined ? ` (${le})` : ""}: ${pe}`);
-      logForDiagnosticsNoPII("error", "mcp_connect_failed", {
-        transport,
-        duration_ms: fe,
-        ...(le === "CONNECT_TIMEOUT" && {
-          reason: "timeout",
-        }),
-        ...(le === CONNECT_SUSPENDED && {
-          reason: "suspended",
-        }),
-      });
-      if (H) H.close().catch(() => {});
-      if (le !== CONNECT_SUSPENDED) getServerCommandArray(name, serverRef, storageV5);
-      let be =
-        le === "ERR_PROXY_TUNNEL"
-          ? [error, cause]
-              .map((W) => (W && typeof W === "object" && "status" in W ? W.status : undefined))
-              .find((W) => typeof W === "number")
-          : undefined;
-      return {
-        name,
-        type: "failed",
-        config: serverRef,
-        error: pe,
-        errorCode: le,
-        ...(be !== undefined && {
-          proxyConnectStatus: be,
-        }),
-        ...(le === undefined &&
-          U?.sawAuthChallenge === true &&
-          (await registrationStatusFields(name, serverRef, connectStartTime))),
-      };
-    }
-  },
-  serverCacheKey,
-  () => getConnectionCache().connections,
-  (e, r, [n, s, , h]) =>
-    connectWithSignedOutFallback(
-      () => redialAfterSuspend(e, r, () => getServerCommandArray(n, s, h)),
-      r,
-      n,
-      s,
-    ),
-);
+    },
+    serverCacheKey,
+    () => getConnectionCache().connections,
+    (name, serverRef, [cacheName, cacheServerRef, , storageV5]) =>
+      connectWithSignedOutFallback(
+        () =>
+          redialAfterSuspend(name, serverRef, () =>
+            getServerCommandArray(cacheName, cacheServerRef, storageV5),
+          ),
+        serverRef,
+        cacheName,
+        cacheServerRef,
+      ),
+  );
+});
 //@ chunk-z1n5m6nf.js:123802-123964 callgraph-fingerprint = callIdeRpc (0.394)
 /**
  * callIdeTool（v1 副本）。
@@ -12192,123 +13552,132 @@ function identityChangedReconnectResult_2(name, config) {
 /**
  * 重连 MCP 服务器（v1）：需要时先等待账号身份就绪，远程服务器在等待期间账号变化则返回 IDENTITY_CHANGED 结果，否则调用 reconnectMcpServerImpl。
  */
-async function reconnectMcpServer_2(name, config, n, s) {
-  if (!isDiscoveryCacheUsable()) return reconnectMcpServerImpl(name, config, n, s);
-  let h = identityEpoch();
-  await flushDiscoveryCache(clearDiscoveryForServer_2(name, config));
-  if (isRemoteMcpTransport(config) && identityEpoch() !== h)
-    return identityChangedReconnectResult_2(name, config);
-  return reconnectMcpServerImpl(name, config, n, s);
+async function reconnectMcpServer_2(serverName, serverRef, credentials, storageV5) {
+  if (!isDiscoveryCacheUsable()) return reconnectMcpServerImpl(serverName, serverRef, credentials, storageV5);
+  let epochAtStart = identityEpoch();
+  await flushDiscoveryCache(clearDiscoveryForServer_2(serverName, serverRef));
+  if (isRemoteMcpTransport(serverRef) && identityEpoch() !== epochAtStart)
+    return identityChangedReconnectResult_2(serverName, serverRef);
+  return reconnectMcpServerImpl(serverName, serverRef, credentials, storageV5);
 }
 //@ chunk-z1n5m6nf.js:124359-126278 layout
 /**
  * reconnectMcpServerImpl（v1 副本）。
  */
-async function reconnectMcpServerImpl(name, config, n, s, h = {}) {
-  let y = identityEpoch();
-  let S = isRemoteMcpTransport(config);
-  let T = () => S && identityEpoch() !== y;
-  let M = () => identityChangedReconnectResult_2(name, config);
+async function reconnectMcpServerImpl(serverName, serverRef, credentials, storageV5, options = {}) {
+  let epochAtStart = identityEpoch();
+  let isRemote = isRemoteMcpTransport(serverRef);
+  let identityChanged = () => isRemote && identityEpoch() !== epochAtStart;
+  let identityChangedResult = () => identityChangedReconnectResult_2(serverName, serverRef);
   try {
     clearKeychainCache();
-    let w = h.keepConnectionInUse ? {} : undefined;
-    await (w === undefined ? clearServerCache_4(name, config) : clearServerCache_4(name, config, w));
-    if (T()) return M();
-    let R = connectToServer_2(name, config, undefined, n, s);
-    let E = await R;
-    if (E.type === "needs-auth") {
-      logMCPDebug(name, "Reconnect returned 'needs-auth'; retrying once after cache clear");
-      if (T()) return M();
-      let fe = serverCacheKey(name, config);
-      if (getConnectionCache().connections.get(fe) === R) getConnectionCache().connections.delete(fe);
-      E = await connectToServer_2(name, config, undefined, n, s);
+    let keepOptions = options.keepConnectionInUse ? {} : undefined;
+    await (keepOptions === undefined
+      ? clearServerCache_4(serverName, serverRef)
+      : clearServerCache_4(serverName, serverRef, keepOptions));
+    if (identityChanged()) return identityChangedResult();
+    let dial = connectToServer_2(serverName, serverRef, undefined, credentials, storageV5);
+    let connection = await dial;
+    if (connection.type === "needs-auth") {
+      logMCPDebug(serverName, "Reconnect returned 'needs-auth'; retrying once after cache clear");
+      if (identityChanged()) return identityChangedResult();
+      let cacheKey = serverCacheKey(serverName, serverRef);
+      if (getConnectionCache().connections.get(cacheKey) === dial)
+        getConnectionCache().connections.delete(cacheKey);
+      connection = await connectToServer_2(serverName, serverRef, undefined, credentials, storageV5);
     }
-    if (T()) {
-      if (E.type === "connected") await detachAndCloseConnection_2(E);
-      return M();
+    if (identityChanged()) {
+      if (connection.type === "connected") await detachAndCloseConnection_2(connection);
+      return identityChangedResult();
     }
-    if (E.type !== "connected") {
+    if (connection.type !== "connected") {
       logFeatureSad("mcp_reconnect", "mcp_reconnect_not_connected");
-      return applyMcpServerConfig(config, {
-        client: E,
+      return applyMcpServerConfig(serverRef, {
+        client: connection,
         tools: [],
         commands: [],
       });
     }
-    if (config.type !== "claudeai-proxy") clearMcpAuthCacheEntry_2(name, n);
-    if (config.type === "http" || config.type === "sse") await clearMcpOAuthStubIfTokenless(name, config);
-    clearDiscoveryPathMemo(name);
+    if (serverRef.type !== "claudeai-proxy") clearMcpAuthCacheEntry_2(serverName, credentials);
+    if (serverRef.type === "http" || serverRef.type === "sse")
+      await clearMcpOAuthStubIfTokenless(serverName, serverRef);
+    clearDiscoveryPathMemo(serverName);
     let grantLeg;
-    if (isDiscoveryCacheOn()) grantLeg = await cacheGrantLeg(name, config);
-    if (T()) {
-      await detachAndCloseConnection_2(E);
-      return M();
+    if (isDiscoveryCacheOn()) grantLeg = await cacheGrantLeg(serverName, serverRef);
+    if (identityChanged()) {
+      await detachAndCloseConnection_2(connection);
+      return identityChangedResult();
     }
-    let H = !!E.capabilities?.resources;
-    let [U, commandsForClient, he, G] = await Promise.all([
-      listMcpTools(E, n),
-      fetchCommandsForClient_2(E),
+    let hasResources = !!connection.capabilities?.resources;
+    let [tools, commandsForClient, extraCommands, resources] = await Promise.all([
+      listMcpTools(connection, credentials),
+      fetchCommandsForClient_2(connection),
       Promise.resolve([]),
-      H ? fetchResourcesForClient_2(E) : Promise.resolve([]),
+      hasResources ? fetchResourcesForClient_2(connection) : Promise.resolve([]),
     ]);
-    if (T()) {
-      await detachAndCloseConnection_2(E);
-      return M();
+    if (identityChanged()) {
+      await detachAndCloseConnection_2(connection);
+      return identityChangedResult();
     }
-    if (E.discoveryAuthFailure) {
+    if (connection.discoveryAuthFailure) {
       logFeatureSad("mcp_reconnect", "mcp_reconnect_needs_auth_discovery");
       return {
         client: {
-          name,
+          name: serverName,
           type: "needs-auth",
-          config,
+          config: serverRef,
         },
         tools: [],
         commands: [],
       };
     }
-    if (config.type === "claudeai-proxy" && !E.discoveryBearerRejected) clearMcpAuthCacheEntry_2(name, n);
-    if (config.type === "claudeai-proxy" && !E.toolsListError && !E.discoveryBearerRejected)
-      recordClaudeAiMcpConnected(name, n);
-    persistLiveListing_2(E, {
-      tools: U,
+    if (serverRef.type === "claudeai-proxy" && !connection.discoveryBearerRejected)
+      clearMcpAuthCacheEntry_2(serverName, credentials);
+    if (
+      serverRef.type === "claudeai-proxy" &&
+      !connection.toolsListError &&
+      !connection.discoveryBearerRejected
+    )
+      recordClaudeAiMcpConnected(serverName, credentials);
+    persistLiveListing_2(connection, {
+      tools,
       commands: commandsForClient,
-      resources: G,
-      identityEpoch: y,
+      resources,
+      identityEpoch: epochAtStart,
       grantLeg,
     });
-    let commands = [...commandsForClient, ...he];
-    let j = [];
-    if (H) {
+    let commands = [...commandsForClient, ...extraCommands];
+    let resourceTools = [];
+    if (hasResources) {
       if (
         ![ListMcpResourcesTool, ReadMcpResourceTool].some((tool) =>
-          U.some((t) => toolMatchesName(t, tool.name)),
+          tools.some((t) => toolMatchesName(t, tool.name)),
         )
       )
-        j.push(ListMcpResourcesTool, ReadMcpResourceTool, listDirectoryResourceTool);
+        resourceTools.push(ListMcpResourcesTool, ReadMcpResourceTool, listDirectoryResourceTool);
     }
-    if (E.discoveryBearerRejected) logFeatureSad("mcp_reconnect", "mcp_reconnect_bearer_rejected");
-    else if (E.toolsListError) logFeatureSad("mcp_reconnect", "mcp_reconnect_tools_list_failed");
+    if (connection.discoveryBearerRejected) logFeatureSad("mcp_reconnect", "mcp_reconnect_bearer_rejected");
+    else if (connection.toolsListError) logFeatureSad("mcp_reconnect", "mcp_reconnect_tools_list_failed");
     else logFeatureOk("mcp_reconnect");
-    return applyMcpServerConfig(config, {
-      client: E,
-      tools: [...U, ...j],
+    return applyMcpServerConfig(serverRef, {
+      client: connection,
+      tools: [...tools, ...resourceTools],
       commands,
-      resources: G.length > 0 ? G : undefined,
+      resources: resources.length > 0 ? resources : undefined,
       resourceTemplates: [],
-      ...(w?.connection !== undefined &&
-        E === w.connection && {
+      ...(keepOptions?.connection !== undefined &&
+        connection === keepOptions.connection && {
           keptConnectionInUse: true,
         }),
     });
   } catch (error) {
     logFeatureBad("mcp_reconnect", "mcp_reconnect_failed");
-    logMCPError(name, `Error during reconnection: ${describeConnectError(error, config)}`);
+    logMCPError(serverName, `Error during reconnection: ${describeConnectError(error, serverRef)}`);
     return {
       client: {
-        name,
+        name: serverName,
         type: "failed",
-        config,
+        config: serverRef,
       },
       tools: [],
       commands: [],
@@ -12325,17 +13694,17 @@ async function processBatched_3(items, concurrency, processor) {
 /**
  * countUnsettledByDeadline（v1 副本）。
  */
-async function countUnsettledByDeadline_2(e, r) {
-  if (e.length === 0) return 0;
-  let n;
+async function countUnsettledByDeadline_2(promises, timeoutMs) {
+  if (promises.length === 0) return 0;
+  let timer;
   let promise = new Promise((resolve) => {
-    n = setTimeout((y) => y("deadline"), r, resolve);
+    timer = setTimeout((resolve) => resolve("deadline"), timeoutMs, resolve);
   });
   try {
     let results = await Promise.all(
-      e.map((y) =>
+      promises.map((promise_2) =>
         Promise.race([
-          y.then(
+          promise_2.then(
             () => "settled",
             () => "settled",
           ),
@@ -12343,51 +13712,60 @@ async function countUnsettledByDeadline_2(e, r) {
         ]),
       ),
     );
-    return count(results, (y) => y === "deadline");
+    return count(results, (outcome) => outcome === "deadline");
   } finally {
-    clearTimeout(n);
+    clearTimeout(timer);
   }
 }
 //@ chunk-z1n5m6nf.js:126598-134003 layout
 /**
  * getMcpToolsCommandsAndResources（v1 副本）。
  */
-async function getMcpToolsCommandsAndResources(e, mcpConfigs, n, s, h, y, S, T) {
-  let M = identityEpoch();
-  let w = (k) => identityEpoch() !== M && isRemoteMcpTransport(k);
-  let R = (k) => {
-    if (!w(k.client.config))
-      e({
-        ...k,
-        attemptEpoch: M,
+async function getMcpToolsCommandsAndResources(
+  publishResult,
+  mcpConfigs,
+  storageV5,
+  credentials,
+  savedToolsByServer,
+  streamResources,
+  listOptions,
+  connectOptions,
+) {
+  let epochAtStart = identityEpoch();
+  let identityChangedForRemote = (config) => identityEpoch() !== epochAtStart && isRemoteMcpTransport(config);
+  let publishServerResult = (config) => {
+    if (!identityChangedForRemote(config.client.config))
+      publishResult({
+        ...config,
+        attemptEpoch: epochAtStart,
       });
   };
   isLegacyProtocolEra();
-  let E = false;
+  let resourceToolsAdded = false;
   let entries = Object.entries(mcpConfigs ?? (await getAllMcpConfigs()).servers);
-  let H = [];
-  for (let k of entries)
-    if (isMcpServerDisabled(k[0]))
-      R({
+  let enabledEntries = [];
+  for (let entry of entries)
+    if (isMcpServerDisabled(entry[0]))
+      publishServerResult({
         client: {
-          name: k[0],
+          name: entry[0],
           type: "disabled",
-          config: k[1],
+          config: entry[1],
         },
         tools: [],
         commands: [],
       });
-    else H.push(k);
-  registerConfiguredMcpServers(Object.fromEntries(H));
-  let totalServers = H.length;
-  let stdioCount = count(H, ([k, L]) => L.type === "stdio");
-  let sseCount = count(H, ([k, L]) => L.type === "sse");
-  let httpCount = count(H, ([k, L]) => L.type === "http");
-  let sseIdeCount = count(H, ([k, L]) => L.type === "sse-ide");
-  let wsIdeCount = count(H, ([k, L]) => L.type === "ws-ide");
-  let filtered = H.filter(([k, config]) => isLocalMcpServer_2(config));
-  let filtered_2 = H.filter(([k, config]) => !isLocalMcpServer_2(config));
-  let ge = {
+    else enabledEntries.push(entry);
+  registerConfiguredMcpServers(Object.fromEntries(enabledEntries));
+  let totalServers = enabledEntries.length;
+  let stdioCount = count(enabledEntries, ([name, config]) => config.type === "stdio");
+  let sseCount = count(enabledEntries, ([name, config]) => config.type === "sse");
+  let httpCount = count(enabledEntries, ([name, config]) => config.type === "http");
+  let sseIdeCount = count(enabledEntries, ([name, config]) => config.type === "sse-ide");
+  let wsIdeCount = count(enabledEntries, ([name, config]) => config.type === "ws-ide");
+  let filtered = enabledEntries.filter(([name, config]) => isLocalMcpServer_2(config));
+  let filtered_2 = enabledEntries.filter(([name, config]) => !isLocalMcpServer_2(config));
+  let transportCounts = {
     totalServers,
     stdioCount,
     sseCount,
@@ -12395,90 +13773,90 @@ async function getMcpToolsCommandsAndResources(e, mcpConfigs, n, s, h, y, S, T) 
     sseIdeCount,
     wsIdeCount,
   };
-  let ce = [];
-  let processor = async ([serverName, L]) => {
+  let pendingDiscoveryTasks = [];
+  let processor = async ([serverName, config]) => {
     try {
       if (isCleanupStarted()) {
         logMCPDebug(serverName, "Skipping connection (Claude Code is shutting down)");
         return;
       }
       if (isMcpServerDisabled(serverName)) {
-        R({
+        publishServerResult({
           client: {
             name: serverName,
             type: "disabled",
-            config: L,
+            config,
           },
           tools: [],
           commands: [],
         });
         return;
       }
-      if (isMcpServerBlockedAtConnectTime(serverName, L)) {
+      if (isMcpServerBlockedAtConnectTime(serverName, config)) {
         logMCPDebug(serverName, "Skipping connection (blocked by managed policy)");
-        R({
+        publishServerResult({
           client: {
             name: serverName,
             type: "failed",
-            config: L,
-            error: mcpGateError("managed-policy", serverName, L).error,
+            config,
+            error: mcpGateError("managed-policy", serverName, config).error,
           },
           tools: [],
           commands: [],
         });
         return;
       }
-      if (isIneligibleClaudeAiProxy(L)) {
-        R({
+      if (isIneligibleClaudeAiProxy(config)) {
+        publishServerResult({
           client: {
             name: serverName,
             type: "needs-auth",
-            config: L,
+            config,
           },
-          tools: mcpAuthToolsFor(serverName, L),
+          tools: mcpAuthToolsFor(serverName, config),
           commands: [],
         });
         return;
       }
       if (
-        (L.type === "claudeai-proxy" || L.type === "http" || L.type === "sse") &&
-        !isCliOwnedConfig(L) &&
-        ((await isMcpAuthCached_2(serverName, L, n)) ||
-          ((L.type === "http" || L.type === "sse") &&
+        (config.type === "claudeai-proxy" || config.type === "http" || config.type === "sse") &&
+        !isCliOwnedConfig(config) &&
+        ((await isMcpAuthCached_2(serverName, config, storageV5)) ||
+          ((config.type === "http" || config.type === "sse") &&
             shouldTryTokenless(
               serverName,
-              L,
+              config,
               await readMcpOAuthStore({
                 serverName,
-                serverConfig: L,
+                serverConfig: config,
                 challenged: false,
               }),
             )))
       ) {
-        if (L.type !== "claudeai-proxy" && L.pluginSource === undefined)
+        if (config.type !== "claudeai-proxy" && config.pluginSource === undefined)
           logMCPDebug(serverName, "Skipping connection (cached needs-auth)");
-        R({
+        publishServerResult({
           client: {
             name: serverName,
             type: "needs-auth",
-            config: L,
-            ...(await registrationStatusFields(serverName, L)),
+            config,
+            ...(await registrationStatusFields(serverName, config)),
           },
-          tools: mcpAuthToolsFor(serverName, L),
+          tools: mcpAuthToolsFor(serverName, config),
           commands: [],
         });
         return;
       }
       if (
-        (L.type === "stdio" || L.type === undefined) &&
-        L.pluginSource !== undefined &&
-        (await isMcpAuthCached_2(serverName, L, n))
+        (config.type === "stdio" || config.type === undefined) &&
+        config.pluginSource !== undefined &&
+        (await isMcpAuthCached_2(serverName, config, storageV5))
       ) {
-        R({
+        publishServerResult({
           client: {
             name: serverName,
             type: "failed",
-            config: L,
+            config,
             error:
               "Skipping connection (recent failure cached; retries automatically in 15 min, or edit the plugin config to retry now)",
           },
@@ -12487,38 +13865,41 @@ async function getMcpToolsCommandsAndResources(e, mcpConfigs, n, s, h, y, S, T) 
         });
         return;
       }
-      let be = await hasLiveConnection_2(serverName, L);
-      let W = h !== undefined && Object.hasOwn(h, serverName) ? h[serverName] : undefined;
-      if (W !== undefined && !be) {
+      let hasLive = await hasLiveConnection_2(serverName, config);
+      let savedTools =
+        savedToolsByServer !== undefined && Object.hasOwn(savedToolsByServer, serverName)
+          ? savedToolsByServer[serverName]
+          : undefined;
+      if (savedTools !== undefined && !hasLive) {
         let { client, tools } = await buildCachedClientTools_2({
           name: serverName,
-          config: L,
+          config,
           capabilities: {
             tools: {},
           },
           serverInfo: undefined,
           savedAt: Date.now(),
-          tools: W,
+          tools: savedTools,
         });
-        R({
+        publishServerResult({
           client,
           tools,
           commands: [],
         });
         return;
       }
-      let ze = be
+      let cacheProbe = hasLive
         ? {
             kind: "miss",
             reason: "live-connection",
           }
-        : await readDiscoveryCache(serverName, L);
-      let X = applyCapabilityServeTimeMiss_2(ze);
-      if (X.kind === "fresh" || X.kind === "stale") {
-        let { entry, ageMs } = X;
+        : await readDiscoveryCache(serverName, config);
+      let cacheServe = applyCapabilityServeTimeMiss_2(cacheProbe);
+      if (cacheServe.kind === "fresh" || cacheServe.kind === "stale") {
+        let { entry, ageMs } = cacheServe;
         let { client, tools } = await buildCachedClientTools_2({
           name: serverName,
-          config: L,
+          config,
           capabilities: entry.capabilities,
           serverInfo: entry.serverInfo,
           savedAt: entry.savedAt,
@@ -12529,248 +13910,284 @@ async function getMcpToolsCommandsAndResources(e, mcpConfigs, n, s, h, y, S, T) 
           ...resource,
           server: serverName,
         }));
-        let mapped_2 = (entry.templates ?? []).map((ve) => ({
-          ...ve,
+        let mapped_2 = (entry.templates ?? []).map((template) => ({
+          ...template,
           server: serverName,
         }));
-        let Ue = !!entry.capabilities.resources || mapped.length > 0;
-        let Ie = [];
-        if (Ue && !E) {
-          E = true;
-          Ie.push(ListMcpResourcesTool, ReadMcpResourceTool, listDirectoryResourceTool);
+        let cachedHasResources = !!entry.capabilities.resources || mapped.length > 0;
+        let resourceTools = [];
+        if (cachedHasResources && !resourceToolsAdded) {
+          resourceToolsAdded = true;
+          resourceTools.push(ListMcpResourcesTool, ReadMcpResourceTool, listDirectoryResourceTool);
         }
         logEvent("tengu_mcp_discovery_source", {
-          source: lit(X.kind === "fresh" ? "cache_fresh" : "cache_stale"),
-          transportType: fromEnum(L.type ?? "stdio"),
+          source: lit(cacheServe.kind === "fresh" ? "cache_fresh" : "cache_stale"),
+          transportType: fromEnum(config.type ?? "stdio"),
           entryAgeMs: ageMs,
-          ...mcpBaseUrlAnalytics(L, serverName),
+          ...mcpBaseUrlAnalytics(config, serverName),
         });
         logFeatureOk("mcp_discovery_cache");
-        getConnectionCache().settledCachedDialFailures.delete(serverCacheKey(serverName, L));
-        getConnectionCache().refusedCachedRows.delete(serverCacheKey(serverName, L));
-        R({
+        getConnectionCache().settledCachedDialFailures.delete(serverCacheKey(serverName, config));
+        getConnectionCache().refusedCachedRows.delete(serverCacheKey(serverName, config));
+        publishServerResult({
           client,
-          tools: [...tools, ...Ie],
+          tools: [...tools, ...resourceTools],
           commands,
           resources: mapped.length > 0 ? mapped : undefined,
           resourceTemplates: mapped_2.length > 0 ? mapped_2 : undefined,
         });
-        if (X.kind === "stale")
+        if (cacheServe.kind === "stale")
           (async () => {
-            let grantLeg = await cacheGrantLeg(serverName, L);
-            let Ee;
-            let B = async () => {
-              if ((Ee !== undefined && isSupersededDial_2(Ee)) || identityEpoch() !== M) return;
+            let grantLeg = await cacheGrantLeg(serverName, config);
+            let refreshDial;
+            let recordStrike = async () => {
+              if (
+                (refreshDial !== undefined && isSupersededDial_2(refreshDial)) ||
+                identityEpoch() !== epochAtStart
+              )
+                return;
               logFeatureSad("mcp_discovery_cache", "strike");
-              await recordRefreshFailureStrike(serverName, L, {
-                identityEpoch: M,
+              await recordRefreshFailureStrike(serverName, config, {
+                identityEpoch: epochAtStart,
                 grantLeg,
               });
             };
-            let discoveryRefreshLock = await acquireDiscoveryRefreshLock(serverName, L);
+            let discoveryRefreshLock = await acquireDiscoveryRefreshLock(serverName, config);
             if (!discoveryRefreshLock) return;
             if (isMcpServerDisabled(serverName)) {
               await discoveryRefreshLock().catch(() => {});
-              refuseCachedRowV1(serverName, L, "disabled");
+              refuseCachedRowV1(serverName, config, "disabled");
               return;
             }
-            if (isMcpServerBlockedAtConnectTime(serverName, L)) {
+            if (isMcpServerBlockedAtConnectTime(serverName, config)) {
               await discoveryRefreshLock().catch(() => {});
-              refuseCachedRowV1(serverName, L, "policy");
+              refuseCachedRowV1(serverName, config, "policy");
               return;
             }
-            let Pe = (ye) => {
-              if (!(!(Ee !== undefined && isSupersededDial_2(Ee)) && identityEpoch() === M)) return;
-              if (ye.type !== "needs-auth")
-                getConnectionCache().connections.delete(serverCacheKey(serverName, L));
+            let handleRefreshResult = (connection) => {
+              if (!(
+                !(refreshDial !== undefined && isSupersededDial_2(refreshDial)) &&
+                identityEpoch() === epochAtStart
+              ))
+                return;
+              if (connection.type !== "needs-auth")
+                getConnectionCache().connections.delete(serverCacheKey(serverName, config));
               let cachedFirstDialArmsRan = getCliOwnedState().cachedFirstDialArmsRan;
-              if (cachedFirstDialArmsRan.has(ye)) return;
-              cachedFirstDialArmsRan.add(ye);
-              if (ye.type === "needs-auth") emitCachedAdoptSignal(serverName, L);
-              else if (ye.type === "failed") recordCachedDialFailureV1(ye, false);
+              if (cachedFirstDialArmsRan.has(connection)) return;
+              cachedFirstDialArmsRan.add(connection);
+              if (connection.type === "needs-auth") emitCachedAdoptSignal(serverName, config);
+              else if (connection.type === "failed") recordCachedDialFailureV1(connection, false);
             };
-            let ke = (ye) => {
+            let emitAdopt = (connection) => {
               let cachedFirstDialArmsRan = getCliOwnedState().cachedFirstDialArmsRan;
-              if (cachedFirstDialArmsRan.has(ye)) return;
-              cachedFirstDialArmsRan.add(ye);
-              emitCachedAdoptSignal(serverName, L);
+              if (cachedFirstDialArmsRan.has(connection)) return;
+              cachedFirstDialArmsRan.add(connection);
+              emitCachedAdoptSignal(serverName, config);
             };
-            let oe = false;
+            let dialSettled = false;
             try {
-              Ee = connectToServer_2(serverName, L, ge, n, s);
-              getCliOwnedState().swrRefreshDialsInFlight.add(Ee);
-              Ee.then(
+              refreshDial = connectToServer_2(serverName, config, transportCounts, storageV5, credentials);
+              getCliOwnedState().swrRefreshDialsInFlight.add(refreshDial);
+              refreshDial.then(
                 () => {
-                  oe = true;
+                  dialSettled = true;
                 },
                 () => {
-                  oe = true;
+                  dialSettled = true;
                 },
               );
-              let ye = await boundDial(Ee, {
+              let refreshConnection = await boundDial(refreshDial, {
                 serverName,
                 context: "MCP discovery-cache stale refresh",
               });
-              if (ye.type !== "connected") {
-                Pe(ye);
-                await B();
+              if (refreshConnection.type !== "connected") {
+                handleRefreshResult(refreshConnection);
+                await recordStrike();
                 return;
               }
-              if (isSupersededDial_2(Ee) || identityEpoch() !== M) return;
+              if (isSupersededDial_2(refreshDial) || identityEpoch() !== epochAtStart) return;
               if (
                 entry.negotiatedEra !== undefined &&
-                ye.protocolEra !== undefined &&
-                ye.protocolEra !== entry.negotiatedEra
+                refreshConnection.protocolEra !== undefined &&
+                refreshConnection.protocolEra !== entry.negotiatedEra
               ) {
                 logMCPDebug(
                   serverName,
                   "Discovery cache entry dropped: server negotiated a different protocol era on revalidation",
                 );
-                await clearDiscoveryForServer_2(serverName, L).catch(() => {});
-                if (!isSupersededDial_2(Ee) && identityEpoch() === M) ke(ye);
+                await clearDiscoveryForServer_2(serverName, config).catch(() => {});
+                if (!isSupersededDial_2(refreshDial) && identityEpoch() === epochAtStart)
+                  emitAdopt(refreshConnection);
                 return;
               }
-              let Ae = !!ye.capabilities?.resources;
+              let refreshHasResources = !!refreshConnection.capabilities?.resources;
               clearDiscoveryPathMemo(serverName);
-              let grantLeg = await cacheGrantLeg(serverName, L);
-              if (isSupersededDial_2(Ee) || identityEpoch() !== M) return;
-              let [ot, commandsForClient, resourcesForClient, P] = await Promise.all([
-                listMcpTools(ye, n),
-                fetchCommandsForClient_2(ye),
-                fetchResourcesForClient_2(ye),
-                Ae && isCacheableServer(L) ? fetchResourceTemplatesForClient_2(ye) : Promise.resolve([]),
+              let grantLeg = await cacheGrantLeg(serverName, config);
+              if (isSupersededDial_2(refreshDial) || identityEpoch() !== epochAtStart) return;
+              let [tools, commandsForClient, resourcesForClient, templatesPromise] = await Promise.all([
+                listMcpTools(refreshConnection, storageV5),
+                fetchCommandsForClient_2(refreshConnection),
+                fetchResourcesForClient_2(refreshConnection),
+                refreshHasResources && isCacheableServer(config)
+                  ? fetchResourceTemplatesForClient_2(refreshConnection)
+                  : Promise.resolve([]),
               ]);
-              let templates = getDiscoveryFetchError_2(P) === undefined ? P : undefined;
+              let templates =
+                getDiscoveryFetchError_2(templatesPromise) === undefined ? templatesPromise : undefined;
               if (
-                isSupersededDial_2(Ee) ||
-                isSupersededCacheEntry_2(Ee, serverName, L) ||
-                identityEpoch() !== M
+                isSupersededDial_2(refreshDial) ||
+                isSupersededCacheEntry_2(refreshDial, serverName, config) ||
+                identityEpoch() !== epochAtStart
               )
                 return;
-              if (!isMcpServerDisabled(serverName) && !isMcpServerBlockedAtConnectTime(serverName, L)) {
+              if (!isMcpServerDisabled(serverName) && !isMcpServerBlockedAtConnectTime(serverName, config)) {
                 if (
-                  !(await persistDiscovery(ye, {
-                    tools: ot,
+                  !(await persistDiscovery(refreshConnection, {
+                    tools,
                     commands: commandsForClient,
                     resources: resourcesForClient,
                     templates,
-                    identityEpoch: M,
+                    identityEpoch: epochAtStart,
                     grantLeg,
                   }))
                 )
-                  await B();
+                  await recordStrike();
               }
               if (
-                !(Ee !== undefined && isSupersededDial_2(Ee)) &&
-                !(Ee !== undefined && isSupersededCacheEntry_2(Ee, serverName, L)) &&
-                identityEpoch() === M
+                !(refreshDial !== undefined && isSupersededDial_2(refreshDial)) &&
+                !(refreshDial !== undefined && isSupersededCacheEntry_2(refreshDial, serverName, config)) &&
+                identityEpoch() === epochAtStart
               )
-                ke(ye);
+                emitAdopt(refreshConnection);
             } catch {
-              if (Ee !== undefined && !oe) {
-                let ye = Ee;
-                ye.then(
-                  (Ae) => {
-                    if (Ae.type !== "connected") {
-                      Pe(Ae);
-                      B().catch(() => {});
+              if (refreshDial !== undefined && !dialSettled) {
+                let pendingDial = refreshDial;
+                pendingDial.then(
+                  (lateResult) => {
+                    if (lateResult.type !== "connected") {
+                      handleRefreshResult(lateResult);
+                      recordStrike().catch(() => {});
                     } else {
-                      getCliOwnedState().swrRefreshDialsInFlight.delete(ye);
+                      getCliOwnedState().swrRefreshDialsInFlight.delete(pendingDial);
                       (entry.negotiatedEra !== undefined &&
-                      Ae.protocolEra !== undefined &&
-                      Ae.protocolEra !== entry.negotiatedEra
-                        ? clearDiscoveryForServer_2(serverName, L).catch(() => {})
+                      lateResult.protocolEra !== undefined &&
+                      lateResult.protocolEra !== entry.negotiatedEra
+                        ? clearDiscoveryForServer_2(serverName, config).catch(() => {})
                         : Promise.resolve()
                       ).then(() => {
-                        if (!isSupersededDial_2(ye) && identityEpoch() === M) ke(Ae);
+                        if (!isSupersededDial_2(pendingDial) && identityEpoch() === epochAtStart)
+                          emitAdopt(lateResult);
                       });
                     }
                   },
                   () => {
-                    B().catch(() => {});
+                    recordStrike().catch(() => {});
                   },
                 );
-              } else await B();
+              } else await recordStrike();
             } finally {
-              if (Ee !== undefined && oe) getCliOwnedState().swrRefreshDialsInFlight.delete(Ee);
+              if (refreshDial !== undefined && dialSettled)
+                getCliOwnedState().swrRefreshDialsInFlight.delete(refreshDial);
               await discoveryRefreshLock().catch(() => {});
             }
           })();
         return;
       }
-      let Le = connectToServer_2(serverName, L, ge, n, s, undefined, T);
-      let Z = await Le;
-      let Ne = connectToServer_2.cache?.get?.(serverCacheKey(serverName, L)) === Le;
-      if (isDiscoveryCacheOn() && isDiscoveryCacheMissRecoverable_2(X))
+      let dial = connectToServer_2(
+        serverName,
+        config,
+        transportCounts,
+        storageV5,
+        credentials,
+        undefined,
+        connectOptions,
+      );
+      let connection = await dial;
+      let isLatestDial = connectToServer_2.cache?.get?.(serverCacheKey(serverName, config)) === dial;
+      if (isDiscoveryCacheOn() && isDiscoveryCacheMissRecoverable_2(cacheServe))
         logEvent("tengu_mcp_discovery_source", {
-          source: lit(discoverySourceLabel_2(X)),
-          transportType: fromEnum(L.type ?? "stdio"),
-          ...mcpBaseUrlAnalytics(L, serverName),
+          source: lit(discoverySourceLabel_2(cacheServe)),
+          transportType: fromEnum(config.type ?? "stdio"),
+          ...mcpBaseUrlAnalytics(config, serverName),
         });
-      if (isSupersededDial_2(Le)) return;
-      if (w(L)) {
-        if (Z.type === "connected" && isSupersededCacheEntry_2(Le, serverName, L))
-          detachAndCloseConnection_2(Z);
+      if (isSupersededDial_2(dial)) return;
+      if (identityChangedForRemote(config)) {
+        if (connection.type === "connected" && isSupersededCacheEntry_2(dial, serverName, config))
+          detachAndCloseConnection_2(connection);
         return;
       }
-      if (Z.type !== "connected") {
-        R(
-          applyMcpServerConfig(L, {
-            client: Z,
-            tools: Z.type === "needs-auth" ? mcpAuthToolsFor(serverName, L) : [],
+      if (connection.type !== "connected") {
+        publishServerResult(
+          applyMcpServerConfig(config, {
+            client: connection,
+            tools: connection.type === "needs-auth" ? mcpAuthToolsFor(serverName, config) : [],
             commands: [],
           }),
         );
         return;
       }
-      Z.discoveryBearerRejected = undefined;
-      if (L.type !== "claudeai-proxy") clearMcpAuthCacheEntry_2(serverName, n);
-      if (L.type === "http" || L.type === "sse") await clearMcpOAuthStubIfTokenless(serverName, L);
-      ce.push(
+      connection.discoveryBearerRejected = undefined;
+      if (config.type !== "claudeai-proxy") clearMcpAuthCacheEntry_2(serverName, storageV5);
+      if (config.type === "http" || config.type === "sse")
+        await clearMcpOAuthStubIfTokenless(serverName, config);
+      pendingDiscoveryTasks.push(
         (async () => {
-          let Te = false;
+          let published = false;
           try {
-            let we = !!Z.capabilities?.resources;
+            let hasResourceCapability = !!connection.capabilities?.resources;
             clearDiscoveryPathMemo(serverName);
-            let grantLeg = await cacheGrantLeg(serverName, L);
-            if (isDiscoveryCacheOn() && (isSupersededDial_2(Le) || w(L))) {
-              if (!isSupersededDial_2(Le) && isSupersededCacheEntry_2(Le, serverName, L))
-                detachAndCloseConnection_2(Z);
+            let grantLeg = await cacheGrantLeg(serverName, config);
+            if (isDiscoveryCacheOn() && (isSupersededDial_2(dial) || identityChangedForRemote(config))) {
+              if (!isSupersededDial_2(dial) && isSupersededCacheEntry_2(dial, serverName, config))
+                detachAndCloseConnection_2(connection);
               return;
             }
             let results = Promise.all([
-              listMcpTools(Z, n, S),
-              fetchCommandsForClient_2(Z),
+              listMcpTools(connection, storageV5, listOptions),
+              fetchCommandsForClient_2(connection),
               Promise.resolve([]),
             ]);
-            let xe =
-              y === true &&
-              (L.type === "claudeai-proxy"
-                ? !!Z.capabilities?.tools || !!Z.capabilities?.prompts
-                : L.type === "http" && isSameOriginAsCcr(L.url) && !isDiscoveryCacheEligible(L));
+            let skipResources =
+              streamResources === true &&
+              (config.type === "claudeai-proxy"
+                ? !!connection.capabilities?.tools || !!connection.capabilities?.prompts
+                : config.type === "http" &&
+                  isSameOriginAsCcr(config.url) &&
+                  !isDiscoveryCacheEligible(config));
             let results_2 = Promise.all([
-              we && !xe ? fetchResourcesForClient_2(Z) : Promise.resolve([]),
-              we && isCacheableServer(Z.config) ? fetchResourceTemplatesForClient_2(Z) : Promise.resolve([]),
+              hasResourceCapability && !skipResources
+                ? fetchResourcesForClient_2(connection)
+                : Promise.resolve([]),
+              hasResourceCapability && isCacheableServer(connection.config)
+                ? fetchResourceTemplatesForClient_2(connection)
+                : Promise.resolve([]),
             ]);
-            let Fe = y === true && we && (L.type === "http" || L.type === "sse") && !isDiscoveryCacheOn();
-            if (Fe) results_2.catch(() => {});
-            let [[Ue, Ie, ve], Ee] = await Promise.all([results, Fe ? undefined : results_2]);
-            if (w(L)) {
-              if (isSupersededCacheEntry_2(Le, serverName, L)) detachAndCloseConnection_2(Z);
+            let parallelResources =
+              streamResources === true &&
+              hasResourceCapability &&
+              (config.type === "http" || config.type === "sse") &&
+              !isDiscoveryCacheOn();
+            if (parallelResources) results_2.catch(() => {});
+            let [[tools, commands, extraCommands], resourceResults] = await Promise.all([
+              results,
+              parallelResources ? undefined : results_2,
+            ]);
+            if (identityChangedForRemote(config)) {
+              if (isSupersededCacheEntry_2(dial, serverName, config)) detachAndCloseConnection_2(connection);
               return;
             }
-            if (isDiscoveryCacheOn() && isSupersededDial_2(Le)) return;
-            if (isDiscoveryCacheOn() && Ne && isSupersededCacheEntry_2(Le, serverName, L)) {
+            if (isDiscoveryCacheOn() && isSupersededDial_2(dial)) return;
+            if (isDiscoveryCacheOn() && isLatestDial && isSupersededCacheEntry_2(dial, serverName, config)) {
               if (
-                connectToServer_2.cache?.get?.(serverCacheKey(serverName, L)) === undefined &&
-                identityId2(Z.client).onclose !== undefined
+                connectToServer_2.cache?.get?.(serverCacheKey(serverName, config)) === undefined &&
+                identityId2(connection.client).onclose !== undefined
               ) {
-                detachAndCloseConnection_2(Z);
-                R({
+                detachAndCloseConnection_2(connection);
+                publishServerResult({
                   client: {
                     name: serverName,
                     type: "failed",
-                    config: L,
+                    config,
                     error: "Connection closed during discovery",
                     errorCode: "ConnectionClosed",
                   },
@@ -12780,75 +14197,80 @@ async function getMcpToolsCommandsAndResources(e, mcpConfigs, n, s, h, y, S, T) 
               }
               return;
             }
-            if (Z.discoveryAuthFailure) {
-              R({
+            if (connection.discoveryAuthFailure) {
+              publishServerResult({
                 client: {
                   name: serverName,
                   type: "needs-auth",
-                  config: L,
+                  config,
                 },
-                tools: mcpAuthToolsFor(serverName, L),
+                tools: mcpAuthToolsFor(serverName, config),
                 commands: [],
               });
               return;
             }
-            if (L.type === "claudeai-proxy" && !Z.discoveryBearerRejected)
-              clearMcpAuthCacheEntry_2(serverName, n);
-            if (L.type === "claudeai-proxy" && !Z.toolsListError && !Z.discoveryBearerRejected)
-              recordClaudeAiMcpConnected(serverName, n);
-            let commands = [...Ie, ...ve];
-            let te = ($e) => {
-              let ot = [];
-              if (we && !E) {
-                E = true;
-                ot.push(ListMcpResourcesTool, ReadMcpResourceTool, listDirectoryResourceTool);
+            if (config.type === "claudeai-proxy" && !connection.discoveryBearerRejected)
+              clearMcpAuthCacheEntry_2(serverName, storageV5);
+            if (
+              config.type === "claudeai-proxy" &&
+              !connection.toolsListError &&
+              !connection.discoveryBearerRejected
+            )
+              recordClaudeAiMcpConnected(serverName, storageV5);
+            let commands_2 = [...commands, ...extraCommands];
+            let publishConnection = (resources) => {
+              let extraResourceTools = [];
+              if (hasResourceCapability && !resourceToolsAdded) {
+                resourceToolsAdded = true;
+                extraResourceTools.push(ListMcpResourcesTool, ReadMcpResourceTool, listDirectoryResourceTool);
               }
-              R(
-                applyMcpServerConfig(L, {
-                  client: Z,
-                  tools: [...Ue, ...ot],
-                  commands,
-                  resources: $e.length > 0 ? $e : undefined,
+              publishServerResult(
+                applyMcpServerConfig(config, {
+                  client: connection,
+                  tools: [...tools, ...extraResourceTools],
+                  commands: commands_2,
+                  resources: resources.length > 0 ? resources : undefined,
                   resourceTemplates: undefined,
                 }),
               );
             };
-            if (Fe) {
-              te([]);
-              Te = true;
+            if (parallelResources) {
+              publishConnection([]);
+              published = true;
             }
-            let [Pe, ke] = Ee ?? (await results_2);
-            if (!we) recordRawResourcesForResult_2(Pe, []);
-            let templates = getDiscoveryFetchError_2(ke) === undefined ? ke : undefined;
-            let Ae =
+            let [resources, templatesResult] = resourceResults ?? (await results_2);
+            if (!hasResourceCapability) recordRawResourcesForResult_2(resources, []);
+            let templates =
+              getDiscoveryFetchError_2(templatesResult) === undefined ? templatesResult : undefined;
+            let persistPromise =
               !isDiscoveryCacheOn() ||
-              isSupersededDial_2(Le) ||
-              isSupersededCacheEntry_2(Le, serverName, L) ||
-              identityEpoch() !== M ||
+              isSupersededDial_2(dial) ||
+              isSupersededCacheEntry_2(dial, serverName, config) ||
+              identityEpoch() !== epochAtStart ||
               isMcpServerDisabled(serverName) ||
-              isMcpServerBlockedAtConnectTime(serverName, L)
+              isMcpServerBlockedAtConnectTime(serverName, config)
                 ? undefined
-                : persistDiscovery(Z, {
-                    tools: Ue,
-                    commands: Ie,
-                    resources: Pe,
+                : persistDiscovery(connection, {
+                    tools,
+                    commands,
+                    resources,
                     templates,
-                    identityEpoch: M,
+                    identityEpoch: epochAtStart,
                     grantLeg,
                   });
-            if (!Fe) te(Pe);
-            await Ae;
+            if (!parallelResources) publishConnection(resources);
+            await persistPromise;
           } catch (error) {
             logMCPError(
               serverName,
-              `Error fetching tools/commands/resources: ${describeConnectError(error, L)}`,
+              `Error fetching tools/commands/resources: ${describeConnectError(error, config)}`,
             );
-            if (Te) return;
-            R({
+            if (published) return;
+            publishServerResult({
               client: {
                 name: serverName,
                 type: "failed",
-                config: L,
+                config,
               },
               tools: [],
               commands: [],
@@ -12857,12 +14279,15 @@ async function getMcpToolsCommandsAndResources(e, mcpConfigs, n, s, h, y, S, T) 
         })(),
       );
     } catch (error) {
-      logMCPError(serverName, `Error fetching tools/commands/resources: ${describeConnectError(error, L)}`);
-      R({
+      logMCPError(
+        serverName,
+        `Error fetching tools/commands/resources: ${describeConnectError(error, config)}`,
+      );
+      publishServerResult({
         client: {
           name: serverName,
           type: "failed",
-          config: L,
+          config,
         },
         tools: [],
         commands: [],
@@ -12873,16 +14298,16 @@ async function getMcpToolsCommandsAndResources(e, mcpConfigs, n, s, h, y, S, T) 
     processBatched_3(filtered, getMcpServerConnectionBatchSize_2(), processor),
     processBatched_3(filtered_2, getRemoteMcpServerConnectionBatchSize_2(), processor),
   ]);
-  await Promise.all(ce);
+  await Promise.all(pendingDiscoveryTasks);
 }
 //@ chunk-z1n5m6nf.js:134003-134665 layout = prefetchAllMcpResources (1)
 /**
  * prefetchAllMcpResources（v1 副本）。
  */
-function prefetchAllMcpResources_2(mcpConfigs, r, n) {
+function prefetchAllMcpResources_2(mcpConfigs, storageV5, credentials) {
   return new Promise((resolve) => {
     let pendingCount = 0;
-    let y = 0;
+    let settledCount = 0;
     pendingCount = Object.keys(mcpConfigs).length;
     if (pendingCount === 0) {
       resolve({
@@ -12895,10 +14320,10 @@ function prefetchAllMcpResources_2(mcpConfigs, r, n) {
     let clients = [];
     let tools = [];
     let commands = [];
-    let w = false;
-    let R = () => {
-      if (w) return;
-      w = true;
+    let done = false;
+    let finish = () => {
+      if (done) return;
+      done = true;
       let commandsMetadataLength = commands.reduce((sum, command) => {
         let commandMetadataLength =
           command.name.length + (command.description ?? "").length + (command.argumentHint ?? "").length;
@@ -12920,14 +14345,14 @@ function prefetchAllMcpResources_2(mcpConfigs, r, n) {
         clients.push(error.client);
         tools.push(...error.tools);
         commands.push(...error.commands);
-        y++;
-        if (y >= pendingCount) R();
+        settledCount++;
+        if (settledCount >= pendingCount) finish();
       },
       mcpConfigs,
-      r,
-      n,
+      storageV5,
+      credentials,
     )
-      .then(R)
+      .then(finish)
       .catch((error) => {
         logMCPError("prefetchAllMcpResources", `Failed to get MCP resources: ${errorMessage(error)}`);
         resolve({
@@ -12942,18 +14367,18 @@ function prefetchAllMcpResources_2(mcpConfigs, r, n) {
 /**
  * transformResultContent（v1 副本）。
  */
-async function transformResultContent_2(resultContent, serverName, imageBuffer, storageV5, h = false) {
+async function transformResultContent_2(resultContent, serverName, imageBuffer, storageV5, keepMeta = false) {
   switch (resultContent.type) {
     case "text": {
-      let y = {
+      let textBlock = {
         type: "text",
         text: resultContent.text,
       };
-      if (h) {
+      if (keepMeta) {
         let _meta = resultContent._meta;
-        if (_meta) y._meta = _meta;
+        if (_meta) textBlock._meta = _meta;
       }
-      return [y];
+      return [textBlock];
     }
     case "audio": {
       let audioData = resultContent;
@@ -13036,8 +14461,8 @@ async function transformResultContent_2(resultContent, serverName, imageBuffer, 
 /**
  * 生成二进制内容的随机文件名（旧副本）。
  */
-function blobFileNameV1(e) {
-  return `mcp-${normalizeNameForMCP(e)}-blob-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+function blobFileNameV1(serverName) {
+  return `mcp-${normalizeNameForMCP(serverName)}-blob-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 //@ chunk-z1n5m6nf.js:135761-136353 layout
 /**
@@ -13061,7 +14486,7 @@ async function imageResultBlocks(base64Data, mediaType, serverName, imageLimits,
     }),
     persistBinaryContent(
       base64Data,
-      Ph(base64Data) ?? mediaType,
+      sniffImageMediaType(base64Data) ?? mediaType,
       blobFileNameV1(serverName),
       undefined,
       storageV5,
@@ -13077,17 +14502,17 @@ async function imageResultBlocks(base64Data, mediaType, serverName, imageLimits,
     return [imageBlock];
   }
   logFeatureOk("mcp_image_result_file");
-  let w = (imageBlock.type === "image"
+  let imageInfo = (imageBlock.type === "image"
     ? null
     : await toolResultStoreOrNull()?.readPicture?.(saved.filepath, base64Data)) ?? {
     block: imageBlock,
     dimensions,
   };
-  let imageMetadataText = createImageMetadataText(w.dimensions ?? {}, saved.filepath);
+  let imageMetadataText = createImageMetadataText(imageInfo.dimensions ?? {}, saved.filepath);
   return imageMetadataText === null
-    ? [w.block]
+    ? [imageInfo.block]
     : [
-        w.block,
+        imageInfo.block,
         {
           type: "text",
           text: imageMetadataText,
@@ -13099,27 +14524,33 @@ function addToHistory() {
   return isSessionPersistenceDisabled() || env.CLAUDE_CODE_SKIP_PROMPT_HISTORY;
 }
 //@ chunk-z1n5m6nf.js:136414-136737 layout
-async function persistBlobToTextBlock(e, mimeType, serverName, s, h) {
-  let y = await persistBinaryContent(e, mimeType, blobFileNameV1(serverName), undefined, h);
-  if ("error" in y) {
+async function persistBlobToTextBlock(data, mimeType, serverName, prefixText, storageV5) {
+  let persistResult = await persistBinaryContent(
+    data,
+    mimeType,
+    blobFileNameV1(serverName),
+    undefined,
+    storageV5,
+  );
+  if ("error" in persistResult) {
     if (toolResultStoreOrNull() !== undefined)
       return [
         {
           type: "text",
-          text: binaryNotSavedNotice(mimeType, e.length),
+          text: binaryNotSavedNotice(mimeType, data.length),
         },
       ];
     return [
       {
         type: "text",
-        text: `${s}Binary content (${mimeType || "unknown type"}, ${e.length} bytes) could not be saved to disk: ${y.error}`,
+        text: `${prefixText}Binary content (${mimeType || "unknown type"}, ${data.length} bytes) could not be saved to disk: ${persistResult.error}`,
       },
     ];
   }
   return [
     {
       type: "text",
-      text: getBinaryBlobSavedMessage(y.filepath, mimeType, y.size, s),
+      text: getBinaryBlobSavedMessage(persistResult.filepath, mimeType, persistResult.size, prefixText),
     },
   ];
 }
@@ -13144,71 +14575,73 @@ function inferCompactSchema_2(value, depth = 2) {
   return typeof value;
 }
 //@ chunk-z1n5m6nf.js:137056-137200 layout
-async function transformContentArray_2(e, serverName, imageBuffer, s) {
-  let h = (
-    await Promise.all(e.map((y) => transformResultContent_2(y, serverName, imageBuffer, s, true)))
+async function transformContentArray_2(content, serverName, imageBuffer, storageV5) {
+  let blocks = (
+    await Promise.all(
+      content.map((block) => transformResultContent_2(block, serverName, imageBuffer, storageV5, true)),
+    )
   ).flat();
   return {
-    content: h,
+    content: blocks,
     type: "contentArray",
-    schema: inferCompactSchema_2(stripTextBlockMeta(h)),
+    schema: inferCompactSchema_2(stripTextBlockMeta(blocks)),
   };
 }
 //@ chunk-z1n5m6nf.js:137200-138213 layout = transformMCPResult (0.902)
 /**
  * transformMCPResult（v1 副本）。
  */
-async function transformMCPResult_2(e, tool, name, imageBuffer, h) {
-  if (e && typeof e === "object") {
-    if ("toolResult" in e)
+async function transformMCPResult_2(result, tool, name, imageBuffer, storageV5) {
+  if (result && typeof result === "object") {
+    if ("toolResult" in result)
       return {
-        content: String(e.toolResult),
+        content: String(result.toolResult),
         type: "toolResult",
       };
-    if ("structuredContent" in e && e.structuredContent !== undefined) {
-      if ("content" in e && Array.isArray(e.content)) {
-        let w = await contentOverStructuredResult(e.content, (R) =>
-          transformContentArray_2(R, name, imageBuffer, h),
+    if ("structuredContent" in result && result.structuredContent !== undefined) {
+      if ("content" in result && Array.isArray(result.content)) {
+        let contentResult = await contentOverStructuredResult(result.content, (blocks) =>
+          transformContentArray_2(blocks, name, imageBuffer, storageV5),
         );
-        if (w !== undefined) return w;
+        if (contentResult !== undefined) return contentResult;
       }
-      let S = base64URLEncode(e.structuredContent);
-      let T = S ?? jsonStringify(e.structuredContent);
-      let schema = S === undefined ? inferCompactSchema_2(e.structuredContent) : undefined;
-      if ("content" in e && Array.isArray(e.content)) {
-        let filtered = e.content.filter(
-          (R) => R && typeof R === "object" && "type" in R && R.type !== "text",
+      let base64Text = base64URLEncode(result.structuredContent);
+      let text = base64Text ?? jsonStringify(result.structuredContent);
+      let schema = base64Text === undefined ? inferCompactSchema_2(result.structuredContent) : undefined;
+      if ("content" in result && Array.isArray(result.content)) {
+        let filtered = result.content.filter(
+          (block) => block && typeof block === "object" && "type" in block && block.type !== "text",
         );
         if (filtered.length > 0) {
           let transformedContent = (
             await Promise.all(
-              filtered.map((item) => transformResultContent_2(item, name, imageBuffer, h, true)),
+              filtered.map((item) => transformResultContent_2(item, name, imageBuffer, storageV5, true)),
             )
           ).flat();
           if (transformedContent.length > 0) {
-            let E = [
+            let contentWithText = [
               ...transformedContent,
               {
                 type: "text",
-                text: T,
+                text,
               },
             ];
             return {
-              content: E,
+              content: contentWithText,
               type: "contentArray",
-              schema: inferCompactSchema_2(stripTextBlockMeta(E)),
+              schema: inferCompactSchema_2(stripTextBlockMeta(contentWithText)),
             };
           }
         }
       }
       return {
-        content: T,
+        content: text,
         type: "structuredContent",
         schema,
       };
     }
-    if ("content" in e && Array.isArray(e.content))
-      return transformContentArray_2(e.content, name, imageBuffer, h);
+    if ("content" in result && Array.isArray(result.content))
+      return transformContentArray_2(result.content, name, imageBuffer, storageV5);
   }
   let errorMessage = `MCP server "${name}" tool "${tool}": unexpected response format`;
   logMCPError(name, errorMessage);
@@ -13225,7 +14658,7 @@ async function transformMCPResult_2(e, tool, name, imageBuffer, h) {
 //@ chunk-z1n5m6nf.js:138213-138322 layout = isMedia (1)
 function isMedia_2(block) {
   if (!block || typeof block === "string") return false;
-  return block.some((r) => r.type === "image" || r.type === "document");
+  return block.some((block) => block.type === "image" || block.type === "document");
 }
 //@ chunk-z1n5m6nf.js:138322-140352 layout = processMCPResult (0.755)
 /**
@@ -13250,97 +14683,100 @@ async function processMCPResult_2(
     Array.isArray(result.content)
   )
     return result.content;
-  let M = await transformMCPResult_2(result, tool, name, imageLimits, storageV5);
-  let { type, schema } = M;
-  let E = dropExtraDocumentBlocks(M.content);
-  if (name === "ide") return E;
-  if (resultNotForModel || (hasResultSizeAnnotation && !isMedia_2(E))) return E;
-  if (!(await mcpContentNeedsTruncation(E, credentials))) return E;
-  let sizeEstimateTokens = getContentSizeEstimate(E);
+  let transformed = await transformMCPResult_2(result, tool, name, imageLimits, storageV5);
+  let { type, schema } = transformed;
+  let content = dropExtraDocumentBlocks(transformed.content);
+  if (name === "ide") return content;
+  if (resultNotForModel || (hasResultSizeAnnotation && !isMedia_2(content))) return content;
+  if (!(await mcpContentNeedsTruncation(content, credentials))) return content;
+  let sizeEstimateTokens = getContentSizeEstimate(content);
   if (env.ENABLE_MCP_LARGE_OUTPUT_FILES === false) {
     logEvent("tengu_mcp_large_result_handled", {
       outcome: lit("truncated"),
       reason: lit("env_disabled"),
       sizeEstimateTokens,
     });
-    return await truncateMcpContentIfNeeded(E, credentials);
+    return await truncateMcpContentIfNeeded(content, credentials);
   }
-  if (!E) return E;
-  if (isMedia_2(E)) {
+  if (!content) return content;
+  if (isMedia_2(content)) {
     logEvent("tengu_mcp_large_result_handled", {
       outcome: lit("truncated"),
       reason: lit("contains_images"),
       sizeEstimateTokens,
     });
-    return await truncateMcpContentIfNeeded(E, credentials);
+    return await truncateMcpContentIfNeeded(content, credentials);
   }
   let timestamp = Date.now();
   let persistId = `mcp-${normalizeNameForMCP(name)}-${normalizeNameForMCP(tool)}-${timestamp}`;
-  let re = stripTextBlockMeta(E);
-  let he =
+  let contentWithoutMeta = stripTextBlockMeta(content);
+  let canUnwrapSingleton =
     useSubagentTruncationPrompt() || getFeatureValue_CACHED_MAY_BE_STALE("tengu_mcp_singleton_unwrap", true);
-  let blockCount = Array.isArray(re) ? re.length : undefined;
+  let blockCount = Array.isArray(contentWithoutMeta) ? contentWithoutMeta.length : undefined;
   let text =
-    he &&
-    Array.isArray(re) &&
-    re.length === 1 &&
-    re[0]?.type === "text" &&
-    !("annotations" in re[0]) &&
-    !("_meta" in re[0])
-      ? re[0].text
+    canUnwrapSingleton &&
+    Array.isArray(contentWithoutMeta) &&
+    contentWithoutMeta.length === 1 &&
+    contentWithoutMeta[0]?.type === "text" &&
+    !("annotations" in contentWithoutMeta[0]) &&
+    !("_meta" in contentWithoutMeta[0])
+      ? contentWithoutMeta[0].text
       : undefined;
-  let j = typeof re === "string" ? re : (text ?? jsonStringify(re, null, 2));
-  let fe = type === "toolResult" || text !== undefined;
-  let pe = fe ? "text" : "json";
+  let textForFile =
+    typeof contentWithoutMeta === "string"
+      ? contentWithoutMeta
+      : (text ?? jsonStringify(contentWithoutMeta, null, 2));
+  let countsAsText = type === "toolResult" || text !== undefined;
+  let persistedFormat = countsAsText ? "text" : "json";
   let lineStats;
-  if (fe) {
-    let lines = j.split(`
+  if (countsAsText) {
+    let lines = textForFile.split(`
 `);
     if (lines.length > 1 && lines.at(-1) === "") lines.pop();
-    let L = 0;
-    for (let line of lines) if (line.length > L) L = line.length;
+    let maxLineLength = 0;
+    for (let line of lines) if (line.length > maxLineLength) maxLineLength = line.length;
     lineStats = {
       count: lines.length,
-      maxLen: L,
+      maxLen: maxLineLength,
     };
   }
-  let ce = await persistToolResult(j, persistId, toolResultsDir(), storageV5);
-  if (isPersistError(ce)) {
+  let persistResult = await persistToolResult(textForFile, persistId, toolResultsDir(), storageV5);
+  if (isPersistError(persistResult)) {
     if (toolResultStoreOrNull() !== undefined) {
       logEvent("tengu_mcp_large_result_handled", {
         outcome: lit("truncated"),
         reason: lit("not_stored"),
         sizeEstimateTokens,
       });
-      return await truncateMcpContent(E);
+      return await truncateMcpContent(content);
     }
-    let contentLength = j.length;
+    let contentLength = textForFile.length;
     logEvent("tengu_mcp_large_result_handled", {
       outcome: lit("truncated"),
       reason: lit("persist_failed"),
       sizeEstimateTokens,
     });
-    return `Error: result (${contentLength.toLocaleString()} characters) exceeds maximum allowed tokens. Failed to save output to file: ${ce.error}. If this MCP server provides pagination or filtering tools, use them to retrieve specific portions of the data.`;
+    return `Error: result (${contentLength.toLocaleString()} characters) exceeds maximum allowed tokens. Failed to save output to file: ${persistResult.error}. If this MCP server provides pagination or filtering tools, use them to retrieve specific portions of the data.`;
   }
   logEvent("tengu_mcp_large_result_handled", {
     outcome: lit("persisted"),
     reason: lit("file_saved"),
     sizeEstimateTokens,
-    persistedSizeChars: ce.originalSize,
-    truncatedAtCap: ce.truncatedAtBytes !== undefined,
+    persistedSizeChars: persistResult.originalSize,
+    truncatedAtCap: persistResult.truncatedAtBytes !== undefined,
     resultType: fromEnum(type),
     blockCount,
-    persistedAs: fromEnum(pe),
+    persistedAs: fromEnum(persistedFormat),
   });
   let formatDescription =
     text !== undefined ? getFormatDescription("toolResult") : getFormatDescription(type, schema);
   return getLargeOutputInstructions(
-    ce.filepath,
-    ce.originalSize,
+    persistResult.filepath,
+    persistResult.originalSize,
     formatDescription,
     undefined,
     lineStats,
-    ce.truncatedAtBytes,
+    persistResult.truncatedAtBytes,
   );
 }
 //@ chunk-z1n5m6nf.js:140352-140524 layout
@@ -13348,12 +14784,15 @@ async function processMCPResult_2(
  * parseUrlElicitationRequiredError：从工具调用错误 data 中取 elicitations 数组（URL elicitation required）。
  */
 function parseUrlElicitationRequiredError_2(error) {
-  let r = error.data;
+  let errorData = error.data;
   return (
-    r != null && typeof r === "object" && "elicitations" in r && Array.isArray(r.elicitations)
-      ? r.elicitations
+    errorData != null &&
+    typeof errorData === "object" &&
+    "elicitations" in errorData &&
+    Array.isArray(errorData.elicitations)
+      ? errorData.elicitations
       : []
-  ).filter((s) => ElicitRequestURLParamsSchema_2.safeParse(s).success);
+  ).filter((elicitation) => ElicitRequestURLParamsSchema_2.safeParse(elicitation).success);
 }
 //@ chunk-z1n5m6nf.js:140524-140795 layout
 /**
@@ -13367,16 +14806,16 @@ function classifyToolCallAuthError_2({
   hasHeadersHelper,
   pendingStepUpScope,
 }) {
-  let S = pendingStepUpScope !== undefined;
+  let hasPendingStepUp = pendingStepUpScope !== undefined;
   if (!(
     errorCode === 401 ||
     isUnauthorizedError ||
     isOAuthShapedAuthError ||
     (errorCode === 403 && hasHeadersHelper) ||
-    (S && errorCode === 403)
+    (hasPendingStepUp && errorCode === 403)
   ))
     return;
-  return S && errorCode !== 401 && !(isOAuthShapedAuthError && /^HTTP 401\b/.test(message))
+  return hasPendingStepUp && errorCode !== 401 && !(isOAuthShapedAuthError && /^HTTP 401\b/.test(message))
     ? "step_up"
     : "credential_rejected";
 }
@@ -13385,8 +14824,8 @@ function isNeedsApprovalOrExpiredSessionV1(error) {
   if (isRefusedByCcrProxy(error)) return true;
   if (!(error instanceof Error) || !("code" in error)) return false;
   if (error.code === CCR_NEEDS_APPROVAL_CODE) {
-    let r = "data" in error ? error.data : undefined;
-    return typeof r === "object" && r !== null && "args_sha256" in r;
+    let errorData = "data" in error ? error.data : undefined;
+    return typeof errorData === "object" && errorData !== null && "args_sha256" in errorData;
   }
   return error.code === -32000 && isApprovalMismatchMessage(error.message);
 }
@@ -13416,10 +14855,10 @@ async function callMCPToolWithUrlElicitationRetry_2({
   credentials,
   offCriticalPath,
 }) {
-  let pe = false;
+  let didNeedsApprovalRetry = false;
   for (let attempt = 0; ; attempt++)
     try {
-      let ce = () =>
+      let invokeCallTool = () =>
         callToolFn({
           client,
           tool,
@@ -13437,21 +14876,22 @@ async function callMCPToolWithUrlElicitationRetry_2({
           storageV5,
           credentials,
         });
-      let le;
-      if (!isPerfettoTracingEnabled()) le = await ce();
+      let callResult;
+      if (!isPerfettoTracingEnabled()) callResult = await invokeCallTool();
       else {
-        let k;
+        let argsForTelemetry;
         try {
-          k = truncateContentForTelemetry(jsonStringify(args)).content;
+          argsForTelemetry = truncateContentForTelemetry(jsonStringify(args)).content;
         } catch {
-          k = undefined;
+          argsForTelemetry = undefined;
         }
-        let L = isMemoryServerConnection(client, tool);
-        let be = fileReferenceToolForRecords(client, tool);
-        let W = L || withholdsFileReferenceArguments(be, toolUseId);
-        let ze = withholdsFileReferenceErrorText(be, toolUseId);
-        if (W && k !== undefined) k = notRecordedLength(k);
-        le = await withToolExecutionSpan(
+        let isMemoryServer = isMemoryServerConnection(client, tool);
+        let fileReferenceTool = fileReferenceToolForRecords(client, tool);
+        let withholdArgs = isMemoryServer || withholdsFileReferenceArguments(fileReferenceTool, toolUseId);
+        let withholdErrorText = withholdsFileReferenceErrorText(fileReferenceTool, toolUseId);
+        if (withholdArgs && argsForTelemetry !== undefined)
+          argsForTelemetry = notRecordedLength(argsForTelemetry);
+        callResult = await withToolExecutionSpan(
           "claude_code.mcp.rpc",
           {
             spanType: "mcp.rpc",
@@ -13462,33 +14902,35 @@ async function callMCPToolWithUrlElicitationRetry_2({
               mcp_tool: tool,
               attempt,
             },
-            ...(k !== undefined && {
+            ...(argsForTelemetry !== undefined && {
               contentAttrs: {
-                mcp_args: k,
+                mcp_args: argsForTelemetry,
               },
             }),
-            withholdErrorText: (X) =>
-              ze || (L && X instanceof McpToolCallError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS),
-            isExpectedError: (X) =>
-              X instanceof McpError &&
-              (X.code === ErrorCode.UrlElicitationRequired ||
-                (X.code === CCR_NEEDS_APPROVAL_CODE &&
-                  typeof X.data === "object" &&
-                  X.data !== null &&
-                  "args_sha256" in X.data &&
+            withholdErrorText: (spanError) =>
+              withholdErrorText ||
+              (isMemoryServer &&
+                spanError instanceof McpToolCallError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS),
+            isExpectedError: (spanError) =>
+              spanError instanceof McpError &&
+              (spanError.code === ErrorCode.UrlElicitationRequired ||
+                (spanError.code === CCR_NEEDS_APPROVAL_CODE &&
+                  typeof spanError.data === "object" &&
+                  spanError.data !== null &&
+                  "args_sha256" in spanError.data &&
                   !!ccrNeedsApprovalRetry &&
                   !!toolUseId &&
-                  !pe &&
+                  !didNeedsApprovalRetry &&
                   getFeatureValue_CACHED_MAY_BE_STALE("tengu_mcp_proxy_needs_approval_retry", true))),
           },
-          ce,
+          invokeCallTool,
         );
       }
-      if (pe) logFeatureOk("mcp_ccr_needs_approval");
-      return le;
+      if (didNeedsApprovalRetry) logFeatureOk("mcp_ccr_needs_approval");
+      return callResult;
     } catch (error) {
       if (!(error instanceof McpError)) {
-        if (pe && !(error instanceof McpSessionExpiredError))
+        if (didNeedsApprovalRetry && !(error instanceof McpSessionExpiredError))
           logFeatureBad("mcp_ccr_needs_approval", "retry_failed");
         throw error;
       }
@@ -13499,11 +14941,11 @@ async function callMCPToolWithUrlElicitationRetry_2({
         "args_sha256" in error.data &&
         ccrNeedsApprovalRetry &&
         toolUseId &&
-        !pe &&
+        !didNeedsApprovalRetry &&
         getFeatureValue_CACHED_MAY_BE_STALE("tengu_mcp_proxy_needs_approval_retry", true)
       ) {
-        pe = true;
-        let L = error.data ?? {};
+        didNeedsApprovalRetry = true;
+        let errorData = error.data ?? {};
         let {
           canUseTool,
           tool: tool_2,
@@ -13511,35 +14953,36 @@ async function callMCPToolWithUrlElicitationRetry_2({
           toolUseContext,
           parentMessage,
         } = ccrNeedsApprovalRetry;
-        let Z = chromeSiteFromError(client, error.data);
-        let Ne = Z && chromeSiteDenyCheck(Z, getToolPermissionContext(toolUseContext));
-        if (Ne) {
-          let xe = Z?.kind === "unreadable";
+        let chromeSite = chromeSiteFromError(client, error.data);
+        let denyCheck =
+          chromeSite && chromeSiteDenyCheck(chromeSite, getToolPermissionContext(toolUseContext));
+        if (denyCheck) {
+          let siteUnreadable = chromeSite?.kind === "unreadable";
           logMCPDebug(
             client.name,
-            `Tool '${tool}' returned -32003 needs_approval ${xe ? "naming a site this session cannot read, and the session has ClaudeInChromeDomain deny rules" : "for a site a ClaudeInChromeDomain deny rule covers"}: failing the call with no approval card`,
+            `Tool '${tool}' returned -32003 needs_approval ${siteUnreadable ? "naming a site this session cannot read, and the session has ClaudeInChromeDomain deny rules" : "for a site a ClaudeInChromeDomain deny rule covers"}: failing the call with no approval card`,
           );
-          if (xe) logFeatureBad("chrome_permission_prompt", "hosted_site_unreadable");
+          if (siteUnreadable) logFeatureBad("chrome_permission_prompt", "hosted_site_unreadable");
           else logFeatureSad("chrome_permission_prompt", "domain_rule_denied");
-          await canUseTool(tool_2, args, toolUseContext, parentMessage, toolUseId, Ne);
+          await canUseTool(tool_2, args, toolUseContext, parentMessage, toolUseId, denyCheck);
           toolUseContext.onPermissionDenial?.(tool_2, toolUseId, args);
           throw markRefusedByCcrProxy(
             new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-              Ne.message,
+              denyCheck.message,
               "ccr_proxy_needs_approval_chrome_site_denied",
             ),
           );
         }
         logMCPDebug(
           client.name,
-          `Tool '${tool}' returned -32003 needs_approval (tool_name=${L.tool_name}) \u2014 surfacing retroactive ` +
+          `Tool '${tool}' returned -32003 needs_approval (tool_name=${errorData.tool_name}) \u2014 surfacing retroactive ` +
             "approval card",
         );
         logEvent("tengu_mcp_proxy_needs_approval_retry", {
           attempt,
         });
         onAwaitingUserInput?.(true);
-        let Te = {
+        let genericAsk = {
           behavior: "ask",
           suppressAlwaysAllowRule: true,
           message: `The ${fullyQualifiedName} connector requires approval for this call.`,
@@ -13548,17 +14991,17 @@ async function callMCPToolWithUrlElicitationRetry_2({
             reason: "This connector call requires your approval to proceed.",
           },
         };
-        let we = Z && chromeSiteAsk(Z, tool, args, toolUseContext);
-        let Oe = we ?? Te;
-        let De;
+        let chromeAsk = chromeSite && chromeSiteAsk(chromeSite, tool, args, toolUseContext);
+        let askRequest = chromeAsk ?? genericAsk;
+        let approval;
         try {
-          De = await canUseTool(tool_2, args, toolUseContext, parentMessage, toolUseId, Oe);
+          approval = await canUseTool(tool_2, args, toolUseContext, parentMessage, toolUseId, askRequest);
         } finally {
           onAwaitingUserInput?.(false);
         }
         if (signal.aborted) throw markRefusedByCcrProxy(new AbortError());
-        if (De.behavior === "allow") {
-          if (De.updatedInput !== undefined && !En(De.updatedInput, args)) {
+        if (approval.behavior === "allow") {
+          if (approval.updatedInput !== undefined && !import_sortedIndex_2(approval.updatedInput, args)) {
             logFeatureSad("mcp_ccr_needs_approval", "edited_input");
             throw markRefusedByCcrProxy(
               new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
@@ -13567,15 +15010,16 @@ async function callMCPToolWithUrlElicitationRetry_2({
               ),
             );
           }
-          let xe = runDiscarder(toolUseContext.session, toolUseId);
-          if (xe !== undefined)
+          let resendRefusal = runDiscarder(toolUseContext.session, toolUseId);
+          if (resendRefusal !== undefined)
             throw markRefusedByCcrProxy(
               new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-                xe,
+                resendRefusal,
                 "ccr_proxy_needs_approval_resend_refused",
               ),
             );
-          if (Z?.kind === "named" && we && meta) meta[CLAUDECODE_CHROMESITE] = Z.site;
+          if (chromeSite?.kind === "named" && chromeAsk && meta)
+            meta[CLAUDECODE_CHROMESITE] = chromeSite.site;
           if (meta)
             consumeTicketIntoInput(
               meta,
@@ -13586,26 +15030,26 @@ async function callMCPToolWithUrlElicitationRetry_2({
             );
           continue;
         }
-        if (De === Oe) {
+        if (approval === askRequest) {
           logFeatureSad("mcp_ccr_needs_approval", "no_prompt_surface");
           throw markRefusedByCcrProxy(error);
         }
         logFeatureOk("mcp_ccr_needs_approval");
         throw markRefusedByCcrProxy(
           new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-            De.message || `Approval denied for ${fullyQualifiedName}`,
+            approval.message || `Approval denied for ${fullyQualifiedName}`,
             "ccr_proxy_needs_approval_denied",
           ),
         );
       }
       if (error.code !== ErrorCode.UrlElicitationRequired) {
-        if (pe) logFeatureBad("mcp_ccr_needs_approval", "retry_failed");
+        if (didNeedsApprovalRetry) logFeatureBad("mcp_ccr_needs_approval", "retry_failed");
         else if (error.code === CCR_NEEDS_APPROVAL_CODE && ccrNeedsApprovalRetry)
           logFeatureBad("mcp_ccr_needs_approval", "arm_not_fired");
         throw error;
       }
       if (hostedDesktopRefusal_2(clientConnection) !== undefined) throw error;
-      if (attempt - (pe ? 1 : 0) >= 3) throw error;
+      if (attempt - (didNeedsApprovalRetry ? 1 : 0) >= 3) throw error;
       let urlElicitationRequiredError = parseUrlElicitationRequiredError_2(error);
       let serverName = clientConnection.name;
       if (urlElicitationRequiredError.length === 0) {
@@ -13673,33 +15117,33 @@ async function callMCPToolWithUrlElicitationRetry_2({
     }
 }
 //@ chunk-z1n5m6nf.js:145793-146321 layout
-function toolErrorResultText_2(result, r, n) {
+function toolErrorResultText_2(result, serverName, formatForLog) {
   if (!result.isError) return;
-  let s = "Unknown error";
+  let errorText = "Unknown error";
   if (Array.isArray(result.content) && result.content.length > 0) {
-    let flattened = result.content.flatMap((S) => {
-      if (S == null || typeof S !== "object") return [];
-      if ("text" in S) return [String(S.text)];
-      if (S.type === "resource_link") {
-        let T = S;
-        let M = `[Resource link: ${T.name}] ${T.uri}`;
-        if (T.description) M += ` (${T.description})`;
-        return [M];
+    let flattened = result.content.flatMap((block) => {
+      if (block == null || typeof block !== "object") return [];
+      if ("text" in block) return [String(block.text)];
+      if (block.type === "resource_link") {
+        let link = block;
+        let linkText = `[Resource link: ${link.name}] ${link.uri}`;
+        if (link.description) linkText += ` (${link.description})`;
+        return [linkText];
       }
       return [];
     });
     if (flattened.length > 0)
-      s = flattened.join(`
+      errorText = flattened.join(`
 `);
-  } else if ("error" in result) s = String(result.error);
-  logMCPError(r, n === undefined ? s : n(s));
-  let h = stripAnthropicMeta(result._meta);
+  } else if ("error" in result) errorText = String(result.error);
+  logMCPError(serverName, formatForLog === undefined ? errorText : formatForLog(errorText));
+  let meta = stripAnthropicMeta(result._meta);
   throw new McpToolCallError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-    s,
+    errorText,
     "MCP tool returned error",
-    h
+    meta
       ? {
-          _meta: h,
+          _meta: meta,
         }
       : undefined,
   );
@@ -13723,27 +15167,27 @@ function buildSep2663TaskBinding_2() {
 /**
  * 调用旧客户端的 listTools。
  */
-function listToolsV1(e, r) {
-  return identityId2(e).listTools(undefined, r);
+function listToolsV1(client, requestOptions) {
+  return identityId2(client).listTools(undefined, requestOptions);
 }
 //@ chunk-z1n5m6nf.js:146548-146604 layout
 /**
  * 调用旧客户端的 readResource。
  */
-function readResourceV1(e, uri, n) {
-  return identityId2(e).readResource(
+function readResourceV1(client, uri, requestOptions) {
+  return identityId2(client).readResource(
     {
       uri,
     },
-    n,
+    requestOptions,
   );
 }
 //@ chunk-z1n5m6nf.js:146604-146657 layout
 /**
  * 调用旧客户端的 callTool。
  */
-function callToolV1(e, r, n) {
-  return identityId2(e).callTool(r, undefined, n);
+function callToolV1(client, params, requestOptions) {
+  return identityId2(client).callTool(params, undefined, requestOptions);
 }
 //@ chunk-z1n5m6nf.js:146657-155462 fingerprint = callMCPTool (0.37)
 /**
@@ -13768,51 +15212,53 @@ async function callMCPTool_2({
   storageV5,
   credentials,
 }) {
-  let { client: client_2, name: q, config, transportErrorState } = client;
-  let pe = identityId2(client_2);
-  let ge = fileReferenceToolForRecords(client, tool);
-  let ce = withholdsFileReferenceErrorText(ge, toolUseId) ? ge : undefined;
-  let le = isMemoryServerConnection(client, tool)
+  let { client: client_2, name: clientName, config, transportErrorState } = client;
+  let sdkClient = identityId2(client_2);
+  let fileReferenceTool = fileReferenceToolForRecords(client, tool);
+  let withheldTool = withholdsFileReferenceErrorText(fileReferenceTool, toolUseId)
+    ? fileReferenceTool
+    : undefined;
+  let formatErrorForLog = isMemoryServerConnection(client, tool)
     ? describeRedactedMcpError
-    : ce !== undefined
-      ? (Z) => withheldFileReferenceErrorForLog(ce, Z)
+    : withheldTool !== undefined
+      ? (errorMessage) => withheldFileReferenceErrorForLog(withheldTool, errorMessage)
       : undefined;
   let toolStartTime = Date.now();
-  let L = identityEpoch();
-  let be = pe.transport?.sessionId === undefined;
-  let W;
-  let ze = meta?.["claudecode/toolUseId"];
-  let X = {
+  let epochAtStart = identityEpoch();
+  let hasNoSession = sdkClient.transport?.sessionId === undefined;
+  let progressTimer;
+  let metaToolUseId = meta?.["claudecode/toolUseId"];
+  let watchdog = {
     armedAt: 0,
     offCriticalPath,
-    toolUseId: typeof ze === "string" ? ze : undefined,
+    toolUseId: typeof metaToolUseId === "string" ? metaToolUseId : undefined,
     ownSends: {
       started: 0,
       ranNothing: 0,
     },
   };
-  transportErrorState?.activeCallWatchdogs.add(X);
+  transportErrorState?.activeCallWatchdogs.add(watchdog);
   let started = transportErrorState?.toolCallSends?.started;
   try {
-    logMCPDebug(q, `Calling MCP tool: ${tool}`);
-    let Z = idleTimeoutMs ?? getMcpToolIdleTimeoutMs_2(config);
-    let Ne = toolStartTime;
-    let Te;
+    logMCPDebug(clientName, `Calling MCP tool: ${tool}`);
+    let idleTimeout = idleTimeoutMs ?? getMcpToolIdleTimeoutMs_2(config);
+    let lastActivityAt = toolStartTime;
+    let rejectWatchdog;
     let promise = new Promise((resolve, reject) => {
-      Te = reject;
+      rejectWatchdog = reject;
     });
-    W = setInterval(() => {
+    progressTimer = setInterval(() => {
       let floored = Math.floor((Date.now() - toolStartTime) / 1000);
-      logMCPDebug(q, `Tool '${tool}' still running (${floored}s elapsed)`);
-      if (X.armedAt > 0 && Date.now() - X.armedAt > 90000) {
+      logMCPDebug(clientName, `Tool '${tool}' still running (${floored}s elapsed)`);
+      if (watchdog.armedAt > 0 && Date.now() - watchdog.armedAt > 90000) {
         logMCPDebug(
-          q,
-          `Tool '${tool}' aborting: transport error ${Math.floor((Date.now() - X.armedAt) / 1000)}s ago, response presumed lost`,
+          clientName,
+          `Tool '${tool}' aborting: transport error ${Math.floor((Date.now() - watchdog.armedAt) / 1000)}s ago, response presumed lost`,
         );
-        Te(
+        rejectWatchdog(
           Object.assign(
             new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-              `MCP server "${q}" transport dropped mid-call; response for tool "${tool}" was lost`,
+              `MCP server "${clientName}" transport dropped mid-call; response for tool "${tool}" was lost`,
               "MCP transport lost mid-call",
             ),
             {
@@ -13822,19 +15268,19 @@ async function callMCPTool_2({
         );
         return;
       }
-      if (transportErrorState?.pendingElicitations) Ne = Date.now();
-      else if (transportErrorState && transportErrorState.lastElicitationClosedAt > Ne)
-        Ne = transportErrorState.lastElicitationClosedAt;
-      if (Z > 0 && Date.now() - Ne > Z) {
-        let elapsedSeconds = Math.floor((Date.now() - Ne) / 1000);
+      if (transportErrorState?.pendingElicitations) lastActivityAt = Date.now();
+      else if (transportErrorState && transportErrorState.lastElicitationClosedAt > lastActivityAt)
+        lastActivityAt = transportErrorState.lastElicitationClosedAt;
+      if (idleTimeout > 0 && Date.now() - lastActivityAt > idleTimeout) {
+        let elapsedSeconds = Math.floor((Date.now() - lastActivityAt) / 1000);
         logMCPDebug(
-          q,
-          `Tool '${tool}' aborting: no response or progress notification for ${elapsedSeconds}s (idle timeout ${Math.floor(Z / 1000)}s)`,
+          clientName,
+          `Tool '${tool}' aborting: no response or progress notification for ${elapsedSeconds}s (idle timeout ${Math.floor(idleTimeout / 1000)}s)`,
         );
-        Te(
+        rejectWatchdog(
           Object.assign(
             new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-              `MCP server "${q}" tool "${tool}" sent no response or progress for ${elapsedSeconds}s; aborting. If this server is configured in your MCP settings, set a per-server "timeout" (ms) to allow longer silent runs for just this server; otherwise set CLAUDE_CODE_MCP_TOOL_IDLE_TIMEOUT (ms) globally (0 disables).`,
+              `MCP server "${clientName}" tool "${tool}" sent no response or progress for ${elapsedSeconds}s; aborting. If this server is configured in your MCP settings, set a per-server "timeout" (ms) to allow longer silent runs for just this server; otherwise set CLAUDE_CODE_MCP_TOOL_IDLE_TIMEOUT (ms) globally (0 disables).`,
               "MCP tool idle timeout",
             ),
             {
@@ -13845,9 +15291,9 @@ async function callMCPTool_2({
       }
     }, 30000);
     let mcpToolTimeoutMs = getMcpToolTimeoutMs_3(config);
-    let De;
+    let timeoutTimer;
     let timeoutPromise = new Promise((resolve, reject) => {
-      De = setTimeout(
+      timeoutTimer = setTimeout(
         (reject, name, tool, timeoutMs) => {
           reject(
             Object.assign(
@@ -13863,22 +15309,22 @@ async function callMCPTool_2({
         },
         mcpToolTimeoutMs,
         reject,
-        q,
+        clientName,
         tool,
         mcpToolTimeoutMs,
       );
     });
-    let He = () => {
-      if (De) clearTimeout(De);
-      if (W !== undefined) {
-        clearInterval(W);
-        W = undefined;
+    let cleanupTimers = () => {
+      if (timeoutTimer) clearTimeout(timeoutTimer);
+      if (progressTimer !== undefined) {
+        clearInterval(progressTimer);
+        progressTimer = undefined;
       }
-      transportErrorState?.activeCallWatchdogs.delete(X);
+      transportErrorState?.activeCallWatchdogs.delete(watchdog);
     };
-    let Fe = timing?.mark("external");
+    let externalMark = timing?.mark("external");
     let result = await Promise.race([
-      pe.callTool(
+      sdkClient.callTool(
         {
           name: tool,
           arguments: args,
@@ -13889,14 +15335,14 @@ async function callMCPTool_2({
           signal,
           timeout: mcpToolTimeoutMs,
           onprogress: (sdkProgress) => {
-            X.armedAt = 0;
-            Ne = Date.now();
+            watchdog.armedAt = 0;
+            lastActivityAt = Date.now();
             netModule?.reportBackgroundProgress(signal, sdkProgress);
             if (onProgress)
               onProgress({
                 type: "mcp_progress",
                 status: "progress",
-                serverName: q,
+                serverName: clientName,
                 toolName: tool,
                 progress: sdkProgress.progress,
                 total: sdkProgress.total,
@@ -13908,19 +15354,19 @@ async function callMCPTool_2({
       timeoutPromise,
       promise,
     ]).finally(() => {
-      He();
-      Fe?.();
+      cleanupTimers();
+      externalMark?.();
     });
-    toolErrorResultText_2(result, q, le);
-    let Ie = Date.now() - toolStartTime;
-    let ve =
-      Ie < 1000
-        ? `${Ie}ms`
-        : Ie < 60000
-          ? `${Math.floor(Ie / 1000)}s`
-          : `${Math.floor(Ie / 60000)}m ${Math.floor((Ie % 60000) / 1000)}s`;
-    logMCPDebug(q, `Tool '${tool}' completed successfully in ${ve}`);
-    let codeIndexingTool = detectCodeIndexingFromMcpServerName(q);
+    toolErrorResultText_2(result, clientName, formatErrorForLog);
+    let elapsedMs = Date.now() - toolStartTime;
+    let elapsedLabel =
+      elapsedMs < 1000
+        ? `${elapsedMs}ms`
+        : elapsedMs < 60000
+          ? `${Math.floor(elapsedMs / 1000)}s`
+          : `${Math.floor(elapsedMs / 60000)}m ${Math.floor((elapsedMs % 60000) / 1000)}s`;
+    logMCPDebug(clientName, `Tool '${tool}' completed successfully in ${elapsedLabel}`);
+    let codeIndexingTool = detectCodeIndexingFromMcpServerName(clientName);
     if (codeIndexingTool)
       logEvent("tengu_code_indexing_tool_used", {
         tool: fromEnum(codeIndexingTool),
@@ -13930,14 +15376,14 @@ async function callMCPTool_2({
     let content = await processMCPResult_2(
       result,
       tool,
-      q,
+      clientName,
       imageLimits,
       hasResultSizeAnnotation,
       storageV5,
       credentials,
       resultNotForModel,
     );
-    noteHearthDegraded(q, undefined);
+    noteHearthDegraded(clientName, undefined);
     return {
       content,
       _meta: result._meta,
@@ -13945,18 +15391,18 @@ async function callMCPTool_2({
       resourceLinks: anthropicResourceLinks(result.content),
     };
   } catch (error) {
-    if (!signal.aborted) noteHearthDegraded(q, error);
-    if (W !== undefined) clearInterval(W);
-    transportErrorState?.activeCallWatchdogs.delete(X);
-    let Ne = Date.now() - toolStartTime;
+    if (!signal.aborted) noteHearthDegraded(clientName, error);
+    if (progressTimer !== undefined) clearInterval(progressTimer);
+    transportErrorState?.activeCallWatchdogs.delete(watchdog);
+    let elapsedMs = Date.now() - toolStartTime;
     if (error instanceof Error && error.name !== "AbortError")
       logMCPDebug(
-        q,
-        `Tool '${tool}' failed after ${Math.floor(Ne / 1000)}s: ${le !== undefined && error instanceof McpToolCallError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS ? le(error.message) : ce !== undefined ? withheldFileReferenceErrorForLog(ce, error.message, error.name) : describeConnectError(error, config)}`,
+        clientName,
+        `Tool '${tool}' failed after ${Math.floor(elapsedMs / 1000)}s: ${formatErrorForLog !== undefined && error instanceof McpToolCallError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS ? formatErrorForLog(error.message) : withheldTool !== undefined ? withheldFileReferenceErrorForLog(withheldTool, error.message, error.name) : describeConnectError(error, config)}`,
       );
     if (error instanceof Error) {
-      let we = error instanceof McpError ? undefined : "code" in error ? error.code : undefined;
-      let Oe =
+      let errorCode = error instanceof McpError ? undefined : "code" in error ? error.code : undefined;
+      let hasHeadersHelper =
         (config.type === "http" || config.type === "sse" || config.type === "ws") && !!config.headersHelper;
       let isSessionExpired = hasCliOwnedBearer(config);
       let isOAuthShapedAuthError =
@@ -13967,110 +15413,126 @@ async function callMCPTool_2({
       let pendingStepUpScope = getCliOwnedState().clientAuthProviders.get(
         identityId2(client_2),
       )?.pendingStepUpScope;
-      let Fe = classifyToolCallAuthError_2({
-        errorCode: we,
+      let authErrorKind = classifyToolCallAuthError_2({
+        errorCode,
         message: error.message,
         isUnauthorizedError: error instanceof UnauthorizedError,
         isOAuthShapedAuthError,
-        hasHeadersHelper: Oe,
+        hasHeadersHelper,
         pendingStepUpScope,
       });
-      let Ue =
+      let oauthConfig =
         (config.type === "http" || config.type === "sse") &&
         !config.headersHelper &&
         !configHasAuthorizationHeader(config)
           ? config
           : undefined;
-      let Ie = !isAuthRetry && Fe === "credential_rejected" && !Oe && Ue !== undefined;
-      let ve = Ie && (await hasStoredRefreshToken(q, Ue));
-      let Ee =
-        ve ||
-        (Ie &&
+      let shouldReauth =
+        !isAuthRetry &&
+        authErrorKind === "credential_rejected" &&
+        !hasHeadersHelper &&
+        oauthConfig !== undefined;
+      let hasRefreshTokenStored = shouldReauth && (await hasStoredRefreshToken(clientName, oauthConfig));
+      let shouldRetryAuth =
+        hasRefreshTokenStored ||
+        (shouldReauth &&
           isSignedOutFallbackEnabled() &&
           getCliOwnedState().clientAuthProviders.get(identityId2(client_2))?.lastAuthRejection?.status ===
             401 &&
           getCliOwnedState().clientAuthProviders.get(identityId2(client_2))?.lastAuthRejection
             ?.accessToken !== undefined);
-      if ((Oe || isSessionExpired || Ue !== undefined) && !isAuthRetry) {
-        let ke = serverCacheKey(q, config);
-        if (identityEpoch() !== L)
+      if ((hasHeadersHelper || isSessionExpired || oauthConfig !== undefined) && !isAuthRetry) {
+        let cacheKey = serverCacheKey(clientName, config);
+        if (identityEpoch() !== epochAtStart)
           throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-            `MCP tool call to server "${q}" was aborted: the account changed before re-authentication`,
+            `MCP tool call to server "${clientName}" was aborted: the account changed before re-authentication`,
             "MCP tool call aborted: account changed before reauth",
           );
         let reauthInFlight = getConnectionCache().reauthInFlight;
         let cliOwnedState = getCliOwnedState();
-        let Ae = reauthInFlight.get(ke);
-        let promise = Ae !== undefined && Ae.epoch === L ? Ae.promise : undefined;
+        let existingReauth = reauthInFlight.get(cacheKey);
+        let promise =
+          existingReauth !== undefined && existingReauth.epoch === epochAtStart
+            ? existingReauth.promise
+            : undefined;
         cliOwnedState.reauthDecisionSinkForTest?.(
-          promise !== undefined ? "joined" : Ae !== undefined ? "stale_refused" : "started",
+          promise !== undefined ? "joined" : existingReauth !== undefined ? "stale_refused" : "started",
         );
-        let ot =
+        let isCollateralClose =
           promise !== undefined &&
           error instanceof McpError &&
           error.code === ErrorCode.ConnectionClosed &&
           !isTruncatedBodyError(transportErrorState?.closeReason);
         if (
-          (ot ||
-            (Fe === "credential_rejected" && Oe) ||
-            (Fe === "credential_rejected" && isSessionExpired) ||
-            Ee) &&
-          !isMcpServerDisabled(q) &&
-          !isMcpServerBlockedAtConnectTime(q, config)
+          (isCollateralClose ||
+            (authErrorKind === "credential_rejected" && hasHeadersHelper) ||
+            (authErrorKind === "credential_rejected" && isSessionExpired) ||
+            shouldRetryAuth) &&
+          !isMcpServerDisabled(clientName) &&
+          !isMcpServerBlockedAtConnectTime(clientName, config)
         ) {
           logMCPDebug(
-            q,
-            Oe
-              ? `Tool '${tool}' returned ${we ?? 401}; re-running headersHelper and retrying once`
+            clientName,
+            hasHeadersHelper
+              ? `Tool '${tool}' returned ${errorCode ?? 401}; re-running headersHelper and retrying once`
               : isSessionExpired
-                ? `Tool '${tool}' returned ${we ?? 401}; session credential rejected \u2014 reconnecting and retrying once`
-                : ot
+                ? `Tool '${tool}' returned ${errorCode ?? 401}; session credential rejected \u2014 reconnecting and retrying once`
+                : isCollateralClose
                   ? `Tool '${tool}' failed because a reconnect in progress closed its connection; retrying once on the new connection`
-                  : `Tool '${tool}' returned ${we ?? 401}; ${ve ? "refresh token stored" : "stored sign-in rejected, no refresh token"} \u2014 reconnecting and retrying once`,
+                  : `Tool '${tool}' returned ${errorCode ?? 401}; ${hasRefreshTokenStored ? "refresh token stored" : "stored sign-in rejected, no refresh token"} \u2014 reconnecting and retrying once`,
           );
-          if (ot) logFeatureSad(Oe ? "mcp_headers_helper" : "mcp_oauth_refresh", "collateral_rejoin");
+          if (isCollateralClose)
+            logFeatureSad(hasHeadersHelper ? "mcp_headers_helper" : "mcp_oauth_refresh", "collateral_rejoin");
           if (!promise) {
             logFeatureSad(
-              Oe ? "mcp_headers_helper" : Ee && !ve ? "mcp_signed_out_fallback" : "mcp_oauth_refresh",
+              hasHeadersHelper
+                ? "mcp_headers_helper"
+                : shouldRetryAuth && !hasRefreshTokenStored
+                  ? "mcp_signed_out_fallback"
+                  : "mcp_oauth_refresh",
               "reauth_retry",
             );
-            pe.onclose = undefined;
-            let P = L;
+            sdkClient.onclose = undefined;
+            let reauthEpoch = epochAtStart;
             promise = (async () => {
-              await clearServerCache_4(q, config);
-              return connectToServer_2(q, config, undefined, undefined, credentials);
+              await clearServerCache_4(clientName, config);
+              return connectToServer_2(clientName, config, undefined, undefined, credentials);
             })();
-            let x = {
+            let reauthEntry = {
               promise,
-              epoch: P,
+              epoch: reauthEpoch,
             };
-            reauthInFlight.set(ke, x);
+            reauthInFlight.set(cacheKey, reauthEntry);
             promise
-              .then((D) => {
-                if (D.type === "connected" && identityEpoch() === P) REAUTH_RECONNECT_SIGNAL.emit(q, config);
+              .then((reconnected) => {
+                if (reconnected.type === "connected" && identityEpoch() === reauthEpoch)
+                  REAUTH_RECONNECT_SIGNAL.emit(clientName, config);
               })
               .finally(() => {
-                if (reauthInFlight.get(ke) === x && !cliOwnedState.holdStaleReauthEntryForTest)
-                  reauthInFlight.delete(ke);
+                if (
+                  reauthInFlight.get(cacheKey) === reauthEntry &&
+                  !cliOwnedState.holdStaleReauthEntryForTest
+                )
+                  reauthInFlight.delete(cacheKey);
               })
               .catch(() => {});
           }
-          let ee = await promise;
-          if (identityEpoch() !== L) {
-            if (ee.type === "connected") await detachAndCloseConnection_2(ee);
+          let newConnection = await promise;
+          if (identityEpoch() !== epochAtStart) {
+            if (newConnection.type === "connected") await detachAndCloseConnection_2(newConnection);
             throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-              `MCP tool call to server "${q}" was aborted: the account changed during re-authentication`,
+              `MCP tool call to server "${clientName}" was aborted: the account changed during re-authentication`,
               "MCP tool call aborted: account changed during reauth",
             );
           }
           if (
-            ee.type === "connected" &&
-            (isMcpServerDisabled(q) || isMcpServerBlockedAtConnectTime(q, config))
+            newConnection.type === "connected" &&
+            (isMcpServerDisabled(clientName) || isMcpServerBlockedAtConnectTime(clientName, config))
           )
-            await clearServerCache_4(q, config);
-          else if (ee.type === "connected")
+            await clearServerCache_4(clientName, config);
+          else if (newConnection.type === "connected")
             return callMCPTool_2({
-              client: ee,
+              client: newConnection,
               tool,
               args,
               meta,
@@ -14088,27 +15550,30 @@ async function callMCPTool_2({
               storageV5,
               credentials,
             });
-          logMCPDebug(q, `Auth reconnect returned '${ee.type}'; falling through to needs-auth`);
-          if (isDiscoveryCacheOn() && ee.type !== "needs-auth") {
-            let P = connectToServer_2.cache?.get?.(ke);
+          logMCPDebug(
+            clientName,
+            `Auth reconnect returned '${newConnection.type}'; falling through to needs-auth`,
+          );
+          if (isDiscoveryCacheOn() && newConnection.type !== "needs-auth") {
+            let cachedDial = connectToServer_2.cache?.get?.(cacheKey);
             if (
-              P !== undefined &&
-              (await settleWithinDeadline(P)) === ee &&
-              connectToServer_2.cache?.get?.(ke) === P
+              cachedDial !== undefined &&
+              (await settleDialOrUndefined(cachedDial)) === newConnection &&
+              connectToServer_2.cache?.get?.(cacheKey) === cachedDial
             )
-              getConnectionCache().connections.delete(ke);
+              getConnectionCache().connections.delete(cacheKey);
           }
         }
       }
-      if (Fe === "credential_rejected" && isSessionExpired) {
-        await clearServerCache_4(q, config);
+      if (authErrorKind === "credential_rejected" && isSessionExpired) {
+        await clearServerCache_4(clientName, config);
         logMCPDebug(
-          q,
-          `Tool '${tool}' rejected the session credential (${we ?? 401}); failing the call and clearing the connection for a fresh retry later`,
+          clientName,
+          `Tool '${tool}' rejected the session credential (${errorCode ?? 401}); failing the call and clearing the connection for a fresh retry later`,
         );
         throw Object.assign(
           new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-            AUTH_MESSAGES.sessionCredentialRejected(q, we ?? 401),
+            AUTH_MESSAGES.sessionCredentialRejected(clientName, errorCode ?? 401),
             "MCP server rejected the session credential",
           ),
           {
@@ -14116,93 +15581,112 @@ async function callMCPTool_2({
           },
         );
       }
-      if (Fe !== undefined) {
-        let ke = config.type === "claudeai-proxy" && config.eligible === false;
-        let authErrorKind = ke ? "not_connected" : Fe === "step_up" ? "insufficient_scope" : "token_expired";
+      if (authErrorKind !== undefined) {
+        let isIneligibleProxy = config.type === "claudeai-proxy" && config.eligible === false;
+        let authErrorKind_2 = isIneligibleProxy
+          ? "not_connected"
+          : authErrorKind === "step_up"
+            ? "insufficient_scope"
+            : "token_expired";
         logMCPDebug(
-          q,
-          authErrorKind === "insufficient_scope"
+          clientName,
+          authErrorKind_2 === "insufficient_scope"
             ? `Tool call returned 403 insufficient_scope (scope: ${redactSensitiveUrlParams("scope", pendingStepUpScope ?? "")})`
             : "Tool call returned 401 Unauthorized - token may have expired",
         );
-        let ye = mcpBaseUrlAnalytics(config, q);
-        let Ae = isMcpServerLoggableInAnalytics(q, config);
+        let serverFields = mcpBaseUrlAnalytics(config, clientName);
+        let loggable = isMcpServerLoggableInAnalytics(clientName, config);
         logEvent("tengu_mcp_tool_call_auth_error", {
-          errorCode: fromNumber(we ?? (Fe === "step_up" ? 403 : 401)),
+          errorCode: fromNumber(errorCode ?? (authErrorKind === "step_up" ? 403 : 401)),
           transportType: fromEnum(config.type ?? "stdio"),
-          authErrorKind: fromEnum(authErrorKind),
-          ...ye,
-          mcpServerName: mcpNameForAnalytics_GATE_EVALUATED(normalizeNameForMCP(q), Ae),
-          mcpToolName: loggableMcpToolName(normalizeNameForMCP(q), normalizeNameForMCP(tool), Ae),
+          authErrorKind: fromEnum(authErrorKind_2),
+          ...serverFields,
+          mcpServerName: mcpNameForAnalytics_GATE_EVALUATED(normalizeNameForMCP(clientName), loggable),
+          mcpToolName: loggableMcpToolName(
+            normalizeNameForMCP(clientName),
+            normalizeNameForMCP(tool),
+            loggable,
+          ),
         });
-        let $e = (config.type === "http" || config.type === "sse") && configHasAuthorizationHeader(config);
+        let hasAuthHeader =
+          (config.type === "http" || config.type === "sse") && configHasAuthorizationHeader(config);
         throw new McpAuthError(
-          q,
-          ke
-            ? AUTH_MESSAGES.notConnected(q)
-            : authErrorKind === "insufficient_scope"
-              ? AUTH_MESSAGES.stepUp(q, pendingStepUpScope)
-              : Oe
-                ? AUTH_MESSAGES.helperRejected(q)
-                : $e
-                  ? AUTH_MESSAGES.headerRejected(q)
-                  : AUTH_MESSAGES.signInAgain(q),
-          authErrorKind,
+          clientName,
+          isIneligibleProxy
+            ? AUTH_MESSAGES.notConnected(clientName)
+            : authErrorKind_2 === "insufficient_scope"
+              ? AUTH_MESSAGES.stepUp(clientName, pendingStepUpScope)
+              : hasHeadersHelper
+                ? AUTH_MESSAGES.helperRejected(clientName)
+                : hasAuthHeader
+                  ? AUTH_MESSAGES.headerRejected(clientName)
+                  : AUTH_MESSAGES.signInAgain(clientName),
+          authErrorKind_2,
           getCliOwnedState().clientFirstPartyBearers.get(identityId2(client_2))?.last,
-          authErrorKind === "insufficient_scope" ? pendingStepUpScope : undefined,
+          authErrorKind_2 === "insufficient_scope" ? pendingStepUpScope : undefined,
         );
       }
-      let te = !(config.type === "http" && we === 404 && be) && isMcpSessionExpiredError_2(error);
-      let Pe =
+      let isSessionExpired_2 =
+        !(config.type === "http" && errorCode === 404 && hasNoSession) && isMcpSessionExpiredError_2(error);
+      let isClosedBeforeAnswer =
         "code" in error &&
         error.code === -32000 &&
         error.message.includes("Connection closed") &&
         (config.type === "http" || config.type === "claudeai-proxy");
       if (error instanceof HttpBodyOverflowError_2)
-        throw new McpToolResultNotReadError(q, tool, {
+        throw new McpToolResultNotReadError(clientName, tool, {
           kind: "too_large",
           capBytes: HTTP_BODY_LIMITS,
         });
-      if (Pe && isTruncatedBodyError(transportErrorState?.closeReason))
-        throw new McpToolResultNotReadError(q, tool, {
+      if (isClosedBeforeAnswer && isTruncatedBodyError(transportErrorState?.closeReason))
+        throw new McpToolResultNotReadError(clientName, tool, {
           kind: "connection_closed",
         });
-      if (te || Pe) {
+      if (isSessionExpired_2 || isClosedBeforeAnswer) {
         logMCPDebug(
-          q,
-          `MCP session expired during tool call (${te ? "stale session" : "connection closed"}), clearing connection cache for re-initialization`,
+          clientName,
+          `MCP session expired during tool call (${isSessionExpired_2 ? "stale session" : "connection closed"}), clearing connection cache for re-initialization`,
         );
-        let ke = mcpBaseUrlAnalytics(config, q);
-        let oe = isMcpServerLoggableInAnalytics(q, config);
-        let mcpToolName = loggableMcpToolName(normalizeNameForMCP(q), normalizeNameForMCP(tool), oe);
+        let serverFields = mcpBaseUrlAnalytics(config, clientName);
+        let loggable = isMcpServerLoggableInAnalytics(clientName, config);
+        let mcpToolName = loggableMcpToolName(
+          normalizeNameForMCP(clientName),
+          normalizeNameForMCP(tool),
+          loggable,
+        );
         logEvent("tengu_mcp_session_expired", {
-          errorCode: we !== undefined ? fromNumber(we) : undefined,
+          errorCode: errorCode !== undefined ? fromNumber(errorCode) : undefined,
           transportType: fromEnum(config.type ?? "stdio"),
-          ...ke,
-          mcpServerName: mcpNameForAnalytics_GATE_EVALUATED(normalizeNameForMCP(q), oe),
+          ...serverFields,
+          mcpServerName: mcpNameForAnalytics_GATE_EVALUATED(normalizeNameForMCP(clientName), loggable),
           mcpToolName,
         });
-        await clearServerCache_4(q, config);
-        let Ae = didCallRunNothing(transportErrorState?.toolCallSends, started, X.ownSends);
+        await clearServerCache_4(clientName, config);
+        let callRanNothing = didCallRunNothing(
+          transportErrorState?.toolCallSends,
+          started,
+          watchdog.ownSends,
+        );
         throw new McpSessionExpiredError(
-          q,
-          te
+          clientName,
+          isSessionExpired_2
             ? "session_expired_404"
             : isMalformedAfterAuthChallenge(transportErrorState?.closeReason) ||
-                (transportErrorState?.closeReason === "session expired" && Ae)
+                (transportErrorState?.closeReason === "session expired" && callRanNothing)
               ? "connection_closed_call_refused"
-              : !isAuthRetry && Ae
+              : !isAuthRetry && callRanNothing
                 ? "connection_closed_call_not_run"
                 : "connection_closed_http",
         );
       }
     }
-    let Te = error;
+    let errorLike = error;
     if (
       error instanceof ZodError ||
-      ((Te?.name === "ZodError" || Te?.name === "$ZodError") && Array.isArray(Te?.issues))
+      ((errorLike?.name === "ZodError" || errorLike?.name === "$ZodError") &&
+        Array.isArray(errorLike?.issues))
     )
-      throw new McpResponseSchemaError(q, error);
+      throw new McpResponseSchemaError(clientName, error);
     if (!(error instanceof Error) || error.name !== "AbortError") throw error;
     return {
       content: INTERRUPTED_CALL_NOTICE,
@@ -14210,27 +15694,31 @@ async function callMCPTool_2({
       isError: true,
     };
   } finally {
-    if (W !== undefined) clearInterval(W);
+    if (progressTimer !== undefined) clearInterval(progressTimer);
   }
 }
 //@ chunk-z1n5m6nf.js:156945-158868 placement
-async function connectAllMcpServers(e, sendMcpMessage, n, s) {
-  let h = [];
-  let y = [];
-  let S = [];
+async function connectAllMcpServers(sdkConfigs, sendMcpMessage, manifests, storageV5) {
+  let clients = [];
+  let tools = [];
+  let commands = [];
   primeEnsureConnectedClient();
   let settled = await Promise.allSettled(
-    Object.entries(e).map(async ([key, value]) => {
-      let E = new SdkControlClientTransport(key, sendMcpMessage, validateHostManifest_2(key, n?.get(key)));
+    Object.entries(sdkConfigs).map(async ([key, value]) => {
+      let transport = new SdkControlClientTransport(
+        key,
+        sendMcpMessage,
+        validateHostManifest_2(key, manifests?.get(key)),
+      );
       guardTransportSend(
         {
           name: key,
         },
-        E,
+        transport,
       );
-      let Q = new Client(
+      let client = new Client(
         {
-          ...A_t,
+          ...CLAUDE_CODE_SERVER_INFO,
           version:
             {
               ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
@@ -14245,66 +15733,66 @@ async function connectAllMcpServers(e, sendMcpMessage, n, s) {
             }.VERSION ?? "unknown",
         },
         {
-          capabilities: T_t,
+          capabilities: EMPTY_CAPABILITIES,
           ...(isDisklessContext() && {
             jsonSchemaValidator: NO_OP_SCHEMA_VALIDATOR,
           }),
         },
       );
-      let H = false;
+      let timedOut = false;
       try {
-        let U = Q.connect(E, {
+        let connectPromise = client.connect(transport, {
           timeout: getConnectionTimeoutMs(),
         });
         if (
           !(await withDeadline(
-            U.then(() => true),
+            connectPromise.then(() => true),
             getConnectionTimeoutMs(),
           ))
         ) {
-          U.catch(() => {});
-          E.close().catch(() => {});
-          H = true;
+          connectPromise.catch(() => {});
+          transport.close().catch(() => {});
+          timedOut = true;
           throw makeConnectTimeoutError(
             `SDK MCP server "${key}" connection timed out after ${getConnectionTimeoutMs()}ms`,
           );
         }
-        let serverCapabilities = Q.getServerCapabilities();
-        let instructions = Q.getInstructions();
+        let serverCapabilities = client.getServerCapabilities();
+        let instructions = client.getInstructions();
         let instructions_2 = truncateServerInstructions_2(instructions, key);
-        let j = {
+        let connection = {
           type: "connected",
-          serverInfo: Q.getServerVersion(),
+          serverInfo: client.getServerVersion(),
           name: key,
           capabilities: serverCapabilities || {},
           instructions: instructions_2,
-          client: identityId(Q),
+          client: identityId(client),
           config: {
             ...value,
             scope: "dynamic",
           },
           cleanup: async () => {
-            await Q.close();
+            await client.close();
           },
         };
-        let fe = serverCacheKey(j.name, j.config);
-        getConnectionCache().toolLists.delete(fe);
-        let pe = [];
+        let cacheKey = serverCacheKey(connection.name, connection.config);
+        getConnectionCache().toolLists.delete(cacheKey);
+        let tools = [];
         if (serverCapabilities?.tools) {
-          let ce = await listMcpTools(j, s);
-          pe.push(...ce);
+          let listed = await listMcpTools(connection, storageV5);
+          tools.push(...listed);
         }
         let commands = [];
         logFeatureOk("mcp_sdk_connect");
-        logManifestOutcomeV1(E.manifestOutcome, true);
+        logManifestOutcomeV1(transport.manifestOutcome, true);
         return {
-          client: j,
-          tools: pe,
+          client: connection,
+          tools,
           commands,
         };
       } catch (error) {
-        logFeatureBad("mcp_sdk_connect", H ? "mcp_sdk_connect_timeout" : "mcp_sdk_connect_failed");
-        logManifestOutcomeV1(E.manifestOutcome, false);
+        logFeatureBad("mcp_sdk_connect", timedOut ? "mcp_sdk_connect_timeout" : "mcp_sdk_connect_failed");
+        logManifestOutcomeV1(transport.manifestOutcome, false);
         logMCPError(key, `Failed to connect SDK MCP server: ${error}`);
         return {
           client: {
@@ -14321,708 +15809,57 @@ async function connectAllMcpServers(e, sendMcpMessage, n, s) {
       }
     }),
   );
-  for (let w of settled)
-    if (w.status === "fulfilled") {
-      h.push(w.value.client);
-      y.push(...w.value.tools);
-      S.push(...w.value.commands);
+  for (let outcome of settled)
+    if (outcome.status === "fulfilled") {
+      clients.push(outcome.value.client);
+      tools.push(...outcome.value.tools);
+      commands.push(...outcome.value.commands);
     }
-  if (h.some((w) => w.type === "connected" && !!w.capabilities?.resources)) {
-    if (![ListMcpResourcesTool, ReadMcpResourceTool].some((R) => y.some((E) => toolMatchesName(E, R.name))))
-      y.push(ListMcpResourcesTool, ReadMcpResourceTool, listDirectoryResourceTool);
+  if (clients.some((client) => client.type === "connected" && !!client.capabilities?.resources)) {
+    if (
+      ![ListMcpResourcesTool, ReadMcpResourceTool].some((resourceTool) =>
+        tools.some((tool) => toolMatchesName(tool, resourceTool.name)),
+      )
+    )
+      tools.push(ListMcpResourcesTool, ReadMcpResourceTool, listDirectoryResourceTool);
   }
   return {
-    clients: h,
-    tools: y,
-    commands: S,
+    clients,
+    tools,
+    commands,
   };
 }
 //@ chunk-z1n5m6nf.js:158868-159057 placement
-async function clearServerCache_2(e) {
+async function clearServerCache_2(clients) {
   await Promise.all(
-    e.map(async (r) => {
-      if (r.type !== "connected") return;
+    clients.map(async (client) => {
+      if (client.type !== "connected") return;
       try {
-        await r.cleanup();
+        await client.cleanup();
       } catch (error) {
-        logForDebugging(`MCP client cleanup failed for ${r.name}: ${error}`, {
+        logForDebugging(`MCP client cleanup failed for ${client.name}: ${error}`, {
           level: "error",
         });
       }
     }),
   );
 }
-//@ chunk-e6aww6q8.js:2145813-2145923 placement
-/**
- * 判断 MCP 输出截断时是否使用子代理提示（环境变量覆盖优先，否则看开关）。
- */
-function useSubagentTruncationPrompt() {
-  let MCP_TRUNCATION_PROMPT_OVERRIDE = env.MCP_TRUNCATION_PROMPT_OVERRIDE;
-  return MCP_TRUNCATION_PROMPT_OVERRIDE
-    ? MCP_TRUNCATION_PROMPT_OVERRIDE !== "legacy"
-    : getFeatureValue_CACHED_MAY_BE_STALE("tengu_mcp_subagent_prompt", false);
-}
-//@ chunk-e6aww6q8.js:3289283-3289667 fingerprint = ensureConnectedClient (0.344)
-/**
- * ensureConnectedClient：按名字找客户端并确认已连接，找不到列出可用服务器名报错。
- */
-function ensureConnectedClient_2(clients, serverName) {
-  let [r] = findServersByName(clients, serverName);
-  if (!r)
-    throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `Server "${serverName}" not found. Available servers: ${clients.map((client) => client.name).join(", ")}`,
-      "MCP server not found",
-    );
-  if (!isConnectedOrCached(r))
-    throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `Server "${r.name}" is not connected`,
-      "MCP server not connected",
-    );
-  if (!r.capabilities?.resources)
-    throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `Server "${r.name}" does not support resources`,
-      "MCP server has no resources capability",
-    );
-  return r;
-}
-//@ chunk-e6aww6q8.js:3806756-3806859 placement
-/**
- * 判断 MCP 配置的 URL 是否为空（未配置）。
- */
-function isUnconfiguredUrl(e) {
-  return e.configErrorReason === "url_empty" || (!e.configError && "url" in e && e.url.trim() === "");
-}
-//@ chunk-e6aww6q8.js:3806859-3807903 placement
-/**
- * 生成 MCP 服务器配置的规范化 JSON 指纹：去掉来源/缓存/资格等元字段，stdio 补默认 type 与 args，URL 查询参数排序，对象键排序，未配置的 URL 标记 unconfigured。
- */
-function canonicalMcpConfigKey(config) {
-  let {
-    scope,
-    pluginSource,
-    pluginPath,
-    relayed,
-    pluginEndpointTemplated,
-    pluginOfficialSourceVouched,
-    agentSource,
-    declaredIn,
-    configError,
-    configErrorReason,
-    expandedFromEnv,
-    configuredCommand,
-    redialToRelearnRegistration,
-    ...we
-  } = config;
-  let canonical = we;
-  delete canonical.tools;
-  delete canonical.discoveryCache;
-  delete canonical.cachedInitResponse;
-  delete canonical.cachedDiscoverResponse;
-  delete canonical.discoverSupport;
-  delete canonical.eligible;
-  delete canonical.ineligibleReason;
-  delete canonical.enterpriseManaged;
-  if (canonical.type === "stdio" || (canonical.type === undefined && "command" in canonical)) {
-    canonical.type = "stdio";
-    canonical.args = canonical.args ?? [];
-  }
-  let urlParts =
-    typeof canonical.url === "string" && URL.canParse(canonical.url)
-      ? /^([^?#]*\?)([^#]*)(.*)$/s.exec(canonical.url)
-      : null;
-  if (urlParts) {
-    let [, Me = "", We = "", ze = ""] = urlParts;
-    canonical.url =
-      Me +
-      We.split("&")
-        .sort((lt, Je) => {
-          let nt = firstLineOf(lt, "=");
-          let pt = firstLineOf(Je, "=");
-          return nt < pt ? -1 : nt > pt ? 1 : 0;
-        })
-        .join("&") +
-      ze;
-  }
-  if (isUnconfiguredUrl(config)) canonical.unconfigured = true;
-  if (agentSource !== undefined) canonical.agentSource = agentSource;
-  return jsonStringify(canonical, (Me, We) => {
-    if (We && typeof We === "object" && !Array.isArray(We)) {
-      let ze = We;
-      let lt = Object.create(null);
-      for (let key of Object.keys(ze).sort()) lt[key] = ze[key];
-      return lt;
-    }
-    return We;
-  });
-}
-//@ chunk-e6aww6q8.js:3807903-3807980 placement
-/**
- * 配置内容的 SHA-256 前 16 位（缓存键）。
- */
-function configHash(config) {
-  return createHash("sha256").update(canonicalMcpConfigKey(config)).digest("hex").slice(0, 16);
-}
-//@ chunk-e6aww6q8.js:3807980-3808019 placement
-/**
- * 服务器缓存键（名字 + 配置哈希）。
- */
-function serverCacheKey(e, config) {
-  return `${e}-${configHash(config)}`;
-}
-//@ chunk-e6aww6q8.js:3808134-3808155 placement
-var CU_DESKTOP_BINARY_NAME = "cu-desktop";
-//@ chunk-e6aww6q8.js:3808155-3808308 placement
-/**
- * 托管桌面会话的 computer-use 接入：mcpConfig {"computer-use": stdio /opt/cu-desktop/cu-desktop mcp, scope dynamic}，并把只读动作加入允许列表。
- */
-function getHostedDesktopComputerUseConfig() {
-  return {
-    mcpConfig: {
-      [COMPUTER_USE_MCP_SERVER_NAME]: registerCliOwnedConfig({
-        type: "stdio",
-        command: `/opt/${CU_DESKTOP_BINARY_NAME}/${CU_DESKTOP_BINARY_NAME}`,
-        args: ["mcp"],
-        scope: "dynamic",
-      }),
-    },
-    allowedTools: READ_ONLY_CU_ACTIONS.map((e) => buildMcpToolName(COMPUTER_USE_MCP_SERVER_NAME, e)),
-  };
-}
-//@ chunk-e6aww6q8.js:3808308-3808421 placement = getServerCommandArray (1)
-function isDesktopComputerUseCommand(config) {
-  return (
-    (config.type === undefined || config.type === "stdio") &&
-    [config.command, ...(config.args ?? [])].some((n) => n?.includes(CU_DESKTOP_BINARY_NAME))
-  );
-}
-//@ chunk-e6aww6q8.js:3874164-3874197 placement
-/**
- * 取可安全记录进日志的服务器源地址。
- */
-function loggingSafeOrigin(serverConfig) {
-  return safeOrigin(getLoggingSafeMcpBaseUrl(serverConfig));
-}
-//@ chunk-e6aww6q8.js:3874197-3874221 placement
-/**
- * 按宿主保存的回合调度器映射。
- */
-var turnsByHost = new HostScoped(() => ({}));
-//@ chunk-e6aww6q8.js:3874221-3874328 placement
-/**
- * 在当前回合调度器中映射执行（没有调度器时直接映射）。
- */
-async function mapInTurns(e, n) {
-  let { turns } = turnsByHost.of(getRootSession().host);
-  return turns === undefined ? e.map((s) => n(s)) : turns.mapInTurns(e, n);
-}
-//@ chunk-e6aww6q8.js:3874328-3874407 placement
-/**
- * 工具描述的最大长度（环境变量可覆盖）。
- */
-function maxDescriptionLength(e = false) {
-  return (
-    env.CLAUDE_CODE_MAX_MCP_DESCRIPTION_LENGTH ?? (e ? MAX_STRUCTURED_RESULT_CHARS : MAX_CALL_MARK_CHARS)
-  );
-}
-//@ chunk-e6aww6q8.js:3874407-3874856 placement
-/**
- * 检测工具描述中工具调用 XML 的标记：invoke 标签与常见 HTML 标签名（不视为参数名）。
- */
-var INVOKE_TAG_MARKERS = [
-  "<invoke>",
-  "<invoke ",
-  "<invoke\t",
-  `<invoke
-`,
-  "</invoke>",
-];
-var COMMON_HTML_TAGS = new Set([
-  "address",
-  "area",
-  "article",
-  "audio",
-  "base",
-  "body",
-  "button",
-  "cite",
-  "code",
-  "data",
-  "details",
-  "dialog",
-  "figure",
-  "footer",
-  "form",
-  "head",
-  "header",
-  "html",
-  "image",
-  "input",
-  "label",
-  "link",
-  "main",
-  "mark",
-  "menu",
-  "meta",
-  "object",
-  "option",
-  "output",
-  "path",
-  "picture",
-  "script",
-  "section",
-  "select",
-  "slot",
-  "source",
-  "span",
-  "style",
-  "summary",
-  "table",
-  "template",
-  "text",
-  "time",
-  "title",
-  "video",
-]);
-//@ chunk-e6aww6q8.js:3874856-3875447 placement
-/**
- * 检查 MCP 工具描述与参数描述中是否含工具调用式 XML：invoke 标签，或以参数名为标签名的标记。
- */
-function detectToolCallXml(tool, maxDescChars) {
-  let properties = tool.inputSchema?.properties ?? {};
-  let propertyNames = Object.keys(properties);
-  let texts = [];
-  if (tool.description) texts.push(tool.description.slice(0, maxDescChars));
-  for (let propertyName of propertyNames) {
-    let G = properties[propertyName];
-    let description = G && typeof G === "object" && "description" in G ? G.description : undefined;
-    if (typeof description === "string") texts.push(description);
-  }
-  if (texts.length === 0) return;
-  let joined = texts.join(`
-`);
-  if (!joined.includes("<")) return;
-  let lower = joined.toLowerCase();
-  if (INVOKE_TAG_MARKERS.some((L) => lower.includes(L))) return "invoke";
-  let paramTags = new Set();
-  for (let propertyName of propertyNames) {
-    let lower = propertyName.toLowerCase();
-    if (propertyName.length >= 4 && !COMMON_HTML_TAGS.has(lower)) paramTags.add(lower);
-  }
-  for (let [, L = ""] of lower.matchAll(/<([^<>]*)>/g))
-    if (paramTags.has(L) || (L.startsWith("/") && paramTags.has(L.slice(1)))) return "param";
-  return;
-}
-//@ chunk-e6aww6q8.js:3875447-3875943 placement
-/**
- * 统计并上报 MCP 服务器工具描述与说明中含工具调用式 XML 的情况。
- */
-async function logToolCallXmlInDescriptions(e, name, r, s, instructions) {
-  let maxDescChars = maxDescriptionLength(true);
-  let S = 0;
-  let w = 0;
-  let L;
-  let G = await mapInTurns(e, (tool) => detectToolCallXml(tool, maxDescChars));
-  for (let [ke, we] of G.entries()) {
-    if (we === undefined) continue;
-    if (we === "invoke") S++;
-    else w++;
-    L ??= e[ke]?.name;
-  }
-  let lower = instructions?.slice(0, maxDescriptionLength()).toLowerCase();
-  let Z = lower !== undefined && INVOKE_TAG_MARKERS.some((ke) => lower.includes(ke));
-  let Se = S + w;
-  if (Se === 0 && !Z) return;
-  logEvent("tengu_mcp_description_contains_toolcall_xml", {
-    matchedToolCount: Se,
-    invokeCount: S,
-    paramCount: w,
-    instructionsMatch: Z,
-    sampleToolName: L ? loggableMcpToolName(name, L, r) : undefined,
-    mcpServerName: mcpNameForAnalytics_GATE_EVALUATED(name, r),
-    ...(s && {
-      mcpServerBaseUrl: s,
-    }),
-  });
-}
-//@ chunk-e6aww6q8.js:3875943-3875971 placement
-/**
- * 类似标签名的最大长度（256）。
- */
-var INVOKE_CLOSE_TAG = "</invoke>";
-var MAX_URL_LIKE_TAG_CHARS = 256;
-//@ chunk-e6aww6q8.js:3875971-3876067 placement
-function mcpToolInputToAutoClassifierInput_2(input, toolName) {
-  return (
-    input.length >= toolName.length && input.slice(-toolName.length).toLowerCase() === toolName.toLowerCase()
-  );
-}
-//@ chunk-e6aww6q8.js:3876067-3876972 placement
-/**
- * 去掉 MCP 工具参数末尾多余的 invoke 结束标签。
- */
-function stripTrailingInvokeSuffix(e, name, name_2, s, featureValue_CACHED_MAY_BE_STALE, y) {
-  let S = e;
-  for (let [key, value] of Object.entries(e)) {
-    if (typeof value !== "string") continue;
-    let G = value.length - 1;
-    while (
-      G >= 0 &&
-      (value.charCodeAt(G) === 32 ||
-        value.charCodeAt(G) === 9 ||
-        value.charCodeAt(G) === 10 ||
-        value.charCodeAt(G) === 13)
-    )
-      G--;
-    if (G >= 0) {
-      let code = value.charCodeAt(G);
-      if (code >= 33 && code <= 126 && code !== 62) continue;
-    }
-    let q = value.trimEnd();
-    if (!mcpToolInputToAutoClassifierInput_2(q, INVOKE_CLOSE_TAG)) continue;
-    q = q.slice(0, -INVOKE_CLOSE_TAG.length).trimEnd();
-    let toolName = `</${key}>`;
-    let Se = mcpToolInputToAutoClassifierInput_2(q, toolName);
-    if (Se) q = q.slice(0, -toolName.length).trimEnd();
-    let ke =
-      Se &&
-      (key.length > MAX_URL_LIKE_TAG_CHARS ||
-        new RegExp(`<${urlPatternToRegex_2(key)}[\\s>/]`, "i").test(value));
-    let we = !Se ? lit("param_close") : ke ? lit("open_guard") : undefined;
-    logEvent("tengu_mcp_arg_trailing_invoke_suffix", {
-      wouldStrip: we === undefined,
-      missKind: we,
-      flagOn: featureValue_CACHED_MAY_BE_STALE,
-      paramNameLen: key.length,
-      strippedToLen: q.length,
-      mcpToolName: loggableMcpToolName(name_2, name, s),
-      mcpServerName: mcpNameForAnalytics_GATE_EVALUATED(name_2, s),
-      ...(y && {
-        mcpServerBaseUrl: y,
-      }),
-    });
-    if (we !== undefined || !featureValue_CACHED_MAY_BE_STALE) continue;
-    if (S === e)
-      S = {
-        ...e,
-      };
-    S[key] = q;
-    logMCPDebug(name_2, `stripped trailing </${key}></invoke> from ${name}.${key} (model emission artifact)`);
-  }
-  return S;
-}
-//@ chunk-e6aww6q8.js:3876972-3877861 placement
-/**
- * 工具输入缺少必填参数时收集诊断：必填数、缺失数、已有键数、最长字符串长度，以及字符串值里是否残留 </parameter>、</invoke> 或参数名闭合标签之类伪标签碎片。
- */
-function describeMissingRequiredArgs(input, schema) {
-  try {
-    if (input === null || typeof input !== "object" || Array.isArray(input) || schema === undefined)
-      return null;
-    let required = schema.required;
-    if (!Array.isArray(required) || required.length === 0) return null;
-    let filtered = required.filter((G) => typeof G === "string");
-    if (filtered.length === 0) return null;
-    let h = input;
-    let reduced = filtered.reduce((acc, q) => acc + (Object.hasOwn(h, q) ? 0 : 1), 0);
-    if (reduced === 0) return null;
-    let S = new Set(
-      [...Object.keys(schema.properties ?? {}), ...filtered]
-        .filter((G) => G.length >= 4 && !COMMON_HTML_TAGS.has(G.toLowerCase()))
-        .map((G) => G.toLowerCase()),
-    );
-    let w = 0;
-    let L = false;
-    for (let G of Object.values(h)) {
-      if (typeof G !== "string") continue;
-      if (G.length > w) w = G.length;
-      if (L) continue;
-      let lower = G.toLowerCase();
-      if (
-        lower.includes("</parameter>") ||
-        lower.includes("<parameter name=") ||
-        lower.includes("</invoke>")
-      ) {
-        L = true;
-        continue;
-      }
-      for (let [, Z = ""] of lower.matchAll(/<\/([^<>]*)>/g))
-        if (S.has(Z)) {
-          L = true;
-          break;
-        }
-    }
-    return {
-      requiredCount: filtered.length,
-      missingCount: reduced,
-      presentKeyCount: Object.keys(h).length,
-      maxStringValueLen: w,
-      hasPseudoTagDebris: L,
-    };
-  } catch {
-    return null;
-  }
-}
-//@ chunk-e6aww6q8.js:4340451-4340529 fingerprint = getMcpAuthCache (1)
-function getMcpAuthCache(e) {
-  return typeof e === "string" ? e : Buffer.from(e).toString("utf-8");
-}
-//@ chunk-cyj440je.js:715-954 fingerprint = McpAuthError (0.526)
-/**
- * McpAuthError：MCP 认证错误（带服务器名）。
- */
-class McpAuthError extends Error {
-  authErrorKind;
-  firstPartyBearer;
-  requestedScope;
-  serverName;
-  constructor(serverName, message, authErrorKind = "token_expired", firstPartyBearer, requestedScope) {
-    super(message);
-    this.authErrorKind = authErrorKind;
-    this.firstPartyBearer = firstPartyBearer;
-    this.requestedScope = requestedScope;
-    this.name = "McpAuthError";
-    this.serverName = serverName;
-  }
-}
-//@ chunk-cyj440je.js:954-1049 layout
-/**
- * McpToolFileInputRejectedError：MCP 工具文件输入被拒绝。
- */
-class McpToolFileInputRejectedError extends TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS {
-  code;
-  constructor(error, code) {
-    super(error, "MCP tool file input rejected");
-    this.code = code;
-  }
-}
-//@ chunk-cyj440je.js:1049-1697 fingerprint = McpSessionExpiredError (0.409)
-/**
- * McpSessionExpiredError：HTTP 会话过期（404）或连接关闭时抛出，expiryKind 区分原因。
- */
-class McpSessionExpiredError extends TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS {
-  expiryKind;
-  constructor(e, r = "session_expired_404") {
-    super(
-      r === "connection_closed_http"
-        ? `MCP server "${e}" connection closed before the tool call was answered. The tool may have run: check whether it did before running it again.`
-        : r === "connection_closed_call_not_run"
-          ? `MCP server "${e}" connection closed before the tool call ran`
-          : `MCP server "${e}" session expired`,
-      "MCP session expired",
-    );
-    this.expiryKind = r;
-    this.name = "McpSessionExpiredError";
-  }
-  get mayHaveRun() {
-    switch (this.expiryKind) {
-      case "session_expired_404":
-      case "connection_closed_call_refused":
-      case "connection_closed_call_not_run":
-        return false;
-      case "connection_closed_http":
-        return true;
-    }
-  }
-}
-//@ chunk-cyj440je.js:1697-2321 layout
-/**
- * McpCredentialStoreUnavailableError：凭证存储读不了（如 macOS 钥匙串锁定）时抛出，消息给出处理办法。
- */
-class McpCredentialStoreUnavailableError extends TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS {
-  code;
-  constructor(serverName, r = "unreadable") {
-    if (r === "unreadable")
-      super(
-        `Couldn't read the stored credentials for MCP server "${serverName}", so the request didn't run. ${getPlatform() === "macos" ? "If your Mac's keychain is locked, unlock it, then try again." : "Try again."}`,
-        "MCP credential store could not be read",
-      );
-    else
-      super(
-        `A request to MCP server "${serverName}" was sent without your stored credentials, so the server rejected it. The credentials are available now. Try again.`,
-        "MCP credentials were read only after a request went out without them",
-      );
-    this.code = "CREDENTIAL_STORE_UNAVAILABLE";
-    this.name = "McpCredentialStoreUnavailableError";
-  }
-}
-//@ chunk-cyj440je.js:2321-2427 fingerprint = McpToolCallError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS (0.82)
-/**
- * MCP 工具调用失败的错误类（name 为 McpToolCallError），在通用错误基础上携带服务器返回的 `_meta`（mcpMeta），供遥测与结果展示。
- */
-class McpToolCallError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS extends TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS {
-  mcpMeta;
-  constructor(message, telemetryMessage, mcpMeta, n) {
-    super(message, telemetryMessage, n);
-    this.mcpMeta = mcpMeta;
-    this.name = "McpToolCallError";
-  }
-}
-//@ chunk-7zr1t9gr.js:302-360 placement
-/**
- * MCP 服务器不被允许时的错误文案。
- */
-var MCP_SERVER_NOT_ALLOWED_MESSAGE = "Error POSTing to endpoint: MCP server not allowed";
-//@ chunk-7zr1t9gr.js:667-722 placement
-/**
- * 取 artifacts 的 MCP 客户端。
- */
-function artifactsMcpClient() {
-  return (getMcpClientsFromAccessor() ?? []).find((t) => t.name === CLAUDE_ARTIFACTS);
-}
-//@ chunk-7zr1t9gr.js:722-780 placement
-/**
- * 取“该行未被服务”的记录。
- */
-function getMcpEntryRowNotServed() {
-  return hasLiveState() ? getLiveState().mcpEntryRowNotServed : null;
-}
-//@ chunk-7zr1t9gr.js:780-813 placement
-/**
- * 判断某行是否正是未服务的记录。
- */
-function isEntryRowNotServed(t) {
-  return getMcpEntryRowNotServed() === t;
-}
-//@ chunk-3pdgd98q.js:226-303 fingerprint = getConnectionTimeoutMs (1)
-/**
- * MCP 连接超时：env `MCP_TIMEOUT`（>0，上限 2^31-1）否则默认 30000ms。
- */
-function getConnectionTimeoutMs() {
-  let MCP_TIMEOUT = env.MCP_TIMEOUT;
-  return MCP_TIMEOUT && MCP_TIMEOUT > 0 ? Math.min(MCP_TIMEOUT, 2147483647) : 30000;
-}
-//@ chunk-3pdgd98q.js:303-391 placement
-/**
- * 连接超时（MCP_CONNECT_TIMEOUT_MS，默认 5000）。
- */
-function getConnectTimeoutMs() {
-  let MCP_CONNECT_TIMEOUT_MS = env.MCP_CONNECT_TIMEOUT_MS;
-  return MCP_CONNECT_TIMEOUT_MS && MCP_CONNECT_TIMEOUT_MS > 0
-    ? Math.min(MCP_CONNECT_TIMEOUT_MS, 2147483647)
-    : 5000;
-}
-//@ chunk-3pdgd98q.js:391-421 placement
-/**
- * 短暂重试间隔（500 毫秒）。
- */
-var TRANSPORT_FALLBACK_TIMEOUT_MS = 2000;
-var REMOTE_CONNECT_TIMEOUT_MS = 8000;
-var SHORT_RETRY_MS = 500;
-//@ chunk-qsdkv90t.js:302-371 placement
-/**
- * 懒加载 MCP 客户端模块。
- */
-function mcpClientModule() {
-  return require("./chunk-asne9cp8.js").mcpClientModule();
-}
-//@ chunk-qsdkv90t.js:371-1385 placement
-async function refreshMcpServerTools(e, c, storageV5) {
-  let i = serverCacheKey(e.name, e.config);
-  let {
-    captureDiscoveryGrantLeg,
-    ensureDiscoveryCacheAccount,
-    getMcpIdentityEpoch,
-    persistRefreshedToolsIfPresent,
-  } = mcpClientModule();
-  ensureDiscoveryCacheAccount();
-  let a = isDiscoveryCacheOn() ? captureDiscoveryGrantLeg(e.name, e.config) : undefined;
-  let toolRefreshSequences = getCliOwnedState().toolRefreshSequences;
-  let r = toolRefreshSequences.get(e) ?? {
-    started: 0,
-    applied: 0,
-  };
-  toolRefreshSequences.set(e, r);
-  r.started += 1;
-  let started = r.started;
-  let { fetchToolsForClient } = mcpClientModule();
-  let previousToolsPromise = fetchToolsForClient.cache.get(i);
-  let identityEpoch = getMcpIdentityEpoch();
-  fetchToolsForClient.cache.delete(i);
-  let toolsForClient = await fetchToolsForClient(e, storageV5);
-  let toolsListErrorForResult = mcpClientModule().getToolsListErrorForResult(toolsForClient);
-  if (toolsListErrorForResult)
-    return {
-      status: "kept-previous",
-      error: toolsListErrorForResult,
-    };
-  if (e.discoveryAuthFailure && toolsForClient.length === 0)
-    return {
-      status: "kept-previous",
-      error:
-        "the server rejected tool discovery as unauthorized \u2014 the user needs to authorize this connector (e.g. via /mcp) before its tools are available",
-    };
-  if (r.applied > started)
-    return {
-      status: "kept-previous",
-      error:
-        "superseded by a newer concurrent refresh of this server \u2014 the newer refresh result is the one applied",
-    };
-  r.applied = started;
-  c(e.name, decorateMcpTools(e, toolsForClient));
-  if (a)
-    a.then((grantLeg) =>
-      persistRefreshedToolsIfPresent(e, toolsForClient, {
-        identityEpoch,
-        grantLeg,
-      }),
-    );
-  return {
-    status: "refreshed",
-    newTools: toolsForClient,
-    previousToolsPromise,
-  };
-}
 //@ chunk-18hwfzwa.js:682582-682744 fingerprint = processBatched (1)
-async function processBatched(sessionSubagentsDir, x) {
-  let D = await listSubagentTranscripts(sessionSubagentsDir, x);
-  let L = await pMap(
-    D.filter((ee) => isSafeIdSegment(ee.agentId)),
-    (ee) => readAgentMetaFiles(sessionSubagentsDir, ee, x),
+async function processBatched(sessionSubagentsDir, timeWindow) {
+  let transcripts = await listSubagentTranscripts(sessionSubagentsDir, timeWindow);
+  let agentMetas = await pMap(
+    transcripts.filter((transcript) => isSafeIdSegment(transcript.agentId)),
+    (transcript) => readAgentMetaFiles(sessionSubagentsDir, transcript, timeWindow),
     {
       concurrency: MAX_META_READ_CONCURRENCY,
     },
   );
-  return buildAgentTree(L.filter((ee) => ee !== null));
-}
-//@ chunk-23fm9f0d.js:17344-17604 fingerprint = getMcpAuthCachePath (0.644)
-/**
- * getMcpAuthCachePath：needs-auth 缓存文件路径（<配置目录>/mcp-needs-auth-cache.json）。
- */
-async function getMcpAuthCachePath() {
-  let e = emptyCleanupResult();
-  let cutoffDate = getCutoffDate();
-  if (cutoffDate === null) return e;
-  let s = join(getClaudeConfigDir(), "mcp-needs-auth-cache.json");
-  try {
-    if (await unlinkIfOld(s, cutoffDate, getFsImplementation(), e)) e.messages++;
-  } catch (error) {
-    if (!isENOENT(error)) {
-      e.errors++;
-      if (isCleanupQuietFsErrno(error))
-        logForDebugging(`cleanup mcp-auth-cache failed: ${error.code}`, {
-          level: "error",
-        });
-      else logError(error);
-    }
-  }
-  return e;
+  return buildAgentTree(agentMetas.filter((agentMeta) => agentMeta !== null));
 }
 //@ chunk-5bdzenzx.js:16639-16696 fingerprint = isIncludedMcpTool (1)
 function isIncludedMcpTool(tool) {
   return !tool.name?.startsWith("mcp__ide__");
 }
-//@ chunk-mdk8a5r0.js:284-480 fingerprint = setupSdkMcpClients (0.425)
-/**
- * 用于吞掉异常的特殊 Symbol。
- */
-var T_t = Object.freeze({});
-var A_t = Object.freeze({
-  name: "claude-code",
-  title: "Claude Code",
-  description: "Anthropic's agentic coding tool",
-  websiteUrl: "https://claude.com/claude-code",
-});
-var SWALLOW_SYMBOL = Symbol("swallow");
 export {
   isDesktopComputerUseCommand,
   serverCacheKey,
@@ -15041,8 +15878,8 @@ export {
   McpToolCallError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
   getConnectionTimeoutMs,
   isIncludedMcpTool,
-  artifactsMcpClient,
   MCP_SERVER_NOT_ALLOWED_MESSAGE,
+  artifactsMcpClient,
   hasNoTransport,
   isTimeoutError,
   MAX_LIST_PAGES,
@@ -15060,8 +15897,8 @@ export {
   SWALLOW_SYMBOL,
   REMOTE_CONNECT_TIMEOUT_MS,
   SHORT_RETRY_MS,
-  T_t,
-  A_t,
+  EMPTY_CAPABILITIES,
+  CLAUDE_CODE_SERVER_INFO,
   mcpBaseUrlAnalytics,
   isMcpAuthCached_3,
   NEEDS_AUTH_CACHE_REFRESHABLE_TTL_MS_2,
@@ -15082,4 +15919,165 @@ export {
   isIdeServer_2,
   listAllPages,
   transformResultContent_2,
+  ClaudeAiProxyBearerRejectedError,
+  DESIGN_WRITE_TOOLS,
+  JAVA_SDK_ELICITATION_HINT,
+  LegacyDialectToleratingValidator,
+  AUTH_CACHE_VERSION,
+  applyCapabilityServeTimeMiss,
+  sameConfigHash,
+  countUnsettledByDeadline,
+  askDesignConsent,
+  mergeRequestHeaders,
+  burnDiscoverPrior,
+  callIdeTool,
+  callMCPTool,
+  callMCPToolWithUrlElicitationRetry,
+  truncateServerInstructions,
+  canPromptForPermission,
+  classifyToolCallAuthError,
+  clearServerCache_3,
+  clearServerCache,
+  completeResourceTemplateArgument,
+  buildMcpTool,
+  connectToServer,
+  canAskDesignConsent,
+  wrapFetchWithCcrSessionAuth,
+  createClaudeAiProxyFetch,
+  wrapFetchWithCliOwnedBearer,
+  wrapFetchWithFirstPartyAuth,
+  createSep2663TaskBinding,
+  gateDesignWriteWithoutPlanToken,
+  detachAndCloseConnection,
+  discardMemoizedConnectResult,
+  discoverySourceLabel,
+  buildSep2663TaskBinding,
+  disposeServerConnectionDetached,
+  clearDiscoveryForServer,
+  logMcpConnectionOtelEvent,
+  ensureConnectedClient,
+  primeClientResolvers,
+  clearMcpDiscoveryCaches,
+  evictStaleFailedConnectMemoForServe,
+  parseUrlElicitationRequiredError,
+  fetchCommandsForClient,
+  fetchResourceTemplatesForClient,
+  fetchResourcesForClient,
+  fetchToolsForClient,
+  getMcpRequestTimeoutMs,
+  getDiscoveryFetchError,
+  getListingDiscoverPrior,
+  getMcpToolTimeoutMs_2,
+  getMcpServerConnectionBatchSize,
+  getMcpToolIdleTimeoutMs,
+  getMcpToolTimeoutMs,
+  getMcpToolsCommandsAndResources_2,
+  resolveVersionNegotiation,
+  getRememberedLegacyPrior,
+  getRemoteMcpServerConnectionBatchSize,
+  getMcpRoots,
+  getToolsListError,
+  isUnsupportedVersionHttp400,
+  hasLiveConnection,
+  hasClearedCachedFailure,
+  buildMcpPromptCommands,
+  buildMcpToolsForClient,
+  identityChangedReconnectResult,
+  inferCompactSchema,
+  invalidateMcpResourceListCaches,
+  invokeToolRaw,
+  isDiscoveryCacheMissRecoverable,
+  isSupersededDial,
+  isDesignServerConfig,
+  isLocalMcpServer,
+  isMcpAuthCached,
+  isListenDenylisted,
+  isNegotiationDenylisted,
+  isMcpSessionExpiredError,
+  shouldDropInvalidToolSchemas,
+  shouldNormalizeRootCombinators,
+  isTransientMcpError,
+  listToolsBypassCache,
+  classifyMcpConnectError,
+  mcpIdentityChangedSinceLastCheck,
+  mcpToolInputToAutoClassifierInput,
+  notifyRootsListChanged,
+  onMcpElicitRequest,
+  onMcpElicitationComplete,
+  onMcpNotification,
+  onMcpPromptListChanged,
+  onMcpResourceListChanged,
+  onMcpToolListChanged,
+  readNeedsConsentBit,
+  clearCachedFailureFor,
+  persistLiveListing,
+  persistRawDiscoveryIfComplete,
+  persistRefreshedToolsIfPresent,
+  prefetchAllMcpResources,
+  processMCPResult,
+  readResourceBypassCache,
+  reconnectMcpServer,
+  reconnectMcpServerImpl_2,
+  setDiscoveryFetchError,
+  rememberDesignConsentAsk,
+  recordRawCommandsForResult,
+  recordRawResourcesForResult,
+  recordRawToolsForResult,
+  fetchResourceTemplatesForClients,
+  clearMcpAuthCacheEntry,
+  classifyTransportKind,
+  runCachedFirstDialArms,
+  sanitizeConnectErrorCodeForTelemetry,
+  seedMcpIdentityCheck,
+  isDocumentsPluginServer,
+  setHoldStaleReauthEntryForTest,
+  setReauthDecisionSinkForTest,
+  setStdioProbeTimeoutMsForTest,
+  setupSdkMcpClients,
+  isDesignGatedTool,
+  takeDesignConsentAsk,
+  takeSettledCachedDialFailure,
+  transformMCPResult,
+  transformResultContent,
+  wrapCallWithDesignConsent,
+  noteDesignProjectId,
+  wrapFetchWithTimeout,
+  AUTH_CACHE_VERSION_2,
+  countUnsettledByDeadline_2,
+  callIdeTool_2,
+  truncateServerInstructions_2,
+  classifyToolCallAuthError_2,
+  clearServerCache_2,
+  buildSep2663TaskBinding_2,
+  clearMcpDiscoveryCaches_2,
+  parseUrlElicitationRequiredError_2,
+  getMcpRequestTimeoutMs_2,
+  getMcpToolTimeoutMs_4,
+  getMcpServerConnectionBatchSize_2,
+  getMcpToolIdleTimeoutMs_2,
+  getMcpToolTimeoutMs_3,
+  getMcpToolsCommandsAndResources,
+  getRemoteMcpServerConnectionBatchSize_2,
+  getMcpRoots_2,
+  identityChangedReconnectResult_2,
+  inferCompactSchema_2,
+  callToolV1,
+  isLocalMcpServer_2,
+  isMcpAuthCached_2,
+  isMcpSessionExpiredError_2,
+  isTransientMcpError_2,
+  listToolsV1,
+  notifyRootsListChanged_2,
+  prefetchAllMcpResources_2,
+  processMCPResult_2,
+  readResourceV1,
+  reconnectMcpServer_2,
+  reconnectMcpServerImpl,
+  clearMcpAuthCacheEntry_2,
+  isDocumentsPluginServer_2,
+  setHoldStaleReauthEntryForTest_2,
+  setReauthDecisionSinkForTestV1,
+  connectAllMcpServers,
+  transformMCPResult_2,
+  wrapFetchWithTimeout_2,
 };

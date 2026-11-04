@@ -23,14 +23,15 @@ import {
  * 并行拉取云环境列表与自托管池，合并结果并校验当前选中的池是否仍存在、是否忽略了不可信池。
  */
 async function fetchEnvironmentsAndPools(storageV5, credentials) {
-  let [o, l] = await Promise.allSettled([
+  let [environmentsResult, poolsResult] = await Promise.allSettled([
     fetchEnvironments(undefined, storageV5, credentials),
     fetchSelfHostedPools(undefined, credentials),
   ]);
-  let environmentsError = o.status === "rejected" ? errorMessage(o.reason) : null;
-  let i = o.status === "fulfilled" ? o.value : [];
-  let a = l.status === "fulfilled" ? l.value : [];
-  let environments = [...i, ...a];
+  let environmentsError =
+    environmentsResult.status === "rejected" ? errorMessage(environmentsResult.reason) : null;
+  let environmentsError_2 = environmentsResult.status === "fulfilled" ? environmentsResult.value : [];
+  let poolsError = poolsResult.status === "fulfilled" ? poolsResult.value : [];
+  let environments = [...environmentsError_2, ...poolsError];
   let selection = getEnvironmentSelectionInfo();
   let ignoredUntrustedPool = selection.ignoredUntrustedPool ?? null;
   if (
@@ -53,7 +54,8 @@ async function fetchEnvironmentsAndPools(storageV5, credentials) {
       environmentsError,
       ignoredUntrustedPool,
     };
-  let selectedTarget = findFirst(i, (n) => n.kind !== "bridge") ?? a[0] ?? environments[0];
+  let selectedTarget =
+    findFirst(environmentsError_2, (error) => error.kind !== "bridge") ?? poolsError[0] ?? environments[0];
   let selectedTargetSource = null;
   if (selection.id !== undefined) {
     let found = environments.find((environment) => isSelfHostedPool(environment) === selection.id);

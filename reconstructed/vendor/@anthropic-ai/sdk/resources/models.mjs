@@ -6,7 +6,7 @@
  * attribution: esm-fingerprint 1
  */
 import { APIResource } from "../core/resource.mjs";
-import { I } from "../internal/utils/path.mjs";
+import { parseUrl_2 } from "../internal/utils/path.mjs";
 import { buildHeaders } from "../internal/headers.mjs";
 import { Page } from "../core/pagination.mjs";
 
@@ -14,7 +14,7 @@ import { Page } from "../core/pagination.mjs";
 class Models_2 extends APIResource {
   retrieve(modelID, params = {}, options) {
     let { betas, workspace_id } = params ?? {};
-    return this._client.get(I`/v1/models/${modelID}`, {
+    return this._client.get(parseUrl_2`/v1/models/${modelID}`, {
       ...options,
       headers: buildHeaders([
         {

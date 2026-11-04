@@ -21,27 +21,28 @@ import { isServerIdentityActive } from "./serverIdentity.js";
 /**
  * 把服务器作用域/插件来源写入工具的 mcpInfo。
  */
-function stampToolScope(e, commands) {
-  let mapped = commands.map((t) =>
-    t.mcpInfo === undefined ||
-    (t.mcpInfo.scope === e.config.scope && t.mcpInfo.pluginSource === e.config.pluginSource)
-      ? t
+function stampToolScope(connection, commands) {
+  let mapped = commands.map((command) =>
+    command.mcpInfo === undefined ||
+    (command.mcpInfo.scope === connection.config.scope &&
+      command.mcpInfo.pluginSource === connection.config.pluginSource)
+      ? command
       : {
-          ...t,
-          mcpInfo: getMcpInfoFromConnection(e),
+          ...command,
+          mcpInfo: getMcpInfoFromConnection(connection),
         },
   );
-  return mapped.every((t, r) => t === commands[r]) ? commands : mapped;
+  return mapped.every((command, index) => command === commands[index]) ? commands : mapped;
 }
 //@ chunk-2qpdvtqf.js:681-789 placement
 /**
  * 客户端配置作用域与插件来源一致时原样返回，否则替换。
  */
-function withConfigScope(e, config) {
-  return e.config.scope === config.scope && e.config.pluginSource === config.pluginSource
-    ? e
+function withConfigScope(connection, config) {
+  return connection.config.scope === config.scope && connection.config.pluginSource === config.pluginSource
+    ? connection
     : {
-        ...e,
+        ...connection,
         config,
       };
 }
@@ -55,8 +56,8 @@ var CONNECTOR_ID_RE = /^[a-z0-9._:-]+$/;
 /**
  * 规范化连接器 id（去空白、转小写、校验），不合法返回 undefined。
  */
-function normalizeConnectorId(e) {
-  let lower = e?.trim().toLowerCase();
+function normalizeConnectorId(id) {
+  let lower = id?.trim().toLowerCase();
   if (!lower || lower.length > MAX_CONNECTOR_ID_CHARS || !CONNECTOR_ID_RE.test(lower)) return;
   return lower;
 }
@@ -64,61 +65,65 @@ function normalizeConnectorId(e) {
 /**
  * 动态 http 服务器的连接器 id。
  */
-function dynamicServerConnectorId(name, config) {
-  if (config.type !== "http" || mcpServerSource(name, config) !== "dynamic") return;
-  let n = normalizeConnectorId(mcpServerIdHeader(config));
-  if (n) return n;
-  let p = officeBridgeState.peek(getRootSession())?.read?.();
-  return normalizeConnectorId(p?.[name]);
+function dynamicServerConnectorId(serverName, config) {
+  if (config.type !== "http" || mcpServerSource(serverName, config) !== "dynamic") return;
+  let headerId = normalizeConnectorId(mcpServerIdHeader(config));
+  if (headerId) return headerId;
+  let bridgeState = officeBridgeState.peek(getRootSession())?.read?.();
+  return normalizeConnectorId(bridgeState?.[serverName]);
 }
 //@ chunk-2qpdvtqf.js:1050-1296 placement
-var stampMcpInfo = (e, mcpInfo) => ({
+var stampMcpInfo = (connection, mcpInfo) => ({
   ...mcpInfo,
-  scope: e.config.scope,
-  pluginSource: e.config.pluginSource,
-  source: mcpServerSource(e.name, e.config),
+  scope: connection.config.scope,
+  pluginSource: connection.config.pluginSource,
+  source: mcpServerSource(connection.name, connection.config),
   pluginTelemetry: undefined,
-  ...(e.config.pluginSource !== undefined && {
-    pluginTelemetry: buildPluginEventFieldsFromId(e.config.pluginSource, policyEnabledPluginNameSet()),
+  ...(connection.config.pluginSource !== undefined && {
+    pluginTelemetry: buildPluginEventFieldsFromId(
+      connection.config.pluginSource,
+      policyEnabledPluginNameSet(),
+    ),
   }),
-  serverIdStamp: dynamicServerConnectorId(e.name, e.config),
+  serverIdStamp: dynamicServerConnectorId(connection.name, connection.config),
 });
 //@ chunk-2qpdvtqf.js:1296-1826 placement
 /**
  * 为 MCP 工具附加来源信息与"忽略整工具允许规则"等行为。
  */
-function decorateMcpTools(e, o) {
-  let n = requiresConnectorGrant(e.name, e.config);
-  let mapped = o.map((r) => {
-    if (r.mcpInfo === undefined) return r;
-    let s =
-      n && (isServerIdentityActive() || r.ignoresWholeToolAllowRule?.({}) !== true)
+function decorateMcpTools(connection, tools) {
+  let requiresGrant = requiresConnectorGrant(connection.name, connection.config);
+  let mapped = tools.map((tool) => {
+    if (tool.mcpInfo === undefined) return tool;
+    let patched =
+      requiresGrant && (isServerIdentityActive() || tool.ignoresWholeToolAllowRule?.({}) !== true)
         ? {
-            ...r,
+            ...tool,
             ignoresWholeToolAllowRule() {
               return true;
             },
             suppressesAlwaysAllowRule() {
               return true;
             },
-            async checkPermissions(u, f) {
-              let i = await r.checkPermissions(u, f);
-              return i.behavior === "ask" || i.behavior === "passthrough"
+            async checkPermissions(input, context) {
+              let verdict = await tool.checkPermissions(input, context);
+              return verdict.behavior === "ask" || verdict.behavior === "passthrough"
                 ? {
-                    ...i,
+                    ...verdict,
                     suggestions: [],
                   }
-                : i;
+                : verdict;
             },
           }
-        : r;
-    return r.mcpInfo.scope === e.config.scope && r.mcpInfo.pluginSource === e.config.pluginSource
-      ? s
+        : tool;
+    return tool.mcpInfo.scope === connection.config.scope &&
+      tool.mcpInfo.pluginSource === connection.config.pluginSource
+      ? patched
       : {
-          ...s,
-          mcpInfo: stampMcpInfo(e, r.mcpInfo),
+          ...patched,
+          mcpInfo: stampMcpInfo(connection, tool.mcpInfo),
         };
   });
-  return mapped.every((r, s) => r === o[s]) ? o : mapped;
+  return mapped.every((tool, index) => tool === tools[index]) ? tools : mapped;
 }
-export { dynamicServerConnectorId, decorateMcpTools, stampToolScope, withConfigScope };
+export { decorateMcpTools, dynamicServerConnectorId, stampToolScope, withConfigScope };

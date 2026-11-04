@@ -10,7 +10,8 @@
  */
 import { join, resolve as resolve_2, sep, basename, dirname, isAbsolute } from "path";
 import { writeFile } from "fs/promises";
-import { execFileNoThrow, execFileNoThrowWithCwd, execGitNoThrow } from "../execFileNoThrow.js";
+import { stripInvisibleChars } from "../sanitization.js";
+import { execGitNoThrow, execFileNoThrow, execFileNoThrowWithCwd } from "../execFileNoThrow.js";
 import {
   homeDirOrDefault,
   runGitWithCeilingDirs,
@@ -122,7 +123,7 @@ import {
   readLocalMarketplaceFile,
   enoentError,
 } from "./localMarketplacePaths.js";
-import { En, xr } from "../../../vendor/lodash-es/_inlinedHelpers.js";
+import { import_sortedIndex_2, import_mapValues } from "../../../vendor/lodash-es/_inlinedHelpers.js";
 import {
   readClaudeAiMarketplaceRegistry,
   toKnownMarketplaceEntry,
@@ -276,8 +277,42 @@ import { logFeatureOk, logFeatureBad, logFeatureSad } from "../../services/analy
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../services/analytics/growthbook.js";
 import { setMarketplaceAutoUpdateFlag } from "./pluginAutoupdate.js";
 import { pluginSettingRecords } from "./pluginSettingsSources.js";
-import { stripInvisibleChars } from "../sanitization.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
+//@ chunk-sycgf9xs.js:7815-7888 fingerprint = GIT_NO_PROMPT_ENV (0.627)
+var GIT_NO_PROMPT_ENV = {
+  GIT_TERMINAL_PROMPT: "0",
+  GIT_ASKPASS: "",
+  GCM_INTERACTIVE: "never",
+};
+//@ chunk-dcmhvw5a.js:376366-376544 fingerprint = redactUrlCredentials (0.842)
+/**
+ * URL 去掉用户名口令后返回（用于显示与日志）。
+ */
+function redactUrlCredentials(urlString) {
+  if (urlString === undefined) return;
+  let url = stripInvisibleChars(urlString, "");
+  try {
+    let { protocol, username, password } = new URL(url);
+    return (protocol === "https:" || protocol === "http:") && username === "" && password === ""
+      ? url
+      : undefined;
+  } catch {
+    return;
+  }
+}
+//@ chunk-s61vbvea.js:532138-532376 callgraph-fingerprint = gitPull (0.191)
+/**
+ * 确定 git pull 用的 remote（分支配置的 remote，缺省 origin）。
+ */
+async function gitPull(gitState, dir, branch, gitOptions) {
+  if (gitState.hasDir(dir)) return "origin";
+  if (branch !== undefined && branch !== "HEAD") {
+    let fetchResult = await execGitNoThrow(dir, ["config", "--get", `branch.${branch}.remote`], gitOptions);
+    if (fetchResult !== undefined) return fetchResult;
+  }
+  return (await execGitNoThrow(dir, ["config", "--get", "remote.pushDefault"], gitOptions)) ?? "origin";
+}
 //@ chunk-e6aww6q8.js:611593-611687 fingerprint = findSeedMarketplaceLocation (1)
 /**
  * zip 缓存/种子目录中市场 JSON 的相对路径 marketplaces/<名字转义>.json。
@@ -313,13 +348,13 @@ async function isGitHubSshLikelyConfigured() {
         timeout: 3000,
       },
     );
-    let n = `${result.stdout ?? ""}
+    let output = `${result.stdout ?? ""}
 ${result.stderr ?? ""}`;
-    let configured = result.code === 1 && n.includes("successfully authenticated");
+    let configured = result.code === 1 && output.includes("successfully authenticated");
     logForDebugging(`SSH config check: code=${result.code} configured=${configured}`);
     if (configured) return "configured";
     if (result.timedOut) return "unknown";
-    if (result.code === 255 && isSshAuthFailureOutput(n)) return "not-configured";
+    if (result.code === 255 && isSshAuthFailureOutput(output)) return "not-configured";
     return (await whichAsync("ssh")) === null ? "not-configured" : "unknown";
   } catch (error) {
     logForDebugging(`SSH configuration check failed: ${errorMessage(error)}`, {
@@ -349,66 +384,70 @@ async function reconcileSparseCheckout(cwd, sparsePaths) {
  * 市场克隆后更新子模块（受截止时间约束，失败给出进度提示）。
  */
 async function gitSubmoduleUpdate({ checkoutDir, manifestPath, inCheckoutArgs, env, deadline }) {
-  let y = {
+  let gitContext = {
     repository: inCheckoutArgs,
     env,
   };
-  let S = await listSubmodulePaths(checkoutDir, {
-    ...y,
+  let submodulePaths = await listSubmodulePaths(checkoutDir, {
+    ...gitContext,
     deadlineMs: msUntilDeadline(deadline),
   });
-  if (Array.isArray(S) && S.length === 0)
+  if (Array.isArray(submodulePaths) && submodulePaths.length === 0)
     return {
       result: undefined,
       submodules: undefined,
     };
-  let w = Array.isArray(S)
+  let gitlinks = Array.isArray(submodulePaths)
     ? await listGitlinkEntries(checkoutDir, {
-        ...y,
+        ...gitContext,
         deadlineMs: msUntilDeadline(deadline),
       })
-    : S;
-  let L = new Set(Array.isArray(w) ? w : []);
-  let G = Array.isArray(S) && Array.isArray(w) ? S.filter((we) => L.has(we)) : undefined;
-  let q =
-    G === undefined
+    : submodulePaths;
+  let gitlinkSet = new Set(Array.isArray(gitlinks) ? gitlinks : []);
+  let recorded =
+    Array.isArray(submodulePaths) && Array.isArray(gitlinks)
+      ? submodulePaths.filter((path) => gitlinkSet.has(path))
+      : undefined;
+  let selected =
+    recorded === undefined
       ? "all"
-      : G.length === 0
+      : recorded.length === 0
         ? []
         : await pickSubmodulesToFetch({
             checkoutDir,
             manifestPath,
-            submodules: G,
+            submodules: recorded,
             inCheckoutArgs,
             env,
             deadline,
           });
-  let Z = q !== "all" && q.join(" ").length <= MAX_SCANNED_BYTES ? q : "all";
-  let Se = {
-    recorded: G?.length,
-    fetched: Z === "all" ? "all" : Z.length,
+  let fetchSelection =
+    selected !== "all" && selected.join(" ").length <= MAX_SCANNED_BYTES ? selected : "all";
+  let submodules = {
+    recorded: recorded?.length,
+    fetched: fetchSelection === "all" ? "all" : fetchSelection.length,
   };
   logForDebugging(
-    `Marketplace clone: ${Se.recorded ?? "an unknown number of"} submodules recorded, fetching ${Se.fetched}`,
+    `Marketplace clone: ${submodules.recorded ?? "an unknown number of"} submodules recorded, fetching ${submodules.fetched}`,
   );
-  if (Se.fetched === 0)
+  if (submodules.fetched === 0)
     return {
       result: undefined,
-      submodules: Se,
+      submodules,
     };
   return {
     result: await execFileNoThrowWithCwd(
       gitExe(),
       [
         ...inCheckoutArgs,
-        ...(Z === "all" ? ["-c", "submodule.active=."] : []),
+        ...(fetchSelection === "all" ? ["-c", "submodule.active=."] : []),
         "submodule",
         "update",
         "--init",
         "--recursive",
         "--depth",
         "1",
-        ...(Z === "all" ? [] : ["--", ...Z]),
+        ...(fetchSelection === "all" ? [] : ["--", ...fetchSelection]),
       ],
       {
         cwd: checkoutDir,
@@ -420,7 +459,7 @@ async function gitSubmoduleUpdate({ checkoutDir, manifestPath, inCheckoutArgs, e
         stdin: "ignore",
       },
     ),
-    submodules: Se,
+    submodules,
   };
 }
 //@ chunk-e6aww6q8.js:4224911-4224938 placement
@@ -431,8 +470,12 @@ function isWorkspaceTrustedForMarketplace() {
   return isWorkspacePersistedTrusted();
 }
 //@ chunk-e6aww6q8.js:4224938-4225011 placement
-var pluginDirectoryModules = require("./chunk-s67w32sp.js");
-var pluginDirectoryStatusModule = require("./chunk-yh2j89hr.js");
+var pluginDirectoryModules; // deferred: loads other modules while loading; runs once its import cycle is complete
+var pluginDirectoryStatusModule;
+deferInit("chunk-e6aww6q8.js:4224938", () => {
+  pluginDirectoryModules = require("./pluginDirectoryCatalog.js");
+  pluginDirectoryStatusModule = require("./pluginDirectorySearch.js");
+});
 //@ chunk-e6aww6q8.js:4225011-4225058 placement
 function pluginDirectoryModuleIfUsable() {
   return isPluginDirectoryModeOn() && pluginDirectoryPolicyBlock() === null ? pluginDirectoryModules : null;
@@ -476,14 +519,14 @@ function getDeclaredMarketplaces() {
       };
       break;
     }
-  let r = isWorkspaceTrustedForMarketplace();
-  let s = r
+  let trusted = isWorkspaceTrustedForMarketplace();
+  let declared = trusted
     ? normalizeLocalMarketplaceSources(getInitialSettings_2().extraKnownMarketplaces ?? {})
     : tryUnwrapTextPayload();
   return {
     ...implicit,
-    ...(r ? getAddDirExtraMarketplaces() : {}),
-    ...s,
+    ...(trusted ? getAddDirExtraMarketplaces() : {}),
+    ...declared,
   };
 }
 //@ chunk-e6aww6q8.js:4236073-4236366 placement = tryUnwrapTextPayload (0.311)
@@ -501,56 +544,58 @@ function tryUnwrapTextPayload() {
   if (
     operatorDeclaredMemo !== undefined &&
     operatorDeclaredMemo.inputs.length === flattened.length &&
-    operatorDeclaredMemo.inputs.every((input, S) => input === flattened[S])
+    operatorDeclaredMemo.inputs.every((input, index) => input === flattened[index])
   )
     return operatorDeclaredMemo.value;
-  let h = {};
+  let merged = {};
   for (let { extras } of nonRepoExtraMarketplaces)
-    if (extras) h = mergeExtraKnownMarketplacesByEntry(h, extras);
-  h = normalizeLocalMarketplaceSources(h);
+    if (extras) merged = mergeExtraKnownMarketplacesByEntry(merged, extras);
+  merged = normalizeLocalMarketplaceSources(merged);
   pluginRegistry.operatorDeclaredMemo = {
     inputs: flattened,
-    value: h,
+    value: merged,
   };
-  return h;
+  return merged;
 }
 //@ chunk-e6aww6q8.js:4236366-4236511 placement
-function normalizeLocalMarketplaceSources(e) {
-  let n;
-  for (let [key, value] of Object.entries(e)) {
-    let h = normalizeLocalMarketplaceSource(value.source);
-    if (h === value.source) continue;
-    n ??= {
-      ...e,
+function normalizeLocalMarketplaceSources(marketplaces) {
+  let normalized;
+  for (let [key, value] of Object.entries(marketplaces)) {
+    let source = normalizeLocalMarketplaceSource(value.source);
+    if (source === value.source) continue;
+    normalized ??= {
+      ...marketplaces,
     };
-    n[key] = {
+    normalized[key] = {
       ...value,
-      source: h,
+      source,
     };
   }
-  return n ?? e;
+  return normalized ?? marketplaces;
 }
 //@ chunk-e6aww6q8.js:4236511-4236553 placement
 /**
  * settingsSourceOfMarketplace：市场记录所在的设置源。
  */
-function settingsSourceOfMarketplace(e) {
-  return ownPropertyOrUndefined(tryUnwrapTextPayload(), e)?.source;
+function settingsSourceOfMarketplace(name) {
+  return ownPropertyOrUndefined(tryUnwrapTextPayload(), name)?.source;
 }
 //@ chunk-e6aww6q8.js:4236553-4236630 placement
 function findMarketplaceSource(resolvedSource) {
-  return Object.values(tryUnwrapTextPayload()).find((n) => En(n.source, resolvedSource))?.source;
+  return Object.values(tryUnwrapTextPayload()).find((entry) =>
+    import_sortedIndex_2(entry.source, resolvedSource),
+  )?.source;
 }
 //@ chunk-e6aww6q8.js:4242257-4242385 fingerprint = saveMarketplaceToSettings (1)
 /**
  * 把市场写入某设置源（默认 userSettings）的 extraKnownMarketplaces。
  */
-function saveMarketplaceToSettings(name, entry, r = "userSettings", storageV5) {
+function saveMarketplaceToSettings(name, entry, source = "userSettings", storageV5) {
   return updateSettingsForSourceWithTransform(
-    r,
-    (h) => ({
+    source,
+    (settings) => ({
       extraKnownMarketplaces: {
-        ...h?.extraKnownMarketplaces,
+        ...settings?.extraKnownMarketplaces,
         [name]: entry,
       },
     }),
@@ -562,66 +607,68 @@ function saveMarketplaceToSettings(name, entry, r = "userSettings", storageV5) {
 /**
  * 读取 known_marketplaces.json，补上设置里 extraKnownMarketplaces 声明但尚未写盘的市场，以及（开启时）内置的 anthropic-plugin-directory 市场；返回 名字→KnownMarketplace。
  */
-async function loadKnownMarketplacesWithDeclared(e) {
+async function loadKnownMarketplacesWithDeclared(storageV5) {
   let [knownMarketplacesConfig, claudeAiMarketplaceRegistry] = await Promise.all([
-    loadKnownMarketplacesConfig(e),
+    loadKnownMarketplacesConfig(storageV5),
     readClaudeAiMarketplaceRegistry(),
   ]);
-  let s = filterAdmittedMarketplaces(knownMarketplacesConfig, getStorageArm(e));
-  let h = s;
+  let base = filterAdmittedMarketplaces(knownMarketplacesConfig, getStorageArm(storageV5));
+  let merged = base;
   for (let [key, value] of Object.entries(claudeAiMarketplaceRegistry)) {
-    if (Object.hasOwn(s, key)) continue;
-    if (h === s)
-      h = {
-        ...s,
+    if (Object.hasOwn(base, key)) continue;
+    if (merged === base)
+      merged = {
+        ...base,
       };
-    h[key] = toKnownMarketplaceEntry(key, value);
+    merged[key] = toKnownMarketplaceEntry(key, value);
   }
-  let y = isPluginDirectoryModeOn() ? pluginDirectoryModules : null;
-  if (y && !Object.hasOwn(h, OFFICIAL_MARKETPLACE_NAME)) {
-    let w = pluginDirectoryPolicyBlock();
-    if (w !== null) logDirectoryBlockedOnce(w);
-    if (w !== null || (await y.isPluginDirectoryMarketplaceEnabled())) {
-      if (h === s)
-        h = {
-          ...s,
+  let directoryModules = isPluginDirectoryModeOn() ? pluginDirectoryModules : null;
+  if (directoryModules && !Object.hasOwn(merged, OFFICIAL_MARKETPLACE_NAME)) {
+    let block = pluginDirectoryPolicyBlock();
+    if (block !== null) logDirectoryBlockedOnce(block);
+    if (block !== null || (await directoryModules.isPluginDirectoryMarketplaceEnabled())) {
+      if (merged === base)
+        merged = {
+          ...base,
         };
-      h[OFFICIAL_MARKETPLACE_NAME] = await y.pluginDirectoryRegistryEntry();
+      merged[OFFICIAL_MARKETPLACE_NAME] = await directoryModules.pluginDirectoryRegistryEntry();
     }
   }
-  setCommandSourceNameRegistration(h[OFFICIAL_MARKETPLACE_NAME]?.source?.source);
-  let S = weakMap_11.get(s);
-  if (h !== s && S !== undefined) weakMap_11.set(h, S);
-  return h;
+  setCommandSourceNameRegistration(merged[OFFICIAL_MARKETPLACE_NAME]?.source?.source);
+  let identity = weakMap_11.get(base);
+  if (merged !== base && identity !== undefined) weakMap_11.set(merged, identity);
+  return merged;
 }
 //@ chunk-e6aww6q8.js:4242853-4242916 layout
 /**
  * 存储模式：storageV5 可用为 "v5"，否则 "raw"。
  */
-function getStorageArm(e) {
-  return isStorageV5Enabled() && e !== undefined && getMarketplacesStorageScope() !== null ? "v5" : "raw";
+function getStorageArm(storageV5) {
+  return isStorageV5Enabled() && storageV5 !== undefined && getMarketplacesStorageScope() !== null
+    ? "v5"
+    : "raw";
 }
 //@ chunk-e6aww6q8.js:4242916-4244446 fingerprint = loadKnownMarketplacesConfig (0.657)
 /**
  * 读 known_marketplaces.json 并用 KnownMarketplacesFileSchema 校验，非法条目（保留名、来源不合法）丢弃并记日志；读不到抛 TelemetrySafeError。
  */
-async function loadKnownMarketplacesConfig(e) {
-  let n = isStorageV5Enabled() && e !== undefined ? getMarketplacesStorageScope() : null;
-  if (e !== undefined && n !== null) {
+async function loadKnownMarketplacesConfig(storageV5) {
+  let scope = isStorageV5Enabled() && storageV5 !== undefined ? getMarketplacesStorageScope() : null;
+  if (storageV5 !== undefined && scope !== null) {
     let fs = getKnownMarketplacesPathForDisplay();
-    let h = await e.read([n]);
-    if (!h.ok) {
-      let L = `Failed to load marketplace configuration: ${formatStorageError(h.error)}`;
-      logForDebugging(L, {
+    let readResult = await storageV5.read([scope]);
+    if (!readResult.ok) {
+      let message = `Failed to load marketplace configuration: ${formatStorageError(readResult.error)}`;
+      logForDebugging(message, {
         level: "error",
       });
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        L,
+        message,
         "failed to load marketplace configuration (v5 backend error)",
       );
     }
-    let y = h.value.items[0];
-    if (y === undefined) {
+    let item = readResult.value.items[0];
+    if (item === undefined) {
       logForDebugging(
         "Failed to load marketplace configuration: the backend returned no item for the registry key",
         {
@@ -633,29 +680,29 @@ async function loadKnownMarketplacesConfig(e) {
         "failed to load marketplace configuration (v5 backend error)",
       );
     }
-    if (!y.found) return {};
-    let S;
+    if (!item.found) return {};
+    let parsedJson;
     try {
-      S = jsonParse(Buffer.from(y.value).toString("utf-8"));
+      parsedJson = jsonParse(Buffer.from(item.value).toString("utf-8"));
     } catch (error) {
-      let G = `Failed to load marketplace configuration: ${errorMessage(error)}`;
-      logForDebugging(G, {
+      let message = `Failed to load marketplace configuration: ${errorMessage(error)}`;
+      logForDebugging(message, {
         level: "error",
       });
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        G,
+        message,
         "failed to load marketplace configuration (v5 parse error)",
       );
     }
-    let w = KnownMarketplacesFileSchema().safeParse(S);
-    if (!w.success) {
-      let L = `Marketplace configuration file is corrupted: ${w.error.issues.map((issue) => `${issue.path.join(".")}: ${issue.message}`).join(", ")}`;
-      logForDebugging(L, {
+    let parseResult = KnownMarketplacesFileSchema().safeParse(parsedJson);
+    if (!parseResult.success) {
+      let message = `Marketplace configuration file is corrupted: ${parseResult.error.issues.map((issue) => `${issue.path.join(".")}: ${issue.message}`).join(", ")}`;
+      logForDebugging(message, {
         level: "error",
       });
-      throw new ConfigParseError(L, fs, S);
+      throw new ConfigParseError(message, fs, parsedJson);
     }
-    return normalizeInstallLocations(w.data);
+    return normalizeInstallLocations(parseResult.data);
   }
   if (isDiskless()) return {};
   let configFile = getKnownMarketplacesPath();
@@ -699,62 +746,66 @@ function normalizeInstallLocation(source, installLocation) {
   return relocateInstallPath(installLocation);
 }
 //@ chunk-e6aww6q8.js:4244564-4244669 layout
-function normalizeInstallLocations(e) {
-  for (let n of Object.values(e)) n.installLocation = normalizeInstallLocation(n.source, n.installLocation);
-  return e;
+function normalizeInstallLocations(config) {
+  for (let entry of Object.values(config))
+    entry.installLocation = normalizeInstallLocation(entry.source, entry.installLocation);
+  return config;
 }
 //@ chunk-e6aww6q8.js:4244669-4244749 layout
 /**
  * 同 loadKnownMarketplacesWithDeclared，但读失败时返回一个被标记为“读失败”的空对象（isKnownMarketplacesReadFailure 可判断），调用方据此区分“没有市场”和“读不到”。
  */
-async function loadKnownMarketplacesSafe(e) {
+async function loadKnownMarketplacesSafe(storageV5) {
   try {
-    return await loadKnownMarketplacesWithDeclared(e);
+    return await loadKnownMarketplacesWithDeclared(storageV5);
   } catch {
-    let n = {};
-    failedKnownMarketplacesReads.add(n);
-    return n;
+    let failed = {};
+    failedKnownMarketplacesReads.add(failed);
+    return failed;
   }
 }
 //@ chunk-e6aww6q8.js:4244749-4244769 layout
-var failedKnownMarketplacesReads = new WeakSet();
+var failedKnownMarketplacesReads; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:4244749", () => {
+  failedKnownMarketplacesReads = new WeakSet();
+});
 //@ chunk-e6aww6q8.js:4244769-4244803 layout
 /**
  * 判断一个已知市场表对象是否为“读失败”占位。
  */
-function isKnownMarketplacesReadFailure(e) {
-  return failedKnownMarketplacesReads.has(e);
+function isKnownMarketplacesReadFailure(config) {
+  return failedKnownMarketplacesReads.has(config);
 }
 //@ chunk-e6aww6q8.js:4244803-4245409 fingerprint = saveKnownMarketplacesConfig (0.43)
 /**
  * 校验后写回 known_marketplaces.json（原子写），失败抛错。
  */
-async function saveKnownMarketplacesConfig(e, n, r = new Map()) {
-  let storageArm = getStorageArm(n);
-  let h = omitPluginDirectoryEntries(omitClaudeAiMarketplaces(e));
-  for (let [q, Z] of r) {
-    if (releasedRegistryEntries()[storageArm].has(q)) continue;
-    if (!Object.hasOwn(h, q))
-      h = {
-        ...h,
-        [q]: Z,
+async function saveKnownMarketplacesConfig(config, storageV5, extraEntries = new Map()) {
+  let storageArm = getStorageArm(storageV5);
+  let sanitizedConfig = omitPluginDirectoryEntries(omitClaudeAiMarketplaces(config));
+  for (let [name, entry] of extraEntries) {
+    if (releasedRegistryEntries()[storageArm].has(name)) continue;
+    if (!Object.hasOwn(sanitizedConfig, name))
+      sanitizedConfig = {
+        ...sanitizedConfig,
+        [name]: entry,
       };
   }
-  let parsed = KnownMarketplacesFileSchema().safeParse(h);
+  let parsed = KnownMarketplacesFileSchema().safeParse(sanitizedConfig);
   if (!parsed.success)
     throw new ConfigParseError(
       `Invalid marketplace config: ${parsed.error.message}`,
       getKnownMarketplacesPathForDisplay(),
-      h,
+      sanitizedConfig,
     );
-  let S = isStorageV5Enabled() && n !== undefined ? getMarketplacesStorageScope() : null;
-  if (isStorageV5Enabled() && n !== undefined && S !== null) {
-    let q = await n.write(S, jsonStringify(parsed.data, null, 2), {
+  let scope = isStorageV5Enabled() && storageV5 !== undefined ? getMarketplacesStorageScope() : null;
+  if (isStorageV5Enabled() && storageV5 !== undefined && scope !== null) {
+    let writeResult = await storageV5.write(scope, jsonStringify(parsed.data, null, 2), {
       mode: 438 & ~process.umask(),
     });
-    if (!q.ok)
+    if (!writeResult.ok)
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        `Failed to save marketplace configuration: ${formatStorageError(q.error)}`,
+        `Failed to save marketplace configuration: ${formatStorageError(writeResult.error)}`,
         "failed to save marketplace configuration (v5 backend error)",
       );
     return;
@@ -766,34 +817,40 @@ async function saveKnownMarketplacesConfig(e, n, r = new Map()) {
   writeAndPublishSync(fs, jsonStringify(parsed.data, null, 2));
 }
 //@ chunk-e6aww6q8.js:4245409-4245422 layout
-var knownMarketplacesWriteQueue = createKeyedQueue();
+var knownMarketplacesWriteQueue; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:4245409", () => {
+  knownMarketplacesWriteQueue = createKeyedQueue();
+});
 //@ chunk-e6aww6q8.js:4245422-4245456 layout
 function drainKnownMarketplacesWrites() {
   return knownMarketplacesWriteQueue.drain();
 }
 //@ chunk-e6aww6q8.js:4245456-4245465 layout
-registerWriteQueueDrain(drainKnownMarketplacesWrites);
+// deferred: uses registerWriteQueueDrain (../settings/writeQueues.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:4245456", () => {
+  registerWriteQueueDrain(drainKnownMarketplacesWrites);
+});
 //@ chunk-e6aww6q8.js:4245465-4246111 layout
 /**
  * 对 known_marketplaces.json 做串行化的读-改-写：进程内队列 + proper-lockfile 文件锁（.lock，重试 5 次）；回调返回 null 表示不写；存储后端模式下走存储层。
  */
-async function updateKnownMarketplaces(e, n) {
+async function updateKnownMarketplaces(update, storageV5) {
   if (isDiskless()) {
-    if (getStorageArm(n) === "raw") {
+    if (getStorageArm(storageV5) === "raw") {
       warnDisklessSettingsWrite("known_marketplaces", KNOWN_MARKETPLACES_FILENAME);
       return false;
     }
     return knownMarketplacesWriteQueue.run(KNOWN_MARKETPLACES_FILENAME, () =>
-      updateKnownMarketplacesLocked(e, n),
+      updateKnownMarketplacesLocked(update, storageV5),
     );
   }
   let knownMarketplacesPath = getKnownMarketplacesPath();
   return knownMarketplacesWriteQueue.run(knownMarketplacesPath, async () => {
     await getFsImplementation().mkdir(join(knownMarketplacesPath, ".."));
-    let h;
-    let y = false;
+    let lockHandle;
+    let unlocked = false;
     try {
-      h = await lock(knownMarketplacesPath, {
+      lockHandle = await lock(knownMarketplacesPath, {
         lockfilePath: `${knownMarketplacesPath}.lock`,
         realpath: false,
         retries: {
@@ -801,8 +858,8 @@ async function updateKnownMarketplaces(e, n) {
           minTimeout: 100,
           maxTimeout: 1000,
         },
-        onCompromised: (S) => {
-          logForDebugging(`known_marketplaces.json lock compromised: ${S}`, {
+        onCompromised: (error) => {
+          logForDebugging(`known_marketplaces.json lock compromised: ${error}`, {
             level: "error",
           });
         },
@@ -814,56 +871,56 @@ async function updateKnownMarketplaces(e, n) {
           level: "error",
         },
       );
-      y = true;
+      unlocked = true;
     }
     try {
-      let S = await updateKnownMarketplacesLocked(e, n);
-      if (S && y) logEvent("tengu_known_marketplaces_fallback_write", {});
-      return S;
+      let changed = await updateKnownMarketplacesLocked(update, storageV5);
+      if (changed && unlocked) logEvent("tengu_known_marketplaces_fallback_write", {});
+      return changed;
     } finally {
-      await releaseLockQuietly(h, "known_marketplaces.json");
+      await releaseLockQuietly(lockHandle, "known_marketplaces.json");
     }
   });
 }
 //@ chunk-e6aww6q8.js:4246111-4246231 layout
-async function updateKnownMarketplacesLocked(e, n) {
-  let knownMarketplacesWithDeclared = await loadKnownMarketplacesWithDeclared(n);
-  let s = new Map(hiddenRegistryEntries()[getStorageArm(n)]);
-  let h = e(knownMarketplacesWithDeclared);
-  if (h === null) return false;
-  await saveKnownMarketplacesConfig(h, n, s);
+async function updateKnownMarketplacesLocked(update, storageV5) {
+  let knownMarketplacesWithDeclared = await loadKnownMarketplacesWithDeclared(storageV5);
+  let hiddenEntries = new Map(hiddenRegistryEntries()[getStorageArm(storageV5)]);
+  let next = update(knownMarketplacesWithDeclared);
+  if (next === null) return false;
+  await saveKnownMarketplacesConfig(next, storageV5, hiddenEntries);
   return true;
 }
 //@ chunk-e6aww6q8.js:4246231-4246365 layout
 async function touchMarketplaceLastUpdated(marketplaceName, storageV5) {
-  await updateKnownMarketplaces((r) => {
-    let s = ownPropertyOrUndefined(r, marketplaceName);
-    if (!s) return null;
-    r[marketplaceName] = {
-      ...s,
+  await updateKnownMarketplaces((config) => {
+    let entry = ownPropertyOrUndefined(config, marketplaceName);
+    if (!entry) return null;
+    config[marketplaceName] = {
+      ...entry,
       lastUpdated: new Date().toISOString(),
     };
-    return r;
+    return config;
   }, storageV5);
 }
 //@ chunk-e6aww6q8.js:4246365-4246607 layout
 /**
  * 把种子目录（CLAUDE_CODE_PLUGIN_SEED_DIR 等）里登记的市场同步进 known_marketplaces.json，有变化返回 true。
  */
-async function syncSeedMarketplaces(e) {
-  let n = await registerSeedMarketplaces(e);
-  if (n.length === 0) return false;
-  let r = 0;
-  await updateKnownMarketplaces((s) => {
-    for (let [h, y] of n) {
-      if (En(ownPropertyOrUndefined(s, h), y)) continue;
-      s[h] = y;
-      r++;
+async function syncSeedMarketplaces(storageV5) {
+  let seedEntries = await registerSeedMarketplaces(storageV5);
+  if (seedEntries.length === 0) return false;
+  let changedCount = 0;
+  await updateKnownMarketplaces((config) => {
+    for (let [name, entry] of seedEntries) {
+      if (import_sortedIndex_2(ownPropertyOrUndefined(config, name), entry)) continue;
+      config[name] = entry;
+      changedCount++;
     }
-    return r > 0 ? s : null;
-  }, e);
-  if (r > 0) {
-    logForDebugging(`Synced ${r} marketplace(s) from seed dir(s)`);
+    return changedCount > 0 ? config : null;
+  }, storageV5);
+  if (changedCount > 0) {
+    logForDebugging(`Synced ${changedCount} marketplace(s) from seed dir(s)`);
     return true;
   }
   return false;
@@ -872,7 +929,7 @@ async function syncSeedMarketplaces(e) {
 /**
  * 扫描 CLAUDE_CODE_PLUGIN_SEED_DIR 下各种子目录的 known_marketplaces.json，返回可登记的 [名字, 条目]（同名先到先得）。
  */
-async function registerSeedMarketplaces(e) {
+async function registerSeedMarketplaces(storageV5) {
   let claimed = new Set();
   let changed = [];
   for (let seedDir of getPluginSeedDirs()) {
@@ -880,7 +937,7 @@ async function registerSeedMarketplaces(e) {
     if (!seedConfig) continue;
     for (let [name, seedEntry] of Object.entries(seedConfig)) {
       if (claimed.has(name)) continue;
-      let resolvedLocation = await findSeedMarketplaceCatalog(seedDir, name, e);
+      let resolvedLocation = await findSeedMarketplaceCatalog(seedDir, name, storageV5);
       if (!resolvedLocation) {
         logForDebugging(`Seed marketplace '${name}' not found under ${seedDir}/marketplaces/, skipping`, {
           level: "warn",
@@ -925,7 +982,7 @@ async function readSeedKnownMarketplaces(seedDir) {
   }
 }
 //@ chunk-e6aww6q8.js:4247362-4247580 layout
-async function findSeedMarketplaceCatalog(seedDir, name, r) {
+async function findSeedMarketplaceCatalog(seedDir, name, storageV5) {
   let dirCandidate = join(seedDir, "marketplaces", name);
   let jsonCandidate = join(seedDir, "marketplaces", `${name}.json`);
   for (let candidate of [dirCandidate, jsonCandidate])
@@ -933,8 +990,8 @@ async function findSeedMarketplaceCatalog(seedDir, name, r) {
       await readMarketplaceManifest(
         candidate,
         undefined,
-        r,
-        isStorageV5Enabled() && r !== undefined
+        storageV5,
+        isStorageV5Enabled() && storageV5 !== undefined
           ? {
               kind: "hostFolder",
               space: "system",
@@ -950,10 +1007,10 @@ async function findSeedMarketplaceCatalog(seedDir, name, r) {
  * 返回包含该安装位置的种子目录（不在任何种子目录下返回 undefined）；种子目录下的市场/插件只读、不刷新。
  */
 function seedDirFor(installLocation) {
-  let n = resolve_2(installLocation);
-  return getPluginSeedDirs().find((r) => {
-    let s = resolve_2(r);
-    return n === s || n.startsWith(s + sep);
+  let resolvedPath = resolve_2(installLocation);
+  return getPluginSeedDirs().find((seedDir) => {
+    let resolvedSeedDir = resolve_2(seedDir);
+    return resolvedPath === resolvedSeedDir || resolvedPath.startsWith(resolvedSeedDir + sep);
   });
 }
 //@ chunk-e6aww6q8.js:4247678-4247707 layout
@@ -966,24 +1023,24 @@ function getPluginGitTimeoutMs() {
   return DEFAULT_GIT_TIMEOUT_MS;
 }
 //@ chunk-e6aww6q8.js:4247803-4248068 layout
-async function marketplacePathExists(e, nestedPath, r) {
-  let s =
-    isStorageV5Enabled() && e !== undefined
+async function marketplacePathExists(storageV5, nestedPath, fallback) {
+  let storageKey =
+    isStorageV5Enabled() && storageV5 !== undefined
       ? getMarketplaceStorageKey(nestedPath, getPluginsDirectory())
       : null;
-  if (e === undefined || s === null) return r();
-  let h = await e.statMeta(s);
-  if (h.ok) return true;
+  if (storageV5 === undefined || storageKey === null) return fallback();
+  let statResult = await storageV5.statMeta(storageKey);
+  if (statResult.ok) return true;
   let telemetryCode =
-    "telemetryCode" in h.error && typeof h.error.telemetryCode === "string"
-      ? h.error.telemetryCode
+    "telemetryCode" in statResult.error && typeof statResult.error.telemetryCode === "string"
+      ? statResult.error.telemetryCode
       : undefined;
-  return isNonRegularError(telemetryCode) ? r() : false;
+  return isNonRegularError(telemetryCode) ? fallback() : false;
 }
 //@ chunk-e6aww6q8.js:4248068-4248187 fingerprint = readCachedMarketplace (0.788)
-function readCachedMarketplace_2(e, n) {
-  let nestedPath = join(n, ".claude-plugin", "marketplace.json");
-  return marketplacePathExists(e, nestedPath, () =>
+function readCachedMarketplace_2(storageV5, rootDir) {
+  let nestedPath = join(rootDir, ".claude-plugin", "marketplace.json");
+  return marketplacePathExists(storageV5, nestedPath, () =>
     getFsImplementation()
       .stat(nestedPath)
       .then(
@@ -993,24 +1050,24 @@ function readCachedMarketplace_2(e, n) {
   );
 }
 //@ chunk-e6aww6q8.js:4248187-4248286 layout
-function orderGithubTransports(e, url, url_2) {
-  let s = {
+function orderGithubTransports(preferSsh, url, url_2) {
+  let sshAttempt = {
     transport: "SSH",
     url,
   };
-  let h = {
+  let httpsAttempt = {
     transport: "HTTPS",
     url: url_2,
   };
-  return e ? [s, h] : [h, s];
+  return preferSsh ? [sshAttempt, httpsAttempt] : [httpsAttempt, sshAttempt];
 }
 //@ chunk-e6aww6q8.js:4248286-4248529 layout
-function mergeBothTransportErrors(e, n) {
-  if (e.error.message !== n.error.message)
-    n.error.message = `Fetching the marketplace from GitHub failed on both attempts. ${e.transport} (${e.url}): ${e.error.message}
+function mergeBothTransportErrors(firstFailure, secondFailure) {
+  if (firstFailure.error.message !== secondFailure.error.message)
+    secondFailure.error.message = `Fetching the marketplace from GitHub failed on both attempts. ${firstFailure.transport} (${firstFailure.url}): ${firstFailure.error.message}
 
-${n.transport} (${n.url}): ${n.error.message}`;
-  return n.error;
+${secondFailure.transport} (${secondFailure.url}): ${secondFailure.error.message}`;
+  return secondFailure.error;
 }
 //@ chunk-e6aww6q8.js:4248529-4248706 fingerprint = isAuthenticationError (1)
 function isAuthenticationError(stderr) {
@@ -1023,9 +1080,9 @@ function isAuthenticationError(stderr) {
   );
 }
 //@ chunk-e6aww6q8.js:4248706-4248801 layout = ghIsDangerousCallback (1)
-function getScpRemoteHost(e) {
-  if (e.includes("://")) return null;
-  return e.match(/^[^:]*@([^@:]+):/)?.[1] ?? null;
+function getScpRemoteHost(url) {
+  if (url.includes("://")) return null;
+  return url.match(/^[^:]*@([^@:]+):/)?.[1] ?? null;
 }
 //@ chunk-e6aww6q8.js:4248801-4248907 layout
 function gitHostDisplayName(url) {
@@ -1050,34 +1107,34 @@ function credentialHelperHint(url) {
 /**
  * 克隆市场仓库：校验 ref/URL（拒绝 - 开头参数与危险协议）、--depth 1、可选 sparse-checkout、禁用交互提示与 LFS、超时 CLAUDE_CODE_PLUGIN_GIT_TIMEOUT_MS。
  */
-async function gitClone(url, n, ref, sparsePaths, manifestPath) {
-  let y = pluginGitUrlError(url);
-  if (y !== null)
+async function gitClone(url, targetDir, ref, sparsePaths, manifestPath) {
+  let urlError = pluginGitUrlError(url);
+  if (urlError !== null)
     return {
       code: 1,
-      stderr: `Refusing to clone. ${y.message}`,
+      stderr: `Refusing to clone. ${urlError.message}`,
     };
   let useSparse = sparsePaths && sparsePaths.length > 0;
-  let { pinArgs, inCheckoutArgs, env } = runGitWithCeilingDirs(n, await resolveGitSshConfig(url));
+  let { pinArgs, inCheckoutArgs, env } = runGitWithCeilingDirs(targetDir, await resolveGitSshConfig(url));
   let args = [...SSH_BATCH_CONFIG_ARGS, ...pinArgs, "clone", "--depth", "1"];
   if (useSparse) {
     if (isNetworkGitUrl(url)) args.push("--filter=blob:none");
     args.push("--no-checkout");
   } else args.push("--no-recurse-submodules");
   if (ref) args.push("--branch", ref);
-  args.push("--", url, n);
+  args.push("--", url, targetDir);
   let timeoutMs = getPluginGitTimeoutMs();
   logForDebugging(`git clone: url=${redactUrlQuery(url)} ref=${ref ?? "default"} timeout=${timeoutMs}ms`);
   let startTime = performance.now();
   let result = await execFileNoThrowWithCwd(gitExe(), args, {
-    ...(await prepareGitWorkDir(n, env)),
+    ...(await prepareGitWorkDir(targetDir, env)),
     timeout: timeoutMs,
     stdin: "ignore",
   });
-  let we =
+  let submoduleResult =
     result.code === 0 && !useSparse
       ? await gitSubmoduleUpdate({
-          checkoutDir: n,
+          checkoutDir: targetDir,
           manifestPath,
           inCheckoutArgs,
           env,
@@ -1085,29 +1142,29 @@ async function gitClone(url, n, ref, sparsePaths, manifestPath) {
         })
       : undefined;
   let result_2 = {
-    ...(we?.result ?? result),
-    submodules: we?.submodules,
+    ...(submoduleResult?.result ?? result),
+    submodules: submoduleResult?.submodules,
   };
   if (result_2.error) result_2.error = redactKnownUrls(result_2.error, url);
   if (result_2.stderr) result_2.stderr = redactKnownUrls(result_2.stderr, url);
   if (result_2.code === 0) {
     if (useSparse) {
       let redacted = pickGitNoPromptEnv(env);
-      let Ie = await runGitInOwnWorkTree(
-        n,
+      let sparseResult = await runGitInOwnWorkTree(
+        targetDir,
         [...inCheckoutArgs, "sparse-checkout", "set", "--cone", "--", ...sparsePaths],
         redacted,
         {
           timeout: timeoutMs,
         },
       );
-      if (Ie.code !== 0)
+      if (sparseResult.code !== 0)
         return {
-          code: Ie.code,
-          stderr: `git sparse-checkout set failed: ${redactKnownUrls(Ie.stderr, url)}`,
+          code: sparseResult.code,
+          stderr: `git sparse-checkout set failed: ${redactKnownUrls(sparseResult.stderr, url)}`,
         };
       let checkoutResult = await runGitInOwnWorkTree(
-        n,
+        targetDir,
         [...inCheckoutArgs, "read-tree", "-u", "--reset", "HEAD"],
         redacted,
         {
@@ -1213,8 +1270,8 @@ function safeCallProgress(onProgress, message) {
   }
 }
 //@ chunk-e6aww6q8.js:4252460-4252641 layout
-function throwDisklessMarketplaceFetch(e) {
-  warnDisklessSettingsWrite("marketplace_cache", e);
+function throwDisklessMarketplaceFetch(cachePath) {
+  warnDisklessSettingsWrite("marketplace_cache", cachePath);
   throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
     "Marketplaces can't be fetched in this session, because it can't save them",
     "marketplace fetch refused in a diskless session",
@@ -1224,13 +1281,13 @@ function throwDisklessMarketplaceFetch(e) {
 /**
  * git 来源市场的缓存：已有克隆则 fetch/pull 刷新（失败可回退），否则克隆；GitHub 来源按 SSH/HTTPS 顺序各试一次。
  */
-async function cacheMarketplaceFromGit(url, n, storageV5, path, ref, sparsePaths, onProgress) {
+async function cacheMarketplaceFromGit(remoteUrl, targetDir, storageV5, path, ref, sparsePaths, onProgress) {
   let fs = getFsImplementation();
   let pluginGitTimeoutMs = getPluginGitTimeoutMs();
   let timeoutSec = Math.round(pluginGitTimeoutMs / 1000);
   switch (
     (safeCallProgress(onProgress, `Refreshing marketplace cache (timeout: ${timeoutSec}s)\u2026`),
-    await probeMarketplaceCheckout(n, url, {
+    await probeMarketplaceCheckout(targetDir, remoteUrl, {
       ref,
       sparsePaths,
       timeout: pluginGitTimeoutMs,
@@ -1243,7 +1300,7 @@ async function cacheMarketplaceFromGit(url, n, storageV5, path, ref, sparsePaths
     case "unreachable":
       if (
         env.CLAUDE_CODE_PLUGIN_KEEP_MARKETPLACE_ON_FAILURE &&
-        (await readCachedMarketplace_2(storageV5, n))
+        (await readCachedMarketplace_2(storageV5, targetDir))
       ) {
         logForDebugging(
           "Marketplace remote unreachable, keeping existing clone (CLAUDE_CODE_PLUGIN_KEEP_MARKETPLACE_ON_FAILURE)",
@@ -1259,89 +1316,92 @@ async function cacheMarketplaceFromGit(url, n, storageV5, path, ref, sparsePaths
     case "stale":
       break;
   }
-  let Z = `${n}.bak`;
-  let Se = `${basename(n)}.bak`;
-  let { owner } = await findMarketplaceNameOwner(dirname(n), Se, storageV5, {
-    isSelf: (ze) => ze === basename(n),
+  let backupPath = `${targetDir}.bak`;
+  let backupName = `${basename(targetDir)}.bak`;
+  let { owner } = await findMarketplaceNameOwner(dirname(targetDir), backupName, storageV5, {
+    isSelf: (name) => name === basename(targetDir),
   });
   if (owner !== undefined)
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `Cannot fetch marketplace ${jsonStringify(basename(n))}: the directory it would use as its backup (${Z}) is the registered marketplace ${jsonStringify(owner)}'s directory. Remove or rename that marketplace first (claude plugin marketplace remove).`,
+      `Cannot fetch marketplace ${jsonStringify(basename(targetDir))}: the directory it would use as its backup (${backupPath}) is the registered marketplace ${jsonStringify(owner)}'s directory. Remove or rename that marketplace first (claude plugin marketplace remove).`,
       "marketplace backup path is another marketplace clone",
     );
   try {
-    await fs.rename(Z, n);
-    forgetGitRootsUnder(n);
+    await fs.rename(backupPath, targetDir);
+    forgetGitRootsUnder(targetDir);
   } catch (error) {
     if (!isENOENT(error)) {
-      if (!(await readCachedMarketplace_2(storageV5, n))) {
-        await removeDirectoryTreeNoFollow_2(n).catch(() => {});
-        await fs.rename(Z, n);
-        forgetGitRootsUnder(n);
+      if (!(await readCachedMarketplace_2(storageV5, targetDir))) {
+        await removeDirectoryTreeNoFollow_2(targetDir).catch(() => {});
+        await fs.rename(backupPath, targetDir);
+        forgetGitRootsUnder(targetDir);
       }
     }
   }
   try {
-    await removeDirectoryTreeNoFollow_2(Z);
+    await removeDirectoryTreeNoFollow_2(backupPath);
   } catch (error) {
-    throw Error(`Failed to clean up stale marketplace backup directory. Please manually delete the directory at ${Z} and try again.
+    throw Error(`Failed to clean up stale marketplace backup directory. Please manually delete the directory at ${backupPath} and try again.
 
 Technical details: ${errorMessage(error)}`);
   }
-  let we = join(dirname(n), `${basename(n)}${CLONE_TEMP_SUFFIX}`);
+  let stagingDir = join(dirname(targetDir), `${basename(targetDir)}${CLONE_TEMP_SUFFIX}`);
   try {
-    await removeDirectoryTreeNoFollow_2(we);
+    await removeDirectoryTreeNoFollow_2(stagingDir);
   } catch (error) {
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `Failed to clean up a leftover marketplace staging directory. Please manually delete the directory at ${we} and try again.
+      `Failed to clean up a leftover marketplace staging directory. Please manually delete the directory at ${stagingDir} and try again.
 
 Technical details: ${errorMessage(error)}`,
       "Failed to clean up a leftover marketplace staging directory",
     );
   }
-  let Ee = ref ? ` (ref: ${ref})` : "";
-  safeCallProgress(onProgress, `Cloning repository (timeout: ${timeoutSec}s): ${redactUrlQuery(url)}${Ee}`);
+  let refSuffix = ref ? ` (ref: ${ref})` : "";
+  safeCallProgress(
+    onProgress,
+    `Cloning repository (timeout: ${timeoutSec}s): ${redactUrlQuery(remoteUrl)}${refSuffix}`,
+  );
   let pullStarted = performance.now();
-  let Ie = await gitClone(url, we, ref, sparsePaths, path);
+  let cloneResult = await gitClone(remoteUrl, stagingDir, ref, sparsePaths, path);
   logPluginFetch(
     "marketplace_clone",
-    url,
-    Ie.code === 0 ? "success" : "failure",
+    remoteUrl,
+    cloneResult.code === 0 ? "success" : "failure",
     performance.now() - pullStarted,
-    Ie.code === 0 ? undefined : classifyFetchError(Ie.stderr),
+    cloneResult.code === 0 ? undefined : classifyFetchError(cloneResult.stderr),
     undefined,
-    Ie.submodules,
+    cloneResult.submodules,
   );
-  if (Ie.code !== 0) {
-    await removeDirectoryTreeNoFollow_2(we).catch(() => {});
+  if (cloneResult.code !== 0) {
+    await removeDirectoryTreeNoFollow_2(stagingDir).catch(() => {});
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `Failed to clone marketplace repository: ${Ie.stderr}`,
-      `Failed to clone marketplace repository: ${classifyFetchError(Ie.stderr)} (exit ${Ie.code})`,
+      `Failed to clone marketplace repository: ${cloneResult.stderr}`,
+      `Failed to clone marketplace repository: ${classifyFetchError(cloneResult.stderr)} (exit ${cloneResult.code})`,
     );
   }
   try {
-    await writeSparsePaths(we, sparsePaths);
+    await writeSparsePaths(stagingDir, sparsePaths);
   } catch (error) {
     logForDebugging(`Could not record the marketplace clone's sparse paths: ${errorMessage(error)}`, {
       level: "warn",
     });
   }
-  let lfsPointerScan = await checkGitLfsFiles(we);
-  let We = false;
+  let lfsPointerScan = await checkGitLfsFiles(stagingDir);
+  let movedAside = false;
   try {
-    await fs.rename(n, Z);
-    We = true;
+    await fs.rename(targetDir, backupPath);
+    movedAside = true;
     safeCallProgress(onProgress, "Replacing the existing marketplace clone\u2026");
   } catch (rmError) {
     let rmErrorMsg = getErrnoCode(rmError);
     if (rmErrorMsg !== "ENOENT") {
-      await removeDirectoryTreeNoFollow_2(we).catch(() => {});
+      await removeDirectoryTreeNoFollow_2(stagingDir).catch(() => {});
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
         rmErrorMsg === "EBUSY" || rmErrorMsg === "EPERM" || rmErrorMsg === "EACCES"
-          ? `Could not replace the marketplace directory at ${n} because it is in use; the existing copy was kept and the next refresh will try again.
+          ? `Could not replace the marketplace directory at ${targetDir} because it is in use; the existing copy was kept and the next refresh will try again.
 
 Technical details: ${errorMessage(rmError)}`
-          : `Failed to move the existing marketplace directory aside. Please manually delete the directory at ${n} and try again.
+          : `Failed to move the existing marketplace directory aside. Please manually delete the directory at ${targetDir} and try again.
 
 Technical details: ${errorMessage(rmError)}`,
         "Failed to move the existing marketplace directory aside",
@@ -1349,23 +1409,23 @@ Technical details: ${errorMessage(rmError)}`,
     }
   }
   try {
-    await fs.rename(we, n);
-    forgetGitRootsUnder(n);
+    await fs.rename(stagingDir, targetDir);
+    forgetGitRootsUnder(targetDir);
   } catch (error) {
-    if (We)
+    if (movedAside)
       await fs
-        .rename(Z, n)
-        .then(() => forgetGitRootsUnder(n))
+        .rename(backupPath, targetDir)
+        .then(() => forgetGitRootsUnder(targetDir))
         .catch(() => {});
-    await removeDirectoryTreeNoFollow_2(we).catch(() => {});
+    await removeDirectoryTreeNoFollow_2(stagingDir).catch(() => {});
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `Failed to move the new marketplace clone into place at ${n}. Please try again.
+      `Failed to move the new marketplace clone into place at ${targetDir}. Please try again.
 
 Technical details: ${errorMessage(error)}`,
       "Failed to move the new marketplace clone into place",
     );
   }
-  if (We) await removeDirectoryTreeNoFollow_2(Z).catch(() => {});
+  if (movedAside) await removeDirectoryTreeNoFollow_2(backupPath).catch(() => {});
   safeCallProgress(onProgress, "Clone complete, validating marketplace\u2026");
   return {
     kind: "cloned",
@@ -1373,18 +1433,18 @@ Technical details: ${errorMessage(error)}`,
   };
 }
 //@ chunk-e6aww6q8.js:4255727-4255868 layout
-function warnLfsPointers(e, n, r) {
-  if (n?.kind !== "cloned") return;
-  let s = describeGitLfsMissing(e, n.lfsPointerScan);
-  if (s === null) return;
-  logForDebugging(`[git-lfs] ${s}`, {
+function warnLfsPointers(targetDir, fetchResult, onProgress) {
+  if (fetchResult?.kind !== "cloned") return;
+  let warning = describeGitLfsMissing(targetDir, fetchResult.lfsPointerScan);
+  if (warning === null) return;
+  logForDebugging(`[git-lfs] ${warning}`, {
     level: "warn",
   });
-  safeCallProgress(r, s);
+  safeCallProgress(onProgress, warning);
 }
 //@ chunk-e6aww6q8.js:4255868-4255918 fingerprint = redactHeaders (0.878)
 function redactHeaders(headers) {
-  return xr(headers, () => "***REDACTED***");
+  return import_mapValues(headers, () => "***REDACTED***");
 }
 //@ chunk-e6aww6q8.js:4255918-4257447 fingerprint = cacheMarketplaceFromUrl (0.867)
 /**
@@ -1419,22 +1479,22 @@ async function cacheMarketplaceFromUrl(url, cachePath, customHeaders, onProgress
     );
     let telemetrySafeCause = findTelemetrySafeCause(error);
     if (telemetrySafeCause) throw telemetrySafeCause;
-    let Z = (message) => message.replaceAll(url, () => redactedUrl);
+    let redactMessage = (message) => message.replaceAll(url, () => redactedUrl);
     if (isAxiosError(error)) {
       if (error.code === "ECONNREFUSED" || error.code === "ENOTFOUND")
         throw Error(`Could not connect to ${redactedUrl}. Please check your internet connection and verify the URL is correct.
 
-Technical details: ${Z(error.message)}`);
+Technical details: ${redactMessage(error.message)}`);
       if (error.code === "ETIMEDOUT")
         throw Error(`Request timed out while downloading marketplace from ${redactedUrl}. The server may be slow or unreachable.
 
-Technical details: ${Z(error.message)}`);
+Technical details: ${redactMessage(error.message)}`);
       if (error.response)
         throw Error(`HTTP ${error.response.status} error while downloading marketplace from ${redactedUrl}. The marketplace file may not exist at this URL.
 
-Technical details: ${Z(error.message)}`);
+Technical details: ${redactMessage(error.message)}`);
     }
-    throw Error(`Failed to download marketplace from ${redactedUrl}: ${Z(errorMessage(error))}`);
+    throw Error(`Failed to download marketplace from ${redactedUrl}: ${redactMessage(errorMessage(error))}`);
   }
   safeCallProgress(onProgress, "Validating marketplace data");
   let result = PluginMarketplaceSchema()
@@ -1458,13 +1518,13 @@ Technical details: ${Z(error.message)}`);
   return response.data;
 }
 //@ chunk-e6aww6q8.js:4257447-4257603 layout
-async function cacheMarketplaceFromUrlToFile(url, n, cachePath, customHeaders, onProgress) {
+async function cacheMarketplaceFromUrlToFile(url, cachePath, cachePath_2, customHeaders, onProgress) {
   let fsImplementation = getFsImplementation();
-  let S = await cacheMarketplaceFromUrl(url, cachePath, customHeaders, onProgress);
+  let marketplace = await cacheMarketplaceFromUrl(url, cachePath_2, customHeaders, onProgress);
   safeCallProgress(onProgress, "Saving marketplace to cache");
-  let dir = join(n, "..");
+  let dir = join(cachePath, "..");
   await fsImplementation.mkdir(dir);
-  await writeFileAtomic_2(n, jsonStringify(S, null, 2));
+  await writeFileAtomic_2(cachePath, jsonStringify(marketplace, null, 2));
 }
 //@ chunk-e6aww6q8.js:4257603-4257894 fingerprint = getCachePathForSource (0.821)
 /**
@@ -1498,18 +1558,18 @@ async function readJsonFileWithSchema(path, schema) {
 /**
  * 读 JSON 文本（去 BOM）并用 zod schema 校验，失败抛带路径的错误。
  */
-function parseFileWithSchema(e, n, schema) {
+function parseFileWithSchema(text, label, schema) {
   let data;
   try {
-    data = jsonParse(stripBom(e));
+    data = jsonParse(stripBom(text));
   } catch (error) {
-    throw new ConfigParseError(`Invalid JSON in ${n}: ${errorMessage(error)}`, n, e);
+    throw new ConfigParseError(`Invalid JSON in ${label}: ${errorMessage(error)}`, label, text);
   }
   let result = schema.safeParse(data);
   if (!result.success)
     throw new ConfigParseError(
-      `Invalid schema: ${n} ${result.error?.issues.map((e) => `${e.path.join(".")}: ${e.message}`).join(", ")}`,
-      n,
+      `Invalid schema: ${label} ${result.error?.issues.map((e) => `${e.path.join(".")}: ${e.message}`).join(", ")}`,
+      label,
       data,
     );
   return result.data;
@@ -1519,21 +1579,21 @@ function parseFileWithSchema(e, n, schema) {
  * 解析下载到的 marketplace.json：schema 校验、保留名来源校验，失败抛 manifest_invalid 类错误。
  */
 async function parseAndValidateFetchedMarketplace(
-  e,
+  storageV5,
   source,
-  r,
+  text,
   temporaryCachePath,
   cacheDir,
   marketplaceName,
-  S,
-  w,
+  onProgress,
+  onName,
   known,
   selfKey,
 ) {
-  let q;
+  let parsed;
   try {
-    q = parseFileWithSchema(
-      r,
+    parsed = parseFileWithSchema(
+      text,
       temporaryCachePath,
       getPluginMarketplaceSchemaFor(marketplaceNameUnlessCowork(marketplaceName)),
     );
@@ -1546,81 +1606,88 @@ async function parseAndValidateFetchedMarketplace(
       "manifest_invalid",
     );
   }
-  let Z = validateOfficialNameSource(q.name, source);
-  if (Z)
+  let refusal = validateOfficialNameSource(parsed.name, source);
+  if (refusal)
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      Z,
+      refusal,
       "marketplace reserved-name/source validation failed",
     );
-  await w?.(q.name);
-  if (!isValidMarketplaceDirName(q.name))
+  await onName?.(parsed.name);
+  if (!isValidMarketplaceDirName(parsed.name))
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `Marketplace name ${jsonStringify(q.name)} is not a plain directory name; refusing to cache it`,
+      `Marketplace name ${jsonStringify(parsed.name)} is not a plain directory name; refusing to cache it`,
       "fetched url marketplace name is not a plain cache component",
     );
-  await assertMarketplaceNameAvailable(cacheDir, q.name, e, {
+  await assertMarketplaceNameAvailable(cacheDir, parsed.name, storageV5, {
     known,
     selfKey,
     source,
   });
-  let Se = marketplaceCacheSpace(q.name, "catalog", getPluginsDirectory());
-  if (Se === null)
+  let storageKey = marketplaceCacheSpace(parsed.name, "catalog", getPluginsDirectory());
+  if (storageKey === null)
     return {
-      declined: q,
+      declined: parsed,
     };
-  let ke = join(cacheDir, q.name);
-  safeCallProgress(S, "Saving marketplace to cache");
-  let we = () =>
-    e.write(Se, r, {
+  let cacheDirPath = join(cacheDir, parsed.name);
+  safeCallProgress(onProgress, "Saving marketplace to cache");
+  let writeCatalog = () =>
+    storageV5.write(storageKey, text, {
       publishDiscipline: "atomic",
       mode: 438 & ~process.umask(),
     });
-  let Ee = await we();
+  let writeResult = await writeCatalog();
   if (
-    !Ee.ok &&
-    Ee.error.code === "Failed" &&
-    (isNonRegularError(Ee.error.telemetryCode) ||
-      (await e.scopeKind(marketplaceCacheKey(q.name)).then(
-        (Ae) => Ae.ok && Ae.value.kind === "directory",
+    !writeResult.ok &&
+    writeResult.error.code === "Failed" &&
+    (isNonRegularError(writeResult.error.telemetryCode) ||
+      (await storageV5.scopeKind(marketplaceCacheKey(parsed.name)).then(
+        (scopeResult) => scopeResult.ok && scopeResult.value.kind === "directory",
         () => false,
       )))
   ) {
     try {
-      await removeDirectoryTreeNoFollow_2(ke);
+      await removeDirectoryTreeNoFollow_2(cacheDirPath);
     } catch (error) {
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        `Failed to finalize marketplace cache. Please manually delete the directory at ${ke} if it exists and try again.
+        `Failed to finalize marketplace cache. Please manually delete the directory at ${cacheDirPath} if it exists and try again.
 
 Technical details: ${errorMessage(error)}`,
         "failed to remove a clone directory holding the url catalog name",
       );
     }
-    Ee = await we();
+    writeResult = await writeCatalog();
   }
-  if (!Ee.ok)
+  if (!writeResult.ok)
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `Failed to write marketplace catalog: ${formatStorageError(Ee.error)}`,
+      `Failed to write marketplace catalog: ${formatStorageError(writeResult.error)}`,
       "failed to write marketplace catalog (v5 backend error)",
     );
   return {
     published: {
-      marketplace: q,
-      cachePath: ke,
+      marketplace: parsed,
+      cachePath: cacheDirPath,
       keptStaleClone: false,
     },
   };
 }
 //@ chunk-e6aww6q8.js:4259634-4259950 layout
-async function cacheMarketplaceFromUrlToStorage(storageV5, n, url, cachePath, customHeaders, onProgress) {
-  let S = await cacheMarketplaceFromUrl(url, cachePath, customHeaders, onProgress);
+async function cacheMarketplaceFromUrlToStorage(
+  storageV5,
+  storageKey,
+  url,
+  cachePath,
+  customHeaders,
+  onProgress,
+) {
+  let marketplace = await cacheMarketplaceFromUrl(url, cachePath, customHeaders, onProgress);
   safeCallProgress(onProgress, "Saving marketplace to cache");
-  let w = await storageV5.write(n, jsonStringify(S, null, 2), {
+  let writeResult = await storageV5.write(storageKey, jsonStringify(marketplace, null, 2), {
     publishDiscipline: "atomic",
     mode: 438 & ~process.umask(),
   });
-  if (!w.ok)
+  if (!writeResult.ok)
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `Failed to write marketplace catalog: ${formatStorageError(w.error)}`,
+      `Failed to write marketplace catalog: ${formatStorageError(writeResult.error)}`,
       "failed to write marketplace catalog (v5 backend error)",
     );
 }
@@ -1632,9 +1699,9 @@ async function loadAndCacheMarketplace(
   source,
   marketplaceName,
   onProgress,
-  s,
-  h,
-  y,
+  storageV5,
+  knownName,
+  onName,
   known,
   refuseNameCollision,
 ) {
@@ -1646,88 +1713,89 @@ async function loadAndCacheMarketplace(
   if (isDiskless()) throwDisklessMarketplaceFetch(join("plugins", "marketplaces"));
   let fs = getFsImplementation();
   let cacheDir = getResolvedMarketplacesCacheDir();
-  let selfKey = y === undefined ? h : undefined;
+  let selfKey = onName === undefined ? knownName : undefined;
   let schema = getPluginMarketplaceSchemaFor(marketplaceNameUnlessCowork(marketplaceName));
   await fs.mkdir(cacheDir);
   let temporaryCachePath;
-  let path;
-  let we = false;
-  let Ee;
-  let Ae;
-  let Ie;
+  let manifestPath;
+  let ownsTemp = false;
+  let settingsJson;
+  let parsedMarketplace;
+  let fetchResult;
   let tempName = getCachePathForSource(source);
-  let We = source.source === "github" && (await checkCloneDirOwnedByOther(cacheDir, tempName, source, s));
+  let folderTaken =
+    source.source === "github" && (await checkCloneDirOwnedByOther(cacheDir, tempName, source, storageV5));
   try {
     switch (source.source) {
       case "url": {
         temporaryCachePath = join(cacheDir, `${tempName}.json`);
-        if (isStorageV5Enabled() && s !== undefined && !refuseNameCollision) {
-          let gt = await cacheMarketplaceFromUrl(
+        if (isStorageV5Enabled() && storageV5 !== undefined && !refuseNameCollision) {
+          let marketplace = await cacheMarketplaceFromUrl(
             source.url,
             marketplaceName,
             await describeHelperDeclaration(source, {
-              marketplaceName: h,
-              trustedDeclaration: findUrlMarketplaceHeaders(source, h),
+              marketplaceName: knownName,
+              trustedDeclaration: findUrlMarketplaceHeaders(source, knownName),
             }),
             onProgress,
           );
-          let At = jsonStringify(gt, null, 2);
-          let It = await parseAndValidateFetchedMarketplace(
-            s,
+          let marketplaceJson = jsonStringify(marketplace, null, 2);
+          let validateResult = await parseAndValidateFetchedMarketplace(
+            storageV5,
             source,
-            At,
+            marketplaceJson,
             temporaryCachePath,
             cacheDir,
             marketplaceName,
             onProgress,
-            y,
+            onName,
             known,
             selfKey,
           );
-          if ("published" in It) return It.published;
-          we = true;
+          if ("published" in validateResult) return validateResult.published;
+          ownsTemp = true;
           safeCallProgress(onProgress, "Saving marketplace to cache");
-          await writeFileAtomic_2(temporaryCachePath, At);
-          path = temporaryCachePath;
-          Ae = It.declined;
+          await writeFileAtomic_2(temporaryCachePath, marketplaceJson);
+          manifestPath = temporaryCachePath;
+          parsedMarketplace = validateResult.declined;
           break;
         }
-        we = true;
+        ownsTemp = true;
         await cacheMarketplaceFromUrlToFile(
           source.url,
           temporaryCachePath,
           marketplaceName,
           await describeHelperDeclaration(source, {
-            marketplaceName: h,
-            trustedDeclaration: findUrlMarketplaceHeaders(source, h),
+            marketplaceName: knownName,
+            trustedDeclaration: findUrlMarketplaceHeaders(source, knownName),
           }),
           onProgress,
         );
-        path = temporaryCachePath;
+        manifestPath = temporaryCachePath;
         break;
       }
       case "github": {
         let sshUrl = `git@${GITHUB_HOST}:${source.repo}.git`;
         let httpsUrl = `https://github.com/${source.repo}.git`;
         temporaryCachePath = join(cacheDir, tempName);
-        we = !We;
+        ownsTemp = !folderTaken;
         if (preferHttpsGitTransport()) {
           safeCallProgress(onProgress, `Cloning via HTTPS: ${httpsUrl}`);
-          Ie = await cacheMarketplaceFromGit(
+          fetchResult = await cacheMarketplaceFromGit(
             httpsUrl,
             temporaryCachePath,
-            s,
+            storageV5,
             source.path,
             source.ref,
             source.sparsePaths,
             onProgress,
           );
-          we = true;
-          path = join(temporaryCachePath, source.path || ".claude-plugin/marketplace.json");
+          ownsTemp = true;
+          manifestPath = join(temporaryCachePath, source.path || ".claude-plugin/marketplace.json");
           break;
         }
         let sshConfigured = await isGithubSshConfigured();
-        let [Yt, qt] = orderGithubTransports(sshConfigured, sshUrl, httpsUrl);
+        let [firstAttempt, fallbackAttempt] = orderGithubTransports(sshConfigured, sshUrl, httpsUrl);
         safeCallProgress(
           onProgress,
           sshConfigured ? `Cloning via SSH: ${sshUrl}` : sshNotConfiguredMessage(httpsUrl),
@@ -1741,10 +1809,10 @@ async function loadAndCacheMarketplace(
           },
         );
         try {
-          Ie = await cacheMarketplaceFromGit(
-            Yt.url,
+          fetchResult = await cacheMarketplaceFromGit(
+            firstAttempt.url,
             temporaryCachePath,
-            s,
+            storageV5,
             source.path,
             source.ref,
             source.sparsePaths,
@@ -1752,21 +1820,21 @@ async function loadAndCacheMarketplace(
           );
         } catch (err) {
           logForDebugging(
-            `${Yt.transport} clone failed for marketplace ${source.repo} (${errorMessage(err)}), falling back to ${qt.transport}`,
+            `${firstAttempt.transport} clone failed for marketplace ${source.repo} (${errorMessage(err)}), falling back to ${fallbackAttempt.transport}`,
             {
               level: "error",
             },
           );
           safeCallProgress(
             onProgress,
-            `${Yt.transport} clone failed, retrying with ${qt.transport}: ${qt.url}`,
+            `${firstAttempt.transport} clone failed, retrying with ${fallbackAttempt.transport}: ${fallbackAttempt.url}`,
           );
-          if (we) await removeDirectoryTreeNoFollow_2(temporaryCachePath);
+          if (ownsTemp) await removeDirectoryTreeNoFollow_2(temporaryCachePath);
           try {
-            Ie = await cacheMarketplaceFromGit(
-              qt.url,
+            fetchResult = await cacheMarketplaceFromGit(
+              fallbackAttempt.url,
               temporaryCachePath,
-              s,
+              storageV5,
               source.path,
               source.ref,
               source.sparsePaths,
@@ -1774,73 +1842,73 @@ async function loadAndCacheMarketplace(
             );
           } catch (httpsErr) {
             logForDebugging(
-              `${qt.transport} clone fallback also failed for marketplace ${source.repo}: ${errorMessage(httpsErr)}`,
+              `${fallbackAttempt.transport} clone fallback also failed for marketplace ${source.repo}: ${errorMessage(httpsErr)}`,
               {
                 level: "error",
               },
             );
             throw mergeBothTransportErrors(
               {
-                ...Yt,
+                ...firstAttempt,
                 error: toError(err),
               },
               {
-                ...qt,
+                ...fallbackAttempt,
                 error: toError(httpsErr),
               },
             );
           }
         }
-        we = true;
-        path = join(temporaryCachePath, source.path || ".claude-plugin/marketplace.json");
+        ownsTemp = true;
+        manifestPath = join(temporaryCachePath, source.path || ".claude-plugin/marketplace.json");
         break;
       }
       case "git": {
         temporaryCachePath = join(cacheDir, tempName);
-        we = true;
-        Ie = await cacheMarketplaceFromGit(
+        ownsTemp = true;
+        fetchResult = await cacheMarketplaceFromGit(
           source.url,
           temporaryCachePath,
-          s,
+          storageV5,
           source.path,
           source.ref,
           source.sparsePaths,
           onProgress,
         );
-        path = join(temporaryCachePath, source.path || ".claude-plugin/marketplace.json");
+        manifestPath = join(temporaryCachePath, source.path || ".claude-plugin/marketplace.json");
         break;
       }
       case "npm":
         throw Error("NPM marketplace sources not yet implemented");
       case "file": {
         let absPath = resolve_2(getProjectConfigRoot() ?? getOriginalCwd(), source.path);
-        path = absPath;
+        manifestPath = absPath;
         temporaryCachePath = dirname(dirname(absPath));
-        we = false;
+        ownsTemp = false;
         break;
       }
       case "directory": {
         let absPath = resolve_2(getProjectConfigRoot() ?? getOriginalCwd(), source.path);
-        path = join(absPath, ".claude-plugin", "marketplace.json");
+        manifestPath = join(absPath, ".claude-plugin", "marketplace.json");
         temporaryCachePath = absPath;
-        we = false;
+        ownsTemp = false;
         break;
       }
       case "settings": {
         temporaryCachePath = join(cacheDir, source.name);
-        path = join(temporaryCachePath, ".claude-plugin", "marketplace.json");
-        we = false;
+        manifestPath = join(temporaryCachePath, ".claude-plugin", "marketplace.json");
+        ownsTemp = false;
         if (!isValidMarketplaceDirName(source.name))
           throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
             `Marketplace name ${jsonStringify(source.name)} is not a plain directory name; refusing to cache it`,
             "settings marketplace name is not a plain cache component",
           );
-        await assertMarketplaceNameAvailable(cacheDir, source.name, s, {
+        await assertMarketplaceNameAvailable(cacheDir, source.name, storageV5, {
           known,
           selfKey,
           source,
         });
-        let gt = jsonStringify(
+        let manifestJson = jsonStringify(
           {
             name: source.name,
             owner: source.owner ?? {
@@ -1851,91 +1919,102 @@ async function loadAndCacheMarketplace(
           null,
           2,
         );
-        await fs.mkdir(dirname(path));
-        let At =
-          isStorageV5Enabled() && s !== undefined
+        await fs.mkdir(dirname(manifestPath));
+        let storageKey =
+          isStorageV5Enabled() && storageV5 !== undefined
             ? marketplaceCacheSpace(source.name, "manifest", getPluginsDirectory())
             : null;
-        if (isStorageV5Enabled() && s !== undefined && At !== null) {
-          let It = await s.write(At, gt, {
+        if (isStorageV5Enabled() && storageV5 !== undefined && storageKey !== null) {
+          let writeResult = await storageV5.write(storageKey, manifestJson, {
             publishDiscipline: "inPlace",
           });
-          if (!It.ok)
+          if (!writeResult.ok)
             throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-              `Failed to write marketplace manifest: ${formatStorageError(It.error)}`,
+              `Failed to write marketplace manifest: ${formatStorageError(writeResult.error)}`,
               "failed to write marketplace manifest (v5 backend error)",
             );
-          Ee = gt;
+          settingsJson = manifestJson;
           break;
         }
-        await writeFile(path, gt);
+        await writeFile(manifestPath, manifestJson);
         break;
       }
       default:
         throw Error("Unsupported marketplace source type");
     }
-    logForDebugging(`Reading marketplace from ${path}`);
-    let ze =
-      isStorageV5Enabled() && (source.source === "file" || source.source === "directory") ? s : undefined;
-    let lt =
-      isStorageV5Enabled() && s !== undefined && (source.source === "github" || source.source === "git")
-        ? getMarketplaceStorageKey(path, getPluginsDirectory())
+    logForDebugging(`Reading marketplace from ${manifestPath}`);
+    let localStorageV5 =
+      isStorageV5Enabled() && (source.source === "file" || source.source === "directory")
+        ? storageV5
+        : undefined;
+    let storageKey =
+      isStorageV5Enabled() &&
+      storageV5 !== undefined &&
+      (source.source === "github" || source.source === "git")
+        ? getMarketplaceStorageKey(manifestPath, getPluginsDirectory())
         : null;
-    let Je;
+    let marketplace;
     try {
-      Je =
-        Ae ??
-        (Ee !== undefined
-          ? parseFileWithSchema(Ee, path, schema)
-          : ze !== undefined
-            ? parseFileWithSchema(await getSteps(ze, path), path, schema)
-            : s !== undefined && lt !== null
-              ? parseFileWithSchema(await cachedMarketplaceOrThrow(s, lt), path, schema)
-              : await readJsonFileWithSchema(path, schema));
+      marketplace =
+        parsedMarketplace ??
+        (settingsJson !== undefined
+          ? parseFileWithSchema(settingsJson, manifestPath, schema)
+          : localStorageV5 !== undefined
+            ? parseFileWithSchema(await getSteps(localStorageV5, manifestPath), manifestPath, schema)
+            : storageV5 !== undefined && storageKey !== null
+              ? parseFileWithSchema(
+                  await cachedMarketplaceOrThrow(storageV5, storageKey),
+                  manifestPath,
+                  schema,
+                )
+              : await readJsonFileWithSchema(manifestPath, schema));
     } catch (e) {
       if (isENOENT(e))
-        throw withMarketplaceFailureCode(Error(`Marketplace file not found at ${path}`), "manifest_missing");
+        throw withMarketplaceFailureCode(
+          Error(`Marketplace file not found at ${manifestPath}`),
+          "manifest_missing",
+        );
       throw withMarketplaceFailureCode(
-        Error(`Failed to parse marketplace file at ${path}: ${errorMessage(e)}`),
+        Error(`Failed to parse marketplace file at ${manifestPath}: ${errorMessage(e)}`),
         e instanceof ConfigParseError ? "manifest_invalid" : undefined,
       );
     }
-    let finalCachePath = validateOfficialNameSource(Je.name, source);
+    let finalCachePath = validateOfficialNameSource(marketplace.name, source);
     if (finalCachePath) throw Error(finalCachePath);
-    await y?.(Je.name);
-    if (!isValidMarketplaceDirName(Je.name))
+    await onName?.(marketplace.name);
+    if (!isValidMarketplaceDirName(marketplace.name))
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        `Marketplace name ${jsonStringify(Je.name)} is not a plain directory name; refusing to cache it`,
+        `Marketplace name ${jsonStringify(marketplace.name)} is not a plain directory name; refusing to cache it`,
         "marketplace name is not a plain directory name",
       );
-    let pt = join(cacheDir, Je.name);
-    if (temporaryCachePath !== pt && !isLocalMarketplaceSource(source))
-      await assertMarketplaceNameAvailable(cacheDir, Je.name, s, {
+    let finalPath = join(cacheDir, marketplace.name);
+    if (temporaryCachePath !== finalPath && !isLocalMarketplaceSource(source))
+      await assertMarketplaceNameAvailable(cacheDir, marketplace.name, storageV5, {
         ownEntry: basename(temporaryCachePath),
         known,
         selfKey,
         source,
       });
     else if (source.source === "github")
-      await assertMarketplaceNameUsable(cacheDir, Je.name, s, {
+      await assertMarketplaceNameUsable(cacheDir, marketplace.name, storageV5, {
         known,
-        isSelf: sameNfcAs(Je.name, selfKey),
+        isSelf: sameNfcAs(marketplace.name, selfKey),
         source,
       });
-    let resolvedFinal = resolve_2(pt);
+    let resolvedFinal = resolve_2(finalPath);
     let resolvedCacheDir = resolve_2(cacheDir);
     if (!resolvedFinal.startsWith(resolvedCacheDir + sep))
-      throw Error(`Marketplace name '${Je.name}' resolves to a path outside the cache directory`);
-    if (temporaryCachePath !== pt && !isLocalMarketplaceSource(source)) {
-      let gt = false;
+      throw Error(`Marketplace name '${marketplace.name}' resolves to a path outside the cache directory`);
+    if (temporaryCachePath !== finalPath && !isLocalMarketplaceSource(source)) {
+      let sameFile = false;
       try {
-        let [At, It] = await Promise.all([fs.stat(temporaryCachePath), fs.stat(pt)]);
-        gt = At.dev === It.dev && At.ino === It.ino && At.ino !== 0;
+        let [tempStat, finalStat] = await Promise.all([fs.stat(temporaryCachePath), fs.stat(finalPath)]);
+        sameFile = tempStat.dev === finalStat.dev && tempStat.ino === finalStat.ino && tempStat.ino !== 0;
       } catch {}
-      if (gt) {
-        temporaryCachePath = pt;
-        forgetGitRootsUnder(pt);
-        we = false;
+      if (sameFile) {
+        temporaryCachePath = finalPath;
+        forgetGitRootsUnder(finalPath);
+        ownsTemp = false;
       } else
         try {
           if (!refuseNameCollision) {
@@ -1946,47 +2025,50 @@ async function loadAndCacheMarketplace(
                 level: "warn",
               });
             }
-            await removeDirectoryTreeNoFollow_2(pt);
+            await removeDirectoryTreeNoFollow_2(finalPath);
           }
           if (refuseNameCollision && source.source === "url") {
-            await fs.link(temporaryCachePath, pt);
-            let At = temporaryCachePath;
-            await fs.unlink(At).catch((error) => {
-              logForDebugging(`Failed to remove the linked temp catalog ${At}: ${errorMessage(error)}`, {
-                level: "warn",
-              });
+            await fs.link(temporaryCachePath, finalPath);
+            let tempPath = temporaryCachePath;
+            await fs.unlink(tempPath).catch((error) => {
+              logForDebugging(
+                `Failed to remove the linked temp catalog ${tempPath}: ${errorMessage(error)}`,
+                {
+                  level: "warn",
+                },
+              );
             });
-          } else await fs.rename(temporaryCachePath, pt);
-          forgetGitRootsUnder(pt);
-          temporaryCachePath = pt;
-          we = false;
+          } else await fs.rename(temporaryCachePath, finalPath);
+          forgetGitRootsUnder(finalPath);
+          temporaryCachePath = finalPath;
+          ownsTemp = false;
         } catch (error) {
           let errorMsg = errorMessage(error);
           if (refuseNameCollision)
             throw new MarketplaceError(
-              `Marketplace ${jsonStringify(Je.name)} was not added: this add never replaces what is cached at ${pt}, and caching it there failed. If a marketplace of that name is added, remove it first with /plugin marketplace remove ${Je.name}; if none is, delete that path and try again.
+              `Marketplace ${jsonStringify(marketplace.name)} was not added: this add never replaces what is cached at ${finalPath}, and caching it there failed. If a marketplace of that name is added, remove it first with /plugin marketplace remove ${marketplace.name}; if none is, delete that path and try again.
 
 Technical details: ${errorMsg}`,
               "marketplace add: the no-replace publish failed",
               {
                 kind: "stored",
-                name: Je.name,
-                folder: pt,
+                name: marketplace.name,
+                folder: finalPath,
               },
             );
-          throw Error(`Failed to finalize marketplace cache. Please manually delete the directory at ${pt} if it exists and try again.
+          throw Error(`Failed to finalize marketplace cache. Please manually delete the directory at ${finalPath} if it exists and try again.
 
 Technical details: ${errorMsg}`);
         }
     }
-    warnLfsPointers(temporaryCachePath, Ie, onProgress);
+    warnLfsPointers(temporaryCachePath, fetchResult, onProgress);
     return {
-      marketplace: Je,
+      marketplace,
       cachePath: temporaryCachePath,
-      keptStaleClone: Ie?.kind === "kept-stale",
+      keptStaleClone: fetchResult?.kind === "kept-stale",
     };
   } catch (error) {
-    if (we && temporaryCachePath && !isLocalMarketplaceSource(source))
+    if (ownsTemp && temporaryCachePath && !isLocalMarketplaceSource(source))
       try {
         await removeDirectoryTreeNoFollow_2(temporaryCachePath);
       } catch (cleanupError) {
@@ -2001,35 +2083,37 @@ Technical details: ${errorMsg}`);
   }
 }
 //@ chunk-e6aww6q8.js:4265413-4265526 layout
-function buildKnownMarketplaceEntry(e, n) {
+function buildKnownMarketplaceEntry(source, name) {
   return {
-    source: e,
-    installLocation: isLocalMarketplaceSource(e) ? e.path : join(getResolvedMarketplacesCacheDir(), n),
+    source,
+    installLocation: isLocalMarketplaceSource(source)
+      ? source.path
+      : join(getResolvedMarketplacesCacheDir(), name),
     lastUpdated: new Date().toISOString(),
   };
 }
 //@ chunk-e6aww6q8.js:4265526-4266146 layout
-function assertMarketplaceNameAddable(e) {
-  if (hasClaudeAiReservedPrefix(e))
+function assertMarketplaceNameAddable(name) {
+  if (hasClaudeAiReservedPrefix(name))
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `Cannot add marketplace ${jsonStringify(e)}: names starting with "${CLAUDEAI_MARKETPLACE_PREFIX}" are reserved for marketplaces hosted on claude.ai (claude plugin marketplace add --claudeai <name>).`,
+      `Cannot add marketplace ${jsonStringify(name)}: names starting with "${CLAUDEAI_MARKETPLACE_PREFIX}" are reserved for marketplaces hosted on claude.ai (claude plugin marketplace add --claudeai <name>).`,
       "marketplace add refused: name uses the reserved claude.ai prefix",
     );
-  if (isOfficialMarketplaceSpelling(e)) {
+  if (isOfficialMarketplaceSpelling(name)) {
     if (isPluginDirectoryModeOn())
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        `Cannot add marketplace ${jsonStringify(e)}: the name is reserved for the built-in ${OFFICIAL_MARKETPLACE_DISPLAY}.`,
+        `Cannot add marketplace ${jsonStringify(name)}: the name is reserved for the built-in ${OFFICIAL_MARKETPLACE_DISPLAY}.`,
         "marketplace add refused: name is the built-in plugin directory",
       );
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      reservedNameMessage(e),
+      reservedNameMessage(name),
       "marketplace add refused: reserved marketplace name",
     );
   }
-  let n = lookalikeReservedMarketplaceName(e);
-  if (n !== undefined)
+  let reservedName = lookalikeReservedMarketplaceName(name);
+  if (reservedName !== undefined)
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      reservedMarketplaceSpellingMessage(e, n),
+      reservedMarketplaceSpellingMessage(name, reservedName),
       "marketplace add refused: reserved marketplace name",
     );
 }
@@ -2037,88 +2121,89 @@ function assertMarketplaceNameAddable(e) {
 /**
  * 在已知市场表中找来源与给定来源相同的市场名。
  */
-function findMarketplaceBySource(e, n) {
-  for (let [key, value] of Object.entries(e)) if (isSameMarketplaceSource(value.source, n)) return key;
+function findMarketplaceBySource(marketplaces, source) {
+  for (let [key, value] of Object.entries(marketplaces))
+    if (isSameMarketplaceSource(value.source, source)) return key;
   return;
 }
 //@ chunk-e6aww6q8.js:4266232-4266374 layout
 /**
  * 同上，找不到时再按“地址键”（忽略 sparsePaths/headers/凭据）宽松比较。
  */
-function findMarketplaceBySourceLoose(knownMarketplacesWithDeclared, n) {
-  let marketplaceBySource = findMarketplaceBySource(knownMarketplacesWithDeclared, n);
+function findMarketplaceBySourceLoose(marketplaces, source) {
+  let marketplaceBySource = findMarketplaceBySource(marketplaces, source);
   if (marketplaceBySource !== undefined) return marketplaceBySource;
-  let s = sourceAddressKey(n);
-  for (let [key, value] of Object.entries(knownMarketplacesWithDeclared))
-    if (isSameMarketplaceSource(sourceAddressKey(value.source), s)) return key;
+  let addressKey = sourceAddressKey(source);
+  for (let [key, value] of Object.entries(marketplaces))
+    if (isSameMarketplaceSource(sourceAddressKey(value.source), addressKey)) return key;
   return;
 }
 //@ chunk-e6aww6q8.js:4266374-4266417 layout
-function isSameMarketplaceSource(source, n) {
-  return En(canonicalizeGithubSource(source), canonicalizeGithubSource(n));
+function isSameMarketplaceSource(source, other) {
+  return import_sortedIndex_2(canonicalizeGithubSource(source), canonicalizeGithubSource(other));
 }
 //@ chunk-e6aww6q8.js:4266417-4266609 layout
-function canonicalizeGithubSource(e) {
-  if (e.source === "github")
+function canonicalizeGithubSource(source) {
+  if (source.source === "github")
     return {
-      ...e,
-      repo: normalizeGithubRepoSlug(e.repo) ?? e.repo,
+      ...source,
+      repo: normalizeGithubRepoSlug(source.repo) ?? source.repo,
     };
-  if (e.source === "git") {
-    let n = normalizeGithubRepoSlug(e.url);
-    if (n !== null) {
-      let { url, ...s } = e;
+  if (source.source === "git") {
+    let repoSlug = normalizeGithubRepoSlug(source.url);
+    if (repoSlug !== null) {
+      let { url, ...rest } = source;
       return {
-        ...s,
+        ...rest,
         source: "github",
-        repo: n,
+        repo: repoSlug,
       };
     }
   }
-  return e;
+  return source;
 }
 //@ chunk-e6aww6q8.js:4266609-4266748 layout
-function getMarketplaceCandidateFolders(e, n, r, { cloneFolder }) {
-  let knownMarketplaceEntry = buildKnownMarketplaceEntry(e, n);
-  if (cloneFolder && e.source === "github")
-    knownMarketplaceEntry.installLocation = join(r, getCachePathForSource(e));
+function getMarketplaceCandidateFolders(source, name, cacheDir, { cloneFolder }) {
+  let knownMarketplaceEntry = buildKnownMarketplaceEntry(source, name);
+  if (cloneFolder && source.source === "github")
+    knownMarketplaceEntry.installLocation = join(cacheDir, getCachePathForSource(source));
   return marketplaceDirCandidates(
     {
-      [n]: knownMarketplaceEntry,
+      [name]: knownMarketplaceEntry,
     },
     undefined,
-    r,
-  )(n);
+    cacheDir,
+  )(name);
 }
 //@ chunk-e6aww6q8.js:4266748-4266930 layout
-function findDeclaredMarketplacesUsingFolders(declaredMarketplaces, n, resolvedMarketplacesCacheDir) {
+function findDeclaredMarketplacesUsingFolders(declaredMarketplaces, candidates, cacheDir) {
   return Object.keys(declaredMarketplaces).filter((key) => {
-    let h = ownPropertyOrUndefined(declaredMarketplaces, key);
+    let entry = ownPropertyOrUndefined(declaredMarketplaces, key);
     return (
-      h !== undefined &&
-      !h.sourceIsFallback &&
-      getMarketplaceCandidateFolders(h.source, key, resolvedMarketplacesCacheDir, {
+      entry !== undefined &&
+      !entry.sourceIsFallback &&
+      getMarketplaceCandidateFolders(entry.source, key, cacheDir, {
         cloneFolder: true,
-      }).some((y) => findByMarketplaceName(y, [key], () => n) !== undefined)
+      }).some((folder) => findByMarketplaceName(folder, [key], () => candidates) !== undefined)
     );
   });
 }
 //@ chunk-e6aww6q8.js:4266930-4267119 layout
-function checkDeclaredMarketplaceCollision(e, resolvedSource) {
+function checkDeclaredMarketplaceCollision(name, resolvedSource) {
   let declaredMarketplaces = getDeclaredMarketplaces();
-  let s = ownPropertyOrUndefined(declaredMarketplaces, e);
-  if (s !== undefined) return checkDeclaredNameCollision(e, resolvedSource, e, s);
-  let resolvedMarketplacesCacheDir = getResolvedMarketplacesCacheDir();
-  for (let y of findDeclaredMarketplacesUsingFolders(
+  let entry = ownPropertyOrUndefined(declaredMarketplaces, name);
+  if (entry !== undefined) return checkDeclaredNameCollision(name, resolvedSource, name, entry);
+  let cacheDir = getResolvedMarketplacesCacheDir();
+  for (let otherName of findDeclaredMarketplacesUsingFolders(
     declaredMarketplaces,
-    getMarketplaceCandidateFolders(resolvedSource, e, resolvedMarketplacesCacheDir, {
+    getMarketplaceCandidateFolders(resolvedSource, name, cacheDir, {
       cloneFolder: false,
     }),
-    resolvedMarketplacesCacheDir,
+    cacheDir,
   )) {
-    let S = ownPropertyOrUndefined(declaredMarketplaces, y);
-    let w = S && checkDeclaredNameCollision(e, resolvedSource, y, S);
-    if (w) return w;
+    let otherEntry = ownPropertyOrUndefined(declaredMarketplaces, otherName);
+    let collision = otherEntry && checkDeclaredNameCollision(name, resolvedSource, otherName, otherEntry);
+    if (collision) return collision;
   }
   return;
 }
@@ -2128,72 +2213,74 @@ function checkCloneFolderCollision(resolvedSource) {
   let declaredMarketplaces = getDeclaredMarketplaces();
   let resolvedMarketplacesCacheDir = getResolvedMarketplacesCacheDir();
   let cachePathForSource = getCachePathForSource(resolvedSource);
-  for (let h of findDeclaredMarketplacesUsingFolders(
+  for (let otherName of findDeclaredMarketplacesUsingFolders(
     declaredMarketplaces,
     [cachePathForSource, `${cachePathForSource}.bak`],
     resolvedMarketplacesCacheDir,
   )) {
-    let y = ownPropertyOrUndefined(declaredMarketplaces, h);
+    let otherEntry = ownPropertyOrUndefined(declaredMarketplaces, otherName);
     if (
-      y !== undefined &&
+      otherEntry !== undefined &&
       !isSameGithubMarketplace(
-        h,
+        otherName,
         {
-          [h]: buildKnownMarketplaceEntry(y.source, h),
+          [otherName]: buildKnownMarketplaceEntry(otherEntry.source, otherName),
         },
         resolvedSource,
         undefined,
       )
     )
       return new MarketplaceError(
-        `Cannot add this marketplace: it would download into the folder ${jsonStringify(cachePathForSource)}, which the marketplace ${jsonStringify(h)} listed under extraKnownMarketplaces in your settings (from ${formatSourceForDisplay(y.source)}) uses, so it can't be added while that entry is listed.`,
+        `Cannot add this marketplace: it would download into the folder ${jsonStringify(cachePathForSource)}, which the marketplace ${jsonStringify(otherName)} listed under extraKnownMarketplaces in your settings (from ${formatSourceForDisplay(otherEntry.source)}) uses, so it can't be added while that entry is listed.`,
         "marketplace add refused: its clone folder is one a declared marketplace needs",
         {
           kind: "declared",
-          name: h,
+          name: otherName,
         },
       );
   }
   return;
 }
 //@ chunk-e6aww6q8.js:4267662-4268555 layout
-function checkDeclaredNameCollision(e, n, r, s) {
-  if (s.sourceIsFallback) return;
-  let h = isLocalMarketplaceSource(s.source)
-    ? isLocalMarketplaceSource(n)
-    : !isLocalMarketplaceSource(n) && isSourceConsistentWith(n, s.source);
-  if (r.normalize("NFC") !== e.normalize("NFC"))
-    return h
+function checkDeclaredNameCollision(candidateName, candidateSource, declaredName, declaredEntry) {
+  if (declaredEntry.sourceIsFallback) return;
+  let sameKind = isLocalMarketplaceSource(declaredEntry.source)
+    ? isLocalMarketplaceSource(candidateSource)
+    : !isLocalMarketplaceSource(candidateSource) &&
+      isSourceConsistentWith(candidateSource, declaredEntry.source);
+  if (declaredName.normalize("NFC") !== candidateName.normalize("NFC"))
+    return sameKind
       ? undefined
       : new MarketplaceError(
-          `Cannot add marketplace ${jsonStringify(e)} from this source: your settings list ${jsonStringify(r)} under extraKnownMarketplaces with another source (${formatSourceForDisplay(s.source)}), and the two names would clash in the marketplaces folder, so it can't be added while that entry is listed.`,
+          `Cannot add marketplace ${jsonStringify(candidateName)} from this source: your settings list ${jsonStringify(declaredName)} under extraKnownMarketplaces with another source (${formatSourceForDisplay(declaredEntry.source)}), and the two names would clash in the marketplaces folder, so it can't be added while that entry is listed.`,
           "marketplace add refused: settings declare a colliding name with a different source",
           {
             kind: "declared",
-            name: r,
+            name: declaredName,
           },
         );
-  if (h || (r === e && settingsSourceOfMarketplace(r) !== undefined)) return;
+  if (sameKind || (declaredName === candidateName && settingsSourceOfMarketplace(declaredName) !== undefined))
+    return;
   return new MarketplaceError(
-    `Cannot add marketplace ${jsonStringify(e)} from this source: your settings list ${jsonStringify(r)} under extraKnownMarketplaces with another source (${formatSourceForDisplay(s.source)}). Add it from that source, or change that entry if it is wrong.`,
+    `Cannot add marketplace ${jsonStringify(candidateName)} from this source: your settings list ${jsonStringify(declaredName)} under extraKnownMarketplaces with another source (${formatSourceForDisplay(declaredEntry.source)}). Add it from that source, or change that entry if it is wrong.`,
     "marketplace add refused: settings declare the name with a different source",
     {
       kind: "declared",
-      name: r,
+      name: declaredName,
     },
   );
 }
 //@ chunk-e6aww6q8.js:4268555-4268949 layout
-function checkExistingNameDifferentSource(e, n, resolvedSource) {
-  if (n === undefined || isSameMarketplaceSource(n.source, resolvedSource)) return;
+function checkExistingNameDifferentSource(name, existing, resolvedSource) {
+  if (existing === undefined || isSameMarketplaceSource(existing.source, resolvedSource)) return;
   return new MarketplaceError(
-    `Marketplace ${jsonStringify(e)} is already added from a different source (${formatSourceForDisplay(n.source)}). To use this source instead, remove that marketplace first with /plugin marketplace remove ${e}.`,
+    `Marketplace ${jsonStringify(name)} is already added from a different source (${formatSourceForDisplay(existing.source)}). To use this source instead, remove that marketplace first with /plugin marketplace remove ${name}.`,
     "marketplace add refused: the name is registered from a different source",
     {
-      kind: isSameMarketplaceSource(sourceAddressKey(n.source), sourceAddressKey(resolvedSource))
+      kind: isSameMarketplaceSource(sourceAddressKey(existing.source), sourceAddressKey(resolvedSource))
         ? "same_address"
         : "name_taken",
-      name: e,
+      name,
     },
   );
 }
@@ -2201,24 +2288,24 @@ function checkExistingNameDifferentSource(e, n, resolvedSource) {
 function sourceAddressKey(source) {
   switch (source.source) {
     case "github": {
-      let { sparsePaths, skipLfs, ...s } = source;
-      return s;
+      let { sparsePaths, skipLfs, ...rest } = source;
+      return rest;
     }
     case "git": {
-      let { sparsePaths, skipLfs, ...s } = source;
+      let { sparsePaths, skipLfs, ...rest } = source;
       return isUnsafeRemoteUrl(source.url)
-        ? s
+        ? rest
         : {
-            ...s,
+            ...rest,
             url: stripUrlUserinfo(source.url),
           };
     }
     case "url": {
-      let { headers, headersHelper, ...s } = source;
+      let { headers, headersHelper, ...rest } = source;
       return isUnsafeRemoteUrl(source.url)
-        ? s
+        ? rest
         : {
-            ...s,
+            ...rest,
             url: stripUrlUserinfo(source.url),
           };
     }
@@ -2234,7 +2321,7 @@ function stripUrlUserinfo(url) {
 /**
  * 添加市场（/plugin marketplace add、claude plugin marketplace add）：校验名字与来源、检查与已声明/已存在市场冲突、loadAndCacheMarketplace 下载、写入 known_marketplaces.json。
  */
-async function addMarketplaceSource(source, onProgress, storageV5, s, h) {
+async function addMarketplaceSource(source, onProgress, storageV5, expectedName, options) {
   let resolvedSource = source;
   if (isLocalMarketplaceSource(source) && !isAbsolute(source.path))
     resolvedSource = {
@@ -2242,8 +2329,8 @@ async function addMarketplaceSource(source, onProgress, storageV5, s, h) {
       path: resolve_2(source.path),
     };
   if (resolvedSource.source === "git") {
-    let we = pluginGitUrlError(resolvedSource.url);
-    if (we !== null) throw withMarketplaceFailureCode(we, "invalid_source");
+    let urlError = pluginGitUrlError(resolvedSource.url);
+    if (urlError !== null) throw withMarketplaceFailureCode(urlError, "invalid_source");
   }
   if (!isSourceAllowedByPolicy(resolvedSource)) {
     if (isSourceInBlocklist(resolvedSource))
@@ -2260,7 +2347,7 @@ async function addMarketplaceSource(source, onProgress, storageV5, s, h) {
     if (sourceHost) errorMessage += ` (${sourceHost})`;
     errorMessage += " is blocked by enterprise policy.";
     if (allowlist.length > 0)
-      errorMessage += ` Allowed sources: ${allowlist.map((Me) => formatSourceForDisplay(Me)).join(", ")}`;
+      errorMessage += ` Allowed sources: ${allowlist.map((entry) => formatSourceForDisplay(entry)).join(", ")}`;
     else errorMessage += " No external marketplaces are allowed.";
     if (resolvedSource.source === "github" && hostPatterns.length > 0)
       errorMessage +=
@@ -2273,17 +2360,18 @@ Tip: The shorthand "${resolvedSource.repo}" assumes github.com. ` +
     throw withMarketplaceFailureCode(Error(errorMessage), "source_blocked_by_policy");
   }
   if (
-    s !== undefined &&
-    (isOfficialMarketplaceSpelling(s) || lookalikeReservedMarketplaceName(s) !== undefined)
+    expectedName !== undefined &&
+    (isOfficialMarketplaceSpelling(expectedName) ||
+      lookalikeReservedMarketplaceName(expectedName) !== undefined)
   )
-    assertMarketplaceNameAddable(s);
-  let knownMarketplacesWithDeclared = await loadKnownMarketplacesWithDeclared(storageV5);
-  for (let [existingName, existingEntry] of Object.entries(knownMarketplacesWithDeclared))
-    if (En(existingEntry.source, resolvedSource)) {
-      let Ae = h?.refuseNameCollision
+    assertMarketplaceNameAddable(expectedName);
+  let known = await loadKnownMarketplacesWithDeclared(storageV5);
+  for (let [existingName, existingEntry] of Object.entries(known))
+    if (import_sortedIndex_2(existingEntry.source, resolvedSource)) {
+      let declaredCollision = options?.refuseNameCollision
         ? checkDeclaredMarketplaceCollision(existingName, resolvedSource)
         : undefined;
-      if (Ae) throw Ae;
+      if (declaredCollision) throw declaredCollision;
       logForDebugging(`Source already materialized as '${existingName}', skipping clone`);
       return {
         name: existingName,
@@ -2291,102 +2379,102 @@ Tip: The shorthand "${resolvedSource.repo}" assumes github.com. ` +
         resolvedSource,
       };
     }
-  if (h?.refuseNameCollision) {
-    let we = checkCloneFolderCollision(resolvedSource);
-    if (we) throw we;
+  if (options?.refuseNameCollision) {
+    let folderCollision = checkCloneFolderCollision(resolvedSource);
+    if (folderCollision) throw folderCollision;
   }
-  let w = describeUnusableMarketplaceSource(
+  let unusable = describeUnusableMarketplaceSource(
     buildKnownMarketplaceEntry(resolvedSource, "pending-add"),
     findMarketplaceSource(resolvedSource),
   );
-  if (w !== undefined)
+  if (unusable !== undefined)
     throw withMarketplaceFailureCode(
       new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        `Cannot add this marketplace: ${w.cause}; ${MARKETPLACE_SOURCE_FIX_HINTS[w.kind]}.`,
+        `Cannot add this marketplace: ${unusable.cause}; ${MARKETPLACE_SOURCE_FIX_HINTS[unusable.kind]}.`,
         "marketplace add refused by the registry admission rule",
       ),
-      MARKETPLACE_SOURCE_FAILURE_CODES[w.kind],
+      MARKETPLACE_SOURCE_FAILURE_CODES[unusable.kind],
     );
   let { marketplace, cachePath, keptStaleClone } = await loadAndCacheMarketplace(
     resolvedSource,
     undefined,
     onProgress,
     storageV5,
-    s,
-    async (we) => {
-      let Ee = describeUnusableMarketplaceSource(
-        buildKnownMarketplaceEntry(resolvedSource, we),
-        settingsSourceOfMarketplace(we),
+    expectedName,
+    async (name) => {
+      let unusable = describeUnusableMarketplaceSource(
+        buildKnownMarketplaceEntry(resolvedSource, name),
+        settingsSourceOfMarketplace(name),
       );
-      if (Ee !== undefined) {
-        let Ae = `Cannot add marketplace ${jsonStringify(we)}: ${Ee.cause}; ${MARKETPLACE_SOURCE_FIX_HINTS[Ee.kind]}.`;
-        throw Ee.kind === "declaration"
-          ? new MarketplaceError(Ae, "marketplace add refused by the registry admission rule (named)", {
+      if (unusable !== undefined) {
+        let message = `Cannot add marketplace ${jsonStringify(name)}: ${unusable.cause}; ${MARKETPLACE_SOURCE_FIX_HINTS[unusable.kind]}.`;
+        throw unusable.kind === "declaration"
+          ? new MarketplaceError(message, "marketplace add refused by the registry admission rule (named)", {
               kind: "declared",
-              name: we,
+              name,
             })
           : withMarketplaceFailureCode(
               new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-                Ae,
+                message,
                 "marketplace add refused by the registry admission rule (named)",
               ),
-              MARKETPLACE_SOURCE_FAILURE_CODES[Ee.kind],
+              MARKETPLACE_SOURCE_FAILURE_CODES[unusable.kind],
             );
       }
-      assertMarketplaceNameAddable(we);
+      assertMarketplaceNameAddable(name);
       if (
-        s === undefined &&
-        !isValidPluginIdSegment(we) &&
-        !Object.hasOwn(knownMarketplacesWithDeclared, we) &&
-        !admissionKindsFor(knownMarketplacesWithDeclared).has(we)
+        expectedName === undefined &&
+        !isValidPluginIdSegment(name) &&
+        !Object.hasOwn(known, name) &&
+        !admissionKindsFor(known).has(name)
       )
         throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-          `Cannot add marketplace "${quotedPrintable(we, 64)}": Claude Code cannot install plugins from a marketplace with this name. Each part of a plugin id (plugin@marketplace) may use only the letters a-z and A-Z, digits, ".", "_" and "-", and must start with a letter or digit. The name is set by "name" in the marketplace's marketplace.json; ask its maintainer to change it.`,
+          `Cannot add marketplace "${quotedPrintable(name, 64)}": Claude Code cannot install plugins from a marketplace with this name. Each part of a plugin id (plugin@marketplace) may use only the letters a-z and A-Z, digits, ".", "_" and "-", and must start with a letter or digit. The name is set by "name" in the marketplace's marketplace.json; ask its maintainer to change it.`,
           "marketplace add refused: the name cannot form a plugin id",
         );
       if (
-        Object.hasOwn(Object.prototype, we) &&
-        !Object.hasOwn(knownMarketplacesWithDeclared, we) &&
-        !admissionKindsFor(knownMarketplacesWithDeclared).has(we)
+        Object.hasOwn(Object.prototype, name) &&
+        !Object.hasOwn(known, name) &&
+        !admissionKindsFor(known).has(name)
       )
         throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-          `Cannot add marketplace "${quotedPrintable(we, 64)}": Claude Code reserves this name and cannot register a marketplace under it. The name is set by "name" in the marketplace's marketplace.json; ask its maintainer to change it.`,
+          `Cannot add marketplace "${quotedPrintable(name, 64)}": Claude Code reserves this name and cannot register a marketplace under it. The name is set by "name" in the marketplace's marketplace.json; ask its maintainer to change it.`,
           "marketplace add refused: the name is an inherited object member",
         );
-      if (h?.refuseNameCollision) {
+      if (options?.refuseNameCollision) {
         let knownMarketplacesWithDeclared = await loadKnownMarketplacesWithDeclared(storageV5);
-        let Ie = checkExistingNameDifferentSource(
-          we,
-          (Object.hasOwn(knownMarketplacesWithDeclared, we)
-            ? knownMarketplacesWithDeclared[we]
-            : undefined) ?? hiddenRegistryEntryFor(we, storageV5),
+        let collision = checkExistingNameDifferentSource(
+          name,
+          (Object.hasOwn(knownMarketplacesWithDeclared, name)
+            ? knownMarketplacesWithDeclared[name]
+            : undefined) ?? hiddenRegistryEntryFor(name, storageV5),
           resolvedSource,
         );
-        if (Ie) throw Ie;
-        let Me = checkDeclaredMarketplaceCollision(we, resolvedSource);
-        if (Me) throw Me;
+        if (collision) throw collision;
+        let declaredCollision2 = checkDeclaredMarketplaceCollision(name, resolvedSource);
+        if (declaredCollision2) throw declaredCollision2;
       }
     },
-    knownMarketplacesWithDeclared,
-    h?.refuseNameCollision,
+    known,
+    options?.refuseNameCollision,
   );
   let sourceValidationError = validateOfficialNameSource(marketplace.name, resolvedSource);
   if (sourceValidationError) throw Error(sourceValidationError);
-  let Se;
-  let ke;
-  await updateKnownMarketplaces((we) => {
+  let previousEntry;
+  let collision;
+  await updateKnownMarketplaces((config) => {
     assertMarketplaceNameAddable(marketplace.name);
-    Se = ownPropertyOrUndefined(we, marketplace.name);
-    ke = h?.refuseNameCollision
+    previousEntry = ownPropertyOrUndefined(config, marketplace.name);
+    collision = options?.refuseNameCollision
       ? (checkExistingNameDifferentSource(
           marketplace.name,
-          Se ?? hiddenRegistryEntryFor(marketplace.name, storageV5),
+          previousEntry ?? hiddenRegistryEntryFor(marketplace.name, storageV5),
           resolvedSource,
         ) ?? checkDeclaredMarketplaceCollision(marketplace.name, resolvedSource))
       : undefined;
-    if (ke) return null;
-    if (Se) {
-      let seedDir = seedDirFor(Se.installLocation);
+    if (collision) return null;
+    if (previousEntry) {
+      let seedDir = seedDirFor(previousEntry.installLocation);
       if (seedDir)
         throw withMarketplaceFailureCode(
           Error(
@@ -2395,61 +2483,66 @@ Tip: The shorthand "${resolvedSource.repo}" assumes github.com. ` +
           "managed",
         );
       logForDebugging(
-        `Marketplace '${marketplace.name}' exists with different source \u2014 overwriting (was ${formatSourceForDisplay(Se.source)}, now ${formatSourceForDisplay(resolvedSource)})`,
+        `Marketplace '${marketplace.name}' exists with different source \u2014 overwriting (was ${formatSourceForDisplay(previousEntry.source)}, now ${formatSourceForDisplay(resolvedSource)})`,
       );
     }
-    we[marketplace.name] = {
+    config[marketplace.name] = {
       source: resolvedSource,
       installLocation: cachePath,
-      lastUpdated: keptStaleClone && Se ? Se.lastUpdated : new Date().toISOString(),
+      lastUpdated: keptStaleClone && previousEntry ? previousEntry.lastUpdated : new Date().toISOString(),
     };
-    return we;
+    return config;
   }, storageV5);
-  if (ke) throw ke;
-  if (Se) {
-    let we =
+  if (collision) throw collision;
+  if (previousEntry) {
+    let previousKey =
       isStorageV5Enabled() && storageV5 !== undefined
-        ? getSyntheticMarketplaceStorageKey(marketplace.name, Se.source, Se.installLocation)
+        ? getSyntheticMarketplaceStorageKey(
+            marketplace.name,
+            previousEntry.source,
+            previousEntry.installLocation,
+          )
         : null;
-    let Ee =
+    let nextKey =
       isStorageV5Enabled() && storageV5 !== undefined
         ? getSyntheticMarketplaceStorageKey(marketplace.name, resolvedSource, cachePath)
         : null;
-    let Ae = Ee === null && resolve_2(Se.installLocation) === resolve_2(cachePath);
-    if (isStorageV5Enabled() && storageV5 !== undefined && we !== null && !En(we, Ee) && !Ae) {
-      let Ie = await storageV5.delete(we);
-      if (!Ie.ok)
+    let sameLocation = nextKey === null && resolve_2(previousEntry.installLocation) === resolve_2(cachePath);
+    if (
+      isStorageV5Enabled() &&
+      storageV5 !== undefined &&
+      previousKey !== null &&
+      !import_sortedIndex_2(previousKey, nextKey) &&
+      !sameLocation
+    ) {
+      let deleteResult = await storageV5.delete(previousKey);
+      if (!deleteResult.ok)
         logForDebugging(
-          `Failed to delete the previous entry's cached marketplace ${marketplace.name} through the storage backend: ${formatStorageError(Ie.error)}`,
+          `Failed to delete the previous entry's cached marketplace ${marketplace.name} through the storage backend: ${formatStorageError(deleteResult.error)}`,
           {
             level: "warn",
           },
         );
     }
-    if (!isLocalMarketplaceSource(Se.source)) {
-      let resolvedMarketplacesCacheDir = getResolvedMarketplacesCacheDir();
-      let cacheDir = classifyMarketplacePath(Se.installLocation);
+    if (!isLocalMarketplaceSource(previousEntry.source)) {
+      let rootPath = getResolvedMarketplacesCacheDir();
+      let cacheDir = classifyMarketplacePath(previousEntry.installLocation);
       let absolute = cacheDir.absolute;
-      let ze = resolve_2(getOriginalCwd(), cachePath);
-      let lt = cacheDir.suspect
+      let nextAbsPath = resolve_2(getOriginalCwd(), cachePath);
+      let containment = cacheDir.suspect
         ? "outside"
-        : comparePathContainment(resolvedMarketplacesCacheDir, absolute, ze);
-      if (lt === "same");
+        : comparePathContainment(rootPath, absolute, nextAbsPath);
+      if (containment === "same");
       else if (
-        lt === "inside" &&
-        (await checkMarketplaceDirCollision(
-          resolvedMarketplacesCacheDir,
-          absolute,
-          marketplace.name,
-          storageV5,
-          knownMarketplacesWithDeclared,
-        )) === undefined
+        containment === "inside" &&
+        (await checkMarketplaceDirCollision(rootPath, absolute, marketplace.name, storageV5, known)) ===
+          undefined
       )
         await removeDirectoryTreeNoFollow_2(absolute);
       else
         logForDebugging(
-          `Skipping cleanup of old installLocation (${Se.installLocation}) \u2014 ` +
-            `outside ${resolvedMarketplacesCacheDir}. The path is corrupted; leaving it alone and overwriting the config entry.`,
+          `Skipping cleanup of old installLocation (${previousEntry.installLocation}) \u2014 ` +
+            `outside ${rootPath}. The path is corrupted; leaving it alone and overwriting the config entry.`,
           {
             level: "warn",
           },
@@ -2458,12 +2551,12 @@ Tip: The shorthand "${resolvedSource.repo}" assumes github.com. ` +
   }
   getPluginRegistry().marketplaces.delete(marketplace.name);
   logForDebugging(`Added marketplace source: ${marketplace.name}`);
-  return Se !== undefined && !isSameMarketplaceSource(Se.source, resolvedSource)
+  return previousEntry !== undefined && !isSameMarketplaceSource(previousEntry.source, resolvedSource)
     ? {
         name: marketplace.name,
         alreadyMaterialized: false,
         resolvedSource,
-        replacedSource: Se.source,
+        replacedSource: previousEntry.source,
       }
     : {
         name: marketplace.name,
@@ -2474,99 +2567,109 @@ Tip: The shorthand "${resolvedSource.repo}" assumes github.com. ` +
 //@ chunk-e6aww6q8.js:4273867-4273913 layout
 var RESERVED_NAME_REGISTRY_WRITE_FAILED = "reserved_name_registry_write_failed";
 //@ chunk-e6aww6q8.js:4273913-4274014 layout
-function reservedNameRemovalError(e, cause) {
-  let r = new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-    e,
+function reservedNameRemovalError(message, cause) {
+  let error = new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
+    message,
     "removing a reserved-name entry failed part-way",
   );
-  r.cause = cause;
-  return r;
+  error.cause = cause;
+  return error;
 }
 //@ chunk-e6aww6q8.js:4274014-4275802 layout
 /**
  * 删除市场的外层入口（CLI/界面调用）：名字属于需要成组处理的保留名时，先逐个删除相关条目并汇总结果，再调用 removeMarketplaceSource。
  */
-async function removeMarketplaceWithReservedSiblings(marketplaceName, n, storageV5, credentials, h) {
-  if (n === undefined && isOfficialMarketplaceName_2(marketplaceName)) {
+async function removeMarketplaceWithReservedSiblings(
+  marketplaceName,
+  scope,
+  storageV5,
+  credentials,
+  options,
+) {
+  if (scope === undefined && isOfficialMarketplaceName_2(marketplaceName)) {
     let filtered = listReservedNameRefusals(await loadKnownMarketplacesWithDeclared(storageV5)).filter(
-      ({ name: S }) => isOfficialMarketplaceName_2(S),
+      ({ name }) => isOfficialMarketplaceName_2(name),
     );
     if (filtered.length > 0) {
-      let S = [];
-      let w = [];
-      let L = [];
-      let G = "commit_mismatch";
+      let removedNames = [];
+      let removedPluginIds = [];
+      let disabledPluginIds = [];
+      let disabledReason = "commit_mismatch";
       for (let { name: marketplaceName } of filtered) {
-        let Z = {
+        let outcome = {
           pluginIds: [],
           reason: "commit_mismatch",
           entryDeleted: false,
         };
-        let Se = await removeMarketplaceSource(
+        let result = await removeMarketplaceSource(
           marketplaceName,
           undefined,
           storageV5,
           credentials,
-          S.length > 0,
+          removedNames.length > 0,
           true,
-          Z,
+          outcome,
         ).catch(async (error) => {
-          let we = null;
+          let remaining = null;
           try {
-            we = listReservedNameRefusals(await loadKnownMarketplacesWithDeclared(storageV5))
-              .map((We) => We.name)
+            remaining = listReservedNameRefusals(await loadKnownMarketplacesWithDeclared(storageV5))
+              .map((entry) => entry.name)
               .filter(isOfficialMarketplaceName_2);
           } catch {
-            we = null;
+            remaining = null;
           }
-          if (!(Z.entryDeleted || (we !== null && !we.includes(marketplaceName)))) {
-            let We = blockedPluginsNotice(L, G, {
+          if (!(outcome.entryDeleted || (remaining !== null && !remaining.includes(marketplaceName)))) {
+            let notice = blockedPluginsNotice(disabledPluginIds, disabledReason, {
               insideFailure: true,
             });
-            if (We === null) throw error;
+            if (notice === null) throw error;
             throw reservedNameRemovalError(
-              `${We} Another known_marketplaces.json entry, named "${quotedPrintable(marketplaceName)}", could not be removed (${quotedPrintable(errorMessage(error))}). Run this remove again.`,
+              `${notice} Another known_marketplaces.json entry, named "${quotedPrintable(marketplaceName)}", could not be removed (${quotedPrintable(errorMessage(error))}). Run this remove again.`,
               error,
             );
           }
-          let Ae = blockedPluginsNotice([...L, ...Z.pluginIds], L.length > 0 ? G : Z.reason, {
-            insideFailure: true,
-          });
-          let Ie =
+          let notice = blockedPluginsNotice(
+            [...disabledPluginIds, ...outcome.pluginIds],
+            disabledPluginIds.length > 0 ? disabledReason : outcome.reason,
+            {
+              insideFailure: true,
+            },
+          );
+          let cause =
             error instanceof TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS &&
             error.errorClass === RESERVED_NAME_REGISTRY_WRITE_FAILED &&
             error.cause !== undefined
               ? error.cause
               : error;
-          let Me =
-            we === null
+          let hint =
+            remaining === null
               ? `Before running this remove again, check known_marketplaces.json: if no entry of this name is left, this remove can turn the ${OFFICIAL_MARKETPLACE_DISPLAY} itself off.`
-              : we.length > 0
+              : remaining.length > 0
                 ? "Another entry of this name is left: run this remove again."
                 : `Do not run this remove again: no entry of this name is left, so it can turn the ${OFFICIAL_MARKETPLACE_DISPLAY} itself off.`;
           throw reservedNameRemovalError(
-            `${Me} The known_marketplaces.json entry named "${quotedPrintable(marketplaceName)}" is gone, but this remove did not finish. ${Ae === null ? "" : `${Ae} `}(${quotedPrintable(errorMessage(Ie), 2000)})`,
+            `${hint} The known_marketplaces.json entry named "${quotedPrintable(marketplaceName)}" is gone, but this remove did not finish. ${notice === null ? "" : `${notice} `}(${quotedPrintable(errorMessage(cause), 2000)})`,
             error,
           );
         });
-        if (Se.kind !== "ignored-plugin-directory-name-entry-removed" || Se.removedNames.length === 0)
+        if (result.kind !== "ignored-plugin-directory-name-entry-removed" || result.removedNames.length === 0)
           continue;
-        if (S.length === 0) {
-          L = Se.disabledPluginIds;
-          G = Se.disabledReason;
+        if (removedNames.length === 0) {
+          disabledPluginIds = result.disabledPluginIds;
+          disabledReason = result.disabledReason;
         }
-        w.push(...Se.removedPluginIds);
-        S.push(marketplaceName);
+        removedPluginIds.push(...result.removedPluginIds);
+        removedNames.push(marketplaceName);
       }
       return {
         kind: "ignored-plugin-directory-name-entry-removed",
-        removedNames: S,
-        removedPluginIds: w,
-        disabledPluginIds: L,
-        disabledReason: G,
+        removedNames,
+        removedPluginIds,
+        disabledPluginIds,
+        disabledReason,
       };
     }
-    if (h?.onlyIgnoredNameEntries)
+    if (options?.onlyIgnoredNameEntries)
       return {
         kind: "ignored-plugin-directory-name-entry-removed",
         removedNames: [],
@@ -2575,7 +2678,7 @@ async function removeMarketplaceWithReservedSiblings(marketplaceName, n, storage
         disabledReason: "commit_mismatch",
       };
   }
-  return removeMarketplaceSource(marketplaceName, n, storageV5, credentials, false);
+  return removeMarketplaceSource(marketplaceName, scope, storageV5, credentials, false);
 }
 //@ chunk-e6aww6q8.js:4275802-4276224 layout
 async function probeSettingsFileMayExist(filePath) {
@@ -2621,15 +2724,15 @@ var ADD_DIR_SOURCE_LABEL = "an added directory's";
 /**
  * 删除市场时把该市场的插件在各可写设置源（userSettings、localSettings、projectSettings）的 enabledPlugins 中关掉；--settings 与 --add-dir 来源无法写时记入 notTurnedOff。
  */
-async function disablePluginsInSettings(e, n, storageV5) {
-  let s = new Set();
-  let h = new Map();
+async function disablePluginsInSettings(pluginIds, allPluginIds, storageV5) {
+  let turnedOff = new Set();
+  let notTurnedOff = new Map();
   let legacyFileIsTheCause = false;
   let legacyPathRefused;
-  if (e.length === 0)
+  if (pluginIds.length === 0)
     return {
       turnedOff: [],
-      notTurnedOff: h,
+      notTurnedOff,
       legacyFileIsTheCause: false,
       unreadSources: [],
       unreadAddDirFiles: [],
@@ -2637,35 +2740,35 @@ async function disablePluginsInSettings(e, n, storageV5) {
       addDirFileBehindALink: false,
     };
   invalidateCommandNames();
-  let filtered = n.filter((Ae) => !e.includes(Ae));
+  let excluded = allPluginIds.filter((id) => !pluginIds.includes(id));
   let addDirEnabledPlugins = getAddDirEnabledPlugins();
-  let filtered_2 = e.filter((Ae) => findEnablingSettingSource(Ae, filtered) !== undefined);
-  for (let Ae of EDITABLE_SETTING_SOURCES) {
-    let Ie = new Set();
-    let Me = new Set();
-    let We = 0;
-    let ze = await updateSettingsForSourceWithTransform(
-      Ae,
-      (It) => {
-        We += 1;
-        let enabledPlugins = It?.enabledPlugins;
+  let filtered = pluginIds.filter((id) => findEnablingSettingSource(id, excluded) !== undefined);
+  for (let source of EDITABLE_SETTING_SOURCES) {
+    let turnedOffHere = new Set();
+    let turnedOffIds = new Set();
+    let passCount = 0;
+    let result = await updateSettingsForSourceWithTransform(
+      source,
+      (settings) => {
+        passCount += 1;
+        let enabledPlugins = settings?.enabledPlugins;
         let settingSource = [];
-        for (let Zt of e) {
-          let filtered_2 = enabledPluginKeysFor(enabledPlugins, Zt, filtered).filter((pn) =>
-            isDependencyAutoInstallState(enabledPlugins?.[pn]),
+        for (let id of pluginIds) {
+          let filtered = enabledPluginKeysFor(enabledPlugins, id, excluded).filter((key) =>
+            isDependencyAutoInstallState(enabledPlugins?.[key]),
           );
-          if (filtered_2.length > 0) Ie.add(Zt);
-          for (let pn of filtered_2) Me.add(pn);
+          if (filtered.length > 0) turnedOffHere.add(id);
+          for (let key of filtered) turnedOffIds.add(key);
           settingSource.push(
-            ...filtered_2,
-            ...(Ae !== "userSettings"
+            ...filtered,
+            ...(source !== "userSettings"
               ? []
               : [
-                  ...(enabledPlugins?.[Zt] !== false ? [Zt] : []),
-                  ...enabledPluginKeysFor(addDirEnabledPlugins, Zt, filtered).filter(
-                    (pn) =>
-                      isDependencyAutoInstallState(addDirEnabledPlugins[pn]) &&
-                      enabledPlugins?.[pn] !== false,
+                  ...(enabledPlugins?.[id] !== false ? [id] : []),
+                  ...enabledPluginKeysFor(addDirEnabledPlugins, id, excluded).filter(
+                    (key) =>
+                      isDependencyAutoInstallState(addDirEnabledPlugins[key]) &&
+                      enabledPlugins?.[key] !== false,
                   ),
                 ]),
           );
@@ -2675,49 +2778,55 @@ async function disablePluginsInSettings(e, n, storageV5) {
       undefined,
       storageV5,
     );
-    let settingSource = [...Me].filter((It) => enabledPluginSettings(Ae)?.[It] !== false);
-    if (!ze.error && Ae === "localSettings" && settingSource.length > 0)
-      ze = await updateSettingsForSourceWithTransform(
-        Ae,
+    let settingSource = [...turnedOffIds].filter((id) => enabledPluginSettings(source)?.[id] !== false);
+    if (!result.error && source === "localSettings" && settingSource.length > 0)
+      result = await updateSettingsForSourceWithTransform(
+        source,
         () => getEnabledPluginIdsForScope(settingSource),
         undefined,
         storageV5,
       );
-    if (ze.error)
-      logForDebugging(`Failed to turn plugins off in ${Ae} settings: ${ze.error.message}`, {
+    if (result.error)
+      logForDebugging(`Failed to turn plugins off in ${source} settings: ${result.error.message}`, {
         level: "error",
       });
-    let Je = Ae === "localSettings" ? getLegacyLocalSettingsFilePath() : undefined;
-    let nt = Je !== undefined && We < 2 ? await probeSettingsFileMayExist(Je) : undefined;
-    if (nt?.refused !== undefined) {
-      legacyPathRefused = nt.refused;
+    let legacyPath = source === "localSettings" ? getLegacyLocalSettingsFilePath() : undefined;
+    let probe =
+      legacyPath !== undefined && passCount < 2 ? await probeSettingsFileMayExist(legacyPath) : undefined;
+    if (probe?.refused !== undefined) {
+      legacyPathRefused = probe.refused;
       logForDebugging(
-        `Did not read the legacy local settings file ${Je}: readScreenedSettingsFile refused it (${nt.refused}); counting it as present`,
+        `Did not read the legacy local settings file ${legacyPath}: readScreenedSettingsFile refused it (${probe.refused}); counting it as present`,
       );
     }
-    let pt = nt?.mayExist === true;
-    let Et = Je !== undefined && (ze.error !== null || pt);
-    let yt = pt && We === 1 && (ze.error === null || Ie.size === 0);
-    let gt = enabledPluginSettings(Ae);
-    let At = We === 0 || Et;
-    for (let It of At ? e : Ie) {
-      if (!Et && (!At || gt?.[It] === false) && hasDisabledEnabledPlugin(gt, It, filtered)) {
-        s.add(It);
+    let legacyMayExist = probe?.mayExist === true;
+    let legacyUnreadable = legacyPath !== undefined && (result.error !== null || legacyMayExist);
+    let legacyIsCause =
+      legacyMayExist && passCount === 1 && (result.error === null || turnedOffHere.size === 0);
+    let enabledSettings = enabledPluginSettings(source);
+    let ignoreFilter = passCount === 0 || legacyUnreadable;
+    for (let id of ignoreFilter ? pluginIds : turnedOffHere) {
+      if (
+        !legacyUnreadable &&
+        (!ignoreFilter || enabledSettings?.[id] === false) &&
+        hasDisabledEnabledPlugin(enabledSettings, id, excluded)
+      ) {
+        turnedOff.add(id);
         continue;
       }
-      legacyFileIsTheCause ||= yt;
-      h.set(It, [...(h.get(It) ?? []), settingsSourceName(Ae)]);
+      legacyFileIsTheCause ||= legacyIsCause;
+      notTurnedOff.set(id, [...(notTurnedOff.get(id) ?? []), settingsSourceName(source)]);
     }
   }
   invalidateCommandNames();
-  for (let Ae of e) {
-    let enablingSettingSource = findEnablingSettingSource(Ae, filtered);
+  for (let id of pluginIds) {
+    let enablingSettingSource = findEnablingSettingSource(id, excluded);
     if (enablingSettingSource === undefined) {
-      if (filtered_2.includes(Ae)) s.add(Ae);
+      if (filtered.includes(id)) turnedOff.add(id);
       continue;
     }
-    if (h.has(Ae)) continue;
-    h.set(Ae, [
+    if (notTurnedOff.has(id)) continue;
+    notTurnedOff.set(id, [
       enablingSettingSource === "addDir"
         ? ADD_DIR_SOURCE_LABEL
         : enablingSettingSource === "flagSettings"
@@ -2726,75 +2835,81 @@ async function disablePluginsInSettings(e, n, storageV5) {
     ]);
   }
   let any = getPolicySettingsLoadErrors().some(isBlockingPolicyLoadError);
-  let any_2 = getSettingsParseErrorsForSource("flagSettings").some((Ae) => Ae.severity !== "warning");
-  let Se = false;
-  for (let Ae of e) {
-    let Ie = h.has(Ae) ? undefined : await sourceEnablementEntry("flagSettings", Ae, filtered);
-    if (Ie?.readsBack === "on") h.set(Ae, [SETTINGS_FLAG_SOURCE_LABEL]);
-    else if (Ie !== undefined) Se = true;
+  let any_2 = getSettingsParseErrorsForSource("flagSettings").some((error) => error.severity !== "warning");
+  let flagUnreadable = false;
+  for (let id of pluginIds) {
+    let entry = notTurnedOff.has(id) ? undefined : await sourceEnablementEntry("flagSettings", id, excluded);
+    if (entry?.readsBack === "on") notTurnedOff.set(id, [SETTINGS_FLAG_SOURCE_LABEL]);
+    else if (entry !== undefined) flagUnreadable = true;
   }
-  let ke = (
+  let addDirFiles = (
     await Promise.all(
       getAdditionalDirectoriesForClaudeMd()
-        .flatMap((Ae) => SETTINGS_FILES.map((Ie) => join(Ae, ".claude", Ie)))
-        .map(async (Ae) => {
-          let { settings, errors } = parseSettingsFile(Ae);
+        .flatMap((dir) => SETTINGS_FILES.map((fileName) => join(dir, ".claude", fileName)))
+        .map(async (filePath) => {
+          let { settings, errors } = parseSettingsFile(filePath);
           if (settings !== null || !errors.some((error) => error.severity !== "warning")) return [];
-          let We = await probeSettingsFileMayExist(Ae);
-          if (We.refused !== undefined)
+          let probe = await probeSettingsFileMayExist(filePath);
+          if (probe.refused !== undefined)
             logForDebugging(
-              `Did not read the added directory's settings file ${Ae}: readScreenedSettingsFile refused it (${We.refused}); counting it as present`,
+              `Did not read the added directory's settings file ${filePath}: readScreenedSettingsFile refused it (${probe.refused}); counting it as present`,
             );
-          return We.cannotHoldAFile &&
+          return probe.cannotHoldAFile &&
             errors.some((error) => error.errorClass === "unreadable" && error.errno === "ENOTDIR")
             ? []
             : [
                 {
-                  file: Ae,
-                  behindALink: We.refused === "vet-network",
+                  file: filePath,
+                  behindALink: probe.refused === "vet-network",
                 },
               ];
         }),
     )
   ).flat();
-  let mapped = ke.map((Ae) => Ae.file);
+  let mapped = addDirFiles.map((item) => item.file);
   let unreadSources = [
     ...(any ? ["managed"] : []),
-    ...(any_2 || Se ? ["flag"] : []),
+    ...(any_2 || flagUnreadable ? ["flag"] : []),
     ...(mapped.length > 0 ? ["addDir"] : []),
   ];
   return {
-    turnedOff: [...s].filter((Ae) => !h.has(Ae)),
-    notTurnedOff: h,
+    turnedOff: [...turnedOff].filter((id) => !notTurnedOff.has(id)),
+    notTurnedOff,
     legacyFileIsTheCause,
     unreadSources,
     unreadAddDirFiles: mapped,
     legacyPathRefused,
-    addDirFileBehindALink: ke.some((Ae) => Ae.behindALink),
+    addDirFileBehindALink: addDirFiles.some((item) => item.behindALink),
   };
 }
 //@ chunk-e6aww6q8.js:4278957-4289668 callgraph-fingerprint = removeMarketplaceSource (0.202)
 /**
  * 删除市场：从 known_marketplaces.json 与 settings 的 extraKnownMarketplaces 中移除，关掉其插件、删除缓存目录与安装记录，处理托管/保留名等特殊情况。
  */
-async function removeMarketplaceSource(marketplaceName, n, storageV5, s, h, y = false, S) {
-  let knownMarketplacesWithDeclared = await loadKnownMarketplacesWithDeclared(storageV5);
-  let L =
+async function removeMarketplaceSource(
+  marketplaceName,
+  scope,
+  storageV5,
+  credentials,
+  onlyIgnored,
+  onlyIgnoredNameEntries = false,
+  sharedOutcome,
+) {
+  let config = await loadKnownMarketplacesWithDeclared(storageV5);
+  let targetName =
     marketplaceName !== OFFICIAL_MARKETPLACE_NAME &&
     isOfficialMarketplaceName_2(marketplaceName) &&
-    !Object.hasOwn(knownMarketplacesWithDeclared, marketplaceName) &&
+    !Object.hasOwn(config, marketplaceName) &&
     hiddenRegistryEntryFor(marketplaceName, storageV5) === undefined
       ? OFFICIAL_MARKETPLACE_NAME
       : marketplaceName;
-  let G =
-    L === OFFICIAL_MARKETPLACE_NAME && isOfficialMarketplaceSourced(knownMarketplacesWithDeclared)
+  let officialSourced =
+    targetName === OFFICIAL_MARKETPLACE_NAME && isOfficialMarketplaceSourced(config) ? true : false;
+  let ignoredNameEntry =
+    isOfficialMarketplaceSpelling(targetName) && admissionKindsFor(config).get(targetName) === "source"
       ? true
       : false;
-  let q =
-    isOfficialMarketplaceSpelling(L) && admissionKindsFor(knownMarketplacesWithDeclared).get(L) === "source"
-      ? true
-      : false;
-  if (y && !q)
+  if (onlyIgnoredNameEntries && !ignoredNameEntry)
     return {
       kind: "ignored-plugin-directory-name-entry-removed",
       removedNames: [],
@@ -2802,97 +2917,107 @@ async function removeMarketplaceSource(marketplaceName, n, storageV5, s, h, y = 
       disabledPluginIds: [],
       disabledReason: "commit_mismatch",
     };
-  let Z =
-    !G && Object.hasOwn(knownMarketplacesWithDeclared, L) ? knownMarketplacesWithDeclared[L] : undefined;
-  let Se = Z !== undefined ? undefined : hiddenRegistryEntryFor(L, storageV5);
-  let ke = Z ?? Se;
-  if (ke === undefined) {
-    if (L === OFFICIAL_MARKETPLACE_NAME && n === undefined && (await getPluginDirectoryState()) === "off") {
+  let entry = !officialSourced && Object.hasOwn(config, targetName) ? config[targetName] : undefined;
+  let hiddenEntry = entry !== undefined ? undefined : hiddenRegistryEntryFor(targetName, storageV5);
+  let known = entry ?? hiddenEntry;
+  if (known === undefined) {
+    if (
+      targetName === OFFICIAL_MARKETPLACE_NAME &&
+      scope === undefined &&
+      (await getPluginDirectoryState()) === "off"
+    ) {
       await persistPluginDirectoryChoice(false);
       return {
         kind: "plugin-directory-built-in",
       };
     }
-    throw withMarketplaceFailureCode(Error(`Marketplace '${L}' not found`), "not_configured");
+    throw withMarketplaceFailureCode(Error(`Marketplace '${targetName}' not found`), "not_configured");
   }
-  let we = isPluginDirectorySource(ke.source) ? true : false;
-  if (we && n !== undefined) {
-    let settingsForSourceForUpkeep = getSettingsForSourceForUpkeep(n);
-    let mapped = listReservedNameRefusals(knownMarketplacesWithDeclared)
+  let isDirectorySource = isPluginDirectorySource(known.source) ? true : false;
+  if (isDirectorySource && scope !== undefined) {
+    let settingsForSourceForUpkeep = getSettingsForSourceForUpkeep(scope);
+    let mapped = listReservedNameRefusals(config)
       .filter(
-        (Yt) =>
-          isOfficialMarketplaceName_2(Yt.name) && removeExtraMarketplace(settingsForSourceForUpkeep, Yt.name),
+        (refusal) =>
+          isOfficialMarketplaceName_2(refusal.name) &&
+          removeExtraMarketplace(settingsForSourceForUpkeep, refusal.name),
       )
       .map(
-        (Yt) =>
-          ` An ignored entry named "${Yt.name}" is declared there: claude plugin marketplace remove ${Yt.name} --scope ${settingsSourceName(n)}`,
+        (refusal) =>
+          ` An ignored entry named "${refusal.name}" is declared there: claude plugin marketplace remove ${refusal.name} --scope ${settingsSourceName(scope)}`,
       );
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
       `${OFFICIAL_MARKETPLACE_DISPLAY} is built in and not declared in any settings scope. Omit --scope to turn it off.${mapped.join("")}`,
       "plugin directory marketplace remove with --scope",
     );
   }
-  let seedDir = isClaudeAiMarketplaceSource(ke.source);
-  if (seedDir && n !== undefined)
+  let seedDir = isClaudeAiMarketplaceSource(known.source);
+  if (seedDir && scope !== undefined)
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `Marketplace '${L}' is hosted on claude.ai and not declared in any settings scope. Omit --scope to remove it.`,
+      `Marketplace '${targetName}' is hosted on claude.ai and not declared in any settings scope. Omit --scope to remove it.`,
       "claude.ai marketplace remove with --scope",
     );
-  let Ae = seedDir || we ? undefined : seedDirFor(ke.installLocation);
-  let Ie = isSafeCliArg(L)
-    ? ` To stop using its plugins: claude plugin disable <plugin>@${L}`
+  let seedDirPath = seedDir || isDirectorySource ? undefined : seedDirFor(known.installLocation);
+  let disableHint = isSafeCliArg(targetName)
+    ? ` To stop using its plugins: claude plugin disable <plugin>@${targetName}`
     : " To stop using its plugins, disable each one in /plugin.";
-  if (Ae && n === undefined)
+  if (seedDirPath && scope === undefined)
     throw withMarketplaceFailureCode(
       Error(
-        `Marketplace '${L}' is registered from the read-only seed directory (${Ae}) and will be re-registered on next startup.${Ie}`,
+        `Marketplace '${targetName}' is registered from the read-only seed directory (${seedDirPath}) and will be re-registered on next startup.${disableHint}`,
       ),
       "managed",
     );
-  let Me = false;
-  if (n !== undefined) {
-    if (!removeExtraMarketplace(getSettingsForSourceForUpkeep(n), L)) {
-      let At = Ae
-        ? `It is registered from the read-only seed directory.${Ie}`
+  let declaredElsewhere = false;
+  if (scope !== undefined) {
+    if (!removeExtraMarketplace(getSettingsForSourceForUpkeep(scope), targetName)) {
+      let extraHint = seedDirPath
+        ? `It is registered from the read-only seed directory.${disableHint}`
         : "Omit --scope to remove it from all scopes.";
       throw withMarketplaceFailureCode(
-        Error(`Marketplace '${L}' is not declared in ${settingsSourceName(n)} settings. ${At}`),
+        Error(
+          `Marketplace '${targetName}' is not declared in ${settingsSourceName(scope)} settings. ${extraHint}`,
+        ),
         "not_configured",
       );
     }
-    Me =
-      Boolean(Ae) ||
+    declaredElsewhere =
+      Boolean(seedDirPath) ||
       EDITABLE_SETTING_SOURCES.some(
-        (At) => At !== n && removeExtraMarketplace(getSettingsForSourceForUpkeep(At), L),
+        (source) =>
+          source !== scope && removeExtraMarketplace(getSettingsForSourceForUpkeep(source), targetName),
       ) ||
-      Boolean(removeExtraMarketplace(getSettingsForSource("policySettings"), L));
+      Boolean(removeExtraMarketplace(getSettingsForSource("policySettings"), targetName));
   }
-  let We = [];
-  let ze = "commit_mismatch";
-  if (q && !h && !Me) {
+  let disabledPluginIds = [];
+  let disabledReason = "commit_mismatch";
+  if (ignoredNameEntry && !onlyIgnored && !declaredElsewhere) {
     let pluginDirectoryMarketplace = await loadPluginDirectoryMarketplaceCached({
       ignoreToggle: true,
       storageV5,
     });
-    if (pluginDirectoryMarketplace === null) ze = "catalog_unreadable";
+    if (pluginDirectoryMarketplace === null) disabledReason = "catalog_unreadable";
     let installedPlugins = await loadInstalledPlugins(storageV5);
     if (hasFailedInstalledPluginsRead(installedPlugins)) {
       let installedListRefusal = await getInstalledListRefusal(storageV5);
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        `The list of installed plugins (installed_plugins.json) could not be read or is not a valid list, so this remove cannot tell which plugins to turn off. Nothing was deleted, and the known_marketplaces.json entry named "${quotedPrintable(L)}" was left in place: repair or restore installed_plugins.json, then run this remove again.${installedListRefusal === undefined ? "" : ` ${readInstalledPluginsFile(installedListRefusal)}`}`,
+        `The list of installed plugins (installed_plugins.json) could not be read or is not a valid list, so this remove cannot tell which plugins to turn off. Nothing was deleted, and the known_marketplaces.json entry named "${quotedPrintable(targetName)}" was left in place: repair or restore installed_plugins.json, then run this remove again.${installedListRefusal === undefined ? "" : ` ${readInstalledPluginsFile(installedListRefusal)}`}`,
         "removing a reserved-name entry was held back: the installed plugins could not be read",
       );
     }
     let plugins = installedPlugins.plugins;
     let mapped = Object.entries(plugins)
       .filter(([key, value]) => {
-        let { name: fo, marketplace } = parsePluginIdentifier(key);
+        let { name, marketplace } = parsePluginIdentifier(key);
         if (marketplace !== OFFICIAL_MARKETPLACE_NAME) return false;
-        let bo = pinnedSha(
+        let pinnedShaValue = pinnedSha(
           key,
-          pluginDirectoryMarketplace?.marketplace.plugins.find((plugin) => plugin.name === fo)?.source,
+          pluginDirectoryMarketplace?.marketplace.plugins.find((plugin) => plugin.name === name)?.source,
         );
-        return bo === undefined || value.some((vn) => vn.gitCommitSha !== bo);
+        return (
+          pinnedShaValue === undefined ||
+          value.some((installation) => installation.gitCommitSha !== pinnedShaValue)
+        );
       })
       .map(([key]) => key);
     let {
@@ -2905,9 +3030,11 @@ async function removeMarketplaceSource(marketplaceName, n, storageV5, s, h, y = 
       addDirFileBehindALink,
     } = await disablePluginsInSettings(mapped, Object.keys(plugins), storageV5);
     if (notTurnedOff.size > 0 || unreadSources.length > 0) {
-      let Kn = [...notTurnedOff.values()].flat();
+      let scopes = [...notTurnedOff.values()].flat();
       let joined = [
-        Kn.some((To) => ["user", "project"].includes(To) || (To === "local" && !legacyFileIsTheCause))
+        scopes.some(
+          (scope) => ["user", "project"].includes(scope) || (scope === "local" && !legacyFileIsTheCause),
+        )
           ? "Turn each off with: claude plugin disable <id> --scope <scope>, or repair that scope's settings file."
           : "",
         legacyFileIsTheCause
@@ -2921,20 +3048,20 @@ async function removeMarketplaceSource(marketplaceName, n, storageV5, s, h, y = 
                   ? "The path of the legacy local settings file (.claude/settings.local.json in the folder Claude Code was started in) could not be checked for links to another machine, so the file was not read: make each folder on that path readable, and replace any link on it with a real folder or file. No command can turn off a plugin that file enables."
                   : "Repair or delete the legacy local settings file (.claude/settings.local.json in the folder Claude Code was started in): it could not be read as settings, and no command can turn off a plugin that file enables."
           : "",
-        Kn.includes("managed")
+        scopes.includes("managed")
           ? "Your organization's managed settings turn a plugin named here on, and this command cannot change them: ask your administrator to take that plugin out of managed settings."
           : "",
-        Kn.includes(SETTINGS_FLAG_SOURCE_LABEL)
+        scopes.includes(SETTINGS_FLAG_SOURCE_LABEL)
           ? "The --settings given to this session turn a plugin named here on, and this command cannot change them: take that plugin out of --settings, or start Claude Code without it."
           : "",
-        Kn.includes(ADD_DIR_SOURCE_LABEL)
+        scopes.includes(ADD_DIR_SOURCE_LABEL)
           ? "An added directory's settings (--add-dir) turn a plugin named here on, and user settings did not overrule them: check that user settings can be written and that this session reads them, or start Claude Code without that directory."
           : "",
       ]
-        .filter((To) => To !== "")
+        .filter((hint) => hint !== "")
         .join(" ");
       let joined_2 = [...notTurnedOff]
-        .map(([To, bo]) => `${quotedPrintable(To)} in ${bo.join(" and ")} settings`)
+        .map(([pluginId, scopes]) => `${quotedPrintable(pluginId)} in ${scopes.join(" and ")} settings`)
         .join("; ");
       if (unreadSources.length > 0) {
         let joined_3 = [
@@ -2948,196 +3075,201 @@ async function removeMarketplaceSource(marketplaceName, n, storageV5, s, h, y = 
             ? `A settings file of an added directory (--add-dir) could not be read, so a plugin it turns on cannot be seen: mend ${unreadAddDirFiles.map((unreadAddDirFile) => printableOrEmpty(unreadAddDirFile)).join(" and ")}${addDirFileBehindALink ? " (where a link on the way to such a file leads to another machine, replace that link with a real folder or file)" : ""}, or start Claude Code without ${new Set(unreadAddDirFiles.map((unreadAddDirFile) => dirname(dirname(unreadAddDirFile)))).size === 1 ? "that directory" : "those directories"}, then run this remove again.`
             : "",
         ]
-          .filter((bo) => bo !== "")
+          .filter((hint) => hint !== "")
           .join(" ");
         throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-          `${joined_3} Nothing was deleted, and the known_marketplaces.json entry named "${quotedPrintable(L)}" was left in place: those settings may turn ${formatPluginNameList(
+          `${joined_3} Nothing was deleted, and the known_marketplaces.json entry named "${quotedPrintable(targetName)}" was left in place: those settings may turn ${formatPluginNameList(
             mapped,
             {
               disabledNote: false,
             },
-          )} on again, ${ze === "catalog_unreadable" ? "not checked against" : "not at"} the commit the ${OFFICIAL_MARKETPLACE_DISPLAY} lists.${notTurnedOff.size > 0 ? ` May still be on: ${joined_2}. ${joined}` : " No settings that could be read switch them on now."}`,
+          )} on again, ${disabledReason === "catalog_unreadable" ? "not checked against" : "not at"} the commit the ${OFFICIAL_MARKETPLACE_DISPLAY} lists.${notTurnedOff.size > 0 ? ` May still be on: ${joined_2}. ${joined}` : " No settings that could be read switch them on now."}`,
           "removing a reserved-name entry was held back by settings that could not be read",
         );
       }
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        `${turnedOff.length > 0 ? `Turned off ${formatPluginNameList(turnedOff)}. ` : ""}Could not turn off ${joined_2}: ${ze === "catalog_unreadable" ? "not checked against" : "not at"} the commit the ${OFFICIAL_MARKETPLACE_DISPLAY} lists, and may still be enabled. The known_marketplaces.json entry named "${quotedPrintable(L)}" was left in place: run this remove again once each plugin named here is off. ${joined}`,
+        `${turnedOff.length > 0 ? `Turned off ${formatPluginNameList(turnedOff)}. ` : ""}Could not turn off ${joined_2}: ${disabledReason === "catalog_unreadable" ? "not checked against" : "not at"} the commit the ${OFFICIAL_MARKETPLACE_DISPLAY} lists, and may still be enabled. The known_marketplaces.json entry named "${quotedPrintable(targetName)}" was left in place: run this remove again once each plugin named here is off. ${joined}`,
         "removing a reserved-name entry could not turn plugins off",
       );
     }
-    We = turnedOff;
-    if (S !== undefined) {
-      S.pluginIds = turnedOff;
-      S.reason = ze;
+    disabledPluginIds = turnedOff;
+    if (sharedOutcome !== undefined) {
+      sharedOutcome.pluginIds = turnedOff;
+      sharedOutcome.reason = disabledReason;
     }
   }
-  if (isClaudeAiMarketplaceSource(ke.source)) {
-    await removeClaudeAiMarketplace(L, ke.source, s);
-    getPluginRegistry().marketplaces.delete(L);
-  } else if (we) {
+  if (isClaudeAiMarketplaceSource(known.source)) {
+    await removeClaudeAiMarketplace(targetName, known.source, credentials);
+    getPluginRegistry().marketplaces.delete(targetName);
+  } else if (isDirectorySource) {
     let fs = pluginDirectoryModuleIfUsable();
     if (!fs)
       return {
         kind: "plugin-directory-built-in",
       };
     await fs.setPluginDirectoryMarketplaceEnabled(false);
-    getPluginRegistry().marketplaces.delete(L);
-    logForDebugging(`Turned the built-in marketplace '${L}' off`);
+    getPluginRegistry().marketplaces.delete(targetName);
+    logForDebugging(`Turned the built-in marketplace '${targetName}' off`);
     return {
       kind: "plugin-directory-built-in",
     };
-  } else if (!Me) {
-    let At = false;
-    if (Se !== undefined) {
-      releaseRegistryEntry(L, storageV5);
-      At = true;
+  } else if (!declaredElsewhere) {
+    let released = false;
+    if (hiddenEntry !== undefined) {
+      releaseRegistryEntry(targetName, storageV5);
+      released = true;
     }
     try {
-      await updateKnownMarketplaces((Zt) => {
-        if (!Object.hasOwn(Zt, L)) {
-          if (hiddenRegistryEntryFor(L, storageV5) === undefined && !At) return null;
-          if (!At) {
-            releaseRegistryEntry(L, storageV5);
-            At = true;
+      await updateKnownMarketplaces((config) => {
+        if (!Object.hasOwn(config, targetName)) {
+          if (hiddenRegistryEntryFor(targetName, storageV5) === undefined && !released) return null;
+          if (!released) {
+            releaseRegistryEntry(targetName, storageV5);
+            released = true;
           }
         }
-        delete Zt[L];
-        return Zt;
+        delete config[targetName];
+        return config;
       }, storageV5);
     } catch (error) {
-      let rn = blockedPluginsNotice(We, ze, {
+      let blockedNotice = blockedPluginsNotice(disabledPluginIds, disabledReason, {
         insideFailure: true,
       });
-      if (rn === null) throw error;
-      let pn = new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        `${rn} The known_marketplaces.json entry named "${quotedPrintable(L)}" could not be removed (${quotedPrintable(errorMessage(error))}). Run this remove again.`,
+      if (blockedNotice === null) throw error;
+      let failureError = new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
+        `${blockedNotice} The known_marketplaces.json entry named "${quotedPrintable(targetName)}" could not be removed (${quotedPrintable(errorMessage(error))}). Run this remove again.`,
         "removing a reserved-name entry failed after plugins were turned off",
         RESERVED_NAME_REGISTRY_WRITE_FAILED,
       );
-      pn.cause = error;
-      throw pn;
+      failureError.cause = error;
+      throw failureError;
     } finally {
-      if (At) {
-        releasedRegistryEntries()[getStorageArm(storageV5)].delete(L);
+      if (released) {
+        releasedRegistryEntries()[getStorageArm(storageV5)].delete(targetName);
         clearMarketplaceAdmissionVerdicts();
       }
     }
-    if (S !== undefined) S.entryDeleted = true;
-    getPluginRegistry().marketplaces.delete(L);
-    let It =
+    if (sharedOutcome !== undefined) sharedOutcome.entryDeleted = true;
+    getPluginRegistry().marketplaces.delete(targetName);
+    let storageKey =
       isStorageV5Enabled() && storageV5 !== undefined
-        ? getSyntheticMarketplaceStorageKey(L, ke.source, ke.installLocation)
+        ? getSyntheticMarketplaceStorageKey(targetName, known.source, known.installLocation)
         : null;
-    if (storageV5 !== undefined && It !== null) {
-      let Zt = await storageV5.delete(It);
-      if (!Zt.ok)
+    if (storageV5 !== undefined && storageKey !== null) {
+      let deleteResult = await storageV5.delete(storageKey);
+      if (!deleteResult.ok)
         logForDebugging(
-          `Failed to delete cached marketplace ${L} through the storage backend: ${formatStorageError(Zt.error)}`,
+          `Failed to delete cached marketplace ${targetName} through the storage backend: ${formatStorageError(deleteResult.error)}`,
           {
             level: "warn",
           },
         );
     }
     let knownMarketplacesWithDeclared = await loadKnownMarketplacesWithDeclared(storageV5);
-    let filtered = listMarketplaceNames(knownMarketplacesWithDeclared, storageV5).filter((Zt) => Zt !== L);
+    let names = listMarketplaceNames(knownMarketplacesWithDeclared, storageV5).filter(
+      (name) => name !== targetName,
+    );
     await removeMarketplaceCacheFiles(
-      L,
-      filtered,
+      targetName,
+      names,
       marketplaceDirCandidates(knownMarketplacesWithDeclared, storageV5, getResolvedMarketplacesCacheDir()),
     ).catch((error) => {
       logForDebugging(
-        `Left the cache files of removed marketplace ${jsonStringify(L)} in place: ${errorMessage(error)}`,
+        `Left the cache files of removed marketplace ${jsonStringify(targetName)} in place: ${errorMessage(error)}`,
         {
           level: "warn",
         },
       );
     });
   }
-  let lt = !Me && !G;
+  let alsoClearEnabledPlugins = !declaredElsewhere && !officialSourced;
   for (let source of EDITABLE_SETTING_SOURCES) {
-    let It = n === undefined || source === n;
-    if (!It && !lt) continue;
-    let Yt = false;
-    let qt = await updateSettingsForSourceWithTransform(
+    let currentScope = scope === undefined || source === scope;
+    if (!currentScope && !alsoClearEnabledPlugins) continue;
+    let hasChanges = false;
+    let updateResult = await updateSettingsForSourceWithTransform(
       source,
-      (Zt) => {
-        if (!Zt) return null;
-        let rn = false;
+      (settings) => {
+        if (!settings) return null;
+        let changed = false;
         let updates = {};
-        let no =
-          G &&
-          n === undefined &&
+        let keepAutoUpdate =
+          officialSourced &&
+          scope === undefined &&
           source === "userSettings" &&
-          removeExtraMarketplace(Zt, L)?.autoUpdate !== undefined;
-        if (It && removeExtraMarketplace(Zt, L) && !no) {
+          removeExtraMarketplace(settings, targetName)?.autoUpdate !== undefined;
+        if (currentScope && removeExtraMarketplace(settings, targetName) && !keepAutoUpdate) {
           let updatedMarketplaces = {
-            ...Zt.extraKnownMarketplaces,
+            ...settings.extraKnownMarketplaces,
           };
-          updatedMarketplaces[L] = undefined;
+          updatedMarketplaces[targetName] = undefined;
           updates.extraKnownMarketplaces = updatedMarketplaces;
-          rn = true;
+          changed = true;
         }
-        if (lt && Zt.enabledPlugins) {
-          let marketplaceSuffix = `@${L}`;
+        if (alsoClearEnabledPlugins && settings.enabledPlugins) {
+          let marketplaceSuffix = `@${targetName}`;
           let updatedPlugins = {
-            ...Zt.enabledPlugins,
+            ...settings.enabledPlugins,
           };
-          let yn = false;
+          let clearedAny = false;
           for (let pluginId in updatedPlugins)
             if (pluginId.endsWith(marketplaceSuffix)) {
               updatedPlugins[pluginId] = undefined;
-              yn = true;
+              clearedAny = true;
             }
-          if (yn) {
+          if (clearedAny) {
             updates.enabledPlugins = updatedPlugins;
-            rn = true;
+            changed = true;
           }
         }
-        if (!rn) return null;
-        Yt = true;
+        if (!changed) return null;
+        hasChanges = true;
         return updates;
       },
       undefined,
       storageV5,
     );
-    if (qt.error)
-      logForDebugging(`Failed to clean up marketplace '${L}' from ${source} settings: ${qt.error.message}`, {
-        level: "error",
-      });
-    else if (Yt) logForDebugging(`Cleaned up marketplace '${L}' from ${source} settings`);
+    if (updateResult.error)
+      logForDebugging(
+        `Failed to clean up marketplace '${targetName}' from ${source} settings: ${updateResult.error.message}`,
+        {
+          level: "error",
+        },
+      );
+    else if (hasChanges) logForDebugging(`Cleaned up marketplace '${targetName}' from ${source} settings`);
   }
-  if (Me) {
+  if (declaredElsewhere) {
     logForDebugging(
-      `Removed marketplace '${L}' declaration from ${n}; still declared in another scope, keeping state layer and installed plugins`,
+      `Removed marketplace '${targetName}' declaration from ${scope}; still declared in another scope, keeping state layer and installed plugins`,
     );
     return {
       kind: "removed",
       removedPluginIds: [],
     };
   }
-  if (G) {
+  if (officialSourced) {
     logForDebugging(
-      `Removed the ignored registry entry named '${L}'; turned off ${We.length} plugin(s) (${ze})`,
+      `Removed the ignored registry entry named '${targetName}'; turned off ${disabledPluginIds.length} plugin(s) (${disabledReason})`,
     );
     return {
       kind: "ignored-plugin-directory-name-entry-removed",
-      removedNames: [L],
+      removedNames: [targetName],
       removedPluginIds: [],
-      disabledPluginIds: We,
-      disabledReason: ze,
+      disabledPluginIds,
+      disabledReason,
     };
   }
   let { orphanedPaths, removedPluginIds, sharedDataDirPluginIds, installPathsStillInUse } =
-    await removeAllPluginsForMarketplace(L, storageV5);
-  let yt = new Set();
-  if (q && L !== OFFICIAL_MARKETPLACE_NAME)
-    for (let At of installPathsStillInUse) {
-      let It = normalizeMarketplaceInputPath(At);
-      if (It !== undefined) yt.add(It);
+    await removeAllPluginsForMarketplace(targetName, storageV5);
+  let inUsePaths = new Set();
+  if (ignoredNameEntry && targetName !== OFFICIAL_MARKETPLACE_NAME)
+    for (let installPath of installPathsStillInUse) {
+      let normalizedPath = normalizeMarketplaceInputPath(installPath);
+      if (normalizedPath !== undefined) inUsePaths.add(normalizedPath);
     }
   for (let installPath of orphanedPaths) {
-    let It = yt.size > 0 ? normalizeMarketplaceInputPath(installPath) : undefined;
-    if (It !== undefined && yt.has(It)) continue;
+    let normalizedOrphanPath = inUsePaths.size > 0 ? normalizeMarketplaceInputPath(installPath) : undefined;
+    if (normalizedOrphanPath !== undefined && inUsePaths.has(normalizedOrphanPath)) continue;
     await markPluginVersionOrphaned(installPath, storageV5);
   }
   let installedIds = listInstalledPluginIds(getInstalledPlugins());
@@ -3146,17 +3278,17 @@ async function removeMarketplaceSource(marketplaceName, n, storageV5, s, h, y = 
       deleteDataDir: !sharedDataDirPluginIds.includes(pluginId),
       installedIds,
       storageV5,
-      credentials: s,
+      credentials,
     });
   removePluginUsage(removedPluginIds, storageV5);
-  logForDebugging(`Removed marketplace source: ${L}`);
-  if (q)
+  logForDebugging(`Removed marketplace source: ${targetName}`);
+  if (ignoredNameEntry)
     return {
       kind: "ignored-plugin-directory-name-entry-removed",
-      removedNames: [L],
+      removedNames: [targetName],
       removedPluginIds,
-      disabledPluginIds: We,
-      disabledReason: ze,
+      disabledPluginIds,
+      disabledReason,
     };
   return {
     kind: "removed",
@@ -3167,51 +3299,56 @@ async function removeMarketplaceSource(marketplaceName, n, storageV5, s, h, y = 
 /**
  * reservedMarketplaceSpellingMessage：保留市场名的拒绝说明。
  */
-function reservedMarketplaceSpellingMessage(e, n) {
-  return PLUGIN_DIRECTORY_MARKETPLACE_NAMES.has(n)
-    ? reservedNameMessage(e)
-    : formatReservedSpellingMessage(e, n);
+function reservedMarketplaceSpellingMessage(name, reservedName) {
+  return PLUGIN_DIRECTORY_MARKETPLACE_NAMES.has(reservedName)
+    ? reservedNameMessage(name)
+    : formatReservedSpellingMessage(name, reservedName);
 }
 //@ chunk-e6aww6q8.js:4289720-4289810 placement
 /**
  * lookalikeReservedMarketplaceName：与保留名形似的市场名。
  */
-function lookalikeReservedMarketplaceName(e) {
-  for (let n of RESERVED_MARKETPLACE_NAMES)
-    if (n !== OFFICIAL_MARKETPLACE_NAME && e.toLowerCase() !== n && isFoldedSpellingOf(e, n)) return n;
+function lookalikeReservedMarketplaceName(name) {
+  for (let reservedName of RESERVED_MARKETPLACE_NAMES)
+    if (
+      reservedName !== OFFICIAL_MARKETPLACE_NAME &&
+      name.toLowerCase() !== reservedName &&
+      isFoldedSpellingOf(name, reservedName)
+    )
+      return reservedName;
   return;
 }
 //@ chunk-e6aww6q8.js:4289810-4290233 placement
 /**
  * 校验注册表条目对保留市场名的使用：官方名只允许 pluginDirectory 源；其他保留名需种子目录或官方来源；源格式错误时返回说明。
  */
-function validateReservedMarketplaceEntry(e, n) {
-  if (e === OFFICIAL_MARKETPLACE_NAME)
-    return n.source?.source === "pluginDirectory"
+function validateReservedMarketplaceEntry(marketplaceName, entry) {
+  if (marketplaceName === OFFICIAL_MARKETPLACE_NAME)
+    return entry.source?.source === "pluginDirectory"
       ? null
-      : reservedMarketplaceEntryMessage(e, isPluginDirectoryModeOn());
-  let r = reservedMarketplaceNameMessage(e);
-  if (r !== undefined) return r;
-  if (!RESERVED_MARKETPLACE_NAMES.has(e.toLowerCase())) return null;
-  if (typeof n.installLocation === "string" && seedDirFor(n.installLocation)) return null;
-  let source = n.source;
+      : reservedMarketplaceEntryMessage(marketplaceName, isPluginDirectoryModeOn());
+  let nameMessage = reservedMarketplaceNameMessage(marketplaceName);
+  if (nameMessage !== undefined) return nameMessage;
+  if (!RESERVED_MARKETPLACE_NAMES.has(marketplaceName.toLowerCase())) return null;
+  if (typeof entry.installLocation === "string" && seedDirFor(entry.installLocation)) return null;
+  let source = entry.source;
   if (typeof source !== "object" || source === null)
-    return `The name '${e}' is reserved for official Anthropic marketplaces and its registered source is malformed.`;
-  return validateOfficialNameSource(e, n.source);
+    return `The name '${marketplaceName}' is reserved for official Anthropic marketplaces and its registered source is malformed.`;
+  return validateOfficialNameSource(marketplaceName, entry.source);
 }
 //@ chunk-e6aww6q8.js:4290233-4290272 placement
 /**
  * isImpersonatingOfficialMarketplace：是否在冒充官方市场名。
  */
-function isImpersonatingOfficialMarketplace(e, n) {
-  return impersonationCheckDisabled() && isImpersonatingOfficialName(e);
+function isImpersonatingOfficialMarketplace(marketplaceName, entry) {
+  return impersonationCheckDisabled() && isImpersonatingOfficialName(marketplaceName);
 }
 //@ chunk-e6aww6q8.js:4290272-4290492 placement
-function assertNotLookAlikeName(marketplaceName, n) {
-  if (!isImpersonatingOfficialMarketplace(marketplaceName, n)) return;
+function assertNotLookAlikeName(marketplaceName, entry) {
+  if (!isImpersonatingOfficialMarketplace(marketplaceName, entry)) return;
   if (isAsciiImpersonatingOfficialName(marketplaceName))
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      reservedNameMessage_2(n.source.source === "settings"),
+      reservedNameMessage_2(entry.source.source === "settings"),
       "Marketplace name refused by the look-alike check",
     );
   throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
@@ -3223,34 +3360,34 @@ function assertNotLookAlikeName(marketplaceName, n) {
 /**
  * 保留名被不受信来源注册时抛错。
  */
-function assertReservedNameTrusted(marketplaceName, n) {
-  let r = validateReservedMarketplaceEntry(marketplaceName, n);
-  let s = isOfficialMarketplaceSpelling(marketplaceName);
-  if (r && (s || lookalikeReservedMarketplaceName(marketplaceName) !== undefined)) {
-    if (s)
+function assertReservedNameTrusted(marketplaceName, entry) {
+  let refusal = validateReservedMarketplaceEntry(marketplaceName, entry);
+  let isOfficialSpelling = isOfficialMarketplaceSpelling(marketplaceName);
+  if (refusal && (isOfficialSpelling || lookalikeReservedMarketplaceName(marketplaceName) !== undefined)) {
+    if (isOfficialSpelling)
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        r,
+        refusal,
         "Plugin directory name held by another registry entry",
       );
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      r,
+      refusal,
       "Reserved marketplace name held by a registry entry",
     );
   }
-  if (r)
+  if (refusal)
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `Marketplace "${marketplaceName}" is registered from an untrusted source: ${r} To fix it, remove the marketplace and re-add it from the official source.`,
+      `Marketplace "${marketplaceName}" is registered from an untrusted source: ${refusal} To fix it, remove the marketplace and re-add it from the official source.`,
       "Reserved marketplace name registered from untrusted source",
     );
 }
 //@ chunk-e6aww6q8.js:4290923-4291532 placement
-async function readCachedMarketplace(storage, key, { folderAsEisdir: r = false } = {}) {
-  let s = await storage.read([key]);
-  if (!s.ok) {
-    if (r && isNonRegularFailure(s.error))
+async function readCachedMarketplace(storage, key, { folderAsEisdir = false } = {}) {
+  let readResult = await storage.read([key]);
+  if (!readResult.ok) {
+    if (folderAsEisdir && isNonRegularFailure(readResult.error))
       throw Object.assign(
         new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-          `EISDIR: not a regular file (${formatStorageError(s.error)})`,
+          `EISDIR: not a regular file (${formatStorageError(readResult.error)})`,
           "cached marketplace folder is not a regular file (v5)",
         ),
         {
@@ -3258,17 +3395,17 @@ async function readCachedMarketplace(storage, key, { folderAsEisdir: r = false }
         },
       );
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `Failed to read cached marketplace: ${formatStorageError(s.error)}`,
+      `Failed to read cached marketplace: ${formatStorageError(readResult.error)}`,
       "failed to read cached marketplace (v5 backend error)",
     );
   }
-  let h = s.value.items[0];
-  if (h === undefined)
+  let item = readResult.value.items[0];
+  if (item === undefined)
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
       "Failed to read cached marketplace: the backend returned no item for the key",
       "failed to read cached marketplace (v5 backend error)",
     );
-  return h.found ? Buffer.from(h.value).toString("utf-8") : null;
+  return item.found ? Buffer.from(item.value).toString("utf-8") : null;
 }
 //@ chunk-e6aww6q8.js:4291632-4291733 sole-consumer
 function catalogNotCachedError() {
@@ -3277,19 +3414,19 @@ function catalogNotCachedError() {
   });
 }
 //@ chunk-e6aww6q8.js:4291733-4291811 sole-consumer
-async function cachedMarketplaceOrThrow(e, n) {
-  let cachedMarketplace = await readCachedMarketplace(e, n);
+async function cachedMarketplaceOrThrow(storageV5, key) {
+  let cachedMarketplace = await readCachedMarketplace(storageV5, key);
   if (cachedMarketplace === null) throw catalogNotCachedError();
   return cachedMarketplace;
 }
 //@ chunk-e6aww6q8.js:4291811-4291849 sole-consumer
-function marketplaceNameUnlessCowork(e) {
-  return isUsingCoworkPlugins() ? undefined : e;
+function marketplaceNameUnlessCowork(name) {
+  return isUsingCoworkPlugins() ? undefined : name;
 }
 //@ chunk-e6aww6q8.js:4291849-4291904 sole-consumer
-function isLookalikeUnblockedMarketplace(e) {
-  let n = marketplaceNameUnlessCowork(e);
-  return n !== undefined && isLookalikeButNotBlockedName(n);
+function isLookalikeUnblockedMarketplace(name) {
+  let normalizedName = marketplaceNameUnlessCowork(name);
+  return normalizedName !== undefined && isLookalikeButNotBlockedName(normalizedName);
 }
 //@ chunk-e6aww6q8.js:4291904-4292977 sole-consumer
 /**
@@ -3300,18 +3437,18 @@ async function readMarketplaceManifest(location, source, storage, storageLocatio
   let key = storageLocation?.kind === "key" ? storageLocation.key : null;
   let schema = getPluginMarketplaceSchemaFor(marketplaceNameUnlessCowork(source));
   if (isStorageV5Enabled() && storage !== undefined && storageLocation?.kind === "hostFolder") {
-    let w;
+    let localFile;
     try {
-      w = await readLocalMarketplaceFile(storage, storageLocation.space, manifestPath);
+      localFile = await readLocalMarketplaceFile(storage, storageLocation.space, manifestPath);
     } catch (error) {
       let errnoCode = getErrnoCode(error);
       if (errnoCode === "ENOENT" || errnoCode === "ENOTDIR")
-        w = {
+        localFile = {
           absent: errnoCode,
         };
       else throw error;
     }
-    if ("text" in w) return parseFileWithSchema(w.text, manifestPath, schema);
+    if ("text" in localFile) return parseFileWithSchema(localFile.text, manifestPath, schema);
     let localMarketplaceFile = await readLocalMarketplaceFile(storage, storageLocation.space, location);
     if ("text" in localMarketplaceFile)
       return parseFileWithSchema(localMarketplaceFile.text, location, schema);
@@ -3379,43 +3516,43 @@ async function getMarketplaceCacheOnly(marketplaceName, storageV5, options) {
       unreadableCatalogs,
     );
   let fs = getFsImplementation();
-  let y = isStorageV5Enabled() && storageV5 !== undefined ? getMarketplacesStorageScope() : null;
-  if (storageV5 !== undefined && y !== null) {
-    let L = await storageV5.read([y]);
-    if (!L.ok) {
+  let scope = isStorageV5Enabled() && storageV5 !== undefined ? getMarketplacesStorageScope() : null;
+  if (storageV5 !== undefined && scope !== null) {
+    let readResult = await storageV5.read([scope]);
+    if (!readResult.ok) {
       logForDebugging(
-        `Failed to read cached marketplace ${marketplaceName}: ${formatStorageError(L.error)}`,
+        `Failed to read cached marketplace ${marketplaceName}: ${formatStorageError(readResult.error)}`,
         {
           level: "warn",
         },
       );
       return null;
     }
-    let G = L.value.items[0];
-    if (!G?.found) return loadDeclaredMarketplace(storageV5, marketplaceName, unreadableCatalogs);
-    let q;
+    let item = readResult.value.items[0];
+    if (!item?.found) return loadDeclaredMarketplace(storageV5, marketplaceName, unreadableCatalogs);
+    let entry;
     try {
-      let Z = jsonParse(Buffer.from(G.value).toString("utf-8"));
-      q = getAdmittedMarketplaceEntry(marketplaceName, Z);
+      let config = jsonParse(Buffer.from(item.value).toString("utf-8"));
+      entry = getAdmittedMarketplaceEntry(marketplaceName, config);
     } catch (error) {
       logForDebugging(`Failed to read cached marketplace ${marketplaceName}: ${errorMessage(error)}`, {
         level: "warn",
       });
       return null;
     }
-    return q
-      ? await loadCachedMarketplace(storageV5, marketplaceName, q, marketplaceName, unreadableCatalogs)
+    return entry
+      ? await loadCachedMarketplace(storageV5, marketplaceName, entry, marketplaceName, unreadableCatalogs)
       : await loadDeclaredMarketplace(storageV5, marketplaceName, unreadableCatalogs);
   }
   if (isDiskless()) return loadDeclaredMarketplace(storageV5, marketplaceName, unreadableCatalogs);
   let configFile = getKnownMarketplacesPath();
-  let w;
+  let entry;
   try {
     let content = await fs.readFile(configFile, {
       encoding: "utf-8",
     });
     let config = jsonParse(content);
-    w = getAdmittedMarketplaceEntry(marketplaceName, config);
+    entry = getAdmittedMarketplaceEntry(marketplaceName, config);
   } catch (error) {
     if (isENOENT(error)) return loadDeclaredMarketplace(storageV5, marketplaceName, unreadableCatalogs);
     logForDebugging(`Failed to read cached marketplace ${marketplaceName}: ${errorMessage(error)}`, {
@@ -3423,8 +3560,8 @@ async function getMarketplaceCacheOnly(marketplaceName, storageV5, options) {
     });
     return null;
   }
-  return w
-    ? await loadCachedMarketplace(storageV5, marketplaceName, w, marketplaceName, unreadableCatalogs)
+  return entry
+    ? await loadCachedMarketplace(storageV5, marketplaceName, entry, marketplaceName, unreadableCatalogs)
     : await loadDeclaredMarketplace(storageV5, marketplaceName, unreadableCatalogs);
 }
 //@ chunk-e6aww6q8.js:4293865-4294027 layout
@@ -3437,13 +3574,13 @@ async function loadDeclaredMarketplace(storageV5, marketplaceName, unreadableCat
         })
       )?.marketplace ?? null
     );
-  let s = ownPropertyOrUndefined(await readClaudeAiMarketplaceRegistry(), marketplaceName);
-  return s === undefined
+  let entry = ownPropertyOrUndefined(await readClaudeAiMarketplaceRegistry(), marketplaceName);
+  return entry === undefined
     ? null
     : loadCachedMarketplace(
         storageV5,
         marketplaceName,
-        toKnownMarketplaceEntry(marketplaceName, s),
+        toKnownMarketplaceEntry(marketplaceName, entry),
         undefined,
         unreadableCatalogs,
       );
@@ -3453,8 +3590,8 @@ var BLOCKLIST_DIRECTION_OPTION = {
   blocklistDirection: true,
 };
 //@ chunk-e6aww6q8.js:4294059-4294123 layout
-function looseMarketplaceName(e) {
-  return e.toLowerCase().replace(/[^a-z0-9]/g, "");
+function looseMarketplaceName(name) {
+  return name.toLowerCase().replace(/[^a-z0-9]/g, "");
 }
 //@ chunk-e6aww6q8.js:4294123-4294438 layout
 /**
@@ -3466,106 +3603,111 @@ var CONFUSABLE_PUNCTUATION_RE =
 var MAX_LOOSE_NAME_LENGTH = 512;
 var NON_ASCII_RE = /[^\x00-\x7f]/;
 //@ chunk-e6aww6q8.js:4294438-4294474 layout
-function isLooseNameTooLong(e) {
-  return e.length > MAX_LOOSE_NAME_LENGTH;
+function isLooseNameTooLong(name) {
+  return name.length > MAX_LOOSE_NAME_LENGTH;
 }
 //@ chunk-e6aww6q8.js:4294474-4294609 layout
-function looseNameVariants(e) {
-  let n = [looseMarketplaceName(e)];
-  if (NON_ASCII_RE.test(e) && !isLooseNameTooLong(e))
-    n.push(looseMarketplaceName(e.normalize("NFKC").replace(INVISIBLE_FORMAT_CHARS_RE, "")));
-  return uniq(n).filter((r) => r !== "");
+function looseNameVariants(name) {
+  let variants = [looseMarketplaceName(name)];
+  if (NON_ASCII_RE.test(name) && !isLooseNameTooLong(name))
+    variants.push(looseMarketplaceName(name.normalize("NFKC").replace(INVISIBLE_FORMAT_CHARS_RE, "")));
+  return uniq(variants).filter((variant) => variant !== "");
 }
 //@ chunk-e6aww6q8.js:4294609-4294670 layout
 var FULLWIDTH_ALNUM_RE = /^[\uff10-\uff19\uff21-\uff3a\uff41-\uff5a]$/;
 var MAX_CONFUSABLE_RUN = 16;
 //@ chunk-e6aww6q8.js:4294670-4294891 layout
-function splitLooseNameSegments(e) {
-  let n = [];
-  let r = 0;
-  for (let s of e) {
-    let normalized = s.normalize("NFKC");
-    if (NON_ASCII_RE.test(normalized)) continue;
-    let y = looseMarketplaceName(normalized);
-    if (y === "") continue;
-    let S = NON_ASCII_RE.test(s) && !FULLWIDTH_ALNUM_RE.test(s);
-    if (S && ++r > MAX_CONFUSABLE_RUN) return null;
-    n.push({
-      text: y,
-      eitherWay: S,
+function splitLooseNameSegments(segments) {
+  let parts = [];
+  let runLength = 0;
+  for (let segment of segments) {
+    let name = segment.normalize("NFKC");
+    if (NON_ASCII_RE.test(name)) continue;
+    let loose = looseMarketplaceName(name);
+    if (loose === "") continue;
+    let eitherWay = NON_ASCII_RE.test(segment) && !FULLWIDTH_ALNUM_RE.test(segment);
+    if (eitherWay && ++runLength > MAX_CONFUSABLE_RUN) return null;
+    parts.push({
+      text: loose,
+      eitherWay,
     });
   }
-  return n;
+  return parts;
 }
 //@ chunk-e6aww6q8.js:4294891-4295044 layout
-function isSuspiciousNonAsciiName(e) {
-  if (!NON_ASCII_RE.test(e)) return false;
-  if (isLooseNameTooLong(e)) return true;
-  if (splitLooseNameSegments(e) === null) return true;
+function isSuspiciousNonAsciiName(name) {
+  if (!NON_ASCII_RE.test(name)) return false;
+  if (isLooseNameTooLong(name)) return true;
+  if (splitLooseNameSegments(name) === null) return true;
   return NON_ASCII_RE.test(
-    e.replace(CONFUSABLE_PUNCTUATION_RE, "").normalize("NFKC").replace(INVISIBLE_FORMAT_CHARS_RE, ""),
+    name.replace(CONFUSABLE_PUNCTUATION_RE, "").normalize("NFKC").replace(INVISIBLE_FORMAT_CHARS_RE, ""),
   );
 }
 //@ chunk-e6aww6q8.js:4295044-4295247 layout
-function matchesLooseSegments(e, looseName) {
-  let r = new Set([0]);
-  for (let { text, eitherWay } of e) {
-    let y = new Set();
-    for (let S of r) {
-      if (eitherWay) y.add(S);
-      if (looseName.startsWith(text, S)) y.add(S + text.length);
+function matchesLooseSegments(segments, looseName) {
+  let positions = new Set([0]);
+  for (let { text, eitherWay } of segments) {
+    let next = new Set();
+    for (let index of positions) {
+      if (eitherWay) next.add(index);
+      if (looseName.startsWith(text, index)) next.add(index + text.length);
     }
-    if (y.size === 0) return false;
-    r = y;
+    if (next.size === 0) return false;
+    positions = next;
   }
-  return r.has(looseName.length);
+  return positions.has(looseName.length);
 }
 //@ chunk-e6aww6q8.js:4295247-4295514 layout
-function matchesBlockedLooseName(e, n) {
-  if (!NON_ASCII_RE.test(e) || isLooseNameTooLong(e)) return false;
-  let r = splitLooseNameSegments(e);
-  if (r === null || !r.some((y) => y.eitherWay)) return false;
-  let s = 0;
-  let h = 0;
-  for (let { text, eitherWay } of r) {
-    h += text.length;
-    if (!eitherWay) s += text.length;
+function matchesBlockedLooseName(name, blocked) {
+  if (!NON_ASCII_RE.test(name) || isLooseNameTooLong(name)) return false;
+  let segments = splitLooseNameSegments(name);
+  if (segments === null || !segments.some((segment) => segment.eitherWay)) return false;
+  let fixedLength = 0;
+  let maxLength = 0;
+  for (let { text, eitherWay } of segments) {
+    maxLength += text.length;
+    if (!eitherWay) fixedLength += text.length;
   }
-  for (let looseName of n.looseNames)
-    if (looseName.length >= s && looseName.length <= h && matchesLooseSegments(r, looseName)) return true;
+  for (let looseName of blocked.looseNames)
+    if (
+      looseName.length >= fixedLength &&
+      looseName.length <= maxLength &&
+      matchesLooseSegments(segments, looseName)
+    )
+      return true;
   return false;
 }
 //@ chunk-e6aww6q8.js:4295514-4296565 layout
 /**
  * 读取 policySettings.enabledPlugins 中为 false 的插件，收集名字、宽松名，并尽量解析出其仓库来源键； 无法解析仓库时只按名字阻止并记 warn。没有禁用项返回 null。
  */
-async function collectOrgBlockedPlugins(e) {
+async function collectOrgBlockedPlugins(storageV5) {
   {
     let blockedIds = Object.entries(getSettingsForSource("policySettings")?.enabledPlugins ?? {})
       .filter(([, value]) => value === false)
       .map(([key]) => key);
     if (blockedIds.length === 0) return null;
-    let knownMarketplaces = await loadKnownMarketplacesSafe(e);
+    let knownMarketplaces = await loadKnownMarketplacesSafe(storageV5);
     let blocked = {
       keys: new Set(),
       names: new Set(),
       looseNames: new Set(),
       looseNameBlock: false,
     };
-    let h;
-    let y = false;
+    let catalogPromise;
+    let unresolvedNames = false;
     for (let blockedId of blockedIds) {
-      let { name: w, marketplace } = parsePluginIdentifier(blockedId);
-      if (!w) continue;
-      blocked.names.add(w);
+      let { name, marketplace } = parsePluginIdentifier(blockedId);
+      if (!name) continue;
+      blocked.names.add(name);
       blocked.looseNameBlock = true;
-      for (let q of looseNameVariants(w)) blocked.looseNames.add(q);
+      for (let variant of looseNameVariants(name)) blocked.looseNames.add(variant);
       if (marketplace === OFFICIAL_MARKETPLACE_NAME) continue;
-      let G;
+      let sourceKey;
       try {
-        let pluginByIdCacheOnly = await getPluginByIdCacheOnly(blockedId, e);
+        let pluginByIdCacheOnly = await getPluginByIdCacheOnly(blockedId, storageV5);
         if (pluginByIdCacheOnly)
-          G = samePluginSource(
+          sourceKey = samePluginSource(
             pluginByIdCacheOnly.entry.source,
             sourceUrlAndRef(
               marketplace ? ownPropertyOrUndefined(knownMarketplaces, marketplace)?.source : undefined,
@@ -3573,29 +3715,33 @@ async function collectOrgBlockedPlugins(e) {
             BLOCKLIST_DIRECTION_OPTION,
           );
         else if (marketplace === CLAUDE_PLUGINS_OFFICIAL) {
-          h ??= getCachedCatalogPlugins(e);
-          G = samePluginSource(
-            (await h)?.[blockedId]?.marketplace_entry.source,
+          catalogPromise ??= getCachedCatalogPlugins(storageV5);
+          sourceKey = samePluginSource(
+            (await catalogPromise)?.[blockedId]?.marketplace_entry.source,
             OFFICIAL_MARKETPLACE_SOURCE.repo,
             BLOCKLIST_DIRECTION_OPTION,
           );
-          y ||= G === undefined;
+          unresolvedNames ||= sourceKey === undefined;
         }
       } catch (error) {
         logForDebugging(`Could not resolve org-blocked plugin ${blockedId}: ${errorMessage(error)}`, {
           level: "warn",
         });
       }
-      if (G === undefined)
+      if (sourceKey === undefined)
         logForDebugging(
           `Org-blocked plugin ${blockedId} has no resolvable repository; the plugin directory blocks it by name only`,
           {
             level: "warn",
           },
         );
-      else blocked.keys.add(G);
+      else blocked.keys.add(sourceKey);
     }
-    if (y && (await h) === undefined && (await getMarketplaceCacheOnly(CLAUDE_PLUGINS_OFFICIAL, e)) === null)
+    if (
+      unresolvedNames &&
+      (await catalogPromise) === undefined &&
+      (await getMarketplaceCacheOnly(CLAUDE_PLUGINS_OFFICIAL, storageV5)) === null
+    )
       logForDebugging(
         `${CLAUDE_PLUGINS_OFFICIAL} has never been cached on this machine, so the plugins your organization blocks in it are matched in the plugin directory by name alone`,
         {
@@ -3610,29 +3756,31 @@ async function collectOrgBlockedPlugins(e) {
 /**
  * 判断插件目录中的条目是否应隐藏：仓库被主机策略阻止；或按名字、仓库键、宽松名、可疑非 ASCII 名与禁用名匹配。
  */
-function isListingBlocked(e, orgBlockedPlugins) {
+function isListingBlocked(listing, blocked) {
   {
-    let { source } = e;
+    let { source } = listing;
     if (
       isListingRepositoryBlockedByHostPolicy(
         typeof source === "object" && "url" in source ? source.url : undefined,
       )
     )
       return true;
-    if (orgBlockedPlugins === null) return false;
-    let s = samePluginSource(e.source, undefined, BLOCKLIST_DIRECTION_OPTION);
+    if (blocked === null) return false;
+    let sourceKey = samePluginSource(listing.source, undefined, BLOCKLIST_DIRECTION_OPTION);
     if (
-      orgBlockedPlugins.names.has(e.name) ||
-      (s === undefined ? orgBlockedPlugins.keys.size > 0 : orgBlockedPlugins.keys.has(s))
+      blocked.names.has(listing.name) ||
+      (sourceKey === undefined ? blocked.keys.size > 0 : blocked.keys.has(sourceKey))
     )
       return true;
-    if (!orgBlockedPlugins.looseNameBlock) return false;
+    if (!blocked.looseNameBlock) return false;
     let path = typeof source === "object" && "path" in source ? source.path : undefined;
-    let filtered = [e.name, e.displayName, path?.split("/").findLast(Boolean)].filter((S) => S !== undefined);
-    if (filtered.some((S) => looseNameVariants(S).some((w) => orgBlockedPlugins.looseNames.has(w))))
+    let filtered = [listing.name, listing.displayName, path?.split("/").findLast(Boolean)].filter(
+      (label) => label !== undefined,
+    );
+    if (filtered.some((label) => looseNameVariants(label).some((variant) => blocked.looseNames.has(variant))))
       return true;
     if (filtered.some(isSuspiciousNonAsciiName)) return true;
-    return filtered.some((S) => matchesBlockedLooseName(S, orgBlockedPlugins));
+    return filtered.some((label) => matchesBlockedLooseName(label, blocked));
   }
   return false;
 }
@@ -3641,10 +3789,10 @@ function isListingBlocked(e, orgBlockedPlugins) {
  * 插件目录缓存清单中的该插件是否被组织阻止。
  */
 async function isPluginDirectoryListingBlocked(pluginName, storageV5) {
-  let r = pluginDirectoryModuleIfUsable();
-  if (!r) return false;
+  let directoryModule = pluginDirectoryModuleIfUsable();
+  if (!directoryModule) return false;
   let orgBlockedPlugins = await collectOrgBlockedPlugins(storageV5);
-  let { marketplace } = await r.loadPluginDirectoryMarketplace("cache-only", {
+  let { marketplace } = await directoryModule.loadPluginDirectoryMarketplace("cache-only", {
     installRecords: getInstalledPluginsMap,
   });
   let found = marketplace?.plugins.find((plugin) => plugin.name === pluginName);
@@ -3654,17 +3802,19 @@ async function isPluginDirectoryListingBlocked(pluginName, storageV5) {
 /**
  * 插件目录启用时返回插件不可安装的说明。
  */
-async function pluginDirectoryNotInstallableMessage(e) {
-  let n = pluginDirectoryModuleIfUsable();
-  if (!n || !(await n.isPluginDirectoryMarketplaceEnabled())) return;
-  let { marketplace } = await n.loadPluginDirectoryMarketplace("cache-only", {
+async function pluginDirectoryNotInstallableMessage(pluginName) {
+  let directoryModule = pluginDirectoryModuleIfUsable();
+  if (!directoryModule || !(await directoryModule.isPluginDirectoryMarketplaceEnabled())) return;
+  let { marketplace } = await directoryModule.loadPluginDirectoryMarketplace("cache-only", {
     installRecords: getInstalledPluginsMap,
   });
-  return marketplace === null ? undefined : await n.pluginDirectoryNotInstallableMessage(e);
+  return marketplace === null
+    ? undefined
+    : await directoryModule.pluginDirectoryNotInstallableMessage(pluginName);
 }
 //@ chunk-e6aww6q8.js:4297550-4297745 layout
-async function filterBlockedListings(marketplace, n) {
-  let orgBlockedPlugins = await collectOrgBlockedPlugins(n);
+async function filterBlockedListings(marketplace, storageV5) {
+  let orgBlockedPlugins = await collectOrgBlockedPlugins(storageV5);
   let filtered = marketplace.plugins.filter((plugin) => !isListingBlocked(plugin, orgBlockedPlugins));
   if (filtered.length === marketplace.plugins.length) return marketplace;
   if (marketplace.plugins.some((plugin) => isListingBlocked(plugin, null)))
@@ -3679,23 +3829,26 @@ async function filterBlockedListings(marketplace, n) {
  * 只读缓存加载插件目录市场清单（滤掉被阻止项）。
  */
 async function loadPluginDirectoryMarketplaceCached({
-  ignoreToggle: e = false,
-  storageV5: n,
-  onlyMissedListings: r = false,
+  ignoreToggle = false,
+  storageV5,
+  onlyMissedListings = false,
 } = {}) {
   {
-    let s =
-      e && pluginDirectoryPolicyBlock() === null ? pluginDirectoryModules : pluginDirectoryModuleIfUsable();
-    if (!s || (!e && !(await s.isPluginDirectoryMarketplaceEnabled()))) return null;
-    let { marketplace } = await s.loadPluginDirectoryMarketplace("cache-only", {
-      forInstalledPlugin: e,
-      onlyMissedListings: r,
+    let directoryModule =
+      ignoreToggle && pluginDirectoryPolicyBlock() === null
+        ? pluginDirectoryModules
+        : pluginDirectoryModuleIfUsable();
+    if (!directoryModule || (!ignoreToggle && !(await directoryModule.isPluginDirectoryMarketplaceEnabled())))
+      return null;
+    let { marketplace } = await directoryModule.loadPluginDirectoryMarketplace("cache-only", {
+      forInstalledPlugin: ignoreToggle,
+      onlyMissedListings,
       installRecords: getInstalledPluginsMap,
     });
     if (marketplace === null) return null;
-    let { installLocation } = await s.pluginDirectoryRegistryEntry();
+    let { installLocation } = await directoryModule.pluginDirectoryRegistryEntry();
     return {
-      marketplace: await filterBlockedListings(marketplace, n),
+      marketplace: await filterBlockedListings(marketplace, storageV5),
       installLocation,
     };
   }
@@ -3708,11 +3861,11 @@ async function loadPluginDirectoryMarketplaceCached({
 function createPluginDirectoryReader(storage, { mayWalkTheFeed, onBehalfOf = "a-person" }) {
   let readPromise;
   let readState = "unasked";
-  let readOnce = (w, L) => {
+  let readOnce = (directoryModule, purpose) => {
     readPromise ??= (async () => {
-      let pluginDirectoryMarketplace = await w.loadPluginDirectoryMarketplace("refresh", {
-        purpose: L,
-        trigger: L === "update" ? "update" : "install",
+      let pluginDirectoryMarketplace = await directoryModule.loadPluginDirectoryMarketplace("refresh", {
+        purpose,
+        trigger: purpose === "update" ? "update" : "install",
         installRecords: getInstalledPluginsMap,
       });
       if (pluginDirectoryMarketplace.marketplace === null) {
@@ -3727,16 +3880,16 @@ function createPluginDirectoryReader(storage, { mayWalkTheFeed, onBehalfOf = "a-
       }
       readState = "read";
       getPluginRegistry().marketplaces.delete(OFFICIAL_MARKETPLACE_NAME);
-      let { installLocation } = await w.pluginDirectoryRegistryEntry();
-      let Z = await filterBlockedListings(pluginDirectoryMarketplace.marketplace, storage);
-      let Se = new Set(Z.plugins);
+      let { installLocation } = await directoryModule.pluginDirectoryRegistryEntry();
+      let filteredMarketplace = await filterBlockedListings(pluginDirectoryMarketplace.marketplace, storage);
+      let visibleSet = new Set(filteredMarketplace.plugins);
       return {
-        marketplace: Z,
+        marketplace: filteredMarketplace,
         installLocation,
         reviewerMarkedNames: pluginDirectoryMarketplace.reviewerMarkedNames ?? new Set(),
         hiddenByPolicy: new Set(
           pluginDirectoryMarketplace.marketplace.plugins
-            .filter((plugin) => !Se.has(plugin))
+            .filter((plugin) => !visibleSet.has(plugin))
             .map((plugin) => plugin.name),
         ),
         notInstallable: pluginDirectoryMarketplace.notInstallable ?? new Map(),
@@ -3752,89 +3905,90 @@ function createPluginDirectoryReader(storage, { mayWalkTheFeed, onBehalfOf = "a-
     return readPromise;
   };
   let reader = {
-    async lookUp(w, L) {
+    async lookUp(pluginName, purpose) {
       {
-        let G = pluginDirectoryModuleIfUsable();
-        if (G === null)
+        let directoryModule = pluginDirectoryModuleIfUsable();
+        if (directoryModule === null)
           return {
             outcome: "not-read",
-            purpose: L,
+            purpose,
             detail: "it isn't available in this session",
           };
         if (!mayWalkTheFeed)
           return {
             outcome: "not-read",
-            purpose: L,
+            purpose,
             detail: "it is read only when a person asks for it",
           };
         if (
-          L !== "switch" &&
-          !(await G.isPluginDirectoryMarketplaceEnabled()) &&
-          !(L === "update" && hasInstalledOfficialEntry(w))
+          purpose !== "switch" &&
+          !(await directoryModule.isPluginDirectoryMarketplaceEnabled()) &&
+          !(purpose === "update" && hasInstalledOfficialEntry(pluginName))
         )
           return {
             outcome: "not-read",
-            purpose: L,
+            purpose,
             detail: "it is off",
             nextStep: `Turn it on: claude plugin marketplace add ${OFFICIAL_MARKETPLACE_NAME}`,
           };
         if (readPromise === undefined) {
-          let ke = G.pluginDirectoryFailedWalkWindow();
+          let failedWalkWindow = directoryModule.pluginDirectoryFailedWalkWindow();
           let timestamp =
-            ke === undefined
+            failedWalkWindow === undefined
               ? undefined
               : onBehalfOf === "nobody"
-                ? ke.closesAt
-                : ke.serviceDelayMs === undefined
+                ? failedWalkWindow.closesAt
+                : failedWalkWindow.serviceDelayMs === undefined
                   ? undefined
-                  : ke.failedAt + Math.min(ke.serviceDelayMs, MARKETPLACE_CACHE_TTL_MS);
-          if (ke !== undefined && timestamp !== undefined && Date.now() < timestamp) {
+                  : failedWalkWindow.failedAt +
+                    Math.min(failedWalkWindow.serviceDelayMs, MARKETPLACE_CACHE_TTL_MS);
+          if (failedWalkWindow !== undefined && timestamp !== undefined && Date.now() < timestamp) {
             readState = "not-read";
             return {
               outcome: "not-read",
-              purpose: L,
+              purpose,
               detail:
                 onBehalfOf === "nobody"
-                  ? `it could not be read a short while ago (${ke.reason}), and work that runs by itself does not ask it again before ${formatTimeOfDay(timestamp)}`
+                  ? `it could not be read a short while ago (${failedWalkWindow.reason}), and work that runs by itself does not ask it again before ${formatTimeOfDay(timestamp)}`
                   : `it asked Claude Code to wait, and can be asked again at ${formatTimeOfDay(timestamp)}`,
             };
           }
         }
-        let q = await readOnce(G, L);
-        if (q.marketplace === null)
+        let readResult = await readOnce(directoryModule, purpose);
+        if (readResult.marketplace === null)
           return {
             outcome: "not-read",
-            purpose: L,
-            detail: q.detail,
-            ...(q.nextStep !== undefined && {
-              nextStep: q.nextStep,
+            purpose,
+            detail: readResult.detail,
+            ...(readResult.nextStep !== undefined && {
+              nextStep: readResult.nextStep,
             }),
           };
-        let found = q.marketplace.plugins.find((plugin) => plugin.name === w);
+        let found = readResult.marketplace.plugins.find((plugin) => plugin.name === pluginName);
         if (found !== undefined)
           return {
             outcome: "listed",
             entry: found,
-            marketplaceInstallLocation: q.installLocation,
-            reviewerMarked: q.reviewerMarkedNames.has(w),
+            marketplaceInstallLocation: readResult.installLocation,
+            reviewerMarked: readResult.reviewerMarkedNames.has(pluginName),
           };
-        if (q.hiddenByPolicy.has(w))
+        if (readResult.hiddenByPolicy.has(pluginName))
           return {
             outcome: "hidden-by-policy",
           };
-        let Se = q.notInstallable.get(w);
-        return Se === undefined
+        let reason = readResult.notInstallable.get(pluginName);
+        return reason === undefined
           ? {
               outcome: "not-listed",
             }
           : {
               outcome: "not-installable",
-              why: Se,
+              why: reason,
             };
       }
       return {
         outcome: "not-read",
-        purpose: L,
+        purpose,
         detail: "it isn't available in this build",
       };
     },
@@ -3852,7 +4006,10 @@ function formatTimeOfDay(timestamp) {
   });
 }
 //@ chunk-e6aww6q8.js:4300724-4300744 layout
-var weakMap_12 = new WeakMap();
+var weakMap_12; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:4300724", () => {
+  weakMap_12 = new WeakMap();
+});
 //@ chunk-e6aww6q8.js:4300744-4301197 layout
 /**
  * 为切换安装来源查插件目录条目。
@@ -3860,22 +4017,22 @@ var weakMap_12 = new WeakMap();
 async function lookUpPluginForSwitch(
   pluginName,
   storage,
-  r = createPluginDirectoryReader(storage, {
+  reader = createPluginDirectoryReader(storage, {
     mayWalkTheFeed: true,
   }),
 ) {
-  let s = await r.lookUp(pluginName, "switch");
-  switch (s.outcome) {
+  let result = await reader.lookUp(pluginName, "switch");
+  switch (result.outcome) {
     case "listed":
       return {
-        entry: s.entry,
-        marketplaceInstallLocation: s.marketplaceInstallLocation,
-        reviewerMarked: s.reviewerMarked,
+        entry: result.entry,
+        marketplaceInstallLocation: result.marketplaceInstallLocation,
+        reviewerMarked: result.reviewerMarked,
       };
     case "not-read":
       return {
         notFreshEnoughFor: "switch",
-        detail: s.detail,
+        detail: result.detail,
       };
     case "hidden-by-policy":
     case "not-installable":
@@ -3884,7 +4041,7 @@ async function lookUpPluginForSwitch(
         entry: null,
       };
     default: {
-      let h = s;
+      let outcome = result;
       throw Error("Unhandled outcome of a read of the Directory");
     }
   }
@@ -3897,9 +4054,9 @@ function formatSwitchNeedsFreshReadMessage(detail) {
   return `A switch needs a fresh read of the ${OFFICIAL_MARKETPLACE_DISPLAY}, not the copy saved on this machine, and it could not be read: ${quotedPrintable(detail, 200)}. Nothing was changed; try again once it can be read`;
 }
 //@ chunk-e6aww6q8.js:4301390-4301558 layout
-async function findPluginDirectoryEntry(e, n, r) {
-  let pluginDirectoryForPurpose = await loadPluginDirectoryForPurpose(e, n, r);
-  let found = pluginDirectoryForPurpose?.marketplace.plugins.find((plugin) => plugin.name === e);
+async function findPluginDirectoryEntry(pluginName, purpose, storageV5) {
+  let pluginDirectoryForPurpose = await loadPluginDirectoryForPurpose(pluginName, purpose, storageV5);
+  let found = pluginDirectoryForPurpose?.marketplace.plugins.find((plugin) => plugin.name === pluginName);
   return pluginDirectoryForPurpose && found
     ? {
         entry: found,
@@ -3911,8 +4068,8 @@ async function findPluginDirectoryEntry(e, n, r) {
 /**
  * 加载插件目录（Directory）市场的清单（缓存模式），没有返回 null。
  */
-async function loadPluginDirectoryMarketplace(e, storageV5) {
-  return (await loadPluginDirectoryForPurpose(e, storageV5, "load"))?.marketplace ?? null;
+async function loadPluginDirectoryMarketplace(pluginName, storageV5) {
+  return (await loadPluginDirectoryForPurpose(pluginName, storageV5, "load"))?.marketplace ?? null;
 }
 //@ chunk-e6aww6q8.js:4301631-4301747 layout
 async function pluginDirectoryNotInstallableReason(pluginName, storageV5) {
@@ -3924,26 +4081,26 @@ async function pluginDirectoryNotInstallableReason(pluginName, storageV5) {
 /**
  * 在插件目录（可只看漏列项）中查插件条目。
  */
-async function findMissedListingEntry(e, n, r) {
-  let s = r
-    ? await loadPluginDirectoryForPurpose(e, n, "load", true)
+async function findMissedListingEntry(pluginName, storageV5, ignoreToggle) {
+  let directory = ignoreToggle
+    ? await loadPluginDirectoryForPurpose(pluginName, storageV5, "load", true)
     : await loadPluginDirectoryMarketplaceCached({
-        storageV5: n,
+        storageV5,
         onlyMissedListings: true,
       });
-  let found = s?.marketplace.plugins.find((plugin) => plugin.name === e);
-  return s && found
+  let found = directory?.marketplace.plugins.find((plugin) => plugin.name === pluginName);
+  return directory && found
     ? {
         entry: found,
-        marketplaceInstallLocation: s.installLocation,
+        marketplaceInstallLocation: directory.installLocation,
       }
     : null;
 }
 //@ chunk-e6aww6q8.js:4301972-4302079 layout
-function loadPluginDirectoryForPurpose(e, storageV5, r, onlyMissedListings = false) {
+function loadPluginDirectoryForPurpose(pluginName, storageV5, purpose, onlyMissedListings = false) {
   return loadPluginDirectoryMarketplaceCached({
     onlyMissedListings,
-    ignoreToggle: r !== "install" && hasInstalledOfficialEntry(e),
+    ignoreToggle: purpose !== "install" && hasInstalledOfficialEntry(pluginName),
     storageV5,
   });
 }
@@ -3974,40 +4131,45 @@ async function awaitPluginDirectoryVerdict() {
  * 加载插件目录市场，不可用（或过期）时抛 PluginDirectoryUnavailableError。
  */
 async function loadPluginDirectoryMarketplace_2(
-  e,
+  mode,
   storageV5,
-  { staleIsFailure: r = false, trigger: s = "other", signal: h } = {},
+  { staleIsFailure = false, trigger = "other", signal } = {},
 ) {
-  let y = pluginDirectoryModuleIfUsable();
-  let S = y
-    ? await y.loadPluginDirectoryMarketplace(e, {
-        trigger: s,
-        signal: h,
+  let directoryModule = pluginDirectoryModuleIfUsable();
+  let loadResult = directoryModule
+    ? await directoryModule.loadPluginDirectoryMarketplace(mode, {
+        trigger,
+        signal,
         installRecords: getInstalledPluginsMap,
       })
     : {
         marketplace: null,
         message: "it isn't available in this session",
       };
-  if (r && S.marketplace !== null && "staleReason" in S && S.staleReason)
+  if (
+    staleIsFailure &&
+    loadResult.marketplace !== null &&
+    "staleReason" in loadResult &&
+    loadResult.staleReason
+  )
     throw withTelemetryMessage(
       new PluginDirectoryUnavailableError(
-        `${OFFICIAL_MARKETPLACE_DISPLAY} could not be refreshed: ${S.staleReason}`,
+        `${OFFICIAL_MARKETPLACE_DISPLAY} could not be refreshed: ${loadResult.staleReason}`,
       ),
       "Plugin directory marketplace refresh served stale cache",
     );
-  if (S.marketplace === null) {
-    let w = pluginDirectoryPolicyBlockHint();
+  if (loadResult.marketplace === null) {
+    let policyHint = pluginDirectoryPolicyBlockHint();
     throw withTelemetryMessage(
       new PluginDirectoryUnavailableError(
-        w === ""
-          ? `${OFFICIAL_MARKETPLACE_DISPLAY} is unavailable: ${S.message}`
-          : `${OFFICIAL_MARKETPLACE_DISPLAY} is blocked by your organization. ${w}`,
+        policyHint === ""
+          ? `${OFFICIAL_MARKETPLACE_DISPLAY} is unavailable: ${loadResult.message}`
+          : `${OFFICIAL_MARKETPLACE_DISPLAY} is blocked by your organization. ${policyHint}`,
       ),
       "Plugin directory marketplace catalog unavailable",
     );
   }
-  return await filterBlockedListings(S.marketplace, storageV5);
+  return await filterBlockedListings(loadResult.marketplace, storageV5);
 }
 //@ chunk-e6aww6q8.js:4302965-4303774 layout
 /**
@@ -4030,13 +4192,13 @@ async function loadCachedMarketplace(storage, marketplaceName, entry, declaredSo
       )?.marketplace ?? null
     );
   try {
-    let y = normalizeInstallLocation(entry.source, entry.installLocation);
-    let S = validateReservedMarketplaceEntry(marketplaceName, {
+    let installLocation = normalizeInstallLocation(entry.source, entry.installLocation);
+    let refusal = validateReservedMarketplaceEntry(marketplaceName, {
       source: entry.source,
-      installLocation: y,
+      installLocation,
     });
-    if (S) {
-      logForDebugging(`Refusing to load marketplace '${marketplaceName}': ${S}`, {
+    if (refusal) {
+      logForDebugging(`Refusing to load marketplace '${marketplaceName}': ${refusal}`, {
         level: "warn",
       });
       return null;
@@ -4053,11 +4215,11 @@ async function loadCachedMarketplace(storage, marketplaceName, entry, declaredSo
       return null;
     }
     let marketplaceManifest = await readMarketplaceManifest(
-      y,
+      installLocation,
       declaredSource,
       storage,
       isStorageV5Enabled() && storage !== undefined
-        ? getMarketplaceStorageLocation(marketplaceName, entry.source, y)
+        ? getMarketplaceStorageLocation(marketplaceName, entry.source, installLocation)
         : null,
     );
     failedNames?.delete(marketplaceName);
@@ -4083,28 +4245,31 @@ async function loadCachedMarketplace(storage, marketplaceName, entry, declaredSo
   }
 }
 //@ chunk-e6aww6q8.js:4303774-4303794 layout
-var weakMap_13 = new WeakMap();
+var weakMap_13; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:4303774", () => {
+  weakMap_13 = new WeakMap();
+});
 //@ chunk-e6aww6q8.js:4303794-4303927 layout
-function markImpersonationFailure(failedNames, marketplaceName, r) {
+function markImpersonationFailure(failedNames, marketplaceName, isImpersonating) {
   if (failedNames === undefined) return;
-  let s = weakMap_13.get(failedNames);
-  if (r) {
-    if (s === undefined) weakMap_13.set(failedNames, new Set([marketplaceName]));
-    else s.add(marketplaceName);
-  } else s?.delete(marketplaceName);
+  let names = weakMap_13.get(failedNames);
+  if (isImpersonating) {
+    if (names === undefined) weakMap_13.set(failedNames, new Set([marketplaceName]));
+    else names.add(marketplaceName);
+  } else names?.delete(marketplaceName);
 }
 //@ chunk-e6aww6q8.js:4303927-4303976 layout
 /**
  * isRegistryOwnedByName：weakMap 里是否登记了该名字。
  */
-function isRegistryOwnedByName(e, marketplaceName) {
-  return weakMap_13.get(e)?.has(marketplaceName) === true;
+function isRegistryOwnedByName(failedNames, marketplaceName) {
+  return weakMap_13.get(failedNames)?.has(marketplaceName) === true;
 }
 //@ chunk-e6aww6q8.js:4303976-4306122 fingerprint = getMarketplace (0.462)
 /**
  * 取市场目录：缓存存在且可解析就用，否则（或缓存过期时）重新 loadAndCacheMarketplace。
  */
-function getMarketplace(marketplaceName, storageV5, r = "other") {
+function getMarketplace(marketplaceName, storageV5, purpose = "other") {
   if (marketplaceName.toLowerCase() === pluginManifestPathSchemas)
     return Promise.reject(
       Error(
@@ -4112,39 +4277,39 @@ function getMarketplace(marketplaceName, storageV5, r = "other") {
       ),
     );
   let { marketplaces } = getPluginRegistry();
-  let h = marketplaces.get(marketplaceName);
-  if (h)
+  let cached = marketplaces.get(marketplaceName);
+  if (cached)
     return marketplaceName === OFFICIAL_MARKETPLACE_NAME
-      ? h.then(
-          (S) =>
+      ? cached.then(
+          (marketplace) =>
             pluginDirectoryUnavailableKind() !== null
               ? loadPluginDirectoryMarketplace_2("if-stale", storageV5)
-              : filterBlockedListings(S, storageV5),
+              : filterBlockedListings(marketplace, storageV5),
           (error) => {
-            let w = marketplaces.get(marketplaceName);
+            let current = marketplaces.get(marketplaceName);
             if (
               !(error instanceof PluginDirectoryUnavailableError) ||
               pluginDirectoryPolicyBlock() !== null ||
-              w === undefined
+              current === undefined
             )
               throw error;
-            if (w === h) marketplaces.delete(marketplaceName);
-            return getMarketplace(marketplaceName, storageV5, r);
+            if (current === cached) marketplaces.delete(marketplaceName);
+            return getMarketplace(marketplaceName, storageV5, purpose);
           },
         )
-      : h;
-  let y = (async () => {
+      : cached;
+  let load = (async () => {
     let knownMarketplacesWithDeclared = await loadKnownMarketplacesWithDeclared(storageV5);
-    let w = ownPropertyOrUndefined(knownMarketplacesWithDeclared, marketplaceName);
-    if (!w)
+    let entry = ownPropertyOrUndefined(knownMarketplacesWithDeclared, marketplaceName);
+    if (!entry)
       throw withTelemetryMessage(
         Error(
           `Marketplace '${marketplaceName}' not found in configuration. Available marketplaces: ${Object.keys(knownMarketplacesWithDeclared).join(", ")}`,
         ),
         "Marketplace not found in configuration",
       );
-    if (isClaudeAiMarketplaceSource(w.source)) {
-      let { marketplace, status } = await ensureClaudeAiMarketplace(marketplaceName, w.source, {
+    if (isClaudeAiMarketplaceSource(entry.source)) {
+      let { marketplace, status } = await ensureClaudeAiMarketplace(marketplaceName, entry.source, {
         mode: "if-missing",
         credentials: undefined,
       });
@@ -4156,30 +4321,30 @@ function getMarketplace(marketplaceName, storageV5, r = "other") {
         );
       return marketplace;
     }
-    if (isPluginDirectorySource(w.source))
+    if (isPluginDirectorySource(entry.source))
       return await loadPluginDirectoryMarketplace_2("if-stale", storageV5, {
-        trigger: r,
+        trigger: purpose,
       });
-    assertReservedNameTrusted(marketplaceName, w);
-    assertNotLookAlikeName(marketplaceName, w);
-    if (isLocalMarketplaceSource(w.source) && !isAbsolute(w.source.path)) {
-      let q = claudeCommand("plugin marketplace remove", marketplaceName);
+    assertReservedNameTrusted(marketplaceName, entry);
+    assertNotLookAlikeName(marketplaceName, entry);
+    if (isLocalMarketplaceSource(entry.source) && !isAbsolute(entry.source.path)) {
+      let hint = claudeCommand("plugin marketplace remove", marketplaceName);
       throw withTelemetryMessage(
         Error(
-          `Marketplace "${marketplaceName}" has a relative source path (${w.source.path}) ` +
+          `Marketplace "${marketplaceName}" has a relative source path (${entry.source.path}) ` +
             "in known_marketplaces.json \u2014 this is stale state from an older " +
-            `Claude Code version. ${q ? `Run \`${q}\` and re-add` : "Remove and re-add"} it from the original project directory.`,
+            `Claude Code version. ${hint ? `Run \`${hint}\` and re-add` : "Remove and re-add"} it from the original project directory.`,
         ),
         "Marketplace has relative source path (legacy state)",
       );
     }
     try {
       return await readMarketplaceManifest(
-        w.installLocation,
+        entry.installLocation,
         marketplaceName,
         storageV5,
         isStorageV5Enabled() && storageV5 !== undefined
-          ? getMarketplaceStorageLocation(marketplaceName, w.source, w.installLocation)
+          ? getMarketplaceStorageLocation(marketplaceName, entry.source, entry.installLocation)
           : null,
       );
     } catch (error) {
@@ -4190,11 +4355,11 @@ function getMarketplace(marketplaceName, storageV5, r = "other") {
         },
       );
     }
-    let L;
-    let G;
+    let marketplace;
+    let keptStale;
     try {
-      ({ marketplace: L, keptStaleClone: G } = await loadAndCacheMarketplace(
-        w.source,
+      ({ marketplace, keptStaleClone: keptStale } = await loadAndCacheMarketplace(
+        entry.source,
         marketplaceName,
         undefined,
         storageV5,
@@ -4210,49 +4375,52 @@ function getMarketplace(marketplaceName, storageV5, r = "other") {
         errorMessage(error).includes(IMPERSONATION_ERROR_MESSAGE)
       )
         throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-          reservedNameMessage_2(w.source.source === "settings"),
+          reservedNameMessage_2(entry.source.source === "settings"),
           "Marketplace name refused by the look-alike check",
         );
       throw withTelemetryMessage(
         Error(
-          `Failed to load marketplace "${marketplaceName}" from source (${w.source.source}): ${errorMessage(error)}`,
+          `Failed to load marketplace "${marketplaceName}" from source (${entry.source.source}): ${errorMessage(error)}`,
         ),
         "Failed to load marketplace from source",
       );
     }
-    if (!G) await touchMarketplaceLastUpdated(marketplaceName, storageV5);
-    return L;
+    if (!keptStale) await touchMarketplaceLastUpdated(marketplaceName, storageV5);
+    return marketplace;
   })();
-  marketplaces.set(marketplaceName, y);
-  y.catch((error) => {
-    if (
-      error instanceof PluginDirectoryUnavailableError &&
-      pluginDirectoryPolicyBlock() === null &&
-      marketplaces.get(marketplaceName) === y
-    )
-      marketplaces.delete(marketplaceName);
-  }).catch(() => {});
-  return y;
+  marketplaces.set(marketplaceName, load);
+  load
+    .catch((error) => {
+      if (
+        error instanceof PluginDirectoryUnavailableError &&
+        pluginDirectoryPolicyBlock() === null &&
+        marketplaces.get(marketplaceName) === load
+      )
+        marketplaces.delete(marketplaceName);
+    })
+    .catch(() => {});
+  return load;
 }
 //@ chunk-e6aww6q8.js:4306122-4307000 fingerprint = getPluginByIdCacheOnly (0.811)
 /**
  * 由插件 ID（name@marketplace）只用缓存找到 marketplace 条目，返回 {entry, marketplaceInstallLocation}。
  */
-async function getPluginByIdCacheOnly(pluginId, storageV5, r = "load") {
+async function getPluginByIdCacheOnly(pluginId, storageV5, purpose = "load") {
   let { name: pluginName, marketplace: marketplaceName } = parsePluginIdentifier(pluginId);
   if (!pluginName || !marketplaceName || marketplaceName.toLowerCase() === pluginManifestPathSchemas)
     return null;
   let fs = getFsImplementation();
-  let S = isStorageV5Enabled() && storageV5 !== undefined ? getMarketplacesStorageScope() : null;
-  if (storageV5 !== undefined && S !== null) {
-    let L = await storageV5.read([S]);
-    if (!L.ok) return null;
-    let G = L.value.items[0];
-    if (!G?.found) return getPluginByIdFromCacheOrDeclared(storageV5, pluginId, r);
+  let scope = isStorageV5Enabled() && storageV5 !== undefined ? getMarketplacesStorageScope() : null;
+  if (storageV5 !== undefined && scope !== null) {
+    let readResult = await storageV5.read([scope]);
+    if (!readResult.ok) return null;
+    let item = readResult.value.items[0];
+    if (!item?.found) return getPluginByIdFromCacheOrDeclared(storageV5, pluginId, purpose);
     try {
-      let q = jsonParse(Buffer.from(G.value).toString("utf-8"));
-      let admittedMarketplaceEntry = getAdmittedMarketplaceEntry(marketplaceName, q);
-      if (!admittedMarketplaceEntry) return await getPluginByIdFromCacheOrDeclared(storageV5, pluginId, r);
+      let config = jsonParse(Buffer.from(item.value).toString("utf-8"));
+      let admittedMarketplaceEntry = getAdmittedMarketplaceEntry(marketplaceName, config);
+      if (!admittedMarketplaceEntry)
+        return await getPluginByIdFromCacheOrDeclared(storageV5, pluginId, purpose);
       let marketplaceCacheOnly = await getMarketplaceCacheOnly(marketplaceName, storageV5);
       if (!marketplaceCacheOnly) return null;
       let found = marketplaceCacheOnly.plugins.find((plugin) => plugin.name === pluginName);
@@ -4265,7 +4433,7 @@ async function getPluginByIdCacheOnly(pluginId, storageV5, r = "load") {
       return null;
     }
   }
-  if (isDiskless()) return getPluginByIdFromCacheOrDeclared(storageV5, pluginId, r);
+  if (isDiskless()) return getPluginByIdFromCacheOrDeclared(storageV5, pluginId, purpose);
   let configFile = getKnownMarketplacesPath();
   try {
     let content = await fs.readFile(configFile, {
@@ -4273,7 +4441,7 @@ async function getPluginByIdCacheOnly(pluginId, storageV5, r = "load") {
     });
     let config = jsonParse(content);
     let marketplaceConfig = getAdmittedMarketplaceEntry(marketplaceName, config);
-    if (!marketplaceConfig) return await getPluginByIdFromCacheOrDeclared(storageV5, pluginId, r);
+    if (!marketplaceConfig) return await getPluginByIdFromCacheOrDeclared(storageV5, pluginId, purpose);
     let marketplace = await getMarketplaceCacheOnly(marketplaceName);
     if (!marketplace) return null;
     let plugin = marketplace.plugins.find((plugin) => plugin.name === pluginName);
@@ -4283,23 +4451,24 @@ async function getPluginByIdCacheOnly(pluginId, storageV5, r = "load") {
       marketplaceInstallLocation: marketplaceConfig.installLocation,
     };
   } catch (error) {
-    return isENOENT(error) ? getPluginByIdFromCacheOrDeclared(storageV5, pluginId, r) : null;
+    return isENOENT(error) ? getPluginByIdFromCacheOrDeclared(storageV5, pluginId, purpose) : null;
   }
 }
 //@ chunk-e6aww6q8.js:4307000-4307675 layout
-async function getPluginByIdFromCacheOrDeclared(storageV5, pluginId, r) {
-  let { name: s, marketplace } = parsePluginIdentifier(pluginId);
-  if (!s || !marketplace) return null;
-  if (marketplace === OFFICIAL_MARKETPLACE_NAME) return findPluginDirectoryEntry(s, storageV5, r);
-  let y = ownPropertyOrUndefined(await readClaudeAiMarketplaceRegistry(), marketplace);
-  if (y === undefined) return null;
-  let marketplaceInstallLocation = toKnownMarketplaceEntry(marketplace, y).installLocation;
-  let { marketplace: marketplace_2, status } = await ensureClaudeAiMarketplace(marketplace, y.source, {
+async function getPluginByIdFromCacheOrDeclared(storageV5, pluginId, purpose) {
+  let { name: pluginName, marketplace } = parsePluginIdentifier(pluginId);
+  if (!pluginName || !marketplace) return null;
+  if (marketplace === OFFICIAL_MARKETPLACE_NAME)
+    return findPluginDirectoryEntry(pluginName, storageV5, purpose);
+  let entry = ownPropertyOrUndefined(await readClaudeAiMarketplaceRegistry(), marketplace);
+  if (entry === undefined) return null;
+  let marketplaceInstallLocation = toKnownMarketplaceEntry(marketplace, entry).installLocation;
+  let { marketplace: marketplace_2, status } = await ensureClaudeAiMarketplace(marketplace, entry.source, {
     mode: "cache-only",
     credentials: undefined,
   });
   if (marketplace_2 !== null) {
-    let found = marketplace_2.plugins.find((plugin) => plugin.name === s);
+    let found = marketplace_2.plugins.find((plugin) => plugin.name === pluginName);
     return found === undefined
       ? null
       : {
@@ -4308,19 +4477,19 @@ async function getPluginByIdFromCacheOrDeclared(storageV5, pluginId, r) {
         };
   }
   if (status.kind === "gone") return null;
-  let q = getInstalledPlugins().plugins[pluginId]?.[0];
-  if (q === undefined) return null;
+  let installation = getInstalledPlugins().plugins[pluginId]?.[0];
+  if (installation === undefined) return null;
   return {
     entry: {
-      name: s,
+      name: pluginName,
       source: {
         source: "claudeai",
-        pluginId: q.claudeaiPluginId ?? "",
-        version: q.version ?? "",
+        pluginId: installation.claudeaiPluginId ?? "",
+        version: installation.version ?? "",
         installable: false,
       },
-      ...(q.version !== undefined && {
-        version: q.version,
+      ...(installation.version !== undefined && {
+        version: installation.version,
       }),
       strict: true,
     },
@@ -4331,11 +4500,11 @@ async function getPluginByIdFromCacheOrDeclared(storageV5, pluginId, r) {
 /**
  * 由插件 ID 找 marketplace 条目，必要时联网刷新市场。
  */
-async function getPluginById(pluginId, storageV5, r = "other") {
+async function getPluginById(pluginId, storageV5, purpose = "other") {
   let cached = await getPluginByIdCacheOnly(
     pluginId,
     storageV5,
-    r === "install" || r === "update" ? r : "load",
+    purpose === "install" || purpose === "update" ? purpose : "load",
   );
   if (cached) return cached;
   let { name: pluginName, marketplace: marketplaceName } = parsePluginIdentifier(pluginId);
@@ -4345,7 +4514,7 @@ async function getPluginById(pluginId, storageV5, r = "other") {
     let config = await loadKnownMarketplacesWithDeclared(storageV5);
     let marketplaceConfig = ownPropertyOrUndefined(config, marketplaceName);
     if (!marketplaceConfig) return null;
-    let plugin = (await getMarketplace(marketplaceName, storageV5, r)).plugins.find(
+    let plugin = (await getMarketplace(marketplaceName, storageV5, purpose)).plugins.find(
       (plugin) => plugin.name === pluginName,
     );
     if (!plugin) return null;
@@ -4365,30 +4534,30 @@ async function getPluginById(pluginId, storageV5, r = "other") {
 /**
  * 确保插件目录市场的目录在本机（必要时 cache-only 加载），返回 not_needed/ok/not_allowed 等。
  */
-async function ensurePluginDirectoryCatalog(e, n = PLUGIN_DIRECTORY_CATALOG_MISSING_ERROR) {
+async function ensurePluginDirectoryCatalog(storageV5, timeoutMs = PLUGIN_DIRECTORY_CATALOG_MISSING_ERROR) {
   {
-    let r = pluginDirectoryModuleIfUsable();
+    let directoryModule = pluginDirectoryModuleIfUsable();
     if (
-      r === null ||
+      directoryModule === null ||
       !isSourceAllowedByPolicy({
         source: "pluginDirectory",
       }) ||
-      r.pluginDirectoryWalkReadiness() === "not_allowed"
+      directoryModule.pluginDirectoryWalkReadiness() === "not_allowed"
     )
       return "not_needed";
     if (
       (
-        await r.loadPluginDirectoryMarketplace("cache-only", {
+        await directoryModule.loadPluginDirectoryMarketplace("cache-only", {
           forInstalledPlugin: true,
           installRecords: getInstalledPluginsMap,
         })
       ).marketplace !== null
     )
       return "not_needed";
-    if (r.pluginDirectoryWalkReadiness() === "backed_off") return "unreachable";
+    if (directoryModule.pluginDirectoryWalkReadiness() === "backed_off") return "unreachable";
     let abortController = new AbortController();
-    let y = await withDeadline(
-      refreshMarketplaceDeduped(OFFICIAL_MARKETPLACE_NAME, e, undefined, {
+    let result = await withDeadline(
+      refreshMarketplaceDeduped(OFFICIAL_MARKETPLACE_NAME, storageV5, undefined, {
         directoryTrigger: "reload",
         directorySignal: abortController.signal,
       }).then(
@@ -4403,15 +4572,15 @@ async function ensurePluginDirectoryCatalog(e, n = PLUGIN_DIRECTORY_CATALOG_MISS
           return false;
         },
       ),
-      n,
+      timeoutMs,
     );
-    if (y === undefined) {
+    if (result === undefined) {
       abortController.abort();
-      r.notePluginDirectoryWalkTimedOut();
+      directoryModule.notePluginDirectoryWalkTimedOut();
       return "unreachable";
     }
-    if (y) return "fetched";
-    return r.pluginDirectoryWalkReadiness() === "backed_off" ? "unreachable" : "unavailable";
+    if (result) return "fetched";
+    return directoryModule.pluginDirectoryWalkReadiness() === "backed_off" ? "unreachable" : "unavailable";
   }
   return "not_needed";
 }
@@ -4419,8 +4588,12 @@ async function ensurePluginDirectoryCatalog(e, n = PLUGIN_DIRECTORY_CATALOG_MISS
 /**
  * 插件目录 catalog 不在本机时的错误类别名。
  */
-var PLUGIN_DIRECTORY_CATALOG_MISSING_ERROR = OFFICIAL_MARKETPLACE_NAME_CHECK_TTL_MS;
-var PLUGIN_DIRECTORY_CATALOG_MISSING = `the ${OFFICIAL_MARKETPLACE_DISPLAY}'s catalog is not on this machine (it is off, blocked, unavailable, or not downloaded yet)`;
+var PLUGIN_DIRECTORY_CATALOG_MISSING_ERROR; // deferred: uses OFFICIAL_MARKETPLACE_NAME (./officialMarketplaceNames.js) of its import cycle while loading; runs once the cycle is complete
+var PLUGIN_DIRECTORY_CATALOG_MISSING;
+deferInit("chunk-e6aww6q8.js:4308924", () => {
+  PLUGIN_DIRECTORY_CATALOG_MISSING_ERROR = OFFICIAL_MARKETPLACE_NAME_CHECK_TTL_MS;
+  PLUGIN_DIRECTORY_CATALOG_MISSING = `the ${OFFICIAL_MARKETPLACE_DISPLAY}'s catalog is not on this machine (it is off, blocked, unavailable, or not downloaded yet)`;
+});
 //@ chunk-e6aww6q8.js:4309042-4309159 layout
 /**
  * 插件目录市场的目录（catalog）不在本机时抛出的错误。
@@ -4435,34 +4608,34 @@ class PluginDirectoryCatalogMissingError extends Error {
 /**
  * 取市场目录；插件目录市场只读缓存，没有缓存时抛 PluginDirectoryCatalogMissingError。
  */
-async function getMarketplaceOrDirectoryCatalog(e, n) {
-  if (e === OFFICIAL_MARKETPLACE_NAME) {
-    let marketplaceCacheOnly = await getMarketplaceCacheOnly(e, n);
+async function getMarketplaceOrDirectoryCatalog(name, storageV5) {
+  if (name === OFFICIAL_MARKETPLACE_NAME) {
+    let marketplaceCacheOnly = await getMarketplaceCacheOnly(name, storageV5);
     if (marketplaceCacheOnly === null) throw new PluginDirectoryCatalogMissingError();
     return marketplaceCacheOnly;
   }
-  return getMarketplace(e, n);
+  return getMarketplace(name, storageV5);
 }
 //@ chunk-e6aww6q8.js:4309264-4309332 layout
 /**
  * 按插件 ID 取 marketplace 条目；插件目录市场只用缓存。
  */
-function getPluginByIdAnySource(e, n, r) {
-  return parsePluginIdentifier(e).marketplace === OFFICIAL_MARKETPLACE_NAME
-    ? getPluginByIdCacheOnly(e, n, r)
-    : getPluginById(e, n);
+function getPluginByIdAnySource(pluginId, storageV5, purpose) {
+  return parsePluginIdentifier(pluginId).marketplace === OFFICIAL_MARKETPLACE_NAME
+    ? getPluginByIdCacheOnly(pluginId, storageV5, purpose)
+    : getPluginById(pluginId, storageV5);
 }
 //@ chunk-e6aww6q8.js:4309332-4311978 fingerprint = refreshAllMarketplaces (0.447)
 /**
  * 刷新所有市场（跳过种子管理和 settings 内联的市场），逐个调用 refreshMarketplace，汇总失败。
  */
-async function refreshAllMarketplaces(e) {
-  let n = [];
-  let r = [];
-  let s = [];
-  let h = 0;
-  let knownMarketplacesWithDeclared = await loadKnownMarketplacesWithDeclared(e);
-  let S = {};
+async function refreshAllMarketplaces(storageV5) {
+  let policyRefused = [];
+  let failed = [];
+  let builtInSkipped = [];
+  let attempted = 0;
+  let knownMarketplacesWithDeclared = await loadKnownMarketplacesWithDeclared(storageV5);
+  let patches = {};
   for (let [key, value] of Object.entries(knownMarketplacesWithDeclared)) {
     if (seedDirFor(value.installLocation)) {
       logForDebugging(`Skipping seed-managed marketplace '${key}' in bulk refresh`);
@@ -4476,14 +4649,14 @@ async function refreshAllMarketplaces(e) {
             level: "warn",
           },
         );
-        h++;
-        r.push(key);
+        attempted++;
+        failed.push(key);
       }
       continue;
     }
     if (isClaudeAiMarketplaceSource(value.source)) {
       if (!isSourceAllowedByPolicy(value.source)) continue;
-      h++;
+      attempted++;
       getPluginRegistry().marketplaces.delete(key);
       try {
         await refreshClaudeAiMarketplace(key, value.source, {
@@ -4493,7 +4666,7 @@ async function refreshAllMarketplaces(e) {
         logForDebugging(`Failed to refresh claude.ai marketplace ${key}: ${errorMessage(error)}`, {
           level: "warn",
         });
-        r.push(key);
+        failed.push(key);
       }
       continue;
     }
@@ -4501,17 +4674,17 @@ async function refreshAllMarketplaces(e) {
       if (!isSourceAllowedByPolicy(value.source) || pluginDirectoryPolicyBlock() !== null) continue;
       getPluginRegistry().marketplaces.delete(key);
       try {
-        await loadPluginDirectoryMarketplace_2("refresh", e, {
+        await loadPluginDirectoryMarketplace_2("refresh", storageV5, {
           staleIsFailure: true,
           trigger: "update",
         });
-        h++;
+        attempted++;
       } catch (error) {
         if (pluginDirectoryPolicyBlock() !== null) continue;
         logForDebugging(`Failed to refresh the plugin directory marketplace: ${errorMessage(error)}`, {
           level: "warn",
         });
-        s.push(key);
+        builtInSkipped.push(key);
       }
       continue;
     }
@@ -4519,13 +4692,13 @@ async function refreshAllMarketplaces(e) {
       logForDebugging(`Skipping policy-blocked marketplace '${key}' in bulk refresh`);
       continue;
     }
-    h++;
-    let G = validateReservedMarketplaceEntry(key, value);
-    if (G) {
-      logForDebugging(`Skipping marketplace '${key}' in bulk refresh: ${G}`, {
+    attempted++;
+    let refusal = validateReservedMarketplaceEntry(key, value);
+    if (refusal) {
+      logForDebugging(`Skipping marketplace '${key}' in bulk refresh: ${refusal}`, {
         level: "warn",
       });
-      r.push(key);
+      failed.push(key);
       continue;
     }
     if (isImpersonatingOfficialMarketplace(key, value)) {
@@ -4535,29 +4708,29 @@ async function refreshAllMarketplaces(e) {
           level: "warn",
         },
       );
-      r.push(key);
+      failed.push(key);
       continue;
     }
-    let q = false;
+    let usedGitFallback = false;
     if (key === CLAUDE_PLUGINS_OFFICIAL) {
       try {
-        await removeMarketplaceCacheDir(key, value.installLocation, e, knownMarketplacesWithDeclared);
+        await removeMarketplaceCacheDir(key, value.installLocation, storageV5, knownMarketplacesWithDeclared);
       } catch (error) {
         logForDebugging(`Skipping marketplace '${key}' in bulk refresh: ${errorMessage(error)}`, {
           level: "warn",
         });
-        r.push(key);
+        failed.push(key);
         continue;
       }
       if (
         (await fetchOfficialMarketplaceFromGcs(
           value.installLocation,
           getResolvedMarketplacesCacheDir(),
-          e,
+          storageV5,
         )) !== null
       ) {
         logFeatureOk("plugin_official_marketplace_fetch");
-        S[key] = {
+        patches[key] = {
           forSource: value.source,
           patch: {
             lastUpdated: new Date().toISOString(),
@@ -4568,23 +4741,23 @@ async function refreshAllMarketplaces(e) {
       if (!getFeatureValue_CACHED_MAY_BE_STALE("tengu_plugin_official_mkt_git_fallback", true)) {
         logFeatureBad("plugin_official_marketplace_fetch", "gcs_failed_fallback_disabled");
         logForDebugging("Skipping official marketplace bulk refresh: GCS failed, git fallback disabled");
-        r.push(key);
+        failed.push(key);
         continue;
       }
-      q = true;
+      usedGitFallback = true;
     }
     try {
       let { cachePath, keptStaleClone } = await loadAndCacheMarketplace(
         value.source,
         key,
         undefined,
-        e,
+        storageV5,
         key,
         undefined,
         knownMarketplacesWithDeclared,
       );
       if (!keptStaleClone)
-        S[key] = {
+        patches[key] = {
           forSource: value.source,
           patch: {
             lastUpdated: new Date().toISOString(),
@@ -4592,97 +4765,99 @@ async function refreshAllMarketplaces(e) {
           },
         };
       else if (cachePath !== value.installLocation)
-        S[key] = {
+        patches[key] = {
           forSource: value.source,
           patch: {
             installLocation: cachePath,
           },
         };
-      if (q) logFeatureSad("plugin_official_marketplace_fetch", "gcs_failed_git_fallback");
+      if (usedGitFallback) logFeatureSad("plugin_official_marketplace_fetch", "gcs_failed_git_fallback");
     } catch (error) {
-      if (q) logFeatureBad("plugin_official_marketplace_fetch", "gcs_and_git_failed");
+      if (usedGitFallback) logFeatureBad("plugin_official_marketplace_fetch", "gcs_and_git_failed");
       if (error instanceof CommandSourceError) {
-        n.push(key);
+        policyRefused.push(key);
         logForDebugging(`Marketplace ${key} not refreshed (managed policy): ${errorMessage(error)}`);
         continue;
       }
-      r.push(key);
+      failed.push(key);
       logForDebugging(`Failed to refresh marketplace ${key}: ${errorMessage(error)}`, {
         level: "error",
       });
     }
   }
-  await updateKnownMarketplaces((w) => {
-    let L = false;
-    for (let [key, { forSource: q, patch: Z }] of Object.entries(S)) {
-      let Se = ownPropertyOrUndefined(w, key);
-      if (!Se || !En(Se.source, q) || seedDirFor(Se.installLocation)) continue;
-      w[key] = {
-        ...Se,
-        ...Z,
+  await updateKnownMarketplaces((config) => {
+    let changed = false;
+    for (let [key, { forSource, patch }] of Object.entries(patches)) {
+      let entry = ownPropertyOrUndefined(config, key);
+      if (!entry || !import_sortedIndex_2(entry.source, forSource) || seedDirFor(entry.installLocation))
+        continue;
+      config[key] = {
+        ...entry,
+        ...patch,
       };
-      L = true;
+      changed = true;
     }
-    return L ? w : null;
-  }, e);
+    return changed ? config : null;
+  }, storageV5);
   return {
-    policyRefused: n,
-    failed: r,
-    attempted: h,
-    builtInSkipped: s,
+    policyRefused,
+    failed,
+    attempted,
+    builtInSkipped,
   };
 }
 //@ chunk-e6aww6q8.js:4311978-4312224 layout
 /**
  * 刷新一个市场，同名刷新进行中时复用同一个 Promise 并追加进度监听（全局 marketplaceRefreshesInFlight）。
  */
-function refreshMarketplaceDeduped(marketplaceName, storageV5, r, options) {
+function refreshMarketplaceDeduped(marketplaceName, storageV5, listener, options) {
   let { marketplaceRefreshesInFlight } = getPluginRegistry();
-  let y = marketplaceRefreshesInFlight.get(marketplaceName);
-  if (y) {
-    if (r) y.listeners.push(r);
-    return y.promise;
+  let inFlight = marketplaceRefreshesInFlight.get(marketplaceName);
+  if (inFlight) {
+    if (listener) inFlight.listeners.push(listener);
+    return inFlight.promise;
   }
-  let S = r ? [r] : [];
-  let L = refreshMarketplace(
+  let listeners = listener ? [listener] : [];
+  let promise = refreshMarketplace(
     marketplaceName,
     storageV5,
-    (G) => {
-      for (let q of S) safeCallProgress(q, G);
+    (message) => {
+      for (let listener of listeners) safeCallProgress(listener, message);
     },
     options,
   ).finally(() => marketplaceRefreshesInFlight.delete(marketplaceName));
   marketplaceRefreshesInFlight.set(marketplaceName, {
-    promise: L,
-    listeners: S,
+    promise,
+    listeners,
   });
-  return L;
+  return promise;
 }
 //@ chunk-e6aww6q8.js:4312224-4312980 layout
-async function removeMarketplaceCacheDir(e, installLocation, r, knownMarketplacesWithDeclared) {
+async function removeMarketplaceCacheDir(name, installLocation, storageV5, known) {
   let resolvedMarketplacesCacheDir = getResolvedMarketplacesCacheDir();
-  let y = resolve_2(getOriginalCwd(), installLocation);
+  let absolutePath = resolve_2(getOriginalCwd(), installLocation);
   if (
     classifyMarketplacePath(installLocation).suspect ||
-    comparePathContainment(resolvedMarketplacesCacheDir, y, resolvedMarketplacesCacheDir) !== "inside"
+    comparePathContainment(resolvedMarketplacesCacheDir, absolutePath, resolvedMarketplacesCacheDir) !==
+      "inside"
   ) {
-    let w = claudeCommand("plugin marketplace remove", e);
+    let hint = claudeCommand("plugin marketplace remove", name);
     throw Error(
-      `Marketplace '${quotedPrintable(e)}' has a corrupted installLocation (${printableOrEmpty(installLocation)}) \u2014 expected a path inside ${resolvedMarketplacesCacheDir}. This can happen after cross-platform path writes or manual edits to known_marketplaces.json. ${w ? `Run \`${w}\`` : "Remove the entry"} and re-add it.`,
+      `Marketplace '${quotedPrintable(name)}' has a corrupted installLocation (${printableOrEmpty(installLocation)}) \u2014 expected a path inside ${resolvedMarketplacesCacheDir}. This can happen after cross-platform path writes or manual edits to known_marketplaces.json. ${hint ? `Run \`${hint}\`` : "Remove the entry"} and re-add it.`,
     );
   }
-  let S = await checkMarketplaceDirCollision(
+  let owner = await checkMarketplaceDirCollision(
     resolvedMarketplacesCacheDir,
-    y,
-    e,
-    r,
-    knownMarketplacesWithDeclared,
+    absolutePath,
+    name,
+    storageV5,
+    known,
   );
-  if (S !== undefined) {
-    let w = claudeCommand("plugin marketplace remove", e);
+  if (owner !== undefined) {
+    let hint = claudeCommand("plugin marketplace remove", name);
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `Marketplace '${quotedPrintable(e)}' has a corrupted installLocation (${printableOrEmpty(installLocation)}) \u2014 it belongs to the registered marketplace ` +
-        `'${quotedPrintable(S)}'. ${w ? `Run \`${w}\`` : "Remove the entry"} and re-add it.`,
+      `Marketplace '${quotedPrintable(name)}' has a corrupted installLocation (${printableOrEmpty(installLocation)}) \u2014 it belongs to the registered marketplace ` +
+        `'${quotedPrintable(owner)}'. ${hint ? `Run \`${hint}\`` : "Remove the entry"} and re-add it.`,
       "marketplace installLocation names another registered marketplace directory",
     );
   }
@@ -4693,10 +4868,10 @@ async function removeMarketplaceCacheDir(e, installLocation, r, knownMarketplace
  */
 async function refreshMarketplace(marketplaceName, storageV5, onProgress, options) {
   let knownMarketplacesWithDeclared = await loadKnownMarketplacesWithDeclared(storageV5);
-  let y = ownPropertyOrUndefined(knownMarketplacesWithDeclared, marketplaceName);
+  let entry = ownPropertyOrUndefined(knownMarketplacesWithDeclared, marketplaceName);
   let trigger = options?.directoryTrigger ?? (options?.isBackground ? "background" : "update");
   if (
-    !y &&
+    !entry &&
     marketplaceName === OFFICIAL_MARKETPLACE_NAME &&
     isPluginDirectoryAvailable() &&
     isSourceAllowedByPolicy({
@@ -4707,10 +4882,10 @@ async function refreshMarketplace(marketplaceName, storageV5, onProgress, option
     let lastUpdated = options?.skipIfRecent
       ? (await pluginDirectoryModules?.pluginDirectoryRegistryEntry())?.lastUpdated
       : undefined;
-    let q = lastUpdated ? Date.now() - new Date(lastUpdated).getTime() : -1;
-    if (q >= 0 && q < 30000) {
+    let ageMs = lastUpdated ? Date.now() - new Date(lastUpdated).getTime() : -1;
+    if (ageMs >= 0 && ageMs < 30000) {
       logForDebugging(
-        `Skipping refresh for marketplace '${marketplaceName}' \u2014 refreshed ${Math.round(q / 1000)}s ago`,
+        `Skipping refresh for marketplace '${marketplaceName}' \u2014 refreshed ${Math.round(ageMs / 1000)}s ago`,
       );
       return;
     }
@@ -4721,14 +4896,14 @@ async function refreshMarketplace(marketplaceName, storageV5, onProgress, option
     });
     return;
   }
-  if (!y)
+  if (!entry)
     throw withMarketplaceFailureCode(
       Error(
         `Marketplace '${marketplaceName}' not found. Available marketplaces: ${Object.keys(knownMarketplacesWithDeclared).join(", ")}`,
       ),
       "not_configured",
     );
-  if (isPluginDirectorySource(y.source) && pluginDirectoryPolicyBlock() !== null)
+  if (isPluginDirectorySource(entry.source) && pluginDirectoryPolicyBlock() !== null)
     throw withMarketplaceFailureCode(
       withTelemetryMessage(
         new PluginDirectoryUnavailableError(
@@ -4738,32 +4913,32 @@ async function refreshMarketplace(marketplaceName, storageV5, onProgress, option
       ),
       "source_blocked_by_policy",
     );
-  if (!isSourceAllowedByPolicy(y.source))
+  if (!isSourceAllowedByPolicy(entry.source))
     throw withMarketplaceFailureCode(
-      Error(`Marketplace source '${formatSourceForDisplay(y.source)}' is blocked by enterprise policy.`),
+      Error(`Marketplace source '${formatSourceForDisplay(entry.source)}' is blocked by enterprise policy.`),
       "source_blocked_by_policy",
     );
-  assertReservedNameTrusted(marketplaceName, y);
+  assertReservedNameTrusted(marketplaceName, entry);
   getPluginRegistry().marketplaces.delete(marketplaceName);
-  if (options?.skipIfRecent && y.lastUpdated) {
-    let G = Date.now() - new Date(y.lastUpdated).getTime();
-    if (G >= 0 && G < 30000) {
+  if (options?.skipIfRecent && entry.lastUpdated) {
+    let ageMs = Date.now() - new Date(entry.lastUpdated).getTime();
+    if (ageMs >= 0 && ageMs < 30000) {
       logForDebugging(
-        `Skipping refresh for marketplace '${marketplaceName}' \u2014 refreshed ${Math.round(G / 1000)}s ago`,
+        `Skipping refresh for marketplace '${marketplaceName}' \u2014 refreshed ${Math.round(ageMs / 1000)}s ago`,
       );
       return;
     }
   }
-  if (isClaudeAiMarketplaceSource(y.source)) {
+  if (isClaudeAiMarketplaceSource(entry.source)) {
     safeCallProgress(onProgress, "Refreshing plugin list from claude.ai");
-    await refreshClaudeAiMarketplace(marketplaceName, y.source, {
+    await refreshClaudeAiMarketplace(marketplaceName, entry.source, {
       credentials: undefined,
       skipIfRecent: options?.skipIfRecent,
       isBackground: options?.isBackground,
     });
     return;
   }
-  if (isPluginDirectorySource(y.source)) {
+  if (isPluginDirectorySource(entry.source)) {
     safeCallProgress(onProgress, `Refreshing ${OFFICIAL_MARKETPLACE_DISPLAY}`);
     await loadPluginDirectoryMarketplace_2(options?.isBackground ? "if-stale" : "refresh", undefined, {
       staleIsFailure: true,
@@ -4772,18 +4947,18 @@ async function refreshMarketplace(marketplaceName, storageV5, onProgress, option
     });
     return;
   }
-  if (y.source.source === "settings") {
-    assertNotLookAlikeName(marketplaceName, y);
+  if (entry.source.source === "settings") {
+    assertNotLookAlikeName(marketplaceName, entry);
     logForDebugging(
       `Skipping refresh for settings-sourced marketplace '${marketplaceName}' \u2014 no upstream`,
     );
     return;
   }
   if (isDiskless()) throwDisklessMarketplaceFetch(join("plugins", "marketplaces"));
-  let w = false;
-  let L;
+  let usedGcsFallbackToGit = false;
+  let fetchResult;
   try {
-    let { installLocation, source } = y;
+    let { installLocation, source } = entry;
     let seedDir = seedDirFor(installLocation);
     if (seedDir)
       throw withMarketplaceFailureCode(
@@ -4799,7 +4974,7 @@ async function refreshMarketplace(marketplaceName, storageV5, onProgress, option
         storageV5,
         knownMarketplacesWithDeclared,
       );
-    assertNotLookAlikeName(marketplaceName, y);
+    assertNotLookAlikeName(marketplaceName, entry);
     if (marketplaceName === CLAUDE_PLUGINS_OFFICIAL) {
       if (
         (await fetchOfficialMarketplaceFromGcs(
@@ -4816,7 +4991,7 @@ async function refreshMarketplace(marketplaceName, storageV5, onProgress, option
         logFeatureBad("plugin_official_marketplace_fetch", "gcs_failed_fallback_disabled");
         throw Error("Official marketplace GCS fetch failed and git fallback is disabled");
       }
-      w = true;
+      usedGcsFallbackToGit = true;
       logForDebugging("Official marketplace GCS failed; falling back to git", {
         level: "warn",
       });
@@ -4826,7 +5001,7 @@ async function refreshMarketplace(marketplaceName, storageV5, onProgress, option
         let sshUrl = `git@${GITHUB_HOST}:${source.repo}.git`;
         let httpsUrl = `https://github.com/${source.repo}.git`;
         if (preferHttpsGitTransport())
-          L = await cacheMarketplaceFromGit(
+          fetchResult = await cacheMarketplaceFromGit(
             httpsUrl,
             installLocation,
             storageV5,
@@ -4836,10 +5011,14 @@ async function refreshMarketplace(marketplaceName, storageV5, onProgress, option
             onProgress,
           );
         else {
-          let [we, Ee] = orderGithubTransports(await isGithubSshConfigured(), sshUrl, httpsUrl);
+          let [firstAttempt, fallbackAttempt] = orderGithubTransports(
+            await isGithubSshConfigured(),
+            sshUrl,
+            httpsUrl,
+          );
           try {
-            L = await cacheMarketplaceFromGit(
-              we.url,
+            fetchResult = await cacheMarketplaceFromGit(
+              firstAttempt.url,
               installLocation,
               storageV5,
               source.path,
@@ -4849,14 +5028,14 @@ async function refreshMarketplace(marketplaceName, storageV5, onProgress, option
             );
           } catch (error) {
             logForDebugging(
-              `Marketplace refresh failed with ${we.transport} for ${source.repo} (${errorMessage(error)}), falling back to ${Ee.transport}`,
+              `Marketplace refresh failed with ${firstAttempt.transport} for ${source.repo} (${errorMessage(error)}), falling back to ${fallbackAttempt.transport}`,
               {
                 level: "info",
               },
             );
             try {
-              L = await cacheMarketplaceFromGit(
-                Ee.url,
+              fetchResult = await cacheMarketplaceFromGit(
+                fallbackAttempt.url,
                 installLocation,
                 storageV5,
                 source.path,
@@ -4867,11 +5046,11 @@ async function refreshMarketplace(marketplaceName, storageV5, onProgress, option
             } catch (error_2) {
               throw mergeBothTransportErrors(
                 {
-                  ...we,
+                  ...firstAttempt,
                   error: toError(error),
                 },
                 {
-                  ...Ee,
+                  ...fallbackAttempt,
                   error: toError(error_2),
                 },
               );
@@ -4879,7 +5058,7 @@ async function refreshMarketplace(marketplaceName, storageV5, onProgress, option
           }
         }
       } else
-        L = await cacheMarketplaceFromGit(
+        fetchResult = await cacheMarketplaceFromGit(
           source.url,
           installLocation,
           storageV5,
@@ -4888,7 +5067,7 @@ async function refreshMarketplace(marketplaceName, storageV5, onProgress, option
           source.sparsePaths,
           onProgress,
         );
-      warnLfsPointers(installLocation, L, onProgress);
+      warnLfsPointers(installLocation, fetchResult, onProgress);
       try {
         await readMarketplaceManifest(
           installLocation,
@@ -4899,27 +5078,27 @@ async function refreshMarketplace(marketplaceName, storageV5, onProgress, option
             : null,
         );
       } catch (error) {
-        let ke = source.source === "github" ? source.repo : redactUrlsTracked(source.url);
+        let sourceLabel = source.source === "github" ? source.repo : redactUrlsTracked(source.url);
         let reason =
           marketplaceName === "claude-code-plugins"
             ? `We've deprecated "claude-code-plugins" in favor of "claude-plugins-official".`
             : "This marketplace may have been deprecated or moved to a new location.";
-        let Ee = claudeCommand("plugin marketplace remove", marketplaceName);
-        let Ae = error instanceof ConfigParseError;
+        let removeHint = claudeCommand("plugin marketplace remove", marketplaceName);
+        let isParseError = error instanceof ConfigParseError;
         throw withMarketplaceFailureCode(
           Error(
             `The marketplace.json file is no longer present in this repository.
 
 ${reason}
-Source: ${ke}` +
-              (Ee
+Source: ${sourceLabel}` +
+              (removeHint
                 ? `
 
-You can remove this marketplace with: ${Ee}`
+You can remove this marketplace with: ${removeHint}`
                 : `
 
 You can remove this marketplace from /plugin or by editing known_marketplaces.json.`) +
-              (Ae
+              (isParseError
                 ? `
 
 Details: the repository does have a marketplace.json, but it isn't a valid marketplace file: ${errorMessage(error)}`
@@ -4927,23 +5106,37 @@ Details: the repository does have a marketplace.json, but it isn't a valid marke
           ),
           isENOENT(error) || getErrnoCode(error) === "EISDIR"
             ? "manifest_missing"
-            : Ae
+            : isParseError
               ? "manifest_invalid"
               : undefined,
         );
       }
     } else if (source.source === "url") {
-      let Se = await describeHelperDeclaration(source, {
+      let helperHeaders = await describeHelperDeclaration(source, {
         marketplaceName,
         trustedDeclaration: findUrlMarketplaceHeaders(source, marketplaceName),
       });
-      let ke =
+      let storageKey =
         isStorageV5Enabled() && storageV5 !== undefined
           ? getSyntheticMarketplaceStorageKey(marketplaceName, source, installLocation)
           : null;
-      if (storageV5 !== undefined && ke !== null)
-        await cacheMarketplaceFromUrlToStorage(storageV5, ke, source.url, marketplaceName, Se, onProgress);
-      else await cacheMarketplaceFromUrlToFile(source.url, installLocation, marketplaceName, Se, onProgress);
+      if (storageV5 !== undefined && storageKey !== null)
+        await cacheMarketplaceFromUrlToStorage(
+          storageV5,
+          storageKey,
+          source.url,
+          marketplaceName,
+          helperHeaders,
+          onProgress,
+        );
+      else
+        await cacheMarketplaceFromUrlToFile(
+          source.url,
+          installLocation,
+          marketplaceName,
+          helperHeaders,
+          onProgress,
+        );
     } else if (isLocalMarketplaceSource(source)) {
       safeCallProgress(onProgress, "Validating local marketplace");
       await readMarketplaceManifest(
@@ -4967,11 +5160,11 @@ Details: the repository does have a marketplace.json, but it isn't a valid marke
         );
       });
     } else throw Error("Unsupported marketplace source type for refresh");
-    if (L?.kind !== "kept-stale") await touchMarketplaceLastUpdated(marketplaceName, storageV5);
-    if (w) logFeatureSad("plugin_official_marketplace_fetch", "gcs_failed_git_fallback");
+    if (fetchResult?.kind !== "kept-stale") await touchMarketplaceLastUpdated(marketplaceName, storageV5);
+    if (usedGcsFallbackToGit) logFeatureSad("plugin_official_marketplace_fetch", "gcs_failed_git_fallback");
     logForDebugging(`Successfully refreshed marketplace: ${marketplaceName}`);
   } catch (error) {
-    if (w) logFeatureBad("plugin_official_marketplace_fetch", "gcs_and_git_failed");
+    if (usedGcsFallbackToGit) logFeatureBad("plugin_official_marketplace_fetch", "gcs_and_git_failed");
     let errorMessage = error instanceof Error ? error.message : String(error);
     logForDebugging(`Failed to refresh marketplace ${marketplaceName}: ${errorMessage}`, {
       level: "error",
@@ -5014,14 +5207,14 @@ async function setMarketplaceAutoUpdate(name, autoUpdate, storageV5) {
       `Auto-update can't be turned off for ${OFFICIAL_MARKETPLACE_DISPLAY}: its plugins follow the commit the Directory lists`,
       "plugin directory marketplace auto-update toggle refused",
     );
-  await updateKnownMarketplaces((L) => {
-    let G = ownPropertyOrUndefined(L, name);
-    if (!G || G.autoUpdate === autoUpdate || seedDirFor(G.installLocation)) return null;
-    L[name] = {
-      ...G,
+  await updateKnownMarketplaces((config) => {
+    let entry = ownPropertyOrUndefined(config, name);
+    if (!entry || entry.autoUpdate === autoUpdate || seedDirFor(entry.installLocation)) return null;
+    config[name] = {
+      ...entry,
       autoUpdate,
     };
-    return L;
+    return config;
   }, storageV5);
   let declaringSource = supportsPersistence(name);
   if (declaringSource) {
@@ -5055,22 +5248,22 @@ async function syncDeclaredAutoUpdateToJson(storageV5) {
   let declaredMarketplaces = getDeclaredMarketplaces();
   if (Object.keys(declaredMarketplaces).length === 0) return false;
   try {
-    return await updateKnownMarketplaces((r) => {
-      let s = false;
+    return await updateKnownMarketplaces((config) => {
+      let changed = false;
       for (let [key, value] of Object.entries(declaredMarketplaces)) {
         if (value.autoUpdate === undefined) continue;
-        let S = ownPropertyOrUndefined(r, key);
-        if (!S || seedDirFor(S.installLocation)) continue;
-        if (isPluginDirectorySource(S.source)) continue;
-        if (S.autoUpdate === value.autoUpdate) continue;
-        r[key] = {
-          ...S,
+        let entry = ownPropertyOrUndefined(config, key);
+        if (!entry || seedDirFor(entry.installLocation)) continue;
+        if (isPluginDirectorySource(entry.source)) continue;
+        if (entry.autoUpdate === value.autoUpdate) continue;
+        config[key] = {
+          ...entry,
           autoUpdate: value.autoUpdate,
         };
-        s = true;
+        changed = true;
         logForDebugging(`Synced autoUpdate=${value.autoUpdate} from settings for marketplace: ${key}`);
       }
-      return s ? r : null;
+      return changed ? config : null;
     }, storageV5);
   } catch (error) {
     logForDebugging(
@@ -5087,10 +5280,10 @@ async function syncDeclaredAutoUpdateToJson(storageV5) {
  * 插件目录市场状态：on/off/blocked/unavailable。
  */
 async function getPluginDirectoryState() {
-  let e = pluginDirectoryModuleIfUsable();
-  if (!e)
+  let directoryModule = pluginDirectoryModuleIfUsable();
+  if (!directoryModule)
     return isPluginDirectoryModeOn() && pluginDirectoryPolicyBlock() !== null ? "blocked" : "unavailable";
-  return (await e.isPluginDirectoryMarketplaceEnabled()) ? "on" : "off";
+  return (await directoryModule.isPluginDirectoryMarketplaceEnabled()) ? "on" : "off";
 }
 //@ chunk-e6aww6q8.js:4319643-4320055 placement
 /**
@@ -5098,8 +5291,8 @@ async function getPluginDirectoryState() {
  */
 async function setPluginDirectoryEnabled(marketplace) {
   {
-    let n = pluginDirectoryModuleIfUsable();
-    if (!n)
+    let directoryModule = pluginDirectoryModuleIfUsable();
+    if (!directoryModule)
       throw pluginDirectoryPolicyBlock() === null
         ? new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
             `The ${OFFICIAL_MARKETPLACE_DISPLAY} isn't available in this session`,
@@ -5109,7 +5302,7 @@ async function setPluginDirectoryEnabled(marketplace) {
             `${OFFICIAL_MARKETPLACE_DISPLAY} is blocked by your organization. ${pluginDirectoryPolicyBlockHint()}`,
             "plugin directory marketplace toggled while blocked by policy",
           );
-    await n.setPluginDirectoryMarketplaceEnabled(marketplace);
+    await directoryModule.setPluginDirectoryMarketplaceEnabled(marketplace);
     getPluginRegistry().marketplaces.delete(OFFICIAL_MARKETPLACE_NAME);
     return;
   }
@@ -5119,20 +5312,20 @@ async function setPluginDirectoryEnabled(marketplace) {
 /**
  * 当前值来自默认时把开关保存为用户的选择。
  */
-async function persistPluginDirectoryChoice(e) {
+async function persistPluginDirectoryChoice(enabled) {
   {
-    let n = pluginDirectoryModuleIfUsable();
-    if (!n) return;
+    let directoryModule = pluginDirectoryModuleIfUsable();
+    if (!directoryModule) return;
     try {
-      let pluginDirectoryMarketplaceChoice = await n.readPluginDirectoryMarketplaceChoice();
+      let pluginDirectoryMarketplaceChoice = await directoryModule.readPluginDirectoryMarketplaceChoice();
       if (
         pluginDirectoryMarketplaceChoice.source === "flag_default" &&
-        pluginDirectoryMarketplaceChoice.enabled === e
+        pluginDirectoryMarketplaceChoice.enabled === enabled
       )
-        await n.setPluginDirectoryMarketplaceEnabled(e);
+        await directoryModule.setPluginDirectoryMarketplaceEnabled(enabled);
     } catch (error) {
       logForDebugging(
-        `Could not save "${e ? "on" : "off"}" as the person's choice for the ${OFFICIAL_MARKETPLACE_DISPLAY}: ${errorMessage(error)}`,
+        `Could not save "${enabled ? "on" : "off"}" as the person's choice for the ${OFFICIAL_MARKETPLACE_DISPLAY}: ${errorMessage(error)}`,
         {
           level: "warn",
         },
@@ -5141,63 +5334,28 @@ async function persistPluginDirectoryChoice(e) {
   }
 }
 //@ chunk-e6aww6q8.js:4320361-4320575 placement
-function findEnablingSettingSource(e, n) {
-  let r = pluginSettingRecords(e);
-  let s = uniq(r.flatMap(({ record }) => enabledPluginKeysFor(record, e, n)));
-  for (let h of s) {
-    let found = r.find(({ record }) => record?.[h] !== undefined);
-    let S = found?.record?.[h];
-    if (found !== undefined && (S === true || Array.isArray(S))) return found.source;
+function findEnablingSettingSource(pluginId, excluded) {
+  let records = pluginSettingRecords(pluginId);
+  let keys = uniq(records.flatMap(({ record }) => enabledPluginKeysFor(record, pluginId, excluded)));
+  for (let key of keys) {
+    let found = records.find(({ record }) => record?.[key] !== undefined);
+    let value = found?.record?.[key];
+    if (found !== undefined && (value === true || Array.isArray(value))) return found.source;
   }
   return;
 }
 //@ chunk-e6aww6q8.js:4320575-4320613 placement
-function enabledPluginKeysFor(e, n, r) {
-  return enabledPluginKeys(e, n, r);
+function enabledPluginKeysFor(record, pluginId, excluded) {
+  return enabledPluginKeys(record, pluginId, excluded);
 }
 //@ chunk-e6aww6q8.js:4320613-4320708 placement
-function hasDisabledEnabledPlugin(e, n, r) {
-  let s = enabledPluginKeysFor(e, n, r);
-  return s.some((h) => e?.[h] === false) && !s.some((h) => isDependencyAutoInstallState(e?.[h]));
+function hasDisabledEnabledPlugin(record, pluginId, excluded) {
+  let keys = enabledPluginKeysFor(record, pluginId, excluded);
+  return (
+    keys.some((key) => record?.[key] === false) &&
+    !keys.some((key) => isDependencyAutoInstallState(record?.[key]))
+  );
 }
-//@ chunk-dcmhvw5a.js:376366-376544 fingerprint = redactUrlCredentials (0.842)
-/**
- * URL 去掉用户名口令后返回（用于显示与日志）。
- */
-function redactUrlCredentials(urlString) {
-  if (urlString === undefined) return;
-  let n = stripInvisibleChars(urlString, "");
-  try {
-    let { protocol, username, password } = new URL(n);
-    return (protocol === "https:" || protocol === "http:") && username === "" && password === ""
-      ? n
-      : undefined;
-  } catch {
-    return;
-  }
-}
-//@ chunk-s61vbvea.js:532138-532376 callgraph-fingerprint = gitPull (0.191)
-/**
- * 确定 git pull 用的 remote（分支配置的 remote，缺省 origin）。
- */
-async function gitPull(gitState, cwdOption, branch, gitOptions) {
-  if (gitState.hasDir(cwdOption)) return "origin";
-  if (branch !== undefined && branch !== "HEAD") {
-    let fetchResult = await execGitNoThrow(
-      cwdOption,
-      ["config", "--get", `branch.${branch}.remote`],
-      gitOptions,
-    );
-    if (fetchResult !== undefined) return fetchResult;
-  }
-  return (await execGitNoThrow(cwdOption, ["config", "--get", "remote.pushDefault"], gitOptions)) ?? "origin";
-}
-//@ chunk-sycgf9xs.js:7815-7888 fingerprint = GIT_NO_PROMPT_ENV (0.627)
-var GIT_NO_PROMPT_ENV = {
-  GIT_TERMINAL_PROMPT: "0",
-  GIT_ASKPASS: "",
-  GCM_INTERACTIVE: "never",
-};
 export {
   loadKnownMarketplacesWithDeclared,
   getDeclaredMarketplaces,
@@ -5242,10 +5400,10 @@ export {
   lookalikeReservedMarketplaceName,
   reservedMarketplaceSpellingMessage,
   syncDeclaredAutoUpdateToJson,
-  isGitHubSshLikelyConfigured,
-  reconcileSparseCheckout,
   getCachePathForSource,
   getStorageArm,
+  isGitHubSshLikelyConfigured,
+  reconcileSparseCheckout,
   settingsSourceOfMarketplace,
   normalizeInstallLocation,
   collectOrgBlockedPlugins,

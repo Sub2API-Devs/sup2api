@@ -8,24 +8,6 @@
  * pieces: chunk-0wa2vg6f.js (14), chunk-3nztfxrw.js (2)
  * attribution: fingerprint 3, layout 4, placement 8, callgraph-witnessed 1
  */
-import { logForDebugging } from "../../utils/debug.js";
-import { apiClient } from "../../services/routines/routinesApi.js";
-import { BETA_CCR_BYOC } from "../../utils/betas.js";
-import { isAxiosError, axios_default } from "../../../vendor/axios/dist/esm/axios.js";
-import { getSSLErrorHint } from "../../services/api/errorUtils.js";
-import { oneLineClipped, plural } from "../../utils/stringUtils.js";
-import { extractErrorDetail } from "../../bridge/debugUtils.js";
-import { prepareApiRequest, getOAuthHeaders_2 } from "../../utils/teleport/api.js";
-import { logFeatureSad, logFeatureOk } from "../../services/analytics/featureTelemetry.js";
-import { getOauthConfig } from "../../constants/oauth.js";
-import { getGlobalConfig, saveGlobalConfig } from "../../utils/config.js";
-import { logError } from "../../utils/log.js";
-import { HostScoped } from "../../utils/hostScoped.js";
-import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../services/analytics/growthbook.js";
-import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, string, _enum } from "../../../vendor/zod/v4/classic/schemas.js";
-import { getOauthAccountInfo, getClaudeAIOAuthTokenOrigin } from "../../utils/auth.js";
-import { env } from "../../utils/env.js";
 import { claudeCodeUserAgent } from "../../utils/http.js";
 import {
   RUNNER_CLIENT_VERSION,
@@ -40,34 +22,488 @@ import {
   UnreadableToolsHostError,
   MAX_ENV_VALUE_BYTES,
 } from "../../selfHostedRunner/serverAutoMode.js";
+import { axios_default, isAxiosError } from "../../../vendor/axios/dist/esm/axios.js";
 import { formatRunnerApiError } from "../../selfHostedRunner/runnerApiErrors.js";
 import { readRequestIdSource } from "../../services/api/requestIdSource.js";
+import { getOAuthHeaders_2, prepareApiRequest } from "../../utils/teleport/api.js";
 import { jsonParse } from "../../utils/slowOperations.js";
+import { plural, oneLineClipped } from "../../utils/stringUtils.js";
+import { logForDebugging } from "../../utils/debug.js";
+import { apiClient } from "../../services/routines/routinesApi.js";
+import { BETA_CCR_BYOC } from "../../utils/betas.js";
+import { getSSLErrorHint } from "../../services/api/errorUtils.js";
+import { extractErrorDetail } from "../../bridge/debugUtils.js";
+import { logFeatureSad, logFeatureOk } from "../../services/analytics/featureTelemetry.js";
+import { getOauthConfig } from "../../constants/oauth.js";
+import { getGlobalConfig, saveGlobalConfig } from "../../utils/config.js";
+import { logError } from "../../utils/log.js";
+import { HostScoped } from "../../utils/hostScoped.js";
+import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../services/analytics/growthbook.js";
+import { DoctorLazy } from "../../cli/handlers/util.js";
+import { objectSchema, stringSchema, _enum } from "../../../vendor/zod/v4/classic/schemas.js";
+import { getOauthAccountInfo, getClaudeAIOAuthTokenOrigin } from "../../utils/auth.js";
+import { env } from "../../utils/env.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
-//@ chunk-0wa2vg6f.js:713-925 fingerprint = RedactedGithubToken (1)
-class GithubWebConnectionStatus {
-  #t;
-  constructor(raw) {
-    this.#t = raw;
-  }
-  reveal() {
-    return this.#t;
-  }
-  toString() {
-    return "[REDACTED:gh-token]";
-  }
-  toJSON() {
-    return "[REDACTED:gh-token]";
-  }
-  [Symbol.for("nodejs.util.inspect.custom")]() {
-    return "[REDACTED:gh-token]";
-  }
+//@ chunk-3nztfxrw.js:5177-5348 placement = getOAuthHeaders (0.778)
+function getOAuthHeaders_3(accessToken) {
+  return {
+    "User-Agent": claudeCodeUserAgent(),
+    Authorization: `Bearer ${accessToken}`,
+    "Content-Type": "application/json",
+    "anthropic-version": "2023-06-01",
+    "x-self-hosted-runner-version": RUNNER_CLIENT_VERSION,
+  };
 }
+//@ chunk-3nztfxrw.js:8831-17921 callgraph-witnessed = createDefaultEnvironment (0.009)
+function createDefaultEnvironment(config) {
+  function debugLog(message) {
+    config.onDebug?.(message);
+  }
+  let consecutiveEmptyPolls = 0;
+  let emptyPollLogInterval = 30;
+  let capabilityHeaders = {
+    "x-self-hosted-runner-capabilities": config.capabilities.join(",") || null,
+  };
+  return {
+    async registerRunner(options = {}) {
+      let { clientLabel, lockToAccountId, useAnthropicGitProxy, serverAutoModeLists } = options;
+      debugLog("[runner:api] POST /v1/code/runners/self-hosted/runners/register");
+      let body = {
+        runner_version: RUNNER_CLIENT_VERSION,
+        capabilities: config.capabilities,
+        use_anthropic_git_proxy: useAnthropicGitProxy ?? false,
+        server_auto_mode_lists: LIST_MODE_ENV_VARS[serverAutoModeLists ?? NO_ALLOW],
+      };
+      if (clientLabel) body.client_label = clientLabel;
+      if (lockToAccountId) body.lock_to_account_id = lockToAccountId;
+      let response = await axios_default.post(
+        `${config.baseUrl}/v1/code/runners/self-hosted/runners/register`,
+        body,
+        {
+          headers: getOAuthHeaders(config.poolSecret),
+          timeout: 15000,
+          validateStatus: (status) => status < 500,
+        },
+      );
+      formatRunnerApiError(response.status, response.data, "RegisterRunner");
+      validateRunnerLabel(response.data.runner_id, "runner_id");
+      debugLog(`[runner:api] RegisterRunner -> ${response.status} runner_id=${response.data.runner_id}`);
+      return response.data;
+    },
+    async pollSpawnHints(requestBody, signal) {
+      let response = await axios_default.post(
+        `${config.baseUrl}/v1/code/runners/self-hosted/spawn-hints/poll`,
+        requestBody,
+        {
+          headers: getOAuthHeaders(config.poolSecret),
+          timeout: 30000,
+          signal,
+          validateStatus: (status) => status < 500,
+        },
+      );
+      formatRunnerApiError(response.status, response.data, "PollSpawnHints");
+      let serverDate = typeof response.headers?.date === "string" ? response.headers.date : null;
+      let normalizeHint = (hint) => ({
+        ...hint,
+        session_uuid: hint.session_uuid ?? "",
+        attempt: hint.attempt ?? 0,
+        work_order_jwt: hint.work_order_jwt ?? "",
+        sources: hint.sources ?? [],
+      });
+      let slots = response.data.slots;
+      let result = {
+        hints: (response.data.hints ?? []).map(normalizeHint),
+        warm_hints: (response.data.warm_hints ?? []).map(normalizeHint),
+        pending_count: response.data.pending_count ?? 0,
+        backing_off_count: response.data.backing_off_count ?? 0,
+        circuit_broken_count: response.data.circuit_broken_count ?? 0,
+        pool_pending_session_count: response.data.pool_pending_session_count ?? 0,
+        pool_active_session_count: response.data.pool_active_session_count ?? 0,
+        ...(typeof slots === "number" &&
+          Number.isInteger(slots) &&
+          slots >= 1 && {
+            slots,
+          }),
+        server_date: serverDate,
+      };
+      debugLog(
+        `[runner:api] PollSpawnHints -> ${response.status} hints=${result.hints.length} warm=${result.warm_hints.length} pending=${result.pending_count} backing_off=${result.backing_off_count} circuit_broken=${result.circuit_broken_count} slots=${result.slots ?? "-"}`,
+      );
+      return result;
+    },
+    async nackSpawnHint(nack, signal) {
+      debugLog(
+        `[runner:api] POST /v1/code/runners/self-hosted/spawn-hints/nack session=${nack.session_uuid} attempt=${nack.attempt} retryable=${nack.retryable}${nack.failure_kind ? ` cause=${nack.failure_kind}` : ""}`,
+      );
+      let error = nack.error.length > 512 ? nack.error.slice(0, 512) : nack.error;
+      let response = await axios_default.post(
+        `${config.baseUrl}/v1/code/runners/self-hosted/spawn-hints/nack`,
+        {
+          ...nack,
+          error,
+        },
+        {
+          headers: getOAuthHeaders(config.poolSecret),
+          timeout: ENV_MAX_TIMEOUT_MS,
+          signal,
+          validateStatus: (status) => status < 500,
+        },
+      );
+      formatRunnerApiError(response.status, response.data, "NackSpawnHint");
+      debugLog(`[runner:api] NackSpawnHint -> ${response.status}`);
+    },
+    async pollWork(credentials, runnerId, availableCapacity, signal, wakeSource) {
+      validateRunnerLabel(runnerId, "runnerId");
+      let priorEmptyPolls = consecutiveEmptyPolls;
+      consecutiveEmptyPolls = 0;
+      let response = await axios_default.post(
+        `${config.baseUrl}/v1/code/runners/self-hosted/runners/${runnerId}/poll`,
+        {
+          available_capacity: availableCapacity,
+          ...(wakeSource !== undefined && {
+            wake_source: wakeSource,
+          }),
+        },
+        {
+          headers: getOAuthHeaders_3(credentials),
+          timeout: ENV_DEFAULT_TIMEOUT_MS,
+          signal,
+          validateStatus: (status) => status < 500,
+        },
+      );
+      formatRunnerApiError(response.status, response.data, "PollWork");
+      let data = response.data;
+      if (typeof data !== "object" || data === null || Array.isArray(data))
+        throw Error(
+          "PollWork: response body is not a JSON object (an intercepting proxy may have answered) \u2014 rejecting the malformed poll response",
+        );
+      let assignmentIds = response.data.assignment_ids;
+      if (assignmentIds !== undefined && assignmentIds !== null && !Array.isArray(assignmentIds))
+        throw Error(
+          "PollWork: response assignment_ids is not an array \u2014 rejecting the malformed poll response",
+        );
+      if (Array.isArray(assignmentIds) && !assignmentIds.every(isSafeEnvToken))
+        throw Error(
+          "PollWork: response assignment_ids contains a malformed session id \u2014 rejecting the malformed poll response",
+        );
+      let assignmentIds_2 = response.data.assignment_ids ?? [];
+      if (assignmentIds_2.length === 0) {
+        consecutiveEmptyPolls = priorEmptyPolls + 1;
+        if (consecutiveEmptyPolls === 1 || consecutiveEmptyPolls % emptyPollLogInterval === 0)
+          debugLog(
+            `[runner:api] PollWork -> ${response.status} (no work, ${consecutiveEmptyPolls} consecutive empty polls)`,
+          );
+      } else debugLog(`[runner:api] PollWork -> ${response.status} assignments=${assignmentIds_2.length}`);
+      let leaseExpiresAt = response.data.lease_expires_at;
+      let suggestedPollInterval = response.data.suggested_poll_interval;
+      return {
+        assignment_ids: assignmentIds_2,
+        lease_expires_at: typeof leaseExpiresAt === "string" ? leaseExpiresAt : undefined,
+        session_assignments: Array.isArray(response.data.session_assignments)
+          ? response.data.session_assignments
+          : [],
+        suggested_poll_interval:
+          typeof suggestedPollInterval === "string" ? suggestedPollInterval : undefined,
+      };
+    },
+    async issueSessionToken(credentials, sessionId, signal) {
+      validateRunnerLabel(sessionId, "sessionId");
+      let url = `/v1/code/runners/self-hosted/sessions/${encodeURIComponent(sessionId)}/token`;
+      debugLog(`[runner:api] POST ${url}`);
+      let response = await axios_default.post(
+        `${config.baseUrl}${url}`,
+        {},
+        {
+          headers: getOAuthHeaders_3(credentials),
+          timeout: 15000,
+          signal,
+          validateStatus: (status) => status < 500,
+        },
+      );
+      formatRunnerApiError(response.status, response.data, "IssueSessionToken");
+      if (!response.data.session_token) throw Error("IssueSessionToken: response missing session_token");
+      debugLog(`[runner:api] IssueSessionToken -> ${response.status}`);
+      let { session_token: sessionToken, tools_host: toolsHost } = response.data;
+      if (toolsHost === undefined || toolsHost === null)
+        return {
+          session_token: sessionToken,
+        };
+      let parsed = RUNNER_CONFIG_SCHEMA().safeParse(toolsHost);
+      if (!parsed.success) throw new UnreadableToolsHostError();
+      return {
+        session_token: sessionToken,
+        tools_host: parsed.data,
+      };
+    },
+    async reportSessionFailure(credentials, sessionId, reason, setupFailureKind, failureKind) {
+      validateRunnerLabel(sessionId, "sessionId");
+      debugLog(
+        `[runner:api] POST /v1/code/runners/self-hosted/sessions/${sessionId}/report-failure reason=${reason}${setupFailureKind ? ` kind=${setupFailureKind}` : ""}${failureKind ? ` cause=${failureKind}` : ""}`,
+      );
+      let response = await axios_default.post(
+        `${config.baseUrl}/v1/code/runners/self-hosted/sessions/${sessionId}/report-failure`,
+        {
+          reason,
+          ...(setupFailureKind && {
+            setup_failure_kind: setupFailureKind,
+          }),
+          ...(failureKind && {
+            failure_kind: failureKind,
+          }),
+        },
+        {
+          headers: getOAuthHeaders_3(credentials),
+          timeout: 15000,
+          validateStatus: (status) => status < 500,
+        },
+      );
+      formatRunnerApiError(response.status, response.data, "ReportSessionFailure");
+      debugLog(
+        `[runner:api] ReportSessionFailure -> ${response.status} excluded_count=${response.data.excluded_count} stuck=${response.data.stuck}`,
+      );
+      return response.data;
+    },
+    async releaseSession(credentials, sessionId) {
+      validateRunnerLabel(sessionId, "sessionId");
+      debugLog(`[runner:api] POST /v1/code/runners/self-hosted/sessions/${sessionId}/release`);
+      let response = await axios_default.post(
+        `${config.baseUrl}/v1/code/runners/self-hosted/sessions/${sessionId}/release`,
+        {},
+        {
+          headers: getOAuthHeaders_3(credentials),
+          timeout: 15000,
+          validateStatus: (status) => status < 500,
+        },
+      );
+      formatRunnerApiError(response.status, response.data, "ReleaseSession");
+      let released = response.data.released ?? true;
+      debugLog(`[runner:api] ReleaseSession -> ${response.status} released=${released}`);
+      return {
+        released,
+      };
+    },
+    async deregisterRunner(credentials, deregisterOptions = {}) {
+      debugLog(
+        `[runner:api] POST /v1/code/runners/self-hosted/deregister reason=${deregisterOptions.reason ?? ""}` +
+          (deregisterOptions.drain_hold
+            ? ` drain_hold=${deregisterOptions.drain_hold.outcome} held_ms=${deregisterOptions.drain_hold.held_ms} busy_at_release=${deregisterOptions.drain_hold.busy_session_ids_at_release.length}`
+            : ""),
+      );
+      let response = await axios_default.post(
+        `${config.baseUrl}/v1/code/runners/self-hosted/deregister`,
+        {
+          ...(deregisterOptions.reason && {
+            reason: deregisterOptions.reason,
+          }),
+          ...(deregisterOptions.drain_hold && {
+            drain_hold: deregisterOptions.drain_hold,
+          }),
+        },
+        {
+          headers: getOAuthHeaders_3(credentials),
+          timeout: 1e4,
+          validateStatus: (status) => status < 500,
+        },
+      );
+      formatRunnerApiError(response.status, response.data, "DeregisterRunner");
+      debugLog(`[runner:api] DeregisterRunner -> ${response.status}`);
+    },
+    async refreshToken(credentials) {
+      debugLog("[runner:api] POST /v1/code/auth/refresh");
+      let response = await axios_default.post(
+        `${config.baseUrl}/v1/code/auth/refresh`,
+        {},
+        {
+          headers: getOAuthHeaders_3(credentials),
+          timeout: 15000,
+          validateStatus: (status) => status < 500,
+        },
+      );
+      formatRunnerApiError(
+        response.status,
+        response.data,
+        "RefreshToken",
+        response.status === 403 &&
+          readRequestIdSource((headerName) => response.headers[headerName]) === "nonorigin_other",
+      );
+      if (!response.data.token) throw Error("RefreshToken: response missing token");
+      debugLog(`[runner:api] RefreshToken -> ${response.status}`);
+      return response.data;
+    },
+    async getSessionRemoteConfig(sessionId, credentials, signal, requestOptions) {
+      validateRunnerLabel(sessionId, "sessionId");
+      debugLog(`[runner:api] GET /v1/code/sessions/${sessionId}/remote`);
+      let response = await axios_default.get(`${config.baseUrl}/v1/code/sessions/${sessionId}/remote`, {
+        headers: {
+          ...requestOptions?.headers,
+          ...getOAuthHeaders_2(credentials),
+          "User-Agent": claudeCodeUserAgent(),
+          ...capabilityHeaders,
+        },
+        timeout: requestOptions?.timeoutMs ?? 15000,
+        signal,
+        validateStatus: (status) => status < 500,
+        ...(requestOptions?.beforeParsing && {
+          maxContentLength: requestOptions.beforeParsing.mostBytes,
+          responseType: "text",
+          transformResponse: (text, headers, httpStatus) => {
+            if (httpStatus !== undefined && httpStatus >= 200 && httpStatus < 300)
+              requestOptions.beforeParsing?.admit(text);
+            else if (text.length > MAX_ENV_VALUE_BYTES) return text;
+            try {
+              return jsonParse(text);
+            } catch {
+              return text;
+            }
+          },
+        }),
+      });
+      formatRunnerApiError(response.status, response.data, "GetSessionRemoteConfig");
+      let data = response.data;
+      return {
+        ...data,
+        sources: data.sources ?? [],
+        push_targets: data.push_targets ?? [],
+        claude_code_args: data.claude_code_args ?? {},
+        environment_variables: data.environment_variables ?? {},
+      };
+    },
+    async registerWorker(baseUrl, sessionId, credentials, signal) {
+      validateRunnerLabel(sessionId, "sessionId");
+      debugLog(`[runner:api] POST ${baseUrl}/v1/code/sessions/${sessionId}/worker/register`);
+      let response = await axios_default.post(
+        `${baseUrl}/v1/code/sessions/${sessionId}/worker/register`,
+        {
+          session_id: sessionId,
+        },
+        {
+          headers: getOAuthHeaders_2(credentials),
+          timeout: 30000,
+          signal,
+          validateStatus: (status) => status < 500,
+        },
+      );
+      formatRunnerApiError(response.status, response.data, "RegisterWorker");
+      let workerEpoch = parseInt(String(response.data.worker_epoch), 10);
+      if (isNaN(workerEpoch))
+        throw Error(`RegisterWorker: invalid worker_epoch in response: ${response.data.worker_epoch}`);
+      debugLog(`[runner:api] RegisterWorker -> ${response.status} worker_epoch=${workerEpoch}`);
+      return workerEpoch;
+    },
+    async postWorkerEvents(baseUrl, sessionId, credentials, workerEpoch, events, signal) {
+      validateRunnerLabel(sessionId, "sessionId");
+      debugLog(
+        `[runner:api] POST ${baseUrl}/v1/code/sessions/${sessionId}/worker/events (${events.length} ${plural(events.length, "event")})`,
+      );
+      let response = await axios_default.post(
+        `${baseUrl}/v1/code/sessions/${sessionId}/worker/events`,
+        {
+          worker_epoch: workerEpoch,
+          events: events.map((payload) => ({
+            payload,
+          })),
+        },
+        {
+          headers: getOAuthHeaders_2(credentials),
+          timeout: 15000,
+          signal,
+          validateStatus: (status) => status < 500,
+        },
+      );
+      formatRunnerApiError(response.status, response.data, "PostWorkerEvents");
+      debugLog(`[runner:api] PostWorkerEvents -> ${response.status}`);
+    },
+    async updateSessionWorkerState(baseUrl, sessionId, credentials, workerEpoch, workerState, signal) {
+      validateRunnerLabel(sessionId, "sessionId");
+      debugLog(`[runner:api] PUT ${baseUrl}/v1/code/sessions/${sessionId}/worker`);
+      let response = await axios_default.put(
+        `${baseUrl}/v1/code/sessions/${sessionId}/worker`,
+        {
+          worker_epoch: workerEpoch,
+          ...(typeof workerState === "string" && {
+            worker_status: workerState,
+          }),
+          ...(typeof workerState === "object" && {
+            connection_status: workerState.connectionStatus,
+          }),
+        },
+        {
+          headers: getOAuthHeaders_2(credentials),
+          timeout: 15000,
+          signal,
+          validateStatus: (status) => status < 500,
+        },
+      );
+      formatRunnerApiError(response.status, response.data, "UpdateSessionWorkerState");
+      debugLog(`[runner:api] UpdateSessionWorkerState -> ${response.status}`);
+    },
+    async heartbeat(baseUrl, sessionId, credentials, workerEpoch, signal) {
+      validateRunnerLabel(sessionId, "sessionId");
+      let response = await axios_default.post(
+        `${baseUrl}/v1/code/sessions/${sessionId}/worker/heartbeat`,
+        {
+          worker_epoch: workerEpoch,
+        },
+        {
+          headers: getOAuthHeaders_2(credentials),
+          timeout: 1e4,
+          signal,
+          validateStatus: (status) => status < 500,
+        },
+      );
+      formatRunnerApiError(response.status, response.data, "Heartbeat");
+    },
+    async forwardDiagnostics(baseUrl, sessionId, credentials, workerEpoch, lines) {
+      validateRunnerLabel(sessionId, "sessionId");
+      if (lines.length === 0) return;
+      debugLog(
+        `[runner:api] POST ${baseUrl}/v1/code/sessions/${sessionId}/worker/diagnostics (${lines.length} lines)`,
+      );
+      let response = await axios_default.post(
+        `${baseUrl}/v1/code/sessions/${sessionId}/worker/diagnostics`,
+        {
+          worker_epoch: workerEpoch,
+          lines,
+        },
+        {
+          headers: getOAuthHeaders_2(credentials),
+          timeout: 30000,
+          validateStatus: (status) => status < 500,
+        },
+      );
+      formatRunnerApiError(response.status, response.data, "ForwardDiagnostics");
+      debugLog(`[runner:api] ForwardDiagnostics -> ${response.status}`);
+    },
+  };
+}
+//@ chunk-0wa2vg6f.js:713-925 fingerprint = RedactedGithubToken (1)
+let GithubWebConnectionStatus; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-0wa2vg6f.js:713", () => {
+  GithubWebConnectionStatus = class GithubWebConnectionStatus {
+    #t;
+    constructor(raw) {
+      this.#t = raw;
+    }
+    reveal() {
+      return this.#t;
+    }
+    toString() {
+      return "[REDACTED:gh-token]";
+    }
+    toJSON() {
+      return "[REDACTED:gh-token]";
+    }
+    [Symbol.for("nodejs.util.inspect.custom")]() {
+      return "[REDACTED:gh-token]";
+    }
+  };
+});
 //@ chunk-0wa2vg6f.js:925-1708 fingerprint = importGithubToken (0.79)
 async function importGithubToken(token, credentials) {
-  let r;
+  let response;
   try {
-    r = await apiClient.post(
+    response = await apiClient.post(
       "/v1/code/github/import-token",
       {
         token: token.reveal(),
@@ -105,52 +541,52 @@ async function importGithubToken(token, credentials) {
       },
     };
   }
-  if (!r.ok)
+  if (!response.ok)
     return {
       ok: false,
       error: {
         kind: "not_signed_in",
       },
     };
-  if (r.status === 200)
+  if (response.status === 200)
     return {
       ok: true,
-      result: r.data,
+      result: response.data,
     };
-  if (r.status === 400) {
-    let s = oneLineClipped(extractErrorDetail(r.data) ?? "");
+  if (response.status === 400) {
+    let message = oneLineClipped(extractErrorDetail(response.data) ?? "");
     return {
       ok: false,
       error: {
         kind: "invalid_token",
-        ...(s && {
-          message: s,
+        ...(message && {
+          message,
         }),
       },
     };
   }
-  if (r.status === 401)
+  if (response.status === 401)
     return {
       ok: false,
       error: {
         kind: "not_signed_in",
       },
     };
-  logForDebugging(`import-token returned ${r.status}`, {
+  logForDebugging(`import-token returned ${response.status}`, {
     level: "error",
   });
   return {
     ok: false,
     error: {
       kind: "server",
-      status: r.status,
+      status: response.status,
     },
   };
 }
 //@ chunk-0wa2vg6f.js:1708-1775 layout
-async function hasValidOAuthToken(e) {
+async function hasValidOAuthToken(credentials) {
   try {
-    await prepareApiRequest(e, false);
+    await prepareApiRequest(credentials, false);
     return true;
   } catch {
     return false;
@@ -159,17 +595,17 @@ async function hasValidOAuthToken(e) {
 //@ chunk-0wa2vg6f.js:1775-2166 layout
 async function fetchGithubAuthStatus(credentials, { timeout, isBackground }) {
   try {
-    let s = await apiClient.get("/api/oauth/organizations/:orgUUID/sync/github/auth", {
+    let response = await apiClient.get("/api/oauth/organizations/:orgUUID/sync/github/auth", {
       auth: "teleport-org",
       timeout,
       isBackground,
       validateStatus: () => true,
       credentials,
     });
-    if (!s.ok || s.status !== 200) return null;
-    let authSource = s.data?.auth_source;
+    if (!response.ok || response.status !== 200) return null;
+    let authSource = response.data?.auth_source;
     return {
-      isAuthenticated: s.data?.is_authenticated === true,
+      isAuthenticated: response.data?.is_authenticated === true,
       authSource: authSource === "oauth" || authSource === "cli_import" ? authSource : null,
     };
   } catch {
@@ -209,29 +645,30 @@ class GithubConnectionStatusCache {
   inFlight = undefined;
   status = undefined;
   generation = 0;
-  async read(e, n) {
+  async read(credentials, timeoutOptions) {
     this.seedFromPersisted();
     if (this.inFlight) await this.inFlight;
-    else if (!isCheerfulHorizonGateOn()) await this.fetch(e, n);
+    else if (!isCheerfulHorizonGateOn()) await this.fetch(credentials, timeoutOptions);
     return this.status ?? "unknown";
   }
-  async readLive(e, n) {
+  async readLive(credentials, timeoutOptions) {
     this.seedFromPersisted();
     if (!this.inFlight && isCheerfulHorizonGateOn()) return "unknown";
     let generation = this.generation;
-    let s = await (this.inFlight ?? this.fetch(e, n));
-    return generation === this.generation ? s : "unknown";
+    let fetchedStatus = await (this.inFlight ?? this.fetch(credentials, timeoutOptions));
+    return generation === this.generation ? fetchedStatus : "unknown";
   }
-  peek(e, n) {
+  peek(credentials, timeoutOptions) {
     this.seedFromPersisted();
-    if (this.status === undefined && !this.inFlight && !isCheerfulHorizonGateOn()) this.fetch(e, n);
+    if (this.status === undefined && !this.inFlight && !isCheerfulHorizonGateOn())
+      this.fetch(credentials, timeoutOptions);
     return this.status;
   }
-  markConnected(e) {
+  markConnected(timeoutOptions) {
     this.generation++;
     this.inFlight = undefined;
     this.status = "connected";
-    persistGithubStatus("connected", e);
+    persistGithubStatus("connected", timeoutOptions);
   }
   clear() {
     this.generation++;
@@ -244,50 +681,56 @@ class GithubConnectionStatusCache {
     if (connectionCacheAccount)
       this.status = readPersistedGithubStatus(getGlobalConfig(), connectionCacheAccount);
   }
-  fetch(e, n) {
+  fetch(credentials, timeoutOptions) {
     let generation = this.generation;
-    let s = getGithubConnectionStatus(e).then(
+    let statusPromise = getGithubConnectionStatus(credentials).then(
       (githubConnectionStatus) => {
-        this.settle(generation, githubConnectionStatus, n);
+        this.settle(generation, githubConnectionStatus, timeoutOptions);
         return githubConnectionStatus;
       },
       (error) => {
         logError(error);
-        this.settle(generation, "unknown", n);
+        this.settle(generation, "unknown", timeoutOptions);
         return "unknown";
       },
     );
-    this.inFlight = s;
-    return s;
+    this.inFlight = statusPromise;
+    return statusPromise;
   }
-  settle(e, n, r) {
-    if (e !== this.generation) return;
+  settle(generation, status, timeoutOptions) {
+    if (generation !== this.generation) return;
     this.inFlight = undefined;
-    if (n === "unknown") {
-      this.status ??= n;
+    if (status === "unknown") {
+      this.status ??= status;
       return;
     }
-    this.status = n;
-    persistGithubStatus(n, r);
+    this.status = status;
+    persistGithubStatus(status, timeoutOptions);
   }
 }
 //@ chunk-0wa2vg6f.js:3604-3628 placement
 /**
  * 按宿主缓存的 GitHub 连接状态缓存（remote-setup/promo/auth 共用）。
  */
-var GITHUB_CONNECTION_STATUS_CACHE = new HostScoped(() => new GithubConnectionStatusCache());
+var GITHUB_CONNECTION_STATUS_CACHE; // deferred: uses GithubConnectionStatusCache of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-0wa2vg6f.js:3604", () => {
+  GITHUB_CONNECTION_STATUS_CACHE = new HostScoped(() => new GithubConnectionStatusCache());
+});
 //@ chunk-0wa2vg6f.js:3628-3679 placement
 function isCheerfulHorizonGateOn() {
   return getFeatureValue_CACHED_MAY_BE_STALE("tengu_cheerful_horizon", false);
 }
 //@ chunk-0wa2vg6f.js:3679-3765 placement
-var githubConnectionStatusSchema = DoctorLazy(() =>
-  u({
-    accountUuid: string(),
-    orgUuid: string(),
-    status: _enum(["connected", "not_connected"]),
-  }),
-);
+var githubConnectionStatusSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-0wa2vg6f.js:3679", () => {
+  githubConnectionStatusSchema = DoctorLazy(() =>
+    objectSchema({
+      accountUuid: stringSchema(),
+      orgUuid: stringSchema(),
+      status: _enum(["connected", "not_connected"]),
+    }),
+  );
+});
 //@ chunk-0wa2vg6f.js:3765-3980 placement
 function getConnectionCacheAccount() {
   let oauthAccountInfo = getOauthAccountInfo();
@@ -302,448 +745,33 @@ function getConnectionCacheAccount() {
   };
 }
 //@ chunk-0wa2vg6f.js:3980-4156 placement
-function readPersistedGithubStatus(e, connectionCacheAccount) {
-  let r = githubConnectionStatusSchema().safeParse(e.githubWebConnectionStatusCache);
+function readPersistedGithubStatus(config, connectionCacheAccount) {
+  let parsed = githubConnectionStatusSchema().safeParse(config.githubWebConnectionStatusCache);
   if (
-    !r.success ||
-    r.data.accountUuid !== connectionCacheAccount.accountUuid ||
-    r.data.orgUuid !== connectionCacheAccount.orgUuid
+    !parsed.success ||
+    parsed.data.accountUuid !== connectionCacheAccount.accountUuid ||
+    parsed.data.orgUuid !== connectionCacheAccount.orgUuid
   )
     return;
-  return r.data.status;
+  return parsed.data.status;
 }
 //@ chunk-0wa2vg6f.js:4156-4273 placement
-function persistGithubStatus(e, n) {
+function persistGithubStatus(status, storage) {
   let connectionCacheAccount = getConnectionCacheAccount();
   if (!connectionCacheAccount) return;
   saveGlobalConfig(
-    (s) =>
-      readPersistedGithubStatus(s, connectionCacheAccount) === e
-        ? s
+    (config) =>
+      readPersistedGithubStatus(config, connectionCacheAccount) === status
+        ? config
         : {
-            ...s,
+            ...config,
             githubWebConnectionStatusCache: {
               ...connectionCacheAccount,
-              status: e,
+              status,
             },
           },
-    n,
+    storage,
   );
-}
-//@ chunk-3nztfxrw.js:5177-5348 placement = getOAuthHeaders (0.778)
-function getOAuthHeaders_3(accessToken) {
-  return {
-    "User-Agent": claudeCodeUserAgent(),
-    Authorization: `Bearer ${accessToken}`,
-    "Content-Type": "application/json",
-    "anthropic-version": "2023-06-01",
-    "x-self-hosted-runner-version": RUNNER_CLIENT_VERSION,
-  };
-}
-//@ chunk-3nztfxrw.js:8831-17921 callgraph-witnessed = createDefaultEnvironment (0.009)
-function createDefaultEnvironment(e) {
-  function n(t) {
-    e.onDebug?.(t);
-  }
-  let r = 0;
-  let m = 30;
-  let a = {
-    "x-self-hosted-runner-capabilities": e.capabilities.join(",") || null,
-  };
-  return {
-    async registerRunner(t = {}) {
-      let { clientLabel, lockToAccountId, useAnthropicGitProxy, serverAutoModeLists } = t;
-      n("[runner:api] POST /v1/code/runners/self-hosted/runners/register");
-      let b = {
-        runner_version: RUNNER_CLIENT_VERSION,
-        capabilities: e.capabilities,
-        use_anthropic_git_proxy: useAnthropicGitProxy ?? false,
-        server_auto_mode_lists: LIST_MODE_ENV_VARS[serverAutoModeLists ?? NO_ALLOW],
-      };
-      if (clientLabel) b.client_label = clientLabel;
-      if (lockToAccountId) b.lock_to_account_id = lockToAccountId;
-      let w = await axios_default.post(`${e.baseUrl}/v1/code/runners/self-hosted/runners/register`, b, {
-        headers: getOAuthHeaders(e.poolSecret),
-        timeout: 15000,
-        validateStatus: (S) => S < 500,
-      });
-      formatRunnerApiError(w.status, w.data, "RegisterRunner");
-      validateRunnerLabel(w.data.runner_id, "runner_id");
-      n(`[runner:api] RegisterRunner -> ${w.status} runner_id=${w.data.runner_id}`);
-      return w.data;
-    },
-    async pollSpawnHints(t, signal) {
-      let s = await axios_default.post(`${e.baseUrl}/v1/code/runners/self-hosted/spawn-hints/poll`, t, {
-        headers: getOAuthHeaders(e.poolSecret),
-        timeout: 30000,
-        signal,
-        validateStatus: (S) => S < 500,
-      });
-      formatRunnerApiError(s.status, s.data, "PollSpawnHints");
-      let serverDate = typeof s.headers?.date === "string" ? s.headers.date : null;
-      let l = (S) => ({
-        ...S,
-        session_uuid: S.session_uuid ?? "",
-        attempt: S.attempt ?? 0,
-        work_order_jwt: S.work_order_jwt ?? "",
-        sources: S.sources ?? [],
-      });
-      let slots = s.data.slots;
-      let w = {
-        hints: (s.data.hints ?? []).map(l),
-        warm_hints: (s.data.warm_hints ?? []).map(l),
-        pending_count: s.data.pending_count ?? 0,
-        backing_off_count: s.data.backing_off_count ?? 0,
-        circuit_broken_count: s.data.circuit_broken_count ?? 0,
-        pool_pending_session_count: s.data.pool_pending_session_count ?? 0,
-        pool_active_session_count: s.data.pool_active_session_count ?? 0,
-        ...(typeof slots === "number" &&
-          Number.isInteger(slots) &&
-          slots >= 1 && {
-            slots,
-          }),
-        server_date: serverDate,
-      };
-      n(
-        `[runner:api] PollSpawnHints -> ${s.status} hints=${w.hints.length} warm=${w.warm_hints.length} pending=${w.pending_count} backing_off=${w.backing_off_count} circuit_broken=${w.circuit_broken_count} slots=${w.slots ?? "-"}`,
-      );
-      return w;
-    },
-    async nackSpawnHint(t, signal) {
-      n(
-        `[runner:api] POST /v1/code/runners/self-hosted/spawn-hints/nack session=${t.session_uuid} attempt=${t.attempt} retryable=${t.retryable}${t.failure_kind ? ` cause=${t.failure_kind}` : ""}`,
-      );
-      let error = t.error.length > 512 ? t.error.slice(0, 512) : t.error;
-      let c = await axios_default.post(
-        `${e.baseUrl}/v1/code/runners/self-hosted/spawn-hints/nack`,
-        {
-          ...t,
-          error,
-        },
-        {
-          headers: getOAuthHeaders(e.poolSecret),
-          timeout: ENV_MAX_TIMEOUT_MS,
-          signal,
-          validateStatus: (l) => l < 500,
-        },
-      );
-      formatRunnerApiError(c.status, c.data, "NackSpawnHint");
-      n(`[runner:api] NackSpawnHint -> ${c.status}`);
-    },
-    async pollWork(t, i, availableCapacity, signal, l) {
-      validateRunnerLabel(i, "runnerId");
-      let b = r;
-      r = 0;
-      let w = await axios_default.post(
-        `${e.baseUrl}/v1/code/runners/self-hosted/runners/${i}/poll`,
-        {
-          available_capacity: availableCapacity,
-          ...(l !== undefined && {
-            wake_source: l,
-          }),
-        },
-        {
-          headers: getOAuthHeaders_3(t),
-          timeout: ENV_DEFAULT_TIMEOUT_MS,
-          signal,
-          validateStatus: (A) => A < 500,
-        },
-      );
-      formatRunnerApiError(w.status, w.data, "PollWork");
-      let S = w.data;
-      if (typeof S !== "object" || S === null || Array.isArray(S))
-        throw Error(
-          "PollWork: response body is not a JSON object (an intercepting proxy may have answered) \u2014 rejecting the malformed poll response",
-        );
-      let assignmentIds = w.data.assignment_ids;
-      if (assignmentIds !== undefined && assignmentIds !== null && !Array.isArray(assignmentIds))
-        throw Error(
-          "PollWork: response assignment_ids is not an array \u2014 rejecting the malformed poll response",
-        );
-      if (Array.isArray(assignmentIds) && !assignmentIds.every(isSafeEnvToken))
-        throw Error(
-          "PollWork: response assignment_ids contains a malformed session id \u2014 rejecting the malformed poll response",
-        );
-      let assignmentIds_2 = w.data.assignment_ids ?? [];
-      if (assignmentIds_2.length === 0) {
-        r = b + 1;
-        if (r === 1 || r % m === 0)
-          n(`[runner:api] PollWork -> ${w.status} (no work, ${r} consecutive empty polls)`);
-      } else n(`[runner:api] PollWork -> ${w.status} assignments=${assignmentIds_2.length}`);
-      let leaseExpiresAt = w.data.lease_expires_at;
-      let suggestedPollInterval = w.data.suggested_poll_interval;
-      return {
-        assignment_ids: assignmentIds_2,
-        lease_expires_at: typeof leaseExpiresAt === "string" ? leaseExpiresAt : undefined,
-        session_assignments: Array.isArray(w.data.session_assignments) ? w.data.session_assignments : [],
-        suggested_poll_interval:
-          typeof suggestedPollInterval === "string" ? suggestedPollInterval : undefined,
-      };
-    },
-    async issueSessionToken(t, i, signal) {
-      validateRunnerLabel(i, "sessionId");
-      let url = `/v1/code/runners/self-hosted/sessions/${encodeURIComponent(i)}/token`;
-      n(`[runner:api] POST ${url}`);
-      let l = await axios_default.post(
-        `${e.baseUrl}${url}`,
-        {},
-        {
-          headers: getOAuthHeaders_3(t),
-          timeout: 15000,
-          signal,
-          validateStatus: (T) => T < 500,
-        },
-      );
-      formatRunnerApiError(l.status, l.data, "IssueSessionToken");
-      if (!l.data.session_token) throw Error("IssueSessionToken: response missing session_token");
-      n(`[runner:api] IssueSessionToken -> ${l.status}`);
-      let { session_token: sessionToken, tools_host: toolsHost } = l.data;
-      if (toolsHost === undefined || toolsHost === null)
-        return {
-          session_token: sessionToken,
-        };
-      let S = RUNNER_CONFIG_SCHEMA().safeParse(toolsHost);
-      if (!S.success) throw new UnreadableToolsHostError();
-      return {
-        session_token: sessionToken,
-        tools_host: S.data,
-      };
-    },
-    async reportSessionFailure(t, i, s, c, l) {
-      validateRunnerLabel(i, "sessionId");
-      n(
-        `[runner:api] POST /v1/code/runners/self-hosted/sessions/${i}/report-failure reason=${s}${c ? ` kind=${c}` : ""}${l ? ` cause=${l}` : ""}`,
-      );
-      let b = await axios_default.post(
-        `${e.baseUrl}/v1/code/runners/self-hosted/sessions/${i}/report-failure`,
-        {
-          reason: s,
-          ...(c && {
-            setup_failure_kind: c,
-          }),
-          ...(l && {
-            failure_kind: l,
-          }),
-        },
-        {
-          headers: getOAuthHeaders_3(t),
-          timeout: 15000,
-          validateStatus: (w) => w < 500,
-        },
-      );
-      formatRunnerApiError(b.status, b.data, "ReportSessionFailure");
-      n(
-        `[runner:api] ReportSessionFailure -> ${b.status} excluded_count=${b.data.excluded_count} stuck=${b.data.stuck}`,
-      );
-      return b.data;
-    },
-    async releaseSession(t, i) {
-      validateRunnerLabel(i, "sessionId");
-      n(`[runner:api] POST /v1/code/runners/self-hosted/sessions/${i}/release`);
-      let s = await axios_default.post(
-        `${e.baseUrl}/v1/code/runners/self-hosted/sessions/${i}/release`,
-        {},
-        {
-          headers: getOAuthHeaders_3(t),
-          timeout: 15000,
-          validateStatus: (l) => l < 500,
-        },
-      );
-      formatRunnerApiError(s.status, s.data, "ReleaseSession");
-      let released = s.data.released ?? true;
-      n(`[runner:api] ReleaseSession -> ${s.status} released=${released}`);
-      return {
-        released,
-      };
-    },
-    async deregisterRunner(t, i = {}) {
-      n(
-        `[runner:api] POST /v1/code/runners/self-hosted/deregister reason=${i.reason ?? ""}` +
-          (i.drain_hold
-            ? ` drain_hold=${i.drain_hold.outcome} held_ms=${i.drain_hold.held_ms} busy_at_release=${i.drain_hold.busy_session_ids_at_release.length}`
-            : ""),
-      );
-      let s = await axios_default.post(
-        `${e.baseUrl}/v1/code/runners/self-hosted/deregister`,
-        {
-          ...(i.reason && {
-            reason: i.reason,
-          }),
-          ...(i.drain_hold && {
-            drain_hold: i.drain_hold,
-          }),
-        },
-        {
-          headers: getOAuthHeaders_3(t),
-          timeout: 1e4,
-          validateStatus: (c) => c < 500,
-        },
-      );
-      formatRunnerApiError(s.status, s.data, "DeregisterRunner");
-      n(`[runner:api] DeregisterRunner -> ${s.status}`);
-    },
-    async refreshToken(t) {
-      n("[runner:api] POST /v1/code/auth/refresh");
-      let i = await axios_default.post(
-        `${e.baseUrl}/v1/code/auth/refresh`,
-        {},
-        {
-          headers: getOAuthHeaders_3(t),
-          timeout: 15000,
-          validateStatus: (s) => s < 500,
-        },
-      );
-      formatRunnerApiError(
-        i.status,
-        i.data,
-        "RefreshToken",
-        i.status === 403 && readRequestIdSource((s) => i.headers[s]) === "nonorigin_other",
-      );
-      if (!i.data.token) throw Error("RefreshToken: response missing token");
-      n(`[runner:api] RefreshToken -> ${i.status}`);
-      return i.data;
-    },
-    async getSessionRemoteConfig(t, i, signal, c) {
-      validateRunnerLabel(t, "sessionId");
-      n(`[runner:api] GET /v1/code/sessions/${t}/remote`);
-      let l = await axios_default.get(`${e.baseUrl}/v1/code/sessions/${t}/remote`, {
-        headers: {
-          ...c?.headers,
-          ...getOAuthHeaders_2(i),
-          "User-Agent": claudeCodeUserAgent(),
-          ...a,
-        },
-        timeout: c?.timeoutMs ?? 15000,
-        signal,
-        validateStatus: (w) => w < 500,
-        ...(c?.beforeParsing && {
-          maxContentLength: c.beforeParsing.mostBytes,
-          responseType: "text",
-          transformResponse: (w, S, T) => {
-            if (T !== undefined && T >= 200 && T < 300) c.beforeParsing?.admit(w);
-            else if (w.length > MAX_ENV_VALUE_BYTES) return w;
-            try {
-              return jsonParse(w);
-            } catch {
-              return w;
-            }
-          },
-        }),
-      });
-      formatRunnerApiError(l.status, l.data, "GetSessionRemoteConfig");
-      let b = l.data;
-      return {
-        ...b,
-        sources: b.sources ?? [],
-        push_targets: b.push_targets ?? [],
-        claude_code_args: b.claude_code_args ?? {},
-        environment_variables: b.environment_variables ?? {},
-      };
-    },
-    async registerWorker(t, i, s, signal) {
-      validateRunnerLabel(i, "sessionId");
-      n(`[runner:api] POST ${t}/v1/code/sessions/${i}/worker/register`);
-      let l = await axios_default.post(
-        `${t}/v1/code/sessions/${i}/worker/register`,
-        {
-          session_id: i,
-        },
-        {
-          headers: getOAuthHeaders_2(s),
-          timeout: 30000,
-          signal,
-          validateStatus: (w) => w < 500,
-        },
-      );
-      formatRunnerApiError(l.status, l.data, "RegisterWorker");
-      let b = parseInt(String(l.data.worker_epoch), 10);
-      if (isNaN(b)) throw Error(`RegisterWorker: invalid worker_epoch in response: ${l.data.worker_epoch}`);
-      n(`[runner:api] RegisterWorker -> ${l.status} worker_epoch=${b}`);
-      return b;
-    },
-    async postWorkerEvents(t, i, s, workerEpoch, l, signal) {
-      validateRunnerLabel(i, "sessionId");
-      n(
-        `[runner:api] POST ${t}/v1/code/sessions/${i}/worker/events (${l.length} ${plural(l.length, "event")})`,
-      );
-      let w = await axios_default.post(
-        `${t}/v1/code/sessions/${i}/worker/events`,
-        {
-          worker_epoch: workerEpoch,
-          events: l.map((payload) => ({
-            payload,
-          })),
-        },
-        {
-          headers: getOAuthHeaders_2(s),
-          timeout: 15000,
-          signal,
-          validateStatus: (S) => S < 500,
-        },
-      );
-      formatRunnerApiError(w.status, w.data, "PostWorkerEvents");
-      n(`[runner:api] PostWorkerEvents -> ${w.status}`);
-    },
-    async updateSessionWorkerState(t, i, s, workerEpoch, l, signal) {
-      validateRunnerLabel(i, "sessionId");
-      n(`[runner:api] PUT ${t}/v1/code/sessions/${i}/worker`);
-      let w = await axios_default.put(
-        `${t}/v1/code/sessions/${i}/worker`,
-        {
-          worker_epoch: workerEpoch,
-          ...(typeof l === "string" && {
-            worker_status: l,
-          }),
-          ...(typeof l === "object" && {
-            connection_status: l.connectionStatus,
-          }),
-        },
-        {
-          headers: getOAuthHeaders_2(s),
-          timeout: 15000,
-          signal,
-          validateStatus: (S) => S < 500,
-        },
-      );
-      formatRunnerApiError(w.status, w.data, "UpdateSessionWorkerState");
-      n(`[runner:api] UpdateSessionWorkerState -> ${w.status}`);
-    },
-    async heartbeat(t, i, s, workerEpoch, signal) {
-      validateRunnerLabel(i, "sessionId");
-      let b = await axios_default.post(
-        `${t}/v1/code/sessions/${i}/worker/heartbeat`,
-        {
-          worker_epoch: workerEpoch,
-        },
-        {
-          headers: getOAuthHeaders_2(s),
-          timeout: 1e4,
-          signal,
-          validateStatus: (w) => w < 500,
-        },
-      );
-      formatRunnerApiError(b.status, b.data, "Heartbeat");
-    },
-    async forwardDiagnostics(t, i, s, workerEpoch, l) {
-      validateRunnerLabel(i, "sessionId");
-      if (l.length === 0) return;
-      n(`[runner:api] POST ${t}/v1/code/sessions/${i}/worker/diagnostics (${l.length} lines)`);
-      let response = await axios_default.post(
-        `${t}/v1/code/sessions/${i}/worker/diagnostics`,
-        {
-          worker_epoch: workerEpoch,
-          lines: l,
-        },
-        {
-          headers: getOAuthHeaders_2(s),
-          timeout: 30000,
-          validateStatus: (w) => w < 500,
-        },
-      );
-      formatRunnerApiError(response.status, response.data, "ForwardDiagnostics");
-      n(`[runner:api] ForwardDiagnostics -> ${response.status}`);
-    },
-  };
 }
 export {
   createDefaultEnvironment,

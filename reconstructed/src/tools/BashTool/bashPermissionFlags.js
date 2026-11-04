@@ -12,6 +12,7 @@ import { readFlagWithOverride } from "../../services/analytics/flagOverrides.js"
 import { getFeatureValueWithSource_CACHED_MAY_BE_STALE } from "../../services/analytics/growthbook.js";
 import { env } from "../../utils/env.js";
 import { identity as identity_2 } from "../../utils/identity.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:1016950-1017012 placement
 /**
@@ -42,32 +43,34 @@ var MAX_DANGEROUS_RM_DIALOG_TIMEOUTS = 100;
  * 读取 tengu_splendid_horizon 配置的危险 rm 超时策略：是否启用（可被环境变量关闭）、是否显示对话框、主机卡片是否拒绝、超时与最大对话框超时次数（越界取默认）。
  */
 function getDangerousRmTimeoutConfig() {
-  let { value: e, source } = getFeatureValueWithSource_CACHED_MAY_BE_STALE(TENGU_SPLENDID_HORIZON, {});
+  let { value: config, source } = getFeatureValueWithSource_CACHED_MAY_BE_STALE(TENGU_SPLENDID_HORIZON, {});
   return {
     enabled: env.CLAUDE_CODE_DISABLE_DANGEROUS_RM_TIMEOUT
       ? false
-      : typeof e?.enabled === "boolean" && source === "payload"
-        ? e.enabled
+      : typeof config?.enabled === "boolean" && source === "payload"
+        ? config.enabled
         : DEFAULT_DANGEROUS_RM_TIMEOUT_CONFIG.enabled,
     showDialog:
-      typeof e?.showDialog === "boolean" ? e.showDialog : DEFAULT_DANGEROUS_RM_TIMEOUT_CONFIG.showDialog,
+      typeof config?.showDialog === "boolean"
+        ? config.showDialog
+        : DEFAULT_DANGEROUS_RM_TIMEOUT_CONFIG.showDialog,
     denyOnHostCard:
-      typeof e?.denyOnHostCard === "boolean"
-        ? e.denyOnHostCard
+      typeof config?.denyOnHostCard === "boolean"
+        ? config.denyOnHostCard
         : DEFAULT_DANGEROUS_RM_TIMEOUT_CONFIG.denyOnHostCard,
     timeoutMs:
-      typeof e?.timeoutMs === "number" &&
-      Number.isFinite(e.timeoutMs) &&
-      e.timeoutMs >= MIN_DANGEROUS_RM_DIALOG_TIMEOUT_MS &&
-      e.timeoutMs <= MAX_DANGEROUS_RM_DIALOG_TIMEOUT_MS
-        ? e.timeoutMs
+      typeof config?.timeoutMs === "number" &&
+      Number.isFinite(config.timeoutMs) &&
+      config.timeoutMs >= MIN_DANGEROUS_RM_DIALOG_TIMEOUT_MS &&
+      config.timeoutMs <= MAX_DANGEROUS_RM_DIALOG_TIMEOUT_MS
+        ? config.timeoutMs
         : DEFAULT_DANGEROUS_RM_TIMEOUT_CONFIG.timeoutMs,
     maxDialogTimeouts:
-      typeof e?.maxDialogTimeouts === "number" &&
-      Number.isInteger(e.maxDialogTimeouts) &&
-      e.maxDialogTimeouts >= 0 &&
-      e.maxDialogTimeouts <= MAX_DANGEROUS_RM_DIALOG_TIMEOUTS
-        ? e.maxDialogTimeouts
+      typeof config?.maxDialogTimeouts === "number" &&
+      Number.isInteger(config.maxDialogTimeouts) &&
+      config.maxDialogTimeouts >= 0 &&
+      config.maxDialogTimeouts <= MAX_DANGEROUS_RM_DIALOG_TIMEOUTS
+        ? config.maxDialogTimeouts
         : DEFAULT_DANGEROUS_RM_TIMEOUT_CONFIG.maxDialogTimeouts,
   };
 }
@@ -103,14 +106,17 @@ function resetUnansweredSafetyCheckCount() {
 /**
  * 记录“自动拒绝窗口是否已过期”的可响应对象。
  */
-var unansweredWindowState = identity_2(
-  {
-    expired: false,
-  },
-  (e) => {
-    e.expired = false;
-  },
-);
+var unansweredWindowState; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:1017916", () => {
+  unansweredWindowState = identity_2(
+    {
+      expired: false,
+    },
+    (state) => {
+      state.expired = false;
+    },
+  );
+});
 //@ chunk-e6aww6q8.js:1017961-1017995 placement
 /**
  * 读取自动拒绝窗口是否已过期。

@@ -29,16 +29,16 @@ import { withTimeout_2 } from "../../sleep.js";
 /**
  * 从 Cache-Control 头里取出指定指令的秒数。
  */
-function parseCacheControlSeconds(cacheControl, t, n) {
-  let match = new RegExp(`(?:^|,)\\s*${t}=(\\d+)`).exec(cacheControl ?? "");
-  return match ? Number(match[1]) : n;
+function parseCacheControlSeconds(cacheControl, directive, fallback) {
+  let match = new RegExp(`(?:^|,)\\s*${directive}=(\\d+)`).exec(cacheControl ?? "");
+  return match ? Number(match[1]) : fallback;
 }
 //@ chunk-p7xf186d.js:9510-9571 placement
 /**
  * 构造 jwks_unavailable 配对错误。
  */
-function jwksUnavailableError(e, cause) {
-  return new PairingError("jwks_unavailable", e, {
+function jwksUnavailableError(message, cause) {
+  return new PairingError("jwks_unavailable", message, {
     cause,
   });
 }
@@ -58,31 +58,31 @@ class JwksCache {
   floor;
   timeoutSec;
   url;
-  constructor(e) {
-    this.opts = e;
-    this.clock = new PairingClock(e);
+  constructor(options) {
+    this.opts = options;
+    this.clock = new PairingClock(options);
     this.floor = MIN_CACHE_MAX_AGE_S;
-    this.timeoutSec = e.timeoutSec ?? MAX_TAG_FAILURES;
-    this.url = normalizeApiOrigin(e.apiOrigin, e.allowLoopbackHttp).jwks;
+    this.timeoutSec = options.timeoutSec ?? MAX_TAG_FAILURES;
+    this.url = normalizeApiOrigin(options.apiOrigin, options.allowLoopbackHttp).jwks;
   }
-  async getKey(e) {
-    let t = this.lookup(e);
-    if (!t || this.age() > this.maxAge) {
+  async getKey(kid) {
+    let key = this.lookup(kid);
+    if (!key || this.age() > this.maxAge) {
       if (!this.inflight && !this.floored()) {
-        if (!t) this.flooredAt = this.clock.stamp();
+        if (!key) this.flooredAt = this.clock.stamp();
         this.inflight = this.fetch().finally(() => {
           this.inflight = undefined;
         });
       }
       await this.inflight;
-      t = this.lookup(e);
+      key = this.lookup(kid);
     }
-    if (t) return t;
+    if (key) return key;
     if (this.keys.size === 0) throw jwksUnavailableError("no verification keys");
-    throw new PairingError("unknown_kid", e.slice(0, 32));
+    throw new PairingError("unknown_kid", kid.slice(0, 32));
   }
-  lookup(e) {
-    return this.servable().get(e);
+  lookup(kid) {
+    return this.servable().get(kid);
   }
   servable() {
     if (this.age() > this.maxAge + this.staleIfError) this.keys = new Map();
@@ -104,17 +104,17 @@ class JwksCache {
     }
   }
   async load() {
-    let e = await withTimeout_2(this.get(), this.timeoutSec, () => jwksUnavailableError("timed out"));
-    if (e.status !== 200) throw jwksUnavailableError(`HTTP ${e.status}`);
-    let t;
+    let response = await withTimeout_2(this.get(), this.timeoutSec, () => jwksUnavailableError("timed out"));
+    if (response.status !== 200) throw jwksUnavailableError(`HTTP ${response.status}`);
+    let body;
     try {
-      t = JSON.parse(e.text);
+      body = JSON.parse(response.text);
     } catch {
       throw jwksUnavailableError("not JSON");
     }
-    let keys = t?.keys;
+    let keys = body?.keys;
     if (!Array.isArray(keys)) throw jwksUnavailableError("no keys array");
-    let r = new Map();
+    let keys_2 = new Map();
     for (let key of keys) {
       if (
         key?.kty !== "EC" ||
@@ -127,16 +127,20 @@ class JwksCache {
       )
         continue;
       try {
-        r.set(key.kid, await importEcdhJwk(key.x, key.y));
+        keys_2.set(key.kid, await importEcdhJwk(key.x, key.y));
       } catch {}
     }
-    if (r.size === 0) throw jwksUnavailableError("no usable EC P-256 keys");
+    if (keys_2.size === 0) throw jwksUnavailableError("no usable EC P-256 keys");
     this.maxAge = Math.max(
-      parseCacheControlSeconds(e.cacheControl, "max-age", DEFAULT_CACHE_MAX_AGE_S),
+      parseCacheControlSeconds(response.cacheControl, "max-age", DEFAULT_CACHE_MAX_AGE_S),
       this.floor,
     );
-    this.staleIfError = parseCacheControlSeconds(e.cacheControl, "stale-if-error", DEFAULT_STALE_IF_ERROR_S);
-    this.keys = r;
+    this.staleIfError = parseCacheControlSeconds(
+      response.cacheControl,
+      "stale-if-error",
+      DEFAULT_STALE_IF_ERROR_S,
+    );
+    this.keys = keys_2;
     this.fetchedAt = this.clock.stamp();
   }
   async get() {
@@ -157,123 +161,123 @@ class JwksCache {
   }
 }
 //@ chunk-p7xf186d.js:11556-12038 placement
-function canonicalJson(e) {
-  if (e === null || typeof e === "boolean" || typeof e === "string") return JSON.stringify(e);
-  if (typeof e === "number") {
-    if (!Number.isFinite(e)) throw TypeError("canonicalJson: non-finite number");
-    return JSON.stringify(e);
+function canonicalJson(value) {
+  if (value === null || typeof value === "boolean" || typeof value === "string") return JSON.stringify(value);
+  if (typeof value === "number") {
+    if (!Number.isFinite(value)) throw TypeError("canonicalJson: non-finite number");
+    return JSON.stringify(value);
   }
-  if (Array.isArray(e)) return "[" + e.map((t) => canonicalJson(t)).join(",") + "]";
-  if (typeof e === "object") {
-    let t = e;
+  if (Array.isArray(value)) return "[" + value.map((item) => canonicalJson(item)).join(",") + "]";
+  if (typeof value === "object") {
+    let object = value;
     return (
       "{" +
-      Object.keys(t)
-        .filter((key) => t[key] !== undefined)
+      Object.keys(object)
+        .filter((key) => object[key] !== undefined)
         .sort()
-        .map((key) => JSON.stringify(key) + ":" + canonicalJson(t[key]))
+        .map((key) => JSON.stringify(key) + ":" + canonicalJson(object[key]))
         .join(",") +
       "}"
     );
   }
-  throw TypeError(`canonicalJson: unsupported ${typeof e}`);
+  throw TypeError(`canonicalJson: unsupported ${typeof value}`);
 }
 //@ chunk-p7xf186d.js:12038-13130 placement
-function parseStrictJson(e) {
-  let t = 0;
-  let n = (c) => {
-    throw SyntaxError(`strict JSON: ${c} at ${t}`);
+function parseStrictJson(text) {
+  let cursor = 0;
+  let fail = (message) => {
+    throw SyntaxError(`strict JSON: ${message} at ${cursor}`);
   };
-  let r = () => {
+  let skipWhitespace = () => {
     while (
-      t < e.length &&
+      cursor < text.length &&
       ` 	
-\r`.includes(e.charAt(t))
+\r`.includes(text.charAt(cursor))
     )
-      t++;
+      cursor++;
   };
-  let i = () => {
-    let c = t;
-    if (e[t] !== '"') n("expected string");
-    t++;
-    while (t < e.length && e[t] !== '"') {
-      if (e[t] === "\\") t++;
-      t++;
+  let parseString = () => {
+    let start = cursor;
+    if (text[cursor] !== '"') fail("expected string");
+    cursor++;
+    while (cursor < text.length && text[cursor] !== '"') {
+      if (text[cursor] === "\\") cursor++;
+      cursor++;
     }
-    if (t >= e.length) n("unterminated string");
-    t++;
-    return JSON.parse(e.slice(c, t));
+    if (cursor >= text.length) fail("unterminated string");
+    cursor++;
+    return JSON.parse(text.slice(start, cursor));
   };
-  let s = () => {
-    r();
-    let c = e[t];
-    if (c === "{") {
-      t++;
-      let u = {};
-      let l = new Set();
-      r();
-      if (e[t] === "}") {
-        t++;
-        return u;
+  let parseValue = () => {
+    skipWhitespace();
+    let char = text[cursor];
+    if (char === "{") {
+      cursor++;
+      let object = {};
+      let seenKeys = new Set();
+      skipWhitespace();
+      if (text[cursor] === "}") {
+        cursor++;
+        return object;
       }
       for (;;) {
-        r();
-        let p = i();
-        if (l.has(p)) n(`duplicate key ${JSON.stringify(p)}`);
-        l.add(p);
-        r();
-        if (e[t] !== ":") n("expected ':'");
-        t++;
-        Object.defineProperty(u, p, {
-          value: s(),
+        skipWhitespace();
+        let key = parseString();
+        if (seenKeys.has(key)) fail(`duplicate key ${JSON.stringify(key)}`);
+        seenKeys.add(key);
+        skipWhitespace();
+        if (text[cursor] !== ":") fail("expected ':'");
+        cursor++;
+        Object.defineProperty(object, key, {
+          value: parseValue(),
           enumerable: true,
           writable: true,
           configurable: true,
         });
-        r();
-        if (e[t] === ",") {
-          t++;
+        skipWhitespace();
+        if (text[cursor] === ",") {
+          cursor++;
           continue;
         }
-        if (e[t] === "}") {
-          t++;
-          return u;
+        if (text[cursor] === "}") {
+          cursor++;
+          return object;
         }
-        n("expected ',' or '}'");
+        fail("expected ',' or '}'");
       }
     }
-    if (c === "[") {
-      t++;
-      let u = [];
-      r();
-      if (e[t] === "]") {
-        t++;
-        return u;
+    if (char === "[") {
+      cursor++;
+      let array = [];
+      skipWhitespace();
+      if (text[cursor] === "]") {
+        cursor++;
+        return array;
       }
       for (;;) {
-        u.push(s());
-        r();
-        if (e[t] === ",") {
-          t++;
+        array.push(parseValue());
+        skipWhitespace();
+        if (text[cursor] === ",") {
+          cursor++;
           continue;
         }
-        if (e[t] === "]") {
-          t++;
-          return u;
+        if (text[cursor] === "]") {
+          cursor++;
+          return array;
         }
-        n("expected ',' or ']'");
+        fail("expected ',' or ']'");
       }
     }
-    if (c === '"') return i();
-    let match = /^(-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?|true|false|null)/.exec(e.slice(t));
-    if (!match) n("unexpected token");
-    t += match[0].length;
+    if (char === '"') return parseString();
+    let match = /^(-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?|true|false|null)/.exec(text.slice(cursor));
+    if (!match) fail("unexpected token");
+    cursor += match[0].length;
     return JSON.parse(match[0]);
   };
-  let o = s();
-  r();
-  if (t !== e.length) n("trailing data");
-  return o;
+  let value = parseValue();
+  skipWhitespace();
+  if (cursor !== text.length) fail("trailing data");
+  return value;
 }
 //@ chunk-p7xf186d.js:13130-13172 placement
 /**
@@ -283,58 +287,69 @@ var ASSERTION_TYP = "local-pairing+jwt";
 var MAX_ASSERTION_CHARS = 4096;
 var MAX_KID_CHARS = 256;
 //@ chunk-p7xf186d.js:13172-14160 placement
-function parseAssertion(e) {
-  if (typeof e !== "string" || e.length === 0 || e.length > MAX_ASSERTION_CHARS)
+function parseAssertion(token) {
+  if (typeof token !== "string" || token.length === 0 || token.length > MAX_ASSERTION_CHARS)
     throw malformedError("assertion missing or too long");
-  let parts = e.split(".");
-  let [n, r, i] = parts;
-  if (parts.length !== 3 || n === undefined || r === undefined || i === undefined)
+  let parts = token.split(".");
+  let [headerPart, payloadPart, signaturePart] = parts;
+  if (
+    parts.length !== 3 ||
+    headerPart === undefined ||
+    payloadPart === undefined ||
+    signaturePart === undefined
+  )
     throw malformedError("assertion is not a compact JWS");
-  let s;
-  let o;
-  let c;
+  let header;
+  let payload;
+  let signature;
   try {
-    s = parseStrictJson(utf8Decode(base64UrlDecode(n)));
-    o = parseStrictJson(utf8Decode(base64UrlDecode(r)));
-    c = base64UrlDecode(i);
+    header = parseStrictJson(utf8Decode(base64UrlDecode(headerPart)));
+    payload = parseStrictJson(utf8Decode(base64UrlDecode(payloadPart)));
+    signature = base64UrlDecode(signaturePart);
   } catch (error) {
     throw malformedError(`assertion does not decode: ${String(error)}`);
   }
   if (
-    s === null ||
-    typeof s !== "object" ||
-    Array.isArray(s) ||
-    o === null ||
-    typeof o !== "object" ||
-    Array.isArray(o)
+    header === null ||
+    typeof header !== "object" ||
+    Array.isArray(header) ||
+    payload === null ||
+    typeof payload !== "object" ||
+    Array.isArray(payload)
   )
     throw malformedError("assertion header/payload are not objects");
-  let a = s;
-  if (a.alg !== "ES256") throw new PairingError("bad_signature", `alg ${JSON.stringify(a.alg)} is not ES256`);
-  if ("crit" in a) throw malformedError("crit header is not accepted");
-  if (a.typ !== ASSERTION_TYP)
-    throw new PairingError("wrong_issuer_or_audience", `typ ${JSON.stringify(a.typ)}`);
-  if (typeof a.kid !== "string" || a.kid.length === 0 || a.kid.length > MAX_KID_CHARS)
+  let headerObject = header;
+  if (headerObject.alg !== "ES256")
+    throw new PairingError("bad_signature", `alg ${JSON.stringify(headerObject.alg)} is not ES256`);
+  if ("crit" in headerObject) throw malformedError("crit header is not accepted");
+  if (headerObject.typ !== ASSERTION_TYP)
+    throw new PairingError("wrong_issuer_or_audience", `typ ${JSON.stringify(headerObject.typ)}`);
+  if (
+    typeof headerObject.kid !== "string" ||
+    headerObject.kid.length === 0 ||
+    headerObject.kid.length > MAX_KID_CHARS
+  )
     throw malformedError("kid missing or too long");
-  if (c.length !== 64) throw new PairingError("bad_signature", "ES256 signature must be exactly 64 bytes");
+  if (signature.length !== 64)
+    throw new PairingError("bad_signature", "ES256 signature must be exactly 64 bytes");
   return {
     header: {
-      kid: a.kid,
+      kid: headerObject.kid,
     },
-    payload: o,
-    signingInput: utf8Encode(`${n}.${r}`),
-    signature: c,
+    payload,
+    signingInput: utf8Encode(`${headerPart}.${payloadPart}`),
+    signature,
   };
 }
 //@ chunk-p7xf186d.js:14160-14320 placement
-async function verifyAssertionSignature(assertion, t) {
+async function verifyAssertionSignature(assertion, context) {
   if (
     !(await globalThis.crypto.subtle.verify(
       {
         name: "ECDSA",
         hash: "SHA-256",
       },
-      t,
+      context,
       toArrayBuffer(assertion.signature),
       toArrayBuffer(assertion.signingInput),
     ))
@@ -350,8 +365,8 @@ var PEER_KINDS = ["desktop", "chrome_extension"];
 /**
  * 判断对端类型是否允许。
  */
-function isKnownPeerKind(e) {
-  return PEER_KINDS.includes(e);
+function isKnownPeerKind(kind) {
+  return PEER_KINDS.includes(kind);
 }
 //@ chunk-p7xf186d.js:14395-14447 placement
 /**
@@ -362,21 +377,21 @@ var ASSERTION_CLOCK_SKEW_S = 60;
 var MAX_ASSERTION_LIFETIME_S = 301;
 var MAX_TAG_FAILURES_DEFAULT = 30;
 //@ chunk-p7xf186d.js:14447-14550 placement
-function requireStringClaim(e, t) {
-  let n = e[t];
-  if (typeof n !== "string" || n.length === 0) throw malformedError(`claim ${t} missing`);
-  return n;
+function requireStringClaim(payload, field) {
+  let value = payload[field];
+  if (typeof value !== "string" || value.length === 0) throw malformedError(`claim ${field} missing`);
+  return value;
 }
 //@ chunk-p7xf186d.js:14550-14661 placement
-function requireNumberClaim(e, t) {
-  let n = e[t];
-  if (typeof n !== "number" || !Number.isFinite(n)) throw malformedError(`claim ${t} missing`);
-  return n;
+function requireNumberClaim(payload, field) {
+  let value = payload[field];
+  if (typeof value !== "number" || !Number.isFinite(value)) throw malformedError(`claim ${field} missing`);
+  return value;
 }
 //@ chunk-p7xf186d.js:14661-15071 placement
 function validatePeerClaims(payload) {
-  let t = requireStringClaim(payload, "client_kind");
-  if (!isKnownPeerKind(t)) throw new PairingError("wrong_peer_kind", t);
+  let clientKind = requireStringClaim(payload, "client_kind");
+  if (!isKnownPeerKind(clientKind)) throw new PairingError("wrong_peer_kind", clientKind);
   let cnf = payload.cnf;
   if (!cnf || typeof cnf !== "object" || Array.isArray(cnf) || typeof cnf.jkt !== "string")
     throw malformedError("cnf.jkt missing");
@@ -385,7 +400,7 @@ function validatePeerClaims(payload) {
     sub: requireStringClaim(payload, "sub"),
     org: requireStringClaim(payload, "org"),
     azp: typeof payload.azp === "string" ? payload.azp : undefined,
-    client_kind: t,
+    client_kind: clientKind,
     hybrid: payload.hybrid === true,
     cnf: {
       jkt: cnf.jkt,
@@ -396,28 +411,29 @@ function validatePeerClaims(payload) {
   };
 }
 //@ chunk-p7xf186d.js:15071-15562 placement
-async function verifyPeerAssertion(assertion, publicKey, n) {
-  let assertion_2 = parseAssertion(assertion);
-  let publicKey_2 = parsePublicKey(publicKey);
-  let key = await n.jwks.getKey(assertion_2.header.kid);
-  await verifyAssertionSignature(assertion_2, key);
-  let o = validatePeerClaims(assertion_2.payload);
-  let aud = assertion_2.payload.aud;
-  let a = aud === ASSERTION_CONSTANTS || (Array.isArray(aud) && aud.includes(ASSERTION_CONSTANTS));
-  if (o.iss !== n.expectedIssuer || !a) throw new PairingError("wrong_issuer_or_audience");
-  if (o.exp - o.iat > MAX_ASSERTION_LIFETIME_S)
+async function verifyPeerAssertion(token, text, policy) {
+  let assertion = parseAssertion(token);
+  let point = parsePublicKey(text);
+  let context = await policy.jwks.getKey(assertion.header.kid);
+  await verifyAssertionSignature(assertion, context);
+  let claims = validatePeerClaims(assertion.payload);
+  let aud = assertion.payload.aud;
+  let audienceOk = aud === ASSERTION_CONSTANTS || (Array.isArray(aud) && aud.includes(ASSERTION_CONSTANTS));
+  if (claims.iss !== policy.expectedIssuer || !audienceOk) throw new PairingError("wrong_issuer_or_audience");
+  if (claims.exp - claims.iat > MAX_ASSERTION_LIFETIME_S)
     throw new PairingError("expired", `assertion lifetime exceeds ${MAX_ASSERTION_LIFETIME_S} s`);
-  if (o.client_kind !== n.expectedKind) throw new PairingError("wrong_peer_kind", o.client_kind);
-  if ((await sha256Base64Url(publicKey_2)) !== o.cnf.jkt) throw new PairingError("key_binding_mismatch");
+  if (claims.client_kind !== policy.expectedKind)
+    throw new PairingError("wrong_peer_kind", claims.client_kind);
+  if ((await sha256Base64Url(point)) !== claims.cnf.jkt) throw new PairingError("key_binding_mismatch");
   return {
-    claims: o,
-    peerRaw: publicKey_2,
+    claims,
+    peerRaw: point,
   };
 }
 //@ chunk-p7xf186d.js:15562-15660 placement
-function checkAssertionTimes(claims, t) {
-  if (claims.iat > t + ASSERTION_CLOCK_SKEW_S) throw new PairingError("not_yet_valid");
-  if (claims.exp + ASSERTION_CLOCK_SKEW_S <= t) throw new PairingError("expired");
+function checkAssertionTimes(claims, serverTime) {
+  if (claims.iat > serverTime + ASSERTION_CLOCK_SKEW_S) throw new PairingError("not_yet_valid");
+  if (claims.exp + ASSERTION_CLOCK_SKEW_S <= serverTime) throw new PairingError("expired");
 }
 export {
   MAX_TAG_FAILURES_DEFAULT,

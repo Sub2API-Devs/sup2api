@@ -9,37 +9,49 @@
  * attribution: placement 16
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, string, _enum, M, array } from "../../../vendor/zod/v4/classic/schemas.js";
+import {
+  objectSchema,
+  stringSchema,
+  _enum,
+  booleanSchema,
+  array,
+} from "../../../vendor/zod/v4/classic/schemas.js";
 import { HEARTHBOT } from "../mcp/ccrMetaMcp.js";
 import { isCliOwnedConfig } from "../mcp/cliOwnedClients.js";
 import { isCcrUrlWithoutCredentials } from "../mcp/ccrMcpUrls.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-aepeg2w5.js:597533-597971 placement
 /**
  * 提取消息的中继回合标记（Slack 人工、项目用户、邮件发件人等）。
  */
 function relayTurnFlags(message) {
-  let n = {};
-  if (message.verifiedSlackHumanTurn === true) n.verifiedSlackHumanTurn = true;
-  if (message.projectsUserTurn === true) n.projectsUserTurn = true;
-  if (message.emailSenderTurn !== undefined) n.emailSenderTurn = message.emailSenderTurn;
-  if (message.hearthRelayMessageIds !== undefined) n.hearthRelayMessageIds = message.hearthRelayMessageIds;
-  if (message.hearthRelayRows !== undefined) n.hearthRelayRows = message.hearthRelayRows;
-  if (message.hearthRelayThreadTs !== undefined) n.hearthRelayThreadTs = message.hearthRelayThreadTs;
-  return n;
+  let flags = {};
+  if (message.verifiedSlackHumanTurn === true) flags.verifiedSlackHumanTurn = true;
+  if (message.projectsUserTurn === true) flags.projectsUserTurn = true;
+  if (message.emailSenderTurn !== undefined) flags.emailSenderTurn = message.emailSenderTurn;
+  if (message.hearthRelayMessageIds !== undefined)
+    flags.hearthRelayMessageIds = message.hearthRelayMessageIds;
+  if (message.hearthRelayRows !== undefined) flags.hearthRelayRows = message.hearthRelayRows;
+  if (message.hearthRelayThreadTs !== undefined) flags.hearthRelayThreadTs = message.hearthRelayThreadTs;
+  return flags;
 }
 //@ chunk-aepeg2w5.js:597971-598023 placement
 /**
  * 属于中继来源的种类名（projects-relay、session-inbox）。
  */
-var RELAY_SOURCE_KINDS = new Set(["projects-relay", "session-inbox"]);
+var RELAY_SOURCE_KINDS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-aepeg2w5.js:597971", () => {
+  RELAY_SOURCE_KINDS = new Set(["projects-relay", "session-inbox"]);
+});
 //@ chunk-aepeg2w5.js:598023-598121 placement
 /**
  * 给指定 uuid 的用户消息打上中继回合标记。
  */
-function attachRelayTurnFlags(e, n, r) {
-  let s = relayTurnFlags(r);
-  for (let h of e) if (h.type === "user" && h.uuid === n) Object.assign(h, s);
+function attachRelayTurnFlags(messages, turnId, message) {
+  let flags = relayTurnFlags(message);
+  for (let message of messages)
+    if (message.type === "user" && message.uuid === turnId) Object.assign(message, flags);
 }
 //@ chunk-aepeg2w5.js:598121-598192 placement
 /**
@@ -52,89 +64,95 @@ var MAX_RELAY_MESSAGE_IDS = 8;
 /**
  * 解析 relay_message_ids。
  */
-function parseRelayMessageIds(e) {
-  let relayMessageIds = e.relay_message_ids;
+function parseRelayMessageIds(message) {
+  let relayMessageIds = message.relay_message_ids;
   if (
     !Array.isArray(relayMessageIds) ||
     relayMessageIds.length === 0 ||
     relayMessageIds.length > MAX_RELAY_MESSAGE_IDS
   )
     return;
-  let r = [];
-  let s = new Set();
+  let ids = [];
+  let seen = new Set();
   for (let relayMessageId of relayMessageIds) {
     if (
       typeof relayMessageId !== "string" ||
       !RELAY_MESSAGE_ID_REGEX.test(relayMessageId) ||
-      s.has(relayMessageId)
+      seen.has(relayMessageId)
     )
       return;
-    s.add(relayMessageId);
-    r.push(relayMessageId);
+    seen.add(relayMessageId);
+    ids.push(relayMessageId);
   }
-  return r;
+  return ids;
 }
 //@ chunk-aepeg2w5.js:598406-598811 placement
 /**
  * 中继消息行 schema（作者类型、角色等）。
  */
-var RelayRowSchema = DoctorLazy(() =>
-  u({
-    id: string().regex(RELAY_MESSAGE_ID_REGEX),
-    in_reply_to: string().regex(RELAY_MESSAGE_ID_REGEX).optional(),
-    attached_by: _enum(["server"]).optional().catch(undefined),
-    author_kind: _enum(["owner", "member", "agent", "system"]),
-    author_id: string(),
-    author_live: M().optional(),
-    author_role: string().optional(),
-    where: _enum(["timeline", "thread"]),
-    thread_ts: string().optional(),
-    written_at: string(),
-    edited_at: string().optional(),
-    within_window: M().optional(),
-    truncated: M().optional(),
-    text: string(),
-  }),
-);
+var RelayRowSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-aepeg2w5.js:598406", () => {
+  RelayRowSchema = DoctorLazy(() =>
+    objectSchema({
+      id: stringSchema().regex(RELAY_MESSAGE_ID_REGEX),
+      in_reply_to: stringSchema().regex(RELAY_MESSAGE_ID_REGEX).optional(),
+      attached_by: _enum(["server"]).optional().catch(undefined),
+      author_kind: _enum(["owner", "member", "agent", "system"]),
+      author_id: stringSchema(),
+      author_live: booleanSchema().optional(),
+      author_role: stringSchema().optional(),
+      where: _enum(["timeline", "thread"]),
+      thread_ts: stringSchema().optional(),
+      written_at: stringSchema(),
+      edited_at: stringSchema().optional(),
+      within_window: booleanSchema().optional(),
+      truncated: booleanSchema().optional(),
+      text: stringSchema(),
+    }),
+  );
+});
 //@ chunk-aepeg2w5.js:598811-599005 placement
 /**
  * 中继作者是否为在场的人（owner/member）。
  */
-function isHumanRelayAuthor(e) {
-  if (e.author_role === "former_member") return false;
-  switch (e.author_kind) {
+function isHumanRelayAuthor(row) {
+  if (row.author_role === "former_member") return false;
+  switch (row.author_kind) {
     case "owner":
-      return e.author_live !== false;
+      return row.author_live !== false;
     case "member":
-      return e.author_live === true;
+      return row.author_live === true;
     case "agent":
     case "system":
       return false;
   }
 }
 //@ chunk-aepeg2w5.js:599005-599043 placement
-var relayRowsSchema = DoctorLazy(() => array(RelayRowSchema()).min(1).max(MAX_RELAY_MESSAGE_IDS));
+var relayRowsSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-aepeg2w5.js:599005", () => {
+  relayRowsSchema = DoctorLazy(() => array(RelayRowSchema()).min(1).max(MAX_RELAY_MESSAGE_IDS));
+});
 //@ chunk-aepeg2w5.js:599043-599221 placement
 /**
  * 解析消息的 relay_rows：id 必须在给定集合内且不重复，否则返回 undefined。
  */
-function parseRelayRows(e, relayMessageIds) {
-  let r = relayRowsSchema().safeParse(e.relay_rows);
-  if (!r.success) return;
-  let s = new Set(relayMessageIds);
-  let h = new Set();
-  for (let { id } of r.data) {
-    if (!s.has(id) || h.has(id)) return;
-    h.add(id);
+function parseRelayRows(message, relayMessageIds) {
+  let parsed = relayRowsSchema().safeParse(message.relay_rows);
+  if (!parsed.success) return;
+  let allowedIds = new Set(relayMessageIds);
+  let seen = new Set();
+  for (let { id } of parsed.data) {
+    if (!allowedIds.has(id) || seen.has(id)) return;
+    seen.add(id);
   }
-  return r.data;
+  return parsed.data;
 }
 //@ chunk-aepeg2w5.js:599221-599310 placement
 /**
  * 取合法的中继线程时间戳，非法返回 undefined。
  */
-function relayThreadTsOf(e) {
-  let relayThreadTs = e.relay_thread_ts;
+function relayThreadTsOf(message) {
+  let relayThreadTs = message.relay_thread_ts;
   return typeof relayThreadTs === "string" && RELAY_MESSAGE_ID_REGEX.test(relayThreadTs)
     ? relayThreadTs
     : undefined;
@@ -145,13 +163,13 @@ var COORDINATOR_RELAY_PREFIX = '<relay from="coordinator" ';
 /**
  * 是否为中继注入的提示。
  */
-function isRelayPrompt(e) {
-  let content = e.message?.content;
+function isRelayPrompt(message) {
+  let content = message.message?.content;
   return (
-    e.isSynthetic === true &&
-    e.shouldQuery !== false &&
-    e.relay_message_ids === undefined &&
-    relayThreadTsOf(e) !== undefined &&
+    message.isSynthetic === true &&
+    message.shouldQuery !== false &&
+    message.relay_message_ids === undefined &&
+    relayThreadTsOf(message) !== undefined &&
     typeof content === "string" &&
     content.startsWith(COORDINATOR_RELAY_PREFIX)
   );
@@ -160,8 +178,8 @@ function isRelayPrompt(e) {
 /**
  * 为消息设置 Hearth 中继元数据（消息 id、行、线程 ts）。
  */
-function setHearthRelayMetadata(e, turnId, { messageIds, rows, threadTs }) {
-  attachRelayTurnFlags(e, turnId, {
+function setHearthRelayMetadata(messages, turnId, { messageIds, rows, threadTs }) {
+  attachRelayTurnFlags(messages, turnId, {
     hearthRelayMessageIds: messageIds,
     hearthRelayRows: rows,
     hearthRelayThreadTs: threadTs,
@@ -171,22 +189,22 @@ function setHearthRelayMetadata(e, turnId, { messageIds, rows, threadTs }) {
 /**
  * 判断 MCP 服务器是否为 Hearthbot 中继（动态作用域、不带凭据的 CCR URL）。
  */
-function isHearthbotRelayServer(e) {
+function isHearthbotRelayServer(server) {
   return (
-    e.name === HEARTHBOT &&
-    e.config.scope === "dynamic" &&
-    !isCliOwnedConfig(e.config) &&
-    "url" in e.config &&
-    typeof e.config.url === "string" &&
-    isCcrUrlWithoutCredentials(e.config.url)
+    server.name === HEARTHBOT &&
+    server.config.scope === "dynamic" &&
+    !isCliOwnedConfig(server.config) &&
+    "url" in server.config &&
+    typeof server.config.url === "string" &&
+    isCcrUrlWithoutCredentials(server.config.url)
   );
 }
 //@ chunk-aepeg2w5.js:599792-599832 placement
 /**
  * 是否有中继来源。
  */
-function hasRelaySource(e) {
-  return (e ?? []).some(isHearthbotRelayServer);
+function hasRelaySource(servers) {
+  return (servers ?? []).some(isHearthbotRelayServer);
 }
 //@ chunk-aepeg2w5.js:599832-600042 placement
 /**

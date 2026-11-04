@@ -25,26 +25,26 @@ var IMPORT_KIND_ORDER = {
 /**
  * 导出函数 `isPlainUserImportItem`：参数 e，返回 e.scope === "user" && !e.warning && e.kind !== "skill"。
  */
-function isPlainUserImportItem(e) {
-  return e.scope === "user" && !e.warning && e.kind !== "skill";
+function isPlainUserImportItem(item) {
+  return item.scope === "user" && !item.warning && item.kind !== "skill";
 }
 //@ chunk-h3ha77z5.js:404-517 placement
 /**
  * 导入项分组：project / warned / null。
  */
-function importItemGroup(e) {
-  if (e.scope === "project") return "project";
-  if (e.warning || e.kind === "skill") return "warned";
+function importItemGroup(item) {
+  if (item.scope === "project") return "project";
+  if (item.warning || item.kind === "skill") return "warned";
   return null;
 }
 //@ chunk-h3ha77z5.js:517-670 placement
 /**
  * 按类型、作用域（项目优先）、标签排序导入项。
  */
-function compareImportItems(e, t) {
-  let r = IMPORT_KIND_ORDER[e.kind] - IMPORT_KIND_ORDER[t.kind];
-  if (r !== 0) return r;
-  if (e.scope !== t.scope) return e.scope === "project" ? -1 : 1;
-  return e.label.localeCompare(t.label);
+function compareImportItems(a, b) {
+  let kindOrder = IMPORT_KIND_ORDER[a.kind] - IMPORT_KIND_ORDER[b.kind];
+  if (kindOrder !== 0) return kindOrder;
+  if (a.scope !== b.scope) return a.scope === "project" ? -1 : 1;
+  return a.label.localeCompare(b.label);
 }
-export { compareImportItems, isPlainUserImportItem, importItemGroup, INSTRUCTION_FILE_NAMES };
+export { isPlainUserImportItem, importItemGroup, compareImportItems, INSTRUCTION_FILE_NAMES };

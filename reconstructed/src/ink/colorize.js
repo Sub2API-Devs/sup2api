@@ -8,31 +8,36 @@
  * pieces: chunk-4ymxyb4g.js (14), chunk-cwwxybjc.js (1), chunk-g3xfp0ds.js (2)
  * attribution: placement 10, fingerprint 5, layout 2
  */
-import { Z } from "../../vendor/chalk/source/index.js";
+import { chalk } from "../../vendor/chalk/source/index.js";
 import { env as env_2 } from "../utils/env.js";
 import { inverseText } from "./screen.js";
 import { sequential } from "../utils/sequential.js";
 import { themeColorCache } from "../utils/theme.js";
 import { colorize } from "../../vendor/es-toolkit/dist/server/colors/index.mjs";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-4ymxyb4g.js:7196-7204 placement
-var chalkLevel = Z;
+var chalkLevel = chalk;
 //@ chunk-4ymxyb4g.js:7204-7411 placement
-var NO_COLOR_FLAGS = new Set(["--no-color", "--no-colors", "--color=false", "--color=never"]);
-var FORCE_COLOR_FLAGS = new Set([
-  "--color",
-  "--colors",
-  "--color=true",
-  "--color=always",
-  "--color=256",
-  "--color=16m",
-  "--color=full",
-  "--color=truecolor",
-]);
+var NO_COLOR_FLAGS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var FORCE_COLOR_FLAGS;
+deferInit("chunk-4ymxyb4g.js:7204", () => {
+  NO_COLOR_FLAGS = new Set(["--no-color", "--no-colors", "--color=false", "--color=never"]);
+  FORCE_COLOR_FLAGS = new Set([
+    "--color",
+    "--colors",
+    "--color=true",
+    "--color=always",
+    "--color=256",
+    "--color=16m",
+    "--color=full",
+    "--color=truecolor",
+  ]);
+});
 //@ chunk-4ymxyb4g.js:7411-7530 placement
-function hasArgvFlag(e) {
+function hasArgvFlag(flags) {
   let index = process.argv.indexOf("--");
-  return (index === -1 ? process.argv : process.argv.slice(0, index)).some((o) => e.has(o));
+  return (index === -1 ? process.argv : process.argv.slice(0, index)).some((arg) => flags.has(arg));
 }
 //@ chunk-4ymxyb4g.js:7530-7560 placement
 var useDetectedColorSupport = () => hasArgvFlag(NO_COLOR_FLAGS);
@@ -57,16 +62,19 @@ function boostChalkLevelForXtermJs() {
   return false;
 }
 //@ chunk-4ymxyb4g.js:7744-7847 layout
-var TRUECOLOR_TERMS = new Set([
-  "alacritty",
-  "contour",
-  "foot",
-  "ghostty",
-  "rio",
-  "wezterm",
-  "xterm-ghostty",
-  "xterm-kitty",
-]);
+var TRUECOLOR_TERMS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-4ymxyb4g.js:7744", () => {
+  TRUECOLOR_TERMS = new Set([
+    "alacritty",
+    "contour",
+    "foot",
+    "ghostty",
+    "rio",
+    "wezterm",
+    "xterm-ghostty",
+    "xterm-kitty",
+  ]);
+});
 //@ chunk-4ymxyb4g.js:7847-8006 layout
 /**
  * TERM 是已知真彩终端（alacritty、contour、foot、ghostty、rio、wezterm、xterm-kitty 等）且未设 NO_COLOR/FORCE_COLOR 时，把 chalk 等级提升到真彩色。
@@ -97,9 +105,9 @@ function clampChalkLevelForTmux() {
 /**
  * 函数 clampLevelForAttacher（附着方等级夹到 2）；位于「颜色输出：chalk 级别（--color/--no-color、NO_COLOR/FORCE_COLOR）与着色辅助」模块。
  */
-function clampLevelForAttacher(e) {
+function clampLevelForAttacher(attacherLevel) {
   colorSupport.ensureInit();
-  if (e && chalkLevel.level > 2) {
+  if (attacherLevel && chalkLevel.level > 2) {
     chalkLevel.level = 2;
     return true;
   }
@@ -132,17 +140,21 @@ class ChalkLevelController {
     this.ensureInit();
     return this.generation;
   }
-  clampForAttacher(e) {
+  clampForAttacher(attacherLevel) {
     this.ensureInit();
-    let r = e !== undefined && e < this.nativeLevel ? e : this.nativeLevel;
-    if (r !== chalkLevel.level) {
-      chalkLevel.level = r;
+    let target =
+      attacherLevel !== undefined && attacherLevel < this.nativeLevel ? attacherLevel : this.nativeLevel;
+    if (target !== chalkLevel.level) {
+      chalkLevel.level = target;
       this.generation++;
     }
   }
 }
 //@ chunk-4ymxyb4g.js:8693-8705 placement
-var colorSupport = new ChalkLevelController();
+var colorSupport; // deferred: uses ChalkLevelController of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-4ymxyb4g.js:8693", () => {
+  colorSupport = new ChalkLevelController();
+});
 //@ chunk-4ymxyb4g.js:8939-8979 placement
 /**
  * 函数 levelGeneration（等级代数）；位于「颜色输出：chalk 级别（--color/--no-color、NO_COLOR/FORCE_COLOR）与着色辅助」模块。
@@ -192,24 +204,27 @@ function applyColor(text, color) {
   return colorize(text, color, "foreground");
 }
 //@ chunk-cwwxybjc.js:4884-5146 fingerprint = colorize (0.57)
-var ANSI_COLOR_INDEX = new Map([
-  ["black", 0],
-  ["red", 1],
-  ["green", 2],
-  ["yellow", 3],
-  ["blue", 4],
-  ["magenta", 5],
-  ["cyan", 6],
-  ["white", 7],
-  ["blackBright", 8],
-  ["redBright", 9],
-  ["greenBright", 10],
-  ["yellowBright", 11],
-  ["blueBright", 12],
-  ["magentaBright", 13],
-  ["cyanBright", 14],
-  ["whiteBright", 15],
-]);
+var ANSI_COLOR_INDEX; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-cwwxybjc.js:4884", () => {
+  ANSI_COLOR_INDEX = new Map([
+    ["black", 0],
+    ["red", 1],
+    ["green", 2],
+    ["yellow", 3],
+    ["blue", 4],
+    ["magenta", 5],
+    ["cyan", 6],
+    ["white", 7],
+    ["blackBright", 8],
+    ["redBright", 9],
+    ["greenBright", 10],
+    ["yellowBright", 11],
+    ["blueBright", 12],
+    ["magentaBright", 13],
+    ["cyanBright", 14],
+    ["whiteBright", 15],
+  ]);
+});
 export {
   levelGeneration,
   applyColor,

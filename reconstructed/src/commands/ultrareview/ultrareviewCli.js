@@ -56,8 +56,8 @@ var FINDINGS_LOST_NOTE =
 //@ chunk-jzm79q04.js:12445-12539 placement
 class PollFailure extends Error {
   reason;
-  constructor(reason, t) {
-    super(t);
+  constructor(reason, message) {
+    super(message);
     this.reason = reason;
     this.name = "PollFailure";
   }
@@ -81,34 +81,37 @@ function shouldPostComment(post, argv) {
 /**
  * claude ultrareview：信任工作区、启动云审查会话、等待结果并可发布评论（约 4.4 KB）。
  */
-async function ultrareviewCommand(s, t, storageV5, credentials) {
-  let a = () => process.exit(130);
-  process.once("SIGINT", a);
-  let found = process.argv.find((arg, T) => process.argv[T - 1] === "--trust-workspace" && !/^-./.test(arg));
-  if (t.trustWorkspace === true && found !== undefined) {
+async function ultrareviewCommand(args, flags, storageV5, credentials) {
+  let onSigint = () => process.exit(130);
+  process.once("SIGINT", onSigint);
+  let found = process.argv.find(
+    (arg, argIndex) => process.argv[argIndex - 1] === "--trust-workspace" && !/^-./.test(arg),
+  );
+  if (flags.trustWorkspace === true && found !== undefined) {
     await logFeatureBadAsync("cli_ultrareview", "trust_flag_given_a_value");
-    let n = isOnClaudeCodeSessionSurface()
+    let hint = isOnClaudeCodeSessionSurface()
       ? ""
       : " To trust it for this run, put nothing after the flag: a PR number or base branch goes before it.";
     return cliErrorAfterAnalyticsFlush(
-      `Ultrareview did not start: \`--trust-workspace\` takes no value, but ${jsonStringify(found)} follows it. If you do not trust this folder, leave the flag out.${n}`,
+      `Ultrareview did not start: \`--trust-workspace\` takes no value, but ${jsonStringify(found)} follows it. If you do not trust this folder, leave the flag out.${hint}`,
     );
   }
   if (!checkHasTrustDialogAccepted())
-    if (t.trustWorkspace === true) {
+    if (flags.trustWorkspace === true) {
       setSessionTrustAccepted(true);
       logFeatureOk("cli_ultrareview_workspace_trust", {
         trust_source: lit("flag"),
       });
     } else {
-      let { canPromptForWorkspaceTrust, offerBridgeWorkspaceTrust } = await import("./chunk-p3rkx9n6.js");
-      let P = canPromptForWorkspaceTrust();
-      if (P || (await checkUltrareviewWorkspaceTrust())) {
+      let { canPromptForWorkspaceTrust, offerBridgeWorkspaceTrust } =
+        await import("../../bridge/canPromptForWorkspaceTrust.lazy.js");
+      let canPrompt = canPromptForWorkspaceTrust();
+      if (canPrompt || (await checkUltrareviewWorkspaceTrust())) {
         stopCapturingEarlyInput();
-        let E = await offerBridgeWorkspaceTrust({
+        let trustAnswer = await offerBridgeWorkspaceTrust({
           dir: getOriginalCwd(),
           isHomeDir: isHomeDirectorySession(),
-          canPrompt: P,
+          canPrompt,
           storageV5,
           answerTimeoutMs: 300000,
           asker: {
@@ -123,34 +126,34 @@ async function ultrareviewCommand(s, t, storageV5, credentials) {
               : " Or, in a script or CI job, pass `--trust-workspace` to trust the folder for this run only.",
           },
         });
-        if (!E.trusted) {
+        if (!trustAnswer.trusted) {
           await logFeatureBadAsync(
             "cli_ultrareview",
-            E.reason === "declined" ? "workspace_trust_declined" : "workspace_not_trusted",
+            trustAnswer.reason === "declined" ? "workspace_trust_declined" : "workspace_not_trusted",
           );
-          return cliErrorAfterAnalyticsFlush(E.message);
+          return cliErrorAfterAnalyticsFlush(trustAnswer.message);
         }
       }
     }
   await waitForPolicyLimitsToLoad();
-  let w = policyDeniedReason("allow_remote_sessions", "Cloud sessions", "are");
-  if (w) {
-    let n = policyDenyKind("allow_remote_sessions");
+  let policyDenied = policyDeniedReason("allow_remote_sessions", "Cloud sessions", "are");
+  if (policyDenied) {
+    let denyKind = policyDenyKind("allow_remote_sessions");
     await logOrgPolicyDeniedAsync("allow_remote_sessions", "cli_flag");
-    if (n === "cache_miss") await logFeatureSadAsync("cli_ultrareview", "policy_cache_miss");
+    if (denyKind === "cache_miss") await logFeatureSadAsync("cli_ultrareview", "policy_cache_miss");
     else
       await logFeatureBadAsync(
         "cli_ultrareview",
-        n === "route_missing" ? "policy_route_missing" : "policy_disallowed",
+        denyKind === "route_missing" ? "policy_route_missing" : "policy_disallowed",
       );
-    return cliErrorAfterAnalyticsFlush(w);
+    return cliErrorAfterAnalyticsFlush(policyDenied);
   }
   await initializeGrowthBook().catch(() => {});
-  let l = Number(t.timeout);
-  let f = Number.isFinite(l) && l > 0 ? l : clientWaitMinutes();
+  let timeoutValue = Number(flags.timeout);
+  let waitMinutes = Number.isFinite(timeoutValue) && timeoutValue > 0 ? timeoutValue : clientWaitMinutes();
   let abortController = createAbortController();
-  let postReview = shouldPostComment(t.post, process.argv);
-  let e = await runUltrareviewHeadless(s, {
+  let postReview = shouldPostComment(flags.post, process.argv);
+  let result = await runUltrareviewHeadless(args, {
     confirm: true,
     postReview,
     overageConfirmed: false,
@@ -166,38 +169,38 @@ async function ultrareviewCommand(s, t, storageV5, credentials) {
       credentials,
     },
   });
-  if (e.status !== "launched") {
-    let n =
-      e.status === "blocked" && e.actionUrl
+  if (result.status !== "launched") {
+    let actionLine =
+      result.status === "blocked" && result.actionUrl
         ? `
-  \u2192 ${e.actionUrl}`
+  \u2192 ${result.actionUrl}`
         : "";
     await logFeatureBadAsync("cli_ultrareview", "cli_ultrareview_launch_failed");
     return cliErrorAfterAnalyticsFlush(
-      `Ultrareview could not launch: ${"message" in e ? e.message : e.body}${n}`,
+      `Ultrareview could not launch: ${"message" in result ? result.message : result.body}${actionLine}`,
     );
   }
-  printStatus(e.message);
-  if (e.lowCreditsNote) printStatus(e.lowCreditsNote);
+  printStatus(result.message);
+  if (result.lowCreditsNote) printStatus(result.lowCreditsNote);
   printStatus(`Waiting for findings (${getReviewDurationNote()})\u2026`);
-  process.removeListener("SIGINT", a);
-  let p = () => {
+  process.removeListener("SIGINT", onSigint);
+  let handleStopSigint = () => {
     printStatus(`
 Stopped waiting. The review may still be running in the cloud, but ${FINDINGS_LOST_NOTE}${
-      e.postReviewTo
+      result.postReviewTo
         ? `
 Nothing will be posted to the pull request.`
         : ""
     }`);
     process.exit(130);
   };
-  process.once("SIGINT", p);
-  let S = () => {
-    process.removeListener("SIGINT", p);
+  process.once("SIGINT", handleStopSigint);
+  let restoreSigint = () => {
+    process.removeListener("SIGINT", handleStopSigint);
     process.once("SIGINT", () => {
       printStatus(`
 Interrupted. The review already finished (findings above).${
-        e.postReviewTo
+        result.postReviewTo
           ? `
 The post to the pull request may already be on its way \u2014 check the PR before posting by hand.`
           : ""
@@ -207,21 +210,26 @@ The post to the pull request may already be on its way \u2014 check the PR befor
   };
   let text;
   try {
-    text = await pollReviewSession(e.sessionId, abortController.signal, f * 60 * 1000, credentials);
+    text = await pollReviewSession(
+      result.sessionId,
+      abortController.signal,
+      waitMinutes * 60 * 1000,
+      credentials,
+    );
   } catch (error) {
     await logFeatureBadAsync("cli_ultrareview", "cli_ultrareview_poll_failed", {
       reason: error instanceof PollFailure ? fromEnum(error.reason) : lit("poll_unknown"),
     });
-    let T = error instanceof PollFailure && error.reason === "session_start_failed";
+    let startFailed = error instanceof PollFailure && error.reason === "session_start_failed";
     return cliErrorAfterAnalyticsFlush(
       `Ultrareview failed: ${errorMessage(error)}${
-        T
+        startFailed
           ? `
 Nothing is running in the cloud.`
           : `
 This command stopped waiting. The review may still be running in the cloud, but ${FINDINGS_LOST_NOTE}`
       }${
-        e.postReviewTo
+        result.postReviewTo
           ? `
 Nothing was posted to the pull request, and nothing will be. The --post request ends with this run.`
           : ""
@@ -230,22 +238,22 @@ Nothing was posted to the pull request, and nothing will be. The --post request 
   }
   let reviewErrorPayload = parseReviewErrorPayload(text);
   let error = reviewErrorPayload?.error ?? null;
-  let k = reviewErrorPayload?.stopped === true;
+  let stoppedRemotely = reviewErrorPayload?.stopped === true;
   let reason =
     error === ARCHIVED_BEFORE_OUTPUT_MESSAGE
       ? lit("session_archived")
-      : k
+      : stoppedRemotely
         ? lit("stopped_remotely")
         : lit("orchestrator_error");
-  let C = countReviewFindings(text);
-  let N =
-    C !== undefined
+  let findingsCount = countReviewFindings(text);
+  let okProps =
+    findingsCount !== undefined
       ? {
-          findings_count: C,
+          findings_count: findingsCount,
         }
       : undefined;
-  if (!error) S();
-  if (t.json) {
+  if (!error) restoreSigint();
+  if (flags.json) {
     await writeStdoutAndDrain(
       text +
         `
@@ -255,11 +263,13 @@ Nothing was posted to the pull request, and nothing will be. The --post request 
       await logFeatureBadAsync("cli_ultrareview", "cli_ultrareview_remote_error", {
         reason,
       });
-      if (e.postReviewTo)
-        printStatus(`Nothing was posted to the pull request: the review ${k ? "was stopped" : "failed"}.`);
+      if (result.postReviewTo)
+        printStatus(
+          `Nothing was posted to the pull request: the review ${stoppedRemotely ? "was stopped" : "failed"}.`,
+        );
     } else {
-      await describePostOutcome(e, credentials);
-      await logFeatureOkAsync("cli_ultrareview", N);
+      await describePostOutcome(result, credentials);
+      await logFeatureOkAsync("cli_ultrareview", okProps);
     }
     return exitAfterAnalyticsFlush(error ? 1 : 0);
   }
@@ -268,10 +278,10 @@ Nothing was posted to the pull request, and nothing will be. The --post request 
       reason,
     });
     return cliErrorAfterAnalyticsFlush(
-      `${k ? "Review stopped" : "Review failed"}: ${error}${
-        e.postReviewTo
+      `${stoppedRemotely ? "Review stopped" : "Review failed"}: ${error}${
+        result.postReviewTo
           ? `
-Nothing was posted to the pull request: the review ${k ? "was stopped" : "failed"}, so there are no findings to post.`
+Nothing was posted to the pull request: the review ${stoppedRemotely ? "was stopped" : "failed"}, so there are no findings to post.`
           : ""
       }`,
     );
@@ -281,73 +291,73 @@ Nothing was posted to the pull request: the review ${k ? "was stopped" : "failed
       `
 `,
   );
-  await describePostOutcome(e, credentials);
-  await logFeatureOkAsync("cli_ultrareview", N);
+  await describePostOutcome(result, credentials);
+  await logFeatureOkAsync("cli_ultrareview", okProps);
   return exitAfterAnalyticsFlush(0);
 }
 //@ chunk-jzm79q04.js:17230-17650 placement
-async function describePostOutcome({ postReviewTo, sessionId }, u) {
+async function describePostOutcome({ postReviewTo, sessionId }, credentials) {
   if (!postReviewTo) return;
   printStatus("Posting the findings to the pull request as a comment from your GitHub account\u2026");
-  let o = await waitForUltrareviewPost(sessionId, u);
-  switch (o.status) {
+  let postResult = await waitForUltrareviewPost(sessionId, credentials);
+  switch (postResult.status) {
     case "posted":
       printStatus(
-        o.alreadyPosted
-          ? `Already posted \u2014 this review's comment is on the pull request: ${o.commentUrl}`
-          : `Posted \u2014 a single plain comment, not a review: ${o.commentUrl}`,
+        postResult.alreadyPosted
+          ? `Already posted \u2014 this review's comment is on the pull request: ${postResult.commentUrl}`
+          : `Posted \u2014 a single plain comment, not a review: ${postResult.commentUrl}`,
       );
       break;
     case "not-posted":
-      printStatus(o.reason);
+      printStatus(postResult.reason);
       break;
   }
 }
 //@ chunk-jzm79q04.js:17650-18596 placement
-async function pollReviewSession(sessionId, signal, u, credentials) {
-  let a = Date.now() + u;
-  let i = null;
-  let w = 0;
-  let l = [];
-  let f = "";
-  while (Date.now() < a) {
+async function pollReviewSession(sessionId, signal, timeoutMs, credentials) {
+  let deadline = Date.now() + timeoutMs;
+  let lastEventId = null;
+  let failureCount = 0;
+  let events = [];
+  let lastProgress = "";
+  while (Date.now() < deadline) {
     if (signal.aborted) throw Error("aborted");
     try {
-      let r = await pollRemoteSessionEvents(sessionId, i, {
+      let pollResult = await pollRemoteSessionEvents(sessionId, lastEventId, {
         credentials,
       });
-      i = r.lastEventId;
-      w = 0;
-      if (r.sessionStatus === "archived") {
-        if (r.newEvents.length > 0) l.push(...r.newEvents);
-        let reviewFromLog = extractReviewFromLog(l);
+      lastEventId = pollResult.lastEventId;
+      failureCount = 0;
+      if (pollResult.sessionStatus === "archived") {
+        if (pollResult.newEvents.length > 0) events.push(...pollResult.newEvents);
+        let reviewFromLog = extractReviewFromLog(events);
         if (reviewFromLog) return reviewFromLog;
-        if (r.startupFailure && isReviewStartupFailureFastFailEnabled())
-          throw sessionStartFailure(r.startupFailure);
+        if (pollResult.startupFailure && isReviewStartupFailureFastFailEnabled())
+          throw sessionStartFailure(pollResult.startupFailure);
         return `{"error":"${ARCHIVED_BEFORE_OUTPUT_MESSAGE}"}`;
       }
-      if (r.newEvents.length > 0) {
-        l.push(...r.newEvents);
-        for (let newEvent of r.newEvents)
+      if (pollResult.newEvents.length > 0) {
+        events.push(...pollResult.newEvents);
+        for (let newEvent of pollResult.newEvents)
           if (
             newEvent.type === "system" &&
             (newEvent.subtype === "hook_progress" || newEvent.subtype === "hook_response")
           ) {
-            let p = formatReviewProgress(newEvent.stdout);
-            if (p && p !== f) {
-              f = p;
-              printStatus(`  ${p}`);
+            let progress = formatReviewProgress(newEvent.stdout);
+            if (progress && progress !== lastProgress) {
+              lastProgress = progress;
+              printStatus(`  ${progress}`);
             }
           }
-        let reviewFromLog = extractReviewFromLog(l);
+        let reviewFromLog = extractReviewFromLog(events);
         if (reviewFromLog) return reviewFromLog;
       }
-      if (r.startupFailure && isReviewStartupFailureFastFailEnabled())
-        throw sessionStartFailure(r.startupFailure);
+      if (pollResult.startupFailure && isReviewStartupFailureFastFailEnabled())
+        throw sessionStartFailure(pollResult.startupFailure);
     } catch (error) {
       if (signal.aborted || error instanceof PollFailure) throw error;
       if (!isTransientNetworkError(error)) throw new PollFailure("poll_api_error", errorMessage(error));
-      if (++w >= MAX_POLL_FAILURES)
+      if (++failureCount >= MAX_POLL_FAILURES)
         throw new PollFailure(
           "poll_connection_lost",
           "lost connection to the cloud session after repeated retries",
@@ -355,59 +365,62 @@ async function pollReviewSession(sessionId, signal, u, credentials) {
     }
     await sleep(POLL_INTERVAL_MS, signal);
   }
-  throw new PollFailure("poll_timeout", `cloud session exceeded ${Math.round(u / 60000)} minutes`);
+  throw new PollFailure("poll_timeout", `cloud session exceeded ${Math.round(timeoutMs / 60000)} minutes`);
 }
 //@ chunk-jzm79q04.js:18596-18914 placement
 function formatReviewProgress(stdout) {
-  let t = `<${REMOTE_REVIEW_PROGRESS}>`;
-  let u = `</${REMOTE_REVIEW_PROGRESS}>`;
-  let index = stdout.lastIndexOf(u);
-  let a = index === -1 ? -1 : stdout.lastIndexOf(t, index);
-  if (a === -1 || index <= a) return null;
+  let openTag = `<${REMOTE_REVIEW_PROGRESS}>`;
+  let closeTag = `</${REMOTE_REVIEW_PROGRESS}>`;
+  let index = stdout.lastIndexOf(closeTag);
+  let startIndex = index === -1 ? -1 : stdout.lastIndexOf(openTag, index);
+  if (startIndex === -1 || index <= startIndex) return null;
   try {
-    let i = jsonParse(stdout.slice(a + t.length, index));
-    let stage = i.stage ?? "running";
-    let bugsFound = i.bugs_found ?? 0;
-    let bugsVerified = i.bugs_verified ?? 0;
-    let bugsRefuted = i.bugs_refuted ?? 0;
+    let payload = jsonParse(stdout.slice(startIndex + openTag.length, index));
+    let stage = payload.stage ?? "running";
+    let bugsFound = payload.bugs_found ?? 0;
+    let bugsVerified = payload.bugs_verified ?? 0;
+    let bugsRefuted = payload.bugs_refuted ?? 0;
     return `${stage} \u2014 ${bugsFound} found, ${bugsVerified} verified, ${bugsRefuted} refuted`;
   } catch {
     return null;
   }
 }
 //@ chunk-jzm79q04.js:18914-19480 placement
-function formatReviewResult(s) {
-  let t;
+function formatReviewResult(text) {
+  let parsed;
   try {
-    t = jsonParse(s);
+    parsed = jsonParse(text);
   } catch {
-    return s;
+    return text;
   }
-  if (!Array.isArray(t) || t.length === 0) return "Review complete \u2014 no findings.";
-  let u = t;
-  let o = u.length;
-  let a = [sequential.bold(`Review complete \u2014 ${o} ${plural(o, "finding")}`), ""];
-  for (let i of u) {
-    let w = SEVERITY_EMOJI[i.severity ?? "normal"] ?? "\uD83D\uDD34";
-    let filePath = i.file_path ?? "?";
-    let startLine = i.start_line ?? 0;
-    let endLine = i.end_line ?? startLine;
-    let h = startLine === endLine ? `${filePath}:${startLine}` : `${filePath}:${startLine}-${endLine}`;
-    let trimmed = (i.pr_comment ?? "").trim();
+  if (!Array.isArray(parsed) || parsed.length === 0) return "Review complete \u2014 no findings.";
+  let findings = parsed;
+  let findingCount = findings.length;
+  let lines = [
+    sequential.bold(`Review complete \u2014 ${findingCount} ${plural(findingCount, "finding")}`),
+    "",
+  ];
+  for (let finding of findings) {
+    let severityEmoji = SEVERITY_EMOJI[finding.severity ?? "normal"] ?? "\uD83D\uDD34";
+    let filePath = finding.file_path ?? "?";
+    let startLine = finding.start_line ?? 0;
+    let endLine = finding.end_line ?? startLine;
+    let location = startLine === endLine ? `${filePath}:${startLine}` : `${filePath}:${startLine}-${endLine}`;
+    let trimmed = (finding.pr_comment ?? "").trim();
     let index = trimmed.indexOf(`
 
 `);
-    let S = index === -1 ? trimmed : trimmed.slice(0, index);
-    let v = index === -1 ? "" : trimmed.slice(index + 2);
-    a.push(`${w} ${sequential.bold(h)}`);
-    if (S) a.push(S);
-    if (v) {
-      a.push("");
-      a.push(v);
+    let summaryLine = index === -1 ? trimmed : trimmed.slice(0, index);
+    let detailText = index === -1 ? "" : trimmed.slice(index + 2);
+    lines.push(`${severityEmoji} ${sequential.bold(location)}`);
+    if (summaryLine) lines.push(summaryLine);
+    if (detailText) {
+      lines.push("");
+      lines.push(detailText);
     }
-    a.push("");
+    lines.push("");
   }
-  return a
+  return lines
     .join(
       `
 `,
@@ -415,10 +428,11 @@ function formatReviewResult(s) {
     .trimEnd();
 }
 //@ chunk-jzm79q04.js:19480-19530 placement
-function printStatus(s) {
+function printStatus(line) {
   process.stderr.write(
-    sequential.dim(s) +
+    sequential.dim(line) +
       `
 `,
   );
 }
+export { ultrareviewCommand };

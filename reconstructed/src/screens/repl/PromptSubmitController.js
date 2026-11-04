@@ -33,7 +33,7 @@ import {
   jsxProd_default_2,
 } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { logForDebugging } from "../../utils/debug.js";
-import { string } from "../../../vendor/zod/v4/classic/schemas.js";
+import { stringSchema } from "../../../vendor/zod/v4/classic/schemas.js";
 import { Text, Box } from "../../ink/components/Text.js";
 import { EXIT_COMMAND_WORDS, handlePromptSubmit } from "../../utils/handlePromptSubmit.js";
 import { RESUME_COMPACT_DIALOG } from "./resumeCompactOffer.js";
@@ -121,51 +121,55 @@ import { shouldEscapeNdjsonForBridge } from "../../cli/ndjsonSafeStringify.js";
 import { areHooksEnabled } from "../../utils/hooks.js";
 import { getPluginRegistry } from "../../utils/plugins/pluginLoadState.js";
 import { init_react_production } from "../../../vendor/react/cjs/react.production.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-18hwfzwa.js:1628953-1629068 placement
 /**
  * 等待前置任务后，在仍需要时先等扫描或回合，再等回合结束。
  */
-async function awaitScanThenTurn(activeMessageQueue, x, D) {
-  await D?.catch(() => {
+async function awaitScanThenTurn(activeMessageQueue, isBusy, scan) {
+  await scan?.catch(() => {
     return;
   });
-  if (!x()) return;
+  if (!isBusy()) return;
   await Promise.race([activeMessageQueue, loadingScansRead()]);
-  if (x()) await activeMessageQueue;
+  if (isBusy()) await activeMessageQueue;
 }
 //@ chunk-18hwfzwa.js:1629068-1629379 placement
 /**
  * 解析斜杠命令（支持 “命令:子命令” 与子命令映射），返回启用的命令。
  */
-function resolveSlashCommand({ commandName, args, isMcp }, L) {
-  let command = findCommand(commandName, L);
-  let ke = command !== undefined && isCommandEnabled(command);
-  let [Re = "", ...Be] = args.split(/\s+/);
-  let We = !ke && !isMcp && Re !== "" ? findCommand(`${commandName}:${Re}`, L) : undefined;
-  let ze = ke ? command : We;
-  if (ze === undefined) return;
-  let Xe = matchSubcommand(ze, We === undefined ? args : Be.join(" "));
-  let rt = Xe === undefined ? undefined : findCommand(Xe.targetName, L);
-  return rt !== undefined && isCommandEnabled(rt) ? rt : ze;
+function resolveSlashCommand({ commandName, args, isMcp }, commands) {
+  let command = findCommand(commandName, commands);
+  let isEnabled = command !== undefined && isCommandEnabled(command);
+  let [firstArg = "", ...restArgs] = args.split(/\s+/);
+  let subcommand =
+    !isEnabled && !isMcp && firstArg !== "" ? findCommand(`${commandName}:${firstArg}`, commands) : undefined;
+  let resolved = isEnabled ? command : subcommand;
+  if (resolved === undefined) return;
+  let subcommandMatch = matchSubcommand(resolved, subcommand === undefined ? args : restArgs.join(" "));
+  let targetCommand =
+    subcommandMatch === undefined ? undefined : findCommand(subcommandMatch.targetName, commands);
+  return targetCommand !== undefined && isCommandEnabled(targetCommand) ? targetCommand : resolved;
 }
 //@ chunk-18hwfzwa.js:1629379-1629688 placement
 /**
  * 输入是否会发送给模型（普通提示、prompt 类命令或可被钩子处理的命令）。
  */
-function mayReachModel({ value: h, mode, skipSlashCommands }, commands) {
+function mayReachModel({ value, mode, skipSlashCommands }, commands) {
   if (mode === "bash" || mode === "poll-event") return false;
-  let ke = typeof h === "string" ? h : "";
-  let Be =
-    mode === "prompt" && skipSlashCommands !== true && ke.startsWith("/") ? parseSlashCommand(ke) : null;
-  if (Be === null) return true;
-  let slashCommand = resolveSlashCommand(Be, commands);
-  if (slashCommand === undefined) return !looksLikeCommand(Be.commandName) || mayRegisterCommands();
-  return slashCommand.type === "prompt" || mayHookCommand(getCommandName(slashCommand));
+  let text = typeof value === "string" ? value : "";
+  let slashCommand =
+    mode === "prompt" && skipSlashCommands !== true && text.startsWith("/") ? parseSlashCommand(text) : null;
+  if (slashCommand === null) return true;
+  let slashCommand_2 = resolveSlashCommand(slashCommand, commands);
+  if (slashCommand_2 === undefined)
+    return !looksLikeCommand(slashCommand.commandName) || mayRegisterCommands();
+  return slashCommand_2.type === "prompt" || mayHookCommand(getCommandName(slashCommand_2));
 }
 //@ chunk-18hwfzwa.js:1629688-1629730 placement
-function isCompactCommand(h) {
-  return h.name === "compact";
+function isCompactCommand(command) {
+  return command.name === "compact";
 }
 //@ chunk-18hwfzwa.js:1629730-1644033 placement
 /**
@@ -175,17 +179,17 @@ class PromptSubmitController {
   #e;
   #t = null;
   #o = undefined;
-  constructor(h) {
-    this.#e = h;
+  constructor(options) {
+    this.#e = options;
   }
-  bindHost(h) {
-    this.#t = h;
+  bindHost(host) {
+    this.#t = host;
   }
   #n() {
     if (!this.#t) throw Error("PromptSubmitController used before its host was bound");
     return this.#t;
   }
-  submit = async (h, x, D) => {
+  submit = async (text, helpers, options) => {
     let submittedAtMs = performance.now();
     let {
       store,
@@ -207,57 +211,66 @@ class PromptSubmitController {
       addNotification,
     } = this.#e;
     let { mainLoopModel, canUseTool, onBeforeQuery } = this.#n();
-    let po = D?.inputModeOverride ?? draft.mode;
-    let ao = po !== "bash" && EXIT_COMMAND_WORDS.includes(h.trim());
-    let co = ao && transport.activeRemote.isRemoteMode ? "/exit" : h;
-    let bo = D?.pastedContentsOverride ?? draft.pastedContents;
+    let inputMode = options?.inputModeOverride ?? draft.mode;
+    let isExitWord = inputMode !== "bash" && EXIT_COMMAND_WORDS.includes(text.trim());
+    let submitText = isExitWord && transport.activeRemote.isRemoteMode ? "/exit" : text;
+    let pastedContents = options?.pastedContentsOverride ?? draft.pastedContents;
     let isLoading = turn.getSnapshot().isLoading;
-    let Bo = false;
+    let shouldKeepComposer = false;
     let commands = scope.commands;
     let { ideSelection, onDetachToCaller } = chrome.getSnapshot();
-    let Wo =
-      po !== "bash" && co.trim().startsWith("/")
-        ? findCommand(splitSlashCommandInput(co.trim()).name, commands)
+    let slashCommand =
+      inputMode !== "bash" && submitText.trim().startsWith("/")
+        ? findCommand(splitSlashCommandInput(submitText.trim()).name, commands)
         : undefined;
-    let mn =
-      Wo?.type === "local-jsx" && Wo.keepsScrollPosition === true && co.startsWith("/") ? Wo : undefined;
-    if (!mn) scrollPin.repin(false, "onSubmit");
+    let scrollKeepingCommand =
+      slashCommand?.type === "local-jsx" &&
+      slashCommand.keepsScrollPosition === true &&
+      submitText.startsWith("/")
+        ? slashCommand
+        : undefined;
+    if (!scrollKeepingCommand) scrollPin.repin(false, "onSubmit");
     dialogStore.dismissKind(RESUME_COMPACT_DIALOG.kind);
     dialogStore.dismissKind(COLD_RESUME_QUOTA);
     dialogStore.dismissKind(NEWER_MODEL_OFFER_2);
     endDrawnOffer();
     dialogStore.dismissKind(AUTOCOMPACT_OFFER);
-    let Cn = isFrozenMarker(D?.composerEnter) && D?.inputSource !== "suggestion_accepted";
-    let No = false;
-    let vo =
-      D?.fromKeybinding || No
+    let sentByPerson =
+      isFrozenMarker(options?.composerEnter) && options?.inputSource !== "suggestion_accepted";
+    let fromQueue = false;
+    let historyEntry =
+      options?.fromKeybinding || fromQueue
         ? undefined
         : {
-            display: prependModeCharacterToInput_3(h, po),
-            pastedContents: bo,
+            display: prependModeCharacterToInput_3(text, inputMode),
+            pastedContents,
           };
-    if (onDetachToCaller !== undefined && (ao || (Wo?.name === "exit" && Wo.type !== "prompt"))) {
-      if (vo) {
+    if (
+      onDetachToCaller !== undefined &&
+      (isExitWord || (slashCommand?.name === "exit" && slashCommand.type !== "prompt"))
+    ) {
+      if (historyEntry) {
         draft.clear();
-        x.clearBuffer();
-        addHistoryEntryNoUndo(vo, storageV5, po);
+        helpers.clearBuffer();
+        addHistoryEntryNoUndo(historyEntry, storageV5, inputMode);
       }
       onDetachToCaller();
       return;
     }
-    if (co.trim().startsWith("/")) {
-      let trimmed = addPastedEntry(co, bo).trim();
-      let { name: Wn, args } = splitSlashCommandInput(trimmed);
-      let command = findCommand(Wn, commands);
-      let Un = command && isCommandEnabled(command) ? command : undefined;
-      if (Un?.name === "clear") idleNudge.onClearSubmitted();
-      let dr = isImmediateCommand(Un, args, this.#e.presentation);
+    if (submitText.trim().startsWith("/")) {
+      let trimmed = addPastedEntry(submitText, pastedContents).trim();
+      let { name: commandName, args } = splitSlashCommandInput(trimmed);
+      let command = findCommand(commandName, commands);
+      let command_2 = command && isCommandEnabled(command) ? command : undefined;
+      if (command_2?.name === "clear") idleNudge.onClearSubmitted();
+      let runsImmediately = isImmediateCommand(command_2, args, this.#e.presentation);
       let isActive = turn.guard.isActive || false;
-      let pr = runsBesideTurns(Un) && (po !== "bash" || D?.fromKeybinding === true);
-      let Qn = (isActive && (dr || D?.fromKeybinding)) || pr;
-      let ur = Un?.type === "local" && isActive && dr;
-      if (Un && ((Qn && Un.type === "local-jsx") || ur)) {
-        if (isSlashCommandBlockedByEndedByModel(Un, store.getState().endedByModel)) {
+      let runsBeside =
+        runsBesideTurns(command_2) && (inputMode !== "bash" || options?.fromKeybinding === true);
+      let dispatchesNow = (isActive && (runsImmediately || options?.fromKeybinding)) || runsBeside;
+      let runsLocalWhileBusy = command_2?.type === "local" && isActive && runsImmediately;
+      if (command_2 && ((dispatchesNow && command_2.type === "local-jsx") || runsLocalWhileBusy)) {
+        if (isSlashCommandBlockedByEndedByModel(command_2, store.getState().endedByModel)) {
           addNotification({
             key: "immediate-ended-by-model",
             kind: "feedback",
@@ -268,45 +281,48 @@ class PromptSubmitController {
           });
           return;
         }
-        let commandDialog = resolveCommandDialog(Un);
-        if (Un.type === "local-jsx" && !commandDialog) {
-          logFeatureBad(cmdFeature(Un.name), "cmd_local_jsx_no_dialog_resolution");
+        let commandDialog = resolveCommandDialog(command_2);
+        if (command_2.type === "local-jsx" && !commandDialog) {
+          logFeatureBad(cmdFeature(command_2.name), "cmd_local_jsx_no_dialog_resolution");
           addNotification({
-            key: `immediate-${Un.name}`,
+            key: `immediate-${command_2.name}`,
             kind: "feedback",
-            text: commandUnavailableMessage(Un),
+            text: commandUnavailableMessage(command_2),
             priority: "immediate",
           });
           return;
         }
-        if (h.trim() === draft.value.trim()) {
+        if (text.trim() === draft.value.trim()) {
           draft.clear();
-          x.clearBuffer();
+          helpers.clearBuffer();
         }
         let ranAs = createPromptHistoryWriter({
-          entry: vo,
-          name: Wn,
+          entry: historyEntry,
+          name: commandName,
           typed: args,
-          write: (Zr) => addHistoryEntryNoUndo(Zr, storageV5, po),
+          write: (entry) => addHistoryEntryNoUndo(entry, storageV5, inputMode),
         });
-        let filtered = parsePastedRefs(co).filter(
-          (Zr) => bo[Zr.id]?.type === "text" && !bo[Zr.id]?.unavailable,
+        let filtered = parsePastedRefs(submitText).filter(
+          (ref) => pastedContents[ref.id]?.type === "text" && !pastedContents[ref.id]?.unavailable,
         );
         let pastedTextCount = filtered.length;
-        let pastedTextBytes = filtered.reduce((acc, wr) => acc + (bo[wr.id]?.content.length ?? 0), 0);
+        let pastedTextBytes = filtered.reduce(
+          (acc, ref) => acc + (pastedContents[ref.id]?.content.length ?? 0),
+          0,
+        );
         logEvent("tengu_paste_text", {
           pastedTextCount,
           pastedTextBytes,
         });
         logEvent("tengu_immediate_command_executed", {
-          commandName: shippedCommandNameForAnalytics(Un.name),
-          fromKeybinding: D?.fromKeybinding ?? false,
+          commandName: shippedCommandNameForAnalytics(command_2.name),
+          fromKeybinding: options?.fromKeybinding ?? false,
         });
-        if (Un.type === "local") {
-          let Zr = bumpClawdPoseRun();
+        if (command_2.type === "local") {
+          let poseRun = bumpClawdPoseRun();
           runLocalCommandFromRepl({
-            command: Un,
-            commandName: Wn,
+            command: command_2,
+            commandName,
             args,
             context: {
               ...turn.buildToolUseContext(
@@ -316,57 +332,61 @@ class PromptSubmitController {
                 mainLoopModel,
               ),
               isMidTurn: true,
-              dispatchedAsImmediate: dr,
+              dispatchedAsImmediate: runsImmediately,
             },
             printRows: turn.appendAfterTurn,
             ranAs,
-          }).finally(() => releaseKeptPoseIfStale(Zr));
+          }).finally(() => releaseKeptPoseIfStale(poseRun));
           this.#s({
             toast: true,
           });
         } else if (commandDialog) {
-          let Zr = bumpClawdPoseRun();
+          let poseRun = bumpClawdPoseRun();
           this.#c({
-            command: Un,
-            commandName: Wn,
+            command: command_2,
+            commandName,
             commandArgs: args,
-            dispatchedAsImmediate: dr,
+            dispatchedAsImmediate: runsImmediately,
             isMidTurn: isActive,
-            besideTurns: pr,
+            besideTurns: runsBeside,
             loadDialog: commandDialog,
             mainLoopModel,
-            composerEnter: D?.composerEnter,
+            composerEnter: options?.composerEnter,
             ranAs,
-          }).finally(() => releaseKeptPoseIfStale(Zr));
+          }).finally(() => releaseKeptPoseIfStale(poseRun));
         }
         return;
       }
     }
     if (
-      transport.refuseSubmit(co, po, {
-        sentByPerson: Cn,
-        pastedContents: bo,
+      transport.refuseSubmit(submitText, inputMode, {
+        sentByPerson,
+        pastedContents,
       })
     )
       return;
     let isRemoteMode = transport.activeRemote.isRemoteMode;
-    let kn = (!isLoading && true) || isRemoteMode;
+    let clearsComposer = (!isLoading && true) || isRemoteMode;
     if (
-      !D?.fromKeybinding &&
-      po === "bash" &&
-      !parsePastedRefs(co).some((Kn) => !Kn.match.startsWith("[Image"))
+      !options?.fromKeybinding &&
+      inputMode === "bash" &&
+      !parsePastedRefs(submitText).some((ref) => !ref.match.startsWith("[Image"))
     )
-      prependToShellHistoryCache(session, co.trim());
-    let Fn = co.trim().startsWith("/");
-    let bn = randomUUID();
-    let Go = D?.inputModeOverride !== undefined && (D.fromKeybinding === true || D.keepsComposer === true);
-    let hn = D?.leavesIdeSelection !== true && (ideSelection?.source !== "diff" || (!Fn && po !== "bash"));
+      prependToShellHistoryCache(session, submitText.trim());
+    let isSlash = submitText.trim().startsWith("/");
+    let submitUuid = randomUUID();
+    let keepsComposer =
+      options?.inputModeOverride !== undefined &&
+      (options.fromKeybinding === true || options.keepsComposer === true);
+    let usesIdeSelection =
+      options?.leavesIdeSelection !== true &&
+      (ideSelection?.source !== "diff" || (!isSlash && inputMode !== "bash"));
     let cameBack = draft.getSnapshot().cameBack;
-    if (kn && !Go) draft.setMode("prompt");
-    if (kn) {
-      if (hn) chrome.consumeIdeSelection(bn);
+    if (clearsComposer && !keepsComposer) draft.setMode("prompt");
+    if (clearsComposer) {
+      if (usesIdeSelection) chrome.consumeIdeSelection(submitUuid);
     }
-    if (draft.stashedPrompt !== undefined && !Fn && kn) {
+    if (draft.stashedPrompt !== undefined && !isSlash && clearsComposer) {
       draft.popStash("outside");
       addNotification({
         key: "stash-restored",
@@ -375,151 +395,160 @@ class PromptSubmitController {
         priority: "high",
         timeoutMs: 5000,
       });
-    } else if (kn) {
-      if (!D?.fromKeybinding && !D?.keepsComposer) draft.clear();
+    } else if (clearsComposer) {
+      if (!options?.fromKeybinding && !options?.keepsComposer) draft.clear();
     }
-    if (!Fn && po === "prompt") recordSubmitTime();
-    if (kn) {
+    if (!isSlash && inputMode === "prompt") recordSubmitTime();
+    if (clearsComposer) {
       turn.markSubmit();
-      x.clearBuffer();
-      if (!Fn && po === "prompt" && !isRemoteMode && !remoteSessionAwaits()) {
-        turn.stream.setUserInputOnProcessing(co, {
+      helpers.clearBuffer();
+      if (!isSlash && inputMode === "prompt" && !isRemoteMode && !remoteSessionAwaits()) {
+        turn.stream.setUserInputOnProcessing(submitText, {
           kind: "human",
         });
         turn.resetTiming();
       }
     }
-    let Xo = po === "prompt" && !Fn ? this.#i() : undefined;
-    let Sn =
-      Xo === undefined
+    let remoteTarget = inputMode === "prompt" && !isSlash ? this.#i() : undefined;
+    let sendNowFeature =
+      remoteTarget === undefined
         ? undefined
-        : D?.sendNow === true
+        : options?.sendNow === true
           ? "input_send_now_key"
           : shouldUseResponsiveMode({
-                text: co,
-                pastedContents: bo,
-                isSentByPerson: Cn,
-                wait: D?.wait === true,
+                text: submitText,
+                pastedContents,
+                isSentByPerson: sentByPerson,
+                wait: options?.wait === true,
               })
             ? "input_send_now_responsive_enter"
             : undefined;
-    let $n = transport.submit(co, {
-      inputMode: po,
-      pastedContents: bo,
-      fromKeybinding: D?.fromKeybinding ?? false,
-      sentByPerson: Cn,
+    let submitPromise = transport.submit(submitText, {
+      inputMode,
+      pastedContents,
+      fromKeybinding: options?.fromKeybinding ?? false,
+      sentByPerson,
       recordHistory: ({ startsTurn }) => {
-        if (!vo || shouldHoldPluginStorage()) return;
+        if (!historyEntry || shouldHoldPluginStorage()) return;
         if (startsTurn)
-          addHistoryEntry(vo, storageV5, {
-            submitMode: po,
+          addHistoryEntry(historyEntry, storageV5, {
+            submitMode: inputMode,
           });
-        else addHistoryEntryNoUndo(vo, storageV5, po);
+        else addHistoryEntryNoUndo(historyEntry, storageV5, inputMode);
       },
     });
-    if ($n) {
-      let Kn = bumpClawdPoseRun();
-      let Wn = undefined;
+    if (submitPromise) {
+      let poseRun = bumpClawdPoseRun();
+      let submitResult = undefined;
       try {
-        Wn = await $n;
+        submitResult = await submitPromise;
       } finally {
-        releaseKeptPoseIfStale(Kn);
+        releaseKeptPoseIfStale(poseRun);
       }
-      if (Wn?.handBack) {
-        chrome.restoreIdeSelectionConsumedBy(bn);
+      if (submitResult?.handBack) {
+        chrome.restoreIdeSelectionConsumedBy(submitUuid);
         if (draft.value.trim() === "") {
-          draft.replaceValue(co);
-          draft.setPastedContents(bo);
-        } else if (vo && !shouldHoldPluginStorage()) addHistoryEntryNoUndo(vo, storageV5, po);
-      } else if (Xo !== undefined && Sn !== undefined && Wn?.sent && this.#i() === Xo)
-        if (Sn === "input_send_now_responsive_enter" && Xo.workerSendsNow() === undefined)
-          logFeatureSad(Sn, "remote_version_unknown");
-        else this.#a(Xo, Sn, Wn.uuid);
+          draft.replaceValue(submitText);
+          draft.setPastedContents(pastedContents);
+        } else if (historyEntry && !shouldHoldPluginStorage())
+          addHistoryEntryNoUndo(historyEntry, storageV5, inputMode);
+      } else if (
+        remoteTarget !== undefined &&
+        sendNowFeature !== undefined &&
+        submitResult?.sent &&
+        this.#i() === remoteTarget
+      )
+        if (
+          sendNowFeature === "input_send_now_responsive_enter" &&
+          remoteTarget.workerSendsNow() === undefined
+        )
+          logFeatureSad(sendNowFeature, "remote_version_unknown");
+        else this.#a(remoteTarget, sendNowFeature, submitResult.uuid);
       return;
     }
-    let any = parsePastedRefs(co).some((Kn) => bo[Kn.id]?.type === "text");
-    using _o = messageQueue.trackSubmission({
+    let any = parsePastedRefs(submitText).some((ref) => pastedContents[ref.id]?.type === "text");
+    using submission = messageQueue.trackSubmission({
       agentId: mainAgentId(),
-      mode: po,
-      value: co,
-      uuid: bn,
+      mode: inputMode,
+      value: submitText,
+      uuid: submitUuid,
     });
-    let cn = kn
+    let queuedScan = clearsComposer
       ? scanQueueBeforeTurn(
           () =>
             any ||
             mayReachModel(
               {
-                value: co,
-                mode: po,
+                value: submitText,
+                mode: inputMode,
               },
               commands,
             ),
           this.#o,
         )
       : undefined;
-    if (cn) {
-      this.#o = cn;
+    if (queuedScan) {
+      this.#o = queuedScan;
       try {
-        await cn;
+        await queuedScan;
       } finally {
-        if (this.#o === cn) this.#o = undefined;
+        if (this.#o === queuedScan) this.#o = undefined;
       }
     }
-    let Dn = switchSerializerSlot.of(session);
-    if (Dn.pending > 0) await Dn.tail;
+    let serializer = switchSerializerSlot.of(session);
+    if (serializer.pending > 0) await serializer.tail;
     let mainLoopModel_2 = getMainLoopModelFromState(store.getState());
-    let mr = transcript.getSnapshot().length;
+    let messageCount = transcript.getSnapshot().length;
     await handlePromptSubmit({
       presentation: this.#e.presentation,
-      input: co,
-      uuid: bn,
+      input: submitText,
+      uuid: submitUuid,
       submittedAtMs,
-      helpers: x,
+      helpers,
       turn,
       queue: messageQueue,
-      mode: po,
+      mode: inputMode,
       commands,
-      onInputChange: Go
-        ? (Kn) => {
-            draft.replaceValue(Kn);
-            if (Kn === "") draft.setMode("prompt");
+      onInputChange: keepsComposer
+        ? (nextValue) => {
+            draft.replaceValue(nextValue);
+            if (nextValue === "") draft.setMode("prompt");
           }
         : draft.replaceValue,
       onPromptCameBack: draft.markCameBack,
       getCurrentInput: () => draft.value,
-      composerClearedAtEnter: (kn && !D?.fromKeybinding) || D?.keepsComposer,
+      composerClearedAtEnter: (clearsComposer && !options?.fromKeybinding) || options?.keepsComposer,
       ...false,
-      restoreHandedBackPrompt: (Kn) => {
+      restoreHandedBackPrompt: (prompt) => {
         turn.consumeRateLimitAutoContinuePrefill();
-        restorePromptAfterCancel(draft, Kn);
+        restorePromptAfterCancel(draft, prompt);
       },
       onPromptHandedBack: chrome.restoreIdeSelectionConsumedBy,
       setPastedContents: draft.setPastedContents,
       messages: transcript.getSnapshot(),
       mainLoopModel: mainLoopModel_2,
-      suppressWorkflowKeyword: D?.suppressWorkflowKeyword,
-      resumesStaleQuotaWait: D?.resumesStaleQuotaWait,
-      wait: D?.wait,
-      inputSource: D?.inputSource,
-      pastedContents: bo,
-      keyboard: D?.keyboard,
-      composerEnter: D?.composerEnter,
+      suppressWorkflowKeyword: options?.suppressWorkflowKeyword,
+      resumesStaleQuotaWait: options?.resumesStaleQuotaWait,
+      wait: options?.wait,
+      inputSource: options?.inputSource,
+      pastedContents,
+      keyboard: options?.keyboard,
+      composerEnter: options?.composerEnter,
       session,
-      historyEntry: vo,
-      onSubmitProceed: kn || D?.keepsComposer ? undefined : () => draft.setMode("prompt"),
-      onSubmitCancelRewind: kn
+      historyEntry,
+      onSubmitProceed: clearsComposer || options?.keepsComposer ? undefined : () => draft.setMode("prompt"),
+      onSubmitCancelRewind: clearsComposer
         ? () => {
-            if (!Go) draft.setMode(po);
+            if (!keepsComposer) draft.setMode(inputMode);
             if (cameBack) draft.markCameBack();
           }
         : undefined,
-      replaceDraftWithNextInput: (Kn) => this.#r(Kn),
+      replaceDraftWithNextInput: (nextInput) => this.#r(nextInput),
       ideSelection,
       takeIdeSelectionForQueue:
-        hn && po !== "bash" && (ideSelection?.text || ideSelection?.filePath)
+        usesIdeSelection && inputMode !== "bash" && (ideSelection?.text || ideSelection?.filePath)
           ? () => {
-              if (!kn) chrome.consumeIdeSelection(bn);
+              if (!clearsComposer) chrome.consumeIdeSelection(submitUuid);
               return ideSelection;
             }
           : undefined,
@@ -534,20 +563,20 @@ class PromptSubmitController {
       storageV5,
     });
     if (
-      mn &&
+      scrollKeepingCommand &&
       transcript
         .getSnapshot()
-        .slice(mr)
+        .slice(messageCount)
         .some(
-          (Kn) =>
-            Kn.uuid === bn ||
-            (Kn.type === "system" &&
-              Kn.subtype === "local_command" &&
-              Kn.commandRun?.command === getCommandName(mn)),
+          (message) =>
+            message.uuid === submitUuid ||
+            (message.type === "system" &&
+              message.subtype === "local_command" &&
+              message.commandRun?.command === getCommandName(scrollKeepingCommand)),
         )
     )
       scrollPin.repin(false, "commandOutput");
-    if (Fn || isLoading)
+    if (isSlash || isLoading)
       this.#s({
         toast: true,
       });
@@ -565,10 +594,10 @@ class PromptSubmitController {
         timeoutMs: 5000,
       });
   }
-  #r(h) {
+  #r(value) {
     let { draft } = this.#e;
     draft.setMode("prompt");
-    draft.replaceValue(h);
+    draft.replaceValue(value);
   }
   async #c({
     command,
@@ -584,15 +613,15 @@ class PromptSubmitController {
   }) {
     let { transcript, turn, messageQueue, scope, addNotification } = this.#e;
     let localJsx = scope.localJsx;
-    let Ot = false;
-    let Et = isPromptHookObserved() ? "" : commandArgs;
-    let Dt = snapshotHookRegistration();
-    let Lt;
-    let oo = (text, ao) => {
-      Ot = true;
-      Lt?.close();
-      let co = [];
-      if (text && ao?.shouldQuery)
+    let dialogRan = false;
+    let effectiveArgs = isPromptHookObserved() ? "" : commandArgs;
+    let hookRegistration = snapshotHookRegistration();
+    let panel;
+    let onDialogDone = (text, result) => {
+      dialogRan = true;
+      panel?.close();
+      let rows = [];
+      if (text && result?.shouldQuery)
         messageQueue.enqueue({
           agentId: mainAgentId(),
           value: text,
@@ -601,7 +630,7 @@ class PromptSubmitController {
             kind: "auto-continuation",
           },
         });
-      else if (text && ao?.display !== "skip") {
+      else if (text && result?.display !== "skip") {
         addNotification({
           key: `immediate-${command.name}`,
           kind: "feedback",
@@ -609,41 +638,41 @@ class PromptSubmitController {
           priority: "immediate",
         });
         if (this.#e.presentation !== "fullscreen")
-          co.push(
-            createCommandInputMessage(formatCommandInputTags(getCommandName(command), Et)),
+          rows.push(
+            createCommandInputMessage(formatCommandInputTags(getCommandName(command), effectiveArgs)),
             createCommandInputMessage(
               `<${LOCAL_COMMAND_STDOUT}>${escapeXml(text)}</${LOCAL_COMMAND_STDOUT}>`,
               {
-                commandRun: buildCommandRunInfo(command, Et),
+                commandRun: buildCommandRunInfo(command, effectiveArgs),
               },
             ),
           );
       }
-      if (ao?.metaMessages?.length)
-        co.push(
-          ...ao.metaMessages.map((content) =>
+      if (result?.metaMessages?.length)
+        rows.push(
+          ...result.metaMessages.map((content) =>
             createUserMessage({
               content,
               isMeta: true,
-              origin: ao.metaMessagesOrigin,
+              origin: result.metaMessagesOrigin,
             }),
           ),
         );
-      turn.appendAfterTurn(co);
+      turn.appendAfterTurn(rows);
       this.#s({
-        toast: !ao?.nextInput,
+        toast: !result?.nextInput,
       });
-      if (ao?.nextInput)
-        if (ao.submitNextInput)
+      if (result?.nextInput)
+        if (result.submitNextInput)
           messageQueue.enqueue({
             agentId: mainAgentId(),
-            value: ao.nextInput,
+            value: result.nextInput,
             mode: "prompt",
             origin: {
               kind: "auto-continuation",
             },
           });
-        else this.#r(ao.nextInput);
+        else this.#r(result.nextInput);
     };
     let toolUseContext = turn.buildToolUseContext(
       transcript.getSnapshot(),
@@ -651,14 +680,14 @@ class PromptSubmitController {
       createAbortController(),
       mainLoopModel,
     );
-    let io = await dispatchCommandRunHooks({
+    let hookResult = await dispatchCommandRunHooks({
       input: commandRunEvent(command, commandArgs, this.#e.presentation),
       engine: {
-        run: async (po) => {
-          if (!hasHookRegistrationChanged(Dt)) Et = po;
-          ranAs(po);
+        run: async (hookArgs) => {
+          if (!hasHookRegistrationChanged(hookRegistration)) effectiveArgs = hookArgs;
+          ranAs(hookArgs);
           return (await loadDialog()).call(
-            oo,
+            onDialogDone,
             {
               ...toolUseContext,
               isMidTurn,
@@ -671,7 +700,7 @@ class PromptSubmitController {
                 },
               }),
             },
-            po,
+            hookArgs,
             commandName,
           );
         },
@@ -688,24 +717,24 @@ class PromptSubmitController {
       queued: undefined,
     });
     logFeatureOk(cmdFeature(command.name), getTipAttribution(command.name));
-    if (io.kind === "answered") {
+    if (hookResult.kind === "answered") {
       if (hasSingleCommandRunHook(getCommandName(command))) {
-        if (!hasHookRegistrationChanged(Dt)) Et = commandArgs;
+        if (!hasHookRegistrationChanged(hookRegistration)) effectiveArgs = commandArgs;
         ranAs(commandArgs);
       }
-      oo(
-        io.text,
-        io.context === undefined
+      onDialogDone(
+        hookResult.text,
+        hookResult.context === undefined
           ? undefined
           : {
-              metaMessages: [...io.context],
+              metaMessages: [...hookResult.context],
             },
       );
       return;
     }
-    let ran = io.ran;
-    if (ran && !Ot)
-      Lt = localJsx.show(ran, {
+    let ran = hookResult.ran;
+    if (ran && !dialogRan)
+      panel = localJsx.show(ran, {
         commandName: getCommandName(command),
         immediate: true,
         hidesPrompt: false,
@@ -714,16 +743,16 @@ class PromptSubmitController {
       });
   }
   remoteSendsNow = {
-    subscribe: (h) => {
-      let x = this.#e.turn.subscribe(h);
-      let D = this.#e.transport.subscribe(h);
-      let L = this.#e.draft.subscribe(h);
-      let ee = this.#e.transcript.subscribe(h);
+    subscribe: (listener) => {
+      let unsubTurn = this.#e.turn.subscribe(listener);
+      let unsubTransport = this.#e.transport.subscribe(listener);
+      let unsubDraft = this.#e.draft.subscribe(listener);
+      let unsubTranscript = this.#e.transcript.subscribe(listener);
       return () => {
-        x();
-        D();
-        L();
-        ee();
+        unsubTurn();
+        unsubTransport();
+        unsubDraft();
+        unsubTranscript();
       };
     },
     getSnapshot: () => this.#e.draft.mode === "prompt" && this.#i()?.workerSendsNow() === true,
@@ -731,28 +760,32 @@ class PromptSubmitController {
   submitEmpty = () => {
     let mode = this.#e.draft.mode;
     if (sendQueuedNow(this.#l(mode))) return true;
-    let x = this.#i();
+    let remoteTarget = this.#i();
     return (
-      x !== undefined &&
+      remoteTarget !== undefined &&
       isQueuedSendNowEnabled() &&
       mode === "prompt" &&
-      this.#a(x, "input_send_queued_now", undefined)
+      this.#a(remoteTarget, "input_send_queued_now", undefined)
     );
   };
-  sendQueuedNow = (h, x) => {
-    let D = () => this.#e.lowLatency.sendQueuedNow(x);
-    if (x === undefined) {
+  sendQueuedNow = (mode, deliver) => {
+    let deliverWithoutCancel = () => this.#e.lowLatency.sendQueuedNow(deliver);
+    if (deliver === undefined) {
       if (
         handleSendNowKey({
-          ...this.#l(h),
-          deliverWithoutCancel: D,
+          ...this.#l(mode),
+          deliverWithoutCancel,
         })
       )
         return true;
-      let L = this.#i();
-      return L !== undefined && h === "prompt" && this.#a(L, "input_send_now_key", undefined);
+      let remoteTarget = this.#i();
+      return (
+        remoteTarget !== undefined &&
+        mode === "prompt" &&
+        this.#a(remoteTarget, "input_send_now_key", undefined)
+      );
     }
-    return h === "prompt" && isSendNowKeyEnabled() && D();
+    return mode === "prompt" && isSendNowKeyEnabled() && deliverWithoutCancel();
   };
   #i() {
     let activeRemote = this.#e.transport.activeRemote;
@@ -764,9 +797,9 @@ class PromptSubmitController {
       ? activeRemote
       : undefined;
   }
-  #a(h, x, D) {
-    if (h.workerSendsNow() === false) {
-      logFeatureSad(x, "remote_not_supported");
+  #a(remoteTarget, featureName, deliver) {
+    if (remoteTarget.workerSendsNow() === false) {
+      logFeatureSad(featureName, "remote_not_supported");
       this.#e.addNotification({
         key: "remote-send-now-unavailable",
         kind: "feedback",
@@ -775,22 +808,22 @@ class PromptSubmitController {
       });
       return true;
     }
-    h.sendQueuedNow(D).then((L) => {
-      switch (L) {
+    remoteTarget.sendQueuedNow(deliver).then((outcome) => {
+      switch (outcome) {
         case "delivering":
-          logFeatureOk(x);
+          logFeatureOk(featureName);
           return;
         case "stopped":
-          logFeatureSad(x, "fell_back_to_cancel");
+          logFeatureSad(featureName, "fell_back_to_cancel");
           return;
         case "nothing_waiting":
-          logFeatureSad(x, "remote_nothing_waiting");
+          logFeatureSad(featureName, "remote_nothing_waiting");
           return;
         case "not_asked":
-          logFeatureSad(x, "remote_not_asked");
+          logFeatureSad(featureName, "remote_not_asked");
           return;
         case "failed":
-          logFeatureBad(x, "remote_request_failed");
+          logFeatureBad(featureName, "remote_request_failed");
           return;
       }
     });
@@ -809,21 +842,21 @@ class PromptSubmitController {
       getAppState: () => store.getState(),
     };
   }
-  submitToAgent = async (h, x, D, L) => {
+  submitToAgent = async (requestText, task, helpers, pastedContents) => {
     let { taskRegistry, transcript, turn, draft, messageQueue, addNotification } = this.#e;
     let { mainLoopModel, canUseTool } = this.#n();
-    let text = requestDialogWrapper(h, L ?? draft.pastedContents);
-    if (isLocalAgent(x)) {
-      markChatEngaged(x.id, taskRegistry);
+    let text = requestDialogWrapper(requestText, pastedContents ?? draft.pastedContents);
+    if (isLocalAgent(task)) {
+      markChatEngaged(task.id, taskRegistry);
       let userMessage = createUserMessage({
         content: text,
         origin: {
           kind: "human",
         },
       });
-      appendAgentTranscriptMessage(x.id, userMessage, taskRegistry);
-      if (x.status === "running")
-        queueAgentMessage(x.id, text, taskRegistry, {
+      appendAgentTranscriptMessage(task.id, userMessage, taskRegistry);
+      if (task.status === "running")
+        queueAgentMessage(task.id, text, taskRegistry, {
           isMeta: true,
           origin: {
             kind: "human",
@@ -832,7 +865,7 @@ class PromptSubmitController {
         });
       else
         resumeAgentBackground({
-          agentId: x.id,
+          agentId: task.id,
           prompt: text,
           promptIsMeta: true,
           promptOrigin: {
@@ -848,12 +881,12 @@ class PromptSubmitController {
           canUseTool,
           userInitiated: true,
         })
-          .then((At) => {
-            if (isResumeDenied(At))
+          .then((resumeResult) => {
+            if (isResumeDenied(resumeResult))
               addNotification({
-                key: `resume-agent-failed-${x.id}`,
+                key: `resume-agent-failed-${task.id}`,
                 kind: "warning",
-                text: `Failed to resume agent: ${At.deniedByPlugin}`,
+                text: `Failed to resume agent: ${resumeResult.deniedByPlugin}`,
                 color: "error",
                 priority: "low",
               });
@@ -861,7 +894,7 @@ class PromptSubmitController {
           .catch((error) => {
             if (error instanceof AgentResumeInProgressError || error instanceof AgentStillStoppingError) {
               if (
-                sendMessageToAgent(x.id, text, taskRegistry, {
+                sendMessageToAgent(task.id, text, taskRegistry, {
                   isMeta: true,
                   origin: {
                     kind: "human",
@@ -874,7 +907,7 @@ class PromptSubmitController {
                 return;
               }
               addNotification({
-                key: `resume-agent-failed-${x.id}`,
+                key: `resume-agent-failed-${task.id}`,
                 kind: "warning",
                 text: "Failed to resume agent: it is no longer running; message not delivered",
                 color: "error",
@@ -884,7 +917,7 @@ class PromptSubmitController {
             }
             logForDebugging(`resumeAgentBackground failed: ${errorMessage(error)}`);
             addNotification({
-              key: `resume-agent-failed-${x.id}`,
+              key: `resume-agent-failed-${task.id}`,
               kind: "warning",
               text: `Failed to resume agent: ${errorMessage(error)}`,
               color: "error",
@@ -892,14 +925,14 @@ class PromptSubmitController {
             });
           });
     } else
-      injectUserMessageToTeammate(x.id, text, taskRegistry, {
+      injectUserMessageToTeammate(task.id, text, taskRegistry, {
         kind: "human",
       });
     draft.clear();
-    D.clearBuffer();
+    helpers.clearBuffer();
   };
-  submitSurveyFollowUp = (h) => {
-    this.submit(h, NOOP_HELPERS, {
+  submitSurveyFollowUp = (feedback) => {
+    this.submit(feedback, NOOP_HELPERS, {
       inputModeOverride: "prompt",
     }).catch((error) => {
       logForDebugging(
@@ -914,48 +947,52 @@ class PromptSubmitController {
       cursor: draft.cursorOffset,
     };
   };
-  fillDraft = (h, x, D) => {
+  fillDraft = (text, position, options) => {
     let { draft, dialogStore } = this.#e;
-    let { decorations, cursor } = D ?? {};
+    let { decorations, cursor } = options ?? {};
     if (dialogStore.getState().open.length > 0)
       return {
         isFilled: false,
         refusal: "dialog",
       };
-    let Be = decorations !== undefined && h !== "";
-    let He = Be && x === "insert" ? draft.value.normalize("NFC") : "";
-    let We = x === "replace" ? 0 : draft.value.length;
-    switch (x) {
+    let hasDecorations = decorations !== undefined && text !== "";
+    let nfcPrefix = hasDecorations && position === "insert" ? draft.value.normalize("NFC") : "";
+    let insertOffset = position === "replace" ? 0 : draft.value.length;
+    switch (position) {
       case "replace":
-        this.#r(h);
+        this.#r(text);
         break;
       case "append":
-        draft.replaceValue(draft.value + h);
+        draft.replaceValue(draft.value + text);
         break;
       case "insert":
-        We = draft.insertText(h, "outside");
+        insertOffset = draft.insertText(text, "outside");
         break;
     }
     if (cursor !== undefined) {
-      let rt = Cursor.fromText(draft.value, 80, cursor);
+      let cursorState = Cursor.fromText(draft.value, 80, cursor);
       draft.setCursorOffset(
         cursor >= draft.value.length
           ? draft.value.length
-          : rt.measuredText.snapToGraphemeBoundary(rt.snapOutOfPlaceholder(cursor, "start")),
+          : cursorState.measuredText.snapToGraphemeBoundary(
+              cursorState.snapOutOfPlaceholder(cursor, "start"),
+            ),
       );
-    } else if (x !== "insert" && draft.cursorOffset !== draft.value.length)
+    } else if (position !== "insert" && draft.cursorOffset !== draft.value.length)
       draft.setCursorOffset(draft.value.length);
-    let sliced = He.slice(0, We);
+    let mode = nfcPrefix.slice(0, insertOffset);
     if (
-      Be &&
-      (x === "insert"
-        ? draft.value.normalize("NFD").startsWith((sliced + h).normalize("NFD"))
-        : draft.value.startsWith(h, We))
+      hasDecorations &&
+      (position === "insert"
+        ? draft.value.normalize("NFD").startsWith((mode + text).normalize("NFD"))
+        : draft.value.startsWith(text, insertOffset))
     ) {
-      let rt = normalizeInputDecorations(decorations, h);
+      let normalizedDecorations = normalizeInputDecorations(decorations, text);
       draft.paint(
         normalizeInputDecorations(
-          x === "insert" ? mapRangesToNfcOffsets(rt, h, sliced) : offsetDecorations(rt, We),
+          position === "insert"
+            ? mapRangesToNfcOffsets(normalizedDecorations, text, mode)
+            : offsetDecorations(normalizedDecorations, insertOffset),
           draft.value,
         ),
       );
@@ -964,17 +1001,17 @@ class PromptSubmitController {
       isFilled: true,
     };
   };
-  suggestDraft = (h, generationRequestId) => {
+  suggestDraft = (suggestion, generationRequestId) => {
     let { draft, turn, setAppState } = this.#e;
-    if (!(h.trim() !== "" && draft.value === "" && !turn.getSnapshot().isLoading))
+    if (!(suggestion.trim() !== "" && draft.value === "" && !turn.getSnapshot().isLoading))
       return {
         isShown: false,
       };
-    setAppState((Re) => ({
-      ...Re,
+    setAppState((state) => ({
+      ...state,
       promptSuggestion: {
         status: "generated",
-        text: h,
+        text: suggestion,
         generationRequestId,
       },
     }));
@@ -984,57 +1021,65 @@ class PromptSubmitController {
   };
   popQueuedIntoDraft = () => {
     let { draft, setAppState, messageQueue, chrome } = this.#e;
-    let ee = messageQueue.popAllEditable(draft.value, 0, draft.pastedContents);
-    if (!ee) return;
-    draft.replaceValue(ee.text);
-    if (ee.unpassed) draft.markCameBack();
-    draft.setMode(ee.mode);
-    chrome.returnIdeSelection(ee.ideSelection);
-    setAppState((ke) =>
-      ke.queueEditIndex === null
-        ? ke
+    let popped = messageQueue.popAllEditable(draft.value, 0, draft.pastedContents);
+    if (!popped) return;
+    draft.replaceValue(popped.text);
+    if (popped.unpassed) draft.markCameBack();
+    draft.setMode(popped.mode);
+    chrome.returnIdeSelection(popped.ideSelection);
+    setAppState((state) =>
+      state.queueEditIndex === null
+        ? state
         : {
-            ...ke,
+            ...state,
             queueEditIndex: null,
           },
     );
-    if (ee.images.length > 0) draft.setPastedContents((ke) => mergeTurnTags(ke, ee.images));
+    if (popped.images.length > 0)
+      draft.setPastedContents((contents) => mergeTurnTags(contents, popped.images));
   };
   cancelAndDrainPending = () => {
     let { turn, messageQueue } = this.#e;
     let { userInputOnProcessing, followingPromptsOnProcessing } = turn.stream.getSnapshot();
-    let ee =
+    let processingText =
       turn.stream.placeholderTracker.pending && userInputOnProcessing
-        ? [userInputOnProcessing, ...followingPromptsOnProcessing.map((He) => He.text)].join(`
+        ? [userInputOnProcessing, ...followingPromptsOnProcessing.map((prompt) => prompt.text)].join(`
 `)
         : undefined;
-    let ke = [];
+    let drained = [];
     for (;;) {
       let pastedContents = messageQueue.getCommandQueue().find(isRefillableInput)?.pastedContents ?? {};
-      let We = messageQueue.popEditableAt(0, "", 0);
-      if (!We) break;
-      let ze = new Set(
-        We.images
+      let queued = messageQueue.popEditableAt(0, "", 0);
+      if (!queued) break;
+      let fixedImageIds = new Set(
+        queued.images
           .filter((image) => image.type === "image" && !(image.id in pastedContents))
           .map((image) => image.id),
       );
-      let Xe = parsePastedRefs(We.text)
-        .filter((rt) => rt.match.startsWith("[Image") && ze.has(rt.id))
+      let textWithoutImages = parsePastedRefs(queued.text)
+        .filter((ref) => ref.match.startsWith("[Image") && fixedImageIds.has(ref.id))
         .reduceRight(
-          (rt, kt) => rt.slice(0, kt.index) + rt.slice(kt.index + kt.match.length).replace(/^ /, ""),
-          We.text,
+          (acc, ref) => acc.slice(0, ref.index) + acc.slice(ref.index + ref.match.length).replace(/^ /, ""),
+          queued.text,
         );
-      if (Xe) {
-        let rt = addPastedEntry(Xe, Object.fromEntries(We.images.map((image) => [image.id, image])));
-        ke.push(rt.trimStart().startsWith("/") && !We.text.trimStart().startsWith("/") ? We.text : rt);
+      if (textWithoutImages) {
+        let restored = addPastedEntry(
+          textWithoutImages,
+          Object.fromEntries(queued.images.map((image) => [image.id, image])),
+        );
+        drained.push(
+          restored.trimStart().startsWith("/") && !queued.text.trimStart().startsWith("/")
+            ? queued.text
+            : restored,
+        );
       }
     }
-    let Re =
-      ke.join(`
+    let drainedText =
+      drained.join(`
 `) || undefined;
     turn.cancel("local");
     return (
-      [ee, Re].filter(Boolean).join(`
+      [processingText, drainedText].filter(Boolean).join(`
 
 `) || undefined
     );
@@ -1048,5 +1093,8 @@ function shouldHoldPluginStorage() {
   );
 }
 //@ chunk-18hwfzwa.js:1644107-1644111 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:1644107", () => {
+  init_react_production();
+});
 export { PromptSubmitController, isCompactCommand, awaitScanThenTurn, resolveSlashCommand, mayReachModel };

@@ -5,11 +5,11 @@
  * pieces: chunk-bwbq4xvm.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../runtime/bun-runtime.js";
 import { require_parse } from "./parse.js";
 
 //@ chunk-bwbq4xvm.js:10738-11216 cjs-fingerprint
-var require_diff = x(function (cjsExports, cjsModule) {
+var require_diff = __commonJS(function (cjsExports, cjsModule) {
   var parse = require_parse();
   var diff = (version1, version2) => {
     let v1 = parse(version1, null, true);

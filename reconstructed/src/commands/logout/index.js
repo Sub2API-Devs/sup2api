@@ -19,9 +19,9 @@ var logoutCommand = {
   name: "logout",
   description: "Sign out from your Anthropic account",
   isEnabled: () => !env.DISABLE_LOGOUT_COMMAND,
-  fleetHostCall: async (e) => {
-    let { fleetHostLogout } = await import("./chunk-3pe4yaee.js");
-    return fleetHostLogout(e);
+  fleetHostCall: async (call) => {
+    let { fleetHostLogout } = await import("./logout.lazy.js");
+    return fleetHostLogout(call);
   },
 };
 export { logoutCommand };

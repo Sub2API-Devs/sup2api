@@ -39,29 +39,33 @@ var MAX_CELL_WIDTH = 128;
 /**
  * 按字素切分字符串并给出每段显示宽度（处理 emoji、组合字符、全角）。
  */
-function segmentGraphemesWithWidth(e) {
-  if (NARROW_SAFE_RE.test(e))
-    return Array.from(e, (text) => ({
+function segmentGraphemesWithWidth(text) {
+  if (NARROW_SAFE_RE.test(text))
+    return Array.from(text, (text) => ({
       text,
       width: 1,
     }));
-  let t = new Intl.Segmenter(undefined, {
+  let segmenter = new Intl.Segmenter(undefined, {
     granularity: "grapheme",
   });
-  return Array.from(t.segment(e), ({ segment }) => {
-    let list = Array.from(segment, (l) => graphemeCellWidth(l) ?? 1);
-    let i = segment.codePointAt(0) ?? 0;
-    let u = i >= 8252 && (i < 11264 || i >= 126976) && EMOJI_RE.test(String.fromCodePoint(i));
-    let r = VARIATION_SELECTOR_RE.test(segment) && !VARIATION_SELECTOR_RE.test(segment[0] ?? "");
+  return Array.from(segmenter.segment(text), ({ segment }) => {
+    let list = Array.from(segment, (char) => graphemeCellWidth(char) ?? 1);
+    let codePoint = segment.codePointAt(0) ?? 0;
+    let isEmoji =
+      codePoint >= 8252 &&
+      (codePoint < 11264 || codePoint >= 126976) &&
+      EMOJI_RE.test(String.fromCodePoint(codePoint));
+    let hasVariationSelector =
+      VARIATION_SELECTOR_RE.test(segment) && !VARIATION_SELECTOR_RE.test(segment[0] ?? "");
     let width = REGIONAL_INDICATOR_REGEX.test(segment)
       ? Math.min(list.length, 2)
-      : segment.includes("\u20E3") || (u && ZWJ_OR_SKIN_TONE_REGEX.test(segment))
+      : segment.includes("\u20E3") || (isEmoji && ZWJ_OR_SKIN_TONE_REGEX.test(segment))
         ? 2
-        : r
-          ? list[0] === 2 || (segment.includes("\uFE0F") && i >= 128)
+        : hasVariationSelector
+          ? list[0] === 2 || (segment.includes("\uFE0F") && codePoint >= 128)
             ? 2
             : 1
-          : list.reduce((acc, a) => acc + a, 0);
+          : list.reduce((acc, width) => acc + width, 0);
     return {
       text: segment,
       width,
@@ -72,51 +76,57 @@ function segmentGraphemesWithWidth(e) {
 /**
  * 每段都有确定宽度
  */
-function isAllNarrowSafe(e) {
-  return NARROW_SAFE_RE.test(e) || Array.from(e).every((t) => graphemeCellWidth(t) !== undefined);
+function isAllNarrowSafe(text) {
+  return NARROW_SAFE_RE.test(text) || Array.from(text).every((char) => graphemeCellWidth(char) !== undefined);
 }
 //@ chunk-yb0ajcmt.js:7385-7439 placement
 /**
  * 字符串显示宽度合计
  */
-function textDisplayWidth(e) {
-  return segmentGraphemesWithWidth(e).reduce((acc, n) => acc + n.width, 0);
+function textDisplayWidth(text) {
+  return segmentGraphemesWithWidth(text).reduce((acc, grapheme) => acc + grapheme.width, 0);
 }
 //@ chunk-yb0ajcmt.js:7439-7673 placement
-function parseLabelLines(e) {
-  let trimmed = e.trim();
+function parseLabelLines(label) {
+  let trimmed = label.trim();
   return (
     trimmed.length >= 2 && trimmed.startsWith('"') && trimmed.endsWith('"') ? trimmed.slice(1, -1) : trimmed
   )
     .split(BR_TAG_RE)
-    .map((i) => {
-      let u = "";
-      for (let r of i) {
-        let s = r.codePointAt(0) ?? 0;
-        let l = s <= 31 || (s >= 127 && s <= 159);
-        u += l ? (s === 9 ? " " : "") : r;
+    .map((line) => {
+      let cleaned = "";
+      for (let char of line) {
+        let codePoint = char.codePointAt(0) ?? 0;
+        let isControl = codePoint <= 31 || (codePoint >= 127 && codePoint <= 159);
+        cleaned += isControl ? (codePoint === 9 ? " " : "") : char;
       }
-      return u.trim();
+      return cleaned.trim();
     });
 }
 //@ chunk-yb0ajcmt.js:7673-7813 placement
-function identifierWidth(e, t) {
-  if (t.length === 1 && t[0] === e) return 0;
-  let n = textDisplayWidth(e);
-  return Array.from(e).every((i) => WORD_CHAR_RE.test(i)) && n <= 16 ? n : Number.POSITIVE_INFINITY;
+function identifierWidth(word, tokens) {
+  if (tokens.length === 1 && tokens[0] === word) return 0;
+  let width = textDisplayWidth(word);
+  return Array.from(word).every((char) => WORD_CHAR_RE.test(char)) && width <= 16
+    ? width
+    : Number.POSITIVE_INFINITY;
 }
 //@ chunk-yb0ajcmt.js:7813-8003 placement
-function graphemeCellWidth(e) {
-  let t = e.codePointAt(0) ?? 0;
-  let n = t & 127;
+function graphemeCellWidth(char) {
+  let codePoint = char.codePointAt(0) ?? 0;
+  let lowBits = codePoint & 127;
   if (
-    (t >= 2304 &&
-      t <= 3407 &&
-      (n <= 2 || (n >= 58 && n <= 77 && n !== 61) || (n >= 81 && n <= 87) || n === 98 || n === 99)) ||
-    ZERO_WIDTH_CHAR_REGEX.test(e)
+    (codePoint >= 2304 &&
+      codePoint <= 3407 &&
+      (lowBits <= 2 ||
+        (lowBits >= 58 && lowBits <= 77 && lowBits !== 61) ||
+        (lowBits >= 81 && lowBits <= 87) ||
+        lowBits === 98 ||
+        lowBits === 99)) ||
+    ZERO_WIDTH_CHAR_REGEX.test(char)
   )
     return 0;
-  return AMBIGUOUS_WIDTH_CHAR_REGEX.test(e) ? undefined : WIDE_CHAR_REGEX.test(e) ? 2 : 1;
+  return AMBIGUOUS_WIDTH_CHAR_REGEX.test(char) ? undefined : WIDE_CHAR_REGEX.test(char) ? 2 : 1;
 }
 //@ chunk-yb0ajcmt.js:8003-8392 placement
 /**
@@ -167,52 +177,59 @@ var BOX_STYLE_GLYPHS = {
 var BOX_STYLES = ["solid", "dotted", "thick"];
 var MAX_CANVAS_CELLS = 400000;
 //@ chunk-yb0ajcmt.js:8549-8942 placement
-function linkCells(e, t, n, o = "solid") {
-  let i =
-    Math.min(t.x, n.x) >= 0 &&
-    Math.min(t.y, n.y) >= 0 &&
-    Math.max(t.x, n.x) < e.width &&
-    Math.max(t.y, n.y) < e.height;
-  let u = Math.abs(t.x - n.x) + Math.abs(t.y - n.y) === 1;
-  if (!i || !u) return;
-  let r = n.x > t.x ? BOX_RIGHT_BIT : n.x < t.x ? BOX_LEFT_BIT : n.y > t.y ? BOX_UP_BIT : BOX_DIRECTION_BITS;
-  let s =
-    r === BOX_RIGHT_BIT
+function linkCells(canvas, from, to, style = "solid") {
+  let inBounds =
+    Math.min(from.x, to.x) >= 0 &&
+    Math.min(from.y, to.y) >= 0 &&
+    Math.max(from.x, to.x) < canvas.width &&
+    Math.max(from.y, to.y) < canvas.height;
+  let isAdjacent = Math.abs(from.x - to.x) + Math.abs(from.y - to.y) === 1;
+  if (!inBounds || !isAdjacent) return;
+  let fromBits =
+    to.x > from.x
+      ? BOX_RIGHT_BIT
+      : to.x < from.x
+        ? BOX_LEFT_BIT
+        : to.y > from.y
+          ? BOX_UP_BIT
+          : BOX_DIRECTION_BITS;
+  let toBits =
+    fromBits === BOX_RIGHT_BIT
       ? BOX_LEFT_BIT
-      : r === BOX_LEFT_BIT
+      : fromBits === BOX_LEFT_BIT
         ? BOX_RIGHT_BIT
-        : r === BOX_UP_BIT
+        : fromBits === BOX_UP_BIT
           ? BOX_DIRECTION_BITS
           : BOX_UP_BIT;
-  let index = BOX_STYLES.indexOf(o);
-  for (let [a, h] of [
-    [t, r],
-    [n, s],
+  let index = BOX_STYLES.indexOf(style);
+  for (let [cell, bits] of [
+    [from, fromBits],
+    [to, toBits],
   ]) {
-    let c = a.y * e.width + a.x;
-    e.links[c] = (e.links[c] ?? 0) | h;
-    e.styles[c] = Math.max(e.styles[c] ?? 0, index);
+    let index_2 = cell.y * canvas.width + cell.x;
+    canvas.links[index_2] = (canvas.links[index_2] ?? 0) | bits;
+    canvas.styles[index_2] = Math.max(canvas.styles[index_2] ?? 0, index);
   }
 }
 //@ chunk-yb0ajcmt.js:8942-9047 placement = diff (0.775)
-function unlinkCell(boxCanvas, toward, n) {
-  let o =
-    n.x > toward.x
+function unlinkCell(boxCanvas, toward, cell) {
+  let bits =
+    cell.x > toward.x
       ? BOX_RIGHT_BIT
-      : n.x < toward.x
+      : cell.x < toward.x
         ? BOX_LEFT_BIT
-        : n.y > toward.y
+        : cell.y > toward.y
           ? BOX_UP_BIT
           : BOX_DIRECTION_BITS;
-  let i = toward.y * boxCanvas.width + toward.x;
-  boxCanvas.links[i] = (boxCanvas.links[i] ?? 0) & ~o;
+  let index = toward.y * boxCanvas.width + toward.x;
+  boxCanvas.links[index] = (boxCanvas.links[index] ?? 0) & ~bits;
 }
 //@ chunk-yb0ajcmt.js:9047-9141 placement
-function linkPath(boxCanvas, t, line = "solid") {
-  for (let k = 1; k < t.length; k++) {
-    let i = t[k - 1];
-    let u = t[k];
-    if (i && u) linkCells(boxCanvas, i, u, line);
+function linkPath(boxCanvas, points, line = "solid") {
+  for (let k = 1; k < points.length; k++) {
+    let previous = points[k - 1];
+    let current = points[k];
+    if (previous && current) linkCells(boxCanvas, previous, current, line);
   }
 }
 export {

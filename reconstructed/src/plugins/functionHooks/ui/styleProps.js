@@ -9,6 +9,7 @@
  * attribution: placement 24
  */
 import { BORDER_STYLE_NAMES } from "../../../ink/render-border.js";
+import { deferInit } from "../../../../runtime/deferred-init.js";
 
 //@ chunk-4121qate.js:109038-109061 placement
 /**
@@ -31,56 +32,71 @@ var VIRTUALTEXT = "virtualText";
 /**
  * 文本样式键集合
  */
-var TEXT_STYLE_KEYS = [...DECORATION_EDGE_KEYS, ...TEXT_STYLE_PROPS, VIRTUALTEXT];
+var TEXT_STYLE_KEYS; // deferred: uses DECORATION_EDGE_KEYS of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-4121qate.js:109173", () => {
+  TEXT_STYLE_KEYS = [...DECORATION_EDGE_KEYS, ...TEXT_STYLE_PROPS, VIRTUALTEXT];
+});
 //@ chunk-4121qate.js:109198-109288 placement
 /**
  * 基本类型或空串
  */
-function primitiveOrEmpty(e) {
-  return typeof e === "string" || typeof e === "number" || typeof e === "boolean" ? e : "";
+function primitiveOrEmpty(value) {
+  return typeof value === "string" || typeof value === "number" || typeof value === "boolean" ? value : "";
 }
 //@ chunk-4121qate.js:109288-109406 placement
-var BOOLEAN_PROPS = new Set([
-  "dimColor",
-  "bold",
-  "italic",
-  "underline",
-  "strikethrough",
-  "inverse",
-  "borderDimColor",
-  "mono",
-  "tabular",
-]);
-//@ chunk-4121qate.js:109406-109416 placement
-var BORDER_ROWS = 2;
-//@ chunk-4121qate.js:109416-109437 placement
-var BORDER_STYLES = new Set(BORDER_STYLE_NAMES);
-//@ chunk-4121qate.js:109437-109496 placement
-var COLOR_PROPS = new Set(["color", "backgroundColor", "borderColor"]);
-//@ chunk-4121qate.js:109496-109731 placement
-var HOVER_PROPS = {
-  Box: new Set([
-    "borderStyle",
-    "borderColor",
-    "borderDimColor",
-    "backgroundColor",
-    "display",
-    "top",
-    "left",
-    "right",
-    "bottom",
-  ]),
-  Text: new Set([
-    "color",
-    "backgroundColor",
+var BOOLEAN_PROPS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-4121qate.js:109288", () => {
+  BOOLEAN_PROPS = new Set([
     "dimColor",
     "bold",
     "italic",
     "underline",
     "strikethrough",
     "inverse",
-  ]),
-};
+    "borderDimColor",
+    "mono",
+    "tabular",
+  ]);
+});
+//@ chunk-4121qate.js:109406-109416 placement
+var BORDER_ROWS = 2;
+//@ chunk-4121qate.js:109416-109437 placement
+var BORDER_STYLES; // deferred: uses BORDER_STYLE_NAMES (../../../ink/render-border.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-4121qate.js:109416", () => {
+  BORDER_STYLES = new Set(BORDER_STYLE_NAMES);
+});
+//@ chunk-4121qate.js:109437-109496 placement
+var COLOR_PROPS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-4121qate.js:109437", () => {
+  COLOR_PROPS = new Set(["color", "backgroundColor", "borderColor"]);
+});
+//@ chunk-4121qate.js:109496-109731 placement
+var HOVER_PROPS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-4121qate.js:109496", () => {
+  HOVER_PROPS = {
+    Box: new Set([
+      "borderStyle",
+      "borderColor",
+      "borderDimColor",
+      "backgroundColor",
+      "display",
+      "top",
+      "left",
+      "right",
+      "bottom",
+    ]),
+    Text: new Set([
+      "color",
+      "backgroundColor",
+      "dimColor",
+      "bold",
+      "italic",
+      "underline",
+      "strikethrough",
+      "inverse",
+    ]),
+  };
+});
 //@ chunk-4121qate.js:109731-109846 placement
 var SPACE_CELLS = {
   xs: {
@@ -105,8 +121,8 @@ var SPACE_CELLS = {
   },
 };
 //@ chunk-4121qate.js:109846-109911 placement
-function isSpaceStep(e) {
-  return typeof e === "string" && Object.hasOwn(SPACE_CELLS, e);
+function isSpaceStep(value) {
+  return typeof value === "string" && Object.hasOwn(SPACE_CELLS, value);
 }
 //@ chunk-4121qate.js:109911-110180 placement
 var SPACE_AXIS = {
@@ -132,108 +148,131 @@ var SPACE_PAIRS = {
   padding: ["paddingX", "paddingY"],
 };
 //@ chunk-4121qate.js:110278-110337 placement
-var SPACE_PROPS = new Set([...Object.keys(SPACE_AXIS), ...Object.keys(SPACE_PAIRS)]);
+var SPACE_PROPS; // deferred: uses SPACE_AXIS of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-4121qate.js:110278", () => {
+  SPACE_PROPS = new Set([...Object.keys(SPACE_AXIS), ...Object.keys(SPACE_PAIRS)]);
+});
 //@ chunk-4121qate.js:110337-110387 placement
-var NUMBER_PROPS = new Set(["flexGrow", "flexShrink", ...SPACE_PROPS]);
+var NUMBER_PROPS; // deferred: uses SPACE_PROPS of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-4121qate.js:110337", () => {
+  NUMBER_PROPS = new Set(["flexGrow", "flexShrink", ...SPACE_PROPS]);
+});
 //@ chunk-4121qate.js:110387-110436 placement
-var OFFSET_PROPS = new Set(["top", "left", "right", "bottom"]);
+var OFFSET_PROPS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-4121qate.js:110387", () => {
+  OFFSET_PROPS = new Set(["top", "left", "right", "bottom"]);
+});
 //@ chunk-4121qate.js:110436-111172 placement = applyFlexStyles (0.426)
-var PROP_VALUES = {
-  flexDirection: new Set(["row", "column", "row-reverse", "column-reverse"]),
-  flexWrap: new Set(["nowrap", "wrap", "wrap-reverse"]),
-  alignItems: new Set(["flex-start", "center", "flex-end", "stretch"]),
-  alignSelf: new Set(["flex-start", "center", "flex-end", "auto"]),
-  justifyContent: new Set([
-    "flex-start",
-    "center",
-    "flex-end",
-    "space-between",
-    "space-around",
-    "space-evenly",
-  ]),
-  overflow: new Set(["visible", "hidden"]),
-  display: new Set(["flex", "none"]),
-  position: new Set(["relative", "absolute"]),
-  dir: new Set(["ltr", "rtl"]),
-  wrap: new Set(["wrap", "end", "middle", "truncate-end", "truncate", "truncate-middle", "truncate-start"]),
-  borderStyle: BORDER_STYLES,
-  size: new Set(["caption", "footnote", "body", "heading", "title"]),
-  weight: new Set(["regular", "medium", "semibold", "bold"]),
-};
+var PROP_VALUES; // deferred: uses BORDER_STYLES of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-4121qate.js:110436", () => {
+  PROP_VALUES = {
+    flexDirection: new Set(["row", "column", "row-reverse", "column-reverse"]),
+    flexWrap: new Set(["nowrap", "wrap", "wrap-reverse"]),
+    alignItems: new Set(["flex-start", "center", "flex-end", "stretch"]),
+    alignSelf: new Set(["flex-start", "center", "flex-end", "auto"]),
+    justifyContent: new Set([
+      "flex-start",
+      "center",
+      "flex-end",
+      "space-between",
+      "space-around",
+      "space-evenly",
+    ]),
+    overflow: new Set(["visible", "hidden"]),
+    display: new Set(["flex", "none"]),
+    position: new Set(["relative", "absolute"]),
+    dir: new Set(["ltr", "rtl"]),
+    wrap: new Set(["wrap", "end", "middle", "truncate-end", "truncate", "truncate-middle", "truncate-start"]),
+    borderStyle: BORDER_STYLES,
+    size: new Set(["caption", "footnote", "body", "heading", "title"]),
+    weight: new Set(["regular", "medium", "semibold", "bold"]),
+  };
+});
 //@ chunk-4121qate.js:111172-111808 placement
-var RENDER_PROPS = {
-  Box: new Set([
-    "flexDirection",
-    "flexGrow",
-    "flexShrink",
-    "flexWrap",
-    "alignItems",
-    "alignSelf",
-    "justifyContent",
-    "gap",
-    "columnGap",
-    "rowGap",
-    "width",
-    "height",
-    "minWidth",
-    "minHeight",
-    "margin",
-    "marginX",
-    "marginY",
-    "marginTop",
-    "marginBottom",
-    "marginLeft",
-    "marginRight",
-    "padding",
-    "paddingX",
-    "paddingY",
-    "paddingTop",
-    "paddingBottom",
-    "paddingLeft",
-    "paddingRight",
-    "borderStyle",
-    "borderColor",
-    "borderDimColor",
-    "backgroundColor",
-    "overflow",
-    "display",
-    "position",
-    "top",
-    "left",
-    "right",
-    "bottom",
-  ]),
-  Text: new Set([
-    "color",
-    "backgroundColor",
-    "dimColor",
-    "size",
-    "weight",
-    "mono",
-    "tabular",
-    "bold",
-    "italic",
-    "underline",
-    "strikethrough",
-    "inverse",
-    "dir",
-    "wrap",
-  ]),
-};
+var RENDER_PROPS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-4121qate.js:111172", () => {
+  RENDER_PROPS = {
+    Box: new Set([
+      "flexDirection",
+      "flexGrow",
+      "flexShrink",
+      "flexWrap",
+      "alignItems",
+      "alignSelf",
+      "justifyContent",
+      "gap",
+      "columnGap",
+      "rowGap",
+      "width",
+      "height",
+      "minWidth",
+      "minHeight",
+      "margin",
+      "marginX",
+      "marginY",
+      "marginTop",
+      "marginBottom",
+      "marginLeft",
+      "marginRight",
+      "padding",
+      "paddingX",
+      "paddingY",
+      "paddingTop",
+      "paddingBottom",
+      "paddingLeft",
+      "paddingRight",
+      "borderStyle",
+      "borderColor",
+      "borderDimColor",
+      "backgroundColor",
+      "overflow",
+      "display",
+      "position",
+      "top",
+      "left",
+      "right",
+      "bottom",
+    ]),
+    Text: new Set([
+      "color",
+      "backgroundColor",
+      "dimColor",
+      "size",
+      "weight",
+      "mono",
+      "tabular",
+      "bold",
+      "italic",
+      "underline",
+      "strikethrough",
+      "inverse",
+      "dir",
+      "wrap",
+    ]),
+  };
+});
 //@ chunk-4121qate.js:111808-111820 placement
 var SIZE_LIMIT = 1e4;
 //@ chunk-4121qate.js:111820-111879 placement = applyDimensionStyles (0.373)
-var SIZE_PROPS = new Set(["width", "height", "minWidth", "minHeight"]);
+var SIZE_PROPS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-4121qate.js:111820", () => {
+  SIZE_PROPS = new Set(["width", "height", "minWidth", "minHeight"]);
+});
 //@ chunk-4121qate.js:111879-111944 placement
-var CONCEALING_PROPS = new Set(["display", "overflow", "position", ...SIZE_PROPS, ...OFFSET_PROPS]);
+var CONCEALING_PROPS; // deferred: uses SIZE_PROPS of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-4121qate.js:111879", () => {
+  CONCEALING_PROPS = new Set(["display", "overflow", "position", ...SIZE_PROPS, ...OFFSET_PROPS]);
+});
 //@ chunk-4121qate.js:111944-112922 placement
 /**
  * 校验声明式 UI 的样式属性值（枚举、尺寸、间距 token、定位整数、颜色、布尔），不合法返回原因文字。注意：这不是 Ink 的 styles.ts。
  */
 function propValueProblem(prop, value) {
-  let r = PROP_VALUES[prop];
-  if (r !== undefined)
-    return typeof value === "string" && r.has(value) ? undefined : `must be one of ${[...r].join(", ")}`;
+  let allowed = PROP_VALUES[prop];
+  if (allowed !== undefined)
+    return typeof value === "string" && allowed.has(value)
+      ? undefined
+      : `must be one of ${[...allowed].join(", ")}`;
   if (SIZE_PROPS.has(prop)) {
     if (typeof value === "number")
       return Number.isFinite(value) && value >= 0 && value <= SIZE_LIMIT
@@ -244,10 +283,11 @@ function propValueProblem(prop, value) {
       : "must be a number or a percentage";
   }
   if (NUMBER_PROPS.has(prop)) {
-    let n = typeof value === "number" && Number.isFinite(value) && Math.abs(value) <= SIZE_LIMIT;
-    let s = SPACE_PROPS.has(prop);
-    if (n || (s && isSpaceStep(value))) return;
-    return s
+    let isNumberInRange =
+      typeof value === "number" && Number.isFinite(value) && Math.abs(value) <= SIZE_LIMIT;
+    let allowsSpaceStep = SPACE_PROPS.has(prop);
+    if (isNumberInRange || (allowsSpaceStep && isSpaceStep(value))) return;
+    return allowsSpaceStep
       ? `must be a number of cells from -${SIZE_LIMIT} to ${SIZE_LIMIT}, or one of ${Object.keys(SPACE_CELLS).join(", ")}`
       : `must be a finite number within ${SIZE_LIMIT}`;
   }

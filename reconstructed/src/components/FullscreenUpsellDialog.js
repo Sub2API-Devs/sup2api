@@ -34,7 +34,7 @@ import { isScreenReaderMode } from "../utils/accessibility/screenReader.js";
 import { getInitialSettings_2, updateSettingsForSource } from "../utils/settings/settings.js";
 import { getGlobalConfig } from "../utils/config.js";
 import { hasFullscreenBootFailures } from "../utils/fullscreenBootGuard.js";
-import { w } from "../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import { useTheme_2 } from "./design-system/ThemeProvider.js";
 import { getFullscreenUpsellImpression, setTrialFlag } from "./FullscreenUpsellTrial.js";
 import { logEvent } from "../services/analytics/index.js";
@@ -47,7 +47,7 @@ import { Dialog } from "./design-system/Dialog.js";
 import { withHideWhile } from "./dialogs/dialogRequests.js";
 import { AUTO_DEFAULT_NUDGE, FULLSCREEN_UPSELL } from "./nudges/nudgeIds.js";
 import { DoctorLazy } from "../cli/handlers/util.js";
-import { u, _enum } from "../../vendor/zod/v4/classic/schemas.js";
+import { objectSchema, _enum } from "../../vendor/zod/v4/classic/schemas.js";
 import { PERMISSION_MODES } from "../types/permissions.js";
 import { waitForFalse } from "../commands/terminalSetup/index.js";
 import { resolveAutoDefaultNudge } from "./AutoDefaultNudge.js";
@@ -56,9 +56,10 @@ import { saveResumePoint } from "../utils/processRelaunch.js";
 import { buildRelaunchArgs, buildPermissionAndAgentArgs } from "../services/daemon/relaunchArgs.js";
 import { relaunchInto, relaunchFailedMessage } from "../commands/tui/tui.js";
 import { logError } from "../utils/log.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-18hwfzwa.js:151490-151577 placement
-function renderBulletLine(oo) {
+function renderBulletLine(line) {
   return jsxProd_default_2(
     Text,
     {
@@ -68,10 +69,10 @@ function renderBulletLine(oo) {
           children: "\xB7",
         }),
         " ",
-        oo,
+        line,
       ],
     },
-    oo,
+    line,
   );
 }
 //@ chunk-18hwfzwa.js:151577-151934 placement
@@ -93,50 +94,50 @@ function shouldOfferFullscreenUpsell() {
 }
 //@ chunk-18hwfzwa.js:151934-153416 placement
 function FullscreenUpsellDialog(props) {
-  let $ = w(16);
+  let $ = useMemoCache(16);
   let { answer } = props;
   let { storageV5 } = useTheme_2();
-  let ee;
+  let logImpression;
   if ($[0] !== storageV5) {
-    ee = () => {
+    logImpression = () => {
       let impression = getFullscreenUpsellImpression(storageV5);
       logEvent("tengu_fullscreen_upsell_dialog_shown", {
         impression,
       });
     };
     $[0] = storageV5;
-    $[1] = ee;
-  } else ee = $[1];
-  useOnFirstReveal("impression", ee);
+    $[1] = logImpression;
+  } else logImpression = $[1];
+  useOnFirstReveal("impression", logImpression);
   let { answer: answer_2, refused, attempts } = useRefusableAnswer(answer);
-  let We;
+  let onConfirm;
   if ($[2] !== answer_2) {
-    We = function ze() {
+    onConfirm = function acceptAnswer() {
       answer_2("accept");
     };
     $[2] = answer_2;
-    $[3] = We;
-  } else We = $[3];
-  let onConfirm = We;
-  let Xe;
+    $[3] = onConfirm;
+  } else onConfirm = $[3];
+  let onConfirm_2 = onConfirm;
+  let onCancel;
   if ($[4] !== answer_2) {
-    Xe = function rt() {
+    onCancel = function dismissAnswer() {
       answer_2("dismiss");
     };
     $[4] = answer_2;
-    $[5] = Xe;
-  } else Xe = $[5];
-  let onCancel = Xe;
-  let kt;
+    $[5] = onCancel;
+  } else onCancel = $[5];
+  let onCancel_2 = onCancel;
+  let syncedOutput;
   if ($[6] === MEMO_CACHE_SENTINEL) {
-    kt = isSynchronizedOutputLikely();
-    $[6] = kt;
-  } else kt = $[6];
-  let At = !kt;
+    syncedOutput = isSynchronizedOutputLikely();
+    $[6] = syncedOutput;
+  } else syncedOutput = $[6];
+  let flickerRisk = !syncedOutput;
   const title = null?.title ?? "Try the new fullscreen renderer?";
-  let Ot;
+  let bullets;
   if ($[7] === MEMO_CACHE_SENTINEL) {
-    Ot = null
+    bullets = null
       ? jsxProd_default_2(Fragment, {
           children: [
             jsxProd_default(Box, {
@@ -155,7 +156,7 @@ function FullscreenUpsellDialog(props) {
               dimColor: true,
               children: [
                 "\xB7 Flicker-free output",
-                At ? " \u2014 fixes the flashing you see during long responses" : "",
+                flickerRisk ? " \u2014 fixes the flashing you see during long responses" : "",
               ],
             }),
             jsxProd_default(Text, {
@@ -168,105 +169,111 @@ function FullscreenUpsellDialog(props) {
             }),
           ],
         });
-    $[7] = Ot;
-  } else Ot = $[7];
+    $[7] = bullets;
+  } else bullets = $[7];
   const focus = refused === "dismiss" ? "cancel" : "confirm";
   let children;
-  if ($[8] !== onConfirm || $[9] !== attempts || $[10] !== onCancel || $[11] !== focus) {
+  if ($[8] !== onConfirm_2 || $[9] !== attempts || $[10] !== onCancel_2 || $[11] !== focus) {
     children = jsxProd_default_2(Box, {
       flexDirection: "column",
       gap: 1,
       children: [
-        Ot,
+        bullets,
         jsxProd_default(
           ConfirmSelect,
           {
             focus,
             confirmLabel: null?.confirmLabel ?? "Yes, try it",
             cancelLabel: "Not now",
-            onConfirm,
-            onCancel,
+            onConfirm: onConfirm_2,
+            onCancel: onCancel_2,
           },
           attempts,
         ),
       ],
     });
-    $[8] = onConfirm;
+    $[8] = onConfirm_2;
     $[9] = attempts;
-    $[10] = onCancel;
+    $[10] = onCancel_2;
     $[11] = focus;
     $[12] = children;
   } else children = $[12];
-  let Lt;
-  if ($[13] !== onCancel || $[14] !== children) {
-    Lt = jsxProd_default(Dialog, {
+  let dialog;
+  if ($[13] !== onCancel_2 || $[14] !== children) {
+    dialog = jsxProd_default(Dialog, {
       title,
-      onCancel,
+      onCancel: onCancel_2,
       children,
     });
-    $[13] = onCancel;
+    $[13] = onCancel_2;
     $[14] = children;
-    $[15] = Lt;
-  } else Lt = $[15];
-  return Lt;
+    $[15] = dialog;
+  } else dialog = $[15];
+  return dialog;
 }
 //@ chunk-18hwfzwa.js:153416-153575 placement
-var AUTO_DEFAULT_NUDGE_DIALOG = withHideWhile({
-  kind: AUTO_DEFAULT_NUDGE,
-  payload: DoctorLazy(() =>
-    u({
-      currentMode: _enum(PERMISSION_MODES),
-    }),
-  ),
-  result: DoctorLazy(() => _enum(["accept", "decline", "cancelled"])),
-  default: "cancelled",
-  hideWhile: ["panel", "draft"],
+var AUTO_DEFAULT_NUDGE_DIALOG; // deferred: uses DoctorLazy (../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-18hwfzwa.js:153416", () => {
+  AUTO_DEFAULT_NUDGE_DIALOG = withHideWhile({
+    kind: AUTO_DEFAULT_NUDGE,
+    payload: DoctorLazy(() =>
+      objectSchema({
+        currentMode: _enum(PERMISSION_MODES),
+      }),
+    ),
+    result: DoctorLazy(() => _enum(["accept", "decline", "cancelled"])),
+    default: "cancelled",
+    hideWhile: ["panel", "draft"],
+  });
 });
 //@ chunk-18hwfzwa.js:153575-153747 placement
-async function openAutoDefaultNudge(requestDialog, x, D, L) {
-  await waitForFalse(D.activity, D.signal);
-  let ee = await requestDialog(
+async function openAutoDefaultNudge(requestDialog, currentMode, options, storageV5) {
+  await waitForFalse(options.activity, options.signal);
+  let answer = await requestDialog(
     AUTO_DEFAULT_NUDGE_DIALOG,
     {
-      currentMode: x,
+      currentMode,
     },
     {
       place: "under",
-      signal: D.signal,
+      signal: options.signal,
     },
   );
-  if (ee === "cancelled" || isUnattendedInteractiveSession()) return;
-  resolveAutoDefaultNudge(ee, x, L);
+  if (answer === "cancelled" || isUnattendedInteractiveSession()) return;
+  resolveAutoDefaultNudge(answer, currentMode, storageV5);
 }
 //@ chunk-18hwfzwa.js:169743-169856 placement
-var FULLSCREEN_UPSELL_DIALOG = withHideWhile({
-  kind: FULLSCREEN_UPSELL,
-  payload: DoctorLazy(() => u({})),
-  result: DoctorLazy(() => _enum(["accept", "dismiss", "cancelled"])),
-  default: "cancelled",
+var FULLSCREEN_UPSELL_DIALOG; // deferred: uses DoctorLazy (../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-18hwfzwa.js:169743", () => {
+  FULLSCREEN_UPSELL_DIALOG = withHideWhile({
+    kind: FULLSCREEN_UPSELL,
+    payload: DoctorLazy(() => objectSchema({})),
+    result: DoctorLazy(() => _enum(["accept", "dismiss", "cancelled"])),
+    default: "cancelled",
+  });
 });
 //@ chunk-18hwfzwa.js:169856-169932 placement
-async function openFullscreenUpsell(requestDialog, x) {
-  let D = await requestDialog(
+async function openFullscreenUpsell(requestDialog, services) {
+  let answer = await requestDialog(
     FULLSCREEN_UPSELL_DIALOG,
     {},
     {
       place: "under",
     },
   );
-  await resolveFullscreenUpsell(D, x);
+  await resolveFullscreenUpsell(answer, services);
 }
 //@ chunk-18hwfzwa.js:169932-170110 placement
-async function resolveFullscreenUpsell(h, x) {
-  switch (h) {
+async function resolveFullscreenUpsell(answer, services) {
+  switch (answer) {
     case "cancelled":
       return;
     case "dismiss":
-      setTrialFlag(x.storageV5);
+      setTrialFlag(services.storageV5);
       logEvent("tengu_fullscreen_upsell_dialog_dismissed", {});
       return;
     case "accept":
-      await acceptFullscreenUpsell(x);
+      await acceptFullscreenUpsell(services);
       return;
   }
 }
@@ -331,11 +338,11 @@ async function acceptFullscreenUpsell({
     );
     if (error_2) logError(error_2);
     else setTrialFlag(storageV5);
-    let rt = error instanceof Error ? error.message : String(error);
+    let errorText = error instanceof Error ? error.message : String(error);
     addNotification({
       key: "fullscreen-upsell-done",
       kind: "feedback",
-      text: error_2 ? `Couldn't switch renderers \u2014 ${rt}.` : relaunchFailedMessage(error),
+      text: error_2 ? `Couldn't switch renderers \u2014 ${errorText}.` : relaunchFailedMessage(error),
       priority: "immediate",
       timeoutMs: 12000,
     });

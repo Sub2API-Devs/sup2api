@@ -11,7 +11,14 @@
 import { join } from "path";
 import { realpath, readdir } from "fs/promises";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, array, string, record, unknown, M } from "../../../vendor/zod/v4/classic/schemas.js";
+import {
+  objectSchema,
+  array,
+  stringSchema,
+  record,
+  unknown,
+  booleanSchema,
+} from "../../../vendor/zod/v4/classic/schemas.js";
 import { jsonStringifyRaw } from "../../utils/slowOperations.js";
 import { isCustomizationDisabled } from "../../utils/settings/customizationDisabled.js";
 import { clearAgentDefinitionsCache, parseAgentFromMarkdown } from "../../tools/AgentTool/loadAgentsDir.js";
@@ -34,17 +41,17 @@ var MAX_AGENT_VALUES = 32768;
 var MAX_AGENTS = 2000;
 var MAX_AGENT_DEPTH = 1000;
 var listProjectAgentsResultSchema = DoctorLazy(() =>
-  u({
+  objectSchema({
     agents: array(
-      u({
-        filePath: string(),
-        baseDir: string(),
-        frontmatter: record(string(), unknown()),
-        content: string(),
-        fromAdditionalDirectory: M().optional(),
+      objectSchema({
+        filePath: stringSchema(),
+        baseDir: stringSchema(),
+        frontmatter: record(stringSchema(), unknown()),
+        content: stringSchema(),
+        fromAdditionalDirectory: booleanSchema().optional(),
       }),
     ).max(MAX_AGENTS),
-    cut: M(),
+    cut: booleanSchema(),
   }),
 );
 var UNBOUNDED_LIMITS = {
@@ -53,39 +60,40 @@ var UNBOUNDED_LIMITS = {
   levels: 1 / 0,
 };
 //@ chunk-wy9dbk5f.js:32560-33069 placement = reorderBidi (0.534)
-function measureJsonSize(e, r = 0, n = new Map()) {
-  if (typeof e !== "object" || e === null)
+function measureJsonSize(value, level = 0, seen = new Map()) {
+  if (typeof value !== "object" || value === null)
     return {
-      bytes: Buffer.byteLength(jsonStringifyRaw(e)),
+      bytes: Buffer.byteLength(jsonStringifyRaw(value)),
       values: 0,
       levels: 0,
     };
-  let s = n.get(e);
-  if (r + (s?.levels ?? 1) > MAX_AGENT_DEPTH) return UNBOUNDED_LIMITS;
-  if (s !== undefined) return s;
-  n.set(e, UNBOUNDED_LIMITS);
-  let a = Array.isArray(e) ? e : Object.values(e);
-  let max = Math.max(a.length + 1, 2);
-  if (a !== e) for (let key of Object.keys(e)) max += Buffer.byteLength(jsonStringifyRaw(key)) + 1;
-  let values = a.length;
-  let g = 1;
-  for (let S of a) {
-    let C = measureJsonSize(S, r + 1, n);
-    max += C.bytes;
-    values += C.values;
+  let cached = seen.get(value);
+  if (level + (cached?.levels ?? 1) > MAX_AGENT_DEPTH) return UNBOUNDED_LIMITS;
+  if (cached !== undefined) return cached;
+  seen.set(value, UNBOUNDED_LIMITS);
+  let children = Array.isArray(value) ? value : Object.values(value);
+  let max = Math.max(children.length + 1, 2);
+  if (children !== value)
+    for (let key of Object.keys(value)) max += Buffer.byteLength(jsonStringifyRaw(key)) + 1;
+  let values = children.length;
+  let maxLevels = 1;
+  for (let child of children) {
+    let childSize = measureJsonSize(child, level + 1, seen);
+    max += childSize.bytes;
+    values += childSize.values;
     if (max > MAX_AGENTS_BYTES) return UNBOUNDED_LIMITS;
-    g = Math.max(g, C.levels + 1);
+    maxLevels = Math.max(maxLevels, childSize.levels + 1);
   }
-  let h = {
+  let size = {
     bytes: max,
     values,
-    levels: g,
+    levels: maxLevels,
   };
-  n.set(e, h);
-  return h;
+  seen.set(value, size);
+  return size;
 }
 //@ chunk-wy9dbk5f.js:33069-34460 placement
-async function serveListProjectAgents(e, r, n) {
+async function serveListProjectAgents(input, signal, context) {
   if (isCustomizationDisabled("agents"))
     return {
       summary: "agents are off",
@@ -98,78 +106,92 @@ async function serveListProjectAgents(e, r, n) {
   invalidateCommandNames();
   let hostState = getHostState();
   let markdownScansGivenUp = hostState.markdownScansGivenUp;
-  let markdownFiles = await loadMarkdownFilesCached("agents", getOriginalCwd(), n.toolUseContext().storageV5);
-  r.throwIfAborted();
-  let y = [];
-  let g = 0;
-  let h = 0;
-  let S = hostState.markdownScansGivenUp !== markdownScansGivenUp;
-  let C = [];
+  let markdownFiles = await loadMarkdownFilesCached(
+    "agents",
+    getOriginalCwd(),
+    context.toolUseContext().storageV5,
+  );
+  signal.throwIfAborted();
+  let agents = [];
+  let agentCount = 0;
+  let bytesUsed = 0;
+  let stale = hostState.markdownScansGivenUp !== markdownScansGivenUp;
+  let searchDirs = [];
   if (isSettingSourceEnabled("projectSettings") && !isRestrictedToPluginOnly("agents")) {
-    C.push(...(await getProjectDirsUpToHome("agents", getOriginalCwd())));
-    for (let w of getAdditionalDirectoriesForClaudeMd()) C.push(join(w, ".claude", "agents"));
+    searchDirs.push(...(await getProjectDirsUpToHome("agents", getOriginalCwd())));
+    for (let extraDir of getAdditionalDirectoriesForClaudeMd())
+      searchDirs.push(join(extraDir, ".claude", "agents"));
   }
-  let b = new Set();
-  for (let w of new Set(markdownFiles.map((markdownFile) => markdownFile.baseDir))) b.add(await realpath(w));
-  for (let w of C)
+  let coveredDirs = new Set();
+  for (let baseDir of new Set(markdownFiles.map((markdownFile) => markdownFile.baseDir)))
+    coveredDirs.add(await realpath(baseDir));
+  for (let dir of searchDirs)
     try {
-      let O = b.has(await realpath(w));
-      for (let P of await readdir(w, {
+      let covered = coveredDirs.has(await realpath(dir));
+      for (let entry of await readdir(dir, {
         withFileTypes: true,
       }))
-        S ||= P.name.endsWith(".md") && !P.isDirectory() && !O;
+        stale ||= entry.name.endsWith(".md") && !entry.isDirectory() && !covered;
     } catch (error) {
       if (!isPathAbsent(error)) {
-        S = true;
-        logForDebugging(`ListProjectAgents: ${w} is there and cannot be read: ${getErrnoCode(error)}`, {
+        stale = true;
+        logForDebugging(`ListProjectAgents: ${dir} is there and cannot be read: ${getErrnoCode(error)}`, {
           level: "error",
         });
       }
     }
-  r.throwIfAborted();
-  let R = markdownFiles.toSorted(
-    (w, O) => Number(w.fromAdditionalDirectory ?? false) - Number(O.fromAdditionalDirectory ?? false),
+  signal.throwIfAborted();
+  let agentFiles = markdownFiles.toSorted(
+    (left, right) =>
+      Number(left.fromAdditionalDirectory ?? false) - Number(right.fromAdditionalDirectory ?? false),
   );
-  let x = new Set();
-  for (let w of R) {
-    let { filePath, baseDir, frontmatter, content, source } = w;
+  let seenPaths = new Set();
+  for (let file of agentFiles) {
+    let { filePath, baseDir, frontmatter, content, source } = file;
     if (source !== "projectSettings") continue;
-    let H = {
+    let agentFile = {
       filePath,
       baseDir,
       frontmatter,
       content,
-      ...(w.fromAdditionalDirectory && {
+      ...(file.fromAdditionalDirectory && {
         fromAdditionalDirectory: true,
       }),
     };
-    let Y = measureJsonSize(H);
-    if (Y !== UNBOUNDED_LIMITS && !parseAgentFromMarkdown(filePath, baseDir, frontmatter, content, source)) {
-      if (!x.has(w)) {
-        let Q = {
-          ...w,
+    let size = measureJsonSize(agentFile);
+    if (
+      size !== UNBOUNDED_LIMITS &&
+      !parseAgentFromMarkdown(filePath, baseDir, frontmatter, content, source)
+    ) {
+      if (!seenPaths.has(file)) {
+        let blankFile = {
+          ...file,
           frontmatter: {},
           content: "",
         };
-        x.add(Q);
-        R.push(Q);
+        seenPaths.add(blankFile);
+        agentFiles.push(blankFile);
         continue;
       }
-      if (!S) continue;
+      if (!stale) continue;
     }
-    if (y.length === MAX_AGENTS || g + Y.bytes > MAX_AGENTS_BYTES || h + Y.values + 1 > MAX_AGENT_VALUES) {
-      S = true;
+    if (
+      agents.length === MAX_AGENTS ||
+      agentCount + size.bytes > MAX_AGENTS_BYTES ||
+      bytesUsed + size.values + 1 > MAX_AGENT_VALUES
+    ) {
+      stale = true;
       continue;
     }
-    g += Y.bytes;
-    h += Y.values + 1;
-    y.push(H);
+    agentCount += size.bytes;
+    bytesUsed += size.values + 1;
+    agents.push(agentFile);
   }
   return {
-    summary: `${y.length} agents${S ? ", cut at a limit" : ""}`,
+    summary: `${agents.length} agents${stale ? ", cut at a limit" : ""}`,
     output: {
-      agents: y,
-      cut: S,
+      agents,
+      cut: stale,
     },
   };
 }

@@ -5,41 +5,31 @@
  * pieces: chunk-0rkz0exm.js (3), chunk-edce4vxq.js (1)
  * attribution: esm-layout 2, esm-fingerprint 1, cjs-fingerprint 1
  */
-import { Re, x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS, __toESM } from "../../../../runtime/bun-runtime.js";
+import { require_protocol_http as require_protocol_http_2 } from "../../../@smithy/protocol-http/dist-cjs/index.js";
+import { require_core as require_core_3 } from "../../../@smithy/core/dist-cjs/index.js";
+import { require_property_provider as require_property_provider_2 } from "../../../@smithy/property-provider/dist-cjs/index.js";
 import { require_client as require_client_2 } from "./submodules/client/index.js";
-import { require_protocol_http } from "../../../@smithy/protocol-http/dist-cjs/index.js";
-import { require_core as require_core_2 } from "../../../@smithy/core/dist-cjs/index.js";
-import { require_property_provider } from "../../../@smithy/property-provider/dist-cjs/index.js";
-import { require_signature_v4 } from "../../../@smithy/signature-v4/dist-cjs/index.js";
+import { require_signature_v4 as require_signature_v4_2 } from "../../../@smithy/signature-v4/dist-cjs/index.js";
 import { require_cbor } from "../../../@smithy/core/dist-cjs/submodules/cbor/index.js";
 import { require_schema } from "../../../@smithy/core/dist-cjs/submodules/schema/index.js";
-import { require_client } from "../../../@smithy/core/dist-cjs/submodules/client/index.js";
+import { require_client as require_client_3 } from "../../../@smithy/core/dist-cjs/submodules/client/index.js";
 import { require_protocols as require_protocols_2 } from "../../../@smithy/core/dist-cjs/submodules/protocols/index.js";
 import { require_serde } from "../../../@smithy/core/dist-cjs/submodules/serde/index.js";
 import { base64Module } from "../../credential-provider-web-identity/dist-cjs/index.js";
 import { require_util_utf8 } from "../../../@smithy/util-utf8/dist-cjs/index.js";
 import { require_xml_builder } from "../../xml-builder/dist-cjs/index.js";
 
-//@ chunk-0rkz0exm.js:445-460 esm-layout
-var import_client = Re(require_client_2());
-//@ chunk-0rkz0exm.js:460-500 esm-layout
-var c = require_protocol_http();
-var d = require_core_2();
-var l = require_property_provider();
-var u = require_client_2();
-var S = require_signature_v4();
-//@ chunk-0rkz0exm.js:500-571 esm-fingerprint
-var g_2 = (e) => `AWS_BEARER_TOKEN_${e.replace(/[\s-]/g, "_").toUpperCase()}`;
 //@ chunk-edce4vxq.js:75638-111841 cjs-fingerprint
-var require_core = x(function (cjsExports) {
-  var protocolHttp = require_protocol_http();
-  var core = require_core_2();
-  var propertyProvider = require_property_provider();
+var require_core_2 = __commonJS(function (cjsExports) {
+  var protocolHttp = require_protocol_http_2();
+  var core = require_core_3();
+  var propertyProvider = require_property_provider_2();
   var client = require_client_2();
-  var signatureV4 = require_signature_v4();
+  var signatureV4 = require_signature_v4_2();
   var cbor = require_cbor();
   var schema = require_schema();
-  var smithyClient = require_client();
+  var smithyClient = require_client_3();
   var protocols = require_protocols_2();
   var serde = require_serde();
   var utilBase64 = base64Module();
@@ -97,8 +87,8 @@ More information can be found at: https://a.co/74kJMmI`);
   var validateSigningProperties = async (signingProperties) => {
     let context = throwSigningPropertyError("context", signingProperties.context);
     let config = throwSigningPropertyError("config", signingProperties.config);
-    let s = context.endpointV2?.properties?.authSchemes?.[0];
-    let signer = await throwSigningPropertyError("signer", config.signer)(s);
+    let authScheme = context.endpointV2?.properties?.authSchemes?.[0];
+    let signer = await throwSigningPropertyError("signer", config.signer)(authScheme);
     let signingRegion = signingProperties?.signingRegion;
     let signingRegionSet = signingProperties?.signingRegionSet;
     let signingName = signingProperties?.signingName;
@@ -425,14 +415,14 @@ More information can be found at: https://a.co/74kJMmI`);
       if (output !== undefined && queryErrorHeader != null) {
         let [Code, Type] = queryErrorHeader.split(";");
         let entries = Object.entries(output);
-        let c = {
+        let errorShape = {
           Code,
           Type,
         };
-        Object.assign(output, c);
-        for (let [k, v] of entries) c[k] = v;
-        delete c.__type;
-        output.Error = c;
+        Object.assign(output, errorShape);
+        for (let [k, v] of entries) errorShape[k] = v;
+        delete errorShape.__type;
+        output.Error = errorShape;
       }
     }
     queryCompatOutput(queryCompatErrorData, errorData) {
@@ -468,14 +458,14 @@ More information can be found at: https://a.co/74kJMmI`);
       );
       let ns = schema.NormalizedSchema.of(errorSchema);
       let message = dataObject.message ?? dataObject.Message ?? "Unknown";
-      let N = new (schema.TypeRegistry.for(errorSchema[1]).getErrorCtor(errorSchema) ?? Error)(message);
+      let error = new (schema.TypeRegistry.for(errorSchema[1]).getErrorCtor(errorSchema) ?? Error)(message);
       let output = {};
       for (let [name, member] of ns.structIterator())
         output[name] = this.deserializer.readValue(member, dataObject[name]);
       if (this.awsQueryCompatible) this.mixin.queryCompatOutput(dataObject, output);
       throw this.mixin.decorateServiceException(
         Object.assign(
-          N,
+          error,
           errorMetadata,
           {
             $fault: ns.getMergedTraits().error,
@@ -878,7 +868,7 @@ More information can be found at: https://a.co/74kJMmI`);
       );
       let ns = schema.NormalizedSchema.of(errorSchema);
       let message = dataObject.message ?? dataObject.Message ?? "Unknown";
-      let N = new (schema.TypeRegistry.for(errorSchema[1]).getErrorCtor(errorSchema) ?? Error)(message);
+      let error = new (schema.TypeRegistry.for(errorSchema[1]).getErrorCtor(errorSchema) ?? Error)(message);
       let output = {};
       for (let [name, member] of ns.structIterator()) {
         let target = member.getMergedTraits().jsonName ?? name;
@@ -887,7 +877,7 @@ More information can be found at: https://a.co/74kJMmI`);
       if (this.awsQueryCompatible) this.mixin.queryCompatOutput(dataObject, output);
       throw this.mixin.decorateServiceException(
         Object.assign(
-          N,
+          error,
           errorMetadata,
           {
             $fault: ns.getMergedTraits().error,
@@ -1001,7 +991,7 @@ More information can be found at: https://a.co/74kJMmI`);
       );
       let ns = schema.NormalizedSchema.of(errorSchema);
       let message = dataObject.message ?? dataObject.Message ?? "Unknown";
-      let N = new (schema.TypeRegistry.for(errorSchema[1]).getErrorCtor(errorSchema) ?? Error)(message);
+      let error = new (schema.TypeRegistry.for(errorSchema[1]).getErrorCtor(errorSchema) ?? Error)(message);
       await this.deserializeHttpMessage(errorSchema, context, response, dataObject);
       let output = {};
       for (let [name, member] of ns.structIterator()) {
@@ -1010,7 +1000,7 @@ More information can be found at: https://a.co/74kJMmI`);
       }
       throw this.mixin.decorateServiceException(
         Object.assign(
-          N,
+          error,
           errorMetadata,
           {
             $fault: ns.getMergedTraits().error,
@@ -1364,7 +1354,7 @@ More information can be found at: https://a.co/74kJMmI`);
         },
       );
       let ns = schema.NormalizedSchema.of(errorSchema);
-      let b = new (schema.TypeRegistry.for(errorSchema[1]).getErrorCtor(errorSchema) ?? Error)(message);
+      let error = new (schema.TypeRegistry.for(errorSchema[1]).getErrorCtor(errorSchema) ?? Error)(message);
       let output = {
         Error: errorData.Error,
       };
@@ -1375,7 +1365,7 @@ More information can be found at: https://a.co/74kJMmI`);
       }
       throw this.mixin.decorateServiceException(
         Object.assign(
-          b,
+          error,
           errorMetadata,
           {
             $fault: ns.getMergedTraits().error,
@@ -1756,7 +1746,7 @@ More information can be found at: https://a.co/74kJMmI`);
         dataObject.message ??
         dataObject.Message ??
         "Unknown";
-      let N = new (schema.TypeRegistry.for(errorSchema[1]).getErrorCtor(errorSchema) ?? Error)(message);
+      let error = new (schema.TypeRegistry.for(errorSchema[1]).getErrorCtor(errorSchema) ?? Error)(message);
       await this.deserializeHttpMessage(errorSchema, context, response, dataObject);
       let output = {};
       for (let [name, member] of ns.structIterator()) {
@@ -1766,7 +1756,7 @@ More information can be found at: https://a.co/74kJMmI`);
       }
       throw this.mixin.decorateServiceException(
         Object.assign(
-          N,
+          error,
           errorMetadata,
           {
             $fault: ns.getMergedTraits().error,
@@ -1821,4 +1811,15 @@ More information can be found at: https://a.co/74kJMmI`);
   cjsExports.state = state;
   cjsExports.validateSigningProperties = validateSigningProperties;
 });
-export { require_core, g_2, import_client };
+//@ chunk-0rkz0exm.js:445-460 esm-layout
+var import_client = __toESM(require_client_2());
+//@ chunk-0rkz0exm.js:460-500 esm-layout
+var require_protocol_http = require_protocol_http_2();
+var require_core = require_core_3();
+var require_property_provider = require_property_provider_2();
+var require_client = require_client_2();
+var require_signature_v4 = require_signature_v4_2();
+//@ chunk-0rkz0exm.js:500-571 esm-fingerprint
+var bearerTokenEnvKey = (signingName) =>
+  `AWS_BEARER_TOKEN_${signingName.replace(/[\s-]/g, "_").toUpperCase()}`;
+export { require_core_2, bearerTokenEnvKey, import_client };

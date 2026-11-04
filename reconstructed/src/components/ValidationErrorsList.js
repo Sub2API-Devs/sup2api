@@ -8,6 +8,8 @@
  * pieces: chunk-s3fw2t2g.js (2), chunk-td6byj4s.js (6)
  * attribution: affinity 1, fingerprint 4, file-local 1, layout 2
  */
+import { createHyperlink } from "../utils/hyperlink.js";
+import { OSC8_PREFIX } from "../ink/screen.js";
 import {
   jsxProd_default,
   jsxProd_default_2,
@@ -15,11 +17,30 @@ import {
 import { TreeConnectors } from "./design-system/TreeConnectors.js";
 import { Text, Box } from "../ink/components/Text.js";
 import { LearnMoreLink } from "./LearnMoreLink.js";
-import { w } from "../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import { cleanForDisplay } from "../utils/stringUtils.js";
-import { createHyperlink } from "../utils/hyperlink.js";
-import { OSC8_PREFIX } from "../ink/screen.js";
 
+//@ chunk-s3fw2t2g.js:1056-1104 affinity
+var URL_RE = /https?:\/\/[^\s"'<>\\\x00-\x1f]+/g;
+var MAX_VALIDATION_TEXT = 1e5;
+//@ chunk-s3fw2t2g.js:1104-1296 fingerprint = ValidationErrorsList (0.308)
+function ValidationErrorsList_2(text, themeName) {
+  if (text.length > MAX_VALIDATION_TEXT) return text;
+  let linkify = (segment) =>
+    segment.replace(URL_RE, (file_0) =>
+      createHyperlink(file_0, undefined, {
+        themeName,
+      }),
+    );
+  if (!text.includes(OSC8_PREFIX)) return linkify(text);
+  return text
+    .split(
+      `
+`,
+    )
+    .map((error_0) => (error_0.includes(OSC8_PREFIX) ? error_0 : linkify(error_0))).join(`
+`);
+}
 //@ chunk-td6byj4s.js:13677-13770 fingerprint = _temp (1)
 function groupErrorsByFile(acc, error) {
   let file = error.file || "(file not specified)";
@@ -38,7 +59,7 @@ function compareByPath(a, b) {
   return (a.path || "").localeCompare(b.path || "");
 }
 //@ chunk-td6byj4s.js:13890-14052 layout = createYogaLayoutNode (1)
-function renderErrorNode(errors, F) {
+function renderErrorNode(errors, key) {
   let nestedTree = buildNestedTree(errors);
   return jsxProd_default(
     TreeConnectors.Node,
@@ -59,7 +80,7 @@ function renderErrorNode(errors, F) {
             children: errors.message,
           }),
     },
-    F,
+    key,
   );
 }
 //@ chunk-td6byj4s.js:14052-14255 fingerprint = _temp3 (1)
@@ -90,7 +111,7 @@ function renderSuggestionPair(pair, index) {
  * 校验错误列表：按文件分组、按路径排序，以树形显示错误，并汇总去重后的修复建议与文档链接。
  */
 function ValidationErrorsList(props) {
-  let $ = w(8);
+  let $ = useMemoCache(8);
   let { errors } = props;
   if (errors.length === 0) {
     return null;
@@ -173,31 +194,10 @@ function buildNestedTree(errors) {
     part !== undefined &&
     !isNaN(parseInt(part, 10))
   ) {
-    let l =
+    let valueLabel =
       typeof errors.invalidValue === "string" ? `"${errors.invalidValue}"` : String(errors.invalidValue);
-    return [...pathParts.slice(0, -1), l].join(".");
+    return [...pathParts.slice(0, -1), valueLabel].join(".");
   }
   return errors.path;
-}
-//@ chunk-s3fw2t2g.js:1056-1104 affinity
-var URL_RE = /https?:\/\/[^\s"'<>\\\x00-\x1f]+/g;
-var MAX_VALIDATION_TEXT = 1e5;
-//@ chunk-s3fw2t2g.js:1104-1296 fingerprint = ValidationErrorsList (0.308)
-function ValidationErrorsList_2(r, themeName) {
-  if (r.length > MAX_VALIDATION_TEXT) return r;
-  let s = (o) =>
-    o.replace(URL_RE, (file_0) =>
-      createHyperlink(file_0, undefined, {
-        themeName,
-      }),
-    );
-  if (!r.includes(OSC8_PREFIX)) return s(r);
-  return r
-    .split(
-      `
-`,
-    )
-    .map((error_0) => (error_0.includes(OSC8_PREFIX) ? error_0 : s(error_0))).join(`
-`);
 }
 export { ValidationErrorsList_2, ValidationErrorsList };

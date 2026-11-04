@@ -36,7 +36,7 @@ import {
 import { logEvent } from "../analytics/index.js";
 import { logError } from "../../utils/log.js";
 import { toError } from "../../utils/errors.js";
-import { u, literal, string } from "../../../vendor/zod/v4/classic/schemas.js";
+import { objectSchema, literal, stringSchema } from "../../../vendor/zod/v4/classic/schemas.js";
 import { streamFallbackWarning, ROOT as ROOT_2, formatZodErrors } from "./streamFallbackWarning.js";
 import {
   getTrackingKey,
@@ -83,6 +83,7 @@ import { HostScoped } from "../../utils/hostScoped.js";
 import { isFirstPartyApiBackend } from "../../utils/model/providers.js";
 import { isEssentialTrafficOnly } from "../../utils/privacyLevel.js";
 import { sleep } from "../../utils/sleep.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:2584360-2585122 placement
 /**
@@ -92,33 +93,33 @@ function seedWireShapeFromRecord(betas, record, model) {
   if (record === undefined || betas.wireShapeSeed?.record === record || !isFoamySpringEnabled()) return;
   try {
     let { systemTurns, toolChangeHeader, inlineTools } = record;
-    let S = undefined;
+    let unusedSeed = undefined;
     if (systemTurns === undefined && toolChangeHeader === undefined && inlineTools === undefined) return;
-    let w = hasContextBeta(betas);
-    let L = [];
-    let G = [];
-    let q = isInlineToolsAllowed();
-    let Z = systemTurns === false && isMidConvSystemForced(model);
-    if (systemTurns === true) L.push(BETA_MID_CONVERSATION_SYSTEM);
-    else if (systemTurns === false && !Z) G.push(BETA_MID_CONVERSATION_SYSTEM);
+    let hadContextBeta = hasContextBeta(betas);
+    let sent = [];
+    let rejected = [];
+    let inlineAllowed = isInlineToolsAllowed();
+    let forcedMidConv = systemTurns === false && isMidConvSystemForced(model);
+    if (systemTurns === true) sent.push(BETA_MID_CONVERSATION_SYSTEM);
+    else if (systemTurns === false && !forcedMidConv) rejected.push(BETA_MID_CONVERSATION_SYSTEM);
     if (toolChangeHeader === true) {
-      L.push(BETA_MID_CONV_TOOL_CHANGE);
-      if (inlineTools === true && q) L.push(BETA_INLINE_TOOLS);
-    } else if (toolChangeHeader === false) G.push(BETA_MID_CONV_TOOL_CHANGE);
-    if (inlineTools === false) G.push(BETA_INLINE_TOOLS);
+      sent.push(BETA_MID_CONV_TOOL_CHANGE);
+      if (inlineTools === true && inlineAllowed) sent.push(BETA_INLINE_TOOLS);
+    } else if (toolChangeHeader === false) rejected.push(BETA_MID_CONV_TOOL_CHANGE);
+    if (inlineTools === false) rejected.push(BETA_INLINE_TOOLS);
     dropWireShapeSeed(betas);
     applyWireShapeSeed(betas, {
       record,
-      sent: L,
-      rejected: G,
+      sent,
+      rejected,
     });
     if (record.systemTurnsAnsweredBy !== undefined)
       betas.systemMessagesAcceptedBy.add(strip1mTagWhereBuiltIn(record.systemTurnsAnsweredBy));
-    if (betas === getStickyBetas()) notifyPerTurnEffortInactive(betas, w);
+    if (betas === getStickyBetas()) notifyPerTurnEffortInactive(betas, hadContextBeta);
     logEvent("tengu_wire_shape_seeded", {
       ...(systemTurns !== undefined && {
         systemTurns,
-        systemTurnsForced: Z,
+        systemTurnsForced: forcedMidConv,
       }),
       ...(toolChangeHeader !== undefined && {
         toolChangeHeader,
@@ -126,7 +127,7 @@ function seedWireShapeFromRecord(betas, record, model) {
       ...(inlineTools !== undefined && {
         inlineTools,
         inlineToolsOffered: isInlineToolsEnabled(),
-        inlineToolsPermitted: q,
+        inlineToolsPermitted: inlineAllowed,
       }),
       ...false,
     });
@@ -140,12 +141,12 @@ function thinkingDropSummary(body) {
   return transformations && parseThinkingDrops(transformations);
 }
 //@ chunk-e6aww6q8.js:2585168-2585321 placement
-function readInputTransformations(e) {
-  return typeof e === "object" &&
-    e !== null &&
-    "input_transformations" in e &&
-    Array.isArray(e.input_transformations)
-    ? e.input_transformations
+function readInputTransformations(body) {
+  return typeof body === "object" &&
+    body !== null &&
+    "input_transformations" in body &&
+    Array.isArray(body.input_transformations)
+    ? body.input_transformations
     : undefined;
 }
 //@ chunk-e6aww6q8.js:2585321-2585782 placement
@@ -153,20 +154,20 @@ function readInputTransformations(e) {
  * 从服务端警告中解析 thinking_dropped 条目，得到消息/块位置与原因类别。
  */
 function parseThinkingDrops(transformations) {
-  let n = u({
+  let schema = objectSchema({
     type: literal("thinking_dropped"),
-    path: string(),
-    reason: string(),
+    path: stringSchema(),
+    reason: stringSchema(),
   });
-  let r = [];
+  let drops = [];
   for (let transformation of transformations) {
-    let h = n.safeParse(transformation);
-    if (!h.success) continue;
-    let { path, reason } = h.data;
+    let parsed = schema.safeParse(transformation);
+    if (!parsed.success) continue;
+    let { path, reason } = parsed.data;
     let match = /^messages\.(\d{1,6})\.content\.(\d{1,6})$/.exec(path);
-    let L = match ?? /^messages\.(\d{1,6})(?:\.|$)/.exec(path);
-    r.push({
-      messageIndex: L ? Number(L[1]) : undefined,
+    let pathMatch = match ?? /^messages\.(\d{1,6})(?:\.|$)/.exec(path);
+    drops.push({
+      messageIndex: pathMatch ? Number(pathMatch[1]) : undefined,
       blockIndex: match ? Number(match[2]) : undefined,
       reason:
         reason === "prefix_binding_mismatch"
@@ -176,11 +177,11 @@ function parseThinkingDrops(transformations) {
             : "other",
     });
   }
-  return r;
+  return drops;
 }
 //@ chunk-e6aww6q8.js:2585782-2585839 placement
-function xxhashBase36(e) {
-  return Bun.hash.xxHash64(e).toString(36);
+function xxhashBase36(text) {
+  return Bun.hash.xxHash64(text).toString(36);
 }
 //@ chunk-e6aww6q8.js:2585839-2585892 placement
 /**
@@ -196,49 +197,50 @@ var THINKING_DROP_REASON_RANK = {
  * 汇总被丢弃的思考块：去重已报告的块，统计块数、轮数、原因与首末位置。
  */
 function summarizeThinkingDrops(drops, blockKeyAt, isMain, seen) {
-  let h;
-  let y = new Set();
-  let S = [];
-  let w = {};
-  let L = new Set();
+  let summary;
+  let turns = new Set();
+  let blockHashes = [];
+  let reasonCounts = {};
+  let seenKeys = new Set();
   for (let { messageIndex, blockIndex, reason } of drops) {
     if (messageIndex === undefined || blockIndex === undefined) continue;
-    let Se = {
+    let position = {
       messageIndex,
       blockIndex,
     };
-    let ke = blockKeyAt(Se);
-    if (ke === undefined) continue;
-    let we = xxhashBase36(ke);
-    let Ee = `*:${we}`;
-    let Ae = isMain ? `main:${we}` : Ee;
-    if (L.has(Ae) || seen.get(Ae)) continue;
-    L.add(Ae).add(Ee);
-    S.push(we);
-    y.add(messageIndex);
-    w[reason] = (w[reason] ?? 0) + 1;
-    if (h === undefined) {
-      h = {
+    let blockKey = blockKeyAt(position);
+    if (blockKey === undefined) continue;
+    let hash = xxhashBase36(blockKey);
+    let anyKey = `*:${hash}`;
+    let key = isMain ? `main:${hash}` : anyKey;
+    if (seenKeys.has(key) || seen.get(key)) continue;
+    seenKeys.add(key).add(anyKey);
+    blockHashes.push(hash);
+    turns.add(messageIndex);
+    reasonCounts[reason] = (reasonCounts[reason] ?? 0) + 1;
+    if (summary === undefined) {
+      summary = {
         blockCount: 1,
         turnCount: 1,
         reason,
-        first: Se,
-        last: Se,
+        first: position,
+        last: position,
       };
       continue;
     }
-    h.blockCount++;
-    if (THINKING_DROP_REASON_RANK[reason] > THINKING_DROP_REASON_RANK[h.reason]) h.reason = reason;
-    if (isBeforeBlock(Se, h.first)) h.first = Se;
-    if (isBeforeBlock(h.last, Se)) h.last = Se;
+    summary.blockCount++;
+    if (THINKING_DROP_REASON_RANK[reason] > THINKING_DROP_REASON_RANK[summary.reason])
+      summary.reason = reason;
+    if (isBeforeBlock(position, summary.first)) summary.first = position;
+    if (isBeforeBlock(summary.last, position)) summary.last = position;
   }
-  if (h === undefined) return;
-  h.turnCount = y.size;
-  h.reasonCounts = w;
+  if (summary === undefined) return;
+  summary.turnCount = turns.size;
+  summary.reasonCounts = reasonCounts;
   return {
-    drops: h,
-    blockHashes: S,
-    seenKeys: [...L],
+    drops: summary,
+    blockHashes,
+    seenKeys: [...seenKeys],
   };
 }
 //@ chunk-e6aww6q8.js:2586534-2587915 placement
@@ -262,33 +264,34 @@ function reportThinkingDrop({
     if (transformations === undefined) return;
     let bindingDrops = streamFallbackWarning().bindingDrops;
     let trackingKey = getTrackingKey(querySource, agentId);
-    let ke = `${getSessionId()}:${trackingKey ?? "*"}`;
-    let we = bindingDrops.threadsRead.get(ke) !== true;
+    let threadKey = `${getSessionId()}:${trackingKey ?? "*"}`;
+    let firstReport = bindingDrops.threadsRead.get(threadKey) !== true;
     let isMain = agentId === undefined && classifyQuerySource(querySource) === "main";
-    let Ae = we ? [...carriedBlockHashes()] : [];
+    let carriedHashes = firstReport ? [...carriedBlockHashes()] : [];
     let seen =
-      transformations.length > 0 || Ae.length > 0
+      transformations.length > 0 || carriedHashes.length > 0
         ? (bindingDrops.seenBlocks ??= new LRUCache({
             max: 40000,
           }))
         : undefined;
-    for (let ze of Ae) {
-      if (isMain) seen?.set(`main:${ze}`, true);
-      seen?.set(`*:${ze}`, true);
+    for (let hash of carriedHashes) {
+      if (isMain) seen?.set(`main:${hash}`, true);
+      seen?.set(`*:${hash}`, true);
     }
-    let Me = seen && summarizeThinkingDrops(parseThinkingDrops(transformations), blockKeyAt, isMain, seen);
-    let We;
-    if (seen && Me) {
-      let { drops, blockHashes, seenKeys } = Me;
-      let nt = countThinkingSent();
+    let summary =
+      seen && summarizeThinkingDrops(parseThinkingDrops(transformations), blockKeyAt, isMain, seen);
+    let report;
+    if (seen && summary) {
+      let { drops, blockHashes, seenKeys } = summary;
+      let sent = countThinkingSent();
       let pendingChangeSummary = getPendingChangeSummary(querySource, agentId);
       logEvent("tengu_thinking_drop", {
         query_source: agentTypeForTelemetry(querySource),
         model: telemetrySafeModelName(model),
         request_id: sanitizeMarkName(requestId) ?? lit_2("unknown"),
         solicited,
-        thinking_blocks_sent: nt.blocksSent,
-        thinking_turns_sent: nt.turnsSent,
+        thinking_blocks_sent: sent.blocksSent,
+        thinking_turns_sent: sent.turnsSent,
         dropped_reason: fromEnum(drops.reason),
         newly_dropped_block_count: drops.blockCount,
         newly_dropped_turn_count: drops.turnCount,
@@ -296,7 +299,7 @@ function reportThinkingDrop({
         failing_block_index: drops.first.blockIndex,
         last_failing_message_index: drops.last.messageIndex,
         last_failing_block_index: drops.last.blockIndex,
-        first_report_for_thread_in_process: we,
+        first_report_for_thread_in_process: firstReport,
         client_change_kinds: pendingChangeSummary.kinds,
         first_changed_message_index: pendingChangeSummary.firstChangedMessageIndex,
         client_baseline: pendingChangeSummary.baseline,
@@ -304,25 +307,26 @@ function reportThinkingDrop({
         context_compacted: fromEnumOpt(contextCompactedKind),
       });
       for (let seenKey of seenKeys) seen.set(seenKey, true);
-      We = {
+      report = {
         drops,
         blockHashes,
-        sent: nt,
-        firstReport: we,
+        sent,
+        firstReport,
         change: pendingChangeSummary,
       };
     }
-    bindingDrops.threadsRead.set(ke, true);
-    return We;
+    bindingDrops.threadsRead.set(threadKey, true);
+    return report;
   } catch (error) {
     logError(error);
     return;
   }
 }
 //@ chunk-e6aww6q8.js:2587915-2588030 placement
-function isBeforeBlock(e, n) {
+function isBeforeBlock(left, right) {
   return (
-    e.messageIndex < n.messageIndex || (e.messageIndex === n.messageIndex && e.blockIndex < n.blockIndex)
+    left.messageIndex < right.messageIndex ||
+    (left.messageIndex === right.messageIndex && left.blockIndex < right.blockIndex)
   );
 }
 //@ chunk-e6aww6q8.js:2588030-2588056 placement
@@ -350,18 +354,18 @@ function threadDropRecreate() {
   return streamFallbackWarning().threadDropRecreate;
 }
 //@ chunk-e6aww6q8.js:2588306-2588597 placement
-function touchThreadHealState(e) {
-  let n = threadDropRecreate();
-  let r = n.get(e);
-  if (r === undefined) {
-    if (n.size >= MAX_TETHER_KEYS) {
-      for (let key of n.keys())
+function touchThreadHealState(key) {
+  let states = threadDropRecreate();
+  let state = states.get(key);
+  if (state === undefined) {
+    if (states.size >= MAX_TETHER_KEYS) {
+      for (let key of states.keys())
         if (key !== ROOT_2) {
-          n.delete(key);
+          states.delete(key);
           break;
         }
     }
-    r = {
+    state = {
       mintedOnContinue: new Map(),
       continuesServed: 0,
       createdForDrop: false,
@@ -370,9 +374,9 @@ function touchThreadHealState(e) {
       reportUnmatched: false,
       lastDispatchHealed: false,
     };
-  } else n.delete(e);
-  n.set(e, r);
-  return r;
+  } else states.delete(key);
+  states.set(key, state);
+  return state;
 }
 //@ chunk-e6aww6q8.js:2588597-2588990 placement
 /**
@@ -383,37 +387,37 @@ function recordThreadDispatch(threadKey, dispatch) {
     threadDropRecreate().delete(formatZodErrors(threadKey));
     return;
   }
-  let r = touchThreadHealState(formatZodErrors(threadKey));
+  let state = touchThreadHealState(formatZodErrors(threadKey));
   if (dispatch.thread === "create") {
-    r.mintedOnContinue.clear();
-    r.armed = false;
+    state.mintedOnContinue.clear();
+    state.armed = false;
     if (dispatch.forDrop) {
-      r.createdForDrop = true;
-      r.continuesServed = 0;
+      state.createdForDrop = true;
+      state.continuesServed = 0;
     }
     return;
   }
-  r.continuesServed++;
+  state.continuesServed++;
   if (dispatch.messageId !== undefined) {
-    let mintedOnContinue = r.mintedOnContinue;
+    let mintedOnContinue = state.mintedOnContinue;
     if (!mintedOnContinue.has(dispatch.messageId) && mintedOnContinue.size >= MAX_MINTED_ONCE) {
-      let h = mintedOnContinue.keys().next().value;
-      if (h !== undefined) mintedOnContinue.delete(h);
+      let oldest = mintedOnContinue.keys().next().value;
+      if (oldest !== undefined) mintedOnContinue.delete(oldest);
     }
-    mintedOnContinue.set(dispatch.messageId, r.continuesServed);
+    mintedOnContinue.set(dispatch.messageId, state.continuesServed);
   }
 }
 //@ chunk-e6aww6q8.js:2588990-2589096 placement
 function resetThreadHealState(agentId) {
-  let n = threadDropRecreate().get(formatZodErrors(agentId));
-  if (n === undefined) return;
-  n.mintedOnContinue.clear();
-  n.createdForDrop = false;
+  let state = threadDropRecreate().get(formatZodErrors(agentId));
+  if (state === undefined) return;
+  state.mintedOnContinue.clear();
+  state.createdForDrop = false;
 }
 //@ chunk-e6aww6q8.js:2589096-2589173 placement
 function noteLastDispatchHealed(agentId, lastDispatchHealed) {
-  let r = threadDropRecreate().get(formatZodErrors(agentId));
-  if (r !== undefined) r.lastDispatchHealed = lastDispatchHealed;
+  let state = threadDropRecreate().get(formatZodErrors(agentId));
+  if (state !== undefined) state.lastDispatchHealed = lastDispatchHealed;
 }
 //@ chunk-e6aww6q8.js:2589173-2589263 placement
 function isThreadArmed(agentId) {
@@ -425,9 +429,11 @@ function isThreadArmed(agentId) {
   }
 }
 //@ chunk-e6aww6q8.js:2589263-2589361 placement
-function isThreadHeldStateless(e) {
+function isThreadHeldStateless(agentId) {
   try {
-    return threadDropRecreate().get(formatZodErrors(e))?.heldStateless === true && isTetherHealEnabled();
+    return (
+      threadDropRecreate().get(formatZodErrors(agentId))?.heldStateless === true && isTetherHealEnabled()
+    );
   } catch (error) {
     logError(toError(error));
     return false;
@@ -435,58 +441,60 @@ function isThreadHeldStateless(e) {
 }
 //@ chunk-e6aww6q8.js:2589361-2589556 placement
 function takeThreadHealFacts(agentId) {
-  let n = threadDropRecreate().get(formatZodErrors(agentId));
-  let r = {
-    continuesSinceDropCreate: n?.createdForDrop === true ? n.continuesServed : -1,
-    reportUnmatched: n?.reportUnmatched === true,
+  let state = threadDropRecreate().get(formatZodErrors(agentId));
+  let facts = {
+    continuesSinceDropCreate: state?.createdForDrop === true ? state.continuesServed : -1,
+    reportUnmatched: state?.reportUnmatched === true,
   };
-  if (n !== undefined) n.reportUnmatched = false;
-  return r;
+  if (state !== undefined) state.reportUnmatched = false;
+  return facts;
 }
 //@ chunk-e6aww6q8.js:2589556-2589692 placement
 function hasPendingMintedReplies() {
   if (!isTetherHealEnabled()) return false;
-  for (let e of threadDropRecreate().values())
-    if (!e.heldStateless && !e.armed && e.mintedOnContinue.size > 0) return true;
+  for (let state of threadDropRecreate().values())
+    if (!state.heldStateless && !state.armed && state.mintedOnContinue.size > 0) return true;
   return false;
 }
 //@ chunk-e6aww6q8.js:2589692-2591079 placement
 /**
  * 当服务端报告线程前缀不一致时给出警告（重发了旧字节、没发线程前缀等）。
  */
-function warnTetherPrefixMismatch(e, carrier, sentThreadPrefix) {
-  let s = tetherHealConfig();
-  if (!s.enabled || e.length === 0) return;
-  for (let [h, y] of threadDropRecreate()) {
-    if (y.heldStateless || y.armed) continue;
-    let sorted = e
-      .filter((q) => y.mintedOnContinue.has(q.messageId))
-      .sort((q, Z) => y.mintedOnContinue.get(q.messageId) - y.mintedOnContinue.get(Z.messageId));
+function warnTetherPrefixMismatch(mintedReplies, carrier, sentThreadPrefix) {
+  let config = tetherHealConfig();
+  if (!config.enabled || mintedReplies.length === 0) return;
+  for (let [threadKey, state] of threadDropRecreate()) {
+    if (state.heldStateless || state.armed) continue;
+    let sorted = mintedReplies
+      .filter((reply) => state.mintedOnContinue.has(reply.messageId))
+      .sort((a, b) => state.mintedOnContinue.get(a.messageId) - state.mintedOnContinue.get(b.messageId));
     if (sorted.length === 0) continue;
-    let w = y.lastDispatchHealed && h !== carrier.key;
-    let L = w ? undefined : sorted.find((q) => sentThreadPrefix(h, q.messageIndex));
-    if (L === undefined) {
-      y.reportUnmatched = true;
+    let exempt = state.lastDispatchHealed && threadKey !== carrier.key;
+    let matched = exempt
+      ? undefined
+      : sorted.find((reply) => sentThreadPrefix(threadKey, reply.messageIndex));
+    if (matched === undefined) {
+      state.reportUnmatched = true;
       logForDebugging(
-        `[tether] thread '${h}': a request (${carrier.querySource}) reported this thread's thinking dropped, but ${w ? "this thread's own requests re-send earlier bytes (sent-prefix ledger, enforce mode) that other requests do not" : "did not send this thread's prefix (system, tools, model, thinking or an earlier message differ)"}; ignored`,
+        `[tether] thread '${threadKey}': a request (${carrier.querySource}) reported this thread's thinking dropped, but ${exempt ? "this thread's own requests re-send earlier bytes (sent-prefix ledger, enforce mode) that other requests do not" : "did not send this thread's prefix (system, tools, model, thinking or an earlier message differ)"}; ignored`,
       );
       continue;
     }
-    let G = y.mintedOnContinue.get(L.messageId);
-    if (y.createdForDrop && G < s.minContinues) {
-      y.heldStateless = true;
+    let continues = state.mintedOnContinue.get(matched.messageId);
+    if (state.createdForDrop && continues < config.minContinues) {
+      state.heldStateless = true;
       logFeatureSad("tether_drop_recreate", "held_stateless");
       logForDebugging(
-        `[tether] thread '${h}': the server dropped thinking produced on continue #${G} after the thread was re-created for a drop (reported by ${carrier.querySource}; held because it came before continue #${s.minContinues}); sending without \`thread\` for the rest of this conversation`,
+        `[tether] thread '${threadKey}': the server dropped thinking produced on continue #${continues} after the thread was re-created for a drop (reported by ${carrier.querySource}; held because it came before continue #${config.minContinues}); sending without \`thread\` for the rest of this conversation`,
         {
           level: "warn",
         },
       );
       continue;
     }
-    y.armed = true;
+    state.armed = true;
     logForDebugging(
-      `[tether] thread '${h}': the server dropped thinking this thread produced on a continue (prefix mismatch, reported by ${carrier.querySource}); re-creating the thread on its next request`,
+      `[tether] thread '${threadKey}': the server dropped thinking this thread produced on a continue (prefix mismatch, reported by ${carrier.querySource}); re-creating the thread on its next request`,
     );
   }
 }
@@ -514,36 +522,40 @@ function checkTetherPrefixMismatch({ body, blockKeyAt, replyHolding, carrier, se
   }
   if (earliestByMessage.size === 0) return;
   warnTetherPrefixMismatch(
-    [...earliestByMessage].map(([w, L]) => ({
-      messageId: w,
-      messageIndex: L,
+    [...earliestByMessage].map(([messageId, messageIndex]) => ({
+      messageId,
+      messageIndex,
     })),
     carrier,
     sentThreadPrefix,
   );
 }
 //@ chunk-e6aww6q8.js:2591583-2591618 placement
-function clearThreadArmed(e) {
-  threadDropRecreate().delete(formatZodErrors(e));
+function clearThreadArmed(agentId) {
+  threadDropRecreate().delete(formatZodErrors(agentId));
 }
 //@ chunk-e6aww6q8.js:2591618-2591647 placement
 var MAX_THREAD_TTLS = 128;
 var MIN_TTL_SECONDS = 300;
 var MAX_TTL_SECONDS = 3600;
 //@ chunk-e6aww6q8.js:2591647-2591736 placement
-function validTtlSeconds(e) {
-  return typeof e === "number" && Number.isInteger(e) && e >= MIN_TTL_SECONDS && e <= MAX_TTL_SECONDS
-    ? e
+function validTtlSeconds(value) {
+  return typeof value === "number" &&
+    Number.isInteger(value) &&
+    value >= MIN_TTL_SECONDS &&
+    value <= MAX_TTL_SECONDS
+    ? value
     : undefined;
 }
 //@ chunk-e6aww6q8.js:2591736-2591928 placement
 function threadLifetimeMs(closedTurn) {
   let featureValue_CACHED_MAY_BE_STALE = getFeatureValue_CACHED_MAY_BE_STALE("tengu_jaunty_charm", null);
-  let r = validTtlSeconds(featureValue_CACHED_MAY_BE_STALE?.ttl_seconds);
+  let ttlSeconds = validTtlSeconds(featureValue_CACHED_MAY_BE_STALE?.ttl_seconds);
   let ccClosedTurnTtlSeconds = featureValue_CACHED_MAY_BE_STALE?.cc_closed_turn_ttl_seconds ?? undefined;
-  let h = ccClosedTurnTtlSeconds === undefined ? r : validTtlSeconds(ccClosedTurnTtlSeconds);
-  if (r === undefined || h === undefined || h < r) return;
-  return (closedTurn ? r : h) * 1000;
+  let effectiveTtl =
+    ccClosedTurnTtlSeconds === undefined ? ttlSeconds : validTtlSeconds(ccClosedTurnTtlSeconds);
+  if (ttlSeconds === undefined || effectiveTtl === undefined || effectiveTtl < ttlSeconds) return;
+  return (closedTurn ? ttlSeconds : effectiveTtl) * 1000;
 }
 //@ chunk-e6aww6q8.js:2591928-2591973 placement
 function threadRequestEnds() {
@@ -552,16 +564,16 @@ function threadRequestEnds() {
 //@ chunk-e6aww6q8.js:2591973-2592171 placement
 function touchThreadLastUse(agentId, clock) {
   try {
-    let r = threadRequestEnds();
-    let s = formatZodErrors(agentId);
-    if (!r.delete(s) && r.size >= MAX_THREAD_TTLS) {
-      for (let key of r.keys())
+    let ends = threadRequestEnds();
+    let key = formatZodErrors(agentId);
+    if (!ends.delete(key) && ends.size >= MAX_THREAD_TTLS) {
+      for (let key of ends.keys())
         if (key !== ROOT_2) {
-          r.delete(key);
+          ends.delete(key);
           break;
         }
     }
-    r.set(s, {
+    ends.set(key, {
       wallMs: clock.now(),
       monotonicMs: clock.monotonicNow(),
     });
@@ -575,22 +587,22 @@ function touchThreadLastUse(agentId, clock) {
  */
 function threadIdleState(threadKey, closedTurn, clock) {
   try {
-    let s = threadLifetimeMs(closedTurn);
-    let h = threadRequestEnds().get(formatZodErrors(threadKey));
-    if (h === undefined)
+    let lifetimeMs = threadLifetimeMs(closedTurn);
+    let end = threadRequestEnds().get(formatZodErrors(threadKey));
+    if (end === undefined)
       return {
         idleMs: undefined,
         monotonicIdleMs: undefined,
-        lifetimeMs: s,
+        lifetimeMs,
         expired: false,
       };
-    let y = clock.monotonicNow() - h.monotonicMs;
-    let max = Math.max(clock.now() - h.wallMs, y);
+    let monotonicIdleMs = clock.monotonicNow() - end.monotonicMs;
+    let max = Math.max(clock.now() - end.wallMs, monotonicIdleMs);
     return {
       idleMs: max,
-      monotonicIdleMs: y,
-      lifetimeMs: s,
-      expired: s !== undefined && max >= s,
+      monotonicIdleMs,
+      lifetimeMs,
+      expired: lifetimeMs !== undefined && max >= lifetimeMs,
     };
   } catch (error) {
     logError(toError(error));
@@ -603,8 +615,8 @@ function threadIdleState(threadKey, closedTurn, clock) {
   }
 }
 //@ chunk-e6aww6q8.js:2592544-2592580 placement
-function clearThreadRequestEnd(e) {
-  threadRequestEnds().delete(formatZodErrors(e));
+function clearThreadRequestEnd(agentId) {
+  threadRequestEnds().delete(formatZodErrors(agentId));
 }
 //@ chunk-e6aww6q8.js:2595772-2595824 placement = isSubagentContext (0.815)
 /**
@@ -624,11 +636,11 @@ function isThreadUnsupported(agentId, model) {
   return getUnsupportedThreadKeys().has(threadKey(agentId, model));
 }
 //@ chunk-e6aww6q8.js:2595922-2595970 placement
-function threadKey(e, n) {
-  return `${e ?? ROOT}\x00${strippedCanonicalName(n)}`;
+function threadKey(agentId, model) {
+  return `${agentId ?? ROOT}\x00${strippedCanonicalName(model)}`;
 }
 //@ chunk-e6aww6q8.js:2595970-2596197 placement
-function isStatelessTetherModel(e) {
+function isStatelessTetherModel(model) {
   let featureValue_CACHED_MAY_BE_STALE = getFeatureValue_CACHED_MAY_BE_STALE(
     "tengu_curious_tower_stateless_models",
     "",
@@ -638,12 +650,12 @@ function isStatelessTetherModel(e) {
     featureValue_CACHED_MAY_BE_STALE.trim().length === 0
   )
     return false;
-  let r = {};
-  for (let s of featureValue_CACHED_MAY_BE_STALE.split(",")) {
-    let h = strip1mSuffix(s.trim());
-    if (h !== "" && h !== ANY_MODEL_KEY) r[h] = true;
+  let keys = {};
+  for (let part of featureValue_CACHED_MAY_BE_STALE.split(",")) {
+    let key = strip1mSuffix(part.trim());
+    if (key !== "" && key !== ANY_MODEL_KEY) keys[key] = true;
   }
-  return findModelKeyedEntry(r, e) !== undefined;
+  return findModelKeyedEntry(keys, model) !== undefined;
 }
 //@ chunk-e6aww6q8.js:2596197-2596251 placement
 function isLucidAnchorEnabled() {
@@ -658,33 +670,35 @@ function isQuietHeronEnabled() {
 }
 //@ chunk-e6aww6q8.js:2596347-2596391 placement
 function uncachedSystemBlocks(system) {
-  return system.filter((n) => isUncachedSystemBlock(n));
+  return system.filter((block) => isUncachedSystemBlock(block));
 }
 //@ chunk-e6aww6q8.js:2596391-2596403 placement
 var MAX_TOOLS_HASH_ENTRIES = 128;
 //@ chunk-e6aww6q8.js:2596403-2596485 placement
-function isTeleportCacheActiveRoot(e) {
-  return e === undefined && thinkingRelayModuleKept?.getTeleportCacheState().status === "active";
+function isTeleportCacheActiveRoot(agentId) {
+  return agentId === undefined && thinkingRelayModuleKept?.getTeleportCacheState().status === "active";
 }
 //@ chunk-e6aww6q8.js:2596485-2596529 placement
 function isThreadsHeldForClassifier() {
   return isThreadsHeldForServerClassifier() && (isAutoModeClassified() || isServerArbiterActive());
 }
 //@ chunk-e6aww6q8.js:2596529-2596605 placement
-function canTetherThread(e, n) {
+function canTetherThread(agentId, model) {
   return (
     isTetherLive() &&
-    !isThreadUnsupported(e, n) &&
-    !isStatelessTetherModel(n) &&
-    !isTeleportCacheActiveRoot(e) &&
+    !isThreadUnsupported(agentId, model) &&
+    !isStatelessTetherModel(model) &&
+    !isTeleportCacheActiveRoot(agentId) &&
     !isThreadsHeldForClassifier() &&
-    !isThreadHeldStateless(e)
+    !isThreadHeldStateless(agentId)
   );
 }
 //@ chunk-e6aww6q8.js:2596605-2596719 placement
 function hasServerToolUse(messages) {
   return messages.some(
-    (n) => n.type === "assistant" && n.message.content.some((r) => r.type === "server_tool_use"),
+    (message) =>
+      message.type === "assistant" &&
+      message.message.content.some((block) => block.type === "server_tool_use"),
   );
 }
 //@ chunk-e6aww6q8.js:2596719-2596739 placement
@@ -709,141 +723,149 @@ function buildTetherDelta({
   toolResultClearingHeldStateless = false,
   clock,
 }) {
-  let ke = messages.length;
-  let we =
+  let messageCount = messages.length;
+  let anchorIndex =
     previousMessageId === undefined
       ? -1
       : messages.findLastIndex(
           (message) => message.type === "assistant" && message.message.id === previousMessageId,
         );
-  let Ee = we >= 0 ? messages[we] : undefined;
-  let Ae =
-    Ee?.type === "assistant" &&
-    Ee.message.stop_reason != null &&
-    !getClientTruncatedAssistantIds().has(Ee.message.id) &&
-    !getHeldStatelessReplyIds().has(Ee.message.id);
-  let closedTurn = Ee?.type === "assistant" && Ee.message.content.some((yo) => yo.type === "tool_use");
-  let Me = threadIdleState(agentId, closedTurn, clock);
-  let We = engine === null ? "no_engine_result" : null;
-  let ze = null;
-  let lt = null;
-  let Je = false;
-  let nt = null;
-  let pt = isThreadUnsupported(agentId, model);
-  let Et = hasServerToolUse(messages);
+  let anchorMessage = anchorIndex >= 0 ? messages[anchorIndex] : undefined;
+  let anchorComplete =
+    anchorMessage?.type === "assistant" &&
+    anchorMessage.message.stop_reason != null &&
+    !getClientTruncatedAssistantIds().has(anchorMessage.message.id) &&
+    !getHeldStatelessReplyIds().has(anchorMessage.message.id);
+  let closedTurn =
+    anchorMessage?.type === "assistant" &&
+    anchorMessage.message.content.some((block) => block.type === "tool_use");
+  let idleState = threadIdleState(agentId, closedTurn, clock);
+  let forcedCreateReason = engine === null ? "no_engine_result" : null;
+  let plan = null;
+  let firstThreadError = null;
+  let replayed = false;
+  let droppedThreadType = null;
+  let threadUnsupported = isThreadUnsupported(agentId, model);
+  let hasServerToolHistory = hasServerToolUse(messages);
   let any = messages.some(
     (message) =>
       message.type === "user" &&
       Array.isArray(message.message.content) &&
       message.message.content.some(
-        (Ho) =>
-          Ho.type === "tool_result" &&
-          Array.isArray(Ho.content) &&
-          Ho.content.some((rr) => isObjectBlock(rr) && rr.type === "search_result"),
+        (block) =>
+          block.type === "tool_result" &&
+          Array.isArray(block.content) &&
+          block.content.some((block) => isObjectBlock(block) && block.type === "search_result"),
       ),
   );
-  let gt = false;
-  let At = false;
-  let It = false;
-  let Yt = false;
-  let qt = false;
-  let Zt = false;
-  let rn = false;
-  let pn;
-  let no = false;
-  let hn = false;
-  let ho = 0;
+  let requestScopedStateless = false;
+  let keptReminderClearAt = false;
+  let hasToolAdditions = false;
+  let hasToolRemovals = false;
+  let hasToolChanges = false;
+  let dropArmed = false;
+  let settled = false;
+  let storedToolsHash;
+  let omittedSystem = false;
+  let omittedTools = false;
+  let omittedBytes = 0;
   let inheritBreakerTripped = false;
-  let Kn;
-  let Xn;
-  let fo = (tools) => {
-    if (Kn === undefined || Kn.ref !== tools) {
-      let Ho = jsonStringify(tools);
-      Kn = {
+  let toolsHashCache;
+  let systemBytesCache;
+  let toolsHashOf = (tools) => {
+    if (toolsHashCache === undefined || toolsHashCache.ref !== tools) {
+      let json = jsonStringify(tools);
+      toolsHashCache = {
         ref: tools,
-        json: Ho,
-        hash: computeContentHash(Ho),
+        json,
+        hash: computeContentHash(json),
       };
     }
-    return Kn;
+    return toolsHashCache;
   };
-  let To = (system) => {
-    if (Xn?.ref !== system)
-      Xn = {
+  let systemBytesOf = (system) => {
+    if (systemBytesCache?.ref !== system)
+      systemBytesCache = {
         ref: system,
-        bytes: jsonStringify(system.filter((Ho) => !isUncachedSystemBlock(Ho))).length,
+        bytes: jsonStringify(system.filter((block) => !isUncachedSystemBlock(block))).length,
       };
-    return Xn.bytes;
+    return systemBytesCache.bytes;
   };
-  function bo(yo, Ho = false) {
-    At = false;
-    Zt = false;
-    It = yo.some((Hr) => Hr.type === "api_system" && (Hr.toolAdditions?.length ?? 0) > 0);
-    Yt = yo.some((Hr) => Hr.type === "api_system" && (Hr.toolRemovals?.length ?? 0) > 0);
-    qt = (It || Yt) && !isLucidAnchorEnabled();
+  function buildPlan(messagesForSend, isRetry = false) {
+    keptReminderClearAt = false;
+    dropArmed = false;
+    hasToolAdditions = messagesForSend.some(
+      (message) => message.type === "api_system" && (message.toolAdditions?.length ?? 0) > 0,
+    );
+    hasToolRemovals = messagesForSend.some(
+      (message) => message.type === "api_system" && (message.toolRemovals?.length ?? 0) > 0,
+    );
+    hasToolChanges = (hasToolAdditions || hasToolRemovals) && !isLucidAnchorEnabled();
     if (
-      pt ||
+      threadUnsupported ||
       modelHeldStateless ||
       relayHeldStateless ||
       classifierHeldStateless ||
       creditRetryStateless ||
       dropHeldStateless ||
       toolResultClearingHeldStateless ||
-      nt !== null ||
-      Et ||
+      droppedThreadType !== null ||
+      hasServerToolHistory ||
       any ||
-      qt
+      hasToolChanges
     ) {
-      ze = null;
+      plan = null;
       return null;
     }
     if (
-      yo.some(
-        (Hr) =>
-          (Hr.type === "user" && Hr.ephemeral) ||
-          (!Ho && Hr.type === "api_system" && (Hr.ephemeral || Hr.ephemeralSuffix !== undefined)),
+      messagesForSend.some(
+        (message) =>
+          (message.type === "user" && message.ephemeral) ||
+          (!isRetry &&
+            message.type === "api_system" &&
+            (message.ephemeral || message.ephemeralSuffix !== undefined)),
       )
     ) {
-      ze = null;
-      gt = true;
+      plan = null;
+      requestScopedStateless = true;
       return null;
     }
-    Zt = isThreadArmed(agentId);
-    let rr;
-    if (We !== null || engine === null)
-      rr = {
+    dropArmed = isThreadArmed(agentId);
+    let decision;
+    if (forcedCreateReason !== null || engine === null)
+      decision = {
         thread: {
           type: "create",
         },
         sliceFrom: 0,
-        reason: We ?? "no_engine_result",
+        reason: forcedCreateReason ?? "no_engine_result",
       };
     else if (engine.decision !== "continue")
-      rr = {
+      decision = {
         thread: {
           type: "create",
         },
         sliceFrom: 0,
         reason: engine.reason,
       };
-    else if (previousMessageId === undefined || we < 0)
-      rr = {
+    else if (previousMessageId === undefined || anchorIndex < 0)
+      decision = {
         thread: {
           type: "create",
         },
         sliceFrom: 0,
         reason: "anchor_missing",
       };
-    else if (we + 1 >= ke)
-      rr = {
+    else if (anchorIndex + 1 >= messageCount)
+      decision = {
         thread: {
           type: "create",
         },
         sliceFrom: 0,
         reason: "anchor_is_tail",
       };
-    else if (!Ae)
-      rr = {
+    else if (!anchorComplete)
+      decision = {
         thread: {
           type: "create",
         },
@@ -851,35 +873,35 @@ function buildTetherDelta({
         reason: "anchor_incomplete",
       };
     else if (anchorRewritten)
-      rr = {
+      decision = {
         thread: {
           type: "create",
         },
         sliceFrom: 0,
         reason: "anchor_rewritten",
       };
-    else if (yo !== messages || yo.length !== ke)
-      rr = {
+    else if (messagesForSend !== messages || messagesForSend.length !== messageCount)
+      decision = {
         thread: {
           type: "create",
         },
         sliceFrom: 0,
         reason: "transcript_drift",
       };
-    else if (Zt)
-      rr = {
+    else if (dropArmed)
+      decision = {
         thread: {
           type: "create",
         },
         sliceFrom: 0,
         reason: "thread_minted_drop",
       };
-    else if (Me.expired) {
-      if (ze?.reason !== "thread_presumed_expired")
+    else if (idleState.expired) {
+      if (plan?.reason !== "thread_presumed_expired")
         logForDebugging(
-          `[tether] thread idle for ${Math.round((Me.idleMs ?? 0) / 1000)} s, at or past its ${(Me.lifetimeMs ?? 0) / 1000} s lifetime on the server: sending a create, not a continue`,
+          `[tether] thread idle for ${Math.round((idleState.idleMs ?? 0) / 1000)} s, at or past its ${(idleState.lifetimeMs ?? 0) / 1000} s lifetime on the server: sending a create, not a continue`,
         );
-      rr = {
+      decision = {
         thread: {
           type: "create",
         },
@@ -887,129 +909,135 @@ function buildTetherDelta({
         reason: "thread_presumed_expired",
       };
     } else
-      rr = {
+      decision = {
         thread: {
           type: "continue",
           previous_message_id: previousMessageId,
         },
-        sliceFrom: we + 1,
+        sliceFrom: anchorIndex + 1,
         reason: engine.reason,
       };
-    ze = rr;
-    let last = yo.at(-1);
-    At = Ho && last?.type === "api_system" && (last.ephemeral === true || last.ephemeralSuffix !== undefined);
-    return rr;
+    plan = decision;
+    let last = messagesForSend.at(-1);
+    keptReminderClearAt =
+      isRetry &&
+      last?.type === "api_system" &&
+      (last.ephemeral === true || last.ephemeralSuffix !== undefined);
+    return decision;
   }
-  function vn(yo, Ho) {
-    no = false;
-    hn = false;
-    ho = 0;
-    pn = undefined;
+  function shapeInheritedFields(decision, body) {
+    omittedSystem = false;
+    omittedTools = false;
+    omittedBytes = 0;
+    storedToolsHash = undefined;
     try {
-      if (yo === null)
+      if (decision === null)
         return {
-          system: Ho.system,
-          tools: Ho.tools,
+          system: body.system,
+          tools: body.tools,
         };
       if (!isQuietHeronEnabled()) {
         forgetThreadToolsHash(agentId);
         return {
-          system: Ho.system,
-          tools: Ho.tools,
+          system: body.system,
+          tools: body.tools,
         };
       }
-      let { json, hash } = fo(Ho.tools);
-      if (yo.thread.type !== "continue") {
-        pn = hash;
+      let { json, hash } = toolsHashOf(body.tools);
+      if (decision.thread.type !== "continue") {
+        storedToolsHash = hash;
         return {
-          system: Ho.system,
-          tools: Ho.tools,
+          system: body.system,
+          tools: body.tools,
         };
       }
-      let Hr = uncachedSystemBlocks(Ho.system);
-      let Fr = Hr.length > 0 && Hr.length < Ho.system.length ? Hr : Ho.system;
-      if (Fr !== Ho.system) {
-        no = true;
-        ho += To(Ho.system);
+      let uncached = uncachedSystemBlocks(body.system);
+      let system = uncached.length > 0 && uncached.length < body.system.length ? uncached : body.system;
+      if (system !== body.system) {
+        omittedSystem = true;
+        omittedBytes += systemBytesOf(body.system);
       }
       if (
         streamFallbackWarning().threadInheritedFields.storedToolsHashByThread.get(
           formatZodErrors(agentId),
         ) === hash
       ) {
-        hn = true;
-        ho += json.length;
+        omittedTools = true;
+        omittedBytes += json.length;
         return {
-          system: Fr,
+          system,
           tools: undefined,
         };
       }
-      pn = hash;
+      storedToolsHash = hash;
       return {
-        system: Fr,
-        tools: Ho.tools,
+        system,
+        tools: body.tools,
       };
     } catch (error) {
       logError(error);
-      no = false;
-      hn = false;
-      ho = 0;
-      pn = undefined;
+      omittedSystem = false;
+      omittedTools = false;
+      omittedBytes = 0;
+      storedToolsHash = undefined;
       forgetThreadToolsHash(agentId);
       return {
-        system: Ho.system,
-        tools: Ho.tools,
+        system: body.system,
+        tools: body.tools,
       };
     }
   }
-  function co(yo) {
-    if (We === null) {
-      We = yo;
-      logForDebugging(`[tether] forcing create for retry: ${yo}`);
+  function forceCreate(reason) {
+    if (forcedCreateReason === null) {
+      forcedCreateReason = reason;
+      logForDebugging(`[tether] forcing create for retry: ${reason}`);
     }
   }
-  function So(yo) {
+  function resolveRetry(error) {
     try {
-      let Ho = classifyThreadError(yo);
-      if (Ho !== null && lt === null) lt = Ho;
-      if (Ho === "unsupported_request" || (Ho === "other_thread_400" && ze?.thread.type === "create")) {
-        if (nt !== null || ze === null) return;
-        nt = ze.thread.type;
+      let errorClass = classifyThreadError(error);
+      if (errorClass !== null && firstThreadError === null) firstThreadError = errorClass;
+      if (
+        errorClass === "unsupported_request" ||
+        (errorClass === "other_thread_400" && plan?.thread.type === "create")
+      ) {
+        if (droppedThreadType !== null || plan === null) return;
+        droppedThreadType = plan.thread.type;
         markThreadUnsupported(agentId, model);
         logForDebugging(
-          `[tether] ${Ho}: resending this turn stateless; this thread stays stateless on this model for the session`,
+          `[tether] ${errorClass}: resending this turn stateless; this thread stays stateless on this model for the session`,
           {
             level: "warn",
           },
         );
         return "retry:tether-stateless";
       }
-      if (ze?.thread.type !== "continue") return;
-      if (!(yo instanceof APIError)) return;
-      if (yo.status !== 400 && yo.status !== 404) return;
-      if (yo.status === 404 && Ho !== "not_found") return;
-      if (Ho === null && (isPromptTooLongError(yo) || isCreditBalanceTooLow(yo))) return;
-      switch (Ho) {
+      if (plan?.thread.type !== "continue") return;
+      if (!(error instanceof APIError)) return;
+      if (error.status !== 400 && error.status !== 404) return;
+      if (error.status === 404 && errorClass !== "not_found") return;
+      if (errorClass === null && (isPromptTooLongError(error) || isCreditBalanceTooLow(error))) return;
+      switch (errorClass) {
         case "not_found":
-          Je = true;
-          co("replay_not_found");
+          replayed = true;
+          forceCreate("replay_not_found");
           return "retry:tether-replay";
         case "fingerprint_mismatch":
-          Je = true;
+          replayed = true;
           if (
-            initFingerprint(yo, {
-              system: no,
-              tools: hn,
+            initFingerprint(error, {
+              system: omittedSystem,
+              tools: omittedTools,
             })
           )
-            $o();
-          co("replay_fingerprint");
+            tripInheritBreaker();
+          forceCreate("replay_fingerprint");
           return "retry:tether-replay";
         case "already_continued":
         case "other_thread_400":
         case null:
-          Je = true;
-          co("replay_other_400");
+          replayed = true;
+          forceCreate("replay_other_400");
           return "retry:tether-replay";
       }
     } catch (error) {
@@ -1017,13 +1045,13 @@ function buildTetherDelta({
       return;
     }
   }
-  function ko() {
+  function dropForUnrecognised400() {
     try {
-      if (nt !== null || ze === null) return;
-      nt = ze.thread.type;
-      lt ??= "unrecognised_400";
+      if (droppedThreadType !== null || plan === null) return;
+      droppedThreadType = plan.thread.type;
+      firstThreadError ??= "unrecognised_400";
       logForDebugging(
-        `[tether] unrecognised HTTP 400 on a ${nt} that carried the message-threads header: resending this turn stateless without the header`,
+        `[tether] unrecognised HTTP 400 on a ${droppedThreadType} that carried the message-threads header: resending this turn stateless without the header`,
         {
           level: "warn",
         },
@@ -1034,14 +1062,14 @@ function buildTetherDelta({
       return;
     }
   }
-  function un(yo) {
-    addWithLimitLogged(getClientTruncatedAssistantIds(), MAX_TRUNCATED_ASSISTANT_IDS, yo);
+  function noteClientTruncated(messageId) {
+    addWithLimitLogged(getClientTruncatedAssistantIds(), MAX_TRUNCATED_ASSISTANT_IDS, messageId);
   }
-  function ao(yo, Ho, rr) {
-    if (rn) return;
-    rn = true;
+  function settle(outcome, requestId, messageId) {
+    if (settled) return;
+    settled = true;
     if (
-      gt ||
+      requestScopedStateless ||
       modelHeldStateless ||
       relayHeldStateless ||
       classifierHeldStateless ||
@@ -1049,80 +1077,82 @@ function buildTetherDelta({
       dropHeldStateless ||
       toolResultClearingHeldStateless ||
       any ||
-      qt ||
-      nt !== null
+      hasToolChanges ||
+      droppedThreadType !== null
     )
-      addWithLimitLogged(getHeldStatelessReplyIds(), MAX_HELD_STATELESS_IDS, rr);
-    if (ze !== null) touchThreadLastUse(agentId, clock);
-    if (yo.kind === "ok" && ze !== null)
+      addWithLimitLogged(getHeldStatelessReplyIds(), MAX_HELD_STATELESS_IDS, messageId);
+    if (plan !== null) touchThreadLastUse(agentId, clock);
+    if (outcome.kind === "ok" && plan !== null)
       try {
-        let br = ze.thread.type === "create" && ze.reason === "thread_minted_drop";
+        let forDrop = plan.thread.type === "create" && plan.reason === "thread_minted_drop";
         recordThreadDispatch(
           agentId,
-          ze.thread.type === "continue"
+          plan.thread.type === "continue"
             ? {
                 thread: "continue",
-                messageId: rr,
+                messageId,
               }
             : {
                 thread: "create",
-                forDrop: br,
+                forDrop,
               },
         );
-        if (br) logFeatureOk("tether_drop_recreate");
+        if (forDrop) logFeatureOk("tether_drop_recreate");
       } catch (error) {
         logError(toError(error));
       }
-    if (yo.kind === "ok" && ze !== null && pn !== undefined) storeThreadToolsHash(agentId, pn);
+    if (outcome.kind === "ok" && plan !== null && storedToolsHash !== undefined)
+      storeThreadToolsHash(agentId, storedToolsHash);
     try {
-      let br = yo.kind === "error" ? (classifyThreadError(yo.error) ?? "error_non_thread") : yo.kind;
-      let Hr = takeThreadHealFacts(agentId);
+      let finalOutcome =
+        outcome.kind === "error" ? (classifyThreadError(outcome.error) ?? "error_non_thread") : outcome.kind;
+      let healFacts = takeThreadHealFacts(agentId);
       logEvent("tengu_tether_live_outcome", {
-        requestId: sanitizeMarkName(Ho),
-        sentThreadType: fromEnum(ze?.thread.type ?? "none"),
+        requestId: sanitizeMarkName(requestId),
+        sentThreadType: fromEnum(plan?.thread.type ?? "none"),
         sourceCategory: fromEnum(engine?.sourceCategory ?? "none"),
-        planReason: fromEnum(ze?.reason ?? "none"),
+        planReason: fromEnum(plan?.reason ?? "none"),
         engineDecision: fromEnum(engine?.decision ?? "none"),
         engineReason: fromEnum(engine?.reason ?? "none"),
-        firstThreadError: fromEnum(lt ?? "none"),
-        finalOutcome: fromEnum(br),
-        replayed: Je,
-        droppedFrom: fromEnum(nt ?? "none"),
-        threadUnsupported: pt,
+        firstThreadError: fromEnum(firstThreadError ?? "none"),
+        finalOutcome: fromEnum(finalOutcome),
+        replayed,
+        droppedFrom: fromEnum(droppedThreadType ?? "none"),
+        threadUnsupported,
         modelHeldStateless,
         relayHeldStateless,
         classifierHeldStateless,
         creditRetryStateless,
         toolResultClearingHeldStateless,
-        serverToolHistory: Et,
+        serverToolHistory: hasServerToolHistory,
         searchResultHistory: any,
-        toolAdditionHistory: It,
-        toolRemovalHistory: Yt,
-        toolChangeHistory: qt,
-        requestScopedStateless: gt,
-        keptReminderClearAt: At,
+        toolAdditionHistory: hasToolAdditions,
+        toolRemovalHistory: hasToolRemovals,
+        toolChangeHistory: hasToolChanges,
+        requestScopedStateless,
+        keptReminderClearAt,
         keptReminderScope: fromEnum(keptReminderModeSafe(model)),
-        deltaMessageCount: we >= 0 ? ke - we - 1 : 0,
-        messageCount: ke,
+        deltaMessageCount: anchorIndex >= 0 ? messageCount - anchorIndex - 1 : 0,
+        messageCount,
         turnsInThread: engine?.turnsInThread ?? 0,
-        omittedSystem: no,
-        omittedTools: hn,
-        omittedBytes: ho,
+        omittedSystem,
+        omittedTools,
+        omittedBytes,
         inheritBreakerTripped,
-        dropArmed: Zt,
+        dropArmed,
         dropHeldStateless,
-        continuesSinceDropCreate: Hr.continuesSinceDropCreate,
-        dropReportUnmatched: Hr.reportUnmatched,
-        threadIdleMs: Math.round(Me.idleMs ?? -1),
-        threadIdleMonotonicMs: Math.round(Me.monotonicIdleMs ?? -1),
-        threadLifetimeMs: Me.lifetimeMs ?? -1,
+        continuesSinceDropCreate: healFacts.continuesSinceDropCreate,
+        dropReportUnmatched: healFacts.reportUnmatched,
+        threadIdleMs: Math.round(idleState.idleMs ?? -1),
+        threadIdleMonotonicMs: Math.round(idleState.monotonicIdleMs ?? -1),
+        threadLifetimeMs: idleState.lifetimeMs ?? -1,
         anchorHasToolCall: closedTurn,
       });
     } catch (error) {
       logError(error);
     }
   }
-  function $o() {
+  function tripInheritBreaker() {
     let threadInheritedFields = streamFallbackWarning().threadInheritedFields;
     if (threadInheritedFields.breakerTripped) return;
     threadInheritedFields.breakerTripped = true;
@@ -1136,13 +1166,13 @@ function buildTetherDelta({
     logFeatureSad("tether_inherited_fields", "fingerprint_mismatch");
   }
   return {
-    plan: bo,
-    shapeInheritedFields: vn,
-    forceCreate: co,
-    resolveRetry: So,
-    dropForUnrecognised400: ko,
-    noteClientTruncated: un,
-    settle: ao,
+    plan: buildPlan,
+    shapeInheritedFields,
+    forceCreate,
+    resolveRetry,
+    dropForUnrecognised400,
+    noteClientTruncated,
+    settle,
   };
 }
 //@ chunk-e6aww6q8.js:2603807-2603888 placement
@@ -1150,21 +1180,21 @@ function forgetThreadToolsHash(agentId) {
   streamFallbackWarning().threadInheritedFields.storedToolsHashByThread.delete(formatZodErrors(agentId));
 }
 //@ chunk-e6aww6q8.js:2603888-2604064 placement
-function storeThreadToolsHash(agentId, n) {
+function storeThreadToolsHash(agentId, hash) {
   let storedToolsHashByThread = streamFallbackWarning().threadInheritedFields.storedToolsHashByThread;
-  let s = formatZodErrors(agentId);
-  storedToolsHashByThread.delete(s);
+  let key = formatZodErrors(agentId);
+  storedToolsHashByThread.delete(key);
   if (storedToolsHashByThread.size >= MAX_TOOLS_HASH_ENTRIES) {
-    let h = storedToolsHashByThread.keys().next().value;
-    if (h !== undefined) storedToolsHashByThread.delete(h);
+    let oldest = storedToolsHashByThread.keys().next().value;
+    if (oldest !== undefined) storedToolsHashByThread.delete(oldest);
   }
-  storedToolsHashByThread.set(s, n);
+  storedToolsHashByThread.set(key, hash);
 }
 //@ chunk-e6aww6q8.js:2604064-2604135 placement
-function addWithLimitLogged(e, n, r) {
-  if (r === undefined) return;
+function addWithLimitLogged(collection, limit, value) {
+  if (value === undefined) return;
   try {
-    addWithLimit(e, r, n);
+    addWithLimit(collection, value, limit);
   } catch (error) {
     logError(error);
   }
@@ -1173,16 +1203,16 @@ function addWithLimitLogged(e, n, r) {
 /**
  * 把线程续接接口的错误（线程不存在、请求不支持、指纹不一致）归类。
  */
-function classifyThreadError(e) {
-  if (!(e instanceof APIError)) return null;
-  let message = e.message ?? "";
-  if (e.status === 404)
-    return message.includes("thread_not_found") || readErrorCode(e) === "thread_not_found"
+function classifyThreadError(error) {
+  if (!(error instanceof APIError)) return null;
+  let message = error.message ?? "";
+  if (error.status === 404)
+    return message.includes("thread_not_found") || readErrorCode(error) === "thread_not_found"
       ? "not_found"
       : null;
-  if (e.status !== 400) return null;
-  let errorCode = readErrorCode(e);
-  if (errorCode === "thread_unsupported_request" || isTetherBetaRejected(e)) return "unsupported_request";
+  if (error.status !== 400) return null;
+  let errorCode = readErrorCode(error);
+  if (errorCode === "thread_unsupported_request" || isTetherBetaRejected(error)) return "unsupported_request";
   if (errorCode === "thread_fingerprint_mismatch" || message.includes("differing field"))
     return "fingerprint_mismatch";
   if (errorCode === "thread_already_continued" || message.includes("already been continued"))
@@ -1196,12 +1226,12 @@ function classifyThreadError(e) {
   return null;
 }
 //@ chunk-e6aww6q8.js:2604788-2605055 placement
-function readErrorCode(e) {
-  let error = e.error;
-  if (typeof error !== "object" || error === null) return;
-  let r = "error" in error ? error.error : error;
-  if (typeof r !== "object" || r === null || !("details" in r)) return;
-  let details = r.details;
+function readErrorCode(error) {
+  let error_2 = error.error;
+  if (typeof error_2 !== "object" || error_2 === null) return;
+  let inner = "error" in error_2 ? error_2.error : error_2;
+  if (typeof inner !== "object" || inner === null || !("details" in inner)) return;
+  let details = inner.details;
   if (typeof details !== "object" || details === null) return;
   let errorCode = details.error_code;
   return typeof errorCode === "string" ? errorCode : undefined;
@@ -1222,13 +1252,13 @@ var THREAD_INHERITED_FIELDS = [
 /**
  * 判断能否不发送临时提醒：子代理或未知来源、模型条件满足、未模拟代理。
  */
-function canUseNoTransientReminders(querySource, agentContext, r, s = false) {
+function canUseNoTransientReminders(querySource, threadId, model, usesToolResultClearing = false) {
   let agentType = threadSourceKind(querySource);
   return (
     agentType !== null &&
-    !s &&
-    canTetherThread(agentContext, r) &&
-    isSubagentOrUnknown(agentType, agentContext) &&
+    !usesToolResultClearing &&
+    canTetherThread(threadId, model) &&
+    isSubagentOrUnknown(agentType, threadId) &&
     !env.CLAUDE_CODE_SIMULATE_PROXY_USAGE
   );
 }
@@ -1236,11 +1266,18 @@ function canUseNoTransientReminders(querySource, agentContext, r, s = false) {
 /**
  * 决定提醒的投递方式：保留（kept）、不发（none）或临时（transient）。
  */
-function reminderDeliveryMode(querySource, betas, model, s = model, h = false, recorded) {
+function reminderDeliveryMode(
+  querySource,
+  betas,
+  model,
+  ttlModel = model,
+  usesToolResultClearing = false,
+  recorded,
+) {
   if (
     !isAutoModeQuerySource(querySource) &&
     isKeptReminderModeNotOff(
-      s,
+      ttlModel,
       classifyQuerySource(querySource) === "main"
         ? {
             recorded,
@@ -1249,23 +1286,25 @@ function reminderDeliveryMode(querySource, betas, model, s = model, h = false, r
     )
   )
     return "kept";
-  return canUseNoTransientReminders(querySource, betas, model, h) ? "none" : "transient";
+  return canUseNoTransientReminders(querySource, betas, model, usesToolResultClearing) ? "none" : "transient";
 }
 //@ chunk-e6aww6q8.js:2605410-2605510 placement
 function threadSourceKind(querySource) {
   if (querySource === "hook_agent") return null;
-  let n = classifyQuerySource(querySource);
-  return n === "main" || n === "subagent" ? n : null;
+  let category = classifyQuerySource(querySource);
+  return category === "main" || category === "subagent" ? category : null;
 }
 //@ chunk-e6aww6q8.js:2605510-2605522 placement
 var MAX_TRACKED_IDS = 128;
 //@ chunk-e6aww6q8.js:2605522-2605675 placement
-function threadPrefixHashes(e) {
+function threadPrefixHashes(request) {
   return {
-    model: computeHash(e.model),
-    system: computeHash(e.system.filter((n) => !isUncachedSystemBlock(n)).map((n) => n.text)),
-    tools: computeHash(e.toolSchemas),
-    thinking: computeHash(e.thinkingConfig),
+    model: computeHash(request.model),
+    system: computeHash(
+      request.system.filter((block) => !isUncachedSystemBlock(block)).map((block) => block.text),
+    ),
+    tools: computeHash(request.toolSchemas),
+    thinking: computeHash(request.thinkingConfig),
   };
 }
 //@ chunk-e6aww6q8.js:2605675-2607563 placement
@@ -1273,133 +1312,143 @@ function threadPrefixHashes(e) {
  * 决定本次请求能否作为线程续接（tether）发送：首个请求、无续接指针、配置变化、历史被改写都不能续接。
  */
 function decideTetherContinuation() {
-  let e = new Map();
-  function n(h) {
-    let y = threadSourceKind(h.querySource);
-    if (y === null) return null;
-    let S = formatZodErrors(h.agentId);
-    let w = y === "main" ? takePendingConversationEdits() : [];
-    let L = threadPrefixHashes(h);
-    let G = {
-      model: L.model,
+  let trackers = new Map();
+  function evaluate(input) {
+    let category = threadSourceKind(input.querySource);
+    if (category === null) return null;
+    let key = formatZodErrors(input.agentId);
+    let claimedEdits = category === "main" ? takePendingConversationEdits() : [];
+    let prefixHashes = threadPrefixHashes(input);
+    let configHashes = {
+      model: prefixHashes.model,
       system: computeHash([
-        L.system,
-        h.system.filter((We) => !isUncachedSystemBlock(We)).map((We) => We.cache_control ?? null),
+        prefixHashes.system,
+        input.system
+          .filter((block) => !isUncachedSystemBlock(block))
+          .map((block) => block.cache_control ?? null),
       ]),
-      tools: L.tools,
-      thinking: L.thinking,
-      betas: computeHash([...h.betas].sort()),
-      latchedHeaders: computeHash(h.latchedHeaders),
-      toolChoice: computeHash(h.toolChoice ?? null),
-      effort: computeHash(h.effortValue ?? null),
-      extraBody: computeHash(h.extraBodyParams ?? null),
+      tools: prefixHashes.tools,
+      thinking: prefixHashes.thinking,
+      betas: computeHash([...input.betas].sort()),
+      latchedHeaders: computeHash(input.latchedHeaders),
+      toolChoice: computeHash(input.toolChoice ?? null),
+      effort: computeHash(input.effortValue ?? null),
+      extraBody: computeHash(input.extraBodyParams ?? null),
     };
-    let messageHashes = h.getMessageHashes();
-    let Z = e.get(S);
-    let Se = Z?.messageHashes.length ?? 0;
-    let ke = Z ? THREAD_INHERITED_FIELDS.filter((We) => G[We] !== Z.configHashes[We]) : [];
-    let we;
-    let Ee = -1;
-    if (!Z) we = "first_request";
-    else if (h.previousMessageId === undefined) we = "no_continue_pointer";
-    else if (ke.length > 0) we = "config_changed";
+    let messageHashes = input.getMessageHashes();
+    let prev = trackers.get(key);
+    let prevCount = prev?.messageHashes.length ?? 0;
+    let changedFields = prev
+      ? THREAD_INHERITED_FIELDS.filter((field) => configHashes[field] !== prev.configHashes[field])
+      : [];
+    let reason;
+    let firstChangedIndex = -1;
+    if (!prev) reason = "first_request";
+    else if (input.previousMessageId === undefined) reason = "no_continue_pointer";
+    else if (changedFields.length > 0) reason = "config_changed";
     else {
-      Ee = Z.messageHashes.findIndex(
-        (messageHash, ze) =>
+      firstChangedIndex = prev.messageHashes.findIndex(
+        (messageHash, index) =>
           messageHash !== EPHEMERAL_MESSAGE_MARK &&
-          ze < messageHashes.length &&
-          messageHashes[ze] !== messageHash,
+          index < messageHashes.length &&
+          messageHashes[index] !== messageHash,
       );
-      if (Ee !== -1) we = "history_reshaped";
-      else if (messageHashes.length <= Z.messageHashes.length) we = "history_rewound";
-      else we = "append";
+      if (firstChangedIndex !== -1) reason = "history_reshaped";
+      else if (messageHashes.length <= prev.messageHashes.length) reason = "history_rewound";
+      else reason = "append";
     }
-    let Ae = we === "append" ? "continue" : "create";
-    let turnsInThread = Ae === "continue" && Z ? Z.turnsInThread + 1 : 1;
+    let decision = reason === "append" ? "continue" : "create";
+    let turnsInThread = decision === "continue" && prev ? prev.turnsInThread + 1 : 1;
     let evictedOther = false;
-    if (e.has(S)) e.delete(S);
-    else if (e.size >= MAX_TRACKED_IDS) {
-      for (let key of e.keys())
+    if (trackers.has(key)) trackers.delete(key);
+    else if (trackers.size >= MAX_TRACKED_IDS) {
+      for (let key of trackers.keys())
         if (key !== ROOT_2) {
-          e.delete(key);
+          trackers.delete(key);
           evictedOther = true;
           break;
         }
     }
-    e.set(S, {
-      configHashes: G,
-      boundSystemHash: L.system,
+    trackers.set(key, {
+      configHashes,
+      boundSystemHash: prefixHashes.system,
       messageHashes,
       turnsInThread,
     });
     return {
-      decision: Ae,
-      reason: we,
-      sourceCategory: y,
+      decision,
+      reason,
+      sourceCategory: category,
       evictedOther,
-      changedConfigFields: ke,
+      changedConfigFields: changedFields,
       turnsInThread,
       messageCount: messageHashes.length,
-      prevMessageCount: Se,
-      firstChangedIndex: Ee,
-      deltaMessageCount: Ae === "continue" ? messageHashes.length - Se : 0,
-      historyEditClaims: Z ? w : [],
+      prevMessageCount: prevCount,
+      firstChangedIndex,
+      deltaMessageCount: decision === "continue" ? messageHashes.length - prevCount : 0,
+      historyEditClaims: prev ? claimedEdits : [],
     };
   }
-  function r(h, y, S, w) {
-    let L = e.get(h);
+  function sentThreadPrefix(key, prefixHashes, getHashes, sentCount) {
+    let record = trackers.get(key);
     if (
-      L === undefined ||
-      w > L.messageHashes.length ||
-      y.model !== L.configHashes.model ||
-      y.system !== L.boundSystemHash ||
-      y.tools !== L.configHashes.tools ||
-      y.thinking !== L.configHashes.thinking
+      record === undefined ||
+      sentCount > record.messageHashes.length ||
+      prefixHashes.model !== record.configHashes.model ||
+      prefixHashes.system !== record.boundSystemHash ||
+      prefixHashes.tools !== record.configHashes.tools ||
+      prefixHashes.thinking !== record.configHashes.thinking
     )
       return false;
-    let G = S();
-    if (w > G.length) return false;
-    if (w < L.messageHashes.length && G[w] !== L.messageHashes[w]) return false;
-    for (let idx = 0; idx < w; idx++) {
-      let Z = L.messageHashes[idx];
-      if (Z !== EPHEMERAL_MESSAGE_MARK && G[idx] !== Z) return false;
+    let hashes = getHashes();
+    if (sentCount > hashes.length) return false;
+    if (sentCount < record.messageHashes.length && hashes[sentCount] !== record.messageHashes[sentCount])
+      return false;
+    for (let idx = 0; idx < sentCount; idx++) {
+      let hash = record.messageHashes[idx];
+      if (hash !== EPHEMERAL_MESSAGE_MARK && hashes[idx] !== hash) return false;
     }
     return true;
   }
-  function s(h) {
-    e.delete(formatZodErrors(h));
+  function forget(agentId) {
+    trackers.delete(formatZodErrors(agentId));
   }
   return {
-    evaluate: n,
-    sentThreadPrefix: r,
-    forget: s,
+    evaluate,
+    sentThreadPrefix,
+    forget,
   };
 }
 //@ chunk-e6aww6q8.js:2607563-2607628 placement
 function evaluateTetherContinuation() {
-  let e = streamFallbackWarning();
-  return (e.threadDecisionTracker ??= decideTetherContinuation());
+  let warningState = streamFallbackWarning();
+  return (warningState.threadDecisionTracker ??= decideTetherContinuation());
 }
 //@ chunk-e6aww6q8.js:2607628-2607766 placement
 /**
  * 子代理结束时清除其线程决策、工具哈希等线程状态。
  */
 function forgetAgentThread(agentId) {
-  let n = streamFallbackWarning();
-  n.threadDecisionTracker?.forget(agentId);
-  n.threadInheritedFields.storedToolsHashByThread.delete(formatZodErrors(agentId));
+  let state = streamFallbackWarning();
+  state.threadDecisionTracker?.forget(agentId);
+  state.threadInheritedFields.storedToolsHashByThread.delete(formatZodErrors(agentId));
   clearThreadArmed(agentId);
   clearThreadRequestEnd(agentId);
 }
 //@ chunk-e6aww6q8.js:2607766-2607941 placement
-function createSentPrefixChecker(e) {
-  let n;
-  return (r, s) => {
+function createSentPrefixChecker(request) {
+  let hashes;
+  return (threadKey, messageIndex) => {
     try {
       let threadDecisionTracker = streamFallbackWarning().threadDecisionTracker;
       return (
         threadDecisionTracker !== undefined &&
-        threadDecisionTracker.sentThreadPrefix(r, (n ??= threadPrefixHashes(e)), e.getMessageHashes, s)
+        threadDecisionTracker.sentThreadPrefix(
+          threadKey,
+          (hashes ??= threadPrefixHashes(request)),
+          request.getMessageHashes,
+          messageIndex,
+        )
       );
     } catch (error) {
       logError(toError(error));
@@ -1408,9 +1457,9 @@ function createSentPrefixChecker(e) {
   };
 }
 //@ chunk-e6aww6q8.js:2607941-2608002 placement
-function logTetherDecisionSafely(e) {
+function logTetherDecisionSafely(args) {
   try {
-    return logTetherDecision(e);
+    return logTetherDecision(args);
   } catch (error) {
     logError(error);
     return null;
@@ -1420,12 +1469,12 @@ function logTetherDecisionSafely(e) {
 /**
  * 记录 tether 续接决策遥测。
  */
-function logTetherDecision(e) {
+function logTetherDecision(args) {
   if (!isTetherLive()) return null;
-  let n = evaluateTetherContinuation().evaluate(e);
-  if (!n) return null;
-  if (n.decision !== "continue") resetThreadHealState(e.agentId);
-  let r = {
+  let decision = evaluateTetherContinuation().evaluate(args);
+  if (!decision) return null;
+  if (decision.decision !== "continue") resetThreadHealState(args.agentId);
+  let changedFields = {
     model: false,
     system: false,
     tools: false,
@@ -1436,8 +1485,8 @@ function logTetherDecision(e) {
     effort: false,
     extraBody: false,
   };
-  for (let changedConfigField of n.changedConfigFields) r[changedConfigField] = true;
-  let s = {
+  for (let changedConfigField of decision.changedConfigFields) changedFields[changedConfigField] = true;
+  let claimedEdits = {
     compact: false,
     snip: false,
     tool_result_clear: false,
@@ -1445,42 +1494,43 @@ function logTetherDecision(e) {
     clear: false,
     abort_strip: false,
   };
-  for (let historyEditClaim of n.historyEditClaims) s[historyEditClaim] = true;
-  let h = n.reason === "history_reshaped" || n.reason === "history_rewound";
+  for (let historyEditClaim of decision.historyEditClaims) claimedEdits[historyEditClaim] = true;
+  let reshaped = decision.reason === "history_reshaped" || decision.reason === "history_rewound";
   logEvent("tengu_tether_decision", {
-    decision: fromEnum(n.decision),
-    reason: fromEnum(n.reason),
-    sourceCategory: fromEnum(n.sourceCategory),
-    threadUnsupported: isThreadUnsupported(e.agentId, e.model),
-    modelHeldStateless: e.modelHeldStateless,
-    relayHeldStateless: e.relayHeldStateless,
-    classifierHeldStateless: e.classifierHeldStateless,
-    creditRetryStateless: e.creditRetryStateless,
-    dropHeldStateless: e.dropHeldStateless,
-    evictedOther: n.evictedOther,
-    changedModel: r.model,
-    changedSystem: r.system,
-    changedTools: r.tools,
-    changedBetas: r.betas,
-    changedLatchedHeaders: r.latchedHeaders,
-    changedThinking: r.thinking,
-    changedToolChoice: r.toolChoice,
-    changedEffort: r.effort,
-    changedExtraBody: r.extraBody,
-    turnsInThread: n.turnsInThread,
-    messageCount: n.messageCount,
-    prevMessageCount: n.prevMessageCount,
-    firstChangedIndex: n.firstChangedIndex,
-    deltaMessageCount: n.deltaMessageCount,
-    claimedCompact: s.compact,
-    claimedSnip: s.snip,
-    claimedToolResultClear: s.tool_result_clear,
-    claimedRewind: s.rewind,
-    claimedClear: s.clear,
-    claimedAbortStrip: s.abort_strip,
-    unclaimedHistoryChange: n.sourceCategory === "main" && h && n.historyEditClaims.length === 0,
+    decision: fromEnum(decision.decision),
+    reason: fromEnum(decision.reason),
+    sourceCategory: fromEnum(decision.sourceCategory),
+    threadUnsupported: isThreadUnsupported(args.agentId, args.model),
+    modelHeldStateless: args.modelHeldStateless,
+    relayHeldStateless: args.relayHeldStateless,
+    classifierHeldStateless: args.classifierHeldStateless,
+    creditRetryStateless: args.creditRetryStateless,
+    dropHeldStateless: args.dropHeldStateless,
+    evictedOther: decision.evictedOther,
+    changedModel: changedFields.model,
+    changedSystem: changedFields.system,
+    changedTools: changedFields.tools,
+    changedBetas: changedFields.betas,
+    changedLatchedHeaders: changedFields.latchedHeaders,
+    changedThinking: changedFields.thinking,
+    changedToolChoice: changedFields.toolChoice,
+    changedEffort: changedFields.effort,
+    changedExtraBody: changedFields.extraBody,
+    turnsInThread: decision.turnsInThread,
+    messageCount: decision.messageCount,
+    prevMessageCount: decision.prevMessageCount,
+    firstChangedIndex: decision.firstChangedIndex,
+    deltaMessageCount: decision.deltaMessageCount,
+    claimedCompact: claimedEdits.compact,
+    claimedSnip: claimedEdits.snip,
+    claimedToolResultClear: claimedEdits.tool_result_clear,
+    claimedRewind: claimedEdits.rewind,
+    claimedClear: claimedEdits.clear,
+    claimedAbortStrip: claimedEdits.abort_strip,
+    unclaimedHistoryChange:
+      decision.sourceCategory === "main" && reshaped && decision.historyEditClaims.length === 0,
   });
-  return n;
+  return decision;
 }
 //@ chunk-e6aww6q8.js:2609515-2609768 placement
 function emptyEchoDiffs() {
@@ -1510,20 +1560,20 @@ var STRUCTURAL_ECHO_DIFFS = [
   "turn_dropped",
 ];
 //@ chunk-e6aww6q8.js:2609895-2610017 placement
-function hasStructuralEchoDiff(effort, n) {
-  if (n === undefined) return false;
-  let r = effort.classesById.get(n);
-  if (r === undefined) return false;
-  return STRUCTURAL_ECHO_DIFFS.some((s) => r.has(s));
+function hasStructuralEchoDiff(effort, anchorId) {
+  if (anchorId === undefined) return false;
+  let classes = effort.classesById.get(anchorId);
+  if (classes === undefined) return false;
+  return STRUCTURAL_ECHO_DIFFS.some((diff) => classes.has(diff));
 }
 //@ chunk-e6aww6q8.js:2610017-2610262 placement
-function blockShape(e) {
-  let n = e.type === "tool_use" || e.type === "server_tool_use" || e.type === "mcp_tool_use";
+function blockShape(block) {
+  let isTool = block.type === "tool_use" || block.type === "server_tool_use" || block.type === "mcp_tool_use";
   return {
-    type: e.type,
-    id: n && typeof e.id === "string" ? e.id : undefined,
-    name: n && typeof e.name === "string" ? e.name : undefined,
-    hasCaller: "caller" in e && e.caller !== undefined,
+    type: block.type,
+    id: isTool && typeof block.id === "string" ? block.id : undefined,
+    name: isTool && typeof block.name === "string" ? block.name : undefined,
+    hasCaller: "caller" in block && block.caller !== undefined,
   };
 }
 //@ chunk-e6aww6q8.js:2610262-2610354 placement
@@ -1541,173 +1591,174 @@ function blockShapes(content) {
 /**
  * 把助手消息内容转成块形状列表，批量工具调用按原始调用合并去重。
  */
-function assistantBlockShapes(e) {
-  let n = blockShapes(e.message.content);
-  let batchToolUses = e.batchToolUses;
-  if (!batchToolUses || batchToolUses.length === 0) return n;
-  let s = new Map(batchToolUses.map((batchToolUse) => [batchToolUse.id, batchToolUse]));
-  let h = [];
-  let y = new Set();
-  for (let S of n) {
-    let w = S.id === undefined ? undefined : stripSuffixNumber(S.id);
-    let L = w === undefined ? undefined : s.get(w);
-    if (!L) h.push(S);
-    else if (!y.has(L.id)) {
-      y.add(L.id);
-      h.push({
+function assistantBlockShapes(message) {
+  let shapes = blockShapes(message.message.content);
+  let batchToolUses = message.batchToolUses;
+  if (!batchToolUses || batchToolUses.length === 0) return shapes;
+  let batches = new Map(batchToolUses.map((batchToolUse) => [batchToolUse.id, batchToolUse]));
+  let out = [];
+  let usedIds = new Set();
+  for (let shape of shapes) {
+    let baseId = shape.id === undefined ? undefined : stripSuffixNumber(shape.id);
+    let batch = baseId === undefined ? undefined : batches.get(baseId);
+    if (!batch) out.push(shape);
+    else if (!usedIds.has(batch.id)) {
+      usedIds.add(batch.id);
+      out.push({
         type: "tool_use",
-        id: L.id,
-        name: L.name,
-        hasCaller: S.hasCaller,
+        id: batch.id,
+        name: batch.name,
+        hasCaller: shape.hasCaller,
       });
     }
   }
-  return h;
+  return out;
 }
 //@ chunk-e6aww6q8.js:2610705-2610769 placement
-function blockKey(e) {
-  return e.id !== undefined ? `${e.type}#${e.id}` : e.type;
+function blockKey(shape) {
+  return shape.id !== undefined ? `${shape.type}#${shape.id}` : shape.type;
 }
 //@ chunk-e6aww6q8.js:2610769-2610862 placement
-function countBlockKeys(e) {
-  let n = new Map();
-  for (let r of e) {
-    let s = blockKey(r);
-    n.set(s, (n.get(s) ?? 0) + 1);
+function countBlockKeys(shapes) {
+  let counts = new Map();
+  for (let shape of shapes) {
+    let key = blockKey(shape);
+    counts.set(key, (counts.get(key) ?? 0) + 1);
   }
-  return n;
+  return counts;
 }
 //@ chunk-e6aww6q8.js:2610862-2610984 placement
-function matchedBlockKeys(e, n) {
-  let r = new Map(n);
-  let s = [];
-  for (let h of e) {
-    let y = blockKey(h);
-    let S = r.get(y) ?? 0;
-    if (S > 0) {
-      s.push(y);
-      r.set(y, S - 1);
+function matchedBlockKeys(shapes, counts) {
+  let remaining = new Map(counts);
+  let keys = [];
+  for (let shape of shapes) {
+    let key = blockKey(shape);
+    let count = remaining.get(key) ?? 0;
+    if (count > 0) {
+      keys.push(key);
+      remaining.set(key, count - 1);
     }
   }
-  return s;
+  return keys;
 }
 //@ chunk-e6aww6q8.js:2610984-2612031 placement
 /**
  * 对比两次请求，分类新增的内容（工具调用、轮询、其他），供 tether 判断。
  */
-function classifyAddedContent(e, shapes) {
-  let r = new Set();
-  let s = countBlockKeys(e);
-  let h = countBlockKeys(shapes);
-  for (let G of shapes) {
-    let q = blockKey(G);
-    if ((h.get(q) ?? 0) > (s.get(q) ?? 0))
-      if (G.id === undefined) r.add("added_other");
-      else if (isTaskId(G.id)) r.add("added_tool_use_gettask");
-      else if (G.id.startsWith(POLL_2)) r.add("added_tool_use_poll");
-      else r.add("added_tool_use_other");
+function classifyAddedContent(sentShapes, shapes) {
+  let classes = new Set();
+  let sentCounts = countBlockKeys(sentShapes);
+  let echoedCounts = countBlockKeys(shapes);
+  for (let shape of shapes) {
+    let key = blockKey(shape);
+    if ((echoedCounts.get(key) ?? 0) > (sentCounts.get(key) ?? 0))
+      if (shape.id === undefined) classes.add("added_other");
+      else if (isTaskId(shape.id)) classes.add("added_tool_use_gettask");
+      else if (shape.id.startsWith(POLL_2)) classes.add("added_tool_use_poll");
+      else classes.add("added_tool_use_other");
   }
-  for (let G of e) {
-    let q = blockKey(G);
-    if ((s.get(q) ?? 0) > (h.get(q) ?? 0))
-      switch (G.type) {
+  for (let shape of sentShapes) {
+    let key = blockKey(shape);
+    if ((sentCounts.get(key) ?? 0) > (echoedCounts.get(key) ?? 0))
+      switch (shape.type) {
         case "tool_use":
         case "server_tool_use":
         case "mcp_tool_use":
-          r.add("dropped_tool_use");
+          classes.add("dropped_tool_use");
           break;
         case "thinking":
         case "redacted_thinking":
-          r.add("dropped_thinking");
+          classes.add("dropped_thinking");
           break;
         case "text":
-          r.add("dropped_text");
+          classes.add("dropped_text");
           break;
         default:
-          r.add("dropped_other");
+          classes.add("dropped_other");
       }
   }
-  let y = new Map();
-  for (let [G, q] of s) {
-    let Z = h.get(G) ?? 0;
-    if (Z > 0) y.set(G, Math.min(q, Z));
+  let matchedCounts = new Map();
+  for (let [key, count] of sentCounts) {
+    let otherCount = echoedCounts.get(key) ?? 0;
+    if (otherCount > 0) matchedCounts.set(key, Math.min(count, otherCount));
   }
-  let S = matchedBlockKeys(e, y);
-  let w = matchedBlockKeys(shapes, y);
-  for (let idx = 0; idx < S.length; idx++)
-    if (S[idx] !== w[idx]) {
-      r.add("reordered");
+  let sentMatched = matchedBlockKeys(sentShapes, matchedCounts);
+  let echoedMatched = matchedBlockKeys(shapes, matchedCounts);
+  for (let idx = 0; idx < sentMatched.length; idx++)
+    if (sentMatched[idx] !== echoedMatched[idx]) {
+      classes.add("reordered");
       break;
     }
-  let L = new Map();
-  for (let G of e) if (G.id !== undefined) L.set(G.id, G);
-  for (let G of shapes) {
-    if (G.id === undefined) continue;
-    let q = L.get(G.id);
-    if (!q) continue;
-    if (q.name !== undefined && G.name !== undefined && q.name !== G.name) r.add("tool_name_changed");
-    if (q.hasCaller && !G.hasCaller) r.add("caller_dropped");
+  let byId = new Map();
+  for (let shape of sentShapes) if (shape.id !== undefined) byId.set(shape.id, shape);
+  for (let shape of shapes) {
+    if (shape.id === undefined) continue;
+    let sent = byId.get(shape.id);
+    if (!sent) continue;
+    if (sent.name !== undefined && shape.name !== undefined && sent.name !== shape.name)
+      classes.add("tool_name_changed");
+    if (sent.hasCaller && !shape.hasCaller) classes.add("caller_dropped");
   }
-  return r;
+  return classes;
 }
 //@ chunk-e6aww6q8.js:2612031-2612836 placement
 /**
  * 对比本地发送的 assistant 回合与服务端线程回显的内容：按消息 id 聚合块形状，统计重排、拆分、丢失、增删工具调用、thinking/文本丢失等差异类别。
  */
 function auditTetherEcho(sent, echoed) {
-  let r = new Map();
-  let s = [];
-  for (let G of sent) {
-    if (G.type !== "assistant" || G.isVirtual || !isRealApiResponse(G)) continue;
-    let id = G.message.id;
+  let shapesById = new Map();
+  let order = [];
+  for (let message of sent) {
+    if (message.type !== "assistant" || message.isVirtual || !isRealApiResponse(message)) continue;
+    let id = message.message.id;
     if (typeof id !== "string" || id.length === 0) continue;
-    let Z = r.get(id);
-    if (!Z) {
-      Z = [];
-      r.set(id, Z);
-      s.push(id);
+    let shapes = shapesById.get(id);
+    if (!shapes) {
+      shapes = [];
+      shapesById.set(id, shapes);
+      order.push(id);
     }
-    Z.push(...assistantBlockShapes(G));
+    shapes.push(...assistantBlockShapes(message));
   }
-  let h = new Map();
-  for (let G of echoed) {
-    if (G.type !== "assistant") continue;
-    let id = G.message.id;
-    if (typeof id !== "string" || !r.has(id)) continue;
-    let Z = h.get(id);
-    if (!Z) {
-      Z = {
+  let echoedById = new Map();
+  for (let message of echoed) {
+    if (message.type !== "assistant") continue;
+    let id = message.message.id;
+    if (typeof id !== "string" || !shapesById.has(id)) continue;
+    let entry = echoedById.get(id);
+    if (!entry) {
+      entry = {
         shapes: [],
         messages: 0,
       };
-      h.set(id, Z);
+      echoedById.set(id, entry);
     }
-    Z.messages++;
-    Z.shapes.push(...blockShapes(G.message.content));
+    entry.messages++;
+    entry.shapes.push(...blockShapes(message.message.content));
   }
-  let y = emptyEchoDiffs();
-  let S = 0;
-  let w = [];
-  let L = new Map();
-  for (let G of s) {
-    let q = r.get(G) ?? [];
-    let Z = h.get(G);
-    let Se = Z ? classifyAddedContent(q, Z.shapes) : new Set(["turn_dropped"]);
-    if (Z && Z.messages > 1) Se.add("turn_split");
-    if (Se.size === 0) {
-      S++;
+  let diffs = emptyEchoDiffs();
+  let identical = 0;
+  let diverged = [];
+  let classesById = new Map();
+  for (let id of order) {
+    let sentShapes = shapesById.get(id) ?? [];
+    let echoed = echoedById.get(id);
+    let classes = echoed ? classifyAddedContent(sentShapes, echoed.shapes) : new Set(["turn_dropped"]);
+    if (echoed && echoed.messages > 1) classes.add("turn_split");
+    if (classes.size === 0) {
+      identical++;
       continue;
     }
-    w.push(G);
-    L.set(G, Se);
-    for (let ke of Se) y[ke]++;
+    diverged.push(id);
+    classesById.set(id, classes);
+    for (let cls of classes) diffs[cls]++;
   }
   return {
-    turnsReceived: s.length,
-    turnsIdentical: S,
-    diffs: y,
-    divergedMessageIds: w,
-    classesById: L,
+    turnsReceived: order.length,
+    turnsIdentical: identical,
+    diffs,
+    divergedMessageIds: diverged,
+    classesById,
   };
 }
 //@ chunk-e6aww6q8.js:2612836-2612901 placement
@@ -1757,15 +1808,16 @@ function logTetherEchoAudit(audit, context) {
  * 把 api_system 消息中的临时提醒拆出：返回去掉临时内容的消息副本、需在下一条用户消息时清除的提醒位置与需整体丢弃的空消息。
  */
 function liftEphemeralReminders(messages, clearAtNextUser) {
-  let r = messages.length - 1;
-  let s = new Map();
-  let h = new Set();
-  let y;
-  messages.forEach((message, w) => {
+  let lastIndex = messages.length - 1;
+  let clearAtByIndex = new Map();
+  let dropBase = new Set();
+  let next;
+  messages.forEach((message, index) => {
     if (message.type !== "api_system") return;
-    let L = message.ephemeral ? message.message.content : message.ephemeralSuffix;
-    if (L === undefined || !(clearAtNextUser || (message.reminderFromRecords && w !== r))) return;
-    if (clearAtNextUser && L.trim() !== "") s.set(w, L);
+    let suffix = message.ephemeral ? message.message.content : message.ephemeralSuffix;
+    if (suffix === undefined || !(clearAtNextUser || (message.reminderFromRecords && index !== lastIndex)))
+      return;
+    if (clearAtNextUser && suffix.trim() !== "") clearAtByIndex.set(index, suffix);
     let content = message.ephemeral ? "" : message.message.content;
     if (
       content === "" &&
@@ -1773,9 +1825,9 @@ function liftEphemeralReminders(messages, clearAtNextUser) {
       !message.toolRemovals?.length &&
       message.outputConfig === undefined
     )
-      h.add(w);
-    y ??= [...messages];
-    y[w] = {
+      dropBase.add(index);
+    next ??= [...messages];
+    next[index] = {
       ...message,
       message: {
         ...message.message,
@@ -1785,54 +1837,63 @@ function liftEphemeralReminders(messages, clearAtNextUser) {
       ephemeralSuffix: undefined,
     };
   });
-  return y === undefined
+  return next === undefined
     ? undefined
     : {
-        messages: y,
-        clearAtAfter: s,
-        dropBase: h,
+        messages: next,
+        clearAtAfter: clearAtByIndex,
+        dropBase,
       };
 }
 //@ chunk-e6aww6q8.js:2614300-2614553 placement
-function buildWireWithClearAt(e, n) {
-  let r = [];
-  let s = [];
-  e.forEach((h, y) => {
-    s.push(r.length);
-    if (!n.dropBase.has(y)) r.push(h);
-    let S = n.clearAtAfter.get(y);
-    if (S !== undefined)
-      r.push({
+function buildWireWithClearAt(messages, lifted) {
+  let wire = [];
+  let wireIndexOf = [];
+  messages.forEach((message, index) => {
+    wireIndexOf.push(wire.length);
+    if (!lifted.dropBase.has(index)) wire.push(message);
+    let content = lifted.clearAtAfter.get(index);
+    if (content !== undefined)
+      wire.push({
         role: "system",
-        content: S,
+        content,
         clear_at: "next_user_message",
       });
   });
-  s.push(r.length);
+  wireIndexOf.push(wire.length);
   return {
-    wire: r,
-    wireIndexOf: s,
+    wire,
+    wireIndexOf,
   };
 }
 //@ chunk-e6aww6q8.js:2614553-2614712 placement
 /**
  * ATIS 不一致时重新拉取 bootstrap 的参数：最小间隔 300 s（30–86400）、最大抖动 180 s（0–3600）与开关名、拉取时间槽。
  */
-var X_CC_ATIS_CURRENT = "x-cc-atis-current";
-var DEFAULT_ATIS_MIN_INTERVAL_S = 300;
-var ATIS_MIN_INTERVAL_RANGE = {
-  min: 30,
-  max: 86400,
-};
-var DEFAULT_ATIS_MAX_JITTER_S = 180;
-var ATIS_MAX_JITTER_RANGE = {
-  min: 0,
-  max: 3600,
-};
-var TENGU_EXPRESSIVE_WHISTLE_CONFIG = "tengu_expressive_whistle_config";
-var atisRefetchStateSlot = new HostScoped(() => ({
-  nextFetchAt: 0,
-}));
+var X_CC_ATIS_CURRENT; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var DEFAULT_ATIS_MIN_INTERVAL_S;
+var ATIS_MIN_INTERVAL_RANGE;
+var DEFAULT_ATIS_MAX_JITTER_S;
+var ATIS_MAX_JITTER_RANGE;
+var TENGU_EXPRESSIVE_WHISTLE_CONFIG;
+var atisRefetchStateSlot;
+deferInit("chunk-e6aww6q8.js:2614553", () => {
+  X_CC_ATIS_CURRENT = "x-cc-atis-current";
+  DEFAULT_ATIS_MIN_INTERVAL_S = 300;
+  ATIS_MIN_INTERVAL_RANGE = {
+    min: 30,
+    max: 86400,
+  };
+  DEFAULT_ATIS_MAX_JITTER_S = 180;
+  ATIS_MAX_JITTER_RANGE = {
+    min: 0,
+    max: 3600,
+  };
+  TENGU_EXPRESSIVE_WHISTLE_CONFIG = "tengu_expressive_whistle_config";
+  atisRefetchStateSlot = new HostScoped(() => ({
+    nextFetchAt: 0,
+  }));
+});
 //@ chunk-e6aww6q8.js:2614712-2614751 placement
 function atisRefetchState() {
   return atisRefetchStateSlot.of(getRootSession().host);
@@ -1848,8 +1909,8 @@ function isExpressiveWhistleEnabled() {
 async function refetchStaleClientData(headers, request, fallbackActive) {
   try {
     if (!isExpressiveWhistleEnabled()) return;
-    let s = headers.get(X_CC_ATIS_CURRENT);
-    if (!s) return;
+    let serverPin = headers.get(X_CC_ATIS_CURRENT);
+    if (!serverPin) return;
     let clientDataAtis = getClientDataAtis();
     if (clientDataAtis === undefined) return;
     if (
@@ -1862,34 +1923,34 @@ async function refetchStaleClientData(headers, request, fallbackActive) {
       hasRefusalFallbackHeaderArmed()
     )
       return;
-    let y = atisPin(s);
-    if (y === atisPin(clientDataAtis)) return;
-    let S = atisRefetchState();
+    let pin = atisPin(serverPin);
+    if (pin === atisPin(clientDataAtis)) return;
+    let state = atisRefetchState();
     let now = Date.now();
-    if (now < S.nextFetchAt) return;
+    if (now < state.nextFetchAt) return;
     let { minIntervalMs, maxJitterMs } = staleRefetchTiming();
-    let q = Math.random() * maxJitterMs;
-    S.nextFetchAt = now + q + minIntervalMs;
-    let { bootstrapFetchCanConvergeSlot, refreshBootstrapData } = await import("./chunk-1qx2v2vg.js");
+    let jitterMs = Math.random() * maxJitterMs;
+    state.nextFetchAt = now + jitterMs + minIntervalMs;
+    let { bootstrapFetchCanConvergeSlot, refreshBootstrapData } = await import("./bootstrap.js");
     if (!bootstrapFetchCanConvergeSlot()) return;
     logForDebugging("[Bootstrap] Server ATIS pin differs from cached clientData; refetching");
-    await sleep(q, undefined, {
+    await sleep(jitterMs, undefined, {
       unref: true,
     });
     let outcome = lit_2("skipped_converged");
-    if (clientDataAtisPin() !== y)
+    if (clientDataAtisPin() !== pin)
       outcome = !(await refreshBootstrapData(request.storageV5, request.credentials, {
         keepRenderCaches: true,
       }))
         ? lit_2("fetch_failed")
-        : clientDataAtisPin() === y
+        : clientDataAtisPin() === pin
           ? lit_2("fetched_converged")
           : lit_2("fetched_pins_differ");
     logEvent("tengu_client_data_stale_refetch", {
       outcome,
-      server_has_pin: y !== "none",
+      server_has_pin: pin !== "none",
       min_interval_ms: minIntervalMs,
-      jitter_ms: Math.round(q),
+      jitter_ms: Math.round(jitterMs),
     });
   } catch (error) {
     logError(error);
@@ -1924,8 +1985,10 @@ function staleRefetchTiming() {
   };
 }
 //@ chunk-e6aww6q8.js:2615903-2616006 placement
-function clampNumber(e, n, r) {
-  return typeof e === "number" && Number.isFinite(e) ? Math.min(Math.max(e, r.min), r.max) : n;
+function clampNumber(value, fallback, bounds) {
+  return typeof value === "number" && Number.isFinite(value)
+    ? Math.min(Math.max(value, bounds.min), bounds.max)
+    : fallback;
 }
 //@ chunk-e6aww6q8.js:2616006-2616063 placement
 class TetherHealSpendState {
@@ -1934,7 +1997,10 @@ class TetherHealSpendState {
   lapsedAtMs = undefined;
 }
 //@ chunk-e6aww6q8.js:2616063-2616090 placement
-var tetherHealSpendSlot = new HostScoped(() => new TetherHealSpendState());
+var tetherHealSpendSlot; // deferred: uses TetherHealSpendState of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:2616063", () => {
+  tetherHealSpendSlot = new HostScoped(() => new TetherHealSpendState());
+});
 export {
   seedWireShapeFromRecord,
   forgetAgentThread,

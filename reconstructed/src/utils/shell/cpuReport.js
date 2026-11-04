@@ -16,6 +16,7 @@ import { procStatField, isMinorFaultField, statState, statSession } from "../pro
 import { logForDebugging } from "../debug.js";
 import { identity } from "../identity.js";
 import { shellQuoteArgs } from "../bash/bashPipeCommand.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-8v8kgcje.js:468-514 placement
 var MAX_TRACKED_TOOL_ENTRIES = 10;
@@ -28,39 +29,45 @@ function classifyProcessError(error) {
   return errnoCode === "ENOENT" || errnoCode === "ESRCH" ? "gone" : "unknown";
 }
 //@ chunk-8v8kgcje.js:589-705 placement
-function getProcessState(file, e) {
-  let r = procStatField(file);
-  if (r === undefined || r === "") return "unknown";
-  if (r !== e || isMinorFaultField(statState(file))) return "gone";
+function getProcessState(file, expectedField) {
+  let field = procStatField(file);
+  if (field === undefined || field === "") return "unknown";
+  if (field !== expectedField || isMinorFaultField(statState(file))) return "gone";
   return "running";
 }
 //@ chunk-8v8kgcje.js:705-1138 placement
 /**
  * 扫描 /proc 下各进程的 stat（分批并行），按进程组 id 收集仍在运行的进程（pid 与启动标记），每组有数量上限。
  */
-async function findProcessesByPgid(n) {
-  let e = new Map();
-  if (n.size === 0) return e;
-  let filtered = (await readdir("/proc")).filter((o) => /^[0-9]+$/.test(o));
-  for (let o = 0; o < filtered.length; o += PROC_READ_BATCH_SIZE) {
+async function findProcessesByPgid(pgids) {
+  let processesByPgid = new Map();
+  if (pgids.size === 0) return processesByPgid;
+  let filtered = (await readdir("/proc")).filter((pidEntry) => /^[0-9]+$/.test(pidEntry));
+  for (let batchStart = 0; batchStart < filtered.length; batchStart += PROC_READ_BATCH_SIZE) {
     let results = await Promise.all(
       filtered
-        .slice(o, o + PROC_READ_BATCH_SIZE)
-        .map((s) => readFile(`/proc/${s}/stat`, "utf8").catch(() => "")),
+        .slice(batchStart, batchStart + PROC_READ_BATCH_SIZE)
+        .map((pid) => readFile(`/proc/${pid}/stat`, "utf8").catch(() => "")),
     );
-    for (let [s, l] of results.entries()) {
-      let u = statSession(l);
-      let f = procStatField(l);
-      if (u === undefined || !n.has(u) || f === undefined || f === "" || isMinorFaultField(statState(l)))
+    for (let [batchIndex, statContent] of results.entries()) {
+      let sessionId = statSession(statContent);
+      let pgidField = procStatField(statContent);
+      if (
+        sessionId === undefined ||
+        !pgids.has(sessionId) ||
+        pgidField === undefined ||
+        pgidField === "" ||
+        isMinorFaultField(statState(statContent))
+      )
         continue;
-      let a = e.get(u) ?? [];
-      if (a.length < MAX_PIDS_PER_GROUP) {
-        a.push([Number(filtered[o + s]), f]);
-        e.set(u, a);
+      let groupProcesses = processesByPgid.get(sessionId) ?? [];
+      if (groupProcesses.length < MAX_PIDS_PER_GROUP) {
+        groupProcesses.push([Number(filtered[batchStart + batchIndex]), pgidField]);
+        processesByPgid.set(sessionId, groupProcesses);
       }
     }
   }
-  return e;
+  return processesByPgid;
 }
 //@ chunk-8v8kgcje.js:1138-1219 placement
 /**
@@ -88,36 +95,37 @@ class LeftoverProcessTracker {
   isFollowing() {
     return this.#n !== undefined;
   }
-  follows(n) {
-    return (n === "turn" || n === "agent") && this.isFollowing();
+  follows(source) {
+    return (source === "turn" || source === "agent") && this.isFollowing();
   }
   countRunning() {
-    let n = new Set(this.#t);
-    for (let e of this.#e) if (hasLiveProcess(e)) n.add(e.pgid);
-    return Math.min(n.size, MAX_TRACKED_TOOL_ENTRIES);
+    let pgids = new Set(this.#t);
+    for (let entry of this.#e) if (hasLiveProcess(entry)) pgids.add(entry.pgid);
+    return Math.min(pgids.size, MAX_TRACKED_TOOL_ENTRIES);
   }
-  noteCommandLeftProcesses(n, e) {
-    if (!this.isFollowing() || !_.test(e)) return Promise.resolve();
-    let r = this.#n;
-    this.#t.add(n);
-    return findProcessesByPgid(new Set([n]))
+  noteCommandLeftProcesses(pgid, toolUseId) {
+    if (!this.isFollowing() || !_.test(toolUseId)) return Promise.resolve();
+    let generation = this.#n;
+    this.#t.add(pgid);
+    return findProcessesByPgid(new Set([pgid]))
       .then((processesByPgid) => {
-        let i = processesByPgid.get(n);
-        if (i?.some(([s]) => s === n)) return;
-        if (i !== undefined && this.#n === r)
+        let processes = processesByPgid.get(pgid);
+        if (processes?.some(([pid]) => pid === pgid)) return;
+        if (processes !== undefined && this.#n === generation)
           this.#r({
-            tool_use_id: e,
-            pgid: n,
-            processes: i,
+            tool_use_id: toolUseId,
+            pgid,
+            processes,
           });
       })
       .catch(() => {})
-      .finally(() => this.#t.delete(n));
+      .finally(() => this.#t.delete(pgid));
   }
-  #r(n) {
-    this.#e = [...this.#e.filter((e) => e.tool_use_id !== n.tool_use_id && hasLiveProcess(e)), n].slice(
-      -MAX_TRACKED_TOOL_ENTRIES,
-    );
+  #r(entry) {
+    this.#e = [
+      ...this.#e.filter((existing) => existing.tool_use_id !== entry.tool_use_id && hasLiveProcess(existing)),
+      entry,
+    ].slice(-MAX_TRACKED_TOOL_ENTRIES);
   }
   reset() {
     this.#e = [];
@@ -127,10 +135,10 @@ class LeftoverProcessTracker {
 }
 //@ chunk-8v8kgcje.js:1959-2103 placement
 function hasLiveProcess({ processes }) {
-  return processes.some(([e, r]) => {
+  return processes.some(([pid, expectedField]) => {
     try {
-      let file = readFileSync(`/proc/${e}/stat`, "utf8");
-      return getProcessState(file, r) !== "gone";
+      let file = readFileSync(`/proc/${pid}/stat`, "utf8");
+      return getProcessState(file, expectedField) !== "gone";
     } catch (error) {
       return classifyProcessError(error) !== "gone";
     }
@@ -140,19 +148,26 @@ function hasLiveProcess({ processes }) {
 /**
  * 按宿主缓存的遗留后台进程跟踪器，重置时清空记录。
  */
-var leftoverProcessTracker = identity(new LeftoverProcessTracker(), (n) => n.reset());
+var leftoverProcessTracker; // deferred: uses LeftoverProcessTracker of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-8v8kgcje.js:2103", () => {
+  leftoverProcessTracker = identity(new LeftoverProcessTracker(), (tracker) => tracker.reset());
+});
 //@ chunk-8v8kgcje.js:2243-2339 placement
-var CC_SHELL = "cc-shell";
-var cpuacctState = identity(
-  {
-    dir: undefined,
-    joinCommand: undefined,
-  },
-  (n) => {
-    n.dir = undefined;
-    n.joinCommand = undefined;
-  },
-);
+var CC_SHELL; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var cpuacctState;
+deferInit("chunk-8v8kgcje.js:2243", () => {
+  CC_SHELL = "cc-shell";
+  cpuacctState = identity(
+    {
+      dir: undefined,
+      joinCommand: undefined,
+    },
+    (state) => {
+      state.dir = undefined;
+      state.joinCommand = undefined;
+    },
+  );
+});
 //@ chunk-8v8kgcje.js:2339-2471 placement
 /**
  * 设置 cpuacct 目录，并生成把子进程加入该组的 shell 片段。
@@ -187,11 +202,11 @@ var CPUACCT_ROOT = "/sys/fs/cgroup/cpuacct";
 /**
  * 从 /proc/<pid>/cgroup 内容中取 cpuacct 控制组路径。
  */
-function getCpuacctPath(n) {
-  for (let line of n.split(`
+function getCpuacctPath(mountInfo) {
+  for (let line of mountInfo.split(`
 `)) {
-    let [, r, ...o] = line.split(":");
-    if (r === "cpuacct" && o.length > 0) return o.join(":");
+    let [, controller, ...pathParts] = line.split(":");
+    if (controller === "cpuacct" && pathParts.length > 0) return pathParts.join(":");
   }
   return;
 }
@@ -199,12 +214,12 @@ function getCpuacctPath(n) {
 /**
  * 在 cpuacct cgroup 下为 Bash 工具创建子组（路径须至少两段、不含 ..、非 cc- 结尾），已存在视为成功，失败记录后返回 undefined。
  */
-function ensureCpuacctGroup(n, e = mkdirSync) {
-  let filtered = n.split("/").filter(Boolean);
+function ensureCpuacctGroup(groupPath, mkdir = mkdirSync) {
+  let filtered = groupPath.split("/").filter(Boolean);
   if (filtered.length < 2 || filtered.at(-1)?.startsWith("cc-") || filtered.includes("..")) return;
-  let joined = posix.join(CPUACCT_ROOT, n, CC_SHELL);
+  let joined = posix.join(CPUACCT_ROOT, groupPath, CC_SHELL);
   try {
-    e(joined);
+    mkdir(joined);
   } catch (error) {
     if (getErrnoCode(error) !== "EEXIST") {
       logForDebugging(
@@ -219,11 +234,11 @@ function ensureCpuacctGroup(n, e = mkdirSync) {
 /**
  * 读取 cpuacct.usage（纳秒）并转换为毫秒。
  */
-function readCpuUsageSeconds(n) {
+function readCpuUsageSeconds(usagePath) {
   try {
-    let trimmed = readFileSync(n, "utf8").trim();
-    let r = trimmed === "" ? Number.NaN : Number(trimmed);
-    return Number.isFinite(r) ? r / 1e6 : undefined;
+    let trimmed = readFileSync(usagePath, "utf8").trim();
+    let microseconds = trimmed === "" ? Number.NaN : Number(trimmed);
+    return Number.isFinite(microseconds) ? microseconds / 1e6 : undefined;
   } catch {
     return;
   }

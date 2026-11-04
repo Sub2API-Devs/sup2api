@@ -11,6 +11,7 @@
 import { createDomainCache } from "../../tools/WebFetchTool/utils.js";
 import { createSignal } from "../signal.js";
 import { SessionRootSlot } from "../../bootstrap/sessionSlices.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:2313500-2313874 placement
 /**
@@ -36,7 +37,10 @@ class SuggestionCacheState {
 /**
  * 按会话根缓存的建议缓存状态。
  */
-var suggestionCacheBySessionRoot = new SessionRootSlot(() => new SuggestionCacheState());
+var suggestionCacheBySessionRoot; // deferred: uses SessionRootSlot (../../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:2313874", () => {
+  suggestionCacheBySessionRoot = new SessionRootSlot(() => new SuggestionCacheState());
+});
 //@ chunk-e6aww6q8.js:2313901-2313915 placement
 var SUGGESTION_CACHE_TTL_MS = 60000;
 export { suggestionCacheBySessionRoot, SUGGESTION_CACHE_TTL_MS };

@@ -30,6 +30,7 @@ import { LINK_END, link } from "./termio/osc.js";
 import { logForDebugging } from "../utils/debug.js";
 import { bunStringWidth } from "./stringWidth.js";
 import { repeatString } from "../utils/stringUtils.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-bzr73sfg.js:253719-253776 fingerprint = renderFrame (0.771)
 /**
@@ -39,18 +40,23 @@ function isFrameOverflowing(frame) {
   return frame.screen.height >= frame.viewport.height;
 }
 //@ chunk-bzr73sfg.js:258955-259050 fingerprint = CARRIAGE_RETURN (0.73)
-var CARRIAGE_RETURN = {
-  type: "carriageReturn",
-};
-var NEWLINE = {
-  type: "stdout",
-  content: `
+var CARRIAGE_RETURN; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var NEWLINE;
+var ERASE_TO_EOL_PATCH;
+deferInit("chunk-bzr73sfg.js:258955", () => {
+  CARRIAGE_RETURN = {
+    type: "carriageReturn",
+  };
+  NEWLINE = {
+    type: "stdout",
+    content: `
 `,
-};
-var ERASE_TO_EOL_PATCH = {
-  type: "stdout",
-  content: eraseToEndOfLine(),
-};
+  };
+  ERASE_TO_EOL_PATCH = {
+    type: "stdout",
+    content: eraseToEndOfLine(),
+  };
+});
 //@ chunk-bzr73sfg.js:259050-263509 fingerprint = LogUpdate (0.962)
 /**
  * 增量输出：render(prev, next, altScreen, decstbmAllowed) 比较两帧屏幕，产出 Patch 列表（stdout 文字、styleStr、hyperlink、cursorMove/cursorTo、clear、clearTerminal…）。非 TTY 时整帧输出；视口变小/宽度变化/内容缩到视口以内等情况整屏重置（clearTerminal，会闪）；有 scrollHint 且允许 DECSTBM 时先用滚动区域把旧帧行上移/下移再 diff；diff 时跳过宽字符占位格，行尾空白用 EL 清除；改动落在已滚入回滚区的行上时只能整屏重置。慢于 50ms 记日志。
@@ -74,8 +80,8 @@ class LogUpdate {
     this.scrolledOutRows = new WeakMap();
   }
   scrolledOutRows = new WeakMap();
-  scrolledOutRowsOf(n) {
-    return this.scrolledOutRows.get(n);
+  scrolledOutRowsOf(frame) {
+    return this.scrolledOutRows.get(frame);
   }
   forceReset = false;
   forceFullReset() {
@@ -97,9 +103,9 @@ class LogUpdate {
             if (cell.hyperlink !== undefined) line += link(cell.hyperlink);
             currentHyperlink = cell.hyperlink;
           }
-          let O = stylePool.transition(currentStyles, cell.styleId);
-          if (O.length > 0) {
-            line += O;
+          let transition = stylePool.transition(currentStyles, cell.styleId);
+          if (transition.length > 0) {
+            line += transition;
             currentStyles = cell.styleId;
           }
           line += cell.char;
@@ -132,7 +138,7 @@ class LogUpdate {
       ];
     return [];
   }
-  render(prev, next, f = false, decstbmSafe = true) {
+  render(prev, next, allowScroll = false, decstbmSafe = true) {
     if (!this.options.isTTY) {
       if (screensEqual(prev.screen, next.screen)) return [];
       return this.renderFullFrame(next);
@@ -141,20 +147,20 @@ class LogUpdate {
     let stylePool = this.options.stylePool;
     let prevHadScrollback = prev.cursor.y >= prev.screen.height && isFrameOverflowing(prev);
     let max = Math.max(0, prev.screen.height - Math.min(prev.viewport.height, next.viewport.height));
-    let D = isFrameOverflowing(prev) ? 1 : 0;
-    let O = max + D;
+    let overflowRows = isFrameOverflowing(prev) ? 1 : 0;
+    let maxHeight = max + overflowRows;
     if (this.forceReset) {
       this.forceReset = false;
-      return fullResetSequence_CAUSES_FLICKER(next, "clear", stylePool, f, O);
+      return fullResetSequence_CAUSES_FLICKER(next, "clear", stylePool, allowScroll, maxHeight);
     }
     if (
       next.viewport.height < prev.viewport.height ||
       (next.viewport.height > prev.viewport.height && prevHadScrollback) ||
       (prev.viewport.width !== 0 && next.viewport.width !== prev.viewport.width)
     )
-      return fullResetSequence_CAUSES_FLICKER(next, "resize", stylePool, f, O);
+      return fullResetSequence_CAUSES_FLICKER(next, "resize", stylePool, allowScroll, maxHeight);
     let scrollPatch = [];
-    if (f && next.scrollHint && decstbmSafe) {
+    if (allowScroll && next.scrollHint && decstbmSafe) {
       let { bottom, delta } = next.scrollHint;
       let top = Math.max(next.scrollHint.top, 1);
       if (top < bottom && bottom < prev.screen.height && bottom < next.screen.height) {
@@ -171,22 +177,28 @@ class LogUpdate {
         ];
       }
     }
-    let U = next.screen.height < prev.screen.height;
+    let shrinking = next.screen.height < prev.screen.height;
     let nextFitsViewport = next.screen.height <= prev.viewport.height;
-    if (prevHadScrollback && nextFitsViewport && U) {
+    if (prevHadScrollback && nextFitsViewport && shrinking) {
       logForDebugging(
         `Full reset (shrink->below): prevHeight=${prev.screen.height}, nextHeight=${next.screen.height}, viewport=${prev.viewport.height}`,
       );
-      return fullResetSequence_CAUSES_FLICKER(next, "offscreen", stylePool, f, O);
+      return fullResetSequence_CAUSES_FLICKER(next, "offscreen", stylePool, allowScroll, maxHeight);
     }
     let screen = new VirtualScreen(prev.cursor, next.viewport.width);
     let heightDelta = Math.max(next.screen.height, 1) - Math.max(prev.screen.height, 1);
-    let shrinking = heightDelta < 0;
+    let shrinking_2 = heightDelta < 0;
     let growing = heightDelta > 0;
-    if (shrinking) {
+    if (shrinking_2) {
       let linesToClear = prev.screen.height - next.screen.height;
       if (linesToClear > prev.viewport.height)
-        return fullResetSequence_CAUSES_FLICKER(next, "offscreen", this.options.stylePool, f, O);
+        return fullResetSequence_CAUSES_FLICKER(
+          next,
+          "offscreen",
+          this.options.stylePool,
+          allowScroll,
+          maxHeight,
+        );
       screen.txn((prev) => [
         [
           {
@@ -212,59 +224,59 @@ class LogUpdate {
         : Math.max(prev.screen.height, next.screen.height) - next.viewport.height + cursorRestoreScroll,
       this.scrolledOutRows.get(prev) ?? 0,
     );
-    let Y = next.screen.height - next.viewport.height + 1;
+    let viewportY_2 = next.screen.height - next.viewport.height + 1;
     let currentStyleId = stylePool.none;
     let currentHyperlink = undefined;
-    let ee = -1;
-    let ae = -1;
-    let ne = false;
-    let de = false;
+    let lastRow = -1;
+    let lastCol = -1;
     let needsFullReset = false;
-    let resetTriggerY = -1;
-    diffEach(prev.screen, next.screen, (ce, pe, removed, added) => {
-      if (growing && pe >= prev.screen.height) return;
+    let resetTriggerY = false;
+    let needsFullReset_2 = false;
+    let resetTriggerY_2 = -1;
+    diffEach(prev.screen, next.screen, (x, y, removed, added) => {
+      if (growing && y >= prev.screen.height) return;
       if (added && added.width === 2) return;
-      if (added && added.width === 3 && isEmptyCellAt(prev.screen, ce, pe)) return;
+      if (added && added.width === 3 && isEmptyCellAt(prev.screen, x, y)) return;
       if (removed && (removed.width === 2 || removed.width === 3) && !added) return;
-      if (added && isEmptyCellAt(next.screen, ce, pe) && !removed) return;
-      if (pe < viewportY) {
-        if (f || shrinking || pe >= Y) {
-          needsFullReset = true;
-          resetTriggerY = pe;
+      if (added && isEmptyCellAt(next.screen, x, y) && !removed) return;
+      if (y < viewportY) {
+        if (allowScroll || shrinking_2 || y >= viewportY_2) {
+          needsFullReset_2 = true;
+          resetTriggerY_2 = y;
           return true;
         }
         return;
       }
-      if (pe !== ee) {
+      if (y !== lastRow) {
         currentHyperlink = transitionHyperlink(screen.diff, currentHyperlink, undefined);
-        ee = pe;
-        ae = -1;
-        ne = false;
-        de = false;
+        lastRow = y;
+        lastCol = -1;
+        needsFullReset = false;
+        resetTriggerY = false;
       }
-      if (removed && isEmptyCellAt(next.screen, ce, pe)) {
-        if (!ne) {
-          ne = true;
-          if (pe < next.screen.height) {
-            for (let idx = next.screen.width - 1; idx > ce; idx--)
-              if (!isEmptyCellAt(next.screen, idx, pe)) {
-                ae = idx;
+      if (removed && isEmptyCellAt(next.screen, x, y)) {
+        if (!needsFullReset) {
+          needsFullReset = true;
+          if (y < next.screen.height) {
+            for (let idx = next.screen.width - 1; idx > x; idx--)
+              if (!isEmptyCellAt(next.screen, idx, y)) {
+                lastCol = idx;
                 break;
               }
           }
         }
-        if (ce > ae) {
-          if (de) return;
-          de = true;
-          moveCursorTo(screen, ce, pe);
-          let fe = currentStyleId;
-          let ge = currentHyperlink;
+        if (x > lastCol) {
+          if (resetTriggerY) return;
+          resetTriggerY = true;
+          moveCursorTo(screen, x, y);
+          let prevStyleId = currentStyleId;
+          let prevHyperlink = currentHyperlink;
           currentStyleId = stylePool.none;
           currentHyperlink = undefined;
           screen.txn(() => {
             let patches = [];
-            transitionStyle(patches, stylePool, fe, stylePool.none);
-            transitionHyperlink(patches, ge, undefined);
+            transitionStyle(patches, stylePool, prevStyleId, stylePool.none);
+            transitionHyperlink(patches, prevHyperlink, undefined);
             patches.push(ERASE_TO_EOL_PATCH);
             return [
               patches,
@@ -277,7 +289,7 @@ class LogUpdate {
           return;
         }
       }
-      moveCursorTo(screen, ce, pe);
+      moveCursorTo(screen, x, y);
       if (added) {
         let targetHyperlink = added.hyperlink;
         currentHyperlink = transitionHyperlink(screen.diff, currentHyperlink, targetHyperlink);
@@ -306,16 +318,16 @@ class LogUpdate {
         });
       }
     });
-    if (needsFullReset)
-      return fullResetSequence_CAUSES_FLICKER(next, "offscreen", stylePool, f, O, {
-        triggerY: resetTriggerY,
-        prevLine: readLine(prev.screen, resetTriggerY),
-        nextLine: readLine(next.screen, resetTriggerY),
+    if (needsFullReset_2)
+      return fullResetSequence_CAUSES_FLICKER(next, "offscreen", stylePool, allowScroll, maxHeight, {
+        triggerY: resetTriggerY_2,
+        prevLine: readLine(prev.screen, resetTriggerY_2),
+        nextLine: readLine(next.screen, resetTriggerY_2),
       });
     currentStyleId = transitionStyle(screen.diff, stylePool, currentStyleId, stylePool.none);
     currentHyperlink = transitionHyperlink(screen.diff, currentHyperlink, undefined);
     if (growing) renderFrameSlice(screen, next, prev.screen.height, next.screen.height, stylePool);
-    if (f);
+    if (allowScroll);
     else if (next.cursor.y >= next.screen.height)
       screen.txn((prev) => {
         let rowsToCreate = next.cursor.y - prev.y;
@@ -331,19 +343,19 @@ class LogUpdate {
             },
           ];
         }
-        let Se = next.cursor.y - prev.y;
-        if (Se !== 0 || prev.x !== next.cursor.x) {
+        let dy = next.cursor.y - prev.y;
+        if (dy !== 0 || prev.x !== next.cursor.x) {
           let patches = [CARRIAGE_RETURN];
           patches.push({
             type: "cursorMove",
             x: next.cursor.x,
-            y: Se,
+            y: dy,
           });
           return [
             patches,
             {
               dx: next.cursor.x - prev.x,
-              dy: Se,
+              dy,
             },
           ];
         }
@@ -538,12 +550,12 @@ function writeCellWithStyleStr(screen, cell, styleStr) {
  */
 function moveCursorTo(screen, targetX, targetY) {
   let cursor = screen.cursor;
-  let p = targetY - cursor.y;
-  if (cursor.x >= screen.viewportWidth || p !== 0)
+  let dy = targetY - cursor.y;
+  if (cursor.x >= screen.viewportWidth || dy !== 0)
     screen.diff.push(CARRIAGE_RETURN, {
       type: "cursorMove",
       x: targetX,
-      y: p,
+      y: dy,
     });
   else if (cursor.x !== targetX)
     screen.diff.push({

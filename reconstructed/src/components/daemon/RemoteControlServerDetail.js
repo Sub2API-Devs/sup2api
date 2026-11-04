@@ -9,10 +9,10 @@
  * attribution: placement 7
  */
 import { basename, resolve } from "path";
-import { init_react_production, y } from "../../../vendor/react/cjs/react.production.js";
+import { init_react_production, useState } from "../../../vendor/react/cjs/react.production.js";
 import { readJsonConfigFile } from "../../utils/jsonConfigFile.js";
 import { daemonJsonPath } from "../../services/daemon/paths.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { removeRemoteControlDir, upsertRemoteControlDir } from "../../daemon/daemonAuth.js";
 import { logError } from "../../utils/log.js";
 import { errorMessage } from "../../utils/errors.js";
@@ -50,19 +50,19 @@ init_react_production();
 /**
  * 会话隔离方式说明（每个会话独立 worktree 或共享目录）。
  */
-function describeSessionIsolation(Lt) {
-  return Lt === "worktree"
+function describeSessionIsolation(isolationMode) {
+  return isolationMode === "worktree"
     ? "Each session gets its own git worktree (requires a git repo)."
     : "All sessions share the directory.";
 }
 //@ chunk-b7gstm5r.js:14876-15069 placement
-async function readRemoteControlServers(isRunning, t) {
-  let jsonConfigFile = await readJsonConfigFile(daemonJsonPath(), t);
+async function readRemoteControlServers(isRunning, storageV5) {
+  let jsonConfigFile = await readJsonConfigFile(daemonJsonPath(), storageV5);
   if (!jsonConfigFile.ok) return [];
-  return (jsonConfigFile.config.remoteControl ?? []).map((i) => ({
-    dir: i.dir,
-    name: i.name ?? basename(i.dir),
-    spawnMode: i.spawnMode ?? "same-dir",
+  return (jsonConfigFile.config.remoteControl ?? []).map((server) => ({
+    dir: server.dir,
+    name: server.name ?? basename(server.dir),
+    spawnMode: server.spawnMode ?? "same-dir",
     isRunning,
   }));
 }
@@ -71,17 +71,17 @@ async function readRemoteControlServers(isRunning, t) {
  * 远程控制服务器详情页：状态、无人值守同意、启停与删除。
  */
 function RemoteControlServerDetail(props) {
-  let u = w(41);
+  let $ = useMemoCache(41);
   let { server, onBack, onDone, refresh, storageV5 } = props;
-  let [b, N] = y(false);
-  let [k, I] = y(false);
-  let T;
-  if (u[0] !== b || u[1] !== onDone || u[2] !== refresh || u[3] !== server.dir || u[4] !== storageV5) {
-    T = async function m() {
-      if (b) {
+  let [isBusy, setIsBusy] = useState(false);
+  let [isConfirmingRemove, setIsConfirmingRemove] = useState(false);
+  let removeCached;
+  if ($[0] !== isBusy || $[1] !== onDone || $[2] !== refresh || $[3] !== server.dir || $[4] !== storageV5) {
+    removeCached = async function handleRemove() {
+      if (isBusy) {
         return;
       }
-      N(true);
+      setIsBusy(true);
       try {
         await removeRemoteControlDir(server.dir, undefined, storageV5);
         await refresh();
@@ -89,47 +89,47 @@ function RemoteControlServerDetail(props) {
           display: "system",
         });
       } catch (error) {
-        let M = error;
-        logError(M);
-        onDone(`Action failed: ${errorMessage(M)}`, {
+        let caughtError = error;
+        logError(caughtError);
+        onDone(`Action failed: ${errorMessage(caughtError)}`, {
           display: "system",
         });
       }
     };
-    u[0] = b;
-    u[1] = onDone;
-    u[2] = refresh;
-    u[3] = server.dir;
-    u[4] = storageV5;
-    u[5] = T;
-  } else T = u[5];
-  let m = T;
-  if (k) {
+    $[0] = isBusy;
+    $[1] = onDone;
+    $[2] = refresh;
+    $[3] = server.dir;
+    $[4] = storageV5;
+    $[5] = removeCached;
+  } else removeCached = $[5];
+  let removeServer = removeCached;
+  if (isConfirmingRemove) {
     const dir = server.dir;
-    let D;
-    if (u[6] === MEMO_CACHE_SENTINEL) {
-      D = bgSupervisorNoun();
-      u[6] = D;
-    } else D = u[6];
-    const subtitle = `Stop serving ${dir} to claude.ai. The ${D} will stop the worker on its next reconcile.`;
+    let supervisorNoun;
+    if ($[6] === MEMO_CACHE_SENTINEL) {
+      supervisorNoun = bgSupervisorNoun();
+      $[6] = supervisorNoun;
+    } else supervisorNoun = $[6];
+    const subtitle = `Stop serving ${dir} to claude.ai. The ${supervisorNoun} will stop the worker on its next reconcile.`;
     let onCancel;
-    if (u[7] === MEMO_CACHE_SENTINEL) {
-      onCancel = () => I(false);
-      u[7] = onCancel;
-    } else onCancel = u[7];
+    if ($[7] === MEMO_CACHE_SENTINEL) {
+      onCancel = () => setIsConfirmingRemove(false);
+      $[7] = onCancel;
+    } else onCancel = $[7];
     let onConfirm;
-    if (u[8] !== m) {
-      onConfirm = () => void m();
-      u[8] = m;
-      u[9] = onConfirm;
-    } else onConfirm = u[9];
+    if ($[8] !== removeServer) {
+      onConfirm = () => void removeServer();
+      $[8] = removeServer;
+      $[9] = onConfirm;
+    } else onConfirm = $[9];
     let onCancel_2;
-    if (u[10] === MEMO_CACHE_SENTINEL) {
-      onCancel_2 = () => I(false);
-      u[10] = onCancel_2;
-    } else onCancel_2 = u[10];
+    if ($[10] === MEMO_CACHE_SENTINEL) {
+      onCancel_2 = () => setIsConfirmingRemove(false);
+      $[10] = onCancel_2;
+    } else onCancel_2 = $[10];
     let children;
-    if (u[11] !== onConfirm) {
+    if ($[11] !== onConfirm) {
       children = jsxProd_default(ConfirmSelect, {
         hideIndexes: true,
         cancelFirst: true,
@@ -139,27 +139,27 @@ function RemoteControlServerDetail(props) {
         onConfirm,
         onCancel: onCancel_2,
       });
-      u[11] = onConfirm;
-      u[12] = children;
-    } else children = u[12];
-    let c;
-    if (u[13] !== subtitle || u[14] !== children) {
-      c = jsxProd_default(Dialog, {
+      $[11] = onConfirm;
+      $[12] = children;
+    } else children = $[12];
+    let confirmDialog;
+    if ($[13] !== subtitle || $[14] !== children) {
+      confirmDialog = jsxProd_default(Dialog, {
         title: "Remove server?",
         subtitle,
         onCancel,
         color: "error",
         children,
       });
-      u[13] = subtitle;
-      u[14] = children;
-      u[15] = c;
-    } else c = u[15];
-    return c;
+      $[13] = subtitle;
+      $[14] = children;
+      $[15] = confirmDialog;
+    } else confirmDialog = $[15];
+    return confirmDialog;
   }
-  let p;
-  if (u[16] === MEMO_CACHE_SENTINEL) {
-    p = [
+  let options;
+  if ($[16] === MEMO_CACHE_SENTINEL) {
+    options = [
       {
         label: "Remove",
         value: "remove",
@@ -169,169 +169,170 @@ function RemoteControlServerDetail(props) {
         value: "back",
       },
     ];
-    u[16] = p;
-  } else p = u[16];
-  let options = p;
-  let D;
-  if (u[17] !== server.dir) {
-    D = jsxProd_default_2(Text, {
+    $[16] = options;
+  } else options = $[16];
+  let options_2 = options;
+  let dirLine;
+  if ($[17] !== server.dir) {
+    dirLine = jsxProd_default_2(Text, {
       dimColor: true,
       children: ["Directory ", server.dir],
     });
-    u[17] = server.dir;
-    u[18] = D;
-  } else D = u[18];
-  let C;
-  if (u[19] !== server.spawnMode) {
-    C = jsxProd_default_2(Text, {
+    $[17] = server.dir;
+    $[18] = dirLine;
+  } else dirLine = $[18];
+  let spawnModeLine;
+  if ($[19] !== server.spawnMode) {
+    spawnModeLine = jsxProd_default_2(Text, {
       dimColor: true,
       children: ["Spawn mode ", server.spawnMode],
     });
-    u[19] = server.spawnMode;
-    u[20] = C;
-  } else C = u[20];
+    $[19] = server.spawnMode;
+    $[20] = spawnModeLine;
+  } else spawnModeLine = $[20];
   const status = server.isRunning ? "success" : "pending";
-  let U;
-  if (u[21] !== status) {
-    U = jsxProd_default(StatusIcon, {
+  let statusIcon;
+  if ($[21] !== status) {
+    statusIcon = jsxProd_default(StatusIcon, {
       status,
       withSpace: true,
     });
-    u[21] = status;
-    u[22] = U;
-  } else U = u[22];
-  const B = server.isRunning ? "running" : "not running";
-  let A;
-  if (u[23] !== U || u[24] !== B) {
-    A = jsxProd_default_2(Text, {
+    $[21] = status;
+    $[22] = statusIcon;
+  } else statusIcon = $[22];
+  const runningText = server.isRunning ? "running" : "not running";
+  let statusLine;
+  if ($[23] !== statusIcon || $[24] !== runningText) {
+    statusLine = jsxProd_default_2(Text, {
       dimColor: true,
-      children: ["Status", "     ", U, B],
+      children: ["Status", "     ", statusIcon, runningText],
     });
-    u[23] = U;
-    u[24] = B;
-    u[25] = A;
-  } else A = u[25];
-  let c;
-  if (u[26] !== D || u[27] !== C || u[28] !== A) {
-    c = jsxProd_default_2(Box, {
+    $[23] = statusIcon;
+    $[24] = runningText;
+    $[25] = statusLine;
+  } else statusLine = $[25];
+  let detailBody;
+  if ($[26] !== dirLine || $[27] !== spawnModeLine || $[28] !== statusLine) {
+    detailBody = jsxProd_default_2(Box, {
       flexDirection: "column",
       marginBottom: 1,
-      children: [D, C, A],
+      children: [dirLine, spawnModeLine, statusLine],
     });
-    u[26] = D;
-    u[27] = C;
-    u[28] = A;
-    u[29] = c;
-  } else c = u[29];
+    $[26] = dirLine;
+    $[27] = spawnModeLine;
+    $[28] = statusLine;
+    $[29] = detailBody;
+  } else detailBody = $[29];
   let onChange;
-  if (u[30] !== onBack) {
-    onChange = (L) => {
-      if (L === "back") {
+  if ($[30] !== onBack) {
+    onChange = (value) => {
+      if (value === "back") {
         return onBack();
       }
-      I(true);
+      setIsConfirmingRemove(true);
     };
-    u[30] = onBack;
-    u[31] = onChange;
-  } else onChange = u[31];
-  let W;
-  if (u[32] !== b || u[33] !== onBack || u[34] !== onChange) {
-    W = jsxProd_default(ModelSelector, {
-      options,
-      isDisabled: b,
+    $[30] = onBack;
+    $[31] = onChange;
+  } else onChange = $[31];
+  let selectorElement;
+  if ($[32] !== isBusy || $[33] !== onBack || $[34] !== onChange) {
+    selectorElement = jsxProd_default(ModelSelector, {
+      options: options_2,
+      isDisabled: isBusy,
       onChange,
       onCancel: onBack,
     });
-    u[32] = b;
-    u[33] = onBack;
-    u[34] = onChange;
-    u[35] = W;
-  } else W = u[35];
-  let z;
-  if (u[36] !== onBack || u[37] !== server.name || u[38] !== W || u[39] !== c) {
-    z = jsxProd_default_2(Dialog, {
+    $[32] = isBusy;
+    $[33] = onBack;
+    $[34] = onChange;
+    $[35] = selectorElement;
+  } else selectorElement = $[35];
+  let dialogElement;
+  if ($[36] !== onBack || $[37] !== server.name || $[38] !== selectorElement || $[39] !== detailBody) {
+    dialogElement = jsxProd_default_2(Dialog, {
       title: server.name,
       onCancel: onBack,
-      children: [c, W],
+      children: [detailBody, selectorElement],
     });
-    u[36] = onBack;
-    u[37] = server.name;
-    u[38] = W;
-    u[39] = c;
-    u[40] = z;
-  } else z = u[40];
-  return z;
+    $[36] = onBack;
+    $[37] = server.name;
+    $[38] = selectorElement;
+    $[39] = detailBody;
+    $[40] = dialogElement;
+  } else dialogElement = $[40];
+  return dialogElement;
 }
 //@ chunk-b7gstm5r.js:17350-20584 placement
 function AddRemoteControlServerForm(props) {
-  let v = w(50);
+  let $ = useMemoCache(50);
   let { defaultDir, onCancel, onAdded, storageV5 } = props;
   let name;
-  if (v[0] !== defaultDir) {
+  if ($[0] !== defaultDir) {
     name = basename(defaultDir);
-    v[0] = defaultDir;
-    v[1] = name;
-  } else name = v[1];
-  let N;
-  if (v[2] !== defaultDir || v[3] !== name) {
-    N = {
+    $[0] = defaultDir;
+    $[1] = name;
+  } else name = $[1];
+  let initialValues;
+  if ($[2] !== defaultDir || $[3] !== name) {
+    initialValues = {
       dir: defaultDir,
       name,
       spawnMode: "same-dir",
     };
-    v[2] = defaultDir;
-    v[3] = name;
-    v[4] = N;
-  } else N = v[4];
-  let [k, I] = y(N);
-  let [u, T] = y(false);
-  let [p, M] = y(null);
-  let [m, D] = y(false);
-  let C;
-  if (v[5] !== defaultDir || v[6] !== u) {
-    C = function c(F, U) {
-      if (F === "name") T(true);
-      I((B) => {
-        if (B[F] === U) {
-          return B;
+    $[2] = defaultDir;
+    $[3] = name;
+    $[4] = initialValues;
+  } else initialValues = $[4];
+  let [values, setValues] = useState(initialValues);
+  let [isNameDirty, setIsNameDirty] = useState(false);
+  let [trustPrompt, setTrustPrompt] = useState(null);
+  let [isSubmitting, setIsSubmitting] = useState(false);
+  let changeCached;
+  if ($[5] !== defaultDir || $[6] !== isNameDirty) {
+    changeCached = function handleChange(fieldKey, fieldValue) {
+      if (fieldKey === "name") setIsNameDirty(true);
+      setValues((previous) => {
+        if (previous[fieldKey] === fieldValue) {
+          return previous;
         }
-        let A = {
-          ...B,
-          [F]: U,
+        let nextValues = {
+          ...previous,
+          [fieldKey]: fieldValue,
         };
-        if (F === "dir" && !u) A.name = basename(resolve(expandTildeWithHome(U.trim() || defaultDir)));
-        return A;
+        if (fieldKey === "dir" && !isNameDirty)
+          nextValues.name = basename(resolve(expandTildeWithHome(fieldValue.trim() || defaultDir)));
+        return nextValues;
       });
     };
-    v[5] = defaultDir;
-    v[6] = u;
-    v[7] = C;
-  } else C = v[7];
-  let onChange = C;
-  let te;
-  if (v[8] !== defaultDir || v[9] !== k.dir) {
-    te = resolve(expandTildeWithHome(k.dir?.trim() || defaultDir));
-    v[8] = defaultDir;
-    v[9] = k.dir;
-    v[10] = te;
-  } else te = v[10];
-  let g = te;
+    $[5] = defaultDir;
+    $[6] = isNameDirty;
+    $[7] = changeCached;
+  } else changeCached = $[7];
+  let onChange = changeCached;
+  let resolvedDirCached;
+  if ($[8] !== defaultDir || $[9] !== values.dir) {
+    resolvedDirCached = resolve(expandTildeWithHome(values.dir?.trim() || defaultDir));
+    $[8] = defaultDir;
+    $[9] = values.dir;
+    $[10] = resolvedDirCached;
+  } else resolvedDirCached = $[10];
+  let resolvedDir = resolvedDirCached;
   let hint;
-  if (v[11] !== defaultDir) {
-    hint = (W) => {
-      let z = resolve(expandTildeWithHome(W.trim() || defaultDir));
-      return isPathTrusted(z, {
+  if ($[11] !== defaultDir) {
+    hint = (rawDir) => {
+      let dir = resolve(expandTildeWithHome(rawDir.trim() || defaultDir));
+      return isPathTrusted(dir, {
         advisoryNoFsProbe: true,
       })
         ? "Available on claude.ai/code and the Claude mobile app."
-        : `${z} is not yet trusted \u2014 you'll be asked to trust it on submit.`;
+        : `${dir} is not yet trusted \u2014 you'll be asked to trust it on submit.`;
     };
-    v[11] = defaultDir;
-    v[12] = hint;
-  } else hint = v[12];
-  let J;
-  if (v[13] !== defaultDir || v[14] !== hint) {
-    J = {
+    $[11] = defaultDir;
+    $[12] = hint;
+  } else hint = $[12];
+  let dirField;
+  if ($[13] !== defaultDir || $[14] !== hint) {
+    dirField = {
       type: "text",
       key: "dir",
       label: "Directory",
@@ -339,24 +340,25 @@ function AddRemoteControlServerForm(props) {
       required: true,
       hint,
     };
-    v[13] = defaultDir;
-    v[14] = hint;
-    v[15] = J;
-  } else J = v[15];
-  let Y;
-  if (v[16] !== u) {
-    Y = {
+    $[13] = defaultDir;
+    $[14] = hint;
+    $[15] = dirField;
+  } else dirField = $[15];
+  let nameField;
+  if ($[16] !== isNameDirty) {
+    nameField = {
       type: "text",
       key: "name",
       label: "Name",
-      hint: () => (u ? "Shown in the claude.ai session picker." : "Auto-generated from the directory name."),
+      hint: () =>
+        isNameDirty ? "Shown in the claude.ai session picker." : "Auto-generated from the directory name.",
     };
-    v[16] = u;
-    v[17] = Y;
-  } else Y = v[17];
-  let ce;
-  if (v[18] === MEMO_CACHE_SENTINEL) {
-    ce = {
+    $[16] = isNameDirty;
+    $[17] = nameField;
+  } else nameField = $[17];
+  let spawnModeField;
+  if ($[18] === MEMO_CACHE_SENTINEL) {
+    spawnModeField = {
       type: "select",
       key: "spawnMode",
       label: "Spawn mode",
@@ -372,32 +374,32 @@ function AddRemoteControlServerForm(props) {
       ],
       hint: describeSessionIsolation,
     };
-    v[18] = ce;
-  } else ce = v[18];
-  let h;
-  if (v[19] !== J || v[20] !== Y) {
-    h = [J, Y, ce];
-    v[19] = J;
-    v[20] = Y;
-    v[21] = h;
-  } else h = v[21];
-  let fields = h;
-  let ge;
+    $[18] = spawnModeField;
+  } else spawnModeField = $[18];
+  let fields;
+  if ($[19] !== dirField || $[20] !== nameField) {
+    fields = [dirField, nameField, spawnModeField];
+    $[19] = dirField;
+    $[20] = nameField;
+    $[21] = fields;
+  } else fields = $[21];
+  let fields_2 = fields;
+  let submitCached;
   if (
-    v[22] !== onAdded ||
-    v[23] !== onCancel ||
-    v[24] !== storageV5 ||
-    v[25] !== k.name ||
-    v[26] !== k.spawnMode
+    $[22] !== onAdded ||
+    $[23] !== onCancel ||
+    $[24] !== storageV5 ||
+    $[25] !== values.name ||
+    $[26] !== values.spawnMode
   ) {
-    ge = async function E(ke) {
-      D(true);
-      let name = k.name?.trim() || basename(ke);
-      let spawnMode = k.spawnMode ?? "same-dir";
+    submitCached = async function handleSubmit(dir) {
+      setIsSubmitting(true);
+      let name = values.name?.trim() || basename(dir);
+      let spawnMode = values.spawnMode ?? "same-dir";
       try {
         await upsertRemoteControlDir(
           {
-            dir: ke,
+            dir,
             name,
             spawnMode,
           },
@@ -406,70 +408,70 @@ function AddRemoteControlServerForm(props) {
         );
         onAdded();
       } catch (error) {
-        let Ce = error;
-        logError(Ce);
-        D(false);
+        let caughtError = error;
+        logError(caughtError);
+        setIsSubmitting(false);
         onCancel();
       }
     };
-    v[22] = onAdded;
-    v[23] = onCancel;
-    v[24] = storageV5;
-    v[25] = k.name;
-    v[26] = k.spawnMode;
-    v[27] = ge;
-  } else ge = v[27];
-  let E = ge;
-  let ne;
-  if (v[28] !== m || v[29] !== E || v[30] !== g) {
-    ne = function X() {
-      if (m) {
+    $[22] = onAdded;
+    $[23] = onCancel;
+    $[24] = storageV5;
+    $[25] = values.name;
+    $[26] = values.spawnMode;
+    $[27] = submitCached;
+  } else submitCached = $[27];
+  let submit = submitCached;
+  let onSubmitCached;
+  if ($[28] !== isSubmitting || $[29] !== submit || $[30] !== resolvedDir) {
+    onSubmitCached = function handleFormSubmit() {
+      if (isSubmitting) {
         return;
       }
-      if (!isPathTrusted(g)) {
-        M({
-          dir: g,
-          trustRoot: uncachedStorageRootFor(g),
+      if (!isPathTrusted(resolvedDir)) {
+        setTrustPrompt({
+          dir: resolvedDir,
+          trustRoot: uncachedStorageRootFor(resolvedDir),
         });
         return;
       }
-      E(g);
+      submit(resolvedDir);
     };
-    v[28] = m;
-    v[29] = E;
-    v[30] = g;
-    v[31] = ne;
-  } else ne = v[31];
-  let onSubmit = ne;
-  if (p !== null) {
-    let In =
-      p.trustRoot != null && p.trustRoot !== p.dir
-        ? ` It's part of the repository at ${p.trustRoot} \u2014 trusting it trusts that whole repository.`
+    $[28] = isSubmitting;
+    $[29] = submit;
+    $[30] = resolvedDir;
+    $[31] = onSubmitCached;
+  } else onSubmitCached = $[31];
+  let onSubmit = onSubmitCached;
+  if (trustPrompt !== null) {
+    let trustHintSuffix =
+      trustPrompt.trustRoot != null && trustPrompt.trustRoot !== trustPrompt.dir
+        ? ` It's part of the repository at ${trustPrompt.trustRoot} \u2014 trusting it trusts that whole repository.`
         : "";
-    const subtitle = `${p.dir} hasn't been trusted yet.${In} Trusting allows Claude to read and execute files there.`;
+    const subtitle = `${trustPrompt.dir} hasn't been trusted yet.${trustHintSuffix} Trusting allows Claude to read and execute files there.`;
     let onCancel;
-    if (v[32] === MEMO_CACHE_SENTINEL) {
-      onCancel = () => M(null);
-      v[32] = onCancel;
-    } else onCancel = v[32];
+    if ($[32] === MEMO_CACHE_SENTINEL) {
+      onCancel = () => setTrustPrompt(null);
+      $[32] = onCancel;
+    } else onCancel = $[32];
     let onConfirm;
-    if (v[33] !== E || v[34] !== p.dir || v[35] !== storageV5) {
+    if ($[33] !== submit || $[34] !== trustPrompt.dir || $[35] !== storageV5) {
       onConfirm = () => {
-        setPathTrusted(p.dir, storageV5).then(() => E(p.dir));
-        M(null);
+        setPathTrusted(trustPrompt.dir, storageV5).then(() => submit(trustPrompt.dir));
+        setTrustPrompt(null);
       };
-      v[33] = E;
-      v[34] = p.dir;
-      v[35] = storageV5;
-      v[36] = onConfirm;
-    } else onConfirm = v[36];
+      $[33] = submit;
+      $[34] = trustPrompt.dir;
+      $[35] = storageV5;
+      $[36] = onConfirm;
+    } else onConfirm = $[36];
     let onCancel_2;
-    if (v[37] === MEMO_CACHE_SENTINEL) {
-      onCancel_2 = () => M(null);
-      v[37] = onCancel_2;
-    } else onCancel_2 = v[37];
+    if ($[37] === MEMO_CACHE_SENTINEL) {
+      onCancel_2 = () => setTrustPrompt(null);
+      $[37] = onCancel_2;
+    } else onCancel_2 = $[37];
     let children;
-    if (v[38] !== onConfirm) {
+    if ($[38] !== onConfirm) {
       children = jsxProd_default(ConfirmSelect, {
         hideIndexes: true,
         cancelFirst: true,
@@ -479,60 +481,60 @@ function AddRemoteControlServerForm(props) {
         onConfirm,
         onCancel: onCancel_2,
       });
-      v[38] = onConfirm;
-      v[39] = children;
-    } else children = v[39];
-    let Re;
-    if (v[40] !== subtitle || v[41] !== children) {
-      Re = jsxProd_default(Dialog, {
+      $[38] = onConfirm;
+      $[39] = children;
+    } else children = $[39];
+    let trustDialog;
+    if ($[40] !== subtitle || $[41] !== children) {
+      trustDialog = jsxProd_default(Dialog, {
         title: "Trust this directory?",
         subtitle,
         onCancel,
         children,
       });
-      v[40] = subtitle;
-      v[41] = children;
-      v[42] = Re;
-    } else Re = v[42];
-    return Re;
+      $[40] = subtitle;
+      $[41] = children;
+      $[42] = trustDialog;
+    } else trustDialog = $[42];
+    return trustDialog;
   }
-  const submitLabel = m ? "Adding\u2026" : "Add server";
-  let oe;
+  const submitLabel = isSubmitting ? "Adding\u2026" : "Add server";
+  let formElement;
   if (
-    v[43] !== fields ||
-    v[44] !== onSubmit ||
-    v[45] !== onCancel ||
-    v[46] !== onChange ||
-    v[47] !== submitLabel ||
-    v[48] !== k
+    $[43] !== fields_2 ||
+    $[44] !== onSubmit ||
+    $[45] !== onCancel ||
+    $[46] !== onChange ||
+    $[47] !== submitLabel ||
+    $[48] !== values
   ) {
-    oe = jsxProd_default(AgentsList, {
+    formElement = jsxProd_default(AgentsList, {
       title: "New Remote Control server",
       subtitle: "Make a directory available on claude.ai/code and the Claude mobile app",
-      fields,
-      values: k,
+      fields: fields_2,
+      values,
       onChange,
       onSubmit,
       onCancel,
       submitLabel,
     });
-    v[43] = fields;
-    v[44] = onSubmit;
-    v[45] = onCancel;
-    v[46] = onChange;
-    v[47] = submitLabel;
-    v[48] = k;
-    v[49] = oe;
-  } else oe = v[49];
-  return oe;
+    $[43] = fields_2;
+    $[44] = onSubmit;
+    $[45] = onCancel;
+    $[46] = onChange;
+    $[47] = submitLabel;
+    $[48] = values;
+    $[49] = formElement;
+  } else formElement = $[49];
+  return formElement;
 }
 //@ chunk-b7gstm5r.js:21796-21984 placement
-async function readServingConsentState(a) {
-  let t = a?.servingOn ?? isRemoteToolServingOnForSettings();
+async function readServingConsentState(override) {
+  let servingOn = override?.servingOn ?? isRemoteToolServingOnForSettings();
   let choice = await readUnattendedServingConsent().catch(() => "unset");
   return {
-    servingOn: t,
-    visible: a?.visible === true || BARE_SUBSCRIPT_NAME_BUILTINS_2(t),
+    servingOn,
+    visible: override?.visible === true || BARE_SUBSCRIPT_NAME_BUILTINS_2(servingOn),
     choice,
     canWithdraw: isUnattendedServingAccepted(),
     lockReason: managedSettingsForbidUnattendedServing() ? unattendedServingForbiddenText() : undefined,

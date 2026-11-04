@@ -12,67 +12,67 @@ import { hipaaTaintsOnly } from "./complianceTaints.js";
 import { DISABLED_BY_POLICY_REASON, DISABLED_FOR_SESSION_REASON, POLICY_LIMITS_PATH } from "./index.js";
 
 //@ chunk-yxnffbzs.js:2672-2852 placement
-function formatPolicyDisabledMessage(e, n, r, o) {
-  if (hipaaTaintsOnly(r).length > 0) return `${e} ${n} ${DISABLED_BY_POLICY_REASON}.`;
-  if (o !== undefined) return o;
-  return `${e} ${n} ${DISABLED_BY_POLICY_REASON}. Contact your organization admin to enable ${n === "are" ? "them" : "it"}.`;
+function formatPolicyDisabledMessage(featureLabel, verb, taints, override) {
+  if (hipaaTaintsOnly(taints).length > 0) return `${featureLabel} ${verb} ${DISABLED_BY_POLICY_REASON}.`;
+  if (override !== undefined) return override;
+  return `${featureLabel} ${verb} ${DISABLED_BY_POLICY_REASON}. Contact your organization admin to enable ${verb === "are" ? "them" : "it"}.`;
 }
 //@ chunk-yxnffbzs.js:2852-2930 placement
 /**
  * 策略禁用功能的提示。
  */
-function policyBlockedMessage(e, n) {
-  return `${e} ${n} ${DISABLED_FOR_SESSION_REASON}. Restart Claude Code to re-evaluate.`;
+function policyBlockedMessage(featureLabel, verb) {
+  return `${featureLabel} ${verb} ${DISABLED_FOR_SESSION_REASON}. Restart Claude Code to re-evaluate.`;
 }
 //@ chunk-yxnffbzs.js:2930-3066 placement
 /**
  * 无法验证组织策略时的提示。
  */
-function policyUnverifiedMessage(e) {
-  return `Couldn't verify your organization's policy for ${e.toLowerCase()}. Check your network connection and try again.`;
+function policyUnverifiedMessage(featureLabel) {
+  return `Couldn't verify your organization's policy for ${featureLabel.toLowerCase()}. Check your network connection and try again.`;
 }
 //@ chunk-yxnffbzs.js:3066-3399 placement
 /**
  * 策略请求 404（代理未转发）时的提示。
  */
-function policy404Message(e) {
-  return `Couldn't load your organization's policy, which governs ${e.toLowerCase()}. The request for ${POLICY_LIMITS_PATH} got a 404, which usually means a proxy or gateway between you and the API isn't forwarding that path. Ask your network admin to allow it; \`claude doctor\` (or /status in a session) shows which host was asked.`;
+function policy404Message(featureLabel) {
+  return `Couldn't load your organization's policy, which governs ${featureLabel.toLowerCase()}. The request for ${POLICY_LIMITS_PATH} got a 404, which usually means a proxy or gateway between you and the API isn't forwarding that path. Ask your network admin to allow it; \`claude doctor\` (or /status in a session) shows which host was asked.`;
 }
 //@ chunk-yxnffbzs.js:3399-5323 placement
 /**
  * 策略不可用原因（解析失败、网络错误、HTTP 状态）的详细提示。
  */
-function policyUnavailableMessage(e, n, r) {
-  let o = `${e} ${n === "are" ? "aren't" : "isn't"} available`;
-  let { host, httpStatus } = r;
-  switch (r.errorCode) {
+function policyUnavailableMessage(featureLabel, verb, failure) {
+  let prefix = `${featureLabel} ${verb === "are" ? "aren't" : "isn't"} available`;
+  let { host, httpStatus } = failure;
+  switch (failure.errorCode) {
     case "parse_failed":
-      return `${o}: Claude Code couldn't read the reply when it asked ${host} for your organization's policy, which usually means a network proxy or web filter answered instead.`;
+      return `${prefix}: Claude Code couldn't read the reply when it asked ${host} for your organization's policy, which usually means a network proxy or web filter answered instead.`;
     case "network_error":
     case "timeout":
-      return `${o}: couldn't reach ${host} to load your organization's policy. Check your network or proxy.`;
+      return `${prefix}: couldn't reach ${host} to load your organization's policy. Check your network or proxy.`;
     case "auth_failed":
       if (httpStatus === 403)
-        return `${o}: ${host}, or a proxy in front of it, refused the request for your organization's policy (HTTP 403).`;
+        return `${prefix}: ${host}, or a proxy in front of it, refused the request for your organization's policy (HTTP 403).`;
       return httpStatus === 401
-        ? `${o}: ${host} didn't accept this session's credentials when Claude Code asked for your organization's policy.`
-        : `${o}: no credentials could be attached to the request for your organization's policy.`;
+        ? `${prefix}: ${host} didn't accept this session's credentials when Claude Code asked for your organization's policy.`
+        : `${prefix}: no credentials could be attached to the request for your organization's policy.`;
     case "spurious_304":
-      return `${o}: the saved copy of your organization's policy belongs to a previous sign-in, and a fresh one hasn't loaded yet.`;
+      return `${prefix}: the saved copy of your organization's policy belongs to a previous sign-in, and a fresh one hasn't loaded yet.`;
     case "stale_tunnel_credential":
-      return `${o}: the machine running claude ssh changed credentials while your organization's policy was loading, and a fresh copy hasn't loaded yet.`;
+      return `${prefix}: the machine running claude ssh changed credentials while your organization's policy was loading, and a fresh copy hasn't loaded yet.`;
     case "request_failed":
       if (httpStatus === 404)
-        return `${o}: the request for your organization's policy got a 404 from ${host}, which usually means a proxy or gateway isn't forwarding ${POLICY_LIMITS_PATH}.`;
+        return `${prefix}: the request for your organization's policy got a 404 from ${host}, which usually means a proxy or gateway isn't forwarding ${POLICY_LIMITS_PATH}.`;
       if (httpStatus === 304)
-        return `${o}: a caching proxy answered in place of ${host} when Claude Code asked for your organization's policy.`;
+        return `${prefix}: a caching proxy answered in place of ${host} when Claude Code asked for your organization's policy.`;
       if (httpStatus === 407)
-        return `${o}: your proxy asked for authentication before it would forward the request for your organization's policy to ${host}.`;
+        return `${prefix}: your proxy asked for authentication before it would forward the request for your organization's policy to ${host}.`;
       if (httpStatus !== null && (httpStatus >= 500 || httpStatus === 429))
-        return `${o}: your organization's policy couldn't be loaded from ${host} (HTTP ${httpStatus}). Try again later.`;
+        return `${prefix}: your organization's policy couldn't be loaded from ${host} (HTTP ${httpStatus}). Try again later.`;
       return httpStatus !== null
-        ? `${o}: your organization's policy couldn't be loaded from ${host} (HTTP ${httpStatus}). Check your proxy settings.`
-        : `${o}: the request to ${host} for your organization's policy didn't complete. If you use a proxy, check that it lets ${host} through.`;
+        ? `${prefix}: your organization's policy couldn't be loaded from ${host} (HTTP ${httpStatus}). Check your proxy settings.`
+        : `${prefix}: the request to ${host} for your organization's policy didn't complete. If you use a proxy, check that it lets ${host} through.`;
   }
 }
 //@ chunk-yxnffbzs.js:5323-5485 placement
@@ -93,9 +93,9 @@ function commandEnabledAfterStartMessage(name) {
 /**
  * 有 HIPAA 污点时统一用「被组织策略禁用」文案，否则用给定文案。
  */
-function policyDisabledMessageFor(currentTaints, n) {
+function policyDisabledMessageFor(currentTaints, override) {
   if (hipaaTaintsOnly(currentTaints).length > 0) return DISABLED_BY_POLICY_REASON;
-  return n ?? DISABLED_BY_POLICY_REASON;
+  return override ?? DISABLED_BY_POLICY_REASON;
 }
 //@ chunk-yxnffbzs.js:5677-5747 placement
 /**

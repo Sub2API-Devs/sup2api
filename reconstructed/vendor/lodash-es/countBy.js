@@ -5,7 +5,7 @@
  * pieces: chunk-e6aww6q8.js (1)
  * attribution: placement 1
  */
-import { gao } from "./_inlinedHelpers.js";
+import { import_createAggregator } from "./_inlinedHelpers.js";
 import { assignValueRaw } from "../../src/utils/git/gitSafeEnv.js";
 
 //@ chunk-e6aww6q8.js:2230725-2230847 placement
@@ -14,9 +14,9 @@ import { assignValueRaw } from "../../src/utils/git/gitSafeEnv.js";
  */
 var objectProto = Object.prototype;
 var hasOwnProperty = objectProto.hasOwnProperty;
-var countBy = gao(function (result, n, key) {
-  if (hasOwnProperty.call(result, key)) ++result[key];
-  else assignValueRaw(result, key, 1);
+var countBy = import_createAggregator(function (result, key, key_2) {
+  if (hasOwnProperty.call(result, key_2)) ++result[key_2];
+  else assignValueRaw(result, key_2, 1);
 });
 var countByAlias = countBy;
 export { countByAlias };

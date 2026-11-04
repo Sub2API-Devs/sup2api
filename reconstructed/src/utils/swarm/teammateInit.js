@@ -23,9 +23,13 @@ import { jsonStringify } from "../slowOperations.js";
 import { getTeammateColor } from "../teammate.js";
 import { getLastApiErrorReason } from "../messages.js";
 import { errorMessage } from "../errors.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-18hwfzwa.js:218085-218089 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:218085", () => {
+  init_react_production();
+});
 //@ chunk-18hwfzwa.js:218089-219727 fingerprint = initializeTeammateHooks (0.826)
 /**
  * 初始化 teammate：读团队文件，把 teamAllowedPaths 转成会话级 allow 规则（仅允许受管规则时跳过）；非 leader 注册 Stop 函数钩子：标成员不活跃并写 idle_notification 到 team-lead 的 inbox。
@@ -49,12 +53,12 @@ async function initializeTeammateHooks(setAppState, hookRegistry, sessionId, tea
     logForDebugging(`[TeammateInit] Found ${teamAllowedPaths.length} team-wide allowed path(s)`);
     for (let allowedPath of teamAllowedPaths) {
       let teamFile = toPosixPath(allowedPath.path);
-      let At = escapeRuleContent(teamFile);
+      let escapedPath = escapeRuleContent(teamFile);
       let ruleContent = teamFile.startsWith("/")
-        ? `/${At}/**`
-        : At.startsWith("\\")
-          ? `./${At}/**`
-          : `${At}/**`;
+        ? `/${escapedPath}/**`
+        : escapedPath.startsWith("\\")
+          ? `./${escapedPath}/**`
+          : `${escapedPath}/**`;
       logForDebugging(
         `[TeammateInit] Applying team permission: ${allowedPath.toolName} allowed in ${allowedPath.path} (rule: ${ruleContent})`,
       );
@@ -88,17 +92,17 @@ async function initializeTeammateHooks(setAppState, hookRegistry, sessionId, tea
     "",
     async (messages, _signal) => {
       setMemberActive(teamName, agentName, false, storage);
-      let { result: At, summary } = safeTeammateIdleResult(messages, {
+      let { result: idleResult, summary } = safeTeammateIdleResult(messages, {
         emitTelemetry: true,
       });
       let notification = createIdleNotification(agentName, {
         idleReason: "available",
         summary,
-        result: At,
+        result: idleResult,
       });
-      let Et;
+      let mailboxId;
       try {
-        Et = await writeToMailbox(
+        mailboxId = await writeToMailbox(
           leaderName,
           {
             from: agentName,
@@ -110,10 +114,10 @@ async function initializeTeammateHooks(setAppState, hookRegistry, sessionId, tea
           storage,
         );
       } finally {
-        logIdleResultDeliveryOutcome(notification, At, Et);
+        logIdleResultDeliveryOutcome(notification, idleResult, mailboxId);
       }
       logForDebugging(
-        Et !== undefined
+        mailboxId !== undefined
           ? `[TeammateInit] Sent idle notification to leader ${leaderName}`
           : `[TeammateInit] Idle notification to leader ${leaderName} not delivered (mailbox write returned no id)`,
       );
@@ -127,27 +131,27 @@ async function initializeTeammateHooks(setAppState, hookRegistry, sessionId, tea
   );
 }
 //@ chunk-18hwfzwa.js:219727-220439 placement
-async function notifyLeaderOfFailedIdle(teamContext, snapshot, aborted, storage) {
+async function notifyLeaderOfFailedIdle(teamContext, messages, aborted, storage) {
   if (aborted || !teamContext || teamContext.isLeader) return;
   let selfAgentName = teamContext.selfAgentName;
   if (!selfAgentName) return;
-  let lastApiErrorReason = getLastApiErrorReason(snapshot);
+  let lastApiErrorReason = getLastApiErrorReason(messages);
   if (lastApiErrorReason === undefined) return;
   setMemberActive(teamContext.teamName, selfAgentName, false, storage);
-  let { result: Re, summary } = safeTeammateIdleResult(snapshot, {
+  let { result: idleResult, summary } = safeTeammateIdleResult(messages, {
     emitTelemetry: true,
   });
-  let He = TEAM_LEAD;
+  let leaderId = TEAM_LEAD;
   let idleNotification = createIdleNotification(selfAgentName, {
     idleReason: "failed",
     failureReason: lastApiErrorReason,
     summary,
-    result: Re,
+    result: idleResult,
   });
-  let ze;
+  let mailboxId;
   try {
-    ze = await writeToMailbox(
-      He,
+    mailboxId = await writeToMailbox(
+      leaderId,
       {
         from: selfAgentName,
         text: jsonStringify(idleNotification),
@@ -164,14 +168,14 @@ async function notifyLeaderOfFailedIdle(teamContext, snapshot, aborted, storage)
         level: "error",
       },
     );
-    logIdleResultDeliveryOutcome(idleNotification, Re, undefined);
+    logIdleResultDeliveryOutcome(idleNotification, idleResult, undefined);
     return;
   }
-  logIdleResultDeliveryOutcome(idleNotification, Re, ze);
+  logIdleResultDeliveryOutcome(idleNotification, idleResult, mailboxId);
   logForDebugging(
-    ze !== undefined
-      ? `[TeammateInit] Sent failed idle notification to leader ${He}`
-      : `[TeammateInit] Failed idle notification to leader ${He} not delivered (mailbox write returned no id)`,
+    mailboxId !== undefined
+      ? `[TeammateInit] Sent failed idle notification to leader ${leaderId}`
+      : `[TeammateInit] Failed idle notification to leader ${leaderId} not delivered (mailbox write returned no id)`,
   );
 }
 export { initializeTeammateHooks, notifyLeaderOfFailedIdle };

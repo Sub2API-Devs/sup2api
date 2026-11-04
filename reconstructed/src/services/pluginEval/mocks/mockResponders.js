@@ -14,13 +14,13 @@ import { createHash } from "crypto";
 import { DoctorLazy } from "../../../cli/handlers/util.js";
 import {
   union,
-  string,
-  E,
-  M,
+  stringSchema,
+  numberSchema,
+  booleanSchema,
   lazy,
   array,
   record,
-  u,
+  objectSchema,
   _enum,
   unknown,
 } from "../../../../vendor/zod/v4/classic/schemas.js";
@@ -38,7 +38,11 @@ import {
 import { getFileKind } from "../../../utils/fileKind.js";
 import { readTextFile, parseProseFrontmatter } from "../caseSchema.js";
 import { jsonParse } from "../../../utils/slowOperations.js";
+import { deferInit, beginDeferredInits } from "../../../../runtime/deferred-init.js";
 
+// This module is the first evaluated of an import cycle of 2 modules closed by ../caseSchema.js;
+// the load-time work of the cycle's statements marked "deferred" waits until the cycle is complete (runtime/deferred-init.js).
+beginDeferredInits("src/services/pluginEval/caseSchema.js");
 //@ chunk-qchp9vrd.js:31046-31057 placement
 /**
  * 每层最多读取的目录数（256）。
@@ -48,9 +52,9 @@ var MAX_LAYERS = 256;
 /**
  * 判断路径是否为符号链接。
  */
-async function isSymlink(e) {
+async function isSymlink(filePath) {
   try {
-    return (await lstat(e)).isSymbolicLink();
+    return (await lstat(filePath)).isSymbolicLink();
   } catch {
     return false;
   }
@@ -59,38 +63,48 @@ async function isSymlink(e) {
 /**
  * _tools.json 的 schema。
  */
-var MAX_MOCK_FILE_BYTES = 1048576;
-var SERVER_RESPONDER_FILE = "_server.md";
-var TOOLS_JSON_FILE = "_tools.json";
-var MAX_SERVERS_LISTED = 256;
-var MOCK_NAME_RE = /^[A-Za-z0-9_-]+$/;
-var echoValueSchema = DoctorLazy(() => {
-  let e = union([string(), E(), M()]).transform(String);
-  let n = lazy(() => union([e, array(e), record(string(), n)]));
-  return n;
+var MAX_MOCK_FILE_BYTES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var SERVER_RESPONDER_FILE;
+var TOOLS_JSON_FILE;
+var MAX_SERVERS_LISTED;
+var MOCK_NAME_RE;
+var echoValueSchema;
+var responderFrontmatterSchema;
+var toolsJsonSchema;
+deferInit("chunk-qchp9vrd.js:31135", () => {
+  MAX_MOCK_FILE_BYTES = 1048576;
+  SERVER_RESPONDER_FILE = "_server.md";
+  TOOLS_JSON_FILE = "_tools.json";
+  MAX_SERVERS_LISTED = 256;
+  MOCK_NAME_RE = /^[A-Za-z0-9_-]+$/;
+  echoValueSchema = DoctorLazy(() => {
+    let echoScalar = union([stringSchema(), numberSchema(), booleanSchema()]).transform(String);
+    let echoValue = lazy(() => union([echoScalar, array(echoScalar), record(stringSchema(), echoValue)]));
+    return echoValue;
+  });
+  responderFrontmatterSchema = DoctorLazy(() =>
+    objectSchema({
+      type: _enum(["fixed", "agent"]).default("fixed"),
+      expect: record(stringSchema(), echoValueSchema()).optional(),
+      error: booleanSchema().optional(),
+      tools: array(
+        stringSchema().regex(MOCK_NAME_RE, 'tool names may contain only letters, digits, "_" and "-"'),
+      ).optional(),
+      abort_when: stringSchema().optional(),
+    }).strict(),
+  );
+  toolsJsonSchema = DoctorLazy(() =>
+    objectSchema({
+      tools: array(
+        objectSchema({
+          name: stringSchema().min(1),
+          description: stringSchema().optional(),
+          inputSchema: record(stringSchema(), unknown()).optional(),
+        }),
+      ),
+    }),
+  );
 });
-var responderFrontmatterSchema = DoctorLazy(() =>
-  u({
-    type: _enum(["fixed", "agent"]).default("fixed"),
-    expect: record(string(), echoValueSchema()).optional(),
-    error: M().optional(),
-    tools: array(
-      string().regex(MOCK_NAME_RE, 'tool names may contain only letters, digits, "_" and "-"'),
-    ).optional(),
-    abort_when: string().optional(),
-  }).strict(),
-);
-var toolsJsonSchema = DoctorLazy(() =>
-  u({
-    tools: array(
-      u({
-        name: string().min(1),
-        description: string().optional(),
-        inputSchema: record(string(), unknown()).optional(),
-      }),
-    ),
-  }),
-);
 //@ chunk-qchp9vrd.js:31654-31704 placement
 /**
  * 空的模拟层级结构。
@@ -105,87 +119,93 @@ function emptyMockLayers() {
 /**
  * 汇总各层 mocks/<server>/ 的应答者；无应答者时提示。
  */
-async function loadMockServers(e, layers = emptyMockLayers()) {
-  let r = [];
-  let a = new Set();
-  let s = [];
-  for (let w of e) {
-    let resolved = path.resolve(w);
-    if (a.has(resolved)) continue;
-    a.add(resolved);
-    let y = layers.layers.get(resolved);
-    if (!y) {
-      y = (async () => {
-        let T = [];
+async function loadMockServers(plugins, layers = emptyMockLayers()) {
+  let notes = [];
+  let seen = new Set();
+  let rawLayers = [];
+  for (let pluginDirs of plugins) {
+    let resolved = path.resolve(pluginDirs);
+    if (seen.has(resolved)) continue;
+    seen.add(resolved);
+    let layerPromise = layers.layers.get(resolved);
+    if (!layerPromise) {
+      layerPromise = (async () => {
+        let layerNotes = [];
         return {
-          raw: await loadMocksDir(path.join(w, "mocks"), T),
-          notes: T,
+          raw: await loadMocksDir(path.join(pluginDirs, "mocks"), layerNotes),
+          notes: layerNotes,
         };
       })();
-      layers.layers.set(resolved, y);
+      layers.layers.set(resolved, layerPromise);
     }
-    let { raw, notes } = await y;
-    r.push(...notes);
-    s.push(raw);
+    let { raw, notes: notes_2 } = await layerPromise;
+    notes.push(...notes_2);
+    rawLayers.push(raw);
   }
-  let h = new Map();
-  for (let w of new Set(s.flatMap((b) => [...b.keys()]))) {
-    let b = describeUncoveredAbortWhen(
-      w,
-      s.flatMap((y) => y.get(w) ?? []),
-      r,
+  let servers = new Map();
+  for (let dirName of new Set(rawLayers.flatMap((layer) => [...layer.keys()]))) {
+    let server = describeUncoveredAbortWhen(
+      dirName,
+      rawLayers.flatMap((layer) => layer.get(dirName) ?? []),
+      notes,
     );
-    if (b.tools.size === 0) {
-      r.push(`mocks: mocks/${w}/ has no <tool>.md responders in any layer \u2014 nothing is mocked for ${w}`);
+    if (server.tools.size === 0) {
+      notes.push(
+        `mocks: mocks/${dirName}/ has no <tool>.md responders in any layer \u2014 nothing is mocked for ${dirName}`,
+      );
       continue;
     }
-    for (let y of new Set(b.tools.values())) {
-      if (y.kind !== "agent") continue;
-      let joined = path.join(path.dirname(path.dirname(y.sourceFile)), REPLAY_DIR_SUFFIX, w);
-      let S = layers.pins.get(joined);
-      if (S === undefined) {
-        let T = [];
-        S = loadMockReplayRecordings(joined, T).then((pinned) => ({
+    for (let responder of new Set(server.tools.values())) {
+      if (responder.kind !== "agent") continue;
+      let recordingsDir = path.join(
+        path.dirname(path.dirname(responder.sourceFile)),
+        REPLAY_DIR_SUFFIX,
+        dirName,
+      );
+      let pinnedPromise = layers.pins.get(recordingsDir);
+      if (pinnedPromise === undefined) {
+        let pinNotes = [];
+        pinnedPromise = loadMockReplayRecordings(recordingsDir, pinNotes).then((pinned) => ({
           pinned,
-          notes: T,
+          notes: pinNotes,
         }));
-        layers.pins.set(joined, S);
+        layers.pins.set(recordingsDir, pinnedPromise);
       }
-      if (!(joined in b.recordings)) {
-        let { pinned, notes } = await S;
-        b.recordings[joined] = pinned;
-        r.push(...notes);
+      if (!(recordingsDir in server.recordings)) {
+        let { pinned, notes: notes_2 } = await pinnedPromise;
+        server.recordings[recordingsDir] = pinned;
+        notes.push(...notes_2);
       }
     }
-    h.set(w, b);
+    servers.set(dirName, server);
   }
   return {
-    servers: h,
-    notes: r,
+    servers,
+    notes,
   };
 }
 //@ chunk-qchp9vrd.js:32587-33503 placement
-async function loadMocksDir(e, n) {
-  let r = new Map();
-  let a;
+async function loadMocksDir(mocksDir, notes) {
+  let servers = new Map();
+  let entries;
   try {
-    await checkRepoAuthoredPath(path.dirname(e), path.basename(e), "mocks/");
-    a = sortByName(
-      await readdir(e, {
+    await checkRepoAuthoredPath(path.dirname(mocksDir), path.basename(mocksDir), "mocks/");
+    entries = sortByName(
+      await readdir(mocksDir, {
         withFileTypes: true,
       }),
     );
   } catch (error) {
     if (isENOENT(error)) {
-      if (await isDanglingSymlink(e))
+      if (await isDanglingSymlink(mocksDir))
         throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
           "mocks/ is a symbolic link whose target does not exist",
           "mocks/: dangling symbolic link",
         );
-      return r;
+      return servers;
     }
     if (getErrnoCode(error) === "ENOTDIR") {
-      if (await isDanglingSymlink(e))
+      if (await isDanglingSymlink(mocksDir))
         throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
           "mocks/ is a symbolic link whose target does not exist",
           "mocks/: dangling symbolic link",
@@ -201,36 +221,36 @@ async function loadMocksDir(e, n) {
       "mocks/: unreadable",
     );
   }
-  if (a.length > MAX_SERVERS_LISTED)
+  if (entries.length > MAX_SERVERS_LISTED)
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `mocks/ has ${a.length} entries (cap: ${MAX_SERVERS_LISTED})`,
+      `mocks/ has ${entries.length} entries (cap: ${MAX_SERVERS_LISTED})`,
       "mocks/: too many entries",
     );
-  for (let s of a) {
-    if (s.name.startsWith(".")) continue;
-    let fileKind = await getFileKind(s, path.join(e, s.name), "unknown");
+  for (let entry of entries) {
+    if (entry.name.startsWith(".")) continue;
+    let fileKind = await getFileKind(entry, path.join(mocksDir, entry.name), "unknown");
     if (fileKind !== "dir" && fileKind !== "symlink" && fileKind !== "unknown") continue;
-    let mockServerDir = await loadMockServerDir(path.join(e, s.name), s.name, n);
-    if (mockServerDir !== null) r.set(s.name, mockServerDir);
+    let mockServerDir = await loadMockServerDir(path.join(mocksDir, entry.name), entry.name, notes);
+    if (mockServerDir !== null) servers.set(entry.name, mockServerDir);
   }
-  return r;
+  return servers;
 }
 //@ chunk-qchp9vrd.js:33503-33575 placement
 /**
  * 按名字排序目录项。
  */
-function sortByName(e) {
-  return e.sort((n, r) => (n.name < r.name ? -1 : n.name > r.name ? 1 : 0));
+function sortByName(entries) {
+  return entries.sort((left, right) => (left.name < right.name ? -1 : left.name > right.name ? 1 : 0));
 }
 //@ chunk-qchp9vrd.js:33575-33707 placement
-async function isDanglingSymlink(e) {
+async function isDanglingSymlink(path) {
   try {
-    if (!(await lstat(e)).isSymbolicLink()) return false;
+    if (!(await lstat(path)).isSymbolicLink()) return false;
   } catch {
     return false;
   }
   try {
-    await stat(e);
+    await stat(path);
     return false;
   } catch (error) {
     return isENOENT(error);
@@ -240,176 +260,182 @@ async function isDanglingSymlink(e) {
 /**
  * 读取 mocks/<server>/ 下的 _server.md、_tools.json 与各工具应答者。
  */
-async function loadMockServerDir(baseDir, name, r) {
-  let a;
+async function loadMockServerDir(serverDir, serverName, notes) {
+  let entries;
   try {
-    await checkRepoAuthoredPath(path.dirname(baseDir), name, `mocks/${formatGuardValueJson(name)}/`);
-    a = sortByName(
-      await readdir(baseDir, {
+    await checkRepoAuthoredPath(
+      path.dirname(serverDir),
+      serverName,
+      `mocks/${formatGuardValueJson(serverName)}/`,
+    );
+    entries = sortByName(
+      await readdir(serverDir, {
         withFileTypes: true,
       }),
     );
   } catch (error) {
-    if (isENOENT(error) || (getErrnoCode(error) === "ENOTDIR" && (await isDanglingSymlink(baseDir))))
+    if (isENOENT(error) || (getErrnoCode(error) === "ENOTDIR" && (await isDanglingSymlink(serverDir))))
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        `mocks/${formatGuardValueJson(name)} is a symbolic link whose target does not exist`,
+        `mocks/${formatGuardValueJson(serverName)} is a symbolic link whose target does not exist`,
         "mocks/<server>/: dangling symbolic link",
       );
     if (getErrnoCode(error) === "ENOTDIR") return null;
     if (error instanceof TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS) throw error;
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `mocks/${formatGuardValueJson(name)}/ is unreadable (${getErrnoCode(error) ?? "unknown error"})`,
+      `mocks/${formatGuardValueJson(serverName)}/ is unreadable (${getErrnoCode(error) ?? "unknown error"})`,
       "mocks/<server>/: unreadable",
     );
   }
-  if (!MOCK_NAME_RE.test(name))
+  if (!MOCK_NAME_RE.test(serverName))
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `mocks/${formatGuardValueJson(name)}/: name the directory after the server segment of the tool name (letters, digits, "_" and "-" only)`,
+      `mocks/${formatGuardValueJson(serverName)}/: name the directory after the server segment of the tool name (letters, digits, "_" and "-" only)`,
       "mocks: directory name not a tool-name segment",
     );
-  if (a.length > MAX_SERVERS_LISTED)
+  if (entries.length > MAX_SERVERS_LISTED)
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `mocks/${name}/ has ${a.length} entries (cap: ${MAX_SERVERS_LISTED})`,
+      `mocks/${serverName}/ has ${entries.length} entries (cap: ${MAX_SERVERS_LISTED})`,
       "mocks/<server>/: too many entries",
     );
-  let s = new Map();
-  let h = null;
-  let w = new Map();
-  for (let b of a) {
-    let joined = path.join(baseDir, b.name);
-    if (b.name === TOOLS_JSON_FILE) {
-      w = await loadMockToolsJson(joined, name);
+  let toolFiles = new Map();
+  let serverAgent = null;
+  let listings = new Map();
+  for (let entry of entries) {
+    let filePath = path.join(serverDir, entry.name);
+    if (entry.name === TOOLS_JSON_FILE) {
+      listings = await loadMockToolsJson(filePath, serverName);
       continue;
     }
-    if (b.name.startsWith(".") || !b.name.endsWith(".md") || b.isDirectory()) continue;
-    let base = path.basename(b.name, ".md");
-    if (b.name !== SERVER_RESPONDER_FILE && !MOCK_NAME_RE.test(base))
+    if (entry.name.startsWith(".") || !entry.name.endsWith(".md") || entry.isDirectory()) continue;
+    let base = path.basename(entry.name, ".md");
+    if (entry.name !== SERVER_RESPONDER_FILE && !MOCK_NAME_RE.test(base))
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        `mocks/${name}/${formatGuardValueJson(b.name)}: name responder files after the tool (letters, digits, "_" and "-" only), e.g. list_issues.md`,
+        `mocks/${serverName}/${formatGuardValueJson(entry.name)}: name responder files after the tool (letters, digits, "_" and "-" only), e.g. list_issues.md`,
         "mocks: tool file name not a tool-name segment",
       );
-    let { responder, tools } = await loadMockToolResponder(joined, baseDir, name);
-    if (b.name === SERVER_RESPONDER_FILE) {
+    let { responder, tools } = await loadMockToolResponder(filePath, serverDir, serverName);
+    if (entry.name === SERVER_RESPONDER_FILE) {
       if (responder.kind !== "agent")
         throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-          `mocks/${name}/${SERVER_RESPONDER_FILE}: only \`type: agent\` is meaningful here (one agent answering several tools); put a fixed answer in <tool>.md`,
+          `mocks/${serverName}/${SERVER_RESPONDER_FILE}: only \`type: agent\` is meaningful here (one agent answering several tools); put a fixed answer in <tool>.md`,
           "mocks: _server.md not an agent",
         );
       if (tools.length === 0)
         throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-          `mocks/${name}/${SERVER_RESPONDER_FILE}: an agent answering several tools needs \`tools: [...]\``,
+          `mocks/${serverName}/${SERVER_RESPONDER_FILE}: an agent answering several tools needs \`tools: [...]\``,
           "mocks: _server.md without tools",
         );
       if (responder.expect !== null && tools.length > 1)
         throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-          `mocks/${name}/${SERVER_RESPONDER_FILE}: \`expect:\` here would guard all ${tools.length} tools it answers; put the guard on the one tool it is meant for as mocks/${name}/<tool>.md`,
+          `mocks/${serverName}/${SERVER_RESPONDER_FILE}: \`expect:\` here would guard all ${tools.length} tools it answers; put the guard on the one tool it is meant for as mocks/${serverName}/<tool>.md`,
           "mocks: expect on multi-tool _server.md",
         );
-      h = {
+      serverAgent = {
         responder,
         tools,
       };
       continue;
     }
-    s.set(base, responder);
+    toolFiles.set(base, responder);
   }
-  if (s.size === 0 && h === null && w.size === 0) {
-    r.push(`mocks: mocks/${name}/ has no <tool>.md responders \u2014 nothing is mocked for ${name}`);
+  if (toolFiles.size === 0 && serverAgent === null && listings.size === 0) {
+    notes.push(
+      `mocks: mocks/${serverName}/ has no <tool>.md responders \u2014 nothing is mocked for ${serverName}`,
+    );
     return null;
   }
   return {
-    dir: baseDir,
-    toolFiles: s,
-    serverAgent: h,
-    listings: w,
+    dir: serverDir,
+    toolFiles,
+    serverAgent,
+    listings,
   };
 }
 //@ chunk-qchp9vrd.js:35751-37469 placement
-async function loadMockToolResponder(e, baseDir, r) {
-  let a = `mocks/${r}/${path.basename(e)}`;
-  let s;
-  let h;
+async function loadMockToolResponder(filePath, baseDir, serverName) {
+  let label = `mocks/${serverName}/${path.basename(filePath)}`;
+  let text;
+  let parsed;
   try {
-    s = await readTextFile(e, MAX_MOCK_FILE_BYTES, a);
-    if (s === null)
+    text = await readTextFile(filePath, MAX_MOCK_FILE_BYTES, label);
+    if (text === null)
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        `${a}: disappeared while loading`,
+        `${label}: disappeared while loading`,
         "mocks: file vanished",
       );
-    h = parseProseFrontmatter(s, e);
+    parsed = parseProseFrontmatter(text, filePath);
   } catch (error) {
-    throw rebaseErrorPrefix(error, e, a);
+    throw rebaseErrorPrefix(error, filePath, label);
   }
-  let { fm, body } = h;
-  let y = responderFrontmatterSchema().safeParse(fm);
-  if (!y.success) {
-    let x = y.error.issues[0];
-    let j = x?.path.length ? x.path.join(".") : "frontmatter";
+  let { fm, body } = parsed;
+  let frontmatter = responderFrontmatterSchema().safeParse(fm);
+  if (!frontmatter.success) {
+    let issue = frontmatter.error.issues[0];
+    let keyPath = issue?.path.length ? issue.path.join(".") : "frontmatter";
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `${a}: ${j}: ${x?.message ?? "invalid"} (keys: type, expect, error, tools, abort_when)`,
+      `${label}: ${keyPath}: ${issue?.message ?? "invalid"} (keys: type, expect, error, tools, abort_when)`,
       "mocks: invalid frontmatter",
     );
   }
-  let R = y.data;
-  let expect = R.expect ?? null;
+  let data = frontmatter.data;
+  let expect = data.expect ?? null;
   if (expect !== null) {
-    let x = compileExpectGuards(expect);
-    if (x.length > 0)
+    let expectProblems = compileExpectGuards(expect);
+    if (expectProblems.length > 0)
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        `${a}: ${x[0]}`,
+        `${label}: ${expectProblems[0]}`,
         "mocks: invalid expect",
       );
   }
-  if (R.tools !== undefined && path.basename(e) !== SERVER_RESPONDER_FILE)
+  if (data.tools !== undefined && path.basename(filePath) !== SERVER_RESPONDER_FILE)
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `${a}: \`tools:\` belongs in ${SERVER_RESPONDER_FILE} (a <tool>.md answers the tool it is named after)`,
+      `${label}: \`tools:\` belongs in ${SERVER_RESPONDER_FILE} (a <tool>.md answers the tool it is named after)`,
       "mocks: tools outside _server.md",
     );
-  let tools = R.tools ?? [];
-  let replaced = body.replace(/^\n+/, "").replace(/\s+$/, "");
-  if (R.type === "agent") {
-    if (R.error !== undefined)
+  let tools = data.tools ?? [];
+  let text_2 = body.replace(/^\n+/, "").replace(/\s+$/, "");
+  if (data.type === "agent") {
+    if (data.error !== undefined)
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        `${a}: \`error:\` applies to fixed responders only`,
+        `${label}: \`error:\` applies to fixed responders only`,
         "mocks: error on agent",
       );
-    if (replaced === "" || hasToolTemplate(replaced))
+    if (text_2 === "" || hasToolTemplate(text_2))
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        `${a}: an agent responder needs a description of the server it plays as its body${replaced === "" ? "" : " (it still holds the scaffolded placeholder)"}`,
+        `${label}: an agent responder needs a description of the server it plays as its body${text_2 === "" ? "" : " (it still holds the scaffolded placeholder)"}`,
         "mocks: empty agent prompt",
       );
     return {
       responder: {
         kind: "agent",
-        prompt: replaced,
-        abortWhen: R.abort_when?.trim() ? R.abort_when : null,
+        prompt: text_2,
+        abortWhen: data.abort_when?.trim() ? data.abort_when : null,
         expect,
         baseDir,
-        sourceFile: e,
-        sourceHash: sourceHash(s),
+        sourceFile: filePath,
+        sourceHash: sourceHash(text),
       },
       tools,
     };
   }
-  if (R.abort_when !== undefined)
+  if (data.abort_when !== undefined)
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `${a}: \`abort_when:\` needs \`type: agent\`; a fixed responder guards its input with \`expect:\``,
+      `${label}: \`abort_when:\` needs \`type: agent\`; a fixed responder guards its input with \`expect:\``,
       "mocks: abort_when on fixed",
     );
-  if (hasToolTemplate(replaced))
+  if (hasToolTemplate(text_2))
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `${a}: still holds the scaffolded placeholder \u2014 write the tool's canned answer as the body`,
+      `${label}: still holds the scaffolded placeholder \u2014 write the tool's canned answer as the body`,
       "mocks: unfilled stub",
     );
   return {
     responder: {
       kind: "fixed",
-      body: replaced,
-      isError: R.error ?? false,
+      body: text_2,
+      isError: data.error ?? false,
       expect,
       baseDir,
-      sourceFile: e,
-      sourceHash: sourceHash(s),
+      sourceFile: filePath,
+      sourceHash: sourceHash(text),
     },
     tools,
   };
@@ -418,10 +444,10 @@ async function loadMockToolResponder(e, baseDir, r) {
 /**
  * 取规范化内容的短哈希（16 位）。
  */
-function sourceHash(e) {
+function sourceHash(text) {
   return createHash("sha256")
     .update(
-      e.replaceAll(
+      text.replaceAll(
         `\r
 `,
         `
@@ -437,87 +463,88 @@ var MOCK_TOOL_TEMPLATE = "TODO: replace with the canned result this tool should 
 /**
  * 判断文本里是否还留着工具模板占位。
  */
-function hasToolTemplate(e) {
-  return e.includes(MOCK_TOOL_TEMPLATE);
+function hasToolTemplate(text) {
+  return text.includes(MOCK_TOOL_TEMPLATE);
 }
 //@ chunk-qchp9vrd.js:37669-38303 placement
 /**
  * 解析 _tools.json（工具名、描述、输入模式）。
  */
-async function loadMockToolsJson(e, n) {
-  let r = `mocks/${n}/${TOOLS_JSON_FILE}`;
-  let a = await readTextFile(e, MAX_MOCK_FILE_BYTES, r).catch((error) => {
-    throw rebaseErrorPrefix(error, e, r);
+async function loadMockToolsJson(filePath, serverName) {
+  let label = `mocks/${serverName}/${TOOLS_JSON_FILE}`;
+  let text = await readTextFile(filePath, MAX_MOCK_FILE_BYTES, label).catch((error) => {
+    throw rebaseErrorPrefix(error, filePath, label);
   });
-  let s = new Map();
-  if (a === null) return s;
-  let h;
+  let tools = new Map();
+  if (text === null) return tools;
+  let parsed;
   try {
-    h = jsonParse(a);
+    parsed = jsonParse(text);
   } catch (error) {
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `${r}: not valid JSON (${error instanceof Error ? error.message : String(error)})`,
+      `${label}: not valid JSON (${error instanceof Error ? error.message : String(error)})`,
       "mocks: _tools.json invalid",
     );
   }
-  let w = typeof h === "object" && h !== null && "result" in h ? h.result : h;
-  let b = toolsJsonSchema().safeParse(w);
-  if (!b.success)
+  let resultValue =
+    typeof parsed === "object" && parsed !== null && "result" in parsed ? parsed.result : parsed;
+  let validated = toolsJsonSchema().safeParse(resultValue);
+  if (!validated.success)
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `${r}: expected a saved tools/list response ({"tools": [{"name", "description", "inputSchema"}]})`,
+      `${label}: expected a saved tools/list response ({"tools": [{"name", "description", "inputSchema"}]})`,
       "mocks: _tools.json shape",
     );
-  for (let tool of b.data.tools)
-    s.set(tool.name, {
+  for (let tool of validated.data.tools)
+    tools.set(tool.name, {
       name: tool.name,
       description: tool.description ?? "",
       inputSchema: tool.inputSchema ?? {
         type: "object",
       },
     });
-  return s;
+  return tools;
 }
 //@ chunk-qchp9vrd.js:38303-39231 placement
-function describeUncoveredAbortWhen(e, n, r) {
-  let a = new Map();
-  let s = n.map((w) => w.serverAgent).findLast((w) => w !== null) ?? null;
-  if (s !== null) for (let tool of s.tools) a.set(tool, s.responder);
-  for (let w of n) for (let [b, y] of w.toolFiles) a.set(b, y);
-  if (s !== null)
-    for (let tool of s.tools) {
-      let b = a.get(tool);
-      if (b !== undefined && b !== s.responder)
-        r.push(
-          `mocks: ${path.relative(path.dirname(path.dirname(s.responder.sourceFile)), s.responder.sourceFile)} will not see ${tool} \u2014 answered by ${path.relative(path.dirname(path.dirname(path.dirname(path.dirname(b.sourceFile)))), b.sourceFile)}, so its abort_when does not cover that tool`,
+function describeUncoveredAbortWhen(serverSegment, layers, notes) {
+  let tools = new Map();
+  let serverAgent = layers.map((layer) => layer.serverAgent).findLast((layer) => layer !== null) ?? null;
+  if (serverAgent !== null) for (let tool of serverAgent.tools) tools.set(tool, serverAgent.responder);
+  for (let layer of layers) for (let [toolName, responder] of layer.toolFiles) tools.set(toolName, responder);
+  if (serverAgent !== null)
+    for (let tool of serverAgent.tools) {
+      let otherResponder = tools.get(tool);
+      if (otherResponder !== undefined && otherResponder !== serverAgent.responder)
+        notes.push(
+          `mocks: ${path.relative(path.dirname(path.dirname(serverAgent.responder.sourceFile)), serverAgent.responder.sourceFile)} will not see ${tool} \u2014 answered by ${path.relative(path.dirname(path.dirname(path.dirname(path.dirname(otherResponder.sourceFile)))), otherResponder.sourceFile)}, so its abort_when does not cover that tool`,
         );
     }
-  let listings = new Map(n.flatMap((w) => [...w.listings]));
-  for (let w of new Set(a.values()))
+  let listings = new Map(layers.flatMap((layer) => [...layer.listings]));
+  for (let responder of new Set(tools.values()))
     if (
-      w.kind === "agent" &&
-      w.abortWhen === null &&
-      /\b(abort|fail)\b[^.]{0,40}\b(eval|run)\b/i.test(w.prompt)
+      responder.kind === "agent" &&
+      responder.abortWhen === null &&
+      /\b(abort|fail)\b[^.]{0,40}\b(eval|run)\b/i.test(responder.prompt)
     )
-      r.push(
-        `mocks: ${e}/${path.basename(w.sourceFile)} mentions failing the run in its prose but has no abort_when: \u2014 only abort_when can abort`,
+      notes.push(
+        `mocks: ${serverSegment}/${path.basename(responder.sourceFile)} mentions failing the run in its prose but has no abort_when: \u2014 only abort_when can abort`,
       );
   return {
-    dirName: e,
-    tools: a,
+    dirName: serverSegment,
+    tools,
     listings,
     recordings: {},
   };
 }
 //@ chunk-qchp9vrd.js:39231-39417 placement
-function rebaseErrorPrefix(error, n, r) {
-  let base = path.basename(n);
+function rebaseErrorPrefix(error, filePath, label) {
+  let base = path.basename(filePath);
   if (
     error instanceof TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS &&
     error.message.startsWith(base) &&
-    !error.message.startsWith(r)
+    !error.message.startsWith(label)
   )
     return new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `${r}${error.message.slice(base.length)}`,
+      `${label}${error.message.slice(base.length)}`,
       error.telemetryMessage,
     );
   return error;

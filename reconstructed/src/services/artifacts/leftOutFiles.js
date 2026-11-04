@@ -37,22 +37,22 @@ function markLeaveOutMissingRefused() {
   getLiveState().leaveOutMissingRefusedAt = Date.now();
 }
 //@ chunk-06y4szbn.js:38030-38215 placement
-function leaveOutMissingRefusal(e, n) {
-  let r = formatFrameErrorBody(e);
-  if (!UNKNOWN_FIELD_ERROR_RE.test(r)) return;
-  if (mentionsField(r, "leave_out_missing")) return "named";
-  return /unknown field ["']/i.test(r) || Object.keys(n).some((key) => mentionsField(r, key))
+function leaveOutMissingRefusal(body, missingPaths) {
+  let text = formatFrameErrorBody(body);
+  if (!UNKNOWN_FIELD_ERROR_RE.test(text)) return;
+  if (mentionsField(text, "leave_out_missing")) return "named";
+  return /unknown field ["']/i.test(text) || Object.keys(missingPaths).some((key) => mentionsField(text, key))
     ? undefined
     : "unnamed";
 }
 //@ chunk-06y4szbn.js:38215-38301 placement
-function isClientRefusalStatus(status, n) {
+function isClientRefusalStatus(status, body) {
   return (
     status < 500 &&
     status !== 401 &&
     status !== 403 &&
     status !== 429 &&
-    !(status === 400 && UNKNOWN_FIELD_ERROR_RE.test(formatFrameErrorBody(n)))
+    !(status === 400 && UNKNOWN_FIELD_ERROR_RE.test(formatFrameErrorBody(body)))
   );
 }
 //@ chunk-06y4szbn.js:38301-38386 placement
@@ -60,51 +60,51 @@ function isAddOnlyPublish({ mode, isFirstPublish, removedCount }) {
   return removedCount === 0 && (mode === "patch" || isFirstPublish);
 }
 //@ chunk-06y4szbn.js:38386-38760 placement
-function copiedFilesLeftOutNote(e) {
-  let n = e.length;
-  let r = plural(n, "file");
-  let s = n === 1 ? "was" : "were";
-  return `${n} copied ${r} ${s} left out of this version; the other files in this publish were saved. Tell the user which ${r} ${s} left out${unnamedFilesSuffix(e)}. At each left-out path the artifact keeps the file it had before; if it had none, the path is empty, so change or remove any reference to it. Left out: ${describeLeftOutFiles(e)}.`;
+function copiedFilesLeftOutNote(files) {
+  let count = files.length;
+  let fileNoun = plural(count, "file");
+  let verb = count === 1 ? "was" : "were";
+  return `${count} copied ${fileNoun} ${verb} left out of this version; the other files in this publish were saved. Tell the user which ${fileNoun} ${verb} left out${unnamedFilesSuffix(files)}. At each left-out path the artifact keeps the file it had before; if it had none, the path is empty, so change or remove any reference to it. Left out: ${describeLeftOutFiles(files)}.`;
 }
 //@ chunk-06y4szbn.js:38760-39745 placement
-function allFilesLeftOutMessage(e, n) {
-  let r = e.length;
-  let s = plural(r, "file");
-  let h = r === 1 ? "was" : "were";
-  let b = `Nothing was published, and the artifact is unchanged: the server left out ${r} copied ${s}`;
-  let y = `Tell the user which ${s} ${h} left out${unnamedFilesSuffix(e)}.`;
-  let x = `Left out: ${describeLeftOutFiles(e)}.`;
-  switch (n) {
+function allFilesLeftOutMessage(files, extra) {
+  let count = files.length;
+  let fileNoun = plural(count, "file");
+  let verb = count === 1 ? "was" : "were";
+  let head = `Nothing was published, and the artifact is unchanged: the server left out ${count} copied ${fileNoun}`;
+  let advice = `Tell the user which ${fileNoun} ${verb} left out${unnamedFilesSuffix(files)}.`;
+  let detail = `Left out: ${describeLeftOutFiles(files)}.`;
+  switch (extra) {
     case "removes_files":
-      return `${b}, and this publish also removes files, so publishing without the copies could remove a file one of them was meant to replace. ${y} To save the rest, publish again without the left-out copies, and keep any file one of them was meant to replace. ${x}`;
+      return `${head}, and this publish also removes files, so publishing without the copies could remove a file one of them was meant to replace. ${advice} To save the rest, publish again without the left-out copies, and keep any file one of them was meant to replace. ${detail}`;
     case "replaces_files":
-      return `${b}, and this publish replaces every file in the artifact, so publishing without the copies could delete a file it has. ${y} To save the rest, read the artifact to see which files it has, then publish again without the left-out copies. ${x}`;
+      return `${head}, and this publish replaces every file in the artifact, so publishing without the copies could delete a file it has. ${advice} To save the rest, read the artifact to see which files it has, then publish again without the left-out copies. ${detail}`;
     case "no_other_file":
-      return `${b}, and nothing else in this publish would have changed the artifact. ${y} Send a copy again only when the reason it was left out no longer applies. ${x}`;
+      return `${head}, and nothing else in this publish would have changed the artifact. ${advice} Send a copy again only when the reason it was left out no longer applies. ${detail}`;
   }
 }
 //@ chunk-06y4szbn.js:39745-39826 placement
-function unnamedFilesSuffix(e) {
-  let n = e.length - MAX_UNNAMED_FILES;
-  return n > 0 ? ` (${n} more are not named here)` : "";
+function unnamedFilesSuffix(files) {
+  let hiddenCount = files.length - MAX_UNNAMED_FILES;
+  return hiddenCount > 0 ? ` (${hiddenCount} more are not named here)` : "";
 }
 //@ chunk-06y4szbn.js:39826-39887 placement
 function jsonQuotedTruncated(path) {
-  let n = truncateToLength(path, MAX_FILE_PATH_CHARS);
-  return jsonStringify(n === path ? path : `${n}\u2026`);
+  let shownPath = truncateToLength(path, MAX_FILE_PATH_CHARS);
+  return jsonStringify(shownPath === path ? path : `${shownPath}\u2026`);
 }
 //@ chunk-06y4szbn.js:39887-40168 placement
-function describeLeftOutFiles(e) {
-  return e
+function describeLeftOutFiles(files) {
+  return files
     .slice(0, MAX_UNNAMED_FILES)
     .map(({ file, why }) => {
-      let s =
+      let lines =
         why === NO_FILE
           ? "which has no file there"
           : FILE_KIND_RE.test(why)
             ? `left out by the server for the reason ${jsonStringify(why)}`
             : "left out by the server";
-      return `${jsonQuotedTruncated(file.path)} (a copy of ${jsonQuotedTruncated(file.from.path)} in artifact ${file.from.slug}, ${s})`;
+      return `${jsonQuotedTruncated(file.path)} (a copy of ${jsonQuotedTruncated(file.from.path)} in artifact ${file.from.slug}, ${lines})`;
     })
     .join("; ");
 }

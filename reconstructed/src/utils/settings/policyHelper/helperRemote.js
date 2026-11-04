@@ -41,17 +41,22 @@ import {
 } from "../../../services/remoteManagedSettings/remoteSettingsState.js";
 import { logError } from "../../log.js";
 import { getIsInteractive } from "../../../bootstrap/state.js";
+import { deferInit } from "../../../../runtime/deferred-init.js";
 
 //@ chunk-q8cqcff6.js:74436-74621 placement
-function selectPerOsConfig(policyHelpers, chain, r) {
-  for (let s of chain) {
-    let S = policyHelpers[s];
-    if (S == null) continue;
-    if (r ? getPolicyHelperCommand(S) !== undefined : S.path != null || S.script != null) {
-      let { defaultSettings, ...y } = S;
+function selectPerOsConfig(policyHelpers, chain, requireCommand) {
+  for (let osKey of chain) {
+    let entry = policyHelpers[osKey];
+    if (entry == null) continue;
+    if (
+      requireCommand
+        ? getPolicyHelperCommand(entry) !== undefined
+        : entry.path != null || entry.script != null
+    ) {
+      let { defaultSettings, ...config } = entry;
       return {
-        osKey: s,
-        config: y,
+        osKey,
+        config,
       };
     }
   }
@@ -61,8 +66,8 @@ function selectPerOsConfig(policyHelpers, chain, r) {
 /**
  * remoteHelperCommand：按平台选出的远程 policy helper 命令。
  */
-function remoteHelperCommand(e) {
-  let policyHelpers = e?.policyHelpers;
+function remoteHelperCommand(settings) {
+  let policyHelpers = settings?.policyHelpers;
   return policyHelpers
     ? getPolicyHelperCommand(
         selectPerOsConfig(policyHelpers, platformSettingsChain().chain, true)?.config ?? null,
@@ -70,8 +75,8 @@ function remoteHelperCommand(e) {
     : undefined;
 }
 //@ chunk-q8cqcff6.js:74715-75507 placement
-function selectPerOsHelper(policyHelpers, policyHelper, r, s) {
-  if (!policyHelpers || !r)
+function selectPerOsHelper(policyHelpers, policyHelper, chainInfo, requireCommand) {
+  if (!policyHelpers || !chainInfo)
     return policyHelper
       ? {
           kind: "helper",
@@ -80,8 +85,8 @@ function selectPerOsHelper(policyHelpers, policyHelper, r, s) {
           fromPerOs: false,
         }
       : null;
-  let { platform, chain } = r;
-  let perOsConfig = selectPerOsConfig(policyHelpers, chain, s);
+  let { platform, chain } = chainInfo;
+  let perOsConfig = selectPerOsConfig(policyHelpers, chain, requireCommand);
   if (perOsConfig)
     return {
       kind: "helper",
@@ -104,17 +109,17 @@ function selectPerOsHelper(policyHelpers, policyHelper, r, s) {
       fromPerOs: false,
     };
   }
-  if (s) return null;
-  let P = `${NO_PLATFORM_ENTRY_TEXT}"${platform}", no default settings payload, and no policyHelper fallback; no policy helper will run`;
+  if (requireCommand) return null;
+  let message = `${NO_PLATFORM_ENTRY_TEXT}"${platform}", no default settings payload, and no policyHelper fallback; no policy helper will run`;
   policyHelperRunner.selectionWarnings.push({
     file: "policyHelper",
     path: "policyHelpers",
-    message: P,
+    message,
     severity: "warning",
     statusOnly: true,
   });
   invalidatePolicyLayer();
-  logForDebugging(P, {
+  logForDebugging(message, {
     level: "warn",
   });
   if (!policyHelperRunner.noEntrySadLogged) {
@@ -129,29 +134,29 @@ function selectPerOsHelper(policyHelpers, policyHelper, r, s) {
  */
 class RemoteHelperError extends Error {
   code;
-  constructor(code, n) {
-    super(n);
+  constructor(code, message) {
+    super(message);
     this.code = code;
   }
 }
 //@ chunk-q8cqcff6.js:75574-76946 placement
-async function runRemoteArmedHelper({ config, fromPerOs }, r) {
-  let s = r?.armedFromRemote === true;
+async function runRemoteArmedHelper({ config, fromPerOs }, options) {
+  let armed = options?.armedFromRemote === true;
   let { remoteArmGeneration, osAdminRetireGeneration } = policyHelperRunner;
-  if (s) policyHelperRunner.remoteArmingConfig = config;
-  let h;
+  if (armed) policyHelperRunner.remoteArmingConfig = config;
+  let result;
   try {
-    h = await runPolicyHelperWithRetry(
+    result = await runPolicyHelperWithRetry(
       config,
       fromPerOs,
-      s,
-      () => !s || policyHelperRunner.remoteArmGeneration === remoteArmGeneration,
+      armed,
+      () => !armed || policyHelperRunner.remoteArmGeneration === remoteArmGeneration,
     );
   } finally {
     if (policyHelperRunner.remoteArmingConfig === config) policyHelperRunner.remoteArmingConfig = null;
   }
-  if (s && policyHelperRunner.remoteArmGeneration !== remoteArmGeneration) {
-    if (config.path !== undefined && !("error" in h && h.code === "bad_path"))
+  if (armed && policyHelperRunner.remoteArmGeneration !== remoteArmGeneration) {
+    if (config.path !== undefined && !("error" in result && result.code === "bad_path"))
       policyHelperRunner.retiredHelperPaths.add(config.path);
     logForDebugging("policyHelper: remote arming revoked during exec; discarding output", {
       level: "warn",
@@ -160,8 +165,8 @@ async function runRemoteArmedHelper({ config, fromPerOs }, r) {
     policyHelperRunner.releaseLatchAfterTornDownExec();
     return "dropped";
   }
-  if (!s && policyHelperRunner.osAdminRetireGeneration !== osAdminRetireGeneration) {
-    if (config.path !== undefined && !("error" in h && h.code === "bad_path"))
+  if (!armed && policyHelperRunner.osAdminRetireGeneration !== osAdminRetireGeneration) {
+    if (config.path !== undefined && !("error" in result && result.code === "bad_path"))
       policyHelperRunner.retiredHelperPaths.add(config.path);
     logForDebugging("policyHelper: OS-admin pass retired during exec; discarding output", {
       level: "warn",
@@ -170,28 +175,28 @@ async function runRemoteArmedHelper({ config, fromPerOs }, r) {
     policyHelperRunner.initializeAttempted = false;
     return "dropped";
   }
-  if ("error" in h) {
-    if (!r?.suppressExecEvents)
-      logFeatureBad("settings_policy_helper", h.code, {
-        attempts: h.attempts,
+  if ("error" in result) {
+    if (!options?.suppressExecEvents)
+      logFeatureBad("settings_policy_helper", result.code, {
+        attempts: result.attempts,
       });
-    throw new RemoteHelperError(h.code, `policyHelper failed: ${h.error}`);
+    throw new RemoteHelperError(result.code, `policyHelper failed: ${result.error}`);
   }
   policyHelperRunner.apply({
     config,
     fromPerOs,
     serving: "helper",
-    armedFromRemote: s,
+    armedFromRemote: armed,
     mergesOutput: config.outputBehavior === "merge",
-    output: h.output,
-    warnings: h.warnings,
+    output: result.output,
+    warnings: result.warnings,
   });
-  logForDebugging(`policyHelper applied (keys: ${Object.keys(h.output).join(",")})`, {
+  logForDebugging(`policyHelper applied (keys: ${Object.keys(result.output).join(",")})`, {
     level: "debug",
   });
-  if (!r?.suppressExecEvents)
+  if (!options?.suppressExecEvents)
     logFeatureOk("settings_policy_helper", {
-      attempts: h.attempts,
+      attempts: result.attempts,
     });
   return "applied";
 }
@@ -246,8 +251,8 @@ function releaseLatchWhenTickSettles() {
 /**
  * subscribeHelperPassSettled：订阅 helper 轮次结算。
  */
-function subscribeHelperPassSettled(e) {
-  return policyHelperRunner.passSettled.subscribe(e);
+function subscribeHelperPassSettled(listener) {
+  return policyHelperRunner.passSettled.subscribe(listener);
 }
 //@ chunk-q8cqcff6.js:77354-77398 placement
 /**
@@ -281,9 +286,9 @@ function mergesRemoteOutput() {
 /**
  * 远程载荷遮蔽了 OS 管理员策略时，退役原有的 policyHelper pass。
  */
-function retireIfShadowedByRemote(e) {
+function retireIfShadowedByRemote(origin) {
   if (
-    e !== "remote" ||
+    origin !== "remote" ||
     !policyHelperRunner.initializeAttempted ||
     policyHelperRunner.state?.armedFromRemote === true
   )
@@ -297,21 +302,21 @@ function retireIfShadowedByRemote(e) {
 /**
  * notifyOrganizationAsking：通知组织询问状态（不作答）。
  */
-function notifyOrganizationAsking(e) {
-  onAskingOrganizationChange(e, false);
+function notifyOrganizationAsking(readBase) {
+  onAskingOrganizationChange(readBase, false);
 }
 //@ chunk-q8cqcff6.js:77805-77830 placement
 /**
  * notifyOrganizationAskingForced：通知组织询问状态（强制）。
  */
-function notifyOrganizationAskingForced(e) {
-  onAskingOrganizationChange(e, true);
+function notifyOrganizationAskingForced(readBase) {
+  onAskingOrganizationChange(readBase, true);
 }
 //@ chunk-q8cqcff6.js:77830-78276 placement
 /**
  * 会话开始或停止向组织请求设置时，重新处理 OS 管理员的 policyHelper：远程已接管时忽略；有进行中的 pass 时记下重启；否则退役当前 pass 并按新的基础设置重新武装。
  */
-function onAskingOrganizationChange(e, n) {
+function onAskingOrganizationChange(readBase, forced) {
   let { state } = policyHelperRunner;
   if (
     state?.armedFromRemote === true ||
@@ -319,14 +324,14 @@ function onAskingOrganizationChange(e, n) {
     policyHelperRunner.remoteFailedConfig !== null
   )
     return;
-  policyHelperRunner.stoppedAsking = n;
+  policyHelperRunner.stoppedAsking = forced;
   policyHelperRunner.osAdminRetireGeneration++;
   if (policyHelperRunner.passesInFlight > 0) {
-    policyHelperRunner.restartFrom = e;
+    policyHelperRunner.restartFrom = readBase;
     return;
   }
   if (state === null && !policyHelperRunner.initializeAttempted) {
-    if (n) {
+    if (forced) {
       policyHelperRunner.decidedOrigin = null;
       armFromOsAdminIfNew("is read whole at the turn away from asking");
     }
@@ -335,10 +340,10 @@ function onAskingOrganizationChange(e, n) {
   retireOsAdminPass(retireReason());
   armFromBase(
     {
-      readBase: e,
+      readBase,
       refuse: refuseFromRemoteArming,
     },
-    `was read again at the turn ${n ? "away from" : "to"} asking its organization`,
+    `was read again at the turn ${forced ? "away from" : "to"} asking its organization`,
   );
 }
 //@ chunk-q8cqcff6.js:78276-78358 placement
@@ -370,14 +375,14 @@ function retireReason() {
 function retireOsAdminPass({ said, code }) {
   clearHelperRefreshWarning();
   policyHelperRunner.stopRefreshTimer();
-  let r = policyHelperRunner.state !== null;
+  let hadState = policyHelperRunner.state !== null;
   policyHelperRunner.retireState();
   policyHelperRunner.defaultFallback = null;
   policyHelperRunner.payloadRefusalError = null;
   policyHelperRunner.remoteFailedConfig = null;
   policyHelperRunner.initializeAttempted = false;
   if (code !== "retired_shadowed_by_remote") policyHelperRunner.decidedOrigin = null;
-  if (!r) return;
+  if (!hadState) return;
   logForDebugging(`policyHelper: OS-admin helper pass retired; ${said}`, {
     level: "info",
   });
@@ -407,21 +412,26 @@ function deactivateRemoteHelper() {
   policyHelperRunner.announceTierChange();
 }
 //@ chunk-q8cqcff6.js:79377-79385 placement
-registerSyncCacheResetListener(deactivateRemoteHelper);
+// deferred: uses registerSyncCacheResetListener (../../../services/remoteManagedSettings/remoteSettingsState.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-q8cqcff6.js:79377", () => {
+  registerSyncCacheResetListener(deactivateRemoteHelper);
+});
 //@ chunk-q8cqcff6.js:79385-79567 placement
-function matchingRemoteHelperConfig(e) {
+function matchingRemoteHelperConfig(config) {
   let readRemotePayload = policyHelperRunner.readRemotePayload;
   if (readRemotePayload === null || !isRemoteManagedSettingsVerifiedAndApprovedForSession()) return null;
   let policyHelpers = readRemotePayload()?.policyHelpers;
-  let s = policyHelpers
+  let remoteConfig = policyHelpers
     ? (selectPerOsConfig(policyHelpers, platformSettingsChain().chain, true)?.config ?? null)
     : null;
-  return s !== null && getPolicyHelperCommand(s) === getPolicyHelperCommand(e) ? s : null;
+  return remoteConfig !== null && getPolicyHelperCommand(remoteConfig) === getPolicyHelperCommand(config)
+    ? remoteConfig
+    : null;
 }
 //@ chunk-q8cqcff6.js:79567-80659 placement
-async function retryRemoteHelper(e, n) {
+async function retryRemoteHelper(config, fromPerOs) {
   try {
-    if (matchingRemoteHelperConfig(e) === null) {
+    if (matchingRemoteHelperConfig(config) === null) {
       logForDebugging(
         "policyHelper: remote retry stopped; the payload in force no longer authorizes the entry",
         {
@@ -432,51 +442,51 @@ async function retryRemoteHelper(e, n) {
       return;
     }
     let remoteArmGeneration = policyHelperRunner.remoteArmGeneration;
-    policyHelperRunner.remoteArmingConfig = e;
-    let s;
+    policyHelperRunner.remoteArmingConfig = config;
+    let result;
     try {
-      s = await runPolicyHelperWithRetry(
-        e,
-        n,
+      result = await runPolicyHelperWithRetry(
+        config,
+        fromPerOs,
         true,
         () =>
           policyHelperRunner.remoteArmGeneration === remoteArmGeneration &&
-          matchingRemoteHelperConfig(e) !== null,
+          matchingRemoteHelperConfig(config) !== null,
       );
     } finally {
-      if (policyHelperRunner.remoteArmingConfig === e) policyHelperRunner.remoteArmingConfig = null;
+      if (policyHelperRunner.remoteArmingConfig === config) policyHelperRunner.remoteArmingConfig = null;
     }
-    let S = policyHelperRunner.remoteArmGeneration !== remoteArmGeneration;
-    let E = S ? null : matchingRemoteHelperConfig(e);
-    if (E === null) {
-      if (!S) deactivateRemoteHelper();
+    let revoked = policyHelperRunner.remoteArmGeneration !== remoteArmGeneration;
+    let currentConfig = revoked ? null : matchingRemoteHelperConfig(config);
+    if (currentConfig === null) {
+      if (!revoked) deactivateRemoteHelper();
       logForDebugging("policyHelper: remote retry revoked during exec; discarding output", {
         level: "warn",
       });
       logFeatureSad("settings_policy_helpers_per_os", "deactivated_during_exec");
       return;
     }
-    if ("error" in s) {
-      logForDebugging(`policyHelper retry failed (remote entry still not armed): ${s.error}`, {
+    if ("error" in result) {
+      logForDebugging(`policyHelper retry failed (remote entry still not armed): ${result.error}`, {
         level: "warn",
       });
       logFeatureSad("settings_policy_helper", "refresh_failed", {
-        attempts: s.attempts,
+        attempts: result.attempts,
       });
       return;
     }
-    let h = {
-      ...e,
-      outputBehavior: E.outputBehavior,
+    let nextConfig = {
+      ...config,
+      outputBehavior: currentConfig.outputBehavior,
     };
     policyHelperRunner.apply({
-      config: h,
-      fromPerOs: n,
+      config: nextConfig,
+      fromPerOs,
       serving: "helper",
       armedFromRemote: true,
-      mergesOutput: h.outputBehavior === "merge",
-      output: s.output,
-      warnings: s.warnings,
+      mergesOutput: nextConfig.outputBehavior === "merge",
+      output: result.output,
+      warnings: result.warnings,
     });
     clearAllRemoteWarnings();
     logForDebugging("policyHelper: remote entry armed by a retry tick", {
@@ -492,12 +502,12 @@ async function retryRemoteHelper(e, n) {
 /**
  * 启用会话中途的 policyHelper 武装，并交付尚未送达的拒绝。
  */
-function enableMidSessionArming(e) {
+function enableMidSessionArming(arming) {
   policyHelperRunner.midSessionArmingEnabled = true;
-  policyHelperRunner.osAdminArming = e ?? null;
+  policyHelperRunner.osAdminArming = arming ?? null;
   let undeliveredRefusal = policyHelperRunner.undeliveredRefusal;
-  if (undeliveredRefusal !== null && e) {
-    e.refuse(undeliveredRefusal);
+  if (undeliveredRefusal !== null && arming) {
+    arming.refuse(undeliveredRefusal);
     policyHelperRunner.undeliveredRefusal = null;
   }
 }
@@ -505,12 +515,12 @@ function enableMidSessionArming(e) {
 /**
  * applyRemotePolicyMidSession：会话中应用远程策略。
  */
-function applyRemotePolicyMidSession(e) {
-  applyRemotePolicyMidSession_2(e);
+function applyRemotePolicyMidSession(reader) {
+  applyRemotePolicyMidSession_2(reader);
   armFromOsAdminIfNew("became the base mid-session");
 }
 //@ chunk-q8cqcff6.js:80864-81076 placement
-function armFromOsAdminIfNew(e) {
+function armFromOsAdminIfNew(reason) {
   let osAdminArming = policyHelperRunner.osAdminArming;
   if (
     osAdminArming === null ||
@@ -522,30 +532,30 @@ function armFromOsAdminIfNew(e) {
   let { origin } = osAdminArming.readBase();
   if (origin === null || !FILE_POLICY_TIERS.has(origin) || origin === policyHelperRunner.decidedOrigin)
     return;
-  armFromBase(osAdminArming, e);
+  armFromBase(osAdminArming, reason);
 }
 //@ chunk-q8cqcff6.js:81076-81482 placement
 /**
  * 按基础设置的来源武装 policyHelper：pass 拒绝时按启动时的方式退出并记下来源，成功则记日志并通知层级变化。
  */
-function armFromBase(osAdminArming, n) {
+function armFromBase(osAdminArming, reason) {
   let { settings, origin, loadErrors } = osAdminArming.readBase();
   retireIfShadowedByRemote(origin);
   runPolicyHelperPass(settings, origin, loadErrors)
-    .then((E) => {
-      if (E !== null) {
+    .then((message) => {
+      if (message !== null) {
         logForDebugging(
-          `policyHelper: the ${origin} source ${n} and its pass refused; exiting as the launch would have: ${E}`,
+          `policyHelper: the ${origin} source ${reason} and its pass refused; exiting as the launch would have: ${message}`,
           {
             level: "error",
           },
         );
-        osAdminArming.refuse(E);
+        osAdminArming.refuse(message);
         policyHelperRunner.decidedOrigin = origin;
         return;
       }
       if (policyHelperRunner.state === null) return;
-      logForDebugging(`policyHelper: armed from the ${origin} source, which ${n}`, {
+      logForDebugging(`policyHelper: armed from the ${origin} source, which ${reason}`, {
         level: "info",
       });
       policyHelperRunner.announceTierChange();
@@ -555,61 +565,61 @@ function armFromBase(osAdminArming, n) {
     });
 }
 //@ chunk-q8cqcff6.js:81482-83187 placement
-function applyRemotePolicyMidSession_2(e) {
-  policyHelperRunner.readRemotePayload = e;
+function applyRemotePolicyMidSession_2(reader) {
+  policyHelperRunner.readRemotePayload = reader;
   if (
     !policyHelperRunner.midSessionArmingEnabled ||
     policyHelperRunner.initializeAttempted ||
     !isRemoteManagedSettingsVerified()
   )
     return;
-  let n = e();
-  if (!hasPolicyHelperConfig(n)) return;
+  let settings = reader();
+  if (!hasPolicyHelperConfig(settings)) return;
   let remoteDecision = policyHelperRunner.remoteDecision;
-  if (remoteDecision !== null && sameRemoteSnapshot(remoteDecision, remotePolicySnapshot(n))) return;
+  if (remoteDecision !== null && sameRemoteSnapshot(remoteDecision, remotePolicySnapshot(settings))) return;
   let size = policyHelperRunner.retiredHelperPaths.size;
   let { remoteFailedConfig, osAdminRetireGeneration } = policyHelperRunner;
-  runPassWithRestarts(n, "remote", [])
-    .then((h) => {
-      if (h === null) return;
-      if (h.remote && policyHelperRunner.startsNoSession) {
-        warnRefuseNotEnforced(h.message, h.remote);
+  runPassWithRestarts(settings, "remote", [])
+    .then((refusal) => {
+      if (refusal === null) return;
+      if (refusal.remote && policyHelperRunner.startsNoSession) {
+        warnRefuseNotEnforced(refusal.message, refusal.remote);
         return;
       }
       let osAdminArming = policyHelperRunner.osAdminArming;
       if (osAdminArming !== null && (!getIsInteractive() || osAdminArming.isUnwatchedRepl())) {
         logForDebugging(
-          `policyHelper: ${h.message} (reached after this unwatched session started; ending it as the launch refusal would have)`,
+          `policyHelper: ${refusal.message} (reached after this unwatched session started; ending it as the launch refusal would have)`,
           {
             level: "error",
           },
         );
-        if (h.remote) logRemoteRefusal(h.remote);
-        osAdminArming.refuse(h.message);
+        if (refusal.remote) logRemoteRefusal(refusal.remote);
+        osAdminArming.refuse(refusal.message);
         policyHelperRunner.midSessionArmingEnabled = false;
         return;
       }
-      if (h.remote === null && policyHelperRunner.osAdminRetireGeneration !== osAdminRetireGeneration) {
+      if (refusal.remote === null && policyHelperRunner.osAdminRetireGeneration !== osAdminRetireGeneration) {
         logForDebugging(
-          `policyHelper: ${h.message} (refused by the pass a turn of the ask ran in this one's place; handed to the launch's handler, or kept for it)`,
+          `policyHelper: ${refusal.message} (refused by the pass a turn of the ask ran in this one's place; handed to the launch's handler, or kept for it)`,
           {
             level: "error",
           },
         );
-        refuseFromRemoteArming(h.message);
+        refuseFromRemoteArming(refusal.message);
         policyHelperRunner.midSessionArmingEnabled = false;
         return;
       }
       logForDebugging(
-        `policyHelper: ${h.message} (reached after this interactive session started; it continues without the helper)`,
+        `policyHelper: ${refusal.message} (reached after this interactive session started; it continues without the helper)`,
         {
           level: "error",
         },
       );
-      if (h.remote) {
+      if (refusal.remote) {
         warnRemoteHelperSkipped(
           'onFailure is "refuse", but this was reached after this interactive session started, so it continues on the remote managed settings without the helper; new sessions will not start (and non-interactive or unwatched ones are ended) until the helper succeeds',
-          h.remote.tuple,
+          refusal.remote.tuple,
         );
         logFeatureSad("settings_policy_helpers_per_os", "remote_refuse_unenforceable_midsession");
       }
@@ -618,8 +628,8 @@ function applyRemotePolicyMidSession_2(e) {
       logError(error);
     })
     .finally(() => {
-      let h = policyHelperRunner.state?.armedFromRemote === true;
-      if (h)
+      let armed = policyHelperRunner.state?.armedFromRemote === true;
+      if (armed)
         logForDebugging(
           `policyHelper: remote ${policyHelperRunner.state?.serving === "default" ? "static payload applied" : "entry armed"} mid-session`,
           {
@@ -627,7 +637,7 @@ function applyRemotePolicyMidSession_2(e) {
           },
         );
       if (
-        h ||
+        armed ||
         policyHelperRunner.retiredHelperPaths.size > size ||
         policyHelperRunner.remoteFailedConfig !== remoteFailedConfig
       )
@@ -635,36 +645,37 @@ function applyRemotePolicyMidSession_2(e) {
     });
 }
 //@ chunk-q8cqcff6.js:83187-84358 placement
-function reserveRemoteStaticPayload(e) {
+function reserveRemoteStaticPayload(reader) {
   let remoteDecision = policyHelperRunner.remoteDecision;
   if (remoteDecision === null) return;
-  let r = e();
-  let s = remotePolicySnapshot(r);
-  if (sameRemoteSnapshot(remoteDecision, s)) return;
+  let settings = reader();
+  let snapshot = remotePolicySnapshot(settings);
+  if (sameRemoteSnapshot(remoteDecision, snapshot)) return;
   let state = policyHelperRunner.state;
   if (state?.armedFromRemote === true && state.serving === "default") {
-    let P = s.tuple === remoteDecision.tuple && s.helperMayExec === remoteDecision.helperMayExec;
-    let winner = s.winner;
-    if (P && s.payloadServable && winner !== null) {
-      applyStaticPayloadChoice(s);
-      policyHelperRunner.remoteDecision = s;
-      let T = withholdUnverifiedCacheKeys(winner.settings, true, s.verified);
+    let sameHelper =
+      snapshot.tuple === remoteDecision.tuple && snapshot.helperMayExec === remoteDecision.helperMayExec;
+    let winner = snapshot.winner;
+    if (sameHelper && snapshot.payloadServable && winner !== null) {
+      applyStaticPayloadChoice(snapshot);
+      policyHelperRunner.remoteDecision = snapshot;
+      let withheld = withholdUnverifiedCacheKeys(winner.settings, true, snapshot.verified);
       if (
-        s.payloadKey === remoteDecision.payloadKey &&
-        s.helperMergesOutput === remoteDecision.helperMergesOutput &&
-        withholdUnverifiedCacheKeys(winner.settings, true, remoteDecision.verified) === T
+        snapshot.payloadKey === remoteDecision.payloadKey &&
+        snapshot.helperMergesOutput === remoteDecision.helperMergesOutput &&
+        withholdUnverifiedCacheKeys(winner.settings, true, remoteDecision.verified) === withheld
       ) {
         logForDebugging(
-          `policyHelper: remote static payload from ${winner.sourceField} stands as served (document ${s.verified ? "verified" : "no longer verified"} this session)`,
+          `policyHelper: remote static payload from ${winner.sourceField} stands as served (document ${snapshot.verified ? "verified" : "no longer verified"} this session)`,
           {
             level: "debug",
           },
         );
         return;
       }
-      state.mergesOutput = s.helperMergesOutput || winner.mergesOutput;
+      state.mergesOutput = snapshot.helperMergesOutput || winner.mergesOutput;
       state.output = {
-        managedSettings: T,
+        managedSettings: withheld,
       };
       state.warnings = winner.warnings;
       logForDebugging(`policyHelper: remote static payload re-served in place from ${winner.sourceField}`, {
@@ -676,15 +687,16 @@ function reserveRemoteStaticPayload(e) {
     deactivateRemoteHelper();
     return;
   }
-  let E =
+  let armedConfig =
     state?.armedFromRemote === true
       ? state.config
       : (policyHelperRunner.remoteArmingConfig ?? policyHelperRunner.remoteFailedConfig);
-  let h = E != null && s.helperMayExec && s.tuple === getPolicyHelperCommand(E);
-  let y = state !== null || policyHelperRunner.remoteFailedConfig === null;
-  if (h && y) {
-    applyStaticPayloadChoice(s);
-    policyHelperRunner.remoteDecision = s;
+  let armStands =
+    armedConfig != null && snapshot.helperMayExec && snapshot.tuple === getPolicyHelperCommand(armedConfig);
+  let nothingPending = state !== null || policyHelperRunner.remoteFailedConfig === null;
+  if (armStands && nothingPending) {
+    applyStaticPayloadChoice(snapshot);
+    policyHelperRunner.remoteDecision = snapshot;
     logForDebugging(
       "policyHelper: remote static payloads re-resolved under the armed entry; the arm stands",
       {
@@ -715,26 +727,26 @@ function retiredHelperPaths() {
  */
 function policyHelperPaths(basePolicySettings) {
   let policyHelpers = basePolicySettings?.policyHelpers;
-  let r = policyHelpers
+  let configs = policyHelpers
     ? platformSettingsChain()
-        .chain.map((E) => policyHelpers[E])
-        .filter((E) => E != null)
+        .chain.map((osKey) => policyHelpers[osKey])
+        .filter((entry) => entry != null)
         .map((config) => ({
           config,
           fromPerOs: true,
         }))
     : [];
   if (basePolicySettings?.policyHelper != null)
-    r.push({
+    configs.push({
       config: basePolicySettings.policyHelper,
       fromPerOs: false,
     });
-  let s = helperPlatformFamily();
-  let S = [];
-  for (let { config, fromPerOs } of r)
-    if (typeof config.path === "string" && validateHelperConfig(config, s, fromPerOs, false) === null)
-      S.push(config.path);
-  return S;
+  let family = helperPlatformFamily();
+  let paths = [];
+  for (let { config, fromPerOs } of configs)
+    if (typeof config.path === "string" && validateHelperConfig(config, family, fromPerOs, false) === null)
+      paths.push(config.path);
+  return paths;
 }
 //@ chunk-q8cqcff6.js:84778-84829 placement
 /**
@@ -748,29 +760,29 @@ function policyHelperConsentState() {
   let { state, lastFailure, selectedEntry, remoteFailedConfig } = policyHelperRunner;
   let remoteDecision = policyHelperRunner.remoteDecision;
   let config = selectedEntry?.config ?? null;
-  let h = "none";
+  let consentState = "none";
   if (
     remoteDecision?.helperRefusesOnFailure === true &&
     (remoteFailedConfig !== null ||
       (remoteDecision.verified && remoteDecision.tuple !== undefined && !remoteDecision.helperMayExec))
   )
-    h = "refuse_pending";
-  else if (lastFailure !== null) h = lastFailure;
+    consentState = "refuse_pending";
+  else if (lastFailure !== null) consentState = lastFailure;
   else if (
     remoteDecision !== null &&
     !remoteDecision.verified &&
     (remoteDecision.tuple !== undefined || !remoteDecision.payloadServable)
   )
-    h = "unverified";
+    consentState = "unverified";
   else if (
     remoteDecision !== null &&
     ((config !== null && !remoteDecision.helperMayExec) ||
       (selectedEntry !== null && config === null && !remoteDecision.payloadServable))
   )
-    h = "consent_missing";
-  else if (config !== null && state?.serving === "helper") h = "ok";
+    consentState = "consent_missing";
+  else if (config !== null && state?.serving === "helper") consentState = "ok";
   return {
-    state: h,
+    state: consentState,
     applied: state === null ? "none" : state.serving === "helper" ? "output" : "fallback",
     entry: selectedEntry && {
       key: selectedEntry.key,

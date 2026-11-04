@@ -5,12 +5,12 @@
  * pieces: chunk-fq0cr76a.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../runtime/bun-runtime.js";
 import { require_forge } from "./forge.js";
 import { require_asn1 } from "./asn1.js";
 
 //@ chunk-fq0cr76a.js:259538-260717 cjs-fingerprint
-var require_asn1_validator = x(function (cjsExports) {
+var require_asn1_validator = __commonJS(function (cjsExports) {
   var forge = require_forge();
   require_asn1();
   var asn1 = forge.asn1;

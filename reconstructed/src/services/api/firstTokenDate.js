@@ -19,27 +19,27 @@ import { isExpectedApiError, errorMessage } from "../../utils/errors.js";
 /**
  * 已有缓存则跳过；否则 GET /api/organization/claude_code_first_token_date，校验日期后写入全局配置 claudeCodeFirstTokenDate。
  */
-async function fetchAndStoreClaudeCodeFirstTokenDate(e, credentials) {
+async function fetchAndStoreClaudeCodeFirstTokenDate(configWriteSource, credentials) {
   try {
     if (getGlobalConfig().claudeCodeFirstTokenDate !== undefined) {
       logFeatureOk("api_first_token_date_fetch");
       return;
     }
-    let f = await apiClient.get("/api/organization/claude_code_first_token_date", {
+    let response = await apiClient.get("/api/organization/claude_code_first_token_date", {
       auth: "async",
       timeout: 1e4,
       credentials,
     });
-    if (!f.ok) {
-      if (f.reason === "no-auth") {
-        logForDebugging(`Failed to get auth headers for first-token-date fetch: ${f.detail}`, {
+    if (!response.ok) {
+      if (response.reason === "no-auth") {
+        logForDebugging(`Failed to get auth headers for first-token-date fetch: ${response.detail}`, {
           level: "error",
         });
         logFeatureBad("api_first_token_date_fetch", "request_failed");
       }
       return;
     }
-    let firstTokenDate = f.data?.first_token_date ?? null;
+    let firstTokenDate = response.data?.first_token_date ?? null;
     if (firstTokenDate !== null) {
       let dateTime = new Date(firstTokenDate).getTime();
       if (isNaN(dateTime)) {
@@ -53,7 +53,7 @@ async function fetchAndStoreClaudeCodeFirstTokenDate(e, credentials) {
         ...current,
         claudeCodeFirstTokenDate: firstTokenDate,
       }),
-      e,
+      configWriteSource,
     );
     logFeatureOk("api_first_token_date_fetch");
   } catch (error) {

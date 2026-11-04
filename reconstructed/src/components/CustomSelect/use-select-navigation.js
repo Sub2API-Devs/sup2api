@@ -10,7 +10,14 @@
  */
 import { isDeepStrictEqual } from "util";
 import { OptionMap, useLatestState } from "./option-map.js";
-import { ce, Oo, R, y, Q, P } from "../../../vendor/react/cjs/react.production.js";
+import {
+  useCallback,
+  useEffectEvent,
+  useRef,
+  useState,
+  useMemo,
+  useEffect,
+} from "../../../vendor/react/cjs/react.production.js";
 
 //@ chunk-ey2qag4x.js:37574-41082 fingerprint = reducer (0.885)
 /**
@@ -125,12 +132,13 @@ var selectNavigationReducer = (state, action) => {
       );
       if (min === state.visibleFromIndex) return state;
       let min_2 = Math.min(state.optionMap.size, min + state.visibleOptionCount);
-      let l = state.focusedValue === undefined ? undefined : state.optionMap.get(state.focusedValue);
-      while (l?.next && l.index < min) l = l.next;
-      while (l?.previous && l.index >= min_2) l = l.previous;
+      let focusedNode =
+        state.focusedValue === undefined ? undefined : state.optionMap.get(state.focusedValue);
+      while (focusedNode?.next && focusedNode.index < min) focusedNode = focusedNode.next;
+      while (focusedNode?.previous && focusedNode.index >= min_2) focusedNode = focusedNode.previous;
       return {
         ...state,
-        focusedValue: l?.value,
+        focusedValue: focusedNode?.value,
         visibleFromIndex: min,
         visibleToIndex: min_2,
       };
@@ -218,85 +226,87 @@ var createSelectNavigationState = ({
  * Select 导航：reducer 处理 focus-next/previous-option、翻页、视口滚动与重置，保证聚焦项在可见窗口内。
  */
 function useSelectNavigation({ visibleOptionCount = 5, options, onFocus, focusValue }) {
-  let [state, f, d] = useLatestState(() =>
+  let [state, setNavigationState, getNavigationState] = useLatestState(() =>
     createSelectNavigationState({
       visibleOptionCount,
       options,
       initialFocusValue: focusValue,
     }),
   );
-  let u = ce(
+  let dispatch = useCallback(
     (action) => {
-      f((state) => selectNavigationReducer(state, action));
+      setNavigationState((state) => selectNavigationReducer(state, action));
     },
-    [f],
+    [setNavigationState],
   );
-  let onFocusRef = Oo((v) => onFocus?.(v));
-  let c = R(undefined);
-  let [lastOptions, setLastOptions] = y(options);
-  let [x, C] = y(visibleOptionCount);
-  let B = options !== lastOptions && !isDeepStrictEqual(options, lastOptions);
-  let N = visibleOptionCount !== x;
-  if (B || N) {
-    let v = d();
-    u({
+  let onFocusRef = useEffectEvent((value) => onFocus?.(value));
+  let lastReportedFocusRef = useRef(undefined);
+  let [lastOptions, setLastOptions] = useState(options);
+  let [lastVisibleCount, setLastVisibleCount] = useState(visibleOptionCount);
+  let optionsChanged = options !== lastOptions && !isDeepStrictEqual(options, lastOptions);
+  let countChanged = visibleOptionCount !== lastVisibleCount;
+  if (optionsChanged || countChanged) {
+    let currentState = getNavigationState();
+    dispatch({
       type: "reset",
       state: createSelectNavigationState({
         visibleOptionCount,
         options,
-        initialFocusValue: B ? (focusValue ?? v.focusedValue) : (v.focusedValue ?? focusValue),
+        initialFocusValue: optionsChanged
+          ? (focusValue ?? currentState.focusedValue)
+          : (currentState.focusedValue ?? focusValue),
         currentViewport: {
-          visibleFromIndex: v.visibleFromIndex,
-          visibleToIndex: v.visibleToIndex,
+          visibleFromIndex: currentState.visibleFromIndex,
+          visibleToIndex: currentState.visibleToIndex,
         },
       }),
     });
-    if (B) setLastOptions(options);
-    if (N) C(visibleOptionCount);
+    if (optionsChanged) setLastOptions(options);
+    if (countChanged) setLastVisibleCount(visibleOptionCount);
   }
-  let focusNextOption = ce(
-    (v) => {
-      u(v);
-      let focusPreviousOption = validFocusedValue(d().focusedValue, options);
-      if (focusPreviousOption !== undefined && focusPreviousOption !== c.current) {
-        c.current = focusPreviousOption;
+  let focusNextOption = useCallback(
+    (action) => {
+      dispatch(action);
+      let focusPreviousOption = validFocusedValue(getNavigationState().focusedValue, options);
+      if (focusPreviousOption !== undefined && focusPreviousOption !== lastReportedFocusRef.current) {
+        lastReportedFocusRef.current = focusPreviousOption;
         onFocus?.(focusPreviousOption);
       }
     },
-    [u, d, options, onFocus],
+    [dispatch, getNavigationState, options, onFocus],
   );
-  let focusNextPage = ce(() => {
+  let focusNextPage = useCallback(() => {
     focusNextOption({
       type: "focus-next-option",
     });
   }, [focusNextOption]);
-  let focusPreviousOption = ce(() => {
+  let focusPreviousOption = useCallback(() => {
     focusNextOption({
       type: "focus-previous-option",
     });
   }, [focusNextOption]);
-  let focusNextPage_2 = ce(() => {
+  let focusNextPage_2 = useCallback(() => {
     focusNextOption({
       type: "focus-next-page",
     });
   }, [focusNextOption]);
-  let focusPreviousPage = ce(() => {
+  let focusPreviousPage = useCallback(() => {
     focusNextOption({
       type: "focus-previous-page",
     });
   }, [focusNextOption]);
-  let scrollViewport = ce(
+  let scrollViewport = useCallback(
     (value) => {
-      let visibleFromIndex = d().visibleFromIndex;
+      let visibleFromIndex = getNavigationState().visibleFromIndex;
       focusNextOption({
         type: "scroll-viewport",
         delta: value,
       });
-      return d().visibleFromIndex !== visibleFromIndex;
+      return getNavigationState().visibleFromIndex !== visibleFromIndex;
     },
-    [focusNextOption, d],
+    [focusNextOption, getNavigationState],
   );
-  let visibleOptions = ce(
+  let visibleOptions = useCallback(
     (value) => {
       if (value !== undefined)
         focusNextOption({
@@ -306,7 +316,7 @@ function useSelectNavigation({ visibleOptionCount = 5, options, onFocus, focusVa
     },
     [focusNextOption],
   );
-  let visibleOptions_2 = Q(
+  let visibleOptions_2 = useMemo(
     () =>
       options
         .map((option, index) => ({
@@ -316,28 +326,31 @@ function useSelectNavigation({ visibleOptionCount = 5, options, onFocus, focusVa
         .slice(state.visibleFromIndex, state.visibleToIndex),
     [options, state.visibleFromIndex, state.visibleToIndex],
   );
-  let validatedFocusedValue = Q(
+  let validatedFocusedValue = useMemo(
     () => validFocusedValue(state.focusedValue, options),
     [state.focusedValue, options],
   );
-  let isInInput = ce(() => validFocusedValue(d().focusedValue, options), [d, options]);
-  P(() => {
+  let isInInput = useCallback(
+    () => validFocusedValue(getNavigationState().focusedValue, options),
+    [getNavigationState, options],
+  );
+  useEffect(() => {
     if (validatedFocusedValue === undefined) {
-      c.current = undefined;
+      lastReportedFocusRef.current = undefined;
       return;
     }
-    if (validatedFocusedValue !== c.current) {
-      c.current = validatedFocusedValue;
+    if (validatedFocusedValue !== lastReportedFocusRef.current) {
+      lastReportedFocusRef.current = validatedFocusedValue;
       onFocusRef(validatedFocusedValue);
     }
   }, [validatedFocusedValue]);
-  P(() => {
+  useEffect(() => {
     if (focusValue !== undefined)
-      u({
+      dispatch({
         type: "set-focus",
         value: focusValue,
       });
-  }, [focusValue, u]);
+  }, [focusValue, dispatch]);
   return {
     focusedValue: validatedFocusedValue,
     getFocusedValue: isInInput,
@@ -356,7 +369,7 @@ function useSelectNavigation({ visibleOptionCount = 5, options, onFocus, focusVa
 //@ chunk-ey2qag4x.js:42666-42760 affinity
 function validFocusedValue(focusedValue, options) {
   if (focusedValue === undefined) return;
-  if (options.some((i) => i.value === focusedValue)) return focusedValue;
+  if (options.some((option) => option.value === focusedValue)) return focusedValue;
   return options[0]?.value;
 }
 export { useSelectNavigation };

@@ -9,234 +9,247 @@
  * attribution: placement 4
  */
 import {
-  W,
-  F,
-  w,
-  G,
-  U,
+  MAX_TREE_DEPTH,
+  MAX_TOTAL_OPENS,
+  MAX_FORMAT_ESTIMATE,
+  MAX_TAG_COUNT,
+  formattingElements,
   RAWTEXT_MODES,
-  H,
-  B,
-  Y,
-  q,
-  K,
-  J,
-  P,
-  Z,
-  Q,
-  j,
-  V,
+  voidElements,
+  formattingElementsWithoutNobr,
+  MAX_ACTIVE_FORMATTING,
+  svgBreakoutElements,
+  mathTextIntegrationPoints,
+  scopeBoundaryElements,
+  specialElements,
+  impliedEndTagsByOpener,
+  scopeBreakElements,
+  LAST_ANCESTOR_SCAN_DEPTH,
+  foreignContentElements,
 } from "../../../vendor/@mixmark-io/domino/lib/HTMLParser.js";
 import { Tokenizer } from "../../../vendor/parse5/dist/tokenizer/index.js";
 
 //@ chunk-ktx79ksk.js:2221-2282 placement
-function nestingBudgetExceeded(s) {
-  return scanHtmlWithBudget(s, {
-    depth: W,
-    totalOpens: F,
+function nestingBudgetExceeded(budget) {
+  return scanHtmlWithBudget(budget, {
+    depth: MAX_TREE_DEPTH,
+    totalOpens: MAX_TOTAL_OPENS,
   }).exceeded;
 }
 //@ chunk-ktx79ksk.js:2282-2416 placement
-function budgetedTokenizer(s, a) {
-  let t = 0;
-  let u = false;
-  let c = new BudgetedTokenizer(s, a, (T) => {
-    t += T;
-    if (t > w) {
-      u = true;
-      c.pause();
+function budgetedTokenizer(budget, tokenizer) {
+  let tokenCount = 0;
+  let exhausted = false;
+  let budgetedTokenizer = new BudgetedTokenizer(budget, tokenizer, (text) => {
+    tokenCount += text;
+    if (tokenCount > MAX_FORMAT_ESTIMATE) {
+      exhausted = true;
+      budgetedTokenizer.pause();
       return false;
     }
     return true;
   });
   return {
-    tokenizer: c,
-    overBudget: () => u,
+    tokenizer: budgetedTokenizer,
+    overBudget: () => exhausted,
   };
 }
 //@ chunk-ktx79ksk.js:2416-6062 placement
 /**
  * 在嵌套与属性预算内扫描 HTML
  */
-function scanHtmlWithBudget(s, a) {
-  let t = [];
-  let u = [];
-  let c = [];
-  let T = [];
-  let r = [];
-  let p = 0;
-  let x = 0;
-  let R = 0;
-  let C = 0;
-  let b = 0;
-  let _ = 0;
-  let h = 0;
-  let I = new Set();
-  let O = 0;
-  let g = 0;
-  let y = 0;
-  let D = 0;
-  let A = false;
-  let v = new Map();
-  let k = false;
-  function l() {
-    k = true;
-    N.pause();
+function scanHtmlWithBudget(html, budget) {
+  let openTags = [];
+  let integrationPoints = [];
+  let foreignDepthFlags = [];
+  let foreignRoots = [];
+  let htmlNamespaceStack = [];
+  let selectDepth = 0;
+  let framesetDepth = 0;
+  let maxDepth = 0;
+  let totalOpens = 0;
+  let foreignRootDepth = 0;
+  let integrationPointDepth = 0;
+  let costEstimate = 0;
+  let htmlBodyAttrs = new Set();
+  let openTagCount = 0;
+  let formatDepth = 0;
+  let maxFormatDepth = 0;
+  let formSplices = 0;
+  let failClosed = false;
+  let openCountByTag = new Map();
+  let exceeded = false;
+  function abort() {
+    exceeded = true;
+    tokenizer.pause();
   }
-  let S = () => {};
-  function X() {
-    while (t.length > 0 && r.at(-1) === "f") {
-      let o = t.pop();
-      c.pop();
-      if (u.pop() === true && _ > 0) {
-        _--;
-        if (r.at(-1) === "i") r.pop();
+  let noop = () => {};
+  function dropForeignUntilHtml() {
+    while (openTags.length > 0 && htmlNamespaceStack.at(-1) === "f") {
+      let tag = openTags.pop();
+      foreignDepthFlags.pop();
+      if (integrationPoints.pop() === true && integrationPointDepth > 0) {
+        integrationPointDepth--;
+        if (htmlNamespaceStack.at(-1) === "i") htmlNamespaceStack.pop();
       }
-      if (o === "svg" || o === "math") {
-        b--;
-        T.pop();
-        if (r.at(-1) === "f") r.pop();
-      } else if (o === "select" && p > 0) p--;
-      else if (o === "frameset" && x > 0) x--;
+      if (tag === "svg" || tag === "math") {
+        foreignRootDepth--;
+        foreignRoots.pop();
+        if (htmlNamespaceStack.at(-1) === "f") htmlNamespaceStack.pop();
+      } else if (tag === "select" && selectDepth > 0) selectDepth--;
+      else if (tag === "frameset" && framesetDepth > 0) framesetDepth--;
     }
   }
-  function L(attrs) {
+  function hasFontAttrs(attrs) {
     if (attrs === undefined) return false;
-    return attrs.some((e) => {
-      let i = e !== null && typeof e === "object" ? e.name : undefined;
-      if (typeof i !== "string") return false;
-      let lower = i.toLowerCase();
+    return attrs.some((attr) => {
+      let name = attr !== null && typeof attr === "object" ? attr.name : undefined;
+      if (typeof name !== "string") return false;
+      let lower = name.toLowerCase();
       return lower === "color" || lower === "face" || lower === "size";
     });
   }
-  let N = new BudgetedTokenizer(
+  let tokenizer = new BudgetedTokenizer(
     {},
     {
-      onStartTag(o) {
-        if (k) return;
-        h += t.length + 1 + g;
-        O++;
-        if (a !== null && (h > w || O > G)) {
-          l();
+      onStartTag(token) {
+        if (exceeded) return;
+        costEstimate += openTags.length + 1 + formatDepth;
+        openTagCount++;
+        if (budget !== null && (costEstimate > MAX_FORMAT_ESTIMATE || openTagCount > MAX_TAG_COUNT)) {
+          abort();
           return;
         }
-        let tagName = o.tagName;
-        if (r.at(-1) === "f" && U.has(tagName) && (tagName !== "font" || L(o.attrs))) X();
-        let i = r.length === 0 || r.at(-1) === "i";
-        if (i && (tagName === "html" || tagName === "body")) {
-          let n = !(t.length <= 2 && t.every((f) => f === "html" || f === "head"));
-          for (let f of o.attrs ?? []) I.add((tagName === "html" ? "h:" : "b:") + f.name);
-          if (n) {
-            h += 8 * I.size;
-            if (a !== null && h > w) l();
+        let tagName = token.tagName;
+        if (
+          htmlNamespaceStack.at(-1) === "f" &&
+          formattingElements.has(tagName) &&
+          (tagName !== "font" || hasFontAttrs(token.attrs))
+        )
+          dropForeignUntilHtml();
+        let htmlNamespace = htmlNamespaceStack.length === 0 || htmlNamespaceStack.at(-1) === "i";
+        if (htmlNamespace && (tagName === "html" || tagName === "body")) {
+          let isMismatch = !(
+            openTags.length <= 2 && openTags.every((tag) => tag === "html" || tag === "head")
+          );
+          for (let attr of token.attrs ?? [])
+            htmlBodyAttrs.add((tagName === "html" ? "h:" : "b:") + attr.name);
+          if (isMismatch) {
+            costEstimate += 8 * htmlBodyAttrs.size;
+            if (budget !== null && costEstimate > MAX_FORMAT_ESTIMATE) abort();
             return;
           }
         }
         if (
-          (b > 0 && (tagName === "mglyph" || tagName === "malignmark")) ||
-          (!i && p > 0 && (tagName === "script" || tagName === "textarea")) ||
-          (r.at(-1) === "f" && (tagName === "svg" || tagName === "math") && T.at(-1) !== tagName)
+          (foreignRootDepth > 0 && (tagName === "mglyph" || tagName === "malignmark")) ||
+          (!htmlNamespace && selectDepth > 0 && (tagName === "script" || tagName === "textarea")) ||
+          (htmlNamespaceStack.at(-1) === "f" &&
+            (tagName === "svg" || tagName === "math") &&
+            foreignRoots.at(-1) !== tagName)
         ) {
-          A = true;
-          l();
+          failClosed = true;
+          abort();
           return;
         }
-        let m = i ? RAWTEXT_MODES.get(tagName) : undefined;
-        if (m !== undefined && (x > 0 || (p > 0 && tagName !== "script"))) {
-          A = true;
-          l();
+        let mode = htmlNamespace ? RAWTEXT_MODES.get(tagName) : undefined;
+        if (mode !== undefined && (framesetDepth > 0 || (selectDepth > 0 && tagName !== "script"))) {
+          failClosed = true;
+          abort();
           return;
         }
-        if (m !== undefined) {
-          N.state = m;
-          N.lastStartTagName = tagName;
+        if (mode !== undefined) {
+          tokenizer.state = mode;
+          tokenizer.lastStartTagName = tagName;
         }
-        if (H.has(tagName) && i) return;
-        C++;
-        if ((tagName === "svg" || tagName === "math") && o.selfClosing) return;
-        if (!(o.selfClosing && !i)) {
-          if (B.has(tagName)) {
-            v.set(tagName, (v.get(tagName) ?? 0) + 1);
-            g++;
-            if (g > y) y = g;
-            if (a !== null && g > Y) {
-              l();
+        if (voidElements.has(tagName) && htmlNamespace) return;
+        totalOpens++;
+        if ((tagName === "svg" || tagName === "math") && token.selfClosing) return;
+        if (!(token.selfClosing && !htmlNamespace)) {
+          if (formattingElementsWithoutNobr.has(tagName)) {
+            openCountByTag.set(tagName, (openCountByTag.get(tagName) ?? 0) + 1);
+            formatDepth++;
+            if (formatDepth > maxFormatDepth) maxFormatDepth = formatDepth;
+            if (budget !== null && formatDepth > MAX_ACTIVE_FORMATTING) {
+              abort();
               return;
             }
           }
-          t.push(tagName);
-          if (t.length > R) R = t.length;
-          let n = false;
-          let f = r.at(-1) === "f";
+          openTags.push(tagName);
+          if (openTags.length > maxDepth) maxDepth = openTags.length;
+          let integrationPoint = false;
+          let inForeign = htmlNamespaceStack.at(-1) === "f";
           if (tagName === "svg" || tagName === "math") {
-            b++;
-            T.push(tagName);
-            r.push("f");
-          } else if (tagName === "select") p++;
-          else if (tagName === "frameset") x++;
-          else if (f) {
-            let last = T.at(-1);
-            if (last === "svg") n = q.has(tagName);
+            foreignRootDepth++;
+            foreignRoots.push(tagName);
+            htmlNamespaceStack.push("f");
+          } else if (tagName === "select") selectDepth++;
+          else if (tagName === "frameset") framesetDepth++;
+          else if (inForeign) {
+            let last = foreignRoots.at(-1);
+            if (last === "svg") integrationPoint = svgBreakoutElements.has(tagName);
             else if (last === "math")
-              n =
-                K.has(tagName) ||
+              integrationPoint =
+                mathTextIntegrationPoints.has(tagName) ||
                 (tagName === "annotation-xml" &&
-                  o.attrs?.some(
+                  token.attrs?.some(
                     (attr) =>
                       attr.name.toLowerCase() === "encoding" &&
                       ["text/html", "application/xhtml+xml"].includes(attr.value.toLowerCase()),
                   ) === true);
-            if (n) {
-              _++;
-              r.push("i");
+            if (integrationPoint) {
+              integrationPointDepth++;
+              htmlNamespaceStack.push("i");
             }
           }
-          u.push(n);
-          c.push(tagName === "svg" || tagName === "math" || (f && !n));
+          integrationPoints.push(integrationPoint);
+          foreignDepthFlags.push(tagName === "svg" || tagName === "math" || (inForeign && !integrationPoint));
         }
-        if (a !== null && (t.length > a.depth || C > a.totalOpens)) l();
+        if (budget !== null && (openTags.length > budget.depth || totalOpens > budget.totalOpens)) abort();
       },
-      onEndTag(o) {
-        if (k) return;
-        h += t.length + 1 + g;
-        O++;
-        if (a !== null && (h > w || O > G)) {
-          l();
+      onEndTag(token) {
+        if (exceeded) return;
+        costEstimate += openTags.length + 1 + formatDepth;
+        openTagCount++;
+        if (budget !== null && (costEstimate > MAX_FORMAT_ESTIMATE || openTagCount > MAX_TAG_COUNT)) {
+          abort();
           return;
         }
-        let tagName = o.tagName;
+        let tagName = token.tagName;
         if (
-          r.at(-1) === "i" &&
+          htmlNamespaceStack.at(-1) === "i" &&
           tagName !== "p" &&
           tagName !== "br" &&
-          !(t.at(-1) === tagName && u.at(-1) === true)
+          !(openTags.at(-1) === tagName && integrationPoints.at(-1) === true)
         ) {
-          for (let idx = t.length - 1; idx >= 0; idx--)
-            if ((c[idx] || u[idx] === true) && t[idx] === tagName) {
-              A = true;
-              l();
+          for (let idx = openTags.length - 1; idx >= 0; idx--)
+            if ((foreignDepthFlags[idx] || integrationPoints[idx] === true) && openTags[idx] === tagName) {
+              failClosed = true;
+              abort();
               return;
             }
         }
-        if (J.has(tagName)) {
-          if (tagName === "html" && b > 0) {
-            for (let idx = t.length - 1; idx >= 0; idx--)
-              if (c[idx] && t[idx] === "html") {
-                A = true;
-                l();
+        if (scopeBoundaryElements.has(tagName)) {
+          if (tagName === "html" && foreignRootDepth > 0) {
+            for (let idx = openTags.length - 1; idx >= 0; idx--)
+              if (foreignDepthFlags[idx] && openTags[idx] === "html") {
+                failClosed = true;
+                abort();
                 return;
               }
           }
           return;
         }
-        if (p > 0 && r.at(-1) === "f" && (tagName === "p" || tagName === "br")) {
-          A = true;
-          l();
+        if (selectDepth > 0 && htmlNamespaceStack.at(-1) === "f" && (tagName === "p" || tagName === "br")) {
+          failClosed = true;
+          abort();
           return;
         }
         if (
-          p > 0 &&
-          !(t.at(-1) === tagName && (c.at(-1) === true || u.at(-1) === true)) &&
+          selectDepth > 0 &&
+          !(
+            openTags.at(-1) === tagName &&
+            (foreignDepthFlags.at(-1) === true || integrationPoints.at(-1) === true)
+          ) &&
           tagName !== "select" &&
           tagName !== "option" &&
           tagName !== "optgroup" &&
@@ -244,83 +257,92 @@ function scanHtmlWithBudget(s, a) {
           tagName !== "script"
         )
           return;
-        if (r.at(-1) === "f" && (tagName === "p" || tagName === "br")) X();
-        let i = P.has(tagName);
-        let m = Z.get(tagName);
-        let z = Q.has(tagName) ? Math.max(0, t.length - 1) : Math.max(0, t.length - j);
-        for (let idx = t.length - 1; idx >= z; idx--) {
-          let f = t[idx];
-          if (f === tagName) {
-            if (B.has(tagName)) {
-              let d = v.get(tagName) ?? 0;
-              if (d > 0) {
-                v.set(tagName, d - 1);
-                if (g > 0) g--;
+        if (htmlNamespaceStack.at(-1) === "f" && (tagName === "p" || tagName === "br"))
+          dropForeignUntilHtml();
+        let isScopeBoundary = specialElements.has(tagName);
+        let stops = impliedEndTagsByOpener.get(tagName);
+        let floor = scopeBreakElements.has(tagName)
+          ? Math.max(0, openTags.length - 1)
+          : Math.max(0, openTags.length - LAST_ANCESTOR_SCAN_DEPTH);
+        for (let idx = openTags.length - 1; idx >= floor; idx--) {
+          let tag = openTags[idx];
+          if (tag === tagName) {
+            if (formattingElementsWithoutNobr.has(tagName)) {
+              let count = openCountByTag.get(tagName) ?? 0;
+              if (count > 0) {
+                openCountByTag.set(tagName, count - 1);
+                if (formatDepth > 0) formatDepth--;
               }
             }
             if (tagName === "form") {
-              t.splice(idx, 1);
-              u.splice(idx, 1);
-              c.splice(idx, 1);
-              D++;
+              openTags.splice(idx, 1);
+              integrationPoints.splice(idx, 1);
+              foreignDepthFlags.splice(idx, 1);
+              formSplices++;
               return;
             }
-            for (let idx_2 = t.length - 1; idx_2 >= idx; idx_2--) {
-              let E = t[idx_2];
-              if (u[idx_2] === true && _ > 0) {
-                _--;
-                if (r.at(-1) === "i") r.pop();
+            for (let idx_2 = openTags.length - 1; idx_2 >= idx; idx_2--) {
+              let tag = openTags[idx_2];
+              if (integrationPoints[idx_2] === true && integrationPointDepth > 0) {
+                integrationPointDepth--;
+                if (htmlNamespaceStack.at(-1) === "i") htmlNamespaceStack.pop();
               }
-              if (E === "svg" || E === "math") {
-                if (b > 0) b--;
-                T.pop();
-                if (r.at(-1) === "f") r.pop();
-              } else if (E === "select" && p > 0) p--;
-              else if (E === "frameset" && x > 0) x--;
+              if (tag === "svg" || tag === "math") {
+                if (foreignRootDepth > 0) foreignRootDepth--;
+                foreignRoots.pop();
+                if (htmlNamespaceStack.at(-1) === "f") htmlNamespaceStack.pop();
+              } else if (tag === "select" && selectDepth > 0) selectDepth--;
+              else if (tag === "frameset" && framesetDepth > 0) framesetDepth--;
             }
-            t.length = idx;
-            u.length = idx;
-            c.length = idx;
+            openTags.length = idx;
+            integrationPoints.length = idx;
+            foreignDepthFlags.length = idx;
             return;
           }
-          if (V.has(f) || m?.has(f) === true) return;
-          if (!i && P.has(f)) return;
+          if (foreignContentElements.has(tag) || stops?.has(tag) === true) return;
+          if (!isScopeBoundary && specialElements.has(tag)) return;
         }
       },
-      onComment(o) {
-        if (k || b === 0 || !o.data.startsWith("[CDATA[") || o.data.endsWith("]]")) return;
-        let e = N.preprocessor.offset + 1;
-        let index = s.indexOf("]]>", e);
-        let m = index === -1 ? s.slice(e) : s.slice(e, index);
-        if (/<[a-zA-Z!/?]/.test(m)) {
-          A = true;
-          l();
+      onComment(comment) {
+        if (
+          exceeded ||
+          foreignRootDepth === 0 ||
+          !comment.data.startsWith("[CDATA[") ||
+          comment.data.endsWith("]]")
+        )
+          return;
+        let start = tokenizer.preprocessor.offset + 1;
+        let index = html.indexOf("]]>", start);
+        let body = index === -1 ? html.slice(start) : html.slice(start, index);
+        if (/<[a-zA-Z!/?]/.test(body)) {
+          failClosed = true;
+          abort();
         }
       },
-      onDoctype: S,
-      onCharacter: S,
-      onNullCharacter: S,
-      onWhitespaceCharacter: S,
-      onEof: S,
-      onParseError: S,
+      onDoctype: noop,
+      onCharacter: noop,
+      onNullCharacter: noop,
+      onWhitespaceCharacter: noop,
+      onEof: noop,
+      onParseError: noop,
     },
-    (o) => {
-      h += o;
-      if (a !== null && h > w) {
-        l();
+    (cost) => {
+      costEstimate += cost;
+      if (budget !== null && costEstimate > MAX_FORMAT_ESTIMATE) {
+        abort();
         return false;
       }
       return true;
     },
   );
-  N.write(s, true);
+  tokenizer.write(html, true);
   return {
-    exceeded: k,
-    maxDepth: R,
-    totalOpens: C,
-    maxFmtEstimate: y,
-    formSplices: D,
-    failClosed: A,
+    exceeded,
+    maxDepth,
+    totalOpens,
+    maxFmtEstimate: maxFormatDepth,
+    formSplices,
+    failClosed,
   };
 }
 //@ chunk-ktx79ksk.js:6062-6283 placement
@@ -329,17 +351,17 @@ function scanHtmlWithBudget(s, a) {
  */
 class BudgetedTokenizer extends Tokenizer {
   #e;
-  constructor(s, a, t) {
-    super(s, a);
-    this.#e = t;
+  constructor(budget, tokenizer, shouldSkip) {
+    super(budget, tokenizer);
+    this.#e = shouldSkip;
   }
   _leaveAttrName() {
     let currentToken = this.currentToken;
-    let a =
+    let attrName =
       currentToken !== null && "attrs" in currentToken
         ? currentToken.attrs.length * (1 + (this.currentAttr.name.length >> 6))
         : 0;
-    if (this.#e(a)) super._leaveAttrName();
+    if (this.#e(attrName)) super._leaveAttrName();
   }
 }
-export { budgetedTokenizer };
+export { budgetedTokenizer, nestingBudgetExceeded };

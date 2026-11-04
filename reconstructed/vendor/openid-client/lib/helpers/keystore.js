@@ -5,13 +5,13 @@
  * pieces: chunk-1ny7cxrt.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 import { require_deep_clone } from "./deep_clone.js";
 import { require_is_plain_object } from "./is_plain_object.js";
 
 //@ chunk-1ny7cxrt.js:23839-27191 cjs-fingerprint
-var require_keystore = x(function (cjsExports, cjsModule) {
-  var jose = require("./chunk-2tyrgda4.js");
+var require_keystore = __commonJS(function (cjsExports, cjsModule) {
+  var jose = require("../../../jose/dist/node/esm/jwe/compact/CompactEncrypt.lazy.js");
   var clone = require_deep_clone();
   var isPlainObject = require_is_plain_object();
   var internal = Symbol();

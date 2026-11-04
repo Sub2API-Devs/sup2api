@@ -79,68 +79,70 @@ var NO_POLICY_ALLOWS_REASON =
 /**
  * 判断能否向某类远程会话发送：非第一方/仅必要流量时为 residency；组织策略都拒绝时记录并返回第一个拒绝原因；允许时返回 null。
  */
-function getRemoteSendBlock(e) {
+function getRemoteSendBlock(via) {
   if (getAPIProvider() !== "firstParty" || isEssentialTrafficOnly())
     return {
       cause: "residency",
     };
   if (isAsyncSnowglobeOn()) return null;
-  let n = require("./chunk-sbc4zy7a.js");
-  let i = REMOTE_SEND_POLICY_KEYS[e];
-  let s = [];
-  for (let d of i) {
-    let { featureLabel, verb } = n.policyKeyLabel(d);
-    let u = n.policyDeniedReason(d, featureLabel, verb);
-    if (u === null) return null;
-    s.push(u);
+  let policyModule = require("../../services/policyLimits/CLIENT_POLICY_KEYS.lazy.js");
+  let policyKeys = REMOTE_SEND_POLICY_KEYS[via];
+  let deniedReasons = [];
+  for (let policyKey of policyKeys) {
+    let { featureLabel, verb } = policyModule.policyKeyLabel(policyKey);
+    let deniedReason = policyModule.policyDeniedReason(policyKey, featureLabel, verb);
+    if (deniedReason === null) return null;
+    deniedReasons.push(deniedReason);
   }
-  let [o] = i;
-  if (o === undefined)
+  let [firstPolicyKey] = policyKeys;
+  if (firstPolicyKey === undefined)
     return {
       cause: "policy",
       reason: NO_POLICY_ALLOWS_REASON,
     };
-  let { logOrgPolicyDenied } = require("./chunk-g8qt1yya.js");
-  logOrgPolicyDenied(o, "tool");
+  let { logOrgPolicyDenied } = require("../../services/policyLimits/orgPolicyDeniedEvent.js");
+  logOrgPolicyDenied(firstPolicyKey, "tool");
   return {
     cause: "policy",
     reason:
-      (e === "unknown" && s.length > 1
-        ? (n.policyDeniedReason(
-            o,
+      (via === "unknown" && deniedReasons.length > 1
+        ? (policyModule.policyDeniedReason(
+            firstPolicyKey,
             COMBINED_REMOTE_FEATURE_LABEL.featureLabel,
             COMBINED_REMOTE_FEATURE_LABEL.verb,
-          ) ?? s[0])
-        : s[0]) ?? NO_POLICY_ALLOWS_REASON,
+          ) ?? deniedReasons[0])
+        : deniedReasons[0]) ?? NO_POLICY_ALLOWS_REASON,
   };
 }
 //@ chunk-n0beqxxz.js:1785-2146 placement
 /**
  * 记录本会话对某名字的发送目标（id、ref、socket），身份变化时更新 sendMessagePins，保留更稳定的会话 id。
  */
-function pinSendTarget(setSendMessagePins, displayName, i) {
-  let s = slugifySessionName(displayName);
-  setSendMessagePins((o) => {
-    let a = Object.hasOwn(o.sendMessagePins, s) ? o.sendMessagePins[s] : undefined;
+function pinSendTarget(setSendMessagePins, displayName, target) {
+  let slotName = slugifySessionName(displayName);
+  setSendMessagePins((state) => {
+    let existingPin = Object.hasOwn(state.sendMessagePins, slotName)
+      ? state.sendMessagePins[slotName]
+      : undefined;
     let id =
-      a !== undefined &&
-      isStableSessionAddress(a.id) &&
-      !isStableSessionAddress(i.id) &&
-      (i.claimedSessionIds ?? []).some((d) => stableSessionAddress(d) === a.id)
-        ? a.id
-        : i.id;
-    return a?.id === id && a.sock === i.sock
-      ? o
+      existingPin !== undefined &&
+      isStableSessionAddress(existingPin.id) &&
+      !isStableSessionAddress(target.id) &&
+      (target.claimedSessionIds ?? []).some((claimedId) => stableSessionAddress(claimedId) === existingPin.id)
+        ? existingPin.id
+        : target.id;
+    return existingPin?.id === id && existingPin.sock === target.sock
+      ? state
       : {
-          ...o,
+          ...state,
           sendMessagePins: {
-            ...o.sendMessagePins,
-            [s]: {
+            ...state.sendMessagePins,
+            [slotName]: {
               id,
               name: displayName,
-              ref: addressRef(i.kind, id),
-              ...(i.sock !== undefined && {
-                sock: i.sock,
+              ref: addressRef(target.kind, id),
+              ...(target.sock !== undefined && {
+                sock: target.sock,
               }),
             },
           },
@@ -157,9 +159,9 @@ var PREVIOUSLY_PINNED_NOTE =
 /**
  * 说明本机某会话现名为 X、其旧名之一为目标名（会话改名提示）。
  */
-function renamedSessionNote(e, name) {
+function renamedSessionNote(previousName, name) {
   return `
-A session on this machine now named '${name}' reports '${e}' as one of its former names \u2014 if that is the session you meant, it goes by '${name}' now (a rename, not a stop).`;
+A session on this machine now named '${name}' reports '${previousName}' as one of its former names \u2014 if that is the session you meant, it goes by '${name}' now (a rename, not a stop).`;
 }
 //@ chunk-n0beqxxz.js:2453-2544 placement
 /**
@@ -181,30 +183,30 @@ var LOCAL_SESSION_LABEL = "another Claude session on this machine";
 /**
  * 子代理发送跨会话消息时的说明：以本会话地址发出，回复会送到主对话（单向时只说明发送身份）。
  */
-function describeSubagentSender(agentId, from, i) {
+function describeSubagentSender(agentId, from, options) {
   if (agentId === undefined)
     return {
       message: "",
       display: "",
     };
-  let s = (from && clipTeammateText(from)) || "an agent in this session";
-  return i.oneWay
+  let senderLabel = (from && clipTeammateText(from)) || "an agent in this session";
+  return options.oneWay
     ? {
         message: "; sent under this session's address, not this agent's",
-        display: ` (sent by ${s}, under this session's name)`,
+        display: ` (sent by ${senderLabel}, under this session's name)`,
       }
     : {
         message:
           "; sent under this session's address: any reply will be delivered to this session's main conversation, not to this agent",
-        display: ` (sent by ${s}; replies go to the main conversation)`,
+        display: ` (sent by ${senderLabel}; replies go to the main conversation)`,
       };
 }
 //@ chunk-n0beqxxz.js:3544-3678 placement
 /**
  * 描述远程会话类型：云端会话或经 Remote Control 的其他机器会话。
  */
-function describeRemoteSessionKind(e) {
-  return e === "cloud"
+function describeRemoteSessionKind(kind) {
+  return kind === "cloud"
     ? "a Claude session running in the cloud"
     : "a Claude session on another machine, over Remote Control";
 }
@@ -224,8 +226,8 @@ var INBOX_NO_NOTICE_NOTE =
 /**
  * 按是否有投递说明返回对应的 inbox 提示。
  */
-function inboxNoticeNote(e) {
-  return e ? INBOX_WITH_NOTICE_NOTE : INBOX_NO_NOTICE_NOTE;
+function inboxNoticeNote(hasInboxNotice) {
+  return hasInboxNotice ? INBOX_WITH_NOTICE_NOTE : INBOX_NO_NOTICE_NOTE;
 }
 //@ chunk-n0beqxxz.js:4410-4627 placement
 /**
@@ -238,8 +240,8 @@ var NO_READ_RECEIPT_DISPLAY = " (that session's settings decide delivery; no rea
 /**
  * 未确认投递时的说明（message 与 display 两份）。
  */
-function unconfirmedDeliveryNote(e) {
-  return e
+function unconfirmedDeliveryNote(unreported) {
+  return unreported
     ? {
         message: UNCONFIRMED_DELIVERY_NOTE,
         display: UNCONFIRMED_DELIVERY_DISPLAY,
@@ -260,48 +262,48 @@ function describeLocalTargetCaveats(resolvedRecipient) {
 /**
  * 生成"已发往本对话确认过的会话"的说明，并提示如何改发给其他同名目标。
  */
-function describePinnedChoice(resolvedRecipient, n, i = "live session", s = "delivery") {
+function describePinnedChoice(resolvedRecipient, retryHint, kindNoun = "live session", what = "delivery") {
   return describePinCaveats(
     resolvedRecipient,
-    `. ${s === "subscription" ? "The subscription" : "This"} went to the one this conversation confirmed; to switch, re-send with that ${i === "agent" ? "agent" : "session"}'s 'name [ref]'${n}.`,
-    i,
+    `. ${what === "subscription" ? "The subscription" : "This"} went to the one this conversation confirmed; to switch, re-send with that ${kindNoun === "agent" ? "agent" : "session"}'s 'name [ref]'${retryHint}.`,
+    kindNoun,
   );
 }
 //@ chunk-n0beqxxz.js:5211-5380 placement
 /**
  * 生成"已发往本对话先前确认的那个"的简短说明。
  */
-function describeConfirmedChoice(resolvedRecipient, n = "live session", i = "delivery") {
+function describeConfirmedChoice(resolvedRecipient, kindNoun = "live session", what = "delivery") {
   return describePinCaveats(
     resolvedRecipient,
-    `; ${i === "subscription" ? "the subscription" : "this"} went to the one confirmed earlier in this conversation.`,
-    n,
+    `; ${what === "subscription" ? "the subscription" : "this"} went to the one confirmed earlier in this conversation.`,
+    kindNoun,
   );
 }
 //@ chunk-n0beqxxz.js:5380-5659 placement
-function describePinCaveats(e, n, i) {
-  let s = e.previouslyPinned
+function describePinCaveats(resolved, extraNote, kindNoun) {
+  let pinNote = resolved.previouslyPinned
     ? `
 ${PREVIOUSLY_PINNED_NOTE}`
-    : e.restartedSincePin
+    : resolved.restartedSincePin
       ? `
 ${RESTARTED_SINCE_PIN_NOTE}`
-      : e.identityContested
+      : resolved.identityContested
         ? `
 ${IDENTITY_CONTESTED_NOTE}`
         : "";
-  let o = e.sameNamedSiblings
+  let siblingsNote = resolved.sameNamedSiblings
     ? `
-Note: ${e.sameNamedSiblings} other ${plural(e.sameNamedSiblings, `${i} is`, `${i}s are`)} also named '${e.displayName}'${n}`
+Note: ${resolved.sameNamedSiblings} other ${plural(resolved.sameNamedSiblings, `${kindNoun} is`, `${kindNoun}s are`)} also named '${resolved.displayName}'${extraNote}`
     : "";
-  return `${s}${o}`;
+  return `${pinNote}${siblingsNote}`;
 }
 //@ chunk-n0beqxxz.js:5659-5857 placement
 /**
  * 生成远程目标会话的附加说明（离线、同名会话已在本机注册等）。
  */
-function describeRemoteTargetCaveats(e) {
-  return `${e.offline ? OFFLINE_QUEUED_NOTE : ""}${e.remoteNamesakeClaimedLocally ? `; another session also named '${e.displayName}' is registered to a session on this machine` : ""}${e.searchTruncated ? TRUNCATED_SEARCH_NOTE : ""}`;
+function describeRemoteTargetCaveats(target) {
+  return `${target.offline ? OFFLINE_QUEUED_NOTE : ""}${target.remoteNamesakeClaimedLocally ? `; another session also named '${target.displayName}' is registered to a session on this machine` : ""}${target.searchTruncated ? TRUNCATED_SEARCH_NOTE : ""}`;
 }
 //@ chunk-n0beqxxz.js:5857-5948 placement
 /**
@@ -341,30 +343,37 @@ var TRUNCATED_SEARCH_SHORT = "your session list was too long to check completely
 /**
  * 解析 SendMessage 的跨会话收件人（会话名/团队成员），返回匹配或最接近的候选。
  */
-async function resolveCrossSessionAddress(session, agentName, message, s, storageV5, credentials) {
+async function resolveCrossSessionAddress(
+  session,
+  agentName,
+  resolverContext,
+  toolContext,
+  storageV5,
+  credentials,
+) {
   await primePeerIdentity({
     refresh: true,
     credentials,
   });
-  let r = slugifySessionName(agentName);
-  let teamName = getTeamName(s.teamContext);
-  let l = null;
+  let slug = slugifySessionName(agentName);
+  let teamName = getTeamName(toolContext.teamContext);
+  let teamFile = null;
   if (looksLikeAddress(agentName))
     return {
       kind: "not-found",
       closest: [],
     };
-  if (typeof message === "string") {
+  if (typeof resolverContext === "string") {
     if (agentName === MAIN)
       return {
         kind: "main",
       };
-    let teammates = s.teamContext?.teammates ?? {};
+    let teammates = toolContext.teamContext?.teammates ?? {};
     let found = Object.entries(teammates).find(([, value]) => value.name === agentName);
-    let P = normalizeAgentIdOrNull(agentName) ?? normalizeAgentIdOrNull(r);
-    let y = found || P ? undefined : s.agentNameRegistry.get(agentName);
-    let S = P ?? y;
-    if (S) return subagentRoute(s, S, agentName);
+    let normalizedId = normalizeAgentIdOrNull(agentName) ?? normalizeAgentIdOrNull(slug);
+    let registryAgentId = found || normalizedId ? undefined : toolContext.agentNameRegistry.get(agentName);
+    let agentId = normalizedId ?? registryAgentId;
+    if (agentId) return subagentRoute(toolContext, agentId, agentName);
     if (found)
       return {
         kind: "mailbox",
@@ -379,9 +388,11 @@ async function resolveCrossSessionAddress(session, agentName, message, s, storag
           kind: "mailbox",
           recipientName: agentName,
         };
-      l = await readTeamFileAsync(teamName, storageV5);
-      if (nameWithRef === null && l !== null) {
-        let found = addressableTeamMembers(l, teamLeadAddress(s)).find((p) => p.name === agentName);
+      teamFile = await readTeamFileAsync(teamName, storageV5);
+      if (nameWithRef === null && teamFile !== null) {
+        let found = addressableTeamMembers(teamFile, teamLeadAddress(toolContext)).find(
+          (member) => member.name === agentName,
+        );
         if (found !== undefined)
           return {
             kind: "mailbox",
@@ -391,7 +402,7 @@ async function resolveCrossSessionAddress(session, agentName, message, s, storag
           };
       }
     }
-    let Se = teamLeadAddress(s);
+    let leadAddress = teamLeadAddress(toolContext);
     let found_2 = Object.entries(teammates).find(
       ([key, value]) =>
         (isLocalTeamLead(
@@ -399,10 +410,10 @@ async function resolveCrossSessionAddress(session, agentName, message, s, storag
             name: value.name,
             agentId: key,
           },
-          Se,
+          leadAddress,
         ) ||
           !isReservedOrInvalidName(value.name)) &&
-        slugifySessionName(value.name) === r,
+        slugifySessionName(value.name) === slug,
     );
     if (found_2 !== undefined)
       return {
@@ -411,80 +422,83 @@ async function resolveCrossSessionAddress(session, agentName, message, s, storag
         memberAgentId: found_2[0],
         memberIdentitySource: "team-context",
       };
-    for (let [agentName, p] of s.agentNameRegistry)
-      if (!isReservedOrInvalidName(agentName) && slugifySessionName(agentName) === r)
-        return subagentRoute(s, p, agentName);
-    let M = nameWithRef;
-    if (M) {
-      let [v, p] = await Promise.all([listPeerSessionsSafe(), searchCloudPeers(session, credentials)]);
-      let sessions = v.sessions;
+    for (let [agentName, registeredAgentId] of toolContext.agentNameRegistry)
+      if (!isReservedOrInvalidName(agentName) && slugifySessionName(agentName) === slug)
+        return subagentRoute(toolContext, registeredAgentId, agentName);
+    let parsedNameWithRef = nameWithRef;
+    if (parsedNameWithRef) {
+      let [localListing, cloudListing] = await Promise.all([
+        listPeerSessionsSafe(),
+        searchCloudPeers(session, credentials),
+      ]);
+      let sessions = localListing.sessions;
       let remoteRowsForPin = await loadRemoteRowsForPin(
         session,
-        s.sendMessagePins,
-        slugifySessionName(M.name),
-        p,
-        r,
+        toolContext.sendMessagePins,
+        slugifySessionName(parsedNameWithRef.name),
+        cloudListing,
+        slug,
         warmBridgeListingIfEnabled(session),
         credentials,
       );
       let { rows, unavailable } = remoteRowsForPin;
-      let _ = describeAgentAddress(s, {
-        teamFile: l,
+      let addressIndex = describeAgentAddress(toolContext, {
+        teamFile,
         sessions,
-        cloud: p.sessions,
+        cloud: cloudListing.sessions,
         bridge: rows,
       });
-      let x = slugifySessionName(M.name);
-      let se = (candidateByRef, W, rows, truncated) => {
-        let L = candidateToRoute(candidateByRef, s);
-        return L.kind === "local-session" || L.kind === "cloud-session"
+      let refSlug = slugifySessionName(parsedNameWithRef.name);
+      let toRoute = (candidateByRef, extraNote, rows, truncated) => {
+        let route = candidateToRoute(candidateByRef, toolContext);
+        return route.kind === "local-session" || route.kind === "cloud-session"
           ? {
-              ...L,
+              ...route,
               ...describeRouteFlags(
-                L,
-                x,
-                W,
+                route,
+                refSlug,
+                extraNote,
                 {
-                  socksMirroredRemotely: getMirroredSockets(sessions, p, rows),
-                  searchTruncated: p.truncated === true || truncated,
+                  socksMirroredRemotely: getMirroredSockets(sessions, cloudListing, rows),
+                  searchTruncated: cloudListing.truncated === true || truncated,
                 },
-                s.sendMessagePins,
+                toolContext.sendMessagePins,
               ),
             }
-          : L;
+          : route;
       };
-      let candidateByRef = findCandidateByRef(_, x, M.ref);
-      if (candidateByRef) return se(candidateByRef, _, rows, remoteRowsForPin.truncated);
-      let te = unavailable;
+      let candidateByRef = findCandidateByRef(addressIndex, refSlug, parsedNameWithRef.ref);
+      if (candidateByRef) return toRoute(candidateByRef, addressIndex, rows, remoteRowsForPin.truncated);
+      let remoteUnavailable = unavailable;
       let remoteTruncated = remoteRowsForPin.truncated;
       if (rows === undefined) {
-        let remoteSessionRows = await fetchRemoteSessionRows(session, p, r, credentials);
-        te = remoteSessionRows.unavailable;
+        let remoteSessionRows = await fetchRemoteSessionRows(session, cloudListing, slug, credentials);
+        remoteUnavailable = remoteSessionRows.unavailable;
         remoteTruncated = remoteSessionRows.truncated;
         if (remoteSessionRows.rows.length > 0) {
-          _ = describeAgentAddress(s, {
-            teamFile: l,
+          addressIndex = describeAgentAddress(toolContext, {
+            teamFile,
             sessions,
-            cloud: p.sessions,
+            cloud: cloudListing.sessions,
             bridge: remoteSessionRows.rows,
           });
-          let candidateByRef = findCandidateByRef(_, x, M.ref);
+          let candidateByRef = findCandidateByRef(addressIndex, refSlug, parsedNameWithRef.ref);
           if (candidateByRef)
-            return se(candidateByRef, _, remoteSessionRows.rows, remoteSessionRows.truncated);
+            return toRoute(candidateByRef, addressIndex, remoteSessionRows.rows, remoteSessionRows.truncated);
         }
       }
       return {
-        ...notFoundWithSuggestions(x, _),
-        ...findRenamedSession(x, sessions, _, s.sendMessagePins),
-        ...describeSearchGaps(p, te, v.unavailable, {
+        ...notFoundWithSuggestions(refSlug, addressIndex),
+        ...findRenamedSession(refSlug, sessions, addressIndex, toolContext.sendMessagePins),
+        ...describeSearchGaps(cloudListing, remoteUnavailable, localListing.unavailable, {
           remoteTruncated,
         }),
-        ...findLocallyClaimedPin(s.sendMessagePins, [x], bridgeSessionIds(sessions)),
+        ...findLocallyClaimedPin(toolContext.sendMessagePins, [refSlug], bridgeSessionIds(sessions)),
       };
     }
   }
-  if (typeof message !== "string") {
-    if (message.type === "shutdown_response")
+  if (typeof resolverContext !== "string") {
+    if (resolverContext.type === "shutdown_response")
       return {
         kind: "mailbox",
         recipientName: agentName,
@@ -492,11 +506,11 @@ async function resolveCrossSessionAddress(session, agentName, message, s, storag
     if (agentName !== TEAM_LEAD && isReservedSessionName(agentName))
       return notFoundWithSuggestions(
         slugifySessionName(agentName),
-        describeAgentAddress(s, {
+        describeAgentAddress(toolContext, {
           teamFile: null,
           sessions: [],
         }),
-        (y) => y.kind === "teammate",
+        (entry) => entry.kind === "teammate",
       );
     if (!teamName)
       return {
@@ -508,17 +522,17 @@ async function resolveCrossSessionAddress(session, agentName, message, s, storag
         kind: "mailbox",
         recipientName: agentName,
       };
-    let filtered = Object.entries(s.teamContext?.teammates ?? {}).filter(
+    let filtered = Object.entries(toolContext.teamContext?.teammates ?? {}).filter(
       ([key, value]) =>
         isLocalTeamLead(
           {
             name: value.name,
             agentId: key,
           },
-          teamLeadAddress(s),
+          teamLeadAddress(toolContext),
         ) || !isReservedOrInvalidName(value.name),
     );
-    let found = filtered.find(([, y]) => y.name === agentName);
+    let found = filtered.find(([, teammate]) => teammate.name === agentName);
     if (found)
       return {
         kind: "mailbox",
@@ -526,9 +540,11 @@ async function resolveCrossSessionAddress(session, agentName, message, s, storag
         memberAgentId: found[0],
         memberIdentitySource: "team-context",
       };
-    l = await readTeamFileAsync(teamName, storageV5);
-    if (parseNameWithRef(agentName) === null && l !== null) {
-      let found = addressableTeamMembers(l, teamLeadAddress(s)).find((S) => S.name === agentName);
+    teamFile = await readTeamFileAsync(teamName, storageV5);
+    if (parseNameWithRef(agentName) === null && teamFile !== null) {
+      let found = addressableTeamMembers(teamFile, teamLeadAddress(toolContext)).find(
+        (member) => member.name === agentName,
+      );
       if (found !== undefined)
         return {
           kind: "mailbox",
@@ -537,7 +553,7 @@ async function resolveCrossSessionAddress(session, agentName, message, s, storag
           memberIdentitySource: "roster",
         };
     }
-    let found_2 = filtered.find(([, y]) => slugifySessionName(y.name) === r);
+    let found_2 = filtered.find(([, teammate]) => slugifySessionName(teammate.name) === slug);
     if (found_2 !== undefined)
       return {
         kind: "mailbox",
@@ -545,8 +561,11 @@ async function resolveCrossSessionAddress(session, agentName, message, s, storag
         memberAgentId: found_2[0],
         memberIdentitySource: "team-context",
       };
-    if (parseNameWithRef(agentName) === null && l !== null) {
-      let sessionByName = findSessionByName(addressableTeamMembers(l, teamLeadAddress(s)), agentName);
+    if (parseNameWithRef(agentName) === null && teamFile !== null) {
+      let sessionByName = findSessionByName(
+        addressableTeamMembers(teamFile, teamLeadAddress(toolContext)),
+        agentName,
+      );
       if (sessionByName !== undefined)
         return {
           kind: "mailbox",
@@ -556,26 +575,26 @@ async function resolveCrossSessionAddress(session, agentName, message, s, storag
           memberIdentitySource: "roster",
         };
     }
-    if (l === null)
+    if (teamFile === null)
       return {
         kind: "mailbox",
         recipientName: agentName,
       };
     return notFoundWithSuggestions(
-      r,
-      describeAgentAddress(s, {
-        teamFile: l,
+      slug,
+      describeAgentAddress(toolContext, {
+        teamFile,
         sessions: [],
       }),
-      (y) => y.kind === "teammate",
+      (entry) => entry.kind === "teammate",
     );
   }
-  if (teamName && l === null) {
+  if (teamName && teamFile === null) {
     if (isReservedSessionName(agentName))
       return notFoundWithSuggestions(
-        r,
-        describeAgentAddress(s, {
-          teamFile: l,
+        slug,
+        describeAgentAddress(toolContext, {
+          teamFile,
           sessions: [],
         }),
       );
@@ -584,102 +603,111 @@ async function resolveCrossSessionAddress(session, agentName, message, s, storag
       recipientName: agentName,
     };
   }
-  let [c, u] = await Promise.all([listPeerSessionsSafe(), searchCloudPeers(session, credentials)]);
-  let sessions = c.sessions;
+  let [localListing, cloudListing] = await Promise.all([
+    listPeerSessionsSafe(),
+    searchCloudPeers(session, credentials),
+  ]);
+  let sessions = localListing.sessions;
   let remoteRowsForPin = await loadRemoteRowsForPin(
     session,
-    s.sendMessagePins,
-    r,
-    u,
-    r,
+    toolContext.sendMessagePins,
+    slug,
+    cloudListing,
+    slug,
     warmBridgeListingIfEnabled(session),
     credentials,
   );
   let { rows, unavailable, truncated } = remoteRowsForPin;
-  let Q = bridgeSessionIds(sessions);
-  let V = () => ({
-    cloudUnavailable: definedIf(u.unavailable),
+  let localClaimedBodies = bridgeSessionIds(sessions);
+  let listingGaps = () => ({
+    cloudUnavailable: definedIf(cloudListing.unavailable),
     bridgeUnavailable: unavailable,
-    localClaimedRemoteBodies: Q,
+    localClaimedRemoteBodies: localClaimedBodies,
     bridgeSettled: rows !== undefined,
-    localUnavailable: c.unavailable,
-    socksMirroredRemotely: getMirroredSockets(sessions, u, rows),
-    searchTruncated: u.truncated === true || truncated,
+    localUnavailable: localListing.unavailable,
+    socksMirroredRemotely: getMirroredSockets(sessions, cloudListing, rows),
+    searchTruncated: cloudListing.truncated === true || truncated,
   });
-  let k = describeAgentAddress(s, {
-    teamFile: l,
+  let addressIndex = describeAgentAddress(toolContext, {
+    teamFile,
     sessions,
-    cloud: u.sessions,
+    cloud: cloudListing.sessions,
     bridge: rows,
   });
-  let A = k.byName.get(r)?.length === 1 ? k.byName.get(r)[0] : undefined;
-  let pinKind = getPinKind(s.sendMessagePins, r);
-  let Ie =
-    A !== undefined &&
+  let singleByName =
+    addressIndex.byName.get(slug)?.length === 1 ? addressIndex.byName.get(slug)[0] : undefined;
+  let pinKind = getPinKind(toolContext.sendMessagePins, slug);
+  let pinMatches =
+    singleByName !== undefined &&
     pinKind !== undefined &&
-    Object.hasOwn(s.sendMessagePins, r) &&
-    matchesPin(s.sendMessagePins[r], A);
-  let Ne =
-    A !== undefined && (A.kind === "session" || A.kind === "cloud-session") && pinKind !== "agent" && !Ie;
-  if (rows === undefined && Ne) {
-    let remoteSessionRows = await fetchRemoteSessionRows(session, u, r, credentials);
+    Object.hasOwn(toolContext.sendMessagePins, slug) &&
+    matchesPin(toolContext.sendMessagePins[slug], singleByName);
+  let needsRemoteRows =
+    singleByName !== undefined &&
+    (singleByName.kind === "session" || singleByName.kind === "cloud-session") &&
+    pinKind !== "agent" &&
+    !pinMatches;
+  if (rows === undefined && needsRemoteRows) {
+    let remoteSessionRows = await fetchRemoteSessionRows(session, cloudListing, slug, credentials);
     rows = remoteSessionRows.rows;
     unavailable = remoteSessionRows.unavailable;
     truncated = remoteSessionRows.truncated;
-    k = describeAgentAddress(s, {
-      teamFile: l,
+    addressIndex = describeAgentAddress(toolContext, {
+      teamFile,
       sessions,
-      cloud: u.sessions,
+      cloud: cloudListing.sessions,
       bridge: remoteSessionRows.rows,
     });
   }
-  let exactName = resolveExactName(k, r, agentName, s, V());
+  let exactName = resolveExactName(addressIndex, slug, agentName, toolContext, listingGaps());
   if (exactName) return exactName;
   if (rows === undefined) {
-    let remoteSessionRows = await fetchRemoteSessionRows(session, u, r, credentials);
+    let remoteSessionRows = await fetchRemoteSessionRows(session, cloudListing, slug, credentials);
     rows = remoteSessionRows.rows;
     unavailable = remoteSessionRows.unavailable;
     truncated = remoteSessionRows.truncated;
     if (remoteSessionRows.rows.length > 0) {
-      k = describeAgentAddress(s, {
-        teamFile: l,
+      addressIndex = describeAgentAddress(toolContext, {
+        teamFile,
         sessions,
-        cloud: u.sessions,
+        cloud: cloudListing.sessions,
         bridge: remoteSessionRows.rows,
       });
-      let exactName = resolveExactName(k, r, agentName, s, V());
+      let exactName = resolveExactName(addressIndex, slug, agentName, toolContext, listingGaps());
       if (exactName) return exactName;
     }
   }
   return (
-    resolveNamePrefix(k, r, s, V()) ?? {
-      ...notFoundWithSuggestions(r, k),
-      ...findRenamedSession(r, sessions, k, s.sendMessagePins),
-      ...describeSearchGaps(u, unavailable, c.unavailable, {
+    resolveNamePrefix(addressIndex, slug, toolContext, listingGaps()) ?? {
+      ...notFoundWithSuggestions(slug, addressIndex),
+      ...findRenamedSession(slug, sessions, addressIndex, toolContext.sendMessagePins),
+      ...describeSearchGaps(cloudListing, unavailable, localListing.unavailable, {
         remoteTruncated: truncated,
       }),
-      ...findLocallyClaimedPin(s.sendMessagePins, [r], Q),
+      ...findLocallyClaimedPin(toolContext.sendMessagePins, [slug], localClaimedBodies),
     }
   );
 }
 //@ chunk-n0beqxxz.js:11055-11179 placement
-function getLocallyClaimedPinName(e, n, i) {
-  let pinKind = getPinKind(e, n);
+function getLocallyClaimedPinName(sendMessagePins, pinName, localClaimedBodies) {
+  let pinKind = getPinKind(sendMessagePins, pinName);
   if (pinKind !== "cloud" && pinKind !== "remote-control") return;
-  let o = e[n];
-  return i.has(sessionIdBody(o.id)) ? o.name : undefined;
+  let pin = sendMessagePins[pinName];
+  return localClaimedBodies.has(sessionIdBody(pin.id)) ? pin.name : undefined;
 }
 //@ chunk-n0beqxxz.js:11179-11349 placement
-function expandPinPrefixes(e, n) {
-  let i = n[0];
-  if (i === undefined || i.length < 3) return n;
-  let filtered = Object.keys(e).filter((key) => key !== i && key.startsWith(i) && !n.includes(key));
-  return filtered.length === 0 ? n : [...n, ...filtered];
+function expandPinPrefixes(sendMessagePins, names) {
+  let firstName = names[0];
+  if (firstName === undefined || firstName.length < 3) return names;
+  let filtered = Object.keys(sendMessagePins).filter(
+    (key) => key !== firstName && key.startsWith(firstName) && !names.includes(key),
+  );
+  return filtered.length === 0 ? names : [...names, ...filtered];
 }
 //@ chunk-n0beqxxz.js:11349-11467 placement
-function findLocallyClaimedPin(sendMessagePins, n, localClaimedRemoteBodies) {
-  for (let s of expandPinPrefixes(sendMessagePins, n)) {
-    let locallyClaimedPinName = getLocallyClaimedPinName(sendMessagePins, s, localClaimedRemoteBodies);
+function findLocallyClaimedPin(sendMessagePins, names, localClaimedBodies) {
+  for (let name of expandPinPrefixes(sendMessagePins, names)) {
+    let locallyClaimedPinName = getLocallyClaimedPinName(sendMessagePins, name, localClaimedBodies);
     if (locallyClaimedPinName !== undefined)
       return {
         pinnedIdentityClaimedLocally: locallyClaimedPinName,
@@ -688,56 +716,64 @@ function findLocallyClaimedPin(sendMessagePins, n, localClaimedRemoteBodies) {
   return {};
 }
 //@ chunk-n0beqxxz.js:11467-11663 placement
-function getPinKind(sendMessagePins, n) {
-  let i = Object.hasOwn(sendMessagePins, n) ? sendMessagePins[n] : undefined;
-  if (i === undefined) return;
-  if (normalizeAgentIdOrNull(i.id) !== null) return "agent";
-  if (i.id.startsWith("cse_")) return "cloud";
-  return sessionIdBody(i.id) !== i.id ? "remote-control" : "local";
+function getPinKind(sendMessagePins, pinName) {
+  let pin = Object.hasOwn(sendMessagePins, pinName) ? sendMessagePins[pinName] : undefined;
+  if (pin === undefined) return;
+  if (normalizeAgentIdOrNull(pin.id) !== null) return "agent";
+  if (pin.id.startsWith("cse_")) return "cloud";
+  return sessionIdBody(pin.id) !== pin.id ? "remote-control" : "local";
 }
 //@ chunk-n0beqxxz.js:11663-11978 placement
 /**
  * 按需为固定目标加载远程会话列表：不需要时沿用已有结果，需要时拉取并在失败时回退到已有行。
  */
-async function loadRemoteRowsForPin(e, sendMessagePins, i, s, o, a, r) {
-  let rows = a?.rows;
-  if (!needsRemoteLookupForPin(sendMessagePins, i, s.sessions, rows))
+async function loadRemoteRowsForPin(
+  session,
+  sendMessagePins,
+  pinName,
+  cloudListing,
+  slug,
+  warmListing,
+  credentials,
+) {
+  let rows = warmListing?.rows;
+  if (!needsRemoteLookupForPin(sendMessagePins, pinName, cloudListing.sessions, rows))
     return {
       rows,
       unavailable: undefined,
-      truncated: a !== undefined && a.truncated,
+      truncated: warmListing !== undefined && warmListing.truncated,
     };
-  let remoteSessionRows = await fetchRemoteSessionRows(e, s, o, r);
+  let remoteSessionRows = await fetchRemoteSessionRows(session, cloudListing, slug, credentials);
   return {
     rows: remoteSessionRows.unavailable === undefined || rows === undefined ? remoteSessionRows.rows : rows,
     unavailable: remoteSessionRows.unavailable,
     truncated:
-      remoteSessionRows.unavailable === undefined || a === undefined
+      remoteSessionRows.unavailable === undefined || warmListing === undefined
         ? remoteSessionRows.truncated
-        : a.truncated,
+        : warmListing.truncated,
   };
 }
 //@ chunk-n0beqxxz.js:11978-12160 placement
-function needsRemoteLookupForPin(e, n, sessions, rows) {
-  let pinKind = getPinKind(e, n);
+function needsRemoteLookupForPin(sendMessagePins, pinName, sessions, rows) {
+  let pinKind = getPinKind(sendMessagePins, pinName);
   if (pinKind !== "remote-control" && pinKind !== "cloud") return false;
-  let a = sessionIdBody(e[n].id);
-  if (sessions.some((r) => sessionIdBody(r.id) === a)) return false;
-  return rows === undefined || !rows.some((r) => sessionIdBody(r.id) === a);
+  let pinBody = sessionIdBody(sendMessagePins[pinName].id);
+  if (sessions.some((session) => sessionIdBody(session.id) === pinBody)) return false;
+  return rows === undefined || !rows.some((row) => sessionIdBody(row.id) === pinBody);
 }
 //@ chunk-n0beqxxz.js:12160-12395 placement
-function searchGaps(e) {
+function searchGaps(gaps) {
   return {
-    ...(e.cloudUnavailable && {
-      cloudUnavailable: e.cloudUnavailable,
+    ...(gaps.cloudUnavailable && {
+      cloudUnavailable: gaps.cloudUnavailable,
     }),
-    ...(e.bridgeUnavailable && {
-      bridgeUnavailable: e.bridgeUnavailable,
+    ...(gaps.bridgeUnavailable && {
+      bridgeUnavailable: gaps.bridgeUnavailable,
     }),
-    ...(e.localUnavailable && {
+    ...(gaps.localUnavailable && {
       localUnavailable: true,
     }),
-    ...(e.searchTruncated && {
+    ...(gaps.searchTruncated && {
       searchTruncated: true,
     }),
   };
@@ -746,45 +782,58 @@ function searchGaps(e) {
 /**
  * 按名字精确解析发送目标：唯一时直接转为路由；同名多个时优先使用已固定的目标，若只有一个会话且所有来源都已搜索则视为唯一，否则返回 ambiguous 并带搜索缺口说明。
  */
-function resolveExactName(e, n, i, s, o) {
-  let uniqueCandidate = resolveUniqueCandidate(e.byName, n, i);
+function resolveExactName(index, slug, agentName, toolContext, listingGaps) {
+  let uniqueCandidate = resolveUniqueCandidate(index.byName, slug, agentName);
   if (uniqueCandidate) {
     if (uniqueCandidate.kind === "ambiguous") {
-      let r = e.byName.get(n);
-      let pinnedCandidate = findPinnedCandidate(s.sendMessagePins, n, r, i, o);
-      if (pinnedCandidate) return pinnedRoute(pinnedCandidate, r, s, n, e, o);
-      let locallyClaimedPin = findLocallyClaimedPin(s.sendMessagePins, [n], o.localClaimedRemoteBodies);
-      let c = r[0];
-      let pinKind = getPinKind(s.sendMessagePins, n);
+      let candidates = index.byName.get(slug);
+      let pinnedCandidate = findPinnedCandidate(
+        toolContext.sendMessagePins,
+        slug,
+        candidates,
+        agentName,
+        listingGaps,
+      );
+      if (pinnedCandidate)
+        return pinnedRoute(pinnedCandidate, candidates, toolContext, slug, index, listingGaps);
+      let locallyClaimedPin = findLocallyClaimedPin(
+        toolContext.sendMessagePins,
+        [slug],
+        listingGaps.localClaimedRemoteBodies,
+      );
+      let firstCandidate = candidates[0];
+      let pinKind = getPinKind(toolContext.sendMessagePins, slug);
       if (
-        r.length === 1 &&
-        (c.kind === "session" || c.kind === "cloud-session" || c.kind === "bridge-session") &&
-        !o.cloudUnavailable &&
-        o.bridgeSettled &&
-        !o.bridgeUnavailable &&
-        !o.localUnavailable &&
+        candidates.length === 1 &&
+        (firstCandidate.kind === "session" ||
+          firstCandidate.kind === "cloud-session" ||
+          firstCandidate.kind === "bridge-session") &&
+        !listingGaps.cloudUnavailable &&
+        listingGaps.bridgeSettled &&
+        !listingGaps.bridgeUnavailable &&
+        !listingGaps.localUnavailable &&
         locallyClaimedPin.pinnedIdentityClaimedLocally === undefined &&
         pinKind !== "agent" &&
-        !c.derivedName
+        !firstCandidate.derivedName
       ) {
-        let b = candidateToRoute(c, s);
-        if (b.kind === "local-session" || b.kind === "cloud-session")
+        let route = candidateToRoute(firstCandidate, toolContext);
+        if (route.kind === "local-session" || route.kind === "cloud-session")
           return {
-            ...b,
+            ...route,
             exactUnique: true,
             ...(pinKind !== undefined && {
               previouslyPinned: true,
             }),
-            ...describeRouteFlags(b, n, e, o, s.sendMessagePins),
+            ...describeRouteFlags(route, slug, index, listingGaps, toolContext.sendMessagePins),
           };
       }
       return {
-        ...ambiguousMatch(r, "exact"),
-        ...searchGaps(o),
+        ...ambiguousMatch(candidates, "exact"),
+        ...searchGaps(listingGaps),
         ...locallyClaimedPin,
       };
     }
-    return candidateToRoute(uniqueCandidate.candidate, s);
+    return candidateToRoute(uniqueCandidate.candidate, toolContext);
   }
   return;
 }
@@ -792,76 +841,104 @@ function resolveExactName(e, n, i, s, o) {
 /**
  * 按名字前缀（≥3 字符）解析发送目标：唯一前缀匹配时处理已固定目标与同名歧义、未搜索完整的来源；多个前缀匹配返回 ambiguous；记录 send_message_prefix_match 遥测。
  */
-function resolveNamePrefix(e, n, i, s) {
-  if (n.length >= 3) {
-    let filtered = [...e.byName.keys()].filter((key) => key.startsWith(n));
+function resolveNamePrefix(index, slug, toolContext, listingGaps) {
+  if (slug.length >= 3) {
+    let filtered = [...index.byName.keys()].filter((key) => key.startsWith(slug));
     if (filtered.length === 1) {
-      let uniqueCandidate = resolveUniqueCandidate(e.byName, filtered[0]);
-      let pinKind = getPinKind(i.sendMessagePins, n);
-      let d =
-        findLocallyClaimedPin(i.sendMessagePins, [n], s.localClaimedRemoteBodies)
+      let uniqueCandidate = resolveUniqueCandidate(index.byName, filtered[0]);
+      let pinKind = getPinKind(toolContext.sendMessagePins, slug);
+      let claimedLocally =
+        findLocallyClaimedPin(toolContext.sendMessagePins, [slug], listingGaps.localClaimedRemoteBodies)
           .pinnedIdentityClaimedLocally !== undefined;
-      if ((pinKind !== undefined && pinKind !== "agent") || d) {
-        let l = e.byName.get(filtered[0]);
+      if ((pinKind !== undefined && pinKind !== "agent") || claimedLocally) {
+        let candidates = index.byName.get(filtered[0]);
         logFeatureSad(
           "send_message_prefix_match",
           pinKind !== undefined && pinKind !== "agent" ? "typed_name_pinned" : "prefix_of_claimed_pin",
         );
         return {
-          ...ambiguousMatch(uniqueCandidate.kind === "one" ? [uniqueCandidate.candidate] : l, "prefix"),
-          ...searchGaps(s),
-          ...findLocallyClaimedPin(i.sendMessagePins, [n, filtered[0]], s.localClaimedRemoteBodies),
+          ...ambiguousMatch(
+            uniqueCandidate.kind === "one" ? [uniqueCandidate.candidate] : candidates,
+            "prefix",
+          ),
+          ...searchGaps(listingGaps),
+          ...findLocallyClaimedPin(
+            toolContext.sendMessagePins,
+            [slug, filtered[0]],
+            listingGaps.localClaimedRemoteBodies,
+          ),
         };
       }
       if (uniqueCandidate.kind === "ambiguous") {
-        let l = e.byName.get(filtered[0]);
-        let pinnedCandidate = findPinnedCandidate(i.sendMessagePins, filtered[0], l, undefined, s, true);
+        let candidates = index.byName.get(filtered[0]);
+        let pinnedCandidate = findPinnedCandidate(
+          toolContext.sendMessagePins,
+          filtered[0],
+          candidates,
+          undefined,
+          listingGaps,
+          true,
+        );
         if (pinnedCandidate) {
           logFeatureOk("send_message_prefix_match", {
-            input_len: n.length,
-            index_size: e.candidates.length,
+            input_len: slug.length,
+            index_size: index.candidates.length,
             pinned: 1,
           });
-          return pinnedRoute(pinnedCandidate, l, i, filtered[0], e, s);
+          return pinnedRoute(pinnedCandidate, candidates, toolContext, filtered[0], index, listingGaps);
         }
-        if (l.length === 1) logFeatureSad("send_message_prefix_match", "confirm_required");
+        if (candidates.length === 1) logFeatureSad("send_message_prefix_match", "confirm_required");
         else logFeatureBad("send_message_prefix_match", "ambiguous_name");
         return {
-          ...ambiguousMatch(l, "prefix"),
-          ...searchGaps(s),
-          ...findLocallyClaimedPin(i.sendMessagePins, [n, filtered[0]], s.localClaimedRemoteBodies),
+          ...ambiguousMatch(candidates, "prefix"),
+          ...searchGaps(listingGaps),
+          ...findLocallyClaimedPin(
+            toolContext.sendMessagePins,
+            [slug, filtered[0]],
+            listingGaps.localClaimedRemoteBodies,
+          ),
         };
       }
-      if (s.cloudUnavailable || s.bridgeUnavailable || s.localUnavailable) {
+      if (listingGaps.cloudUnavailable || listingGaps.bridgeUnavailable || listingGaps.localUnavailable) {
         logFeatureSad(
           "send_message_prefix_match",
-          s.cloudUnavailable || s.bridgeUnavailable ? "remote_unsearched" : "local_unsearched",
+          listingGaps.cloudUnavailable || listingGaps.bridgeUnavailable
+            ? "remote_unsearched"
+            : "local_unsearched",
         );
         return {
           ...ambiguousMatch([uniqueCandidate.candidate], "prefix"),
-          ...searchGaps(s),
-          ...findLocallyClaimedPin(i.sendMessagePins, [n, filtered[0]], s.localClaimedRemoteBodies),
+          ...searchGaps(listingGaps),
+          ...findLocallyClaimedPin(
+            toolContext.sendMessagePins,
+            [slug, filtered[0]],
+            listingGaps.localClaimedRemoteBodies,
+          ),
         };
       }
       logFeatureOk("send_message_prefix_match", {
-        input_len: n.length,
-        index_size: e.candidates.length,
-        ...(s.searchTruncated && {
+        input_len: slug.length,
+        index_size: index.candidates.length,
+        ...(listingGaps.searchTruncated && {
           search_truncated: true,
         }),
       });
-      return candidateToRoute(uniqueCandidate.candidate, i);
+      return candidateToRoute(uniqueCandidate.candidate, toolContext);
     }
     if (filtered.length > 1) {
       logFeatureBad("send_message_prefix_match", "ambiguous_prefix");
       return {
-        ...searchGaps(s),
-        ...findLocallyClaimedPin(i.sendMessagePins, [n, ...filtered], s.localClaimedRemoteBodies),
+        ...searchGaps(listingGaps),
+        ...findLocallyClaimedPin(
+          toolContext.sendMessagePins,
+          [slug, ...filtered],
+          listingGaps.localClaimedRemoteBodies,
+        ),
         ...ambiguousMatch(
-          filtered.flatMap((a) => {
-            let r = e.byName.get(a);
-            let uniqueCandidate = resolveUniqueCandidate(e.byName, a);
-            return uniqueCandidate?.kind === "one" ? [uniqueCandidate.candidate] : r;
+          filtered.flatMap((name) => {
+            let candidates = index.byName.get(name);
+            let uniqueCandidate = resolveUniqueCandidate(index.byName, name);
+            return uniqueCandidate?.kind === "one" ? [uniqueCandidate.candidate] : candidates;
           }),
           "prefix",
         ),
@@ -871,30 +948,36 @@ function resolveNamePrefix(e, n, i, s) {
   return;
 }
 //@ chunk-n0beqxxz.js:14768-14892 placement
-function findCandidateByRef(e, n, ref) {
-  let s = e.byName.get(n) ?? [];
-  let uniqueCandidate = resolveUniqueCandidate(e.byName, n);
-  return (uniqueCandidate?.kind === "one" ? [uniqueCandidate.candidate] : s).find((r) => r.ref === ref);
+function findCandidateByRef(index, slug, ref) {
+  let candidates = index.byName.get(slug) ?? [];
+  let uniqueCandidate = resolveUniqueCandidate(index.byName, slug);
+  return (uniqueCandidate?.kind === "one" ? [uniqueCandidate.candidate] : candidates).find(
+    (candidate) => candidate.ref === ref,
+  );
 }
 //@ chunk-n0beqxxz.js:14892-15825 placement
 /**
  * 冷启动时拉取 Remote Control 会话列表（有超时），失败或超时返回 unavailable 原因，成功时与云会话列表去重并按需记录。
  */
-async function fetchRemoteSessionRows(e, n, i, s) {
+async function fetchRemoteSessionRows(session, cloudListing, slug, credentials) {
   if (isCrossSessionMessagingEnabled()) {
-    let o = !isTransientListingFailure(n.unavailable);
-    let bridgePopulation = fetchBridgePopulation(e, s);
-    let r = await withDeadline(bridgePopulation, REMOTE_POPULATION_TIMEOUT_MS);
-    if (r === undefined) {
+    let mayRecordListing = !isTransientListingFailure(cloudListing.unavailable);
+    let bridgePopulation = fetchBridgePopulation(session, credentials);
+    let population = await withDeadline(bridgePopulation, REMOTE_POPULATION_TIMEOUT_MS);
+    if (population === undefined) {
       logForDebugging(
-        `[bridge:resolve] "${i}": Remote Control population not ready within ${REMOTE_POPULATION_TIMEOUT_MS}ms (cold) \u2014 not searched, disclosing a hedge`,
+        `[bridge:resolve] "${slug}": Remote Control population not ready within ${REMOTE_POPULATION_TIMEOUT_MS}ms (cold) \u2014 not searched, disclosing a hedge`,
         {
           level: "warn",
         },
       );
-      if (o)
-        bridgePopulation.then((l) =>
-          recordBridgeListing(e, l, livePeerSessionsExcludingKnown(l.rows, n.sessions)),
+      if (mayRecordListing)
+        bridgePopulation.then((latePopulation) =>
+          recordBridgeListing(
+            session,
+            latePopulation,
+            livePeerSessionsExcludingKnown(latePopulation.rows, cloudListing.sessions),
+          ),
         );
       return {
         rows: [],
@@ -902,9 +985,9 @@ async function fetchRemoteSessionRows(e, n, i, s) {
         truncated: false,
       };
     }
-    if (r.failed || (r.identityKey !== null && !isCurrentBridgeIdentity(r))) {
+    if (population.failed || (population.identityKey !== null && !isCurrentBridgeIdentity(population))) {
       logForDebugging(
-        `[bridge:resolve] "${i}": Remote Control walk ${r.failed ? "failed" : "ran under a previous handle"} (cold) \u2014 not searched, disclosing a hedge`,
+        `[bridge:resolve] "${slug}": Remote Control walk ${population.failed ? "failed" : "ran under a previous handle"} (cold) \u2014 not searched, disclosing a hedge`,
         {
           level: "warn",
         },
@@ -915,16 +998,16 @@ async function fetchRemoteSessionRows(e, n, i, s) {
         truncated: false,
       };
     }
-    let d = livePeerSessionsExcludingKnown(r.rows, n.sessions);
-    if (o) recordBridgeListing(e, r, d);
-    else forgetBridgeListing(e, r);
+    let liveRows = livePeerSessionsExcludingKnown(population.rows, cloudListing.sessions);
+    if (mayRecordListing) recordBridgeListing(session, population, liveRows);
+    else forgetBridgeListing(session, population);
     logForDebugging(
-      `[bridge:resolve] "${i}": ${r.rows.length} Remote Control rows, ${d.length} listed (cold${o ? ", recorded" : ", not recorded \u2014 cloud list failed"})`,
+      `[bridge:resolve] "${slug}": ${population.rows.length} Remote Control rows, ${liveRows.length} listed (cold${mayRecordListing ? ", recorded" : ", not recorded \u2014 cloud list failed"})`,
     );
     return {
-      rows: d,
+      rows: liveRows,
       unavailable: undefined,
-      truncated: r.truncated === true,
+      truncated: population.truncated === true,
     };
   }
   return {
@@ -941,16 +1024,16 @@ function definedIf(unavailable) {
   return isTransientListingFailure(unavailable) ? unavailable : undefined;
 }
 //@ chunk-n0beqxxz.js:15863-16057 placement
-function describeSearchGaps(e, n, unavailable, { remoteTruncated }) {
+function describeSearchGaps(cloudListing, bridgeUnavailable, unavailable, { remoteTruncated }) {
   return {
-    cloudUnavailable: definedIf(e.unavailable),
-    ...(n !== undefined && {
-      bridgeUnavailable: n,
+    cloudUnavailable: definedIf(cloudListing.unavailable),
+    ...(bridgeUnavailable !== undefined && {
+      bridgeUnavailable,
     }),
     ...(unavailable && {
       localUnavailable: true,
     }),
-    ...((e.truncated === true || remoteTruncated) && {
+    ...((cloudListing.truncated === true || remoteTruncated) && {
       searchTruncated: true,
     }),
   };
@@ -959,13 +1042,13 @@ function describeSearchGaps(e, n, unavailable, { remoteTruncated }) {
 /**
  * 把子代理 id 转换为路由：运行中、被用户停止、已停止（带状态）或已从任务表逐出。
  */
-function subagentRoute(e, n, agentName) {
-  let task = e.tasks[n];
+function subagentRoute(toolContext, agentId, agentName) {
+  let task = toolContext.tasks[agentId];
   if (isLocalAgent(task) && !isMainSessionTask(task)) {
     if (task.status === "running")
       return {
         kind: "agent-live",
-        agentId: n,
+        agentId,
         agentName,
       };
     if (task.stoppedByUser)
@@ -975,14 +1058,14 @@ function subagentRoute(e, n, agentName) {
       };
     return {
       kind: "agent-stopped",
-      agentId: n,
+      agentId,
       status: task.status,
       agentName,
     };
   }
   return {
     kind: "agent-evicted",
-    agentId: n,
+    agentId,
     agentName,
   };
 }
@@ -990,8 +1073,8 @@ function subagentRoute(e, n, agentName) {
 /**
  * 把寻址候选转换为投递路由：main、队友邮箱、子代理（运行中/已停止/已逐出）、本机会话（socket 与 pin id）、云/Remote Control 会话。
  */
-function candidateToRoute(e, n) {
-  switch (e.kind) {
+function candidateToRoute(candidate, toolContext) {
+  switch (candidate.kind) {
     case "main":
       return {
         kind: "main",
@@ -999,40 +1082,40 @@ function candidateToRoute(e, n) {
     case "teammate":
       return {
         kind: "mailbox",
-        recipientName: e.name,
-        memberAgentId: e.id,
-        memberIdentitySource: e.where === "in-process" ? "team-context" : "roster",
+        recipientName: candidate.name,
+        memberAgentId: candidate.id,
+        memberIdentitySource: candidate.where === "in-process" ? "team-context" : "roster",
       };
     case "subagent":
-      return subagentRoute(n, identityAgentId2(e.id), e.name);
+      return subagentRoute(toolContext, identityAgentId2(candidate.id), candidate.name);
     case "session":
       return {
         kind: "local-session",
-        sock: e.sock,
-        pinId: stableSessionKey(e),
-        ...(e.claimedSessionIds !== undefined && {
-          claimedSessionIds: e.claimedSessionIds,
+        sock: candidate.sock,
+        pinId: stableSessionKey(candidate),
+        ...(candidate.claimedSessionIds !== undefined && {
+          claimedSessionIds: candidate.claimedSessionIds,
         }),
-        displayName: e.name,
-        ...(e.hostSessionId !== undefined && {
-          hostSessionId: e.hostSessionId,
+        displayName: candidate.name,
+        ...(candidate.hostSessionId !== undefined && {
+          hostSessionId: candidate.hostSessionId,
         }),
       };
     case "cloud-session":
     case "bridge-session":
       return {
         kind: "cloud-session",
-        via: e.where === "cloud" ? "cloud" : "remote-control",
-        refKind: e.kind,
-        sessionId: e.id,
-        displayName: e.name,
-        ...(e.offline && {
+        via: candidate.where === "cloud" ? "cloud" : "remote-control",
+        refKind: candidate.kind,
+        sessionId: candidate.id,
+        displayName: candidate.name,
+        ...(candidate.offline && {
           offline: true,
         }),
-        ...(e.reportsInbound && {
+        ...(candidate.reportsInbound && {
           reportsInbound: true,
         }),
-        ...(e.inboundReportUnavailable && {
+        ...(candidate.inboundReportUnavailable && {
           inboundReportUnavailable: true,
         }),
       };
@@ -1048,11 +1131,11 @@ var REMOTE_POPULATION_TIMEOUT_MS = 5000;
 /**
  * 构造“名字有歧义”的结果（候选、总数与匹配方式）。
  */
-function ambiguousMatch(e, matchedBy) {
+function ambiguousMatch(candidates, matchedBy) {
   return {
     kind: "ambiguous",
-    candidates: e.slice(0, MAX_AMBIGUOUS_CANDIDATES),
-    total: e.length,
+    candidates: candidates.slice(0, MAX_AMBIGUOUS_CANDIDATES),
+    total: candidates.length,
     matchedBy,
   };
 }
@@ -1060,44 +1143,52 @@ function ambiguousMatch(e, matchedBy) {
 /**
  * 查找改过名的会话：唯一一条记录的旧名等于目标名、socket 唯一且对应候选名唯一时，返回改名提示与候选。
  */
-function findRenamedSession(e, sessions, i, sendMessagePins) {
+function findRenamedSession(slug, sessions, index, sendMessagePins) {
   if (!isStableAddressEnabled()) return {};
   let filtered = sessions.filter(
-    (c) =>
-      isNotStableAddress(c) &&
-      c.sessionId !== undefined &&
-      c.formerNames?.some(
-        (formerName) => formerName.sessionId === c.sessionId && slugifySessionName(formerName.name) === e,
+    (session) =>
+      isNotStableAddress(session) &&
+      session.sessionId !== undefined &&
+      session.formerNames?.some(
+        (formerName) =>
+          formerName.sessionId === session.sessionId && slugifySessionName(formerName.name) === slug,
       ),
   );
   if (filtered.length !== 1) return {};
-  let a = filtered[0];
-  if (sessions.filter((c) => isNotStableAddress(c) && mayBeSamePath(c.sock, a.sock)).length !== 1) return {};
-  let found = i.candidates.find(
+  let renamedSession = filtered[0];
+  if (
+    sessions.filter(
+      (session) => isNotStableAddress(session) && mayBeSamePath(session.sock, renamedSession.sock),
+    ).length !== 1
+  )
+    return {};
+  let found = index.candidates.find(
     (candidate) =>
-      candidate.kind === "session" && candidate.sock !== undefined && isSamePath(candidate.sock, a.sock),
+      candidate.kind === "session" &&
+      candidate.sock !== undefined &&
+      isSamePath(candidate.sock, renamedSession.sock),
   );
   if (
     found === undefined ||
     parseNameWithRef(found.name) !== null ||
     isReservedSessionName(found.name) ||
-    (i.byName.get(slugifySessionName(found.name))?.length ?? 0) !== 1
+    (index.byName.get(slugifySessionName(found.name))?.length ?? 0) !== 1
   )
     return {};
-  let l = Object.hasOwn(sendMessagePins, e) ? sendMessagePins[e] : undefined;
-  if (l !== undefined && l.id !== stableSessionKey(found)) return {};
+  let pin = Object.hasOwn(sendMessagePins, slug) ? sendMessagePins[slug] : undefined;
+  if (pin !== undefined && pin.id !== stableSessionKey(found)) return {};
   return {
     renamedTo: found,
   };
 }
 //@ chunk-n0beqxxz.js:17785-17957 placement
-function notFoundWithSuggestions(e, n, i) {
-  let s = i ? n.candidates.filter(i) : n.candidates;
-  let o = uniq(s.map((r) => slugifySessionName(r.name)));
+function notFoundWithSuggestions(inputName, index, filter) {
+  let pool = filter ? index.candidates.filter(filter) : index.candidates;
+  let names = uniq(pool.map((candidate) => slugifySessionName(candidate.name)));
   return {
     kind: "not-found",
-    closest: similarNames(e, o, MAX_AMBIGUOUS_CANDIDATES).map((r) =>
-      s.find((d) => slugifySessionName(d.name) === r),
+    closest: similarNames(inputName, names, MAX_AMBIGUOUS_CANDIDATES).map((name) =>
+      pool.find((candidate) => slugifySessionName(candidate.name) === name),
     ),
   };
 }
@@ -1105,109 +1196,133 @@ function notFoundWithSuggestions(e, n, i) {
 /**
  * 按会话固定的 pin 查找候选：跳过代理类与被本地认领的远程 pin，相关来源不可用时放弃；按 id 或 socket 匹配，找不到记录 pin 失效。
  */
-function findPinnedCandidate(sendMessagePins, n, i, s, o, a = false) {
-  let r = Object.hasOwn(sendMessagePins, n) ? sendMessagePins[n] : undefined;
-  if (r === undefined) return;
-  let pinKind = getPinKind(sendMessagePins, n);
+function findPinnedCandidate(
+  sendMessagePins,
+  pinName,
+  candidates,
+  typedName,
+  listingGaps,
+  strictGaps = false,
+) {
+  let pin = Object.hasOwn(sendMessagePins, pinName) ? sendMessagePins[pinName] : undefined;
+  if (pin === undefined) return;
+  let pinKind = getPinKind(sendMessagePins, pinName);
   if (pinKind === "agent") return;
-  let l = pinKind !== "local";
-  if (l && o.localClaimedRemoteBodies.has(sessionIdBody(r.id))) return;
+  let isRemotePin = pinKind !== "local";
+  if (isRemotePin && listingGaps.localClaimedRemoteBodies.has(sessionIdBody(pin.id))) return;
   if (
-    (pinKind === "cloud" && o.cloudUnavailable) ||
-    (pinKind === "remote-control" && o.bridgeUnavailable) ||
-    (pinKind === "local" && o.localUnavailable) ||
-    (a && (o.cloudUnavailable || o.bridgeUnavailable || o.localUnavailable))
+    (pinKind === "cloud" && listingGaps.cloudUnavailable) ||
+    (pinKind === "remote-control" && listingGaps.bridgeUnavailable) ||
+    (pinKind === "local" && listingGaps.localUnavailable) ||
+    (strictGaps &&
+      (listingGaps.cloudUnavailable || listingGaps.bridgeUnavailable || listingGaps.localUnavailable))
   )
     return;
-  let filtered = i.filter(
-    (b) =>
-      (l ? b.kind === "cloud-session" || b.kind === "bridge-session" : b.kind === "session") &&
-      b.where !== "in-process",
+  let filtered = candidates.filter(
+    (candidate) =>
+      (isRemotePin
+        ? candidate.kind === "cloud-session" || candidate.kind === "bridge-session"
+        : candidate.kind === "session") && candidate.where !== "in-process",
   );
-  let u = filtered.find((b) => stableSessionKey(b) === r.id) ?? filtered.find((b) => matchesPin(r, b));
-  if (u === undefined) {
-    if (!(l && o.searchTruncated)) logFeatureSad("send_message_pin", "stale");
+  let match =
+    filtered.find((candidate) => stableSessionKey(candidate) === pin.id) ??
+    filtered.find((candidate) => matchesPin(pin, candidate));
+  if (match === undefined) {
+    if (!(isRemotePin && listingGaps.searchTruncated)) logFeatureSad("send_message_pin", "stale");
     return;
   }
-  if (s !== undefined && u.name !== s && i.some((b) => b.name === s)) return;
+  if (
+    typedName !== undefined &&
+    match.name !== typedName &&
+    candidates.some((candidate) => candidate.name === typedName)
+  )
+    return;
   logFeatureOk("send_message_pin");
-  return u;
+  return match;
 }
 //@ chunk-n0beqxxz.js:18673-19093 placement
 /**
  * 把固定的候选转换为路由：本机会话 pin id 与持有的更稳定 id 不符时标记身份冲突，附加同名兄弟数量与路由标记。
  */
-function pinnedRoute(pinnedCandidate, n, i, s, o, a) {
-  let r = candidateToRoute(pinnedCandidate, i);
-  if (r.kind !== "local-session" && r.kind !== "cloud-session") return r;
-  let d = Object.hasOwn(i.sendMessagePins, s) ? i.sendMessagePins[s] : undefined;
-  let c =
-    r.kind === "local-session" &&
-    d !== undefined &&
-    d.id !== r.pinId &&
-    d.sock !== undefined &&
-    isSamePath(d.sock, r.sock) &&
-    isStableSessionAddress(d.id) &&
-    !isStableSessionAddress(r.pinId)
+function pinnedRoute(pinnedCandidate, candidates, toolContext, slug, index, listingGaps) {
+  let route = candidateToRoute(pinnedCandidate, toolContext);
+  if (route.kind !== "local-session" && route.kind !== "cloud-session") return route;
+  let pin = Object.hasOwn(toolContext.sendMessagePins, slug) ? toolContext.sendMessagePins[slug] : undefined;
+  let effectiveRoute =
+    route.kind === "local-session" &&
+    pin !== undefined &&
+    pin.id !== route.pinId &&
+    pin.sock !== undefined &&
+    isSamePath(pin.sock, route.sock) &&
+    isStableSessionAddress(pin.id) &&
+    !isStableSessionAddress(route.pinId)
       ? {
-          ...r,
-          pinId: d.id,
+          ...route,
+          pinId: pin.id,
           identityContested: true,
         }
-      : r;
+      : route;
   return {
-    ...c,
-    ...(n.length > 1 && {
-      sameNamedSiblings: n.length - 1,
+    ...effectiveRoute,
+    ...(candidates.length > 1 && {
+      sameNamedSiblings: candidates.length - 1,
     }),
-    ...describeRouteFlags(c, s, o, a, i.sendMessagePins),
+    ...describeRouteFlags(effectiveRoute, slug, index, listingGaps, toolContext.sendMessagePins),
   };
 }
 //@ chunk-n0beqxxz.js:19093-19293 placement
-function getMirroredSockets(sessions, n, i) {
-  let s = new Set([
-    ...n.sessions.map((session) => sessionIdBody(session.id)),
-    ...(i ?? []).map((o) => sessionIdBody(o.id)),
+function getMirroredSockets(sessions, cloudListing, rows) {
+  let remoteBodies = new Set([
+    ...cloudListing.sessions.map((session) => sessionIdBody(session.id)),
+    ...(rows ?? []).map((row) => sessionIdBody(row.id)),
   ]);
   return new Set(
-    sessions.flatMap((o) =>
-      o.bridgeSessionId !== undefined && s.has(sessionIdBody(o.bridgeSessionId)) ? [o.sock] : [],
+    sessions.flatMap((session) =>
+      session.bridgeSessionId !== undefined && remoteBodies.has(sessionIdBody(session.bridgeSessionId))
+        ? [session.sock]
+        : [],
     ),
   );
 }
 //@ chunk-n0beqxxz.js:19293-19512 placement
-function matchesPin(e, n) {
-  if (stableSessionKey(n) === e.id) return true;
-  if (e.sock === undefined || n.kind !== "session" || n.sock === undefined || !isSamePath(n.sock, e.sock))
+function matchesPin(pin, candidate) {
+  if (stableSessionKey(candidate) === pin.id) return true;
+  if (
+    pin.sock === undefined ||
+    candidate.kind !== "session" ||
+    candidate.sock === undefined ||
+    !isSamePath(candidate.sock, pin.sock)
+  )
     return false;
   return (
-    !isStableSessionAddress(e.id) ||
-    (n.stableId === undefined && (n.claimedSessionIds ?? []).some((i) => stableSessionAddress(i) === e.id))
+    !isStableSessionAddress(pin.id) ||
+    (candidate.stableId === undefined &&
+      (candidate.claimedSessionIds ?? []).some((claimedId) => stableSessionAddress(claimedId) === pin.id))
   );
 }
 //@ chunk-n0beqxxz.js:19512-19949 placement
 /**
  * 生成路由附加标记：自固定后已重启、也在远程列表中、同名远程会话被本地认领、搜索被截断。
  */
-function describeRouteFlags(e, n, i, s, sendMessagePins) {
-  let a = Object.hasOwn(sendMessagePins, n) ? sendMessagePins[n] : undefined;
+function describeRouteFlags(route, slug, index, listingGaps, sendMessagePins) {
+  let pin = Object.hasOwn(sendMessagePins, slug) ? sendMessagePins[slug] : undefined;
   return {
-    ...(e.kind === "local-session" &&
-      a?.sock !== undefined &&
-      a.id === e.pinId &&
-      !isSamePath(a.sock, e.sock) && {
+    ...(route.kind === "local-session" &&
+      pin?.sock !== undefined &&
+      pin.id === route.pinId &&
+      !isSamePath(pin.sock, route.sock) && {
         restartedSincePin: true,
       }),
-    ...(e.kind === "local-session" &&
-      s.socksMirroredRemotely.has(e.sock) && {
+    ...(route.kind === "local-session" &&
+      listingGaps.socksMirroredRemotely.has(route.sock) && {
         alsoListedRemotely: true,
       }),
-    ...([...(i.remoteNamesClaimedLocally.get(n) ?? [])].some(
-      (r) => e.kind !== "local-session" || r !== e.sock,
+    ...([...(index.remoteNamesClaimedLocally.get(slug) ?? [])].some(
+      (sock) => route.kind !== "local-session" || sock !== route.sock,
     ) && {
       remoteNamesakeClaimedLocally: true,
     }),
-    ...(s.searchTruncated && {
+    ...(listingGaps.searchTruncated && {
       searchTruncated: true,
     }),
   };

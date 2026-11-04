@@ -8,11 +8,21 @@
  * pieces: chunk-18hwfzwa.js (12), chunk-azz22fvc.js (1), chunk-hantmvxa.js (1)
  * attribution: placement 2, fingerprint 10, layout 1, callgraph-fingerprint 1
  */
-import { init_react_production, y, R, Kc, Q } from "../../../vendor/react/cjs/react.production.js";
+import { plural } from "../../utils/stringUtils.js";
+import { isFilePersistenceEnabled } from "../../utils/filePersistence/filePersistence.js";
+import { filesPlacedByNameRead } from "../../bootstrap/state.js";
+import { hasConflictingPlacedFile } from "../../utils/filePersistence/taskFileLookup.js";
+import {
+  init_react_production,
+  useState,
+  useRef,
+  fragmentTypeExport,
+  useMemo,
+} from "../../../vendor/react/cjs/react.production.js";
 import { EXITPLANMODE_2 } from "../../tools/ExitPlanModeTool/constants.js";
 import { ASKUSERQUESTION } from "../../tools/AskUserQuestionTool/prompt.js";
 import { truncateToWidth } from "../../utils/format.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { useElapsedTicker } from "../ConfirmationPrompt.js";
 import { remoteSessionLogFor } from "../../tasks/RemoteAgentTask/RemoteAgentTask.js";
 import { remoteSessionUrl } from "../../utils/background/remote/remoteSession.js";
@@ -21,11 +31,10 @@ import {
   jsxProd_default_2,
 } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Dialog } from "../design-system/Dialog.js";
-import { FILLED_DIAMOND_GLYPH, DIAMOND_GLYPH } from "../../utils/permissions/autoModeRulesPrompt.js";
+import { FILLED_DIAMOND_GLYPH, DIAMOND_GLYPH } from "../../constants/figures.js";
 import { Text, Box, Link } from "../../ink/components/Text.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { figures_default } from "../../../vendor/@inquirer/figures/dist/esm/index.js";
-import { plural } from "../../utils/stringUtils.js";
 import { openValidatedUrlSucceeded } from "../../utils/browser.js";
 import { ModelSelector } from "../agents/ModelSelector.js";
 import { ConfirmSelect } from "../design-system/ConfirmSelect.js";
@@ -40,37 +49,53 @@ import { errorMessage } from "../../utils/errors.js";
 import { FocusColumn } from "../design-system/FocusColumn.js";
 import { TranscriptModeProvider } from "../messages/transcriptModeContext.js";
 import { agentProgressSelector } from "../../tools/AgentTool/UI.js";
-import { isFilePersistenceEnabled } from "../../utils/filePersistence/filePersistence.js";
-import { filesPlacedByNameRead } from "../../bootstrap/state.js";
-import { hasConflictingPlacedFile } from "../../utils/filePersistence/taskFileLookup.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
+//@ chunk-hantmvxa.js:57940-58017 fingerprint = STAGES (0.317)
+function STAGES(maxFindings) {
+  return maxFindings === "all" ? "all findings" : `\u2264${maxFindings} ${plural(maxFindings, "finding")}`;
+}
+//@ chunk-azz22fvc.js:1568-1635 fingerprint = AGENT_VERB (0.384)
+function AGENT_VERB(agentId) {
+  return (
+    agentId.length > 0 &&
+    isFilePersistenceEnabled() &&
+    (filesPlacedByNameRead() !== "done" || hasConflictingPlacedFile(agentId))
+  );
+}
 //@ chunk-18hwfzwa.js:708595-708599 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:708595", () => {
+  init_react_production();
+});
 //@ chunk-18hwfzwa.js:708599-708603 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:708599", () => {
+  init_react_production();
+});
 //@ chunk-18hwfzwa.js:708603-709181 fingerprint = formatToolUseSummary (0.898)
-function formatToolUseSummary(name, input, D) {
+function formatToolUseSummary(name, input, maxWidth) {
   if (name === EXITPLANMODE_2) return "Review the plan in your browser";
   if (!input || typeof input !== "object") return name;
   if (name === ASKUSERQUESTION && "questions" in input) {
     let qs = input.questions;
     if (Array.isArray(qs) && qs[0] && typeof qs[0] === "object") {
-      let ee =
+      let questionText =
         "question" in qs[0] && typeof qs[0].question === "string" && qs[0].question
           ? qs[0].question
           : "header" in qs[0] && typeof qs[0].header === "string"
             ? qs[0].header
             : null;
-      if (ee) {
-        let oneLine = ee.replace(/\s+/g, " ").trim();
-        return `Answer in browser: ${truncateToWidth(oneLine, D - 10)}`;
+      if (questionText) {
+        let oneLine = questionText.replace(/\s+/g, " ").trim();
+        return `Answer in browser: ${truncateToWidth(oneLine, maxWidth - 10)}`;
       }
     }
   }
   for (let v of Object.values(input))
     if (typeof v === "string" && v.trim()) {
       let oneLine = v.replace(/\s+/g, " ").trim();
-      return `${name} ${truncateToWidth(oneLine, D)}`;
+      return `${name} ${truncateToWidth(oneLine, maxWidth)}`;
     }
   return name;
 }
@@ -85,25 +110,25 @@ var ULTRAPLAN_STATUS_SHORT = {
 };
 //@ chunk-18hwfzwa.js:709285-713110 fingerprint = UltraplanSessionDetail (0.62)
 function UltraplanSessionDetail(props) {
-  let $ = w(74);
+  let $ = useMemoCache(74);
   let { session, onDone, onBack, onKill } = props;
   let running = session.status === "running" || session.status === "pending";
   let phase = session.ultraplanPhase;
   let statusText = running ? (phase ? ULTRAPLAN_STATUS_LABELS[phase] : "running") : session.status;
   let elapsedTime = useElapsedTicker(session.startTime, running, 1000, 0, session.endTime);
-  let We = remoteSessionLogFor(session.id);
-  let agentsWorking = 1 + (We?.agentSpawnCount ?? 0);
-  let toolCalls = We?.toolCallCount ?? 0;
-  let lastToolCall = We?.lastToolUse
-    ? formatToolUseSummary(We.lastToolUse.name, We.lastToolUse.input, 60)
+  let sessionLog = remoteSessionLogFor(session.id);
+  let agentsWorking = 1 + (sessionLog?.agentSpawnCount ?? 0);
+  let toolCalls = sessionLog?.toolCallCount ?? 0;
+  let lastToolCall = sessionLog?.lastToolUse
+    ? formatToolUseSummary(sessionLog.lastToolUse.name, sessionLog.lastToolUse.input, 60)
     : null;
-  let At;
+  let sessionUrl;
   if ($[0] !== session.sessionId) {
-    At = remoteSessionUrl(session.sessionId);
+    sessionUrl = remoteSessionUrl(session.sessionId);
     $[0] = session.sessionId;
-    $[1] = At;
-  } else At = $[1];
-  let sessionUrl = At;
+    $[1] = sessionUrl;
+  } else sessionUrl = $[1];
+  let sessionUrl_2 = sessionUrl;
   let t5;
   if ($[2] !== onBack || $[3] !== onDone) {
     t5 =
@@ -117,7 +142,7 @@ function UltraplanSessionDetail(props) {
     $[4] = t5;
   } else t5 = $[4];
   let goBackOrClose = t5;
-  let [confirmingStop, setConfirmingStop] = y(false);
+  let [confirmingStop, setConfirmingStop] = useState(false);
   if (confirmingStop) {
     const discardsPlan = phase === "plan_ready";
     let onStop;
@@ -136,9 +161,9 @@ function UltraplanSessionDetail(props) {
       $[8] = setConfirmingStop;
       $[9] = onBack;
     } else onBack = $[9];
-    let so;
+    let confirmElement;
     if ($[10] !== discardsPlan || $[11] !== onStop || $[12] !== onBack) {
-      so = jsxProd_default(StopUltraplanConfirm, {
+      confirmElement = jsxProd_default(StopUltraplanConfirm, {
         discardsPlan,
         backFirst: false,
         onStop,
@@ -147,19 +172,19 @@ function UltraplanSessionDetail(props) {
       $[10] = discardsPlan;
       $[11] = onStop;
       $[12] = onBack;
-      $[13] = so;
-    } else so = $[13];
-    return so;
+      $[13] = confirmElement;
+    } else confirmElement = $[13];
+    return confirmElement;
   }
-  const po = Dialog;
-  const oo = phase === "plan_ready" ? FILLED_DIAMOND_GLYPH : DIAMOND_GLYPH;
+  const DialogComponent = Dialog;
+  const phaseGlyph = phase === "plan_ready" ? FILLED_DIAMOND_GLYPH : DIAMOND_GLYPH;
   let t7;
-  if ($[14] !== oo) {
+  if ($[14] !== phaseGlyph) {
     t7 = jsxProd_default_2(Text, {
       color: "background",
-      children: [oo, " "],
+      children: [phaseGlyph, " "],
     });
-    $[14] = oo;
+    $[14] = phaseGlyph;
     $[15] = t7;
   } else t7 = $[15];
   let t8;
@@ -190,10 +215,10 @@ function UltraplanSessionDetail(props) {
     $[22] = title;
   } else title = $[22];
   const color = "background";
-  const bo = Box;
+  const BoxComponent = Box;
   const flexDirection = "column";
   const gap = 1;
-  const Ro = Text;
+  const TextComponent = Text;
   let t11;
   if ($[23] !== phase) {
     t11 =
@@ -205,38 +230,50 @@ function UltraplanSessionDetail(props) {
     $[23] = phase;
     $[24] = t11;
   } else t11 = $[24];
-  const Io = " ";
+  const spaceAfterAgentCount = " ";
   let t12;
   if ($[25] !== agentsWorking) {
     t12 = plural(agentsWorking, "agent");
     $[25] = agentsWorking;
     $[26] = t12;
   } else t12 = $[26];
-  const mn = " ";
-  const Cn = phase ? ULTRAPLAN_STATUS_SHORT[phase] : "working";
-  const No = " \xB7 ";
-  const vo = " tool";
-  const Yo = " ";
-  const kn = plural(toolCalls, "call");
+  const spaceBeforePhase = " ";
+  const phaseLabel = phase ? ULTRAPLAN_STATUS_SHORT[phase] : "working";
+  const toolCountSeparator = " \xB7 ";
+  const toolSuffix = " tool";
+  const spaceAfterToolCount = " ";
+  const toolCallCountLabel = plural(toolCalls, "call");
   let t15;
   if (
-    $[27] !== Ro ||
+    $[27] !== TextComponent ||
     $[28] !== agentsWorking ||
     $[29] !== t11 ||
     $[30] !== t12 ||
-    $[31] !== Cn ||
-    $[32] !== kn ||
+    $[31] !== phaseLabel ||
+    $[32] !== toolCallCountLabel ||
     $[33] !== toolCalls
   ) {
-    t15 = jsxProd_default_2(Ro, {
-      children: [t11, agentsWorking, Io, t12, mn, Cn, No, toolCalls, vo, Yo, kn],
+    t15 = jsxProd_default_2(TextComponent, {
+      children: [
+        t11,
+        agentsWorking,
+        spaceAfterAgentCount,
+        t12,
+        spaceBeforePhase,
+        phaseLabel,
+        toolCountSeparator,
+        toolCalls,
+        toolSuffix,
+        spaceAfterToolCount,
+        toolCallCountLabel,
+      ],
     });
-    $[27] = Ro;
+    $[27] = TextComponent;
     $[28] = agentsWorking;
     $[29] = t11;
     $[30] = t12;
-    $[31] = Cn;
-    $[32] = kn;
+    $[31] = phaseLabel;
+    $[32] = toolCallCountLabel;
     $[33] = toolCalls;
     $[34] = t15;
   } else t15 = $[34];
@@ -252,21 +289,21 @@ function UltraplanSessionDetail(props) {
     $[36] = t16;
   } else t16 = $[36];
   let children;
-  if ($[37] !== sessionUrl) {
+  if ($[37] !== sessionUrl_2) {
     children = jsxProd_default(Text, {
       dimColor: true,
-      children: sessionUrl,
+      children: sessionUrl_2,
     });
-    $[37] = sessionUrl;
+    $[37] = sessionUrl_2;
     $[38] = children;
   } else children = $[38];
   let t18;
-  if ($[39] !== sessionUrl || $[40] !== children) {
+  if ($[39] !== sessionUrl_2 || $[40] !== children) {
     t18 = jsxProd_default(Link, {
-      url: sessionUrl,
+      url: sessionUrl_2,
       children,
     });
-    $[39] = sessionUrl;
+    $[39] = sessionUrl_2;
     $[40] = children;
     $[41] = t18;
   } else t18 = $[41];
@@ -276,28 +313,28 @@ function UltraplanSessionDetail(props) {
       : phase === "needs_input"
         ? "Answer in browser"
         : "Open in browser";
-  let Xo;
+  let openOptionDescription;
   if ($[42] !== phase) {
-    Xo = phase === "plan_ready" && {
+    openOptionDescription = phase === "plan_ready" && {
       description: "Approve, edit, or comment on the plan",
     };
     $[42] = phase;
-    $[43] = Xo;
-  } else Xo = $[43];
-  let Sn;
-  if ($[44] !== label || $[45] !== Xo) {
-    Sn = {
+    $[43] = openOptionDescription;
+  } else openOptionDescription = $[43];
+  let openOption;
+  if ($[44] !== label || $[45] !== openOptionDescription) {
+    openOption = {
       label,
       value: "open",
-      ...Xo,
+      ...openOptionDescription,
     };
     $[44] = label;
-    $[45] = Xo;
-    $[46] = Sn;
-  } else Sn = $[46];
-  let $n;
+    $[45] = openOptionDescription;
+    $[46] = openOption;
+  } else openOption = $[46];
+  let stopOptions;
   if ($[47] !== onKill || $[48] !== phase || $[49] !== running) {
-    $n =
+    stopOptions =
       onKill && running
         ? [
             {
@@ -312,8 +349,8 @@ function UltraplanSessionDetail(props) {
     $[47] = onKill;
     $[48] = phase;
     $[49] = running;
-    $[50] = $n;
-  } else $n = $[50];
+    $[50] = stopOptions;
+  } else stopOptions = $[50];
   let t21;
   if ($[51] === MEMO_CACHE_SENTINEL) {
     t21 = {
@@ -323,18 +360,18 @@ function UltraplanSessionDetail(props) {
     $[51] = t21;
   } else t21 = $[51];
   let options;
-  if ($[52] !== Sn || $[53] !== $n) {
-    options = [Sn, ...$n, t21];
-    $[52] = Sn;
-    $[53] = $n;
+  if ($[52] !== openOption || $[53] !== stopOptions) {
+    options = [openOption, ...stopOptions, t21];
+    $[52] = openOption;
+    $[53] = stopOptions;
     $[54] = options;
   } else options = $[54];
   let onChange;
-  if ($[55] !== goBackOrClose || $[56] !== onDone || $[57] !== sessionUrl || $[58] !== setConfirmingStop) {
+  if ($[55] !== goBackOrClose || $[56] !== onDone || $[57] !== sessionUrl_2 || $[58] !== setConfirmingStop) {
     onChange = (v_0) => {
       switch (v_0) {
         case "open": {
-          openValidatedUrlSucceeded(sessionUrl);
+          openValidatedUrlSucceeded(sessionUrl_2);
           onDone();
           return;
         }
@@ -350,7 +387,7 @@ function UltraplanSessionDetail(props) {
     };
     $[55] = goBackOrClose;
     $[56] = onDone;
-    $[57] = sessionUrl;
+    $[57] = sessionUrl_2;
     $[58] = setConfirmingStop;
     $[59] = onChange;
   } else onChange = $[59];
@@ -365,13 +402,13 @@ function UltraplanSessionDetail(props) {
     $[62] = t24;
   } else t24 = $[62];
   let children_2;
-  if ($[63] !== bo || $[64] !== t15 || $[65] !== t16 || $[66] !== t18 || $[67] !== t24) {
-    children_2 = jsxProd_default_2(bo, {
+  if ($[63] !== BoxComponent || $[64] !== t15 || $[65] !== t16 || $[66] !== t18 || $[67] !== t24) {
+    children_2 = jsxProd_default_2(BoxComponent, {
       flexDirection,
       gap,
       children: [t15, t16, t18, t24],
     });
-    $[63] = bo;
+    $[63] = BoxComponent;
     $[64] = t15;
     $[65] = t16;
     $[66] = t18;
@@ -379,14 +416,14 @@ function UltraplanSessionDetail(props) {
     $[68] = children_2;
   } else children_2 = $[68];
   let t26;
-  if ($[69] !== po || $[70] !== goBackOrClose || $[71] !== children_2 || $[72] !== title) {
-    t26 = jsxProd_default(po, {
+  if ($[69] !== DialogComponent || $[70] !== goBackOrClose || $[71] !== children_2 || $[72] !== title) {
+    t26 = jsxProd_default(DialogComponent, {
       title,
       onCancel: goBackOrClose,
       color,
       children: children_2,
     });
-    $[69] = po;
+    $[69] = DialogComponent;
     $[70] = goBackOrClose;
     $[71] = children_2;
     $[72] = title;
@@ -399,39 +436,39 @@ function UltraplanSessionDetail(props) {
  * "停止 ultraplan？"确认对话框：终止云会话（可选同时丢弃计划），防止重复触发。
  */
 function StopUltraplanConfirm(props) {
-  let $ = w(15);
+  let $ = useMemoCache(15);
   let { discardsPlan, backFirst, onStop, onBack } = props;
-  let ke = R(false);
-  let Be;
+  let hasAnsweredRef = useRef(false);
+  let answerOnce;
   if ($[0] === MEMO_CACHE_SENTINEL) {
-    Be = (He) => {
-      if (!ke.current) {
-        ke.current = true;
-        He();
+    answerOnce = (callback) => {
+      if (!hasAnsweredRef.current) {
+        hasAnsweredRef.current = true;
+        callback();
       }
     };
-    $[0] = Be;
-  } else Be = $[0];
-  let We = Be;
-  let ze;
+    $[0] = answerOnce;
+  } else answerOnce = $[0];
+  let answerOnce_ = answerOnce;
+  let noticeText;
   if ($[1] === MEMO_CACHE_SENTINEL) {
-    ze = jsxProd_default(Text, {
+    noticeText = jsxProd_default(Text, {
       dimColor: true,
       children: "This will terminate the cloud session.",
     });
-    $[1] = ze;
-  } else ze = $[1];
+    $[1] = noticeText;
+  } else noticeText = $[1];
   const confirmLabel = discardsPlan ? "Terminate session and discard plan" : "Terminate session";
   const focus = backFirst ? "cancel" : "confirm";
   let onConfirm;
   if ($[2] !== onStop) {
-    onConfirm = () => We(onStop);
+    onConfirm = () => answerOnce_(onStop);
     $[2] = onStop;
     $[3] = onConfirm;
   } else onConfirm = $[3];
   let onCancel;
   if ($[4] !== onBack) {
-    onCancel = () => We(onBack);
+    onCancel = () => answerOnce_(onBack);
     $[4] = onBack;
     $[5] = onCancel;
   } else onCancel = $[5];
@@ -447,7 +484,7 @@ function StopUltraplanConfirm(props) {
       flexDirection: "column",
       gap: 1,
       children: [
-        ze,
+        noticeText,
         jsxProd_default(ConfirmSelect, {
           confirmLabel,
           cancelLabel: "Back",
@@ -466,9 +503,9 @@ function StopUltraplanConfirm(props) {
     $[10] = onCancel;
     $[11] = children;
   } else children = $[11];
-  let Ot;
+  let dialogElement;
   if ($[12] !== onBack || $[13] !== children) {
-    Ot = jsxProd_default(Dialog, {
+    dialogElement = jsxProd_default(Dialog, {
       title: "Stop ultraplan?",
       onCancel: onBack,
       color: "background",
@@ -476,9 +513,9 @@ function StopUltraplanConfirm(props) {
     });
     $[12] = onBack;
     $[13] = children;
-    $[14] = Ot;
-  } else Ot = $[14];
-  return Ot;
+    $[14] = dialogElement;
+  } else dialogElement = $[14];
+  return dialogElement;
 }
 //@ chunk-18hwfzwa.js:714091-714198 fingerprint = STAGE_LABELS (0.772)
 var REVIEW_STAGES = ["finding", "verifying", "synthesizing"];
@@ -489,7 +526,7 @@ var REVIEW_STAGE_LABELS = {
 };
 //@ chunk-18hwfzwa.js:714198-715118 fingerprint = StagePipeline (0.627)
 function StagePipeline(props) {
-  let $ = w(15);
+  let $ = useMemoCache(15);
   let { stage, completed, hasProgress } = props;
   let t1;
   if ($[0] !== stage) {
@@ -523,10 +560,10 @@ function StagePipeline(props) {
   } else t3 = $[4];
   let t4;
   if ($[5] !== completed || $[6] !== currentIdx || $[7] !== inSetup) {
-    t4 = REVIEW_STAGES.map((Xe, i) => {
+    t4 = REVIEW_STAGES.map((stage, i) => {
       let isCurrent = !completed && !inSetup && i === currentIdx;
       return jsxProd_default_2(
-        Kc,
+        fragmentTypeExport,
         {
           children: [
             i > 0 &&
@@ -537,15 +574,15 @@ function StagePipeline(props) {
             isCurrent
               ? jsxProd_default(Text, {
                   color: "background",
-                  children: REVIEW_STAGE_LABELS[Xe],
+                  children: REVIEW_STAGE_LABELS[stage],
                 })
               : jsxProd_default(Text, {
                   dimColor: true,
-                  children: REVIEW_STAGE_LABELS[Xe],
+                  children: REVIEW_STAGE_LABELS[stage],
                 }),
           ],
         },
-        Xe,
+        stage,
       );
     });
     $[5] = completed;
@@ -598,24 +635,24 @@ function reviewCountsLine(session) {
  * "停止 ultrareview？"确认对话框：归档云会话、停止本地跟踪并丢弃已有发现。
  */
 function StopUltrareviewConfirm(exitState) {
-  let $ = w(10);
+  let $ = useMemoCache(10);
   let { onStop, onBack } = exitState;
-  let L = R(false);
-  let ke;
+  let hasAnsweredRef = useRef(false);
+  let handleAnswer;
   if ($[0] !== onBack || $[1] !== onStop) {
-    ke = (Re) => {
-      if (L.current) {
+    handleAnswer = (answer) => {
+      if (hasAnsweredRef.current) {
         return;
       }
-      L.current = true;
-      if (Re === "stop") onStop();
+      hasAnsweredRef.current = true;
+      if (answer === "stop") onStop();
       else onBack();
     };
     $[0] = onBack;
     $[1] = onStop;
-    $[2] = ke;
-  } else ke = $[2];
-  let Be = ke;
+    $[2] = handleAnswer;
+  } else handleAnswer = $[2];
+  let answerOnce = handleAnswer;
   let inputGuide;
   if ($[3] === MEMO_CACHE_SENTINEL) {
     inputGuide = jsxProd_default_2(Byline, {
@@ -632,39 +669,39 @@ function StopUltrareviewConfirm(exitState) {
     });
     $[3] = inputGuide;
   } else inputGuide = $[3];
-  let We;
+  let noticeText;
   if ($[4] === MEMO_CACHE_SENTINEL) {
-    We = jsxProd_default(Text, {
+    noticeText = jsxProd_default(Text, {
       dimColor: true,
       children:
         "This archives the cloud session and stops local tracking. The review will not complete and any findings so far are discarded.",
     });
-    $[4] = We;
-  } else We = $[4];
+    $[4] = noticeText;
+  } else noticeText = $[4];
   let children;
-  if ($[5] !== Be) {
+  if ($[5] !== answerOnce) {
     children = jsxProd_default_2(Box, {
       flexDirection: "column",
       gap: 1,
       children: [
-        We,
+        noticeText,
         jsxProd_default(ConfirmSelect, {
           confirmLabel: "Stop ultrareview",
           cancelLabel: "Back",
           cancelFirst: true,
           focus: "cancel",
           hideIndexes: true,
-          onConfirm: () => Be("stop"),
-          onCancel: () => Be("back"),
+          onConfirm: () => answerOnce("stop"),
+          onCancel: () => answerOnce("back"),
         }),
       ],
     });
-    $[5] = Be;
+    $[5] = answerOnce;
     $[6] = children;
   } else children = $[6];
-  let Xe;
+  let dialogElement;
   if ($[7] !== onBack || $[8] !== children) {
-    Xe = jsxProd_default(Dialog, {
+    dialogElement = jsxProd_default(Dialog, {
       title: "Stop ultrareview?",
       onCancel: onBack,
       color: "background",
@@ -673,17 +710,17 @@ function StopUltrareviewConfirm(exitState) {
     });
     $[7] = onBack;
     $[8] = children;
-    $[9] = Xe;
-  } else Xe = $[9];
-  return Xe;
+    $[9] = dialogElement;
+  } else dialogElement = $[9];
+  return dialogElement;
 }
 //@ chunk-18hwfzwa.js:716385-719172 fingerprint = ReviewSessionDetail (0.743)
 function ReviewSessionDetail(props) {
-  let $ = w(50);
+  let $ = useMemoCache(50);
   let { session, onDone, onBack, onKill } = props;
   let completed = session.status === "completed";
   let running = session.status === "running" || session.status === "pending";
-  let [confirmingStop, setConfirmingStop] = y(false);
+  let [confirmingStop, setConfirmingStop] = useState(false);
   let elapsedTime = useElapsedTicker(session.startTime, running, 1000, 0, session.endTime);
   let t1;
   if ($[0] !== onDone) {
@@ -696,7 +733,7 @@ function ReviewSessionDetail(props) {
   } else t1 = $[1];
   let handleClose = t1;
   let goBackOrClose = onBack ?? handleClose;
-  let At = completed ? "ready" : running ? "running" : session.status;
+  let statusLabel = completed ? "ready" : running ? "running" : session.status;
   if (confirmingStop) {
     let onStop;
     if ($[2] !== goBackOrClose || $[3] !== onKill) {
@@ -713,20 +750,20 @@ function ReviewSessionDetail(props) {
       onBack = () => setConfirmingStop(false);
       $[5] = onBack;
     } else onBack = $[5];
-    let Et;
+    let confirmElement;
     if ($[6] !== onStop) {
-      Et = jsxProd_default(StopUltrareviewConfirm, {
+      confirmElement = jsxProd_default(StopUltrareviewConfirm, {
         onStop,
         onBack,
       });
       $[6] = onStop;
-      $[7] = Et;
-    } else Et = $[7];
-    return Et;
+      $[7] = confirmElement;
+    } else confirmElement = $[7];
+    return confirmElement;
   }
-  let It;
+  let options;
   if ($[8] !== completed || $[9] !== onKill || $[10] !== running) {
-    It = completed
+    options = completed
       ? [
           {
             label: "Dismiss",
@@ -750,12 +787,12 @@ function ReviewSessionDetail(props) {
     $[8] = completed;
     $[9] = onKill;
     $[10] = running;
-    $[11] = It;
-  } else It = $[11];
-  let options = It;
-  let Ot;
+    $[11] = options;
+  } else options = $[11];
+  let options_2 = options;
+  let handleChange;
   if ($[12] !== goBackOrClose || $[13] !== handleClose) {
-    Ot = (action) => {
+    handleChange = (action) => {
       oo: switch (action) {
         case "stop": {
           setConfirmingStop(true);
@@ -772,9 +809,9 @@ function ReviewSessionDetail(props) {
     };
     $[12] = goBackOrClose;
     $[13] = handleClose;
-    $[14] = Ot;
-  } else Ot = $[14];
-  let onChange = Ot;
+    $[14] = handleChange;
+  } else handleChange = $[14];
+  let onChange = handleChange;
   const t5 = completed ? FILLED_DIAMOND_GLYPH : DIAMOND_GLYPH;
   let t6;
   if ($[15] !== t5) {
@@ -794,13 +831,13 @@ function ReviewSessionDetail(props) {
     $[17] = t7;
   } else t7 = $[17];
   let t8;
-  if ($[18] !== elapsedTime || $[19] !== At) {
+  if ($[18] !== elapsedTime || $[19] !== statusLabel) {
     t8 = jsxProd_default_2(Text, {
       dimColor: true,
-      children: [" \xB7 ", elapsedTime, " \xB7 ", At],
+      children: [" \xB7 ", elapsedTime, " \xB7 ", statusLabel],
     });
     $[18] = elapsedTime;
-    $[19] = At;
+    $[19] = statusLabel;
     $[20] = t8;
   } else t8 = $[20];
   let title;
@@ -856,37 +893,37 @@ function ReviewSessionDetail(props) {
     $[31] = children;
     $[32] = t14;
   } else t14 = $[32];
-  let Io;
+  let doneNote;
   if ($[33] !== completed) {
-    Io =
+    doneNote =
       completed &&
       jsxProd_default(Text, {
         dimColor: true,
         children: "The full review is in this session.",
       });
     $[33] = completed;
-    $[34] = Io;
-  } else Io = $[34];
+    $[34] = doneNote;
+  } else doneNote = $[34];
   let t17;
-  if ($[35] !== t14 || $[36] !== Io) {
+  if ($[35] !== t14 || $[36] !== doneNote) {
     t17 = jsxProd_default_2(Box, {
       flexDirection: "column",
-      children: [t14, Io],
+      children: [t14, doneNote],
     });
     $[35] = t14;
-    $[36] = Io;
+    $[36] = doneNote;
     $[37] = t17;
   } else t17 = $[37];
   const defaultFocusValue = completed ? "dismiss" : "back";
   let t18;
-  if ($[38] !== onChange || $[39] !== options || $[40] !== defaultFocusValue) {
+  if ($[38] !== onChange || $[39] !== options_2 || $[40] !== defaultFocusValue) {
     t18 = jsxProd_default(ModelSelector, {
-      options,
+      options: options_2,
       defaultFocusValue,
       onChange,
     });
     $[38] = onChange;
-    $[39] = options;
+    $[39] = options_2;
     $[40] = defaultFocusValue;
     $[41] = t18;
   } else t18 = $[41];
@@ -923,18 +960,18 @@ function ReviewSessionDetail(props) {
  * 云会话详情：ultraplan 显示阶段与计划审阅（在浏览器中查看），ultrareview 显示发现/验证计数，可终止或归档会话。
  */
 function RemoteSessionDetailDialog({ session, tools, commands, verbose, onDone, onBack, onKill }) {
-  let [isTeleporting, setIsTeleporting] = y(false);
-  let [teleportError, setTeleportError] = y(null);
-  let Xe = remoteSessionLogFor(session.id);
-  let tail = Xe?.tail;
-  let lastMessages = Q(() => {
+  let [isTeleporting, setIsTeleporting] = useState(false);
+  let [teleportError, setTeleportError] = useState(null);
+  let sessionLog = remoteSessionLogFor(session.id);
+  let tail = sessionLog?.tail;
+  let lastMessages = useMemo(() => {
     if (session.isUltraplan || session.isRemoteReview || !tail) return [];
     return normalizeMessages(toInternalMessages(tail))
-      .filter((Xt) => Xt.type !== "progress")
+      .filter((message) => message.type !== "progress")
       .slice(-3);
   }, [session.isUltraplan, session.isRemoteReview, tail]);
-  let At = session.status === "running" || session.status === "pending";
-  let elapsedTicker = useElapsedTicker(session.startTime, At, 1000, 0, session.endTime);
+  let isRunning = session.status === "running" || session.status === "pending";
+  let elapsedTicker = useElapsedTicker(session.startTime, isRunning, 1000, 0, session.endTime);
   if (session.isUltraplan)
     return jsxProd_default(UltraplanSessionDetail, {
       session,
@@ -1088,8 +1125,8 @@ function RemoteSessionDetailDialog({ session, tools, commands, verbose, onDone, 
             }),
           ],
         }),
-        Xe !== undefined &&
-          Xe.eventCount > 0 &&
+        sessionLog !== undefined &&
+          sessionLog.eventCount > 0 &&
           jsxProd_default_2(Box, {
             flexDirection: "column",
             marginTop: 1,
@@ -1136,7 +1173,14 @@ function RemoteSessionDetailDialog({ session, tools, commands, verbose, onDone, 
                 children: jsxProd_default_2(Text, {
                   dimColor: true,
                   italic: true,
-                  children: ["Showing last ", lastMessages.length, " of ", Xe.eventCount, " ", "messages"],
+                  children: [
+                    "Showing last ",
+                    lastMessages.length,
+                    " of ",
+                    sessionLog.eventCount,
+                    " ",
+                    "messages",
+                  ],
                 }),
               }),
             ],
@@ -1157,17 +1201,5 @@ function RemoteSessionDetailDialog({ session, tools, commands, verbose, onDone, 
       ],
     }),
   });
-}
-//@ chunk-azz22fvc.js:1568-1635 fingerprint = AGENT_VERB (0.384)
-function AGENT_VERB(e) {
-  return (
-    e.length > 0 &&
-    isFilePersistenceEnabled() &&
-    (filesPlacedByNameRead() !== "done" || hasConflictingPlacedFile(e))
-  );
-}
-//@ chunk-hantmvxa.js:57940-58017 fingerprint = STAGES (0.317)
-function STAGES(e) {
-  return e === "all" ? "all findings" : `\u2264${e} ${plural(e, "finding")}`;
 }
 export { StopUltrareviewConfirm, RemoteSessionDetailDialog, STAGES, AGENT_VERB };

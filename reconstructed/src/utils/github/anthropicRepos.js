@@ -9,19 +9,24 @@
  * attribution: placement 5
  */
 import { isGithubDotCom } from "../git/githubUrl.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-j7n8n7rc.js:227-285 placement
 var ANTHROPICS = "anthropics";
 var ANTHROPIC = "anthropic";
 var ANTHROPIC_REPO_SLUG = `github.com/${ANTHROPICS}/${ANTHROPIC}`;
 //@ chunk-j7n8n7rc.js:285-352 placement
-var regExp = new RegExp(`${ANTHROPICS}[^]*${ANTHROPIC}`);
-var regExp_2 = new RegExp(`^${ANTHROPIC}(?:\\.git)*$`);
+var regExp; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var regExp_2;
+deferInit("chunk-j7n8n7rc.js:285", () => {
+  regExp = new RegExp(`${ANTHROPICS}[^]*${ANTHROPIC}`);
+  regExp_2 = new RegExp(`^${ANTHROPIC}(?:\\.git)*$`);
+});
 //@ chunk-j7n8n7rc.js:352-377 placement
 /**
  * 判断文本是否指向 Anthropic 仓库（此构建恒为 false）。
  */
-function isAnthropicRepoText(o) {
+function isAnthropicRepoText(text) {
   return false;
 }
 //@ chunk-j7n8n7rc.js:377-399 placement
@@ -35,7 +40,11 @@ function noopAnthropicRepoHint() {
 /**
  * 判断远程仓库是否为 github.com/anthropics/anthropic。
  */
-function isAnthropicRepo(o) {
-  return isGithubDotCom(o.host) && o.owner.toLowerCase() === ANTHROPICS && o.name.toLowerCase() === ANTHROPIC;
+function isAnthropicRepo(repository) {
+  return (
+    isGithubDotCom(repository.host) &&
+    repository.owner.toLowerCase() === ANTHROPICS &&
+    repository.name.toLowerCase() === ANTHROPIC
+  );
 }
 export { isAnthropicRepo, noopAnthropicRepoHint, isAnthropicRepoText };

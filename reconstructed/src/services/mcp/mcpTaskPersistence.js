@@ -98,51 +98,60 @@ async function mcpContentToNotificationText(
   let text;
   if (typeof content === "string") text = content;
   else {
-    let d = [];
-    for (let o of content ?? []) {
-      let { text, bytesPersisted } = await blockToNotificationText(o, persistBudget, storageV5);
+    let parts = [];
+    for (let block of content ?? []) {
+      let { text, bytesPersisted } = await blockToNotificationText(block, persistBudget, storageV5);
       persistBudget -= bytesPersisted;
-      d.push(text);
+      parts.push(text);
     }
-    text = d.join(`
+    text = parts.join(`
 `);
   }
   try {
-    let d = await truncateMcpContentIfNeeded(text, serverName);
-    let o = typeof d === "string" ? d : text;
+    let truncated = await truncateMcpContentIfNeeded(text, serverName);
+    let outputText = typeof truncated === "string" ? truncated : text;
     let maxMcpOutputChars = getMaxMcpOutputChars();
-    if (o === text && (text.length > maxMcpOutputChars || escapeXml(text).length > maxMcpOutputChars))
-      o = truncateBeforeEscape(text, maxMcpOutputChars);
-    if (o === text)
+    if (
+      outputText === text &&
+      (text.length > maxMcpOutputChars || escapeXml(text).length > maxMcpOutputChars)
+    )
+      outputText = truncateBeforeEscape(text, maxMcpOutputChars);
+    if (outputText === text)
       return {
         text,
       };
     if (text.length > persistBudget)
       return {
-        text: o,
+        text: outputText,
         savedHint: "[The portion truncated above was not saved: the per-result persist budget is exhausted.]",
       };
-    let c = `mcp-task-result-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    let l = await persistBinaryContent(Buffer.from(text, "utf8"), "text/plain", c, undefined, storageV5);
-    if ("error" in l) {
+    let persistId = `mcp-task-result-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    let persistResult = await persistBinaryContent(
+      Buffer.from(text, "utf8"),
+      "text/plain",
+      persistId,
+      undefined,
+      storageV5,
+    );
+    if ("error" in persistResult) {
       if (toolResultStoreOrNull() !== undefined)
         return {
-          text: o,
+          text: outputText,
           savedHint: TRUNCATED_UNSAVED_TEXT,
         };
       return {
-        text: o,
+        text: outputText,
       };
     }
-    persistBudget -= l.size;
-    let u = getPlatform() === "windows" ? "python" : "python3";
-    let replaced = l.filepath.replaceAll("\\", "/").replaceAll("'", "'\\''");
-    let k = hasReadableLines(text)
+    persistBudget -= persistResult.size;
+    let pythonCommand = getPlatform() === "windows" ? "python" : "python3";
+    let replaced = persistResult.filepath.replaceAll("\\", "/").replaceAll("'", "'\\''");
+    let tailLines = hasReadableLines(text)
       ? "use Read to retrieve the portion truncated above"
-      : `its lines are too long for Read's offset/limit \u2014 slice by character range via Bash instead, e.g. ${u} -c 'print(open("${replaced}").read()[A:B])' in ~${MAX_SLICE_CHARS.toLocaleString()}-char spans`;
+      : `its lines are too long for Read's offset/limit \u2014 slice by character range via Bash instead, e.g. ${pythonCommand} -c 'print(open("${replaced}").read()[A:B])' in ~${MAX_SLICE_CHARS.toLocaleString()}-char spans`;
     return {
-      text: o,
-      savedHint: `[The complete ${text.length}-character output was saved to ${l.filepath}; ${k}.]`,
+      text: outputText,
+      savedHint: `[The complete ${text.length}-character output was saved to ${persistResult.filepath}; ${tailLines}.]`,
     };
   } catch {
     return {
@@ -157,18 +166,18 @@ async function mcpContentToNotificationText(
 var MAX_SLICE_CHARS = 80000;
 //@ chunk-mzh22y2k.js:13697-13822 placement
 function hasReadableLines(text) {
-  let a = 0;
-  let i = 0;
+  let lineStart = 0;
+  let lineCount = 0;
   for (;;) {
     let index = text.indexOf(
       `
 `,
-      a,
+      lineStart,
     );
-    if ((index === -1 ? text.length : index) - a > MAX_SLICE_CHARS) return false;
-    if (index === -1) return i > 0;
-    i++;
-    a = index + 1;
+    if ((index === -1 ? text.length : index) - lineStart > MAX_SLICE_CHARS) return false;
+    if (index === -1) return lineCount > 0;
+    lineCount++;
+    lineStart = index + 1;
   }
 }
 //@ chunk-mzh22y2k.js:13822-15485 placement
@@ -183,19 +192,19 @@ async function blockToNotificationText(block, budget, storageV5) {
     };
   let parsed = binaryBlockSchema().safeParse(block);
   if (!parsed.success) {
-    let n = textResourceSchema().safeParse(block);
-    if (n.success) {
-      let { uri, text } = n.data.resource;
+    let textResource = textResourceSchema().safeParse(block);
+    if (textResource.success) {
+      let { uri, text } = textResource.data.resource;
       return {
         text: uri ? `[Resource at ${uri}] ${text}` : text,
         bytesPersisted: 0,
       };
     }
-    let c = resourceLinkSchema().safeParse(block);
-    if (c.success) {
-      let { name: l, uri, description } = c.data;
+    let resourceLink = resourceLinkSchema().safeParse(block);
+    if (resourceLink.success) {
+      let { name, uri, description } = resourceLink.data;
       return {
-        text: `[Resource link: ${l}] ${uri}${description ? ` (${description})` : ""}`,
+        text: `[Resource link: ${name}] ${uri}${description ? ` (${description})` : ""}`,
         bytesPersisted: 0,
       };
     }
@@ -243,28 +252,33 @@ async function blockToNotificationText(block, budget, storageV5) {
     };
   }
   try {
-    let n = `mcp-task-result-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    let c = await persistBinaryContent(
+    let persistId = `mcp-task-result-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    let persistResult = await persistBinaryContent(
       Buffer.from(decoded, "latin1"),
       binary.mimeType,
-      n,
+      persistId,
       undefined,
       storageV5,
     );
-    if ("error" in c) {
+    if ("error" in persistResult) {
       if (toolResultStoreOrNull() !== undefined)
         return {
           text: binaryNotSavedNotice(binary.mimeType, decoded.length),
           bytesPersisted: 0,
         };
       return {
-        text: `[${block.type} content (${binary.mimeType ?? "unknown type"}) could not be saved to disk: ${c.error}]`,
+        text: `[${block.type} content (${binary.mimeType ?? "unknown type"}) could not be saved to disk: ${persistResult.error}]`,
         bytesPersisted: 0,
       };
     }
     return {
-      text: getBinaryBlobSavedMessage(c.filepath, binary.mimeType, c.size, `[${block.type} result] `),
-      bytesPersisted: c.size,
+      text: getBinaryBlobSavedMessage(
+        persistResult.filepath,
+        binary.mimeType,
+        persistResult.size,
+        `[${block.type} result] `,
+      ),
+      bytesPersisted: persistResult.size,
     };
   } catch (error) {
     logForDebugging(`persisting MCP task result block failed: ${String(error)}`, {
@@ -298,30 +312,30 @@ function boundMcpStatusMessage(statusMessage) {
 /**
  * 生成 MCP 任务完成/失败/取消时的任务通知（摘要与带结果或原因的正文，转义并截断）。
  */
-function buildMcpTaskNotification(e) {
-  let a = sanitizeTaskLabel(e.mcpTaskId);
-  let s = `MCP task ${LABEL_PATTERN.test(a) ? a : shortTaskLabel(e.mcpTaskId)} (${mcpTaskKey(e.serverName, e.toolName)}) ${e.status}.`;
-  let r = boundMcpStatusMessage(e.statusMessage) ?? "no detail";
-  let d =
-    e.status === "completed"
-      ? (e.resultText ?? "")
-      : e.status === "failed"
-        ? `Task failed: ${r}`
-        : e.statusMessage !== undefined
-          ? `Task cancelled: ${r}`
+function buildMcpTaskNotification(ending) {
+  let taskLabel = sanitizeTaskLabel(ending.mcpTaskId);
+  let summaryText = `MCP task ${LABEL_PATTERN.test(taskLabel) ? taskLabel : shortTaskLabel(ending.mcpTaskId)} (${mcpTaskKey(ending.serverName, ending.toolName)}) ${ending.status}.`;
+  let detail = boundMcpStatusMessage(ending.statusMessage) ?? "no detail";
+  let bodyText =
+    ending.status === "completed"
+      ? (ending.resultText ?? "")
+      : ending.status === "failed"
+        ? `Task failed: ${detail}`
+        : ending.statusMessage !== undefined
+          ? `Task cancelled: ${detail}`
           : "Task was cancelled by the server.";
-  let o = e.resultHint
+  let hintText = ending.resultHint
     ? `
 
-${escapeXml(e.resultHint)}`
+${escapeXml(ending.resultHint)}`
     : "";
   return formatTaskNotification({
-    taskId: e.registryId,
-    status: e.status,
-    summary: escapeXml(s),
+    taskId: ending.registryId,
+    status: ending.status,
+    summary: escapeXml(summaryText),
     body: `
 <result>
-${escapeXmlTruncated(d, getMaxMcpOutputChars() - o.length)}${o}
+${escapeXmlTruncated(bodyText, getMaxMcpOutputChars() - hintText.length)}${hintText}
 </result>`,
   });
 }
@@ -339,17 +353,17 @@ async function restoreMcpTasks(ctx) {
     logForDebugging(`restoreMcpTasks list failed: ${String(error)}`);
     return;
   }
-  let filtered = metas.filter((s) => s.protocol === "sep2663");
+  let filtered = metas.filter((meta) => meta.protocol === "sep2663");
   if (filtered.length > 0 && !isSingleShotPrintSession()) {
     let { requestDialog } = ctx;
-    let { createSep2663TaskBinding } = require("./chunk-8t8n4kdh.js");
-    let { restoreSep2663Tasks } = require("./chunk-g25jqyhb.js");
+    let { createSep2663TaskBinding } = require("./ClaudeAiProxyBearerRejectedError.lazy.js");
+    let { restoreSep2663Tasks } = require("./buildSep2663EndingNotice.lazy.js");
     restoreSep2663Tasks({
       metas: filtered,
       taskRegistry: ctx.taskRegistry,
       getMcpClients: ctx.getMcpClients,
-      bindingFactory: (o, taskId) =>
-        createSep2663TaskBinding(o, {
+      bindingFactory: (connection, taskId) =>
+        createSep2663TaskBinding(connection, {
           taskId,
           requestDialog,
         }),
@@ -357,18 +371,22 @@ async function restoreMcpTasks(ctx) {
       credentials: ctx.credentials,
     }).catch((error) => logForDebugging(`restoreSep2663Tasks: ${describeErrorBrief(error)}`));
   }
-  for (let s of metas) {
-    if (s.protocol === "sep2663") continue;
-    if (s.protocol !== undefined) {
-      logForDebugging(`restoreMcpTasks: sidecar ${s.taskId} has unknown protocol '${s.protocol}'; parked`, {
-        level: "error",
-      });
+  for (let meta of metas) {
+    if (meta.protocol === "sep2663") continue;
+    if (meta.protocol !== undefined) {
+      logForDebugging(
+        `restoreMcpTasks: sidecar ${meta.taskId} has unknown protocol '${meta.protocol}'; parked`,
+        {
+          level: "error",
+        },
+      );
       continue;
     }
     logForDebugging(
-      `restoreMcpTasks: deleting the resume record for MCP task ${s.taskId} (server '${s.serverName}', server task ${shortTaskLabel(s.mcpTaskId)}): it used the 2025-11-25 tasks protocol, which this version no longer supports; the task was not cancelled on the server`,
+      `restoreMcpTasks: deleting the resume record for MCP task ${meta.taskId} (server '${meta.serverName}', server task ${shortTaskLabel(meta.mcpTaskId)}): it used the 2025-11-25 tasks protocol, which this version no longer supports; the task was not cancelled on the server`,
     );
-    removeTaskMetadataSafe(s.taskId, ctx.storageV5);
+    removeTaskMetadataSafe(meta.taskId, ctx.storageV5);
   }
   logFeatureOk("mcp_task_restore");
 }
+export { boundMcpStatusMessage, buildMcpTaskNotification, mcpContentToNotificationText, restoreMcpTasks };

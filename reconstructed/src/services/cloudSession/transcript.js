@@ -43,8 +43,8 @@ async function getCloudSessionTranscript(limiter, request, context) {
       `${request.subtype}: cursor must be a non-empty string of at most ${MAX_CURSOR_CHARS} characters`,
     );
   let result = await limiter.bounded(request.subtype, context, async (signal) => {
-    let d = await refusalBeforeAnyRequest(true);
-    if (d !== null) return d;
+    let pageLimit = await refusalBeforeAnyRequest(true);
+    if (pageLimit !== null) return pageLimit;
     let sessionResult = await getFromSessionApi(`/v1/code/sessions/${request.session_id}`, {
       signal,
       context,
@@ -52,8 +52,8 @@ async function getCloudSessionTranscript(limiter, request, context) {
       olderApi: false,
       isBackground: false,
     });
-    let c = unavailableForResult(sessionResult, false);
-    if (c !== null) return c;
+    let constructor = unavailableForResult(sessionResult, false);
+    if (constructor !== null) return constructor;
     if (extractSessionFromResponse(sessionResult.ok ? sessionResult.data : undefined) === undefined)
       return unavailable("not_found");
     for (let pageLimit = DEFAULT_TRANSCRIPT_PAGE_LIMIT; ; pageLimit = Math.floor(pageLimit / 2)) {
@@ -75,14 +75,14 @@ async function getCloudSessionTranscript(limiter, request, context) {
           },
         );
         if (pageResult.ok && pageResult.status === 403) await limiter.pageWasRefused();
-        let f = unavailableForResult(pageResult, false);
-        if (f !== null) return f;
+        let unavailableResult = unavailableForResult(pageResult, false);
+        if (unavailableResult !== null) return unavailableResult;
         let page = pageResult.ok ? pageResult.data : undefined;
         if (!isPlainObject(page) || !Array.isArray(page.data)) return unavailable("failed");
         return {
           status: "ok",
-          entries: page.data.flatMap((a) =>
-            isPlainObject(a) && isPlainObject(a.payload) ? [a.payload] : [],
+          entries: page.data.flatMap((entry) =>
+            isPlainObject(entry) && isPlainObject(entry.payload) ? [entry.payload] : [],
           ),
           ...(typeof page.next_cursor === "string" &&
             page.next_cursor !== "" && {
@@ -98,3 +98,4 @@ async function getCloudSessionTranscript(limiter, request, context) {
   else logFeatureBad("sdk_get_cloud_session_transcript", result.reason ?? "failed");
   return result;
 }
+export { getCloudSessionTranscript };

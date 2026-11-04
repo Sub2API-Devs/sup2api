@@ -23,3 +23,4 @@ async function call(onDone, context) {
     getTranscript: () => submittedMessages(context),
   });
 }
+export { call };

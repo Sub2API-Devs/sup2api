@@ -12,7 +12,7 @@ import { useTheme_2 } from "../../components/design-system/ThemeProvider.js";
 import { useStoreSelector } from "../../hooks/useStoreSelector.js";
 import { useClock } from "../../ink/components/ClockContext.js";
 import { useGlobalExitKeybindings } from "../../keybindings/useKeybinding.js";
-import { ce, P } from "../../../vendor/react/cjs/react.production.js";
+import { useCallback, useEffect } from "../../../vendor/react/cjs/react.production.js";
 import { safeExecShell } from "../../utils/safeSpawn.js";
 import { plural } from "../../utils/stringUtils.js";
 import { getGithubRepo } from "../../utils/git.js";
@@ -89,20 +89,20 @@ function InstallGitHubApp({ onDone, wizard }) {
   let storeSelector = useStoreSelector(wizard.state);
   let { setState, getState } = wizard.state;
   let clock = useClock();
-  let g = () => {
+  let handleCancel = () => {
     if (cancellation.signal.aborted) return;
     cancellation.abort();
     if (getState().step === "creating") {
-      setState((m) => ({
-        ...m,
+      setState((state) => ({
+        ...state,
         stopRequested: true,
       }));
       return;
     }
     onDone("Installation cancelled by user");
   };
-  useGlobalExitKeybindings(g, undefined, storeSelector.step === "oauth-flow");
-  let checkGitHubCLI = ce(async () => {
+  useGlobalExitKeybindings(handleCancel, undefined, storeSelector.step === "oauth-flow");
+  let checkGitHubCLI = useCallback(async () => {
     let warnings = [];
     if (
       (
@@ -173,14 +173,14 @@ function InstallGitHubApp({ onDone, wizard }) {
       step: warnings.length > 0 ? "warnings" : "choose-repo",
     }));
   }, [setState]);
-  P(() => {
+  useEffect(() => {
     if (wizard.started.current) return;
     wizard.started.current = true;
     logEvent("tengu_install_github_app_started", {});
     checkGitHubCLI();
   }, [wizard, checkGitHubCLI]);
   let setupRunning = wizard.setupRunning;
-  let runSetupGitHubActions = ce(
+  let runSetupGitHubActions = useCallback(
     async (apiKeyOrOAuthToken, secretName) => {
       if (setupRunning.current || cancellation.signal.aborted) return;
       if (isUnattendedBgSession()) {
@@ -383,29 +383,29 @@ function InstallGitHubApp({ onDone, wizard }) {
       if (!repoName.trim()) return;
       let repoWarnings = [];
       {
-        let L;
-        let Q;
+        let host;
+        let repoPath;
         if (repoName.includes("://"))
           try {
-            let ne = new URL(repoName);
-            L = ne.hostname;
-            Q = ne.pathname.replace(/^\/+/, "");
+            let parsedUrl = new URL(repoName);
+            host = parsedUrl.hostname;
+            repoPath = parsedUrl.pathname.replace(/^\/+/, "");
           } catch {}
         else {
           let match = repoName.match(/^[^@]+@([^:]+):(.+)$/);
           if (match) {
-            L = match[1];
-            Q = match[2];
+            host = match[1];
+            repoPath = match[2];
           } else {
-            let He = repoName.search(/[:/]/);
-            if (He > 0) {
-              L = repoName.slice(0, He);
-              Q = repoName.slice(He + 1);
+            let separatorIndex = repoName.search(/[:/]/);
+            if (separatorIndex > 0) {
+              host = repoName.slice(0, separatorIndex);
+              repoPath = repoName.slice(separatorIndex + 1);
             }
           }
         }
-        if (L && isGithubDotCom(L)) {
-          let match = Q?.match(/^([^/]+\/[^/]+?)(?:\.git)?\/?$/);
+        if (host && isGithubDotCom(host)) {
+          let match = repoPath?.match(/^([^/]+\/[^/]+?)(?:\.git)?\/?$/);
           if (match?.[1]) repoName = match[1];
           else
             repoWarnings.push({
@@ -523,8 +523,8 @@ function InstallGitHubApp({ onDone, wizard }) {
         "--repo",
         state.selectedRepoName,
       ]);
-      setState((K) => ({
-        ...K,
+      setState((state) => ({
+        ...state,
         isCheckingSecret: false,
       }));
       if (cancellation.signal.aborted || getState().step !== "api-key") return;
@@ -577,7 +577,7 @@ function InstallGitHubApp({ onDone, wizard }) {
       selectedApiKeyOption: option,
     }));
   };
-  let handleCreateOAuthToken = ce(() => {
+  let handleCreateOAuthToken = useCallback(() => {
     if (isUnattendedBgSession()) {
       logEvent("tengu_install_github_app_error", {
         reason: lit("unattended_bg_session"),
@@ -596,7 +596,7 @@ function InstallGitHubApp({ onDone, wizard }) {
       step: "oauth-flow",
     }));
   }, [setState]);
-  let handleOAuthSuccess = ce(
+  let handleOAuthSuccess = useCallback(
     (token) => {
       logEvent("tengu_install_github_app_step_completed", {
         step: lit("oauth-flow"),
@@ -612,7 +612,7 @@ function InstallGitHubApp({ onDone, wizard }) {
     },
     [runSetupGitHubActions, setState],
   );
-  let handleOAuthCancel = ce(() => {
+  let handleOAuthCancel = useCallback(() => {
     setState((prev) => ({
       ...prev,
       step: "api-key",
@@ -670,14 +670,14 @@ function InstallGitHubApp({ onDone, wizard }) {
         step: "check-existing-workflow",
       }));
     else
-      setState((h) => ({
-        ...h,
+      setState((state) => ({
+        ...state,
         step: "select-workflows",
       }));
   };
   let handleWorkflowAction_2 = async (action) => {
     if (action === "exit") {
-      g();
+      handleCancel();
       return;
     }
     logEvent("tengu_install_github_app_step_completed", {
@@ -713,25 +713,25 @@ For manual setup instructions, see: ${GITHUB_ACTION_SETUP_DOCS_URL}`
 For manual setup instructions, see: ${GITHUB_ACTION_SETUP_DOCS_URL}`,
     );
   }
-  let oe;
-  let se = false;
-  let ge = true;
-  let J;
+  let title;
+  let canContinue = false;
+  let showContinueHint = true;
+  let stepContent;
   switch (storeSelector.step) {
     case "check-gh":
-      ge = false;
-      J = jsxProd_default(CheckingGhCliStep, {});
+      showContinueHint = false;
+      stepContent = jsxProd_default(CheckingGhCliStep, {});
       break;
     case "warnings":
-      J = jsxProd_default(WarningsStep, {
+      stepContent = jsxProd_default(WarningsStep, {
         warnings: storeSelector.warnings,
         onContinue: handleSubmit,
       });
       break;
     case "choose-repo":
-      oe = "Select GitHub repository";
-      se = !!storeSelector.currentRepo;
-      J = jsxProd_default(ChooseRepoStep, {
+      title = "Select GitHub repository";
+      canContinue = !!storeSelector.currentRepo;
+      stepContent = jsxProd_default(ChooseRepoStep, {
         currentRepo: storeSelector.currentRepo,
         useCurrentRepo: storeSelector.useCurrentRepo,
         repoUrl: storeSelector.selectedRepoName,
@@ -741,30 +741,30 @@ For manual setup instructions, see: ${GITHUB_ACTION_SETUP_DOCS_URL}`,
       });
       break;
     case "install-app":
-      J = jsxProd_default(InstallAppStep, {
+      stepContent = jsxProd_default(InstallAppStep, {
         repoUrl: storeSelector.selectedRepoName,
         onSubmit: handleSubmit,
       });
       break;
     case "setup-actions-prompt":
-      oe = "Set up GitHub Actions";
-      se = true;
-      J = jsxProd_default(OptionalActionsSetupStep, {
+      title = "Set up GitHub Actions";
+      canContinue = true;
+      stepContent = jsxProd_default(OptionalActionsSetupStep, {
         onSelect: handleWorkflowAction,
-        onCancel: g,
+        onCancel: handleCancel,
       });
       break;
     case "check-existing-workflow":
-      oe = `Repository: ${storeSelector.selectedRepoName}`;
-      se = true;
-      J = jsxProd_default(ExistingWorkflowStep, {
+      title = `Repository: ${storeSelector.selectedRepoName}`;
+      canContinue = true;
+      stepContent = jsxProd_default(ExistingWorkflowStep, {
         onSelectAction: handleWorkflowAction_2,
       });
       break;
     case "check-existing-secret":
-      oe = "Setup API key secret";
-      se = true;
-      J = jsxProd_default(CheckExistingSecretStep, {
+      title = "Setup API key secret";
+      canContinue = true;
+      stepContent = jsxProd_default(CheckExistingSecretStep, {
         useExistingSecret: storeSelector.useExistingSecret,
         secretName: storeSelector.secretName,
         onToggleUseExistingSecret: handleToggleUseExistingSecret,
@@ -773,9 +773,9 @@ For manual setup instructions, see: ${GITHUB_ACTION_SETUP_DOCS_URL}`,
       });
       break;
     case "api-key":
-      oe = "Choose API key";
-      se = true;
-      J = jsxProd_default_2(Box, {
+      title = "Choose API key";
+      canContinue = true;
+      stepContent = jsxProd_default_2(Box, {
         flexDirection: "column",
         gap: 1,
         children: [
@@ -799,9 +799,9 @@ For manual setup instructions, see: ${GITHUB_ACTION_SETUP_DOCS_URL}`,
       });
       break;
     case "creating":
-      oe = "Create GitHub Actions workflow";
-      ge = false;
-      J = jsxProd_default(CreatingStep, {
+      title = "Create GitHub Actions workflow";
+      showContinueHint = false;
+      stepContent = jsxProd_default(CreatingStep, {
         currentWorkflowInstallStep: storeSelector.currentWorkflowInstallStep,
         secretExists: storeSelector.secretExists,
         useExistingSecret: storeSelector.useExistingSecret,
@@ -811,8 +811,8 @@ For manual setup instructions, see: ${GITHUB_ACTION_SETUP_DOCS_URL}`,
       });
       break;
     case "success":
-      oe = "Success";
-      J = jsxProd_default(Box, {
+      title = "Success";
+      stepContent = jsxProd_default(Box, {
         tabIndex: 0,
         autoFocus: true,
         onKeyDown: handleDismissKeyDown,
@@ -826,7 +826,7 @@ For manual setup instructions, see: ${GITHUB_ACTION_SETUP_DOCS_URL}`,
       });
       break;
     case "error":
-      J = jsxProd_default(Box, {
+      stepContent = jsxProd_default(Box, {
         tabIndex: 0,
         autoFocus: true,
         onKeyDown: handleDismissKeyDown,
@@ -862,27 +862,27 @@ For manual setup instructions, see: ${GITHUB_ACTION_SETUP_DOCS_URL}`,
         onCancel: handleOAuthCancel,
       });
   }
-  let ye = storeSelector.step === "success" || storeSelector.step === "error";
-  let be = storeSelector.step === "creating" && !!storeSelector.stopRequested;
+  let isFinished = storeSelector.step === "success" || storeSelector.step === "error";
+  let isStopping = storeSelector.step === "creating" && !!storeSelector.stopRequested;
   return jsxProd_default(
     Dialog,
     {
       title: "Install GitHub App",
-      subtitle: oe,
-      onCancel: ye ? handleDismissKeyDown_2 : g,
-      exitOnCtrlCD: be,
-      inputGuide: ye
+      subtitle: title,
+      onCancel: isFinished ? handleDismissKeyDown_2 : handleCancel,
+      exitOnCtrlCD: isStopping,
+      inputGuide: isFinished
         ? "Press any key to exit"
-        : be
+        : isStopping
           ? "Stopping after the step in progress\u2026"
           : jsxProd_default_2(Byline, {
               children: [
-                se &&
+                canContinue &&
                   jsxProd_default(KeyboardShortcutHint, {
                     chord: ["up", "down"],
                     action: "select",
                   }),
-                ge &&
+                showContinueHint &&
                   jsxProd_default(KeyboardShortcutHint, {
                     chord: "enter",
                     action: "continue",
@@ -895,9 +895,9 @@ For manual setup instructions, see: ${GITHUB_ACTION_SETUP_DOCS_URL}`,
                 }),
               ],
             }),
-      children: J,
+      children: stepContent,
     },
-    be ? "stopping" : "open",
+    isStopping ? "stopping" : "open",
   );
 }
 //@ chunk-4v9zy7gn.js:63101-64479 placement
@@ -906,14 +906,14 @@ For manual setup instructions, see: ${GITHUB_ACTION_SETUP_DOCS_URL}`,
  */
 async function runInstallGitHubApp(onDone, context) {
   if (isUnattendedBgSession()) {
-    let o = await parkCommandForAttacher(
+    let parked = await parkCommandForAttacher(
       context.session.host,
       "open this session to finish /install-github-app",
       "/install-github-app requested",
       context.storageV5,
     );
     onDone(
-      o
+      parked
         ? `Can't run /install-github-app while no terminal is attached to this background session. This session now shows "needs input" in agent view \u2014 open it and run the command again.`
         : "Can't run /install-github-app while no terminal is attached to this background session. Attach to it and run the command again.",
       {
@@ -923,9 +923,9 @@ async function runInstallGitHubApp(onDone, context) {
     return null;
   }
   let remoteUrl = await resolveRemoteUrl(getCwd());
-  let f = remoteUrl ? ghIsDangerousCallback(remoteUrl) : null;
-  let C = f ? getGitHostKind(f) : null;
-  if (C === "gitlab") {
+  let dangerousCallback = remoteUrl ? ghIsDangerousCallback(remoteUrl) : null;
+  let hostKind = dangerousCallback ? getGitHostKind(dangerousCallback) : null;
+  if (hostKind === "gitlab") {
     onDone(
       `The Claude GitHub App only works with GitHub repositories, and this repository's git remote is on GitLab. To run Claude Code from GitLab CI/CD instead, see ${GITLAB_CI_DOCS_URL}. To install the app for a GitHub repository, run /install-github-app from a checkout of that repository.`,
       {
@@ -934,7 +934,7 @@ async function runInstallGitHubApp(onDone, context) {
     );
     return null;
   }
-  if (C === "bitbucket") {
+  if (hostKind === "bitbucket") {
     onDone(
       "The Claude GitHub App only works with GitHub repositories, and this repository's git remote is on Bitbucket. To install the app for a GitHub repository, run /install-github-app from a checkout of that repository.",
       {
@@ -963,3 +963,4 @@ async function runInstallGitHubApp(onDone, context) {
     },
   });
 }
+export { NO_TERMINAL_ERROR_STATE, runInstallGitHubApp };

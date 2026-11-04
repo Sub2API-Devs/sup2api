@@ -41,7 +41,7 @@ import __cc_resource_29 from "../../../assets/sign-in.mjs-e560d968.txt.zst" with
 import __cc_resource_30 from "../../../assets/SKILL-7a3ab2a6.md.zst" with { type: "file" };
 import __cc_resource_31 from "../../../assets/SKILL-33067c78.md.zst" with { type: "file" };
 import __cc_resource_32 from "../../../assets/SKILL-cc984d7e.md.zst" with { type: "file" };
-import { Ar } from "../../../runtime/bun-runtime.js";
+import { __export } from "../../../runtime/bun-runtime.js";
 import { readEmbeddedTextSync } from "../../utils/embeddedAssets.js";
 
 //@ chunk-thddg15d.js:3016-3025 placement
@@ -50,9 +50,9 @@ import { readEmbeddedTextSync } from "../../utils/embeddedAssets.js";
  */
 var runSkillExports = {};
 //@ chunk-thddg15d.js:3025-3086 placement
-Ar(runSkillExports, {
+__export(runSkillExports, {
   INSTALLED_FILES: () => RUN_SKILL_FILES,
-  SKILL_MD: () => Ue,
+  SKILL_MD: () => SKILL_KINDS,
   default: () => runSkillExports,
 });
 //@ chunk-thddg15d.js:3086-3108 placement
@@ -203,8 +203,9 @@ var skillPath2 = __cc_resource_32;
 //@ chunk-thddg15d.js:5769-5803 placement
 var skill3 = readEmbeddedTextSync(skillPath2, import.meta.dirname);
 //@ chunk-thddg15d.js:5803-5854 placement
-var Ue = Object.freeze({
+var SKILL_KINDS = Object.freeze({
   run: skill3,
   execute: skill2,
   draft: skill,
 });
+export { RUN_SKILL_FILES, SKILL_KINDS, runSkillExports };

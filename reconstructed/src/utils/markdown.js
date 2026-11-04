@@ -33,13 +33,13 @@ import { stripPromptXMLTags } from "./messages.js";
 import { supportsHyperlinks } from "../ink/supports-hyperlinks.js";
 import { color } from "../components/design-system/color.js";
 import { sequential } from "./sequential.js";
-import { createHyperlink, isUrl } from "./hyperlink.js";
+import { createHyperlink, urlMatchesHost } from "./hyperlink.js";
 import { stripAnsi } from "./stripAnsi.js";
 import {
   isCanonicalArtifactViewerUrl,
   isDecisionSurfaceControl,
 } from "../tools/ArtifactTool/artifactUrls.js";
-import { BOXED_DIAMOND_GLYPH, withBoxedDiamond } from "./permissions/autoModeRulesPrompt.js";
+import { BOXED_DIAMOND_GLYPH, withBoxedDiamond } from "../constants/figures.js";
 import { repeatString, ANY_CONTROL_CHAR_RE } from "./stringUtils.js";
 import { bunStringWidth } from "../ink/stringWidth.js";
 import { fileUrlToPath } from "./markdownFileLinks.js";
@@ -51,6 +51,7 @@ import {
 import { getCachedRepositoryHost } from "./detectRepository.js";
 import { getGitHostKind } from "./gitHosts.js";
 import { normalizeHostCached, GITHUB_HOST } from "./git/githubUrl.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-wj577vf9.js:13206-13268 fingerprint = configureMarked (0.369)
 function configureMarked() {
@@ -62,39 +63,42 @@ function configureMarked() {
 /**
  * 插件 Markdown 用的受限词法器：关闭表格、引用、分隔线、链接、自动链接、转义与换行等语法。
  */
-var pluginMarkdownLexer = new Marked(MARKED_CONFIG_CACHE_SIZE, {
-  tokenizer: {
-    emStrong(e) {
-      return e.startsWith("_") ? undefined : false;
+var pluginMarkdownLexer; // deferred: uses markdownRendererPool (./markdownInlineRendering.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-wj577vf9.js:13268", () => {
+  pluginMarkdownLexer = new Marked(MARKED_CONFIG_CACHE_SIZE, {
+    tokenizer: {
+      emStrong(source) {
+        return source.startsWith("_") ? undefined : false;
+      },
+      table() {
+        return;
+      },
+      blockquote() {
+        return;
+      },
+      hr() {
+        return;
+      },
+      lheading() {
+        return;
+      },
+      link() {
+        return;
+      },
+      autolink() {
+        return;
+      },
+      url() {
+        return;
+      },
+      escape() {
+        return;
+      },
+      br() {
+        return;
+      },
     },
-    table() {
-      return;
-    },
-    blockquote() {
-      return;
-    },
-    hr() {
-      return;
-    },
-    lheading() {
-      return;
-    },
-    link() {
-      return;
-    },
-    autolink() {
-      return;
-    },
-    url() {
-      return;
-    },
-    escape() {
-      return;
-    },
-    br() {
-      return;
-    },
-  },
+  });
 });
 //@ chunk-wj577vf9.js:13497-13710 layout
 /**
@@ -105,8 +109,8 @@ function renderMarkdownToAnsi(content, theme, highlight = null) {
   let { tokens, isWindowed } = lexMarkdownWindowed(marked, stripPromptXMLTags(content));
   let linkCap = !isWindowed && supportsHyperlinks();
   return controlCharTokens(tokens)
-    .map((l) =>
-      formatTokenWindowed(l, theme, {
+    .map((token) =>
+      formatTokenWindowed(token, theme, {
         listDepth: 0,
         orderedListNumber: null,
         parent: null,
@@ -126,33 +130,33 @@ var WHITESPACE_RE = /\s/;
 var NBSP_ENTITY_RE = /&(?:nbsp|#0{0,4}160|#[xX]0{0,4}[aA]0);/g;
 var MAX_INDENT_SPACES = 32;
 //@ chunk-wj577vf9.js:13774-13914 layout
-function endsWithHardBreak(e) {
+function endsWithHardBreak(text) {
   if (
-    !e.endsWith(`
+    !text.endsWith(`
 `)
   )
     return false;
-  for (let k = e.length - 2; k >= 0; k--) {
-    let n = e[k];
+  for (let k = text.length - 2; k >= 0; k--) {
+    let char = text[k];
     if (
-      n ===
+      char ===
       `
 `
     )
       return true;
-    if (!WHITESPACE_RE.test(n)) return false;
+    if (!WHITESPACE_RE.test(char)) return false;
   }
   return false;
 }
 //@ chunk-wj577vf9.js:13914-14028 layout
-function formatTokenWindowed(e, t, n) {
-  let r = formatToken(e, t, n);
-  return n.windowed && ESC_NON_CSI_RE.test(r)
-    ? r.replace(OSC8_LINK_PATTERN, "").replace(C1_OSC_RE, "").replace(ESC_NON_CSI_GLOBAL_RE, "")
-    : r;
+function formatTokenWindowed(token, theme, options) {
+  let rendered = formatToken(token, theme, options);
+  return options.windowed && ESC_NON_CSI_RE.test(rendered)
+    ? rendered.replace(OSC8_LINK_PATTERN, "").replace(C1_OSC_RE, "").replace(ESC_NON_CSI_GLOBAL_RE, "")
+    : rendered;
 }
 //@ chunk-wj577vf9.js:14028-19907 fingerprint = formatToken (0.729)
-function formatToken(e, t, n) {
+function formatToken(token, theme, options) {
   let {
     listDepth = 0,
     orderedListNumber = null,
@@ -164,18 +168,18 @@ function formatToken(e, t, n) {
     promptMode = false,
     windowed,
     quotesAround = 0,
-  } = n;
-  let y = !windowed && (n.linkCap ?? supportsHyperlinks());
-  switch (e.type) {
+  } = options;
+  let linkCap = !windowed && (options.linkCap ?? supportsHyperlinks());
+  switch (token.type) {
     case "blockquote":
-      return drawAround(e.tokens ?? [], quotesAround, (u, quotesAround) =>
-        formatTokenWindowed(u, t, {
+      return drawAround(token.tokens ?? [], quotesAround, (quoteToken, quotesAround) =>
+        formatTokenWindowed(quoteToken, theme, {
           listDepth: 0,
           orderedListNumber: null,
           parent: null,
           highlight,
           glueProse: false,
-          linkCap: y,
+          linkCap,
           windowed,
           screenReader,
           promptMode,
@@ -183,52 +187,53 @@ function formatToken(e, t, n) {
         }),
       );
     case "code": {
-      let lang = e.lang ?? "";
-      if (!lang && e.codeBlockStyle !== "indented")
-        return e.text.replace(/\S(?:.*\S)?/g, color("permission", t)) + WORD_BOUNDARY_PATTERNS;
-      let f = lang.match(/^[\w.+#-]+/)?.[0] ?? "";
+      let lang = token.lang ?? "";
+      if (!lang && token.codeBlockStyle !== "indented")
+        return token.text.replace(/\S(?:.*\S)?/g, color("permission", theme)) + WORD_BOUNDARY_PATTERNS;
+      let bareLang = lang.match(/^[\w.+#-]+/)?.[0] ?? "";
       let language =
         highlight && lang && highlight.supportsLanguage(lang)
           ? lang
-          : highlight && f && highlight.supportsLanguage(f)
-            ? f
+          : highlight && bareLang && highlight.supportsLanguage(bareLang)
+            ? bareLang
             : "plaintext";
-      let T = lang && !highlight?.supportsLanguage(lang) ? sequential.dim(lang) + WORD_BOUNDARY_PATTERNS : "";
-      if (!highlight) return T + e.text + WORD_BOUNDARY_PATTERNS;
+      let langLabel =
+        lang && !highlight?.supportsLanguage(lang) ? sequential.dim(lang) + WORD_BOUNDARY_PATTERNS : "";
+      if (!highlight) return langLabel + token.text + WORD_BOUNDARY_PATTERNS;
       return (
-        T +
-        highlight.highlight(e.text, {
+        langLabel +
+        highlight.highlight(token.text, {
           language,
-          fence: e,
+          fence: token,
         }) +
         WORD_BOUNDARY_PATTERNS
       );
     }
     case "codespan": {
-      let u = color("permission", t)(e.text);
-      let f =
+      let styledCode = color("permission", theme)(token.text);
+      let skipLink =
         promptMode ||
         parent?.type === "link" ||
-        ("defanged" in e && e.defanged === true) ||
-        ("afterStyle" in e && e.afterStyle === true);
-      if (y && !f && HTTP_URL_RE.test(e.text) && URL.canParse(e.text))
-        return createHyperlink(e.text, u, {
-          themeName: t,
+        ("defanged" in token && token.defanged === true) ||
+        ("afterStyle" in token && token.afterStyle === true);
+      if (linkCap && !skipLink && HTTP_URL_RE.test(token.text) && URL.canParse(token.text))
+        return createHyperlink(token.text, styledCode, {
+          themeName: theme,
           supportsHyperlinks: true,
         });
-      return u;
+      return styledCode;
     }
     case "em":
       return sequential.italic(
-        (e.tokens ?? [])
-          .map((u) =>
-            formatTokenWindowed(u, t, {
+        (token.tokens ?? [])
+          .map((emToken) =>
+            formatTokenWindowed(emToken, theme, {
               listDepth: 0,
               orderedListNumber: null,
               parent,
               highlight,
               glueProse,
-              linkCap: y,
+              linkCap,
               windowed,
               promptMode,
             }),
@@ -237,15 +242,15 @@ function formatToken(e, t, n) {
       );
     case "strong":
       return sequential.bold(
-        (e.tokens ?? [])
-          .map((u) =>
-            formatTokenWindowed(u, t, {
+        (token.tokens ?? [])
+          .map((strongToken) =>
+            formatTokenWindowed(strongToken, theme, {
               listDepth: 0,
               orderedListNumber: null,
               parent,
               highlight,
               glueProse,
-              linkCap: y,
+              linkCap,
               windowed,
               promptMode,
             }),
@@ -253,15 +258,15 @@ function formatToken(e, t, n) {
           .join(""),
       );
     case "del": {
-      let inner = (e.tokens ?? [])
-        .map((f) =>
-          formatTokenWindowed(f, t, {
+      let inner = (token.tokens ?? [])
+        .map((delToken) =>
+          formatTokenWindowed(delToken, theme, {
             listDepth: 0,
             orderedListNumber: null,
             parent,
             highlight,
             glueProse,
-            linkCap: y,
+            linkCap,
             windowed,
             promptMode,
           }),
@@ -272,24 +277,24 @@ function formatToken(e, t, n) {
         : `~~${inner}~~`;
     }
     case "heading": {
-      let u = () =>
-        (e.tokens ?? [])
+      let renderHeading = () =>
+        (token.tokens ?? [])
           .map((line) =>
-            formatTokenWindowed(line, t, {
+            formatTokenWindowed(line, theme, {
               listDepth: 0,
               orderedListNumber: null,
               parent: null,
               highlight,
               glueProse: false,
-              linkCap: y,
+              linkCap,
               windowed,
               promptMode,
             }),
           )
           .join("");
       return (
-        (e.depth === 1 ? sequential.bold.italic.underline : sequential.bold)(
-          renderWithSafeLinks(e.tokens, u),
+        (token.depth === 1 ? sequential.bold.italic.underline : sequential.bold)(
+          renderWithSafeLinks(token.tokens, renderHeading),
         ) +
         WORD_BOUNDARY_PATTERNS +
         WORD_BOUNDARY_PATTERNS
@@ -298,89 +303,95 @@ function formatToken(e, t, n) {
     case "hr":
       return "---" + WORD_BOUNDARY_PATTERNS;
     case "image": {
-      if (!e.text && !e.title) return labelWithReset(e.href, afterStyleReset(e));
-      let u = e.title ? ` "${e.title}"` : "";
-      let f = labelWithHint(e.href, afterStyleReset(e), u);
-      return e.text ? `${e.text}${f}` : f.replace(" (", "(");
+      if (!token.text && !token.title) return labelWithReset(token.href, afterStyleReset(token));
+      let imageTitle = token.title ? ` "${token.title}"` : "";
+      let imageLabel = labelWithHint(token.href, afterStyleReset(token), imageTitle);
+      return token.text ? `${token.text}${imageLabel}` : imageLabel.replace(" (", "(");
     }
     case "link": {
-      let u = e.title ? ` ("${e.title}")` : "";
-      if (/^mailto:/i.test(e.href)) {
-        let replaced = e.href.replace(/^mailto:/i, "");
-        let K = afterStyleReset(e);
+      let linkTitle = token.title ? ` ("${token.title}")` : "";
+      if (/^mailto:/i.test(token.href)) {
+        let replaced = token.href.replace(/^mailto:/i, "");
+        let resetSuffix = afterStyleReset(token);
         return (
-          (e.text && e.text !== stripDecisionSurfaceChars(replaced)
-            ? `${e.text}${labelWithHint(replaced, K)}`
-            : labelWithReset(replaced, K)) + u
+          (token.text && token.text !== stripDecisionSurfaceChars(replaced)
+            ? `${token.text}${labelWithHint(replaced, resetSuffix)}`
+            : labelWithReset(replaced, resetSuffix)) + linkTitle
         );
       }
-      let f = y ? localFileLinkPath(e.href) : null;
-      let h = "defanged" in e && e.defanged === true;
-      let T = f !== null && !h;
-      let k = afterStyleReset(e);
-      let g = T ? f : stripDecisionSurfaceChars(f ?? e.href);
-      let joined = (e.tokens ?? [])
-        .map((I) =>
-          formatTokenWindowed(I, t, {
+      let localPath = linkCap ? localFileLinkPath(token.href) : null;
+      let isDefanged = "defanged" in token && token.defanged === true;
+      let canLink = localPath !== null && !isDefanged;
+      let shownUrlStart = afterStyleReset(token);
+      let targetUrl = canLink ? localPath : stripDecisionSurfaceChars(localPath ?? token.href);
+      let joined = (token.tokens ?? [])
+        .map((linkToken) =>
+          formatTokenWindowed(linkToken, theme, {
             listDepth: 0,
             orderedListNumber: null,
-            parent: e,
+            parent: token,
             highlight,
             glueProse: false,
-            linkCap: y,
+            linkCap,
             windowed,
             promptMode,
           }),
         )
         .join("");
-      let L = stripAnsi(joined);
-      let w = isCanonicalArtifactViewerUrl(e.href);
-      let R = Boolean(L && L !== e.href);
-      let _ = (I) => I.replace(regExp_3, "").startsWith(BOXED_DIAMOND_GLYPH);
-      let M = _(L) || _(e.text ?? "");
-      let x = L.includes(BOXED_DIAMOND_GLYPH) || (e.text ?? "").includes(BOXED_DIAMOND_GLYPH);
-      if (w && R) {
-        let joined = Array.from(L)
-          .filter((Ye) => {
-            let Q = Ye.codePointAt(0) ?? 0;
-            if (Q === 8205 || (Q >= 65024 && Q <= 65039)) return true;
-            return !isDecisionSurfaceControl(Q);
+      let linkText = stripAnsi(joined);
+      let isArtifactViewer = isCanonicalArtifactViewerUrl(token.href);
+      let textDiffersFromHref = Boolean(linkText && linkText !== token.href);
+      let hasDiamondGlyph = (text) => text.replace(regExp_3, "").startsWith(BOXED_DIAMOND_GLYPH);
+      let textHasDiamond = hasDiamondGlyph(linkText) || hasDiamondGlyph(token.text ?? "");
+      let anyDiamond =
+        linkText.includes(BOXED_DIAMOND_GLYPH) || (token.text ?? "").includes(BOXED_DIAMOND_GLYPH);
+      if (isArtifactViewer && textDiffersFromHref) {
+        let text = Array.from(linkText)
+          .filter((character) => {
+            let codePoint = character.codePointAt(0) ?? 0;
+            if (codePoint === 8205 || (codePoint >= 65024 && codePoint <= 65039)) return true;
+            return !isDecisionSurfaceControl(codePoint);
           })
           .join("");
-        let K = M ? joined : withBoxedDiamond(joined);
+        let linkedText = textHasDiamond ? text : withBoxedDiamond(text);
         return (
-          createHyperlink(g, K, {
-            themeName: t,
-            supportsHyperlinks: T,
-            shownUrlStart: k,
+          createHyperlink(targetUrl, linkedText, {
+            themeName: theme,
+            supportsHyperlinks: canLink,
+            shownUrlStart,
           }) +
-          (T && e.title ? labelForLink(g) : "") +
-          u
+          (canLink && token.title ? labelForLink(targetUrl) : "") +
+          linkTitle
         );
       }
-      let G = !R || isUrl(g, L);
-      let N = T && G ? k : "";
-      let Z = N === "" ? joined : stripDecisionSurfaceChars(L);
-      let U = R ? Z : T ? stripDecisionSurfaceChars(e.href) : g;
-      let hyperlink = createHyperlink(g, U, {
-        themeName: t,
-        supportsHyperlinks: T,
-        shownUrlStart: k,
+      let needsLink = !textDiffersFromHref || urlMatchesHost(targetUrl, linkText);
+      let prefix = canLink && needsLink ? shownUrlStart : "";
+      let shownText = prefix === "" ? joined : stripDecisionSurfaceChars(linkText);
+      let displayText = textDiffersFromHref
+        ? shownText
+        : canLink
+          ? stripDecisionSurfaceChars(token.href)
+          : targetUrl;
+      let text = createHyperlink(targetUrl, displayText, {
+        themeName: theme,
+        supportsHyperlinks: canLink,
+        shownUrlStart,
       });
-      let V = (!w && x) || Boolean(e.title);
-      if (T && R && V) return N + hyperlink + labelForLink(g) + u;
-      return N + (w ? withBoxedDiamond(hyperlink) : hyperlink) + u;
+      let needsLabel = (!isArtifactViewer && anyDiamond) || Boolean(token.title);
+      if (canLink && textDiffersFromHref && needsLabel)
+        return prefix + text + labelForLink(targetUrl) + linkTitle;
+      return prefix + (isArtifactViewer ? withBoxedDiamond(text) : text) + linkTitle;
     }
     case "list":
-      return e.items
-        .map((item, f) =>
-          formatTokenWindowed(item, t, {
+      return token.items
+        .map((item, itemIndex) =>
+          formatTokenWindowed(item, theme, {
             listDepth,
-            orderedListNumber: e.ordered ? e.start + f : null,
-            parent: e,
+            orderedListNumber: token.ordered ? token.start + itemIndex : null,
+            parent: token,
             highlight,
             glueProse: false,
-            linkCap: y,
+            linkCap,
             windowed,
             screenReader,
             listIndent,
@@ -390,8 +401,8 @@ function formatToken(e, t, n) {
         )
         .join("");
     case "list_item": {
-      let f =
-        (promptMode && orderedListNumber !== null ? /^ *(\d+[.)])/.exec(e.raw)?.[1] : undefined) ??
+      let marker =
+        (promptMode && orderedListNumber !== null ? /^ *(\d+[.)])/.exec(token.raw)?.[1] : undefined) ??
         listMarkerText(
           listDepth,
           orderedListNumber !== null && parent?.type === "list"
@@ -401,71 +412,81 @@ function formatToken(e, t, n) {
               }
             : null,
         );
-      let h = listIndent + repeatString(" ", bunStringWidth(f) + 1);
-      let listIndent_2 = repeatString(" ", Math.min(h.length, MAX_INDENT_SPACES));
-      let k = e.tokens ? flattenNumberOnlyLists(e) : e;
-      let tokens = k.tokens ?? [];
+      let continuationIndent = listIndent + repeatString(" ", bunStringWidth(marker) + 1);
+      let listIndent_2 = repeatString(" ", Math.min(continuationIndent.length, MAX_INDENT_SPACES));
+      let flatItem = token.tokens ? flattenNumberOnlyLists(token) : token;
+      let tokens = flatItem.tokens ?? [];
       let index = tokens.findIndex((token) => token.type !== "space");
-      let L = index === -1 ? [] : tokens.slice(index);
-      let w = L[0];
-      let R =
-        w !== undefined &&
-        (w.type === "code" ||
-          w.type === "blockquote" ||
-          w.type === "hr" ||
-          w.type === "table" ||
-          w.type === "list");
-      let _ = !R;
-      let joined = L.map((x) => {
-        let G = x.type === "blockquote" ? leadingBlockToken(x, highlight) : undefined;
-        let N = formatTokenWindowed(G ?? x, t, {
-          listDepth: listDepth + 1,
-          orderedListNumber,
-          parent: k,
-          highlight,
-          glueProse: false,
-          linkCap: y,
-          windowed,
-          screenReader,
-          listIndent: listIndent_2,
-          promptMode,
-          quotesAround,
-        });
-        if (x.type === "code" && N === WORD_BOUNDARY_PATTERNS) return "";
-        if (
-          x.type === "code" ||
-          x.type === "blockquote" ||
-          x.type === "hr" ||
-          x.type === "table" ||
-          x.type === "list" ||
-          x.type === "space"
-        )
-          return (x.type === "blockquote" && G === undefined) || x.type === "hr" || x.type === "table"
-            ? N.replace(/^\n+/, "")
-            : N;
-        let Z = _ ? `${listIndent}${f} ` : h;
-        _ = false;
-        let linkText = N.split(WORD_BOUNDARY_PATTERNS)
-          .map((C, index) => (index === 0 ? Z + C : C === "" ? C : h + C))
-          .join(WORD_BOUNDARY_PATTERNS);
-        return x.type === "html" && !linkText.endsWith(WORD_BOUNDARY_PATTERNS)
-          ? linkText + WORD_BOUNDARY_PATTERNS
-          : linkText;
-      }).join("");
-      return _ || R ? `${listIndent}${f}${WORD_BOUNDARY_PATTERNS}${joined}` : joined;
+      let contentTokens = index === -1 ? [] : tokens.slice(index);
+      let firstToken = contentTokens[0];
+      let firstIsBlock =
+        firstToken !== undefined &&
+        (firstToken.type === "code" ||
+          firstToken.type === "blockquote" ||
+          firstToken.type === "hr" ||
+          firstToken.type === "table" ||
+          firstToken.type === "list");
+      let needsMarker = !firstIsBlock;
+      let joined = contentTokens
+        .map((itemToken) => {
+          let leadingBlock =
+            itemToken.type === "blockquote" ? leadingBlockToken(itemToken, highlight) : undefined;
+          let renderedItem = formatTokenWindowed(leadingBlock ?? itemToken, theme, {
+            listDepth: listDepth + 1,
+            orderedListNumber,
+            parent: flatItem,
+            highlight,
+            glueProse: false,
+            linkCap,
+            windowed,
+            screenReader,
+            listIndent: listIndent_2,
+            promptMode,
+            quotesAround,
+          });
+          if (itemToken.type === "code" && renderedItem === WORD_BOUNDARY_PATTERNS) return "";
+          if (
+            itemToken.type === "code" ||
+            itemToken.type === "blockquote" ||
+            itemToken.type === "hr" ||
+            itemToken.type === "table" ||
+            itemToken.type === "list" ||
+            itemToken.type === "space"
+          )
+            return (itemToken.type === "blockquote" && leadingBlock === undefined) ||
+              itemToken.type === "hr" ||
+              itemToken.type === "table"
+              ? renderedItem.replace(/^\n+/, "")
+              : renderedItem;
+          let linePrefix = needsMarker ? `${listIndent}${marker} ` : continuationIndent;
+          needsMarker = false;
+          let linkText = renderedItem
+            .split(WORD_BOUNDARY_PATTERNS)
+            .map((line, index) =>
+              index === 0 ? linePrefix + line : line === "" ? line : continuationIndent + line,
+            )
+            .join(WORD_BOUNDARY_PATTERNS);
+          return itemToken.type === "html" && !linkText.endsWith(WORD_BOUNDARY_PATTERNS)
+            ? linkText + WORD_BOUNDARY_PATTERNS
+            : linkText;
+        })
+        .join("");
+      return needsMarker || firstIsBlock
+        ? `${listIndent}${marker}${WORD_BOUNDARY_PATTERNS}${joined}`
+        : joined;
     }
     case "paragraph":
       return (
-        renderWithSafeLinks(e.tokens, () =>
-          (e.tokens ?? [])
-            .map((u) =>
-              formatTokenWindowed(u, t, {
+        renderWithSafeLinks(token.tokens, () =>
+          (token.tokens ?? [])
+            .map((paragraphToken) =>
+              formatTokenWindowed(paragraphToken, theme, {
                 listDepth: 0,
                 orderedListNumber: null,
                 parent: null,
                 highlight,
                 glueProse: false,
-                linkCap: y,
+                linkCap,
                 windowed,
                 promptMode,
               }),
@@ -478,47 +499,48 @@ function formatToken(e, t, n) {
     case "br":
       return WORD_BOUNDARY_PATTERNS;
     case "text": {
-      if (parent?.type === "link") return e.text;
-      let u = !promptMode && e.escaped === false ? e.text.replace(NBSP_ENTITY_RE, " ") : e.text;
+      if (parent?.type === "link") return token.text;
+      let normalizedText =
+        !promptMode && token.escaped === false ? token.text.replace(NBSP_ENTITY_RE, " ") : token.text;
       if (parent?.type === "list_item") {
-        let h = e.tokens
-          ? renderWithSafeLinks(e.tokens, () =>
-              (e.tokens ?? [])
-                .map((g) =>
-                  formatTokenWindowed(g, t, {
+        let renderedText = token.tokens
+          ? renderWithSafeLinks(token.tokens, () =>
+              (token.tokens ?? [])
+                .map((textToken) =>
+                  formatTokenWindowed(textToken, theme, {
                     listDepth,
                     orderedListNumber,
-                    parent: e,
+                    parent: token,
                     highlight,
                     glueProse: true,
-                    linkCap: y,
+                    linkCap,
                     windowed,
                     promptMode,
                   }),
                 )
                 .join(""),
             )
-          : glueListMarkers(linkifyInline(u, t, y, parent, promptMode));
-        let T = parent.tokens?.[0] === e;
-        return `${parent.task && T ? `[${parent.checked ? "x" : " "}] ` : ""}${h}${WORD_BOUNDARY_PATTERNS}`;
+          : glueListMarkers(linkifyInline(normalizedText, theme, linkCap, parent, promptMode));
+        let isFirstToken = parent.tokens?.[0] === token;
+        return `${parent.task && isFirstToken ? `[${parent.checked ? "x" : " "}] ` : ""}${renderedText}${WORD_BOUNDARY_PATTERNS}`;
       }
-      let f = linkifyInline(u, t, y, parent, promptMode);
-      return glueProse ? glueListMarkers(f) : f;
+      let linkedText = linkifyInline(normalizedText, theme, linkCap, parent, promptMode);
+      return glueProse ? glueListMarkers(linkedText) : linkedText;
     }
     case "table": {
-      let f = function (tokens) {
+      let renderCells = function (tokens) {
         return renderWithSafeLinks(
           tokens,
           () =>
             tokens
-              ?.map((E) =>
-                formatTokenWindowed(E, t, {
+              ?.map((cellToken) =>
+                formatTokenWindowed(cellToken, theme, {
                   listDepth: 0,
                   orderedListNumber: null,
                   parent: null,
                   highlight,
                   glueProse: false,
-                  linkCap: y,
+                  linkCap,
                   windowed,
                   promptMode,
                 }),
@@ -526,31 +548,31 @@ function formatToken(e, t, n) {
               .join("") ?? "",
         );
       };
-      let h = function (tokens) {
-        return stripAnsi(f(tokens));
+      let plainCells = function (tokens) {
+        return stripAnsi(renderCells(tokens));
       };
-      let tableToken = e;
+      let tableToken = token;
       if (screenReader)
         return (
           summarizeMarkdownText(
-            tableToken.header.map((g) => h(g.tokens)),
-            tableToken.rows.map((tokens) => tokens.map((token) => h(token.tokens))),
+            tableToken.header.map((headerCell) => plainCells(headerCell.tokens)),
+            tableToken.rows.map((tokens) => tokens.map((token) => plainCells(token.tokens))),
           ) +
           WORD_BOUNDARY_PATTERNS +
           WORD_BOUNDARY_PATTERNS
         );
       let columnWidths = tableToken.header.map((header, index) => {
-        let maxWidth = bunStringWidth(h(header.tokens));
+        let maxWidth = bunStringWidth(plainCells(header.tokens));
         for (let row of tableToken.rows) {
-          let cellLength = bunStringWidth(h(row[index]?.tokens));
+          let cellLength = bunStringWidth(plainCells(row[index]?.tokens));
           maxWidth = Math.max(maxWidth, cellLength);
         }
         return Math.max(maxWidth, 3);
       });
       let tableOutput = "| ";
       tableToken.header.forEach((header, index) => {
-        let content = f(header.tokens);
-        let displayText = h(header.tokens);
+        let content = renderCells(header.tokens);
+        let displayText = plainCells(header.tokens);
         let targetWidth = columnWidths[index];
         let align = tableToken.align?.[index];
         tableOutput += padAligned(content, bunStringWidth(displayText), targetWidth, align) + " | ";
@@ -565,8 +587,8 @@ function formatToken(e, t, n) {
       tableToken.rows.forEach((row) => {
         tableOutput += "| ";
         row.forEach((cell, index) => {
-          let content = f(cell.tokens);
-          let displayText = h(cell.tokens);
+          let content = renderCells(cell.tokens);
+          let displayText = plainCells(cell.tokens);
           let width = columnWidths[index];
           let align = tableToken.align?.[index];
           tableOutput += padAligned(content, bunStringWidth(displayText), width, align) + " | ";
@@ -576,138 +598,150 @@ function formatToken(e, t, n) {
       return tableOutput + WORD_BOUNDARY_PATTERNS;
     }
     case "escape":
-      return e.text;
+      return token.text;
     case "html":
-      return e.text;
+      return token.text;
     case "def":
       return "";
   }
-  return e.raw;
+  return token.raw;
 }
 //@ chunk-wj577vf9.js:19907-20150 layout
 /**
  * issue 引用正则、被视为非 GitHub 的托管站点列表以及 URL 正则。
  */
-var ISSUE_REFERENCE_RE = /(^|[^\w./-])([A-Za-z0-9][\w-]*\/[A-Za-z0-9][\w.-]*)#(\d+)\b/g;
-var NON_GITHUB_ISSUE_HOSTS = new Set([
-  "gitlab.com",
-  "bitbucket.org",
-  "codeberg.org",
-  "gitea.com",
-  "git.sr.ht",
-  "dev.azure.com",
-]);
-var URL_SCHEME_RE = /^[a-z][a-z0-9+.-]*:/i;
-var HTTP_URL_RE = /^https?:\/\/[\w\-.~:/?#[\]@!$&'()*+,;=%]+$/i;
+var ISSUE_REFERENCE_RE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var NON_GITHUB_ISSUE_HOSTS;
+var URL_SCHEME_RE;
+var HTTP_URL_RE;
+deferInit("chunk-wj577vf9.js:19907", () => {
+  ISSUE_REFERENCE_RE = /(^|[^\w./-])([A-Za-z0-9][\w-]*\/[A-Za-z0-9][\w.-]*)#(\d+)\b/g;
+  NON_GITHUB_ISSUE_HOSTS = new Set([
+    "gitlab.com",
+    "bitbucket.org",
+    "codeberg.org",
+    "gitea.com",
+    "git.sr.ht",
+    "dev.azure.com",
+  ]);
+  URL_SCHEME_RE = /^[a-z][a-z0-9+.-]*:/i;
+  HTTP_URL_RE = /^https?:\/\/[\w\-.~:/?#[\]@!$&'()*+,;=%]+$/i;
+});
 //@ chunk-wj577vf9.js:20150-20313 layout
-function isUnsafeLinkHref(href, t) {
-  let n = URL_SCHEME_RE.exec(href)?.[0];
-  if (n !== undefined) return !t.has(n.slice(0, -1).toLowerCase());
-  let r = href.split(/[/?#]/, 1)[0] ?? "";
-  return !/^[A-Za-z0-9._~-]*$/.test(r);
+function isUnsafeLinkHref(href, allowedSchemes) {
+  let scheme = URL_SCHEME_RE.exec(href)?.[0];
+  if (scheme !== undefined) return !allowedSchemes.has(scheme.slice(0, -1).toLowerCase());
+  let firstSegment = href.split(/[/?#]/, 1)[0] ?? "";
+  return !/^[A-Za-z0-9._~-]*$/.test(firstSegment);
 }
 //@ chunk-wj577vf9.js:20313-20644 layout
 /**
  * 递归标记不安全的链接与代码片段为 defanged（表格、列表、子令牌都处理）。
  */
-function defangTokens(tokens, t) {
-  for (let n of tokens) {
-    if (n.type === "codespan" || (n.type === "link" && isUnsafeLinkHref(n.href, t)))
-      Object.assign(n, {
+function defangTokens(tokens, theme) {
+  for (let token of tokens) {
+    if (token.type === "codespan" || (token.type === "link" && isUnsafeLinkHref(token.href, theme)))
+      Object.assign(token, {
         defanged: true,
       });
-    if (n.type === "table") {
-      let r = n;
-      for (let o of [...r.header, ...r.rows.flat()]) defangTokens(o.tokens, t);
-    } else if (n.type === "list") for (let item of n.items) defangTokens(item.tokens, t);
-    else if ("tokens" in n && Array.isArray(n.tokens)) defangTokens(n.tokens, t);
+    if (token.type === "table") {
+      let tableToken = token;
+      for (let cell of [...tableToken.header, ...tableToken.rows.flat()]) defangTokens(cell.tokens, theme);
+    } else if (token.type === "list") for (let item of token.items) defangTokens(item.tokens, theme);
+    else if ("tokens" in token && Array.isArray(token.tokens)) defangTokens(token.tokens, theme);
   }
 }
 //@ chunk-wj577vf9.js:20644-20837 layout
-function localFileLinkPath(href) {
-  let t = fileUrlToPath(href);
-  if (t === null || ANY_CONTROL_CHAR_RE.test(t) || regExp_3.test(t) || t !== t.trimEnd()) return null;
-  if (URL_SCHEME_RE.test(t)) return t;
-  let n = decodePercentEncoding(t);
-  let any = n.some((o) => /^file:/i.test(stripLeadingInvisibleChars(o)));
-  return isUnsafePathAfterDecode(t, n) || any ? null : t;
+function localFileLinkPath(url) {
+  let filePath = fileUrlToPath(url);
+  if (
+    filePath === null ||
+    ANY_CONTROL_CHAR_RE.test(filePath) ||
+    regExp_3.test(filePath) ||
+    filePath !== filePath.trimEnd()
+  )
+    return null;
+  if (URL_SCHEME_RE.test(filePath)) return filePath;
+  let decodedCandidates = decodePercentEncoding(filePath);
+  let any = decodedCandidates.some((candidate) => /^file:/i.test(stripLeadingInvisibleChars(candidate)));
+  return isUnsafePathAfterDecode(filePath, decodedCandidates) || any ? null : filePath;
 }
 //@ chunk-wj577vf9.js:20837-21446 placement
-function escapePipesInCode(e) {
-  if (!e.includes("`") || !e.includes("|")) return e;
-  let t = [];
-  let n = [];
-  for (let c = 0; c < e.length;) {
-    if (e[c] !== "`") {
-      c++;
+function escapePipesInCode(text) {
+  if (!text.includes("`") || !text.includes("|")) return text;
+  let fenceStarts = [];
+  let fenceLengths = [];
+  for (let cursor = 0; cursor < text.length;) {
+    if (text[cursor] !== "`") {
+      cursor++;
       continue;
     }
-    let p = 0;
-    while (e[c + p] === "`") p++;
-    t.push(c);
-    n.push(p);
-    c += p;
+    let runLength = 0;
+    while (text[cursor + runLength] === "`") runLength++;
+    fenceStarts.push(cursor);
+    fenceLengths.push(runLength);
+    cursor += runLength;
   }
-  let r = Array(t.length).fill(-1);
-  let o = new Map();
-  for (let k = t.length - 1; k >= 0; k--) {
-    let p = o.get(n[k]);
-    if (p !== undefined) r[k] = p;
-    o.set(n[k], k);
+  let closingIndexes = Array(fenceStarts.length).fill(-1);
+  let lastOpenByLength = new Map();
+  for (let k = fenceStarts.length - 1; k >= 0; k--) {
+    let closingIndex = lastOpenByLength.get(fenceLengths[k]);
+    if (closingIndex !== undefined) closingIndexes[k] = closingIndex;
+    lastOpenByLength.set(fenceLengths[k], k);
   }
-  let s = "";
-  let l = 0;
-  let a = 0;
-  while (l < e.length) {
-    if (e[l] !== "`") {
-      s += e[l++];
+  let result = "";
+  let cursor = 0;
+  let fenceIndex = 0;
+  while (cursor < text.length) {
+    if (text[cursor] !== "`") {
+      result += text[cursor++];
       continue;
     }
-    let c = n[a];
-    let sliced = e.slice(l, l + c);
-    let d = r[a];
-    if (d === -1) {
-      s += sliced;
-      l += c;
-      a++;
+    let fenceLength = fenceLengths[fenceIndex];
+    let sliced = text.slice(cursor, cursor + fenceLength);
+    let closingIndex = closingIndexes[fenceIndex];
+    if (closingIndex === -1) {
+      result += sliced;
+      cursor += fenceLength;
+      fenceIndex++;
       continue;
     }
-    let b = t[d];
-    s += sliced;
-    let S = 0;
-    for (let k = l + c; k < b; k++) {
-      let u = e[k];
-      if (u === "\\") {
-        S++;
-        s += u;
+    let closingStart = fenceStarts[closingIndex];
+    result += sliced;
+    let backslashRun = 0;
+    for (let k = cursor + fenceLength; k < closingStart; k++) {
+      let character = text[k];
+      if (character === "\\") {
+        backslashRun++;
+        result += character;
         continue;
       }
-      if (u === "|") s += S % 2 === 0 ? "\\|" : "|";
-      else s += u;
-      S = 0;
+      if (character === "|") result += backslashRun % 2 === 0 ? "\\|" : "|";
+      else result += character;
+      backslashRun = 0;
     }
-    s += sliced;
-    l = b + c;
-    a = d + 1;
+    result += sliced;
+    cursor = closingStart + fenceLength;
+    fenceIndex = closingIndex + 1;
   }
-  return s;
+  return result;
 }
 //@ chunk-wj577vf9.js:21446-21566 placement
-function tableHasExtraCells(e, t) {
-  for (let k = 2; k < e.length; k++) {
-    let r = addToInMemoryErrorLog(e[k]);
-    for (let o = t; o < r.length; o++) if (r[o].trim()) return true;
+function tableHasExtraCells(lines, columnCount) {
+  for (let k = 2; k < lines.length; k++) {
+    let cells = addToInMemoryErrorLog(lines[k]);
+    for (let column = columnCount; column < cells.length; column++) if (cells[column].trim()) return true;
   }
   return false;
 }
 //@ chunk-wj577vf9.js:21566-21767 placement = addToInMemoryErrorLog (0.678)
 function addToInMemoryErrorLog(errorInfo) {
   let parts = errorInfo
-    .replace(/\|/g, (r, o, s) => {
-      let l = false;
-      let a = o;
-      while (--a >= 0 && s[a] === "\\") l = !l;
-      return l ? "|" : " |";
+    .replace(/\|/g, (match, offset, input) => {
+      let isEscaped = false;
+      let scanIndex = offset;
+      while (--scanIndex >= 0 && input[scanIndex] === "\\") isEscaped = !isEscaped;
+      return isEscaped ? "|" : " |";
     })
     .split(/ \|/);
   if (!parts[0]?.trim()) parts.shift();
@@ -715,35 +749,35 @@ function addToInMemoryErrorLog(errorInfo) {
   return parts;
 }
 //@ chunk-wj577vf9.js:21767-21831 layout
-function linkifyInline(e, themeName, n, parent, promptMode) {
-  if (promptMode) return e;
-  return withHyperlinks(linkifyIssueReferences(e, themeName, n), themeName, n, parent);
+function linkifyInline(text, theme, linkCap, parent, promptMode) {
+  if (promptMode) return text;
+  return withHyperlinks(linkifyIssueReferences(text, theme, linkCap), theme, linkCap, parent);
 }
 //@ chunk-wj577vf9.js:21831-21866 layout
-function withHyperlinks(e, t, n = supportsHyperlinks(), r) {
-  return e;
+function withHyperlinks(text, theme, linkCap = supportsHyperlinks(), parent) {
+  return text;
 }
 //@ chunk-wj577vf9.js:21866-22169 fingerprint = linkifyIssueReferences (0.327)
-function linkifyIssueReferences(e, themeName, n = supportsHyperlinks()) {
-  if (!n) return e;
-  if (!e.includes("#")) return e;
+function linkifyIssueReferences(text, themeName, linkCap = supportsHyperlinks()) {
+  if (!linkCap) return text;
+  if (!text.includes("#")) return text;
   let cachedRepositoryHost = getCachedRepositoryHost();
-  let o = cachedRepositoryHost !== null && getGitHostKind(cachedRepositoryHost) === "gitlab";
+  let isGitlab = cachedRepositoryHost !== null && getGitHostKind(cachedRepositoryHost) === "gitlab";
   if (
-    !o &&
+    !isGitlab &&
     cachedRepositoryHost !== null &&
     NON_GITHUB_ISSUE_HOSTS.has(normalizeHostCached(cachedRepositoryHost))
   )
-    return e;
-  let s = cachedRepositoryHost ?? GITHUB_HOST;
-  let l = o ? "/-/issues/" : "/issues/";
-  return e.replace(
+    return text;
+  let host = cachedRepositoryHost ?? GITHUB_HOST;
+  let issuePathPrefix = isGitlab ? "/-/issues/" : "/issues/";
+  return text.replace(
     ISSUE_REFERENCE_RE,
     (_match, prefix, repo, num) =>
       prefix +
-      createHyperlink(`https://${s}/${repo}${l}${num}`, `${repo}#${num}`, {
+      createHyperlink(`https://${host}/${repo}${issuePathPrefix}${num}`, `${repo}#${num}`, {
         themeName,
-        supportsHyperlinks: n,
+        supportsHyperlinks: linkCap,
       }),
   );
 }
@@ -775,43 +809,43 @@ var ROMAN_NUMERALS = [
 ];
 //@ chunk-wj577vf9.js:22402-22474 layout
 function toRomanNumeral(number) {
-  let t = "";
-  for (let [n, r] of ROMAN_NUMERALS)
-    while (number >= n) {
-      t += r;
-      number -= n;
+  let roman = "";
+  for (let [value, symbol] of ROMAN_NUMERALS)
+    while (number >= value) {
+      roman += symbol;
+      number -= value;
     }
-  return t;
+  return roman;
 }
 //@ chunk-wj577vf9.js:22474-22540 layout
-function glueListMarkers(e) {
-  return e.replace(/ (\d{1,9}[.)])(?!\w)/g, "\xA0$1");
+function glueListMarkers(text) {
+  return text.replace(/ (\d{1,9}[.)])(?!\w)/g, "\xA0$1");
 }
 //@ chunk-wj577vf9.js:22540-22625 layout
 /**
  * 取有序列表的首末编号。
  */
-function orderedListRange(e) {
-  let start = e.start === "" ? 1 : e.start;
+function orderedListRange(token) {
+  let start = token.start === "" ? 1 : token.start;
   return {
     first: start,
-    last: start + e.items.length - 1,
+    last: start + token.items.length - 1,
   };
 }
 //@ chunk-wj577vf9.js:22625-22941 layout
 /**
  * 把只含编号、没有内容的有序列表折成纯文本（避免渲染为空列表）。
  */
-function flattenNumberOnlyLists(e) {
-  let mapped = e.tokens.map((token) => {
+function flattenNumberOnlyLists(token) {
+  let mapped = token.tokens.map((token) => {
     if (token.type !== "list" || !token.ordered) return token;
-    let r = [];
+    let markers = [];
     for (let item of token.items) {
-      let l = /^ *(\d{1,9}[.)])/.exec(item.raw)?.[1];
-      if (item.tokens.length > 0 || l === undefined) return token;
-      r.push(l);
+      let marker = /^ *(\d{1,9}[.)])/.exec(item.raw)?.[1];
+      if (item.tokens.length > 0 || marker === undefined) return token;
+      markers.push(marker);
     }
-    let joined = r.join(`
+    let joined = markers.join(`
 `);
     return {
       type: "text",
@@ -819,24 +853,24 @@ function flattenNumberOnlyLists(e) {
       text: joined,
     };
   });
-  return mapped.every((n, r) => n === e.tokens[r])
-    ? e
+  return mapped.every((mappedToken, index) => mappedToken === token.tokens[index])
+    ? token
     : {
-        ...e,
+        ...token,
         tokens: mapped,
       };
 }
 //@ chunk-wj577vf9.js:22941-23178 layout
-function isBlankToken(e, t) {
-  switch (e.type) {
+function isBlankToken(token, highlight) {
+  switch (token.type) {
     case "space":
       return true;
     case "code":
-      return e.text === "" && (!e.lang || t?.supportsLanguage(e.lang) === true);
+      return token.text === "" && (!token.lang || highlight?.supportsLanguage(token.lang) === true);
     case "heading":
-      return e.text === "";
+      return token.text === "";
     case "blockquote":
-      return (e.tokens ?? []).every((n) => isBlankToken(n, t));
+      return (token.tokens ?? []).every((childToken) => isBlankToken(childToken, highlight));
     default:
       return false;
   }
@@ -847,12 +881,17 @@ function isBlankToken(e, t) {
  */
 function leadingBlockToken(token, highlight) {
   let index = token.tokens.findIndex((token) => !isBlankToken(token, highlight));
-  let r = token.tokens[index];
-  let o = r?.type === "blockquote" ? leadingBlockToken(r, highlight) : r?.type === "code" ? r : undefined;
+  let firstContentToken = token.tokens[index];
+  let promotedToken =
+    firstContentToken?.type === "blockquote"
+      ? leadingBlockToken(firstContentToken, highlight)
+      : firstContentToken?.type === "code"
+        ? firstContentToken
+        : undefined;
   return (
-    o && {
+    promotedToken && {
       ...token,
-      tokens: [o, ...token.tokens.slice(index + 1)],
+      tokens: [promotedToken, ...token.tokens.slice(index + 1)],
     }
   );
 }
@@ -860,12 +899,12 @@ function leadingBlockToken(token, highlight) {
 /**
  * 根据列表序号与编号样式生成列表符号。
  */
-function listMarkerText(listDepth, t) {
-  return t === null ? "-" : `${listMarkerText_2(listDepth + 1, t)}.`;
+function listMarkerText(listDepth, listToken) {
+  return listToken === null ? "-" : `${listMarkerText_2(listDepth + 1, listToken)}.`;
 }
 //@ chunk-wj577vf9.js:23415-23580 layout
-function listMarkerText_2(e, { number, first, last }) {
-  switch (e) {
+function listMarkerText_2(listDepth, { number, first, last }) {
+  switch (listDepth) {
     case 2:
       return first >= 1 ? numberToLetter(number) : number.toString();
     case 3:
@@ -885,26 +924,30 @@ function padAligned(content, displayWidth, targetWidth, align) {
   return content + " ".repeat(padding);
 }
 //@ chunk-wj577vf9.js:23757-24133 placement
-function summarizeMarkdownText(e, t) {
-  function n(l) {
-    return l.replace(/\s+/g, " ").trim();
+function summarizeMarkdownText(summaryLines, groups) {
+  function collapseWhitespace(text) {
+    return text.replace(/\s+/g, " ").trim();
   }
-  function r(l) {
-    return /[.!?\u2026]["')\]]*$/.test(l) ? l : `${l}.`;
+  function ensureSentenceEnd(sentence) {
+    return /[.!?\u2026]["')\]]*$/.test(sentence) ? sentence : `${sentence}.`;
   }
-  function o(l) {
-    return l
-      .map((a, c) => {
-        let p = n(e[c] ?? "");
-        let d = n(a);
-        if (!p && !d) return null;
-        return r(p ? `${p}: ${d}` : d);
+  function formatGroup(lines) {
+    return lines
+      .map((line, index) => {
+        let existingLine = collapseWhitespace(summaryLines[index] ?? "");
+        let trimmedLine = collapseWhitespace(line);
+        if (!existingLine && !trimmedLine) return null;
+        return ensureSentenceEnd(existingLine ? `${existingLine}: ${trimmedLine}` : trimmedLine);
       })
-      .filter((a) => a !== null)
+      .filter((formatted) => formatted !== null)
       .join(" ");
   }
-  return (t.length > 0 ? t.map(o) : [e.map(n).filter(Boolean).map(r).join(" ")])
-    .filter((l) => l.length > 0)
+  return (
+    groups.length > 0
+      ? groups.map(formatGroup)
+      : [summaryLines.map(collapseWhitespace).filter(Boolean).map(ensureSentenceEnd).join(" ")]
+  )
+    .filter((chunk) => chunk.length > 0)
     .join(WORD_BOUNDARY_PATTERNS);
 }
 export {

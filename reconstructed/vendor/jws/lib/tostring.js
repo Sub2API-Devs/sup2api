@@ -5,14 +5,14 @@
  * pieces: chunk-82d8c88w.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x, importMetaRequire } from "../../../runtime/bun-runtime.js";
+import { __commonJS, importMetaRequire } from "../../../runtime/bun-runtime.js";
 
 //@ chunk-82d8c88w.js:7580-7773 cjs-fingerprint
-var require_tostring = x(function (cjsExports, cjsModule) {
-  var ir = importMetaRequire("buffer").Buffer;
+var require_tostring = __commonJS(function (cjsExports, cjsModule) {
+  var BufferCtor = importMetaRequire("buffer").Buffer;
   cjsModule.exports = function (obj) {
     if (typeof obj === "string") return obj;
-    if (typeof obj === "number" || ir.isBuffer(obj)) return obj.toString();
+    if (typeof obj === "number" || BufferCtor.isBuffer(obj)) return obj.toString();
     return JSON.stringify(obj);
   };
 });

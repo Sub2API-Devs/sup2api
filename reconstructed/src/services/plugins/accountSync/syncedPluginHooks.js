@@ -53,33 +53,35 @@ import { isCustomizationDisabled } from "../../../utils/settings/customizationDi
 import { isSettingSourceEnabled } from "../../../utils/settings/constants.js";
 import { DoctorLazy } from "../../../cli/handlers/util.js";
 import { create, create_2 } from "../../../../vendor/zod/lib/index.mjs";
+import { deferInit } from "../../../../runtime/deferred-init.js";
 
 //@ chunk-f9asxqh1.js:7717-8021 placement
 /**
  * 从所有会话钩子注册表中移除属于给定技能根目录的钩子，返回移除数量，有移除时广播钩子存储变化。
  */
-function removeSkillRootHooks(e) {
-  if (e.size === 0) return 0;
-  let n = 0;
-  for (let s of liveWeakRefs(getSessionHookRegistries()))
-    for (let [r, f] of s) {
-      let y = {};
-      let S = n;
-      for (let h of HOOK_EVENTS) {
-        let w = [];
-        for (let b of f.hooks[h] ?? [])
-          if (b.skillRoot !== undefined && e.has(b.skillRoot)) n += b.hooks.length;
-          else w.push(b);
-        if (w.length > 0) y[h] = w;
+function removeSkillRootHooks(roots) {
+  if (roots.size === 0) return 0;
+  let removedCount = 0;
+  for (let registry of liveWeakRefs(getSessionHookRegistries()))
+    for (let [registryKey, entry] of registry) {
+      let keptByEvent = {};
+      let removedBefore = removedCount;
+      for (let event of HOOK_EVENTS) {
+        let keptMatchers = [];
+        for (let matcherEntry of entry.hooks[event] ?? [])
+          if (matcherEntry.skillRoot !== undefined && roots.has(matcherEntry.skillRoot))
+            removedCount += matcherEntry.hooks.length;
+          else keptMatchers.push(matcherEntry);
+        if (keptMatchers.length > 0) keptByEvent[event] = keptMatchers;
       }
-      if (n > S)
-        s.set(r, {
-          ...f,
-          hooks: y,
+      if (removedCount > removedBefore)
+        registry.set(registryKey, {
+          ...entry,
+          hooks: keptByEvent,
         });
     }
-  if (n > 0) emitHookStoresChanged();
-  return n;
+  if (removedCount > 0) emitHookStoresChanged();
+  return removedCount;
 }
 //@ chunk-f9asxqh1.js:8021-8050 placement
 /**
@@ -90,7 +92,7 @@ function createSessionHooksRegistry() {
 }
 //@ chunk-f9asxqh1.js:8050-8296 placement
 var HOOK_REMOVAL_REASONS = {
-  sync_off: (e) => `${e} sync is off (a setting or the organization's policy).`,
+  sync_off: (what) => `${what} sync is off (a setting or the organization's policy).`,
   account_change: () => "A sign-out, or a sign-in not verified as the same account.",
   skill_gone: () => "Those skills are gone from this account's list or from the disk.",
 };
@@ -98,32 +100,39 @@ var HOOK_REMOVAL_REASONS = {
 /**
  * 列出当前会话钩子中位于指定目录之下的技能根目录集合。
  */
-function skillRootsUnder(e) {
-  let n = e + sep;
-  let s = new Set();
-  for (let { skillRoot } of getAllSessionHookEntries()) if (skillRoot?.startsWith(n)) s.add(skillRoot);
-  return s;
+function skillRootsUnder(root) {
+  let rootPrefix = root + sep;
+  let skillRoots = new Set();
+  for (let { skillRoot } of getAllSessionHookEntries())
+    if (skillRoot?.startsWith(rootPrefix)) skillRoots.add(skillRoot);
+  return skillRoots;
 }
 //@ chunk-f9asxqh1.js:8400-8544 placement
 /**
  * 移除指定技能根目录的同步钩子，并按原因（同步关闭、账号变化、技能消失）记录调试日志与诊断事件。
  */
-function removeSyncedSkillHooks(e, n, s) {
-  let r = removeSkillRootHooks(n);
-  if (r === 0) return;
-  logForDebugging(`Hooks of ${e.hooksOf} removed: ${r}. ${HOOK_REMOVAL_REASONS[s](e.sync)}`);
-  logForDiagnosticsNoPII("info", e.event, {
-    count: r,
-    reason: s,
+function removeSyncedSkillHooks(labels, roots, reason) {
+  let removedCount = removeSkillRootHooks(roots);
+  if (removedCount === 0) return;
+  logForDebugging(
+    `Hooks of ${labels.hooksOf} removed: ${removedCount}. ${HOOK_REMOVAL_REASONS[reason](labels.sync)}`,
+  );
+  logForDiagnosticsNoPII("info", labels.event, {
+    count: removedCount,
+    reason,
   });
 }
 //@ chunk-f9asxqh1.js:8544-8664 placement
-var PLUGINS_SYNC_HOOK_LABELS = {
-  sync: "Plugins",
-  hooksOf: "synced plugins' skills",
-  event: "plugins_sync_skill_hooks_removed",
-};
-var refusalsLogged = new HostScoped(() => new Set());
+var PLUGINS_SYNC_HOOK_LABELS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var refusalsLogged;
+deferInit("chunk-f9asxqh1.js:8544", () => {
+  PLUGINS_SYNC_HOOK_LABELS = {
+    sync: "Plugins",
+    hooksOf: "synced plugins' skills",
+    event: "plugins_sync_skill_hooks_removed",
+  };
+  refusalsLogged = new HostScoped(() => new Set());
+});
 //@ chunk-f9asxqh1.js:8664-8837 placement
 function syncedPluginsFolder() {
   try {
@@ -146,33 +155,33 @@ function syncedPluginsFolder() {
  * 把同步插件目录标记为已记录拒绝。
  */
 function markSyncedFolderRefused() {
-  let e = syncedPluginsFolder();
-  if (e !== undefined) onProcessRootHost(refusalsLogged).add(e);
+  let folder = syncedPluginsFolder();
+  if (folder !== undefined) onProcessRootHost(refusalsLogged).add(folder);
 }
 //@ chunk-f9asxqh1.js:8891-8965 placement
 /**
  * 取已记录拒绝的根目录集合（含同步插件目录）。
  */
 function refusedRoots() {
-  let e = new Set(onProcessRootHost(refusalsLogged));
-  let n = syncedPluginsFolder();
-  if (n !== undefined) e.add(n);
-  return e;
+  let roots = new Set(onProcessRootHost(refusalsLogged));
+  let syncedFolder = syncedPluginsFolder();
+  if (syncedFolder !== undefined) roots.add(syncedFolder);
+  return roots;
 }
 //@ chunk-f9asxqh1.js:8965-9011 placement
 /**
  * 判断是否属于同步市场的插件。
  */
-function isSyncedMarketplace(e) {
-  return e !== undefined && marketplaceSuffix(e) === SYNCED;
+function isSyncedMarketplace(source) {
+  return source !== undefined && marketplaceSuffix(source) === SYNCED;
 }
 //@ chunk-f9asxqh1.js:9011-9107 placement
 /**
  * 找出某路径所属的同步根目录。
  */
-function syncedRootsUnder(e, n) {
-  if (!isSyncedMarketplace(e) || n === undefined) return [];
-  return [...refusedRoots()].filter((s) => n.startsWith(s + sep));
+function syncedRootsUnder(marketplace, path) {
+  if (!isSyncedMarketplace(marketplace) || path === undefined) return [];
+  return [...refusedRoots()].filter((root) => path.startsWith(root + sep));
 }
 //@ chunk-f9asxqh1.js:9107-9184 placement
 /**
@@ -190,26 +199,28 @@ async function readSyncBucket() {
 /**
  * 从路径取技能键（去掉不可见字符）。
  */
-function skillKeyFromPath(e, n) {
-  let [s = ""] = n.slice(e.length + 1).split(sep);
-  return stripInvisibleChars(stripGenerationSuffix(s));
+function skillKeyFromPath(root, path) {
+  let [segment = ""] = path.slice(root.length + 1).split(sep);
+  return stripInvisibleChars(stripGenerationSuffix(segment));
 }
 //@ chunk-f9asxqh1.js:9259-9569 placement
 /**
  * 检查同步插件技能是否仍在账号最近一次完整插件列表里：不在时返回 not_listed，列表读取失败返回 list_unreadable。
  */
-function notListedReason(e, n, s) {
+function notListedReason(bucket, roots, path) {
   try {
     let lastCompleteSyncedPluginList = getLastCompleteSyncedPluginList();
-    let found = n.map((S) => S + sep + e).find((S) => s.startsWith(S + sep));
+    let found = roots
+      .map((root) => root + sep + bucket)
+      .find((dirPrefix) => path.startsWith(dirPrefix + sep));
     if (
       lastCompleteSyncedPluginList === null ||
-      lastCompleteSyncedPluginList.bucket !== e ||
+      lastCompleteSyncedPluginList.bucket !== bucket ||
       found === undefined
     )
       return;
-    let y = skillKeyFromPath(found, s);
-    return Array.from(lastCompleteSyncedPluginList.dirsById.values()).some((S) => S.has(y))
+    let skillKey = skillKeyFromPath(found, path);
+    return Array.from(lastCompleteSyncedPluginList.dirsById.values()).some((dirs) => dirs.has(skillKey))
       ? undefined
       : "not_listed";
   } catch (error) {
@@ -222,9 +233,9 @@ function notListedReason(e, n, s) {
 /**
  * 检查同步插件技能目录是否属于当前账号：无账号返回 no_account，属于其他账号返回 other_account。
  */
-function otherAccountReason(e, n, s) {
-  if (e === null) return "no_account";
-  return n.some((r) => s.startsWith(r + sep + e + sep)) ? undefined : "other_account";
+function otherAccountReason(bucket, roots, path) {
+  if (bucket === null) return "no_account";
+  return roots.some((root) => path.startsWith(root + sep + bucket + sep)) ? undefined : "other_account";
 }
 //@ chunk-f9asxqh1.js:9685-10190 placement
 /**
@@ -243,45 +254,48 @@ var SYNCED_SKILL_REFUSAL_TEXT = {
 /**
  * 取某拒绝原因的说明文本。
  */
-function refusalTextFor(e) {
-  return SYNCED_SKILL_REFUSAL_TEXT[e];
+function refusalTextFor(reason) {
+  return SYNCED_SKILL_REFUSAL_TEXT[reason];
 }
 //@ chunk-f9asxqh1.js:10218-10473 placement
 /**
  * 记录同步插件技能在缺少钩子或 allowed-tools 授权下运行的警告与诊断事件。
  */
-function logSyncedSkillRestricted(e, n, s) {
+function logSyncedSkillRestricted(skillName, reason, lost) {
   let joined = [
-    ...(s.hooks ? ["its hooks"] : []),
-    ...(s.grant ? ["the tools its allowed-tools grants"] : []),
+    ...(lost.hooks ? ["its hooks"] : []),
+    ...(lost.grant ? ["the tools its allowed-tools grants"] : []),
   ].join(" and without ");
-  logForDebugging(`Plugin skill '${e}' runs without ${joined}: ${SYNCED_SKILL_REFUSAL_TEXT[n]}.`, {
-    level: "warn",
-  });
+  logForDebugging(
+    `Plugin skill '${skillName}' runs without ${joined}: ${SYNCED_SKILL_REFUSAL_TEXT[reason]}.`,
+    {
+      level: "warn",
+    },
+  );
   logForDiagnosticsNoPII("info", "plugins_sync_skill_hooks_refused", {
-    reason: n,
+    reason,
   });
 }
 //@ chunk-f9asxqh1.js:10473-10607 placement
 /**
  * 记录同步插件命令被拒绝执行的警告与诊断事件。
  */
-function logSyncedCommandRefused(e, n) {
-  logForDebugging(`Plugin command '${e}' was not run: ${SYNCED_SKILL_REFUSAL_TEXT[n]}.`, {
+function logSyncedCommandRefused(commandName, reason) {
+  logForDebugging(`Plugin command '${commandName}' was not run: ${SYNCED_SKILL_REFUSAL_TEXT[reason]}.`, {
     level: "warn",
   });
   logForDiagnosticsNoPII("info", "plugins_sync_command_refused", {
-    reason: n,
+    reason,
   });
 }
 //@ chunk-f9asxqh1.js:10607-10695 placement
 /**
  * 立即移除已下架插件的技能钩子。
  */
-function removeDelistedSkillHooksNow(e) {
-  let n = new Set();
-  for (let s of refusedRoots()) for (let r of skillRootsUnder(s)) n.add(r);
-  removeSyncedSkillHooks(PLUGINS_SYNC_HOOK_LABELS, n, e);
+function removeDelistedSkillHooksNow(reason) {
+  let rootsToRemove = new Set();
+  for (let root of refusedRoots()) for (let skillRoot of skillRootsUnder(root)) rootsToRemove.add(skillRoot);
+  removeSyncedSkillHooks(PLUGINS_SYNC_HOOK_LABELS, rootsToRemove, reason);
 }
 //@ chunk-f9asxqh1.js:10695-10975 placement
 /**
@@ -289,15 +303,15 @@ function removeDelistedSkillHooksNow(e) {
  */
 function removeDelistedSkillHooks({ bucket, delistedDirs, listedDirs }) {
   try {
-    let r = new Set();
-    for (let f of refusedRoots()) {
-      let y = f + sep + bucket;
-      for (let S of skillRootsUnder(y)) {
-        let h = skillKeyFromPath(y, S);
-        if (delistedDirs.has(h) && !listedDirs.has(h)) r.add(S);
+    let rootsToRemove = new Set();
+    for (let root of refusedRoots()) {
+      let bucketRoot = root + sep + bucket;
+      for (let skillRoot of skillRootsUnder(bucketRoot)) {
+        let skillKey = skillKeyFromPath(bucketRoot, skillRoot);
+        if (delistedDirs.has(skillKey) && !listedDirs.has(skillKey)) rootsToRemove.add(skillRoot);
       }
     }
-    removeSyncedSkillHooks(PLUGINS_SYNC_HOOK_LABELS, r, "skill_gone");
+    removeSyncedSkillHooks(PLUGINS_SYNC_HOOK_LABELS, rootsToRemove, "skill_gone");
     return true;
   } catch (error) {
     logForDiagnosticsNoPII("warn", "plugins_sync_skill_hooks_removal_failed");
@@ -318,18 +332,18 @@ var PLUGINS_SYNC_SETTING = {
  */
 function enableAccountPluginsSync() {
   refreshSyncVeto();
-  let e = isAccountSyncEligibleHere() && !getPluginsSyncVetoed();
-  setAccountPluginsSyncEnabled(e);
-  return e;
+  let enabled = isAccountSyncEligibleHere() && !getPluginsSyncVetoed();
+  setAccountPluginsSyncEnabled(enabled);
+  return enabled;
 }
 //@ chunk-f9asxqh1.js:11179-11241 placement
 /**
  * 重新判定同步是否被否决。
  */
 function refreshSyncVeto() {
-  let e = isSyncSettingsUnreliable(PLUGINS_SYNC_SETTING);
-  setPluginsSyncVetoed(e);
-  if (e && isAccountSyncDeniedHere()) removeDelistedSkillHooksNow("sync_off");
+  let unreliable = isSyncSettingsUnreliable(PLUGINS_SYNC_SETTING);
+  setPluginsSyncVetoed(unreliable);
+  if (unreliable && isAccountSyncDeniedHere()) removeDelistedSkillHooksNow("sync_off");
 }
 //@ chunk-f9asxqh1.js:11241-11273 placement
 /**
@@ -439,28 +453,31 @@ function isAccountSyncDeniedHere() {
 /**
  * 判断是否为 404 not_found_error。
  */
-function isNotFoundServerError(e) {
-  return e.kind === "server_error" && e.status === 404 && e.error === "not_found_error";
+function isNotFoundServerError(answer) {
+  return answer.kind === "server_error" && answer.status === 404 && answer.error === "not_found_error";
 }
 //@ chunk-f9asxqh1.js:12566-12633 placement
 /**
  * 判断错误是否属于“不该继续同步”的拒绝。
  */
-function isSyncRefusal(e) {
-  return e.status === 403 || e.kind === "no_scope" || isNotFoundServerError(e);
+function isSyncRefusal(answer) {
+  return answer.status === 403 || answer.kind === "no_scope" || isNotFoundServerError(answer);
 }
 //@ chunk-f9asxqh1.js:12749-12840 placement
 /**
  * 错误响应信封的 schema。
  */
-var errorEnvelopeSchema = DoctorLazy(() =>
-  create({
-    error: create({
-      type: create_2().optional(),
-      message: create_2().nullish().catch(undefined),
+var errorEnvelopeSchema; // deferred: uses DoctorLazy (../../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-f9asxqh1.js:12749", () => {
+  errorEnvelopeSchema = DoctorLazy(() =>
+    create({
+      error: create({
+        type: create_2().optional(),
+        message: create_2().nullish().catch(undefined),
+      }),
     }),
-  }),
-);
+  );
+});
 export {
   createSessionHooksRegistry,
   isPluginsSyncVetoed,

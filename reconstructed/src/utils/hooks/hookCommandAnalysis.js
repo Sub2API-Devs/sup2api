@@ -17,31 +17,41 @@ import { firstLineOf } from "../stringUtils.js";
 import { isDosShortName } from "../windowsProfileFolders.js";
 import { isPathAbsent } from "../errors.js";
 import { computeContentHash } from "../commitAttribution.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-qmzcskz6.js:527-746 placement
-var HIDDEN_PATH_PATTERN = /(^|\/)\.[^/]*$/;
-var PRIVATE_DOTDIR_RE = /(^|\/)\.(?!\.\/)(?!claude[^/]*\/|config\/)[^/]+\//i;
-var CLAUDE_TRANSIENT_DIRS = ["shell-snapshots", "session-env", "projects", "file-history", "backups"];
-var regExp = new RegExp(String.raw`(^|/)\.claude[^/]*/(?:${CLAUDE_TRANSIENT_DIRS.join("|")})/`, "i");
+var HIDDEN_PATH_PATTERN; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var PRIVATE_DOTDIR_RE;
+var CLAUDE_TRANSIENT_DIRS;
+var regExp;
+deferInit("chunk-qmzcskz6.js:527", () => {
+  HIDDEN_PATH_PATTERN = /(^|\/)\.[^/]*$/;
+  PRIVATE_DOTDIR_RE = /(^|\/)\.(?!\.\/)(?!claude[^/]*\/|config\/)[^/]+\//i;
+  CLAUDE_TRANSIENT_DIRS = ["shell-snapshots", "session-env", "projects", "file-history", "backups"];
+  regExp = new RegExp(String.raw`(^|/)\.claude[^/]*/(?:${CLAUDE_TRANSIENT_DIRS.join("|")})/`, "i");
+});
 //@ chunk-qmzcskz6.js:746-839 placement
-function isScriptFileName(e) {
-  let sliced = e.slice(e.lastIndexOf("/") + 1);
+function isScriptFileName(name) {
+  let sliced = name.slice(name.lastIndexOf("/") + 1);
   return SCRIPT_EXTENSION_RE.test(sliced) || (sliced !== "" && !sliced.includes("."));
 }
 //@ chunk-qmzcskz6.js:839-899 placement
-function shellWord(e, quote) {
+function shellWord(text, quote) {
   return {
-    text: e,
+    text,
     quote,
     start: 0,
-    end: e.length,
+    end: text.length,
   };
 }
 //@ chunk-qmzcskz6.js:899-955 placement
-var COMMON_INTERPRETERS = new Set(["python3", "python", "bash", "sh", "node"]);
+var COMMON_INTERPRETERS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-qmzcskz6.js:899", () => {
+  COMMON_INTERPRETERS = new Set(["python3", "python", "bash", "sh", "node"]);
+});
 //@ chunk-qmzcskz6.js:955-986 placement
-function isCommonInterpreter(e) {
-  return COMMON_INTERPRETERS.has(e);
+function isCommonInterpreter(name) {
+  return COMMON_INTERPRETERS.has(name);
 }
 //@ chunk-qmzcskz6.js:986-1676 placement
 /**
@@ -62,87 +72,87 @@ var SHELL_META_OR_SPACE_RE = /[$~*?[\]()\{\}#!|&;<>`\\\p{Cc}\p{Cf}]|[^\S ]/u;
 var CONTROL_CHARS_RE = /[\p{Cc}\p{Cf}]/u;
 //@ chunk-qmzcskz6.js:1676-2279 placement
 function resolveScriptPath(command) {
-  let t = [];
-  let n = 0;
-  while (n < command.length) {
-    if (command[n] === " ") {
-      n += 1;
+  let words = [];
+  let index = 0;
+  while (index < command.length) {
+    if (command[index] === " ") {
+      index += 1;
       continue;
     }
-    let r = command[n];
-    let l = r === '"' || r === "'" ? r : null;
-    if (l) {
-      let index = command.indexOf(l, n + 1);
-      if (index === -1) return null;
-      let sliced = command.slice(n + 1, index);
-      let i = command[index + 1];
-      if (i !== undefined && i !== " ") {
-        let a = index + 1;
-        while (a < command.length && command[a] !== " ") {
-          if (command[a] === '"' || command[a] === "'") return null;
-          a += 1;
+    let char = command[index];
+    let quote = char === '"' || char === "'" ? char : null;
+    if (quote) {
+      let index_2 = command.indexOf(quote, index + 1);
+      if (index_2 === -1) return null;
+      let sliced = command.slice(index + 1, index_2);
+      let nextChar = command[index_2 + 1];
+      if (nextChar !== undefined && nextChar !== " ") {
+        let end = index_2 + 1;
+        while (end < command.length && command[end] !== " ") {
+          if (command[end] === '"' || command[end] === "'") return null;
+          end += 1;
         }
-        if (l !== '"' || !HOME_OR_PROJECT_MARKERS_RE.test(sliced)) return null;
-        t.push({
-          text: sliced + command.slice(index + 1, a),
-          quote: l,
-          start: n,
-          end: a,
+        if (quote !== '"' || !HOME_OR_PROJECT_MARKERS_RE.test(sliced)) return null;
+        words.push({
+          text: sliced + command.slice(index_2 + 1, end),
+          quote,
+          start: index,
+          end,
         });
-        n = a;
+        index = end;
         continue;
       }
-      t.push({
+      words.push({
         text: sliced,
-        quote: l,
-        start: n,
-        end: index + 1,
+        quote,
+        start: index,
+        end: index_2 + 1,
       });
-      n = index + 1;
+      index = index_2 + 1;
     } else {
-      let s = n;
-      while (s < command.length && command[s] !== " ") {
-        if (command[s] === '"' || command[s] === "'") return null;
-        s += 1;
+      let start = index;
+      while (start < command.length && command[start] !== " ") {
+        if (command[start] === '"' || command[start] === "'") return null;
+        start += 1;
       }
-      t.push({
-        text: command.slice(n, s),
+      words.push({
+        text: command.slice(index, start),
         quote: null,
-        start: n,
-        end: s,
+        start: index,
+        end: start,
       });
-      n = s;
+      index = start;
     }
   }
-  return t;
+  return words;
 }
 //@ chunk-qmzcskz6.js:2279-2341 placement
-function homePrefixPatternFor(e) {
-  return e.quote === null ? ASSIGNMENT_PREFIX_RE : e.quote === '"' ? QUOTED_HOME_PREFIX_RE : null;
+function homePrefixPatternFor(word) {
+  return word.quote === null ? ASSIGNMENT_PREFIX_RE : word.quote === '"' ? QUOTED_HOME_PREFIX_RE : null;
 }
 //@ chunk-qmzcskz6.js:2341-2686 placement
-function classifyScriptRoot(e) {
-  let t = homePrefixPatternFor(e);
-  if (t !== null && t.test(e.text))
+function classifyScriptRoot(word) {
+  let pattern = homePrefixPatternFor(word);
+  if (pattern !== null && pattern.test(word.text))
     return {
-      rest: e.text.replace(t, ""),
+      rest: word.text.replace(pattern, ""),
       hadPrefix: true,
       base: "home",
     };
-  if (e.quote !== "'" && PROJECT_DIR_PREFIX_RE.test(e.text))
+  if (word.quote !== "'" && PROJECT_DIR_PREFIX_RE.test(word.text))
     return {
-      rest: e.text.replace(PROJECT_DIR_PREFIX_RE, ""),
+      rest: word.text.replace(PROJECT_DIR_PREFIX_RE, ""),
       hadPrefix: true,
       base: "project",
     };
-  if (e.quote !== "'" && PLUGIN_ROOT_PREFIX_RE.test(e.text))
+  if (word.quote !== "'" && PLUGIN_ROOT_PREFIX_RE.test(word.text))
     return {
-      rest: e.text.replace(PLUGIN_ROOT_PREFIX_RE, ""),
+      rest: word.text.replace(PLUGIN_ROOT_PREFIX_RE, ""),
       hadPrefix: true,
       base: "plugin",
     };
   return {
-    rest: e.text,
+    rest: word.text,
     hadPrefix: false,
     base: null,
   };
@@ -150,21 +160,26 @@ function classifyScriptRoot(e) {
 //@ chunk-qmzcskz6.js:2686-2706 placement
 var GLOB_META_RE = /[\s*?[\]]/u;
 //@ chunk-qmzcskz6.js:2706-2783 placement
-function isPlainRelativeLiteral(path, t) {
-  return path.quote !== null || path.text.startsWith("~/") || !GLOB_META_RE.test(t);
+function isPlainRelativeLiteral(path, rest) {
+  return path.quote !== null || path.text.startsWith("~/") || !GLOB_META_RE.test(rest);
 }
 //@ chunk-qmzcskz6.js:2783-2925 placement
-var SCRIPT_EXTENSION_RE = /\.(?:py|sh|bash|zsh|js|mjs|cjs|ts|rb|pl)$/iu;
-var SYSTEM_BIN_DIRS = new Set(["/usr/bin", "/bin", "/usr/local/bin", "/opt/homebrew/bin"]);
-var DOT_DOT_SEGMENT_RE = /(^|\/)\.\.(\/|$)/;
+var SCRIPT_EXTENSION_RE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var SYSTEM_BIN_DIRS;
+var DOT_DOT_SEGMENT_RE;
+deferInit("chunk-qmzcskz6.js:2783", () => {
+  SCRIPT_EXTENSION_RE = /\.(?:py|sh|bash|zsh|js|mjs|cjs|ts|rb|pl)$/iu;
+  SYSTEM_BIN_DIRS = new Set(["/usr/bin", "/bin", "/usr/local/bin", "/opt/homebrew/bin"]);
+  DOT_DOT_SEGMENT_RE = /(^|\/)\.\.(\/|$)/;
+});
 //@ chunk-qmzcskz6.js:2925-2984 placement
-function hasDotDotSegment(e) {
-  return DOT_DOT_SEGMENT_RE.test(e.replace(/^(?:\.\.?\/)+/, ""));
+function hasDotDotSegment(text) {
+  return DOT_DOT_SEGMENT_RE.test(text.replace(/^(?:\.\.?\/)+/, ""));
 }
 //@ chunk-qmzcskz6.js:2984-3266 placement
-function looksLikeScriptPath(e) {
-  if (e.quote === null && INTERPRETER_NAME_PATTERN_2.test(e.text)) return false;
-  let { rest, hadPrefix } = classifyScriptRoot(e);
+function looksLikeScriptPath(word) {
+  if (word.quote === null && INTERPRETER_NAME_PATTERN_2.test(word.text)) return false;
+  let { rest, hadPrefix } = classifyScriptRoot(word);
   if (
     rest.startsWith("-") ||
     HIDDEN_PATH_PATTERN.test(rest) ||
@@ -183,24 +198,24 @@ function looksLikeScriptPath(e) {
   );
 }
 //@ chunk-qmzcskz6.js:3266-3337 placement
-function isScriptishArgument(e) {
-  let { rest } = classifyScriptRoot(e);
-  return looksLikeScriptPath(e) || rest.includes("/") || SCRIPT_EXTENSION_RE.test(rest);
+function isScriptishArgument(word) {
+  let { rest } = classifyScriptRoot(word);
+  return looksLikeScriptPath(word) || rest.includes("/") || SCRIPT_EXTENSION_RE.test(rest);
 }
 //@ chunk-qmzcskz6.js:3337-3599 placement
 function describeOpaqueCommand(
   interpreter,
-  t,
-  n,
+  word,
+  options,
   site = {
     form: "shell",
-    start: t.start,
-    end: t.end,
+    start: word.start,
+    end: word.end,
   },
 ) {
-  let { rest, base } = classifyScriptRoot(t);
-  let o = rootDirForBase(base, n);
-  if (o === null)
+  let { rest, base } = classifyScriptRoot(word);
+  let baseDir = rootDirForBase(base, options);
+  if (baseDir === null)
     return {
       kind: "opaque",
       reason: "shell_syntax",
@@ -208,20 +223,20 @@ function describeOpaqueCommand(
   return {
     kind: "script",
     interpreter,
-    rawPath: t.text,
-    resolvedPath: posix.resolve(n.hookCwd, o === "" ? rest : `${o}/${rest}`),
+    rawPath: word.text,
+    resolvedPath: posix.resolve(options.hookCwd, baseDir === "" ? rest : `${baseDir}/${rest}`),
     site,
   };
 }
 //@ chunk-qmzcskz6.js:3599-3744 placement
-function rootDirForBase(base, t) {
+function rootDirForBase(base, options) {
   switch (base) {
     case "home":
-      return t.home;
+      return options.home;
     case "project":
-      return t.projectDir;
+      return options.projectDir;
     case "plugin":
-      return t.pluginRoot ?? null;
+      return options.pluginRoot ?? null;
     case null:
       return "";
   }
@@ -231,32 +246,33 @@ function rootDirForBase(base, t) {
  * 解析命令的解释器与脚本参数（uv run、不支持的解释器、程序有歧义）。
  */
 function parseInterpreterInvocation(scriptPath) {
-  let [t, n] = scriptPath;
-  if (t === undefined)
+  let [first, second] = scriptPath;
+  if (first === undefined)
     return {
       interpreter: null,
       path: undefined,
       refusal: null,
     };
-  if (t.quote === null && t.text === "uv" && n?.text === "run")
+  if (first.quote === null && first.text === "uv" && second?.text === "run")
     return {
       interpreter: null,
       path: undefined,
       refusal: "uv_project",
     };
-  let lower = t.text.toLowerCase();
-  if (t.quote === null && isCommonInterpreter(lower)) {
-    let s = n !== undefined && looksLikeScriptPath(n) && scriptPath.slice(2).some(isScriptishArgument);
+  let name = first.text.toLowerCase();
+  if (first.quote === null && isCommonInterpreter(name)) {
+    let ambiguous =
+      second !== undefined && looksLikeScriptPath(second) && scriptPath.slice(2).some(isScriptishArgument);
     return {
-      interpreter: lower,
-      path: n,
-      refusal: s ? "ambiguous_program" : null,
+      interpreter: name,
+      path: second,
+      refusal: ambiguous ? "ambiguous_program" : null,
     };
   }
   let any = scriptPath.slice(1).some(isScriptishArgument);
-  if (looksLikeScriptPath(t)) {
-    let sliced = t.text.slice(t.text.lastIndexOf("/") + 1);
-    if (n === undefined && INTERPRETER_NAME_PATTERN.test(sliced))
+  if (looksLikeScriptPath(first)) {
+    let sliced = first.text.slice(first.text.lastIndexOf("/") + 1);
+    if (second === undefined && INTERPRETER_NAME_PATTERN.test(sliced))
       return {
         interpreter: null,
         path: undefined,
@@ -264,8 +280,9 @@ function parseInterpreterInvocation(scriptPath) {
       };
     return {
       interpreter: null,
-      path: t,
-      refusal: any || (n !== undefined && !SCRIPT_EXTENSION_RE.test(sliced)) ? "ambiguous_program" : null,
+      path: first,
+      refusal:
+        any || (second !== undefined && !SCRIPT_EXTENSION_RE.test(sliced)) ? "ambiguous_program" : null,
     };
   }
   return {
@@ -278,22 +295,22 @@ function parseInterpreterInvocation(scriptPath) {
 /**
  * 分析钩子命令得到解释器与脚本：shell 语法则为 opaque，插件命令展开 ${CLAUDE_PLUGIN_ROOT}（约 2.5 KB）。
  */
-function analyzeHookCommand(hook, t) {
-  if ([hook.command, ...(hook.args ?? [])].some((c) => CONTROL_CHARS_RE.test(c)))
+function analyzeHookCommand(hook, options) {
+  if ([hook.command, ...(hook.args ?? [])].some((part) => CONTROL_CHARS_RE.test(part)))
     return {
       kind: "opaque",
       reason: "shell_syntax",
     };
   if (
-    t.pluginRoot === undefined &&
-    [hook.command, ...(hook.args ?? [])].some((c) => PLUGIN_ROOT_REFERENCE_RE.test(c))
+    options.pluginRoot === undefined &&
+    [hook.command, ...(hook.args ?? [])].some((part) => PLUGIN_ROOT_REFERENCE_RE.test(part))
   )
     return {
       kind: "opaque",
       reason: "shell_syntax",
     };
-  let { pluginRoot } = t;
-  let r =
+  let { pluginRoot } = options;
+  let hook_2 =
     hook.args !== undefined && pluginRoot !== undefined
       ? {
           ...hook,
@@ -301,63 +318,65 @@ function analyzeHookCommand(hook, t) {
           args: hook.args.map((arg) => substitutePluginRoot(arg, pluginRoot)),
         }
       : hook;
-  if ((r.shell ?? t.defaultShell) !== "bash")
+  if ((hook_2.shell ?? options.defaultShell) !== "bash")
     return {
       kind: "opaque",
       reason: "unsupported_shell",
     };
-  if (t.shellPrefix !== undefined && t.shellPrefix !== "" && r.args === undefined)
+  if (options.shellPrefix !== undefined && options.shellPrefix !== "" && hook_2.args === undefined)
     return {
       kind: "opaque",
       reason: "shell_prefix",
     };
   if (
-    !t.hookCwd.startsWith("/") ||
-    !t.home.startsWith("/") ||
-    !t.projectDir.startsWith("/") ||
-    (t.pluginRoot !== undefined && (!t.pluginRoot.startsWith("/") || DOT_DOT_SEGMENT_RE.test(t.pluginRoot)))
+    !options.hookCwd.startsWith("/") ||
+    !options.home.startsWith("/") ||
+    !options.projectDir.startsWith("/") ||
+    (options.pluginRoot !== undefined &&
+      (!options.pluginRoot.startsWith("/") || DOT_DOT_SEGMENT_RE.test(options.pluginRoot)))
   )
     return {
       kind: "opaque",
       reason: "unsupported_platform",
     };
-  if (r.args !== undefined) {
-    let c =
-      r.command.startsWith("/") && !DOT_DOT_SEGMENT_RE.test(r.command)
-        ? posix.normalize(r.command)
-        : r.command;
-    let W = c.startsWith("/") ? c.slice(0, c.lastIndexOf("/")) : null;
-    let C =
-      W === null
-        ? c.toLowerCase()
-        : SYSTEM_BIN_DIRS.has(W.toLowerCase())
-          ? c.slice(c.lastIndexOf("/") + 1).toLowerCase()
+  if (hook_2.args !== undefined) {
+    let command =
+      hook_2.command.startsWith("/") && !DOT_DOT_SEGMENT_RE.test(hook_2.command)
+        ? posix.normalize(hook_2.command)
+        : hook_2.command;
+    let dir = command.startsWith("/") ? command.slice(0, command.lastIndexOf("/")) : null;
+    let baseName =
+      dir === null
+        ? command.toLowerCase()
+        : SYSTEM_BIN_DIRS.has(dir.toLowerCase())
+          ? command.slice(command.lastIndexOf("/") + 1).toLowerCase()
           : "";
-    if (C === "uv")
+    if (baseName === "uv")
       return {
         kind: "opaque",
-        reason: r.args[0] === "run" ? "uv_project" : "args_form",
+        reason: hook_2.args[0] === "run" ? "uv_project" : "args_form",
       };
-    if (r.args.some((arg) => arg.includes("${")) || /\/\.?$/u.test(r.command))
+    if (hook_2.args.some((arg) => arg.includes("${")) || /\/\.?$/u.test(hook_2.command))
       return {
         kind: "opaque",
         reason: "args_form",
       };
-    let interpreter = isCommonInterpreter(C) ? C : null;
+    let interpreter = isCommonInterpreter(baseName) ? baseName : null;
     if (interpreter === null) {
-      let E = r.command.startsWith("/") || r.command.startsWith("./") || r.command.startsWith("../");
-      let sliced = r.command.slice(r.command.lastIndexOf("/") + 1);
-      let oe =
-        (r.args.length === 0 && !INTERPRETER_NAME_PATTERN.test(sliced)) ||
-        (r.args.length > 0 &&
+      let anchored =
+        hook_2.command.startsWith("/") || hook_2.command.startsWith("./") || hook_2.command.startsWith("../");
+      let sliced = hook_2.command.slice(hook_2.command.lastIndexOf("/") + 1);
+      let noScriptArg =
+        (hook_2.args.length === 0 && !INTERPRETER_NAME_PATTERN.test(sliced)) ||
+        (hook_2.args.length > 0 &&
           SCRIPT_EXTENSION_RE.test(sliced) &&
-          !r.args.some((arg) => isScriptishArgument(shellWord(arg, "'"))));
-      return E &&
-        oe &&
-        looksLikeScriptPath(shellWord(r.command, null)) &&
-        !SHELL_META_OR_SPACE_RE.test(r.command) &&
-        !hasDotDotSegment(r.command)
-        ? describeOpaqueCommand(null, shellWord(r.command, null), t, {
+          !hook_2.args.some((arg) => isScriptishArgument(shellWord(arg, "'"))));
+      return anchored &&
+        noScriptArg &&
+        looksLikeScriptPath(shellWord(hook_2.command, null)) &&
+        !SHELL_META_OR_SPACE_RE.test(hook_2.command) &&
+        !hasDotDotSegment(hook_2.command)
+        ? describeOpaqueCommand(null, shellWord(hook_2.command, null), options, {
             form: "exec",
             slot: "command",
           })
@@ -366,18 +385,18 @@ function analyzeHookCommand(hook, t) {
             reason: "args_form",
           };
     }
-    let _ = r.args[0];
-    if (_ === undefined || r.args.slice(1).some((arg) => isScriptishArgument(shellWord(arg, "'"))))
+    let arg = hook_2.args[0];
+    if (arg === undefined || hook_2.args.slice(1).some((arg) => isScriptishArgument(shellWord(arg, "'"))))
       return {
         kind: "opaque",
         reason: "args_form",
       };
-    let L = shellWord(_, "'");
-    return looksLikeScriptPath(L) &&
-      isScriptFileName(_) &&
-      !SHELL_META_OR_SPACE_RE.test(_) &&
-      !hasDotDotSegment(_)
-      ? describeOpaqueCommand(interpreter, L, t, {
+    let word = shellWord(arg, "'");
+    return looksLikeScriptPath(word) &&
+      isScriptFileName(arg) &&
+      !SHELL_META_OR_SPACE_RE.test(arg) &&
+      !hasDotDotSegment(arg)
+      ? describeOpaqueCommand(interpreter, word, options, {
           form: "exec",
           slot: "arg0",
         })
@@ -386,14 +405,14 @@ function analyzeHookCommand(hook, t) {
           reason: "args_form",
         };
   }
-  let scriptPath = resolveScriptPath(r.command);
+  let scriptPath = resolveScriptPath(hook_2.command);
   if (scriptPath === null)
     return {
       kind: "opaque",
       reason: "shell_syntax",
     };
-  let [s] = scriptPath;
-  if (s !== undefined && s.quote === null && INTERPRETER_NAME_PATTERN_2.test(s.text))
+  let [word] = scriptPath;
+  if (word !== undefined && word.quote === null && INTERPRETER_NAME_PATTERN_2.test(word.text))
     return {
       kind: "opaque",
       reason: "shell_syntax",
@@ -405,34 +424,36 @@ function analyzeHookCommand(hook, t) {
       reason: refusal,
     };
   if (path === undefined || !looksLikeScriptPath(path)) {
-    let c = path ?? s;
+    let word_2 = path ?? word;
     return {
       kind: "opaque",
       reason:
-        c !== undefined && PRIVATE_DOTDIR_RE.test(classifyScriptRoot(c).rest) ? "private_dotdir" : "no_path",
+        word_2 !== undefined && PRIVATE_DOTDIR_RE.test(classifyScriptRoot(word_2).rest)
+          ? "private_dotdir"
+          : "no_path",
     };
   }
-  let sliced = r.command.slice(0, path.start);
-  let sliced_2 = r.command.slice(path.end);
-  if ([sliced, classifyScriptRoot(path).rest, sliced_2].some((c) => SHELL_META_OR_SPACE_RE.test(c)))
+  let sliced = hook_2.command.slice(0, path.start);
+  let sliced_2 = hook_2.command.slice(path.end);
+  if ([sliced, classifyScriptRoot(path).rest, sliced_2].some((text) => SHELL_META_OR_SPACE_RE.test(text)))
     return {
       kind: "opaque",
       reason: "shell_syntax",
     };
   let { rest, hadPrefix, base } = classifyScriptRoot(path);
   if (
-    (hadPrefix && !isPlainRelativeLiteral(path, rootDirForBase(base, t) ?? "")) ||
+    (hadPrefix && !isPlainRelativeLiteral(path, rootDirForBase(base, options) ?? "")) ||
     (hadPrefix ? DOT_DOT_SEGMENT_RE.test(rest) : hasDotDotSegment(rest))
   )
     return {
       kind: "opaque",
       reason: "shell_syntax",
     };
-  return describeOpaqueCommand(interpreter, path, t);
+  return describeOpaqueCommand(interpreter, path, options);
 }
 //@ chunk-qmzcskz6.js:6950-6993 placement
-function substitutePluginRoot(e, pluginRoot) {
-  return e.split(PLUGIN_ROOT_PLACEHOLDER).join(pluginRoot);
+function substitutePluginRoot(text, pluginRoot) {
+  return text.split(PLUGIN_ROOT_PLACEHOLDER).join(pluginRoot);
 }
 //@ chunk-qmzcskz6.js:6993-7204 placement
 /**
@@ -448,39 +469,41 @@ var WIN32_DEVICE_NAMESPACE_RE = /^(?:[\\/]{2}[?.]|[\\/]\?\?)(?:[\\/]|$)/;
 /**
  * 按平台判断路径 n 是否位于 e 之下。
  */
-function isPathUnderForPlatform(e, t) {
-  return getPlatform() === "windows" ? isWindowsPathUnder(e, t) : isPosixPathUnder(e, t);
+function isPathUnderForPlatform(path, root) {
+  return getPlatform() === "windows" ? isWindowsPathUnder(path, root) : isPosixPathUnder(path, root);
 }
 //@ chunk-qmzcskz6.js:7261-7377 placement
-function isPosixPathUnder(e, t) {
-  let n = t.length > 1 && t.endsWith("/") ? t.slice(0, -1) : t;
-  return e === n || e.startsWith(n === "/" ? "/" : `${n}/`);
+function isPosixPathUnder(path, root) {
+  let prefix = root.length > 1 && root.endsWith("/") ? root.slice(0, -1) : root;
+  return path === prefix || path.startsWith(prefix === "/" ? "/" : `${prefix}/`);
 }
 //@ chunk-qmzcskz6.js:7377-7491 placement
-function isWindowsPathUnder(e, t) {
-  let replaced = toWindowsBackslashPath(t).replace(/\\+$/, "");
+function isWindowsPathUnder(path, root) {
+  let replaced = toWindowsBackslashPath(root).replace(/\\+$/, "");
   if (replaced === "") return true;
-  let windowsBackslashPath = toWindowsBackslashPath(e);
+  let windowsBackslashPath = toWindowsBackslashPath(path);
   return windowsBackslashPath === replaced || windowsBackslashPath.startsWith(`${replaced}\\`);
 }
 //@ chunk-qmzcskz6.js:7491-7578 placement
-function toWindowsBackslashPath(e) {
-  return e.replace(/\//g, "\\").replace(/^[a-z](?=:)/, (t) => t.toUpperCase());
+function toWindowsBackslashPath(path) {
+  return path.replace(/\//g, "\\").replace(/^[a-z](?=:)/, (drive) => drive.toUpperCase());
 }
 //@ chunk-qmzcskz6.js:7578-7653 placement
 /**
  * 去掉 Win32 设备前缀（\\?\、\\?\UNC\ 按需转换）。
  */
-function stripWin32DevicePrefix(e) {
-  return WIN32_DEVICE_UNC_RE.test(e)
-    ? `\\\\${e.replace(WIN32_DEVICE_UNC_RE, "")}`
-    : e.replace(WIN32_DEVICE_PREFIX_RE, "");
+function stripWin32DevicePrefix(path) {
+  return WIN32_DEVICE_UNC_RE.test(path)
+    ? `\\\\${path.replace(WIN32_DEVICE_UNC_RE, "")}`
+    : path.replace(WIN32_DEVICE_PREFIX_RE, "");
 }
 //@ chunk-qmzcskz6.js:7653-7762 placement
-function uncAdminShareToDrive(e) {
-  let t = stripWin32DevicePrefix(e);
-  let match = WIN32_ADMIN_SHARE_RE.exec(t);
-  return match !== null && isLocalHost_2(match[1], false) ? `${match[2]}:\\${t.slice(match[0].length)}` : t;
+function uncAdminShareToDrive(path) {
+  let stripped = stripWin32DevicePrefix(path);
+  let match = WIN32_ADMIN_SHARE_RE.exec(stripped);
+  return match !== null && isLocalHost_2(match[1], false)
+    ? `${match[2]}:\\${stripped.slice(match[0].length)}`
+    : stripped;
 }
 //@ chunk-qmzcskz6.js:7762-7821 placement
 var WIN32_ADMIN_SHARE_RE = /^[\\/]{2,}([^\\/]+)[\\/]+([A-Za-z])\$(?:[\\/]+|$)/;
@@ -489,33 +512,34 @@ var WIN32_ADMIN_SHARE_RE = /^[\\/]{2,}([^\\/]+)[\\/]+([A-Za-z])\$(?:[\\/]+|$)/;
  * （旧版名配错）Windows 路径规范化：处理盘符、UNC 前缀、.. 折叠、去掉尾随点空格，用于路径比较。
  */
 function normalizeWindowsPathForCompare(path) {
-  let t = uncAdminShareToDrive(path);
-  let n = /^[\\/]+/.exec(t)?.[0] ?? "";
-  let parts = t.slice(n.length).split(/[\\/]+/);
-  let l = n === "" && /^[A-Za-z]:$/.test(parts[0] ?? "");
-  let s = n === "" && /^[A-Za-z]:./.test(parts[0] ?? "");
-  let o = [];
-  parts.forEach((a, f) => {
-    if (f === 0 && l) o.push(a.toLowerCase());
-    else if (f === 0 && s) o.push(a.toLowerCase());
-    else if (f === 0 && n.length >= 2) o.push(foldWindowsPathComponent(a));
-    else if (a === "..") {
-      if (o.length > (l || s ? 1 : n.length >= 2 ? 2 : 0)) o.pop();
-    } else if (/^[. ]+$/.test(a) && a !== ".") o.push("");
-    else if (a !== "." && a !== "") o.push(foldName(a.toLowerCase().toUpperCase().toLowerCase()));
+  let path_2 = uncAdminShareToDrive(path);
+  let prefix = /^[\\/]+/.exec(path_2)?.[0] ?? "";
+  let parts = path_2.slice(prefix.length).split(/[\\/]+/);
+  let isDriveOnly = prefix === "" && /^[A-Za-z]:$/.test(parts[0] ?? "");
+  let hasDrive = prefix === "" && /^[A-Za-z]:./.test(parts[0] ?? "");
+  let parts_2 = [];
+  parts.forEach((part, partIndex) => {
+    if (partIndex === 0 && isDriveOnly) parts_2.push(part.toLowerCase());
+    else if (partIndex === 0 && hasDrive) parts_2.push(part.toLowerCase());
+    else if (partIndex === 0 && prefix.length >= 2) parts_2.push(foldWindowsPathComponent(part));
+    else if (part === "..") {
+      if (parts_2.length > (isDriveOnly || hasDrive ? 1 : prefix.length >= 2 ? 2 : 0)) parts_2.pop();
+    } else if (/^[. ]+$/.test(part) && part !== ".") parts_2.push("");
+    else if (part !== "." && part !== "")
+      parts_2.push(foldName(part.toLowerCase().toUpperCase().toLowerCase()));
   });
-  let filtered = o.filter((a) => a !== "");
+  let filtered = parts_2.filter((part) => part !== "");
   return (
-    (n.length >= 2 ? "\\\\" : n.length === 1 ? "\\" : "") +
+    (prefix.length >= 2 ? "\\\\" : prefix.length === 1 ? "\\" : "") +
     filtered.join("\\") +
-    (/[\\/]$/.test(t) && filtered.length > 0 ? "\\" : "")
+    (/[\\/]$/.test(path_2) && filtered.length > 0 ? "\\" : "")
   );
 }
 //@ chunk-qmzcskz6.js:9310-9456 placement
-function foldWindowsPathComponent(e) {
-  if (/^[?.]$/.test(e)) return e;
-  let lower = e.toLowerCase().toUpperCase().toLowerCase();
-  return e.includes(":") ? lower.replace(/[. ]+$/, "") : foldName(lower);
+function foldWindowsPathComponent(component) {
+  if (/^[?.]$/.test(component)) return component;
+  let lower = component.toLowerCase().toUpperCase().toLowerCase();
+  return component.includes(":") ? lower.replace(/[. ]+$/, "") : foldName(lower);
 }
 //@ chunk-qmzcskz6.js:9456-9555 placement = setCwdState (0.867)
 function caseFoldKey(cwd) {
@@ -525,39 +549,39 @@ function caseFoldKey(cwd) {
 /**
  * 规范化后判断两条命令路径是否相同。
  */
-function isSameCommandPath(e, t) {
-  return isReachableOrSamePath(normalizeCommandForPlatform(e), normalizeCommandForPlatform(t));
+function isSameCommandPath(a, b) {
+  return isReachableOrSamePath(normalizeCommandForPlatform(a), normalizeCommandForPlatform(b));
 }
 //@ chunk-qmzcskz6.js:9597-9712 placement
 /**
  * 判断两个路径是否相同或互相可达（含 Windows 短名、UNC、WSL 挂载）。
  */
-function isReachableOrSamePath(e, t) {
+function isReachableOrSamePath(a, b) {
   return (
-    isPathUnderForPlatform(e, t) ||
+    isPathUnderForPlatform(a, b) ||
     (getPlatform() === "windows" &&
-      (isUncOrShortNamePair(e, t) || (e.startsWith("\\\\") && t.startsWith("\\\\")))) ||
-    isOnSameWslMount(e, t)
+      (isUncOrShortNamePair(a, b) || (a.startsWith("\\\\") && b.startsWith("\\\\")))) ||
+    isOnSameWslMount(a, b)
   );
 }
 //@ chunk-qmzcskz6.js:9712-9760 placement
-function isUncOrShortNamePair(e, t) {
-  return [e, t].some(isSpecialUncPath) || differsByUncPrefix(e, t);
+function isUncOrShortNamePair(a, b) {
+  return [a, b].some(isSpecialUncPath) || differsByUncPrefix(a, b);
 }
 //@ chunk-qmzcskz6.js:9760-9807 placement
 /**
  * 判断两个路径是否只在 UNC 前缀上不同。
  */
-function differsByUncPrefix(e, t) {
-  return UNC_PREFIX_RE.test(e) !== UNC_PREFIX_RE.test(t);
+function differsByUncPrefix(a, b) {
+  return UNC_PREFIX_RE.test(a) !== UNC_PREFIX_RE.test(b);
 }
 //@ chunk-qmzcskz6.js:9807-9935 placement
 /**
  * 判断两个 UNC 路径主机相同、共享名一个是短名（8.3）形式。
  */
-function isSameUncHostShortNamePair(e, t) {
-  let match = UNC_HOST_AND_SHARE_RE.exec(e);
-  let match_2 = UNC_HOST_AND_SHARE_RE.exec(t);
+function isSameUncHostShortNamePair(a, b) {
+  let match = UNC_HOST_AND_SHARE_RE.exec(a);
+  let match_2 = UNC_HOST_AND_SHARE_RE.exec(b);
   return (
     match !== null &&
     match_2 !== null &&
@@ -573,19 +597,21 @@ var SHARE_ALIAS_SUFFIX_RE = /^[a-z]\$$/;
 /**
  * 把 UNC 路径的主机名改写为参考路径的主机名。
  */
-function rewriteUncHostFromReference(e, t) {
-  if (!isSameUncHost(e, t)) return e;
-  let n = /^\\\\([^\\]+)(?=\\|$)/.exec(t)?.[1];
-  return n === undefined ? e : e.replace(/^\\\\[^\\]+/, () => `\\\\${n}`);
+function rewriteUncHostFromReference(path, reference) {
+  if (!isSameUncHost(path, reference)) return path;
+  let host = /^\\\\([^\\]+)(?=\\|$)/.exec(reference)?.[1];
+  return host === undefined ? path : path.replace(/^\\\\[^\\]+/, () => `\\\\${host}`);
 }
 //@ chunk-qmzcskz6.js:10123-10337 placement
-function isSameUncHost(e, t) {
-  let n = firstLineOf(firstLineOf(/^\\\\([^\\]+)(?=\\)/.exec(e)?.[1] ?? "", "@"), ".");
-  let r = firstLineOf(firstLineOf(/^\\\\([^\\]+)(?=\\|$)/.exec(t)?.[1] ?? "", "@"), ".");
+function isSameUncHost(a, b) {
+  let hostA = firstLineOf(firstLineOf(/^\\\\([^\\]+)(?=\\)/.exec(a)?.[1] ?? "", "@"), ".");
+  let hostB = firstLineOf(firstLineOf(/^\\\\([^\\]+)(?=\\|$)/.exec(b)?.[1] ?? "", "@"), ".");
   return (
-    n !== "" &&
-    r !== "" &&
-    (n === r || (isShortWindowsPath(n) && r.startsWith(n)) || (isShortWindowsPath(r) && n.startsWith(r)))
+    hostA !== "" &&
+    hostB !== "" &&
+    (hostA === hostB ||
+      (isShortWindowsPath(hostA) && hostB.startsWith(hostA)) ||
+      (isShortWindowsPath(hostB) && hostA.startsWith(hostB)))
   );
 }
 //@ chunk-qmzcskz6.js:10337-10346 placement
@@ -594,60 +620,69 @@ function isSameUncHost(e, t) {
  */
 var SHORT_WINDOWS_PATH_CHARS = 15;
 //@ chunk-qmzcskz6.js:10346-10444 placement
-function isShortWindowsPath(e) {
-  let t = getPlatform() === "windows" ? (e.match(/ss/g)?.length ?? 0) : 0;
-  return e.length >= SHORT_WINDOWS_PATH_CHARS && e.length - t <= SHORT_WINDOWS_PATH_CHARS;
+function isShortWindowsPath(name) {
+  let ssCount = getPlatform() === "windows" ? (name.match(/ss/g)?.length ?? 0) : 0;
+  return name.length >= SHORT_WINDOWS_PATH_CHARS && name.length - ssCount <= SHORT_WINDOWS_PATH_CHARS;
 }
 //@ chunk-qmzcskz6.js:10444-10482 placement
-function isSpecialUncPath(e) {
-  return classifyUncPath(e) !== undefined;
+function isSpecialUncPath(path) {
+  return classifyUncPath(path) !== undefined;
 }
 //@ chunk-qmzcskz6.js:10482-10928 placement
 /**
  * 分类 Windows UNC/特殊路径（本机、WSL、短名、设备命名空间、WebDAV 等）。
  */
-function classifyUncPath(e) {
-  let t = /^\\\\([^\\]+)\\/.exec(e)?.[1];
-  let n = t === undefined ? undefined : WSL_UNC_SHARE_RE.exec(t)?.[1];
-  if (t !== undefined && isLocalHost_2(n ?? t)) return "own_host";
-  if (t !== undefined && WSL_UNC_HOSTS.has(t)) return "wsl_host";
-  if (e.split("\\").some(isShortNameComponent)) return "short_name";
-  if (WIN32_DEVICE_NAMESPACE_RE.test(e)) return "device_namespace";
-  if (DRIVE_RELATIVE_RE.test(e)) return "drive_relative";
-  if (t === undefined) return;
-  if (n !== undefined) return NUMERIC_HOST_RE.test(n) ? "numeric_host" : "webdav_host";
-  if (ODD_UNC_HOST_RE.test(t)) return "odd_host";
-  if (NUMERIC_HOST_RE.test(t)) return "numeric_host";
+function classifyUncPath(path) {
+  let host = /^\\\\([^\\]+)\\/.exec(path)?.[1];
+  let share = host === undefined ? undefined : WSL_UNC_SHARE_RE.exec(host)?.[1];
+  if (host !== undefined && isLocalHost_2(share ?? host)) return "own_host";
+  if (host !== undefined && WSL_UNC_HOSTS.has(host)) return "wsl_host";
+  if (path.split("\\").some(isShortNameComponent)) return "short_name";
+  if (WIN32_DEVICE_NAMESPACE_RE.test(path)) return "device_namespace";
+  if (DRIVE_RELATIVE_RE.test(path)) return "drive_relative";
+  if (host === undefined) return;
+  if (share !== undefined) return NUMERIC_HOST_RE.test(share) ? "numeric_host" : "webdav_host";
+  if (ODD_UNC_HOST_RE.test(host)) return "odd_host";
+  if (NUMERIC_HOST_RE.test(host)) return "numeric_host";
   return;
 }
 //@ chunk-qmzcskz6.js:10928-11011 placement
 var WSL_UNC_SHARE_RE = /^((?=[^@]*[a-z])[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?)(?:@ssl(?:@\d+)?|@\d+)$/i;
 //@ chunk-qmzcskz6.js:11011-11113 placement
-function isShortNameComponent(e) {
-  return /^[\x20-\x7e]*$/.test(e) ? isDosShortName(e.replaceAll("ss", "s")) : /~\d+(?:\.[^.]*)?$/.test(e);
+function isShortNameComponent(component) {
+  return /^[\x20-\x7e]*$/.test(component)
+    ? isDosShortName(component.replaceAll("ss", "s"))
+    : /~\d+(?:\.[^.]*)?$/.test(component);
 }
 //@ chunk-qmzcskz6.js:11113-11303 placement
-var UNC_PREFIX_RE = /^\\[^\\]/;
-var DRIVE_RELATIVE_RE = /^[a-z]:(?![\\/]|$)/;
-var WSL_UNC_HOSTS = new Set(["wsl.localhost", "wsl$"]);
-var ODD_UNC_HOST_RE = /[:@]|[^\x21-\x7e]|^\.+$/;
-var NUMERIC_HOST_RE = /^(?:(?:0x[0-9a-f]*|\d+)(?:\.(?:0x[0-9a-f]*|\d+)){0,3}|.*\.ipv6-literal\.net)$/i;
+var UNC_PREFIX_RE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var DRIVE_RELATIVE_RE;
+var WSL_UNC_HOSTS;
+var ODD_UNC_HOST_RE;
+var NUMERIC_HOST_RE;
+deferInit("chunk-qmzcskz6.js:11113", () => {
+  UNC_PREFIX_RE = /^\\[^\\]/;
+  DRIVE_RELATIVE_RE = /^[a-z]:(?![\\/]|$)/;
+  WSL_UNC_HOSTS = new Set(["wsl.localhost", "wsl$"]);
+  ODD_UNC_HOST_RE = /[:@]|[^\x21-\x7e]|^\.+$/;
+  NUMERIC_HOST_RE = /^(?:(?:0x[0-9a-f]*|\d+)(?:\.(?:0x[0-9a-f]*|\d+)){0,3}|.*\.ipv6-literal\.net)$/i;
+});
 //@ chunk-qmzcskz6.js:11303-11395 placement
-function isInspectableScriptPath(e) {
+function isInspectableScriptPath(path) {
   return (
-    posix.isAbsolute(e) &&
-    !HIDDEN_PATH_PATTERN.test(e) &&
-    !PRIVATE_DOTDIR_RE.test(e) &&
-    !regExp.test(e) &&
-    !CONTROL_CHARS_RE.test(e) &&
-    isScriptFileName(e)
+    posix.isAbsolute(path) &&
+    !HIDDEN_PATH_PATTERN.test(path) &&
+    !PRIVATE_DOTDIR_RE.test(path) &&
+    !regExp.test(path) &&
+    !CONTROL_CHARS_RE.test(path) &&
+    isScriptFileName(path)
   );
 }
 //@ chunk-qmzcskz6.js:11395-11928 placement
-async function classifyScriptLocation(e, t, n) {
-  let cwd;
+async function classifyScriptLocation(path, state, deps) {
+  let realPath;
   try {
-    cwd = await n.realpath(e);
+    realPath = await deps.realpath(path);
   } catch (error) {
     return {
       location: "elsewhere",
@@ -655,16 +690,16 @@ async function classifyScriptLocation(e, t, n) {
       missing: isPathAbsent(error),
     };
   }
-  if (!isInspectableScriptPath(cwd))
+  if (!isInspectableScriptPath(realPath))
     return {
       location: "elsewhere",
       realPath: null,
       missing: false,
     };
   if (
-    posix.isAbsolute(t.configHomeReal) &&
-    CLAUDE_TRANSIENT_DIRS.some((o) =>
-      isPathUnderForPlatform(caseFoldKey(cwd), caseFoldKey(posix.join(t.configHomeReal, o))),
+    posix.isAbsolute(state.configHomeReal) &&
+    CLAUDE_TRANSIENT_DIRS.some((dir) =>
+      isPathUnderForPlatform(caseFoldKey(realPath), caseFoldKey(posix.join(state.configHomeReal, dir))),
     )
   )
     return {
@@ -672,24 +707,24 @@ async function classifyScriptLocation(e, t, n) {
       realPath: null,
       missing: false,
     };
-  let s = [
-    ["in_checkout", t.launchDirReal],
-    ["in_config_home", t.configHomeReal],
+  let match = [
+    ["in_checkout", state.launchDirReal],
+    ["in_config_home", state.configHomeReal],
   ]
-    .filter(([, o]) => posix.isAbsolute(o) && isPathUnderForPlatform(cwd, o))
-    .sort(([, o], [, i]) => i.length - o.length)[0];
+    .filter(([, root]) => posix.isAbsolute(root) && isPathUnderForPlatform(realPath, root))
+    .sort(([, rootA], [, rootB]) => rootB.length - rootA.length)[0];
   return {
-    location: s ? s[0] : "elsewhere",
-    realPath: cwd,
+    location: match ? match[0] : "elsewhere",
+    realPath,
   };
 }
 //@ chunk-qmzcskz6.js:11928-11942 placement
 var MAX_SCRIPT_PROBE_BYTES = 262144;
 //@ chunk-qmzcskz6.js:11942-12469 placement
-async function checkScriptFile(e, t, n = MAX_SCRIPT_PROBE_BYTES) {
-  let r;
+async function checkScriptFile(path, fs, maxBytes = MAX_SCRIPT_PROBE_BYTES) {
+  let handle;
   try {
-    r = await t.open(e);
+    handle = await fs.open(path);
   } catch {
     return {
       ok: false,
@@ -697,7 +732,7 @@ async function checkScriptFile(e, t, n = MAX_SCRIPT_PROBE_BYTES) {
     };
   }
   try {
-    let stats = await r.stat();
+    let stats = await handle.stat();
     if (!stats.isFile())
       return {
         ok: false,
@@ -708,23 +743,23 @@ async function checkScriptFile(e, t, n = MAX_SCRIPT_PROBE_BYTES) {
         ok: false,
         reason: "multiply_linked",
       };
-    let s = Buffer.alloc(n + 1);
-    let o = 0;
-    while (o < s.length) {
-      let { bytesRead } = await r.read(s, o, s.length - o, o);
+    let buffer = Buffer.alloc(maxBytes + 1);
+    let total = 0;
+    while (total < buffer.length) {
+      let { bytesRead } = await handle.read(buffer, total, buffer.length - total, total);
       if (bytesRead === 0) break;
-      o += bytesRead;
+      total += bytesRead;
     }
-    if (o > n)
+    if (total > maxBytes)
       return {
         ok: false,
         reason: "too_large",
       };
-    let buffer = Buffer.from(s.subarray(0, o));
+    let buffer_2 = Buffer.from(buffer.subarray(0, total));
     return {
       ok: true,
-      sha256: computeContentHash(buffer),
-      bytes: buffer,
+      sha256: computeContentHash(buffer_2),
+      bytes: buffer_2,
     };
   } catch {
     return {
@@ -732,142 +767,149 @@ async function checkScriptFile(e, t, n = MAX_SCRIPT_PROBE_BYTES) {
       reason: "unreadable",
     };
   } finally {
-    await r.close().catch(() => {});
+    await handle.close().catch(() => {});
   }
 }
 //@ chunk-qmzcskz6.js:12469-13820 placement
 /**
  * /usr/bin/env 与各 shell 的单字母选项表，用于解析 shebang 参数。
  */
-var ENV_PROGRAM_PATHS = new Set(["/usr/bin/env", "/bin/env"]);
-var SHEBANG_INTERPRETER_RULES = [
-  {
-    names: /^(?:bash|dash|ash|sh|rbash|mksh|ksh[0-9]*)$/,
-    letters: "aefhiklmnprtuvxBCEHPT",
-    long: new Set(["login", "posix", "norc", "noprofile", "restricted"]),
-    ends: ["-", "--"],
-  },
-  {
-    names: /^zsh$/,
-    letters: "aefhiklmnprtuvxBCEHPT",
-    long: new Set(["login"]),
-    ends: ["-", "--", "-b"],
-  },
-  {
-    names: /^node(?:js)?$/,
-    letters: "",
-    long: new Set([
-      "enable-source-maps",
-      "no-warnings",
-      "no-deprecation",
-      "throw-deprecation",
-      "trace-warnings",
-      "trace-deprecation",
-      "pending-deprecation",
-      "experimental-strip-types",
-    ]),
-  },
-  {
-    names: /^rscript$/,
-    letters: "",
-    long: new Set(["vanilla", "no-save", "no-restore", "no-site-file", "no-init-file", "no-environ"]),
-    inReachNeeds: [["vanilla"], ["no-init-file", "no-environ", "no-site-file"]],
-  },
-  {
-    names: /^osascript$/,
-    letters: "",
-    valued: "l",
-  },
-  {
-    names: /^fish$/,
-    letters: "N",
-    long: new Set(["no-config"]),
-  },
-  {
-    names: /^(?:tclsh|wish)[0-9.]*$/,
-    letters: "",
-  },
-  {
-    names: /^(?:python|pypy)[0-9.]*$/,
-    letters: "bBdEIOPqRsSuvx",
-    ends: ["--"],
-  },
-  {
-    names: /^perl[0-9.]*$/,
-    letters: "acnpsTtwWX",
-    ends: ["--"],
-  },
-  {
-    names: /^ruby[0-9.]*$/,
-    letters: "acdlnpsvwy",
-    ends: ["--"],
-  },
-  {
-    names: /^[gnm]?awk$/,
-    letters: "",
-    nextWord: "fE",
-  },
-  {
-    names: /^g?sed$/,
-    letters: "nEru",
-    nextWord: "f",
-  },
-  {
-    names: /^php[0-9.]*$/,
-    letters: "nqeH",
-  },
-  {
-    names: /^t?csh$/,
-    letters: "efnvx",
-    ends: ["-b"],
-  },
-  {
-    names: /^expect$/,
-    letters: "",
-    ends: ["--"],
-    nextWord: "f",
-  },
-  {
-    names: /^(?:g|b|p|gnu)?make$/,
-    letters: "",
-    nextWord: "f",
-    requiresTerminal: true,
-  },
-];
+var ENV_PROGRAM_PATHS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var SHEBANG_INTERPRETER_RULES;
+deferInit("chunk-qmzcskz6.js:12469", () => {
+  ENV_PROGRAM_PATHS = new Set(["/usr/bin/env", "/bin/env"]);
+  SHEBANG_INTERPRETER_RULES = [
+    {
+      names: /^(?:bash|dash|ash|sh|rbash|mksh|ksh[0-9]*)$/,
+      letters: "aefhiklmnprtuvxBCEHPT",
+      long: new Set(["login", "posix", "norc", "noprofile", "restricted"]),
+      ends: ["-", "--"],
+    },
+    {
+      names: /^zsh$/,
+      letters: "aefhiklmnprtuvxBCEHPT",
+      long: new Set(["login"]),
+      ends: ["-", "--", "-b"],
+    },
+    {
+      names: /^node(?:js)?$/,
+      letters: "",
+      long: new Set([
+        "enable-source-maps",
+        "no-warnings",
+        "no-deprecation",
+        "throw-deprecation",
+        "trace-warnings",
+        "trace-deprecation",
+        "pending-deprecation",
+        "experimental-strip-types",
+      ]),
+    },
+    {
+      names: /^rscript$/,
+      letters: "",
+      long: new Set(["vanilla", "no-save", "no-restore", "no-site-file", "no-init-file", "no-environ"]),
+      inReachNeeds: [["vanilla"], ["no-init-file", "no-environ", "no-site-file"]],
+    },
+    {
+      names: /^osascript$/,
+      letters: "",
+      valued: "l",
+    },
+    {
+      names: /^fish$/,
+      letters: "N",
+      long: new Set(["no-config"]),
+    },
+    {
+      names: /^(?:tclsh|wish)[0-9.]*$/,
+      letters: "",
+    },
+    {
+      names: /^(?:python|pypy)[0-9.]*$/,
+      letters: "bBdEIOPqRsSuvx",
+      ends: ["--"],
+    },
+    {
+      names: /^perl[0-9.]*$/,
+      letters: "acnpsTtwWX",
+      ends: ["--"],
+    },
+    {
+      names: /^ruby[0-9.]*$/,
+      letters: "acdlnpsvwy",
+      ends: ["--"],
+    },
+    {
+      names: /^[gnm]?awk$/,
+      letters: "",
+      nextWord: "fE",
+    },
+    {
+      names: /^g?sed$/,
+      letters: "nEru",
+      nextWord: "f",
+    },
+    {
+      names: /^php[0-9.]*$/,
+      letters: "nqeH",
+    },
+    {
+      names: /^t?csh$/,
+      letters: "efnvx",
+      ends: ["-b"],
+    },
+    {
+      names: /^expect$/,
+      letters: "",
+      ends: ["--"],
+      nextWord: "f",
+    },
+    {
+      names: /^(?:g|b|p|gnu)?make$/,
+      letters: "",
+      nextWord: "f",
+      requiresTerminal: true,
+    },
+  ];
+});
 //@ chunk-qmzcskz6.js:13820-14660 placement
-function parseShebangArgs(e, t, { childStartsInReach: n = true } = {}) {
-  let found = SHEBANG_INTERPRETER_RULES.find((u) => u.names.test(t.toLowerCase()));
-  if (found === undefined) return !n && e.length === 0;
+function parseShebangArgs(args, name, { childStartsInReach = true } = {}) {
+  let found = SHEBANG_INTERPRETER_RULES.find((rule) => rule.names.test(name.toLowerCase()));
+  if (found === undefined) return !childStartsInReach && args.length === 0;
   if (
-    n &&
+    childStartsInReach &&
     found.inReachNeeds !== undefined &&
-    !found.inReachNeeds.some((inReachNeed) => inReachNeed.every((d) => e.includes(`--${d}`)))
+    !found.inReachNeeds.some((inReachNeed) => inReachNeed.every((name) => args.includes(`--${name}`)))
   )
     return false;
-  let l = (u) =>
-    u.startsWith("--")
-      ? (found.long?.has(u.slice(2)) ?? false)
-      : /^-[A-Za-z]{1,3}$/.test(u) &&
-        u
+  let isFlag = (arg) =>
+    arg.startsWith("--")
+      ? (found.long?.has(arg.slice(2)) ?? false)
+      : /^-[A-Za-z]{1,3}$/.test(arg) &&
+        arg
           .slice(1)
           .split("")
-          .every((d) => found.letters.includes(d));
-  let s = (u) =>
-    (found.ends?.includes(u) ?? false) ||
+          .every((char) => found.letters.includes(char));
+  let isTerminalWord = (arg) =>
+    (found.ends?.includes(arg) ?? false) ||
     (found.nextWord !== undefined &&
-      /^-[A-Za-z]{1,3}$/.test(u) &&
-      found.nextWord.includes(u.at(-1)) &&
-      u
+      /^-[A-Za-z]{1,3}$/.test(arg) &&
+      found.nextWord.includes(arg.at(-1)) &&
+      arg
         .slice(1, -1)
         .split("")
-        .every((d) => found.letters.includes(d)));
-  let o = (u) => found.valued !== undefined && new RegExp(`^-[${found.valued}]$`).test(u);
-  if (e.length > 0 && o(e.at(-1))) return false;
-  let filtered = e.filter((u, d) => !(d > 0 && o(e[d - 1])));
+        .every((char) => found.letters.includes(char)));
+  let takesValue = (arg) => found.valued !== undefined && new RegExp(`^-[${found.valued}]$`).test(arg);
+  if (args.length > 0 && takesValue(args.at(-1))) return false;
+  let filtered = args.filter((arg, argIndex) => !(argIndex > 0 && takesValue(args[argIndex - 1])));
   let last = filtered.at(-1);
-  let f = last !== undefined && !l(last) && s(last);
-  if (found.requiresTerminal && !(f && last !== "--" && last !== "-")) return false;
-  return filtered.every((u, d) => l(u) || o(u) || (d === filtered.length - 1 && s(u)));
+  let lastOk = last !== undefined && !isFlag(last) && isTerminalWord(last);
+  if (found.requiresTerminal && !(lastOk && last !== "--" && last !== "-")) return false;
+  return filtered.every(
+    (arg, argIndex) =>
+      isFlag(arg) || takesValue(arg) || (argIndex === filtered.length - 1 && isTerminalWord(arg)),
+  );
 }
 //@ chunk-qmzcskz6.js:14660-15660 placement
 /**
@@ -882,14 +924,14 @@ function readShebang(bytes) {
     .slice(2, index === -1 ? undefined : index)
     .replace(/^[ \t]+|[ \t]+$/g, "")
     .split(/[ \t]+/);
-  let l = parts[0];
-  if (l === undefined || l === "") return null;
-  if (parts.some((a) => /[^\x21-\x7e]/.test(a))) return "unjudgeable";
-  if (!l.startsWith("/") || DOT_DOT_SEGMENT_RE.test(l))
+  let program = parts[0];
+  if (program === undefined || program === "") return null;
+  if (parts.some((word) => /[^\x21-\x7e]/.test(word))) return "unjudgeable";
+  if (!program.startsWith("/") || DOT_DOT_SEGMENT_RE.test(program))
     return {
       kind: "cwd",
     };
-  let normalized = posix.normalize(l);
+  let normalized = posix.normalize(program);
   if (!ENV_PROGRAM_PATHS.has(normalizeCommandForPlatform(normalized))) {
     if (normalizeCommandForPlatform(posix.basename(normalized)) === "env") return "unjudgeable";
     return parseShebangArgs(parts.slice(1), posix.basename(normalized))
@@ -897,36 +939,36 @@ function readShebang(bytes) {
           kind: "absolute",
           path: normalized,
         }
-      : parts.slice(1).some((a) => !a.startsWith("-"))
+      : parts.slice(1).some((word) => !word.startsWith("-"))
         ? {
             kind: "cwd",
           }
         : "unjudgeable";
   }
-  let o = parts[1] === "-S" ? parts.slice(2) : parts.slice(1);
-  let i = o[0];
-  if (i === undefined || i.startsWith("-") || i.includes("=")) return "unjudgeable";
-  if (!parseShebangArgs(o.slice(1), posix.basename(i)))
-    return o.slice(1).some((a) => !a.startsWith("-"))
+  let words = parts[1] === "-S" ? parts.slice(2) : parts.slice(1);
+  let program_2 = words[0];
+  if (program_2 === undefined || program_2.startsWith("-") || program_2.includes("=")) return "unjudgeable";
+  if (!parseShebangArgs(words.slice(1), posix.basename(program_2)))
+    return words.slice(1).some((word) => !word.startsWith("-"))
       ? {
           kind: "cwd",
         }
       : "unjudgeable";
-  if (i.startsWith("/"))
-    return DOT_DOT_SEGMENT_RE.test(i) || /[\\$"'#\s]/.test(i)
+  if (program_2.startsWith("/"))
+    return DOT_DOT_SEGMENT_RE.test(program_2) || /[\\$"'#\s]/.test(program_2)
       ? "unjudgeable"
       : {
           kind: "absolute",
-          path: posix.normalize(i),
+          path: posix.normalize(program_2),
         };
-  if (i.includes("/"))
+  if (program_2.includes("/"))
     return {
       kind: "cwd",
     };
-  return /^[\w.+-]+$/.test(i)
+  return /^[\w.+-]+$/.test(program_2)
     ? {
         kind: "env",
-        program: i,
+        program: program_2,
       }
     : "unjudgeable";
 }

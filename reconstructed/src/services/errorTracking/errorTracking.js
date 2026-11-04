@@ -60,12 +60,13 @@ import { currentAuthSurface, getCurrentAuthSurface } from "../analytics/authOutc
 import { getPlatform } from "../../utils/platform.js";
 import { hasEmbeddedSearchTools_2 } from "../../utils/embeddedTools.js";
 import { isErrorReportingEnabled } from "../errorReportingGate.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-crrjgh95.js:802-837 placement
 var CLAUDE_CODE_ERROR_TRACKING = "claude-code-error-tracking";
 //@ chunk-crrjgh95.js:837-1903 placement
-function buildErrorTrackingRelease(e) {
-  return e
+function buildErrorTrackingRelease(sourcemapGroup) {
+  return sourcemapGroup
     ? {
         version: `${
           {
@@ -79,8 +80,8 @@ function buildErrorTrackingRelease(e) {
             HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
             DD_SOURCEMAP_GROUP: "default",
           }.VERSION
-        }_${e}`,
-        sourcemapGroup: e,
+        }_${sourcemapGroup}`,
+        sourcemapGroup,
       }
     : {
         version: {
@@ -104,26 +105,26 @@ function buildErrorTrackingRelease(e) {
 var USER_BUCKET_MODULUS = 30;
 //@ chunk-crrjgh95.js:1912-2116 placement
 function getUserBucket() {
-  let e = errorTrackingClient();
-  if (e.cachedUserBucket !== undefined) return e.cachedUserBucket;
-  let r = getOrCreateUserID();
-  let o = createHash("sha256").update(r).digest("hex");
-  e.cachedUserBucket = parseInt(o.slice(0, 8), 16) % USER_BUCKET_MODULUS;
-  return e.cachedUserBucket;
+  let client = errorTrackingClient();
+  if (client.cachedUserBucket !== undefined) return client.cachedUserBucket;
+  let userId = getOrCreateUserID();
+  let digest = createHash("sha256").update(userId).digest("hex");
+  client.cachedUserBucket = parseInt(digest.slice(0, 8), 16) % USER_BUCKET_MODULUS;
+  return client.cachedUserBucket;
 }
 //@ chunk-crrjgh95.js:2116-2342 placement
-function computeErrorFingerprint(e, r) {
-  let joined = r
+function computeErrorFingerprint(message, frames) {
+  let joined = frames
     .slice(0, 3)
-    .map((n) =>
-      isAnonymousBundledFrame(n)
-        ? `${n.function ?? "?"}@${n.file}:${n.line ?? "?"}:${n.column ?? "?"}`
-        : `${n.function ?? "?"}@${unifyCliBundlePath(n.file)}`,
+    .map((frame) =>
+      isAnonymousBundledFrame(frame)
+        ? `${frame.function ?? "?"}@${frame.file}:${frame.line ?? "?"}:${frame.column ?? "?"}`
+        : `${frame.function ?? "?"}@${unifyCliBundlePath(frame.file)}`,
     )
     .join("|");
   return createHash("sha256")
     .update(
-      `${e}
+      `${message}
 ${joined}`,
     )
     .digest("hex")
@@ -133,7 +134,10 @@ ${joined}`,
 /**
  * 旧模型 id 集合（不在其中的归 other）。
  */
-var LEGACY_MODEL_SET = new Set(LEGACY_MODEL_IDS_2);
+var LEGACY_MODEL_SET; // deferred: uses LEGACY_MODEL_IDS_2 (../../utils/model/modelIds.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-crrjgh95.js:2342", () => {
+  LEGACY_MODEL_SET = new Set(LEGACY_MODEL_IDS_2);
+});
 //@ chunk-crrjgh95.js:2361-2472 placement
 function getCanonicalModelForTracking() {
   try {
@@ -157,25 +161,25 @@ function getNonDefaultBooleanFlags() {
   try {
     let allGrowthBookFeatures = getAllGrowthBookFeatures();
     let nonDefaultFeatureKeys = getNonDefaultFeatureKeys();
-    let o = {};
-    let n = 0;
+    let flags = {};
+    let count = 0;
     for (let [key, value] of Object.entries(allGrowthBookFeatures))
       if (typeof value === "boolean" && nonDefaultFeatureKeys.has(key)) {
-        o[key] = value;
-        if (++n >= MAX_ADDITIONAL_FILES) break;
+        flags[key] = value;
+        if (++count >= MAX_ADDITIONAL_FILES) break;
       }
-    return o;
+    return flags;
   } catch {
     return {};
   }
 }
 //@ chunk-crrjgh95.js:2642-2843 placement
-function summarizeZodIssues(e) {
-  let issues = e.issues;
+function summarizeZodIssues(error) {
+  let issues = error.issues;
   if (!Array.isArray(issues) || issues.length === 0) return;
   let filtered = issues
     .map((issue) => issue?.code)
-    .filter((n) => typeof n === "string" && /^[a-z_]{1,40}$/.test(n));
+    .filter((code) => typeof code === "string" && /^[a-z_]{1,40}$/.test(code));
   return `${issues.length} issue(s): ${filtered.join(",")}`;
 }
 //@ chunk-crrjgh95.js:2843-2857 placement
@@ -187,38 +191,43 @@ function errorTrackingIdentifierProbe() {}
 /**
  * 错误追踪：构建是否保留类名（探测函数名未被压缩）、SDK/客户端错误类名表（用 instanceof 识别）、"已验证无代码路径" 后缀正则。
  */
-var CLASS_NAMES_PRESERVED = !errorTrackingIdentifierProbe.name.startsWith("errorTrackingIdentifierProbe");
-var KNOWN_ERROR_CLASSES = [
-  ["APIUserAbortError", APIUserAbortError],
-  ["APIConnectionTimeoutError", APIConnectionTimeoutError],
-  ["APIConnectionError", APIConnectionError],
-  ["BadRequestError", BadRequestError],
-  ["AuthenticationError", AuthenticationError],
-  ["PermissionDeniedError", PermissionDeniedError],
-  ["NotFoundError", NotFoundError],
-  ["ConflictError", ConflictError],
-  ["UnprocessableEntityError", UnprocessableEntityError],
-  ["RateLimitError", RateLimitError],
-  ["InternalServerError", InternalServerError],
-  ["APIError", APIError],
-  ["RetryableError", RetryableError],
-  ["WorkloadIdentityError", WorkloadIdentityError],
-  ["AnthropicError", AnthropicError],
-  ["ClaudeError", ClaudeError],
-];
-var VERIFIED_SAFE_SUFFIX_RE = /_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS$/;
+var CLASS_NAMES_PRESERVED; // deferred: uses errorTrackingIdentifierProbe of its import cycle while loading; runs once the cycle is complete
+var KNOWN_ERROR_CLASSES;
+var VERIFIED_SAFE_SUFFIX_RE;
+deferInit("chunk-crrjgh95.js:2857", () => {
+  CLASS_NAMES_PRESERVED = !errorTrackingIdentifierProbe.name.startsWith("errorTrackingIdentifierProbe");
+  KNOWN_ERROR_CLASSES = [
+    ["APIUserAbortError", APIUserAbortError],
+    ["APIConnectionTimeoutError", APIConnectionTimeoutError],
+    ["APIConnectionError", APIConnectionError],
+    ["BadRequestError", BadRequestError],
+    ["AuthenticationError", AuthenticationError],
+    ["PermissionDeniedError", PermissionDeniedError],
+    ["NotFoundError", NotFoundError],
+    ["ConflictError", ConflictError],
+    ["UnprocessableEntityError", UnprocessableEntityError],
+    ["RateLimitError", RateLimitError],
+    ["InternalServerError", InternalServerError],
+    ["APIError", APIError],
+    ["RetryableError", RetryableError],
+    ["WorkloadIdentityError", WorkloadIdentityError],
+    ["AnthropicError", AnthropicError],
+    ["ClaudeError", ClaudeError],
+  ];
+  VERIFIED_SAFE_SUFFIX_RE = /_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS$/;
+});
 //@ chunk-crrjgh95.js:3369-3679 placement
-function errorClassName(e, r = CLASS_NAMES_PRESERVED) {
-  let o =
-    typeof e.constructor?.name === "string"
-      ? e.constructor.name.replace(VERIFIED_SAFE_SUFFIX_RE, "")
+function errorClassName(error, preserveKnown = CLASS_NAMES_PRESERVED) {
+  let constructorName =
+    typeof error.constructor?.name === "string"
+      ? error.constructor.name.replace(VERIFIED_SAFE_SUFFIX_RE, "")
       : undefined;
-  let n = r && e instanceof ClaudeError && e.name === o;
+  let nameIsClass = preserveKnown && error instanceof ClaudeError && error.name === constructorName;
   let replaced = (
-    (typeof e.name === "string" && e.name !== "Error" && !n ? e.name : undefined) ||
-    (!r && sanitizeClassName(o) !== undefined
-      ? o
-      : KNOWN_ERROR_CLASSES.find(([, a]) => e instanceof a)?.[0]) ||
+    (typeof error.name === "string" && error.name !== "Error" && !nameIsClass ? error.name : undefined) ||
+    (!preserveKnown && sanitizeClassName(constructorName) !== undefined
+      ? constructorName
+      : KNOWN_ERROR_CLASSES.find(([, ctor]) => error instanceof ctor)?.[0]) ||
     "Error"
   ).replace(VERIFIED_SAFE_SUFFIX_RE, "");
   return sanitizeClassName(replaced) ?? "Error";
@@ -232,26 +241,26 @@ var MAX_STACK_FRAMES = 20;
 /**
  * 构造错误追踪事件（截取栈、标记捆绑外抛出、版本信息）。
  */
-function buildErrorTrackingEvent(error, r, o) {
+function buildErrorTrackingEvent(error, origin, kind) {
   let sanitizedStackFrames = getSanitizedStackFrames(error);
-  let t = isStackOnlyExternal(sanitizedStackFrames);
-  let sliced = sanitizedStackFrames.slice(0, MAX_STACK_FRAMES);
+  let externalOnly = isStackOnlyExternal(sanitizedStackFrames);
+  let frames = sanitizedStackFrames.slice(0, MAX_STACK_FRAMES);
   let telemetryMessage = getTelemetryMessage(error);
-  let a =
-    t && telemetryMessage === undefined
-      ? `thrown outside the Claude Code bundle (${o})`
+  let message =
+    externalOnly && telemetryMessage === undefined
+      ? `thrown outside the Claude Code bundle (${kind})`
       : redactErrorMessage(
           redactErrorPaths(
             error,
             telemetryMessage ?? summarizeZodIssues(error) ?? error.message ?? String(error),
           ),
         );
-  let C = formatGitErrorFrames(
+  let stack = formatGitErrorFrames(
     {
-      name: o,
-      message: a,
+      name: kind,
+      message,
     },
-    sliced,
+    frames,
   );
   let { version, sourcemapGroup } = buildErrorTrackingRelease(
     {
@@ -266,16 +275,16 @@ function buildErrorTrackingEvent(error, r, o) {
       DD_SOURCEMAP_GROUP: "default",
     }.DD_SOURCEMAP_GROUP,
   );
-  let fingerprint = computeErrorFingerprint(o, sliced);
+  let fingerprint = computeErrorFingerprint(kind, frames);
   let userBucket = getUserBucket();
   let canonicalModelForTracking = getCanonicalModelForTracking();
-  let F = typeof Bun !== "undefined" && true;
-  let m = sanitizeErrnoForTelemetry(error);
+  let isNative = typeof Bun !== "undefined" && true;
+  let errnoCode = sanitizeErrnoForTelemetry(error);
   let telemetryChildExitStatus = getTelemetryChildExitStatus(error);
-  let f = env.CLAUDE_CODE_ENTRYPOINT === undefined ? "cli" : (getEntrypointKind() ?? "other");
-  let d = envSessionKind();
+  let entrypoint = env.CLAUDE_CODE_ENTRYPOINT === undefined ? "cli" : (getEntrypointKind() ?? "other");
+  let sessionKind = envSessionKind();
   let rendererModeForAnalytics = getRendererModeForAnalytics();
-  let _ = currentAuthSurface();
+  let remoteControlLane = currentAuthSurface();
   let majorMinorVersion = getMajorMinorVersion(release());
   return {
     ddtags: [
@@ -283,50 +292,50 @@ function buildErrorTrackingEvent(error, r, o) {
       "team:claude-code",
       `version:${version}`,
       "env:external",
-      `origin:${r}`,
+      `origin:${origin}`,
       `platform:${getPlatform()}`,
       `os_release:${majorMinorVersion}`,
       `user_bucket:${userBucket}`,
-      `entrypoint:${f}`,
+      `entrypoint:${entrypoint}`,
       `node_version:${process.versions.node}`,
       "bun_version:1.4.4",
-      `is_native_runtime:${F}`,
+      `is_native_runtime:${isNative}`,
       ...(canonicalModelForTracking ? [`model:${canonicalModelForTracking}`] : []),
-      ...(m ? [`error_code:${m}`] : []),
+      ...(errnoCode ? [`error_code:${errnoCode}`] : []),
       ...(telemetryChildExitStatus !== undefined ? [`child_exit_status:${telemetryChildExitStatus}`] : []),
-      ...(d ? [`session_kind:${d}`] : []),
-      ...(d ? [`has_attacher:${getAttacherCaps() ? "1" : "0"}`] : []),
+      ...(sessionKind ? [`session_kind:${sessionKind}`] : []),
+      ...(sessionKind ? [`has_attacher:${getAttacherCaps() ? "1" : "0"}`] : []),
       ...(rendererModeForAnalytics ? [`renderer_mode:${rendererModeForAnalytics}`] : []),
-      ...(_ ? [`remote_control_lane:${_}`] : []),
+      ...(remoteControlLane ? [`remote_control_lane:${remoteControlLane}`] : []),
       ...(getCurrentAuthSurface() ? ["projects_session:1"] : []),
     ].join(","),
     service: CLAUDE_CODE_ERROR_TRACKING,
     hostname: "claude-code",
     status: "error",
-    message: `${o}: ${a}`.slice(0, 4000),
+    message: `${kind}: ${message}`.slice(0, 4000),
     timestamp: new Date().toISOString(),
     error: {
-      kind: o,
-      message: a.slice(0, 4000),
-      stack: C.slice(0, 16000),
+      kind,
+      message: message.slice(0, 4000),
+      stack: stack.slice(0, 16000),
       fingerprint,
-      handling: r === "logError" ? "handled" : "unhandled",
+      handling: origin === "logError" ? "handled" : "unhandled",
     },
     version,
     sourcemap_group: sourcemapGroup,
     env: "external",
     user_bucket: userBucket,
-    origin: r,
+    origin,
     host_platform: getPlatform(),
     host_os_release: majorMinorVersion,
     host_name_redacted: getOrCreateMachineID().slice(0, 12),
-    entrypoint: f,
+    entrypoint,
     node_version: process.versions.node,
     bun_version: "1.4.4",
     ...(canonicalModelForTracking && {
       model: canonicalModelForTracking,
     }),
-    error_frames: sliced,
+    error_frames: frames,
     feature_flags: getNonDefaultBooleanFlags(),
   };
 }
@@ -334,29 +343,36 @@ function buildErrorTrackingEvent(error, r, o) {
 /**
  * 已知可忽略的系统栈帧（node 内部帧）。
  */
-var EXPECTED_ERROR_CLASSES = new Set(["APIUserAbortError", "AuthenticationError", "McpSessionExpiredError"]);
-var KNOWN_IGNORED_ERRORS = [
-  {
-    messagePrefix: "File does not exist",
-    topFrameIncludes: "FileReadTool.ts",
-  },
-];
-var KNOWN_IGNORED_SYSTEM_FRAMES = [
-  {
-    topFile: "node:net",
-    topFunction: "internalConnectMultipleTimeout",
-  },
-  {
-    topFile: "node:_http_server",
-    topFunction: "#onClose",
-  },
-];
+var EXPECTED_ERROR_CLASSES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var KNOWN_IGNORED_ERRORS;
+var KNOWN_IGNORED_SYSTEM_FRAMES;
+deferInit("chunk-crrjgh95.js:5589", () => {
+  EXPECTED_ERROR_CLASSES = new Set(["APIUserAbortError", "AuthenticationError", "McpSessionExpiredError"]);
+  KNOWN_IGNORED_ERRORS = [
+    {
+      messagePrefix: "File does not exist",
+      topFrameIncludes: "FileReadTool.ts",
+    },
+  ];
+  KNOWN_IGNORED_SYSTEM_FRAMES = [
+    {
+      topFile: "node:net",
+      topFunction: "internalConnectMultipleTimeout",
+    },
+    {
+      topFile: "node:_http_server",
+      topFunction: "#onClose",
+    },
+  ];
+});
 //@ chunk-crrjgh95.js:5873-6005 placement
 function isIgnoredTopFrame(error) {
   let sanitizedStackFrames = getSanitizedStackFrames(error, 20);
-  let o = sanitizedStackFrames[0];
-  if (!o || sanitizedStackFrames.some(isSourceFrame)) return false;
-  return KNOWN_IGNORED_SYSTEM_FRAMES.some((n) => o.file === n.topFile && o.function === n.topFunction);
+  let topFrame = sanitizedStackFrames[0];
+  if (!topFrame || sanitizedStackFrames.some(isSourceFrame)) return false;
+  return KNOWN_IGNORED_SYSTEM_FRAMES.some(
+    (needle) => topFrame.file === needle.topFile && topFrame.function === needle.topFunction,
+  );
 }
 //@ chunk-crrjgh95.js:6005-6141 placement
 function isRemoteEnvironment() {
@@ -367,8 +383,8 @@ function isRemoteEnvironment() {
   );
 }
 //@ chunk-crrjgh95.js:6141-6466 placement
-function classifyFsSyscall(error, r) {
-  if (EXPECTED_ERROR_CLASSES.has(r)) return true;
+function classifyFsSyscall(error, errorClass) {
+  if (EXPECTED_ERROR_CLASSES.has(errorClass)) return true;
   if (
     hasEmbeddedSearchTools_2() &&
     !isRemoteEnvironment() &&
@@ -381,8 +397,8 @@ function classifyFsSyscall(error, r) {
     return true;
   let message = error.message ?? "";
   return KNOWN_IGNORED_ERRORS.some(
-    (n) =>
-      message.startsWith(n.messagePrefix) &&
+    (code) =>
+      message.startsWith(code.messagePrefix) &&
       (
         error.stack
           ?.split(
@@ -390,30 +406,31 @@ function classifyFsSyscall(error, r) {
 `,
           )
           .find((line) => line.trim().startsWith("at ")) ?? ""
-      ).includes(n.topFrameIncludes),
+      ).includes(code.topFrameIncludes),
   );
 }
 //@ chunk-crrjgh95.js:6466-6547 placement
 /**
  * 取版本的 major.minor，取不到返回 unknown。
  */
-function getMajorMinorVersion(e) {
-  let match = /^(\d+)\.(\d+)/.exec(e);
+function getMajorMinorVersion(version) {
+  let match = /^(\d+)\.(\d+)/.exec(version);
   return match ? `${match[1]}.${match[2]}` : "unknown";
 }
 //@ chunk-crrjgh95.js:6547-6766 placement
 /**
  * 把错误上报到客户端错误追踪：判定开启后过滤文件系统系统调用错误、已知可忽略的未处理异常、达到上限，然后构建事件入队。
  */
-function trackError(e, r = "logError") {
+function trackError(thrown, source = "logError") {
   try {
     if (!isErrorReportingEnabled()) return;
-    let error = toError(e);
-    let n = errorClassName(error);
-    if (r === "logError" && classifyFsSyscall(error, n)) return;
-    if ((r === "unhandled_rejection" || r === "uncaught_exception") && isIgnoredTopFrame(error)) return;
+    let error = toError(thrown);
+    let className = errorClassName(error);
+    if (source === "logError" && classifyFsSyscall(error, className)) return;
+    if ((source === "unhandled_rejection" || source === "uncaught_exception") && isIgnoredTopFrame(error))
+      return;
     if (isErrorTrackingCapReached()) return;
-    let errorTrackingEvent = buildErrorTrackingEvent(error, r, n);
+    let errorTrackingEvent = buildErrorTrackingEvent(error, source, className);
     enqueueErrorLog(errorTrackingEvent);
   } catch {}
 }

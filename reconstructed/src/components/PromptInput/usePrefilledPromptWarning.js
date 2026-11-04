@@ -8,10 +8,10 @@
  * pieces: chunk-18hwfzwa.js (3)
  * attribution: placement 3
  */
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { useLaunchWarning } from "../../screens/repl/storeHooks.js";
 import { useNotifications } from "../../context/notifications.js";
-import { P } from "../../../vendor/react/cjs/react.production.js";
+import { useEffect } from "../../../vendor/react/cjs/react.production.js";
 import { LONG_PREFILL_CHARS } from "../../utils/deepLink/banner.js";
 
 //@ chunk-18hwfzwa.js:772584-772615 placement
@@ -21,13 +21,13 @@ var LAUNCH_PROMPT_WARNING = "launch-prompt-warning";
  * 有预填或来自外部链接的提示词时，显示一条固定的警告通知，提醒按回车前先检查。
  */
 function usePrefilledPromptWarning() {
-  let $ = w(5);
+  let $ = useMemoCache(5);
   let prefill = useLaunchWarning();
   let { addNotification, removeNotification } = useNotifications();
-  let ee;
+  let warnEffect;
   let t1;
   if ($[0] !== addNotification || $[1] !== removeNotification || $[2] !== prefill) {
-    ee = () => {
+    warnEffect = () => {
       if (prefill === null) {
         removeNotification(LAUNCH_PROMPT_WARNING);
         return;
@@ -44,24 +44,26 @@ function usePrefilledPromptWarning() {
     $[0] = addNotification;
     $[1] = removeNotification;
     $[2] = prefill;
-    $[3] = ee;
+    $[3] = warnEffect;
     $[4] = t1;
   } else {
-    ee = $[3];
+    warnEffect = $[3];
     t1 = $[4];
   }
-  P(ee, t1);
+  useEffect(warnEffect, t1);
 }
 //@ chunk-18hwfzwa.js:772919-773225 placement
 function formatPrefillWarningSegments(prefill) {
-  let x = prefill.type === "deep-link" ? "Prompt from an external link" : "Pre-filled prompt";
-  let D = prefill.prefillLength > LONG_PREFILL_CHARS;
+  let title = prefill.type === "deep-link" ? "Prompt from an external link" : "Pre-filled prompt";
+  let isLongPrefill = prefill.prefillLength > LONG_PREFILL_CHARS;
   return [
     {
-      text: `${x}${D ? ` (${prefill.prefillLength.toLocaleString("en-US")} chars)` : ""}`,
+      text: `${title}${isLongPrefill ? ` (${prefill.prefillLength.toLocaleString("en-US")} chars)` : ""}`,
     },
     {
-      text: D ? " \xB7 scroll to review it all before pressing Enter" : " \xB7 review before pressing Enter",
+      text: isLongPrefill
+        ? " \xB7 scroll to review it all before pressing Enter"
+        : " \xB7 review before pressing Enter",
       dim: true,
     },
   ];

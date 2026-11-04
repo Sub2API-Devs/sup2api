@@ -8,9 +8,11 @@
  * pieces: chunk-81qqq1aq.js (1), chunk-e6aww6q8.js (1)
  * attribution: fingerprint 1, placement 1
  */
-import { w } from "../../vendor/react/compiler-runtime.js";
+import { reduceCodes } from "../utils/textHighlighting.js";
+import { draftToDisplayOffset } from "../plugins/functionHooks/prompt/decorationSpans.js";
+import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import { usePasteHandler } from "../hooks/usePasteHandler.js";
-import { P, R } from "../../vendor/react/cjs/react.production.js";
+import { useEffect, useRef } from "../../vendor/react/cjs/react.production.js";
 import { MEMO_CACHE_SENTINEL } from "../../runtime/bun-runtime.js";
 import { isNativeCursorEnabled } from "../ink/nativeCursor.js";
 import { useIsScreenReaderEnabled } from "../ink/components/ErrorBoundary.js";
@@ -27,12 +29,38 @@ import { Input } from "../ink/components/Input.js";
 import { Box, Text } from "../ink/components/Text.js";
 import { HighlightedInput } from "./PromptInput/ShimmeredInput.js";
 import { Ansi } from "../ink/components/AnsiText.js";
-import { reduceCodes } from "../utils/textHighlighting.js";
-import { draftToDisplayOffset } from "../plugins/functionHooks/prompt/decorationSpans.js";
 
+//@ chunk-e6aww6q8.js:66424-66686 placement = writeCacheBreakDiff (0.806)
+/**
+ * 文本编辑用的区间切分（BaseTextInput 使用），与缓存检测无关，归错文件。旧版名 writeCacheBreakDiff 为错配。
+ */
+var splitSpansAroundOverlays = (prevContent, newContent) =>
+  reduceCodes(prevContent).flatMap((span) => {
+    let start = draftToDisplayOffset(newContent, span.start, "after");
+    let end = draftToDisplayOffset(newContent, span.end, "before");
+    let boundaries = [
+      start,
+      ...newContent.spans
+        .filter((span) => span.start >= start && span.end <= end)
+        .flatMap((span) => [span.start, span.end]),
+      end,
+    ];
+    return boundaries.flatMap((boundary, index) => {
+      let nextBoundary = boundaries[index + 1] ?? boundary;
+      return index % 2 === 0 && nextBoundary > boundary
+        ? [
+            {
+              ...span,
+              start: boundary,
+              end: nextBoundary,
+            },
+          ]
+        : [];
+    });
+  });
 //@ chunk-81qqq1aq.js:4298-6714 fingerprint = BaseTextInput (0.631)
 function BaseTextInput(props) {
-  let $ = w(7);
+  let $ = useMemoCache(7);
   let { inputState, children, terminalFocus, invert, hidePlaceholderText, cursorCellPainted, ...props_2 } =
     props;
   let { handleKeyDown, renderedValue, cursorLine, cursorColumn } = inputState;
@@ -61,59 +89,61 @@ function BaseTextInput(props) {
     onUnreadImagePaste: props_2.onUnreadImagePaste,
   });
   let { onIsPastingChange } = props_2;
-  P(() => {
+  useEffect(() => {
     if (onIsPastingChange) onIsPastingChange(isPasting);
   }, [isPasting, onIsPastingChange]);
-  let U;
+  let nativeCursor;
   if ($[0] === MEMO_CACHE_SENTINEL) {
-    U = isNativeCursorEnabled();
-    $[0] = U;
-  } else U = $[0];
-  let He = U;
+    nativeCursor = isNativeCursorEnabled();
+    $[0] = nativeCursor;
+  } else nativeCursor = $[0];
+  let useNativeCursor = nativeCursor;
   let isScreenReaderEnabled = useIsScreenReaderEnabled();
   let { showPlaceholder, renderedPlaceholder } = renderPlaceholder({
     placeholder: props_2.placeholder,
     value: props_2.value,
-    showCursor: props_2.showCursor && !He,
+    showCursor: props_2.showCursor && !useNativeCursor,
     focus: props_2.focus,
     terminalFocus,
     invert,
     hidePlaceholderText: hidePlaceholderText || isScreenReaderEnabled,
   });
-  let V = showPlaceholder ? renderedPlaceholder : undefined;
-  let B = props_2.focus !== false;
-  let ne = R(null);
-  useFocusOnMount(ne, B);
-  let k = {
-    ref: ne,
-    autoFocus: B,
-    disabled: !B,
+  let placeholder = showPlaceholder ? renderedPlaceholder : undefined;
+  let isFocused = props_2.focus !== false;
+  let inputRef = useRef(null);
+  useFocusOnMount(inputRef, isFocused);
+  let inputProps = {
+    ref: inputRef,
+    autoFocus: isFocused,
+    disabled: !isFocused,
     caret,
     onKeyDown: handleKeyDown_2,
     onPaste: handlePaste,
     allowPrintableKeybindings: props_2.allowPrintableKeybindings,
   };
-  let W =
+  let endsWithToken =
     (props_2.value && props_2.value.trim().indexOf(" ") === -1) ||
     (props_2.value && props_2.value.endsWith(" "));
-  let showArgumentHint = Boolean(props_2.argumentHint && props_2.value && W && props_2.value.startsWith("/"));
+  let showArgumentHint = Boolean(
+    props_2.argumentHint && props_2.value && endsWithToken && props_2.value.startsWith("/"),
+  );
   let shown = inputState.shown;
-  let ke =
+  let caretSelection =
     shown && props_2.showCursor
       ? {
           start: shown.cursorOffset,
           end: shown.cursorOffset + firstGrapheme(shown.text.text.slice(shown.cursorOffset)).length,
         }
       : undefined;
-  let le = shown !== undefined && shown.text.spans.some((span) => span.start === shown.cursorOffset);
-  let X =
-    props_2.showCursor && props_2.highlights && !le
+  let caretOnSpan = shown !== undefined && shown.text.spans.some((span) => span.start === shown.cursorOffset);
+  let highlights =
+    props_2.showCursor && props_2.highlights && !caretOnSpan
       ? props_2.highlights.filter(
           (h_0) => h_0.dimColor || props_2.cursorOffset < h_0.start || props_2.cursorOffset >= h_0.end,
         )
       : props_2.highlights;
   let text = props_2.leadingPill?.text ?? "";
-  let ae = text
+  let decorations = text
     ? [
         {
           start: 0,
@@ -121,28 +151,33 @@ function BaseTextInput(props) {
           color: "ide",
           priority: 30,
         },
-        ...(X ?? []).map((h_1) => ({
+        ...(highlights ?? []).map((h_1) => ({
           ...h_1,
           start: h_1.start + text.length,
           end: h_1.end + text.length,
         })),
       ]
-    : X;
-  let K = shown
-    ? [...splitSpansAroundOverlays(ae ?? [], shown.text), ...domSpansToDecorations(shown.text, ke)]
-    : ae;
-  let G =
-    K && K.length > 0 ? mapDecorationsToRendered(K, renderedValue, inputState.renderedRowStartOffsets) : K;
-  if (G && G.length > 0 && !V && !isScreenReaderEnabled) {
+    : highlights;
+  let splitDecorations = shown
+    ? [
+        ...splitSpansAroundOverlays(decorations ?? [], shown.text),
+        ...domSpansToDecorations(shown.text, caretSelection),
+      ]
+    : decorations;
+  let renderedDecorations =
+    splitDecorations && splitDecorations.length > 0
+      ? mapDecorationsToRendered(splitDecorations, renderedValue, inputState.renderedRowStartOffsets)
+      : splitDecorations;
+  if (renderedDecorations && renderedDecorations.length > 0 && !placeholder && !isScreenReaderEnabled) {
     return jsxProd_default_2(Input, {
-      ...k,
+      ...inputProps,
       children: [
         jsxProd_default(Box, {
           flexShrink: 0,
           "aria-preserve-whitespace": true,
           children: jsxProd_default(HighlightedInput, {
             text: renderedValue,
-            highlights: G,
+            highlights: renderedDecorations,
           }),
         }),
         showArgumentHint &&
@@ -155,10 +190,10 @@ function BaseTextInput(props) {
       ],
     });
   }
-  const Y = Text;
+  const TextComponent = Text;
   const wrap = "truncate-end";
   const dimColor = props_2.dimColor;
-  const ce = V
+  const renderedChild = placeholder
     ? jsxProd_default_2(Fragment, {
         children: [
           text
@@ -168,7 +203,7 @@ function BaseTextInput(props) {
               })
             : null,
           jsxProd_default(Ansi, {
-            children: V,
+            children: placeholder,
           }),
         ],
       })
@@ -185,50 +220,28 @@ function BaseTextInput(props) {
       children: [props_2.value?.endsWith(" ") ? "" : " ", props_2.argumentHint],
     });
   let children_2;
-  if ($[1] !== Y || $[2] !== children || $[3] !== props_2 || $[4] !== ce || $[5] !== t6) {
-    children_2 = jsxProd_default_2(Y, {
+  if (
+    $[1] !== TextComponent ||
+    $[2] !== children ||
+    $[3] !== props_2 ||
+    $[4] !== renderedChild ||
+    $[5] !== t6
+  ) {
+    children_2 = jsxProd_default_2(TextComponent, {
       wrap,
       dimColor,
-      children: [ce, t6, children],
+      children: [renderedChild, t6, children],
     });
-    $[1] = Y;
+    $[1] = TextComponent;
     $[2] = children;
     $[3] = props_2;
-    $[4] = ce;
+    $[4] = renderedChild;
     $[5] = t6;
     $[6] = children_2;
   } else children_2 = $[6];
   return jsxProd_default(Input, {
-    ...k,
+    ...inputProps,
     children: children_2,
   });
 }
-//@ chunk-e6aww6q8.js:66424-66686 placement = writeCacheBreakDiff (0.806)
-/**
- * 文本编辑用的区间切分（BaseTextInput 使用），与缓存检测无关，归错文件。旧版名 writeCacheBreakDiff 为错配。
- */
-var splitSpansAroundOverlays = (prevContent, newContent) =>
-  reduceCodes(prevContent).flatMap((r) => {
-    let s = draftToDisplayOffset(newContent, r.start, "after");
-    let h = draftToDisplayOffset(newContent, r.end, "before");
-    let y = [
-      s,
-      ...newContent.spans
-        .filter((span) => span.start >= s && span.end <= h)
-        .flatMap((span) => [span.start, span.end]),
-      h,
-    ];
-    return y.flatMap((S, w) => {
-      let L = y[w + 1] ?? S;
-      return w % 2 === 0 && L > S
-        ? [
-            {
-              ...r,
-              start: S,
-              end: L,
-            },
-          ]
-        : [];
-    });
-  });
 export { BaseTextInput };

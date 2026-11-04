@@ -10,28 +10,32 @@
  */
 import { withHideWhile } from "../dialogs/dialogRequests.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, string, M } from "../../../vendor/zod/v4/classic/schemas.js";
+import { objectSchema, stringSchema, booleanSchema } from "../../../vendor/zod/v4/classic/schemas.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-vbbsbs4g.js:301-476 placement
 /**
  * 目标提议对话框定义（goal_proposal：条件 → 是否批准）。
  */
-var GOAL_PROPOSAL_DIALOG = withHideWhile({
-  kind: "goal_proposal",
-  payload: DoctorLazy(() =>
-    u({
-      condition: string(),
-    }),
-  ),
-  result: DoctorLazy(() =>
-    u({
-      approved: M(),
-      explicit: M().optional(),
-    }),
-  ),
-  default: {
-    approved: false,
-  },
-  hideWhile: ["panel", "draft"],
+var GOAL_PROPOSAL_DIALOG; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-vbbsbs4g.js:301", () => {
+  GOAL_PROPOSAL_DIALOG = withHideWhile({
+    kind: "goal_proposal",
+    payload: DoctorLazy(() =>
+      objectSchema({
+        condition: stringSchema(),
+      }),
+    ),
+    result: DoctorLazy(() =>
+      objectSchema({
+        approved: booleanSchema(),
+        explicit: booleanSchema().optional(),
+      }),
+    ),
+    default: {
+      approved: false,
+    },
+    hideWhile: ["panel", "draft"],
+  });
 });
 export { GOAL_PROPOSAL_DIALOG };

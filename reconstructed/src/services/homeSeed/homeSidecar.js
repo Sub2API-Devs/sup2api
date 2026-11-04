@@ -20,7 +20,7 @@ import {
   literal,
   int,
   array,
-  string,
+  stringSchema,
   record,
   unknown,
 } from "../../../vendor/zod/v4/classic/schemas.js";
@@ -35,46 +35,58 @@ import {
 import { isPlainObject } from "../../utils/isPlainObject.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
 import { uniq } from "../../utils/collections.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-twq47pff.js:12711-12973 placement
 /**
  * home seed 附带文件（记录已写入文件摘要、设置摘要与包 etag）的版本、上限与 schema。
  */
-var SIDECAR_VERSION = 1;
-var SIDECAR_ENTRY_FACTOR = 4;
-var MAX_SIDECAR_ENTRIES = MAX_WORKING_PATH_CHARS * SIDECAR_ENTRY_FACTOR;
-var MAX_SIDECAR_BYTES = 131072;
-var homeSidecarSchema = DoctorLazy(() =>
-  zodStrictObject({
-    version: literal(SIDECAR_VERSION),
-    generation: int().min(1),
-    writtenAtMs: int().min(0),
-    entries: array(
-      zodStrictObject({
-        path: string().min(1).max(MAX_WORKING_PATH_LENGTH),
-        sha256: string().regex(SHA256_HEX_RE),
-      }),
-    ).max(MAX_SIDECAR_ENTRIES),
-    settingsSha256: string().regex(SHA256_HEX_RE).nullable(),
-    packEtag: string().min(1).max(MAX_CONTENT_HASH_CHARS).optional(),
-  }),
-);
+var SIDECAR_VERSION; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var SIDECAR_ENTRY_FACTOR;
+var MAX_SIDECAR_ENTRIES;
+var MAX_SIDECAR_BYTES;
+var homeSidecarSchema;
+deferInit("chunk-twq47pff.js:12711", () => {
+  SIDECAR_VERSION = 1;
+  SIDECAR_ENTRY_FACTOR = 4;
+  MAX_SIDECAR_ENTRIES = MAX_WORKING_PATH_CHARS * SIDECAR_ENTRY_FACTOR;
+  MAX_SIDECAR_BYTES = 131072;
+  homeSidecarSchema = DoctorLazy(() =>
+    zodStrictObject({
+      version: literal(SIDECAR_VERSION),
+      generation: int().min(1),
+      writtenAtMs: int().min(0),
+      entries: array(
+        zodStrictObject({
+          path: stringSchema().min(1).max(MAX_WORKING_PATH_LENGTH),
+          sha256: stringSchema().regex(SHA256_HEX_RE),
+        }),
+      ).max(MAX_SIDECAR_ENTRIES),
+      settingsSha256: stringSchema().regex(SHA256_HEX_RE).nullable(),
+      packEtag: stringSchema().min(1).max(MAX_CONTENT_HASH_CHARS).optional(),
+    }),
+  );
+});
 //@ chunk-twq47pff.js:12973-13166 placement
 function parseHomeSidecar(content) {
   if (content.length > MAX_SIDECAR_BYTES) return null;
-  let e = tryJsonParse(content.toString("utf8"));
-  if (!isPlainObject(e) || (Array.isArray(e.entries) && e.entries.length > MAX_SIDECAR_ENTRIES)) return null;
-  let n = homeSidecarSchema().safeParse(e);
-  return n.success ? n.data : null;
+  let rawContent = tryJsonParse(content.toString("utf8"));
+  if (
+    !isPlainObject(rawContent) ||
+    (Array.isArray(rawContent.entries) && rawContent.entries.length > MAX_SIDECAR_ENTRIES)
+  )
+    return null;
+  let parsed = homeSidecarSchema().safeParse(rawContent);
+  return parsed.success ? parsed.data : null;
 }
 //@ chunk-twq47pff.js:13166-13407 placement
 function encodeHomeSidecar(seed) {
-  let e = homeSidecarSchema().safeParse({
+  let incomingSeed = homeSidecarSchema().safeParse({
     ...seed,
     entries: seed.entries.slice(-MAX_SIDECAR_ENTRIES),
   });
-  if (!e.success) throw Error("home sidecar is off its own schema");
-  let buffer = Buffer.from(jsonStringify(e.data));
+  if (!incomingSeed.success) throw Error("home sidecar is off its own schema");
+  let buffer = Buffer.from(jsonStringify(incomingSeed.data));
   if (buffer.length > MAX_SIDECAR_BYTES) throw Error("home sidecar exceeds its byte bound");
   return buffer;
 }
@@ -83,49 +95,53 @@ function encodeHomeSidecar(seed) {
  * 生成侧车计划（文档、渲染文本与哈希）。
  */
 function renderSidecarPlan(settingsDoc) {
-  let e = canonicalJson(settingsDoc);
+  let rendered = canonicalJson(settingsDoc);
   return {
     document: settingsDoc,
-    rendered: e,
-    sha256: computeContentHash(e),
+    rendered,
+    sha256: computeContentHash(rendered),
   };
 }
 //@ chunk-twq47pff.js:13478-13516 placement
 /**
  * 渲染后 settings 的字节上限（1 MiB）。
  */
-var permissionsSchema = DoctorLazy(() => record(string(), unknown()));
-var MAX_RENDERED_SETTINGS_BYTES = 1048576;
+var permissionsSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var MAX_RENDERED_SETTINGS_BYTES;
+deferInit("chunk-twq47pff.js:13478", () => {
+  permissionsSchema = DoctorLazy(() => record(stringSchema(), unknown()));
+  MAX_RENDERED_SETTINGS_BYTES = 1048576;
+});
 //@ chunk-twq47pff.js:13516-13618 placement
-function toStringArray(t) {
-  let e = array(unknown()).safeParse(t);
-  return e.success ? e.data.filter((n) => typeof n === "string") : [];
+function toStringArray(value) {
+  let parsed = array(unknown()).safeParse(value);
+  return parsed.success ? parsed.data.filter((item) => typeof item === "string") : [];
 }
 //@ chunk-twq47pff.js:13618-13696 placement
 /**
  * 合并两个规则列表并去重（保持前者顺序）。
  */
-function mergeRuleLists(stringArray, e) {
-  let n = new Set(stringArray);
-  return [...stringArray, ...uniq(e).filter((l) => !n.has(l))];
+function mergeRuleLists(stringArray, incoming) {
+  let seen = new Set(stringArray);
+  return [...stringArray, ...uniq(incoming).filter((entry) => !seen.has(entry))];
 }
 //@ chunk-twq47pff.js:13696-14335 placement
 /**
  * 把包里的 deny/ask 规则合并进云端现有 settings.json：恢复模式按记录合并，否则与现有规则去重；无规则返回 null，超过大小上限或无法读取返回 unreadable。
  */
-function renderRestrictiveSettings(t, existingSettings, n) {
+function renderRestrictiveSettings(plan, existingSettings, mode) {
   if (existingSettings.kind === "unusable") return "unreadable";
   let existing = existingSettings.kind === "object" ? existingSettings.value : {};
-  let d = permissionsSchema().safeParse(existing.permissions ?? {});
-  if (!d.success) return "unreadable";
-  let renderFull = n !== "refused_over_ours";
-  if (renderFull && t === null) return null;
-  let mergeRules = (j) => {
-    let stringArray = toStringArray(d.data[j]);
-    let Q = t?.document.permissions?.[j] ?? [];
-    return n === "restore"
-      ? mergeRuleLists(stringArray, Q)
-      : uniq([...stringArray, ...Q].toReversed()).toReversed();
+  let parsedPermissions = permissionsSchema().safeParse(existing.permissions ?? {});
+  if (!parsedPermissions.success) return "unreadable";
+  let renderFull = mode !== "refused_over_ours";
+  if (renderFull && plan === null) return null;
+  let mergeRules = (ruleKind) => {
+    let stringArray = toStringArray(parsedPermissions.data[ruleKind]);
+    let incoming = plan?.document.permissions?.[ruleKind] ?? [];
+    return mode === "restore"
+      ? mergeRuleLists(stringArray, incoming)
+      : uniq([...stringArray, ...incoming].toReversed()).toReversed();
   };
   let deny = mergeRules("deny");
   let ask = mergeRules("ask");
@@ -147,7 +163,7 @@ function renderRestrictiveSettings(t, existingSettings, n) {
       {
         ...existing,
         permissions: {
-          ...d.data,
+          ...parsedPermissions.data,
           ...restrictive,
         },
       },
@@ -183,17 +199,17 @@ function planHomeSeedApply({
       lastApplied: lastAppliedGeneration,
     };
   let priorByPath = new Map(
-    (sidecar?.entries ?? []).flatMap((x) => {
-      let N = workingFileDestination(x.path);
-      return N === null
+    (sidecar?.entries ?? []).flatMap((first) => {
+      let second = workingFileDestination(first.path);
+      return second === null
         ? []
         : [
             [
-              N.destination,
+              second.destination,
               {
-                path: N.destination,
-                kind: N.kind,
-                sha256: x.sha256,
+                path: second.destination,
+                kind: second.kind,
+                sha256: first.sha256,
               },
             ],
           ];
@@ -202,7 +218,7 @@ function planHomeSeedApply({
   let priorSha = new Map([...priorByPath.values()].map(({ path, sha256 }) => [path, sha256]));
   let files = pack.files;
   let filtered = files.filter((file) => !looksLikeCredentialIncludingNul(file.content.toString("utf8")));
-  let writablePaths = new Set(filtered.map((x) => x.path));
+  let writablePaths = new Set(filtered.map((third) => third.path));
   let removals = [...priorByPath.values()].filter(({ path }) => !writablePaths.has(path));
   let settingsPlan = refilterSeedSettings(pack.settings, permissionsAdmissible);
   return {
@@ -230,14 +246,14 @@ function planHomeSeedApply({
 /**
  * 把工作文件条目归类成可写入项。
  */
-function classifyWorkingFileWrite(t) {
-  let e = classifyWorkingFile(t.path);
-  return e === null
+function classifyWorkingFileWrite(write) {
+  let kind = classifyWorkingFile(write.path);
+  return kind === null
     ? []
     : [
         {
-          ...t,
-          kind: e,
+          ...write,
+          kind,
         },
       ];
 }
@@ -270,15 +286,15 @@ function refilterSeedSettings(userSettings, permissionsAdmissible) {
       ...counts,
       permissionsDropped: false,
     };
-  let { permissions, ...u } = filtered.document;
+  let { permissions, ...plan } = filtered.document;
   let dropAllow = permissions?.allow !== undefined && !permissionsAdmissible;
-  let { allow, ...P } = permissions ?? {};
+  let { allow, ...keys } = permissions ?? {};
   let settingsDoc = dropAllow
-    ? Object.keys(P).length === 0
-      ? u
+    ? Object.keys(keys).length === 0
+      ? plan
       : {
-          ...u,
-          permissions: P,
+          ...plan,
+          permissions: keys,
         }
     : filtered.document;
   if (Object.keys(settingsDoc).length === 0)

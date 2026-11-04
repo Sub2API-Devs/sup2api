@@ -8,7 +8,7 @@
  * pieces: chunk-fq0cr76a.js (4)
  * attribution: placement 3, fingerprint 1
  */
-import { Re } from "../../runtime/bun-runtime.js";
+import { __toESM } from "../../runtime/bun-runtime.js";
 import { require_ignore } from "../../vendor/ignore/index.js";
 import { bunWhichSync } from "./which.js";
 
@@ -16,21 +16,21 @@ import { bunWhichSync } from "./which.js";
 /**
  * 按下标逐项比较两个数组是否全等。
  */
-function arraysEqualByIndex(e, n) {
-  return e.every((r, s) => r === n[s]);
+function arraysEqualByIndex(left, right) {
+  return left.every((item, index) => item === right[index]);
 }
 //@ chunk-fq0cr76a.js:877414-877468 placement
 /**
  * 判断两个数组长度与内容是否完全相同。
  */
-function isSameArray(e, configHome) {
-  return e.length === configHome.length && arraysEqualByIndex(e, configHome);
+function isSameArray(leftArray, configHome) {
+  return leftArray.length === configHome.length && arraysEqualByIndex(leftArray, configHome);
 }
 //@ chunk-fq0cr76a.js:877468-877487 placement
 /**
  * path 模块（Node 内置 path）的引用。
  */
-var pathModule = Re(require_ignore(), 1);
+var pathModule = __toESM(require_ignore(), 1);
 //@ chunk-fq0cr76a.js:877818-877863 fingerprint = findExecutable (1)
 function findExecutable(exe, args) {
   return {

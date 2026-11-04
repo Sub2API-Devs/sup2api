@@ -18,7 +18,7 @@ import {
 import { safeParseJSON } from "../json.js";
 import { isPlainObject as isPlainObject_4 } from "../objectUtils.js";
 import { logForDebugging } from "../debug.js";
-import { string } from "../../../vendor/zod/v4/classic/schemas.js";
+import { stringSchema } from "../../../vendor/zod/v4/classic/schemas.js";
 import { env } from "../env.js";
 import { logEvent } from "../../services/analytics/index.js";
 import { SessionRootSlot } from "../../bootstrap/sessionSlices.js";
@@ -27,6 +27,7 @@ import { getSessionFeatureValues } from "../../bootstrap/sessionFeatureValues.js
 import { fromEnum } from "../../services/analytics/safeMetadata.js";
 import { isModelCapabilityEnabled } from "../model/promptBundles.js";
 import { getInitialSettings_2 } from "../settings/settings.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:2230913-2230925 placement
 /**
@@ -34,13 +35,13 @@ import { getInitialSettings_2 } from "../settings/settings.js";
  */
 var ANY_MODEL_KEY = "*";
 //@ chunk-e6aww6q8.js:2230925-2231064 placement
-function matchesWildcardPattern(e, n) {
-  let filtered = e.split("*").filter((h) => h !== "");
-  let s = 0;
-  for (let h of filtered) {
-    let index = n.indexOf(h, s);
+function matchesWildcardPattern(pattern, value) {
+  let filtered = pattern.split("*").filter((part) => part !== "");
+  let cursor = 0;
+  for (let part of filtered) {
+    let index = value.indexOf(part, cursor);
     if (index === -1) return false;
-    s = index + h.length;
+    cursor = index + part.length;
   }
   return true;
 }
@@ -48,69 +49,69 @@ function matchesWildcardPattern(e, n) {
 /**
  * 在按模型名为键的对象中查找条目：优先精确匹配模型名，其次规范名，再次最长的通配匹配，最后是默认键。
  */
-function findModelKeyedEntry(e, n) {
-  let lower = stripAnyVersatileSuffix(n).toLowerCase();
-  let lower_2 = stripAnyVersatileSuffix(getCanonicalName(n)).toLowerCase();
-  let h;
-  let y;
-  let S;
-  let w = -1;
-  for (let [key, value] of Object.entries(e)) {
-    let lower_3 = key.trim().toLowerCase();
-    if (lower_3 === ANY_MODEL_KEY) {
-      y ??= [key, value];
+function findModelKeyedEntry(entriesObject, model) {
+  let lower = stripAnyVersatileSuffix(model).toLowerCase();
+  let lower_2 = stripAnyVersatileSuffix(getCanonicalName(model)).toLowerCase();
+  let canonicalMatch;
+  let anyModelMatch;
+  let wildcardMatch;
+  let wildcardLength = -1;
+  for (let [key, value] of Object.entries(entriesObject)) {
+    let pattern = key.trim().toLowerCase();
+    if (pattern === ANY_MODEL_KEY) {
+      anyModelMatch ??= [key, value];
       continue;
     }
-    if (lower_3 === lower) return [key, value];
-    if (lower_3 === lower_2) {
-      h ??= [key, value];
+    if (pattern === lower) return [key, value];
+    if (pattern === lower_2) {
+      canonicalMatch ??= [key, value];
       continue;
     }
-    let replaced = lower_3.replaceAll("*", "");
+    let replaced = pattern.replaceAll("*", "");
     if (replaced === "") continue;
     if (
-      (matchesWildcardPattern(lower_3, lower) || matchesWildcardPattern(lower_3, lower_2)) &&
-      replaced.length > w
+      (matchesWildcardPattern(pattern, lower) || matchesWildcardPattern(pattern, lower_2)) &&
+      replaced.length > wildcardLength
     ) {
-      S = [key, value];
-      w = replaced.length;
+      wildcardMatch = [key, value];
+      wildcardLength = replaced.length;
     }
   }
-  if (h !== undefined) return h;
-  if (S !== undefined) return S;
-  return y;
+  if (canonicalMatch !== undefined) return canonicalMatch;
+  if (wildcardMatch !== undefined) return wildcardMatch;
+  return anyModelMatch;
 }
 //@ chunk-e6aww6q8.js:2231445-2231495 placement
 /**
  * 依次取调用方给的值、客户端数据、会话固定配置开关值。
  */
-function getClientOrDefaultValue(e, n) {
-  return n ?? getCachedClientData()?.[e] ?? getFeatureValue_SESSION_PINNED(e, null);
+function getClientOrDefaultValue(flagKey, explicitValue) {
+  return explicitValue ?? getCachedClientData()?.[flagKey] ?? getFeatureValue_SESSION_PINNED(flagKey, null);
 }
 //@ chunk-e6aww6q8.js:2231495-2231590 placement
 /**
  * 取配置时按模型取值：字符串解析成对象后取该模型的键。
  */
-function getModelKeyedFlagValue(e, n, r) {
-  let clientOrDefaultValue = getClientOrDefaultValue(e, n);
-  let h =
+function getModelKeyedFlagValue(flagKey, explicitValue, model) {
+  let clientOrDefaultValue = getClientOrDefaultValue(flagKey, explicitValue);
+  let parsedValue =
     typeof clientOrDefaultValue === "string"
       ? (safeParseJSON(clientOrDefaultValue, false) ?? clientOrDefaultValue)
       : clientOrDefaultValue;
-  return isPlainObject_4(h) ? getModelKeyedValue(h, r) : h;
+  return isPlainObject_4(parsedValue) ? getModelKeyedValue(parsedValue, model) : parsedValue;
 }
 //@ chunk-e6aww6q8.js:2231590-2231731 placement
 /**
  * 在按模型名为键的对象中取值：精确匹配优先，否则用默认键。
  */
-function getModelKeyedValue(e, n) {
-  let r;
-  for (let [key, value] of Object.entries(e)) {
+function getModelKeyedValue(entriesObject, modelKey) {
+  let anyModelValue;
+  for (let [key, value] of Object.entries(entriesObject)) {
     let lower = key.trim().toLowerCase();
-    if (lower === n) return value;
-    if (lower === ANY_MODEL_KEY && r === undefined) r = value;
+    if (lower === modelKey) return value;
+    if (lower === ANY_MODEL_KEY && anyModelValue === undefined) anyModelValue = value;
   }
-  return r;
+  return anyModelValue;
 }
 //@ chunk-e6aww6q8.js:2231731-2231877 placement
 var TOTAL_TOKENS_REMINDER_MODES = ["off", "infinite", "fixed", "countdown", "padded-countdown"];
@@ -128,95 +129,98 @@ class TotalTokensReminder {
   #n = new Map();
   #o = new Map();
   #r = new Map();
-  rollOverContext(e, n) {
-    this.#e.set(e, (this.#e.get(e) ?? 0) + n);
-    let r = this.#i(e);
-    r.rolledOver += n;
-    r.rolloverCount++;
-    if (this.#r.get(e) === true) this.#t.set(e, (this.#t.get(e) ?? 0) + n);
-    else if (this.#r.has(e)) this.#r.set(e, true);
+  rollOverContext(budgetKey, tokens) {
+    this.#e.set(budgetKey, (this.#e.get(budgetKey) ?? 0) + tokens);
+    let thresholdState = this.#i(budgetKey);
+    thresholdState.rolledOver += tokens;
+    thresholdState.rolloverCount++;
+    if (this.#r.get(budgetKey) === true) this.#t.set(budgetKey, (this.#t.get(budgetKey) ?? 0) + tokens);
+    else if (this.#r.has(budgetKey)) this.#r.set(budgetKey, true);
   }
-  reanchorTaskBudget(e, n) {
-    this.#o.delete(e);
-    this.#t.set(e, (this.#e.get(e) ?? 0) + n);
-    this.#n.set(e, 0);
+  reanchorTaskBudget(budgetKey, tokens) {
+    this.#o.delete(budgetKey);
+    this.#t.set(budgetKey, (this.#e.get(budgetKey) ?? 0) + tokens);
+    this.#n.set(budgetKey, 0);
   }
-  excludeStartContext(e, n) {
-    let r = this.#r.get(e);
-    if (r === false) return;
-    let s = n();
-    if (s === undefined) return;
-    this.#r.set(e, false);
-    if (r === true) {
-      this.#t.set(e, (this.#t.get(e) ?? 0) + s);
+  excludeStartContext(budgetKey, getStartTokens) {
+    let previous = this.#r.get(budgetKey);
+    if (previous === false) return;
+    let startTokens = getStartTokens();
+    if (startTokens === undefined) return;
+    this.#r.set(budgetKey, false);
+    if (previous === true) {
+      this.#t.set(budgetKey, (this.#t.get(budgetKey) ?? 0) + startTokens);
       return;
     }
-    this.#t.set(e, (this.#e.get(e) ?? 0) + s);
-    this.#n.set(e, 0);
-    this.#o.delete(e);
-    this.#i(e).excludedStartContext = s;
+    this.#t.set(budgetKey, (this.#e.get(budgetKey) ?? 0) + startTokens);
+    this.#n.set(budgetKey, 0);
+    this.#o.delete(budgetKey);
+    this.#i(budgetKey).excludedStartContext = startTokens;
   }
-  cumulativeUsed(e, n) {
-    let s = (this.#e.get(e) ?? 0) + n - (this.#t.get(e) ?? 0);
-    let h = this.#n.get(e) ?? 0;
-    let max = Math.max(h, s);
-    this.#n.set(e, max);
+  cumulativeUsed(budgetKey, tokens) {
+    let used = (this.#e.get(budgetKey) ?? 0) + tokens - (this.#t.get(budgetKey) ?? 0);
+    let highWaterMark = this.#n.get(budgetKey) ?? 0;
+    let max = Math.max(highWaterMark, used);
+    this.#n.set(budgetKey, max);
     return max;
   }
-  remaining(e, n, r) {
-    let s = this.cumulativeUsed(e, n);
-    let h = r - s;
-    let y = this.#i(e);
-    for (let S of TOTAL_TOKENS_THRESHOLDS) {
-      if (S >= y.loggedDownToPercent) continue;
-      if (h > (r * S) / 100) break;
-      y.loggedDownToPercent = S;
+  remaining(budgetKey, tokens, budget) {
+    let used = this.cumulativeUsed(budgetKey, tokens);
+    let remainingTokens = budget - used;
+    let thresholdState = this.#i(budgetKey);
+    for (let thresholdPercent of TOTAL_TOKENS_THRESHOLDS) {
+      if (thresholdPercent >= thresholdState.loggedDownToPercent) continue;
+      if (remainingTokens > (budget * thresholdPercent) / 100) break;
+      thresholdState.loggedDownToPercent = thresholdPercent;
       logEvent(TENGU_LAPIS_ANCHOR_THRESHOLD, {
-        thresholdPercent: S,
-        budget: r,
-        used: s,
-        remaining: h,
-        rolledOver: y.rolledOver,
-        rolloverCount: y.rolloverCount,
-        excludedStartContext: y.excludedStartContext,
-        msSinceAnchor: Date.now() - y.anchoredAt,
-        isSubagent: e !== "main",
+        thresholdPercent,
+        budget,
+        used,
+        remaining: remainingTokens,
+        rolledOver: thresholdState.rolledOver,
+        rolloverCount: thresholdState.rolloverCount,
+        excludedStartContext: thresholdState.excludedStartContext,
+        msSinceAnchor: Date.now() - thresholdState.anchoredAt,
+        isSubagent: budgetKey !== "main",
       });
     }
-    return h;
+    return remainingTokens;
   }
-  #i(e) {
-    let n = this.#o.get(e);
-    if (n === undefined) {
-      n = {
+  #i(budgetKey) {
+    let state = this.#o.get(budgetKey);
+    if (state === undefined) {
+      state = {
         anchoredAt: Date.now(),
         rolledOver: 0,
         rolloverCount: 0,
         loggedDownToPercent: 100,
       };
-      this.#o.set(e, n);
+      this.#o.set(budgetKey, state);
     }
-    return n;
+    return state;
   }
 }
 //@ chunk-e6aww6q8.js:2233186-2233214 placement
 /**
  * 按会话根保存剩余 token 提醒状态。
  */
-var totalTokensReminderByRoot = new SessionRootSlot(() => new TotalTokensReminder());
+var totalTokensReminderByRoot; // deferred: uses SessionRootSlot (../../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:2233186", () => {
+  totalTokensReminderByRoot = new SessionRootSlot(() => new TotalTokensReminder());
+});
 //@ chunk-e6aww6q8.js:2233214-2233265 placement
 /**
  * 上下文切换时让剩余 token 提醒跟随（重置计数）。
  */
-function rollOverTotalTokensContext(e, n) {
-  totalTokensReminderByRoot.of(getRootSession()).rollOverContext(e, n);
+function rollOverTotalTokensContext(budgetKey, tokens) {
+  totalTokensReminderByRoot.of(getRootSession()).rollOverContext(budgetKey, tokens);
 }
 //@ chunk-e6aww6q8.js:2233265-2233325 placement
 /**
  * 判断字符串是否为合法的剩余 token 提醒模式。
  */
-function isTotalTokensReminderMode(e) {
-  return typeof e === "string" && TOTAL_TOKENS_REMINDER_MODES.includes(e);
+function isTotalTokensReminderMode(value) {
+  return typeof value === "string" && TOTAL_TOKENS_REMINDER_MODES.includes(value);
 }
 //@ chunk-e6aww6q8.js:2233325-2233463 placement
 var TENGU_LAPIS_ANCHOR = "tengu_lapis_anchor";
@@ -224,13 +228,13 @@ var TENGU_LAPIS_ANCHOR_BUDGET = "tengu_lapis_anchor_budget";
 var TENGU_LAPIS_ANCHOR_USER_TURN = "tengu_lapis_anchor_user_turn";
 var TENGU_LAPIS_ANCHOR_FROM_CLIENT_DATA = "tengu_lapis_anchor_from_client_data";
 //@ chunk-e6aww6q8.js:2233463-2233707 placement
-function reportClientDataValue(e, n, r) {
-  let s = (getSessionFeatureValues().totalTokensReminderClientDataReported ??= new Map());
-  if (s.get(e) === n) return;
-  s.set(e, n);
-  if (r !== undefined) logEvent(TENGU_LAPIS_ANCHOR_FROM_CLIENT_DATA, r);
-  else if (n !== undefined)
-    logForDebugging(`[total_tokens reminder] ignoring clientData ${e} of type ${typeof n}`, {
+function reportClientDataValue(key, value, telemetryFields) {
+  let reportedValues = (getSessionFeatureValues().totalTokensReminderClientDataReported ??= new Map());
+  if (reportedValues.get(key) === value) return;
+  reportedValues.set(key, value);
+  if (telemetryFields !== undefined) logEvent(TENGU_LAPIS_ANCHOR_FROM_CLIENT_DATA, telemetryFields);
+  else if (value !== undefined)
+    logForDebugging(`[total_tokens reminder] ignoring clientData ${key} of type ${typeof value}`, {
       level: "warn",
     });
 }
@@ -245,18 +249,22 @@ function getEffectiveTotalTokensReminderMode() {
 function getTotalTokensReminderModeOverride() {
   let configuredTotalTokensReminderMode = getConfiguredTotalTokensReminderMode();
   if (configuredTotalTokensReminderMode !== undefined) return configuredTotalTokensReminderMode;
-  let n = getCachedClientData()?.[TENGU_LAPIS_ANCHOR];
-  let r = isTotalTokensReminderMode(n) ? n : n === false ? "off" : undefined;
+  let clientValue = getCachedClientData()?.[TENGU_LAPIS_ANCHOR];
+  let resolvedMode = isTotalTokensReminderMode(clientValue)
+    ? clientValue
+    : clientValue === false
+      ? "off"
+      : undefined;
   reportClientDataValue(
     TENGU_LAPIS_ANCHOR,
-    n,
-    r
+    clientValue,
+    resolvedMode
       ? {
-          mode: fromEnum(r),
+          mode: fromEnum(resolvedMode),
         }
       : undefined,
   );
-  return r;
+  return resolvedMode;
 }
 //@ chunk-e6aww6q8.js:2233882-2233964 placement
 /**
@@ -275,16 +283,16 @@ function readDefaultTotalTokensReminderMode() {
 /**
  * 决定剩余 token 提醒模式：有固定预算时为 padded-countdown，否则按覆盖或模型能力决定。
  */
-function getTotalTokensReminderMode(e, n) {
-  if (n !== undefined) return "padded-countdown";
+function getTotalTokensReminderMode(model, totalTokensReminderBudget) {
+  if (totalTokensReminderBudget !== undefined) return "padded-countdown";
   return (
     getTotalTokensReminderModeOverride() ??
     (isModelCapabilityEnabled(
       "total_tokens_reminder",
-      getCanonicalName(e, {
+      getCanonicalName(model, {
         deterministic: true,
       }),
-      e,
+      model,
     )
       ? readDefaultTotalTokensReminderMode()
       : "off")
@@ -308,18 +316,18 @@ function getTotalTokensReminderBudget() {
   let totalTokensReminderBudget = getInitialSettings_2().totalTokensReminderBudget;
   if (Number.isFinite(totalTokensReminderBudget) && totalTokensReminderBudget > 0)
     return totalTokensReminderBudget;
-  let r = getCachedClientData()?.[TENGU_LAPIS_ANCHOR_BUDGET];
-  let s = typeof r === "number" && Number.isInteger(r) && r > 0;
+  let clientBudget = getCachedClientData()?.[TENGU_LAPIS_ANCHOR_BUDGET];
+  let isUsableBudget = typeof clientBudget === "number" && Number.isInteger(clientBudget) && clientBudget > 0;
   reportClientDataValue(
     TENGU_LAPIS_ANCHOR_BUDGET,
-    r,
-    s
+    clientBudget,
+    isUsableBudget
       ? {
-          budget: r,
+          budget: clientBudget,
         }
       : undefined,
   );
-  if (s) return r;
+  if (isUsableBudget) return clientBudget;
   let featureValue_CACHED_MAY_BE_STALE = getFeatureValue_CACHED_MAY_BE_STALE(
     TENGU_LAPIS_ANCHOR_BUDGET,
     DEFAULT_TOTAL_TOKENS_BUDGET,
@@ -329,14 +337,14 @@ function getTotalTokensReminderBudget() {
     : DEFAULT_TOTAL_TOKENS_BUDGET;
 }
 //@ chunk-e6aww6q8.js:2234564-2235172 placement
-function resolveTotalTokensReminderMode(e, n) {
+function resolveTotalTokensReminderMode(model, messages) {
   if (env.CLAUDE_CODE_DISABLE_ATTACHMENTS || env.CLAUDE_CODE_SIMPLE) return;
   let effectiveTotalTokensReminderMode = getEffectiveTotalTokensReminderMode();
   if (effectiveTotalTokensReminderMode !== "padded-countdown" && effectiveTotalTokensReminderMode !== "off")
     return;
   if (
     effectiveTotalTokensReminderMode === "off" &&
-    n === undefined &&
+    messages === undefined &&
     env.CLAUDE_CODE_RIPPLING_TULIP === undefined &&
     getConfiguredTotalTokensReminderMode() === "off"
   ) {
@@ -345,13 +353,13 @@ function resolveTotalTokensReminderMode(e, n) {
     );
     return;
   }
-  let s =
-    n === undefined
-      ? getModelKeyedFlagValue("tengu_rippling_tulip", env.CLAUDE_CODE_RIPPLING_TULIP, e)
-      : Number(n.findLast((h) => TOTAL_TOKENS_TAG_RE.test(h))?.match(TOTAL_TOKENS_TAG_RE)?.[1]);
-  if (typeof s !== "number" || !Number.isSafeInteger(s) || s <= 0) return;
-  if (effectiveTotalTokensReminderMode === "off" && n === undefined) return s;
-  return s < getTotalTokensReminderBudget() ? s : undefined;
+  let tagValue =
+    messages === undefined
+      ? getModelKeyedFlagValue("tengu_rippling_tulip", env.CLAUDE_CODE_RIPPLING_TULIP, model)
+      : Number(messages.findLast((text) => TOTAL_TOKENS_TAG_RE.test(text))?.match(TOTAL_TOKENS_TAG_RE)?.[1]);
+  if (typeof tagValue !== "number" || !Number.isSafeInteger(tagValue) || tagValue <= 0) return;
+  if (effectiveTotalTokensReminderMode === "off" && messages === undefined) return tagValue;
+  return tagValue < getTotalTokensReminderBudget() ? tagValue : undefined;
 }
 //@ chunk-e6aww6q8.js:2235172-2235281 placement
 /**
@@ -366,30 +374,30 @@ function getCalmMochiScope() {
  * 判断剩余 token 提醒是否在用户回合后发送：环境变量 > 设置 > 客户端数据 > 开关。
  */
 function shouldRemindAfterUserTurn() {
-  let e = env.CLAUDE_CODE_TOTAL_TOKENS_REMINDER_AFTER_USER_TURN;
-  if (e !== undefined) return e;
+  let envValue = env.CLAUDE_CODE_TOTAL_TOKENS_REMINDER_AFTER_USER_TURN;
+  if (envValue !== undefined) return envValue;
   let totalTokensReminderAfterUserTurn = getInitialSettings_2().totalTokensReminderAfterUserTurn;
   if (totalTokensReminderAfterUserTurn !== undefined) return totalTokensReminderAfterUserTurn;
-  let r = getCachedClientData()?.[TENGU_LAPIS_ANCHOR_USER_TURN];
-  let s = typeof r === "boolean";
+  let clientValue = getCachedClientData()?.[TENGU_LAPIS_ANCHOR_USER_TURN];
+  let isBooleanValue = typeof clientValue === "boolean";
   reportClientDataValue(
     TENGU_LAPIS_ANCHOR_USER_TURN,
-    r,
-    s
+    clientValue,
+    isBooleanValue
       ? {
-          userTurn: r,
+          userTurn: clientValue,
         }
       : undefined,
   );
-  if (s) return r;
+  if (isBooleanValue) return clientValue;
   return getFeatureValue_CACHED_MAY_BE_STALE(TENGU_LAPIS_ANCHOR_USER_TURN, true);
 }
 //@ chunk-e6aww6q8.js:2235549-2235675 placement
 /**
  * 生成 <total_tokens> 提醒标签（无限、固定或剩余数量）。
  */
-function formatTotalTokensTag(e, n) {
-  return `<total_tokens>${e === "infinite" ? "Infinite" : e === "fixed" ? FIXED_TOTAL_TOKENS : Math.max(0, n)} tokens left</total_tokens>`;
+function formatTotalTokensTag(mode, remainingTokens) {
+  return `<total_tokens>${mode === "infinite" ? "Infinite" : mode === "fixed" ? FIXED_TOTAL_TOKENS : Math.max(0, remainingTokens)} tokens left</total_tokens>`;
 }
 //@ chunk-e6aww6q8.js:2235675-2235735 placement
 /**

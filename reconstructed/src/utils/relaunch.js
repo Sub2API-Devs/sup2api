@@ -16,12 +16,12 @@ import { assertProgramLaunchAllowed } from "./disklessSession.js";
 import {
   isProcessWrapperUsable,
   processWrapperError,
-  PROCESS_WRAPPER_ENV_2,
+  PROCESS_WRAPPER_ENV,
   processWrapperArgv,
 } from "./processWrapper.js";
 import { logFeatureBadAsync } from "../services/analytics/featureTelemetry.js";
 import { exitAfterAnalyticsFlush, flushAnalyticsBeforeExit } from "../cli/exit.js";
-import { withHostOwnedEnv } from "./settings/managedSettingsFiles.js";
+import { withHostOwnedEnv } from "./settings/hostEnvWrites.js";
 import { getLaunchCommand } from "./deepLink/registerProtocol.js";
 import { withLaunchValuesOfHybridConnection } from "./managedEnvApply.js";
 import { withoutProtectedEnv } from "./permissions/protectedSettingsPaths.js";
@@ -54,84 +54,85 @@ function closeInheritedTtyFds() {
   }
 }
 //@ chunk-sv7j935w.js:4222-5704 placement
-async function execRelaunch({ proactivity: o, pinToCurrentBinary: l } = {}) {
+async function execRelaunch({ proactivity, pinToCurrentBinary } = {}) {
   assertProgramLaunchAllowed();
   await new Promise((resolve) => setImmediate(resolve));
   if (!(await isProcessWrapperUsable())) {
     await logFeatureBadAsync("agent_launcher", "relaunch_launcher_not_runnable");
     process.stderr.write(`
-${processWrapperError() ?? `${PROCESS_WRAPPER_ENV_2}: launcher \`${processWrapperArgv()[0]}\` was deleted or is not executable \u2014 restore it (or fix the setting), then start claude again`}
+${processWrapperError() ?? `${PROCESS_WRAPPER_ENV}: launcher \`${processWrapperArgv()[0]}\` was deleted or is not executable \u2014 restore it (or fix the setting), then start claude again`}
 `);
     return exitAfterAnalyticsFlush(1);
   }
-  let s = withHostOwnedEnv(() => ({
+  let launchSpec = withHostOwnedEnv(() => ({
     invocation: getLaunchCommand({
-      pinToCurrentBinary: l,
+      pinToCurrentBinary,
     }),
     env: {
       ...process.env,
     },
   }));
-  let { cmd, prefixArgs } = s.invocation;
-  let sliced = process.argv.slice(2);
-  let e = withLaunchValuesOfHybridConnection(withoutProtectedEnv(s.env));
-  noopStdinReset(e);
-  delete e[CLAUDE_CODE_RELAUNCH_TERMINAL_SIZE];
-  Object.assign(e, getRelaunchTerminalSizeEnv());
-  noopRelaunch(e, sliced);
-  delete e[RELAUNCH_PROACTIVITY_BASELINE_ENV];
-  delete e[CLAUDE_CODE_RELAUNCH_PROACTIVITY_DECIDED];
-  delete e[CLAUDE_CODE_RELAUNCH_PROACTIVITY_EVER_ON];
-  delete e[CLAUDE_CODE_RELAUNCH_PROACTIVITY_LEVEL];
-  if (o) {
-    Object.assign(e, proactivityLevelEnv(o));
-    if (hasExplicitPermissionMode(sliced))
-      Object.assign(e, proactivityBaselineEnv(o), undecidedProactivityEnv(o));
+  let { cmd, prefixArgs } = launchSpec.invocation;
+  let argv = process.argv.slice(2);
+  let childEnv = withLaunchValuesOfHybridConnection(withoutProtectedEnv(launchSpec.env));
+  noopStdinReset(childEnv);
+  delete childEnv[CLAUDE_CODE_RELAUNCH_TERMINAL_SIZE];
+  Object.assign(childEnv, getRelaunchTerminalSizeEnv());
+  noopRelaunch(childEnv, argv);
+  delete childEnv[RELAUNCH_PROACTIVITY_BASELINE_ENV];
+  delete childEnv[CLAUDE_CODE_RELAUNCH_PROACTIVITY_DECIDED];
+  delete childEnv[CLAUDE_CODE_RELAUNCH_PROACTIVITY_EVER_ON];
+  delete childEnv[CLAUDE_CODE_RELAUNCH_PROACTIVITY_LEVEL];
+  if (proactivity) {
+    Object.assign(childEnv, proactivityLevelEnv(proactivity));
+    if (hasExplicitPermissionMode(argv))
+      Object.assign(childEnv, proactivityBaselineEnv(proactivity), undecidedProactivityEnv(proactivity));
   }
   pauseNonBlockingStdout();
   if (getPlatform() === "windows") {
-    for (let t of ["SIGINT", "SIGTERM", "SIGHUP", "SIGBREAK"]) {
-      process.removeAllListeners(t);
-      process.on(t, () => {});
+    for (let signal of ["SIGINT", "SIGTERM", "SIGHUP", "SIGBREAK"]) {
+      process.removeAllListeners(signal);
+      process.on(signal, () => {});
     }
     await Promise.all([
       withTimeout(drainRegisteredWriteQueues(), 2000, "write queue drain timeout (relaunch)").catch(() => {}),
       flushAnalyticsBeforeExit(),
     ]);
     resetWindowsStdinMode();
-    let r = spawnSync(cmd, [...prefixArgs, ...sliced], {
+    let windowsChild = spawnSync(cmd, [...prefixArgs, ...argv], {
       stdio: "inherit",
-      env: e,
+      env: childEnv,
     });
-    if (r.error) {
-      process.stderr.write(`Failed to relaunch Claude Code: ${r.error.message}
+    if (windowsChild.error) {
+      process.stderr.write(`Failed to relaunch Claude Code: ${windowsChild.error.message}
 `);
       setBgExitCause("relaunch_child_error");
     }
-    process.exit(r.status ?? 1);
+    process.exit(windowsChild.status ?? 1);
   }
-  let i = spawn(cmd, [...prefixArgs, ...sliced], {
+  let child = spawn(cmd, [...prefixArgs, ...argv], {
     stdio: "inherit",
-    env: e,
+    env: childEnv,
   });
   closeInheritedTtyFds();
-  let m = ["SIGINT", "SIGTERM", "SIGHUP"];
-  for (let r of m)
-    process.on(r, () => {
+  let forwardedSignals = ["SIGINT", "SIGTERM", "SIGHUP"];
+  for (let signal of forwardedSignals)
+    process.on(signal, () => {
       try {
-        i.kill(r);
+        child.kill(signal);
       } catch {}
     });
   return new Promise(() => {
-    i.on("close", (r, t) => {
-      let u = t ? 128 + (constants.signals[t] ?? 0) : 0;
-      process.exit(r ?? u);
+    child.on("close", (exitCode, exitSignal) => {
+      let signalExitCode = exitSignal ? 128 + (constants.signals[exitSignal] ?? 0) : 0;
+      process.exit(exitCode ?? signalExitCode);
     });
-    i.on("error", (r) => {
-      process.stderr.write(`Failed to relaunch Claude Code: ${r.message}
+    child.on("error", (spawnError) => {
+      process.stderr.write(`Failed to relaunch Claude Code: ${spawnError.message}
 `);
       setBgExitCause("relaunch_child_error");
       process.exit(1);
     });
   });
 }
+export { execRelaunch };

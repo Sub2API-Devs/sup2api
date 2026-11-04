@@ -5,11 +5,11 @@
  * pieces: chunk-vwj6ccer.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 import { require_utils } from "./utils.js";
 
 //@ chunk-vwj6ccer.js:11263-12056 cjs-fingerprint
-var require_LinkedList = x(function (cjsExports, cjsModule) {
+var require_LinkedList = __commonJS(function (cjsExports, cjsModule) {
   var utils = require_utils();
   var LinkedList = (cjsModule.exports = {
     valid: function (a) {

@@ -40,80 +40,86 @@ function eagerRainShadowBudget() {
 /**
  * 判定一次 API 尝试的结果（保留部分输出、失败、只有思考等），并与旧逻辑做影子比对。
  */
-function decideAttemptOutcome(e, apiAttemptsLeft) {
+function decideAttemptOutcome(retryLimits, apiAttemptsLeft) {
   let featureValue_CACHED_MAY_BE_STALE = getFeatureValue_CACHED_MAY_BE_STALE(
     "tengu_attempt_decision_shadow",
     false,
   );
-  let s = EMPTY_RETRY_COUNTS;
-  let h = s;
-  let y = STREAM_RETRY_CONST_2;
-  let S = false;
-  let w = false;
-  let L = () => apiAttemptsLeft !== undefined && apiAttemptsLeft.count <= 0;
-  function G(Se) {
-    return Se === "keepPartial" || !L() ? Se : "fail";
+  let retryCounts = EMPTY_RETRY_COUNTS;
+  let previousCounts = retryCounts;
+  let credentialRenewalsLeft = STREAM_RETRY_CONST_2;
+  let hasReportedMismatch = false;
+  let gaveUp = false;
+  let isOutOfApiAttempts = () => apiAttemptsLeft !== undefined && apiAttemptsLeft.count <= 0;
+  function clampDecision(decision) {
+    return decision === "keepPartial" || !isOutOfApiAttempts() ? decision : "fail";
   }
-  function q(error, fallbackModelCouldHelp) {
-    if (w) return;
+  function shadowDecide(error, fallbackModelCouldHelp) {
+    if (gaveUp) return;
     try {
-      let we = classifyAttemptError(error, fallbackModelCouldHelp);
-      if (we === undefined) return;
-      let Ee = decideStreamRetry(we, s, e, true);
-      s = Ee.counts;
+      let failure = classifyAttemptError(error, fallbackModelCouldHelp);
+      if (failure === undefined) return;
+      let retryResult = decideStreamRetry(failure, retryCounts, retryLimits, true);
+      retryCounts = retryResult.counts;
       return {
-        failure: we,
-        decision: Ee.decision,
+        failure,
+        decision: retryResult.decision,
       };
     } catch (error) {
       logError(error);
       return;
     }
   }
-  function Z(Se, ke) {
-    if (Se === undefined || Se.decision === ke || S || !featureValue_CACHED_MAY_BE_STALE) return;
-    S = true;
+  function reportDecisionMismatch(shadowResult, decided) {
+    if (
+      shadowResult === undefined ||
+      shadowResult.decision === decided ||
+      hasReportedMismatch ||
+      !featureValue_CACHED_MAY_BE_STALE
+    )
+      return;
+    hasReportedMismatch = true;
     logEvent("tengu_attempt_decision_mismatch", {
-      end: fromEnum(Se.failure.kind),
-      status: Se.failure.kind === "httpError" ? Se.failure.status : undefined,
-      decided: fromEnum(Se.decision),
-      did: fromEnum(ke),
-      spent: s.retries,
-      limit: e.maxRetries,
+      end: fromEnum(shadowResult.failure.kind),
+      status: shadowResult.failure.kind === "httpError" ? shadowResult.failure.status : undefined,
+      decided: fromEnum(shadowResult.decision),
+      did: fromEnum(decided),
+      spent: retryCounts.retries,
+      limit: retryLimits.maxRetries,
     });
   }
   return {
-    onStreamFailed(Se, ke) {
-      h = s;
-      let we;
+    onStreamFailed(attempt, fallbackModelCouldHelp) {
+      previousCounts = retryCounts;
+      let decision;
       try {
-        let Ee = decideStreamRetry(Se, s, e, ke);
-        s = Ee.counts;
-        we = Ee.decision;
+        let retryResult = decideStreamRetry(attempt, retryCounts, retryLimits, fallbackModelCouldHelp);
+        retryCounts = retryResult.counts;
+        decision = retryResult.decision;
       } catch (error) {
         logError(error);
-        we =
-          Se.progress === "thinkingOnly" || Se.progress === "output"
+        decision =
+          attempt.progress === "thinkingOnly" || attempt.progress === "output"
             ? "keepPartial"
-            : ke
+            : fallbackModelCouldHelp
               ? "retryWithoutStreaming"
               : "fail";
       }
-      we = G(we);
-      w = we === "fail" || we === "useFallbackModel";
-      return we;
+      decision = clampDecision(decision);
+      gaveUp = decision === "fail" || decision === "useFallbackModel";
+      return decision;
     },
     undoLastCount() {
-      s = h;
-      w = false;
+      retryCounts = previousCounts;
+      gaveUp = false;
     },
-    counts: () => s,
-    retriesLeft: () => Math.max(0, e.maxRetries - s.retries),
-    sleptThroughLeft: () => Math.max(0, e.maxSleptThrough - s.sleptThrough),
-    reconnectsLeft: () => Math.max(0, e.maxReconnects - s.reconnects),
+    counts: () => retryCounts,
+    retriesLeft: () => Math.max(0, retryLimits.maxRetries - retryCounts.retries),
+    sleptThroughLeft: () => Math.max(0, retryLimits.maxSleptThrough - retryCounts.sleptThrough),
+    reconnectsLeft: () => Math.max(0, retryLimits.maxReconnects - retryCounts.reconnects),
     takeCredentialRenewal() {
-      if (y <= 0) return false;
-      y--;
+      if (credentialRenewalsLeft <= 0) return false;
+      credentialRenewalsLeft--;
       return true;
     },
     capacityWait: {
@@ -126,27 +132,27 @@ function decideAttemptOutcome(e, apiAttemptsLeft) {
       apiAttemptsLeft.count--;
       return true;
     },
-    outOfApiAttempts: L,
-    onWithRetryGaveUp(Se) {
-      if (L()) return "fail";
-      let ke = q(Se, false);
-      let we = ke?.decision === "retryWithoutStreaming" ? "retryWithoutStreaming" : "fail";
-      Z(ke, we);
-      return we;
+    outOfApiAttempts: isOutOfApiAttempts,
+    onWithRetryGaveUp(error) {
+      if (isOutOfApiAttempts()) return "fail";
+      let shadowResult = shadowDecide(error, false);
+      let decision = shadowResult?.decision === "retryWithoutStreaming" ? "retryWithoutStreaming" : "fail";
+      reportDecisionMismatch(shadowResult, decision);
+      return decision;
     },
-    reportHttpFailure(Se, ke, we) {
-      let { triedWithoutStreaming } = s;
-      let Ae = q(Se, we?.fallbackModelCouldHelp ?? false);
-      s = {
-        ...s,
+    reportHttpFailure(error, decision, context) {
+      let { triedWithoutStreaming } = retryCounts;
+      let shadowResult = shadowDecide(error, context?.fallbackModelCouldHelp ?? false);
+      retryCounts = {
+        ...retryCounts,
         triedWithoutStreaming,
       };
-      if (Ae === undefined && ke === "retry")
-        s = {
-          ...s,
-          retries: Math.min(s.retries + 1, e.maxRetries),
+      if (shadowResult === undefined && decision === "retry")
+        retryCounts = {
+          ...retryCounts,
+          retries: Math.min(retryCounts.retries + 1, retryLimits.maxRetries),
         };
-      Z(Ae, ke);
+      reportDecisionMismatch(shadowResult, decision);
     },
   };
 }
@@ -161,16 +167,16 @@ function classifyAttemptError(error, fallbackModelCouldHelp) {
       suspended: isStreamSuspendedError(error),
       networkDown: isNetworkDownError(error),
     };
-  let r =
+  let apiError =
     error instanceof APIError
       ? error
       : error instanceof Error && error.cause instanceof APIError
         ? error.cause
         : undefined;
-  if (r?.status === undefined || r.status === 401 || r.status === 403) return;
+  if (apiError?.status === undefined || apiError.status === 401 || apiError.status === 403) return;
   return {
     kind: "httpError",
-    status: r.status,
+    status: apiError.status,
     fallbackModelCouldHelp,
   };
 }
@@ -179,7 +185,7 @@ function classifyAttemptError(error, fallbackModelCouldHelp) {
  * 判定一次流式尝试是否算失败：按进度（output/thinkingOnly/partialOutput/started/nothing）与原因分类；已完整且原因是断线/挂起/截断/卡住、或已有输出时的过载/服务端错/超时，不视为失败。
  */
 function classifyStreamFailure(attempt) {
-  let n = attempt.anyBlockFinished
+  let progress = attempt.anyBlockFinished
     ? attempt.anyOutputShown
       ? "output"
       : "thinkingOnly"
@@ -188,21 +194,21 @@ function classifyStreamFailure(attempt) {
       : attempt.anyEvent
         ? "started"
         : "nothing";
-  let r = streamFailureCause(attempt);
+  let cause = streamFailureCause(attempt);
   if (attempt.complete) {
     if (
-      r === "connectionLost" ||
-      r === "suspended" ||
-      r === "truncated" ||
-      r === "stalled" ||
-      ((r === "overloaded" || r === "serverError" || r === "timedOut") && n === "output")
+      cause === "connectionLost" ||
+      cause === "suspended" ||
+      cause === "truncated" ||
+      cause === "stalled" ||
+      ((cause === "overloaded" || cause === "serverError" || cause === "timedOut") && progress === "output")
     )
       return;
   }
   return {
     kind: "streamFailed",
-    cause: r,
-    progress: n,
+    cause,
+    progress,
     stopReasonReceived: attempt.stopReasonReceived,
     outlastedNonStreamingTimeout: attempt.outlastedNonStreamingTimeout,
   };
@@ -232,32 +238,34 @@ function streamFailureCause(attempt) {
     : "unknown";
 }
 //@ chunk-e6aww6q8.js:2645526-2646270 placement
-function classifyAttemptOutcome(e, n) {
+function classifyAttemptOutcome(attempt, context) {
   try {
-    let r = e.ended ?? (n.aborted ? "aborted" : n.stopReason === "refusal" ? "completed" : "other");
-    let s =
-      r !== "completed" || n.stopReason === null
+    let outcome =
+      attempt.ended ??
+      (context.aborted ? "aborted" : context.stopReason === "refusal" ? "completed" : "other");
+    let stopReasonKey =
+      outcome !== "completed" || context.stopReason === null
         ? null
-        : (STOP_REASON_KEYS.find((y) => y === n.stopReason) ?? "unknown");
-    let msFromRetryToEnd = Math.max(0, Math.round(n.now - e.startedAt));
+        : (STOP_REASON_KEYS.find((stopReasonKey) => stopReasonKey === context.stopReason) ?? "unknown");
+    let msFromRetryToEnd = Math.max(0, Math.round(context.now - attempt.startedAt));
     logForDiagnosticsNoPII("warn", "cli_output_filter_retry_outcome", {
-      outcome: r,
-      stop_reason: s,
-      first_stop_progress: e.firstStopProgress,
-      ms_to_first_stop: e.msToFirstStop,
+      outcome,
+      stop_reason: stopReasonKey,
+      first_stop_progress: attempt.firstStopProgress,
+      ms_to_first_stop: attempt.msToFirstStop,
       ms_from_retry_to_end: msFromRetryToEnd,
-      model: telemetrySafeModelName(n.model) ?? null,
-      query_source: normalizeAgentQuerySource(n.querySource) ?? null,
-      client_request_id: sanitizeMarkName(n.clientRequestId) ?? null,
+      model: telemetrySafeModelName(context.model) ?? null,
+      query_source: normalizeAgentQuerySource(context.querySource) ?? null,
+      client_request_id: sanitizeMarkName(context.clientRequestId) ?? null,
     });
     logEvent("tengu_output_filter_retry_outcome", {
-      outcome: fromEnum(r),
-      stop_reason: fromEnumOpt(s),
-      first_stop_progress: fromEnum(e.firstStopProgress),
-      ms_to_first_stop: e.msToFirstStop,
+      outcome: fromEnum(outcome),
+      stop_reason: fromEnumOpt(stopReasonKey),
+      first_stop_progress: fromEnum(attempt.firstStopProgress),
+      ms_to_first_stop: attempt.msToFirstStop,
       ms_from_retry_to_end: msFromRetryToEnd,
-      model: telemetrySafeModelName(n.model),
-      query_source: agentTypeForTelemetry(n.querySource),
+      model: telemetrySafeModelName(context.model),
+      query_source: agentTypeForTelemetry(context.querySource),
     });
   } catch (error) {
     logError(error);
@@ -292,18 +300,18 @@ function buildThinkingDropAttachment(
 }
 //@ chunk-e6aww6q8.js:2646737-2647001 placement
 function collectDroppedThinkingHashes(messages) {
-  let n = [];
-  for (let r of messages) {
+  let hashes = [];
+  for (let message of messages) {
     if (
-      r?.type !== "attachment" ||
-      r.attachment?.type !== "thinking_drop" ||
-      !Array.isArray(r.attachment.blockHashes)
+      message?.type !== "attachment" ||
+      message.attachment?.type !== "thinking_drop" ||
+      !Array.isArray(message.attachment.blockHashes)
     )
       continue;
-    for (let blockHash of r.attachment.blockHashes)
-      if (typeof blockHash === "string" && /^[0-9a-z]{1,13}$/.test(blockHash)) n.push(blockHash);
+    for (let blockHash of message.attachment.blockHashes)
+      if (typeof blockHash === "string" && /^[0-9a-z]{1,13}$/.test(blockHash)) hashes.push(blockHash);
   }
-  return n;
+  return hashes;
 }
 export {
   decideAttemptOutcome,

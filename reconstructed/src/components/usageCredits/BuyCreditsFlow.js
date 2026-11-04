@@ -8,7 +8,7 @@
  * pieces: chunk-18hwfzwa.js (17)
  * attribution: placement 17
  */
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import {
   jsxProd_default,
   jsxProd_default_2,
@@ -16,7 +16,13 @@ import {
 } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Text, Box } from "../../ink/components/Text.js";
 import { useTheme_2 } from "../design-system/ThemeProvider.js";
-import { y, P, R, Oo, init_react_production } from "../../../vendor/react/cjs/react.production.js";
+import {
+  useState,
+  useEffect,
+  useRef,
+  useEffectEvent,
+  init_react_production,
+} from "../../../vendor/react/cjs/react.production.js";
 import {
   discountPercentOfPay,
   percentOfBase,
@@ -56,17 +62,18 @@ import { logForDebugging } from "../../utils/debug.js";
 import { logError } from "../../utils/log.js";
 import { AnimatedClawd } from "../LogoV2/AnimatedClawd.js";
 import { WorkerBadge } from "../permissions/WorkerBadge.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-18hwfzwa.js:1154884-1155348 placement
 /**
  * 左右两端对齐的标签-数值行（购买额度汇总）。
  */
 function SummaryRow(props) {
-  let $ = w(11);
-  let { label, value: D, bold, dim } = props;
-  let Re;
+  let $ = useMemoCache(11);
+  let { label, value, bold, dim } = props;
+  let labelElement;
   if ($[0] !== bold || $[1] !== dim || $[2] !== label) {
-    Re = jsxProd_default(Text, {
+    labelElement = jsxProd_default(Text, {
       dimColor: dim,
       bold,
       children: label,
@@ -74,38 +81,38 @@ function SummaryRow(props) {
     $[0] = bold;
     $[1] = dim;
     $[2] = label;
-    $[3] = Re;
-  } else Re = $[3];
-  let Be;
-  if ($[4] !== bold || $[5] !== dim || $[6] !== D) {
-    Be = jsxProd_default(Text, {
+    $[3] = labelElement;
+  } else labelElement = $[3];
+  let valueElement;
+  if ($[4] !== bold || $[5] !== dim || $[6] !== value) {
+    valueElement = jsxProd_default(Text, {
       dimColor: dim,
       bold,
-      children: D,
+      children: value,
     });
     $[4] = bold;
     $[5] = dim;
-    $[6] = D;
-    $[7] = Be;
-  } else Be = $[7];
-  let He;
-  if ($[8] !== Re || $[9] !== Be) {
-    He = jsxProd_default_2(Box, {
+    $[6] = value;
+    $[7] = valueElement;
+  } else valueElement = $[7];
+  let rowElement;
+  if ($[8] !== labelElement || $[9] !== valueElement) {
+    rowElement = jsxProd_default_2(Box, {
       justifyContent: "space-between",
-      children: [Re, Be],
+      children: [labelElement, valueElement],
     });
-    $[8] = Re;
-    $[9] = Be;
-    $[10] = He;
-  } else He = $[10];
-  return He;
+    $[8] = labelElement;
+    $[9] = valueElement;
+    $[10] = rowElement;
+  } else rowElement = $[10];
+  return rowElement;
 }
 //@ chunk-18hwfzwa.js:1155348-1160051 placement
 /**
  * 购买额度流程中的确认购买步骤。
  */
 function ConfirmPurchaseStep(props) {
-  let $ = w(85);
+  let $ = useMemoCache(85);
   let {
     pm,
     cents,
@@ -120,53 +127,55 @@ function ConfirmPurchaseStep(props) {
     onCancel,
   } = props;
   let { credentials } = useTheme_2();
-  let [kt, At] = y(false);
-  let It = bundle ? bundle.local_price_minor_units : (custom?.payMinor ?? cents);
-  let Ot = bundle ? bundle.local_credit_minor_units : (custom?.creditMinor ?? cents);
-  let Et = Ot - It;
-  let Dt = discountPercentOfPay(Ot, It);
-  let Lt = Ot > It && (custom ? custom.kind === "extra_credit" : offerKind === "extra_credit");
-  let Xt;
-  if ($[0] !== Ot || $[1] !== It) {
-    Xt = percentOfBase(Ot, It);
-    $[0] = Ot;
-    $[1] = It;
-    $[2] = Xt;
-  } else Xt = $[2];
-  let io = Xt;
-  let so = expiryMonths !== null ? ` (valid for ${expiryMonths} ${expiryMonths === 1 ? "mo" : "mos"})` : "";
-  let [po, ao] = y("loading");
-  let co;
-  let bo;
-  if ($[3] !== credentials || $[4] !== currency || $[5] !== It || $[6] !== stripeProductId) {
-    co = () => {
-      let Ao = true;
-      previewPurchaseTax(It, currency, stripeProductId, credentials).then((Bo) => {
-        if (Ao) ao(Bo);
+  let [isConfirming, setIsConfirming] = useState(false);
+  let payMinor = bundle ? bundle.local_price_minor_units : (custom?.payMinor ?? cents);
+  let creditMinor = bundle ? bundle.local_credit_minor_units : (custom?.creditMinor ?? cents);
+  let bonusMinor = creditMinor - payMinor;
+  let discountPercent = discountPercentOfPay(creditMinor, payMinor);
+  let isExtraCredit =
+    creditMinor > payMinor && (custom ? custom.kind === "extra_credit" : offerKind === "extra_credit");
+  let bonusPercent;
+  if ($[0] !== creditMinor || $[1] !== payMinor) {
+    bonusPercent = percentOfBase(creditMinor, payMinor);
+    $[0] = creditMinor;
+    $[1] = payMinor;
+    $[2] = bonusPercent;
+  } else bonusPercent = $[2];
+  let bonusPercent_ = bonusPercent;
+  let expirySuffix =
+    expiryMonths !== null ? ` (valid for ${expiryMonths} ${expiryMonths === 1 ? "mo" : "mos"})` : "";
+  let [taxState, setTaxState] = useState("loading");
+  let loadTax;
+  let loadTaxDeps;
+  if ($[3] !== credentials || $[4] !== currency || $[5] !== payMinor || $[6] !== stripeProductId) {
+    loadTax = () => {
+      let isMounted = true;
+      previewPurchaseTax(payMinor, currency, stripeProductId, credentials).then((taxResult) => {
+        if (isMounted) setTaxState(taxResult);
       });
       return () => {
-        Ao = false;
+        isMounted = false;
       };
     };
-    bo = [It, currency, stripeProductId, credentials];
+    loadTaxDeps = [payMinor, currency, stripeProductId, credentials];
     $[3] = credentials;
     $[4] = currency;
-    $[5] = It;
+    $[5] = payMinor;
     $[6] = stripeProductId;
-    $[7] = co;
-    $[8] = bo;
+    $[7] = loadTax;
+    $[8] = loadTaxDeps;
   } else {
-    co = $[7];
-    bo = $[8];
+    loadTax = $[7];
+    loadTaxDeps = $[8];
   }
-  P(co, bo);
-  let Ro = po === "loading";
-  let Ho = po === null;
-  let taxMinorUnits = Ro || Ho ? 0 : po.tax_minor_units;
-  let Wo = It + taxMinorUnits;
-  let mn;
-  if ($[9] !== currency || $[10] !== Ro || $[11] !== Ho || $[12] !== Wo) {
-    mn = Ho
+  useEffect(loadTax, loadTaxDeps);
+  let isTaxLoading = taxState === "loading";
+  let isTaxUnavailable = taxState === null;
+  let taxMinorUnits = isTaxLoading || isTaxUnavailable ? 0 : taxState.tax_minor_units;
+  let totalMinor = payMinor + taxMinorUnits;
+  let options;
+  if ($[9] !== currency || $[10] !== isTaxLoading || $[11] !== isTaxUnavailable || $[12] !== totalMinor) {
+    options = isTaxUnavailable
       ? [
           {
             label: "Go back",
@@ -175,9 +184,11 @@ function ConfirmPurchaseStep(props) {
         ]
       : [
           {
-            label: Ro ? "Pay (calculating\u2026)" : `Pay ${formatCurrency(Wo, currency)} now`,
+            label: isTaxLoading
+              ? "Pay (calculating\u2026)"
+              : `Pay ${formatCurrency(totalMinor, currency)} now`,
             value: "yes",
-            disabled: Ro,
+            disabled: isTaxLoading,
           },
           {
             label: "Go back",
@@ -185,178 +196,190 @@ function ConfirmPurchaseStep(props) {
           },
         ];
     $[9] = currency;
-    $[10] = Ro;
-    $[11] = Ho;
-    $[12] = Wo;
-    $[13] = mn;
-  } else mn = $[13];
-  let options = mn;
+    $[10] = isTaxLoading;
+    $[11] = isTaxUnavailable;
+    $[12] = totalMinor;
+    $[13] = options;
+  } else options = $[13];
+  let options_2 = options;
   let { columns } = useTerminalSize();
   let max = Math.max(0, Math.min(columns - 6, 44));
-  let Yo = Ro || Ho ? "Tax" : (po.tax_label ?? "Tax");
+  let taxLabel = isTaxLoading || isTaxUnavailable ? "Tax" : (taxState.tax_label ?? "Tax");
   let children;
   if ($[14] !== max) {
     children = "\u2500".repeat(max);
     $[14] = max;
     $[15] = children;
   } else children = $[15];
-  let Fn;
+  let dividerElement;
   if ($[16] !== children) {
-    Fn = jsxProd_default(Text, {
+    dividerElement = jsxProd_default(Text, {
       dimColor: true,
       children,
     });
     $[16] = children;
-    $[17] = Fn;
-  } else Fn = $[17];
-  let bn = Fn;
-  if (kt) {
+    $[17] = dividerElement;
+  } else dividerElement = $[17];
+  let divider = dividerElement;
+  if (isConfirming) {
     let onBack;
     if ($[18] === MEMO_CACHE_SENTINEL) {
-      onBack = () => At(false);
+      onBack = () => setIsConfirming(false);
       $[18] = onBack;
     } else onBack = $[18];
-    let hn;
-    if ($[19] !== currency || $[20] !== onConfirm || $[21] !== Wo) {
-      hn = jsxProd_default(ConfirmQuestion, {
+    let confirmElement;
+    if ($[19] !== currency || $[20] !== onConfirm || $[21] !== totalMinor) {
+      confirmElement = jsxProd_default(ConfirmQuestion, {
         question: "Buy usage credits for",
-        amountCents: Wo,
+        amountCents: totalMinor,
         currency,
         onConfirm,
         onBack,
       });
       $[19] = currency;
       $[20] = onConfirm;
-      $[21] = Wo;
-      $[22] = hn;
-    } else hn = $[22];
-    return hn;
+      $[21] = totalMinor;
+      $[22] = confirmElement;
+    } else confirmElement = $[22];
+    return confirmElement;
   }
-  let Go;
+  let summaryElement;
   if (
-    $[23] !== Ot ||
+    $[23] !== creditMinor ||
     $[24] !== currency ||
-    $[25] !== Et ||
-    $[26] !== Dt ||
-    $[27] !== bn ||
+    $[25] !== bonusMinor ||
+    $[26] !== discountPercent ||
+    $[27] !== divider ||
     $[28] !== expiryMonths ||
-    $[29] !== Lt ||
-    $[30] !== io ||
-    $[31] !== It ||
-    $[32] !== so
+    $[29] !== isExtraCredit ||
+    $[30] !== bonusPercent_ ||
+    $[31] !== payMinor ||
+    $[32] !== expirySuffix
   ) {
-    Go = Lt
+    summaryElement = isExtraCredit
       ? jsxProd_default_2(Fragment, {
           children: [
             jsxProd_default(SummaryRow, {
               label:
                 expiryMonths !== null
-                  ? `Credits +${io}% (valid for ${expiryMonths} ${expiryMonths === 1 ? "mo" : "mos"})`
-                  : `Usage credits (+${io}% extra)`,
-              value: formatCurrency(Ot, currency),
+                  ? `Credits +${bonusPercent_}% (valid for ${expiryMonths} ${expiryMonths === 1 ? "mo" : "mos"})`
+                  : `Usage credits (+${bonusPercent_}% extra)`,
+              value: formatCurrency(creditMinor, currency),
             }),
-            bn,
+            divider,
             jsxProd_default(SummaryRow, {
               label: "You pay",
-              value: formatCurrency(It, currency),
+              value: formatCurrency(payMinor, currency),
             }),
           ],
         })
       : jsxProd_default_2(Fragment, {
           children: [
             jsxProd_default(SummaryRow, {
-              label: expiryMonths !== null ? `Usage credits${so}` : "Subtotal",
-              value: formatCurrency(Ot, currency),
+              label: expiryMonths !== null ? `Usage credits${expirySuffix}` : "Subtotal",
+              value: formatCurrency(creditMinor, currency),
             }),
-            Et > 0 &&
+            bonusMinor > 0 &&
               jsxProd_default_2(Fragment, {
                 children: [
                   jsxProd_default(SummaryRow, {
-                    label: `Discount${Dt > 0 ? ` (${Dt}%)` : ""}`,
-                    value: `\u2212${formatCurrency(Et, currency)}`,
+                    label: `Discount${discountPercent > 0 ? ` (${discountPercent}%)` : ""}`,
+                    value: `\u2212${formatCurrency(bonusMinor, currency)}`,
                   }),
-                  bn,
+                  divider,
                   jsxProd_default(SummaryRow, {
                     label: "Subtotal after discount",
-                    value: formatCurrency(It, currency),
+                    value: formatCurrency(payMinor, currency),
                   }),
                 ],
               }),
           ],
         });
-    $[23] = Ot;
+    $[23] = creditMinor;
     $[24] = currency;
-    $[25] = Et;
-    $[26] = Dt;
-    $[27] = bn;
+    $[25] = bonusMinor;
+    $[26] = discountPercent;
+    $[27] = divider;
     $[28] = expiryMonths;
-    $[29] = Lt;
-    $[30] = io;
-    $[31] = It;
-    $[32] = so;
-    $[33] = Go;
-  } else Go = $[33];
-  let hn;
-  if ($[34] !== currency || $[35] !== po || $[36] !== Yo || $[37] !== Ro || $[38] !== Ho) {
-    hn = Ro
+    $[29] = isExtraCredit;
+    $[30] = bonusPercent_;
+    $[31] = payMinor;
+    $[32] = expirySuffix;
+    $[33] = summaryElement;
+  } else summaryElement = $[33];
+  let taxRowElement;
+  if (
+    $[34] !== currency ||
+    $[35] !== taxState ||
+    $[36] !== taxLabel ||
+    $[37] !== isTaxLoading ||
+    $[38] !== isTaxUnavailable
+  ) {
+    taxRowElement = isTaxLoading
       ? jsxProd_default(SummaryRow, {
-          label: Yo,
+          label: taxLabel,
           value: "\u2026",
           dim: true,
         })
-      : Ho
+      : isTaxUnavailable
         ? jsxProd_default(SummaryRow, {
-            label: Yo,
+            label: taxLabel,
             value: "\u2014",
             dim: true,
           })
         : jsxProd_default(SummaryRow, {
-            label: `${Yo} (${formatPercent(po.tax_rate_pct)})`,
-            value: formatCurrency(po.tax_minor_units, currency),
+            label: `${taxLabel} (${formatPercent(taxState.tax_rate_pct)})`,
+            value: formatCurrency(taxState.tax_minor_units, currency),
           });
     $[34] = currency;
-    $[35] = po;
-    $[36] = Yo;
-    $[37] = Ro;
-    $[38] = Ho;
-    $[39] = hn;
-  } else hn = $[39];
+    $[35] = taxState;
+    $[36] = taxLabel;
+    $[37] = isTaxLoading;
+    $[38] = isTaxUnavailable;
+    $[39] = taxRowElement;
+  } else taxRowElement = $[39];
   let value;
-  if ($[40] !== currency || $[41] !== Ro || $[42] !== Ho || $[43] !== Wo) {
-    value = Ro ? "\u2026" : Ho ? "\u2014" : formatCurrency(Wo, currency);
+  if ($[40] !== currency || $[41] !== isTaxLoading || $[42] !== isTaxUnavailable || $[43] !== totalMinor) {
+    value = isTaxLoading ? "\u2026" : isTaxUnavailable ? "\u2014" : formatCurrency(totalMinor, currency);
     $[40] = currency;
-    $[41] = Ro;
-    $[42] = Ho;
-    $[43] = Wo;
+    $[41] = isTaxLoading;
+    $[42] = isTaxUnavailable;
+    $[43] = totalMinor;
     $[44] = value;
   } else value = $[44];
-  let Xo;
+  let totalRowElement;
   if ($[45] !== value) {
-    Xo = jsxProd_default(SummaryRow, {
+    totalRowElement = jsxProd_default(SummaryRow, {
       label: "Total due",
       value,
       bold: true,
     });
     $[45] = value;
-    $[46] = Xo;
-  } else Xo = $[46];
-  let Sn;
-  if ($[47] !== max || $[48] !== bn || $[49] !== Xo || $[50] !== Go || $[51] !== hn) {
-    Sn = jsxProd_default_2(Box, {
+    $[46] = totalRowElement;
+  } else totalRowElement = $[46];
+  let summaryBox;
+  if (
+    $[47] !== max ||
+    $[48] !== divider ||
+    $[49] !== totalRowElement ||
+    $[50] !== summaryElement ||
+    $[51] !== taxRowElement
+  ) {
+    summaryBox = jsxProd_default_2(Box, {
       flexDirection: "column",
       width: max,
-      children: [Go, hn, bn, Xo],
+      children: [summaryElement, taxRowElement, divider, totalRowElement],
     });
     $[47] = max;
-    $[48] = bn;
-    $[49] = Xo;
-    $[50] = Go;
-    $[51] = hn;
-    $[52] = Sn;
-  } else Sn = $[52];
-  let $n;
+    $[48] = divider;
+    $[49] = totalRowElement;
+    $[50] = summaryElement;
+    $[51] = taxRowElement;
+    $[52] = summaryBox;
+  } else summaryBox = $[52];
+  let withheldNotice;
   if ($[53] !== capRemaining || $[54] !== currency || $[55] !== custom) {
-    $n =
+    withheldNotice =
       custom?.withheld &&
       jsxProd_default(Text, {
         dimColor: true,
@@ -365,105 +388,112 @@ function ConfirmPurchaseStep(props) {
     $[53] = capRemaining;
     $[54] = currency;
     $[55] = custom;
-    $[56] = $n;
-  } else $n = $[56];
-  let on;
+    $[56] = withheldNotice;
+  } else withheldNotice = $[56];
+  let paymentLabelElement;
   if ($[57] === MEMO_CACHE_SENTINEL) {
-    on = jsxProd_default(Text, {
+    paymentLabelElement = jsxProd_default(Text, {
       children: "Payment ",
     });
-    $[57] = on;
-  } else on = $[57];
+    $[57] = paymentLabelElement;
+  } else paymentLabelElement = $[57];
   let children_2;
   if ($[58] !== pm) {
     children_2 = formatCardOnFile(pm);
     $[58] = pm;
     $[59] = children_2;
   } else children_2 = $[59];
-  let cn;
+  let cardOnFileElement;
   if ($[60] !== children_2) {
-    cn = jsxProd_default(Text, {
+    cardOnFileElement = jsxProd_default(Text, {
       dimColor: true,
       children: children_2,
     });
     $[60] = children_2;
-    $[61] = cn;
-  } else cn = $[61];
-  let Dn;
-  if ($[62] !== max || $[63] !== cn) {
-    Dn = jsxProd_default_2(Box, {
+    $[61] = cardOnFileElement;
+  } else cardOnFileElement = $[61];
+  let paymentRowBox;
+  if ($[62] !== max || $[63] !== cardOnFileElement) {
+    paymentRowBox = jsxProd_default_2(Box, {
       width: max,
-      children: [on, cn],
+      children: [paymentLabelElement, cardOnFileElement],
     });
     $[62] = max;
-    $[63] = cn;
-    $[64] = Dn;
-  } else Dn = $[64];
-  let wn;
-  if ($[65] !== Ho) {
-    wn =
-      Ho &&
+    $[63] = cardOnFileElement;
+    $[64] = paymentRowBox;
+  } else paymentRowBox = $[64];
+  let taxErrorNotice;
+  if ($[65] !== isTaxUnavailable) {
+    taxErrorNotice =
+      isTaxUnavailable &&
       jsxProd_default(Text, {
         color: "warning",
         children: `Couldn't calculate tax. Try again, or buy at ${USAGE_SETTINGS_LINK}`,
       });
-    $[65] = Ho;
-    $[66] = wn;
-  } else wn = $[66];
+    $[65] = isTaxUnavailable;
+    $[66] = taxErrorNotice;
+  } else taxErrorNotice = $[66];
   let onChange;
   if ($[67] !== onCancel) {
-    onChange = (Kn) => {
-      if (Kn !== "yes") {
+    onChange = (choice) => {
+      if (choice !== "yes") {
         onCancel();
         return;
       }
-      At(true);
+      setIsConfirming(true);
     };
     $[67] = onCancel;
     $[68] = onChange;
   } else onChange = $[68];
-  let Wn;
-  if ($[69] !== onCancel || $[70] !== options || $[71] !== onChange) {
-    Wn = jsxProd_default(ModelSelector, {
-      options,
+  let actionsElement;
+  if ($[69] !== onCancel || $[70] !== options_2 || $[71] !== onChange) {
+    actionsElement = jsxProd_default(ModelSelector, {
+      options: options_2,
       onChange,
       onCancel,
       visibleOptionCount: 2,
     });
     $[69] = onCancel;
-    $[70] = options;
+    $[70] = options_2;
     $[71] = onChange;
-    $[72] = Wn;
-  } else Wn = $[72];
-  let Fr;
-  if ($[73] !== Ho) {
-    Fr =
-      !Ho &&
+    $[72] = actionsElement;
+  } else actionsElement = $[72];
+  let consentNotice;
+  if ($[73] !== isTaxUnavailable) {
+    consentNotice =
+      !isTaxUnavailable &&
       jsxProd_default(Text, {
         dimColor: true,
         children: "By confirming, you allow Anthropic to charge your card in the amount above.",
       });
-    $[73] = Ho;
-    $[74] = Fr;
-  } else Fr = $[74];
+    $[73] = isTaxUnavailable;
+    $[74] = consentNotice;
+  } else consentNotice = $[74];
   let children_3;
-  if ($[75] !== Sn || $[76] !== $n || $[77] !== Dn || $[78] !== wn || $[79] !== Wn || $[80] !== Fr) {
+  if (
+    $[75] !== summaryBox ||
+    $[76] !== withheldNotice ||
+    $[77] !== paymentRowBox ||
+    $[78] !== taxErrorNotice ||
+    $[79] !== actionsElement ||
+    $[80] !== consentNotice
+  ) {
     children_3 = jsxProd_default_2(Box, {
       flexDirection: "column",
       gap: 1,
-      children: [Sn, $n, Dn, wn, Wn, Fr],
+      children: [summaryBox, withheldNotice, paymentRowBox, taxErrorNotice, actionsElement, consentNotice],
     });
-    $[75] = Sn;
-    $[76] = $n;
-    $[77] = Dn;
-    $[78] = wn;
-    $[79] = Wn;
-    $[80] = Fr;
+    $[75] = summaryBox;
+    $[76] = withheldNotice;
+    $[77] = paymentRowBox;
+    $[78] = taxErrorNotice;
+    $[79] = actionsElement;
+    $[80] = consentNotice;
     $[81] = children_3;
   } else children_3 = $[81];
-  let Un;
+  let dialogElement;
   if ($[82] !== onCancel || $[83] !== children_3) {
-    Un = jsxProd_default(Dialog, {
+    dialogElement = jsxProd_default(Dialog, {
       title: "Buy usage credits",
       onCancel,
       color: "suggestion",
@@ -471,9 +501,9 @@ function ConfirmPurchaseStep(props) {
     });
     $[82] = onCancel;
     $[83] = children_3;
-    $[84] = Un;
-  } else Un = $[84];
-  return Un;
+    $[84] = dialogElement;
+  } else dialogElement = $[84];
+  return dialogElement;
 }
 //@ chunk-18hwfzwa.js:1160051-1160100 placement
 function formatPercent(taxRatePct) {
@@ -483,25 +513,25 @@ function formatPercent(taxRatePct) {
 /**
  * 说明为何此金额没有额外额度/折扣（超出上限或本月折扣额度已用完）。
  */
-function describeWithheldBonus(h, capRemaining, currency) {
-  let L = h.withheld === "bonus" ? "extra credit" : "discount";
-  if (h.maxWithBonusMinor !== undefined)
-    return h.maxWithBonusMinor > 0
-      ? `No ${L} on an amount this large: up to ${formatCurrency(h.maxWithBonusMinor, currency)} still gets it.`
-      : `No ${L}: this month's discount limit is used up.`;
+function describeWithheldBonus(offer, capRemaining, currency) {
+  let bonusLabel = offer.withheld === "bonus" ? "extra credit" : "discount";
+  if (offer.maxWithBonusMinor !== undefined)
+    return offer.maxWithBonusMinor > 0
+      ? `No ${bonusLabel} on an amount this large: up to ${formatCurrency(offer.maxWithBonusMinor, currency)} still gets it.`
+      : `No ${bonusLabel}: this month's discount limit is used up.`;
   return capRemaining !== null && capRemaining <= 0
-    ? `No ${L}: this month's discount limit is used up.`
-    : `No ${L} on this amount: it would go over what's left of this month's discount limit.`;
+    ? `No ${bonusLabel}: this month's discount limit is used up.`
+    : `No ${bonusLabel} on this amount: it would go over what's left of this month's discount limit.`;
 }
 //@ chunk-18hwfzwa.js:1160529-1162196 placement
 function CustomAmountStep(props) {
-  let $ = w(24);
+  let $ = useMemoCache(24);
   let { pm, initialCents, currency, offer, discountTiers, usdRate, capRemaining, onConfirm, onCancel } =
     props;
-  let ze = offer?.kind === "extra_credit" && offer.customBonusTiers !== null;
-  let rt;
+  let supportsBonusTiers = offer?.kind === "extra_credit" && offer.customBonusTiers !== null;
+  let computeOffer;
   if ($[0] !== capRemaining || $[1] !== discountTiers || $[2] !== offer || $[3] !== usdRate) {
-    rt = (typedMinor) =>
+    computeOffer = (typedMinor) =>
       computeCreditOffer({
         typedMinor,
         offer,
@@ -513,16 +543,16 @@ function CustomAmountStep(props) {
     $[1] = discountTiers;
     $[2] = offer;
     $[3] = usdRate;
-    $[4] = rt;
-  } else rt = $[4];
-  let At = rt;
+    $[4] = computeOffer;
+  } else computeOffer = $[4];
+  let computeOffer_ = computeOffer;
   let subtitle;
-  if ($[5] !== ze || $[6] !== pm || $[7] !== usdRate) {
+  if ($[5] !== supportsBonusTiers || $[6] !== pm || $[7] !== usdRate) {
     subtitle =
-      ze && usdRate !== null
+      supportsBonusTiers && usdRate !== null
         ? `Amount to pay \xB7 Payment: ${formatCardOnFile(pm)}`
         : `Payment: ${formatCardOnFile(pm)}`;
-    $[5] = ze;
+    $[5] = supportsBonusTiers;
     $[6] = pm;
     $[7] = usdRate;
     $[8] = subtitle;
@@ -530,39 +560,39 @@ function CustomAmountStep(props) {
   const initial = initialCents ? String(initialCents / 100) : "75";
   const minCents = currency === "USD" ? CREDIT_MIN_AMOUNT_CENTS : undefined;
   let preview;
-  if ($[9] !== capRemaining || $[10] !== currency || $[11] !== At) {
-    preview = (Lt) => {
-      let oo = At(Lt);
-      switch (oo.kind) {
+  if ($[9] !== capRemaining || $[10] !== currency || $[11] !== computeOffer_) {
+    preview = (typedMinor) => {
+      let computed = computeOffer_(typedMinor);
+      switch (computed.kind) {
         case "extra_credit": {
-          return `Pay ${formatCurrency(oo.payMinor, currency)} \xB7 Get ${formatCurrency(oo.creditMinor, currency)} of usage credits (+${oo.pct}%)`;
+          return `Pay ${formatCurrency(computed.payMinor, currency)} \xB7 Get ${formatCurrency(computed.creditMinor, currency)} of usage credits (+${computed.pct}%)`;
         }
         case "discount": {
-          return `Buys ${formatCurrency(oo.creditMinor, currency)} of usage credits for ${formatCurrency(oo.payMinor, currency)} (${oo.pct}% off)`;
+          return `Buys ${formatCurrency(computed.creditMinor, currency)} of usage credits for ${formatCurrency(computed.payMinor, currency)} (${computed.pct}% off)`;
         }
         case "plain": {
-          return oo.withheld
-            ? `Buys ${formatCurrency(oo.creditMinor, currency)} of usage credits \xB7 ${describeWithheldBonus(oo, capRemaining, currency)}`
+          return computed.withheld
+            ? `Buys ${formatCurrency(computed.creditMinor, currency)} of usage credits \xB7 ${describeWithheldBonus(computed, capRemaining, currency)}`
             : undefined;
         }
       }
     };
     $[9] = capRemaining;
     $[10] = currency;
-    $[11] = At;
+    $[11] = computeOffer_;
     $[12] = preview;
   } else preview = $[12];
   let onSubmit;
-  if ($[13] !== onConfirm || $[14] !== At) {
-    onSubmit = (io) => {
-      let so = At(io);
-      onConfirm(io, so.kind === "plain" && !so.withheld ? undefined : so);
+  if ($[13] !== onConfirm || $[14] !== computeOffer_) {
+    onSubmit = (typedMinor) => {
+      let computed = computeOffer_(typedMinor);
+      onConfirm(typedMinor, computed.kind === "plain" && !computed.withheld ? undefined : computed);
     };
     $[13] = onConfirm;
-    $[14] = At;
+    $[14] = computeOffer_;
     $[15] = onSubmit;
   } else onSubmit = $[15];
-  let po;
+  let amountEntryElement;
   if (
     $[16] !== currency ||
     $[17] !== onCancel ||
@@ -572,7 +602,7 @@ function CustomAmountStep(props) {
     $[21] !== preview ||
     $[22] !== onSubmit
   ) {
-    po = jsxProd_default(AmountEntry, {
+    amountEntryElement = jsxProd_default(AmountEntry, {
       title: "Buy usage credits",
       subtitle,
       initial,
@@ -590,110 +620,116 @@ function CustomAmountStep(props) {
     $[20] = minCents;
     $[21] = preview;
     $[22] = onSubmit;
-    $[23] = po;
-  } else po = $[23];
-  return po;
+    $[23] = amountEntryElement;
+  } else amountEntryElement = $[23];
+  return amountEntryElement;
 }
 //@ chunk-18hwfzwa.js:1162196-1162209 placement
 var YES = "yes";
 //@ chunk-18hwfzwa.js:1162209-1163920 placement
 function ConfirmQuestion(props) {
-  let $ = w(30);
+  let $ = useMemoCache(30);
   let { question, amountCents, currency, onConfirm, onBack } = props;
   let { columns } = useTerminalSize();
-  let [Be, He] = y("");
-  let [We, ze] = y(0);
-  let [Xe, rt] = y(false);
-  let kt = R(false);
-  let At = Be.trim().toLowerCase() === YES;
-  let Ot = Xe && !At ? "error" : At ? "success" : undefined;
-  let Dt;
+  let [typedText, setTypedText] = useState("");
+  let [cursorOffset, setCursorOffset] = useState(0);
+  let [hasMismatch, setHasMismatch] = useState(false);
+  let submittedRef = useRef(false);
+  let isConfirmed = typedText.trim().toLowerCase() === YES;
+  let feedbackColor = hasMismatch && !isConfirmed ? "error" : isConfirmed ? "success" : undefined;
+  let keybindingHandlers;
   if ($[0] !== onBack) {
-    Dt = {
+    keybindingHandlers = {
       "confirm:no": onBack,
     };
     $[0] = onBack;
-    $[1] = Dt;
-  } else Dt = $[1];
-  let Lt;
+    $[1] = keybindingHandlers;
+  } else keybindingHandlers = $[1];
+  let settingsKeybindingOptions;
   if ($[2] === MEMO_CACHE_SENTINEL) {
-    Lt = {
+    settingsKeybindingOptions = {
       context: "Settings",
     };
-    $[2] = Lt;
-  } else Lt = $[2];
-  MessageActionsKeybindings(Dt, Lt);
-  let oo;
+    $[2] = settingsKeybindingOptions;
+  } else settingsKeybindingOptions = $[2];
+  MessageActionsKeybindings(keybindingHandlers, settingsKeybindingOptions);
+  let amountText;
   if ($[3] !== amountCents || $[4] !== currency) {
-    oo = formatCurrency(amountCents, currency);
+    amountText = formatCurrency(amountCents, currency);
     $[3] = amountCents;
     $[4] = currency;
-    $[5] = oo;
-  } else oo = $[5];
-  let Xt;
-  if ($[6] !== question || $[7] !== oo) {
-    Xt = jsxProd_default_2(Text, {
-      children: [question, " ", oo, "."],
+    $[5] = amountText;
+  } else amountText = $[5];
+  let questionElement;
+  if ($[6] !== question || $[7] !== amountText) {
+    questionElement = jsxProd_default_2(Text, {
+      children: [question, " ", amountText, "."],
     });
     $[6] = question;
-    $[7] = oo;
-    $[8] = Xt;
-  } else Xt = $[8];
-  const dimColor = !Ot;
-  let so;
-  if ($[9] !== Ot || $[10] !== dimColor) {
-    so = jsxProd_default_2(Text, {
-      color: Ot,
+    $[7] = amountText;
+    $[8] = questionElement;
+  } else questionElement = $[8];
+  const dimColor = !feedbackColor;
+  let promptElement;
+  if ($[9] !== feedbackColor || $[10] !== dimColor) {
+    promptElement = jsxProd_default_2(Text, {
+      color: feedbackColor,
       dimColor,
       children: ["Type ", YES, " to confirm."],
     });
-    $[9] = Ot;
+    $[9] = feedbackColor;
     $[10] = dimColor;
-    $[11] = so;
-  } else so = $[11];
-  const borderColor = Ot ?? "warning";
+    $[11] = promptElement;
+  } else promptElement = $[11];
+  const borderColor = feedbackColor ?? "warning";
   let onSubmit;
   if ($[12] !== onConfirm) {
-    onSubmit = (co) => {
-      if (co.trim().toLowerCase() === YES) {
-        if (kt.current) {
+    onSubmit = (submittedText) => {
+      if (submittedText.trim().toLowerCase() === YES) {
+        if (submittedRef.current) {
           return;
         }
-        kt.current = true;
+        submittedRef.current = true;
         onConfirm();
       } else {
-        He("");
-        ze(0);
-        rt(true);
+        setTypedText("");
+        setCursorOffset(0);
+        setHasMismatch(true);
       }
     };
     $[12] = onConfirm;
     $[13] = onSubmit;
   } else onSubmit = $[13];
   let children;
-  if ($[14] !== columns || $[15] !== We || $[16] !== onBack || $[17] !== onSubmit || $[18] !== Be) {
+  if (
+    $[14] !== columns ||
+    $[15] !== cursorOffset ||
+    $[16] !== onBack ||
+    $[17] !== onSubmit ||
+    $[18] !== typedText
+  ) {
     children = jsxProd_default(TextInput, {
-      value: Be,
+      value: typedText,
       disableEscapeDoublePress: true,
-      onChange: He,
+      onChange: setTypedText,
       onSubmit,
       onExit: onBack,
       focus: true,
       showCursor: true,
       columns,
-      cursorOffset: We,
-      onChangeCursorOffset: ze,
+      cursorOffset,
+      onChangeCursorOffset: setCursorOffset,
     });
     $[14] = columns;
-    $[15] = We;
+    $[15] = cursorOffset;
     $[16] = onBack;
     $[17] = onSubmit;
-    $[18] = Be;
+    $[18] = typedText;
     $[19] = children;
   } else children = $[19];
-  let Ao;
+  let inputFrame;
   if ($[20] !== borderColor || $[21] !== children) {
-    Ao = jsxProd_default(Box, {
+    inputFrame = jsxProd_default(Box, {
       borderStyle: "single",
       borderColor,
       paddingX: 1,
@@ -701,23 +737,23 @@ function ConfirmQuestion(props) {
     });
     $[20] = borderColor;
     $[21] = children;
-    $[22] = Ao;
-  } else Ao = $[22];
+    $[22] = inputFrame;
+  } else inputFrame = $[22];
   let children_2;
-  if ($[23] !== Ao || $[24] !== Xt || $[25] !== so) {
+  if ($[23] !== inputFrame || $[24] !== questionElement || $[25] !== promptElement) {
     children_2 = jsxProd_default_2(Box, {
       flexDirection: "column",
       gap: 1,
-      children: [Xt, so, Ao],
+      children: [questionElement, promptElement, inputFrame],
     });
-    $[23] = Ao;
-    $[24] = Xt;
-    $[25] = so;
+    $[23] = inputFrame;
+    $[24] = questionElement;
+    $[25] = promptElement;
     $[26] = children_2;
   } else children_2 = $[26];
-  let Ro;
+  let dialogElement;
   if ($[27] !== onBack || $[28] !== children_2) {
-    Ro = jsxProd_default(Dialog, {
+    dialogElement = jsxProd_default(Dialog, {
       title: "Confirm amount",
       onCancel: onBack,
       color: "warning",
@@ -726,120 +762,123 @@ function ConfirmQuestion(props) {
     });
     $[27] = onBack;
     $[28] = children_2;
-    $[29] = Ro;
-  } else Ro = $[29];
-  return Ro;
+    $[29] = dialogElement;
+  } else dialogElement = $[29];
+  return dialogElement;
 }
 //@ chunk-18hwfzwa.js:1163920-1167866 placement
 /**
  * 购买额度流程中的花费上限设置步骤。
  */
 function SpendLimitStep(props) {
-  let $ = w(70);
-  let { current: x, currency, onConfirm, onCancel } = props;
+  let $ = useMemoCache(70);
+  let { current: currentLimit, currency, onConfirm, onCancel } = props;
   let { columns } = useTerminalSize();
-  let Be;
-  if ($[0] !== x) {
-    Be = x !== null ? formatDollarAmount(x) : "150";
-    $[0] = x;
-    $[1] = Be;
-  } else Be = $[1];
-  let He = Be;
-  let { value: We, setValue, cursor, setCursor } = useAmountInputBuffer(He);
-  let [kt, At] = y(0);
-  let It;
+  let initialAmountText;
+  if ($[0] !== currentLimit) {
+    initialAmountText = currentLimit !== null ? formatDollarAmount(currentLimit) : "150";
+    $[0] = currentLimit;
+    $[1] = initialAmountText;
+  } else initialAmountText = $[1];
+  let amountInputInitial = initialAmountText;
+  let { value: amountText, setValue, cursor, setCursor } = useAmountInputBuffer(amountInputInitial);
+  let [focusIndex, setFocusIndex] = useState(0);
+  let actionIds;
   if ($[2] === MEMO_CACHE_SENTINEL) {
-    It = ["set", "unlimited", "cancel"];
-    $[2] = It;
-  } else It = $[2];
-  let Ot = It;
-  let [Et, Dt] = y(0);
-  let [Lt, oo] = y(false);
-  let Xt;
-  let io;
-  let so;
-  let po;
+    actionIds = ["set", "unlimited", "cancel"];
+    $[2] = actionIds;
+  } else actionIds = $[2];
+  let actionChoices = actionIds;
+  let [selectedActionIndex, setSelectedActionIndex] = useState(0);
+  let [isConfirming, setIsConfirming] = useState(false);
+  let contentColumnComponent;
+  let dialogComponent;
+  let actionLabels;
+  let amountError;
   let color;
-  let co;
+  let earlyReturnElement;
   let gap;
   let onKeyDown;
-  let Bo;
-  let Ro;
-  let Ho;
+  let descriptionElement;
+  let amountInputBox;
+  let limitPreviewElement;
   let title;
   let onCancel_2;
   if (
-    $[3] !== Et ||
+    $[3] !== selectedActionIndex ||
     $[4] !== columns ||
-    $[5] !== Lt ||
+    $[5] !== isConfirming ||
     $[6] !== currency ||
     $[7] !== cursor ||
-    $[8] !== kt ||
+    $[8] !== focusIndex ||
     $[9] !== onCancel ||
     $[10] !== onConfirm ||
     $[11] !== setCursor ||
     $[12] !== setValue ||
-    $[13] !== We
+    $[13] !== amountText
   ) {
-    co = EARLY_RETURN_SENTINEL;
+    earlyReturnElement = EARLY_RETURN_SENTINEL;
     Go: {
-      let amountInput = parseAmountInput(We);
-      po = !amountInput.ok && (We.trim() !== "" || kt === 1) ? amountInput.error : "";
-      let No = function No() {
-        let Cn = Ot[Et];
-        if (Cn === "set") {
+      let amountInput = parseAmountInput(amountText);
+      amountError =
+        !amountInput.ok && (amountText.trim() !== "" || focusIndex === 1) ? amountInput.error : "";
+      let handleAction = function handleAction() {
+        let selectedAction = actionChoices[selectedActionIndex];
+        if (selectedAction === "set") {
           if (!amountInput.ok) {
             return;
           }
           if (amountInput.cents > CREDIT_PRESET_AMOUNTS_CENTS) {
-            oo(true);
+            setIsConfirming(true);
             return;
           }
           onConfirm(amountInput.cents);
-        } else if (Cn === "unlimited") onConfirm(null);
+        } else if (selectedAction === "unlimited") onConfirm(null);
         else onCancel();
       };
-      let kn = function kn(event) {
+      let handleKeyDown = function onKeyDown(event) {
         if (event.key === "tab") {
           event.preventDefault();
-          At(toBinaryFlag);
+          setFocusIndex(toBinaryFlag);
           return;
         }
-        if (kt !== 1) {
+        if (focusIndex !== 1) {
           return;
         }
         if (event.key === "up") {
           event.preventDefault();
-          At(0);
+          setFocusIndex(0);
         } else if (event.key === "down") event.preventDefault();
         else if (event.key === "left") {
           event.preventDefault();
-          Dt(decrementClamped);
+          setSelectedActionIndex(decrementClamped);
         } else if (event.key === "right") {
           event.preventDefault();
-          Dt((Yo) => Math.min(Ot.length - 1, Yo + 1));
+          setSelectedActionIndex((nextActionIndex) =>
+            Math.min(actionChoices.length - 1, nextActionIndex + 1),
+          );
         } else if (event.key === "return") {
           event.preventDefault();
-          No();
+          handleAction();
         }
       };
-      let Fn;
+      let actionLabelMap;
       if ($[27] === MEMO_CACHE_SENTINEL) {
-        Fn = {
+        actionLabelMap = {
           set: "Set limit",
           unlimited: "Set to unlimited",
           cancel: "Cancel",
         };
-        $[27] = Fn;
-      } else Fn = $[27];
-      so = Fn;
-      if (Lt && amountInput.ok) {
+        $[27] = actionLabelMap;
+      } else actionLabelMap = $[27];
+      actionLabels = actionLabelMap;
+      if (isConfirming && amountInput.ok) {
         let onBack;
         if ($[28] === MEMO_CACHE_SENTINEL) {
-          onBack = () => oo(false);
+          onBack = () => setIsConfirming(false);
           $[28] = onBack;
         } else onBack = $[28];
-        co = jsxProd_default(ConfirmQuestion, {
+        earlyReturnElement = jsxProd_default(ConfirmQuestion, {
           question: "Set your monthly spend limit to",
           amountCents: amountInput.cents,
           currency,
@@ -848,48 +887,48 @@ function SpendLimitStep(props) {
         });
         break Go;
       }
-      io = Dialog;
+      dialogComponent = Dialog;
       title = "Set monthly spend limit";
       onCancel_2 = onCancel;
       color = "suggestion";
-      Xt = FocusColumn;
+      contentColumnComponent = FocusColumn;
       gap = 1;
-      onKeyDown = kn;
+      onKeyDown = handleKeyDown;
       if ($[29] === MEMO_CACHE_SENTINEL) {
-        Bo = jsxProd_default(Text, {
+        descriptionElement = jsxProd_default(Text, {
           children: "You can set a maximum amount you can spend on usage credits per month.",
         });
-        $[29] = Bo;
-      } else Bo = $[29];
-      const borderColor = kt === 0 ? "suggestion" : "inactive";
+        $[29] = descriptionElement;
+      } else descriptionElement = $[29];
+      const borderColor = focusIndex === 0 ? "suggestion" : "inactive";
       let children;
       if ($[30] !== currency) {
         children = getCurrencySymbol(currency);
         $[30] = currency;
         $[31] = children;
       } else children = $[31];
-      let Mn;
+      let currencySymbolElement;
       if ($[32] !== children) {
-        Mn = jsxProd_default(Text, {
+        currencySymbolElement = jsxProd_default(Text, {
           children,
         });
         $[32] = children;
-        $[33] = Mn;
-      } else Mn = $[33];
+        $[33] = currencySymbolElement;
+      } else currencySymbolElement = $[33];
       let onSubmit;
       let onHistoryDown;
       if ($[34] === MEMO_CACHE_SENTINEL) {
-        onSubmit = () => At(1);
-        onHistoryDown = () => At(1);
+        onSubmit = () => setFocusIndex(1);
+        onHistoryDown = () => setFocusIndex(1);
         $[34] = onSubmit;
         $[35] = onHistoryDown;
       } else {
         onSubmit = $[34];
         onHistoryDown = $[35];
       }
-      const focus = kt === 0;
-      const showCursor = kt === 0;
-      let _o;
+      const focus = focusIndex === 0;
+      const showCursor = focusIndex === 0;
+      let amountTextInputElement;
       if (
         $[36] !== columns ||
         $[37] !== cursor ||
@@ -897,10 +936,10 @@ function SpendLimitStep(props) {
         $[39] !== setValue ||
         $[40] !== focus ||
         $[41] !== showCursor ||
-        $[42] !== We
+        $[42] !== amountText
       ) {
-        _o = jsxProd_default(TextInput, {
-          value: We,
+        amountTextInputElement = jsxProd_default(TextInput, {
+          value: amountText,
           onChange: setValue,
           onSubmit,
           onHistoryDown,
@@ -917,404 +956,431 @@ function SpendLimitStep(props) {
         $[39] = setValue;
         $[40] = focus;
         $[41] = showCursor;
-        $[42] = We;
-        $[43] = _o;
-      } else _o = $[43];
-      if ($[44] !== borderColor || $[45] !== Mn || $[46] !== _o) {
-        Ro = jsxProd_default_2(Box, {
+        $[42] = amountText;
+        $[43] = amountTextInputElement;
+      } else amountTextInputElement = $[43];
+      if ($[44] !== borderColor || $[45] !== currencySymbolElement || $[46] !== amountTextInputElement) {
+        amountInputBox = jsxProd_default_2(Box, {
           borderStyle: "single",
           borderColor,
           paddingX: 1,
-          children: [Mn, _o],
+          children: [currencySymbolElement, amountTextInputElement],
         });
         $[44] = borderColor;
-        $[45] = Mn;
-        $[46] = _o;
-        $[47] = Ro;
-      } else Ro = $[47];
-      Ho =
+        $[45] = currencySymbolElement;
+        $[46] = amountTextInputElement;
+        $[47] = amountInputBox;
+      } else amountInputBox = $[47];
+      limitPreviewElement =
         amountInput.ok &&
         jsxProd_default_2(Text, {
           color: "success",
           children: ["Monthly limit: ", formatCurrency(amountInput.cents, currency)],
         });
     }
-    $[3] = Et;
+    $[3] = selectedActionIndex;
     $[4] = columns;
-    $[5] = Lt;
+    $[5] = isConfirming;
     $[6] = currency;
     $[7] = cursor;
-    $[8] = kt;
+    $[8] = focusIndex;
     $[9] = onCancel;
     $[10] = onConfirm;
     $[11] = setCursor;
     $[12] = setValue;
-    $[13] = We;
-    $[14] = Xt;
-    $[15] = io;
-    $[16] = so;
-    $[17] = po;
+    $[13] = amountText;
+    $[14] = contentColumnComponent;
+    $[15] = dialogComponent;
+    $[16] = actionLabels;
+    $[17] = amountError;
     $[18] = color;
-    $[19] = co;
+    $[19] = earlyReturnElement;
     $[20] = gap;
     $[21] = onKeyDown;
-    $[22] = Bo;
-    $[23] = Ro;
-    $[24] = Ho;
+    $[22] = descriptionElement;
+    $[23] = amountInputBox;
+    $[24] = limitPreviewElement;
     $[25] = title;
     $[26] = onCancel_2;
   } else {
-    Xt = $[14];
-    io = $[15];
-    so = $[16];
-    po = $[17];
+    contentColumnComponent = $[14];
+    dialogComponent = $[15];
+    actionLabels = $[16];
+    amountError = $[17];
     color = $[18];
-    co = $[19];
+    earlyReturnElement = $[19];
     gap = $[20];
     onKeyDown = $[21];
-    Bo = $[22];
-    Ro = $[23];
-    Ho = $[24];
+    descriptionElement = $[22];
+    amountInputBox = $[23];
+    limitPreviewElement = $[24];
     title = $[25];
     onCancel_2 = $[26];
   }
-  if (co !== EARLY_RETURN_SENTINEL) return co;
-  let Fn;
-  if ($[48] !== po) {
-    Fn =
-      po &&
+  if (earlyReturnElement !== EARLY_RETURN_SENTINEL) return earlyReturnElement;
+  let amountErrorElement;
+  if ($[48] !== amountError) {
+    amountErrorElement =
+      amountError &&
       jsxProd_default(Text, {
         color: "error",
-        children: po,
+        children: amountError,
       });
-    $[48] = po;
-    $[49] = Fn;
-  } else Fn = $[49];
-  let bn;
+    $[48] = amountError;
+    $[49] = amountErrorElement;
+  } else amountErrorElement = $[49];
+  let immediateNoticeElement;
   if ($[50] === MEMO_CACHE_SENTINEL) {
-    bn = jsxProd_default(Text, {
+    immediateNoticeElement = jsxProd_default(Text, {
       dimColor: true,
       children: "This spend limit goes into effect immediately.",
     });
-    $[50] = bn;
-  } else bn = $[50];
-  let hn;
-  if ($[51] !== Et || $[52] !== so || $[53] !== kt) {
-    hn = jsxProd_default(Box, {
+    $[50] = immediateNoticeElement;
+  } else immediateNoticeElement = $[50];
+  let actionButtonsRow;
+  if ($[51] !== selectedActionIndex || $[52] !== actionLabels || $[53] !== focusIndex) {
+    actionButtonsRow = jsxProd_default(Box, {
       flexDirection: "row",
       gap: 2,
-      children: Ot.map((cn, Dn) =>
+      children: actionChoices.map((actionId, actionIndex) =>
         jsxProd_default_2(
           Text,
           {
-            color: kt === 1 && Et === Dn ? "suggestion" : undefined,
-            children: [kt === 1 && Et === Dn ? figures_default.pointer : " ", " ", so[cn]],
+            color: focusIndex === 1 && selectedActionIndex === actionIndex ? "suggestion" : undefined,
+            children: [
+              focusIndex === 1 && selectedActionIndex === actionIndex ? figures_default.pointer : " ",
+              " ",
+              actionLabels[actionId],
+            ],
           },
-          cn,
+          actionId,
         ),
       ),
     });
-    $[51] = Et;
-    $[52] = so;
-    $[53] = kt;
-    $[54] = hn;
-  } else hn = $[54];
+    $[51] = selectedActionIndex;
+    $[52] = actionLabels;
+    $[53] = focusIndex;
+    $[54] = actionButtonsRow;
+  } else actionButtonsRow = $[54];
   let children;
   if (
-    $[55] !== Xt ||
-    $[56] !== Fn ||
-    $[57] !== hn ||
+    $[55] !== contentColumnComponent ||
+    $[56] !== amountErrorElement ||
+    $[57] !== actionButtonsRow ||
     $[58] !== gap ||
     $[59] !== onKeyDown ||
-    $[60] !== Bo ||
-    $[61] !== Ro ||
-    $[62] !== Ho
+    $[60] !== descriptionElement ||
+    $[61] !== amountInputBox ||
+    $[62] !== limitPreviewElement
   ) {
-    children = jsxProd_default_2(Xt, {
+    children = jsxProd_default_2(contentColumnComponent, {
       gap,
       onKeyDown,
-      children: [Bo, Ro, Ho, Fn, bn, hn],
+      children: [
+        descriptionElement,
+        amountInputBox,
+        limitPreviewElement,
+        amountErrorElement,
+        immediateNoticeElement,
+        actionButtonsRow,
+      ],
     });
-    $[55] = Xt;
-    $[56] = Fn;
-    $[57] = hn;
+    $[55] = contentColumnComponent;
+    $[56] = amountErrorElement;
+    $[57] = actionButtonsRow;
     $[58] = gap;
     $[59] = onKeyDown;
-    $[60] = Bo;
-    $[61] = Ro;
-    $[62] = Ho;
+    $[60] = descriptionElement;
+    $[61] = amountInputBox;
+    $[62] = limitPreviewElement;
     $[63] = children;
   } else children = $[63];
-  let Xo;
-  if ($[64] !== io || $[65] !== color || $[66] !== children || $[67] !== title || $[68] !== onCancel_2) {
-    Xo = jsxProd_default(io, {
+  let dialogElement;
+  if (
+    $[64] !== dialogComponent ||
+    $[65] !== color ||
+    $[66] !== children ||
+    $[67] !== title ||
+    $[68] !== onCancel_2
+  ) {
+    dialogElement = jsxProd_default(dialogComponent, {
       title,
       onCancel: onCancel_2,
       color,
       children,
     });
-    $[64] = io;
+    $[64] = dialogComponent;
     $[65] = color;
     $[66] = children;
     $[67] = title;
     $[68] = onCancel_2;
-    $[69] = Xo;
-  } else Xo = $[69];
-  return Xo;
+    $[69] = dialogElement;
+  } else dialogElement = $[69];
+  return dialogElement;
 }
 //@ chunk-18hwfzwa.js:1167866-1175272 placement
 /**
  * 购买额度流程中的自动充值设置步骤。
  */
 function AutoReloadStep(props) {
-  let $ = w(134);
-  let { current: x, pm, currency, onSave, onTurnOff, onCancel } = props;
+  let $ = useMemoCache(134);
+  let { current: currentSettings, pm, currency, onSave, onTurnOff, onCancel } = props;
   let { columns } = useTerminalSize();
-  let He = x?.enabled === true;
-  let ze;
-  if ($[0] !== x) {
-    ze = x?.threshold_in_minor_units != null ? formatDollarAmount(x.threshold_in_minor_units) : "5";
-    $[0] = x;
-    $[1] = ze;
-  } else ze = $[1];
-  let Xe = ze;
-  let rt;
-  if ($[2] !== x) {
-    rt = x?.reload_to_in_minor_units != null ? formatDollarAmount(x.reload_to_in_minor_units) : "15";
-    $[2] = x;
-    $[3] = rt;
-  } else rt = $[3];
-  let kt = rt;
-  let { value: At, setValue, cursor, setCursor } = useAmountInputBuffer(Xe);
+  let isEnabled = currentSettings?.enabled === true;
+  let thresholdText;
+  if ($[0] !== currentSettings) {
+    thresholdText =
+      currentSettings?.threshold_in_minor_units != null
+        ? formatDollarAmount(currentSettings.threshold_in_minor_units)
+        : "5";
+    $[0] = currentSettings;
+    $[1] = thresholdText;
+  } else thresholdText = $[1];
+  let initialThresholdText = thresholdText;
+  let reloadToText;
+  if ($[2] !== currentSettings) {
+    reloadToText =
+      currentSettings?.reload_to_in_minor_units != null
+        ? formatDollarAmount(currentSettings.reload_to_in_minor_units)
+        : "15";
+    $[2] = currentSettings;
+    $[3] = reloadToText;
+  } else reloadToText = $[3];
+  let initialReloadToText = reloadToText;
+  let { value: thresholdValue, setValue, cursor, setCursor } = useAmountInputBuffer(initialThresholdText);
   let {
-    value: Dt,
+    value: reloadToValue,
     setValue: setValue_2,
     cursor: cursor_2,
     setCursor: setCursor_2,
-  } = useAmountInputBuffer(kt);
-  let [io, so] = y(0);
-  let po;
-  if ($[4] !== He) {
-    po = He ? ["save", "off", "cancel"] : ["save", "cancel"];
-    $[4] = He;
-    $[5] = po;
-  } else po = $[5];
-  let ao = po;
-  let [co, bo] = y(0);
-  let [Ao, Bo] = y(false);
-  let Ro;
-  let Ho;
-  let Io;
-  let Wo;
-  let mn;
-  let Cn;
-  let No;
+  } = useAmountInputBuffer(initialReloadToText);
+  let [focusIndex, setFocusIndex] = useState(0);
+  let actionIds;
+  if ($[4] !== isEnabled) {
+    actionIds = isEnabled ? ["save", "off", "cancel"] : ["save", "cancel"];
+    $[4] = isEnabled;
+    $[5] = actionIds;
+  } else actionIds = $[5];
+  let actionChoices = actionIds;
+  let [selectedActionIndex, setSelectedActionIndex] = useState(0);
+  let [isConfirming, setIsConfirming] = useState(false);
+  let contentColumnComponent;
+  let dialogComponent;
+  let actionLabelMap;
+  let thresholdError;
+  let reloadToInput;
+  let thresholdInput;
+  let summaryElement;
   let title;
   let onCancel_2;
   let color;
-  let Fn;
+  let earlyReturnElement;
   let gap;
   let onKeyDown;
-  let hn;
-  let Mn;
-  let Xo;
-  let Sn;
+  let descriptionElement;
+  let cardOnFileElement;
+  let thresholdSectionElement;
+  let reloadToSectionElement;
   if (
-    $[6] !== co ||
-    $[7] !== ao ||
+    $[6] !== selectedActionIndex ||
+    $[7] !== actionChoices ||
     $[8] !== columns ||
-    $[9] !== Ao ||
+    $[9] !== isConfirming ||
     $[10] !== currency ||
     $[11] !== cursor ||
     $[12] !== cursor_2 ||
-    $[13] !== io ||
-    $[14] !== He ||
+    $[13] !== focusIndex ||
+    $[14] !== isEnabled ||
     $[15] !== onCancel ||
     $[16] !== onSave ||
     $[17] !== onTurnOff ||
     $[18] !== pm ||
-    $[19] !== Dt ||
+    $[19] !== reloadToValue ||
     $[20] !== setCursor ||
     $[21] !== setCursor_2 ||
     $[22] !== setValue_2 ||
     $[23] !== setValue ||
-    $[24] !== At
+    $[24] !== thresholdValue
   ) {
-    Fn = EARLY_RETURN_SENTINEL;
+    earlyReturnElement = EARLY_RETURN_SENTINEL;
     ur: {
-      Cn = parseAmountInput(At);
-      mn = parseAmountInput(Dt);
-      Wo = !Cn.ok
-        ? Cn.error
-        : !mn.ok
-          ? mn.error
-          : mn.cents <= Cn.cents
+      thresholdInput = parseAmountInput(thresholdValue);
+      reloadToInput = parseAmountInput(reloadToValue);
+      thresholdError = !thresholdInput.ok
+        ? thresholdInput.error
+        : !reloadToInput.ok
+          ? reloadToInput.error
+          : reloadToInput.cents <= thresholdInput.cents
             ? "Reload-to must be above threshold"
-            : currency === "USD" && mn.cents - Cn.cents < CREDIT_AMOUNT_STEP_CENTS
+            : currency === "USD" && reloadToInput.cents - thresholdInput.cents < CREDIT_AMOUNT_STEP_CENTS
               ? `Reload must be at least ${formatCurrency(CREDIT_AMOUNT_STEP_CENTS, currency, "whole")} above threshold`
               : "";
-      let $n = !Wo;
-      let error = !Cn.ok && (At.trim() !== "" || io !== 0) ? Cn.error : "";
-      let error_2 = !mn.ok && (Dt.trim() !== "" || io === 2) ? mn.error : "";
-      let Dn = function Dn() {
-        let cn = ao[co];
-        if (cn === "save") {
-          if (!Cn.ok || !mn.ok || !$n) {
+      let isValidReload = !thresholdError;
+      let error =
+        !thresholdInput.ok && (thresholdValue.trim() !== "" || focusIndex !== 0) ? thresholdInput.error : "";
+      let error_2 =
+        !reloadToInput.ok && (reloadToValue.trim() !== "" || focusIndex === 2) ? reloadToInput.error : "";
+      let handleAction = function handleActionSelection() {
+        let actionId = actionChoices[selectedActionIndex];
+        if (actionId === "save") {
+          if (!thresholdInput.ok || !reloadToInput.ok || !isValidReload) {
             return;
           }
-          Bo(true);
+          setIsConfirming(true);
           return;
-        } else if (cn === "off") onTurnOff();
+        } else if (actionId === "off") onTurnOff();
         else onCancel();
       };
-      let wn;
+      let goToPreviousSection;
       if ($[42] === MEMO_CACHE_SENTINEL) {
-        wn = () => so(decrementOrZero);
-        $[42] = wn;
-      } else wn = $[42];
-      let mr = wn;
-      let Kn;
+        goToPreviousSection = () => setFocusIndex(decrementOrZero);
+        $[42] = goToPreviousSection;
+      } else goToPreviousSection = $[42];
+      let previousSectionCallback = goToPreviousSection;
+      let goToNextSection;
       if ($[43] === MEMO_CACHE_SENTINEL) {
-        Kn = () => so(incrementCappedAtTwo);
-        $[43] = Kn;
-      } else Kn = $[43];
-      let Wn = Kn;
-      let Fr;
-      if ($[44] !== Dn || $[45] !== ao.length || $[46] !== io) {
-        Fr = function dr(event) {
+        goToNextSection = () => setFocusIndex(incrementCappedAtTwo);
+        $[43] = goToNextSection;
+      } else goToNextSection = $[43];
+      let nextSectionCallback = goToNextSection;
+      let handleKeyDown;
+      if ($[44] !== handleAction || $[45] !== actionChoices.length || $[46] !== focusIndex) {
+        handleKeyDown = function handleKeyDownImpl(event) {
           if (event.key === "tab") {
             event.preventDefault();
-            if (event.shift) mr();
-            else Wn();
+            if (event.shift) previousSectionCallback();
+            else nextSectionCallback();
             return;
           }
-          if (io !== 2) {
+          if (focusIndex !== 2) {
             return;
           }
           if (event.key === "up") {
             event.preventDefault();
-            mr();
+            previousSectionCallback();
           } else if (event.key === "down") event.preventDefault();
           else if (event.key === "left") {
             event.preventDefault();
-            bo(decrementClampedLower);
+            setSelectedActionIndex(decrementClampedLower);
           } else if (event.key === "right") {
             event.preventDefault();
-            bo((Un) => Math.min(ao.length - 1, Un + 1));
+            setSelectedActionIndex((nextActionIndex) =>
+              Math.min(actionChoices.length - 1, nextActionIndex + 1),
+            );
           } else if (event.key === "return") {
             event.preventDefault();
-            Dn();
+            handleAction();
           }
         };
-        $[44] = Dn;
-        $[45] = ao.length;
-        $[46] = io;
-        $[47] = Fr;
-      } else Fr = $[47];
-      let dr = Fr;
-      let save = He ? "Agree and save" : "Agree and turn on";
-      let pr;
+        $[44] = handleAction;
+        $[45] = actionChoices.length;
+        $[46] = focusIndex;
+        $[47] = handleKeyDown;
+      } else handleKeyDown = $[47];
+      let keyDownHandler = handleKeyDown;
+      let save = isEnabled ? "Agree and save" : "Agree and turn on";
+      let actionLabelMap_2;
       if ($[48] !== save) {
-        pr = {
+        actionLabelMap_2 = {
           save,
           off: "Turn off",
           cancel: "Cancel",
         };
         $[48] = save;
-        $[49] = pr;
-      } else pr = $[49];
-      Io = pr;
-      if (Ao && Cn.ok && mn.ok) {
+        $[49] = actionLabelMap_2;
+      } else actionLabelMap_2 = $[49];
+      actionLabelMap = actionLabelMap_2;
+      if (isConfirming && thresholdInput.ok && reloadToInput.ok) {
         let onBack;
         if ($[50] === MEMO_CACHE_SENTINEL) {
-          onBack = () => Bo(false);
+          onBack = () => setIsConfirming(false);
           $[50] = onBack;
         } else onBack = $[50];
-        Fn = jsxProd_default(ConfirmQuestion, {
+        earlyReturnElement = jsxProd_default(ConfirmQuestion, {
           question: "Auto-reload will top your balance up to",
-          amountCents: mn.cents,
+          amountCents: reloadToInput.cents,
           currency,
-          onConfirm: () => onSave(Cn.cents, mn.cents),
+          onConfirm: () => onSave(thresholdInput.cents, reloadToInput.cents),
           onBack,
         });
         break ur;
       }
-      Ho = Dialog;
+      dialogComponent = Dialog;
       title = "Auto-reload";
       onCancel_2 = onCancel;
       color = "suggestion";
-      Ro = FocusColumn;
+      contentColumnComponent = FocusColumn;
       gap = 1;
-      onKeyDown = dr;
-      let Qn;
-      if ($[51] !== He) {
-        Qn =
-          He &&
+      onKeyDown = keyDownHandler;
+      let currentStatusElement;
+      if ($[51] !== isEnabled) {
+        currentStatusElement =
+          isEnabled &&
           jsxProd_default(Text, {
             color: "success",
             children: " \xB7 Currently on",
           });
-        $[51] = He;
-        $[52] = Qn;
-      } else Qn = $[52];
-      if ($[53] !== Qn) {
-        hn = jsxProd_default_2(Text, {
-          children: ["Automatically buy more usage credits when your balance is low.", Qn],
+        $[51] = isEnabled;
+        $[52] = currentStatusElement;
+      } else currentStatusElement = $[52];
+      if ($[53] !== currentStatusElement) {
+        descriptionElement = jsxProd_default_2(Text, {
+          children: ["Automatically buy more usage credits when your balance is low.", currentStatusElement],
         });
-        $[53] = Qn;
-        $[54] = hn;
-      } else hn = $[54];
-      let Ir;
+        $[53] = currentStatusElement;
+        $[54] = descriptionElement;
+      } else descriptionElement = $[54];
+      let cardOnFileText;
       if ($[55] !== pm) {
-        Ir = formatCardOnFile(pm);
+        cardOnFileText = formatCardOnFile(pm);
         $[55] = pm;
-        $[56] = Ir;
-      } else Ir = $[56];
-      if ($[57] !== Ir) {
-        Mn = jsxProd_default_2(Text, {
+        $[56] = cardOnFileText;
+      } else cardOnFileText = $[56];
+      if ($[57] !== cardOnFileText) {
+        cardOnFileElement = jsxProd_default_2(Text, {
           dimColor: true,
-          children: ["Card on file: ", Ir],
+          children: ["Card on file: ", cardOnFileText],
         });
-        $[57] = Ir;
-        $[58] = Mn;
-      } else Mn = $[58];
-      let Pr;
+        $[57] = cardOnFileText;
+        $[58] = cardOnFileElement;
+      } else cardOnFileElement = $[58];
+      let thresholdPromptElement;
       if ($[59] === MEMO_CACHE_SENTINEL) {
-        Pr = jsxProd_default(Text, {
+        thresholdPromptElement = jsxProd_default(Text, {
           dimColor: true,
           children: "When usage credit balance falls below:",
         });
-        $[59] = Pr;
-      } else Pr = $[59];
-      const borderColor = error ? "error" : io === 0 ? "suggestion" : "inactive";
+        $[59] = thresholdPromptElement;
+      } else thresholdPromptElement = $[59];
+      const borderColor = error ? "error" : focusIndex === 0 ? "suggestion" : "inactive";
       let children;
       if ($[60] !== currency) {
         children = getCurrencySymbol(currency);
         $[60] = currency;
         $[61] = children;
       } else children = $[61];
-      let Ur;
+      let thresholdCurrencyElement;
       if ($[62] !== children) {
-        Ur = jsxProd_default(Text, {
+        thresholdCurrencyElement = jsxProd_default(Text, {
           children,
         });
         $[62] = children;
-        $[63] = Ur;
-      } else Ur = $[63];
+        $[63] = thresholdCurrencyElement;
+      } else thresholdCurrencyElement = $[63];
       let onSubmit;
       let onHistoryDown;
       if ($[64] === MEMO_CACHE_SENTINEL) {
-        onSubmit = () => so(1);
-        onHistoryDown = () => so(1);
+        onSubmit = () => setFocusIndex(1);
+        onHistoryDown = () => setFocusIndex(1);
         $[64] = onSubmit;
         $[65] = onHistoryDown;
       } else {
         onSubmit = $[64];
         onHistoryDown = $[65];
       }
-      const focus = io === 0;
-      const showCursor = io === 0;
-      let fr;
+      const focus = focusIndex === 0;
+      const showCursor = focusIndex === 0;
+      let thresholdTextInputElement;
       if (
         $[66] !== columns ||
         $[67] !== cursor ||
@@ -1322,10 +1388,10 @@ function AutoReloadStep(props) {
         $[69] !== setValue ||
         $[70] !== focus ||
         $[71] !== showCursor ||
-        $[72] !== At
+        $[72] !== thresholdValue
       ) {
-        fr = jsxProd_default(TextInput, {
-          value: At,
+        thresholdTextInputElement = jsxProd_default(TextInput, {
+          value: thresholdValue,
           onChange: setValue,
           onSubmit,
           onHistoryDown,
@@ -1342,27 +1408,31 @@ function AutoReloadStep(props) {
         $[69] = setValue;
         $[70] = focus;
         $[71] = showCursor;
-        $[72] = At;
-        $[73] = fr;
-      } else fr = $[73];
-      let $r;
-      if ($[74] !== borderColor || $[75] !== Ur || $[76] !== fr) {
-        $r = jsxProd_default_2(Box, {
+        $[72] = thresholdValue;
+        $[73] = thresholdTextInputElement;
+      } else thresholdTextInputElement = $[73];
+      let thresholdInputBox;
+      if (
+        $[74] !== borderColor ||
+        $[75] !== thresholdCurrencyElement ||
+        $[76] !== thresholdTextInputElement
+      ) {
+        thresholdInputBox = jsxProd_default_2(Box, {
           borderStyle: "single",
           borderColor,
           paddingX: 1,
-          children: [Ur, fr],
+          children: [thresholdCurrencyElement, thresholdTextInputElement],
         });
         $[74] = borderColor;
-        $[75] = Ur;
-        $[76] = fr;
-        $[77] = $r;
-      } else $r = $[77];
-      Xo = jsxProd_default_2(Box, {
+        $[75] = thresholdCurrencyElement;
+        $[76] = thresholdTextInputElement;
+        $[77] = thresholdInputBox;
+      } else thresholdInputBox = $[77];
+      thresholdSectionElement = jsxProd_default_2(Box, {
         flexDirection: "column",
         children: [
-          Pr,
-          $r,
+          thresholdPromptElement,
+          thresholdInputBox,
           error &&
             jsxProd_default(Text, {
               color: "error",
@@ -1370,36 +1440,36 @@ function AutoReloadStep(props) {
             }),
         ],
       });
-      let Yr;
+      let reloadPromptElement;
       if ($[78] === MEMO_CACHE_SENTINEL) {
-        Yr = jsxProd_default(Text, {
+        reloadPromptElement = jsxProd_default(Text, {
           dimColor: true,
           children: "Reload balance to:",
         });
-        $[78] = Yr;
-      } else Yr = $[78];
-      const borderColor_2 = error_2 ? "error" : io === 1 ? "suggestion" : "inactive";
+        $[78] = reloadPromptElement;
+      } else reloadPromptElement = $[78];
+      const borderColor_2 = error_2 ? "error" : focusIndex === 1 ? "suggestion" : "inactive";
       let children_2;
       if ($[79] !== currency) {
         children_2 = getCurrencySymbol(currency);
         $[79] = currency;
         $[80] = children_2;
       } else children_2 = $[80];
-      let ms;
+      let reloadCurrencyElement;
       if ($[81] !== children_2) {
-        ms = jsxProd_default(Text, {
+        reloadCurrencyElement = jsxProd_default(Text, {
           children: children_2,
         });
         $[81] = children_2;
-        $[82] = ms;
-      } else ms = $[82];
+        $[82] = reloadCurrencyElement;
+      } else reloadCurrencyElement = $[82];
       let onSubmit_2;
       let onHistoryUp;
       let onHistoryDown_2;
       if ($[83] === MEMO_CACHE_SENTINEL) {
-        onSubmit_2 = () => so(2);
-        onHistoryUp = () => so(0);
-        onHistoryDown_2 = () => so(2);
+        onSubmit_2 = () => setFocusIndex(2);
+        onHistoryUp = () => setFocusIndex(0);
+        onHistoryDown_2 = () => setFocusIndex(2);
         $[83] = onSubmit_2;
         $[84] = onHistoryUp;
         $[85] = onHistoryDown_2;
@@ -1408,20 +1478,20 @@ function AutoReloadStep(props) {
         onHistoryUp = $[84];
         onHistoryDown_2 = $[85];
       }
-      const focus_2 = io === 1;
-      const showCursor_2 = io === 1;
-      let oi;
+      const focus_2 = focusIndex === 1;
+      const showCursor_2 = focusIndex === 1;
+      let reloadTextInputElement;
       if (
         $[86] !== columns ||
         $[87] !== cursor_2 ||
-        $[88] !== Dt ||
+        $[88] !== reloadToValue ||
         $[89] !== setCursor_2 ||
         $[90] !== setValue_2 ||
         $[91] !== focus_2 ||
         $[92] !== showCursor_2
       ) {
-        oi = jsxProd_default(TextInput, {
-          value: Dt,
+        reloadTextInputElement = jsxProd_default(TextInput, {
+          value: reloadToValue,
           onChange: setValue_2,
           onSubmit: onSubmit_2,
           onHistoryUp,
@@ -1435,31 +1505,31 @@ function AutoReloadStep(props) {
         });
         $[86] = columns;
         $[87] = cursor_2;
-        $[88] = Dt;
+        $[88] = reloadToValue;
         $[89] = setCursor_2;
         $[90] = setValue_2;
         $[91] = focus_2;
         $[92] = showCursor_2;
-        $[93] = oi;
-      } else oi = $[93];
-      let Oi;
-      if ($[94] !== borderColor_2 || $[95] !== ms || $[96] !== oi) {
-        Oi = jsxProd_default_2(Box, {
+        $[93] = reloadTextInputElement;
+      } else reloadTextInputElement = $[93];
+      let reloadInputBox;
+      if ($[94] !== borderColor_2 || $[95] !== reloadCurrencyElement || $[96] !== reloadTextInputElement) {
+        reloadInputBox = jsxProd_default_2(Box, {
           borderStyle: "single",
           borderColor: borderColor_2,
           paddingX: 1,
-          children: [ms, oi],
+          children: [reloadCurrencyElement, reloadTextInputElement],
         });
         $[94] = borderColor_2;
-        $[95] = ms;
-        $[96] = oi;
-        $[97] = Oi;
-      } else Oi = $[97];
-      Sn = jsxProd_default_2(Box, {
+        $[95] = reloadCurrencyElement;
+        $[96] = reloadTextInputElement;
+        $[97] = reloadInputBox;
+      } else reloadInputBox = $[97];
+      reloadToSectionElement = jsxProd_default_2(Box, {
         flexDirection: "column",
         children: [
-          Yr,
-          Oi,
+          reloadPromptElement,
+          reloadInputBox,
           error_2 &&
             jsxProd_default(Text, {
               color: "error",
@@ -1467,91 +1537,91 @@ function AutoReloadStep(props) {
             }),
         ],
       });
-      No =
-        Cn.ok &&
-        mn.ok &&
-        $n &&
+      summaryElement =
+        thresholdInput.ok &&
+        reloadToInput.ok &&
+        isValidReload &&
         jsxProd_default_2(Text, {
           color: "success",
           children: [
             "Tops up to ",
-            formatCurrency(mn.cents, currency),
+            formatCurrency(reloadToInput.cents, currency),
             " when your balance falls below",
             " ",
-            formatCurrency(Cn.cents, currency),
+            formatCurrency(thresholdInput.cents, currency),
           ],
         });
     }
-    $[6] = co;
-    $[7] = ao;
+    $[6] = selectedActionIndex;
+    $[7] = actionChoices;
     $[8] = columns;
-    $[9] = Ao;
+    $[9] = isConfirming;
     $[10] = currency;
     $[11] = cursor;
     $[12] = cursor_2;
-    $[13] = io;
-    $[14] = He;
+    $[13] = focusIndex;
+    $[14] = isEnabled;
     $[15] = onCancel;
     $[16] = onSave;
     $[17] = onTurnOff;
     $[18] = pm;
-    $[19] = Dt;
+    $[19] = reloadToValue;
     $[20] = setCursor;
     $[21] = setCursor_2;
     $[22] = setValue_2;
     $[23] = setValue;
-    $[24] = At;
-    $[25] = Ro;
-    $[26] = Ho;
-    $[27] = Io;
-    $[28] = Wo;
-    $[29] = mn;
-    $[30] = Cn;
-    $[31] = No;
+    $[24] = thresholdValue;
+    $[25] = contentColumnComponent;
+    $[26] = dialogComponent;
+    $[27] = actionLabelMap;
+    $[28] = thresholdError;
+    $[29] = reloadToInput;
+    $[30] = thresholdInput;
+    $[31] = summaryElement;
     $[32] = title;
     $[33] = onCancel_2;
     $[34] = color;
-    $[35] = Fn;
+    $[35] = earlyReturnElement;
     $[36] = gap;
     $[37] = onKeyDown;
-    $[38] = hn;
-    $[39] = Mn;
-    $[40] = Xo;
-    $[41] = Sn;
+    $[38] = descriptionElement;
+    $[39] = cardOnFileElement;
+    $[40] = thresholdSectionElement;
+    $[41] = reloadToSectionElement;
   } else {
-    Ro = $[25];
-    Ho = $[26];
-    Io = $[27];
-    Wo = $[28];
-    mn = $[29];
-    Cn = $[30];
-    No = $[31];
+    contentColumnComponent = $[25];
+    dialogComponent = $[26];
+    actionLabelMap = $[27];
+    thresholdError = $[28];
+    reloadToInput = $[29];
+    thresholdInput = $[30];
+    summaryElement = $[31];
     title = $[32];
     onCancel_2 = $[33];
     color = $[34];
-    Fn = $[35];
+    earlyReturnElement = $[35];
     gap = $[36];
     onKeyDown = $[37];
-    hn = $[38];
-    Mn = $[39];
-    Xo = $[40];
-    Sn = $[41];
+    descriptionElement = $[38];
+    cardOnFileElement = $[39];
+    thresholdSectionElement = $[40];
+    reloadToSectionElement = $[41];
   }
-  if (Fn !== EARLY_RETURN_SENTINEL) return Fn;
-  let wn;
+  if (earlyReturnElement !== EARLY_RETURN_SENTINEL) return earlyReturnElement;
+  let consentCardText;
   if ($[98] !== pm) {
-    wn = formatCardOnFile(pm);
+    consentCardText = formatCardOnFile(pm);
     $[98] = pm;
-    $[99] = wn;
-  } else wn = $[99];
-  let Kn;
-  if ($[100] !== wn) {
-    Kn = jsxProd_default_2(Text, {
+    $[99] = consentCardText;
+  } else consentCardText = $[99];
+  let consentElement;
+  if ($[100] !== consentCardText) {
+    consentElement = jsxProd_default_2(Text, {
       dimColor: true,
       children: [
         "By selecting Agree, you authorize Anthropic to automatically charge",
         " ",
-        wn,
+        consentCardText,
         " on a recurring basis whenever your balance reaches the threshold, per the Consumer Terms (",
         CONSUMER_TERMS_URL,
         "). Turn off any time here or at ",
@@ -1559,186 +1629,221 @@ function AutoReloadStep(props) {
         ".",
       ],
     });
-    $[100] = wn;
-    $[101] = Kn;
-  } else Kn = $[101];
-  let Fr;
-  if ($[102] !== co || $[103] !== Io || $[104] !== ao || $[105] !== io) {
-    Fr = ao.map((Hi, Zi) =>
+    $[100] = consentCardText;
+    $[101] = consentElement;
+  } else consentElement = $[101];
+  let actionButtonsRow;
+  if (
+    $[102] !== selectedActionIndex ||
+    $[103] !== actionLabelMap ||
+    $[104] !== actionChoices ||
+    $[105] !== focusIndex
+  ) {
+    actionButtonsRow = actionChoices.map((actionId, actionIndex) =>
       jsxProd_default_2(
         Text,
         {
-          color: io === 2 && co === Zi ? "suggestion" : undefined,
-          children: [io === 2 && co === Zi ? figures_default.pointer : " ", " ", Io[Hi]],
+          color: focusIndex === 2 && selectedActionIndex === actionIndex ? "suggestion" : undefined,
+          children: [
+            focusIndex === 2 && selectedActionIndex === actionIndex ? figures_default.pointer : " ",
+            " ",
+            actionLabelMap[actionId],
+          ],
         },
-        Hi,
+        actionId,
       ),
     );
-    $[102] = co;
-    $[103] = Io;
-    $[104] = ao;
-    $[105] = io;
-    $[106] = Fr;
-  } else Fr = $[106];
-  let pr;
-  if ($[107] !== co || $[108] !== ao || $[109] !== Wo || $[110] !== io || $[111] !== mn || $[112] !== Cn) {
-    pr =
-      Wo &&
-      Cn.ok &&
-      mn.ok &&
-      io === 2 &&
-      ao[co] === "save" &&
+    $[102] = selectedActionIndex;
+    $[103] = actionLabelMap;
+    $[104] = actionChoices;
+    $[105] = focusIndex;
+    $[106] = actionButtonsRow;
+  } else actionButtonsRow = $[106];
+  let actionErrorElement;
+  if (
+    $[107] !== selectedActionIndex ||
+    $[108] !== actionChoices ||
+    $[109] !== thresholdError ||
+    $[110] !== focusIndex ||
+    $[111] !== reloadToInput ||
+    $[112] !== thresholdInput
+  ) {
+    actionErrorElement =
+      thresholdError &&
+      thresholdInput.ok &&
+      reloadToInput.ok &&
+      focusIndex === 2 &&
+      actionChoices[selectedActionIndex] === "save" &&
       jsxProd_default_2(Text, {
         color: "error",
-        children: ["\xB7 ", Wo],
+        children: ["\xB7 ", thresholdError],
       });
-    $[107] = co;
-    $[108] = ao;
-    $[109] = Wo;
-    $[110] = io;
-    $[111] = mn;
-    $[112] = Cn;
-    $[113] = pr;
-  } else pr = $[113];
-  let Qn;
-  if ($[114] !== Fr || $[115] !== pr) {
-    Qn = jsxProd_default_2(Box, {
+    $[107] = selectedActionIndex;
+    $[108] = actionChoices;
+    $[109] = thresholdError;
+    $[110] = focusIndex;
+    $[111] = reloadToInput;
+    $[112] = thresholdInput;
+    $[113] = actionErrorElement;
+  } else actionErrorElement = $[113];
+  let actionsRowBox;
+  if ($[114] !== actionButtonsRow || $[115] !== actionErrorElement) {
+    actionsRowBox = jsxProd_default_2(Box, {
       flexDirection: "row",
       gap: 2,
-      children: [Fr, pr],
+      children: [actionButtonsRow, actionErrorElement],
     });
-    $[114] = Fr;
-    $[115] = pr;
-    $[116] = Qn;
-  } else Qn = $[116];
+    $[114] = actionButtonsRow;
+    $[115] = actionErrorElement;
+    $[116] = actionsRowBox;
+  } else actionsRowBox = $[116];
   let children;
   if (
-    $[117] !== Ro ||
-    $[118] !== No ||
-    $[119] !== Kn ||
-    $[120] !== Qn ||
+    $[117] !== contentColumnComponent ||
+    $[118] !== summaryElement ||
+    $[119] !== consentElement ||
+    $[120] !== actionsRowBox ||
     $[121] !== gap ||
     $[122] !== onKeyDown ||
-    $[123] !== hn ||
-    $[124] !== Mn ||
-    $[125] !== Xo ||
-    $[126] !== Sn
+    $[123] !== descriptionElement ||
+    $[124] !== cardOnFileElement ||
+    $[125] !== thresholdSectionElement ||
+    $[126] !== reloadToSectionElement
   ) {
-    children = jsxProd_default_2(Ro, {
+    children = jsxProd_default_2(contentColumnComponent, {
       gap,
       onKeyDown,
-      children: [hn, Mn, Xo, Sn, No, Kn, Qn],
+      children: [
+        descriptionElement,
+        cardOnFileElement,
+        thresholdSectionElement,
+        reloadToSectionElement,
+        summaryElement,
+        consentElement,
+        actionsRowBox,
+      ],
     });
-    $[117] = Ro;
-    $[118] = No;
-    $[119] = Kn;
-    $[120] = Qn;
+    $[117] = contentColumnComponent;
+    $[118] = summaryElement;
+    $[119] = consentElement;
+    $[120] = actionsRowBox;
     $[121] = gap;
     $[122] = onKeyDown;
-    $[123] = hn;
-    $[124] = Mn;
-    $[125] = Xo;
-    $[126] = Sn;
+    $[123] = descriptionElement;
+    $[124] = cardOnFileElement;
+    $[125] = thresholdSectionElement;
+    $[126] = reloadToSectionElement;
     $[127] = children;
   } else children = $[127];
-  let Pr;
-  if ($[128] !== Ho || $[129] !== title || $[130] !== onCancel_2 || $[131] !== color || $[132] !== children) {
-    Pr = jsxProd_default(Ho, {
+  let dialogElement;
+  if (
+    $[128] !== dialogComponent ||
+    $[129] !== title ||
+    $[130] !== onCancel_2 ||
+    $[131] !== color ||
+    $[132] !== children
+  ) {
+    dialogElement = jsxProd_default(dialogComponent, {
       title,
       onCancel: onCancel_2,
       color,
       children,
     });
-    $[128] = Ho;
+    $[128] = dialogComponent;
     $[129] = title;
     $[130] = onCancel_2;
     $[131] = color;
     $[132] = children;
-    $[133] = Pr;
-  } else Pr = $[133];
-  return Pr;
+    $[133] = dialogElement;
+  } else dialogElement = $[133];
+  return dialogElement;
 }
 //@ chunk-18hwfzwa.js:1175272-1177637 placement
 function AmountEntry(props) {
-  let $ = w(52);
+  let $ = useMemoCache(52);
   let { title, subtitle, initial, minCents, currency, preview, footer, onSubmit, onCancel } = props;
   let { columns } = useTerminalSize();
-  let { value: Xe, setValue, cursor, setCursor } = useAmountInputBuffer(initial);
-  let [It, Ot] = y(false);
-  let Dt;
-  if ($[0] !== Xe) {
-    Dt = parseAmountInput(Xe);
-    $[0] = Xe;
-    $[1] = Dt;
-  } else Dt = $[1];
-  let Lt = Dt;
-  let oo = Lt.ok && minCents !== undefined && Lt.cents < minCents;
-  let Xt;
+  let { value: amountText, setValue, cursor, setCursor } = useAmountInputBuffer(initial);
+  let [hasEdited, setHasEdited] = useState(false);
+  let parsedAmount;
+  if ($[0] !== amountText) {
+    parsedAmount = parseAmountInput(amountText);
+    $[0] = amountText;
+    $[1] = parsedAmount;
+  } else parsedAmount = $[1];
+  let amountParse = parsedAmount;
+  let isBelowMinimum = amountParse.ok && minCents !== undefined && amountParse.cents < minCents;
+  let amountError;
   if (
-    $[2] !== It ||
-    $[3] !== oo ||
+    $[2] !== hasEdited ||
+    $[3] !== isBelowMinimum ||
     $[4] !== currency ||
     $[5] !== minCents ||
-    $[6] !== Lt.error ||
-    $[7] !== Lt.ok ||
-    $[8] !== Xe
+    $[6] !== amountParse.error ||
+    $[7] !== amountParse.ok ||
+    $[8] !== amountText
   ) {
-    Xt =
-      !Lt.ok && (Xe.trim() !== "" || It)
-        ? Lt.error
-        : oo && minCents !== undefined
+    amountError =
+      !amountParse.ok && (amountText.trim() !== "" || hasEdited)
+        ? amountParse.error
+        : isBelowMinimum && minCents !== undefined
           ? `Minimum is ${formatCurrency(minCents, currency, "whole")}`
           : "";
-    $[2] = It;
-    $[3] = oo;
+    $[2] = hasEdited;
+    $[3] = isBelowMinimum;
     $[4] = currency;
     $[5] = minCents;
-    $[6] = Lt.error;
-    $[7] = Lt.ok;
-    $[8] = Xe;
-    $[9] = Xt;
-  } else Xt = $[9];
-  let io = Xt;
-  let so;
-  if ($[10] !== oo || $[11] !== onSubmit || $[12] !== Lt.cents || $[13] !== Lt.ok) {
-    so = function po() {
-      if (!Lt.ok || oo) {
-        Ot(true);
+    $[6] = amountParse.error;
+    $[7] = amountParse.ok;
+    $[8] = amountText;
+    $[9] = amountError;
+  } else amountError = $[9];
+  let errorMessage = amountError;
+  let handleSubmit;
+  if (
+    $[10] !== isBelowMinimum ||
+    $[11] !== onSubmit ||
+    $[12] !== amountParse.cents ||
+    $[13] !== amountParse.ok
+  ) {
+    handleSubmit = function submitAmount() {
+      if (!amountParse.ok || isBelowMinimum) {
+        setHasEdited(true);
         return;
       }
-      onSubmit(Lt.cents);
+      onSubmit(amountParse.cents);
     };
-    $[10] = oo;
+    $[10] = isBelowMinimum;
     $[11] = onSubmit;
-    $[12] = Lt.cents;
-    $[13] = Lt.ok;
-    $[14] = so;
-  } else so = $[14];
-  let onSubmit_2 = so;
-  let ao;
+    $[12] = amountParse.cents;
+    $[13] = amountParse.ok;
+    $[14] = handleSubmit;
+  } else handleSubmit = $[14];
+  let onSubmit_2 = handleSubmit;
+  let subtitleElement;
   if ($[15] !== subtitle) {
-    ao = jsxProd_default(Text, {
+    subtitleElement = jsxProd_default(Text, {
       dimColor: true,
       children: subtitle,
     });
     $[15] = subtitle;
-    $[16] = ao;
-  } else ao = $[16];
+    $[16] = subtitleElement;
+  } else subtitleElement = $[16];
   let children;
   if ($[17] !== currency) {
     children = getCurrencySymbol(currency);
     $[17] = currency;
     $[18] = children;
   } else children = $[18];
-  let bo;
+  let currencySymbolElement;
   if ($[19] !== children) {
-    bo = jsxProd_default(Text, {
+    currencySymbolElement = jsxProd_default(Text, {
       children,
     });
     $[19] = children;
-    $[20] = bo;
-  } else bo = $[20];
-  let Ao;
+    $[20] = currencySymbolElement;
+  } else currencySymbolElement = $[20];
+  let amountTextInputElement;
   if (
     $[21] !== columns ||
     $[22] !== cursor ||
@@ -1746,10 +1851,10 @@ function AmountEntry(props) {
     $[24] !== setCursor ||
     $[25] !== setValue ||
     $[26] !== onSubmit_2 ||
-    $[27] !== Xe
+    $[27] !== amountText
   ) {
-    Ao = jsxProd_default(TextInput, {
-      value: Xe,
+    amountTextInputElement = jsxProd_default(TextInput, {
+      value: amountText,
       onChange: setValue,
       onSubmit: onSubmit_2,
       onExit: onCancel,
@@ -1765,75 +1870,89 @@ function AmountEntry(props) {
     $[24] = setCursor;
     $[25] = setValue;
     $[26] = onSubmit_2;
-    $[27] = Xe;
-    $[28] = Ao;
-  } else Ao = $[28];
-  let Bo;
-  if ($[29] !== bo || $[30] !== Ao) {
-    Bo = jsxProd_default_2(Box, {
+    $[27] = amountText;
+    $[28] = amountTextInputElement;
+  } else amountTextInputElement = $[28];
+  let amountRowBox;
+  if ($[29] !== currencySymbolElement || $[30] !== amountTextInputElement) {
+    amountRowBox = jsxProd_default_2(Box, {
       flexDirection: "row",
       gap: 1,
-      children: [bo, Ao],
+      children: [currencySymbolElement, amountTextInputElement],
     });
-    $[29] = bo;
-    $[30] = Ao;
-    $[31] = Bo;
-  } else Bo = $[31];
-  let Ro;
+    $[29] = currencySymbolElement;
+    $[30] = amountTextInputElement;
+    $[31] = amountRowBox;
+  } else amountRowBox = $[31];
+  let footerElement;
   if ($[32] !== footer) {
-    Ro =
+    footerElement =
       footer &&
       jsxProd_default(Text, {
         dimColor: true,
         children: footer,
       });
     $[32] = footer;
-    $[33] = Ro;
-  } else Ro = $[33];
-  let Ho;
-  if ($[34] !== oo || $[35] !== currency || $[36] !== Lt.cents || $[37] !== Lt.ok || $[38] !== preview) {
-    Ho =
-      Lt.ok &&
-      !oo &&
+    $[33] = footerElement;
+  } else footerElement = $[33];
+  let previewElement;
+  if (
+    $[34] !== isBelowMinimum ||
+    $[35] !== currency ||
+    $[36] !== amountParse.cents ||
+    $[37] !== amountParse.ok ||
+    $[38] !== preview
+  ) {
+    previewElement =
+      amountParse.ok &&
+      !isBelowMinimum &&
       jsxProd_default(Text, {
         color: "success",
-        children: preview?.(Lt.cents) ?? `Buys ${formatCurrency(Lt.cents, currency)} of usage credits`,
+        children:
+          preview?.(amountParse.cents) ??
+          `Buys ${formatCurrency(amountParse.cents, currency)} of usage credits`,
       });
-    $[34] = oo;
+    $[34] = isBelowMinimum;
     $[35] = currency;
-    $[36] = Lt.cents;
-    $[37] = Lt.ok;
+    $[36] = amountParse.cents;
+    $[37] = amountParse.ok;
     $[38] = preview;
-    $[39] = Ho;
-  } else Ho = $[39];
-  let Io;
-  if ($[40] !== io) {
-    Io =
-      io &&
+    $[39] = previewElement;
+  } else previewElement = $[39];
+  let errorElement;
+  if ($[40] !== errorMessage) {
+    errorElement =
+      errorMessage &&
       jsxProd_default(Text, {
         color: "error",
-        children: io,
+        children: errorMessage,
       });
-    $[40] = io;
-    $[41] = Io;
-  } else Io = $[41];
+    $[40] = errorMessage;
+    $[41] = errorElement;
+  } else errorElement = $[41];
   let children_2;
-  if ($[42] !== Ho || $[43] !== Io || $[44] !== ao || $[45] !== Bo || $[46] !== Ro) {
+  if (
+    $[42] !== previewElement ||
+    $[43] !== errorElement ||
+    $[44] !== subtitleElement ||
+    $[45] !== amountRowBox ||
+    $[46] !== footerElement
+  ) {
     children_2 = jsxProd_default_2(Box, {
       flexDirection: "column",
       gap: 1,
-      children: [ao, Bo, Ro, Ho, Io],
+      children: [subtitleElement, amountRowBox, footerElement, previewElement, errorElement],
     });
-    $[42] = Ho;
-    $[43] = Io;
-    $[44] = ao;
-    $[45] = Bo;
-    $[46] = Ro;
+    $[42] = previewElement;
+    $[43] = errorElement;
+    $[44] = subtitleElement;
+    $[45] = amountRowBox;
+    $[46] = footerElement;
     $[47] = children_2;
   } else children_2 = $[47];
-  let mn;
+  let dialogElement;
   if ($[48] !== onCancel || $[49] !== children_2 || $[50] !== title) {
-    mn = jsxProd_default(Dialog, {
+    dialogElement = jsxProd_default(Dialog, {
       title,
       onCancel,
       color: "suggestion",
@@ -1842,127 +1961,133 @@ function AmountEntry(props) {
     $[48] = onCancel;
     $[49] = children_2;
     $[50] = title;
-    $[51] = mn;
-  } else mn = $[51];
-  return mn;
+    $[51] = dialogElement;
+  } else dialogElement = $[51];
+  return dialogElement;
 }
 //@ chunk-18hwfzwa.js:1177637-1178928 placement
 function PurchasePoller(props) {
-  let $ = w(11);
+  let $ = useMemoCache(11);
   let { purchaseId, onSuccess, onError } = props;
   let { credentials } = useTheme_2();
-  let ke = R(0);
-  let Re = Oo(onSuccess);
-  let Be = Oo(onError);
+  let pollCountRef = useRef(0);
+  let onSuccessRef = useEffectEvent(onSuccess);
+  let onErrorRef = useEffectEvent(onError);
   let clock = useClock();
-  let ze;
-  if ($[0] !== clock || $[1] !== credentials || $[2] !== purchaseId || $[3] !== Be || $[4] !== Re) {
-    ze = () => {
-      let Xe = false;
-      let rt;
-      let At = function At(kt) {
+  let pollEffect;
+  if (
+    $[0] !== clock ||
+    $[1] !== credentials ||
+    $[2] !== purchaseId ||
+    $[3] !== onErrorRef ||
+    $[4] !== onSuccessRef
+  ) {
+    pollEffect = () => {
+      let isStopped = false;
+      let timerId;
+      let logPollStatus = function logPollStatus(status) {
         logEvent("tengu_extra_usage_inline_dialog_buy_result", {
-          status: fromEnum(kt),
+          status: fromEnum(status),
         });
       };
-      async function Et() {
-        if (Xe) {
+      async function pollOnce() {
+        if (isStopped) {
           return;
         }
-        ke.current = ke.current + 1;
-        if (ke.current > CREDIT_MAX_POLL_COUNT) {
-          Xe = true;
-          Be(`Purchase timed out \u2014 check ${USAGE_SETTINGS_LINK}`);
+        pollCountRef.current = pollCountRef.current + 1;
+        if (pollCountRef.current > CREDIT_MAX_POLL_COUNT) {
+          isStopped = true;
+          onErrorRef(`Purchase timed out \u2014 check ${USAGE_SETTINGS_LINK}`);
           return;
         }
         try {
           let prepaidPurchaseStatus = await fetchPrepaidPurchaseStatus(purchaseId, credentials);
-          if (Xe) {
+          if (isStopped) {
             return;
           }
           if (prepaidPurchaseStatus.status === "paid") {
-            Xe = true;
-            At("success");
-            Re();
+            isStopped = true;
+            logPollStatus("success");
+            onSuccessRef();
           } else if (prepaidPurchaseStatus.status === "failed") {
-            Xe = true;
-            At("failed");
-            Be("Payment failed");
+            isStopped = true;
+            logPollStatus("failed");
+            onErrorRef("Payment failed");
           } else if (prepaidPurchaseStatus.status === "action_needed") {
-            Xe = true;
-            At("3ds_fallback");
-            Be(
+            isStopped = true;
+            logPollStatus("3ds_fallback");
+            onErrorRef(
               `Your card requires additional verification \u2014 this purchase was not completed. Try again at ${USAGE_SETTINGS_LINK}`,
             );
-          } else rt = clock.setTimeout(Et, CREDIT_POLL_INTERVAL_MS);
+          } else timerId = clock.setTimeout(pollOnce, CREDIT_POLL_INTERVAL_MS);
         } catch (error) {
-          let Dt = error;
-          if (Xe) {
+          let caughtError = error;
+          if (isStopped) {
             return;
           }
-          Xe = true;
-          if (isExpectedApiError(Dt))
-            logForDebugging(`Purchase status poll failed: ${errorMessage(Dt)}`, {
+          isStopped = true;
+          if (isExpectedApiError(caughtError))
+            logForDebugging(`Purchase status poll failed: ${errorMessage(caughtError)}`, {
               level: "error",
             });
-          else logError(Dt);
-          Be("Failed to check purchase status");
+          else logError(caughtError);
+          onErrorRef("Failed to check purchase status");
         }
       }
-      Et();
+      pollOnce();
       return () => {
-        Xe = true;
-        rt?.();
+        isStopped = true;
+        timerId?.();
       };
     };
     $[0] = clock;
     $[1] = credentials;
     $[2] = purchaseId;
-    $[3] = Be;
-    $[4] = Re;
-    $[5] = ze;
-  } else ze = $[5];
-  let It;
+    $[3] = onErrorRef;
+    $[4] = onSuccessRef;
+    $[5] = pollEffect;
+  } else pollEffect = $[5];
+  let effectDeps;
   if ($[6] !== clock || $[7] !== credentials || $[8] !== purchaseId) {
-    It = [clock, purchaseId, credentials];
+    effectDeps = [clock, purchaseId, credentials];
     $[6] = clock;
     $[7] = credentials;
     $[8] = purchaseId;
-    $[9] = It;
-  } else It = $[9];
-  P(ze, It);
-  let Lt;
+    $[9] = effectDeps;
+  } else effectDeps = $[9];
+  useEffect(pollEffect, effectDeps);
+  let loadingElement;
   if ($[10] === MEMO_CACHE_SENTINEL) {
-    Lt = jsxProd_default(ClawdLoadingRow, {
+    loadingElement = jsxProd_default(ClawdLoadingRow, {
       message: "Confirming payment\u2026 (may take a few seconds)",
     });
-    $[10] = Lt;
-  } else Lt = $[10];
-  return Lt;
+    $[10] = loadingElement;
+  } else loadingElement = $[10];
+  return loadingElement;
 }
 //@ chunk-18hwfzwa.js:1178928-1179193 placement
 /**
  * 渲染带动画 Clawd 的加载行与提示信息。
  */
 function ClawdLoadingRow(props) {
-  let $ = w(3);
+  let $ = useMemoCache(3);
   let { message } = props;
-  let L;
+  let clawdElement;
   if ($[0] === MEMO_CACHE_SENTINEL) {
-    L = jsxProd_default(AnimatedClawd, {
+    clawdElement = jsxProd_default(AnimatedClawd, {
       autoplay: true,
     });
-    $[0] = L;
-  } else L = $[0];
-  let ee;
+    $[0] = clawdElement;
+  } else clawdElement = $[0];
+  let rowBox;
   if ($[1] !== message) {
-    ee = jsxProd_default_2(Box, {
+    rowBox = jsxProd_default_2(Box, {
       flexDirection: "row",
       gap: 2,
       alignItems: "center",
       paddingTop: 2,
       children: [
-        L,
+        clawdElement,
         jsxProd_default(Text, {
           dimColor: true,
           children: message,
@@ -1970,30 +2095,30 @@ function ClawdLoadingRow(props) {
       ],
     });
     $[1] = message;
-    $[2] = ee;
-  } else ee = $[2];
-  return ee;
+    $[2] = rowBox;
+  } else rowBox = $[2];
+  return rowBox;
 }
 //@ chunk-18hwfzwa.js:1179193-1179628 placement
 /**
  * 购买成功时显示 Clawd 庆祝动画与成功文案，动画结束后回调。
  */
 function ClawdSuccessRow(props) {
-  let $ = w(7);
+  let $ = useMemoCache(7);
   let { message, onDone } = props;
-  let ee;
+  let clawdElement;
   if ($[0] !== onDone) {
-    ee = jsxProd_default(AnimatedClawd, {
+    clawdElement = jsxProd_default(AnimatedClawd, {
       sequence: "celebrate",
       reserveCrouchRow: true,
       onComplete: onDone,
     });
     $[0] = onDone;
-    $[1] = ee;
-  } else ee = $[1];
-  let ke;
+    $[1] = clawdElement;
+  } else clawdElement = $[1];
+  let messageBox;
   if ($[2] !== message) {
-    ke = jsxProd_default(Box, {
+    messageBox = jsxProd_default(Box, {
       marginTop: 1,
       children: jsxProd_default(Text, {
         color: "success",
@@ -2001,88 +2126,88 @@ function ClawdSuccessRow(props) {
       }),
     });
     $[2] = message;
-    $[3] = ke;
-  } else ke = $[3];
-  let Re;
-  if ($[4] !== ee || $[5] !== ke) {
-    Re = jsxProd_default_2(Box, {
+    $[3] = messageBox;
+  } else messageBox = $[3];
+  let rowBox;
+  if ($[4] !== clawdElement || $[5] !== messageBox) {
+    rowBox = jsxProd_default_2(Box, {
       flexDirection: "row",
       gap: 2,
       alignItems: "center",
       paddingTop: 1,
-      children: [ee, ke],
+      children: [clawdElement, messageBox],
     });
-    $[4] = ee;
-    $[5] = ke;
-    $[6] = Re;
-  } else Re = $[6];
-  return Re;
+    $[4] = clawdElement;
+    $[5] = messageBox;
+    $[6] = rowBox;
+  } else rowBox = $[6];
+  return rowBox;
 }
 //@ chunk-18hwfzwa.js:1179628-1180592 placement
 function CelebrationMessage(props) {
-  let $ = w(15);
+  let $ = useMemoCache(15);
   let { message, work, onDone, failure } = props;
-  let ke = R(null);
-  let Re = R(false);
-  let Be = R(false);
-  let We;
+  let resultRef = useRef(null);
+  let animationDoneRef = useRef(false);
+  let isUnmountedRef = useRef(false);
+  let handleResult;
   if ($[0] !== failure || $[1] !== onDone) {
-    We = (ze) => {
-      let Xe = ze ?? {
+    handleResult = (resultArg) => {
+      let result = resultArg ?? {
         value: failure,
       };
-      ke.current = Xe;
-      if (Re.current && !Be.current) onDone(Xe.value);
+      resultRef.current = result;
+      if (animationDoneRef.current && !isUnmountedRef.current) onDone(result.value);
     };
     $[0] = failure;
     $[1] = onDone;
-    $[2] = We;
-  } else We = $[2];
-  let rt = Oo(We);
-  let kt;
-  if ($[3] !== rt || $[4] !== work) {
-    kt = () => {
+    $[2] = handleResult;
+  } else handleResult = $[2];
+  let onResultReady = useEffectEvent(handleResult);
+  let workEffect;
+  if ($[3] !== onResultReady || $[4] !== work) {
+    workEffect = () => {
       work
         .then((value) =>
-          rt({
+          onResultReady({
             value,
           }),
         )
         .catch((error) => {
           logError(error);
-          rt(null);
+          onResultReady(null);
         });
       return () => {
-        Be.current = true;
+        isUnmountedRef.current = true;
       };
     };
-    $[3] = rt;
+    $[3] = onResultReady;
     $[4] = work;
-    $[5] = kt;
-  } else kt = $[5];
-  let Ot;
+    $[5] = workEffect;
+  } else workEffect = $[5];
+  let effectDeps;
   if ($[6] !== work) {
-    Ot = [work];
+    effectDeps = [work];
     $[6] = work;
-    $[7] = Ot;
-  } else Ot = $[7];
-  P(kt, Ot);
-  let Et;
+    $[7] = effectDeps;
+  } else effectDeps = $[7];
+  useEffect(workEffect, effectDeps);
+  let celebrationElement;
   if ($[8] !== onDone) {
-    Et = jsxProd_default(AnimatedClawd, {
+    celebrationElement = jsxProd_default(AnimatedClawd, {
       sequence: "celebrate",
       reserveCrouchRow: true,
       onComplete: () => {
-        Re.current = true;
-        if (ke.current && !Be.current) onDone(ke.current.value);
+        animationDoneRef.current = true;
+        if (resultRef.current && !isUnmountedRef.current) onDone(resultRef.current.value);
       },
     });
     $[8] = onDone;
-    $[9] = Et;
-  } else Et = $[9];
-  let Dt;
+    $[9] = celebrationElement;
+  } else celebrationElement = $[9];
+  let messageBox;
   if ($[10] !== message) {
-    Dt = jsxProd_default(Box, {
+    messageBox = jsxProd_default(Box, {
       marginTop: 1,
       children: jsxProd_default(Text, {
         dimColor: true,
@@ -2090,87 +2215,87 @@ function CelebrationMessage(props) {
       }),
     });
     $[10] = message;
-    $[11] = Dt;
-  } else Dt = $[11];
-  let Lt;
-  if ($[12] !== Et || $[13] !== Dt) {
-    Lt = jsxProd_default_2(Box, {
+    $[11] = messageBox;
+  } else messageBox = $[11];
+  let rowBox;
+  if ($[12] !== celebrationElement || $[13] !== messageBox) {
+    rowBox = jsxProd_default_2(Box, {
       flexDirection: "row",
       gap: 2,
       alignItems: "center",
       paddingTop: 1,
-      children: [Et, Dt],
+      children: [celebrationElement, messageBox],
     });
-    $[12] = Et;
-    $[13] = Dt;
-    $[14] = Lt;
-  } else Lt = $[14];
-  return Lt;
+    $[12] = celebrationElement;
+    $[13] = messageBox;
+    $[14] = rowBox;
+  } else rowBox = $[14];
+  return rowBox;
 }
 //@ chunk-18hwfzwa.js:1180592-1181129 placement
 /**
  * 显示等待提示并等待一个 Promise；完成时以结果调用 onDone，失败记错误并以 failure 值调用；卸载后不再回调。
  */
 function AwaitWork(props) {
-  let $ = w(10);
+  let $ = useMemoCache(10);
   let { message, work, onDone, failure } = props;
-  let Re;
+  let handleResult;
   if ($[0] !== failure || $[1] !== onDone) {
-    Re = (Be) => onDone(Be ? Be.value : failure);
+    handleResult = (resultArg) => onDone(resultArg ? resultArg.value : failure);
     $[0] = failure;
     $[1] = onDone;
-    $[2] = Re;
-  } else Re = $[2];
-  let He = Oo(Re);
-  let We;
-  if ($[3] !== He || $[4] !== work) {
-    We = () => {
-      let ze = false;
+    $[2] = handleResult;
+  } else handleResult = $[2];
+  let onResultReady = useEffectEvent(handleResult);
+  let workEffect;
+  if ($[3] !== onResultReady || $[4] !== work) {
+    workEffect = () => {
+      let isCancelled = false;
       work
         .then((value) => {
-          if (!ze)
-            He({
+          if (!isCancelled)
+            onResultReady({
               value,
             });
         })
         .catch((error) => {
           logError(error);
-          if (!ze) He(null);
+          if (!isCancelled) onResultReady(null);
         });
       return () => {
-        ze = true;
+        isCancelled = true;
       };
     };
-    $[3] = He;
+    $[3] = onResultReady;
     $[4] = work;
-    $[5] = We;
-  } else We = $[5];
-  let kt;
+    $[5] = workEffect;
+  } else workEffect = $[5];
+  let effectDeps;
   if ($[6] !== work) {
-    kt = [work];
+    effectDeps = [work];
     $[6] = work;
-    $[7] = kt;
-  } else kt = $[7];
-  P(We, kt);
-  let At;
+    $[7] = effectDeps;
+  } else effectDeps = $[7];
+  useEffect(workEffect, effectDeps);
+  let badgeBox;
   if ($[8] !== message) {
-    At = jsxProd_default(Box, {
+    badgeBox = jsxProd_default(Box, {
       paddingTop: 1,
       children: jsxProd_default(WorkerBadge, {
         message,
       }),
     });
     $[8] = message;
-    $[9] = At;
-  } else At = $[9];
-  return At;
+    $[9] = badgeBox;
+  } else badgeBox = $[9];
+  return badgeBox;
 }
 //@ chunk-18hwfzwa.js:1181129-1181441 placement
 /**
  * 判断购买用量额度流程的当前步骤是否处于忙碌（加载、开通、调整、保存自动充值、购买中、轮询）状态。
  */
-function isBusyCreditsStep(h) {
-  switch (h) {
+function isBusyCreditsStep(stepKind) {
+  switch (stepKind) {
     case "loading":
     case "enabling":
     case "adjusting":
@@ -2191,7 +2316,10 @@ function isBusyCreditsStep(h) {
   }
 }
 //@ chunk-18hwfzwa.js:1181441-1181445 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:1181441", () => {
+  init_react_production();
+});
 export {
   isBusyCreditsStep,
   CelebrationMessage,

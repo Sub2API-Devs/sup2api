@@ -277,7 +277,7 @@ echo '{"systemMessage": "Session complete!"}'
  * update-config skill 的「构造钩子（含验证）」章节，按当前 hooks schema 生成。
  */
 function buildHookConstructionDoc() {
-  let e = artifactPathPrefix("hooks");
+  let configMenuPath = artifactPathPrefix("hooks");
   return `## Constructing a Hook (with verification)
 
 Given an event, matcher, target file, and desired behavior, follow this flow. Each step catches a different failure class \u2014 a hook that silently does nothing is worse than no hook.
@@ -311,9 +311,9 @@ Given an event, matcher, target file, and desired behavior, follow this flow. Ea
 
    **Always clean up** \u2014 revert the violation, strip the sentinel prefix \u2014 whether the proof passed or failed.
 
-   **If proof fails but pipe-test passed and \`jq -e\` passed**: the settings watcher isn't watching \`.claude/\` \u2014 it only watches directories that had a settings file when this session started. The hook is written correctly. ${e ? `Tell the user to open \`${e}\` once (reloads config) or restart \u2014 you can't do this yourself; \`${e}\` is a user UI menu and opening it ends this turn.` : "Tell the user to start a new session so the new settings load. You can't do this yourself."}
+   **If proof fails but pipe-test passed and \`jq -e\` passed**: the settings watcher isn't watching \`.claude/\` \u2014 it only watches directories that had a settings file when this session started. The hook is written correctly. ${configMenuPath ? `Tell the user to open \`${configMenuPath}\` once (reloads config) or restart \u2014 you can't do this yourself; \`${configMenuPath}\` is a user UI menu and opening it ends this turn.` : "Tell the user to start a new session so the new settings load. You can't do this yourself."}
 
-7. **Handoff.** ${e ? `Tell the user the hook is live (or needs \`${e}\`/restart per the watcher caveat). Point them at \`${e}\` to review, edit, or disable it later.` : "Tell the user the hook is live (or needs a new session per the watcher caveat), and that they can review, edit, or disable it later in the settings file you wrote."} The UI only shows "Ran N hooks" if a hook errors or is slow \u2014 silent success is invisible by design.
+7. **Handoff.** ${configMenuPath ? `Tell the user the hook is live (or needs \`${configMenuPath}\`/restart per the watcher caveat). Point them at \`${configMenuPath}\` to review, edit, or disable it later.` : "Tell the user the hook is live (or needs a new session per the watcher caveat), and that they can review, edit, or disable it later in the settings file you wrote."} The UI only shows "Ran N hooks" if a hook errors or is slow \u2014 silent success is invisible by design.
 `;
 }
 //@ chunk-hantmvxa.js:213278-217472 affinity
@@ -493,28 +493,28 @@ ${req}`;
           },
         ];
       }
-      let n = settingsJsonSchema(wholeSettingsSchema(), {
+      let schema = settingsJsonSchema(wholeSettingsSchema(), {
         io: "input",
       });
-      let attribution = n.properties?.attribution;
-      let r =
+      let attribution = schema.properties?.attribution;
+      let objectBranch =
         typeof attribution === "object"
-          ? attribution.anyOf?.find((w) => typeof w === "object" && w.type === "object")
+          ? attribution.anyOf?.find((branch) => typeof branch === "object" && branch.type === "object")
           : undefined;
-      if (n.properties && typeof attribution === "object" && typeof r === "object")
-        n.properties.attribution = {
+      if (schema.properties && typeof attribution === "object" && typeof objectBranch === "object")
+        schema.properties.attribution = {
           description: attribution.description,
-          ...r,
+          ...objectBranch,
         };
-      collectValidationTips(n, false);
-      let h = jsonStringify(n, null, 2);
+      collectValidationTips(schema, false);
+      let schemaJson = jsonStringify(schema, null, 2);
       let jsonSchema = buildUpdateConfigPrompt();
       jsonSchema += `
 
 ## Full Settings JSON Schema
 
 \`\`\`json
-${h}
+${schemaJson}
 \`\`\``;
       if (args)
         jsonSchema += `

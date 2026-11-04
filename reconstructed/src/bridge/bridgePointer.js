@@ -12,7 +12,15 @@ import { join, dirname } from "path";
 import { mkdir, stat, readFile, unlink } from "fs/promises";
 import { isBridgeRcChildRestartResumeEnabled } from "./bridgeGates.js";
 import { DoctorLazy } from "../cli/handlers/util.js";
-import { string, u, union, literal, _enum, E, array } from "../../vendor/zod/v4/classic/schemas.js";
+import {
+  stringSchema,
+  objectSchema,
+  union,
+  literal,
+  _enum,
+  numberSchema,
+  array,
+} from "../../vendor/zod/v4/classic/schemas.js";
 import { isSafeBridgeId } from "./sessionIdCompat.js";
 import { getProjectsDir, getProjectKey } from "../utils/sessionStoragePortable.js";
 import { isValidKeySegment, STORAGE_SPACES } from "../utils/storage/storageSpaces.js";
@@ -23,41 +31,47 @@ import { formatStorageError } from "../utils/storage/storageErrors.js";
 import { writeFileAtomic } from "../utils/atomicPublishWrite.js";
 import { getWorktreePathsPortable } from "../utils/getWorktreePathsPortable.js";
 import { isENOENT } from "../utils/errors.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-7snpqrde.js:724-758 facade-exports
 var MAX_POINTER_WORKTREE_FANOUT = 50;
 var BRIDGE_POINTER_TTL_MS = 14400000;
 var POINTER_PERSISTED_STAMP_FRESH_MS = 604800000;
 //@ chunk-7snpqrde.js:758-833 layout
-function hasFreshPersistedThreadSessions(e, r, n) {
+function hasFreshPersistedThreadSessions(ids, persistedAt, now) {
   return (
     isBridgeRcChildRestartResumeEnabled() &&
-    Boolean(e?.length) &&
-    r !== undefined &&
-    isPersistedStampFresh(r, n, POINTER_PERSISTED_STAMP_FRESH_MS)
+    Boolean(ids?.length) &&
+    persistedAt !== undefined &&
+    isPersistedStampFresh(persistedAt, now, POINTER_PERSISTED_STAMP_FRESH_MS)
   );
 }
 //@ chunk-7snpqrde.js:833-959 facade-exports
-function freshProjectThreadSessionIds(e, r) {
-  return hasFreshPersistedThreadSessions(e.projectThreadSessionIds, e.projectThreadSessionIdsPersistedAt, r)
-    ? e.projectThreadSessionIds
+function freshProjectThreadSessionIds(pointer, now) {
+  return hasFreshPersistedThreadSessions(
+    pointer.projectThreadSessionIds,
+    pointer.projectThreadSessionIdsPersistedAt,
+    now,
+  )
+    ? pointer.projectThreadSessionIds
     : undefined;
 }
 //@ chunk-7snpqrde.js:959-1103 facade-exports
-function freshParkedProjectThreadSessionIds(e, r) {
+function freshParkedProjectThreadSessionIds(pointer, now) {
   return hasFreshPersistedThreadSessions(
-    e.parkedProjectThreadSessionIds,
-    e.parkedProjectThreadSessionIdsPersistedAt,
-    r,
+    pointer.parkedProjectThreadSessionIds,
+    pointer.parkedProjectThreadSessionIdsPersistedAt,
+    now,
   )
-    ? (e.parkedProjectThreadSessionIds ?? [])
+    ? (pointer.parkedProjectThreadSessionIds ?? [])
     : [];
 }
 //@ chunk-7snpqrde.js:1103-1207 layout
-function getBridgePointerTtlMs(e, options, n) {
+function getBridgePointerTtlMs(pointer, options, now) {
   if (
     options?.projectThreadResume &&
-    (freshProjectThreadSessionIds(e, n) !== undefined || freshParkedProjectThreadSessionIds(e, n).length > 0)
+    (freshProjectThreadSessionIds(pointer, now) !== undefined ||
+      freshParkedProjectThreadSessionIds(pointer, now).length > 0)
   )
     return POINTER_PERSISTED_STAMP_FRESH_MS;
   return BRIDGE_POINTER_TTL_MS;
@@ -66,30 +80,35 @@ function getBridgePointerTtlMs(e, options, n) {
 var PERSISTED_SESSION_RESUME_WINDOW_MS = 900000;
 var PERSISTED_STAMP_SKEW_TOLERANCE_MS = 120000;
 //@ chunk-7snpqrde.js:1231-1273 facade-exports
-function isPersistedStampFresh(e, r, n) {
-  return r - e <= n && e - r <= PERSISTED_STAMP_SKEW_TOLERANCE_MS;
+function isPersistedStampFresh(stampAt, now, windowMs) {
+  return now - stampAt <= windowMs && stampAt - now <= PERSISTED_STAMP_SKEW_TOLERANCE_MS;
 }
 //@ chunk-7snpqrde.js:1273-1857 facade-exports = BridgePointerSchema (0.417)
 /**
  * pointer schema：sessionId、environmentId、source（standalone/repl）、pid、procStart、activeSessionIds 及项目线程会话相关字段（数组上限 64）。
  */
-var MAX_POINTER_ACTIVE_SESSION_IDS = 64;
-var safeIdSchema = DoctorLazy(() => string().max(256).refine(isSafeBridgeId));
-var bridgePointerSchema = DoctorLazy(() =>
-  u({
-    sessionId: union([literal(""), safeIdSchema()]),
-    environmentId: safeIdSchema(),
-    source: _enum(["standalone", "repl"]),
-    pid: E().optional(),
-    procStart: string().optional(),
-    activeSessionIds: array(safeIdSchema()).max(MAX_POINTER_ACTIVE_SESSION_IDS).optional(),
-    activeSessionIdsPersistedAt: E().int().min(0).max(8640000000000000).optional(),
-    projectThreadSessionIds: array(safeIdSchema()).max(MAX_POINTER_ACTIVE_SESSION_IDS).optional(),
-    parkedProjectThreadSessionIds: array(safeIdSchema()).max(MAX_POINTER_ACTIVE_SESSION_IDS).optional(),
-    parkedProjectThreadSessionIdsPersistedAt: E().int().min(0).max(8640000000000000).optional(),
-    projectThreadSessionIdsPersistedAt: E().int().min(0).max(8640000000000000).optional(),
-  }),
-);
+var MAX_POINTER_ACTIVE_SESSION_IDS; // deferred: uses DoctorLazy (../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var safeIdSchema;
+var bridgePointerSchema;
+deferInit("chunk-7snpqrde.js:1273", () => {
+  MAX_POINTER_ACTIVE_SESSION_IDS = 64;
+  safeIdSchema = DoctorLazy(() => stringSchema().max(256).refine(isSafeBridgeId));
+  bridgePointerSchema = DoctorLazy(() =>
+    objectSchema({
+      sessionId: union([literal(""), safeIdSchema()]),
+      environmentId: safeIdSchema(),
+      source: _enum(["standalone", "repl"]),
+      pid: numberSchema().optional(),
+      procStart: stringSchema().optional(),
+      activeSessionIds: array(safeIdSchema()).max(MAX_POINTER_ACTIVE_SESSION_IDS).optional(),
+      activeSessionIdsPersistedAt: numberSchema().int().min(0).max(8640000000000000).optional(),
+      projectThreadSessionIds: array(safeIdSchema()).max(MAX_POINTER_ACTIVE_SESSION_IDS).optional(),
+      parkedProjectThreadSessionIds: array(safeIdSchema()).max(MAX_POINTER_ACTIVE_SESSION_IDS).optional(),
+      parkedProjectThreadSessionIdsPersistedAt: numberSchema().int().min(0).max(8640000000000000).optional(),
+      projectThreadSessionIdsPersistedAt: numberSchema().int().min(0).max(8640000000000000).optional(),
+    }),
+  );
+});
 //@ chunk-7snpqrde.js:1857-1914 fingerprint = getBridgePointerPath (1)
 function getBridgePointerPath(dir) {
   return join(getProjectsDir(), getProjectKey(dir), "bridge-pointer.json");
@@ -102,13 +121,13 @@ function bridgePointerStoreKey(dir) {
 //@ chunk-7snpqrde.js:1978-2419 facade-exports = writeBridgePointer (0.924)
 async function writeBridgePointer(dir, pointer, storageV5) {
   let path = getBridgePointerPath(dir);
-  let i = isStorageV5Enabled() && storageV5 !== undefined ? bridgePointerStoreKey(dir) : null;
-  if (isStorageV5Enabled() && storageV5 !== undefined && i) {
-    let d = await storageV5.write(i, jsonStringify(pointer), {
+  let storeKey = isStorageV5Enabled() && storageV5 !== undefined ? bridgePointerStoreKey(dir) : null;
+  if (isStorageV5Enabled() && storageV5 !== undefined && storeKey) {
+    let writeResult = await storageV5.write(storeKey, jsonStringify(pointer), {
       mode: 438 & ~process.umask(),
     });
-    if (!d.ok) {
-      logForDebugging(`[bridge:pointer] write failed: ${formatStorageError(d.error)}`, {
+    if (!writeResult.ok) {
+      logForDebugging(`[bridge:pointer] write failed: ${formatStorageError(writeResult.error)}`, {
         level: "warn",
       });
       return false;
@@ -136,8 +155,8 @@ async function writeBridgePointer(dir, pointer, storageV5) {
  */
 function createBridgePointerWriteQueue() {
   let resolved = Promise.resolve();
-  return (r) => {
-    resolved = resolved.then(r, r);
+  return (writeOp) => {
+    resolved = resolved.then(writeOp, writeOp);
     return resolved;
   };
 }
@@ -147,22 +166,22 @@ function createBridgePointerWriteQueue() {
  */
 async function readBridgePointer(dir, options, storageV5) {
   let path = getBridgePointerPath(dir);
-  let i;
-  let d;
-  let g = storageV5 ? bridgePointerStoreKey(dir) : null;
-  if (storageV5 && g) {
-    let l = await storageV5.read([g]);
-    if (!l.ok || !l.value.items[0].found) return null;
-    d = l.value.items[0].mtimeMs;
-    i = Buffer.from(l.value.items[0].value).toString("utf8");
+  let text;
+  let mtimeMs;
+  let storeKey = storageV5 ? bridgePointerStoreKey(dir) : null;
+  if (storageV5 && storeKey) {
+    let readResult = await storageV5.read([storeKey]);
+    if (!readResult.ok || !readResult.value.items[0].found) return null;
+    mtimeMs = readResult.value.items[0].mtimeMs;
+    text = Buffer.from(readResult.value.items[0].value).toString("utf8");
   } else
     try {
-      d = (await stat(path)).mtimeMs;
-      i = await readFile(path, "utf8");
+      mtimeMs = (await stat(path)).mtimeMs;
+      text = await readFile(path, "utf8");
     } catch {
       return null;
     }
-  let parsed = bridgePointerSchema().safeParse(parseBridgePointerJson(i));
+  let parsed = bridgePointerSchema().safeParse(parseBridgePointerJson(text));
   if (!parsed.success) {
     if (!options?.noClear) {
       logForDebugging(`[bridge:pointer] invalid schema, clearing: ${path}`);
@@ -171,7 +190,7 @@ async function readBridgePointer(dir, options, storageV5) {
     return null;
   }
   let now = Date.now();
-  let ageMs = Math.max(0, now - d);
+  let ageMs = Math.max(0, now - mtimeMs);
   if (!options?.ignoreTtl && ageMs > getBridgePointerTtlMs(parsed.data, options, now)) {
     if (!options?.noClear) {
       logForDebugging(`[bridge:pointer] stale mtime, clearing: ${path}`);
@@ -225,12 +244,13 @@ async function readBridgePointerAcrossWorktrees(dir, storageV5, options) {
 //@ chunk-7snpqrde.js:3639-3994 facade-exports = clearBridgePointer (0.859)
 async function clearBridgePointer(dir, storageV5) {
   let path = getBridgePointerPath(dir);
-  let s = storageV5 ? bridgePointerStoreKey(dir) : null;
-  if (storageV5 && s) {
-    let i = await storageV5.delete(s);
-    if (i.ok || i.error.code === "NotFound") logForDebugging(`[bridge:pointer] cleared ${path}`);
+  let storeKey = storageV5 ? bridgePointerStoreKey(dir) : null;
+  if (storageV5 && storeKey) {
+    let deleteResult = await storageV5.delete(storeKey);
+    if (deleteResult.ok || deleteResult.error.code === "NotFound")
+      logForDebugging(`[bridge:pointer] cleared ${path}`);
     else
-      logForDebugging(`[bridge:pointer] clear failed: ${formatStorageError(i.error)}`, {
+      logForDebugging(`[bridge:pointer] clear failed: ${formatStorageError(deleteResult.error)}`, {
         level: "warn",
       });
     return;
@@ -246,11 +266,23 @@ async function clearBridgePointer(dir, storageV5) {
   }
 }
 //@ chunk-7snpqrde.js:3994-4044 sole-consumer
-function parseBridgePointerJson(e) {
+function parseBridgePointerJson(text) {
   try {
-    return jsonParse(e);
+    return jsonParse(text);
   } catch {
     return null;
   }
 }
-export { MAX_POINTER_ACTIVE_SESSION_IDS };
+export {
+  MAX_POINTER_ACTIVE_SESSION_IDS,
+  BRIDGE_POINTER_TTL_MS,
+  PERSISTED_SESSION_RESUME_WINDOW_MS,
+  clearBridgePointer,
+  createBridgePointerWriteQueue,
+  freshParkedProjectThreadSessionIds,
+  freshProjectThreadSessionIds,
+  isPersistedStampFresh,
+  readBridgePointer,
+  readBridgePointerAcrossWorktrees,
+  writeBridgePointer,
+};

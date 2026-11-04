@@ -8,7 +8,7 @@
  * pieces: chunk-18hwfzwa.js (1)
  * attribution: fingerprint 1
  */
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import {
   isTranscriptShareKey,
   TRANSCRIPT_SHARE_RESPONSES,
@@ -21,51 +21,51 @@ import { SurveyOption } from "./FeedbackSurveyView.js";
 
 //@ chunk-18hwfzwa.js:995118-995644 fingerprint = useDebouncedDigitInput (0.727)
 function useDebouncedDigitInput(props) {
-  let $ = w(10);
+  let $ = useMemoCache(10);
   let { onSelect, inputValue, setInputValue } = props;
-  let ke;
+  let selectCached;
   if ($[0] !== onSelect || $[1] !== setInputValue) {
-    ke = function Be(Re) {
+    selectCached = function handleSelect(key) {
       setInputValue("");
-      onSelect(Re);
+      onSelect(key);
     };
     $[0] = onSelect;
     $[1] = setInputValue;
-    $[2] = ke;
-  } else ke = $[2];
-  let Be = ke;
+    $[2] = selectCached;
+  } else selectCached = $[2];
+  let select = selectCached;
   let onDigit;
-  if ($[3] !== Be) {
-    onDigit = (We) => {
-      let lower = We.toLowerCase();
-      if (isTranscriptShareKey(lower)) Be(TRANSCRIPT_SHARE_RESPONSES[lower]);
+  if ($[3] !== select) {
+    onDigit = (key) => {
+      let lower = key.toLowerCase();
+      if (isTranscriptShareKey(lower)) select(TRANSCRIPT_SHARE_RESPONSES[lower]);
     };
-    $[3] = Be;
+    $[3] = select;
     $[4] = onDigit;
   } else onDigit = $[4];
-  let Xe;
+  let digitHotkeyOptions;
   if ($[5] !== inputValue || $[6] !== onDigit) {
-    Xe = {
+    digitHotkeyOptions = {
       inputValue,
       isValidDigit: isShareAnswerKey,
       onDigit,
     };
     $[5] = inputValue;
     $[6] = onDigit;
-    $[7] = Xe;
-  } else Xe = $[7];
-  useDigitHotkeys(Xe);
-  let rt;
-  if ($[8] !== Be) {
-    rt = jsxProd_default(Box, {
+    $[7] = digitHotkeyOptions;
+  } else digitHotkeyOptions = $[7];
+  useDigitHotkeys(digitHotkeyOptions);
+  let promptElement;
+  if ($[8] !== select) {
+    promptElement = jsxProd_default(Box, {
       marginTop: 1,
       children: jsxProd_default(SurveyOption, {
-        onSelect: Be,
+        onSelect: select,
       }),
     });
-    $[8] = Be;
-    $[9] = rt;
-  } else rt = $[9];
-  return rt;
+    $[8] = select;
+    $[9] = promptElement;
+  } else promptElement = $[9];
+  return promptElement;
 }
 export { useDebouncedDigitInput };

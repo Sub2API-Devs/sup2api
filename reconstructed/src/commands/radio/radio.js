@@ -25,3 +25,4 @@ async function openClaudeRadio() {
     value: "Couldn't open the browser. Listen at: https://clau.de/radio",
   };
 }
+export { openClaudeRadio };

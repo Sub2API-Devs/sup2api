@@ -8,8 +8,10 @@
  * pieces: chunk-18hwfzwa.js (10), chunk-fm6h4dv7.js (1)
  * attribution: placement 4, layout 2, fingerprint 5
  */
-import { init_react_production, y } from "../../../vendor/react/cjs/react.production.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { currentUsageCreditState } from "../../services/usageCreditOffers.js";
+import { isSameWallReset } from "../rateLimit/quotaAutoResume.js";
+import { init_react_production, useState } from "../../../vendor/react/cjs/react.production.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import {
   jsxProd_default,
   Fragment,
@@ -22,17 +24,24 @@ import { useIsScreenReaderEnabled } from "../../ink/components/ErrorBoundary.js"
 import { isReducedMotion } from "../Spinner/spinnerFlags.js";
 import { useAnimationFrame } from "../../ink/components/Input.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
-import { FILLED_DIAMOND_GLYPH, DIAMOND_GLYPH } from "../../utils/permissions/autoModeRulesPrompt.js";
+import { FILLED_DIAMOND_GLYPH, DIAMOND_GLYPH } from "../../constants/figures.js";
 import { KeyboardShortcutHint } from "../design-system/KeyboardShortcutHint.js";
 import { count } from "../../utils/collections.js";
 import { toInkColor } from "../../utils/ink.js";
 import { collapseWhitespace } from "../../utils/stringUtils.js";
 import { describeTeammateActivity } from "./taskStatusUtils.js";
-import { currentUsageCreditState } from "../../services/usageCreditOffers.js";
-import { isSameWallReset } from "../rateLimit/quotaAutoResume.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
+//@ chunk-fm6h4dv7.js:10887-10953 fingerprint = RainbowText (0.607)
+function RainbowText(t0) {
+  let wall = currentUsageCreditState();
+  return wall.phase === "failed" && isSameWallReset(wall.wall, t0);
+}
 //@ chunk-18hwfzwa.js:692158-692162 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:692158", () => {
+  init_react_production();
+});
 //@ chunk-18hwfzwa.js:692162-692172 layout
 var PROGRESS_TICK_MS = 80;
 //@ chunk-18hwfzwa.js:692172-692509 fingerprint = formatReviewStageCounts (1)
@@ -53,133 +62,133 @@ function formatReviewStageCounts(stage, found, verified, refuted) {
 }
 //@ chunk-18hwfzwa.js:692509-692784 layout
 function RainbowChars(props) {
-  let ee = w(5);
+  let $ = useMemoCache(5);
   let { text, phase } = props;
-  let L = phase === undefined ? 0 : phase;
-  let ke;
-  if (ee[0] !== text) {
-    ke = [...text];
-    ee[0] = text;
-    ee[1] = ke;
-  } else ke = ee[1];
-  let Re;
-  if (ee[2] !== L || ee[3] !== ke) {
-    Re = jsxProd_default(Fragment, {
-      children: ke.map((children, He) =>
+  let startPhase = phase === undefined ? 0 : phase;
+  let chars;
+  if ($[0] !== text) {
+    chars = [...text];
+    $[0] = text;
+    $[1] = chars;
+  } else chars = $[1];
+  let element;
+  if ($[2] !== startPhase || $[3] !== chars) {
+    element = jsxProd_default(Fragment, {
+      children: chars.map((children, charIndex) =>
         jsxProd_default(
           Text,
           {
-            color: getRainbowColor(He + L),
+            color: getRainbowColor(charIndex + startPhase),
             children,
           },
-          He,
+          charIndex,
         ),
       ),
     });
-    ee[2] = L;
-    ee[3] = ke;
-    ee[4] = Re;
-  } else Re = ee[4];
-  return Re;
+    $[2] = startPhase;
+    $[3] = chars;
+    $[4] = element;
+  } else element = $[4];
+  return element;
 }
 //@ chunk-18hwfzwa.js:692784-693241 placement = _temp2 (0.728)
 /**
  * 让显示计数每个 tick 最多增加 1（追赶目标值），减少或强制时直接跳到目标。
  */
 function useSteppedCount(target, tick, immediate) {
-  let L = w(9);
-  let ee;
-  if (L[0] !== target || L[1] !== tick) {
-    ee = {
+  let $ = useMemoCache(9);
+  let initialState;
+  if ($[0] !== target || $[1] !== tick) {
+    initialState = {
       count: target,
       tick,
     };
-    L[0] = target;
-    L[1] = tick;
-    L[2] = ee;
-  } else ee = L[2];
-  let [ke, Re] = y(ee);
-  let Be = ke;
-  if (immediate || target < ke.count) {
-    if (ke.count !== target) {
-      let He;
-      if (L[3] !== ke.tick || L[4] !== target) {
-        He = {
+    $[0] = target;
+    $[1] = tick;
+    $[2] = initialState;
+  } else initialState = $[2];
+  let [steppedState, setSteppedState] = useState(initialState);
+  let nextState = steppedState;
+  if (immediate || target < steppedState.count) {
+    if (steppedState.count !== target) {
+      let sameTickState;
+      if ($[3] !== steppedState.tick || $[4] !== target) {
+        sameTickState = {
           count: target,
-          tick: ke.tick,
+          tick: steppedState.tick,
         };
-        L[3] = ke.tick;
-        L[4] = target;
-        L[5] = He;
-      } else He = L[5];
-      Be = He;
+        $[3] = steppedState.tick;
+        $[4] = target;
+        $[5] = sameTickState;
+      } else sameTickState = $[5];
+      nextState = sameTickState;
     }
-  } else if (target > ke.count && tick !== ke.tick) {
-    const count = ke.count + 1;
-    let We;
-    if (L[6] !== count || L[7] !== tick) {
-      We = {
+  } else if (target > steppedState.count && tick !== steppedState.tick) {
+    const count = steppedState.count + 1;
+    let advancedState;
+    if ($[6] !== count || $[7] !== tick) {
+      advancedState = {
         count,
         tick,
       };
-      L[6] = count;
-      L[7] = tick;
-      L[8] = We;
-    } else We = L[8];
-    Be = We;
+      $[6] = count;
+      $[7] = tick;
+      $[8] = advancedState;
+    } else advancedState = $[8];
+    nextState = advancedState;
   }
-  if (Be !== ke) Re(Be);
-  return Be.count;
+  if (nextState !== steppedState) setSteppedState(nextState);
+  return nextState.count;
 }
 //@ chunk-18hwfzwa.js:693241-694845 fingerprint = ReviewRainbowLine (0.769)
 function ReviewRainbowLine(props) {
-  let $ = w(20);
+  let $ = useMemoCache(20);
   let { session } = props;
   let settings = useSettingsState();
   let isScreenReaderEnabled = useIsScreenReaderEnabled();
-  let ke;
+  let reducedMotion;
   if ($[0] !== isScreenReaderEnabled || $[1] !== settings.prefersReducedMotion) {
-    ke = isReducedMotion(settings.prefersReducedMotion) || isScreenReaderEnabled;
+    reducedMotion = isReducedMotion(settings.prefersReducedMotion) || isScreenReaderEnabled;
     $[0] = isScreenReaderEnabled;
     $[1] = settings.prefersReducedMotion;
-    $[2] = ke;
-  } else ke = $[2];
-  let reducedMotion = ke;
+    $[2] = reducedMotion;
+  } else reducedMotion = $[2];
+  let reducedMotion_2 = reducedMotion;
   let reviewProgress = session.reviewProgress;
   let running = session.status === "running";
-  let [, time] = useAnimationFrame(running && !reducedMotion ? PROGRESS_TICK_MS : null);
+  let [, time] = useAnimationFrame(running && !reducedMotion_2 ? PROGRESS_TICK_MS : null);
   let targetFound = reviewProgress?.bugsFound ?? 0;
   let targetVerified = reviewProgress?.bugsVerified ?? 0;
   let targetRefuted = reviewProgress?.bugsRefuted ?? 0;
-  let snap = reducedMotion || !running;
+  let snap = reducedMotion_2 || !running;
   let found = useSteppedCount(targetFound, time, snap);
   let verified = useSteppedCount(targetVerified, time, snap);
   let refuted = useSteppedCount(targetRefuted, time, snap);
   let phase = Math.floor(time / (PROGRESS_TICK_MS * 3)) % 7;
   if (session.status === "completed") {
-    let Dt;
-    let Lt;
+    let glyphElement;
+    let labelElement;
     if ($[3] === MEMO_CACHE_SENTINEL) {
-      Dt = jsxProd_default_2(Text, {
+      glyphElement = jsxProd_default_2(Text, {
         color: "background",
         children: [FILLED_DIAMOND_GLYPH, " "],
       });
-      Lt = jsxProd_default(RainbowChars, {
+      labelElement = jsxProd_default(RainbowChars, {
         text: "ultrareview",
         phase: 0,
       });
-      $[3] = Dt;
-      $[4] = Lt;
+      $[3] = glyphElement;
+      $[4] = labelElement;
     } else {
-      Dt = $[3];
-      Lt = $[4];
+      glyphElement = $[3];
+      labelElement = $[4];
     }
-    let oo;
+    let readyLine;
     if ($[5] === MEMO_CACHE_SENTINEL) {
-      oo = jsxProd_default_2(Fragment, {
+      readyLine = jsxProd_default_2(Fragment, {
         children: [
-          Dt,
-          Lt,
+          glyphElement,
+          labelElement,
           jsxProd_default_2(Text, {
             dimColor: true,
             children: [
@@ -192,9 +201,9 @@ function ReviewRainbowLine(props) {
           }),
         ],
       });
-      $[5] = oo;
-    } else oo = $[5];
-    return oo;
+      $[5] = readyLine;
+    } else readyLine = $[5];
+    return readyLine;
   }
   if (session.status === "failed") {
     let t1;
@@ -272,7 +281,7 @@ function ReviewRainbowLine(props) {
 }
 //@ chunk-18hwfzwa.js:694845-695386 fingerprint = RemoteSessionProgress (0.595)
 function RemoteSessionProgress(props) {
-  let $ = w(8);
+  let $ = useMemoCache(8);
   let { session } = props;
   if (session.isRemoteReview) {
     let t1;
@@ -317,38 +326,38 @@ function RemoteSessionProgress(props) {
     $[4] = session;
     $[5] = children;
   } else children = $[5];
-  let ee;
+  let labelElement;
   if ($[6] !== children) {
-    ee = jsxProd_default(Text, {
+    labelElement = jsxProd_default(Text, {
       dimColor: true,
       children,
     });
     $[6] = children;
-    $[7] = ee;
-  } else ee = $[7];
-  return ee;
+    $[7] = labelElement;
+  } else labelElement = $[7];
+  return labelElement;
 }
 //@ chunk-18hwfzwa.js:695386-695523 placement
-function remoteSessionProgressLabel(h) {
-  if (!h.todoList.length) return `${h.status}\u2026`;
-  return `${count(h.todoList, (D) => D.status === "completed")}/${h.todoList.length}`;
+function remoteSessionProgressLabel(session) {
+  if (!session.todoList.length) return `${session.status}\u2026`;
+  return `${count(session.todoList, (todo) => todo.status === "completed")}/${session.todoList.length}`;
 }
 //@ chunk-18hwfzwa.js:697663-698417 placement
 function RemoteAgentTaskLabel(props) {
-  let $ = w(16);
+  let $ = useMemoCache(16);
   let { task } = props;
   if (task.type === "remote_agent") {
-    let L;
+    let progressElement;
     if ($[0] !== task) {
-      L = jsxProd_default(Text, {
+      progressElement = jsxProd_default(Text, {
         children: jsxProd_default(RemoteSessionProgress, {
           session: task,
         }),
       });
       $[0] = task;
-      $[1] = L;
-    } else L = $[1];
-    return L;
+      $[1] = progressElement;
+    } else progressElement = $[1];
+    return progressElement;
   }
   let color;
   if ($[2] !== task.identity.color) {
@@ -356,48 +365,48 @@ function RemoteAgentTaskLabel(props) {
     $[2] = task.identity.color;
     $[3] = color;
   } else color = $[3];
-  let ee;
+  let agentName;
   if ($[4] !== task.identity.agentName) {
-    ee = collapseWhitespace(task.identity.agentName);
+    agentName = collapseWhitespace(task.identity.agentName);
     $[4] = task.identity.agentName;
-    $[5] = ee;
-  } else ee = $[5];
-  let ke;
-  if ($[6] !== color || $[7] !== ee) {
-    ke = jsxProd_default_2(Text, {
+    $[5] = agentName;
+  } else agentName = $[5];
+  let agentNameElement;
+  if ($[6] !== color || $[7] !== agentName) {
+    agentNameElement = jsxProd_default_2(Text, {
       color,
-      children: ["@", ee],
+      children: ["@", agentName],
     });
     $[6] = color;
-    $[7] = ee;
-    $[8] = ke;
-  } else ke = $[8];
-  let Re;
+    $[7] = agentName;
+    $[8] = agentNameElement;
+  } else agentNameElement = $[8];
+  let activityText;
   if ($[9] !== task) {
-    Re = collapseWhitespace(describeTeammateActivity(task));
+    activityText = collapseWhitespace(describeTeammateActivity(task));
     $[9] = task;
-    $[10] = Re;
-  } else Re = $[10];
-  let Be;
-  if ($[11] !== Re) {
-    Be = jsxProd_default_2(Text, {
+    $[10] = activityText;
+  } else activityText = $[10];
+  let activityElement;
+  if ($[11] !== activityText) {
+    activityElement = jsxProd_default_2(Text, {
       dimColor: true,
-      children: [": ", Re],
+      children: [": ", activityText],
     });
-    $[11] = Re;
-    $[12] = Be;
-  } else Be = $[12];
-  let He;
-  if ($[13] !== ke || $[14] !== Be) {
-    He = jsxProd_default_2(Text, {
+    $[11] = activityText;
+    $[12] = activityElement;
+  } else activityElement = $[12];
+  let labelElement;
+  if ($[13] !== agentNameElement || $[14] !== activityElement) {
+    labelElement = jsxProd_default_2(Text, {
       wrap: "truncate-end",
-      children: [ke, Be],
+      children: [agentNameElement, activityElement],
     });
-    $[13] = ke;
-    $[14] = Be;
-    $[15] = He;
-  } else He = $[15];
-  return He;
+    $[13] = agentNameElement;
+    $[14] = activityElement;
+    $[15] = labelElement;
+  } else labelElement = $[15];
+  return labelElement;
 }
 //@ chunk-18hwfzwa.js:1429198-1429302 fingerprint = _temp (1)
 /**
@@ -405,12 +414,7 @@ function RemoteAgentTaskLabel(props) {
  */
 function completedPercent(taskListSnapshot) {
   if (taskListSnapshot === undefined || taskListSnapshot.length === 0) return;
-  return (100 * count(taskListSnapshot, (x) => x.status === "completed")) / taskListSnapshot.length;
-}
-//@ chunk-fm6h4dv7.js:10887-10953 fingerprint = RainbowText (0.607)
-function RainbowText(t0) {
-  let s = currentUsageCreditState();
-  return s.phase === "failed" && isSameWallReset(s.wall, t0);
+  return (100 * count(taskListSnapshot, (task) => task.status === "completed")) / taskListSnapshot.length;
 }
 export {
   remoteSessionProgressLabel,

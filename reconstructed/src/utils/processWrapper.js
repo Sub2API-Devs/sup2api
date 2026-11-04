@@ -10,7 +10,7 @@
  */
 import { join, isAbsolute } from "path";
 import { statSync } from "fs";
-import { withHostOwnedEnv } from "./settings/managedSettingsFiles.js";
+import { withHostOwnedEnv } from "./settings/hostEnvWrites.js";
 import { logForDebugging } from "./debug.js";
 import { HostScoped } from "./hostScoped.js";
 import { getRootSession } from "../bootstrap/state.js";
@@ -18,14 +18,15 @@ import { isPossibleClaudeBinary } from "./nativeInstaller/installer.js";
 import { getPlatform } from "./platform.js";
 import { getUserBinDir } from "./xdg.js";
 import { jsonStringify, jsonParse } from "./slowOperations.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-ch0vxh4c.js:544-643 placement
 /**
- * PROCESS_WRAPPER_ENV：进程包装器环境变量；PROCESS_WRAPPER_TIMEOUT_MS：进程包装器超时（同一声明共 2 个绑定）。
+ * 进程包装器的常量组：lR 是环境变量名 CLAUDE_CODE_PROCESS_WRAPPER；Xit 是超时 12000 ms；c 是 memoState 的空状态对象（argv/error/platformIgnored/record）。
  */
-var PROCESS_WRAPPER_ENV_2 = "CLAUDE_CODE_PROCESS_WRAPPER";
-var PROCESS_WRAPPER_ENV = 12000;
-var PROCESS_WRAPPER_TIMEOUT_MS = {
+var PROCESS_WRAPPER_ENV = "CLAUDE_CODE_PROCESS_WRAPPER";
+var PROCESS_WRAPPER_TIMEOUT_MS = 12000;
+var IDLE_WRAPPER_STATE = {
   argv: [],
   error: null,
   platformIgnored: false,
@@ -34,24 +35,24 @@ var PROCESS_WRAPPER_TIMEOUT_MS = {
 //@ chunk-ch0vxh4c.js:643-1292 placement
 class ProcessWrapperState {
   memoRaw = undefined;
-  memoState = PROCESS_WRAPPER_TIMEOUT_MS;
+  memoState = IDLE_WRAPPER_STATE;
   getState() {
-    let r = withHostOwnedEnv(() => process.env[PROCESS_WRAPPER_ENV_2]);
-    if (!r) return PROCESS_WRAPPER_TIMEOUT_MS;
-    let error = r === this.memoRaw ? this.memoState.error : null;
-    if (r === this.memoRaw && error === null) return this.memoState;
-    this.memoRaw = r;
-    this.memoState = readProcessWrapper(r);
+    let raw = withHostOwnedEnv(() => process.env[PROCESS_WRAPPER_ENV]);
+    if (!raw) return IDLE_WRAPPER_STATE;
+    let error = raw === this.memoRaw ? this.memoState.error : null;
+    if (raw === this.memoRaw && error === null) return this.memoState;
+    this.memoRaw = raw;
+    this.memoState = readProcessWrapper(raw);
     if (this.memoState.error && this.memoState.error !== error)
       logForDebugging(
-        `${PROCESS_WRAPPER_ENV_2} is set but can't be used \u2014 self-spawns that require it will refuse to start rather than run unwrapped: ${this.memoState.error}`,
+        `${PROCESS_WRAPPER_ENV} is set but can't be used \u2014 self-spawns that require it will refuse to start rather than run unwrapped: ${this.memoState.error}`,
         {
           level: "error",
         },
       );
     else if (this.memoState.platformIgnored)
       logForDebugging(
-        `${PROCESS_WRAPPER_ENV_2} is set but ignored on Windows \u2014 the launcher must exec into Claude Code, which Windows can't do; sessions run unwrapped`,
+        `${PROCESS_WRAPPER_ENV} is set but ignored on Windows \u2014 the launcher must exec into Claude Code, which Windows can't do; sessions run unwrapped`,
         {
           level: "warn",
         },
@@ -60,7 +61,10 @@ class ProcessWrapperState {
   }
 }
 //@ chunk-ch0vxh4c.js:1292-1315 placement
-var processWrapperStateSlot = new HostScoped(() => new ProcessWrapperState());
+var processWrapperStateSlot; // deferred: uses ProcessWrapperState of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-ch0vxh4c.js:1292", () => {
+  processWrapperStateSlot = new HostScoped(() => new ProcessWrapperState());
+});
 //@ chunk-ch0vxh4c.js:1315-1363 placement
 function processWrapperState() {
   return processWrapperStateSlot.of(getRootSession().host).getState();
@@ -76,29 +80,29 @@ function processWrapperError() {
 //@ chunk-ch0vxh4c.js:1428-1552 placement
 async function isProcessWrapperUsable() {
   if (processWrapperError() !== null) return false;
-  let r = processWrapperArgv();
-  if (r.length === 0) return true;
-  let filePath = absoluteLauncher(r)[0];
+  let argv = processWrapperArgv();
+  if (argv.length === 0) return true;
+  let filePath = absoluteLauncher(argv)[0];
   return filePath === undefined ? true : isPossibleClaudeBinary(filePath);
 }
 //@ chunk-ch0vxh4c.js:1657-1728 placement
-function absoluteLauncher(r) {
-  let e = r[0];
-  return e !== undefined && e.startsWith("/") ? [e] : [];
+function absoluteLauncher(argv) {
+  let first = argv[0];
+  return first !== undefined && first.startsWith("/") ? [first] : [];
 }
 //@ chunk-ch0vxh4c.js:1728-1923 placement
 async function processWrapperProblem() {
-  let r = processWrapperError();
-  if (r) return r;
+  let error = processWrapperError();
+  if (error) return error;
   if (await isProcessWrapperUsable()) return null;
-  return `${PROCESS_WRAPPER_ENV_2}: launcher \`${processWrapperArgv()[0]}\` was deleted or is not executable \u2014 restore it (or fix the setting), then retry`;
+  return `${PROCESS_WRAPPER_ENV}: launcher \`${processWrapperArgv()[0]}\` was deleted or is not executable \u2014 restore it (or fix the setting), then retry`;
 }
 //@ chunk-ch0vxh4c.js:1923-1957 placement
 function processWrapperRecord() {
   return processWrapperState().record;
 }
 //@ chunk-ch0vxh4c.js:1957-2828 placement
-function readProcessWrapper(r) {
+function readProcessWrapper(raw) {
   if (getPlatform() === "windows")
     return {
       argv: [],
@@ -106,42 +110,42 @@ function readProcessWrapper(r) {
       platformIgnored: true,
       record: "",
     };
-  let e;
+  let argv;
   try {
-    e = parseWrapperArgv(r);
+    argv = parseWrapperArgv(raw);
   } catch (error) {
     return processWrapperError_2(error instanceof Error ? error.message : String(error));
   }
-  if (e.length === 0)
+  if (argv.length === 0)
     return processWrapperError_2(
       "the value is set but contains no launcher \u2014 unset the variable to run without one, or set it to the absolute path of your launcher",
     );
-  let s = e[0];
-  if (s === process.execPath || s === join(getUserBinDir(), "claude"))
+  let launcher = argv[0];
+  if (launcher === process.execPath || launcher === join(getUserBinDir(), "claude"))
     return processWrapperError_2(
-      `launcher \`${s}\` is Claude Code's own launch path \u2014 point ${PROCESS_WRAPPER_ENV_2} at your launcher, not at claude`,
+      `launcher \`${launcher}\` is Claude Code's own launch path \u2014 point ${PROCESS_WRAPPER_ENV} at your launcher, not at claude`,
     );
-  if (!isAbsolute(s))
+  if (!isAbsolute(launcher))
     return processWrapperError_2("the launcher must be an absolute path, not a bare name resolved via PATH");
   try {
-    let n = statSync(s);
-    if (!n.isFile() || (n.mode & 73) === 0)
-      return processWrapperError_2(`launcher \`${s}\` is not an executable regular file`);
+    let stats = statSync(launcher);
+    if (!stats.isFile() || (stats.mode & 73) === 0)
+      return processWrapperError_2(`launcher \`${launcher}\` is not an executable regular file`);
   } catch {
-    return processWrapperError_2(`launcher \`${s}\` does not exist or is not readable`);
+    return processWrapperError_2(`launcher \`${launcher}\` does not exist or is not readable`);
   }
   return {
-    argv: e,
+    argv,
     error: null,
     platformIgnored: false,
-    record: e.map((n) => (/[\s"]/.test(n) ? jsonStringify(n) : n)).join(" "),
+    record: argv.map((arg) => (/[\s"]/.test(arg) ? jsonStringify(arg) : arg)).join(" "),
   };
 }
 //@ chunk-ch0vxh4c.js:2828-2907 placement
-function processWrapperError_2(r) {
+function processWrapperError_2(reason) {
   return {
     argv: [],
-    error: `${PROCESS_WRAPPER_ENV_2}: ${r}`,
+    error: `${PROCESS_WRAPPER_ENV}: ${reason}`,
     platformIgnored: false,
     record: "",
   };
@@ -152,75 +156,75 @@ var SHELL_METACHARS = ";|&$()`<>";
 /**
  * 解析 CLAUDE_CODE_PROCESS_WRAPPER：JSON 数组或 shell 风格字符串转成 argv。
  */
-function parseWrapperArgv(r) {
-  let trimmed = r.trim();
+function parseWrapperArgv(value) {
+  let trimmed = value.trim();
   if (trimmed === "") return [];
   if (trimmed.startsWith("[")) {
-    let o;
+    let parsed;
     try {
-      o = jsonParse(trimmed);
+      parsed = jsonParse(trimmed);
     } catch {
       throw Error("value starts with `[` but is not valid JSON");
     }
-    if (!Array.isArray(o) || !o.every((a) => typeof a === "string"))
+    if (!Array.isArray(parsed) || !parsed.every((item) => typeof item === "string"))
       throw Error("JSON form must be an array of strings");
-    if (o.length > 0 && o.some((a) => a === "")) {
-      if (o.every((a) => a === "")) return [];
+    if (parsed.length > 0 && parsed.some((item) => item === "")) {
+      if (parsed.every((item) => item === "")) return [];
       throw Error(
         "the JSON array contains an empty element \u2014 remove it, or fill in the value it was a placeholder for",
       );
     }
-    return o;
+    return parsed;
   }
-  let s = [];
-  let n = "";
-  let u = false;
-  let l = false;
+  let tokens = [];
+  let current = "";
+  let hasToken = false;
+  let inQuote = false;
   for (let j = 0; j < trimmed.length; j++) {
-    let a = trimmed[j];
-    if (l) {
-      if (a === "\\" && (trimmed[j + 1] === '"' || trimmed[j + 1] === "\\")) n += trimmed[++j];
-      else if (a === '"') l = false;
-      else n += a;
+    let char = trimmed[j];
+    if (inQuote) {
+      if (char === "\\" && (trimmed[j + 1] === '"' || trimmed[j + 1] === "\\")) current += trimmed[++j];
+      else if (char === '"') inQuote = false;
+      else current += char;
       continue;
     }
-    if (a === '"') {
-      l = true;
-      u = true;
+    if (char === '"') {
+      inQuote = true;
+      hasToken = true;
       continue;
     }
-    if (/\s/.test(a)) {
-      if (u) {
-        s.push(n);
-        n = "";
-        u = false;
+    if (/\s/.test(char)) {
+      if (hasToken) {
+        tokens.push(current);
+        current = "";
+        hasToken = false;
       }
       continue;
     }
-    if (SHELL_METACHARS.includes(a))
+    if (SHELL_METACHARS.includes(char))
       throw Error(
         "the value contains an unquoted shell metacharacter (one of ; | & $ ( ) ` < >) \u2014 it is an argv list, not a shell command",
       );
-    n += a;
-    u = true;
+    current += char;
+    hasToken = true;
   }
-  if (l) throw Error("unterminated double quote");
-  if (u) s.push(n);
-  if (s.length > 0 && s.some((o) => o === "")) {
-    if (s.every((o) => o === "")) return [];
+  if (inQuote) throw Error("unterminated double quote");
+  if (hasToken) tokens.push(current);
+  if (tokens.length > 0 && tokens.some((token) => token === "")) {
+    if (tokens.every((token) => token === "")) return [];
     throw Error(
       'the value contains an empty `""` token \u2014 remove it, or fill in the value it was a placeholder for',
     );
   }
-  return s;
+  return tokens;
 }
 export {
   processWrapperRecord,
   processWrapperError,
   isProcessWrapperUsable,
   processWrapperArgv,
-  PROCESS_WRAPPER_ENV_2,
   PROCESS_WRAPPER_ENV,
+  PROCESS_WRAPPER_TIMEOUT_MS,
   processWrapperProblem,
   absoluteLauncher,
   processWrapperState,

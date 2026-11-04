@@ -11,7 +11,7 @@
 import { spawnForkFromDirective } from "../../tools/AgentTool/forkDirective.js";
 import { evaluateAskingNoHost } from "../../utils/permissions/permissions.js";
 import { isCoordinatorMode_2 } from "../../coordinator/coordinatorMode.js";
-import { CIRCLE_MARK_GLYPH } from "../../utils/permissions/autoModeRulesPrompt.js";
+import { CIRCLE_MARK_GLYPH } from "../../constants/figures.js";
 
 //@ chunk-3vqj3nc0.js:12628-12720 placement
 /**
@@ -27,11 +27,11 @@ var subtaskCommandCall = async (onDone, context, args) => {
 /**
  * 启动一个子任务：参数为空返回 null，协调者会话中不可用时返回提示文字。
  */
-async function startSubtask(a, toolUseContext) {
-  let directive = a.trim();
-  if (!directive) return null;
+async function startSubtask(directive, toolUseContext) {
+  let directive_2 = directive.trim();
+  if (!directive_2) return null;
   let forkFromDirective = await spawnForkFromDirective(
-    directive,
+    directive_2,
     toolUseContext,
     toolUseContext.canUseTool ?? evaluateAskingNoHost,
   );
@@ -41,3 +41,4 @@ async function startSubtask(a, toolUseContext) {
       : "Cannot start a subtask before the first conversation turn";
   return `${CIRCLE_MARK_GLYPH} forked ${forkFromDirective.name} (${forkFromDirective.agentId.slice(-4)})`;
 }
+export { subtaskCommandCall };

@@ -10,10 +10,18 @@
  */
 import { extractToolInputForTelemetry } from "../../../services/analytics/metadata.js";
 import { DoctorLazy } from "../../../cli/handlers/util.js";
-import { string, zodStrictObject, M, E, array, _enum, u } from "../../../../vendor/zod/v4/classic/schemas.js";
+import {
+  stringSchema,
+  zodStrictObject,
+  booleanSchema,
+  numberSchema,
+  array,
+  _enum,
+  objectSchema,
+} from "../../../../vendor/zod/v4/classic/schemas.js";
 import { hasNoControlChars, isSingleLine } from "../../../utils/effortMediumNudge.js";
 import { logForDebugging } from "../../../utils/debug.js";
-import { wi } from "../../../../vendor/lodash-es/_inlinedHelpers.js";
+import { import_reject } from "../../../../vendor/lodash-es/_inlinedHelpers.js";
 import { env } from "../../../utils/env.js";
 import {
   getFeatureValue_CACHED_MAY_BE_STALE,
@@ -39,6 +47,7 @@ import { fromEnum } from "../../../services/analytics/safeMetadata.js";
 import { telemetrySafeModelName } from "../../../utils/model/telemetryModelName.js";
 import { stripNonPrintable } from "../../../utils/truncateGraphemes.js";
 import { renderModelName } from "../../../utils/model/modelDisplay.js";
+import { deferInit } from "../../../../runtime/deferred-init.js";
 
 //@ chunk-18hwfzwa.js:1742035-1743869 placement
 var CONFIG_PROFILE_SOURCES = ["claude_md", "skills", "agents"];
@@ -80,10 +89,11 @@ var CONFIG_PROFILE_MAX_AGENT_CHARS = 8000;
 /**
  * 把 CLAUDE.md、用户技能、自定义代理的描述截断拼成 <claude_md>/<skills>/<agents> 三段文本，交给子代理配置分类器。
  */
-function buildSubagentConfigProbe(h) {
+function buildSubagentConfigProbe(profile) {
   let toolInputForTelemetry = extractToolInputForTelemetry(
-    h.claudeMd.map((ee) => extractToolInputForTelemetry(ee.trim(), CONFIG_PROFILE_MAX_TRANSCRIPT_CHARS))
-      .join(`
+    profile.claudeMd.map((doc) =>
+      extractToolInputForTelemetry(doc.trim(), CONFIG_PROFILE_MAX_TRANSCRIPT_CHARS),
+    ).join(`
 
 ---
 
@@ -91,7 +101,7 @@ function buildSubagentConfigProbe(h) {
     CONFIG_PROFILE_MAX_SKILL_CHARS,
   );
   let toolInputForTelemetry_2 = extractToolInputForTelemetry(
-    h.skills.map((skill) =>
+    profile.skills.map((skill) =>
       extractToolInputForTelemetry(
         `- ${skill.name}: ${[skill.description, skill.whenToUse].filter(Boolean).join(" \u2014 ")}`,
         CONFIG_PROFILE_MAX_CLAUDE_MD_CHARS,
@@ -101,7 +111,7 @@ function buildSubagentConfigProbe(h) {
     CONFIG_PROFILE_MAX_AGENT_CHARS,
   );
   let toolInputForTelemetry_3 = extractToolInputForTelemetry(
-    h.agents.map((agent) =>
+    profile.agents.map((agent) =>
       extractToolInputForTelemetry(
         `- ${agent.agentType}: ${agent.whenToUse}`,
         CONFIG_PROFILE_MAX_CLAUDE_MD_CHARS,
@@ -124,64 +134,84 @@ ${toolInputForTelemetry_3}
 /**
  * 某个提示/通知的展示频率常量与记忆类型集合（每日上限、冷却等）。用途未确认。
  */
-var DISABLED_STATE = {
-  off: true,
-};
-var MAX_SUBAGENT_WARNING_VIEWS = 3;
-var SUBAGENT_WARNING_MIN_DAYS = 1;
-var ONE_DAY_MS = 86400000;
-var EMPTY_WARNING_SHOWN_STATE = {
-  views: 0,
-  lastShownAt: 0,
-};
-var CLASSIFIER_TIMEOUT_MS = 20000;
-var MAX_CACHED_CLASSIFIER_CALLS = 8;
-var MAX_CLASSIFIER_CALLS_PER_DAY = 10;
-var MEMORY_SOURCE_KINDS = new Set(["User", "Project", "Local", "Managed"]);
+var DISABLED_STATE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var MAX_SUBAGENT_WARNING_VIEWS;
+var SUBAGENT_WARNING_MIN_DAYS;
+var ONE_DAY_MS;
+var EMPTY_WARNING_SHOWN_STATE;
+var CLASSIFIER_TIMEOUT_MS;
+var MAX_CACHED_CLASSIFIER_CALLS;
+var MAX_CLASSIFIER_CALLS_PER_DAY;
+var MEMORY_SOURCE_KINDS;
+deferInit("chunk-18hwfzwa.js:1744325", () => {
+  DISABLED_STATE = {
+    off: true,
+  };
+  MAX_SUBAGENT_WARNING_VIEWS = 3;
+  SUBAGENT_WARNING_MIN_DAYS = 1;
+  ONE_DAY_MS = 86400000;
+  EMPTY_WARNING_SHOWN_STATE = {
+    views: 0,
+    lastShownAt: 0,
+  };
+  CLASSIFIER_TIMEOUT_MS = 20000;
+  MAX_CACHED_CLASSIFIER_CALLS = 8;
+  MAX_CLASSIFIER_CALLS_PER_DAY = 10;
+  MEMORY_SOURCE_KINDS = new Set(["User", "Project", "Local", "Managed"]);
+});
 //@ chunk-18hwfzwa.js:1744518-1744819 placement
 /**
  * 子代理配置警告的远程配置 schema：开关、最多显示次数、最小间隔天数，以及单行的前后缀文案（有长度上限）。
  */
-var MAX_CONFIG_WARNING_WORDS = 120;
-var configWarningWordsSchema = DoctorLazy(() =>
-  string()
-    .min(1)
-    .max(MAX_CONFIG_WARNING_WORDS)
-    .refine((h) => h.trim() !== "", "must not be blank")
-    .refine(hasNoControlChars, "must not contain control chars")
-    .refine(isSingleLine, "must be a single line"),
-);
-var subagentConfigWarningConfigSchema = DoctorLazy(() =>
-  zodStrictObject({
-    off: M().optional(),
-    maxViews: E().optional(),
-    minDaysApart: E().optional(),
-    lead: configWarningWordsSchema().optional(),
-    tail: configWarningWordsSchema().optional(),
-  }),
-);
+var MAX_CONFIG_WARNING_WORDS; // deferred: uses DoctorLazy (../../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var configWarningWordsSchema;
+var subagentConfigWarningConfigSchema;
+deferInit("chunk-18hwfzwa.js:1744518", () => {
+  MAX_CONFIG_WARNING_WORDS = 120;
+  configWarningWordsSchema = DoctorLazy(() =>
+    stringSchema()
+      .min(1)
+      .max(MAX_CONFIG_WARNING_WORDS)
+      .refine((text) => text.trim() !== "", "must not be blank")
+      .refine(hasNoControlChars, "must not contain control chars")
+      .refine(isSingleLine, "must be a single line"),
+  );
+  subagentConfigWarningConfigSchema = DoctorLazy(() =>
+    zodStrictObject({
+      off: booleanSchema().optional(),
+      maxViews: numberSchema().optional(),
+      minDaysApart: numberSchema().optional(),
+      lead: configWarningWordsSchema().optional(),
+      tail: configWarningWordsSchema().optional(),
+    }),
+  );
+});
 //@ chunk-18hwfzwa.js:1744819-1745204 placement
 /**
  * 解析子代理配置警告的远程配置：只有前后缀文案不合法时丢弃它们并使用内置文案，其余错误时关闭该警告。
  */
 function parseSubagentConfigWarningConfig(featureValue_CACHED_MAY_BE_STALE) {
-  let x = subagentConfigWarningConfigSchema();
-  let D = x.safeParse(featureValue_CACHED_MAY_BE_STALE);
-  if (D.success) return D.data;
-  let L = new Set(D.error.issues.map((issue) => issue.path[0]));
+  let schema = subagentConfigWarningConfigSchema();
+  let parsed = schema.safeParse(featureValue_CACHED_MAY_BE_STALE);
+  if (parsed.success) return parsed.data;
+  let badKeys = new Set(parsed.error.issues.map((issue) => issue.path[0]));
   if (
     typeof featureValue_CACHED_MAY_BE_STALE !== "object" ||
     featureValue_CACHED_MAY_BE_STALE === null ||
-    [...L].some((ee) => ee !== "lead" && ee !== "tail")
+    [...badKeys].some((key) => key !== "lead" && key !== "tail")
   )
     return {
       off: true,
     };
-  logForDebugging(`subagent config check: served ${[...L].join(" and ")} dropped, using the built-in words`, {
-    level: "warn",
-  });
+  logForDebugging(
+    `subagent config check: served ${[...badKeys].join(" and ")} dropped, using the built-in words`,
+    {
+      level: "warn",
+    },
+  );
   return (
-    x.safeParse(wi(featureValue_CACHED_MAY_BE_STALE, (ee, ke) => L.has(ke))).data ?? {
+    schema.safeParse(import_reject(featureValue_CACHED_MAY_BE_STALE, (value, key) => badKeys.has(key)))
+      .data ?? {
       off: true,
     }
   );
@@ -200,12 +230,14 @@ function readSubagentConfigWarningConfig() {
   );
 }
 //@ chunk-18hwfzwa.js:1745341-1745438 placement
-function hasConfigProfile(h) {
-  return h.claudeMd.some((x) => x.trim() !== "") || h.skills.length > 0 || h.agents.length > 0;
+function hasConfigProfile(inputs) {
+  return (
+    inputs.claudeMd.some((doc) => doc.trim() !== "") || inputs.skills.length > 0 || inputs.agents.length > 0
+  );
 }
 //@ chunk-18hwfzwa.js:1745438-1745529 placement
-function logConfigReadFailure(h, error) {
-  logForDebugging(`subagent config check: could not read ${h}: ${errorMessage(error)}`, {
+function logConfigReadFailure(source, error) {
+  logForDebugging(`subagent config check: could not read ${source}: ${errorMessage(error)}`, {
     level: "error",
   });
 }
@@ -243,90 +275,104 @@ async function collectSubagentConfigInputs(ctx) {
         whenToUse: skill.whenToUse,
       })),
     agents: (agentDefinitions?.activeAgents ?? [])
-      .filter((ke) => ke.source !== "built-in" && !(ke.source === "plugin" && isBuiltinPluginId(ke.plugin)))
-      .map((ke) => ({
-        agentType: ke.agentType,
-        whenToUse: ke.whenToUse,
+      .filter(
+        (agent) =>
+          agent.source !== "built-in" && !(agent.source === "plugin" && isBuiltinPluginId(agent.plugin)),
+      )
+      .map((agent) => ({
+        agentType: agent.agentType,
+        whenToUse: agent.whenToUse,
       })),
   };
 }
 //@ chunk-18hwfzwa.js:1746191-1746254 placement
-var SubagentConfigVerdictSchema = DoctorLazy(() =>
-  zodStrictObject({
-    encourages_subagents: M(),
-    sources: array(_enum(CONFIG_PROFILE_SOURCES)),
-  }),
-);
+var SubagentConfigVerdictSchema; // deferred: uses DoctorLazy (../../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-18hwfzwa.js:1746191", () => {
+  SubagentConfigVerdictSchema = DoctorLazy(() =>
+    zodStrictObject({
+      encourages_subagents: booleanSchema(),
+      sources: array(_enum(CONFIG_PROFILE_SOURCES)),
+    }),
+  );
+});
 //@ chunk-18hwfzwa.js:1746254-1746470 placement
 function parseSubagentConfigVerdict(text) {
   try {
-    let x = SubagentConfigVerdictSchema().safeParse(jsonParse(stripJsonCodeFence(text.trim())));
-    if (!x.success) return null;
-    let encouragesSubagents = x.data.encourages_subagents;
+    let parsed = SubagentConfigVerdictSchema().safeParse(jsonParse(stripJsonCodeFence(text.trim())));
+    if (!parsed.success) return null;
+    let encouragesSubagents = parsed.data.encourages_subagents;
     return {
       encourages: encouragesSubagents,
-      sources: encouragesSubagents ? CONFIG_PROFILE_SOURCES.filter((L) => x.data.sources.includes(L)) : [],
+      sources: encouragesSubagents
+        ? CONFIG_PROFILE_SOURCES.filter((source) => parsed.data.sources.includes(source))
+        : [],
     };
   } catch {
     return null;
   }
 }
 //@ chunk-18hwfzwa.js:1746470-1746529 placement
-var CachedSubagentConfigVerdictSchema = DoctorLazy(() =>
-  u({
-    encourages: M(),
-    sources: array(_enum(CONFIG_PROFILE_SOURCES)),
-    at: E(),
-  }),
-);
+var CachedSubagentConfigVerdictSchema; // deferred: uses DoctorLazy (../../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-18hwfzwa.js:1746470", () => {
+  CachedSubagentConfigVerdictSchema = DoctorLazy(() =>
+    objectSchema({
+      encourages: booleanSchema(),
+      sources: array(_enum(CONFIG_PROFILE_SOURCES)),
+      at: numberSchema(),
+    }),
+  );
+});
 //@ chunk-18hwfzwa.js:1746529-1746677 placement
-function cachedSubagentConfigVerdict(h) {
-  let x = CachedSubagentConfigVerdictSchema().safeParse(getGlobalConfig().subagentConfigChecks?.[h]);
-  return x.success
+function cachedSubagentConfigVerdict(cacheKey) {
+  let parsed = CachedSubagentConfigVerdictSchema().safeParse(
+    getGlobalConfig().subagentConfigChecks?.[cacheKey],
+  );
+  return parsed.success
     ? {
-        encourages: x.data.encourages,
-        sources: x.data.sources,
+        encourages: parsed.data.encourages,
+        sources: parsed.data.sources,
       }
     : undefined;
 }
 //@ chunk-18hwfzwa.js:1746677-1746947 placement
-function saveSubagentConfigVerdict(h, x, D) {
-  saveGlobalConfig((L) => {
-    let sliced = Object.entries(L.subagentConfigChecks ?? {})
-      .filter(([key, value]) => key !== h && typeof value?.at === "number")
-      .sort(([, ke], [, Re]) => Re.at - ke.at)
+function saveSubagentConfigVerdict(cacheKey, verdict, storageV5) {
+  saveGlobalConfig((config) => {
+    let sliced = Object.entries(config.subagentConfigChecks ?? {})
+      .filter(([key, value]) => key !== cacheKey && typeof value?.at === "number")
+      .sort(([, a], [, b]) => b.at - a.at)
       .slice(0, MAX_CACHED_CLASSIFIER_CALLS - 1);
     return {
-      ...L,
+      ...config,
       subagentConfigChecks: Object.fromEntries([
         [
-          h,
+          cacheKey,
           {
-            ...x,
+            ...verdict,
             at: Date.now(),
           },
         ],
         ...sliced,
       ]),
     };
-  }, D);
+  }, storageV5);
 }
 //@ chunk-18hwfzwa.js:1746947-1747225 placement
-function takeClassifierCallBudget(h) {
+function takeClassifierCallBudget(storageV5) {
   let now = Date.now();
-  let D = (subagentConfigClassifierCalls) =>
+  let recentCalls = (subagentConfigClassifierCalls) =>
     Array.isArray(subagentConfigClassifierCalls)
       ? subagentConfigClassifierCalls.filter(
-          (ee) => typeof ee === "number" && ee <= now && now - ee < ONE_DAY_MS,
+          (at) => typeof at === "number" && at <= now && now - at < ONE_DAY_MS,
         )
       : [];
-  if (D(getGlobalConfig().subagentConfigClassifierCalls).length >= MAX_CLASSIFIER_CALLS_PER_DAY) return false;
+  if (recentCalls(getGlobalConfig().subagentConfigClassifierCalls).length >= MAX_CLASSIFIER_CALLS_PER_DAY)
+    return false;
   saveGlobalConfig(
-    (L) => ({
-      ...L,
-      subagentConfigClassifierCalls: [...D(L.subagentConfigClassifierCalls), now],
+    (config) => ({
+      ...config,
+      subagentConfigClassifierCalls: [...recentCalls(config.subagentConfigClassifierCalls), now],
     }),
-    h,
+    storageV5,
   );
   return true;
 }
@@ -342,26 +388,26 @@ async function checkSubagentConfig(subagentConfigInputs, storageV5, credentials)
       ranClassifier: false,
     };
   let probeText = buildSubagentConfigProbe(subagentConfigInputs);
-  let ee = bunHashPair(CONFIG_PROFILE_PROMPT, probeText);
-  let ke = cachedSubagentConfigVerdict(ee);
-  if (!ke && !takeClassifierCallBudget(storageV5))
+  let cacheKey = bunHashPair(CONFIG_PROFILE_PROMPT, probeText);
+  let cachedVerdict = cachedSubagentConfigVerdict(cacheKey);
+  if (!cachedVerdict && !takeClassifierCallBudget(storageV5))
     return {
       verdict: "skipped",
       sources: [],
       ranClassifier: false,
     };
-  let Re = ke ?? (await classifySubagentConfig(probeText, credentials));
-  if (!Re)
+  let verdict = cachedVerdict ?? (await classifySubagentConfig(probeText, credentials));
+  if (!verdict)
     return {
       verdict: "error",
       sources: [],
       ranClassifier: true,
     };
-  if (!ke) saveSubagentConfigVerdict(ee, Re, storageV5);
+  if (!cachedVerdict) saveSubagentConfigVerdict(cacheKey, verdict, storageV5);
   return {
-    verdict: Re.encourages ? "positive" : "negative",
-    sources: Re.sources,
-    ranClassifier: !ke,
+    verdict: verdict.encourages ? "positive" : "negative",
+    sources: verdict.sources,
+    ranClassifier: !cachedVerdict,
   };
 }
 //@ chunk-18hwfzwa.js:1747615-1748116 placement
@@ -371,7 +417,7 @@ async function checkSubagentConfig(subagentConfigInputs, storageV5, credentials)
 async function classifySubagentConfig(probeText, credentials) {
   try {
     let defaultSonnetModel = getDefaultSonnetModel();
-    let [L, ee] = getSideQueryThinkingSettings(defaultSonnetModel);
+    let [thinking, thinkingTokens] = getSideQueryThinkingSettings(defaultSonnetModel);
     let found = (
       await sideQueryWithCounter({
         model: defaultSonnetModel,
@@ -388,8 +434,8 @@ async function classifySubagentConfig(probeText, credentials) {
             ],
           },
         ],
-        max_tokens: 64 + ee,
-        thinking: L,
+        max_tokens: 64 + thinkingTokens,
+        thinking,
         effort: "low",
         output_format: {
           type: "json_schema",
@@ -400,7 +446,7 @@ async function classifySubagentConfig(probeText, credentials) {
         querySource: "subagent_config_classifier",
         credentials,
       })
-    ).content.find((Be) => Be.type === "text");
+    ).content.find((block) => block.type === "text");
     return found && found.type === "text" ? parseSubagentConfigVerdict(found.text) : null;
   } catch (error) {
     logForDebugging(`subagent config check failed: ${errorMessage(error)}`, {
@@ -423,12 +469,12 @@ function canShowSubagentConfigWarning(
 }
 //@ chunk-18hwfzwa.js:1748302-1748492 placement
 function recordSubagentConfigWarningShown(storageV5, minDaysApart = SUBAGENT_WARNING_MIN_DAYS) {
-  saveGlobalConfig((D) => {
-    let subagentConfigWarningShown = D.subagentConfigWarningShown ?? EMPTY_WARNING_SHOWN_STATE;
+  saveGlobalConfig((config) => {
+    let subagentConfigWarningShown = config.subagentConfigWarningShown ?? EMPTY_WARNING_SHOWN_STATE;
     return Date.now() - subagentConfigWarningShown.lastShownAt < minDaysApart * ONE_DAY_MS
-      ? D
+      ? config
       : {
-          ...D,
+          ...config,
           subagentConfigWarningShown: {
             views: subagentConfigWarningShown.views + 1,
             lastShownAt: Date.now(),
@@ -444,7 +490,7 @@ var CONFIG_SOURCE_LABELS = {
 };
 //@ chunk-18hwfzwa.js:1748563-1748702 placement
 function describeConfigSources(sources) {
-  let mapped = sources.map((D) => CONFIG_SOURCE_LABELS[D]);
+  let mapped = sources.map((source) => CONFIG_SOURCE_LABELS[source]);
   return mapped.length === 0
     ? "Your config"
     : mapped.length === 1
@@ -498,10 +544,10 @@ var subagentConfigWarningNoticeSpec = {
       ...configSourceTelemetry(sources),
     });
     recordSubagentConfigWarningShown(ctx.storageV5, subagentConfigWarningConfig.minDaysApart);
-    let He = sources.length === 0 || (sources.length === 1 && sources[0] === "claude_md");
-    let We = (ze) =>
+    let isSingular = sources.length === 0 || (sources.length === 1 && sources[0] === "claude_md");
+    let fillTemplate = (text) =>
       stripNonPrintable(
-        ze
+        text
           .replaceAll("{sources}", describeConfigSources(sources))
           .replaceAll("{model}", renderModelName(mainLoopModel)),
       );
@@ -511,14 +557,14 @@ var subagentConfigWarningNoticeSpec = {
       segments: [
         {
           text: subagentConfigWarningConfig.lead
-            ? We(subagentConfigWarningConfig.lead)
-            : `${describeConfigSources(sources)} ${He ? "asks" : "ask"} for subagents`,
+            ? fillTemplate(subagentConfigWarningConfig.lead)
+            : `${describeConfigSources(sources)} ${isSingular ? "asks" : "ask"} for subagents`,
           color: "warning",
         },
         {
           text: subagentConfigWarningConfig.tail
-            ? ` \xB7 ${We(subagentConfigWarningConfig.tail)}`
-            : ` \xB7 editing ${He ? "it" : "them"} may save tokens on ${renderModelName(mainLoopModel)}`,
+            ? ` \xB7 ${fillTemplate(subagentConfigWarningConfig.tail)}`
+            : ` \xB7 editing ${isSingular ? "it" : "them"} may save tokens on ${renderModelName(mainLoopModel)}`,
           dim: true,
         },
       ],

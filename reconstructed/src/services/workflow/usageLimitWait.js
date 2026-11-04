@@ -12,7 +12,7 @@ import { sleep, fullJitterBackoffMs } from "../../utils/sleep.js";
 import { HostScoped } from "../../utils/hostScoped.js";
 import { getRootSession } from "../../bootstrap/state.js";
 import { env } from "../../utils/env.js";
-import { string, u } from "../../../vendor/zod/v4/classic/schemas.js";
+import { stringSchema, objectSchema } from "../../../vendor/zod/v4/classic/schemas.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { logEvent } from "../analytics/index.js";
 import { logError } from "../../utils/log.js";
@@ -50,54 +50,55 @@ class UsageLimitWarmupGate {
   constructor(clock = Date.now) {
     this.now = clock;
   }
-  async enter(e, n) {
-    let r = this.now();
-    for (let [L, j] of this.entries) if (j.state === "warm" && j.until <= r) this.entries.delete(L);
-    let h = this.entries.get(e);
-    let T;
+  async enter(key, options) {
+    let nowMs = this.now();
+    for (let [entryKey, entry] of this.entries)
+      if (entry.state === "warm" && entry.until <= nowMs) this.entries.delete(entryKey);
+    let existing = this.entries.get(key);
+    let newEntry;
     let waitedMs = 0;
-    if (h === undefined) {
-      T = warmingEntry();
-      this.entries.set(e, T);
-    } else if (h.state === "warming" && n.capMs > 0) {
-      let L = this.now();
-      await waitWithCap(h.ready, n.capMs, n.signal);
-      waitedMs = Math.max(0, this.now() - L);
+    if (existing === undefined) {
+      newEntry = warmingEntry();
+      this.entries.set(key, newEntry);
+    } else if (existing.state === "warming" && options.capMs > 0) {
+      let waitStart = this.now();
+      await waitWithCap(existing.ready, options.capMs, options.signal);
+      waitedMs = Math.max(0, this.now() - waitStart);
     }
-    let A = false;
+    let didRespond = false;
     return {
-      leader: T !== undefined,
+      leader: newEntry !== undefined,
       waitedMs,
       responded: () => {
-        A = true;
-        this.markWarm(e);
+        didRespond = true;
+        this.markWarm(key);
       },
       done: () => {
-        if (A || T === undefined) return;
-        if (this.entries.get(e) === T && T.state === "warming") {
-          this.entries.delete(e);
-          T.release();
+        if (didRespond || newEntry === undefined) return;
+        if (this.entries.get(key) === newEntry && newEntry.state === "warming") {
+          this.entries.delete(key);
+          newEntry.release();
         }
       },
     };
   }
-  stateOf(e) {
-    let n = this.entries.get(e);
-    if (n === undefined) return "cold";
-    if (n.state === "warm") return n.until > this.now() ? "warm" : "cold";
+  stateOf(key) {
+    let entry = this.entries.get(key);
+    if (entry === undefined) return "cold";
+    if (entry.state === "warm") return entry.until > this.now() ? "warm" : "cold";
     return "warming";
   }
   clear() {
     for (let entry of this.entries.values()) if (entry.state === "warming") entry.release();
     this.entries.clear();
   }
-  markWarm(e) {
-    let n = this.entries.get(e);
-    this.entries.set(e, {
+  markWarm(key) {
+    let previous = this.entries.get(key);
+    this.entries.set(key, {
       state: "warm",
       until: this.now() + WARM_STATE_TTL_MS,
     });
-    if (n?.state === "warming") n.release();
+    if (previous?.state === "warming") previous.release();
   }
 }
 //@ chunk-41w44bgm.js:34564-34648 placement
@@ -118,13 +119,13 @@ function warmingEntry() {
 function waitWithCap(ready, capMs, signal) {
   if (signal?.aborted) return Promise.resolve();
   let abortController = new AbortController();
-  let T = () => abortController.abort();
-  signal?.addEventListener("abort", T, {
+  let onAbort = () => abortController.abort();
+  signal?.addEventListener("abort", onAbort, {
     once: true,
   });
   return Promise.race([ready, sleep(capMs, abortController.signal)]).finally(() => {
     abortController.abort();
-    signal?.removeEventListener("abort", T);
+    signal?.removeEventListener("abort", onAbort);
   });
 }
 //@ chunk-41w44bgm.js:34887-34912 placement
@@ -143,8 +144,8 @@ function currentWarmupGate() {
 /**
  * 预热等待时长的默认值兜底。
  */
-function warmupWaitMs(e) {
-  return e ?? DEFAULT_WARMUP_RELEASE_WAIT_MS;
+function warmupWaitMs(override) {
+  return override ?? DEFAULT_WARMUP_RELEASE_WAIT_MS;
 }
 //@ chunk-41w44bgm.js:34977-35070 placement
 /**
@@ -178,18 +179,18 @@ class UsageLimitWaiter {
     this.#r = onChange;
     this.#u(storageV5, INITIAL_RETRY_COUNT);
   }
-  async #u(e, n) {
+  async #u(storageV5, attemptsLeft) {
     try {
-      this.#s = await rawSettingsKeyPresence("autoContinueAtUsageLimit", e);
+      this.#s = await rawSettingsKeyPresence("autoContinueAtUsageLimit", storageV5);
     } catch (error) {
       this.#s = "unknowable";
       logError(error);
     }
-    if (this.#s === "unknowable" && n > 0 && !this.#e?.aborted) {
+    if (this.#s === "unknowable" && attemptsLeft > 0 && !this.#e?.aborted) {
       await sleep(RETRY_SLEEP_MS, this.#e, {
         unref: true,
       });
-      await this.#u(e, n - 1);
+      await this.#u(storageV5, attemptsLeft - 1);
     }
   }
   #d() {
@@ -207,12 +208,12 @@ class UsageLimitWaiter {
       !isUnattendedInteractiveSession()
     );
   }
-  wouldWait(e) {
+  wouldWait(resetsAt) {
     try {
-      let n = (e ?? 0) * 1000;
+      let resetMs = (resetsAt ?? 0) * 1000;
       return (
         !this.#e?.aborted &&
-        n - Date.now() <= RATE_LIMIT_RESET_MAX_MS &&
+        resetMs - Date.now() <= RATE_LIMIT_RESET_MAX_MS &&
         this.#i < MAX_WAITED_RESETS &&
         this.#a < MAX_RESETS_AFTER_RUN &&
         this.#f()
@@ -225,9 +226,9 @@ class UsageLimitWaiter {
   async whenClear() {
     while (this.#n !== undefined) await this.#n;
   }
-  join(e) {
+  join(limit) {
     try {
-      return this.#p(e);
+      return this.#p(limit);
     } catch (error) {
       logError(error);
       return {
@@ -236,22 +237,22 @@ class UsageLimitWaiter {
       };
     }
   }
-  #p(e) {
+  #p(limit) {
     if (this.#e?.aborted)
       return {
         outcome: "aborted",
       };
-    if (e === undefined || e.resetsAt === undefined || !isAutoResumableLimit(e) || !this.#f())
+    if (limit === undefined || limit.resetsAt === undefined || !isAutoResumableLimit(limit) || !this.#f())
       return {
         outcome: "declined",
         failureNote: undefined,
       };
     let now = Date.now();
-    let r = e.resetsAt * 1000;
-    if (r - now > RATE_LIMIT_RESET_MAX_MS)
-      return this.#c(`usage limit; resets ${formatResetTime(e.resetsAt)}, too far out to wait for`);
-    let h =
-      Math.max(r, now) +
+    let resetAtMs = limit.resetsAt * 1000;
+    if (resetAtMs - now > RATE_LIMIT_RESET_MAX_MS)
+      return this.#c(`usage limit; resets ${formatResetTime(limit.resetsAt)}, too far out to wait for`);
+    let resumeAtMs =
+      Math.max(resetAtMs, now) +
       fullJitterBackoffMs({
         baseMs: RETRY_BASE_MS,
         capMs: RETRY_BASE_MS,
@@ -260,8 +261,8 @@ class UsageLimitWaiter {
       });
     if (this.#t !== undefined && this.#n !== undefined) {
       this.#t.status = {
-        resetsAt: Math.max(this.#t.status.resetsAt, e.resetsAt),
-        resumeAtMs: Math.max(this.#t.status.resumeAtMs, h),
+        resetsAt: Math.max(this.#t.status.resetsAt, limit.resetsAt),
+        resumeAtMs: Math.max(this.#t.status.resumeAtMs, resumeAtMs),
         waitingAgents: this.#t.status.waitingAgents + 1,
       };
       this.#r(this.#t.status);
@@ -270,44 +271,44 @@ class UsageLimitWaiter {
         ended: this.#n,
       };
     }
-    let T = r <= now;
-    if (T ? this.#a >= MAX_RESETS_AFTER_RUN : this.#i >= MAX_WAITED_RESETS)
+    let alreadyReset = resetAtMs <= now;
+    if (alreadyReset ? this.#a >= MAX_RESETS_AFTER_RUN : this.#i >= MAX_WAITED_RESETS)
       return this.#c(
-        `usage limit; resets ${formatResetTime(e.resetsAt)}, and this run already waited for ${T ? MAX_RESETS_AFTER_RUN : MAX_WAITED_RESETS} resets`,
+        `usage limit; resets ${formatResetTime(limit.resetsAt)}, and this run already waited for ${alreadyReset ? MAX_RESETS_AFTER_RUN : MAX_WAITED_RESETS} resets`,
       );
-    if (T) this.#a++;
+    if (alreadyReset) this.#a++;
     else this.#i++;
-    let y = {
+    let waitRecord = {
       status: {
-        resetsAt: e.resetsAt,
-        resumeAtMs: h,
+        resetsAt: limit.resetsAt,
+        resumeAtMs,
         waitingAgents: 1,
       },
       startedAtMs: now,
     };
-    this.#t = y;
-    this.#n = this.#m(y);
-    let A = resetsAtText(e.resetsAt, true);
+    this.#t = waitRecord;
+    this.#n = this.#m(waitRecord);
+    let resetText = resetsAtText(limit.resetsAt, true);
     this.#o(
-      `Usage limit reached${A === undefined ? "" : ` \xB7 ${A}`}. Workflow paused; waiting agents re-run shortly after the reset.`,
+      `Usage limit reached${resetText === undefined ? "" : ` \xB7 ${resetText}`}. Workflow paused; waiting agents re-run shortly after the reset.`,
     );
-    this.#r(y.status);
+    this.#r(waitRecord.status);
     return {
       outcome: "waiting",
       ended: this.#n,
     };
   }
-  async #m(e) {
-    let n = "failed";
-    let r;
+  async #m(waitRecord) {
+    let outcome = "failed";
+    let revokedReason;
     try {
-      let h = e.status.resumeAtMs - Date.now();
+      let remainingMs = waitRecord.status.resumeAtMs - Date.now();
       do {
-        await sleep(Math.max(0, Math.min(h, MAX_SINGLE_WAIT_MS)), this.#e);
-        h = e.status.resumeAtMs - Date.now();
-        r = this.#d();
-      } while (!this.#e?.aborted && r === undefined && h > 0);
-      n = this.#e?.aborted ? "aborted" : r === undefined ? "resumed" : "revoked";
+        await sleep(Math.max(0, Math.min(remainingMs, MAX_SINGLE_WAIT_MS)), this.#e);
+        remainingMs = waitRecord.status.resumeAtMs - Date.now();
+        revokedReason = this.#d();
+      } while (!this.#e?.aborted && revokedReason === undefined && remainingMs > 0);
+      outcome = this.#e?.aborted ? "aborted" : revokedReason === undefined ? "resumed" : "revoked";
     } catch (error) {
       logError(error);
     }
@@ -315,38 +316,38 @@ class UsageLimitWaiter {
     this.#n = undefined;
     try {
       this.#r(undefined);
-      let h = {
-        wait_ms: Date.now() - e.startedAtMs,
-        agents_waiting: e.status.waitingAgents,
+      let fields = {
+        wait_ms: Date.now() - waitRecord.startedAtMs,
+        agents_waiting: waitRecord.status.waitingAgents,
       };
-      switch (n) {
+      switch (outcome) {
         case "resumed":
           this.#o(
-            `Usage limit reset. Re-running ${e.status.waitingAgents} waiting ${plural(e.status.waitingAgents, "agent")}.`,
+            `Usage limit reset. Re-running ${waitRecord.status.waitingAgents} waiting ${plural(waitRecord.status.waitingAgents, "agent")}.`,
           );
-          logFeatureOk("workflow_rate_limit_wait", h);
+          logFeatureOk("workflow_rate_limit_wait", fields);
           break;
         case "aborted":
-          logFeatureSad("workflow_rate_limit_wait", "killed_while_waiting", h);
+          logFeatureSad("workflow_rate_limit_wait", "killed_while_waiting", fields);
           break;
         case "revoked":
           this.#o(
-            `Waiting for usage limits to reset was turned off. ${e.status.waitingAgents} waiting ${plural(e.status.waitingAgents, "agent")} will not run again.`,
+            `Waiting for usage limits to reset was turned off. ${waitRecord.status.waitingAgents} waiting ${plural(waitRecord.status.waitingAgents, "agent")} will not run again.`,
           );
           logFeatureSad(
             "workflow_rate_limit_wait",
-            r === "setting_off" ? "setting_off_while_waiting" : "killswitch_while_waiting",
-            h,
+            revokedReason === "setting_off" ? "setting_off_while_waiting" : "killswitch_while_waiting",
+            fields,
           );
           break;
         case "failed":
-          logFeatureBad("workflow_rate_limit_wait", "wait_error", h);
+          logFeatureBad("workflow_rate_limit_wait", "wait_error", fields);
           break;
       }
     } catch (error) {
       logError(error);
     }
-    return n;
+    return outcome;
   }
   #c(failureNote) {
     if (!this.#l) {

@@ -8,7 +8,7 @@
  * pieces: chunk-j64mp9kq.js (3)
  * attribution: placement 3
  */
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { formatKb } from "../../utils/format.js";
 import {
   jsxProd_default,
@@ -30,206 +30,212 @@ import { sanitizeDisplayText } from "../../utils/sanitizeDisplayText.js";
  * 折叠提示分隔线："(N lines hidden)"、"(~X KB hidden)" 或两者。
  */
 function CollapsedLinesDivider(props) {
-  let c = w(7);
+  let $ = useMemoCache(7);
   let { hiddenLines, hiddenChars, indent } = props;
-  let a = `${hiddenLines} ${hiddenLines === 1 ? "line" : "lines"}`;
-  let f;
-  if (c[0] !== hiddenChars || c[1] !== hiddenLines || c[2] !== a) {
-    f =
+  let linesLabel = `${hiddenLines} ${hiddenLines === 1 ? "line" : "lines"}`;
+  let element;
+  if ($[0] !== hiddenChars || $[1] !== hiddenLines || $[2] !== linesLabel) {
+    element =
       hiddenChars === undefined
-        ? `(${a} hidden)`
+        ? `(${linesLabel} hidden)`
         : hiddenLines === 0
           ? `(~${formatKb(hiddenChars)} KB hidden)`
-          : `(${a}, ~${formatKb(hiddenChars)} KB hidden)`;
-    c[0] = hiddenChars;
-    c[1] = hiddenLines;
-    c[2] = a;
-    c[3] = f;
-  } else f = c[3];
-  let title = f;
-  let u;
-  if (c[4] !== indent || c[5] !== title) {
-    u = jsxProd_default(Divider, {
+          : `(${linesLabel}, ~${formatKb(hiddenChars)} KB hidden)`;
+    $[0] = hiddenChars;
+    $[1] = hiddenLines;
+    $[2] = linesLabel;
+    $[3] = element;
+  } else element = $[3];
+  let title = element;
+  let dividerElement;
+  if ($[4] !== indent || $[5] !== title) {
+    dividerElement = jsxProd_default(Divider, {
       title,
       titleAlign: "start",
       color: "subtle",
       padding: indent,
     });
-    c[4] = indent;
-    c[5] = title;
-    c[6] = u;
-  } else u = c[6];
-  return u;
+    $[4] = indent;
+    $[5] = title;
+    $[6] = dividerElement;
+  } else dividerElement = $[6];
+  return dividerElement;
 }
 //@ chunk-j64mp9kq.js:5195-5838 placement
 /**
  * 渲染思考文本，ultrathink 关键字生效时把关键字逐字符彩虹着色。
  */
 function UltrathinkHighlightedText(props) {
-  let c = w(9);
+  let $ = useMemoCache(9);
   let { text, color } = props;
   let mainLoopModel = useMainLoopModel();
   let queuedMessageText = useQueuedMessageText();
-  let f;
-  let l;
-  if (c[0] !== color || c[1] !== queuedMessageText || c[2] !== mainLoopModel || c[3] !== text) {
-    l = EARLY_RETURN_SENTINEL;
+  let headerElement;
+  let contentElement;
+  if ($[0] !== color || $[1] !== queuedMessageText || $[2] !== mainLoopModel || $[3] !== text) {
+    contentElement = EARLY_RETURN_SENTINEL;
     C: {
-      let u = ULTRATHINK_KEYWORD(text);
-      if (u.length === 0 || !isUltrathinkEffective(mainLoopModel, queuedMessageText)) {
-        let p;
-        if (c[6] !== color || c[7] !== text) {
-          p = jsxProd_default(Text, {
+      let ultrathinkKeyword = ULTRATHINK_KEYWORD(text);
+      if (ultrathinkKeyword.length === 0 || !isUltrathinkEffective(mainLoopModel, queuedMessageText)) {
+        let textElement;
+        if ($[6] !== color || $[7] !== text) {
+          textElement = jsxProd_default(Text, {
             color,
             children: text,
           });
-          c[6] = color;
-          c[7] = text;
-          c[8] = p;
-        } else p = c[8];
-        l = p;
+          $[6] = color;
+          $[7] = text;
+          $[8] = textElement;
+        } else textElement = $[8];
+        contentElement = textElement;
         break C;
       }
-      let m = [];
-      let g = 0;
-      for (const x of u) {
-        if (x.start > g)
-          m.push(
+      let segments = [];
+      let cursor = 0;
+      for (const keywordMatch of ultrathinkKeyword) {
+        if (keywordMatch.start > cursor)
+          segments.push(
             jsxProd_default(
               Text,
               {
                 color,
-                children: text.slice(g, x.start),
+                children: text.slice(cursor, keywordMatch.start),
               },
-              `plain-${g}`,
+              `plain-${cursor}`,
             ),
           );
-        for (let start = x.start; start < x.end; start++)
-          m.push(
+        for (let start = keywordMatch.start; start < keywordMatch.end; start++)
+          segments.push(
             jsxProd_default(
               Text,
               {
-                color: getRainbowColor(start - x.start),
+                color: getRainbowColor(start - keywordMatch.start),
                 children: text[start],
               },
               `rb-${start}`,
             ),
           );
-        g = x.end;
+        cursor = keywordMatch.end;
       }
-      if (g < text.length)
-        m.push(
+      if (cursor < text.length)
+        segments.push(
           jsxProd_default(
             Text,
             {
               color,
-              children: text.slice(g),
+              children: text.slice(cursor),
             },
-            `plain-${g}`,
+            `plain-${cursor}`,
           ),
         );
-      f = jsxProd_default(Text, {
-        children: m,
+      headerElement = jsxProd_default(Text, {
+        children: segments,
       });
     }
-    c[0] = color;
-    c[1] = queuedMessageText;
-    c[2] = mainLoopModel;
-    c[3] = text;
-    c[4] = f;
-    c[5] = l;
+    $[0] = color;
+    $[1] = queuedMessageText;
+    $[2] = mainLoopModel;
+    $[3] = text;
+    $[4] = headerElement;
+    $[5] = contentElement;
   } else {
-    f = c[4];
-    l = c[5];
+    headerElement = $[4];
+    contentElement = $[5];
   }
-  if (l !== EARLY_RETURN_SENTINEL) return l;
-  return f;
+  if (contentElement !== EARLY_RETURN_SENTINEL) return contentElement;
+  return headerElement;
 }
 //@ chunk-j64mp9kq.js:5838-6575 placement
 /**
  * 长文本折叠显示：能折叠时显示头部、折叠分隔线和尾部，否则整段显示（均经 sanitizeDisplayText）。
  */
 function CollapsibleText(props) {
-  let o = w(19);
+  let $ = useMemoCache(19);
   let { text } = props;
-  let d;
-  let a;
+  let headerElement;
+  let footerElement;
   let wrap;
   let children;
   let flexDirection;
-  let u;
-  let p;
-  let C;
-  if (o[0] !== text) {
-    C = EARLY_RETURN_SENTINEL;
+  let rowsChildren;
+  let collapsedLinesDividerElement;
+  let contentElement;
+  if ($[0] !== text) {
+    contentElement = EARLY_RETURN_SENTINEL;
     g: {
-      let m = splitLongTextForCollapse(text);
-      if (typeof m === "string") {
-        C = jsxProd_default(Text, {
+      let collapsibleElement = splitLongTextForCollapse(text);
+      if (typeof collapsibleElement === "string") {
+        contentElement = jsxProd_default(Text, {
           wrap: "wrap",
-          children: sanitizeDisplayText(m),
+          children: sanitizeDisplayText(collapsibleElement),
         });
         break g;
       }
-      a = Box;
+      footerElement = Box;
       flexDirection = "column";
-      u = jsxProd_default(Text, {
+      rowsChildren = jsxProd_default(Text, {
         wrap: "wrap",
-        children: sanitizeDisplayText(m.head),
+        children: sanitizeDisplayText(collapsibleElement.head),
       });
-      p = jsxProd_default(CollapsedLinesDivider, {
-        hiddenLines: m.hiddenLines,
-        hiddenChars: m.hiddenChars,
+      collapsedLinesDividerElement = jsxProd_default(CollapsedLinesDivider, {
+        hiddenLines: collapsibleElement.hiddenLines,
+        hiddenChars: collapsibleElement.hiddenChars,
         indent: 0,
       });
-      d = Text;
+      headerElement = Text;
       wrap = "wrap";
-      children = sanitizeDisplayText(m.tail);
+      children = sanitizeDisplayText(collapsibleElement.tail);
     }
-    o[0] = text;
-    o[1] = d;
-    o[2] = a;
-    o[3] = wrap;
-    o[4] = children;
-    o[5] = flexDirection;
-    o[6] = u;
-    o[7] = p;
-    o[8] = C;
+    $[0] = text;
+    $[1] = headerElement;
+    $[2] = footerElement;
+    $[3] = wrap;
+    $[4] = children;
+    $[5] = flexDirection;
+    $[6] = rowsChildren;
+    $[7] = collapsedLinesDividerElement;
+    $[8] = contentElement;
   } else {
-    d = o[1];
-    a = o[2];
-    wrap = o[3];
-    children = o[4];
-    flexDirection = o[5];
-    u = o[6];
-    p = o[7];
-    C = o[8];
+    headerElement = $[1];
+    footerElement = $[2];
+    wrap = $[3];
+    children = $[4];
+    flexDirection = $[5];
+    rowsChildren = $[6];
+    collapsedLinesDividerElement = $[7];
+    contentElement = $[8];
   }
-  if (C !== EARLY_RETURN_SENTINEL) return C;
-  let x;
-  if (o[9] !== d || o[10] !== wrap || o[11] !== children) {
-    x = jsxProd_default(d, {
+  if (contentElement !== EARLY_RETURN_SENTINEL) return contentElement;
+  let headerElementElement;
+  if ($[9] !== headerElement || $[10] !== wrap || $[11] !== children) {
+    headerElementElement = jsxProd_default(headerElement, {
       wrap,
       children,
     });
-    o[9] = d;
-    o[10] = wrap;
-    o[11] = children;
-    o[12] = x;
-  } else x = o[12];
-  let h;
-  if (o[13] !== a || o[14] !== flexDirection || o[15] !== u || o[16] !== p || o[17] !== x) {
-    h = jsxProd_default_2(a, {
+    $[9] = headerElement;
+    $[10] = wrap;
+    $[11] = children;
+    $[12] = headerElementElement;
+  } else headerElementElement = $[12];
+  let footerElementElement;
+  if (
+    $[13] !== footerElement ||
+    $[14] !== flexDirection ||
+    $[15] !== rowsChildren ||
+    $[16] !== collapsedLinesDividerElement ||
+    $[17] !== headerElementElement
+  ) {
+    footerElementElement = jsxProd_default_2(footerElement, {
       flexDirection,
-      children: [u, p, x],
+      children: [rowsChildren, collapsedLinesDividerElement, headerElementElement],
     });
-    o[13] = a;
-    o[14] = flexDirection;
-    o[15] = u;
-    o[16] = p;
-    o[17] = x;
-    o[18] = h;
-  } else h = o[18];
-  return h;
+    $[13] = footerElement;
+    $[14] = flexDirection;
+    $[15] = rowsChildren;
+    $[16] = collapsedLinesDividerElement;
+    $[17] = headerElementElement;
+    $[18] = footerElementElement;
+  } else footerElementElement = $[18];
+  return footerElementElement;
 }
 export { CollapsibleText, CollapsedLinesDivider, UltrathinkHighlightedText };

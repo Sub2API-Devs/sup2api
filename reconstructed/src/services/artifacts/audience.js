@@ -39,6 +39,7 @@ import { typeLockFromWire } from "./pagePreparation.js";
 import { getLiveState } from "../liveReplica/liveReplica.js";
 import { ORG_SCOPE_CACHE_MS } from "./orgScope.js";
 import { checkBehindLive } from "./liveSubscribe.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-jv307fw4.js:23883-23944 placement
 var SAFE_AUDIENCE_KEY_RE = /^[a-z][a-z0-9_-]{0,63}$/;
@@ -54,78 +55,84 @@ function getDocumentCount(dbUsage) {
     : undefined;
 }
 //@ chunk-jv307fw4.js:24045-24132 placement
-var CONTROL_CHAR_REGEX = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f-\u009f]/;
-var regExp = new RegExp(CONTROL_CHAR_REGEX, "g");
+var CONTROL_CHAR_REGEX; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var regExp;
+deferInit("chunk-jv307fw4.js:24045", () => {
+  CONTROL_CHAR_REGEX = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f-\u009f]/;
+  regExp = new RegExp(CONTROL_CHAR_REGEX, "g");
+});
 //@ chunk-jv307fw4.js:24132-24172 placement
-function stripControlChars(e) {
-  return e.replace(regExp, "");
+function stripControlChars(text) {
+  return text.replace(regExp, "");
 }
 //@ chunk-jv307fw4.js:24172-24348 placement
-function classifyPageOwnership(e, n, r, s, a) {
-  let l = isVouchedOwnVer(n, r, e.ver);
-  let d = !e.typeLocked && !e.publicRead && !s && !a;
-  let h = d && !mayHaveForeignWriters(e);
+function classifyPageOwnership(assess, ver, vouched, journal, sameChannel) {
+  let ownVer = isVouchedOwnVer(ver, vouched, assess.ver);
+  let maybeOwn = !assess.typeLocked && !assess.publicRead && !journal && !sameChannel;
+  let noForeign = maybeOwn && !mayHaveForeignWriters(assess);
   return {
-    workshopPage: s,
-    ownVersion: l,
-    ownBytesPage: d,
-    plainOwner: h,
-    vouchedOwn: h && l,
+    workshopPage: journal,
+    ownVersion: ownVer,
+    ownBytesPage: maybeOwn,
+    plainOwner: noForeign,
+    vouchedOwn: noForeign && ownVer,
   };
 }
 //@ chunk-jv307fw4.js:24348-24454 placement
-async function assessOwnArtifactPage(e, ownPublishes, r, s = {}) {
+async function assessOwnArtifactPage(artifact, ver, ownPublishMap, options = {}) {
   return classifyPageOwnership(
-    e,
-    ownPublishes,
-    r,
-    (await extractJsonScriptById(e.html, "ws-decisions")) !== null,
-    s.savedInPage === true,
+    artifact,
+    ver,
+    ownPublishMap,
+    (await extractJsonScriptById(artifact.html, "ws-decisions")) !== null,
+    options.savedInPage === true,
   );
 }
 //@ chunk-jv307fw4.js:24454-24554 placement
-async function isVouchedOwnPage(e, ownPublishes, slug) {
+async function isVouchedOwnPage(html, ver, vouched) {
   return (
-    classifyPageOwnership(e, ownPublishes, slug, false, false).vouchedOwn &&
-    (await extractJsonScriptById(e.html, "ws-decisions")) === null
+    classifyPageOwnership(html, ver, vouched, false, false).vouchedOwn &&
+    (await extractJsonScriptById(html.html, "ws-decisions")) === null
   );
 }
 //@ chunk-jv307fw4.js:24554-24743 placement
-function getSharedReadLane(e) {
-  if (e.publicRead || e.offOrgRamp === true || e.external === true || e.role === "owner") return null;
-  if (e.role === "writer" && e.sameChannel === true && isFrameSameChannelRawReadEnabled()) return "channel";
+function getSharedReadLane(read) {
+  if (read.publicRead || read.offOrgRamp === true || read.external === true || read.role === "owner")
+    return null;
+  if (read.role === "writer" && read.sameChannel === true && isFrameSameChannelRawReadEnabled())
+    return "channel";
   return isFrameSameOrgInlineReadEnabled() ? "shared" : null;
 }
 //@ chunk-jv307fw4.js:24743-25192 placement
 /**
  * 根据角色（owner/writer/共写/外部组织）决定页面源码给模型时的包装方式（untrusted 框定或截断）。
  */
-function buildAudienceFraming(e) {
-  let n = e.role !== "owner" || e.cowritten || e.typeLocked === true || e.outsideOrg === true;
-  let pageText = extractPageText(e.html, "page");
-  let head = (a) => truncatePageText(pageText, a, "page");
-  if (n || !e.vouchedOwn) {
-    let [a, l] =
-      n && e.sameChannel === true
+function buildAudienceFraming(meta) {
+  let base = meta.role !== "owner" || meta.cowritten || meta.typeLocked === true || meta.outsideOrg === true;
+  let pageText = extractPageText(meta.html, "page");
+  let head = (limit) => truncatePageText(pageText, limit, "page");
+  if (base || !meta.vouchedOwn) {
+    let [headText, tailText] =
+      base && meta.sameChannel === true
         ? [COWRITTEN_HTML_BELOW_SESSION, COWRITTEN_HTML_ABOVE_PUBLISHED]
-        : e.typeLocked
+        : meta.typeLocked
           ? [COWRITTEN_HTML_BELOW_CREATED, COWRITTEN_HTML_ABOVE_CREATED]
-          : e.role === "owner" && e.outsideOrg === true
+          : meta.role === "owner" && meta.outsideOrg === true
             ? [COWRITTEN_HTML_BELOW_OTHERS, COWRITTEN_HTML_ABOVE_OWNED]
-            : n
+            : base
               ? [COWRITTEN_ARTIFACT_PROMPTS, COWRITTEN_HTML_ABOVE_OTHERS]
               : [COWRITTEN_HTML_BELOW_UNPUBLISHED, COWRITTEN_HTML_ABOVE_UNPUBLISHED];
     return {
       enveloped: true,
-      otherWriters: n,
-      lead: `${a}
+      otherWriters: base,
+      lead: `${headText}
 <${COWRITTEN_ARTIFACT_HTML}>
 `,
       body: pageText,
       tail: `
 </${COWRITTEN_ARTIFACT_HTML}>
 
-${l}`,
+${tailText}`,
       head,
     };
   }
@@ -139,35 +146,35 @@ ${l}`,
   };
 }
 //@ chunk-jv307fw4.js:25192-25225 placement
-function scrubPageText(e) {
-  return neutralizeForgedMarkup(e, RESERVED_XML_TAGS);
+function scrubPageText(text) {
+  return neutralizeForgedMarkup(text, RESERVED_XML_TAGS);
 }
 //@ chunk-jv307fw4.js:25225-25268 placement
-function extractPageText(e, n = "all") {
-  return scrubPageText(scrubArtifactEnvelopeTags(e, n));
+function extractPageText(html, scope = "all") {
+  return scrubPageText(scrubArtifactEnvelopeTags(html, scope));
 }
 //@ chunk-jv307fw4.js:25268-25376 placement
-function truncatePageText(pageText, n, r = "all") {
-  if (n <= 0) return "";
-  for (let s = n; ; s--) {
-    let a = scrubPageText(scrubbedHead(pageText, s, r));
-    if (a.length <= n) return a;
+function truncatePageText(text, limit, scope = "all") {
+  if (limit <= 0) return "";
+  for (let size = limit; ; size--) {
+    let text_2 = scrubPageText(scrubbedHead(text, size, scope));
+    if (text_2.length <= limit) return text_2;
   }
 }
 //@ chunk-jv307fw4.js:25376-25608 placement
-function getLiveSubscriptionToken(e) {
+function getLiveSubscriptionToken(slug) {
   if (!isFrameLiveSubscribeEnabled()) return;
-  if (e.syncClient === true)
-    return typeof e.syncToken === "string" && e.syncToken !== ""
+  if (slug.syncClient === true)
+    return typeof slug.syncToken === "string" && slug.syncToken !== ""
       ? {
           transport: "sync",
-          token: e.syncToken,
+          token: slug.syncToken,
         }
       : undefined;
-  return e.subscriptionToken
+  return slug.subscriptionToken
     ? {
         transport: "live",
-        token: e.subscriptionToken,
+        token: slug.subscriptionToken,
       }
     : undefined;
 }
@@ -176,8 +183,8 @@ function isWriterRole(role) {
   return role === "owner" || role === "writer";
 }
 //@ chunk-jv307fw4.js:35897-35945 placement
-function ownerVisibleRole(role, n) {
-  return n && role === "owner" ? undefined : role;
+function ownerVisibleRole(role, roleValue) {
+  return roleValue && role === "owner" ? undefined : role;
 }
 //@ chunk-jv307fw4.js:35945-36012 placement
 function isReaderRole(role) {
@@ -187,9 +194,9 @@ function isReaderRole(role) {
 /**
  * 探测 artifact：取 boot 数据，判定角色/受众/资产令牌并返回可用于读写的上下文。
  */
-async function probeArtifactAccess(e, signal, credentials, s) {
-  let artifactBoot = await fetchArtifactBoot(e, signal, {
-    readBack: s?.readBack === true,
+async function probeArtifactAccess(artifact, signal, credentials, options) {
+  let artifactBoot = await fetchArtifactBoot(artifact, signal, {
+    readBack: options?.readBack === true,
     credentials,
   });
   if (artifactBoot.err !== null)
@@ -200,19 +207,19 @@ async function probeArtifactAccess(e, signal, credentials, s) {
         gone: true,
       }),
     };
-  let l = artifactBoot.assetToken === undefined;
+  let noAssetToken = artifactBoot.assetToken === undefined;
   let role = artifactBoot.data.perm?.role;
-  let h = triState(artifactBoot.data.outsideWriter);
+  let outsideWriter = triState(artifactBoot.data.outsideWriter);
   let currentStoredDecl = getCurrentStoredDecl(artifactBoot.data);
   return {
     err: null,
-    mode: l ? "public" : (artifactBoot.data.perm?.mode ?? artifactBoot.data.mode),
+    mode: noAssetToken ? "public" : (artifactBoot.data.perm?.mode ?? artifactBoot.data.mode),
     shared: artifactBoot.data.shared,
-    role: ownerVisibleRole(role, l),
-    outsideOrgReader: l,
+    role: ownerVisibleRole(role, noAssetToken),
+    outsideOrgReader: noAssetToken,
     cowritten: artifactBoot.data.cowritten === true,
-    ...(h !== undefined && {
-      outsideWriter: h,
+    ...(outsideWriter !== undefined && {
+      outsideWriter,
     }),
     ...(typeof artifactBoot.data.title === "string" && {
       title: artifactBoot.data.title,
@@ -227,34 +234,34 @@ async function probeArtifactAccess(e, signal, credentials, s) {
 /**
  * 从发布读回结果里取出已存储的 frame 声明：类型实例必须带类型锁，且类型锁不能落后于最新发行版；不满足返回 undefined。
  */
-function getCurrentStoredDecl(e) {
-  if (e.readback === undefined || typeof e.typeInstance !== "boolean") return;
-  let n = storedDeclFromWire(e.readback);
-  if (n === undefined) return;
-  let r = e.typeInstance || typeLockFromWire(e.type) !== undefined;
-  let typeLock = n.typeLock;
-  if (r && typeLock === undefined) return;
+function getCurrentStoredDecl(decl) {
+  if (decl.readback === undefined || typeof decl.typeInstance !== "boolean") return;
+  let stored = storedDeclFromWire(decl.readback);
+  if (stored === undefined) return;
+  let typeLocked = decl.typeInstance || typeLockFromWire(decl.type) !== undefined;
+  let typeLock = stored.typeLock;
+  if (typeLocked && typeLock === undefined) return;
   if (typeLock?.latest !== undefined && typeLock.latest !== typeLock.current) return;
-  return n;
+  return stored;
 }
 //@ chunk-jv307fw4.js:36805-36997 placement
 function getRecentProbeBoot(slug, toolUseId) {
   if (toolUseId === undefined) return;
-  let r = getLiveState().shareStatus.probeBoots.get(slug);
-  return r !== undefined &&
-    r.toolUseId === toolUseId &&
-    Date.now() - r.issuedAt <= ORG_SCOPE_CACHE_MS &&
-    !checkBehindLive(slug, r.boot.ver).behind
-    ? getCurrentStoredDecl(r.boot.data)
+  let boot = getLiveState().shareStatus.probeBoots.get(slug);
+  return boot !== undefined &&
+    boot.toolUseId === toolUseId &&
+    Date.now() - boot.issuedAt <= ORG_SCOPE_CACHE_MS &&
+    !checkBehindLive(slug, boot.boot.ver).behind
+    ? getCurrentStoredDecl(boot.boot.data)
     : undefined;
 }
 //@ chunk-jv307fw4.js:41220-41354 placement
-function isAudienceVersionServed(e) {
+function isAudienceVersionServed(read) {
   return (
-    e.servedAudienceVersion === true ||
-    e.audience === "owner" ||
-    e.audienceView === "live" ||
-    e.audienceView === "pinned-current"
+    read.servedAudienceVersion === true ||
+    read.audience === "owner" ||
+    read.audienceView === "live" ||
+    read.audienceView === "pinned-current"
   );
 }
 //@ chunk-jv307fw4.js:41354-41368 placement
@@ -276,12 +283,12 @@ function classifyArtifactOwnership(artifactBootWithProbe) {
   return typeof perm?.mode === "string" && perm.mode !== "" ? "same" : "unproven";
 }
 //@ chunk-jv307fw4.js:41716-41761 placement
-function isForeignOwnership(e) {
-  return e !== "own" && e !== "same";
+function isForeignOwnership(share) {
+  return share !== "own" && share !== "same";
 }
 //@ chunk-jv307fw4.js:41761-41827 placement
-function buildFrameFilePath(ver, n) {
-  return `/_f/${ver}/${SOURCE_KEY}/${n === "" ? "index.html" : n}`;
+function buildFrameFilePath(ver, verValue) {
+  return `/_f/${ver}/${SOURCE_KEY}/${verValue === "" ? "index.html" : verValue}`;
 }
 //@ chunk-jv307fw4.js:41827-41841 placement
 /**

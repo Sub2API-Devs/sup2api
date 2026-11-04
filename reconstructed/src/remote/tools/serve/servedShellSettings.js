@@ -61,24 +61,25 @@ import { runInRemoteCallFrameMain } from "../../remoteMode.js";
 import { runServedTool } from "./resultShaping.js";
 import { currentOrGlobalCwd } from "../../../utils/cwd.js";
 import { shellCommandRegistryByHost, drainPendingKillBackstops } from "../../../utils/ShellCommand.js";
-import { so } from "../../../../vendor/es-toolkit/dist/promise/withTimeout.mjs";
+import { withTimeout } from "../../../../vendor/es-toolkit/dist/promise/withTimeout.mjs";
 import { isPlainObject } from "./callStatusQuery.js";
-import { Uo } from "../../../../vendor/@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
+import { omitAlias } from "../../../../vendor/@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
 import { HOST_TOOL_INPUT_FIELD, DEVICE_2 } from "../../../bridge/deviceRegistration.js";
 import { stableHashWithSalt } from "../../../utils/stableHash.js";
 import { allServedTools, servedShellToolName } from "./serveCall.js";
 import { sessionIdBody } from "../../../bridge/sessionIdCompat.js";
+import { deferInit } from "../../../../runtime/deferred-init.js";
 
 //@ chunk-ad2e1aj6.js:35252-35617 placement
-function clipFullOutput(e, n) {
-  let fullOutput = e.fullOutput;
-  let h = Buffer.byteLength(fullOutput);
-  let max = Math.max(e.totalBytes ?? 0, h);
-  let i = max > h;
-  let y = i ? fullOutput.search(/[\n\r\0]/) : -1;
-  let O = i && y === -1 ? "" : fullOutput.slice(y + 1);
-  let R = n(stripClaudeCodeHints(O));
-  let buffer = Buffer.from(R);
+function clipFullOutput(status, rewrite) {
+  let fullOutput = status.fullOutput;
+  let bytes = Buffer.byteLength(fullOutput);
+  let max = Math.max(status.totalBytes ?? 0, bytes);
+  let headCut = max > bytes;
+  let firstNewline = headCut ? fullOutput.search(/[\n\r\0]/) : -1;
+  let tailSource = headCut && firstNewline === -1 ? "" : fullOutput.slice(firstNewline + 1);
+  let rewritten = rewrite(stripClaudeCodeHints(tailSource));
+  let buffer = Buffer.from(rewritten);
   let replaced = new TextDecoder("utf-8", {
     fatal: false,
   })
@@ -87,9 +88,9 @@ function clipFullOutput(e, n) {
   return {
     text: replaced,
     truncated_head:
-      replaced !== R ||
-      i ||
-      e.totalLines >
+      replaced !== rewritten ||
+      headCut ||
+      status.totalLines >
         countCharInString(
           fullOutput,
           `
@@ -108,50 +109,53 @@ var ABSENT = "absent";
 var CHAIN_SEPARATOR = ">";
 //@ chunk-ad2e1aj6.js:35685-36244 placement
 function settingsFileOrigins() {
-  let e = new Map();
-  for (let s of [...getFlagAgentsFilePaths(), ...getFlagMcpConfigFilePaths()]) e.set(s, "launch");
-  for (let s of managedDropInDirs()) e.set(s, "managed");
+  let origins = new Map();
+  for (let path of [...getFlagAgentsFilePaths(), ...getFlagMcpConfigFilePaths()]) origins.set(path, "launch");
+  for (let dir of managedDropInDirs()) origins.set(dir, "managed");
   let legacyLocalSettingsFilePath = getLegacyLocalSettingsFilePath();
-  if (legacyLocalSettingsFilePath !== undefined) e.set(legacyLocalSettingsFilePath, "local");
-  for (let s of SETTING_SOURCES.toReversed()) {
-    let settingsFilePathForSource = getSettingsFilePathForSource(s);
+  if (legacyLocalSettingsFilePath !== undefined) origins.set(legacyLocalSettingsFilePath, "local");
+  for (let source of SETTING_SOURCES.toReversed()) {
+    let settingsFilePathForSource = getSettingsFilePathForSource(source);
     if (settingsFilePathForSource === undefined) continue;
-    switch (s) {
+    switch (source) {
       case "policySettings":
-        e.set(settingsFilePathForSource, "managed");
+        origins.set(settingsFilePathForSource, "managed");
         break;
       case "flagSettings":
-        e.set(settingsFilePathForSource, "launch");
+        origins.set(settingsFilePathForSource, "launch");
         break;
       case "localSettings":
-        e.set(settingsFilePathForSource, "local");
+        origins.set(settingsFilePathForSource, "local");
         break;
       case "projectSettings":
-        e.set(settingsFilePathForSource, "project");
+        origins.set(settingsFilePathForSource, "project");
         break;
       case "userSettings":
-        e.set(settingsFilePathForSource, "user");
+        origins.set(settingsFilePathForSource, "user");
         break;
     }
   }
   for (let file of settingsLocationPaths().files)
-    if (!e.has(file)) e.set(file, basename(file) === "managed-settings.json" ? "managed" : "user");
-  return e;
+    if (!origins.has(file))
+      origins.set(file, basename(file) === "managed-settings.json" ? "managed" : "user");
+  return origins;
 }
 //@ chunk-ad2e1aj6.js:36244-36635 placement
-async function statSettingsFiles(e) {
+async function statSettingsFiles(paths) {
   let results = await Promise.all(
-    Array.from(e, async (s) => {
+    Array.from(paths, async (path) => {
       try {
-        let h = await vetRepoSettingsPathAsync(getFsImplementation(), s, {
+        let vet = await vetRepoSettingsPathAsync(getFsImplementation(), path, {
           fileIdentity: true,
         });
-        if (h.endStats === undefined && h.absentAt === undefined) return [s, "unexamined:unseen"];
-        let joined = (h.linksFollowed ?? []).map((y) => `${y.dev}:${y.ino}:${y.ctimeNs}`).join("/");
-        let i = h.endStats === undefined ? ABSENT : statFingerprint(h.endStats);
-        return [s, joined === "" ? i : `${joined}${CHAIN_SEPARATOR}${i}`];
+        if (vet.endStats === undefined && vet.absentAt === undefined) return [path, "unexamined:unseen"];
+        let joined = (vet.linksFollowed ?? [])
+          .map((link) => `${link.dev}:${link.ino}:${link.ctimeNs}`)
+          .join("/");
+        let tail = vet.endStats === undefined ? ABSENT : statFingerprint(vet.endStats);
+        return [path, joined === "" ? tail : `${joined}${CHAIN_SEPARATOR}${tail}`];
       } catch (error) {
-        return [s, absentOrUnexamined(error)];
+        return [path, absentOrUnexamined(error)];
       }
     }),
   );
@@ -171,18 +175,18 @@ function absentOrUnexamined(error) {
   return errnoCode === "ENOENT" || errnoCode === "ENOTDIR" ? ABSENT : `unexamined:${errnoCode ?? "unknown"}`;
 }
 //@ chunk-ad2e1aj6.js:36878-37214 placement
-function changedSettingsFiles(e, n) {
-  return uniq([...e.keys(), ...n.keys()]).filter((s) => {
-    let h = e.get(s);
-    let r = n.get(s);
-    if (h === r) return false;
-    if (h === undefined || r === undefined) return true;
-    let index = h.lastIndexOf(CHAIN_SEPARATOR);
-    let index_2 = r.lastIndexOf(CHAIN_SEPARATOR);
-    let sliced = h.slice(index + 1);
-    let sliced_2 = r.slice(index_2 + 1);
+function changedSettingsFiles(before, after) {
+  return uniq([...before.keys(), ...after.keys()]).filter((path) => {
+    let beforeStamp = before.get(path);
+    let afterStamp = after.get(path);
+    if (beforeStamp === afterStamp) return false;
+    if (beforeStamp === undefined || afterStamp === undefined) return true;
+    let index = beforeStamp.lastIndexOf(CHAIN_SEPARATOR);
+    let index_2 = afterStamp.lastIndexOf(CHAIN_SEPARATOR);
+    let sliced = beforeStamp.slice(index + 1);
+    let sliced_2 = afterStamp.slice(index_2 + 1);
     return !(
-      h.slice(0, Math.max(index, 0)) === r.slice(0, Math.max(index_2, 0)) &&
+      beforeStamp.slice(0, Math.max(index, 0)) === afterStamp.slice(0, Math.max(index_2, 0)) &&
       ((sliced === ABSENT && sliced_2.startsWith(EMPTY)) || (sliced_2 === ABSENT && sliced.startsWith(EMPTY)))
     );
   });
@@ -190,63 +194,67 @@ function changedSettingsFiles(e, n) {
 //@ chunk-ad2e1aj6.js:37214-37244 placement
 var processRootWeakMaps = new HostScoped(() => new WeakMap());
 //@ chunk-ad2e1aj6.js:37244-37332 placement
-function refreshStampCache(e, reach) {
+function refreshStampCache(stamps, reach) {
   try {
-    let s = onProcessRootHost(processRootWeakMaps).get(reach);
-    if (s !== undefined) pruneChangedStamps(s.stamps, e);
+    let host = onProcessRootHost(processRootWeakMaps).get(reach);
+    if (host !== undefined) pruneChangedStamps(host.stamps, stamps);
   } catch (error) {
     logError(toError(error));
   }
 }
 //@ chunk-ad2e1aj6.js:37332-38119 placement
-async function noteServedSettingsChanges(e, name, reach) {
+async function noteServedSettingsChanges(before, name, reach) {
   try {
-    let h = await statSettingsFiles(e.keys());
-    let r = changedSettingsFiles(e, h);
-    let i = onProcessRootHost(processRootWeakMaps);
-    let y = i.get(reach);
-    if (y === undefined) {
-      y = {
+    let after = await statSettingsFiles(before.keys());
+    let changed = changedSettingsFiles(before, after);
+    let map = onProcessRootHost(processRootWeakMaps);
+    let host = map.get(reach);
+    if (host === undefined) {
+      host = {
         stamps: new Map(),
         tellings: new Map(),
       };
-      i.set(reach, y);
+      map.set(reach, host);
     }
-    let O = new Set();
-    let R = r.length > 0 ? settingsFileOrigins() : undefined;
-    pruneChangedStamps(y.stamps, h);
-    for (let C of r) {
-      let P = e.get(C);
-      let x = h.get(C);
-      if (P !== undefined && x !== undefined && y.stamps.get(C)?.before !== P) {
-        y.stamps.set(C, {
-          before: P,
-          after: x,
+    let tiers = new Set();
+    let origins = changed.length > 0 ? settingsFileOrigins() : undefined;
+    pruneChangedStamps(host.stamps, after);
+    for (let path of changed) {
+      let beforeStamp = before.get(path);
+      let afterStamp = after.get(path);
+      if (
+        beforeStamp !== undefined &&
+        afterStamp !== undefined &&
+        host.stamps.get(path)?.before !== beforeStamp
+      ) {
+        host.stamps.set(path, {
+          before: beforeStamp,
+          after: afterStamp,
         });
-        O.add(R?.get(C) ?? "user");
+        tiers.add(origins?.get(path) ?? "user");
       }
     }
-    if (O.size > 0)
+    if (tiers.size > 0)
       logEvent("tengu_served_shell_settings_changed", {
         tool: fromEnum(name === POWERSHELL_TOOL_NAME ? "powershell" : "bash"),
-        user: O.has("user"),
-        project: O.has("project"),
-        local: O.has("local"),
-        managed: O.has("managed"),
-        launch: O.has("launch"),
+        user: tiers.has("user"),
+        project: tiers.has("project"),
+        local: tiers.has("local"),
+        managed: tiers.has("managed"),
+        launch: tiers.has("launch"),
       });
-    let w = [];
-    for (let C of O) {
-      let P = (y.tellings.get(C) ?? 0) + 1;
-      y.tellings.set(C, P);
-      w.push({
-        tier: C,
-        telling: P,
+    let tiersToTell = [];
+    for (let tier of tiers) {
+      let telling = (host.tellings.get(tier) ?? 0) + 1;
+      host.tellings.set(tier, telling);
+      tiersToTell.push({
+        tier,
+        telling,
       });
     }
     return {
-      changed: r.length > 0,
-      tiersToTell: w,
+      changed: changed.length > 0,
+      tiersToTell,
     };
   } catch (error) {
     logError(toError(error));
@@ -255,19 +263,19 @@ async function noteServedSettingsChanges(e, name, reach) {
   }
 }
 //@ chunk-ad2e1aj6.js:38119-38188 placement
-function pruneChangedStamps(stamps, n) {
-  for (let [s, h] of n) if (stamps.get(s)?.after !== h) stamps.delete(s);
+function pruneChangedStamps(stamps, next) {
+  for (let [path, afterStamp] of next) if (stamps.get(path)?.after !== afterStamp) stamps.delete(path);
 }
 //@ chunk-ad2e1aj6.js:38188-42590 placement
 /**
  * 构造远程调用执行器：比较执行前后设置文件、运行 PostToolUse 钩子、整理输出与结果。
  */
-function createServedCallRunner(e) {
-  return (n) => {
-    let { tool, toolInput, startCwd, constraints, sessionModel, session, state, deps } = n;
+function createServedCallRunner(kit) {
+  return (args) => {
+    let { tool, toolInput, startCwd, constraints, sessionModel, session, state, deps } = args;
     let { facts, controller, callId } = state;
     if (isNonMcpShellTool(tool)) facts.ownerSettingsLost = deps.ownerSettingsLost?.();
-    let Y;
+    let beforeStamps;
     let canUseTool = createServedCallPermissionCheck({
       stance: deps.policy.stance,
       targetName: deps.targetName,
@@ -277,51 +285,51 @@ function createServedCallRunner(e) {
       serverVerdict: facts.serverVerdict,
       sessionModel,
       forwardedInput: toolInput,
-      permissionContextNow: n.permissionContextNow,
+      permissionContextNow: args.permissionContextNow,
       stopSignal: controller.signal,
-      ...(n.refusalAsAllowLands !== undefined && {
-        refusalAsAllowLands: n.refusalAsAllowLands,
+      ...(args.refusalAsAllowLands !== undefined && {
+        refusalAsAllowLands: args.refusalAsAllowLands,
       }),
-      legDeadlineAt: n.legDeadlineAt,
-      ...(n.ownCheckAhead !== undefined && {
-        ownCheckAhead: n.ownCheckAhead,
+      legDeadlineAt: args.legDeadlineAt,
+      ...(args.ownCheckAhead !== undefined && {
+        ownCheckAhead: args.ownCheckAhead,
       }),
-      onAllowLanded: (M) => {
-        let Q;
-        let ee = false;
+      onAllowLanded: (tool) => {
+        let lookPromise;
+        let lookPromiseSet = false;
         try {
-          if (isServedPostToolHookEnabled() && isNonMcpShellTool(M)) {
-            ee = true;
-            Q = statSettingsFiles(settingsFileOrigins().keys()).then((q) => {
-              Y = q;
-              refreshStampCache(q, deps.reach);
+          if (isServedPostToolHookEnabled() && isNonMcpShellTool(tool)) {
+            lookPromiseSet = true;
+            lookPromise = statSettingsFiles(settingsFileOrigins().keys()).then((stamps) => {
+              beforeStamps = stamps;
+              refreshStampCache(stamps, deps.reach);
             });
           }
         } catch (error) {
           logError(toError(error));
-          if (ee) logFeatureBad("remote_served_shell_settings_compare", "look_failed");
+          if (lookPromiseSet) logFeatureBad("remote_served_shell_settings_compare", "look_failed");
         }
-        return Q;
+        return lookPromise;
       },
-      onOutcome: (M) => {
-        if (M.kind !== "allowed" && M.kind !== "approved_by_session") Y = undefined;
-        n.onOutcome(M);
+      onOutcome: (outcome) => {
+        if (outcome.kind !== "allowed" && outcome.kind !== "approved_by_session") beforeStamps = undefined;
+        args.onOutcome(outcome);
       },
-      onAsk: (M) => n.onAsk(M),
+      onAsk: (ask) => args.onAsk(ask),
     });
-    let D = {
+    let toolUse = {
       type: "tool_use",
-      id: n.toolUseId,
+      id: args.toolUseId,
       name: tool.name,
       input: toolInput,
       caller: {
         type: "direct",
       },
     };
-    let L =
+    let backgroundShells =
       deps.policy.backgroundShells &&
       session.backgroundShells.starterFor({
-        callId: callId ?? D.id,
+        callId: callId ?? toolUse.id,
         lifetime: deps.lifetime ?? AbortSignal.abort(),
         enabled: () => facts.arrivedOver !== "bridge" && deps.policy.backgroundShells?.enabled() === true,
         max: deps.policy.backgroundShells.maxPerSession,
@@ -332,30 +340,30 @@ function createServedCallRunner(e) {
           deps.callLog?.note({
             t: "background",
             caller: session.callerSessionId,
-            call_id: callId ?? D.id,
+            call_id: callId ?? toolUse.id,
             shell_id: shellId,
             event,
           }),
       });
     let context = servedToolUseContext({
       session,
-      servedTools: e.tools(deps),
+      servedTools: kit.tools(deps),
       cwd: startCwd,
       abortController: createChildAbortController(controller),
       remoteCall: {
         origin: {
           kind: "remote",
           transport: facts.arrivedOver,
-          callerSessionId: n.callerSessionId,
-          callId: callId ?? D.id,
+          callerSessionId: args.callerSessionId,
+          callId: callId ?? toolUse.id,
           hostName: deps.targetName,
           launchDir: deps.launchDir,
         },
         constraints,
         reach: deps.reach,
         hookRewrites: [],
-        ...(L && {
-          backgroundShells: L.starter,
+        ...(backgroundShells && {
+          backgroundShells: backgroundShells.starter,
         }),
         ownBackgroundShells: session.backgroundShells,
         ...(sessionModel !== undefined && {
@@ -371,119 +379,120 @@ function createServedCallRunner(e) {
             message,
           };
         },
-        onProjectHook: (M, Q) => {
-          facts.projectHook = M;
+        onProjectHook: (hookKey, hookName) => {
+          facts.projectHook = hookKey;
           let said = deps.reach.projectHooks?.said;
           if (said?.has("keeps_recorded_note") === true && !said.has("keeps_recorded_notice")) {
             said.add("keeps_recorded_notice");
             deps.onNotice?.(SERVED_HOOK_CHANGED_KEEPS_RECORDED, KEEPS_RECORDED_HOOK_NOTICE);
           }
-          if (Q === undefined) return;
-          switch (M) {
+          if (hookName === undefined) return;
+          switch (hookKey) {
             case "held_changed_since_last_serve":
-              (facts.changedHookKeys ??= []).push(Q);
+              (facts.changedHookKeys ??= []).push(hookName);
               return;
             case "fallback_timeout":
             case "fallback_exit":
             case "fallback_wrap_failed":
             case "fallback_malformed":
-              (facts.stoppedWorkingHookKeys ??= []).push(Q);
+              (facts.stoppedWorkingHookKeys ??= []).push(hookName);
               return;
             default:
               return;
           }
         },
-        onNote: (M) => {
-          switch (M.key) {
+        onNote: (note) => {
+          switch (note.key) {
             case "timeout_clamped":
               state.notes.add(
-                M.key,
+                note.key,
                 timeoutClampedMessage({
-                  ...M,
+                  ...note,
                   targetName: deps.targetName,
                 }),
               );
               return;
             case "sandboxed": {
               let conversationId = facts.envelope?.caller.conversation_id;
-              let ee = conversationId === undefined || conversationId === session.conversationIds.at(-1);
-              let q = M.filesystemConfined ? "files_and_network" : "network_only";
-              let ae = sandboxRunNote({
-                ...M,
+              let sameConversation =
+                conversationId === undefined || conversationId === session.conversationIds.at(-1);
+              let sandboxKind = note.filesystemConfined ? "files_and_network" : "network_only";
+              let noteText = sandboxRunNote({
+                ...note,
                 targetName: deps.targetName,
-                firstWord: ee && session.toldOfSandbox !== q,
+                firstWord: sameConversation && session.toldOfSandbox !== sandboxKind,
               });
-              if (ae !== undefined) {
-                if (ee) session.toldOfSandbox = q;
-                state.notes.add(M.key, ae);
+              if (noteText !== undefined) {
+                if (sameConversation) session.toldOfSandbox = sandboxKind;
+                state.notes.add(note.key, noteText);
               }
               return;
             }
           }
         },
       },
-      permissionContext: n.permissionContext,
+      permissionContext: args.permissionContext,
       storageV5: deps.storageV5,
     });
     return () => {
-      let M = (async () =>
+      let runPromise = (async () =>
         runInRemoteCallFrameMain(startCwd, async () => {
-          let V = await runServedTool({
-            toolUse: D,
+          let run = await runServedTool({
+            toolUse,
             canUseTool,
             context,
             stopSignal: controller.signal,
-            servedShellToolName: e.shellToolName(deps),
+            servedShellToolName: kit.shellToolName(deps),
             ...(callId !== undefined && {
               onShellProgress: runServedPostToolHook({
                 toolName: tool.name,
                 toolInput,
-                toolAliases: n.permissionContext.toolAliases,
+                toolAliases: args.permissionContext.toolAliases,
                 targetName: deps.targetName,
-                keep: (K) => session.calls.noteOutput(callId, K),
+                keep: (chunk) => session.calls.noteOutput(callId, chunk),
               }),
             }),
           }).then(
-            (K) => {
-              let Se = L?.started();
-              let ue = !K.settledBeforeStop || K.result?.is_error === true;
-              L?.settle(ue);
-              if (Se === undefined || K.result === undefined) return K;
-              if (ue)
+            (result) => {
+              let started = backgroundShells?.started();
+              let failedOrStopped = !result.settledBeforeStop || result.result?.is_error === true;
+              backgroundShells?.settle(failedOrStopped);
+              if (started === undefined || result.result === undefined) return result;
+              if (failedOrStopped)
                 return {
-                  ...K,
+                  ...result,
                   ranToEnd: false,
                 };
               return {
-                ...K,
+                ...result,
                 result: {
-                  ...K.result,
+                  ...result.result,
                   content: [
-                    ...stringArrayValue(K.output, "stderr"),
+                    ...stringArrayValue(result.output, "stderr"),
                     backgroundCommandStartedNote({
-                      ...Se,
+                      ...started,
                       targetName: deps.targetName,
                     }),
-                    ...stringArrayValue(K.output, "backgroundCwdHint"),
+                    ...stringArrayValue(result.output, "backgroundCwdHint"),
                   ].join(`
 `),
                 },
               };
             },
             (error) => {
-              L?.settle(true);
+              backgroundShells?.settle(true);
               throw error;
             },
           );
-          if (Y !== undefined)
+          if (beforeStamps !== undefined)
             try {
-              let K = await noteServedSettingsChanges(Y, tool.name, deps.reach);
-              if (K !== undefined) {
-                if (K.changed)
+              let changes = await noteServedSettingsChanges(beforeStamps, tool.name, deps.reach);
+              if (changes !== undefined) {
+                if (changes.changed)
                   state.notes.add("settings_changed_around_command", SETTINGS_CHANGED_DURING_COMMAND);
-                for (let Se of K.tiersToTell) {
-                  let ue = servedSettingsChangedNotice(Se.tier, Se.telling);
-                  deps.onNotice?.(ue.key, ue.text);
+                for (let tierNotice of changes.tiersToTell) {
+                  let notice = servedSettingsChangedNotice(tierNotice.tier, tierNotice.telling);
+                  deps.onNotice?.(notice.key, notice.text);
                 }
                 logFeatureOk("remote_served_shell_settings_compare");
               }
@@ -491,42 +500,42 @@ function createServedCallRunner(e) {
               logError(toError(error));
               logFeatureBad("remote_served_shell_settings_compare", "tell_failed");
             }
-          if (V.gateHookErrors > 0) deps.onNotice?.(SERVED_HOOK_ERROR_NOTICES, HOOK_ERRORED_NOTICE);
-          if (V.heldHookNotes > 0) deps.onNotice?.(SERVED_HOOK_NOTICES, SKIPS_UNSAFE_HOOKS_NOTICE);
+          if (run.gateHookErrors > 0) deps.onNotice?.(SERVED_HOOK_ERROR_NOTICES, HOOK_ERRORED_NOTICE);
+          if (run.heldHookNotes > 0) deps.onNotice?.(SERVED_HOOK_NOTICES, SKIPS_UNSAFE_HOOKS_NOTICE);
           if (
             !constraints.pinCwd &&
             !controller.signal.aborted &&
             (session.cwd ?? deps.launchDir) === startCwd
           )
             session.cwd = currentOrGlobalCwd();
-          return V;
+          return run;
         }))();
-      let Q = false;
+      let done = false;
       let deferred = Promise.withResolvers();
-      let q = () => {
-        Q = true;
+      let resolveDone = () => {
+        done = true;
         deferred.resolve();
       };
-      let ae = () => {
+      let afterKills = () => {
         if (onProcessRootHost(shellCommandRegistryByHost).pendingKillBackstops.size > 0)
-          drainPendingKillBackstops().then(q, q);
-        else q();
+          drainPendingKillBackstops().then(resolveDone, resolveDone);
+        else resolveDone();
       };
-      M.then(ae, ae).catch(q);
-      let fe = (givenUp) => {
-        if (!Q)
-          n.onAnsweredAhead({
+      runPromise.then(afterKills, afterKills).catch(resolveDone);
+      let reportAnswered = (givenUp) => {
+        if (!done)
+          args.onAnsweredAhead({
             ended: deferred.promise,
             givenUp,
           });
       };
-      return so(M, controller.signal).then(
-        (V) => {
-          fe(V === undefined);
-          return callResultEnvelope(state, V);
+      return withTimeout(runPromise, controller.signal).then(
+        (answer) => {
+          reportAnswered(answer === undefined);
+          return callResultEnvelope(state, answer);
         },
         (error) => {
-          fe(false);
+          reportAnswered(false);
           throw error;
         },
       );
@@ -534,36 +543,40 @@ function createServedCallRunner(e) {
   };
 }
 //@ chunk-ad2e1aj6.js:42590-42674 placement
-function stringArrayValue(output, n) {
-  let s = isPlainObject(output) ? output[n] : undefined;
-  return typeof s === "string" && s !== "" ? [s] : [];
+function stringArrayValue(output, field) {
+  let value = isPlainObject(output) ? output[field] : undefined;
+  return typeof value === "string" && value !== "" ? [value] : [];
 }
 //@ chunk-ad2e1aj6.js:42674-42917 placement
-function decidingInput(e, n, startDir) {
-  let remoteExecution = e.remoteExecution;
+function decidingInput(tool, input, startDir) {
+  let remoteExecution = tool.remoteExecution;
   let decidingInputFields = remoteExecution?.supported ? remoteExecution.decidingInputFields : undefined;
   let deciding =
     decidingInputFields === undefined
-      ? Uo(n, [HOST_TOOL_INPUT_FIELD, DEVICE_2])
+      ? omitAlias(input, [HOST_TOOL_INPUT_FIELD, DEVICE_2])
       : Object.fromEntries(
           decidingInputFields
-            .map((decidingInputField) => [decidingInputField, n[decidingInputField]])
-            .filter(([, y]) => y !== undefined && y !== null && y !== false),
+            .map((decidingInputField) => [decidingInputField, input[decidingInputField]])
+            .filter(([, value]) => value !== undefined && value !== null && value !== false),
         );
-  return stableHashWithSalt(e.name, {
+  return stableHashWithSalt(tool.name, {
     startDir,
     deciding,
   });
 }
 //@ chunk-ad2e1aj6.js:42917-43040 placement
-function callFailedText(e) {
-  return `The call failed on ${e} before it produced a result \u2014 details are in that machine's debug log.`;
+function callFailedText(targetName) {
+  return `The call failed on ${targetName} before it produced a result \u2014 details are in that machine's debug log.`;
 }
 //@ chunk-ad2e1aj6.js:43040-43094 placement
-var ANONYMOUS_CALLER = "anonymous";
-var defaultServedCallRunner = createServedCallRunner({
-  tools: allServedTools,
-  shellToolName: servedShellToolName,
+var ANONYMOUS_CALLER; // deferred: uses createServedCallRunner of its import cycle while loading; runs once the cycle is complete
+var defaultServedCallRunner;
+deferInit("chunk-ad2e1aj6.js:43040", () => {
+  ANONYMOUS_CALLER = "anonymous";
+  defaultServedCallRunner = createServedCallRunner({
+    tools: allServedTools,
+    shellToolName: servedShellToolName,
+  });
 });
 //@ chunk-ad2e1aj6.js:43094-43157 placement
 function callerKey(ctx) {

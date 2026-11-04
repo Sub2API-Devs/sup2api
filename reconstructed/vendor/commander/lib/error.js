@@ -5,10 +5,10 @@
  * pieces: chunk-b7dyevzy.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../runtime/bun-runtime.js";
 
 //@ chunk-b7dyevzy.js:304-707 cjs-fingerprint
-var require_error = x(function (cjsExports) {
+var require_error = __commonJS(function (cjsExports) {
   class CommanderError extends Error {
     constructor(exitCode, code, message) {
       super(message);

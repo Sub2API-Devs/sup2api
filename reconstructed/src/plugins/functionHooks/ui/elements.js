@@ -12,12 +12,13 @@ import { uniq } from "../../../utils/collections.js";
 import { deepFreezeInPlace, isPlainDataObject } from "../../../utils/hooks/functionHookMatchers.js";
 import { buildVmElement, vmFragment, namedVmElementBuilder } from "../vm/boundaryCopy.js";
 import { isPlainObject } from "../../../utils/isPlainObject.js";
-import { Vme } from "./raster.js";
+import { KEY_SEPARATOR } from "./raster.js";
 import { computeContentHash } from "../../../utils/commitAttribution.js";
 import { jsonStringify } from "../../../utils/slowOperations.js";
 import { isUntrustedObject } from "../../../utils/untrustedValues.js";
 import { HooksError } from "../hooksErrors.js";
 import { withModifiers } from "../hostBridge.js";
+import { deferInit } from "../../../../runtime/deferred-init.js";
 
 //@ chunk-4121qate.js:69406-69747 placement
 var UI_ELEMENT_TYPES = {
@@ -42,42 +43,46 @@ var UI_ELEMENT_TYPES = {
 /**
  * 全部 UI 元素类型
  */
-var ALL_ELEMENT_TYPES = uniq(Object.values(UI_ELEMENT_TYPES).flat());
+var ALL_ELEMENT_TYPES; // deferred: uses UI_ELEMENT_TYPES of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-4121qate.js:69747", () => {
+  ALL_ELEMENT_TYPES = uniq(Object.values(UI_ELEMENT_TYPES).flat());
+});
 //@ chunk-4121qate.js:69783-69810 placement
 /**
  * 构建占位元素
  */
-var buildStaticElement = (e) => deepFreezeInPlace(buildVmElement(vmFragment, e));
+var buildStaticElement = (definition) => deepFreezeInPlace(buildVmElement(vmFragment, definition));
 //@ chunk-4121qate.js:69810-69957 placement
 /**
  * 构建元素构造器表：包装已有构造器，缺失的元素类型以占位片段补齐并回调告警。
  */
-function buildElementTable(e, o, r) {
-  let n = {};
-  for (let [key, value] of Object.entries(e)) if (typeof value === "function") n[key] = o(value);
-  for (let s of ALL_ELEMENT_TYPES)
-    if (!n[s]) {
-      r(s);
-      n[s] = o(buildStaticElement);
+function buildElementTable(overrides, wrap, onFallback) {
+  let table = {};
+  for (let [key, value] of Object.entries(overrides))
+    if (typeof value === "function") table[key] = wrap(value);
+  for (let typeName of ALL_ELEMENT_TYPES)
+    if (!table[typeName]) {
+      onFallback(typeName);
+      table[typeName] = wrap(buildStaticElement);
     }
-  return n;
+  return table;
 }
 //@ chunk-4121qate.js:69957-70054 placement
 /**
  * 某类型元素的构造器表
  */
-function elementBuildersFor(e) {
-  let o = Object.create(null);
-  for (let r of UI_ELEMENT_TYPES[e]) o[r] = namedVmElementBuilder(r);
-  return Object.freeze(o);
+function elementBuildersFor(surface) {
+  let builders = Object.create(null);
+  for (let typeName of UI_ELEMENT_TYPES[surface]) builders[typeName] = namedVmElementBuilder(typeName);
+  return Object.freeze(builders);
 }
 //@ chunk-4121qate.js:70054-70243 placement
 /**
  * 校验元素构造器表：每项都必须是函数。
  */
-function checkElementTable(e) {
-  if (!isPlainObject(e)) return "something that is not a table of elements";
-  for (let [key, value] of Object.entries(e))
+function checkElementTable(table) {
+  if (!isPlainObject(table)) return "something that is not a table of elements";
+  for (let [key, value] of Object.entries(table))
     if (typeof value !== "function") return `an entry "${key}" that is not a constructor`;
   return;
 }
@@ -85,180 +90,188 @@ function checkElementTable(e) {
 /**
  * 是否已知元素类型
  */
-var isElementType_2 = (e) => typeof e === "string" && ALL_ELEMENT_TYPES.includes(e);
+var isElementType_2 = (typeName) => typeof typeName === "string" && ALL_ELEMENT_TYPES.includes(typeName);
 //@ chunk-4121qate.js:175433-175469 placement
 /**
  * engine 或 Svg
  */
-var isEngineOrSvg = (e) => e === "engine" || e === "Svg";
+var isEngineOrSvg = (typeName) => typeName === "engine" || typeName === "Svg";
 //@ chunk-4121qate.js:175469-175537 placement
 /**
  * Button/Input/Select/Markdown
  */
-var isPressableType = (e) => e === "Button" || e === "Input" || e === "Select" || e === "Markdown";
+var isPressableType = (typeName) =>
+  typeName === "Button" || typeName === "Input" || typeName === "Select" || typeName === "Markdown";
 //@ chunk-4121qate.js:175537-175619 placement
 /**
  * 可承载子元素
  */
-var hasChildrenContainer = (type) =>
-  type === "Button" ||
-  (!isEngineOrSvg(type) &&
-    type !== "Client" &&
-    type !== "Raster" &&
-    type !== "Image" &&
-    !isPressableType(type));
+var hasChildrenContainer = (typeName) =>
+  typeName === "Button" ||
+  (!isEngineOrSvg(typeName) &&
+    typeName !== "Client" &&
+    typeName !== "Raster" &&
+    typeName !== "Image" &&
+    !isPressableType(typeName));
 //@ chunk-4121qate.js:175619-175706 placement
 /**
  * 取子元素
  */
-function childElements(e, o) {
-  let { children } = e;
-  return Array.isArray(children) && hasChildrenContainer(e.type) ? children.flatMap(o) : [];
+function childElements(element, mapChild) {
+  let { children } = element;
+  return Array.isArray(children) && hasChildrenContainer(element.type) ? children.flatMap(mapChild) : [];
 }
 //@ chunk-4121qate.js:175706-175877 placement
 function optionValues(options) {
   if (!Array.isArray(options)) return;
-  let mapped = options.map((n) =>
-    typeof n === "object" && n !== null && "value" in n ? n.value : undefined,
+  let mapped = options.map((option) =>
+    typeof option === "object" && option !== null && "value" in option ? option.value : undefined,
   );
-  return mapped.every((n) => typeof n === "string") ? mapped : undefined;
+  return mapped.every((value) => typeof value === "string") ? mapped : undefined;
 }
 //@ chunk-4121qate.js:175877-176390 placement
-function checkElementProps(e) {
-  if (typeof e !== "object" || !e || Array.isArray(e)) return [];
-  let o = e;
-  let r = o.type;
-  let n = childElements(o, checkElementProps);
-  if (!isPressableType(r)) return n;
-  let { press, props } = o;
-  if (!(typeof press === "object" && press !== null)) return n;
+function checkElementProps(element) {
+  if (typeof element !== "object" || !element || Array.isArray(element)) return [];
+  let node = element;
+  let typeName = node.type;
+  let fromChildren = childElements(node, checkElementProps);
+  if (!isPressableType(typeName)) return fromChildren;
+  let { press, props } = node;
+  if (!(typeof press === "object" && press !== null)) return fromChildren;
   let { plugin, handle } = press;
   let key = props?.key;
-  if (!(typeof plugin === "string" && typeof handle === "number" && typeof key === "string")) return n;
+  if (!(typeof plugin === "string" && typeof handle === "number" && typeof key === "string"))
+    return fromChildren;
   let pressableLinks = props?.pressableLinks;
-  let l =
+  let hasPressableLinks =
     Array.isArray(pressableLinks) &&
     pressableLinks.every((pressableLink) => typeof pressableLink === "string");
-  let y = r === "Select" ? optionValues(props?.options) : undefined;
+  let selectValues = typeName === "Select" ? optionValues(props?.options) : undefined;
   return [
     {
-      tag: r,
+      tag: typeName,
       plugin,
       handle,
       element: key,
-      ...(l && {
+      ...(hasPressableLinks && {
         pressableLinks,
       }),
-      ...(y !== undefined && {
-        options: y,
+      ...(selectValues !== undefined && {
+        options: selectValues,
       }),
     },
-    ...n,
+    ...fromChildren,
   ];
 }
 //@ chunk-4121qate.js:176390-176448 placement
 /**
  * client 元素键
  */
-var clientKeyOf = (e) => ["client", e.plugin, e.key, e.module].join(Vme);
+var clientKeyOf = (client) => ["client", client.plugin, client.key, client.module].join(KEY_SEPARATOR);
 //@ chunk-4121qate.js:176448-176481 placement
 /**
  * 元素的 plugin
  */
-var pluginOfElement = (e) => (isPlainObject(e) ? e.plugin : undefined);
+var pluginOfElement = (element) => (isPlainObject(element) ? element.plugin : undefined);
 //@ chunk-4121qate.js:176481-176742 placement
 /**
  * 在渲染树中收集 Client 元素（插件、模块、key）。
  */
-function collectClientElements(e) {
-  if (!isPlainObject(e)) return [];
-  let o = e;
-  if (o.type !== "Client") return childElements(o, collectClientElements);
-  let { props } = o;
-  let n = pluginOfElement(o.client);
+function collectClientElements(element) {
+  if (!isPlainObject(element)) return [];
+  let node = element;
+  if (node.type !== "Client") return childElements(node, collectClientElements);
+  let { props } = node;
+  let plugin = pluginOfElement(node.client);
   let key = isPlainObject(props) ? props.key : undefined;
-  let i = isPlainObject(props) ? props.module : undefined;
-  return typeof n === "string" && n !== "" && typeof key === "string" && typeof i === "string"
+  let moduleName = isPlainObject(props) ? props.module : undefined;
+  return typeof plugin === "string" &&
+    plugin !== "" &&
+    typeof key === "string" &&
+    typeof moduleName === "string"
     ? [
         {
-          plugin: n,
-          module: i,
+          plugin,
+          module: moduleName,
           key,
         },
       ]
     : [];
 }
 //@ chunk-4121qate.js:176742-176883 placement
-function containsEngineNode(e) {
-  if (typeof e === "string") return false;
-  let children = "children" in e ? e.children : undefined;
-  return e.type === "engine" || (Array.isArray(children) && children.some(containsEngineNode));
+function containsEngineNode(node) {
+  if (typeof node === "string") return false;
+  let children = "children" in node ? node.children : undefined;
+  return node.type === "engine" || (Array.isArray(children) && children.some(containsEngineNode));
 }
 //@ chunk-4121qate.js:176883-176927 placement
 /**
  * 字符串或 engine 类型
  */
-var isStringOrEngineType = (e) => typeof e === "string" || isEngineOrSvg(e.type);
+var isStringOrEngineType = (element) => typeof element === "string" || isEngineOrSvg(element.type);
 //@ chunk-4121qate.js:176927-176977 placement = withModifiers (0.799)
-var withModifiers_2 = (e) => isPressableType(e.type) && "press" in e && isPlainObject(e.press);
+var withModifiers_2 = (element) =>
+  isPressableType(element.type) && "press" in element && isPlainObject(element.press);
 //@ chunk-4121qate.js:176977-177256 placement
-function restampPress(e, handle) {
+function restampPress(element, handle) {
   let press = {
-    plugin: e.press.plugin,
+    plugin: element.press.plugin,
     handle,
   };
-  switch (e.type) {
+  switch (element.type) {
     case "Button":
       return {
-        ...e,
+        ...element,
         press,
       };
     case "Input":
       return {
         type: "Input",
-        props: e.props,
+        props: element.props,
         press,
       };
     case "Select":
       return {
         type: "Select",
-        props: e.props,
+        props: element.props,
         press,
       };
     case "Markdown":
       return {
         type: "Markdown",
-        props: e.props,
+        props: element.props,
         press,
       };
   }
 }
 //@ chunk-4121qate.js:177256-177367 placement = setAttribute (0.839)
-function mapChildren(e, o) {
-  let r = e;
-  let children = "children" in r ? r.children : undefined;
+function mapChildren(element, mapChild) {
+  let node = element;
+  let children = "children" in node ? node.children : undefined;
   return Array.isArray(children)
     ? {
-        ...e,
-        children: children.map(o),
+        ...element,
+        children: children.map(mapChild),
       }
-    : e;
+    : element;
 }
 //@ chunk-4121qate.js:177367-177505 placement
-function mapPressHandles_2(e, o) {
-  if (isStringOrEngineType(e)) return e;
-  if (withModifiers_2(e)) {
-    let handle = o(e.press.plugin, e.press.handle);
-    return handle === undefined ? e : restampPress(e, handle);
+function mapPressHandles_2(element, restamp) {
+  if (isStringOrEngineType(element)) return element;
+  if (withModifiers_2(element)) {
+    let handle = restamp(element.press.plugin, element.press.handle);
+    return handle === undefined ? element : restampPress(element, handle);
   }
-  return mapChildren(e, (r) => mapPressHandles_2(r, o));
+  return mapChildren(element, (child) => mapPressHandles_2(child, restamp));
 }
 //@ chunk-4121qate.js:177505-177550 placement
 /**
  * 渲染树内容哈希
  */
-var treeContentHash = (e) =>
-  containsEngineNode(e) ? undefined : computeContentHash(jsonStringify(mapPressHandles_2(e, () => 0)));
+var treeContentHash = (element) =>
+  containsEngineNode(element)
+    ? undefined
+    : computeContentHash(jsonStringify(mapPressHandles_2(element, () => 0)));
 //@ chunk-4121qate.js:177550-177628 placement
 /**
  * 收集器状态
@@ -273,7 +286,7 @@ var newCollectorState = () => ({
 /**
  * 悬停作用域表的键 plugin\0scope，按插件与作用域名区分悬停计数。
  */
-var hoverScopeKey = (e) => `${e.plugin}\x00scope\x00${e.scope}`;
+var hoverScopeKey = (entry) => `${entry.plugin}\x00scope\x00${entry.scope}`;
 //@ chunk-4121qate.js:177678-177713 placement
 /**
  * Box 或 Text
@@ -291,54 +304,54 @@ function elementScope(hover) {
 /**
  * 收集渲染树中各插件的悬停作用域（Box/Text 组与可按元素）。
  */
-function collectHoverScopes(e) {
-  let o = isPlainObject(e) ? e : {};
-  let { hover, press, group } = o;
-  let i = elementScope(hover);
-  let p = o.type;
-  let a = isPlainObject(press) && typeof press.handle === "number" ? press : undefined;
-  let m = isPressableType(p) ? a : isHoverableType(p) ? group : undefined;
-  let c = pluginOfElement(m);
+function collectHoverScopes(element) {
+  let node = isPlainObject(element) ? element : {};
+  let { hover, press, group } = node;
+  let scope = elementScope(hover);
+  let typeName = node.type;
+  let pressable = isPlainObject(press) && typeof press.handle === "number" ? press : undefined;
+  let holder = isPressableType(typeName) ? pressable : isHoverableType(typeName) ? group : undefined;
+  let plugin = pluginOfElement(holder);
   return [
-    ...(i !== undefined && typeof c === "string" && c !== ""
+    ...(scope !== undefined && typeof plugin === "string" && plugin !== ""
       ? [
           {
-            plugin: c,
-            scope: i,
+            plugin,
+            scope,
           },
         ]
       : []),
-    ...childElements(o, collectHoverScopes),
+    ...childElements(node, collectHoverScopes),
   ];
 }
 //@ chunk-4121qate.js:178035-178087 placement = _temp (1)
 /**
  * image 元素键
  */
-var imageKeyOf = (c) => ["image", c.plugin, c.key ?? ""].join(Vme);
+var imageKeyOf = (c) => ["image", c.plugin, c.key ?? ""].join(KEY_SEPARATOR);
 //@ chunk-4121qate.js:178087-178345 placement
-function describeForeignMedia(key, o, r) {
-  let n = r === "Raster";
-  let s = n ? "a Raster" : "an Image";
-  let i = n ? "cells" : "source";
-  return `returned ${s} it did not draw (${String(o)}/${String(key)}); a render hook may keep the ones next(e) returned and change their ${i}, not which plugin or key they name`;
+function describeForeignMedia(key, ownerPlugin, kind) {
+  let isRaster = kind === "Raster";
+  let noun = isRaster ? "a Raster" : "an Image";
+  let editableField = isRaster ? "cells" : "source";
+  return `returned ${noun} it did not draw (${String(ownerPlugin)}/${String(key)}); a render hook may keep the ones next(e) returned and change their ${editableField}, not which plugin or key they name`;
 }
 //@ chunk-4121qate.js:178345-178385 placement
 /**
  * 标记图片所属插件
  */
-var withImageOwner = (e, plugin) => ({
-  ...e,
+var withImageOwner = (element, plugin) => ({
+  ...element,
   image: {
     plugin,
   },
 });
 //@ chunk-4121qate.js:178385-178572 placement
 var IMAGE_STAMP_RULES = {
-  stampOf: (e) => e.image,
+  stampOf: (element) => element.image,
   restamp: withImageOwner,
-  seenKeyOf: (e, plugin) => {
-    let key = e.props.key;
+  seenKeyOf: (element, plugin) => {
+    let key = element.props.key;
     return key === undefined || typeof key === "string"
       ? imageKeyOf({
           plugin,
@@ -346,23 +359,23 @@ var IMAGE_STAMP_RULES = {
         })
       : undefined;
   },
-  refusal: (e, o) => describeForeignMedia(e.props.key, o, "Image"),
+  refusal: (element, ownerPlugin) => describeForeignMedia(element.props.key, ownerPlugin, "Image"),
 };
 //@ chunk-4121qate.js:178572-178784 placement
 /**
  * 收集渲染树中的 Image 元素（图片与 key）。
  */
-function collectImageElements(e) {
-  if (!isPlainObject(e)) return [];
-  let o = e;
-  if (o.type !== "Image") return childElements(o, collectImageElements);
-  let { props } = o;
-  let n = pluginOfElement(o.image);
+function collectImageElements(element) {
+  if (!isPlainObject(element)) return [];
+  let node = element;
+  if (node.type !== "Image") return childElements(node, collectImageElements);
+  let { props } = node;
+  let plugin = pluginOfElement(node.image);
   let key = isPlainObject(props) ? props.key : undefined;
-  return typeof n === "string" && n !== ""
+  return typeof plugin === "string" && plugin !== ""
     ? [
         {
-          plugin: n,
+          plugin,
           key: typeof key === "string" ? key : undefined,
         },
       ]
@@ -372,126 +385,133 @@ function collectImageElements(e) {
 /**
  * onPress/onEvent
  */
-function isPressHandlerProp(e) {
-  return e === "onPress" || e === "onEvent";
+function isPressHandlerProp(propName) {
+  return propName === "onPress" || propName === "onEvent";
 }
 //@ chunk-4121qate.js:178835-178880 placement
 /**
  * 纯数据且带 type
  */
-var isPlainElement = (e) => isPlainDataObject(e) && typeof e.type === "string";
+var isPlainElement = (value) => isPlainDataObject(value) && typeof value.type === "string";
 //@ chunk-4121qate.js:178880-178963 placement
 /**
  * 带 key 的 Markdown
  */
-var isKeyedMarkdown = (e) =>
-  e.type === "Markdown" && !withModifiers_2(e) && isPlainObject(e.props) && typeof e.props.key === "string";
+var isKeyedMarkdown = (element) =>
+  element.type === "Markdown" &&
+  !withModifiers_2(element) &&
+  isPlainObject(element.props) &&
+  typeof element.props.key === "string";
 //@ chunk-4121qate.js:178963-178987 placement
 /**
  * 悬停作用域元素
  */
-var isHoverScopeElement = (e) => isHoverableType(e.type);
+var isHoverScopeElement = (element) => isHoverableType(element.type);
 //@ chunk-4121qate.js:178987-179084 placement
 /**
  * 自有属性的值
  */
-function ownValueOf(e, o) {
-  let ownPropertyDescriptor = Object.getOwnPropertyDescriptor(e, o);
+function ownValueOf(target, key) {
+  let ownPropertyDescriptor = Object.getOwnPropertyDescriptor(target, key);
   return ownPropertyDescriptor && "value" in ownPropertyDescriptor ? ownPropertyDescriptor.value : undefined;
 }
 //@ chunk-4121qate.js:179084-179123 placement
 /**
  * 设置并返回
  */
-function setAndReturn(weakMap, o, r) {
-  weakMap.set(o, r);
-  return r;
+function setAndReturn(weakMap, target, value) {
+  weakMap.set(target, value);
+  return value;
 }
 //@ chunk-4121qate.js:179123-180041 placement
-function checkElementList(result, o) {
+function checkElementList(result, caller) {
   let weakMap = new WeakMap();
-  function n(p) {
-    if (Array.isArray(p)) {
-      let a = ownValueOf(p, "length");
-      let m = typeof a === "number" ? a : 0;
-      let c = setAndReturn(weakMap, p, []);
-      for (let u = 0; u < m; u += 1) c[u] = i(ownValueOf(p, String(u)));
-      return c;
+  function copyContainer(source) {
+    if (Array.isArray(source)) {
+      let length = ownValueOf(source, "length");
+      let count = typeof length === "number" ? length : 0;
+      let copy = setAndReturn(weakMap, source, []);
+      for (let index = 0; index < count; index += 1)
+        copy[index] = copyElementValue(ownValueOf(source, String(index)));
+      return copy;
     }
-    let f = setAndReturn(weakMap, p, {});
-    for (let key of Object.keys(p)) if (key !== "__proto__") f[key] = s(key, ownValueOf(p, key));
-    return f;
+    let objectCopy = setAndReturn(weakMap, source, {});
+    for (let key of Object.keys(source))
+      if (key !== "__proto__") objectCopy[key] = copyValue(key, ownValueOf(source, key));
+    return objectCopy;
   }
-  function s(p, f) {
-    return !isUntrustedObject(f) && typeof f === "function" && isPressHandlerProp(p) ? f : i(f);
+  function copyValue(key, value) {
+    return !isUntrustedObject(value) && typeof value === "function" && isPressHandlerProp(key)
+      ? value
+      : copyElementValue(value);
   }
-  function i(p) {
-    if (isUntrustedObject(p))
+  function copyElementValue(value) {
+    if (isUntrustedObject(value))
       throw new HooksError(
-        `${o}: returned a drawing that holds a Proxy or a vm context; an element, its props and its hover are plain objects and arrays`,
+        `${caller}: returned a drawing that holds a Proxy or a vm context; an element, its props and its hover are plain objects and arrays`,
       );
-    let f = Array.isArray(p) || isPlainDataObject(p);
-    if (typeof p === "function")
+    let isPlainValue = Array.isArray(value) || isPlainDataObject(value);
+    if (typeof value === "function")
       throw new HooksError(
-        `${o}: returned a drawing with a function where plain data goes; a closure rides only in an element's onPress or onEvent`,
+        `${caller}: returned a drawing with a function where plain data goes; a closure rides only in an element's onPress or onEvent`,
       );
-    if (!f && isPlainObject(p))
+    if (!isPlainValue && isPlainObject(value))
       throw new HooksError(
-        `${o}: returned a drawing that holds an object that is not plain data (a class instance); an element, its props and its hover are plain objects and arrays`,
+        `${caller}: returned a drawing that holds an object that is not plain data (a class instance); an element, its props and its hover are plain objects and arrays`,
       );
-    return f ? (weakMap.get(p) ?? n(p)) : p;
+    return isPlainValue ? (weakMap.get(value) ?? copyContainer(value)) : value;
   }
-  return i(result);
+  return copyElementValue(result);
 }
 //@ chunk-4121qate.js:180041-180090 placement
 /**
  * markdown 片段键
  */
-var markdownKeyOf = (key, o) => ["markdown", o, String(key)].join(Vme);
+var markdownKeyOf = (key, plugin) => ["markdown", plugin, String(key)].join(KEY_SEPARATOR);
 //@ chunk-4121qate.js:180090-180272 placement
 /**
  * 收集渲染树中的 Markdown 片段（片段与 key）。
  */
-function collectMarkdownParts(e) {
-  let o = isPlainObject(e) ? e : {};
-  if (o.type !== "Markdown") return childElements(o, collectMarkdownParts);
-  let r = pluginOfElement(o.part);
-  let key = isPlainObject(o.props) ? o.props.key : undefined;
-  return typeof r === "string" && typeof key === "string" ? [markdownKeyOf(key, r)] : [];
+function collectMarkdownParts(element) {
+  let node = isPlainObject(element) ? element : {};
+  if (node.type !== "Markdown") return childElements(node, collectMarkdownParts);
+  let plugin = pluginOfElement(node.part);
+  let key = isPlainObject(node.props) ? node.props.key : undefined;
+  return typeof plugin === "string" && typeof key === "string" ? [markdownKeyOf(key, plugin)] : [];
 }
 //@ chunk-4121qate.js:180272-180389 placement
 /**
  * 收集渲染树中文本类元素的片段文本。
  */
-function collectTextParts(e) {
-  let o = isPlainObject(e) ? e : {};
-  let r = pluginOfElement(o.part);
+function collectTextParts(element) {
+  let node = isPlainObject(element) ? element : {};
+  let plugin = pluginOfElement(node.part);
   return [
-    ...(isHoverableType(o.type) && typeof r === "string" && r !== "" ? [r] : []),
-    ...childElements(o, collectTextParts),
+    ...(isHoverableType(node.type) && typeof plugin === "string" && plugin !== "" ? [plugin] : []),
+    ...childElements(node, collectTextParts),
   ];
 }
 //@ chunk-4121qate.js:180428-180477 placement
 /**
  * raster 元素键
  */
-var rasterKeyOf = (e) => ["raster", e.plugin, e.key].join(Vme);
+var rasterKeyOf = (entry) => ["raster", entry.plugin, entry.key].join(KEY_SEPARATOR);
 //@ chunk-4121qate.js:180477-180518 placement
 /**
  * 标记 raster 所属插件
  */
-var withRasterOwner = (e, plugin) => ({
-  ...e,
+var withRasterOwner = (element, plugin) => ({
+  ...element,
   raster: {
     plugin,
   },
 });
 //@ chunk-4121qate.js:180518-180695 placement
 var RASTER_STAMP_RULES = {
-  stampOf: (e) => e.raster,
+  stampOf: (element) => element.raster,
   restamp: withRasterOwner,
-  seenKeyOf: (e, plugin) => {
-    let key = e.props.key;
+  seenKeyOf: (element, plugin) => {
+    let key = element.props.key;
     return typeof key === "string"
       ? rasterKeyOf({
           plugin,
@@ -499,23 +519,23 @@ var RASTER_STAMP_RULES = {
         })
       : undefined;
   },
-  refusal: (e, o) => describeForeignMedia(e.props.key, o, "Raster"),
+  refusal: (element, ownerPlugin) => describeForeignMedia(element.props.key, ownerPlugin, "Raster"),
 };
 //@ chunk-4121qate.js:180695-180903 placement
 /**
  * 收集渲染树中的 Raster 元素（栅格与 key）。
  */
-function collectRasterElements(e) {
-  if (!isPlainObject(e)) return [];
-  let o = e;
-  if (o.type !== "Raster") return childElements(o, collectRasterElements);
-  let { props } = o;
-  let n = pluginOfElement(o.raster);
+function collectRasterElements(element) {
+  if (!isPlainObject(element)) return [];
+  let node = element;
+  if (node.type !== "Raster") return childElements(node, collectRasterElements);
+  let { props } = node;
+  let plugin = pluginOfElement(node.raster);
   let key = isPlainObject(props) ? props.key : undefined;
-  return typeof n === "string" && n !== "" && typeof key === "string"
+  return typeof plugin === "string" && plugin !== "" && typeof key === "string"
     ? [
         {
-          plugin: n,
+          plugin,
           key,
         },
       ]
@@ -525,89 +545,91 @@ function collectRasterElements(e) {
 /**
  * 映射按键句柄
  */
-var mapPressHandles = (e, o) => mapPressHandles_2(e, o);
+var mapPressHandles = (element, restamp) => mapPressHandles_2(element, restamp);
 //@ chunk-4121qate.js:180926-180967 placement
 /**
  * 标记 client 所属插件
  */
-var withClientOwner = (e, plugin) => ({
-  ...e,
+var withClientOwner = (element, plugin) => ({
+  ...element,
   client: {
     plugin,
   },
 });
 //@ chunk-4121qate.js:180967-181419 placement
-function checkReturnedClient(e, o) {
-  let r = pluginOfElement(e.client);
-  let key = e.props.key;
-  let s = e.props.module;
-  if (r === "" || r === undefined) return withClientOwner(e, o.plugin);
+function checkReturnedClient(element, context) {
+  let plugin = pluginOfElement(element.client);
+  let key = element.props.key;
+  let moduleName = element.props.module;
+  if (plugin === "" || plugin === undefined) return withClientOwner(element, context.plugin);
   if (!(
-    typeof r === "string" &&
+    typeof plugin === "string" &&
     typeof key === "string" &&
-    typeof s === "string" &&
-    o.seen.has(
+    typeof moduleName === "string" &&
+    context.seen.has(
       clientKeyOf({
-        plugin: r,
+        plugin,
         key,
-        module: s,
+        module: moduleName,
       }),
     )
   ))
     throw new HooksError(
-      `${o.plugin}: returned a Client it did not draw (${String(r)}/${String(key)} ${String(s)}); a render hook may keep the ones next(e) returned and change their props, not which plugin, key or module they name`,
+      `${context.plugin}: returned a Client it did not draw (${String(plugin)}/${String(key)} ${String(moduleName)}); a render hook may keep the ones next(e) returned and change their props, not which plugin, key or module they name`,
     );
-  return e;
+  return element;
 }
 //@ chunk-4121qate.js:181419-181459 placement
 /**
  * 标记分组所属插件
  */
-var withGroupOwner = (e, plugin) => ({
-  ...e,
+var withGroupOwner = (element, plugin) => ({
+  ...element,
   group: {
     plugin,
   },
 });
 //@ chunk-4121qate.js:181459-181745 placement
-function takeHoverGroup(e, o, type) {
-  let n = hoverScopeKey(o);
-  let s = e.groups.get(n) ?? 0;
-  if (s < 1)
+function takeHoverGroup(context, scopeEntry, type) {
+  let scopeKey = hoverScopeKey(scopeEntry);
+  let remaining = context.groups.get(scopeKey) ?? 0;
+  if (remaining < 1)
     throw new HooksError(
-      `${e.plugin}: returned a ${type} in another plugin's hover scope that next(e) did not hand it; a render hook may keep the ones next(e) returned and restyle them, not join another plugin's group`,
+      `${context.plugin}: returned a ${type} in another plugin's hover scope that next(e) did not hand it; a render hook may keep the ones next(e) returned and restyle them, not join another plugin's group`,
     );
-  e.groups.set(n, s - 1);
+  context.groups.set(scopeKey, remaining - 1);
 }
 //@ chunk-4121qate.js:181745-181929 placement
-function stampHoverGroup(e, o) {
-  let r = elementScope(e.hover);
-  if (r === undefined) return e;
-  let n = pluginOfElement(e.group);
-  if (n === "" || n === undefined || n === o.plugin) return withGroupOwner(e, o.plugin);
+function stampHoverGroup(element, context) {
+  let scope = elementScope(element.hover);
+  if (scope === undefined) return element;
+  let plugin = pluginOfElement(element.group);
+  if (plugin === "" || plugin === undefined || plugin === context.plugin)
+    return withGroupOwner(element, context.plugin);
   takeHoverGroup(
-    o,
+    context,
     {
-      plugin: String(n),
-      scope: r,
+      plugin: String(plugin),
+      scope,
     },
-    e.type,
+    element.type,
   );
-  return e;
+  return element;
 }
 //@ chunk-4121qate.js:181929-182160 placement
-function stampMedia(e, o, r) {
-  let n = pluginOfElement(r.stampOf(e));
-  if (n === "" || n === undefined) return r.restamp(e, o.plugin);
-  let i = typeof n === "string" ? r.seenKeyOf(e, n) : undefined;
-  if (!(i !== undefined && o.seen.has(i))) throw new HooksError(`${o.plugin}: ${r.refusal(e, n)}`);
-  return e;
+function stampMedia(element, context, rules) {
+  let plugin = pluginOfElement(rules.stampOf(element));
+  if (plugin === "" || plugin === undefined) return rules.restamp(element, context.plugin);
+  let seenKey = typeof plugin === "string" ? rules.seenKeyOf(element, plugin) : undefined;
+  if (!(seenKey !== undefined && context.seen.has(seenKey)))
+    throw new HooksError(`${context.plugin}: ${rules.refusal(element, plugin)}`);
+  return element;
 }
 //@ chunk-4121qate.js:182160-182185 placement
 /**
  * 标记图片媒体
  */
-var stampImageMedia = (e, o) => stampMedia(e, o, IMAGE_STAMP_RULES);
+var stampImageMedia = (element, context) => stampMedia(element, context, IMAGE_STAMP_RULES);
 //@ chunk-4121qate.js:182185-182269 placement
 /**
  * a Button/an Input…
@@ -622,8 +644,8 @@ var PRESSABLE_LABELS = {
 /**
  * 标记部件所属插件
  */
-var withPartOwner = (e, plugin) => ({
-  ...e,
+var withPartOwner = (element, plugin) => ({
+  ...element,
   part: {
     plugin,
   },
@@ -632,71 +654,71 @@ var withPartOwner = (e, plugin) => ({
 /**
  * 去掉 part
  */
-function withoutPart(e) {
-  let { part, ...r } = e;
-  return r;
+function withoutPart(element) {
+  let { part, ...rest } = element;
+  return rest;
 }
 //@ chunk-4121qate.js:182351-182578 placement
-function stampPart(e, o) {
-  if (!("part" in e)) return e;
-  let r = pluginOfElement(e.part);
-  if (r === o.plugin) return withPartOwner(e, o.plugin);
-  let n = typeof r === "string" ? (o.parts.get(r) ?? 0) : 0;
-  if (typeof r !== "string" || r === "" || n < 1) return withoutPart(e);
-  o.parts.set(r, n - 1);
-  return withPartOwner(e, r);
+function stampPart(element, context) {
+  if (!("part" in element)) return element;
+  let plugin = pluginOfElement(element.part);
+  if (plugin === context.plugin) return withPartOwner(element, context.plugin);
+  let remaining = typeof plugin === "string" ? (context.parts.get(plugin) ?? 0) : 0;
+  if (typeof plugin !== "string" || plugin === "" || remaining < 1) return withoutPart(element);
+  context.parts.set(plugin, remaining - 1);
+  return withPartOwner(element, plugin);
 }
 //@ chunk-4121qate.js:182578-182603 placement
 /**
  * 标记 raster 媒体
  */
-var stampRasterMedia = (e, o) => stampMedia(e, o, RASTER_STAMP_RULES);
+var stampRasterMedia = (element, context) => stampMedia(element, context, RASTER_STAMP_RULES);
 //@ chunk-4121qate.js:182603-182993 placement
 /**
  * 把可按元素（Button/Input/Select/Markdown）转为带按键句柄的形状。
  */
-function toPressElement(e, plugin, handle) {
+function toPressElement(element, plugin, handle) {
   let press = {
     plugin,
     handle,
   };
-  switch (e.type) {
+  switch (element.type) {
     case "Button": {
-      let s = {
+      let withPress = {
         type: "Button",
-        props: e.props,
+        props: element.props,
         press,
       };
-      let p =
-        e.hover === undefined
-          ? s
+      let withHover =
+        element.hover === undefined
+          ? withPress
           : {
-              ...s,
-              hover: e.hover,
+              ...withPress,
+              hover: element.hover,
             };
-      return e.children === undefined
-        ? p
+      return element.children === undefined
+        ? withHover
         : {
-            ...p,
-            children: e.children,
+            ...withHover,
+            children: element.children,
           };
     }
     case "Input":
       return {
         type: "Input",
-        props: e.props,
+        props: element.props,
         press,
       };
     case "Select":
       return {
         type: "Select",
-        props: e.props,
+        props: element.props,
         press,
       };
     case "Markdown":
       return {
         type: "Markdown",
-        props: e.props,
+        props: element.props,
         press,
       };
   }
@@ -712,63 +734,74 @@ var ELEMENT_HANDLER_ERRORS = {
     "returned a pressable Markdown without an onLinkPress function; a render hook draws one with <Markdown key text onLinkPress>",
 };
 //@ chunk-4121qate.js:183471-184565 placement
-function validateElement(e, o) {
-  if (typeof e === "object" && e !== null && e.type === "engine")
+function validateElement(element, context) {
+  if (typeof element === "object" && element !== null && element.type === "engine")
     return {
       type: "engine",
-      ref: e.ref,
+      ref: element.ref,
     };
-  if (typeof e === "object" && !isHoverScopeElement(e) && !isKeyedMarkdown(e) && "part" in e)
-    return validateElement(withoutPart(e), o);
-  if (isStringOrEngineType(e)) return e;
-  if (e.type === "Client") return checkReturnedClient(e, o);
-  if (e.type === "Raster") return stampRasterMedia(e, o);
-  if (e.type === "Image") return stampImageMedia(e, o);
-  if (isKeyedMarkdown(e)) {
-    let h = pluginOfElement("part" in e ? e.part : undefined);
-    let v = typeof h === "string" && o.seen.has(markdownKeyOf(e.props.key, h));
-    return withPartOwner(e, v ? h : o.plugin);
+  if (
+    typeof element === "object" &&
+    !isHoverScopeElement(element) &&
+    !isKeyedMarkdown(element) &&
+    "part" in element
+  )
+    return validateElement(withoutPart(element), context);
+  if (isStringOrEngineType(element)) return element;
+  if (element.type === "Client") return checkReturnedClient(element, context);
+  if (element.type === "Raster") return stampRasterMedia(element, context);
+  if (element.type === "Image") return stampImageMedia(element, context);
+  if (isKeyedMarkdown(element)) {
+    let partPlugin = pluginOfElement("part" in element ? element.part : undefined);
+    let isKnown =
+      typeof partPlugin === "string" && context.seen.has(markdownKeyOf(element.props.key, partPlugin));
+    return withPartOwner(element, isKnown ? partPlugin : context.plugin);
   }
-  if (!withModifiers_2(e)) {
-    let h = isHoverScopeElement(e) ? stampPart(stampHoverGroup(e, o), o) : e;
-    return mapChildren(h, (v) => validateElement(v, o));
+  if (!withModifiers_2(element)) {
+    let stamped = isHoverScopeElement(element)
+      ? stampPart(stampHoverGroup(element, context), context)
+      : element;
+    return mapChildren(stamped, (child) => validateElement(child, context));
   }
-  let { press, onPress, onEvent } = e;
-  let p = e.type === "Button";
-  let f = p ? onPress : onEvent;
-  let a = p ? mapChildren(e, (h) => validateElement(h, o)) : e;
-  if (typeof press !== "object" || press === null) return a;
+  let { press, onPress, onEvent } = element;
+  let isButton = element.type === "Button";
+  let handler = isButton ? onPress : onEvent;
+  let withChildren = isButton ? mapChildren(element, (child) => validateElement(child, context)) : element;
+  if (typeof press !== "object" || press === null) return withChildren;
   let { handle, plugin } = press;
-  if (typeof handle !== "number") return a;
+  if (typeof handle !== "number") return withChildren;
   if (plugin === "") {
-    if (typeof f !== "function") throw new HooksError(`${o.plugin}: ${ELEMENT_HANDLER_ERRORS[a.type]}`);
-    o.take(handle, f);
-    return toPressElement(a, o.plugin, handle);
+    if (typeof handler !== "function")
+      throw new HooksError(`${context.plugin}: ${ELEMENT_HANDLER_ERRORS[withChildren.type]}`);
+    context.take(handle, handler);
+    return toPressElement(withChildren, context.plugin, handle);
   }
-  if (typeof plugin !== "string" || !o.seen.has(withModifiers(plugin, handle)))
+  if (typeof plugin !== "string" || !context.seen.has(withModifiers(plugin, handle)))
     throw new HooksError(
-      `${o.plugin}: returned ${PRESSABLE_LABELS[a.type]} it did not draw (${String(plugin)}#${handle}); a render hook may keep the ones next(e) returned, not address another plugin's`,
+      `${context.plugin}: returned ${PRESSABLE_LABELS[withChildren.type]} it did not draw (${String(plugin)}#${handle}); a render hook may keep the ones next(e) returned, not address another plugin's`,
     );
-  let { hover } = a;
-  let x = elementScope(hover);
-  if (x !== undefined && plugin !== o.plugin)
+  let { hover } = withChildren;
+  let scope = elementScope(hover);
+  if (scope !== undefined && plugin !== context.plugin)
     takeHoverGroup(
-      o,
+      context,
       {
         plugin,
-        scope: x,
+        scope,
       },
-      a.type,
+      withChildren.type,
     );
-  return a;
+  return withChildren;
 }
 //@ chunk-4121qate.js:184565-184654 placement
 /**
  * 校验并标记元素
  */
-function validateAndStampElement({ tree, ...o }) {
-  let r = validateElement(tree, o);
-  return isHoverScopeElement(r) && r.part === undefined ? withPartOwner(r, o.plugin) : r;
+function validateAndStampElement({ tree, ...context }) {
+  let validated = validateElement(tree, context);
+  return isHoverScopeElement(validated) && validated.part === undefined
+    ? withPartOwner(validated, context.plugin)
+    : validated;
 }
 export {
   UI_ELEMENT_TYPES,

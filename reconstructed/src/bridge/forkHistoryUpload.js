@@ -32,48 +32,51 @@ var MAX_FORK_HISTORY_MESSAGES = 200;
 /**
  * Remote Control 分叉会话上传显示历史，失败时发通知并归档。
  */
-async function uploadForkDisplayHistory(o, r, e, i, host, tools) {
-  let p = sliceTailKeepingGroups(r.filter(isEligibleBridgeMessage), MAX_FORK_HISTORY_MESSAGES);
-  let g = undefined;
+async function uploadForkDisplayHistory(sessionId, messages, credentials, featureName, host, tools) {
+  let tail = sliceTailKeepingGroups(messages.filter(isEligibleBridgeMessage), MAX_FORK_HISTORY_MESSAGES);
+  let redactor = undefined;
   let remoteBridgeRedactor = createRemoteBridgeRedactor({
     mode: strayDropMode,
     placeAccountMemoryTool: createMemoryServerVerifier(() => tools),
     accountMemoryInPlay: () => hasRecordedTextForHost(host),
   });
-  remoteBridgeRedactor.note(r);
-  let flattened = remoteBridgeRedactor
-    .redact(toSDKMessages(remoteBridgeRedactor.withoutMemoryCallAttachments(p), undefined))
-    .flatMap((m) =>
-      typeof m.uuid === "string"
+  remoteBridgeRedactor.note(messages);
+  let events = remoteBridgeRedactor
+    .redact(toSDKMessages(remoteBridgeRedactor.withoutMemoryCallAttachments(tail), undefined))
+    .flatMap((message) =>
+      typeof message.uuid === "string"
         ? [
             {
-              ...m,
-              uuid: m.uuid,
-              session_id: o,
+              ...message,
+              uuid: message.uuid,
+              session_id: sessionId,
               [DISPLAY_ONLY]: true,
             },
           ]
         : [],
     );
-  if (flattened.length === 0) return null;
-  let n = await sendSessionHistoryEvents(toInfraSessionId(o), flattened, e);
-  if (!n.ok || n.droppedEvents === flattened.length) {
-    logForDebugging(`[rc-fork] History upload to ${o} failed: ${n.ok ? "every event refused" : n.reason}`, {
-      level: "error",
-    });
+  if (events.length === 0) return null;
+  let result = await sendSessionHistoryEvents(toInfraSessionId(sessionId), events, credentials);
+  if (!result.ok || result.droppedEvents === events.length) {
+    logForDebugging(
+      `[rc-fork] History upload to ${sessionId} failed: ${result.ok ? "every event refused" : result.reason}`,
+      {
+        level: "error",
+      },
+    );
     return "history_upload_failed";
   }
-  if (n.droppedEvents > 0) logFeatureSad(i, "history_events_dropped");
+  if (result.droppedEvents > 0) logFeatureSad(featureName, "history_events_dropped");
   return null;
 }
 //@ chunk-vx1xamz5.js:1320-1408 placement
 var FORK_FAILED_NOTICE_TEXT =
   "This forked session could not be started. Fork the conversation again to retry.";
 //@ chunk-vx1xamz5.js:1408-1785 placement
-async function postForkFailureNotice(o, r) {
+async function postForkFailureNotice(sessionId, credentials) {
   try {
-    let e = await sendSessionHistoryEvents(
-      toInfraSessionId(o),
+    let result = await sendSessionHistoryEvents(
+      toInfraSessionId(sessionId),
       [
         {
           type: "system",
@@ -81,21 +84,21 @@ async function postForkFailureNotice(o, r) {
           content: FORK_FAILED_NOTICE_TEXT,
           level: "warning",
           uuid: randomUUID(),
-          session_id: o,
+          session_id: sessionId,
           [DISPLAY_ONLY]: true,
         },
       ],
-      r,
+      credentials,
     );
-    if (!e.ok || e.droppedEvents > 0)
+    if (!result.ok || result.droppedEvents > 0)
       logForDebugging(
-        `[rc-fork] Could not post the failure notice to ${o}: ${e.ok ? "event refused" : e.reason}`,
+        `[rc-fork] Could not post the failure notice to ${sessionId}: ${result.ok ? "event refused" : result.reason}`,
         {
           level: "warn",
         },
       );
   } catch (error) {
-    logForDebugging(`[rc-fork] Could not post the failure notice to ${o}: ${errorMessage(error)}`, {
+    logForDebugging(`[rc-fork] Could not post the failure notice to ${sessionId}: ${errorMessage(error)}`, {
       level: "warn",
     });
   }
@@ -104,22 +107,25 @@ async function postForkFailureNotice(o, r) {
 /**
  * 远程控制分叉时尝试登记推荐兑换。
  */
-async function archiveAbandonedForkSession(o, r) {
+async function archiveAbandonedForkSession(sessionId, credentials) {
   try {
-    let { accessToken, orgUUID } = await prepareApiRequest(r);
-    let s = await archiveCodeSession(getOauthConfig().BASE_API_URL, accessToken, o, 1e4, {
+    let { accessToken, orgUUID } = await prepareApiRequest(credentials);
+    let status = await archiveCodeSession(getOauthConfig().BASE_API_URL, accessToken, sessionId, 1e4, {
       useV2: isCcrV2SessionCrudEnabled(),
       orgUUID,
       trustedDeviceToken: (await trustedDeviceHeaders())["X-Trusted-Device-Token"],
     });
-    if (s !== 200 && s !== 409)
-      logForDebugging(`[rc-fork] Could not archive abandoned fork session ${o}: ${s}`, {
+    if (status !== 200 && status !== 409)
+      logForDebugging(`[rc-fork] Could not archive abandoned fork session ${sessionId}: ${status}`, {
         level: "warn",
       });
   } catch (error) {
-    logForDebugging(`[rc-fork] Could not archive abandoned fork session ${o}: ${errorMessage(error)}`, {
-      level: "warn",
-    });
+    logForDebugging(
+      `[rc-fork] Could not archive abandoned fork session ${sessionId}: ${errorMessage(error)}`,
+      {
+        level: "warn",
+      },
+    );
   }
 }
 export { uploadForkDisplayHistory, archiveAbandonedForkSession, postForkFailureNotice };

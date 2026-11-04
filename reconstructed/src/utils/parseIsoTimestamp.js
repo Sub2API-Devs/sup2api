@@ -15,7 +15,7 @@ var ISO_TIMESTAMP_RE = /^\d{4}-\d{2}-\d{2}[Tt ]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:[zZ
 /**
  * 解析 ISO 时间戳，不合法返回 NaN。
  */
-function parseIsoTimestamp(t) {
-  return ISO_TIMESTAMP_RE.test(t) ? Date.parse(t) : Number.NaN;
+function parseIsoTimestamp(text) {
+  return ISO_TIMESTAMP_RE.test(text) ? Date.parse(text) : Number.NaN;
 }
 export { parseIsoTimestamp };

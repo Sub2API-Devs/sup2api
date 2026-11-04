@@ -33,24 +33,24 @@ import { settingsChangeDetector } from "../../utils/settings/changeDetector.js";
 //@ chunk-cm57mjc2.js:12063-13013 placement
 function registerArtifactsMcpLaptopEntry({ session, store, scope, storageV5, credentials }) {
   if (!mayBuildArtifactsMcpLaptopEntryAfterStart()) return () => {};
-  let s = loginEventCounter.of(session);
-  let t = [];
-  let n = false;
-  let c = () => {
-    n = true;
-    for (let e of t.splice(0)) e();
+  let counter = loginEventCounter.of(session);
+  let unsubscribers = [];
+  let disposed = false;
+  let dispose = () => {
+    disposed = true;
+    for (let unsubscribe of unsubscribers.splice(0)) unsubscribe();
   };
-  let g = async () => {
-    if (n || !isArtifactToolEnabled() || !isArtifactsMcpLaptopLoginCompleted()) return;
+  let run = async () => {
+    if (disposed || !isArtifactToolEnabled() || !isArtifactsMcpLaptopLoginCompleted()) return;
     let effectiveMcpPolicyKey = getEffectiveMcpPolicyKey();
     let { servers } = await getClaudeCodeMcpConfigs(scope.dynamicMcpConfig ?? {}, {
       storageV5,
       credentials,
     });
     await awaitPolicyColdStartWaiter();
-    if (n || isRemoteSettingsFetchFailed()) return;
+    if (disposed || isRemoteSettingsFetchFailed()) return;
     if (getEffectiveMcpPolicyKey() !== effectiveMcpPolicyKey) {
-      o();
+      queueRun();
       return;
     }
     let artifactsMcpLaptopEntryAfterStart = buildArtifactsMcpLaptopEntryAfterStart({
@@ -64,29 +64,30 @@ function registerArtifactsMcpLaptopEntry({ session, store, scope, storageV5, cre
       allowedByPolicy: isMcpServerAllowedByPolicy,
     });
     if (artifactsMcpLaptopEntryAfterStart === "waiting") return;
-    c();
+    dispose();
     if (artifactsMcpLaptopEntryAfterStart !== null)
-      scope.updateDynamicMcpConfig((y) => ({
-        ...y,
+      scope.updateDynamicMcpConfig((config) => ({
+        ...config,
         [artifactsMcpLaptopEntryAfterStart.name]: artifactsMcpLaptopEntryAfterStart.config,
       }));
   };
-  let a = () => void g().catch(logError);
-  let o = () => queueMicrotask(a);
-  let S = () => {
-    noteLoginsCompletedForArtifactsMcpLaptopEntry(s.getSnapshot().loginCompleted, "as_it_completed");
-    o();
+  let scheduleRun = () => void run().catch(logError);
+  let queueRun = () => queueMicrotask(scheduleRun);
+  let onLoginChange = () => {
+    noteLoginsCompletedForArtifactsMcpLaptopEntry(counter.getSnapshot().loginCompleted, "as_it_completed");
+    queueRun();
   };
   try {
-    t.push(s.subscribe(S));
-    t.push(onGrowthBookRefresh(o));
-    t.push(onPolicyVerdictHeldStart(o));
-    t.push(settingsChangeDetector.subscribe(o));
-    noteLoginsCompletedForArtifactsMcpLaptopEntry(s.getSnapshot().loginCompleted, "later");
-    a();
+    unsubscribers.push(counter.subscribe(onLoginChange));
+    unsubscribers.push(onGrowthBookRefresh(queueRun));
+    unsubscribers.push(onPolicyVerdictHeldStart(queueRun));
+    unsubscribers.push(settingsChangeDetector.subscribe(queueRun));
+    noteLoginsCompletedForArtifactsMcpLaptopEntry(counter.getSnapshot().loginCompleted, "later");
+    scheduleRun();
   } catch (error) {
-    c();
+    dispose();
     throw error;
   }
-  return c;
+  return dispose;
 }
+export { registerArtifactsMcpLaptopEntry };

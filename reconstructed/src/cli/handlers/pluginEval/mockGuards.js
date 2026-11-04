@@ -31,31 +31,33 @@ import {
 } from "../../../utils/fsOperations.js";
 import { DoctorLazy } from "../util.js";
 import {
-  u,
+  objectSchema,
   _enum,
-  string,
+  stringSchema,
   lazy,
   union,
   array,
   record,
   discriminatedUnion,
   literal,
-  M,
+  booleanSchema,
   unknown,
 } from "../../../../vendor/zod/v4/classic/schemas.js";
 
 //@ chunk-vzw8h259.js:754-764 placement
 var MAX_GUARD_VALUE_CHARS = 120;
 //@ chunk-vzw8h259.js:764-814 placement
-function truncateGuardValue(e) {
-  return e.length > MAX_GUARD_VALUE_CHARS ? `${truncateToLength(e, MAX_GUARD_VALUE_CHARS)}...` : e;
+function truncateGuardValue(value) {
+  return value.length > MAX_GUARD_VALUE_CHARS
+    ? `${truncateToLength(value, MAX_GUARD_VALUE_CHARS)}...`
+    : value;
 }
 //@ chunk-vzw8h259.js:814-849 placement
 /**
  * 把守卫值转成可展示文本：先按 120 字符截断，再 JSON 序列化并转义不可打印字符。
  */
-function formatGuardValueJson(e) {
-  return escapeNonPrintable(jsonStringify(truncateGuardValue(e)));
+function formatGuardValueJson(value) {
+  return escapeNonPrintable(jsonStringify(truncateGuardValue(value)));
 }
 //@ chunk-vzw8h259.js:849-962 placement
 /**
@@ -63,52 +65,56 @@ function formatGuardValueJson(e) {
  */
 function formatGuardValue(value) {
   if (typeof value === "string") return formatGuardValueJson(value);
-  let t = jsonStringify(value) ?? String(value);
-  return t.length <= MAX_GUARD_VALUE_CHARS
-    ? escapeNonPrintable(t)
-    : escapeNonPrintable(jsonStringify(truncateGuardValue(t)));
+  let json = jsonStringify(value) ?? String(value);
+  return json.length <= MAX_GUARD_VALUE_CHARS
+    ? escapeNonPrintable(json)
+    : escapeNonPrintable(jsonStringify(truncateGuardValue(json)));
 }
 //@ chunk-vzw8h259.js:962-2507 placement
-async function checkRepoAuthoredPath(e, t, r, i = []) {
-  let resolved = path.resolve(e, t);
-  let s = formatGuardValueJson(t);
-  let anchors = [e, ...i];
+async function checkRepoAuthoredPath(root, repoPath, label, extraAnchors = []) {
+  let resolved = path.resolve(root, repoPath);
+  let displayPath = formatGuardValueJson(repoPath);
+  let anchors = [root, ...extraAnchors];
   if (
-    (isNetworkRelatedPath(t) && !isNetworkMountRoot(t)) ||
+    (isNetworkRelatedPath(repoPath) && !isNetworkMountRoot(repoPath)) ||
     (isNetworkRelatedPath(resolved) && !isNetworkMountRoot(resolved))
   )
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `${r}: ${s} is an automounter path (macOS /Network, or the bare /net root) \u2014 refusing it (a lookup there is a network request)`,
+      `${label}: ${displayPath} is an automounter path (macOS /Network, or the bare /net root) \u2014 refusing it (a lookup there is a network request)`,
       "plugin eval: a repo-authored path is an automounter path \u2014 refusing it",
     );
-  let c = isWslUncPath(resolved) || (isWslUncPath(t) && !isOnForeignMount(resolved, e));
-  if (isOnForeignMount(t, e) && i.every((h) => isOnForeignMount(resolved, h)) && !c)
+  let isWslPath = isWslUncPath(resolved) || (isWslUncPath(repoPath) && !isOnForeignMount(resolved, root));
+  if (
+    isOnForeignMount(repoPath, root) &&
+    extraAnchors.every((anchor) => isOnForeignMount(resolved, anchor)) &&
+    !isWslPath
+  )
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `${r}: ${s} is a network-reaching path (UNC / automount) \u2014 refusing it`,
+      `${label}: ${displayPath} is a network-reaching path (UNC / automount) \u2014 refusing it`,
       "plugin eval: a repo-authored path is network-reaching \u2014 refusing it",
     );
-  let m;
+  let resolvedTarget;
   let intermediateUncJunction = await findIntermediateUncJunctionAsync(NodeFsOperations, resolved, {
     anchors,
     surfaceNetworkRaw: true,
     unreadableAncestry: "unverified",
-    onOutcome: (h) => {
-      if (h.kind === "resolved") m = h.path;
+    onOutcome: (outcome) => {
+      if (outcome.kind === "resolved") resolvedTarget = outcome.path;
     },
   });
   if (intermediateUncJunction === UNVERIFIED_ANCESTRY)
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `${r}: ${s} passes through a component that cannot be examined (unreadable, a link or junction whose target does not exist, or a symlink chain too long to follow) \u2014 refusing it (it could not be vetted)`,
+      `${label}: ${displayPath} passes through a component that cannot be examined (unreadable, a link or junction whose target does not exist, or a symlink chain too long to follow) \u2014 refusing it (it could not be vetted)`,
       "plugin eval: a repo-authored path has an unexaminable component \u2014 refusing it",
     );
   if (intermediateUncJunction !== undefined)
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `${r}: ${s} passes through a symlink to a network-reaching path (or a dotted one that cannot be vetted) \u2014 refusing it`,
+      `${label}: ${displayPath} passes through a symlink to a network-reaching path (or a dotted one that cannot be vetted) \u2014 refusing it`,
       "plugin eval: a repo-authored path links to a network-reaching path \u2014 refusing it",
     );
-  if (m !== undefined && isNetworkMountRoot_2(m))
+  if (resolvedTarget !== undefined && isNetworkMountRoot_2(resolvedTarget))
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `${r}: ${s} leads to an automounter map directory (/net, /net/<host>; macOS /Network, /home) \u2014 refusing it (naming anything in it asks the automounter or a host)`,
+      `${label}: ${displayPath} leads to an automounter map directory (/net, /net/<host>; macOS /Network, /home) \u2014 refusing it (naming anything in it asks the automounter or a host)`,
       "plugin eval: a repo-authored path lands on an automounter map directory \u2014 refusing it",
     );
 }
@@ -118,31 +124,31 @@ var MAX_EXPECT_REPEAT_BUDGET = 50000000;
 var EXPECT_REGEX_FLAGS_PATTERN = /^[is]*$/;
 //@ chunk-vzw8h259.js:2562-5316 placement
 function compileExpectRegex(source) {
-  let r = 0;
-  let i = 1;
-  let n = 0;
-  let s = false;
-  let a = false;
-  let c = false;
+  let singleCount = 0;
+  let repeatCount = 1;
+  let literalCount = 0;
+  let isAnchoredStart = false;
+  let isLiteralAtom = false;
+  let prevWasQuantified = false;
   for (let idx = 0; idx < source.length; idx++) {
-    let f = source[idx];
-    if (f === "(" || f === ")" || f === "|")
+    let char = source[idx];
+    if (char === "(" || char === ")" || char === "|")
       return {
         problem:
           'expect: /regex/ guards use a small dialect \u2014 literals, ".", escapes, character classes, and quantifiers (* + ? {m,n}) on single atoms, with optional ^ and $; no groups "(\u2026)", alternation "|", backreferences, or lookaround. Use a list of literals, a type name, or several simpler guards instead',
       };
-    if (f === "^") {
+    if (char === "^") {
       if (idx !== 0)
         return {
           problem:
             'expect: /regex/ guards use a small dialect \u2014 literals, ".", escapes, character classes, and quantifiers (* + ? {m,n}) on single atoms, with optional ^ and $; no groups "(\u2026)", alternation "|", backreferences, or lookaround. Use a list of literals, a type name, or several simpler guards instead',
         };
-      s = true;
-      a = false;
-      c = false;
+      isAnchoredStart = true;
+      isLiteralAtom = false;
+      prevWasQuantified = false;
       continue;
     }
-    if (f === "$") {
+    if (char === "$") {
       if (idx !== source.length - 1)
         return {
           problem:
@@ -150,72 +156,72 @@ function compileExpectRegex(source) {
         };
       continue;
     }
-    let b = null;
-    if (f === "*")
-      b = {
+    let quantifier = null;
+    if (char === "*")
+      quantifier = {
         lo: 0,
         hi: 1 / 0,
       };
-    else if (f === "+")
-      b = {
+    else if (char === "+")
+      quantifier = {
         lo: 1,
         hi: 1 / 0,
       };
-    else if (f === "?") {
-      if (c) {
-        c = false;
+    else if (char === "?") {
+      if (prevWasQuantified) {
+        prevWasQuantified = false;
         continue;
       }
-      b = {
+      quantifier = {
         lo: 0,
         hi: 1,
       };
-    } else if (f === "{") {
+    } else if (char === "{") {
       let match = /^\{(\d+)(?:,(\d*))?\}/.exec(source.slice(idx));
       if (match) {
-        let w = Number(match[1]);
-        let S = match[2] === undefined ? w : match[2] === "" ? 1 / 0 : Number(match[2]);
-        if (S < w)
+        let min = Number(match[1]);
+        let max = match[2] === undefined ? min : match[2] === "" ? 1 / 0 : Number(match[2]);
+        if (max < min)
           return {
             problem: `quantifier ${match[0]} has max < min`,
           };
-        b = {
-          lo: w,
-          hi: S,
+        quantifier = {
+          lo: min,
+          hi: max,
         };
         idx += match[0].length - 1;
       }
     }
-    if (b !== null) {
-      if (!a)
+    if (quantifier !== null) {
+      if (!isLiteralAtom)
         return {
           problem: "a quantifier must follow a single character, escape, or class",
         };
-      n += (b.hi === 1 / 0 ? b.lo : b.hi) - 1;
-      if (b.hi === 1 / 0) r++;
-      else i *= b.hi - b.lo + 1;
-      a = false;
-      c = true;
+      literalCount += (quantifier.hi === 1 / 0 ? quantifier.lo : quantifier.hi) - 1;
+      if (quantifier.hi === 1 / 0) singleCount++;
+      else repeatCount *= quantifier.hi - quantifier.lo + 1;
+      isLiteralAtom = false;
+      prevWasQuantified = true;
       continue;
     }
-    c = false;
-    if (f === "\\") {
-      let g = source[idx + 1];
-      if (g === undefined)
+    prevWasQuantified = false;
+    if (char === "\\") {
+      let escaped = source[idx + 1];
+      if (escaped === undefined)
         return {
           problem: "pattern ends with a lone backslash",
         };
-      if (/[1-9]/.test(g) || g === "k")
+      if (/[1-9]/.test(escaped) || escaped === "k")
         return {
           problem:
             'expect: /regex/ guards use a small dialect \u2014 literals, ".", escapes, character classes, and quantifiers (* + ? {m,n}) on single atoms, with optional ^ and $; no groups "(\u2026)", alternation "|", backreferences, or lookaround. Use a list of literals, a type name, or several simpler guards instead',
         };
-      a = g !== "b" && g !== "B";
-      if (a) n++;
+      isLiteralAtom = escaped !== "b" && escaped !== "B";
+      if (isLiteralAtom) literalCount++;
       idx++;
       continue;
     }
-    if (f === "[") {
+    if (char === "[") {
       idx++;
       while (idx < source.length && source[idx] !== "]") {
         if (source[idx] === "\\") idx++;
@@ -225,36 +231,41 @@ function compileExpectRegex(source) {
         return {
           problem: "unterminated character class",
         };
-      a = true;
-      n++;
+      isLiteralAtom = true;
+      literalCount++;
       continue;
     }
-    a = true;
-    n++;
+    isLiteralAtom = true;
+    literalCount++;
   }
-  if (i > MAX_EXPECT_REPEAT_BUDGET)
+  if (repeatCount > MAX_EXPECT_REPEAT_BUDGET)
     return {
       problem: "too many optional/bounded repeats for an expect: guard",
     };
-  let m = (l) => {
-    let f = 1;
-    for (let idx = 1; idx <= r; idx++) f = (f * (l + idx)) / idx;
-    return (s ? 1 : Math.max(1, l)) * f * i * (l + n);
+  let subjectCost = (subjectLength) => {
+    let product = 1;
+    for (let idx = 1; idx <= singleCount; idx++) product = (product * (subjectLength + idx)) / idx;
+    return (
+      (isAnchoredStart ? 1 : Math.max(1, subjectLength)) *
+      product *
+      repeatCount *
+      (subjectLength + literalCount)
+    );
   };
-  let y = 0;
-  let h = MAX_REGEX_EXPECT_LENGTH;
-  while (y < h) {
-    let l = Math.ceil((y + h) / 2);
-    if (m(l) <= MAX_EXPECT_REPEAT_BUDGET) y = l;
-    else h = l - 1;
+  let lo = 0;
+  let hi = MAX_REGEX_EXPECT_LENGTH;
+  while (lo < hi) {
+    let mid = Math.ceil((lo + hi) / 2);
+    if (subjectCost(mid) <= MAX_EXPECT_REPEAT_BUDGET) lo = mid;
+    else hi = mid - 1;
   }
-  if (y < 16)
+  if (lo < 16)
     return {
       problem:
         "this combination of repeats leaves no useful subject length under the matching budget \u2014 use fewer quantifiers",
     };
   return {
-    maxSubject: y,
+    maxSubject: lo,
     problem: null,
   };
 }
@@ -262,17 +273,17 @@ function compileExpectRegex(source) {
 var GUARD_SCALAR_TYPES = new Set(["string", "number", "bool", "boolean", "object", "array"]);
 //@ chunk-vzw8h259.js:5386-5591 placement
 function getByDottedPath(root, path) {
-  let r = root;
-  for (let i of path.split(".")) {
-    if (r === null || typeof r !== "object") return;
-    if (Array.isArray(r)) {
-      if (!/^\d+$/.test(i)) return;
-      r = r[Number(i)];
+  let cursor = root;
+  for (let segment of path.split(".")) {
+    if (cursor === null || typeof cursor !== "object") return;
+    if (Array.isArray(cursor)) {
+      if (!/^\d+$/.test(segment)) return;
+      cursor = cursor[Number(segment)];
       continue;
     }
-    r = Object.hasOwn(r, i) ? r[i] : undefined;
+    cursor = Object.hasOwn(cursor, segment) ? cursor[segment] : undefined;
   }
-  return r;
+  return cursor;
 }
 //@ chunk-vzw8h259.js:5591-5726 placement
 /**
@@ -281,41 +292,49 @@ function getByDottedPath(root, path) {
 function checkExpectGuards(input, expect, prefix = "") {
   for (let [key, value] of Object.entries(expect)) {
     let path = prefix ? `${prefix}.${key}` : key;
-    let a = getByDottedPath(input, path);
-    let c = checkExpectType(a, value, path, input);
-    if (c !== null) return c;
+    let actual = getByDottedPath(input, path);
+    let problem = checkExpectType(actual, value, path, input);
+    if (problem !== null) return problem;
   }
   return null;
 }
 //@ chunk-vzw8h259.js:5726-6442 placement
-function checkExpectType(e, text, r, i) {
-  if (Array.isArray(text))
-    return text.some((s) => scalarEquals(e, s))
+function checkExpectType(value, expected, path, root) {
+  if (Array.isArray(expected))
+    return expected.some((allowed) => scalarEquals(value, allowed))
       ? null
-      : `${r} = ${describeGuardValue(e)} is not one of [${text.join(", ")}]`;
-  if (typeof text === "object" && text !== null) return checkExpectGuards(i, text, r);
-  let regexLiteral = parseRegexLiteral(text);
+      : `${path} = ${describeGuardValue(value)} is not one of [${expected.join(", ")}]`;
+  if (typeof expected === "object" && expected !== null) return checkExpectGuards(root, expected, path);
+  let regexLiteral = parseRegexLiteral(expected);
   if (regexLiteral !== null) {
-    let s = typeof e === "string" ? e : typeof e === "number" || typeof e === "boolean" ? String(e) : null;
-    let a = compileExpectRegex(regexLiteral.source);
-    if (!("maxSubject" in a)) return `${r}: ${text} is not a usable guard (${a.problem})`;
-    let maxSubject = a.maxSubject;
-    if (s !== null && s.length > maxSubject)
-      return `${r} is ${s.length} characters, more than this /regex/ guard checks (${maxSubject})`;
-    return s !== null && regexLiteral.test(s)
+    let subject =
+      typeof value === "string"
+        ? value
+        : typeof value === "number" || typeof value === "boolean"
+          ? String(value)
+          : null;
+    let compiled = compileExpectRegex(regexLiteral.source);
+    if (!("maxSubject" in compiled))
+      return `${path}: ${expected} is not a usable guard (${compiled.problem})`;
+    let maxSubject = compiled.maxSubject;
+    if (subject !== null && subject.length > maxSubject)
+      return `${path} is ${subject.length} characters, more than this /regex/ guard checks (${maxSubject})`;
+    return subject !== null && regexLiteral.test(subject)
       ? null
-      : `${r} = ${describeGuardValue(e)} does not match ${text}`;
+      : `${path} = ${describeGuardValue(value)} does not match ${expected}`;
   }
-  if (GUARD_SCALAR_TYPES.has(text)) {
-    let s = text === "boolean" ? "bool" : text;
-    return guardTypeOf(e) === s ? null : `${r} = ${describeGuardValue(e)} is not a ${text}`;
+  if (GUARD_SCALAR_TYPES.has(expected)) {
+    let typeName = expected === "boolean" ? "bool" : expected;
+    return guardTypeOf(value) === typeName
+      ? null
+      : `${path} = ${describeGuardValue(value)} is not a ${expected}`;
   }
-  return scalarEquals(e, text) ? null : `${r} = ${describeGuardValue(e)} is not "${text}"`;
+  return scalarEquals(value, expected) ? null : `${path} = ${describeGuardValue(value)} is not "${expected}"`;
 }
 //@ chunk-vzw8h259.js:6442-6569 placement
-function scalarEquals(e, t) {
-  if (typeof e === "string") return e === t;
-  if (typeof e === "number" || typeof e === "boolean") return String(e) === t;
+function scalarEquals(value, expected) {
+  if (typeof value === "string") return value === expected;
+  if (typeof value === "number" || typeof value === "boolean") return String(value) === expected;
   return false;
 }
 //@ chunk-vzw8h259.js:6569-6674 placement
@@ -325,113 +344,126 @@ function parseRegexLiteral(text) {
   return new RegExp(match[1] ?? "", match[2] ?? "");
 }
 //@ chunk-vzw8h259.js:6674-6816 placement
-function guardTypeOf(e) {
-  if (Array.isArray(e)) return "array";
-  if (e === null || e === undefined) return "missing";
-  if (typeof e === "boolean") return "bool";
-  return typeof e;
+function guardTypeOf(value) {
+  if (Array.isArray(value)) return "array";
+  if (value === null || value === undefined) return "missing";
+  if (typeof value === "boolean") return "bool";
+  return typeof value;
 }
 //@ chunk-vzw8h259.js:6816-6911 placement
-function describeGuardValue(e) {
-  if (e === undefined) return "(missing)";
-  let t = jsonStringify(e);
-  return t.length > 80 ? `${truncateToLength(t, 77)}...` : t;
+function describeGuardValue(value) {
+  if (value === undefined) return "(missing)";
+  let text = jsonStringify(value);
+  return text.length > 80 ? `${truncateToLength(text, 77)}...` : text;
 }
 //@ chunk-vzw8h259.js:6911-6920 placement
 var MAX_GUARDS_OR_LEAVES = 32;
 //@ chunk-vzw8h259.js:6920-7921 placement
-function compileExpectGuards(e, t = "") {
-  let r = [];
-  if (t === "") {
-    let i = countLeafValues(e);
-    if (i > MAX_GUARDS_OR_LEAVES) {
-      r.push(
-        `expect: ${i} guards is more than the ${MAX_GUARDS_OR_LEAVES} one responder may carry \u2014 every call checks each of them; keep the ones that catch a wrong call`,
+function compileExpectGuards(expect, prefix = "") {
+  let problems = [];
+  if (prefix === "") {
+    let leafCount = countLeafValues(expect);
+    if (leafCount > MAX_GUARDS_OR_LEAVES) {
+      problems.push(
+        `expect: ${leafCount} guards is more than the ${MAX_GUARDS_OR_LEAVES} one responder may carry \u2014 every call checks each of them; keep the ones that catch a wrong call`,
       );
-      return r;
+      return problems;
     }
   }
-  for (let [key, value] of Object.entries(e)) {
-    let s = t ? `${t}.${key}` : key;
+  for (let [key, value] of Object.entries(expect)) {
+    let path = prefix ? `${prefix}.${key}` : key;
     if (Array.isArray(value)) {
       if (value.length === 0)
-        r.push(
-          `expect.${s}: an empty list of allowed values can never be satisfied \u2014 list at least one`,
+        problems.push(
+          `expect.${path}: an empty list of allowed values can never be satisfied \u2014 list at least one`,
         );
       continue;
     }
     if (typeof value === "object" && value !== null) {
-      r.push(...compileExpectGuards(value, s));
+      problems.push(...compileExpectGuards(value, path));
       continue;
     }
     if (/^\/.*\/[a-z]*$/s.test(value))
       try {
         let regexLiteral = parseRegexLiteral(value);
-        let c = regexLiteral ? compileExpectRegex(regexLiteral.source) : null;
+        let compiled = regexLiteral ? compileExpectRegex(regexLiteral.source) : null;
         if (regexLiteral && !EXPECT_REGEX_FLAGS_PATTERN.test(regexLiteral.flags))
-          r.push(`expect.${s}: ${value} \u2014 only the i and s flags are supported in expect: guards`);
-        else if (c && c.problem !== null) r.push(`expect.${s}: ${value} \u2014 ${c.problem}`);
+          problems.push(
+            `expect.${path}: ${value} \u2014 only the i and s flags are supported in expect: guards`,
+          );
+        else if (compiled && compiled.problem !== null)
+          problems.push(`expect.${path}: ${value} \u2014 ${compiled.problem}`);
       } catch (error) {
-        r.push(
-          `expect.${s}: invalid regular expression ${value} (${error instanceof Error ? error.message : String(error)}) \u2014 a value written /like this/ is read as a regex; for a literal that starts and ends with a slash, write a one-element list: ["${value}"]`,
+        problems.push(
+          `expect.${path}: invalid regular expression ${value} (${error instanceof Error ? error.message : String(error)}) \u2014 a value written /like this/ is read as a regex; for a literal that starts and ends with a slash, write a one-element list: ["${value}"]`,
         );
       }
   }
-  return r;
+  return problems;
 }
 //@ chunk-vzw8h259.js:7921-7960 placement
 var SAFE_FILE_NAME_SEGMENT_PATTERN = /^(?!\.{1,2}$)[A-Za-z0-9._-]+$/;
 //@ chunk-vzw8h259.js:7960-8956 placement
-async function substituteAgentInput(e, root, baseDir, readFixture, n = Number.POSITIVE_INFINITY) {
-  let s = null;
-  let a = [];
-  let c = 0;
-  for (let y of e.matchAll(
+async function substituteAgentInput(
+  template,
+  root,
+  parent,
+  readFixture,
+  maxChars = Number.POSITIVE_INFINITY,
+) {
+  let failure = null;
+  let parts = [];
+  let cursor = 0;
+  for (let match of template.matchAll(
     /\{\{\s*(input\.[A-Za-z0-9_.-]+|file:(?:[^{}]|\{input\.[A-Za-z0-9_.-]+\})+?)\s*\}\}/g,
   )) {
-    a.push(e.slice(c, y.index));
-    c = y.index + y[0].length;
-    let h = y[1] ?? "";
-    if (h.startsWith("input.")) {
-      let g = getByDottedPath(root, h.slice(6));
-      let w = g === undefined ? "" : typeof g === "string" ? g : jsonStringify(g);
-      a.push(w.length > n ? `${truncateToLength(w, n)}\u2026 [${w.length - n} more characters omitted]` : w);
+    parts.push(template.slice(cursor, match.index));
+    cursor = match.index + match[0].length;
+    let placeholder = match[1] ?? "";
+    if (placeholder.startsWith("input.")) {
+      let value = getByDottedPath(root, placeholder.slice(6));
+      let text = value === undefined ? "" : typeof value === "string" ? value : jsonStringify(value);
+      parts.push(
+        text.length > maxChars
+          ? `${truncateToLength(text, maxChars)}\u2026 [${text.length - maxChars} more characters omitted]`
+          : text,
+      );
       continue;
     }
-    let trimmed = h.slice(5).trim();
-    let f = null;
-    trimmed = trimmed.replace(/\{input\.([A-Za-z0-9_.-]+)\}/g, (g, path) => {
-      let S = getByDottedPath(root, path);
-      let F = S === undefined || S === null ? "" : String(S);
-      if (!SAFE_FILE_NAME_SEGMENT_PATTERN.test(F))
-        f = `{input.${path}} = ${describeGuardValue(S)} is not a plain file-name segment`;
-      return F;
+    let trimmed = placeholder.slice(5).trim();
+    let fileProblem = null;
+    trimmed = trimmed.replace(/\{input\.([A-Za-z0-9_.-]+)\}/g, (whole, path) => {
+      let value = getByDottedPath(root, path);
+      let segment = value === undefined || value === null ? "" : String(value);
+      if (!SAFE_FILE_NAME_SEGMENT_PATTERN.test(segment))
+        fileProblem = `{input.${path}} = ${describeGuardValue(value)} is not a plain file-name segment`;
+      return segment;
     });
-    if (f !== null) {
-      s ??= f;
+    if (fileProblem !== null) {
+      failure ??= fileProblem;
       continue;
     }
-    let resolved = path.resolve(baseDir, trimmed);
-    if (!isPathInside(baseDir, resolved)) {
-      s ??= `{{file:${trimmed}}} names a path outside the mock's directory`;
+    let child = path.resolve(parent, trimmed);
+    if (!isPathInside(parent, child)) {
+      failure ??= `{{file:${trimmed}}} names a path outside the mock's directory`;
       continue;
     }
-    a.push(
-      readFixture(resolved).then((g) => {
-        if (typeof g !== "string") {
-          s ??= `{{file:${trimmed}}}: ${g.problem}`;
+    parts.push(
+      readFixture(child).then((fixture) => {
+        if (typeof fixture !== "string") {
+          failure ??= `{{file:${trimmed}}}: ${fixture.problem}`;
           return "";
         }
-        return g;
+        return fixture;
       }),
     );
   }
-  a.push(e.slice(c));
-  let results = await Promise.all(a);
-  if (s !== null)
+  parts.push(template.slice(cursor));
+  let results = await Promise.all(parts);
+  if (failure !== null)
     return {
       ok: false,
-      reason: s,
+      reason: failure,
     };
   return {
     ok: true,
@@ -439,18 +471,19 @@ async function substituteAgentInput(e, root, baseDir, readFixture, n = Number.PO
   };
 }
 //@ chunk-vzw8h259.js:8956-9048 placement
-function isPathInside(e, t) {
-  let relativePath = path.relative(e, t);
+function isPathInside(parent, child) {
+  let relativePath = path.relative(parent, child);
   return relativePath !== "" && !relativePath.startsWith("..") && !path.isAbsolute(relativePath);
 }
 //@ chunk-vzw8h259.js:9048-9181 placement
-function countLeafValues(e) {
-  let t = 0;
-  for (let r of Object.values(e)) {
-    t += typeof r === "object" && r !== null && !Array.isArray(r) ? countLeafValues(r) : 1;
-    if (t > MAX_GUARDS_OR_LEAVES) break;
+function countLeafValues(node) {
+  let total = 0;
+  for (let value of Object.values(node)) {
+    total +=
+      typeof value === "object" && value !== null && !Array.isArray(value) ? countLeafValues(value) : 1;
+    if (total > MAX_GUARDS_OR_LEAVES) break;
   }
-  return t;
+  return total;
 }
 //@ chunk-vzw8h259.js:9221-9286 placement
 /**
@@ -460,9 +493,9 @@ var EVAL_ABORTED_BY_MOCK = "eval aborted by mock";
 var MOCK_RESPONDER_FAILED_TEXT = "mock agent responder failed";
 //@ chunk-vzw8h259.js:9286-9400 placement
 var RELAY_RESPONSE_SCHEMA = DoctorLazy(() =>
-  u({
+  objectSchema({
     verdict: _enum(["ok", "tool_error", "abort"]),
-    text: string(),
+    text: stringSchema(),
     replay: _enum(["hit", "miss"]).optional(),
   }),
 );
@@ -473,7 +506,7 @@ var MAX_RELAY_RESPONSE_BYTES = 4194304;
  */
 async function relayAgentMockCall(agent, payload, signal) {
   try {
-    let i = await requestOverSocketLine(
+    let line = await requestOverSocketLine(
       agent.socketPath,
       `${jsonStringify({
         token: agent.token,
@@ -482,7 +515,7 @@ async function relayAgentMockCall(agent, payload, signal) {
 `,
       signal,
     );
-    return RELAY_RESPONSE_SCHEMA().parse(jsonParse(i));
+    return RELAY_RESPONSE_SCHEMA().parse(jsonParse(line));
   } catch (error) {
     process.stderr.write(`eval mock stand-in: agent relay failed: ${errorMessage(error)}
 `);
@@ -505,32 +538,32 @@ function requestOverSocketLine(socketPath, line, signal) {
     let connection = createConnection({
       path: socketPath,
     });
-    let a = Buffer.alloc(0);
-    let c = false;
-    let m = (h, l) => {
-      if (c) return;
-      c = true;
-      signal.removeEventListener("abort", y);
+    let buffer = Buffer.alloc(0);
+    let isSettled = false;
+    let settle = (error, value) => {
+      if (isSettled) return;
+      isSettled = true;
+      signal.removeEventListener("abort", onAbort);
       connection.destroy();
-      if (h !== null) reject(h);
-      else resolve(l ?? "");
+      if (error !== null) reject(error);
+      else resolve(value ?? "");
     };
-    let y = () => m(Error("aborted"));
-    signal.addEventListener("abort", y, {
+    let onAbort = () => settle(Error("aborted"));
+    signal.addEventListener("abort", onAbort, {
       once: true,
     });
     connection.once("connect", () => connection.write(line));
-    connection.on("data", (h) => {
-      a = Buffer.concat([a, h]);
-      if (a.length > MAX_RELAY_RESPONSE_BYTES) {
-        m(Error("relay response too large"));
+    connection.on("data", (chunk) => {
+      buffer = Buffer.concat([buffer, chunk]);
+      if (buffer.length > MAX_RELAY_RESPONSE_BYTES) {
+        settle(Error("relay response too large"));
         return;
       }
-      let index = a.indexOf(10);
-      if (index !== -1) m(null, a.subarray(0, index).toString("utf8"));
+      let index = buffer.indexOf(10);
+      if (index !== -1) settle(null, buffer.subarray(0, index).toString("utf8"));
     });
-    connection.once("error", (h) => m(h));
-    connection.once("close", () => m(Error("harness closed the relay without answering")));
+    connection.once("error", (error) => settle(error));
+    connection.once("close", () => settle(Error("harness closed the relay without answering")));
   });
 }
 //@ chunk-vzw8h259.js:10297-10847 placement
@@ -538,26 +571,28 @@ function requestOverSocketLine(socketPath, line, signal) {
  * 插件评测模拟服务器的配置结构：工具列表与响应器（固定响应或代理），以及读取上限。
  */
 var MOCK_SPEC_SCHEMA = DoctorLazy(() => {
-  let e = lazy(() => union([string(), array(string()), record(string(), e)]));
-  let expect = record(string(), e).nullable();
-  let r = discriminatedUnion("kind", [
-    u({
+  let expectValue = lazy(() =>
+    union([stringSchema(), array(stringSchema()), record(stringSchema(), expectValue)]),
+  );
+  let expect = record(stringSchema(), expectValue).nullable();
+  let responder = discriminatedUnion("kind", [
+    objectSchema({
       kind: literal("fixed"),
-      body: string(),
-      isError: M(),
+      body: stringSchema(),
+      isError: booleanSchema(),
       expect,
-      baseDir: string(),
+      baseDir: stringSchema(),
     }),
-    u({
+    objectSchema({
       kind: literal("agent"),
-      prompt: string(),
-      abortWhen: string().nullable(),
+      prompt: stringSchema(),
+      abortWhen: stringSchema().nullable(),
       expect,
-      baseDir: string(),
-      replay: u({
-        mockHash: string(),
-        replayDir: string(),
-        pinned: record(string(), string()),
+      baseDir: stringSchema(),
+      replay: objectSchema({
+        mockHash: stringSchema(),
+        replayDir: stringSchema(),
+        pinned: record(stringSchema(), stringSchema()),
       }).default({
         mockHash: "",
         replayDir: "",
@@ -565,22 +600,22 @@ var MOCK_SPEC_SCHEMA = DoctorLazy(() => {
       }),
     }),
   ]);
-  return u({
-    registeredName: string(),
-    server: string(),
-    nonce: string(),
-    callLogPath: string(),
+  return objectSchema({
+    registeredName: stringSchema(),
+    server: stringSchema(),
+    nonce: stringSchema(),
+    callLogPath: stringSchema(),
     tools: array(
-      u({
-        name: string(),
-        description: string(),
-        inputSchema: record(string(), unknown()),
+      objectSchema({
+        name: stringSchema(),
+        description: stringSchema(),
+        inputSchema: record(stringSchema(), unknown()),
       }),
     ),
-    responders: record(string(), r),
-    agent: u({
-      socketPath: string(),
-      token: string(),
+    responders: record(stringSchema(), responder),
+    agent: objectSchema({
+      socketPath: stringSchema(),
+      token: stringSchema(),
     }).nullable(),
   });
 });

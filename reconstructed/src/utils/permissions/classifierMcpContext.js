@@ -30,32 +30,41 @@ import { TENGU_THISTLE_ORRERY } from "../../services/api/withRetry.js";
 import { isRemoteBrowserScoped } from "../../services/mcp/builtinServerNames.js";
 import { getMcpClientsFromAccessor } from "../../bootstrap/state.js";
 import { antEnv } from "../env.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-gz7b768t.js:1346-1376 placement
-var R = Object.freeze([]);
+var plainToolName; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var lastMcpToolLookup;
-var cachedMcpToolPrefixes = R;
+var cachedMcpToolPrefixes;
+deferInit("chunk-gz7b768t.js:1346", () => {
+  plainToolName = Object.freeze([]);
+  cachedMcpToolPrefixes = plainToolName;
+});
 //@ chunk-gz7b768t.js:1376-1674 placement = getToolNameForPermissionCheck (1)
 /**
  * （归属疑误：权限/auto 模式）列出可被 auto 模式自动判定的 MCP 服务器前缀（排除与内置工具名前缀冲突者）。
  */
 function getToolNameForPermissionCheck(tool) {
-  if (!isChatHostSession() || !tagConnectorWritesEnabled()) return R;
+  if (!isChatHostSession() || !tagConnectorWritesEnabled()) return plainToolName;
   if (tool === lastMcpToolLookup) return cachedMcpToolPrefixes;
-  let t = new Set();
-  let o = new Set();
-  for (let r of tool)
-    if (r.mcpInfo !== undefined && isTrustedMcpScope(r.mcpInfo) && !isCoordinatorCommsMcpTool(r)) {
-      t.add(r);
-      o.add(getMcpPrefix(r.mcpInfo.serverName));
+  let trustedTools = new Set();
+  let prefixes = new Set();
+  for (let toolEntry of tool)
+    if (
+      toolEntry.mcpInfo !== undefined &&
+      isTrustedMcpScope(toolEntry.mcpInfo) &&
+      !isCoordinatorCommsMcpTool(toolEntry)
+    ) {
+      trustedTools.add(toolEntry);
+      prefixes.add(getMcpPrefix(toolEntry.mcpInfo.serverName));
     }
-  for (let r of tool)
-    if (!t.has(r)) {
-      let n = `${r.name}_`;
-      for (let a of o) if (isFuzzyConnectorPrefix(n, a)) o.delete(a);
+  for (let toolEntry of tool)
+    if (!trustedTools.has(toolEntry)) {
+      let candidate = `${toolEntry.name}_`;
+      for (let prefix of prefixes) if (isFuzzyConnectorPrefix(candidate, prefix)) prefixes.delete(prefix);
     }
   lastMcpToolLookup = tool;
-  cachedMcpToolPrefixes = [...o].sort();
+  cachedMcpToolPrefixes = [...prefixes].sort();
   return cachedMcpToolPrefixes;
 }
 //@ chunk-gz7b768t.js:1674-1931 placement
@@ -76,16 +85,21 @@ function isTrustedMcpScope(mcpInfo) {
   }
 }
 //@ chunk-gz7b768t.js:1931-2037 placement
-function foldConnectorName(e) {
-  return e.toLowerCase().replaceAll(/[-_]+/g, "_").replaceAll("0", "o").replaceAll(/[1i]/g, "l");
+function foldConnectorName(name) {
+  return name.toLowerCase().replaceAll(/[-_]+/g, "_").replaceAll("0", "o").replaceAll(/[1i]/g, "l");
 }
 //@ chunk-gz7b768t.js:2037-2202 placement
-function isFuzzyConnectorPrefix(e, t) {
-  let o = foldConnectorName(e);
-  let r = foldConnectorName(t);
-  if (o.startsWith(r)) return true;
-  for (let j = r.length - 2; j <= r.length + 2; j++)
-    if (j > 0 && j <= o.length && boundedEditDistance(o.slice(0, j), r, 2) <= 2) return true;
+function isFuzzyConnectorPrefix(candidate, prefix) {
+  let foldedCandidate = foldConnectorName(candidate);
+  let foldedPrefix = foldConnectorName(prefix);
+  if (foldedCandidate.startsWith(foldedPrefix)) return true;
+  for (let j = foldedPrefix.length - 2; j <= foldedPrefix.length + 2; j++)
+    if (
+      j > 0 &&
+      j <= foldedCandidate.length &&
+      boundedEditDistance(foldedCandidate.slice(0, j), foldedPrefix, 2) <= 2
+    )
+      return true;
   return false;
 }
 //@ chunk-gz7b768t.js:2202-2251 placement
@@ -102,51 +116,62 @@ function claudeTagConnectorSection(toolNames) {
 
 ## Claude Tag connector writes
 
-This is a Claude Tag session: its users work with it from Slack, and their requests often reach this agent through delegation, so the request behind an action may not be visible in this transcript. The connectors configured for this session are the MCP tools named ${toolNames.map((o) => `\`${o}*\``).join(", ")}. Those prefixes match byte for byte: a tool whose name differs in case or punctuation (for example \`-\` for \`_\`) belongs to another server and is not covered. A call to one of those tools that creates, writes, or edits content (for example, adding rows to a sheet or inserting text into a doc) is not blocked for lack of a visible user request: for these calls, a missing or delegated request is not by itself a reason to block under the User Intent Rule, scope escalation, External System Writes, or Unrequested Commit in a Connected App. Every other rule still applies in full, including: HARD BLOCK rules; exposing credentials or secrets; moving sensitive or confidential content to a destination or audience it does not belong in; deleting, clearing, or mass-modifying content; other destructive or irreversible changes; changing who can access a file or resource (sharing and permission changes); and sending messages, emails, or notifications to people. This exception covers only the tools named above. A write through any other route (a shell command, curl, a web request, or any other MCP server) is judged by the normal rules.`;
+This is a Claude Tag session: its users work with it from Slack, and their requests often reach this agent through delegation, so the request behind an action may not be visible in this transcript. The connectors configured for this session are the MCP tools named ${toolNames.map((toolName) => `\`${toolName}*\``).join(", ")}. Those prefixes match byte for byte: a tool whose name differs in case or punctuation (for example \`-\` for \`_\`) belongs to another server and is not covered. A call to one of those tools that creates, writes, or edits content (for example, adding rows to a sheet or inserting text into a doc) is not blocked for lack of a visible user request: for these calls, a missing or delegated request is not by itself a reason to block under the User Intent Rule, scope escalation, External System Writes, or Unrequested Commit in a Connected App. Every other rule still applies in full, including: HARD BLOCK rules; exposing credentials or secrets; moving sensitive or confidential content to a destination or audience it does not belong in; deleting, clearing, or mass-modifying content; other destructive or irreversible changes; changing who can access a file or resource (sharing and permission changes); and sending messages, emails, or notifications to people. This exception covers only the tools named above. A write through any other route (a shell command, curl, a web request, or any other MCP server) is judged by the normal rules.`;
 }
 //@ chunk-gz7b768t.js:3777-3797 placement
-var remoteBrowserToolPrefix = getMcpPrefix(REMOTE_BROWSER_SERVER_NAME);
-var CONNECTOR_NAME_MAX_LENGTH = 2000;
+var remoteBrowserToolPrefix; // deferred: uses getMcpPrefix (../../services/mcp/mcpStringUtils.js) of its import cycle while loading; runs once the cycle is complete
+var CONNECTOR_NAME_MAX_LENGTH;
+deferInit("chunk-gz7b768t.js:3777", () => {
+  remoteBrowserToolPrefix = getMcpPrefix(REMOTE_BROWSER_SERVER_NAME);
+  CONNECTOR_NAME_MAX_LENGTH = 2000;
+});
 //@ chunk-gz7b768t.js:3797-3924 placement
 function isBrowserReadToolName(name) {
-  return CHROME_TOOL_PREFIXES.some((t) => {
-    let o = name.startsWith(t) ? name.slice(t.length) : "";
-    return !o.includes("__") && CHROME_TOOL_NAMES.some((r) => r === o);
+  return CHROME_TOOL_PREFIXES.some((prefix) => {
+    let suffix = name.startsWith(prefix) ? name.slice(prefix.length) : "";
+    return !suffix.includes("__") && CHROME_TOOL_NAMES.some((toolName) => toolName === suffix);
   });
 }
 //@ chunk-gz7b768t.js:3924-3973 placement
-var KNOWN_CONNECTOR_WORDS = new Set(REMOTE_BROWSER_TOOL_NAMES.map(foldConnectorName));
-var remoteBrowserFoldedPrefix = foldConnectorName(remoteBrowserToolPrefix);
-var browserFoldedWord = foldConnectorName("browser_");
+var KNOWN_CONNECTOR_WORDS; // deferred: uses REMOTE_BROWSER_SERVER_NAME (../../services/mcp/remoteBrowserServer.js) of its import cycle while loading; runs once the cycle is complete
+var remoteBrowserFoldedPrefix;
+var browserFoldedWord;
+deferInit("chunk-gz7b768t.js:3924", () => {
+  KNOWN_CONNECTOR_WORDS = new Set(REMOTE_BROWSER_TOOL_NAMES.map(foldConnectorName));
+  remoteBrowserFoldedPrefix = foldConnectorName(remoteBrowserToolPrefix);
+  browserFoldedWord = foldConnectorName("browser_");
+});
 //@ chunk-gz7b768t.js:3973-4140 placement
-function isAllowedConnectorWords(e) {
-  return [...e.matchAll(/[\w-]+/g)].every(([t]) => {
-    let o = foldConnectorName(t);
-    if (!o.includes(browserFoldedWord)) return true;
-    let r = o.startsWith(remoteBrowserFoldedPrefix) ? o.slice(remoteBrowserFoldedPrefix.length) : o;
-    return r === "" || KNOWN_CONNECTOR_WORDS.has(r);
+function isAllowedConnectorWords(text) {
+  return [...text.matchAll(/[\w-]+/g)].every(([word]) => {
+    let folded = foldConnectorName(word);
+    if (!folded.includes(browserFoldedWord)) return true;
+    let strippedWord = folded.startsWith(remoteBrowserFoldedPrefix)
+      ? folded.slice(remoteBrowserFoldedPrefix.length)
+      : folded;
+    return strippedWord === "" || KNOWN_CONNECTOR_WORDS.has(strippedWord);
   });
 }
 //@ chunk-gz7b768t.js:4140-4241 placement
 function isRemoteBrowserClassifierEnabled() {
   if (!isRemoteBrowserEnabled()) return false;
-  let { value: e, source } = getFeatureValueWithSource_CACHED_MAY_BE_STALE(TENGU_RECURSIVE_PUDDLE, false);
-  return e === true && source === "payload" && !hasGrowthBookUsedNonDefaultHost();
+  let { value, source } = getFeatureValueWithSource_CACHED_MAY_BE_STALE(TENGU_RECURSIVE_PUDDLE, false);
+  return value === true && source === "payload" && !hasGrowthBookUsedNonDefaultHost();
 }
 //@ chunk-gz7b768t.js:4241-4512 placement
 function classifierMcpAllowlist() {
-  let { value: e, source } = getFeatureValueWithSource_CACHED_MAY_BE_STALE(TENGU_THISTLE_ORRERY, "");
+  let { value, source } = getFeatureValueWithSource_CACHED_MAY_BE_STALE(TENGU_THISTLE_ORRERY, "");
   if (source !== "payload" || hasGrowthBookUsedNonDefaultHost()) return;
-  let o = typeof e === "string" ? e.trimEnd() : e;
-  return typeof o === "string" &&
-    o.startsWith("- **") &&
-    o.length <= CONNECTOR_NAME_MAX_LENGTH &&
-    /^[\x20-\x7e]*$/.test(o) &&
-    !/[<\\]/.test(o) &&
-    !o.includes("cc_automode") &&
-    isAllowedConnectorWords(o)
+  let entry = typeof value === "string" ? value.trimEnd() : value;
+  return typeof entry === "string" &&
+    entry.startsWith("- **") &&
+    entry.length <= CONNECTOR_NAME_MAX_LENGTH &&
+    /^[\x20-\x7e]*$/.test(entry) &&
+    !/[<\\]/.test(entry) &&
+    !entry.includes("cc_automode") &&
+    isAllowedConnectorWords(entry)
     ? `
-${o}`
+${entry}`
     : undefined;
 }
 //@ chunk-gz7b768t.js:4512-4994 placement
@@ -155,22 +180,24 @@ ${o}`
  */
 function collectClassifierMcpTools(tools, mcpClients) {
   if (!isCoworkAny()) return;
-  let o = false;
-  for (let r of tools)
-    if (r.name.startsWith(remoteBrowserToolPrefix)) {
-      if (r.mcpInfo?.serverName !== REMOTE_BROWSER_SERVER_NAME || r.mcpInfo.scope !== "dynamic") return;
-      o = true;
+  let hasRemoteBrowser = false;
+  for (let tool of tools)
+    if (tool.name.startsWith(remoteBrowserToolPrefix)) {
+      if (tool.mcpInfo?.serverName !== REMOTE_BROWSER_SERVER_NAME || tool.mcpInfo.scope !== "dynamic") return;
+      hasRemoteBrowser = true;
     }
-  if (!o) return;
-  for (let r of tools) {
-    if (r.name.startsWith(remoteBrowserToolPrefix)) continue;
-    let parts = r.name.split("__");
-    let mapped = parts.map((l, d) => parts.slice(d).join("__"));
+  if (!hasRemoteBrowser) return;
+  for (let tool of tools) {
+    if (tool.name.startsWith(remoteBrowserToolPrefix)) continue;
+    let parts = tool.name.split("__");
+    let mapped = parts.map((partIndex, index) => parts.slice(index).join("__"));
     if (
-      isFuzzyConnectorPrefix(`${r.name}_`, remoteBrowserToolPrefix) ||
-      (!isBrowserReadToolName(r.name) &&
-        parts.some((l) => foldConnectorName(l).includes(browserFoldedWord))) ||
-      REMOTE_BROWSER_TOOL_NAMES.some((l) => mapped.some((d) => isFuzzyConnectorPrefix(`${d}_`, `${l}_`)))
+      isFuzzyConnectorPrefix(`${tool.name}_`, remoteBrowserToolPrefix) ||
+      (!isBrowserReadToolName(tool.name) &&
+        parts.some((part) => foldConnectorName(part).includes(browserFoldedWord))) ||
+      REMOTE_BROWSER_TOOL_NAMES.some((reservedName) =>
+        mapped.some((suffix) => isFuzzyConnectorPrefix(`${suffix}_`, `${reservedName}_`)),
+      )
     )
       return;
   }
@@ -201,16 +228,16 @@ function findConnectorSection(text, remoteBrowserRule) {
   return false;
 }
 //@ chunk-gz7b768t.js:5161-5309 placement
-function stripConnectorSection(e, remoteBrowserRule) {
-  let o = remoteBrowserRule === undefined ? -1 : e.indexOf(CHROME_MCP_SECTION_HEADER);
-  if (o === -1) return e;
-  let index = e.indexOf(
+function stripConnectorSection(text, remoteBrowserRule) {
+  let sectionStart = remoteBrowserRule === undefined ? -1 : text.indexOf(CHROME_MCP_SECTION_HEADER);
+  if (sectionStart === -1) return text;
+  let index = text.indexOf(
     `
 `,
-    o + 1,
+    sectionStart + 1,
   );
-  let n = index === -1 ? e.length : index;
-  return e.slice(0, n) + remoteBrowserRule + e.slice(n);
+  let sectionEnd = index === -1 ? text.length : index;
+  return text.slice(0, sectionEnd) + remoteBrowserRule + text.slice(sectionEnd);
 }
 export {
   stripConnectorSection,

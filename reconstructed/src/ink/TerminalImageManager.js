@@ -11,25 +11,28 @@
 import { randomInt } from "crypto";
 import { decodeImagePlaceholder, MAX_ITERM_IMAGE_ID } from "./termio/iterm2Image.js";
 import { ANSI_256_LIMIT, deleteKittyImage } from "./termio/kittyGraphics.js";
-import { tmuxPassthroughChunked } from "./termio/osc.js";
-import { wrapItermImageForTmux } from "../_unattributed/chunk-bzr73sfg/part-001.js";
+import { tmuxPassthroughChunked, wrapItermImageForTmux } from "./termio/osc.js";
 import { csi } from "./termio/csi.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-bzr73sfg.js:268093-268112 placement
-var placeholderDecodeCache = new WeakMap();
+var placeholderDecodeCache; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-bzr73sfg.js:268093", () => {
+  placeholderDecodeCache = new WeakMap();
+});
 //@ chunk-bzr73sfg.js:268112-268251 placement
 function decodePlaceholderCached(charPool, charIndex) {
-  let f = placeholderDecodeCache.get(charPool);
-  if (f === undefined) {
-    f = new Map();
-    placeholderDecodeCache.set(charPool, f);
+  let decodedByChar = placeholderDecodeCache.get(charPool);
+  if (decodedByChar === undefined) {
+    decodedByChar = new Map();
+    placeholderDecodeCache.set(charPool, decodedByChar);
   }
-  let m = f.get(charIndex);
-  if (m === undefined) {
-    m = decodeImagePlaceholder(charPool.get(charIndex)) ?? null;
-    f.set(charIndex, m);
+  let decoded = decodedByChar.get(charIndex);
+  if (decoded === undefined) {
+    decoded = decodeImagePlaceholder(charPool.get(charIndex)) ?? null;
+    decodedByChar.set(charIndex, decoded);
   }
-  return m;
+  return decoded;
 }
 //@ chunk-bzr73sfg.js:268251-268759 placement
 /**
@@ -38,51 +41,53 @@ function decodePlaceholderCached(charPool, charIndex) {
 function scanImagePlaceholders(screen) {
   let images = new Map();
   let { cells, width, charPool } = screen;
-  let g = width * screen.height;
-  for (let idx = 0; idx < g; idx++) {
+  let cellCount = width * screen.height;
+  for (let idx = 0; idx < cellCount; idx++) {
     let charIndex = cells[idx << 1];
     if (charIndex < 2) continue;
-    let A = decodePlaceholderCached(charPool, charIndex);
-    if (A === null) continue;
-    let D = (idx % width) - A.column;
-    let O = Math.floor(idx / width) - A.row;
-    let _ = images.get(A.id);
-    if (_ === undefined) {
-      images.set(A.id, {
-        originX: D,
-        originY: O,
+    let placeholder = decodePlaceholderCached(charPool, charIndex);
+    if (placeholder === null) continue;
+    let originX = (idx % width) - placeholder.column;
+    let originY = Math.floor(idx / width) - placeholder.row;
+    let entry = images.get(placeholder.id);
+    if (entry === undefined) {
+      images.set(placeholder.id, {
+        originX,
+        originY,
         count: 1,
         isConsistent: true,
-        lastRow: A.row,
-        lastColumn: A.column,
+        lastRow: placeholder.row,
+        lastColumn: placeholder.column,
         indexes: [idx],
       });
       continue;
     }
-    _.count++;
-    _.indexes.push(idx);
-    _.lastRow = Math.max(_.lastRow, A.row);
-    _.lastColumn = Math.max(_.lastColumn, A.column);
-    _.isConsistent &&= _.originX === D && _.originY === O;
+    entry.count++;
+    entry.indexes.push(idx);
+    entry.lastRow = Math.max(entry.lastRow, placeholder.row);
+    entry.lastColumn = Math.max(entry.lastColumn, placeholder.column);
+    entry.isConsistent &&= entry.originX === originX && entry.originY === originY;
   }
   return images;
 }
 //@ chunk-bzr73sfg.js:268759-268849 placement
 function cellChangedAt(prev, next, index) {
-  let m = index << 1;
-  return prev.cells[m] !== next.cells[m] || prev.cells[m + 1] !== next.cells[m + 1];
+  let cellIndex = index << 1;
+  return (
+    prev.cells[cellIndex] !== next.cells[cellIndex] || prev.cells[cellIndex + 1] !== next.cells[cellIndex + 1]
+  );
 }
 //@ chunk-bzr73sfg.js:268849-269023 placement = diff (1)
 function indexesToRuns(indexes, width) {
   let runs = [];
   for (let index of indexes) {
-    let p = index % width;
+    let x = index % width;
     let floored = Math.floor(index / width);
     let last = runs.at(-1);
-    if (last !== undefined && last.y === floored && last.x + last.length === p) last.length++;
+    if (last !== undefined && last.y === floored && last.x + last.length === x) last.length++;
     else
       runs.push({
-        x: p,
+        x,
         y: floored,
         length: 1,
       });
@@ -116,42 +121,47 @@ class TerminalImageManager {
   constructor(requestFrame) {
     this.requestFrame = requestFrame;
   }
-  allocate(n, onRefused, f = "kitty", m) {
-    let p = f === "iterm" ? this.takeIterm(m) : n === SMALL_IMAGE_IDS ? this.takeSmall() : this.takeWide();
-    if (p !== undefined)
-      this.live.set(p, {
+  allocate(image, onRefused, protocol = "kitty", options) {
+    let slot =
+      protocol === "iterm"
+        ? this.takeIterm(options)
+        : image === SMALL_IMAGE_IDS
+          ? this.takeSmall()
+          : this.takeWide();
+    if (slot !== undefined)
+      this.live.set(slot, {
         isSent: false,
         resend: undefined,
         onRefused,
-        protocol: f,
+        protocol,
         box: undefined,
         isDrawn: false,
         isDirty: false,
         deferredSince: undefined,
         hasGlyphs: false,
-        reuseKey: m,
+        reuseKey: options,
       });
-    return p;
+    return slot;
   }
   transmit(
-    n,
-    u,
-    f = {
+    key,
+    write,
+    options = {
       resend: true,
     },
   ) {
-    let m = this.live.get(n);
-    let p = !f.resend;
-    if (m === undefined || (p && this.isBackedUp(n))) return false;
-    if (m.protocol === "iterm") return this.keepIterm(n, m, u, f);
+    let entry = this.live.get(key);
+    let isFirst = !options.resend;
+    if (entry === undefined || (isFirst && this.isBackedUp(key))) return false;
+    if (entry.protocol === "iterm") return this.keepIterm(key, entry, write, options);
     try {
-      let g = () => u(n);
-      let sequence = g();
-      m.isSent = true;
-      m.resend = p ? undefined : g;
-      this.queue(n, {
+      let onConsumed = () => write(key);
+      let sequence = onConsumed();
+      entry.isSent = true;
+      entry.resend = isFirst ? undefined : onConsumed;
+      this.queue(key, {
         sequence,
-        isConsumed: p,
+        isConsumed: isFirst,
       });
     } catch {
       return false;
@@ -159,76 +169,78 @@ class TerminalImageManager {
     this.requestFrame();
     return true;
   }
-  isBackedUp(n) {
-    let u = this.pendingTransmits.get(n) ?? [];
-    let f = 0;
-    for (let m of u) if (m.isConsumed) f++;
-    return f >= MAX_PENDING;
+  isBackedUp(key) {
+    let transmits = this.pendingTransmits.get(key) ?? [];
+    let consumedCount = 0;
+    for (let transmit of transmits) if (transmit.isConsumed) consumedCount++;
+    return consumedCount >= MAX_PENDING;
   }
-  refused(n, u) {
-    if (u === "OK") return;
-    this.live.get(n)?.onRefused?.(u);
+  refused(key, callback) {
+    if (callback === "OK") return;
+    this.live.get(key)?.onRefused?.(callback);
   }
-  free(n) {
-    let u = this.live.get(n);
-    if (u === undefined) return;
-    let { isSent, protocol, reuseKey } = u;
-    this.live.delete(n);
+  free(key) {
+    let entry = this.live.get(key);
+    if (entry === undefined) return;
+    let { isSent, protocol, reuseKey } = entry;
+    this.live.delete(key);
     if (protocol === "iterm") {
       if (reuseKey !== undefined) {
-        let g = this.freeIterm.get(reuseKey) ?? [];
+        let slots = this.freeIterm.get(reuseKey) ?? [];
         this.freeIterm.delete(reuseKey);
-        this.freeIterm.set(reuseKey, [...g, n]);
-        let [E] = this.freeIterm.keys();
-        if (E !== undefined && this.freeIterm.size > MAX_ITERM_FREE) this.freeIterm.delete(E);
+        this.freeIterm.set(reuseKey, [...slots, key]);
+        let [reuseKey_2] = this.freeIterm.keys();
+        if (reuseKey_2 !== undefined && this.freeIterm.size > MAX_ITERM_FREE)
+          this.freeIterm.delete(reuseKey_2);
       }
       return;
     }
-    for (let g of this.pendingTransmits.get(n) ?? []) if (g.isConsumed) this.pendingOrphans.push(g.sequence);
-    this.pendingTransmits.delete(n);
-    if (n < ANSI_256_LIMIT) this.freeSmall.add(n);
+    for (let transmit of this.pendingTransmits.get(key) ?? [])
+      if (transmit.isConsumed) this.pendingOrphans.push(transmit.sequence);
+    this.pendingTransmits.delete(key);
+    if (key < ANSI_256_LIMIT) this.freeSmall.add(key);
     if (isSent) {
-      this.pendingDeletes.add(n);
+      this.pendingDeletes.add(key);
       this.requestFrame();
     }
   }
   retransmitAll() {
-    for (let [n, u] of this.live) {
-      let { resend } = u;
-      if (u.protocol === "iterm") {
-        u.isDirty = true;
+    for (let [key, entry] of this.live) {
+      let { resend } = entry;
+      if (entry.protocol === "iterm") {
+        entry.isDirty = true;
         continue;
       }
       if (resend !== undefined)
-        this.queue(n, {
+        this.queue(key, {
           sequence: resend(),
           isConsumed: false,
         });
     }
   }
   drain() {
-    let n = this.pendingOrphans.splice(0);
+    let orphans = this.pendingOrphans.splice(0);
     let mapped = [...this.pendingDeletes].map((pendingDelete) => deleteKittyImage(pendingDelete));
-    let f = [];
-    let m = 0;
+    let keys = [];
+    let index = 0;
     this.pendingDeletes.clear();
-    for (let [p, g] of this.pendingTransmits) {
-      for (let E = g[0]; E !== undefined; E = g[0]) {
-        if (m > 0 && m + E.sequence.length > MAX_TRANSMIT_BYTES) {
+    for (let [key, queue] of this.pendingTransmits) {
+      for (let index_2 = queue[0]; index_2 !== undefined; index_2 = queue[0]) {
+        if (index > 0 && index + index_2.sequence.length > MAX_TRANSMIT_BYTES) {
           this.requestFrame();
-          return this.forOuter([...n, ...mapped, ...f].join(""));
+          return this.forOuter([...orphans, ...mapped, ...keys].join(""));
         }
-        f.push(E.sequence);
-        m += E.sequence.length;
-        g.shift();
+        keys.push(index_2.sequence);
+        index += index_2.sequence.length;
+        queue.shift();
       }
-      this.pendingTransmits.delete(p);
+      this.pendingTransmits.delete(key);
     }
-    return this.forOuter([...n, ...mapped, ...f].join(""));
+    return this.forOuter([...orphans, ...mapped, ...keys].join(""));
   }
   redrawInline() {
     if (!this.hasItermImages) return;
-    for (let n of this.live.values()) if (n.protocol === "iterm") n.isDirty = true;
+    for (let entry of this.live.values()) if (entry.protocol === "iterm") entry.isDirty = true;
     this.requestFrame();
   }
   requestDraw() {
@@ -242,129 +254,137 @@ class TerminalImageManager {
   forOuter(text) {
     return this.isTmuxPassthrough && text !== "" ? tmuxPassthroughChunked(text) : text;
   }
-  placeIterm(n, u, f, m, p = true) {
+  placeIterm(screen, previous, onPlace, offsetY, allowMove = true) {
     this.isDrawHeld = false;
     if (!this.hasItermImages) return "";
-    let g = u !== undefined && u.width === n.width ? u : undefined;
-    let E = g === undefined ? 0 : g.width * g.height;
-    let T = (index) => g === undefined || index >= E || cellChangedAt(n, g, index);
-    let A = scanImagePlaceholders(n);
-    let D = "";
-    let O = 0;
+    let reusable = previous !== undefined && previous.width === screen.width ? previous : undefined;
+    let capacity = reusable === undefined ? 0 : reusable.width * reusable.height;
+    let markRow = (index) =>
+      reusable === undefined || index >= capacity || cellChangedAt(screen, reusable, index);
+    let placeholders = scanImagePlaceholders(screen);
+    let out = "";
+    let lastY = 0;
     this.placements++;
     let sorted = [...this.live].sort(
-      ([, U], [, L]) =>
-        (U.deferredSince ?? Number.MAX_SAFE_INTEGER) - (L.deferredSince ?? Number.MAX_SAFE_INTEGER),
+      ([, box], [, id]) =>
+        (box.deferredSince ?? Number.MAX_SAFE_INTEGER) - (id.deferredSince ?? Number.MAX_SAFE_INTEGER),
     );
-    for (let [U, L] of sorted) {
-      let { box, resend } = L;
-      if (L.protocol !== "iterm" || box === undefined || !resend) continue;
-      let G = A.get(U);
-      if (G === undefined) {
-        L.isDrawn = false;
-        L.hasGlyphs = false;
+    for (let [id, slot] of sorted) {
+      let { box, resend } = slot;
+      if (slot.protocol !== "iterm" || box === undefined || !resend) continue;
+      let placeholdersForId = placeholders.get(id);
+      if (placeholdersForId === undefined) {
+        slot.isDrawn = false;
+        slot.hasGlyphs = false;
         continue;
       }
-      let any = G.indexes.some(T);
-      let hasGlyphs = L.hasGlyphs;
-      L.hasGlyphs ||= any;
-      let { originX, originY } = G;
-      let J =
-        G.isConsistent &&
-        G.count === box.columns * box.rows &&
-        G.lastRow < box.rows &&
-        G.lastColumn < box.columns;
-      let V = originY + box.rows - 1;
-      let position = J ? (m === undefined ? f(originX, originY) : m(originX, originY)) : undefined;
-      if (position !== undefined && (m === undefined ? f(originX, V) : m(originX, V)) !== undefined) {
-        if (!L.isDirty && L.isDrawn && !any) continue;
-        if (m !== undefined && any) {
-          L.isDrawn = false;
-          L.isDirty = true;
+      let any = placeholdersForId.indexes.some(markRow);
+      let hasGlyphs = slot.hasGlyphs;
+      slot.hasGlyphs ||= any;
+      let { originX, originY } = placeholdersForId;
+      let escapeSequence =
+        placeholdersForId.isConsistent &&
+        placeholdersForId.count === box.columns * box.rows &&
+        placeholdersForId.lastRow < box.rows &&
+        placeholdersForId.lastColumn < box.columns;
+      let bottomRow = originY + box.rows - 1;
+      let position = escapeSequence
+        ? offsetY === undefined
+          ? onPlace(originX, originY)
+          : offsetY(originX, originY)
+        : undefined;
+      if (
+        position !== undefined &&
+        (offsetY === undefined ? onPlace(originX, bottomRow) : offsetY(originX, bottomRow)) !== undefined
+      ) {
+        if (!slot.isDirty && slot.isDrawn && !any) continue;
+        if (offsetY !== undefined && any) {
+          slot.isDrawn = false;
+          slot.isDirty = true;
           this.requestFrame();
           continue;
         }
-        if (!p) {
-          L.isDrawn = false;
-          L.isDirty = true;
+        if (!allowMove) {
+          slot.isDrawn = false;
+          slot.isDirty = true;
           this.isDrawHeld = true;
           continue;
         }
         let sequence = resend();
-        if (O > 0 && O + sequence.length > MAX_TRANSMIT_BYTES) {
-          L.isDrawn = false;
-          L.isDirty = true;
-          L.deferredSince ??= this.placements;
+        if (lastY > 0 && lastY + sequence.length > MAX_TRANSMIT_BYTES) {
+          slot.isDrawn = false;
+          slot.isDirty = true;
+          slot.deferredSince ??= this.placements;
           this.requestFrame();
           continue;
         }
-        D += typeof position === "string" ? position + sequence : wrapItermImageForTmux(sequence, position);
-        O += sequence.length;
-        L.isDrawn = true;
-        L.isDirty = false;
-        L.deferredSince = undefined;
-        L.hasGlyphs = false;
+        out += typeof position === "string" ? position + sequence : wrapItermImageForTmux(sequence, position);
+        lastY += sequence.length;
+        slot.isDrawn = true;
+        slot.isDirty = false;
+        slot.deferredSince = undefined;
+        slot.hasGlyphs = false;
         continue;
       }
-      L.isDrawn = false;
-      L.hasGlyphs = false;
-      let indexes = hasGlyphs ? G.indexes : G.indexes.filter(T);
-      for (let de of indexesToRuns(indexes, n.width)) {
-        let se = f(de.x, de.y);
-        if (se !== undefined) D += se + csi(`${de.length}X`);
+      slot.isDrawn = false;
+      slot.hasGlyphs = false;
+      let indexes = hasGlyphs ? placeholdersForId.indexes : placeholdersForId.indexes.filter(markRow);
+      for (let index of indexesToRuns(indexes, screen.width)) {
+        let text = onPlace(index.x, index.y);
+        if (text !== undefined) out += text + csi(`${index.length}X`);
       }
     }
-    return D === "" ? "" : DECSC + D + DECRC;
+    return out === "" ? "" : DECSC + out + DECRC;
   }
   get hasHeldDraw() {
     return this.isDrawHeld;
   }
   get hasItermImages() {
-    for (let n of this.live.values()) if (n.protocol === "iterm") return true;
+    for (let entry of this.live.values()) if (entry.protocol === "iterm") return true;
     return false;
   }
   get size() {
     return this.live.size;
   }
-  keepIterm(n, u, f, m) {
-    if (m.box === undefined || !m.resend) return false;
+  keepIterm(screen, previous, onKeep, offsetY) {
+    if (offsetY.box === undefined || !offsetY.resend) return false;
     try {
-      let p = () => f(n);
-      p();
-      u.resend = p;
+      let keep = () => onKeep(screen);
+      keep();
+      previous.resend = keep;
     } catch {
       return false;
     }
-    u.isSent = true;
-    u.box = m.box;
-    u.isDirty = true;
+    previous.isSent = true;
+    previous.box = offsetY.box;
+    previous.isDirty = true;
     this.requestFrame();
     return true;
   }
-  queue(n, u) {
-    let f = this.pendingTransmits.get(n) ?? [];
-    let m = u.isConsumed ? f : f.filter((p) => p.isConsumed);
-    this.pendingTransmits.set(n, [...m, u]);
+  queue(key, transmit) {
+    let queue = this.pendingTransmits.get(key) ?? [];
+    let nextQueue = transmit.isConsumed ? queue : queue.filter((pending) => pending.isConsumed);
+    this.pendingTransmits.set(key, [...nextQueue, transmit]);
   }
   takeSmall() {
-    let [n] = this.freeSmall;
-    if (n !== undefined) {
-      this.freeSmall.delete(n);
-      return n;
+    let [slot] = this.freeSmall;
+    if (slot !== undefined) {
+      this.freeSmall.delete(slot);
+      return slot;
     }
-    let u = [];
-    for (let idx = 1; idx < ANSI_256_LIMIT; idx++) if (!this.live.has(idx)) u.push(idx);
-    return u.length === 0 ? undefined : u[randomInt(0, u.length)];
+    let ids = [];
+    for (let idx = 1; idx < ANSI_256_LIMIT; idx++) if (!this.live.has(idx)) ids.push(idx);
+    return ids.length === 0 ? undefined : ids[randomInt(0, ids.length)];
   }
-  takeIterm(n) {
-    let u = n === undefined ? undefined : this.freeIterm.get(n);
-    let f = u?.shift();
-    if (n !== undefined && u?.length === 0) this.freeIterm.delete(n);
-    if (f !== undefined && !this.live.has(f)) return f;
-    let m;
-    do m = randomInt(ANSI_256_LIMIT, MAX_ITERM_IMAGE_ID);
-    while (this.live.has(m) || [...this.freeIterm.values()].some((p) => p.includes(m)));
-    return m;
+  takeIterm(preferredKey) {
+    let slots = preferredKey === undefined ? undefined : this.freeIterm.get(preferredKey);
+    let slot = slots?.shift();
+    if (preferredKey !== undefined && slots?.length === 0) this.freeIterm.delete(preferredKey);
+    if (slot !== undefined && !this.live.has(slot)) return slot;
+    let key;
+    do key = randomInt(ANSI_256_LIMIT, MAX_ITERM_IMAGE_ID);
+    while (this.live.has(key) || [...this.freeIterm.values()].some((slots) => slots.includes(key)));
+    return key;
   }
   takeWide() {
     let nextWide = this.nextWide;

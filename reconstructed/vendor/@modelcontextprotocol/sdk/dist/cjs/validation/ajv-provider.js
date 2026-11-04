@@ -6,32 +6,37 @@
  * attribution: esm-layout 2, esm-fingerprint 2
  */
 import { isPlainObject } from "../../esm/shared/protocol.js";
-import { Re } from "../../../../../../runtime/bun-runtime.js";
+import { __toESM } from "../../../../../../runtime/bun-runtime.js";
 import { require_ajv } from "../../../../../ajv/dist/ajv.js";
 import { require_ajv_formats } from "../../../../../ajv-formats/dist/index.js";
+import { deferInit } from "../../../../../../runtime/deferred-init.js";
 
 //@ chunk-zykv69v4.js:27574-27722 esm-layout
-function vGn(mod, capabilities) {
-  let r = {
+function mergeCapabilities(mod, capabilities) {
+  let result = {
     ...mod,
   };
   for (let key in capabilities) {
-    let n = key;
-    let s = capabilities[n];
-    if (s === undefined) continue;
-    let o = r[n];
-    if (isPlainObject(o) && isPlainObject(s))
-      r[n] = {
-        ...o,
-        ...s,
+    let capabilityKey = key;
+    let value = capabilities[capabilityKey];
+    if (value === undefined) continue;
+    let current = result[capabilityKey];
+    if (isPlainObject(current) && isPlainObject(value))
+      result[capabilityKey] = {
+        ...current,
+        ...value,
       };
-    else r[n] = s;
+    else result[capabilityKey] = value;
   }
-  return r;
+  return result;
 }
 //@ chunk-zykv69v4.js:27722-27755 esm-layout
-var import_ajv = Re(require_ajv(), 1);
-var import_ajv_formats = Re(require_ajv_formats(), 1);
+var import_ajv; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var import_ajv_formats;
+deferInit("chunk-zykv69v4.js:27722", () => {
+  import_ajv = __toESM(require_ajv(), 1);
+  import_ajv_formats = __toESM(require_ajv_formats(), 1);
+});
 //@ chunk-zykv69v4.js:27755-27876 esm-fingerprint
 function createDefaultAjvInstance() {
   let ajv = new import_ajv.default({
@@ -44,7 +49,7 @@ function createDefaultAjvInstance() {
   return ajv;
 }
 //@ chunk-zykv69v4.js:27876-28190 esm-fingerprint
-class Gsn {
+class AjvJsonSchemaValidator {
   constructor(ajv) {
     this._ajv = ajv ?? createDefaultAjvInstance();
   }
@@ -53,11 +58,11 @@ class Gsn {
       "$id" in schema && typeof schema.$id === "string"
         ? (this._ajv.getSchema(schema.$id) ?? this._ajv.compile(schema))
         : this._ajv.compile(schema);
-    return (r) => {
-      if (ajvValidator(r))
+    return (input) => {
+      if (ajvValidator(input))
         return {
           valid: true,
-          data: r,
+          data: input,
           errorMessage: undefined,
         };
       else
@@ -69,4 +74,4 @@ class Gsn {
     };
   }
 }
-export { Gsn, vGn };
+export { AjvJsonSchemaValidator, mergeCapabilities };

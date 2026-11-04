@@ -5,10 +5,10 @@
  * pieces: chunk-fq0cr76a.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../runtime/bun-runtime.js";
 
 //@ chunk-fq0cr76a.js:3429-3501 cjs-fingerprint
-var require_forge = x(function (cjsExports, cjsModule) {
+var require_forge = __commonJS(function (cjsExports, cjsModule) {
   cjsModule.exports = {
     options: {
       usePureJavaScript: false,

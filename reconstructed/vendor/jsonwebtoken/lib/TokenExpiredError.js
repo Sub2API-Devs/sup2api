@@ -5,11 +5,11 @@
  * pieces: chunk-mrx6y2r5.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../runtime/bun-runtime.js";
 import { require_JsonWebTokenError } from "./JsonWebTokenError.js";
 
 //@ chunk-mrx6y2r5.js:4325-4528 cjs-fingerprint
-var require_TokenExpiredError = x(function (cjsExports, cjsModule) {
+var require_TokenExpiredError = __commonJS(function (cjsExports, cjsModule) {
   var JsonWebTokenError = require_JsonWebTokenError();
   var TokenExpiredError = function (message, expiredAt) {
     JsonWebTokenError.call(this, message);

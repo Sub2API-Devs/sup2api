@@ -13,79 +13,82 @@
 /**
  * 安全元数据的透传函数：原样返回传入值（不做脱敏），另有 lit 作为其别名。
  */
-function identity(n) {
-  return n;
+function identity(value) {
+  return value;
 }
 //@ chunk-0wqny7vr.js:214-240 placement
 /**
  * 导出函数 `lit`：参数 n，返回 r(n)。
  */
-function lit(n) {
-  return identity(n);
+function lit(value) {
+  return identity(value);
 }
 //@ chunk-0wqny7vr.js:240-266 placement
-function fromEnum(n) {
-  return identity(n);
+function fromEnum(value) {
+  return identity(value);
 }
 //@ chunk-0wqny7vr.js:266-308 placement
-function fromEnumOpt(n) {
-  return n == null ? undefined : identity(n);
+function fromEnumOpt(value) {
+  return value == null ? undefined : identity(value);
 }
 //@ chunk-0wqny7vr.js:308-343 placement
-function fromNumber(n) {
-  return identity(String(n));
+function fromNumber(value) {
+  return identity(String(value));
 }
 //@ chunk-0wqny7vr.js:343-393 placement
-function fromNumberOpt(n) {
-  return n == null ? undefined : identity(String(n));
+function fromNumberOpt(value) {
+  return value == null ? undefined : identity(String(value));
 }
 //@ chunk-0wqny7vr.js:393-432 placement
-function concatSafe(...n) {
-  return identity(n.join(""));
+function concatSafe(...values) {
+  return identity(values.join(""));
 }
 //@ chunk-0wqny7vr.js:432-470 placement
-function fromNumberArr(n) {
-  return identity(n.join(","));
+function fromNumberArr(values) {
+  return identity(values.join(","));
 }
 //@ chunk-0wqny7vr.js:470-519 placement
-function fromEnumArr(n) {
-  return identity([...n].sort().join(","));
+function fromEnumArr(values) {
+  return identity([...values].sort().join(","));
 }
 //@ chunk-0wqny7vr.js:519-561 placement
-function joinSafe(n, e) {
-  return identity(n.join(e ?? ","));
+function joinSafe(values, separator) {
+  return identity(values.join(separator ?? ","));
 }
 //@ chunk-0wqny7vr.js:561-588 placement
-function fromSanitizer_SANITIZER_OUTPUT_ONLY(n) {
-  return identity(n);
+function fromSanitizer_SANITIZER_OUTPUT_ONLY(value) {
+  return identity(value);
 }
 //@ chunk-0wqny7vr.js:588-627 placement
-function mcpNameForAnalytics_GATE_EVALUATED(n, e) {
-  return e ? fromSanitizer_SANITIZER_OUTPUT_ONLY(n) : undefined;
+function mcpNameForAnalytics_GATE_EVALUATED(name, gate) {
+  return gate ? fromSanitizer_SANITIZER_OUTPUT_ONLY(name) : undefined;
 }
 //@ chunk-0wqny7vr.js:627-723 placement
 /**
  * 遥测元数据的安全取值工具集（lit/fromEnum/fromNumber/joinSafe 等）与 MCP 名、插件 id、代理类型的脱敏转换，确保只上报构建期已知或经过闸门的值。
  */
-function bundledFileStemForAnalytics_KNOWN_IS_BUILD_TIME(n, e) {
-  return n !== undefined && e.includes(n) && /^[a-z0-9-]{1,64}$/.test(n)
-    ? fromSanitizer_SANITIZER_OUTPUT_ONLY(n)
+function bundledFileStemForAnalytics_KNOWN_IS_BUILD_TIME(stem, bundleSources) {
+  return stem !== undefined && bundleSources.includes(stem) && /^[a-z0-9-]{1,64}$/.test(stem)
+    ? fromSanitizer_SANITIZER_OUTPUT_ONLY(stem)
     : lit("none");
 }
 //@ chunk-0wqny7vr.js:723-768 placement = inputSchema (0.391)
-function agentTypeForAnalytics_GATE_EVALUATED(n, e) {
-  return e ? fromSanitizer_SANITIZER_OUTPUT_ONLY(n) : lit("custom");
+function agentTypeForAnalytics_GATE_EVALUATED(agentType, gate) {
+  return gate ? fromSanitizer_SANITIZER_OUTPUT_ONLY(agentType) : lit("custom");
 }
 //@ chunk-0wqny7vr.js:768-830 placement = updateAgentFile (1)
-function agentTypeForAnalyticsFromDefinition(n) {
-  return agentTypeForAnalytics_GATE_EVALUATED(n.agentType, n.source === "built-in");
+function agentTypeForAnalyticsFromDefinition(agentDefinition) {
+  return agentTypeForAnalytics_GATE_EVALUATED(
+    agentDefinition.agentType,
+    agentDefinition.source === "built-in",
+  );
 }
 //@ chunk-0wqny7vr.js:830-880 placement = getPluginHookCounts (0.74)
 /**
  * 插件钩子遥测用的插件标识：官方插件用哈希/名，否则 third-party。
  */
-function pluginIdForAnalytics_GATE_EVALUATED(n, e) {
-  return e ? fromSanitizer_SANITIZER_OUTPUT_ONLY(n) : lit("third-party");
+function pluginIdForAnalytics_GATE_EVALUATED(pluginId, gate) {
+  return gate ? fromSanitizer_SANITIZER_OUTPUT_ONLY(pluginId) : lit("third-party");
 }
 export {
   fromEnumOpt,

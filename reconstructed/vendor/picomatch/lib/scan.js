@@ -5,12 +5,12 @@
  * pieces: chunk-fq0cr76a.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../runtime/bun-runtime.js";
 import { require_utils } from "./utils.js";
 import { require_constants } from "./constants.js";
 
 //@ chunk-fq0cr76a.js:299275-302511 cjs-fingerprint
-var require_scan = x(function (cjsExports, cjsModule) {
+var require_scan = __commonJS(function (cjsExports, cjsModule) {
   var utils = require_utils();
   var {
     CHAR_ASTERISK,

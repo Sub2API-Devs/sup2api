@@ -38,18 +38,18 @@ var tiersBeneath = (tier) =>
 /**
  * 是否 prepend 之下
  */
-var isAbovePrepend = (e) => tiersBeneath("prepend").includes(e);
+var isAbovePrepend = (tier) => tiersBeneath("prepend").includes(tier);
 //@ chunk-bfnfj4kx.js:6286-6334 placement
 var SCRIPTS_BUNDLE_BUILTIN_HOOKS_MODULE_TS = "scripts/bundle-builtin-hooks-module.ts";
 //@ chunk-bfnfj4kx.js:6334-6481 placement
 /**
  * 取打包的内置 hooks 模块记录里的 files（只保留字符串值），冻结返回。
  */
-function readBundledFiles(e) {
-  let files = isPlainObject(e) ? e.files : undefined;
+function readBundledFiles(bundledModule) {
+  let files = isPlainObject(bundledModule) ? bundledModule.files : undefined;
   return Object.freeze(
     Object.fromEntries(
-      (isPlainObject(files) ? Object.entries(files) : []).filter((t) => typeof t[1] === "string"),
+      (isPlainObject(files) ? Object.entries(files) : []).filter((entry) => typeof entry[1] === "string"),
     ),
   );
 }
@@ -57,8 +57,8 @@ function readBundledFiles(e) {
 /**
  * 取打包记录里的 scan（hooks、calls、nextTo 字段形状正确），没有则抛"构建未携带扫描结果"。
  */
-function readBundledScan(e, o) {
-  let scan = isPlainObject(e) ? e.scan : undefined;
+function readBundledScan(bundledScan, path) {
+  let scan = isPlainObject(bundledScan) ? bundledScan.scan : undefined;
   if (
     isPlainObject(scan) &&
     Array.isArray(scan.hooks) &&
@@ -67,7 +67,7 @@ function readBundledScan(e, o) {
   )
     return scan;
   throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-    `the build carried no hooks module scan for ${o}`,
+    `the build carried no hooks module scan for ${path}`,
     "the build carried no hooks module scan for a built-in",
   );
 }
@@ -75,9 +75,9 @@ function readBundledScan(e, o) {
 /**
  * 生成"内置插件的 hooks 模块无法发布"遥测安全错误。
  */
-var builtinCannotShipError = (path, o) =>
+var builtinCannotShipError = (path, reason) =>
   new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-    `the hooks module of ${path} cannot ship: ${o}`,
+    `the hooks module of ${path} cannot ship: ${reason}`,
     "the hooks module of a built-in cannot ship",
   );
 //@ chunk-bfnfj4kx.js:6864-6891 placement
@@ -86,7 +86,7 @@ var HOOKS_REGISTER_TS = "hooks/register.ts";
 /**
  * builtin:<name>/register
  */
-var builtinHookKey = (e) => `builtin:${e}/${HOOKS_REGISTER_TS}`;
+var builtinHookKey = (path) => `builtin:${path}/${HOOKS_REGISTER_TS}`;
 //@ chunk-bfnfj4kx.js:6924-6938 placement
 var MODS = "mods";
 //@ chunk-bfnfj4kx.js:6938-6953 placement

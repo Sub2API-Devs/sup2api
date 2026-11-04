@@ -9,6 +9,7 @@
  * attribution: placement 22
  */
 import { randomUUID } from "crypto";
+import { isWindowsSandboxPolicyViolation, SESSION_APPROVAL_STALE_MS } from "./servingState.js";
 import { logEvent } from "../../../services/analytics/index.js";
 import { sanitizeMarkName } from "../../../utils/startupMarks.js";
 import {
@@ -131,7 +132,6 @@ import { credentialRuleKind } from "./servedSafetyChecks.js";
 import { cancelledToolResult } from "./resultShaping.js";
 import { isRanOutcome, REMOTE_TOOL_PROTOCOL_VERSION, serverVerdictKind } from "../protocolConstants.js";
 import { SANDBOX_MAX_DEPTH } from "../../../utils/sandbox/sandboxDefaultPolicy.js";
-import { SESSION_APPROVAL_STALE_MS, isWindowsSandboxPolicyViolation } from "./servingState.js";
 import { isMultiEntryAliasTool } from "../../../services/tools/permissionCheckGuard.js";
 import { BASH_TOOL_NAME } from "../../../tools/BashTool/toolName.js";
 import { POWERSHELL_TOOL_NAME } from "../../../tools/PowerShellTool/toolName.js";
@@ -147,21 +147,35 @@ import { shortHash } from "../../../utils/shortHash.js";
 import { lit, fromEnumOpt, fromEnum } from "../../../services/analytics/safeMetadata.js";
 import { REMOTE_TOOL_PROTOCOL_LABEL } from "../protocolSchemas.js";
 import { jsonStringify } from "../../../utils/slowOperations.js";
+import { deferInit, runDeferredInits } from "../../../../runtime/deferred-init.js";
 
+//@ chunk-5ghnps9r.js:1209-1360 placement
+/**
+ * （切分错误，权限 UI）可提供常驻更新时把它们并入会话权限更新。
+ */
+function sessionUpdatesForCaller(callerSession) {
+  return callerSession.offeredStandingUpdates.length > 0 && isWindowsSandboxPolicyViolation()
+    ? [...callerSession.sessionPermissionUpdates, ...callerSession.offeredStandingUpdates]
+    : callerSession.sessionPermissionUpdates;
+}
 //@ chunk-ad2e1aj6.js:43267-43284 placement
-var SERVING_KIT_INSTANCE_ID = randomUUID();
-var servingKitFrameCounter = 0;
+var SERVING_KIT_INSTANCE_ID; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var servingKitFrameCounter;
+deferInit("chunk-ad2e1aj6.js:43267", () => {
+  SERVING_KIT_INSTANCE_ID = randomUUID();
+  servingKitFrameCounter = 0;
+});
 //@ chunk-ad2e1aj6.js:43284-43314 placement
 function nextServingKitFrameSeq() {
   servingKitFrameCounter += 1;
   return servingKitFrameCounter;
 }
 //@ chunk-ad2e1aj6.js:43314-43565 placement
-function noteLateHoldRelease(facts, n, s) {
-  if (!n || !s.wasAnsweredAheadOfItsKills()) return;
+function noteLateHoldRelease(facts, heldHold, ask) {
+  if (!heldHold || !ask.wasAnsweredAheadOfItsKills()) return;
   facts.holdStandsAtAnswer = true;
   let now = Date.now();
-  s.holdMayGo
+  ask.holdMayGo
     .then(() =>
       logEvent("tengu_remote_tool_hold_released_late", {
         call_id: sanitizeMarkName(facts.callId),
@@ -175,41 +189,42 @@ function noteLateHoldRelease(facts, n, s) {
 /**
  * 远程工具服务端的单次调用全流程：无人值守同意、输入校验、权限判定（会话询问/分类器/钩子）、执行、结果与遥测。
  */
-async function serveToolCall(e) {
-  let { tool, wireArguments, ctx, deps, facts } = e;
+async function serveToolCall(args) {
+  let { tool, wireArguments, ctx, deps, facts } = args;
   if (deps.policy.stance.unattended !== "conveyed" && !unattendedServingConsentViewIsFresh())
     await freshUnattendedServingConsent(ctx.signal);
   let toolRemoteExecution = getToolRemoteExecution(tool);
   let fields =
     deps.policy.refusedInputFields?.(tool) ??
     (toolRemoteExecution.supported ? (toolRemoteExecution.refusedInputFields ?? []) : []);
-  let R = unsupportedFieldRefusal(e.toolInput, fields, deps.targetName);
-  if (R !== undefined) return refusedEnvelope(e.target, facts, "refused_field", R);
-  let w = executionPlacement(deps);
-  if (w.where === "refused") return refusedEnvelope(e.target, facts, "sandbox_unavailable", w.message);
-  let { executor } = w;
-  let P = executor === defaultServedCallRunner;
-  let x = deps.policy.constraints(tool, deps.launchDir, {
+  let fieldRefusal = unsupportedFieldRefusal(args.toolInput, fields, deps.targetName);
+  if (fieldRefusal !== undefined) return refusedEnvelope(args.target, facts, "refused_field", fieldRefusal);
+  let placement = executionPlacement(deps);
+  if (placement.where === "refused")
+    return refusedEnvelope(args.target, facts, "sandbox_unavailable", placement.message);
+  let { executor } = placement;
+  let isDefaultRunner = executor === defaultServedCallRunner;
+  let constraints = deps.policy.constraints(tool, deps.launchDir, {
     approvalAttested: facts.approvalAttested,
   });
-  let Y =
+  let effectiveConstraints =
     deps.policy.stance.unattended === "own_record" && unattendedServingAllowedByHostFlag()
       ? {
-          ...x,
+          ...constraints,
           sandbox: "required",
           scrubCredentialEnv: true,
         }
-      : x;
-  let F = withoutEditKeys(e.toolInput, fields);
-  let D = deps.sessions.forCaller(callerKey(ctx));
-  if (D === undefined) {
+      : constraints;
+  let forwardedInput = withoutEditKeys(args.toolInput, fields);
+  let session = deps.sessions.forCaller(callerKey(ctx));
+  if (session === undefined) {
     facts.seatsFull = true;
     logRemoteTools(facts.envelope?.call_id, "capacity refused", {
       sessions_in_use: deps.sessions.size,
       sessions_limit: deps.sessions.limit,
     });
     return refusedEnvelope(
-      e.target,
+      args.target,
       facts,
       "too_many_in_flight",
       tooManySessionsMessage({
@@ -220,108 +235,110 @@ async function serveToolCall(e) {
   }
   let callId = facts.envelope?.call_id;
   let approval = facts.envelope?.approval;
-  resetCallerReadStateOnClear(D, facts.envelope);
-  let M = ctx.sessionId === undefined ? undefined : deps.dirSyncOf?.(ctx.sessionId);
+  resetCallerReadStateOnClear(session, facts.envelope);
+  let dirSync = ctx.sessionId === undefined ? undefined : deps.dirSyncOf?.(ctx.sessionId);
   if (callId !== undefined && approval === undefined && !facts.enteredRecord)
     if (
-      D.calls.receive(callId, {
-        retryKey: decidingInput(tool, e.toolInput, D.cwd ?? deps.launchDir),
+      session.calls.receive(callId, {
+        retryKey: decidingInput(tool, args.toolInput, session.cwd ?? deps.launchDir),
         workerEpoch: ctx.workerEpoch,
       })
     )
       facts.enteredRecord = true;
     else {
-      let S = D.calls.lookup(callId);
-      if (S !== undefined)
+      let known = session.calls.lookup(callId);
+      if (known !== undefined)
         return joinKnownCall({
-          known: S,
-          session: D,
+          known,
+          session,
           hostEpoch: deps.sessions.epoch,
           callId,
-          target: e.target,
+          target: args.target,
           facts,
         });
     }
-  let cwd = D.cwd;
-  let ee = Y.pinCwd || cwd === undefined ? deps.launchDir : cwd;
-  let q = {
-    ...e.target,
-    working_dir: deps.announcedDir ?? ee,
+  let cwd = session.cwd;
+  let effectiveCwd = effectiveConstraints.pinCwd || cwd === undefined ? deps.launchDir : cwd;
+  let target = {
+    ...args.target,
+    working_dir: deps.announcedDir ?? effectiveCwd,
   };
-  let ae = approval === undefined ? platformPathGuard(tool, F, ee) : undefined;
-  if (ae !== undefined) {
+  let pathTooLong =
+    approval === undefined ? platformPathGuard(tool, forwardedInput, effectiveCwd) : undefined;
+  if (pathTooLong !== undefined) {
     facts.pathOverLimit = true;
     return refusedEnvelope(
-      q,
+      target,
       facts,
       "invalid_request",
-      REMOTE_TOOLS_CONSENT_TEXT["refused.path_too_long"](deps.targetName, ae),
+      REMOTE_TOOLS_CONSENT_TEXT["refused.path_too_long"](deps.targetName, pathTooLong),
     );
   }
-  let fe = stableHashWithSalt(tool.name, F);
-  facts.inputFingerprint = fe;
-  let V = (callId, G) => {
-    if (callId !== undefined) D.calls.remember(callId, G);
+  let inputFingerprint = stableHashWithSalt(tool.name, forwardedInput);
+  facts.inputFingerprint = inputFingerprint;
+  let rememberOutcome = (callId, outcome) => {
+    if (callId !== undefined) session.calls.remember(callId, outcome);
   };
-  let K = (callId, G) => {
-    if (callId !== undefined) D.calls.settle(callId, G, isSessionDenial(G));
+  let settleCall = (callId, result) => {
+    if (callId !== undefined) session.calls.settle(callId, result, isSessionDenial(result));
   };
   if (callId !== undefined && approval === undefined) {
-    let S = D.calls.retryOf(callId);
-    if (S !== undefined && !isServedReadOnly(tool, F, deps)) {
-      let { summary } = S.call;
-      let re =
+    let retry = session.calls.retryOf(callId);
+    if (retry !== undefined && !isServedReadOnly(tool, forwardedInput, deps)) {
+      let { summary } = retry.call;
+      let pendingAskOfRetry =
         summary.state === "asked" && summary.askId !== undefined
-          ? D.pendingAsks.peek(summary.askId)
+          ? session.pendingAsks.peek(summary.askId)
           : undefined;
-      if (re === undefined || re.redeemingLegs > 0)
+      if (pendingAskOfRetry === undefined || pendingAskOfRetry.redeemingLegs > 0)
         return joinRetry({
-          session: D,
-          joined: S,
+          session,
+          joined: retry,
           hostEpoch: deps.sessions.epoch,
           callId,
-          target: q,
+          target,
           facts,
           workerEpoch: ctx.workerEpoch,
         });
       logRemoteTools(callId, "retry replaced ask", {
-        replaced_call: S.callId,
-        ask_id: re.askId,
+        replaced_call: retry.callId,
+        ask_id: pendingAskOfRetry.askId,
         worker_epoch: ctx.workerEpoch,
       });
       if (facts.arrivedOver !== "relay") logFeatureSad("remote_tool_serve", "ask_replaced_by_retry");
-      withdrawAskedCall(D, re.askId, {
+      withdrawAskedCall(session, pendingAskOfRetry.askId, {
         reason: REPLACED_BY_RETRY,
         message: withdrawnRequestMessage({
           targetName: deps.targetName,
           reason: REPLACED_BY_RETRY,
         }),
       });
-      let ie = D.calls.lookup(S.callId)?.result;
-      let De = {
+      let previousResult = session.calls.lookup(retry.callId)?.result;
+      let replacedSummary = {
         state: "failed",
         code: REPLACED_BY_RETRY,
       };
-      if (ie === undefined) V(S.callId, De);
-      else D.calls.settle(S.callId, ie, De);
+      if (previousResult === undefined) rememberOutcome(retry.callId, replacedSummary);
+      else session.calls.settle(retry.callId, previousResult, replacedSummary);
     }
-    if (facts.enteredRecord) D.calls.rekey(callId, decidingInput(tool, e.toolInput, D.cwd ?? deps.launchDir));
+    if (facts.enteredRecord)
+      session.calls.rekey(callId, decidingInput(tool, args.toolInput, session.cwd ?? deps.launchDir));
   }
   if (approval !== undefined) {
-    let S = D.pendingAsks.peek(approval.ask_id);
-    if (S === undefined) {
-      let ie = callId === undefined ? undefined : D.calls.lookup(callId);
-      return ie !== undefined && callId !== undefined
+    let ask = session.pendingAsks.peek(approval.ask_id);
+    if (ask === undefined) {
+      let known = callId === undefined ? undefined : session.calls.lookup(callId);
+      return known !== undefined && callId !== undefined
         ? joinKnownCall({
-            known: ie,
-            session: D,
+            known,
+            session,
             hostEpoch: deps.sessions.epoch,
             callId,
-            target: q,
+            target,
             facts,
           })
         : refusedEnvelope(
-            q,
+            target,
             facts,
             "invalid_request",
             approval.decision === "deny"
@@ -332,49 +349,52 @@ async function serveToolCall(e) {
                 }),
           );
     }
-    facts.askedInMode = S.askedInMode;
-    let G = {
-      ...e.target,
-      working_dir: deps.announcedDir ?? S.startCwd,
+    facts.askedInMode = ask.askedInMode;
+    let askTarget = {
+      ...args.target,
+      working_dir: deps.announcedDir ?? ask.startCwd,
     };
-    let re = S.callId !== undefined && S.callId === callId;
-    if (approval.decision === "deny" && !re) {
+    let sameCall = ask.callId !== undefined && ask.callId === callId;
+    if (approval.decision === "deny" && !sameCall) {
       facts.askStillPending = true;
       return refusedEnvelope(
-        G,
+        askTarget,
         facts,
         "invalid_request",
         `That decline named a different call than the pending question on ${deps.targetName} \u2014 the question is still pending and nothing ran.`,
       );
     }
-    if (approval.decision === "deny" || (re && S.fingerprints.includes(fe))) {
-      let ie = stripTargetField(
+    if (approval.decision === "deny" || (sameCall && ask.fingerprints.includes(inputFingerprint))) {
+      let updatedInput = stripTargetField(
         approval.updated_input === undefined
           ? undefined
           : renameInputFields(approval.updated_input, wireArguments),
         deps.targetName,
       );
-      if (ie !== undefined && approval.decision === "allow") {
-        let se =
-          unsupportedFieldRefusal(ie, fields, deps.targetName) ??
-          (SIMULATED_SED_EDIT_KEY in ie
+      if (updatedInput !== undefined && approval.decision === "allow") {
+        let refusal =
+          unsupportedFieldRefusal(updatedInput, fields, deps.targetName) ??
+          (SIMULATED_SED_EDIT_KEY in updatedInput
             ? unsupportedFieldMessage({
                 field: SIMULATED_SED_EDIT_KEY,
                 targetName: deps.targetName,
               })
             : undefined);
-        if (se !== undefined) {
+        if (refusal !== undefined) {
           facts.askStillPending = true;
-          return refusedEnvelope(G, facts, "refused_field", se);
+          return refusedEnvelope(askTarget, facts, "refused_field", refusal);
         }
         if (
-          !S.fingerprints.includes(
-            stableHashWithSalt(tool.name, pickKnownFields(S.evaluatedInput, withoutEditKeys(ie, fields))),
+          !ask.fingerprints.includes(
+            stableHashWithSalt(
+              tool.name,
+              pickKnownFields(ask.evaluatedInput, withoutEditKeys(updatedInput, fields)),
+            ),
           )
         ) {
           facts.askStillPending = true;
           return refusedEnvelope(
-            G,
+            askTarget,
             facts,
             "invalid_request",
             `An approval cannot change the call it approves on ${deps.targetName} \u2014 nothing ran and the request is still pending. Send the changed call as a new one.`,
@@ -382,35 +402,35 @@ async function serveToolCall(e) {
         }
       }
       if (approval.decision === "allow") {
-        let se = Date.now() - S.createdAt;
-        let Ae = arrivesOverSession(S.raisedOver) || arrivesOverSession(facts.arrivedOver);
-        if ((!Ae || deps.policy.limits.max_ask_ms !== undefined) && se > SYNC_ANSWER_TTL_MS) {
-          let xe = expiredApprovalMessage({
+        let askAgeMs = Date.now() - ask.createdAt;
+        let dated = arrivesOverSession(ask.raisedOver) || arrivesOverSession(facts.arrivedOver);
+        if ((!dated || deps.policy.limits.max_ask_ms !== undefined) && askAgeMs > SYNC_ANSWER_TTL_MS) {
+          let expiredMessage = expiredApprovalMessage({
             targetName: deps.targetName,
-            askAgeMs: se,
+            askAgeMs,
             windowMs: SYNC_ANSWER_TTL_MS,
-            dated: Ae,
+            dated,
           });
-          withdrawAskedCall(D, approval.ask_id, {
+          withdrawAskedCall(session, approval.ask_id, {
             reason: "stale_answer",
-            message: xe,
+            message: expiredMessage,
           });
           facts.staleLeg = {
-            ageMs: se,
+            ageMs: askAgeMs,
             windowMs: SYNC_ANSWER_TTL_MS,
-            judgedBy: Ae ? "dated_ask_age" : "ask_age",
+            judgedBy: dated ? "dated_ask_age" : "ask_age",
           };
-          logRemoteTools(callId, `${Ae ? "aged" : "undated"} allow refused`, {
-            ask_age_ms: Math.round(se),
+          logRemoteTools(callId, `${dated ? "aged" : "undated"} allow refused`, {
+            ask_age_ms: Math.round(askAgeMs),
             window_ms: SYNC_ANSWER_TTL_MS,
           });
-          return refusedEnvelope(G, facts, "stale", xe, {
+          return refusedEnvelope(askTarget, facts, "stale", expiredMessage, {
             reason: "stale_answer",
           });
         }
       }
-      if (acceptsArrival(S.raisedOver, facts.arrivedOver)) {
-        let se = callerKindForArrival(
+      if (acceptsArrival(ask.raisedOver, facts.arrivedOver)) {
+        let approvalBasis = callerKindForArrival(
           facts.arrivedOver,
           deps.registrationTransport ?? "auto",
           {
@@ -419,10 +439,10 @@ async function serveToolCall(e) {
             toolName: tool.name,
             isServedMcpTool: tool.isMcp === true,
             sessionMode: facts.sessionMode,
-            askedInMode: S.askedInMode,
-            classifierEligible: S.classifierEligible,
+            askedInMode: ask.askedInMode,
+            classifierEligible: ask.classifierEligible,
             autoModeRefusedHere:
-              w.where === "handed_on"
+              placement.where === "handed_on"
                 ? servingConsentRequirement(deps.policy.stance.unattended) !== undefined
                 : deps.policy.stance.unattended === "conveyed" || autoModeRefusedForServedCalls(),
             planClaimBackedHere: isPlanFloor(facts.sessionMode, deps.policy.stance.unattended),
@@ -430,40 +450,40 @@ async function serveToolCall(e) {
           },
           facts.trust,
         );
-        facts.approvalAttested = se === "attested";
-        if (approval.decision === "allow") facts.approvalBasis = se;
+        facts.approvalAttested = approvalBasis === "attested";
+        if (approval.decision === "allow") facts.approvalBasis = approvalBasis;
       }
       if (approval.decision === "allow" && facts.approvalBasis === undefined) {
         facts.askStillPending = true;
         return refusedEnvelope(
-          G,
+          askTarget,
           facts,
           "no_approval",
-          acceptsArrival(S.raisedOver, facts.arrivedOver)
+          acceptsArrival(ask.raisedOver, facts.arrivedOver)
             ? `The approval for this call could not be verified as the person's own, so ${deps.targetName} did not run it; the request is still pending.`
             : `The approval for this call arrived over a different channel than the one the request was put on, so ${deps.targetName} did not run it; the request is still pending.`,
         );
       }
-      facts.forceAsk = S.raisedToAsk;
+      facts.forceAsk = ask.raisedToAsk;
       if (approval.decision === "deny") {
         facts.deniedBySession = true;
-        if (facts.approvalAttested) S.onDeclined?.();
-        recordSessionDenial(D, approval.ask_id, sessionDeclineDenial(approval.feedback));
-        return acknowledgedEnvelope(G, facts, approval.ask_id);
+        if (facts.approvalAttested) ask.onDeclined?.();
+        recordSessionDenial(session, approval.ask_id, sessionDeclineDenial(approval.feedback));
+        return acknowledgedEnvelope(askTarget, facts, approval.ask_id);
       }
-      let De = () => {
-        let se = callId === undefined ? undefined : D.calls.lookup(callId);
-        return se !== undefined && callId !== undefined
+      let refuseGone = () => {
+        let known = callId === undefined ? undefined : session.calls.lookup(callId);
+        return known !== undefined && callId !== undefined
           ? joinKnownCall({
-              known: se,
-              session: D,
+              known,
+              session,
               hostEpoch: deps.sessions.epoch,
               callId,
-              target: q,
+              target,
               facts,
             })
           : refusedEnvelope(
-              G,
+              askTarget,
               facts,
               "invalid_request",
               staleApprovalMessage({
@@ -472,140 +492,145 @@ async function serveToolCall(e) {
               }),
             );
       };
-      let $e = (se, Ae) => {
-        let xe = {
-          ...failedEnvelope(G, facts, se, Ae),
-          ...(P && {
+      let failAskedCall = (code, message) => {
+        let envelope = {
+          ...failedEnvelope(askTarget, facts, code, message),
+          ...(isDefaultRunner && {
             ranNothing: true,
           }),
         };
-        return settleAskedCall(D, approval.ask_id, xe, askEndedDenial(Ae)) ? xe : De();
+        return settleAskedCall(session, approval.ask_id, envelope, askEndedDenial(message))
+          ? envelope
+          : refuseGone();
       };
       if (callDeadlineMs(deps.policy.limits, facts.envelope) - (Date.now() - facts.startedAt) <= 0)
-        return $e(
+        return failAskedCall(
           "timed_out",
           `The approval reached ${deps.targetName} with no time left to run the call (admission took longer than the caller allowed) \u2014 nothing ran, and the approval is used up. Run the tool again if it is still needed.`,
         );
-      let aborted = M?.holdInstalls !== undefined && ctx.signal.aborted;
+      let aborted = dirSync?.holdInstalls !== undefined && ctx.signal.aborted;
       if (aborted) facts.stoppedBeforeHold = true;
-      let dt = `${approval.ask_id}:${randomUUID()}`;
-      let fn = false;
-      let Ve =
-        M?.holdInstalls === undefined || aborted
+      let holdKey = `${approval.ask_id}:${randomUUID()}`;
+      let released = false;
+      let holdPromise =
+        dirSync?.holdInstalls === undefined || aborted
           ? null
-          : Promise.resolve(M.holdInstalls(dt, () => !fn && !S.isPipelineOver())).catch(() => {});
-      let pn = () =>
-        void Ve?.then(() => {
+          : Promise.resolve(dirSync.holdInstalls(holdKey, () => !released && !ask.isPipelineOver())).catch(
+              () => {},
+            );
+      let releaseHold = () =>
+        void holdPromise?.then(() => {
           try {
-            M?.releaseInstalls?.(dt);
+            dirSync?.releaseInstalls?.(holdKey);
           } catch (error) {
             logForDebugging(`[remote-tools] releasing the install hold failed: ${errorMessage(error)}`, {
               level: "warn",
             });
           }
         });
-      let Ye = () => {
-        fn = true;
-        pn();
+      let markReleased = () => {
+        released = true;
+        releaseHold();
       };
-      if (Ve !== null) {
-        let se = false;
-        Ve.then(() => {
-          se = true;
+      if (holdPromise !== null) {
+        let holdGranted = false;
+        holdPromise.then(() => {
+          holdGranted = true;
         });
-        let Ae = callDeadlineMs(deps.policy.limits, facts.envelope) - (Date.now() - facts.startedAt);
+        let remainingMs = callDeadlineMs(deps.policy.limits, facts.envelope) - (Date.now() - facts.startedAt);
         let now = Date.now();
         await Promise.race([
-          Ve,
+          holdPromise,
           createChildAbortController_2(ctx.signal),
-          ...(Number.isFinite(Ae)
-            ? [createChildAbortController_2(AbortSignal.timeout(Math.max(0, Ae)))]
+          ...(Number.isFinite(remainingMs)
+            ? [createChildAbortController_2(AbortSignal.timeout(Math.max(0, remainingMs)))]
             : []),
         ]);
         facts.holdMs = Date.now() - now;
-        if (!se) {
-          Ye();
-          return $e(
+        if (!holdGranted) {
+          markReleased();
+          return failAskedCall(
             ctx.signal.aborted ? "cancelled" : "timed_out",
             `The approval reached ${deps.targetName}, but the call was stopped before the command started \u2014 nothing ran, and the approval is used up. Run the tool again if it is still needed.`,
           );
         }
       }
-      let hn = w.where === "handed_on" && facts.approvalBasis === "auto_arm";
-      if (hn && !unattendedServingConsentViewIsFresh()) await freshUnattendedServingConsent(ctx.signal);
-      if (hn && servingConsentRequirement(deps.policy.stance.unattended) !== undefined) {
-        Ye();
+      let handedAutoArm = placement.where === "handed_on" && facts.approvalBasis === "auto_arm";
+      if (handedAutoArm && !unattendedServingConsentViewIsFresh())
+        await freshUnattendedServingConsent(ctx.signal);
+      if (handedAutoArm && servingConsentRequirement(deps.policy.stance.unattended) !== undefined) {
+        markReleased();
         facts.approvalBasis = undefined;
         facts.askStillPending = true;
         return refusedEnvelope(
-          G,
+          askTarget,
           facts,
           "no_approval",
           `${deps.targetName} no longer lets a classifier approve this call, so it did not run; the request is still pending for a person.`,
         );
       }
-      if (D.pendingAsks.take(approval.ask_id) === undefined) {
-        Ye();
-        return De();
+      if (session.pendingAsks.take(approval.ask_id) === undefined) {
+        markReleased();
+        return refuseGone();
       }
-      let bt = w.where === "here" ? executionPlacementRefusal(deps) : undefined;
-      if (bt !== undefined) {
-        Ye();
-        let se = {
-          ...refusedEnvelope(G, facts, "sandbox_unavailable", bt),
+      let placementRefusal = placement.where === "here" ? executionPlacementRefusal(deps) : undefined;
+      if (placementRefusal !== undefined) {
+        markReleased();
+        let refused = {
+          ...refusedEnvelope(askTarget, facts, "sandbox_unavailable", placementRefusal),
           ranNothing: true,
         };
-        K(S.callId, se);
-        S.windDown();
-        S.answer(askEndedDenial(bt));
-        return se;
+        settleCall(ask.callId, refused);
+        ask.windDown();
+        ask.answer(askEndedDenial(placementRefusal));
+        return refused;
       }
-      S.holdMayGo.then(pn);
-      let settled = S.settled;
+      ask.holdMayGo.then(releaseHold);
+      let settled = ask.settled;
       settled.catch(() => {});
       let now = Date.now();
       try {
-        if (S.callId !== undefined && !ctx.signal.aborted) {
-          V(S.callId, {
+        if (ask.callId !== undefined && !ctx.signal.aborted) {
+          rememberOutcome(ask.callId, {
             state: "running",
             started: true,
           });
           deps.callLog?.note({
             t: "started",
-            caller: D.callerSessionId,
-            call_id: S.callId,
+            caller: session.callerSessionId,
+            call_id: ask.callId,
             tool: tool.name,
-            input_fp: fe,
+            input_fp: inputFingerprint,
             by: "session",
             basis: facts.approvalBasis,
           });
         }
-        S.resume({
+        ask.resume({
           signal: ctx.signal,
           startedAt: facts.startedAt,
           expiresInMs: callDeadlineMs(deps.policy.limits, facts.envelope),
         });
         if (facts.arrivedOver !== "session" || facts.approvalAttested)
-          S.onApproved?.({
+          ask.onApproved?.({
             attested: facts.approvalAttested,
           });
       } catch (error) {
-        Ye();
+        markReleased();
         facts.askEndedByThrow = true;
-        let Ae = {
-          ...callFailureEnvelope(error, G, facts, ctx.signal, {}),
-          ...(P && {
+        let failureEnvelope = {
+          ...callFailureEnvelope(error, askTarget, facts, ctx.signal, {}),
+          ...(isDefaultRunner && {
             ranNothing: true,
           }),
         };
-        K(S.callId, Ae);
-        S.windDown();
-        S.answer(askEndedDenial(callFailedText(deps.targetName)));
-        return Ae;
+        settleCall(ask.callId, failureEnvelope);
+        ask.windDown();
+        ask.answer(askEndedDenial(callFailedText(deps.targetName)));
+        return failureEnvelope;
       }
-      S.answer({
+      ask.answer({
         behavior: "allow",
-        updatedInput: S.evaluatedInput,
+        updatedInput: ask.evaluatedInput,
         decisionReason: {
           type: "other",
           reason: REMOTE_CALL_SESSION_ANSWER,
@@ -614,12 +639,12 @@ async function serveToolCall(e) {
       if (
         facts.approvalAttested &&
         deps.policy.capabilities?.includes("standing_approvals") === true &&
-        S.standingRowOffered
+        ask.standingRowOffered
       )
-        await keepStandingApprovals(D, approval.permission_updates, facts, {
+        await keepStandingApprovals(session, approval.permission_updates, facts, {
           toolName: tool.name,
-          input: S.evaluatedInput,
-          offered: needsApprovalSuggestions(S.asked.envelope),
+          input: ask.evaluatedInput,
+          offered: needsApprovalSuggestions(ask.asked.envelope),
         }).catch((error) => {
           logRemoteTools(
             callId,
@@ -630,34 +655,35 @@ async function serveToolCall(e) {
             "warn",
           );
         });
-      let lt = await settled;
-      noteLateHoldRelease(facts, Ve !== null, S);
-      facts.captureAtPipelineEnd = S.takesCaptureAtPipelineEnd();
+      let servedResult = await settled;
+      noteLateHoldRelease(facts, holdPromise !== null, ask);
+      facts.captureAtPipelineEnd = ask.takesCaptureAtPipelineEnd();
       facts.pipelineMs = Date.now() - now;
-      facts.truncated = lt.envelope.outcome === "completed" && lt.envelope.truncated === true;
-      if (S.pipelineCallId === undefined) return lt;
-      logRemoteTools(S.callId, "carried run settled", {
-        pipeline_call: S.pipelineCallId,
+      facts.truncated =
+        servedResult.envelope.outcome === "completed" && servedResult.envelope.truncated === true;
+      if (ask.pipelineCallId === undefined) return servedResult;
+      logRemoteTools(ask.callId, "carried run settled", {
+        pipeline_call: ask.pipelineCallId,
       });
-      let Sn = rebindEnvelopeCallId(lt, S.callId);
-      K(S.callId, Sn);
-      return Sn;
+      let rebound = rebindEnvelopeCallId(servedResult, ask.callId);
+      settleCall(ask.callId, rebound);
+      return rebound;
     }
   }
   if (approval !== undefined) {
-    let S = callId === undefined ? undefined : D.calls.lookup(callId);
-    if (S !== undefined && callId !== undefined)
+    let known = callId === undefined ? undefined : session.calls.lookup(callId);
+    if (known !== undefined && callId !== undefined)
       return joinKnownCall({
-        known: S,
-        session: D,
+        known,
+        session,
         hostEpoch: deps.sessions.epoch,
         callId,
-        target: q,
+        target,
         facts,
       });
     facts.askStillPending = true;
     return refusedEnvelope(
-      q,
+      target,
       facts,
       "invalid_request",
       staleApprovalMessage({
@@ -666,36 +692,36 @@ async function serveToolCall(e) {
       }),
     );
   }
-  let Se = (S) => V(callId, S);
+  let noteCallState = (state) => rememberOutcome(callId, state);
   let stance = deps.policy.stance;
   let abortController = createAbortController();
-  let X = clampToMaxPageSize(callDeadlineMs(deps.policy.limits, facts.envelope));
-  let ce = X - (Date.now() - facts.startedAt);
-  if (ce <= 0) {
-    Se({
+  let deadlineMs = clampToMaxPageSize(callDeadlineMs(deps.policy.limits, facts.envelope));
+  let remainingMs = deadlineMs - (Date.now() - facts.startedAt);
+  if (remainingMs <= 0) {
+    noteCallState({
       state: "failed",
       code: "timed_out",
       ranNothing: true,
     });
     return {
       ...failedEnvelope(
-        q,
+        target,
         facts,
         "timed_out",
-        `The call reached ${deps.targetName} with no time left before its ${formatDuration(Math.max(1000, X))} deadline (admission took longer than the caller allowed) \u2014 nothing ran.`,
+        `The call reached ${deps.targetName} with no time left before its ${formatDuration(Math.max(1000, deadlineMs))} deadline (admission took longer than the caller allowed) \u2014 nothing ran.`,
       ),
       ranNothing: true,
     };
   }
-  let ge = isNonMcpShellTool(tool) || tool.mcpInfo !== undefined;
-  let _e = {
+  let shellTool = isNonMcpShellTool(tool) || tool.mcpInfo !== undefined;
+  let state = {
     facts,
-    target: q,
+    target,
     targetName: deps.targetName,
     callId,
     controller: abortController,
     clock: createCallLifetime({
-      remainingMs: ce,
+      remainingMs,
       controller: abortController,
       leg: ctx.signal,
       lifetime: deps.lifetime,
@@ -705,11 +731,11 @@ async function serveToolCall(e) {
     toolVerdict: undefined,
   };
   if (deps.projectHookWaitingFor?.(callerKey(ctx)) === true)
-    _e.notes.add("project_hook_waiting", HOOK_NOT_ACCEPTED_NOTICE);
-  let { clock } = _e;
-  let te;
+    state.notes.add("project_hook_waiting", HOOK_NOT_ACCEPTED_NOTICE);
+  let { clock } = state;
+  let resolveAsk;
   let promise = new Promise((resolve) => {
-    te = resolve;
+    resolveAsk = resolve;
   });
   let sessionModel =
     facts.envelope?.caller.model !== undefined
@@ -717,80 +743,86 @@ async function serveToolCall(e) {
           overridesMap: {},
         })
       : undefined;
-  let ke;
-  let onOutcome = (S) => {
-    ke?.giveUp();
-    _e.permissionOutcome = S;
-    facts.forceAsk = S.raisedToAsk;
-    facts.throughSecondRootMount = S.throughSecondRootMount;
-    facts.allowBasis = S.allowBasis;
-    facts.denySource = S.denySource;
-    facts.hostCredentialRefusal = S.hostCredentialRefusal;
-    facts.underWindowsProfileGlob = S.underWindowsProfileGlob;
-    facts.rulesCheckCrashed = S.rulesCheckCrashed && true;
-    facts.inputParseThrew = S.rulesCheckCrashed?.inputParseThrew || undefined;
-    facts.crashClass = S.rulesCheckCrashed?.crashClass;
-    facts.deniedUnderForcedAsk = S.deniedUnderForcedAsk;
-    let G = (S.kind === "allowed" || S.kind === "approved_by_session") && !abortController.signal.aborted;
-    if (G)
-      Se({
+  let autoModeAllow;
+  let onOutcome = (outcome) => {
+    autoModeAllow?.giveUp();
+    state.permissionOutcome = outcome;
+    facts.forceAsk = outcome.raisedToAsk;
+    facts.throughSecondRootMount = outcome.throughSecondRootMount;
+    facts.allowBasis = outcome.allowBasis;
+    facts.denySource = outcome.denySource;
+    facts.hostCredentialRefusal = outcome.hostCredentialRefusal;
+    facts.underWindowsProfileGlob = outcome.underWindowsProfileGlob;
+    facts.rulesCheckCrashed = outcome.rulesCheckCrashed && true;
+    facts.inputParseThrew = outcome.rulesCheckCrashed?.inputParseThrew || undefined;
+    facts.crashClass = outcome.rulesCheckCrashed?.crashClass;
+    facts.deniedUnderForcedAsk = outcome.deniedUnderForcedAsk;
+    let mayRun =
+      (outcome.kind === "allowed" || outcome.kind === "approved_by_session") &&
+      !abortController.signal.aborted;
+    if (mayRun)
+      noteCallState({
         state: "running",
         started: true,
       });
-    if (G && S.kind === "allowed" && callId !== undefined)
+    if (mayRun && outcome.kind === "allowed" && callId !== undefined)
       deps.callLog?.note({
         t: "started",
-        caller: D.callerSessionId,
+        caller: session.callerSessionId,
         call_id: callId,
         tool: tool.name,
-        input_fp: fe,
+        input_fp: inputFingerprint,
         by: "host",
-        basis: S.allowBasis,
+        basis: outcome.allowBasis,
       });
-    if ((S.kind === "allowed" || S.kind === "approved_by_session") && Y.maxTimeoutMs === undefined && ge) {
+    if (
+      (outcome.kind === "allowed" || outcome.kind === "approved_by_session") &&
+      effectiveConstraints.maxTimeoutMs === undefined &&
+      shellTool
+    ) {
       clock.enterRunning();
       logRemoteTools(callId, "running: call deadline disarmed", {
         epoch: deps.sessions.epoch,
-        outcome: S.kind,
+        outcome: outcome.kind,
       });
     }
   };
-  let onAsk = (S) => {
-    ke?.giveUp();
-    facts.forceAsk = S.raisedToAsk;
-    facts.askClass = S.askClass;
-    facts.mcpPathWhy = S.mcpPathWhy;
+  let onAsk = (ask) => {
+    autoModeAllow?.giveUp();
+    facts.forceAsk = ask.raisedToAsk;
+    facts.askClass = ask.askClass;
+    facts.mcpPathWhy = ask.mcpPathWhy;
     try {
       if (deps.ownSettingsWaitingFor?.(callerKey(ctx)) === true)
-        _e.notes.add(
+        state.notes.add(
           "own_settings_waiting",
           REMOTE_TOOLS_CONSENT_TEXT["served_settings.own_waiting.session_note"],
         );
     } catch (error) {
       logError(toError(error));
     }
-    te?.(S);
+    resolveAsk?.(ask);
   };
   let toolUseId = `remote_${randomUUID()}`;
-  Se({
+  noteCallState({
     state: "running",
   });
-  let Ee = `ask_${randomUUID()}`;
+  let askId = `ask_${randomUUID()}`;
   if (stance.honorLocalRules)
     await settingsSourcesInReach(
       (await deps.reach.current()).map(normalizeCommandForPlatform),
       deps.storageV5,
       deps.reach.distrustedSources,
     );
-  let vt = Ee;
-  let Ie = null;
-  let He = false;
-  let tt = () => {
-    if (Ie !== null && !He) {
-      He = true;
-      Ie.then(() => {
+  let holdKey = askId;
+  let holdPromise = null;
+  let holdReleased = false;
+  let releaseHold = () => {
+    if (holdPromise !== null && !holdReleased) {
+      holdReleased = true;
+      holdPromise.then(() => {
         try {
-          M?.releaseInstalls?.(vt);
+          dirSync?.releaseInstalls?.(holdKey);
         } catch (error) {
           logForDebugging(`[remote-tools] releasing the install hold failed: ${errorMessage(error)}`, {
             level: "warn",
@@ -799,182 +831,186 @@ async function serveToolCall(e) {
       });
     }
   };
-  let We;
-  let Ke = false;
-  let wt = false;
-  let Tt = false;
+  let pipelineStart;
+  let pipelineOver = false;
+  let gaveUp = false;
+  let answeredAhead = false;
   let deferred = Promise.withResolvers();
-  let nt = () => {
-    Ke = true;
+  let markSettled = () => {
+    pipelineOver = true;
     deferred.resolve();
   };
   let deferred_2 = Promise.withResolvers();
-  let on = false;
-  let rn = false;
-  let rt;
+  let captureTaken = false;
+  let stoppedSinceAnswer = false;
+  let lateRefusal;
   let refusalAsAllowLands = () => {
-    rt =
+    lateRefusal =
       executionPlacementRefusal(deps) ??
-      (Y.sandbox !== "required" && stance.unattended === "own_record" && unattendedServingAllowedByHostFlag()
+      (effectiveConstraints.sandbox !== "required" &&
+      stance.unattended === "own_record" &&
+      unattendedServingAllowedByHostFlag()
         ? admissionChangedMessage({
             targetName: deps.targetName,
           })
         : undefined);
-    return rt;
+    return lateRefusal;
   };
-  let st;
-  let onAnsweredAhead = (S) => {
-    if (st !== undefined) return;
-    st = S;
-    S.ended.then(nt, nt);
-    if (S.givenUp && !ge) {
-      let G = () => {
-        wt = true;
+  let answeredAheadInfo;
+  let onAnsweredAhead = (info) => {
+    if (answeredAheadInfo !== undefined) return;
+    answeredAheadInfo = info;
+    info.ended.then(markSettled, markSettled);
+    if (info.givenUp && !shellTool) {
+      let markGaveUp = () => {
+        gaveUp = true;
         deferred_2.resolve();
       };
-      Promise.resolve().then(drainPendingKillBackstops).then(G, G);
+      Promise.resolve().then(drainPendingKillBackstops).then(markGaveUp, markGaveUp);
     }
   };
-  let sn = (async () => {
-    let S;
+  let pipeline = (async () => {
+    let envelope;
     try {
-      let G = () =>
+      let permissionContextNow = () =>
         servedPermissionContext({
           stance,
           launchDir: deps.launchDir,
           sessionMode: facts.sessionMode,
-          sessionUpdates: sessionUpdatesForCaller(D),
+          sessionUpdates: sessionUpdatesForCaller(session),
           call: facts.trust,
           userSettings: deps.userSettingsAtAttach?.(),
           sandboxTurnedOnByHeldFile: deps.sandboxTurnedOnByHeldFile?.(),
         });
-      let re = G();
+      let permissionContext = permissionContextNow();
       logRemoteTools(callId, "permission mode", {
         tool: tool.name,
         ...servedModeTelemetry({
           stance,
           sessionMode: facts.sessionMode,
-          evaluatedMode: re.mode,
+          evaluatedMode: permissionContext.mode,
         }),
       });
-      let ie = servedToolPath(tool, F, re, ee);
-      if (ie !== undefined) {
-        facts.throughSecondRootMount = isMountPointRule(ie);
-        _e.permissionOutcome = {
+      let blockedPath = servedToolPath(tool, forwardedInput, permissionContext, effectiveCwd);
+      if (blockedPath !== undefined) {
+        facts.throughSecondRootMount = isMountPointRule(blockedPath);
+        state.permissionOutcome = {
           kind: "denied_by_rule",
           raisedToAsk: false,
         };
         facts.denySource = HOST_CREDENTIAL_RULE_SOURCE;
-        let Te = credentialRuleKind(ie);
-        facts.hostCredentialRefusal = Te;
-        facts.underWindowsProfileGlob = isUnderUserProfiles(stripDoubleSlashPrefix(ie));
-        S = callResultEnvelope(
-          _e,
+        let ruleKind = credentialRuleKind(blockedPath);
+        facts.hostCredentialRefusal = ruleKind;
+        facts.underWindowsProfileGlob = isUnderUserProfiles(stripDoubleSlashPrefix(blockedPath));
+        envelope = callResultEnvelope(
+          state,
           cancelledToolResult(
             toolUseId,
             credentialRefusalMessage({
               targetName: deps.targetName,
-              kind: Te,
-              subject: stripDoubleSlashPrefix(ie),
+              kind: ruleKind,
+              subject: stripDoubleSlashPrefix(blockedPath),
             }),
           ),
         );
-        return S;
+        return envelope;
       }
-      let De = executor({
+      let runPromise = executor({
         tool,
-        toolInput: F,
+        toolInput: forwardedInput,
         toolUseId,
-        startCwd: ee,
-        constraints: Y,
+        startCwd: effectiveCwd,
+        constraints: effectiveConstraints,
         sessionModel,
-        permissionContext: re,
-        permissionContextNow: G,
-        session: D,
-        state: _e,
+        permissionContext,
+        permissionContextNow,
+        session,
+        state,
         callerSessionId: ctx.sessionId,
         deps,
-        legDeadlineAt: facts.startedAt + X,
+        legDeadlineAt: facts.startedAt + deadlineMs,
         onOutcome,
         onAsk,
         onAnsweredAhead,
-        ...(w.where === "here" && {
+        ...(placement.where === "here" && {
           refusalAsAllowLands,
-          ownCheckAhead: () => ke,
+          ownCheckAhead: () => autoModeAllow,
         }),
       });
-      if (M?.holdInstalls !== undefined) {
+      if (dirSync?.holdInstalls !== undefined) {
         if (abortController.signal.aborted) {
           facts.stoppedBeforeHold = true;
-          S = stoppedBeforeStart(_e);
-          return S;
+          envelope = stoppedBeforeStart(state);
+          return envelope;
         }
-        if (w.where === "here")
-          ke = tryAutoModeAllowlist({
+        if (placement.where === "here")
+          autoModeAllow = tryAutoModeAllowlist({
             stance,
             tool,
-            forwardedInput: F,
-            permissionContext: re,
+            forwardedInput,
+            permissionContext,
             sessionMode: facts.sessionMode,
             serviceWrittenSessionMode: sessionModeFromStamp(facts),
             call: facts.trust,
             callStop: abortController,
             callId: callId ?? toolUseId,
-            legDeadlineAt: facts.startedAt + X,
+            legDeadlineAt: facts.startedAt + deadlineMs,
           });
-        let Te = false;
+        let holdGranted = false;
         let now = Date.now();
-        Ie = Promise.resolve(M.holdInstalls(vt, () => !rn && !Ke && !wt))
+        holdPromise = Promise.resolve(
+          dirSync.holdInstalls(holdKey, () => !stoppedSinceAnswer && !pipelineOver && !gaveUp),
+        )
           .catch(() => {})
           .then(() => {
-            Te = true;
+            holdGranted = true;
           });
-        await Promise.race([Ie, createChildAbortController_2(abortController.signal)]);
+        await Promise.race([holdPromise, createChildAbortController_2(abortController.signal)]);
         facts.holdMs = Date.now() - now;
-        if (abortController.signal.aborted && !Te) {
-          S = timedOutOrCancelled(_e);
-          return S;
+        if (abortController.signal.aborted && !holdGranted) {
+          envelope = timedOutOrCancelled(state);
+          return envelope;
         }
       }
-      let $e = w.where === "here" ? executionPlacementRefusal(deps) : undefined;
-      if ($e !== undefined) {
-        S = {
-          ...refusedEnvelope(q, facts, "sandbox_unavailable", $e, {
-            notes: _e.notes.lines(),
+      let placementRefusal = placement.where === "here" ? executionPlacementRefusal(deps) : undefined;
+      if (placementRefusal !== undefined) {
+        envelope = {
+          ...refusedEnvelope(target, facts, "sandbox_unavailable", placementRefusal, {
+            notes: state.notes.lines(),
           }),
           ranNothing: true,
         };
-        return S;
+        return envelope;
       }
-      We = Date.now();
-      S = await De();
-      if (st === undefined) nt();
-      if (rt !== undefined)
-        S = {
-          ...refusedEnvelope(q, facts, "sandbox_unavailable", rt, {
-            notes: _e.notes.lines(),
+      pipelineStart = Date.now();
+      envelope = await runPromise();
+      if (answeredAheadInfo === undefined) markSettled();
+      if (lateRefusal !== undefined)
+        envelope = {
+          ...refusedEnvelope(target, facts, "sandbox_unavailable", lateRefusal, {
+            notes: state.notes.lines(),
           }),
           ranNothing: true,
         };
       if (
-        S.envelope.outcome === "completed" &&
-        isRanOutcome(S.envelope.disposition) &&
-        M?.capturePoint !== undefined &&
+        envelope.envelope.outcome === "completed" &&
+        isRanOutcome(envelope.envelope.disposition) &&
+        dirSync?.capturePoint !== undefined &&
         !abortController.signal.aborted &&
-        Ke
+        pipelineOver
       ) {
-        on = true;
+        captureTaken = true;
         try {
-          let Te = await M.capturePoint().catch(() => ({
+          let capture = await dirSync.capturePoint().catch(() => ({
             kind: "not_running",
           }));
-          if (Te !== undefined) {
-            S = {
-              ...S,
-              dirSync: deviceFrame(Te, SERVING_KIT_INSTANCE_ID, nextServingKitFrameSeq()),
+          if (capture !== undefined) {
+            envelope = {
+              ...envelope,
+              dirSync: deviceFrame(capture, SERVING_KIT_INSTANCE_ID, nextServingKitFrameSeq()),
             };
             logRemoteTools(callId, "capture answer attached", {
-              answer: Te.kind,
+              answer: capture.kind,
             });
           }
         } catch (error) {
@@ -986,30 +1022,32 @@ async function serveToolCall(e) {
           );
         }
       }
-      facts.pipelineMs = Date.now() - We;
-      return S;
+      facts.pipelineMs = Date.now() - pipelineStart;
+      return envelope;
     } catch (error) {
       if (abortController.signal.aborted || isAbortError(error)) {
-        let { ranNothing, ...ie } = callNotRunEnvelope(_e);
-        S =
-          ranNothing === true && (P || We === undefined)
+        let { ranNothing, ...notRun } = callNotRunEnvelope(state);
+        envelope =
+          ranNothing === true && (isDefaultRunner || pipelineStart === undefined)
             ? {
-                ...ie,
+                ...notRun,
                 ranNothing,
               }
-            : ie;
+            : notRun;
       } else
-        S = callFailureEnvelope(error, q, facts, abortController.signal, {
-          notes: _e.notes.lines(),
+        envelope = callFailureEnvelope(error, target, facts, abortController.signal, {
+          notes: state.notes.lines(),
         });
-      return S;
+      return envelope;
     } finally {
-      ke?.giveUp();
-      if (st === undefined) nt();
-      let G = on ? undefined : M?.capturePoint?.bind(M);
-      facts.captureAtPipelineEnd = G !== undefined && isPermissionGranted(_e);
+      autoModeAllow?.giveUp();
+      if (answeredAheadInfo === undefined) markSettled();
+      let capturePoint = captureTaken ? undefined : dirSync?.capturePoint?.bind(dirSync);
+      facts.captureAtPipelineEnd = capturePoint !== undefined && isPermissionGranted(state);
       deferred.promise
-        .then(() => (facts.captureAtPipelineEnd === true && !clock.shuttingDown() ? G?.() : undefined))
+        .then(() =>
+          facts.captureAtPipelineEnd === true && !clock.shuttingDown() ? capturePoint?.() : undefined,
+        )
         .catch(() =>
           logForDebugging("[remote-tools] the capture at the pipeline's end failed", {
             level: "warn",
@@ -1019,35 +1057,35 @@ async function serveToolCall(e) {
           () => deferred_2.resolve(),
           () => deferred_2.resolve(),
         );
-      Tt = !Ke;
-      noteLateHoldRelease(facts, Ie !== null && !He, {
-        wasAnsweredAheadOfItsKills: () => Tt,
+      answeredAhead = !pipelineOver;
+      noteLateHoldRelease(facts, holdPromise !== null && !holdReleased, {
+        wasAnsweredAheadOfItsKills: () => answeredAhead,
         holdMayGo: deferred_2.promise,
       });
-      deferred_2.promise.then(tt);
-      withdrawAskedCall(D, Ee, {
+      deferred_2.promise.then(releaseHold);
+      withdrawAskedCall(session, askId, {
         reason: "host_stopped",
         message: withdrawnRequestMessage({
           targetName: deps.targetName,
           reason: "host_stopped",
         }),
       });
-      let re = callId === undefined ? undefined : D.calls.lookup(callId);
+      let known = callId === undefined ? undefined : session.calls.lookup(callId);
       if (
         !(
-          re?.result !== undefined ||
-          (re?.summary.state === "failed" &&
-            re.summary.code !== undefined &&
-            (TERMINAL_CALL_STATES.has(re.summary.code) || re.summary.ranNothing === true))
+          known?.result !== undefined ||
+          (known?.summary.state === "failed" &&
+            known.summary.code !== undefined &&
+            (TERMINAL_CALL_STATES.has(known.summary.code) || known.summary.ranNothing === true))
         ) &&
-        S !== undefined
+        envelope !== undefined
       )
-        K(callId, S);
+        settleCall(callId, envelope);
       clock.dispose();
     }
   })();
   let winner = await Promise.race([
-    sn.then((served) => ({
+    pipeline.then((served) => ({
       suspended: false,
       served,
     })),
@@ -1057,24 +1095,24 @@ async function serveToolCall(e) {
     })),
   ]);
   if (!winner.suspended) return winner.served;
-  if (We !== undefined) facts.pipelineMs = Date.now() - We;
-  rn = true;
-  tt();
+  if (pipelineStart !== undefined) facts.pipelineMs = Date.now() - pipelineStart;
+  stoppedSinceAnswer = true;
+  releaseHold();
   clock.detachLeg();
-  let an = false;
-  let it = false;
-  if (D.pendingAsks.size >= SANDBOX_MAX_DEPTH) {
-    let filtered = D.pendingAsks.list().filter((ie) => ie.redeemingLegs === 0);
+  let askSeatsFull = false;
+  let seatsCounted = false;
+  if (session.pendingAsks.size >= SANDBOX_MAX_DEPTH) {
+    let filtered = session.pendingAsks.list().filter((ask) => ask.redeemingLegs === 0);
     let maxAskMs = deps.policy.limits.max_ask_ms;
-    let re =
+    let evictedAsk =
       maxAskMs === undefined
         ? filtered[0]
-        : filtered.find((ie) => Date.now() - ie.createdAt > maxAskMs + SESSION_APPROVAL_STALE_MS);
-    if (re === undefined) {
-      an = true;
-      it = filtered.length > 0;
+        : filtered.find((ask) => Date.now() - ask.createdAt > maxAskMs + SESSION_APPROVAL_STALE_MS);
+    if (evictedAsk === undefined) {
+      askSeatsFull = true;
+      seatsCounted = filtered.length > 0;
     } else
-      withdrawAskedCall(D, re.askId, {
+      withdrawAskedCall(session, evictedAsk.askId, {
         reason: "evicted",
         message: withdrawnRequestMessage({
           targetName: deps.targetName,
@@ -1097,54 +1135,59 @@ async function serveToolCall(e) {
     deps.policy.stance.unattended === "own_record" &&
     isServedNutEnabled()
   ) {
-    let S = autoOffNotice(deps.targetName);
-    if (S !== undefined) deps.onNotice?.(S.key, S.text);
+    let notice = autoOffNotice(deps.targetName);
+    if (notice !== undefined) deps.onNotice?.(notice.key, notice.text);
   }
-  let At = callId === undefined ? undefined : D.calls.newestRetryJoinedTo(callId);
-  let Pe = callId !== undefined && At !== undefined && D.calls.carryQuestion(callId, At, Ee) ? At : undefined;
-  if (callId !== undefined && Pe !== undefined) {
+  let retryJoined = callId === undefined ? undefined : session.calls.newestRetryJoinedTo(callId);
+  let carrierCallId =
+    callId !== undefined &&
+    retryJoined !== undefined &&
+    session.calls.carryQuestion(callId, retryJoined, askId)
+      ? retryJoined
+      : undefined;
+  if (callId !== undefined && carrierCallId !== undefined) {
     logRemoteTools(callId, "ask carried by retry", {
-      carrier_call: Pe,
-      ask_id: Ee,
+      carrier_call: carrierCallId,
+      ask_id: askId,
       worker_epoch: ctx.workerEpoch,
     });
     if (facts.arrivedOver !== "relay") logFeatureSad("remote_tool_serve", "ask_carried_by_retry");
-    facts.askCarriedBy = Pe;
+    facts.askCarriedBy = carrierCallId;
   }
-  let dn = Pe ?? callId;
-  let un = stableHashWithSalt(tool.name, withoutEditKeys(winner.ask.input, fields));
-  let mn = needsApprovalEnvelope({
-    target: q,
+  let callIdForRecord = carrierCallId ?? callId;
+  let askInputFingerprint = stableHashWithSalt(tool.name, withoutEditKeys(winner.ask.input, fields));
+  let askEnvelope = needsApprovalEnvelope({
+    target,
     facts,
-    askId: Ee,
+    askId,
     toolName: tool.name,
     ask: {
       ...winner.ask,
       input: unrenameOutputFields(winner.ask.input, wireArguments),
     },
-    notes: _e.notes.lines(),
-    inputFingerprint: un,
-    hostRules: !stance.honorLocalRules ? "none" : w.where === "here" ? "full" : "denies",
+    notes: state.notes.lines(),
+    inputFingerprint: askInputFingerprint,
+    hostRules: !stance.honorLocalRules ? "none" : placement.where === "here" ? "full" : "denies",
   });
-  let Wo =
-    Pe !== undefined && callId !== undefined
+  let callRefs =
+    carrierCallId !== undefined && callId !== undefined
       ? {
-          callId: Pe,
+          callId: carrierCallId,
           pipelineCallId: callId,
         }
       : {
           callId,
         };
-  D.pendingAsks.register({
-    askId: Ee,
-    ...Wo,
+  session.pendingAsks.register({
+    askId,
+    ...callRefs,
     toolName: tool.name,
     raisedOver: facts.arrivedOver,
     toolStillServed: () => findServedTool(deps, tool.name) !== undefined,
-    fingerprints: [fe, un],
+    fingerprints: [inputFingerprint, askInputFingerprint],
     createdAt: Date.now(),
-    asked: mn,
-    startCwd: ee,
+    asked: askEnvelope,
+    startCwd: effectiveCwd,
     evaluatedInput: winner.ask.input,
     raisedToAsk: winner.ask.raisedToAsk,
     classifierEligible: winner.ask.classifierEligible,
@@ -1154,31 +1197,31 @@ async function serveToolCall(e) {
     answer: winner.ask.answer,
     ...(winner.ask.heldHook && {
       onApproved: ({ attested }) => {
-        let G = lastIfChangedQuestion(winner.ask.message, facts.changedHookKeys);
-        if (G !== undefined) deps.reach.projectHooks?.shownChanged.add(G);
-        let re = attested
+        let changedQuestion = lastIfChangedQuestion(winner.ask.message, facts.changedHookKeys);
+        if (changedQuestion !== undefined) deps.reach.projectHooks?.shownChanged.add(changedQuestion);
+        let updatedQuestion = attested
           ? findLastMatchingQuestion(
               winner.ask.message,
               facts.changedHookKeys,
               deps.reach.projectHooks?.updatedAsks,
             )
           : undefined;
-        if (re !== undefined) {
-          deps.reach.projectHooks?.shownChanged.add(re);
-          deps.reach.projectHooks?.acceptedUpdated.add(re);
+        if (updatedQuestion !== undefined) {
+          deps.reach.projectHooks?.shownChanged.add(updatedQuestion);
+          deps.reach.projectHooks?.acceptedUpdated.add(updatedQuestion);
           deps.onNotice?.(SERVED_HOOK_UPDATED_ACCEPTED, HOOK_UPDATED_ACCEPTED_NOTICE);
         }
-        let ie = attested
+        let stoppedQuestion = attested
           ? lastIfStoppedQuestion(winner.ask.message, facts.stoppedWorkingHookKeys)
           : undefined;
-        if (ie !== undefined) {
-          deps.reach.projectHooks?.setAside.add(ie);
+        if (stoppedQuestion !== undefined) {
+          deps.reach.projectHooks?.setAside.add(stoppedQuestion);
           deps.onNotice?.(SERVED_HOOK_SET_ASIDE, HOOK_SET_ASIDE_NOTICE);
         }
       },
       onDeclined: () => {
-        let S = lastIfStoppedQuestion(winner.ask.message, facts.stoppedWorkingHookKeys);
-        if (S !== undefined) deps.reach.projectHooks?.declinedSetAside.add(S);
+        let stoppedQuestion = lastIfStoppedQuestion(winner.ask.message, facts.stoppedWorkingHookKeys);
+        if (stoppedQuestion !== undefined) deps.reach.projectHooks?.declinedSetAside.add(stoppedQuestion);
         let lastMatchingQuestion = findLastMatchingQuestion(
           winner.ask.message,
           facts.changedHookKeys,
@@ -1191,21 +1234,21 @@ async function serveToolCall(e) {
         }
       },
     }),
-    settled: sn,
-    isPipelineOver: () => Ke || wt,
-    wasAnsweredAheadOfItsKills: () => Tt,
+    settled: pipeline,
+    isPipelineOver: () => pipelineOver || gaveUp,
+    wasAnsweredAheadOfItsKills: () => answeredAhead,
     holdMayGo: deferred_2.promise,
     takesCaptureAtPipelineEnd: () => facts.captureAtPipelineEnd === true,
     resume: clock.resume,
     windDown: clock.windDown,
   });
-  if (Pe === undefined)
-    V(callId, {
+  if (carrierCallId === undefined)
+    rememberOutcome(callId, {
       state: "asked",
-      askId: Ee,
+      askId,
     });
-  if (an) {
-    let S = it
+  if (askSeatsFull) {
+    let withdrawMessage = seatsCounted
       ? tooManyPendingApprovalsMessage({
           targetName: deps.targetName,
           limit: SANDBOX_MAX_DEPTH,
@@ -1214,102 +1257,110 @@ async function serveToolCall(e) {
           targetName: deps.targetName,
           reason: "evicted",
         });
-    facts.askSeatsFull = it;
-    withdrawAskedCall(D, Ee, {
+    facts.askSeatsFull = seatsCounted;
+    withdrawAskedCall(session, askId, {
       reason: "evicted",
-      message: S,
-      countedByItsLeg: it,
+      message: withdrawMessage,
+      countedByItsLeg: seatsCounted,
     });
-    let G = dn === undefined ? undefined : D.calls.lookup(dn)?.result;
-    return G !== undefined && callId !== undefined
-      ? rebindEnvelopeCallId(G, callId)
-      : (G ??
-          refusedEnvelope(q, facts, "withdrawn", S, {
+    let priorResult =
+      callIdForRecord === undefined ? undefined : session.calls.lookup(callIdForRecord)?.result;
+    return priorResult !== undefined && callId !== undefined
+      ? rebindEnvelopeCallId(priorResult, callId)
+      : (priorResult ??
+          refusedEnvelope(target, facts, "withdrawn", withdrawMessage, {
             reason: "evicted",
-            notes: _e.notes.lines(),
+            notes: state.notes.lines(),
           }));
   }
   let projectHooks = deps.reach.projectHooks;
-  let at = winner.ask.heldHook
+  let updatedQuestion = winner.ask.heldHook
     ? findLastMatchingQuestion(winner.ask.message, facts.changedHookKeys, projectHooks?.updatedAsks)
     : undefined;
-  let Et = at === undefined ? undefined : projectHooks?.updatedAsks.get(at);
-  if (at !== undefined && Et !== undefined) {
-    Et.puts += 1;
-    if (Et.puts >= SERVED_HOOK_UPDATE_NOTICES) projectHooks?.declinedChangedSinceLast.add(at);
+  let updatedEntry =
+    updatedQuestion === undefined ? undefined : projectHooks?.updatedAsks.get(updatedQuestion);
+  if (updatedQuestion !== undefined && updatedEntry !== undefined) {
+    updatedEntry.puts += 1;
+    if (updatedEntry.puts >= SERVED_HOOK_UPDATE_NOTICES)
+      projectHooks?.declinedChangedSinceLast.add(updatedQuestion);
   }
-  return mn;
+  return askEnvelope;
 }
 //@ chunk-ad2e1aj6.js:62338-62426 placement
-function servableTools(e) {
-  return e.tools.filter(
-    (tool) => !isMultiEntryAliasTool(tool) && getToolRemoteExecution(tool).supported && e.policy.serves(tool),
+function servableTools(deps) {
+  return deps.tools.filter(
+    (tool) =>
+      !isMultiEntryAliasTool(tool) && getToolRemoteExecution(tool).supported && deps.policy.serves(tool),
   );
 }
 //@ chunk-ad2e1aj6.js:62426-62514 placement
-function servedShellToolName(e) {
-  let n = new Set(servableTools(e).map((s) => s.name));
-  return [BASH_TOOL_NAME, POWERSHELL_TOOL_NAME].find((s) => n.has(s));
+function servedShellToolName(deps) {
+  let names = new Set(servableTools(deps).map((tool) => tool.name));
+  return [BASH_TOOL_NAME, POWERSHELL_TOOL_NAME].find((name) => names.has(name));
 }
 //@ chunk-ad2e1aj6.js:62514-62584 placement
-function allServedTools(e) {
-  return [...servableTools(e), ...(e.servedMcpTools?.().values() ?? [])];
+function allServedTools(deps) {
+  return [...servableTools(deps), ...(deps.servedMcpTools?.().values() ?? [])];
 }
 //@ chunk-ad2e1aj6.js:62584-62650 placement
-function findServedTool(e, n) {
-  return e.servedMcpTools?.().get(n) ?? findToolByName(servableTools(e), n);
+function findServedTool(deps, name) {
+  return deps.servedMcpTools?.().get(name) ?? findToolByName(servableTools(deps), name);
 }
 //@ chunk-ad2e1aj6.js:62650-62711 placement
-function servedMcpWireArgs(e, n) {
-  return e.servedMcpWireArguments?.(n) ?? renamedFieldCacheMap();
+function servedMcpWireArgs(deps, toolName) {
+  return deps.servedMcpWireArguments?.(toolName) ?? renamedFieldCacheMap();
 }
 //@ chunk-ad2e1aj6.js:62711-63290 placement
-function executionPlacement(e) {
-  let n = vmUnavailableMessage({
-    targetName: e.targetName,
+function executionPlacement(deps) {
+  let vmMessage = vmUnavailableMessage({
+    targetName: deps.targetName,
   });
-  if (parseExecutionMode(e.execution).mode !== "in_process")
-    return typeof e.executor === "function"
+  if (parseExecutionMode(deps.execution).mode !== "in_process")
+    return typeof deps.executor === "function"
       ? {
           where: "handed_on",
-          executor: e.executor,
+          executor: deps.executor,
         }
       : {
           where: "refused",
-          message: n,
+          message: vmMessage,
         };
-  let s = true;
-  if (typeof e.sandboxRequiredNow === "function")
+  let sandboxRequired = true;
+  if (typeof deps.sandboxRequiredNow === "function")
     try {
-      s = e.sandboxRequiredNow();
+      sandboxRequired = deps.sandboxRequiredNow();
     } catch (error) {
       logError(toError(error));
     }
-  if (s === false)
+  if (sandboxRequired === false)
     return {
       where: "here",
-      executor: typeof e.executor === "function" ? e.executor : defaultServedCallRunner,
+      executor: typeof deps.executor === "function" ? deps.executor : defaultServedCallRunner,
     };
-  if ((typeof s === "object" || typeof s === "function") && s !== null && "then" in s)
-    Promise.resolve(s).catch((error) => logError(toError(error)));
+  if (
+    (typeof sandboxRequired === "object" || typeof sandboxRequired === "function") &&
+    sandboxRequired !== null &&
+    "then" in sandboxRequired
+  )
+    Promise.resolve(sandboxRequired).catch((error) => logError(toError(error)));
   return {
     where: "refused",
     message:
-      s === "could_not_be_read"
+      sandboxRequired === "could_not_be_read"
         ? settingsUnreadableMessage({
-            targetName: e.targetName,
+            targetName: deps.targetName,
           })
-        : n,
+        : vmMessage,
   };
 }
 //@ chunk-ad2e1aj6.js:63290-63437 placement
 function executionPlacementRefusal(deps) {
-  let n = executionPlacement(deps);
-  switch (n.where) {
+  let placement = executionPlacement(deps);
+  switch (placement.where) {
     case "here":
       return;
     case "refused":
-      return n.message;
+      return placement.message;
     case "handed_on":
       return vmUnavailableMessage({
         targetName: deps.targetName,
@@ -1317,24 +1368,24 @@ function executionPlacementRefusal(deps) {
   }
 }
 //@ chunk-ad2e1aj6.js:63437-63547 placement
-function isServedReadOnly(e, n, s) {
-  if (parseExecutionMode(s.execution).mode !== "in_process") return false;
+function isServedReadOnly(tool, input, deps) {
+  if (parseExecutionMode(deps.execution).mode !== "in_process") return false;
   try {
-    return e.isReadOnly(n);
+    return tool.isReadOnly(input);
   } catch {
     return false;
   }
 }
 //@ chunk-ad2e1aj6.js:63547-63698 placement
-function callFailureEnvelope(error, n, facts, signal, r) {
+function callFailureEnvelope(error, target, facts, signal, extra) {
   if (signal.aborted || isAbortError(error))
-    return failedEnvelope(n, facts, "cancelled", "The call was cancelled.", r);
+    return failedEnvelope(target, facts, "cancelled", "The call was cancelled.", extra);
   logError(toError(error));
-  return failedEnvelope(n, facts, "internal_error", callFailedText(n.name), r);
+  return failedEnvelope(target, facts, "internal_error", callFailedText(target.name), extra);
 }
 //@ chunk-ad2e1aj6.js:63698-63743 placement
-function isSettingsError(e) {
-  return e.severity !== "warning";
+function isSettingsError(parseError) {
+  return parseError.severity !== "warning";
 }
 //@ chunk-ad2e1aj6.js:63743-63812 placement
 function isMissingPath(settingsFilePathForSource) {
@@ -1355,14 +1406,14 @@ function isSymlinkedSettingsPath(settingsFilePathForSource) {
 }
 //@ chunk-ad2e1aj6.js:63907-64167 placement
 function userSettingsErrorWatcher() {
-  let e = new Map();
+  let cache = new Map();
   return () => {
     try {
       if (!isSettingSourceEnabled("userSettings")) return;
       if (getSettingsParseErrorsForSource("userSettings").some(isSettingsError)) return "held";
       let settingsFilePathForSource = getSettingsFilePathForSource("userSettings");
       if (settingsFilePathForSource === undefined || isMissingPath(settingsFilePathForSource)) return;
-      return parseSettingsFileIfChanged(settingsFilePathForSource, e).errors.some(isSettingsError) &&
+      return parseSettingsFileIfChanged(settingsFilePathForSource, cache).errors.some(isSettingsError) &&
         !isSymlinkedSettingsPath(settingsFilePathForSource)
         ? "disk"
         : undefined;
@@ -1373,22 +1424,22 @@ function userSettingsErrorWatcher() {
   };
 }
 //@ chunk-ad2e1aj6.js:64167-65171 placement
-function backgroundCommandStatusText(e, callId, s) {
-  let { started, startedAt, ended } = s.command;
-  let { outputTail } = s;
+function backgroundCommandStatusText(target, callId, status) {
+  let { started, startedAt, ended } = status.command;
+  let { outputTail } = status;
   let now = Date.now();
   let max = Math.max(0, (ended?.at ?? now) - startedAt);
-  let w = ended && Math.max(0, now - ended.at);
-  let C = (j) =>
-    formatDuration(j, {
+  let sinceEndMs = ended && Math.max(0, now - ended.at);
+  let format = (ms) =>
+    formatDuration(ms, {
       hideTrailingZeros: true,
     });
-  let P = `on ${e.name}`;
-  let x =
-    ended === undefined || w === undefined
-      ? `${P} is running: started ${C(max)} ago, writing its output there to ${started.outputPath}, and stopped after ${C(started.limitMs)} in the background or earlier if ${e.name} stops serving this session.`
-      : `${ended.how === "exited" ? `${P} is over: it exited with code ${ended.exitCode}` : `was stopped ${backgroundStopReasonText(ended.how, e.name)}`} ${C(w)} ago, after ${C(max)}.`;
-  let Y =
+  let where = `on ${target.name}`;
+  let stateText =
+    ended === undefined || sinceEndMs === undefined
+      ? `${where} is running: started ${format(max)} ago, writing its output there to ${started.outputPath}, and stopped after ${format(started.limitMs)} in the background or earlier if ${target.name} stops serving this session.`
+      : `${ended.how === "exited" ? `${where} is over: it exited with code ${ended.exitCode}` : `was stopped ${backgroundStopReasonText(ended.how, target.name)}`} ${format(sinceEndMs)} ago, after ${format(max)}.`;
+  let tailText =
     outputTail === undefined
       ? " Its output could not be read."
       : outputTail.trim() === ""
@@ -1399,21 +1450,21 @@ ${outputTail}`;
   let content = [
     {
       type: "text",
-      text: `Background command ${started.shellId} ${x}${Y}`,
+      text: `Background command ${started.shellId} ${stateText}${tailText}`,
     },
   ];
   let background = {
     state: ended?.how ?? "running",
     exit_code: ended?.exitCode,
     ran_ms: max,
-    ended_ms_ago: w,
+    ended_ms_ago: sinceEndMs,
   };
   return {
     envelope: {
       v: REMOTE_TOOL_PROTOCOL_VERSION,
       outcome: "completed",
       call_id: callId,
-      target: e,
+      target,
       is_error: false,
       content,
       output: {
@@ -1433,8 +1484,8 @@ ${outputTail}`;
 /**
  * 记录远程工具调用的 tengu_remote_tool_serve 遥测（结果、耗时、权限路径、分类器判定等）。
  */
-function logServedCallTelemetry(envelope, n, s, h) {
-  let r =
+function logServedCallTelemetry(envelope, facts, deps, session) {
+  let outcomeKind =
     envelope.outcome === "completed"
       ? envelope.is_error
         ? "completed_error"
@@ -1442,51 +1493,51 @@ function logServedCallTelemetry(envelope, n, s, h) {
       : envelope.outcome === "failed" && (envelope.code === "cancelled" || envelope.code === "timed_out")
         ? envelope.code
         : envelope.outcome;
-  let i = n.secondLeg ? n.askedInMode : n.sessionMode;
-  let y = effectiveServedMode({
-    stance: s.policy.stance,
-    sessionMode: i,
-    call: n.trust,
+  let modeForEval = facts.secondLeg ? facts.askedInMode : facts.sessionMode;
+  let evaluated = effectiveServedMode({
+    stance: deps.policy.stance,
+    sessionMode: modeForEval,
+    call: facts.trust,
   });
-  let O =
-    n.query || n.answeredFromRecord !== undefined || n.callId === undefined
+  let record =
+    facts.query || facts.answeredFromRecord !== undefined || facts.callId === undefined
       ? undefined
-      : h?.calls.lookup(n.callId);
+      : session?.calls.lookup(facts.callId);
   if (
-    s.callLog !== undefined &&
-    h !== undefined &&
-    O !== undefined &&
-    O.priorEpoch === undefined &&
-    n.callId !== undefined
+    deps.callLog !== undefined &&
+    session !== undefined &&
+    record !== undefined &&
+    record.priorEpoch === undefined &&
+    facts.callId !== undefined
   ) {
-    let w = (callId, summary) => ({
+    let legNote = (callId, summary) => ({
       t: "leg",
-      caller: h.callerSessionId,
+      caller: session.callerSessionId,
       call_id: callId,
-      tool: n.resolvedToolName ?? "unresolved",
-      is_mcp: n.isMcp,
-      input_fp: n.inputFingerprint,
-      transport: n.arrivedOver,
-      second_leg: n.secondLeg,
-      session_mode: n.sessionMode ?? "absent",
-      evaluated_mode: y.mode,
-      ...(n.secondLeg && {
-        approval_basis: n.approvalBasis ?? "none",
+      tool: facts.resolvedToolName ?? "unresolved",
+      is_mcp: facts.isMcp,
+      input_fp: facts.inputFingerprint,
+      transport: facts.arrivedOver,
+      second_leg: facts.secondLeg,
+      session_mode: facts.sessionMode ?? "absent",
+      evaluated_mode: evaluated.mode,
+      ...(facts.secondLeg && {
+        approval_basis: facts.approvalBasis ?? "none",
       }),
-      ...(n.allowBasis !== undefined && {
-        allow_basis: n.allowBasis,
+      ...(facts.allowBasis !== undefined && {
+        allow_basis: facts.allowBasis,
       }),
-      ...(n.denySource !== undefined && {
-        deny_source: n.denySource,
+      ...(facts.denySource !== undefined && {
+        deny_source: facts.denySource,
       }),
-      ...(n.rulesCheckCrashed === true && {
+      ...(facts.rulesCheckCrashed === true && {
         rules_check_crashed: true,
       }),
-      ...(n.crashClass !== undefined && {
-        crash_class: n.crashClass,
+      ...(facts.crashClass !== undefined && {
+        crash_class: facts.crashClass,
       }),
-      ...(n.projectHook !== undefined && {
-        hook: n.projectHook,
+      ...(facts.projectHook !== undefined && {
+        hook: facts.projectHook,
       }),
       outcome: envelope.outcome,
       ...(envelope.outcome === "completed" &&
@@ -1503,7 +1554,7 @@ function logServedCallTelemetry(envelope, n, s, h) {
       ...(envelope.outcome === "completed" && {
         is_error: envelope.is_error,
       }),
-      duration_ms: Date.now() - n.startedAt,
+      duration_ms: Date.now() - facts.startedAt,
       record: {
         state: summary.state,
         ...(summary.code !== undefined && {
@@ -1526,68 +1577,73 @@ function logServedCallTelemetry(envelope, n, s, h) {
         }),
       },
     });
-    s.callLog.note(w(n.callId, O.summary));
-    let C = n.askCarriedBy === undefined ? undefined : h.calls.lookup(n.askCarriedBy);
-    if (n.askCarriedBy !== undefined && C !== undefined && C.priorEpoch === undefined)
-      s.callLog.note(w(n.askCarriedBy, C.summary));
+    deps.callLog.note(legNote(facts.callId, record.summary));
+    let carrierRecord =
+      facts.askCarriedBy === undefined ? undefined : session.calls.lookup(facts.askCarriedBy);
+    if (
+      facts.askCarriedBy !== undefined &&
+      carrierRecord !== undefined &&
+      carrierRecord.priorEpoch === undefined
+    )
+      deps.callLog.note(legNote(facts.askCarriedBy, carrierRecord.summary));
   }
-  let R =
-    n.query && n.callId !== undefined
-      ? h?.calls.countOutcomeQuery(
-          n.callId,
-          `${r}:${envelope.outcome === "in_progress" ? `${envelope.state}${envelope.output_tail === undefined ? "" : "+output"}` : envelope.outcome === "refused" || envelope.outcome === "failed" ? envelope.code : ""}`,
+  let queryCount =
+    facts.query && facts.callId !== undefined
+      ? session?.calls.countOutcomeQuery(
+          facts.callId,
+          `${outcomeKind}:${envelope.outcome === "in_progress" ? `${envelope.state}${envelope.output_tail === undefined ? "" : "+output"}` : envelope.outcome === "refused" || envelope.outcome === "failed" ? envelope.code : ""}`,
         )
       : undefined;
-  if (R?.report === false) return;
+  if (queryCount?.report === false) return;
   logEvent("tengu_remote_tool_serve", {
-    call_id: sanitizeMarkName(n.callId),
-    host_epoch: sanitizeMarkName(s.sessions.epoch),
-    handle_hash: shortHash(s.targetName),
-    host_device_id: sanitizeMarkName(s.deviceId),
+    call_id: sanitizeMarkName(facts.callId),
+    host_epoch: sanitizeMarkName(deps.sessions.epoch),
+    handle_hash: shortHash(deps.targetName),
+    host_device_id: sanitizeMarkName(deps.deviceId),
     criteria_version: lit(REMOTE_TOOL_PROTOCOL_LABEL),
-    tool: n.toolNameForAnalytics,
-    isMcp: n.isMcp,
-    shell: fromEnumOpt(servedShellKind(n)),
-    policy: fromEnum(s.policy.name),
-    transport: fromEnum(n.arrivedOver),
-    op: fromEnum(n.query ? "outcome_of" : "call"),
-    outcome_queries_since_last_row: R?.sinceReported,
-    outcome: fromEnum(r),
-    answered_from_record: fromEnumOpt(n.answeredFromRecord),
-    from_prior_epoch: n.fromPriorEpoch,
-    ...(n.joinedCallId !== undefined && {
-      joined_call_id: sanitizeMarkName(n.joinedCallId),
+    tool: facts.toolNameForAnalytics,
+    isMcp: facts.isMcp,
+    shell: fromEnumOpt(servedShellKind(facts)),
+    policy: fromEnum(deps.policy.name),
+    transport: fromEnum(facts.arrivedOver),
+    op: fromEnum(facts.query ? "outcome_of" : "call"),
+    outcome_queries_since_last_row: queryCount?.sinceReported,
+    outcome: fromEnum(outcomeKind),
+    answered_from_record: fromEnumOpt(facts.answeredFromRecord),
+    from_prior_epoch: facts.fromPriorEpoch,
+    ...(facts.joinedCallId !== undefined && {
+      joined_call_id: sanitizeMarkName(facts.joinedCallId),
     }),
-    ...(n.askCarriedBy !== undefined && {
-      ask_carried_by: sanitizeMarkName(n.askCarriedBy),
+    ...(facts.askCarriedBy !== undefined && {
+      ask_carried_by: sanitizeMarkName(facts.askCarriedBy),
     }),
-    ...(n.workerEpoch !== undefined && {
-      worker_epoch: n.workerEpoch,
+    ...(facts.workerEpoch !== undefined && {
+      worker_epoch: facts.workerEpoch,
     }),
     ...(envelope.outcome === "refused" && {
       refusal_code: fromEnum(envelope.code),
     }),
-    ...(n.pathOverLimit === true && {
+    ...(facts.pathOverLimit === true && {
       path_over_limit: true,
     }),
-    ...(n.staleLeg !== undefined && {
-      age_ms: n.staleLeg.ageMs === undefined ? undefined : Math.round(n.staleLeg.ageMs),
-      window_ms: n.staleLeg.windowMs,
+    ...(facts.staleLeg !== undefined && {
+      age_ms: facts.staleLeg.ageMs === undefined ? undefined : Math.round(facts.staleLeg.ageMs),
+      window_ms: facts.staleLeg.windowMs,
     }),
-    ...(n.attestation !== undefined && {
-      attestation_mode: fromEnum(n.attestation.mode),
-      request_attestation: fromEnum(n.attestation.status),
-      attestation_verdict: fromEnum(n.attestation.verdict),
+    ...(facts.attestation !== undefined && {
+      attestation_mode: fromEnum(facts.attestation.mode),
+      request_attestation: fromEnum(facts.attestation.status),
+      attestation_verdict: fromEnum(facts.attestation.verdict),
     }),
-    ...(n.untrustedRepositories !== undefined && {
-      untrusted_repositories: fromEnum(n.untrustedRepositories),
+    ...(facts.untrustedRepositories !== undefined && {
+      untrusted_repositories: fromEnum(facts.untrustedRepositories),
     }),
-    mode_stamp: fromEnum(n.modeStamp ?? "absent"),
-    server_verdict: fromEnum(serverVerdictKind(n.serverVerdict)),
+    mode_stamp: fromEnum(facts.modeStamp ?? "absent"),
+    server_verdict: fromEnum(serverVerdictKind(facts.serverVerdict)),
     ...(envelope.outcome === "refused" &&
-      n.seatsFull && {
-        sessions_in_use: s.sessions.size,
-        sessions_limit: s.sessions.limit,
+      facts.seatsFull && {
+        sessions_in_use: deps.sessions.size,
+        sessions_limit: deps.sessions.limit,
       }),
     ...(envelope.outcome === "failed" && {
       failure_code: fromEnum(envelope.code),
@@ -1596,45 +1652,45 @@ function logServedCallTelemetry(envelope, n, s, h) {
       envelope.disposition !== undefined && {
         disposition: fromEnum(envelope.disposition),
       }),
-    force_ask: n.forceAsk,
-    ask_class: envelope.outcome === "needs_approval" ? fromEnumOpt(n.askClass) : lit("none"),
+    force_ask: facts.forceAsk,
+    ask_class: envelope.outcome === "needs_approval" ? fromEnumOpt(facts.askClass) : lit("none"),
     ...(envelope.outcome === "needs_approval" &&
-      n.mcpPathWhy !== undefined && {
-        mcp_path_why: fromEnum(n.mcpPathWhy),
+      facts.mcpPathWhy !== undefined && {
+        mcp_path_why: fromEnum(facts.mcpPathWhy),
       }),
-    through_second_root_mount: n.throughSecondRootMount,
-    allow_basis: fromEnumOpt(n.allowBasis),
-    deny_source: fromEnumOpt(n.denySource),
-    host_credential_refusal: fromEnumOpt(n.hostCredentialRefusal),
-    under_windows_profile_glob: n.underWindowsProfileGlob,
-    rules_check_crashed: n.rulesCheckCrashed === true,
-    input_parse_threw: n.inputParseThrew === true,
-    crash_class: n.crashClass,
-    denied_under_forced_ask: n.deniedUnderForcedAsk === true,
-    owner_settings_lost: fromEnumOpt(n.ownerSettingsLost),
-    second_leg: n.secondLeg,
-    approval_decision: fromEnum(n.envelope?.approval?.decision ?? "none"),
-    ...(n.secondLeg && {
-      approval_basis: fromEnum(n.approvalBasis ?? "none"),
+    through_second_root_mount: facts.throughSecondRootMount,
+    allow_basis: fromEnumOpt(facts.allowBasis),
+    deny_source: fromEnumOpt(facts.denySource),
+    host_credential_refusal: fromEnumOpt(facts.hostCredentialRefusal),
+    under_windows_profile_glob: facts.underWindowsProfileGlob,
+    rules_check_crashed: facts.rulesCheckCrashed === true,
+    input_parse_threw: facts.inputParseThrew === true,
+    crash_class: facts.crashClass,
+    denied_under_forced_ask: facts.deniedUnderForcedAsk === true,
+    owner_settings_lost: fromEnumOpt(facts.ownerSettingsLost),
+    second_leg: facts.secondLeg,
+    approval_decision: fromEnum(facts.envelope?.approval?.decision ?? "none"),
+    ...(facts.secondLeg && {
+      approval_basis: fromEnum(facts.approvalBasis ?? "none"),
     }),
-    ask_ended_by_throw: n.askEndedByThrow,
-    evaluated_mode: fromEnum(y.mode),
-    mode_capped: y.capped,
-    auto_refused_here: y.autoRefusedHere,
+    ask_ended_by_throw: facts.askEndedByThrow,
+    evaluated_mode: fromEnum(evaluated.mode),
+    mode_capped: evaluated.capped,
+    auto_refused_here: evaluated.autoRefusedHere,
     consent_pending:
-      s.policy.stance.unattended === "own_record" ? unattendedServingConsentPending() : undefined,
+      deps.policy.stance.unattended === "own_record" ? unattendedServingConsentPending() : undefined,
     unattended_by_host_flag:
-      s.policy.stance.unattended === "own_record" ? unattendedServingAllowedByHostFlag() : undefined,
+      deps.policy.stance.unattended === "own_record" ? unattendedServingAllowedByHostFlag() : undefined,
     auto_refused_why:
-      s.policy.stance.unattended === "own_record"
-        ? fromEnum(y.autoRefusedHere ? autoModeRefusedForServedCallsWhy() : "none")
+      deps.policy.stance.unattended === "own_record"
+        ? fromEnum(evaluated.autoRefusedHere ? autoModeRefusedForServedCallsWhy() : "none")
         : undefined,
-    plan_classifier_backed: isPlanFloor(i, s.policy.stance.unattended),
-    destination_downgraded: n.destinationDowngraded,
-    session_mode: fromEnum(n.sessionMode ?? "absent"),
-    envelope: fromEnum(n.envelopeStatus),
-    read_baseline_carried: n.envelope?.read_baseline !== undefined,
-    truncated: n.truncated,
+    plan_classifier_backed: isPlanFloor(modeForEval, deps.policy.stance.unattended),
+    destination_downgraded: facts.destinationDowngraded,
+    session_mode: fromEnum(facts.sessionMode ?? "absent"),
+    envelope: fromEnum(facts.envelopeStatus),
+    read_baseline_carried: facts.envelope?.read_baseline !== undefined,
+    truncated: facts.truncated,
     ...(envelope.outcome === "completed" && {
       documents: envelope.documents?.length ?? 0,
     }),
@@ -1642,13 +1698,13 @@ function logServedCallTelemetry(envelope, n, s, h) {
       envelope.output_tail !== undefined && {
         output_tail_bytes: Buffer.byteLength(envelope.output_tail.text),
       }),
-    duration_ms: Date.now() - n.startedAt,
-    posture_wait_ms: n.postureWaitMs,
-    hold_ms: n.holdMs,
-    hold_stands_at_answer: n.holdStandsAtAnswer === true,
-    pipeline_ms: n.pipelineMs,
-    capture_at_pipeline_end: n.captureAtPipelineEnd === true,
-    stopped_before_hold: n.stoppedBeforeHold,
+    duration_ms: Date.now() - facts.startedAt,
+    posture_wait_ms: facts.postureWaitMs,
+    hold_ms: facts.holdMs,
+    hold_stands_at_answer: facts.holdStandsAtAnswer === true,
+    pipeline_ms: facts.pipelineMs,
+    capture_at_pipeline_end: facts.captureAtPipelineEnd === true,
+    stopped_before_hold: facts.stoppedBeforeHold,
     output_bytes: Buffer.byteLength(
       jsonStringify(
         envelope.outcome === "completed"
@@ -1660,54 +1716,49 @@ function logServedCallTelemetry(envelope, n, s, h) {
       "utf8",
     ),
   });
-  if (n.query || n.answeredFromRecord !== undefined) return;
-  if (n.arrivedOver === "relay") return;
+  if (facts.query || facts.answeredFromRecord !== undefined) return;
+  if (facts.arrivedOver === "relay") return;
   if (envelope.outcome === "completed" && !envelope.is_error) logFeatureOk("remote_tool_serve");
   else if (envelope.outcome === "completed")
     logFeatureSad("remote_tool_serve", envelope.disposition ?? "completed_error");
-  else if (envelope.outcome === "acknowledged" && n.deniedBySession)
+  else if (envelope.outcome === "acknowledged" && facts.deniedBySession)
     logFeatureSad("remote_tool_serve", "denied_by_session");
   else if (
     envelope.outcome === "needs_approval" ||
     envelope.outcome === "acknowledged" ||
     envelope.outcome === "in_progress" ||
-    n.askStillPending
+    facts.askStillPending
   );
   else if (envelope.code === "cancelled") logFeatureSad("remote_tool_serve", "cancelled");
-  else if (n.staleLeg !== undefined)
+  else if (facts.staleLeg !== undefined)
     logFeatureSad(
       "remote_tool_serve",
-      n.staleLeg.judgedBy === "ask_age"
+      facts.staleLeg.judgedBy === "ask_age"
         ? "undated_answer"
-        : n.staleLeg.judgedBy === "dated_ask_age"
+        : facts.staleLeg.judgedBy === "dated_ask_age"
           ? "aged_answer"
-          : n.staleLeg.ageMs === undefined
+          : facts.staleLeg.ageMs === undefined
             ? "undatable_leg"
             : "stale_leg",
       {
-        answer_leg: n.secondLeg,
+        answer_leg: facts.secondLeg,
       },
     );
-  else if (n.askSeatsFull) logFeatureSad("remote_tool_serve", "ask_seats_full");
+  else if (facts.askSeatsFull) logFeatureSad("remote_tool_serve", "ask_seats_full");
   else logFeatureBad("remote_tool_serve", envelope.code);
 }
 //@ chunk-ad2e1aj6.js:71408-71526 placement
-function servedShellKind(e) {
-  let resolvedToolName = e.resolvedToolName;
-  if (e.isMcp === true || resolvedToolName === undefined || !isShellToolName(resolvedToolName)) return;
+function servedShellKind(facts) {
+  let resolvedToolName = facts.resolvedToolName;
+  if (facts.isMcp === true || resolvedToolName === undefined || !isShellToolName(resolvedToolName)) return;
   return resolvedToolName === POWERSHELL_TOOL_NAME ? "powershell" : "bash";
 }
 //@ chunk-ad2e1aj6.js:71526-71537 placement
 var MAX_TELEMETRY_STRING = 128;
-//@ chunk-5ghnps9r.js:1209-1360 placement
-/**
- * （切分错误，权限 UI）可提供常驻更新时把它们并入会话权限更新。
- */
-function sessionUpdatesForCaller(e) {
-  return e.offeredStandingUpdates.length > 0 && isWindowsSandboxPolicyViolation()
-    ? [...e.sessionPermissionUpdates, ...e.offeredStandingUpdates]
-    : e.sessionPermissionUpdates;
-}
+
+// The import cycle this module closes (3 modules) is complete: run the load-time work its statements
+// marked "deferred" waited for, in the official build's order (runtime/deferred-init.js).
+runDeferredInits("src/remote/tools/serve/serveCall.js");
 export {
   servableTools,
   allServedTools,

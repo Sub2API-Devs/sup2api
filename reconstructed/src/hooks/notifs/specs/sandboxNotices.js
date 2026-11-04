@@ -16,13 +16,17 @@ import { getIsRemoteMode } from "../../../bootstrap/state.js";
 import { SandboxManager } from "../../../utils/sandbox/sandbox-adapter.js";
 import { plural } from "../../../utils/stringUtils.js";
 import { settingsChangeDetector } from "../../../utils/settings/changeDetector.js";
+import { deferInit } from "../../../../runtime/deferred-init.js";
 
 //@ chunk-18hwfzwa.js:1786113-1786174 placement
-var sessionModelRestrictedNoticeSpec = {
-  id: SESSION_MODEL_RESTRICTED,
-  deps: (h) => [h.addNotification],
-  setup: () => sessionModelRestrictedNotice,
-};
+var sessionModelRestrictedNoticeSpec; // deferred: uses SESSION_MODEL_DENY_TTL_MS (../../../utils/model/sessionModelRestriction.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-18hwfzwa.js:1786113", () => {
+  sessionModelRestrictedNoticeSpec = {
+    id: SESSION_MODEL_RESTRICTED,
+    deps: (ctx) => [ctx.addNotification],
+    setup: () => sessionModelRestrictedNotice,
+  };
+});
 //@ chunk-18hwfzwa.js:1786174-1786309 placement
 function sessionModelRestrictedNotice({ addNotification }) {
   if (getIsRemoteMode()) return;
@@ -44,13 +48,13 @@ function sandboxDeniesOnAnotherHostNotice({ store, addNotification }, previousDe
   let denies = SandboxManager.canMaskCredentialWarningFire()
     ? SandboxManager.getDeniesDroppedForAnotherHost()
     : [];
-  store.setState((ke) =>
-    ke.setupIssues.sandboxDeniesOnAnotherHostCount === denies.length
-      ? ke
+  store.setState((prev) =>
+    prev.setupIssues.sandboxDeniesOnAnotherHostCount === denies.length
+      ? prev
       : {
-          ...ke,
+          ...prev,
           setupIssues: {
-            ...ke.setupIssues,
+            ...prev.setupIssues,
             sandboxDeniesOnAnotherHostCount: denies.length,
           },
         },
@@ -71,19 +75,21 @@ function sandboxDeniesOnAnotherHostNotice({ store, addNotification }, previousDe
 //@ chunk-18hwfzwa.js:1786906-1787159 placement
 var sandboxDeniesOnAnotherHostNoticeSpec = {
   id: "sandbox-denies-on-another-host",
-  deps: (h) => [h.store, h.addNotification],
+  deps: (ctx) => [ctx.store, ctx.addNotification],
   setup() {
     let previousDenies = new Set();
-    return (x) => {
+    return (ctx) => {
       if (getIsRemoteMode()) return;
-      sandboxDeniesOnAnotherHostNotice(x, previousDenies);
-      let D = SandboxManager.onDeniesDroppedForAnotherHostChanged(() =>
-        sandboxDeniesOnAnotherHostNotice(x, previousDenies),
+      sandboxDeniesOnAnotherHostNotice(ctx, previousDenies);
+      let unsubscribeHost = SandboxManager.onDeniesDroppedForAnotherHostChanged(() =>
+        sandboxDeniesOnAnotherHostNotice(ctx, previousDenies),
       );
-      let L = settingsChangeDetector.subscribe(() => sandboxDeniesOnAnotherHostNotice(x, previousDenies));
+      let unsubscribeSettings = settingsChangeDetector.subscribe(() =>
+        sandboxDeniesOnAnotherHostNotice(ctx, previousDenies),
+      );
       return () => {
-        D();
-        L();
+        unsubscribeHost();
+        unsubscribeSettings();
       };
     };
   },

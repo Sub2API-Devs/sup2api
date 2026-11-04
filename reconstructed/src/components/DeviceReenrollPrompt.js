@@ -8,7 +8,7 @@
  * pieces: chunk-a401dt71.js (2)
  * attribution: placement 2
  */
-import { init_react_production, P, R } from "../../vendor/react/cjs/react.production.js";
+import { init_react_production, useEffect, useRef } from "../../vendor/react/cjs/react.production.js";
 import { useSelfOpenedDialog } from "../hooks/useSelfOpenedDialog.js";
 import { logEvent } from "../services/analytics/index.js";
 import { lit, fromEnum } from "../services/analytics/safeMetadata.js";
@@ -43,20 +43,20 @@ function DeviceReenrollPrompt({ onDone, onCancel }) {
       }
     },
   });
-  useKeybinding("confirm:no", () => i("not_now"), {
+  useKeybinding("confirm:no", () => answerChoice("not_now"), {
     context: "Confirmation",
     isActive: !selfOpenedDialog.decided,
   });
-  P(() => {
+  useEffect(() => {
     logEvent("tengu_device_reenroll_prompt_shown", {});
   }, []);
-  let t = R(false);
-  P(() => {
-    t.current = true;
+  let mountedRef = useRef(false);
+  useEffect(() => {
+    mountedRef.current = true;
     return () => {
-      t.current = false;
+      mountedRef.current = false;
       queueMicrotask(() => {
-        if (!t.current && !selfOpenedDialog.settled()) {
+        if (!mountedRef.current && !selfOpenedDialog.settled()) {
           logEvent("tengu_device_reenroll_prompt", {
             choice: lit("unmounted"),
           });
@@ -65,12 +65,12 @@ function DeviceReenrollPrompt({ onDone, onCancel }) {
       });
     };
   }, []);
-  function i(u) {
+  function answerChoice(choice) {
     if (!selfOpenedDialog.take()) return;
     logEvent("tengu_device_reenroll_prompt", {
-      choice: fromEnum(u),
+      choice: fromEnum(choice),
     });
-    selfOpenedDialog.handBack(u);
+    selfOpenedDialog.handBack(choice);
   }
   if (selfOpenedDialog.decided)
     return selfOpenedDialog.exitHintShowing
@@ -82,7 +82,7 @@ function DeviceReenrollPrompt({ onDone, onCancel }) {
       : null;
   return jsxProd_default_2(Dialog, {
     title: "This computer was removed from your devices",
-    onCancel: () => i("not_now"),
+    onCancel: () => answerChoice("not_now"),
     isCancelActive: false,
     inputGuide: selfOpenedDialog.exit.pending
       ? jsxProd_default_2(Text, {
@@ -134,8 +134,9 @@ function DeviceReenrollPrompt({ onDone, onCancel }) {
         disablePrintableKeybindings: true,
         isDisabled: selfOpenedDialog.choicesDisabled,
         refuseInput: selfOpenedDialog.refuseInput,
-        onChange: i,
+        onChange: answerChoice,
       }),
     ],
   });
 }
+export { DeviceReenrollPrompt };

@@ -30,8 +30,8 @@ var MAX_LISTED_ASK_FILES = 3;
 /**
  * 用 and 连接若干名字（三项以上最后加逗号）。
  */
-function joinWithAnd(e) {
-  return e.length <= 2 ? e.join(" and ") : `${e.slice(0, -1).join(", ")}, and ${e.at(-1)}`;
+function joinWithAnd(parts) {
+  return parts.length <= 2 ? parts.join(" and ") : `${parts.slice(0, -1).join(", ")}, and ${parts.at(-1)}`;
 }
 //@ chunk-m79qv8gp.js:1497-1551 placement
 /**
@@ -47,19 +47,19 @@ function askReadCommentsQuestion(title) {
   return `${ASK_READ_COMMENTS_PREFIX}${title ? `"${title}"` : "this artifact"}?`;
 }
 //@ chunk-m79qv8gp.js:1610-1756 placement
-function questionEndIndex(e) {
-  if (!e.startsWith(ASK_READ_COMMENTS_PREFIX)) return;
-  for (let n of e.matchAll(new RegExp(`${QUOTED_RUN_REGEX.source}|\\?(?=\\s)`, "g")))
-    if (n[0] === "?") return n.index + 1;
+function questionEndIndex(question) {
+  if (!question.startsWith(ASK_READ_COMMENTS_PREFIX)) return;
+  for (let match of question.matchAll(new RegExp(`${QUOTED_RUN_REGEX.source}|\\?(?=\\s)`, "g")))
+    if (match[0] === "?") return match.index + 1;
   return;
 }
 //@ chunk-m79qv8gp.js:1756-1819 placement
 /**
  * 尝试计算哈希值，异常或空值返回 undefined。
  */
-function hashOfIfPossible(e) {
+function hashOfIfPossible(text) {
   try {
-    return e === undefined ? undefined : canonicalFingerprint(e);
+    return text === undefined ? undefined : canonicalFingerprint(text);
   } catch {
     return;
   }
@@ -68,97 +68,111 @@ function hashOfIfPossible(e) {
 /**
  * 取某次工具调用缓存的询问卡片（原因与输入须与缓存时一致）。
  */
-function askCardFor(e, n, t) {
-  let s = getLiveState().askCards.get(n);
-  if (s === undefined || s.reason !== t || hashOfIfPossible(e) !== s.input) return;
-  return s.card;
+function askCardFor(input, toolUseId, reason) {
+  let entry = getLiveState().askCards.get(toolUseId);
+  if (entry === undefined || entry.reason !== reason || hashOfIfPossible(input) !== entry.input) return;
+  return entry.card;
 }
 //@ chunk-m79qv8gp.js:1931-2862 placement
 /**
  * 描述 artifact 请求的内容（请求、脚本、文档、文件）。
  */
-function describeArtifactRequest(e, canonicalHandlerTarget = (t) => t) {
-  let { request, script, text, documents, files, file, source } = e;
-  let p = [];
-  if (isPlainObject(request) && typeof request.method === "string" && typeof request.path === "string") {
-    let g = isPlainObject(request.query)
+function describeArtifactRequest(request, canonicalHandlerTarget = (path) => path) {
+  let { request: request_2, script, text, documents, files, file, source } = request;
+  let lines = [];
+  if (
+    isPlainObject(request_2) &&
+    typeof request_2.method === "string" &&
+    typeof request_2.path === "string"
+  ) {
+    let queryString = isPlainObject(request_2.query)
       ? new URLSearchParams(
-          Object.entries(request.query).flatMap(([key, value]) => {
-            let k = typeof value === "string" ? value : jsonStringify(value);
-            return k === undefined ? [] : [[key, k]];
+          Object.entries(request_2.query).flatMap(([key, value]) => {
+            let queryValue = typeof value === "string" ? value : jsonStringify(value);
+            return queryValue === undefined ? [] : [[key, queryValue]];
           }),
         ).toString()
       : "";
-    let f = canonicalHandlerTarget(g === "" ? request.path : `${request.path}?${g}`);
-    if (/^[A-Za-z]{1,16}$/.test(request.method) && /^[^\s\p{Cc}]+$/u.test(f)) {
-      p.push(`${request.method.toUpperCase()} ${f}`);
-      if (request.body !== undefined) p.push(`Request body \xB7 ${linesLabel(valueWeight(request.body))}`);
+    let targetPath = canonicalHandlerTarget(
+      queryString === "" ? request_2.path : `${request_2.path}?${queryString}`,
+    );
+    if (/^[A-Za-z]{1,16}$/.test(request_2.method) && /^[^\s\p{Cc}]+$/u.test(targetPath)) {
+      lines.push(`${request_2.method.toUpperCase()} ${targetPath}`);
+      if (request_2.body !== undefined)
+        lines.push(`Request body \xB7 ${linesLabel(valueWeight(request_2.body))}`);
     }
   }
-  for (let g of [script, text])
-    if (typeof g === "string" && g.trim() !== "") {
-      let [f = "", ...h] = splitLines(g.trim());
-      p.push(`${linesLabel(h.length + 1)} \xB7 ${f}`);
+  for (let body of [script, text])
+    if (typeof body === "string" && body.trim() !== "") {
+      let [firstLine = "", ...restLines] = splitLines(body.trim());
+      lines.push(`${linesLabel(restLines.length + 1)} \xB7 ${firstLine}`);
     }
-  if (documents !== undefined) p.push(`${documents} ${plural(documents, "document")}`);
+  if (documents !== undefined) lines.push(`${documents} ${plural(documents, "document")}`);
   if (files !== undefined) {
-    let g = files.count - files.names.length;
-    let mapped = files.names.map((r) => `"${r}"`);
-    let h = joinWithAnd(g > 0 ? [...mapped, `${g} more`] : mapped);
-    p.push(`${files.count} ${plural(files.count, "file")} \xB7 ${h}`);
+    let moreCount = files.count - files.names.length;
+    let mapped = files.names.map((name) => `"${name}"`);
+    let namesText = joinWithAnd(moreCount > 0 ? [...mapped, `${moreCount} more`] : mapped);
+    lines.push(`${files.count} ${plural(files.count, "file")} \xB7 ${namesText}`);
   }
-  if (source !== undefined) p.push(`source: ${source}`);
-  if (file !== undefined) p.push(`file: ${file}`);
-  return p;
+  if (source !== undefined) lines.push(`source: ${source}`);
+  if (file !== undefined) lines.push(`file: ${file}`);
+  return lines;
 }
 //@ chunk-m79qv8gp.js:2862-3109 placement
-function valueWeight(e, n = new WeakSet()) {
-  if (typeof e === "string") return splitLines(e).length;
-  if (typeof e !== "object" || e === null || n.has(e)) return 1;
-  n.add(e);
-  let t = Array.isArray(e) ? e : Object.values(e);
-  return t.length === 0 ? 1 : t.reduce((acc, o) => acc + (typeof o === "string" ? 1 : valueWeight(o, n)), 2);
+function valueWeight(value, seen = new WeakSet()) {
+  if (typeof value === "string") return splitLines(value).length;
+  if (typeof value !== "object" || value === null || seen.has(value)) return 1;
+  seen.add(value);
+  let items = Array.isArray(value) ? value : Object.values(value);
+  return items.length === 0
+    ? 1
+    : items.reduce((acc, item) => acc + (typeof item === "string" ? 1 : valueWeight(item, seen)), 2);
 }
 //@ chunk-m79qv8gp.js:3109-3165 placement
 /**
  * 按各种换行符拆行。
  */
-function splitLines(e) {
-  return e.split(/\r\n|[\r\n\u2028\u2029]/);
+function splitLines(text) {
+  return text.split(/\r\n|[\r\n\u2028\u2029]/);
 }
 //@ chunk-m79qv8gp.js:3165-3216 placement
 /**
  * 拼出「N lines」或「1 line」。
  */
-function linesLabel(e) {
-  return `${e} ${e === 1 ? "line" : "lines"}`;
+function linesLabel(count) {
+  return `${count} ${count === 1 ? "line" : "lines"}`;
 }
 //@ chunk-m79qv8gp.js:3216-4428 placement
 /**
  * 记录 artifact 询问卡片的用户决定。
  */
-function recordArtifactAskDecision(toolUseId, n, t, s = getLiveState().askCardFacts.get(toolUseId)) {
+function recordArtifactAskDecision(
+  toolUseId,
+  decision,
+  input,
+  facts = getLiveState().askCardFacts.get(toolUseId),
+) {
   let liveState = getLiveState();
-  let d = liveState.askClassCards.get(toolUseId);
-  let target = s?.target;
-  let values = s?.values ?? [];
-  let audience = s?.audience ?? "";
+  let stampedCard = liveState.askClassCards.get(toolUseId);
+  let target = facts?.target;
+  let values = facts?.values ?? [];
+  let audience = facts?.audience ?? "";
   liveState.askClassCards.delete(toolUseId);
   liveState.askCardFacts.delete(toolUseId);
   if (
-    s === undefined ||
-    s.generic === true ||
-    n.behavior !== "ask" ||
-    (n.decisionReason?.type !== "safetyCheck" && n.decisionReason?.type !== "other") ||
-    n.decisionReason.reason.trim() === ""
+    facts === undefined ||
+    facts.generic === true ||
+    decision.behavior !== "ask" ||
+    (decision.decisionReason?.type !== "safetyCheck" && decision.decisionReason?.type !== "other") ||
+    decision.decisionReason.reason.trim() === ""
   )
     return;
-  let reason = n.decisionReason.reason;
+  let reason = decision.decisionReason.reason;
   let index = reason.indexOf(`
 
 `);
-  let f = index === -1 ? reason : reason.slice(0, index);
-  let h =
+  let firstLine = index === -1 ? reason : reason.slice(0, index);
+  let noteLines =
     index === -1
       ? []
       : reason
@@ -168,45 +182,57 @@ function recordArtifactAskDecision(toolUseId, n, t, s = getLiveState().askCardFa
 `,
           )
           .filter((line) => line !== "");
-  let updatedInput = n.updatedInput ?? t;
-  let k = isPlainObject(updatedInput) ? updatedInput[ARTIFACT_ASK_TAG_KEY] : undefined;
-  let y;
-  if (k === undefined) {
-    let C = GENERIC_ASK_LEADS.find((v) => f.startsWith(v))?.length ?? questionEndIndex(f);
-    let A = C === undefined ? f : f.slice(0, C);
-    let U = C === undefined ? "" : f.slice(C).trim();
+  let updatedInput = decision.updatedInput ?? input;
+  let stamp = isPlainObject(updatedInput) ? updatedInput[ARTIFACT_ASK_TAG_KEY] : undefined;
+  let parsed;
+  if (stamp === undefined) {
+    let leadLength =
+      GENERIC_ASK_LEADS.find((lead) => firstLine.startsWith(lead))?.length ?? questionEndIndex(firstLine);
+    let question = leadLength === undefined ? firstLine : firstLine.slice(0, leadLength);
+    let tail = leadLength === undefined ? "" : firstLine.slice(leadLength).trim();
     let title = target?.title ?? "";
-    let T = title !== "" ? `"${title}"` : target?.url;
-    let R = [];
-    let I = (v) => h.some((Y) => Y.endsWith(v));
-    if (T !== undefined && !A.includes(T) && !I(T)) R.push(T);
+    let titleText = title !== "" ? `"${title}"` : target?.url;
+    let extraLines = [];
+    let appearsInLines = (suffix) => noteLines.some((line) => line.endsWith(suffix));
+    if (titleText !== undefined && !question.includes(titleText) && !appearsInLines(titleText))
+      extraLines.push(titleText);
     let url = target?.url;
-    if (s?.foreign === true && url !== undefined && !A.includes(url) && !R.includes(url) && !I(url))
-      R.push(url);
-    if (U !== "") R.push(U);
-    let V = audience === "" || f.replace(QUOTED_RUN_REGEX, "").includes(audience);
-    y = {
-      question: A,
-      lines: R,
-      values: [...h, ...(V ? values : [...values, audience])],
+    if (
+      facts?.foreign === true &&
+      url !== undefined &&
+      !question.includes(url) &&
+      !extraLines.includes(url) &&
+      !appearsInLines(url)
+    )
+      extraLines.push(url);
+    if (tail !== "") extraLines.push(tail);
+    let audienceShown = audience === "" || firstLine.replace(QUOTED_RUN_REGEX, "").includes(audience);
+    parsed = {
+      question,
+      lines: extraLines,
+      values: [...noteLines, ...(audienceShown ? values : [...values, audience])],
     };
-  } else if (d !== undefined && d.reason === f && hashOfIfPossible(k) === d.stamp) {
-    let [b, ...C] = d.parts;
-    let A = audience === "" || d.saysPublic;
-    y =
-      b === undefined
+  } else if (
+    stampedCard !== undefined &&
+    stampedCard.reason === firstLine &&
+    hashOfIfPossible(stamp) === stampedCard.stamp
+  ) {
+    let [firstPart, ...otherParts] = stampedCard.parts;
+    let audienceCovered = audience === "" || stampedCard.saysPublic;
+    parsed =
+      firstPart === undefined
         ? undefined
         : {
-            question: b,
-            lines: C,
-            values: A ? values : [...values, audience],
+            question: firstPart,
+            lines: otherParts,
+            values: audienceCovered ? values : [...values, audience],
           };
   }
-  let w = hashOfIfPossible(updatedInput);
-  if (w !== undefined && y !== undefined)
+  let line = hashOfIfPossible(updatedInput);
+  if (line !== undefined && parsed !== undefined)
     setBounded(liveState.askCards, toolUseId, {
-      input: w,
-      card: y,
+      input: line,
+      card: parsed,
       reason,
     });
 }
@@ -214,26 +240,26 @@ function recordArtifactAskDecision(toolUseId, n, t, s = getLiveState().askCardFa
 /**
  * 包装工具的 checkPermissions：结果为 ask 时用 n 从（可能被改写的）输入中提取询问卡片要展示的事实并按 toolUseId 记录（有上限）。
  */
-function withAskCardFacts(e, n) {
-  let checkPermissions = e.checkPermissions;
-  return overrideDescriptors(e, {
-    async checkPermissions(s, o) {
-      let d = await checkPermissions.call(this, s, o);
-      let toolUseId = o.toolUseId;
-      let u = d.behavior === "ask" ? (d.updatedInput ?? s) : null;
-      if (toolUseId !== undefined && isPlainObject(u)) {
-        let l;
+function withAskCardFacts(tool, factsReader) {
+  let checkPermissions = tool.checkPermissions;
+  return overrideDescriptors(tool, {
+    async checkPermissions(input, context) {
+      let decision = await checkPermissions.call(this, input, context);
+      let toolUseId = context.toolUseId;
+      let facts = decision.behavior === "ask" ? (decision.updatedInput ?? input) : null;
+      if (toolUseId !== undefined && isPlainObject(facts)) {
+        let attachFacts;
         try {
-          l = n(u, o);
+          attachFacts = factsReader(facts, context);
         } catch {
-          l = {
+          attachFacts = {
             values: [],
             generic: true,
           };
         }
-        setBounded(getLiveState().askCardFacts, toolUseId, l);
+        setBounded(getLiveState().askCardFacts, toolUseId, attachFacts);
       }
-      return d;
+      return decision;
     },
   });
 }
@@ -241,20 +267,20 @@ function withAskCardFacts(e, n) {
 /**
  * 包装 Artifact 工具的 checkPermissions：调用前清除该调用的旧询问卡片记录，调用后按结果记录询问决定。
  */
-function withAskDecisionRecording(e) {
-  let checkPermissions = e.checkPermissions;
-  return overrideDescriptors(e, {
-    async checkPermissions(t, s) {
-      let toolUseId = s.toolUseId;
+function withAskDecisionRecording(tool) {
+  let checkPermissions = tool.checkPermissions;
+  return overrideDescriptors(tool, {
+    async checkPermissions(input, context) {
+      let toolUseId = context.toolUseId;
       if (toolUseId !== undefined) {
         let liveState = getLiveState();
         liveState.askCards.delete(toolUseId);
         liveState.askClassCards.delete(toolUseId);
         liveState.askCardFacts.delete(toolUseId);
       }
-      let d = await checkPermissions.call(this, t, s);
-      if (toolUseId !== undefined) recordArtifactAskDecision(toolUseId, d, t);
-      return d;
+      let decision = await checkPermissions.call(this, input, context);
+      if (toolUseId !== undefined) recordArtifactAskDecision(toolUseId, decision, input);
+      return decision;
     },
   });
 }
@@ -262,22 +288,22 @@ function withAskDecisionRecording(e) {
 /**
  * 写入有上限的 Map（重新插入到末尾，超出上限时删除最早的一项）。
  */
-function setBounded(e, toolUseId, t) {
-  e.delete(toolUseId);
-  e.set(toolUseId, t);
-  if (e.size > MAX_ASK_CARD_FACTS) {
-    let s = e.keys().next().value;
-    if (s !== undefined) e.delete(s);
+function setBounded(map, toolUseId, value) {
+  map.delete(toolUseId);
+  map.set(toolUseId, value);
+  if (map.size > MAX_ASK_CARD_FACTS) {
+    let oldest = map.keys().next().value;
+    if (oldest !== undefined) map.delete(oldest);
   }
 }
 //@ chunk-m79qv8gp.js:5085-5235 placement
 /**
  * 复制对象的全部属性描述符并用另一个对象的描述符覆盖，得到新对象（保留 getter）。
  */
-function overrideDescriptors(e, n) {
+function overrideDescriptors(base, overrides) {
   return Object.defineProperties(
-    Object.defineProperties({}, Object.getOwnPropertyDescriptors(e)),
-    Object.getOwnPropertyDescriptors(n),
+    Object.defineProperties({}, Object.getOwnPropertyDescriptors(base)),
+    Object.getOwnPropertyDescriptors(overrides),
   );
 }
 export {

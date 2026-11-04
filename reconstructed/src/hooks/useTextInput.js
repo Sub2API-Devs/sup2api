@@ -28,7 +28,7 @@ import { announce } from "../utils/accessibility/screenReader.js";
 import { env } from "../utils/env.js";
 import { useIsFullscreen } from "../ink/renderModeContext.js";
 import { useKillRing, topOfKillRing, nextYankPop } from "../utils/killRing.js";
-import { Q, y, R } from "../../vendor/react/cjs/react.production.js";
+import { useMemo, useState, useRef } from "../../vendor/react/cjs/react.production.js";
 import { useNotifications } from "../context/notifications.js";
 import { useTheme_2 } from "../components/design-system/ThemeProvider.js";
 import { useDoublePress } from "../keybindings/useActionHandlers.js";
@@ -40,16 +40,17 @@ import {
 } from "../components/PromptInput/inputModes.js";
 import { addHistoryEntry } from "../history.js";
 import { markBackslashReturnUsed } from "../commands/terminalSetup/terminalSetup.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-7p2hc4jn.js:38712-38960 placement
 /**
  * 文本换行行与原文不能完全拼合、回退到硬换行时，每进程只记录一次错误。
  */
-function logWrapFallbackOnce(columns, r) {
+function logWrapFallbackOnce(columns, textLength) {
   if (!claimOnce().claim("measured_text_wrap_fallback")) return;
   logError(
     new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `Wrapped rows do not tile the text (columns=${columns}, length=${r}); fell back to plain hard wrapping`,
+      `Wrapped rows do not tile the text (columns=${columns}, length=${textLength}); fell back to plain hard wrapping`,
       "Wrapped rows do not tile the text; fell back to plain hard wrapping",
     ),
   );
@@ -67,11 +68,14 @@ class OnceFlag {
   }
 }
 //@ chunk-7p2hc4jn.js:39072-39097 placement
-var textInputStoreSlot = new HostScoped(() => new OnceFlag());
+var textInputStoreSlot; // deferred: uses OnceFlag of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-7p2hc4jn.js:39072", () => {
+  textInputStoreSlot = new HostScoped(() => new OnceFlag());
+});
 //@ chunk-7p2hc4jn.js:39097-39112 placement
 function noopTextInput() {}
 //@ chunk-7p2hc4jn.js:39112-39136 placement
-function returnFalseTextInput(e) {
+function returnFalseTextInput(event) {
   return false;
 }
 //@ chunk-7p2hc4jn.js:39136-39264 placement
@@ -111,7 +115,7 @@ function decideLeftArrowGesture(
   sinceMs = getAttachStampMs(),
 ) {
   if (isSoloKey !== true) return "reject";
-  let isRecent = (x) => x !== 0 && x >= sinceMs;
+  let isRecent = (timestamp) => timestamp !== 0 && timestamp >= sinceMs;
   if (isAttached) {
     if (isRecent(state.absorbAnchorMs) && nowMs - state.absorbAnchorMs < LEFT_ARROW_ABSORB_MS)
       return "attach-absorb";
@@ -130,30 +134,30 @@ function decideLeftArrowGesture(
 /**
  * 按 decideLeftArrowGesture 的结果更新手势状态（武装、吸收锚点、上次按键时间等）。
  */
-function applyLeftArrowGesture(e, r, n) {
-  switch (r) {
+function applyLeftArrowGesture(state, decision, nowMs) {
+  switch (decision) {
     case "fire":
-      if (e.armedAtMs !== 0) e.editedEmptyAtMs = 0;
-      e.armedAtMs = 0;
-      e.attachConfirmArmedAtMs = 0;
-      e.absorbAnchorMs = n;
-      e.lastQualifiedLeftPressMs = n;
-      e.absorbLogged = false;
+      if (state.armedAtMs !== 0) state.editedEmptyAtMs = 0;
+      state.armedAtMs = 0;
+      state.attachConfirmArmedAtMs = 0;
+      state.absorbAnchorMs = nowMs;
+      state.lastQualifiedLeftPressMs = nowMs;
+      state.absorbLogged = false;
       return;
     case "arm":
-      e.armedAtMs = n;
-      e.absorbAnchorMs = n;
-      e.lastQualifiedLeftPressMs = n;
-      e.absorbLogged = false;
+      state.armedAtMs = nowMs;
+      state.absorbAnchorMs = nowMs;
+      state.lastQualifiedLeftPressMs = nowMs;
+      state.absorbLogged = false;
       return;
     case "absorb":
-      if (n - e.lastQualifiedLeftPressMs < HUMAN_CADENCE_MS) e.absorbAnchorMs = n;
-      e.lastQualifiedLeftPressMs = n;
+      if (nowMs - state.lastQualifiedLeftPressMs < HUMAN_CADENCE_MS) state.absorbAnchorMs = nowMs;
+      state.lastQualifiedLeftPressMs = nowMs;
       return;
     case "reject":
       return;
     case "attach-arm":
-      e.attachConfirmArmedAtMs = n;
+      state.attachConfirmArmedAtMs = nowMs;
       return;
     case "attach-absorb":
       return;
@@ -164,7 +168,7 @@ function applyLeftArrowGesture(e, r, n) {
  * 为被拦下的左方向键手势打点 tengu_left_arrow_blocked（原因：editing-quiet、attach-quiet、not-solo、absorb 等）并写调试日志；吸收日志每个锚点只记一次。
  */
 function logLeftArrowGesture(decision, nowMs, state) {
-  let s = nowMs - getAttachStampMs();
+  let msSinceAttach = nowMs - getAttachStampMs();
   switch (decision) {
     case "fire":
       return;
@@ -176,18 +180,18 @@ function logLeftArrowGesture(decision, nowMs, state) {
     case "attach-arm":
       logEvent("tengu_left_arrow_blocked", {
         reason: lit("attach-quiet-hint"),
-        ms_since_stamp: s,
+        ms_since_stamp: msSinceAttach,
       });
-      logForDebugging(`leftArrowGesture: attach-quiet hint armed (ms_since_stamp=${s})`, {
+      logForDebugging(`leftArrowGesture: attach-quiet hint armed (ms_since_stamp=${msSinceAttach})`, {
         level: "debug",
       });
       return;
     case "attach-absorb":
       logEvent("tengu_left_arrow_blocked", {
         reason: lit("attach-quiet"),
-        ms_since_stamp: s,
+        ms_since_stamp: msSinceAttach,
       });
-      logForDebugging(`leftArrowGesture: attach-quiet silent absorb (ms_since_stamp=${s})`, {
+      logForDebugging(`leftArrowGesture: attach-quiet silent absorb (ms_since_stamp=${msSinceAttach})`, {
         level: "debug",
       });
       return;
@@ -200,13 +204,13 @@ function logLeftArrowGesture(decision, nowMs, state) {
     case "absorb":
       if (state.absorbAnchorMs === nowMs || state.absorbLogged) return;
       state.absorbLogged = true;
-      let o = nowMs - state.absorbAnchorMs;
+      let msSincePress = nowMs - state.absorbAnchorMs;
       logEvent("tengu_left_arrow_blocked", {
         reason: lit("absorb"),
-        ms_since_press: o,
+        ms_since_press: msSincePress,
       });
       logForDebugging(
-        `leftArrowGesture: human-cadence press absorbed, too soon after the last \u2190 that fired or showed the hint (ms_since_press=${o})`,
+        `leftArrowGesture: human-cadence press absorbed, too soon after the last \u2190 that fired or showed the hint (ms_since_press=${msSincePress})`,
         {
           level: "debug",
         },
@@ -215,26 +219,31 @@ function logLeftArrowGesture(decision, nowMs, state) {
   }
 }
 //@ chunk-7p2hc4jn.js:41484-41592 placement = setCwdState (1)
-var rangesBefore = (e, r) => e.filter((n) => n.start < r);
-var isNfcStable = (e, virtualTextLayout) =>
-  e.normalize("NFC") === e && virtualTextLayout.text.normalize("NFC") === virtualTextLayout.text;
+var rangesBefore = (ranges, limit) => ranges.filter((range) => range.start < limit);
+var isNfcStable = (text, virtualTextLayout) =>
+  text.normalize("NFC") === text && virtualTextLayout.text.normalize("NFC") === virtualTextLayout.text;
 //@ chunk-7p2hc4jn.js:41592-41920 placement
 /**
  * 按方向移动光标，跳过与当前偏移相同或（上下移动时）不在目标行的位置，直到找到一个实际不同的光标位置；到边界时原地不动。
  */
-function moveCursorToDistinctRow(e, r, n) {
-  let s = n === "up" || n === "down";
-  let o = e.cursorOver(r);
+function moveCursorToDistinctRow(layout, startCursor, key) {
+  let isVertical = key === "up" || key === "down";
+  let current = layout.cursorOver(startCursor);
   for (;;) {
-    let u = o[n]();
-    if (u.equals(o)) return r;
-    let line = u.getPosition().line;
-    let h = shiftSpans(e.text, u.offset);
-    let found = (s ? [h, r.measuredText.nextOffset(h), r.measuredText.prevOffset(h)] : [h]).find(
-      (T) => T !== r.offset && (!s || e.rowOf(T) === line),
+    let nextCursor = current[key]();
+    if (nextCursor.equals(current)) return startCursor;
+    let line = nextCursor.getPosition().line;
+    let offset = shiftSpans(layout.text, nextCursor.offset);
+    let found = (
+      isVertical
+        ? [offset, startCursor.measuredText.nextOffset(offset), startCursor.measuredText.prevOffset(offset)]
+        : [offset]
+    ).find(
+      (candidateOffset) =>
+        candidateOffset !== startCursor.offset && (!isVertical || layout.rowOf(candidateOffset) === line),
     );
-    if (found !== undefined) return new Cursor(r.measuredText, found);
-    o = u;
+    if (found !== undefined) return new Cursor(startCursor.measuredText, found);
+    current = nextCursor;
   }
 }
 //@ chunk-7p2hc4jn.js:41920-42358 placement
@@ -246,31 +255,32 @@ function buildDisplayTextMapping({ buffer, texts, columns, side }) {
   let virtualTextLayout = buildVirtualTextLayout(buffer, texts);
   if (!isNfcStable(buffer, virtualTextLayout)) return;
   let { measuredText } = Cursor.fromText(virtualTextLayout.text, columns);
-  let cursorOver = (x) => new Cursor(measuredText, draftToDisplayOffset(virtualTextLayout, x.offset, side));
-  let rowOf = (x) =>
-    measuredText.getPositionFromOffset(draftToDisplayOffset(virtualTextLayout, x, side)).line;
+  let cursorOver = (offset) =>
+    new Cursor(measuredText, draftToDisplayOffset(virtualTextLayout, offset.offset, side));
+  let rowOf = (offset) =>
+    measuredText.getPositionFromOffset(draftToDisplayOffset(virtualTextLayout, offset, side)).line;
   return {
     text: virtualTextLayout,
     cursorOver,
     rowOf,
     lastRow: () => {
-      let x = draftToDisplayOffset(virtualTextLayout, buffer.length, "before");
+      let shift = draftToDisplayOffset(virtualTextLayout, buffer.length, "before");
       return measuredText.getPositionFromOffset(
         buffer.endsWith(`
 `)
-          ? x
-          : measuredText.prevOffset(x),
+          ? shift
+          : measuredText.prevOffset(shift),
       ).line;
     },
-    rowMoved: (x, T) =>
+    rowMoved: (from, to) =>
       moveCursorToDistinctRow(
         {
           text: virtualTextLayout,
           cursorOver,
           rowOf,
         },
-        x,
-        T,
+        from,
+        to,
       ),
   };
 }
@@ -279,7 +289,7 @@ function buildDisplayTextMapping({ buffer, texts, columns, side }) {
  * 为输入缓冲区建立光标：有显示映射时光标落在显示文本上，并给出把显示偏移换回缓冲区偏移的函数；否则直接用缓冲区。
  */
 function createDisplayCursor({ buffer, offset, texts, columns, side }) {
-  let u = Cursor.fromText(buffer, columns, offset);
+  let cursor = Cursor.fromText(buffer, columns, offset);
   let displayTextMapping = buildDisplayTextMapping({
     buffer,
     texts,
@@ -288,61 +298,64 @@ function createDisplayCursor({ buffer, offset, texts, columns, side }) {
   });
   if (displayTextMapping === undefined)
     return {
-      cursor: u,
-      bufferOffset: (h) => h,
+      cursor,
+      bufferOffset: (offset) => offset,
     };
   return {
-    cursor: displayTextMapping.cursorOver(u),
-    bufferOffset: (h) => shiftSpans(displayTextMapping.text, h),
+    cursor: displayTextMapping.cursorOver(cursor),
+    bufferOffset: (offset) => shiftSpans(displayTextMapping.text, offset),
   };
 }
 //@ chunk-7p2hc4jn.js:42598-42612 placement
 var noopTextInputCallback = () => {};
 //@ chunk-7p2hc4jn.js:42612-42791 placement
-function announceDeletion(e, mask) {
-  if (e === "") return;
+function announceDeletion(deleted, mask) {
+  if (deleted === "") return;
   if (mask !== "") {
     announce("deleted");
     return;
   }
-  let n =
-    e.trim() === ""
-      ? e.includes(`
+  let description =
+    deleted.trim() === ""
+      ? deleted.includes(`
 `)
         ? "new line"
-        : e.includes("\t")
+        : deleted.includes("\t")
           ? "tab"
           : "space"
-      : e
+      : deleted
           .replaceAll(
             `
 `,
             " ",
           )
           .trim();
-  announce(n);
+  announce(description);
 }
 //@ chunk-7p2hc4jn.js:42791-42926 placement
-var IGNORED_KEY_NAMES = new Set([
-  "insert",
-  "clear",
-  "enter",
-  "center",
-  "undefined",
-  "mouse",
-  "f1",
-  "f2",
-  "f3",
-  "f4",
-  "f5",
-  "f6",
-  "f7",
-  "f8",
-  "f9",
-  "f10",
-  "f11",
-  "f12",
-]);
+var IGNORED_KEY_NAMES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-7p2hc4jn.js:42791", () => {
+  IGNORED_KEY_NAMES = new Set([
+    "insert",
+    "clear",
+    "enter",
+    "center",
+    "undefined",
+    "mouse",
+    "f1",
+    "f2",
+    "f3",
+    "f4",
+    "f5",
+    "f6",
+    "f7",
+    "f8",
+    "f9",
+    "f10",
+    "f11",
+    "f12",
+  ]);
+});
 //@ chunk-7p2hc4jn.js:42926-42991 placement
 /**
  * 函数 needsShiftWorkaround（Apple Terminal 需要 shift 兼容）；位于「文本输入核心 hook：按键映射到 Cursor 编辑操作（移动/删除/kill/yank/换行）、历史上下、双击 Esc 清空、Ctrl-C 处理、提交」模块。
@@ -362,7 +375,7 @@ function mapInput(input_map) {
  * 文本输入核心：把按键映射为 Cursor 操作（ctrl+a/e/b/f/h/d/k/u/w/y、alt+b/f/d、方向键、home/end、换行 \⏎/shift+⏎），上下键在多行内移动或触发历史；Esc 双击清空（escape-again-to-clear），Ctrl-C 清空或退出提示；Apple Terminal 特判；返回 onInput、渲染文本与光标位置。
  */
 function useTextInput({
-  value: e,
+  value,
   onChange,
   onSubmit,
   onExit,
@@ -406,65 +419,68 @@ function useTextInput({
   let isFullscreen = useIsFullscreen();
   let killRing = useKillRing();
   if (env.terminal === "Apple_Terminal") noopTextInput();
-  let He = externalOffset;
-  let Ge = onOffsetChange;
+  let offset = externalOffset;
+  let setOffset = onOffsetChange;
   let text = leadingPill?.text ?? "";
-  let cursor = Cursor.fromText(text + e, columns, text.length + He);
-  let wt =
-    inlineGhostText && dim && inlineGhostText.insertPosition === He
+  let cursor = Cursor.fromText(text + value, columns, text.length + offset);
+  let ghostText =
+    inlineGhostText && dim && inlineGhostText.insertPosition === offset
       ? {
           text: inlineGhostText.text,
           dim,
         }
       : undefined;
-  let xt = wt !== undefined && He >= e.length;
-  let rt = Q(
+  let ghostAtEnd = ghostText !== undefined && offset >= value.length;
+  let displayMapping = useMemo(
     () =>
-      virtualTexts === undefined || virtualTexts.length === 0 || e === "" || mask !== ""
+      virtualTexts === undefined || virtualTexts.length === 0 || value === "" || mask !== ""
         ? undefined
         : buildDisplayTextMapping({
-            buffer: text + e,
-            texts: offsetDecorations(xt ? rangesBefore(virtualTexts, e.length) : virtualTexts, text.length),
+            buffer: text + value,
+            texts: offsetDecorations(
+              ghostAtEnd ? rangesBefore(virtualTexts, value.length) : virtualTexts,
+              text.length,
+            ),
             columns,
             side: isCursorOnCharacter ? "after" : "before",
           }),
-    [virtualTexts, e, mask, text, xt, columns, isCursorOnCharacter],
+    [virtualTexts, value, mask, text, ghostAtEnd, columns, isCursorOnCharacter],
   );
-  let nt = false;
-  let st;
-  let Ke = false;
-  function Oe(c) {
-    return inputFilter && st ? inputFilter(c, st) : c;
+  let didSubmit = false;
+  let currentEvent;
+  let insertedModeChar = false;
+  function applyInputFilter(rawInput) {
+    return inputFilter && currentEvent ? inputFilter(rawInput, currentEvent) : rawInput;
   }
   let { addNotification, removeNotification } = useNotifications();
   let { storageV5 } = useTheme_2();
-  let [state] = y(createLeftArrowGestureState);
-  let Ue = "left-arrow-again-for-agents";
-  let Ve = R({
+  let [state] = useState(createLeftArrowGestureState);
+  let leftArrowHintKey = "left-arrow-again-for-agents";
+  let ctrlCState = useRef({
     key: "Ctrl-C",
     pending: false,
   });
   let handleCtrlC = useDoublePress(
     (show) => {
-      Ve.current.pending = show;
-      onExitMessage?.(show, Ve.current.key);
+      ctrlCState.current.pending = show;
+      onExitMessage?.(show, ctrlCState.current.key);
     },
     () => onExit?.(),
     () => {
-      if (!disableCtrlCClear && e) {
+      if (!disableCtrlCClear && value) {
         onChange("");
-        Ge(0);
+        setOffset(0);
         onHistoryReset?.();
       }
     },
   );
-  function yt(key) {
-    if (!Ve.current.pending) Ve.current.key = key;
+  function armCtrlC(key) {
+    if (!ctrlCState.current.pending) ctrlCState.current.key = key;
     handleCtrlC();
   }
   let handleEscape = useDoublePress(
     (show) => {
-      if (!e) return;
+      if (!value) return;
       if (onEscapeMessage) {
         onEscapeMessage(show);
         return;
@@ -482,34 +498,35 @@ function useTextInput({
     () => {
       onEscapeMessage?.(false);
       removeNotification("escape-again-to-clear");
-      if (e) {
-        if (historyOnClear && mask === "" && e.trim() !== "") {
-          let c = getPastedContents
+      if (value) {
+        if (historyOnClear && mask === "" && value.trim() !== "") {
+          let unavailableContents = getPastedContents
             ? pickByHelper(getPastedContents(), (show) => show.type === "text" && show.unavailable === true)
             : undefined;
-          let O = getInputMode?.();
-          let L = O !== undefined ? prependModeCharacterToInput(e, O) : e;
-          let ne = c
+          let inputMode = getInputMode?.();
+          let inputWithModeChar =
+            inputMode !== undefined ? prependModeCharacterToInput(value, inputMode) : value;
+          let historyEntry = unavailableContents
             ? {
-                display: L,
-                pastedContents: c,
+                display: inputWithModeChar,
+                pastedContents: unavailableContents,
               }
-            : L;
-          if (O !== undefined)
-            addHistoryEntry(ne, storageV5, {
-              submitMode: O,
+            : inputWithModeChar;
+          if (inputMode !== undefined)
+            addHistoryEntry(historyEntry, storageV5, {
+              submitMode: inputMode,
             });
-          else addHistoryEntry(ne, storageV5);
+          else addHistoryEntry(historyEntry, storageV5);
         }
         onChange("");
-        Ge(0);
+        setOffset(0);
         onHistoryReset?.();
       }
     },
   );
   function handleCtrlD() {
-    if (cursor.text === text && e === "") {
-      yt("Ctrl-D");
+    if (cursor.text === text && value === "") {
+      armCtrlC("Ctrl-D");
       return cursor;
     }
     return cursor.del();
@@ -519,31 +536,31 @@ function useTextInput({
       return Cursor.fromText(cursor.text.slice(text.length), columns);
     return cursor.backspace();
   }
-  function _e(killed, direction) {
-    let L = killed.startsWith(text) ? killed.slice(text.length) : killed;
+  function recordKill(killed, direction) {
+    let killedText = killed.startsWith(text) ? killed.slice(text.length) : killed;
     killRing.dispatch(
       mask === ""
         ? {
             type: "kill",
-            text: L,
+            text: killedText,
             direction,
           }
         : {
             type: "interrupt",
           },
     );
-    announceDeletion(L, mask);
-    return L;
+    announceDeletion(killedText, mask);
+    return killedText;
   }
   function killToLineEnd_2() {
-    let { cursor: newCursor, killed } = cursor.deleteToLineEnd(we("endOfLine"));
-    _e(killed, "append");
+    let { cursor: newCursor, killed } = cursor.deleteToLineEnd(moveCursor("endOfLine"));
+    recordKill(killed, "append");
     return newCursor;
   }
-  function St() {
-    let { cursor: newCursor, killed } = cursor.deleteToLineStart(we("startOfLine"));
-    let L = _e(killed, "prepend");
-    if (mask === "" && L.length >= 3)
+  function killToLineStart() {
+    let { cursor: newCursor, killed } = cursor.deleteToLineStart(moveCursor("startOfLine"));
+    let killedText = recordKill(killed, "prepend");
+    if (mask === "" && killedText.length >= 3)
       addNotification({
         key: "kill-paste-hint",
         kind: "hint",
@@ -554,23 +571,23 @@ function useTextInput({
       });
     return newCursor;
   }
-  function Qt() {
+  function killWordAfter() {
     let { cursor: cursor_2, killed } = cursor.killWord();
-    _e(killed, "append");
+    recordKill(killed, "append");
     return cursor_2;
   }
-  function killToLineStart() {
+  function killToLineStart_2() {
     let { cursor: cursor_2, killed } = cursor.backwardKillWord();
-    _e(killed, "prepend");
+    recordKill(killed, "prepend");
     return cursor_2;
   }
   function killWordBefore() {
     let { cursor: cursor_2, killed } = cursor.deleteWORDBefore();
-    _e(killed, "prepend");
+    recordKill(killed, "prepend");
     return cursor_2;
   }
   function yank() {
-    let text_2 = Oe(topOfKillRing(killRing.state));
+    let text_2 = applyInputFilter(topOfKillRing(killRing.state));
     if (text_2.length > 0) {
       let start = cursor.offset - text.length;
       let newCursor = cursor.insert(text_2);
@@ -588,7 +605,7 @@ function useTextInput({
     if (!popResult) return cursor;
     let { text: text_2, length } = popResult;
     let start = text.length + popResult.start;
-    let text_3 = Oe(text_2);
+    let text_3 = applyInputFilter(text_2);
     killRing.dispatch({
       type: "yankPop",
     });
@@ -608,7 +625,7 @@ function useTextInput({
     [
       "c",
       () => {
-        yt("Ctrl-C");
+        armCtrlC("Ctrl-C");
         return cursor;
       },
     ],
@@ -619,17 +636,17 @@ function useTextInput({
     ["k", killToLineEnd_2],
     ["n", () => downOrHistoryDown()],
     ["p", () => upOrHistoryUp()],
-    ["u", St],
+    ["u", killToLineStart],
     ["w", killWordBefore],
     ["y", yank],
   ]);
   let handleMeta = mapInput([
     ["b", () => cursor.backwardWord()],
     ["f", () => cursor.forwardWord()],
-    ["d", Qt],
+    ["d", killWordAfter],
     ["y", handleYankPop],
   ]);
-  function handleEnter({ meta, shift: O }) {
+  function handleEnter({ meta, shift }) {
     if (
       multiline &&
       !disableBackslashReturn &&
@@ -638,59 +655,61 @@ function useTextInput({
     ) {
       markBackslashReturnUsed(storageV5);
       return cursor.backspace().insert(
-        Oe(`
+        applyInputFilter(`
 `),
       );
     }
-    if (meta || O)
+    if (meta || shift)
       return cursor.insert(
-        Oe(`
+        applyInputFilter(`
 `),
       );
     if (needsShiftWorkaround())
       return cursor.insert(
-        Oe(`
+        applyInputFilter(`
 `),
       );
     if (onSubmit) {
       onSubmit(cursor.text.slice(text.length));
-      nt = true;
+      didSubmit = true;
     }
     return cursor;
   }
-  function Ye() {
+  function noteEditedEmpty() {
     state.editedEmptyAtMs = Date.now();
   }
-  function Et() {
+  function disarmLeftArrowHint() {
     if (state.armedAtMs === 0) return;
     state.armedAtMs = 0;
-    removeNotification(Ue);
+    removeNotification(leftArrowHintKey);
   }
-  function ze() {
-    return rt !== undefined && cursor.text === rt.text.draft ? rt : undefined;
+  function getDisplayMapping() {
+    return displayMapping !== undefined && cursor.text === displayMapping.text.draft
+      ? displayMapping
+      : undefined;
   }
-  function we(key) {
-    return ze()?.rowMoved(cursor, key) ?? cursor[key]();
+  function moveCursor(key) {
+    return getDisplayMapping()?.rowMoved(cursor, key) ?? cursor[key]();
   }
   function upOrHistoryUp() {
     if (disableCursorMovementForUpDownKeys) {
-      Ye();
+      noteEditedEmpty();
       onHistoryUp?.();
       return cursor;
     }
-    let c = ze();
+    let mapping = getDisplayMapping();
     if (
       onHistoryUp &&
-      (c
-        ? c.rowOf(cursor.offset) <= c.rowOf(text.length)
+      (mapping
+        ? mapping.rowOf(cursor.offset) <= mapping.rowOf(text.length)
         : cursor.getPosition().line <= cursor.measuredText.getPositionFromOffset(text.length).line)
     ) {
-      Ye();
+      noteEditedEmpty();
       onHistoryUp();
       return cursor;
     }
-    let O = we("up");
-    if (!O.equals(cursor)) return O;
+    let upCursor = moveCursor("up");
+    if (!upCursor.equals(cursor)) return upCursor;
     if (multiline) {
       let cursorUpLogical = cursor.upLogicalLine();
       if (!cursorUpLogical.equals(cursor)) return cursorUpLogical;
@@ -699,22 +718,22 @@ function useTextInput({
   }
   function downOrHistoryDown() {
     if (disableCursorMovementForUpDownKeys) {
-      Ye();
+      noteEditedEmpty();
       onHistoryDown?.();
       return cursor;
     }
-    let c = ze();
+    let downMapping = getDisplayMapping();
     if (
       onHistoryDown &&
-      (c
-        ? c.rowOf(cursor.offset) >= c.lastRow()
+      (downMapping
+        ? downMapping.rowOf(cursor.offset) >= downMapping.lastRow()
         : cursor.getPosition().line >= cursor.measuredText.lineCount - 1)
     ) {
-      Ye();
+      noteEditedEmpty();
       onHistoryDown();
       return cursor;
     }
-    let cursorDown = we("down");
+    let cursorDown = moveCursor("down");
     if (!cursorDown.equals(cursor)) return cursorDown;
     if (multiline) {
       let cursorDownLogical = cursor.downLogicalLine();
@@ -729,7 +748,7 @@ function useTextInput({
     if (key.key === "delete" && (key.meta || key.superKey)) return true;
     return false;
   }
-  function lr(input) {
+  function isYankKey(input) {
     return (input.ctrl || input.meta) && input.key === "y";
   }
   function isKillKey(key, input) {
@@ -739,22 +758,22 @@ function useTextInput({
         handleEscape();
         return cursor;
       case "left":
-        if (key.superKey) return we("startOfLine");
+        if (key.superKey) return moveCursor("startOfLine");
         if (key.ctrl || key.meta || key.fn) return cursor.backwardWord();
         if (onLeftArrowOnEmpty && !key.shift && cursor.text === text) {
           let now = Date.now();
           let decision = decideLeftArrowGesture(state, now, key.soloKeypress);
-          let me = state.armedAtMs === 0 ? undefined : now - state.absorbAnchorMs;
+          let msSinceArm = state.armedAtMs === 0 ? undefined : now - state.absorbAnchorMs;
           switch (
             (applyLeftArrowGesture(state, decision, now), logLeftArrowGesture(decision, now, state), decision)
           ) {
             case "fire":
-              removeNotification(Ue);
-              onLeftArrowOnEmpty(me);
+              removeNotification(leftArrowHintKey);
+              onLeftArrowOnEmpty(msSinceArm);
               return cursor;
             case "arm":
               addNotification({
-                key: Ue,
+                key: leftArrowHintKey,
                 kind: "feedback",
                 text: leftArrowConfirmHint ?? "Press \u2190 again",
                 priority: "immediate",
@@ -765,7 +784,7 @@ function useTextInput({
               return cursor;
             case "attach-arm":
               addNotification({
-                key: Ue,
+                key: leftArrowHintKey,
                 kind: "feedback",
                 text: LEFT_ARROW_DETACH_HINT,
                 priority: "immediate",
@@ -780,7 +799,7 @@ function useTextInput({
         }
         return cursor.left();
       case "right":
-        if (key.superKey) return we("endOfLine");
+        if (key.superKey) return moveCursor("endOfLine");
         if (key.ctrl || key.meta || key.fn) return cursor.forwardWord();
         return cursor.right();
       case "up":
@@ -790,8 +809,8 @@ function useTextInput({
         if (key.shift || key.ctrl || key.meta) return;
         return downOrHistoryDown();
       case "backspace":
-        if (key.superKey) return St();
-        if (key.meta || key.ctrl) return killToLineStart();
+        if (key.superKey) return killToLineStart();
+        if (key.meta || key.ctrl) return killToLineStart_2();
         return killToLineEnd();
       case "delete":
         if (key.superKey) return killToLineEnd_2();
@@ -799,22 +818,22 @@ function useTextInput({
         return cursor.del();
       case "home":
         if (key.ctrl) return;
-        return we("startOfLine");
+        return moveCursor("startOfLine");
       case "end":
         if (key.ctrl) return;
-        return we("endOfLine");
+        return moveCursor("endOfLine");
       case "pagedown":
         if (isFullscreen || key.ctrl) return;
-        return we("endOfLine");
+        return moveCursor("endOfLine");
       case "pageup":
         if (isFullscreen || key.ctrl) return;
-        return we("startOfLine");
+        return moveCursor("startOfLine");
       case "return":
         if (key.ctrl) return;
         return handleEnter(key);
       case "enter":
         return cursor.insert(
-          Oe(`
+          applyInputFilter(`
 `),
         );
       case "tab":
@@ -822,7 +841,7 @@ function useTextInput({
     }
     if (multiline && key.ctrl && !key.shift && !key.meta && key.name === "j")
       return cursor.insert(
-        Oe(`
+        applyInputFilter(`
 `),
       );
     if (key.ctrl) return handleCtrl(key.key);
@@ -835,20 +854,20 @@ function useTextInput({
       isBashModeChar(input) &&
       getInputMode() !== getModeFromInput(input)
     ) {
-      Ke = true;
+      insertedModeChar = true;
       return cursor.insert(input).left();
     }
     return cursor.insert(input);
   }
-  function cr(event) {
-    st = event;
-    Ke = false;
-    let O = inputFilter ? inputFilter(event.key, event) : event.key;
-    if (O === "" && event.key !== "") {
+  function handleKeyDown(event) {
+    currentEvent = event;
+    insertedModeChar = false;
+    let filteredKey = inputFilter ? inputFilter(event.key, event) : event.key;
+    if (filteredKey === "" && event.key !== "") {
       event.preventDefault();
       return;
     }
-    if (!mapKey(event) && !lr(event))
+    if (!mapKey(event) && !isYankKey(event))
       killRing.dispatch({
         type: "interrupt",
       });
@@ -860,78 +879,79 @@ function useTextInput({
       !event.superKey &&
       !event.shift
     ))
-      Et();
-    let L = isKillKey(event, O);
-    if (L === undefined) return;
+      disarmLeftArrowHint();
+    let nextCursor = isKillKey(event, filteredKey);
+    if (nextCursor === undefined) return;
     event.preventDefault();
-    if (!cursor.equals(L)) {
-      let ne = L.text.startsWith(text);
-      if (ne && L.offset < text.length) L = new Cursor(L.measuredText, text.length);
+    if (!cursor.equals(nextCursor)) {
+      let keepsPill = nextCursor.text.startsWith(text);
+      if (keepsPill && nextCursor.offset < text.length)
+        nextCursor = new Cursor(nextCursor.measuredText, text.length);
       let sliced = cursor.text.slice(text.length);
-      let Ae = ne ? L.text.slice(text.length) : L.text;
-      let qe = L.offset - (ne ? text.length : 0);
-      if (sliced !== "" && Ae === "") state.editedEmptyAtMs = Date.now();
-      if (sliced !== Ae)
-        if (commitEdit !== undefined && !Ke) commitEdit(() => onChange(Ae));
-        else onChange(Ae);
-      Ge(qe);
-      if (editRelay?.isRecording() === true && !Ke)
+      let nextText = keepsPill ? nextCursor.text.slice(text.length) : nextCursor.text;
+      let nextOffset = nextCursor.offset - (keepsPill ? text.length : 0);
+      if (sliced !== "" && nextText === "") state.editedEmptyAtMs = Date.now();
+      if (sliced !== nextText)
+        if (commitEdit !== undefined && !insertedModeChar) commitEdit(() => onChange(nextText));
+        else onChange(nextText);
+      setOffset(nextOffset);
+      if (editRelay?.isRecording() === true && !insertedModeChar)
         editRelay.record({
           before: {
             text: sliced,
             cursor: Math.max(0, cursor.offset - text.length),
           },
           after: {
-            text: Ae,
-            cursor: qe,
+            text: nextText,
+            cursor: nextOffset,
           },
           key: event,
         });
-      cursor = L;
-      if (!ne) {
+      cursor = nextCursor;
+      if (!keepsPill) {
         text = "";
         leadingPill?.onDelete();
       }
     }
-    if (nt) {
-      nt = false;
+    if (didSubmit) {
+      didSubmit = false;
       if (clearOnSubmit) cursor = Cursor.fromText(text, columns, text.length);
     }
   }
-  let Ce = ze();
-  let ve = Ce?.cursorOver(cursor) ?? cursor;
-  let cursorPos = ve.getPosition();
+  let mapping = getDisplayMapping();
+  let viewCursor = mapping?.cursorOver(cursor) ?? cursor;
+  let cursorPos = viewCursor.getPosition();
   return {
-    handleKeyDown: cr,
-    renderedValue: ve.render(
+    handleKeyDown,
+    renderedValue: viewCursor.render(
       cursorChar,
       mask,
       invert,
-      wt,
+      ghostText,
       maxVisibleLines,
       selectionAnchor === undefined || selectionAnchor === null
         ? undefined
-        : Ce
-          ? draftToDisplayOffset(Ce.text, text.length + selectionAnchor, "after")
+        : mapping
+          ? draftToDisplayOffset(mapping.text, text.length + selectionAnchor, "after")
           : text.length + selectionAnchor,
       selectionLinewise,
       preserveTrailingWhitespace,
-      Ce?.text.spans,
+      mapping?.text.spans,
       maskWhole,
     ),
-    offset: He,
-    setOffset: Ge,
-    cursorLine: cursorPos.line - ve.getViewportStartLine(maxVisibleLines),
+    offset,
+    setOffset,
+    cursorLine: cursorPos.line - viewCursor.getViewportStartLine(maxVisibleLines),
     cursorColumn: cursorPos.column,
-    renderedRowStartOffsets: ve.getRenderedRowStartOffsets(maxVisibleLines),
-    shown: Ce && {
-      text: Ce.text,
-      cursorOffset: ve.offset,
+    renderedRowStartOffsets: viewCursor.getRenderedRowStartOffsets(maxVisibleLines),
+    shown: mapping && {
+      text: mapping.text,
+      cursorOffset: viewCursor.offset,
     },
     noteKeystrokeEmptied: () => {
       state.editedEmptyAtMs = Date.now();
     },
-    disarmLeftArrowConfirm: Et,
+    disarmLeftArrowConfirm: disarmLeftArrowHint,
   };
 }
 export {

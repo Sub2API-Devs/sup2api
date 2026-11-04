@@ -5,8 +5,8 @@
  * pieces: chunk-kndsyy4v.js (9)
  * attribution: esm-layout 5, esm-fingerprint 4
  */
-import { C } from "./impl/parser.js";
-import { ee, applyEdit } from "./impl/edit.js";
+import { parseTree } from "./impl/parser.js";
+import { modify, applyEdit } from "./impl/edit.js";
 
 //@ chunk-kndsyy4v.js:15523-15530 esm-layout
 var ScanError;
@@ -43,7 +43,7 @@ var SyntaxKind;
   SyntaxKind[(SyntaxKind.EOF = 17)] = "EOF";
 })(SyntaxKind || (SyntaxKind = {}));
 //@ chunk-kndsyy4v.js:16523-16533 esm-layout
-var b8e = C;
+var parseJsonc = parseTree;
 //@ chunk-kndsyy4v.js:16533-16540 esm-layout
 var ParseErrorCode;
 //@ chunk-kndsyy4v.js:16540-17313 esm-fingerprint
@@ -66,8 +66,8 @@ var ParseErrorCode;
   ParseErrorCode[(ParseErrorCode.InvalidCharacter = 16)] = "InvalidCharacter";
 })(ParseErrorCode || (ParseErrorCode = {}));
 //@ chunk-kndsyy4v.js:17313-17354 esm-layout
-function KOn(text, s, r, options) {
-  return ee(text, s, r, options);
+function modifyJsonc(text, path, value, options) {
+  return modify(text, path, value, options);
 }
 //@ chunk-kndsyy4v.js:17354-17614 esm-fingerprint
 function applyEdits(text, edits) {
@@ -77,12 +77,12 @@ function applyEdits(text, edits) {
     return diff;
   });
   let lastModifiedOffset = text.length;
-  for (let i = sortedEdits.length - 1; i >= 0; i--) {
-    let e = sortedEdits[i];
+  for (let editIndex = sortedEdits.length - 1; editIndex >= 0; editIndex--) {
+    let e = sortedEdits[editIndex];
     if (e.offset + e.length <= lastModifiedOffset) text = applyEdit(text, e);
     else throw Error("Overlapping edit");
     lastModifiedOffset = e.offset;
   }
   return text;
 }
-export { b8e, KOn, applyEdits };
+export { parseJsonc, modifyJsonc, applyEdits };

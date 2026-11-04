@@ -8,11 +8,12 @@
  * pieces: chunk-18hwfzwa.js (7), chunk-r2w21sc3.js (1)
  * attribution: fingerprint 6, layout 2
  */
-import { w } from "../../vendor/react/compiler-runtime.js";
-import { y, fo, Qr } from "../../vendor/react/cjs/react.production.js";
-import { MEMO_CACHE_SENTINEL } from "../../runtime/bun-runtime.js";
+import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
+import { useIsScreenReaderEnabled } from "../ink/components/ErrorBoundary.js";
 import { jsxProd_default } from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
-import { Text, Box } from "../ink/components/Text.js";
+import { Box, Text } from "../ink/components/Text.js";
+import { useState, suspenseTypeExport, use } from "../../vendor/react/cjs/react.production.js";
+import { MEMO_CACHE_SENTINEL } from "../../runtime/bun-runtime.js";
 import { useTerminalSize } from "../hooks/useTerminalSize.js";
 import { useExitCleanup } from "./permissions/FolderAccessPermissionRequest.js";
 import { StructuredDiffList } from "./StructuredDiffList.js";
@@ -25,11 +26,48 @@ import { isSyscallError } from "../utils/errors.js";
 import { logForDebugging } from "../utils/debug.js";
 import { logError } from "../utils/log.js";
 import { markBrokenSequences, stripUnsafeChars } from "../utils/permissions/approvalPayloadSerialization.js";
-import { useIsScreenReaderEnabled } from "../ink/components/ErrorBoundary.js";
 
+//@ chunk-r2w21sc3.js:299-708 fingerprint = DiffFrame (0.74)
+/**
+ * diff 外框（虚线边框、subtle 色），被 Edit/Write/Notebook 等 20 处复用。
+ */
+function DiffFrame(props) {
+  let $ = useMemoCache(6);
+  let { children, paddingX, marginTop, marginBottom } = props;
+  let paddingX_2 = paddingX === undefined ? 1 : paddingX;
+  const borderStyle = useIsScreenReaderEnabled() ? undefined : "dashed";
+  let box;
+  if (
+    $[0] !== children ||
+    $[1] !== marginBottom ||
+    $[2] !== marginTop ||
+    $[3] !== paddingX_2 ||
+    $[4] !== borderStyle
+  ) {
+    box = jsxProd_default(Box, {
+      borderStyle,
+      borderColor: "subtle",
+      borderLeft: false,
+      borderRight: false,
+      flexDirection: "column",
+      overflow: "hidden",
+      paddingX: paddingX_2,
+      marginTop,
+      marginBottom,
+      children,
+    });
+    $[0] = children;
+    $[1] = marginBottom;
+    $[2] = marginTop;
+    $[3] = paddingX_2;
+    $[4] = borderStyle;
+    $[5] = box;
+  } else box = $[5];
+  return box;
+}
 //@ chunk-18hwfzwa.js:1364313-1364888 fingerprint = FileEditToolDiff (0.468)
 function FileEditToolDiff(props) {
-  let $ = w(9);
+  let $ = useMemoCache(9);
   let t0;
   if (
     $[0] !== props.edits ||
@@ -47,7 +85,7 @@ function FileEditToolDiff(props) {
     $[3] = props.skipLocalRead;
     $[4] = t0;
   } else t0 = $[4];
-  let [dataPromise] = y(t0);
+  let [dataPromise] = useState(t0);
   let fallback;
   if ($[5] === MEMO_CACHE_SENTINEL) {
     fallback = jsxProd_default(DiffFrame, {
@@ -61,7 +99,7 @@ function FileEditToolDiff(props) {
   } else fallback = $[5];
   let t2;
   if ($[6] !== dataPromise || $[7] !== props.file_path) {
-    t2 = jsxProd_default(fo, {
+    t2 = jsxProd_default(suspenseTypeExport, {
       fallback,
       children: jsxProd_default(DiffBody, {
         promise: dataPromise,
@@ -76,9 +114,9 @@ function FileEditToolDiff(props) {
 }
 //@ chunk-18hwfzwa.js:1364888-1365381 fingerprint = DiffBody (0.817)
 function DiffBody(props) {
-  let $ = w(6);
+  let $ = useMemoCache(6);
   let { promise, file_path } = props;
-  let { patch, firstLine, fileContent } = Qr(promise);
+  let { patch, firstLine, fileContent } = use(promise);
   let { columns } = useTerminalSize();
   useExitCleanup();
   let t1;
@@ -116,12 +154,12 @@ function DiffBody(props) {
   return t1;
 }
 //@ chunk-18hwfzwa.js:1365381-1366478 fingerprint = loadDiffData (0.882)
-async function loadDiffData(file_path, edits, fileContent, L) {
+async function loadDiffData(file_path, edits, fileContent, toolUseContext) {
   let valid = edits.filter((e) => e.old_string != null && e.new_string != null);
   let single = valid.length === 1 ? valid[0] : undefined;
   try {
     if (fileContent !== undefined) {
-      let edits = valid.map((He) => normalizeEdit(fileContent, He));
+      let edits = valid.map((edit) => normalizeEdit(fileContent, edit));
       return {
         patch: getPatchForDisplay({
           filePath: file_path,
@@ -132,25 +170,25 @@ async function loadDiffData(file_path, edits, fileContent, L) {
         fileContent,
       };
     }
-    if (L) return diffToolInputsOnly(file_path, valid);
+    if (toolUseContext) return diffToolInputsOnly(file_path, valid);
     let handle = await openForDiff(file_path);
     if (handle === null) return diffToolInputsOnly(file_path, valid);
     try {
       let ctx = await scanForContext(handle, single?.old_string ?? "", DIFF_CONTEXT_LINES);
       if (ctx.truncated) return diffToolInputsOnly(file_path, valid);
-      let He = valid;
+      let normalizedEdits = valid;
       if (ctx.content === "") {
         let file = await readCapped(handle);
         if (file === null || (single && findActualString(file, single.old_string) === null))
           return diffToolInputsOnly(file_path, valid);
-        He = valid.map((e) => normalizeEdit(file, e));
-        if (single && He[0].old_string !== single.old_string)
-          ctx = await scanForContext(handle, He[0].old_string, DIFF_CONTEXT_LINES);
+        normalizedEdits = valid.map((e) => normalizeEdit(file, e));
+        if (single && normalizedEdits[0].old_string !== single.old_string)
+          ctx = await scanForContext(handle, normalizedEdits[0].old_string, DIFF_CONTEXT_LINES);
         if (ctx.content === "") {
           let patchForDisplay = getPatchForDisplay({
             filePath: file_path,
             fileContents: file,
-            edits: He,
+            edits: normalizedEdits,
           });
           return patchForDisplay.length === 0
             ? diffToolInputsOnly(file_path, valid)
@@ -164,7 +202,7 @@ async function loadDiffData(file_path, edits, fileContent, L) {
       let hunks = getPatchForDisplay({
         filePath: file_path,
         fileContents: ctx.content,
-        edits: He,
+        edits: normalizedEdits,
       });
       return {
         patch: adjustHunkLineNumbers(hunks, ctx.lineOffset - 1),
@@ -198,14 +236,14 @@ function diffToolInputsOnly(filePath, edits) {
   };
 }
 //@ chunk-18hwfzwa.js:1366612-1366769 layout
-function mapDiffDataLines(h) {
+function mapDiffDataLines(data) {
   return {
-    patch: h.patch.map((x) => ({
-      ...x,
-      lines: x.lines.map(sanitizeDiffLine),
+    patch: data.patch.map((hunk) => ({
+      ...hunk,
+      lines: hunk.lines.map(sanitizeDiffLine),
     })),
-    firstLine: h.firstLine === null ? null : sanitizeDiffLine(h.firstLine),
-    fileContent: h.fileContent,
+    firstLine: data.firstLine === null ? null : sanitizeDiffLine(data.firstLine),
+    fileContent: data.fileContent,
   };
 }
 //@ chunk-18hwfzwa.js:1366769-1366802 layout
@@ -225,43 +263,5 @@ function normalizeEdit(fileContent, edit) {
     old_string: actualOld,
     new_string: actualNew,
   };
-}
-//@ chunk-r2w21sc3.js:299-708 fingerprint = DiffFrame (0.74)
-/**
- * diff 外框（虚线边框、subtle 色），被 Edit/Write/Notebook 等 20 处复用。
- */
-function DiffFrame(props) {
-  let $ = w(6);
-  let { children, paddingX, marginTop, marginBottom } = props;
-  let paddingX_2 = paddingX === undefined ? 1 : paddingX;
-  const borderStyle = useIsScreenReaderEnabled() ? undefined : "dashed";
-  let i;
-  if (
-    $[0] !== children ||
-    $[1] !== marginBottom ||
-    $[2] !== marginTop ||
-    $[3] !== paddingX_2 ||
-    $[4] !== borderStyle
-  ) {
-    i = jsxProd_default(Box, {
-      borderStyle,
-      borderColor: "subtle",
-      borderLeft: false,
-      borderRight: false,
-      flexDirection: "column",
-      overflow: "hidden",
-      paddingX: paddingX_2,
-      marginTop,
-      marginBottom,
-      children,
-    });
-    $[0] = children;
-    $[1] = marginBottom;
-    $[2] = marginTop;
-    $[3] = paddingX_2;
-    $[4] = borderStyle;
-    $[5] = i;
-  } else i = $[5];
-  return i;
 }
 export { DiffFrame, FileEditToolDiff };

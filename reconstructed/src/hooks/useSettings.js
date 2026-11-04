@@ -17,13 +17,13 @@ import { CLOUD_PLUGINS_FORWARDED_KEY } from "../utils/plugins/cloudPluginForward
  * 函数 useSettingsState（取 settings）；位于「读取当前设置（订阅 settings 变化）的 hook」模块。
  */
 function useSettingsState() {
-  return useAppState((t) => t.settings);
+  return useAppState((state) => state.settings);
 }
 //@ chunk-z4g2ta8k.js:36537-36667 fingerprint = useSettings (0.657)
 function useSettings(payload) {
-  let n = asPlainObject(asPlainObject(payload.request)?.settings);
-  if (n === undefined) return;
-  let { [CLOUD_PLUGINS_FORWARDED_KEY]: r, ...s } = n;
-  return Object.keys(s).length > 0 ? s : undefined;
+  let settings = asPlainObject(asPlainObject(payload.request)?.settings);
+  if (settings === undefined) return;
+  let { [CLOUD_PLUGINS_FORWARDED_KEY]: forwardedKey, ...userSettings } = settings;
+  return Object.keys(userSettings).length > 0 ? userSettings : undefined;
 }
 export { useSettingsState, useSettings };

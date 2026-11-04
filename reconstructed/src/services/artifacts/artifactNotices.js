@@ -27,6 +27,7 @@ import { getCommandQueue } from "../../utils/messageQueueManager.js";
 import { logFeatureSad, logFeatureOk, logFeatureBad } from "../analytics/featureTelemetry.js";
 import { ARTIFACT_SLUG_RE } from "../../tools/ArtifactTool/constants.js";
 import { readSummonStatus } from "./comments/commentReply.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-xf84t5b0.js:1236-1262 placement
 /**
@@ -36,132 +37,135 @@ var DEFAULT_SETTLE_MS = 15000;
 var MAX_SETTLE_MS = 60000;
 var MAX_NOTICE_DETAILS = 20;
 //@ chunk-xf84t5b0.js:1262-1356 placement
-function noticeForFamily(family, artifactName, count, o) {
+function noticeForFamily(family, artifactName, count, familyName) {
   return family === "auto-replied"
     ? autoRepliedNotice(artifactName, count)
     : family === "auto-edited"
       ? autoEditedNotice(artifactName, count)
-      : artifactChangedNotice(artifactName, count, o);
+      : artifactChangedNotice(artifactName, count, familyName);
 }
 //@ chunk-xf84t5b0.js:1356-2194 placement
-function coalesceArtifactNotices(e) {
+function coalesceArtifactNotices(family) {
   let noticeCoalesce = getLiveState().noticeCoalesce;
-  let t = noticeCoalesce.get(e);
-  if (t === undefined) return;
-  noticeCoalesce.delete(e);
-  if (t.timer !== undefined) clearTimeout(t.timer);
-  let o = noticeForFamily(t.family, t.artifactName, t.count, t.suppressedPrior > 0);
-  let i =
-    t.droppedDetails > 0
+  let entry = noticeCoalesce.get(family);
+  if (entry === undefined) return;
+  noticeCoalesce.delete(family);
+  if (entry.timer !== undefined) clearTimeout(entry.timer);
+  let line = noticeForFamily(entry.family, entry.artifactName, entry.count, entry.suppressedPrior > 0);
+  let count =
+    entry.droppedDetails > 0
       ? `
 
-(${t.droppedDetails} earlier ${t.droppedDetails === 1 ? "notice" : "notices"} in this burst omitted \u2014 newest ${MAX_NOTICE_DETAILS} kept.)`
+(${entry.droppedDetails} earlier ${entry.droppedDetails === 1 ? "notice" : "notices"} in this burst omitted \u2014 newest ${MAX_NOTICE_DETAILS} kept.)`
       : "";
-  t.queue.enqueuePendingNotification({
+  entry.queue.enqueuePendingNotification({
     uuid:
-      t.family === "artifact-changed"
+      entry.family === "artifact-changed"
         ? randomUUID()
-        : newLaneNoticeId(undefined, t.ownGestureEpoch === getLiveState().accountEpoch ? t.slug : undefined),
+        : newLaneNoticeId(
+            undefined,
+            entry.ownGestureEpoch === getLiveState().accountEpoch ? entry.slug : undefined,
+          ),
     value: formatTaskNotification({
-      taskType: t.family === "artifact-changed" ? ARTIFACT_CHANGED : "artifact-auto-react",
-      summary: escapeXml(o),
+      taskType: entry.family === "artifact-changed" ? ARTIFACT_CHANGED : "artifact-auto-react",
+      summary: escapeXml(line),
       body: `
 ${escapeXml(
-  t.details.join(`
+  entry.details.join(`
 
-`) + i,
+`) + count,
 )}`,
     }),
     mode: "task-notification",
     origin: {
       kind: "task-notification",
-      source: t.family === "artifact-changed" ? "artifact-changed" : "artifact-auto-react",
-      slug: t.slug,
-      displayName: t.artifactName,
+      source: entry.family === "artifact-changed" ? "artifact-changed" : "artifact-auto-react",
+      slug: entry.slug,
+      displayName: entry.artifactName,
       coalesced: {
-        family: t.family,
-        count: t.count,
+        family: entry.family,
+        count: entry.count,
       },
     },
     agentId: mainAgentId(),
   });
 }
 //@ chunk-xf84t5b0.js:2194-3097 placement
-function enqueueArtifactChanged(e) {
-  let { queue, slug, family, artifactName, detail, mergeDetails } = e;
-  let h = (e.now ?? Date.now)();
-  let settleMs = e.settle?.settleMs ?? DEFAULT_SETTLE_MS;
-  let maxSettleMs = e.settle?.maxSettleMs ?? MAX_SETTLE_MS;
+function enqueueArtifactChanged(notice) {
+  let { queue, slug, family, artifactName, detail, mergeDetails } = notice;
+  let now = (notice.now ?? Date.now)();
+  let settleMs = notice.settle?.settleMs ?? DEFAULT_SETTLE_MS;
+  let maxSettleMs = notice.settle?.maxSettleMs ?? MAX_SETTLE_MS;
   let noticeCoalesce = getLiveState().noticeCoalesce;
-  let S = `${family}
+  let key = `${family}
 ${slug}`;
   let accountEpoch = getLiveState().accountEpoch;
-  let d = noticeCoalesce.get(S);
-  if (d === undefined) {
-    d = {
+  let entry = noticeCoalesce.get(key);
+  if (entry === undefined) {
+    entry = {
       slug,
       family,
       artifactName,
       mergeDetails,
       count: 0,
       threadIds: new Set(),
-      firstAt: h,
+      firstAt: now,
       details: [],
       droppedDetails: 0,
       suppressedPrior: 0,
-      ownGestureEpoch: e.ownGesture ? accountEpoch : undefined,
+      ownGestureEpoch: notice.ownGesture ? accountEpoch : undefined,
       queue,
       timer: undefined,
     };
-    noticeCoalesce.set(S, d);
-  } else if (!e.ownGesture || d.ownGestureEpoch !== accountEpoch) d.ownGestureEpoch = undefined;
-  d.artifactName = artifactName;
-  d.queue = queue;
-  if (e.threadId !== undefined) d.threadIds.add(e.threadId);
-  d.count = d.threadIds.size > 0 ? d.threadIds.size : d.count + 1;
-  if (d.mergeDetails === "latest") d.details = [detail];
+    noticeCoalesce.set(key, entry);
+  } else if (!notice.ownGesture || entry.ownGestureEpoch !== accountEpoch) entry.ownGestureEpoch = undefined;
+  entry.artifactName = artifactName;
+  entry.queue = queue;
+  if (notice.threadId !== undefined) entry.threadIds.add(notice.threadId);
+  entry.count = entry.threadIds.size > 0 ? entry.threadIds.size : entry.count + 1;
+  if (entry.mergeDetails === "latest") entry.details = [detail];
   else {
-    d.details.push(detail);
-    if (d.details.length > MAX_NOTICE_DETAILS) {
-      d.details.shift();
-      d.droppedDetails++;
+    entry.details.push(detail);
+    if (entry.details.length > MAX_NOTICE_DETAILS) {
+      entry.details.shift();
+      entry.droppedDetails++;
     }
   }
-  if (d.timer !== undefined) clearTimeout(d.timer);
-  let E = d.firstAt + maxSettleMs;
-  let max = Math.max(0, Math.min(settleMs, E - h));
-  let timer = setTimeout(coalesceArtifactNotices, max, S);
+  if (entry.timer !== undefined) clearTimeout(entry.timer);
+  let settleAt = entry.firstAt + maxSettleMs;
+  let max = Math.max(0, Math.min(settleMs, settleAt - now));
+  let timer = setTimeout(coalesceArtifactNotices, max, key);
   timer.unref?.();
-  d.timer = timer;
+  entry.timer = timer;
 }
 //@ chunk-xf84t5b0.js:3097-3380 placement
 /**
  * 取出并清除合并中的 Artifact 通知（可只取某个 slug；artifact-changed 类除外），取消其定时器，返回 {slug, family, artifactName, count} 列表。
  */
-function flushCoalescedNotices(e) {
+function flushCoalescedNotices(slug) {
   let noticeCoalesce = getLiveState().noticeCoalesce;
-  let t = [];
-  for (let [o, i] of noticeCoalesce) {
-    if (e !== undefined && i.slug !== e) continue;
-    if (i.family === "artifact-changed") continue;
-    if (i.timer !== undefined) clearTimeout(i.timer);
-    noticeCoalesce.delete(o);
-    t.push({
-      slug: i.slug,
-      family: i.family,
-      artifactName: i.artifactName,
-      count: i.count,
+  let out = [];
+  for (let [key, entry] of noticeCoalesce) {
+    if (slug !== undefined && entry.slug !== slug) continue;
+    if (entry.family === "artifact-changed") continue;
+    if (entry.timer !== undefined) clearTimeout(entry.timer);
+    noticeCoalesce.delete(key);
+    out.push({
+      slug: entry.slug,
+      family: entry.family,
+      artifactName: entry.artifactName,
+      count: entry.count,
     });
   }
-  return t;
+  return out;
 }
 //@ chunk-xf84t5b0.js:3380-3499 placement
 /**
  * 判断某个 slug 是否还有合并中的（非 artifact-changed）通知。
  */
-function hasPendingNotice(e) {
-  for (let n of getLiveState().noticeCoalesce.values())
-    if (n.slug === e && n.family !== "artifact-changed") return true;
+function hasPendingNotice(family) {
+  for (let notice of getLiveState().noticeCoalesce.values())
+    if (notice.slug === family && notice.family !== "artifact-changed") return true;
   return false;
 }
 //@ chunk-xf84t5b0.js:3499-3515 placement
@@ -187,8 +191,8 @@ var MAX_REALTIME_TOKEN_ATTEMPTS = 3;
 /**
  * 用新取得的实时连接令牌建立状态：令牌、版本、账号纪元、按传输方式计算的过期时间，以及打开/失败拨号/探测标志。
  */
-function createLiveTokenState(e) {
-  let { transport, token, ver, accountEpoch, expUnixSeconds, receivedAtMs } = e;
+function createLiveTokenState(lease) {
+  let { transport, token, ver, accountEpoch, expUnixSeconds, receivedAtMs } = lease;
   return {
     transport,
     token,
@@ -204,31 +208,31 @@ function createLiveTokenState(e) {
 /**
  * 用新令牌刷新状态：更新令牌与过期时间，重置探测标志与失败拨号计数。
  */
-function refreshLiveTokenState(e, n) {
-  e.token = n.token;
-  e.expMs = computeTokenExpiry(e.transport, n.expUnixSeconds, n.receivedAtMs);
-  e.probed = false;
-  e.failedDials = 0;
+function refreshLiveTokenState(state, refresh) {
+  state.token = refresh.token;
+  state.expMs = computeTokenExpiry(state.transport, refresh.expUnixSeconds, refresh.receivedAtMs);
+  state.probed = false;
+  state.failedDials = 0;
 }
 //@ chunk-xf84t5b0.js:3895-4032 placement
 function computeTokenExpiry(transport, expUnixSeconds, receivedAtMs) {
-  let o = transport === "sync" ? 900000 : 3600000;
-  let i = transport === "sync" ? 300000 : 1800000;
-  let r = expUnixSeconds === undefined ? o : expUnixSeconds * 1000 - receivedAtMs;
-  return receivedAtMs + Math.min(o, Math.max(i, r));
+  let syncTtl = transport === "sync" ? 900000 : 3600000;
+  let liveTtl = transport === "sync" ? 300000 : 1800000;
+  let expiresInMs = expUnixSeconds === undefined ? syncTtl : expUnixSeconds * 1000 - receivedAtMs;
+  return receivedAtMs + Math.min(syncTtl, Math.max(liveTtl, expiresInMs));
 }
 //@ chunk-xf84t5b0.js:4032-4161 placement
 /**
  * 一次拨号后决定是否继续用当前令牌：已过期或被拒为否；健康则清零失败计数为是；否则累加失败，未满 3 次为是。
  */
-function shouldRetryDial(e, n) {
-  if (n.expired || n.refused) return false;
-  if (n.healthy) {
-    e.failedDials = 0;
+function shouldRetryDial(lease, options) {
+  if (options.expired || options.refused) return false;
+  if (options.healthy) {
+    lease.failedDials = 0;
     return true;
   }
-  e.failedDials++;
-  return e.failedDials < 3;
+  lease.failedDials++;
+  return lease.failedDials < 3;
 }
 //@ chunk-xf84t5b0.js:4161-4183 placement
 var TOKEN_HANDSHAKE_GRACE_MS = 60000;
@@ -237,31 +241,31 @@ var SYNC_TOKEN_DECAY_MS = 60000;
 /**
  * 判断实时令牌还能用：账号纪元一致，且距过期至少还有握手+最短运行时间（sync 传输用固定余量）。
  */
-function isLiveTokenFresh(lease, rewatchTiming, accountEpoch, o = Date.now()) {
-  let i =
+function isLiveTokenFresh(lease, rewatchTiming, accountEpoch, nowMs = Date.now()) {
+  let elapsed =
     lease.transport === "sync"
       ? SYNC_TOKEN_DECAY_MS
       : rewatchTiming.handshakeDeadlineMs + rewatchTiming.minUptimeMs + TOKEN_HANDSHAKE_GRACE_MS;
-  return lease.accountEpoch === accountEpoch && lease.expMs - o >= i;
+  return lease.accountEpoch === accountEpoch && lease.expMs - nowMs >= elapsed;
 }
 //@ chunk-xf84t5b0.js:4325-4665 placement
 /**
  * 计算实时连接重连等待时间：卡住时取短/长停顿区间随机值；租约模式且需要打散时在打散区间随机；否则指数退避（封顶）并加 ±25%/50% 抖动。
  */
-function computeReconnectDelay(e) {
-  let { timing, consecutiveFailures, leaseMode, spread, stalled } = e;
-  if (stalled) return randomStallDelay(timing, e.longStall === true ? "long" : "short");
+function computeReconnectDelay(timing) {
+  let { timing: timing_2, consecutiveFailures, leaseMode, spread, stalled } = timing;
+  if (stalled) return randomStallDelay(timing_2, timing.longStall === true ? "long" : "short");
   if (leaseMode && spread)
-    return Math.round(timing.spreadMinMs + Math.random() * (timing.spreadMaxMs - timing.spreadMinMs));
-  let min = Math.min(timing.capMs, timing.baseMs * 2 ** Math.min(consecutiveFailures, 5));
-  let a = leaseMode ? 0.5 : 0.25;
-  return Math.max(0, Math.round(min * (1 - a + Math.random() * 2 * a)));
+    return Math.round(timing_2.spreadMinMs + Math.random() * (timing_2.spreadMaxMs - timing_2.spreadMinMs));
+  let min = Math.min(timing_2.capMs, timing_2.baseMs * 2 ** Math.min(consecutiveFailures, 5));
+  let jitter = leaseMode ? 0.5 : 0.25;
+  return Math.max(0, Math.round(min * (1 - jitter + Math.random() * 2 * jitter)));
 }
 //@ chunk-xf84t5b0.js:4665-4821 placement
-function randomStallDelay(timing, n = "short") {
-  let t = n === "long" ? timing.longStallMinMs : timing.stallMinMs;
-  let o = n === "long" ? timing.longStallMaxMs : timing.stallMaxMs;
-  return Math.round(t + Math.random() * (o - t));
+function randomStallDelay(timing, kind = "short") {
+  let minMs = kind === "long" ? timing.longStallMinMs : timing.stallMinMs;
+  let maxMs = kind === "long" ? timing.longStallMaxMs : timing.stallMaxMs;
+  return Math.round(minMs + Math.random() * (maxMs - minMs));
 }
 //@ chunk-xf84t5b0.js:4821-4887 placement
 /**
@@ -271,12 +275,17 @@ function seedJitter(rewatchTiming) {
   return Math.round(Math.random() * rewatchTiming.seedDeferMaxMs);
 }
 //@ chunk-xf84t5b0.js:4941-4989 placement
-var SUMMON_HANDOFF_TTL_MS = 3600000;
-var MAX_SUMMON_HANDOFFS = 64;
-var MAX_SAFE_INTEGER = Number.MAX_SAFE_INTEGER;
+var SUMMON_HANDOFF_TTL_MS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var MAX_SUMMON_HANDOFFS;
+var MAX_SAFE_INTEGER;
+deferInit("chunk-xf84t5b0.js:4941", () => {
+  SUMMON_HANDOFF_TTL_MS = 3600000;
+  MAX_SUMMON_HANDOFFS = 64;
+  MAX_SAFE_INTEGER = Number.MAX_SAFE_INTEGER;
+});
 //@ chunk-xf84t5b0.js:4989-5080 placement
-function summonSidForSlug(sessionId, slug, storageV5) {
-  return createHmac("sha256", getOrCreateSummonSidKey(storageV5))
+function summonSidForSlug(sessionId, slug, globalConfig) {
+  return createHmac("sha256", getOrCreateSummonSidKey(globalConfig))
     .update(sessionId + slug, "utf8")
     .digest("hex")
     .slice(0, 16);
@@ -284,76 +293,81 @@ function summonSidForSlug(sessionId, slug, storageV5) {
 //@ chunk-xf84t5b0.js:5080-5154 placement
 var ISO_TIMESTAMP_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$/;
 //@ chunk-xf84t5b0.js:5154-5415 placement
-function isValidUtcTimestampParts(e) {
-  let n = Number(e.slice(0, 4));
-  let t = Number(e.slice(5, 7));
-  let o = Number(e.slice(8, 10));
-  let i = Number(e.slice(11, 13));
-  let r = Number(e.slice(14, 16));
-  let s = Number(e.slice(17, 19));
-  if (t < 1 || t > 12 || o < 1 || i > 23 || r > 59 || s > 59) return false;
-  return new Date(Date.UTC(n, t - 1, o)).getUTCDate() === o;
+function isValidUtcTimestampParts(text) {
+  let year = Number(text.slice(0, 4));
+  let month = Number(text.slice(5, 7));
+  let day = Number(text.slice(8, 10));
+  let hour = Number(text.slice(11, 13));
+  let minute = Number(text.slice(14, 16));
+  let second = Number(text.slice(17, 19));
+  if (month < 1 || month > 12 || day < 1 || hour > 23 || minute > 59 || second > 59) return false;
+  return new Date(Date.UTC(year, month - 1, day)).getUTCDate() === day;
 }
 //@ chunk-xf84t5b0.js:5415-5561 placement
 /**
  * 从字符串列表里挑出格式合法、日期有效的最晚时间戳（返回原字符串）。
  */
-function latestValidTimestamp(e) {
-  let n;
-  let t = -1 / 0;
-  for (let o of e) {
-    if (o == null || !TIMESTAMP_TEXT_RE.test(o) || !ISO_TIMESTAMP_RE.test(o) || !isValidUtcTimestampParts(o))
+function latestValidTimestamp(stamps) {
+  let latest;
+  let latestAt = -1 / 0;
+  for (let stamp of stamps) {
+    if (
+      stamp == null ||
+      !TIMESTAMP_TEXT_RE.test(stamp) ||
+      !ISO_TIMESTAMP_RE.test(stamp) ||
+      !isValidUtcTimestampParts(stamp)
+    )
       continue;
-    let timestamp = parseTimestamp(o);
-    if (timestamp !== null && timestamp > t) {
-      t = timestamp;
-      n = o;
+    let timestamp = parseTimestamp(stamp);
+    if (timestamp !== null && timestamp > latestAt) {
+      latestAt = timestamp;
+      latest = stamp;
     }
   }
-  return n;
+  return latest;
 }
 //@ chunk-xf84t5b0.js:5561-5852 placement
 /**
  * 登记一个评论召唤的交接项（生成 uuid）；超过上限时淘汰最早的、且不在当前队列里的交接项并打点。返回 uuid。
  */
-function registerSummonHandOff(e) {
+function registerSummonHandOff(summon) {
   let { handOffs } = getLiveState().summonStatus;
-  let t = randomUUID();
-  handOffs.set(t, {
-    ...e,
+  let id = randomUUID();
+  handOffs.set(id, {
+    ...summon,
   });
   if (handOffs.size > MAX_SUMMON_HANDOFFS) {
-    let o = new Set(getCommandQueue().map((r) => r.uuid));
-    let i;
+    let queued = new Set(getCommandQueue().map((command) => command.uuid));
+    let handOff;
     for (let key of handOffs.keys())
-      if (key !== t && !o.has(key)) {
-        i = key;
+      if (key !== id && !queued.has(key)) {
+        handOff = key;
         break;
       }
-    i ??= handOffs.keys().next().value;
-    if (i !== undefined) {
-      handOffs.delete(i);
+    handOff ??= handOffs.keys().next().value;
+    if (handOff !== undefined) {
+      handOffs.delete(handOff);
       logFeatureSad("artifact_comments_autoreact", "handoff_evicted");
     }
   }
-  return t;
+  return id;
 }
 //@ chunk-xf84t5b0.js:5852-6139 placement
 /**
  * 对给定消息里仍挂着的召唤交接项发出 declined(auto_reply_off) 状态并移除，打点是否成功上报。
  */
-function declineSweptHandOffs(e) {
+function declineSweptHandOffs(commands) {
   let { handOffs } = getLiveState().summonStatus;
-  for (let t of e) {
-    if (t.uuid === undefined) continue;
-    let o = handOffs.get(t.uuid);
-    if (o === undefined) continue;
-    handOffs.delete(t.uuid);
-    let i = emitArtifactSummonStatus(o, {
+  for (let command of commands) {
+    if (command.uuid === undefined) continue;
+    let handOff = handOffs.get(command.uuid);
+    if (handOff === undefined) continue;
+    handOffs.delete(command.uuid);
+    let emitted = emitArtifactSummonStatus(handOff, {
       status: "declined",
       reason: "auto_reply_off",
     });
-    logFeatureSad("artifact_comments_autoreact", i ? "handoff_swept" : "handoff_swept_unreported");
+    logFeatureSad("artifact_comments_autoreact", emitted ? "handoff_swept" : "handoff_swept_unreported");
   }
 }
 //@ chunk-xf84t5b0.js:6139-6301 placement
@@ -363,8 +377,8 @@ function declineSweptHandOffs(e) {
 function dropStaleHandOffs(slug) {
   let { handOffs } = getLiveState().summonStatus;
   if (handOffs.size === 0) return;
-  let t = new Set(getCommandQueue().map((o) => o.uuid));
-  for (let [o, i] of handOffs) if (i.slug === slug && !t.has(o)) handOffs.delete(o);
+  let queued = new Set(getCommandQueue().map((command) => command.uuid));
+  for (let [key, handOff] of handOffs) if (handOff.slug === slug && !queued.has(key)) handOffs.delete(key);
 }
 //@ chunk-xf84t5b0.js:6301-6415 placement
 /**
@@ -372,47 +386,48 @@ function dropStaleHandOffs(slug) {
  */
 function dropQueuedWakes(slug, threadId) {
   let { queuedWakes } = getLiveState().summonStatus;
-  for (let [o, i] of queuedWakes) if (i.slug === slug && i.threadId === threadId) queuedWakes.delete(o);
+  for (let [wakeSlug, wake] of queuedWakes)
+    if (wake.slug === slug && wake.threadId === threadId) queuedWakes.delete(wakeSlug);
 }
 //@ chunk-xf84t5b0.js:6415-7647 placement
-function emitArtifactSummonStatus(e, n) {
-  let { slug, threadId, gestureAt, suppressed } = e;
+function emitArtifactSummonStatus(status, options) {
+  let { slug, threadId, gestureAt, suppressed } = status;
   if (suppressed) return false;
   let summonStatus = getLiveState().summonStatus;
   if (summonStatus.routeAbsentSince !== null) {
     if (Date.now() - summonStatus.routeAbsentSince < SUMMON_HANDOFF_TTL_MS) return false;
     summonStatus.routeAbsentSince = null;
   }
-  let a = summonStatus.sidBySlug.get(slug);
-  if (a === undefined) {
-    a = summonSidForSlug(getSessionId(), slug, e.storageV5);
-    summonStatus.sidBySlug.set(slug, a);
+  let sid = summonStatus.sidBySlug.get(slug);
+  if (sid === undefined) {
+    sid = summonSidForSlug(getSessionId(), slug, status.storageV5);
+    summonStatus.sidBySlug.set(slug, sid);
   }
-  let reason = n.reason;
-  let max = Math.max(summonStatus.seqBySid.get(a) ?? 0, Math.floor(Date.now() / 1000) * 1000);
+  let reason = options.reason;
+  let max = Math.max(summonStatus.seqBySid.get(sid) ?? 0, Math.floor(Date.now() / 1000) * 1000);
   if (max > MAX_SAFE_INTEGER) return false;
-  summonStatus.seqBySid.set(a, max + 1);
-  let u = e.coversReplyId !== undefined && !ARTIFACT_SLUG_RE.test(e.coversReplyId);
-  let y = {
-    status: n.status,
+  summonStatus.seqBySid.set(sid, max + 1);
+  let coversReply = status.coversReplyId !== undefined && !ARTIFACT_SLUG_RE.test(status.coversReplyId);
+  let payload = {
+    status: options.status,
     ...(reason !== undefined && {
       reason,
     }),
-    ...(e.coversReplyId !== undefined &&
-      !u && {
-        covers_reply_id: e.coversReplyId,
+    ...(status.coversReplyId !== undefined &&
+      !coversReply && {
+        covers_reply_id: status.coversReplyId,
       }),
     ...(gestureAt !== undefined && {
       gesture_at: gestureAt,
     }),
-    sid: a,
+    sid,
     seq: max,
   };
-  readSummonStatus(slug, threadId, y).then(
+  readSummonStatus(slug, threadId, payload).then(
     (summonStatus_2) => {
       switch (summonStatus_2.kind) {
         case "accepted":
-          if (u) logFeatureSad("artifact_summon_status_emit", "covers_id_rejected");
+          if (coversReply) logFeatureSad("artifact_summon_status_emit", "covers_id_rejected");
           else logFeatureOk("artifact_summon_status_emit");
           return;
         case "route_absent":

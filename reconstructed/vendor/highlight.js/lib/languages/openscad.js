@@ -5,10 +5,10 @@
  * pieces: chunk-egr0twnb.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:326893-328178 cjs-fingerprint
-var require_openscad = x(function (cjsExports, cjsModule) {
+var require_openscad = __commonJS(function (cjsExports, cjsModule) {
   function openscad(hljs) {
     let SPECIAL_VARS = {
       className: "keyword",

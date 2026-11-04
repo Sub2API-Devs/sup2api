@@ -49,8 +49,8 @@ function originPathOf(url) {
 /**
  * 按登录状态（输入网关 URL / 信任指纹 / 确认账号）给出提示框的标题、展示值、说明与确认/取消按钮文字。
  */
-function describeSignInPrompt(e, target) {
-  switch (e.state) {
+function describeSignInPrompt(state, target) {
+  switch (state.state) {
     case "url_input":
       return {
         shown: originPathOf(target.url),
@@ -61,12 +61,12 @@ function describeSignInPrompt(e, target) {
       };
     case "trust_prompt":
       return {
-        shown: e.fingerprint,
+        shown: state.fingerprint,
         shownLabel: FINGERPRINT_LABEL,
-        title: `Trust gateway ${e.hostname}?`,
+        title: `Trust gateway ${state.hostname}?`,
         detail: [
-          e.previouslyPinned ? CERT_ROTATED_MESSAGE : FIRST_TRUST_MESSAGE,
-          ...(e.route ? [`Connecting ${e.route}`] : []),
+          state.previouslyPinned ? CERT_ROTATED_MESSAGE : FIRST_TRUST_MESSAGE,
+          ...(state.route ? [`Connecting ${state.route}`] : []),
         ].join(`
 
 `),
@@ -75,7 +75,7 @@ function describeSignInPrompt(e, target) {
       };
     case "confirm_account":
       return {
-        shown: e.email,
+        shown: state.email,
         shownLabel: "Account:",
         title: "Signed in to Cloud gateway",
         detail: PIN_MISMATCH_MESSAGE,
@@ -87,25 +87,25 @@ function describeSignInPrompt(e, target) {
   }
 }
 //@ chunk-gy23bf9p.js:4416-4467 placement
-function validBrowserUrlHref(e) {
-  return isValidBrowserUrl(e) ? new URL(e).href : undefined;
+function validBrowserUrlHref(url) {
+  return isValidBrowserUrl(url) ? new URL(url).href : undefined;
 }
 //@ chunk-gy23bf9p.js:4467-4750 placement
-function serializeSignInState(e, n) {
+function serializeSignInState(state, described) {
   return jsonStringify({
     version: SIGN_IN_STATE_VERSION,
-    state: e.state,
-    ...n,
-    ...(e.state === "polling" && {
+    state: state.state,
+    ...described,
+    ...(state.state === "polling" && {
       detail: TRUST_DECLINE_LABEL,
-      userCode: cleanForDisplay(e.userCode),
+      userCode: cleanForDisplay(state.userCode),
       verificationUriLabel: TRUST_REJECTED_MESSAGE,
-      verificationUri: validBrowserUrlHref(e.verificationUri),
-      browserUrl: validBrowserUrlHref(e.browserUrl),
+      verificationUri: validBrowserUrlHref(state.verificationUri),
+      browserUrl: validBrowserUrlHref(state.browserUrl),
     }),
-    ...(e.state === "error" && {
-      message: cleanForDisplay(e.message),
-      detail: e.detail && cleanForDisplay(e.detail),
+    ...(state.state === "error" && {
+      message: cleanForDisplay(state.message),
+      detail: state.detail && cleanForDisplay(state.detail),
     }),
   });
 }
@@ -135,13 +135,11 @@ class CloudGatewaySignInFlow {
     this.signIn = new GatewayLoginFlow(credentials, () => {});
   }
   report() {
-    let snapshot = this.signIn.status.getSnapshot();
-    if (snapshot.state !== "cancelled")
-      this.lastWrite = this.write(
-        serializeSignInState(snapshot, describeSignInPrompt(snapshot, this.target)),
-      );
-    if (snapshot.state === "done" || snapshot.state === "error" || snapshot.state === "cancelled")
-      this.ended.resolve(snapshot.state === "done");
+    let state = this.signIn.status.getSnapshot();
+    if (state.state !== "cancelled")
+      this.lastWrite = this.write(serializeSignInState(state, describeSignInPrompt(state, this.target)));
+    if (state.state === "done" || state.state === "error" || state.state === "cancelled")
+      this.ended.resolve(state.state === "done");
   }
   cancel() {
     let { state } = this.signIn.status.getSnapshot();
@@ -149,18 +147,18 @@ class CloudGatewaySignInFlow {
   }
   async readAnswers(input) {
     try {
-      for await (let n of createInterface({
+      for await (let line of createInterface({
         input,
       })) {
-        let snapshot = this.signIn.status.getSnapshot();
-        let i = signInStateSchema().safeParse(safeParseJSON(n, false));
+        let state = this.signIn.status.getSnapshot();
+        let parsed = signInStateSchema().safeParse(safeParseJSON(line, false));
         if (
-          !i.success ||
-          i.data.state !== snapshot.state ||
-          i.data.shown !== describeSignInPrompt(snapshot, this.target)?.shown
+          !parsed.success ||
+          parsed.data.state !== state.state ||
+          parsed.data.shown !== describeSignInPrompt(state, this.target)?.shown
         )
           return;
-        switch (snapshot.state) {
+        switch (state.state) {
           case "url_input":
             this.signIn.connect(this.target);
             break;
@@ -181,14 +179,14 @@ class CloudGatewaySignInFlow {
       this.cancel();
     }
   }
-  async run(e, n) {
+  async run(input, signal) {
     this.signIn.status.subscribe(() => this.report());
     this.report();
-    n.addEventListener("abort", () => this.cancel(), {
+    signal.addEventListener("abort", () => this.cancel(), {
       once: true,
     });
-    if (n.aborted) this.cancel();
-    this.readAnswers(e);
+    if (signal.aborted) this.cancel();
+    this.readAnswers(input);
     let promise = await this.ended.promise;
     await Promise.all([this.lastWrite, this.signIn.revoking]);
     return promise;
@@ -212,3 +210,4 @@ async function runCloudGatewaySignIn({ gateway, stdin, write, signal, credential
     credentials,
   ).run(stdin, signal);
 }
+export { runCloudGatewaySignIn };

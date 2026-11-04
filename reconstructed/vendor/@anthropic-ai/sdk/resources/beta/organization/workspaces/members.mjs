@@ -6,7 +6,7 @@
  * attribution: esm-fingerprint 1
  */
 import { APIResource } from "../../../../core/resource.mjs";
-import { I } from "../../../../internal/utils/path.mjs";
+import { parseUrl_2 } from "../../../../internal/utils/path.mjs";
 import { Page } from "../../../../core/pagination.mjs";
 
 //@ chunk-hwmsct5x.js:126331-126969 esm-fingerprint
@@ -14,25 +14,32 @@ class Members extends APIResource {
   retrieve(userID, params, options) {
     let { workspace_id } = params;
     return this._client.get(
-      I`/v1/organizations/workspaces/${workspace_id}/members/${userID}?beta=true`,
+      parseUrl_2`/v1/organizations/workspaces/${workspace_id}/members/${userID}?beta=true`,
       options,
     );
   }
   update(userID, params, options) {
     let { workspace_id, ...body } = params;
-    return this._client.post(I`/v1/organizations/workspaces/${workspace_id}/members/${userID}?beta=true`, {
-      body,
-      ...options,
-    });
+    return this._client.post(
+      parseUrl_2`/v1/organizations/workspaces/${workspace_id}/members/${userID}?beta=true`,
+      {
+        body,
+        ...options,
+      },
+    );
   }
   list(workspaceID, query = {}, options) {
-    return this._client.getAPIList(I`/v1/organizations/workspaces/${workspaceID}/members?beta=true`, Page, {
-      query,
-      ...options,
-    });
+    return this._client.getAPIList(
+      parseUrl_2`/v1/organizations/workspaces/${workspaceID}/members?beta=true`,
+      Page,
+      {
+        query,
+        ...options,
+      },
+    );
   }
   add(workspaceID, body, options) {
-    return this._client.post(I`/v1/organizations/workspaces/${workspaceID}/members?beta=true`, {
+    return this._client.post(parseUrl_2`/v1/organizations/workspaces/${workspaceID}/members?beta=true`, {
       body,
       ...options,
     });
@@ -40,7 +47,7 @@ class Members extends APIResource {
   remove(userID, params, options) {
     let { workspace_id } = params;
     return this._client.delete(
-      I`/v1/organizations/workspaces/${workspace_id}/members/${userID}?beta=true`,
+      parseUrl_2`/v1/organizations/workspaces/${workspace_id}/members/${userID}?beta=true`,
       options,
     );
   }

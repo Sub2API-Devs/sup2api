@@ -15,18 +15,18 @@
  */
 class RecentItemsCache {
   #e = new Map();
-  remember(i) {
-    for (let e of i) {
-      this.#e.delete(e.id);
-      this.#e.set(e.id, e);
+  remember(items) {
+    for (let item of items) {
+      this.#e.delete(item.id);
+      this.#e.set(item.id, item);
     }
     for (let key of this.#e.keys()) {
       if (this.#e.size <= 512) break;
       this.#e.delete(key);
     }
   }
-  get(i) {
-    return this.#e.get(i);
+  get(id) {
+    return this.#e.get(id);
   }
   clear() {
     this.#e.clear();

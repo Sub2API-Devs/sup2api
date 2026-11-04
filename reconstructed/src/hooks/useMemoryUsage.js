@@ -8,7 +8,7 @@
  * pieces: chunk-18hwfzwa.js (2)
  * attribution: affinity 1, fingerprint 1
  */
-import { y, R } from "../../vendor/react/cjs/react.production.js";
+import { useState, useRef } from "../../vendor/react/cjs/react.production.js";
 import { useInterval } from "../ink/components/Input.js";
 import { logForDebugging } from "../utils/debug.js";
 import { logEvent } from "../services/analytics/index.js";
@@ -23,14 +23,14 @@ var MEMORY_LEVEL_RANK = {
   critical: 2,
 };
 //@ chunk-18hwfzwa.js:783029-783611 fingerprint = useMemoryUsage (0.634)
-function useMemoryUsage(h = "high", x = true) {
-  let [memoryUsage, setMemoryUsage] = y(null);
-  let statusRef = R("normal");
+function useMemoryUsage(level = "high", active = true) {
+  let [memoryUsage, setMemoryUsage] = useState(null);
+  let statusRef = useRef("normal");
   useInterval(() => {
     let heapUsed;
-    let Re;
+    let rss;
     try {
-      ({ heapUsed, rss: Re } = process.memoryUsage());
+      ({ heapUsed, rss } = process.memoryUsage());
     } catch (error) {
       logForDebugging(
         `[useMemoryUsage] process.memoryUsage() failed: ${error instanceof Error ? error.message : String(error)}`,
@@ -47,19 +47,19 @@ function useMemoryUsage(h = "high", x = true) {
           ? "high"
           : "normal";
     if (
-      x &&
-      MEMORY_LEVEL_RANK[status] >= MEMORY_LEVEL_RANK[h] &&
+      active &&
+      MEMORY_LEVEL_RANK[status] >= MEMORY_LEVEL_RANK[level] &&
       MEMORY_LEVEL_RANK[status] > MEMORY_LEVEL_RANK[statusRef.current]
     ) {
       logEvent("tengu_memory_threshold_crossed", {
-        rss_mb: Math.round(Re / 1024 / 1024),
+        rss_mb: Math.round(rss / 1024 / 1024),
         heap_used_mb: Math.round(heapUsed / 1024 / 1024),
         status: fromEnum(status),
       });
       statusRef.current = status;
     }
     setMemoryUsage((prev) => {
-      if (MEMORY_LEVEL_RANK[status] < MEMORY_LEVEL_RANK[h]) return prev === null ? prev : null;
+      if (MEMORY_LEVEL_RANK[status] < MEMORY_LEVEL_RANK[level]) return prev === null ? prev : null;
       return {
         heapUsed,
         status,

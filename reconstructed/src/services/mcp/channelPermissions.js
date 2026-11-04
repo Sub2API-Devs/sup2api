@@ -24,6 +24,7 @@ import { jsonStringify, jsonParse } from "../../utils/slowOperations.js";
 import { redactSecretsForDisplay, redactSecretsDeep } from "../teamMemorySync/secretScanner.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { logError } from "../../utils/log.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-d3jaf8bt.js:434-489 fingerprint = isChannelPermissionRelayEnabled (1)
 /**
@@ -72,18 +73,18 @@ var ID_AVOID_SUBSTRINGS = [
  * hashToId：FNV-1a 32 位哈希后取 5 个字母（25 字母表，无 l）作为短 ID。
  */
 function hashToId(input) {
-  let e = 2166136261;
+  let hash = 2166136261;
   for (let i = 0; i < input.length; i++) {
-    e ^= input.charCodeAt(i);
-    e = Math.imul(e, 16777619);
+    hash ^= input.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
   }
-  e = e >>> 0;
-  let o = "";
+  hash = hash >>> 0;
+  let id = "";
   for (let i = 0; i < 5; i++) {
-    o += ID_ALPHABET[e % 25];
-    e = Math.floor(e / 25);
+    id += ID_ALPHABET[hash % 25];
+    hash = Math.floor(hash / 25);
   }
-  return o;
+  return id;
 }
 //@ chunk-d3jaf8bt.js:917-1077 layout
 /**
@@ -91,13 +92,13 @@ function hashToId(input) {
  */
 function generatePermissionRequestId(toolUseID) {
   if (!shouldUseRandomPermissionIds()) return shortRequestId(toolUseID);
-  let e = "";
+  let candidate = "";
   for (let i = 0; i <= 10; i++) {
-    e = "";
-    for (let j = 0; j < 5; j++) e += ID_ALPHABET[randomInt(ID_ALPHABET.length)];
-    if (!ID_AVOID_SUBSTRINGS.some((r) => e.includes(r))) return e;
+    candidate = "";
+    for (let j = 0; j < 5; j++) candidate += ID_ALPHABET[randomInt(ID_ALPHABET.length)];
+    if (!ID_AVOID_SUBSTRINGS.some((avoid) => candidate.includes(avoid))) return candidate;
   }
-  return e;
+  return candidate;
 }
 //@ chunk-d3jaf8bt.js:1077-1190 file-local
 function shortRequestId(toolUseID) {
@@ -118,21 +119,21 @@ var PREVIEW_ELIDED_NAMES_BUDGET = 30000;
 /**
  * sanitizePreviewLine：neutralize 后折叠空白并做中间省略。
  */
-function sanitizePreviewLine(n) {
-  return elideMiddleCodePoints(neutralizeConfusableChars(n).replace(/\s+/g, " ").trim());
+function sanitizePreviewLine(text) {
+  return elideMiddleCodePoints(neutralizeConfusableChars(text).replace(/\s+/g, " ").trim());
 }
 //@ chunk-d3jaf8bt.js:1289-1475 layout
 /**
  * elideMiddleCodePoints：按 Unicode 码点计数，超过 3500 时保留头 2000、尾 1500，中间换成 "⋯ N code points elided ⋯"。
  */
-function elideMiddleCodePoints(n) {
-  let list = Array.from(n);
-  if (list.length <= PREVIEW_MAX_CODE_POINTS) return n;
-  let o = list.length - PREVIEW_HEAD_CODE_POINTS - PREVIEW_TAIL_CODE_POINTS;
+function elideMiddleCodePoints(text) {
+  let list = Array.from(text);
+  if (list.length <= PREVIEW_MAX_CODE_POINTS) return text;
+  let elided = list.length - PREVIEW_HEAD_CODE_POINTS - PREVIEW_TAIL_CODE_POINTS;
   return (
     list.slice(0, PREVIEW_HEAD_CODE_POINTS).join("") +
     `
-\u22EF ${o} ${plural(o, "code point")} elided \u22EF
+\u22EF ${elided} ${plural(elided, "code point")} elided \u22EF
 ` +
     list.slice(list.length - PREVIEW_TAIL_CODE_POINTS).join("")
   );
@@ -141,9 +142,9 @@ function elideMiddleCodePoints(n) {
 /**
  * neutralizeConfusableChars：把不可见/格式字符换成空格，把引号类与易混淆字符换成 ·，防止权限预览被伪造。
  */
-function neutralizeConfusableChars(n) {
-  return Array.from(normalizeFullWidthSpace(n), (e) =>
-    isDecisionSurfaceControl(e.codePointAt(0) ?? 0) ? " " : e,
+function neutralizeConfusableChars(text) {
+  return Array.from(normalizeFullWidthSpace(text), (char) =>
+    isDecisionSurfaceControl(char.codePointAt(0) ?? 0) ? " " : char,
   )
     .join("")
     .replace(QUOTE_HOMOGLYPHS, "\xB7")
@@ -152,54 +153,59 @@ function neutralizeConfusableChars(n) {
     .replace(INVISIBLE_BLANKS, " ");
 }
 //@ chunk-d3jaf8bt.js:1629-2010 layout
-var APOSTROPHE_LIKE_PATTERN =
-  /[\u2018\u2019\u201A\u201B\u00B4\u02B9\u02BB\u02BC\u02BD\u02BE\u02BF\u02C0\u02C8\u02CA\u02CB\u02F4\u0374\u0384\u055A\u055D\u05F3\u07F4\u07F5\u1FBD\u1FBF\u1FEF\u1FFD\u1FFE\u2032\u2035\u275B\u275C\u275F\uA78B\uA78C\uFF07\uFF40]/g;
-var CONFUSABLE_EXCEPTIONS = new Set(["\u1433", "\u1438", "\u16B2", "\uD81B\uDF3F", "\u2039", "\u203A"]);
-var CONFUSABLE_CHARS_PATTERN = new RegExp(
-  `[${[...BRACKET_CONFUSABLES.keys()].filter((key) => !CONFUSABLE_EXCEPTIONS.has(key)).join("")}]`,
-  "gu",
-);
+var APOSTROPHE_LIKE_PATTERN; // deferred: uses BRACKET_CONFUSABLES_2 (../../utils/sanitization.js) of its import cycle while loading; runs once the cycle is complete
+var CONFUSABLE_EXCEPTIONS;
+var CONFUSABLE_CHARS_PATTERN;
+deferInit("chunk-d3jaf8bt.js:1629", () => {
+  APOSTROPHE_LIKE_PATTERN =
+    /[\u2018\u2019\u201A\u201B\u00B4\u02B9\u02BB\u02BC\u02BD\u02BE\u02BF\u02C0\u02C8\u02CA\u02CB\u02F4\u0374\u0384\u055A\u055D\u05F3\u07F4\u07F5\u1FBD\u1FBF\u1FEF\u1FFD\u1FFE\u2032\u2035\u275B\u275C\u275F\uA78B\uA78C\uFF07\uFF40]/g;
+  CONFUSABLE_EXCEPTIONS = new Set(["\u1433", "\u1438", "\u16B2", "\uD81B\uDF3F", "\u2039", "\u203A"]);
+  CONFUSABLE_CHARS_PATTERN = new RegExp(
+    `[${[...BRACKET_CONFUSABLES.keys()].filter((key) => !CONFUSABLE_EXCEPTIONS.has(key)).join("")}]`,
+    "gu",
+  );
+});
 //@ chunk-d3jaf8bt.js:2010-2058 layout
-function previewKeyFingerprint(n) {
-  return sanitizePreviewString(jsonStringify(n)).replace(/\s/g, " ");
+function previewKeyFingerprint(text) {
+  return sanitizePreviewString(jsonStringify(text)).replace(/\s/g, " ");
 }
 //@ chunk-d3jaf8bt.js:2058-2218 layout
 /**
  * dedupePreviewKey：预览中重复的键名追加 #2、#3… 保证唯一。
  */
-function dedupePreviewKey(n, e, o) {
-  let r = n;
-  let s = previewKeyFingerprint(n);
-  if (e.has(s)) {
-    let i = s;
-    let a = o.get(i) ?? 2;
-    r = `${n}#${a}`;
-    s = previewKeyFingerprint(r);
-    while (e.has(s)) {
-      a++;
-      r = `${n}#${a}`;
-      s = previewKeyFingerprint(r);
+function dedupePreviewKey(key, used, counters) {
+  let candidate = key;
+  let fingerprint = previewKeyFingerprint(key);
+  if (used.has(fingerprint)) {
+    let baseFingerprint = fingerprint;
+    let suffix = counters.get(baseFingerprint) ?? 2;
+    candidate = `${key}#${suffix}`;
+    fingerprint = previewKeyFingerprint(candidate);
+    while (used.has(fingerprint)) {
+      suffix++;
+      candidate = `${key}#${suffix}`;
+      fingerprint = previewKeyFingerprint(candidate);
     }
-    o.set(i, a + 1);
+    counters.set(baseFingerprint, suffix + 1);
   }
-  e.add(s);
-  return r;
+  used.add(fingerprint);
+  return candidate;
 }
 //@ chunk-d3jaf8bt.js:2218-2421 layout
 /**
  * sanitizeKeysDeep：递归重写对象键名（脱敏 + 去重），数组逐项处理。
  */
-function sanitizeKeysDeep(n) {
-  if (Array.isArray(n)) return n.map(sanitizeKeysDeep);
-  if (n !== null && typeof n === "object") {
-    let e = Object.create(null);
-    let o = new Set();
-    let r = new Map();
-    for (let [key, value] of Object.entries(n))
-      e[dedupePreviewKey(redactSecretsForDisplay(key), o, r)] = sanitizeKeysDeep(value);
-    return e;
+function sanitizeKeysDeep(value) {
+  if (Array.isArray(value)) return value.map(sanitizeKeysDeep);
+  if (value !== null && typeof value === "object") {
+    let copy = Object.create(null);
+    let used = new Set();
+    let counters = new Map();
+    for (let [key, value_2] of Object.entries(value))
+      copy[dedupePreviewKey(redactSecretsForDisplay(key), used, counters)] = sanitizeKeysDeep(value_2);
+    return copy;
   }
-  return n;
+  return value;
 }
 //@ chunk-d3jaf8bt.js:2421-2443 layout
 var MAX_PROBE_DEPTH = 32000;
@@ -208,42 +214,42 @@ var MAX_PROBE_NODES = 2000000;
 /**
  * exceedsSerializationBudget：深度 ≥32000 或累计节点 >200 万（含 toJSON）就判为不可序列化，避免 JSON.stringify 爆栈。
  */
-function exceedsSerializationBudget(n) {
-  if (n === null || typeof n !== "object") return false;
-  let e = MAX_PROBE_NODES;
-  let o = [
+function exceedsSerializationBudget(value) {
+  if (value === null || typeof value !== "object") return false;
+  let budget = MAX_PROBE_NODES;
+  let stack = [
     {
-      node: n,
+      node: value,
       depth: 1,
     },
   ];
-  while (o.length > 0) {
-    let r = o.pop();
-    let { depth, node } = r;
+  while (stack.length > 0) {
+    let item = stack.pop();
+    let { depth, node } = item;
     if (depth >= MAX_PROBE_DEPTH) return true;
     if (typeof node.toJSON === "function") {
-      e -= 1;
-      if (e < 0) return true;
-      let u;
+      budget -= 1;
+      if (budget < 0) return true;
+      let jsonValue;
       try {
-        u = node.toJSON();
+        jsonValue = node.toJSON();
       } catch {
         return true;
       }
-      if (u === null || typeof u !== "object") continue;
-      node = u;
+      if (jsonValue === null || typeof jsonValue !== "object") continue;
+      node = jsonValue;
     }
     if (Array.isArray(node)) {
-      e -= node.length;
-      if (e < 0) return true;
+      budget -= node.length;
+      if (budget < 0) return true;
     }
     for (let key of Object.keys(node)) {
-      e -= 1;
-      if (e < 0) return true;
-      let p = node[key];
-      if (p !== null && typeof p === "object")
-        o.push({
-          node: p,
+      budget -= 1;
+      if (budget < 0) return true;
+      let child = node[key];
+      if (child !== null && typeof child === "object")
+        stack.push({
+          node: child,
           depth: depth + 1,
         });
     }
@@ -257,77 +263,77 @@ function exceedsSerializationBudget(n) {
 function truncateForPreview(value) {
   try {
     if (value !== null && typeof value === "object" && !Array.isArray(value)) {
-      let s = [];
-      let i = 0;
-      let a = [];
-      let u = new Set();
-      let p = new Map();
+      let parts = [];
+      let usedChars = 0;
+      let elidedNames = [];
+      let usedKeys = new Set();
+      let keyCounters = new Map();
       for (let key of Object.keys(value)) {
-        let h;
-        let m;
-        let y = false;
+        let fieldValue;
+        let serialized;
+        let threw = false;
         try {
-          h = value[key];
-          if (exceedsSerializationBudget(h)) y = true;
-          else m = jsonStringify(h);
+          fieldValue = value[key];
+          if (exceedsSerializationBudget(fieldValue)) threw = true;
+          else serialized = jsonStringify(fieldValue);
         } catch {
-          y = true;
+          threw = true;
         }
-        if (m === undefined) {
-          if (!y) continue;
-          let F = dedupePreviewKey(redactSecretsForDisplay(key), u, p);
+        if (serialized === undefined) {
+          if (!threw) continue;
+          let safeKey = dedupePreviewKey(redactSecretsForDisplay(key), usedKeys, keyCounters);
           logForDebugging(
             "truncateForPreview: field serialization threw (depth) \u2014 rendering a loud unserializable marker",
             {
               level: "error",
             },
           );
-          let replaced = neutralizeConfusableChars(jsonStringify(F)).replace(/\s+/g, " ");
-          let P = truncateCodePoints(replaced, 50);
-          let D = P.length < replaced.length ? P + "\u2026" : P;
-          if (i >= PREVIEW_FIELDS_BUDGET) {
-            a.push(D);
+          let replaced = neutralizeConfusableChars(jsonStringify(safeKey)).replace(/\s+/g, " ");
+          let truncatedKey = truncateCodePoints(replaced, 50);
+          let keyLabel = truncatedKey.length < replaced.length ? truncatedKey + "\u2026" : truncatedKey;
+          if (usedChars >= PREVIEW_FIELDS_BUDGET) {
+            elidedNames.push(keyLabel);
             continue;
           }
-          let j = `${D}: (value unserializable)`;
-          i += Array.from(j).length;
-          s.push(j);
+          let marker = `${keyLabel}: (value unserializable)`;
+          usedChars += Array.from(marker).length;
+          parts.push(marker);
           continue;
         }
-        let d = dedupePreviewKey(redactSecretsForDisplay(key), u, p);
-        if (i >= PREVIEW_FIELDS_BUDGET) {
-          let replaced = neutralizeConfusableChars(jsonStringify(d)).replace(/\s+/g, " ");
-          let b = truncateCodePoints(replaced, 50);
-          a.push(b.length < replaced.length ? b + "\u2026" : b);
+        let safeKey = dedupePreviewKey(redactSecretsForDisplay(key), usedKeys, keyCounters);
+        if (usedChars >= PREVIEW_FIELDS_BUDGET) {
+          let replaced = neutralizeConfusableChars(jsonStringify(safeKey)).replace(/\s+/g, " ");
+          let shortKey = truncateCodePoints(replaced, 50);
+          elidedNames.push(shortKey.length < replaced.length ? shortKey + "\u2026" : shortKey);
           continue;
         }
-        let c;
-        let B = false;
+        let redactedText;
+        let redactionThrew = false;
         try {
-          c = jsonStringify(
+          redactedText = jsonStringify(
             sanitizeKeysDeep(
               redactSecretsDeep(
                 {
-                  [key]: jsonParse(m),
+                  [key]: jsonParse(serialized),
                 },
                 redactSecretsForDisplay,
               )[key],
             ),
           );
         } catch {
-          B = true;
+          redactionThrew = true;
         }
-        if (c === undefined)
-          if (B)
+        if (redactedText === undefined)
+          if (redactionThrew)
             logForDebugging(
-              `truncateForPreview: redaction round-trip threw for field ${jsonStringify(d)} \u2014 rendering unredacted`,
+              `truncateForPreview: redaction round-trip threw for field ${jsonStringify(safeKey)} \u2014 rendering unredacted`,
               {
                 level: "error",
               },
             );
           else {
             logForDebugging(
-              `truncateForPreview: redaction round-trip yielded no text for field ${jsonStringify(d)} \u2014 rendering unredacted`,
+              `truncateForPreview: redaction round-trip yielded no text for field ${jsonStringify(safeKey)} \u2014 rendering unredacted`,
               {
                 level: "error",
               },
@@ -338,31 +344,31 @@ function truncateForPreview(value) {
               ),
             );
           }
-        let H = c === undefined ? m : c;
-        let x = `${sanitizePreviewString(jsonStringify(d))}: ${sanitizePreviewString(H)}`;
-        i += Array.from(x).length;
-        s.push(x);
+        let fieldText = redactedText === undefined ? serialized : redactedText;
+        let line = `${sanitizePreviewString(jsonStringify(safeKey))}: ${sanitizePreviewString(fieldText)}`;
+        usedChars += Array.from(line).length;
+        parts.push(line);
       }
-      let C = "";
-      if (a.length > 0) {
+      let elidedNote = "";
+      if (elidedNames.length > 0) {
         let floored = Math.floor(PREVIEW_ELIDED_NAMES_BUDGET / 10);
-        if (a.length <= floored) {
-          let max = Math.max(8, Math.floor(PREVIEW_ELIDED_NAMES_BUDGET / a.length) - 2);
-          let mapped = a.map((d) => {
-            let c = truncateCodePoints(d, max);
-            return c.length < d.length ? c + "\u2026" : c;
+        if (elidedNames.length <= floored) {
+          let max = Math.max(8, Math.floor(PREVIEW_ELIDED_NAMES_BUDGET / elidedNames.length) - 2);
+          let mapped = elidedNames.map((name) => {
+            let cut = truncateCodePoints(name, max);
+            return cut.length < name.length ? cut + "\u2026" : cut;
           });
-          C = `
-\u22EF ${a.length} ${plural(a.length, "field")} elided: ${mapped.join(", ")} \u22EF
+          elidedNote = `
+\u22EF ${elidedNames.length} ${plural(elidedNames.length, "field")} elided: ${mapped.join(", ")} \u22EF
 `;
         } else
-          C = `
-\u22EF ${a.length} ${plural(a.length, "field")} elided (count exceeds the ${floored}-name bound \u2014 refuse) \u22EF
+          elidedNote = `
+\u22EF ${elidedNames.length} ${plural(elidedNames.length, "field")} elided (count exceeds the ${floored}-name bound \u2014 refuse) \u22EF
 `;
       }
-      return `{ ${s.join(", ")} }${C}`;
+      return `{ ${parts.join(", ")} }${elidedNote}`;
     }
-    let e;
+    let serialized;
     try {
       if (exceedsSerializationBudget(value)) {
         logForDebugging(
@@ -373,7 +379,7 @@ function truncateForPreview(value) {
         );
         return "(value unserializable)";
       }
-      e = jsonStringify(value);
+      serialized = jsonStringify(value);
     } catch {
       logForDebugging(
         "truncateForPreview: non-object input serialization threw \u2014 rendering a loud unserializable marker",
@@ -383,16 +389,18 @@ function truncateForPreview(value) {
       );
       return "(value unserializable)";
     }
-    if (e === undefined) return "(unserializable)";
-    let o;
-    let r = false;
+    if (serialized === undefined) return "(unserializable)";
+    let redacted;
+    let threw = false;
     try {
-      o = jsonStringify(sanitizeKeysDeep(redactSecretsDeep(jsonParse(e), redactSecretsForDisplay)));
+      redacted = jsonStringify(
+        sanitizeKeysDeep(redactSecretsDeep(jsonParse(serialized), redactSecretsForDisplay)),
+      );
     } catch {
-      r = true;
+      threw = true;
     }
-    if (o === undefined) {
-      if (r)
+    if (redacted === undefined) {
+      if (threw)
         logForDebugging(
           "truncateForPreview: non-object redaction round-trip threw \u2014 rendering unredacted",
           {
@@ -410,9 +418,9 @@ function truncateForPreview(value) {
           Error("truncateForPreview: non-object redaction round-trip failed \u2014 rendering unredacted"),
         );
       }
-      o = e;
+      redacted = serialized;
     }
-    return elideMiddleCodePoints(neutralizeConfusableChars(o).replace(/\s{2,}/g, " "));
+    return elideMiddleCodePoints(neutralizeConfusableChars(redacted).replace(/\s{2,}/g, " "));
   } catch {
     return "(unserializable)";
   }
@@ -421,23 +429,24 @@ function truncateForPreview(value) {
 /**
  * sanitizePreviewString：超长字符串（>10 万字符）只处理头尾片段并插入省略说明，其余走 neutralize + 折叠空白 + 中间省略。
  */
-function sanitizePreviewString(n) {
-  if (n.length <= 1e5) return elideMiddleCodePoints(neutralizeConfusableChars(n).replace(/\s{2,}/g, " "));
-  let e = 0;
-  for (let a of n) e++;
+function sanitizePreviewString(text) {
+  if (text.length <= 1e5)
+    return elideMiddleCodePoints(neutralizeConfusableChars(text).replace(/\s{2,}/g, " "));
+  let codePoints = 0;
+  for (let char of text) codePoints++;
   let replaced = neutralizeConfusableChars(
-    truncateCodePoints(n.slice(0, PREVIEW_HEAD_CODE_POINTS * 2 + 1), PREVIEW_HEAD_CODE_POINTS),
+    truncateCodePoints(text.slice(0, PREVIEW_HEAD_CODE_POINTS * 2 + 1), PREVIEW_HEAD_CODE_POINTS),
   ).replace(/\s{2,}/g, " ");
-  let list = Array.from(normalizeFullWidthSpace(n.slice(-(PREVIEW_TAIL_CODE_POINTS * 2 + 1))));
+  let list = Array.from(normalizeFullWidthSpace(text.slice(-(PREVIEW_TAIL_CODE_POINTS * 2 + 1))));
   let replaced_2 = neutralizeConfusableChars(list.slice(-PREVIEW_TAIL_CODE_POINTS).join("")).replace(
     /\s{2,}/g,
     " ",
   );
-  let i = e - PREVIEW_HEAD_CODE_POINTS - PREVIEW_TAIL_CODE_POINTS;
+  let elided = codePoints - PREVIEW_HEAD_CODE_POINTS - PREVIEW_TAIL_CODE_POINTS;
   return (
     replaced +
     `
-\u22EF ${i} ${plural(i, "code point")} elided \u22EF
+\u22EF ${elided} ${plural(elided, "code point")} elided \u22EF
 ` +
     replaced_2
   );
@@ -446,8 +455,8 @@ function sanitizePreviewString(n) {
 /**
  * 判断服务器 capabilities.experimental 是否声明了某个实验能力（如 channel 权限中继）。
  */
-function hasExperimentalCapability(capabilities, e) {
-  return !!capabilities?.experimental?.[e];
+function hasExperimentalCapability(capabilities, capability) {
+  return !!capabilities?.experimental?.[capability];
 }
 //@ chunk-d3jaf8bt.js:5718-5916 fingerprint = filterPermissionRelayClients (0.723)
 /**
@@ -467,13 +476,13 @@ function filterPermissionRelayClients(clients, isChannelServer, isPermissionRela
 //@ chunk-d3jaf8bt.js:5916-6392 fingerprint = createChannelPermissionCallbacks (0.548)
 function createChannelPermissionCallbacks(isServerRegistered) {
   let pending = new Map();
-  let o = new Set();
+  let seenIds = new Set();
   return {
     isServerRegistered,
     onResponse(requestId, handler) {
       let key = requestId.toLowerCase();
       if (shouldUseRandomPermissionIds()) {
-        if (o.has(key)) {
+        if (seenIds.has(key)) {
           pending.delete(key);
           logForDebugging(
             "Channel permission relay: a request ID was drawn twice in one session; channel replies with that ID are ignored \u2014 answer in the terminal",
@@ -483,7 +492,7 @@ function createChannelPermissionCallbacks(isServerRegistered) {
           );
           return () => {};
         }
-        o.add(key);
+        seenIds.add(key);
       }
       pending.set(key, handler);
       return () => {

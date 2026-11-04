@@ -65,10 +65,11 @@ import { listSecretEnvNames } from "../settings/policyHelper/helperEnv.js";
 import { sanitizeEnvCredentials } from "../settings/policyHelper/helperExec.js";
 import { ENV_REF_PATTERN } from "../../services/mcp/envExpansion.js";
 import { uniq } from "../collections.js";
-import { formatWithheldEnvNotice } from "../settings/managedSettingsFiles.js";
+import { formatWithheldEnvNotice } from "../settings/hostEnvWrites.js";
 import { isManagedPluginScope, runWithPluginWriteScope } from "./pluginScopedWrite.js";
 import { readMcpServerNames, resolveComponentPath, objectKeysOf } from "./pluginInventory.js";
 import { hasDotDotWithSpaceSegment } from "../pathClassification.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:605143-605292 fingerprint = addPluginScopeToServers (1)
 /**
@@ -104,16 +105,19 @@ function twinklyPrismOn() {
   return getFeatureValue_CACHED_MAY_BE_STALE(TENGU_TWINKLY_PRISM, false) === true && isFlagSyncWanted();
 }
 //@ chunk-e6aww6q8.js:3808622-3808670 placement
-function isSyncedMarketplacePluginEnabled(e) {
-  return marketplaceOf(e.source) === SYNCED && twinklyPrismOn();
+function isSyncedMarketplacePluginEnabled(plugin) {
+  return marketplaceOf(plugin.source) === SYNCED && twinklyPrismOn();
 }
 //@ chunk-e6aww6q8.js:3808670-3808697 placement
-var mcpPluginIntegrationSlot = new HostScoped(() => new Set());
+var mcpPluginIntegrationSlot; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:3808670", () => {
+  mcpPluginIntegrationSlot = new HostScoped(() => new Set());
+});
 //@ chunk-e6aww6q8.js:3808697-3808887 placement
-function getMcpRegistrationOfferState(e, n, r) {
-  let s = r?.[getServerKey(e, n)];
-  if (!isRegistrationPendingEntry(s) || s.clientId) return "unknown";
-  let registrationNotOfferedAt = s.discoveryState?.registrationNotOfferedAt;
+function getMcpRegistrationOfferState(serverName, config, store) {
+  let entry = store?.[getServerKey(serverName, config)];
+  if (!isRegistrationPendingEntry(entry) || entry.clientId) return "unknown";
+  let registrationNotOfferedAt = entry.discoveryState?.registrationNotOfferedAt;
   if (registrationNotOfferedAt === undefined) return "unknown";
   return isFreshTimestamp(registrationNotOfferedAt) ? "unable" : "recheck";
 }
@@ -121,23 +125,23 @@ function getMcpRegistrationOfferState(e, n, r) {
 /**
  * 按凭据存储判断插件提供的 MCP 服务器哪些可用。
  */
-async function filterPluginMcpServersByCredentials(e, n, { sessionLoad }) {
-  for (let [key, value] of Object.entries(n))
+async function filterPluginMcpServersByCredentials(plugin, servers, { sessionLoad }) {
+  for (let [key, value] of Object.entries(servers))
     if ("redialToRelearnRegistration" in value) {
-      let w = {
+      let stripped = {
         ...value,
       };
-      delete w.redialToRelearnRegistration;
-      n[key] = w;
+      delete stripped.redialToRelearnRegistration;
+      servers[key] = stripped;
     }
   if (
-    marketplaceOf(e.source) !== SYNCED ||
+    marketplaceOf(plugin.source) !== SYNCED ||
     getFeatureValue_CACHED_MAY_BE_STALE(TENGU_STARRY_LOCKET, false) !== true ||
     (recursiveLobsterOn() && getIsInteractive())
   )
     return;
-  let s = [];
-  for (let [key, value] of Object.entries(n)) {
+  let candidates = [];
+  for (let [key, value] of Object.entries(servers)) {
     if (
       (value.type !== "http" && value.type !== "sse") ||
       value.oauth?.clientId ||
@@ -147,49 +151,53 @@ async function filterPluginMcpServersByCredentials(e, n, { sessionLoad }) {
       !URL.canParse(value.url)
     )
       continue;
-    let w = new URL(value.url);
-    if (w.username === "" && w.password === "") s.push([key, value]);
+    let parsedUrl = new URL(value.url);
+    if (parsedUrl.username === "" && parsedUrl.password === "") candidates.push([key, value]);
   }
-  if (s.length === 0 || !isFlagSyncWanted()) return;
-  let h;
+  if (candidates.length === 0 || !isFlagSyncWanted()) return;
+  let store;
   try {
-    h = await readMcpOAuthStore();
+    store = await readMcpOAuthStore();
   } catch (error) {
     logForDebugging(
-      `Could not read the credentials store to judge ${e.name}'s MCP servers; keeping them all: ${errorMessage(error)}`,
+      `Could not read the credentials store to judge ${plugin.name}'s MCP servers; keeping them all: ${errorMessage(error)}`,
       {
         level: "warn",
       },
     );
     return;
   }
-  for (let [y, S] of s) {
-    let mcpRegistrationOfferState = getMcpRegistrationOfferState(`plugin:${e.name}:${y}`, S, h);
+  for (let [name, config] of candidates) {
+    let mcpRegistrationOfferState = getMcpRegistrationOfferState(
+      `plugin:${plugin.name}:${name}`,
+      config,
+      store,
+    );
     if (mcpRegistrationOfferState === "recheck" && sessionLoad) {
-      n[y] = {
-        ...S,
+      servers[name] = {
+        ...config,
         redialToRelearnRegistration: true,
       };
       logForDebugging(
-        `MCP server "${y}" of synced plugin ${e.name} is due a fresh sign-in check: its record that a terminal cannot register is more than ${MAX_REGISTRATION_AGE_MS / 86400000} days old or dated in the future`,
+        `MCP server "${name}" of synced plugin ${plugin.name} is due a fresh sign-in check: its record that a terminal cannot register is more than ${MAX_REGISTRATION_AGE_MS / 86400000} days old or dated in the future`,
       );
     }
     if (mcpRegistrationOfferState !== "unable") continue;
-    delete n[y];
+    delete servers[name];
     if (!sessionLoad) continue;
-    let L = onProcessRootHost(mcpPluginIntegrationSlot);
-    let G = `${e.source}
-${y}`;
-    if (L.has(G)) continue;
-    L.add(G);
+    let seen = onProcessRootHost(mcpPluginIntegrationSlot);
+    let key = `${plugin.source}
+${name}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
     logForDebugging(
-      `Left out MCP server "${y}" of synced plugin ${e.name}: its last sign-in attempt found no way for a terminal to register (GrowthBook flag ${TENGU_STARRY_LOCKET})`,
+      `Left out MCP server "${name}" of synced plugin ${plugin.name}: its last sign-in attempt found no way for a terminal to register (GrowthBook flag ${TENGU_STARRY_LOCKET})`,
     );
     logEvent("tengu_plugins_sync_mcp_server_left_out", {
-      transportType: fromEnumOpt(S.type),
-      mcpServerBaseUrl: safeOrigin(getLoggingSafeMcpBaseUrl(S)),
+      transportType: fromEnumOpt(config.type),
+      mcpServerBaseUrl: safeOrigin(getLoggingSafeMcpBaseUrl(config)),
       ...buildPluginSourceFields({
-        pluginSource: e.source,
+        pluginSource: plugin.source,
       }),
     });
   }
@@ -198,13 +206,13 @@ ${y}`;
 /**
  * 从插件里的 .mcpb/.dxt 包加载 MCP 服务器：loadMcpbFile 解压与生成配置，需要用户配置时返回 needs-config 状态。
  */
-async function loadMcpServersFromMcpb(plugin, n, errors, s, h, y) {
-  let mcpbPath = redactUrlQuery(n);
+async function loadMcpServersFromMcpb(plugin, source, errors, warnings, storageV5, credentials) {
+  let mcpbPath = redactUrlQuery(source);
   try {
     logForDebugging(`Loading MCP servers from MCPB: ${mcpbPath}`);
     let pluginId = plugin.repository;
     let result = await loadMcpbFile(
-      n,
+      source,
       plugin.path,
       pluginId,
       (status) => {
@@ -212,15 +220,15 @@ async function loadMcpServersFromMcpb(plugin, n, errors, s, h, y) {
       },
       undefined,
       undefined,
-      h,
-      y,
+      storageV5,
+      credentials,
     );
     if ("status" in result && result.status === "needs-config") {
       logForDebugging(
         `MCPB ${mcpbPath} requires user configuration; MCP server "${quotedPrintable(result.manifest.name)}" not started. ` +
           `Configure via: /plugin \u2192 Installed \u2192 ${plugin.name} \u2192 Configure`,
       );
-      s.push(mcpbNeedsConfigWarning(plugin, result.manifest.name));
+      warnings.push(mcpbNeedsConfigWarning(plugin, result.manifest.name));
       return null;
     }
     let successResult = result;
@@ -228,26 +236,26 @@ async function loadMcpServersFromMcpb(plugin, n, errors, s, h, y) {
     logForDebugging(
       `Loaded MCP server "${serverName}" from MCPB (extracted to ${successResult.extractedPath})`,
     );
-    let Z =
-      n.startsWith("http") || mcpbNeedsUserConfig(successResult.manifest)
+    let mcpConfig =
+      source.startsWith("http") || mcpbNeedsUserConfig(successResult.manifest)
         ? {
             ...successResult.mcpConfig,
             pluginEndpointTemplated: true,
           }
         : successResult.mcpConfig;
     return {
-      [serverName]: Z,
+      [serverName]: mcpConfig,
     };
   } catch (error) {
     let errorMsg = redactUrlsInMessage(errorMessage(error));
     logForDebugging(`Failed to load MCPB ${mcpbPath}: ${errorMsg}`, {
       level: "error",
     });
-    let source = plugin.repository;
-    if (n.startsWith("http") && (errorMsg.includes("download") || errorMsg.includes("network")))
+    let source_2 = plugin.repository;
+    if (source.startsWith("http") && (errorMsg.includes("download") || errorMsg.includes("network")))
       errors.push({
         type: "mcpb-download-failed",
-        source,
+        source: source_2,
         plugin: plugin.name,
         url: mcpbPath,
         reason: errorMsg,
@@ -255,7 +263,7 @@ async function loadMcpServersFromMcpb(plugin, n, errors, s, h, y) {
     else if (errorMsg.includes("manifest") || errorMsg.includes("user configuration"))
       errors.push({
         type: "mcpb-invalid-manifest",
-        source,
+        source: source_2,
         plugin: plugin.name,
         mcpbPath,
         validationError: errorMsg,
@@ -263,7 +271,7 @@ async function loadMcpServersFromMcpb(plugin, n, errors, s, h, y) {
     else
       errors.push({
         type: "mcpb-extract-failed",
-        source,
+        source: source_2,
         plugin: plugin.name,
         mcpbPath,
         reason: errorMsg,
@@ -277,18 +285,18 @@ function mcpbNeedsUserConfig(manifest) {
   return /\$\{(?:HOME|DESKTOP|DOCUMENTS|DOWNLOADS)\}/.test(jsonStringify(manifest.server ?? {}));
 }
 //@ chunk-e6aww6q8.js:3811551-3811812 layout
-function isExemptFromSkipPluginMcp(e, { fullIdsOnly }) {
-  let r = env.CLAUDE_CODE_SKIP_PLUGIN_MCP_SERVERS_EXCEPT;
-  if (!r) return false;
-  let s = isProjectLocalPlugin(e);
-  if (fullIdsOnly && s) return false;
-  let h = !fullIdsOnly && !s;
-  return r.split(",").some((y) => {
-    let trimmed = y.trim();
+function isExemptFromSkipPluginMcp(plugin, { fullIdsOnly }) {
+  let exemptList = env.CLAUDE_CODE_SKIP_PLUGIN_MCP_SERVERS_EXCEPT;
+  if (!exemptList) return false;
+  let isProjectLocal = isProjectLocalPlugin(plugin);
+  if (fullIdsOnly && isProjectLocal) return false;
+  let allowBareName = !fullIdsOnly && !isProjectLocal;
+  return exemptList.split(",").some((entry) => {
+    let trimmed = entry.trim();
     if (!trimmed) return false;
     return trimmed.includes("@")
-      ? pluginNamesEqual(trimmed, e.repository)
-      : h && pluginNamesEqual(trimmed, e.name);
+      ? pluginNamesEqual(trimmed, plugin.repository)
+      : allowBareName && pluginNamesEqual(trimmed, plugin.name);
   });
 }
 //@ chunk-e6aww6q8.js:3811812-3815254 layout
@@ -298,9 +306,9 @@ function isExemptFromSkipPluginMcp(e, { fullIdsOnly }) {
 async function loadPluginMcpServersFromSources(
   plugin,
   errors = [],
-  r,
-  s,
-  { readOnlyListing: h = false, warnings: y = [] } = {},
+  storageV5,
+  credentials,
+  { readOnlyListing = false, warnings = [] } = {},
 ) {
   if (plugin.isBuiltin) return;
   if (env.CLAUDE_CODE_SKIP_PLUGIN_MCP_SERVERS) {
@@ -325,31 +333,31 @@ async function loadPluginMcpServersFromSources(
     );
     return;
   }
-  let S = isExemptFromSkipPluginMcp(plugin, {
+  let fullIdExempt = isExemptFromSkipPluginMcp(plugin, {
     fullIdsOnly: true,
   });
-  let w = !S && env.CLAUDE_CODE_SKIP_PLUGIN_LOCAL_MCP_SERVERS;
-  let L = w || (!S && env.CLAUDE_CODE_SKIP_PLUGIN_MCP_BUNDLES);
-  let G = {};
-  let q = [];
-  let Z = isProjectLocalPlugin(plugin);
-  let Se = h && hasMarketplaceAlias(plugin.source);
-  let ke = 0;
-  let we = (Ie) => {
-    if (L && isMcpbSource(Ie)) {
+  let skipLocal = !fullIdExempt && env.CLAUDE_CODE_SKIP_PLUGIN_LOCAL_MCP_SERVERS;
+  let skipBundles = skipLocal || (!fullIdExempt && env.CLAUDE_CODE_SKIP_PLUGIN_MCP_BUNDLES);
+  let servers = {};
+  let specWarnings = [];
+  let isProjectLocal = isProjectLocalPlugin(plugin);
+  let readOnlyDirPlugin = readOnlyListing && hasMarketplaceAlias(plugin.source);
+  let omittedCount = 0;
+  let isSkippedSpec = (spec) => {
+    if (skipBundles && isMcpbSource(spec)) {
       logForDebugging(
-        `Skipping MCPB source "${redactUrlQuery(Ie)}" of plugin "${plugin.name}" (CLAUDE_CODE_SKIP_PLUGIN_LOCAL_MCP_SERVERS or CLAUDE_CODE_SKIP_PLUGIN_MCP_BUNDLES is set)`,
+        `Skipping MCPB source "${redactUrlQuery(spec)}" of plugin "${plugin.name}" (CLAUDE_CODE_SKIP_PLUGIN_LOCAL_MCP_SERVERS or CLAUDE_CODE_SKIP_PLUGIN_MCP_BUNDLES is set)`,
       );
       return true;
     }
-    if (Se) {
-      ke++;
+    if (readOnlyDirPlugin) {
+      omittedCount++;
       return true;
     }
-    if (!Z) return false;
-    if (isMcpbSource(Ie)) {
+    if (!isProjectLocal) return false;
+    if (isMcpbSource(spec)) {
       logForDebugging(
-        `Skipping MCPB source "${redactUrlQuery(Ie)}" for directory-loaded plugin "${plugin.name}": ` +
+        `Skipping MCPB source "${redactUrlQuery(spec)}" for directory-loaded plugin "${plugin.name}": ` +
           "not resolved without a pre-approval download here \u2014 declare MCP servers inline or via a local in-dir .mcp.json.",
         {
           level: "warn",
@@ -357,9 +365,9 @@ async function loadPluginMcpServersFromSources(
       );
       return true;
     }
-    if (containsPathTraversal(Ie) || Ie.split(/[/\\]/).some((Me) => /^\.\. [ .]*$/.test(Me))) {
+    if (containsPathTraversal(spec) || spec.split(/[/\\]/).some((segment) => /^\.\. [ .]*$/.test(segment))) {
       logForDebugging(
-        `Skipping out-of-directory MCP source "${redactUrlQuery(Ie)}" for directory-loaded plugin "${plugin.name}": it may only reference files inside the plugin directory here.`,
+        `Skipping out-of-directory MCP source "${redactUrlQuery(spec)}" for directory-loaded plugin "${plugin.name}": it may only reference files inside the plugin directory here.`,
         {
           level: "warn",
         },
@@ -368,34 +376,41 @@ async function loadPluginMcpServersFromSources(
     }
     return false;
   };
-  let Ee = Se
+  let fileServers = readOnlyDirPlugin
     ? null
-    : await loadMcpServersFromFile(plugin, ".mcp.json", r, {
-        confine: Z,
+    : await loadMcpServersFromFile(plugin, ".mcp.json", storageV5, {
+        confine: isProjectLocal,
       });
-  if (Ee)
-    G = {
-      ...G,
-      ...Ee,
+  if (fileServers)
+    servers = {
+      ...servers,
+      ...fileServers,
     };
   if (plugin.manifest.mcpServers) {
     let mcpServers = plugin.manifest.mcpServers;
     if (typeof mcpServers === "string") {
-      if (we(mcpServers));
+      if (isSkippedSpec(mcpServers));
       else if (isMcpbSource(mcpServers)) {
-        let mcpServersFromMcpb = await loadMcpServersFromMcpb(plugin, mcpServers, errors, q, r, s);
+        let mcpServersFromMcpb = await loadMcpServersFromMcpb(
+          plugin,
+          mcpServers,
+          errors,
+          specWarnings,
+          storageV5,
+          credentials,
+        );
         if (mcpServersFromMcpb)
-          G = {
-            ...G,
+          servers = {
+            ...servers,
             ...mcpServersFromMcpb,
           };
       } else {
-        let mcpServersFromFile = await loadMcpServersFromFile(plugin, mcpServers, r, {
-          confine: Z,
+        let mcpServersFromFile = await loadMcpServersFromFile(plugin, mcpServers, storageV5, {
+          confine: isProjectLocal,
         });
         if (mcpServersFromFile)
-          G = {
-            ...G,
+          servers = {
+            ...servers,
             ...mcpServersFromFile,
           };
       }
@@ -408,21 +423,28 @@ async function loadPluginMcpServersFromSources(
         mapped.map(async ({ spec, specWarnings }) => {
           try {
             if (typeof spec === "string") {
-              if (we(spec)) return null;
+              if (isSkippedSpec(spec)) return null;
               if (isMcpbSource(spec))
-                return await loadMcpServersFromMcpb(plugin, spec, errors, specWarnings, r, s);
-              return await loadMcpServersFromFile(plugin, spec, r, {
-                confine: Z,
+                return await loadMcpServersFromMcpb(
+                  plugin,
+                  spec,
+                  errors,
+                  specWarnings,
+                  storageV5,
+                  credentials,
+                );
+              return await loadMcpServersFromFile(plugin, spec, storageV5, {
+                confine: isProjectLocal,
               });
             }
             return spec;
           } catch (error) {
-            let nt =
+            let message =
               typeof spec === "string"
                 ? replaceAll(String(error), join(plugin.path, spec), join(plugin.path, redactUrlQuery(spec)))
                 : String(error);
             logForDebugging(
-              `Failed to load MCP servers from spec for plugin ${plugin.name}: ${redactUrlsInMessage(nt)}`,
+              `Failed to load MCP servers from spec for plugin ${plugin.name}: ${redactUrlsInMessage(message)}`,
               {
                 level: "error",
               },
@@ -431,85 +453,94 @@ async function loadPluginMcpServersFromSources(
           }
         }),
       );
-      for (let ze of results)
-        if (ze)
-          G = {
-            ...G,
-            ...ze,
+      for (let result of results)
+        if (result)
+          servers = {
+            ...servers,
+            ...result,
           };
-      q.push(...mapped.flatMap(({ specWarnings }) => specWarnings));
+      specWarnings.push(...mapped.flatMap(({ specWarnings }) => specWarnings));
     } else
-      G = {
-        ...G,
+      servers = {
+        ...servers,
         ...mcpServers,
       };
   }
-  if (ke > 0)
+  if (omittedCount > 0)
     logForDebugging(
-      `Read-only listing: omitted ${ke} file / bundle MCP server source(s) of directory-loaded plugin "${plugin.name}" (inline declarations only; a session load resolves them).`,
+      `Read-only listing: omitted ${omittedCount} file / bundle MCP server source(s) of directory-loaded plugin "${plugin.name}" (inline declarations only; a session load resolves them).`,
     );
-  for (let [key, value] of Object.entries(G)) {
-    let We = unaddableTransportReason(value.type);
-    if (We === null) {
-      if (w && value.type !== "sse" && value.type !== "http" && value.type !== "ws") {
-        delete G[key];
+  for (let [key, value] of Object.entries(servers)) {
+    let reason = unaddableTransportReason(value.type);
+    if (reason === null) {
+      if (skipLocal && value.type !== "sse" && value.type !== "http" && value.type !== "ws") {
+        delete servers[key];
         logForDebugging(
           `Skipping MCP server "${key}" of plugin "${plugin.name}": only sse, http and ws servers load while CLAUDE_CODE_SKIP_PLUGIN_LOCAL_MCP_SERVERS is set`,
         );
       }
       continue;
     }
-    delete G[key];
+    delete servers[key];
     errors.push({
       type: "mcp-config-invalid",
       source: plugin.source,
       plugin: plugin.name,
       serverName: key,
       validationError:
-        We === "host-only"
+        reason === "host-only"
           ? `type "${value.type}" servers cannot be declared by a plugin; only the host application registers them`
           : `type "${value.type}" servers cannot be declared by a plugin; only claude.ai connectors use that type`,
     });
     logForDebugging(
-      `Dropped MCP server "${key}" of plugin ${plugin.name}: ${We} transport type "${value.type}"`,
+      `Dropped MCP server "${key}" of plugin ${plugin.name}: ${reason} transport type "${value.type}"`,
       {
         level: "warn",
       },
     );
   }
-  y.push(...q);
-  let flattened = q.flatMap((Ie) => (Ie.type === "mcpb-needs-config" ? [Ie.serverName] : []));
+  warnings.push(...specWarnings);
+  let flattened = specWarnings.flatMap((warning) =>
+    warning.type === "mcpb-needs-config" ? [warning.serverName] : [],
+  );
   plugin.mcpServersNeedingConfig = flattened.length > 0 ? flattened : undefined;
-  await filterPluginMcpServersByCredentials(plugin, G, {
-    sessionLoad: !h,
+  await filterPluginMcpServersByCredentials(plugin, servers, {
+    sessionLoad: !readOnlyListing,
   });
-  return Object.keys(G).length > 0 ? G : undefined;
+  return Object.keys(servers).length > 0 ? servers : undefined;
 }
 //@ chunk-e6aww6q8.js:3815254-3815416 file-local
 /**
  * 返回插件的 MCP 服务器（已缓存在插件对象上则直接用，否则发现后写回）。
  */
-async function extractMcpServersFromPlugins(e, n, r, { warnings: s = [] } = {}) {
-  if (e.mcpServers) {
-    pushMcpbNeedsConfigWarnings(e, s);
-    return e.mcpServers;
+async function extractMcpServersFromPlugins(plugin, errors, storageV5, { warnings = [] } = {}) {
+  if (plugin.mcpServers) {
+    pushMcpbNeedsConfigWarnings(plugin, warnings);
+    return plugin.mcpServers;
   }
-  let pluginMcpServersFromSources = await loadPluginMcpServersFromSources(e, n, r, undefined, {
-    warnings: s,
-  });
-  if (pluginMcpServersFromSources) e.mcpServers = pluginMcpServersFromSources;
+  let pluginMcpServersFromSources = await loadPluginMcpServersFromSources(
+    plugin,
+    errors,
+    storageV5,
+    undefined,
+    {
+      warnings,
+    },
+  );
+  if (pluginMcpServersFromSources) plugin.mcpServers = pluginMcpServersFromSources;
   return pluginMcpServersFromSources;
 }
 //@ chunk-e6aww6q8.js:3815416-3815494 layout
-function pushMcpbNeedsConfigWarnings(e, n) {
-  for (let r of e.mcpServersNeedingConfig ?? []) n.push(mcpbNeedsConfigWarning(e, r));
+function pushMcpbNeedsConfigWarnings(plugin, warnings) {
+  for (let serverName of plugin.mcpServersNeedingConfig ?? [])
+    warnings.push(mcpbNeedsConfigWarning(plugin, serverName));
 }
 //@ chunk-e6aww6q8.js:3815494-3815592 layout
-function mcpbNeedsConfigWarning(e, serverName) {
+function mcpbNeedsConfigWarning(plugin, serverName) {
   return {
     type: "mcpb-needs-config",
-    source: e.repository,
-    plugin: e.name,
+    source: plugin.repository,
+    plugin: plugin.name,
     serverName,
   };
 }
@@ -517,31 +548,35 @@ function mcpbNeedsConfigWarning(e, serverName) {
 /**
  * 读取插件内一个 MCP 配置文件（.mcp.json 形状），可限定不逃出插件目录；存储后端模式下经存储层读。
  */
-async function loadMcpServersFromFile(e, n, r, { confine: s = false } = {}) {
+async function loadMcpServersFromFile(plugin, relPath, storageV5, { confine = false } = {}) {
   let fs = getFsImplementation();
-  let filePath = join(e.path, n);
-  let S = (G) => replaceAll(G, join(e.path, n), join(e.path, redactUrlQuery(n)));
-  if (s) {
-    let pluginDirComponentPath = await resolvePluginDirComponentPath(e, n);
+  let filePath = join(plugin.path, relPath);
+  let redact = (message) =>
+    replaceAll(message, join(plugin.path, relPath), join(plugin.path, redactUrlQuery(relPath)));
+  if (confine) {
+    let pluginDirComponentPath = await resolvePluginDirComponentPath(plugin, relPath);
     if (pluginDirComponentPath === null) return null;
     filePath = pluginDirComponentPath;
   }
   let content;
-  let L =
-    isStorageV5Enabled() && r !== undefined
+  let storageKey =
+    isStorageV5Enabled() && storageV5 !== undefined
       ? cacheStorageKeyOrFallback(filePath, projectPluginCacheDir())
       : null;
-  if (r !== undefined && L !== null) {
-    let G = await r.read([L]);
-    if (!G.ok) {
-      logForDebugging(S(`Failed to load MCP servers from ${filePath}: ${formatStorageError(G.error)}`), {
-        level: "error",
-      });
+  if (storageV5 !== undefined && storageKey !== null) {
+    let readResult = await storageV5.read([storageKey]);
+    if (!readResult.ok) {
+      logForDebugging(
+        redact(`Failed to load MCP servers from ${filePath}: ${formatStorageError(readResult.error)}`),
+        {
+          level: "error",
+        },
+      );
       return null;
     }
-    let q = G.value.items[0];
-    if (!q?.found) return null;
-    content = Buffer.from(q.value).toString("utf-8");
+    let item = readResult.value.items[0];
+    if (!item?.found) return null;
+    content = Buffer.from(item.value).toString("utf-8");
   } else
     try {
       content = await fs.readFile(filePath, {
@@ -549,7 +584,7 @@ async function loadMcpServersFromFile(e, n, r, { confine: s = false } = {}) {
       });
     } catch (e) {
       if (isENOENT(e)) return null;
-      logForDebugging(S(`Failed to load MCP servers from ${filePath}: ${e}`), {
+      logForDebugging(redact(`Failed to load MCP servers from ${filePath}: ${e}`), {
         level: "error",
       });
       return null;
@@ -562,13 +597,16 @@ async function loadMcpServersFromFile(e, n, r, { confine: s = false } = {}) {
       let result = McpServerConfigSchema().safeParse(config);
       if (result.success) validatedServers[name] = result.data;
       else
-        logForDebugging(S(`Invalid MCP server config for ${name} in ${filePath}: ${result.error.message}`), {
-          level: "error",
-        });
+        logForDebugging(
+          redact(`Invalid MCP server config for ${name} in ${filePath}: ${result.error.message}`),
+          {
+            level: "error",
+          },
+        );
     }
     return validatedServers;
   } catch (error) {
-    logForDebugging(S(`Failed to load MCP servers from ${filePath}: ${error}`), {
+    logForDebugging(redact(`Failed to load MCP servers from ${filePath}: ${error}`), {
       level: "error",
     });
     return null;
@@ -578,14 +616,14 @@ async function loadMcpServersFromFile(e, n, r, { confine: s = false } = {}) {
 /**
  * 列出插件 manifest.channels 中缺少必填用户配置的频道（供启用时弹出配置对话框）。
  */
-async function getUnconfiguredChannels(plugin, n) {
+async function getUnconfiguredChannels(plugin, storageV5) {
   let channels = plugin.manifest.channels;
   if (!channels || channels.length === 0) return [];
   let pluginId = plugin.repository;
   let unconfigured = [];
   for (let channel of channels) {
     if (!channel.userConfig || Object.keys(channel.userConfig).length === 0) continue;
-    let saved = (await loadMcpServerUserConfig(pluginId, channel.server, n)) ?? {};
+    let saved = (await loadMcpServerUserConfig(pluginId, channel.server, storageV5)) ?? {};
     if (!validateUserConfig(saved, channel.userConfig).valid)
       unconfigured.push({
         server: channel.server,
@@ -599,18 +637,18 @@ async function getUnconfiguredChannels(plugin, n) {
 /**
  * 给插件 MCP 服务器加 plugin:<插件>:<服务器> 前缀并标 scope=dynamic、pluginSource/pluginPath，官方背书时标 pluginOfficialSourceVouched。
  */
-function addPluginScopeToServers_2(servers, name, pluginSource, pluginPath, h = false) {
+function addPluginScopeToServers_2(servers, name, pluginSource, pluginPath, officialVouched = false) {
   let scopedServers = {};
-  let S = pluginDisplayKey(name, pluginSource);
+  let displayName = pluginDisplayKey(name, pluginSource);
   for (let [name, config] of Object.entries(servers)) {
-    let scopedName = `plugin:${S}:${name}`;
+    let scopedName = `plugin:${displayName}:${name}`;
     let scoped = {
       ...config,
       scope: "dynamic",
       pluginSource,
       pluginPath,
     };
-    if (h) scoped.pluginOfficialSourceVouched = true;
+    if (officialVouched) scoped.pluginOfficialSourceVouched = true;
     else delete scoped.pluginOfficialSourceVouched;
     scopedServers[scopedName] = scoped;
   }
@@ -620,18 +658,18 @@ function addPluginScopeToServers_2(servers, name, pluginSource, pluginPath, h = 
 /**
  * 合并插件级 userConfig 与频道级 userConfig 的已保存值（含默认值），供替换 ${user_config.X}。
  */
-async function loadChannelUserConfig(plugin, serverName, r) {
+async function loadChannelUserConfig(plugin, serverName, storageV5) {
   let userConfig = plugin.manifest.userConfig;
   let userConfig_2 = plugin.manifest.channels?.find((channel) => channel.server === serverName)?.userConfig;
   if (!userConfig && !userConfig_2) return;
-  let S = userConfig ? await loadPluginOptions(marketplaceSource(plugin), r) : undefined;
-  let w = userConfig_2
-    ? ((await loadMcpServerUserConfig(plugin.repository, serverName, r)) ?? undefined)
+  let pluginOptions = userConfig ? await loadPluginOptions(marketplaceSource(plugin), storageV5) : undefined;
+  let channelConfig = userConfig_2
+    ? ((await loadMcpServerUserConfig(plugin.repository, serverName, storageV5)) ?? undefined)
     : undefined;
   return applyUserConfigDefaults(
     {
-      ...S,
-      ...w,
+      ...pluginOptions,
+      ...channelConfig,
     },
     {
       ...userConfig,
@@ -644,27 +682,32 @@ async function loadChannelUserConfig(plugin, serverName, r) {
  * 解析插件 MCP 服务器配置中的变量：${CLAUDE_PLUGIN_ROOT}/${CLAUDE_PLUGIN_DATA}/${CLAUDE_PROJECT_DIR}/${user_config.X}/${ENV}，并为 stdio 服务器注入 CLAUDE_PLUGIN_ROOT/CLAUDE_PLUGIN_DATA 环境变量；缺失变量记错误。
  */
 function resolvePluginMcpEnvironment(config, plugin, userConfig, errors, pluginName, serverName) {
-  let S = [];
-  let w;
-  let L;
-  let G = [];
-  let q;
+  let missingVars = [];
+  let configError;
+  let originalUrl;
+  let urlMissingVars = [];
+  let stdioDiff;
   let blankList = scrubbedEnvKeys();
-  let Se = "pluginEndpointTemplated" in config && config.pluginEndpointTemplated === true;
-  let resolveValue = (Ie, { remoteSink: Me = false, selectsEndpoint: We = false } = {}) => {
-    if (We && Ie.includes("${CLAUDE_PROJECT_DIR}")) Se = true;
-    let resolved = substitutePluginVariables(Ie, plugin);
-    let lt = resolved;
+  let endpointTemplated = "pluginEndpointTemplated" in config && config.pluginEndpointTemplated === true;
+  let resolveValue = (value, { remoteSink = false, selectsEndpoint = false } = {}) => {
+    if (selectsEndpoint && value.includes("${CLAUDE_PROJECT_DIR}")) endpointTemplated = true;
+    let resolved = substitutePluginVariables(value, plugin);
+    let substituted = resolved;
     if (userConfig) resolved = substituteUserConfigVariables(resolved, userConfig);
-    let { expanded, missingVars } = expandMcpCredentialEnvVars(resolved, undefined, undefined, {
-      remoteSink: Me,
-      blankList,
-    });
-    S.push(...missingVars);
-    if (We && (expanded !== lt || missingVars.length > 0)) Se = true;
+    let { expanded, missingVars: missingVars_2 } = expandMcpCredentialEnvVars(
+      resolved,
+      undefined,
+      undefined,
+      {
+        remoteSink,
+        blankList,
+      },
+    );
+    missingVars.push(...missingVars_2);
+    if (selectsEndpoint && (expanded !== substituted || missingVars_2.length > 0)) endpointTemplated = true;
     return expanded;
   };
-  let we;
+  let resolved;
   switch (config.type) {
     case undefined:
     case "stdio": {
@@ -692,8 +735,8 @@ function resolvePluginMcpEnvironment(config, plugin, userConfig, errors, pluginN
             selectsEndpoint: true,
           });
       stdioConfig.env = resolvedEnv;
-      q = stdioIdentityDiff(config, stdioConfig);
-      we = stdioConfig;
+      stdioDiff = stdioIdentityDiff(config, stdioConfig);
+      resolved = stdioConfig;
       break;
     }
     case "sse":
@@ -702,14 +745,14 @@ function resolvePluginMcpEnvironment(config, plugin, userConfig, errors, pluginN
       let remoteConfig = {
         ...config,
       };
-      L = remoteConfig.url;
-      let Me = S.length;
+      originalUrl = remoteConfig.url;
+      let beforeCount = missingVars.length;
       if (remoteConfig.url)
         remoteConfig.url = resolveValue(remoteConfig.url, {
           remoteSink: true,
           selectsEndpoint: true,
         });
-      G = S.slice(Me);
+      urlMissingVars = missingVars.slice(beforeCount);
       if (remoteConfig.headers) {
         let resolvedHeaders = {};
         for (let [key, value] of Object.entries(remoteConfig.headers))
@@ -720,48 +763,57 @@ function resolvePluginMcpEnvironment(config, plugin, userConfig, errors, pluginN
       }
       if (remoteConfig.headersHelper)
         if (userConfig && hasUserConfigVariables(remoteConfig.headersHelper, userConfig)) {
-          w = `headersHelper for MCP server '${serverName ?? "<unnamed>"}' references \${user_config.*}. The substituted value would be passed to a shell; read the value inside the helper script instead (e.g. from an env var set in the server's "env" block).`;
+          configError = `headersHelper for MCP server '${serverName ?? "<unnamed>"}' references \${user_config.*}. The substituted value would be passed to a shell; read the value inside the helper script instead (e.g. from an env var set in the server's "env" block).`;
           if (errors && pluginName && serverName)
             errors.push({
               type: "mcp-config-invalid",
               source: plugin.source,
               plugin: pluginName,
               serverName,
-              validationError: w,
+              validationError: configError,
             });
         } else {
-          let We = substitutePluginVariables(remoteConfig.headersHelper, plugin);
-          let ze = subprocessEnv();
-          let lt = {
-            ...ze,
+          let substitutedHelper = substitutePluginVariables(remoteConfig.headersHelper, plugin);
+          let baseEnv = subprocessEnv();
+          let scrubbedEnv = {
+            ...baseEnv,
           };
-          let Je = new Set(listSecretEnvNames(ze));
-          for (let yt of Je) delete lt[yt];
-          Object.assign(lt, sanitizeEnvCredentials(lt).respelled);
-          let replaced = We.replace(new RegExp(ENV_REF_PATTERN, "g"), (yt, gt) =>
-            Je.has(gt) ? (yt.includes(":-") ? yt.slice(yt.indexOf(":-") + 2, -1) : "") : yt,
+          let secretNames = new Set(listSecretEnvNames(baseEnv));
+          for (let name of secretNames) delete scrubbedEnv[name];
+          Object.assign(scrubbedEnv, sanitizeEnvCredentials(scrubbedEnv).respelled);
+          let replaced = substitutedHelper.replace(new RegExp(ENV_REF_PATTERN, "g"), (wholeRef, varName) =>
+            secretNames.has(varName)
+              ? wholeRef.includes(":-")
+                ? wholeRef.slice(wholeRef.indexOf(":-") + 2, -1)
+                : ""
+              : wholeRef,
           );
-          let { expanded, missingVars } = expandMcpCredentialEnvVars(replaced, lt, undefined, {
-            blankAsLive: true,
-            blankList,
-          });
-          S.push(...missingVars);
+          let { expanded, missingVars: missingVars_2 } = expandMcpCredentialEnvVars(
+            replaced,
+            scrubbedEnv,
+            undefined,
+            {
+              blankAsLive: true,
+              blankList,
+            },
+          );
+          missingVars.push(...missingVars_2);
           remoteConfig.headersHelper = expanded;
         }
-      we = remoteConfig;
+      resolved = remoteConfig;
       break;
     }
     case "sse-ide":
     case "ws-ide":
     case "sdk":
     case "claudeai-proxy":
-      we = config;
-      Se = true;
+      resolved = config;
+      endpointTemplated = true;
       break;
   }
-  if (errors && S.length > 0) {
-    let Ie = uniq(S);
-    let varList = Ie.join(", ");
+  if (errors && missingVars.length > 0) {
+    let uniqueVars = uniq(missingVars);
+    let varList = uniqueVars.join(", ");
     logForDebugging(`Missing environment variables in plugin MCP config: ${varList}`, {
       level: "warn",
     });
@@ -772,36 +824,36 @@ function resolvePluginMcpEnvironment(config, plugin, userConfig, errors, pluginN
         plugin: pluginName,
         serverName,
         validationError: formatWithheldEnvNotice(
-          Ie,
+          uniqueVars,
           isManagedPluginScope({
             pluginSource: plugin.source,
           }),
         ),
       });
   }
-  let Ee;
-  if ((we.type === "sse" || we.type === "http" || we.type === "ws") && "url" in we) {
-    let Ie = false;
+  let errorReason;
+  if ((resolved.type === "sse" || resolved.type === "http" || resolved.type === "ws") && "url" in resolved) {
+    let isValid = false;
     try {
-      new URL(we.url);
-      Ie = true;
+      new URL(resolved.url);
+      isValid = true;
     } catch {}
-    if (!Ie) {
-      if (!L?.trim()) {
-        Ee = "url_empty";
-        w = "No URL configured for this server";
-      } else if (G.length > 0) {
-        Ee = "env_missing";
-        w = formatWithheldEnvNotice(
-          uniq(G),
+    if (!isValid) {
+      if (!originalUrl?.trim()) {
+        errorReason = "url_empty";
+        configError = "No URL configured for this server";
+      } else if (urlMissingVars.length > 0) {
+        errorReason = "env_missing";
+        configError = formatWithheldEnvNotice(
+          uniq(urlMissingVars),
           isManagedPluginScope({
             pluginSource: plugin.source,
           }),
         );
       } else {
-        Ee = L.includes("${user_config.") ? "user_config_missing" : "url_invalid";
-        w =
-          Ee === "user_config_missing"
+        errorReason = originalUrl.includes("${user_config.") ? "user_config_missing" : "url_invalid";
+        configError =
+          errorReason === "user_config_missing"
             ? `URL is unset or invalid \u2014 open /plugin manage and configure ${pluginName ?? "the plugin"} options`
             : `Plugin ${pluginName ?? plugin.source} has an invalid MCP url`;
         if (errors && pluginName && serverName)
@@ -810,44 +862,44 @@ function resolvePluginMcpEnvironment(config, plugin, userConfig, errors, pluginN
             source: plugin.source,
             plugin: pluginName,
             serverName,
-            validationError: w,
+            validationError: configError,
           });
       }
     }
   }
-  let Ae = {
-    ...(q && {
-      configuredCommand: q,
+  let resolvedConfig = {
+    ...(stdioDiff && {
+      configuredCommand: stdioDiff,
     }),
-    ...we,
-    ...(w && {
-      configError: w,
-      configErrorReason: Ee,
+    ...resolved,
+    ...(configError && {
+      configError,
+      configErrorReason: errorReason,
     }),
   };
-  return Se
+  return endpointTemplated
     ? {
-        ...Ae,
+        ...resolvedConfig,
         pluginEndpointTemplated: true,
       }
-    : Ae;
+    : resolvedConfig;
 }
 //@ chunk-e6aww6q8.js:3820347-3820777 fingerprint = getPluginMcpServers (0.644)
 /**
  * 已启用插件的最终 MCP 服务器配置（变量已解析）；供 MCP 配置合并（services/mcp/config）使用。
  */
-async function getPluginMcpServers(plugin, errors = [], r, s, warnings = []) {
+async function getPluginMcpServers(plugin, errors = [], storageV5, credentials, warnings = []) {
   if (!plugin.enabled) return;
   if (plugin.mcpServers) pushMcpbNeedsConfigWarnings(plugin, warnings);
   let servers =
     plugin.mcpServers ||
-    (await loadPluginMcpServersFromSources(plugin, errors, r, s, {
+    (await loadPluginMcpServersFromSources(plugin, errors, storageV5, credentials, {
       warnings,
     }));
   if (!servers) return;
   let resolvedServers = {};
   for (let [name, config] of Object.entries(servers)) {
-    let userConfig = await loadChannelUserConfig(plugin, name, s);
+    let userConfig = await loadChannelUserConfig(plugin, name, credentials);
     try {
       resolvedServers[name] = runWithPluginWriteScope(
         {
@@ -872,26 +924,30 @@ async function getPluginMcpServers(plugin, errors = [], r, s, warnings = []) {
     plugin.officialMarketplaceSourceVouched === true,
   );
 }
-//@ chunk-d4eg9at2.js:46214-46302 fingerprint = buildMcpUserConfig (1)
-/**
- * 插件是否声明了 userConfig（名字配错，见 lead 建议）。
- */
-function hasPluginUserConfig(s) {
-  let userConfig = s?.manifest.userConfig;
-  return userConfig && Object.keys(userConfig).length > 0 ? true : undefined;
-}
 //@ chunk-k9mgeeff.js:3581-3828 fingerprint = loadPluginMcpServers (0.615)
 /**
  * 列出插件声明的 MCP 服务器配置（.mcp.json 与 manifest.mcpServers 中的文件/内联项，不含 MCPB 包），用于展示。
  */
-async function loadPluginMcpServers(n) {
-  if (n.isBuiltin) return [];
-  let e = [await readMcpServerNames(await resolveComponentPath(n, ".mcp.json"))];
-  for (let r of [n.manifest.mcpServers ?? []].flat())
-    if (typeof r !== "string") e.push(objectKeysOf(r));
-    else if (!isMcpbSource(r) && !containsPathTraversal(r) && !hasDotDotWithSpaceSegment(r))
-      e.push(await readMcpServerNames(await resolvePluginDirComponentPath(n, r)));
-  return e.flat();
+async function loadPluginMcpServers(plugin) {
+  if (plugin.isBuiltin) return [];
+  let nameLists = [await readMcpServerNames(await resolveComponentPath(plugin, ".mcp.json"))];
+  for (let declaration of [plugin.manifest.mcpServers ?? []].flat())
+    if (typeof declaration !== "string") nameLists.push(objectKeysOf(declaration));
+    else if (
+      !isMcpbSource(declaration) &&
+      !containsPathTraversal(declaration) &&
+      !hasDotDotWithSpaceSegment(declaration)
+    )
+      nameLists.push(await readMcpServerNames(await resolvePluginDirComponentPath(plugin, declaration)));
+  return nameLists.flat();
+}
+//@ chunk-d4eg9at2.js:46214-46302 fingerprint = buildMcpUserConfig (1)
+/**
+ * 插件是否声明了 userConfig（名字配错，见 lead 建议）。
+ */
+function hasPluginUserConfig(plugin) {
+  let userConfig = plugin?.manifest.userConfig;
+  return userConfig && Object.keys(userConfig).length > 0 ? true : undefined;
 }
 export {
   getPluginMcpServers,

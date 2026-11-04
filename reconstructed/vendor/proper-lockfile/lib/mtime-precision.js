@@ -5,10 +5,10 @@
  * pieces: chunk-bmbhxpfm.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../runtime/bun-runtime.js";
 
 //@ chunk-bmbhxpfm.js:17126-17645 cjs-fingerprint
-var require_mtime_precision = x(function (cjsExports, cjsModule) {
+var require_mtime_precision = __commonJS(function (cjsExports, cjsModule) {
   var cacheSymbol = Symbol();
   function probe(file, fs, callback) {
     let cachedPrecision = fs[cacheSymbol];

@@ -17,6 +17,7 @@ import {
   THINKING_SETTINGS_INVALID_MESSAGE,
 } from "../../bridge/controlRequests.js";
 import { WireSafeControlError } from "../../utils/errors.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-0sfjpx19.js:135581-136061 placement
 class ThinkingDisplayState {
@@ -32,15 +33,15 @@ class ThinkingDisplayState {
   current() {
     return this.config;
   }
-  apply(e, n) {
-    if (n !== undefined) {
-      this.display = n ?? undefined;
-      setThinkingDisplayExplicit(n !== null);
+  apply(maxThinkingTokens, display) {
+    if (display !== undefined) {
+      this.display = display ?? undefined;
+      setThinkingDisplayExplicit(display !== null);
     }
-    if (e === undefined) this.config = thinkingConfigFor(null, this.display, this.config);
+    if (maxThinkingTokens === undefined) this.config = thinkingConfigFor(null, this.display, this.config);
     else {
-      this.holdsDefault = e === null;
-      this.config = thinkingConfigFor(e, this.display, this.resetAnchor);
+      this.holdsDefault = maxThinkingTokens === null;
+      this.config = thinkingConfigFor(maxThinkingTokens, this.display, this.resetAnchor);
     }
   }
   refreshDefault() {
@@ -48,66 +49,75 @@ class ThinkingDisplayState {
   }
 }
 //@ chunk-0sfjpx19.js:136061-136322 placement
-var HIGHLIGHTS_UNAVAILABLE_REASONS = {
-  experimentalBetasOff: formatHighlightsRefusal(
-    "experimental betas are off (CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS or organization policy)",
-  ),
-  model: formatHighlightsRefusal("this session's model does not support it on this API provider"),
-  apiRejected: formatHighlightsRefusal('the API has already rejected "highlights"'),
-};
+var HIGHLIGHTS_UNAVAILABLE_REASONS; // deferred: uses formatHighlightsRefusal of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-0sfjpx19.js:136061", () => {
+  HIGHLIGHTS_UNAVAILABLE_REASONS = {
+    experimentalBetasOff: formatHighlightsRefusal(
+      "experimental betas are off (CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS or organization policy)",
+    ),
+    model: formatHighlightsRefusal("this session's model does not support it on this API provider"),
+    apiRejected: formatHighlightsRefusal('the API has already rejected "highlights"'),
+  };
+});
 //@ chunk-0sfjpx19.js:136322-136513 placement
-function highlightsRefusal(e) {
-  if (e !== "highlights") return;
-  let n = HIGHLIGHTS_UNAVAILABLE_REASONS;
+function highlightsRefusal(display) {
+  if (display !== "highlights") return;
+  let reasons = HIGHLIGHTS_UNAVAILABLE_REASONS;
   if (shouldSendInterleavedThinkingBeta(getMainLoopModel()))
     return isThinkingHighlightsRefused()
       ? {
           ok: false,
-          error: n.apiRejected,
+          error: reasons.apiRejected,
         }
       : undefined;
   if (areExperimentalBetasDisabled())
     return {
       ok: false,
-      error: n.experimentalBetasOff,
+      error: reasons.experimentalBetasOff,
     };
   return {
     ok: false,
-    error: n.model,
+    error: reasons.model,
   };
 }
 //@ chunk-0sfjpx19.js:136513-136622 placement
 /**
  * 应用思考预算与显示设置：显示设置被拒时视请求情况返回错误或只应用预算。
  */
-function applyThinkingBudget(e, maxThinkingTokens, thinkingDisplay) {
-  let s = highlightsRefusal(thinkingDisplay);
-  if (!s) return e.apply(maxThinkingTokens, thinkingDisplay);
-  if (maxThinkingTokens === undefined) return s;
-  return e.apply(maxThinkingTokens, undefined) ?? s;
+function applyThinkingBudget(state, tokenCount, display) {
+  let refusal = highlightsRefusal(display);
+  if (!refusal) return state.apply(tokenCount, display);
+  if (tokenCount === undefined) return refusal;
+  return state.apply(tokenCount, undefined) ?? refusal;
 }
 //@ chunk-0sfjpx19.js:136622-136819 placement
 /**
  * 处理 set_max_thinking_tokens 控制请求：校验请求，应用预算与显示设置，部分被拒时抛出可回传的错误。
  */
-var handleSetMaxThinkingTokens = (e, n) => {
-  if (!isValidThinkingSettingsRequest(e)) throw new WireSafeControlError(THINKING_SETTINGS_INVALID_MESSAGE);
-  let r = applyThinkingBudget(n.thinkingBudget, e.max_thinking_tokens, e.thinking_display);
-  if (r) throw new WireSafeControlError(r.error, "set_max_thinking_tokens: part of the request refused");
+var handleSetMaxThinkingTokens = (request, host) => {
+  if (!isValidThinkingSettingsRequest(request))
+    throw new WireSafeControlError(THINKING_SETTINGS_INVALID_MESSAGE);
+  let refusal = applyThinkingBudget(
+    host.thinkingBudget,
+    request.max_thinking_tokens,
+    request.thinking_display,
+  );
+  if (refusal)
+    throw new WireSafeControlError(refusal.error, "set_max_thinking_tokens: part of the request refused");
 };
 //@ chunk-0sfjpx19.js:136819-137043 placement
 /**
  * 由预算生成 thinking 配置：null 时沿用现有配置或（允许时）用 adaptive，0 为禁用，其他为 enabled 带预算，都附带 display。
  */
-function thinkingConfigFor(e, display, r) {
-  if (e === null) {
-    if (r)
-      return r.type !== "disabled"
+function thinkingConfigFor(maxThinkingTokens, display, existing) {
+  if (maxThinkingTokens === null) {
+    if (existing)
+      return existing.type !== "disabled"
         ? {
-            ...r,
+            ...existing,
             display,
           }
-        : r;
+        : existing;
     return display !== undefined && isBetaHeaderAllowed()
       ? {
           type: "adaptive",
@@ -115,18 +125,18 @@ function thinkingConfigFor(e, display, r) {
         }
       : undefined;
   }
-  if (e === 0)
+  if (maxThinkingTokens === 0)
     return {
       type: "disabled",
     };
   return {
     type: "enabled",
-    budgetTokens: e,
+    budgetTokens: maxThinkingTokens,
     display,
   };
 }
 //@ chunk-0sfjpx19.js:137043-137280 placement
-function formatHighlightsRefusal(e) {
-  return `set_max_thinking_tokens: thinking_display "highlights" was not applied because ${e}; the display stays as it was. max_thinking_tokens was applied if the request carried it. "summarized" and "omitted" are accepted.`;
+function formatHighlightsRefusal(reason) {
+  return `set_max_thinking_tokens: thinking_display "highlights" was not applied because ${reason}; the display stays as it was. max_thinking_tokens was applied if the request carried it. "summarized" and "omitted" are accepted.`;
 }
 export { handleSetMaxThinkingTokens, ThinkingDisplayState, applyThinkingBudget, thinkingConfigFor };

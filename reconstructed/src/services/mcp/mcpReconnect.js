@@ -80,213 +80,221 @@ import { logEvent } from "../analytics/index.js";
 import { toolNameForTelemetry } from "../analytics/metadata.js";
 import { lit } from "../analytics/safeMetadata.js";
 import { toolsListAheadTelemetry } from "./toolsListAhead.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-fpvb8c85.js:1248-1317 placement
 /**
  * 懒加载 MCP 客户端模块。
  */
 function mcpClientModule() {
-  return require("./chunk-asne9cp8.js").mcpClientModule();
+  return require("./emitTripwireEvent.lazy.js").mcpClientModule();
 }
 //@ chunk-fpvb8c85.js:1317-1427 placement
 /**
  * 解析重连使用的服务器配置：显式给出的优先，非设置作用域的现有配置次之，否则调用回调查找。
  */
-function resolveReconnectConfig(n, e, config, getMcpConfigByName) {
-  if (Object.hasOwn(e, n)) return e[n];
+function resolveReconnectConfig(serverName, configs, config, getMcpConfigByName) {
+  if (Object.hasOwn(configs, serverName)) return configs[serverName];
   if (config && !MCP_SETTINGS_SCOPE_SET.has(config.scope)) return config;
-  return getMcpConfigByName ? getMcpConfigByName(n) : (config ?? null);
+  return getMcpConfigByName ? getMcpConfigByName(serverName) : (config ?? null);
 }
 //@ chunk-fpvb8c85.js:1427-1605 placement
 /**
  * 在 MCP 状态中把服务器标记为禁用并移除其工具。
  */
-function markServerDisabled(dynamicMcpState, e) {
-  if (!dynamicMcpState.clients.some((client) => client.name === e)) return dynamicMcpState;
+function markServerDisabled(dynamicMcpState, serverName) {
+  if (!dynamicMcpState.clients.some((client) => client.name === serverName)) return dynamicMcpState;
   return {
     ...dynamicMcpState,
     clients: dynamicMcpState.clients.map((client) =>
-      client.name === e
+      client.name === serverName
         ? {
-            name: e,
+            name: serverName,
             type: "disabled",
             config: client.config,
           }
         : client,
     ),
-    tools: filterCommandsByServer(dynamicMcpState.tools, e),
+    tools: filterCommandsByServer(dynamicMcpState.tools, serverName),
   };
 }
 //@ chunk-fpvb8c85.js:1605-1787 placement
 /**
  * 取出某服务器在 MCP 状态中的工具、命令、资源与资源模板。
  */
-function serverItemsOf(n, e) {
-  let mcpPrefix = getMcpPrefix(e);
+function serverItemsOf(state, serverName) {
+  let mcpPrefix = getMcpPrefix(serverName);
   return {
-    tools: n.tools.filter((tool) => isToolFromMcpServer(tool, e, mcpPrefix)),
-    commands: n.commands.filter((command) => commandBelongsToServer(command, e)),
-    resources: n.resources[e],
-    resourceTemplates: n.resourceTemplates[e],
+    tools: state.tools.filter((tool) => isToolFromMcpServer(tool, serverName, mcpPrefix)),
+    commands: state.commands.filter((command) => commandBelongsToServer(command, serverName)),
+    resources: state.resources[serverName],
+    resourceTemplates: state.resourceTemplates[serverName],
   };
 }
 //@ chunk-fpvb8c85.js:1787-1995 placement
 /**
  * 计算重连结果应呈现的拒绝状态：托管策略拦截、用户禁用或其他拨号拦截原因。
  */
-function refusalStateFor(n, client) {
-  let o = client.type !== "failed" ? mcpDialBlockCause(n, client.config) : undefined;
-  if (o === "managed-policy") return failedServerRefusal(n, client.config, o);
-  if (isMcpServerDisabled(n) && !isPolicyBlockedFailure(client))
+function refusalStateFor(serverName, client) {
+  let blockCause = client.type !== "failed" ? mcpDialBlockCause(serverName, client.config) : undefined;
+  if (blockCause === "managed-policy") return failedServerRefusal(serverName, client.config, blockCause);
+  if (isMcpServerDisabled(serverName) && !isPolicyBlockedFailure(client))
     return {
-      name: n,
+      name: serverName,
       type: "disabled",
       config: client.config,
     };
-  return o ? failedServerRefusal(n, client.config, o) : undefined;
+  return blockCause ? failedServerRefusal(serverName, client.config, blockCause) : undefined;
 }
 //@ chunk-fpvb8c85.js:1995-2064 placement
 /**
  * 构造一个“失败 + 拒绝原因”的服务器结果。
  */
-function failedServerRefusal(n, config, o) {
+function failedServerRefusal(serverName, config, blockCause) {
   return {
-    name: n,
+    name: serverName,
     type: "failed",
     config,
-    ...mcpGateError(o, n, config),
+    ...mcpGateError(blockCause, serverName, config),
   };
 }
 //@ chunk-fpvb8c85.js:2064-2160 placement
 /**
  * 用传入配置修正重连结果（被拒时保留原客户端）。
  */
-function reconcileConfig(n, e) {
-  return e.asked || n === undefined || withConfigScope(e.client, n.config) === e.client
-    ? e
-    : applyMcpServerConfig(n.config, e);
+function reconcileConfig(existingRow, incoming) {
+  return incoming.asked ||
+    existingRow === undefined ||
+    withConfigScope(incoming.client, existingRow.config) === incoming.client
+    ? incoming
+    : applyMcpServerConfig(existingRow.config, incoming);
 }
 //@ chunk-fpvb8c85.js:2160-2487 placement
 /**
  * 合并重连结果与传入配置（拒绝时保留原客户端）。
  */
-function mergeReconnectResult(n, e, o) {
-  let { incoming, result: P, outcome } = o;
+function mergeReconnectResult(serverName, existingRow, params) {
+  let { incoming, result, outcome } = params;
   if (outcome === "refused") {
-    let M = incoming.asked ? P.client : withMcpConfig(P.client, e.config);
-    return M === P.client
-      ? P
+    let reboundClient = incoming.asked ? result.client : withMcpConfig(result.client, existingRow.config);
+    return reboundClient === result.client
+      ? result
       : {
-          ...P,
-          client: M,
+          ...result,
+          client: reboundClient,
         };
   }
-  if (withConfigScope(P.client, e.config) === P.client) return P;
-  let C = reconcileConfig(e, incoming);
-  if (C.client.type === "disabled") return C;
-  let _ = refusalStateFor(n, C.client);
-  return _
+  if (withConfigScope(result.client, existingRow.config) === result.client) return result;
+  let reconciled = reconcileConfig(existingRow, incoming);
+  if (reconciled.client.type === "disabled") return reconciled;
+  let refusal = refusalStateFor(serverName, reconciled.client);
+  return refusal
     ? {
-        ...C,
-        client: _,
+        ...reconciled,
+        client: refusal,
         tools: [],
         commands: [],
       }
-    : C;
+    : reconciled;
 }
 //@ chunk-fpvb8c85.js:2487-3946 placement
 /**
  * 把重连结果写入 AppState/动态 MCP 状态，旧连接关闭。
  */
-function applyMcpReconnect(n, e, o) {
-  let { getAppState, setAppState, getDynamicMcpState, setDynamicMcpState } = n;
-  let _ = () => {
-    if (o.client.type === "connected")
+function applyMcpReconnect(handles, serverName, settlement) {
+  let { getAppState, setAppState, getDynamicMcpState, setDynamicMcpState } = handles;
+  let closeConnection = () => {
+    if (settlement.client.type === "connected")
       mcpClientModule()
-        .detachAndCloseConnection(o.client)
+        .detachAndCloseConnection(settlement.client)
         .catch(() => {});
   };
-  let found = getAppState().mcp.clients.find((client) => client.name === e);
-  let found_2 = getDynamicMcpState().clients.find((client) => client.name === e);
-  if (!found && !found_2) {
-    _();
+  let row = getAppState().mcp.clients.find((client) => client.name === serverName);
+  let found = getDynamicMcpState().clients.find((client) => client.name === serverName);
+  if (!row && !found) {
+    closeConnection();
     return "dropped";
   }
-  let v = serverCacheKey(e, o.client.config);
-  let R = (p) => p !== undefined && serverCacheKey(e, p.config) !== v;
-  if (R(found) || R(found_2)) {
-    logForDebugging(`[MCP] ${e}: dropping a settlement whose slot config changed mid-flight`);
-    _();
+  let cacheKey = serverCacheKey(serverName, settlement.client.config);
+  let configChanged = (row) => row !== undefined && serverCacheKey(serverName, row.config) !== cacheKey;
+  if (configChanged(row) || configChanged(found)) {
+    logForDebugging(`[MCP] ${serverName}: dropping a settlement whose slot config changed mid-flight`);
+    closeConnection();
     return "dropped";
   }
-  if (identityChangedForRemote(o.client.config, o.attemptEpoch)) {
+  if (identityChangedForRemote(settlement.client.config, settlement.attemptEpoch)) {
     logForDebugging(
-      `[MCP] ${e}: settlement superseded by an account switch \u2014 closed, not installed (the identity boundary owns the row)`,
+      `[MCP] ${serverName}: settlement superseded by an account switch \u2014 closed, not installed (the identity boundary owns the row)`,
     );
-    _();
+    closeConnection();
     return "superseded";
   }
-  let T = reconcileConfig(found ?? found_2, o);
-  let h = T;
-  let y = "applied";
-  if (T.client.type !== "disabled") {
-    let p = refusalStateFor(e, T.client);
-    if (p) {
-      _();
-      if (p.type === "failed")
+  let reconciled = reconcileConfig(row ?? found, settlement);
+  let toInstall = reconciled;
+  let outcome = "applied";
+  if (reconciled.client.type !== "disabled") {
+    let refusal = refusalStateFor(serverName, reconciled.client);
+    if (refusal) {
+      closeConnection();
+      if (refusal.type === "failed")
         mcpClientModule()
-          .dropDiscoveryEntry(e, T.client.config)
+          .dropDiscoveryEntry(serverName, reconciled.client.config)
           .catch(() => {});
-      h = {
-        client: p,
+      toInstall = {
+        client: refusal,
         tools: [],
         commands: [],
         resources: [],
-        attemptEpoch: o.attemptEpoch,
+        attemptEpoch: settlement.attemptEpoch,
       };
-      y = "refused";
+      outcome = "refused";
     }
   }
-  setAppState((p) => {
-    let I = setMcpClientInAppState(p, e, h, {
-      appendIfAbsent: h.client.config.type !== "sdk",
+  setAppState((state) => {
+    let applied = setMcpClientInAppState(state, serverName, toInstall, {
+      appendIfAbsent: toInstall.client.config.type !== "sdk",
     });
-    let j = !!h.resources && h.resources.length > 0;
-    let B = !!h.resourceTemplates && h.resourceTemplates.length > 0;
-    return j && B
-      ? I
+    let hasResources = !!toInstall.resources && toInstall.resources.length > 0;
+    let hasTemplates = !!toInstall.resourceTemplates && toInstall.resourceTemplates.length > 0;
+    return hasResources && hasTemplates
+      ? applied
       : {
-          ...I,
+          ...applied,
           mcp: {
-            ...I.mcp,
-            resources: j ? I.mcp.resources : omitKeys(I.mcp.resources, e),
-            resourceTemplates: B ? I.mcp.resourceTemplates : omitKeys(I.mcp.resourceTemplates, e),
+            ...applied.mcp,
+            resources: hasResources ? applied.mcp.resources : omitKeys(applied.mcp.resources, serverName),
+            resourceTemplates: hasTemplates
+              ? applied.mcp.resourceTemplates
+              : omitKeys(applied.mcp.resourceTemplates, serverName),
           },
         };
   });
-  if (!found_2) return y;
-  let mcpPrefix = getMcpPrefix(e);
+  if (!found) return outcome;
+  let mcpPrefix = getMcpPrefix(serverName);
   let dynamicMcpState = getDynamicMcpState();
-  let x =
-    found === undefined
-      ? h
-      : mergeReconnectResult(e, found_2, {
-          incoming: o,
-          result: h,
-          outcome: y,
+  let merged =
+    row === undefined
+      ? toInstall
+      : mergeReconnectResult(serverName, found, {
+          incoming: settlement,
+          result: toInstall,
+          outcome,
         });
   setDynamicMcpState({
     ...dynamicMcpState,
-    clients: dynamicMcpState.clients.map((client) => (client.name === e ? x.client : client)),
-    tools: [...dynamicMcpState.tools.filter((tool) => !isToolFromMcpServer(tool, e, mcpPrefix)), ...x.tools],
+    clients: dynamicMcpState.clients.map((client) => (client.name === serverName ? merged.client : client)),
+    tools: [
+      ...dynamicMcpState.tools.filter((tool) => !isToolFromMcpServer(tool, serverName, mcpPrefix)),
+      ...merged.tools,
+    ],
   });
-  return y;
+  return outcome;
 }
 //@ chunk-fpvb8c85.js:3946-7840 placement
 /**
  * MCP 身份（账号/组织）变化后重连受影响的服务器。
  */
-function reconnectMcpOnIdentityChange(n) {
+function reconnectMcpOnIdentityChange(options) {
   if (!isDiscoveryCacheOn()) return;
   let {
     getAppState,
@@ -297,132 +305,142 @@ function reconnectMcpOnIdentityChange(n) {
     credentials,
     force = false,
     spareUnchangedFrom,
-  } = n;
+  } = options;
   deleteNeedsAuthCache(storageV5);
-  let r = mcpClientModule();
+  let clientModule = mcpClientModule();
   let cliOwnedState = getCliOwnedState();
-  if (!r.mcpIdentityChangedSinceLastCheck() && !force) return cliOwnedState.headlessConnectorMountInFlight;
-  let R = !force || !isUnresolved(getMcpIdentitySnapshot());
+  if (!clientModule.mcpIdentityChangedSinceLastCheck() && !force)
+    return cliOwnedState.headlessConnectorMountInFlight;
+  let identityResolved = !force || !isUnresolved(getMcpIdentitySnapshot());
   let dynamicMcpState = getDynamicMcpState();
-  let h = [...getAppState().mcp.clients, ...dynamicMcpState.clients];
-  let y = new Set();
-  let s = new Set();
-  let i = new Set();
-  let x = new Set();
+  let rows = [...getAppState().mcp.clients, ...dynamicMcpState.clients];
+  let redialNames = new Set();
+  let claudeAiNames = new Set();
+  let sparedKeys = new Set();
+  let sparedNames = new Set();
   if (spareUnchangedFrom) {
-    for (let c of h) x.add(c.name);
-    for (let c of h) if (!spareUnchangedFrom.has(c) || c.type === "pending") x.delete(c.name);
+    for (let row of rows) sparedNames.add(row.name);
+    for (let row of rows)
+      if (!spareUnchangedFrom.has(row) || row.type === "pending") sparedNames.delete(row.name);
   }
-  for (let c of h) {
-    if (!isRemoteMcpTransport(c.config) || x.has(c.name)) {
-      i.add(serverCacheKey(c.name, c.config));
+  for (let row of rows) {
+    if (!isRemoteMcpTransport(row.config) || sparedNames.has(row.name)) {
+      sparedKeys.add(serverCacheKey(row.name, row.config));
       continue;
     }
-    r.disposeServerConnectionDetached(c.name, c.config);
-    if (c.config.scope === "claudeai") {
-      s.add(c.name);
+    clientModule.disposeServerConnectionDetached(row.name, row.config);
+    if (row.config.scope === "claudeai") {
+      claudeAiNames.add(row.name);
       continue;
     }
-    if (c.type !== "disabled") y.add(c.name);
+    if (row.type !== "disabled") redialNames.add(row.name);
   }
-  r.evictAllMcpMemosOnIdentityChange(i, hasRemoteMcpServers(h));
+  clientModule.evictAllMcpMemosOnIdentityChange(sparedKeys, hasRemoteMcpServers(rows));
   deferredToolCache().clear();
-  let p = Object.create(null);
-  let I = new Set();
-  let j = n.getHostOwnedConfigs?.() ?? dynamicMcpState.configs;
-  for (let c of h) {
-    if (!y.has(c.name) || !R) continue;
-    let w = p[c.name] ?? resolveReconnectConfig(c.name, j, c.config, getMcpConfigByName);
-    if (!w) {
-      I.add(c.name);
+  let configsToRedial = Object.create(null);
+  let missingConfigNames = new Set();
+  let configs = options.getHostOwnedConfigs?.() ?? dynamicMcpState.configs;
+  for (let row of rows) {
+    if (!redialNames.has(row.name) || !identityResolved) continue;
+    let config =
+      configsToRedial[row.name] ?? resolveReconnectConfig(row.name, configs, row.config, getMcpConfigByName);
+    if (!config) {
+      missingConfigNames.add(row.name);
       continue;
     }
-    let H = (p[c.name] ??= w);
-    if (H !== c.config && serverCacheKey(c.name, H) !== serverCacheKey(c.name, c.config))
+    let chosenConfig = (configsToRedial[row.name] ??= config);
+    if (
+      chosenConfig !== row.config &&
+      serverCacheKey(row.name, chosenConfig) !== serverCacheKey(row.name, row.config)
+    )
       logForDebugging(
-        `[MCP] ${c.name}: appState and dynamic-store rows disagree on config at the identity boundary \u2014 converging both under the ${Object.hasOwn(j, c.name) ? "host's" : "appState row's"} config and re-dialing it`,
+        `[MCP] ${row.name}: appState and dynamic-store rows disagree on config at the identity boundary \u2014 converging both under the ${Object.hasOwn(configs, row.name) ? "host's" : "appState row's"} config and re-dialing it`,
         {
           level: "warn",
         },
       );
   }
-  let B = new Map();
-  let W = headlessSyncsClaudeAiConnectors() && R;
-  let F = Object.create(null);
-  for (let [key, value] of Object.entries(p)) {
-    if (W && isJudgedOnClaudeAiConnectorList(value)) {
-      F[key] = value;
-      delete p[key];
+  let refusals = new Map();
+  let syncsConnectors = headlessSyncsClaudeAiConnectors() && identityResolved;
+  let connectorConfigs = Object.create(null);
+  for (let [key, value] of Object.entries(configsToRedial)) {
+    if (syncsConnectors && isJudgedOnClaudeAiConnectorList(value)) {
+      connectorConfigs[key] = value;
+      delete configsToRedial[key];
       continue;
     }
-    let H = mcpDialBlockCause(key, value);
-    if (H) {
-      B.set(key, failedServerRefusal(key, value, H));
-      delete p[key];
+    let blockCause = mcpDialBlockCause(key, value);
+    if (blockCause) {
+      refusals.set(key, failedServerRefusal(key, value, blockCause));
+      delete configsToRedial[key];
     }
   }
-  let U = [...y, ...s];
-  if (U.length > 0) {
-    let mapped = U.map((l) => [l, getMcpPrefix(l)]);
-    let w = (tool) => mapped.some(([k, L]) => isToolFromMcpServer(tool, k, L));
-    let H = (l) =>
-      s.has(l.name)
+  let affectedNames = [...redialNames, ...claudeAiNames];
+  if (affectedNames.length > 0) {
+    let mapped = affectedNames.map((name) => [name, getMcpPrefix(name)]);
+    let belongs = (tool) => mapped.some(([name, prefix]) => isToolFromMcpServer(tool, name, prefix));
+    let replacementRows = (row) =>
+      claudeAiNames.has(row.name)
         ? []
-        : y.has(l.name)
+        : redialNames.has(row.name)
           ? [
-              !R || I.has(l.name)
-                ? identityChangedFailure(l.name, l.config)
-                : (B.get(l.name) ?? {
-                    name: l.name,
+              !identityResolved || missingConfigNames.has(row.name)
+                ? identityChangedFailure(row.name, row.config)
+                : (refusals.get(row.name) ?? {
+                    name: row.name,
                     type: "pending",
-                    config: p[l.name] ?? F[l.name] ?? l.config,
+                    config: configsToRedial[row.name] ?? connectorConfigs[row.name] ?? row.config,
                   }),
             ]
-          : [l];
-    setAppState((l) => ({
-      ...l,
+          : [row];
+    setAppState((state) => ({
+      ...state,
       mcp: {
-        ...l.mcp,
-        clients: l.mcp.clients.flatMap(H),
-        tools: reject_default(l.mcp.tools, w),
-        commands: reject_default(l.mcp.commands, (k) => U.some((L) => commandBelongsToServer(k, L))),
-        resources: omitKeys(l.mcp.resources, U),
-        resourceTemplates: omitKeys(l.mcp.resourceTemplates, U),
+        ...state.mcp,
+        clients: state.mcp.clients.flatMap(replacementRows),
+        tools: reject_default(state.mcp.tools, belongs),
+        commands: reject_default(state.mcp.commands, (command) =>
+          affectedNames.some((name) => commandBelongsToServer(command, name)),
+        ),
+        resources: omitKeys(state.mcp.resources, affectedNames),
+        resourceTemplates: omitKeys(state.mcp.resourceTemplates, affectedNames),
       },
     }));
     setDynamicMcpState({
       ...dynamicMcpState,
-      clients: dynamicMcpState.clients.flatMap(H),
-      tools: dynamicMcpState.tools.filter((tool) => !w(tool)),
+      clients: dynamicMcpState.clients.flatMap(replacementRows),
+      tools: dynamicMcpState.tools.filter((tool) => !belongs(tool)),
     });
   }
-  let u;
-  let D;
-  if (W) {
+  let connectorMounts;
+  let connectorPromise;
+  if (syncsConnectors) {
     let claudeAiConnectors = fetchClaudeAiConnectors(
       {
         getClients: () => getAppState().mcp.clients,
         getSuppressedPluginServers: () => getAppState().mcp.suppressedPluginMcpServers ?? [],
-        applyMcpUpdate: (l) => {
-          let k = new Set();
-          setAppState((A) => {
-            let X = l(A.mcp);
-            let ee = new Set(X.clients.map((client) => client.name));
-            k = new Set(A.mcp.clients.filter((client) => !ee.has(client.name)).map((client) => client.name));
+        applyMcpUpdate: (update) => {
+          let removedNames = new Set();
+          setAppState((state) => {
+            let nextMcp = update(state.mcp);
+            let nextNames = new Set(nextMcp.clients.map((client) => client.name));
+            removedNames = new Set(
+              state.mcp.clients.filter((client) => !nextNames.has(client.name)).map((client) => client.name),
+            );
             return {
-              ...A,
-              mcp: X,
+              ...state,
+              mcp: nextMcp,
             };
           });
-          if (k.size === 0) return;
+          if (removedNames.size === 0) return;
           let dynamicMcpState = getDynamicMcpState();
-          if (!dynamicMcpState.clients.some((client) => k.has(client.name))) return;
-          let mapped = [...k].map((A) => [A, getMcpPrefix(A)]);
+          if (!dynamicMcpState.clients.some((client) => removedNames.has(client.name))) return;
+          let mapped = [...removedNames].map((name) => [name, getMcpPrefix(name)]);
           setDynamicMcpState({
             ...dynamicMcpState,
-            clients: dynamicMcpState.clients.filter((client) => !k.has(client.name)),
+            clients: dynamicMcpState.clients.filter((client) => !removedNames.has(client.name)),
             tools: dynamicMcpState.tools.filter(
-              (tool) => !mapped.some(([X, ee]) => isToolFromMcpServer(tool, X, ee)),
+              (tool) => !mapped.some(([name, prefix]) => isToolFromMcpServer(tool, name, prefix)),
             ),
           });
         },
@@ -431,8 +449,8 @@ function reconnectMcpOnIdentityChange(n) {
       credentials,
     );
     claudeAiConnectors.settled.catch(() => {});
-    D = claudeAiConnectors.mounted.catch(() => "mounted");
-    let H = claudeAiConnectors.mounted
+    connectorPromise = claudeAiConnectors.mounted.catch(() => "mounted");
+    let connectorWork = claudeAiConnectors.mounted
       .then(
         () => {},
         (error) =>
@@ -441,85 +459,88 @@ function reconnectMcpOnIdentityChange(n) {
           }),
       )
       .finally(() => {
-        if (cliOwnedState.headlessConnectorMountInFlight === H)
+        if (cliOwnedState.headlessConnectorMountInFlight === connectorWork)
           cliOwnedState.headlessConnectorMountInFlight = undefined;
       });
-    cliOwnedState.headlessConnectorMountInFlight = u = H;
+    cliOwnedState.headlessConnectorMountInFlight = connectorMounts = connectorWork;
   }
-  if (y.size === 0 || !R) return u;
-  let Z = (c) => {
-    applyMcpReconnect(n, c.client.name, c);
+  if (redialNames.size === 0 || !identityResolved) return connectorMounts;
+  let applyResult = (result) => {
+    applyMcpReconnect(options, result.client.name, result);
   };
-  let z = {
+  let adapter = {
     getClients: () => [...getAppState().mcp.clients, ...getDynamicMcpState().clients],
     getSuppressedPluginServers: () => getAppState().mcp.suppressedPluginMcpServers ?? [],
-    applyMcpUpdate: (c) =>
-      setAppState((w) => ({
-        ...w,
-        mcp: c(w.mcp),
+    applyMcpUpdate: (update) =>
+      setAppState((state) => ({
+        ...state,
+        mcp: update(state.mcp),
       })),
   };
-  let q = (c) => {
-    r.getMcpToolsCommandsAndResources(Z, c, storageV5, credentials)
+  let redial = (configs) => {
+    clientModule
+      .getMcpToolsCommandsAndResources(applyResult, configs, storageV5, credentials)
       .catch((error) =>
         logForDebugging(`MCP re-dial after account switch failed: ${errorMessage(error)}`, {
           level: "warn",
         }),
       )
       .finally(() => {
-        retryRemoteMcpServers(c, z, storageV5, Z).catch((error) =>
+        retryRemoteMcpServers(configs, adapter, storageV5, applyResult).catch((error) =>
           logForDebugging(`MCP re-dial retry after account switch failed: ${errorMessage(error)}`, {
             level: "warn",
           }),
         );
       });
   };
-  q(p);
-  if (Object.keys(F).length === 0 || !D) return u;
-  let G = identityEpoch();
-  let K = D.then((c) => {
-    if (c === "superseded" || !isCurrentIdentityEpoch(G)) return;
-    let w = Object.create(null);
-    for (let [key, value] of Object.entries(F)) {
-      let k = mcpDialBlockCause(key, value);
-      if (k)
-        Z({
-          client: failedServerRefusal(key, value, k),
-          tools: [],
-          commands: [],
-          attemptEpoch: G,
-        });
-      else w[key] = value;
-    }
-    if (Object.keys(w).length > 0) q(w);
-  }).catch((error) =>
-    logForDebugging(
-      `MCP re-dial of held claude.ai proxy entries after account switch failed: ${errorMessage(error)}`,
-      {
-        level: "warn",
-      },
-    ),
-  );
-  let O = Promise.all([u, K])
+  redial(configsToRedial);
+  if (Object.keys(connectorConfigs).length === 0 || !connectorPromise) return connectorMounts;
+  let epochAtWait = identityEpoch();
+  let heldRedial = connectorPromise
+    .then((mountResult) => {
+      if (mountResult === "superseded" || !isCurrentIdentityEpoch(epochAtWait)) return;
+      let allowed = Object.create(null);
+      for (let [key, value] of Object.entries(connectorConfigs)) {
+        let blockCause = mcpDialBlockCause(key, value);
+        if (blockCause)
+          applyResult({
+            client: failedServerRefusal(key, value, blockCause),
+            tools: [],
+            commands: [],
+            attemptEpoch: epochAtWait,
+          });
+        else allowed[key] = value;
+      }
+      if (Object.keys(allowed).length > 0) redial(allowed);
+    })
+    .catch((error) =>
+      logForDebugging(
+        `MCP re-dial of held claude.ai proxy entries after account switch failed: ${errorMessage(error)}`,
+        {
+          level: "warn",
+        },
+      ),
+    );
+  let allWork = Promise.all([connectorMounts, heldRedial])
     .then(() => {})
     .finally(() => {
-      if (cliOwnedState.headlessConnectorMountInFlight === O)
+      if (cliOwnedState.headlessConnectorMountInFlight === allWork)
         cliOwnedState.headlessConnectorMountInFlight = undefined;
     });
-  cliOwnedState.headlessConnectorMountInFlight = O;
-  return O;
+  cliOwnedState.headlessConnectorMountInFlight = allWork;
+  return allWork;
 }
 //@ chunk-fpvb8c85.js:7840-8000 placement
 /**
  * 判断重连结果是否需要提交到状态：客户端没变时不提交，跳过相同配置时也不提交。
  */
-function shouldCommitReconnect(client, e, o, S) {
-  let P = o?.type === "connected" && o.client === client.client;
-  let E =
-    o !== undefined &&
-    o.type !== "disabled" &&
-    serverCacheKey(client.name, o.config) === serverCacheKey(client.name, e);
-  return !P && (!S || !E);
+function shouldCommitReconnect(client, config, currentRow, isRunEnding) {
+  let isSameClient = currentRow?.type === "connected" && currentRow.client === client.client;
+  let slotMatches =
+    currentRow !== undefined &&
+    currentRow.type !== "disabled" &&
+    serverCacheKey(client.name, currentRow.config) === serverCacheKey(client.name, config);
+  return !isSameClient && (!isRunEnding || !slotMatches);
 }
 //@ chunk-fpvb8c85.js:8000-8017 placement
 /**
@@ -531,63 +552,70 @@ var UNSETTLED_DIAL_SLEEP_MS = 1000;
 /**
  * 创建 MCP 断线重连的退避计算器。
  */
-function createReconnectBackoff(n) {
-  let { getAppState, getDynamicMcpState, now = Date.now } = n;
+function createReconnectBackoff(deps) {
+  let { getAppState, getDynamicMcpState, now = Date.now } = deps;
   let weakSet = new WeakSet();
   let weakMap = new WeakMap();
   let weakMap_2 = new WeakMap();
-  let _ = (M, r, v) => {
-    let R = r > 1 ? retryDelayMs(r - 1) - v : 0;
+  let holdOffDelay = (client, attempt, elapsedMs) => {
+    let delayMs = attempt > 1 ? retryDelayMs(attempt - 1) - elapsedMs : 0;
     let any = [...getAppState().mcp.clients, ...getDynamicMcpState().clients].some(
-      (h) => h.type === "connected" && h.client === M.client,
+      (row) => row.type === "connected" && row.client === client.client,
     );
-    if (R <= 0 || !any || n.isControlReconnectInFlight(M.name)) return 0;
+    if (delayMs <= 0 || !any || deps.isControlReconnectInFlight(client.name)) return 0;
     try {
-      n.onHeldOff?.(r, R);
+      deps.onHeldOff?.(attempt, delayMs);
     } catch (error) {
-      logForDebugging(`MCP reconnect hold-off observer failed for ${M.name}: ${errorMessage(error)}`, {
+      logForDebugging(`MCP reconnect hold-off observer failed for ${client.name}: ${errorMessage(error)}`, {
         level: "warn",
       });
     }
     logMCPDebug(
-      M.name,
-      `${M.config.type} transport closed again soon after it connected: reconnecting in ${R}ms`,
+      client.name,
+      `${client.config.type} transport closed again soon after it connected: reconnecting in ${delayMs}ms`,
     );
-    return R;
+    return delayMs;
   };
-  return (M) => {
-    for (let r of M) {
-      if (r.type === "connected") weakMap_2.set(r.client, r);
-      if (r.type !== "connected" || weakSet.has(r.client) || !isLocalMcpServer(r.config)) continue;
-      weakSet.add(r.client);
-      let v = now();
-      let R = (T) => {
-        if (isShuttingDown() || n.isRunEnding()) return;
-        r.cleanup().catch(() => {});
-        let max = Math.max(0, now() - v);
-        let y = max < CALL_MARK_MAX_CHARS ? (weakMap.get(r.client) ?? 0) + 1 : 0;
+  return (clients) => {
+    for (let row of clients) {
+      if (row.type === "connected") weakMap_2.set(row.client, row);
+      if (row.type !== "connected" || weakSet.has(row.client) || !isLocalMcpServer(row.config)) continue;
+      weakSet.add(row.client);
+      let connectedAt = now();
+      let onClose = (reason) => {
+        if (isShuttingDown() || deps.isRunEnding()) return;
+        row.cleanup().catch(() => {});
+        let max = Math.max(0, now() - connectedAt);
+        let closeCount = max < CALL_MARK_MAX_CHARS ? (weakMap.get(row.client) ?? 0) + 1 : 0;
         (async () => {
-          let s = _(r, y, max);
-          let sleep = n.sleep ?? unrefSleep;
-          if (s > 0) await sleep(s);
-          let x = () => weakMap_2.get(r.client) ?? r;
+          let holdOffMs = holdOffDelay(row, closeCount, max);
+          let sleep = deps.sleep ?? unrefSleep;
+          if (holdOffMs > 0) await sleep(holdOffMs);
+          let latestRow = () => weakMap_2.get(row.client) ?? row;
           for (
             let j = 0;
-            s > 0 &&
+            holdOffMs > 0 &&
             j < MAX_UNSETTLED_DIALS &&
-            (await mcpClientModule().hasUnsettledDial(x().name, x().config));
+            (await mcpClientModule().hasUnsettledDial(latestRow().name, latestRow().config));
             j++
           )
             await sleep(UNSETTLED_DIAL_SLEEP_MS);
-          await reconnectMcpServer(n, x(), T, y, s > 0, (p, I) => weakMap.set(p.client, I));
+          await reconnectMcpServer(
+            deps,
+            latestRow(),
+            reason,
+            closeCount,
+            holdOffMs > 0,
+            (client, connection) => weakMap.set(client.client, connection),
+          );
         })().catch((error) =>
-          logForDebugging(`MCP reconnect after close failed for ${r.name}: ${errorMessage(error)}`, {
+          logForDebugging(`MCP reconnect after close failed for ${row.name}: ${errorMessage(error)}`, {
             level: "warn",
           }),
         );
       };
-      addMcpOnClose(r, () => R(false));
-      if (isClientWithoutTransport(r)) setImmediate(R, true);
+      addMcpOnClose(row, () => onClose(false));
+      if (isClientWithoutTransport(row)) setImmediate(onClose, true);
     }
   };
 }
@@ -595,8 +623,8 @@ function createReconnectBackoff(n) {
 /**
  * 不阻止进程退出的 sleep。
  */
-function unrefSleep(n) {
-  return sleep(n, undefined, {
+function unrefSleep(ms) {
+  return sleep(ms, undefined, {
     unref: true,
   });
 }
@@ -608,7 +636,14 @@ function isLocalMcpServer(config) {
 /**
  * 带退避地重连单个 MCP 服务器（检查会话结束、配置变化）。
  */
-async function reconnectMcpServer(n, e, o, S, P, E) {
+async function reconnectMcpServer(
+  handles,
+  client,
+  foundClosed,
+  youngCloses,
+  useKeptConnection,
+  onReconnected,
+) {
   let {
     getAppState,
     getDynamicMcpState,
@@ -616,368 +651,396 @@ async function reconnectMcpServer(n, e, o, S, P, E) {
     credentials,
     isControlReconnectInFlight,
     isRunEnding,
-    onReconnected,
+    onReconnected: onReconnected_2,
     sleep = unrefSleep,
     random = Math.random,
-  } = n;
-  let { name: s, config } = e;
-  let x = identityEpoch();
-  let p = () => isShuttingDown() || isRunEnding() || (identityEpoch() !== x && isRemoteMcpTransport(config));
-  let I = () =>
-    getAppState().mcp.clients.find((client) => client.name === s) ??
-    getDynamicMcpState().clients.find((client) => client.name === s);
-  let j = e;
-  let B = () => I() === j;
-  let W = (u) => {
-    applyMcpReconnect(n, s, u);
+  } = handles;
+  let { name: serverName, config } = client;
+  let epochAtStart = identityEpoch();
+  let shouldStop = () =>
+    isShuttingDown() || isRunEnding() || (identityEpoch() !== epochAtStart && isRemoteMcpTransport(config));
+  let currentRow = () =>
+    getAppState().mcp.clients.find((client) => client.name === serverName) ??
+    getDynamicMcpState().clients.find((client) => client.name === serverName);
+  let ourRow = client;
+  let ownsRow = () => currentRow() === ourRow;
+  let apply = (result) => {
+    applyMcpReconnect(handles, serverName, result);
   };
-  let F = mcpClientModule();
-  let U = ANSWER_STREAM_GRACE_MS + MAX_REOPEN_ATTEMPTS;
-  for (let idx = 1; idx <= U; idx++) {
-    let D = idx - ANSWER_STREAM_GRACE_MS;
+  let clientModule = mcpClientModule();
+  let totalAttempts = ANSWER_STREAM_GRACE_MS + MAX_REOPEN_ATTEMPTS;
+  for (let idx = 1; idx <= totalAttempts; idx++) {
+    let backgroundAttempt = idx - ANSWER_STREAM_GRACE_MS;
     if (idx > 1)
       await sleep(
-        D > 0
+        backgroundAttempt > 0
           ? fullJitterBackoffMs({
               baseMs: REOPEN_REFETCH_MS,
               capMs: MAX_REOPEN_REFETCH_MS,
               floorMs: REOPEN_REFETCH_MS / 2,
-              attempt: D - 1,
+              attempt: backgroundAttempt - 1,
               random,
             })
           : retryDelayMs(idx - 1),
       );
-    using Z = D > 0 ? trackTransientRetryPass([s]) : undefined;
-    if (p() || !B()) return;
+    using retryPass = backgroundAttempt > 0 ? trackTransientRetryPass([serverName]) : undefined;
+    if (shouldStop() || !ownsRow()) return;
     let attemptEpoch = identityEpoch();
-    if (D > 0) {
-      let A = {
-        name: s,
+    if (backgroundAttempt > 0) {
+      let pendingRow = {
+        name: serverName,
         type: "pending",
         config,
       };
-      if (refusalStateFor(s, A)) {
-        W({
-          client: A,
+      if (refusalStateFor(serverName, pendingRow)) {
+        apply({
+          client: pendingRow,
           tools: [],
           commands: [],
           attemptEpoch,
         });
         return;
       }
-      if (await F.hasUnsettledDial(s, config)) {
-        if (idx < U) {
+      if (await clientModule.hasUnsettledDial(serverName, config)) {
+        if (idx < totalAttempts) {
           logMCPDebug(
-            s,
-            `Background reconnect attempt ${D}/${MAX_REOPEN_ATTEMPTS} skipped: another reconnect to this server is in progress; will try again at the next attempt`,
+            serverName,
+            `Background reconnect attempt ${backgroundAttempt}/${MAX_REOPEN_ATTEMPTS} skipped: another reconnect to this server is in progress; will try again at the next attempt`,
           );
           continue;
         }
-        if (!p() && B() && !isControlReconnectInFlight(s)) {
+        if (!shouldStop() && ownsRow() && !isControlReconnectInFlight(serverName)) {
           logMCPDebug(
-            s,
+            serverName,
             `Reconnect gave up after ${idx} attempts: another reconnect to this server is still in progress; leaving it to finish`,
           );
           logFeatureBad("mcp_slow_reconnect", "gave_up", {
             attempts: idx,
-            found_closed: o,
+            found_closed: foundClosed,
           });
         }
         return;
       }
-      if (p() || !B()) return;
+      if (shouldStop() || !ownsRow()) return;
     } else {
-      let A = {
-        name: s,
+      let pendingRow = {
+        name: serverName,
         type: "pending",
         config,
         reconnectAttempt: idx,
         maxReconnectAttempts: ANSWER_STREAM_GRACE_MS,
       };
-      W({
-        client: A,
-        ...serverItemsOf(getAppState().mcp, s),
+      apply({
+        client: pendingRow,
+        ...serverItemsOf(getAppState().mcp, serverName),
         attemptEpoch,
       });
-      j = A;
+      ourRow = pendingRow;
     }
-    if (!B() || isControlReconnectInFlight(s)) return;
+    if (!ownsRow() || isControlReconnectInFlight(serverName)) return;
     logMCPDebug(
-      s,
+      serverName,
       idx === 1
-        ? `${config.type} transport ${o ? "had already closed when wired" : "closed"} \u2014 reconnecting (attempt 1/${ANSWER_STREAM_GRACE_MS})`
-        : D > 0
-          ? `Background reconnect attempt ${D}/${MAX_REOPEN_ATTEMPTS}`
+        ? `${config.type} transport ${foundClosed ? "had already closed when wired" : "closed"} \u2014 reconnecting (attempt 1/${ANSWER_STREAM_GRACE_MS})`
+        : backgroundAttempt > 0
+          ? `Background reconnect attempt ${backgroundAttempt}/${MAX_REOPEN_ATTEMPTS}`
           : `Reconnect attempt ${idx}/${ANSWER_STREAM_GRACE_MS}`,
     );
-    let q = P && idx === 1 ? await F.peekSettledConnection(s, config) : undefined;
-    let G = q?.type === "connected" && !isClientWithoutTransport(q) ? withConfigScope(q, config) : undefined;
-    let K = {
-      ...(G !== undefined
+    let settled =
+      useKeptConnection && idx === 1
+        ? await clientModule.peekSettledConnection(serverName, config)
+        : undefined;
+    let keptConnection =
+      settled?.type === "connected" && !isClientWithoutTransport(settled)
+        ? withConfigScope(settled, config)
+        : undefined;
+    let result = {
+      ...(keptConnection !== undefined
         ? {
-            client: G,
-            ...serverItemsOf(getAppState().mcp, s),
+            client: keptConnection,
+            ...serverItemsOf(getAppState().mcp, serverName),
           }
-        : await F.reconnectMcpServerImpl(s, config, storageV5, credentials, {
-            keepConnectionInUse: true,
-          }).catch((error) => ({
-            client: {
-              name: s,
-              type: "failed",
-              config,
-              error: errorMessage(error),
-            },
-            tools: [],
-            commands: [],
-          }))),
+        : await clientModule
+            .reconnectMcpServerImpl(serverName, config, storageV5, credentials, {
+              keepConnectionInUse: true,
+            })
+            .catch((error) => ({
+              client: {
+                name: serverName,
+                type: "failed",
+                config,
+                error: errorMessage(error),
+              },
+              tools: [],
+              commands: [],
+            }))),
       attemptEpoch,
     };
-    let client = K.client.type === "connected" ? K.client : undefined;
-    let c = client !== undefined && isSameConnectedClient(await F.peekSettledConnection(s, config), client);
-    let w = () => {
-      if (client && shouldCommitReconnect(client, config, I(), c && !isRunEnding()))
-        F.detachAndCloseConnection(client).catch(() => {});
+    let client = result.client.type === "connected" ? result.client : undefined;
+    let isKeptClient =
+      client !== undefined &&
+      isSameConnectedClient(await clientModule.peekSettledConnection(serverName, config), client);
+    let disposeIfUnused = () => {
+      if (client && shouldCommitReconnect(client, config, currentRow(), isKeptClient && !isRunEnding()))
+        clientModule.detachAndCloseConnection(client).catch(() => {});
     };
-    if (p() || !B() || isControlReconnectInFlight(s)) {
-      w();
+    if (shouldStop() || !ownsRow() || isControlReconnectInFlight(serverName)) {
+      disposeIfUnused();
       return;
     }
-    let H =
-      K.keptConnectionInUse === true &&
+    let keptWithToolError =
+      result.keptConnectionInUse === true &&
       client?.toolsListError !== undefined &&
-      refusalStateFor(s, client) === undefined;
-    if (client && c && !H) {
-      E(client, S + idx - 1);
-      W(K);
-      if (I() === client) {
-        if (client === G)
+      refusalStateFor(serverName, client) === undefined;
+    if (client && isKeptClient && !keptWithToolError) {
+      onReconnected(client, youngCloses + idx - 1);
+      apply(result);
+      if (currentRow() === client) {
+        if (client === keptConnection)
           refreshMcpServerTools(
             client,
-            (A, X) => {
-              commitMcpReconnect(n, A, X, client.config);
+            (tools, commands) => {
+              commitMcpReconnect(handles, tools, commands, client.config);
             },
             storageV5,
           ).catch((error) =>
             logForDebugging(
-              `MCP tools refresh over a kept connection failed for ${s}: ${errorMessage(error)}`,
+              `MCP tools refresh over a kept connection failed for ${serverName}: ${errorMessage(error)}`,
               {
                 level: "warn",
               },
             ),
           );
-        logMCPDebug(s, `Reconnected (attempt ${idx})`);
-        logFeatureOk(D > 0 ? "mcp_slow_reconnect" : "mcp_auto_reconnect", {
+        logMCPDebug(serverName, `Reconnected (attempt ${idx})`);
+        logFeatureOk(backgroundAttempt > 0 ? "mcp_slow_reconnect" : "mcp_auto_reconnect", {
           attempts: idx,
-          found_closed: o,
-          young_closes: S,
+          found_closed: foundClosed,
+          young_closes: youngCloses,
         });
-        onReconnected(client);
+        onReconnected_2(client);
       }
       return;
     }
-    w();
-    let l = client && {
-      name: s,
+    disposeIfUnused();
+    let closedFailure = client && {
+      name: serverName,
       type: "failed",
       config,
-      error: H ? "Its tools could not be listed" : "Connection closed again while reconnecting",
+      error: keptWithToolError
+        ? "Its tools could not be listed"
+        : "Connection closed again while reconnecting",
     };
-    let k = l ?? K.client;
-    let L = l
+    let failureRow = closedFailure ?? result.client;
+    let failureWithCode = closedFailure
       ? {
-          ...l,
+          ...closedFailure,
           errorCode: "ConnectionClosed",
         }
-      : k;
-    let V = isRetryableConnectionFailure(L);
-    if (idx === ANSWER_STREAM_GRACE_MS || (D > 0 && (!V || idx === U))) {
+      : failureRow;
+    let retryable = isRetryableConnectionFailure(failureWithCode);
+    if (idx === ANSWER_STREAM_GRACE_MS || (backgroundAttempt > 0 && (!retryable || idx === totalAttempts))) {
       logMCPDebug(
-        s,
-        D <= 0 && V
+        serverName,
+        backgroundAttempt <= 0 && retryable
           ? `Still failing after ${idx} attempts`
-          : `Reconnect gave up after ${idx} attempts: ${k.type}`,
+          : `Reconnect gave up after ${idx} attempts: ${failureRow.type}`,
       );
-      W({
-        client: k,
-        tools: k.type === "needs-auth" ? mcpAuthToolsFor(s, config) : [],
+      apply({
+        client: failureRow,
+        tools: failureRow.type === "needs-auth" ? mcpAuthToolsFor(serverName, config) : [],
         commands: [],
         attemptEpoch,
       });
-      if (I() !== k) return;
-      if (k.type === "needs-auth") {
-        logFeatureSad(D > 0 ? "mcp_slow_reconnect" : "mcp_auto_reconnect", "needs_auth", {
+      if (currentRow() !== failureRow) return;
+      if (failureRow.type === "needs-auth") {
+        logFeatureSad(backgroundAttempt > 0 ? "mcp_slow_reconnect" : "mcp_auto_reconnect", "needs_auth", {
           attempts: idx,
-          found_closed: o,
-          young_closes: S,
+          found_closed: foundClosed,
+          young_closes: youngCloses,
         });
         return;
       }
-      if (D > 0) {
-        logFeatureBad("mcp_slow_reconnect", V ? "gave_up" : "not_retryable", {
+      if (backgroundAttempt > 0) {
+        logFeatureBad("mcp_slow_reconnect", retryable ? "gave_up" : "not_retryable", {
           attempts: idx,
-          found_closed: o,
+          found_closed: foundClosed,
         });
         return;
       }
       logFeatureBad("mcp_auto_reconnect", "exhausted", {
         attempts: idx,
-        found_closed: o,
-        young_closes: S,
-        goes_slow: V,
+        found_closed: foundClosed,
+        young_closes: youngCloses,
+        goes_slow: retryable,
       });
-      if (!V) return;
-      j = k;
+      if (!retryable) return;
+      ourRow = failureRow;
       logMCPDebug(
-        s,
+        serverName,
         `Reconnect attempts spent; retrying in the background, up to ${MAX_REOPEN_ATTEMPTS} more times`,
       );
       continue;
     }
     logMCPDebug(
-      s,
-      D > 0
-        ? `Background reconnect attempt ${D} did not connect (${k.type})`
-        : `Reconnect attempt ${idx} did not connect (${k.type}); next in ${retryDelayMs(idx)}ms`,
+      serverName,
+      backgroundAttempt > 0
+        ? `Background reconnect attempt ${backgroundAttempt} did not connect (${failureRow.type})`
+        : `Reconnect attempt ${idx} did not connect (${failureRow.type}); next in ${retryDelayMs(idx)}ms`,
     );
   }
 }
 //@ chunk-fpvb8c85.js:12719-12738 placement
-var weakMap = new WeakMap();
+var weakMap; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-fpvb8c85.js:12719", () => {
+  weakMap = new WeakMap();
+});
 //@ chunk-fpvb8c85.js:12738-12771 placement
 /**
  * 取某客户端待提交的重连记录。
  */
-function pendingReconnect(n) {
-  return weakMap.get(n);
+function pendingReconnect(client) {
+  return weakMap.get(client);
 }
 //@ chunk-fpvb8c85.js:12771-13469 placement
 /**
  * 提交重连后的客户端（配置变化时放弃）。
  */
-function commitMcpReconnect(n, e, o, config) {
-  let { setAppState, getDynamicMcpState, setDynamicMcpState } = n;
-  let _ = isUnchangedRelistSkipOn();
-  let M = false;
-  let r = false;
-  let v;
-  setAppState((y) => {
-    let found = y.mcp.clients.find((client) => client.name === e);
-    let i = redecorateTools(found, o, config);
-    if (i === undefined) {
-      r = true;
-      return y;
+function commitMcpReconnect(handles, serverName, tools, config) {
+  let { setAppState, getDynamicMcpState, setDynamicMcpState } = handles;
+  let skipUnchanged = isUnchangedRelistSkipOn();
+  let changed = false;
+  let nameTaken = false;
+  let pendingCommit;
+  setAppState((state) => {
+    let previous = state.mcp.clients.find((client) => client.name === serverName);
+    let redecorated = redecorateTools(previous, tools, config);
+    if (redecorated === undefined) {
+      nameTaken = true;
+      return state;
     }
-    if (_ && found?.type === "connected" && sameServerTools(y.mcp.tools, e, i)) {
-      M = true;
-      v = {
-        row: found,
-        tools: i,
+    if (
+      skipUnchanged &&
+      previous?.type === "connected" &&
+      sameServerTools(state.mcp.tools, serverName, redecorated)
+    ) {
+      changed = true;
+      pendingCommit = {
+        row: previous,
+        tools: redecorated,
       };
-      return y;
+      return state;
     }
-    let x = replaceServerTools(y, e, i);
-    M = x !== y;
-    v =
-      M && found !== undefined
+    let nextState = replaceServerTools(state, serverName, redecorated);
+    changed = nextState !== state;
+    pendingCommit =
+      changed && previous !== undefined
         ? {
-            row: found,
-            tools: i,
+            row: previous,
+            tools: redecorated,
           }
         : undefined;
-    return x;
+    return nextState;
   });
   let dynamicMcpState = getDynamicMcpState();
-  let found = dynamicMcpState.clients.find((client) => client.name === e);
-  let h = redecorateTools(found, o, config);
-  if (h === undefined) r = true;
-  else if (_ && found?.type === "connected" && sameServerTools(dynamicMcpState.tools, e, h)) M = true;
+  let previous = dynamicMcpState.clients.find((client) => client.name === serverName);
+  let redecoratedDynamic = redecorateTools(previous, tools, config);
+  if (redecoratedDynamic === undefined) nameTaken = true;
+  else if (
+    skipUnchanged &&
+    previous?.type === "connected" &&
+    sameServerTools(dynamicMcpState.tools, serverName, redecoratedDynamic)
+  )
+    changed = true;
   else {
-    let chromeClient = findChromeClient(dynamicMcpState, e, h);
+    let chromeClient = findChromeClient(dynamicMcpState, serverName, redecoratedDynamic);
     if (chromeClient !== dynamicMcpState) {
       setDynamicMcpState(chromeClient);
-      M = true;
+      changed = true;
     }
   }
-  if (v !== undefined)
-    if (found?.type === "pending") weakMap.set(v.row, v.tools);
-    else weakMap.delete(v.row);
-  if (r) logMCPDebug(e, "A re-queried tool list was not applied: another server holds the name");
-  return M;
+  if (pendingCommit !== undefined)
+    if (previous?.type === "pending") weakMap.set(pendingCommit.row, pendingCommit.tools);
+    else weakMap.delete(pendingCommit.row);
+  if (nameTaken)
+    logMCPDebug(serverName, "A re-queried tool list was not applied: another server holds the name");
+  return changed;
 }
 //@ chunk-fpvb8c85.js:13469-13512 placement
 /**
  * 生成“提交重连”的回调。
  */
-function makeCommitReconnect(n) {
-  return (e, o, S) => commitMcpReconnect(n, e, o, S);
+function makeCommitReconnect(handles) {
+  return (serverName, tools, config) => commitMcpReconnect(handles, serverName, tools, config);
 }
 //@ chunk-fpvb8c85.js:13512-14736 placement
 /**
  * 监视已连接客户端的断开并触发重连。
  */
-function watchMcpDisconnects(n) {
-  let { getAppState, getDynamicMcpState } = n.stores;
+function watchMcpDisconnects(deps) {
+  let { getAppState, getDynamicMcpState } = deps.stores;
   let weakSet = new WeakSet();
   let weakMap = new WeakMap();
-  return (E) => {
-    for (let C of E) {
-      if (C.type === "connected") weakMap.set(C.client, C);
-      if (C.type !== "connected" || weakSet.has(C.client)) continue;
-      weakSet.add(C.client);
-      if (!C.capabilities?.tools?.listChanged) continue;
-      let _ = C.name;
-      mcpClientModule().onMcpToolListChanged(C, async (M) => {
+  return (clients) => {
+    for (let row of clients) {
+      if (row.type === "connected") weakMap.set(row.client, row);
+      if (row.type !== "connected" || weakSet.has(row.client)) continue;
+      weakSet.add(row.client);
+      if (!row.capabilities?.tools?.listChanged) continue;
+      let serverName = row.name;
+      mcpClientModule().onMcpToolListChanged(row, async (cause) => {
         logMCPDebug(
-          _,
-          M === REOPEN_REFETCH
+          serverName,
+          cause === REOPEN_REFETCH
             ? "Synthesized tools refetch after listen-stream reopen (no notification received)"
-            : M === BEFORE_HANDLER
+            : cause === BEFORE_HANDLER
               ? "Refreshing tools for a tools/list_changed notification received before this handler was registered"
               : "Received tools/list_changed notification, refreshing tools",
         );
-        let r =
-          getAppState().mcp.clients.find((client) => client.name === _) ??
-          getDynamicMcpState().clients.find((client) => client.name === _);
-        let v = weakMap.get(C.client) ?? C;
-        let R =
-          r !== undefined && serverCacheKey(_, r.config) === serverCacheKey(_, v.config)
-            ? withConfigScope(v, r.config)
-            : v;
-        weakMap.set(C.client, R);
-        let T = await refreshMcpServerTools(
-          R,
-          (i, x) => {
-            commitMcpReconnect(n.stores, i, x, R.config);
+        let currentRow =
+          getAppState().mcp.clients.find((client) => client.name === serverName) ??
+          getDynamicMcpState().clients.find((client) => client.name === serverName);
+        let rowVersion = weakMap.get(row.client) ?? row;
+        let target =
+          currentRow !== undefined &&
+          serverCacheKey(serverName, currentRow.config) === serverCacheKey(serverName, rowVersion.config)
+            ? withConfigScope(rowVersion, currentRow.config)
+            : rowVersion;
+        weakMap.set(row.client, target);
+        let result = await refreshMcpServerTools(
+          target,
+          (name, tools) => {
+            commitMcpReconnect(deps.stores, name, tools, target.config);
           },
-          n.storageV5,
+          deps.storageV5,
         );
-        if (T.status === "kept-previous") {
-          logMCPDebug(_, "tools/list failed after list_changed \u2014 keeping previous tool set");
+        if (result.status === "kept-previous") {
+          logMCPDebug(serverName, "tools/list failed after list_changed \u2014 keeping previous tool set");
           return;
         }
-        let newCount = T.newTools.length;
-        let y = toolListingVerdict(T.newTools);
-        let s = (previousCount) =>
+        let newCount = result.newTools.length;
+        let verdict = toolListingVerdict(result.newTools);
+        let logChange = (previousCount) =>
           logEvent("tengu_mcp_list_changed", {
-            mcpServerKeyHash: toolNameForTelemetry(_),
+            mcpServerKeyHash: toolNameForTelemetry(serverName),
             type: lit("tools"),
-            cause: refetchReasonTelemetry(M),
+            cause: refetchReasonTelemetry(cause),
             previousCount,
             newCount,
-            ...toolsListAheadTelemetry(C),
-            ...y,
+            ...toolsListAheadTelemetry(row),
+            ...verdict,
           });
-        if (T.previousToolsPromise)
-          T.previousToolsPromise.then(
-            (i) => s(i.length),
-            () => s(),
+        if (result.previousToolsPromise)
+          result.previousToolsPromise.then(
+            (previousTools) => logChange(previousTools.length),
+            () => logChange(),
           );
-        else s();
+        else logChange();
       });
     }
   };
 }
 export {
+  refusalStateFor,
   applyMcpReconnect,
   resolveReconnectConfig,
   reconnectMcpOnIdentityChange,
@@ -985,7 +1048,6 @@ export {
   createReconnectBackoff,
   makeCommitReconnect,
   markServerDisabled,
-  refusalStateFor,
   pendingReconnect,
   serverItemsOf,
   shouldCommitReconnect,

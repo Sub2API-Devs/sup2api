@@ -27,10 +27,14 @@ function getConfigSection(settings, section) {
   if (settings == null) return null;
   if (section === undefined || section === "") return settings;
   let current = settings;
-  for (let s of section.split(".")) {
-    if (current === null || typeof current !== "object" || !Object.prototype.hasOwnProperty.call(current, s))
+  for (let segment of section.split(".")) {
+    if (
+      current === null ||
+      typeof current !== "object" ||
+      !Object.prototype.hasOwnProperty.call(current, segment)
+    )
       return null;
-    current = current[s];
+    current = current[segment];
   }
   return current ?? null;
 }
@@ -47,7 +51,7 @@ var DEFAULT_REQUEST_TIMEOUT_MS = 60000;
  * 创建一个 LSP 服务器实例（状态机 stopped/starting/running/stopping/error）。start() 串行化并发启动、受 restartOnCrash/maxRestarts 约束；启动时注册 workspace/configuration（按 settings 回答）、忽略 client/registerCapability，发 initialize（clientInfo "Claude Code"+版本，声明 hover/definition/references/documentSymbol/callHierarchy/publishDiagnostics 能力），有 settings 时推 workspace/didChangeConfiguration。sendRequest 对 ContentModified 指数退避重试并带 requestTimeout。各步骤上报 lsp_server_start/lsp_request 等健康指标。
  */
 function createLSPServerInstance(name, config) {
-  let { createLSPClient } = require("./chunk-t4ksmxzx.js");
+  let { createLSPClient } = require("./LSPClient.js");
   let state = "stopped";
   let lastError;
   let restartCount = 0;
@@ -66,12 +70,12 @@ function createLSPServerInstance(name, config) {
   async function start() {
     while (startPromise) await startPromise.catch(() => {});
     if (state === "running" || state === "starting") return;
-    let We = doStart();
-    startPromise = We.finally(() => {
+    let doStartPromise = doStart();
+    startPromise = doStartPromise.finally(() => {
       startPromise = undefined;
     });
     startPromise.catch(() => {});
-    return We;
+    return doStartPromise;
   }
   async function doStart() {
     if (state === "error" && crashRecoveryCount > 0 && config.restartOnCrash === false)
@@ -103,21 +107,21 @@ function createLSPServerInstance(name, config) {
           pluginId: config.pluginSource,
         }),
       });
-      client.onRequest("workspace/configuration", (Et) => {
+      client.onRequest("workspace/configuration", (configurationRequest) => {
         logForDebugging(
-          `LSP: Received workspace/configuration request from ${name} for sections: ${Et.items.map((item) => item.section ?? "<root>").join(", ")}`,
+          `LSP: Received workspace/configuration request from ${name} for sections: ${configurationRequest.items.map((item) => item.section ?? "<root>").join(", ")}`,
         );
-        return Et.items.map((item) => getConfigSection(config.settings, item.section));
+        return configurationRequest.items.map((item) => getConfigSection(config.settings, item.section));
       });
-      client.onRequest("client/registerCapability", (Et) => {
+      client.onRequest("client/registerCapability", (registerRequest) => {
         logForDebugging(
-          `LSP: Ignoring client/registerCapability from ${name} for: ${describeRegistrations(Et?.registrations)}`,
+          `LSP: Ignoring client/registerCapability from ${name} for: ${describeRegistrations(registerRequest?.registrations)}`,
         );
         return null;
       });
-      client.onRequest("client/unregisterCapability", (Et) => {
+      client.onRequest("client/unregisterCapability", (unregisterRequest) => {
         logForDebugging(
-          `LSP: Ignoring client/unregisterCapability from ${name} for: ${describeRegistrations(Et?.unregisterations)}`,
+          `LSP: Ignoring client/unregisterCapability from ${name} for: ${describeRegistrations(unregisterRequest?.unregisterations)}`,
         );
         return null;
       });
@@ -307,9 +311,13 @@ function createLSPServerInstance(name, config) {
     let timeoutMessage = `no response after ${requestTimeoutMs}ms`;
     for (let attempt = 0; attempt <= MAX_RETRIES_FOR_TRANSIENT_ERRORS; attempt++)
       try {
-        let yt = await withTimeout_2(client.sendRequest(method, params), requestTimeoutMs, timeoutMessage);
+        let response = await withTimeout_2(
+          client.sendRequest(method, params),
+          requestTimeoutMs,
+          timeoutMessage,
+        );
         logFeatureOk("lsp_request");
-        return yt;
+        return response;
       } catch (error) {
         lastRequestError = error;
         let errorCode = error.code;
